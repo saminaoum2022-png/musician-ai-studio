@@ -30987,6 +30987,7 @@ body[data-route="mashup"] .app{
 .challengesPage.homeDesk .homeDeskSongPromo,
 .challengesPage.homeDesk .homeDeskPersonaPromo,
 .challengesPage.homeDesk .homeDeskPhotoPromo,
+.challengesPage.homeDesk .homeDeskStudioPromo,
 .challengesPage.homeDesk .homeDeskMashupPromo{
   border: 1px solid rgba(255, 255, 255, 0.1);
   background: rgba(255, 255, 255, 0.02);
@@ -31019,7 +31020,8 @@ body[data-route="mashup"] .app{
   border-color: rgba(124, 92, 255, 0.28);
   background: rgba(124, 92, 255, 0.06);
 }
-.challengesPage.homeDesk .homeDeskPhotoPromo:active{
+.challengesPage.homeDesk .homeDeskPhotoPromo:active,
+.challengesPage.homeDesk .homeDeskStudioPromo:active{
   border-color: rgba(35, 213, 171, 0.24);
   background: rgba(35, 213, 171, 0.06);
 }
@@ -31029,6 +31031,7 @@ body[data-route="mashup"] .app{
 .challengesPage.homeDesk .homeDeskSongPulse,
 .challengesPage.homeDesk .homeDeskPersonaPulse,
 .challengesPage.homeDesk .homeDeskPhotoPulse,
+.challengesPage.homeDesk .homeDeskStudioPulse,
 .challengesPage.homeDesk .homeDeskMashupPulse,
 .challengesPage.homeDesk .homeDeskPhotoSpark{
   display: none;
@@ -31036,6 +31039,7 @@ body[data-route="mashup"] .app{
 .challengesPage.homeDesk .homeDeskSongTile,
 .challengesPage.homeDesk .homeDeskPersonaTile,
 .challengesPage.homeDesk .homeDeskPhotoTile,
+.challengesPage.homeDesk .homeDeskStudioTile,
 .challengesPage.homeDesk .homeDeskMashupTile{
   padding: 0;
   box-shadow: none;
@@ -31043,6 +31047,7 @@ body[data-route="mashup"] .app{
 .challengesPage.homeDesk .homeDeskSongTile::before,
 .challengesPage.homeDesk .homeDeskPersonaTile::before,
 .challengesPage.homeDesk .homeDeskPhotoTile::before,
+.challengesPage.homeDesk .homeDeskStudioTile::before,
 .challengesPage.homeDesk .homeDeskMashupTile::before{
   display: none;
 }
@@ -31055,12 +31060,14 @@ body[data-route="mashup"] .app{
   background: rgba(124, 92, 255, 0.1);
   border-color: rgba(124, 92, 255, 0.28);
 }
-.challengesPage.homeDesk .homeDeskPhotoTile{
+.challengesPage.homeDesk .homeDeskPhotoTile,
+.challengesPage.homeDesk .homeDeskStudioTile{
   background: rgba(35, 213, 171, 0.08);
   border-color: rgba(35, 213, 171, 0.22);
 }
 .challengesPage.homeDesk .homeDeskSongPenIco,
-.challengesPage.homeDesk .homeDeskPhotoIco{
+.challengesPage.homeDesk .homeDeskPhotoIco,
+.challengesPage.homeDesk .homeDeskStudioIco{
   color: var(--brand-teal);
   animation: none;
 }
@@ -40874,6 +40881,25 @@ body.faqOverlayOpen{ overflow: hidden; }
 body[data-route="studio"] .mobileTabbar,
 body[data-route="studio"] .header,
 body[data-route="studio"] .footer { display: none !important; }
+
+/* Desktop / wide web: the Studio is an immersive "room", so collapse the
+   2-column app shell (sidebar + right rail) it would otherwise sit inside.
+   Without this the centered column drifts right behind an empty sidebar
+   gutter. The studio's own `.studio { max-width: 560px; margin: 0 auto }`
+   then centers it on the full viewport, same as mobile. */
+body[data-route="studio"] > .app {
+  display: block !important;
+  max-width: none !important;
+  padding: 0 !important;
+  height: auto;
+  min-height: 100svh;
+}
+body[data-route="studio"] main.grid {
+  display: block !important;
+  margin: 0 !important;
+  max-width: none !important;
+}
+body[data-route="studio"] .deskRail { display: none !important; }
 
 .studioRoute { padding: 0; }
 

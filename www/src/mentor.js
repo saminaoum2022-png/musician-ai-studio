@@ -202,24 +202,45 @@ function guessVoiceArchetype(p5, p50, p95, ref) {
 
 
 /**
- * 12-TET scale-degree sets (semitones from tonic) plus the characteristic lower
- * "jins" degrees that actually distinguish each maqam. Real Arabic intonation
- * uses quarter tones — this is a keyboard-style estimate for practice prompts,
- * not a full maqam analysis. `mult` lets us de-bias modes that over-match a
- * plain pitch-class overlap (notably Sikah, which used to win on any neutral
- * third / quarter-tone-ish note even without real Sikah tonic behavior).
+ * Maqam templates defined in REAL CENTS relative to the tonic, not 12-TET
+ * semitones — because Bayati/Saba/Sikah/Rast live on quarter tones (≈150/350¢)
+ * that an equal-tempered grid erases. Each entry carries:
+ *   - cents:       full scale degrees in cents (for explained-energy fit)
+ *   - jinsCents:   the lower tetrachord (the family-defining region)
+ *   - second/third: the expected 2nd & 3rd degree size in cents — THE primary
+ *                   discriminators between the minor-ish maqamat
+ *   - fourthPerfect: whether a perfect 4th (~500¢) belongs (Saba lowers it)
+ *   - absentCents: degrees that should be WEAK; energy there penalizes the maqam
+ *   - degrees:     12-TET fallback used only by the on-screen scale diagram
+ *   - mult:        mild prior nudge
  */
 const MAQAM_CATALOG = [
-  { id: "ajam", name: "‘Ajam", degrees: [0, 2, 4, 5, 7, 9, 11], jins: [0, 2, 4], mult: 1.0 },
-  { id: "rast", name: "Rast", degrees: [0, 2, 4, 5, 7, 9, 10], jins: [0, 2, 4, 5], mult: 1.0 },
-  { id: "nahawand", name: "Nahawand", degrees: [0, 2, 3, 5, 7, 8, 10], jins: [0, 2, 3, 7], mult: 1.0 },
-  { id: "bayati", name: "Bayati", degrees: [0, 2, 3, 5, 7, 8, 10], jins: [0, 2, 3, 5], mult: 1.0 },
-  { id: "kurd", name: "Kurd", degrees: [0, 1, 3, 5, 7, 8, 10], jins: [0, 1, 3], mult: 1.0 },
-  { id: "hijaz", name: "Hijaz", degrees: [0, 1, 4, 5, 7, 8, 10], jins: [0, 1, 4], mult: 1.05 },
-  { id: "saba", name: "Saba", degrees: [0, 2, 3, 4, 7, 8, 10], jins: [0, 2, 3, 4], mult: 1.0 },
-  // Sikah: narrower template + a base de-bias. It only ranks high when its
-  // tonic is clearly the most-sung note AND its characteristic jins is present.
-  { id: "sikah", name: "Sikah", degrees: [0, 2, 4, 5, 7, 9, 11], jins: [0, 2, 4], mult: 0.78 },
+  { id: "ajam", name: "‘Ajam", degrees: [0, 2, 4, 5, 7, 9, 11],
+    cents: [0, 200, 400, 500, 700, 900, 1100], jinsCents: [0, 200, 400, 500],
+    second: 200, third: 400, fourthPerfect: true, absentCents: [], mult: 1.0 },
+  { id: "rast", name: "Rast", degrees: [0, 2, 4, 5, 7, 9, 10],
+    cents: [0, 200, 350, 500, 700, 900, 1050], jinsCents: [0, 200, 350, 500],
+    second: 200, third: 350, fourthPerfect: true, absentCents: [], mult: 1.0 },
+  { id: "nahawand", name: "Nahawand", degrees: [0, 2, 3, 5, 7, 8, 10],
+    cents: [0, 200, 300, 500, 700, 800, 1000], jinsCents: [0, 200, 300, 500],
+    second: 200, third: 300, fourthPerfect: true, absentCents: [], mult: 1.0 },
+  { id: "bayati", name: "Bayati", degrees: [0, 2, 3, 5, 7, 8, 10],
+    cents: [0, 150, 300, 500, 700, 800, 1000], jinsCents: [0, 150, 300, 500],
+    second: 150, third: 300, fourthPerfect: true, absentCents: [], mult: 1.0 },
+  { id: "kurd", name: "Kurd", degrees: [0, 1, 3, 5, 7, 8, 10],
+    cents: [0, 100, 300, 500, 700, 800, 1000], jinsCents: [0, 100, 300, 500],
+    second: 100, third: 300, fourthPerfect: true, absentCents: [], mult: 1.0 },
+  { id: "hijaz", name: "Hijaz", degrees: [0, 1, 4, 5, 7, 8, 10],
+    cents: [0, 100, 400, 500, 700, 800, 1000], jinsCents: [0, 100, 400, 500],
+    second: 100, third: 400, fourthPerfect: true, absentCents: [], mult: 1.0 },
+  { id: "saba", name: "Saba", degrees: [0, 2, 3, 4, 7, 8, 10],
+    cents: [0, 150, 300, 400, 700, 800, 1000], jinsCents: [0, 150, 300, 400],
+    second: 150, third: 300, fourthPerfect: false, absentCents: [500], mult: 1.0 },
+  // Sikah sits on a half-flat tonic; its signature is the ≈150¢ + ≈350¢ jins.
+  // The microtonal char match (not a blanket penalty) now keeps it honest.
+  { id: "sikah", name: "Sikah", degrees: [0, 2, 4, 5, 7, 9, 11],
+    cents: [0, 150, 350, 500, 700, 850, 1050], jinsCents: [0, 150, 350],
+    second: 150, third: 350, fourthPerfect: true, absentCents: [], mult: 0.92 },
 ];
 
 const PC_LETTERS = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
@@ -242,6 +263,37 @@ function medianOf(arr) {
   const s = [...arr].sort((a, b) => a - b);
   const mid = s.length >> 1;
   return s.length % 2 ? s[mid] : (s[mid - 1] + s[mid]) / 2;
+}
+// Shortest signed distance between two pitch-class cent values on the 1200¢ circle.
+function circCentDelta(a, b) {
+  let d = (a - b) % 1200;
+  if (d > 600) d -= 1200;
+  if (d < -600) d += 1200;
+  return d;
+}
+// Gaussian membership of a cent offset to a target (sigma in cents).
+function centGauss(deltaCents, sigma) {
+  return Math.exp(-(deltaCents * deltaCents) / (2 * sigma * sigma));
+}
+// Duration-weighted energy of the sung profile near a target cent value (0..~1).
+function energyNearCents(samples, totalW, targetCents, sigma) {
+  let s = 0;
+  for (const x of samples) s += x.w * centGauss(circCentDelta(x.c, targetCents), sigma);
+  return s / (totalW || 1);
+}
+// Energy-weighted centroid (and strength) of samples that fall in a cent window
+// ABOVE the tonic — used to read the actual 2nd/3rd/4th interval the singer used.
+function windowCentroid(samples, totalW, tonicCents, loRel, hiRel) {
+  let wsum = 0;
+  let csum = 0;
+  for (const x of samples) {
+    const rel = (((x.c - tonicCents) % 1200) + 1200) % 1200;
+    if (rel >= loRel && rel <= hiRel) {
+      wsum += x.w;
+      csum += x.w * rel;
+    }
+  }
+  return { cents: wsum ? csum / wsum : null, strength: wsum / (totalW || 1) };
 }
 
 /**
@@ -298,63 +350,120 @@ function rankMaqams(stableNotes) {
   };
   if (stableNotes.length < 3) return fallback;
 
-  // Duration-weighted pitch-class profile (held longer = weighs more).
-  const hist = new Array(12).fill(0);
-  for (const n of stableNotes) hist[pcOf(n.midi)] += n.frames;
-  const total = hist.reduce((a, b) => a + b, 0) || 1;
-  const histN = hist.map((x) => x / total);
-  const maxH = Math.max(...histN) || 1;
+  // --- Continuous (cent-based) pitch-class profile -------------------------
+  // Each held note keeps its REAL cents (no 12-TET snap). We work mod 1200¢.
+  const samples = stableNotes.map((n) => ({
+    c: (((n.midi * 100) % 1200) + 1200) % 1200,
+    w: n.frames,
+    midi: n.midi,
+  }));
+  const totalW = samples.reduce((a, s) => a + s.w, 0) || 1;
+  const SIG_NOTE = 30; // note-grouping kernel width (cents)
 
-  // Tonic detection: most-sung note, nudged by the phrase's final note and its
-  // lowest sustained note (both common resting points for the tonic).
-  const lastPc = pcOf(stableNotes[stableNotes.length - 1].midi);
-  const lowPc = pcOf(stableNotes.reduce((lo, n) => (n.midi < lo.midi ? n : lo), stableNotes[0]).midi);
-  const tonicScore = (pc) => histN[pc] + (pc === lastPc ? 0.18 : 0) + (pc === lowPc ? 0.1 : 0);
-  const tonicCands = Array.from({ length: 12 }, (_, pc) => pc)
-    .filter((pc) => histN[pc] > 0)
-    .sort((a, b) => tonicScore(b) - tonicScore(a))
-    .slice(0, 3);
+  // Coarse 24-bin (50¢) profile for the debug view + quarter-tone spotting.
+  const PROFILE_BINS = 24;
+  const profile = new Array(PROFILE_BINS).fill(0);
+  for (const s of samples) {
+    for (let b = 0; b < PROFILE_BINS; b++) {
+      profile[b] += s.w * centGauss(circCentDelta(s.c, b * 50), SIG_NOTE);
+    }
+  }
+  const profSum = profile.reduce((a, b) => a + b, 0) || 1;
+  const profileN = profile.map((x) => x / profSum);
 
-  const scoreFor = (tonic) =>
-    MAQAM_CATALOG.map((m) => {
-      const deg = new Set(m.degrees);
-      let on = 0;
-      for (let pc = 0; pc < 12; pc++) {
-        const rel = (pc - tonic + 12) % 12;
-        if (deg.has(rel)) on += histN[pc];
+  // --- Tonic detection (in cents) with a real confidence -------------------
+  const lastC = samples[samples.length - 1].c;
+  const lowMidi = stableNotes.reduce((lo, n) => (n.midi < lo ? n.midi : lo), stableNotes[0].midi);
+  const lowC = (((lowMidi * 100) % 1200) + 1200) % 1200;
+  const tonicSalience = (t) =>
+    energyNearCents(samples, totalW, t, 40) +
+    0.18 * centGauss(circCentDelta(t, lastC), 50) + // phrases resolve to the tonic
+    0.10 * centGauss(circCentDelta(t, lowC), 50); // tonic is often the lowest dwelt note
+
+  // Scan the octave at 10¢ resolution, then keep peaks ≥120¢ apart.
+  const scan = [];
+  for (let t = 0; t < 1200; t += 10) scan.push({ t, s: tonicSalience(t) });
+  scan.sort((a, b) => b.s - a.s);
+  const tonicCands = [];
+  for (const cand of scan) {
+    if (tonicCands.every((p) => Math.abs(circCentDelta(cand.t, p.t)) >= 120)) {
+      tonicCands.push(cand);
+      if (tonicCands.length >= 3) break;
+    }
+  }
+  const bestSal = tonicCands[0].s;
+  const nextSal = tonicCands[1] ? tonicCands[1].s : 0;
+  // Confidence: how much the winning tonic stands out + does the line resolve to it.
+  const prominence = clamp01((bestSal - nextSal) / (bestSal + 1e-6) / 0.35);
+  const resolves = centGauss(circCentDelta(tonicCands[0].t, lastC), 60);
+  const tonicConf = clamp01(0.6 * prominence + 0.4 * resolves);
+
+  // --- Microtonal maqam fit ------------------------------------------------
+  // Reads the ACTUAL 2nd/3rd/4th interval sizes and scores each maqam on how
+  // close its template intervals are, plus explained energy over the full scale.
+  const scoreAt = (tonicCents) => {
+    const second = windowCentroid(samples, totalW, tonicCents, 60, 260);
+    const third = windowCentroid(samples, totalW, tonicCents, 260, 460);
+    const fourth = windowCentroid(samples, totalW, tonicCents, 460, 560);
+    const scored = MAQAM_CATALOG.map((m) => {
+      // Explained energy: each sample's best membership to ANY scale degree.
+      let expl = 0;
+      for (const s of samples) {
+        let bestMem = 0;
+        for (const deg of m.cents) {
+          const mem = centGauss(circCentDelta(s.c, (tonicCents + deg) % 1200), 38);
+          if (mem > bestMem) bestMem = mem;
+        }
+        expl += s.w * bestMem;
       }
-      const base = clamp01(1.6 * on - 0.6); // ~0.8+ on-scale energy → strong
-      const jinsCov = m.jins.filter((d) => histN[(tonic + d) % 12] > 0.03).length / m.jins.length;
-      // How much the tonic dominates vs a flat 12-note spread (flat singing /
-      // noise → ~0, so it lands in "Uncertain" instead of a confident guess).
-      const tonicStr = clamp01((histN[tonic] * 12 - 1) / 3);
-      let fit = clamp01(0.45 * base + 0.2 * jinsCov + 0.35 * tonicStr);
-      let mult = m.mult;
-      let sikahPenalized = false;
-      // Sikah only counts when its tonic genuinely dominates and its jins is fully present.
-      if (m.id === "sikah" && !(tonicStr >= 0.6 && jinsCov >= 0.999)) {
-        mult *= 0.55;
-        sikahPenalized = true;
+      const scaleFit = expl / totalW;
+
+      // Interval discriminator — the heart of the microtonal upgrade.
+      const parts = [];
+      if (second.cents != null && second.strength > 0.04) {
+        parts.push(centGauss(second.cents - m.second, 45));
       }
+      if (third.cents != null && third.strength > 0.04) {
+        parts.push(centGauss(third.cents - m.third, 45));
+      }
+      // Perfect-4th evidence: rewards maqamat that have it, flags Saba (no 500¢).
+      if (fourth.strength > 0.04) {
+        parts.push(m.fourthPerfect ? clamp01(fourth.strength * 6) : 1 - clamp01(fourth.strength * 6));
+      }
+      const intervalFit = parts.length ? parts.reduce((a, b) => a + b, 0) / parts.length : 0.35;
+
+      // Off-template energy that should NOT be present (e.g. Saba + perfect 4th).
+      let absentEnergy = 0;
+      for (const deg of m.absentCents) {
+        absentEnergy = Math.max(absentEnergy, energyNearCents(samples, totalW, (tonicCents + deg) % 1200, 38));
+      }
+
+      let fit = clamp01(0.5 * intervalFit + 0.32 * scaleFit + 0.18 * tonicConf - 0.7 * absentEnergy);
+      fit *= m.mult;
+      const conf = Math.round(100 * clamp01(fit));
       return {
         id: m.id,
         maqam: m.name,
-        conf: Math.round(100 * clamp01(fit * mult)),
-        tonic,
+        conf,
+        tonic: tonicCents,
         degrees: [...m.degrees],
-        on,
-        jinsCov,
-        tonicStr,
-        fit,
-        mult,
-        sikahPenalized,
+        scaleFit,
+        intervalFit,
+        absentEnergy,
+        expectSecond: m.second,
+        expectThird: m.third,
       };
     }).sort((a, b) => b.conf - a.conf);
+    return { tonicCents, scored, second, third, fourth };
+  };
 
+  // Score at each tonic candidate (weighted toward the most salient tonic) and
+  // keep the best-scoring read.
   let best = null;
-  for (const tonic of tonicCands) {
-    const scored = scoreFor(tonic);
-    if (!best || scored[0].conf > best.scored[0].conf) best = { tonic, scored };
+  for (let i = 0; i < tonicCands.length; i++) {
+    const r = scoreAt(tonicCands[i].t);
+    const headline = r.scored[0].conf * (i === 0 ? 1 : 0.96); // mild preference for the salient tonic
+    if (!best || headline > best.headline) best = { ...r, headline };
   }
 
   const ranked = best.scored;
@@ -362,7 +471,10 @@ function rankMaqams(stableNotes) {
   const second = ranked[1] || { conf: 0, maqam: "" };
   const third = ranked[2] || { conf: 0, maqam: "" };
   const gap = top.conf - second.conf;
-  const isUncertain = top.conf < 45;
+
+  // Tonic confidence gates how strong a claim we allow.
+  const lowTonic = tonicConf < 0.45;
+  let isUncertain = top.conf < 45 || lowTonic;
   let state;
   let kindLabel;
   if (isUncertain) { state = "uncertain"; kindLabel = "Uncertain"; }
@@ -370,38 +482,39 @@ function rankMaqams(stableNotes) {
   else if (top.conf >= 70 && gap >= 10) { state = "confident"; kindLabel = "Maqam"; }
   else { state = "likely"; kindLabel = "Likely Maqam"; }
 
-  const tonicName = pcLetter(best.tonic);
+  const tonicPc = ((Math.round(best.tonicCents / 100) % 12) + 12) % 12;
+  const nearQuarter = Math.min(Math.abs(((best.tonicCents % 100) + 100) % 100), 100 - (((best.tonicCents % 100) + 100) % 100));
+  const tonicName = pcLetter(tonicPc) + (nearQuarter >= 35 && nearQuarter <= 65 ? " (half-flat)" : "");
   const alternatives = [second, third]
     .filter((x) => x && x.maqam)
     .map((x) => ({ maqam: x.maqam, id: x.id, confidence: x.conf }));
 
+  const s2 = best.second.cents != null ? Math.round(best.second.cents) : null;
+  const s3 = best.third.cents != null ? Math.round(best.third.cents) : null;
   let analysisNotes;
-  if (isUncertain) {
+  if (lowTonic) {
+    analysisNotes = `Tonic was ambiguous on this phrase (low tonic confidence), so the maqam read is tentative. End the line by resolving clearly onto one resting note.`;
+  } else if (top.conf < 45) {
     analysisNotes = `The phrase didn’t settle on one maqam — closest reads are ${top.maqam}, ${second.maqam || "—"} and ${third.maqam || "—"}. A slower, more resolved 10–15s line helps.`;
   } else if (state === "possible") {
-    analysisNotes = `${top.maqam} and ${second.maqam} scored very close on this phrase — treat it as a possibility, not a final call.`;
+    analysisNotes = `${top.maqam} and ${second.maqam} scored very close — your 2nd≈${s2}¢ and 3rd≈${s3}¢ sit between the two.`;
   } else {
-    analysisNotes = `Stable notes and interval movement around tonic ${tonicName} suggest ${top.maqam} more strongly than ${second.maqam || "the alternatives"}.`;
+    analysisNotes = `Your 2nd≈${s2}¢ and 3rd≈${s3}¢ above tonic ${pcLetter(tonicPc)} match ${top.maqam} more than ${second.maqam || "the alternatives"}.`;
   }
 
-  // Reference tonic MIDI for real-cents intervals: median of held notes that
-  // sit on the detected tonic pitch-class (so we can show e.g. a "neutral 3rd"
-  // ~350¢ instead of forcing it onto the 12-TET grid).
-  const tonicMidis = stableNotes.filter((n) => pcOf(n.midi) === best.tonic).map((n) => n.midi);
-  const tonicRefMidi = tonicMidis.length
-    ? medianOf(tonicMidis)
-    : Math.round(stableNotes.reduce((lo, n) => (n.midi < lo ? n.midi : lo), stableNotes[0].midi));
+  // Real-cents intervals for the debug list (kept off the 12-TET grid).
   const intervals = stableNotes.map((n) => {
-    let cents = Math.round((n.midi - tonicRefMidi) * 100);
-    cents = ((cents % 1200) + 1200) % 1200;
-    return { note: midiToLetterName(n.midi), letter: pcLetter(pcOf(n.midi)), cents, frames: n.frames };
+    const c = (((n.midi * 100 - best.tonicCents) % 1200) + 1200) % 1200;
+    return { note: midiToLetterName(n.midi), letter: pcLetter(pcOf(n.midi)), cents: Math.round(c), frames: n.frames };
   });
 
-  const reason = isUncertain
-    ? `Top score ${top.conf}% is below 45% — evidence too weak to commit.`
-    : state === "possible"
-      ? `${top.maqam} (${top.conf}%) and ${second.maqam} (${second.conf}%) are within ${gap} pts — too close to call final.`
-      : `${top.maqam} won: on-scale energy ${(top.on * 100).toFixed(0)}%, jins coverage ${(top.jinsCov * 100).toFixed(0)}%, tonic strength ${(top.tonicStr * 100).toFixed(0)}% → beat ${second.maqam || "—"} by ${gap} pts.`;
+  const reason = lowTonic
+    ? `Tonic confidence ${(tonicConf * 100).toFixed(0)}% < 45% — capped to a tentative read (no high-confidence claim).`
+    : top.conf < 45
+      ? `Top score ${top.conf}% < 45% — evidence too weak to commit.`
+      : state === "possible"
+        ? `${top.maqam} (${top.conf}%) vs ${second.maqam} (${second.conf}%) within ${gap} pts — sung 2nd≈${s2}¢/3rd≈${s3}¢ don't separate them cleanly.`
+        : `${top.maqam} won: sung 2nd≈${s2}¢ (wants ${top.expectSecond}¢), 3rd≈${s3}¢ (wants ${top.expectThird}¢); interval fit ${(top.intervalFit * 100).toFixed(0)}%, scale fit ${(top.scaleFit * 100).toFixed(0)}% → beat ${second.maqam || "—"} by ${gap} pts.`;
 
   return {
     isUncertain,
@@ -412,25 +525,34 @@ function rankMaqams(stableNotes) {
     confidence: top.conf,
     alternatives,
     top3: ranked.slice(0, 3).map((x) => ({ maqam: x.maqam, id: x.id, confidence: x.conf })),
-    detectedTonicPc: best.tonic,
+    detectedTonicPc: tonicPc,
     detectedTonicName: tonicName,
     analysisNotes,
     degrees: top.degrees,
-    tonicPc: best.tonic,
+    tonicPc,
     stableCount: stableNotes.length,
     debug: {
-      histogram: histN.map((v, pc) => ({ pc, letter: pcLetter(pc), weight: v })),
-      tonicCandidates: tonicCands.map((pc) => ({ pc, letter: pcLetter(pc), score: tonicScore(pc) })),
-      tonicRefMidi,
+      tonicCents: Math.round(best.tonicCents),
+      tonicConf,
+      sungSecond: s2,
+      sungThird: s3,
+      fourthStrength: best.fourth.strength,
+      profile: profileN.map((v, b) => ({ cents: b * 50, weight: v })),
+      tonicCandidates: tonicCands.map((p) => ({
+        cents: Math.round(p.t),
+        letter: pcLetter(((Math.round(p.t / 100) % 12) + 12) % 12),
+        score: p.s,
+      })),
       intervals,
       scores: ranked.map((x) => ({
         maqam: x.maqam,
         id: x.id,
         conf: x.conf,
-        on: x.on,
-        jinsCov: x.jinsCov,
-        tonicStr: x.tonicStr,
-        sikahPenalized: x.sikahPenalized,
+        scaleFit: x.scaleFit,
+        intervalFit: x.intervalFit,
+        absentEnergy: x.absentEnergy,
+        expectSecond: x.expectSecond,
+        expectThird: x.expectThird,
       })),
       gap,
       reason,
@@ -701,7 +823,7 @@ function analyzeBuffer(full, sampleRate) {
   const maqamTitle = maqamRanking.isUncertain
     ? "Uncertain"
     : `${maqamRanking.primaryMaqam} · ${maqamRanking.confidence}%`;
-  const maqamMeta = `Tonic ~${maqamRanking.detectedTonicName} · ranked from ${maqamRanking.stableCount} sustained notes (12-TET estimate)`;
+  const maqamMeta = `Tonic ~${maqamRanking.detectedTonicName} · ranked from ${maqamRanking.stableCount} sustained notes (microtonal cents estimate)`;
 
   return {
     ok: true,
@@ -1050,6 +1172,10 @@ function buildMaqamDebug({ f0s, sampleRate, hop, stableNotes, ranking }) {
   if (jumpRate > 0.25) {
     flags.push(`pitch tracking unstable (${Math.round(jumpRate * 100)}% of frames jump >120¢)`);
   }
+  const tonicConf = ranking.debug && typeof ranking.debug.tonicConf === "number" ? ranking.debug.tonicConf : 1;
+  if (tonicConf < 0.45) {
+    flags.push(`tonic confidence low (${Math.round(tonicConf * 100)}%) — maqam capped to tentative`);
+  }
   if (ranking.isUncertain) flags.push("uncertain — not forcing a maqam");
   else if (ranking.state === "possible") flags.push("ranking close — flagged as possible, not final");
 
@@ -1115,11 +1241,11 @@ function renderMaqamDebug(debug) {
     return;
   }
   el.hidden = false;
-  const histLines = (debug.histogram || [])
+  const profLines = (debug.profile || [])
     .slice()
+    .filter((h) => h.weight > 0.012)
     .sort((a, b) => b.weight - a.weight)
-    .filter((h) => h.weight > 0)
-    .map((h) => `  ${h.letter.padEnd(3)} ${"#".repeat(Math.max(0, Math.round(h.weight * 24)))} ${(h.weight * 100).toFixed(0)}%`)
+    .map((h) => `  ${String(h.cents).padStart(4)}c ${"#".repeat(Math.max(0, Math.round(h.weight * 40)))} ${(h.weight * 100).toFixed(0)}%`)
     .join("\n");
   const intervalLines = (debug.intervals || [])
     .map((iv) => `  ${String(iv.note).padEnd(5)} +${String(iv.cents).padStart(4)}c (${iv.frames}f)`)
@@ -1128,13 +1254,17 @@ function renderMaqamDebug(debug) {
     .slice(0, 5)
     .map(
       (s, i) =>
-        `  ${i + 1}. ${String(s.maqam).padEnd(9)} ${String(s.conf).padStart(3)}%   on=${(s.on * 100).toFixed(0)}% jins=${(s.jinsCov * 100).toFixed(0)}% tonic=${(s.tonicStr * 100).toFixed(0)}%${s.sikahPenalized ? " [sikah-]" : ""}`,
+        `  ${i + 1}. ${String(s.maqam).padEnd(9)} ${String(s.conf).padStart(3)}%   interval=${(s.intervalFit * 100).toFixed(0)}% scale=${(s.scaleFit * 100).toFixed(0)}% (wants 2nd ${s.expectSecond}c/3rd ${s.expectThird}c)${s.absentEnergy > 0.05 ? ` [off ${(s.absentEnergy * 100).toFixed(0)}%]` : ""}`,
     )
     .join("\n");
-  const tonicCandLine = (debug.tonicCandidates || []).map((t) => `${t.letter}(${t.score.toFixed(2)})`).join("  ");
+  const tonicCandLine = (debug.tonicCandidates || []).map((t) => `${t.letter} ${t.cents}c(${t.score.toFixed(2)})`).join("  ");
+  const tConf = typeof debug.tonicConf === "number" ? `${Math.round(debug.tonicConf * 100)}%` : "—";
   const flagsBlock = debug.flags && debug.flags.length ? debug.flags.map((f) => `! ${f}`).join("\n") : "OK — no instability flags";
   const text = [
-    `Detected tonic: ${debug.detectedTonicName}   candidates: ${tonicCandLine}`,
+    `Detected tonic: ${debug.detectedTonicName} (${debug.tonicCents}c) · confidence ${tConf}`,
+    `Tonic candidates: ${tonicCandLine}`,
+    ``,
+    `Sung intervals: 2nd ~${debug.sungSecond == null ? "—" : debug.sungSecond + "c"} · 3rd ~${debug.sungThird == null ? "—" : debug.sungThird + "c"} · 4th energy ${(Number(debug.fourthStrength || 0) * 100).toFixed(0)}%`,
     ``,
     `Stable notes (${debug.stableNotes.length}):`,
     `  ${debug.stableNotes.map((n) => n.note).join(", ") || "—"}`,
@@ -1144,8 +1274,8 @@ function renderMaqamDebug(debug) {
     `Relative intervals from tonic (real cents):`,
     intervalLines || "  —",
     ``,
-    `Note histogram (duration-weighted):`,
-    histLines || "  —",
+    `Cent profile (microtonal, 50c bins):`,
+    profLines || "  —",
     ``,
     `Maqam ranking (top 5):`,
     scoreLines || "  —",

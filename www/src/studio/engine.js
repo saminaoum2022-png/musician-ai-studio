@@ -228,10 +228,12 @@ export class StudioEngine {
         echo: cb.monitorEcho ?? 0.18,
       });
       micSrc.connect(chain.input);
-      // Centre the mic across both ears (see _centerNode) before monitoring.
+      // Centre the mic across both ears (see _centerNode), then limit so the
+      // hot makeup gain stays loud without clipping in the headphones.
       const center = this._centerNode(this.ctx);
+      const limiter = this._makeLimiter(this.ctx);
       chain.output.connect(center.input);
-      center.output.connect(monitorGain).connect(this.ctx.destination);
+      center.output.connect(monitorGain).connect(limiter).connect(this.ctx.destination);
       this._monitorChain = chain;
     }
 
@@ -362,10 +364,11 @@ export class StudioEngine {
     const take = this.getActiveTake();
 
     const master = this.ctx.createGain();
-    master.connect(this.ctx.destination);
+    const limiter = this._makeLimiter(this.ctx);
+    master.connect(limiter).connect(this.ctx.destination);
     const startAt = this.ctx.currentTime + 0.08;
     const fromSec = Math.max(0, Number(params.fromSec) || 0);
-    this._nodes = [master];
+    this._nodes = [master, limiter];
 
     // Live-adjustable handles so the Mix sliders change gains/reverb in real
     // time (no restart). Cleared on stopMix.
@@ -445,7 +448,8 @@ export class StudioEngine {
     const off = new OfflineAudioContext(2, frames, sr);
 
     const master = off.createGain();
-    master.connect(off.destination);
+    const limiter = this._makeLimiter(off);
+    master.connect(limiter).connect(off.destination);
 
     const guideSrc = off.createBufferSource();
     guideSrc.buffer = this.guideBuffer;
@@ -471,6 +475,21 @@ export class StudioEngine {
     const chans = rendered.numberOfChannels >= 2
       ? [rendered.getChannelData(0), rendered.getChannelData(1)]
       : [rendered.getChannelData(0), rendered.getChannelData(0)];
+
+    // Peak-normalise so every export lands at a consistent, loud level
+    // (-0.3 dBFS) regardless of how quiet the raw take was. The limiter already
+    // tamed transients, so this just maps the surviving peak up to the ceiling.
+    let peak = 0;
+    for (const ch of chans) {
+      for (let i = 0; i < ch.length; i++) { const a = Math.abs(ch[i]); if (a > peak) peak = a; }
+    }
+    if (peak > 0) {
+      const gain = Math.min(0.97 / peak, 8);
+      if (Math.abs(gain - 1) > 0.01) {
+        for (const ch of chans) for (let i = 0; i < ch.length; i++) ch[i] *= gain;
+      }
+    }
+
     const blob = encodeWav16(chans, rendered.sampleRate);
     return { blob, durationSec: rendered.duration, sampleRate: rendered.sampleRate };
   }
@@ -537,6 +556,23 @@ export class StudioEngine {
     splitter.connect(merger, 0, 0);
     splitter.connect(merger, 0, 1);
     return { input: splitter, output: merger };
+  }
+
+  /**
+   * A brick-wall-ish limiter on the master bus. The voice makeup gain pushes the
+   * mix hot on purpose (so it reads loud); the limiter catches the peaks so it
+   * never clips. ~3ms lookahead is fine even for the live monitor.
+   */
+  _makeLimiter(ctx) {
+    const c = ctx.createDynamicsCompressor();
+    try {
+      c.threshold.value = -2.5;
+      c.knee.value = 0;
+      c.ratio.value = 20;
+      c.attack.value = 0.003;
+      c.release.value = 0.25;
+    } catch {}
+    return c;
   }
 
   _buildVoiceChain(ctx, params = {}) {

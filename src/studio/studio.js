@@ -23,6 +23,7 @@ import {
   saveRecording,
   getRecordingBlob,
   deleteRecording,
+  saveVocal,
 } from "./store.js";
 
 let engine = null;
@@ -1045,7 +1046,7 @@ function renderMix(root) {
       </div>
 
       <div class="studioFooter studioFooter--mix">
-        <button type="button" class="studioPrimary studioPrimary--publish" data-studio-publish>Publish</button>
+        <button type="button" class="studioPrimary studioPrimary--publish" data-studio-save>Save to Songs</button>
         <button type="button" class="studioGhost" data-studio-draft>Save draft</button>
       </div>
     </div>`;
@@ -1114,7 +1115,7 @@ function bindMix(root) {
 
   root.querySelector("[data-studio-play]")?.addEventListener("click", () => togglePreview(root));
   root.querySelector("[data-studio-draft]")?.addEventListener("click", () => saveDraft());
-  root.querySelector("[data-studio-publish]")?.addEventListener("click", () => startPublish(root));
+  root.querySelector("[data-studio-save]")?.addEventListener("click", () => saveToSongs(root));
 }
 
 function mixParams() {
@@ -1164,13 +1165,17 @@ function saveDraft() {
 }
 
 /* -------------------------------------------------------------------------- */
-/* Screen: Publishing + Published                                              */
+/* Screen: Save to Songs (local-first) + Saved                                 */
 /* -------------------------------------------------------------------------- */
 
-async function startPublish(root) {
+// "Save to Songs" renders the final mix and stores it ON THE DEVICE only (in
+// the local "My Vocals" store). Nothing is uploaded here — publishing (with a
+// cover + release) happens later from the My Vocals tab, and that is the only
+// time the audio leaves the phone.
+async function saveToSongs(root) {
   bridge.haptic?.("medium");
   try { engine?.stopMix(); } catch {}
-  renderPublishing(root);
+  renderSaving(root);
   const fill = root.querySelector("[data-pub-fill]");
   const pct = root.querySelector("[data-pub-pct]");
   const phase = root.querySelector("[data-pub-phase]");
@@ -1190,72 +1195,70 @@ async function startPublish(root) {
   };
 
   try {
-    tickTo(35, "Rendering your mix…");
+    tickTo(55, "Bouncing your mix…");
     const rendered = await engine.renderMix(mixParams());
-    tickTo(70, "Uploading…");
-    const meta = {
-      track: current.track,
-      title: current.track?.title || "My take",
+    tickTo(85, "Saving to your device…");
+    const title = String(current.track?.title || "").trim();
+    await saveVocal({
+      title: title ? `${title} — my version` : "Studio song",
+      blob: rendered.blob,
       durationSec: rendered.durationSec,
-      mix: current.mix,
-    };
-    // Local-first: only the final render leaves the device. app.js owns the
-    // real upload/publish; if it isn't wired yet we still complete the flow.
-    if (typeof bridge.publishMix === "function") {
-      await bridge.publishMix(rendered.blob, meta);
-    } else {
-      await new Promise((r) => setTimeout(r, 900));
-    }
+      artUrl: safe(bridge.coverForTrack?.(current.track)) || safe(current.track?.artUrl) || "",
+      sourceTitle: title,
+      mime: "audio/wav",
+    });
     p = 100; paint();
     unsaved = false;
-    renderPublished(root);
+    try { bridge.onVocalsChanged?.(); } catch {}
+    renderSaved(root);
   } catch (e) {
     renderMix(root);
-    bridge.showToast?.("Publishing failed — your take is still saved. Try again.");
+    bridge.showToast?.("Couldn’t save the mix — your take is still here. Try again.");
   }
 }
 
-function renderPublishing(root) {
-  screen = "publishing";
+function renderSaving(root) {
+  screen = "saving";
   const cover = safe(bridge.coverForTrack?.(current.track)) || safe(current.track?.artUrl) || "";
   root.innerHTML = `
-    <div class="studio studioPublish" data-studio-screen="publishing">
+    <div class="studio studioPublish" data-studio-screen="saving">
       <div class="studioPublishInner">
         <div class="studioPublishArt ${cover ? "" : "isEmpty"}">
           ${cover ? `<img src="${esc(cover)}" alt="" />` : `<span aria-hidden="true">♪</span>`}
           <div class="studioPublishShimmer" aria-hidden="true"></div>
         </div>
-        <h1 class="studioPublishTitle">Publishing your song</h1>
+        <h1 class="studioPublishTitle">Saving your song</h1>
         <p class="studioPublishPhase" data-pub-phase>Preparing…</p>
         <div class="studioPubBar"><span class="studioPubFill" data-pub-fill style="width:0%"></span></div>
         <div class="studioPubPct" data-pub-pct>0%</div>
-        <p class="studioPublishHint">Keep this open — we’ll let you know the moment it’s live.</p>
+        <p class="studioPublishHint">Stays on your phone — find it in Profile → My Vocals, and publish it whenever you’re ready.</p>
       </div>
     </div>`;
 }
 
-function renderPublished(root) {
-  screen = "published";
+function renderSaved(root) {
+  screen = "saved";
   bridge.haptic?.("medium");
   const title = safe(current.track?.title) || "Your song";
   root.innerHTML = `
-    <div class="studio studioPublished" data-studio-screen="published">
+    <div class="studio studioPublished" data-studio-screen="saved">
       <div class="studioPublishInner">
         <div class="studioCheck" aria-hidden="true">
           <svg viewBox="0 0 52 52" width="72" height="72"><circle class="studioCheckCircle" cx="26" cy="26" r="24" fill="none"/><path class="studioCheckMark" fill="none" d="M14 27 l8 8 l16 -18"/></svg>
         </div>
-        <h1 class="studioPublishTitle">You’re live</h1>
-        <p class="studioPublishPhase">“${esc(title)}” is now on Discover with your voice.</p>
+        <h1 class="studioPublishTitle">Saved to My Vocals</h1>
+        <p class="studioPublishPhase">“${esc(title)} — my version” is on your device. Publish it anytime from Profile → My Vocals.</p>
         <div class="studioFooter studioFooter--done">
-          <button type="button" class="studioPrimary" data-studio-done>Done</button>
+          <button type="button" class="studioPrimary" data-studio-myvocals>Go to My Vocals</button>
           <button type="button" class="studioGhost" data-studio-another>Record another</button>
         </div>
       </div>
     </div>`;
 
-  root.querySelector("[data-studio-done]")?.addEventListener("click", () => {
+  root.querySelector("[data-studio-myvocals]")?.addEventListener("click", () => {
     bridge.haptic?.("light");
-    bridge.navigateBack?.();
+    if (typeof bridge.openMyVocals === "function") bridge.openMyVocals();
+    else bridge.navigateBack?.();
   });
   root.querySelector("[data-studio-another]")?.addEventListener("click", () => {
     bridge.haptic?.("light");

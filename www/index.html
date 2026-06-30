@@ -124,7 +124,7 @@
       onload="this.media='all'"
     />
     <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Display:wght@900&family=Inter:wght@900&display=swap" /></noscript>
-    <link rel="stylesheet" href="./styles.css?v=20260701-024428" />
+    <link rel="stylesheet" href="./styles.css?v=20260701-032400" />
 
     <meta name="description" content="Nabadai is an AI music studio. Hum a melody, write lyrics, and ship a song." />
     <meta property="og:type" content="website" />
@@ -2642,6 +2642,7 @@
             <div class="profileTabBar" role="tablist" aria-label="Profile content">
               <button type="button" class="profileTab isActive" role="tab" aria-selected="true" data-profile-songs-segment="activities" id="profileSongsSegActivity">Posts</button>
               <button type="button" class="profileTab" role="tab" aria-selected="false" data-profile-songs-segment="all" id="profileSongsSegAll">Songs</button>
+              <button type="button" class="profileTab" role="tab" aria-selected="false" data-profile-songs-segment="vocals" id="profileSongsSegVocals">My Vocals</button>
               <button type="button" class="profileTab" role="tab" aria-selected="false" data-profile-songs-segment="playlist" id="profileSongsSegPlaylist">Playlist</button>
             </div>
             <div class="profileSongsToolbar libraryHeaderRow">
@@ -2656,6 +2657,7 @@
               </div>
             </div>
             <div id="libraryList" class="libraryList profileHubSharedList"></div>
+            <div id="profileVocalsList" class="studioVocalsList" hidden aria-live="polite"></div>
             <div id="profileActivitiesList" class="profileActivitiesList followActStack" hidden aria-live="polite"></div>
             <div id="profileActivitiesLoadMoreWrap" class="profileReleasesLoadMoreRow profileActLoadMoreRow" hidden>
               <button type="button" id="profileActivitiesLoadMore" class="profileReleasesLoadMore profileActLoadMore" aria-label="Load more posts">
@@ -4146,6 +4148,6 @@
     </script>
     <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
     <script src="./env.client.js" onerror="void 0"></script>
-    <script type="module" src="./src/app.js?v=20260701-024428"></script>
+    <script type="module" src="./src/app.js?v=20260701-032400"></script>
   </body>
 </html>

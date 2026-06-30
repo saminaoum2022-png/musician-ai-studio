@@ -12,6 +12,12 @@ import {
   leaveStudioRoot,
 } from "./studio/studio.js";
 import {
+  listVocals,
+  getVocalBlob,
+  deleteVocal,
+  renameVocal,
+} from "./studio/store.js";
+import {
   clearLockScreenNowPlaying,
   initLockScreenNowPlaying,
   syncLockScreenNowPlaying,
@@ -64,7 +70,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260701-024428";
+const APP_BUILD = "20260701-032400";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -3531,7 +3537,7 @@ function applyRoute({ passGen } = {}) {
     try {
       const pq = new URLSearchParams(String(rawRouteQuery || ""));
       const segQ = pq.get("seg");
-      if (segQ === "all" || segQ === "activities" || segQ === "playlist" || segQ === "public") {
+      if (segQ === "all" || segQ === "activities" || segQ === "playlist" || segQ === "public" || segQ === "vocals") {
         _profileSongsSegment = segQ === "public" ? "activities" : segQ;
         sessionStorage.setItem(PROFILE_SONGS_SEGMENT_KEY, _profileSongsSegment);
       } else {
@@ -3539,7 +3545,7 @@ function applyRoute({ passGen } = {}) {
         _profileSongsSegment =
           stored === "public"
             ? "activities"
-            : stored === "all" || stored === "activities" || stored === "playlist"
+            : stored === "all" || stored === "activities" || stored === "playlist" || stored === "vocals"
               ? stored
               : "activities";
       }
@@ -29069,6 +29075,33 @@ function runTrackSheetAction(action, sourceEl) {
     return;
   }
 
+  if (ctx.mode === "vocals") {
+    const id = ctx.vocalId;
+    if (action === "vocal_play") { shut(); void playVocalById(id); return; }
+    if (action === "vocal_rename") {
+      shut();
+      const cur = (listVocals().find((x) => x.id === id) || {}).title || "";
+      const name = prompt("Rename this song", cur);
+      if (name && name.trim()) { renameVocal(id, name.trim()); renderMyVocals(); }
+      return;
+    }
+    if (action === "vocal_download") { shut(); void downloadVocalById(id); return; }
+    if (action === "vocal_del") {
+      shut();
+      if (!confirm("Delete this studio song from your device? This can’t be undone.")) return;
+      if (_vocalsPlayingId === id) stopVocalsPlayback();
+      void deleteVocal(id).then(() => { haptic("light"); renderMyVocals(); });
+      return;
+    }
+    if (action === "vocal_publish") {
+      shut();
+      haptic("light");
+      showToast("Publishing from My Vocals is coming next — you’ll add a cover and release it here.", { durationMs: 4200 });
+      return;
+    }
+    return;
+  }
+
   if (ctx.mode === "user_playlist_item") {
     const pl = getUserPlaylistById(ctx.playlistId);
     const item = (pl?.items || []).find((x) => String(x.id) === String(ctx.playlistItemId));
@@ -36172,6 +36205,8 @@ function syncProfileSongsSegmentUi() {
   const isAll = _profileSongsSegment === "all";
   const isPlaylist = _profileSongsSegment === "playlist";
   const isActivities = _profileSongsSegment === "activities";
+  const isVocals = _profileSongsSegment === "vocals";
+  const vocalsList = document.getElementById("profileVocalsList");
   const onProfile = (document.body.getAttribute("data-route") || "") === "profile";
   try {
     document.body.setAttribute("data-profile-songs-seg", _profileSongsSegment);
@@ -36186,7 +36221,8 @@ function syncProfileSongsSegmentUi() {
   if (playlistCount) playlistCount.hidden = !isPlaylist;
   if (actCount) actCount.hidden = !isActivities;
   if (activitiesList) activitiesList.hidden = !isActivities;
-  if (libList) libList.hidden = isActivities;
+  if (vocalsList) vocalsList.hidden = !isVocals;
+  if (libList) libList.hidden = isActivities || isVocals;
   const loadMoreWrap = document.getElementById("profileActivitiesLoadMoreWrap");
   if (loadMoreWrap) {
     loadMoreWrap.hidden = !isActivities;
@@ -36208,7 +36244,7 @@ function bindProfileSongsSegmentOnce() {
   document.querySelectorAll("[data-profile-songs-segment]").forEach((btn) => {
     btn.addEventListener("click", () => {
       const seg = btn.getAttribute("data-profile-songs-segment");
-      if (seg !== "all" && seg !== "activities" && seg !== "playlist") return;
+      if (seg !== "all" && seg !== "activities" && seg !== "playlist" && seg !== "vocals") return;
       if (seg === _profileSongsSegment) return;
       _profileSongsSegment = seg;
       try { sessionStorage.setItem(PROFILE_SONGS_SEGMENT_KEY, seg); } catch {}
@@ -36246,7 +36282,7 @@ function bindProfileSongsSegmentOnce() {
     const segBtn = e.target?.closest?.("[data-profile-songs-switch]");
     if (!segBtn) return;
     const seg = segBtn.getAttribute("data-profile-songs-switch");
-    if (seg !== "all" && seg !== "activities" && seg !== "playlist") return;
+    if (seg !== "all" && seg !== "activities" && seg !== "playlist" && seg !== "vocals") return;
     _profileSongsSegment = seg;
     try { sessionStorage.setItem(PROFILE_SONGS_SEGMENT_KEY, seg); } catch {}
     syncProfileSongsSegmentUi();
@@ -36313,6 +36349,11 @@ function renderProfileSongs(opts = {}) {
     return;
   }
   if (actList) actList.hidden = true;
+  if (_profileSongsSegment === "vocals") {
+    if (libEl) libEl.hidden = true;
+    renderMyVocals();
+    return;
+  }
   if (libEl) libEl.hidden = false;
   if (_profileSongsSegment === "playlist") {
     renderUserPlaylist();
@@ -36322,6 +36363,170 @@ function renderProfileSongs(opts = {}) {
     try { renderProfileOwnStats(); } catch {}
     renderLibrary();
   }
+}
+
+/* -------------------------------------------------------------------------- */
+/* My Vocals — local Studio recordings (device-only until published)          */
+/* -------------------------------------------------------------------------- */
+
+let _vocalsAudio = null;
+let _vocalsPlayingId = "";
+let _vocalsPlayingUrl = "";
+
+function stopVocalsPlayback() {
+  try { _vocalsAudio?.pause(); } catch {}
+  if (_vocalsPlayingUrl) { try { URL.revokeObjectURL(_vocalsPlayingUrl); } catch {} _vocalsPlayingUrl = ""; }
+  _vocalsPlayingId = "";
+}
+
+function fmtVocalDuration(sec) {
+  const s = Math.max(0, Math.floor(Number(sec) || 0));
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+}
+
+function fmtVocalDate(ts) {
+  const d = new Date(Number(ts) || 0);
+  if (Number.isNaN(d.getTime())) return "";
+  try { return d.toLocaleDateString(undefined, { month: "short", day: "numeric" }); } catch { return ""; }
+}
+
+function renderMyVocals() {
+  const host = document.getElementById("profileVocalsList");
+  if (!host) return;
+  let items = [];
+  try { items = listVocals() || []; } catch { items = []; }
+
+  if (!items.length) {
+    host.innerHTML = `
+      <div class="studioVocalsEmpty">
+        <div class="studioVocalsEmptyIco" aria-hidden="true">🎙️</div>
+        <h3>No studio songs yet</h3>
+        <p>Record your voice over a song in the Studio, then “Save to Songs”. Your takes stay on this device until you publish them.</p>
+      </div>`;
+    return;
+  }
+
+  // Match the standard Library card (.libRow) so it feels native, with the same
+  // ⋯ menu affordance opening the track-options sheet.
+  const placeholder = brokenCoverPlaceholderUrl();
+  host.innerHTML = `
+    <ul class="libraryRows" role="list">
+      ${items.map((v) => {
+        const playing = v.id === _vocalsPlayingId;
+        const art = escapeHtml(v.artUrl || placeholder);
+        const safeTitle = escapeHtml(v.title || "Studio song");
+        const subBits = [];
+        const dateLabel = fmtVocalDate(v.createdAt);
+        if (v.durationSec) subBits.push(`<span class="libRowDot">${escapeHtml(fmtVocalDuration(v.durationSec))}</span>`);
+        if (dateLabel) subBits.push(`<span class="libRowDot">${escapeHtml(dateLabel)}</span>`);
+        subBits.push(`<span class="libRowChip">${v.published ? "Published" : "On this device"}</span>`);
+        return `
+          <li class="libRow ${playing ? "libRowPlaying" : ""}" data-vocal-row="${escapeHtml(v.id)}">
+            <button class="libRowMain" type="button" data-vocal-play="${escapeHtml(v.id)}" aria-label="${playing ? "Pause" : "Play"} ${safeTitle}">
+              <span class="libRowArt">
+                <img src="${art}" alt="" width="56" height="56" decoding="async" loading="lazy" />
+                ${typeof coverArtPlaybackOverlayHtml === "function" ? coverArtPlaybackOverlayHtml() : ""}
+              </span>
+              <span class="libRowInfo">
+                <span class="libRowTitle">${safeTitle}</span>
+                <span class="libRowSub">${subBits.join("")}</span>
+              </span>
+              <span class="libRowEq" aria-hidden="true"><span></span><span></span><span></span></span>
+            </button>
+            <div class="libRowActions">
+              <button class="libRowMore" type="button" data-vocal-menu="${escapeHtml(v.id)}" aria-label="More options for ${safeTitle}">⋯</button>
+            </div>
+          </li>`;
+      }).join("")}
+    </ul>`;
+
+  bindMyVocalsOnce();
+}
+
+async function playVocalById(id) {
+  if (_vocalsPlayingId === id) { stopVocalsPlayback(); renderMyVocals(); return; }
+  stopVocalsPlayback();
+  try {
+    const blob = await getVocalBlob(id);
+    if (!blob) { showToast("Recording not found on this device."); return; }
+    _vocalsPlayingUrl = URL.createObjectURL(blob);
+    if (!_vocalsAudio) _vocalsAudio = new Audio();
+    _vocalsAudio.src = _vocalsPlayingUrl;
+    _vocalsAudio.onended = () => { stopVocalsPlayback(); renderMyVocals(); };
+    _vocalsPlayingId = id;
+    await _vocalsAudio.play();
+    renderMyVocals();
+  } catch { showToast("Couldn’t play that here."); stopVocalsPlayback(); }
+}
+
+let _vocalsBound = false;
+function bindMyVocalsOnce() {
+  const host = document.getElementById("profileVocalsList");
+  if (!host || _vocalsBound) return;
+  _vocalsBound = true;
+  host.addEventListener("click", async (e) => {
+    const menuBtn = e.target.closest("[data-vocal-menu]");
+    if (menuBtn) {
+      e.stopPropagation();
+      haptic("light");
+      openVocalOptionsSheet(menuBtn.getAttribute("data-vocal-menu"));
+      return;
+    }
+    const playBtn = e.target.closest("[data-vocal-play]");
+    if (playBtn) {
+      haptic("light");
+      await playVocalById(playBtn.getAttribute("data-vocal-play"));
+      return;
+    }
+  });
+}
+
+/* ---- My Vocals: track-options sheet (Publish / Play / Rename / Download / Delete) ---- */
+
+function openVocalOptionsSheet(id) {
+  const v = (listVocals() || []).find((x) => x.id === id);
+  if (!v) return;
+  _trackSheetCtx = { mode: "vocals", vocalId: id };
+  renderTrackSheetVocal(v);
+  openTrackSheetShell({
+    title: v.title || "Studio song",
+    sub: ["My Vocals", v.published ? "Published" : "On this device"].join(" · "),
+    artUrl: v.artUrl || brokenCoverPlaceholderUrl(),
+  });
+}
+
+function renderTrackSheetVocal(v) {
+  const q = document.getElementById("trackSheetQuickMount");
+  const l = document.getElementById("trackSheetListMount");
+  const d = document.getElementById("trackSheetDangerMount");
+  if (!q || !l || !d) return;
+  q.innerHTML = `
+    <button type="button" class="discoverTrackSheetQuickBtn discoverTrackSheetQuickBtn--accent" data-track-sheet-action="vocal_publish">Publish</button>
+    <button type="button" class="discoverTrackSheetQuickBtn" data-track-sheet-action="vocal_play">Play</button>
+  `;
+  l.innerHTML = `
+    <button type="button" class="discoverTrackSheetRow" data-track-sheet-action="vocal_rename">Rename song</button>
+    <button type="button" class="discoverTrackSheetRow" data-track-sheet-action="vocal_download">Download audio</button>
+  `;
+  d.innerHTML = `
+    <button type="button" class="discoverTrackSheetRow discoverTrackSheetRow--danger" data-track-sheet-action="vocal_del">Delete</button>
+  `;
+}
+
+async function downloadVocalById(id) {
+  try {
+    const v = (listVocals() || []).find((x) => x.id === id);
+    const blob = await getVocalBlob(id);
+    if (!blob) { showToast("Recording not found on this device."); return; }
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${(v?.title || "studio-song").replace(/[^\w\- ]+/g, "").trim() || "studio-song"}.wav`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => { try { URL.revokeObjectURL(url); } catch {} }, 4000);
+  } catch { showToast("Couldn’t export that here."); }
 }
 
 function refreshOwnSongsUi(opts = {}) {
@@ -49568,6 +49773,19 @@ try {
     cachedInstrumental: (t) => studioCachedInstrumental(t),
     separateVocals: (t, onPhase) => studioSeparateVocals(t, onPhase),
     librarySongs: () => studioLibrarySongs(),
+    onVocalsChanged: () => { try { if ((document.body.getAttribute("data-route") || "") === "profile" && _profileSongsSegment === "vocals") renderMyVocals(); } catch {} },
+    openMyVocals: () => {
+      try {
+        _profileSongsSegment = "vocals";
+        sessionStorage.setItem(PROFILE_SONGS_SEGMENT_KEY, "vocals");
+      } catch {}
+      try { leaveStudioRoot?.(); } catch {}
+      try {
+        location.hash = "#/profile";
+        syncProfileSongsSegmentUi();
+        renderProfileSongs();
+      } catch {}
+    },
     latestTrack: () => {
       try {
         return loadLibrary().find(

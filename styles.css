@@ -41424,3 +41424,12 @@ body[data-route="studio"] .deskRail { display: none !important; }
 @media (prefers-reduced-motion: reduce) {
   .studioWaveFill { transition: none; }
 }
+
+/* -------------------------------------------------------------------------- */
+/* My Vocals — local Studio songs in Profile                                   */
+/* -------------------------------------------------------------------------- */
+.studioVocalsList { padding: 4px 0 8px; }
+.studioVocalsEmpty { text-align: center; padding: 40px 18px; color: rgba(255,255,255,0.6); }
+.studioVocalsEmptyIco { font-size: 34px; margin-bottom: 10px; }
+.studioVocalsEmpty h3 { margin: 0 0 6px; font-size: 17px; color: rgba(255,255,255,0.9); }
+.studioVocalsEmpty p { margin: 0 auto; max-width: 320px; font-size: 13px; line-height: 1.5; }

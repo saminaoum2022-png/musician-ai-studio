@@ -65,10 +65,11 @@ function readMeta() {
     if (m && typeof m === "object") {
       m.projects = Array.isArray(m.projects) ? m.projects : [];
       m.recordings = Array.isArray(m.recordings) ? m.recordings : [];
+      m.vocals = Array.isArray(m.vocals) ? m.vocals : [];
       return m;
     }
   } catch {}
-  return { projects: [], recordings: [] };
+  return { projects: [], recordings: [], vocals: [] };
 }
 
 function writeMeta(m) {
@@ -110,6 +111,61 @@ export function renameRecording(id, name) {
   const m = readMeta();
   const r = m.recordings.find((x) => x.id === id);
   if (r) { r.name = String(name || "").trim() || r.name; writeMeta(m); }
+}
+
+/* ---- Vocals (finished Studio mixes, saved on-device only) ----
+ * These are the "Save to Songs" results. They live ONLY here until the user
+ * explicitly publishes one (which is the only time audio is uploaded). They are
+ * deliberately kept out of the cloud-archived Library path. */
+
+export function listVocals() {
+  return readMeta().vocals.slice().sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+}
+
+export function getVocal(id) {
+  return readMeta().vocals.find((v) => v.id === id) || null;
+}
+
+export async function saveVocal({ title, blob, durationSec, artUrl, sourceTitle, mime }) {
+  const id = `voc_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+  if (blob) { try { await putBlob(id, blob); } catch {} }
+  const m = readMeta();
+  m.vocals.push({
+    id,
+    title: String(title || "").trim() || `Studio song ${m.vocals.length + 1}`,
+    durationSec: Number(durationSec) || 0,
+    artUrl: String(artUrl || ""),
+    sourceTitle: String(sourceTitle || ""),
+    mime: String(mime || "audio/wav"),
+    bytes: Number(blob?.size) || 0,
+    createdAt: Date.now(),
+    published: false,
+  });
+  writeMeta(m);
+  return id;
+}
+
+export async function getVocalBlob(id) {
+  try { return await readBlob(id); } catch { return null; }
+}
+
+export async function deleteVocal(id) {
+  try { await removeBlob(id); } catch {}
+  const m = readMeta();
+  m.vocals = m.vocals.filter((v) => v.id !== id);
+  writeMeta(m);
+}
+
+export function renameVocal(id, title) {
+  const m = readMeta();
+  const v = m.vocals.find((x) => x.id === id);
+  if (v) { v.title = String(title || "").trim() || v.title; writeMeta(m); }
+}
+
+export function markVocalPublished(id, on = true) {
+  const m = readMeta();
+  const v = m.vocals.find((x) => x.id === id);
+  if (v) { v.published = !!on; writeMeta(m); }
 }
 
 /* ---- Projects (draft studio sessions) ---- */

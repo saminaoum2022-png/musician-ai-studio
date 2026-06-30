@@ -739,6 +739,117 @@ function escMaqam(s) {
   );
 }
 
+// --- Take history (on-device only) -----------------------------------------
+// We don't store audio — just a compact snapshot of each scan so the singer can
+// see range / quality / maqam drift over time. Kept in localStorage; capped.
+const MENTOR_TAKES_KEY = "mentor:takes:v1";
+const MENTOR_TAKES_MAX = 24;
+
+function loadMentorTakes() {
+  try {
+    const arr = JSON.parse(localStorage.getItem(MENTOR_TAKES_KEY) || "[]");
+    return Array.isArray(arr) ? arr : [];
+  } catch {
+    return [];
+  }
+}
+function persistMentorTakes(list) {
+  try {
+    localStorage.setItem(MENTOR_TAKES_KEY, JSON.stringify(list.slice(0, MENTOR_TAKES_MAX)));
+  } catch {}
+}
+function saveMentorTake(res) {
+  const r = res?.maqamRanking || {};
+  const take = {
+    t: Date.now(),
+    lowName: res.lowName,
+    highName: res.highName,
+    span: res.spanSemitones,
+    medianName: res.medianName,
+    quality: res.quality,
+    voiceTitle: res.voiceTitle,
+    maqam: r.primaryMaqam || "—",
+    maqamConf: r.confidence || 0,
+    maqamUncertain: !!r.isUncertain,
+    tonic: r.detectedTonicName || "—",
+  };
+  const list = loadMentorTakes();
+  list.unshift(take);
+  persistMentorTakes(list);
+  renderMentorHistory();
+  return take;
+}
+function clearMentorTakes() {
+  try {
+    localStorage.removeItem(MENTOR_TAKES_KEY);
+  } catch {}
+  renderMentorHistory();
+}
+function mentorAgoLabel(ts) {
+  const s = (Date.now() - Number(ts || 0)) / 1000;
+  if (s < 60) return "just now";
+  if (s < 3600) return `${Math.floor(s / 60)}m ago`;
+  if (s < 86400) return `${Math.floor(s / 3600)}h ago`;
+  const d = Math.floor(s / 86400);
+  if (d < 7) return `${d}d ago`;
+  try {
+    return new Date(Number(ts)).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  } catch {
+    return `${d}d ago`;
+  }
+}
+function renderMentorHistory() {
+  const sec = document.getElementById("mentorHistory");
+  const list = document.getElementById("mentorHistoryList");
+  const trend = document.getElementById("mentorHistoryTrend");
+  if (!sec || !list) return;
+  const takes = loadMentorTakes();
+  if (!takes.length) {
+    sec.hidden = true;
+    list.innerHTML = "";
+    if (trend) trend.textContent = "";
+    return;
+  }
+  sec.hidden = false;
+  const bestSpan = takes.reduce((m, x) => ((x.span || 0) > (m.span || 0) ? x : m), takes[0]);
+  const bestQual = Math.max(...takes.map((x) => x.quality || 0));
+  if (trend) {
+    trend.textContent = `${takes.length} take${takes.length > 1 ? "s" : ""} · widest ${bestSpan.lowName}–${bestSpan.highName} · best quality ${bestQual}/100`;
+  }
+  list.innerHTML = takes
+    .map((x) => {
+      const maq = x.maqamUncertain ? "Uncertain" : `${escMaqam(x.maqam)} ${x.maqamConf}%`;
+      const sub = [escMaqam(x.voiceTitle || ""), maq].filter(Boolean).join(" · ");
+      return `<div class="mentorHistoryRow" role="listitem">
+        <div class="mhMain">
+          <span class="mhRange">${escMaqam(x.lowName)}–${escMaqam(x.highName)}</span>
+          <span class="mhSub">${sub}</span>
+        </div>
+        <div class="mhRight">
+          <span class="mhQual">${x.quality}<small>/100</small></span>
+          <span class="mhWhen">${mentorAgoLabel(x.t)}</span>
+        </div>
+      </div>`;
+    })
+    .join("");
+}
+function updateMentorTrendLine(res, prevTake) {
+  const tl = document.getElementById("mentorTrendLine");
+  if (!tl) return;
+  if (!prevTake) {
+    tl.hidden = true;
+    tl.textContent = "";
+    return;
+  }
+  const dq = (res.quality || 0) - (prevTake.quality || 0);
+  const dspan = (res.spanSemitones || 0) - (prevTake.span || 0);
+  const parts = [];
+  if (dq) parts.push(`quality ${dq > 0 ? "+" : ""}${dq}`);
+  if (dspan) parts.push(`range ${dspan > 0 ? "+" : ""}${dspan} st`);
+  tl.textContent = parts.length ? `vs your last take · ${parts.join(" · ")}` : "Steady — same as your last take";
+  tl.hidden = false;
+}
+
 /** Render the ranked maqam result card (primary + alternatives with bars). */
 function renderMaqamRanking(r) {
   const el = document.getElementById("mentorMaqamRanking");
@@ -1016,6 +1127,9 @@ async function finalizeMentorRecording(chunks, mimeTypeHint, recordSession) {
       );
 
       renderGauge(res.minM, res.maxM, res.medianM);
+      const prevTake = loadMentorTakes()[0] || null;
+      saveMentorTake(res);
+      updateMentorTrendLine(res, prevTake);
       showResults(true);
     } catch (e) {
       try {
@@ -1109,6 +1223,18 @@ export function initMentor() {
       });
     }
   });
+
+  const btnClearHist = document.getElementById("mentorHistoryClear");
+  if (btnClearHist && !btnClearHist.dataset.mentorBound) {
+    btnClearHist.dataset.mentorBound = "1";
+    btnClearHist.addEventListener("click", () => {
+      if (!loadMentorTakes().length) return;
+      const ok = typeof confirm === "function" ? confirm("Clear your saved take history on this device?") : true;
+      if (ok) clearMentorTakes();
+    });
+  }
+
+  renderMentorHistory();
 
   const refEl = document.getElementById("mentorVoiceRef");
   if (refEl && !refEl.dataset.mentorBound) {

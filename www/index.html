@@ -124,7 +124,7 @@
       onload="this.media='all'"
     />
     <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Display:wght@900&family=Inter:wght@900&display=swap" /></noscript>
-    <link rel="stylesheet" href="./styles.css?v=20260630-142414" />
+    <link rel="stylesheet" href="./styles.css?v=20260630-142954" />
 
     <meta name="description" content="Nabadai is an AI music studio. Hum a melody, write lyrics, and ship a song." />
     <meta property="og:type" content="website" />
@@ -1626,6 +1626,18 @@
                 <p class="mentorGuideFoot">Pick <strong>Men’s</strong> or <strong>Women’s</strong> so the printed range matches how you sing.</p>
               </details>
             </div>
+
+            <section class="mentorHistory mentorGlass" id="mentorHistory" hidden>
+              <div class="mentorHistoryHead">
+                <div class="mentorHistoryHeadCopy">
+                  <span class="mentorSectionEyebrow">Your recent takes</span>
+                  <p class="mentorHistoryTrend" id="mentorHistoryTrend"></p>
+                </div>
+                <button type="button" id="mentorHistoryClear" class="mentorHistoryClear">Clear</button>
+              </div>
+              <div class="mentorHistoryList" id="mentorHistoryList" role="list"></div>
+              <p class="mentorHistoryNote">Saved on this device only — no audio is kept.</p>
+            </section>
           </div>
           </div>
 
@@ -1640,6 +1652,7 @@
               </button>
             </div>
             <p class="mentorPullQuote" id="mentorPullQuote">This pass</p>
+            <p class="mentorTrendLine" id="mentorTrendLine" hidden></p>
 
             <div class="mentorResultHero mentorGlass" data-mentor-hero>
               <div class="mentorResultHeroGlow" aria-hidden="true"></div>
@@ -4106,6 +4119,6 @@
     </script>
     <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
     <script src="./env.client.js" onerror="void 0"></script>
-    <script type="module" src="./src/app.js?v=20260630-142414"></script>
+    <script type="module" src="./src/app.js?v=20260630-142954"></script>
   </body>
 </html>

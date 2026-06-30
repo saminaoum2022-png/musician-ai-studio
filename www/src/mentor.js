@@ -309,19 +309,117 @@ function extractStableNotes(f0s, sampleRate, hop) {
   const tolCents = 55; // same-note band (< a semitone)
   const notes = [];
   let run = [];
-  const flush = () => {
-    if (run.length >= minFrames) notes.push({ midi: medianOf(run), frames: run.length });
+  let start = -1;
+  const flush = (endIdx) => {
+    if (run.length >= minFrames) {
+      notes.push({ midi: medianOf(run), frames: run.length, start, end: endIdx });
+    }
     run = [];
+    start = -1;
   };
-  for (const m of f0s) {
-    if (!Number.isFinite(m)) { flush(); continue; }
-    if (!run.length) { run.push(m); continue; }
+  for (let i = 0; i < f0s.length; i++) {
+    const m = f0s[i];
+    if (!Number.isFinite(m)) { flush(i - 1); continue; }
+    if (!run.length) { start = i; run.push(m); continue; }
     const ref = run.length > 6 ? medianOf(run) : run[run.length - 1];
     if (Math.abs(m - ref) * 100 <= tolCents) run.push(m);
-    else { flush(); run.push(m); }
+    else { flush(i - 1); start = i; run.push(m); }
   }
-  flush();
+  flush(f0s.length - 1);
+  // Silence/gap (in frames) before and after each held note — this is what
+  // lets us see phrase boundaries (breaths) and detect cadences/resolutions.
+  for (let i = 0; i < notes.length; i++) {
+    const prevEnd = i > 0 ? notes[i - 1].end : -1;
+    const nextStart = i < notes.length - 1 ? notes[i + 1].start : f0s.length;
+    notes[i].preGap = Math.max(0, notes[i].start - prevEnd - 1);
+    notes[i].postGap = Math.max(0, nextStart - notes[i].end - 1);
+    notes[i].frameMs = frameMs;
+  }
   return notes;
+}
+
+/**
+ * Tonic = the melodic HOME, not the most frequent pitch. We estimate it from
+ * weighted phrase-resolution cues rather than raw histogram peaks:
+ *   40% cadence (where phrases END / resolve, tail-weighted)
+ *   30% longest sustained notes (held longest, super-linear weight)
+ *   20% repeated RESTING notes (returned to as held notes — brief repeats excluded)
+ *   10% phrase beginnings
+ * Confidence reflects how much the winner stands out AND whether the cadence and
+ * the longest-held note agree on the same home; if they disagree the tonic is
+ * unstable and we keep the result tentative.
+ */
+function detectTonic(stableNotes) {
+  const N = stableNotes.length;
+  const centsMod = (n) => (((n.midi * 100) % 1200) + 1200) % 1200;
+  const medFrames = medianOf(stableNotes.map((n) => n.frames)) || 1;
+  const posGaps = stableNotes.map((n) => n.postGap || 0).filter((g) => g > 0);
+  const medGap = Math.max(1, medianOf(posGaps) || 1);
+  const mem = (a, b) => centGauss(circCentDelta(a, b), 45);
+
+  const notes = stableNotes.map((n, i) => {
+    const p = N > 1 ? i / (N - 1) : 1; // temporal position 0..1
+    const recency = p < 0.7 ? 0.15 : 0.15 + ((p - 0.7) / 0.3) * 0.85; // emphasize the tail
+    const isLast = i === N - 1;
+    const gapAfter = isLast ? medGap * 2 : n.postGap || 0; // the very end is a strong resolution point
+    const gapBonus = clamp01(gapAfter / (medGap * 1.5));
+    return {
+      c: centsMod(n),
+      cadenceW: n.frames * recency * (0.5 + gapBonus),
+      longW: Math.pow(n.frames, 1.5), // super-linear → the longest holds dominate
+      resting: n.frames >= 1.3 * medFrames || (n.postGap || 0) >= medGap, // excludes brief repeats
+      isBegin: i === 0 || (n.preGap || 0) >= medGap,
+      frames: n.frames,
+    };
+  });
+
+  const sumCad = notes.reduce((a, x) => a + x.cadenceW, 0) || 1;
+  const sumLong = notes.reduce((a, x) => a + x.longW, 0) || 1;
+  const beginNotes = notes.filter((x) => x.isBegin);
+  const sumBegin = beginNotes.reduce((a, x) => a + x.frames, 0) || 1;
+  const restNotes = notes.filter((x) => x.resting);
+
+  const cueAt = (t) => {
+    let cad = 0;
+    let lng = 0;
+    let rep = 0;
+    let beg = 0;
+    for (const x of notes) {
+      const w = mem(x.c, t);
+      cad += x.cadenceW * w;
+      lng += x.longW * w;
+    }
+    for (const x of restNotes) rep += mem(x.c, t);
+    for (const x of beginNotes) beg += x.frames * mem(x.c, t);
+    return { cadence: cad / sumCad, longSust: lng / sumLong, rep: clamp01(rep / 3), begin: beg / sumBegin };
+  };
+  const scoreOf = (cue) => 0.4 * cue.cadence + 0.3 * cue.longSust + 0.2 * cue.rep + 0.1 * cue.begin;
+
+  // Candidate home centers = distinct sustained-note pitch classes, merged within 40¢.
+  const centers = [];
+  for (const x of [...notes].sort((a, b) => b.frames - a.frames)) {
+    if (centers.every((c) => Math.abs(circCentDelta(c, x.c)) >= 40)) centers.push(x.c);
+  }
+  const cands = centers
+    .map((t) => { const cue = cueAt(t); return { cents: t, cue, score: scoreOf(cue) }; })
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 4);
+
+  const best = cands[0];
+  const second = cands[1] || { score: 0, cents: best.cents };
+  const prominence = clamp01((best.score - second.score) / (best.score + 1e-6) / 0.3);
+
+  // Do the cadence and the longest-held note point to the same home?
+  const argmaxCue = (key) => centers.reduce((b, t) => (cueAt(t)[key] > cueAt(b)[key] ? t : b), centers[0]);
+  const cadHome = argmaxCue("cadence");
+  const longHome = argmaxCue("longSust");
+  const agreement = 0.6 * centGauss(circCentDelta(cadHome, best.cents), 60) + 0.4 * centGauss(circCentDelta(longHome, best.cents), 60);
+  const cuesAgree = Math.abs(circCentDelta(cadHome, longHome)) <= 60;
+  // When the cadence and the longest-held note point to different homes the home
+  // is genuinely unstable — knock confidence down so it falls under the gate.
+  const tonicConf = clamp01((0.45 * prominence + 0.35 * agreement + 0.2 * best.cue.cadence) * (cuesAgree ? 1 : 0.7));
+
+  return { tonicCents: best.cents, tonicConf, cadHome, longHome, cuesAgree, candidates: cands };
 }
 
 /**
@@ -371,32 +469,9 @@ function rankMaqams(stableNotes) {
   const profSum = profile.reduce((a, b) => a + b, 0) || 1;
   const profileN = profile.map((x) => x / profSum);
 
-  // --- Tonic detection (in cents) with a real confidence -------------------
-  const lastC = samples[samples.length - 1].c;
-  const lowMidi = stableNotes.reduce((lo, n) => (n.midi < lo ? n.midi : lo), stableNotes[0].midi);
-  const lowC = (((lowMidi * 100) % 1200) + 1200) % 1200;
-  const tonicSalience = (t) =>
-    energyNearCents(samples, totalW, t, 40) +
-    0.18 * centGauss(circCentDelta(t, lastC), 50) + // phrases resolve to the tonic
-    0.10 * centGauss(circCentDelta(t, lowC), 50); // tonic is often the lowest dwelt note
-
-  // Scan the octave at 10¢ resolution, then keep peaks ≥120¢ apart.
-  const scan = [];
-  for (let t = 0; t < 1200; t += 10) scan.push({ t, s: tonicSalience(t) });
-  scan.sort((a, b) => b.s - a.s);
-  const tonicCands = [];
-  for (const cand of scan) {
-    if (tonicCands.every((p) => Math.abs(circCentDelta(cand.t, p.t)) >= 120)) {
-      tonicCands.push(cand);
-      if (tonicCands.length >= 3) break;
-    }
-  }
-  const bestSal = tonicCands[0].s;
-  const nextSal = tonicCands[1] ? tonicCands[1].s : 0;
-  // Confidence: how much the winning tonic stands out + does the line resolve to it.
-  const prominence = clamp01((bestSal - nextSal) / (bestSal + 1e-6) / 0.35);
-  const resolves = centGauss(circCentDelta(tonicCands[0].t, lastC), 60);
-  const tonicConf = clamp01(0.6 * prominence + 0.4 * resolves);
+  // --- Tonic detection: cadence / resolution weighted (not raw frequency) --
+  const tonicInfo = detectTonic(stableNotes);
+  const tonicConf = tonicInfo.tonicConf;
 
   // --- Microtonal maqam fit ------------------------------------------------
   // Reads the ACTUAL 2nd/3rd/4th interval sizes and scores each maqam on how
@@ -457,14 +532,9 @@ function rankMaqams(stableNotes) {
     return { tonicCents, scored, second, third, fourth };
   };
 
-  // Score at each tonic candidate (weighted toward the most salient tonic) and
-  // keep the best-scoring read.
-  let best = null;
-  for (let i = 0; i < tonicCands.length; i++) {
-    const r = scoreAt(tonicCands[i].t);
-    const headline = r.scored[0].conf * (i === 0 ? 1 : 0.96); // mild preference for the salient tonic
-    if (!best || headline > best.headline) best = { ...r, headline };
-  }
+  // The tonic is decided by melodic resolution (above), NOT by whichever pitch
+  // happens to maximize a maqam fit — that's what kept the home note wandering.
+  const best = scoreAt(tonicInfo.tonicCents);
 
   const ranked = best.scored;
   const top = ranked[0];
@@ -473,7 +543,7 @@ function rankMaqams(stableNotes) {
   const gap = top.conf - second.conf;
 
   // Tonic confidence gates how strong a claim we allow.
-  const lowTonic = tonicConf < 0.45;
+  const lowTonic = tonicConf < 0.5;
   let isUncertain = top.conf < 45 || lowTonic;
   let state;
   let kindLabel;
@@ -509,7 +579,7 @@ function rankMaqams(stableNotes) {
   });
 
   const reason = lowTonic
-    ? `Tonic confidence ${(tonicConf * 100).toFixed(0)}% < 45% — capped to a tentative read (no high-confidence claim).`
+    ? `Tonic confidence ${(tonicConf * 100).toFixed(0)}% < 50% — home note unstable${tonicInfo.cuesAgree ? "" : " (cadence and longest-held note disagree)"}; kept tentative.`
     : top.conf < 45
       ? `Top score ${top.conf}% < 45% — evidence too weak to commit.`
       : state === "possible"
@@ -538,11 +608,18 @@ function rankMaqams(stableNotes) {
       sungThird: s3,
       fourthStrength: best.fourth.strength,
       profile: profileN.map((v, b) => ({ cents: b * 50, weight: v })),
-      tonicCandidates: tonicCands.map((p) => ({
-        cents: Math.round(p.t),
-        letter: pcLetter(((Math.round(p.t / 100) % 12) + 12) % 12),
-        score: p.s,
+      tonicCandidates: tonicInfo.candidates.map((p) => ({
+        cents: Math.round(p.cents),
+        letter: pcLetter(((Math.round(p.cents / 100) % 12) + 12) % 12),
+        score: p.score,
+        cadence: p.cue.cadence,
+        longSust: p.cue.longSust,
+        rep: p.cue.rep,
+        begin: p.cue.begin,
       })),
+      cadHome: Math.round(tonicInfo.cadHome),
+      longHome: Math.round(tonicInfo.longHome),
+      cuesAgree: tonicInfo.cuesAgree,
       intervals,
       scores: ranked.map((x) => ({
         maqam: x.maqam,
@@ -1173,8 +1250,11 @@ function buildMaqamDebug({ f0s, sampleRate, hop, stableNotes, ranking }) {
     flags.push(`pitch tracking unstable (${Math.round(jumpRate * 100)}% of frames jump >120¢)`);
   }
   const tonicConf = ranking.debug && typeof ranking.debug.tonicConf === "number" ? ranking.debug.tonicConf : 1;
-  if (tonicConf < 0.45) {
+  if (tonicConf < 0.5) {
     flags.push(`tonic confidence low (${Math.round(tonicConf * 100)}%) — maqam capped to tentative`);
+  }
+  if (ranking.debug && ranking.debug.cuesAgree === false) {
+    flags.push("tonic cues disagree — cadence and longest-held note point to different homes");
   }
   if (ranking.isUncertain) flags.push("uncertain — not forcing a maqam");
   else if (ranking.state === "possible") flags.push("ranking close — flagged as possible, not final");
@@ -1257,12 +1337,20 @@ function renderMaqamDebug(debug) {
         `  ${i + 1}. ${String(s.maqam).padEnd(9)} ${String(s.conf).padStart(3)}%   interval=${(s.intervalFit * 100).toFixed(0)}% scale=${(s.scaleFit * 100).toFixed(0)}% (wants 2nd ${s.expectSecond}c/3rd ${s.expectThird}c)${s.absentEnergy > 0.05 ? ` [off ${(s.absentEnergy * 100).toFixed(0)}%]` : ""}`,
     )
     .join("\n");
-  const tonicCandLine = (debug.tonicCandidates || []).map((t) => `${t.letter} ${t.cents}c(${t.score.toFixed(2)})`).join("  ");
+  const tonicCandLines = (debug.tonicCandidates || [])
+    .map(
+      (t) =>
+        `  ${t.letter.padEnd(3)} ${String(t.cents).padStart(4)}c  score ${t.score.toFixed(2)}  [cad ${(t.cadence * 100).toFixed(0)} · long ${(t.longSust * 100).toFixed(0)} · rep ${(t.rep * 100).toFixed(0)} · beg ${(t.begin * 100).toFixed(0)}]`,
+    )
+    .join("\n");
   const tConf = typeof debug.tonicConf === "number" ? `${Math.round(debug.tonicConf * 100)}%` : "—";
+  const cadLetter = (c) => pcLetter(((Math.round(c / 100) % 12) + 12) % 12);
   const flagsBlock = debug.flags && debug.flags.length ? debug.flags.map((f) => `! ${f}`).join("\n") : "OK — no instability flags";
   const text = [
     `Detected tonic: ${debug.detectedTonicName} (${debug.tonicCents}c) · confidence ${tConf}`,
-    `Tonic candidates: ${tonicCandLine}`,
+    `Resolution cues: cadence→${cadLetter(debug.cadHome)} · longest-held→${cadLetter(debug.longHome)} ${debug.cuesAgree ? "(agree)" : "(DISAGREE)"}`,
+    `Tonic candidates [cadence 40% · longest 30% · repeated-rest 20% · beginnings 10%]:`,
+    tonicCandLines || "  —",
     ``,
     `Sung intervals: 2nd ~${debug.sungSecond == null ? "—" : debug.sungSecond + "c"} · 3rd ~${debug.sungThird == null ? "—" : debug.sungThird + "c"} · 4th energy ${(Number(debug.fourthStrength || 0) * 100).toFixed(0)}%`,
     ``,

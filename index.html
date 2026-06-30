@@ -124,7 +124,7 @@
       onload="this.media='all'"
     />
     <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Display:wght@900&family=Inter:wght@900&display=swap" /></noscript>
-    <link rel="stylesheet" href="./styles.css?v=20260630-141705" />
+    <link rel="stylesheet" href="./styles.css?v=20260630-142414" />
 
     <meta name="description" content="Nabadai is an AI music studio. Hum a melody, write lyrics, and ship a song." />
     <meta property="og:type" content="website" />
@@ -1634,6 +1634,10 @@
               <button type="button" id="mentorBtnBackToLab" class="nabadBackBtn mentorBackBtn" aria-label="Back to Lab">
                 <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6 9 12l6 6"/></svg>
               </button>
+              <button type="button" id="mentorBtnNewScan" class="mentorNewScanBtn">
+                <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7" stroke-linecap="round"/><path d="M3 4v4h4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                New test
+              </button>
             </div>
             <p class="mentorPullQuote" id="mentorPullQuote">This pass</p>
 
@@ -1827,6 +1831,13 @@
                 <p id="mentorFocusLine" class="mentorFocusLine">—</p>
                 <p id="mentorFocusSub" class="mentorFocusSub">—</p>
               </div>
+            </div>
+
+            <div class="mentorResultsFootActions">
+              <button type="button" id="mentorBtnNewScanBottom" class="mentorNewScanCta">
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7" stroke-linecap="round"/><path d="M3 4v4h4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                Run a new test
+              </button>
             </div>
 
             <p class="mentorDisclaimer">
@@ -4095,6 +4106,6 @@
     </script>
     <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
     <script src="./env.client.js" onerror="void 0"></script>
-    <script type="module" src="./src/app.js?v=20260630-141705"></script>
+    <script type="module" src="./src/app.js?v=20260630-142414"></script>
   </body>
 </html>

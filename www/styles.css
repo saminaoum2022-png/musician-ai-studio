@@ -31403,6 +31403,52 @@ section.mentorPage{
 .mentorBackBtn{
   /* layout hook — visuals from .nabadBackBtn */
 }
+.mentorNewScanBtn{
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 14px;
+  border-radius: 999px;
+  border: 1px solid rgba(140, 120, 255, 0.32);
+  background: rgba(120, 100, 240, 0.14);
+  color: rgba(226, 224, 255, 0.96);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.mentorNewScanBtn:active{
+  transform: scale(0.97);
+}
+.mentorNewScanBtn svg{
+  flex: none;
+}
+.mentorResultsFootActions{
+  margin: 22px 0 0;
+  display: flex;
+  justify-content: center;
+}
+.mentorNewScanCta{
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  padding: 13px 24px;
+  border-radius: 14px;
+  border: 1px solid rgba(140, 120, 255, 0.3);
+  background: linear-gradient(180deg, rgba(124, 92, 255, 0.22), rgba(124, 92, 255, 0.12));
+  color: rgba(238, 236, 255, 0.98);
+  font-size: 15px;
+  font-weight: 800;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.mentorNewScanCta:active{
+  transform: scale(0.98);
+}
+.mentorNewScanCta svg{
+  flex: none;
+}
 .mentorDiscover{
   min-width: 0;
   max-width: 100%;

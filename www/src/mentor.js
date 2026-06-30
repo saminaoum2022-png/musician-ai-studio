@@ -1096,6 +1096,20 @@ export function initMentor() {
     });
   }
 
+  // "New test" — clear the report and drop back to the recording screen ready
+  // to capture again (top-bar button + a CTA at the end of the long report).
+  ["mentorBtnNewScan", "mentorBtnNewScanBottom"].forEach((id) => {
+    const btn = document.getElementById(id);
+    if (btn && !btn.dataset.mentorBound) {
+      btn.dataset.mentorBound = "1";
+      btn.addEventListener("click", () => {
+        resetMentorSession();
+        setText("mentorStatus", "");
+        setText("mentorHint", "Open tips below if you want a quick checklist — then one slow glide.");
+      });
+    }
+  });
+
   const refEl = document.getElementById("mentorVoiceRef");
   if (refEl && !refEl.dataset.mentorBound) {
     refEl.dataset.mentorBound = "1";

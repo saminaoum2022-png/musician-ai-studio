@@ -24,6 +24,10 @@ import { encodeWav16 } from "../wav.js";
 
 const LATENCY_STORAGE_KEY = "nabad.studio.latencyMs.v1";
 
+// Raw mic capture (AGC off) is quiet, so we apply a fixed makeup gain to the
+// voice so it sits up front against the music without the user maxing sliders.
+const VOICE_MAKEUP = 1.7;
+
 /* -------------------------------------------------------------------------- */
 /* Modular effect registry                                                     */
 /*                                                                             */
@@ -218,14 +222,25 @@ export class StudioEngine {
     this._monitorChain = null;
     if (cb.monitor) {
       const monitorGain = this.ctx.createGain();
-      monitorGain.gain.value = clamp01(cb.monitorVol ?? 0.85);
+      monitorGain.gain.value = (cb.monitorVol ?? 0.95) * VOICE_MAKEUP;
       const chain = this._buildMonitorChain(this.ctx, {
         reverb: cb.monitorReverb ?? 0.25,
         echo: cb.monitorEcho ?? 0.18,
       });
       micSrc.connect(chain.input);
-      chain.output.connect(monitorGain).connect(this.ctx.destination);
-      this._monitorChain = chain;
+      // The mic is mono — centre it across both ears, otherwise it plays in one
+      // side only on headphones. StereoPanner(0) outputs an even stereo signal.
+      const center = this.ctx.createStereoPanner?.();
+      if (center) {
+        chain.output.connect(center);
+        center.connect(monitorGain).connect(this.ctx.destination);
+        this._monitorChain = chain;
+        this._nodes && (chain.nodes = [...(chain.nodes || []), center, monitorGain]);
+      } else {
+        chain.output.connect(monitorGain).connect(this.ctx.destination);
+        this._monitorChain = chain;
+        chain.nodes = [...(chain.nodes || []), monitorGain];
+      }
     }
 
     // Schedule the guide to start after the count-in, on the same clock.
@@ -360,6 +375,10 @@ export class StudioEngine {
     const fromSec = Math.max(0, Number(params.fromSec) || 0);
     this._nodes = [master];
 
+    // Live-adjustable handles so the Mix sliders change gains/reverb in real
+    // time (no restart). Cleared on stopMix.
+    this._mix = { musicGain: null, voiceGain: null, voiceChain: null };
+
     // Music (guide)
     const guideSrc = this.ctx.createBufferSource();
     guideSrc.buffer = this.guideBuffer;
@@ -368,19 +387,24 @@ export class StudioEngine {
     guideSrc.connect(musicGain).connect(master);
     guideSrc.start(startAt, fromSec);
     this._nodes.push(guideSrc, musicGain);
+    this._mix.musicGain = musicGain;
 
-    // Voice (take) through the effect chain.
+    // Voice (take) through the effect chain, centred across both ears.
     if (take && take.buffer) {
       const voiceSrc = this.ctx.createBufferSource();
       voiceSrc.buffer = take.buffer;
-      const { input, output } = this._buildVoiceChain(this.ctx, { reverb: params.reverb });
+      const chain = this._buildVoiceChain(this.ctx, { reverb: params.reverb });
       const voiceGain = this.ctx.createGain();
-      voiceGain.gain.value = clamp01(params.voiceVol ?? 0.85);
-      voiceSrc.connect(input);
-      output.connect(voiceGain).connect(master);
+      voiceGain.gain.value = clamp01(params.voiceVol ?? 0.9) * VOICE_MAKEUP;
+      const center = this.ctx.createStereoPanner?.();
+      voiceSrc.connect(chain.input);
+      if (center) { chain.output.connect(voiceGain).connect(center).connect(master); }
+      else { chain.output.connect(voiceGain).connect(master); }
       const off = this._takeBufferOffset(take) + fromSec;
       voiceSrc.start(startAt, Math.min(off, Math.max(0, take.buffer.duration - 0.01)));
-      this._nodes.push(voiceSrc, input, output, voiceGain);
+      this._nodes.push(voiceSrc, chain.input, chain.output, voiceGain, ...(center ? [center] : []));
+      this._mix.voiceGain = voiceGain;
+      this._mix.voiceChain = chain;
     }
 
     this._playing = true;
@@ -397,8 +421,18 @@ export class StudioEngine {
     }
   }
 
+  /** Adjust the live mix gains/reverb without restarting playback. */
+  updateMix(params = {}) {
+    const mix = this._mix;
+    if (!mix) return;
+    if (mix.musicGain) mix.musicGain.gain.value = clamp01(params.musicVol ?? 0.8);
+    if (mix.voiceGain) mix.voiceGain.gain.value = clamp01(params.voiceVol ?? 0.9) * VOICE_MAKEUP;
+    if (mix.voiceChain?.update) mix.voiceChain.update({ reverb: params.reverb });
+  }
+
   stopMix() {
     this._playing = false;
+    this._mix = null;
     cancelAnimationFrame(this._raf);
     this._teardownNodes();
   }
@@ -433,9 +467,11 @@ export class StudioEngine {
       voiceSrc.buffer = take.buffer;
       const { input, output } = this._buildVoiceChain(off, { reverb: params.reverb });
       const voiceGain = off.createGain();
-      voiceGain.gain.value = clamp01(params.voiceVol ?? 0.85);
+      voiceGain.gain.value = clamp01(params.voiceVol ?? 0.9) * VOICE_MAKEUP;
+      const center = off.createStereoPanner?.();
       voiceSrc.connect(input);
-      output.connect(voiceGain).connect(master);
+      if (center) { output.connect(voiceGain).connect(center).connect(master); }
+      else { output.connect(voiceGain).connect(master); }
       voiceSrc.start(0, Math.min(this._takeBufferOffset(take), Math.max(0, take.buffer.duration - 0.01)));
     }
 
@@ -499,8 +535,9 @@ export class StudioEngine {
   _buildVoiceChain(ctx, params = {}) {
     const order = ["noiseRemoval", "compression", "eq", "preset", "harmony", "reverb"];
     const passthrough = ctx.createGain();
-    let head = passthrough;
+    const head = passthrough;
     let tail = passthrough;
+    const updaters = [];
 
     for (const id of order) {
       const def = EFFECT_REGISTRY[id];
@@ -508,8 +545,10 @@ export class StudioEngine {
       const node = def.create(ctx, effectParamsFor(id, params));
       tail.connect(node.input);
       tail = node.output;
+      if (typeof node.update === "function") updaters.push((p) => node.update(effectParamsFor(id, p)));
     }
-    return { input: head, output: tail };
+    const update = (p) => { for (const u of updaters) u(p); };
+    return { input: head, output: tail, update };
   }
 
   /* ---- teardown ---- */

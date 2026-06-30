@@ -1073,7 +1073,8 @@ function bindMix(root) {
       m[k] = Number(inp.value) || 0;
       const out = root.querySelector(`[data-mix-val="${k}"]`);
       if (out) out.textContent = String(m[k]);
-      if (engine?.isPlaying) restartMixPreview(root); // keep preview honest
+      // Adjust the live mix in real time — no restart, so it changes smoothly.
+      if (engine?.isPlaying) { try { engine.updateMix(mixParams()); } catch {} }
     });
   });
 
@@ -1089,11 +1090,9 @@ function bindMix(root) {
     if (t?.id) { try { engine.setTakeNudgeMs(t.id, -v); } catch {} }
   };
   applySync(Number(m.syncMs) || 0);
-  syncInp?.addEventListener("input", () => {
-    const v = Number(syncInp.value) || 0;
-    applySync(v);
-    if (engine?.isPlaying) restartMixPreview(root);
-  });
+  syncInp?.addEventListener("input", () => applySync(Number(syncInp.value) || 0));
+  // Timing changes where the voice starts in the buffer, so re-cue on release.
+  syncInp?.addEventListener("change", () => { if (engine?.isPlaying) restartMixPreview(root); });
 
   root.querySelector("[data-studio-pitch]")?.addEventListener("click", (e) => {
     const b = e.target.closest("[data-pitch]");

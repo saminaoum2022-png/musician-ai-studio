@@ -57,7 +57,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260630-160759";
+const APP_BUILD = "20260630-162759";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -49320,6 +49320,27 @@ setProfileEditing(false);
 // click time, so it stays correct across hash changes without needing
 // a rebind.
 try { attachTabRefresh(); } catch (e) { console.warn("[tabRefresh] init", e); }
+
+// Voice Lab → AI maqam verification. The phone sends only the extracted
+// analysis numbers (never the voice). Returns null on any failure / when
+// signed out, so Voice Lab silently falls back to its on-device result.
+window.nabadMaqamVerify = async function nabadMaqamVerify(features) {
+  try {
+    const token = getSupabaseAuthToken();
+    if (!token) return null;
+    const r = await apiFetch("/api/music/detect-maqam", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ features }),
+    });
+    if (!r.ok) return null;
+    const d = await r.json().catch(() => null);
+    return d && d.id ? d : null;
+  } catch {
+    return null;
+  }
+};
+
 try { initMentor(); } catch (e) { console.warn("[mentor] init", e); }
 
 // Hum → melody (MVP)

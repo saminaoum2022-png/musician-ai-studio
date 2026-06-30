@@ -57,6 +57,8 @@ let _mentorChunks = [];
 /** Bumped when starting a new capture or invalidating in-flight decode (tab refresh). */
 let _mentorRecSession = 0;
 let _mentorAutoStopTimer = 0;
+/** Bumped on every analysis/reset so a late AI maqam reply can't patch a stale report. */
+let _mentorAnalysisSeq = 0;
 
 export function bumpMentorRecSession() {
   _mentorRecSession += 1;
@@ -1145,6 +1147,97 @@ function renderMaqamRanking(r) {
     ${alts.length ? `<div class="mmqAlts"><span class="mmqAltsTitle">Other possibilities</span>${altRows}</div>` : ""}`;
 }
 
+// --- AI maqam verification (hybrid) ----------------------------------------
+// We keep the on-device microtonal analysis and send ONLY the extracted numbers
+// (never the voice) to /api/music/detect-maqam, letting Gemini make the final
+// musicological call. Falls back silently to the local result on any failure.
+function buildMaqamFeatures(ranking) {
+  const d = ranking.debug || {};
+  return {
+    detectedTonic: ranking.detectedTonicName,
+    tonicCents: d.tonicCents,
+    tonicConfidencePct: Math.round((d.tonicConf || 0) * 100),
+    cuesAgree: d.cuesAgree,
+    sungSecondCents: d.sungSecond,
+    sungThirdCents: d.sungThird,
+    fourthEnergyPct: Math.round((d.fourthStrength || 0) * 100),
+    tonicCandidates: (d.tonicCandidates || []).slice(0, 4).map((t) => ({
+      note: t.letter,
+      cents: t.cents,
+      cadencePct: Math.round((t.cadence || 0) * 100),
+      longestPct: Math.round((t.longSust || 0) * 100),
+    })),
+    noteProfile: (d.profile || [])
+      .filter((p) => p.weight > 0.02)
+      .map((p) => ({ cents: p.cents, pct: Math.round(p.weight * 100) })),
+    intervalsFromTonicCents: (d.intervals || []).slice(0, 60).map((i) => i.cents),
+    localTopMaqams: (d.scores || []).slice(0, 5).map((s) => ({ maqam: s.maqam, conf: s.conf })),
+    stableNoteCount: ranking.stableCount,
+  };
+}
+
+/** Turn the AI JSON verdict into the same shape renderMaqamRanking expects. */
+function aiToRanking(ai, localRanking) {
+  const conf = Math.max(0, Math.min(100, Number(ai.confidence) || 0));
+  const alternatives = (ai.alternatives || []).map((a) => ({
+    maqam: a.maqam,
+    id: a.id,
+    confidence: Math.max(0, Math.min(100, Number(a.confidence) || 0)),
+  }));
+  const gap = alternatives.length ? conf - alternatives[0].confidence : 99;
+  const uncertain = Boolean(ai.isUncertain) || conf < 45;
+  let state;
+  let kindLabel;
+  if (uncertain) { state = "uncertain"; kindLabel = "Uncertain"; }
+  else if (gap < 6) { state = "possible"; kindLabel = "Possible Maqam"; }
+  else if (conf >= 70 && gap >= 10) { state = "confident"; kindLabel = "Maqam"; }
+  else { state = "likely"; kindLabel = "Likely Maqam"; }
+  return {
+    isUncertain: uncertain,
+    state,
+    kindLabel,
+    primaryMaqam: ai.primaryMaqam,
+    primaryId: ai.id,
+    confidence: conf,
+    alternatives,
+    detectedTonicName: ai.detectedTonic || localRanking.detectedTonicName,
+  };
+}
+
+async function verifyMaqamWithAI(res) {
+  const verify = typeof window !== "undefined" ? window.nabadMaqamVerify : null;
+  if (typeof verify !== "function" || !res || !res.maqamRanking) return;
+  if (res.maqamRanking.stableCount < 3) return; // nothing solid to verify
+  const seq = _mentorAnalysisSeq;
+  let ai;
+  try {
+    ai = await verify(buildMaqamFeatures(res.maqamRanking));
+  } catch {
+    ai = null;
+  }
+  if (!ai || seq !== _mentorAnalysisSeq) return; // failed, or a newer take started
+
+  const aiRanking = aiToRanking(ai, res.maqamRanking);
+  const catalogEntry = MAQAM_CATALOG.find((m) => m.id === ai.id);
+  renderMaqamRanking(aiRanking);
+  setText(
+    "mentorCardMaqamTitle",
+    aiRanking.isUncertain ? "Uncertain" : `${aiRanking.primaryMaqam} · ${aiRanking.confidence}%`,
+  );
+  if (ai.reasoning) setText("mentorCardMaqamBody", ai.reasoning);
+  setText(
+    "mentorCardMaqamMeta",
+    `AI-verified · tonic ~${aiRanking.detectedTonicName} (on-device cents + Gemini)`,
+  );
+  if (catalogEntry) renderMaqamDiagram(res.maqamTonicPc, catalogEntry.degrees);
+  const hero = document.querySelector("[data-mentor-hero]");
+  if (hero && ai.id) hero.style.setProperty("--mentor-mood-hue", String(hueFromMaqamId(ai.id)));
+  if (res.maqamDebug && isMentorDebug()) {
+    res.maqamDebug.ai = ai;
+    renderMaqamDebug(res.maqamDebug);
+  }
+}
+
 // --- Maqam developer debug mode (hidden; internal testing only) ------------
 // Toggled by tapping the "Lab" title 7× fast. Surfaces every pipeline stage so
 // we can see WHERE a maqam read goes wrong (pitch, tonic, smoothing, stable
@@ -1368,13 +1461,22 @@ function renderMaqamDebug(debug) {
     `Maqam ranking (top 5):`,
     scoreLines || "  —",
     ``,
-    `Final: ${debug.kindLabel}: ${debug.primaryMaqam}  |  Confidence: ${debug.confidence}%`,
+    `Final (local): ${debug.kindLabel}: ${debug.primaryMaqam}  |  Confidence: ${debug.confidence}%`,
     `Reason: ${debug.reason || "—"}`,
     ``,
     `Pitch: ${debug.voicedFrames} voiced / ${debug.totalFrames} frames | jump rate ${(debug.jumpRate * 100).toFixed(0)}% | frame ${debug.frameMs}ms`,
     ``,
     `Flags:`,
     flagsBlock,
+    ...(debug.ai
+      ? [
+          ``,
+          `AI verdict (${debug.ai.provider || "gemini"}):`,
+          `  ${debug.ai.isUncertain ? "Uncertain" : debug.ai.primaryMaqam} ${debug.ai.confidence}% · tonic ${debug.ai.detectedTonic || "—"}`,
+          `  alts: ${(debug.ai.alternatives || []).map((a) => `${a.maqam} ${a.confidence}%`).join(", ") || "—"}`,
+          `  reason: ${debug.ai.reasoning || "—"}`,
+        ]
+      : [`(AI verdict pending… local result shown)`]),
   ].join("\n");
   el.innerHTML =
     `<div class="mdbgHead">Maqam debug — internal</div>` +
@@ -1401,6 +1503,7 @@ function showResults(on) {
 
 export function resetMentorSession() {
   stopStreams();
+  _mentorAnalysisSeq += 1; // invalidate any in-flight AI maqam reply
   showResults(false);
   setText("mentorStatus", "");
   const t = document.getElementById("mentorTimer");
@@ -1635,6 +1738,8 @@ async function finalizeMentorRecording(chunks, mimeTypeHint, recordSession) {
       saveMentorTake(res);
       updateMentorTrendLine(res, prevTake);
       showResults(true);
+      _mentorAnalysisSeq += 1; // mark this report current for the async AI reply
+      void verifyMaqamWithAI(res);
     } catch (e) {
       try {
         console.warn("[mentor] result UI", e);

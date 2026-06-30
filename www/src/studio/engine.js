@@ -26,7 +26,7 @@ const LATENCY_STORAGE_KEY = "nabad.studio.latencyMs.v1";
 
 // Raw mic capture (AGC off) is quiet, so we apply a fixed makeup gain to the
 // voice so it sits up front against the music without the user maxing sliders.
-const VOICE_MAKEUP = 1.7;
+const VOICE_MAKEUP = 2.6;
 
 /* -------------------------------------------------------------------------- */
 /* Modular effect registry                                                     */
@@ -228,19 +228,11 @@ export class StudioEngine {
         echo: cb.monitorEcho ?? 0.18,
       });
       micSrc.connect(chain.input);
-      // The mic is mono — centre it across both ears, otherwise it plays in one
-      // side only on headphones. StereoPanner(0) outputs an even stereo signal.
-      const center = this.ctx.createStereoPanner?.();
-      if (center) {
-        chain.output.connect(center);
-        center.connect(monitorGain).connect(this.ctx.destination);
-        this._monitorChain = chain;
-        this._nodes && (chain.nodes = [...(chain.nodes || []), center, monitorGain]);
-      } else {
-        chain.output.connect(monitorGain).connect(this.ctx.destination);
-        this._monitorChain = chain;
-        chain.nodes = [...(chain.nodes || []), monitorGain];
-      }
+      // Centre the mic across both ears (see _centerNode) before monitoring.
+      const center = this._centerNode(this.ctx);
+      chain.output.connect(center.input);
+      center.output.connect(monitorGain).connect(this.ctx.destination);
+      this._monitorChain = chain;
     }
 
     // Schedule the guide to start after the count-in, on the same clock.
@@ -396,13 +388,13 @@ export class StudioEngine {
       const chain = this._buildVoiceChain(this.ctx, { reverb: params.reverb });
       const voiceGain = this.ctx.createGain();
       voiceGain.gain.value = clamp01(params.voiceVol ?? 0.9) * VOICE_MAKEUP;
-      const center = this.ctx.createStereoPanner?.();
+      const center = this._centerNode(this.ctx);
       voiceSrc.connect(chain.input);
-      if (center) { chain.output.connect(voiceGain).connect(center).connect(master); }
-      else { chain.output.connect(voiceGain).connect(master); }
+      chain.output.connect(voiceGain).connect(center.input);
+      center.output.connect(master);
       const off = this._takeBufferOffset(take) + fromSec;
       voiceSrc.start(startAt, Math.min(off, Math.max(0, take.buffer.duration - 0.01)));
-      this._nodes.push(voiceSrc, chain.input, chain.output, voiceGain, ...(center ? [center] : []));
+      this._nodes.push(voiceSrc, chain.input, chain.output, voiceGain, center.input, center.output);
       this._mix.voiceGain = voiceGain;
       this._mix.voiceChain = chain;
     }
@@ -468,10 +460,10 @@ export class StudioEngine {
       const { input, output } = this._buildVoiceChain(off, { reverb: params.reverb });
       const voiceGain = off.createGain();
       voiceGain.gain.value = clamp01(params.voiceVol ?? 0.9) * VOICE_MAKEUP;
-      const center = off.createStereoPanner?.();
+      const center = this._centerNode(off);
       voiceSrc.connect(input);
-      if (center) { output.connect(voiceGain).connect(center).connect(master); }
-      else { output.connect(voiceGain).connect(master); }
+      output.connect(voiceGain).connect(center.input);
+      center.output.connect(master);
       voiceSrc.start(0, Math.min(this._takeBufferOffset(take), Math.max(0, take.buffer.duration - 0.01)));
     }
 
@@ -532,6 +524,21 @@ export class StudioEngine {
    * non-placeholder effects (currently reverb). Returns chain { input, output }.
    * Future effects slot in here in series with zero call-site changes elsewhere.
    */
+  /**
+   * Force a centred stereo signal. The iOS mic often arrives as a left-only
+   * buffer (1 channel, or 2 channels with a silent right), and a StereoPanner
+   * passes stereo through untouched — leaving it in one ear. Splitting and
+   * copying channel 0 into BOTH outputs guarantees full-level, centred audio
+   * regardless of the source layout.
+   */
+  _centerNode(ctx) {
+    const splitter = ctx.createChannelSplitter(2);
+    const merger = ctx.createChannelMerger(2);
+    splitter.connect(merger, 0, 0);
+    splitter.connect(merger, 0, 1);
+    return { input: splitter, output: merger };
+  }
+
   _buildVoiceChain(ctx, params = {}) {
     const order = ["noiseRemoval", "compression", "eq", "preset", "harmony", "reverb"];
     const passthrough = ctx.createGain();

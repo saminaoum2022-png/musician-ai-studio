@@ -57,7 +57,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260630-162759";
+const APP_BUILD = "20260630-170114";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -49321,17 +49321,23 @@ setProfileEditing(false);
 // a rebind.
 try { attachTabRefresh(); } catch (e) { console.warn("[tabRefresh] init", e); }
 
-// Voice Lab → AI maqam verification. The phone sends only the extracted
-// analysis numbers (never the voice). Returns null on any failure / when
-// signed out, so Voice Lab silently falls back to its on-device result.
-window.nabadMaqamVerify = async function nabadMaqamVerify(features) {
+// Voice Lab → AI maqam detection. Primary mode sends the recorded phrase so
+// Gemini can hear the microtonal intervals (the on-device numbers are too flat
+// to separate Bayati/Kurd/Sikah reliably); the extracted numbers ride along as a
+// weak hint. Returns null on any failure / when signed out, so Voice Lab silently
+// falls back to its on-device ranking.
+window.nabadMaqamVerify = async function nabadMaqamVerify(features, audioDataUrl) {
   try {
     const token = getSupabaseAuthToken();
     if (!token) return null;
+    const payload = { features };
+    if (typeof audioDataUrl === "string" && audioDataUrl.startsWith("data:audio/")) {
+      payload.audio = audioDataUrl;
+    }
     const r = await apiFetch("/api/music/detect-maqam", {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ features }),
+      body: JSON.stringify(payload),
     });
     if (!r.ok) return null;
     const d = await r.json().catch(() => null);

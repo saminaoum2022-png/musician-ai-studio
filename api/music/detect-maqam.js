@@ -1,20 +1,27 @@
 /**
- * AI maqam verification (provider-neutral path).
+ * AI maqam detection (provider-neutral path).
  *
- * POST /api/music/detect-maqam   { features: {...} }
+ * POST /api/music/detect-maqam   { audio?: "data:audio/...;base64,...", features?: {...} }
  *   <- { primaryMaqam, id, confidence, alternatives, isUncertain, detectedTonic, reasoning, provider }
  *
- * The phone does the DSP (microtonal pitch → cents → tonic cues → interval
- * sizes) and sends ONLY those numbers here — never the raw voice. Gemini Flash
- * then makes the final musicological call (it knows the maqam repertoire, neutral
- * thirds, sayr, etc.). Cheap (text-only, ~$0.001/call) and private. The client
- * falls back to its own local ranking if this fails or the user is offline.
+ * Two modes:
+ *  - AUDIO (primary): the phone sends the recorded sung phrase and Gemini LISTENS
+ *    to it, finding the tonic and the microtonal 2nd/3rd by ear. This sidesteps
+ *    the on-device tonic/interval ambiguity (the local features are nearly flat
+ *    across candidate tonics, so a numbers-only call can't separate Bayati/Kurd/
+ *    Sikah reliably). The on-device numbers are still passed as a weak hint.
+ *  - NUMBERS-ONLY (fallback): if no audio is supplied, Gemini reasons from the
+ *    extracted features alone (cheaper/private, but limited by the flat features).
+ *
+ * The client always renders its local ranking first and only patches in this
+ * result when it arrives, so a failure / offline / signed-out user is invisible.
  */
 const { verifyUser } = require("../_lib/credits-auth");
 const { applyCors } = require("../_lib/cors");
 const { readJson, sendJson } = require("../_lib/suno-upstream");
 
 const COOLDOWN_MS = 1500;
+const MAX_AUDIO_CHARS = 3_500_000; // ~2.6MB binary; a 10–15s opus clip is far smaller
 const lastCallByUser = new Map();
 
 // The families the rest of Voice Lab understands (diagram + genre recs key off
@@ -48,60 +55,91 @@ module.exports = async function handler(req, res) {
     if (lastCallByUser.size > 5000) lastCallByUser.clear();
 
     const body = await readJson(req);
-    const features = body?.features;
-    if (!features || typeof features !== "object") {
-      return sendJson(res, 400, { error: "Missing analysis features." });
+    const features = body?.features && typeof body.features === "object" ? body.features : null;
+    const audioUrl = String(body?.audio || "").trim();
+    const hasAudio = audioUrl.startsWith("data:audio/");
+    if (hasAudio && audioUrl.length > MAX_AUDIO_CHARS) {
+      return sendJson(res, 413, { error: "Voice clip too large — keep it under about a minute." });
+    }
+    if (!hasAudio && !features) {
+      return sendJson(res, 400, { error: "Send the recorded audio or the analysis features." });
     }
 
     const geminiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || "";
     if (!geminiKey) {
-      return sendJson(res, 502, { error: "Maqam verification unavailable (missing GEMINI_API_KEY)." });
+      return sendJson(res, 502, { error: "Maqam detection unavailable (missing GEMINI_API_KEY)." });
     }
 
-    const out = await tryGeminiMaqam({ geminiKey, features });
+    const out = await tryGeminiMaqam({ geminiKey, features, audioUrl: hasAudio ? audioUrl : "" });
     if (!out?.ok) {
       return sendJson(res, 502, { error: out?.error || "Could not verify maqam — try again." });
     }
-    return sendJson(res, 200, { ...out.result, provider: `gemini:${out.model || "unknown"}` });
+    return sendJson(res, 200, { ...out.result, heard: hasAudio, provider: `gemini:${out.model || "unknown"}` });
   } catch (e) {
     return sendJson(res, 500, { error: e?.message || String(e) });
   }
 };
 
-function buildPrompt(features) {
+function buildPrompt(features, hasAudio) {
   const ref = MAQAM_REFERENCE.map((m) => `- ${m.id} (${m.name}): ${m.sig}`).join("\n");
-  return [
-    "You are an expert in Arabic maqam theory analyzing a SUNG vocal phrase.",
-    "The phone already measured the pitch content with microtonal precision and",
-    "gives you the extracted numbers below (no audio). All intervals are in CENTS",
-    "relative to the detected tonic (100¢ = one equal-tempered semitone;",
-    "~150¢ and ~350¢ indicate quarter-tone / neutral degrees).",
-    "",
+  const sharedRules = [
     "Choose the SINGLE best-fitting maqam family from this fixed list (use the id):",
     ref,
     "",
-    "Rules:",
-    "- Judge primarily by the measured 2nd and 3rd interval sizes and the tonic stability.",
-    "- A neutral/half-flat 2nd (~150¢) suggests Bayati/Saba/Sikah; a minor 2nd (~100¢) suggests Kurd/Hijaz; a whole 2nd (~200¢) suggests Nahawand/Rast/Ajam.",
-    "- Distinguish by the 3rd: ~300 minor, ~350 neutral (Rast/Sikah), ~400 major/augmented.",
+    "How to tell them apart:",
+    "- A neutral/half-flat 2nd (~150¢) ⇒ Bayati/Saba/Sikah; a minor 2nd (~100¢) ⇒ Kurd/Hijaz; a whole 2nd (~200¢) ⇒ Nahawand/Rast/Ajam.",
+    "- The 3rd: ~300 minor, ~350 neutral (Rast/Sikah), ~400 major or augmented (Ajam/Hijaz).",
+    "- Bayati vs Kurd hinges ENTIRELY on the 2nd: Bayati's 2nd is a quarter-flat (~150¢, sung 'in the cracks'); Kurd's is a clean minor 2nd (~100¢). When the 2nd sounds flat/ambiguous and the 3rd is minor with a perfect 4th, prefer Bayati.",
     "- Saba ONLY if the 4th is lowered (~400¢) with little perfect-4th (~500¢) energy.",
+    "- Do NOT invent a maqam outside the list. Do NOT force a confident answer from weak evidence; use isUncertain + a lower confidence when the phrase wanders or never resolves.",
+    "",
+    "Respond with ONLY this JSON shape:",
+    '{"id":"<one of the ids>","primaryMaqam":"<display name>","confidence":<0-100 integer>,"isUncertain":<true|false>,"detectedTonic":"<note name>","alternatives":[{"id":"<id>","maqam":"<name>","confidence":<0-100>}],"reasoning":"<one or two sentences citing what you heard>"}',
+  ];
+  if (hasAudio) {
+    return [
+      "You are an expert in Arabic maqam (and Turkish makam) theory. LISTEN to the",
+      "attached short SUNG vocal phrase and identify the maqam family it is in.",
+      "Trust your EARS for the microtonal intervals — equal-tempered note names are",
+      "not enough; Arabic maqam lives in the quarter-tones between the piano keys.",
+      "",
+      "Method: (1) find the tonic — the note the phrase keeps returning to and",
+      "resolves onto at phrase ends, NOT just the lowest or longest note. (2) Hear",
+      "the size of the 2nd and 3rd ABOVE that tonic. (3) Match to the list below.",
+      "",
+      features
+        ? "A rough on-device pitch analysis is included as a WEAK hint only — its tonic guess is frequently wrong, so trust your ears over these numbers:\n" + JSON.stringify(features)
+        : "",
+      "",
+      ...sharedRules,
+    ]
+      .filter(Boolean)
+      .join("\n");
+  }
+  return [
+    "You are an expert in Arabic maqam theory analyzing a SUNG vocal phrase.",
+    "The phone measured the pitch content with microtonal precision and gives you",
+    "the extracted numbers below (no audio). All intervals are in CENTS relative to",
+    "the detected tonic (100¢ = one equal-tempered semitone; ~150¢ and ~350¢ indicate",
+    "quarter-tone / neutral degrees).",
+    "- Judge primarily by the measured 2nd and 3rd interval sizes and the tonic stability.",
     "- If the tonic confidence is low or the cues disagree, set isUncertain true and lower the confidence.",
-    "- Do NOT invent a maqam outside the list. Do NOT force a confident answer from weak evidence.",
+    "",
+    ...sharedRules,
     "",
     "Extracted features (JSON):",
     JSON.stringify(features),
-    "",
-    "Respond with ONLY this JSON shape:",
-    '{"id":"<one of the ids>","primaryMaqam":"<display name>","confidence":<0-100 integer>,"isUncertain":<true|false>,"detectedTonic":"<note name>","alternatives":[{"id":"<id>","maqam":"<name>","confidence":<0-100>}],"reasoning":"<one or two sentences citing the measured intervals>"}',
   ].join("\n");
 }
 
-async function tryGeminiMaqam({ geminiKey, features }) {
+async function tryGeminiMaqam({ geminiKey, features, audioUrl }) {
   const discovered = await listGeminiGenerateModels(geminiKey);
   const preferred = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-2.0-flash-lite", "gemini-1.5-flash"];
   const models = [...preferred, ...discovered].filter(Boolean).filter((v, i, a) => a.indexOf(v) === i);
   let lastError = discovered.length ? "unknown" : "no generateContent models discovered";
-  const prompt = buildPrompt(features);
+  const hasAudio = Boolean(audioUrl);
+  const prompt = buildPrompt(features, hasAudio);
+  const parts = hasAudio ? [{ text: prompt }, { inline_data: toInlineData(audioUrl) }] : [{ text: prompt }];
 
   for (const model of models) {
     let r;
@@ -112,7 +150,7 @@ async function tryGeminiMaqam({ geminiKey, features }) {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            contents: [{ role: "user", parts: [{ text: prompt }] }],
+            contents: [{ role: "user", parts }],
             generationConfig: { temperature: 0, responseMimeType: "application/json" },
           }),
         },
@@ -171,6 +209,14 @@ function clampInt(v, lo, hi) {
   const n = Math.round(Number(v));
   if (!Number.isFinite(n)) return lo;
   return Math.max(lo, Math.min(hi, n));
+}
+
+function toInlineData(dataUrl) {
+  const m = dataUrl.match(/^data:(audio\/[a-zA-Z0-9.+-]+);base64,(.+)$/);
+  return {
+    mime_type: m ? m[1] : "audio/webm",
+    data: m ? m[2] : "",
+  };
 }
 
 function extractText(payload) {

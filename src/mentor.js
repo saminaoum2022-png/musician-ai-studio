@@ -1204,14 +1204,38 @@ function aiToRanking(ai, localRanking) {
   };
 }
 
-async function verifyMaqamWithAI(res) {
+function blobToDataUrl(blob) {
+  return new Promise((resolve) => {
+    try {
+      const fr = new FileReader();
+      fr.onload = () => resolve(typeof fr.result === "string" ? fr.result : "");
+      fr.onerror = () => resolve("");
+      fr.readAsDataURL(blob);
+    } catch {
+      resolve("");
+    }
+  });
+}
+
+async function verifyMaqamWithAI(res, audioBlob) {
   const verify = typeof window !== "undefined" ? window.nabadMaqamVerify : null;
   if (typeof verify !== "function" || !res || !res.maqamRanking) return;
   if (res.maqamRanking.stableCount < 3) return; // nothing solid to verify
   const seq = _mentorAnalysisSeq;
+  // Primary path: let Gemini HEAR the phrase (numbers alone can't separate the
+  // microtonal maqamat). Send audio when it's small enough; numbers are the hint.
+  let audioDataUrl = "";
+  try {
+    if (audioBlob && audioBlob.size && audioBlob.size <= 2_400_000) {
+      audioDataUrl = await blobToDataUrl(audioBlob);
+    }
+  } catch {
+    audioDataUrl = "";
+  }
+  if (seq !== _mentorAnalysisSeq) return; // a newer take started while encoding
   let ai;
   try {
-    ai = await verify(buildMaqamFeatures(res.maqamRanking));
+    ai = await verify(buildMaqamFeatures(res.maqamRanking), audioDataUrl);
   } catch {
     ai = null;
   }
@@ -1227,7 +1251,7 @@ async function verifyMaqamWithAI(res) {
   if (ai.reasoning) setText("mentorCardMaqamBody", ai.reasoning);
   setText(
     "mentorCardMaqamMeta",
-    `AI-verified · tonic ~${aiRanking.detectedTonicName} (on-device cents + Gemini)`,
+    `AI-heard · tonic ~${aiRanking.detectedTonicName} (Gemini listened to your take)`,
   );
   if (catalogEntry) renderMaqamDiagram(res.maqamTonicPc, catalogEntry.degrees);
   const hero = document.querySelector("[data-mentor-hero]");
@@ -1471,7 +1495,7 @@ function renderMaqamDebug(debug) {
     ...(debug.ai
       ? [
           ``,
-          `AI verdict (${debug.ai.provider || "gemini"}):`,
+          `AI verdict (${debug.ai.provider || "gemini"}, ${debug.ai.heard ? "heard the audio" : "from numbers"}):`,
           `  ${debug.ai.isUncertain ? "Uncertain" : debug.ai.primaryMaqam} ${debug.ai.confidence}% · tonic ${debug.ai.detectedTonic || "—"}`,
           `  alts: ${(debug.ai.alternatives || []).map((a) => `${a.maqam} ${a.confidence}%`).join(", ") || "—"}`,
           `  reason: ${debug.ai.reasoning || "—"}`,
@@ -1739,7 +1763,7 @@ async function finalizeMentorRecording(chunks, mimeTypeHint, recordSession) {
       updateMentorTrendLine(res, prevTake);
       showResults(true);
       _mentorAnalysisSeq += 1; // mark this report current for the async AI reply
-      void verifyMaqamWithAI(res);
+      void verifyMaqamWithAI(res, blob);
     } catch (e) {
       try {
         console.warn("[mentor] result UI", e);

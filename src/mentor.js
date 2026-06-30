@@ -902,7 +902,7 @@ function analyzeBuffer(full, sampleRate) {
   const maqamTitle = maqamRanking.isUncertain
     ? "Uncertain"
     : `${maqamRanking.primaryMaqam} · ${maqamRanking.confidence}%`;
-  const maqamMeta = `Tonic ~${maqamRanking.detectedTonicName} · ranked from ${maqamRanking.stableCount} sustained notes (microtonal cents estimate)`;
+  const maqamMeta = `Tonic ~${maqamRanking.detectedTonicName} · from ${maqamRanking.stableCount} sustained notes · experimental on-device estimate`;
 
   return {
     ok: true,
@@ -1739,7 +1739,11 @@ async function finalizeMentorRecording(chunks, mimeTypeHint, recordSession) {
       updateMentorTrendLine(res, prevTake);
       showResults(true);
       _mentorAnalysisSeq += 1; // mark this report current for the async AI reply
-      void verifyMaqamWithAI(res);
+      // The numbers-only AI verification is fed the SAME flat on-device features
+      // the local ranker already used, so it just rubber-stamps the local guess
+      // while costing a paid call. Keep it OFF for real users; only run it in
+      // developer debug mode where we want to compare local vs AI side by side.
+      if (isMentorDebug()) void verifyMaqamWithAI(res);
     } catch (e) {
       try {
         console.warn("[mentor] result UI", e);

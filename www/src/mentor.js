@@ -229,6 +229,11 @@ function pcOf(m) {
 function pcLetter(pc) {
   return PC_LETTERS[((pc % 12) + 12) % 12];
 }
+function midiToLetterName(m) {
+  if (!Number.isFinite(m)) return "—";
+  const mi = Math.round(m);
+  return `${pcLetter(((mi % 12) + 12) % 12)}${Math.floor(mi / 12) - 1}`;
+}
 function clamp01(x) {
   return x < 0 ? 0 : x > 1 ? 1 : x;
 }
@@ -325,9 +330,25 @@ function rankMaqams(stableNotes) {
       const tonicStr = clamp01((histN[tonic] * 12 - 1) / 3);
       let fit = clamp01(0.45 * base + 0.2 * jinsCov + 0.35 * tonicStr);
       let mult = m.mult;
+      let sikahPenalized = false;
       // Sikah only counts when its tonic genuinely dominates and its jins is fully present.
-      if (m.id === "sikah" && !(tonicStr >= 0.6 && jinsCov >= 0.999)) mult *= 0.55;
-      return { id: m.id, maqam: m.name, conf: Math.round(100 * clamp01(fit * mult)), tonic, degrees: [...m.degrees] };
+      if (m.id === "sikah" && !(tonicStr >= 0.6 && jinsCov >= 0.999)) {
+        mult *= 0.55;
+        sikahPenalized = true;
+      }
+      return {
+        id: m.id,
+        maqam: m.name,
+        conf: Math.round(100 * clamp01(fit * mult)),
+        tonic,
+        degrees: [...m.degrees],
+        on,
+        jinsCov,
+        tonicStr,
+        fit,
+        mult,
+        sikahPenalized,
+      };
     }).sort((a, b) => b.conf - a.conf);
 
   let best = null;
@@ -363,6 +384,25 @@ function rankMaqams(stableNotes) {
     analysisNotes = `Stable notes and interval movement around tonic ${tonicName} suggest ${top.maqam} more strongly than ${second.maqam || "the alternatives"}.`;
   }
 
+  // Reference tonic MIDI for real-cents intervals: median of held notes that
+  // sit on the detected tonic pitch-class (so we can show e.g. a "neutral 3rd"
+  // ~350¢ instead of forcing it onto the 12-TET grid).
+  const tonicMidis = stableNotes.filter((n) => pcOf(n.midi) === best.tonic).map((n) => n.midi);
+  const tonicRefMidi = tonicMidis.length
+    ? medianOf(tonicMidis)
+    : Math.round(stableNotes.reduce((lo, n) => (n.midi < lo ? n.midi : lo), stableNotes[0].midi));
+  const intervals = stableNotes.map((n) => {
+    let cents = Math.round((n.midi - tonicRefMidi) * 100);
+    cents = ((cents % 1200) + 1200) % 1200;
+    return { note: midiToLetterName(n.midi), letter: pcLetter(pcOf(n.midi)), cents, frames: n.frames };
+  });
+
+  const reason = isUncertain
+    ? `Top score ${top.conf}% is below 45% — evidence too weak to commit.`
+    : state === "possible"
+      ? `${top.maqam} (${top.conf}%) and ${second.maqam} (${second.conf}%) are within ${gap} pts — too close to call final.`
+      : `${top.maqam} won: on-scale energy ${(top.on * 100).toFixed(0)}%, jins coverage ${(top.jinsCov * 100).toFixed(0)}%, tonic strength ${(top.tonicStr * 100).toFixed(0)}% → beat ${second.maqam || "—"} by ${gap} pts.`;
+
   return {
     isUncertain,
     state,
@@ -378,6 +418,23 @@ function rankMaqams(stableNotes) {
     degrees: top.degrees,
     tonicPc: best.tonic,
     stableCount: stableNotes.length,
+    debug: {
+      histogram: histN.map((v, pc) => ({ pc, letter: pcLetter(pc), weight: v })),
+      tonicCandidates: tonicCands.map((pc) => ({ pc, letter: pcLetter(pc), score: tonicScore(pc) })),
+      tonicRefMidi,
+      intervals,
+      scores: ranked.map((x) => ({
+        maqam: x.maqam,
+        id: x.id,
+        conf: x.conf,
+        on: x.on,
+        jinsCov: x.jinsCov,
+        tonicStr: x.tonicStr,
+        sikahPenalized: x.sikahPenalized,
+      })),
+      gap,
+      reason,
+    },
   };
 }
 
@@ -628,6 +685,9 @@ function analyzeBuffer(full, sampleRate) {
   // breath, ornaments, and short unstable jumps), then rank all candidates.
   const stableNotes = extractStableNotes(f0s, sampleRate, hop);
   const maqamRanking = rankMaqams(stableNotes);
+  const maqamDebug = isMentorDebug()
+    ? buildMaqamDebug({ f0s, sampleRate, hop, stableNotes, ranking: maqamRanking })
+    : null;
   const rootMidi = alignRootMidi(p50, maqamRanking.tonicPc);
   const tune = intonationVsMaqam(voiced, rootMidi, maqamRanking.degrees);
   const genreLine = recommendGenres({
@@ -673,6 +733,7 @@ function analyzeBuffer(full, sampleRate) {
     maqamBody: maqamRanking.analysisNotes,
     maqamMeta,
     maqamRanking,
+    maqamDebug,
     maqamId: maqamRanking.primaryId,
     maqamTonicPc: maqamRanking.tonicPc,
     maqamDegrees: [...maqamRanking.degrees],
@@ -885,6 +946,225 @@ function renderMaqamRanking(r) {
     ${alts.length ? `<div class="mmqAlts"><span class="mmqAltsTitle">Other possibilities</span>${altRows}</div>` : ""}`;
 }
 
+// --- Maqam developer debug mode (hidden; internal testing only) ------------
+// Toggled by tapping the "Lab" title 7× fast. Surfaces every pipeline stage so
+// we can see WHERE a maqam read goes wrong (pitch, tonic, smoothing, stable
+// notes, or scoring). Regular users never see it.
+const MENTOR_DEBUG_KEY = "mentor:maqamDebug";
+const MENTOR_DEBUG_TONICS_KEY = "mentor:debugTonics";
+function isMentorDebug() {
+  try {
+    return localStorage.getItem(MENTOR_DEBUG_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+function setMentorDebug(on) {
+  try {
+    localStorage.setItem(MENTOR_DEBUG_KEY, on ? "1" : "0");
+  } catch {}
+}
+function pushDebugTonic(letter) {
+  try {
+    const arr = JSON.parse(localStorage.getItem(MENTOR_DEBUG_TONICS_KEY) || "[]");
+    const list = Array.isArray(arr) ? arr : [];
+    list.push(String(letter || "—"));
+    while (list.length > 6) list.shift();
+    localStorage.setItem(MENTOR_DEBUG_TONICS_KEY, JSON.stringify(list));
+    return list;
+  } catch {
+    return [String(letter || "—")];
+  }
+}
+
+function mentorMedianFilter(f0s, win) {
+  const half = Math.floor(win / 2);
+  const out = new Array(f0s.length).fill(null);
+  for (let i = 0; i < f0s.length; i++) {
+    if (!Number.isFinite(f0s[i])) continue;
+    const w = [];
+    for (let j = i - half; j <= i + half; j++) {
+      if (j >= 0 && j < f0s.length && Number.isFinite(f0s[j])) w.push(f0s[j]);
+    }
+    out[i] = w.length ? medianOf(w) : null;
+  }
+  return out;
+}
+
+function buildMaqamDebug({ f0s, sampleRate, hop, stableNotes, ranking }) {
+  const frameMs = (hop / sampleRate) * 1000;
+  const minFrames = Math.max(4, Math.round(90 / frameMs));
+  const tolCents = 55;
+  // Re-walk frames to count what stable-note extraction kept vs dropped.
+  let voiced = 0;
+  let unvoiced = 0;
+  let droppedShortFrames = 0;
+  let droppedShortRuns = 0;
+  let curRun = [];
+  const flushRun = () => {
+    if (curRun.length && curRun.length < minFrames) {
+      droppedShortFrames += curRun.length;
+      droppedShortRuns += 1;
+    }
+    curRun = [];
+  };
+  for (const m of f0s) {
+    if (!Number.isFinite(m)) {
+      unvoiced++;
+      flushRun();
+      continue;
+    }
+    voiced++;
+    if (!curRun.length) {
+      curRun.push(m);
+      continue;
+    }
+    const refv = curRun.length > 6 ? medianOf(curRun) : curRun[curRun.length - 1];
+    if (Math.abs(m - refv) * 100 <= tolCents) curRun.push(m);
+    else {
+      flushRun();
+      curRun.push(m);
+    }
+  }
+  flushRun();
+
+  // Pitch-tracking stability: fraction of voiced frame-to-frame jumps > 120¢.
+  let jumps = 0;
+  let consec = 0;
+  for (let i = 1; i < f0s.length; i++) {
+    if (Number.isFinite(f0s[i]) && Number.isFinite(f0s[i - 1])) {
+      consec++;
+      if (Math.abs(f0s[i] - f0s[i - 1]) * 100 > 120) jumps++;
+    }
+  }
+  const jumpRate = consec ? jumps / consec : 0;
+
+  const tonicHistory = pushDebugTonic(ranking.detectedTonicName);
+  const recent = tonicHistory.slice(-3);
+  const distinctTonics = new Set(recent).size;
+
+  const flags = [];
+  if (recent.length >= 3 && distinctTonics >= 3) {
+    flags.push(`tonic detection unstable (last 3 takes: ${recent.join(", ")})`);
+  }
+  if (jumpRate > 0.25) {
+    flags.push(`pitch tracking unstable (${Math.round(jumpRate * 100)}% of frames jump >120¢)`);
+  }
+  if (ranking.isUncertain) flags.push("uncertain — not forcing a maqam");
+  else if (ranking.state === "possible") flags.push("ranking close — flagged as possible, not final");
+
+  return {
+    frameMs: +frameMs.toFixed(2),
+    totalFrames: f0s.length,
+    voicedFrames: voiced,
+    unvoicedFrames: unvoiced,
+    droppedShortFrames,
+    droppedShortRuns,
+    minStableFrames: minFrames,
+    jumpRate,
+    raw: f0s.map((m) => (Number.isFinite(m) ? +m.toFixed(2) : null)),
+    smooth: mentorMedianFilter(f0s, 5).map((m) => (Number.isFinite(m) ? +m.toFixed(2) : null)),
+    flags,
+    tonicHistory,
+    stableNotes: stableNotes.map((n) => ({ note: midiToLetterName(n.midi), frames: n.frames })),
+    detectedTonicName: ranking.detectedTonicName,
+    primaryMaqam: ranking.primaryMaqam,
+    confidence: ranking.confidence,
+    kindLabel: ranking.kindLabel,
+    ...ranking.debug,
+  };
+}
+
+function mentorSparkline(values, color) {
+  const w = 280;
+  const h = 54;
+  const pad = 4;
+  const nums = values.filter((v) => v != null);
+  if (nums.length < 2) return `<svg viewBox="0 0 ${w} ${h}" class="mdbgSpark"></svg>`;
+  const min = Math.min(...nums);
+  const max = Math.max(...nums);
+  const span = max - min || 1;
+  const n = values.length;
+  const xAt = (i) => pad + (i / (n - 1)) * (w - 2 * pad);
+  const yAt = (v) => h - pad - ((v - min) / span) * (h - 2 * pad);
+  const segs = [];
+  let cur = [];
+  for (let i = 0; i < n; i++) {
+    if (values[i] == null) {
+      if (cur.length) {
+        segs.push(cur);
+        cur = [];
+      }
+    } else {
+      cur.push(`${xAt(i).toFixed(1)},${yAt(values[i]).toFixed(1)}`);
+    }
+  }
+  if (cur.length) segs.push(cur);
+  const lines = segs
+    .map((s) => `<polyline points="${s.join(" ")}" fill="none" stroke="${color}" stroke-width="1.5"/>`)
+    .join("");
+  return `<svg viewBox="0 0 ${w} ${h}" class="mdbgSpark" preserveAspectRatio="none">${lines}</svg>`;
+}
+
+function renderMaqamDebug(debug) {
+  const el = document.getElementById("mentorMaqamDebug");
+  if (!el) return;
+  if (!debug) {
+    el.hidden = true;
+    el.innerHTML = "";
+    return;
+  }
+  el.hidden = false;
+  const histLines = (debug.histogram || [])
+    .slice()
+    .sort((a, b) => b.weight - a.weight)
+    .filter((h) => h.weight > 0)
+    .map((h) => `  ${h.letter.padEnd(3)} ${"#".repeat(Math.max(0, Math.round(h.weight * 24)))} ${(h.weight * 100).toFixed(0)}%`)
+    .join("\n");
+  const intervalLines = (debug.intervals || [])
+    .map((iv) => `  ${String(iv.note).padEnd(5)} +${String(iv.cents).padStart(4)}c (${iv.frames}f)`)
+    .join("\n");
+  const scoreLines = (debug.scores || [])
+    .slice(0, 5)
+    .map(
+      (s, i) =>
+        `  ${i + 1}. ${String(s.maqam).padEnd(9)} ${String(s.conf).padStart(3)}%   on=${(s.on * 100).toFixed(0)}% jins=${(s.jinsCov * 100).toFixed(0)}% tonic=${(s.tonicStr * 100).toFixed(0)}%${s.sikahPenalized ? " [sikah-]" : ""}`,
+    )
+    .join("\n");
+  const tonicCandLine = (debug.tonicCandidates || []).map((t) => `${t.letter}(${t.score.toFixed(2)})`).join("  ");
+  const flagsBlock = debug.flags && debug.flags.length ? debug.flags.map((f) => `! ${f}`).join("\n") : "OK — no instability flags";
+  const text = [
+    `Detected tonic: ${debug.detectedTonicName}   candidates: ${tonicCandLine}`,
+    ``,
+    `Stable notes (${debug.stableNotes.length}):`,
+    `  ${debug.stableNotes.map((n) => n.note).join(", ") || "—"}`,
+    ``,
+    `Ignored: ${debug.unvoicedFrames} unvoiced/breath frames + ${debug.droppedShortFrames} frames in ${debug.droppedShortRuns} short/unstable runs (<${debug.minStableFrames}f ~90ms) — short jumps, ornaments, noise`,
+    ``,
+    `Relative intervals from tonic (real cents):`,
+    intervalLines || "  —",
+    ``,
+    `Note histogram (duration-weighted):`,
+    histLines || "  —",
+    ``,
+    `Maqam ranking (top 5):`,
+    scoreLines || "  —",
+    ``,
+    `Final: ${debug.kindLabel}: ${debug.primaryMaqam}  |  Confidence: ${debug.confidence}%`,
+    `Reason: ${debug.reason || "—"}`,
+    ``,
+    `Pitch: ${debug.voicedFrames} voiced / ${debug.totalFrames} frames | jump rate ${(debug.jumpRate * 100).toFixed(0)}% | frame ${debug.frameMs}ms`,
+    ``,
+    `Flags:`,
+    flagsBlock,
+  ].join("\n");
+  el.innerHTML =
+    `<div class="mdbgHead">Maqam debug — internal</div>` +
+    `<div class="mdbgSparkRow"><span class="mdbgSparkLabel">Raw pitch</span>${mentorSparkline(debug.raw, "#7c5cff")}</div>` +
+    `<div class="mdbgSparkRow"><span class="mdbgSparkLabel">Smoothed</span>${mentorSparkline(debug.smooth, "#23d5ab")}</div>` +
+    `<pre class="mdbgPre">${escMaqam(text)}</pre>`;
+}
+
 function showResults(on) {
   const wrap = document.getElementById("mentorResults");
   const main = document.getElementById("mentorLabMain");
@@ -923,6 +1203,11 @@ export function resetMentorSession() {
   setText("mentorCardMaqamMeta", "");
   const maqamRankEl = document.getElementById("mentorMaqamRanking");
   if (maqamRankEl) maqamRankEl.innerHTML = "";
+  const maqamDbgEl = document.getElementById("mentorMaqamDebug");
+  if (maqamDbgEl) {
+    maqamDbgEl.hidden = true;
+    maqamDbgEl.innerHTML = "";
+  }
   setText("mentorCardGenreTitle", "Genres that may fit");
   setText("mentorCardGenreBody", "");
   setText("mentorCardTuneTitle", "Intonation");
@@ -1091,6 +1376,7 @@ async function finalizeMentorRecording(chunks, mimeTypeHint, recordSession) {
       setText("mentorCardMaqamBody", res.maqamBody);
       setText("mentorCardMaqamMeta", res.maqamMeta);
       renderMaqamRanking(res.maqamRanking);
+      renderMaqamDebug(res.maqamDebug);
       renderMaqamDiagram(res.maqamTonicPc, res.maqamDegrees);
       const hero = document.querySelector("[data-mentor-hero]");
       if (hero) hero.style.setProperty("--mentor-mood-hue", String(hueFromMaqamId(res.maqamId)));
@@ -1223,6 +1509,25 @@ export function initMentor() {
       });
     }
   });
+
+  // Hidden developer toggle: tap the "Lab" title 7× fast to flip maqam debug.
+  const labTitle = document.querySelector("#mentorLabMain .appScreenTitle");
+  if (labTitle && !labTitle.dataset.mentorDebugBound) {
+    labTitle.dataset.mentorDebugBound = "1";
+    let taps = 0;
+    let lastTap = 0;
+    labTitle.addEventListener("click", () => {
+      const now = Date.now();
+      taps = now - lastTap < 800 ? taps + 1 : 1;
+      lastTap = now;
+      if (taps >= 7) {
+        taps = 0;
+        const on = !isMentorDebug();
+        setMentorDebug(on);
+        setText("mentorStatus", on ? "Maqam debug ON (internal)" : "Maqam debug OFF");
+      }
+    });
+  }
 
   const btnClearHist = document.getElementById("mentorHistoryClear");
   if (btnClearHist && !btnClearHist.dataset.mentorBound) {

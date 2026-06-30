@@ -57,7 +57,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260629-174451";
+const APP_BUILD = "20260630-124748";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -45617,7 +45617,7 @@ function evaluateCreateArabicHint({ ignoreFocus = false } = {}) {
   if (/[\u064B-\u0652\u0670]/.test(text)) return; // already has harakat
   const arabicLetters = (text.match(/[\u0621-\u064A]/g) || []).length;
   if (arabicLetters < 6) return; // ignore a stray character
-  showCoachContextHint("أضِف التشكيل (الحركات) للحصول على لهجة أوضح 🎵", "ar-harakat");
+  showCoachContextHint("أضِف التشكيل (الحركات) للهجة أوضح 🎵", "ar-harakat");
 }
 function scheduleCreateArabicHint() {
   if (_coachHintInputTimer) clearTimeout(_coachHintInputTimer);

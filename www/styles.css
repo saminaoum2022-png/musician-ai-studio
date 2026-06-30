@@ -17841,13 +17841,48 @@ input::placeholder, textarea::placeholder{
   transform: translateY(-50%) translateX(0) scale(1);
   animation: coachFabPillBump 2200ms ease-in-out 260ms 2;
 }
-/* Contextual tips can be a short sentence — let them wrap to a tidy bubble
-   instead of running off the screen edge. */
+/* Contextual tips are a short sentence. Render them as a clean rounded card
+   that sits ABOVE the orb (growing upward, away from the form) with a little
+   caret pointing down at the orb — instead of the old stadium pill that wrapped
+   into a tall blob over the Create fields. Both --nudge and --hint are present
+   when a tip shows, so we override the idle-nudge positioning/animation here. */
 .coachFab--hint .coachFabPill{
+  right: 0;
+  left: auto;
+  top: auto;
+  bottom: calc(100% + 12px);
   white-space: normal;
-  max-width: min(62vw, 230px);
-  line-height: 1.32;
+  width: max-content;
+  max-width: min(72vw, 250px);
+  border-radius: 14px;
+  line-height: 1.34;
   text-align: right;
+  transform: translateY(6px) scale(0.96);
+  transform-origin: bottom right;
+  /* Clamp to 2 lines so a longer tip can never grow into a tall blob. */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.coachFab--hint.coachFab--nudge .coachFabPill{
+  opacity: 1;
+  transform: translateY(0) scale(1);
+  animation: none;
+}
+/* Caret: a small rotated square fused to the card's bottom edge, sitting right
+   above the orb's center so the tip clearly belongs to the orb. */
+.coachFab--hint .coachFabPill::after{
+  content: "";
+  position: absolute;
+  top: 100%;
+  right: 22px;
+  width: 12px;
+  height: 12px;
+  margin-top: -6px;
+  background: linear-gradient(135deg, rgba(124,92,255,0.96), rgba(63,115,240,0.94));
+  border-radius: 2px;
+  transform: rotate(45deg);
 }
 @keyframes coachFabPillBump{
   0%, 100% { transform: translateY(-50%) translateX(0) scale(1); }

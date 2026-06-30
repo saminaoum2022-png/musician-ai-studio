@@ -55,9 +55,10 @@ MUSIC PRESENCE — let friends see what you're into:
 - In Settings → "Music presence": toggle "Show my activity" on/off, and toggle "Hide song titles" (shows "Now Playing" without the track name). Visibility is "Friends only". It's fully optional.
 
 PUBLISHING & PRIVACY OF SONGS:
-- New songs are PRIVATE by default — they stay on your device (your library) and only you can see them. A private song is not posted to your public profile until you publish it.
-- To share a song publicly, open it and tap "Publish" (the publish "Release this song" sheet). You can add an optional release note and choose whether to "Allow others to remix this song" and "Allow others to use it in mashups". Publishing puts it on your public profile and Discover.
-- To make it private again, use "Hide from public profile" — your own library copy stays.
+- New songs are PRIVATE by default — they live ONLY on the device you made them on (your local library) and only you can see them. A private song is not posted to your public profile until you publish it.
+- IMPORTANT — private songs are NOT backed up to your account and do NOT sync to your other devices. So a private song won't appear when you sign in on another phone or after reinstalling, and if you delete it, it's gone for good. (The audio is still saved on that device so the draft keeps playing there and publishing it later is instant.) If a song matters to you and you want it kept safely / available everywhere, PUBLISH it.
+- PUBLISHING is what saves a song to your Nabad account: a published song is kept permanently and shows up on any device you sign in to, plus your public profile and Discover. To share a song publicly, open it and tap "Publish" (the "Release this song" sheet). You can add an optional release note and choose whether to "Allow others to remix this song" and "Allow others to use it in mashups".
+- To make it private again, use "Hide from public profile" — it's removed from your public profile and Discover, but your own copy stays.
 - Deleting a song removes it from your library ("Remove from your Library?"); you can also multi-select and delete several at once. Songs generated together (the A and B variants) are independent — deleting one does not delete the other.
 
 THE NABAD "N" MARK (the "Creator mark"):

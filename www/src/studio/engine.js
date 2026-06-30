@@ -111,7 +111,11 @@ export class StudioEngine {
   async ensureReady() {
     if (!this.ctx) {
       const AC = window.AudioContext || window.webkitAudioContext;
-      this.ctx = new AC();
+      // "interactive" asks the platform for the smallest safe output buffer,
+      // which keeps the live "hear myself" monitor as tight as the hardware
+      // allows (the rest of the round-trip lag is the OS/WebView, not us).
+      try { this.ctx = new AC({ latencyHint: "interactive" }); }
+      catch { this.ctx = new AC(); }
     }
     if (this.ctx.state === "suspended") {
       try { await this.ctx.resume(); } catch {}
@@ -179,10 +183,18 @@ export class StudioEngine {
     const noGuide = !!cb.noGuide || !this.guideBuffer;
     if (!noGuide && !this.guideBuffer) throw new Error("no guide loaded");
 
-    // Mic capture. We deliberately avoid heavy processing constraints so the
-    // voice stays natural; effects are applied later in the chain.
+    // Mic capture. For a STUDIO we want the raw voice: browser noiseSuppression
+    // gates/ducks quiet passages (the "cut-offs" users hear) and echoCancellation
+    // pumps the level when it hears the backing — both hurt a sung take. We turn
+    // them off for clean audio. This assumes headphones when monitoring (no
+    // speaker bleed); we advise that in the UI.
     this._recStream = await navigator.mediaDevices.getUserMedia({
-      audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: false },
+      audio: {
+        echoCancellation: false,
+        noiseSuppression: false,
+        autoGainControl: false,
+        channelCount: 1,
+      },
       video: false,
     });
 

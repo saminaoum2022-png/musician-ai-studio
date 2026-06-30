@@ -41345,3 +41345,82 @@ body[data-route="studio"] .deskRail { display: none !important; }
 .studioRecDel { flex: 0 0 auto; width: 36px; height: 36px; border-radius: 10px; border: 0; background: none; color: rgba(255,255,255,0.35); font-size: 14px; cursor: pointer; }
 .studioRecDel:active { color: rgba(255,120,120,0.9); }
 .studioRecLyric--memo { color: rgba(255,255,255,0.55); font-size: 15px; }
+
+/* ===== Studio: New-project card, library picker, sync slider, scrub ===== */
+
+/* "New project" — a neutral companion to the brand Quick-take CTA */
+.studioQuickTake--alt {
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.08);
+  box-shadow: none;
+  color: var(--text, #f5f6fb);
+  margin-top: 12px;
+}
+.studioQuickTake--alt .studioQuickSub { color: rgba(255,255,255,0.6); }
+.studioQuickIco--alt { background: rgba(255,255,255,0.07); color: rgba(255,255,255,0.8); }
+.studioQuickTake--alt .studioChoiceChev { margin-left: auto; color: rgba(255,255,255,0.4); }
+
+/* Library picker */
+.studioPickList { display: flex; flex-direction: column; gap: 10px; margin-top: 16px; }
+.studioPickRow {
+  display: flex; align-items: center; gap: 13px; width: 100%; text-align: left; cursor: pointer;
+  padding: 10px 12px; border-radius: 16px;
+  border: 1px solid rgba(255,255,255,0.06); background: rgba(255,255,255,0.035);
+  color: var(--text, #f5f6fb);
+}
+.studioPickRow:active { background: rgba(255,255,255,0.06); }
+.studioPickArt {
+  flex: 0 0 auto; width: 48px; height: 48px; border-radius: 11px; overflow: hidden;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(255,255,255,0.06); color: rgba(255,255,255,0.5); font-size: 18px;
+}
+.studioPickArt img { width: 100%; height: 100%; object-fit: cover; }
+.studioPickBody { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.studioPickName { font-size: 15px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.studioPickTag {
+  align-self: flex-start; font-size: 10px; font-weight: 700; letter-spacing: .04em;
+  padding: 1px 7px; border-radius: 999px; color: rgba(35,213,171,0.95);
+  background: rgba(35,213,171,0.12);
+}
+
+/* Voice-timing (latency) — bipolar slider, thumb sits at centre (0) */
+.studioMixField--sync { display: flex; flex-direction: column; gap: 8px; }
+.studioSyncVal { font-size: 13px; font-weight: 600; color: var(--brand, #7c5cff); }
+.studioSyncSlider {
+  -webkit-appearance: none; appearance: none; width: 100%; height: 6px; border-radius: 999px;
+  background: linear-gradient(90deg, rgba(255,255,255,0.12), rgba(124,92,255,0.5) 50%, rgba(255,255,255,0.12));
+  outline: none; margin: 2px 0;
+}
+.studioSyncSlider::-webkit-slider-thumb {
+  -webkit-appearance: none; appearance: none; width: 22px; height: 22px; border-radius: 50%;
+  background: #fff; border: 3px solid var(--brand, #7c5cff); cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+}
+.studioSyncSlider::-moz-range-thumb {
+  width: 22px; height: 22px; border-radius: 50%; background: #fff;
+  border: 3px solid var(--brand, #7c5cff); cursor: pointer;
+}
+.studioSyncScale {
+  display: flex; align-items: center; justify-content: space-between;
+  font-size: 11px; color: rgba(255,255,255,0.45);
+}
+.studioSyncRec { color: rgba(35,213,171,0.9); font-weight: 600; }
+.studioSyncHint { margin: 2px 0 0; font-size: 12px; line-height: 1.4; color: rgba(255,255,255,0.45); }
+
+/* Review waveform scrubbing */
+.studioWave--review { position: relative; cursor: pointer; touch-action: none; overflow: hidden; }
+.studioWaveFill {
+  position: absolute; left: 0; top: 0; bottom: 0; width: 0%;
+  background: linear-gradient(90deg, rgba(124,92,255,0.28), rgba(35,213,171,0.28));
+  border-radius: 12px; pointer-events: none; transition: width 60ms linear;
+}
+.studioWaveHandle {
+  position: absolute; top: -3px; bottom: -3px; left: 0%; width: 3px; border-radius: 3px;
+  background: #fff; box-shadow: 0 0 8px rgba(124,92,255,0.7); transform: translateX(-50%);
+  pointer-events: none;
+}
+.studioScrubHint, .studioSoonNoteCenter { text-align: center; font-size: 12px; color: rgba(255,255,255,0.4); margin: 6px 0 0; }
+
+@media (prefers-reduced-motion: reduce) {
+  .studioWaveFill { transition: none; }
+}

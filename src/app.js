@@ -64,7 +64,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260701-014839";
+const APP_BUILD = "20260701-022259";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -28670,7 +28670,9 @@ function renderTrackSheetLibrary(track) {
     ${quickMashup}
     <button type="button" class="discoverTrackSheetQuickBtn" data-track-sheet-action="library_share">Share</button>
   `;
-  const recordEligible = !isSound && !isInstrumental && Boolean(track?.url && String(track.url).trim());
+  // Instrumentals are great to sing over, so they're eligible too (the Studio
+  // source chooser adapts — no "separate vocals" step for an instrumental).
+  const recordEligible = !isSound && Boolean(track?.url && String(track.url).trim());
   l.innerHTML = `
     ${recordEligible ? `<button type="button" class="discoverTrackSheetRow discoverTrackSheetRow--studio" data-track-sheet-action="library_record_voice">Open in Studio</button>` : ""}
     ${TRACK_SHEET_ADD_PLAYLIST_ROW}
@@ -49565,6 +49567,7 @@ try {
     timedLyricsForTrack: (t) => studioTimedLyrics(t),
     cachedInstrumental: (t) => studioCachedInstrumental(t),
     separateVocals: (t, onPhase) => studioSeparateVocals(t, onPhase),
+    librarySongs: () => studioLibrarySongs(),
     latestTrack: () => {
       try {
         return loadLibrary().find(
@@ -49618,15 +49621,64 @@ async function studioTimedLyrics(track) {
       (currentId ? lib.find((x) => String(x.id) === currentId) : null) ||
       lib.find((x) => libraryTrackCanonicalUrl(x?.url) === canonical) ||
       track;
-    const taskId = String(full?.taskId || full?.meta?.taskId || track?.taskId || "").trim();
-    const audioId = String(full?.audioId || full?.meta?.audioId || track?.audioId || "").trim();
+    let taskId = String(full?.taskId || full?.meta?.taskId || track?.taskId || "").trim();
+    let audioId = String(full?.audioId || full?.meta?.audioId || track?.audioId || "").trim();
     const isInstrumental = String(full?.kind || track?.kind || "") === "instrumental";
-    if (!taskId || !audioId || isInstrumental) return null;
+    // When the guide is an instrumental (or the row has no timing ids), the
+    // lyrics + word timing live on the ORIGINAL full song. Find it by title and
+    // borrow its ids so karaoke still syncs while singing over the instrumental.
+    if (isInstrumental || !taskId || !audioId) {
+      const base = String(track?.title || full?.title || "")
+        .replace(/\s*[•·\-]\s*instrumental\s*$/i, "")
+        .trim()
+        .toLowerCase();
+      if (base) {
+        const sibling =
+          lib.find(
+            (x) =>
+              String(x.kind || "") !== "instrumental" &&
+              String(x.title || "").trim().toLowerCase() === base &&
+              (x.taskId || x?.meta?.taskId) && (x.audioId || x?.meta?.audioId),
+          ) ||
+          lib.find(
+            (x) =>
+              String(x.kind || "") !== "instrumental" &&
+              String(x.title || "").toLowerCase().includes(base) &&
+              (x.taskId || x?.meta?.taskId) && (x.audioId || x?.meta?.audioId),
+          );
+        if (sibling) {
+          taskId = String(sibling.taskId || sibling.meta?.taskId || "").trim();
+          audioId = String(sibling.audioId || sibling.meta?.audioId || "").trim();
+        }
+      }
+    }
+    if (!taskId || !audioId) return null;
     const words = await fetchTimedLyrics(taskId, audioId);
     if (!Array.isArray(words) || !words.length) return null;
     return groupTimedLyricsIntoLines(words);
   } catch {
     return null;
+  }
+}
+
+// Studio "New project" picker: the user's playable library songs (full tracks
+// and instrumentals), in a light shape the Studio can load + sing over.
+function studioLibrarySongs() {
+  try {
+    return loadLibrary()
+      .filter((x) => String(x?.url || "").trim() && String(x?.kind || "") !== "sound")
+      .map((x) => ({
+        id: String(x.id || ""),
+        title: String(x.title || "Untitled"),
+        url: String(x.url || ""),
+        artUrl: String(x.artUrl || x?.meta?.imageThumb || x?.meta?.imageUrl || ""),
+        taskId: String(x.taskId || x?.meta?.taskId || ""),
+        audioId: String(x.audioId || x?.meta?.audioId || ""),
+        kind: String(x.kind || ""),
+        meta: x?.meta || {},
+      }));
+  } catch {
+    return [];
   }
 }
 

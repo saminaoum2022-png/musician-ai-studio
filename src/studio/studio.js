@@ -36,6 +36,7 @@ const DEFAULT_MIX = Object.freeze({
   voiceVol: 90,
   musicVol: 70,
   reverb: 15,
+  syncMs: 0, // voice timing offset vs music: 0 = in sync, +later / -earlier
   pitchAssist: "off", // off | light | medium (placeholder)
   enhance: false, // placeholder
 });
@@ -120,6 +121,7 @@ export function enterStudioRoot() {
   // No song chosen → the Studio lobby (quick take, projects, recordings).
   if (!current) {
     if (screen === "recordings") { renderRecordings(root); return; }
+    if (screen === "library") { renderLibraryPicker(root); return; }
     renderLobby(root);
     return;
   }
@@ -159,29 +161,14 @@ function renderSource(root) {
   const t = current.track || {};
   const cover = safe(bridge.coverForTrack?.(t)) || safe(t.artUrl) || "";
   const title = safe(t.title) || "Untitled";
+  const isInstrumental = String(t.kind || "") === "instrumental";
   const cached = String(bridge.cachedInstrumental?.(t) || "");
 
-  root.innerHTML = `
-    <div class="studio studioSource" data-studio-screen="source">
-      ${headerHtml("NABADAI STUDIO")}
-
-      <div class="studioHero">
-        <div class="studioCover">${cover ? `<img src="${esc(cover)}" alt="" />` : `<div class="studioCoverPlaceholder">♪</div>`}</div>
-        <div class="studioHeroMeta">
-          <h1 class="studioTitle">${esc(title)}</h1>
-          <p class="studioArtist">How do you want the music?</p>
-        </div>
-      </div>
-
-      <div class="studioChoices">
-        <button type="button" class="studioChoice" data-source="asis">
-          <span class="studioChoiceIco" aria-hidden="true">♫</span>
-          <span class="studioChoiceBody">
-            <span class="studioChoiceTitle">Sing over the song</span>
-            <span class="studioChoiceSub">Load it as it is — the full track guides you.</span>
-          </span>
-          <span class="studioChoiceChev" aria-hidden="true">→</span>
-        </button>
+  // An instrumental is already vocal-free — there's nothing to separate, so we
+  // only offer to sing over it. Full songs get both options.
+  const separateChoice = isInstrumental
+    ? ""
+    : `
         <button type="button" class="studioChoice studioChoice--accent" data-source="separate">
           <span class="studioChoiceIco" aria-hidden="true">🎤</span>
           <span class="studioChoiceBody">
@@ -191,7 +178,30 @@ function renderSource(root) {
               : "Make a clean instrumental so only your voice carries the melody. <b>~2 credits.</b>"}</span>
           </span>
           <span class="studioChoiceChev" aria-hidden="true">→</span>
+        </button>`;
+
+  root.innerHTML = `
+    <div class="studio studioSource" data-studio-screen="source">
+      ${headerHtml("NABADAI STUDIO")}
+
+      <div class="studioHero">
+        <div class="studioCover">${cover ? `<img src="${esc(cover)}" alt="" />` : `<div class="studioCoverPlaceholder">♪</div>`}</div>
+        <div class="studioHeroMeta">
+          <h1 class="studioTitle">${esc(title)}</h1>
+          <p class="studioArtist">${isInstrumental ? "This is already an instrumental" : "How do you want the music?"}</p>
+        </div>
+      </div>
+
+      <div class="studioChoices">
+        <button type="button" class="studioChoice" data-source="asis">
+          <span class="studioChoiceIco" aria-hidden="true">♫</span>
+          <span class="studioChoiceBody">
+            <span class="studioChoiceTitle">${isInstrumental ? "Sing over this instrumental" : "Sing over the song"}</span>
+            <span class="studioChoiceSub">${isInstrumental ? "It’s vocal-free already — load it and record." : "Load it as it is — the full track guides you."}</span>
+          </span>
+          <span class="studioChoiceChev" aria-hidden="true">→</span>
         </button>
+        ${separateChoice}
       </div>
     </div>`;
 
@@ -290,6 +300,15 @@ function renderLobby(root) {
         </span>
       </button>
 
+      <button type="button" class="studioQuickTake studioQuickTake--alt" data-studio-newproject>
+        <span class="studioQuickIco studioQuickIco--alt" aria-hidden="true">♪</span>
+        <span class="studioQuickBody">
+          <span class="studioQuickTitle">New project</span>
+          <span class="studioQuickSub">Load a song from your library to sing over.</span>
+        </span>
+        <span class="studioChoiceChev" aria-hidden="true">→</span>
+      </button>
+
       <div class="studioLobbySection">
         <div class="studioLobbySectionTop">
           <span class="studioLobbyKicker">Recordings</span>
@@ -326,6 +345,11 @@ function renderLobby(root) {
 function bindLobby(root) {
   bindHeader(root);
   root.querySelector("[data-studio-quick]")?.addEventListener("click", () => startQuickTake(root));
+  root.querySelector("[data-studio-newproject]")?.addEventListener("click", () => {
+    bridge.haptic?.("light");
+    current = null;
+    renderLibraryPicker(root);
+  });
   root.querySelector("[data-studio-open-recordings]")?.addEventListener("click", () => {
     bridge.haptic?.("light");
     current = null;
@@ -364,6 +388,52 @@ function startQuickTake(root) {
     timedFetched: true,
   };
   renderRecording(root);
+}
+
+/* -------------------------------------------------------------------------- */
+/* Screen: Library picker (New project — pick a song to sing over)             */
+/* -------------------------------------------------------------------------- */
+
+function renderLibraryPicker(root) {
+  screen = "library";
+  const songs = bridge.librarySongs?.() || [];
+  root.innerHTML = `
+    <div class="studio studioLibPick" data-studio-screen="library">
+      ${headerHtml("NEW PROJECT")}
+      <div class="studioLobbyHead">
+        <h1 class="studioTitle">Pick a song</h1>
+        <p class="studioArtist">Load one from your library to record over.</p>
+      </div>
+      ${songs.length
+        ? `<div class="studioPickList">${songs.map((s) => `
+            <button type="button" class="studioPickRow" data-pick="${esc(s.id)}">
+              <span class="studioPickArt">${s.artUrl ? `<img src="${esc(s.artUrl)}" alt="" />` : `<span aria-hidden="true">♪</span>`}</span>
+              <span class="studioPickBody">
+                <span class="studioPickName">${esc(s.title)}</span>
+                ${s.kind === "instrumental" ? `<span class="studioPickTag">Instrumental</span>` : ""}
+              </span>
+              <span class="studioChoiceChev" aria-hidden="true">→</span>
+            </button>`).join("")}</div>`
+        : `<div class="studioEmpty"><div class="studioEmptyIco" aria-hidden="true">♪</div><h2>No songs yet</h2><p>Create a song first, then load it here.</p></div>`}
+    </div>`;
+  bindLibraryPicker(root, songs);
+}
+
+function bindLibraryPicker(root, songs) {
+  bindHeader(root, () => { current = null; renderLobby(root); });
+  root.querySelectorAll("[data-pick]").forEach((b) =>
+    b.addEventListener("click", () => {
+      const s = (songs || []).find((x) => x.id === b.getAttribute("data-pick"));
+      if (!s) return;
+      bridge.haptic?.("light");
+      current = freshContext(s);
+      try {
+        current.projectId = `proj_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+        upsertProject({ id: current.projectId, name: nextProjectName(), track: trackRef(s) });
+      } catch {}
+      renderSource(root);
+    }),
+  );
 }
 
 /* -------------------------------------------------------------------------- */
@@ -501,7 +571,7 @@ function renderHome(root) {
         <span class="studioMonitorIco" aria-hidden="true">🎧</span>
         <span class="studioMonitorText">
           <span class="studioMonitorTitle">Hear myself</span>
-          <span class="studioMonitorSub">Live voice with reverb &amp; echo · use headphones</span>
+          <span class="studioMonitorSub">Your voice live in your ears · wired earphones recommended</span>
         </span>
         <span class="studioToggle${current.monitor ? " isOn" : ""}" aria-hidden="true"><span class="studioToggleKnob"></span></span>
       </button>
@@ -538,16 +608,50 @@ function bindHome(root) {
   root.querySelector("[data-studio-guide-status]")?.addEventListener("click", () => {
     if (root.querySelector("[data-studio-guide-status]")?.dataset.state === "error") void ensureGuide(root);
   });
-  root.querySelector("[data-studio-monitor]")?.addEventListener("click", (e) => {
+  root.querySelector("[data-studio-monitor]")?.addEventListener("click", async (e) => {
     bridge.haptic?.("light");
-    current.monitor = !current.monitor;
-    writeMonitorPref(current.monitor);
     const row = e.currentTarget;
-    row.classList.toggle("isOn", current.monitor);
-    row.setAttribute("aria-checked", String(current.monitor));
-    row.querySelector(".studioToggle")?.classList.toggle("isOn", current.monitor);
-    if (current.monitor) bridge.showToast?.("🎧 Use headphones — hearing yourself on speaker can echo.");
+    const setRow = (on) => {
+      current.monitor = on;
+      writeMonitorPref(on);
+      row.classList.toggle("isOn", on);
+      row.setAttribute("aria-checked", String(on));
+      row.querySelector(".studioToggle")?.classList.toggle("isOn", on);
+    };
+    if (current.monitor) { setRow(false); return; }
+
+    // Turning ON: only makes sense through earphones. If we can positively tell
+    // there are none, don't switch it on — just nudge the user to plug in.
+    const hp = await headphonesLikely();
+    if (hp === false) {
+      setRow(false);
+      bridge.showToast?.("Pop in your wired earphones to hear yourself — through the speaker it just echoes back into the mic. Connect them and tap again.", { durationMs: 4600 });
+      return;
+    }
+    setRow(true);
+    if (hp === null) {
+      bridge.showToast?.("🎧 Best with wired earphones in — without them you may hear echo and lag.", { durationMs: 4200 });
+    }
   });
+}
+
+// Best-effort "are headphones connected?" — returns true / false / null(unknown).
+// iOS WebView usually can't enumerate audio outputs, so we return null and let
+// the caller proceed with a gentle advisory rather than blocking real earphones.
+async function headphonesLikely() {
+  try {
+    if (!navigator.mediaDevices?.enumerateDevices) return null;
+    const devs = await navigator.mediaDevices.enumerateDevices();
+    const outs = devs.filter((d) => d.kind === "audiooutput");
+    if (!outs.length) return null;
+    const label = outs.map((d) => (d.label || "").toLowerCase()).join(" ");
+    if (!label.trim()) return null;
+    if (/headphone|airpod|earbud|earphone|wired|bluetooth|\bbt\b|usb|headset/.test(label)) return true;
+    if (outs.length === 1 && /speaker|receiver|built-?in/.test(label)) return false;
+    return null;
+  } catch {
+    return null;
+  }
 }
 
 function guideVol(root) {
@@ -661,8 +765,12 @@ async function startTake(root) {
       countInSec: memo ? 1 : 3,
       noGuide: memo,
       monitor: !!current?.monitor,
-      monitorReverb: Math.max(0.15, (Number(current?.mix?.reverb) || 0) / 100),
-      monitorEcho: 0.16,
+      // Live monitor = dry voice + a light reverb tail only. We intentionally
+      // drop the slap-back delay here: a 0.26s echo on what you hear reads as
+      // "latency", and the round-trip already adds some. Reverb tail doesn't
+      // delay the dry signal, so it stays tight.
+      monitorReverb: Math.min(0.22, Math.max(0.1, (Number(current?.mix?.reverb) || 0) / 100)),
+      monitorEcho: 0,
       onCountIn: (n) => {
         if (!countEl) return;
         if (n > 0) { countEl.hidden = false; countEl.querySelector("span").textContent = String(n); }
@@ -751,8 +859,13 @@ function renderReview(root, take) {
         <span class="studioPlayDiskIco" data-studio-play-ico aria-hidden="true">▶</span>
       </button>
 
-      <div class="studioWave studioWave--review" aria-hidden="true">${waveBarsHtml(56)}</div>
+      <div class="studioWave studioWave--review" data-studio-scrub role="slider" aria-label="Scrub to a point" tabindex="0">
+        ${waveBarsHtml(56)}
+        <span class="studioWaveFill" data-wave-fill></span>
+        <span class="studioWaveHandle" data-wave-handle></span>
+      </div>
       <div class="studioReviewTime"><span data-studio-pos>0:00</span> <span class="studioReviewTimeSep">/</span> <span>${fmtTime(dur)}</span></div>
+      <p class="studioScrubHint">Tap or drag the waveform to hear any part.</p>
 
       <div class="studioFeedbackCard">
         <div class="studioFeedbackIco" aria-hidden="true">✦</div>
@@ -777,30 +890,77 @@ function renderReview(root, take) {
   bindReview(root, take);
 }
 
+function setReviewProgress(root, frac) {
+  frac = Math.max(0, Math.min(1, Number(frac) || 0));
+  const fill = root.querySelector("[data-wave-fill]");
+  const handle = root.querySelector("[data-wave-handle]");
+  if (fill) fill.style.width = `${frac * 100}%`;
+  if (handle) handle.style.left = `${frac * 100}%`;
+}
+
 function bindReview(root, take) {
   bindHeader(root, () => renderHome(root));
 
   const btn = root.querySelector("[data-studio-play]");
   const ico = root.querySelector("[data-studio-play-ico]");
   const posEl = root.querySelector("[data-studio-pos]");
-  btn?.addEventListener("click", async () => {
-    bridge.haptic?.("light");
-    if (engine?.isPlaying) { engine.stopMix(); ico.textContent = "▶"; btn.classList.remove("isPlaying"); return; }
+  const wave = root.querySelector("[data-studio-scrub]");
+  const dur = take?.buffer?.duration || engine?.guideDuration || 0;
+
+  const playFrom = async (fromSec) => {
     try {
       if (!engine.guideBuffer && current.guideUrl) await engine.loadGuide(current.guideUrl);
+      engine.stopMix();
       ico.textContent = "❚❚"; btn.classList.add("isPlaying");
       await engine.playMix(
-        { musicVol: 0.7, voiceVol: take?.buffer ? 0.95 : 0, reverb: 0.12 },
+        { musicVol: 0.7, voiceVol: take?.buffer ? 0.95 : 0, reverb: 0.12, fromSec: Math.max(0, fromSec || 0) },
         {
-          onTick: (s) => { if (posEl) posEl.textContent = fmtTime(s); },
-          onEnded: () => { ico.textContent = "▶"; btn.classList.remove("isPlaying"); if (posEl) posEl.textContent = "0:00"; },
+          onTick: (s) => { if (posEl) posEl.textContent = fmtTime(s); if (dur) setReviewProgress(root, s / dur); },
+          onEnded: () => { ico.textContent = "▶"; btn.classList.remove("isPlaying"); setReviewProgress(root, 0); if (posEl) posEl.textContent = "0:00"; },
         },
       );
     } catch {
       ico.textContent = "▶"; btn.classList.remove("isPlaying");
       bridge.showToast?.("Couldn’t play here.");
     }
+  };
+
+  btn?.addEventListener("click", () => {
+    bridge.haptic?.("light");
+    if (engine?.isPlaying) { engine.stopMix(); ico.textContent = "▶"; btn.classList.remove("isPlaying"); return; }
+    void playFrom(0);
   });
+
+  // Scrub: tap or drag the waveform to hear a specific part.
+  if (wave && dur > 0) {
+    let seeking = false;
+    const fracFromEvent = (ev) => {
+      const r = wave.getBoundingClientRect();
+      const x = (ev.clientX ?? ev.touches?.[0]?.clientX ?? 0) - r.left;
+      return Math.max(0, Math.min(1, r.width ? x / r.width : 0));
+    };
+    wave.addEventListener("pointerdown", (e) => {
+      seeking = true;
+      try { wave.setPointerCapture(e.pointerId); } catch {}
+      const f = fracFromEvent(e);
+      setReviewProgress(root, f);
+      if (posEl) posEl.textContent = fmtTime(f * dur);
+    });
+    wave.addEventListener("pointermove", (e) => {
+      if (!seeking) return;
+      const f = fracFromEvent(e);
+      setReviewProgress(root, f);
+      if (posEl) posEl.textContent = fmtTime(f * dur);
+    });
+    const release = (e) => {
+      if (!seeking) return;
+      seeking = false;
+      bridge.haptic?.("light");
+      void playFrom(fracFromEvent(e) * dur);
+    };
+    wave.addEventListener("pointerup", release);
+    wave.addEventListener("pointercancel", () => { seeking = false; });
+  }
 
   root.querySelector("[data-studio-keep]")?.addEventListener("click", () => {
     bridge.haptic?.("medium");
@@ -848,6 +1008,20 @@ function renderMix(root) {
         ${sliderRow("voiceVol", "Voice", m.voiceVol, "🎤")}
         ${sliderRow("musicVol", "Music", m.musicVol, "♪")}
         ${sliderRow("reverb", "Reverb", m.reverb, "∿")}
+      </div>
+
+      <div class="studioMixField studioMixField--sync">
+        <div class="studioMixFieldTop">
+          <span class="studioMixLabel">Voice timing</span>
+          <span class="studioSyncVal" data-sync-val>In sync</span>
+        </div>
+        <input type="range" class="studioSyncSlider" min="-200" max="200" step="10" value="${Number(m.syncMs) || 0}" data-studio-sync aria-label="Voice timing offset" />
+        <div class="studioSyncScale">
+          <span>Voice earlier</span>
+          <span class="studioSyncRec">Recommended: in sync</span>
+          <span>Voice later</span>
+        </div>
+        <p class="studioSyncHint">Nudge your voice if it drifts ahead of or behind the music. Centre keeps the auto-aligned timing.</p>
       </div>
 
       <div class="studioMixField">
@@ -901,6 +1075,24 @@ function bindMix(root) {
       if (out) out.textContent = String(m[k]);
       if (engine?.isPlaying) restartMixPreview(root); // keep preview honest
     });
+  });
+
+  const syncInp = root.querySelector("[data-studio-sync]");
+  const syncValEl = root.querySelector("[data-sync-val]");
+  const applySync = (v) => {
+    m.syncMs = v;
+    if (syncValEl) {
+      syncValEl.textContent = v === 0 ? "In sync" : `${v > 0 ? "+" : ""}${v} ms · ${v > 0 ? "later" : "earlier"}`;
+    }
+    // Slider right (+) = voice plays later → negative engine nudge (see engine).
+    const t = engine?.getActiveTake?.();
+    if (t?.id) { try { engine.setTakeNudgeMs(t.id, -v); } catch {} }
+  };
+  applySync(Number(m.syncMs) || 0);
+  syncInp?.addEventListener("input", () => {
+    const v = Number(syncInp.value) || 0;
+    applySync(v);
+    if (engine?.isPlaying) restartMixPreview(root);
   });
 
   root.querySelector("[data-studio-pitch]")?.addEventListener("click", (e) => {

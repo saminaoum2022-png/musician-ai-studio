@@ -124,7 +124,7 @@
       onload="this.media='all'"
     />
     <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Display:wght@900&family=Inter:wght@900&display=swap" /></noscript>
-    <link rel="stylesheet" href="./styles.css?v=20260630-225432" />
+    <link rel="stylesheet" href="./styles.css?v=20260701-013111" />
 
     <meta name="description" content="Nabadai is an AI music studio. Hum a melody, write lyrics, and ship a song." />
     <meta property="og:type" content="website" />
@@ -1433,6 +1433,27 @@
                   <span class="homeDeskSectionKicker">From a snapshot</span>
                   <span class="homeDeskPromoTitle" id="homeDeskPhotoPromoTitle">Photo Mood</span>
                   <span class="homeDeskPromoDesc">Upload a photo — we analyze the vibe and shape lyrics, style tags, and cover art.</span>
+                </span>
+                <span class="homeDeskPromoChev" aria-hidden="true">→</span>
+              </button>
+
+              <button type="button" class="homeDeskPromoCard homeDeskStudioPromo homeDeskPromo--compact" data-home-card="studio" aria-label="NabadAi Studio — record your voice over a song or capture a quick take">
+                <span class="homeDeskPromoVisual homeDeskPromoVisual--studio" aria-hidden="true">
+                  <span class="homeDeskStudioTileWrap">
+                    <span class="homeDeskStudioPulse" aria-hidden="true"></span>
+                    <span class="homeDeskStudioTile">
+                      <svg class="homeDeskStudioIco" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                        <path fill="currentColor" d="M12 14a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v5a3 3 0 0 0 3 3Z"/>
+                        <path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21"/>
+                        <path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" d="M3 16.5q1.6-2 3.2 0t3.2 0M14.6 16.5q1.6-2 3.2 0t3.2 0" opacity="0.55"/>
+                      </svg>
+                    </span>
+                  </span>
+                </span>
+                <span class="homeDeskPromoCopy">
+                  <span class="homeDeskSectionKicker">Your voice</span>
+                  <span class="homeDeskPromoTitle" id="homeDeskStudioPromoTitle">Studio</span>
+                  <span class="homeDeskPromoDesc">Record over any song or capture a quick take — mix it and publish with your real voice.</span>
                 </span>
                 <span class="homeDeskPromoChev" aria-hidden="true">→</span>
               </button>
@@ -2841,6 +2862,10 @@
           </details>
         </section>
 
+        <section class="studioRoute" data-route="studio" aria-label="NabadAi Studio">
+          <div id="studioRoot"></div>
+        </section>
+
         <details class="card wide" data-route="advanced">
           <summary>Advanced: local generator + hum → melody</summary>
           <div style="margin-top: 12px"></div>
@@ -4100,7 +4125,7 @@
             h = hasSession ? "discover" : (guestMode ? "discover" : "auth");
           }
         }
-        var ok = /^(intro|onboarding|music-preferences|auth|generate|challenges|activity|discover|friends|profile|settings|player|sounds|user|vocal|stems|advanced|credits|mentor)$/.test(h);
+        var ok = /^(intro|onboarding|music-preferences|auth|generate|challenges|activity|discover|friends|profile|settings|player|sounds|user|vocal|stems|studio|advanced|credits|mentor)$/.test(h);
         if (!ok) {
           if (!done) h = "auth";
           else {
@@ -4121,6 +4146,6 @@
     </script>
     <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
     <script src="./env.client.js" onerror="void 0"></script>
-    <script type="module" src="./src/app.js?v=20260630-225432"></script>
+    <script type="module" src="./src/app.js?v=20260701-013111"></script>
   </body>
 </html>

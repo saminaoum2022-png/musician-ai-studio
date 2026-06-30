@@ -5,6 +5,13 @@ import { mixStemsToWav } from "./studio/mixer.js";
 import { encodeWav16 } from "./wav.js";
 import { initMentor, resetMentorSession } from "./mentor.js";
 import {
+  configureStudio,
+  openStudioForTrack,
+  openStudioLobby,
+  enterStudioRoot,
+  leaveStudioRoot,
+} from "./studio/studio.js";
+import {
   clearLockScreenNowPlaying,
   initLockScreenNowPlaying,
   syncLockScreenNowPlaying,
@@ -57,7 +64,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260630-225432";
+const APP_BUILD = "20260701-013111";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -3222,7 +3229,7 @@ function applyRoute({ passGen } = {}) {
     "intro", "onboarding", "music-preferences", "start", "auth", "generate",
     ...(HUB_FEATURE_ENABLED ? ["hub"] : []),
     ...(MESSAGES_FEATURE_ENABLED ? ["messages", "messages-thread"] : []),
-    "settings", "profile", "player", "discover", "discover-playlist", "friends", "challenges", "activity", "mashup", "mentor", "vocal", "stems", "advanced", "user", "credits", "sounds",
+    "settings", "profile", "player", "discover", "discover-playlist", "friends", "challenges", "activity", "mashup", "mentor", "vocal", "stems", "studio", "advanced", "user", "credits", "sounds",
   ]);
   const onboardingParsed = parseOnboardingRoute(route);
   let normalized = pendingPublicUsername ? "user" : (route === "start" ? "auth" : route);
@@ -3318,7 +3325,7 @@ function applyRoute({ passGen } = {}) {
   // Public profile is intentionally readable without auth so share-link
   // visitors don't hit a wall before discovering the rest of the product.
   const sharedTrackId = parseSharedTrackIdFromLocation();
-  const protectedRoutes = new Set(["generate", "profile", "friends", "activity", "mashup", "player", "vocal", "stems", "advanced", "credits", "sounds", ...(MESSAGES_FEATURE_ENABLED ? ["messages", "messages-thread"] : [])]);
+  const protectedRoutes = new Set(["generate", "profile", "friends", "activity", "mashup", "player", "vocal", "stems", "studio", "advanced", "credits", "sounds", ...(MESSAGES_FEATURE_ENABLED ? ["messages", "messages-thread"] : [])]);
   if (!isLoggedIn && protectedRoutes.has(wanted)) {
     if (wanted === "player" && sharedTrackId) {
       // Listen-only share links — do not bounce guests to sign-in.
@@ -3489,6 +3496,12 @@ function applyRoute({ passGen } = {}) {
         focusHubPostFromShare(targetId);
       }
     } catch {}
+  }
+  if (prevRoute === "studio" && wanted !== "studio") {
+    try { leaveStudioRoot(); } catch {}
+  }
+  if (wanted === "studio") {
+    try { enterStudioRoot(); } catch {}
   }
   if (wanted === "settings") {
     renderPersonaSelect();
@@ -9338,6 +9351,18 @@ function bindHomeDeskOnce(page) {
           return;
         }
         try { location.hash = "#/mashup"; } catch {}
+        scheduleApplyRoute();
+        return;
+      }
+      if (card === "studio") {
+        if (!authSession?.user?.id) {
+          setPostAuthReturnHash("#/studio");
+          try { location.hash = "#/auth"; } catch {}
+          scheduleApplyRoute();
+          setStatus("Sign in to use the Studio.");
+          return;
+        }
+        try { openStudioLobby(); } catch { try { location.hash = "#/studio"; } catch {} }
         scheduleApplyRoute();
         return;
       }
@@ -28645,7 +28670,9 @@ function renderTrackSheetLibrary(track) {
     ${quickMashup}
     <button type="button" class="discoverTrackSheetQuickBtn" data-track-sheet-action="library_share">Share</button>
   `;
+  const recordEligible = !isSound && !isInstrumental && Boolean(track?.url && String(track.url).trim());
   l.innerHTML = `
+    ${recordEligible ? `<button type="button" class="discoverTrackSheetRow discoverTrackSheetRow--studio" data-track-sheet-action="library_record_voice">Open in Studio</button>` : ""}
     ${TRACK_SHEET_ADD_PLAYLIST_ROW}
     <button type="button" class="discoverTrackSheetRow" data-track-sheet-action="library_pin">${escapeHtml(pinLabel)}</button>
     <button type="button" class="discoverTrackSheetRow" data-track-sheet-action="library_dl_audio">Download audio</button>
@@ -29393,6 +29420,11 @@ function runTrackSheetAction(action, sourceEl) {
     if (action === "library_inst") {
       shut();
       void runLibraryInstrumentalForTrack(t);
+      return;
+    }
+    if (action === "library_record_voice") {
+      shut();
+      try { openStudioForTrack(t); } catch {}
       return;
     }
     if (action === "library_del") {
@@ -49520,6 +49552,178 @@ window.nabadMaqamVerify = async function nabadMaqamVerify(features) {
 };
 
 try { initMentor(); } catch (e) { console.warn("[mentor] init", e); }
+
+// NabadAi Studio — wire the controller to the app's capabilities (one-time).
+try {
+  configureStudio({
+    showToast: (m, o) => { try { showToast(m, o); } catch {} },
+    haptic: (k) => { try { haptic(k === "medium" ? "impact" : "light"); } catch {} },
+    navigateBack: () => { try { history.back(); } catch { location.hash = "#/discover"; } },
+    lyricsForTrack: (t) => String(t?.meta?.lyrics || t?.lyrics || t?.meta?.lyricsText || ""),
+    coverForTrack: (t) => String(t?.artUrl || t?.art || ""),
+    prepareGuide: (t) => studioPrepareGuide(t),
+    timedLyricsForTrack: (t) => studioTimedLyrics(t),
+    cachedInstrumental: (t) => studioCachedInstrumental(t),
+    separateVocals: (t, onPhase) => studioSeparateVocals(t, onPhase),
+    latestTrack: () => {
+      try {
+        return loadLibrary().find(
+          (x) =>
+            String(x.url || "").trim() &&
+            String(x.kind || "full") !== "instrumental" &&
+            String(x.kind || "") !== "sound",
+        ) || null;
+      } catch { return null; }
+    },
+  });
+} catch (e) { console.warn("[studio] init", e); }
+
+// Resolve the backing instrumental ("AI Guide") for a song. V1 prefers an
+// existing instrumental already in the library; otherwise it falls back to the
+// song's own audio as a temporary guide. NOTE: real on-demand vocal-removal
+// (Suno separate_vocal, cached + linked to the song) is the next slice — this
+// keeps the Studio renderable/playable without a backend round-trip meanwhile.
+async function studioPrepareGuide(track) {
+  try {
+    const items = loadLibrary();
+    const base = String(track?.title || "")
+      .replace(/\s*[•·-]\s*instrumental$/i, "")
+      .trim()
+      .toLowerCase();
+    if (base) {
+      const inst = items.find(
+        (x) =>
+          String(x.kind || "") === "instrumental" &&
+          String(x.title || "").toLowerCase().includes(base) &&
+          String(x.url || "").trim(),
+      );
+      if (inst) return String(inst.url);
+    }
+  } catch {}
+  return String(track?.url || "");
+}
+
+// Reuse the app's karaoke pipeline for the Studio: resolve the song's
+// generation ids, fetch word-level timing, and return it grouped into lines
+// (the same shape the player overlay highlights). Returns null when a song has
+// no timing data (instrumentals, imports, older songs) so the Studio falls
+// back to plain lyrics. Timing aligns because the Studio guide is the song's
+// own audio; if we later swap in a separate instrumental we'll re-align then.
+async function studioTimedLyrics(track) {
+  try {
+    const lib = loadLibrary();
+    const currentId = String(track?.id || "").trim();
+    const canonical = libraryTrackCanonicalUrl(String(track?.url || ""));
+    const full =
+      (currentId ? lib.find((x) => String(x.id) === currentId) : null) ||
+      lib.find((x) => libraryTrackCanonicalUrl(x?.url) === canonical) ||
+      track;
+    const taskId = String(full?.taskId || full?.meta?.taskId || track?.taskId || "").trim();
+    const audioId = String(full?.audioId || full?.meta?.audioId || track?.audioId || "").trim();
+    const isInstrumental = String(full?.kind || track?.kind || "") === "instrumental";
+    if (!taskId || !audioId || isInstrumental) return null;
+    const words = await fetchTimedLyrics(taskId, audioId);
+    if (!Array.isArray(words) || !words.length) return null;
+    return groupTimedLyricsIntoLines(words);
+  } catch {
+    return null;
+  }
+}
+
+// Studio "Separate vocals": return an already-cached instrumental URL for this
+// song if we have one (so we skip generation + credits), else "".
+function studioCachedInstrumental(track) {
+  try {
+    const items = loadLibrary();
+    const base = String(track?.title || "")
+      .replace(/\s*[•·-]\s*instrumental$/i, "")
+      .trim()
+      .toLowerCase();
+    if (!base) return "";
+    const inst = items.find(
+      (x) =>
+        String(x.kind || "") === "instrumental" &&
+        String(x.title || "").toLowerCase().includes(base) &&
+        String(x.url || "").trim(),
+    );
+    return inst ? String(inst.url) : "";
+  } catch {
+    return "";
+  }
+}
+
+// Studio "Separate vocals": generate a true instrumental via Suno vocal
+// removal, save it to the library/song profile (same as the rest of the app),
+// and resolve the playable instrumental URL for the Studio to use as its guide.
+// Reuses the deployed /api/suno/stems flow — this spends ~2 credits.
+async function studioSeparateVocals(track, onPhase) {
+  const cached = studioCachedInstrumental(track);
+  if (cached) {
+    try { onPhase?.("ready"); } catch {}
+    return normalizeAudioUrlForPlayback(cached) || cached;
+  }
+  const taskId = String(track?.taskId || track?.meta?.taskId || "").trim();
+  const audioId = String(track?.audioId || track?.meta?.audioId || "").trim();
+  if (!taskId || !audioId) {
+    throw new Error("This song can’t be separated yet (missing generation ids).");
+  }
+  try { onPhase?.("requesting"); } catch {}
+  const tok = getSupabaseAuthToken();
+  const r = await fetch(apiUrl("/api/suno/stems"), {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...(tok ? { Authorization: `Bearer ${tok}` } : {}),
+    },
+    body: JSON.stringify({ taskId, audioId, type: "separate_vocal" }),
+  });
+  const d = await r.json().catch(() => ({}));
+  if (r.status === 402 || d?.code === "insufficient_credits") {
+    const need = Number(d?.needed ?? 2);
+    const have = Number(d?.balance || 0);
+    throw new Error(`Not enough credits to separate vocals (you have ${have}, need ${need}). Redeem a code in Profile → Credits.`);
+  }
+  if (!r.ok) throw new Error(d?.error || "Couldn’t start vocal separation.");
+  try { if (typeof refreshMyCredits === "function") void refreshMyCredits({ silent: true }); } catch {}
+  const stemTask = d?.data?.taskId || d?.data?.task_id || d?.taskId || null;
+  if (!stemTask) throw new Error("Missing separation task id.");
+  try { onPhase?.("processing"); } catch {}
+
+  const maxTries = 60;
+  const delayMs = 4500;
+  for (let i = 0; i < maxTries; i++) {
+    await new Promise((res) => setTimeout(res, delayMs));
+    try {
+      const sr = await fetch(apiUrl(`/api/suno/stems_status?taskId=${encodeURIComponent(stemTask)}`));
+      const sd = await sr.json().catch(() => ({}));
+      if (!sr.ok) continue;
+      const flag = sd?.data?.successFlag || sd?.data?.status || sd?.successFlag || sd?.status || "";
+      const resp = sd?.data?.response || sd?.response || sd || {};
+      const instrumentalUrl =
+        deepFindFirstStringByKeys(resp, ["instrumentalUrl", "instrumental_url", "accompanimentUrl"]) ||
+        deepFindFirstStringByKeys(sd, ["instrumentalUrl", "instrumental_url", "accompanimentUrl"]);
+      if (String(flag).toUpperCase() === "FAILED") throw new Error("Vocal separation failed — please try again.");
+      if (instrumentalUrl) {
+        const proxied = toAudioProxyUrl(instrumentalUrl) || instrumentalUrl;
+        const playable = normalizeAudioUrlForPlayback(proxied) || proxied;
+        // Save into the library/song profile exactly like the rest of the app.
+        try {
+          addToLibrary({
+            title: `${String(track?.title || "Song").trim()} • Instrumental`,
+            artUrl: String(track?.artUrl || track?.meta?.imageThumb || track?.meta?.imageUrl || "").trim(),
+            url: playable,
+            kind: "instrumental",
+          });
+        } catch {}
+        try { onPhase?.("ready"); } catch {}
+        return playable;
+      }
+    } catch (e) {
+      if (/failed/i.test(e?.message || "")) throw e;
+    }
+  }
+  throw new Error("Separation is taking longer than expected — try again in a moment.");
+}
 
 // Hum → melody (MVP)
 if (els.btnHumStart && els.btnHumStop && els.btnHumClear) {

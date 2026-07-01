@@ -34,7 +34,7 @@ let unsaved = false;
 let recMode = "take"; // "take" (over a song) | "memo" (quick take, no music)
 
 const DEFAULT_MIX = Object.freeze({
-  voiceVol: 90,
+  voiceVol: 100,
   musicVol: 70,
   reverb: 15,
   syncMs: 0, // voice timing offset vs music: 0 = in sync, +later / -earlier
@@ -127,6 +127,10 @@ export function enterStudioRoot() {
     return;
   }
   if (screen === "source") { renderSource(root); return; }
+  if (screen === "recording") { renderRecording(root); return; }
+  if (screen === "review") { renderReview(root, engine?.getActiveTake?.()); return; }
+  if (screen === "edit") { renderEditTake(root, engine?.getActiveTake?.()); return; }
+  if (screen === "mix") { renderMix(root); return; }
   renderHome(root);
   void ensureGuide(root);
   void ensureTimedLyrics(root);
@@ -563,13 +567,13 @@ function renderHome(root) {
       <div class="studioGuideRow">
         <span class="studioGuideStatus" data-studio-guide-status data-state="preparing">Preparing your AI Guide…</span>
         <label class="studioVolume">
-          <span class="studioVolumeIco" aria-hidden="true">♪</span>
+          <span class="studioVolumeIco" aria-hidden="true">${studioIco("music")}</span>
           <input type="range" min="0" max="100" value="80" data-studio-guide-vol aria-label="AI Guide volume" />
         </label>
       </div>
 
       <button type="button" class="studioMonitorRow${current.monitor ? " isOn" : ""}" data-studio-monitor role="switch" aria-checked="${!!current.monitor}">
-        <span class="studioMonitorIco" aria-hidden="true">🎧</span>
+        <span class="studioMonitorIco" aria-hidden="true">${studioIco("headphones")}</span>
         <span class="studioMonitorText">
           <span class="studioMonitorTitle">Hear myself</span>
           <span class="studioMonitorSub">Your voice live in your ears · wired earphones recommended</span>
@@ -835,41 +839,87 @@ function animateVoiceWave(wrap, level) {
 }
 
 /* -------------------------------------------------------------------------- */
-/* Screen: Take Review                                                         */
+/* Screen: Take Review (listen only)                                           */
 /* -------------------------------------------------------------------------- */
+
+function mixState() {
+  return current.mix || (current.mix = { ...DEFAULT_MIX });
+}
+
+function takeTabsHtml(takes, activeId) {
+  if (!takes?.length) return "";
+  if (takes.length === 1) {
+    return `<span class="studioTakeBadge">Take 1</span>`;
+  }
+  return `<div class="studioTakeTabs" role="tablist" aria-label="Takes">${takes.map((t, i) =>
+    `<button type="button" role="tab" class="studioTakeTab${t.id === activeId ? " isActive" : ""}" data-take-id="${esc(t.id)}" aria-selected="${t.id === activeId}">Take ${i + 1}</button>`,
+  ).join("")}</div>`;
+}
+
+function peaksHtml(peaks) {
+  if (!peaks?.length) {
+    return Array.from({ length: 64 }, () => `<span class="studioPeakBar studioPeakBar--empty"></span>`).join("");
+  }
+  return peaks.map((p) => {
+    const h = Math.max(6, Math.round((Number(p) || 0) * 94));
+    return `<span class="studioPeakBar" style="height:${h}%"></span>`;
+  }).join("");
+}
+
+function studioIco(name) {
+  const icons = {
+    voice: `<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M12 14a3 3 0 0 0 3-3V6a3 3 0 1 0-6 0v5a3 3 0 0 0 3 3zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V21h2v-3.08A7 7 0 0 0 19 11h-2z"/></svg>`,
+    music: `<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M12 3v10.55A4 4 0 1 0 14 15V7h4V3h-6z"/></svg>`,
+    reverb: `<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.8" d="M4 12c0-4 3.5-7 8-7s8 3 8 7-3.5 7-8 7"/></svg>`,
+    headphones: `<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M12 3a8 8 0 0 0-8 8v6a3 3 0 0 0 3 3h1v-9H5a6 6 0 1 1 12 0v9h1a3 3 0 0 0 3-3v-6a8 8 0 0 0-8-8z"/></svg>`,
+    play: `<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M8 5v14l11-7z"/></svg>`,
+    pause: `<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M6 5h4v14H6zm8 0h4v14h-4z"/></svg>`,
+    trim: `<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" d="M6 7v10M18 7v10M6 12h12"/></svg>`,
+    split: `<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.8" d="M12 4v16M8 8l4-4 4 4M8 16l4 4 4-4"/></svg>`,
+    delete: `<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" d="M5 7h14M9 7V5h6v2M8 7l1 12h6l1-12"/></svg>`,
+    levels: `<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M4 10h2v8H4zm5-4h2v12H9zm5 2h2v10h-2zm5-3h2v13h-2z"/></svg>`,
+    note: `<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M12 3v10.55A4 4 0 1 0 14 15V7h4V3h-6z"/></svg>`,
+  };
+  return icons[name] || "";
+}
+
+function timeRulerHtml(durSec, steps = 4) {
+  const marks = [];
+  for (let i = 0; i <= steps; i++) marks.push(fmtTime((durSec * i) / steps));
+  return `<div class="studioEditRuler">${marks.map((t) => `<span>${t}</span>`).join("")}</div>`;
+}
 
 function renderReview(root, take) {
   screen = "review";
-  const takeNo = engine?.getTakes?.().length || 1;
-  const hasVoice = !!(take && take.buffer);
+  take = take || engine?.getActiveTake?.() || null;
+  const takes = engine?.getTakes?.() || [];
+  const hasVoice = !!(take?.buffer);
   const dur = take?.buffer?.duration || engine?.guideDuration || 0;
+  const voicePeaks = take?.buffer ? StudioEngine.computePeaks(take.buffer, 64) : [];
 
   root.innerHTML = `
     <div class="studio studioReview" data-studio-screen="review">
       ${headerHtml("REVIEW")}
 
       <div class="studioReviewHead">
-        <span class="studioTakeBadge">Take ${takeNo}</span>
-        <h1 class="studioReviewTitle">${hasVoice ? "Here’s how it sounds" : "Preview your mix"}</h1>
-        <p class="studioReviewSub">${hasVoice
-          ? "Saved on your device. Listen back, then keep it or try again."
-          : "No mic here — you’ll hear the guide. On your phone this plays your voice."}</p>
+        ${takeTabsHtml(takes, take?.id)}
+        <h1 class="studioReviewTitle">Here’s how it sounds</h1>
+        <p class="studioReviewSub">Listen back, then keep it or try again.</p>
       </div>
 
       <button type="button" class="studioPlayDisk" data-studio-play aria-label="Play take">
-        <span class="studioPlayDiskIco" data-studio-play-ico aria-hidden="true">▶</span>
+        <span class="studioPlayDiskIco" data-studio-play-ico aria-hidden="true">${studioIco("play")}</span>
       </button>
 
-      <div class="studioWave studioWave--review" data-studio-scrub role="slider" aria-label="Scrub to a point" tabindex="0">
-        ${waveBarsHtml(56)}
+      <div class="studioWave studioWave--review studioWave--solo" data-studio-scrub role="slider" aria-label="Scrub vocal" tabindex="0">
+        ${peaksHtml(voicePeaks)}
         <span class="studioWaveFill" data-wave-fill></span>
         <span class="studioWaveHandle" data-wave-handle></span>
       </div>
       <div class="studioReviewTime"><span data-studio-pos>0:00</span> <span class="studioReviewTimeSep">/</span> <span>${fmtTime(dur)}</span></div>
-      <p class="studioScrubHint">Tap or drag the waveform to hear any part.</p>
 
       <div class="studioFeedbackCard">
-        <div class="studioFeedbackIco" aria-hidden="true">✦</div>
+        <div class="studioFeedbackIco" aria-hidden="true">${studioIco("voice")}</div>
         <div class="studioFeedbackBody">
           <div class="studioFeedbackTop">
             <span class="studioFeedbackTitle">AI Coach feedback</span>
@@ -880,7 +930,7 @@ function renderReview(root, take) {
       </div>
 
       <div class="studioFooter studioFooter--review">
-        <button type="button" class="studioPrimary" data-studio-keep>Keep &amp; Mix</button>
+        <button type="button" class="studioPrimary" data-studio-keep>Keep &amp; Edit</button>
         <div class="studioReviewActions">
           <button type="button" class="studioGhost" data-studio-again>Record again</button>
           <button type="button" class="studioGhost studioGhost--danger" data-studio-replace>Replace</button>
@@ -903,36 +953,50 @@ function bindReview(root, take) {
   bindHeader(root, () => renderHome(root));
 
   const btn = root.querySelector("[data-studio-play]");
-  const ico = root.querySelector("[data-studio-play-ico]");
+  const icoWrap = root.querySelector("[data-studio-play-ico]");
   const posEl = root.querySelector("[data-studio-pos]");
   const wave = root.querySelector("[data-studio-scrub]");
   const dur = take?.buffer?.duration || engine?.guideDuration || 0;
+  const voiceOff = take?.buffer ? engine.takeOffsetSec(take) : 0;
 
-  const playFrom = async (fromSec) => {
+  const setPlayingUi = (playing) => {
+    if (icoWrap) icoWrap.innerHTML = playing ? studioIco("pause") : studioIco("play");
+    btn?.classList.toggle("isPlaying", playing);
+  };
+
+  const playFrom = async (fromGuideSec) => {
     try {
       if (!engine.guideBuffer && current.guideUrl) await engine.loadGuide(current.guideUrl);
       engine.stopMix();
-      ico.textContent = "❚❚"; btn.classList.add("isPlaying");
+      setPlayingUi(true);
+      const fromSec = Math.max(0, fromGuideSec || 0);
       await engine.playMix(
-        { musicVol: 0.7, voiceVol: take?.buffer ? 0.95 : 0, reverb: 0.12, fromSec: Math.max(0, fromSec || 0) },
+        { ...mixParams(), fromSec },
         {
-          onTick: (s) => { if (posEl) posEl.textContent = fmtTime(s); if (dur) setReviewProgress(root, s / dur); },
-          onEnded: () => { ico.textContent = "▶"; btn.classList.remove("isPlaying"); setReviewProgress(root, 0); if (posEl) posEl.textContent = "0:00"; },
+          onTick: (s) => {
+            const g = fromSec + s;
+            if (posEl) posEl.textContent = fmtTime(Math.max(0, g - voiceOff));
+            if (dur) setReviewProgress(root, Math.max(0, g - voiceOff) / dur);
+          },
+          onEnded: () => {
+            setPlayingUi(false);
+            setReviewProgress(root, 0);
+            if (posEl) posEl.textContent = "0:00";
+          },
         },
       );
     } catch {
-      ico.textContent = "▶"; btn.classList.remove("isPlaying");
+      setPlayingUi(false);
       bridge.showToast?.("Couldn’t play here.");
     }
   };
 
   btn?.addEventListener("click", () => {
     bridge.haptic?.("light");
-    if (engine?.isPlaying) { engine.stopMix(); ico.textContent = "▶"; btn.classList.remove("isPlaying"); return; }
-    void playFrom(0);
+    if (engine?.isPlaying) { engine.stopMix(); setPlayingUi(false); return; }
+    void playFrom(voiceOff);
   });
 
-  // Scrub: tap or drag the waveform to hear a specific part.
   if (wave && dur > 0) {
     let seeking = false;
     const fracFromEvent = (ev) => {
@@ -957,22 +1021,31 @@ function bindReview(root, take) {
       if (!seeking) return;
       seeking = false;
       bridge.haptic?.("light");
-      void playFrom(fracFromEvent(e) * dur);
+      void playFrom(voiceOff + fracFromEvent(e) * dur);
     };
     wave.addEventListener("pointerup", release);
     wave.addEventListener("pointercancel", () => { seeking = false; });
   }
 
+  root.querySelectorAll("[data-take-id]").forEach((tab) => {
+    tab.addEventListener("click", () => {
+      bridge.haptic?.("light");
+      try { engine.stopMix(); } catch {}
+      engine.setActiveTake(tab.getAttribute("data-take-id"));
+      renderReview(root, engine.getActiveTake());
+    });
+  });
+
   root.querySelector("[data-studio-keep]")?.addEventListener("click", () => {
     bridge.haptic?.("medium");
     try { engine?.stopMix(); } catch {}
-    renderMix(root);
+    renderEditTake(root, engine.getActiveTake());
   });
 
   root.querySelector("[data-studio-again]")?.addEventListener("click", () => {
     bridge.haptic?.("light");
     try { engine?.stopMix(); } catch {}
-    renderRecording(root); // keeps the existing take, adds another
+    renderRecording(root);
   });
 
   root.querySelector("[data-studio-replace]")?.addEventListener("click", () => {
@@ -981,6 +1054,385 @@ function bindReview(root, take) {
     if (take?.id) { try { engine.removeTake(take.id); } catch {} }
     renderRecording(root);
   });
+}
+
+/* -------------------------------------------------------------------------- */
+/* Screen: Edit Take (trim / split / delete)                                     */
+/* -------------------------------------------------------------------------- */
+
+function renderEditTake(root, take) {
+  screen = "edit";
+  take = take || engine?.getActiveTake?.() || null;
+  const takes = engine?.getTakes?.() || [];
+  const hasVoice = !!(take?.buffer);
+  const guideDur = engine?.guideDuration || take?.buffer?.duration || 0;
+  const voiceOffset = hasVoice && guideDur ? engine.takeOffsetSec(take) : 0;
+  const voiceDur = take?.buffer?.duration || 0;
+  const voiceLeftPct = guideDur ? (voiceOffset / guideDur) * 100 : 0;
+  const voiceWidthPct = guideDur ? Math.min(100 - voiceLeftPct, (voiceDur / guideDur) * 100) : 100;
+  const guidePeaks = engine?.guideBuffer ? StudioEngine.computePeaks(engine.guideBuffer, 72) : [];
+  const voicePeaks = take?.buffer ? StudioEngine.computePeaks(take.buffer, 72) : [];
+
+  root.innerHTML = `
+    <div class="studio studioEdit" data-studio-screen="edit">
+      ${headerHtml("EDIT TAKE")}
+
+      <div class="studioReviewHead">
+        ${takeTabsHtml(takes, take?.id)}
+        <p class="studioReviewSub studioEditSub">Trim or cut parts, then keep what you love.</p>
+      </div>
+
+      <div class="studioEditBody">
+        ${timeRulerHtml(guideDur)}
+
+        <div class="studioEditLanes" data-edit-lanes>
+          <div class="studioEditPlayhead" data-edit-playhead hidden></div>
+
+          <div class="studioEditLane studioEditLane--voice">
+            <span class="studioEditLaneLabel">Vocal</span>
+            <div class="studioEditTrack" data-edit-voice-track tabindex="0" aria-label="Vocal timeline">
+              ${hasVoice ? `
+                <div class="studioEditClip" style="left:${voiceLeftPct}%;width:${voiceWidthPct}%" data-edit-clip>
+                  <div class="studioEditTrimShade studioEditTrimShade--left" data-trim-shade-l></div>
+                  <div class="studioEditTrimShade studioEditTrimShade--right" data-trim-shade-r></div>
+                  <div class="studioEditWave studioEditWave--voice">${peaksHtml(voicePeaks)}</div>
+                  <div class="studioEditSelect" data-edit-select hidden></div>
+                  <button type="button" class="studioEditTrimHandle studioEditTrimHandle--in" data-trim-in aria-label="Trim start"></button>
+                  <button type="button" class="studioEditTrimHandle studioEditTrimHandle--out" data-trim-out aria-label="Trim end"></button>
+                </div>` : `<div class="studioEditWave studioEditWave--empty">No vocal recorded</div>`}
+            </div>
+          </div>
+
+          <div class="studioEditLane studioEditLane--music">
+            <span class="studioEditLaneLabel">Instrumental</span>
+            <div class="studioEditTrack" data-edit-music-track tabindex="0" aria-label="Instrumental timeline">
+              <div class="studioEditWave studioEditWave--music">${peaksHtml(guidePeaks)}</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="studioReviewTime">
+          <span data-edit-pos>0:00</span>
+          <span class="studioReviewTimeSep">/</span>
+          <span>${fmtTime(guideDur)}</span>
+        </div>
+
+        <div class="studioEditTools" role="toolbar" aria-label="Edit tools">
+          <button type="button" class="studioEditTool studioEditTool--play" data-edit-play aria-label="Play">
+            ${studioIco("play")}
+            <span>Play</span>
+          </button>
+          <button type="button" class="studioEditTool" data-edit-trim aria-label="Trim">
+            ${studioIco("trim")}
+            <span>Trim</span>
+          </button>
+          <button type="button" class="studioEditTool" data-edit-split aria-label="Split">
+            ${studioIco("split")}
+            <span>Split</span>
+          </button>
+          <button type="button" class="studioEditTool studioEditTool--danger" data-edit-delete disabled aria-label="Delete">
+            ${studioIco("delete")}
+            <span>Delete</span>
+          </button>
+          <button type="button" class="studioEditTool" data-edit-levels aria-label="Levels">
+            ${studioIco("levels")}
+            <span>Levels</span>
+          </button>
+        </div>
+      </div>
+
+      <div class="studioLevelsSheet" data-levels-sheet hidden>
+        <div class="studioLevelsBackdrop" data-levels-close tabindex="-1" aria-hidden="true"></div>
+        <div class="studioLevelsPanel" role="dialog" aria-label="Levels">
+          <div class="studioLevelsHead">
+            <span class="studioLevelsTitle">Levels</span>
+            <button type="button" class="studioLevelsDone" data-levels-close>Done</button>
+          </div>
+          <div class="studioLevelsSliders">
+            ${sliderRow("voiceVol", "Voice", mixState().voiceVol, "voice")}
+            ${sliderRow("musicVol", "Music", mixState().musicVol, "music")}
+          </div>
+        </div>
+      </div>
+
+      <div class="studioFooter studioFooter--edit">
+        <button type="button" class="studioPrimary" data-edit-continue>Continue to Mix</button>
+      </div>
+    </div>`;
+
+  bindEditTake(root, take);
+}
+
+function bindEditTake(root, take) {
+  bindHeader(root, () => {
+    try { engine?.stopMix(); } catch {}
+    renderReview(root, take);
+  });
+
+  const m = mixState();
+  const posEl = root.querySelector("[data-edit-pos]");
+  const playBtn = root.querySelector("[data-edit-play]");
+  const playhead = root.querySelector("[data-edit-playhead]");
+  const lanesEl = root.querySelector("[data-edit-lanes]");
+  const voiceTrack = root.querySelector("[data-edit-voice-track]");
+  const musicTrack = root.querySelector("[data-edit-music-track]");
+  const clipEl = root.querySelector("[data-edit-clip]");
+  const selEl = root.querySelector("[data-edit-select]");
+  const trimInEl = root.querySelector("[data-trim-in]");
+  const trimOutEl = root.querySelector("[data-trim-out]");
+  const shadeL = root.querySelector("[data-trim-shade-l]");
+  const shadeR = root.querySelector("[data-trim-shade-r]");
+  const btnDelete = root.querySelector("[data-edit-delete]");
+  const levelsSheet = root.querySelector("[data-levels-sheet]");
+
+  let playGuideSec = 0;
+  let selGuide = null;
+  let trimIn = 0;
+  let trimOut = take?.buffer?.duration || 0;
+
+  const guideDur = () => engine?.guideDuration || take?.buffer?.duration || 0;
+  const voiceOff = () => (take?.buffer ? engine.takeOffsetSec(take) : 0);
+  const voiceEnd = () => voiceOff() + (take?.buffer?.duration || 0);
+  const voiceDur = () => take?.buffer?.duration || 0;
+
+  const editParams = () => ({ ...mixParams(), fromSec: playGuideSec });
+
+  const setPlayhead = (guideSec) => {
+    const dur = guideDur();
+    if (!playhead || dur <= 0) return;
+    playhead.hidden = false;
+    playhead.style.left = `${Math.max(0, Math.min(1, guideSec / dur)) * 100}%`;
+    if (posEl) posEl.textContent = fmtTime(guideSec);
+  };
+
+  const guideSecFromTrack = (trackEl, ev) => {
+    const dur = guideDur();
+    if (!trackEl || dur <= 0) return 0;
+    const r = trackEl.getBoundingClientRect();
+    const x = (ev.clientX ?? ev.touches?.[0]?.clientX ?? 0) - r.left;
+    return Math.max(0, Math.min(dur, (r.width ? x / r.width : 0) * dur));
+  };
+
+  const paintTrimHandles = () => {
+    const vd = voiceDur();
+    if (!clipEl || vd <= 0) return;
+    const inPct = (trimIn / vd) * 100;
+    const outPct = (trimOut / vd) * 100;
+    if (trimInEl) trimInEl.style.left = `${inPct}%`;
+    if (trimOutEl) trimOutEl.style.left = `${outPct}%`;
+    if (shadeL) { shadeL.style.width = `${inPct}%`; shadeL.hidden = trimIn <= 0.02; }
+    if (shadeR) { shadeR.style.width = `${100 - outPct}%`; shadeR.hidden = trimOut >= vd - 0.02; }
+  };
+
+  const validSelection = () => {
+    if (!selGuide || !take?.buffer) return null;
+    const a = Math.min(selGuide.a, selGuide.b);
+    const b = Math.max(selGuide.a, selGuide.b);
+    const lo = Math.max(a, voiceOff());
+    const hi = Math.min(b, voiceEnd());
+    if (hi - lo < 0.08) return null;
+    return { takeA: lo - voiceOff(), takeB: hi - voiceOff() };
+  };
+
+  const paintSelection = () => {
+    const sel = validSelection();
+    if (btnDelete) btnDelete.disabled = !sel;
+    if (!selEl || !take?.buffer) return;
+    if (!sel) { selEl.hidden = true; return; }
+    const vd = voiceDur();
+    selEl.hidden = false;
+    selEl.style.left = `${(sel.takeA / vd) * 100}%`;
+    selEl.style.width = `${((sel.takeB - sel.takeA) / vd) * 100}%`;
+  };
+
+  const setPlayingUi = (playing) => {
+    if (playBtn) {
+      playBtn.classList.toggle("isPlaying", playing);
+      playBtn.innerHTML = `${playing ? studioIco("pause") : studioIco("play")}<span>${playing ? "Pause" : "Play"}</span>`;
+    }
+  };
+
+  const playFrom = async (fromGuideSec) => {
+    try {
+      if (!engine.guideBuffer && current.guideUrl) await engine.loadGuide(current.guideUrl);
+      engine.stopMix();
+      playGuideSec = Math.max(0, fromGuideSec || 0);
+      setPlayingUi(true);
+      setPlayhead(playGuideSec);
+      await engine.playMix(editParams(), {
+        onTick: (s) => setPlayhead(playGuideSec + s),
+        onEnded: () => { setPlayingUi(false); setPlayhead(0); playGuideSec = 0; },
+      });
+    } catch {
+      setPlayingUi(false);
+      bridge.showToast?.("Couldn’t play here.");
+    }
+  };
+
+  playBtn?.addEventListener("click", () => {
+    bridge.haptic?.("light");
+    if (engine?.isPlaying) { engine.stopMix(); setPlayingUi(false); return; }
+    void playFrom(playGuideSec);
+  });
+
+  const bindTrimHandle = (handleEl, which) => {
+    if (!handleEl || !clipEl) return;
+    handleEl.addEventListener("pointerdown", (e) => {
+      e.stopPropagation();
+      bridge.haptic?.("light");
+      const vd = voiceDur();
+      const move = (ev) => {
+        const clipR = clipEl.getBoundingClientRect();
+        const x = (ev.clientX ?? 0) - clipR.left;
+        const localSec = Math.max(0, Math.min(vd, (clipR.width ? x / clipR.width : 0) * vd));
+        if (which === "in") trimIn = Math.min(localSec, trimOut - 0.08);
+        else trimOut = Math.max(localSec, trimIn + 0.08);
+        paintTrimHandles();
+      };
+      const up = () => {
+        window.removeEventListener("pointermove", move);
+        window.removeEventListener("pointerup", up);
+      };
+      window.addEventListener("pointermove", move);
+      window.addEventListener("pointerup", up);
+    });
+  };
+
+  bindTrimHandle(trimInEl, "in");
+  bindTrimHandle(trimOutEl, "out");
+  paintTrimHandles();
+
+  root.querySelector("[data-edit-trim]")?.addEventListener("click", () => {
+    if (!take?.id || !take.buffer) return;
+    bridge.haptic?.("medium");
+    try { engine.stopMix(); } catch {}
+    const vd = voiceDur();
+    if (trimIn <= 0.02 && trimOut >= vd - 0.02) {
+      bridge.showToast?.("Drag the trim handles first.");
+      return;
+    }
+    const ok = engine.trimTake(take.id, trimIn, trimOut);
+    if (!ok) { bridge.showToast?.("Couldn’t trim."); return; }
+    renderEditTake(root, engine.getActiveTake());
+  });
+
+  root.querySelector("[data-edit-split]")?.addEventListener("click", () => {
+    if (!take?.id || !take.buffer) return;
+    bridge.haptic?.("medium");
+    try { engine.stopMix(); } catch {}
+    const local = playGuideSec - voiceOff();
+    if (local <= 0.05 || local >= voiceDur() - 0.05) {
+      bridge.showToast?.("Move the playhead inside your vocal to split.");
+      return;
+    }
+    const newTake = engine.splitTake(take.id, local);
+    if (!newTake) { bridge.showToast?.("Couldn’t split here."); return; }
+    engine.setActiveTake(newTake.id);
+    bridge.showToast?.("Split into two takes.");
+    renderEditTake(root, engine.getActiveTake());
+  });
+
+  root.querySelector("[data-edit-delete]")?.addEventListener("click", () => {
+    const sel = validSelection();
+    if (!sel || !take?.id) return;
+    bridge.haptic?.("medium");
+    try { engine.stopMix(); } catch {}
+    const ok = engine.deleteTakeRegion(take.id, sel.takeA, sel.takeB);
+    if (!ok) { bridge.showToast?.("Couldn’t delete that part."); return; }
+    selGuide = null;
+    renderEditTake(root, engine.getActiveTake());
+  });
+
+  const openLevels = () => { if (levelsSheet) levelsSheet.hidden = false; };
+  const closeLevels = () => { if (levelsSheet) levelsSheet.hidden = true; };
+  root.querySelector("[data-edit-levels]")?.addEventListener("click", () => { bridge.haptic?.("light"); openLevels(); });
+  root.querySelectorAll("[data-levels-close]").forEach((el) => {
+    el.addEventListener("click", () => { bridge.haptic?.("light"); closeLevels(); });
+  });
+  levelsSheet?.querySelectorAll("[data-mix]").forEach((inp) => {
+    inp.addEventListener("input", () => {
+      const k = inp.getAttribute("data-mix");
+      m[k] = Number(inp.value) || 0;
+      const out = levelsSheet.querySelector(`[data-mix-val="${k}"]`);
+      if (out) out.textContent = String(m[k]);
+      if (engine?.isPlaying) { try { engine.updateMix(editParams()); } catch {} }
+    });
+  });
+
+  root.querySelectorAll("[data-take-id]").forEach((tab) => {
+    tab.addEventListener("click", () => {
+      bridge.haptic?.("light");
+      try { engine.stopMix(); } catch {}
+      engine.setActiveTake(tab.getAttribute("data-take-id"));
+      renderEditTake(root, engine.getActiveTake());
+    });
+  });
+
+  root.querySelector("[data-edit-continue]")?.addEventListener("click", () => {
+    bridge.haptic?.("medium");
+    try { engine?.stopMix(); } catch {}
+    renderMix(root);
+  });
+
+  const bindSeek = (trackEl) => {
+    if (!trackEl) return;
+    trackEl.addEventListener("pointerdown", (e) => {
+      if (e.target.closest("[data-trim-in],[data-trim-out]")) return;
+      playGuideSec = guideSecFromTrack(trackEl, e);
+      setPlayhead(playGuideSec);
+    });
+  };
+
+  const bindVoiceSelect = () => {
+    if (!voiceTrack || !take?.buffer) return;
+    let dragging = false;
+    let moved = false;
+    let startGuide = 0;
+    voiceTrack.addEventListener("pointerdown", (e) => {
+      if (e.target.closest("[data-trim-in],[data-trim-out]")) return;
+      dragging = true;
+      moved = false;
+      startGuide = guideSecFromTrack(voiceTrack, e);
+      try { voiceTrack.setPointerCapture(e.pointerId); } catch {}
+    });
+    voiceTrack.addEventListener("pointermove", (e) => {
+      if (!dragging) return;
+      const cur = guideSecFromTrack(voiceTrack, e);
+      if (Math.abs(cur - startGuide) > 0.12) moved = true;
+      if (!moved) return;
+      e.preventDefault();
+      selGuide = { a: startGuide, b: cur };
+      paintSelection();
+    });
+    const finish = (e) => {
+      if (!dragging) return;
+      dragging = false;
+      if (moved) { e.preventDefault(); paintSelection(); return; }
+      playGuideSec = guideSecFromTrack(voiceTrack, e);
+      setPlayhead(playGuideSec);
+    };
+    voiceTrack.addEventListener("pointerup", finish);
+    voiceTrack.addEventListener("pointercancel", () => { dragging = false; });
+  };
+
+  bindSeek(musicTrack);
+  bindVoiceSelect();
+
+  if (lanesEl) {
+    let scrubbing = false;
+    playhead?.addEventListener("pointerdown", (e) => {
+      scrubbing = true;
+      try { playhead.setPointerCapture(e.pointerId); } catch {}
+    });
+    playhead?.addEventListener("pointermove", (e) => {
+      if (!scrubbing) return;
+      playGuideSec = guideSecFromTrack(lanesEl.querySelector("[data-edit-music-track]") || musicTrack, e);
+      setPlayhead(playGuideSec);
+    });
+    playhead?.addEventListener("pointerup", () => { scrubbing = false; });
+  }
+
+  setPlayhead(0);
 }
 
 /* -------------------------------------------------------------------------- */
@@ -1001,14 +1453,14 @@ function renderMix(root) {
       </div>
 
       <button type="button" class="studioPlayPill" data-studio-play>
-        <span class="studioPlayDiskIco" data-studio-play-ico aria-hidden="true">▶</span>
+        <span class="studioPlayDiskIco" data-studio-play-ico aria-hidden="true">${studioIco("play")}</span>
         <span data-studio-play-label>Preview mix</span>
       </button>
 
       <div class="studioSliders">
-        ${sliderRow("voiceVol", "Voice", m.voiceVol, "🎤")}
-        ${sliderRow("musicVol", "Music", m.musicVol, "♪")}
-        ${sliderRow("reverb", "Reverb", m.reverb, "∿")}
+        ${sliderRow("voiceVol", "Voice", m.voiceVol, "voice")}
+        ${sliderRow("musicVol", "Music", m.musicVol, "music")}
+        ${sliderRow("reverb", "Reverb", m.reverb, "reverb")}
       </div>
 
       <div class="studioMixField studioMixField--sync">
@@ -1054,10 +1506,10 @@ function renderMix(root) {
   bindMix(root);
 }
 
-function sliderRow(key, label, value, ico) {
+function sliderRow(key, label, value, iconKey) {
   return `
     <label class="studioSliderRow">
-      <span class="studioSliderIco" aria-hidden="true">${ico}</span>
+      <span class="studioSliderIco" aria-hidden="true">${studioIco(iconKey)}</span>
       <span class="studioSliderLabel">${esc(label)}</span>
       <input type="range" min="0" max="100" value="${Number(value) || 0}" data-mix="${key}" aria-label="${esc(label)}" />
       <span class="studioSliderVal" data-mix-val="${key}">${Number(value) || 0}</span>
@@ -1065,7 +1517,7 @@ function sliderRow(key, label, value, ico) {
 }
 
 function bindMix(root) {
-  bindHeader(root, () => renderReview(root, engine?.getActiveTake?.()));
+  bindHeader(root, () => renderEditTake(root, engine?.getActiveTake?.()));
   const m = current.mix;
 
   root.querySelectorAll("[data-mix]").forEach((inp) => {
@@ -1130,7 +1582,7 @@ function mixParams() {
 function setPlayUi(root, playing) {
   const ico = root.querySelector("[data-studio-play-ico]");
   const label = root.querySelector("[data-studio-play-label]");
-  if (ico) ico.textContent = playing ? "❚❚" : "▶";
+  if (ico) ico.innerHTML = playing ? studioIco("pause") : studioIco("play");
   if (label) label.textContent = playing ? "Stop" : "Preview mix";
   root.querySelector("[data-studio-play]")?.classList.toggle("isPlaying", playing);
 }

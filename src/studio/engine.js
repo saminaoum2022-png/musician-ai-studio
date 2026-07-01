@@ -24,9 +24,9 @@ import { encodeWav16 } from "../wav.js";
 
 const LATENCY_STORAGE_KEY = "nabad.studio.latencyMs.v1";
 
-// Raw mic capture (AGC off) is quiet, so we apply a fixed makeup gain to the
-// voice so it sits up front against the music without the user maxing sliders.
-const VOICE_MAKEUP = 2.6;
+// Raw mic capture (AGC off) is quiet. Compression + EQ in the voice chain lift
+// level cleanly; this makeup is a final trim so voice sits up front in the mix.
+const VOICE_MAKEUP = 2.2;
 
 /* -------------------------------------------------------------------------- */
 /* Modular effect registry                                                     */
@@ -70,10 +70,49 @@ export const EFFECT_REGISTRY = {
     },
   },
 
-  // ---- Placeholders: architecture only, intentionally not implemented in V1 ----
-  noiseRemoval: placeholderEffect("noiseRemoval", "Noise Removal"),
-  compression: placeholderEffect("compression", "Compression"),
-  eq: placeholderEffect("eq", "EQ"),
+  compression: {
+    id: "compression",
+    label: "Compression",
+    isPlaceholder: false,
+    /** Gentle vocal compression + makeup so quiet phrases still read loud. */
+    create(ctx) {
+      const input = ctx.createGain();
+      const comp = ctx.createDynamicsCompressor();
+      try {
+        comp.threshold.value = -22;
+        comp.knee.value = 8;
+        comp.ratio.value = 4;
+        comp.attack.value = 0.003;
+        comp.release.value = 0.14;
+      } catch {}
+      const makeup = ctx.createGain();
+      makeup.gain.value = 2.4;
+      input.connect(comp).connect(makeup);
+      return { input, output: makeup, update: () => {} };
+    },
+  },
+
+  eq: {
+    id: "eq",
+    label: "EQ",
+    isPlaceholder: false,
+    /** High-pass rumble cut + presence lift so the voice cuts through the guide. */
+    create(ctx) {
+      const input = ctx.createGain();
+      const hp = ctx.createBiquadFilter();
+      hp.type = "highpass";
+      hp.frequency.value = 85;
+      hp.Q.value = 0.7;
+      const presence = ctx.createBiquadFilter();
+      presence.type = "peaking";
+      presence.frequency.value = 3200;
+      presence.Q.value = 1.1;
+      presence.gain.value = 3.5;
+      input.connect(hp).connect(presence);
+      return { input, output: presence, update: () => {} };
+    },
+  },
+
   preset: placeholderEffect("preset", "Vocal Preset"),
   harmony: placeholderEffect("harmony", "Harmony"),
 };
@@ -313,6 +352,7 @@ export class StudioEngine {
     try {
       const arr = await blob.arrayBuffer();
       buffer = await this.ctx.decodeAudioData(arr.slice(0));
+      buffer = normalizeTakeBuffer(buffer, 0.82);
     } catch {
       buffer = null; // some iOS blobs decode lazily; mix path will retry
     }
@@ -345,6 +385,96 @@ export class StudioEngine {
     if (t) t.nudgeMs = clampNum(Number(ms) || 0, -500, 500);
   }
 
+  /** Bucket peak envelope for waveform UI (0..1 per bucket). */
+  static computePeaks(buffer, buckets = 64) {
+    if (!buffer) return [];
+    const ch = buffer.getChannelData(0);
+    const n = Math.max(8, buckets);
+    const block = Math.max(1, Math.floor(ch.length / n));
+    const peaks = [];
+    for (let i = 0; i < n; i++) {
+      const start = i * block;
+      const end = Math.min(ch.length, start + block);
+      let peak = 0;
+      for (let j = start; j < end; j++) peak = Math.max(peak, Math.abs(ch[j]));
+      peaks.push(peak);
+    }
+    const max = Math.max(0.001, ...peaks);
+    return peaks.map((p) => p / max);
+  }
+
+  /**
+   * Keep only [startSec, endSec] of the take's buffer (take-local timeline).
+   * Adjusts alignSec if the kept region no longer starts at buffer 0.
+   */
+  trimTake(id, startSec, endSec) {
+    if (!this.ctx) {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      try { this.ctx = new AC(); } catch { return false; }
+    }
+    const t = this.takes.find((x) => x.id === id);
+    if (!t?.buffer) return false;
+    const sr = t.buffer.sampleRate;
+    const a = Math.max(0, Math.min(Number(startSec) || 0, t.buffer.duration));
+    const b = Math.max(a + 0.05, Math.min(Number(endSec) || t.buffer.duration, t.buffer.duration));
+    const sliced = sliceBuffer(this.ctx, t.buffer, a, b);
+    if (!sliced) return false;
+    t.alignSec = Math.max(0, (t.alignSec || 0) - a);
+    t.buffer = sliced;
+    t.blob = bufferToWavBlob(sliced);
+    return true;
+  }
+
+  /** Remove [startSec, endSec] from the take buffer (splice out). */
+  deleteTakeRegion(id, startSec, endSec) {
+    if (!this.ctx) {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      try { this.ctx = new AC(); } catch { return false; }
+    }
+    const t = this.takes.find((x) => x.id === id);
+    if (!t?.buffer) return false;
+    const a = Math.max(0, Math.min(Number(startSec) || 0, t.buffer.duration));
+    const b = Math.max(a + 0.05, Math.min(Number(endSec) || t.buffer.duration, t.buffer.duration));
+    const spliced = spliceBuffer(this.ctx, t.buffer, a, b);
+    if (!spliced) return false;
+    if (b <= (t.alignSec || 0)) t.alignSec = Math.max(0, (t.alignSec || 0) - (b - a));
+    else if (a < (t.alignSec || 0)) t.alignSec = a;
+    t.buffer = spliced;
+    t.blob = bufferToWavBlob(spliced);
+    return true;
+  }
+
+  /** Split a take at take-local `atSec`; current take keeps the first part, adds a new take for the rest. */
+  splitTake(id, atSec) {
+    if (!this.ctx) {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      try { this.ctx = new AC(); } catch { return null; }
+    }
+    const t = this.takes.find((x) => x.id === id);
+    if (!t?.buffer) return null;
+    const at = clampNum(Number(atSec) || 0, 0.05, t.buffer.duration - 0.05);
+    const partA = sliceBuffer(this.ctx, t.buffer, 0, at);
+    const partB = sliceBuffer(this.ctx, t.buffer, at, t.buffer.duration);
+    if (!partA || !partB) return null;
+    t.buffer = partA;
+    t.blob = bufferToWavBlob(partA);
+    const newTake = {
+      id: `take_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+      blob: bufferToWavBlob(partB),
+      buffer: partB,
+      createdAt: Date.now(),
+      nudgeMs: t.nudgeMs || 0,
+      alignSec: (t.alignSec || 0) + at,
+    };
+    this.takes.push(newTake);
+    return newTake;
+  }
+
+  /** Guide-time offset (sec) where this take's buffer starts. Public for the review editor. */
+  takeOffsetSec(take) {
+    return take ? this._takeBufferOffset(take) : 0;
+  }
+
   /** Where (in seconds) to begin reading a take's buffer so it aligns to guide-0. */
   _takeBufferOffset(take) {
     const comp = (this.latencyMs + (take.nudgeMs || 0)) / 1000;
@@ -362,6 +492,7 @@ export class StudioEngine {
     this.stopMix();
     if (!this.guideBuffer) return;
     const take = this.getActiveTake();
+    const solo = params.solo || ""; // "" | "voice" | "music"
 
     const master = this.ctx.createGain();
     const limiter = this._makeLimiter(this.ctx);
@@ -378,19 +509,19 @@ export class StudioEngine {
     const guideSrc = this.ctx.createBufferSource();
     guideSrc.buffer = this.guideBuffer;
     const musicGain = this.ctx.createGain();
-    musicGain.gain.value = clamp01(params.musicVol ?? 0.8);
+    musicGain.gain.value = solo === "voice" ? 0 : clamp01(params.musicVol ?? 0.8);
     guideSrc.connect(musicGain).connect(master);
     guideSrc.start(startAt, fromSec);
     this._nodes.push(guideSrc, musicGain);
     this._mix.musicGain = musicGain;
 
     // Voice (take) through the effect chain, centred across both ears.
-    if (take && take.buffer) {
+    if (take && take.buffer && solo !== "music") {
       const voiceSrc = this.ctx.createBufferSource();
       voiceSrc.buffer = take.buffer;
       const chain = this._buildVoiceChain(this.ctx, { reverb: params.reverb });
       const voiceGain = this.ctx.createGain();
-      voiceGain.gain.value = clamp01(params.voiceVol ?? 0.9) * VOICE_MAKEUP;
+      voiceGain.gain.value = clamp01(params.voiceVol ?? 0.95) * VOICE_MAKEUP;
       const center = this._centerNode(this.ctx);
       voiceSrc.connect(chain.input);
       chain.output.connect(voiceGain).connect(center.input);
@@ -420,8 +551,9 @@ export class StudioEngine {
   updateMix(params = {}) {
     const mix = this._mix;
     if (!mix) return;
-    if (mix.musicGain) mix.musicGain.gain.value = clamp01(params.musicVol ?? 0.8);
-    if (mix.voiceGain) mix.voiceGain.gain.value = clamp01(params.voiceVol ?? 0.9) * VOICE_MAKEUP;
+    const solo = params.solo || "";
+    if (mix.musicGain) mix.musicGain.gain.value = solo === "voice" ? 0 : clamp01(params.musicVol ?? 0.8);
+    if (mix.voiceGain) mix.voiceGain.gain.value = solo === "music" ? 0 : clamp01(params.voiceVol ?? 0.95) * VOICE_MAKEUP;
     if (mix.voiceChain?.update) mix.voiceChain.update({ reverb: params.reverb });
   }
 
@@ -463,7 +595,7 @@ export class StudioEngine {
       voiceSrc.buffer = take.buffer;
       const { input, output } = this._buildVoiceChain(off, { reverb: params.reverb });
       const voiceGain = off.createGain();
-      voiceGain.gain.value = clamp01(params.voiceVol ?? 0.9) * VOICE_MAKEUP;
+      voiceGain.gain.value = clamp01(params.voiceVol ?? 0.95) * VOICE_MAKEUP;
       const center = this._centerNode(off);
       voiceSrc.connect(input);
       output.connect(voiceGain).connect(center.input);
@@ -504,9 +636,20 @@ export class StudioEngine {
     const output = ctx.createGain();
     const nodes = [input, output];
 
+    // Same compression + EQ as the mix chain so monitoring matches export loudness.
+    let tail = input;
+    for (const id of ["compression", "eq"]) {
+      const def = EFFECT_REGISTRY[id];
+      if (!def?.create) continue;
+      const node = def.create(ctx);
+      tail.connect(node.input);
+      tail = node.output;
+      nodes.push(node.input, node.output);
+    }
+
     const dry = ctx.createGain();
     dry.gain.value = 1;
-    input.connect(dry).connect(output);
+    tail.connect(dry).connect(output);
     nodes.push(dry);
 
     const reverb = clamp01(p.reverb ?? 0);
@@ -527,7 +670,7 @@ export class StudioEngine {
       fb.gain.value = Math.min(0.55, 0.2 + echo * 0.5);
       const echoOut = ctx.createGain();
       echoOut.gain.value = echo;
-      input.connect(delay);
+      tail.connect(delay);
       delay.connect(fb).connect(delay); // feedback loop
       delay.connect(echoOut).connect(output);
       nodes.push(delay, fb, echoOut);
@@ -576,7 +719,7 @@ export class StudioEngine {
   }
 
   _buildVoiceChain(ctx, params = {}) {
-    const order = ["noiseRemoval", "compression", "eq", "preset", "harmony", "reverb"];
+    const order = ["compression", "eq", "reverb"];
     const passthrough = ctx.createGain();
     const head = passthrough;
     let tail = passthrough;
@@ -668,3 +811,65 @@ function readStoredLatency(fallback) {
 
 function clamp01(x) { return Math.max(0, Math.min(1, Number(x) || 0)); }
 function clampNum(x, lo, hi) { return Math.max(lo, Math.min(hi, x)); }
+
+function normalizeTakeBuffer(buffer, targetPeak = 0.82) {
+  if (!buffer) return buffer;
+  const ch0 = buffer.getChannelData(0);
+  let peak = 0;
+  for (let i = 0; i < ch0.length; i++) peak = Math.max(peak, Math.abs(ch0[i]));
+  if (peak < 0.008) return buffer;
+  const g = Math.min(targetPeak / peak, 8);
+  if (g <= 1.04) return buffer;
+  const AC = window.AudioContext || window.webkitAudioContext;
+  const tmp = new AC();
+  const out = tmp.createBuffer(buffer.numberOfChannels, buffer.length, buffer.sampleRate);
+  for (let ch = 0; ch < buffer.numberOfChannels; ch++) {
+    const src = buffer.getChannelData(ch);
+    const dst = out.getChannelData(ch);
+    for (let i = 0; i < src.length; i++) dst[i] = Math.max(-1, Math.min(1, src[i] * g));
+  }
+  try { tmp.close(); } catch {}
+  return out;
+}
+
+function sliceBuffer(ctx, buffer, startSec, endSec) {
+  if (!buffer || !ctx) return null;
+  const sr = buffer.sampleRate;
+  const a = Math.max(0, Math.floor(startSec * sr));
+  const b = Math.min(buffer.length, Math.ceil(endSec * sr));
+  if (b <= a + 1) return null;
+  const len = b - a;
+  const out = ctx.createBuffer(buffer.numberOfChannels, len, sr);
+  for (let ch = 0; ch < buffer.numberOfChannels; ch++) {
+    const dst = out.getChannelData(ch);
+    const src = buffer.getChannelData(ch);
+    for (let i = 0; i < len; i++) dst[i] = src[a + i];
+  }
+  return out;
+}
+
+function spliceBuffer(ctx, buffer, startSec, endSec) {
+  if (!buffer || !ctx) return null;
+  const sr = buffer.sampleRate;
+  const a = Math.max(0, Math.floor(startSec * sr));
+  const b = Math.min(buffer.length, Math.ceil(endSec * sr));
+  if (b <= a + 1) return buffer;
+  const len = buffer.length - (b - a);
+  const out = ctx.createBuffer(buffer.numberOfChannels, len, sr);
+  for (let ch = 0; ch < buffer.numberOfChannels; ch++) {
+    const src = buffer.getChannelData(ch);
+    const dst = out.getChannelData(ch);
+    let j = 0;
+    for (let i = 0; i < a; i++) dst[j++] = src[i];
+    for (let i = b; i < src.length; i++) dst[j++] = src[i];
+  }
+  return out;
+}
+
+function bufferToWavBlob(buffer) {
+  if (!buffer) return new Blob();
+  const chans = buffer.numberOfChannels >= 2
+    ? [buffer.getChannelData(0), buffer.getChannelData(1)]
+    : [buffer.getChannelData(0), buffer.getChannelData(0)];
+  return encodeWav16(chans, buffer.sampleRate);
+}

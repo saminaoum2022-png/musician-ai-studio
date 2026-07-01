@@ -181,6 +181,7 @@ async function persistProject() {
         nudgeMs: t.nudgeMs || 0,
         createdAt: t.createdAt || Date.now(),
         blobKey,
+        pitchPreset: t.pitchCorrection?.preset || "none",
       });
     }
     const existing = getProject(current.projectId);
@@ -224,6 +225,9 @@ async function restoreProjectSession(p) {
       createdAt: meta.createdAt || Date.now(),
     };
     if (blob) await engine.hydrateTakeBuffer(take, { polish: false });
+    if (meta.pitchPreset) {
+      ensureTakePitchState(take).preset = meta.pitchPreset;
+    }
     engine.takes.push(take);
   }
   if (p.activeTakeId && engine.takes.some((t) => t.id === p.activeTakeId)) {
@@ -1372,22 +1376,7 @@ function renderReview(root, take) {
       </div>
       <div class="studioReviewTime"><span data-studio-pos>0:00</span> <span class="studioReviewTimeSep">/</span> <span>${fmtTime(dur)}</span></div>
 
-      <div class="studioPitchField" data-studio-pitch-field>
-        <div class="studioMixFieldTop">
-          <span class="studioMixLabel">Pitch Correction</span>
-          <span class="studioPitchStatus" data-pitch-status>${esc(pitchPresetLabel(PITCH_PRESET_DEFAULT))}</span>
-        </div>
-        <div class="studioSeg studioPitchSeg" data-studio-pitch-presets role="group" aria-label="Pitch correction preset">
-          ${PITCH_PRESET_IDS.map((id) =>
-            `<button type="button" class="studioSegBtn${id === PITCH_PRESET_DEFAULT ? " isActive" : ""}" data-pitch-preset="${id}">${esc(pitchPresetLabel(id))}</button>`,
-          ).join("")}
-        </div>
-        <p class="studioSyncHint studioPitchHint">Start with your raw take. Tap a style to render — playback keeps going from the same spot.</p>
-        <div class="studioPitchLoading" data-pitch-loading hidden aria-live="polite">
-          <span class="studioPitchSpinner" aria-hidden="true"></span>
-          <span data-pitch-loading-label>Rendering…</span>
-        </div>
-      </div>
+      ${pitchCorrectionFieldHtml(activePitchPreset(take), "Pick a style to preview. Your choice carries into Mix & save.")}
 
       <div class="studioFeedbackCard">
         <div class="studioFeedbackIco" aria-hidden="true">${studioIco("voice")}</div>
@@ -1420,12 +1409,69 @@ function setReviewProgress(root, frac) {
   if (handle) handle.style.left = `${frac * 100}%`;
 }
 
-function reviewVoiceBuffer(take) {
+function activePitchPreset(take) {
+  return ensureTakePitchState(take)?.preset || PITCH_PRESET_DEFAULT;
+}
+
+function pitchVoiceBufferForTake(take) {
   if (!take?.buffer) return undefined;
-  const pc = ensureTakePitchState(take);
-  const preset = pc?.preset || PITCH_PRESET_DEFAULT;
+  const preset = activePitchPreset(take);
   if (preset === "none") return undefined;
   return getPitchCachedBuffer(take, preset) || undefined;
+}
+
+function pitchAppliedSummary(take) {
+  const preset = activePitchPreset(take);
+  if (preset === "none") {
+    return { label: "Original", detail: "No pitch correction — raw vocal in preview & save." };
+  }
+  const name = pitchPresetLabel(preset);
+  const ready = !!getPitchCachedBuffer(take, preset);
+  if (ready) {
+    return { label: name, detail: `${name} pitch correction is applied to preview & save.` };
+  }
+  return { label: name, detail: `${name} pitch correction — rendering…` };
+}
+
+function pitchCorrectionFieldHtml(activePresetId, hint) {
+  const summary = PITCH_CORRECTION_PRESETS[activePresetId]?.label || pitchPresetLabel(activePresetId);
+  return `
+      <div class="studioPitchField" data-studio-pitch-field>
+        <div class="studioMixFieldTop">
+          <span class="studioMixLabel">Pitch Correction</span>
+          <span class="studioPitchStatus" data-pitch-status>${esc(summary)}</span>
+        </div>
+        <div class="studioPitchApplied" data-pitch-applied>
+          <span class="studioPitchAppliedDot" aria-hidden="true"></span>
+          <span data-pitch-applied-text>${esc(hint || "")}</span>
+        </div>
+        <div class="studioSeg studioPitchSeg" data-studio-pitch-presets role="group" aria-label="Pitch correction preset">
+          ${PITCH_PRESET_IDS.map((id) =>
+            `<button type="button" class="studioSegBtn${id === activePresetId ? " isActive" : ""}" data-pitch-preset="${id}">${esc(pitchPresetLabel(id))}</button>`,
+          ).join("")}
+        </div>
+        <div class="studioPitchLoading" data-pitch-loading hidden aria-live="polite">
+          <span class="studioPitchSpinner" aria-hidden="true"></span>
+          <span data-pitch-loading-label>Rendering…</span>
+        </div>
+      </div>`;
+}
+
+function updatePitchAppliedUi(root, take) {
+  const { label, detail } = pitchAppliedSummary(take);
+  const statusEl = root.querySelector("[data-pitch-status]");
+  const appliedEl = root.querySelector("[data-pitch-applied-text]");
+  const dot = root.querySelector(".studioPitchAppliedDot");
+  if (statusEl) statusEl.textContent = label;
+  if (appliedEl) appliedEl.textContent = detail;
+  if (dot) {
+    const on = activePitchPreset(take) !== "none" && !!getPitchCachedBuffer(take, activePitchPreset(take));
+    dot.classList.toggle("isOn", on);
+  }
+}
+
+function reviewVoiceBuffer(take) {
+  return pitchVoiceBufferForTake(take);
 }
 
 function pitchPlaybackBuffer(take, presetId) {
@@ -1452,10 +1498,21 @@ function setPitchLoadingUi(root, presetId, loading) {
   }
 }
 
-function swapReviewVoice(take, presetId) {
+function swapPitchVoice(take, presetId) {
   const buf = pitchPlaybackBuffer(take, presetId);
   if (!buf || !engine?.isPlaying) return;
   engine.swapVoiceBufferDuringMix(buf);
+}
+
+async function ensureTakePitchReady(take) {
+  const preset = activePitchPreset(take);
+  if (!take?.buffer || preset === "none") return;
+  if (getPitchCachedBuffer(take, preset)) return;
+  await engine?.ensureReady();
+  await ensurePitchPresetRendered(take, preset, {
+    audioContext: engine?.ctx,
+    trackKey: trackKeyHint(),
+  });
 }
 
 function trackKeyHint() {
@@ -1463,27 +1520,27 @@ function trackKeyHint() {
   return t?.key || t?.meta?.key || t?.meta?.musicalKey || "";
 }
 
-async function selectReviewPitchPreset(root, take, presetId, state) {
+async function selectPitchPreset(root, take, presetId, state) {
   if (!take?.buffer) return;
   const pc = ensureTakePitchState(take);
-  const statusEl = root.querySelector("[data-pitch-status]");
   pc.preset = presetId;
 
   root.querySelectorAll("[data-pitch-preset]").forEach((btn) => {
     btn.classList.toggle("isActive", btn.getAttribute("data-pitch-preset") === presetId);
   });
-  if (statusEl) statusEl.textContent = pitchPresetLabel(presetId);
+  updatePitchAppliedUi(root, take);
 
   const cached = getPitchCachedBuffer(take, presetId);
   if (cached) {
     setPitchLoadingUi(root, presetId, false);
-    swapReviewVoice(take, presetId);
+    swapPitchVoice(take, presetId);
+    if (state?.onReady) state.onReady(take);
     return;
   }
 
   setPitchLoadingUi(root, presetId, true);
   const guideSec = engine?.isPlaying ? engine.getMixGuidePosition() : (state?.lastGuideSec || 0);
-  state.lastGuideSec = guideSec;
+  if (state) state.lastGuideSec = guideSec;
 
   await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
 
@@ -1494,12 +1551,27 @@ async function selectReviewPitchPreset(root, take, presetId, state) {
       trackKey: trackKeyHint(),
     });
     setPitchLoadingUi(root, presetId, false);
+    updatePitchAppliedUi(root, take);
     if (!buf) return;
-    swapReviewVoice(take, presetId);
+    swapPitchVoice(take, presetId);
+    if (state?.onReady) state.onReady(take);
   } catch {
     setPitchLoadingUi(root, presetId, false);
     bridge.showToast?.("Couldn’t render pitch correction.");
   }
+}
+
+function bindPitchPresets(root, take, state) {
+  root.querySelectorAll("[data-pitch-preset]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      bridge.haptic?.("light");
+      const id = btn.getAttribute("data-pitch-preset");
+      if (!id) return;
+      const pc = ensureTakePitchState(take);
+      if (id === pc?.preset && getPitchCachedBuffer(take, id)) return;
+      void selectPitchPreset(root, take, id, state);
+    });
+  });
 }
 
 function bindReview(root, take) {
@@ -1618,22 +1690,15 @@ function bindReview(root, take) {
     renderRecording(root);
   });
 
-  root.querySelectorAll("[data-pitch-preset]").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      bridge.haptic?.("light");
-      const id = btn.getAttribute("data-pitch-preset");
-      if (!id) return;
-      const pc = ensureTakePitchState(take);
-      if (id === pc?.preset && getPitchCachedBuffer(take, id)) return;
-      void selectReviewPitchPreset(root, take, id, pitchState);
-    });
-  });
+  bindPitchPresets(root, take, pitchState);
+  updatePitchAppliedUi(root, take);
 
   void (async () => {
     if (!take?.buffer) return;
     const pc = ensureTakePitchState(take);
     pc.cache.none = take.buffer;
-    await selectReviewPitchPreset(root, take, PITCH_PRESET_DEFAULT, pitchState);
+    updatePitchAppliedUi(root, take);
+    await selectPitchPreset(root, take, activePitchPreset(take), pitchState);
   })();
 }
 
@@ -2066,6 +2131,7 @@ function renderMix(root) {
   const finishHint = m.finish === m.finishSuggested
     ? "Suggested for this song"
     : "";
+  const pitchSummary = pitchAppliedSummary(activeTake);
 
   root.innerHTML = `
     <div class="studio studioMix" data-studio-screen="mix">
@@ -2074,8 +2140,10 @@ function renderMix(root) {
       <div class="studioMixHead">
         ${takes.length > 1 ? takeTabsHtml(takes, activeTake?.id) : ""}
         <h1 class="studioReviewTitle">Shape your sound</h1>
-        <p class="studioReviewSub">Your voice plays raw first — turn on enhancements only if you want them.</p>
+        <p class="studioReviewSub">Mix sliders and vocal FX apply on top of your pitch choice below.</p>
       </div>
+
+      ${pitchCorrectionFieldHtml(activePitchPreset(activeTake), pitchSummary.detail)}
 
       <button type="button" class="studioPlayPill" data-studio-play>
         <span class="studioPlayDiskIco" data-studio-play-ico aria-hidden="true">${studioIco("play")}</span>
@@ -2130,16 +2198,6 @@ function renderMix(root) {
         <p class="studioSyncHint">Polish for streaming — applied when you save, not in preview.</p>
       </div>
 
-      <div class="studioMixField studioMixField--row">
-        <div class="studioMixFieldTop">
-          <span class="studioMixLabel">Pitch Assist</span>
-          <span class="studioSoonPill">Soon</span>
-        </div>
-        <div class="studioSeg" data-studio-pitch>
-          ${["off", "light", "medium"].map((v) => `<button type="button" class="studioSegBtn${m.pitchAssist === v ? " isActive" : ""}" data-pitch="${v}">${v[0].toUpperCase() + v.slice(1)}</button>`).join("")}
-        </div>
-      </div>
-
       <div class="studioFooter studioFooter--mix">
         <button type="button" class="studioPrimary studioPrimary--publish" data-studio-save>Save to Songs</button>
         <button type="button" class="studioGhost" data-studio-draft>Save draft</button>
@@ -2162,6 +2220,11 @@ function sliderRow(key, label, value, iconKey) {
 function bindMix(root) {
   bindHeader(root, () => renderEditTake(root, engine?.getActiveTake?.()));
   const m = current.mix;
+  const activeTake = engine?.getActiveTake?.() || null;
+  const pitchState = {
+    lastGuideSec: 0,
+    onReady: (t) => updatePitchAppliedUi(root, t || engine?.getActiveTake?.() || activeTake),
+  };
 
   root.querySelectorAll("[data-take-id]").forEach((tab) => {
     tab.addEventListener("click", () => {
@@ -2172,6 +2235,16 @@ function bindMix(root) {
       renderMix(root);
     });
   });
+
+  bindPitchPresets(root, activeTake, pitchState);
+  updatePitchAppliedUi(root, activeTake);
+  void (async () => {
+    const t = engine?.getActiveTake?.();
+    if (!t?.buffer) return;
+    ensureTakePitchState(t).cache.none = t.buffer;
+    await ensureTakePitchReady(t);
+    updatePitchAppliedUi(root, t);
+  })();
 
   root.querySelectorAll("[data-mix]").forEach((inp) => {
     inp.addEventListener("input", () => {
@@ -2219,15 +2292,6 @@ function bindMix(root) {
     }
   });
 
-  root.querySelector("[data-studio-pitch]")?.addEventListener("click", (e) => {
-    const b = e.target.closest("[data-pitch]");
-    if (!b) return;
-    bridge.haptic?.("light");
-    m.pitchAssist = b.getAttribute("data-pitch");
-    root.querySelectorAll("[data-studio-pitch] .studioSegBtn").forEach((x) => x.classList.toggle("isActive", x === b));
-    if (m.pitchAssist !== "off") bridge.showToast?.("Pitch Assist is coming soon.");
-  });
-
   root.querySelector("[data-studio-play]")?.addEventListener("click", () => togglePreview(root));
   root.querySelector("[data-studio-draft]")?.addEventListener("click", () => saveDraft());
   root.querySelector("[data-studio-save]")?.addEventListener("click", () => saveToSongs(root));
@@ -2236,6 +2300,10 @@ function bindMix(root) {
 function mixParams(takeId) {
   const m = current.mix || DEFAULT_MIX;
   const tid = takeId || engine?.activeTakeId || engine?.getActiveTake?.()?.id || "";
+  const take = tid
+    ? (engine?.getTakes?.()?.find((t) => t.id === tid) || engine?.getActiveTake?.())
+    : engine?.getActiveTake?.();
+  const voiceBufferOverride = pitchVoiceBufferForTake(take);
   return {
     takeId: tid,
     voiceVol: (Number(m.voiceVol) ?? 50) / 100,
@@ -2247,6 +2315,7 @@ function mixParams(takeId) {
     fxEq: mixFxValue(m, "fxEq"),
     fxDeesser: mixFxValue(m, "fxDeesser"),
     finish: FINISH_PRESETS[m.finish] ? m.finish : "balanced",
+    voiceBufferOverride,
   };
 }
 
@@ -2314,6 +2383,9 @@ async function saveToSongs(root) {
   };
 
   try {
+    tickTo(40, "Preparing vocal…");
+    const take = engine?.getActiveTake?.();
+    if (take) await ensureTakePitchReady(take);
     tickTo(55, "Applying finish…");
     const rendered = await engine.renderMix(mixParams());
     tickTo(85, "Saving to your device…");

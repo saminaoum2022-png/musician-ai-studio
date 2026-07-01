@@ -41609,6 +41609,17 @@ body[data-route="studio"] .deskRail { display: none !important; }
 .studioPitchStatus {
   margin-left: auto; font-size: 12px; font-weight: 700; color: var(--brand-violet-hover);
 }
+.studioPitchApplied {
+  display: flex; align-items: flex-start; gap: 8px;
+  padding: 10px 12px; border-radius: 12px;
+  font-size: 12px; line-height: 1.45; color: rgba(231, 238, 255, 0.82);
+  background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.06);
+}
+.studioPitchAppliedDot {
+  width: 8px; height: 8px; margin-top: 4px; flex-shrink: 0;
+  border-radius: 999px; background: rgba(255,255,255,0.28);
+}
+.studioPitchAppliedDot.isOn { background: var(--brand-teal); box-shadow: 0 0 8px rgba(0, 212, 170, 0.45); }
 .studioPitchHint { margin: 0; font-size: 12px; line-height: 1.45; }
 .studioPitchLoading {
   display: flex; align-items: center; justify-content: center; gap: 10px;

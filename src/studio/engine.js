@@ -909,7 +909,7 @@ export class StudioEngine {
 
     if (take && take.buffer) {
       const voiceSrc = off.createBufferSource();
-      voiceSrc.buffer = this._getTakePlaybackBuffer(take, params);
+      voiceSrc.buffer = params.voiceBufferOverride || this._getTakePlaybackBuffer(take, params);
       const { input, output } = this._buildVoiceChain(off, params);
       const voiceGain = off.createGain();
       voiceGain.gain.value = this._voiceMixGain(params, take);

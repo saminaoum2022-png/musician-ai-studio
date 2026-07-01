@@ -650,6 +650,7 @@ export class StudioEngine {
     t.alignSec = Math.max(0, newOff - comp);
     t.buffer = sliced;
     t.blob = bufferToWavBlob(sliced);
+    if (t.pitchCorrection) { t.pitchCorrection.cache = {}; t.pitchCorrection.keyInfo = null; }
     return true;
   }
 
@@ -674,6 +675,7 @@ export class StudioEngine {
     t.alignSec = Math.max(0, newOff - comp);
     t.buffer = spliced;
     t.blob = bufferToWavBlob(spliced);
+    if (t.pitchCorrection) { t.pitchCorrection.cache = {}; t.pitchCorrection.keyInfo = null; }
     return true;
   }
 
@@ -695,6 +697,7 @@ export class StudioEngine {
     t.buffer = partA;
     t.blob = bufferToWavBlob(partA);
     t.alignSec = Math.max(0, oldOff - comp);
+    if (t.pitchCorrection) { t.pitchCorrection.cache = {}; t.pitchCorrection.keyInfo = null; }
     const newTake = {
       id: `take_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
       blob: bufferToWavBlob(partB),
@@ -778,7 +781,7 @@ export class StudioEngine {
       const voiceDur = voiceGuideEnd - voiceGuideStart;
       if (voiceDur > 0.02) {
         const voiceSrc = this.ctx.createBufferSource();
-        voiceSrc.buffer = this._getTakePlaybackBuffer(take, params);
+        voiceSrc.buffer = params.voiceBufferOverride || this._getTakePlaybackBuffer(take, params);
         const chain = this._buildVoiceChain(this.ctx, params);
         const voiceGain = this.ctx.createGain();
         voiceGain.gain.value = this._voiceMixGain(params, take);
@@ -790,14 +793,22 @@ export class StudioEngine {
         const voiceDelay = Math.max(0, voiceGuideStart - fromSec);
         voiceSrc.start(
           startAt + voiceDelay,
-          Math.min(off, Math.max(0, take.buffer.duration - 0.01)),
+          Math.min(off, Math.max(0, voiceSrc.buffer.duration - 0.01)),
           voiceDur,
         );
         this._nodes.push(voiceSrc, chain.input, chain.output, voiceGain, center.input, center.output);
         this._mix.voiceGain = voiceGain;
         this._mix.voiceChain = chain;
+        this._mix.voiceSrc = voiceSrc;
+        this._mix.take = take;
+        this._mix.startAt = startAt;
+        this._mix.fromSec = fromSec;
+        this._mix.clipStart = clipStart;
+        this._mix.clipEnd = clipEnd;
       }
     }
+
+    this._mix.guideSrc = guideSrc;
 
     this._playing = true;
     guideSrc.onended = () => { this._playing = false; if (typeof cb.onEnded === "function") cb.onEnded(); };
@@ -824,6 +835,41 @@ export class StudioEngine {
       mix.voiceGain.gain.value = solo === "music" ? 0 : this._voiceMixGain(params, take);
     }
     if (mix.voiceChain?.update) mix.voiceChain.update(params);
+  }
+
+  /** Current guide timeline position during live mix (seconds). */
+  getMixGuidePosition() {
+    if (!this._playing || !this._mix || !this.ctx) return 0;
+    return this._mix.fromSec + Math.max(0, this.ctx.currentTime - this._mix.startAt);
+  }
+
+  /**
+   * Swap only the vocal buffer during live mix — guide keeps playing (Review pitch presets).
+   * @returns {boolean}
+   */
+  swapVoiceBufferDuringMix(newBuffer) {
+    const m = this._mix;
+    if (!this._playing || !m?.voiceChain || !m.take || !this.ctx || !newBuffer) return false;
+    const now = this.ctx.currentTime;
+    const guidePos = m.fromSec + Math.max(0, now - m.startAt);
+    const clipEnd = m.clipEnd != null ? m.clipEnd : (m.fromSec + this.takeContentDuration(m.take));
+    const voiceDur = clipEnd - guidePos;
+    if (voiceDur <= 0.02) return false;
+
+    if (m.voiceSrc) {
+      try { m.voiceSrc.stop(now); } catch {}
+      const idx = this._nodes.indexOf(m.voiceSrc);
+      if (idx >= 0) this._nodes.splice(idx, 1);
+    }
+
+    const voiceSrc = this.ctx.createBufferSource();
+    voiceSrc.buffer = newBuffer;
+    voiceSrc.connect(m.voiceChain.input);
+    const off = this._takeBufferOffset(m.take) + guidePos;
+    voiceSrc.start(now, Math.min(off, Math.max(0, newBuffer.duration - 0.01)), voiceDur);
+    m.voiceSrc = voiceSrc;
+    this._nodes.push(voiceSrc);
+    return true;
   }
 
   stopMix() {

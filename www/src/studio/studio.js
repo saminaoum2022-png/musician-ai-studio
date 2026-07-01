@@ -13,6 +13,15 @@
  * No neon-everything.
  */
 
+import {
+  PITCH_PRESET_IDS,
+  PITCH_PRESET_DEFAULT,
+  PITCH_CORRECTION_PRESETS,
+  ensureTakePitchState,
+  getPitchCachedBuffer,
+  ensurePitchPresetRendered,
+  pitchPresetLabel,
+} from "./pitch-correction.js";
 import { StudioEngine, FINISH_PRESETS, FINISH_IDS } from "./engine.js";
 import {
   isStudioAudioDebug,
@@ -1362,6 +1371,23 @@ function renderReview(root, take) {
       </div>
       <div class="studioReviewTime"><span data-studio-pos>0:00</span> <span class="studioReviewTimeSep">/</span> <span>${fmtTime(dur)}</span></div>
 
+      <div class="studioPitchField" data-studio-pitch-field>
+        <div class="studioMixFieldTop">
+          <span class="studioMixLabel">Pitch Correction</span>
+          <span class="studioPitchStatus" data-pitch-status>${esc(pitchPresetLabel(PITCH_PRESET_DEFAULT))}</span>
+        </div>
+        <div class="studioSeg studioPitchSeg" data-studio-pitch-presets role="group" aria-label="Pitch correction preset">
+          ${PITCH_PRESET_IDS.map((id) =>
+            `<button type="button" class="studioSegBtn${id === PITCH_PRESET_DEFAULT ? " isActive" : ""}" data-pitch-preset="${id}">${esc(pitchPresetLabel(id))}</button>`,
+          ).join("")}
+        </div>
+        <p class="studioSyncHint studioPitchHint">Natural is applied automatically. Other styles render on tap — playback continues seamlessly.</p>
+        <div class="studioPitchLoading" data-pitch-loading hidden>
+          <span class="studioPitchLoadingDot" aria-hidden="true"></span>
+          <span data-pitch-loading-label>Rendering…</span>
+        </div>
+      </div>
+
       <div class="studioFeedbackCard">
         <div class="studioFeedbackIco" aria-hidden="true">${studioIco("voice")}</div>
         <div class="studioFeedbackBody">
@@ -1393,8 +1419,75 @@ function setReviewProgress(root, frac) {
   if (handle) handle.style.left = `${frac * 100}%`;
 }
 
+function reviewVoiceBuffer(take) {
+  if (!take?.buffer) return undefined;
+  const pc = ensureTakePitchState(take);
+  const preset = pc?.preset || PITCH_PRESET_DEFAULT;
+  return getPitchCachedBuffer(take, preset) || undefined;
+}
+
+function trackKeyHint() {
+  const t = current?.track;
+  return t?.key || t?.meta?.key || t?.meta?.musicalKey || "";
+}
+
+async function selectReviewPitchPreset(root, take, presetId, state) {
+  if (!take?.buffer) return;
+  const pc = ensureTakePitchState(take);
+  const statusEl = root.querySelector("[data-pitch-status]");
+  const loadingEl = root.querySelector("[data-pitch-loading]");
+  const loadingLabel = root.querySelector("[data-pitch-loading-label]");
+  pc.preset = presetId;
+
+  root.querySelectorAll("[data-pitch-preset]").forEach((btn) => {
+    btn.classList.toggle("isActive", btn.getAttribute("data-pitch-preset") === presetId);
+  });
+  if (statusEl) statusEl.textContent = pitchPresetLabel(presetId);
+
+  const cached = getPitchCachedBuffer(take, presetId);
+  if (cached) {
+    if (loadingEl) loadingEl.hidden = true;
+    if (engine?.isPlaying) {
+      engine.swapVoiceBufferDuringMix(cached);
+    } else if (state?.resumeAfterRender) {
+      void state.playFrom(state.lastGuideSec || 0);
+    }
+    return;
+  }
+
+  if (loadingEl) loadingEl.hidden = false;
+  if (loadingLabel) loadingLabel.textContent = `Rendering ${pitchPresetLabel(presetId)}…`;
+  root.querySelectorAll("[data-pitch-preset]").forEach((b) => { b.disabled = true; });
+
+  const wasPlaying = !!engine?.isPlaying;
+  const guideSec = wasPlaying ? engine.getMixGuidePosition() : (state?.lastGuideSec || 0);
+  state.lastGuideSec = guideSec;
+
+  try {
+    await engine?.ensureReady();
+    const buf = await ensurePitchPresetRendered(take, presetId, {
+      audioContext: engine?.ctx,
+      trackKey: trackKeyHint(),
+    });
+    if (loadingEl) loadingEl.hidden = true;
+    root.querySelectorAll("[data-pitch-preset]").forEach((b) => { b.disabled = false; });
+    if (!buf) return;
+    if (engine?.isPlaying) {
+      engine.swapVoiceBufferDuringMix(buf);
+    } else if (state.autoPlayAfterFirstRender && presetId === PITCH_PRESET_DEFAULT) {
+      void state.playFrom(0);
+    }
+  } catch {
+    if (loadingEl) loadingEl.hidden = true;
+    root.querySelectorAll("[data-pitch-preset]").forEach((b) => { b.disabled = false; });
+    bridge.showToast?.("Couldn’t render pitch correction.");
+  }
+}
+
 function bindReview(root, take) {
   bindHeader(root, () => renderHome(root));
+
+  const pitchState = { lastGuideSec: 0, autoPlayAfterFirstRender: false, resumeAfterRender: false };
 
   const btn = root.querySelector("[data-studio-play]");
   const icoWrap = root.querySelector("[data-studio-play-ico]");
@@ -1413,12 +1506,15 @@ function bindReview(root, take) {
       engine.stopMix();
       setPlayingUi(true);
       const fromSec = Math.max(0, fromGuideSec || 0);
+      pitchState.lastGuideSec = fromSec;
       const dur = contentDur();
+      const voiceBuf = reviewVoiceBuffer(take);
       await engine.playMix(
-        { ...mixParams(take?.id), fromSec },
+        { ...mixParams(take?.id), fromSec, voiceBufferOverride: voiceBuf },
         {
           onTick: (s) => {
             const g = fromSec + s;
+            pitchState.lastGuideSec = g;
             if (posEl) posEl.textContent = fmtTime(Math.min(g, dur));
             if (dur) setReviewProgress(root, Math.min(1, g / dur));
           },
@@ -1434,6 +1530,7 @@ function bindReview(root, take) {
       bridge.showToast?.("Couldn’t play here.");
     }
   };
+  pitchState.playFrom = playFrom;
 
   btn?.addEventListener("click", () => {
     bridge.haptic?.("light");
@@ -1502,6 +1599,23 @@ function bindReview(root, take) {
     if (take?.id) { try { engine.removeTake(take.id); } catch {} }
     renderRecording(root);
   });
+
+  root.querySelectorAll("[data-pitch-preset]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      bridge.haptic?.("light");
+      const id = btn.getAttribute("data-pitch-preset");
+      if (!id) return;
+      const pc = ensureTakePitchState(take);
+      if (id === pc?.preset && getPitchCachedBuffer(take, id)) return;
+      void selectReviewPitchPreset(root, take, id, pitchState);
+    });
+  });
+
+  void (async () => {
+    if (!take?.buffer) return;
+    ensureTakePitchState(take);
+    await selectReviewPitchPreset(root, take, PITCH_PRESET_DEFAULT, pitchState);
+  })();
 }
 
 /* -------------------------------------------------------------------------- */

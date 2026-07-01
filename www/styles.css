@@ -41579,6 +41579,31 @@ body[data-route="studio"] .deskRail { display: none !important; }
 .studioReviewTime { text-align: center; font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
 .studioReviewTimeSep { opacity: 0.5; margin: 0 4px; }
 
+.studioPitchField {
+  display: flex; flex-direction: column; gap: 10px;
+  padding: 14px; border-radius: 16px;
+  background: rgba(255,255,255,0.03); border: 1px solid var(--nabad-glass-border);
+}
+.studioPitchSeg { margin-top: 2px; }
+.studioPitchSeg .studioSegBtn:disabled { opacity: 0.45; }
+.studioPitchStatus {
+  margin-left: auto; font-size: 12px; font-weight: 700; color: var(--brand-violet-hover);
+}
+.studioPitchHint { margin: 0; font-size: 12px; line-height: 1.45; }
+.studioPitchLoading {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 12px; font-weight: 600; color: var(--brand-violet-hover);
+}
+.studioPitchLoading[hidden] { display: none !important; }
+.studioPitchLoadingDot {
+  width: 8px; height: 8px; border-radius: 999px; background: var(--brand-violet);
+  animation: studioPitchPulse 900ms ease-in-out infinite;
+}
+@keyframes studioPitchPulse {
+  0%, 100% { opacity: 0.35; transform: scale(0.85); }
+  50% { opacity: 1; transform: scale(1); }
+}
+
 .studioFeedbackCard {
   display: flex; gap: 12px; align-items: flex-start;
   padding: 14px; border-radius: 16px;

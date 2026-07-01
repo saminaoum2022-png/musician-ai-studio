@@ -24,8 +24,8 @@ import { encodeWav16 } from "../wav.js";
 
 const LATENCY_STORAGE_KEY = "nabad.studio.latencyMs.v1";
 
-// Final makeup gain after compression/EQ — kept moderate so the chain stays warm, not harsh.
-const VOICE_MAKEUP = 1.95;
+// Final makeup gain after compression/EQ — trimmed ~5% so denoise/gate can stay clean.
+const VOICE_MAKEUP = 1.85;
 
 /* -------------------------------------------------------------------------- */
 /* Modular effect registry                                                     */
@@ -78,14 +78,14 @@ export const EFFECT_REGISTRY = {
       const input = ctx.createGain();
       const comp = ctx.createDynamicsCompressor();
       try {
-        comp.threshold.value = -20;
-        comp.knee.value = 10;
-        comp.ratio.value = 2.5;
-        comp.attack.value = 0.006;
-        comp.release.value = 0.18;
+        comp.threshold.value = -16;
+        comp.knee.value = 12;
+        comp.ratio.value = 2.2;
+        comp.attack.value = 0.008;
+        comp.release.value = 0.2;
       } catch {}
       const makeup = ctx.createGain();
-      makeup.gain.value = 1.65;
+      makeup.gain.value = 1.5;
       input.connect(comp).connect(makeup);
       return { input, output: makeup, update: () => {} };
     },
@@ -114,7 +114,7 @@ export const EFFECT_REGISTRY = {
       const airCut = ctx.createBiquadFilter();
       airCut.type = "highshelf";
       airCut.frequency.value = 6500;
-      airCut.gain.value = -1.5;
+      airCut.gain.value = -2;
       input.connect(hp).connect(warmth).connect(presence).connect(airCut);
       return { input, output: airCut, update: () => {} };
     },
@@ -360,10 +360,10 @@ export class StudioEngine {
       const arr = await blob.arrayBuffer();
       if (arr.byteLength > 0) {
         buffer = await this.ctx.decodeAudioData(arr.slice(0));
-        buffer = normalizeTakeBuffer(buffer, 0.76);
         const trimmed = trimBufferLeadIn(this.ctx, buffer, alignSec);
         buffer = trimmed.buffer;
         alignSec = trimmed.alignSec;
+        buffer = finishTakeBuffer(buffer);
       }
     } catch {
       buffer = null; // decode failed — blob kept so a retry can recover
@@ -377,6 +377,9 @@ export class StudioEngine {
       nudgeMs: 0,
       alignSec,
     };
+    if (buffer) {
+      try { take.blob = bufferToWavBlob(buffer); } catch {}
+    }
     this.takes.push(take);
     this.activeTakeId = take.id;
     return take;
@@ -392,7 +395,7 @@ export class StudioEngine {
       const arr = await take.blob.arrayBuffer();
       if (!arr.byteLength) return false;
       let buffer = await this.ctx.decodeAudioData(arr.slice(0));
-      buffer = normalizeTakeBuffer(buffer, 0.76);
+      buffer = finishTakeBuffer(buffer);
       take.buffer = buffer;
       return true;
     } catch {
@@ -682,9 +685,9 @@ export class StudioEngine {
     const output = ctx.createGain();
     const nodes = [input, output];
 
-    // Same compression + EQ as the mix chain so monitoring matches export loudness.
+    // Monitor: EQ only — compression on pauses was lifting room noise in headphones.
     let tail = input;
-    for (const id of ["compression", "eq"]) {
+    for (const id of ["eq"]) {
       const def = EFFECT_REGISTRY[id];
       if (!def?.create) continue;
       const node = def.create(ctx);
@@ -858,7 +861,7 @@ function readStoredLatency(fallback) {
 function clamp01(x) { return Math.max(0, Math.min(1, Number(x) || 0)); }
 function clampNum(x, lo, hi) { return Math.max(lo, Math.min(hi, x)); }
 
-function normalizeTakeBuffer(buffer, targetPeak = 0.76) {
+function normalizeTakeBuffer(buffer, targetPeak = 0.72) {
   if (!buffer) return buffer;
   const ch0 = buffer.getChannelData(0);
   let peak = 0;
@@ -910,6 +913,51 @@ function spliceBuffer(ctx, buffer, startSec, endSec) {
     for (let i = b; i < src.length; i++) dst[j++] = src[i];
   }
   return out;
+}
+
+/** Adaptive noise gate + hiss trim on a decoded take (mutates buffer in place). */
+function denoiseAndGateBuffer(buffer) {
+  if (!buffer) return buffer;
+  const ch0 = buffer.getChannelData(0);
+  const sr = buffer.sampleRate;
+  const nCh = buffer.numberOfChannels;
+  const win = Math.max(1, Math.floor(0.025 * sr));
+  const levels = [];
+  for (let i = 0; i < ch0.length; i += win) {
+    let p = 0;
+    const end = Math.min(ch0.length, i + win);
+    for (let j = i; j < end; j++) p = Math.max(p, Math.abs(ch0[j]));
+    levels.push(p);
+  }
+  levels.sort((a, b) => a - b);
+  const floor = levels[Math.floor(levels.length * 0.12)] || 0.004;
+  const threshold = clampNum(floor * 3.2, 0.01, 0.045);
+  const closed = 0.035;
+  let env = 1;
+  const atk = Math.exp(-1 / (0.004 * sr));
+  const rel = Math.exp(-1 / (0.11 * sr));
+  const envCurve = new Float32Array(ch0.length);
+  for (let i = 0; i < ch0.length; i++) {
+    const lvl = Math.abs(ch0[i]);
+    const target = lvl > threshold ? 1 : closed;
+    env = target > env ? target + atk * (env - target) : target + rel * (env - target);
+    envCurve[i] = env;
+  }
+  for (let ch = 0; ch < nCh; ch++) {
+    const data = buffer.getChannelData(ch);
+    for (let i = 0; i < data.length; i++) {
+      data[i] *= envCurve[i];
+      if (envCurve[i] < 0.2) data[i] *= 0.75;
+    }
+  }
+  return buffer;
+}
+
+/** Post-record polish: gate room noise, then peak-normalise. */
+function finishTakeBuffer(buffer) {
+  if (!buffer) return buffer;
+  denoiseAndGateBuffer(buffer);
+  return normalizeTakeBuffer(buffer, 0.72);
 }
 
 function bufferToWavBlob(buffer) {

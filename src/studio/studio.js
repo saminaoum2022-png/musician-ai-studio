@@ -1483,8 +1483,10 @@ function updatePitchAppliedUi(root, take) {
   if (dot) {
     const preset = activePitchPreset(take);
     const ready = preset !== "none" && !!getPitchCachedBuffer(take, preset);
-    dot.classList.toggle("isOn", ready && active);
-    dot.classList.toggle("isNeutral", ready && onPitch && preset !== "none");
+    const meta = getPitchRenderMeta(take, preset);
+    dot.classList.toggle("isOn", ready && !!active);
+    dot.classList.toggle("isNeutral", ready && (onPitch || meta?.noPitchDetected) && preset !== "none");
+    dot.classList.toggle("isWarn", ready && !!meta?.noPitchDetected);
   }
 }
 
@@ -1537,7 +1539,12 @@ async function ensureTakePitchReady(take) {
 
 function trackKeyHint() {
   const t = current?.track;
-  return t?.key || t?.meta?.key || t?.meta?.musicalKey || "";
+  return t?.key
+    || t?.meta?.key
+    || t?.meta?.musicalKey
+    || t?.meta?.tonality
+    || t?.meta?.scale
+    || "";
 }
 
 async function selectPitchPreset(root, take, presetId, state) {

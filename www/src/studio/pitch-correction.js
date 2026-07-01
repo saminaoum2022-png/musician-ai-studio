@@ -3,7 +3,6 @@
  * Does not touch recording, mix DSP, or export chains.
  */
 
-import { estimatePitchHz } from "../echo-pitch-stabilize.js";
 import { scaleIntervals, midiToFreq } from "../theory.js";
 
 const ROOT_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
@@ -133,7 +132,7 @@ export const PITCH_CORRECTION_PRESETS = Object.freeze({
 export const PITCH_PRESET_IDS = Object.freeze(["none", "natural", "balanced", "pop", "hardtune"]);
 export const PITCH_PRESET_DEFAULT = "balanced";
 /** Bump when pitch engine changes so cached renders are invalidated. */
-const PITCH_ENGINE_VERSION = 6;
+const PITCH_ENGINE_VERSION = 7;
 
 export function normalizePitchPresetId(id) {
   if (!id) return PITCH_PRESET_DEFAULT;
@@ -191,14 +190,73 @@ function yieldToUi() {
 }
 
 function parseTrackKey(str) {
-  const m = String(str || "").trim().match(/^([A-Ga-g])([#b]?)\s*(maj|major|min|minor|m)?$/i);
+  const raw = String(str || "").trim();
+  if (!raw) return null;
+  let m = raw.match(/^([A-Ga-g][#b♭]?)(?:\s*|-)?(maj|major|min|minor|m)?$/i);
+  if (!m) m = raw.match(/^([A-Ga-g])\s*(#|b|♭)?\s*(maj|major|min|minor|m)?$/i);
   if (!m) return null;
-  let name = m[1].toUpperCase() + (m[2] || "");
+  let name = m[1].toUpperCase() + (m[2] || "").replace("♭", "b");
   name = ENHARMONIC[name] || name;
   const idx = ROOT_NAMES.indexOf(name);
   if (idx < 0) return null;
-  const minor = /min|minor|^m$/i.test(m[3] || "");
+  const minorToken = m[3] || "";
+  const minor = /min|minor|^m$/i.test(minorToken) || /^m$/i.test(raw.slice(name.length));
   return { root: idx, scale: minor ? "natural_minor" : "major", rootName: ROOT_NAMES[idx], confidence: 1 };
+}
+
+/** Studio pitch tracker — relaxed vs echo-pitch-stabilize for quiet iOS vocals. */
+function estimatePitchForStudio(samples, sampleRate, minHz = 65, maxHz = 560) {
+  const n = samples.length;
+  if (n < 256) return 0;
+  const minLag = Math.floor(sampleRate / maxHz);
+  const maxLag = Math.min(Math.floor(sampleRate / minHz), n - 2);
+  let bestLag = 0;
+  let bestCorr = 0;
+  for (let lag = minLag; lag <= maxLag; lag++) {
+    let sum = 0;
+    let e0 = 0;
+    let e1 = 0;
+    const lim = n - lag;
+    for (let i = 0; i < lim; i++) {
+      const a = samples[i];
+      const b = samples[i + lag];
+      sum += a * b;
+      e0 += a * a;
+      e1 += b * b;
+    }
+    const corr = sum / (Math.sqrt(e0 * e1) + 1e-9);
+    if (corr > bestCorr) {
+      bestCorr = corr;
+      bestLag = lag;
+    }
+  }
+  if (bestCorr < 0.18 || !bestLag) return 0;
+  return sampleRate / bestLag;
+}
+
+function prepareMonoForPitchAnalysis(ch0, ch1) {
+  const mono = new Float32Array(ch0.length);
+  for (let i = 0; i < ch0.length; i++) {
+    mono[i] = ch1 ? (ch0[i] + ch1[i]) * 0.5 : ch0[i];
+  }
+  let peak = 0;
+  for (let i = 0; i < mono.length; i++) peak = Math.max(peak, Math.abs(mono[i]));
+  if (peak > 1e-6 && peak < 0.85) {
+    const gain = 0.85 / peak;
+    for (let i = 0; i < mono.length; i++) mono[i] *= gain;
+  }
+  return mono;
+}
+
+function resolveKeyInfo(mono, sr, opts = {}) {
+  const trackKey = parseTrackKey(opts.trackKey);
+  let keyInfo = opts.keyInfo || detectMusicalKey(mono, sr);
+  if (trackKey) {
+    keyInfo = { ...trackKey, confidence: Math.max(keyInfo?.confidence ?? 0, 0.88) };
+  } else if (keyInfo && !keyInfo.rootName) {
+    keyInfo.rootName = ROOT_NAMES[keyInfo.root ?? 0];
+  }
+  return keyInfo;
 }
 
 /** Detect key from voiced pitch-class histogram. */
@@ -208,7 +266,7 @@ export function detectMusicalKey(channel, sampleRate) {
   const hop = Math.floor(win * 0.5);
   let voiced = 0;
   for (let i = 0; i + win < channel.length; i += hop) {
-    const hz = estimatePitchHz(channel.subarray(i, i + win), sampleRate);
+    const hz = estimatePitchForStudio(channel.subarray(i, i + win), sampleRate);
     if (hz < 80) continue;
     voiced += 1;
     const pc = ((Math.round(hzToMidi(hz)) % 12) + 12) % 12;
@@ -320,8 +378,8 @@ function trackPitchFrames(mono, sr, preset) {
     const pos = g * hop;
     const slice = mono.subarray(pos, pos + winSize);
     const rms = voicedEnergy(slice);
-    const hz = estimatePitchHz(slice, sr);
-    if (hz > 80 && rms > 0.004) {
+    const hz = estimatePitchForStudio(slice, sr);
+    if (hz > 65 && rms > 0.0006) {
       f0s[g] = hz;
       voiced[g] = 1;
     }
@@ -813,21 +871,24 @@ export function formatPitchKeyLabel(keyInfo) {
   return `${keyInfo.rootName}${scale}`;
 }
 
-function buildRenderMeta(sourceBuffer, outputBuffer, cents, voiced, keyInfo, preset) {
+function buildRenderMeta(sourceBuffer, outputBuffer, cents, voiced, keyInfo, preset, voicedRatio = 0) {
   const { avgCents, peakCents, activeFrames } = summarizeCorrectionCents(cents, voiced);
   const rmsDiff = measureBufferDiff(sourceBuffer, outputBuffer);
-  const audible = peakCents >= 5 || rmsDiff >= 0.0012;
-  const onPitch = peakCents < 4 && rmsDiff < 0.0009;
+  const noPitchDetected = voicedRatio < 0.04;
+  const onPitch = !noPitchDetected && peakCents < 4 && rmsDiff < 0.0009;
+  const audible = !noPitchDetected && (peakCents >= 5 || rmsDiff >= 0.0012);
   return {
     presetId: preset.id,
     keyLabel: formatPitchKeyLabel(keyInfo),
     avgCents: Math.round(avgCents * 10) / 10,
     peakCents: Math.round(peakCents * 10) / 10,
     activeFrames,
+    voicedRatio: Math.round(voicedRatio * 1000) / 1000,
     rmsDiff,
     audible,
     onPitch,
-    passthrough: onPitch,
+    noPitchDetected,
+    passthrough: noPitchDetected || onPitch,
   };
 }
 
@@ -841,8 +902,14 @@ export function describePitchRenderMeta(meta, presetId) {
   if (id === "none") return "No pitch correction — raw vocal.";
   const label = pitchPresetLabel(id);
   if (!meta) return `${label} — tap to render.`;
-  if (meta.passthrough || meta.onPitch) {
-    return `${label} · Key ${meta.keyLabel || "—"} · On pitch — sounds like Original. Try Hard Tune to hear a stronger effect.`;
+  if (meta.noPitchDetected) {
+    return `${label} · Pitch not detected — sounds like Original. Try singing louder on the note, or tap Hard Tune after re-recording.`;
+  }
+  if (meta.error) {
+    return `${label} · Couldn't process — using Original.`;
+  }
+  if (meta.passthrough && meta.onPitch) {
+    return `${label} · Key ${meta.keyLabel || "—"} · Already on pitch — sounds like Original. Hard Tune is the strongest preset.`;
   }
   const strength = meta.peakCents >= 35 ? "Strong" : meta.peakCents >= 12 ? "Moderate" : "Light";
   return `${label} · Key ${meta.keyLabel || "—"} · ${strength} correction (avg ${meta.avgCents}¢, peak ${meta.peakCents}¢). Tap Original while playing to A/B.`;
@@ -863,32 +930,20 @@ export async function renderPitchCorrection(sourceBuffer, presetId, opts = {}) {
     const sr = sourceBuffer.sampleRate || 44100;
     const ch0 = sourceBuffer.getChannelData(0);
     const ch1 = sourceBuffer.numberOfChannels > 1 ? sourceBuffer.getChannelData(1) : null;
-    const mono = new Float32Array(ch0.length);
-    for (let i = 0; i < ch0.length; i++) {
-      mono[i] = ch1 ? (ch0[i] + ch1[i]) * 0.5 : ch0[i];
-    }
-
-    let keyInfo = opts.keyInfo;
-    if (!keyInfo) {
-      keyInfo = detectMusicalKey(mono, sr);
-      const trackKey = parseTrackKey(opts.trackKey);
-      if (trackKey) keyInfo = { ...trackKey, confidence: Math.max(keyInfo.confidence, 0.85) };
-    }
+    const mono = prepareMonoForPitchAnalysis(ch0, ch1);
+    const keyInfo = resolveKeyInfo(mono, sr, opts);
 
     await yieldToUi();
 
     const { f0s, voiced, hop, winSize, nGrains } = trackPitchFrames(mono, sr, preset);
-    if (!nGrains) {
+    const voicedRatio = nGrains
+      ? voiced.reduce((a, b) => a + b, 0) / Math.max(1, voiced.length)
+      : 0;
+
+    if (!nGrains || voicedRatio < 0.04) {
       return {
         buffer: sourceBuffer,
-        meta: buildRenderMeta(sourceBuffer, sourceBuffer, new Float32Array(0), voiced, keyInfo, preset),
-      };
-    }
-    const voicedRatio = voiced.reduce((a, b) => a + b, 0) / Math.max(1, voiced.length);
-    if (voicedRatio < 0.08) {
-      return {
-        buffer: sourceBuffer,
-        meta: { ...buildRenderMeta(sourceBuffer, sourceBuffer, new Float32Array(0), voiced, keyInfo, preset), passthrough: true, onPitch: true },
+        meta: buildRenderMeta(sourceBuffer, sourceBuffer, new Float32Array(0), voiced, keyInfo, preset, voicedRatio),
       };
     }
 
@@ -902,11 +957,11 @@ export async function renderPitchCorrection(sourceBuffer, presetId, opts = {}) {
     const ctx = getPitchRenderContext(sr, opts);
     const buf = ctx.createBuffer(1, corrected.length, sr);
     buf.getChannelData(0).set(corrected);
-    const meta = buildRenderMeta(sourceBuffer, buf, cents, voiced, keyInfo, preset);
+    const meta = buildRenderMeta(sourceBuffer, buf, cents, voiced, keyInfo, preset, voicedRatio);
     return { buffer: buf, meta };
   } catch (err) {
     console.warn("[pitch-correction] render failed:", err);
-    return { buffer: sourceBuffer, meta: { passthrough: true, onPitch: true, error: true } };
+    return { buffer: sourceBuffer, meta: { passthrough: true, onPitch: false, noPitchDetected: false, error: true, keyLabel: "" } };
   }
 }
 
@@ -967,9 +1022,10 @@ export async function ensurePitchPresetRendered(take, presetId, opts = {}) {
       await yieldToUi();
       if (!take.buffer?.numberOfChannels) return take.buffer || null;
       if (!pc.keyInfo) {
-        pc.keyInfo = detectMusicalKey(take.buffer.getChannelData(0), take.buffer.sampleRate);
-        const trackKey = parseTrackKey(opts.trackKey);
-        if (trackKey) pc.keyInfo = { ...trackKey, confidence: Math.max(pc.keyInfo.confidence, 0.85) };
+        const ch = take.buffer.getChannelData(0);
+        const ch1 = take.buffer.numberOfChannels > 1 ? take.buffer.getChannelData(1) : null;
+        const mono = prepareMonoForPitchAnalysis(ch, ch1);
+        pc.keyInfo = resolveKeyInfo(mono, take.buffer.sampleRate, { trackKey: opts.trackKey });
       }
       const result = await renderPitchCorrection(take.buffer, id, {
         audioContext: opts.audioContext,

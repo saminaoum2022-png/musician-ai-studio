@@ -41621,6 +41621,7 @@ body[data-route="studio"] .deskRail { display: none !important; }
 }
 .studioPitchAppliedDot.isOn { background: var(--brand-teal); box-shadow: 0 0 8px rgba(0, 212, 170, 0.45); }
 .studioPitchAppliedDot.isNeutral { background: rgba(255, 196, 120, 0.95); box-shadow: 0 0 8px rgba(255, 196, 120, 0.35); }
+.studioPitchAppliedDot.isWarn { background: rgba(255, 120, 100, 0.95); box-shadow: 0 0 8px rgba(255, 120, 100, 0.35); }
 .studioPitchField--active { border-color: rgba(0, 212, 170, 0.35); }
 .studioPitchField--onPitch { border-color: rgba(255, 196, 120, 0.28); }
 .studioPitchHint { margin: 0; font-size: 12px; line-height: 1.45; }

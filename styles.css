@@ -41620,7 +41620,11 @@ body[data-route="studio"] .deskRail { display: none !important; }
   border-radius: 999px; background: rgba(255,255,255,0.28);
 }
 .studioPitchAppliedDot.isOn { background: var(--brand-teal); box-shadow: 0 0 8px rgba(0, 212, 170, 0.45); }
+.studioPitchAppliedDot.isNeutral { background: rgba(255, 196, 120, 0.95); box-shadow: 0 0 8px rgba(255, 196, 120, 0.35); }
+.studioPitchField--active { border-color: rgba(0, 212, 170, 0.35); }
+.studioPitchField--onPitch { border-color: rgba(255, 196, 120, 0.28); }
 .studioPitchHint { margin: 0; font-size: 12px; line-height: 1.45; }
+.studioPitchHint strong { font-weight: 700; color: rgba(231, 238, 255, 0.92); }
 .studioPitchLoading {
   display: flex; align-items: center; justify-content: center; gap: 10px;
   padding: 10px 12px; border-radius: 12px;

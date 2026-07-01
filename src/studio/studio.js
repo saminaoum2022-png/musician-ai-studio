@@ -23,6 +23,8 @@ import {
   pitchPresetLabel,
   isPitchPresetInstant,
   normalizePitchPresetId,
+  getPitchRenderMeta,
+  describePitchRenderMeta,
 } from "./pitch-correction.js";
 import { StudioEngine, FINISH_PRESETS, FINISH_IDS } from "./engine.js";
 import {
@@ -1424,14 +1426,21 @@ function pitchVoiceBufferForTake(take) {
 function pitchAppliedSummary(take) {
   const preset = activePitchPreset(take);
   if (preset === "none") {
-    return { label: "Original", detail: "No pitch correction — raw vocal in preview & save." };
+    return { label: "Original", detail: "No pitch correction — raw vocal in preview & save.", active: false, onPitch: true };
   }
   const name = pitchPresetLabel(preset);
+  const meta = getPitchRenderMeta(take, preset);
   const ready = !!getPitchCachedBuffer(take, preset);
-  if (ready) {
-    return { label: name, detail: `${name} pitch correction is applied to preview & save.` };
+  if (!ready) {
+    return { label: name, detail: `${name} — rendering…`, active: false, onPitch: false };
   }
-  return { label: name, detail: `${name} pitch correction — rendering…` };
+  const detail = describePitchRenderMeta(meta, preset);
+  return {
+    label: name,
+    detail,
+    active: !!(meta?.audible && !meta?.passthrough),
+    onPitch: !!meta?.onPitch || !!meta?.passthrough,
+  };
 }
 
 function pitchCorrectionFieldHtml(activePresetId, hint) {
@@ -1446,6 +1455,7 @@ function pitchCorrectionFieldHtml(activePresetId, hint) {
           <span class="studioPitchAppliedDot" aria-hidden="true"></span>
           <span data-pitch-applied-text>${esc(hint || "")}</span>
         </div>
+        <p class="studioSyncHint studioPitchHint">Tap <strong>Original</strong> then a preset while playing to A/B. Hard Tune is the most obvious.</p>
         <div class="studioSeg studioPitchSeg" data-studio-pitch-presets role="group" aria-label="Pitch correction preset">
           ${PITCH_PRESET_IDS.map((id) =>
             `<button type="button" class="studioSegBtn${id === activePresetId ? " isActive" : ""}" data-pitch-preset="${id}">${esc(pitchPresetLabel(id))}</button>`,
@@ -1459,15 +1469,22 @@ function pitchCorrectionFieldHtml(activePresetId, hint) {
 }
 
 function updatePitchAppliedUi(root, take) {
-  const { label, detail } = pitchAppliedSummary(take);
+  const { label, detail, active, onPitch } = pitchAppliedSummary(take);
   const statusEl = root.querySelector("[data-pitch-status]");
   const appliedEl = root.querySelector("[data-pitch-applied-text]");
+  const field = root.querySelector("[data-studio-pitch-field]");
   const dot = root.querySelector(".studioPitchAppliedDot");
   if (statusEl) statusEl.textContent = label;
   if (appliedEl) appliedEl.textContent = detail;
+  if (field) {
+    field.classList.toggle("studioPitchField--active", !!active);
+    field.classList.toggle("studioPitchField--onPitch", !!onPitch && activePitchPreset(take) !== "none");
+  }
   if (dot) {
-    const on = activePitchPreset(take) !== "none" && !!getPitchCachedBuffer(take, activePitchPreset(take));
-    dot.classList.toggle("isOn", on);
+    const preset = activePitchPreset(take);
+    const ready = preset !== "none" && !!getPitchCachedBuffer(take, preset);
+    dot.classList.toggle("isOn", ready && active);
+    dot.classList.toggle("isNeutral", ready && onPitch && preset !== "none");
   }
 }
 

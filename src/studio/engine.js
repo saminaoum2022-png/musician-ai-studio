@@ -29,8 +29,10 @@ const pcmWorkletLoaded = new WeakMap();
 
 // AI guides are mastered loud; slight trim so Music % feels honest vs raw voice.
 const GUIDE_MIX_TRIM = 0.88;
-// Sliders at 50% = unity gain; 100% = 2× (each multiplies).
+// Voice / Vocal gain sliders: 50% = previous 100% level (2× each); 100% = 3× each for headroom.
 const VOCAL_SLIDER_CENTER = 0.5;
+const VOCAL_SLIDER_CENTER_GAIN = 2;
+const VOCAL_SLIDER_MAX_GAIN = 3;
 // WKWebView mic capture runs quiet on iOS — one fixed boost at record start (not AGC).
 const IOS_WEB_MIC_DEFAULT_GAIN = 2.0;
 // Live headphones monitor only — extra voice boost vs the guide (not in the capture path).
@@ -1208,7 +1210,7 @@ function cloneAudioBuffer(ctx, buffer) {
   return out;
 }
 
-/** 50% slider = 1× gain, 100% = 2×. Voice × Vocal gain multiply. */
+/** 50% = 2× each (prior 100% level); 100% = 3× each. Voice × Vocal gain multiply. */
 function voiceOutputGain(params = {}) {
   const vol = vocalSliderGain(params.voiceVol);
   const gain = vocalSliderGain(params.vocalGain);
@@ -1217,7 +1219,26 @@ function voiceOutputGain(params = {}) {
 
 function vocalSliderGain(pct01) {
   const x = Number.isFinite(pct01) ? pct01 : VOCAL_SLIDER_CENTER;
-  return Math.max(0, x / VOCAL_SLIDER_CENTER);
+  if (x <= 0) return 0;
+  if (x <= VOCAL_SLIDER_CENTER) {
+    return (x / VOCAL_SLIDER_CENTER) * VOCAL_SLIDER_CENTER_GAIN;
+  }
+  return VOCAL_SLIDER_CENTER_GAIN
+    + ((x - VOCAL_SLIDER_CENTER) / VOCAL_SLIDER_CENTER) * (VOCAL_SLIDER_MAX_GAIN - VOCAL_SLIDER_CENTER_GAIN);
+}
+
+/** Inverse of vocalSliderGain — for auto-level (pct 0–100). */
+export function vocalGainMultiplier(pct01) {
+  return vocalSliderGain(pct01);
+}
+
+export function vocalGainSliderPctFromMultiplier(mult) {
+  const g = Math.max(0, Math.min(VOCAL_SLIDER_MAX_GAIN, Number(mult) || 0));
+  if (g <= VOCAL_SLIDER_CENTER_GAIN) {
+    return Math.round((g / VOCAL_SLIDER_CENTER_GAIN) * VOCAL_SLIDER_CENTER * 100);
+  }
+  const t = (g - VOCAL_SLIDER_CENTER_GAIN) / (VOCAL_SLIDER_MAX_GAIN - VOCAL_SLIDER_CENTER_GAIN);
+  return Math.round((VOCAL_SLIDER_CENTER + t * VOCAL_SLIDER_CENTER) * 100);
 }
 
 function musicOutputGain(params = {}) {

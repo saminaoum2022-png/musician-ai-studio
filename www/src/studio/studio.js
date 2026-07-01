@@ -13,7 +13,7 @@
  * No neon-everything.
  */
 
-import { StudioEngine, FINISH_PRESETS, FINISH_IDS } from "./engine.js";
+import { StudioEngine, FINISH_PRESETS, FINISH_IDS, vocalGainMultiplier, vocalGainSliderPctFromMultiplier } from "./engine.js";
 import {
   isStudioAudioDebug,
   bindAudioDebugEnableGesture,
@@ -93,13 +93,16 @@ function applyMixAutoLevelForTake(take) {
   for (let i = 0; i < ch0.length; i++) peak = Math.max(peak, Math.abs(ch0[i]));
   if (peak < 0.0001) return;
   const m = mixState();
+  const voiceVol = Number(m.voiceVol) ?? 50;
+  const voiceMult = vocalGainMultiplier(voiceVol / 100) || 2;
   if (peak >= MIX_AUTO_TARGET_PEAK * 0.88) {
-    current.mix = { ...m, vocalGain: 50 };
+    current.mix = { ...m, vocalGain: 50, voiceVol: 50 };
     return;
   }
-  const needed = Math.min(MIX_AUTO_TARGET_PEAK / peak, 2);
-  const vocalGainPct = Math.min(100, Math.max(50, Math.round(needed * 50)));
-  current.mix = { ...m, vocalGain: vocalGainPct };
+  const totalNeeded = Math.min(MIX_AUTO_TARGET_PEAK / peak, voiceMult * 3);
+  const vocalMultNeeded = totalNeeded / voiceMult;
+  const vocalGainPct = vocalGainSliderPctFromMultiplier(vocalMultNeeded);
+  current.mix = { ...m, vocalGain: Math.min(100, Math.max(0, vocalGainPct)) };
 }
 
 /** Pick a finish preset from song style/tags — used as default on Mix. */
@@ -1963,7 +1966,7 @@ function renderMix(root) {
           ${sliderRow("fxDeesser", "De-esser", m.fxDeesser, "deess")}
           ${sliderRow("reverb", "Reverb", m.reverb, "reverb")}
         </div>
-        <p class="studioSyncHint">50% on Voice / Vocal gain is your natural level; enhancements blend in gradually from 0.</p>
+        <p class="studioSyncHint">50% on Voice / Vocal gain is your natural level; turn up toward 100% if you want it louder.</p>
       </div>
 
       <div class="studioMixField studioMixField--sync">

@@ -24,9 +24,8 @@ import { encodeWav16 } from "../wav.js";
 
 const LATENCY_STORAGE_KEY = "nabad.studio.latencyMs.v1";
 
-// Raw mic capture (AGC off) is quiet. Compression + EQ in the voice chain lift
-// level cleanly; this makeup is a final trim so voice sits up front in the mix.
-const VOICE_MAKEUP = 2.2;
+// Final makeup gain after compression/EQ — kept moderate so the chain stays warm, not harsh.
+const VOICE_MAKEUP = 1.95;
 
 /* -------------------------------------------------------------------------- */
 /* Modular effect registry                                                     */
@@ -74,19 +73,19 @@ export const EFFECT_REGISTRY = {
     id: "compression",
     label: "Compression",
     isPlaceholder: false,
-    /** Gentle vocal compression + makeup so quiet phrases still read loud. */
+    /** Gentle vocal compression — evens level without squashing body. */
     create(ctx) {
       const input = ctx.createGain();
       const comp = ctx.createDynamicsCompressor();
       try {
-        comp.threshold.value = -22;
-        comp.knee.value = 8;
-        comp.ratio.value = 4;
-        comp.attack.value = 0.003;
-        comp.release.value = 0.14;
+        comp.threshold.value = -20;
+        comp.knee.value = 10;
+        comp.ratio.value = 2.5;
+        comp.attack.value = 0.006;
+        comp.release.value = 0.18;
       } catch {}
       const makeup = ctx.createGain();
-      makeup.gain.value = 2.4;
+      makeup.gain.value = 1.65;
       input.connect(comp).connect(makeup);
       return { input, output: makeup, update: () => {} };
     },
@@ -96,20 +95,28 @@ export const EFFECT_REGISTRY = {
     id: "eq",
     label: "EQ",
     isPlaceholder: false,
-    /** High-pass rumble cut + presence lift so the voice cuts through the guide. */
+    /** Warm body + light presence — avoids the thin/crispy phone-mic top end. */
     create(ctx) {
       const input = ctx.createGain();
       const hp = ctx.createBiquadFilter();
       hp.type = "highpass";
-      hp.frequency.value = 85;
-      hp.Q.value = 0.7;
+      hp.frequency.value = 65;
+      hp.Q.value = 0.65;
+      const warmth = ctx.createBiquadFilter();
+      warmth.type = "lowshelf";
+      warmth.frequency.value = 220;
+      warmth.gain.value = 2;
       const presence = ctx.createBiquadFilter();
       presence.type = "peaking";
-      presence.frequency.value = 3200;
-      presence.Q.value = 1.1;
-      presence.gain.value = 3.5;
-      input.connect(hp).connect(presence);
-      return { input, output: presence, update: () => {} };
+      presence.frequency.value = 2800;
+      presence.Q.value = 0.85;
+      presence.gain.value = 1;
+      const airCut = ctx.createBiquadFilter();
+      airCut.type = "highshelf";
+      airCut.frequency.value = 6500;
+      airCut.gain.value = -1.5;
+      input.connect(hp).connect(warmth).connect(presence).connect(airCut);
+      return { input, output: airCut, update: () => {} };
     },
   },
 
@@ -352,7 +359,10 @@ export class StudioEngine {
     try {
       const arr = await blob.arrayBuffer();
       buffer = await this.ctx.decodeAudioData(arr.slice(0));
-      buffer = normalizeTakeBuffer(buffer, 0.82);
+      buffer = normalizeTakeBuffer(buffer, 0.76);
+      const trimmed = trimBufferLeadIn(this.ctx, buffer, alignSec);
+      buffer = trimmed.buffer;
+      alignSec = trimmed.alignSec;
     } catch {
       buffer = null; // some iOS blobs decode lazily; mix path will retry
     }
@@ -385,22 +395,40 @@ export class StudioEngine {
     if (t) t.nudgeMs = clampNum(Number(ms) || 0, -500, 500);
   }
 
-  /** Bucket peak envelope for waveform UI (0..1 per bucket). */
-  static computePeaks(buffer, buckets = 64) {
+  /** Bucket peak envelope for waveform UI (0..1 per bucket). Optional startSec/endSec slice. */
+  static computePeaks(buffer, buckets = 64, startSec = 0, endSec = null) {
     if (!buffer) return [];
     const ch = buffer.getChannelData(0);
+    const sr = buffer.sampleRate;
+    const i0 = Math.max(0, Math.floor((Number(startSec) || 0) * sr));
+    const i1 = endSec != null
+      ? Math.min(ch.length, Math.ceil(Number(endSec) * sr))
+      : ch.length;
+    const len = Math.max(0, i1 - i0);
+    if (len < 1) return [];
     const n = Math.max(8, buckets);
-    const block = Math.max(1, Math.floor(ch.length / n));
+    const block = Math.max(1, Math.floor(len / n));
     const peaks = [];
     for (let i = 0; i < n; i++) {
-      const start = i * block;
-      const end = Math.min(ch.length, start + block);
+      const start = i0 + i * block;
+      const end = Math.min(i1, start + block);
       let peak = 0;
       for (let j = start; j < end; j++) peak = Math.max(peak, Math.abs(ch[j]));
       peaks.push(peak);
     }
     const max = Math.max(0.001, ...peaks);
     return peaks.map((p) => p / max);
+  }
+
+  /** Buffer time (sec) where guide-timeline 0 maps when playing this take. */
+  takePlayStartSec(take) {
+    return take ? this._takeBufferOffset(take) : 0;
+  }
+
+  /** Vocal duration aligned to the guide (excludes count-in / pre-sync silence). */
+  takeContentDuration(take) {
+    if (!take?.buffer) return 0;
+    return Math.max(0, take.buffer.duration - this._takeBufferOffset(take));
   }
 
   /**
@@ -470,9 +498,9 @@ export class StudioEngine {
     return newTake;
   }
 
-  /** Guide-time offset (sec) where this take's buffer starts. Public for the review editor. */
+  /** Guide-time offset — same as takePlayStartSec (legacy alias for UI). */
   takeOffsetSec(take) {
-    return take ? this._takeBufferOffset(take) : 0;
+    return this.takePlayStartSec(take);
   }
 
   /** Where (in seconds) to begin reading a take's buffer so it aligns to guide-0. */
@@ -812,7 +840,7 @@ function readStoredLatency(fallback) {
 function clamp01(x) { return Math.max(0, Math.min(1, Number(x) || 0)); }
 function clampNum(x, lo, hi) { return Math.max(lo, Math.min(hi, x)); }
 
-function normalizeTakeBuffer(buffer, targetPeak = 0.82) {
+function normalizeTakeBuffer(buffer, targetPeak = 0.76) {
   if (!buffer) return buffer;
   const ch0 = buffer.getChannelData(0);
   let peak = 0;
@@ -872,4 +900,14 @@ function bufferToWavBlob(buffer) {
     ? [buffer.getChannelData(0), buffer.getChannelData(1)]
     : [buffer.getChannelData(0), buffer.getChannelData(0)];
   return encodeWav16(chans, buffer.sampleRate);
+}
+
+/** Drop count-in silence from the front of a take so waveforms line up with the guide. */
+function trimBufferLeadIn(ctx, buffer, alignSec) {
+  const preRoll = 0.04;
+  const leadTrim = Math.max(0, (Number(alignSec) || 0) - preRoll);
+  if (leadTrim < 0.12 || !buffer || !ctx) return { buffer, alignSec: Number(alignSec) || 0 };
+  const sliced = sliceBuffer(ctx, buffer, leadTrim, buffer.duration);
+  if (!sliced) return { buffer, alignSec: Number(alignSec) || 0 };
+  return { buffer: sliced, alignSec: Math.max(preRoll, (Number(alignSec) || 0) - leadTrim) };
 }

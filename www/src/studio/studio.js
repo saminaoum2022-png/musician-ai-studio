@@ -889,13 +889,30 @@ function timeRulerHtml(durSec, steps = 4) {
   return `<div class="studioEditRuler">${marks.map((t) => `<span>${t}</span>`).join("")}</div>`;
 }
 
+/** Guide-aligned vocal waveform metadata (peaks match what you hear at guide t=0). */
+function takeWaveMeta(take) {
+  if (!take?.buffer || !engine) {
+    return { peaks: [], contentDur: 0, bufStart: 0, guideWidthPct: 100 };
+  }
+  const bufStart = engine.takePlayStartSec(take);
+  const contentDur = engine.takeContentDuration(take);
+  const guideDur = engine.guideDuration || contentDur || take.buffer.duration;
+  const peaks = StudioEngine.computePeaks(take.buffer, 72, bufStart, take.buffer.duration);
+  return {
+    peaks,
+    contentDur,
+    bufStart,
+    guideWidthPct: guideDur ? Math.min(100, (contentDur / guideDur) * 100) : 100,
+  };
+}
+
 function renderReview(root, take) {
   screen = "review";
   take = take || engine?.getActiveTake?.() || null;
   const takes = engine?.getTakes?.() || [];
-  const hasVoice = !!(take?.buffer);
-  const dur = take?.buffer?.duration || engine?.guideDuration || 0;
-  const voicePeaks = take?.buffer ? StudioEngine.computePeaks(take.buffer, 64) : [];
+  const wave = takeWaveMeta(take);
+  const dur = wave.contentDur || engine?.guideDuration || 0;
+  const voicePeaks = wave.peaks;
 
   root.innerHTML = `
     <div class="studio studioReview" data-studio-screen="review">
@@ -956,8 +973,7 @@ function bindReview(root, take) {
   const icoWrap = root.querySelector("[data-studio-play-ico]");
   const posEl = root.querySelector("[data-studio-pos]");
   const wave = root.querySelector("[data-studio-scrub]");
-  const dur = take?.buffer?.duration || engine?.guideDuration || 0;
-  const voiceOff = take?.buffer ? engine.takeOffsetSec(take) : 0;
+  const contentDur = () => engine?.takeContentDuration(take) || take?.buffer?.duration || engine?.guideDuration || 0;
 
   const setPlayingUi = (playing) => {
     if (icoWrap) icoWrap.innerHTML = playing ? studioIco("pause") : studioIco("play");
@@ -970,13 +986,14 @@ function bindReview(root, take) {
       engine.stopMix();
       setPlayingUi(true);
       const fromSec = Math.max(0, fromGuideSec || 0);
+      const dur = contentDur();
       await engine.playMix(
         { ...mixParams(), fromSec },
         {
           onTick: (s) => {
             const g = fromSec + s;
-            if (posEl) posEl.textContent = fmtTime(Math.max(0, g - voiceOff));
-            if (dur) setReviewProgress(root, Math.max(0, g - voiceOff) / dur);
+            if (posEl) posEl.textContent = fmtTime(Math.min(g, dur));
+            if (dur) setReviewProgress(root, Math.min(1, g / dur));
           },
           onEnded: () => {
             setPlayingUi(false);
@@ -994,9 +1011,10 @@ function bindReview(root, take) {
   btn?.addEventListener("click", () => {
     bridge.haptic?.("light");
     if (engine?.isPlaying) { engine.stopMix(); setPlayingUi(false); return; }
-    void playFrom(voiceOff);
+    void playFrom(0);
   });
 
+  const dur = contentDur();
   if (wave && dur > 0) {
     let seeking = false;
     const fracFromEvent = (ev) => {
@@ -1021,7 +1039,7 @@ function bindReview(root, take) {
       if (!seeking) return;
       seeking = false;
       bridge.haptic?.("light");
-      void playFrom(voiceOff + fracFromEvent(e) * dur);
+      void playFrom(fracFromEvent(e) * dur);
     };
     wave.addEventListener("pointerup", release);
     wave.addEventListener("pointercancel", () => { seeking = false; });
@@ -1066,12 +1084,10 @@ function renderEditTake(root, take) {
   const takes = engine?.getTakes?.() || [];
   const hasVoice = !!(take?.buffer);
   const guideDur = engine?.guideDuration || take?.buffer?.duration || 0;
-  const voiceOffset = hasVoice && guideDur ? engine.takeOffsetSec(take) : 0;
-  const voiceDur = take?.buffer?.duration || 0;
-  const voiceLeftPct = guideDur ? (voiceOffset / guideDur) * 100 : 0;
-  const voiceWidthPct = guideDur ? Math.min(100 - voiceLeftPct, (voiceDur / guideDur) * 100) : 100;
+  const wave = takeWaveMeta(take);
+  const voicePeaks = wave.peaks;
+  const voiceWidthPct = wave.guideWidthPct;
   const guidePeaks = engine?.guideBuffer ? StudioEngine.computePeaks(engine.guideBuffer, 72) : [];
-  const voicePeaks = take?.buffer ? StudioEngine.computePeaks(take.buffer, 72) : [];
 
   root.innerHTML = `
     <div class="studio studioEdit" data-studio-screen="edit">
@@ -1092,7 +1108,7 @@ function renderEditTake(root, take) {
             <span class="studioEditLaneLabel">Vocal</span>
             <div class="studioEditTrack" data-edit-voice-track tabindex="0" aria-label="Vocal timeline">
               ${hasVoice ? `
-                <div class="studioEditClip" style="left:${voiceLeftPct}%;width:${voiceWidthPct}%" data-edit-clip>
+                <div class="studioEditClip" style="left:0;width:${voiceWidthPct}%" data-edit-clip>
                   <div class="studioEditTrimShade studioEditTrimShade--left" data-trim-shade-l></div>
                   <div class="studioEditTrimShade studioEditTrimShade--right" data-trim-shade-r></div>
                   <div class="studioEditWave studioEditWave--voice">${peaksHtml(voicePeaks)}</div>
@@ -1188,12 +1204,12 @@ function bindEditTake(root, take) {
   let playGuideSec = 0;
   let selGuide = null;
   let trimIn = 0;
-  let trimOut = take?.buffer?.duration || 0;
+  let trimOut = engine?.takeContentDuration(take) || take?.buffer?.duration || 0;
 
   const guideDur = () => engine?.guideDuration || take?.buffer?.duration || 0;
-  const voiceOff = () => (take?.buffer ? engine.takeOffsetSec(take) : 0);
-  const voiceEnd = () => voiceOff() + (take?.buffer?.duration || 0);
-  const voiceDur = () => take?.buffer?.duration || 0;
+  const bufStart = () => engine?.takePlayStartSec(take) || 0;
+  const contentDur = () => engine?.takeContentDuration(take) || 0;
+  const toBufferSec = (guideSec) => bufStart() + guideSec;
 
   const editParams = () => ({ ...mixParams(), fromSec: playGuideSec });
 
@@ -1214,7 +1230,7 @@ function bindEditTake(root, take) {
   };
 
   const paintTrimHandles = () => {
-    const vd = voiceDur();
+    const vd = contentDur();
     if (!clipEl || vd <= 0) return;
     const inPct = (trimIn / vd) * 100;
     const outPct = (trimOut / vd) * 100;
@@ -1228,10 +1244,11 @@ function bindEditTake(root, take) {
     if (!selGuide || !take?.buffer) return null;
     const a = Math.min(selGuide.a, selGuide.b);
     const b = Math.max(selGuide.a, selGuide.b);
-    const lo = Math.max(a, voiceOff());
-    const hi = Math.min(b, voiceEnd());
+    const end = contentDur();
+    const lo = Math.max(0, Math.min(a, end));
+    const hi = Math.max(lo, Math.min(b, end));
     if (hi - lo < 0.08) return null;
-    return { takeA: lo - voiceOff(), takeB: hi - voiceOff() };
+    return { contentA: lo, contentB: hi };
   };
 
   const paintSelection = () => {
@@ -1239,10 +1256,10 @@ function bindEditTake(root, take) {
     if (btnDelete) btnDelete.disabled = !sel;
     if (!selEl || !take?.buffer) return;
     if (!sel) { selEl.hidden = true; return; }
-    const vd = voiceDur();
+    const vd = contentDur() || 1;
     selEl.hidden = false;
-    selEl.style.left = `${(sel.takeA / vd) * 100}%`;
-    selEl.style.width = `${((sel.takeB - sel.takeA) / vd) * 100}%`;
+    selEl.style.left = `${(sel.contentA / vd) * 100}%`;
+    selEl.style.width = `${((sel.contentB - sel.contentA) / vd) * 100}%`;
   };
 
   const setPlayingUi = (playing) => {
@@ -1280,7 +1297,7 @@ function bindEditTake(root, take) {
     handleEl.addEventListener("pointerdown", (e) => {
       e.stopPropagation();
       bridge.haptic?.("light");
-      const vd = voiceDur();
+      const vd = contentDur();
       const move = (ev) => {
         const clipR = clipEl.getBoundingClientRect();
         const x = (ev.clientX ?? 0) - clipR.left;
@@ -1306,12 +1323,12 @@ function bindEditTake(root, take) {
     if (!take?.id || !take.buffer) return;
     bridge.haptic?.("medium");
     try { engine.stopMix(); } catch {}
-    const vd = voiceDur();
+    const vd = contentDur();
     if (trimIn <= 0.02 && trimOut >= vd - 0.02) {
       bridge.showToast?.("Drag the trim handles first.");
       return;
     }
-    const ok = engine.trimTake(take.id, trimIn, trimOut);
+    const ok = engine.trimTake(take.id, toBufferSec(trimIn), toBufferSec(trimOut));
     if (!ok) { bridge.showToast?.("Couldn’t trim."); return; }
     renderEditTake(root, engine.getActiveTake());
   });
@@ -1320,12 +1337,12 @@ function bindEditTake(root, take) {
     if (!take?.id || !take.buffer) return;
     bridge.haptic?.("medium");
     try { engine.stopMix(); } catch {}
-    const local = playGuideSec - voiceOff();
-    if (local <= 0.05 || local >= voiceDur() - 0.05) {
+    const end = contentDur();
+    if (playGuideSec <= 0.05 || playGuideSec >= end - 0.05) {
       bridge.showToast?.("Move the playhead inside your vocal to split.");
       return;
     }
-    const newTake = engine.splitTake(take.id, local);
+    const newTake = engine.splitTake(take.id, toBufferSec(playGuideSec));
     if (!newTake) { bridge.showToast?.("Couldn’t split here."); return; }
     engine.setActiveTake(newTake.id);
     bridge.showToast?.("Split into two takes.");
@@ -1337,7 +1354,7 @@ function bindEditTake(root, take) {
     if (!sel || !take?.id) return;
     bridge.haptic?.("medium");
     try { engine.stopMix(); } catch {}
-    const ok = engine.deleteTakeRegion(take.id, sel.takeA, sel.takeB);
+    const ok = engine.deleteTakeRegion(take.id, toBufferSec(sel.contentA), toBufferSec(sel.contentB));
     if (!ok) { bridge.showToast?.("Couldn’t delete that part."); return; }
     selGuide = null;
     renderEditTake(root, engine.getActiveTake());

@@ -132,7 +132,7 @@ export const PITCH_CORRECTION_PRESETS = Object.freeze({
 export const PITCH_PRESET_IDS = Object.freeze(["none", "natural", "balanced", "pop", "hardtune"]);
 export const PITCH_PRESET_DEFAULT = "balanced";
 /** Bump when pitch engine changes so cached renders are invalidated. */
-const PITCH_ENGINE_VERSION = 7;
+const PITCH_ENGINE_VERSION = 8;
 
 export function normalizePitchPresetId(id) {
   if (!id) return PITCH_PRESET_DEFAULT;
@@ -180,6 +180,37 @@ function getPitchRenderContext(sampleRate, opts = {}) {
     : (typeof webkitAudioContext !== "undefined" ? webkitAudioContext : null);
   if (Live) return new Live();
   throw new Error("no audio context");
+}
+
+function createMonoBufferFromFloat32(corrected, sr, opts = {}) {
+  const len = corrected.length;
+  const ctx = getPitchRenderContext(sr, opts);
+  const ctxSr = ctx.sampleRate || sr;
+  let buf;
+  try {
+    buf = ctx.createBuffer(1, len, ctxSr === sr ? sr : ctxSr);
+  } catch {
+    const Offline = typeof OfflineAudioContext !== "undefined"
+      ? OfflineAudioContext
+      : (typeof webkitOfflineAudioContext !== "undefined" ? webkitOfflineAudioContext : null);
+    if (!Offline) throw new Error("createBuffer failed");
+    const off = new Offline(1, len, sr);
+    buf = off.createBuffer(1, len, sr);
+  }
+  const ch = buf.getChannelData(0);
+  if (ctxSr === sr) {
+    ch.set(corrected);
+  } else {
+    const ratio = sr / ctxSr;
+    for (let i = 0; i < ch.length; i++) {
+      const src = i * ratio;
+      const i0 = Math.floor(src);
+      const i1 = Math.min(len - 1, i0 + 1);
+      const t = src - i0;
+      ch[i] = corrected[i0] * (1 - t) + corrected[i1] * t;
+    }
+  }
+  return buf;
 }
 
 function yieldToUi() {
@@ -635,8 +666,8 @@ function applyMicroPitchFilter(f0s, voiced, hop, sr) {
  * Note locking — stage 2. Uses filtered expression contour only.
  * Waits ~70 ms stability before first lock; avoids neighbour-note flicker.
  */
-function buildLockedNotes(filter, preset, keyInfo, hop, sr) {
-  const { expressionMidi, noteCenterMidi, correctable, voiced } = filter;
+function buildLockedNotes(filter, voiced, preset, keyInfo, hop, sr) {
+  const { expressionMidi, noteCenterMidi, correctable } = filter;
   const n = expressionMidi.length;
   const lockedMidi = new Float32Array(n);
   const lockFrames = framesForMs(MICRO_PITCH_FILTER.lockStabilityMs, hop, sr);
@@ -950,13 +981,11 @@ export async function renderPitchCorrection(sourceBuffer, presetId, opts = {}) {
     await yieldToUi();
 
     const microFilter = applyMicroPitchFilter(f0s, voiced, hop, sr);
-    const { lockedMidi, slowMidi } = buildLockedNotes(microFilter, preset, keyInfo, hop, sr);
+    const { lockedMidi, slowMidi } = buildLockedNotes(microFilter, voiced, preset, keyInfo, hop, sr);
     const cents = buildCorrectionCents(f0s, voiced, lockedMidi, slowMidi, microFilter, preset, hop, sr);
     const corrected = applyPitchShift(mono, sr, cents, hop, winSize, preset.wet);
 
-    const ctx = getPitchRenderContext(sr, opts);
-    const buf = ctx.createBuffer(1, corrected.length, sr);
-    buf.getChannelData(0).set(corrected);
+    const buf = createMonoBufferFromFloat32(corrected, sr, opts);
     const meta = buildRenderMeta(sourceBuffer, buf, cents, voiced, keyInfo, preset, voicedRatio);
     return { buffer: buf, meta };
   } catch (err) {

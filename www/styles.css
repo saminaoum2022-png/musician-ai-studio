@@ -41583,25 +41583,49 @@ body[data-route="studio"] .deskRail { display: none !important; }
   display: flex; flex-direction: column; gap: 10px;
   padding: 14px; border-radius: 16px;
   background: rgba(255,255,255,0.03); border: 1px solid var(--nabad-glass-border);
+  position: relative;
 }
-.studioPitchSeg { margin-top: 2px; }
-.studioPitchSeg .studioSegBtn:disabled { opacity: 0.45; }
+.studioPitchField--busy { opacity: 0.92; }
+.studioPitchSeg { margin-top: 2px; flex-wrap: wrap; }
+.studioPitchSeg .studioSegBtn {
+  min-width: calc(33.33% - 4px);
+  flex: 1 1 calc(33.33% - 4px);
+}
+.studioPitchSeg .studioSegBtn:disabled { opacity: 0.55; }
+.studioPitchSeg .studioSegBtn.isLoading {
+  color: var(--brand-violet-hover);
+  background: rgba(124, 92, 255, 0.14);
+  position: relative;
+}
+.studioPitchSeg .studioSegBtn.isLoading::after {
+  content: "";
+  position: absolute; right: 8px; top: 50%;
+  width: 10px; height: 10px; margin-top: -5px;
+  border: 2px solid rgba(124, 92, 255, 0.25);
+  border-top-color: var(--brand-violet);
+  border-radius: 999px;
+  animation: studioPitchSpin 650ms linear infinite;
+}
 .studioPitchStatus {
   margin-left: auto; font-size: 12px; font-weight: 700; color: var(--brand-violet-hover);
 }
 .studioPitchHint { margin: 0; font-size: 12px; line-height: 1.45; }
 .studioPitchLoading {
-  display: flex; align-items: center; gap: 8px;
-  font-size: 12px; font-weight: 600; color: var(--brand-violet-hover);
+  display: flex; align-items: center; justify-content: center; gap: 10px;
+  padding: 10px 12px; border-radius: 12px;
+  font-size: 13px; font-weight: 700; color: var(--brand-violet-hover);
+  background: rgba(124, 92, 255, 0.1); border: 1px solid rgba(124, 92, 255, 0.22);
 }
 .studioPitchLoading[hidden] { display: none !important; }
-.studioPitchLoadingDot {
-  width: 8px; height: 8px; border-radius: 999px; background: var(--brand-violet);
-  animation: studioPitchPulse 900ms ease-in-out infinite;
+.studioPitchSpinner {
+  width: 16px; height: 16px; flex-shrink: 0;
+  border: 2px solid rgba(124, 92, 255, 0.25);
+  border-top-color: var(--brand-violet);
+  border-radius: 999px;
+  animation: studioPitchSpin 650ms linear infinite;
 }
-@keyframes studioPitchPulse {
-  0%, 100% { opacity: 0.35; transform: scale(0.85); }
-  50% { opacity: 1; transform: scale(1); }
+@keyframes studioPitchSpin {
+  to { transform: rotate(360deg); }
 }
 
 .studioFeedbackCard {

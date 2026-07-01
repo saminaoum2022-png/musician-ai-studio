@@ -21,6 +21,7 @@ import {
   getPitchCachedBuffer,
   ensurePitchPresetRendered,
   pitchPresetLabel,
+  isPitchPresetInstant,
 } from "./pitch-correction.js";
 import { StudioEngine, FINISH_PRESETS, FINISH_IDS } from "./engine.js";
 import {
@@ -1381,9 +1382,9 @@ function renderReview(root, take) {
             `<button type="button" class="studioSegBtn${id === PITCH_PRESET_DEFAULT ? " isActive" : ""}" data-pitch-preset="${id}">${esc(pitchPresetLabel(id))}</button>`,
           ).join("")}
         </div>
-        <p class="studioSyncHint studioPitchHint">Natural is applied automatically. Other styles render on tap — playback continues seamlessly.</p>
-        <div class="studioPitchLoading" data-pitch-loading hidden>
-          <span class="studioPitchLoadingDot" aria-hidden="true"></span>
+        <p class="studioSyncHint studioPitchHint">Start with your raw take. Tap a style to render — playback keeps going from the same spot.</p>
+        <div class="studioPitchLoading" data-pitch-loading hidden aria-live="polite">
+          <span class="studioPitchSpinner" aria-hidden="true"></span>
           <span data-pitch-loading-label>Rendering…</span>
         </div>
       </div>
@@ -1423,7 +1424,38 @@ function reviewVoiceBuffer(take) {
   if (!take?.buffer) return undefined;
   const pc = ensureTakePitchState(take);
   const preset = pc?.preset || PITCH_PRESET_DEFAULT;
+  if (preset === "none") return undefined;
   return getPitchCachedBuffer(take, preset) || undefined;
+}
+
+function pitchPlaybackBuffer(take, presetId) {
+  if (!take?.buffer) return null;
+  if (presetId === "none") return take.buffer;
+  return getPitchCachedBuffer(take, presetId);
+}
+
+function setPitchLoadingUi(root, presetId, loading) {
+  const field = root.querySelector("[data-studio-pitch-field]");
+  const loadingEl = root.querySelector("[data-pitch-loading]");
+  const loadingLabel = root.querySelector("[data-pitch-loading-label]");
+  field?.classList.toggle("studioPitchField--busy", loading);
+  root.querySelectorAll("[data-pitch-preset]").forEach((btn) => {
+    const id = btn.getAttribute("data-pitch-preset");
+    btn.classList.toggle("isLoading", loading && id === presetId);
+    btn.disabled = loading;
+  });
+  if (loadingEl) loadingEl.hidden = !loading;
+  if (loading && loadingLabel) {
+    loadingLabel.textContent = isPitchPresetInstant(presetId)
+      ? "Applying…"
+      : `Rendering ${pitchPresetLabel(presetId)}…`;
+  }
+}
+
+function swapReviewVoice(take, presetId) {
+  const buf = pitchPlaybackBuffer(take, presetId);
+  if (!buf || !engine?.isPlaying) return;
+  engine.swapVoiceBufferDuringMix(buf);
 }
 
 function trackKeyHint() {
@@ -1435,8 +1467,6 @@ async function selectReviewPitchPreset(root, take, presetId, state) {
   if (!take?.buffer) return;
   const pc = ensureTakePitchState(take);
   const statusEl = root.querySelector("[data-pitch-status]");
-  const loadingEl = root.querySelector("[data-pitch-loading]");
-  const loadingLabel = root.querySelector("[data-pitch-loading-label]");
   pc.preset = presetId;
 
   root.querySelectorAll("[data-pitch-preset]").forEach((btn) => {
@@ -1446,22 +1476,16 @@ async function selectReviewPitchPreset(root, take, presetId, state) {
 
   const cached = getPitchCachedBuffer(take, presetId);
   if (cached) {
-    if (loadingEl) loadingEl.hidden = true;
-    if (engine?.isPlaying) {
-      engine.swapVoiceBufferDuringMix(cached);
-    } else if (state?.resumeAfterRender) {
-      void state.playFrom(state.lastGuideSec || 0);
-    }
+    setPitchLoadingUi(root, presetId, false);
+    swapReviewVoice(take, presetId);
     return;
   }
 
-  if (loadingEl) loadingEl.hidden = false;
-  if (loadingLabel) loadingLabel.textContent = `Rendering ${pitchPresetLabel(presetId)}…`;
-  root.querySelectorAll("[data-pitch-preset]").forEach((b) => { b.disabled = true; });
-
-  const wasPlaying = !!engine?.isPlaying;
-  const guideSec = wasPlaying ? engine.getMixGuidePosition() : (state?.lastGuideSec || 0);
+  setPitchLoadingUi(root, presetId, true);
+  const guideSec = engine?.isPlaying ? engine.getMixGuidePosition() : (state?.lastGuideSec || 0);
   state.lastGuideSec = guideSec;
+
+  await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
 
   try {
     await engine?.ensureReady();
@@ -1469,17 +1493,11 @@ async function selectReviewPitchPreset(root, take, presetId, state) {
       audioContext: engine?.ctx,
       trackKey: trackKeyHint(),
     });
-    if (loadingEl) loadingEl.hidden = true;
-    root.querySelectorAll("[data-pitch-preset]").forEach((b) => { b.disabled = false; });
+    setPitchLoadingUi(root, presetId, false);
     if (!buf) return;
-    if (engine?.isPlaying) {
-      engine.swapVoiceBufferDuringMix(buf);
-    } else if (state.autoPlayAfterFirstRender && presetId === PITCH_PRESET_DEFAULT) {
-      void state.playFrom(0);
-    }
+    swapReviewVoice(take, presetId);
   } catch {
-    if (loadingEl) loadingEl.hidden = true;
-    root.querySelectorAll("[data-pitch-preset]").forEach((b) => { b.disabled = false; });
+    setPitchLoadingUi(root, presetId, false);
     bridge.showToast?.("Couldn’t render pitch correction.");
   }
 }
@@ -1613,7 +1631,8 @@ function bindReview(root, take) {
 
   void (async () => {
     if (!take?.buffer) return;
-    ensureTakePitchState(take);
+    const pc = ensureTakePitchState(take);
+    pc.cache.none = take.buffer;
     await selectReviewPitchPreset(root, take, PITCH_PRESET_DEFAULT, pitchState);
   })();
 }

@@ -17,6 +17,12 @@ import { StudioEngine, FINISH_PRESETS, FINISH_IDS } from "./engine.js";
 import {
   isStudioAudioDebug,
   bindAudioDebugEnableGesture,
+  getAgcTestMode,
+  setAgcTestMode,
+  saveAgcCompareSnapshot,
+  buildAgcCompareHtml,
+  clearAgcCompareSnapshots,
+  inputLevelModeLabel,
   analyzeRawTake,
   exportRawTakeWavBlob,
   describeRecordingPipeline,
@@ -741,6 +747,16 @@ function renderHome(root) {
 
       <div class="studioLyricsWrap" data-studio-home-lyrics>${homeLyricsHtml()}</div>
 
+      ${isStudioAudioDebug() ? `
+      <div class="studioAgcTest" data-studio-agc-test>
+        <span class="studioAgcTestLabel">DEV · AGC A/B test (next recording)</span>
+        <div class="studioAgcTestToggle" role="group" aria-label="Input level test mode">
+          <button type="button" class="studioAgcTestBtn${getAgcTestMode() === "raw" ? " isActive" : ""}" data-agc-mode="raw">Raw · AGC off</button>
+          <button type="button" class="studioAgcTestBtn${getAgcTestMode() === "agc" ? " isActive" : ""}" data-agc-mode="agc">Auto Level · AGC on</button>
+        </div>
+        <p class="studioAgcTestHint">Record twice — once per mode — then compare metrics in the debug panel. Default production capture stays Raw.</p>
+      </div>` : ""}
+
       <div class="studioFooter">
         <button type="button" class="studioPrimary" data-studio-start disabled>
           <span class="studioPrimaryIco" aria-hidden="true">●</span> Start Recording
@@ -795,6 +811,17 @@ function bindHome(root) {
     if (hp === null) {
       bridge.showToast?.("🎧 Best with wired earphones in — without them you may hear echo and lag.", { durationMs: 4200 });
     }
+  });
+  root.querySelectorAll("[data-agc-mode]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      bridge.haptic?.("light");
+      const mode = btn.getAttribute("data-agc-mode") === "agc" ? "agc" : "raw";
+      setAgcTestMode(mode);
+      root.querySelectorAll("[data-agc-mode]").forEach((b) => {
+        b.classList.toggle("isActive", b.getAttribute("data-agc-mode") === mode);
+      });
+      bridge.showToast?.(mode === "agc" ? "Next take: Auto Level (AGC on)" : "Next take: Raw (AGC off)");
+    });
   });
 }
 
@@ -858,6 +885,7 @@ function renderRecording(root) {
       <div class="studioRecTop">
         <span class="studioRecDot" aria-hidden="true"></span>
         <span class="studioRecLabel">${memo ? "Quick take…" : "Recording…"}</span>
+        ${isStudioAudioDebug() ? `<span class="studioRecAgcBadge">${esc(inputLevelModeLabel(getAgcTestMode()))}</span>` : ""}
         <span class="studioRecTimer" data-studio-timer>0:00</span>
       </div>
 
@@ -962,6 +990,10 @@ function mountAudioDebugSheet(root, take) {
       return;
     }
 
+    const inputMode = take.inputLevelMode === "agc" ? "agc" : "raw";
+    saveAgcCompareSnapshot(inputMode, analysis, pipeline);
+    const agcCompareHtml = buildAgcCompareHtml();
+
     const diagHtml = analysis.diagnostics.map((d) =>
       `<li class="studioAudioDebugDiag studioAudioDebugDiag--${d.level}">${d.level === "warn" ? "⚠" : "✓"} ${esc(d.text)}</li>`,
     ).join("");
@@ -969,6 +1001,7 @@ function mountAudioDebugSheet(root, take) {
     panel.innerHTML = `
         <div class="studioAudioDebugHead">
           <span class="studioAudioDebugKicker">DEV · RAW TAKE ANALYSIS</span>
+          <span class="studioAudioDebugMode">${esc(pipeline.inputLevelLabel || inputLevelModeLabel(inputMode))}</span>
         </div>
         <dl class="studioAudioDebugStats">
           <div class="studioAudioDebugRow"><dt>Take</dt><dd>#${analysis.takeIndex}</dd></div>
@@ -1010,8 +1043,15 @@ function mountAudioDebugSheet(root, take) {
           <span class="studioAudioDebugVoiceTitle">Voice analysis</span>
           <ul class="studioAudioDebugDiagList">${diagHtml}</ul>
         </div>
+        ${agcCompareHtml}
         <button type="button" class="studioAudioDebugExport" data-audio-debug-export>Export Raw Take WAV</button>
         <button type="button" class="studioPrimary studioAudioDebugContinue" data-audio-debug-continue>Continue</button>`;
+
+    sheet?.querySelector("[data-agc-compare-clear]")?.addEventListener("click", () => {
+      clearAgcCompareSnapshots();
+      sheet.querySelector(".studioAudioDebugCompare")?.remove();
+      bridge.showToast?.("A/B snapshots cleared");
+    });
 
     sheet?.querySelector("[data-audio-debug-export]")?.addEventListener("click", () => {
       bridge.haptic?.("light");
@@ -1020,7 +1060,7 @@ function mountAudioDebugSheet(root, take) {
         bridge.showToast?.("Nothing to export — buffer missing.");
         return;
       }
-      const fname = `nabad-raw-take-${analysis.takeIndex}-${Date.now()}.wav`;
+      const fname = `nabad-${inputMode}-take-${analysis.takeIndex}-${Date.now()}.wav`;
       void bridge.deliverBlob?.(wav, { filename: fname, title: `Raw take ${analysis.takeIndex}` })
         .catch((e) => bridge.showToast?.(`Export failed: ${String(e?.message || e).slice(0, 72)}`));
     });
@@ -1051,6 +1091,7 @@ async function startTake(root) {
     await engine.startRecording({
       countInSec: memo ? 1 : 3,
       noGuide: memo,
+      autoGainControl: isStudioAudioDebug() && getAgcTestMode() === "agc",
       monitor: !!current?.monitor,
       // Live monitor = dry voice + a light reverb tail only. We intentionally
       // drop the slap-back delay here: a 0.26s echo on what you hear reads as

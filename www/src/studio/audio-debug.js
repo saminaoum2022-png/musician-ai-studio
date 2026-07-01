@@ -9,6 +9,8 @@
 import { encodeWav16 } from "../wav.js";
 
 const DEBUG_KEY = "nabad.studio.audioDebug.v1";
+const AGC_TEST_MODE_KEY = "nabad.studio.agcTestMode.v1";
+const AGC_COMPARE_KEY = "nabad.studio.agcCompare.v1";
 
 const BLOCK_MS = 400;
 const HOP_MS = 100;
@@ -22,6 +24,109 @@ export function isStudioAudioDebug() {
 
 export function setStudioAudioDebug(on) {
   try { localStorage.setItem(DEBUG_KEY, on ? "1" : "0"); } catch {}
+}
+
+/** Dev A/B test: next recording uses AGC off (raw) or on. Default raw. */
+export function getAgcTestMode() {
+  if (!isStudioAudioDebug()) return "raw";
+  try {
+    return localStorage.getItem(AGC_TEST_MODE_KEY) === "agc" ? "agc" : "raw";
+  } catch {
+    return "raw";
+  }
+}
+
+export function setAgcTestMode(mode) {
+  try { localStorage.setItem(AGC_TEST_MODE_KEY, mode === "agc" ? "agc" : "raw"); } catch {}
+}
+
+export function clearAgcCompareSnapshots() {
+  try { sessionStorage.removeItem(AGC_COMPARE_KEY); } catch {}
+}
+
+/** Store latest metrics per mode for session A/B comparison. */
+export function saveAgcCompareSnapshot(mode, analysis, pipeline = {}) {
+  if (!isStudioAudioDebug() || !analysis) return;
+  const key = mode === "agc" ? "agc" : "raw";
+  try {
+    const prev = JSON.parse(sessionStorage.getItem(AGC_COMPARE_KEY) || "{}");
+    prev[key] = {
+      at: Date.now(),
+      peakDbfs: analysis.peakDbfs,
+      lufsIntegrated: analysis.lufsIntegrated,
+      lufsShortTerm: analysis.lufsShortTerm,
+      rmsDb: analysis.rmsDb,
+      noiseFloorDb: analysis.noiseFloorDb,
+      dynamicRangeDb: analysis.dynamicRangeDb,
+      clippingSamples: analysis.clippingSamples,
+      liveMeterPeakSyncedDbfs: pipeline.liveMeterPeakSyncedDbfs,
+      agcActual: pipeline.agcActual,
+    };
+    sessionStorage.setItem(AGC_COMPARE_KEY, JSON.stringify(prev));
+  } catch {}
+}
+
+export function getAgcCompareSnapshots() {
+  try { return JSON.parse(sessionStorage.getItem(AGC_COMPARE_KEY) || "{}"); }
+  catch { return {}; }
+}
+
+function metricDelta(a, b) {
+  if (!Number.isFinite(a) || !Number.isFinite(b)) return null;
+  return b - a;
+}
+
+/** HTML for dev A/B table (raw vs AGC session snapshots). */
+export function buildAgcCompareHtml() {
+  const snap = getAgcCompareSnapshots();
+  const raw = snap.raw;
+  const agc = snap.agc;
+  if (!raw && !agc) return "";
+
+  const fmtDb = (v) => (Number.isFinite(v) ? `${v.toFixed(1)} dB` : "—");
+  const fmtLufs = (v) => (Number.isFinite(v) ? `${v.toFixed(1)} LUFS` : "—");
+  const fmtDelta = (d) => {
+    if (d == null) return "—";
+    return `${d >= 0 ? "+" : ""}${d.toFixed(1)} dB`;
+  };
+
+  const rows = [
+    { label: "Peak dBFS", raw: raw?.peakDbfs, agc: agc?.peakDbfs, fmt: fmtDb },
+    { label: "LUFS-I", raw: raw?.lufsIntegrated, agc: agc?.lufsIntegrated, fmt: fmtLufs },
+    { label: "LUFS-S (max)", raw: raw?.lufsShortTerm, agc: agc?.lufsShortTerm, fmt: fmtLufs },
+    { label: "RMS (active)", raw: raw?.rmsDb, agc: agc?.rmsDb, fmt: fmtDb },
+    { label: "Noise floor", raw: raw?.noiseFloorDb, agc: agc?.noiseFloorDb, fmt: fmtDb },
+    { label: "Live meter (synced)", raw: raw?.liveMeterPeakSyncedDbfs, agc: agc?.liveMeterPeakSyncedDbfs, fmt: fmtDb },
+  ];
+
+  const body = rows.map((r) => {
+    const d = metricDelta(r.raw, r.agc);
+    return `<tr>
+      <td>${r.label}</td>
+      <td>${r.fmt(r.raw)}</td>
+      <td>${r.fmt(r.agc)}</td>
+      <td>${fmtDelta(d)}</td>
+    </tr>`;
+  }).join("");
+
+  const hint = (!raw || !agc)
+    ? `<p class="studioAudioDebugCompareHint">Record one take with each mode (toggle on home screen) to fill both columns.</p>`
+    : `<p class="studioAudioDebugCompareHint">Δ = AGC − Raw. Export each WAV and compare perceived loudness by ear.</p>`;
+
+  return `
+    <div class="studioAudioDebugCompare">
+      <span class="studioAudioDebugVoiceTitle">AGC A/B test (this session)</span>
+      <table class="studioAudioDebugCompareTable">
+        <thead><tr><th>Metric</th><th>Raw</th><th>AGC on</th><th>Δ</th></tr></thead>
+        <tbody>${body}</tbody>
+      </table>
+      ${hint}
+      <button type="button" class="studioAudioDebugCompareClear" data-agc-compare-clear>Clear A/B snapshots</button>
+    </div>`;
+}
+
+export function inputLevelModeLabel(mode) {
+  return mode === "agc" ? "Auto Level test (AGC on)" : "Raw (AGC off)";
 }
 
 /** Hidden dev gesture: 7 taps on Studio lobby title enables debug. */
@@ -133,7 +238,11 @@ export function describeRecordingPipeline(take, ctxSampleRate = 0) {
     preTrimPeakDb: take?.preTrimPeakDb,
     voiceMemosNote: "Voice Memos uses native iOS recorder with system AGC enabled — not browser attenuation",
     levelCompareNote: "File peak vs live meter (post count-in only) — same float path, no AAC",
-    constraints: "requested: echoCancellation off · noiseSuppression off · autoGainControl off · channelCount 1",
+    constraints: take?.inputLevelMode === "agc"
+      ? "requested: echoCancellation off · noiseSuppression off · autoGainControl ON (dev test) · channelCount 1"
+      : "requested: echoCancellation off · noiseSuppression off · autoGainControl off · channelCount 1",
+    inputLevelMode: take?.inputLevelMode === "agc" ? "agc" : "raw",
+    inputLevelLabel: inputLevelModeLabel(take?.inputLevelMode),
     liveMeterPeakDbfs: ampToDb(live),
     liveMeterPeakSyncedDbfs: ampToDb(liveSynced),
     liveMeterPeakPct: Math.round(live * 100),

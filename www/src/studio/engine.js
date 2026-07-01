@@ -346,16 +346,14 @@ export class StudioEngine {
     const noGuide = !!cb.noGuide || !this.guideBuffer;
     if (!noGuide && !this.guideBuffer) throw new Error("no guide loaded");
 
-    // Mic capture. For a STUDIO we want the raw voice: browser noiseSuppression
-    // gates/ducks quiet passages (the "cut-offs" users hear) and echoCancellation
-    // pumps the level when it hears the backing — both hurt a sung take. We turn
-    // them off for clean audio. This assumes headphones when monitoring (no
-    // speaker bleed); we advise that in the UI.
+    // Mic capture. NS/EC off for studio; AGC only when debug A/B test requests it.
+    const autoGainControl = cb.autoGainControl === true;
+    this._inputLevelMode = autoGainControl ? "agc" : "raw";
     this._recStream = await navigator.mediaDevices.getUserMedia({
       audio: {
         echoCancellation: false,
         noiseSuppression: false,
-        autoGainControl: false,
+        autoGainControl,
         channelCount: 1,
       },
       video: false,
@@ -516,6 +514,8 @@ export class StudioEngine {
       liveMeterPeakSynced: this._recLivePeakSyncedMax || 0,
       preTrimPeakDb,
       micTrackInfo: this._micTrackInfo || null,
+      inputLevelMode: this._inputLevelMode || "raw",
+      autoGainControlRequested: this._inputLevelMode === "agc",
       buffer,
       createdAt: Date.now(),
       nudgeMs: 0,

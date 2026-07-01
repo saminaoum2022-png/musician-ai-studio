@@ -22,6 +22,7 @@ import {
   ensurePitchPresetRendered,
   pitchPresetLabel,
   isPitchPresetInstant,
+  normalizePitchPresetId,
 } from "./pitch-correction.js";
 import { StudioEngine, FINISH_PRESETS, FINISH_IDS } from "./engine.js";
 import {
@@ -181,7 +182,7 @@ async function persistProject() {
         nudgeMs: t.nudgeMs || 0,
         createdAt: t.createdAt || Date.now(),
         blobKey,
-        pitchPreset: t.pitchCorrection?.preset || "none",
+        pitchPreset: normalizePitchPresetId(t.pitchCorrection?.preset),
       });
     }
     const existing = getProject(current.projectId);
@@ -226,7 +227,7 @@ async function restoreProjectSession(p) {
     };
     if (blob) await engine.hydrateTakeBuffer(take, { polish: false });
     if (meta.pitchPreset) {
-      ensureTakePitchState(take).preset = meta.pitchPreset;
+      ensureTakePitchState(take).preset = normalizePitchPresetId(meta.pitchPreset);
     }
     engine.takes.push(take);
   }
@@ -1410,7 +1411,7 @@ function setReviewProgress(root, frac) {
 }
 
 function activePitchPreset(take) {
-  return ensureTakePitchState(take)?.preset || PITCH_PRESET_DEFAULT;
+  return normalizePitchPresetId(ensureTakePitchState(take)?.preset);
 }
 
 function pitchVoiceBufferForTake(take) {

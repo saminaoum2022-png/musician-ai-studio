@@ -17,13 +17,16 @@ import { StudioEngine, FINISH_PRESETS, FINISH_IDS } from "./engine.js";
 import {
   listProjects,
   upsertProject,
-  deleteProject,
+  deleteProjectWithBlobs,
   nextProjectName,
+  getProject,
   listRecordings,
   saveRecording,
   getRecordingBlob,
   deleteRecording,
   saveVocal,
+  saveProjectTakeBlob,
+  loadProjectTakeBlob,
 } from "./store.js";
 
 let engine = null;
@@ -34,7 +37,8 @@ let unsaved = false;
 let recMode = "take"; // "take" (over a song) | "memo" (quick take, no music)
 
 const DEFAULT_MIX = Object.freeze({
-  voiceVol: 100,
+  voiceVol: 82,
+  vocalGain: 72,
   musicVol: 70,
   reverb: 15,
   syncMs: 0,
@@ -74,6 +78,93 @@ function ensureMixFinish(m) {
   m.finishSuggested = suggested;
   if (!m.finishUserPick) m.finish = suggested;
   m._finishReady = true;
+}
+
+/** Where to land when reopening a saved project. */
+function projectResumeScreen(p) {
+  const hasTakes = (p.takes || []).length > 0;
+  const saved = p.screen;
+  if (saved === "mix" || saved === "edit" || saved === "review") {
+    return hasTakes ? saved : (p.guideUrl ? "home" : "source");
+  }
+  if (hasTakes) return "mix";
+  if (p.guideUrl) return "home";
+  return "source";
+}
+
+async function persistProject() {
+  if (!current?.projectId) return;
+  try {
+    const takes = engine?.getTakes?.() || [];
+    const takeMeta = [];
+    for (const t of takes) {
+      if (!t.id) continue;
+      const blobKey = `pt_${current.projectId}_${t.id}`;
+      if (t.blob?.size) await saveProjectTakeBlob(blobKey, t.blob);
+      takeMeta.push({
+        id: t.id,
+        alignSec: t.alignSec || 0,
+        nudgeMs: t.nudgeMs || 0,
+        createdAt: t.createdAt || Date.now(),
+        blobKey,
+      });
+    }
+    const existing = getProject(current.projectId);
+    upsertProject({
+      id: current.projectId,
+      name: existing?.name || nextProjectName(),
+      track: trackRef(current.track),
+      guideUrl: current.guideUrl || "",
+      guideDuration: current.guideDuration || engine?.guideDuration || 0,
+      screen,
+      mix: { ...current.mix },
+      activeTakeId: engine?.activeTakeId || "",
+      takes: takeMeta,
+    });
+  } catch {}
+}
+
+async function restoreProjectSession(p) {
+  if (!engine) engine = new StudioEngine();
+  engine.clearTakes();
+  current.mix = { ...DEFAULT_MIX, ...(p.mix || {}) };
+  delete current.mix._finishReady;
+  ensureMixFinish(current.mix);
+  current.guideUrl = p.guideUrl || "";
+  current.guideDuration = p.guideDuration || 0;
+  if (current.guideUrl) {
+    try {
+      await engine.ensureReady();
+      current.guideDuration = await engine.loadGuide(current.guideUrl);
+    } catch {}
+  }
+  for (const meta of p.takes || []) {
+    const blob = meta.blobKey ? await loadProjectTakeBlob(meta.blobKey) : null;
+    const take = {
+      id: meta.id,
+      blob,
+      buffer: null,
+      alignSec: meta.alignSec || 0,
+      nudgeMs: meta.nudgeMs || 0,
+      createdAt: meta.createdAt || Date.now(),
+    };
+    if (blob) await engine.hydrateTakeBuffer(take, { polish: false });
+    engine.takes.push(take);
+  }
+  if (p.activeTakeId && engine.takes.some((t) => t.id === p.activeTakeId)) {
+    engine.activeTakeId = p.activeTakeId;
+  } else if (engine.takes.length) {
+    engine.activeTakeId = engine.takes.at(-1).id;
+  }
+}
+
+async function openSavedProject(root, p) {
+  current = freshContext(p.track);
+  current.projectId = p.id;
+  await restoreProjectSession(p);
+  screen = projectResumeScreen(p);
+  unsaved = false;
+  enterStudioRoot();
 }
 
 /**
@@ -189,6 +280,7 @@ export function leaveStudioRoot() {
   try { engine?.stopMix(); } catch {}
   try { if (engine?.isRecording) void engine.stopRecording(); } catch {}
   try { stopRecPlayback(); } catch {}
+  void persistProject();
 }
 
 /* -------------------------------------------------------------------------- */
@@ -399,17 +491,19 @@ function bindLobby(root) {
   );
   root.querySelectorAll("[data-proj-open]").forEach((b) =>
     b.addEventListener("click", () => {
-      bridge.haptic?.("light");
-      const p = listProjects().find((x) => x.id === b.getAttribute("data-proj-open"));
-      if (p?.track) { current = freshContext(p.track); current.projectId = p.id; renderSource(root); }
+      void (async () => {
+        bridge.haptic?.("light");
+        const p = listProjects().find((x) => x.id === b.getAttribute("data-proj-open"));
+        if (!p?.track) return;
+        await openSavedProject(root, p);
+      })();
     }),
   );
   root.querySelectorAll("[data-proj-del]").forEach((b) =>
     b.addEventListener("click", (e) => {
       e.stopPropagation();
       bridge.haptic?.("light");
-      deleteProject(b.getAttribute("data-proj-del"));
-      renderLobby(root);
+      void deleteProjectWithBlobs(b.getAttribute("data-proj-del")).then(() => renderLobby(root));
     }),
   );
 }
@@ -550,7 +644,9 @@ async function ensureGuide(root) {
     const url = await Promise.resolve(bridge.prepareGuide?.(current.track));
     if (!url) throw new Error("no guide url");
     current.guideUrl = url;
+    current.guideDuration = engine?.guideDuration || 0;
     setGuideStatus(root, "ready");
+    void persistProject();
   } catch {
     setGuideStatus(root, "error");
   }
@@ -793,6 +889,7 @@ function bindRecording(root) {
     if (take && !take.buffer) {
       bridge.showToast?.("Couldn’t read that take — try recording again.");
     }
+    void persistProject();
     renderReview(root, take);
   });
 }
@@ -918,6 +1015,7 @@ function studioIco(name) {
     split: `<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.8" d="M12 4v16M8 8l4-4 4 4M8 16l4 4 4-4"/></svg>`,
     delete: `<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" d="M5 7h14M9 7V5h6v2M8 7l1 12h6l1-12"/></svg>`,
     levels: `<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M4 10h2v8H4zm5-4h2v12H9zm5 2h2v10h-2zm5-3h2v13h-2z"/></svg>`,
+    undo: `<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="M9 7H5v4M5 11c1.5-3 4.5-5 8-5 4.4 0 8 3.6 8 8s-3.6 8-8 8"/></svg>`,
     note: `<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M12 3v10.55A4 4 0 1 0 14 15V7h4V3h-6z"/></svg>`,
   };
   return icons[name] || "";
@@ -1028,7 +1126,7 @@ function bindReview(root, take) {
       const fromSec = Math.max(0, fromGuideSec || 0);
       const dur = contentDur();
       await engine.playMix(
-        { ...mixParams(), fromSec },
+        { ...mixParams(take?.id), fromSec },
         {
           onTick: (s) => {
             const g = fromSec + s;
@@ -1090,6 +1188,7 @@ function bindReview(root, take) {
       bridge.haptic?.("light");
       try { engine.stopMix(); } catch {}
       engine.setActiveTake(tab.getAttribute("data-take-id"));
+      void persistProject();
       renderReview(root, engine.getActiveTake());
     });
   });
@@ -1097,6 +1196,7 @@ function bindReview(root, take) {
   root.querySelector("[data-studio-keep]")?.addEventListener("click", () => {
     bridge.haptic?.("medium");
     try { engine?.stopMix(); } catch {}
+    void persistProject();
     renderEditTake(root, engine.getActiveTake());
   });
 
@@ -1178,6 +1278,10 @@ function renderEditTake(root, take) {
             ${studioIco("play")}
             <span>Play</span>
           </button>
+          <button type="button" class="studioEditTool" data-edit-undo disabled aria-label="Undo">
+            ${studioIco("undo")}
+            <span>Undo</span>
+          </button>
           <button type="button" class="studioEditTool" data-edit-trim aria-label="Trim">
             ${studioIco("trim")}
             <span>Trim</span>
@@ -1206,6 +1310,7 @@ function renderEditTake(root, take) {
           </div>
           <div class="studioLevelsSliders">
             ${sliderRow("voiceVol", "Voice", mixState().voiceVol, "voice")}
+            ${sliderRow("vocalGain", "Vocal gain", mixState().vocalGain ?? 72, "voice")}
             ${sliderRow("musicVol", "Music", mixState().musicVol, "music")}
           </div>
         </div>
@@ -1251,7 +1356,15 @@ function bindEditTake(root, take) {
   const contentDur = () => engine?.takeContentDuration(take) || 0;
   const toBufferSec = (guideSec) => bufStart() + guideSec;
 
-  const editParams = () => ({ ...mixParams(), fromSec: playGuideSec });
+  const editParams = () => {
+    const params = { ...mixParams(take?.id), fromSec: playGuideSec };
+    const vd = contentDur();
+    if (trimIn > 0.02 || trimOut < vd - 0.02) {
+      params.voiceClipStart = trimIn;
+      params.voiceClipEnd = trimOut;
+    }
+    return params;
+  };
 
   const setPlayhead = (guideSec) => {
     const dur = guideDur();
@@ -1359,6 +1472,21 @@ function bindEditTake(root, take) {
   bindTrimHandle(trimOutEl, "out");
   paintTrimHandles();
 
+  const btnUndo = root.querySelector("[data-edit-undo]");
+  const syncUndoBtn = () => {
+    if (btnUndo) btnUndo.disabled = !engine?.canUndo?.();
+  };
+  syncUndoBtn();
+
+  btnUndo?.addEventListener("click", () => {
+    if (!engine?.canUndo?.()) return;
+    bridge.haptic?.("light");
+    try { engine.stopMix(); } catch {}
+    engine.undo();
+    void persistProject();
+    renderEditTake(root, engine.getActiveTake());
+  });
+
   root.querySelector("[data-edit-trim]")?.addEventListener("click", () => {
     if (!take?.id || !take.buffer) return;
     bridge.haptic?.("medium");
@@ -1370,6 +1498,7 @@ function bindEditTake(root, take) {
     }
     const ok = engine.trimTake(take.id, toBufferSec(trimIn), toBufferSec(trimOut));
     if (!ok) { bridge.showToast?.("Couldn’t trim."); return; }
+    void persistProject();
     renderEditTake(root, engine.getActiveTake());
   });
 
@@ -1386,6 +1515,7 @@ function bindEditTake(root, take) {
     if (!newTake) { bridge.showToast?.("Couldn’t split here."); return; }
     engine.setActiveTake(newTake.id);
     bridge.showToast?.("Split into two takes.");
+    void persistProject();
     renderEditTake(root, engine.getActiveTake());
   });
 
@@ -1397,6 +1527,7 @@ function bindEditTake(root, take) {
     const ok = engine.deleteTakeRegion(take.id, toBufferSec(sel.contentA), toBufferSec(sel.contentB));
     if (!ok) { bridge.showToast?.("Couldn’t delete that part."); return; }
     selGuide = null;
+    void persistProject();
     renderEditTake(root, engine.getActiveTake());
   });
 
@@ -1421,6 +1552,7 @@ function bindEditTake(root, take) {
       bridge.haptic?.("light");
       try { engine.stopMix(); } catch {}
       engine.setActiveTake(tab.getAttribute("data-take-id"));
+      void persistProject();
       renderEditTake(root, engine.getActiveTake());
     });
   });
@@ -1428,6 +1560,11 @@ function bindEditTake(root, take) {
   root.querySelector("[data-edit-continue]")?.addEventListener("click", () => {
     bridge.haptic?.("medium");
     try { engine?.stopMix(); } catch {}
+    const vd = contentDur();
+    if (take?.id && take.buffer && (trimIn > 0.02 || trimOut < vd - 0.02)) {
+      engine.trimTake(take.id, toBufferSec(trimIn), toBufferSec(trimOut));
+    }
+    void persistProject();
     renderMix(root);
   });
 
@@ -1500,6 +1637,8 @@ function renderMix(root) {
   screen = "mix";
   const m = current.mix || (current.mix = { ...DEFAULT_MIX });
   ensureMixFinish(m);
+  const takes = engine?.getTakes?.() || [];
+  const activeTake = engine?.getActiveTake?.() || null;
   const finishHint = m.finish === m.finishSuggested
     ? "Suggested for this song"
     : "";
@@ -1509,6 +1648,7 @@ function renderMix(root) {
       ${headerHtml("MIX")}
 
       <div class="studioMixHead">
+        ${takes.length > 1 ? takeTabsHtml(takes, activeTake?.id) : ""}
         <h1 class="studioReviewTitle">Shape your sound</h1>
         <p class="studioReviewSub">A few gentle controls — no mixing desk required.</p>
       </div>
@@ -1520,6 +1660,7 @@ function renderMix(root) {
 
       <div class="studioSliders">
         ${sliderRow("voiceVol", "Voice", m.voiceVol, "voice")}
+        ${sliderRow("vocalGain", "Vocal gain", m.vocalGain ?? 72, "voice")}
         ${sliderRow("musicVol", "Music", m.musicVol, "music")}
         ${sliderRow("reverb", "Reverb", m.reverb, "reverb")}
       </div>
@@ -1594,6 +1735,16 @@ function bindMix(root) {
   bindHeader(root, () => renderEditTake(root, engine?.getActiveTake?.()));
   const m = current.mix;
 
+  root.querySelectorAll("[data-take-id]").forEach((tab) => {
+    tab.addEventListener("click", () => {
+      bridge.haptic?.("light");
+      try { engine.stopMix(); setPlayUi(root, false); } catch {}
+      engine.setActiveTake(tab.getAttribute("data-take-id"));
+      void persistProject();
+      renderMix(root);
+    });
+  });
+
   root.querySelectorAll("[data-mix]").forEach((inp) => {
     inp.addEventListener("input", () => {
       const k = inp.getAttribute("data-mix");
@@ -1660,10 +1811,13 @@ function bindMix(root) {
   root.querySelector("[data-studio-save]")?.addEventListener("click", () => saveToSongs(root));
 }
 
-function mixParams() {
+function mixParams(takeId) {
   const m = current.mix || DEFAULT_MIX;
+  const tid = takeId || engine?.activeTakeId || engine?.getActiveTake?.()?.id || "";
   return {
-    voiceVol: (Number(m.voiceVol) || 0) / 100,
+    takeId: tid,
+    voiceVol: (Number(m.voiceVol) ?? 82) / 100,
+    vocalGain: (Number(m.vocalGain) ?? 72) / 100,
     musicVol: (Number(m.musicVol) || 0) / 100,
     reverb: (Number(m.reverb) || 0) / 100,
     finish: FINISH_PRESETS[m.finish] ? m.finish : "balanced",
@@ -1697,14 +1851,10 @@ async function restartMixPreview(root) {
 
 function saveDraft() {
   bridge.haptic?.("light");
-  try {
-    const id = String(current.track?.id || current.track?.url || "draft");
-    const drafts = JSON.parse(localStorage.getItem("nabad.studio.drafts.v1") || "{}");
-    drafts[id] = { title: current.track?.title || "Untitled", mix: current.mix, ts: Date.now() };
-    localStorage.setItem("nabad.studio.drafts.v1", JSON.stringify(drafts));
-  } catch {}
-  unsaved = false;
-  bridge.showToast?.("Draft saved on your device.");
+  void persistProject().then(() => {
+    unsaved = false;
+    bridge.showToast?.("Draft saved on your device.");
+  });
 }
 
 /* -------------------------------------------------------------------------- */
@@ -1753,6 +1903,7 @@ async function saveToSongs(root) {
     p = 100; paint();
     unsaved = false;
     try { bridge.onVocalsChanged?.(); } catch {}
+    void persistProject();
     renderSaved(root);
   } catch (e) {
     renderMix(root);

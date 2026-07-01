@@ -193,6 +193,26 @@ export function deleteProject(id) {
   writeMeta(m);
 }
 
+/** Remove a project and its stored take blobs. */
+export async function deleteProjectWithBlobs(id) {
+  const p = getProject(id);
+  if (p?.takes?.length) {
+    for (const t of p.takes) {
+      if (t.blobKey) { try { await removeBlob(t.blobKey); } catch {} }
+    }
+  }
+  deleteProject(id);
+}
+
+export async function saveProjectTakeBlob(blobKey, blob) {
+  if (!blobKey || !blob) return;
+  try { await putBlob(blobKey, blob); } catch {}
+}
+
+export async function loadProjectTakeBlob(blobKey) {
+  try { return await readBlob(blobKey); } catch { return null; }
+}
+
 export function nextProjectName() {
   return `New Project ${readMeta().projects.length + 1}`;
 }

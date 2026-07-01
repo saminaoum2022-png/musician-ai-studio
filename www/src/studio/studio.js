@@ -28,32 +28,6 @@ import {
 } from "./pitch-correction.js";
 import { StudioEngine, FINISH_PRESETS, FINISH_IDS } from "./engine.js";
 import {
-  isStudioAudioDebug,
-  bindAudioDebugEnableGesture,
-  getAgcTestMode,
-  setAgcTestMode,
-  saveAgcCompareSnapshot,
-  buildAgcCompareHtml,
-  clearAgcCompareSnapshots,
-  inputLevelModeLabel,
-  analyzeRawTake,
-  exportRawTakeWavBlob,
-  describeRecordingPipeline,
-  formatDb,
-  formatDbfs,
-  formatLufs,
-} from "./audio-debug.js";
-import {
-  isNativeIosStudio,
-  isNativeMicProbeAvailable,
-  fetchNativeSessionInfo,
-  getNativeSessionPrepEnabled,
-  setNativeSessionPrepEnabled,
-  runNativeMicProbe,
-  formatNativeSessionSummary,
-  buildNativeVsWebCompareHtml,
-} from "./native-mic-probe.js";
-import {
   listProjects,
   upsertProject,
   deleteProjectWithBlobs,
@@ -121,9 +95,15 @@ const FINISH_LABELS = {
 };
 
 /** Style preset tabs on Preview + Mix — pitch + mix + finish in one tap. */
-const STYLE_TAB_IDS = Object.freeze(["natural", "studio", "pop", "hardtune", "custom"]);
+const STYLE_TAB_IDS = Object.freeze(["original", "natural", "studio", "pop", "hardtune", "custom"]);
 
 const STYLE_TABS = Object.freeze({
+  original: {
+    label: "Original",
+    pitch: "none",
+    finish: "balanced",
+    mix: { voiceVol: 50, vocalGain: 50, musicVol: 70, fxDenoise: 0, fxCompress: 0, fxEq: 0, fxDeesser: 0, reverb: 0 },
+  },
   natural: {
     label: "Natural",
     pitch: "natural",
@@ -591,7 +571,6 @@ function renderLobby(root) {
 
 function bindLobby(root) {
   bindHeader(root);
-  bindAudioDebugEnableGesture(root.querySelector(".studioLobbyHead .studioTitle"), bridge.showToast);
   root.querySelector("[data-studio-quick]")?.addEventListener("click", () => startQuickTake(root));
   root.querySelector("[data-studio-newproject]")?.addEventListener("click", () => {
     bridge.haptic?.("light");
@@ -890,19 +869,6 @@ function bindHome(root) {
       bridge.showToast?.("🎧 Best with wired earphones in — without them you may hear echo and lag.", { durationMs: 4200 });
     }
   });
-  root.querySelector("[data-native-session-prep]")?.addEventListener("click", () => {
-    bridge.haptic?.("light");
-    const next = !getNativeSessionPrepEnabled();
-    setNativeSessionPrepEnabled(next);
-    const btn = root.querySelector("[data-native-session-prep]");
-    btn?.classList.toggle("isActive", next);
-    if (btn) {
-      btn.textContent = next
-        ? "✓ playAndRecord before Web capture"
-        : "Prepare playAndRecord before Web capture";
-    }
-    bridge.showToast?.(next ? "playAndRecord before Web capture (default)" : "Debug: playback-only session for next take");
-  });
 }
 
 // Best-effort "are headphones connected?" — returns true / false / null(unknown).
@@ -1032,193 +998,15 @@ function bindRecording(root) {
   });
 }
 
-/**
- * Dev-only: bottom sheet with raw take metrics before Review.
- * Does not modify the take or run DSP.
- */
-function mountAudioDebugSheet(root, take) {
-  const takeIndex = (engine?.getTakes?.() || []).findIndex((t) => t.id === take.id) + 1;
-  root.querySelector("[data-audio-debug-sheet]")?.remove();
-
-  root.insertAdjacentHTML("beforeend", `
-    <div class="studioAudioDebugSheet" data-audio-debug-sheet role="dialog" aria-label="Audio debug">
-      <div class="studioAudioDebugBackdrop" data-audio-debug-backdrop aria-hidden="true"></div>
-      <div class="studioAudioDebugPanel">
-        <p class="studioAudioDebugLoading">Analyzing raw take…</p>
-      </div>
-    </div>`);
-
-  void (async () => {
-    const analysis = await analyzeRawTake(take.buffer, {
-      takeIndex: takeIndex || 1,
-      latencyMs: engine?.getLatencyMs?.() ?? 0,
-    });
-    const pipeline = describeRecordingPipeline(take, engine?.sampleRate);
-    const liveCompareDb = Number.isFinite(pipeline.liveMeterPeakSyncedDbfs)
-      ? pipeline.liveMeterPeakSyncedDbfs
-      : pipeline.liveMeterPeakDbfs;
-    const peakDeltaDb = Number.isFinite(analysis.peakDbfs) && Number.isFinite(liveCompareDb)
-      ? analysis.peakDbfs - liveCompareDb
-      : null;
-    const sheet = root.querySelector("[data-audio-debug-sheet]");
-    const panel = sheet?.querySelector(".studioAudioDebugPanel");
-    if (!analysis || !panel) {
-      sheet?.remove();
-      renderReview(root, take);
-      return;
-    }
-
-    const inputMode = take.inputLevelMode === "agc" ? "agc" : "raw";
-    saveAgcCompareSnapshot(inputMode, analysis, pipeline);
-    const agcCompareHtml = buildAgcCompareHtml();
-
-    let sessionInfo = null;
-    let nativeProbe = null;
-    if (isNativeMicProbeAvailable()) {
-      try { sessionInfo = await fetchNativeSessionInfo(); } catch {}
-    }
-    const sessionSummary = formatNativeSessionSummary(sessionInfo);
-    const sessionWarn = sessionInfo?.category === "AVAudioSessionCategoryPlayback"
-      ? " ⚠ playback-only — Web mic may be attenuated"
-      : "";
-
-    const diagHtml = analysis.diagnostics.map((d) =>
-      `<li class="studioAudioDebugDiag studioAudioDebugDiag--${d.level}">${d.level === "warn" ? "⚠" : "✓"} ${esc(d.text)}</li>`,
-    ).join("");
-
-    panel.innerHTML = `
-        <div class="studioAudioDebugHead">
-          <span class="studioAudioDebugKicker">DEV · RAW TAKE ANALYSIS</span>
-          <span class="studioAudioDebugMode">${esc(pipeline.inputLevelLabel || inputLevelModeLabel(inputMode))}</span>
-        </div>
-        <dl class="studioAudioDebugStats">
-          <div class="studioAudioDebugRow"><dt>Take</dt><dd>#${analysis.takeIndex}</dd></div>
-          <div class="studioAudioDebugRow"><dt>Duration</dt><dd>${analysis.durationSec.toFixed(1)} s</dd></div>
-          <div class="studioAudioDebugRow"><dt>Peak Level</dt><dd>${formatDbfs(analysis.peakDbfs)}</dd></div>
-          <div class="studioAudioDebugRow"><dt>Integrated Loudness</dt><dd>${formatLufs(analysis.lufsIntegrated, "-I")}</dd></div>
-          <div class="studioAudioDebugRow"><dt>Short-term Loudness</dt><dd>${formatLufs(analysis.lufsShortTerm, "-S")}</dd></div>
-          <div class="studioAudioDebugRow"><dt>RMS (active)</dt><dd>${formatDb(analysis.rmsDb)}</dd></div>
-          <div class="studioAudioDebugRow"><dt>Noise Floor</dt><dd>${formatDb(analysis.noiseFloorDb)}</dd></div>
-          <div class="studioAudioDebugRow"><dt>Dynamic Range</dt><dd>${analysis.dynamicRangeDb.toFixed(1)} dB</dd></div>
-          <div class="studioAudioDebugRow"><dt>Detected Clipping</dt><dd>${analysis.clippingSamples} samples</dd></div>
-          <div class="studioAudioDebugRow"><dt>Sample Rate</dt><dd>${analysis.sampleRate} Hz</dd></div>
-          <div class="studioAudioDebugRow"><dt>Bit Depth</dt><dd>${esc(analysis.bitDepthLabel)}</dd></div>
-          <div class="studioAudioDebugRow"><dt>Input Gain</dt><dd>${analysis.inputGainPct}%</dd></div>
-          <div class="studioAudioDebugRow"><dt>Recording Latency</dt><dd>${Math.round(analysis.latencyMs)} ms</dd></div>
-        </dl>
-        <div class="studioAudioDebugPipeline">
-          <span class="studioAudioDebugVoiceTitle">AVAudioSession (native)</span>
-          <dl class="studioAudioDebugStats">
-            <div class="studioAudioDebugRow"><dt>Session</dt><dd class="studioAudioDebugMono">${esc(sessionSummary)}${esc(sessionWarn)}</dd></div>
-            <div class="studioAudioDebugRow"><dt>Input gain settable</dt><dd>${sessionInfo?.inputGainSettable ? `yes · ${sessionInfo.inputGain}` : "no"}</dd></div>
-          </dl>
-        </div>
-        <div class="studioAudioDebugPipeline">
-          <span class="studioAudioDebugVoiceTitle">Recording pipeline</span>
-          <dl class="studioAudioDebugStats">
-            <div class="studioAudioDebugRow"><dt>Capture</dt><dd>${esc(pipeline.captureMethod)}</dd></div>
-            <div class="studioAudioDebugRow"><dt>Web Audio</dt><dd>${esc(pipeline.webAudioRole)}</dd></div>
-            <div class="studioAudioDebugRow"><dt>Container</dt><dd>${esc(pipeline.containerMime)}</dd></div>
-            <div class="studioAudioDebugRow"><dt>Context SR</dt><dd>${pipeline.contextSampleRate} Hz</dd></div>
-            <div class="studioAudioDebugRow"><dt>Channels</dt><dd>${pipeline.channelCount || "—"} (mono)</dd></div>
-            <div class="studioAudioDebugRow"><dt>Record gain</dt><dd>${esc(pipeline.recordInputGain)}</dd></div>
-            <div class="studioAudioDebugRow"><dt>Mic track</dt><dd class="studioAudioDebugMono">${esc(pipeline.micLabel)}</dd></div>
-            <div class="studioAudioDebugRow"><dt>Track SR / ch</dt><dd>${pipeline.trackSampleRate} Hz · ${pipeline.trackChannels} ch</dd></div>
-            <div class="studioAudioDebugRow"><dt>AGC req / actual</dt><dd>${esc(pipeline.agcRequested)} / ${esc(pipeline.agcActual)}</dd></div>
-            <div class="studioAudioDebugRow"><dt>NS / EC actual</dt><dd>${esc(pipeline.nsActual)} / ${esc(pipeline.ecActual)}</dd></div>
-            <div class="studioAudioDebugRow"><dt>Live meter (synced)</dt><dd>${formatDbfs(pipeline.liveMeterPeakSyncedDbfs)}</dd></div>
-            <div class="studioAudioDebugRow"><dt>File − Live peak</dt><dd>${peakDeltaDb == null ? "—" : `${peakDeltaDb >= 0 ? "+" : ""}${peakDeltaDb.toFixed(1)} dB`}${peakDeltaDb != null && Math.abs(peakDeltaDb) <= 2 ? " · OK" : peakDeltaDb != null ? " · investigate" : ""}</dd></div>
-            <div class="studioAudioDebugRow studioAudioDebugRow--note"><dt>vs Voice Memos</dt><dd class="studioAudioDebugMono">${esc(pipeline.voiceMemosNote)}</dd></div>
-            <div class="studioAudioDebugRow"><dt>Constraints</dt><dd class="studioAudioDebugMono">${esc(pipeline.constraints)}</dd></div>
-            <div class="studioAudioDebugRow"><dt>Live meter peak</dt><dd>${formatDbfs(pipeline.liveMeterPeakDbfs)} (${pipeline.liveMeterPeakPct}%)</dd></div>
-            <div class="studioAudioDebugRow"><dt>Analyzed buffer</dt><dd class="studioAudioDebugMono">${esc(pipeline.analyzedBuffer)}</dd></div>
-          </dl>
-        </div>
-        <div class="studioAudioDebugVoice">
-          <span class="studioAudioDebugVoiceTitle">Voice analysis</span>
-          <ul class="studioAudioDebugDiagList">${diagHtml}</ul>
-        </div>
-        ${agcCompareHtml}
-        <div class="studioAudioDebugNativeProbe" data-native-probe-result></div>
-        ${isNativeMicProbeAvailable() ? `<button type="button" class="studioAudioDebugExport" data-native-probe-run>Run 5s Native Probe (AVAudioEngine)</button>` : ""}
-        <button type="button" class="studioAudioDebugExport" data-audio-debug-export>Export Web Take WAV</button>
-        <button type="button" class="studioPrimary studioAudioDebugContinue" data-audio-debug-continue>Continue</button>`;
-
-    sheet?.querySelector("[data-native-probe-run]")?.addEventListener("click", () => {
-      bridge.haptic?.("medium");
-      const btn = sheet.querySelector("[data-native-probe-run]");
-      const slot = sheet.querySelector("[data-native-probe-result]");
-      if (btn) btn.disabled = true;
-      if (slot) slot.innerHTML = `<p class="studioAudioDebugLoading">Native probe — sing now (5s)…</p>`;
-      void (async () => {
-        try {
-          nativeProbe = await runNativeMicProbe(5);
-          if (slot) {
-            const shareBtn = nativeProbe.wavPath
-              ? `<button type="button" class="studioAudioDebugCompareClear" data-native-probe-share>Share native probe WAV</button>`
-              : "";
-            slot.innerHTML = `
-              <div class="studioAudioDebugCompare">
-                <span class="studioAudioDebugVoiceTitle">Native probe result</span>
-                <dl class="studioAudioDebugStats">
-                  <div class="studioAudioDebugRow"><dt>Peak</dt><dd>${Number(nativeProbe.peakDbfs).toFixed(1)} dBFS</dd></div>
-                  <div class="studioAudioDebugRow"><dt>RMS</dt><dd>${Number(nativeProbe.rmsDb).toFixed(1)} dB</dd></div>
-                  <div class="studioAudioDebugRow"><dt>Clipping</dt><dd>${nativeProbe.clippingSamples} samples</dd></div>
-                  <div class="studioAudioDebugRow"><dt>Path</dt><dd class="studioAudioDebugMono">${esc(nativeProbe.capturePath || "")}</dd></div>
-                </dl>
-                ${shareBtn}
-              </div>
-              ${buildNativeVsWebCompareHtml(analysis, nativeProbe)}`;
-            slot.querySelector("[data-native-probe-share]")?.addEventListener("click", () => {
-              void (async () => {
-                try {
-                  const res = await fetch(nativeProbe.wavPath);
-                  const blob = await res.blob();
-                  await bridge.deliverBlob?.(blob, { filename: `nabad-native-probe-${Date.now()}.wav`, title: "Native mic probe" });
-                } catch (e) {
-                  bridge.showToast?.(`Share failed: ${String(e?.message || e).slice(0, 60)}`);
-                }
-              })();
-            });
-          }
-        } catch (e) {
-          if (slot) slot.innerHTML = `<p class="studioAudioDebugCompareHint">Native probe failed: ${esc(String(e?.message || e).slice(0, 80))}</p>`;
-        } finally {
-          if (btn) btn.disabled = false;
-        }
-      })();
-    });
-
-    sheet?.querySelector("[data-agc-compare-clear]")?.addEventListener("click", () => {
-      clearAgcCompareSnapshots();
-      sheet.querySelector(".studioAudioDebugCompare")?.remove();
-      bridge.showToast?.("A/B snapshots cleared");
-    });
-
-    sheet?.querySelector("[data-audio-debug-export]")?.addEventListener("click", () => {
-      bridge.haptic?.("light");
-      const wav = exportRawTakeWavBlob(take.buffer);
-      if (!wav?.size) {
-        bridge.showToast?.("Nothing to export — buffer missing.");
-        return;
-      }
-      const fname = `nabad-${inputMode}-take-${analysis.takeIndex}-${Date.now()}.wav`;
-      void bridge.deliverBlob?.(wav, { filename: fname, title: `Raw take ${analysis.takeIndex}` })
-        .catch((e) => bridge.showToast?.(`Export failed: ${String(e?.message || e).slice(0, 72)}`));
-    });
-
-    const close = () => {
-      sheet?.remove();
-      renderReview(root, take);
-    };
-    sheet?.querySelector("[data-audio-debug-continue]")?.addEventListener("click", () => {
-      bridge.haptic?.("light");
-      close();
-    });
-    sheet?.querySelector("[data-audio-debug-backdrop]")?.addEventListener("click", () => {
-      close();
-    });
-  })();
+function pulseCountIn(countEl, n) {
+  if (!countEl || n <= 0) return;
+  countEl.hidden = false;
+  const span = countEl.querySelector("span");
+  if (!span) return;
+  span.textContent = String(n);
+  span.classList.remove("studioCountPulse");
+  void span.offsetWidth;
+  span.classList.add("studioCountPulse");
 }
 
 async function startTake(root) {
@@ -1244,8 +1032,8 @@ async function startTake(root) {
       monitorEcho: 0,
       onCountIn: (n) => {
         if (!countEl) return;
-        if (n > 0) { countEl.hidden = false; countEl.querySelector("span").textContent = String(n); }
-        else { countEl.hidden = true; }
+        if (n > 0) pulseCountIn(countEl, n);
+        else countEl.hidden = true;
       },
       onLevel: (v) => animateVoiceWave(voiceWave, v),
       onTick: (sec) => {
@@ -1401,22 +1189,29 @@ function buildAiMixRecommendation(take, track) {
 function aiMixCardHtml(rec) {
   return `
     <div class="studioAiCard" data-studio-ai-card>
-      <div class="studioAiCardLeft">
+      <div class="studioAiCardTop">
         <div class="studioAiCardBrand"><span class="studioAiSpark" aria-hidden="true">✨</span> Nabad AI</div>
-        <div class="studioAiCardSub">Recommended for this take</div>
-        <div class="studioAiCardRec">
-          <span>${esc(rec.styleLabel)} Preset</span>
-          <span class="studioAiCardDot">·</span>
-          <span>${esc(rec.finishLabel)} Mix</span>
-          <span class="studioAiCardDot">·</span>
-          <span>${esc(rec.pitchLabel)} Pitch</span>
-        </div>
+        <span class="studioAiMatch">${rec.matchPct}% match</span>
       </div>
-      <div class="studioAiCardRight">
-        <span class="studioAiMatch">${rec.matchPct}% Match</span>
-        <button type="button" class="studioAiApply" data-studio-ai-apply>Apply AI Mix</button>
+      <p class="studioAiCardSub">Recommended for this take</p>
+      <div class="studioAiChips" aria-label="Recommended settings">
+        <span class="studioAiChip">${esc(rec.styleLabel)}</span>
+        <span class="studioAiChip">${esc(rec.finishLabel)} mix</span>
+        <span class="studioAiChip">${esc(rec.pitchLabel)} pitch</span>
       </div>
+      <button type="button" class="studioAiApply" data-studio-ai-apply>Apply AI Mix</button>
     </div>`;
+}
+
+function updateAiApplyUi(root, m, aiRec) {
+  const card = root.querySelector("[data-studio-ai-card]");
+  const btn = root.querySelector("[data-studio-ai-apply]");
+  const applied = m.styleTab === aiRec?.styleTab && m.styleTab !== "custom";
+  card?.classList.toggle("isApplied", applied);
+  if (btn) {
+    btn.textContent = applied ? "Applied ✓" : "Apply AI Mix";
+    btn.setAttribute("aria-pressed", applied ? "true" : "false");
+  }
 }
 
 function stylePresetTabsHtml(activeId) {
@@ -1487,6 +1282,7 @@ async function applyStyleTab(root, take, tabId, state) {
   if (tabId === "custom") {
     m.styleTab = "custom";
     updateStyleTabUi(root, "custom");
+    updateAiApplyUi(root, m, state?.aiRec);
     return;
   }
   const tab = STYLE_TABS[tabId];
@@ -1503,6 +1299,11 @@ async function applyStyleTab(root, take, tabId, state) {
     try { engine.updateMix(mixParams()); } catch {}
   }
   await selectPitchPreset(root, take, tab.pitch, { ...state, silent: true });
+  updateAiApplyUi(root, m, state?.aiRec);
+  if (state?.fromAi) {
+    bridge.showToast?.("AI mix applied — tap play to hear it.");
+    if (engine?.isPlaying) void restartMixPreview(root);
+  }
 }
 
 async function warmupPitchPresets(take) {
@@ -1550,8 +1351,9 @@ function renderPreviewMix(root, take) {
         <div class="studioFinishTake">Take ${takeNum}</div>
       </div>
 
-      <button type="button" class="studioPlayDisk studioPlayDisk--finish" data-studio-play aria-label="Play preview">
-        <span class="studioPlayDiskIco" data-studio-play-ico aria-hidden="true">${studioIco("play")}</span>
+      <button type="button" class="studioPreviewPlay" data-studio-play aria-label="Play preview">
+        <span class="studioPreviewPlayIco" data-studio-play-ico aria-hidden="true">${studioIco("play")}</span>
+        <span class="studioPreviewPlayLbl">Play preview</span>
       </button>
 
       <div class="studioWave studioWave--review studioWave--finish" data-studio-scrub role="slider" aria-label="Scrub preview" tabindex="0">
@@ -1563,7 +1365,10 @@ function renderPreviewMix(root, take) {
 
       ${aiMixCardHtml(aiRec)}
 
-      ${stylePresetTabsHtml(m.styleTab)}
+      <div class="studioPresetBlock">
+        <span class="studioMixLabel">Style preset</span>
+        ${stylePresetTabsHtml(m.styleTab)}
+      </div>
 
       <div class="studioMixTabs" role="tablist" aria-label="Mix controls">
         <button type="button" class="studioMixTab${mixPanel === "basic" ? " isActive" : ""}" data-mix-panel="basic" role="tab" aria-selected="${mixPanel === "basic"}">Basic</button>
@@ -1575,14 +1380,6 @@ function renderPreviewMix(root, take) {
           ${sliderRow("voiceVol", "Voice", m.voiceVol, "voice")}
           ${sliderRow("musicVol", "Music", m.musicVol, "music")}
           ${sliderRow("vocalGain", "Vocal gain", m.vocalGain ?? 50, "voice")}
-        </div>
-        <div class="studioMixField studioMixField--finish">
-          <span class="studioMixLabel">Finish style</span>
-          <div class="studioSeg studioSeg--finish" data-studio-finish role="group" aria-label="Finish preset">
-            ${FINISH_IDS.map((id) =>
-              `<button type="button" class="studioSegBtn${m.finish === id ? " isActive" : ""}" data-finish="${id}">${esc(FINISH_LABELS[id] || id)}</button>`,
-            ).join("")}
-          </div>
         </div>
       </div>
 
@@ -1610,6 +1407,15 @@ function renderPreviewMix(root, take) {
           ${advSliderRow("stereoWidth", "Stereo width", adv.stereoWidth, "music")}
         </div>
       </div>
+
+      <section class="studioFinishSection">
+        <span class="studioMixLabel">Finish style</span>
+        <div class="studioSeg studioSeg--finish" data-studio-finish role="group" aria-label="Finish preset">
+          ${FINISH_IDS.map((id) =>
+            `<button type="button" class="studioSegBtn${m.finish === id ? " isActive" : ""}" data-finish="${id}">${esc(FINISH_LABELS[id] || id)}</button>`,
+          ).join("")}
+        </div>
+      </section>
 
       <div class="studioFooter studioFooter--finish">
         <button type="button" class="studioPrimary studioPrimary--continue" data-studio-save-vocal>Save to My Vocals</button>
@@ -1837,10 +1643,11 @@ function bindPitchPresets(root, take, state) {
 function bindPreviewMix(root, take, aiRec) {
   bindHeader(root, () => renderHome(root));
   const m = current.mix || (current.mix = { ...DEFAULT_MIX });
-  const pitchState = { lastGuideSec: 0, silent: true };
+  const pitchState = { lastGuideSec: 0, silent: true, aiRec };
 
   const btn = root.querySelector("[data-studio-play]");
   const icoWrap = root.querySelector("[data-studio-play-ico]");
+  const lblEl = root.querySelector(".studioPreviewPlayLbl");
   const posEl = root.querySelector("[data-studio-pos]");
   const wave = root.querySelector("[data-studio-scrub]");
   const contentDur = () => engine?.guideDuration || engine?.takeContentDuration(take) || take?.buffer?.duration || 0;
@@ -1848,6 +1655,7 @@ function bindPreviewMix(root, take, aiRec) {
   const setPlayingUi = (playing) => {
     if (icoWrap) icoWrap.innerHTML = playing ? studioIco("pause") : studioIco("play");
     btn?.classList.toggle("isPlaying", playing);
+    if (lblEl) lblEl.textContent = playing ? "Pause" : "Play preview";
   };
 
   const playFrom = async (fromGuideSec) => {
@@ -1937,9 +1745,11 @@ function bindPreviewMix(root, take, aiRec) {
     });
   });
 
+  updateAiApplyUi(root, m, aiRec);
+
   root.querySelector("[data-studio-ai-apply]")?.addEventListener("click", () => {
     bridge.haptic?.("medium");
-    void applyStyleTab(root, take, aiRec?.styleTab || "studio", pitchState);
+    void applyStyleTab(root, take, aiRec?.styleTab || "studio", { ...pitchState, fromAi: true });
   });
 
   root.querySelectorAll("[data-mix-panel]").forEach((tabBtn) => {
@@ -1964,6 +1774,7 @@ function bindPreviewMix(root, take, aiRec) {
       m[k] = Number(inp.value) || 0;
       m.styleTab = "custom";
       updateStyleTabUi(root, "custom");
+      updateAiApplyUi(root, m, pitchState.aiRec);
       const out = root.querySelector(`[data-mix-val="${k}"]`);
       if (out) out.textContent = String(m[k]);
       if (engine?.isPlaying) {
@@ -1980,6 +1791,7 @@ function bindPreviewMix(root, take, aiRec) {
       adv[k] = Number(inp.value) || 0;
       m.styleTab = "custom";
       updateStyleTabUi(root, "custom");
+      updateAiApplyUi(root, m, pitchState.aiRec);
       const out = root.querySelector(`[data-adv-pitch-val="${k}"]`);
       if (out) out.textContent = String(adv[k]);
       if (k === "retuneSpeed" && take) {
@@ -1996,6 +1808,7 @@ function bindPreviewMix(root, take, aiRec) {
     m.syncMs = v;
     m.styleTab = "custom";
     updateStyleTabUi(root, "custom");
+    updateAiApplyUi(root, m, pitchState.aiRec);
     if (syncValEl) {
       syncValEl.textContent = v === 0 ? "In sync" : `${v > 0 ? "+" : ""}${v} ms`;
     }
@@ -2014,6 +1827,7 @@ function bindPreviewMix(root, take, aiRec) {
     m.finishUserPick = true;
     m.styleTab = "custom";
     updateStyleTabUi(root, "custom");
+    updateAiApplyUi(root, m, pitchState.aiRec);
     root.querySelectorAll("[data-studio-finish] .studioSegBtn").forEach((x) => {
       x.classList.toggle("isActive", x === b);
     });

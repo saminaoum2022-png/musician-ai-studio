@@ -132,6 +132,8 @@ export const PITCH_CORRECTION_PRESETS = Object.freeze({
 
 export const PITCH_PRESET_IDS = Object.freeze(["none", "natural", "balanced", "pop", "hardtune"]);
 export const PITCH_PRESET_DEFAULT = "balanced";
+/** Bump when pitch engine changes so cached renders are invalidated. */
+const PITCH_ENGINE_VERSION = 4;
 
 export function normalizePitchPresetId(id) {
   if (!id) return PITCH_PRESET_DEFAULT;
@@ -307,45 +309,277 @@ function trackPitchFrames(mono, sr, preset) {
   return { f0s, voiced, hop, winSize, nGrains };
 }
 
-/**
- * Lock target notes with hysteresis — never flip every frame.
- * Uses a slow pitch contour for detection; raw f0 only for micro-correction.
+/** Shared Micro Pitch Filter — runs before Auto-Tune for every preset. */
+const MICRO_PITCH_FILTER = Object.freeze({
+  microIgnoreCents: 25,
+  lockStabilityMs: 70,
+  expressionLpMs: 95,
+  noteCenterMs: 115,
+  vibratoRateMinHz: 3.5,
+  vibratoRateMaxHz: 9,
+  vibratoDepthMinCents: 18,
+  vibratoDepthMaxCents: 95,
+  portamentoMinMs: 35,
+  portamentoMaxCents: 180,
+  ornamentMaxMs: 130,
+  slideRateCentsPerMs: 6,
+});
+
+/** @typedef {object} MicroPitchFilterResult
+ * @property {Float32Array} expressionMidi slow contour for note detection
+ * @property {Float32Array} noteCenterMidi very slow center for lock decisions
+ * @property {Float32Array} correctable 0–1 mask (1 = sustained, safe to correct)
+ * @property {Float32Array} microCents deviation from expression contour
+ * @property {Uint8Array} vibrato expressive vibrato detected
+ * @property {Uint8Array} portamento slide between notes
+ * @property {Uint8Array} ornament short bends / melisma
  */
-function buildLockedNotes(f0s, voiced, preset, keyInfo, hop, sr) {
+
+function framesForMs(ms, hop, sr) {
+  return Math.max(2, Math.round((ms / 1000) * sr / hop));
+}
+
+function averageInWindow(arr, i, radius) {
+  let sum = 0;
+  let count = 0;
+  for (let j = Math.max(0, i - radius); j <= Math.min(arr.length - 1, i + radius); j++) {
+    sum += arr[j];
+    count += 1;
+  }
+  return count ? sum / count : 0;
+}
+
+function isStableQuantNote(expressionMidi, voiced, i, lockFrames, quantNote) {
+  let hits = 0;
+  let total = 0;
+  for (let j = Math.max(0, i - lockFrames + 1); j <= i; j++) {
+    if (!voiced[j] || !Number.isFinite(expressionMidi[j])) continue;
+    total += 1;
+    if (Math.abs(expressionMidi[j] - quantNote) < 0.22) hits += 1;
+  }
+  return total >= Math.max(2, Math.floor(lockFrames * 0.7)) && hits / total >= 0.82;
+}
+
+/** Detect periodic micro-oscillation (natural vibrato). */
+function detectVibratoMask(microCents, voiced, hop, sr) {
+  const n = microCents.length;
+  const mask = new Uint8Array(n);
+  const winFrames = framesForMs(85, hop, sr);
+  const frameMs = (hop / sr) * 1000;
+
+  for (let i = winFrames; i < n; i++) {
+    if (!voiced[i]) continue;
+    let crossings = 0;
+    let prev = 0;
+    let hadPrev = false;
+    let peak = 0;
+    let trough = 0;
+    let active = 0;
+    for (let j = i - winFrames; j <= i; j++) {
+      if (!voiced[j]) continue;
+      const v = microCents[j];
+      active += 1;
+      peak = Math.max(peak, v);
+      trough = Math.min(trough, v);
+      if (hadPrev && Math.sign(v) !== Math.sign(prev) && Math.abs(v) > 6 && Math.abs(prev) > 6) {
+        crossings += 1;
+      }
+      prev = v;
+      hadPrev = true;
+    }
+    if (active < winFrames * 0.55) continue;
+    const depth = peak - trough;
+    const rateHz = crossings / (winFrames * frameMs / 1000) * 0.5;
+    if (
+      rateHz >= MICRO_PITCH_FILTER.vibratoRateMinHz
+      && rateHz <= MICRO_PITCH_FILTER.vibratoRateMaxHz
+      && depth >= MICRO_PITCH_FILTER.vibratoDepthMinCents
+      && depth <= MICRO_PITCH_FILTER.vibratoDepthMaxCents
+    ) {
+      mask[i] = 1;
+    }
+  }
+  return mask;
+}
+
+/** Detect sustained pitch slides (portamento) — do not treat as new notes. */
+function detectPortamentoMask(expressionMidi, voiced, hop, sr) {
+  const n = expressionMidi.length;
+  const mask = new Uint8Array(n);
+  const minFrames = framesForMs(MICRO_PITCH_FILTER.portamentoMinMs, hop, sr);
+
+  for (let i = minFrames; i < n; i++) {
+    if (!voiced[i] || !Number.isFinite(expressionMidi[i])) continue;
+    let dir = 0;
+    let consistent = 0;
+    let totalCents = 0;
+    let prev = expressionMidi[i - 1];
+    if (!Number.isFinite(prev)) continue;
+
+    for (let j = i - minFrames + 1; j <= i; j++) {
+      if (!voiced[j] || !Number.isFinite(expressionMidi[j]) || !Number.isFinite(expressionMidi[j - 1])) continue;
+      const stepCents = 1200 * Math.log2(midiToFreq(expressionMidi[j]) / midiToFreq(expressionMidi[j - 1]));
+      const stepDir = Math.sign(stepCents);
+      if (Math.abs(stepCents) < 2) continue;
+      if (dir === 0) dir = stepDir;
+      if (stepDir === dir) {
+        consistent += 1;
+        totalCents += Math.abs(stepCents);
+      }
+    }
+    const frameMs = (hop / sr) * 1000;
+    const durMs = minFrames * frameMs;
+    const rate = totalCents / Math.max(1, durMs);
+    if (
+      consistent >= minFrames * 0.55
+      && totalCents >= MICRO_PITCH_FILTER.microIgnoreCents
+      && totalCents <= MICRO_PITCH_FILTER.portamentoMaxCents
+      && rate >= MICRO_PITCH_FILTER.slideRateCentsPerMs * 0.45
+      && rate <= MICRO_PITCH_FILTER.slideRateCentsPerMs * 4.5
+    ) {
+      mask[i] = 1;
+    }
+  }
+  return mask;
+}
+
+/** Short expressive bends / ornament (incl. Arabic melisma) — transient, not a new target. */
+function detectOrnamentMask(microCents, expressionMidi, voiced, hop, sr) {
+  const n = microCents.length;
+  const mask = new Uint8Array(n);
+  const maxFrames = framesForMs(MICRO_PITCH_FILTER.ornamentMaxMs, hop, sr);
+
+  for (let i = 2; i < n; i++) {
+    if (!voiced[i]) continue;
+    let peakAbs = 0;
+    let active = 0;
+    for (let j = Math.max(0, i - maxFrames); j <= i; j++) {
+      if (!voiced[j]) continue;
+      active += 1;
+      peakAbs = Math.max(peakAbs, Math.abs(microCents[j]));
+    }
+    if (active < 2) continue;
+    const returning = Math.abs(microCents[i]) < MICRO_PITCH_FILTER.microIgnoreCents * 0.85;
+    const bent = peakAbs >= MICRO_PITCH_FILTER.microIgnoreCents * 1.1
+      && peakAbs <= MICRO_PITCH_FILTER.portamentoMaxCents * 0.75;
+    const centerStable = Number.isFinite(expressionMidi[i])
+      && isStableQuantNote(expressionMidi, voiced, i, Math.min(maxFrames, 3), Math.round(expressionMidi[i]));
+    if (bent && (returning || centerStable)) mask[i] = 1;
+  }
+  return mask;
+}
+
+/**
+ * Micro Pitch Filter (Expression Protection) — stage 1, before Auto-Tune.
+ * Stabilises pitch detection and marks expressive regions as non-correctable.
+ * @returns {MicroPitchFilterResult}
+ */
+function applyMicroPitchFilter(f0s, voiced, hop, sr) {
   const n = f0s.length;
+  const rawMidi = new Float32Array(n);
+  const expressionMidi = new Float32Array(n);
+  const noteCenterMidi = new Float32Array(n);
+  const correctable = new Float32Array(n);
+  const microCents = new Float32Array(n);
+
+  for (let i = 0; i < n; i++) {
+    rawMidi[i] = voiced[i] && f0s[i] > 80 ? hzToMidi(f0s[i]) : NaN;
+  }
+
+  const lpRadius = framesForMs(MICRO_PITCH_FILTER.expressionLpMs, hop, sr);
+  const centerRadius = framesForMs(MICRO_PITCH_FILTER.noteCenterMs, hop, sr);
+
+  for (let i = 0; i < n; i++) {
+    if (!Number.isFinite(rawMidi[i])) {
+      expressionMidi[i] = NaN;
+      noteCenterMidi[i] = NaN;
+      microCents[i] = 0;
+      correctable[i] = 0;
+      continue;
+    }
+
+    const lpVals = [];
+    const centerVals = [];
+    for (let j = Math.max(0, i - lpRadius); j <= Math.min(n - 1, i + lpRadius); j++) {
+      if (Number.isFinite(rawMidi[j])) lpVals.push(rawMidi[j]);
+    }
+    for (let j = Math.max(0, i - centerRadius); j <= Math.min(n - 1, i + centerRadius); j++) {
+      if (Number.isFinite(rawMidi[j])) centerVals.push(rawMidi[j]);
+    }
+
+    const expr = medianOf(lpVals) || rawMidi[i];
+    const center = medianOf(centerVals) || expr;
+    expressionMidi[i] = expr;
+    noteCenterMidi[i] = center;
+    microCents[i] = 1200 * Math.log2(midiToFreq(rawMidi[i]) / midiToFreq(expr));
+  }
+
+  const vibrato = detectVibratoMask(microCents, voiced, hop, sr);
+  const portamento = detectPortamentoMask(expressionMidi, voiced, hop, sr);
+  const ornament = detectOrnamentMask(microCents, expressionMidi, voiced, hop, sr);
+  const lockFrames = framesForMs(MICRO_PITCH_FILTER.lockStabilityMs, hop, sr);
+
+  for (let i = 0; i < n; i++) {
+    if (!voiced[i] || !Number.isFinite(expressionMidi[i])) {
+      correctable[i] = 0;
+      continue;
+    }
+
+    let score = 1;
+
+    if (Math.abs(microCents[i]) < MICRO_PITCH_FILTER.microIgnoreCents) score *= 0.12;
+    if (vibrato[i]) score = 0;
+    if (portamento[i]) score = 0;
+    if (ornament[i]) score = Math.min(score, 0.08);
+
+    const quant = Math.round(noteCenterMidi[i]);
+    const stable = isStableQuantNote(noteCenterMidi, voiced, i, lockFrames, quant);
+    if (!stable) score *= 0.18;
+
+    const localCenterDev = Math.abs(noteCenterMidi[i] - expressionMidi[i]) * 100;
+    if (localCenterDev > 28) score *= 0.25;
+
+    correctable[i] = clamp(score, 0, 1);
+  }
+
+  return { expressionMidi, noteCenterMidi, correctable, microCents, vibrato, portamento, ornament };
+}
+
+/**
+ * Note locking — stage 2. Uses filtered expression contour only.
+ * Waits ~70 ms stability before first lock; avoids neighbour-note flicker.
+ */
+function buildLockedNotes(filter, preset, keyInfo, hop, sr) {
+  const { expressionMidi, noteCenterMidi, correctable, voiced } = filter;
+  const n = expressionMidi.length;
   const lockedMidi = new Float32Array(n);
-  const slowMidi = new Float32Array(n);
-  const radius = preset.tracking === "high" ? 2 : preset.tracking === "medium-high" ? 3 : 4;
-  const switchFrames = noteSwitchFrames(preset, hop, sr);
-  const switchMarginSemis = preset.noteTransition === "instant" ? 0.45 : preset.noteTransition === "fast" ? 0.65 : 0.85;
+  const lockFrames = framesForMs(MICRO_PITCH_FILTER.lockStabilityMs, hop, sr);
+  const switchFrames = Math.max(lockFrames, noteSwitchFrames(preset, hop, sr));
+  const switchMarginSemis = preset.id === "hardtune" ? 0.48 : preset.noteTransition === "fast" ? 0.68 : 0.82;
 
   let locked = NaN;
   let candidate = NaN;
   let candidateFrames = 0;
 
   for (let i = 0; i < n; i++) {
-    if (!voiced[i] || f0s[i] < 80) {
+    if (!voiced[i] || !Number.isFinite(noteCenterMidi[i])) {
       lockedMidi[i] = Number.isFinite(locked) ? locked : NaN;
-      slowMidi[i] = lockedMidi[i];
       candidateFrames = 0;
       continue;
     }
 
-    const localMidis = [];
-    for (let j = Math.max(0, i - radius); j <= Math.min(n - 1, i + radius); j++) {
-      if (voiced[j] && f0s[j] > 80) localMidis.push(hzToMidi(f0s[j]));
-    }
-    const slow = medianOf(localMidis) || hzToMidi(f0s[i]);
-    slowMidi[i] = slow;
-    const quant = quantizeMidi(slow, preset, keyInfo);
+    const quant = quantizeMidi(noteCenterMidi[i], preset, keyInfo);
 
     if (!Number.isFinite(locked)) {
-      locked = quant;
+      const avgCorr = averageInWindow(correctable, i, lockFrames);
+      if (isStableQuantNote(noteCenterMidi, voiced, i, lockFrames, quant) && avgCorr > 0.42) {
+        locked = quant;
+      }
       lockedMidi[i] = locked;
       continue;
     }
 
-    if (quant === locked) {
+    if (quantizeMidi(noteCenterMidi[i], preset, keyInfo) === locked) {
       candidateFrames = 0;
       lockedMidi[i] = locked;
       continue;
@@ -360,14 +594,17 @@ function buildLockedNotes(f0s, voiced, preset, keyInfo, hop, sr) {
     if (candidate === quant) candidateFrames += 1;
     else { candidate = quant; candidateFrames = 1; }
 
-    if (candidateFrames >= switchFrames) {
+    const avgCorr = averageInWindow(correctable, i, lockFrames);
+    const stable = isStableQuantNote(noteCenterMidi, voiced, i, lockFrames, quant);
+
+    if (candidateFrames >= switchFrames && stable && avgCorr > 0.48) {
       locked = candidate;
       candidateFrames = 0;
     }
     lockedMidi[i] = locked;
   }
 
-  return { lockedMidi, slowMidi };
+  return { lockedMidi, slowMidi: expressionMidi };
 }
 
 function vibratoPassFactor(preset) {
@@ -376,9 +613,10 @@ function vibratoPassFactor(preset) {
   return 0.55 + preset.humanize * 0.35;
 }
 
-function buildCorrectionCents(f0s, voiced, lockedMidi, slowMidi, preset, hop, sr) {
+function buildCorrectionCents(f0s, voiced, lockedMidi, slowMidi, filter, preset, hop, sr) {
   const cents = new Float32Array(f0s.length);
-  const driftIgnore = preset.pitchDriftIgnore;
+  const { correctable, microCents, vibrato, portamento, ornament } = filter;
+  const driftIgnore = Math.max(preset.pitchDriftIgnore, MICRO_PITCH_FILTER.microIgnoreCents);
   const flexOff = preset.flexTune <= 0.001;
   const flexCents = flexOff ? 0 : preset.flexTune * 42;
   const maxStep = retuneStepCents(preset, hop, sr);
@@ -396,7 +634,11 @@ function buildCorrectionCents(f0s, voiced, lockedMidi, slowMidi, preset, hop, sr
     const targetHz = midiToFreq(lockedMidi[i]);
     let corr = 1200 * Math.log2(targetHz / raw);
 
-    if (Math.abs(corr) < driftIgnore) {
+    if (correctable[i] < 0.22 || vibrato[i] || portamento[i] || ornament[i]) {
+      corr = 0;
+    } else if (Math.abs(microCents[i]) < MICRO_PITCH_FILTER.microIgnoreCents) {
+      corr = 0;
+    } else if (Math.abs(corr) < driftIgnore) {
       corr = 0;
     } else if (!flexOff && Math.abs(corr) < flexCents) {
       corr = 0;
@@ -413,12 +655,12 @@ function buildCorrectionCents(f0s, voiced, lockedMidi, slowMidi, preset, hop, sr
       }
     }
 
-    corr *= preset.correctionStrength;
+    corr *= preset.correctionStrength * correctable[i];
     if (preset.humanize > 0) corr *= 1 - preset.humanize * 0.72;
 
     corr = clamp(corr, -preset.maxCents, preset.maxCents);
 
-    if (preset.noteTransition === "instant") {
+    if (preset.noteTransition === "instant" && correctable[i] > 0.75) {
       prevCorr = corr;
     } else {
       corr = clamp(corr, prevCorr - maxStep, prevCorr + maxStep);
@@ -529,8 +771,9 @@ export async function renderPitchCorrection(sourceBuffer, presetId, opts = {}) {
 
   await yieldToUi();
 
-  const { lockedMidi, slowMidi } = buildLockedNotes(f0s, voiced, preset, keyInfo, hop, sr);
-  const cents = buildCorrectionCents(f0s, voiced, lockedMidi, slowMidi, preset, hop, sr);
+  const microFilter = applyMicroPitchFilter(f0s, voiced, hop, sr);
+  const { lockedMidi, slowMidi } = buildLockedNotes(microFilter, preset, keyInfo, hop, sr);
+  const cents = buildCorrectionCents(f0s, voiced, lockedMidi, slowMidi, microFilter, preset, hop, sr);
   const corrected = applyPitchShift(mono, sr, cents, hop, winSize, preset.wet);
 
   const AC = opts.audioContext?.constructor || window.AudioContext || window.webkitAudioContext;
@@ -548,9 +791,14 @@ export function ensureTakePitchState(take) {
       cache: {},
       rendering: null,
       keyInfo: null,
+      engineVersion: PITCH_ENGINE_VERSION,
     };
   } else {
     take.pitchCorrection.preset = normalizePitchPresetId(take.pitchCorrection.preset);
+    if (take.pitchCorrection.engineVersion !== PITCH_ENGINE_VERSION) {
+      take.pitchCorrection.cache = {};
+      take.pitchCorrection.engineVersion = PITCH_ENGINE_VERSION;
+    }
   }
   return take.pitchCorrection;
 }

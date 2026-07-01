@@ -2539,11 +2539,17 @@ async function saveVocalFromPreview(root) {
     });
     unsaved = false;
     try { bridge.onVocalsChanged?.(); } catch {}
-    screen = "home";
-    await persistProject();
+    const projectId = current?.projectId;
+    if (projectId) {
+      try { await deleteProjectWithBlobs(projectId); } catch {}
+    }
+    try { engine?.clearTakes(); } catch {}
+    current = null;
+    screen = "lobby";
     bridge.showToast?.("Saved to My Vocals.");
-    renderHome(root);
-    void ensureGuide(root);
+    leaveStudioRoot();
+    if (typeof bridge.openMyVocals === "function") bridge.openMyVocals();
+    else bridge.navigateBack?.();
   } catch (e) {
     console.warn("[studio] save failed:", e);
     bridge.showToast?.("Couldn't save — your take is still here.");

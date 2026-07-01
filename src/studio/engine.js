@@ -33,6 +33,9 @@ const GUIDE_MIX_TRIM = 0.88;
 const VOCAL_SLIDER_CENTER = 0.5;
 // WKWebView mic capture runs quiet on iOS — one fixed boost at record start (not AGC).
 const IOS_WEB_MIC_DEFAULT_GAIN = 2.0;
+// Live headphones monitor only — extra voice boost vs the guide (not in the capture path).
+const MONITOR_VOICE_BOOST = 2.5;
+const GUIDE_DUCK_WHEN_MONITOR = 0.55;
 
 /* -------------------------------------------------------------------------- */
 /* Modular effect registry                                                     */
@@ -418,20 +421,22 @@ export class StudioEngine {
     // There's inherent WebView round-trip latency, so it reads as a soft echo.
     this._monitorChain = null;
     if (cb.monitor) {
+      const monitorVoiceBoost = this.ctx.createGain();
+      monitorVoiceBoost.gain.value = Number(cb.monitorVoiceBoost) || MONITOR_VOICE_BOOST;
       const monitorGain = this.ctx.createGain();
       monitorGain.gain.value = cb.monitorVol ?? 0.85;
       const chain = this._buildMonitorChain(this.ctx, {
         reverb: cb.monitorReverb ?? 0.25,
         echo: cb.monitorEcho ?? 0.18,
       });
-      micInputGain.connect(chain.input);
+      micInputGain.connect(monitorVoiceBoost).connect(chain.input);
       // Centre the mic across both ears (see _centerNode), then limit so the
       // hot makeup gain stays loud without clipping in the headphones.
       const center = this._centerNode(this.ctx);
       const limiter = this._makeLimiter(this.ctx);
       chain.output.connect(center.input);
       center.output.connect(monitorGain).connect(limiter).connect(this.ctx.destination);
-      this._monitorChain = chain;
+      this._monitorChain = { ...chain, nodes: [...chain.nodes, monitorVoiceBoost, monitorGain, center.input, center.output, limiter] };
     }
 
     // Schedule the guide to start after the count-in, on the same clock.
@@ -443,6 +448,8 @@ export class StudioEngine {
       guideSrc = this.ctx.createBufferSource();
       guideSrc.buffer = this.guideBuffer;
       guideGain = this.ctx.createGain();
+      const musicVol = clamp01(cb.musicVol ?? 0.75);
+      guideGain.gain.value = cb.monitor ? musicVol * GUIDE_DUCK_WHEN_MONITOR : musicVol;
       guideSrc.connect(guideGain).connect(this.ctx.destination);
       guideSrc.start(startAt);
     }

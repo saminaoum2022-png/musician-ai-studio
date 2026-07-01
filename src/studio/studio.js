@@ -1186,6 +1186,7 @@ async function startTake(root) {
     await engine.startRecording({
       countInSec: memo ? 1 : 3,
       noGuide: memo,
+      musicVol: guideVol(root),
       autoGainControl: false,
       monitor: !!current?.monitor,
       // Live monitor = dry voice + a light reverb tail only. We intentionally

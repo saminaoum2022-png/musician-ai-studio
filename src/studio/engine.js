@@ -356,6 +356,8 @@ export class StudioEngine {
       video: false,
     });
 
+    this._micTrackInfo = readMicTrackInfo(this._recStream);
+
     const mime = pickRecorderMime();
     this._recChunks = [];
     this._recorder = mime
@@ -363,14 +365,14 @@ export class StudioEngine {
       : new MediaRecorder(this._recStream);
     this._recorder.ondataavailable = (e) => { if (e.data && e.data.size) this._recChunks.push(e.data); };
 
-    // Live level metering off the mic (analyser is never routed to output).
+    // Live level metering off the raw mic stream (parallel tap — not in MediaRecorder path).
     const micSrc = this.ctx.createMediaStreamSource(this._recStream);
     const analyser = this.ctx.createAnalyser();
     analyser.fftSize = 1024;
     micSrc.connect(analyser);
     const data = new Uint8Array(analyser.fftSize);
 
-    // Optional live monitoring ("hear yourself"): mic -> reverb + echo -> output.
+    // Optional live monitoring ("hear yourself"): raw mic -> reverb -> output.
     // HEADPHONES ONLY — through a speaker this loops back into the mic and howls.
     // There's inherent WebView round-trip latency, so it reads as a soft echo.
     this._monitorChain = null;
@@ -405,6 +407,7 @@ export class StudioEngine {
     }
 
     this._recLivePeakMax = 0;
+    this._recCtxStart = this.ctx.currentTime;
     this._guideCtxStart = startAt;
     this._recording = true;
     this._nodes = [micSrc, analyser, ...(guideSrc ? [guideSrc, guideGain] : []), ...(this._monitorChain?.nodes || [])];
@@ -472,6 +475,7 @@ export class StudioEngine {
       const arr = await blob.arrayBuffer();
       if (arr.byteLength > 0) {
         buffer = await this.ctx.decodeAudioData(arr.slice(0));
+        buffer = monoFromBuffer(this.ctx, buffer);
         const trimmed = trimBufferLeadIn(this.ctx, buffer, alignSec);
         buffer = trimmed.buffer;
         alignSec = trimmed.alignSec;
@@ -487,6 +491,7 @@ export class StudioEngine {
       containerBlob,
       recorderMime,
       liveMeterPeak: this._recLivePeakMax || 0,
+      micTrackInfo: this._micTrackInfo || null,
       buffer,
       createdAt: Date.now(),
       nudgeMs: 0,
@@ -510,6 +515,7 @@ export class StudioEngine {
       const arr = await take.blob.arrayBuffer();
       if (!arr.byteLength) return false;
       let buffer = await this.ctx.decodeAudioData(arr.slice(0));
+      buffer = monoFromBuffer(this.ctx, buffer);
       if (opts.polish) buffer = finishTakeBuffer(buffer);
       take.buffer = buffer;
       return true;
@@ -1057,6 +1063,21 @@ function makeImpulseResponse(ctx, seconds = 2.2, decay = 2.6) {
   return impulse;
 }
 
+/** Snapshot mic track settings after getUserMedia (for debug / level audit). */
+function readMicTrackInfo(stream) {
+  const track = stream?.getAudioTracks?.()?.[0];
+  if (!track) return null;
+  let settings = {};
+  let constraints = {};
+  try { settings = { ...(track.getSettings?.() || {}) }; } catch {}
+  try { constraints = { ...(track.getConstraints?.() || {}) }; } catch {}
+  return {
+    label: String(track.label || "").slice(0, 80),
+    settings,
+    constraints,
+  };
+}
+
 function pickRecorderMime() {
   const ua = navigator.userAgent || "";
   const safariLike = /iPad|iPhone|iPod/.test(ua) || (/Safari/.test(ua) && !/Chrome|CriOS|Android/.test(ua));
@@ -1252,10 +1273,38 @@ function finishTakeBuffer(buffer) {
 
 function bufferToWavBlob(buffer) {
   if (!buffer) return new Blob();
-  const chans = buffer.numberOfChannels >= 2
-    ? [buffer.getChannelData(0), buffer.getChannelData(1)]
-    : [buffer.getChannelData(0), buffer.getChannelData(0)];
+  const chans = [buffer.getChannelData(0)];
+  if (buffer.numberOfChannels >= 2) chans.push(buffer.getChannelData(1));
   return encodeWav16(chans, buffer.sampleRate);
+}
+
+/**
+ * iOS MediaRecorder AAC often decodes as stereo with the mic on L only.
+ * Collapse to true mono without halving a single active channel.
+ */
+function monoFromBuffer(ctx, buffer) {
+  if (!buffer || !ctx) return buffer;
+  if (buffer.numberOfChannels === 1) return buffer;
+
+  const L = buffer.getChannelData(0);
+  const R = buffer.getChannelData(1);
+  let sumL = 0;
+  let sumR = 0;
+  for (let i = 0; i < L.length; i++) {
+    sumL += L[i] * L[i];
+    sumR += R[i] * R[i];
+  }
+  const rmsL = Math.sqrt(sumL / L.length);
+  const rmsR = Math.sqrt(sumR / R.length);
+
+  const mono = ctx.createBuffer(1, buffer.length, buffer.sampleRate);
+  const out = mono.getChannelData(0);
+  if (rmsR < rmsL * 0.05) out.set(L);
+  else if (rmsL < rmsR * 0.05) out.set(R);
+  else {
+    for (let i = 0; i < L.length; i++) out[i] = 0.5 * (L[i] + R[i]);
+  }
+  return mono;
 }
 
 /** Drop count-in silence from the front of a take so waveforms line up with the guide. */

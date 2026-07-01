@@ -948,6 +948,9 @@ function mountAudioDebugSheet(root, take) {
       latencyMs: engine?.getLatencyMs?.() ?? 0,
     });
     const pipeline = describeRecordingPipeline(take, engine?.sampleRate);
+    const peakDeltaDb = Number.isFinite(analysis.peakDbfs) && Number.isFinite(pipeline.liveMeterPeakDbfs)
+      ? analysis.peakDbfs - pipeline.liveMeterPeakDbfs
+      : null;
     const sheet = root.querySelector("[data-audio-debug-sheet]");
     const panel = sheet?.querySelector(".studioAudioDebugPanel");
     if (!analysis || !panel) {
@@ -986,7 +989,14 @@ function mountAudioDebugSheet(root, take) {
             <div class="studioAudioDebugRow"><dt>Web Audio</dt><dd>${esc(pipeline.webAudioRole)}</dd></div>
             <div class="studioAudioDebugRow"><dt>Container</dt><dd>${esc(pipeline.containerMime)}</dd></div>
             <div class="studioAudioDebugRow"><dt>Context SR</dt><dd>${pipeline.contextSampleRate} Hz</dd></div>
-            <div class="studioAudioDebugRow"><dt>Channels</dt><dd>${pipeline.channelCount || "—"}</dd></div>
+            <div class="studioAudioDebugRow"><dt>Channels</dt><dd>${pipeline.channelCount || "—"} (mono)</dd></div>
+            <div class="studioAudioDebugRow"><dt>Record gain</dt><dd>${esc(pipeline.recordInputGain)}</dd></div>
+            <div class="studioAudioDebugRow"><dt>Mic track</dt><dd class="studioAudioDebugMono">${esc(pipeline.micLabel)}</dd></div>
+            <div class="studioAudioDebugRow"><dt>Track SR / ch</dt><dd>${pipeline.trackSampleRate} Hz · ${pipeline.trackChannels} ch</dd></div>
+            <div class="studioAudioDebugRow"><dt>AGC req / actual</dt><dd>${esc(pipeline.agcRequested)} / ${esc(pipeline.agcActual)}</dd></div>
+            <div class="studioAudioDebugRow"><dt>NS / EC actual</dt><dd>${esc(pipeline.nsActual)} / ${esc(pipeline.ecActual)}</dd></div>
+            <div class="studioAudioDebugRow"><dt>Live vs file peak</dt><dd>${peakDeltaDb == null ? "—" : `${peakDeltaDb >= 0 ? "+" : ""}${peakDeltaDb.toFixed(1)} dB`}${peakDeltaDb != null && Math.abs(peakDeltaDb) <= 3 ? " · decode OK" : peakDeltaDb != null ? " · check decode" : ""}</dd></div>
+            <div class="studioAudioDebugRow studioAudioDebugRow--note"><dt>vs Voice Memos</dt><dd class="studioAudioDebugMono">${esc(pipeline.voiceMemosNote)}</dd></div>
             <div class="studioAudioDebugRow"><dt>Constraints</dt><dd class="studioAudioDebugMono">${esc(pipeline.constraints)}</dd></div>
             <div class="studioAudioDebugRow"><dt>Live meter peak</dt><dd>${formatDbfs(pipeline.liveMeterPeakDbfs)} (${pipeline.liveMeterPeakPct}%)</dd></div>
             <div class="studioAudioDebugRow"><dt>Analyzed buffer</dt><dd class="studioAudioDebugMono">${esc(pipeline.analyzedBuffer)}</dd></div>

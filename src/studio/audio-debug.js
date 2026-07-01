@@ -101,16 +101,35 @@ export function exportRawTakeWavBlob(buffer) {
 /** Read-only audit of how the take was captured (for the debug panel). */
 export function describeRecordingPipeline(take, ctxSampleRate = 0) {
   const live = Number(take?.liveMeterPeak) || 0;
+  const info = take?.micTrackInfo;
+  const settings = info?.settings || {};
+  const constraints = info?.constraints || {};
+  const agcActual = settings.autoGainControl;
+  const agcRequested = constraints.autoGainControl;
+  const fmtBool = (v) => (v === true ? "on" : v === false ? "off" : "default");
+
   return {
-    captureMethod: "MediaRecorder API",
-    webAudioRole: "Live meter + optional headphones monitor only",
+    captureMethod: "MediaRecorder API (direct mic stream, gain 1.0)",
+    webAudioRole: "Parallel meter + optional monitor only — not in record path",
     containerMime: take?.recorderMime || "—",
     contextSampleRate: ctxSampleRate || take?.buffer?.sampleRate || 0,
     channelCount: take?.buffer?.numberOfChannels || 0,
-    constraints: "echoCancellation: false · noiseSuppression: false · autoGainControl: false · channelCount: 1",
+    recordInputGain: "1.00× (0.0 dB) — no app gain applied",
+    micLabel: info?.label || "—",
+    trackSampleRate: settings.sampleRate || "—",
+    trackChannels: settings.channelCount ?? "—",
+    agcRequested: fmtBool(agcRequested),
+    agcActual: fmtBool(agcActual),
+    nsActual: fmtBool(settings.noiseSuppression),
+    ecActual: fmtBool(settings.echoCancellation),
+    voiceMemosNote: "Voice Memos uses native iOS recorder with system AGC enabled — not browser attenuation",
+    levelCompareNote: take?.buffer
+      ? "Compare Live meter peak vs Peak dBFS — if similar, decode is not attenuating"
+      : "",
+    constraints: "requested: echoCancellation off · noiseSuppression off · autoGainControl off · channelCount 1",
     liveMeterPeakDbfs: ampToDb(live),
     liveMeterPeakPct: Math.round(live * 100),
-    analyzedBuffer: "Post count-in trim · pre any FX/gain/normalize",
+    analyzedBuffer: "Mono downmix · post count-in trim · pre mix FX",
     dspBeforeAnalysis: "None",
   };
 }

@@ -930,25 +930,34 @@ function bindRecording(root) {
  */
 function mountAudioDebugSheet(root, take) {
   const takeIndex = (engine?.getTakes?.() || []).findIndex((t) => t.id === take.id) + 1;
-  const analysis = analyzeRawTake(take.buffer, {
-    takeIndex: takeIndex || 1,
-    latencyMs: engine?.getLatencyMs?.() ?? 0,
-  });
-  if (!analysis) {
-    renderReview(root, take);
-    return;
-  }
-
   root.querySelector("[data-audio-debug-sheet]")?.remove();
-
-  const diagHtml = analysis.diagnostics.map((d) =>
-    `<li class="studioAudioDebugDiag studioAudioDebugDiag--${d.level}">${d.level === "warn" ? "⚠" : "✓"} ${esc(d.text)}</li>`,
-  ).join("");
 
   root.insertAdjacentHTML("beforeend", `
     <div class="studioAudioDebugSheet" data-audio-debug-sheet role="dialog" aria-label="Audio debug">
       <div class="studioAudioDebugBackdrop" data-audio-debug-backdrop aria-hidden="true"></div>
       <div class="studioAudioDebugPanel">
+        <p class="studioAudioDebugLoading">Analyzing raw take…</p>
+      </div>
+    </div>`);
+
+  void (async () => {
+    const analysis = await analyzeRawTake(take.buffer, {
+      takeIndex: takeIndex || 1,
+      latencyMs: engine?.getLatencyMs?.() ?? 0,
+    });
+    const sheet = root.querySelector("[data-audio-debug-sheet]");
+    const panel = sheet?.querySelector(".studioAudioDebugPanel");
+    if (!analysis || !panel) {
+      sheet?.remove();
+      renderReview(root, take);
+      return;
+    }
+
+    const diagHtml = analysis.diagnostics.map((d) =>
+      `<li class="studioAudioDebugDiag studioAudioDebugDiag--${d.level}">${d.level === "warn" ? "⚠" : "✓"} ${esc(d.text)}</li>`,
+    ).join("");
+
+    panel.innerHTML = `
         <div class="studioAudioDebugHead">
           <span class="studioAudioDebugKicker">DEV · RAW TAKE ANALYSIS</span>
         </div>
@@ -958,7 +967,7 @@ function mountAudioDebugSheet(root, take) {
           <div class="studioAudioDebugRow"><dt>Peak Level</dt><dd>${formatDbfs(analysis.peakDbfs)}</dd></div>
           <div class="studioAudioDebugRow"><dt>Integrated Loudness</dt><dd>${formatLufs(analysis.lufsIntegrated, "-I")}</dd></div>
           <div class="studioAudioDebugRow"><dt>Short-term Loudness</dt><dd>${formatLufs(analysis.lufsShortTerm, "-S")}</dd></div>
-          <div class="studioAudioDebugRow"><dt>RMS</dt><dd>${formatDb(analysis.rmsDb)}</dd></div>
+          <div class="studioAudioDebugRow"><dt>RMS (active)</dt><dd>${formatDb(analysis.rmsDb)}</dd></div>
           <div class="studioAudioDebugRow"><dt>Noise Floor</dt><dd>${formatDb(analysis.noiseFloorDb)}</dd></div>
           <div class="studioAudioDebugRow"><dt>Dynamic Range</dt><dd>${analysis.dynamicRangeDb.toFixed(1)} dB</dd></div>
           <div class="studioAudioDebugRow"><dt>Detected Clipping</dt><dd>${analysis.clippingSamples} samples</dd></div>
@@ -971,22 +980,20 @@ function mountAudioDebugSheet(root, take) {
           <span class="studioAudioDebugVoiceTitle">Voice analysis</span>
           <ul class="studioAudioDebugDiagList">${diagHtml}</ul>
         </div>
-        <button type="button" class="studioPrimary studioAudioDebugContinue" data-audio-debug-continue>Continue</button>
-      </div>
-    </div>`);
+        <button type="button" class="studioPrimary studioAudioDebugContinue" data-audio-debug-continue>Continue</button>`;
 
-  const sheet = root.querySelector("[data-audio-debug-sheet]");
-  const close = () => {
-    sheet?.remove();
-    renderReview(root, take);
-  };
-  sheet?.querySelector("[data-audio-debug-continue]")?.addEventListener("click", () => {
-    bridge.haptic?.("light");
-    close();
-  });
-  sheet?.querySelector("[data-audio-debug-backdrop]")?.addEventListener("click", () => {
-    close();
-  });
+    const close = () => {
+      sheet?.remove();
+      renderReview(root, take);
+    };
+    sheet?.querySelector("[data-audio-debug-continue]")?.addEventListener("click", () => {
+      bridge.haptic?.("light");
+      close();
+    });
+    sheet?.querySelector("[data-audio-debug-backdrop]")?.addEventListener("click", () => {
+      close();
+    });
+  })();
 }
 
 async function startTake(root) {

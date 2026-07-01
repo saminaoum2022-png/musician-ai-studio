@@ -353,18 +353,20 @@ export class StudioEngine {
 
     // The recording's t=0 == _recCtxStart; the guide's t=0 == _guideCtxStart.
     // So guide-time 0 sits `alignSec` into the recording.
-    const alignSec = Math.max(0, this._guideCtxStart - this._recCtxStart);
+    let alignSec = Math.max(0, this._guideCtxStart - this._recCtxStart);
 
     let buffer = null;
     try {
       const arr = await blob.arrayBuffer();
-      buffer = await this.ctx.decodeAudioData(arr.slice(0));
-      buffer = normalizeTakeBuffer(buffer, 0.76);
-      const trimmed = trimBufferLeadIn(this.ctx, buffer, alignSec);
-      buffer = trimmed.buffer;
-      alignSec = trimmed.alignSec;
+      if (arr.byteLength > 0) {
+        buffer = await this.ctx.decodeAudioData(arr.slice(0));
+        buffer = normalizeTakeBuffer(buffer, 0.76);
+        const trimmed = trimBufferLeadIn(this.ctx, buffer, alignSec);
+        buffer = trimmed.buffer;
+        alignSec = trimmed.alignSec;
+      }
     } catch {
-      buffer = null; // some iOS blobs decode lazily; mix path will retry
+      buffer = null; // decode failed — blob kept so a retry can recover
     }
 
     const take = {
@@ -381,6 +383,22 @@ export class StudioEngine {
   }
 
   /* ---- takes ---- */
+
+  /** Decode a take's blob into buffer if missing (e.g. after a partial stop failure). */
+  async hydrateTakeBuffer(take) {
+    if (!take || take.buffer || !take.blob?.size) return !!take?.buffer;
+    await this.ensureReady();
+    try {
+      const arr = await take.blob.arrayBuffer();
+      if (!arr.byteLength) return false;
+      let buffer = await this.ctx.decodeAudioData(arr.slice(0));
+      buffer = normalizeTakeBuffer(buffer, 0.76);
+      take.buffer = buffer;
+      return true;
+    } catch {
+      return false;
+    }
+  }
 
   getTakes() { return this.takes.slice(); }
   getActiveTake() { return this.takes.find((t) => t.id === this.activeTakeId) || null; }

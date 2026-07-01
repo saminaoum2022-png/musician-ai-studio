@@ -753,6 +753,12 @@ function bindRecording(root) {
     }
 
     unsaved = true;
+    if (take && !take.buffer) {
+      try { await engine.hydrateTakeBuffer(take); } catch {}
+    }
+    if (take && !take.buffer) {
+      bridge.showToast?.("Couldn’t read that take — try recording again.");
+    }
     renderReview(root, take);
   });
 }

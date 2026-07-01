@@ -10,7 +10,7 @@ import { fileURLToPath } from "url";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.join(__dirname, "..");
 const configPath = path.join(root, "ios/App/App/capacitor.config.json");
-const LOCAL_PLUGINS = ["NowPlayingPlugin", "StoryCameraPlugin", "AuthVaultPlugin"];
+const LOCAL_PLUGINS = ["NowPlayingPlugin", "StoryCameraPlugin", "AuthVaultPlugin", "NativeMicProbePlugin"];
 
 /** @capacitor-community/apple-sign-in 7.x still pins capacitor-swift-pm 7.x in Package.swift. */
 function patchAppleSignInSwiftPm() {

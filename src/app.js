@@ -70,7 +70,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260701-220234";
+const APP_BUILD = "20260701-221848";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -271,6 +271,15 @@ function isFounderBadgeEmail(raw) {
           async addListener() {
             return { remove: async () => {} };
           },
+        }),
+      });
+    }
+    if (!cap.Plugins?.NativeMicProbe) {
+      cap.registerPlugin("NativeMicProbe", {
+        web: () => ({
+          async getSessionInfo() { return { category: "web", mode: "n/a" }; },
+          async prepareRecordingSession() { return {}; },
+          async recordProbe() { throw new Error("NativeMicProbe is iOS only"); },
         }),
       });
     }

@@ -23,6 +23,13 @@ import {
   buildAgcCompareHtml,
   clearAgcCompareSnapshots,
   inputLevelModeLabel,
+  isNativeMicProbeAvailable,
+  fetchNativeSessionInfo,
+  getNativeSessionPrepEnabled,
+  setNativeSessionPrepEnabled,
+  runNativeMicProbe,
+  formatNativeSessionSummary,
+  buildNativeVsWebCompareHtml,
   analyzeRawTake,
   exportRawTakeWavBlob,
   describeRecordingPipeline,
@@ -748,13 +755,12 @@ function renderHome(root) {
       <div class="studioLyricsWrap" data-studio-home-lyrics>${homeLyricsHtml()}</div>
 
       ${isStudioAudioDebug() ? `
-      <div class="studioAgcTest" data-studio-agc-test>
-        <span class="studioAgcTestLabel">DEV · AGC A/B test (next recording)</span>
-        <div class="studioAgcTestToggle" role="group" aria-label="Input level test mode">
-          <button type="button" class="studioAgcTestBtn${getAgcTestMode() === "raw" ? " isActive" : ""}" data-agc-mode="raw">Raw · AGC off</button>
-          <button type="button" class="studioAgcTestBtn${getAgcTestMode() === "agc" ? " isActive" : ""}" data-agc-mode="agc">Auto Level · AGC on</button>
-        </div>
-        <p class="studioAgcTestHint">Record twice — once per mode — then compare metrics in the debug panel. Default production capture stays Raw.</p>
+      <div class="studioAgcTest" data-studio-native-session>
+        <span class="studioAgcTestLabel">DEV · Native session test</span>
+        <button type="button" class="studioAgcTestBtn studioAgcTestBtn--full${getNativeSessionPrepEnabled() ? " isActive" : ""}" data-native-session-prep>
+          ${getNativeSessionPrepEnabled() ? "✓ playAndRecord before Web capture" : "Prepare playAndRecord before Web capture"}
+        </button>
+        <p class="studioAgcTestHint">AppDelegate sets AVAudioSession to playback-only at launch — likely why Web mic is quiet. Toggle this to configure playAndRecord (routing only, no gain) before getUserMedia, then record. Use debug panel native probe to compare AVAudioEngine levels.</p>
       </div>` : ""}
 
       <div class="studioFooter">
@@ -812,16 +818,18 @@ function bindHome(root) {
       bridge.showToast?.("🎧 Best with wired earphones in — without them you may hear echo and lag.", { durationMs: 4200 });
     }
   });
-  root.querySelectorAll("[data-agc-mode]").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      bridge.haptic?.("light");
-      const mode = btn.getAttribute("data-agc-mode") === "agc" ? "agc" : "raw";
-      setAgcTestMode(mode);
-      root.querySelectorAll("[data-agc-mode]").forEach((b) => {
-        b.classList.toggle("isActive", b.getAttribute("data-agc-mode") === mode);
-      });
-      bridge.showToast?.(mode === "agc" ? "Next take: Auto Level (AGC on)" : "Next take: Raw (AGC off)");
-    });
+  root.querySelector("[data-native-session-prep]")?.addEventListener("click", () => {
+    bridge.haptic?.("light");
+    const next = !getNativeSessionPrepEnabled();
+    setNativeSessionPrepEnabled(next);
+    const btn = root.querySelector("[data-native-session-prep]");
+    btn?.classList.toggle("isActive", next);
+    if (btn) {
+      btn.textContent = next
+        ? "✓ playAndRecord before Web capture"
+        : "Prepare playAndRecord before Web capture";
+    }
+    bridge.showToast?.(next ? "Will configure playAndRecord before next Web recording" : "Web capture uses default session (playback-only at launch)");
   });
 }
 
@@ -885,7 +893,7 @@ function renderRecording(root) {
       <div class="studioRecTop">
         <span class="studioRecDot" aria-hidden="true"></span>
         <span class="studioRecLabel">${memo ? "Quick take…" : "Recording…"}</span>
-        ${isStudioAudioDebug() ? `<span class="studioRecAgcBadge">${esc(inputLevelModeLabel(getAgcTestMode()))}</span>` : ""}
+        ${isStudioAudioDebug() ? `<span class="studioRecAgcBadge">${esc(getNativeSessionPrepEnabled() ? "playAndRecord prep" : "default session")}</span>` : ""}
         <span class="studioRecTimer" data-studio-timer>0:00</span>
       </div>
 
@@ -994,6 +1002,16 @@ function mountAudioDebugSheet(root, take) {
     saveAgcCompareSnapshot(inputMode, analysis, pipeline);
     const agcCompareHtml = buildAgcCompareHtml();
 
+    let sessionInfo = null;
+    let nativeProbe = null;
+    if (isNativeMicProbeAvailable()) {
+      try { sessionInfo = await fetchNativeSessionInfo(); } catch {}
+    }
+    const sessionSummary = formatNativeSessionSummary(sessionInfo);
+    const sessionWarn = sessionInfo?.category === "AVAudioSessionCategoryPlayback"
+      ? " ⚠ playback-only — Web mic may be attenuated"
+      : "";
+
     const diagHtml = analysis.diagnostics.map((d) =>
       `<li class="studioAudioDebugDiag studioAudioDebugDiag--${d.level}">${d.level === "warn" ? "⚠" : "✓"} ${esc(d.text)}</li>`,
     ).join("");
@@ -1018,6 +1036,13 @@ function mountAudioDebugSheet(root, take) {
           <div class="studioAudioDebugRow"><dt>Input Gain</dt><dd>${analysis.inputGainPct}%</dd></div>
           <div class="studioAudioDebugRow"><dt>Recording Latency</dt><dd>${Math.round(analysis.latencyMs)} ms</dd></div>
         </dl>
+        <div class="studioAudioDebugPipeline">
+          <span class="studioAudioDebugVoiceTitle">AVAudioSession (native)</span>
+          <dl class="studioAudioDebugStats">
+            <div class="studioAudioDebugRow"><dt>Session</dt><dd class="studioAudioDebugMono">${esc(sessionSummary)}${esc(sessionWarn)}</dd></div>
+            <div class="studioAudioDebugRow"><dt>Input gain settable</dt><dd>${sessionInfo?.inputGainSettable ? `yes · ${sessionInfo.inputGain}` : "no"}</dd></div>
+          </dl>
+        </div>
         <div class="studioAudioDebugPipeline">
           <span class="studioAudioDebugVoiceTitle">Recording pipeline</span>
           <dl class="studioAudioDebugStats">
@@ -1044,8 +1069,55 @@ function mountAudioDebugSheet(root, take) {
           <ul class="studioAudioDebugDiagList">${diagHtml}</ul>
         </div>
         ${agcCompareHtml}
-        <button type="button" class="studioAudioDebugExport" data-audio-debug-export>Export Raw Take WAV</button>
+        <div class="studioAudioDebugNativeProbe" data-native-probe-result></div>
+        ${isNativeMicProbeAvailable() ? `<button type="button" class="studioAudioDebugExport" data-native-probe-run>Run 5s Native Probe (AVAudioEngine)</button>` : ""}
+        <button type="button" class="studioAudioDebugExport" data-audio-debug-export>Export Web Take WAV</button>
         <button type="button" class="studioPrimary studioAudioDebugContinue" data-audio-debug-continue>Continue</button>`;
+
+    sheet?.querySelector("[data-native-probe-run]")?.addEventListener("click", () => {
+      bridge.haptic?.("medium");
+      const btn = sheet.querySelector("[data-native-probe-run]");
+      const slot = sheet.querySelector("[data-native-probe-result]");
+      if (btn) btn.disabled = true;
+      if (slot) slot.innerHTML = `<p class="studioAudioDebugLoading">Native probe — sing now (5s)…</p>`;
+      void (async () => {
+        try {
+          nativeProbe = await runNativeMicProbe(5);
+          if (slot) {
+            const shareBtn = nativeProbe.wavPath
+              ? `<button type="button" class="studioAudioDebugCompareClear" data-native-probe-share>Share native probe WAV</button>`
+              : "";
+            slot.innerHTML = `
+              <div class="studioAudioDebugCompare">
+                <span class="studioAudioDebugVoiceTitle">Native probe result</span>
+                <dl class="studioAudioDebugStats">
+                  <div class="studioAudioDebugRow"><dt>Peak</dt><dd>${Number(nativeProbe.peakDbfs).toFixed(1)} dBFS</dd></div>
+                  <div class="studioAudioDebugRow"><dt>RMS</dt><dd>${Number(nativeProbe.rmsDb).toFixed(1)} dB</dd></div>
+                  <div class="studioAudioDebugRow"><dt>Clipping</dt><dd>${nativeProbe.clippingSamples} samples</dd></div>
+                  <div class="studioAudioDebugRow"><dt>Path</dt><dd class="studioAudioDebugMono">${esc(nativeProbe.capturePath || "")}</dd></div>
+                </dl>
+                ${shareBtn}
+              </div>
+              ${buildNativeVsWebCompareHtml(analysis, nativeProbe)}`;
+            slot.querySelector("[data-native-probe-share]")?.addEventListener("click", () => {
+              void (async () => {
+                try {
+                  const res = await fetch(nativeProbe.wavPath);
+                  const blob = await res.blob();
+                  await bridge.deliverBlob?.(blob, { filename: `nabad-native-probe-${Date.now()}.wav`, title: "Native mic probe" });
+                } catch (e) {
+                  bridge.showToast?.(`Share failed: ${String(e?.message || e).slice(0, 60)}`);
+                }
+              })();
+            });
+          }
+        } catch (e) {
+          if (slot) slot.innerHTML = `<p class="studioAudioDebugCompareHint">Native probe failed: ${esc(String(e?.message || e).slice(0, 80))}</p>`;
+        } finally {
+          if (btn) btn.disabled = false;
+        }
+      })();
+    });
 
     sheet?.querySelector("[data-agc-compare-clear]")?.addEventListener("click", () => {
       clearAgcCompareSnapshots();
@@ -1091,7 +1163,8 @@ async function startTake(root) {
     await engine.startRecording({
       countInSec: memo ? 1 : 3,
       noGuide: memo,
-      autoGainControl: isStudioAudioDebug() && getAgcTestMode() === "agc",
+      prepareNativeSession: isStudioAudioDebug() && getNativeSessionPrepEnabled(),
+      autoGainControl: false,
       monitor: !!current?.monitor,
       // Live monitor = dry voice + a light reverb tail only. We intentionally
       // drop the slap-back delay here: a 0.26s echo on what you hear reads as

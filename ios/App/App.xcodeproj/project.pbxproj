@@ -15,6 +15,7 @@
 		D1E2F351FED79650016851F /* AuthVaultPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1E2F341FED79650016851F /* AuthVaultPlugin.swift */; };
 		B2C3D411FED79650016851F /* BridgeViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2C3D401FED79650016851F /* BridgeViewController.swift */; };
 		C1C2C3D41FED79650016851F /* StoryCameraPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1C2C3D31FED79650016851F /* StoryCameraPlugin.swift */; };
+		N1M2P3R41FED79650016851F /* NativeMicProbePlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = N1M2P3R31FED79650016851F /* NativeMicProbePlugin.swift */; };
 		504EC30D1FED79650016851F /* Main.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 504EC30B1FED79650016851F /* Main.storyboard */; };
 		504EC30F1FED79650016851F /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 504EC30E1FED79650016851F /* Assets.xcassets */; };
 		504EC3121FED79650016851F /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 504EC3101FED79650016851F /* LaunchScreen.storyboard */; };
@@ -31,6 +32,7 @@
 		D1E2F341FED79650016851F /* AuthVaultPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthVaultPlugin.swift; sourceTree = "<group>"; };
 		B2C3D401FED79650016851F /* BridgeViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BridgeViewController.swift; sourceTree = "<group>"; };
 		C1C2C3D31FED79650016851F /* StoryCameraPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoryCameraPlugin.swift; sourceTree = "<group>"; };
+		N1M2P3R31FED79650016851F /* NativeMicProbePlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeMicProbePlugin.swift; sourceTree = "<group>"; };
 		504EC30C1FED79650016851F /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/Main.storyboard; sourceTree = "<group>"; };
 		504EC30E1FED79650016851F /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		504EC3111FED79650016851F /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/LaunchScreen.storyboard; sourceTree = "<group>"; };
@@ -81,6 +83,7 @@
 				D1E2F341FED79650016851F /* AuthVaultPlugin.swift */,
 				B2C3D401FED79650016851F /* BridgeViewController.swift */,
 				C1C2C3D31FED79650016851F /* StoryCameraPlugin.swift */,
+				N1M2P3R31FED79650016851F /* NativeMicProbePlugin.swift */,
 				504EC30B1FED79650016851F /* Main.storyboard */,
 				504EC30E1FED79650016851F /* Assets.xcassets */,
 				504EC3101FED79650016851F /* LaunchScreen.storyboard */,
@@ -201,6 +204,7 @@
 				D1E2F351FED79650016851F /* AuthVaultPlugin.swift in Sources */,
 				B2C3D411FED79650016851F /* BridgeViewController.swift in Sources */,
 				C1C2C3D41FED79650016851F /* StoryCameraPlugin.swift in Sources */,
+				N1M2P3R41FED79650016851F /* NativeMicProbePlugin.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

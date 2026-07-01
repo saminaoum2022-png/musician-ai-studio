@@ -41346,6 +41346,50 @@ body[data-route="studio"] .deskRail { display: none !important; }
 }
 .studioLevelsSliders { display: flex; flex-direction: column; gap: 14px; }
 
+/* Dev-only raw take analysis (never shown unless audio debug flag is on) */
+.studioAudioDebugSheet {
+  position: fixed; inset: 0; z-index: 200; display: flex; align-items: flex-end; justify-content: center;
+  pointer-events: auto;
+}
+.studioAudioDebugBackdrop {
+  position: absolute; inset: 0; background: rgba(0,0,0,0.45);
+}
+.studioAudioDebugPanel {
+  position: relative; width: min(100%, 420px); max-height: min(78vh, 560px); overflow-y: auto;
+  margin: 0 8px max(8px, env(safe-area-inset-bottom));
+  padding: 14px 16px 16px; border-radius: 16px 16px 14px 14px;
+  background: #0c0e14; border: 1px solid rgba(255,180,80,0.35);
+  box-shadow: 0 -6px 28px rgba(0,0,0,0.55);
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 11px;
+}
+.studioAudioDebugHead { margin-bottom: 10px; }
+.studioAudioDebugKicker {
+  font-size: 10px; font-weight: 700; letter-spacing: 0.06em;
+  color: rgba(255, 180, 80, 0.95);
+}
+.studioAudioDebugStats { margin: 0 0 12px; }
+.studioAudioDebugRow {
+  display: flex; justify-content: space-between; gap: 12px;
+  padding: 3px 0; border-bottom: 1px solid rgba(255,255,255,0.05);
+}
+.studioAudioDebugRow dt { margin: 0; color: rgba(232,238,247,0.45); font-weight: 500; }
+.studioAudioDebugRow dd { margin: 0; color: rgba(232,238,247,0.92); text-align: right; }
+.studioAudioDebugVoice { margin-bottom: 14px; }
+.studioAudioDebugVoiceTitle {
+  display: block; font-size: 10px; font-weight: 700; letter-spacing: 0.04em;
+  color: rgba(232,238,247,0.5); margin-bottom: 6px; text-transform: uppercase;
+}
+.studioAudioDebugDiagList {
+  list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px;
+}
+.studioAudioDebugDiag { font-size: 11px; line-height: 1.35; }
+.studioAudioDebugDiag--ok { color: rgba(120, 220, 160, 0.95); }
+.studioAudioDebugDiag--warn { color: rgba(255, 190, 100, 0.95); }
+.studioAudioDebugContinue {
+  width: 100%; font-family: inherit; font-size: 15px; font-weight: 700;
+}
+
 .studioFooter--edit { margin-top: auto; }
 
 .studioWave--solo .studioPeakBar { background: rgba(124, 92, 255, 0.55); }

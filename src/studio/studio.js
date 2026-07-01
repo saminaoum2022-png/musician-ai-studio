@@ -15,6 +15,14 @@
 
 import { StudioEngine, FINISH_PRESETS, FINISH_IDS } from "./engine.js";
 import {
+  isStudioAudioDebug,
+  bindAudioDebugEnableGesture,
+  analyzeRawTake,
+  formatDb,
+  formatDbfs,
+  formatLufs,
+} from "./audio-debug.js";
+import {
   listProjects,
   upsertProject,
   deleteProjectWithBlobs,
@@ -492,6 +500,7 @@ function renderLobby(root) {
 
 function bindLobby(root) {
   bindHeader(root);
+  bindAudioDebugEnableGesture(root.querySelector(".studioLobbyHead .studioTitle"), bridge.showToast);
   root.querySelector("[data-studio-quick]")?.addEventListener("click", () => startQuickTake(root));
   root.querySelector("[data-studio-newproject]")?.addEventListener("click", () => {
     bridge.haptic?.("light");
@@ -907,7 +916,76 @@ function bindRecording(root) {
       bridge.showToast?.("Couldn’t read that take — try recording again.");
     }
     void persistProject();
+    if (isStudioAudioDebug() && take?.buffer) {
+      mountAudioDebugSheet(root, take);
+      return;
+    }
     renderReview(root, take);
+  });
+}
+
+/**
+ * Dev-only: bottom sheet with raw take metrics before Review.
+ * Does not modify the take or run DSP.
+ */
+function mountAudioDebugSheet(root, take) {
+  const takeIndex = (engine?.getTakes?.() || []).findIndex((t) => t.id === take.id) + 1;
+  const analysis = analyzeRawTake(take.buffer, {
+    takeIndex: takeIndex || 1,
+    latencyMs: engine?.getLatencyMs?.() ?? 0,
+  });
+  if (!analysis) {
+    renderReview(root, take);
+    return;
+  }
+
+  root.querySelector("[data-audio-debug-sheet]")?.remove();
+
+  const diagHtml = analysis.diagnostics.map((d) =>
+    `<li class="studioAudioDebugDiag studioAudioDebugDiag--${d.level}">${d.level === "warn" ? "⚠" : "✓"} ${esc(d.text)}</li>`,
+  ).join("");
+
+  root.insertAdjacentHTML("beforeend", `
+    <div class="studioAudioDebugSheet" data-audio-debug-sheet role="dialog" aria-label="Audio debug">
+      <div class="studioAudioDebugBackdrop" data-audio-debug-backdrop aria-hidden="true"></div>
+      <div class="studioAudioDebugPanel">
+        <div class="studioAudioDebugHead">
+          <span class="studioAudioDebugKicker">DEV · RAW TAKE ANALYSIS</span>
+        </div>
+        <dl class="studioAudioDebugStats">
+          <div class="studioAudioDebugRow"><dt>Take</dt><dd>#${analysis.takeIndex}</dd></div>
+          <div class="studioAudioDebugRow"><dt>Duration</dt><dd>${analysis.durationSec.toFixed(1)} s</dd></div>
+          <div class="studioAudioDebugRow"><dt>Peak Level</dt><dd>${formatDbfs(analysis.peakDbfs)}</dd></div>
+          <div class="studioAudioDebugRow"><dt>Integrated Loudness</dt><dd>${formatLufs(analysis.lufsIntegrated, "-I")}</dd></div>
+          <div class="studioAudioDebugRow"><dt>Short-term Loudness</dt><dd>${formatLufs(analysis.lufsShortTerm, "-S")}</dd></div>
+          <div class="studioAudioDebugRow"><dt>RMS</dt><dd>${formatDb(analysis.rmsDb)}</dd></div>
+          <div class="studioAudioDebugRow"><dt>Noise Floor</dt><dd>${formatDb(analysis.noiseFloorDb)}</dd></div>
+          <div class="studioAudioDebugRow"><dt>Dynamic Range</dt><dd>${analysis.dynamicRangeDb.toFixed(1)} dB</dd></div>
+          <div class="studioAudioDebugRow"><dt>Detected Clipping</dt><dd>${analysis.clippingSamples} samples</dd></div>
+          <div class="studioAudioDebugRow"><dt>Sample Rate</dt><dd>${analysis.sampleRate} Hz</dd></div>
+          <div class="studioAudioDebugRow"><dt>Bit Depth</dt><dd>${esc(analysis.bitDepthLabel)}</dd></div>
+          <div class="studioAudioDebugRow"><dt>Input Gain</dt><dd>${analysis.inputGainPct}%</dd></div>
+          <div class="studioAudioDebugRow"><dt>Recording Latency</dt><dd>${Math.round(analysis.latencyMs)} ms</dd></div>
+        </dl>
+        <div class="studioAudioDebugVoice">
+          <span class="studioAudioDebugVoiceTitle">Voice analysis</span>
+          <ul class="studioAudioDebugDiagList">${diagHtml}</ul>
+        </div>
+        <button type="button" class="studioPrimary studioAudioDebugContinue" data-audio-debug-continue>Continue</button>
+      </div>
+    </div>`);
+
+  const sheet = root.querySelector("[data-audio-debug-sheet]");
+  const close = () => {
+    sheet?.remove();
+    renderReview(root, take);
+  };
+  sheet?.querySelector("[data-audio-debug-continue]")?.addEventListener("click", () => {
+    bridge.haptic?.("light");
+    close();
+  });
+  sheet?.querySelector("[data-audio-debug-backdrop]")?.addEventListener("click", () => {
+    close();
   });
 }
 

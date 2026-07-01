@@ -33,8 +33,10 @@ const GUIDE_MIX_TRIM = 0.88;
 const VOCAL_SLIDER_CENTER = 0.5;
 // Count-in mic calibration: measure during 3-2-1, boost shared bus when the take starts.
 const MIC_CAL_TARGET_PEAK = 0.251; // ~−12 dBFS
-const MIC_CAL_MIN_PEAK = 0.008; // ignore silence / room noise
+const MIC_CAL_MIN_PEAK = 0.008; // below ≈−42 dBFS — treat as silence, no boost
+const MIC_CAL_REPRESENTATIVE_PEAK = 0.063; // ~−24 dBFS — need audible count-in for full cal
 const MIC_CAL_MAX_GAIN = 2.5;
+const MIC_CAL_CONSERVATIVE_MAX_GAIN = 1.35; // cap when count-in was too quiet to trust
 const MIC_CAL_MIN_GAIN = 1.0; // never attenuate — only boost quiet mics
 
 /* -------------------------------------------------------------------------- */
@@ -382,6 +384,7 @@ export class StudioEngine {
     this._micInputGain = micInputGain;
     this._calPeakMax = 0;
     this._calGainApplied = false;
+    this._calGainMode = "none";
     this._recordInputGain = 1;
     this._autoMicLevel = cb.autoMicLevel !== false && !autoGainControl;
 
@@ -498,6 +501,9 @@ export class StudioEngine {
         this._calGainApplied = true;
         const g = computeMicCalGain(this._calPeakMax);
         this._recordInputGain = g;
+        this._calGainMode = g <= 1 ? "none"
+          : this._calPeakMax < MIC_CAL_REPRESENTATIVE_PEAK ? "conservative"
+            : "full";
         if (g !== 1 && this._micInputGain) {
           this._micInputGain.gain.setTargetAtTime(g, now, 0.02);
         }
@@ -551,6 +557,7 @@ export class StudioEngine {
       inputLevelMode: this._inputLevelMode || "raw",
       autoGainControlRequested: this._inputLevelMode === "agc",
       recordInputGain: this._recordInputGain || 1,
+      calGainMode: this._calGainMode || "none",
       calPeakDb: this._calPeakMax > 0 ? 20 * Math.log10(this._calPeakMax) : null,
       buffer,
       createdAt: Date.now(),
@@ -1187,8 +1194,11 @@ function bufferPeakLinear(buffer) {
 /** Measure count-in peak → gain for shared mic bus (capture + meter + monitor). */
 function computeMicCalGain(calPeak) {
   if (!Number.isFinite(calPeak) || calPeak < MIC_CAL_MIN_PEAK) return 1;
+  const maxGain = calPeak < MIC_CAL_REPRESENTATIVE_PEAK
+    ? MIC_CAL_CONSERVATIVE_MAX_GAIN
+    : MIC_CAL_MAX_GAIN;
   const g = MIC_CAL_TARGET_PEAK / calPeak;
-  return Math.min(MIC_CAL_MAX_GAIN, Math.max(MIC_CAL_MIN_GAIN, g));
+  return Math.min(maxGain, Math.max(MIC_CAL_MIN_GAIN, g));
 }
 
 function pickRecorderMime() {

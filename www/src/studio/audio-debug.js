@@ -214,9 +214,17 @@ export function describeRecordingPipeline(take, ctxSampleRate = 0) {
   const agcRequested = constraints.autoGainControl;
   const fmtBool = (v) => (v === true ? "on" : v === false ? "off" : "default");
   const recordGain = Number(take?.recordInputGain) || 1;
+  const calMode = take?.calGainMode || "none";
+  const calNote = calMode === "conservative"
+    ? " — conservative cap (quiet count-in)"
+    : calMode === "full"
+      ? " — count-in auto-level"
+      : recordGain > 1.001
+        ? " — count-in auto-level"
+        : " — count-in cal (no boost needed)";
   const recordGainLabel = Math.abs(recordGain - 1) < 0.01
-    ? "1.00× (0.0 dB) — count-in cal (no boost needed)"
-    : `${recordGain.toFixed(2)}× (${(20 * Math.log10(recordGain)).toFixed(1)} dB) — count-in auto-level`;
+    ? `1.00× (0.0 dB)${calNote}`
+    : `${recordGain.toFixed(2)}× (${(20 * Math.log10(recordGain)).toFixed(1)} dB)${calNote}`;
   const method = take?.captureMethod === "float32-pcm-worklet"
     ? "Web Audio Float32 PCM (AudioWorklet)"
     : take?.captureMethod === "float32-pcm"

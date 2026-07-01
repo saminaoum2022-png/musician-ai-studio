@@ -133,7 +133,7 @@ export const PITCH_CORRECTION_PRESETS = Object.freeze({
 export const PITCH_PRESET_IDS = Object.freeze(["none", "natural", "balanced", "pop", "hardtune"]);
 export const PITCH_PRESET_DEFAULT = "balanced";
 /** Bump when pitch engine changes so cached renders are invalidated. */
-const PITCH_ENGINE_VERSION = 4;
+const PITCH_ENGINE_VERSION = 5;
 
 export function normalizePitchPresetId(id) {
   if (!id) return PITCH_PRESET_DEFAULT;
@@ -162,6 +162,25 @@ function clamp(v, lo, hi) {
 
 function hzToMidi(hz) {
   return 69 + 12 * Math.log2(hz / 440);
+}
+
+function getPitchRenderContext(sampleRate, opts = {}) {
+  const live = opts.audioContext;
+  if (live && live.state !== "closed" && typeof live.createBuffer === "function") {
+    return live;
+  }
+  const Offline = typeof OfflineAudioContext !== "undefined"
+    ? OfflineAudioContext
+    : (typeof webkitOfflineAudioContext !== "undefined" ? webkitOfflineAudioContext : null);
+  if (Offline) {
+    return new Offline(1, Math.max(1, Math.ceil(sampleRate * 0.25)), sampleRate);
+  }
+  if (live) return live;
+  const Live = typeof AudioContext !== "undefined"
+    ? AudioContext
+    : (typeof webkitAudioContext !== "undefined" ? webkitAudioContext : null);
+  if (Live) return new Live();
+  throw new Error("no audio context");
 }
 
 function yieldToUi() {
@@ -285,8 +304,14 @@ function voicedEnergy(samples) {
 }
 
 function trackPitchFrames(mono, sr, preset) {
+  if (!mono?.length || mono.length < 1024) {
+    return { f0s: new Float32Array(0), voiced: new Float32Array(0), hop: 512, winSize: 2048, nGrains: 0 };
+  }
   const winSize = Math.max(2048, Math.floor(sr * analysisWindowSec(preset)));
   const hop = Math.floor(winSize * 0.5);
+  if (mono.length < winSize + hop) {
+    return { f0s: new Float32Array(0), voiced: new Float32Array(0), hop, winSize, nGrains: 0 };
+  }
   const nGrains = Math.max(1, Math.floor((mono.length - winSize) / hop));
   const f0s = new Float32Array(nGrains);
   const voiced = new Float32Array(nGrains);
@@ -350,6 +375,7 @@ function averageInWindow(arr, i, radius) {
 }
 
 function isStableQuantNote(expressionMidi, voiced, i, lockFrames, quantNote) {
+  if (lockFrames < 1 || !Number.isFinite(quantNote)) return false;
   let hits = 0;
   let total = 0;
   for (let j = Math.max(0, i - lockFrames + 1); j <= i; j++) {
@@ -357,7 +383,8 @@ function isStableQuantNote(expressionMidi, voiced, i, lockFrames, quantNote) {
     total += 1;
     if (Math.abs(expressionMidi[j] - quantNote) < 0.22) hits += 1;
   }
-  return total >= Math.max(2, Math.floor(lockFrames * 0.7)) && hits / total >= 0.82;
+  if (total < Math.max(2, Math.floor(lockFrames * 0.7))) return false;
+  return hits / total >= 0.82;
 }
 
 /** Detect periodic micro-oscillation (natural vibrato). */
@@ -511,7 +538,9 @@ function applyMicroPitchFilter(f0s, voiced, hop, sr) {
     const center = medianOf(centerVals) || expr;
     expressionMidi[i] = expr;
     noteCenterMidi[i] = center;
-    microCents[i] = 1200 * Math.log2(midiToFreq(rawMidi[i]) / midiToFreq(expr));
+    const exprHz = midiToFreq(expr);
+    const rawHz = midiToFreq(rawMidi[i]);
+    microCents[i] = exprHz > 0 && rawHz > 0 ? 1200 * Math.log2(rawHz / exprHz) : 0;
   }
 
   const vibrato = detectVibratoMask(microCents, voiced, hop, sr);
@@ -746,41 +775,46 @@ export async function renderPitchCorrection(sourceBuffer, presetId, opts = {}) {
   const id = normalizePitchPresetId(presetId);
   const preset = PITCH_CORRECTION_PRESETS[id];
   if (!preset || id === "none") return sourceBuffer;
-  if (!sourceBuffer?.numberOfChannels) throw new Error("no buffer");
+  if (!sourceBuffer?.numberOfChannels || !sourceBuffer.length) return sourceBuffer;
 
-  const sr = sourceBuffer.sampleRate;
-  const ch0 = sourceBuffer.getChannelData(0);
-  const ch1 = sourceBuffer.numberOfChannels > 1 ? sourceBuffer.getChannelData(1) : null;
-  const mono = new Float32Array(ch0.length);
-  for (let i = 0; i < ch0.length; i++) {
-    mono[i] = ch1 ? (ch0[i] + ch1[i]) * 0.5 : ch0[i];
+  try {
+    const sr = sourceBuffer.sampleRate || 44100;
+    const ch0 = sourceBuffer.getChannelData(0);
+    const ch1 = sourceBuffer.numberOfChannels > 1 ? sourceBuffer.getChannelData(1) : null;
+    const mono = new Float32Array(ch0.length);
+    for (let i = 0; i < ch0.length; i++) {
+      mono[i] = ch1 ? (ch0[i] + ch1[i]) * 0.5 : ch0[i];
+    }
+
+    let keyInfo = opts.keyInfo;
+    if (!keyInfo) {
+      keyInfo = detectMusicalKey(mono, sr);
+      const trackKey = parseTrackKey(opts.trackKey);
+      if (trackKey) keyInfo = { ...trackKey, confidence: Math.max(keyInfo.confidence, 0.85) };
+    }
+
+    await yieldToUi();
+
+    const { f0s, voiced, hop, winSize, nGrains } = trackPitchFrames(mono, sr, preset);
+    if (!nGrains) return sourceBuffer;
+    const voicedRatio = voiced.reduce((a, b) => a + b, 0) / Math.max(1, voiced.length);
+    if (voicedRatio < 0.08) return sourceBuffer;
+
+    await yieldToUi();
+
+    const microFilter = applyMicroPitchFilter(f0s, voiced, hop, sr);
+    const { lockedMidi, slowMidi } = buildLockedNotes(microFilter, preset, keyInfo, hop, sr);
+    const cents = buildCorrectionCents(f0s, voiced, lockedMidi, slowMidi, microFilter, preset, hop, sr);
+    const corrected = applyPitchShift(mono, sr, cents, hop, winSize, preset.wet);
+
+    const ctx = getPitchRenderContext(sr, opts);
+    const buf = ctx.createBuffer(1, corrected.length, sr);
+    buf.getChannelData(0).set(corrected);
+    return buf;
+  } catch (err) {
+    console.warn("[pitch-correction] render failed:", err);
+    return sourceBuffer;
   }
-
-  let keyInfo = opts.keyInfo;
-  if (!keyInfo) {
-    keyInfo = detectMusicalKey(mono, sr);
-    const trackKey = parseTrackKey(opts.trackKey);
-    if (trackKey) keyInfo = { ...trackKey, confidence: Math.max(keyInfo.confidence, 0.85) };
-  }
-
-  await yieldToUi();
-
-  const { f0s, voiced, hop, winSize } = trackPitchFrames(mono, sr, preset);
-  const voicedRatio = voiced.reduce((a, b) => a + b, 0) / Math.max(1, voiced.length);
-  if (voicedRatio < 0.08) return sourceBuffer;
-
-  await yieldToUi();
-
-  const microFilter = applyMicroPitchFilter(f0s, voiced, hop, sr);
-  const { lockedMidi, slowMidi } = buildLockedNotes(microFilter, preset, keyInfo, hop, sr);
-  const cents = buildCorrectionCents(f0s, voiced, lockedMidi, slowMidi, microFilter, preset, hop, sr);
-  const corrected = applyPitchShift(mono, sr, cents, hop, winSize, preset.wet);
-
-  const AC = opts.audioContext?.constructor || window.AudioContext || window.webkitAudioContext;
-  const ctx = opts.audioContext || new AC();
-  const buf = ctx.createBuffer(1, corrected.length, sr);
-  buf.getChannelData(0).set(corrected);
-  return buf;
 }
 
 export function ensureTakePitchState(take) {
@@ -834,6 +868,7 @@ export async function ensurePitchPresetRendered(take, presetId, opts = {}) {
   pc.renderingPromise = (async () => {
     try {
       await yieldToUi();
+      if (!take.buffer?.numberOfChannels) return take.buffer || null;
       if (!pc.keyInfo) {
         pc.keyInfo = detectMusicalKey(take.buffer.getChannelData(0), take.buffer.sampleRate);
         const trackKey = parseTrackKey(opts.trackKey);
@@ -844,8 +879,11 @@ export async function ensurePitchPresetRendered(take, presetId, opts = {}) {
         keyInfo: pc.keyInfo,
         trackKey: opts.trackKey,
       });
-      pc.cache[id] = buf;
+      if (buf) pc.cache[id] = buf;
       return buf;
+    } catch (err) {
+      console.warn("[pitch-correction] preset render failed:", id, err);
+      return null;
     } finally {
       pc.rendering = null;
       pc.renderingPromise = null;

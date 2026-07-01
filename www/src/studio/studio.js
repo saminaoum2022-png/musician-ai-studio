@@ -1507,9 +1507,11 @@ function swapPitchVoice(take, presetId) {
 
 async function ensureTakePitchReady(take) {
   const preset = activePitchPreset(take);
-  if (!take?.buffer || preset === "none") return;
+  if (!take || preset === "none") return;
   if (getPitchCachedBuffer(take, preset)) return;
   await engine?.ensureReady();
+  if (take?.blob && !take?.buffer) await engine?.hydrateTakeBuffer(take);
+  if (!take?.buffer) return;
   await ensurePitchPresetRendered(take, preset, {
     audioContext: engine?.ctx,
     trackKey: trackKeyHint(),
@@ -1547,16 +1549,26 @@ async function selectPitchPreset(root, take, presetId, state) {
 
   try {
     await engine?.ensureReady();
+    if (take?.blob && !take?.buffer) await engine?.hydrateTakeBuffer(take);
+    if (!take?.buffer) {
+      setPitchLoadingUi(root, presetId, false);
+      bridge.showToast?.("Vocal isn’t ready yet — try again.");
+      return;
+    }
     const buf = await ensurePitchPresetRendered(take, presetId, {
       audioContext: engine?.ctx,
       trackKey: trackKeyHint(),
     });
     setPitchLoadingUi(root, presetId, false);
     updatePitchAppliedUi(root, take);
-    if (!buf) return;
+    if (!buf) {
+      bridge.showToast?.("Couldn’t render pitch correction.");
+      return;
+    }
     swapPitchVoice(take, presetId);
     if (state?.onReady) state.onReady(take);
-  } catch {
+  } catch (err) {
+    console.warn("[studio] pitch preset failed:", presetId, err);
     setPitchLoadingUi(root, presetId, false);
     bridge.showToast?.("Couldn’t render pitch correction.");
   }
@@ -1695,10 +1707,13 @@ function bindReview(root, take) {
   updatePitchAppliedUi(root, take);
 
   void (async () => {
-    if (!take?.buffer) return;
+    if (!take) return;
     const pc = ensureTakePitchState(take);
-    pc.cache.none = take.buffer;
+    if (take.buffer) pc.cache.none = take.buffer;
+    else if (take.blob) await engine?.hydrateTakeBuffer(take);
+    if (take.buffer) pc.cache.none = take.buffer;
     updatePitchAppliedUi(root, take);
+    if (!take.buffer) return;
     await selectPitchPreset(root, take, activePitchPreset(take), pitchState);
   })();
 }
@@ -2241,7 +2256,9 @@ function bindMix(root) {
   updatePitchAppliedUi(root, activeTake);
   void (async () => {
     const t = engine?.getActiveTake?.();
-    if (!t?.buffer) return;
+    if (!t) return;
+    if (!t.buffer && t.blob) await engine?.hydrateTakeBuffer(t);
+    if (!t.buffer) return;
     ensureTakePitchState(t).cache.none = t.buffer;
     await ensureTakePitchReady(t);
     updatePitchAppliedUi(root, t);

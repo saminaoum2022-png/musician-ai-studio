@@ -31,6 +31,11 @@ const pcmWorkletLoaded = new WeakMap();
 const GUIDE_MIX_TRIM = 0.88;
 // Sliders at 50% = unity gain; 100% = 2× (each multiplies).
 const VOCAL_SLIDER_CENTER = 0.5;
+// Count-in mic calibration: measure during 3-2-1, boost shared bus when the take starts.
+const MIC_CAL_TARGET_PEAK = 0.251; // ~−12 dBFS
+const MIC_CAL_MIN_PEAK = 0.008; // ignore silence / room noise
+const MIC_CAL_MAX_GAIN = 2.5;
+const MIC_CAL_MIN_GAIN = 1.0; // never attenuate — only boost quiet mics
 
 /* -------------------------------------------------------------------------- */
 /* Modular effect registry                                                     */
@@ -372,9 +377,19 @@ export class StudioEngine {
     await ensurePcmCaptureWorklet(this.ctx);
 
     const micSrc = this.ctx.createMediaStreamSource(this._recStream);
+    const micInputGain = this.ctx.createGain();
+    micInputGain.gain.value = 1;
+    this._micInputGain = micInputGain;
+    this._calPeakMax = 0;
+    this._calGainApplied = false;
+    this._recordInputGain = 1;
+    this._autoMicLevel = cb.autoMicLevel !== false && !autoGainControl;
+
+    micSrc.connect(micInputGain);
+
     const analyser = this.ctx.createAnalyser();
     analyser.fftSize = 2048;
-    micSrc.connect(analyser);
+    micInputGain.connect(analyser);
 
     const procIn = Math.min(2, Math.max(1, this._micTrackInfo?.settings?.channelCount || 1));
     const pcmNode = new AudioWorkletNode(this.ctx, "pcm-capture-processor", {
@@ -392,7 +407,7 @@ export class StudioEngine {
 
     const pcmSilent = this.ctx.createGain();
     pcmSilent.gain.value = 0;
-    micSrc.connect(pcmNode);
+    micInputGain.connect(pcmNode);
     pcmNode.connect(pcmSilent);
     pcmSilent.connect(this.ctx.destination);
 
@@ -412,7 +427,7 @@ export class StudioEngine {
         reverb: cb.monitorReverb ?? 0.25,
         echo: cb.monitorEcho ?? 0.18,
       });
-      micSrc.connect(chain.input);
+      micInputGain.connect(chain.input);
       // Centre the mic across both ears (see _centerNode), then limit so the
       // hot makeup gain stays loud without clipping in the headphones.
       const center = this._centerNode(this.ctx);
@@ -440,7 +455,7 @@ export class StudioEngine {
     this._recCtxStart = this.ctx.currentTime;
     this._guideCtxStart = startAt;
     this._recording = true;
-    this._nodes = [micSrc, analyser, pcmNode, pcmSilent, ...(guideSrc ? [guideSrc, guideGain] : []), ...(this._monitorChain?.nodes || [])];
+    this._nodes = [micSrc, micInputGain, analyser, pcmNode, pcmSilent, ...(guideSrc ? [guideSrc, guideGain] : []), ...(this._monitorChain?.nodes || [])];
 
     // Count-in ticks.
     if (typeof cb.onCountIn === "function") {
@@ -475,6 +490,19 @@ export class StudioEngine {
           if (v > peak) peak = v;
         }
       }
+
+      const now = this.ctx.currentTime;
+      if (this._autoMicLevel && now < this._guideCtxStart) {
+        if (peak > this._calPeakMax) this._calPeakMax = peak;
+      } else if (this._autoMicLevel && !this._calGainApplied && now >= this._guideCtxStart) {
+        this._calGainApplied = true;
+        const g = computeMicCalGain(this._calPeakMax);
+        this._recordInputGain = g;
+        if (g !== 1 && this._micInputGain) {
+          this._micInputGain.gain.setTargetAtTime(g, now, 0.02);
+        }
+      }
+
       if (peak > this._recLivePeakMax) this._recLivePeakMax = peak;
       const pos = this.ctx.currentTime - this._guideCtxStart;
       if (pos >= 0 && peak > this._recLivePeakSyncedMax) this._recLivePeakSyncedMax = peak;
@@ -522,6 +550,8 @@ export class StudioEngine {
       micTrackInfo: this._micTrackInfo || null,
       inputLevelMode: this._inputLevelMode || "raw",
       autoGainControlRequested: this._inputLevelMode === "agc",
+      recordInputGain: this._recordInputGain || 1,
+      calPeakDb: this._calPeakMax > 0 ? 20 * Math.log10(this._calPeakMax) : null,
       buffer,
       createdAt: Date.now(),
       nudgeMs: 0,
@@ -1142,6 +1172,23 @@ function bufferPeakDb(buffer) {
   }
   if (peak <= 0) return -Infinity;
   return 20 * Math.log10(peak);
+}
+
+function bufferPeakLinear(buffer) {
+  if (!buffer) return 0;
+  let peak = 0;
+  for (let ch = 0; ch < buffer.numberOfChannels; ch++) {
+    const data = buffer.getChannelData(ch);
+    for (let i = 0; i < data.length; i++) peak = Math.max(peak, Math.abs(data[i]));
+  }
+  return peak;
+}
+
+/** Measure count-in peak → gain for shared mic bus (capture + meter + monitor). */
+function computeMicCalGain(calPeak) {
+  if (!Number.isFinite(calPeak) || calPeak < MIC_CAL_MIN_PEAK) return 1;
+  const g = MIC_CAL_TARGET_PEAK / calPeak;
+  return Math.min(MIC_CAL_MAX_GAIN, Math.max(MIC_CAL_MIN_GAIN, g));
 }
 
 function pickRecorderMime() {

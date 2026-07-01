@@ -70,7 +70,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260701-222450";
+const APP_BUILD = "20260701-223925";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -274,18 +274,24 @@ function isFounderBadgeEmail(raw) {
         }),
       });
     }
+    // On iOS/Android, never register NativeMicProbe with a web stub before the
+    // native bridge loads — that shadows the real Swift plugin (session info "—").
+    const isNative = Boolean(cap.isNativePlatform?.());
     if (!cap.Plugins?.NativeMicProbe) {
-      cap.registerPlugin("NativeMicProbe", {
-        web: () => ({
-          async getSessionInfo() { return { category: "web", mode: "n/a" }; },
-          async prepareRecordingSession() { return {}; },
-          async recordProbe() { throw new Error("NativeMicProbe is iOS only"); },
-        }),
-      });
+      if (isNative) {
+        cap.registerPlugin("NativeMicProbe");
+      } else {
+        cap.registerPlugin("NativeMicProbe", {
+          web: () => ({
+            async getSessionInfo() { return { category: "web", mode: "n/a" }; },
+            async prepareRecordingSession() { return {}; },
+            async recordProbe() { throw new Error("NativeMicProbe is iOS only"); },
+          }),
+        });
+      }
     }
     // On iOS/Android, never register Preferences with a localStorage web stub
     // before the native bridge loads — that was wiping sessions on force-quit.
-    const isNative = Boolean(cap.isNativePlatform?.());
     if (!isNative && !cap.Plugins?.Preferences) {
       cap.registerPlugin("Preferences", {
         web: () => ({

@@ -1,27 +1,57 @@
 /**
- * Dev-only bridge to NativeMicProbePlugin (iOS AVAudioSession + AVAudioEngine probe).
+ * Bridge to NativeMicProbePlugin (iOS AVAudioSession + AVAudioEngine probe).
  */
 
 const PREP_SESSION_KEY = "nabad.studio.nativeSessionPrep.v1";
+const DEBUG_KEY = "nabad.studio.audioDebug.v1";
+
+let _plugin = null;
 
 function plugin() {
+  if (_plugin) return _plugin;
   try {
-    return window?.Capacitor?.Plugins?.NativeMicProbe || null;
+    const cap = window?.Capacitor;
+    if (!cap) return null;
+    _plugin = cap.Plugins?.NativeMicProbe || null;
+    if (!_plugin && cap.isNativePlatform?.() && cap.registerPlugin) {
+      _plugin = cap.registerPlugin("NativeMicProbe");
+    }
+    return _plugin;
   } catch {
     return null;
   }
 }
 
-export function isNativeMicProbeAvailable() {
-  return !!plugin()?.getSessionInfo;
+export function isNativeIosStudio() {
+  try {
+    const cap = window?.Capacitor;
+    return cap?.isNativePlatform?.() && cap?.getPlatform?.() === "ios";
+  } catch {
+    return false;
+  }
 }
 
+export function isNativeMicProbeAvailable() {
+  return isNativeIosStudio() && !!plugin()?.getSessionInfo;
+}
+
+/** Dev-only: toggle off to compare playback-only session. Default ON (prep runs). */
 export function getNativeSessionPrepEnabled() {
-  try { return localStorage.getItem(PREP_SESSION_KEY) === "1"; } catch { return false; }
+  try { return localStorage.getItem(PREP_SESSION_KEY) !== "0"; } catch { return true; }
 }
 
 export function setNativeSessionPrepEnabled(on) {
   try { localStorage.setItem(PREP_SESSION_KEY, on ? "1" : "0"); } catch {}
+}
+
+function shouldSkipNativeSessionPrep() {
+  try {
+    const debugOn = localStorage.getItem(DEBUG_KEY) === "1";
+    if (!debugOn) return false;
+    return localStorage.getItem(PREP_SESSION_KEY) === "0";
+  } catch {
+    return false;
+  }
 }
 
 export async function fetchNativeSessionInfo() {
@@ -33,6 +63,17 @@ export async function fetchNativeSessionInfo() {
 export async function prepareNativeRecordingSession() {
   const p = plugin();
   if (!p?.prepareRecordingSession) throw new Error("NativeMicProbe not available");
+  return p.prepareRecordingSession();
+}
+
+/** Configure playAndRecord on iOS before Web getUserMedia (routing only, no gain). */
+export async function ensureNativeRecordingSession() {
+  if (!isNativeIosStudio() || shouldSkipNativeSessionPrep()) return null;
+  const p = plugin();
+  if (!p?.prepareRecordingSession) {
+    console.warn("[native-mic-probe] NativeMicProbe not available — Web mic may be quiet");
+    return null;
+  }
   return p.prepareRecordingSession();
 }
 

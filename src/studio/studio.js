@@ -31,6 +31,7 @@ import {
   formatLufs,
 } from "./audio-debug.js";
 import {
+  isNativeIosStudio,
   isNativeMicProbeAvailable,
   fetchNativeSessionInfo,
   getNativeSessionPrepEnabled,
@@ -762,7 +763,7 @@ function renderHome(root) {
         <button type="button" class="studioAgcTestBtn studioAgcTestBtn--full${getNativeSessionPrepEnabled() ? " isActive" : ""}" data-native-session-prep>
           ${getNativeSessionPrepEnabled() ? "✓ playAndRecord before Web capture" : "Prepare playAndRecord before Web capture"}
         </button>
-        <p class="studioAgcTestHint">AppDelegate sets AVAudioSession to playback-only at launch — likely why Web mic is quiet. Toggle this to configure playAndRecord (routing only, no gain) before getUserMedia, then record. Use debug panel native probe to compare AVAudioEngine levels.</p>
+        <p class="studioAgcTestHint">iOS configures playAndRecord automatically before each recording. Toggle off to compare playback-only session (debug A/B). Use the debug panel native probe to compare AVAudioEngine levels.</p>
       </div>` : ""}
 
       <div class="studioFooter">
@@ -831,7 +832,7 @@ function bindHome(root) {
         ? "✓ playAndRecord before Web capture"
         : "Prepare playAndRecord before Web capture";
     }
-    bridge.showToast?.(next ? "Will configure playAndRecord before next Web recording" : "Web capture uses default session (playback-only at launch)");
+    bridge.showToast?.(next ? "playAndRecord before Web capture (default)" : "Debug: playback-only session for next take");
   });
 }
 
@@ -895,7 +896,7 @@ function renderRecording(root) {
       <div class="studioRecTop">
         <span class="studioRecDot" aria-hidden="true"></span>
         <span class="studioRecLabel">${memo ? "Quick take…" : "Recording…"}</span>
-        ${isStudioAudioDebug() ? `<span class="studioRecAgcBadge">${esc(getNativeSessionPrepEnabled() ? "playAndRecord prep" : "default session")}</span>` : ""}
+        ${isStudioAudioDebug() && isNativeIosStudio() ? `<span class="studioRecAgcBadge">${esc(getNativeSessionPrepEnabled() ? "playAndRecord session" : "default session (debug)")}</span>` : ""}
         <span class="studioRecTimer" data-studio-timer>0:00</span>
       </div>
 
@@ -1165,7 +1166,6 @@ async function startTake(root) {
     await engine.startRecording({
       countInSec: memo ? 1 : 3,
       noGuide: memo,
-      prepareNativeSession: isStudioAudioDebug() && getNativeSessionPrepEnabled(),
       autoGainControl: false,
       monitor: !!current?.monitor,
       // Live monitor = dry voice + a light reverb tail only. We intentionally

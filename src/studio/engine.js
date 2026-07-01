@@ -21,7 +21,7 @@
  */
 
 import { encodeWav16 } from "../wav.js";
-import { prepareNativeRecordingSession } from "./native-mic-probe.js";
+import { ensureNativeRecordingSession } from "./native-mic-probe.js";
 
 const LATENCY_STORAGE_KEY = "nabad.studio.latencyMs.v1";
 const PCM_CAPTURE_WORKLET_URL = new URL("./pcm-capture-processor.js", import.meta.url);
@@ -351,10 +351,8 @@ export class StudioEngine {
     const autoGainControl = cb.autoGainControl === true;
     this._inputLevelMode = autoGainControl ? "agc" : "raw";
 
-    if (cb.prepareNativeSession) {
-      try { await prepareNativeRecordingSession(); } catch (e) {
-        console.warn("[StudioEngine] prepareNativeRecordingSession", e);
-      }
+    try { await ensureNativeRecordingSession(); } catch (e) {
+      console.warn("[StudioEngine] ensureNativeRecordingSession", e);
     }
 
     this._recStream = await navigator.mediaDevices.getUserMedia({

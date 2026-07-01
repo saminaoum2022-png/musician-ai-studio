@@ -126,7 +126,7 @@ export function getVocal(id) {
   return readMeta().vocals.find((v) => v.id === id) || null;
 }
 
-export async function saveVocal({ title, blob, durationSec, artUrl, sourceTitle, mime }) {
+export async function saveVocal({ title, blob, durationSec, artUrl, sourceTitle, mime, visibility }) {
   const id = `voc_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
   if (blob) { try { await putBlob(id, blob); } catch {} }
   const m = readMeta();
@@ -138,6 +138,7 @@ export async function saveVocal({ title, blob, durationSec, artUrl, sourceTitle,
     sourceTitle: String(sourceTitle || ""),
     mime: String(mime || "audio/wav"),
     bytes: Number(blob?.size) || 0,
+    visibility: visibility === "public" ? "public" : "private",
     createdAt: Date.now(),
     published: false,
   });

@@ -91,6 +91,8 @@ const DEFAULT_MIX = Object.freeze({
 
 /** Applied after each new take — opens on Mix with these starting values. */
 const POST_RECORD_MIX = Object.freeze({
+  styleTab: "studio",
+  mixPanel: "basic",
   voiceVol: 72,
   vocalGain: 59,
   musicVol: 70,
@@ -117,6 +119,39 @@ const FINISH_LABELS = {
   bright: "Bright",
   punchy: "Punchy",
 };
+
+/** Style preset tabs on Preview + Mix — pitch + mix + finish in one tap. */
+const STYLE_TAB_IDS = Object.freeze(["natural", "studio", "pop", "hardtune", "custom"]);
+
+const STYLE_TABS = Object.freeze({
+  natural: {
+    label: "Natural",
+    pitch: "natural",
+    finish: "warm",
+    mix: { voiceVol: 68, vocalGain: 54, musicVol: 74, fxDenoise: 30, fxCompress: 8, fxEq: 48, fxDeesser: 6, reverb: 8 },
+  },
+  studio: {
+    label: "Studio",
+    pitch: "balanced",
+    finish: "balanced",
+    mix: { voiceVol: 72, vocalGain: 59, musicVol: 70, fxDenoise: 50, fxCompress: 14, fxEq: 65, fxDeesser: 11, reverb: 14 },
+  },
+  pop: {
+    label: "Pop",
+    pitch: "pop",
+    finish: "bright",
+    mix: { voiceVol: 74, vocalGain: 62, musicVol: 68, fxDenoise: 45, fxCompress: 45, fxEq: 62, fxDeesser: 12, reverb: 16 },
+  },
+  hardtune: {
+    label: "Hard Tune",
+    pitch: "hardtune",
+    finish: "punchy",
+    mix: { voiceVol: 76, vocalGain: 64, musicVol: 66, fxDenoise: 40, fxCompress: 55, fxEq: 52, fxDeesser: 9, reverb: 6 },
+  },
+  custom: { label: "Custom", pitch: null, finish: null, mix: null },
+});
+
+const PITCH_RETUNE_STEPS = Object.freeze(["none", "natural", "balanced", "pop", "hardtune"]);
 
 /** Pick a finish preset from song style/tags — used as default on Mix. */
 function suggestFinishPreset(track) {
@@ -161,8 +196,8 @@ function ensureMixFinish(m) {
 function projectResumeScreen(p) {
   const hasTakes = (p.takes || []).length > 0;
   const saved = p.screen;
-  if (saved === "mix" || saved === "edit" || saved === "review") {
-    return hasTakes ? saved : (p.guideUrl ? "home" : "source");
+  if (saved === "mix" || saved === "edit" || saved === "review" || saved === "details") {
+    return hasTakes ? (saved === "review" ? "mix" : saved) : (p.guideUrl ? "home" : "source");
   }
   if (hasTakes) return "mix";
   if (p.guideUrl) return "home";
@@ -335,9 +370,9 @@ export function enterStudioRoot() {
   }
   if (screen === "source") { renderSource(root); return; }
   if (screen === "recording") { renderRecording(root); return; }
-  if (screen === "review") { renderReview(root, engine?.getActiveTake?.()); return; }
+  if (screen === "review" || screen === "mix") { renderPreviewMix(root, engine?.getActiveTake?.()); return; }
   if (screen === "edit") { renderEditTake(root, engine?.getActiveTake?.()); return; }
-  if (screen === "mix") { renderMix(root); return; }
+  if (screen === "details") { renderSongDetails(root); return; }
   renderHome(root);
   void ensureGuide(root);
   void ensureTimedLyrics(root);
@@ -1350,58 +1385,253 @@ function takeWaveMeta(take) {
   };
 }
 
-function renderReview(root, take) {
-  screen = "review";
+function buildAiMixRecommendation(take, track) {
+  const finish = suggestFinishPreset(track);
+  let styleTab = "studio";
+  if (finish === "warm") styleTab = "natural";
+  else if (finish === "punchy") styleTab = "hardtune";
+  else if (finish === "bright") styleTab = "pop";
+  const tab = STYLE_TABS[styleTab];
+  const meta = take ? getPitchRenderMeta(take, tab.pitch) : null;
+  let match = 86 + Math.min(8, Math.round((meta?.voicedRatio || 0.45) * 14));
+  if (meta?.audible) match += 5;
+  return {
+    styleTab,
+    finish: tab.finish,
+    pitchId: tab.pitch,
+    styleLabel: tab.label,
+    pitchLabel: pitchPresetLabel(tab.pitch),
+    finishLabel: FINISH_LABELS[tab.finish] || tab.finish,
+    matchPct: Math.min(99, match),
+  };
+}
+
+function aiMixCardHtml(rec) {
+  return `
+    <div class="studioAiCard" data-studio-ai-card>
+      <div class="studioAiCardLeft">
+        <div class="studioAiCardBrand"><span class="studioAiSpark" aria-hidden="true">✨</span> Nabad AI</div>
+        <div class="studioAiCardSub">Recommended for this take</div>
+        <div class="studioAiCardRec">
+          <span>${esc(rec.styleLabel)} Preset</span>
+          <span class="studioAiCardDot">·</span>
+          <span>${esc(rec.finishLabel)} Mix</span>
+          <span class="studioAiCardDot">·</span>
+          <span>${esc(rec.pitchLabel)} Pitch</span>
+        </div>
+      </div>
+      <div class="studioAiCardRight">
+        <span class="studioAiMatch">${rec.matchPct}% Match</span>
+        <button type="button" class="studioAiApply" data-studio-ai-apply>Apply AI Mix</button>
+      </div>
+    </div>`;
+}
+
+function stylePresetTabsHtml(activeId) {
+  return `
+    <div class="studioStyleTabs" data-studio-style-tabs role="group" aria-label="Style preset">
+      ${STYLE_TAB_IDS.map((id) =>
+        `<button type="button" class="studioStyleTab${id === activeId ? " isActive" : ""}" data-style-tab="${id}">${esc(STYLE_TABS[id].label)}</button>`,
+      ).join("")}
+    </div>`;
+}
+
+function pitchAdvDefaults(pitchId) {
+  const p = PITCH_CORRECTION_PRESETS[normalizePitchPresetId(pitchId)];
+  return {
+    humanize: Math.round((p.humanize || 0) * 100),
+    retuneSpeed: Math.round(Math.max(8, Math.min(98, 100 - (p.retuneMs || 35) * 1.4))),
+    flexTune: Math.round((p.flexTune || 0) * 100),
+    expressionProtection: p.vibratoPreserve === "on" ? 78 : p.vibratoPreserve === "slight" ? 52 : 24,
+    microPitchFilter: 72,
+    stereoWidth: 50,
+  };
+}
+
+function ensureMixAdvPitch(m) {
+  if (!m.advPitch) m.advPitch = pitchAdvDefaults(activePitchPreset(engine?.getActiveTake?.()));
+  return m.advPitch;
+}
+
+function advSliderRow(key, label, value, iconKey) {
+  return `
+    <label class="studioSliderRow">
+      <span class="studioSliderIco" aria-hidden="true">${studioIco(iconKey)}</span>
+      <span class="studioSliderLabel">${esc(label)}</span>
+      <input type="range" min="0" max="100" value="${Number(value) || 0}" data-adv-pitch="${key}" aria-label="${esc(label)}" />
+      <span class="studioSliderVal" data-adv-pitch-val="${key}">${Number(value) || 0}</span>
+    </label>`;
+}
+
+function refreshMixSlidersUi(root, m) {
+  root.querySelectorAll("[data-mix]").forEach((inp) => {
+    const k = inp.getAttribute("data-mix");
+    if (!k || m[k] == null) return;
+    inp.value = String(m[k]);
+    const out = root.querySelector(`[data-mix-val="${k}"]`);
+    if (out) out.textContent = String(m[k]);
+  });
+  root.querySelectorAll("[data-studio-finish] .studioSegBtn").forEach((btn) => {
+    btn.classList.toggle("isActive", btn.getAttribute("data-finish") === m.finish);
+  });
+  const adv = ensureMixAdvPitch(m);
+  root.querySelectorAll("[data-adv-pitch]").forEach((inp) => {
+    const k = inp.getAttribute("data-adv-pitch");
+    if (adv[k] == null) return;
+    inp.value = String(adv[k]);
+    const out = root.querySelector(`[data-adv-pitch-val="${k}"]`);
+    if (out) out.textContent = String(adv[k]);
+  });
+}
+
+function updateStyleTabUi(root, activeId) {
+  root.querySelectorAll("[data-style-tab]").forEach((btn) => {
+    btn.classList.toggle("isActive", btn.getAttribute("data-style-tab") === activeId);
+  });
+}
+
+async function applyStyleTab(root, take, tabId, state) {
+  const m = current.mix || (current.mix = { ...DEFAULT_MIX });
+  if (tabId === "custom") {
+    m.styleTab = "custom";
+    updateStyleTabUi(root, "custom");
+    return;
+  }
+  const tab = STYLE_TABS[tabId];
+  if (!tab?.mix) return;
+  m.styleTab = tabId;
+  Object.assign(m, tab.mix);
+  m.finish = tab.finish;
+  m.finishUserPick = true;
+  ensureTakePitchState(take).preset = tab.pitch;
+  m.advPitch = pitchAdvDefaults(tab.pitch);
+  updateStyleTabUi(root, tabId);
+  refreshMixSlidersUi(root, m);
+  if (engine?.isPlaying) {
+    try { engine.updateMix(mixParams()); } catch {}
+  }
+  await selectPitchPreset(root, take, tab.pitch, { ...state, silent: true });
+}
+
+async function warmupPitchPresets(take) {
+  if (!take?.buffer) return;
+  ensureTakePitchState(take).cache.none = take.buffer;
+  for (const id of ["natural", "balanced", "pop", "hardtune"]) {
+    await ensurePitchPresetRendered(take, id, {
+      audioContext: engine?.ctx,
+      trackKey: trackKeyHint(),
+    });
+    await new Promise((r) => requestAnimationFrame(r));
+  }
+}
+
+function pitchFromRetuneSlider(v) {
+  const n = Math.max(0, Math.min(100, Number(v) || 0));
+  const idx = Math.round((n / 100) * (PITCH_RETUNE_STEPS.length - 1));
+  return PITCH_RETUNE_STEPS[idx];
+}
+
+function renderPreviewMix(root, take) {
+  screen = "mix";
   take = take || engine?.getActiveTake?.() || null;
+  const m = current.mix || (current.mix = { ...DEFAULT_MIX });
+  ensureMixFx(m);
+  ensureMixFinish(m);
+  if (!m.styleTab) m.styleTab = "studio";
+  ensureMixAdvPitch(m);
+
   const takes = engine?.getTakes?.() || [];
   const wave = takeWaveMeta(take);
   const dur = wave.contentDur || engine?.guideDuration || 0;
-  const voicePeaks = wave.peaks;
+  const aiRec = buildAiMixRecommendation(take, current?.track);
+  const mixPanel = m.mixPanel || "basic";
+  const adv = ensureMixAdvPitch(m);
+  const takeNum = take ? (takes.findIndex((t) => t.id === take.id) + 1) || 1 : 1;
 
   root.innerHTML = `
-    <div class="studio studioReview" data-studio-screen="review">
-      ${headerHtml("REVIEW")}
+    <div class="studio studioFinish" data-studio-screen="mix">
+      ${headerHtml("PREVIEW")}
 
-      <div class="studioReviewHead">
+      <div class="studioFinishHead">
         ${takeTabsHtml(takes, take?.id)}
-        <h1 class="studioReviewTitle">Here’s how it sounds</h1>
-        <p class="studioReviewSub">Listen back, then keep it or try again.</p>
+        <div class="studioFinishTake">Take ${takeNum}</div>
       </div>
 
-      <button type="button" class="studioPlayDisk" data-studio-play aria-label="Play take">
+      <button type="button" class="studioPlayDisk studioPlayDisk--finish" data-studio-play aria-label="Play preview">
         <span class="studioPlayDiskIco" data-studio-play-ico aria-hidden="true">${studioIco("play")}</span>
       </button>
 
-      <div class="studioWave studioWave--review studioWave--solo" data-studio-scrub role="slider" aria-label="Scrub vocal" tabindex="0">
-        ${peaksHtml(voicePeaks)}
+      <div class="studioWave studioWave--review studioWave--finish" data-studio-scrub role="slider" aria-label="Scrub preview" tabindex="0">
+        ${peaksHtml(wave.peaks)}
         <span class="studioWaveFill" data-wave-fill></span>
         <span class="studioWaveHandle" data-wave-handle></span>
       </div>
-      <div class="studioReviewTime"><span data-studio-pos>0:00</span> <span class="studioReviewTimeSep">/</span> <span>${fmtTime(dur)}</span></div>
+      <div class="studioReviewTime studioFinishTime"><span data-studio-pos>0:00</span> <span class="studioReviewTimeSep">/</span> <span>${fmtTime(dur)}</span></div>
 
-      ${pitchCorrectionFieldHtml(activePitchPreset(take), "Pick a style to preview. Your choice carries into Mix & save.")}
+      ${aiMixCardHtml(aiRec)}
 
-      <div class="studioFeedbackCard">
-        <div class="studioFeedbackIco" aria-hidden="true">${studioIco("voice")}</div>
-        <div class="studioFeedbackBody">
-          <div class="studioFeedbackTop">
-            <span class="studioFeedbackTitle">AI Coach feedback</span>
-            <span class="studioSoonPill">Soon</span>
+      ${stylePresetTabsHtml(m.styleTab)}
+
+      <div class="studioMixTabs" role="tablist" aria-label="Mix controls">
+        <button type="button" class="studioMixTab${mixPanel === "basic" ? " isActive" : ""}" data-mix-panel="basic" role="tab" aria-selected="${mixPanel === "basic"}">Basic</button>
+        <button type="button" class="studioMixTab${mixPanel === "advanced" ? " isActive" : ""}" data-mix-panel="advanced" role="tab" aria-selected="${mixPanel === "advanced"}">Advanced</button>
+      </div>
+
+      <div class="studioMixPanel" data-mix-panel-basic ${mixPanel === "basic" ? "" : "hidden"}>
+        <div class="studioSliders studioSliders--compact">
+          ${sliderRow("voiceVol", "Voice", m.voiceVol, "voice")}
+          ${sliderRow("musicVol", "Music", m.musicVol, "music")}
+          ${sliderRow("vocalGain", "Vocal gain", m.vocalGain ?? 50, "voice")}
+        </div>
+        <div class="studioMixField studioMixField--finish">
+          <span class="studioMixLabel">Finish style</span>
+          <div class="studioSeg studioSeg--finish" data-studio-finish role="group" aria-label="Finish preset">
+            ${FINISH_IDS.map((id) =>
+              `<button type="button" class="studioSegBtn${m.finish === id ? " isActive" : ""}" data-finish="${id}">${esc(FINISH_LABELS[id] || id)}</button>`,
+            ).join("")}
           </div>
-          <p class="studioFeedbackText">We’ll grade your pitch, timing and tone here — and suggest the takes worth keeping.</p>
         </div>
       </div>
 
-      <div class="studioFooter studioFooter--review">
-        <button type="button" class="studioPrimary" data-studio-keep>Keep &amp; Mix</button>
-        <div class="studioReviewActions">
-          <button type="button" class="studioGhost" data-studio-again>Record again</button>
-          <button type="button" class="studioGhost studioGhost--danger" data-studio-replace>Replace</button>
+      <div class="studioMixPanel" data-mix-panel-advanced ${mixPanel === "advanced" ? "" : "hidden"}>
+        <div class="studioSliders studioSliders--compact">
+          ${sliderRow("fxDenoise", "Noise gate", m.fxDenoise, "gate")}
+          ${sliderRow("fxCompress", "Compressor", m.fxCompress, "compress")}
+          ${sliderRow("fxEq", "Warm EQ", m.fxEq, "eq")}
+          ${sliderRow("fxDeesser", "De-esser", m.fxDeesser, "deess")}
+          ${sliderRow("reverb", "Reverb", m.reverb, "reverb")}
         </div>
+        <div class="studioMixField studioMixField--sync">
+          <div class="studioMixFieldTop">
+            <span class="studioMixLabel">Timing</span>
+            <span class="studioSyncVal" data-sync-val>In sync</span>
+          </div>
+          <input type="range" class="studioSyncSlider" min="-200" max="200" step="10" value="${Number(m.syncMs) || 0}" data-studio-sync aria-label="Voice timing offset" />
+        </div>
+        <div class="studioSliders studioSliders--compact studioSliders--advPitch">
+          ${advSliderRow("retuneSpeed", "Retune speed", adv.retuneSpeed, "note")}
+          ${advSliderRow("humanize", "Humanize", adv.humanize, "voice")}
+          ${advSliderRow("flexTune", "Flex tune", adv.flexTune, "note")}
+          ${advSliderRow("expressionProtection", "Expression protection", adv.expressionProtection, "voice")}
+          ${advSliderRow("microPitchFilter", "Micro pitch filter", adv.microPitchFilter, "note")}
+          ${advSliderRow("stereoWidth", "Stereo width", adv.stereoWidth, "music")}
+        </div>
+      </div>
+
+      <div class="studioFooter studioFooter--finish">
+        <button type="button" class="studioPrimary studioPrimary--continue" data-studio-continue>Continue</button>
       </div>
     </div>`;
 
-  bindReview(root, take);
+  bindPreviewMix(root, take, aiRec);
+}
+
+function renderReview(root, take) {
+  renderPreviewMix(root, take);
+}
+
+function renderMix(root) {
+  renderPreviewMix(root, engine?.getActiveTake?.());
 }
 
 function setReviewProgress(root, frac) {
@@ -1565,7 +1795,7 @@ async function selectPitchPreset(root, take, presetId, state) {
     return;
   }
 
-  setPitchLoadingUi(root, presetId, true);
+  if (!state?.silent) setPitchLoadingUi(root, presetId, true);
   const guideSec = engine?.isPlaying ? engine.getMixGuidePosition() : (state?.lastGuideSec || 0);
   if (state) state.lastGuideSec = guideSec;
 
@@ -1586,7 +1816,7 @@ async function selectPitchPreset(root, take, presetId, state) {
     setPitchLoadingUi(root, presetId, false);
     updatePitchAppliedUi(root, take);
     if (!buf) {
-      bridge.showToast?.("Couldn’t render pitch correction.");
+      if (!state?.silent) bridge.showToast?.("Couldn’t render pitch correction.");
       return;
     }
     swapPitchVoice(take, presetId);
@@ -1594,7 +1824,7 @@ async function selectPitchPreset(root, take, presetId, state) {
   } catch (err) {
     console.warn("[studio] pitch preset failed:", presetId, err);
     setPitchLoadingUi(root, presetId, false);
-    bridge.showToast?.("Couldn’t render pitch correction.");
+    if (!state?.silent) bridge.showToast?.("Couldn't render pitch correction.");
   }
 }
 
@@ -1611,16 +1841,16 @@ function bindPitchPresets(root, take, state) {
   });
 }
 
-function bindReview(root, take) {
+function bindPreviewMix(root, take, aiRec) {
   bindHeader(root, () => renderHome(root));
-
-  const pitchState = { lastGuideSec: 0, autoPlayAfterFirstRender: false, resumeAfterRender: false };
+  const m = current.mix || (current.mix = { ...DEFAULT_MIX });
+  const pitchState = { lastGuideSec: 0, silent: true };
 
   const btn = root.querySelector("[data-studio-play]");
   const icoWrap = root.querySelector("[data-studio-play-ico]");
   const posEl = root.querySelector("[data-studio-pos]");
   const wave = root.querySelector("[data-studio-scrub]");
-  const contentDur = () => engine?.takeContentDuration(take) || take?.buffer?.duration || engine?.guideDuration || 0;
+  const contentDur = () => engine?.guideDuration || engine?.takeContentDuration(take) || take?.buffer?.duration || 0;
 
   const setPlayingUi = (playing) => {
     if (icoWrap) icoWrap.innerHTML = playing ? studioIco("pause") : studioIco("play");
@@ -1635,9 +1865,8 @@ function bindReview(root, take) {
       const fromSec = Math.max(0, fromGuideSec || 0);
       pitchState.lastGuideSec = fromSec;
       const dur = contentDur();
-      const voiceBuf = reviewVoiceBuffer(take);
       await engine.playMix(
-        { ...mixParams(take?.id), fromSec, voiceBufferOverride: voiceBuf },
+        { ...mixParams(take?.id), fromSec },
         {
           onTick: (s) => {
             const g = fromSec + s;
@@ -1654,7 +1883,7 @@ function bindReview(root, take) {
       );
     } catch {
       setPlayingUi(false);
-      bridge.showToast?.("Couldn’t play here.");
+      bridge.showToast?.("Couldn't play here.");
     }
   };
   pitchState.playFrom = playFrom;
@@ -1662,7 +1891,7 @@ function bindReview(root, take) {
   btn?.addEventListener("click", () => {
     bridge.haptic?.("light");
     if (engine?.isPlaying) { engine.stopMix(); setPlayingUi(false); return; }
-    void playFrom(0);
+    void playFrom(pitchState.lastGuideSec || 0);
   });
 
   const dur = contentDur();
@@ -1702,43 +1931,118 @@ function bindReview(root, take) {
       try { engine.stopMix(); } catch {}
       engine.setActiveTake(tab.getAttribute("data-take-id"));
       void persistProject();
-      renderReview(root, engine.getActiveTake());
+      renderPreviewMix(root, engine.getActiveTake());
     });
   });
 
-  root.querySelector("[data-studio-keep]")?.addEventListener("click", () => {
+  root.querySelectorAll("[data-style-tab]").forEach((tabBtn) => {
+    tabBtn.addEventListener("click", () => {
+      bridge.haptic?.("light");
+      const id = tabBtn.getAttribute("data-style-tab");
+      if (!id) return;
+      void applyStyleTab(root, take, id, pitchState);
+    });
+  });
+
+  root.querySelector("[data-studio-ai-apply]")?.addEventListener("click", () => {
+    bridge.haptic?.("medium");
+    void applyStyleTab(root, take, aiRec?.styleTab || "studio", pitchState);
+  });
+
+  root.querySelectorAll("[data-mix-panel]").forEach((tabBtn) => {
+    tabBtn.addEventListener("click", () => {
+      bridge.haptic?.("light");
+      const panel = tabBtn.getAttribute("data-mix-panel");
+      if (!panel) return;
+      m.mixPanel = panel;
+      root.querySelectorAll(".studioMixTab").forEach((b) => {
+        const on = b.getAttribute("data-mix-panel") === panel;
+        b.classList.toggle("isActive", on);
+        b.setAttribute("aria-selected", on ? "true" : "false");
+      });
+      root.querySelector("[data-mix-panel-basic]")?.toggleAttribute("hidden", panel !== "basic");
+      root.querySelector("[data-mix-panel-advanced]")?.toggleAttribute("hidden", panel !== "advanced");
+    });
+  });
+
+  root.querySelectorAll("[data-mix]").forEach((inp) => {
+    inp.addEventListener("input", () => {
+      const k = inp.getAttribute("data-mix");
+      m[k] = Number(inp.value) || 0;
+      m.styleTab = "custom";
+      updateStyleTabUi(root, "custom");
+      const out = root.querySelector(`[data-mix-val="${k}"]`);
+      if (out) out.textContent = String(m[k]);
+      if (engine?.isPlaying) {
+        if (k === "fxDenoise") restartMixPreview(root);
+        else { try { engine.updateMix(mixParams()); } catch {} }
+      }
+    });
+  });
+
+  root.querySelectorAll("[data-adv-pitch]").forEach((inp) => {
+    inp.addEventListener("input", () => {
+      const k = inp.getAttribute("data-adv-pitch");
+      const adv = ensureMixAdvPitch(m);
+      adv[k] = Number(inp.value) || 0;
+      m.styleTab = "custom";
+      updateStyleTabUi(root, "custom");
+      const out = root.querySelector(`[data-adv-pitch-val="${k}"]`);
+      if (out) out.textContent = String(adv[k]);
+      if (k === "retuneSpeed" && take) {
+        const pid = pitchFromRetuneSlider(adv.retuneSpeed);
+        ensureTakePitchState(take).preset = pid;
+        void selectPitchPreset(root, take, pid, { ...pitchState, silent: true });
+      }
+    });
+  });
+
+  const syncInp = root.querySelector("[data-studio-sync]");
+  const syncValEl = root.querySelector("[data-sync-val]");
+  const applySync = (v) => {
+    m.syncMs = v;
+    m.styleTab = "custom";
+    updateStyleTabUi(root, "custom");
+    if (syncValEl) {
+      syncValEl.textContent = v === 0 ? "In sync" : `${v > 0 ? "+" : ""}${v} ms`;
+    }
+    const t = engine?.getActiveTake?.();
+    if (t?.id) { try { engine.setTakeNudgeMs(t.id, -v); } catch {} }
+  };
+  applySync(Number(m.syncMs) || 0);
+  syncInp?.addEventListener("input", () => applySync(Number(syncInp.value) || 0));
+  syncInp?.addEventListener("change", () => { if (engine?.isPlaying) restartMixPreview(root); });
+
+  root.querySelector("[data-studio-finish]")?.addEventListener("click", (e) => {
+    const b = e.target.closest("[data-finish]");
+    if (!b) return;
+    bridge.haptic?.("light");
+    m.finish = b.getAttribute("data-finish");
+    m.finishUserPick = true;
+    m.styleTab = "custom";
+    updateStyleTabUi(root, "custom");
+    root.querySelectorAll("[data-studio-finish] .studioSegBtn").forEach((x) => {
+      x.classList.toggle("isActive", x === b);
+    });
+  });
+
+  root.querySelector("[data-studio-continue]")?.addEventListener("click", () => {
     bridge.haptic?.("medium");
     try { engine?.stopMix(); } catch {}
-    applyPostRecordMixDefaults();
+    current.details = null;
     void persistProject();
-    renderMix(root);
+    renderSongDetails(root);
   });
-
-  root.querySelector("[data-studio-again]")?.addEventListener("click", () => {
-    bridge.haptic?.("light");
-    try { engine?.stopMix(); } catch {}
-    renderRecording(root);
-  });
-
-  root.querySelector("[data-studio-replace]")?.addEventListener("click", () => {
-    bridge.haptic?.("light");
-    try { engine?.stopMix(); } catch {}
-    if (take?.id) { try { engine.removeTake(take.id); } catch {} }
-    renderRecording(root);
-  });
-
-  bindPitchPresets(root, take, pitchState);
-  updatePitchAppliedUi(root, take);
 
   void (async () => {
     if (!take) return;
-    const pc = ensureTakePitchState(take);
-    if (take.buffer) pc.cache.none = take.buffer;
-    else if (take.blob) await engine?.hydrateTakeBuffer(take);
-    if (take.buffer) pc.cache.none = take.buffer;
-    updatePitchAppliedUi(root, take);
+    if (!take.buffer && take.blob) await engine?.hydrateTakeBuffer(take);
     if (!take.buffer) return;
-    await selectPitchPreset(root, take, activePitchPreset(take), pitchState);
+    ensureTakePitchState(take).cache.none = take.buffer;
+    const tab = STYLE_TABS[m.styleTab] || STYLE_TABS.studio;
+    if (tab.pitch) ensureTakePitchState(take).preset = tab.pitch;
+    void warmupPitchPresets(take);
+    await selectPitchPreset(root, take, activePitchPreset(take), { ...pitchState, silent: true });
   })();
 }
 
@@ -2157,95 +2461,6 @@ function bindEditTake(root, take) {
   setPlayhead(0);
 }
 
-/* -------------------------------------------------------------------------- */
-/* Screen: Final Mix                                                           */
-/* -------------------------------------------------------------------------- */
-
-function renderMix(root) {
-  screen = "mix";
-  const m = current.mix || (current.mix = { ...DEFAULT_MIX });
-  ensureMixFx(m);
-  ensureMixFinish(m);
-  const takes = engine?.getTakes?.() || [];
-  const activeTake = engine?.getActiveTake?.() || null;
-  const finishHint = m.finish === m.finishSuggested
-    ? "Suggested for this song"
-    : "";
-  const pitchSummary = pitchAppliedSummary(activeTake);
-
-  root.innerHTML = `
-    <div class="studio studioMix" data-studio-screen="mix">
-      ${headerHtml("MIX")}
-
-      <div class="studioMixHead">
-        ${takes.length > 1 ? takeTabsHtml(takes, activeTake?.id) : ""}
-        <h1 class="studioReviewTitle">Shape your sound</h1>
-        <p class="studioReviewSub">Mix sliders and vocal FX apply on top of your pitch choice below.</p>
-      </div>
-
-      ${pitchCorrectionFieldHtml(activePitchPreset(activeTake), pitchSummary.detail)}
-
-      <button type="button" class="studioPlayPill" data-studio-play>
-        <span class="studioPlayDiskIco" data-studio-play-ico aria-hidden="true">${studioIco("play")}</span>
-        <span data-studio-play-label>Preview mix</span>
-      </button>
-
-      <div class="studioSliders">
-        ${sliderRow("voiceVol", "Voice", m.voiceVol, "voice")}
-        ${sliderRow("vocalGain", "Vocal gain", m.vocalGain ?? 50, "voice")}
-        ${sliderRow("musicVol", "Music", m.musicVol, "music")}
-      </div>
-
-      <div class="studioMixField">
-        <div class="studioMixFieldTop">
-          <span class="studioMixLabel">Vocal enhancements</span>
-          <span class="studioMixFinishHint">0 = off · drag up for more</span>
-        </div>
-        <div class="studioLevelsSliders studioLevelsSliders--mix">
-          ${sliderRow("fxDenoise", "Noise gate", m.fxDenoise, "gate")}
-          ${sliderRow("fxCompress", "Compressor", m.fxCompress, "compress")}
-          ${sliderRow("fxEq", "Warm EQ", m.fxEq, "eq")}
-          ${sliderRow("fxDeesser", "De-esser", m.fxDeesser, "deess")}
-          ${sliderRow("reverb", "Reverb", m.reverb, "reverb")}
-        </div>
-        <p class="studioSyncHint">50% on Voice / Vocal gain is your natural level; turn up toward 100% if you want it louder.</p>
-      </div>
-
-      <div class="studioMixField studioMixField--sync">
-        <div class="studioMixFieldTop">
-          <span class="studioMixLabel">Voice timing</span>
-          <span class="studioSyncVal" data-sync-val>In sync</span>
-        </div>
-        <input type="range" class="studioSyncSlider" min="-200" max="200" step="10" value="${Number(m.syncMs) || 0}" data-studio-sync aria-label="Voice timing offset" />
-        <div class="studioSyncScale">
-          <span>Voice earlier</span>
-          <span class="studioSyncRec">Recommended: in sync</span>
-          <span>Voice later</span>
-        </div>
-        <p class="studioSyncHint">Nudge your voice if it drifts ahead of or behind the music. Centre keeps the auto-aligned timing.</p>
-      </div>
-
-      <div class="studioMixField">
-        <div class="studioMixFieldTop">
-          <span class="studioMixLabel">Finish</span>
-          ${finishHint ? `<span class="studioMixFinishHint">${esc(finishHint)}</span>` : ""}
-        </div>
-        <div class="studioSeg" data-studio-finish role="group" aria-label="Finish preset">
-          ${FINISH_IDS.map((id) =>
-            `<button type="button" class="studioSegBtn${m.finish === id ? " isActive" : ""}" data-finish="${id}">${esc(FINISH_LABELS[id] || FINISH_PRESETS[id]?.label || id)}</button>`,
-          ).join("")}
-        </div>
-        <p class="studioSyncHint">Polish for streaming — applied when you save, not in preview.</p>
-      </div>
-
-      <div class="studioFooter studioFooter--mix">
-        <button type="button" class="studioPrimary studioPrimary--publish" data-studio-save>Save to Songs</button>
-        <button type="button" class="studioGhost" data-studio-draft>Save draft</button>
-      </div>
-    </div>`;
-
-  bindMix(root);
-}
 
 function sliderRow(key, label, value, iconKey) {
   return `
@@ -2255,88 +2470,6 @@ function sliderRow(key, label, value, iconKey) {
       <input type="range" min="0" max="100" value="${Number(value) || 0}" data-mix="${key}" aria-label="${esc(label)}" />
       <span class="studioSliderVal" data-mix-val="${key}">${Number(value) || 0}</span>
     </label>`;
-}
-
-function bindMix(root) {
-  bindHeader(root, () => renderEditTake(root, engine?.getActiveTake?.()));
-  const m = current.mix;
-  const activeTake = engine?.getActiveTake?.() || null;
-  const pitchState = {
-    lastGuideSec: 0,
-    onReady: (t) => updatePitchAppliedUi(root, t || engine?.getActiveTake?.() || activeTake),
-  };
-
-  root.querySelectorAll("[data-take-id]").forEach((tab) => {
-    tab.addEventListener("click", () => {
-      bridge.haptic?.("light");
-      try { engine.stopMix(); setPlayUi(root, false); } catch {}
-      engine.setActiveTake(tab.getAttribute("data-take-id"));
-      void persistProject();
-      renderMix(root);
-    });
-  });
-
-  bindPitchPresets(root, activeTake, pitchState);
-  updatePitchAppliedUi(root, activeTake);
-  void (async () => {
-    const t = engine?.getActiveTake?.();
-    if (!t) return;
-    if (!t.buffer && t.blob) await engine?.hydrateTakeBuffer(t);
-    if (!t.buffer) return;
-    ensureTakePitchState(t).cache.none = t.buffer;
-    await ensureTakePitchReady(t);
-    updatePitchAppliedUi(root, t);
-  })();
-
-  root.querySelectorAll("[data-mix]").forEach((inp) => {
-    inp.addEventListener("input", () => {
-      const k = inp.getAttribute("data-mix");
-      m[k] = Number(inp.value) || 0;
-      const out = root.querySelector(`[data-mix-val="${k}"]`);
-      if (out) out.textContent = String(m[k]);
-      // Adjust the live mix in real time — no restart, so it changes smoothly.
-      if (engine?.isPlaying) {
-        if (k === "fxDenoise") restartMixPreview(root);
-        else { try { engine.updateMix(mixParams()); } catch {} }
-      }
-    });
-  });
-
-  const syncInp = root.querySelector("[data-studio-sync]");
-  const syncValEl = root.querySelector("[data-sync-val]");
-  const applySync = (v) => {
-    m.syncMs = v;
-    if (syncValEl) {
-      syncValEl.textContent = v === 0 ? "In sync" : `${v > 0 ? "+" : ""}${v} ms · ${v > 0 ? "later" : "earlier"}`;
-    }
-    // Slider right (+) = voice plays later → negative engine nudge (see engine).
-    const t = engine?.getActiveTake?.();
-    if (t?.id) { try { engine.setTakeNudgeMs(t.id, -v); } catch {} }
-  };
-  applySync(Number(m.syncMs) || 0);
-  syncInp?.addEventListener("input", () => applySync(Number(syncInp.value) || 0));
-  // Timing changes where the voice starts in the buffer, so re-cue on release.
-  syncInp?.addEventListener("change", () => { if (engine?.isPlaying) restartMixPreview(root); });
-
-  root.querySelector("[data-studio-finish]")?.addEventListener("click", (e) => {
-    const b = e.target.closest("[data-finish]");
-    if (!b) return;
-    bridge.haptic?.("light");
-    m.finish = b.getAttribute("data-finish");
-    m.finishUserPick = true;
-    root.querySelectorAll("[data-studio-finish] .studioSegBtn").forEach((x) => {
-      x.classList.toggle("isActive", x === b);
-    });
-    const hint = root.querySelector(".studioMixFinishHint");
-    if (hint) {
-      hint.textContent = m.finish === m.finishSuggested ? "Suggested for this song" : "";
-      hint.hidden = !hint.textContent;
-    }
-  });
-
-  root.querySelector("[data-studio-play]")?.addEventListener("click", () => togglePreview(root));
-  root.querySelector("[data-studio-draft]")?.addEventListener("click", () => saveDraft());
-  root.querySelector("[data-studio-save]")?.addEventListener("click", () => saveToSongs(root));
 }
 
 function mixParams(takeId) {
@@ -2392,6 +2525,102 @@ function saveDraft() {
     unsaved = false;
     bridge.showToast?.("Draft saved on your device.");
   });
+}
+
+
+function renderSongDetails(root) {
+  screen = "details";
+  const t = current?.track || {};
+  const cover = safe(bridge.coverForTrack?.(t)) || safe(t.artUrl) || "";
+  const srcTitle = String(t.title || "").trim();
+  if (!current.details) {
+    current.details = {
+      title: srcTitle ? `${srcTitle} — my version` : "My version",
+      artUrl: cover,
+      visibility: "private",
+    };
+  }
+  const d = current.details;
+
+  root.innerHTML = `
+    <div class="studio studioDetails" data-studio-screen="details">
+      ${headerHtml("DETAILS")}
+
+      <div class="studioDetailsHero">
+        <div class="studioDetailsArt ${d.artUrl ? "" : "isEmpty"}">
+          ${d.artUrl ? `<img src="${esc(d.artUrl)}" alt="" />` : `<span aria-hidden="true">♪</span>`}
+        </div>
+        <p class="studioDetailsSub">Title, artwork, and visibility for your version.</p>
+      </div>
+
+      <label class="studioDetailsField">
+        <span class="studioMixLabel">Title</span>
+        <input type="text" class="studioDetailsInput" value="${esc(d.title)}" data-details-title maxlength="120" autocomplete="off" />
+      </label>
+
+      <div class="studioDetailsField">
+        <span class="studioMixLabel">Visibility</span>
+        <div class="studioSeg studioSeg--visibility" data-details-visibility role="group" aria-label="Visibility">
+          <button type="button" class="studioSegBtn${d.visibility !== "public" ? " isActive" : ""}" data-vis="private">Private</button>
+          <button type="button" class="studioSegBtn${d.visibility === "public" ? " isActive" : ""}" data-vis="public">Public profile</button>
+        </div>
+      </div>
+
+      <div class="studioFooter studioFooter--finish">
+        <button type="button" class="studioPrimary studioPrimary--continue" data-details-save>Save to My Vocals</button>
+      </div>
+    </div>`;
+
+  bindHeader(root, () => renderPreviewMix(root, engine?.getActiveTake?.()));
+
+  root.querySelector("[data-details-title]")?.addEventListener("input", (e) => {
+    current.details.title = e.target.value;
+  });
+
+  root.querySelector("[data-details-visibility]")?.addEventListener("click", (e) => {
+    const b = e.target.closest("[data-vis]");
+    if (!b) return;
+    bridge.haptic?.("light");
+    current.details.visibility = b.getAttribute("data-vis") || "private";
+    root.querySelectorAll("[data-details-visibility] .studioSegBtn").forEach((x) => {
+      x.classList.toggle("isActive", x === b);
+    });
+  });
+
+  root.querySelector("[data-details-save]")?.addEventListener("click", () => {
+    void saveSongFromDetails(root);
+  });
+}
+
+async function saveSongFromDetails(root) {
+  const btn = root.querySelector("[data-details-save]");
+  if (btn) { btn.disabled = true; btn.textContent = "Saving…"; }
+  bridge.haptic?.("medium");
+  try {
+    const take = engine?.getActiveTake?.();
+    if (take) await ensureTakePitchReady(take);
+    const rendered = await engine.renderMix(mixParams());
+    const d = current.details || {};
+    const title = String(d.title || "").trim() || "Studio song";
+    await saveVocal({
+      title,
+      blob: rendered.blob,
+      durationSec: rendered.durationSec,
+      artUrl: String(d.artUrl || ""),
+      sourceTitle: String(current.track?.title || ""),
+      mime: "audio/wav",
+      visibility: d.visibility === "public" ? "public" : "private",
+    });
+    unsaved = false;
+    try { bridge.onVocalsChanged?.(); } catch {}
+    void persistProject();
+    bridge.showToast?.("Saved to My Vocals.");
+    renderHome(root);
+  } catch (e) {
+    console.warn("[studio] save failed:", e);
+    bridge.showToast?.("Couldn't save — your take is still here.");
+    if (btn) { btn.disabled = false; btn.textContent = "Save to My Vocals"; }
+  }
 }
 
 /* -------------------------------------------------------------------------- */

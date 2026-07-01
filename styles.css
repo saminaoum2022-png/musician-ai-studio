@@ -27483,15 +27483,40 @@ body[data-route="challenges"] .app{
   display: flex;
   flex-direction: column;
   justify-content: flex-start;
-  gap: 12px;
+  gap: 20px;
   min-height: 0;
   padding-bottom: 12px;
 }
-.homeDeskCreateStack .homeDeskPromo--compact,
+.homeDeskPrimaryActions{
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.homeDeskQuickStarts{
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.homeDeskQuickStartsTitle{
+  margin: 0;
+  padding: 0 2px;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: rgba(223, 231, 251, 0.48);
+}
+.homeDeskQuickStartsStack{
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.homeDeskCreateStack .homeDeskPromo--hero,
+.homeDeskCreateStack .homeDeskPromo--quick,
 .homeDeskCreateStack .homeDeskSongPromo,
 .homeDeskCreateStack .homeDeskPersonaPromo,
 .homeDeskCreateStack .homeDeskPhotoPromo,
-.homeDeskCreateStack .homeDeskMashupPromo{
+.homeDeskCreateStack .homeDeskDraftPromo{
   display: flex;
   flex-direction: row;
   align-items: center;
@@ -27499,24 +27524,48 @@ body[data-route="challenges"] .app{
   width: 100%;
   margin: 0;
   min-height: 0;
-  padding: 16px 16px 16px;
-  gap: 14px;
   border-radius: 22px;
   overflow: hidden;
   box-sizing: border-box;
 }
+.homeDeskCreateStack .homeDeskPromo--hero,
+.homeDeskCreateStack .homeDeskSongPromo,
+.homeDeskCreateStack .homeDeskStudioPromo{
+  padding: 16px 16px 16px;
+  gap: 14px;
+}
+.homeDeskCreateStack .homeDeskPromo--quick,
+.homeDeskCreateStack .homeDeskPersonaPromo,
+.homeDeskCreateStack .homeDeskPhotoPromo,
+.homeDeskCreateStack .homeDeskDraftPromo{
+  padding: 12px 14px;
+  gap: 12px;
+}
 .homeDeskCreateStack .homeDeskPromoVisual{
+  flex: 0 0 auto;
+  align-self: center;
+}
+.homeDeskCreateStack .homeDeskPromo--hero .homeDeskPromoVisual,
+.homeDeskPrimaryActions .homeDeskPromoVisual{
   flex: 0 0 72px;
   width: 72px;
   height: 72px;
-  align-self: center;
+}
+.homeDeskCreateStack .homeDeskPromo--quick .homeDeskPromoVisual{
+  flex: 0 0 56px;
+  width: 56px;
+  height: 56px;
 }
 .homeDeskCreateStack .homeDeskPromoVisual--photo .homeDeskPhotoTileWrap,
 .homeDeskCreateStack .homeDeskPromoVisual--persona .homeDeskPersonaTileWrap,
-.homeDeskCreateStack .homeDeskPromoVisual--mashup .homeDeskMashupTileWrap,
 .homeDeskCreateStack .homeDeskPromoVisual--studio .homeDeskStudioTileWrap,
 .homeDeskCreateStack .homeDeskPromoVisual--song .homeDeskSongTileWrap{
   transform: scale(0.64);
+}
+.homeDeskCreateStack .homeDeskPromo--quick .homeDeskPromoVisual--photo .homeDeskPhotoTileWrap,
+.homeDeskCreateStack .homeDeskPromo--quick .homeDeskPromoVisual--persona .homeDeskPersonaTileWrap,
+.homeDeskCreateStack .homeDeskPromo--quick .homeDeskPromoVisual--draft .homeDeskDraftTileWrap{
+  transform: scale(0.52);
 }
 .homeDeskCreateStack .homeDeskPromoCopy{
   display: flex;
@@ -27537,6 +27586,61 @@ body[data-route="challenges"] .app{
   margin: 0 0 8px;
   font-size: 18px;
   flex: 0 0 auto;
+}
+.homeDeskCreateStack .homeDeskPromo--quick .homeDeskPromoCopy .homeDeskSectionKicker{
+  display: none;
+}
+.homeDeskCreateStack .homeDeskPromo--quick .homeDeskPromoCopy .homeDeskPromoTitle{
+  margin: 0 0 4px;
+  font-size: 16px;
+}
+.homeDeskCreateStack .homeDeskPromo--quick .homeDeskPromoCopy .homeDeskPromoDesc{
+  font-size: 12px;
+  line-height: 1.45;
+}
+.homeDeskDraftTileWrap{
+  position: relative;
+  width: 108px;
+  height: 108px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.homeDeskDraftTile{
+  position: relative;
+  width: 72px;
+  height: 72px;
+  border-radius: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.04);
+}
+.homeDeskDraftIco{
+  width: 28px;
+  height: 28px;
+  color: rgba(223, 231, 251, 0.72);
+}
+.challengesPage.homeDesk .homeDeskDraftPromo{
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.02);
+}
+.challengesPage.homeDesk .homeDeskDraftTile{
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.14);
+}
+.challengesPage.homeDesk .homeDeskQuickStartsStack .homeDeskPhotoPromo,
+.challengesPage.homeDesk .homeDeskQuickStartsStack .homeDeskPersonaPromo,
+.challengesPage.homeDesk .homeDeskQuickStartsStack .homeDeskDraftPromo{
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.015);
+  box-shadow: none;
+}
+.challengesPage.homeDesk .homeDeskQuickStartsStack .homeDeskPhotoPromo:active,
+.challengesPage.homeDesk .homeDeskQuickStartsStack .homeDeskPersonaPromo:active,
+.challengesPage.homeDesk .homeDeskQuickStartsStack .homeDeskDraftPromo:active{
+  background: rgba(255, 255, 255, 0.05);
 }
 .homeDeskCreateStack .homeDeskPromoCopy p,
 .homeDeskCreateStack .homeDeskPromoCopy .homeDeskPromoDesc{
@@ -41433,3 +41537,69 @@ body[data-route="studio"] .deskRail { display: none !important; }
 .studioVocalsEmptyIco { font-size: 34px; margin-bottom: 10px; }
 .studioVocalsEmpty h3 { margin: 0 0 6px; font-size: 17px; color: rgba(255,255,255,0.9); }
 .studioVocalsEmpty p { margin: 0 auto; max-width: 320px; font-size: 13px; line-height: 1.5; }
+
+/* -------------------------------------------------------------------------- */
+/* Create page — dynamic greeting subtitle + Studio emphasis                    */
+/* -------------------------------------------------------------------------- */
+.homeDeskGreetingSub {
+  margin: 8px 0 0;
+  color: rgba(223, 231, 251, 0.62);
+  font-size: 15px;
+  line-height: 1.35;
+  letter-spacing: -0.01em;
+  font-weight: 500;
+}
+
+/* Studio card — subtle emphasis (Nabad's key differentiator). Slightly stronger
+   purple border + accent wash, without changing size/height. Placed after the
+   neutralising rules so it wins by source order. */
+.challengesPage.homeDesk .homeDeskStudioPromo--featured {
+  position: relative;
+  border-color: rgba(124, 92, 255, 0.48);
+  background:
+    radial-gradient(130% 110% at 0% 0%, rgba(124, 92, 255, 0.12), transparent 60%),
+    rgba(255, 255, 255, 0.02);
+  box-shadow: 0 0 0 1px rgba(124, 92, 255, 0.08), 0 8px 28px rgba(124, 92, 255, 0.08);
+}
+.challengesPage.homeDesk .homeDeskStudioPromo--featured:active {
+  border-color: rgba(124, 92, 255, 0.55);
+  background:
+    radial-gradient(130% 110% at 0% 0%, rgba(124, 92, 255, 0.16), transparent 60%),
+    rgba(255, 255, 255, 0.04);
+}
+.challengesPage.homeDesk .homeDeskStudioPromo--featured .homeDeskStudioTile {
+  background: rgba(124, 92, 255, 0.14);
+  border-color: rgba(124, 92, 255, 0.36);
+}
+.challengesPage.homeDesk .homeDeskStudioPromo--featured .homeDeskStudioIco {
+  color: var(--brand-violet, #a78bfa);
+}
+/* Tiny animated waveform beside the mic. */
+.challengesPage.homeDesk .homeDeskStudioPromo--featured .homeDeskStudioWave {
+  animation: homeDeskStudioWave 1.8s ease-in-out infinite;
+}
+@keyframes homeDeskStudioWave {
+  0%, 100% { opacity: 0.35; }
+  50% { opacity: 0.9; }
+}
+
+/* NEW badge — small pill, top-right of the Studio card. */
+.homeDeskNewBadge {
+  position: absolute;
+  top: 12px;
+  right: 14px;
+  z-index: 2;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  color: #fff;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #7c5cff, #23d5ab);
+  box-shadow: 0 2px 8px rgba(124, 92, 255, 0.42);
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .challengesPage.homeDesk .homeDeskStudioPromo--featured .homeDeskStudioWave { animation: none; }
+}

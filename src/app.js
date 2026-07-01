@@ -70,7 +70,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260701-032400";
+const APP_BUILD = "20260701-122007";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -5724,6 +5724,8 @@ function syncHomeSegUi() {
     panel.classList.toggle("is-active", on);
     panel.hidden = !on;
   });
+  // Banner follows the active tab: hidden on Create, shown on Sparks/Templates.
+  try { renderCampaignBanner(); } catch {}
 }
 
 function wireHomeDeskSegOnce() {
@@ -5737,6 +5739,7 @@ function wireHomeDeskSegOnce() {
       const seg = String(btn.getAttribute("data-home-seg") || "start");
       if (seg === _homeSeg) return;
       haptic("light");
+      if (seg === "templates") recordCreateActivity("templates");
       setHomeSeg(seg);
     });
   });
@@ -5771,6 +5774,97 @@ function homeDeskGreetingName() {
   return email || "there";
 }
 
+/* -------------------------------------------------------------------------- */
+/* Create page — smart contextual greeting                                     */
+/* -------------------------------------------------------------------------- */
+
+const CREATE_ACTIVITY_KEY = "nabad.create.lastActivity.v1";
+const HOME_GREETING_LAST_KEY = "nabad.create.greetSub.last.v1";
+
+// Record the user's latest meaningful Create action so the greeting can react
+// to it next time they land on the page. Local-only, tiny.
+function recordCreateActivity(kind) {
+  const k = String(kind || "").trim();
+  if (!k) return;
+  try { localStorage.setItem(CREATE_ACTIVITY_KEY, JSON.stringify({ kind: k, ts: Date.now() })); } catch {}
+}
+
+function readCreateActivity() {
+  try {
+    const a = JSON.parse(localStorage.getItem(CREATE_ACTIVITY_KEY) || "null");
+    if (a && a.kind) return a;
+  } catch {}
+  return null;
+}
+
+const HOME_GREETING_VARIANTS = {
+  song: ["Ready for your next track?", "Let's make another song.", "Another idea waiting?"],
+  studio: ["Continue recording?", "Ready to record again?", "Your microphone is waiting."],
+  persona: ["Your signature is ready.", "Keep creating with your voice."],
+  photo: ["Turn another memory into music.", "Another photo, another story."],
+  templates: ["Need some inspiration?", "Find your next idea."],
+  published: ["What's your next masterpiece?", "Keep the momentum going."],
+  generic: ["What are we creating today?", "What should we make today?", "Let's create something."],
+};
+
+// Pick a line, avoiding the last one we showed so it rotates naturally.
+function pickGreetingVariant(list) {
+  const opts = (list || []).filter(Boolean);
+  if (!opts.length) return "";
+  let last = "";
+  try { last = localStorage.getItem(HOME_GREETING_LAST_KEY) || ""; } catch {}
+  const fresh = opts.filter((x) => x !== last);
+  const pool = fresh.length ? fresh : opts;
+  const chosen = pool[Math.floor(Math.random() * pool.length)] || opts[0];
+  try { localStorage.setItem(HOME_GREETING_LAST_KEY, chosen); } catch {}
+  return chosen;
+}
+
+// Contextual subtitle, prioritising: unfinished drafts → last action →
+// recent publish → first visit → generic. No async, so it appears instantly.
+function homeDeskDynamicSubtitle() {
+  // 1) Unfinished drafts — highest priority.
+  try {
+    const drafts = loadLibrary()
+      .filter((t) => libraryTrackNeedsContinue(t))
+      .sort((a, b) => Number(b.ts || 0) - Number(a.ts || 0));
+    const draft = _homeDeskContinueTrack || drafts[0];
+    if (draft) {
+      const title = String(draft.title || "").trim();
+      const list = title
+        ? [`Continue “${title}”`, "Your lyrics are waiting.", "Continue where you left off.", "Finish your last track"]
+        : ["Your lyrics are waiting.", "Continue where you left off.", "Finish your last track"];
+      return pickGreetingVariant(list);
+    }
+  } catch {}
+
+  // 2) Last meaningful action (within two weeks).
+  const act = readCreateActivity();
+  const recent = act && Number.isFinite(Number(act.ts)) && (Date.now() - Number(act.ts) < 14 * 86400000);
+  if (recent && HOME_GREETING_VARIANTS[act.kind]) {
+    return pickGreetingVariant(HOME_GREETING_VARIANTS[act.kind]);
+  }
+
+  // 3) Recently published a song (last 3 days).
+  try {
+    const lib = loadLibrary();
+    const pubRecent = lib.some((t) => {
+      if (!t || !t.publicOnProfile) return false;
+      const when = Number(t.publishedAt || t.meta?.publishedAt || t.ts || 0);
+      return when && (Date.now() - when < 3 * 86400000);
+    });
+    if (pubRecent) return pickGreetingVariant(HOME_GREETING_VARIANTS.published);
+  } catch {}
+
+  // 4) First visit — nothing created yet, no recorded action.
+  try {
+    if (!act && loadLibrary().length === 0) return "What are we creating today?";
+  } catch {}
+
+  // 5) Generic fallback.
+  return pickGreetingVariant(HOME_GREETING_VARIANTS.generic);
+}
+
 function homeDeskTimeAgo(ts) {
   const ms = Date.now() - Number(ts || 0);
   if (!Number.isFinite(ms) || ms < 0) return "Recently";
@@ -5799,30 +5893,24 @@ function continueIdeaFromLibraryTrack(track) {
 }
 
 function renderHomeDeskContinue() {
-  const wrap = document.getElementById("homeDeskContinue");
-  const titleEl = document.getElementById("homeDeskContinueTitle");
-  const metaEl = document.getElementById("homeDeskContinueMeta");
-  const artEl = document.getElementById("homeDeskContinueArt");
-  if (!wrap || !titleEl || !metaEl) return;
+  const draftBtn = document.getElementById("homeDeskQuickDraft");
+  const draftDesc = document.getElementById("homeDeskQuickDraftDesc");
+  if (!draftBtn) return;
   const lib = loadLibrary()
     .filter((t) => libraryTrackNeedsContinue(t))
     .sort((a, b) => Number(b.ts || 0) - Number(a.ts || 0));
   const track = lib[0] || null;
   _homeDeskContinueTrack = track;
   if (!track) {
-    wrap.hidden = true;
+    draftBtn.hidden = true;
     return;
   }
-  wrap.hidden = false;
-  const challenge = challengeMetaForTrack(track);
-  titleEl.textContent = String(track.title || "Untitled song").trim();
-  metaEl.textContent = challenge
-    ? `${challengeAttributionText(challenge)} · open in Create`
-    : String(track.url || "").trim()
-      ? "Resume editing in Create"
-      : "Pick up where you left off";
-  if (artEl) {
-    artEl.src = trackCoverArtForFeed(track);
+  draftBtn.hidden = false;
+  const title = String(track.title || "").trim();
+  if (draftDesc) {
+    draftDesc.textContent = title
+      ? `Continue “${title}” and finish your latest project.`
+      : "Continue where you left off and finish your latest project.";
   }
 }
 
@@ -6449,6 +6537,12 @@ function campaignDaysLeftLabel(c) {
 function renderCampaignBanner() {
   const wrap = document.getElementById("campaignBanner");
   if (!wrap) return;
+  // The banner is a shared header widget. The Create ("start") tab must stay
+  // distraction-free, so hide it there; it still shows on Sparks/Templates.
+  if (_homeSeg === "start") {
+    wrap.hidden = true;
+    return;
+  }
   const c = liveCampaignNow();
   if (!c) {
     wrap.hidden = true;
@@ -9316,9 +9410,10 @@ function bindHomeDeskOnce(page) {
   page.dataset.boundHomeDesk = "1";
   wireHomeDeskSegOnce();
   page.addEventListener("click", (e) => {
-    const cont = e.target?.closest?.("#homeDeskContinueBtn");
+    const cont = e.target?.closest?.("[data-home-card=\"draft\"]");
     if (cont && page.contains(cont)) {
       haptic("light");
+      recordCreateActivity("draft");
       continueIdeaFromLibraryTrack(_homeDeskContinueTrack);
       return;
     }
@@ -9326,6 +9421,7 @@ function bindHomeDeskOnce(page) {
     if (promoCard && page.contains(promoCard)) {
       haptic("light");
       const card = String(promoCard.getAttribute("data-home-card") || "").trim();
+      recordCreateActivity(card);
       if (card === "song") {
         try {
           location.hash = "#/generate";
@@ -9425,6 +9521,8 @@ function renderHomeDesk() {
   renderHomeDeskQuickStarts();
   renderHomeDeskSparksDeck();
   renderHomeDeskContinue();
+  const greetingSub = document.getElementById("homeDeskGreetingSub");
+  if (greetingSub) greetingSub.textContent = homeDeskDynamicSubtitle();
   syncHomeMakeSegUi();
   void refreshHomeDeskJoinCounts(page);
   if (typeof page._refreshChallengeEntries === "function") void page._refreshChallengeEntries();

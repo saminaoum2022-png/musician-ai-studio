@@ -70,7 +70,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260701-210827";
+const APP_BUILD = "20260701-212300";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -49872,6 +49872,7 @@ try {
     separateVocals: (t, onPhase) => studioSeparateVocals(t, onPhase),
     librarySongs: () => studioLibrarySongs(),
     onVocalsChanged: () => { try { if ((document.body.getAttribute("data-route") || "") === "profile" && _profileSongsSegment === "vocals") renderMyVocals(); } catch {} },
+    deliverBlob: (blob, opts) => deliverDownloadBlobToDevice(blob, opts),
     openMyVocals: () => {
       try {
         _profileSongsSegment = "vocals";

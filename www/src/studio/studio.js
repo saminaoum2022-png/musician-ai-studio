@@ -18,6 +18,8 @@ import {
   isStudioAudioDebug,
   bindAudioDebugEnableGesture,
   analyzeRawTake,
+  exportRawTakeWavBlob,
+  describeRecordingPipeline,
   formatDb,
   formatDbfs,
   formatLufs,
@@ -945,6 +947,7 @@ function mountAudioDebugSheet(root, take) {
       takeIndex: takeIndex || 1,
       latencyMs: engine?.getLatencyMs?.() ?? 0,
     });
+    const pipeline = describeRecordingPipeline(take, engine?.sampleRate);
     const sheet = root.querySelector("[data-audio-debug-sheet]");
     const panel = sheet?.querySelector(".studioAudioDebugPanel");
     if (!analysis || !panel) {
@@ -976,11 +979,37 @@ function mountAudioDebugSheet(root, take) {
           <div class="studioAudioDebugRow"><dt>Input Gain</dt><dd>${analysis.inputGainPct}%</dd></div>
           <div class="studioAudioDebugRow"><dt>Recording Latency</dt><dd>${Math.round(analysis.latencyMs)} ms</dd></div>
         </dl>
+        <div class="studioAudioDebugPipeline">
+          <span class="studioAudioDebugVoiceTitle">Recording pipeline</span>
+          <dl class="studioAudioDebugStats">
+            <div class="studioAudioDebugRow"><dt>Capture</dt><dd>${esc(pipeline.captureMethod)}</dd></div>
+            <div class="studioAudioDebugRow"><dt>Web Audio</dt><dd>${esc(pipeline.webAudioRole)}</dd></div>
+            <div class="studioAudioDebugRow"><dt>Container</dt><dd>${esc(pipeline.containerMime)}</dd></div>
+            <div class="studioAudioDebugRow"><dt>Context SR</dt><dd>${pipeline.contextSampleRate} Hz</dd></div>
+            <div class="studioAudioDebugRow"><dt>Channels</dt><dd>${pipeline.channelCount || "—"}</dd></div>
+            <div class="studioAudioDebugRow"><dt>Constraints</dt><dd class="studioAudioDebugMono">${esc(pipeline.constraints)}</dd></div>
+            <div class="studioAudioDebugRow"><dt>Live meter peak</dt><dd>${formatDbfs(pipeline.liveMeterPeakDbfs)} (${pipeline.liveMeterPeakPct}%)</dd></div>
+            <div class="studioAudioDebugRow"><dt>Analyzed buffer</dt><dd class="studioAudioDebugMono">${esc(pipeline.analyzedBuffer)}</dd></div>
+          </dl>
+        </div>
         <div class="studioAudioDebugVoice">
           <span class="studioAudioDebugVoiceTitle">Voice analysis</span>
           <ul class="studioAudioDebugDiagList">${diagHtml}</ul>
         </div>
+        <button type="button" class="studioAudioDebugExport" data-audio-debug-export>Export Raw Take WAV</button>
         <button type="button" class="studioPrimary studioAudioDebugContinue" data-audio-debug-continue>Continue</button>`;
+
+    sheet?.querySelector("[data-audio-debug-export]")?.addEventListener("click", () => {
+      bridge.haptic?.("light");
+      const wav = exportRawTakeWavBlob(take.buffer);
+      if (!wav?.size) {
+        bridge.showToast?.("Nothing to export — buffer missing.");
+        return;
+      }
+      const fname = `nabad-raw-take-${analysis.takeIndex}-${Date.now()}.wav`;
+      void bridge.deliverBlob?.(wav, { filename: fname, title: `Raw take ${analysis.takeIndex}` })
+        .catch((e) => bridge.showToast?.(`Export failed: ${String(e?.message || e).slice(0, 72)}`));
+    });
 
     const close = () => {
       sheet?.remove();

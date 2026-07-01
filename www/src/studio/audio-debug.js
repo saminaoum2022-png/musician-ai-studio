@@ -6,6 +6,8 @@
  * Peak/RMS/clipping: unweighted sample values on the raw buffer.
  */
 
+import { encodeWav16 } from "../wav.js";
+
 const DEBUG_KEY = "nabad.studio.audioDebug.v1";
 
 const BLOCK_MS = 400;
@@ -85,6 +87,32 @@ export async function analyzeRawTake(buffer, opts = {}) {
   };
 
   return { ...metrics, diagnostics: buildDiagnostics(metrics) };
+}
+
+/** Encode the exact analyzed buffer as 16-bit PCM WAV (no DSP, no re-decode). */
+export function exportRawTakeWavBlob(buffer) {
+  if (!buffer) return null;
+  const chans = buffer.numberOfChannels >= 2
+    ? [buffer.getChannelData(0), buffer.getChannelData(1)]
+    : [buffer.getChannelData(0)];
+  return encodeWav16(chans, buffer.sampleRate);
+}
+
+/** Read-only audit of how the take was captured (for the debug panel). */
+export function describeRecordingPipeline(take, ctxSampleRate = 0) {
+  const live = Number(take?.liveMeterPeak) || 0;
+  return {
+    captureMethod: "MediaRecorder API",
+    webAudioRole: "Live meter + optional headphones monitor only",
+    containerMime: take?.recorderMime || "—",
+    contextSampleRate: ctxSampleRate || take?.buffer?.sampleRate || 0,
+    channelCount: take?.buffer?.numberOfChannels || 0,
+    constraints: "echoCancellation: false · noiseSuppression: false · autoGainControl: false · channelCount: 1",
+    liveMeterPeakDbfs: ampToDb(live),
+    liveMeterPeakPct: Math.round(live * 100),
+    analyzedBuffer: "Post count-in trim · pre any FX/gain/normalize",
+    dspBeforeAnalysis: "None",
+  };
 }
 
 /* ---- Sample peak (unweighted dBFS) ---- */

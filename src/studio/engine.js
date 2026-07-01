@@ -404,7 +404,7 @@ export class StudioEngine {
       guideSrc.start(startAt);
     }
 
-    this._recCtxStart = this.ctx.currentTime;
+    this._recLivePeakMax = 0;
     this._guideCtxStart = startAt;
     this._recording = true;
     this._nodes = [micSrc, analyser, ...(guideSrc ? [guideSrc, guideGain] : []), ...(this._monitorChain?.nodes || [])];
@@ -436,6 +436,7 @@ export class StudioEngine {
         const v = Math.abs(data[i] - 128) / 128;
         if (v > peak) peak = v;
       }
+      if (peak > this._recLivePeakMax) this._recLivePeakMax = peak;
       if (typeof cb.onLevel === "function") cb.onLevel(peak);
       const pos = this.ctx.currentTime - this._guideCtxStart;
       if (pos >= 0 && typeof cb.onTick === "function") cb.onTick(pos);
@@ -463,6 +464,9 @@ export class StudioEngine {
     // So guide-time 0 sits `alignSec` into the recording.
     let alignSec = Math.max(0, this._guideCtxStart - this._recCtxStart);
 
+    const recorderMime = rec.mimeType || "audio/webm";
+    const containerBlob = blob;
+
     let buffer = null;
     try {
       const arr = await blob.arrayBuffer();
@@ -480,6 +484,9 @@ export class StudioEngine {
     const take = {
       id: `take_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
       blob,
+      containerBlob,
+      recorderMime,
+      liveMeterPeak: this._recLivePeakMax || 0,
       buffer,
       createdAt: Date.now(),
       nudgeMs: 0,

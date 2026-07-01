@@ -13,7 +13,7 @@
  * No neon-everything.
  */
 
-import { StudioEngine, FINISH_PRESETS, FINISH_IDS, vocalGainMultiplier, vocalGainSliderPctFromMultiplier } from "./engine.js";
+import { StudioEngine, FINISH_PRESETS, FINISH_IDS } from "./engine.js";
 import {
   isStudioAudioDebug,
   bindAudioDebugEnableGesture,
@@ -76,34 +76,34 @@ const DEFAULT_MIX = Object.freeze({
   fxDeesser: 0,
 });
 
+/** Applied after each new take — opens on Mix with these starting values. */
+const POST_RECORD_MIX = Object.freeze({
+  voiceVol: 72,
+  vocalGain: 59,
+  musicVol: 70,
+  reverb: 14,
+  syncMs: -80,
+  finish: "balanced",
+  finishUserPick: true,
+  finishSuggested: "balanced",
+  _finishReady: true,
+  fxDenoise: 100,
+  fxCompress: 14,
+  fxEq: 65,
+  fxDeesser: 11,
+});
+
+function applyPostRecordMixDefaults() {
+  if (!current) return;
+  current.mix = { ...DEFAULT_MIX, ...POST_RECORD_MIX };
+}
+
 const FINISH_LABELS = {
   balanced: "Balanced",
   warm: "Warm",
   bright: "Bright",
   punchy: "Punchy",
 };
-
-/** Auto-balance Review/Mix vocal level from the recorded take — no user action. */
-const MIX_AUTO_TARGET_PEAK = 0.26;
-
-function applyMixAutoLevelForTake(take) {
-  if (!take?.buffer || !current) return;
-  const ch0 = take.buffer.getChannelData(0);
-  let peak = 0;
-  for (let i = 0; i < ch0.length; i++) peak = Math.max(peak, Math.abs(ch0[i]));
-  if (peak < 0.0001) return;
-  const m = mixState();
-  const voiceVol = Number(m.voiceVol) ?? 50;
-  const voiceMult = vocalGainMultiplier(voiceVol / 100) || 2;
-  if (peak >= MIX_AUTO_TARGET_PEAK * 0.88) {
-    current.mix = { ...m, vocalGain: 50, voiceVol: 50 };
-    return;
-  }
-  const totalNeeded = Math.min(MIX_AUTO_TARGET_PEAK / peak, voiceMult * 3);
-  const vocalMultNeeded = totalNeeded / voiceMult;
-  const vocalGainPct = vocalGainSliderPctFromMultiplier(vocalMultNeeded);
-  current.mix = { ...m, vocalGain: Math.min(100, Math.max(0, vocalGainPct)) };
-}
 
 /** Pick a finish preset from song style/tags — used as default on Mix. */
 function suggestFinishPreset(track) {
@@ -978,7 +978,7 @@ function bindRecording(root) {
     if (take && !take.buffer) {
       bridge.showToast?.("Couldn’t read that take — try recording again.");
     }
-    if (take?.buffer) applyMixAutoLevelForTake(take);
+    if (take?.buffer) applyPostRecordMixDefaults();
     void persistProject();
     if (isStudioAudioDebug() && take?.buffer) {
       mountAudioDebugSheet(root, take);
@@ -1374,7 +1374,7 @@ function renderReview(root, take) {
       </div>
 
       <div class="studioFooter studioFooter--review">
-        <button type="button" class="studioPrimary" data-studio-keep>Keep &amp; Edit</button>
+        <button type="button" class="studioPrimary" data-studio-keep>Keep &amp; Mix</button>
         <div class="studioReviewActions">
           <button type="button" class="studioGhost" data-studio-again>Record again</button>
           <button type="button" class="studioGhost studioGhost--danger" data-studio-replace>Replace</button>
@@ -1485,8 +1485,9 @@ function bindReview(root, take) {
   root.querySelector("[data-studio-keep]")?.addEventListener("click", () => {
     bridge.haptic?.("medium");
     try { engine?.stopMix(); } catch {}
+    applyPostRecordMixDefaults();
     void persistProject();
-    renderEditTake(root, engine.getActiveTake());
+    renderMix(root);
   });
 
   root.querySelector("[data-studio-again]")?.addEventListener("click", () => {

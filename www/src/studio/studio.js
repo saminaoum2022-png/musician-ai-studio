@@ -196,7 +196,7 @@ function ensureMixFinish(m) {
 function projectResumeScreen(p) {
   const hasTakes = (p.takes || []).length > 0;
   const saved = p.screen;
-  if (saved === "mix" || saved === "edit" || saved === "review" || saved === "details") {
+  if (saved === "mix" || saved === "edit" || saved === "review") {
     return hasTakes ? (saved === "review" ? "mix" : saved) : (p.guideUrl ? "home" : "source");
   }
   if (hasTakes) return "mix";
@@ -372,7 +372,6 @@ export function enterStudioRoot() {
   if (screen === "recording") { renderRecording(root); return; }
   if (screen === "review" || screen === "mix") { renderPreviewMix(root, engine?.getActiveTake?.()); return; }
   if (screen === "edit") { renderEditTake(root, engine?.getActiveTake?.()); return; }
-  if (screen === "details") { renderSongDetails(root); return; }
   renderHome(root);
   void ensureGuide(root);
   void ensureTimedLyrics(root);
@@ -787,8 +786,13 @@ function setGuideStatus(root, state) {
 /* Screen: Studio Home                                                         */
 /* -------------------------------------------------------------------------- */
 
+function clearStudioOverlays(root) {
+  root?.querySelector?.("[data-audio-debug-sheet]")?.remove();
+}
+
 function renderHome(root) {
   screen = "home";
+  clearStudioOverlays(root);
   const t = current.track || {};
   const cover = safe(bridge.coverForTrack?.(t)) || safe(t.artUrl) || "";
   const title = safe(t.title) || "Untitled";
@@ -830,15 +834,6 @@ function renderHome(root) {
       </button>
 
       <div class="studioLyricsWrap" data-studio-home-lyrics>${homeLyricsHtml()}</div>
-
-      ${isStudioAudioDebug() ? `
-      <div class="studioAgcTest" data-studio-native-session>
-        <span class="studioAgcTestLabel">DEV · Native session test</span>
-        <button type="button" class="studioAgcTestBtn studioAgcTestBtn--full${getNativeSessionPrepEnabled() ? " isActive" : ""}" data-native-session-prep>
-          ${getNativeSessionPrepEnabled() ? "✓ playAndRecord before Web capture" : "Prepare playAndRecord before Web capture"}
-        </button>
-        <p class="studioAgcTestHint">iOS configures playAndRecord automatically before each recording. Toggle off to compare playback-only session (debug A/B). Use the debug panel native probe to compare AVAudioEngine levels.</p>
-      </div>` : ""}
 
       <div class="studioFooter">
         <button type="button" class="studioPrimary" data-studio-start disabled>
@@ -964,13 +959,13 @@ function updateHomeLyrics(root) {
 
 function renderRecording(root) {
   screen = "recording";
+  clearStudioOverlays(root);
   const memo = recMode === "memo";
   root.innerHTML = `
     <div class="studio studioRec" data-studio-screen="recording">
       <div class="studioRecTop">
         <span class="studioRecDot" aria-hidden="true"></span>
         <span class="studioRecLabel">${memo ? "Quick take…" : "Recording…"}</span>
-        ${isStudioAudioDebug() && isNativeIosStudio() ? `<span class="studioRecAgcBadge">${esc(getNativeSessionPrepEnabled() ? "playAndRecord session" : "default session (debug)")}</span>` : ""}
         <span class="studioRecTimer" data-studio-timer>0:00</span>
       </div>
 
@@ -1032,11 +1027,8 @@ function bindRecording(root) {
     }
     if (take?.buffer) applyPostRecordMixDefaults();
     void persistProject();
-    if (isStudioAudioDebug() && take?.buffer) {
-      mountAudioDebugSheet(root, take);
-      return;
-    }
-    renderReview(root, take);
+    clearStudioOverlays(root);
+    renderPreviewMix(root, take);
   });
 }
 
@@ -1533,6 +1525,7 @@ function pitchFromRetuneSlider(v) {
 
 function renderPreviewMix(root, take) {
   screen = "mix";
+  clearStudioOverlays(root);
   take = take || engine?.getActiveTake?.() || null;
   const m = current.mix || (current.mix = { ...DEFAULT_MIX });
   ensureMixFx(m);
@@ -1619,7 +1612,7 @@ function renderPreviewMix(root, take) {
       </div>
 
       <div class="studioFooter studioFooter--finish">
-        <button type="button" class="studioPrimary studioPrimary--continue" data-studio-continue>Continue</button>
+        <button type="button" class="studioPrimary studioPrimary--continue" data-studio-save-vocal>Save to My Vocals</button>
       </div>
     </div>`;
 
@@ -2026,12 +2019,8 @@ function bindPreviewMix(root, take, aiRec) {
     });
   });
 
-  root.querySelector("[data-studio-continue]")?.addEventListener("click", () => {
-    bridge.haptic?.("medium");
-    try { engine?.stopMix(); } catch {}
-    current.details = null;
-    void persistProject();
-    renderSongDetails(root);
+  root.querySelector("[data-studio-save-vocal]")?.addEventListener("click", () => {
+    void saveVocalFromPreview(root);
   });
 
   void (async () => {
@@ -2528,206 +2517,38 @@ function saveDraft() {
 }
 
 
-function renderSongDetails(root) {
-  screen = "details";
-  const t = current?.track || {};
-  const cover = safe(bridge.coverForTrack?.(t)) || safe(t.artUrl) || "";
-  const srcTitle = String(t.title || "").trim();
-  if (!current.details) {
-    current.details = {
-      title: srcTitle ? `${srcTitle} — my version` : "My version",
-      artUrl: cover,
-      visibility: "private",
-    };
-  }
-  const d = current.details;
-
-  root.innerHTML = `
-    <div class="studio studioDetails" data-studio-screen="details">
-      ${headerHtml("DETAILS")}
-
-      <div class="studioDetailsHero">
-        <div class="studioDetailsArt ${d.artUrl ? "" : "isEmpty"}">
-          ${d.artUrl ? `<img src="${esc(d.artUrl)}" alt="" />` : `<span aria-hidden="true">♪</span>`}
-        </div>
-        <p class="studioDetailsSub">Title, artwork, and visibility for your version.</p>
-      </div>
-
-      <label class="studioDetailsField">
-        <span class="studioMixLabel">Title</span>
-        <input type="text" class="studioDetailsInput" value="${esc(d.title)}" data-details-title maxlength="120" autocomplete="off" />
-      </label>
-
-      <div class="studioDetailsField">
-        <span class="studioMixLabel">Visibility</span>
-        <div class="studioSeg studioSeg--visibility" data-details-visibility role="group" aria-label="Visibility">
-          <button type="button" class="studioSegBtn${d.visibility !== "public" ? " isActive" : ""}" data-vis="private">Private</button>
-          <button type="button" class="studioSegBtn${d.visibility === "public" ? " isActive" : ""}" data-vis="public">Public profile</button>
-        </div>
-      </div>
-
-      <div class="studioFooter studioFooter--finish">
-        <button type="button" class="studioPrimary studioPrimary--continue" data-details-save>Save to My Vocals</button>
-      </div>
-    </div>`;
-
-  bindHeader(root, () => renderPreviewMix(root, engine?.getActiveTake?.()));
-
-  root.querySelector("[data-details-title]")?.addEventListener("input", (e) => {
-    current.details.title = e.target.value;
-  });
-
-  root.querySelector("[data-details-visibility]")?.addEventListener("click", (e) => {
-    const b = e.target.closest("[data-vis]");
-    if (!b) return;
-    bridge.haptic?.("light");
-    current.details.visibility = b.getAttribute("data-vis") || "private";
-    root.querySelectorAll("[data-details-visibility] .studioSegBtn").forEach((x) => {
-      x.classList.toggle("isActive", x === b);
-    });
-  });
-
-  root.querySelector("[data-details-save]")?.addEventListener("click", () => {
-    void saveSongFromDetails(root);
-  });
-}
-
-async function saveSongFromDetails(root) {
-  const btn = root.querySelector("[data-details-save]");
-  if (btn) { btn.disabled = true; btn.textContent = "Saving…"; }
+async function saveVocalFromPreview(root) {
+  const btn = root.querySelector("[data-studio-save-vocal]");
   bridge.haptic?.("medium");
+  try { engine?.stopMix(); } catch {}
+  if (btn) { btn.disabled = true; btn.textContent = "Saving…"; }
   try {
     const take = engine?.getActiveTake?.();
     if (take) await ensureTakePitchReady(take);
     const rendered = await engine.renderMix(mixParams());
-    const d = current.details || {};
-    const title = String(d.title || "").trim() || "Studio song";
+    const srcTitle = String(current?.track?.title || "").trim();
+    const cover = safe(bridge.coverForTrack?.(current?.track)) || safe(current?.track?.artUrl) || "";
     await saveVocal({
-      title,
+      title: srcTitle ? `${srcTitle} — my version` : "Studio song",
       blob: rendered.blob,
       durationSec: rendered.durationSec,
-      artUrl: String(d.artUrl || ""),
-      sourceTitle: String(current.track?.title || ""),
+      artUrl: cover,
+      sourceTitle: srcTitle,
       mime: "audio/wav",
-      visibility: d.visibility === "public" ? "public" : "private",
+      visibility: "private",
     });
     unsaved = false;
     try { bridge.onVocalsChanged?.(); } catch {}
-    void persistProject();
+    screen = "home";
+    await persistProject();
     bridge.showToast?.("Saved to My Vocals.");
     renderHome(root);
+    void ensureGuide(root);
   } catch (e) {
     console.warn("[studio] save failed:", e);
     bridge.showToast?.("Couldn't save — your take is still here.");
     if (btn) { btn.disabled = false; btn.textContent = "Save to My Vocals"; }
   }
-}
-
-/* -------------------------------------------------------------------------- */
-/* Screen: Save to Songs (local-first) + Saved                                 */
-/* -------------------------------------------------------------------------- */
-
-// "Save to Songs" renders the final mix and stores it ON THE DEVICE only (in
-// the local "My Vocals" store). Nothing is uploaded here — publishing (with a
-// cover + release) happens later from the My Vocals tab, and that is the only
-// time the audio leaves the phone.
-async function saveToSongs(root) {
-  bridge.haptic?.("medium");
-  try { engine?.stopMix(); } catch {}
-  renderSaving(root);
-  const fill = root.querySelector("[data-pub-fill]");
-  const pct = root.querySelector("[data-pub-pct]");
-  const phase = root.querySelector("[data-pub-phase]");
-
-  let p = 0;
-  const tickTo = (target, label) => {
-    if (label && phase) phase.textContent = label;
-    const step = () => {
-      if (p < target) { p = Math.min(target, p + Math.max(1, (target - p) * 0.12)); paint(); requestAnimationFrame(step); }
-    };
-    requestAnimationFrame(step);
-  };
-  const paint = () => {
-    const v = Math.round(p);
-    if (fill) fill.style.width = v + "%";
-    if (pct) pct.textContent = v + "%";
-  };
-
-  try {
-    tickTo(40, "Preparing vocal…");
-    const take = engine?.getActiveTake?.();
-    if (take) await ensureTakePitchReady(take);
-    tickTo(55, "Applying finish…");
-    const rendered = await engine.renderMix(mixParams());
-    tickTo(85, "Saving to your device…");
-    const title = String(current.track?.title || "").trim();
-    await saveVocal({
-      title: title ? `${title} — my version` : "Studio song",
-      blob: rendered.blob,
-      durationSec: rendered.durationSec,
-      artUrl: safe(bridge.coverForTrack?.(current.track)) || safe(current.track?.artUrl) || "",
-      sourceTitle: title,
-      mime: "audio/wav",
-    });
-    p = 100; paint();
-    unsaved = false;
-    try { bridge.onVocalsChanged?.(); } catch {}
-    void persistProject();
-    renderSaved(root);
-  } catch (e) {
-    renderMix(root);
-    bridge.showToast?.("Couldn’t save the mix — your take is still here. Try again.");
-  }
-}
-
-function renderSaving(root) {
-  screen = "saving";
-  const cover = safe(bridge.coverForTrack?.(current.track)) || safe(current.track?.artUrl) || "";
-  root.innerHTML = `
-    <div class="studio studioPublish" data-studio-screen="saving">
-      <div class="studioPublishInner">
-        <div class="studioPublishArt ${cover ? "" : "isEmpty"}">
-          ${cover ? `<img src="${esc(cover)}" alt="" />` : `<span aria-hidden="true">♪</span>`}
-          <div class="studioPublishShimmer" aria-hidden="true"></div>
-        </div>
-        <h1 class="studioPublishTitle">Saving your song</h1>
-        <p class="studioPublishPhase" data-pub-phase>Preparing…</p>
-        <div class="studioPubBar"><span class="studioPubFill" data-pub-fill style="width:0%"></span></div>
-        <div class="studioPubPct" data-pub-pct>0%</div>
-        <p class="studioPublishHint">Stays on your phone — find it in Profile → My Vocals, and publish it whenever you’re ready.</p>
-      </div>
-    </div>`;
-}
-
-function renderSaved(root) {
-  screen = "saved";
-  bridge.haptic?.("medium");
-  const title = safe(current.track?.title) || "Your song";
-  root.innerHTML = `
-    <div class="studio studioPublished" data-studio-screen="saved">
-      <div class="studioPublishInner">
-        <div class="studioCheck" aria-hidden="true">
-          <svg viewBox="0 0 52 52" width="72" height="72"><circle class="studioCheckCircle" cx="26" cy="26" r="24" fill="none"/><path class="studioCheckMark" fill="none" d="M14 27 l8 8 l16 -18"/></svg>
-        </div>
-        <h1 class="studioPublishTitle">Saved to My Vocals</h1>
-        <p class="studioPublishPhase">“${esc(title)} — my version” is on your device. Publish it anytime from Profile → My Vocals.</p>
-        <div class="studioFooter studioFooter--done">
-          <button type="button" class="studioPrimary" data-studio-myvocals>Go to My Vocals</button>
-          <button type="button" class="studioGhost" data-studio-another>Record another</button>
-        </div>
-      </div>
-    </div>`;
-
-  root.querySelector("[data-studio-myvocals]")?.addEventListener("click", () => {
-    bridge.haptic?.("light");
-    if (typeof bridge.openMyVocals === "function") bridge.openMyVocals();
-    else bridge.navigateBack?.();
-  });
-  root.querySelector("[data-studio-another]")?.addEventListener("click", () => {
-    bridge.haptic?.("light");
-    current.mix = { ...DEFAULT_MIX };
-    renderHome(root);
-  });
 }
 
 /* -------------------------------------------------------------------------- */

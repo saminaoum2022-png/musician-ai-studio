@@ -132,7 +132,7 @@ export const PITCH_CORRECTION_PRESETS = Object.freeze({
 export const PITCH_PRESET_IDS = Object.freeze(["none", "natural", "balanced", "pop", "hardtune"]);
 export const PITCH_PRESET_DEFAULT = "balanced";
 /** Bump when pitch engine changes so cached renders are invalidated. */
-const PITCH_ENGINE_VERSION = 8;
+const PITCH_ENGINE_VERSION = 9;
 
 export function normalizePitchPresetId(id) {
   if (!id) return PITCH_PRESET_DEFAULT;
@@ -265,18 +265,42 @@ function estimatePitchForStudio(samples, sampleRate, minHz = 65, maxHz = 560) {
   return sampleRate / bestLag;
 }
 
-function prepareMonoForPitchAnalysis(ch0, ch1) {
+function toMonoFloat32(ch0, ch1) {
   const mono = new Float32Array(ch0.length);
   for (let i = 0; i < ch0.length; i++) {
     mono[i] = ch1 ? (ch0[i] + ch1[i]) * 0.5 : ch0[i];
   }
+  return mono;
+}
+
+/** Peak-normalize a copy for pitch tracking only — never use for audible output. */
+function peakNormalizeCopyForAnalysis(mono, targetPeak = 0.85) {
   let peak = 0;
   for (let i = 0; i < mono.length; i++) peak = Math.max(peak, Math.abs(mono[i]));
-  if (peak > 1e-6 && peak < 0.85) {
-    const gain = 0.85 / peak;
-    for (let i = 0; i < mono.length; i++) mono[i] *= gain;
-  }
-  return mono;
+  if (peak <= 1e-6 || peak >= targetPeak) return mono.slice();
+  const out = mono.slice();
+  const gain = targetPeak / peak;
+  for (let i = 0; i < out.length; i++) out[i] *= gain;
+  return out;
+}
+
+/** Keep corrected vocal at the same peak level as the raw take (A/B-safe). */
+function matchPeakToReference(corrected, referenceMono) {
+  let refPeak = 0;
+  let outPeak = 0;
+  for (let i = 0; i < referenceMono.length; i++) refPeak = Math.max(refPeak, Math.abs(referenceMono[i]));
+  for (let i = 0; i < corrected.length; i++) outPeak = Math.max(outPeak, Math.abs(corrected[i]));
+  if (refPeak <= 1e-6 || outPeak <= 1e-6) return corrected;
+  const gain = refPeak / outPeak;
+  if (gain > 0.97 && gain < 1.03) return corrected;
+  const out = corrected.slice();
+  const g = clamp(gain, 0.25, 4);
+  for (let i = 0; i < out.length; i++) out[i] *= g;
+  return out;
+}
+
+function prepareMonoForPitchAnalysis(ch0, ch1) {
+  return peakNormalizeCopyForAnalysis(toMonoFloat32(ch0, ch1));
 }
 
 function resolveKeyInfo(mono, sr, opts = {}) {
@@ -961,12 +985,13 @@ export async function renderPitchCorrection(sourceBuffer, presetId, opts = {}) {
     const sr = sourceBuffer.sampleRate || 44100;
     const ch0 = sourceBuffer.getChannelData(0);
     const ch1 = sourceBuffer.numberOfChannels > 1 ? sourceBuffer.getChannelData(1) : null;
-    const mono = prepareMonoForPitchAnalysis(ch0, ch1);
-    const keyInfo = resolveKeyInfo(mono, sr, opts);
+    const monoRaw = toMonoFloat32(ch0, ch1);
+    const monoAnalysis = peakNormalizeCopyForAnalysis(monoRaw);
+    const keyInfo = resolveKeyInfo(monoAnalysis, sr, opts);
 
     await yieldToUi();
 
-    const { f0s, voiced, hop, winSize, nGrains } = trackPitchFrames(mono, sr, preset);
+    const { f0s, voiced, hop, winSize, nGrains } = trackPitchFrames(monoAnalysis, sr, preset);
     const voicedRatio = nGrains
       ? voiced.reduce((a, b) => a + b, 0) / Math.max(1, voiced.length)
       : 0;
@@ -983,9 +1008,10 @@ export async function renderPitchCorrection(sourceBuffer, presetId, opts = {}) {
     const microFilter = applyMicroPitchFilter(f0s, voiced, hop, sr);
     const { lockedMidi, slowMidi } = buildLockedNotes(microFilter, voiced, preset, keyInfo, hop, sr);
     const cents = buildCorrectionCents(f0s, voiced, lockedMidi, slowMidi, microFilter, preset, hop, sr);
-    const corrected = applyPitchShift(mono, sr, cents, hop, winSize, preset.wet);
+    const corrected = applyPitchShift(monoRaw, sr, cents, hop, winSize, preset.wet);
+    const levelMatched = matchPeakToReference(corrected, monoRaw);
 
-    const buf = createMonoBufferFromFloat32(corrected, sr, opts);
+    const buf = createMonoBufferFromFloat32(levelMatched, sr, opts);
     const meta = buildRenderMeta(sourceBuffer, buf, cents, voiced, keyInfo, preset, voicedRatio);
     return { buffer: buf, meta };
   } catch (err) {
@@ -1053,8 +1079,8 @@ export async function ensurePitchPresetRendered(take, presetId, opts = {}) {
       if (!pc.keyInfo) {
         const ch = take.buffer.getChannelData(0);
         const ch1 = take.buffer.numberOfChannels > 1 ? take.buffer.getChannelData(1) : null;
-        const mono = prepareMonoForPitchAnalysis(ch, ch1);
-        pc.keyInfo = resolveKeyInfo(mono, take.buffer.sampleRate, { trackKey: opts.trackKey });
+        const monoAnalysis = peakNormalizeCopyForAnalysis(toMonoFloat32(ch, ch1));
+        pc.keyInfo = resolveKeyInfo(monoAnalysis, take.buffer.sampleRate, { trackKey: opts.trackKey });
       }
       const result = await renderPitchCorrection(take.buffer, id, {
         audioContext: opts.audioContext,

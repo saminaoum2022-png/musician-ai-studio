@@ -24,8 +24,10 @@ import { encodeWav16 } from "../wav.js";
 
 const LATENCY_STORAGE_KEY = "nabad.studio.latencyMs.v1";
 
-// Base vocal trim after compression/EQ — scaled by Mix “Vocal gain” slider.
-const VOICE_MAKEUP = 1.32;
+// Base vocal trim after compression/EQ — scaled by Mix sliders + per-take level match.
+const VOICE_MAKEUP = 1.55;
+// AI guides are mastered near full scale; trim so Music % compares fairly to Voice %.
+const GUIDE_MIX_TRIM = 0.88;
 
 /* -------------------------------------------------------------------------- */
 /* Modular effect registry                                                     */
@@ -78,14 +80,14 @@ export const EFFECT_REGISTRY = {
       const input = ctx.createGain();
       const comp = ctx.createDynamicsCompressor();
       try {
-        comp.threshold.value = -16;
-        comp.knee.value = 12;
-        comp.ratio.value = 2.2;
-        comp.attack.value = 0.012;
-        comp.release.value = 0.28;
+        comp.threshold.value = -20;
+        comp.knee.value = 14;
+        comp.ratio.value = 1.75;
+        comp.attack.value = 0.014;
+        comp.release.value = 0.3;
       } catch {}
       const makeup = ctx.createGain();
-      makeup.gain.value = 1.22;
+      makeup.gain.value = 1.38;
       input.connect(comp).connect(makeup);
       return { input, output: makeup, update: () => {} };
     },
@@ -633,6 +635,14 @@ export class StudioEngine {
     return this._takePlayOffsetSec(take);
   }
 
+  _voiceMixGain(params = {}, take = null) {
+    const p = {
+      ...params,
+      vocalPlayOffsetSec: take ? this._takePlayOffsetSec(take) : 0,
+    };
+    return voiceOutputGain(p, take, this.guideBuffer);
+  }
+
   /* ---- live mix preview ---- */
 
   /**
@@ -661,7 +671,7 @@ export class StudioEngine {
     const guideSrc = this.ctx.createBufferSource();
     guideSrc.buffer = this.guideBuffer;
     const musicGain = this.ctx.createGain();
-    musicGain.gain.value = solo === "voice" ? 0 : clamp01(params.musicVol ?? 0.8);
+    musicGain.gain.value = solo === "voice" ? 0 : musicOutputGain(params);
     guideSrc.connect(musicGain).connect(master);
     guideSrc.start(startAt, fromSec);
     this._nodes.push(guideSrc, musicGain);
@@ -679,7 +689,7 @@ export class StudioEngine {
         voiceSrc.buffer = take.buffer;
         const chain = this._buildVoiceChain(this.ctx, { reverb: params.reverb });
         const voiceGain = this.ctx.createGain();
-        voiceGain.gain.value = voiceOutputGain(params);
+        voiceGain.gain.value = this._voiceMixGain(params, take);
         const center = this._centerNode(this.ctx);
         voiceSrc.connect(chain.input);
         chain.output.connect(voiceGain).connect(center.input);
@@ -716,8 +726,11 @@ export class StudioEngine {
     const mix = this._mix;
     if (!mix) return;
     const solo = params.solo || "";
-    if (mix.musicGain) mix.musicGain.gain.value = solo === "voice" ? 0 : clamp01(params.musicVol ?? 0.8);
-    if (mix.voiceGain) mix.voiceGain.gain.value = solo === "music" ? 0 : voiceOutputGain(params);
+    if (mix.musicGain) mix.musicGain.gain.value = solo === "voice" ? 0 : musicOutputGain(params);
+    if (mix.voiceGain) {
+      const take = this._resolveTake(params);
+      mix.voiceGain.gain.value = solo === "music" ? 0 : this._voiceMixGain(params, take);
+    }
     if (mix.voiceChain?.update) mix.voiceChain.update({ reverb: params.reverb });
   }
 
@@ -752,7 +765,7 @@ export class StudioEngine {
     const guideSrc = off.createBufferSource();
     guideSrc.buffer = this.guideBuffer;
     const musicGain = off.createGain();
-    musicGain.gain.value = clamp01(params.musicVol ?? 0.8);
+    musicGain.gain.value = musicOutputGain(params);
     guideSrc.connect(musicGain).connect(mixBus);
     guideSrc.start(0);
 
@@ -761,7 +774,7 @@ export class StudioEngine {
       voiceSrc.buffer = take.buffer;
       const { input, output } = this._buildVoiceChain(off, { reverb: params.reverb });
       const voiceGain = off.createGain();
-      voiceGain.gain.value = voiceOutputGain(params);
+      voiceGain.gain.value = this._voiceMixGain(params, take);
       const center = this._centerNode(off);
       voiceSrc.connect(input);
       output.connect(voiceGain).connect(center.input);
@@ -1010,15 +1023,44 @@ function cloneAudioBuffer(ctx, buffer) {
   return out;
 }
 
-/** Mix output: balance × chain makeup × user vocal-gain trim. */
-function voiceOutputGain(params = {}) {
+/** Mix output: balance × chain makeup × vocal-gain knob × per-take level match. */
+function voiceOutputGain(params = {}, take = null, guideBuffer = null) {
   const vol = clamp01(params.voiceVol ?? 0.82);
   const knob = clamp01(Number.isFinite(params.vocalGain) ? params.vocalGain : 0.72);
-  const gainMul = 0.55 + knob * 0.45;
-  return vol * VOICE_MAKEUP * gainMul;
+  const gainMul = 0.75 + knob * 0.7;
+  const match = vocalMatchGain(take, guideBuffer, params.vocalPlayOffsetSec);
+  return vol * VOICE_MAKEUP * gainMul * match;
 }
 
-function normalizeTakeBuffer(buffer, targetPeak = 0.58) {
+function musicOutputGain(params = {}) {
+  return clamp01(params.musicVol ?? 0.8) * GUIDE_MIX_TRIM;
+}
+
+/** Lift quiet takes toward the guide so Voice % and Music % feel comparable. */
+function vocalMatchGain(take, guideBuffer, playOffsetSec = null) {
+  if (!take?.buffer || !guideBuffer) return 1;
+  const off = playOffsetSec != null ? playOffsetSec : Math.max(0, take.alignSec || 0);
+  const vRms = bufferRms(take.buffer, off);
+  const gRms = bufferRms(guideBuffer);
+  if (vRms < 0.004 || gRms < 0.004) return 1;
+  return clampNum((gRms / vRms) * 1.35, 1.0, 2.8);
+}
+
+function bufferRms(buffer, startSec = 0, endSec = null) {
+  if (!buffer) return 0;
+  const ch = buffer.getChannelData(0);
+  const sr = buffer.sampleRate;
+  const i0 = Math.max(0, Math.floor((Number(startSec) || 0) * sr));
+  const i1 = endSec != null
+    ? Math.min(ch.length, Math.ceil(Number(endSec) * sr))
+    : ch.length;
+  if (i1 <= i0) return 0;
+  let sum = 0;
+  for (let i = i0; i < i1; i++) sum += ch[i] * ch[i];
+  return Math.sqrt(sum / (i1 - i0));
+}
+
+function normalizeTakeBuffer(buffer, targetPeak = 0.68) {
   if (!buffer) return buffer;
   const ch0 = buffer.getChannelData(0);
   let peak = 0;
@@ -1026,7 +1068,7 @@ function normalizeTakeBuffer(buffer, targetPeak = 0.58) {
   if (peak < 0.008) return buffer;
   let g = 1;
   if (peak > targetPeak) g = targetPeak / peak;
-  else if (peak < targetPeak * 0.55) g = Math.min(targetPeak / peak, 1.28);
+  else if (peak < targetPeak * 0.55) g = Math.min(targetPeak / peak, 1.45);
   else return buffer;
   const AC = window.AudioContext || window.webkitAudioContext;
   const tmp = new AC();
@@ -1160,7 +1202,7 @@ function finishTakeBuffer(buffer) {
   if (!buffer) return buffer;
   denoiseAndGateBuffer(buffer);
   stabilizeLevelBuffer(buffer);
-  return normalizeTakeBuffer(buffer, 0.58);
+  return normalizeTakeBuffer(buffer, 0.68);
 }
 
 function bufferToWavBlob(buffer) {

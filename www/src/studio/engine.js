@@ -23,6 +23,8 @@
 import { encodeWav16 } from "../wav.js";
 
 const LATENCY_STORAGE_KEY = "nabad.studio.latencyMs.v1";
+const PCM_CAPTURE_WORKLET_URL = new URL("./pcm-capture-processor.js", import.meta.url);
+const pcmWorkletLoaded = new WeakMap();
 
 // AI guides are mastered loud; slight trim so Music % feels honest vs raw voice.
 const GUIDE_MIX_TRIM = 0.88;
@@ -198,6 +200,9 @@ export class StudioEngine {
     this._recorder = null;
     this._recStream = null;
     this._recChunks = [];
+    this._pcmChunks = [];
+    this._pcmNode = null;
+    this._recLivePeakSyncedMax = 0;
     this._recCtxStart = 0;
     this._guideCtxStart = 0;
     this._raf = 0;
@@ -358,19 +363,39 @@ export class StudioEngine {
 
     this._micTrackInfo = readMicTrackInfo(this._recStream);
 
-    const mime = pickRecorderMime();
-    this._recChunks = [];
-    this._recorder = mime
-      ? new MediaRecorder(this._recStream, { mimeType: mime })
-      : new MediaRecorder(this._recStream);
-    this._recorder.ondataavailable = (e) => { if (e.data && e.data.size) this._recChunks.push(e.data); };
+    // Float32 PCM capture via AudioWorklet — same mic tap as the live meter, no AAC.
+    this._pcmChunks = [];
+    await ensurePcmCaptureWorklet(this.ctx);
 
-    // Live level metering off the raw mic stream (parallel tap — not in MediaRecorder path).
     const micSrc = this.ctx.createMediaStreamSource(this._recStream);
     const analyser = this.ctx.createAnalyser();
-    analyser.fftSize = 1024;
+    analyser.fftSize = 2048;
     micSrc.connect(analyser);
-    const data = new Uint8Array(analyser.fftSize);
+
+    const procIn = Math.min(2, Math.max(1, this._micTrackInfo?.settings?.channelCount || 1));
+    const pcmNode = new AudioWorkletNode(this.ctx, "pcm-capture-processor", {
+      numberOfInputs: 1,
+      numberOfOutputs: 1,
+      channelCount: procIn,
+      outputChannelCount: [1],
+    });
+    this._pcmNode = pcmNode;
+    pcmNode.port.onmessage = (ev) => {
+      if (!this._recording || ev.data?.type !== "pcm") return;
+      const samples = ev.data.samples;
+      if (samples?.length) this._pcmChunks.push(samples);
+    };
+
+    const pcmSilent = this.ctx.createGain();
+    pcmSilent.gain.value = 0;
+    micSrc.connect(pcmNode);
+    pcmNode.connect(pcmSilent);
+    pcmSilent.connect(this.ctx.destination);
+
+    const floatData = typeof analyser.getFloatTimeDomainData === "function"
+      ? new Float32Array(analyser.fftSize)
+      : null;
+    const byteData = floatData ? null : new Uint8Array(analyser.fftSize);
 
     // Optional live monitoring ("hear yourself"): raw mic -> reverb -> output.
     // HEADPHONES ONLY — through a speaker this loops back into the mic and howls.
@@ -407,10 +432,11 @@ export class StudioEngine {
     }
 
     this._recLivePeakMax = 0;
+    this._recLivePeakSyncedMax = 0;
     this._recCtxStart = this.ctx.currentTime;
     this._guideCtxStart = startAt;
     this._recording = true;
-    this._nodes = [micSrc, analyser, ...(guideSrc ? [guideSrc, guideGain] : []), ...(this._monitorChain?.nodes || [])];
+    this._nodes = [micSrc, analyser, pcmNode, pcmSilent, ...(guideSrc ? [guideSrc, guideGain] : []), ...(this._monitorChain?.nodes || [])];
 
     // Count-in ticks.
     if (typeof cb.onCountIn === "function") {
@@ -421,9 +447,7 @@ export class StudioEngine {
       setTimeout(() => { if (this._recording) cb.onCountIn(0); }, n * 1000);
     }
 
-    // Start the recorder now (its t=0 maps to _recCtxStart). Timeslice helps iOS.
-    this._recorder.start(250);
-
+    // Start capture (t=0 maps to _recCtxStart; PCM processor runs on AudioContext clock).
     if (guideSrc) {
       guideSrc.onended = () => {
         if (typeof cb.onEnded === "function") cb.onEnded();
@@ -433,15 +457,24 @@ export class StudioEngine {
     // rAF loop for level + position.
     const loop = () => {
       if (!this._recording) return;
-      analyser.getByteTimeDomainData(data);
       let peak = 0;
-      for (let i = 0; i < data.length; i++) {
-        const v = Math.abs(data[i] - 128) / 128;
-        if (v > peak) peak = v;
+      if (floatData) {
+        analyser.getFloatTimeDomainData(floatData);
+        for (let i = 0; i < floatData.length; i++) {
+          const v = Math.abs(floatData[i]);
+          if (v > peak) peak = v;
+        }
+      } else {
+        analyser.getByteTimeDomainData(byteData);
+        for (let i = 0; i < byteData.length; i++) {
+          const v = Math.abs(byteData[i] - 128) / 128;
+          if (v > peak) peak = v;
+        }
       }
       if (peak > this._recLivePeakMax) this._recLivePeakMax = peak;
-      if (typeof cb.onLevel === "function") cb.onLevel(peak);
       const pos = this.ctx.currentTime - this._guideCtxStart;
+      if (pos >= 0 && peak > this._recLivePeakSyncedMax) this._recLivePeakSyncedMax = peak;
+      if (typeof cb.onLevel === "function") cb.onLevel(peak);
       if (pos >= 0 && typeof cb.onTick === "function") cb.onTick(pos);
       this._raf = requestAnimationFrame(loop);
     };
@@ -454,43 +487,34 @@ export class StudioEngine {
     this._recording = false;
     cancelAnimationFrame(this._raf);
 
-    const rec = this._recorder;
-    const blob = await new Promise((resolve) => {
-      rec.onstop = () => resolve(new Blob(this._recChunks, { type: rec.mimeType || "audio/webm" }));
-      try { rec.stop(); } catch { resolve(new Blob(this._recChunks)); }
-    });
+    try { this._pcmNode?.port?.postMessage({ type: "stop" }); } catch {}
+
+    const pcmChunks = this._pcmChunks.slice();
+    const alignSecRaw = Math.max(0, this._guideCtxStart - this._recCtxStart);
 
     this._teardownNodes();
     this._stopStream();
 
-    // The recording's t=0 == _recCtxStart; the guide's t=0 == _guideCtxStart.
-    // So guide-time 0 sits `alignSec` into the recording.
-    let alignSec = Math.max(0, this._guideCtxStart - this._recCtxStart);
+    let alignSec = alignSecRaw;
+    let buffer = mergePcmChunks(pcmChunks, this.ctx.sampleRate, this.ctx);
+    const preTrimPeakDb = bufferPeakDb(buffer);
 
-    const recorderMime = rec.mimeType || "audio/webm";
-    const containerBlob = blob;
-
-    let buffer = null;
-    try {
-      const arr = await blob.arrayBuffer();
-      if (arr.byteLength > 0) {
-        buffer = await this.ctx.decodeAudioData(arr.slice(0));
-        buffer = monoFromBuffer(this.ctx, buffer);
-        const trimmed = trimBufferLeadIn(this.ctx, buffer, alignSec);
-        buffer = trimmed.buffer;
-        alignSec = trimmed.alignSec;
-        // Raw take — no gate/normalize; user picks enhancements on Mix.
-      }
-    } catch {
-      buffer = null; // decode failed — blob kept so a retry can recover
+    if (buffer) {
+      buffer = monoFromBuffer(this.ctx, buffer);
+      const trimmed = trimBufferLeadIn(this.ctx, buffer, alignSec);
+      buffer = trimmed.buffer;
+      alignSec = trimmed.alignSec;
     }
 
     const take = {
       id: `take_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
-      blob,
-      containerBlob,
-      recorderMime,
+      blob: null,
+      containerBlob: null,
+      recorderMime: "audio/float32-pcm",
+      captureMethod: "float32-pcm-worklet",
       liveMeterPeak: this._recLivePeakMax || 0,
+      liveMeterPeakSynced: this._recLivePeakSyncedMax || 0,
+      preTrimPeakDb,
       micTrackInfo: this._micTrackInfo || null,
       buffer,
       createdAt: Date.now(),
@@ -500,6 +524,7 @@ export class StudioEngine {
     if (buffer) {
       try { take.blob = bufferToWavBlob(buffer); } catch {}
     }
+    this._pcmChunks = [];
     this.takes.push(take);
     this.activeTakeId = take.id;
     return take;
@@ -976,6 +1001,8 @@ export class StudioEngine {
     this._recStream = null;
     this._recorder = null;
     this._recChunks = [];
+    this._pcmChunks = [];
+    this._pcmNode = null;
   }
 
   /** Full cleanup when leaving the Studio. */
@@ -1076,6 +1103,39 @@ function readMicTrackInfo(stream) {
     settings,
     constraints,
   };
+}
+
+/** Load the PCM capture AudioWorklet once per AudioContext. */
+async function ensurePcmCaptureWorklet(ctx) {
+  if (!ctx?.audioWorklet) throw new Error("AudioWorklet not supported");
+  if (pcmWorkletLoaded.get(ctx)) return;
+  await ctx.audioWorklet.addModule(PCM_CAPTURE_WORKLET_URL);
+  pcmWorkletLoaded.set(ctx, true);
+}
+
+function mergePcmChunks(chunks, sampleRate, ctx) {
+  if (!chunks?.length || !ctx) return null;
+  const total = chunks.reduce((s, c) => s + c.length, 0);
+  if (!total) return null;
+  const buffer = ctx.createBuffer(1, total, sampleRate);
+  const out = buffer.getChannelData(0);
+  let off = 0;
+  for (const c of chunks) {
+    out.set(c, off);
+    off += c.length;
+  }
+  return buffer;
+}
+
+function bufferPeakDb(buffer) {
+  if (!buffer) return -Infinity;
+  let peak = 0;
+  for (let ch = 0; ch < buffer.numberOfChannels; ch++) {
+    const data = buffer.getChannelData(ch);
+    for (let i = 0; i < data.length; i++) peak = Math.max(peak, Math.abs(data[i]));
+  }
+  if (peak <= 0) return -Infinity;
+  return 20 * Math.log10(peak);
 }
 
 function pickRecorderMime() {

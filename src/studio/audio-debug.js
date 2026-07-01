@@ -101,16 +101,24 @@ export function exportRawTakeWavBlob(buffer) {
 /** Read-only audit of how the take was captured (for the debug panel). */
 export function describeRecordingPipeline(take, ctxSampleRate = 0) {
   const live = Number(take?.liveMeterPeak) || 0;
+  const liveSynced = Number(take?.liveMeterPeakSynced) || 0;
   const info = take?.micTrackInfo;
   const settings = info?.settings || {};
   const constraints = info?.constraints || {};
   const agcActual = settings.autoGainControl;
   const agcRequested = constraints.autoGainControl;
   const fmtBool = (v) => (v === true ? "on" : v === false ? "off" : "default");
+  const method = take?.captureMethod === "float32-pcm-worklet"
+    ? "Web Audio Float32 PCM (AudioWorklet)"
+    : take?.captureMethod === "float32-pcm"
+      ? "Web Audio Float32 PCM (ScriptProcessor)"
+      : "MediaRecorder API (direct mic stream, gain 1.0)";
 
   return {
-    captureMethod: "MediaRecorder API (direct mic stream, gain 1.0)",
-    webAudioRole: "Parallel meter + optional monitor only — not in record path",
+    captureMethod: method,
+    webAudioRole: take?.captureMethod?.startsWith("float32-pcm")
+      ? "Mic → AudioWorklet float PCM + parallel float meter (no AAC, gain 1.0)"
+      : "Parallel meter + optional monitor only — not in record path",
     containerMime: take?.recorderMime || "—",
     contextSampleRate: ctxSampleRate || take?.buffer?.sampleRate || 0,
     channelCount: take?.buffer?.numberOfChannels || 0,
@@ -122,14 +130,14 @@ export function describeRecordingPipeline(take, ctxSampleRate = 0) {
     agcActual: fmtBool(agcActual),
     nsActual: fmtBool(settings.noiseSuppression),
     ecActual: fmtBool(settings.echoCancellation),
+    preTrimPeakDb: take?.preTrimPeakDb,
     voiceMemosNote: "Voice Memos uses native iOS recorder with system AGC enabled — not browser attenuation",
-    levelCompareNote: take?.buffer
-      ? "Compare Live meter peak vs Peak dBFS — if similar, decode is not attenuating"
-      : "",
+    levelCompareNote: "File peak vs live meter (post count-in only) — same float path, no AAC",
     constraints: "requested: echoCancellation off · noiseSuppression off · autoGainControl off · channelCount 1",
     liveMeterPeakDbfs: ampToDb(live),
+    liveMeterPeakSyncedDbfs: ampToDb(liveSynced),
     liveMeterPeakPct: Math.round(live * 100),
-    analyzedBuffer: "Mono downmix · post count-in trim · pre mix FX",
+    analyzedBuffer: "Float32 mono · post count-in trim · pre mix FX",
     dspBeforeAnalysis: "None",
   };
 }

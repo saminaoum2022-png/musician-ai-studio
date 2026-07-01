@@ -614,7 +614,10 @@ function detectOrnamentMask(microCents, expressionMidi, voiced, hop, sr) {
  * Stabilises pitch detection and marks expressive regions as non-correctable.
  * @returns {MicroPitchFilterResult}
  */
-function applyMicroPitchFilter(f0s, voiced, hop, sr) {
+function applyMicroPitchFilter(f0s, voiced, hop, sr, filterOpts = null) {
+  const microIgnoreCents = Number.isFinite(filterOpts?.microIgnoreCents)
+    ? filterOpts.microIgnoreCents
+    : MICRO_PITCH_FILTER.microIgnoreCents;
   const n = f0s.length;
   const rawMidi = new Float32Array(n);
   const expressionMidi = new Float32Array(n);
@@ -675,7 +678,7 @@ function applyMicroPitchFilter(f0s, voiced, hop, sr) {
     if (vibrato[i] || portamento[i]) score = 0;
     else if (ornament[i]) score = Math.min(score, 0.15);
     else if (!stable) score *= 0.25;
-    else if (Math.abs(microCents[i]) < MICRO_PITCH_FILTER.microIgnoreCents) score *= 0.72;
+    else if (Math.abs(microCents[i]) < microIgnoreCents) score *= 0.72;
 
     const localCenterDev = Math.abs(noteCenterMidi[i] - expressionMidi[i]) * 100;
     if (localCenterDev > 28) score *= 0.35;
@@ -970,10 +973,44 @@ export function describePitchRenderMeta(meta, presetId) {
   return `${label} · Key ${meta.keyLabel || "—"} · ${strength} correction (avg ${meta.avgCents}¢, peak ${meta.peakCents}¢). Tap Original while playing to A/B.`;
 }
 
+function expressionProtectionToVibrato(v) {
+  const n = Number(v) || 0;
+  if (n >= 66) return "on";
+  if (n >= 33) return "slight";
+  return "off";
+}
+
+/** Map Advanced tab sliders to pitch preset field overrides (0–100 UI → engine). */
+export function advPitchOverrides(adv) {
+  if (!adv) return null;
+  return {
+    humanize: clamp((Number(adv.humanize) || 0) / 100, 0, 1),
+    flexTune: clamp((Number(adv.flexTune) || 0) / 100, 0, 1),
+    vibratoPreserve: expressionProtectionToVibrato(adv.expressionProtection),
+  };
+}
+
+/** Micro pitch filter strength from Advanced slider (0 = gentle, 100 = tighter). */
+export function microFilterFromAdv(adv) {
+  const strength = clamp((Number(adv?.microPitchFilter) ?? 72) / 100, 0, 1);
+  return { microIgnoreCents: 40 - strength * 28 };
+}
+
+function advPitchKey(adv) {
+  if (!adv) return "";
+  return JSON.stringify({
+    h: Number(adv.humanize) || 0,
+    f: Number(adv.flexTune) || 0,
+    e: Number(adv.expressionProtection) || 0,
+    m: Number(adv.microPitchFilter) || 0,
+  });
+}
+
 /** Render pitch-corrected vocal (offline). Returns { buffer, meta }. */
 export async function renderPitchCorrection(sourceBuffer, presetId, opts = {}) {
   const id = normalizePitchPresetId(presetId);
-  const preset = PITCH_CORRECTION_PRESETS[id];
+  const base = PITCH_CORRECTION_PRESETS[id];
+  const preset = base && opts.presetOverrides ? { ...base, ...opts.presetOverrides } : base;
   if (!preset || id === "none") {
     return { buffer: sourceBuffer, meta: { passthrough: true, onPitch: true, keyLabel: "" } };
   }
@@ -1005,7 +1042,7 @@ export async function renderPitchCorrection(sourceBuffer, presetId, opts = {}) {
 
     await yieldToUi();
 
-    const microFilter = applyMicroPitchFilter(f0s, voiced, hop, sr);
+    const microFilter = applyMicroPitchFilter(f0s, voiced, hop, sr, opts.microFilter);
     const { lockedMidi, slowMidi } = buildLockedNotes(microFilter, voiced, preset, keyInfo, hop, sr);
     const cents = buildCorrectionCents(f0s, voiced, lockedMidi, slowMidi, microFilter, preset, hop, sr);
     const corrected = applyPitchShift(monoRaw, sr, cents, hop, winSize, preset.wet);
@@ -1051,11 +1088,48 @@ export function getPitchCachedBuffer(take, presetId) {
   return pc.cache?.[id] || null;
 }
 
+export function getPitchAdvCachedBuffer(take) {
+  return take?.pitchCorrection?.cache?.adv || null;
+}
+
+export function clearPitchAdvCache(take) {
+  const pc = take?.pitchCorrection;
+  if (!pc) return;
+  delete pc.cache.adv;
+  delete pc.meta?.adv;
+  pc.advCacheKey = "";
+}
+
 export function invalidatePitchCache(take) {
   if (!take?.pitchCorrection) return;
   take.pitchCorrection.cache = {};
   take.pitchCorrection.meta = {};
   take.pitchCorrection.keyInfo = null;
+}
+
+export async function ensurePitchAdvRendered(take, presetId, adv, opts = {}) {
+  const pc = ensureTakePitchState(take);
+  if (!take?.buffer || !pc) return null;
+  const id = normalizePitchPresetId(presetId);
+  if (id === "none") return take.buffer;
+
+  const key = advPitchKey(adv);
+  if (pc.advCacheKey === key && pc.cache.adv) return pc.cache.adv;
+
+  const overrides = advPitchOverrides(adv);
+  const microFilter = microFilterFromAdv(adv);
+  const result = await renderPitchCorrection(take.buffer, id, {
+    ...opts,
+    presetOverrides: overrides,
+    microFilter,
+  });
+  const buf = result?.buffer || null;
+  if (buf) {
+    pc.cache.adv = buf;
+    pc.advCacheKey = key;
+    if (result?.meta) pc.meta.adv = result.meta;
+  }
+  return buf;
 }
 
 export async function ensurePitchPresetRendered(take, presetId, opts = {}) {

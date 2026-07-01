@@ -41686,6 +41686,12 @@ body[data-route="studio"] .deskRail { display: none !important; }
 .studioSliderLabel { font-size: 14px; font-weight: 600; color: rgba(231,238,255,0.85); }
 .studioSliderRow input[type="range"] { width: 100%; accent-color: var(--brand-violet); }
 .studioSliderVal { font-size: 12px; color: var(--muted); text-align: right; font-variant-numeric: tabular-nums; }
+.studioSliderRow--disabled { opacity: 0.55; }
+.studioSliderRow--disabled input[type="range"] { pointer-events: none; }
+.studioAdvSoon {
+  display: block; margin-top: 1px; font-size: 10px; font-weight: 700;
+  letter-spacing: 0.04em; text-transform: uppercase; color: var(--muted);
+}
 
 .studioMixField { display: flex; flex-direction: column; gap: 10px; }
 .studioMixFinishHint {
@@ -41892,6 +41898,28 @@ body[data-route="studio"] .deskRail { display: none !important; }
 .studioPrimary--continue {
   min-height: 52px; font-size: 16px; font-weight: 800; letter-spacing: 0.01em;
 }
+
+.studioNabadProcess .studioPublishInner { gap: 14px; }
+.studioNabadKicker {
+  margin: 0; font-size: 12px; font-weight: 800; letter-spacing: 0.06em;
+  text-transform: uppercase; color: var(--brand-violet-hover);
+}
+.studioNabadScore {
+  width: 100%; display: flex; flex-direction: column; align-items: center; gap: 4px;
+  padding: 14px 12px; border-radius: 16px; text-align: center;
+  background: linear-gradient(155deg, rgba(124, 92, 255, 0.14), rgba(35, 213, 171, 0.08));
+  border: 1px solid rgba(124, 92, 255, 0.22);
+}
+.studioNabadScoreLbl {
+  font-size: 11px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase;
+  color: rgba(231, 238, 255, 0.62);
+}
+.studioNabadScoreVal {
+  font-size: 40px; font-weight: 800; line-height: 1;
+  color: var(--brand-teal); text-shadow: 0 0 24px rgba(35, 213, 171, 0.35);
+}
+.studioNabadScoreDetail { margin: 2px 0 0; font-size: 12px; color: rgba(231, 238, 255, 0.78); }
+.studioNabadScoreBlurb { margin: 6px 0 0; font-size: 12px; line-height: 1.45; color: var(--muted); }
 
 .studioDetails { gap: 18px; }
 .studioDetailsHero { text-align: center; display: flex; flex-direction: column; align-items: center; gap: 10px; }

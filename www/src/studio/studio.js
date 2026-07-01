@@ -25,6 +25,11 @@ import {
   normalizePitchPresetId,
   getPitchRenderMeta,
   describePitchRenderMeta,
+  advPitchOverrides,
+  microFilterFromAdv,
+  getPitchAdvCachedBuffer,
+  clearPitchAdvCache,
+  ensurePitchAdvRendered,
 } from "./pitch-correction.js";
 import { StudioEngine, FINISH_PRESETS, FINISH_IDS } from "./engine.js";
 import {
@@ -498,6 +503,219 @@ async function runSeparation(root) {
     screen = "source";
     renderSource(root);
     bridge.showToast?.(String(e?.message || "Couldn’t separate vocals."), { durationMs: 4200 });
+  }
+}
+
+/* -------------------------------------------------------------------------- */
+/* Screen: Nabad AI processing (post-record prep + save finalizing)            */
+/* -------------------------------------------------------------------------- */
+
+function yieldToUi() {
+  return new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+}
+
+function trackCoverUrl() {
+  return safe(bridge.coverForTrack?.(current?.track)) || safe(current?.track?.artUrl) || "";
+}
+
+function setProcessingPhase(root, phase) {
+  const el = root.querySelector("[data-nabad-phase]");
+  if (el) el.textContent = phase;
+}
+
+function buildNabadScoreCopy(take, track, mix) {
+  const aiRec = buildAiMixRecommendation(take, track);
+  const finishLabel = FINISH_LABELS[mix?.finish] || "Balanced";
+  const detail = `${aiRec.matchPct}% match with this song · ${finishLabel} finish`;
+  let blurb = "Your vocal sits well on the guide — polishing tone and balance.";
+  if (aiRec.matchPct >= 92) blurb = "Strong take — Nabad AI is dialing in a pro-sounding mix.";
+  else if (aiRec.matchPct >= 84) blurb = "Nice energy — smoothing pitch and glueing you to the track.";
+  else blurb = "Good raw take — gentle enhancement will help it sit in the mix.";
+  return { score: aiRec.matchPct, finishLabel, detail, blurb, aiRec };
+}
+
+function renderNabadProcessing(root, opts = {}) {
+  const procScreen = opts.screen || "processing";
+  const cover = opts.cover ?? trackCoverUrl();
+  const score = Number.isFinite(opts.score) ? Math.round(opts.score) : null;
+  screen = procScreen;
+  root.innerHTML = `
+    <div class="studio studioPublish studioNabadProcess" data-studio-screen="${esc(procScreen)}">
+      <div class="studioPublishInner">
+        <div class="studioPublishArt ${cover ? "" : "isEmpty"}">
+          ${cover ? `<img src="${esc(cover)}" alt="" />` : `<span aria-hidden="true">♪</span>`}
+          <div class="studioPublishShimmer" aria-hidden="true"></div>
+        </div>
+        <p class="studioNabadKicker"><span aria-hidden="true">✨</span> Nabad AI</p>
+        <h1 class="studioPublishTitle">${esc(opts.title || "Working…")}</h1>
+        <p class="studioPublishPhase" data-nabad-phase>${esc(opts.phase || "Starting…")}</p>
+        ${score != null ? `
+          <div class="studioNabadScore" aria-live="polite">
+            <span class="studioNabadScoreLbl">${esc(opts.scoreLabel || "Nabad Score")}</span>
+            <span class="studioNabadScoreVal">${score}</span>
+            <p class="studioNabadScoreDetail">${esc(opts.scoreDetail || "")}</p>
+            ${opts.scoreBlurb ? `<p class="studioNabadScoreBlurb">${esc(opts.scoreBlurb)}</p>` : ""}
+          </div>` : ""}
+        <div class="studioPubBar"><span class="studioPubFill studioPubFill--indet"></span></div>
+        <p class="studioPublishHint">${esc(opts.hint || "This only takes a moment.")}</p>
+      </div>
+    </div>`;
+}
+
+async function prepareTakeForPreview(root, take) {
+  if (!take) {
+    bridge.showToast?.("Nothing captured — try recording again.");
+    return;
+  }
+
+  renderNabadProcessing(root, {
+    screen: "processing",
+    title: "Preparing Preview",
+    phase: "Reading your take…",
+    hint: "Nabad AI is enhancing your vocals and suggesting a mix.",
+    cover: trackCoverUrl(),
+  });
+
+  const setPhase = (txt) => setProcessingPhase(root, txt);
+
+  try {
+    if (!take.buffer) {
+      setPhase("Reading your take…");
+      await yieldToUi();
+      await engine?.hydrateTakeBuffer(take);
+    }
+    if (!take.buffer) throw new Error("no buffer");
+
+    applyPostRecordMixDefaults();
+    await engine?.ensureReady();
+
+    ensureTakePitchState(take).cache.none = take.buffer;
+    setPhase("Enhancing your vocals…");
+    await yieldToUi();
+
+    setPhase("Building pitch options…");
+    await warmupPitchPresets(take);
+
+    setPhase("Nabad AI is suggesting your mix…");
+    await yieldToUi();
+    const aiRec = buildAiMixRecommendation(take, current?.track);
+    const tab = STYLE_TABS[aiRec.styleTab];
+    const m = current.mix || (current.mix = { ...DEFAULT_MIX });
+    if (tab?.mix) {
+      m.styleTab = aiRec.styleTab;
+      Object.assign(m, tab.mix);
+      m.finish = tab.finish;
+      m.finishUserPick = true;
+      ensureTakePitchState(take).preset = tab.pitch;
+      m.advPitch = pitchAdvDefaults(tab.pitch);
+      await ensurePitchPresetRendered(take, tab.pitch, {
+        audioContext: engine?.ctx,
+        trackKey: trackKeyHint(),
+      });
+    }
+
+    current._previewPreparedTakeId = take.id;
+    void persistProject();
+    renderPreviewMix(root, take);
+  } catch (e) {
+    console.warn("[studio] preview prep failed:", e);
+    bridge.showToast?.("Couldn't prepare preview — try again.");
+    if (take?.buffer) renderPreviewMix(root, take);
+    else renderHome(root);
+  }
+}
+
+function defaultVocalTitle() {
+  const srcTitle = String(current?.track?.title || "").trim();
+  return srcTitle ? `${srcTitle} — my version` : "Studio song";
+}
+
+function renderSaveDetails(root) {
+  screen = "save-details";
+  clearStudioOverlays(root);
+  const pending = current?._pendingSave;
+  if (!pending?.rendered) {
+    renderPreviewMix(root, engine?.getActiveTake?.());
+    return;
+  }
+  const cover = pending.cover || trackCoverUrl();
+  const title = pending.title || defaultVocalTitle();
+
+  root.innerHTML = `
+    <div class="studio studioDetails" data-studio-screen="save-details">
+      ${headerHtml("SAVE")}
+      <div class="studioDetailsHero">
+        <div class="studioDetailsArt ${cover ? "" : "isEmpty"}">
+          ${cover ? `<img src="${esc(cover)}" alt="" />` : `<span aria-hidden="true">♪</span>`}
+        </div>
+        <p class="studioDetailsSub">Name your vocal before we add it to My Vocals.</p>
+      </div>
+      <label class="studioDetailsField">
+        <span class="studioMixLabel">Song title</span>
+        <input type="text" class="studioDetailsInput" data-save-title value="${esc(title)}" maxlength="120" autocomplete="off" enterkeyhint="done" />
+      </label>
+      <div class="studioFooter studioFooter--finish">
+        <button type="button" class="studioPrimary studioPrimary--continue" data-save-confirm>Save to My Vocals</button>
+      </div>
+    </div>`;
+
+  bindSaveDetails(root);
+}
+
+function bindSaveDetails(root) {
+  bindHeader(root, () => {
+    try { engine?.stopMix(); } catch {}
+    renderPreviewMix(root, engine?.getActiveTake?.());
+  });
+  const inp = root.querySelector("[data-save-title]");
+  root.querySelector("[data-save-confirm]")?.addEventListener("click", () => {
+    void confirmSaveVocal(root, inp?.value?.trim() || defaultVocalTitle());
+  });
+  inp?.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      void confirmSaveVocal(root, inp.value?.trim() || defaultVocalTitle());
+    }
+  });
+  try { inp?.focus(); } catch {}
+}
+
+async function confirmSaveVocal(root, title) {
+  const pending = current?._pendingSave;
+  const btn = root.querySelector("[data-save-confirm]");
+  if (!pending?.rendered) {
+    bridge.showToast?.("Nothing to save — go back and try again.");
+    return;
+  }
+  bridge.haptic?.("medium");
+  if (btn) { btn.disabled = true; btn.textContent = "Saving…"; }
+  try {
+    await saveVocal({
+      title,
+      blob: pending.rendered.blob,
+      durationSec: pending.rendered.durationSec,
+      artUrl: pending.cover || "",
+      sourceTitle: pending.sourceTitle || "",
+      mime: "audio/wav",
+      visibility: "private",
+    });
+    unsaved = false;
+    try { bridge.onVocalsChanged?.(); } catch {}
+    const projectId = current?.projectId;
+    if (projectId) {
+      try { await deleteProjectWithBlobs(projectId); } catch {}
+    }
+    try { engine?.clearTakes(); } catch {}
+    current = null;
+    screen = "lobby";
+    bridge.showToast?.("Saved to My Vocals.");
+    leaveStudioRoot();
+    if (typeof bridge.openMyVocals === "function") bridge.openMyVocals();
+    else bridge.navigateBack?.();
+  } catch (e) {
+    console.warn("[studio] save failed:", e);
+    bridge.showToast?.("Couldn't save — your mix is still here.");
+    if (btn) { btn.disabled = false; btn.textContent = "Save to My Vocals"; }
   }
 }
 
@@ -985,16 +1203,8 @@ function bindRecording(root) {
     }
 
     unsaved = true;
-    if (take && !take.buffer) {
-      try { await engine.hydrateTakeBuffer(take); } catch {}
-    }
-    if (take && !take.buffer) {
-      bridge.showToast?.("Couldn’t read that take — try recording again.");
-    }
-    if (take?.buffer) applyPostRecordMixDefaults();
-    void persistProject();
     clearStudioOverlays(root);
-    renderPreviewMix(root, take);
+    void prepareTakeForPreview(root, take);
   });
 }
 
@@ -1223,6 +1433,16 @@ function stylePresetTabsHtml(activeId) {
     </div>`;
 }
 
+function advPitchDiffersFromDefaults(pitchId, adv) {
+  const d = pitchAdvDefaults(pitchId);
+  return (
+    Math.round(Number(adv.humanize) || 0) !== d.humanize
+    || Math.round(Number(adv.flexTune) || 0) !== d.flexTune
+    || Math.round(Number(adv.expressionProtection) || 0) !== d.expressionProtection
+    || Math.round(Number(adv.microPitchFilter) || 0) !== d.microPitchFilter
+  );
+}
+
 function pitchAdvDefaults(pitchId) {
   const p = PITCH_CORRECTION_PRESETS[normalizePitchPresetId(pitchId)];
   return {
@@ -1240,12 +1460,14 @@ function ensureMixAdvPitch(m) {
   return m.advPitch;
 }
 
-function advSliderRow(key, label, value, iconKey) {
+function advSliderRow(key, label, value, iconKey, opts = {}) {
+  const disabled = opts.disabled ? " disabled" : "";
+  const hint = opts.hint ? `<span class="studioAdvSoon">${esc(opts.hint)}</span>` : "";
   return `
-    <label class="studioSliderRow">
+    <label class="studioSliderRow${opts.disabled ? " studioSliderRow--disabled" : ""}">
       <span class="studioSliderIco" aria-hidden="true">${studioIco(iconKey)}</span>
-      <span class="studioSliderLabel">${esc(label)}</span>
-      <input type="range" min="0" max="100" value="${Number(value) || 0}" data-adv-pitch="${key}" aria-label="${esc(label)}" />
+      <span class="studioSliderLabel">${esc(label)}${hint}</span>
+      <input type="range" min="0" max="100" value="${Number(value) || 0}" data-adv-pitch="${key}" aria-label="${esc(label)}"${disabled} />
       <span class="studioSliderVal" data-adv-pitch-val="${key}">${Number(value) || 0}</span>
     </label>`;
 }
@@ -1404,7 +1626,7 @@ function renderPreviewMix(root, take) {
           ${advSliderRow("flexTune", "Flex tune", adv.flexTune, "note")}
           ${advSliderRow("expressionProtection", "Expression protection", adv.expressionProtection, "voice")}
           ${advSliderRow("microPitchFilter", "Micro pitch filter", adv.microPitchFilter, "note")}
-          ${advSliderRow("stereoWidth", "Stereo width", adv.stereoWidth, "music")}
+          ${advSliderRow("stereoWidth", "Stereo width", adv.stereoWidth, "music", { disabled: true, hint: "Soon" })}
         </div>
       </div>
 
@@ -1449,6 +1671,10 @@ function pitchVoiceBufferForTake(take) {
   if (!take?.buffer) return undefined;
   const preset = activePitchPreset(take);
   if (preset === "none") return undefined;
+  const adv = current?.mix?.advPitch;
+  if (adv && advPitchDiffersFromDefaults(preset, adv)) {
+    return getPitchAdvCachedBuffer(take) || getPitchCachedBuffer(take, preset) || undefined;
+  }
   return getPitchCachedBuffer(take, preset) || undefined;
 }
 
@@ -1526,6 +1752,10 @@ function reviewVoiceBuffer(take) {
 function pitchPlaybackBuffer(take, presetId) {
   if (!take?.buffer) return null;
   if (presetId === "none") return take.buffer;
+  const adv = current?.mix?.advPitch;
+  if (adv && advPitchDiffersFromDefaults(presetId, adv)) {
+    return getPitchAdvCachedBuffer(take) || getPitchCachedBuffer(take, presetId);
+  }
   return getPitchCachedBuffer(take, presetId);
 }
 
@@ -1556,6 +1786,18 @@ function swapPitchVoice(take, presetId) {
 async function ensureTakePitchReady(take) {
   const preset = activePitchPreset(take);
   if (!take || preset === "none") return;
+  const adv = current?.mix?.advPitch;
+  if (adv && advPitchDiffersFromDefaults(preset, adv)) {
+    if (getPitchAdvCachedBuffer(take)) return;
+    await engine?.ensureReady();
+    if (take?.blob && !take?.buffer) await engine?.hydrateTakeBuffer(take);
+    if (!take?.buffer) return;
+    await ensurePitchAdvRendered(take, preset, adv, {
+      audioContext: engine?.ctx,
+      trackKey: trackKeyHint(),
+    });
+    return;
+  }
   if (getPitchCachedBuffer(take, preset)) return;
   await engine?.ensureReady();
   if (take?.blob && !take?.buffer) await engine?.hydrateTakeBuffer(take);
@@ -1564,6 +1806,32 @@ async function ensureTakePitchReady(take) {
     audioContext: engine?.ctx,
     trackKey: trackKeyHint(),
   });
+}
+
+async function applyAdvPitchSliders(root, take, state) {
+  if (!take?.buffer) return;
+  const preset = activePitchPreset(take);
+  if (preset === "none") return;
+  const adv = ensureMixAdvPitch(current.mix || {});
+  if (!advPitchDiffersFromDefaults(preset, adv)) {
+    clearPitchAdvCache(take);
+    swapPitchVoice(take, preset);
+    return;
+  }
+  if (!state?.silent) setPitchLoadingUi(root, preset, true);
+  try {
+    await engine?.ensureReady();
+    await ensurePitchAdvRendered(take, preset, adv, {
+      audioContext: engine?.ctx,
+      trackKey: trackKeyHint(),
+    });
+    if (!state?.silent) setPitchLoadingUi(root, preset, false);
+    swapPitchVoice(take, preset);
+  } catch (err) {
+    console.warn("[studio] adv pitch failed:", err);
+    setPitchLoadingUi(root, preset, false);
+    if (!state?.silent) bridge.showToast?.("Couldn't update pitch settings.");
+  }
 }
 
 function trackKeyHint() {
@@ -1578,6 +1846,7 @@ function trackKeyHint() {
 
 async function selectPitchPreset(root, take, presetId, state) {
   if (!take?.buffer) return;
+  clearPitchAdvCache(take);
   const pc = ensureTakePitchState(take);
   pc.preset = presetId;
 
@@ -1797,7 +2066,11 @@ function bindPreviewMix(root, take, aiRec) {
       if (k === "retuneSpeed" && take) {
         const pid = pitchFromRetuneSlider(adv.retuneSpeed);
         ensureTakePitchState(take).preset = pid;
+        m.advPitch = pitchAdvDefaults(pid);
+        refreshMixSlidersUi(root, m);
         void selectPitchPreset(root, take, pid, { ...pitchState, silent: true });
+      } else if (k !== "stereoWidth" && take) {
+        void applyAdvPitchSliders(root, take, pitchState);
       }
     });
   });
@@ -1844,7 +2117,8 @@ function bindPreviewMix(root, take, aiRec) {
     ensureTakePitchState(take).cache.none = take.buffer;
     const tab = STYLE_TABS[m.styleTab] || STYLE_TABS.studio;
     if (tab.pitch) ensureTakePitchState(take).preset = tab.pitch;
-    void warmupPitchPresets(take);
+    const prepared = current._previewPreparedTakeId === take.id;
+    if (!prepared) void warmupPitchPresets(take);
     await selectPitchPreset(root, take, activePitchPreset(take), { ...pitchState, silent: true });
   })();
 }
@@ -2332,42 +2606,49 @@ function saveDraft() {
 
 
 async function saveVocalFromPreview(root) {
-  const btn = root.querySelector("[data-studio-save-vocal]");
   bridge.haptic?.("medium");
   try { engine?.stopMix(); } catch {}
-  if (btn) { btn.disabled = true; btn.textContent = "Saving…"; }
+
+  const take = engine?.getActiveTake?.();
+  const m = current.mix || DEFAULT_MIX;
+  const scoreCopy = buildNabadScoreCopy(take, current?.track, m);
+  const cover = trackCoverUrl();
+  const srcTitle = String(current?.track?.title || "").trim();
+
+  renderNabadProcessing(root, {
+    screen: "finalizing",
+    title: "Finalizing your mix",
+    phase: "Enhancing vocal tone…",
+    hint: `Applying ${scoreCopy.finishLabel} finish before you name your song.`,
+    cover,
+    score: scoreCopy.score,
+    scoreLabel: "Nabad Score",
+    scoreDetail: scoreCopy.detail,
+    scoreBlurb: scoreCopy.blurb,
+  });
+
+  const setPhase = (txt) => setProcessingPhase(root, txt);
+
   try {
-    const take = engine?.getActiveTake?.();
+    await yieldToUi();
     if (take) await ensureTakePitchReady(take);
+    setPhase(`Applying ${scoreCopy.finishLabel} finish…`);
+    await yieldToUi();
+    setPhase("Rendering your release…");
     const rendered = await engine.renderMix(mixParams());
-    const srcTitle = String(current?.track?.title || "").trim();
-    const cover = safe(bridge.coverForTrack?.(current?.track)) || safe(current?.track?.artUrl) || "";
-    await saveVocal({
-      title: srcTitle ? `${srcTitle} — my version` : "Studio song",
-      blob: rendered.blob,
-      durationSec: rendered.durationSec,
-      artUrl: cover,
+    setPhase("Preparing song details…");
+    await yieldToUi();
+    current._pendingSave = {
+      rendered,
+      title: defaultVocalTitle(),
       sourceTitle: srcTitle,
-      mime: "audio/wav",
-      visibility: "private",
-    });
-    unsaved = false;
-    try { bridge.onVocalsChanged?.(); } catch {}
-    const projectId = current?.projectId;
-    if (projectId) {
-      try { await deleteProjectWithBlobs(projectId); } catch {}
-    }
-    try { engine?.clearTakes(); } catch {}
-    current = null;
-    screen = "lobby";
-    bridge.showToast?.("Saved to My Vocals.");
-    leaveStudioRoot();
-    if (typeof bridge.openMyVocals === "function") bridge.openMyVocals();
-    else bridge.navigateBack?.();
+      cover,
+    };
+    renderSaveDetails(root);
   } catch (e) {
-    console.warn("[studio] save failed:", e);
-    bridge.showToast?.("Couldn't save — your take is still here.");
-    if (btn) { btn.disabled = false; btn.textContent = "Save to My Vocals"; }
+    console.warn("[studio] finalize failed:", e);
+    bridge.showToast?.("Couldn't finalize — your take is still here.");
+    renderPreviewMix(root, take);
   }
 }
 

@@ -23,13 +23,6 @@ import {
   buildAgcCompareHtml,
   clearAgcCompareSnapshots,
   inputLevelModeLabel,
-  isNativeMicProbeAvailable,
-  fetchNativeSessionInfo,
-  getNativeSessionPrepEnabled,
-  setNativeSessionPrepEnabled,
-  runNativeMicProbe,
-  formatNativeSessionSummary,
-  buildNativeVsWebCompareHtml,
   analyzeRawTake,
   exportRawTakeWavBlob,
   describeRecordingPipeline,
@@ -37,6 +30,15 @@ import {
   formatDbfs,
   formatLufs,
 } from "./audio-debug.js";
+import {
+  isNativeMicProbeAvailable,
+  fetchNativeSessionInfo,
+  getNativeSessionPrepEnabled,
+  setNativeSessionPrepEnabled,
+  runNativeMicProbe,
+  formatNativeSessionSummary,
+  buildNativeVsWebCompareHtml,
+} from "./native-mic-probe.js";
 import {
   listProjects,
   upsertProject,

@@ -24,10 +24,10 @@ import { encodeWav16 } from "../wav.js";
 
 const LATENCY_STORAGE_KEY = "nabad.studio.latencyMs.v1";
 
-// Base vocal trim after compression/EQ — scaled by Mix sliders + per-take level match.
-const VOICE_MAKEUP = 1.55;
-// AI guides are mastered near full scale; trim so Music % compares fairly to Voice %.
+// AI guides are mastered loud; slight trim so Music % feels honest vs raw voice.
 const GUIDE_MIX_TRIM = 0.88;
+// Sliders at 50% = unity gain; 100% = 2× (each multiplies).
+const VOCAL_SLIDER_CENTER = 0.5;
 
 /* -------------------------------------------------------------------------- */
 /* Modular effect registry                                                     */
@@ -75,21 +75,20 @@ export const EFFECT_REGISTRY = {
     id: "compression",
     label: "Compression",
     isPlaceholder: false,
-    /** Gentle vocal compression — evens level without squashing body. */
-    create(ctx) {
-      const input = ctx.createGain();
-      const comp = ctx.createDynamicsCompressor();
-      try {
-        comp.threshold.value = -20;
-        comp.knee.value = 14;
-        comp.ratio.value = 1.75;
-        comp.attack.value = 0.014;
-        comp.release.value = 0.3;
-      } catch {}
-      const makeup = ctx.createGain();
-      makeup.gain.value = 1.38;
-      input.connect(comp).connect(makeup);
-      return { input, output: makeup, update: () => {} };
+    create(ctx, params = {}) {
+      return createParallelFx(ctx, params, (c, wetIn, wetOut) => {
+        const comp = c.createDynamicsCompressor();
+        try {
+          comp.threshold.value = -20;
+          comp.knee.value = 14;
+          comp.ratio.value = 1.75;
+          comp.attack.value = 0.014;
+          comp.release.value = 0.3;
+        } catch {}
+        const makeup = c.createGain();
+        makeup.gain.value = 1.25;
+        wetIn.connect(comp).connect(makeup).connect(wetOut);
+      });
     },
   },
 
@@ -97,28 +96,43 @@ export const EFFECT_REGISTRY = {
     id: "eq",
     label: "EQ",
     isPlaceholder: false,
-    /** Warm body + light presence — avoids the thin/crispy phone-mic top end. */
-    create(ctx) {
-      const input = ctx.createGain();
-      const hp = ctx.createBiquadFilter();
-      hp.type = "highpass";
-      hp.frequency.value = 65;
-      hp.Q.value = 0.65;
-      const warmth = ctx.createBiquadFilter();
-      warmth.type = "lowshelf";
-      warmth.frequency.value = 220;
-      warmth.gain.value = 1.4;
-      const presence = ctx.createBiquadFilter();
-      presence.type = "peaking";
-      presence.frequency.value = 2800;
-      presence.Q.value = 0.85;
-      presence.gain.value = 0.4;
-      const airCut = ctx.createBiquadFilter();
-      airCut.type = "highshelf";
-      airCut.frequency.value = 6500;
-      airCut.gain.value = -2.8;
-      input.connect(hp).connect(warmth).connect(presence).connect(airCut);
-      return { input, output: airCut, update: () => {} };
+    create(ctx, params = {}) {
+      return createParallelFx(ctx, params, (c, wetIn, wetOut) => {
+        const hp = c.createBiquadFilter();
+        hp.type = "highpass";
+        hp.frequency.value = 65;
+        hp.Q.value = 0.65;
+        const warmth = c.createBiquadFilter();
+        warmth.type = "lowshelf";
+        warmth.frequency.value = 220;
+        warmth.gain.value = 1.4;
+        const presence = c.createBiquadFilter();
+        presence.type = "peaking";
+        presence.frequency.value = 2800;
+        presence.Q.value = 0.85;
+        presence.gain.value = 0.4;
+        const airCut = c.createBiquadFilter();
+        airCut.type = "highshelf";
+        airCut.frequency.value = 6500;
+        airCut.gain.value = -2.8;
+        wetIn.connect(hp).connect(warmth).connect(presence).connect(airCut).connect(wetOut);
+      });
+    },
+  },
+
+  deesser: {
+    id: "deesser",
+    label: "De-esser",
+    isPlaceholder: false,
+    create(ctx, params = {}) {
+      return createParallelFx(ctx, params, (c, wetIn, wetOut) => {
+        const cut = c.createBiquadFilter();
+        cut.type = "peaking";
+        cut.frequency.value = 6200;
+        cut.Q.value = 1.2;
+        cut.gain.value = -4.5;
+        wetIn.connect(cut).connect(wetOut);
+      });
     },
   },
 
@@ -362,7 +376,7 @@ export class StudioEngine {
     this._monitorChain = null;
     if (cb.monitor) {
       const monitorGain = this.ctx.createGain();
-      monitorGain.gain.value = (cb.monitorVol ?? 0.88) * VOICE_MAKEUP * 0.92;
+      monitorGain.gain.value = cb.monitorVol ?? 0.85;
       const chain = this._buildMonitorChain(this.ctx, {
         reverb: cb.monitorReverb ?? 0.25,
         echo: cb.monitorEcho ?? 0.18,
@@ -457,7 +471,7 @@ export class StudioEngine {
         const trimmed = trimBufferLeadIn(this.ctx, buffer, alignSec);
         buffer = trimmed.buffer;
         alignSec = trimmed.alignSec;
-        buffer = finishTakeBuffer(buffer);
+        // Raw take — no gate/normalize; user picks enhancements on Mix.
       }
     } catch {
       buffer = null; // decode failed — blob kept so a retry can recover
@@ -489,7 +503,7 @@ export class StudioEngine {
       const arr = await take.blob.arrayBuffer();
       if (!arr.byteLength) return false;
       let buffer = await this.ctx.decodeAudioData(arr.slice(0));
-      if (opts.polish !== false) buffer = finishTakeBuffer(buffer);
+      if (opts.polish) buffer = finishTakeBuffer(buffer);
       take.buffer = buffer;
       return true;
     } catch {
@@ -636,11 +650,21 @@ export class StudioEngine {
   }
 
   _voiceMixGain(params = {}, take = null) {
-    const p = {
-      ...params,
-      vocalPlayOffsetSec: take ? this._takePlayOffsetSec(take) : 0,
-    };
-    return voiceOutputGain(p, take, this.guideBuffer);
+    return voiceOutputGain(params);
+  }
+
+  /** Raw buffer, or denoise blended by fxDenoise amount (0..1). */
+  _getTakePlaybackBuffer(take, params = {}) {
+    if (!take?.buffer) return null;
+    const amt = fxAmount01(params.fxDenoise);
+    if (amt <= 0.001) return take.buffer;
+    const stepped = Math.round(amt * 100);
+    const cacheKey = `${take.id}_${take.buffer.length}_dn${stepped}`;
+    if (take._fxDenoiseBuf && take._fxCacheKey === cacheKey) return take._fxDenoiseBuf;
+    const blended = blendDenoiseBuffer(this.ctx, take.buffer, amt);
+    take._fxDenoiseBuf = blended;
+    take._fxCacheKey = cacheKey;
+    return blended;
   }
 
   /* ---- live mix preview ---- */
@@ -686,8 +710,8 @@ export class StudioEngine {
       const voiceDur = voiceGuideEnd - voiceGuideStart;
       if (voiceDur > 0.02) {
         const voiceSrc = this.ctx.createBufferSource();
-        voiceSrc.buffer = take.buffer;
-        const chain = this._buildVoiceChain(this.ctx, { reverb: params.reverb });
+        voiceSrc.buffer = this._getTakePlaybackBuffer(take, params);
+        const chain = this._buildVoiceChain(this.ctx, params);
         const voiceGain = this.ctx.createGain();
         voiceGain.gain.value = this._voiceMixGain(params, take);
         const center = this._centerNode(this.ctx);
@@ -731,7 +755,7 @@ export class StudioEngine {
       const take = this._resolveTake(params);
       mix.voiceGain.gain.value = solo === "music" ? 0 : this._voiceMixGain(params, take);
     }
-    if (mix.voiceChain?.update) mix.voiceChain.update({ reverb: params.reverb });
+    if (mix.voiceChain?.update) mix.voiceChain.update(params);
   }
 
   stopMix() {
@@ -771,8 +795,8 @@ export class StudioEngine {
 
     if (take && take.buffer) {
       const voiceSrc = off.createBufferSource();
-      voiceSrc.buffer = take.buffer;
-      const { input, output } = this._buildVoiceChain(off, { reverb: params.reverb });
+      voiceSrc.buffer = this._getTakePlaybackBuffer(take, params);
+      const { input, output } = this._buildVoiceChain(off, params);
       const voiceGain = off.createGain();
       voiceGain.gain.value = this._voiceMixGain(params, take);
       const center = this._centerNode(off);
@@ -804,22 +828,7 @@ export class StudioEngine {
     const input = ctx.createGain();
     const output = ctx.createGain();
     const nodes = [input, output];
-
-    // Monitor: EQ only — compression on pauses was lifting room noise in headphones.
-    let tail = input;
-    for (const id of ["eq"]) {
-      const def = EFFECT_REGISTRY[id];
-      if (!def?.create) continue;
-      const node = def.create(ctx);
-      tail.connect(node.input);
-      tail = node.output;
-      nodes.push(node.input, node.output);
-    }
-
-    const dry = ctx.createGain();
-    dry.gain.value = 1;
-    tail.connect(dry).connect(output);
-    nodes.push(dry);
+    input.connect(output);
 
     const reverb = clamp01(p.reverb ?? 0);
     if (reverb > 0) {
@@ -839,7 +848,7 @@ export class StudioEngine {
       fb.gain.value = Math.min(0.55, 0.2 + echo * 0.5);
       const echoOut = ctx.createGain();
       echoOut.gain.value = echo;
-      tail.connect(delay);
+      input.connect(delay);
       delay.connect(fb).connect(delay); // feedback loop
       delay.connect(echoOut).connect(output);
       nodes.push(delay, fb, echoOut);
@@ -888,9 +897,8 @@ export class StudioEngine {
   }
 
   _buildVoiceChain(ctx, params = {}) {
-    const order = ["compression", "eq", "reverb"];
+    const order = ["compression", "eq", "deesser", "reverb"];
     const passthrough = ctx.createGain();
-    const head = passthrough;
     let tail = passthrough;
     const updaters = [];
 
@@ -902,8 +910,9 @@ export class StudioEngine {
       tail = node.output;
       if (typeof node.update === "function") updaters.push((p) => node.update(effectParamsFor(id, p)));
     }
+
     const update = (p) => { for (const u of updaters) u(p); };
-    return { input: head, output: tail, update };
+    return { input: passthrough, output: tail, update };
   }
 
   /** Master finish chain — bus EQ + glue compression (export / save only). */
@@ -973,8 +982,58 @@ export class StudioEngine {
 /* -------------------------------------------------------------------------- */
 
 function effectParamsFor(id, params) {
-  if (id === "reverb") return { amount: params.reverb ?? 0 };
+  if (id === "reverb") return { amount: fxAmount01(params.reverb) };
+  if (id === "compression") return { amount: fxAmount01(params.fxCompress) };
+  if (id === "eq") return { amount: fxAmount01(params.fxEq) };
+  if (id === "deesser") return { amount: fxAmount01(params.fxDeesser) };
   return params;
+}
+
+/** Dry/wet wrapper — amount 0 = bypass, 1 = full effect. */
+function createParallelFx(ctx, params, buildWet) {
+  const input = ctx.createGain();
+  const output = ctx.createGain();
+  const dry = ctx.createGain();
+  const wetAmt = ctx.createGain();
+  input.connect(dry).connect(output);
+  const wetIn = ctx.createGain();
+  const wetOut = ctx.createGain();
+  input.connect(wetIn);
+  buildWet(ctx, wetIn, wetOut);
+  wetOut.connect(wetAmt).connect(output);
+  const apply = (p = {}) => {
+    const amt = clamp01(p.amount ?? params.amount ?? 0);
+    wetAmt.gain.value = amt;
+    dry.gain.value = 1 - amt;
+  };
+  apply(params);
+  return { input, output, update: apply };
+}
+
+/** 0–100 (or legacy boolean) → 0..1. */
+function fxAmount01(v) {
+  if (v === true) return 1;
+  if (v === false || v == null) return 0;
+  if (typeof v === "number" && v <= 1 && v > 0 && !Number.isInteger(v)) return clamp01(v);
+  return clamp01((Number(v) || 0) / 100);
+}
+
+function blendDenoiseBuffer(ctx, buffer, amount) {
+  if (!buffer || amount <= 0.001) return buffer;
+  const denoised = cloneAudioBuffer(ctx, buffer);
+  if (!denoised) return buffer;
+  denoiseAndGateBuffer(denoised);
+  if (amount >= 0.999) return denoised;
+  const out = cloneAudioBuffer(ctx, buffer);
+  if (!out) return denoised;
+  const a = clamp01(amount);
+  for (let ch = 0; ch < buffer.numberOfChannels; ch++) {
+    const src = buffer.getChannelData(ch);
+    const dn = denoised.getChannelData(ch);
+    const dst = out.getChannelData(ch);
+    for (let i = 0; i < dst.length; i++) dst[i] = src[i] * (1 - a) + dn[i] * a;
+  }
+  return out;
 }
 
 /** Decaying-noise impulse response so we don't ship an IR file. */
@@ -1023,41 +1082,20 @@ function cloneAudioBuffer(ctx, buffer) {
   return out;
 }
 
-/** Mix output: balance × chain makeup × vocal-gain knob × per-take level match. */
-function voiceOutputGain(params = {}, take = null, guideBuffer = null) {
-  const vol = clamp01(params.voiceVol ?? 0.82);
-  const knob = clamp01(Number.isFinite(params.vocalGain) ? params.vocalGain : 0.72);
-  const gainMul = 0.75 + knob * 0.7;
-  const match = vocalMatchGain(take, guideBuffer, params.vocalPlayOffsetSec);
-  return vol * VOICE_MAKEUP * gainMul * match;
+/** 50% slider = 1× gain, 100% = 2×. Voice × Vocal gain multiply. */
+function voiceOutputGain(params = {}) {
+  const vol = vocalSliderGain(params.voiceVol);
+  const gain = vocalSliderGain(params.vocalGain);
+  return vol * gain;
+}
+
+function vocalSliderGain(pct01) {
+  const x = Number.isFinite(pct01) ? pct01 : VOCAL_SLIDER_CENTER;
+  return Math.max(0, x / VOCAL_SLIDER_CENTER);
 }
 
 function musicOutputGain(params = {}) {
-  return clamp01(params.musicVol ?? 0.8) * GUIDE_MIX_TRIM;
-}
-
-/** Lift quiet takes toward the guide so Voice % and Music % feel comparable. */
-function vocalMatchGain(take, guideBuffer, playOffsetSec = null) {
-  if (!take?.buffer || !guideBuffer) return 1;
-  const off = playOffsetSec != null ? playOffsetSec : Math.max(0, take.alignSec || 0);
-  const vRms = bufferRms(take.buffer, off);
-  const gRms = bufferRms(guideBuffer);
-  if (vRms < 0.004 || gRms < 0.004) return 1;
-  return clampNum((gRms / vRms) * 1.35, 1.0, 2.8);
-}
-
-function bufferRms(buffer, startSec = 0, endSec = null) {
-  if (!buffer) return 0;
-  const ch = buffer.getChannelData(0);
-  const sr = buffer.sampleRate;
-  const i0 = Math.max(0, Math.floor((Number(startSec) || 0) * sr));
-  const i1 = endSec != null
-    ? Math.min(ch.length, Math.ceil(Number(endSec) * sr))
-    : ch.length;
-  if (i1 <= i0) return 0;
-  let sum = 0;
-  for (let i = i0; i < i1; i++) sum += ch[i] * ch[i];
-  return Math.sqrt(sum / (i1 - i0));
+  return clamp01(params.musicVol ?? 0.7) * GUIDE_MIX_TRIM;
 }
 
 function normalizeTakeBuffer(buffer, targetPeak = 0.68) {

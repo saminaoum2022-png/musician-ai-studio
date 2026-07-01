@@ -37,14 +37,17 @@ let unsaved = false;
 let recMode = "take"; // "take" (over a song) | "memo" (quick take, no music)
 
 const DEFAULT_MIX = Object.freeze({
-  voiceVol: 82,
-  vocalGain: 72,
+  voiceVol: 50,
+  vocalGain: 50,
   musicVol: 70,
-  reverb: 15,
+  reverb: 0,
   syncMs: 0,
   finish: "balanced",
   pitchAssist: "off",
-  enhance: false,
+  fxDenoise: 0,
+  fxCompress: 0,
+  fxEq: 0,
+  fxDeesser: 0,
 });
 
 const FINISH_LABELS = {
@@ -70,6 +73,19 @@ function suggestFinishPreset(track) {
   if (/\b(hip hop|hip-hop|rap|trap|drill|dance|edm|club|bass|afro|reggaeton|phonk)\b/.test(hay)) return "punchy";
   if (/\b(pop|upbeat|indie|synth|electro|hyper|bright)\b/.test(hay)) return "bright";
   return "balanced";
+}
+
+function mixFxValue(m, key) {
+  const v = m?.[key];
+  if (v === true) return 100;
+  if (v === false || v == null) return 0;
+  return Math.max(0, Math.min(100, Math.round(Number(v) || 0)));
+}
+
+function ensureMixFx(m) {
+  for (const k of ["fxDenoise", "fxCompress", "fxEq", "fxDeesser"]) {
+    m[k] = mixFxValue(m, k);
+  }
 }
 
 function ensureMixFinish(m) {
@@ -129,6 +145,7 @@ async function restoreProjectSession(p) {
   engine.clearTakes();
   current.mix = { ...DEFAULT_MIX, ...(p.mix || {}) };
   delete current.mix._finishReady;
+  ensureMixFx(current.mix);
   ensureMixFinish(current.mix);
   current.guideUrl = p.guideUrl || "";
   current.guideDuration = p.guideDuration || 0;
@@ -1017,6 +1034,10 @@ function studioIco(name) {
     levels: `<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M4 10h2v8H4zm5-4h2v12H9zm5 2h2v10h-2zm5-3h2v13h-2z"/></svg>`,
     undo: `<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="M9 7H5v4M5 11c1.5-3 4.5-5 8-5 4.4 0 8 3.6 8 8s-3.6 8-8 8"/></svg>`,
     note: `<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M12 3v10.55A4 4 0 1 0 14 15V7h4V3h-6z"/></svg>`,
+    gate: `<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" d="M4 12h6M14 12h6M10 8v8"/></svg>`,
+    compress: `<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" d="M4 12h16M8 8v8M16 6v12"/></svg>`,
+    eq: `<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M4 10h2v8H4zm5-4h2v12H9zm5 2h2v10h-2zm5-3h2v13h-2z"/></svg>`,
+    deess: `<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" d="M6 16s2-4 6-4 6 4 6 4M6 8h12"/></svg>`,
   };
   return icons[name] || "";
 }
@@ -1310,7 +1331,7 @@ function renderEditTake(root, take) {
           </div>
           <div class="studioLevelsSliders">
             ${sliderRow("voiceVol", "Voice", mixState().voiceVol, "voice")}
-            ${sliderRow("vocalGain", "Vocal gain", mixState().vocalGain ?? 72, "voice")}
+            ${sliderRow("vocalGain", "Vocal gain", mixState().vocalGain ?? 50, "voice")}
             ${sliderRow("musicVol", "Music", mixState().musicVol, "music")}
           </div>
         </div>
@@ -1636,6 +1657,7 @@ function bindEditTake(root, take) {
 function renderMix(root) {
   screen = "mix";
   const m = current.mix || (current.mix = { ...DEFAULT_MIX });
+  ensureMixFx(m);
   ensureMixFinish(m);
   const takes = engine?.getTakes?.() || [];
   const activeTake = engine?.getActiveTake?.() || null;
@@ -1650,7 +1672,7 @@ function renderMix(root) {
       <div class="studioMixHead">
         ${takes.length > 1 ? takeTabsHtml(takes, activeTake?.id) : ""}
         <h1 class="studioReviewTitle">Shape your sound</h1>
-        <p class="studioReviewSub">A few gentle controls — no mixing desk required.</p>
+        <p class="studioReviewSub">Your voice plays raw first — turn on enhancements only if you want them.</p>
       </div>
 
       <button type="button" class="studioPlayPill" data-studio-play>
@@ -1660,9 +1682,23 @@ function renderMix(root) {
 
       <div class="studioSliders">
         ${sliderRow("voiceVol", "Voice", m.voiceVol, "voice")}
-        ${sliderRow("vocalGain", "Vocal gain", m.vocalGain ?? 72, "voice")}
+        ${sliderRow("vocalGain", "Vocal gain", m.vocalGain ?? 50, "voice")}
         ${sliderRow("musicVol", "Music", m.musicVol, "music")}
-        ${sliderRow("reverb", "Reverb", m.reverb, "reverb")}
+      </div>
+
+      <div class="studioMixField">
+        <div class="studioMixFieldTop">
+          <span class="studioMixLabel">Vocal enhancements</span>
+          <span class="studioMixFinishHint">0 = off · drag up for more</span>
+        </div>
+        <div class="studioLevelsSliders studioLevelsSliders--mix">
+          ${sliderRow("fxDenoise", "Noise gate", m.fxDenoise, "gate")}
+          ${sliderRow("fxCompress", "Compressor", m.fxCompress, "compress")}
+          ${sliderRow("fxEq", "Warm EQ", m.fxEq, "eq")}
+          ${sliderRow("fxDeesser", "De-esser", m.fxDeesser, "deess")}
+          ${sliderRow("reverb", "Reverb", m.reverb, "reverb")}
+        </div>
+        <p class="studioSyncHint">50% on Voice / Vocal gain is your natural level; enhancements blend in gradually from 0.</p>
       </div>
 
       <div class="studioMixField studioMixField--sync">
@@ -1692,7 +1728,7 @@ function renderMix(root) {
         <p class="studioSyncHint">Polish for streaming — applied when you save, not in preview.</p>
       </div>
 
-      <div class="studioMixField">
+      <div class="studioMixField studioMixField--row">
         <div class="studioMixFieldTop">
           <span class="studioMixLabel">Pitch Assist</span>
           <span class="studioSoonPill">Soon</span>
@@ -1700,16 +1736,6 @@ function renderMix(root) {
         <div class="studioSeg" data-studio-pitch>
           ${["off", "light", "medium"].map((v) => `<button type="button" class="studioSegBtn${m.pitchAssist === v ? " isActive" : ""}" data-pitch="${v}">${v[0].toUpperCase() + v.slice(1)}</button>`).join("")}
         </div>
-      </div>
-
-      <div class="studioMixField studioMixField--row">
-        <div class="studioMixFieldTop">
-          <span class="studioMixLabel">Enhance</span>
-          <span class="studioSoonPill">Soon</span>
-        </div>
-        <button type="button" class="studioToggle${m.enhance ? " isOn" : ""}" data-studio-enhance role="switch" aria-checked="${m.enhance}">
-          <span class="studioToggleKnob"></span>
-        </button>
       </div>
 
       <div class="studioFooter studioFooter--mix">
@@ -1752,7 +1778,10 @@ function bindMix(root) {
       const out = root.querySelector(`[data-mix-val="${k}"]`);
       if (out) out.textContent = String(m[k]);
       // Adjust the live mix in real time — no restart, so it changes smoothly.
-      if (engine?.isPlaying) { try { engine.updateMix(mixParams()); } catch {} }
+      if (engine?.isPlaying) {
+        if (k === "fxDenoise") restartMixPreview(root);
+        else { try { engine.updateMix(mixParams()); } catch {} }
+      }
     });
   });
 
@@ -1797,15 +1826,6 @@ function bindMix(root) {
     if (m.pitchAssist !== "off") bridge.showToast?.("Pitch Assist is coming soon.");
   });
 
-  root.querySelector("[data-studio-enhance]")?.addEventListener("click", (e) => {
-    bridge.haptic?.("light");
-    m.enhance = !m.enhance;
-    const t = e.currentTarget;
-    t.classList.toggle("isOn", m.enhance);
-    t.setAttribute("aria-checked", String(m.enhance));
-    if (m.enhance) bridge.showToast?.("Enhance is coming soon.");
-  });
-
   root.querySelector("[data-studio-play]")?.addEventListener("click", () => togglePreview(root));
   root.querySelector("[data-studio-draft]")?.addEventListener("click", () => saveDraft());
   root.querySelector("[data-studio-save]")?.addEventListener("click", () => saveToSongs(root));
@@ -1816,10 +1836,14 @@ function mixParams(takeId) {
   const tid = takeId || engine?.activeTakeId || engine?.getActiveTake?.()?.id || "";
   return {
     takeId: tid,
-    voiceVol: (Number(m.voiceVol) ?? 82) / 100,
-    vocalGain: (Number(m.vocalGain) ?? 72) / 100,
+    voiceVol: (Number(m.voiceVol) ?? 50) / 100,
+    vocalGain: (Number(m.vocalGain) ?? 50) / 100,
     musicVol: (Number(m.musicVol) || 0) / 100,
     reverb: (Number(m.reverb) || 0) / 100,
+    fxDenoise: mixFxValue(m, "fxDenoise"),
+    fxCompress: mixFxValue(m, "fxCompress"),
+    fxEq: mixFxValue(m, "fxEq"),
+    fxDeesser: mixFxValue(m, "fxDeesser"),
     finish: FINISH_PRESETS[m.finish] ? m.finish : "balanced",
   };
 }

@@ -1116,20 +1116,37 @@ export async function ensurePitchAdvRendered(take, presetId, adv, opts = {}) {
   const key = advPitchKey(adv);
   if (pc.advCacheKey === key && pc.cache.adv) return pc.cache.adv;
 
-  const overrides = advPitchOverrides(adv);
-  const microFilter = microFilterFromAdv(adv);
-  const result = await renderPitchCorrection(take.buffer, id, {
-    ...opts,
-    presetOverrides: overrides,
-    microFilter,
-  });
-  const buf = result?.buffer || null;
-  if (buf) {
-    pc.cache.adv = buf;
-    pc.advCacheKey = key;
-    if (result?.meta) pc.meta.adv = result.meta;
+  if (pc.advRendering) {
+    try { await pc.advRenderingPromise; } catch {}
+    if (pc.advCacheKey === key && pc.cache.adv) return pc.cache.adv;
   }
-  return buf;
+
+  pc.advRendering = key;
+  pc.advRenderingPromise = (async () => {
+    try {
+      const overrides = advPitchOverrides(adv);
+      const microFilter = microFilterFromAdv(adv);
+      const result = await renderPitchCorrection(take.buffer, id, {
+        ...opts,
+        presetOverrides: overrides,
+        microFilter,
+      });
+      const buf = result?.buffer || null;
+      if (buf && pc.advRendering === key) {
+        pc.cache.adv = buf;
+        pc.advCacheKey = key;
+        if (result?.meta) pc.meta.adv = result.meta;
+      }
+      return buf;
+    } catch (err) {
+      console.warn("[pitch-correction] adv render failed:", err);
+      return null;
+    } finally {
+      if (pc.advRendering === key) pc.advRendering = null;
+    }
+  })();
+
+  return pc.advRenderingPromise;
 }
 
 export async function ensurePitchPresetRendered(take, presetId, opts = {}) {

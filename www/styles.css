@@ -41693,6 +41693,18 @@ body[data-route="studio"] .deskRail { display: none !important; }
   letter-spacing: 0.04em; text-transform: uppercase; color: var(--muted);
 }
 
+.studioSliders--advPitch { gap: 6px; }
+.studioSliders--advPitch .studioSliderRow {
+  padding: 10px 0;
+  touch-action: none;
+}
+.studioSliders--advPitch input[type="range"] {
+  height: 28px;
+  min-height: 28px;
+  touch-action: none;
+}
+.studioSliders--advPitch .studioSliderLabel { font-size: 13px; }
+
 .studioMixField { display: flex; flex-direction: column; gap: 10px; }
 .studioMixFinishHint {
   font-size: 11px; font-weight: 600; color: var(--brand-teal);

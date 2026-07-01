@@ -53,6 +53,7 @@ let current = null; // { track, guideUrl, guideDuration, lyrics, mix, projectId 
 let screen = "lobby";
 let unsaved = false;
 let recMode = "take"; // "take" (over a song) | "memo" (quick take, no music)
+let _advPitchApplyToken = 0;
 
 const DEFAULT_MIX = Object.freeze({
   voiceVol: 50,
@@ -1813,8 +1814,10 @@ async function applyAdvPitchSliders(root, take, state) {
   const preset = activePitchPreset(take);
   if (preset === "none") return;
   const adv = ensureMixAdvPitch(current.mix || {});
+  const token = ++_advPitchApplyToken;
   if (!advPitchDiffersFromDefaults(preset, adv)) {
     clearPitchAdvCache(take);
+    if (token !== _advPitchApplyToken) return;
     swapPitchVoice(take, preset);
     return;
   }
@@ -1825,12 +1828,40 @@ async function applyAdvPitchSliders(root, take, state) {
       audioContext: engine?.ctx,
       trackKey: trackKeyHint(),
     });
+    if (token !== _advPitchApplyToken) return;
     if (!state?.silent) setPitchLoadingUi(root, preset, false);
     swapPitchVoice(take, preset);
   } catch (err) {
+    if (token !== _advPitchApplyToken) return;
     console.warn("[studio] adv pitch failed:", err);
     setPitchLoadingUi(root, preset, false);
     if (!state?.silent) bridge.showToast?.("Couldn't update pitch settings.");
+  }
+}
+
+function updateAdvPitchSliderUi(root, m, k, value) {
+  const adv = ensureMixAdvPitch(m);
+  adv[k] = Number(value) || 0;
+  m.styleTab = "custom";
+  updateStyleTabUi(root, "custom");
+  updateAiApplyUi(root, m, current?._bindPitchAiRec);
+  const out = root.querySelector(`[data-adv-pitch-val="${k}"]`);
+  if (out) out.textContent = String(adv[k]);
+}
+
+async function commitAdvPitchSlider(root, take, pitchState, k) {
+  const m = current.mix || (current.mix = { ...DEFAULT_MIX });
+  const adv = ensureMixAdvPitch(m);
+  if (k === "retuneSpeed" && take) {
+    const pid = pitchFromRetuneSlider(adv.retuneSpeed);
+    ensureTakePitchState(take).preset = pid;
+    m.advPitch = pitchAdvDefaults(pid);
+    refreshMixSlidersUi(root, m);
+    await selectPitchPreset(root, take, pid, { ...pitchState, silent: true });
+    return;
+  }
+  if (k !== "stereoWidth" && take) {
+    await applyAdvPitchSliders(root, take, pitchState);
   }
 }
 
@@ -1912,6 +1943,7 @@ function bindPitchPresets(root, take, state) {
 function bindPreviewMix(root, take, aiRec) {
   bindHeader(root, () => renderHome(root));
   const m = current.mix || (current.mix = { ...DEFAULT_MIX });
+  current._bindPitchAiRec = aiRec;
   const pitchState = { lastGuideSec: 0, silent: true, aiRec };
 
   const btn = root.querySelector("[data-studio-play]");
@@ -2054,24 +2086,24 @@ function bindPreviewMix(root, take, aiRec) {
   });
 
   root.querySelectorAll("[data-adv-pitch]").forEach((inp) => {
+    inp.addEventListener("pointerdown", () => {
+      if (inp.disabled) return;
+      if (engine?.isPlaying) {
+        pitchState.lastGuideSec = engine.getMixGuidePosition?.() || pitchState.lastGuideSec || 0;
+        try { engine.stopMix(); } catch {}
+        setPlayingUi(false);
+      }
+    });
     inp.addEventListener("input", () => {
       const k = inp.getAttribute("data-adv-pitch");
-      const adv = ensureMixAdvPitch(m);
-      adv[k] = Number(inp.value) || 0;
-      m.styleTab = "custom";
-      updateStyleTabUi(root, "custom");
-      updateAiApplyUi(root, m, pitchState.aiRec);
-      const out = root.querySelector(`[data-adv-pitch-val="${k}"]`);
-      if (out) out.textContent = String(adv[k]);
-      if (k === "retuneSpeed" && take) {
-        const pid = pitchFromRetuneSlider(adv.retuneSpeed);
-        ensureTakePitchState(take).preset = pid;
-        m.advPitch = pitchAdvDefaults(pid);
-        refreshMixSlidersUi(root, m);
-        void selectPitchPreset(root, take, pid, { ...pitchState, silent: true });
-      } else if (k !== "stereoWidth" && take) {
-        void applyAdvPitchSliders(root, take, pitchState);
-      }
+      if (!k) return;
+      updateAdvPitchSliderUi(root, m, k, inp.value);
+    });
+    inp.addEventListener("change", () => {
+      const k = inp.getAttribute("data-adv-pitch");
+      if (!k) return;
+      bridge.haptic?.("light");
+      void commitAdvPitchSlider(root, take, { ...pitchState, silent: false }, k);
     });
   });
 

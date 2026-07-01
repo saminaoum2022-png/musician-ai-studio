@@ -124,6 +124,40 @@ export const EFFECT_REGISTRY = {
   harmony: placeholderEffect("harmony", "Harmony"),
 };
 
+/** Export finish presets — applied on Save only (master bus), not live mix preview. */
+export const FINISH_PRESETS = {
+  balanced: {
+    id: "balanced",
+    label: "Balanced",
+    targetLufs: -14,
+    glue: { threshold: -18, ratio: 1.8, attack: 0.015, release: 0.22, makeup: 1.04 },
+    eq: { lowHz: 120, lowDb: 0.6, highHz: 8500, highDb: 0.4 },
+  },
+  warm: {
+    id: "warm",
+    label: "Warm",
+    targetLufs: -14.5,
+    glue: { threshold: -20, ratio: 1.6, attack: 0.018, release: 0.28, makeup: 1.02 },
+    eq: { lowHz: 220, lowDb: 1.6, highHz: 9000, highDb: -1.1 },
+  },
+  bright: {
+    id: "bright",
+    label: "Bright",
+    targetLufs: -13.8,
+    glue: { threshold: -17, ratio: 1.7, attack: 0.012, release: 0.2, makeup: 1.05 },
+    eq: { lowHz: 140, lowDb: -0.4, highHz: 7200, highDb: 1.5 },
+  },
+  punchy: {
+    id: "punchy",
+    label: "Punchy",
+    targetLufs: -12.8,
+    glue: { threshold: -15, ratio: 2.1, attack: 0.008, release: 0.18, makeup: 1.07 },
+    eq: { lowHz: 95, lowDb: 1.3, highHz: 6800, highDb: 0.8 },
+  },
+};
+
+export const FINISH_IDS = Object.keys(FINISH_PRESETS);
+
 function placeholderEffect(id, label) {
   return { id, label, isPlaceholder: true, create: null };
 }
@@ -616,9 +650,8 @@ export class StudioEngine {
   /* ---- final render (the ONLY thing publish uploads) ---- */
 
   /**
-   * Render guide + active take + effects to a stereo WAV Blob via an
-   * OfflineAudioContext, so the export matches the live preview exactly.
-   * Returns { blob, durationSec, sampleRate }.
+   * Render guide + active take + mix + finish master to a stereo WAV Blob.
+   * Finish (EQ, glue, LUFS) applies here only — live preview stays un-mastered.
    */
   async renderMix(params = {}) {
     if (!this.guideBuffer) throw new Error("no guide");
@@ -628,15 +661,18 @@ export class StudioEngine {
     const frames = Math.ceil(durationSec * sr);
     const off = new OfflineAudioContext(2, frames, sr);
 
-    const master = off.createGain();
+    const mixBus = off.createGain();
+    const finishId = FINISH_PRESETS[params.finish] ? params.finish : "balanced";
+    const master = this._buildMasterChain(off, finishId);
     const limiter = this._makeLimiter(off);
-    master.connect(limiter).connect(off.destination);
+    mixBus.connect(master.input);
+    master.output.connect(limiter).connect(off.destination);
 
     const guideSrc = off.createBufferSource();
     guideSrc.buffer = this.guideBuffer;
     const musicGain = off.createGain();
     musicGain.gain.value = clamp01(params.musicVol ?? 0.8);
-    guideSrc.connect(musicGain).connect(master);
+    guideSrc.connect(musicGain).connect(mixBus);
     guideSrc.start(0);
 
     if (take && take.buffer) {
@@ -648,7 +684,7 @@ export class StudioEngine {
       const center = this._centerNode(off);
       voiceSrc.connect(input);
       output.connect(voiceGain).connect(center.input);
-      center.output.connect(master);
+      center.output.connect(mixBus);
       voiceSrc.start(0, Math.min(this._takeBufferOffset(take), Math.max(0, take.buffer.duration - 0.01)));
     }
 
@@ -657,22 +693,12 @@ export class StudioEngine {
       ? [rendered.getChannelData(0), rendered.getChannelData(1)]
       : [rendered.getChannelData(0), rendered.getChannelData(0)];
 
-    // Peak-normalise so every export lands at a consistent, loud level
-    // (-0.3 dBFS) regardless of how quiet the raw take was. The limiter already
-    // tamed transients, so this just maps the surviving peak up to the ceiling.
-    let peak = 0;
-    for (const ch of chans) {
-      for (let i = 0; i < ch.length; i++) { const a = Math.abs(ch[i]); if (a > peak) peak = a; }
-    }
-    if (peak > 0) {
-      const gain = Math.min(0.97 / peak, 8);
-      if (Math.abs(gain - 1) > 0.01) {
-        for (const ch of chans) for (let i = 0; i < ch.length; i++) ch[i] *= gain;
-      }
-    }
+    const preset = FINISH_PRESETS[finishId];
+    normalizeToLufs(chans, preset.targetLufs, rendered.sampleRate);
+    applyPeakCeiling(chans, 0.97);
 
     const blob = encodeWav16(chans, rendered.sampleRate);
-    return { blob, durationSec: rendered.duration, sampleRate: rendered.sampleRate };
+    return { blob, durationSec: rendered.duration, sampleRate: rendered.sampleRate, finish: finishId };
   }
 
   /**
@@ -784,6 +810,39 @@ export class StudioEngine {
     }
     const update = (p) => { for (const u of updaters) u(p); };
     return { input: head, output: tail, update };
+  }
+
+  /** Master finish chain — bus EQ + glue compression (export / save only). */
+  _buildMasterChain(ctx, finishId = "balanced") {
+    const preset = FINISH_PRESETS[finishId] || FINISH_PRESETS.balanced;
+    const input = ctx.createGain();
+    let tail = input;
+    const eq = preset.eq;
+    if (eq) {
+      const low = ctx.createBiquadFilter();
+      low.type = "lowshelf";
+      low.frequency.value = eq.lowHz;
+      low.gain.value = eq.lowDb;
+      const high = ctx.createBiquadFilter();
+      high.type = "highshelf";
+      high.frequency.value = eq.highHz;
+      high.gain.value = eq.highDb;
+      tail.connect(low).connect(high);
+      tail = high;
+    }
+    const g = preset.glue;
+    const comp = ctx.createDynamicsCompressor();
+    try {
+      comp.threshold.value = g.threshold;
+      comp.knee.value = 6;
+      comp.ratio.value = g.ratio;
+      comp.attack.value = g.attack;
+      comp.release.value = g.release;
+    } catch {}
+    const makeup = ctx.createGain();
+    makeup.gain.value = g.makeup;
+    tail.connect(comp).connect(makeup);
+    return { input, output: makeup, preset };
   }
 
   /* ---- teardown ---- */
@@ -1013,4 +1072,45 @@ function trimBufferLeadIn(ctx, buffer, alignSec) {
   const sliced = sliceBuffer(ctx, buffer, leadTrim, buffer.duration);
   if (!sliced) return { buffer, alignSec: Number(alignSec) || 0 };
   return { buffer: sliced, alignSec: Math.max(preRoll, (Number(alignSec) || 0) - leadTrim) };
+}
+
+/** Simplified integrated loudness (400 ms blocks, mono downmix). */
+function measureIntegratedLufs(chans, sampleRate) {
+  const L = chans[0];
+  const R = chans[1] || chans[0];
+  const block = Math.max(1, Math.floor(0.4 * sampleRate));
+  let sum = 0;
+  let count = 0;
+  for (let off = 0; off + block <= L.length; off += block) {
+    let ms = 0;
+    for (let i = 0; i < block; i++) {
+      const idx = off + i;
+      const m = (L[idx] + R[idx]) * 0.5;
+      ms += m * m;
+    }
+    ms /= block;
+    if (ms > 1e-10) {
+      sum += ms;
+      count++;
+    }
+  }
+  if (!count) return -70;
+  return -0.691 + 10 * Math.log10(sum / count);
+}
+
+function normalizeToLufs(chans, targetLufs = -14, sampleRate = 44100) {
+  const cur = measureIntegratedLufs(chans, sampleRate);
+  if (!Number.isFinite(cur) || cur <= -60) return;
+  const gain = clampNum(Math.pow(10, (targetLufs - cur) / 20), 0.35, 3.5);
+  for (const ch of chans) for (let i = 0; i < ch.length; i++) ch[i] *= gain;
+}
+
+function applyPeakCeiling(chans, ceiling = 0.97) {
+  let peak = 0;
+  for (const ch of chans) {
+    for (let i = 0; i < ch.length; i++) peak = Math.max(peak, Math.abs(ch[i]));
+  }
+  if (peak <= ceiling) return;
+  const g = ceiling / peak;
+  for (const ch of chans) for (let i = 0; i < ch.length; i++) ch[i] *= g;
 }

@@ -13,7 +13,7 @@
  * No neon-everything.
  */
 
-import { StudioEngine } from "./engine.js";
+import { StudioEngine, FINISH_PRESETS, FINISH_IDS } from "./engine.js";
 import {
   listProjects,
   upsertProject,
@@ -37,10 +37,44 @@ const DEFAULT_MIX = Object.freeze({
   voiceVol: 100,
   musicVol: 70,
   reverb: 15,
-  syncMs: 0, // voice timing offset vs music: 0 = in sync, +later / -earlier
-  pitchAssist: "off", // off | light | medium (placeholder)
-  enhance: false, // placeholder
+  syncMs: 0,
+  finish: "balanced",
+  pitchAssist: "off",
+  enhance: false,
 });
+
+const FINISH_LABELS = {
+  balanced: "Balanced",
+  warm: "Warm",
+  bright: "Bright",
+  punchy: "Punchy",
+};
+
+/** Pick a finish preset from song style/tags — used as default on Mix. */
+function suggestFinishPreset(track) {
+  const hay = [
+    track?.style,
+    track?.genre,
+    track?.tags,
+    track?.meta?.style,
+    track?.meta?.tags,
+    track?.meta?.prompt,
+    track?.meta?.genre,
+    track?.title,
+  ].filter(Boolean).join(" ").toLowerCase();
+  if (/\b(ballad|acoustic|soul|r&b|rnb|jazz|blues|slow|romantic|folk|unplugged)\b/.test(hay)) return "warm";
+  if (/\b(hip hop|hip-hop|rap|trap|drill|dance|edm|club|bass|afro|reggaeton|phonk)\b/.test(hay)) return "punchy";
+  if (/\b(pop|upbeat|indie|synth|electro|hyper|bright)\b/.test(hay)) return "bright";
+  return "balanced";
+}
+
+function ensureMixFinish(m) {
+  if (m._finishReady) return;
+  const suggested = suggestFinishPreset(current?.track);
+  m.finishSuggested = suggested;
+  if (!m.finishUserPick) m.finish = suggested;
+  m._finishReady = true;
+}
 
 /**
  * One-time wiring from app.js. bridge: {
@@ -1465,6 +1499,10 @@ function bindEditTake(root, take) {
 function renderMix(root) {
   screen = "mix";
   const m = current.mix || (current.mix = { ...DEFAULT_MIX });
+  ensureMixFinish(m);
+  const finishHint = m.finish === m.finishSuggested
+    ? "Suggested for this song"
+    : "";
 
   root.innerHTML = `
     <div class="studio studioMix" data-studio-screen="mix">
@@ -1498,6 +1536,19 @@ function renderMix(root) {
           <span>Voice later</span>
         </div>
         <p class="studioSyncHint">Nudge your voice if it drifts ahead of or behind the music. Centre keeps the auto-aligned timing.</p>
+      </div>
+
+      <div class="studioMixField">
+        <div class="studioMixFieldTop">
+          <span class="studioMixLabel">Finish</span>
+          ${finishHint ? `<span class="studioMixFinishHint">${esc(finishHint)}</span>` : ""}
+        </div>
+        <div class="studioSeg" data-studio-finish role="group" aria-label="Finish preset">
+          ${FINISH_IDS.map((id) =>
+            `<button type="button" class="studioSegBtn${m.finish === id ? " isActive" : ""}" data-finish="${id}">${esc(FINISH_LABELS[id] || FINISH_PRESETS[id]?.label || id)}</button>`,
+          ).join("")}
+        </div>
+        <p class="studioSyncHint">Polish for streaming — applied when you save, not in preview.</p>
       </div>
 
       <div class="studioMixField">
@@ -1570,6 +1621,22 @@ function bindMix(root) {
   // Timing changes where the voice starts in the buffer, so re-cue on release.
   syncInp?.addEventListener("change", () => { if (engine?.isPlaying) restartMixPreview(root); });
 
+  root.querySelector("[data-studio-finish]")?.addEventListener("click", (e) => {
+    const b = e.target.closest("[data-finish]");
+    if (!b) return;
+    bridge.haptic?.("light");
+    m.finish = b.getAttribute("data-finish");
+    m.finishUserPick = true;
+    root.querySelectorAll("[data-studio-finish] .studioSegBtn").forEach((x) => {
+      x.classList.toggle("isActive", x === b);
+    });
+    const hint = root.querySelector(".studioMixFinishHint");
+    if (hint) {
+      hint.textContent = m.finish === m.finishSuggested ? "Suggested for this song" : "";
+      hint.hidden = !hint.textContent;
+    }
+  });
+
   root.querySelector("[data-studio-pitch]")?.addEventListener("click", (e) => {
     const b = e.target.closest("[data-pitch]");
     if (!b) return;
@@ -1599,6 +1666,7 @@ function mixParams() {
     voiceVol: (Number(m.voiceVol) || 0) / 100,
     musicVol: (Number(m.musicVol) || 0) / 100,
     reverb: (Number(m.reverb) || 0) / 100,
+    finish: FINISH_PRESETS[m.finish] ? m.finish : "balanced",
   };
 }
 
@@ -1670,7 +1738,7 @@ async function saveToSongs(root) {
   };
 
   try {
-    tickTo(55, "Bouncing your mix…");
+    tickTo(55, "Applying finish…");
     const rendered = await engine.renderMix(mixParams());
     tickTo(85, "Saving to your device…");
     const title = String(current.track?.title || "").trim();

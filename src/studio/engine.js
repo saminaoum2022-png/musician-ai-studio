@@ -81,8 +81,8 @@ export const EFFECT_REGISTRY = {
         comp.threshold.value = -16;
         comp.knee.value = 12;
         comp.ratio.value = 2.2;
-        comp.attack.value = 0.008;
-        comp.release.value = 0.2;
+        comp.attack.value = 0.012;
+        comp.release.value = 0.28;
       } catch {}
       const makeup = ctx.createGain();
       makeup.gain.value = 1.5;
@@ -915,7 +915,7 @@ function spliceBuffer(ctx, buffer, startSec, endSec) {
   return out;
 }
 
-/** Adaptive noise gate + hiss trim on a decoded take (mutates buffer in place). */
+/** Adaptive expander gate — hysteresis + slow release so word onsets/tails aren't clipped. */
 function denoiseAndGateBuffer(buffer) {
   if (!buffer) return buffer;
   const ch0 = buffer.getChannelData(0);
@@ -931,32 +931,69 @@ function denoiseAndGateBuffer(buffer) {
   }
   levels.sort((a, b) => a - b);
   const floor = levels[Math.floor(levels.length * 0.12)] || 0.004;
-  const threshold = clampNum(floor * 3.2, 0.01, 0.045);
-  const closed = 0.035;
-  let env = 1;
-  const atk = Math.exp(-1 / (0.004 * sr));
-  const rel = Math.exp(-1 / (0.11 * sr));
+  const openTh = clampNum(floor * 2.2, 0.007, 0.028);
+  const closeTh = openTh * 0.4;
+  const minGain = 0.11;
   const envCurve = new Float32Array(ch0.length);
+  let env = 0;
+  let gateGain = 1;
+  let isOpen = false;
+  const peakAtk = Math.exp(-1 / (0.0012 * sr));
+  const peakRel = Math.exp(-1 / (0.03 * sr));
+  const gainAtk = Math.exp(-1 / (0.0018 * sr));
+  const gainRel = Math.exp(-1 / (0.17 * sr));
   for (let i = 0; i < ch0.length; i++) {
     const lvl = Math.abs(ch0[i]);
-    const target = lvl > threshold ? 1 : closed;
-    env = target > env ? target + atk * (env - target) : target + rel * (env - target);
-    envCurve[i] = env;
+    env = lvl > env ? lvl + peakAtk * (env - lvl) : lvl + peakRel * (env - lvl);
+    if (isOpen) { if (env < closeTh) isOpen = false; }
+    else if (env > openTh) isOpen = true;
+    const target = isOpen ? 1 : minGain;
+    gateGain = target > gateGain
+      ? target + gainAtk * (gateGain - target)
+      : target + gainRel * (gateGain - target);
+    envCurve[i] = gateGain;
   }
   for (let ch = 0; ch < nCh; ch++) {
     const data = buffer.getChannelData(ch);
+    for (let i = 0; i < data.length; i++) data[i] *= envCurve[i];
+  }
+  return buffer;
+}
+
+/** Gentle level rider — smooths loud/quiet phrases without chopping transients. */
+function stabilizeLevelBuffer(buffer) {
+  if (!buffer) return buffer;
+  const ch0 = buffer.getChannelData(0);
+  const sr = buffer.sampleRate;
+  const nCh = buffer.numberOfChannels;
+  const win = Math.max(1, Math.floor(0.045 * sr));
+  const nWin = Math.ceil(ch0.length / win);
+  const gains = new Float32Array(nWin);
+  const target = 0.082;
+  for (let w = 0; w < nWin; w++) {
+    let sum = 0;
+    const start = w * win;
+    const end = Math.min(ch0.length, start + win);
+    for (let i = start; i < end; i++) sum += ch0[i] * ch0[i];
+    const rms = Math.sqrt(sum / Math.max(1, end - start));
+    gains[w] = rms > 0.003 ? clampNum(target / rms, 0.72, 1.18) : 1;
+  }
+  for (let w = 1; w < nWin; w++) gains[w] = gains[w] * 0.28 + gains[w - 1] * 0.72;
+  for (let ch = 0; ch < nCh; ch++) {
+    const data = buffer.getChannelData(ch);
     for (let i = 0; i < data.length; i++) {
-      data[i] *= envCurve[i];
-      if (envCurve[i] < 0.2) data[i] *= 0.75;
+      const w = Math.min(nWin - 1, Math.floor(i / win));
+      data[i] *= gains[w];
     }
   }
   return buffer;
 }
 
-/** Post-record polish: gate room noise, then peak-normalise. */
+/** Post-record polish: gate room noise, level ride, then peak-normalise. */
 function finishTakeBuffer(buffer) {
   if (!buffer) return buffer;
   denoiseAndGateBuffer(buffer);
+  stabilizeLevelBuffer(buffer);
   return normalizeTakeBuffer(buffer, 0.72);
 }
 

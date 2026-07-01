@@ -215,13 +215,11 @@ export function describeRecordingPipeline(take, ctxSampleRate = 0) {
   const fmtBool = (v) => (v === true ? "on" : v === false ? "off" : "default");
   const recordGain = Number(take?.recordInputGain) || 1;
   const calMode = take?.calGainMode || "none";
-  const calNote = calMode === "conservative"
-    ? " — conservative cap (quiet count-in)"
-    : calMode === "full"
-      ? " — count-in auto-level"
-      : recordGain > 1.001
-        ? " — count-in auto-level"
-        : " — count-in cal (no boost needed)";
+  const calNote = calMode === "ios-default"
+    ? " — iOS Web mic boost (fixed, not AGC)"
+    : recordGain > 1.001
+      ? " — input gain"
+      : " — no input boost";
   const recordGainLabel = Math.abs(recordGain - 1) < 0.01
     ? `1.00× (0.0 dB)${calNote}`
     : `${recordGain.toFixed(2)}× (${(20 * Math.log10(recordGain)).toFixed(1)} dB)${calNote}`;
@@ -234,7 +232,7 @@ export function describeRecordingPipeline(take, ctxSampleRate = 0) {
   return {
     captureMethod: method,
     webAudioRole: take?.captureMethod?.startsWith("float32-pcm")
-      ? "Mic → count-in auto-level → AudioWorklet float PCM + parallel float meter (no AAC)"
+      ? "Mic → iOS Web input boost (fixed) → AudioWorklet float PCM + parallel float meter (no AAC)"
       : "Parallel meter + optional monitor only — not in record path",
     containerMime: take?.recorderMime || "—",
     contextSampleRate: ctxSampleRate || take?.buffer?.sampleRate || 0,

@@ -83,20 +83,23 @@ const FINISH_LABELS = {
   punchy: "Punchy",
 };
 
-/** If the take is still quiet after count-in cal, bump mix vocal gain (Review/Mix defaults). */
-const MIX_AUTO_TARGET_PEAK = 0.22;
+/** Auto-balance Review/Mix vocal level from the recorded take — no user action. */
+const MIX_AUTO_TARGET_PEAK = 0.26;
 
-function applyMixAutoLevelIfNeeded(take) {
+function applyMixAutoLevelForTake(take) {
   if (!take?.buffer || !current) return;
-  const m = mixState();
-  if (Number(m.vocalGain) !== 50 || Number(m.voiceVol) !== 50) return;
   const ch0 = take.buffer.getChannelData(0);
   let peak = 0;
   for (let i = 0; i < ch0.length; i++) peak = Math.max(peak, Math.abs(ch0[i]));
-  if (peak < 0.0001 || peak >= MIX_AUTO_TARGET_PEAK * 0.9) return;
+  if (peak < 0.0001) return;
+  const m = mixState();
+  if (peak >= MIX_AUTO_TARGET_PEAK * 0.88) {
+    current.mix = { ...m, vocalGain: 50 };
+    return;
+  }
   const needed = Math.min(MIX_AUTO_TARGET_PEAK / peak, 2);
   const vocalGainPct = Math.min(100, Math.max(50, Math.round(needed * 50)));
-  if (vocalGainPct > 50) current.mix = { ...m, vocalGain: vocalGainPct };
+  current.mix = { ...m, vocalGain: vocalGainPct };
 }
 
 /** Pick a finish preset from song style/tags — used as default on Mix. */
@@ -972,7 +975,7 @@ function bindRecording(root) {
     if (take && !take.buffer) {
       bridge.showToast?.("Couldn’t read that take — try recording again.");
     }
-    if (take?.buffer) applyMixAutoLevelIfNeeded(take);
+    if (take?.buffer) applyMixAutoLevelForTake(take);
     void persistProject();
     if (isStudioAudioDebug() && take?.buffer) {
       mountAudioDebugSheet(root, take);

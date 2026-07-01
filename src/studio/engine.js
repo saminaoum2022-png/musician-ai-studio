@@ -21,7 +21,7 @@
  */
 
 import { encodeWav16 } from "../wav.js";
-import { ensureNativeRecordingSession } from "./native-mic-probe.js";
+import { ensureNativeRecordingSession, isNativeIosStudio } from "./native-mic-probe.js";
 
 const LATENCY_STORAGE_KEY = "nabad.studio.latencyMs.v1";
 const PCM_CAPTURE_WORKLET_URL = new URL("./pcm-capture-processor.js", import.meta.url);
@@ -31,13 +31,8 @@ const pcmWorkletLoaded = new WeakMap();
 const GUIDE_MIX_TRIM = 0.88;
 // Sliders at 50% = unity gain; 100% = 2× (each multiplies).
 const VOCAL_SLIDER_CENTER = 0.5;
-// Count-in mic calibration: measure during 3-2-1, boost shared bus when the take starts.
-const MIC_CAL_TARGET_PEAK = 0.251; // ~−12 dBFS
-const MIC_CAL_MIN_PEAK = 0.008; // below ≈−42 dBFS — treat as silence, no boost
-const MIC_CAL_REPRESENTATIVE_PEAK = 0.063; // ~−24 dBFS — need audible count-in for full cal
-const MIC_CAL_MAX_GAIN = 2.5;
-const MIC_CAL_CONSERVATIVE_MAX_GAIN = 1.35; // cap when count-in was too quiet to trust
-const MIC_CAL_MIN_GAIN = 1.0; // never attenuate — only boost quiet mics
+// WKWebView mic capture runs quiet on iOS — one fixed boost at record start (not AGC).
+const IOS_WEB_MIC_DEFAULT_GAIN = 2.0;
 
 /* -------------------------------------------------------------------------- */
 /* Modular effect registry                                                     */
@@ -380,13 +375,12 @@ export class StudioEngine {
 
     const micSrc = this.ctx.createMediaStreamSource(this._recStream);
     const micInputGain = this.ctx.createGain();
-    micInputGain.gain.value = 1;
+    const useIosBoost = cb.autoMicLevel !== false && !autoGainControl && isNativeIosStudio();
+    const micGain = useIosBoost ? IOS_WEB_MIC_DEFAULT_GAIN : 1;
+    micInputGain.gain.value = micGain;
     this._micInputGain = micInputGain;
-    this._calPeakMax = 0;
-    this._calGainApplied = false;
-    this._calGainMode = "none";
-    this._recordInputGain = 1;
-    this._autoMicLevel = cb.autoMicLevel !== false && !autoGainControl;
+    this._recordInputGain = micGain;
+    this._calGainMode = useIosBoost ? "ios-default" : "none";
 
     micSrc.connect(micInputGain);
 
@@ -494,21 +488,6 @@ export class StudioEngine {
         }
       }
 
-      const now = this.ctx.currentTime;
-      if (this._autoMicLevel && now < this._guideCtxStart) {
-        if (peak > this._calPeakMax) this._calPeakMax = peak;
-      } else if (this._autoMicLevel && !this._calGainApplied && now >= this._guideCtxStart) {
-        this._calGainApplied = true;
-        const g = computeMicCalGain(this._calPeakMax);
-        this._recordInputGain = g;
-        this._calGainMode = g <= 1 ? "none"
-          : this._calPeakMax < MIC_CAL_REPRESENTATIVE_PEAK ? "conservative"
-            : "full";
-        if (g !== 1 && this._micInputGain) {
-          this._micInputGain.gain.setTargetAtTime(g, now, 0.02);
-        }
-      }
-
       if (peak > this._recLivePeakMax) this._recLivePeakMax = peak;
       const pos = this.ctx.currentTime - this._guideCtxStart;
       if (pos >= 0 && peak > this._recLivePeakSyncedMax) this._recLivePeakSyncedMax = peak;
@@ -558,7 +537,6 @@ export class StudioEngine {
       autoGainControlRequested: this._inputLevelMode === "agc",
       recordInputGain: this._recordInputGain || 1,
       calGainMode: this._calGainMode || "none",
-      calPeakDb: this._calPeakMax > 0 ? 20 * Math.log10(this._calPeakMax) : null,
       buffer,
       createdAt: Date.now(),
       nudgeMs: 0,
@@ -1189,16 +1167,6 @@ function bufferPeakLinear(buffer) {
     for (let i = 0; i < data.length; i++) peak = Math.max(peak, Math.abs(data[i]));
   }
   return peak;
-}
-
-/** Measure count-in peak → gain for shared mic bus (capture + meter + monitor). */
-function computeMicCalGain(calPeak) {
-  if (!Number.isFinite(calPeak) || calPeak < MIC_CAL_MIN_PEAK) return 1;
-  const maxGain = calPeak < MIC_CAL_REPRESENTATIVE_PEAK
-    ? MIC_CAL_CONSERVATIVE_MAX_GAIN
-    : MIC_CAL_MAX_GAIN;
-  const g = MIC_CAL_TARGET_PEAK / calPeak;
-  return Math.min(maxGain, Math.max(MIC_CAL_MIN_GAIN, g));
 }
 
 function pickRecorderMime() {

@@ -3,6 +3,7 @@
  */
 import { coverArtParamsFromTrack, shouldUseAbstractCover } from "./params.js";
 import { DEFAULT_SONG_COVER_URL } from "./placeholders.js";
+import { stampCoverWithSplashMark } from "./branding.js";
 
 let _deps = null;
 const _inflight = new Map();
@@ -59,6 +60,7 @@ function patchLibraryTrackCover(trackId, patch) {
     coverStoryTheme: params?.storyTheme || prev.meta?.coverStoryTheme || "",
     coverParams: params || prev.meta?.coverParams,
     photoMode: false,
+    coverNabadMark: coverSource === "pollinations",
     coverGenAttempted: coverGenAttempted || prev.meta?.coverGenAttempted || false,
   };
   items[idx] = {
@@ -100,8 +102,9 @@ export async function ensureAbstractCoverForTrack(track) {
     const params = coverArtParamsFromTrack(track);
     if (!params.songId) return null;
     const result = await fetchAbstractCoverArt(params);
+    const stampedUrl = await stampCoverWithSplashMark(result.dataUrl);
     const patched = patchLibraryTrackCover(id, {
-      dataUrl: result.dataUrl,
+      dataUrl: stampedUrl,
       seed: result.seed,
       bucket: result.bucket,
       params: result.params || params,

@@ -93,8 +93,9 @@ async function main() {
   const ico = await toIco([bufs[48], bufs[32], bufs[16]]);
   await writeMirrors(["favicon.ico"], ico);
 
+  const iosIcon1024 = await composeBrandSquare(1024);
   await fs.mkdir(ICON_DIR, { recursive: true });
-  await writeFile(IOS_ICON, bufs[512]);
+  await writeFile(IOS_ICON, iosIcon1024);
 
   console.log("Brand icons generated from assets/icons/splash-mark.png");
   console.log("  root: favicon.ico, favicon-48x48.png, favicon-96x96.png, apple-touch-icon.png, icon-192.png, icon-512.png");

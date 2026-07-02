@@ -25,6 +25,10 @@ import {
 import {
   setNabadTabsActiveByAttr,
 } from "./nabad-tabs.js";
+import {
+  initProfileSegTabsOnce,
+  setProfileSegActive,
+} from "./profile-seg-tabs.js";
 import { initEcho, openEchoFromCreateChooser } from "./echo.js";
 import {
   getInitialBootHash,
@@ -97,7 +101,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260702-203731";
+const APP_BUILD = "20260702-204855";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -36493,8 +36497,8 @@ function syncProfileSongsSegmentUi() {
   try {
     document.body.setAttribute("data-profile-songs-seg", _profileSongsSegment);
   } catch {}
-  const profileTabBar = document.querySelector(".profileTabBar");
-  if (profileTabBar) setNabadTabsActiveByAttr(profileTabBar, _profileSongsSegment, "data-profile-songs-segment");
+  const profileTabBar = document.querySelector(".profileSegBar");
+  if (profileTabBar) setProfileSegActive(_profileSongsSegment);
   if (allCount) allCount.hidden = !isAll;
   const playlistCount = document.getElementById("profilePlaylistCount");
   if (playlistCount) playlistCount.hidden = !isPlaylist;
@@ -36519,6 +36523,7 @@ function syncProfileSongsSegmentUi() {
 function bindProfileSongsSegmentOnce() {
   if (_profileSongsSegmentBound) return;
   _profileSongsSegmentBound = true;
+  initProfileSegTabsOnce();
   wireProfileActivitiesLoadMoreOnce();
   document.querySelectorAll("[data-profile-songs-segment]").forEach((btn) => {
     btn.addEventListener("click", () => {

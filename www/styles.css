@@ -706,14 +706,14 @@ html[data-theme="light"] .profileStatPill:not(:last-child)::after{
   background: linear-gradient(180deg, transparent, rgba(15, 23, 40, 0.12), transparent);
 }
 
-html[data-theme="light"] .profileTab,
-html[data-theme="light"] .nabadTabsTab.profileTab{
-  color: var(--muted);
+html[data-theme="light"] .profileSegTab{
+  color: #A8A8A8;
+  opacity: 0.55;
 }
 
-html[data-theme="light"] .profileTab.is-active,
-html[data-theme="light"] .nabadTabsTab.profileTab.is-active{
-  color: var(--text);
+html[data-theme="light"] .profileSegTab.is-active{
+  color: #0f1728;
+  opacity: 1;
 }
 
 html[data-theme="light"] .profileActEmptyTitle{
@@ -22943,22 +22943,54 @@ button.discoverySpotCard{
   gap: 10px;
 }
 
-/* Profile — content segments (Posts / Songs / …) */
+/* Profile — icon segment bar (Posts / Songs / Vocals / Playlist) */
 .profileSongsBlock{
-  margin-top: 5px;
+  margin-top: 0;
 }
-.profileTabBar{
-  display: block;
-  margin: 0 0 6px;
+.profileSegBar{
+  position: relative;
+  display: flex;
+  justify-content: space-evenly;
+  align-items: flex-start;
+  width: 100%;
+  margin: 32px 0 0;
   padding: 0;
-  border-bottom: 0;
+  background: none;
+  border: 0;
+  box-shadow: none;
 }
-.profileTabBar .nabadTabsTrack{
-  gap: 16px;
-  padding: 0 2px 4px;
+.profileSegTab{
+  flex: 1 1 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  appearance: none;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  margin: 0;
+  padding: 0;
+  cursor: pointer;
+  color: #A8A8A8;
+  opacity: 0.55;
+  -webkit-tap-highlight-color: transparent;
+  transition: color 180ms ease, opacity 180ms ease;
+}
+.profileSegTab:hover:not(.is-active){
+  opacity: 0.72;
+}
+.profileSegTab.is-active{
+  color: #FFFFFF;
+  opacity: 1;
+}
+.profileSegIcon{
+  width: 24px;
+  height: 24px;
+  display: block;
+  flex: 0 0 auto;
 }
 .profileSongsToolbar{
-  margin: 0 0 10px;
+  margin: 28px 0 10px;
   min-height: 0;
   display: flex;
   flex-direction: column;

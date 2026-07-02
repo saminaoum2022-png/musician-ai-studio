@@ -124,7 +124,7 @@
       onload="this.media='all'"
     />
     <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Display:wght@900&family=Inter:wght@900&display=swap" /></noscript>
-    <link rel="stylesheet" href="./styles.css?v=20260702-203731" />
+    <link rel="stylesheet" href="./styles.css?v=20260702-204855" />
 
     <meta name="description" content="Nabadai is an AI music studio. Hum a melody, write lyrics, and ship a song." />
     <meta property="og:type" content="website" />
@@ -2635,13 +2635,41 @@
 
           <!-- Songs — Public (Discover / link) vs All (full library) -->
           <div class="profileSongsBlock">
-            <nav class="nabadTabs profileTabBar" role="tablist" aria-label="Profile content">
-              <div class="nabadTabsTrack">
-                <button type="button" class="nabadTabsTab profileTab is-active" role="tab" aria-selected="true" data-profile-songs-segment="activities" id="profileSongsSegActivity"><span class="nabadTabsLabel">Posts</span></button>
-                <button type="button" class="nabadTabsTab profileTab" role="tab" aria-selected="false" data-profile-songs-segment="all" id="profileSongsSegAll"><span class="nabadTabsLabel">Songs</span></button>
-                <button type="button" class="nabadTabsTab profileTab" role="tab" aria-selected="false" data-profile-songs-segment="vocals" id="profileSongsSegVocals"><span class="nabadTabsLabel">My Vocals</span></button>
-                <button type="button" class="nabadTabsTab profileTab" role="tab" aria-selected="false" data-profile-songs-segment="playlist" id="profileSongsSegPlaylist"><span class="nabadTabsLabel">Playlist</span></button>
-              </div>
+            <nav class="profileSegBar" role="tablist" aria-label="Profile content">
+              <button type="button" class="profileSegTab is-active" role="tab" aria-selected="true" data-profile-songs-segment="activities" id="profileSongsSegActivity" aria-label="Posts">
+                <svg class="profileSegIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+                  <rect x="3" y="3" width="7" height="7" rx="1.5"/>
+                  <rect x="14" y="3" width="7" height="7" rx="1.5"/>
+                  <rect x="3" y="14" width="7" height="7" rx="1.5"/>
+                  <rect x="14" y="14" width="7" height="7" rx="1.5"/>
+                </svg>
+              </button>
+              <button type="button" class="profileSegTab" role="tab" aria-selected="false" data-profile-songs-segment="all" id="profileSongsSegAll" aria-label="Songs">
+                <svg class="profileSegIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" aria-hidden="true" focusable="false">
+                  <path d="M5 10v4"/>
+                  <path d="M9 7v10"/>
+                  <path d="M13 4v16"/>
+                  <path d="M17 8v8"/>
+                  <path d="M21 11v2"/>
+                </svg>
+              </button>
+              <button type="button" class="profileSegTab" role="tab" aria-selected="false" data-profile-songs-segment="vocals" id="profileSongsSegVocals" aria-label="My Vocals">
+                <svg class="profileSegIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+                  <rect x="9" y="3" width="6" height="11" rx="3"/>
+                  <path d="M5 11a7 7 0 0 0 14 0"/>
+                  <path d="M12 18v3"/>
+                  <path d="M8 21h8"/>
+                </svg>
+              </button>
+              <button type="button" class="profileSegTab" role="tab" aria-selected="false" data-profile-songs-segment="playlist" id="profileSongsSegPlaylist" aria-label="Playlist">
+                <svg class="profileSegIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+                  <path d="M4 6h12"/>
+                  <path d="M4 12h10"/>
+                  <path d="M4 18h7"/>
+                  <path d="M18 16.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Z"/>
+                  <path d="M21 16.5V8.5"/>
+                </svg>
+              </button>
             </nav>
             <div class="profileSongsToolbar libraryHeaderRow">
               <p id="libraryCount" class="libraryCount" hidden aria-live="polite"></p>
@@ -4146,6 +4174,6 @@
     </script>
     <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
     <script src="./env.client.js" onerror="void 0"></script>
-    <script type="module" src="./src/app.js?v=20260702-203731"></script>
+    <script type="module" src="./src/app.js?v=20260702-204855"></script>
   </body>
 </html>

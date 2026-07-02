@@ -127,12 +127,38 @@ export const PITCH_CORRECTION_PRESETS = Object.freeze({
     lockHoldMs: 12,
     formantPreserve: true,
   },
+  /** Scale-locked trap/R&B hard tune — hum or slide and hear melody in the song key. */
+  melodylock: {
+    id: "melodylock",
+    label: "Melody Lock",
+    retuneMs: 0,
+    humanize: 0,
+    flexTune: 0,
+    tracking: "high",
+    noteTransition: "instant",
+    vibratoPreserve: "off",
+    pitchDriftIgnore: 0,
+    maxCents: 240,
+    wet: 1,
+    useScale: true,
+    correctionStrength: 1,
+    lockHoldMs: 0,
+    formantPreserve: true,
+  },
 });
 
-export const PITCH_PRESET_IDS = Object.freeze(["none", "natural", "balanced", "pop", "hardtune"]);
+export const PITCH_PRESET_IDS = Object.freeze(["none", "natural", "balanced", "pop", "hardtune", "melodylock"]);
 export const PITCH_PRESET_DEFAULT = "balanced";
 /** Bump when pitch engine changes so cached renders are invalidated. */
-const PITCH_ENGINE_VERSION = 9;
+const PITCH_ENGINE_VERSION = 10;
+
+function isMelodyLockPreset(preset) {
+  return preset?.id === "melodylock";
+}
+
+function isHardTunePreset(preset) {
+  return preset?.id === "hardtune" || isMelodyLockPreset(preset);
+}
 
 export function normalizePitchPresetId(id) {
   if (!id) return PITCH_PRESET_DEFAULT;
@@ -311,6 +337,9 @@ function resolveKeyInfo(mono, sr, opts = {}) {
   } else if (keyInfo && !keyInfo.rootName) {
     keyInfo.rootName = ROOT_NAMES[keyInfo.root ?? 0];
   }
+  if (opts.preferScaleLock && keyInfo && (keyInfo.confidence ?? 0) < 0.2) {
+    keyInfo = { ...keyInfo, confidence: Math.max(keyInfo.confidence ?? 0, 0.25) };
+  }
   return keyInfo;
 }
 
@@ -362,23 +391,27 @@ function quantizeToScaleMidi(midi, keyInfo) {
 }
 
 function quantizeMidi(midi, preset, keyInfo) {
-  const useScale = preset.useScale && (keyInfo?.confidence ?? 0) > 0.38;
+  const minConf = isMelodyLockPreset(preset) ? 0.12 : 0.38;
+  const useScale = preset.useScale && (keyInfo?.confidence ?? 0) > minConf;
   return useScale ? quantizeToScaleMidi(midi, keyInfo) : Math.round(midi);
 }
 
 function analysisWindowSec(preset) {
+  if (isMelodyLockPreset(preset)) return 0.032;
   if (preset.tracking === "high") return 0.040;
   if (preset.tracking === "medium-high") return 0.048;
   return 0.055;
 }
 
 function trackingSmoothCents(preset) {
+  if (isMelodyLockPreset(preset)) return 32;
   if (preset.tracking === "high") return 22;
   if (preset.tracking === "medium-high") return 16;
   return 11;
 }
 
 function retuneStepCents(preset, hop, sr) {
+  if (preset.retuneMs <= 0) return 9999;
   const frameMs = (hop / sr) * 1000;
   return (1200 / Math.max(4, preset.retuneMs)) * frameMs;
 }
@@ -663,10 +696,16 @@ function applyMicroPitchFilter(f0s, voiced, hop, sr, filterOpts = null) {
   const portamento = detectPortamentoMask(expressionMidi, voiced, hop, sr);
   const ornament = detectOrnamentMask(microCents, expressionMidi, voiced, hop, sr);
   const lockFrames = framesForMs(MICRO_PITCH_FILTER.lockStabilityMs, hop, sr);
+  const aggressive = filterOpts?.aggressive === true;
 
   for (let i = 0; i < n; i++) {
     if (!voiced[i] || !Number.isFinite(expressionMidi[i])) {
       correctable[i] = 0;
+      continue;
+    }
+
+    if (aggressive) {
+      correctable[i] = 1;
       continue;
     }
 
@@ -697,9 +736,22 @@ function buildLockedNotes(filter, voiced, preset, keyInfo, hop, sr) {
   const { expressionMidi, noteCenterMidi, correctable } = filter;
   const n = expressionMidi.length;
   const lockedMidi = new Float32Array(n);
+
+  /** Per-frame scale snap — slide your voice and hear scale steps (Voloco-style). */
+  if (isMelodyLockPreset(preset)) {
+    for (let i = 0; i < n; i++) {
+      if (!voiced[i] || !Number.isFinite(expressionMidi[i])) {
+        lockedMidi[i] = NaN;
+        continue;
+      }
+      lockedMidi[i] = quantizeMidi(expressionMidi[i], preset, keyInfo);
+    }
+    return { lockedMidi, slowMidi: expressionMidi };
+  }
+
   const lockFrames = framesForMs(MICRO_PITCH_FILTER.lockStabilityMs, hop, sr);
   const switchFrames = Math.max(lockFrames, noteSwitchFrames(preset, hop, sr));
-  const switchMarginSemis = preset.id === "hardtune" ? 0.48 : preset.noteTransition === "fast" ? 0.68 : 0.82;
+  const switchMarginSemis = isHardTunePreset(preset) ? 0.48 : preset.noteTransition === "fast" ? 0.68 : 0.82;
 
   let locked = NaN;
   let candidate = NaN;
@@ -760,12 +812,12 @@ function vibratoPassFactor(preset) {
 function buildCorrectionCents(f0s, voiced, lockedMidi, slowMidi, filter, preset, hop, sr) {
   const cents = new Float32Array(f0s.length);
   const { correctable, vibrato, portamento, ornament } = filter;
-  const driftIgnore = preset.id === "hardtune" ? 2 : preset.pitchDriftIgnore;
+  const driftIgnore = isHardTunePreset(preset) ? 2 : preset.pitchDriftIgnore;
   const flexOff = preset.flexTune <= 0.001;
   const flexCents = flexOff ? 0 : preset.flexTune * 42;
   const maxStep = retuneStepCents(preset, hop, sr);
   const vibPass = vibratoPassFactor(preset);
-  const minCorrectable = preset.id === "hardtune" ? 0.08 : 0.18;
+  const minCorrectable = isMelodyLockPreset(preset) ? 0.02 : isHardTunePreset(preset) ? 0.08 : 0.18;
   let prevCorr = 0;
 
   for (let i = 0; i < f0s.length; i++) {
@@ -793,7 +845,7 @@ function buildCorrectionCents(f0s, voiced, lockedMidi, slowMidi, filter, preset,
       if (Math.abs(corr) < knee) corr *= (Math.abs(corr) - flexCents) / 10;
     }
 
-    if (vibPass > 0 && Number.isFinite(slowMidi[i]) && preset.id !== "hardtune") {
+    if (vibPass > 0 && Number.isFinite(slowMidi[i]) && !isHardTunePreset(preset)) {
       const slowHz = midiToFreq(slowMidi[i]);
       const vibratoCents = 1200 * Math.log2(raw / slowHz);
       if (Math.abs(vibratoCents) < driftIgnore * 1.15) {
@@ -806,7 +858,7 @@ function buildCorrectionCents(f0s, voiced, lockedMidi, slowMidi, filter, preset,
 
     corr = clamp(corr, -preset.maxCents, preset.maxCents);
 
-    if (preset.noteTransition === "instant" && (correctable[i] > 0.5 || preset.id === "hardtune")) {
+    if (preset.noteTransition === "instant" && (correctable[i] > 0.5 || isHardTunePreset(preset))) {
       prevCorr = corr;
     } else {
       corr = clamp(corr, prevCorr - maxStep, prevCorr + maxStep);
@@ -837,7 +889,7 @@ function interpolateCentsAtSample(cents, hop, sampleIdx) {
 }
 
 function resampleGrain(grain, ratio) {
-  const r = clamp(ratio, 0.94, 1.06);
+  const r = clamp(ratio, 0.5, 2);
   const outLen = Math.max(8, Math.floor(grain.length / r));
   const out = new Float32Array(outLen);
   for (let j = 0; j < outLen; j++) {
@@ -860,7 +912,8 @@ function overlapAdd(out, norm, grain, start, win) {
   }
 }
 
-function applyPitchShift(mono, sr, cents, hop, winSize, wet) {
+function applyPitchShift(mono, sr, cents, hop, winSize, wet, opts = {}) {
+  const minCorr = Number.isFinite(opts.minCorrCents) ? opts.minCorrCents : 0.6;
   const win = hannWindow(winSize);
   const nGrains = Math.max(1, Math.floor((mono.length - winSize) / hop));
   const wetSig = new Float32Array(mono.length);
@@ -871,7 +924,7 @@ function applyPitchShift(mono, sr, cents, hop, winSize, wet) {
     if (pos + winSize > mono.length) break;
     const grain = mono.subarray(pos, pos + winSize);
     const corr = interpolateCentsAtSample(cents, hop, pos + winSize * 0.5);
-    if (Math.abs(corr) < 0.6) {
+    if (Math.abs(corr) < minCorr) {
       overlapAdd(wetSig, norm, grain, pos, win);
       continue;
     }
@@ -967,7 +1020,14 @@ export function describePitchRenderMeta(meta, presetId) {
     return `${label} · Couldn't process — using Original.`;
   }
   if (meta.passthrough && meta.onPitch) {
-    return `${label} · Key ${meta.keyLabel || "—"} · Already on pitch — sounds like Original. Hard Tune is the strongest preset.`;
+    const hint = id === "melodylock"
+      ? `${label} · Key ${meta.keyLabel || "—"} · Play preview to hear scale-locked tuning on your take.`
+      : `${label} · Key ${meta.keyLabel || "—"} · Already on pitch — sounds like Original. Try Melody Lock or Hard Tune.`;
+    return hint;
+  }
+  if (id === "melodylock" && meta.keyLabel) {
+    const strength = meta.peakCents >= 35 ? "Strong" : meta.peakCents >= 12 ? "Moderate" : "Light";
+    return `${label} · Locked to ${meta.keyLabel} · ${strength} scale snap on your recorded take.`;
   }
   const strength = meta.peakCents >= 35 ? "Strong" : meta.peakCents >= 12 ? "Moderate" : "Light";
   return `${label} · Key ${meta.keyLabel || "—"} · ${strength} correction (avg ${meta.avgCents}¢, peak ${meta.peakCents}¢). Tap Original while playing to A/B.`;
@@ -980,10 +1040,19 @@ function expressionProtectionToVibrato(v) {
   return "off";
 }
 
+/** Retune speed slider (0–100) → engine retuneMs (higher ms = slower / gentler). */
+export function retuneMsFromAdvSlider(retuneSpeed) {
+  const speed = clamp(Number(retuneSpeed) || 0, 0, 100);
+  if (speed <= 0) return 120;
+  return Math.max(4, Math.round((100 - speed) / 1.4));
+}
+
 /** Map Advanced tab sliders to pitch preset field overrides (0–100 UI → engine). */
 export function advPitchOverrides(adv) {
   if (!adv) return null;
+  const retuneSpeed = Number(adv.retuneSpeed) || 0;
   return {
+    retuneMs: retuneMsFromAdvSlider(retuneSpeed),
     humanize: clamp((Number(adv.humanize) || 0) / 100, 0, 1),
     flexTune: clamp((Number(adv.flexTune) || 0) / 100, 0, 1),
     vibratoPreserve: expressionProtectionToVibrato(adv.expressionProtection),
@@ -999,6 +1068,7 @@ export function microFilterFromAdv(adv) {
 function advPitchKey(adv) {
   if (!adv) return "";
   return JSON.stringify({
+    r: Number(adv.retuneSpeed) || 0,
     h: Number(adv.humanize) || 0,
     f: Number(adv.flexTune) || 0,
     e: Number(adv.expressionProtection) || 0,
@@ -1024,7 +1094,10 @@ export async function renderPitchCorrection(sourceBuffer, presetId, opts = {}) {
     const ch1 = sourceBuffer.numberOfChannels > 1 ? sourceBuffer.getChannelData(1) : null;
     const monoRaw = toMonoFloat32(ch0, ch1);
     const monoAnalysis = peakNormalizeCopyForAnalysis(monoRaw);
-    const keyInfo = resolveKeyInfo(monoAnalysis, sr, opts);
+    const keyInfo = resolveKeyInfo(monoAnalysis, sr, {
+      ...opts,
+      preferScaleLock: isMelodyLockPreset(preset),
+    });
 
     await yieldToUi();
 
@@ -1042,10 +1115,15 @@ export async function renderPitchCorrection(sourceBuffer, presetId, opts = {}) {
 
     await yieldToUi();
 
-    const microFilter = applyMicroPitchFilter(f0s, voiced, hop, sr, opts.microFilter);
+    const microFilter = applyMicroPitchFilter(f0s, voiced, hop, sr, {
+      ...(opts.microFilter || {}),
+      aggressive: isMelodyLockPreset(preset),
+    });
     const { lockedMidi, slowMidi } = buildLockedNotes(microFilter, voiced, preset, keyInfo, hop, sr);
     const cents = buildCorrectionCents(f0s, voiced, lockedMidi, slowMidi, microFilter, preset, hop, sr);
-    const corrected = applyPitchShift(monoRaw, sr, cents, hop, winSize, preset.wet);
+    const corrected = applyPitchShift(monoRaw, sr, cents, hop, winSize, preset.wet, {
+      minCorrCents: isMelodyLockPreset(preset) ? 0.15 : 0.6,
+    });
     const levelMatched = matchPeakToReference(corrected, monoRaw);
 
     const buf = createMonoBufferFromFloat32(levelMatched, sr, opts);

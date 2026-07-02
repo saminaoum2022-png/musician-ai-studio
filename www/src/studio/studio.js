@@ -69,23 +69,23 @@ const DEFAULT_MIX = Object.freeze({
   fxDeesser: 0,
 });
 
-/** Applied after each new take — opens on Mix with these starting values. */
+/** Applied after each new take — opens on Preview with Original (raw vocal). */
 const POST_RECORD_MIX = Object.freeze({
-  styleTab: "studio",
+  styleTab: "original",
   mixPanel: "basic",
-  voiceVol: 72,
-  vocalGain: 59,
+  voiceVol: 50,
+  vocalGain: 50,
   musicVol: 70,
-  reverb: 14,
+  reverb: 0,
   syncMs: 0,
   finish: "balanced",
-  finishUserPick: true,
+  finishUserPick: false,
   finishSuggested: "balanced",
   _finishReady: true,
-  fxDenoise: 50,
-  fxCompress: 14,
-  fxEq: 65,
-  fxDeesser: 11,
+  fxDenoise: 0,
+  fxCompress: 0,
+  fxEq: 0,
+  fxDeesser: 0,
 });
 
 function applyPostRecordMixDefaults() {
@@ -101,7 +101,7 @@ const FINISH_LABELS = {
 };
 
 /** Style preset tabs on Preview + Mix — pitch + mix + finish in one tap. */
-const STYLE_TAB_IDS = Object.freeze(["original", "natural", "studio", "pop", "hardtune", "custom"]);
+const STYLE_TAB_IDS = Object.freeze(["original", "natural", "studio", "pop", "hardtune", "melodylock", "custom"]);
 
 const STYLE_TABS = Object.freeze({
   original: {
@@ -134,27 +134,194 @@ const STYLE_TABS = Object.freeze({
     finish: "punchy",
     mix: { voiceVol: 76, vocalGain: 64, musicVol: 66, fxDenoise: 40, fxCompress: 55, fxEq: 52, fxDeesser: 9, reverb: 6 },
   },
+  melodylock: {
+    label: "Melody Lock",
+    pitch: "melodylock",
+    finish: "punchy",
+    mix: { voiceVol: 78, vocalGain: 66, musicVol: 64, fxDenoise: 35, fxCompress: 62, fxEq: 50, fxDeesser: 10, reverb: 8 },
+  },
   custom: { label: "Custom", pitch: null, finish: null, mix: null },
 });
 
-const PITCH_RETUNE_STEPS = Object.freeze(["none", "natural", "balanced", "pop", "hardtune"]);
+/** Advanced pitch sliders when Original is selected — all zero = no correction. */
+const ORIGINAL_ADV_PITCH = Object.freeze({
+  retuneSpeed: 0,
+  humanize: 0,
+  flexTune: 0,
+  expressionProtection: 0,
+  microPitchFilter: 0,
+  stereoWidth: 50,
+});
+
+const ADV_PITCH_DEBOUNCE_MS = 140;
 
 /** Pick a finish preset from song style/tags — used as default on Mix. */
-function suggestFinishPreset(track) {
-  const hay = [
+function trackStyleHaystack(track) {
+  const tags = track?.tags;
+  const tagStr = Array.isArray(tags) ? tags.join(" ") : String(tags || "");
+  return [
     track?.style,
     track?.genre,
-    track?.tags,
+    tagStr,
     track?.meta?.style,
     track?.meta?.tags,
     track?.meta?.prompt,
     track?.meta?.genre,
+    track?.meta?.description,
     track?.title,
   ].filter(Boolean).join(" ").toLowerCase();
-  if (/\b(ballad|acoustic|soul|r&b|rnb|jazz|blues|slow|romantic|folk|unplugged)\b/.test(hay)) return "warm";
-  if (/\b(hip hop|hip-hop|rap|trap|drill|dance|edm|club|bass|afro|reggaeton|phonk)\b/.test(hay)) return "punchy";
-  if (/\b(pop|upbeat|indie|synth|electro|hyper|bright)\b/.test(hay)) return "bright";
+}
+
+function suggestFinishPreset(track) {
+  const hay = trackStyleHaystack(track);
+  if (/\b(ballad|acoustic|soul|jazz|blues|slow|romantic|folk|unplugged|worship|gospel)\b/.test(hay)) return "warm";
+  if (/\b(r&b|rnb|neo.?soul)\b/.test(hay)) return "warm";
+  if (/\b(hip hop|hip-hop|rap|trap|drill|dance|edm|club|bass|afro|reggaeton|phonk|melodic rap)\b/.test(hay)) return "punchy";
+  if (/\b(pop|upbeat|indie|synth|electro|hyper|bright|k-?pop|radio)\b/.test(hay)) return "bright";
   return "balanced";
+}
+
+/** Score each style preset from song metadata + optional pitch analysis on the take. */
+function scoreAiStyleTabs(track, take) {
+  const hay = trackStyleHaystack(track);
+  const scores = Object.fromEntries(
+    ["natural", "studio", "pop", "hardtune", "melodylock"].map((id) => [id, 0]),
+  );
+
+  if (/\b(ballad|acoustic|soul|jazz|blues|slow|romantic|folk|unplugged|worship|gospel|spoken|talking)\b/.test(hay)) {
+    scores.natural += 5;
+    scores.studio += 1;
+  }
+  if (/\b(r&b|rnb|neo.?soul|smooth|sensual)\b/.test(hay)) {
+    scores.pop += 3;
+    scores.studio += 2;
+    scores.natural += 2;
+  }
+  if (/\b(pop|upbeat|indie|synth|electro|hyper|bright|k-?pop|radio|catchy|hook)\b/.test(hay)) {
+    scores.pop += 5;
+    scores.studio += 1;
+  }
+  if (/\b(hip hop|hip-hop|rap|trap|drill|phonk|melodic rap|auto-?tune|808|mumble|freestyle)\b/.test(hay)) {
+    scores.melodylock += 6;
+    scores.hardtune += 2;
+  }
+  if (/\b(dance|edm|club|house|techno|dnb|drum.?and.?bass|afro|afrobeats|amapiano|reggaeton|dembow|jersey)\b/.test(hay)) {
+    scores.melodylock += 3;
+    scores.pop += 3;
+    scores.hardtune += 1;
+  }
+  if (/\b(rock|metal|punk|grunge|alternative|emo)\b/.test(hay)) {
+    scores.studio += 4;
+    scores.natural += 1;
+  }
+  if (/\b(country|americana|bluegrass|western)\b/.test(hay)) {
+    scores.natural += 4;
+    scores.studio += 2;
+  }
+  if (/\b(classical|orchestral|cinematic|soundtrack|film)\b/.test(hay)) {
+    scores.natural += 5;
+  }
+
+  if (take?.buffer) {
+    let peak = 0;
+    let sum = 0;
+    let n = 0;
+    const ch = take.buffer.getChannelData(0);
+    const step = Math.max(1, Math.floor(ch.length / 6000));
+    for (let i = 0; i < ch.length; i += step) {
+      const v = Math.abs(ch[i]);
+      sum += v * v;
+      peak = Math.max(peak, v);
+      n += 1;
+    }
+    const rms = Math.sqrt(sum / Math.max(1, n));
+    if (rms > 0.12 || peak > 0.55) {
+      scores.pop += 1;
+      scores.melodylock += 1;
+    } else if (rms < 0.04) {
+      scores.natural += 2;
+    }
+
+    for (const pid of ["balanced", "natural", "pop", "melodylock"]) {
+      const meta = getPitchRenderMeta(take, pid);
+      if (!meta || meta.noPitchDetected) continue;
+      const offPitch = meta.peakCents ?? 0;
+      if (offPitch >= 40) {
+        scores.melodylock += 3;
+        scores.pop += 2;
+        scores.hardtune += 1;
+        scores.natural -= 1;
+      } else if (offPitch >= 18) {
+        scores.studio += 2;
+        scores.pop += 2;
+      } else if (offPitch < 10 && meta.onPitch) {
+        scores.natural += 3;
+        scores.studio += 1;
+      }
+      break;
+    }
+  }
+
+  scores.studio += 2;
+  return scores;
+}
+
+function aiRecommendReason(styleTab, track, take) {
+  const hay = trackStyleHaystack(track);
+  if (/\b(trap|drill|phonk|melodic rap)\b/.test(hay) && styleTab === "melodylock") {
+    return "Trap-style vocal — scale-locked melody tune";
+  }
+  if (/\b(hip hop|hip-hop|rap|auto-?tune)\b/.test(hay) && (styleTab === "melodylock" || styleTab === "hardtune")) {
+    return "Hip-hop vocal — hard pitch snap";
+  }
+  if (/\b(pop|k-?pop|radio|hook)\b/.test(hay) && styleTab === "pop") {
+    return "Pop vocal — polished radio pitch";
+  }
+  if (/\b(ballad|acoustic|soul|jazz|folk)\b/.test(hay) && styleTab === "natural") {
+    return "Warm song — light natural tuning";
+  }
+  if (take?.buffer) {
+    const meta = getPitchRenderMeta(take, "balanced") || getPitchRenderMeta(take, "natural");
+    if (meta?.peakCents >= 35) return "Your take drifts off pitch — stronger tune helps";
+    if (meta?.peakCents < 10 && meta?.onPitch) return "You're already on pitch — light touch";
+  }
+  const labels = {
+    melodylock: "Melodic hard tune locked to the song key",
+    pop: "Bright, polished pop vocal",
+    natural: "Gentle tuning that keeps your feel",
+    hardtune: "Classic hard auto-tune snap",
+    studio: "All-round studio vocal polish",
+  };
+  return labels[styleTab] || "Matched to this song and take";
+}
+
+function buildAiMixRecommendation(take, track) {
+  const scores = scoreAiStyleTabs(track, take);
+  let styleTab = "studio";
+  let best = -Infinity;
+  for (const id of ["melodylock", "pop", "hardtune", "natural", "studio"]) {
+    if (scores[id] > best) {
+      best = scores[id];
+      styleTab = id;
+    }
+  }
+  const tab = STYLE_TABS[styleTab];
+  const meta = take ? getPitchRenderMeta(take, tab.pitch) : null;
+  let match = 76 + Math.min(18, Math.round(best * 2.8));
+  if (meta?.audible) match += 2;
+  if (meta?.voicedRatio > 0.5) match += 2;
+  match = Math.min(99, Math.max(72, match));
+  const reason = aiRecommendReason(styleTab, track, take);
+  return {
+    styleTab,
+    finish: tab.finish,
+    pitchId: tab.pitch,
+    styleLabel: tab.label,
+    pitchLabel: pitchPresetLabel(tab.pitch),
+    finishLabel: FINISH_LABELS[tab.finish] || tab.finish,
+    reason,
+    matchPct: match,
+  };
 }
 
 function mixFxValue(m, key) {
@@ -317,6 +484,16 @@ function trackRef(t) {
     taskId: String(t?.taskId || t?.meta?.taskId || ""),
     audioId: String(t?.audioId || t?.meta?.audioId || ""),
     kind: String(t?.kind || ""),
+    style: String(t?.style || t?.meta?.style || ""),
+    genre: String(t?.genre || t?.meta?.genre || ""),
+    tags: t?.tags || t?.meta?.tags || "",
+    meta: t?.meta ? {
+      style: t.meta.style,
+      tags: t.meta.tags,
+      prompt: t.meta.prompt,
+      genre: t.meta.genre,
+      key: t.meta.key || t.meta.musicalKey || t.meta.tonality,
+    } : undefined,
   };
 }
 
@@ -599,21 +776,11 @@ async function prepareTakeForPreview(root, take) {
 
     setPhase("Nabad AI is suggesting your mix…");
     await yieldToUi();
-    const aiRec = buildAiMixRecommendation(take, current?.track);
-    const tab = STYLE_TABS[aiRec.styleTab];
+    buildAiMixRecommendation(take, current?.track);
+
     const m = current.mix || (current.mix = { ...DEFAULT_MIX });
-    if (tab?.mix) {
-      m.styleTab = aiRec.styleTab;
-      Object.assign(m, tab.mix);
-      m.finish = tab.finish;
-      m.finishUserPick = true;
-      ensureTakePitchState(take).preset = tab.pitch;
-      m.advPitch = pitchAdvDefaults(tab.pitch);
-      await ensurePitchPresetRendered(take, tab.pitch, {
-        audioContext: engine?.ctx,
-        trackKey: trackKeyHint(),
-      });
-    }
+    ensureTakePitchState(take).preset = "none";
+    m.advPitch = pitchAdvDefaults("none");
 
     current._previewPreparedTakeId = take.id;
     void persistProject();
@@ -1376,27 +1543,6 @@ function takeWaveMeta(take) {
   };
 }
 
-function buildAiMixRecommendation(take, track) {
-  const finish = suggestFinishPreset(track);
-  let styleTab = "studio";
-  if (finish === "warm") styleTab = "natural";
-  else if (finish === "punchy") styleTab = "hardtune";
-  else if (finish === "bright") styleTab = "pop";
-  const tab = STYLE_TABS[styleTab];
-  const meta = take ? getPitchRenderMeta(take, tab.pitch) : null;
-  let match = 86 + Math.min(8, Math.round((meta?.voicedRatio || 0.45) * 14));
-  if (meta?.audible) match += 5;
-  return {
-    styleTab,
-    finish: tab.finish,
-    pitchId: tab.pitch,
-    styleLabel: tab.label,
-    pitchLabel: pitchPresetLabel(tab.pitch),
-    finishLabel: FINISH_LABELS[tab.finish] || tab.finish,
-    matchPct: Math.min(99, match),
-  };
-}
-
 function aiMixCardHtml(rec) {
   return `
     <div class="studioAiCard" data-studio-ai-card>
@@ -1404,11 +1550,10 @@ function aiMixCardHtml(rec) {
         <div class="studioAiCardBrand"><span class="studioAiSpark" aria-hidden="true">✨</span> Nabad AI</div>
         <span class="studioAiMatch">${rec.matchPct}% match</span>
       </div>
-      <p class="studioAiCardSub">Recommended for this take</p>
+      <p class="studioAiCardSub">${esc(rec.reason || "Recommended for this take")}</p>
       <div class="studioAiChips" aria-label="Recommended settings">
         <span class="studioAiChip">${esc(rec.styleLabel)}</span>
-        <span class="studioAiChip">${esc(rec.finishLabel)} mix</span>
-        <span class="studioAiChip">${esc(rec.pitchLabel)} pitch</span>
+        <span class="studioAiChip">${esc(rec.finishLabel)} finish</span>
       </div>
       <button type="button" class="studioAiApply" data-studio-ai-apply>Apply AI Mix</button>
     </div>`;
@@ -1437,7 +1582,8 @@ function stylePresetTabsHtml(activeId) {
 function advPitchDiffersFromDefaults(pitchId, adv) {
   const d = pitchAdvDefaults(pitchId);
   return (
-    Math.round(Number(adv.humanize) || 0) !== d.humanize
+    Math.round(Number(adv.retuneSpeed) || 0) !== d.retuneSpeed
+    || Math.round(Number(adv.humanize) || 0) !== d.humanize
     || Math.round(Number(adv.flexTune) || 0) !== d.flexTune
     || Math.round(Number(adv.expressionProtection) || 0) !== d.expressionProtection
     || Math.round(Number(adv.microPitchFilter) || 0) !== d.microPitchFilter
@@ -1445,15 +1591,27 @@ function advPitchDiffersFromDefaults(pitchId, adv) {
 }
 
 function pitchAdvDefaults(pitchId) {
-  const p = PITCH_CORRECTION_PRESETS[normalizePitchPresetId(pitchId)];
+  const id = normalizePitchPresetId(pitchId);
+  if (id === "none") return { ...ORIGINAL_ADV_PITCH };
+  const p = PITCH_CORRECTION_PRESETS[id];
   return {
     humanize: Math.round((p.humanize || 0) * 100),
-    retuneSpeed: Math.round(Math.max(8, Math.min(98, 100 - (p.retuneMs || 35) * 1.4))),
+    retuneSpeed: Math.round(Math.max(0, Math.min(100, 100 - (p.retuneMs || 35) * 1.4))),
     flexTune: Math.round((p.flexTune || 0) * 100),
     expressionProtection: p.vibratoPreserve === "on" ? 78 : p.vibratoPreserve === "slight" ? 52 : 24,
     microPitchFilter: 72,
     stereoWidth: 50,
   };
+}
+
+/** Engine preset used when Advanced sliders override pitch (Original → balanced base). */
+function effectivePitchPresetId(pitchId, adv) {
+  const id = normalizePitchPresetId(pitchId);
+  if (id === "none") {
+    if (!adv || !advPitchDiffersFromDefaults("none", adv)) return "none";
+    return "balanced";
+  }
+  return id;
 }
 
 function ensureMixAdvPitch(m) {
@@ -1524,27 +1682,25 @@ async function applyStyleTab(root, take, tabId, state) {
   await selectPitchPreset(root, take, tab.pitch, { ...state, silent: true });
   updateAiApplyUi(root, m, state?.aiRec);
   if (state?.fromAi) {
-    bridge.showToast?.("AI mix applied — tap play to hear it.");
-    if (engine?.isPlaying) void restartMixPreview(root);
+    bridge.showToast?.("AI mix applied — playing preview…");
+  }
+  if (state?.playFrom && tabId !== "custom") {
+    void state.playFrom(state.lastGuideSec || 0);
+  } else if (state?.fromAi && engine?.isPlaying) {
+    void restartMixPreview(root);
   }
 }
 
 async function warmupPitchPresets(take) {
   if (!take?.buffer) return;
   ensureTakePitchState(take).cache.none = take.buffer;
-  for (const id of ["natural", "balanced", "pop", "hardtune"]) {
+  for (const id of ["natural", "balanced", "pop", "hardtune", "melodylock"]) {
     await ensurePitchPresetRendered(take, id, {
       audioContext: engine?.ctx,
       trackKey: trackKeyHint(),
     });
     await new Promise((r) => requestAnimationFrame(r));
   }
-}
-
-function pitchFromRetuneSlider(v) {
-  const n = Math.max(0, Math.min(100, Number(v) || 0));
-  const idx = Math.round((n / 100) * (PITCH_RETUNE_STEPS.length - 1));
-  return PITCH_RETUNE_STEPS[idx];
 }
 
 function renderPreviewMix(root, take) {
@@ -1554,7 +1710,7 @@ function renderPreviewMix(root, take) {
   const m = current.mix || (current.mix = { ...DEFAULT_MIX });
   ensureMixFx(m);
   ensureMixFinish(m);
-  if (!m.styleTab) m.styleTab = "studio";
+  if (!m.styleTab) m.styleTab = "original";
   ensureMixAdvPitch(m);
 
   const takes = engine?.getTakes?.() || [];
@@ -1591,6 +1747,7 @@ function renderPreviewMix(root, take) {
       <div class="studioPresetBlock">
         <span class="studioMixLabel">Style preset</span>
         ${stylePresetTabsHtml(m.styleTab)}
+        <p class="studioSyncHint studioPresetHint">Pitch and mix apply to your <strong>recorded take</strong> when you play preview — not live while recording. Pick a preset, then tap Play.</p>
       </div>
 
       <div class="studioMixTabs" role="tablist" aria-label="Mix controls">
@@ -1671,11 +1828,12 @@ function activePitchPreset(take) {
 function pitchVoiceBufferForTake(take) {
   if (!take?.buffer) return undefined;
   const preset = activePitchPreset(take);
-  if (preset === "none") return undefined;
   const adv = current?.mix?.advPitch;
+  if (preset === "none" && (!adv || !advPitchDiffersFromDefaults("none", adv))) return undefined;
   if (adv && advPitchDiffersFromDefaults(preset, adv)) {
-    return getPitchAdvCachedBuffer(take) || getPitchCachedBuffer(take, preset) || undefined;
+    return getPitchAdvCachedBuffer(take) || getPitchCachedBuffer(take, effectivePitchPresetId(preset, adv)) || undefined;
   }
+  if (preset === "none") return undefined;
   return getPitchCachedBuffer(take, preset) || undefined;
 }
 
@@ -1711,7 +1869,7 @@ function pitchCorrectionFieldHtml(activePresetId, hint) {
           <span class="studioPitchAppliedDot" aria-hidden="true"></span>
           <span data-pitch-applied-text>${esc(hint || "")}</span>
         </div>
-        <p class="studioSyncHint studioPitchHint">Tap <strong>Original</strong> then a preset while playing to A/B. Hard Tune is the most obvious.</p>
+        <p class="studioSyncHint studioPitchHint">Tap a preset, then <strong>Play preview</strong> to hear it on your recording. Use <strong>Original</strong> to A/B your raw take. Not live while recording — <strong>Hear myself</strong> is dry voice only.</p>
         <div class="studioSeg studioPitchSeg" data-studio-pitch-presets role="group" aria-label="Pitch correction preset">
           ${PITCH_PRESET_IDS.map((id) =>
             `<button type="button" class="studioSegBtn${id === activePresetId ? " isActive" : ""}" data-pitch-preset="${id}">${esc(pitchPresetLabel(id))}</button>`,
@@ -1752,12 +1910,13 @@ function reviewVoiceBuffer(take) {
 
 function pitchPlaybackBuffer(take, presetId) {
   if (!take?.buffer) return null;
-  if (presetId === "none") return take.buffer;
   const adv = current?.mix?.advPitch;
-  if (adv && advPitchDiffersFromDefaults(presetId, adv)) {
-    return getPitchAdvCachedBuffer(take) || getPitchCachedBuffer(take, presetId);
+  const pid = normalizePitchPresetId(presetId);
+  if (adv && advPitchDiffersFromDefaults(pid, adv)) {
+    return getPitchAdvCachedBuffer(take) || null;
   }
-  return getPitchCachedBuffer(take, presetId);
+  if (pid === "none") return take.buffer;
+  return getPitchCachedBuffer(take, pid);
 }
 
 function setPitchLoadingUi(root, presetId, loading) {
@@ -1786,19 +1945,24 @@ function swapPitchVoice(take, presetId) {
 
 async function ensureTakePitchReady(take) {
   const preset = activePitchPreset(take);
-  if (!take || preset === "none") return;
+  if (!take || preset === "none") {
+    const adv = current?.mix?.advPitch;
+    if (!adv || !advPitchDiffersFromDefaults("none", adv)) return;
+  }
   const adv = current?.mix?.advPitch;
+  const renderPreset = effectivePitchPresetId(preset, adv);
   if (adv && advPitchDiffersFromDefaults(preset, adv)) {
     if (getPitchAdvCachedBuffer(take)) return;
     await engine?.ensureReady();
     if (take?.blob && !take?.buffer) await engine?.hydrateTakeBuffer(take);
     if (!take?.buffer) return;
-    await ensurePitchAdvRendered(take, preset, adv, {
+    await ensurePitchAdvRendered(take, renderPreset, adv, {
       audioContext: engine?.ctx,
       trackKey: trackKeyHint(),
     });
     return;
   }
+  if (preset === "none") return;
   if (getPitchCachedBuffer(take, preset)) return;
   await engine?.ensureReady();
   if (take?.blob && !take?.buffer) await engine?.hydrateTakeBuffer(take);
@@ -1812,25 +1976,36 @@ async function ensureTakePitchReady(take) {
 async function applyAdvPitchSliders(root, take, state) {
   if (!take?.buffer) return;
   const preset = activePitchPreset(take);
-  if (preset === "none") return;
   const adv = ensureMixAdvPitch(current.mix || {});
+  const renderPreset = effectivePitchPresetId(preset, adv);
   const token = ++_advPitchApplyToken;
+
+  if (renderPreset === "none") {
+    clearPitchAdvCache(take);
+    if (token !== _advPitchApplyToken) return;
+    if (engine?.isPlaying) engine.swapVoiceBufferDuringMix(take.buffer);
+    return;
+  }
+
   if (!advPitchDiffersFromDefaults(preset, adv)) {
     clearPitchAdvCache(take);
     if (token !== _advPitchApplyToken) return;
     swapPitchVoice(take, preset);
     return;
   }
+
   if (!state?.silent) setPitchLoadingUi(root, preset, true);
   try {
     await engine?.ensureReady();
-    await ensurePitchAdvRendered(take, preset, adv, {
+    await ensurePitchAdvRendered(take, renderPreset, adv, {
       audioContext: engine?.ctx,
       trackKey: trackKeyHint(),
     });
     if (token !== _advPitchApplyToken) return;
     if (!state?.silent) setPitchLoadingUi(root, preset, false);
-    swapPitchVoice(take, preset);
+    const buf = getPitchAdvCachedBuffer(take);
+    if (buf && engine?.isPlaying) engine.swapVoiceBufferDuringMix(buf);
+    else swapPitchVoice(take, preset);
   } catch (err) {
     if (token !== _advPitchApplyToken) return;
     console.warn("[studio] adv pitch failed:", err);
@@ -1849,19 +2024,13 @@ function updateAdvPitchSliderUi(root, m, k, value) {
   if (out) out.textContent = String(adv[k]);
 }
 
-async function commitAdvPitchSlider(root, take, pitchState, k) {
-  const m = current.mix || (current.mix = { ...DEFAULT_MIX });
-  const adv = ensureMixAdvPitch(m);
-  if (k === "retuneSpeed" && take) {
-    const pid = pitchFromRetuneSlider(adv.retuneSpeed);
-    ensureTakePitchState(take).preset = pid;
-    m.advPitch = pitchAdvDefaults(pid);
-    refreshMixSlidersUi(root, m);
-    await selectPitchPreset(root, take, pid, { ...pitchState, silent: true });
-    return;
-  }
-  if (k !== "stereoWidth" && take) {
-    await applyAdvPitchSliders(root, take, pitchState);
+async function commitAdvPitchSlider(root, take, pitchState, k, opts = {}) {
+  if (k === "stereoWidth") return;
+  if (!take) return;
+  await applyAdvPitchSliders(root, take, pitchState);
+  if (opts.resume && pitchState._resumeAfterAdv && pitchState.playFrom) {
+    pitchState._resumeAfterAdv = false;
+    void pitchState.playFrom(pitchState.lastGuideSec || 0);
   }
 }
 
@@ -2086,8 +2255,10 @@ function bindPreviewMix(root, take, aiRec) {
   });
 
   root.querySelectorAll("[data-adv-pitch]").forEach((inp) => {
+    let debounceTimer = null;
     inp.addEventListener("pointerdown", () => {
       if (inp.disabled) return;
+      pitchState._resumeAfterAdv = !!engine?.isPlaying;
       if (engine?.isPlaying) {
         pitchState.lastGuideSec = engine.getMixGuidePosition?.() || pitchState.lastGuideSec || 0;
         try { engine.stopMix(); } catch {}
@@ -2098,12 +2269,17 @@ function bindPreviewMix(root, take, aiRec) {
       const k = inp.getAttribute("data-adv-pitch");
       if (!k) return;
       updateAdvPitchSliderUi(root, m, k, inp.value);
+      clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => {
+        void commitAdvPitchSlider(root, take, { ...pitchState, silent: true }, k, { resume: false });
+      }, ADV_PITCH_DEBOUNCE_MS);
     });
     inp.addEventListener("change", () => {
       const k = inp.getAttribute("data-adv-pitch");
       if (!k) return;
+      clearTimeout(debounceTimer);
       bridge.haptic?.("light");
-      void commitAdvPitchSlider(root, take, { ...pitchState, silent: false }, k);
+      void commitAdvPitchSlider(root, take, { ...pitchState, silent: false }, k, { resume: true });
     });
   });
 
@@ -2147,8 +2323,8 @@ function bindPreviewMix(root, take, aiRec) {
     if (!take.buffer && take.blob) await engine?.hydrateTakeBuffer(take);
     if (!take.buffer) return;
     ensureTakePitchState(take).cache.none = take.buffer;
-    const tab = STYLE_TABS[m.styleTab] || STYLE_TABS.studio;
-    if (tab.pitch) ensureTakePitchState(take).preset = tab.pitch;
+    const tab = STYLE_TABS[m.styleTab] || STYLE_TABS.original;
+    if (tab.pitch != null) ensureTakePitchState(take).preset = tab.pitch;
     const prepared = current._previewPreparedTakeId === take.id;
     if (!prepared) void warmupPitchPresets(take);
     await selectPitchPreset(root, take, activePitchPreset(take), { ...pitchState, silent: true });

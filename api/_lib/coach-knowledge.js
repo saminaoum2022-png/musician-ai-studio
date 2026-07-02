@@ -109,9 +109,9 @@ NABADAI STUDIO — record your real voice over a song:
      - **Take tabs** (Take 1, 2, 3) to switch between attempts.
      - **Play preview** pill + waveform scrubber.
      - **Nabad AI card**: shows a recommended preset, finish style, pitch setting, match %, and **Apply AI Mix** (tap to apply; shows **Applied ✓** when active).
-     - **Style preset** grid: **Original** (no pitch correction — your raw vocal), **Natural**, **Studio**, **Pop**, **Hard Tune**, **Custom** (when you move sliders yourself).
+     - **Style preset** grid: **Original** (no pitch correction — your raw vocal), **Natural**, **Studio**, **Pop**, **Hard Tune**, **Melody Lock** (scale-locked trap/R&B tune — slide your voice to hear melody notes in the song key), **Custom** (when you move sliders yourself).
      - **Basic** tab: Voice, Music, Vocal gain sliders.
-     - **Advanced** tab: Noise gate, Compressor, Warm EQ, De-esser, Reverb, **Timing** offset, and pitch fine-tuning (**Retune speed**, **Humanize**, **Flex tune**, **Expression protection**, **Micro pitch filter**). Adjust Advanced pitch sliders, then **release** the slider to apply — playback pauses while you drag so it is easier to control. **Stereo width** is coming soon.
+     - **Advanced** tab: Noise gate, Compressor, Warm EQ, De-esser, Reverb, **Timing** offset, and pitch fine-tuning (**Retune speed**, **Humanize**, **Flex tune**, **Expression protection**, **Micro pitch filter**). Preview opens on **Original** (sliders at zero); moving any pitch slider switches to **Custom**. Pitch sliders apply live while you drag (playback pauses during the drag, then resumes when you release). **Stereo width** is coming soon.
      - **Finish style** (separate section): **Balanced**, **Warm**, **Bright**, or **Punchy** — polishes the final tone.
      - **Save to My Vocals** at the bottom.
   6. **Finalizing your mix** (loading screen): Nabad AI shows a **Nabad Score** and applies your finish style while rendering.

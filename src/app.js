@@ -75,6 +75,7 @@ import {
   COACH_PILL_DEFAULT,
 } from "./coach-generation.js";
 import { initTheme } from "./theme.js";
+import { initSoundsStudioOnce } from "./sounds-studio.js";
 import {
   initNabadVerificationUi,
   lyricsEditedAfterNabadDraft,
@@ -101,7 +102,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260702-214329";
+const APP_BUILD = "20260702-220209";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -5871,22 +5872,7 @@ function pickGreetingVariant(list) {
 // Contextual subtitle, prioritising: unfinished drafts → last action →
 // recent publish → first visit → generic. No async, so it appears instantly.
 function homeDeskDynamicSubtitle() {
-  // 1) Unfinished drafts — highest priority.
-  try {
-    const drafts = loadLibrary()
-      .filter((t) => libraryTrackNeedsContinue(t))
-      .sort((a, b) => Number(b.ts || 0) - Number(a.ts || 0));
-    const draft = _homeDeskContinueTrack || drafts[0];
-    if (draft) {
-      const title = String(draft.title || "").trim();
-      const list = title
-        ? [`Continue “${title}”`, "Your lyrics are waiting.", "Continue where you left off.", "Finish your last track"]
-        : ["Your lyrics are waiting.", "Continue where you left off.", "Finish your last track"];
-      return pickGreetingVariant(list);
-    }
-  } catch {}
-
-  // 2) Last meaningful action (within two weeks).
+  // Last meaningful action (within two weeks).
   const act = readCreateActivity();
   const recent = act && Number.isFinite(Number(act.ts)) && (Date.now() - Number(act.ts) < 14 * 86400000);
   if (recent && HOME_GREETING_VARIANTS[act.kind]) {
@@ -5941,25 +5927,7 @@ function continueIdeaFromLibraryTrack(track) {
 }
 
 function renderHomeDeskContinue() {
-  const draftBtn = document.getElementById("homeDeskQuickDraft");
-  const draftDesc = document.getElementById("homeDeskQuickDraftDesc");
-  if (!draftBtn) return;
-  const lib = loadLibrary()
-    .filter((t) => libraryTrackNeedsContinue(t))
-    .sort((a, b) => Number(b.ts || 0) - Number(a.ts || 0));
-  const track = lib[0] || null;
-  _homeDeskContinueTrack = track;
-  if (!track) {
-    draftBtn.hidden = true;
-    return;
-  }
-  draftBtn.hidden = false;
-  const title = String(track.title || "").trim();
-  if (draftDesc) {
-    draftDesc.textContent = title
-      ? `Continue “${title}” and finish your latest project.`
-      : "Continue where you left off and finish your latest project.";
-  }
+  /* Continue Draft removed from Create — no-op. */
 }
 
 function applyChallengeStartById(id, challengesMap) {
@@ -9454,13 +9422,6 @@ function bindHomeDeskOnce(page) {
   page.dataset.boundHomeDesk = "1";
   wireHomeDeskSegOnce();
   page.addEventListener("click", (e) => {
-    const cont = e.target?.closest?.("[data-home-card=\"draft\"]");
-    if (cont && page.contains(cont)) {
-      haptic("light");
-      recordCreateActivity("draft");
-      continueIdeaFromLibraryTrack(_homeDeskContinueTrack);
-      return;
-    }
     const promoCard = e.target?.closest?.("[data-home-card]");
     if (promoCard && page.contains(promoCard)) {
       haptic("light");
@@ -9509,6 +9470,11 @@ function bindHomeDeskOnce(page) {
           return;
         }
         try { openStudioLobby(); } catch { try { location.hash = "#/studio"; } catch {} }
+        scheduleApplyRoute();
+        return;
+      }
+      if (card === "sounds") {
+        try { location.hash = "#/sounds"; } catch {}
         scheduleApplyRoute();
         return;
       }
@@ -47555,6 +47521,11 @@ if (els.soundTempo && els.soundTempoLabel) {
   els.soundTempo.addEventListener("input", syncTempoLabel);
   syncTempoLabel();
 }
+const soundGenerateCostEl = document.getElementById("soundGenerateCost");
+if (soundGenerateCostEl) {
+  soundGenerateCostEl.textContent = `${formatCreditsAmount(SOUND_CREDIT_COST)} credits`;
+}
+initSoundsStudioOnce({ promptEl: els.soundPrompt, haptic });
 if (els.btnSoundGenerate) {
   els.btnSoundGenerate.addEventListener("click", async () => {
     const prompt = String(els.soundPrompt?.value || "").trim();

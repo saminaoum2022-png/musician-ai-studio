@@ -124,7 +124,7 @@
       onload="this.media='all'"
     />
     <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Display:wght@900&family=Inter:wght@900&display=swap" /></noscript>
-    <link rel="stylesheet" href="./styles.css?v=20260702-214329" />
+    <link rel="stylesheet" href="./styles.css?v=20260702-220209" />
 
     <meta name="description" content="Nabadai is an AI music studio. Hum a melody, write lyrics, and ship a song." />
     <meta property="og:type" content="website" />
@@ -507,70 +507,114 @@
           <div id="hubList" class="code" style="max-height:none"></div>
         </section>
 
-        <section class="wide soundsPage soundsPageNeon" data-route="sounds">
-          <div class="soundsNeonDecor" aria-hidden="true"></div>
-          <header class="soundsHeroHeader creditsHeader">
-            <a href="#/challenges" class="nabadBackBtn creditsBack soundsHeroBack" aria-label="Back to Home">
+        <section class="wide soundsStudio" data-route="sounds">
+          <header class="soundsStudioHead">
+            <a href="#/challenges" class="nabadBackBtn soundsStudioBack" aria-label="Back to Create">
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6 9 12l6 6"/></svg>
             </a>
-            <div class="soundsHeroTitleBlock">
-              <h2 class="soundsHeroTitle creditsTitle">Sounds</h2>
-              <p class="soundsHeroTagline">Loops · ambience · neon</p>
+            <div class="soundsStudioHeadCopy">
+              <p class="soundsStudioEyebrow">Imagine a sound</p>
+              <h2 class="soundsStudioTitle">Sounds</h2>
             </div>
+            <span class="soundsStudioMark" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" focusable="false">
+                <path d="M11 5 6 9H3v6h3l5 4V5Z"/>
+                <path d="M15.54 8.46a5 5 0 0 1 0 7.07"/>
+                <path d="M19.07 4.93a10 10 0 0 1 0 14.14"/>
+              </svg>
+            </span>
           </header>
-          <p class="hint soundsLead soundsLeadNeon">
-            Loops and ambience (games, podcasts, backgrounds). Priced at <strong>2.5 credits</strong> per generation.
-          </p>
-          <div class="soundsCard soundsCardNeon">
-            <label class="field grow">
-              <span class="label">Describe the sound</span>
-              <textarea id="soundPrompt" rows="4" maxlength="500" class="soundPromptArea" placeholder="Soft rain on a window, distant thunder, seamless loop…"></textarea>
-            </label>
-            <label class="soundOptRow">
-              <input id="soundLoop" type="checkbox" checked />
-              <span>Seamless loop</span>
-            </label>
-            <div class="soundTempoRow">
-              <span class="label">Tempo</span>
-              <input id="soundTempo" type="range" min="40" max="200" value="120" />
-              <span id="soundTempoLabel" class="soundTempoLabel">120 BPM</span>
+
+          <div class="soundsStudioBody">
+            <div class="soundsStudioPromptShell">
+              <label for="soundPrompt" class="srOnly">Describe the sound you want to create</label>
+              <textarea
+                id="soundPrompt"
+                rows="5"
+                maxlength="500"
+                class="soundsStudioPrompt"
+                placeholder="Rain on glass at midnight — soft, distant, seamless…"
+              ></textarea>
             </div>
-            <label class="field">
-              <span class="label">Key</span>
-              <select id="soundKeySelect" class="soundKeySelect">
-                <option value="Any">Any (auto)</option>
-                <option value="Cm">Cm</option>
-                <option value="C#m">C♯m</option>
-                <option value="Dm">Dm</option>
-                <option value="D#m">D♯m</option>
-                <option value="Em">Em</option>
-                <option value="Fm">Fm</option>
-                <option value="F#m">F♯m</option>
-                <option value="Gm">Gm</option>
-                <option value="G#m">G♯m</option>
-                <option value="Am">Am</option>
-                <option value="A#m">A♯m</option>
-                <option value="Bm">Bm</option>
-                <option value="C">C</option>
-                <option value="C#">C♯</option>
-                <option value="D">D</option>
-                <option value="D#">D♯</option>
-                <option value="E">E</option>
-                <option value="F">F</option>
-                <option value="F#">F♯</option>
-                <option value="G">G</option>
-                <option value="G#">G♯</option>
-                <option value="A">A</option>
-                <option value="A#">A♯</option>
-                <option value="B">B</option>
-              </select>
-            </label>
-            <label class="soundOptRow">
-              <input id="soundGrabLyrics" type="checkbox" />
-              <span>Capture lyric subtitles when available</span>
-            </label>
-            <p class="soundCostHint">Each sound costs <strong>2.5 credits</strong>.</p>
-            <button id="btnSoundGenerate" class="primary soundGenerateBtn" type="button">Generate sound (2.5 credits)</button>
+
+            <section class="soundsStudioInspired" aria-labelledby="soundInspiredTitle">
+              <h3 id="soundInspiredTitle" class="soundsStudioSectionLabel">Inspired by</h3>
+              <div class="soundsStudioChipRow" id="soundPresetChips">
+                <button type="button" class="soundsStudioChip" data-sound-preset="rain">Rain</button>
+                <button type="button" class="soundsStudioChip" data-sound-preset="ocean">Ocean</button>
+                <button type="button" class="soundsStudioChip" data-sound-preset="fire">Fire</button>
+                <button type="button" class="soundsStudioChip" data-sound-preset="nature">Nature</button>
+                <button type="button" class="soundsStudioChip" data-sound-preset="cinematic">Cinematic</button>
+                <button type="button" class="soundsStudioChip" data-sound-preset="scifi">Sci-Fi</button>
+                <button type="button" class="soundsStudioChip" data-sound-preset="gameui">Game UI</button>
+                <button type="button" class="soundsStudioChip" data-sound-preset="city">City</button>
+                <button type="button" class="soundsStudioChip" data-sound-preset="whoosh">Whoosh</button>
+                <button type="button" class="soundsStudioChip" data-sound-preset="wind">Wind</button>
+              </div>
+            </section>
+
+            <details class="soundsStudioAdvanced" id="soundAdvancedPanel">
+              <summary class="soundsStudioAdvancedSummary">
+                <span class="soundsStudioAdvancedLabel">Advanced</span>
+                <svg class="soundsStudioAdvancedChev" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                  <path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+              </summary>
+              <div class="soundsStudioAdvancedBody">
+                <label class="soundsStudioToggleRow">
+                  <span class="soundsStudioToggleText">Seamless loop</span>
+                  <input id="soundLoop" type="checkbox" class="soundsStudioSwitch" role="switch" checked />
+                </label>
+                <div class="soundsStudioField soundsStudioTempo">
+                  <span class="soundsStudioFieldLabel">Tempo</span>
+                  <div class="soundsStudioTempoRow">
+                    <input id="soundTempo" type="range" min="40" max="200" value="120" aria-label="Tempo" />
+                    <span id="soundTempoLabel" class="soundsStudioTempoValue">120 BPM</span>
+                  </div>
+                </div>
+                <label class="soundsStudioField">
+                  <span class="soundsStudioFieldLabel">Key</span>
+                  <select id="soundKeySelect" class="soundsStudioSelect">
+                    <option value="Any">Any (auto)</option>
+                    <option value="Cm">Cm</option>
+                    <option value="C#m">C♯m</option>
+                    <option value="Dm">Dm</option>
+                    <option value="D#m">D♯m</option>
+                    <option value="Em">Em</option>
+                    <option value="Fm">Fm</option>
+                    <option value="F#m">F♯m</option>
+                    <option value="Gm">Gm</option>
+                    <option value="G#m">G♯m</option>
+                    <option value="Am">Am</option>
+                    <option value="A#m">A♯m</option>
+                    <option value="Bm">Bm</option>
+                    <option value="C">C</option>
+                    <option value="C#">C♯</option>
+                    <option value="D">D</option>
+                    <option value="D#">D♯</option>
+                    <option value="E">E</option>
+                    <option value="F">F</option>
+                    <option value="F#">F♯</option>
+                    <option value="G">G</option>
+                    <option value="G#">G♯</option>
+                    <option value="A">A</option>
+                    <option value="A#">A♯</option>
+                    <option value="B">B</option>
+                  </select>
+                </label>
+                <label class="soundsStudioToggleRow">
+                  <span class="soundsStudioToggleText">Capture lyric subtitles when available</span>
+                  <input id="soundGrabLyrics" type="checkbox" class="soundsStudioSwitch" role="switch" />
+                </label>
+              </div>
+            </details>
+
+            <div class="soundsStudioAction">
+              <button id="btnSoundGenerate" class="soundsStudioGenerate primary" type="button">
+                <span class="soundsStudioGenerateText">Generate sound</span>
+                <span class="soundsStudioGenerateCost" id="soundGenerateCost">2.5 credits</span>
+              </button>
+            </div>
           </div>
         </section>
 
@@ -1387,7 +1431,7 @@
                 <span class="homeDeskPromoChev" aria-hidden="true">→</span>
               </button>
 
-              <button type="button" class="homeDeskPromoCard homeDeskStudioPromo homeDeskStudioPromo--featured homeDeskPromo--hero" data-home-card="studio" aria-label="NabadAi Studio — record your voice over a song or capture a quick take">
+              <button type="button" class="homeDeskPromoCard homeDeskStudioPromo homeDeskStudioPromo--featured" data-home-card="studio" aria-label="NabadAi Studio — record your voice over a song or capture a quick take">
                 <span class="homeDeskNewBadge" aria-hidden="true">NEW</span>
                 <span class="homeDeskPromoVisual homeDeskPromoVisual--studio" aria-hidden="true">
                   <span class="homeDeskStudioTileWrap">
@@ -1417,12 +1461,10 @@
                   <button type="button" class="homeDeskPromoCard homeDeskPhotoPromo homeDeskPromo--quick" data-home-card="photo" aria-label="Photo Mood — create a complete song from a single photo">
                     <span class="homeDeskPromoVisual homeDeskPromoVisual--photo" aria-hidden="true">
                       <span class="homeDeskPhotoTileWrap">
-                        <span class="homeDeskPhotoPulse" aria-hidden="true"></span>
                         <span class="homeDeskPhotoTile">
                           <svg class="homeDeskPhotoIco" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
                             <path fill="currentColor" d="M5 4.5A2.5 2.5 0 0 0 2.5 7v10A2.5 2.5 0 0 0 5 19.5h14a2.5 2.5 0 0 0 2.5-2.5V7A2.5 2.5 0 0 0 19 4.5H5Zm0 1.5h14c.55 0 1 .45 1 1v7.2l-3.33-3.32a1.8 1.8 0 0 0-2.54 0L10 15.01l-1.63-1.63a1.8 1.8 0 0 0-2.54 0L4 15.21V7c0-.55.45-1 1-1Zm12.5 2.2a1.7 1.7 0 1 0 0 3.4 1.7 1.7 0 0 0 0-3.4ZM7.1 14.44a.3.3 0 0 1 .43 0L10 16.9l5.19-5.18a.3.3 0 0 1 .42 0L20 16.1V17c0 .55-.45 1-1 1H5c-.55 0-1-.45-1-1v-.26l3.1-2.3Z"/>
                           </svg>
-                          <span class="homeDeskPhotoSpark" aria-hidden="true">✦</span>
                         </span>
                       </span>
                     </span>
@@ -1436,7 +1478,6 @@
                   <button type="button" class="homeDeskPromoCard homeDeskPersonaPromo homeDeskPromo--quick" data-home-card="persona" aria-label="Persona — save your voice once and use it across every song">
                     <span class="homeDeskPromoVisual homeDeskPromoVisual--persona" aria-hidden="true">
                       <span class="homeDeskPersonaTileWrap">
-                        <span class="homeDeskPersonaPulse" aria-hidden="true"></span>
                         <span class="homeDeskPersonaTile">
                           <svg class="homeDeskPersonaMicIco" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
                             <path fill="currentColor" d="M12 14a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v5a3 3 0 0 0 3 3Z"/>
@@ -1452,20 +1493,21 @@
                     <span class="homeDeskPromoChev" aria-hidden="true">→</span>
                   </button>
 
-                  <button type="button" class="homeDeskPromoCard homeDeskDraftPromo homeDeskPromo--quick" data-home-card="draft" id="homeDeskQuickDraft" hidden aria-label="Continue Draft — finish your latest project">
-                    <span class="homeDeskPromoVisual homeDeskPromoVisual--draft" aria-hidden="true">
-                      <span class="homeDeskDraftTileWrap">
-                        <span class="homeDeskDraftTile">
-                          <svg class="homeDeskDraftIco" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
-                            <path d="M12 20h9"/>
-                            <path d="M16.5 3.5a2.121 2.121 0 1 1 3 3L7 19l-4 1 1-4 12.5-12.5Z"/>
+                  <button type="button" class="homeDeskPromoCard homeDeskSoundsPromo homeDeskPromo--quick" data-home-card="sounds" aria-label="Sounds — create sound effects, ambience and short AI audio clips">
+                    <span class="homeDeskPromoVisual homeDeskPromoVisual--sounds" aria-hidden="true">
+                      <span class="homeDeskSoundsTileWrap">
+                        <span class="homeDeskSoundsTile">
+                          <svg class="homeDeskSoundsIco" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+                            <path d="M11 5 6 9H3v6h3l5 4V5Z"/>
+                            <path d="M15.54 8.46a5 5 0 0 1 0 7.07"/>
+                            <path d="M19.07 4.93a10 10 0 0 1 0 14.14"/>
                           </svg>
                         </span>
                       </span>
                     </span>
                     <span class="homeDeskPromoCopy">
-                      <span class="homeDeskPromoTitle" id="homeDeskQuickDraftTitle">Continue Draft</span>
-                      <span class="homeDeskPromoDesc" id="homeDeskQuickDraftDesc">Continue where you left off and finish your latest project.</span>
+                      <span class="homeDeskPromoTitle" id="homeDeskSoundsPromoTitle">Sounds</span>
+                      <span class="homeDeskPromoDesc">Create sound effects, ambience and short AI audio clips.</span>
                     </span>
                     <span class="homeDeskPromoChev" aria-hidden="true">→</span>
                   </button>
@@ -3219,16 +3261,6 @@
             <section class="settingsSection" aria-labelledby="settingsCreatorTitle">
               <h2 id="settingsCreatorTitle" class="settingsSectionLabel">Creator tools</h2>
               <div class="settingsList">
-                <a href="#/sounds" class="settingsRow settingsRowLink" data-route-link="sounds">
-                  <span class="settingsRowIco" aria-hidden="true">
-                    <svg viewBox="0 0 24 24"><path d="M3 12c2 0 2-4 4-4s2 8 4 8 2-12 4-12 2 8 4 8 2-4 2-4"/></svg>
-                  </span>
-                  <span class="settingsRowBody">
-                    <span class="settingsRowTitle">Sounds</span>
-                    <span class="settingsRowSub">Loops and ambience</span>
-                  </span>
-                  <span class="settingsRowChev" aria-hidden="true">›</span>
-                </a>
                 <a href="#/mentor" class="settingsRow settingsRowLink" data-route-link="mentor">
                   <span class="settingsRowIco" aria-hidden="true">
                     <svg viewBox="0 0 24 24"><path d="M2.5 12h1.8M19.7 12H22"/><path d="M6 12c0-3.2 1.6-3.2 3.2 0s3.2 3.2 4.8 0 3.2-3.2 4.8 0"/></svg>
@@ -4200,6 +4232,6 @@
     </script>
     <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
     <script src="./env.client.js" onerror="void 0"></script>
-    <script type="module" src="./src/app.js?v=20260702-214329"></script>
+    <script type="module" src="./src/app.js?v=20260702-220209"></script>
   </body>
 </html>

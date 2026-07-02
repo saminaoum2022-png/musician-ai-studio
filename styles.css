@@ -20113,209 +20113,363 @@ a.vwPrimary,
   margin: 14px 0 2px;
 }
 
-/* ---------- Sounds (Suno /generate/sounds) ---------- */
-.soundsPage{
+/* ---------- Sounds studio (AI creation, not settings) ---------- */
+.soundsStudio{
   display: flex;
   flex-direction: column;
-  gap: 14px;
-  padding: 4px 0 24px;
+  gap: 0;
+  padding: 4px 0 28px;
   min-width: 0;
   max-width: 100%;
   overflow-x: hidden;
   animation: sectionFadeIn 260ms ease;
 }
-.soundsPage *{ min-width: 0; max-width: 100%; }
-.soundsPage textarea,
-.soundsPage select{
-  word-break: break-word;
+.soundsStudio *{ min-width: 0; max-width: 100%; }
+.soundsStudioHead{
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 2px 0 20px;
 }
-.soundsLead{
+.soundsStudioBack{
+  margin-top: 2px;
+}
+.soundsStudioHeadCopy{
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.soundsStudioEyebrow{
+  margin: 0 0 4px;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: rgba(223, 231, 251, 0.52);
+}
+.soundsStudioTitle{
   margin: 0;
-  line-height: 1.45;
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  color: #fff;
 }
-.soundsCard{
-  border-radius: 16px;
-  border: 1px solid rgba(255,255,255,0.10);
-  background: linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.012));
-  padding: 14px 14px 16px;
+.soundsStudioMark{
+  flex: 0 0 auto;
+  width: 28px;
+  height: 28px;
+  margin-top: 4px;
+  color: rgba(94, 234, 212, 0.88);
+  opacity: 0.9;
+}
+.soundsStudioMark svg{
+  width: 28px;
+  height: 28px;
+  display: block;
+}
+.soundsStudioBody{
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 28px;
 }
-.soundPromptArea{
+.soundsStudioPromptShell{
+  border-radius: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.025);
+  padding: 2px;
+}
+.soundsStudioPrompt{
   width: 100%;
   box-sizing: border-box;
-  border-radius: 12px;
-  border: 1px solid rgba(255,255,255,0.14);
-  background: rgba(8,12,20,0.46);
+  display: block;
+  min-height: 132px;
+  padding: 18px 18px 16px;
+  border: 0;
+  border-radius: 18px;
+  background: transparent;
   color: #fff;
-  padding: 12px 14px;
-  font-size: 16px;
-  line-height: 1.45;
+  font-size: 17px;
+  font-weight: 500;
+  line-height: 1.55;
+  letter-spacing: -0.02em;
   resize: vertical;
-  min-height: 96px;
+  -webkit-appearance: none;
+  appearance: none;
 }
-.soundOptRow{
+.soundsStudioPrompt::placeholder{
+  color: rgba(223, 231, 251, 0.38);
+}
+.soundsStudioPrompt:focus{
+  outline: none;
+}
+.soundsStudioPromptShell:focus-within{
+  border-color: rgba(35, 213, 171, 0.22);
+  background: rgba(255, 255, 255, 0.035);
+}
+.soundsStudioSectionLabel{
+  margin: 0 0 12px;
+  padding: 0 2px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(223, 231, 251, 0.42);
+}
+.soundsStudioChipRow{
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.soundsStudioChip{
+  -webkit-appearance: none;
+  appearance: none;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(248, 250, 255, 0.88);
+  border-radius: 999px;
+  padding: 9px 14px;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 160ms ease, border-color 160ms ease, color 160ms ease, opacity 160ms ease;
+  -webkit-tap-highlight-color: transparent;
+}
+.soundsStudioChip:hover{
+  background: rgba(255, 255, 255, 0.07);
+  border-color: rgba(255, 255, 255, 0.14);
+}
+.soundsStudioChip:active{
+  opacity: 0.72;
+}
+.soundsStudioChip.is-active{
+  border-color: rgba(35, 213, 171, 0.32);
+  background: rgba(35, 213, 171, 0.1);
+  color: #fff;
+}
+.soundsStudioAdvanced{
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  padding-top: 4px;
+}
+.soundsStudioAdvancedSummary{
   display: flex;
   align-items: center;
-  gap: 10px;
-  font-size: 13px;
-  color: rgba(232,238,247,0.88);
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 2px;
+  list-style: none;
+  cursor: pointer;
+  color: rgba(232, 238, 247, 0.72);
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
 }
-.soundOptRow input{
+.soundsStudioAdvancedSummary::-webkit-details-marker{ display: none; }
+.soundsStudioAdvancedChev{
   width: 18px;
   height: 18px;
+  flex: 0 0 auto;
+  opacity: 0.5;
+  transition: transform 180ms ease, opacity 180ms ease;
 }
-.soundTempoRow{
-  display: grid;
-  grid-template-columns: auto 1fr auto;
-  gap: 10px;
-  align-items: center;
+.soundsStudioAdvanced[open] .soundsStudioAdvancedChev{
+  transform: rotate(180deg);
+  opacity: 0.72;
 }
-.soundTempoRow .label{
-  font-size: 13px;
+.soundsStudioAdvancedBody{
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 0 2px 8px;
+}
+.soundsStudioField{
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.soundsStudioFieldLabel{
+  font-size: 11px;
   font-weight: 700;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: rgba(232,238,247,0.55);
+  color: rgba(223, 231, 251, 0.42);
 }
-.soundTempoRow input[type="range"]{
-  width: 100%;
-}
-.soundTempoLabel{
-  font-size: 13px;
-  font-variant-numeric: tabular-nums;
-  color: rgba(232,238,247,0.72);
-  min-width: 72px;
-  text-align: right;
-}
-.soundKeySelect{
+.soundsStudioSelect{
   width: 100%;
   min-height: 44px;
+  box-sizing: border-box;
   border-radius: 12px;
-  border: 1px solid rgba(255,255,255,0.14);
-  background: rgba(8,12,20,0.46);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.03);
   color: #fff;
   padding: 0 12px;
   font-size: 16px;
 }
-.soundCostHint{
-  margin: 4px 0 0;
-  font-size: 13.5px;
-  color: rgba(232,238,247,0.62);
+.soundsStudioTempoRow{
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 12px;
+  align-items: center;
 }
-.soundGenerateBtn{
+.soundsStudioTempoRow input[type="range"]{
   width: 100%;
-  margin-top: 4px;
 }
-
-/* ---------- Sounds — neon studio treatment (mockup-inspired) ---------- */
-.soundsPageNeon{
-  position: relative;
-  isolation: isolate;
-  padding-top: 8px;
+.soundsStudioTempoValue{
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  color: rgba(223, 231, 251, 0.62);
+  min-width: 72px;
+  text-align: right;
 }
-.soundsNeonDecor{
-  position: absolute;
-  left: 50%;
-  top: 0;
-  width: min(120%, 520px);
-  height: 200px;
-  transform: translateX(-50%);
-  z-index: 0;
-  pointer-events: none;
-  background:
-    radial-gradient(ellipse 70% 55% at 50% 0%, rgba(124,92,255,0.22), transparent 72%),
-    radial-gradient(ellipse 55% 45% at 18% 18%, rgba(35,213,171,0.12), transparent 68%),
-    radial-gradient(ellipse 50% 40% at 88% 22%, rgba(124,92,255,0.14), transparent 70%);
-  opacity: 0.95;
-  filter: blur(0px);
+.soundsStudioToggleRow{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 8px 2px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
 }
-.soundsPageNeon > *:not(.soundsNeonDecor){
-  position: relative;
-  z-index: 1;
-}
-.soundsHeroHeader{
-  flex-wrap: wrap;
-  align-items: flex-start;
-}
-.soundsHeroTitleBlock{
+.soundsStudioToggleText{
   flex: 1 1 auto;
   min-width: 0;
+  font-size: 14px;
+  line-height: 1.45;
+  color: rgba(232, 238, 247, 0.82);
 }
-.soundsHeroTitle{
+.soundsStudioSwitch{
+  flex: 0 0 auto;
+  appearance: none;
+  -webkit-appearance: none;
+  width: 44px;
+  height: 26px;
   margin: 0;
-  font-size: 26px;
-  font-weight: 900;
-  letter-spacing: -0.04em;
-  background: linear-gradient(115deg, #f4f0ff 0%, #c9b8ff 38%, #7cf0e0 88%);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-  text-shadow: 0 0 42px rgba(124,92,255,0.25);
-}
-.soundsHeroTagline{
-  margin: 4px 0 0;
-  font-size: 11px;
-  font-weight: 800;
-  letter-spacing: 0.22em;
-  text-transform: uppercase;
-  color: rgba(124,92,255,0.55);
-}
-.soundsLeadNeon{
-  color: rgba(232,238,247,0.72);
-  border-left: 3px solid transparent;
-  border-image: linear-gradient(180deg, rgba(124,92,255,0.95), rgba(35,213,171,0.85)) 1;
-  padding-left: 12px;
-}
-.soundsCardNeon{
-  position: relative;
-  border-radius: 20px;
-  border: 1px solid transparent;
-  background:
-    linear-gradient(180deg, rgba(26,30,44,0.92), rgba(14,16,24,0.96)) padding-box,
-    linear-gradient(135deg, rgba(124,92,255,0.55), rgba(35,213,171,0.45), rgba(124,92,255,0.35)) border-box;
-  box-shadow:
-    0 0 0 1px rgba(124,92,255,0.12) inset,
-    0 20px 56px -24px rgba(124,92,255,0.45),
-    0 28px 70px -30px rgba(35,213,171,0.22);
-}
-.soundsPageNeon .soundPromptArea,
-.soundsPageNeon .soundKeySelect{
-  border-color: rgba(124,92,255,0.22);
-  background: rgba(10,12,20,0.72);
-  box-shadow: 0 0 0 1px rgba(35,213,171,0.06) inset;
-}
-.soundsPageNeon .soundOptRow{
-  color: rgba(232,238,247,0.82);
-}
-.soundsPageNeon .soundTempoRow .label{
-  color: rgba(124,180,255,0.55);
-}
-.soundsPageNeon .soundCostHint{
-  color: rgba(200,210,232,0.62);
-}
-.soundsPageNeon .soundGenerateBtn.primary,
-.soundsPageNeon .soundGenerateBtn{
   border: 0;
-  border-radius: 14px;
-  font-weight: 800;
-  letter-spacing: 0.02em;
-  background: linear-gradient(135deg, #7c5cff, #5a8cff 48%, #23d5ab);
-  color: #0a0c12;
-  box-shadow:
-    0 14px 36px -8px rgba(124,92,255,0.55),
-    0 10px 28px -10px rgba(35,213,171,0.35),
-    inset 0 1px 0 rgba(255,255,255,0.22);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.14);
+  cursor: pointer;
+  position: relative;
+  transition: background 180ms ease;
+  -webkit-tap-highlight-color: transparent;
 }
-.soundsPageNeon .soundGenerateBtn:hover{
-  filter: brightness(1.06);
+.soundsStudioSwitch::after{
+  content: "";
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.28);
+  transition: transform 180ms ease;
 }
-.soundsPageNeon .soundGenerateBtn:active{
-  transform: scale(0.985);
+.soundsStudioSwitch:checked{
+  background: rgba(35, 213, 171, 0.82);
 }
-@media (prefers-reduced-motion: reduce){
-  .soundsPageNeon .soundGenerateBtn:active{ transform: none; }
+.soundsStudioSwitch:checked::after{
+  transform: translateX(18px);
+}
+.soundsStudioSwitch:focus-visible{
+  outline: 2px solid rgba(35, 213, 171, 0.45);
+  outline-offset: 2px;
+}
+.soundsStudioAction{
+  padding-top: 4px;
+}
+.soundsStudioGenerate.primary{
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 52px;
+  margin: 0;
+  padding: 0 20px;
+  border: 0;
+  border-radius: 16px;
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  background: linear-gradient(135deg, #23d5ab 0%, #12b896 100%);
+  color: #041018;
+  box-shadow: none;
+  transition: opacity 160ms ease, filter 160ms ease;
+}
+.soundsStudioGenerate.primary:hover{
+  filter: brightness(1.04);
+}
+.soundsStudioGenerate.primary:active{
+  opacity: 0.88;
+}
+.soundsStudioGenerate.primary:disabled{
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.soundsStudioGenerateCost{
+  font-size: 13px;
+  font-weight: 600;
+  opacity: 0.68;
+}
+html[data-theme="light"] .soundsStudioEyebrow{
+  color: rgba(71, 88, 110, 0.72);
+}
+html[data-theme="light"] .soundsStudioTitle{
+  color: var(--text);
+}
+html[data-theme="light"] .soundsStudioMark{
+  color: #12b896;
+}
+html[data-theme="light"] .soundsStudioPromptShell{
+  border-color: rgba(15, 23, 40, 0.08);
+  background: rgba(255, 255, 255, 0.72);
+}
+html[data-theme="light"] .soundsStudioPrompt{
+  color: var(--text);
+}
+html[data-theme="light"] .soundsStudioPrompt::placeholder{
+  color: rgba(71, 88, 110, 0.45);
+}
+html[data-theme="light"] .soundsStudioPromptShell:focus-within{
+  border-color: rgba(18, 184, 150, 0.28);
+  background: #fff;
+}
+html[data-theme="light"] .soundsStudioSectionLabel,
+html[data-theme="light"] .soundsStudioFieldLabel{
+  color: rgba(71, 88, 110, 0.62);
+}
+html[data-theme="light"] .soundsStudioChip{
+  border-color: rgba(15, 23, 40, 0.1);
+  background: rgba(255, 255, 255, 0.88);
+  color: var(--text);
+}
+html[data-theme="light"] .soundsStudioChip.is-active{
+  border-color: rgba(18, 184, 150, 0.35);
+  background: rgba(18, 184, 150, 0.1);
+}
+html[data-theme="light"] .soundsStudioAdvanced{
+  border-top-color: rgba(15, 23, 40, 0.08);
+}
+html[data-theme="light"] .soundsStudioAdvancedSummary{
+  color: var(--muted);
+}
+html[data-theme="light"] .soundsStudioToggleText{
+  color: var(--text);
+}
+html[data-theme="light"] .soundsStudioSwitch{
+  background: rgba(15, 23, 40, 0.12);
+}
+html[data-theme="light"] .soundsStudioSwitch:checked{
+  background: rgba(18, 184, 150, 0.82);
+}
+html[data-theme="light"] .soundsStudioSelect{
+  border-color: rgba(15, 23, 40, 0.1);
+  background: rgba(255, 255, 255, 0.92);
+  color: var(--text);
+}
+html[data-theme="light"] .soundsStudioTempoValue{
+  color: var(--muted);
 }
 
 /* ---------- Profile — Nabad sound certification badge (gated) ----------
@@ -27758,7 +27912,7 @@ body[data-route="challenges"] .app{
 .homeDeskCreateStack .homeDeskSongPromo,
 .homeDeskCreateStack .homeDeskPersonaPromo,
 .homeDeskCreateStack .homeDeskPhotoPromo,
-.homeDeskCreateStack .homeDeskDraftPromo{
+.homeDeskCreateStack .homeDeskSoundsPromo{
   display: flex;
   flex-direction: row;
   align-items: center;
@@ -27779,7 +27933,7 @@ body[data-route="challenges"] .app{
 .homeDeskCreateStack .homeDeskPromo--quick,
 .homeDeskCreateStack .homeDeskPersonaPromo,
 .homeDeskCreateStack .homeDeskPhotoPromo,
-.homeDeskCreateStack .homeDeskDraftPromo{
+.homeDeskCreateStack .homeDeskSoundsPromo{
   padding: 12px 14px;
   gap: 12px;
 }
@@ -27806,7 +27960,7 @@ body[data-route="challenges"] .app{
 }
 .homeDeskCreateStack .homeDeskPromo--quick .homeDeskPromoVisual--photo .homeDeskPhotoTileWrap,
 .homeDeskCreateStack .homeDeskPromo--quick .homeDeskPromoVisual--persona .homeDeskPersonaTileWrap,
-.homeDeskCreateStack .homeDeskPromo--quick .homeDeskPromoVisual--draft .homeDeskDraftTileWrap{
+.homeDeskCreateStack .homeDeskPromo--quick .homeDeskPromoVisual--sounds .homeDeskSoundsTileWrap{
   transform: scale(0.52);
 }
 .homeDeskCreateStack .homeDeskPromoCopy{
@@ -27840,7 +27994,7 @@ body[data-route="challenges"] .app{
   font-size: 12px;
   line-height: 1.45;
 }
-.homeDeskDraftTileWrap{
+.homeDeskSoundsTileWrap{
   position: relative;
   width: 108px;
   height: 108px;
@@ -27848,7 +28002,7 @@ body[data-route="challenges"] .app{
   align-items: center;
   justify-content: center;
 }
-.homeDeskDraftTile{
+.homeDeskSoundsTile{
   position: relative;
   width: 72px;
   height: 72px;
@@ -27856,33 +28010,50 @@ body[data-route="challenges"] .app{
   display: flex;
   align-items: center;
   justify-content: center;
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.06);
   background: rgba(255, 255, 255, 0.04);
 }
-.homeDeskDraftIco{
+.homeDeskSoundsIco{
   width: 28px;
   height: 28px;
-  color: rgba(223, 231, 251, 0.72);
+  display: block;
 }
-.challengesPage.homeDesk .homeDeskDraftPromo{
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  background: rgba(255, 255, 255, 0.02);
+.homeDeskCreateStack .homeDeskSoundsIco{
+  width: 50px;
+  height: 50px;
 }
-.challengesPage.homeDesk .homeDeskDraftTile{
-  background: rgba(255, 255, 255, 0.06);
-  border-color: rgba(255, 255, 255, 0.14);
+.homeDeskPromoVisual--sounds .homeDeskSoundsTileWrap{
+  transform: scale(0.68);
+  transform-origin: center center;
 }
 .challengesPage.homeDesk .homeDeskQuickStartsStack .homeDeskPhotoPromo,
 .challengesPage.homeDesk .homeDeskQuickStartsStack .homeDeskPersonaPromo,
-.challengesPage.homeDesk .homeDeskQuickStartsStack .homeDeskDraftPromo{
+.challengesPage.homeDesk .homeDeskQuickStartsStack .homeDeskSoundsPromo{
   border: 1px solid rgba(255, 255, 255, 0.08);
   background: rgba(255, 255, 255, 0.015);
   box-shadow: none;
 }
 .challengesPage.homeDesk .homeDeskQuickStartsStack .homeDeskPhotoPromo:active,
 .challengesPage.homeDesk .homeDeskQuickStartsStack .homeDeskPersonaPromo:active,
-.challengesPage.homeDesk .homeDeskQuickStartsStack .homeDeskDraftPromo:active{
+.challengesPage.homeDesk .homeDeskQuickStartsStack .homeDeskSoundsPromo:active{
   background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.12);
+}
+.challengesPage.homeDesk .homeDeskQuickStartsStack .homeDeskPhotoTile,
+.challengesPage.homeDesk .homeDeskQuickStartsStack .homeDeskPersonaTile,
+.challengesPage.homeDesk .homeDeskQuickStartsStack .homeDeskSoundsTile{
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  box-shadow: none;
+}
+.challengesPage.homeDesk .homeDeskQuickStartsStack .homeDeskPhotoIco{
+  color: #f472b6;
+}
+.challengesPage.homeDesk .homeDeskQuickStartsStack .homeDeskPersonaMicIco{
+  color: #a78bfa;
+}
+.challengesPage.homeDesk .homeDeskQuickStartsStack .homeDeskSoundsIco{
+  color: #5eead4;
 }
 .homeDeskCreateStack .homeDeskPromoCopy p,
 .homeDeskCreateStack .homeDeskPromoCopy .homeDeskPromoDesc{
@@ -31336,9 +31507,9 @@ body[data-route="mashup"] .app{
   display: none;
 }
 .challengesPage.homeDesk .homeDeskSongPromo{
-  border-color: rgba(35, 213, 171, 0.22);
+  border-color: rgba(35, 213, 171, 0.12);
   background:
-    linear-gradient(135deg, rgba(35, 213, 171, 0.06), rgba(255, 255, 255, 0.02));
+    linear-gradient(135deg, rgba(35, 213, 171, 0.04), rgba(255, 255, 255, 0.02));
 }
 .challengesPage.homeDesk .homeDeskSectionKicker{
   color: rgba(223, 231, 251, 0.72);
@@ -31351,8 +31522,8 @@ body[data-route="mashup"] .app{
   background: rgba(255, 255, 255, 0.05);
 }
 .challengesPage.homeDesk .homeDeskSongPromo:active{
-  background: linear-gradient(135deg, rgba(35, 213, 171, 0.1), rgba(255, 255, 255, 0.04));
-  border-color: rgba(35, 213, 171, 0.32);
+  background: linear-gradient(135deg, rgba(35, 213, 171, 0.07), rgba(255, 255, 255, 0.04));
+  border-color: rgba(35, 213, 171, 0.18);
 }
 .challengesPage.homeDesk .homeDeskPersonaPromo:active,
 .challengesPage.homeDesk .homeDeskMashupPromo:active{
@@ -31379,7 +31550,8 @@ body[data-route="mashup"] .app{
 .challengesPage.homeDesk .homeDeskPersonaTile,
 .challengesPage.homeDesk .homeDeskPhotoTile,
 .challengesPage.homeDesk .homeDeskStudioTile,
-.challengesPage.homeDesk .homeDeskMashupTile{
+.challengesPage.homeDesk .homeDeskMashupTile,
+.challengesPage.homeDesk .homeDeskSoundsTile{
   padding: 0;
   box-shadow: none;
 }
@@ -31387,7 +31559,8 @@ body[data-route="mashup"] .app{
 .challengesPage.homeDesk .homeDeskPersonaTile::before,
 .challengesPage.homeDesk .homeDeskPhotoTile::before,
 .challengesPage.homeDesk .homeDeskStudioTile::before,
-.challengesPage.homeDesk .homeDeskMashupTile::before{
+.challengesPage.homeDesk .homeDeskMashupTile::before,
+.challengesPage.homeDesk .homeDeskSoundsTile::before{
   display: none;
 }
 .challengesPage.homeDesk .homeDeskSongTile{
@@ -42360,22 +42533,16 @@ body[data-route="studio"] .deskRail { display: none !important; }
   font-weight: 500;
 }
 
-/* Studio card — subtle emphasis (Nabad's key differentiator). Slightly stronger
-   purple border + accent wash, without changing size/height. Placed after the
-   neutralising rules so it wins by source order. */
+/* Studio card — secondary emphasis: neutral shell, purple icon tile only. */
 .challengesPage.homeDesk .homeDeskStudioPromo--featured {
   position: relative;
-  border-color: rgba(124, 92, 255, 0.48);
-  background:
-    radial-gradient(130% 110% at 0% 0%, rgba(124, 92, 255, 0.12), transparent 60%),
-    rgba(255, 255, 255, 0.02);
-  box-shadow: 0 0 0 1px rgba(124, 92, 255, 0.08), 0 8px 28px rgba(124, 92, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.02);
+  box-shadow: none;
 }
 .challengesPage.homeDesk .homeDeskStudioPromo--featured:active {
-  border-color: rgba(124, 92, 255, 0.55);
-  background:
-    radial-gradient(130% 110% at 0% 0%, rgba(124, 92, 255, 0.16), transparent 60%),
-    rgba(255, 255, 255, 0.04);
+  border-color: rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.05);
 }
 .challengesPage.homeDesk .homeDeskStudioPromo--featured .homeDeskStudioTile {
   background: rgba(124, 92, 255, 0.14);

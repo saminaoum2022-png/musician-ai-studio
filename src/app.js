@@ -52,10 +52,21 @@ import { DEFAULT_SONG_COVER_URL, isLogoCoverUrl, normalizeSongCoverUrl, playerEm
 import { initCoverArtOverlay, syncCoverArtOverlay } from "./cover-art/overlay.js";
 import {
   clearGenerationPending,
+  GENERATION_VARIANT_COUNT,
   getGenerationPending,
   libraryGeneratingRowsHtml,
   setGenerationPending,
 } from "./generation-pending.js";
+import {
+  beginCoachGenerationStatus,
+  bumpCoachGenerationStillWorking,
+  cancelCoachGenerationStatus,
+  finishCoachGenerationReady,
+  isCoachStatusActive,
+  syncCoachGenerationStatusFromPending,
+  configureCoachGeneration,
+  COACH_PILL_DEFAULT,
+} from "./coach-generation.js";
 import { initTheme } from "./theme.js";
 import {
   initNabadVerificationUi,
@@ -83,7 +94,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260702-140413";
+const APP_BUILD = "20260702-143419";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -3743,6 +3754,9 @@ function applyRoute({ passGen } = {}) {
   syncGenerateOrbVisibility();
   renderGenerateReadyDot();
   updateProfilePersonaRow();
+  try {
+    syncCoachGenerationStatusFromPending(getGenerationPending());
+  } catch {}
   try {
     updatePlayerSecondaryChrome();
   } catch {}
@@ -15218,12 +15232,7 @@ function pushLocalGenerationReadyActivity(entries) {
       : "Follows, likes, comments, milestones, and remixes.";
   }
   try {
-    showToast(
-      variantCount > 1
-        ? "Your 2 songs are ready — check Library."
-        : `"${titles[0] || "Your song"}" is ready.`,
-      { icon: "✓", durationMs: 5200 },
-    );
+    finishCoachGenerationReady({ variantCount });
   } catch {}
 }
 
@@ -42665,6 +42674,7 @@ function dismissPendingBackendTask({ silent = false, skipRecoverSave = false } =
     document.body.classList.remove("isBusy");
     if (els.btnLoadingDismiss) els.btnLoadingDismiss.hidden = true;
   } catch {}
+  try { cancelCoachGenerationStatus(); } catch {}
   if (!silent) {
     try { setStatus("Cleared. You can start a new generation."); } catch {}
     try {
@@ -42798,18 +42808,10 @@ function restoreCreatePageOnRouteEnter() {
         syncGenerationPendingLibraryUi();
       }
     }
-    if (busyCount <= 0) {
-      try {
-        setLoading(true, {
-          title: "Processing in backend...",
-          sub: "This can take 30–120 seconds.",
-          dismissible: true,
-        });
-      } catch {}
-    }
     if (tid && !generatePollTimer && typeof _startGeneratePolling === "function") {
       try { _startGeneratePolling(); } catch {}
     }
+    try { syncCoachGenerationStatusFromPending(getGenerationPending()); } catch {}
   } else {
     try { setGenerateFieldsLocked(false); } catch {}
   }
@@ -44493,6 +44495,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
     // *successful* generation (already wired in the SUCCESS branch above).
     setGenerateFieldsLocked(false);
     setLoading(false);
+    try { cancelCoachGenerationStatus(); } catch {}
     setProgress(0);
     const info = failureInfo || { kind: "generic", headline: "Generation failed", detail: "" };
     // Dump everything Suno told us into the console so we (and the user)
@@ -44647,11 +44650,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
           setGenerateBtn("Check status", false, "resume");
           setStatus("Still processing in backend. Tap Check status.");
           setGenerateFieldsLocked(false);
-          setLoading(true, {
-            title: "Processing in backend...",
-            sub: "You can keep using the app. Tap Check status anytime, or × to clear.",
-            dismissible: true,
-          });
+          try { bumpCoachGenerationStillWorking(); } catch {}
         }
       } catch (err) {
         consecutiveFetchErrors += 1;
@@ -44979,13 +44978,9 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       sunoTaskId = resumeTask;
       savePendingBackendTask(resumeTask);
       setStatus("Checking backend status...");
-      setLoading(true, {
-        title: "Processing in backend...",
-        sub: "Checking latest status...",
-        dismissible: true,
-      });
       setGenerateBtn("Checking...", true, "resume");
       startGeneratePolling();
+      try { syncCoachGenerationStatusFromPending(getGenerationPending()); } catch {}
       return;
     }
     const promptText = String(els.sunoPrompt?.value || "").trim();
@@ -45037,11 +45032,6 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       els.btnSunoStems.disabled = true;
       if (els.btnSunoMultiStems) els.btnSunoMultiStems.disabled = true;
       setProgress(5);
-      setLoading(true, {
-        title: "Processing in backend...",
-        sub: "This can take 30–120 seconds.",
-        dismissible: true,
-      });
 
       applyMaqamToStyleInput();
       const userPrompt = (els.sunoPrompt?.value || "").trim();
@@ -45434,6 +45424,8 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
           title: String(els.sunoTitle?.value || "").trim(),
         });
         syncGenerationPendingLibraryUi();
+        try { beginCoachGenerationStatus({ variantCount: GENERATION_VARIANT_COUNT }); } catch {}
+        try { setLoading(false); } catch {}
       }
       sunoAudioId = null;
       sunoStemsTaskId = null;
@@ -45490,6 +45482,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
           if (els.sunoFullLink) setLink(els.sunoFullLink, lastSunoProxyUrl || immediateFullUrl);
           if (els.btnLoadFull) els.btnLoadFull.disabled = false;
           setStatus("Song ready.");
+          try { finishCoachGenerationReady({ variantCount: 1 }); } catch {}
           markGenerationReadyNotice();
           setGenerateBtn("Regenerate", false, "regenerate");
           setGenerateFieldsLocked(false);
@@ -45510,6 +45503,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
         } catch {}
         setGenerateBtn("Generate song", false, "generate");
         setGenerateFieldsLocked(false);
+        try { cancelCoachGenerationStatus(); } catch {}
         setLoading(false);
         setProgress(0);
         imageMoodAppliedForNextGen = false;
@@ -45550,6 +45544,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       setGenerateFieldsLocked(false);
       imageMoodAppliedForNextGen = false;
       setProgress(0);
+      try { cancelCoachGenerationStatus(); } catch {}
       setLoading(false);
     } finally {}
   });
@@ -46395,7 +46390,6 @@ function openNabadCoach() {
 // Never shown while the Coach thread is open.
 let _coachNudgeArmTimer = null;
 let _coachNudgeHideTimer = null;
-const COACH_PILL_DEFAULT = "Need help? 🎵";
 const COACH_NUDGE_DELAY_MS = 150000;     // first idle offer after ~2.5 min
 const COACH_NUDGE_VISIBLE_MS = 6500;     // how long the idle pill stays
 const COACH_HINT_VISIBLE_MS = 9000;      // contextual tips linger a bit longer
@@ -46416,30 +46410,35 @@ function setCoachPillText(text) {
   if (pill) pill.textContent = String(text || COACH_PILL_DEFAULT);
 }
 function dismissCoachFabNudge() {
+  if (isCoachStatusActive()) return;
   const fab = document.getElementById("coachFab");
-  if (fab) fab.classList.remove("coachFab--nudge");
+  if (fab) fab.classList.remove("coachFab--nudge", "coachFab--hint", "coachFab--generating");
   if (_coachNudgeHideTimer) { clearTimeout(_coachNudgeHideTimer); _coachNudgeHideTimer = null; }
 }
 function showCoachFabPill(text, { visibleMs = COACH_NUDGE_VISIBLE_MS, contextual = false } = {}) {
+  if (isCoachStatusActive()) return;
   if (!coachFabIsVisible() || isCoachThreadId(_conversationId)) return;
   const fab = document.getElementById("coachFab");
   if (!fab) return;
   setCoachPillText(text);
   fab.classList.toggle("coachFab--hint", Boolean(contextual));
   fab.classList.add("coachFab--nudge");
+  fab.classList.remove("coachFab--generating");
   if (_coachNudgeHideTimer) clearTimeout(_coachNudgeHideTimer);
   _coachNudgeHideTimer = setTimeout(() => {
-    fab.classList.remove("coachFab--nudge", "coachFab--hint");
+    if (isCoachStatusActive()) return;
+    fab.classList.remove("coachFab--nudge", "coachFab--hint", "coachFab--generating");
     setCoachPillText(COACH_PILL_DEFAULT);
   }, visibleMs);
 }
 function showCoachFabNudge() {
+  if (isCoachStatusActive()) return;
   showCoachFabPill(COACH_PILL_DEFAULT, { visibleMs: COACH_NUDGE_VISIBLE_MS });
 }
 function scheduleCoachFabNudge(delay = COACH_NUDGE_DELAY_MS) {
   if (_coachNudgeArmTimer) clearTimeout(_coachNudgeArmTimer);
   _coachNudgeArmTimer = setTimeout(function tick() {
-    showCoachFabNudge();
+    if (!isCoachStatusActive()) showCoachFabNudge();
     _coachNudgeArmTimer = setTimeout(tick, COACH_NUDGE_COOLDOWN_MS);
   }, delay);
 }
@@ -46455,6 +46454,7 @@ const COACH_HINT_SEEN = new Set();     // tip keys shown this session
 // Returns true if a tip was actually shown, false otherwise. Callers use the
 // boolean to stop a priority chain at the first tip that fires.
 function showCoachContextHint(text, key) {
+  if (isCoachStatusActive()) return false;
   const now = Date.now();
   if (now - _coachHintLastAt < COACH_HINT_COOLDOWN_MS) return false;
   if (key && COACH_HINT_SEEN.has(key)) return false;
@@ -46475,6 +46475,7 @@ function showCoachContextHint(text, key) {
 // user just hopped from Style to Lyrics) so the keyboard-down case is the only
 // one that shows.
 function evaluateCreateHints({ ignoreFocus = false } = {}) {
+  if (isCoachStatusActive()) return;
   if (document.body.getAttribute("data-route") !== "generate") return;
   const ae = document.activeElement;
   if (!ignoreFocus && ae && (ae.tagName === "TEXTAREA" || ae.tagName === "INPUT")) return;
@@ -46544,9 +46545,20 @@ function scheduleCreateHints() {
 }
 
 (() => {
+  try {
+    configureCoachGeneration({
+      onArm: () => {
+        if (_coachNudgeHideTimer) {
+          clearTimeout(_coachNudgeHideTimer);
+          _coachNudgeHideTimer = null;
+        }
+      },
+    });
+  } catch {}
   const fab = document.getElementById("coachFab");
   if (fab) fab.addEventListener("click", () => openNabadCoach());
   try { scheduleCoachFabNudge(); } catch {}
+  try { syncCoachGenerationStatusFromPending(getGenerationPending()); } catch {}
   // Watch the Create fields locally for the contextual tips. Fire on blur so
   // the orb pill isn't trapped behind the on-screen keyboard.
   els.sunoStyle?.addEventListener("blur", scheduleCreateHints);

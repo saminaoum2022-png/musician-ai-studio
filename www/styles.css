@@ -18045,6 +18045,18 @@ input::placeholder, textarea::placeholder{
   transform: translateY(0) scale(1);
   animation: none;
 }
+/* Song generation — persistent status pill (replaces the loading bar). */
+.coachFab--generating.coachFab--nudge .coachFabPill{
+  opacity: 1;
+  transform: translateY(-50%) translateX(0) scale(1);
+  animation: coachGenPillPulse 2600ms ease-in-out infinite;
+  background: linear-gradient(135deg, rgba(35,213,171,0.94), rgba(91,60,255,0.96));
+  box-shadow: 0 10px 26px rgba(18,10,52,0.46), 0 0 0 1px rgba(255,255,255,0.08) inset;
+}
+@keyframes coachGenPillPulse{
+  0%, 100% { opacity: 1; transform: translateY(-50%) translateX(0) scale(1); }
+  50%      { opacity: 0.92; transform: translateY(-50%) translateX(0) scale(1.02); }
+}
 /* Caret: a small rotated square fused to the card's bottom edge, sitting right
    above the orb's center so the tip clearly belongs to the orb. */
 .coachFab--hint .coachFabPill::after{

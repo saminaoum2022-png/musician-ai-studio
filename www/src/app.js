@@ -107,7 +107,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260702-225507";
+const APP_BUILD = "20260702-232723";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -1354,7 +1354,7 @@ function applyHubRowCoverTint(rowEl, src) {
 function applyCoverGlowRgb(el, src) {
   if (!el) return;
   const s = String(src || "").trim();
-  if (!s || s.startsWith("data:") || /nabadai-logo\.png/i.test(s) || /cover-placeholder\.svg/i.test(s)) {
+  if (!s || s.startsWith("data:") || /nabadai-logo\.png|splash-mark\.png/i.test(s) || /cover-placeholder\.svg/i.test(s)) {
     try {
       el.style.removeProperty("--cover-glow-rgb");
     } catch {}
@@ -1846,7 +1846,7 @@ async function startHubPlayback(postId) {
   miniSource = { type: "hub", id: postId };
   hubNowMeta = {
     title: p.title || "Hub song",
-    art: p.artUrl || p.creatorAvatar || "./assets/nabadai-logo.png",
+    art: p.artUrl || p.creatorAvatar || "./assets/icons/splash-mark.png",
     subtitle: String(p.creator || "").trim() ? `@${String(p.creator).trim()}` : "Hub",
   };
 
@@ -2857,7 +2857,7 @@ function syncMobileTabbarProfileAvatar() {
     return;
   }
   const raw = String(activeProfile?.avatar || "").trim();
-  const isReal = raw && !/nabadai-logo\.png(?:$|\?)/i.test(raw);
+  const isReal = raw && !/nabadai-logo\.png(?:$|\?)|splash-mark\.png(?:$|\?)/i.test(raw);
   const url = isReal ? normalizeProfileAvatarForImg(raw) : "";
   const initials = String(activeProfile?.username || "U")
     .replace(/^@/, "")
@@ -5300,7 +5300,7 @@ async function supabaseSearchPublicProfiles(qNorm) {
     return rows
       .map((row) => ({
         handle: String(row.username || "").trim(),
-        avatar: String(row.avatar || "").trim() || "./assets/nabadai-logo.png",
+        avatar: String(row.avatar || "").trim() || "./assets/icons/splash-mark.png",
         userId: String(row.user_id || "").trim(),
       }))
       .filter((u) => u.handle && u.handle.toLowerCase() !== "guest");
@@ -5488,7 +5488,7 @@ function renderSearchPeople(query) {
     seen.add(key);
     hubPeople.push({
       handle,
-      avatar: String(p?.creatorAvatar || "./assets/nabadai-logo.png"),
+      avatar: String(p?.creatorAvatar || "./assets/icons/splash-mark.png"),
     });
     if (hubPeople.length >= 12) break;
   }
@@ -15618,7 +15618,7 @@ function mashupSourceLineHtml(track) {
 
 function mashupSourceTileHtml(source, label, profMap) {
   const title = escapeHtml(String(source?.title || "Track").trim() || "Track");
-  const art = escapeHtml(String(source?.artUrl || "./assets/nabadai-logo.png"));
+  const art = escapeHtml(String(source?.artUrl || "./assets/icons/splash-mark.png"));
   const url = String(source?.url || "").trim();
   const handle = String(source?.username || "").trim();
   const by = handle ? `@${handle}` : "Source";
@@ -19121,7 +19121,7 @@ function profileNeedsCloudRefresh() {
   if (!authSession?.user?.id) return false;
   const av = String(activeProfile?.avatar || "").trim();
   const bio = String(activeProfile?.bio || "").trim();
-  const hasAvatar = av && !/nabadai-logo\.png(?:$|\?)/i.test(av);
+  const hasAvatar = av && !/nabadai-logo\.png(?:$|\?)|splash-mark\.png(?:$|\?)/i.test(av);
   return !hasAvatar || !bio;
 }
 
@@ -19578,7 +19578,7 @@ function mapHubRestRowToPost(r, { includeProof = false } = {}) {
     url: r.song_url || "",
     kind: r.kind || "full",
     creator: r.creator_username || "guest",
-    creatorAvatar: r.creator_avatar || "./assets/nabadai-logo.png",
+    creatorAvatar: r.creator_avatar || "./assets/icons/splash-mark.png",
     likes: Number(r.likes || 0),
     reacts: r.reacts || { melody: 0, lyrics: 0, mix: 0, groove: 0 },
     remixOf: r.remix_of || "",
@@ -20328,7 +20328,7 @@ function startSoundGenerationPolling(meta) {
         const finalTitle = shortenSoundTitle(candidate || "Sound");
         addToLibrary({
           title: finalTitle,
-          artUrl: clip.imageUrl || "./assets/nabadai-logo.png",
+          artUrl: clip.imageUrl || "./assets/icons/splash-mark.png",
           url,
           taskId: soundTaskId || "",
           audioId: String(clip.audioId || ""),
@@ -21722,7 +21722,7 @@ function openPublishReleaseSheet(trackId, opts = {}) {
   sheet.dataset.trackId = id;
   const art =
     String((track.meta && (track.meta.imageThumb || track.meta.imageUrl)) || track.artUrl || "").trim() ||
-    "./assets/nabadai-logo.png";
+    "./assets/icons/splash-mark.png";
   const title = String(track.title || "Untitled").trim() || "Untitled";
   const remixOf = remixAttributionForTrack(track);
   const caption = sheet.querySelector("#publishReleaseCaption");
@@ -23903,7 +23903,7 @@ function dmSongPayloadFromShareRef(ref) {
   if (!art && ref) {
     try { art = mashupCoverForTrack(ref) || ""; } catch {}
   }
-  if (!art) art = "./assets/nabadai-logo.png";
+  if (!art) art = "./assets/icons/splash-mark.png";
   let by = String(ref?.byLine || ref?.by || "").replace(/^@/, "").trim();
   if (!by) {
     by = String(activeProfile?.username || authSession?.user?.user_metadata?.username || "").replace(/^@/, "").trim();
@@ -23978,8 +23978,8 @@ function renderInAppSharePreview(ref, mountEl) {
   const sub = escapeHtml(subRaw || dmShareKindLabel(ref.shareKind || "song"));
   let art = String(ref.artUrl || ref.art || "").trim();
   if (!art) {
-    try { art = mashupCoverForTrack(ref) || "./assets/nabadai-logo.png"; } catch {
-      art = "./assets/nabadai-logo.png";
+    try { art = mashupCoverForTrack(ref) || "./assets/icons/splash-mark.png"; } catch {
+      art = "./assets/icons/splash-mark.png";
     }
   }
   mountEl.hidden = false;
@@ -24630,7 +24630,7 @@ function dmShareKindLabel(kind) {
 function messagesDmSongCardHtml(song, { mine = false } = {}) {
   const title = escapeHtml(song.title || "Song");
   const by = escapeHtml(song.by ? `@${String(song.by).replace(/^@/, "")}` : "@creator");
-  const art = escapeHtml(song.art || "./assets/nabadai-logo.png");
+  const art = escapeHtml(song.art || "./assets/icons/splash-mark.png");
   const encUrl = encodeURIComponent(song.url || "");
   const encTitle = encodeURIComponent(song.title || "Song");
   const encArt = encodeURIComponent(song.art || "");
@@ -26108,7 +26108,7 @@ function userPublicSongsSkeletonHtml(count = 5) {
 function isRealUserAvatarUrl(raw) {
   const s = String(raw || "").trim();
   if (!s) return false;
-  return !/nabadai-logo\.png/i.test(s);
+  return !/nabadai-logo\.png|splash-mark\.png/i.test(s);
 }
 
 /** Other-user profile avatar: real photo when available; person silhouette otherwise — never the app logo. */
@@ -27597,7 +27597,7 @@ function mashupEligibleLibraryTracks() {
 
 function mashupCoverForTrack(t) {
   const raw = String(t?.artUrl || t?.meta?.imageUrl || "").trim();
-  return raw && /^https?:\/\//i.test(raw) ? raw : "./assets/nabadai-logo.png";
+  return raw && /^https?:\/\//i.test(raw) ? raw : "./assets/icons/splash-mark.png";
 }
 
 function mashupSlotEls(slot) {
@@ -29040,7 +29040,7 @@ function openTrackSheetShell(payload) {
   const tEl = document.getElementById("discoverTrackSheetTitle");
   const sEl = document.getElementById("discoverTrackSheetSub");
   if (artEl) {
-    artEl.src = payload.artUrl || "./assets/nabadai-logo.png";
+    artEl.src = payload.artUrl || "./assets/icons/splash-mark.png";
     artEl.alt = "";
   }
   if (tEl) tEl.textContent = payload.title || "Song";
@@ -29087,7 +29087,7 @@ function openDiscoverTrackSheetFromEl(el) {
   openTrackSheetShell({
     title: base.title || "Song",
     sub: base.by || "Discover",
-    artUrl: base.art || "./assets/nabadai-logo.png",
+    artUrl: base.art || "./assets/icons/splash-mark.png",
   });
 }
 
@@ -29133,7 +29133,7 @@ function openPlayerTrackOptionsSheet() {
   openTrackSheetShell({
     title: ctx.title || "Song",
     sub: ctx.by || "Now playing",
-    artUrl: ctx.art || "./assets/nabadai-logo.png",
+    artUrl: ctx.art || "./assets/icons/splash-mark.png",
   });
 }
 
@@ -29144,7 +29144,7 @@ function openLibraryTrackOptionsFromMenuButton(id) {
   renderTrackSheetLibrary(t);
   const art =
     String((t.meta && (t.meta.imageThumb || t.meta.imageUrl)) || t.artUrl || "").trim() ||
-    "./assets/nabadai-logo.png";
+    "./assets/icons/splash-mark.png";
   openTrackSheetShell({
     title: String(t.title || "").trim() || "Song",
     sub: formatLibrarySheetSubtitle(t),
@@ -29159,7 +29159,7 @@ function openProfilePublicTrackSheet(id) {
   renderTrackSheetProfileLib(t);
   const art =
     String((t.meta && (t.meta.imageThumb || t.meta.imageUrl)) || t.artUrl || "").trim() ||
-    "./assets/nabadai-logo.png";
+    "./assets/icons/splash-mark.png";
   openTrackSheetShell({
     title: String(t.title || "").trim() || "Song",
     sub: "On your public profile",
@@ -29172,7 +29172,7 @@ function openProfileHubPostSheet(sid) {
   if (!p) return;
   _trackSheetCtx = { mode: "profile_hub", hubPostId: sid, hubTitle: p.title || "Song" };
   renderTrackSheetProfileHub(p);
-  const art = String(p.artUrl || "./assets/nabadai-logo.png").trim();
+  const art = String(p.artUrl || "./assets/icons/splash-mark.png").trim();
   openTrackSheetShell({
     title: p.title || "Song",
     sub: "On your Hub",
@@ -29271,7 +29271,7 @@ async function startLibraryRemixForLibraryTrack(t) {
       normalizeAudioUrlForPlayback(toAudioProxyUrl(rawInner) || rawInner) || rawInner;
     const art =
       String((track.meta && (track.meta.imageThumb || track.meta.imageUrl)) || track.artUrl || "").trim() ||
-      "./assets/nabadai-logo.png";
+      "./assets/icons/splash-mark.png";
     const handle = String(activeProfile?.username || "").trim();
     let lyricsInput = songDetailsLyricsForTrack(track);
     if (!lyricsInput) {
@@ -30648,7 +30648,7 @@ function discoveryPlaylistCardArtHtml(tracks) {
   const arts = (tracks || [])
     .map((t) => {
       const art = trackCoverArtForFeed(t);
-      return art && !/nabadai-logo\.png/i.test(art) ? art : "";
+      return art && !/nabadai-logo\.png|splash-mark\.png/i.test(art) ? art : "";
     })
     .filter(Boolean)
     .slice(0, 4);
@@ -31313,7 +31313,7 @@ function openUserPlaylistItemSheet(playlistId, itemId) {
   if (!item) return;
   _trackSheetCtx = { mode: "user_playlist_item", playlistId, playlistItemId: itemId };
   renderTrackSheetUserPlaylistItem(pl, item);
-  const art = String(item.artUrl || "./assets/nabadai-logo.png").trim();
+  const art = String(item.artUrl || "./assets/icons/splash-mark.png").trim();
   openTrackSheetShell({
     title: String(item.title || "").trim() || "Song",
     sub: pl?.title ? `${pl.title} · Playlist` : "Playlist",
@@ -31371,7 +31371,7 @@ function renderUserPlaylist() {
     <ul class="libraryRows" role="list">
       ${visible
         .map(({ playlistId, playlistTitle, item }) => {
-          const art = String(item.artUrl || "./assets/nabadai-logo.png").trim();
+          const art = String(item.artUrl || "./assets/icons/splash-mark.png").trim();
           const safeTitle = escapeHtml(String(item.title || "").trim() || "Song");
           const { active: plActive, audible: plAudible } = getUserPlaylistPlaybackUiForItem(item);
           const subBits = [];
@@ -33039,7 +33039,7 @@ async function shareToHub(track) {
     url,
     kind,
     creator,
-    creatorAvatar: String(activeProfile.avatar || "./assets/nabadai-logo.png"),
+    creatorAvatar: String(activeProfile.avatar || "./assets/icons/splash-mark.png"),
     ownerDeviceId: getLocalDeviceId(),
     likes: 0,
     reacts: { melody: 0, lyrics: 0, mix: 0, groove: 0 },
@@ -33089,11 +33089,11 @@ function makeDemoHubPost() {
     id: `hub_demo_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
     ts: Date.now(),
     title: "Demo Hub Track",
-    artUrl: "./assets/nabadai-logo.png",
+    artUrl: "./assets/icons/splash-mark.png",
     url: "",
     kind: "full",
     creator,
-    creatorAvatar: String(activeProfile.avatar || "./assets/nabadai-logo.png"),
+    creatorAvatar: String(activeProfile.avatar || "./assets/icons/splash-mark.png"),
     ownerDeviceId: getLocalDeviceId(),
     likes: 0,
     reacts: { melody: 0, lyrics: 0, mix: 0, groove: 0 },
@@ -33323,7 +33323,7 @@ function renderHub() {
     //     what the user actually views.
     const isEager = i < HUB_EAGER_REEL_COUNT;
     const coverSrc = hubCoverImgSrc(
-      p.artUrl || p.creatorAvatar || "./assets/nabadai-logo.png",
+      p.artUrl || p.creatorAvatar || "./assets/icons/splash-mark.png",
     );
     const imgSrcAttr = isEager
       ? `src="${escapeHtml(coverSrc)}" loading="eager" fetchpriority="high"`
@@ -33331,7 +33331,7 @@ function renderHub() {
     const backdropStyle = isEager
       ? `--reel-bg: url('${escapeHtml(coverSrc)}');`
       : ``;
-    const avatarSrc = p.creatorAvatar || "./assets/nabadai-logo.png";
+    const avatarSrc = p.creatorAvatar || "./assets/icons/splash-mark.png";
     const safeTitle = escapeHtml(p.title);
     const likes = Number(p.likes || 0);
     return `
@@ -35448,7 +35448,7 @@ function applyProfileAuraAvatarTint(srcOverride) {
   const aura = els.profileAura;
   if (!aura) return;
   const src = String(srcOverride || activeProfile?.avatar || "").trim();
-  if (!src || src === "./assets/nabadai-logo.png") {
+  if (!src || src === "./assets/icons/splash-mark.png") {
     aura.style.setProperty("--aura-tint", "rgba(124, 92, 255, 0.55)");
     aura.style.setProperty("--aura-tint-soft", "rgba(35, 213, 171, 0.18)");
     aura.style.setProperty("--aura-tint-solid", "rgb(168, 152, 255)");
@@ -35538,7 +35538,7 @@ function applyProfileAuraVisualTint() {
       const items = getProfileOwnerHubItems();
       const top = items?.[0];
       const url = String(top?.artUrl || top?.creatorAvatar || "").trim();
-      if (!url || url === "./assets/nabadai-logo.png") return "";
+      if (!url || url === "./assets/icons/splash-mark.png") return "";
       return url;
     } catch { return ""; }
   })();
@@ -35840,7 +35840,7 @@ function renderProfileTopWeek(items) {
     .map((p, i) => {
       const sid = escapeHtml(String(p.id));
       const tl = escapeHtml(String(p.title || "Untitled"));
-      const art = escapeHtml(String(p.artUrl || p.creatorAvatar || "./assets/nabadai-logo.png"));
+      const art = escapeHtml(String(p.artUrl || p.creatorAvatar || "./assets/icons/splash-mark.png"));
       const likes = Number(p.likes || 0);
       const rel = typeof relativeTime === "function" ? relativeTime(p.ts) : "";
       const subBits = [];
@@ -36010,7 +36010,7 @@ function renderProfilePreviewFromInputs() {
   }
   if (els.profilePreviewAvatar) {
     const raw = String(activeProfile.avatar || "").trim();
-    const isReal = raw && !/nabadai-logo\.png(?:$|\?)/.test(raw);
+    const isReal = raw && !/nabadai-logo\.png(?:$|\?)|splash-mark\.png(?:$|\?)/.test(raw);
     const url = isReal ? normalizeProfileAvatarForImg(raw) : "";
     if (url) {
       els.profilePreviewAvatar.src = url;
@@ -36219,11 +36219,11 @@ function renderUserProfile(rawUsername, { soft = false } = {}) {
       )
       .join("")}</div>`;
     _userPublicFeedTracks = slice.map((p) => {
-      const artSafe = trackCoverArtForFeed(p) !== "./assets/nabadai-logo.png"
+      const artSafe = trackCoverArtForFeed(p) !== "./assets/icons/splash-mark.png"
         ? trackCoverArtForFeed(p)
         : (String(p.artUrl || p.creatorAvatar || "").trim() && !String(p.artUrl || "").startsWith("data:")
           ? String(p.artUrl || p.creatorAvatar || "").trim()
-          : "./assets/nabadai-logo.png");
+          : "./assets/icons/splash-mark.png");
       return {
         url: String(p.url || "").trim(),
         title: String(p.title || "Untitled"),
@@ -37076,7 +37076,7 @@ function renderProfileHubShared() {
     <ul class="libraryRows" role="list">
       ${items.map((p) => {
         const safeTitle = escapeHtml(String(p.title || "Untitled"));
-        const art = String(p.artUrl || p.creatorAvatar || "./assets/nabadai-logo.png");
+        const art = String(p.artUrl || p.creatorAvatar || "./assets/icons/splash-mark.png");
         const dateLabel = relativeTime(p.ts);
         const likes = Number(p.likes || 0);
         const profilePublic = isHubPostVisibleOnPublicProfile(p);
@@ -38324,7 +38324,7 @@ function showVideoRenderCard(track) {
   if (!els.videoRenderCard) return;
   const cover = videoCardCoverForTrack(track);
   if (els.videoRenderArt) {
-    els.videoRenderArt.src = cover || "./assets/nabadai-logo.png";
+    els.videoRenderArt.src = cover || "./assets/icons/splash-mark.png";
   }
   if (els.videoRenderTitle) {
     els.videoRenderTitle.textContent = String(track?.title || "Your song").trim() || "Your song";
@@ -38376,7 +38376,7 @@ function openMusicVideoViewer(videoUrl, title, { coverUrl } = {}) {
 
   const cover = String(coverUrl || "").trim();
   if (els.musicVideoCover) {
-    els.musicVideoCover.src = cover || "./assets/nabadai-logo.png";
+    els.musicVideoCover.src = cover || "./assets/icons/splash-mark.png";
     els.musicVideoCover.style.display = cover ? "" : "none";
   }
 
@@ -40942,7 +40942,7 @@ function shouldAutoWireCoverImage(img) {
     + ".mashupSlotArt, .searchPosterArt, .hubSearchTemplateArt, .discoveryRowArt, .followActMedia"
   )) return true;
   const src = String(img.getAttribute("src") || img.dataset.coverSrc || "").trim();
-  if (!src || isBrokenCoverPlaceholder(src) || /nabadai-logo\.png/i.test(src)) return false;
+  if (!src || isBrokenCoverPlaceholder(src) || /nabadai-logo\.png|splash-mark\.png/i.test(src)) return false;
   return false;
 }
 
@@ -41037,7 +41037,7 @@ function applyBrokenCoverPlaceholder(img) {
 function handleCoverImageError(img) {
   if (!img || img.dataset.coverFallback === "final") return;
   const original = String(img.dataset.coverSrc || img.getAttribute("src") || "").trim();
-  if (!original || isBrokenCoverPlaceholder(original) || /nabadai-logo\.png/i.test(original)) {
+  if (!original || isBrokenCoverPlaceholder(original) || /nabadai-logo\.png|splash-mark\.png/i.test(original)) {
     applyBrokenCoverPlaceholder(img);
     return;
   }

@@ -64,7 +64,7 @@ export function absoluteArtworkUrl(url) {
 function isLockScreenPlaceholderArt(url) {
   const s = String(url || "").trim();
   if (!s) return true;
-  return /nabadai-logo\.png/i.test(s) || /cover-placeholder\.svg/i.test(s);
+  return /nabadai-logo\.png/i.test(s) || /splash-mark\.png/i.test(s) || /cover-placeholder\.svg/i.test(s);
 }
 
 /** Prefer https when ready; keep data: covers for lock screen (Pollinations before upload). */

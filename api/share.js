@@ -7,7 +7,7 @@
 const SITE_NAME = "Nabadai";
 const DEFAULT_TITLE = "Listen on Nabadai";
 const DEFAULT_DESCRIPTION = "Made on Nabadai. Take a listen.";
-const DEFAULT_IMAGE = "/assets/nabadai-logo.png";
+const DEFAULT_IMAGE = "https://www.nabadai.com/icon-512.png";
 
 function escapeAttr(s) {
   return String(s == null ? "" : s)

@@ -73,7 +73,10 @@
     <meta name="format-detection" content="telephone=no" />
 
     <link rel="manifest" href="./manifest.webmanifest" />
-    <link rel="apple-touch-icon" href="./assets/icons/apple-touch-icon.png" />
+    <link rel="icon" href="/favicon.ico" sizes="any" />
+    <link rel="icon" type="image/png" sizes="48x48" href="/favicon-48x48.png" />
+    <link rel="icon" type="image/png" sizes="96x96" href="/favicon-96x96.png" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <!-- iOS PWA launch screens. iOS ignores the manifest background_color for the
          home-screen launch and paints WHITE until the web splash renders unless an
          apple-touch-startup-image matches the device. These are SOLID #05070d with
@@ -96,8 +99,7 @@
     <link rel="apple-touch-startup-image" media="(device-width: 430px) and (device-height: 932px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" href="./assets/splash/ios/startup-430x932@3x.png" />
     <link rel="apple-touch-startup-image" media="(device-width: 440px) and (device-height: 956px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" href="./assets/splash/ios/startup-440x956@3x.png" />
     <link rel="preload" href="./assets/icons/splash-mark.png" as="image" />
-    <link rel="icon" type="image/png" sizes="32x32" href="./assets/icons/favicon-32.png" />
-    <link rel="icon" type="image/png" sizes="16x16" href="./assets/icons/favicon-16.png" />
+    <link rel="canonical" href="https://www.nabadai.com/" />
     <!--
       Network preflight hints. Supabase + CDN audio origins warm up faster on first tap.
       Suno's CDN; preconnecting on cellular knocks out DNS + TLS for the
@@ -124,18 +126,30 @@
       onload="this.media='all'"
     />
     <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Display:wght@900&family=Inter:wght@900&display=swap" /></noscript>
-    <link rel="stylesheet" href="./styles.css?v=20260702-225507" />
+    <link rel="stylesheet" href="./styles.css?v=20260702-232723" />
 
-    <meta name="description" content="Nabadai is an AI music studio. Hum a melody, write lyrics, and ship a song." />
+    <meta name="description" content="NabadAi is an AI music studio. Hum a melody, write lyrics, and ship a song." />
     <meta property="og:type" content="website" />
-    <meta property="og:site_name" content="Nabadai" />
-    <meta property="og:title" content="Nabadai — AI Music Studio" />
-    <meta property="og:description" content="Hum a melody. Write lyrics. Ship a song with NabadAi." />
-    <meta property="og:image" content="./assets/nabadai-logo.png" />
+    <meta property="og:site_name" content="NabadAi" />
+    <meta property="og:url" content="https://www.nabadai.com/" />
+    <meta property="og:title" content="NabadAi" />
+    <meta property="og:description" content="NabadAi is an AI music studio. Hum a melody, write lyrics, and ship a song." />
+    <meta property="og:image" content="https://www.nabadai.com/icon-512.png" />
+    <meta property="og:image:width" content="512" />
+    <meta property="og:image:height" content="512" />
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content="Nabadai — AI Music Studio" />
-    <meta name="twitter:description" content="Hum a melody. Write lyrics. Ship a song." />
-    <meta name="twitter:image" content="./assets/nabadai-logo.png" />
+    <meta name="twitter:title" content="NabadAi" />
+    <meta name="twitter:description" content="NabadAi is an AI music studio. Hum a melody, write lyrics, and ship a song." />
+    <meta name="twitter:image" content="https://www.nabadai.com/icon-512.png" />
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "Organization",
+        "name": "NabadAi",
+        "url": "https://www.nabadai.com",
+        "logo": "https://www.nabadai.com/icon-512.png"
+      }
+    </script>
 </head>
   <body class="booting">
     <div id="bootSplash" class="bootSplash" aria-hidden="true">
@@ -2135,7 +2149,7 @@
               <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M6.4 5 5 6.4 10.6 12 5 17.6 6.4 19 12 13.4 17.6 19 19 17.6 13.4 12 19 6.4 17.6 5 12 10.6Z"/></svg>
             </button>
             <div class="discoverTrackSheetHead">
-              <img id="discoverTrackSheetArt" class="discoverTrackSheetArt" src="./assets/nabadai-logo.png" alt="" />
+              <img id="discoverTrackSheetArt" class="discoverTrackSheetArt" src="./assets/icons/splash-mark.png" alt="" />
               <div class="discoverTrackSheetHeadText">
                 <div id="discoverTrackSheetTitle" class="discoverTrackSheetTitle">—</div>
                 <div id="discoverTrackSheetSub" class="discoverTrackSheetSub">—</div>
@@ -3652,7 +3666,7 @@
       <div id="musicVideoModal" class="musicVideoOverlay" style="display:none" role="dialog" aria-modal="true" aria-label="Music video">
         <div class="musicVideoStage">
           <div class="musicVideoFrame">
-            <img id="musicVideoCover" class="musicVideoCover" src="./assets/nabadai-logo.png" alt="" aria-hidden="true" />
+            <img id="musicVideoCover" class="musicVideoCover" src="./assets/icons/splash-mark.png" alt="" aria-hidden="true" />
             <div id="musicVideoLoader" class="musicVideoLoader" aria-hidden="true">
               <span class="musicVideoLoaderSpin"></span>
             </div>
@@ -3699,7 +3713,7 @@
 
       <div id="videoRenderCard" class="videoRenderCard" style="display:none" role="status" aria-live="polite">
         <span class="videoRenderGlow" aria-hidden="true"></span>
-        <img id="videoRenderArt" class="videoRenderArt" src="./assets/nabadai-logo.png" alt="" />
+        <img id="videoRenderArt" class="videoRenderArt" src="./assets/icons/splash-mark.png" alt="" />
         <div class="videoRenderText">
           <div class="videoRenderKicker">
             <span class="videoRenderDot" aria-hidden="true"></span>
@@ -3744,7 +3758,7 @@
             </div>
             <p id="proofCertTagline" class="proofCertTagline">Created with NabadAi</p>
             <div class="proofCertCoverWrap">
-              <img id="proofCertCoverImg" class="proofCertCoverImg" src="./assets/nabadai-logo.png" alt="" width="640" height="360" decoding="async"/>
+              <img id="proofCertCoverImg" class="proofCertCoverImg" src="./assets/icons/splash-mark.png" alt="" width="640" height="360" decoding="async"/>
               <div class="proofCertCoverFrame" aria-hidden="true"></div>
             </div>
             <dl class="proofCertFields proofCertFieldsIdentity">
@@ -3931,7 +3945,7 @@
           <div id="hubNowAura" class="hubNowAura" aria-hidden="true"></div>
           <div class="hubNowGlass">
             <div class="hubNowCoverWrap">
-              <img id="hubNowArt" class="hubNowArt" src="./assets/nabadai-logo.png" alt="" decoding="async" />
+              <img id="hubNowArt" class="hubNowArt" src="./assets/icons/splash-mark.png" alt="" decoding="async" />
             </div>
             <div class="hubNowText">
               <div class="hubNowTitleRow">
@@ -4331,6 +4345,6 @@
     </script>
     <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
     <script src="./env.client.js" onerror="void 0"></script>
-    <script type="module" src="./src/app.js?v=20260702-225507"></script>
+    <script type="module" src="./src/app.js?v=20260702-232723"></script>
   </body>
 </html>

@@ -9,7 +9,8 @@ export function playerEmptyArtUrl() {
 }
 
 export function isLogoCoverUrl(src) {
-  return /nabadai-logo\.png/i.test(String(src || ""));
+  const s = String(src || "");
+  return /nabadai-logo\.png/i.test(s) || /splash-mark\.png/i.test(s);
 }
 
 export function isDefaultSongCoverUrl(src) {

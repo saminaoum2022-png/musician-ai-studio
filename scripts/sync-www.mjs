@@ -36,6 +36,35 @@ for (const worker of ["OneSignalSDKWorker.js", "OneSignalSDKUpdaterWorker.js"]) 
   }
 }
 
+const brandRootFiles = [
+  "manifest.webmanifest",
+  "favicon.ico",
+  "favicon-48x48.png",
+  "favicon-96x96.png",
+  "apple-touch-icon.png",
+  "icon-192.png",
+  "icon-512.png",
+];
+for (const name of brandRootFiles) {
+  const src = path.join(root, name);
+  const dest = path.join(root, "www", name);
+  if (fs.existsSync(src)) {
+    fs.copyFileSync(src, dest);
+    console.log(`sync-www: ${name} → www/${name}`);
+  }
+}
+
+const brandIconFiles = ["icon-192.png", "icon-512.png", "apple-touch-icon.png"];
+for (const name of brandIconFiles) {
+  const src = path.join(root, "assets", "icons", name);
+  const dest = path.join(root, "www", "assets", "icons", name);
+  if (fs.existsSync(src)) {
+    fs.mkdirSync(path.dirname(dest), { recursive: true });
+    fs.copyFileSync(src, dest);
+    console.log(`sync-www: assets/icons/${name} → www/assets/icons/${name}`);
+  }
+}
+
 execSync("rsync -a src/ www/src/", { cwd: root, stdio: "inherit" });
 console.log("sync-www: src/ → www/src/");
 

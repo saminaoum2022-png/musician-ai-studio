@@ -9,13 +9,13 @@ The confirm email uses the **current app icon** (purple → teal **N** mark), no
 After you deploy, use this URL in the template (the `?v=2` busts old CDN/cache from the previous logo):
 
 ```
-https://musician-ai-studio.vercel.app/assets/nabadai-logo.png?v=2
+https://www.nabadai.com/icon-512.png
 ```
 
 After `nabadai.com` is on Vercel:
 
 ```
-https://nabadai.com/assets/nabadai-logo.png?v=2
+https://www.nabadai.com/icon-512.png
 ```
 
 ## 2. Edit the template in Supabase
@@ -53,7 +53,7 @@ Paste as-is after deploy. If you change the logo file again, bump `?v=` in the `
         <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:520px;background:linear-gradient(165deg,#0c1018 0%,#12151e 55%,#0a0d14 100%);border:1px solid rgba(124,92,255,0.28);border-radius:20px;overflow:hidden;">
           <tr>
             <td style="padding:36px 32px 20px;text-align:center;">
-              <img src="https://musician-ai-studio.vercel.app/assets/nabadai-logo.png?v=2" width="88" height="88" alt="NabadAi Music" style="display:block;margin:0 auto 18px;border-radius:20px;" />
+              <img src="https://www.nabadai.com/icon-512.png" width="88" height="88" alt="NabadAi Music" style="display:block;margin:0 auto 18px;border-radius:20px;" />
               <p style="margin:0 0 6px;font-size:13px;font-weight:600;letter-spacing:0.14em;text-transform:uppercase;color:rgba(223,231,251,0.55);">NabadAi Music</p>
               <h1 style="margin:0;font-size:26px;line-height:1.25;font-weight:800;letter-spacing:-0.02em;color:#f0f4ff;">Confirm your email</h1>
             </td>

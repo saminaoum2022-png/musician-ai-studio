@@ -752,7 +752,11 @@ html[data-theme="light"] .createTab:hover{
 }
 
 html[data-theme="light"] .createTab.isActive{
-  color: #fff;
+  color: var(--text);
+  background: linear-gradient(180deg, rgba(255,255,255,0.98), rgba(244,247,252,0.94));
+  box-shadow:
+    inset 0 0 0 1.5px rgba(15,23,40,0.14),
+    0 6px 18px rgba(88,104,140,0.10);
 }
 
 html[data-theme="light"] .createPaneCta{
@@ -7556,9 +7560,12 @@ textarea{
   transform: scale(0.985);
 }
 .createTab.isActive{
-  background: rgba(255, 255, 255, 0.08);
+  background: linear-gradient(180deg, rgba(255,255,255,0.17), rgba(255,255,255,0.085));
   color: #fff;
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.22),
+    inset 0 0 0 1px rgba(255,255,255,0.19),
+    0 3px 12px rgba(255,255,255,0.05);
 }
 .createTabIcon{
   width:14px;
@@ -8436,8 +8443,11 @@ textarea{
   transition:background 200ms ease, color 200ms ease;
 }
 .lyricsModeTab.isActive{
-  background:rgba(255,255,255,0.10);
+  background: linear-gradient(180deg, rgba(255,255,255,0.15), rgba(255,255,255,0.08));
   color:#fff;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.19),
+    inset 0 0 0 1px rgba(255,255,255,0.15);
 }
 .lyricsModeTab:disabled{
   opacity:0.4;
@@ -8454,9 +8464,7 @@ textarea{
 }
 
 /* ── Smart Style Assistant — neutral suggestion pills under Style/Tags ──
-   Pills are intentionally monochrome (no genre/mood colour-coding); only
-   the selected state uses brand purple. UI only — they populate the
-   existing Style field, no backend involvement. */
+   Monochrome pills; selected = brighter white lift on the Create surface. */
 .styleSuggestRow{
   display:flex;
   flex-wrap:nowrap;
@@ -8779,14 +8787,17 @@ textarea{
   font-weight: 500;
 }
 /* The minimal base rules above are ID-scoped, so they out-specify the shared
-   `.addressPill.isActive`. Re-assert the neutral active pill here (also
-   ID-scoped) so the highlighted Singer/Arabic pill matches every other selected
-   pill on the calm Create surface — light grey, not purple. */
+   `.addressPill.isActive`. Re-assert the Create-surface active pill here too. */
 #singerGenderPills .addressPill.isActive,
 #arabicAddressPills .addressPill.isActive{
-  border-color: rgba(255,255,255,0.18);
-  background: rgba(255,255,255,0.10);
+  border-color: rgba(255,255,255,0.34);
+  background: linear-gradient(180deg, rgba(255,255,255,0.20), rgba(255,255,255,0.09));
   color: #fff;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.25),
+    0 0 0 1px rgba(255,255,255,0.085),
+    0 3px 14px rgba(255,255,255,0.06),
+    0 8px 24px rgba(0,0,0,0.17);
 }
 #singerGenderPills .singerPillIco{
   display: none;
@@ -34831,23 +34842,37 @@ section.mentorPage{
   color: #fff;
 }
 
-/* ── Neutral Create surface ───────────────────────────────────────────
-   On the Create page we keep things calm: every in-form control reads the
-   same quiet grey — selected = a light-grey pill, unselected = neutral —
-   matching the Write/Generate tabs. Brand colour is reserved for the two
-   things we actually want users to reach for: the centre "+" tab (which
-   morphs into Generate) and the NabadAi Coach orb. Scoped to the route so
-   every other page keeps its purple/teal accents. */
+/* ── Create surface — neutral selected pills: brighter fill + soft white glow,
+   no brand purple. Scoped to the route so other pages keep their accents. */
 body[data-route="generate"] .optChip.isActive,
 body[data-route="generate"] .styleSuggestPill.isActive,
 body[data-route="generate"] .addressPill.isActive{
-  border-color: rgba(255,255,255,0.18);
-  background: rgba(255,255,255,0.10);
+  border-color: rgba(255,255,255,0.34);
+  background: linear-gradient(180deg, rgba(255,255,255,0.20), rgba(255,255,255,0.09));
   color: #fff;
-  box-shadow: none;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.25),
+    0 0 0 1px rgba(255,255,255,0.085),
+    0 3px 14px rgba(255,255,255,0.06),
+    0 8px 24px rgba(0,0,0,0.17);
 }
 body[data-route="generate"] .addressPill.isActive .addressPillSub{
-  color: rgba(232,238,247,0.7);
+  color: rgba(244,247,255,0.78);
+}
+html[data-theme="light"] body[data-route="generate"] .optChip.isActive,
+html[data-theme="light"] body[data-route="generate"] .styleSuggestPill.isActive,
+html[data-theme="light"] body[data-route="generate"] .addressPill.isActive,
+html[data-theme="light"] #singerGenderPills .addressPill.isActive,
+html[data-theme="light"] #arabicAddressPills .addressPill.isActive{
+  border-color: rgba(15,23,40,0.14);
+  background: linear-gradient(180deg, rgba(255,255,255,0.96), rgba(244,247,252,0.92));
+  color: var(--text);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.88),
+    0 3px 12px rgba(88,104,140,0.10);
+}
+html[data-theme="light"] body[data-route="generate"] .addressPill.isActive .addressPillSub{
+  color: rgba(15,23,40,0.55);
 }
 /* The ✦ helper buttons (lyrics "Generate", style "Boost") go neutral too. */
 body[data-route="generate"] .lyricsMagicBtn{

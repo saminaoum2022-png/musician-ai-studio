@@ -3,27 +3,33 @@
  * User never writes these. Same song id + same story → same seed + same scene.
  */
 
+const SAFETY_PREFIX =
+  "typography-free pure visual art, textless image, no written language anywhere, ";
+
 const SAFETY_SUFFIX =
-  "absolutely no text, no words, no letters, no numbers, no sentences, no captions, no subtitles, no typography, no writing of any kind, no logo, no album title, no watermark, no readable signage, no speech bubbles, silhouettes only without facial details, premium music cover art quality";
+  "absolutely no text, no words, no letters, no numbers, no captions, no subtitles, no typography, no writing, no logo text, no album title, no watermark, no readable signage, no speech bubbles, no banners, no posters, no book pages, no diplomas with writing, silhouettes only without facial details, premium music cover art quality";
 
 const NO_TEXT_REINFORCE =
-  "image must be completely wordless, zero readable characters anywhere in the frame";
+  "completely wordless photograph, zero readable characters in the entire frame, blank signs, empty screens";
+
+const NEGATIVE_TEXT_PROMPT =
+  "text, words, letters, numbers, typography, font, writing, caption, subtitle, watermark, logo, album cover title, song title, artist name, signage, billboard, poster text, newspaper, book, magazine, speech bubble, label, stamp, signature, handwritten, calligraphy, arabic text, english text, quotes, meme text, ui overlay, readable characters, sentences, lyrics on screen";
 
 const STYLE_CORE =
-  "premium luxury music cover art, cinematic atmosphere, elegant composition, rich color grading, high-end editorial look, moody dark tones with luminous accents, nabad teal and violet palette when appropriate";
+  "premium luxury music cover art, cinematic atmosphere, elegant composition, rich color grading, high-end editorial look, moody dark tones with luminous accents, deep teal and violet palette when appropriate";
 
 const MOOD_PALETTES = {
   love: "rose gold, soft magenta, warm coral, violet dusk",
   party: "electric teal, vivid violet, gold sparkle, neon bloom",
   happy: "bright teal, sunny amber, soft white bloom",
   sad: "deep indigo, muted violet, cold teal whisper",
-  chill: "nabad teal, soft cyan, muted violet mist",
+  chill: "deep teal, soft cyan, muted violet mist",
   wedding: "champagne gold, ivory glow, soft violet",
   hype: "aggressive teal, sharp violet, high contrast",
   dark: "near-black void, deep purple, toxic teal trace",
   dreamy: "lavender, teal mist, pearlescent white",
   epic: "royal violet, teal beam, bright gold crest",
-  default: "deep void black, nabad teal, nabad violet, rose-gold accent",
+  default: "deep void black, deep teal, rich violet, rose-gold accent",
 };
 
 /** Story themes — chosen from title + lyrics + style, highest match wins. */
@@ -360,16 +366,45 @@ function brightnessPhrase(brightness) {
   return "balanced contrast";
 }
 
-function storyMoodPhrase(input, storyTheme) {
-  const title = String(input?.title || "").trim();
-  const mood = String(input?.mood || "").trim();
-  const bits = [];
-  if (storyTheme && storyTheme !== "mood_fallback") {
-    bits.push(`visual mood must match the song story theme (${storyTheme.replace(/_/g, " ")})`);
-  }
-  if (mood) bits.push(`emotional tone: ${mood}`);
-  if (title) bits.push(`inspired by the feeling of a song called "${title.slice(0, 60)}" but never write that title or any words in the image`);
-  return bits.join(", ");
+const STORY_MOOD_PHRASES = {
+  prom_formal: "formal dance celebration atmosphere",
+  graduation: "proud graduation celebration atmosphere",
+  wedding: "elegant wedding ceremony atmosphere",
+  club_night: "nightlife dance celebration atmosphere",
+  concert_stage: "live concert performance atmosphere",
+  heartbreak: "lonely heartbreak atmosphere",
+  romance: "intimate romantic atmosphere",
+  family_home: "warm nostalgic home atmosphere",
+  city_street: "urban cinematic night atmosphere",
+  ocean_beach: "coastal emotional atmosphere",
+  mountains: "epic mountain landscape atmosphere",
+  rain_storm: "stormy melancholic atmosphere",
+  nature_calm: "serene natural landscape atmosphere",
+  workout_power: "intense athletic power atmosphere",
+  celebration: "joyful party celebration atmosphere",
+  dreamy_ethereal: "dreamy surreal atmosphere",
+  mood_fallback: "premium emotional music atmosphere",
+};
+
+function storyMoodPhrase(storyTheme) {
+  return STORY_MOOD_PHRASES[storyTheme] || STORY_MOOD_PHRASES.mood_fallback;
+}
+
+function bucketMoodPhrase(bucketKey) {
+  const map = {
+    love: "romantic emotional tone",
+    party: "festive energetic tone",
+    happy: "uplifting joyful tone",
+    sad: "melancholic emotional tone",
+    chill: "calm peaceful tone",
+    wedding: "elegant ceremonial tone",
+    hype: "intense powerful tone",
+    dark: "moody noir tone",
+    dreamy: "ethereal dreamy tone",
+    epic: "grand cinematic tone",
+    default: "balanced premium tone",
+  };
+  return map[bucketKey] || map.default;
 }
 
 function buildCoverSeed(input, storyTheme, bucketKey) {
@@ -398,14 +433,14 @@ export function buildAbstractCoverPrompt(input) {
   const seed = buildCoverSeed(input, storyTheme, bucketKey);
 
   const parts = [
-    STYLE_CORE,
+    SAFETY_PREFIX + STYLE_CORE,
     scene,
     composition,
-    storyMoodPhrase(input, storyTheme),
+    storyMoodPhrase(storyTheme),
+    bucketMoodPhrase(bucketKey),
     tempoPhrase(tempo),
     brightnessPhrase(brightness),
     sonicPhrase(sonicProfile),
-    genre ? `musical style feeling: ${genre}` : "",
     NO_TEXT_REINFORCE,
     SAFETY_SUFFIX,
   ].filter(Boolean);
@@ -434,5 +469,6 @@ export function buildAbstractCoverPrompt(input) {
 
 export function buildPollinationsUrl(prompt, seed, { width = 1024, height = 1024 } = {}) {
   const encoded = encodeURIComponent(prompt);
-  return `https://image.pollinations.ai/prompt/${encoded}?width=${width}&height=${height}&seed=${seed}&nologo=true&enhance=false&private=true`;
+  const negative = encodeURIComponent(NEGATIVE_TEXT_PROMPT);
+  return `https://image.pollinations.ai/prompt/${encoded}?width=${width}&height=${height}&seed=${seed}&nologo=true&enhance=false&private=true&negative_prompt=${negative}`;
 }

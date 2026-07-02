@@ -1039,6 +1039,13 @@ html[data-theme="light"] .profileCreditsPill--toolbar:hover{
 html[data-theme="light"] .profileCreditsPill--toolbar .profileCreditsPillValue{
   color: #0f1728;
 }
+html[data-theme="light"] .profileEditPill{
+  background: rgba(15, 23, 40, 0.05);
+  color: #0f1728;
+}
+html[data-theme="light"] .profileEditPill:hover{
+  background: rgba(15, 23, 40, 0.08);
+}
 html[data-theme="light"] .profileAuraIconBtn{
   color: rgba(15, 23, 40, 0.85);
 }
@@ -3468,7 +3475,8 @@ body[data-route="vocal"] main.grid > [data-route="vocal"],
 body[data-route="stems"] main.grid > [data-route="stems"],
 body[data-route="advanced"] main.grid > [data-route="advanced"],
 body[data-route="studio"] main.grid > [data-route="studio"],
-body[data-route="settings"] main.grid > [data-route="settings"]{
+body[data-route="settings"] main.grid > [data-route="settings"],
+body[data-route="profile-edit"] main.grid > [data-route="profile-edit"]{
   display: block !important;
 }
 
@@ -13219,6 +13227,7 @@ body:not([data-route="profile"]) #profileAuraHeaderChromeRoot{
 }
 /* Verified check + gender stay pinned beside the field, never wrap. */
 .profileAura.profileAuraEditing .profileNabadCertCheck,
+.profileAura.profileAuraEditing .profileEditPill,
 .profileAura.profileAuraEditing .profileAuraGender{
   flex: 0 0 auto;
 }
@@ -13764,7 +13773,8 @@ body:not([data-route="profile"]) #profileAuraHeaderChromeRoot{
   display: block;
 }
 .profileAuraNameRow[data-loading="true"] .profileAuraNameInput,
-.profileAuraNameRow[data-loading="true"] .profilePreviewGenderIcon{
+.profileAuraNameRow[data-loading="true"] .profilePreviewGenderIcon,
+.profileAuraNameRow[data-loading="true"] .profileEditPill{
   visibility: hidden;
 }
 #profileAuraNameRow[data-loading="true"] + .profileMusicStylesInline{
@@ -14938,6 +14948,40 @@ button.profileMusicStylesLine:hover .profileMusicStylePill{
   color: #fff;
   font-size: 18px;
   font-weight: 600;
+}
+/* Compact Edit pill after verified badge — same quiet surface as credits, smaller. */
+.profileEditPill{
+  -webkit-appearance: none;
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  min-height: 26px;
+  padding: 4px 10px;
+  margin: 0;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+  box-shadow: none;
+  color: rgba(248, 250, 255, 0.92);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  line-height: 1;
+  cursor: pointer;
+  text-decoration: none;
+  -webkit-tap-highlight-color: transparent;
+  transition: opacity 160ms ease, background 160ms ease;
+}
+.profileEditPill:hover{
+  background: rgba(255, 255, 255, 0.09);
+}
+.profileEditPill:active{
+  opacity: 0.72;
+}
+.profileAura.profileAuraEditing .profileEditPill{
+  display: none !important;
 }
 .profileCreditsPillMark{
   width: 18px;
@@ -42579,4 +42623,443 @@ body[data-route="studio"] .deskRail { display: none !important; }
 
 @media (prefers-reduced-motion: reduce) {
   .challengesPage.homeDesk .homeDeskStudioPromo--featured .homeDeskStudioWave { animation: none; }
+}
+
+/* ---------- Edit Profile (creator workspace) ---------- */
+.profileEditPage{
+  position: relative;
+  width: 100%;
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 4px max(18px, env(safe-area-inset-left, 0px), env(safe-area-inset-right, 0px)) 96px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  min-width: 0;
+  animation: sectionFadeIn 260ms ease;
+}
+body[data-route="profile-edit"] .app{
+  padding-left: 0;
+  padding-right: 0;
+}
+body[data-route="profile-edit"] main.grid{
+  background: #05070d;
+}
+.profileEditHead{
+  display: grid;
+  grid-template-columns: 44px 1fr 44px;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 28px;
+  padding: 2px 0 0;
+}
+.profileEditBack{
+  grid-column: 1;
+  grid-row: 1;
+  justify-self: start;
+  margin-left: -4px;
+}
+.profileEditTitle{
+  grid-column: 1 / -1;
+  grid-row: 1;
+  margin: 0;
+  text-align: center;
+  font-size: 17px;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+  color: rgba(248, 250, 255, 0.96);
+  pointer-events: none;
+}
+.profileEditSave{
+  grid-column: 3;
+  grid-row: 1;
+  justify-self: end;
+  z-index: 1;
+  -webkit-appearance: none;
+  appearance: none;
+  border: 0;
+  background: transparent;
+  padding: 8px 4px;
+  margin: 0;
+  font-size: 16px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  color: rgba(94, 234, 212, 0.92);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.profileEditSave:disabled{
+  opacity: 0.34;
+  cursor: default;
+}
+.profileEditSave:not(:disabled):active{
+  opacity: 0.72;
+}
+.profileEditBody{
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+}
+.profileEditPhotoBlock{
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  padding: 8px 0 4px;
+}
+.profileEditAvatarBtn{
+  -webkit-appearance: none;
+  appearance: none;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  margin: 0;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.profileEditAvatarShell{
+  position: relative;
+  display: block;
+  width: 104px;
+  height: 104px;
+  border-radius: var(--nabad-squircle-radius, 22px);
+}
+.profileEditAvatar{
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+  object-fit: cover;
+  display: block;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+.profileEditAvatarFallback{
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: inherit;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: rgba(232, 238, 247, 0.34);
+  font-size: 34px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  user-select: none;
+  pointer-events: none;
+}
+.profileEditCameraBadge{
+  position: absolute;
+  right: -2px;
+  bottom: -2px;
+  width: 30px;
+  height: 30px;
+  border-radius: 999px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(18, 21, 30, 0.96);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: rgba(248, 250, 255, 0.88);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.28);
+}
+.profileEditCameraBadge svg{
+  width: 16px;
+  height: 16px;
+  display: block;
+}
+.profileEditPhotoLabel{
+  -webkit-appearance: none;
+  appearance: none;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: rgba(248, 250, 255, 0.88);
+  cursor: pointer;
+}
+.profileEditPhotoLabel:active{
+  opacity: 0.68;
+}
+.profileEditSection{
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.profileEditSectionLabel{
+  margin: 0;
+  padding: 0 6px;
+  color: rgba(223, 231, 251, 0.42);
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.profileEditCard{
+  border-radius: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  background: rgba(255, 255, 255, 0.025);
+  overflow: hidden;
+}
+.profileEditRow{
+  width: 100%;
+  min-height: 54px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.profileEditRow:last-child{
+  border-bottom: 0;
+}
+.profileEditRow:active{
+  background: rgba(255, 255, 255, 0.03);
+}
+.profileEditRowLabel{
+  font-size: 15px;
+  font-weight: 560;
+  letter-spacing: -0.01em;
+  color: rgba(248, 250, 255, 0.94);
+}
+.profileEditRowValue{
+  min-width: 0;
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  color: rgba(223, 231, 251, 0.62);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-align: right;
+}
+.profileEditRowValue--empty{
+  color: rgba(223, 231, 251, 0.38);
+}
+.profileEditRowChev{
+  color: rgba(223, 231, 251, 0.28);
+  font-size: 18px;
+  line-height: 1;
+}
+.profileEditSheet{
+  position: fixed;
+  inset: 0;
+  z-index: 180;
+  display: flex;
+  flex-direction: column;
+  pointer-events: none;
+}
+.profileEditSheet.isOpen{
+  pointer-events: auto;
+}
+.profileEditSheet[hidden]{
+  display: none !important;
+}
+body.profileEditSheetOpen{
+  overflow: hidden;
+}
+.profileEditSheetBackdrop{
+  position: absolute;
+  inset: 0;
+  background: rgba(3, 5, 10, 0.62);
+  opacity: 0;
+  transition: opacity 220ms ease;
+}
+.profileEditSheet.isOpen .profileEditSheetBackdrop{
+  opacity: 1;
+}
+.profileEditSheetCard{
+  position: relative;
+  z-index: 1;
+  flex: 1 1 auto;
+  min-height: 0;
+  margin-top: max(8px, env(safe-area-inset-top, 0px));
+  border-radius: 22px 22px 0 0;
+  background: #05070d;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-bottom: 0;
+  display: flex;
+  flex-direction: column;
+  transform: translateY(12px);
+  opacity: 0;
+  transition: transform 280ms cubic-bezier(0.22, 1, 0.36, 1), opacity 220ms ease;
+  box-shadow: 0 -12px 40px rgba(0, 0, 0, 0.38);
+}
+.profileEditSheet.isOpen .profileEditSheetCard{
+  transform: translateY(0);
+  opacity: 1;
+}
+.profileEditSheetHead{
+  display: grid;
+  grid-template-columns: 44px 1fr 44px;
+  align-items: center;
+  padding: 8px 10px 4px;
+  flex: 0 0 auto;
+}
+.profileEditSheetBack{
+  grid-column: 1;
+  justify-self: start;
+}
+.profileEditSheetTitle{
+  grid-column: 1 / -1;
+  grid-row: 1;
+  margin: 0;
+  text-align: center;
+  font-size: 17px;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+  color: rgba(248, 250, 255, 0.96);
+  pointer-events: none;
+}
+.profileEditSheetHeadSpacer{
+  grid-column: 3;
+}
+.profileEditSheetBody{
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  padding: 8px 18px calc(24px + env(safe-area-inset-bottom, 0px));
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+.profileEditSheetLead{
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.5;
+  color: rgba(223, 231, 251, 0.52);
+}
+.profileEditSheetFieldWrap{
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.profileEditSheetInput,
+.profileEditSheetTextarea{
+  width: 100%;
+  box-sizing: border-box;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.03);
+  color: #fff;
+  font-size: 16px;
+  line-height: 1.45;
+  padding: 14px 16px;
+  resize: none;
+}
+.profileEditSheetInput:focus,
+.profileEditSheetTextarea:focus{
+  outline: none;
+  border-color: rgba(255, 255, 255, 0.16);
+}
+.profileEditSheetHint{
+  margin: 0;
+  font-size: 13px;
+  color: rgba(223, 231, 251, 0.42);
+}
+.profileEditSheetActions{
+  margin-top: auto;
+  padding-top: 8px;
+}
+.profileEditSheetDone{
+  width: 100%;
+  min-height: 48px;
+  border: 0;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(248, 250, 255, 0.96);
+  font-size: 16px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  cursor: pointer;
+}
+.profileEditSheetDone:active{
+  opacity: 0.76;
+}
+.profileEditGenreGrid{
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.profileEditGenreChip{
+  -webkit-appearance: none;
+  appearance: none;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 999px;
+  padding: 8px 14px;
+  font-size: 14px;
+  font-weight: 560;
+  letter-spacing: -0.01em;
+  color: rgba(223, 231, 251, 0.72);
+  cursor: pointer;
+}
+.profileEditGenreChip.isSelected{
+  border-color: rgba(94, 234, 212, 0.34);
+  background: rgba(94, 234, 212, 0.08);
+  color: rgba(248, 250, 255, 0.96);
+}
+.profileEditPersonaList{
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.profileEditPersonaRow{
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  padding: 14px 16px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  background: rgba(255, 255, 255, 0.025);
+  text-align: left;
+  cursor: pointer;
+}
+.profileEditPersonaRow.isSelected{
+  border-color: rgba(94, 234, 212, 0.28);
+  background: rgba(94, 234, 212, 0.06);
+}
+.profileEditPersonaRowTitle{
+  font-size: 15px;
+  font-weight: 620;
+  color: rgba(248, 250, 255, 0.94);
+}
+.profileEditPersonaRowSub{
+  font-size: 13px;
+  color: rgba(223, 231, 251, 0.48);
+}
+html[data-theme="light"] body[data-route="profile-edit"] main.grid{
+  background: #f5f6fa;
+}
+html[data-theme="light"] .profileEditCard,
+html[data-theme="light"] .profileEditSheetCard{
+  background: rgba(255, 255, 255, 0.92);
+  border-color: rgba(15, 23, 42, 0.08);
+}
+html[data-theme="light"] .profileEditRowLabel,
+html[data-theme="light"] .profileEditSheetTitle,
+html[data-theme="light"] .profileEditTitle{
+  color: rgba(15, 23, 42, 0.92);
+}
+html[data-theme="light"] .profileEditRowValue{
+  color: rgba(15, 23, 42, 0.56);
+}
+html[data-theme="light"] .profileEditSheetInput,
+html[data-theme="light"] .profileEditSheetTextarea{
+  background: rgba(15, 23, 42, 0.03);
+  border-color: rgba(15, 23, 42, 0.08);
+  color: rgba(15, 23, 42, 0.92);
 }

@@ -124,7 +124,7 @@
       onload="this.media='all'"
     />
     <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Display:wght@900&family=Inter:wght@900&display=swap" /></noscript>
-    <link rel="stylesheet" href="./styles.css?v=20260702-220209" />
+    <link rel="stylesheet" href="./styles.css?v=20260702-225507" />
 
     <meta name="description" content="Nabadai is an AI music studio. Hum a melody, write lyrics, and ship a song." />
     <meta property="og:type" content="website" />
@@ -2527,6 +2527,9 @@
                     <path fill="#0a0c12" d="m10.6 14.6-2.3-2.3 1.3-1.3 1 1 3.4-3.4 1.3 1.3-4.7 4.7Z"/>
                   </svg>
                 </span>
+                <button type="button" id="btnProfileEditPill" class="profileEditPill" aria-label="Edit profile" hidden>
+                  Edit
+                </button>
                 <span id="profilePreviewGenderIcon" class="profilePreviewGenderIcon profileAuraGender" hidden aria-hidden="true"></span>
               </div>
               <div id="profileMusicStylesInline" class="profileMusicStylesInline" hidden aria-hidden="true">
@@ -3118,6 +3121,89 @@
 
         </details>
 
+        <section class="wide profileEditPage" data-route="profile-edit" aria-label="Edit profile">
+          <header class="profileEditHead">
+            <a href="#/profile" class="nabadBackBtn profileEditBack" aria-label="Back to Profile">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6 9 12l6 6"/></svg>
+            </a>
+            <h1 class="profileEditTitle appScreenTitle">Edit Profile</h1>
+            <button type="button" id="btnProfileEditPageSave" class="profileEditSave" disabled aria-disabled="true">Save</button>
+          </header>
+
+          <div class="profileEditBody">
+            <div class="profileEditPhotoBlock">
+              <button type="button" class="profileEditAvatarBtn" id="profileEditAvatarWrap" aria-label="Change profile photo">
+                <span class="profileEditAvatarShell">
+                  <img id="profileEditAvatar" class="profileEditAvatar" alt="" hidden decoding="async" />
+                  <span id="profileEditAvatarFallback" class="profileEditAvatarFallback" aria-hidden="true">Na</span>
+                  <span class="profileEditCameraBadge" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" focusable="false"><path fill="currentColor" d="M9.5 6.5 8 4H4v16h16V8h-4.5L14 6.5h-4.5Z"/><circle cx="12" cy="13" r="3.25" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>
+                  </span>
+                </span>
+              </button>
+              <button type="button" id="btnProfileEditChangePhoto" class="profileEditPhotoLabel">Change Photo</button>
+            </div>
+
+            <section class="profileEditSection" aria-labelledby="profileEditIdentityTitle">
+              <h2 id="profileEditIdentityTitle" class="profileEditSectionLabel">Identity</h2>
+              <div class="profileEditCard">
+                <button type="button" class="profileEditRow" data-profile-edit-field="displayName">
+                  <span class="profileEditRowLabel">Display name</span>
+                  <span class="profileEditRowValue profileEditRowValue--empty" id="profileEditDisplayNameVal">Add display name</span>
+                  <span class="profileEditRowChev" aria-hidden="true">›</span>
+                </button>
+                <button type="button" class="profileEditRow" data-profile-edit-field="bio">
+                  <span class="profileEditRowLabel">Bio</span>
+                  <span class="profileEditRowValue profileEditRowValue--empty" id="profileEditBioVal">Add a bio</span>
+                  <span class="profileEditRowChev" aria-hidden="true">›</span>
+                </button>
+                <button type="button" class="profileEditRow" data-profile-edit-field="genres">
+                  <span class="profileEditRowLabel">Music genres</span>
+                  <span class="profileEditRowValue profileEditRowValue--empty" id="profileEditGenresVal">Choose genres</span>
+                  <span class="profileEditRowChev" aria-hidden="true">›</span>
+                </button>
+              </div>
+            </section>
+
+            <section class="profileEditSection" aria-labelledby="profileEditSocialTitle">
+              <h2 id="profileEditSocialTitle" class="profileEditSectionLabel">Social links</h2>
+              <div class="profileEditCard">
+                <button type="button" class="profileEditRow" data-profile-edit-field="social:instagram">
+                  <span class="profileEditRowLabel">Instagram</span>
+                  <span class="profileEditRowValue profileEditRowValue--empty" id="profileEditSocialVal-instagram">Add link</span>
+                  <span class="profileEditRowChev" aria-hidden="true">›</span>
+                </button>
+                <button type="button" class="profileEditRow" data-profile-edit-field="social:tiktok">
+                  <span class="profileEditRowLabel">TikTok</span>
+                  <span class="profileEditRowValue profileEditRowValue--empty" id="profileEditSocialVal-tiktok">Add link</span>
+                  <span class="profileEditRowChev" aria-hidden="true">›</span>
+                </button>
+                <button type="button" class="profileEditRow" data-profile-edit-field="social:youtube">
+                  <span class="profileEditRowLabel">YouTube</span>
+                  <span class="profileEditRowValue profileEditRowValue--empty" id="profileEditSocialVal-youtube">Add link</span>
+                  <span class="profileEditRowChev" aria-hidden="true">›</span>
+                </button>
+                <button type="button" class="profileEditRow" data-profile-edit-field="social:spotify">
+                  <span class="profileEditRowLabel">Spotify</span>
+                  <span class="profileEditRowValue profileEditRowValue--empty" id="profileEditSocialVal-spotify">Add link</span>
+                  <span class="profileEditRowChev" aria-hidden="true">›</span>
+                </button>
+              </div>
+            </section>
+
+            <section class="profileEditSection" aria-labelledby="profileEditAiTitle">
+              <h2 id="profileEditAiTitle" class="profileEditSectionLabel">AI</h2>
+              <div class="profileEditCard">
+                <button type="button" class="profileEditRow" data-profile-edit-field="persona">
+                  <span class="profileEditRowLabel">Voice persona</span>
+                  <span class="profileEditRowValue" id="profileEditPersonaVal">Default voice</span>
+                  <span class="profileEditRowChev" aria-hidden="true">›</span>
+                </button>
+              </div>
+            </section>
+          </div>
+        </section>
+
         <section class="settingsPage wide" data-route="settings">
           <header class="settingsPageHead">
             <a href="#/profile" class="nabadBackBtn settingsBack" aria-label="Back to Profile">
@@ -3135,13 +3221,13 @@
             <section class="settingsSection" aria-labelledby="settingsAccountTitle">
               <h2 id="settingsAccountTitle" class="settingsSectionLabel">Account</h2>
               <div class="settingsList">
-                <a id="settingsEditProfileRow" class="settingsRow settingsRowLink" href="#/profile">
+                <a id="settingsEditProfileRow" class="settingsRow settingsRowLink" href="#/profile-edit">
                   <span class="settingsRowIco" aria-hidden="true">
                     <svg viewBox="0 0 24 24"><path d="M4 20h16"/><path d="M6 4h12v16"/><path d="M8 9h8M8 13h5"/></svg>
                   </span>
                   <span class="settingsRowBody">
                     <span class="settingsRowTitle">Edit profile</span>
-                    <span class="settingsRowSub">Name, bio, avatar, and public songs</span>
+                    <span class="settingsRowSub">Photo, bio, genres, and social links</span>
                   </span>
                   <span class="settingsRowChev" aria-hidden="true">›</span>
                 </a>
@@ -3903,6 +3989,19 @@
          otherwise drop from layout — fixed buttons then "jump" on
          return. This portal stays in the DOM; visibility is CSS-tied to
          body[data-route="profile"]. -->
+    <div id="profileEditSheet" class="profileEditSheet" hidden aria-hidden="true">
+      <div class="profileEditSheetBackdrop" data-profile-edit-sheet-dismiss="1"></div>
+      <section class="profileEditSheetCard" role="dialog" aria-modal="true" aria-labelledby="profileEditSheetTitle">
+        <header class="profileEditSheetHead">
+          <button type="button" class="nabadBackBtn profileEditSheetBack" data-profile-edit-sheet-dismiss="1" aria-label="Close editor">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6 9 12l6 6"/></svg>
+          </button>
+          <h2 id="profileEditSheetTitle" class="profileEditSheetTitle">Edit</h2>
+          <span class="profileEditSheetHeadSpacer" aria-hidden="true"></span>
+        </header>
+        <div id="profileEditSheetBody" class="profileEditSheetBody"></div>
+      </section>
+    </div>
     <div id="profileAuraHeaderChromeRoot" class="profileAuraHeaderChrome" aria-hidden="true">
       <a
         href="#/credits"
@@ -4211,7 +4310,7 @@
             h = hasSession ? "discover" : (guestMode ? "discover" : "auth");
           }
         }
-        var ok = /^(intro|onboarding|music-preferences|auth|generate|challenges|activity|discover|friends|profile|settings|player|sounds|user|vocal|stems|studio|advanced|credits|mentor)$/.test(h);
+        var ok = /^(intro|onboarding|music-preferences|auth|generate|challenges|activity|discover|friends|profile|profile-edit|settings|player|sounds|user|vocal|stems|studio|advanced|credits|mentor)$/.test(h);
         if (!ok) {
           if (!done) h = "auth";
           else {
@@ -4232,6 +4331,6 @@
     </script>
     <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
     <script src="./env.client.js" onerror="void 0"></script>
-    <script type="module" src="./src/app.js?v=20260702-220209"></script>
+    <script type="module" src="./src/app.js?v=20260702-225507"></script>
   </body>
 </html>

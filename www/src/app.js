@@ -77,6 +77,11 @@ import {
 import { initTheme } from "./theme.js";
 import { initSoundsStudioOnce } from "./sounds-studio.js";
 import {
+  initProfileEditOnce,
+  onProfileEditRouteActive,
+  openProfileEditPage,
+} from "./profile-edit.js";
+import {
   initNabadVerificationUi,
   lyricsEditedAfterNabadDraft,
   nabadVerificationBadgeForTrack,
@@ -102,7 +107,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260702-220209";
+const APP_BUILD = "20260702-225507";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -856,6 +861,7 @@ const els = {
   profileIsPublic: document.getElementById("profileIsPublic"),
   btnProfileSave: document.getElementById("btnProfileSave"),
   btnProfileEdit: document.getElementById("btnProfileEdit"),
+  btnProfileEditPill: document.getElementById("btnProfileEditPill"),
   profilePersonaAvatarBadge: document.getElementById("profilePersonaAvatarBadge"),
   profileEditActions: document.getElementById("profileEditActions"),
   btnProfileCancel: document.getElementById("btnProfileCancel"),
@@ -3284,7 +3290,7 @@ function applyRoute({ passGen } = {}) {
     "intro", "onboarding", "music-preferences", "start", "auth", "generate",
     ...(HUB_FEATURE_ENABLED ? ["hub"] : []),
     ...(MESSAGES_FEATURE_ENABLED ? ["messages", "messages-thread"] : []),
-    "settings", "profile", "player", "discover", "discover-playlist", "friends", "challenges", "activity", "mashup", "mentor", "vocal", "stems", "studio", "advanced", "user", "credits", "sounds",
+    "settings", "profile", "profile-edit", "player", "discover", "discover-playlist", "friends", "challenges", "activity", "mashup", "mentor", "vocal", "stems", "studio", "advanced", "user", "credits", "sounds",
   ]);
   const onboardingParsed = parseOnboardingRoute(route);
   let normalized = pendingPublicUsername ? "user" : (route === "start" ? "auth" : route);
@@ -3380,7 +3386,7 @@ function applyRoute({ passGen } = {}) {
   // Public profile is intentionally readable without auth so share-link
   // visitors don't hit a wall before discovering the rest of the product.
   const sharedTrackId = parseSharedTrackIdFromLocation();
-  const protectedRoutes = new Set(["generate", "profile", "friends", "activity", "mashup", "player", "vocal", "stems", "studio", "advanced", "credits", "sounds", ...(MESSAGES_FEATURE_ENABLED ? ["messages", "messages-thread"] : [])]);
+  const protectedRoutes = new Set(["generate", "profile", "profile-edit", "friends", "activity", "mashup", "player", "vocal", "stems", "studio", "advanced", "credits", "sounds", ...(MESSAGES_FEATURE_ENABLED ? ["messages", "messages-thread"] : [])]);
   if (!isLoggedIn && protectedRoutes.has(wanted)) {
     if (wanted === "player" && sharedTrackId) {
       // Listen-only share links — do not bounce guests to sign-in.
@@ -3663,6 +3669,10 @@ function applyRoute({ passGen } = {}) {
       restoreRouteScroll("profile");
     }
     scheduleProfileSongsRender({ deferCloud: profileHeavy });
+  }
+  if (wanted === "profile-edit") {
+    setProfileEditing(false);
+    try { onProfileEditRouteActive(); } catch {}
   }
   if (routeApplyStale(gate)) return;
   if (wanted === "credits" || wanted === "sounds") {
@@ -19009,7 +19019,7 @@ const AUTH_PKCE_KEY = "mas:supabase:pkce:v1";
 const AUTH_APPLE_NONCE_KEY = "mas:supabase:apple-nonce:v1";
 const OAUTH_NATIVE_REDIRECT = "com.nabadai.music://auth-callback";
 const APPLE_NATIVE_BUNDLE_ID = "com.nabadai.music";
-let activeProfile = { id: "guest", username: "guest", email: "", soundCertified: false };
+let activeProfile = { id: "guest", username: "guest", email: "", displayName: "", soundCertified: false };
 let lastAuthDebug = "";
 function loadProfile() {
   try {
@@ -19054,6 +19064,7 @@ function onAuthAccountSwitched(prevUserId, nextUserId) {
   activeProfile = {
     id: nextUserId,
     username: deriveUsernameFromAuth(user) || "guest",
+    displayName: "",
     email: String(user?.email || ""),
     gender: "",
     voiceTimbre: "",
@@ -20543,6 +20554,10 @@ function renderAuthStatus() {
     els.btnProfileShareIcon.style.display = isAuthed ? "" : "none";
     els.btnProfileShareIcon.setAttribute("aria-hidden", isAuthed ? "false" : "true");
   }
+  if (els.btnProfileEditPill) {
+    els.btnProfileEditPill.hidden = !isAuthed;
+    els.btnProfileEditPill.setAttribute("aria-hidden", isAuthed ? "false" : "true");
+  }
   document.body.setAttribute("data-logged-in", isAuthed ? "true" : "false");
   try { updateProfilePersonaRow(); } catch {}
 }
@@ -21439,12 +21454,19 @@ async function supabaseUpsertProfile(profile) {
     } catch {}
   }
   if (!outgoingUsername) outgoingUsername = "guest";
-  // Never wipe a real cloud avatar/bio with empty local defaults — that
+  // Never wipe a real cloud avatar/bio/genres with empty local defaults — that
   // happened when boot couldn't reach Supabase and scheduleProfileCloudSync
-  // pushed a blank shell over the stored row.
+  // pushed a blank shell over the stored row (genres kept clearing on reopen).
   let outgoingAvatar = String(profile.avatar || "").trim();
   let outgoingBio = String(profile.bio || "").trim();
-  if ((!outgoingAvatar || !outgoingBio) && authSession?.user?.id) {
+  let outgoingGenres = String(profile.genres || "").trim();
+  let outgoingInstagram = String(profile.links?.instagram || "").trim();
+  let outgoingYoutube = String(profile.links?.youtube || "").trim();
+  let outgoingTiktok = String(profile.links?.tiktok || "").trim();
+  const needsCloudPeek =
+    (!outgoingAvatar || !outgoingBio || !outgoingGenres || !outgoingInstagram || !outgoingYoutube || !outgoingTiktok) &&
+    authSession?.user?.id;
+  if (needsCloudPeek) {
     try {
       const existing = await supabaseLoadProfile();
       if (existing) {
@@ -21453,6 +21475,18 @@ async function supabaseUpsertProfile(profile) {
         }
         if (!outgoingBio && String(existing.bio || "").trim()) {
           outgoingBio = String(existing.bio).trim();
+        }
+        if (!outgoingGenres && String(existing.genres || "").trim()) {
+          outgoingGenres = String(existing.genres).trim();
+        }
+        if (!outgoingInstagram && String(existing.links?.instagram || "").trim()) {
+          outgoingInstagram = String(existing.links.instagram).trim();
+        }
+        if (!outgoingYoutube && String(existing.links?.youtube || "").trim()) {
+          outgoingYoutube = String(existing.links.youtube).trim();
+        }
+        if (!outgoingTiktok && String(existing.links?.tiktok || "").trim()) {
+          outgoingTiktok = String(existing.links.tiktok).trim();
         }
       }
     } catch {}
@@ -21465,10 +21499,10 @@ async function supabaseUpsertProfile(profile) {
     voice_timbre: profile.voiceTimbre || "",
     bio: outgoingBio,
     avatar: outgoingAvatar,
-    genres: profile.genres || "",
-    instagram: profile.links?.instagram || "",
-    youtube: profile.links?.youtube || "",
-    tiktok: profile.links?.tiktok || "",
+    genres: outgoingGenres,
+    instagram: outgoingInstagram,
+    youtube: outgoingYoutube,
+    tiktok: outgoingTiktok,
     is_public: profile.isPublic !== false,
     calling_card_url: profile.callingCardUrl || null,
     calling_card_updated_at: profile.callingCardUpdatedAt
@@ -21520,6 +21554,7 @@ async function supabaseLoadProfile() {
   return {
     id: p.user_id || activeProfile.id,
     username: p.username || "guest",
+    displayName: String(activeProfile?.displayName || "").trim(),
     email: p.email || "",
     gender: p.gender || "",
     voiceTimbre: p.voice_timbre || "",
@@ -35213,6 +35248,10 @@ function setProfileEditing(on) {
   if (els.profilePreviewTimbreInput) els.profilePreviewTimbreInput.disabled = !profileEditing;
   if (els.profilePreviewBioInput) els.profilePreviewBioInput.disabled = !profileEditing;
   if (els.btnProfileEdit) els.btnProfileEdit.style.display = profileEditing ? "none" : "";
+  if (els.btnProfileEditPill) {
+    els.btnProfileEditPill.hidden = profileEditing;
+    els.btnProfileEditPill.setAttribute("aria-hidden", profileEditing ? "true" : "false");
+  }
   if (els.profileEditActions) {
     els.profileEditActions.style.display = profileEditing ? "flex" : "none";
     els.profileEditActions.setAttribute("aria-hidden", profileEditing ? "false" : "true");
@@ -35700,10 +35739,15 @@ function shouldShowProfileHeaderSkeleton() {
 function renderProfileIdentityLine() {
   const el = els.profileIdentityLine;
   if (!el) return;
-  // Retired under @handle — music styles line replaced persona/voice CTAs here.
-  el.hidden = true;
-  el.textContent = "";
-  el.innerHTML = "";
+  const friendly = String(activeProfile?.displayName || "").trim();
+  if (!friendly || profileEditing) {
+    el.hidden = true;
+    el.textContent = "";
+    el.innerHTML = "";
+    return;
+  }
+  el.hidden = false;
+  el.textContent = friendly;
 }
 
 /* =================================================================
@@ -35943,7 +35987,7 @@ function bindProfileMusicStylesBtnOnce() {
     if (!authSession?.user?.id) return;
     if (String(activeProfile?.id || "") !== String(authSession.user.id)) return;
     try { haptic("light"); } catch {}
-    openMusicPreferencesEditor();
+    openProfileEditPage();
   });
 }
 
@@ -47526,6 +47570,45 @@ if (soundGenerateCostEl) {
   soundGenerateCostEl.textContent = `${formatCreditsAmount(SOUND_CREDIT_COST)} credits`;
 }
 initSoundsStudioOnce({ promptEl: els.soundPrompt, haptic });
+
+function syncProfileUiFromEdit(profile = activeProfile) {
+  if (els.profilePreviewUsernameInput) {
+    els.profilePreviewUsernameInput.value = profile?.username ? `@${profile.username}` : "@guest";
+  }
+  if (els.profilePreviewBioInput) {
+    const rawBio = String(profile?.bio || "").trim();
+    els.profilePreviewBioInput.value = /^add a short bio/i.test(rawBio) ? "" : profile?.bio || "";
+  }
+  renderProfilePreviewFromInputs();
+  renderProfileHeroBio();
+  renderProfileIdentityLine();
+  renderProfileMusicStylesInline(profile);
+  renderPersonaSelect();
+  refreshOwnSongsUi();
+}
+
+try {
+  initProfileEditOnce({
+    getActiveProfile: () => activeProfile,
+    saveProfile,
+    supabaseUpsertProfile,
+    compressAvatarFile,
+    loadPersonas,
+    loadPersonaSelection,
+    savePersonaSelection,
+    getActivePersonaId,
+    personaTypeLabel,
+    getAuthSession: () => authSession,
+    els,
+    applyRoute: scheduleApplyRoute,
+    haptic,
+    showToast,
+    setStatus,
+    syncProfileUi: syncProfileUiFromEdit,
+  });
+} catch (e) {
+  console.error("[profile-edit] init failed", e);
+}
 if (els.btnSoundGenerate) {
   els.btnSoundGenerate.addEventListener("click", async () => {
     const prompt = String(els.soundPrompt?.value || "").trim();
@@ -48538,16 +48621,23 @@ if (els.btnProfileSave) {
     const bio = String(els.profilePreviewBioInput?.value || "").trim().slice(0, 280);
     const genres = String(activeProfile.genres || "").trim();
     const isPublic = Boolean(els.profileIsPublic?.checked);
+    const links = {
+      instagram: String(activeProfile.links?.instagram || "").trim(),
+      youtube: String(activeProfile.links?.youtube || "").trim(),
+      tiktok: String(activeProfile.links?.tiktok || "").trim(),
+      spotify: String(activeProfile.links?.spotify || "").trim(),
+    };
     const id = email || `user:${username}`;
     saveProfile({
       id,
       username,
       email,
+      displayName: String(activeProfile.displayName || "").trim(),
       voiceTimbre,
       bio,
       avatar: activeProfile.avatar || "",
       genres,
-      links: {},
+      links,
       isPublic,
     });
     try {
@@ -48559,7 +48649,7 @@ if (els.btnProfileSave) {
         bio,
         avatar: activeProfile.avatar || "",
         genres,
-        links: {},
+        links,
         isPublic,
       });
     } catch (e) {
@@ -48595,24 +48685,25 @@ document.addEventListener("keydown", (e) => {
 });
 if (els.settingsEditProfileRow) {
   els.settingsEditProfileRow.addEventListener("click", () => {
-    window.setTimeout(() => {
-      setProfileEditing(true);
-      if (els.profilePreviewUsernameInput) els.profilePreviewUsernameInput.focus();
-      setStatus("Editing profile — adjust fields, then Save.");
-    }, 80);
+    try { haptic("light"); } catch {}
+  });
+}
+if (els.btnProfileEditPill) {
+  els.btnProfileEditPill.addEventListener("click", (e) => {
+    e.preventDefault();
+    if (!authSession?.user?.id && !getSupabaseAuthToken()) {
+      try { location.hash = "#/auth"; } catch {}
+      try { showToast("Sign in to edit your profile", { icon: "👤", durationMs: 2600 }); } catch {}
+      return;
+    }
+    try { haptic("light"); } catch {}
+    openProfileEditPage();
   });
 }
 if (els.profileUsernamePrompt) {
-  // Tap the soft prompt → enter edit mode and select the username
-  // text so they can just start typing their handle of choice.
+  // Tap the soft prompt → dedicated edit workspace.
   els.profileUsernamePrompt.addEventListener("click", () => {
-    setProfileEditing(true);
-    const input = els.profilePreviewUsernameInput;
-    if (input) {
-      input.focus();
-      try { input.select(); } catch {}
-    }
-    setStatus("Pick a username, then tap Save.");
+    openProfileEditPage();
   });
 }
 if (els.btnProfileCancel) {
@@ -49626,6 +49717,7 @@ if (els.profileAvatarFile) {
   els.profileAvatarFile.addEventListener("change", async () => {
     const f = els.profileAvatarFile?.files?.[0];
     if (!f) return;
+    if ((document.body.getAttribute("data-route") || "") === "profile-edit") return;
     try {
       const dataUrl = await compressAvatarFile(f, { maxSize: 320, quality: 0.82 });
       if (!dataUrl) throw new Error("Could not read photo");

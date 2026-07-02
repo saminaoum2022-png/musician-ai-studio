@@ -48,7 +48,7 @@ import {
   ensureAbstractCoverForTrack,
 } from "./cover-art/generate.js";
 import { isPollinationsCoverEligible, shouldUseAbstractCover } from "./cover-art/params.js";
-import { DEFAULT_SONG_COVER_URL, isLogoCoverUrl, normalizeSongCoverUrl } from "./cover-art/placeholders.js";
+import { DEFAULT_SONG_COVER_URL, isLogoCoverUrl, normalizeSongCoverUrl, playerEmptyArtUrl } from "./cover-art/placeholders.js";
 import { initCoverArtOverlay, syncCoverArtOverlay } from "./cover-art/overlay.js";
 import {
   clearGenerationPending,
@@ -83,7 +83,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260702-125941";
+const APP_BUILD = "20260702-131630";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -26362,7 +26362,7 @@ function notificationMessage(n) {
       return {
         title: "Your songs are ready",
         body: `${titles.slice(0, 2).join(" · ") || "Both variants"} — saved to your Library.`,
-        action: "Open Library",
+        action: "View songs",
       };
     }
     const title = String(n?.metadata?.song_title || titles[0] || "Your song").trim();
@@ -26844,9 +26844,7 @@ function notificationActivityHref(n) {
   if (t === "chart_rank" && songId) return `#/player?track=${encodeURIComponent(songId)}`;
   if (t === "song_live" && songId) return `#/player?track=${encodeURIComponent(songId)}`;
   if (t === "generation_ready") {
-    const trackId = String(meta.track_ids?.[0] || meta.song_id || "").trim();
-    if (trackId) return `#/player?track=${encodeURIComponent(trackId)}`;
-    return "#/profile";
+    return "#/profile?seg=all";
   }
   if (t === "song_feedback" && songId) return `#/player?track=${encodeURIComponent(songId)}`;
   if (t === "remix") {
@@ -26879,9 +26877,15 @@ async function openActivityNotificationTarget(n) {
     showToast("This post is not available anymore.", { icon: "!", durationMs: 3800 });
     return;
   }
+  const t = String(n?.type || "").trim();
+  if (t === "generation_ready") {
+    try { sessionStorage.setItem(PROFILE_SONGS_SEGMENT_KEY, "all"); } catch {}
+    _profileSongsSegment = "all";
+    location.hash = "#/profile?seg=all";
+    return;
+  }
   const href = notificationActivityHref(n);
   if (!href) return;
-  const t = String(n?.type || "").trim();
   const meta = n?.metadata || {};
 
   if (t === "remix") {
@@ -27015,14 +27019,14 @@ function activityItemDisplayParts(n, msg) {
       return {
         category: "Ready",
         title: "Your 2 songs are ready",
-        description: titles.slice(0, 2).join(" · ") || "Both variants saved to Library",
+        description: titles.slice(0, 2).join(" · ") || "Both variants saved to your songs",
       };
     }
     const title = String(meta.song_title || titles[0] || "Your song").trim();
     return {
       category: "Ready",
       title,
-      description: "Saved to your Library — tap to play",
+      description: "Saved to your songs — tap to open",
     };
   }
   if (t === "social_like") {
@@ -40981,7 +40985,7 @@ function setCoverImageSrc(img, url, opts = {}) {
   img.dataset.coverSrc = raw || "";
   img.dataset.coverRetry = "0";
   img.dataset.coverFallback = "";
-  img.classList.toggle("isCoverPlaceholder", empty || isBrokenCoverPlaceholder(src) || /nabadai-logo\.png/i.test(src));
+  img.classList.toggle("isCoverPlaceholder", empty || isBrokenCoverPlaceholder(src) || isLogoCoverUrl(src));
   img.classList.add("coverImg");
   if (/^https?:\/\//i.test(src)) img.crossOrigin = "anonymous";
   else img.removeAttribute("crossorigin");
@@ -40994,7 +40998,7 @@ function setPlayerMeta({ title, subtitle, artUrl, releaseCaption, remixOf, chall
   if (els.playerSubtitle) els.playerSubtitle.textContent = subtitle || "";
   if (els.playerArt) {
     if (hasTrack) setCoverImageSrc(els.playerArt, artUrl);
-    else setCoverImageSrc(els.playerArt, placeholderCoverDataUrl(), { allowEmpty: true });
+    else setCoverImageSrc(els.playerArt, playerEmptyArtUrl(), { allowEmpty: true });
     els.playerArt.classList.toggle("isPlaceholder", !hasTrack);
     els.playerArt.classList.toggle("isCoverPlaceholder", !hasTrack);
   }

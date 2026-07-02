@@ -18,6 +18,8 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, "..");
 const SOURCE = path.join(ROOT, "assets", "icons", "splash-mark.png");
 const APP_BG = { r: 5, g: 7, b: 13, alpha: 1 }; // #05070d
+/** Logo width vs canvas — ~76% fill zoomed out 20% → ~61%, centered on #05070d. */
+const MARK_CANVAS_FILL = 0.608;
 
 const ICON_DIR = path.join(
   ROOT,
@@ -31,8 +33,7 @@ const IOS_ICON = path.join(ICON_DIR, "AppIcon-512@2x.png");
 
 /** Square canvas with the splash mark centered — matches boot splash / PWA. */
 async function composeBrandSquare(size) {
-  const pad = Math.round(size * 0.12);
-  const inner = Math.max(16, size - pad * 2);
+  const inner = Math.max(16, Math.round(size * MARK_CANVAS_FILL));
   const mark = await sharp(SOURCE)
     .resize(inner, inner, { fit: "inside", kernel: sharp.kernel.lanczos3 })
     .png()

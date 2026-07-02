@@ -97,7 +97,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260702-180801";
+const APP_BUILD = "20260702-203731";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -49006,14 +49006,65 @@ if (els.authEmailForm) {
     void runEmailPasswordAuth();
   });
 }
+function countUnpublishedLibraryTracks() {
+  return loadLibrary().filter((t) => {
+    if (libraryTrackPublicTs(t) || t?.publicOnProfile) return false;
+    return Boolean(String(t?.url || "").trim());
+  }).length;
+}
+
+function signOutConfirmMessage() {
+  const native = isNativeShell();
+  const drafts = countUnpublishedLibraryTracks();
+  if (native) {
+    if (drafts > 0) {
+      return (
+        `Your ${drafts} unpublished song${drafts === 1 ? "" : "s"} stay on this device when you sign out and come back when you sign in again.\n\n` +
+        "Publish any song you want kept in your Nabad account on every device.\n\nSign out?"
+      );
+    }
+    return "Sign out on this device? Published songs remain in your account when you sign back in.";
+  }
+  if (drafts > 0) {
+    return (
+      `You have ${drafts} unpublished song${drafts === 1 ? "" : "s"} saved only in this browser — not in your Nabad cloud account until you publish them.\n\n` +
+      "They'll still be here when you sign back in on this browser. Clearing this site's data will remove them.\n\n" +
+      "Publish songs you want kept forever.\n\nSign out?"
+    );
+  }
+  return (
+    "Sign out? Published songs remain in your account. " +
+    "Unpublished drafts in this browser stay until you clear site data."
+  );
+}
+
+async function requestSignOut() {
+  let ok = false;
+  try {
+    ok = window.confirm(signOutConfirmMessage());
+  } catch {
+    ok = true;
+  }
+  if (!ok) return;
+  logoutCurrentUser();
+}
+
 function logoutCurrentUser() {
   const prevUserId = String(authSession?.user?.id || "");
   saveAuthSession(null);
   void clearAuthSessionEverywhere();
   if (prevUserId) {
-    wipeLocalStorageForUserId(prevUserId);
-    saveLibraryFor(prevUserId, []);
+    // Keep mas:library:v1:{uid} on disk — private drafts survive sign-out on
+    // this device/browser and return when the same user signs back in.
+    // Account delete still wipes library explicitly.
+    try {
+      localStorage.removeItem(profileStorageKey(prevUserId));
+      const raw = localStorage.getItem(PROFILE_KEY);
+      const p = raw ? JSON.parse(raw) : null;
+      if (String(p?.id || "") === prevUserId) localStorage.removeItem(PROFILE_KEY);
+    } catch {}
     saveHubFeed([]);
+    invalidateLibraryMemCache();
   }
   clearGuestLocalData();
   resetProfileUiToGuest();
@@ -49528,7 +49579,7 @@ if (els.settingsBtnSignIn) {
   els.settingsBtnSignIn.addEventListener("click", () => void runGoogleOAuthLogin());
 }
 if (els.settingsBtnLogout) {
-  els.settingsBtnLogout.addEventListener("click", () => logoutCurrentUser());
+  els.settingsBtnLogout.addEventListener("click", () => void requestSignOut());
 }
 if (els.btnUserPublicFollow) {
   els.btnUserPublicFollow.addEventListener("click", () => void toggleCurrentUserPublicFollow());

@@ -54,7 +54,9 @@ module.exports = async function handler(req, res) {
 
     const { buildAbstractCoverPrompt, buildPollinationsUrl } = await getPromptModule();
 
-    const { prompt, seed, bucket, visualMode, storyTheme, params } = buildAbstractCoverPrompt({
+    const avoidTagsInput = String(body?.avoidTagsInput || body?.avoidTags || "").trim().slice(0, MAX_FIELD);
+
+    const { prompt, seed, bucket, visualMode, storyTheme, artworkSource, params } = buildAbstractCoverPrompt({
       songId,
       title: String(body?.title || "").trim().slice(0, MAX_FIELD),
       genre: String(body?.genre || body?.style || "").trim().slice(0, MAX_FIELD),
@@ -67,9 +69,11 @@ module.exports = async function handler(req, res) {
       styleSent: String(body?.styleSent || "").trim().slice(0, MAX_FIELD),
       lyrics: String(body?.lyrics || body?.lyricsInput || "").trim().slice(0, 800),
       finalPrompt: String(body?.finalPrompt || "").trim().slice(0, MAX_FIELD),
+      artworkStyle: String(body?.artworkStyle || body?.artworkHint || "").trim().slice(0, 240),
+      artworkHint: String(body?.artworkHint || "").trim().slice(0, 240),
     });
 
-    const upstreamUrl = buildPollinationsUrl(prompt, seed);
+    const upstreamUrl = buildPollinationsUrl(prompt, seed, { avoidTags: avoidTagsInput });
     const upstream = await fetch(upstreamUrl, {
       headers: { "User-Agent": "NabadAi-CoverArt/1.0" },
     });
@@ -95,6 +99,7 @@ module.exports = async function handler(req, res) {
       bucket,
       visualMode,
       storyTheme,
+      artworkSource,
       params,
       provider: "pollinations",
       abstract: true,

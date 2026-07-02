@@ -407,15 +407,54 @@ function bucketMoodPhrase(bucketKey) {
   return map[bucketKey] || map.default;
 }
 
+const TEXT_REQUEST_RE =
+  /\b(with|include|show|add|display|featuring)\s+(the\s+)?(song\s+|album\s+)?(title|name|text|words|letters|typography|caption|subtitle|lyrics|label|watermark|logo\s+text?)\b/gi;
+const TYPOGRAPHY_RE =
+  /\b(album cover with text|text overlay|title on cover|song title|artist name on cover|readable text|written words|typography|watermark|logo text)\b/gi;
+
+/** User Artwork field (Create) or Image Mood hint — highest priority for Pollinations scene. */
+export function resolveUserArtworkPrompt(input) {
+  return String(input?.artworkStyle || input?.artworkHint || "").trim();
+}
+
+/** Strip text-on-image requests; never pass raw song title into the visual prompt. */
+export function sanitizeArtworkPrompt(raw, { title = "" } = {}) {
+  let s = String(raw || "").trim();
+  if (!s) return "";
+  s = s.replace(TYPOGRAPHY_RE, " ");
+  s = s.replace(TEXT_REQUEST_RE, " ");
+  const t = String(title || "").trim();
+  if (t.length >= 3) {
+    const esc = t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    s = s.replace(new RegExp(esc, "gi"), " ");
+  }
+  return s.replace(/\s+/g, " ").trim().slice(0, 240);
+}
+
+function parseAvoidTagsList(raw) {
+  return String(raw || "")
+    .split(/[,;|]/)
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .slice(0, 24);
+}
+
+export function buildCoverNegativePrompt(avoidTags) {
+  const extra = parseAvoidTagsList(avoidTags);
+  if (!extra.length) return NEGATIVE_TEXT_PROMPT;
+  return `${NEGATIVE_TEXT_PROMPT}, ${extra.join(", ")}`;
+}
+
 function buildCoverSeed(input, storyTheme, bucketKey) {
   const storyBlob = buildStoryBlob(input);
+  const artwork = sanitizeArtworkPrompt(resolveUserArtworkPrompt(input), { title: input?.title });
   const songId = String(input?.songId || input?.id || "").trim();
-  return fnv1a(`${songId}|${storyTheme}|${bucketKey}|${storyBlob}`) % 2147483646;
+  return fnv1a(`${songId}|${storyTheme}|${bucketKey}|${storyBlob}|${artwork}`) % 2147483646;
 }
 
 /**
  * @param {object} input
- * @returns {{ prompt: string, seed: number, bucket: string, visualMode: string, storyTheme: string, params: object }}
+ * @returns {{ prompt: string, seed: number, bucket: string, visualMode: string, storyTheme: string, artworkSource: string, params: object }}
  */
 export function buildAbstractCoverPrompt(input) {
   const songId = String(input?.songId || input?.id || input?.title || "nabad-song").trim();
@@ -427,30 +466,44 @@ export function buildAbstractCoverPrompt(input) {
   const energy = parseEnergy(input?.energy);
   const brightness = parseBrightness(input?.brightness);
   const sonicProfile = String(input?.sonicProfile || inferSonicProfile(`${genre} ${styleBlob}`));
+  const userArtwork = sanitizeArtworkPrompt(resolveUserArtworkPrompt(input), { title });
 
   const { scene, visualMode, storyTheme, bucketKey } = buildSceneFromStory(input);
   const composition = COMPOSITIONS[fnv1a(`${songId}:composition`) % COMPOSITIONS.length];
   const seed = buildCoverSeed(input, storyTheme, bucketKey);
+  const artworkSource = userArtwork ? "user_artwork" : "auto_story";
 
-  const parts = [
-    SAFETY_PREFIX + STYLE_CORE,
-    scene,
-    composition,
-    storyMoodPhrase(storyTheme),
-    bucketMoodPhrase(bucketKey),
-    tempoPhrase(tempo),
-    brightnessPhrase(brightness),
-    sonicPhrase(sonicProfile),
-    NO_TEXT_REINFORCE,
-    SAFETY_SUFFIX,
-  ].filter(Boolean);
+  const parts = userArtwork
+    ? [
+        SAFETY_PREFIX + STYLE_CORE,
+        `primary visual direction from user: ${userArtwork}`,
+        composition,
+        bucketMoodPhrase(bucketKey),
+        brightnessPhrase(brightness),
+        sonicPhrase(sonicProfile),
+        NO_TEXT_REINFORCE,
+        SAFETY_SUFFIX,
+      ]
+    : [
+        SAFETY_PREFIX + STYLE_CORE,
+        scene,
+        composition,
+        storyMoodPhrase(storyTheme),
+        bucketMoodPhrase(bucketKey),
+        tempoPhrase(tempo),
+        brightnessPhrase(brightness),
+        sonicPhrase(sonicProfile),
+        NO_TEXT_REINFORCE,
+        SAFETY_SUFFIX,
+      ];
 
   return {
-    prompt: parts.join(", "),
+    prompt: parts.filter(Boolean).join(", "),
     seed,
     bucket: bucketKey,
-    visualMode,
+    visualMode: userArtwork ? "user_directed" : visualMode,
     storyTheme,
+    artworkSource,
     params: {
       songId,
       title,
@@ -461,14 +514,16 @@ export function buildAbstractCoverPrompt(input) {
       brightness,
       sonicProfile,
       bucket: bucketKey,
-      visualMode,
+      visualMode: userArtwork ? "user_directed" : visualMode,
       storyTheme,
+      artworkSource,
+      userArtwork: userArtwork || undefined,
     },
   };
 }
 
-export function buildPollinationsUrl(prompt, seed, { width = 1024, height = 1024 } = {}) {
+export function buildPollinationsUrl(prompt, seed, { width = 1024, height = 1024, avoidTags = "" } = {}) {
   const encoded = encodeURIComponent(prompt);
-  const negative = encodeURIComponent(NEGATIVE_TEXT_PROMPT);
+  const negative = encodeURIComponent(buildCoverNegativePrompt(avoidTags));
   return `https://image.pollinations.ai/prompt/${encoded}?width=${width}&height=${height}&seed=${seed}&nologo=true&enhance=false&private=true&negative_prompt=${negative}`;
 }

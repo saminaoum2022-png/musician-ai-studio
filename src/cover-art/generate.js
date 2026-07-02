@@ -58,6 +58,7 @@ function patchLibraryTrackCover(trackId, patch) {
     coverSeed: seed || prev.meta?.coverSeed || "",
     coverBucket: bucket || params?.bucket || prev.meta?.coverBucket || "",
     coverStoryTheme: params?.storyTheme || prev.meta?.coverStoryTheme || "",
+    coverArtworkSource: params?.artworkSource || prev.meta?.coverArtworkSource || "",
     coverParams: params || prev.meta?.coverParams,
     photoMode: false,
     coverNabadMark: coverSource === "pollinations",

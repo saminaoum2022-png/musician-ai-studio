@@ -97,6 +97,8 @@ export function coverArtParamsFromTrack(track) {
     lyrics,
     lyricsInput: lyrics,
     finalPrompt: String(meta.finalPrompt || "").trim(),
+    artworkStyle: String(meta?.artworkStyle || meta?.artworkHint || "").trim(),
+    avoidTagsInput: String(meta?.avoidTagsInput || "").trim(),
   };
 }
 

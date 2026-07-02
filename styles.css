@@ -539,18 +539,20 @@ html[data-theme="light"] .challengesGhostCta{
 }
 
 html[data-theme="light"] .homeDeskSeg{
-  background: rgba(255, 255, 255, 0.72);
-  border-color: rgba(15, 23, 40, 0.08);
+  background: none;
+  border: 0;
 }
 
-html[data-theme="light"] .homeDeskSegBtn{
+html[data-theme="light"] .homeDeskSegBtn,
+html[data-theme="light"] .nabadTabsTab.homeDeskSegBtn{
   color: var(--muted);
 }
 
-html[data-theme="light"] .homeDeskSegBtn.is-active{
-  background: #fff;
+html[data-theme="light"] .homeDeskSegBtn.is-active,
+html[data-theme="light"] .nabadTabsTab.homeDeskSegBtn.is-active{
   color: var(--text);
-  box-shadow: 0 6px 20px rgba(88, 104, 140, 0.12);
+  background: none;
+  box-shadow: none;
 }
 
 html[data-theme="light"] .homeDeskPhotoPromo{
@@ -704,11 +706,13 @@ html[data-theme="light"] .profileStatPill:not(:last-child)::after{
   background: linear-gradient(180deg, transparent, rgba(15, 23, 40, 0.12), transparent);
 }
 
-html[data-theme="light"] .profileTab{
+html[data-theme="light"] .profileTab,
+html[data-theme="light"] .nabadTabsTab.profileTab{
   color: var(--muted);
 }
 
-html[data-theme="light"] .profileTab.isActive{
+html[data-theme="light"] .profileTab.is-active,
+html[data-theme="light"] .nabadTabsTab.profileTab.is-active{
   color: var(--text);
 }
 
@@ -22939,66 +22943,19 @@ button.discoverySpotCard{
   gap: 10px;
 }
 
-/* Profile — Songs | All songs | Activity (X-style underline tabs) */
+/* Profile — content segments (Posts / Songs / …) */
 .profileSongsBlock{
   margin-top: 5px;
 }
 .profileTabBar{
-  display: flex;
-  align-items: stretch;
-  gap: 0;
-  margin: 0 0 7px;
-  padding: 0 2px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-  overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
-  scrollbar-width: none;
+  display: block;
+  margin: 0 0 6px;
+  padding: 0;
+  border-bottom: 0;
 }
-.profileTabBar::-webkit-scrollbar{
-  display: none;
-}
-.profileTab{
-  flex: 0 0 auto;
-  appearance: none;
-  border: 0;
-  border-radius: 0;
-  background: transparent;
-  color: rgba(232, 238, 247, 0.52);
-  font-size: 15px;
-  font-weight: 600;
-  letter-spacing: -0.02em;
-  padding: 10px 12px 9px;
-  cursor: pointer;
-  position: relative;
-  -webkit-tap-highlight-color: transparent;
-  transition: color 160ms ease;
-}
-.profileTab:hover{
-  color: rgba(232, 238, 247, 0.78);
-}
-.profileTab.isActive{
-  color: rgba(248, 250, 255, 0.96);
-  font-weight: 700;
-}
-.profileTab.isActive::after{
-  content: "";
-  position: absolute;
-  left: 10px;
-  right: 10px;
-  bottom: 0;
-  height: 3px;
-  border-radius: 3px 3px 0 0;
-  background: linear-gradient(90deg, #7c5cff 0%, #23d5ab 100%);
-  box-shadow:
-    0 0 14px rgba(124, 92, 255, 0.45),
-    0 0 22px rgba(35, 213, 171, 0.32);
-}
-.profileTab.isActive[data-profile-songs-segment="all"]::after,
-.profileTab.isActive[data-profile-songs-segment="activities"]::after{
-  background: linear-gradient(90deg, #7c5cff 0%, #23d5ab 100%);
-  box-shadow:
-    0 0 14px rgba(124, 92, 255, 0.45),
-    0 0 22px rgba(35, 213, 171, 0.32);
+.profileTabBar .nabadTabsTrack{
+  gap: 16px;
+  padding: 0 2px 4px;
 }
 .profileSongsToolbar{
   margin: 0 0 10px;
@@ -28212,41 +28169,34 @@ body[data-route="challenges"] .app{
   font-size: clamp(30px, 8vw, 44px);
 }
 .homeDeskSeg{
-  display: flex;
-  gap: 8px;
-  margin: 12px 0 10px;
-  padding: 4px;
-  border-radius: 999px;
-  background: rgba(255,255,255,0.05);
-  border: 1px solid rgba(255,255,255,0.08);
+  display: block;
+  margin: 10px 0 8px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
   position: relative;
   z-index: 12;
   pointer-events: auto;
 }
+.homeDeskSeg .nabadTabsTrack{
+  gap: 18px;
+}
 .homeDeskSegBtn{
-  flex: 1 1 0;
-  min-height: 44px;
-  border: none;
-  border-radius: 999px;
+  flex: 0 0 auto;
+  min-height: 0;
+  border: 0;
+  border-radius: 0;
   background: transparent;
-  color: rgba(223,231,251,0.55);
-  font-size: 14px;
-  font-weight: 700;
   cursor: pointer;
-  transition: background 180ms ease, color 180ms ease;
   -webkit-tap-highlight-color: transparent;
   touch-action: manipulation;
   pointer-events: auto;
-  display: flex;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
   text-align: center;
-  padding: 0 10px;
-}
-.homeDeskSegBtn.is-active{
-  background: rgba(255,255,255,0.92);
-  color: #0b1320;
-  box-shadow: 0 8px 24px -12px rgba(255,255,255,0.35);
+  padding: 0;
 }
 .homeDeskSegPanels{
   display: block;
@@ -29189,7 +29139,7 @@ body[data-route="messages"]{
 .messagesPage .discoverFeedTabs{
   margin: 0 0 10px;
 }
-.discoverFeedTab .messagesFilterTabBadge{
+.nabadTabsTab .messagesFilterTabBadge{
   min-width: 18px;
   height: 18px;
   padding: 0 5px;
@@ -31338,11 +31288,6 @@ body[data-route="mashup"] .app{
 .challengesPage.homeDesk .homeDeskMashupDisc--b{
   background: rgba(35, 213, 171, 0.5);
   border-color: rgba(94, 234, 212, 0.4);
-}
-.challengesPage.homeDesk .homeDeskSegBtn.is-active{
-  background: rgba(255, 255, 255, 0.1);
-  color: #fff;
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12);
 }
 
 @media (max-width: 760px){
@@ -36245,62 +36190,85 @@ body[data-route="generate"] .aiGenerate{
   padding-bottom: 4px;
   min-width: 0;
 }
+
+/* Shared minimal text tabs — Discover, Profile, Activity, Create, Messages, Home */
+.nabadTabs{
+  min-width: 0;
+}
+.nabadTabsTrack{
+  display: flex;
+  align-items: flex-end;
+  gap: 18px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scroll-snap-type: x proximity;
+  padding: 0 2px 2px;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.nabadTabsTrack::-webkit-scrollbar{
+  display: none;
+}
+.nabadTabsTab{
+  flex: 0 0 auto;
+  scroll-snap-align: start;
+  appearance: none;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: rgba(232, 238, 247, 0.52);
+  font: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+  padding: 5px 2px 4px;
+  margin: 0;
+  cursor: pointer;
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  -webkit-tap-highlight-color: transparent;
+  transition: color 200ms ease-out;
+}
+.nabadTabsTab:hover:not(.is-active){
+  color: rgba(232, 238, 247, 0.72);
+}
+.nabadTabsTab.is-active{
+  color: rgba(248, 250, 255, 0.96);
+  font-weight: 700;
+}
+.nabadTabsLabel{
+  display: inline-block;
+  vertical-align: baseline;
+}
+.nabadTabs--compact .nabadTabsTrack{
+  gap: 14px;
+}
+.nabadTabs--compact .nabadTabsTab{
+  font-size: 13px;
+  font-weight: 600;
+  padding: 3px 2px 4px;
+}
+.nabadTabs--compact .nabadTabsTab.is-active{
+  font-weight: 700;
+}
+
 .discoverFeedTabs{
   position: sticky;
   top: 0;
   z-index: 5;
-  margin: 0 -2px 10px;
-  padding: 2px 0 8px;
+  margin: 0 -2px 8px;
+  padding: 0 0 4px;
   background:
     linear-gradient(180deg, rgba(5, 7, 13, 0.96) 0%, rgba(5, 7, 13, 0.88) 72%, rgba(5, 7, 13, 0) 100%);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
 }
 .discoverFeedTabsTrack{
-  display: flex;
-  gap: 8px;
-  overflow-x: auto;
-  overflow-y: hidden;
-  -webkit-overflow-scrolling: touch;
-  scroll-snap-type: x proximity;
-  padding: 2px 2px 4px;
-  scrollbar-width: none;
-  -ms-overflow-style: none;
-}
-.discoverFeedTabsTrack::-webkit-scrollbar{ display: none; }
-.discoverFeedTab{
-  flex: 0 0 auto;
-  scroll-snap-align: start;
-  appearance: none;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  background: rgba(255, 255, 255, 0.04);
-  color: rgba(232, 238, 247, 0.68);
-  font: inherit;
-  font-size: 13px;
-  font-weight: 700;
-  letter-spacing: -0.02em;
-  border-radius: 999px;
-  padding: 9px 14px;
-  cursor: pointer;
-  white-space: nowrap;
-  -webkit-tap-highlight-color: transparent;
-  transition:
-    background 220ms ease,
-    border-color 220ms ease,
-    color 220ms ease,
-    box-shadow 220ms ease,
-    transform 220ms ease;
-}
-.discoverFeedTab.is-active{
-  color: #f8faff;
-  border-color: rgba(35, 213, 171, 0.35);
-  background: linear-gradient(135deg, rgba(35, 213, 171, 0.18) 0%, rgba(124, 92, 255, 0.22) 100%);
-  box-shadow:
-    0 0 0 1px rgba(124, 92, 255, 0.12) inset,
-    0 8px 24px rgba(35, 213, 171, 0.08);
-}
-.discoverFeedTab:active{
-  transform: scale(0.98);
+  /* legacy alias — layout lives on .nabadTabsTrack */
 }
 .discoverFeedMount{
   display: flex;
@@ -40799,74 +40767,7 @@ body.isAuth:not(.booting) .authGateChoices:not([hidden]){
   }
 }
 
-/* P1: Unify segmented controls. Home (Create/Sparks/Templates) used a filled
-   "iOS segmented" track with a white active fill; Profile (Posts/Songs/Playlist)
-   used an underline tab bar. Both now adopt the same gradient-pill language as
-   Discover / Activity / Messages (.discoverFeedTab) for one consistent control. */
-
-/* Home — drop the track chrome + white active fill; use individual pills. */
-.homeDeskSeg{
-  gap: 8px;
-  margin: 12px 0 10px;
-  padding: 2px 0 4px;
-  border: 0;
-  background: none;
-  border-radius: 0;
-  flex-wrap: wrap;
-}
-.homeDeskSegBtn{
-  flex: 0 0 auto;
-  min-height: 0;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  background: rgba(255, 255, 255, 0.04);
-  color: rgba(232, 238, 247, 0.68);
-  font-size: 13px;
-  font-weight: 700;
-  letter-spacing: -0.02em;
-  border-radius: 999px;
-  padding: 9px 14px;
-  justify-content: center;
-}
-.challengesPage.homeDesk .homeDeskSegBtn.is-active,
-.homeDeskSegBtn.is-active{
-  color: #f8faff;
-  background: linear-gradient(135deg, rgba(35, 213, 171, 0.18) 0%, rgba(124, 92, 255, 0.22) 100%);
-  border-color: rgba(35, 213, 171, 0.35);
-  box-shadow:
-    0 0 0 1px rgba(124, 92, 255, 0.12) inset,
-    0 8px 24px rgba(35, 213, 171, 0.08);
-}
-.homeDeskSegBtn:active{ transform: scale(0.98); }
-
-/* Profile — replace underline tab bar with the same pills. */
-.profileTabBar{
-  gap: 8px;
-  margin: 0 0 10px;
-  padding: 2px 2px 4px;
-  border-bottom: 0;
-  align-items: center;
-}
-.profileTab{
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  background: rgba(255, 255, 255, 0.04);
-  color: rgba(232, 238, 247, 0.68);
-  font-size: 13px;
-  font-weight: 700;
-  letter-spacing: -0.02em;
-  border-radius: 999px;
-  padding: 9px 14px;
-}
-.profileTab.isActive{
-  color: #f8faff;
-  font-weight: 700;
-  background: linear-gradient(135deg, rgba(35, 213, 171, 0.18) 0%, rgba(124, 92, 255, 0.22) 100%);
-  border-color: rgba(35, 213, 171, 0.35);
-  box-shadow:
-    0 0 0 1px rgba(124, 92, 255, 0.12) inset,
-    0 8px 24px rgba(35, 213, 171, 0.08);
-}
-.profileTab.isActive::after{ display: none; }
-.profileTab:active{ transform: scale(0.98); }
+/* P1: Top section tabs use shared .nabadTabs (text + sliding underline). */
 
 /* ============================================================
    In-app Help & FAQ — a full-screen, on-brand overlay opened from

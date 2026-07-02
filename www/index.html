@@ -124,7 +124,7 @@
       onload="this.media='all'"
     />
     <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Display:wght@900&family=Inter:wght@900&display=swap" /></noscript>
-    <link rel="stylesheet" href="./styles.css?v=20260702-165623" />
+    <link rel="stylesheet" href="./styles.css?v=20260702-180801" />
 
     <meta name="description" content="Nabadai is an AI music studio. Hum a melody, write lyrics, and ship a song." />
     <meta property="og:type" content="website" />
@@ -1133,13 +1133,13 @@
             </div>
 
             <div id="discoveryMainContent" class="discoveryMainContent discoverFeedV2">
-            <nav id="discoverFeedTabs" class="discoverFeedTabs" aria-label="Discover categories">
-              <div class="discoverFeedTabsTrack" role="tablist">
-                <button type="button" class="discoverFeedTab is-active" role="tab" aria-selected="true" data-discover-feed-tab="for-you">For You</button>
-                <button type="button" class="discoverFeedTab" role="tab" aria-selected="false" data-discover-feed-tab="templates">Templates</button>
-                <button type="button" class="discoverFeedTab" role="tab" aria-selected="false" data-discover-feed-tab="challenges">Challenges</button>
-                <button type="button" class="discoverFeedTab" role="tab" aria-selected="false" data-discover-feed-tab="remixes">Remixes</button>
-                <button type="button" class="discoverFeedTab" role="tab" aria-selected="false" data-discover-feed-tab="all">All</button>
+            <nav id="discoverFeedTabs" class="nabadTabs discoverFeedTabs" aria-label="Discover categories">
+              <div class="nabadTabsTrack discoverFeedTabsTrack" role="tablist">
+                <button type="button" class="nabadTabsTab is-active" role="tab" aria-selected="true" data-discover-feed-tab="for-you"><span class="nabadTabsLabel">For You</span></button>
+                <button type="button" class="nabadTabsTab" role="tab" aria-selected="false" data-discover-feed-tab="templates"><span class="nabadTabsLabel">Templates</span></button>
+                <button type="button" class="nabadTabsTab" role="tab" aria-selected="false" data-discover-feed-tab="challenges"><span class="nabadTabsLabel">Challenges</span></button>
+                <button type="button" class="nabadTabsTab" role="tab" aria-selected="false" data-discover-feed-tab="remixes"><span class="nabadTabsLabel">Remixes</span></button>
+                <button type="button" class="nabadTabsTab" role="tab" aria-selected="false" data-discover-feed-tab="all"><span class="nabadTabsLabel">All</span></button>
               </div>
             </nav>
             <div id="discoverFeedMount" class="discoverFeedMount" aria-live="polite"></div>
@@ -1155,11 +1155,11 @@
               <h2 class="discoveryStudioH2 appScreenTitle" id="activityTitle">Activity</h2>
             </div>
           </header>
-          <nav id="activityFilterTabs" class="discoverFeedTabs" aria-label="Activity filters">
-              <div class="discoverFeedTabsTrack" role="tablist">
-                <button type="button" class="discoverFeedTab is-active" role="tab" aria-selected="true" data-activity-filter="all">All</button>
-                <button type="button" class="discoverFeedTab" role="tab" aria-selected="false" data-activity-filter="social">Social</button>
-                <button type="button" class="discoverFeedTab" role="tab" aria-selected="false" data-activity-filter="achievements">Achievements</button>
+          <nav id="activityFilterTabs" class="nabadTabs discoverFeedTabs" aria-label="Activity filters">
+              <div class="nabadTabsTrack discoverFeedTabsTrack" role="tablist">
+                <button type="button" class="nabadTabsTab is-active" role="tab" aria-selected="true" data-activity-filter="all"><span class="nabadTabsLabel">All</span></button>
+                <button type="button" class="nabadTabsTab" role="tab" aria-selected="false" data-activity-filter="social"><span class="nabadTabsLabel">Social</span></button>
+                <button type="button" class="nabadTabsTab" role="tab" aria-selected="false" data-activity-filter="achievements"><span class="nabadTabsLabel">Achievements</span></button>
               </div>
           </nav>
           <div id="activityStatus" class="activityStatus" role="status" aria-live="polite" hidden></div>
@@ -1267,13 +1267,13 @@
               <p class="messagesLead" id="messagesLead">Chat with creators you follow.</p>
             </div>
           </header>
-          <nav class="discoverFeedTabs" id="messagesFilterTabs" aria-label="Message filters">
-            <div class="discoverFeedTabsTrack" role="tablist">
-              <button type="button" class="discoverFeedTab is-active" data-messages-filter="all" role="tab" aria-selected="true">All</button>
-              <button type="button" class="discoverFeedTab" data-messages-filter="requests" role="tab" aria-selected="false">
-                Requests<span class="messagesFilterTabBadge" id="messagesRequestsTabBadge" hidden></span>
+          <nav class="nabadTabs discoverFeedTabs" id="messagesFilterTabs" aria-label="Message filters">
+            <div class="nabadTabsTrack discoverFeedTabsTrack" role="tablist">
+              <button type="button" class="nabadTabsTab is-active" data-messages-filter="all" role="tab" aria-selected="true"><span class="nabadTabsLabel">All</span></button>
+              <button type="button" class="nabadTabsTab" data-messages-filter="requests" role="tab" aria-selected="false">
+                <span class="nabadTabsLabel">Requests</span><span class="messagesFilterTabBadge" id="messagesRequestsTabBadge" hidden></span>
               </button>
-              <button type="button" class="discoverFeedTab" data-messages-filter="chats" role="tab" aria-selected="false">Chats</button>
+              <button type="button" class="nabadTabsTab" data-messages-filter="chats" role="tab" aria-selected="false"><span class="nabadTabsLabel">Chats</span></button>
             </div>
           </nav>
           <div id="messagesStatus" class="messagesStatus" role="status" aria-live="polite" hidden></div>
@@ -1355,10 +1355,12 @@
             </button>
           </section>
 
-          <nav class="homeDeskSeg" role="tablist" aria-label="Create sections">
-            <button type="button" class="homeDeskSegBtn is-active" data-home-seg="start" role="tab" aria-selected="true" aria-controls="homeDeskPanelStart">Create</button>
-            <button type="button" class="homeDeskSegBtn" data-home-seg="sparks" role="tab" aria-selected="false" aria-controls="homeDeskPanelSparks">Sparks</button>
-            <button type="button" class="homeDeskSegBtn" data-home-seg="templates" role="tab" aria-selected="false" aria-controls="homeDeskPanelTemplates">Templates</button>
+          <nav class="nabadTabs homeDeskSeg" role="tablist" aria-label="Create sections">
+            <div class="nabadTabsTrack">
+              <button type="button" class="nabadTabsTab homeDeskSegBtn is-active" data-home-seg="start" role="tab" aria-selected="true" aria-controls="homeDeskPanelStart"><span class="nabadTabsLabel">Create</span></button>
+              <button type="button" class="nabadTabsTab homeDeskSegBtn" data-home-seg="sparks" role="tab" aria-selected="false" aria-controls="homeDeskPanelSparks"><span class="nabadTabsLabel">Sparks</span></button>
+              <button type="button" class="nabadTabsTab homeDeskSegBtn" data-home-seg="templates" role="tab" aria-selected="false" aria-controls="homeDeskPanelTemplates"><span class="nabadTabsLabel">Templates</span></button>
+            </div>
           </nav>
 
           <div class="homeDeskSegPanels">
@@ -2633,12 +2635,14 @@
 
           <!-- Songs — Public (Discover / link) vs All (full library) -->
           <div class="profileSongsBlock">
-            <div class="profileTabBar" role="tablist" aria-label="Profile content">
-              <button type="button" class="profileTab isActive" role="tab" aria-selected="true" data-profile-songs-segment="activities" id="profileSongsSegActivity">Posts</button>
-              <button type="button" class="profileTab" role="tab" aria-selected="false" data-profile-songs-segment="all" id="profileSongsSegAll">Songs</button>
-              <button type="button" class="profileTab" role="tab" aria-selected="false" data-profile-songs-segment="vocals" id="profileSongsSegVocals">My Vocals</button>
-              <button type="button" class="profileTab" role="tab" aria-selected="false" data-profile-songs-segment="playlist" id="profileSongsSegPlaylist">Playlist</button>
-            </div>
+            <nav class="nabadTabs profileTabBar" role="tablist" aria-label="Profile content">
+              <div class="nabadTabsTrack">
+                <button type="button" class="nabadTabsTab profileTab is-active" role="tab" aria-selected="true" data-profile-songs-segment="activities" id="profileSongsSegActivity"><span class="nabadTabsLabel">Posts</span></button>
+                <button type="button" class="nabadTabsTab profileTab" role="tab" aria-selected="false" data-profile-songs-segment="all" id="profileSongsSegAll"><span class="nabadTabsLabel">Songs</span></button>
+                <button type="button" class="nabadTabsTab profileTab" role="tab" aria-selected="false" data-profile-songs-segment="vocals" id="profileSongsSegVocals"><span class="nabadTabsLabel">My Vocals</span></button>
+                <button type="button" class="nabadTabsTab profileTab" role="tab" aria-selected="false" data-profile-songs-segment="playlist" id="profileSongsSegPlaylist"><span class="nabadTabsLabel">Playlist</span></button>
+              </div>
+            </nav>
             <div class="profileSongsToolbar libraryHeaderRow">
               <p id="libraryCount" class="libraryCount" hidden aria-live="polite"></p>
               <p id="profilePlaylistCount" class="libraryCount" hidden aria-live="polite"></p>
@@ -4142,6 +4146,6 @@
     </script>
     <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
     <script src="./env.client.js" onerror="void 0"></script>
-    <script type="module" src="./src/app.js?v=20260702-165623"></script>
+    <script type="module" src="./src/app.js?v=20260702-180801"></script>
   </body>
 </html>

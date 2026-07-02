@@ -22,6 +22,9 @@ import {
   initLockScreenNowPlaying,
   syncLockScreenNowPlaying,
 } from "./lockScreenNowPlaying.js";
+import {
+  setNabadTabsActiveByAttr,
+} from "./nabad-tabs.js";
 import { initEcho, openEchoFromCreateChooser } from "./echo.js";
 import {
   getInitialBootHash,
@@ -94,7 +97,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260702-165623";
+const APP_BUILD = "20260702-180801";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -5758,12 +5761,8 @@ function setHomeSeg(seg) {
 
 function syncHomeSegUi() {
   const page = document.getElementById("homeDeskPage") || document.querySelector('[data-route="challenges"]');
-  page?.querySelectorAll?.("[data-home-seg]")?.forEach?.((btn) => {
-    const key = String(btn.getAttribute("data-home-seg") || "");
-    const on = key === _homeSeg;
-    btn.classList.toggle("is-active", on);
-    btn.setAttribute("aria-selected", on ? "true" : "false");
-  });
+  const nav = page?.querySelector?.(".homeDeskSeg");
+  if (nav) setNabadTabsActiveByAttr(nav, _homeSeg, "data-home-seg");
   page?.querySelectorAll?.("[data-home-panel]")?.forEach?.((panel) => {
     const on = String(panel.getAttribute("data-home-panel") || "") === _homeSeg;
     panel.classList.toggle("is-active", on);
@@ -8783,11 +8782,7 @@ function renderDiscoverFeedTabPanel(tab, tracks, profMap) {
 function paintDiscoverFeedTabsActive(tab) {
   const root = document.getElementById("discoverFeedTabs");
   if (!root) return;
-  root.querySelectorAll("[data-discover-feed-tab]").forEach((btn) => {
-    const active = String(btn.getAttribute("data-discover-feed-tab") || "") === tab;
-    btn.classList.toggle("is-active", active);
-    btn.setAttribute("aria-selected", active ? "true" : "false");
-  });
+  setNabadTabsActiveByAttr(root, tab, "data-discover-feed-tab");
 }
 
 function renderDiscoverFeed(tracks, profMap, tab = _discoverFeedTab) {
@@ -24964,11 +24959,8 @@ function messagesInboxSentRequestRowHtml(req) {
 
 function syncMessagesInboxFilterUi() {
   const filter = String(_messagesInboxFilter || "all");
-  document.querySelectorAll("[data-messages-filter]").forEach((btn) => {
-    const active = btn.getAttribute("data-messages-filter") === filter;
-    btn.classList.toggle("is-active", active);
-    btn.setAttribute("aria-selected", active ? "true" : "false");
-  });
+  const nav = document.getElementById("messagesFilterTabs");
+  if (nav) setNabadTabsActiveByAttr(nav, filter, "data-messages-filter");
   const requests = Array.isArray(_messagesInboxState.requests) ? _messagesInboxState.requests : [];
   const badge = document.getElementById("messagesRequestsTabBadge");
   if (badge) {
@@ -26572,11 +26564,7 @@ function activityNotificationMatchesFilter(n, tab = _activityFilterTab) {
 function paintActivityFilterTabsActive(tab = _activityFilterTab) {
   const root = document.getElementById("activityFilterTabs");
   if (!root) return;
-  root.querySelectorAll("[data-activity-filter]").forEach((btn) => {
-    const active = String(btn.getAttribute("data-activity-filter") || "") === tab;
-    btn.classList.toggle("is-active", active);
-    btn.setAttribute("aria-selected", active ? "true" : "false");
-  });
+  setNabadTabsActiveByAttr(root, tab, "data-activity-filter");
 }
 
 /** Avatar for an activity/notification row. Real photo when the actor has
@@ -36505,11 +36493,8 @@ function syncProfileSongsSegmentUi() {
   try {
     document.body.setAttribute("data-profile-songs-seg", _profileSongsSegment);
   } catch {}
-  document.querySelectorAll("[data-profile-songs-segment]").forEach((btn) => {
-    const on = btn.getAttribute("data-profile-songs-segment") === _profileSongsSegment;
-    btn.classList.toggle("isActive", on);
-    btn.setAttribute("aria-selected", on ? "true" : "false");
-  });
+  const profileTabBar = document.querySelector(".profileTabBar");
+  if (profileTabBar) setNabadTabsActiveByAttr(profileTabBar, _profileSongsSegment, "data-profile-songs-segment");
   if (allCount) allCount.hidden = !isAll;
   const playlistCount = document.getElementById("profilePlaylistCount");
   if (playlistCount) playlistCount.hidden = !isPlaylist;

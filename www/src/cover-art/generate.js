@@ -72,8 +72,13 @@ function patchLibraryTrackCover(trackId, patch) {
   };
   saveLibrary(items);
   try {
-    refreshOwnSongsUi?.();
-  } catch {}
+    patchLibraryRowCoverArt?.(id, dataUrl);
+    refreshOwnSongsUi?.({ soft: true });
+  } catch {
+    try {
+      refreshOwnSongsUi?.();
+    } catch {}
+  }
   return items[idx];
 }
 

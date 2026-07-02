@@ -94,7 +94,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260702-152543";
+const APP_BUILD = "20260702-161125";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -2074,8 +2074,8 @@ function renderHubNowPlaying() {
         } catch {}
       });
     }
-    const artSrc = hubNowMeta.art || "./assets/nabadai-logo.png";
-    els.hubNowArt.src = artSrc;
+    const artSrc = hubNowMeta.art || DEFAULT_SONG_COVER_URL;
+    assignCoverImageSrc(els.hubNowArt, artSrc, { updateClasses: false });
     syncHubNowAuraFromCoverUrl(artSrc);
   }
   if (els.hubNowTitle) els.hubNowTitle.textContent = hubNowMeta.title || "Now playing";
@@ -17755,7 +17755,27 @@ async function persistTrackCoverIfNeeded(track) {
       items[idx] = { ...prev, artUrl: imageUrl, meta: nextMeta, ts: Date.now() };
       saveLibrary(items);
       try {
-        refreshOwnSongsUi();
+        patchLibraryRowCoverArt(id, imageUrl);
+        refreshOwnSongsUi({ soft: true });
+      } catch {
+        try {
+          refreshOwnSongsUi();
+        } catch {}
+      }
+      try {
+        const playingId = String(
+          currentPlayerTrackRef?.id || libraryNowPlayingId || "",
+        ).trim();
+        if (playingId && playingId === id) {
+          const row = items[idx];
+          setPlayerMeta({
+            title: row.title || "Now Playing",
+            subtitle: document.getElementById("playerSubtitle")?.textContent || "",
+            artUrl: imageUrl,
+            releaseCaption: releaseCaptionForTrack(row) || "",
+            remixOf: remixAttributionForTrack(row) || null,
+          });
+        }
       } catch {}
       void supabasePatchUserSong(prev, { artUrl: imageUrl, meta: nextMeta });
       return imageUrl;
@@ -17780,6 +17800,7 @@ configureCoverArt({
   loadLibrary,
   saveLibrary,
   refreshOwnSongsUi,
+  patchLibraryRowCoverArt,
   persistTrackCoverIfNeeded,
   get currentPlayerTrackRef() {
     return currentPlayerTrackRef;
@@ -36880,7 +36901,7 @@ function renderProfileLibraryPublicOnLinkSection() {
         .map((t) => {
           const safeTitle = esc(String(t.title || "Untitled"));
           const art = String(
-            (t.meta && (t.meta.imageThumb || t.meta.imageUrl)) || t.artUrl || "./assets/nabadai-logo.png",
+            (t.meta && (t.meta.imageThumb || t.meta.imageUrl)) || t.artUrl || DEFAULT_SONG_COVER_URL,
           );
           const dateLabel = formatLibraryDate(t.ts);
           const subBits = [];
@@ -39334,7 +39355,7 @@ function renderLibrary() {
         const art = String(
           (t.meta && (t.meta.imageThumb || t.meta.imageUrl)) ||
           t.artUrl ||
-          "./assets/nabadai-logo.png"
+          DEFAULT_SONG_COVER_URL
         );
         const { active: libActive, audible: libAudible } = getLibraryRowPlaybackUiForTrack(t.id);
         const dateLabel = formatLibraryDate(t.ts);
@@ -40927,6 +40948,71 @@ function coverImageRetryUrl(original, attempt) {
   }
 }
 
+function applyCoverImageStateClasses(img, raw, src, empty) {
+  if (!img) return;
+  img.classList.toggle("isCoverPlaceholder", empty || isBrokenCoverPlaceholder(src) || isLogoCoverUrl(src));
+  img.classList.add("coverImg");
+  if (/^https?:\/\//i.test(src)) img.crossOrigin = "anonymous";
+  else img.removeAttribute("crossorigin");
+}
+
+/** Assign cover URL without clearing the current frame until the next image is decoded. */
+function assignCoverImageSrc(img, url, opts = {}) {
+  if (!img) return;
+  const raw = String(url || "").trim();
+  const empty = opts.allowEmpty && !raw;
+  const fallback = empty ? placeholderCoverDataUrl() : raw || brokenCoverPlaceholderUrl();
+  const updateClasses = opts.updateClasses !== false;
+
+  const prevRaw = String(img.dataset.coverSrc || "").trim();
+  if (prevRaw === raw) {
+    const showing = String(img.currentSrc || img.src || "").trim();
+    if (raw && showing && img.complete && img.naturalWidth > 0) {
+      if (updateClasses) applyCoverImageStateClasses(img, raw, showing, empty);
+      return;
+    }
+    if (!raw && empty && showing) return;
+  }
+
+  img.dataset.coverSrc = raw || "";
+  img.dataset.coverRetry = "0";
+  img.dataset.coverFallback = "";
+
+  const applySrc = (finalSrc) => {
+    img.src = finalSrc;
+    if (updateClasses) applyCoverImageStateClasses(img, raw, finalSrc, empty);
+  };
+
+  const needsPreload = !empty && raw && (raw.startsWith("data:") || /^https?:\/\//i.test(raw));
+  if (needsPreload) {
+    const pre = new Image();
+    if (/^https?:\/\//i.test(raw)) pre.crossOrigin = "anonymous";
+    pre.onload = () => {
+      if (String(img.dataset.coverSrc || "").trim() !== raw) return;
+      applySrc(raw);
+    };
+    pre.onerror = () => {
+      if (String(img.dataset.coverSrc || "").trim() !== raw) return;
+      applySrc(brokenCoverPlaceholderUrl());
+    };
+    pre.src = raw;
+    if (updateClasses) applyCoverImageStateClasses(img, raw, fallback, empty);
+    return;
+  }
+
+  applySrc(fallback);
+}
+
+function patchLibraryRowCoverArt(trackId, artUrl) {
+  const id = String(trackId || "").trim();
+  const src = String(artUrl || "").trim();
+  if (!id || !src) return;
+  const row = document.querySelector(`.libRow[data-lib-row="${CSS.escape(id)}"]`);
+  const img = row?.querySelector(".libRowArt img");
+  if (!img) return;
+  assignCoverImageSrc(img, src);
+}
+
 function applyBrokenCoverPlaceholder(img) {
   if (!img) return;
   img.dataset.coverFallback = "final";
@@ -40985,20 +41071,7 @@ function initCoverImageFallbackOnce() {
 }
 
 function setCoverImageSrc(img, url, opts = {}) {
-  if (!img) return;
-  const raw = String(url || "").trim();
-  const empty = opts.allowEmpty && !raw;
-  const src = empty
-    ? placeholderCoverDataUrl()
-    : raw || brokenCoverPlaceholderUrl();
-  img.dataset.coverSrc = raw || "";
-  img.dataset.coverRetry = "0";
-  img.dataset.coverFallback = "";
-  img.classList.toggle("isCoverPlaceholder", empty || isBrokenCoverPlaceholder(src) || isLogoCoverUrl(src));
-  img.classList.add("coverImg");
-  if (/^https?:\/\//i.test(src)) img.crossOrigin = "anonymous";
-  else img.removeAttribute("crossorigin");
-  img.src = src;
+  assignCoverImageSrc(img, url, opts);
 }
 
 function setPlayerMeta({ title, subtitle, artUrl, releaseCaption, remixOf, challenge, mashupOf } = {}) {
@@ -41009,7 +41082,6 @@ function setPlayerMeta({ title, subtitle, artUrl, releaseCaption, remixOf, chall
     if (hasTrack) setCoverImageSrc(els.playerArt, artUrl);
     else setCoverImageSrc(els.playerArt, playerEmptyArtUrl(), { allowEmpty: true });
     els.playerArt.classList.toggle("isPlaceholder", !hasTrack);
-    els.playerArt.classList.toggle("isCoverPlaceholder", !hasTrack);
   }
   setPlayerChallengeAttribution(challenge || challengeMetaForTrack(currentPlayerTrackRef));
   setPlayerTemplateAttribution(currentPlayerTrackRef, {

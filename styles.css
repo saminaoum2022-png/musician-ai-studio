@@ -6263,6 +6263,87 @@ body.hubJumpingToTop #hubList .hubRow{
   .playerArtWrap.isNowPlaying .playerArt{ animation: none; }
 }
 
+/* Pollinations abstract cover — calm live overlay (player only) */
+.coverArtLiveOverlay{
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 1;
+  overflow: hidden;
+  opacity: 0;
+  transition: opacity 480ms ease;
+}
+.coverArtLiveOverlay.isActive{
+  opacity: 1;
+}
+.coverArtLiveGlow{
+  position: absolute;
+  inset: -8%;
+  background:
+    radial-gradient(70% 55% at 50% 62%, rgba(35, 213, 171, 0.22), transparent 68%),
+    radial-gradient(55% 45% at 40% 38%, rgba(124, 92, 255, 0.18), transparent 72%);
+  mix-blend-mode: screen;
+  opacity: 0.38;
+  animation: coverArtGlowBreath 7s ease-in-out infinite;
+}
+.coverArtLiveShimmer{
+  position: absolute;
+  inset: -20%;
+  background: linear-gradient(
+    115deg,
+    transparent 38%,
+    rgba(255, 255, 255, 0.07) 48%,
+    rgba(35, 213, 171, 0.08) 52%,
+    transparent 62%
+  );
+  opacity: 0.35;
+  animation: coverArtShimmerDrift 14s ease-in-out infinite;
+}
+.coverArtLiveParticle{
+  position: absolute;
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.55);
+  box-shadow: 0 0 8px rgba(124, 92, 255, 0.45);
+  opacity: 0;
+  animation: coverArtParticleDrift 18s ease-in-out infinite;
+}
+.coverArtLiveParticle--a{ left: 18%; top: 72%; animation-delay: 0s; }
+.coverArtLiveParticle--b{ left: 62%; top: 58%; animation-delay: -4s; }
+.coverArtLiveParticle--c{ left: 44%; top: 34%; animation-delay: -9s; }
+.coverArtLiveParticle--d{ left: 78%; top: 28%; animation-delay: -13s; }
+.coverArtLiveOverlay.isActive .coverArtLiveParticle{ opacity: 0.55; }
+
+.playerArtWrap.isCoverLive.isNowPlaying .playerArt{
+  animation: coverArtSlowZoom 26s ease-in-out infinite alternate;
+}
+@keyframes coverArtGlowBreath{
+  0%, 100% { opacity: 0.28; transform: scale(1); }
+  50%      { opacity: 0.52; transform: scale(1.03); }
+}
+@keyframes coverArtShimmerDrift{
+  0%, 100% { transform: translate3d(-4%, 0, 0) rotate(0deg); opacity: 0.22; }
+  50%      { transform: translate3d(4%, -1.5%, 0) rotate(2deg); opacity: 0.42; }
+}
+@keyframes coverArtParticleDrift{
+  0%, 100% { transform: translate3d(0, 0, 0); opacity: 0.15; }
+  25%      { transform: translate3d(6px, -10px, 0); opacity: 0.55; }
+  75%      { transform: translate3d(-5px, 8px, 0); opacity: 0.35; }
+}
+@keyframes coverArtSlowZoom{
+  0%   { transform: scale(1); filter: brightness(1) saturate(1); }
+  100% { transform: scale(1.018); filter: brightness(1.03) saturate(1.04); }
+}
+@media (prefers-reduced-motion: reduce){
+  .coverArtLiveOverlay.isActive,
+  .coverArtLiveOverlay.isActive *,
+  .playerArtWrap.isCoverLive.isNowPlaying .playerArt{
+    animation: none !important;
+  }
+  .coverArtLiveOverlay.isActive{ opacity: 0.35; }
+}
+
 .playerMeta{
   display:flex;
   flex-direction:column;

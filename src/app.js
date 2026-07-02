@@ -43,6 +43,13 @@ import {
   parseMusicPreferencesFromProfile,
   shouldShowMusicPreferencesScreen,
 } from "./music-preferences.js";
+import {
+  configureCoverArt,
+  ensureAbstractCoverForTrack,
+} from "./cover-art/generate.js";
+import { shouldUseAbstractCover } from "./cover-art/params.js";
+import { DEFAULT_SONG_COVER_URL, isLogoCoverUrl, normalizeSongCoverUrl } from "./cover-art/placeholders.js";
+import { initCoverArtOverlay, syncCoverArtOverlay } from "./cover-art/overlay.js";
 import { initTheme } from "./theme.js";
 import {
   initNabadVerificationUi,
@@ -70,7 +77,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260702-022611";
+const APP_BUILD = "20260702-120643";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -405,6 +412,8 @@ initLockScreenNowPlaying({
     }
   },
 });
+
+initCoverArtOverlay();
 
 const els = {
   sunoPrompt: document.getElementById("sunoPrompt"),
@@ -8374,7 +8383,7 @@ function discoverFeaturedChallengeHeroArt(c, topEntry) {
   const challengeArt = discoverChallengeArtUrl(c?.id);
   if (challengeArt) return challengeArt;
   if (topEntry) return trackCoverArtForFeed(topEntry);
-  return "./assets/nabadai-logo.png";
+  return DEFAULT_SONG_COVER_URL;
 }
 
 function discoverFeaturedChallengeSubtitle(c, topEntry, tracks) {
@@ -15437,7 +15446,7 @@ function mashupSourceFromMetaEntry(entry) {
   return {
     id: String(entry.songId || ""),
     title: String(entry.title || "Track").trim(),
-    artUrl: String(entry.artUrl || "./assets/nabadai-logo.png").trim() || "./assets/nabadai-logo.png",
+    artUrl: normalizeSongCoverUrl(String(entry.artUrl || "").trim()),
     url: "",
     userId: String(entry.ownerUserId || ""),
     username: String(entry.creatorUsername || "").trim(),
@@ -15452,7 +15461,7 @@ function mashupSourceFromDb(entry, row) {
     ...base,
     id: String(row?.id || base.id || ""),
     title: String(row?.title || base.title || "Track").trim(),
-    artUrl: String(row?.art_url || base.artUrl || "./assets/nabadai-logo.png").trim() || "./assets/nabadai-logo.png",
+    artUrl: normalizeSongCoverUrl(String(row?.art_url || base.artUrl || "").trim()),
     url: String(row?.song_url || "").trim(),
     userId: String(row?.user_id || base.userId || ""),
     taskId: String(row?.task_id || ""),
@@ -17621,7 +17630,9 @@ function trackCoverArtCandidates(track) {
     String(m.imageThumb || "").trim(),
     String(m.imageUrl || "").trim(),
     String(track?.artUrl || "").trim(),
-  ].filter(Boolean);
+  ]
+    .filter(Boolean)
+    .filter((c) => !isLogoCoverUrl(c));
 }
 
 /** For Discover / Friends / Activity feeds — only HTTP URLs (no data: blobs). */
@@ -17629,7 +17640,7 @@ function trackCoverArtForFeed(track) {
   for (const c of trackCoverArtCandidates(track)) {
     if (c && !c.startsWith("data:")) return c;
   }
-  return "./assets/nabadai-logo.png";
+  return DEFAULT_SONG_COVER_URL;
 }
 
 const _coverUploadInflight = new Map();
@@ -17690,11 +17701,29 @@ async function persistTrackCoverIfNeeded(track) {
   }
 }
 
+configureCoverArt({
+  apiUrl,
+  getSupabaseAuthToken,
+  loadLibrary,
+  saveLibrary,
+  refreshOwnSongsUi,
+  persistTrackCoverIfNeeded,
+  get currentPlayerTrackRef() {
+    return currentPlayerTrackRef;
+  },
+  get libraryNowPlayingId() {
+    return libraryNowPlayingId;
+  },
+  setPlayerMeta,
+  releaseCaptionForTrack,
+  remixAttributionForTrack,
+});
+
 /** Retry cover uploads that never reached the cloud (offline at
  *  generation time, app killed mid-upload, transient storage error).
  *  Without this the custom cover lives only in this device's
  *  localStorage and every cloud-hydrated surface falls back to the
- *  placeholder logo. Runs once per session, off the boot hydrate. */
+ *  placeholder music tile. Runs once per session, off the boot hydrate. */
 let _coverBackfillRan = false;
 async function backfillPendingCoverUploads(items) {
   if (_coverBackfillRan || !authSession?.user?.id) return;
@@ -17709,6 +17738,20 @@ async function backfillPendingCoverUploads(items) {
   for (const t of pending) {
     // eslint-disable-next-line no-await-in-loop
     await persistTrackCoverIfNeeded(t);
+  }
+}
+
+/** Generate Pollinations covers for library tracks that still have Suno / empty art. */
+let _abstractCoverBackfillRan = false;
+async function backfillAbstractCovers(items) {
+  if (_abstractCoverBackfillRan) return;
+  _abstractCoverBackfillRan = true;
+  const pending = (Array.isArray(items) ? items : [])
+    .filter((t) => shouldUseAbstractCover(t))
+    .slice(0, 6);
+  for (const t of pending) {
+    // eslint-disable-next-line no-await-in-loop
+    await ensureAbstractCoverForTrack(t);
   }
 }
 
@@ -37764,6 +37807,7 @@ async function ensureUserLibraryHydrated(prefetchedCloud) {
   // Heal covers that never made it to the cloud (kept as data: URLs
   // locally) so they stop reverting to the placeholder logo.
   void backfillPendingCoverUploads(mergedDeduped);
+  void backfillAbstractCovers(mergedDeduped);
 
   // Local-first: private songs are NEVER auto-uploaded to the cloud. A song
   // reaches the cloud only when the user explicitly publishes it. Removing
@@ -37918,6 +37962,21 @@ function addToLibrary(track) {
     meta: stampedMeta || null,
     publicOnProfile: false,
   };
+  if (shouldUseAbstractCover(newTrack)) {
+    const ph = DEFAULT_SONG_COVER_URL;
+    newTrack.artUrl = ph;
+    newTrack.meta = {
+      ...(newTrack.meta || {}),
+      imageUrl: ph,
+      imageThumb: ph,
+    };
+  } else {
+    newTrack.artUrl = normalizeSongCoverUrl(newTrack.artUrl);
+    if (newTrack.meta && typeof newTrack.meta === "object") {
+      newTrack.meta.imageUrl = normalizeSongCoverUrl(newTrack.meta.imageUrl || newTrack.artUrl);
+      newTrack.meta.imageThumb = normalizeSongCoverUrl(newTrack.meta.imageThumb || newTrack.meta.imageUrl);
+    }
+  }
   items.unshift(newTrack);
   saveLibrary(items);
   refreshOwnSongsUi();
@@ -37934,6 +37993,9 @@ function addToLibrary(track) {
     // one exists, since PATCH matches nothing).
     await persistTrackCoverIfNeeded(newTrack);
     queueArchiveLibraryTrack(newTrack);
+    if (shouldUseAbstractCover(newTrack)) {
+      void ensureAbstractCoverForTrack(newTrack);
+    }
   })();
   return newTrack;
 }
@@ -40688,7 +40750,7 @@ function getPlayerDuration() {
 }
 
 function placeholderCoverDataUrl() {
-  return "./assets/nabadai-logo.png";
+  return DEFAULT_SONG_COVER_URL;
 }
 
 /** Shown when a remote cover URL fails after brief retries (♪ tile). */
@@ -40861,6 +40923,19 @@ function setPlayerMeta({ title, subtitle, artUrl, releaseCaption, remixOf, chall
   } catch {}
   renderHubNowPlaying();
   syncLockScreenNowPlaying({ force: true });
+  try {
+    const track = resolvePlayerLibraryTrack() || currentPlayerTrackRef;
+    const abstractLive =
+      Boolean(track?.meta?.nabadAbstractCover) ||
+      String(track?.meta?.coverSource || "") === "pollinations";
+    syncCoverArtOverlay(
+      hasTrack &&
+        abstractLive &&
+        !els.playerArt?.classList.contains("isCoverPlaceholder"),
+    );
+  } catch {
+    syncCoverArtOverlay(false);
+  }
 }
 
 // Most recent http(s) URL handed to the player. Used by Download Video
@@ -41193,8 +41268,8 @@ function toCoverThumbUrl(url, opts) {
  *  looks like a muddy plate from a failed decode). Library tiles can
  *  keep using thumbs where transforms are known-good. */
 function hubCoverImgSrc(url) {
-  const s = String(url || "").trim();
-  return s || "./assets/nabadai-logo.png";
+  const s = normalizeSongCoverUrl(String(url || "").trim());
+  return s || DEFAULT_SONG_COVER_URL;
 }
 
 /** Read a picked file as a data URL (same pattern as the Image Mood flow). */
@@ -43991,7 +44066,11 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
     if (rm) rm.textContent = metaLine;
     if (rm2) rm2.textContent = metaLine;
     if (els.resultArt) {
-      setCoverImageSrc(els.resultArt, lastSunoArtUrl || brokenCoverPlaceholderUrl());
+      const resultArtSrc =
+        pendingGeneratedCoverDataUrl ||
+        (lastGenerationMeta?.photoMode ? lastSunoArtUrl : "") ||
+        placeholderCoverDataUrl();
+      setCoverImageSrc(els.resultArt, resultArtSrc || brokenCoverPlaceholderUrl());
       els.resultArt.alt = lastSunoTitle ? `Cover: ${lastSunoTitle}` : "Song cover";
       els.resultArt.style.display = "";
     }
@@ -44016,7 +44095,11 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
     }
     if (els.resultTitle2) els.resultTitle2.textContent = lastSunoTitle2 || "Generated song B";
     if (els.resultArt2) {
-      setCoverImageSrc(els.resultArt2, lastSunoArtUrl2 || lastSunoArtUrl || brokenCoverPlaceholderUrl());
+      const resultArt2Src =
+        pendingGeneratedCoverDataUrl ||
+        (lastGenerationMeta?.photoMode ? (lastSunoArtUrl2 || lastSunoArtUrl) : "") ||
+        placeholderCoverDataUrl();
+      setCoverImageSrc(els.resultArt2, resultArt2Src || brokenCoverPlaceholderUrl());
       els.resultArt2.alt = lastSunoTitle2 ? `Cover: ${lastSunoTitle2}` : "Song cover B";
       els.resultArt2.style.display = "";
     }

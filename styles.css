@@ -75,15 +75,13 @@
 
 /* ========== Nabad Glass Control System ==========
  * Dark premium glass for utility/navigation controls only.
- * Reference: Profile Credits pill + Settings gear.
+ * Reference: discovery refresh, back buttons, chooser close.
  * Do NOT apply to feed cards, song cards, posts, tabs, or content shells.
  * Optional hook for future controls: .nabadGlassCtrl (+ --square | --round | --pill). */
 .nabadGlassCtrl,
 .nabadBackBtn,
 .discoveryRefreshBtn,
 .discoverySearchClose,
-.profileAuraIconBtn,
-.profileCreditsPill--toolbar,
 .createChooserClose{
   -webkit-appearance: none;
   appearance: none;
@@ -107,8 +105,6 @@
 .nabadBackBtn:hover,
 .discoveryRefreshBtn:hover,
 .discoverySearchClose:hover,
-.profileAuraIconBtn:hover,
-.profileCreditsPill--toolbar:hover,
 .createChooserClose:hover{
   background: var(--nabad-glass-bg-hover);
   border-color: var(--nabad-glass-border-hover);
@@ -122,8 +118,6 @@
 .nabadBackBtn:active,
 .discoveryRefreshBtn:active,
 .discoverySearchClose:active,
-.profileAuraIconBtn:active,
-.profileCreditsPill--toolbar:active,
 .createChooserClose:active{
   transform: scale(var(--nabad-glass-active-scale));
 }
@@ -141,24 +135,16 @@
   flex: 0 0 auto;
 }
 .nabadGlassCtrl--round,
-.profileAuraIconBtn,
 .createChooserClose{
   display: inline-flex;
   align-items: center;
   justify-content: center;
   border-radius: var(--nabad-glass-radius-round);
 }
-.nabadGlassCtrl--round,
-.profileAuraIconBtn{
+.createChooserClose{
   width: var(--nabad-glass-size-round);
   height: var(--nabad-glass-size-round);
   padding: 0;
-}
-.nabadGlassCtrl--pill,
-.profileCreditsPill--toolbar{
-  display: inline-flex;
-  align-items: center;
-  border-radius: var(--nabad-glass-radius-round);
 }
 
 /* Light mode — soft canvas, white cards, purple/teal washes (not flat white). */
@@ -1042,6 +1028,22 @@ html[data-theme="light"] .profileCreditsPill:not(.profileCreditsPill--toolbar){
   border-color: rgba(15, 23, 40, 0.10);
   background: rgba(255, 255, 255, 0.88);
   color: var(--text);
+}
+
+html[data-theme="light"] .profileCreditsPill--toolbar{
+  background: rgba(15, 23, 40, 0.05);
+}
+html[data-theme="light"] .profileCreditsPill--toolbar:hover{
+  background: rgba(15, 23, 40, 0.08);
+}
+html[data-theme="light"] .profileCreditsPill--toolbar .profileCreditsPillValue{
+  color: #0f1728;
+}
+html[data-theme="light"] .profileAuraIconBtn{
+  color: rgba(15, 23, 40, 0.85);
+}
+html[data-theme="light"] .profileAuraIconBtn:hover{
+  color: rgba(15, 23, 40, 0.85);
 }
 
 html[data-theme="light"] .discoverySpotlightTitle,
@@ -13025,22 +13027,55 @@ body:not([data-route="profile"]) #profileAuraHeaderChromeRoot{
 .profileAuraIconBtn.hasNotice::after{
   content: "";
   position: absolute;
-  top: 7px;
-  right: 7px;
-  width: 8px;
-  height: 8px;
+  top: 9px;
+  right: 9px;
+  width: 7px;
+  height: 7px;
   border-radius: 999px;
-  background: linear-gradient(135deg, #ff4d6d, #ff8aa2);
-  box-shadow:
-    0 0 0 2px rgba(5, 7, 13, 0.94),
-    0 0 12px rgba(255, 77, 109, 0.72);
+  background: #ff4d6d;
+  box-shadow: none;
+}
+.profileAuraIconBtn{
+  -webkit-appearance: none;
+  appearance: none;
+  position: relative;
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  -webkit-backdrop-filter: none;
+          backdrop-filter: none;
+  color: rgba(255, 255, 255, 0.85);
+  text-decoration: none;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: opacity 160ms ease;
+}
+.profileAuraIconBtn:hover{
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  color: rgba(255, 255, 255, 0.85);
+  opacity: 0.65;
+}
+.profileAuraIconBtn:active{
+  transform: none;
+  opacity: 0.45;
 }
 .profileAuraIconBtn svg{
-  width: 18px;
-  height: 18px;
+  width: 24px;
+  height: 24px;
   fill: none;
   stroke: currentColor;
-  stroke-width: 1.7;
+  stroke-width: 2;
   stroke-linecap: round;
   stroke-linejoin: round;
 }
@@ -14873,18 +14908,50 @@ button.profileMusicStylesLine:hover .profileMusicStylePill{
   color: rgba(248, 250, 255, 0.92);
   transition: background 140ms ease, border-color 140ms ease, transform 120ms ease;
 }
-/* Credits pill in the floating top chrome row (left). Glass system capsule. */
+/* Credits pill in the floating top chrome row (left). Quiet branded capsule. */
 .profileCreditsPill--toolbar{
   position: static;
   margin: 0;
   flex: 0 0 auto;
   align-self: center;
-  min-height: var(--nabad-glass-size-round);
-  padding: 6px 12px 6px 9px;
-  gap: 6px;
+  min-height: 34px;
+  padding: 5px 14px 5px 10px;
+  gap: 8px;
+  border: 0;
+  background: rgba(255, 255, 255, 0.06);
+  box-shadow: none;
+  -webkit-backdrop-filter: none;
+          backdrop-filter: none;
+  transition: opacity 160ms ease, background 160ms ease;
 }
-.profileCreditsPill--toolbar .profileCreditsPillIco{ opacity: 0.95; }
-.profileCreditsPill--toolbar .profileCreditsPillValue{ color: #fff; }
+.profileCreditsPill--toolbar:hover{
+  background: rgba(255, 255, 255, 0.09);
+  border: 0;
+  box-shadow: none;
+  opacity: 1;
+}
+.profileCreditsPill--toolbar:active{
+  transform: none;
+  opacity: 0.72;
+}
+.profileCreditsPill--toolbar .profileCreditsPillValue{
+  color: #fff;
+  font-size: 18px;
+  font-weight: 600;
+}
+.profileCreditsPillMark{
+  width: 18px;
+  height: 18px;
+  flex: 0 0 auto;
+  display: block;
+  line-height: 0;
+}
+.profileCreditsPillMarkLogo{
+  width: 18px;
+  height: 18px;
+  display: block;
+  object-fit: contain;
+}
 /* In edit mode hide credits in the portal chrome. */
 body[data-route="profile"]:has(#profileAura.profileAuraEditing) #profileAuraHeaderChromeRoot .profileCreditsPill--toolbar{
   display: none;
@@ -14899,6 +14966,9 @@ body[data-route="profile"]:has(#profileAura.profileAuraEditing) #profileAuraHead
   height: 13px;
   opacity: 0.75;
   flex: 0 0 auto;
+}
+.profileCreditsPill--toolbar .profileCreditsPillIco{
+  display: none;
 }
 .profileCreditsPillLabel{
   font-size: 11px;
@@ -14916,9 +14986,8 @@ body[data-route="profile"]:has(#profileAura.profileAuraEditing) #profileAuraHead
   line-height: 1;
 }
 .profileCreditsPill.isAdmin{
-  /* Same liquid glass as the toolbar; admin is hinted only on the coin icon. */
-  border-color: rgba(255, 255, 255, 0.14);
-  background: linear-gradient(145deg, rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0.05));
+  border: 0;
+  background: rgba(255, 255, 255, 0.08);
   color: #fff;
 }
 .profileCreditsPill.isAdmin .profileCreditsPillIco{
@@ -14926,7 +14995,7 @@ body[data-route="profile"]:has(#profileAura.profileAuraEditing) #profileAuraHead
   color: #f0d78a;
 }
 .profileCreditsPill.isAdmin .profileCreditsPillValue{
-  font-size: 16px;
+  font-size: 18px;
   line-height: 1;
 }
 .profileOwnAuthRow{

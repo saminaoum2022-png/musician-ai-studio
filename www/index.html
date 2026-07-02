@@ -124,7 +124,7 @@
       onload="this.media='all'"
     />
     <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Display:wght@900&family=Inter:wght@900&display=swap" /></noscript>
-    <link rel="stylesheet" href="./styles.css?v=20260702-212400" />
+    <link rel="stylesheet" href="./styles.css?v=20260702-214329" />
 
     <meta name="description" content="Nabadai is an AI music studio. Hum a melody, write lyrics, and ship a song." />
     <meta property="og:type" content="website" />
@@ -3878,10 +3878,16 @@
         class="profileCreditsPill profileCreditsPill--toolbar"
         aria-label="Credits balance. Tap to manage credits."
       >
-        <svg class="profileCreditsPillIco" viewBox="0 0 24 24" aria-hidden="true">
-          <circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.6"/>
-          <path d="M12 7v10M9 10h4.5a2 2 0 0 1 0 4H9m0 0h4.5a2 2 0 0 1 0 4H9" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
-        </svg>
+        <span class="profileCreditsPillMark" aria-hidden="true">
+          <img
+            class="profileCreditsPillMarkLogo"
+            src="./assets/icons/splash-mark.png"
+            alt=""
+            width="18"
+            height="18"
+            decoding="async"
+          />
+        </span>
         <strong id="profileCreditsBalance" class="profileCreditsPillValue">0</strong>
       </a>
       <div class="profileAuraToolbar" role="toolbar" aria-label="Profile actions">
@@ -3896,9 +3902,9 @@
           aria-label="Settings"
           title="Settings"
         >
-          <svg viewBox="0 0 24 24" aria-hidden="true">
-            <circle cx="12" cy="12" r="3"/>
-            <path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3h.1a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8v.1a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>
+          <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z"/>
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z"/>
           </svg>
         </a>
       </div>
@@ -4194,6 +4200,6 @@
     </script>
     <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
     <script src="./env.client.js" onerror="void 0"></script>
-    <script type="module" src="./src/app.js?v=20260702-212400"></script>
+    <script type="module" src="./src/app.js?v=20260702-214329"></script>
   </body>
 </html>

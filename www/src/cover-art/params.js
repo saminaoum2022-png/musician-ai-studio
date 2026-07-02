@@ -37,6 +37,7 @@ function inferMood(meta, title) {
     style: meta?.styleInput,
     styleSent: meta?.styleSent,
     energy: inferEnergy(meta),
+    lyrics: String(meta?.lyricsInput || meta?.finalPrompt || "").trim(),
   });
   const labels = {
     love: "Romantic",
@@ -81,6 +82,7 @@ function inferSonicProfile(meta) {
 export function coverArtParamsFromTrack(track) {
   const meta = track?.meta && typeof track.meta === "object" ? track.meta : {};
   const styleBlob = `${meta.styleInput || ""} ${meta.styleSent || ""}`;
+  const lyrics = String(meta.lyricsInput || meta.finalPrompt || meta.prompt || "").trim();
   return {
     songId: String(track?.id || meta?.taskId || track?.taskId || "").trim(),
     title: String(track?.title || "Untitled").trim(),
@@ -92,17 +94,29 @@ export function coverArtParamsFromTrack(track) {
     sonicProfile: inferSonicProfile(meta),
     style: String(meta?.styleInput || "").trim(),
     styleSent: String(meta?.styleSent || "").trim(),
+    lyrics,
+    lyricsInput: lyrics,
+    finalPrompt: String(meta.finalPrompt || "").trim(),
   };
 }
 
+/** Only tracks explicitly marked at add-time get Pollinations — never backfill old library rows. */
 export function shouldUseAbstractCover(track) {
   const meta = track?.meta && typeof track.meta === "object" ? track.meta : {};
+  if (!meta.pollinationsCoverPending) return false;
   if (meta.photoMode || meta.imageOnlyInstrumental) return false;
   if (meta.coverGenAttempted) return false;
   if (String(meta?.coverSource || "") === "pollinations" && meta?.nabadAbstractCover) return false;
   if (String(track?.artUrl || meta?.imageUrl || "").startsWith("data:") && meta?.nabadAbstractCover) {
     return false;
   }
+  return true;
+}
+
+export function isPollinationsCoverEligible(meta) {
+  const m = meta && typeof meta === "object" ? meta : {};
+  if (m.photoMode || m.imageOnlyInstrumental) return false;
+  if (String(m?.coverSource || "") === "pollinations" && m?.nabadAbstractCover) return false;
   return true;
 }
 

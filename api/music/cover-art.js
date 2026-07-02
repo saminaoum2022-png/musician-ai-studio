@@ -54,7 +54,7 @@ module.exports = async function handler(req, res) {
 
     const { buildAbstractCoverPrompt, buildPollinationsUrl } = await getPromptModule();
 
-    const { prompt, seed, bucket, visualMode, params } = buildAbstractCoverPrompt({
+    const { prompt, seed, bucket, visualMode, storyTheme, params } = buildAbstractCoverPrompt({
       songId,
       title: String(body?.title || "").trim().slice(0, MAX_FIELD),
       genre: String(body?.genre || body?.style || "").trim().slice(0, MAX_FIELD),
@@ -65,6 +65,8 @@ module.exports = async function handler(req, res) {
       sonicProfile: String(body?.sonicProfile || "").trim().slice(0, 40),
       style: String(body?.style || body?.styleSent || "").trim().slice(0, MAX_FIELD),
       styleSent: String(body?.styleSent || "").trim().slice(0, MAX_FIELD),
+      lyrics: String(body?.lyrics || body?.lyricsInput || "").trim().slice(0, 800),
+      finalPrompt: String(body?.finalPrompt || "").trim().slice(0, MAX_FIELD),
     });
 
     const upstreamUrl = buildPollinationsUrl(prompt, seed);
@@ -92,6 +94,7 @@ module.exports = async function handler(req, res) {
       seed,
       bucket,
       visualMode,
+      storyTheme,
       params,
       provider: "pollinations",
       abstract: true,

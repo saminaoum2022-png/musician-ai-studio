@@ -1,6 +1,6 @@
 /**
- * Mood-rich Pollinations prompts — creative freedom with light safety rails.
- * User never writes these; app derives from song metadata.
+ * Story-aware Pollinations prompts — derived from title, lyrics, style, mood.
+ * User never writes these. Same song id + same story → same seed + same scene.
  */
 
 const SAFETY_SUFFIX =
@@ -12,180 +12,156 @@ const NO_TEXT_REINFORCE =
 const STYLE_CORE =
   "premium luxury music cover art, cinematic atmosphere, elegant composition, rich color grading, high-end editorial look, moody dark tones with luminous accents, nabad teal and violet palette when appropriate";
 
-/** Base mood buckets — may blend with silhouettes or landscapes per song seed */
-const MOOD_BUCKETS = {
-  love: {
-    id: "love",
-    palette: "rose gold, soft magenta, warm coral, violet dusk, deep romantic shadows",
-    scene: "intimate romantic atmosphere, tender emotional warmth, soft backlight haze",
-    motion: "slow affectionate glow",
-    figures: [
-      "romantic couple silhouette against a glowing sunset sky, no visible faces",
-      "elegant woman silhouette backlit by rose and violet light",
-      "man silhouette in soft golden haze, mysterious and emotional",
-      "two silhouettes close together under a wide luminous sky",
-    ],
-    landscapes: [
-      "city skyline silhouette at golden hour, romantic mood",
-      "calm sea horizon with warm pink and violet sky",
-    ],
-  },
-  party: {
-    id: "party",
-    palette: "electric teal, vivid violet, gold sparkle, neon bloom, deep night",
-    scene: "festive celebration energy, vibrant nightlife atmosphere",
-    motion: "high-energy pulsing lights",
-    figures: [
-      "dancing crowd silhouettes under colorful club lights, no faces",
-      "single dancer silhouette mid-movement, dynamic and free",
-      "group of people partying as dark silhouettes with bokeh lights",
-      "silhouettes dancing at a wedding celebration",
-    ],
-    landscapes: [
-      "lit city rooftops at night, festive urban atmosphere",
-      "open-air party venue lights glowing in darkness",
-    ],
-  },
-  happy: {
-    id: "happy",
-    palette: "bright teal, sunny amber, soft white bloom, cheerful sky tones",
-    scene: "uplifting joyful atmosphere, optimistic radiant mood",
-    motion: "light airy brightness",
-    figures: [
-      "happy person silhouette arms raised against bright sky",
-      "friends silhouettes laughing together at sunset, no faces",
-    ],
-    landscapes: [
-      "sunlit hills and open sky, warm and hopeful",
-      "bright coastal view with sparkling water",
-    ],
-  },
-  sad: {
-    id: "sad",
-    palette: "deep indigo, muted violet, cold teal whisper, faint silver",
-    scene: "lonely melancholic atmosphere, quiet emotional weight",
-    motion: "very slow fading light",
-    figures: [
-      "solitary figure silhouette staring into the distance",
-      "person sitting alone silhouette by a window glow, no face details",
-      "woman or man silhouette in rain-lit moody darkness",
-    ],
-    landscapes: [
-      "empty rainy street at night, cinematic melancholy",
-      "foggy lonely horizon, minimal and emotional",
-    ],
-  },
-  chill: {
-    id: "chill",
-    palette: "nabad teal, soft cyan, muted violet mist, deep calm blues",
-    scene: "peaceful calm atmosphere, breathable stillness",
-    motion: "gentle slow drift",
-    figures: [
-      "relaxed figure silhouette watching the horizon",
-      "person meditating silhouette on a hill at dusk",
-    ],
-    landscapes: [
-      "misty mountains over a still lake at blue hour",
-      "soft aurora sky over quiet peaks",
-      "minimal ocean horizon, serene and spacious",
-    ],
-  },
-  wedding: {
-    id: "wedding",
-    palette: "champagne gold, ivory glow, soft violet, teal accent",
-    scene: "elegant celebration, graceful premium ceremony mood",
-    motion: "majestic slow radiant swell",
-    figures: [
-      "bride and groom silhouettes at sunset, no faces",
-      "couple silhouettes dancing, wedding romance",
-      "elegant wedding party silhouettes with golden backlight",
-    ],
-    landscapes: [
-      "beautiful wedding venue exterior at twilight, warm lights",
-      "garden ceremony arch silhouette at golden hour",
-    ],
-  },
-  hype: {
-    id: "hype",
-    palette: "aggressive teal, sharp violet, white hot core, high contrast",
-    scene: "intense power and drive, kinetic energy",
-    motion: "dynamic tight pulse",
-    figures: [
-      "athlete silhouette in powerful stance, backlit",
-      "performer silhouette on stage with dramatic lights, no face",
-      "crowd silhouettes with hands up at a concert",
-    ],
-    landscapes: [
-      "stadium lights glowing in darkness, epic scale",
-      "urban nightscape with sharp neon energy",
-    ],
-  },
-  dark: {
-    id: "dark",
-    palette: "near-black void, deep purple, toxic teal trace",
-    scene: "mysterious noir mood, smoldering tension",
-    motion: "subtle ominous shimmer",
-    figures: [
-      "lone hooded silhouette in fog, no face visible",
-      "dark figure silhouette against a single light source",
-    ],
-    landscapes: [
-      "noir city alley at night, wet reflections",
-      "stormy mountains under black clouds",
-    ],
-  },
-  dreamy: {
-    id: "dreamy",
-    palette: "lavender, teal mist, pearlescent white, soft pastels",
-    scene: "surreal dreamlike atmosphere, soft magic realism",
-    motion: "weightless floating mood",
-    figures: [
-      "dreamy figure silhouette walking through mist",
-      "woman or man silhouette in soft fog, ethereal",
-    ],
-    landscapes: [
-      "cozy houses on a hill at twilight, warm window lights",
-      "small village nestled in mountains with mist",
-      "fantasy-like rolling hills under a giant moonlit sky",
-    ],
-  },
-  epic: {
-    id: "epic",
-    palette: "royal violet, teal beam, bright gold crest, cinematic white bloom",
-    scene: "grand heroic scale, monumental cinematic mood",
-    motion: "wide powerful bloom",
-    figures: [
-      "hero silhouette on a cliff edge facing vast landscape",
-      "lone warrior silhouette against enormous sky",
-    ],
-    landscapes: [
-      "cinematic mountain range at dusk, dramatic peaks and god rays",
-      "vast desert canyon with epic scale and golden light",
-      "snow-capped mountains under a storm-lit sky",
-    ],
-  },
-  default: {
-    id: "default",
-    palette: "deep void black, nabad teal, nabad violet, rose-gold accent",
-    scene: "balanced premium atmospheric mood",
-    motion: "calm internal breathing",
-    figures: [
-      "subtle human silhouette in abstract light, no face",
-      "elegant silhouette against gradient sky",
-    ],
-    landscapes: [
-      "soft mountain horizon silhouette at twilight",
-      "minimal city skyline at night with teal and violet lights",
-      "abstract living light with distant hills",
-    ],
-  },
+const MOOD_PALETTES = {
+  love: "rose gold, soft magenta, warm coral, violet dusk",
+  party: "electric teal, vivid violet, gold sparkle, neon bloom",
+  happy: "bright teal, sunny amber, soft white bloom",
+  sad: "deep indigo, muted violet, cold teal whisper",
+  chill: "nabad teal, soft cyan, muted violet mist",
+  wedding: "champagne gold, ivory glow, soft violet",
+  hype: "aggressive teal, sharp violet, high contrast",
+  dark: "near-black void, deep purple, toxic teal trace",
+  dreamy: "lavender, teal mist, pearlescent white",
+  epic: "royal violet, teal beam, bright gold crest",
+  default: "deep void black, nabad teal, nabad violet, rose-gold accent",
 };
 
-const ABSTRACT_EXTRAS = [
-  "translucent light gradients and glass diffusion layered over the scene",
-  "soft aurora-like glow woven through the atmosphere",
-  "premium abstract light particles in the air",
-  "living light material accents, cinematic bloom",
+/** Story themes — chosen from title + lyrics + style, highest match wins. */
+const STORY_THEMES = [
+  {
+    id: "prom_formal",
+    re: /prom|prom night|homecoming|formal dance|school dance|senior year|senior night|university ball|college ball|graduation ball|graduation night|debs|matric|leaving cert|bal de promo|soirée de promo|حفل التخرج|حفل تخرج|سهرة تخرج|بروف|promenade/i,
+    scene:
+      "elegant formal school prom or university ball atmosphere, decorated ballroom with chandeliers and soft golden lights, young people dancing as silhouettes in formal wear, festive celebration mood, no visible faces",
+    visualMode: "figure",
+    bucket: "party",
+  },
+  {
+    id: "graduation",
+    re: /graduation|graduate|diploma|commencement|cap and gown|mortarboard|تخرج/i,
+    scene:
+      "graduation celebration atmosphere, graduate silhouettes with caps thrown in the air, campus or hall lights at dusk, proud joyful mood, no faces",
+    visualMode: "figure",
+    bucket: "happy",
+  },
+  {
+    id: "wedding",
+    re: /wedding|bridal|bride|groom|marriage|ceremony|first dance|dabke entrance|زفاف|عرس|عروس/i,
+    scene:
+      "elegant wedding celebration atmosphere, bride and groom silhouettes dancing or standing together, warm golden ceremony lights, graceful premium mood, no faces",
+    visualMode: "figure",
+    bucket: "wedding",
+  },
+  {
+    id: "club_night",
+    re: /club|nightclub|dj|afterparty|turn up|night out|rave|discoteca|ملهى|نادي/i,
+    scene:
+      "vibrant nightclub atmosphere, dancing crowd silhouettes under colorful lights and bokeh, high energy celebration, no faces",
+    visualMode: "figure",
+    bucket: "party",
+  },
+  {
+    id: "concert_stage",
+    re: /concert|festival|live show|on stage|stadium|arena|tour|headliner|حفلة|مسرح/i,
+    scene:
+      "live concert atmosphere, performer and crowd silhouettes on stage with dramatic spotlights, epic scale, no faces",
+    visualMode: "figure",
+    bucket: "hype",
+  },
+  {
+    id: "heartbreak",
+    re: /heartbreak|broken heart|goodbye|farewell|miss you|without you|left me|tears|lonely|alone|empty|goodnight|وداع|فراق|وحيد|بكي|دمع/i,
+    scene:
+      "lonely melancholic atmosphere, solitary person silhouette by a rain-lit window or empty street, quiet emotional weight, no face",
+    visualMode: "figure",
+    bucket: "sad",
+  },
+  {
+    id: "romance",
+    re: /love you|my love|romantic|romance|darling|valentine|kiss|together forever|habibi|habibti|حبيب|حبيبي|حبيبتي|عشق|حب|قلبي/i,
+    scene:
+      "intimate romantic atmosphere, couple silhouettes close together under a glowing sky, tender warmth, no visible faces",
+    visualMode: "figure",
+    bucket: "love",
+  },
+  {
+    id: "family_home",
+    re: /mother|father|mom|dad|family|home|childhood|house|village|grandma|grandpa|أم|أبي|بيت|عائلة|أهل/i,
+    scene:
+      "warm nostalgic home atmosphere, cozy house with glowing windows at twilight, gentle emotional mood, no people required",
+    visualMode: "landscape",
+    bucket: "dreamy",
+  },
+  {
+    id: "city_street",
+    re: /city|street|downtown|urban|skyline|neighborhood|block|metro|subway|taxi|مدينة|شارع|حي/i,
+    scene:
+      "cinematic urban night atmosphere, city skyline or wet street reflections, moody premium noir lighting",
+    visualMode: "landscape",
+    bucket: "dark",
+  },
+  {
+    id: "ocean_beach",
+    re: /ocean|sea|beach|waves|shore|coast|sailing|boat|ship|بحر|شاطئ|موج/i,
+    scene:
+      "coastal atmosphere, ocean horizon with cinematic sky glow, emotional spacious mood",
+    visualMode: "landscape",
+    bucket: "chill",
+  },
+  {
+    id: "mountains",
+    re: /mountain|peak|summit|alps|valley|hill|cliff|canyon|desert|جبل|جبال|صحر/i,
+    scene:
+      "grand mountain landscape at dusk, dramatic peaks and god rays, epic cinematic scale, no people",
+    visualMode: "landscape",
+    bucket: "epic",
+  },
+  {
+    id: "rain_storm",
+    re: /rain|storm|thunder|lightning|flood|wind|hurricane|مطر|عاصف/i,
+    scene:
+      "stormy atmospheric mood, rain-swept darkness with single luminous accent, cinematic tension",
+    visualMode: "landscape",
+    bucket: "dark",
+  },
+  {
+    id: "nature_calm",
+    re: /forest|garden|flower|meadow|field|tree|river|lake|sunset|sunrise|moon|stars|sky|nature|green|spring|autumn|fall|winter|snow|rose|orchard|غابة|حديقة|زهرة|نهر|غروب|فجر|قمر|نجوم/i,
+    scene:
+      "natural landscape atmosphere matching the song mood, soft organic light, serene cinematic framing, no people",
+    visualMode: "landscape",
+    bucket: "chill",
+  },
+  {
+    id: "workout_power",
+    re: /workout|gym|training|run|running|champion|victory|win|power|beast mode|anthem|كأس|بطل|قوة/i,
+    scene:
+      "intense powerful atmosphere, athlete or crowd silhouettes in dramatic backlight, kinetic energy, no faces",
+    visualMode: "figure",
+    bucket: "hype",
+  },
+  {
+    id: "celebration",
+    re: /party|celebration|birthday|cheers|toast|dance|dancing|fiesta|celebrate|احتفال|رقص|عيد/i,
+    scene:
+      "joyful celebration atmosphere, people dancing as silhouettes with warm festive lights, no faces",
+    visualMode: "figure",
+    bucket: "party",
+  },
+  {
+    id: "dreamy_ethereal",
+    re: /dream|dreamy|ethereal|float|cosmic|space|galaxy|nebula|magic|fantasy|حلم|فضاء/i,
+    scene:
+      "surreal dreamlike atmosphere, soft fog and pearlescent light, weightless magical mood, abstract human form optional as distant silhouette only",
+    visualMode: "abstract",
+    bucket: "dreamy",
+  },
+];
+
+const ABSTRACT_FALLBACKS = [
+  "premium abstract living light gradients, glass diffusion, cinematic bloom, no people",
+  "atmospheric color field with soft aurora glow and elegant negative space, no figures",
+  "luxury abstract light sculpture mood, teal and violet luminous accents, no human subjects",
 ];
 
 const COMPOSITIONS = [
@@ -243,68 +219,125 @@ function inferSonicProfile(text) {
   return "balanced";
 }
 
-export function classifyVisualBucket({ mood, genre, title, style, styleSent, energy }) {
-  const blob = `${mood} ${genre} ${title} ${style} ${styleSent}`.toLowerCase();
+/** Full story text used for theme + seed (title weighs heavily). */
+export function buildStoryBlob(input) {
+  const title = String(input?.title || "").trim();
+  const mood = String(input?.mood || "").trim();
+  const genre = String(input?.genre || input?.style || "").trim();
+  const style = String(input?.style || "").trim();
+  const styleSent = String(input?.styleSent || "").trim();
+  const lyrics = String(input?.lyrics || input?.lyricsInput || "").trim();
+  const finalPrompt = String(input?.finalPrompt || "").trim();
+  const lyricsExcerpt = lyrics.replace(/\[[^\]]*\]/g, " ").replace(/\s+/g, " ").trim().slice(0, 600);
+  return [title, title, mood, genre, style, styleSent, finalPrompt, lyricsExcerpt].filter(Boolean).join(" ");
+}
 
-  if (/wedding|bridal|marriage|dabke|entrance|ceremony|first dance/.test(blob)) return "wedding";
-  if (/party|club|dance|dancing|celebration|festival|hype|turn up|night out/.test(blob)) return "party";
-  if (/love|romantic|romance|heart|habibi|darling|valentine|intimate|passion/.test(blob)) return "love";
-  if (/sad|melanchol|heartbreak|lonely|tears|miss you|goodbye|mourning|empty/.test(blob)) return "sad";
-  if (/happy|joy|uplift|cheerful|feel good|sunshine|smile|blessed/.test(blob)) return "happy";
-  if (/workout|gym|drill|trap|arena|stadium|hype|power|beast|anthem/.test(blob)) return "hype";
-  if (/dark|noir|gothic|sinister|brooding|evil|shadow/.test(blob)) return "dark";
-  if (/dream|ethereal|ambient|sleep|float|cosmic|space|nebula|village|home/.test(blob)) return "dreamy";
-  if (/epic|cinematic|orchestral|trailer|heroic|grand|massive|anthemic|mountain/.test(blob)) return "epic";
-  if (/chill|lofi|lo-fi|calm|soft|relax|meditat|breathe|peace|nature/.test(blob)) return "chill";
-  if (/folk|country|acoustic|desert|mountain|city|urban|street/.test(blob)) return "dreamy";
+function scoreTheme(theme, blob) {
+  const m = blob.match(theme.re);
+  if (!m) return 0;
+  let score = 1;
+  const hit = m[0] || "";
+  const idx = blob.toLowerCase().indexOf(hit.toLowerCase());
+  if (idx >= 0 && idx < 160) score += 2;
+  return score;
+}
 
+export function resolveStoryTheme(input) {
+  const blob = buildStoryBlob(input);
+  let best = null;
+  let bestScore = 0;
+  for (const theme of STORY_THEMES) {
+    const score = scoreTheme(theme, blob);
+    if (score > bestScore) {
+      bestScore = score;
+      best = theme;
+    }
+  }
+  return { theme: best, blob, storyScore: bestScore };
+}
+
+export function classifyVisualBucket(input) {
+  const blob = buildStoryBlob(input);
+  const energy = parseEnergy(input?.energy);
+  const { theme } = resolveStoryTheme(input);
+  if (theme) return theme.bucket;
+
+  const lower = blob.toLowerCase();
+  if (/dark|noir|gothic|sinister|brooding|evil|shadow|drill|trap/.test(lower)) return "dark";
+  if (/sad|melanchol|lonely|tears/.test(lower)) return "sad";
+  if (/happy|joy|uplift|cheerful|smile/.test(lower)) return "happy";
+  if (/love|romantic|heart|passion/.test(lower)) return "love";
+  if (/epic|cinematic|orchestral|heroic|grand|anthemic/.test(lower)) return "epic";
+  if (/chill|lofi|lo-fi|calm|relax|ambient|peaceful/.test(lower)) return "chill";
   if (energy > 0.78) return "party";
   if (energy < 0.32) return "chill";
   return "default";
 }
 
-function pickFrom(list, songId, salt) {
+function pickFrom(list, seedKey, salt) {
   if (!list?.length) return "";
-  return list[fnv1a(`${songId}:${salt}`) % list.length];
+  return list[fnv1a(`${seedKey}:${salt}`) % list.length];
 }
 
-/** Roll visual treatment: abstract blend, silhouette figure, or landscape */
-function pickVisualScene(bucket, songId, bucketKey) {
-  const roll = fnv1a(`${songId}:${bucketKey}:visual-mode`) % 100;
-
-  // Mood-led bias — love/wedding lean figures, epic/chill lean landscapes
-  let mode = "blend";
-  if (roll < 34) mode = "figure";
-  else if (roll < 64) mode = "landscape";
-  else mode = "blend";
-
-  if (bucketKey === "love" || bucketKey === "wedding") {
-    if (roll < 55) mode = "figure";
-    else if (roll < 80) mode = "landscape";
-  }
-  if (bucketKey === "epic" || bucketKey === "chill" || bucketKey === "dreamy") {
-    if (roll < 50) mode = "landscape";
-    else if (roll < 75) mode = "figure";
-  }
+function moodBucketFallback(bucketKey, energy) {
+  const palette = MOOD_PALETTES[bucketKey] || MOOD_PALETTES.default;
   if (bucketKey === "party" || bucketKey === "hype") {
-    if (roll < 50) mode = "figure";
+    return {
+      scene: "festive high-energy atmosphere, dancing silhouettes under colorful lights, no faces",
+      visualMode: "figure",
+      palette,
+    };
+  }
+  if (bucketKey === "love") {
+    return {
+      scene: "romantic atmosphere, couple silhouettes under glowing sky, no visible faces",
+      visualMode: "figure",
+      palette,
+    };
+  }
+  if (bucketKey === "sad") {
+    return {
+      scene: "melancholic atmosphere, lone silhouette in moody darkness, no face",
+      visualMode: "figure",
+      palette,
+    };
+  }
+  if (energy > 0.7) {
+    return {
+      scene: "dynamic celebratory light atmosphere, abstract motion and sparkle, no human subjects",
+      visualMode: "abstract",
+      palette,
+    };
+  }
+  return {
+    scene: pickFrom(ABSTRACT_FALLBACKS, bucketKey, "abstract-fallback"),
+    visualMode: "abstract",
+    palette,
+  };
+}
+
+function buildSceneFromStory(input) {
+  const energy = parseEnergy(input?.energy);
+  const { theme, blob, storyScore } = resolveStoryTheme(input);
+  const bucketKey = theme?.bucket || classifyVisualBucket(input);
+  const palette = MOOD_PALETTES[bucketKey] || MOOD_PALETTES.default;
+
+  if (theme && storyScore > 0) {
+    return {
+      scene: `${theme.scene}, ${palette}`,
+      visualMode: theme.visualMode,
+      storyTheme: theme.id,
+      bucketKey,
+    };
   }
 
-  const parts = [bucket.scene, bucket.palette, bucket.motion];
-
-  if (mode === "figure" || mode === "blend") {
-    const fig = pickFrom(bucket.figures, songId, "figure");
-    if (fig) parts.push(fig);
-  }
-  if (mode === "landscape" || mode === "blend") {
-    const land = pickFrom(bucket.landscapes, songId, "landscape");
-    if (land) parts.push(land);
-  }
-  if (mode === "blend") {
-    parts.push(pickFrom(ABSTRACT_EXTRAS, songId, "abstract"));
-  }
-
-  return { scene: parts.filter(Boolean).join(", "), visualMode: mode };
+  const fallback = moodBucketFallback(bucketKey, energy);
+  return {
+    scene: `${fallback.scene}, ${fallback.palette}`,
+    visualMode: fallback.visualMode,
+    storyTheme: "mood_fallback",
+    bucketKey,
+  };
 }
 
 function sonicPhrase(profile) {
@@ -327,13 +360,27 @@ function brightnessPhrase(brightness) {
   return "balanced contrast";
 }
 
-function pickComposition(songId) {
-  return COMPOSITIONS[fnv1a(`${songId}:composition`) % COMPOSITIONS.length];
+function storyMoodPhrase(input, storyTheme) {
+  const title = String(input?.title || "").trim();
+  const mood = String(input?.mood || "").trim();
+  const bits = [];
+  if (storyTheme && storyTheme !== "mood_fallback") {
+    bits.push(`visual mood must match the song story theme (${storyTheme.replace(/_/g, " ")})`);
+  }
+  if (mood) bits.push(`emotional tone: ${mood}`);
+  if (title) bits.push(`inspired by the feeling of a song called "${title.slice(0, 60)}" but never write that title or any words in the image`);
+  return bits.join(", ");
+}
+
+function buildCoverSeed(input, storyTheme, bucketKey) {
+  const storyBlob = buildStoryBlob(input);
+  const songId = String(input?.songId || input?.id || "").trim();
+  return fnv1a(`${songId}|${storyTheme}|${bucketKey}|${storyBlob}`) % 2147483646;
 }
 
 /**
  * @param {object} input
- * @returns {{ prompt: string, seed: number, bucket: string, visualMode: string, params: object }}
+ * @returns {{ prompt: string, seed: number, bucket: string, visualMode: string, storyTheme: string, params: object }}
  */
 export function buildAbstractCoverPrompt(input) {
   const songId = String(input?.songId || input?.id || input?.title || "nabad-song").trim();
@@ -346,39 +393,29 @@ export function buildAbstractCoverPrompt(input) {
   const brightness = parseBrightness(input?.brightness);
   const sonicProfile = String(input?.sonicProfile || inferSonicProfile(`${genre} ${styleBlob}`));
 
-  const bucketKey = classifyVisualBucket({
-    mood,
-    genre,
-    title,
-    style: input?.style,
-    styleSent: input?.styleSent,
-    energy,
-  });
-  const bucket = MOOD_BUCKETS[bucketKey] || MOOD_BUCKETS.default;
-  const { scene, visualMode } = pickVisualScene(bucket, songId, bucketKey);
-  const composition = pickComposition(songId);
+  const { scene, visualMode, storyTheme, bucketKey } = buildSceneFromStory(input);
+  const composition = COMPOSITIONS[fnv1a(`${songId}:composition`) % COMPOSITIONS.length];
+  const seed = buildCoverSeed(input, storyTheme, bucketKey);
 
   const parts = [
     STYLE_CORE,
     scene,
     composition,
+    storyMoodPhrase(input, storyTheme),
     tempoPhrase(tempo),
     brightnessPhrase(brightness),
     sonicPhrase(sonicProfile),
-    genre ? `inspired by the feeling of ${genre} music` : "",
-    title ? `never write or display "${title.slice(0, 50)}" or any other words or sentences` : "",
+    genre ? `musical style feeling: ${genre}` : "",
     NO_TEXT_REINFORCE,
     SAFETY_SUFFIX,
   ].filter(Boolean);
 
-  const prompt = parts.join(", ");
-  const seed = fnv1a(`${songId}:${bucketKey}:nabad-cover`) % 2147483646;
-
   return {
-    prompt,
+    prompt: parts.join(", "),
     seed,
     bucket: bucketKey,
     visualMode,
+    storyTheme,
     params: {
       songId,
       title,
@@ -390,6 +427,7 @@ export function buildAbstractCoverPrompt(input) {
       sonicProfile,
       bucket: bucketKey,
       visualMode,
+      storyTheme,
     },
   };
 }

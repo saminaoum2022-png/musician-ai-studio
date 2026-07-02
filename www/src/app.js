@@ -47,7 +47,7 @@ import {
   configureCoverArt,
   ensureAbstractCoverForTrack,
 } from "./cover-art/generate.js";
-import { shouldUseAbstractCover } from "./cover-art/params.js";
+import { isPollinationsCoverEligible, shouldUseAbstractCover } from "./cover-art/params.js";
 import { DEFAULT_SONG_COVER_URL, isLogoCoverUrl, normalizeSongCoverUrl } from "./cover-art/placeholders.js";
 import { initCoverArtOverlay, syncCoverArtOverlay } from "./cover-art/overlay.js";
 import { initTheme } from "./theme.js";
@@ -77,7 +77,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260702-120643";
+const APP_BUILD = "20260702-122539";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -17738,20 +17738,6 @@ async function backfillPendingCoverUploads(items) {
   for (const t of pending) {
     // eslint-disable-next-line no-await-in-loop
     await persistTrackCoverIfNeeded(t);
-  }
-}
-
-/** Generate Pollinations covers for library tracks that still have Suno / empty art. */
-let _abstractCoverBackfillRan = false;
-async function backfillAbstractCovers(items) {
-  if (_abstractCoverBackfillRan) return;
-  _abstractCoverBackfillRan = true;
-  const pending = (Array.isArray(items) ? items : [])
-    .filter((t) => shouldUseAbstractCover(t))
-    .slice(0, 6);
-  for (const t of pending) {
-    // eslint-disable-next-line no-await-in-loop
-    await ensureAbstractCoverForTrack(t);
   }
 }
 
@@ -37807,7 +37793,6 @@ async function ensureUserLibraryHydrated(prefetchedCloud) {
   // Heal covers that never made it to the cloud (kept as data: URLs
   // locally) so they stop reverting to the placeholder logo.
   void backfillPendingCoverUploads(mergedDeduped);
-  void backfillAbstractCovers(mergedDeduped);
 
   // Local-first: private songs are NEVER auto-uploaded to the cloud. A song
   // reaches the cloud only when the user explicitly publishes it. Removing
@@ -37962,11 +37947,12 @@ function addToLibrary(track) {
     meta: stampedMeta || null,
     publicOnProfile: false,
   };
-  if (shouldUseAbstractCover(newTrack)) {
+  if (isPollinationsCoverEligible(newTrack.meta)) {
     const ph = DEFAULT_SONG_COVER_URL;
     newTrack.artUrl = ph;
     newTrack.meta = {
       ...(newTrack.meta || {}),
+      pollinationsCoverPending: true,
       imageUrl: ph,
       imageThumb: ph,
     };

@@ -56,6 +56,7 @@ function patchLibraryTrackCover(trackId, patch) {
     coverSource,
     coverSeed: seed || prev.meta?.coverSeed || "",
     coverBucket: bucket || params?.bucket || prev.meta?.coverBucket || "",
+    coverStoryTheme: params?.storyTheme || prev.meta?.coverStoryTheme || "",
     coverParams: params || prev.meta?.coverParams,
     photoMode: false,
     coverGenAttempted: coverGenAttempted || prev.meta?.coverGenAttempted || false,

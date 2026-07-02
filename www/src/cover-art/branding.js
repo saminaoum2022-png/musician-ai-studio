@@ -49,7 +49,7 @@ export async function stampCoverWithSplashMark(dataUrl) {
 
     ctx.drawImage(cover, 0, 0, w, h);
 
-    const markMax = Math.round(Math.min(w, h) * 0.1);
+    const markMax = Math.round(Math.min(w, h) * 0.085);
     const markScale = markMax / Math.max(mark.naturalWidth || mark.width, 1);
     const markW = Math.round((mark.naturalWidth || mark.width) * markScale);
     const markH = Math.round((mark.naturalHeight || mark.height) * markScale);

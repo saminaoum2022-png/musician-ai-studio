@@ -50,6 +50,12 @@ import {
 import { isPollinationsCoverEligible, shouldUseAbstractCover } from "./cover-art/params.js";
 import { DEFAULT_SONG_COVER_URL, isLogoCoverUrl, normalizeSongCoverUrl } from "./cover-art/placeholders.js";
 import { initCoverArtOverlay, syncCoverArtOverlay } from "./cover-art/overlay.js";
+import {
+  clearGenerationPending,
+  getGenerationPending,
+  libraryGeneratingRowsHtml,
+  setGenerationPending,
+} from "./generation-pending.js";
 import { initTheme } from "./theme.js";
 import {
   initNabadVerificationUi,
@@ -77,7 +83,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260702-124543";
+const APP_BUILD = "20260702-125941";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -4184,6 +4190,7 @@ function resetCreateDraft() {
     if (typeof stopSoundGenerationPolling === "function") stopSoundGenerationPolling();
   } catch {}
   try { savePendingBackendTask(""); } catch {}
+  clearGenerationPending();
   pendingGeneratedCoverDataUrl = "";
   pendingBackendTaskId = "";
   imageMoodAppliedForNextGen = false;
@@ -15166,6 +15173,63 @@ function markGenerationReadyNotice() {
   setLoading(false);
   try {
     if (typeof _showResultCardHoisted === "function") _showResultCardHoisted(true);
+  } catch {}
+}
+
+function pushLocalGenerationReadyActivity(entries) {
+  const list = (Array.isArray(entries) ? entries : []).filter((e) => e && String(e.id || "").trim());
+  if (!list.length) return;
+  const titles = list.map((e) => String(e.title || "Generated song").trim());
+  const trackIds = list.map((e) => String(e.id || "").trim());
+  const artUrls = list.map((e) =>
+    String(e.meta?.imageThumb || e.meta?.imageUrl || e.artUrl || "").trim(),
+  );
+  const variantCount = list.length;
+  const id = `local-gen-${trackIds.join("-")}-${Date.now()}`;
+  const n = {
+    id,
+    type: "generation_ready",
+    created_at: new Date().toISOString(),
+    read_at: null,
+    local: true,
+    metadata: {
+      song_title: titles[0] || "Your song",
+      song_titles: titles,
+      track_ids: trackIds,
+      song_id: trackIds[0] || "",
+      variant_count: variantCount,
+      art_url: artUrls[0] || "",
+      art_urls: artUrls,
+    },
+  };
+  const seen = new Set(_activityFeedState.items.map((item) => String(item?.id || "")));
+  if (seen.has(id)) return;
+  _activityFeedState.items.unshift(n);
+  try {
+    renderActivityFeedFromState();
+  } catch {}
+  const unread = _activityFeedState.items.filter((item) => !item?.read_at).length;
+  try {
+    updateNotificationsEntryBadges(unread);
+  } catch {}
+  if (els.activityLead) {
+    els.activityLead.textContent = unread
+      ? `${unread} unread ${unread === 1 ? "update" : "updates"} from your music circle.`
+      : "Follows, likes, comments, milestones, and remixes.";
+  }
+  try {
+    showToast(
+      variantCount > 1
+        ? "Your 2 songs are ready — check Library."
+        : `"${titles[0] || "Your song"}" is ready.`,
+      { icon: "✓", durationMs: 5200 },
+    );
+  } catch {}
+}
+
+function syncGenerationPendingLibraryUi() {
+  try {
+    refreshOwnSongsUi();
   } catch {}
 }
 
@@ -26175,6 +26239,7 @@ function notificationIconForType(type) {
   if (t === "chart_rank") return "★";
   if (t === "public_song") return "P";
   if (t === "song_live") return "♪";
+  if (t === "generation_ready") return "✓";
   return "•";
 }
 
@@ -26203,6 +26268,9 @@ function activityTypeBadgeSvg(type) {
   }
   if (t === "song_live") {
     return `<svg viewBox="0 0 24 24" width="11" height="11" aria-hidden="true"><path fill="currentColor" d="M12 3v10.55A4 4 0 1 0 14 17V7h4V3h-6Z"/></svg>`;
+  }
+  if (t === "generation_ready") {
+    return `<svg viewBox="0 0 24 24" width="11" height="11" aria-hidden="true"><path fill="currentColor" d="M9 16.2 4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4L9 16.2Z"/></svg>`;
   }
   return `<svg viewBox="0 0 24 24" width="11" height="11" aria-hidden="true"><path fill="currentColor" d="M20 12v5H4v-5H2v7h20v-7h-2Zm-6 .5-7-4v8l7-4ZM4 9h16V4H4v5Z"/></svg>`;
 }
@@ -26285,6 +26353,23 @@ function notificationMessage(n) {
       title: `“${title}” is live on Discover`,
       body: "Saved permanently and published — listeners can find and play it.",
       action: "",
+    };
+  }
+  if (n?.type === "generation_ready") {
+    const titles = Array.isArray(n?.metadata?.song_titles) ? n.metadata.song_titles : [];
+    const count = Number(n?.metadata?.variant_count || titles.length || 1);
+    if (count > 1) {
+      return {
+        title: "Your songs are ready",
+        body: `${titles.slice(0, 2).join(" · ") || "Both variants"} — saved to your Library.`,
+        action: "Open Library",
+      };
+    }
+    const title = String(n?.metadata?.song_title || titles[0] || "Your song").trim();
+    return {
+      title: `"${title}" is ready`,
+      body: "Saved to your Library — tap to listen.",
+      action: "Play",
     };
   }
   if (n?.type === "social_like") {
@@ -26436,7 +26521,7 @@ function activityDayLabel(bucket) {
 function activityNotificationMatchesFilter(n, tab = _activityFilterTab) {
   if (tab === "all") return true;
   const t = String(n?.type || "").trim();
-  if (tab === "achievements") return t === "chart_rank" || t === "play_milestone" || t === "song_live";
+  if (tab === "achievements") return t === "chart_rank" || t === "play_milestone" || t === "song_live" || t === "generation_ready";
   if (tab === "social") {
     return ["follow", "remix", "social_like", "social_reply", "social_repost", "public_song", "song_feedback"].includes(t);
   }
@@ -26467,7 +26552,7 @@ function activityActorAvatarHtml(n, cls) {
 /** Milestone rows are about your songs — lead with cover art, not a blank silhouette. */
 function activityRowUsesSongLeadVisual(n) {
   const t = String(n?.type || "").trim();
-  return t === "chart_rank" || t === "play_milestone" || t === "song_live";
+  return t === "chart_rank" || t === "play_milestone" || t === "song_live" || t === "generation_ready";
 }
 
 function activityNotificationShowRightCover(n) {
@@ -26640,7 +26725,7 @@ function activitySongArtFromLocalPools(songId) {
 
 function activitySongCoverUrl(n) {
   const meta = n?.metadata || {};
-  const fromMeta = String(meta.song_art_url || meta.target_art_url || "").trim();
+  const fromMeta = String(meta.song_art_url || meta.target_art_url || meta.art_url || "").trim();
   if (fromMeta && /^https?:\/\//i.test(fromMeta)) return fromMeta;
   return activitySongArtFromLocalPools(activitySongIdForNotification(n));
 }
@@ -26758,6 +26843,11 @@ function notificationActivityHref(n) {
   if (t === "play_milestone" && songId) return `#/player?track=${encodeURIComponent(songId)}`;
   if (t === "chart_rank" && songId) return `#/player?track=${encodeURIComponent(songId)}`;
   if (t === "song_live" && songId) return `#/player?track=${encodeURIComponent(songId)}`;
+  if (t === "generation_ready") {
+    const trackId = String(meta.track_ids?.[0] || meta.song_id || "").trim();
+    if (trackId) return `#/player?track=${encodeURIComponent(trackId)}`;
+    return "#/profile";
+  }
   if (t === "song_feedback" && songId) return `#/player?track=${encodeURIComponent(songId)}`;
   if (t === "remix") {
     const remixSongId = String(meta.remix_song_id || meta.song_id || "").trim();
@@ -26916,6 +27006,23 @@ function activityItemDisplayParts(n, msg) {
       category: "Published",
       title: `${title} is live`,
       description: "Saved permanently and published — listeners can find and play it on Discover.",
+    };
+  }
+  if (t === "generation_ready") {
+    const titles = Array.isArray(meta.song_titles) ? meta.song_titles : [];
+    const count = Number(meta.variant_count || titles.length || 1);
+    if (count > 1) {
+      return {
+        category: "Ready",
+        title: "Your 2 songs are ready",
+        description: titles.slice(0, 2).join(" · ") || "Both variants saved to Library",
+      };
+    }
+    const title = String(meta.song_title || titles[0] || "Your song").trim();
+    return {
+      category: "Ready",
+      title,
+      description: "Saved to your Library — tap to play",
     };
   }
   if (t === "social_like") {
@@ -39108,6 +39215,7 @@ function renderLibrary() {
     _librarySelectedIds.clear();
   }
   updateLibrarySelectToolbar();
+  const generatingHtml = libraryGeneratingRowsHtml();
   if (!totalCount) {
     // PWA cold start: localStorage is empty, hydrate hasn't completed
     // yet. Show a "Loading…" state so the user doesn't see the "Nothing
@@ -39116,6 +39224,14 @@ function renderLibrary() {
     // completed yet during this session" flag — the latter covers the
     // window between page boot and the IIFE actually firing hydrate.
     const isLoggedIn = Boolean(authSession?.user?.id);
+    if (generatingHtml) {
+      els.libraryList.innerHTML = `
+        <ul class="libraryRows" role="list" aria-busy="true" aria-label="Generating songs">
+          ${generatingHtml}
+        </ul>
+      `;
+      return;
+    }
     if ((_libraryHydrateInFlight || (isLoggedIn && !_libraryHydrateCompleted)) && !totalCount) {
       els.libraryList.innerHTML = getLibraryHydratingSkeletonHtml();
       return;
@@ -39195,6 +39311,7 @@ function renderLibrary() {
   }
   els.libraryList.innerHTML = `
     <ul class="libraryRows" role="list">
+      ${generatingHtml}
       ${visibleItems.map((t, i) => {
         // Prefer the small thumbnail when one is saved (custom covers
         // generate it on save). Fall back to the full-size cover, then
@@ -42671,6 +42788,11 @@ function restoreCreatePageOnRouteEnter() {
     if (tid) {
       sunoTaskId = tid;
       try { savePendingBackendTask(tid); } catch {}
+      if (!getGenerationPending()) {
+        const rec = loadRecoverableGenerationTask();
+        setGenerationPending({ taskId: tid, title: rec?.titleHint || "" });
+        syncGenerationPendingLibraryUi();
+      }
     }
     if (busyCount <= 0) {
       try {
@@ -44360,6 +44482,8 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
     }
     setGenerateBtn("Generate song", false, "generate");
     savePendingBackendTask("");
+    clearGenerationPending(sunoTaskId || loadPendingBackendTask());
+    syncGenerationPendingLibraryUi();
     // Keep the vocal reference intact on failure so the user can retry
     // immediately instead of having to re-record. We only clear it on a
     // *successful* generation (already wired in the SUCCESS branch above).
@@ -44462,8 +44586,9 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
             kind: "full",
             meta: genMeta,
           });
+          const savedEntries = [variantAEntry].filter(Boolean);
           if (lastSunoProxyUrl2 || lastSunoFullUrl2) {
-            addToLibrary({
+            savedEntries.push(addToLibrary({
               title: lastSunoTitle2 || "Generated song B",
               artUrl: lastSunoArtUrl2 || lastSunoArtUrl || "",
               url: lastSunoProxyUrl2 || lastSunoFullUrl2,
@@ -44471,8 +44596,13 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
               audioId: lastSunoAudioId2 || "",
               kind: "full",
               meta: genMeta,
-            });
+            }));
           }
+          clearGenerationPending(sunoTaskId || "");
+          try {
+            pushLocalGenerationReadyActivity(savedEntries.filter(Boolean));
+          } catch {}
+          syncGenerationPendingLibraryUi();
           pendingGeneratedCoverDataUrl = "";
           resetNabadLyricsDraftState();
           els.btnSunoStems.disabled = !(sunoAudioId);
@@ -45295,6 +45425,11 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       savePendingBackendTask(sunoTaskId || "");
       if (sunoTaskId) {
         saveRecoverableGenerationTask(sunoTaskId, String(els.sunoTitle?.value || "").trim());
+        setGenerationPending({
+          taskId: sunoTaskId,
+          title: String(els.sunoTitle?.value || "").trim(),
+        });
+        syncGenerationPendingLibraryUi();
       }
       sunoAudioId = null;
       sunoStemsTaskId = null;
@@ -45406,6 +45541,8 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       }
       setGenerateBtn("Generate song", false, "generate");
       savePendingBackendTask("");
+      clearGenerationPending();
+      syncGenerationPendingLibraryUi();
       setGenerateFieldsLocked(false);
       imageMoodAppliedForNextGen = false;
       setProgress(0);

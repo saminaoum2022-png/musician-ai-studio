@@ -94,7 +94,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260702-161742";
+const APP_BUILD = "20260702-163134";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -25190,7 +25190,7 @@ function renderMessagesThread() {
   renderMessagesMount();
 }
 
-async function loadMessagesForConversation(threadId, { bootToken = 0, silent = false } = {}) {
+async function loadMessagesForConversation(threadId, { bootToken = 0, silent = false, replace = false } = {}) {
   const tid = String(threadId || _conversationId || "").trim();
   if (!tid) return false;
   const hasCache = messagesThreadHasCachedMessages(tid);
@@ -25201,8 +25201,9 @@ async function loadMessagesForConversation(threadId, { bootToken = 0, silent = f
     _messagesRefreshing = true;
   }
   try {
-    const data = await messagesApi(`/api/messages?type=thread&threadId=${encodeURIComponent(tid)}`);
+    const data = await messagesApi(`/api/messages?type=thread&threadId=${encodeURIComponent(tid)}&limit=80`);
     if (bootToken && bootToken !== _messagesThreadBootToken) return false;
+    if (_conversationId && _conversationId !== tid) return false;
     const partner = data?.thread || null;
     if (partner && !_chatHeaderUser?.userId) {
       setChatHeaderUser(chatHeaderUserFromApiThread(partner));
@@ -25215,7 +25216,10 @@ async function loadMessagesForConversation(threadId, { bootToken = 0, silent = f
     }
     _conversationId = tid;
     const incoming = Array.isArray(data?.messages) ? data.messages : [];
-    if (silent || hasCache || (Array.isArray(_messagesList) && _messagesList.length)) {
+    if (replace) {
+      _messagesList = incoming.map((m) => ({ ...m, sendStatus: m.sendStatus || "delivered" }));
+      syncMessagesLastFetchedAtFromList();
+    } else if (silent || hasCache || (Array.isArray(_messagesList) && _messagesList.length)) {
       if (incoming.length) mergeThreadMessages(incoming, { scrollToBottom: false });
     } else {
       _messagesList = incoming;
@@ -25254,24 +25258,30 @@ async function loadMessagesThread(threadId, { silent = false } = {}) {
   return loadMessagesForConversation(threadId, { silent });
 }
 
-async function pollNewThreadMessages(threadId) {
+async function pollNewThreadMessages(threadId, { bootToken = 0 } = {}) {
   const tid = String(threadId || _conversationId || "").trim();
   if (!tid) return;
+  if (bootToken && bootToken !== _messagesThreadBootToken) return;
   if (String(document.body.getAttribute("data-route") || "") !== "messages-thread") return;
   if (_conversationId !== tid) return;
 
   const since = String(_messagesLastFetchedAt || "").trim();
-  let path = `dm_messages?select=id,sender_id,body,created_at&thread_id=eq.${encodeURIComponent(tid)}&order=created_at.asc&limit=40`;
+  let path = `dm_messages?select=id,sender_id,body,created_at&thread_id=eq.${encodeURIComponent(tid)}&order=created_at.desc&limit=40`;
   if (since) path += `&created_at=gt.${encodeURIComponent(since)}`;
 
   const r = await supabaseRestWithAuth(path);
+  if (bootToken && bootToken !== _messagesThreadBootToken) return;
+  if (_conversationId !== tid) return;
   if (!r?.ok) {
-    await loadMessagesForConversation(tid, { silent: true });
+    await loadMessagesForConversation(tid, { silent: true, bootToken });
     return;
   }
   const rows = await r.json().catch(() => []);
   if (!Array.isArray(rows) || !rows.length) return;
-  if (mergeThreadMessages(rows)) {
+  if (bootToken && bootToken !== _messagesThreadBootToken) return;
+  if (_conversationId !== tid) return;
+  const ordered = [...rows].reverse();
+  if (mergeThreadMessages(ordered)) {
     saveActiveThreadToCache();
     void markThreadReadQuiet(tid);
   }
@@ -25298,7 +25308,7 @@ function startMessagesThreadRealtime(threadId) {
       return;
     }
     if (_conversationId !== tid) return;
-    void pollNewThreadMessages(tid);
+    void pollNewThreadMessages(tid, { bootToken: _messagesThreadBootToken });
     void refreshPartnerPresence();
   }, 3500);
 }
@@ -25355,14 +25365,7 @@ async function bootstrapMessagesThread({ bootToken, threadId, targetUserId }) {
   }
   startMessagesThreadRealtime(tid);
   const silent = messagesThreadHasCachedMessages(tid) || (Array.isArray(_messagesList) && _messagesList.length > 0);
-  // When we render from cache, the newest bubbles (received since last visit)
-  // only appear after the heavier `/api/messages?type=thread` serverless call
-  // returns — a few seconds of staring at stale messages. Fire the lightweight
-  // Supabase delta query (only rows newer than our last fetch) in parallel so
-  // the freshest messages land fast. mergeThreadMessages dedupes, so the full
-  // fetch below reconciles harmlessly.
-  if (silent) void pollNewThreadMessages(tid);
-  await loadMessagesForConversation(tid, { bootToken, silent });
+  await loadMessagesForConversation(tid, { bootToken, silent, replace: true });
   syncMessagesThreadComposerReady();
   if (bootToken === _messagesThreadBootToken) {
     scheduleMessagesThreadScrollToBottom({ force: true });
@@ -25385,8 +25388,16 @@ function enterMessagesThreadRoute(threadId, targetUserId = "") {
   }
 
   if (isCoachThreadId(tid)) {
+    stopMessagesThreadRealtime();
     enterCoachThread(bootToken);
     return;
+  }
+
+  stopMessagesThreadRealtime();
+  const prevTid = String(_conversationId || "").trim();
+  if (prevTid && tid && prevTid !== tid) {
+    _messagesList = [];
+    _messagesLastFetchedAt = "";
   }
 
   _messagesThreadNeedsInitialScroll = true;

@@ -309,10 +309,11 @@ async function handleGet(req, res, user) {
     );
     const thread = Array.isArray(tr.data) && tr.data[0] ? tr.data[0] : null;
     if (!thread) return sendJson(res, 404, { ok: false, error: "Thread not found" });
-    const limit = Math.min(80, Math.max(1, Number(url.searchParams.get("limit")) || 40));
+    const limit = Math.min(80, Math.max(1, Number(url.searchParams.get("limit")) || 80));
     const msgs = await svcFetch(
-      `dm_messages?select=id,sender_id,body,created_at&thread_id=eq.${encodeURIComponent(threadId)}&order=created_at.asc&limit=${limit}`,
+      `dm_messages?select=id,sender_id,body,created_at&thread_id=eq.${encodeURIComponent(threadId)}&order=created_at.desc&limit=${limit}`,
     );
+    const rows = Array.isArray(msgs.data) ? [...msgs.data].reverse() : [];
     const partnerId = threadPartnerId(thread, user.userId);
     const prof = partnerId ? await profileByUserId(partnerId) : null;
     return sendJson(res, 200, {
@@ -323,7 +324,7 @@ async function handleGet(req, res, user) {
         partnerUsername: prof?.username || "",
         partnerAvatar: prof?.avatar || "",
       },
-      messages: Array.isArray(msgs.data) ? msgs.data : [],
+      messages: rows,
     });
   }
 

@@ -104,6 +104,8 @@ module.exports = async function handler(req, res) {
       storyTheme,
       artworkSource,
       params,
+      coverWidth: params?.coverWidth || 1024,
+      coverHeight: params?.coverHeight || 1024,
       provider: "pollinations",
       abstract: true,
     });

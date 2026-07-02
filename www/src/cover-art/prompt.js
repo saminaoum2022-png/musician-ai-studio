@@ -3,6 +3,13 @@
  * User never writes these. Same song id + same story → same seed + same scene.
  */
 
+/** Pollinations output; Suno CDN covers were typically ~512×512 JPEG. */
+export const POLLINATIONS_COVER_WIDTH = 1024;
+export const POLLINATIONS_COVER_HEIGHT = 1024;
+
+const NO_TEXT_LEAD =
+  "pure photograph with absolutely zero text letters or words visible anywhere, visual scene only, ";
+
 const SAFETY_PREFIX =
   "typography-free pure visual art, textless image, no written language anywhere, ";
 
@@ -13,7 +20,7 @@ const NO_TEXT_REINFORCE =
   "completely wordless photograph, zero readable characters in the entire frame, blank signs, empty screens, no labels";
 
 const NEGATIVE_TEXT_PROMPT =
-  "text, words, letters, numbers, typography, font, writing, caption, subtitle, watermark, logo, album cover title, song title, track title, artist name, band name, signage, billboard, poster text, newspaper, book, magazine, speech bubble, label, stamp, signature, handwritten, calligraphy, arabic text, english text, quotes, meme text, ui overlay, readable characters, sentences, lyrics on screen, cd cover text, record label, tracklist, credits block, diploma text, certificate text, neon sign with words, graffiti letters, title card";
+  "text, words, letters, numbers, typography, font, writing, caption, subtitle, watermark, logo, album cover title, song title, track title, artist name, band name, signage, billboard, poster text, newspaper, book, magazine, speech bubble, label, stamp, signature, handwritten, calligraphy, cursive, script font, decorative lettering, word art, letter shapes, holiday lettering, christmas text, greeting card text, festive banner, neon sign with words, arabic text, english text, quotes, meme text, ui overlay, readable characters, sentences, lyrics on screen, cd cover text, record label, tracklist, credits block, diploma text, certificate text, graffiti letters, title card, greeting card, banner text, embroidered text, carved letters, glowing words, light text, 3d text";
 
 const STYLE_CORE =
   "premium cinematic visual art, elegant composition, rich color grading, high-end editorial look, moody dark tones with luminous accents, deep teal and violet palette when appropriate";
@@ -37,6 +44,14 @@ const MOOD_PALETTES = {
 
 /** Story themes — chosen from title + lyrics + style, highest match wins. */
 const STORY_THEMES = [
+  {
+    id: "winter_festive",
+    re: /christmas|xmas|noël|noel|holiday season|winter lights|yuletide|santa|snowman|بيت الميلاد|عيد/i,
+    scene:
+      "cozy winter evening atmosphere, evergreen tree with warm golden lights and glowing star, soft snowfall bokeh, home warmth mood, no people, no writing",
+    visualMode: "landscape",
+    bucket: "happy",
+  },
   {
     id: "prom_formal",
     re: /prom|prom night|homecoming|formal dance|school dance|senior year|senior night|university ball|college ball|graduation ball|graduation night|debs|matric|leaving cert|bal de promo|soirée de promo|حفل التخرج|حفل تخرج|سهرة تخرج|بروف|promenade/i,
@@ -370,6 +385,7 @@ function brightnessPhrase(brightness) {
 }
 
 const STORY_MOOD_PHRASES = {
+  winter_festive: "cozy winter festive atmosphere",
   prom_formal: "formal dance celebration atmosphere",
   graduation: "proud graduation celebration atmosphere",
   wedding: "elegant wedding ceremony atmosphere",
@@ -418,6 +434,49 @@ const TYPOGRAPHY_RE =
 const COVER_ART_INLINE_RE =
   /(?:cover art|cover look|artwork|visual mood|visual style)\s*[:：]\s*([^|;]+)/i;
 
+/** Words/models often render as on-image typography — swap for pure visual descriptions. */
+const TEXT_TRIGGER_REPLACEMENTS = [
+  ["christmas glow", "warm evergreen tree with golden lights and star glow"],
+  ["christmas tree", "evergreen tree with warm golden lights and star topper"],
+  ["christmas", "evergreen tree with warm golden lights and star"],
+  ["xmas", "evergreen tree with warm golden lights"],
+  ["happy birthday", "celebration balloons and soft candle glow"],
+  ["new year", "midnight fireworks and sparkling lights"],
+  ["congratulations", "confetti burst and golden celebration light"],
+  ["merry", "festive warm light"],
+  ["holiday", "festive winter season atmosphere"],
+  ["greeting card", "blank textured paper surface"],
+  ["signature version", ""],
+  ["signature", ""],
+];
+
+function stripTitleTokens(text, title) {
+  let s = String(text || "");
+  const tokens = String(title || "")
+    .split(/[\s\-–—|:,]+/)
+    .map((t) => t.trim())
+    .filter((t) => t.length >= 3 && !/^(the|and|for|with|song|mix|version|edit|remix)$/i.test(t));
+  for (const tok of tokens) {
+    const esc = tok.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    s = s.replace(new RegExp(`\\b${esc}\\b`, "gi"), " ");
+  }
+  return s.replace(/\s+/g, " ").trim();
+}
+
+/** Convert labels/titles/holiday words into visual-only language for the image model. */
+export function toVisualOnlyPrompt(raw, { title = "" } = {}) {
+  let s = String(raw || "").trim();
+  if (!s) return "";
+  const sorted = [...TEXT_TRIGGER_REPLACEMENTS].sort((a, b) => b[0].length - a[0].length);
+  for (const [from, to] of sorted) {
+    const esc = from.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    s = s.replace(new RegExp(esc, "gi"), to);
+  }
+  s = s.replace(/["'""''][^"'""'']*["'""'']/g, " ");
+  s = stripTitleTokens(s, title);
+  return s.replace(/\s+/g, " ").trim();
+}
+
 function extractArtworkFromStyleBlob(...blobs) {
   for (const raw of blobs) {
     const m = String(raw || "").match(COVER_ART_INLINE_RE);
@@ -436,17 +495,12 @@ export function resolveUserArtworkPrompt(input) {
 
 /** Strip text-on-image requests; never pass raw song title into the visual prompt. */
 export function sanitizeArtworkPrompt(raw, { title = "" } = {}) {
-  let s = String(raw || "").trim();
+  let s = toVisualOnlyPrompt(raw, { title });
   if (!s) return "";
   s = s.replace(/\bcover art\b/gi, "cinematic scene");
   s = s.replace(/\balbum cover\b/gi, "cinematic scene");
   s = s.replace(TYPOGRAPHY_RE, " ");
   s = s.replace(TEXT_REQUEST_RE, " ");
-  const t = String(title || "").trim();
-  if (t.length >= 3) {
-    const esc = t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    s = s.replace(new RegExp(esc, "gi"), " ");
-  }
   return s.replace(/\s+/g, " ").trim().slice(0, 280);
 }
 
@@ -491,21 +545,25 @@ export function buildAbstractCoverPrompt(input) {
   const userArtwork = sanitizeArtworkPrompt(userArtworkRaw, { title });
 
   const { scene, visualMode, storyTheme, bucketKey } = buildSceneFromStory(input);
+  const visualScene = toVisualOnlyPrompt(scene, { title });
   const composition = COMPOSITIONS[fnv1a(`${songId}:composition`) % COMPOSITIONS.length];
   const seed = buildCoverSeed(input, storyTheme, bucketKey, userArtwork);
   const artworkSource = userArtwork ? "user_artwork" : "auto_story";
 
   const parts = userArtwork
     ? [
+        NO_TEXT_LEAD,
         userArtwork,
+        NO_TEXT_REINFORCE,
         SAFETY_PREFIX + USER_STYLE_CORE,
         composition,
         NO_TEXT_REINFORCE,
         SAFETY_SUFFIX,
       ]
     : [
+        NO_TEXT_LEAD,
         SAFETY_PREFIX + STYLE_CORE,
-        scene,
+        visualScene,
         composition,
         storyMoodPhrase(storyTheme),
         bucketMoodPhrase(bucketKey),
@@ -538,12 +596,18 @@ export function buildAbstractCoverPrompt(input) {
       artworkSource,
       userArtwork: userArtwork || undefined,
       userArtworkRaw: userArtworkRaw || undefined,
+      coverWidth: POLLINATIONS_COVER_WIDTH,
+      coverHeight: POLLINATIONS_COVER_HEIGHT,
     },
   };
 }
 
-export function buildPollinationsUrl(prompt, seed, { width = 1024, height = 1024, avoidTags = "" } = {}) {
+export function buildPollinationsUrl(
+  prompt,
+  seed,
+  { width = POLLINATIONS_COVER_WIDTH, height = POLLINATIONS_COVER_HEIGHT, avoidTags = "" } = {},
+) {
   const encoded = encodeURIComponent(prompt);
   const negative = encodeURIComponent(buildCoverNegativePrompt(avoidTags));
-  return `https://image.pollinations.ai/prompt/${encoded}?width=${width}&height=${height}&seed=${seed}&nologo=true&enhance=false&private=true&negative_prompt=${negative}`;
+  return `https://image.pollinations.ai/prompt/${encoded}?width=${width}&height=${height}&seed=${seed}&model=flux&nologo=true&enhance=false&private=true&negative_prompt=${negative}`;
 }

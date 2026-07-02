@@ -4,9 +4,11 @@ const DEFAULT_ORIGIN = "https://nabadai.com";
 
 let _handlers = null;
 let _nativeListener = null;
-let _lastKey = "";
+let _lastMetaKey = "";
+let _lastPosKey = -1;
 let _throttleTimer = 0;
 let _mediaSessionReady = false;
+let _lockArtCache = { artworkUrl: "", artworkDataUrl: "" };
 
 function isNativeIos() {
   try {
@@ -42,7 +44,7 @@ function ensureNowPlayingPluginRegistered() {
   }
 }
 
-/** Absolute https URL — required for iOS lock screen artwork. */
+/** Absolute https URL — required for iOS lock screen artwork fetch. */
 export function absoluteArtworkUrl(url) {
   const u = String(url || "").trim();
   if (!u || u.startsWith("data:")) return "";
@@ -59,9 +61,39 @@ export function absoluteArtworkUrl(url) {
   }
 }
 
-/** iOS Safari/WKWebView: first artwork entry ≤128px; native bridge loads the URL separately. */
-function webArtworkEntries(artUrl) {
-  const src = absoluteArtworkUrl(artUrl);
+function isLockScreenPlaceholderArt(url) {
+  const s = String(url || "").trim();
+  if (!s) return true;
+  return /nabadai-logo\.png/i.test(s) || /cover-placeholder\.svg/i.test(s);
+}
+
+/** Prefer https when ready; keep data: covers for lock screen (Pollinations before upload). */
+function resolveLockScreenArtwork(raw) {
+  const u = String(raw || "").trim();
+  if (!u || isLockScreenPlaceholderArt(u)) {
+    return { artworkUrl: "", artworkDataUrl: "" };
+  }
+  if (u.startsWith("data:")) {
+    return { artworkUrl: "", artworkDataUrl: u };
+  }
+  const abs = absoluteArtworkUrl(u);
+  if (!abs) return { artworkUrl: "", artworkDataUrl: "" };
+  return { artworkUrl: abs, artworkDataUrl: "" };
+}
+
+function mergeLockArtwork(resolved) {
+  if (resolved.artworkUrl || resolved.artworkDataUrl) {
+    _lockArtCache = { ...resolved };
+    return resolved;
+  }
+  return { ..._lockArtCache };
+}
+
+function webArtworkEntries(artworkUrl, artworkDataUrl) {
+  if (artworkDataUrl) {
+    return [{ src: artworkDataUrl, sizes: "512x512", type: "image/png" }];
+  }
+  const src = absoluteArtworkUrl(artworkUrl);
   if (!src) return [];
   return [
     { src, sizes: "96x96", type: "image/png" },
@@ -116,7 +148,9 @@ export function initLockScreenNowPlaying(handlers = {}) {
 }
 
 export async function clearLockScreenNowPlaying() {
-  _lastKey = "";
+  _lastMetaKey = "";
+  _lastPosKey = -1;
+  _lockArtCache = { artworkUrl: "", artworkDataUrl: "" };
   if (_throttleTimer) {
     clearTimeout(_throttleTimer);
     _throttleTimer = 0;
@@ -154,12 +188,13 @@ function buildPayload() {
   if (!playing && cur <= 0) return null;
 
   const artist = String(meta?.subtitle || "").trim() || "NabadAi Music";
-  const artworkUrl = absoluteArtworkUrl(meta?.art || meta?.artUrl || "");
+  const art = mergeLockArtwork(resolveLockScreenArtwork(meta?.art || meta?.artUrl || ""));
 
   return {
     title,
     artist,
-    artworkUrl,
+    artworkUrl: art.artworkUrl,
+    artworkDataUrl: art.artworkDataUrl,
     duration: dur > 0 ? dur : 0,
     position: cur,
     playbackRate: playing ? 1 : 0,
@@ -167,50 +202,81 @@ function buildPayload() {
   };
 }
 
-async function pushPayload(payload) {
+async function pushNativePosition(payload) {
+  if (!isNativeIos()) return;
+  try {
+    await getNowPlayingPlugin()?.update?.({
+      positionOnly: true,
+      position: payload.position,
+      duration: payload.duration,
+      playbackRate: payload.playbackRate,
+      isPlaying: payload.isPlaying,
+    });
+  } catch {
+    /* noop */
+  }
+}
+
+async function pushPayload(payload, { forceMeta = false } = {}) {
   if (!payload) {
     await clearLockScreenNowPlaying();
     return;
   }
 
-  const key = [
+  const metaKey = [
     payload.title,
     payload.artist,
     payload.artworkUrl,
+    payload.artworkDataUrl,
     payload.isPlaying ? "1" : "0",
-    Math.floor(payload.position),
-    Math.floor(payload.duration),
   ].join("|");
-  if (key === _lastKey) return;
-  _lastKey = key;
+  const posKey = Math.floor(payload.position);
 
-  try {
-    if ("mediaSession" in navigator) {
-      navigator.mediaSession.metadata = new MediaMetadata({
-        title: payload.title,
-        artist: payload.artist,
-        album: "NabadAi Music",
-        artwork: webArtworkEntries(payload.artworkUrl),
-      });
-      navigator.mediaSession.playbackState = payload.isPlaying ? "playing" : "paused";
-      if (typeof navigator.mediaSession.setPositionState === "function" && payload.duration > 0) {
-        navigator.mediaSession.setPositionState({
-          duration: payload.duration,
-          position: payload.position,
-          playbackRate: payload.isPlaying ? 1 : 0,
-        });
-      }
-    }
-  } catch {
-    /* noop */
-  }
+  const metaChanged = forceMeta || metaKey !== _lastMetaKey;
+  const posChanged = posKey !== _lastPosKey;
 
-  if (isNativeIos()) {
+  if (!metaChanged && !posChanged) return;
+
+  if (metaChanged) {
+    _lastMetaKey = metaKey;
+    _lastPosKey = posKey;
+
     try {
-      await getNowPlayingPlugin()?.update?.(payload);
+      if ("mediaSession" in navigator) {
+        navigator.mediaSession.metadata = new MediaMetadata({
+          title: payload.title,
+          artist: payload.artist,
+          album: "NabadAi Music",
+          artwork: webArtworkEntries(payload.artworkUrl, payload.artworkDataUrl),
+        });
+        navigator.mediaSession.playbackState = payload.isPlaying ? "playing" : "paused";
+      }
     } catch {
       /* noop */
     }
+
+    if (isNativeIos()) {
+      try {
+        await getNowPlayingPlugin()?.update?.(payload);
+      } catch {
+        /* noop */
+      }
+    }
+  } else if (posChanged) {
+    _lastPosKey = posKey;
+    await pushNativePosition(payload);
+  }
+
+  try {
+    if ("mediaSession" in navigator && typeof navigator.mediaSession.setPositionState === "function" && payload.duration > 0) {
+      navigator.mediaSession.setPositionState({
+        duration: payload.duration,
+        position: payload.position,
+        playbackRate: payload.isPlaying ? 1 : 0,
+      });
+    }
+  } catch {
+    /* noop */
   }
 }
 
@@ -219,16 +285,13 @@ export function syncLockScreenNowPlaying({ force = false } = {}) {
   if (!_handlers) return;
   const payload = buildPayload();
   if (!payload) {
-    if (_lastKey) void clearLockScreenNowPlaying();
+    if (_lastMetaKey) void clearLockScreenNowPlaying();
     return;
   }
   if (force) {
-    _lastKey = "";
-    void pushPayload(payload);
+    void pushPayload(payload, { forceMeta: true });
     return;
   }
-  // iOS WKWebView: frequent native Now Playing updates re-touch AVAudioSession
-  // and can pause inline HTML5 audio — sync less aggressively on native.
   const throttleMs = isNativeIos() ? 2500 : 400;
   if (_throttleTimer) return;
   _throttleTimer = window.setTimeout(() => {

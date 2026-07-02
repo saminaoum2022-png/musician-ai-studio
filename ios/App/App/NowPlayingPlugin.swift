@@ -13,6 +13,7 @@ public class NowPlayingPlugin: CAPPlugin, CAPBridgedPlugin {
 
     private var artworkTask: URLSessionDataTask?
     private var lastArtworkUrl = ""
+    private var lastArtworkDataUrl = ""
     private static var remoteCommandsReady = false
     private static var audioSessionConfigured = false
 
@@ -21,13 +22,31 @@ public class NowPlayingPlugin: CAPPlugin, CAPBridgedPlugin {
     }
 
     @objc public func update(_ call: CAPPluginCall) {
-        let title = call.getString("title") ?? ""
-        let artist = call.getString("artist") ?? ""
-        let artworkUrl = call.getString("artworkUrl") ?? ""
+        let positionOnly = call.getBool("positionOnly") ?? false
         let duration = call.getDouble("duration") ?? 0
         let position = call.getDouble("position") ?? 0
         let rate = call.getDouble("playbackRate") ?? 1.0
         let isPlaying = call.getBool("isPlaying") ?? false
+
+        if positionOnly {
+            DispatchQueue.main.async {
+                guard var info = MPNowPlayingInfoCenter.default().nowPlayingInfo else {
+                    call.resolve()
+                    return
+                }
+                info[MPNowPlayingInfoPropertyElapsedPlaybackTime] = max(0, position)
+                info[MPMediaItemPropertyPlaybackDuration] = max(0, duration)
+                info[MPNowPlayingInfoPropertyPlaybackRate] = isPlaying ? max(0, rate) : 0
+                MPNowPlayingInfoCenter.default().nowPlayingInfo = info
+                call.resolve()
+            }
+            return
+        }
+
+        let title = call.getString("title") ?? ""
+        let artist = call.getString("artist") ?? ""
+        let artworkUrl = call.getString("artworkUrl") ?? ""
+        let artworkDataUrl = call.getString("artworkDataUrl") ?? ""
 
         DispatchQueue.main.async {
             var info: [String: Any] = [
@@ -37,13 +56,18 @@ public class NowPlayingPlugin: CAPPlugin, CAPBridgedPlugin {
                 MPMediaItemPropertyPlaybackDuration: max(0, duration),
                 MPNowPlayingInfoPropertyPlaybackRate: isPlaying ? max(0, rate) : 0,
             ]
+            // Keep the current frame visible until a new image is decoded — never flash the app icon.
             if let existing = MPNowPlayingInfoCenter.default().nowPlayingInfo,
-               let art = existing[MPMediaItemPropertyArtwork] as? MPMediaItemArtwork,
-               artworkUrl == self.lastArtworkUrl || artworkUrl.isEmpty {
+               let art = existing[MPMediaItemPropertyArtwork] as? MPMediaItemArtwork {
                 info[MPMediaItemPropertyArtwork] = art
             }
             MPNowPlayingInfoCenter.default().nowPlayingInfo = info
-            self.loadArtworkIfNeeded(urlString: artworkUrl)
+
+            if !artworkDataUrl.isEmpty {
+                self.loadArtworkFromDataUrl(artworkDataUrl)
+            } else if !artworkUrl.isEmpty {
+                self.loadArtworkIfNeeded(urlString: artworkUrl)
+            }
             call.resolve()
         }
     }
@@ -53,9 +77,36 @@ public class NowPlayingPlugin: CAPPlugin, CAPBridgedPlugin {
             self.artworkTask?.cancel()
             self.artworkTask = nil
             self.lastArtworkUrl = ""
+            self.lastArtworkDataUrl = ""
             MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
             call.resolve()
         }
+    }
+
+    private func applyArtwork(_ image: UIImage, urlKey: String, dataKey: String) {
+        let artwork = MPMediaItemArtwork(boundsSize: image.size) { _ in image }
+        DispatchQueue.main.async {
+            guard self.lastArtworkUrl == urlKey, self.lastArtworkDataUrl == dataKey else { return }
+            var info = MPNowPlayingInfoCenter.default().nowPlayingInfo ?? [:]
+            info[MPMediaItemPropertyArtwork] = artwork
+            MPNowPlayingInfoCenter.default().nowPlayingInfo = info
+        }
+    }
+
+    private func loadArtworkFromDataUrl(_ dataUrl: String) {
+        let trimmed = dataUrl.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        if trimmed == lastArtworkDataUrl { return }
+        lastArtworkDataUrl = trimmed
+        lastArtworkUrl = ""
+        artworkTask?.cancel()
+        artworkTask = nil
+
+        guard let comma = trimmed.firstIndex(of: ",") else { return }
+        let encoded = String(trimmed[trimmed.index(after: comma)...])
+        guard let data = Data(base64Encoded: encoded, options: .ignoreUnknownCharacters),
+              let image = UIImage(data: data) else { return }
+        applyArtwork(image, urlKey: "", dataKey: trimmed)
     }
 
     private func loadArtworkIfNeeded(urlString: String) {
@@ -63,16 +114,11 @@ public class NowPlayingPlugin: CAPPlugin, CAPBridgedPlugin {
         guard !trimmed.isEmpty, let url = URL(string: trimmed) else { return }
         if trimmed == lastArtworkUrl { return }
         lastArtworkUrl = trimmed
+        lastArtworkDataUrl = ""
         artworkTask?.cancel()
         artworkTask = URLSession.shared.dataTask(with: url) { [weak self] data, _, _ in
             guard let self = self, let data = data, let image = UIImage(data: data) else { return }
-            let artwork = MPMediaItemArtwork(boundsSize: image.size) { _ in image }
-            DispatchQueue.main.async {
-                guard self.lastArtworkUrl == trimmed else { return }
-                var info = MPNowPlayingInfoCenter.default().nowPlayingInfo ?? [:]
-                info[MPMediaItemPropertyArtwork] = artwork
-                MPNowPlayingInfoCenter.default().nowPlayingInfo = info
-            }
+            self.applyArtwork(image, urlKey: trimmed, dataKey: "")
         }
         artworkTask?.resume()
     }

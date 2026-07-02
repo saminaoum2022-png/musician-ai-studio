@@ -7,16 +7,19 @@ const SAFETY_PREFIX =
   "typography-free pure visual art, textless image, no written language anywhere, ";
 
 const SAFETY_SUFFIX =
-  "absolutely no text, no words, no letters, no numbers, no captions, no subtitles, no typography, no writing, no logo text, no album title, no watermark, no readable signage, no speech bubbles, no banners, no posters, no book pages, no diplomas with writing, silhouettes only without facial details, premium music cover art quality";
+  "absolutely no text, no words, no letters, no numbers, no captions, no subtitles, no typography, no writing, no logo text, no song name, no watermark, no readable signage, no speech bubbles, no banners, no posters, no book pages, no diplomas, no certificates, no newspapers, silhouettes only without facial details, fine art photography quality";
 
 const NO_TEXT_REINFORCE =
-  "completely wordless photograph, zero readable characters in the entire frame, blank signs, empty screens";
+  "completely wordless photograph, zero readable characters in the entire frame, blank signs, empty screens, no labels";
 
 const NEGATIVE_TEXT_PROMPT =
-  "text, words, letters, numbers, typography, font, writing, caption, subtitle, watermark, logo, album cover title, song title, artist name, signage, billboard, poster text, newspaper, book, magazine, speech bubble, label, stamp, signature, handwritten, calligraphy, arabic text, english text, quotes, meme text, ui overlay, readable characters, sentences, lyrics on screen";
+  "text, words, letters, numbers, typography, font, writing, caption, subtitle, watermark, logo, album cover title, song title, track title, artist name, band name, signage, billboard, poster text, newspaper, book, magazine, speech bubble, label, stamp, signature, handwritten, calligraphy, arabic text, english text, quotes, meme text, ui overlay, readable characters, sentences, lyrics on screen, cd cover text, record label, tracklist, credits block, diploma text, certificate text, neon sign with words, graffiti letters, title card";
 
 const STYLE_CORE =
-  "premium luxury music cover art, cinematic atmosphere, elegant composition, rich color grading, high-end editorial look, moody dark tones with luminous accents, deep teal and violet palette when appropriate";
+  "premium cinematic visual art, elegant composition, rich color grading, high-end editorial look, moody dark tones with luminous accents, deep teal and violet palette when appropriate";
+
+const USER_STYLE_CORE =
+  "cinematic lighting, rich color grading, high-end editorial look";
 
 const MOOD_PALETTES = {
   love: "rose gold, soft magenta, warm coral, violet dusk",
@@ -410,17 +413,33 @@ function bucketMoodPhrase(bucketKey) {
 const TEXT_REQUEST_RE =
   /\b(with|include|show|add|display|featuring)\s+(the\s+)?(song\s+|album\s+)?(title|name|text|words|letters|typography|caption|subtitle|lyrics|label|watermark|logo\s+text?)\b/gi;
 const TYPOGRAPHY_RE =
-  /\b(album cover with text|text overlay|title on cover|song title|artist name on cover|readable text|written words|typography|watermark|logo text)\b/gi;
+  /\b(album cover with text|text overlay|title on cover|song title on|artist name on cover|readable text on|written words on|watermark text|logo text on)\b/gi;
 
-/** User Artwork field (Create) or Image Mood hint — highest priority for Pollinations scene. */
+const COVER_ART_INLINE_RE =
+  /(?:cover art|cover look|artwork|visual mood|visual style)\s*[:：]\s*([^|;]+)/i;
+
+function extractArtworkFromStyleBlob(...blobs) {
+  for (const raw of blobs) {
+    const m = String(raw || "").match(COVER_ART_INLINE_RE);
+    const hit = String(m?.[1] || "").trim();
+    if (hit) return hit;
+  }
+  return "";
+}
+
+/** User Artwork field (Create), Image Mood hint, or inline "cover art:" in style. */
 export function resolveUserArtworkPrompt(input) {
-  return String(input?.artworkStyle || input?.artworkHint || "").trim();
+  const direct = String(input?.artworkStyle || input?.artworkHint || "").trim();
+  if (direct) return direct;
+  return extractArtworkFromStyleBlob(input?.styleSent, input?.style, input?.styleInput);
 }
 
 /** Strip text-on-image requests; never pass raw song title into the visual prompt. */
 export function sanitizeArtworkPrompt(raw, { title = "" } = {}) {
   let s = String(raw || "").trim();
   if (!s) return "";
+  s = s.replace(/\bcover art\b/gi, "cinematic scene");
+  s = s.replace(/\balbum cover\b/gi, "cinematic scene");
   s = s.replace(TYPOGRAPHY_RE, " ");
   s = s.replace(TEXT_REQUEST_RE, " ");
   const t = String(title || "").trim();
@@ -428,7 +447,7 @@ export function sanitizeArtworkPrompt(raw, { title = "" } = {}) {
     const esc = t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     s = s.replace(new RegExp(esc, "gi"), " ");
   }
-  return s.replace(/\s+/g, " ").trim().slice(0, 240);
+  return s.replace(/\s+/g, " ").trim().slice(0, 280);
 }
 
 function parseAvoidTagsList(raw) {
@@ -445,11 +464,13 @@ export function buildCoverNegativePrompt(avoidTags) {
   return `${NEGATIVE_TEXT_PROMPT}, ${extra.join(", ")}`;
 }
 
-function buildCoverSeed(input, storyTheme, bucketKey) {
-  const storyBlob = buildStoryBlob(input);
-  const artwork = sanitizeArtworkPrompt(resolveUserArtworkPrompt(input), { title: input?.title });
+function buildCoverSeed(input, storyTheme, bucketKey, userArtwork) {
   const songId = String(input?.songId || input?.id || "").trim();
-  return fnv1a(`${songId}|${storyTheme}|${bucketKey}|${storyBlob}|${artwork}`) % 2147483646;
+  if (userArtwork) {
+    return fnv1a(`${songId}|user:${userArtwork}|${userArtwork.length}`) % 2147483646;
+  }
+  const storyBlob = buildStoryBlob(input);
+  return fnv1a(`${songId}|${storyTheme}|${bucketKey}|${storyBlob}`) % 2147483646;
 }
 
 /**
@@ -466,21 +487,19 @@ export function buildAbstractCoverPrompt(input) {
   const energy = parseEnergy(input?.energy);
   const brightness = parseBrightness(input?.brightness);
   const sonicProfile = String(input?.sonicProfile || inferSonicProfile(`${genre} ${styleBlob}`));
-  const userArtwork = sanitizeArtworkPrompt(resolveUserArtworkPrompt(input), { title });
+  const userArtworkRaw = resolveUserArtworkPrompt(input);
+  const userArtwork = sanitizeArtworkPrompt(userArtworkRaw, { title });
 
   const { scene, visualMode, storyTheme, bucketKey } = buildSceneFromStory(input);
   const composition = COMPOSITIONS[fnv1a(`${songId}:composition`) % COMPOSITIONS.length];
-  const seed = buildCoverSeed(input, storyTheme, bucketKey);
+  const seed = buildCoverSeed(input, storyTheme, bucketKey, userArtwork);
   const artworkSource = userArtwork ? "user_artwork" : "auto_story";
 
   const parts = userArtwork
     ? [
-        SAFETY_PREFIX + STYLE_CORE,
-        `primary visual direction from user: ${userArtwork}`,
+        userArtwork,
+        SAFETY_PREFIX + USER_STYLE_CORE,
         composition,
-        bucketMoodPhrase(bucketKey),
-        brightnessPhrase(brightness),
-        sonicPhrase(sonicProfile),
         NO_TEXT_REINFORCE,
         SAFETY_SUFFIX,
       ]
@@ -518,6 +537,7 @@ export function buildAbstractCoverPrompt(input) {
       storyTheme,
       artworkSource,
       userArtwork: userArtwork || undefined,
+      userArtworkRaw: userArtworkRaw || undefined,
     },
   };
 }

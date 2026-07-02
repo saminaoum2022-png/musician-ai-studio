@@ -8,6 +8,8 @@ const { verifyUser } = require("../_lib/credits-auth");
 const { applyCors } = require("../_lib/cors");
 
 const MAX_FIELD = 160;
+const MAX_STYLE = 980;
+const MAX_ARTWORK = 280;
 let _promptMod = null;
 
 async function getPromptModule() {
@@ -65,12 +67,13 @@ module.exports = async function handler(req, res) {
       energy: body?.energy,
       brightness: body?.brightness,
       sonicProfile: String(body?.sonicProfile || "").trim().slice(0, 40),
-      style: String(body?.style || body?.styleSent || "").trim().slice(0, MAX_FIELD),
-      styleSent: String(body?.styleSent || "").trim().slice(0, MAX_FIELD),
+      style: String(body?.style || body?.styleInput || "").trim().slice(0, MAX_STYLE),
+      styleInput: String(body?.styleInput || body?.style || "").trim().slice(0, MAX_STYLE),
+      styleSent: String(body?.styleSent || "").trim().slice(0, MAX_STYLE),
       lyrics: String(body?.lyrics || body?.lyricsInput || "").trim().slice(0, 800),
       finalPrompt: String(body?.finalPrompt || "").trim().slice(0, MAX_FIELD),
-      artworkStyle: String(body?.artworkStyle || body?.artworkHint || "").trim().slice(0, 240),
-      artworkHint: String(body?.artworkHint || "").trim().slice(0, 240),
+      artworkStyle: String(body?.artworkStyle || "").trim().slice(0, MAX_ARTWORK),
+      artworkHint: String(body?.artworkHint || "").trim().slice(0, MAX_ARTWORK),
     });
 
     const upstreamUrl = buildPollinationsUrl(prompt, seed, { avoidTags: avoidTagsInput });

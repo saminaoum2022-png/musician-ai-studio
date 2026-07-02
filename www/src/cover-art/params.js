@@ -1,7 +1,7 @@
 /**
  * Derive Pollinations cover-art params from a library track / generation meta.
  */
-import { classifyVisualBucket } from "./prompt.js";
+import { classifyVisualBucket, resolveUserArtworkPrompt } from "./prompt.js";
 
 const MOOD_TAG_MAP = {
   chill: "Chill",
@@ -83,6 +83,13 @@ export function coverArtParamsFromTrack(track) {
   const meta = track?.meta && typeof track.meta === "object" ? track.meta : {};
   const styleBlob = `${meta.styleInput || ""} ${meta.styleSent || ""}`;
   const lyrics = String(meta.lyricsInput || meta.finalPrompt || meta.prompt || "").trim();
+  const artworkResolved = resolveUserArtworkPrompt({
+    artworkStyle: meta?.artworkStyle,
+    artworkHint: meta?.artworkHint,
+    styleSent: meta?.styleSent,
+    style: meta?.styleInput,
+    styleInput: meta?.styleInput,
+  });
   return {
     songId: String(track?.id || meta?.taskId || track?.taskId || "").trim(),
     title: String(track?.title || "Untitled").trim(),
@@ -93,11 +100,13 @@ export function coverArtParamsFromTrack(track) {
     brightness: inferBrightness(meta),
     sonicProfile: inferSonicProfile(meta),
     style: String(meta?.styleInput || "").trim(),
+    styleInput: String(meta?.styleInput || "").trim(),
     styleSent: String(meta?.styleSent || "").trim(),
     lyrics,
     lyricsInput: lyrics,
     finalPrompt: String(meta.finalPrompt || "").trim(),
-    artworkStyle: String(meta?.artworkStyle || meta?.artworkHint || "").trim(),
+    artworkStyle: artworkResolved,
+    artworkHint: String(meta?.artworkHint || "").trim(),
     avoidTagsInput: String(meta?.avoidTagsInput || "").trim(),
   };
 }

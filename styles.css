@@ -33339,6 +33339,7 @@ section.mentorPage{
   --feed-caption-gap: 4px;
   --feed-art-gap: 8px;
   --feed-repost-banner-gap: 6px;
+  --feed-username-size: 14px;
   display: flex;
   flex-direction: column;
   align-items: stretch;
@@ -33562,7 +33563,7 @@ section.mentorPage{
 
 /* Repost — same vertical rhythm on Friends + Profile */
 .followAct--xstyle.followAct--repost{
-  --feed-repost-actor-user-size: 14px;
+  --feed-repost-actor-user-size: var(--feed-username-size, 14px);
   --feed-repost-nested-user-size: 13px;
   --feed-repost-nested-avatar: 36px;
 }
@@ -34020,7 +34021,7 @@ section.mentorPage{
   box-shadow: 0 0 0 1px rgba(var(--cover-glow-rgb, 124, 92, 255), 0.18), 0 8px 28px rgba(0,0,0,0.18);
 }
 .followAct--xstyle .followActMetaPrimary .followActUser{
-  font-size: 14px;
+  font-size: var(--feed-username-size, 14px);
   font-weight: 800;
   color: rgba(248, 250, 255, 0.98);
   letter-spacing: -0.01em;
@@ -40660,16 +40661,6 @@ body[data-route="friends"] .followAct--xstyle .followActMeta{
   line-height: 1.2;
   color: rgba(232,238,247,.5);
 }
-body[data-route="friends"] .followAct--xstyle .followActMetaPrimary .followActUser{
-  font-size: 16px;
-  font-weight: 900;
-  letter-spacing: -.02em;
-  color: rgba(245,248,255,.96);
-}
-body[data-route="friends"] .followAct--xstyle .followActMetaSub .followActWhen{
-  font-size: 13px;
-  color: rgba(232,238,247,.42);
-}
 body[data-route="friends"] .followAct--xstyle .followActMeta .followActBadgeLabel{
   font-size: 12px;
   font-weight: 800;
@@ -40687,16 +40678,10 @@ body[data-route="friends"] .followAct--xstyle .followActStatusText{
   letter-spacing: -.01em;
   color: rgba(239,244,255,.82);
 }
-/* Friends repost: reposter at feed scale; nested original stays secondary */
+/* Friends repost: nested original stays secondary; reposter uses shared --feed-username-size */
 body[data-route="friends"] .followAct--xstyle.followAct--repost{
-  --feed-repost-actor-user-size: 16px;
   --feed-repost-nested-user-size: 13px;
   --feed-repost-nested-avatar: 36px;
-}
-body[data-route="friends"] .followAct--xstyle.followAct--repost > .followActRepostBanner .followActUser,
-body[data-route="friends"] .followAct--xstyle.followAct--repost > .followActRepostBanner .followActRepostByLink strong{
-  font-weight: 900;
-  letter-spacing: -0.02em;
 }
 body[data-route="friends"] .followAct--xstyle.followAct--repost > .followActTop{
   gap: 10px;

@@ -17891,6 +17891,7 @@ input::placeholder, textarea::placeholder{
      Without this, computed style stays none and the bar never paints. */
   .hubNowPlaying{
     --cover-glow-rgb: 100, 108, 128;
+    --cover-prog-rgb: 100, 108, 128;
     display: block;
     position: fixed;
     left: 0;
@@ -18050,9 +18051,9 @@ input::placeholder, textarea::placeholder{
   .hubNowProg{
     flex: 0 0 auto;
     width: 100%;
-    height: 2px;
+    height: 3px;
     border-radius: 0;
-    background: rgba(255, 255, 255, 0.18);
+    background: rgba(255, 255, 255, 0.16);
     overflow: hidden;
   }
   .hubNowProgBar{
@@ -18062,6 +18063,14 @@ input::placeholder, textarea::placeholder{
     border-radius: inherit;
     background: rgba(255, 255, 255, 0.88);
     transition: width 120ms linear;
+  }
+  .hubNowPlaying[data-cover-prog="ready"] .hubNowProgBar{
+    background: linear-gradient(
+      90deg,
+      rgb(var(--cover-prog-rgb)),
+      rgba(var(--cover-prog-rgb), 0.52)
+    );
+    box-shadow: 0 0 10px rgba(var(--cover-prog-rgb), 0.62);
   }
   .hubNowActions{
     flex: 0 0 auto;
@@ -33793,7 +33802,10 @@ section.mentorPage{
   display: block;
   height: 100%;
   border-radius: inherit;
-  background: linear-gradient(90deg, rgba(var(--cover-glow-rgb, 124, 92, 255), 0.72), rgba(var(--cover-glow-rgb, 124, 92, 255), 0.24));
+  background: rgba(255, 255, 255, 0.72);
+}
+.followAct[data-cover-prog="ready"] .feedHeroPlayerProgFill{
+  background: linear-gradient(90deg, rgb(var(--cover-prog-rgb)), rgba(var(--cover-prog-rgb), 0.52));
 }
 .feedHeroPlayerControls{
   display: grid;
@@ -40719,7 +40731,12 @@ body[data-route="friends"] .followAct--xstyle > .followActQuoteRow:has(.feedHero
   height: 3px;
   border-radius: 999px;
   background:
-    linear-gradient(90deg, rgba(124,92,255,.95), rgba(45,222,183,.78)) 0 / var(--feedSeekPct) 100% no-repeat,
+    linear-gradient(90deg, rgba(255, 255, 255, 0.82), rgba(255, 255, 255, 0.58)) 0 / var(--feedSeekPct) 100% no-repeat,
+    rgba(232,238,247,.16);
+}
+:is(#friendsPage, #profileActivitiesList, #userPublicSongs) .followAct[data-cover-prog="ready"] .followActRealtimeSeek::-webkit-slider-runnable-track{
+  background:
+    linear-gradient(90deg, rgb(var(--cover-prog-rgb)), rgba(var(--cover-prog-rgb), 0.62)) 0 / var(--feedSeekPct) 100% no-repeat,
     rgba(232,238,247,.16);
 }
 :is(#friendsPage, #profileActivitiesList, #userPublicSongs) .followActRealtimeSeek::-webkit-slider-thumb{
@@ -40734,7 +40751,10 @@ body[data-route="friends"] .followAct--xstyle > .followActQuoteRow:has(.feedHero
   margin-top: -3.5px;
   border-radius: 999px;
   background: rgba(246,249,255,.96);
-  box-shadow: 0 0 0 3px rgba(124,92,255,.18), 0 4px 10px rgba(0,0,0,.32);
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.16), 0 4px 10px rgba(0,0,0,.32);
+}
+:is(#friendsPage, #profileActivitiesList, #userPublicSongs) .followAct[data-cover-prog="ready"] .followActRealtimeProgress.isActive .followActRealtimeSeek::-webkit-slider-thumb{
+  box-shadow: 0 0 0 3px rgba(var(--cover-prog-rgb), 0.24), 0 4px 10px rgba(0,0,0,.32);
 }
 :is(#friendsPage, #profileActivitiesList, #userPublicSongs) .followActRealtimeSeek::-moz-range-track{
   height: 3px;
@@ -40744,7 +40764,10 @@ body[data-route="friends"] .followAct--xstyle > .followActQuoteRow:has(.feedHero
 :is(#friendsPage, #profileActivitiesList, #userPublicSongs) .followActRealtimeSeek::-moz-range-progress{
   height: 3px;
   border-radius: 999px;
-  background: linear-gradient(90deg, rgba(124,92,255,.95), rgba(45,222,183,.78));
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.82), rgba(255, 255, 255, 0.55));
+}
+:is(#friendsPage, #profileActivitiesList, #userPublicSongs) .followAct[data-cover-prog="ready"] .followActRealtimeSeek::-moz-range-progress{
+  background: linear-gradient(90deg, rgb(var(--cover-prog-rgb)), rgba(var(--cover-prog-rgb), 0.52));
 }
 :is(#friendsPage, #profileActivitiesList, #userPublicSongs) .followActRealtimeSeek::-moz-range-thumb{
   width: 0;
@@ -40756,7 +40779,10 @@ body[data-route="friends"] .followAct--xstyle > .followActQuoteRow:has(.feedHero
   height: 10px;
   border-radius: 999px;
   background: rgba(246,249,255,.96);
-  box-shadow: 0 0 0 3px rgba(124,92,255,.18), 0 4px 10px rgba(0,0,0,.32);
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.16), 0 4px 10px rgba(0,0,0,.32);
+}
+:is(#friendsPage, #profileActivitiesList, #userPublicSongs) .followAct[data-cover-prog="ready"] .followActRealtimeProgress.isActive .followActRealtimeSeek::-moz-range-thumb{
+  box-shadow: 0 0 0 3px rgba(var(--cover-prog-rgb), 0.24), 0 4px 10px rgba(0,0,0,.32);
 }
 body[data-route="friends"] .followAct--xstyle .followActQuoteCard--hero{
   border: 0;
@@ -40824,10 +40850,6 @@ body[data-route="friends"] .feedHeroPlayerTime{
 body[data-route="friends"] .feedHeroPlayerProgTrack{
   height: 4px;
   background: rgba(255,255,255,.13);
-}
-body[data-route="friends"] .feedHeroPlayerProgFill{
-  background: linear-gradient(90deg, rgba(124,92,255,.95), rgba(37,220,184,.64));
-  box-shadow: 0 0 16px rgba(92,129,255,.28);
 }
 body[data-route="friends"] .feedHeroPlayerControls{
   padding-top: 2px;

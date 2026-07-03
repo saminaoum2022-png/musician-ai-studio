@@ -140,7 +140,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260704-004027";
+const APP_BUILD = "20260704-005759";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -1398,6 +1398,17 @@ function applyHubRowCoverTint(rowEl, src) {
   });
 }
 
+/** Boost sampled cover RGB so the mini-player progress line reads clearly at 3px. */
+function boostRgbForProgBar([r, g, b]) {
+  const max = Math.max(r, g, b, 1);
+  const scale = Math.min(2.5, 225 / max);
+  return [
+    Math.min(255, Math.round(r * scale * 0.9 + 255 * 0.1)),
+    Math.min(255, Math.round(g * scale * 0.9 + 255 * 0.1)),
+    Math.min(255, Math.round(b * scale * 0.9 + 255 * 0.1)),
+  ];
+}
+
 /** Soft glow / progress accents tied to artwork (not brand purple). */
 function applyCoverGlowRgb(el, src) {
   if (!el) return;
@@ -1405,6 +1416,8 @@ function applyCoverGlowRgb(el, src) {
   if (!s || s.startsWith("data:") || /nabadai-logo\.png|splash-mark\.png/i.test(s) || /cover-placeholder\.svg/i.test(s)) {
     try {
       el.style.removeProperty("--cover-glow-rgb");
+      el.style.removeProperty("--cover-prog-rgb");
+      el.removeAttribute("data-cover-prog");
     } catch {}
     return;
   }
@@ -1413,9 +1426,14 @@ function applyCoverGlowRgb(el, src) {
       if (!el.isConnected) return;
       if (!rgb) {
         el.style.removeProperty("--cover-glow-rgb");
+        el.style.removeProperty("--cover-prog-rgb");
+        el.removeAttribute("data-cover-prog");
         return;
       }
       el.style.setProperty("--cover-glow-rgb", `${rgb[0]}, ${rgb[1]}, ${rgb[2]}`);
+      const prog = boostRgbForProgBar(rgb);
+      el.style.setProperty("--cover-prog-rgb", `${prog[0]}, ${prog[1]}, ${prog[2]}`);
+      el.setAttribute("data-cover-prog", "ready");
     } catch {}
   });
 }
@@ -2101,6 +2119,8 @@ function renderHubNowPlaying() {
     } catch {}
     try {
       els.hubNowPlaying.style.removeProperty("--cover-glow-rgb");
+      els.hubNowPlaying.style.removeProperty("--cover-prog-rgb");
+      els.hubNowPlaying.removeAttribute("data-cover-prog");
     } catch {}
     // Match `.hubNowPlaying` exit transition so display:none does not clip the animation.
     window.setTimeout(() => {
@@ -2135,7 +2155,9 @@ function renderHubNowPlaying() {
       els.hubNowArt.dataset.hubAuraBound = "1";
       els.hubNowArt.addEventListener("load", () => {
         try {
-          syncHubNowAuraFromCoverUrl(els.hubNowArt.currentSrc || els.hubNowArt.src || "");
+          const loaded = els.hubNowArt.currentSrc || els.hubNowArt.src || "";
+          syncHubNowAuraFromCoverUrl(loaded);
+          applyCoverGlowRgb(els.hubNowPlaying, loaded);
         } catch {}
       });
     }
@@ -30600,6 +30622,8 @@ function syncDiscoveryPlayingHighlights() {
     host.classList.remove("discoveryRowPlaying", "discoveryRowActive");
     try {
       host.style.removeProperty("--cover-glow-rgb");
+      host.style.removeProperty("--cover-prog-rgb");
+      host.removeAttribute("data-cover-prog");
     } catch {}
     if (host.classList.contains("followAct")) {
       const title = decodeDiscoverDataAttr(host, "data-user-lib-title") || "Song";
@@ -30719,7 +30743,6 @@ function syncFriendsFeedProgressBars() {
   ].filter(Boolean);
   if (!roots.length) return;
   const curRef = String(currentPlayerTrackRef?.url || "").trim();
-  const discoverSource = isDiscoverStyleMiniSource();
   const a = playerEl;
   const dur = a ? getPlayerDuration() : 0;
   const cur = a && Number.isFinite(a.currentTime) ? a.currentTime : 0;
@@ -30729,7 +30752,7 @@ function syncFriendsFeedProgressBars() {
       const input = wrap.querySelector(".followActRealtimeSeek");
       if (!input) return;
       const trackUrl = decodeDiscoveryPlayUrl(wrap);
-      const active = Boolean(discoverSource && curRef && trackUrl && audioUrlsEquivalent(curRef, trackUrl));
+      const active = Boolean(curRef && trackUrl && audioUrlsEquivalent(curRef, trackUrl));
       wrap.classList.toggle("isActive", active);
       wrap.classList.toggle("isPlaying", active && audible);
       input.disabled = !active || !(dur > 0);
@@ -30737,6 +30760,17 @@ function syncFriendsFeedProgressBars() {
       const value = active && dur > 0 ? Math.max(0, Math.min(max, Math.round((cur / dur) * max))) : 0;
       input.value = String(value);
       input.style.setProperty("--feedSeekPct", active && dur > 0 ? `${(value / max) * 100}%` : "0%");
+      const followAct = wrap.closest(".followAct");
+      if (followAct && active) {
+        const playBtn = followAct.querySelector("[data-user-lib-play], .feedHeroPlayer, .followActMedia");
+        const artHint =
+          String(decodeDiscoverDataAttr(playBtn || followAct, "data-user-lib-art") || "").trim() ||
+          String(
+            followAct.querySelector(".feedHeroPlayerArt, .followActQuoteImg, .followActMediaImg img")?.getAttribute?.("src") ||
+              "",
+          ).trim();
+        applyCoverGlowRgb(followAct, artHint);
+      }
     });
   }
 }
@@ -30771,6 +30805,8 @@ function syncUserPublicFeedPlayingHighlights() {
     host.classList.remove("discoveryRowPlaying", "discoveryRowActive");
     try {
       host.style.removeProperty("--cover-glow-rgb");
+      host.style.removeProperty("--cover-prog-rgb");
+      host.removeAttribute("data-cover-prog");
     } catch {}
     const playBtn = host.querySelector(PLAY_BTN_SELECTOR);
     if (playBtn) {
@@ -39962,6 +39998,8 @@ function applyLibRowNowPlayingChrome(row, active, audible) {
   } else {
     try {
       row.style.removeProperty("--cover-glow-rgb");
+      row.style.removeProperty("--cover-prog-rgb");
+      row.removeAttribute("data-cover-prog");
     } catch {}
   }
   const mainBtn =

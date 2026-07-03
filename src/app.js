@@ -130,7 +130,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260703-205208";
+const APP_BUILD = "20260703-210351";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -19084,7 +19084,13 @@ function ensureAuthBoot({ force = false, fast = false } = {}) {
         loadAuthSession();
         ensureAuthSessionUserFromToken();
       }
+      loadProfile();
       syncActiveProfileIdFromSession();
+      if (authSession?.user?.id) {
+        if (shouldShowProfileHeaderSkeleton()) setProfileHeaderLoading(true);
+        else setProfileHeaderLoading(false);
+        try { refreshProfileHandleFromActiveProfile(); } catch {}
+      }
       renderAuthStatus();
       _authBootDone = true;
     })();
@@ -19986,6 +19992,8 @@ function saveAuthSession(sess, { persist = true } = {}) {
   // First sign-in (prev empty) still had activeProfile.id === "guest" — mint a real handle.
   if (nextUserId && prevUserId !== nextUserId) {
     onAuthAccountSwitched(prevUserId || "guest", nextUserId);
+    try { refreshProfileHandleFromActiveProfile(); } catch {}
+    if (!shouldShowProfileHeaderSkeleton()) setProfileHeaderLoading(false);
   }
   if (authSession) {
     const payload = JSON.stringify(authSession);
@@ -35891,6 +35899,14 @@ function setProfileHeaderLoading(on) {
   if (row) row.setAttribute("data-loading", flag);
 }
 
+function refreshProfileHandleFromActiveProfile() {
+  const handle = String(activeProfile?.username || "").trim();
+  if (els.profilePreviewUsernameInput) {
+    els.profilePreviewUsernameInput.value = handle ? `@${handle}` : "@guest";
+  }
+  try { renderProfilePreviewFromInputs(); } catch {}
+}
+
 /** Signed-in but the visible handle is still the unauthenticated
  *  sentinel or not set yet. We intentionally do NOT treat auto-generated
  *  `user_xxxxx` as "loading" — once boot assigns that, the header may
@@ -35898,6 +35914,9 @@ function setProfileHeaderLoading(on) {
  *  session is valid. A cached avatar alone must NOT skip this. */
 function shouldShowProfileHeaderSkeleton() {
   if (!authSession?.user?.id) return false;
+  const uid = String(authSession.user.id);
+  const localId = String(activeProfile?.id || "guest");
+  if (localId === "guest" || localId !== uid) return true;
   const u = String(activeProfile?.username || "").trim().toLowerCase();
   if (!u) return true;
   return u === "guest";
@@ -37714,6 +37733,8 @@ function syncActiveProfileIdFromSession() {
     email: authSession.user.email || activeProfile.email || "",
     username: nextUsername,
   });
+  try { refreshProfileHandleFromActiveProfile(); } catch {}
+  if (!shouldShowProfileHeaderSkeleton()) setProfileHeaderLoading(false);
   invalidateLibraryMemCache();
   renderPersonaSelect();
 }
@@ -50325,14 +50346,16 @@ applyClientEnvBootstrap();
 loadPublicConfigFromCache();
 void refreshSunoCredits();
 renderCreditsHistory();
-loadProfile();
 loadAuthSession();
+ensureAuthSessionUserFromToken();
+loadProfile();
 syncActiveProfileIdFromSession();
+try { refreshProfileHandleFromActiveProfile(); } catch {}
 renderAuthStatus();
 const _bootOAuthCodePending = hasOAuthCodeInUrl();
 if (_bootOAuthCodePending) {
   try { beginLoginSettling("Finishing sign in…"); } catch {}
-} else {
+} else if (!isCapacitorNativeAuth()) {
   safeApplyRoute();
 }
 // `ensureAuthBoot()` (Preferences / native restore) runs before each route apply.

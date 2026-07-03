@@ -4,6 +4,7 @@
  */
 import { ECHO_TONE_DEFAULT, ECHO_TONE_IDS } from "./echo-tone.js";
 import { suggestEchoBeatFromBlob } from "./echo-suggest.js";
+import { applyUserTextBidi, applyUserTextInputDir } from "./text-bidi.js";
 
 const ECHO_BAR_COUNT = 48;
 /** Match status voice — keeps clips small and upload fast */
@@ -970,7 +971,7 @@ function syncEchoViewerUi() {
   paintEchoViewerWave(slide);
   renderEchoViewerDots();
   if (caption) {
-    caption.textContent = slide.body || "";
+    applyUserTextBidi(caption, slide.body || "");
     caption.hidden = !slide.body;
   }
   if (onceBlock) onceBlock.hidden = !slide.listenOnce;
@@ -2828,6 +2829,9 @@ function wireEchoOnce() {
     } catch {}
   });
   wireEchoRecordHold();
+  document.getElementById("echoComposeCaption")?.addEventListener("input", (e) => {
+    applyUserTextInputDir(e.currentTarget);
+  });
 
   document.addEventListener("keydown", (e) => {
     if (e.key !== "Escape") return;

@@ -3904,6 +3904,17 @@ body[data-route="profile-edit"] main.grid > [data-route="profile-edit"]{
   overflow: hidden;
   text-overflow: ellipsis;
 }
+/* User-generated text: RTL when primarily Arabic (captions, comments, DMs, bios). */
+.userTextBidi--rtl{
+  direction: rtl;
+  text-align: right;
+  unicode-bidi: isolate;
+}
+textarea.userTextBidi--rtl,
+input.userTextBidi--rtl{
+  direction: rtl;
+  text-align: right;
+}
 .remixAttributionPill,
 .mashupAttributionPill,
 .challengeAttributionPill{

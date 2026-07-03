@@ -109,6 +109,11 @@ import {
   stampNabadVerificationMeta,
 } from "./nabad-verification.js";
 import {
+  applyUserTextBidi,
+  applyUserTextInputDir,
+  userTextHtml,
+} from "./text-bidi.js";
+import {
   configurePushFromPublicConfig,
   enablePushNotifications,
   getPushPermissionState,
@@ -125,7 +130,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260703-151122";
+const APP_BUILD = "20260703-155536";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -10453,7 +10458,11 @@ function startStatusVoiceFeedVisualizer(audio, card) {
 function statusVoiceCaptionHtml(post) {
   const body = String(post?.body || "").trim();
   if (!body || body === STATUS_VOICE_DEFAULT_BODY) return "";
-  return `<p class="followActStatusText followActStatusCaption">${escapeHtml(body)}</p>`;
+  return userTextHtml(body, {
+    tag: "p",
+    className: "followActStatusText followActStatusCaption",
+    escapeHtml,
+  });
 }
 
 function statusVoiceCardHtml(post) {
@@ -11065,11 +11074,11 @@ function followingStatusRowHtml(post, profMap, idx, opts = {}) {
   const profileHref = handle ? `#/u/${encodeURIComponent(handle)}` : "#";
   const ts = post?.createdAt || post?.created_at;
   const when = ts ? relativeTime(new Date(ts).getTime()) : "Just now";
-  const body = escapeHtml(String(post?.body || "").trim());
+  const bodyRaw = String(post?.body || "").trim();
   const voiceCard = statusVoiceCardHtml(post);
   const contentHtml = voiceCard
     ? `${voiceCard}${statusVoiceCaptionHtml(post)}`
-    : `<p class="followActStatusText">${body}</p>`;
+    : userTextHtml(bodyRaw, { tag: "p", className: "followActStatusText", escapeHtml });
   const isOwn = Boolean(
     postId &&
     userId &&
@@ -11252,11 +11261,11 @@ function profileActivityRowHtml(post, idx) {
   const postId = String(post?.id || "").trim();
   const ts = post?.createdAt || post?.created_at;
   const when = ts ? relativeTime(new Date(ts).getTime()) : "Just now";
-  const body = escapeHtml(String(post?.body || "").trim());
+  const bodyRaw = String(post?.body || "").trim();
   const voiceCard = statusVoiceCardHtml(post);
   const bodyHtml = voiceCard
     ? `${voiceCard}${statusVoiceCaptionHtml(post)}`
-    : `<p class="profileActRowBody">${body}</p>`;
+    : userTextHtml(bodyRaw, { tag: "p", className: "profileActRowBody", escapeHtml });
   const menuBtn = postId
     ? `<div class="followActMenuWrap">
         <button type="button" class="followActMore" data-follow-status-menu="${escapeHtml(postId)}" aria-label="Post options" aria-haspopup="true" aria-expanded="false">
@@ -12584,7 +12593,10 @@ function bindFollowingComposeOnce() {
       try { input?.focus?.({ preventScroll: true }); } catch {}
     });
   });
-  input?.addEventListener("input", () => syncFollowingComposeUi());
+  input?.addEventListener("input", () => {
+    applyUserTextInputDir(input);
+    syncFollowingComposeUi();
+  });
   document.getElementById("followComposeMic")?.addEventListener("click", () => {
     toggleStatusVoiceMicTap();
   });
@@ -13050,7 +13062,7 @@ function followingActivityRowHtml(t, profMap, idx, opts = {}) {
   const plays = playsPending ? null : Math.max(0, Number(t.playCount) || 0);
   const caption = releaseCaptionForTrack(t);
   const captionHtml = caption
-    ? `<p class="followActCaption">${escapeHtml(caption)}</p>`
+    ? userTextHtml(caption, { tag: "p", className: "followActCaption", escapeHtml })
     : "";
   const verbHtml = followingActivityBodyHtml(type, rawTitle, remixOf, challenge, mashupOf);
   const subtitle = handle ? `@${handle}` : "Musician";
@@ -13673,7 +13685,7 @@ function feedReplyRowHtml(reply) {
   const href = handle ? `#/u/${encodeURIComponent(handle)}` : "#";
   const ts = reply?.createdAt ? new Date(reply.createdAt).getTime() : 0;
   const when = ts ? relativeTime(ts) : "Just now";
-  const body = escapeHtml(String(reply?.body || "").trim());
+  const bodyRaw = String(reply?.body || "").trim();
   const replyId = escapeHtml(String(reply?.id || ""));
   const isOwn = Boolean(
     reply?.userId &&
@@ -13696,7 +13708,7 @@ function feedReplyRowHtml(reply) {
           <span aria-hidden="true">·</span>
           <span class="feedReplyWhen">${escapeHtml(when)}</span>
         </div>
-        <p class="feedReplyBody">${body}</p>
+        ${userTextHtml(bodyRaw, { tag: "p", className: "feedReplyBody", escapeHtml })}
         ${deleteBtn}
       </div>
     </article>`;
@@ -13941,7 +13953,10 @@ function bindFeedReplySheetOnce() {
     }
   });
 
-  input.addEventListener("input", updateFeedReplyFormState);
+  input.addEventListener("input", () => {
+    applyUserTextInputDir(input);
+    updateFeedReplyFormState();
+  });
 
   form.addEventListener("submit", (e) => {
     e.preventDefault();
@@ -16132,7 +16147,7 @@ function releaseCaptionForTrack(track) {
 function releaseCaptionLineHtml(track) {
   const caption = releaseCaptionForTrack(track);
   if (!caption) return "";
-  return `<span class="releaseCaptionLine">${escapeHtml(caption)}</span>`;
+  return userTextHtml(caption, { tag: "span", className: "releaseCaptionLine", escapeHtml });
 }
 
 function isFeaturedOnProfile(track) {
@@ -16584,7 +16599,7 @@ function setPlayerFeedback(track) {
 
 function setPlayerReleaseNote(caption) {
   const note = String(caption || "").trim();
-  if (els.playerReleaseNoteText) els.playerReleaseNoteText.textContent = note;
+  applyUserTextBidi(els.playerReleaseNoteText, note);
   if (els.playerReleaseNote) els.playerReleaseNote.hidden = !note;
 }
 
@@ -21746,6 +21761,9 @@ function ensurePublishReleaseSheet() {
   sheet.addEventListener("click", (e) => {
     if (e.target?.getAttribute?.("data-publish-release-close") === "1") closePublishReleaseSheet();
   });
+  sheet.querySelector("#publishReleaseCaption")?.addEventListener("input", (e) => {
+    applyUserTextInputDir(e.currentTarget);
+  });
   const confirm = sheet.querySelector("#publishReleaseConfirm");
   if (confirm) {
     confirm.addEventListener("click", () => {
@@ -21802,6 +21820,7 @@ function openPublishReleaseSheet(trackId, opts = {}) {
   if (subEl) subEl.textContent = "Move this from your private studio to your public sound.";
   if (caption) {
     caption.value = String(track?.meta?.releaseCaption || "").trim();
+    applyUserTextInputDir(caption);
     caption.focus?.();
   }
   const remixToggle = sheet.querySelector("#publishAllowRemix");
@@ -24982,7 +25001,7 @@ function messagesInboxThreadRowHtml(t) {
           <strong class="messagesRowHandle">${escapeHtml(handle ? `@${handle.replace(/^@/, "")}` : "creator")}</strong>
           ${when ? `<span class="messagesRowWhen">${escapeHtml(when)}</span>` : ""}
         </span>
-        <span class="messagesRowPreview">${escapeHtml(preview || "No messages yet")}</span>
+        ${userTextHtml(preview || "No messages yet", { tag: "span", className: "messagesRowPreview", escapeHtml })}
       </span>
       ${unread ? `<span class="messagesRowUnread" aria-label="Unread">1</span>` : ""}
     </button>`;
@@ -25002,7 +25021,7 @@ function messagesInboxRequestRowHtml(req) {
           ${when ? `<span class="messagesRowWhen">${escapeHtml(when)}</span>` : ""}
         </div>
         <p class="messagesRequestLabel">Message request</p>
-        <p class="messagesRequestPreview">${escapeHtml(preview)}</p>
+        ${userTextHtml(preview, { tag: "p", className: "messagesRequestPreview", escapeHtml })}
         <div class="messagesRequestActions">
           <button type="button" class="messagesRequestBtn messagesRequestBtn--accept" data-messages-request-accept="${escapeHtml(requestId)}">Accept</button>
           <button type="button" class="messagesRequestBtn messagesRequestBtn--decline" data-messages-request-decline="${escapeHtml(requestId)}">Decline</button>
@@ -25024,7 +25043,7 @@ function messagesInboxSentRequestRowHtml(req) {
           ${when ? `<span class="messagesRowWhen">${escapeHtml(when)}</span>` : ""}
         </div>
         <p class="messagesRequestLabel messagesRequestLabel--sent">Waiting for reply</p>
-        <p class="messagesRequestPreview">${escapeHtml(preview)}</p>
+        ${userTextHtml(preview, { tag: "p", className: "messagesRequestPreview", escapeHtml })}
       </div>
     </article>`;
 }
@@ -25240,7 +25259,7 @@ function messagesBubbleHtml(msg, viewerId, opts) {
   const isCoachMsg = !mine && String(msg?.sender_id || "") === COACH_SENDER_ID;
   const textHtml = isCoachMsg
     ? `<div class="messagesBubbleText messagesBubbleText--coachMd">${renderCoachMarkdown(body)}</div>`
-    : `<p class="messagesBubbleText">${escapeHtml(body)}</p>`;
+    : userTextHtml(body, { tag: "p", className: "messagesBubbleText", escapeHtml });
   return `
     <div class="messagesBubbleWrap${mine ? " is-mine" : ""}${pendingCls}${failedCls}" data-msg-id="${escapeHtml(String(msg?.id || ""))}" data-client-msg-id="${escapeHtml(String(msg?.client_message_id || ""))}">
       <div class="messagesBubble">
@@ -25720,7 +25739,7 @@ function coachInboxRowHtml() {
         <span class="messagesRowTop">
           <strong class="messagesRowHandle">NabadAi Coach <span class="coachBadge">AI</span></strong>
         </span>
-        <span class="messagesRowPreview">${escapeHtml(preview)}</span>
+        ${userTextHtml(preview, { tag: "span", className: "messagesRowPreview", escapeHtml })}
       </span>
     </button>`;
 }
@@ -25747,6 +25766,7 @@ function sendCurrentThreadMessage() {
   };
 
   input.value = "";
+  applyUserTextInputDir(input);
   syncMessagesComposerInputHeight(input);
   addOptimisticThreadMessage(optimistic);
   updateMessagesComposerReserve();
@@ -25997,6 +26017,7 @@ function bindMessagesPageOnce() {
   if (composer && !composer.dataset.boundMessagesComposer) {
     composer.dataset.boundMessagesComposer = "1";
     composer.addEventListener("input", () => {
+      applyUserTextInputDir(composer);
       syncMessagesComposerInputHeight(composer);
       updateMessagesComposerReserve();
       scrollMessagesMountToBottom({ force: true });
@@ -26023,6 +26044,9 @@ function bindMessagesPageOnce() {
     document.getElementById("messagesRequestSheetClose")?.addEventListener("click", closeMessagesRequestSheet);
     document.getElementById("messagesRequestSheetBackdrop")?.addEventListener("click", closeMessagesRequestSheet);
     document.getElementById("messagesRequestSend")?.addEventListener("click", () => void submitMessagesRequestSheet());
+    document.getElementById("messagesRequestInput")?.addEventListener("input", (e) => {
+      applyUserTextInputDir(e.currentTarget);
+    });
     document.getElementById("messagesRequestInput")?.addEventListener("keydown", (e) => {
       if (e.key === "Enter" && !e.shiftKey) {
         e.preventDefault();
@@ -26544,7 +26568,7 @@ function renderNotificationRows(list) {
             <strong>${escapeHtml(msg.title)}</strong>
             <span>${escapeHtml(time)}</span>
           </div>
-          <p>${escapeHtml(msg.body)}</p>
+          ${userTextHtml(msg.body, { tag: "p", escapeHtml })}
           ${actionHtml}
         </div>
         ${unread ? `<span class="notificationsUnreadDot" aria-label="Unread"></span>` : ""}
@@ -27322,7 +27346,7 @@ function activityItemHtml(n) {
     ? ` data-activity-href="${escapeHtml(href)}"${notifId ? ` data-activity-id="${escapeHtml(notifId)}"` : ""}`
     : "";
   const descHtml = parts.description
-    ? `<p class="activityRowDesc">${escapeHtml(parts.description)}</p>`
+    ? userTextHtml(parts.description, { tag: "p", className: "activityRowDesc", escapeHtml })
     : "";
   return `
     <${tag} class="activityRow activityRow--${escapeHtml(notifType)}${unread ? " isUnread" : ""}${unavailable ? " activityRow--unavailable" : ""}"${typeAttr}${dataHref}>
@@ -31848,7 +31872,7 @@ function discoveryFeedCardHtml(t, profMap, idx) {
       : "";
   const captionRaw = releaseCaption || (challenge ? String(challenge.title || "Challenge").trim() : "");
   const captionHtml = captionRaw
-    ? `<span class="discoveryFeedCardCaption">${escapeHtml(captionRaw)}</span>`
+    ? userTextHtml(captionRaw, { tag: "span", className: "discoveryFeedCardCaption", escapeHtml })
     : "";
   const richClass = badge || captionHtml ? " discoveryFeedCard--rich" : "";
   return `
@@ -32566,10 +32590,12 @@ async function renderUserProfilePublicLibraryAsync(username, userId = "", gen = 
   if (els.userPublicBio) {
     const bio = String(prof.bio || "").trim();
     if (bio && !/^add a short bio/i.test(bio)) {
-      els.userPublicBio.textContent = bio;
+      applyUserTextBidi(els.userPublicBio, bio);
       els.userPublicBio.style.display = "";
     } else {
       els.userPublicBio.textContent = "";
+      els.userPublicBio.dir = "";
+      els.userPublicBio.classList.remove("userTextBidi--rtl");
       els.userPublicBio.style.display = "none";
     }
   }
@@ -35911,10 +35937,12 @@ function renderProfileHeroBio() {
   if (!cleaned) {
     wrap.hidden = true;
     text.textContent = "";
+    text.dir = "";
+    text.classList.remove("userTextBidi--rtl");
     return;
   }
   wrap.hidden = false;
-  text.textContent = cleaned;
+  applyUserTextBidi(text, cleaned);
 }
 
 /* =================================================================
@@ -36298,10 +36326,12 @@ function renderUserProfile(rawUsername, { soft = false } = {}) {
   if (els.userPublicBio) {
     const bio = String(latestPublic?.meta?.bio || "").trim();
     if (bio) {
-      els.userPublicBio.textContent = bio;
+      applyUserTextBidi(els.userPublicBio, bio);
       els.userPublicBio.style.display = "";
     } else {
       els.userPublicBio.textContent = "";
+      els.userPublicBio.dir = "";
+      els.userPublicBio.classList.remove("userTextBidi--rtl");
       els.userPublicBio.style.display = "none";
     }
   }
@@ -50114,7 +50144,10 @@ if (els.btnProfileShareIcon) {
   els.profilePreviewBioInput,
 ].forEach((el) => {
   if (!el) return;
-  el.addEventListener("input", renderProfilePreviewFromInputs);
+  el.addEventListener("input", () => {
+    if (el === els.profilePreviewBioInput) applyUserTextInputDir(el);
+    renderProfilePreviewFromInputs();
+  });
   el.addEventListener("change", renderProfilePreviewFromInputs);
 });
 if (els.btnCloseAdvancedSheet && els.advancedSheet) {

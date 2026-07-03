@@ -114,6 +114,7 @@ import {
   applyUserTextInputDir,
   userTextHtml,
 } from "./text-bidi.js";
+import { userTextWithMentionsHtml } from "./mentions.js";
 import {
   configurePushFromPublicConfig,
   enablePushNotifications,
@@ -131,7 +132,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260703-223057";
+const APP_BUILD = "20260703-230808";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -13102,7 +13103,7 @@ function followingActivityRowHtml(t, profMap, idx, opts = {}) {
   const plays = playsPending ? null : Math.max(0, Number(t.playCount) || 0);
   const caption = releaseCaptionForTrack(t);
   const captionHtml = caption
-    ? userTextHtml(caption, { tag: "p", className: "followActCaption", escapeHtml })
+    ? userTextWithMentionsHtml(caption, { tag: "p", className: "followActCaption", escapeHtml })
     : "";
   const verbHtml = followingActivityBodyHtml(type, rawTitle, remixOf, challenge, mashupOf);
   const subtitle = handle ? `@${handle}` : "Musician";
@@ -13543,13 +13544,16 @@ function bindRepostComposeSheetOnce() {
       const count = document.getElementById("repostComposeCount");
       if (count) count.textContent = `${input.value.length} / 320`;
     });
+    bindFeedReplyKeyboardInput(input);
   }
+  wireFeedReplySheetKeyboardOnce();
 }
 
 function openRepostComposeSheet({ targetKind, targetId, title, art, handle }) {
   const sheet = document.getElementById("repostComposeSheet");
   if (!sheet) return;
   bindRepostComposeSheetOnce();
+  wireFeedReplySheetKeyboardOnce();
   _repostComposeContext = { targetKind, targetId };
   const artEl = document.getElementById("repostComposeArt");
   const titleEl = document.getElementById("repostComposeTitle");
@@ -13568,6 +13572,12 @@ function openRepostComposeSheet({ targetKind, targetId, title, art, handle }) {
   sheet.hidden = false;
   window.requestAnimationFrame(() => {
     sheet.setAttribute("aria-hidden", "false");
+    applyFeedReplyKeyboardInset(0);
+    if (input) {
+      bindFeedReplyKeyboardInput(input);
+      try { input.focus({ preventScroll: true }); } catch { input.focus(); }
+      scheduleFeedReplyKeyboardInsetSync();
+    }
   });
 }
 
@@ -13575,6 +13585,7 @@ function closeRepostComposeSheet() {
   const sheet = document.getElementById("repostComposeSheet");
   if (!sheet) return;
   sheet.setAttribute("aria-hidden", "true");
+  applyFeedReplyKeyboardInset(0);
   window.setTimeout(() => {
     sheet.hidden = true;
     _repostComposeContext = null;
@@ -13619,6 +13630,91 @@ async function submitRepost() {
  * Feed Reply sheet (X-style thread modal)
  * ------------------------------------------------------------------- */
 
+function getOpenFeedReplyKeyboardSheet() {
+  for (const id of ["feedReplySheet", "repostComposeSheet"]) {
+    const sheet = document.getElementById(id);
+    if (sheet && !sheet.hidden && sheet.getAttribute("aria-hidden") === "false") return sheet;
+  }
+  return null;
+}
+
+function applyFeedReplyKeyboardInset(rawInset) {
+  const openSheet = getOpenFeedReplyKeyboardSheet();
+  const inset = Math.max(0, Math.round(Number(rawInset) || 0));
+  for (const id of ["feedReplySheet", "repostComposeSheet"]) {
+    const el = document.getElementById(id);
+    if (!el) continue;
+    el.style.setProperty("--feed-reply-keyboard-inset", openSheet === el ? `${inset}px` : "0px");
+  }
+  document.body.classList.toggle("feedReplyKeyboardOpen", Boolean(openSheet) && inset > 0);
+}
+
+function syncFeedReplySheetKeyboardInset() {
+  const sheet = getOpenFeedReplyKeyboardSheet();
+  if (!sheet) {
+    applyFeedReplyKeyboardInset(0);
+    return;
+  }
+  if (getNativeKeyboardPlugin()) return;
+  const vv = window.visualViewport;
+  if (!vv) {
+    applyFeedReplyKeyboardInset(0);
+    return;
+  }
+  const inset = Math.max(0, Math.round(window.innerHeight - vv.height - (vv.offsetTop || 0)));
+  applyFeedReplyKeyboardInset(inset);
+}
+
+function scheduleFeedReplyKeyboardInsetSync() {
+  syncFeedReplySheetKeyboardInset();
+  window.setTimeout(syncFeedReplySheetKeyboardInset, 60);
+  window.setTimeout(syncFeedReplySheetKeyboardInset, 180);
+  window.setTimeout(syncFeedReplySheetKeyboardInset, 360);
+}
+
+function wireFeedReplySheetKeyboardOnce() {
+  if (document.documentElement.dataset.feedReplyKbWired) return;
+  document.documentElement.dataset.feedReplyKbWired = "1";
+
+  const vv = window.visualViewport;
+  const onViewportChange = () => {
+    if (getOpenFeedReplyKeyboardSheet()) syncFeedReplySheetKeyboardInset();
+  };
+  if (vv) {
+    vv.addEventListener("resize", onViewportChange);
+    vv.addEventListener("scroll", onViewportChange);
+  }
+
+  const Keyboard = getNativeKeyboardPlugin();
+  if (!Keyboard?.addListener) return;
+  Keyboard.addListener("keyboardWillShow", (info) => {
+    if (!getOpenFeedReplyKeyboardSheet()) return;
+    applyFeedReplyKeyboardInset(info?.keyboardHeight);
+  });
+  Keyboard.addListener("keyboardDidShow", (info) => {
+    if (!getOpenFeedReplyKeyboardSheet()) return;
+    applyFeedReplyKeyboardInset(info?.keyboardHeight);
+  });
+  Keyboard.addListener("keyboardWillHide", () => {
+    if (!getOpenFeedReplyKeyboardSheet()) return;
+    applyFeedReplyKeyboardInset(0);
+  });
+}
+
+function bindFeedReplyKeyboardInput(input) {
+  if (!input || input.dataset.feedReplyKbInput === "1") return;
+  input.dataset.feedReplyKbInput = "1";
+  input.addEventListener("focus", () => scheduleFeedReplyKeyboardInsetSync());
+  input.addEventListener("blur", () => {
+    window.setTimeout(() => {
+      const sheet = getOpenFeedReplyKeyboardSheet();
+      const active = document.activeElement;
+      const stillTyping = active?.classList?.contains?.("feedReplyInput");
+      if (!sheet || !stillTyping) applyFeedReplyKeyboardInset(0);
+    }, 80);
+  });
+}
+
 let _feedReplyContext = null;
 let _feedReplyBound = false;
 
@@ -13655,12 +13751,17 @@ function openFeedReplySheet({ targetKind, targetId, handle, sub }) {
   const sheet = document.getElementById("feedReplySheet");
   if (!sheet) return;
   bindFeedReplySheetOnce();
+  wireFeedReplySheetKeyboardOnce();
   _feedReplyContext = { targetKind, targetId };
 
   const header = document.getElementById("feedReplyHeader");
   const subEl = document.getElementById("feedReplySub");
   if (header) header.textContent = handle ? `Reply to ${handle}` : "Replies";
-  if (subEl) subEl.textContent = sub ? sub.slice(0, 200) : "";
+  if (subEl) {
+    subEl.textContent = sub
+      ? sub.slice(0, 200)
+      : "Tap a comment to mention them. Only mutual followers get notified.";
+  }
 
   const list = document.getElementById("feedReplyList");
   if (list) list.innerHTML = `<div class="feedReplyRowLoading" aria-hidden="true" style="padding:24px;text-align:center;color:rgba(232,238,247,0.4);font-size:13px;">Loading…</div>`;
@@ -13673,8 +13774,11 @@ function openFeedReplySheet({ targetKind, targetId, handle, sub }) {
   // Allow the layout to settle before triggering the transition.
   window.requestAnimationFrame(() => {
     sheet.setAttribute("aria-hidden", "false");
+    applyFeedReplyKeyboardInset(0);
     if (input) {
-      try { input.focus({ preventScroll: false }); } catch { input.focus(); }
+      bindFeedReplyKeyboardInput(input);
+      try { input.focus({ preventScroll: true }); } catch { input.focus(); }
+      scheduleFeedReplyKeyboardInsetSync();
     }
   });
 
@@ -13685,6 +13789,7 @@ function closeFeedReplySheet() {
   const sheet = document.getElementById("feedReplySheet");
   if (!sheet) return;
   sheet.setAttribute("aria-hidden", "true");
+  applyFeedReplyKeyboardInset(0);
   window.setTimeout(() => {
     sheet.hidden = true;
     _feedReplyContext = null;
@@ -13738,8 +13843,9 @@ function feedReplyRowHtml(reply) {
     ? `<button type="button" class="feedReplyDelete" data-feed-reply-delete="${replyId}">Remove</button>`
     : "";
   const nameHtml = feedUsernameHtml(handle, replyProf, { className: "feedReplyNameText", fallback: "A musician" });
+  const replyHandle = handle.replace(/^@/, "");
   return `
-    <article class="feedReplyRow" data-feed-reply-id="${replyId}">
+    <article class="feedReplyRow" data-feed-reply-id="${replyId}" data-reply-handle="${escapeHtml(replyHandle)}">
       <a class="feedReplyAvatar" href="${escapeHtml(href)}" data-route-link="user" aria-label="${handle ? `@${escapeHtml(handle.replace(/^@/, ""))} profile` : "Profile"}">
         ${avatarSrc
           ? `<img src="${escapeHtml(avatarSrc)}" alt="" width="36" height="36" decoding="async" loading="lazy" />`
@@ -13751,7 +13857,7 @@ function feedReplyRowHtml(reply) {
           <span aria-hidden="true">·</span>
           <span class="feedReplyWhen">${escapeHtml(when)}</span>
         </div>
-        ${userTextHtml(bodyRaw, { tag: "p", className: "feedReplyBody", escapeHtml })}
+        ${userTextWithMentionsHtml(bodyRaw, { tag: "p", className: "feedReplyBody", escapeHtml })}
         ${deleteBtn}
       </div>
     </article>`;
@@ -13988,6 +14094,10 @@ function bindFeedReplySheetOnce() {
   const input = document.getElementById("feedReplyInput");
   const list = document.getElementById("feedReplyList");
   if (!sheet || !form || !input || !list) return;
+  wireFeedReplySheetKeyboardOnce();
+  bindFeedReplyKeyboardInput(input);
+  const repostInput = document.getElementById("repostComposeInput");
+  bindFeedReplyKeyboardInput(repostInput);
 
   sheet.addEventListener("click", (e) => {
     if (e.target.closest("[data-feed-reply-dismiss]")) {
@@ -14011,7 +14121,19 @@ function bindFeedReplySheetOnce() {
     if (del) {
       e.preventDefault();
       void deleteFeedReply(del.getAttribute("data-feed-reply-delete"));
+      return;
     }
+    const row = e.target.closest(".feedReplyRow");
+    if (!row || e.target.closest(".feedReplyDelete, .feedReplyAvatar, .feedReplyName, .userMention, a[data-route-link]")) return;
+    const handle = String(row.getAttribute("data-reply-handle") || "").trim().replace(/^@/, "");
+    if (!handle) return;
+    input.value = `@${handle} `;
+    applyUserTextInputDir(input);
+    input.focus();
+    try {
+      input.setSelectionRange(input.value.length, input.value.length);
+    } catch {}
+    updateFeedReplyFormState();
   });
 
   document.addEventListener("keydown", (e) => {
@@ -16192,7 +16314,7 @@ function releaseCaptionForTrack(track) {
 function releaseCaptionLineHtml(track) {
   const caption = releaseCaptionForTrack(track);
   if (!caption) return "";
-  return userTextHtml(caption, { tag: "span", className: "releaseCaptionLine", escapeHtml });
+  return userTextWithMentionsHtml(caption, { tag: "span", className: "releaseCaptionLine", escapeHtml });
 }
 
 function isFeaturedOnProfile(track) {
@@ -21899,7 +22021,7 @@ function ensurePublishReleaseSheet() {
         </div>
       </div>
       <label class="publishReleaseLabel" for="publishReleaseCaption">Release note <span>(optional)</span></label>
-      <textarea id="publishReleaseCaption" class="publishReleaseCaption" rows="3" maxlength="160" placeholder="Say something about the mood, story, or moment..."></textarea>
+      <textarea id="publishReleaseCaption" class="publishReleaseCaption" rows="3" maxlength="160" placeholder="Say something about the mood, story, or moment… Mention mutual followers with @username"></textarea>
       <div class="publishReleasePermits" role="group" aria-label="Collaboration permissions">
         <label class="publishReleasePermit">
           <input id="publishAllowRemix" type="checkbox" checked />
@@ -26291,6 +26413,7 @@ function notifyPublicSongPublished(track) {
       action: "notify_public_song",
       songId,
       title: String(track?.title || "New song").trim(),
+      releaseCaption: releaseCaptionForTrack(track),
     }),
   }).catch(() => {});
 }
@@ -26523,6 +26646,7 @@ function notificationIconForType(type) {
   if (t === "song_feedback") return "♪";
   if (t === "social_like") return "♥";
   if (t === "social_reply") return "↩";
+  if (t === "social_mention") return "@";
   if (t === "social_repost") return "↻";
   if (t === "play_milestone") return "▶";
   if (t === "chart_rank") return "★";
@@ -26551,6 +26675,9 @@ function activityTypeBadgeSvg(type) {
   }
   if (t === "social_reply") {
     return `<svg viewBox="0 0 24 24" width="11" height="11" aria-hidden="true"><path fill="currentColor" d="M10 9V5l-7 7 7 7v-4.1c5 0 8.5 1.6 11 5.1-1-5.4-4-10.9-11-11Z"/></svg>`;
+  }
+  if (t === "social_mention") {
+    return `<svg viewBox="0 0 24 24" width="11" height="11" aria-hidden="true"><path fill="currentColor" d="M12 2a7 7 0 0 1 7 7c0 2.4-1.2 4.5-3 5.7V18a2 2 0 0 1-2 2h-4a2 2 0 0 1-2-2v-3.3A7 7 0 0 1 12 2Zm0 2a5 5 0 0 0-5 5c0 2.2 1.4 4.1 3.4 4.8V18h3.2v-4.2A5 5 0 0 0 12 4Z"/></svg>`;
   }
   if (t === "social_repost") {
     return `<svg viewBox="0 0 24 24" width="11" height="11" aria-hidden="true"><path fill="currentColor" d="M17 1l4 4-4 4V6H9a4 4 0 0 0-4 4v1H3v-1a6 6 0 0 1 6-6h8V1ZM7 23l-4-4 4-4v3h8a4 4 0 0 0 4-4v-1h2v1a6 6 0 0 1-6 6H7v3Z"/></svg>`;
@@ -26676,6 +26803,18 @@ function notificationMessage(n) {
       title: username ? `@${username} replied to ${target}` : `Someone replied to ${target}`,
       body: preview ? `"${preview.slice(0, 140)}${preview.length > 140 ? "…" : ""}"` : "Open the thread to read the reply.",
       action: username ? "View profile" : "",
+    };
+  }
+  if (n?.type === "social_mention") {
+    const preview = String(n?.metadata?.mention_preview || "").trim();
+    const where = String(n?.metadata?.source_kind || "") === "song_caption" ? "in a caption" : "in a comment";
+    const songTitle = String(n?.metadata?.song_title || "").trim();
+    return {
+      title: username ? `@${username} mentioned you` : "You were mentioned",
+      body: preview
+        ? `"${preview.slice(0, 140)}${preview.length > 140 ? "…" : ""}"`
+        : (songTitle ? `On “${songTitle}”` : where),
+      action: "Open",
     };
   }
   if (n?.type === "social_repost") {
@@ -26882,7 +27021,7 @@ function activityNotificationMatchesFilter(n, tab = _activityFilterTab) {
   const t = String(n?.type || "").trim();
   if (tab === "achievements") return t === "chart_rank" || t === "play_milestone" || t === "song_live" || t === "generation_ready";
   if (tab === "social") {
-    return ["follow", "remix", "social_like", "social_reply", "social_repost", "public_song", "song_feedback"].includes(t);
+    return ["follow", "remix", "social_like", "social_reply", "social_repost", "social_mention", "public_song", "song_feedback"].includes(t);
   }
   return true;
 }
@@ -26975,7 +27114,7 @@ async function validateActivityNotificationsAvailability(notifications) {
         t === "play_milestone" ||
         t === "song_feedback" ||
         t === "remix" ||
-        ((t === "social_like" || t === "social_reply" || t === "social_repost") && String(meta.target_kind || "") === "song"));
+        ((t === "social_like" || t === "social_reply" || t === "social_repost" || t === "social_mention") && String(meta.target_kind || "") === "song"));
     if (songLinked) songIds.add(sid);
     if (t === "remix") {
       const remixPostId = String(meta.remix_post_id || "").trim();
@@ -27047,7 +27186,7 @@ function activitySongIdForNotification(n) {
   if (t === "remix") {
     return String(meta.remix_song_id || meta.remix_post_id || "").trim();
   }
-  if ((t === "social_like" || t === "social_reply" || t === "social_repost") && String(meta.target_kind || "") === "song") {
+  if ((t === "social_like" || t === "social_reply" || t === "social_repost" || t === "social_mention") && String(meta.target_kind || "") === "song") {
     return String(meta.target_id || "").trim();
   }
   return "";
@@ -27056,7 +27195,7 @@ function activitySongIdForNotification(n) {
 function activityNotificationHasSongCover(n) {
   const t = String(n?.type || "").trim();
   if (t === "follow") return false;
-  if (t === "social_like" || t === "social_reply" || t === "social_repost") {
+  if (t === "social_like" || t === "social_reply" || t === "social_repost" || t === "social_mention") {
     return String(n?.metadata?.target_kind || "") === "song";
   }
   return ["play_milestone", "chart_rank", "song_feedback", "public_song", "remix"].includes(t);
@@ -27146,7 +27285,7 @@ function collapseActivityRows(rows) {
     else if (t === "chart_rank") {
       key = `chart|${String(n?.metadata?.week_key || "").trim()}|${String(n?.metadata?.song_id || "").trim()}`;
     }
-    else if ((t === "song_feedback" || t === "social_like" || t === "social_reply" || t === "social_repost") && actor) {
+    else if ((t === "song_feedback" || t === "social_like" || t === "social_reply" || t === "social_repost" || t === "social_mention") && actor) {
       key = `${t}|${actor}|${String(n?.metadata?.target_id || n?.metadata?.song_id || "").trim()}`;
     }
     if (!key) {
@@ -27212,10 +27351,10 @@ function notificationActivityHref(n) {
       return `#/player?hub=${encodeURIComponent(remixPostId)}`;
     }
   }
-  if ((t === "social_like" || t === "social_reply" || t === "social_repost") && targetKind === "song" && targetId) {
+  if ((t === "social_like" || t === "social_reply" || t === "social_repost" || t === "social_mention") && targetKind === "song" && targetId) {
     return `#/player?track=${encodeURIComponent(targetId)}`;
   }
-  if ((t === "social_like" || t === "social_reply" || t === "social_repost") && (targetKind === "echo" || targetKind === "status")) {
+  if ((t === "social_like" || t === "social_reply" || t === "social_repost" || t === "social_mention") && (targetKind === "echo" || targetKind === "status")) {
     return "#/friends";
   }
   if ((t === "follow" || t === "public_song") && username) {
@@ -27271,7 +27410,7 @@ async function openActivityNotificationTarget(n) {
     (t === "chart_rank" ||
       t === "play_milestone" ||
       t === "song_feedback" ||
-      ((t === "social_like" || t === "social_reply" || t === "social_repost") && String(meta.target_kind || "") === "song"));
+      ((t === "social_like" || t === "social_reply" || t === "social_repost" || t === "social_mention") && String(meta.target_kind || "") === "song"));
 
   if (songLinked) {
     if (await resolveAndPlayActivityTrack(songId)) return;
@@ -27319,7 +27458,7 @@ function activityRowArtworkHtml(n) {
   if (preferSong && songUrl) {
     return `<img class="activityRowArt" src="${escapeHtml(songUrl)}" alt="" loading="lazy" decoding="async" />`;
   }
-  if (t === "follow" || t === "social_like" || t === "social_reply" || t === "social_repost" || t === "public_song" || t === "remix") {
+  if (t === "follow" || t === "social_like" || t === "social_reply" || t === "social_repost" || t === "social_mention" || t === "public_song" || t === "remix") {
     const actorArt = String(n?.metadata?.actor_avatar || "").trim();
     if (isRealUserAvatarUrl(actorArt)) {
       return `<img class="activityRowArt activityRowArt--avatar" src="${escapeHtml(normalizeProfileAvatarForImg(actorArt))}" alt="" loading="lazy" decoding="async" />`;
@@ -27403,8 +27542,20 @@ function activityItemDisplayParts(n, msg) {
     const preview = String(meta.reply_preview || msg.body || "").trim();
     return {
       category: "New Reply",
-      title: username ? `${username} replied` : "New reply",
+      title: username ? `@${username} replied` : "New reply",
       description: preview ? `"${preview.slice(0, 100)}${preview.length > 100 ? "…" : ""}"` : (msg.body || "Open the thread"),
+    };
+  }
+  if (t === "social_mention") {
+    const preview = String(meta.mention_preview || msg.body || "").trim();
+    const where = String(meta.source_kind || "") === "song_caption" ? "in a caption" : "in a comment";
+    const songTitle = String(meta.song_title || meta.target_title || "").trim();
+    return {
+      category: "Mention",
+      title: username ? `@${username} mentioned you` : "You were mentioned",
+      description: preview
+        ? `"${preview.slice(0, 100)}${preview.length > 100 ? "…" : ""}"`
+        : (songTitle ? `On “${songTitle}”` : where),
     };
   }
   if (t === "social_repost") {

@@ -13,6 +13,7 @@ const {
   callRpc,
 } = require("./_lib/credits-auth");
 const { queuePrivacySafePush } = require("./_lib/onesignal-push");
+const { processMentions } = require("./_lib/mentions");
 
 const SUPABASE_URL = (process.env.SUPABASE_URL || "").replace(/\/$/, "");
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
@@ -1564,6 +1565,22 @@ async function handlePost(req, res, user) {
       songId: song.id,
       title: song.title || body?.title,
     });
+    const caption = String(body?.releaseCaption || body?.caption || "").trim();
+    if (caption) {
+      void processMentions({
+        svcFetch,
+        insertNotification,
+        notificationExists,
+        actorUserId: user.userId,
+        sourceKind: "song_caption",
+        sourceId: song.id,
+        body: caption,
+        targetKind: "song",
+        targetId: song.id,
+        songTitle: song.title || body?.title || "",
+        songArtUrl: song.art_url || "",
+      });
+    }
     // Self-notification: a durable Activity-feed entry telling the creator their
     // song finished publishing and is live. No push (they're right here) and no
     // actor — it's a system event about their own song. Deduped by song id.
@@ -1871,6 +1888,19 @@ async function handlePost(req, res, user) {
       actorUserId: user.userId,
       replyId: row.id,
       body: text,
+    });
+    void processMentions({
+      svcFetch,
+      insertNotification,
+      notificationExists,
+      actorUserId: user.userId,
+      sourceKind: "reply",
+      sourceId: row.id,
+      body: text,
+      targetKind: targetKind,
+      targetId: targetId,
+      songTitle: target.title || "",
+      songArtUrl: target.artUrl || "",
     });
     return sendJson(res, 200, {
       ok: true,

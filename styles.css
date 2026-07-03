@@ -34676,9 +34676,11 @@ section.mentorPage{
   align-items: flex-end;
   justify-content: center;
   pointer-events: none;
+  --feed-reply-keyboard-inset: 0px;
 }
 .feedReplySheet[aria-hidden="false"]{
   pointer-events: auto;
+  padding-bottom: var(--feed-reply-keyboard-inset, 0px);
 }
 .feedReplySheet[hidden]{
   display: none !important;
@@ -34697,7 +34699,10 @@ section.mentorPage{
   position: relative;
   width: 100%;
   max-width: 560px;
-  max-height: 88vh;
+  max-height: min(
+    88vh,
+    calc(100dvh - var(--feed-reply-keyboard-inset, 0px) - 12px - env(safe-area-inset-top, 0px))
+  );
   background: linear-gradient(180deg, rgba(18, 22, 32, 0.98), rgba(10, 14, 22, 0.99));
   border-top-left-radius: 22px;
   border-top-right-radius: 22px;
@@ -34876,11 +34881,31 @@ section.mentorPage{
   color: rgba(232, 238, 247, 0.45);
 }
 .feedReplyRow{
+  cursor: pointer;
   display: grid;
   grid-template-columns: 36px 1fr;
   gap: 10px;
   padding: 12px 18px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+.feedReplyRow .userMention,
+.feedReplyRow .feedReplyAvatar,
+.feedReplyRow .feedReplyName,
+.feedReplyRow .feedReplyDelete{
+  cursor: pointer;
+}
+.userMention{
+  color: #4ea4ff;
+  text-decoration: none;
+  font-weight: 650;
+}
+.userMention:hover{
+  text-decoration: underline;
+}
+.followActCaption .userMention,
+.releaseCaptionLine .userMention,
+.feedReplyBody .userMention{
+  color: #6eb6ff;
 }
 .feedReplyRow:last-child{
   border-bottom: 0;

@@ -129,6 +129,14 @@ import {
   consumePendingPushRoute,
   stashPendingPushRoute,
 } from "./push-notifications.js";
+import {
+  applyScreenshotModeFromDeepLink,
+  initScreenshotMode,
+  screenshotDisplayName,
+  screenshotHandle,
+  screenshotProf,
+  screenshotSanitizeCopy,
+} from "./screenshot-mode.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
@@ -161,6 +169,11 @@ const MESSAGES_FEATURE_ENABLED = true;
   const f = document.getElementById("footerBuild");
   if (f) f.textContent = `Build ${APP_BUILD}`;
 })();
+try {
+  initScreenshotMode();
+} catch (e) {
+  console.warn("[screenshot-mode] init failed", e);
+}
 try {
   initTheme();
 } catch (e) {
@@ -5593,7 +5606,7 @@ function renderSearchPeople(query) {
     rowEl.innerHTML = people.map((u) => `
     <button class="searchPersonCard" type="button" data-search-user="${encodeURIComponent(u.handle)}">
       <img class="searchPersonAvatar" src="${escapeHtml(u.avatar)}" alt="" loading="lazy" />
-      <div class="searchPersonName">@${escapeHtml(u.handle)}</div>
+      <div class="searchPersonName">@${escapeHtml(screenshotHandle(u.handle))}</div>
     </button>
   `).join("");
     bindSearchPeopleRowClickHandlers(rowEl);
@@ -7037,7 +7050,7 @@ function chartWeekWinnerHtml(hero) {
             ${chartWeekTrendHtml(hero)}
           </span>
           <strong class="chartWeekWinnerTitle">${escapeHtml(title)}</strong>
-          ${hero.username ? `<span class="chartWeekWinnerBy">@${escapeHtml(hero.username)}</span>` : ""}
+          ${hero.username ? `<span class="chartWeekWinnerBy">@${escapeHtml(screenshotHandle(hero.username))}</span>` : ""}
           ${heroPlays ? `<span class="chartWeekWinnerPlays">${escapeHtml(chartWeekPlaysText(heroPlays))}</span>` : ""}
         </span>
       </button>
@@ -7088,7 +7101,7 @@ function chartWeekLeaderboardRowHtml(e) {
       </span>
       <span class="chartWeekLeaderMeta">
         <strong class="chartWeekLeaderTitle">${escapeHtml(title)}</strong>
-        ${e.username ? `<span class="chartWeekLeaderBy">@${escapeHtml(e.username)}</span>` : ""}
+        ${e.username ? `<span class="chartWeekLeaderBy">@${escapeHtml(screenshotHandle(e.username))}</span>` : ""}
         ${plays ? `<span class="chartWeekLeaderPlays">${escapeHtml(featured ? chartWeekPlaysText(plays) : chartWeekPlaysText(plays, true))}</span>` : ""}
       </span>
       ${discoverListPlayBtnHtml("chartWeekLeaderPlay")}
@@ -7279,7 +7292,7 @@ async function renderDeskRailTrending() {
       return `<button type="button" class="deskRailTrendRow" ${chartEntryPlayAttrs(e)} aria-label="Play ${escapeHtml(title)}">
         <span class="deskRailTrendRank">${i + 1}</span>
         <span class="deskRailTrendArt"><img src="${escapeHtml(art)}" alt="" loading="lazy" decoding="async"/></span>
-        <span class="deskRailTrendMeta"><strong>${escapeHtml(title)}</strong>${e.username ? `<span>@${escapeHtml(e.username)}</span>` : ""}</span>
+        <span class="deskRailTrendMeta"><strong>${escapeHtml(title)}</strong>${e.username ? `<span>@${escapeHtml(screenshotHandle(e.username))}</span>` : ""}</span>
       </button>`;
     }).join("");
   } catch {
@@ -8206,7 +8219,7 @@ function feedUsernameHtml(handle, prof, opts = {}) {
   const className = String(opts.className || "followActUser").trim();
   const fallback = String(opts.fallback || "A musician").trim();
   const badge = opts.badge !== false;
-  const h = String(handle || prof?.username || "").trim().replace(/^@/, "");
+  const h = screenshotHandle(String(handle || prof?.username || "").trim().replace(/^@/, ""));
   if (!h) return `<strong class="${className}">${fallback}</strong>`;
   const badgeHtml = badge ? usernameVerifiedBadgeHtml(prof) : "";
   return `<strong class="${className}">@${escapeHtml(h)}</strong>${badgeHtml}`;
@@ -8225,8 +8238,8 @@ function discoverFeedByLineHtml(byLine, prof, opts = {}) {
     return `<span class="discoverFeedSongBy">${escapeHtml(raw || "Creator")}</span>`;
   }
   const prefix = opts.byPrefix != null ? String(opts.byPrefix) : "by ";
-  const handle = raw.replace(/^@/, "");
-  const line = raw.startsWith("@") ? raw : `@${handle}`;
+  const handle = screenshotHandle(raw.replace(/^@/, ""));
+  const line = raw.startsWith("@") ? `@${handle}` : `@${handle}`;
   const badge = usernameVerifiedBadgeHtml(prof, {
     className: "discoverTemplatesVerified profileNabadCertCheck--inline",
     label: "Verified creator",
@@ -16026,9 +16039,11 @@ function repostIconSvgHtml(klass = "followActActIco") {
 
 function remixAttributionText(remixOf) {
   if (!remixOf) return "";
-  const who = remixOf.creatorUsername ? `@${remixOf.creatorUsername}` : "original creator";
+  const who = remixOf.creatorUsername
+    ? `@${screenshotHandle(remixOf.creatorUsername)}`
+    : "original creator";
   const sourceTitle = remixOf.title ? ` · ${remixOf.title}` : "";
-  return `Remixed from ${who}${sourceTitle}`;
+  return screenshotSanitizeCopy(`Remixed from ${who}${sourceTitle}`);
 }
 
 function remixSourceLineHtml(track) {
@@ -22661,12 +22676,12 @@ async function fetchPublicProfileRowByUsername(username) {
   };
   // `sound_certified` breaks the whole request if the column is not migrated yet — fall back to `selCore`.
   // `eq` is case-sensitive — try escaped `ilike` second so `@Samy_CEO` still resolves.
-  return (
+  const row =
     (await tryOne(eq, selFull)) ||
     (await tryOne(eq, selCore)) ||
     (await tryOne(il, selFull)) ||
-    (await tryOne(il, selCore))
-  );
+    (await tryOne(il, selCore));
+  return row ? screenshotProf(row) : null;
 }
 
 function mapPublicLibrarySongRows(arr, selectedPublishedAt) {
@@ -27501,7 +27516,7 @@ function activityRowArtworkHtml(n) {
 function activityItemDisplayParts(n, msg) {
   const t = String(n?.type || "").trim();
   const meta = n?.metadata || {};
-  const username = String(meta.actor_username || "").replace(/^@/, "").trim();
+  const username = screenshotHandle(String(meta.actor_username || "").replace(/^@/, "").trim());
   const gc = Number(n?._groupCount || 0);
 
   if (t === "chart_rank") {
@@ -27563,7 +27578,7 @@ function activityItemDisplayParts(n, msg) {
     };
   }
   if (t === "social_reply") {
-    const preview = String(meta.reply_preview || msg.body || "").trim();
+    const preview = screenshotSanitizeCopy(String(meta.reply_preview || msg.body || "").trim());
     return {
       category: "New Reply",
       title: username ? `@${username} replied` : "New reply",
@@ -27571,7 +27586,7 @@ function activityItemDisplayParts(n, msg) {
     };
   }
   if (t === "social_mention") {
-    const preview = String(meta.mention_preview || msg.body || "").trim();
+    const preview = screenshotSanitizeCopy(String(meta.mention_preview || msg.body || "").trim());
     const where = String(meta.source_kind || "") === "song_caption" ? "in a caption" : "in a comment";
     const songTitle = String(meta.song_title || meta.target_title || "").trim();
     return {
@@ -27651,7 +27666,7 @@ function activityItemHtml(n) {
   const unavailable = activityNotificationIsUnavailable(n);
   const gc = Number(n?._groupCount || 0);
   if (gc > 1) {
-    const username = String(n?.metadata?.actor_username || "").replace(/^@/, "").trim();
+    const username = screenshotHandle(String(n?.metadata?.actor_username || "").replace(/^@/, "").trim());
     const t = String(n?.type || "").trim();
     if (t === "public_song") {
       msg.title = username ? `@${username} published ${gc} songs` : `A creator published ${gc} songs`;
@@ -28982,7 +28997,7 @@ async function fetchProfilesByUserIdsMap(userIds) {
   for (const uid of ids) {
     const cached = _profileRowCache.get(uid);
     if (cached && now - cached.at < PROFILE_ROW_CACHE_MS) {
-      m.set(uid, cached.row);
+      m.set(uid, screenshotProf(cached.row));
     } else {
       missing.push(uid);
     }
@@ -29005,8 +29020,9 @@ async function fetchProfilesByUserIdsMap(userIds) {
     for (const row of Array.isArray(arr) ? arr : []) {
       const uid = String(row?.user_id || "").trim();
       if (!uid) continue;
-      m.set(uid, row);
-      _profileRowCache.set(uid, { row, at: now });
+      const sanitized = screenshotProf(row);
+      m.set(uid, sanitized);
+      _profileRowCache.set(uid, { row: sanitized, at: now });
     }
     return m;
   } catch {
@@ -29061,24 +29077,24 @@ function resolveProfileForFeedCreator(userId, profMap) {
   const authId = String(authSession?.user?.id || "").trim();
 
   if (prof && autoUsernameMatchesAuthUser(cloudName, uid) && isFounderUserId(uid)) {
-    return {
+    return screenshotProf({
       ...prof,
       user_id: uid,
       username: founderPublicUsername(),
       avatar: String(prof?.avatar || "").trim(),
-    };
+    });
   }
 
   const chosen = authId && uid === authId ? chosenUsernameForAuthUser() : "";
   if (chosen && (!cloudName || isPlaceholderUsername(cloudName) || autoUsernameMatchesAuthUser(cloudName, authId))) {
-    return {
+    return screenshotProf({
       ...(prof || {}),
       user_id: uid,
       username: chosen,
       avatar: String(activeProfile?.avatar || prof?.avatar || "").trim() || prof?.avatar || "",
-    };
+    });
   }
-  return prof;
+  return screenshotProf(prof);
 }
 
 async function ensurePersonalizedUsernameSyncedToCloud() {
@@ -36329,8 +36345,8 @@ function renderProfileIdentityLine() {
   const handleTextEl = document.getElementById("profileHandleText");
   const input = els.profilePreviewUsernameInput;
   const stack = els.profileAuraNameStack || document.getElementById("profileAuraNameStack");
-  const friendly = normalizeDisplayName(activeProfile?.displayName);
-  const handle = normalizeProfileUsername(activeProfile?.username);
+  const friendly = screenshotDisplayName(normalizeDisplayName(activeProfile?.displayName));
+  const handle = screenshotHandle(normalizeProfileUsername(activeProfile?.username));
   const handleText = handle ? `@${handle}` : "@guest";
 
   if (profileEditing) {
@@ -36399,7 +36415,7 @@ function renderProfileHeroBio() {
     return;
   }
   wrap.hidden = false;
-  applyUserTextBidi(text, cleaned);
+  applyUserTextBidi(text, screenshotSanitizeCopy(cleaned));
 }
 
 /* =================================================================
@@ -36764,7 +36780,7 @@ function renderUserProfile(rawUsername, { soft = false } = {}) {
   const publicMatches = matches.filter(isHubPostVisibleOnPublicProfile);
   const latestPublic = publicMatches[0] || null;
   const latestAny = matches[0] || null;
-  const displayName = latestAny?.creator || username || "user";
+  const displayName = screenshotHandle(latestAny?.creator || username || "user");
   const metaUserId = String(latestAny?.meta?.creatorUserId || latestAny?.meta?.creator_user_id || "").trim();
 
   if (els.userPublicName) els.userPublicName.textContent = `@${displayName}`;
@@ -41827,7 +41843,7 @@ function setCoverImageSrc(img, url, opts = {}) {
 function setPlayerMeta({ title, subtitle, artUrl, releaseCaption, remixOf, challenge, mashupOf } = {}) {
   const hasTrack = Boolean(artUrl);
   if (els.playerTitle) els.playerTitle.textContent = title || "Now Playing";
-  if (els.playerSubtitle) els.playerSubtitle.textContent = subtitle || "";
+  if (els.playerSubtitle) els.playerSubtitle.textContent = screenshotSanitizeCopy(subtitle || "");
   if (els.playerArt) {
     if (hasTrack) setCoverImageSrc(els.playerArt, artUrl);
     else setCoverImageSrc(els.playerArt, playerEmptyArtUrl(), { allowEmpty: true });
@@ -49619,6 +49635,10 @@ if (isCapacitorNativeAuth()) {
   if (CapApp?.addListener) {
     try {
       CapApp.addListener("appUrlOpen", (event) => {
+        if (applyScreenshotModeFromDeepLink(event?.url)) {
+          try { safeApplyRoute(); } catch {}
+          return;
+        }
         void handleNativeAuthDeepLink(event?.url);
       });
     } catch {}

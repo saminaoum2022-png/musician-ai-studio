@@ -24,6 +24,17 @@ for (const [from, to] of copies) {
     process.exit(1);
   }
   fs.copyFileSync(src, dest);
+  if (to === "index.html" && process.env.NABAD_SCREENSHOT_MODE === "1") {
+    let html = fs.readFileSync(dest, "utf8");
+    if (!html.includes('name="nabad-screenshot-mode"')) {
+      html = html.replace(
+        "<head>",
+        '<head>\n    <meta name="nabad-screenshot-mode" content="1" />',
+      );
+      fs.writeFileSync(dest, html);
+      console.log("sync-www: injected nabad-screenshot-mode meta");
+    }
+  }
   console.log(`sync-www: ${from} → www/${to}`);
 }
 

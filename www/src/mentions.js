@@ -2,6 +2,7 @@
 
 import { isPrimarilyArabic } from "./text-bidi.js";
 import { USERNAME_MAX_LENGTH } from "./profile-limits.js";
+import { isScreenshotMode, screenshotHandle } from "./screenshot-mode.js";
 
 const MENTION_HANDLE_RE = new RegExp(
   `@([a-z0-9_](?:[a-z0-9_.]{0,${USERNAME_MAX_LENGTH - 2}}[a-z0-9_])?)`,
@@ -17,9 +18,10 @@ function linkifyMentions(text, escapeHtml) {
   let m;
   while ((m = re.exec(raw)) !== null) {
     out += escapeHtml(raw.slice(last, m.index));
-    const handle = String(m[1] || "").toLowerCase();
+    const rawHandle = String(m[1] || "");
+    const handle = isScreenshotMode() ? screenshotHandle(rawHandle) : rawHandle.toLowerCase();
     const href = `#/u/${encodeURIComponent(handle)}`;
-    out += `<a class="userMention" href="${escapeHtml(href)}" data-route-link="user">@${escapeHtml(m[1])}</a>`;
+    out += `<a class="userMention" href="${escapeHtml(href)}" data-route-link="user">@${escapeHtml(handle)}</a>`;
     last = m.index + m[0].length;
   }
   out += escapeHtml(raw.slice(last));

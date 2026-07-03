@@ -118,6 +118,11 @@ export function coachInstrumentalPillText(title) {
   return `Instrumental · ${t.slice(0, 28)}${t.length > 28 ? "…" : ""}`;
 }
 
+export function coachSoundPillText(title) {
+  const t = String(title || "Your sound").trim() || "Your sound";
+  return `Creating sound · ${t.slice(0, 28)}${t.length > 28 ? "…" : ""}`;
+}
+
 /** Persistent pill for the whole backend run. */
 export function beginCoachGenerationStatus({ variantCount = 2 } = {}) {
   try { _onArmHook?.(); } catch {}

@@ -79,6 +79,7 @@ import {
   cancelCoachPriorityStatus,
   coachMusicVideoPillText,
   coachInstrumentalPillText,
+  coachSoundPillText,
   notifyCoachOrbPillShown,
   notifyCoachOrbPillHidden,
   syncCoachOrbAfterRouteChange,
@@ -124,7 +125,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260703-133057";
+const APP_BUILD = "20260703-142510";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -2022,7 +2023,8 @@ function getMiniPlayerAudio() {
     t === "discover_playlist" ||
     t === "public_profile_lib" ||
     t === "library" ||
-    t === "profile_hub"
+    t === "profile_hub" ||
+    t === "studio_vocal"
   ) {
     return ensurePlayer();
   }
@@ -2035,6 +2037,7 @@ function renderHubNowPlaying() {
   const hideHubSource = miniSource?.type === "hub";
   const hideOnHubVisible = route === "hub";
   const hideOnLibrary = route === "profile" && _profileSongsSegment === "all" && miniSource?.type !== "library";
+  const hideOnVocals = route === "profile" && _profileSongsSegment === "vocals" && miniSource?.type !== "studio_vocal";
   const hideOnPlaylist = route === "profile" && _profileSongsSegment === "playlist" && miniSource?.type !== "user_playlist";
   const hideOnPlayer = route === "player";
   const hideOnGenerate = route === "generate" && miniSource?.type === "generateResult";
@@ -2060,6 +2063,7 @@ function renderHubNowPlaying() {
     !hideHubSource &&
     !hideOnHubVisible &&
     !hideOnLibrary &&
+    !hideOnVocals &&
     !hideOnPlaylist &&
     !hideOnPlayer &&
     !hideOnGenerate;
@@ -20374,9 +20378,11 @@ function startSoundGenerationPolling(meta) {
   stopSoundGenerationPolling();
   let tries = 0;
   const maxTries = 160;
+  const pillTitle = String(meta?.fallbackTitle || "Your sound").trim() || "Your sound";
   soundPollTimer = setInterval(async () => {
     tries += 1;
     try {
+      updateCoachPriorityStatus(coachSoundPillText(pillTitle), { generating: true });
       const r = await fetch(apiUrl(`/api/suno/status?taskId=${encodeURIComponent(soundTaskId)}`));
       const data = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(data?.error || "Status failed");
@@ -20397,7 +20403,7 @@ function startSoundGenerationPolling(meta) {
           meta: meta.libraryMeta,
         });
         setStatus("Sound saved to Library.");
-        setLoading(false);
+        finishCoachPriorityStatus("Sound ready ✓");
         if (els.btnSoundGenerate) els.btnSoundGenerate.disabled = false;
         markLibraryTabDot(true);
         showToast("Sound saved to your Library", { icon: "✓", durationMs: 3200 });
@@ -20407,21 +20413,21 @@ function startSoundGenerationPolling(meta) {
       if (status === "FAILED" || status === "ERROR") {
         stopSoundGenerationPolling();
         setStatus("Sound generation failed upstream. Check Recent activity for charges.");
-        setLoading(false);
+        cancelCoachPriorityStatus();
         if (els.btnSoundGenerate) els.btnSoundGenerate.disabled = false;
         return;
       }
       if (tries >= maxTries) {
         stopSoundGenerationPolling();
         setStatus("Still processing — check Library in a minute.");
-        setLoading(false);
+        cancelCoachPriorityStatus();
         if (els.btnSoundGenerate) els.btnSoundGenerate.disabled = false;
       }
     } catch (e) {
       if (tries >= 10) {
         stopSoundGenerationPolling();
         setStatus(`Could not get sound status: ${e?.message || String(e)}`);
-        setLoading(false);
+        cancelCoachPriorityStatus();
         if (els.btnSoundGenerate) els.btnSoundGenerate.disabled = false;
       }
     }
@@ -29321,6 +29327,9 @@ async function playLibraryListRowById(id, opts) {
   try {
     stopHubPlayback();
   } catch {}
+  try {
+    stopVocalsPlayback();
+  } catch {}
   const rawForPlay = unwrapInnermostHttpAudioUrl(t.url);
   const playSource = normalizeAudioUrlForPlayback(toAudioProxyUrl(rawForPlay) || rawForPlay);
   if (!isArchivedSongStorageUrl(t.url)) queueArchiveLibraryTrack(t);
@@ -29499,7 +29508,7 @@ function runTrackSheetAction(action, sourceEl) {
 
   if (ctx.mode === "vocals") {
     const id = ctx.vocalId;
-    if (action === "vocal_play") { shut(); void playVocalById(id); return; }
+    if (action === "vocal_play") { shut(); void playVocalById(id, { openPlayer: true }); return; }
     if (action === "vocal_rename") {
       shut();
       const cur = (listVocals().find((x) => x.id === id) || {}).title || "";
@@ -32375,6 +32384,9 @@ async function playLibraryUrlOnPlayer(rawUrl, title, artUrl, opts) {
   const challenge = challengeMetaForTrack(publicTrackMeta);
   try {
     stopHubPlayback();
+  } catch {}
+  try {
+    stopVocalsPlayback();
   } catch {}
   let playableRaw = unwrapInnermostHttpAudioUrl(raw) || raw;
   const initialPlayableRaw = playableRaw;
@@ -36798,14 +36810,45 @@ function renderProfileSongs(opts = {}) {
 /* My Vocals — local Studio recordings (device-only until published)          */
 /* -------------------------------------------------------------------------- */
 
-let _vocalsAudio = null;
 let _vocalsPlayingId = "";
-let _vocalsPlayingUrl = "";
+let _vocalsBlobUrl = "";
 
 function stopVocalsPlayback() {
-  try { _vocalsAudio?.pause(); } catch {}
-  if (_vocalsPlayingUrl) { try { URL.revokeObjectURL(_vocalsPlayingUrl); } catch {} _vocalsPlayingUrl = ""; }
   _vocalsPlayingId = "";
+  if (_vocalsBlobUrl) {
+    try { URL.revokeObjectURL(_vocalsBlobUrl); } catch {}
+    _vocalsBlobUrl = "";
+  }
+  if (miniSource?.type === "studio_vocal") {
+    miniSource = null;
+    try { ensurePlayer()?.pause(); } catch {}
+    try { renderHubNowPlaying(); } catch {}
+  }
+}
+
+function getStudioVocalRowPlaybackUi(vocalId) {
+  const idStr = String(vocalId || "");
+  if (miniSource?.type !== "studio_vocal" || String(miniSource.id || "") !== idStr) {
+    return { active: false, audible: false };
+  }
+  const a = playerEl;
+  if (!a) return { active: true, audible: false };
+  const dur = getPlayerDuration();
+  const cur = Number.isFinite(a.currentTime) ? a.currentTime : 0;
+  const audible = !a.paused && !a.ended && (dur > 0 || cur > 0);
+  return { active: true, audible };
+}
+
+function syncMyVocalsRowsFromPlayer() {
+  const route = document.body.getAttribute("data-route") || "";
+  if (route !== "profile" || _profileSongsSegment !== "vocals") return;
+  const host = document.getElementById("profileVocalsList");
+  if (!host) return;
+  host.querySelectorAll(".libRow[data-vocal-row]").forEach((row) => {
+    const id = row.getAttribute("data-vocal-row");
+    const { active, audible } = getStudioVocalRowPlaybackUi(id);
+    applyLibRowNowPlayingChrome(row, active, audible);
+  });
 }
 
 function fmtVocalDuration(sec) {
@@ -36841,7 +36884,8 @@ function renderMyVocals() {
   host.innerHTML = `
     <ul class="libraryRows" role="list">
       ${items.map((v) => {
-        const playing = v.id === _vocalsPlayingId;
+        const { active, audible } = getStudioVocalRowPlaybackUi(v.id);
+        const playing = audible;
         const art = escapeHtml(v.artUrl || placeholder);
         const safeTitle = escapeHtml(v.title || "Studio song");
         const subBits = [];
@@ -36850,7 +36894,7 @@ function renderMyVocals() {
         if (dateLabel) subBits.push(`<span class="libRowDot">${escapeHtml(dateLabel)}</span>`);
         subBits.push(`<span class="libRowChip">${v.published ? "Published" : "On this device"}</span>`);
         return `
-          <li class="libRow ${playing ? "libRowPlaying" : ""}" data-vocal-row="${escapeHtml(v.id)}">
+          <li class="libRow ${playing ? "libRowPlaying" : ""}${active && !audible ? " libRowActive" : ""}" data-vocal-row="${escapeHtml(v.id)}">
             <button class="libRowMain" type="button" data-vocal-play="${escapeHtml(v.id)}" aria-label="${playing ? "Pause" : "Play"} ${safeTitle}">
               <span class="libRowArt">
                 <img src="${art}" alt="" width="56" height="56" decoding="async" loading="lazy" />
@@ -36872,20 +36916,67 @@ function renderMyVocals() {
   bindMyVocalsOnce();
 }
 
-async function playVocalById(id) {
-  if (_vocalsPlayingId === id) { stopVocalsPlayback(); renderMyVocals(); return; }
+async function playVocalById(id, opts = {}) {
+  const vocalId = String(id || "").trim();
+  if (!vocalId) return;
+  const v = (listVocals() || []).find((x) => x.id === vocalId);
+  if (!v) {
+    showToast("Recording not found on this device.");
+    return;
+  }
+
+  const isSame = miniSource?.type === "studio_vocal" && String(miniSource.id || "") === vocalId;
+  const a = ensurePlayer();
+  if (isSame && !a.paused && !a.ended) {
+    try { a.pause(); } catch {}
+    try { syncPlayerUI(); } catch {}
+    try { renderMyVocals(); } catch {}
+    return;
+  }
+
+  try { stopHubPlayback(); } catch {}
   stopVocalsPlayback();
+
   try {
-    const blob = await getVocalBlob(id);
-    if (!blob) { showToast("Recording not found on this device."); return; }
-    _vocalsPlayingUrl = URL.createObjectURL(blob);
-    if (!_vocalsAudio) _vocalsAudio = new Audio();
-    _vocalsAudio.src = _vocalsPlayingUrl;
-    _vocalsAudio.onended = () => { stopVocalsPlayback(); renderMyVocals(); };
-    _vocalsPlayingId = id;
-    await _vocalsAudio.play();
+    const blob = await getVocalBlob(vocalId);
+    if (!blob) {
+      showToast("Recording not found on this device.");
+      return;
+    }
+    primeGlobalPlayerInGesture();
+    _vocalsBlobUrl = URL.createObjectURL(blob);
+    _vocalsPlayingId = vocalId;
+
+    const artUrl = String(v.artUrl || "").trim() || placeholderCoverDataUrl();
+    const meta = {
+      title: v.title || "Studio song",
+      subtitle: "My Vocals · Studio",
+      artUrl,
+    };
+    currentPlayerTrackRef = {
+      id: vocalId,
+      url: _vocalsBlobUrl,
+      title: meta.title,
+      artUrl,
+      kind: "studio_vocal",
+      sourceTitle: v.sourceTitle || "",
+    };
+    miniSource = { type: "studio_vocal", id: vocalId };
+    libraryNowPlayingId = null;
+    setPlayerMeta(meta);
+
+    const openPlayer = opts?.openPlayer === true;
+    if (openPlayer) {
+      await playOnPlayerPage(_vocalsBlobUrl, "Studio song", meta);
+    } else {
+      await playInline(_vocalsBlobUrl, "Studio song", { type: "studio_vocal", id: vocalId });
+    }
     renderMyVocals();
-  } catch { showToast("Couldn’t play that here."); stopVocalsPlayback(); }
+  } catch {
+    showToast("Couldn’t play that here.");
+    stopVocalsPlayback();
+    renderMyVocals();
+  }
 }
 
 let _vocalsBound = false;
@@ -41022,6 +41113,9 @@ function ensurePlayer() {
     if (miniSource?.type === "user_playlist" && _userPlaylistQueue.length) {
       void playNextUserPlaylistTrack(currentPlayerTrackRef?.url);
     }
+    if (miniSource?.type === "studio_vocal") {
+      try { renderMyVocals(); } catch {}
+    }
   });
   return playerEl;
 }
@@ -41319,17 +41413,22 @@ function updatePlayerSecondaryChrome() {
   // Download is owner-only: listening to someone else's song (Discover,
   // public profiles, shared links) hides the video download entirely.
   if (els.btnPlayerDownloadVideo) els.btnPlayerDownloadVideo.hidden = ro;
-  if (els.btnPlayerMusicVideo && !ro) {
-    const mvWatchable = musicVideoIsWatchable(musicVideoMetaFromTrack(resolvePlayerLibraryTrack()));
-    const label = mvWatchable ? "Watch music video" : "Create music video";
-    els.btnPlayerMusicVideo.setAttribute("aria-label", label);
-    const span = els.btnPlayerMusicVideo.querySelector("span");
-    if (span) span.textContent = mvWatchable ? "Watch" : "Video";
-  }
-  // Remix CTA: any loaded track with audio is remixable — own songs and
-  // listen-only ones alike (the handler routes each to the right flow).
   if (els.playerRemixRow) {
-    els.playerRemixRow.hidden = !String(currentPlayerTrackRef?.url || "").trim();
+    const isStudioVocal = miniSource?.type === "studio_vocal" || currentPlayerTrackRef?.kind === "studio_vocal";
+    els.playerRemixRow.hidden = isStudioVocal || !String(currentPlayerTrackRef?.url || "").trim();
+  }
+  if (els.btnPlayerMusicVideo && !ro) {
+    const isStudioVocal = miniSource?.type === "studio_vocal" || currentPlayerTrackRef?.kind === "studio_vocal";
+    if (isStudioVocal) {
+      els.btnPlayerMusicVideo.hidden = true;
+    } else {
+      els.btnPlayerMusicVideo.hidden = false;
+      const mvWatchable = musicVideoIsWatchable(musicVideoMetaFromTrack(resolvePlayerLibraryTrack()));
+      const label = mvWatchable ? "Watch music video" : "Create music video";
+      els.btnPlayerMusicVideo.setAttribute("aria-label", label);
+      const span = els.btnPlayerMusicVideo.querySelector("span");
+      if (span) span.textContent = mvWatchable ? "Watch" : "Video";
+    }
   }
   if (els.btnPlayerAddPlaylist) {
     els.btnPlayerAddPlaylist.disabled = !String(currentPlayerTrackRef?.url || "").trim();
@@ -41380,7 +41479,7 @@ function setPlayerSource(url, label) {
   if (typeof syncPlayerToggleUI === "function") syncPlayerToggleUI();
   if (!miniSource) miniSource = { type: "player" };
   if (!miniSource || miniSource.type !== "library") {
-    libraryNowPlayingId = null;
+    if (miniSource?.type !== "studio_vocal") libraryNowPlayingId = null;
     // Never re-render Profile/Friends lists here — that ran mid-playback and
     // raced the async Suno refresh, making songs die after ~1s on iOS.
     try {
@@ -42553,6 +42652,9 @@ async function playOnPlayerPage(url, label, meta = null, opts = {}) {
 
 async function playInline(url, label, source) {
   if (!url) return;
+  if (String(source?.type || "") !== "studio_vocal") {
+    try { stopVocalsPlayback(); } catch {}
+  }
   miniSource = source || { type: "player" };
   resetPublicPlayTracking(miniSource);
   setPlayerSource(url, label);
@@ -42748,6 +42850,9 @@ function syncPlayerUI() {
   } catch {}
   try {
     syncLibraryRowsFromPlayer();
+  } catch {}
+  try {
+    syncMyVocalsRowsFromPlayer();
   } catch {}
   try {
     syncProfileHubSharedRowsFromPlayer();
@@ -47778,10 +47883,8 @@ if (els.btnSoundGenerate) {
     }
     try {
       els.btnSoundGenerate.disabled = true;
-      setLoading(true, {
-        title: "Creating sound…",
-        sub: `${formatCreditsAmount(SOUND_CREDIT_COST)} credits · Sounds`,
-      });
+      const soundTitle = shortenSoundTitle((prompt.split(/\r?\n/)[0] || "").trim() || "Sound");
+      beginCoachPriorityStatus(coachSoundPillText(soundTitle), { generating: true });
       const payload = {
         prompt,
         soundLoop: Boolean(els.soundLoop?.checked),
@@ -47804,19 +47907,19 @@ if (els.btnSoundGenerate) {
         setStatus(
           `Not enough credits (you have ${formatCreditsAmount(have)}, need ${formatCreditsAmount(need)}).`
         );
-        setLoading(false);
+        cancelCoachPriorityStatus();
         els.btnSoundGenerate.disabled = false;
         return;
       }
       if (r.status === 401) {
         setStatus("Sign in to generate sounds.");
-        setLoading(false);
+        cancelCoachPriorityStatus();
         els.btnSoundGenerate.disabled = false;
         return;
       }
       if (!r.ok) {
         setStatus(d?.error || "Sound request failed.");
-        setLoading(false);
+        cancelCoachPriorityStatus();
         els.btnSoundGenerate.disabled = false;
         return;
       }
@@ -47827,7 +47930,7 @@ if (els.btnSoundGenerate) {
       soundTaskId = extractTaskIdLoose(d) || "";
       if (!soundTaskId) {
         setStatus("Sound task did not return an id — check Library shortly.");
-        setLoading(false);
+        cancelCoachPriorityStatus();
         els.btnSoundGenerate.disabled = false;
         return;
       }
@@ -47847,7 +47950,7 @@ if (els.btnSoundGenerate) {
       setStatus("Sound is generating…");
     } catch (e) {
       setStatus(`Sound failed: ${e?.message || String(e)}`);
-      setLoading(false);
+      cancelCoachPriorityStatus();
       els.btnSoundGenerate.disabled = false;
     }
   });

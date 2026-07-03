@@ -36678,6 +36678,46 @@ body[data-route="generate"] .aiGenerate{
 .discoverFeedTabsTrack{
   /* legacy alias — layout lives on .nabadTabsTrack */
 }
+
+/* Discover category tabs only — typography-first, no indicators */
+#discoverFeedTabs.discoverFeedTabs{
+  margin: 0 -2px 22px;
+  padding: 0 0 6px;
+}
+.discoveryPaneDiscover > .discoveryStudioHead{
+  padding-bottom: 22px;
+}
+#discoverFeedTabs .nabadTabsTrack{
+  align-items: center;
+  gap: 22px;
+  padding: 4px 2px 6px 8px;
+}
+#discoverFeedTabs .nabadTabsTab{
+  font-size: 18.5px;
+  font-weight: 500;
+  letter-spacing: -0.025em;
+  line-height: 1.25;
+  color: rgba(255, 255, 255, 0.57);
+  padding: 6px 0 8px;
+  background: transparent;
+  box-shadow: none;
+  transition: color 180ms ease, opacity 180ms ease, font-weight 180ms ease;
+}
+#discoverFeedTabs .nabadTabsTab:hover:not(.is-active){
+  color: rgba(255, 255, 255, 0.72);
+}
+#discoverFeedTabs .nabadTabsTab.is-active{
+  color: #ffffff;
+  font-weight: 600;
+  background: transparent;
+  box-shadow: none;
+}
+#discoverFeedTabs .nabadTabsTab::before,
+#discoverFeedTabs .nabadTabsTab::after{
+  content: none;
+  display: none;
+}
+
 .discoverFeedMount{
   display: flex;
   flex-direction: column;

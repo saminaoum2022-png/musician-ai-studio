@@ -43254,23 +43254,32 @@ body[data-route="profile-edit"] main.grid{
 }
 .profileEditCameraBadge{
   position: absolute;
-  right: -2px;
-  bottom: -2px;
-  width: 30px;
-  height: 30px;
+  right: 4px;
+  bottom: 4px;
+  z-index: 3;
+  width: 26px;
+  height: 26px;
   border-radius: 999px;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(18, 21, 30, 0.96);
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(18, 21, 28, 0.88);
+  border: 1px solid rgba(255, 255, 255, 0.14);
   color: rgba(248, 250, 255, 0.88);
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.28);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.32);
+  pointer-events: none;
 }
 .profileEditCameraBadge svg{
-  width: 16px;
-  height: 16px;
+  width: 14px;
+  height: 14px;
   display: block;
+}
+.profileAuraAvatarWrap--tappable{
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.profileAuraAvatarWrap--tappable:active{
+  opacity: 0.92;
 }
 .profileEditPhotoLabel{
   -webkit-appearance: none;

@@ -608,7 +608,7 @@ export function initProfileEditOnce(deps) {
     triggerPhotoPicker();
   });
   qs("#profileEditAvatarWrap")?.addEventListener("click", (e) => {
-    if (e.target?.closest?.("button")) return;
+    e.preventDefault();
     try { _deps?.haptic?.("light"); } catch {}
     triggerPhotoPicker();
   });

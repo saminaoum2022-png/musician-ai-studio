@@ -17162,7 +17162,7 @@ body.trackSheetOpen .footer{
     transition: bottom 300ms cubic-bezier(0.22, 1, 0.36, 1);
   }
   body:has(.hubNowPlaying.isVisible) .footer{
-    bottom: calc(148px + env(safe-area-inset-bottom, 0px));
+    bottom: calc(154px + env(safe-area-inset-bottom, 0px));
   }
   body[data-route="player"] .footer{
     bottom: calc(12px + env(safe-area-inset-bottom, 0px));
@@ -17895,11 +17895,11 @@ input::placeholder, textarea::placeholder{
     position: fixed;
     left: 0;
     right: 0;
-    bottom: var(--tabbar-h, calc(62px + env(safe-area-inset-bottom, 0px)));
+    bottom: calc(var(--tabbar-h, calc(62px + env(safe-area-inset-bottom, 0px))) + 6px);
     z-index: 65;
-    padding: 0 10px;
+    padding: 0 12px;
     pointer-events: none;
-    transform: translate3d(0, 26px, 0);
+    transform: translate3d(0, 28px, 0);
     opacity: 0;
     will-change: transform, opacity;
     transition:
@@ -17915,12 +17915,14 @@ input::placeholder, textarea::placeholder{
     position: relative;
     margin: 0 auto;
     max-width: min(560px, 100%);
-    border-radius: 22px;
+    border-radius: 20px;
     overflow: hidden;
     isolation: isolate;
-    box-shadow: 0 8px 26px rgba(0, 0, 0, 0.20);
-    transform: scale(0.965);
-    opacity: 0.94;
+    box-shadow:
+      0 10px 28px rgba(0, 0, 0, 0.34),
+      0 2px 8px rgba(0, 0, 0, 0.18);
+    transform: scale(0.96) translateY(4px);
+    opacity: 0.92;
     will-change: transform, opacity, box-shadow;
     transition:
       transform 360ms cubic-bezier(0.22, 1, 0.36, 1),
@@ -17928,11 +17930,12 @@ input::placeholder, textarea::placeholder{
       box-shadow 320ms ease;
   }
   .hubNowPlaying.isVisible .hubNowShell{
-    transform: scale(1);
+    transform: scale(1) translateY(0);
     opacity: 1;
     box-shadow:
-      0 12px 34px rgba(0, 0, 0, 0.30),
-      0 0 28px -16px rgba(var(--cover-glow-rgb), 0.55);
+      0 16px 40px rgba(0, 0, 0, 0.42),
+      0 4px 12px rgba(0, 0, 0, 0.22),
+      0 0 0 1px rgba(255, 255, 255, 0.04);
   }
   @media (prefers-reduced-motion: reduce){
     .hubNowPlaying{
@@ -17951,91 +17954,48 @@ input::placeholder, textarea::placeholder{
       transition: none !important;
     }
   }
-  /* Cover-derived aura stays behind darker glass for color without low contrast. */
+  /* Subtle cover tint behind card — art keeps the color pop. */
   .hubNowAura{
     position: absolute;
     inset: -38%;
     background-position: center;
     background-size: cover;
-    filter: blur(54px) saturate(1.34);
-    opacity: 0.24;
+    filter: blur(54px) saturate(1.2);
+    opacity: 0.10;
     transform: scale(1.08);
     pointer-events: none;
     transition: opacity 0.45s ease, filter 0.45s ease;
-  }
-  body[data-route="discover"] .hubNowPlaying .hubNowGlass,
-  body[data-route="discover-playlist"] .hubNowPlaying .hubNowGlass{
-    padding: 6px 8px 7px 8px;
-    gap: 8px;
-  }
-  body[data-route="discover"] .hubNowPlaying .hubNowCoverWrap,
-  body[data-route="discover-playlist"] .hubNowPlaying .hubNowCoverWrap{
-    width: 36px;
-    height: 36px;
-    border-radius: 10px;
-  }
-  body[data-route="discover"] .hubNowPlaying.isVisible .hubNowCoverWrap::after,
-  body[data-route="discover-playlist"] .hubNowPlaying.isVisible .hubNowCoverWrap::after{
-    content: "▶";
-    position: absolute;
-    inset: 0;
-    z-index: 2;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: inherit;
-    background: rgba(8, 11, 18, 0.42);
-    color: #fff;
-    font-size: 11px;
-    font-weight: 800;
-    line-height: 1;
-    pointer-events: none;
-    -webkit-backdrop-filter: blur(4px);
-    backdrop-filter: blur(4px);
-  }
-  body[data-route="discover"] .hubNowPlaying.isVisible[data-mini-pp="pause"] .hubNowCoverWrap::after,
-  body[data-route="discover-playlist"] .hubNowPlaying.isVisible[data-mini-pp="pause"] .hubNowCoverWrap::after{
-    content: "❚❚";
-    font-size: 9px;
-    letter-spacing: -0.08em;
   }
   .hubNowGlass{
     position: relative;
     z-index: 1;
     display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 8px 8px 9px 10px;
+    flex-direction: column;
     border-radius: inherit;
-    border: 1px solid rgba(255, 255, 255, 0.15);
+    border: 1px solid rgba(255, 255, 255, 0.07);
     background:
-      radial-gradient(115% 145% at 5% 0%, rgba(var(--cover-glow-rgb), 0.26), transparent 56%),
-      radial-gradient(95% 120% at 100% 100%, rgba(var(--cover-glow-rgb), 0.14), transparent 62%),
-      linear-gradient(145deg, rgba(255, 255, 255, 0.105), rgba(255, 255, 255, 0.028)),
-      rgba(10, 12, 18, 0.86);
-    -webkit-backdrop-filter: blur(32px) saturate(178%);
-    backdrop-filter: blur(32px) saturate(178%);
+      linear-gradient(180deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0.012)),
+      rgba(8, 10, 16, 0.94);
+    -webkit-backdrop-filter: blur(28px) saturate(150%);
+    backdrop-filter: blur(28px) saturate(150%);
     color: #f3f6ff;
     box-shadow:
-      inset 0 1px 0 rgba(255, 255, 255, 0.14),
-      inset 0 -1px 0 rgba(0, 0, 0, 0.18),
-      0 0 0 1px rgba(var(--cover-glow-rgb), 0.075);
+      inset 0 1px 0 rgba(255, 255, 255, 0.08),
+      inset 0 -1px 0 rgba(0, 0, 0, 0.14);
   }
-  .hubNowGlass::before{
-    content: "";
-    position: absolute;
-    inset: 0;
-    z-index: 0;
-    border-radius: inherit;
-    pointer-events: none;
-    background:
-      radial-gradient(75% 90% at 14% 0%, rgba(var(--cover-glow-rgb), 0.18), transparent 52%),
-      linear-gradient(105deg, rgba(255,255,255,0.085) 0%, rgba(255,255,255,0.025) 36%, transparent 62%);
-    opacity: 0.72;
+  .hubNowRow{
+    position: relative;
+    z-index: 1;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 10px 9px 10px;
   }
   .hubNowCoverWrap,
   .hubNowText,
-  .hubNowIconBtn{
+  .hubNowActions,
+  .hubNowPlayPause,
+  .hubNowClose{
     position: relative;
     z-index: 1;
   }
@@ -18088,10 +18048,11 @@ input::placeholder, textarea::placeholder{
     display: none;
   }
   .hubNowProg{
-    margin-top: 4px;
-    height: 3px;
-    border-radius: 999px;
-    background: rgba(255, 255, 255, 0.11);
+    flex: 0 0 auto;
+    width: 100%;
+    height: 2px;
+    border-radius: 0;
+    background: rgba(255, 255, 255, 0.18);
     overflow: hidden;
   }
   .hubNowProgBar{
@@ -18099,55 +18060,43 @@ input::placeholder, textarea::placeholder{
     height: 100%;
     width: 0%;
     border-radius: inherit;
-    background: linear-gradient(90deg, rgba(var(--cover-glow-rgb), 0.72), rgba(var(--cover-glow-rgb), 0.24));
+    background: rgba(255, 255, 255, 0.88);
+    transition: width 120ms linear;
   }
-  .hubNowIconBtn{
+  .hubNowActions{
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    margin-left: 2px;
+  }
+  .hubNowPlayPause{
     -webkit-appearance: none;
     appearance: none;
     flex: 0 0 auto;
-    width: 40px;
-    height: 40px;
+    width: 36px;
+    height: 36px;
     padding: 0;
     margin: 0;
+    position: relative;
     display: inline-flex;
     align-items: center;
     justify-content: center;
+    border: 0;
     border-radius: 999px;
-    border: 1px solid rgba(255, 255, 255, 0.14);
-    background:
-      radial-gradient(100% 100% at 14% 0%, rgba(var(--cover-glow-rgb), 0.16), transparent 58%),
-      linear-gradient(145deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.035)),
-      rgba(10, 12, 18, 0.78);
-    -webkit-backdrop-filter: blur(24px) saturate(170%);
-    backdrop-filter: blur(24px) saturate(170%);
-    color: #fff;
+    background: rgba(255, 255, 255, 0.08);
+    color: rgba(255, 255, 255, 0.96);
     cursor: pointer;
     -webkit-tap-highlight-color: transparent;
-    box-shadow:
-      inset 0 1px 0 rgba(255, 255, 255, 0.13),
-      inset 0 -1px 0 rgba(0, 0, 0, 0.14),
-      0 6px 16px rgba(0, 0, 0, 0.20);
-    transition: transform 0.12s ease, background 0.16s ease, border-color 0.16s ease, box-shadow 0.16s ease;
+    transition: transform 0.12s ease, background 0.16s ease;
   }
-  .hubNowIconBtn:active{
+  .hubNowPlayPause:active{
     transform: scale(0.94);
+    background: rgba(255, 255, 255, 0.12);
   }
-  .hubNowIconBtn:focus-visible{
+  .hubNowPlayPause:focus-visible{
     outline: 2px solid rgba(255, 255, 255, 0.45);
     outline-offset: 2px;
-  }
-  .hubNowPlayPause{
-    width: 42px;
-    height: 42px;
-    position: relative;
-    background:
-      linear-gradient(135deg, rgba(35, 213, 171, 0.2), rgba(124, 92, 255, 0.26)),
-      linear-gradient(145deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.035)),
-      rgba(10, 12, 18, 0.78);
-    box-shadow:
-      inset 0 1px 0 rgba(255, 255, 255, 0.13),
-      inset 0 -1px 0 rgba(0, 0, 0, 0.14),
-      0 6px 16px rgba(0, 0, 0, 0.22);
   }
   .hubNowPPIco{
     position: absolute;
@@ -18170,19 +18119,35 @@ input::placeholder, textarea::placeholder{
     display: none !important;
   }
   .hubNowClose{
-    width: 34px;
-    height: 34px;
-    font-size: 15px;
-    font-weight: 600;
-    line-height: 1;
-    color: rgba(232, 238, 247, 0.72);
-    border-color: rgba(255, 255, 255, 0.12);
-    background: linear-gradient(145deg, rgba(255, 255, 255, 0.08), rgba(8, 12, 20, 0.32));
-    -webkit-backdrop-filter: blur(16px) saturate(160%);
-    backdrop-filter: blur(16px) saturate(160%);
-    box-shadow:
-      inset 0 1px 0 rgba(255, 255, 255, 0.08),
-      0 4px 12px rgba(0, 0, 0, 0.16);
+    -webkit-appearance: none;
+    appearance: none;
+    flex: 0 0 auto;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    margin: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: 0;
+    border-radius: 999px;
+    background: transparent;
+    color: rgba(255, 255, 255, 0.34);
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    transition: transform 0.12s ease, color 0.16s ease, background 0.16s ease;
+  }
+  .hubNowClose:active{
+    transform: scale(0.94);
+    color: rgba(255, 255, 255, 0.52);
+    background: rgba(255, 255, 255, 0.04);
+  }
+  .hubNowClose:focus-visible{
+    outline: 2px solid rgba(255, 255, 255, 0.35);
+    outline-offset: 2px;
+  }
+  .hubNowClose svg{
+    display: block;
   }
 }
 @keyframes hubArtworkBreath{
@@ -18358,7 +18323,7 @@ input::placeholder, textarea::placeholder{
 }
 /* Lift above the mini-player when it's on screen. */
 .hubNowPlaying.isVisible ~ .coachFab{
-  bottom: calc(var(--tabbar-h, 62px) + 92px);
+  bottom: calc(var(--tabbar-h, 62px) + 98px);
 }
 /* Show only on the main tab routes (including Create, where it surfaces
    on-device contextual tips like the Arabic-harakat hint). */

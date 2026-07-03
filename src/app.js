@@ -140,7 +140,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260704-002659";
+const APP_BUILD = "20260704-004027";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -48252,7 +48252,7 @@ if (els.hubNowExpand && !els.hubNowExpand.dataset.boundHubExp) {
 }
 if (els.hubNowPlaying) {
   els.hubNowPlaying.addEventListener("click", (e) => {
-    if (e.target?.closest?.(".hubNowIconBtn")) return;
+    if (e.target?.closest?.(".hubNowPlayPause, .hubNowClose")) return;
     // Hub posts get special treatment: the post itself is the richer
     // "now playing" surface (cover art, full controls, comments, share),
     // so we jump back to the post in the feed instead of the player.

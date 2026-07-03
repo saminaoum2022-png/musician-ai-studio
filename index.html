@@ -126,7 +126,7 @@
       onload="this.media='all'"
     />
     <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Display:wght@900&family=Inter:wght@900&display=swap" /></noscript>
-    <link rel="stylesheet" href="./styles.css?v=20260704-002659" />
+    <link rel="stylesheet" href="./styles.css?v=20260704-004027" />
 
     <meta name="description" content="NabadAi is an AI music studio. Hum a melody, write lyrics, and ship a song." />
     <meta property="og:type" content="website" />
@@ -3989,31 +3989,35 @@
         <div class="hubNowShell">
           <div id="hubNowAura" class="hubNowAura" aria-hidden="true"></div>
           <div class="hubNowGlass">
-            <div class="hubNowCoverWrap">
-              <img id="hubNowArt" class="hubNowArt" src="./assets/icons/splash-mark.png" alt="" decoding="async" />
-            </div>
-            <div class="hubNowText">
-              <div class="hubNowTitleRow">
-                <div id="hubNowTitle" class="hubNowTitle">Now playing</div>
-                <span id="hubNowNabadBadge" class="hubNowNabadBadgeSlot" hidden></span>
+            <div class="hubNowProg" aria-hidden="true"><span id="hubNowProgBar" class="hubNowProgBar" style="width:0%"></span></div>
+            <div class="hubNowRow">
+              <div class="hubNowCoverWrap">
+                <img id="hubNowArt" class="hubNowArt" src="./assets/icons/splash-mark.png" alt="" decoding="async" />
               </div>
-              <div id="hubNowSubtitle" class="hubNowSubtitle"></div>
-              <div class="hubNowProg"><span id="hubNowProgBar" class="hubNowProgBar" style="width:0%"></span></div>
+              <div class="hubNowText">
+                <div class="hubNowTitleRow">
+                  <div id="hubNowTitle" class="hubNowTitle">Now playing</div>
+                  <span id="hubNowNabadBadge" class="hubNowNabadBadgeSlot" hidden></span>
+                </div>
+                <div id="hubNowSubtitle" class="hubNowSubtitle"></div>
+              </div>
+              <div class="hubNowActions">
+                <button id="hubNowPlayPause" type="button" class="hubNowPlayPause" aria-label="Pause">
+                  <span class="hubNowPPIco hubNowPPIco--pause" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M8 5h3v14H8V5zm5 0h3v14h-3V5z"/></svg>
+                  </span>
+                  <span class="hubNowPPIco hubNowPPIco--play" hidden aria-hidden="true">
+                    <svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M9 7.5v9l7.5-4.5L9 7.5z"/></svg>
+                  </span>
+                </button>
+                <button id="hubNowClose" class="hubNowClose" type="button" aria-label="Stop">
+                  <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
+                    <path d="M6.4 6.4 17.6 17.6" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/>
+                    <path d="M17.6 6.4 6.4 17.6" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/>
+                  </svg>
+                </button>
+              </div>
             </div>
-            <button id="hubNowPlayPause" type="button" class="hubNowIconBtn hubNowPlayPause" aria-label="Pause">
-              <span class="hubNowPPIco hubNowPPIco--pause" aria-hidden="true">
-                <svg viewBox="0 0 24 24" width="22" height="22"><path fill="currentColor" d="M8 5h3v14H8V5zm5 0h3v14h-3V5z"/></svg>
-              </span>
-              <span class="hubNowPPIco hubNowPPIco--play" hidden aria-hidden="true">
-                <svg viewBox="0 0 24 24" width="22" height="22"><path fill="currentColor" d="M9 7.5v9l7.5-4.5L9 7.5z"/></svg>
-              </span>
-            </button>
-            <button id="hubNowExpand" type="button" class="hubNowIconBtn hubNowExpand" aria-label="Play another from Discover" title="Shuffle another song">
-              <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
-                <path fill="currentColor" d="M6 18l8.5-6L6 6v12zm10 0h2V6h-2v12z"/>
-              </svg>
-            </button>
-            <button id="hubNowClose" class="hubNowIconBtn hubNowClose" type="button" aria-label="Stop">✕</button>
           </div>
         </div>
       </div>
@@ -4390,6 +4394,6 @@
     </script>
     <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
     <script src="./env.client.js" onerror="void 0"></script>
-    <script type="module" src="./src/app.js?v=20260704-002659"></script>
+    <script type="module" src="./src/app.js?v=20260704-004027"></script>
   </body>
 </html>

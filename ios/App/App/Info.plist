@@ -50,7 +50,10 @@
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>audio</string>
+		<string>remote-notification</string>
 	</array>
+	<key>OneSignal_app_groups_key</key>
+	<string>group.com.nabadai.music.onesignal</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>NabadAi Music uses the microphone to record short melody guides and vocal references for AI song generation.</string>
 	<key>NSCameraUsageDescription</key>

@@ -68,6 +68,28 @@ for (const name of brandIconFiles) {
 execSync("rsync -a src/ www/src/", { cwd: root, stdio: "inherit" });
 console.log("sync-www: src/ → www/src/");
 
+function copyNativePushVendor() {
+  const capSrc = path.join(root, "node_modules/@capacitor/core/dist/index.js");
+  const osSrc = path.join(root, "node_modules/@onesignal/capacitor-plugin/dist/index.js");
+  if (!fs.existsSync(capSrc) || !fs.existsSync(osSrc)) return;
+
+  const capDest = path.join(root, "www/vendor/capacitor-core/index.js");
+  const osDest = path.join(root, "www/vendor/onesignal/index.js");
+  fs.mkdirSync(path.dirname(capDest), { recursive: true });
+  fs.mkdirSync(path.dirname(osDest), { recursive: true });
+  fs.copyFileSync(capSrc, capDest);
+
+  let osCode = fs.readFileSync(osSrc, "utf8");
+  osCode = osCode.replace(
+    'import { registerPlugin } from "@capacitor/core";',
+    'import { registerPlugin } from "../../vendor/capacitor-core/index.js";',
+  );
+  fs.writeFileSync(osDest, osCode);
+  console.log("sync-www: native push vendor → www/vendor/");
+}
+
+copyNativePushVendor();
+
 const splashAssets = path.join(root, "assets", "splash");
 const wwwSplashAssets = path.join(root, "www", "assets", "splash");
 if (fs.existsSync(splashAssets)) {

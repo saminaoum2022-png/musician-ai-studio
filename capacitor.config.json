@@ -6,7 +6,8 @@
   "backgroundColor": "#05070d",
   "ios": {
     "backgroundColor": "#05070d",
-    "webContentsDebuggingEnabled": true
+    "webContentsDebuggingEnabled": true,
+    "handleApplicationNotifications": false
   },
   "plugins": {
     "Keyboard": {

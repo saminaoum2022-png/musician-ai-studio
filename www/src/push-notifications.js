@@ -1,5 +1,5 @@
 /**
- * OneSignal web push — privacy-first.
+ * OneSignal push — privacy-first (web + native Capacitor).
  * Links Supabase auth UUID as external_id; registers subscription ID with our API.
  * Never sends message content to OneSignal.
  */
@@ -7,6 +7,9 @@
 let _appId = "";
 let _initPromise = null;
 let _linkedUserId = "";
+let _nativeOneSignal = null;
+let _nativePermState = "default";
+let _nativeOptedIn = false;
 
 const PENDING_PUSH_ROUTE_KEY = "nabad_pending_push_route:v1";
 
@@ -44,7 +47,7 @@ function pushConfigured() {
   return Boolean(_appId);
 }
 
-function getOneSignal() {
+function getOneSignalWeb() {
   return globalThis.OneSignal;
 }
 
@@ -59,12 +62,64 @@ export function isNativeAppShell() {
   }
 }
 
+function useNativePush() {
+  return isNativeAppShell() && pushConfigured();
+}
+
+function nativePlatform() {
+  try {
+    return globalThis.Capacitor?.getPlatform?.() === "android" ? "android" : "ios";
+  } catch {
+    return "ios";
+  }
+}
+
+async function getNativeOneSignal() {
+  if (_nativeOneSignal) return _nativeOneSignal;
+  const mod = await import("../vendor/onesignal/index.js");
+  _nativeOneSignal = mod.default;
+  return _nativeOneSignal;
+}
+
+function nativePermToWeb(perm) {
+  if (perm === 2 || perm === 3 || perm === 4) return "granted";
+  if (perm === 1) return "denied";
+  return "default";
+}
+
+async function refreshNativePushState() {
+  if (!useNativePush()) return;
+  try {
+    const OneSignal = await getNativeOneSignal();
+    const perm = await OneSignal.Notifications.permissionNative();
+    _nativePermState = nativePermToWeb(perm);
+    _nativeOptedIn = Boolean(await OneSignal.User.pushSubscription.getOptedInAsync());
+  } catch (e) {
+    console.warn("[push] refresh native state failed", e);
+  }
+}
+
+function navigateFromPushData(data) {
+  const route = String(data?.nabad_route || "").trim();
+  if (!route) return;
+  stashPendingPushRoute(route);
+  const hash = `#/${route.replace(/^\/+/, "")}`;
+  if (location.hash !== hash) location.hash = hash;
+  try {
+    globalThis.__nabadNavigateFromPush?.(route);
+  } catch {
+    globalThis.__nabadApplyRoute?.();
+  }
+}
+
 export function isPushAvailable() {
+  if (useNativePush()) return true;
   if (isNativeAppShell()) return false;
   return pushConfigured() && typeof Notification !== "undefined";
 }
 
 export function getPushPermissionState() {
+  if (useNativePush()) return _nativePermState;
   if (!pushConfigured() || typeof Notification === "undefined") return "unsupported";
   return Notification.permission;
 }
@@ -79,18 +134,19 @@ export function isIosStandalonePwa() {
 }
 
 export function isPushOptedIn() {
+  if (useNativePush()) return _nativeOptedIn;
   try {
-    const OneSignal = getOneSignal();
+    const OneSignal = getOneSignalWeb();
     return Boolean(OneSignal?.User?.PushSubscription?.optedIn);
   } catch {
     return false;
   }
 }
 
-function waitForOneSignalReady() {
+function waitForOneSignalWebReady() {
   return new Promise((resolve) => {
-    if (getOneSignal()?.User) {
-      resolve(getOneSignal());
+    if (getOneSignalWeb()?.User) {
+      resolve(getOneSignalWeb());
       return;
     }
     const deferred = globalThis.OneSignalDeferred || (globalThis.OneSignalDeferred = []);
@@ -98,8 +154,8 @@ function waitForOneSignalReady() {
   });
 }
 
-async function ensurePushOptedIn() {
-  const OneSignal = getOneSignal();
+async function ensureWebPushOptedIn() {
+  const OneSignal = getOneSignalWeb();
   if (!OneSignal?.User?.PushSubscription?.optIn) return false;
   if (OneSignal.User.PushSubscription.optedIn) return true;
   try {
@@ -110,8 +166,8 @@ async function ensurePushOptedIn() {
   return Boolean(OneSignal.User.PushSubscription.optedIn);
 }
 
-function waitForPushSubscriptionId(timeoutMs = 12000) {
-  const OneSignal = getOneSignal();
+function waitForWebPushSubscriptionId(timeoutMs = 12000) {
+  const OneSignal = getOneSignalWeb();
   const immediate = String(OneSignal?.User?.PushSubscription?.id || "").trim();
   if (immediate) return Promise.resolve(immediate);
 
@@ -142,12 +198,80 @@ function waitForPushSubscriptionId(timeoutMs = 12000) {
   });
 }
 
-export async function initPushNotifications() {
+async function waitForNativePushSubscriptionId(timeoutMs = 12000) {
+  const OneSignal = await getNativeOneSignal();
+  const immediate = String(await OneSignal.User.pushSubscription.getIdAsync() || "").trim();
+  if (immediate) return immediate;
+
+  return new Promise((resolve) => {
+    let settled = false;
+    const finish = (id) => {
+      if (settled) return;
+      settled = true;
+      try {
+        clearInterval(poll);
+      } catch {}
+      try {
+        clearTimeout(timer);
+      } catch {}
+      resolve(String(id || "").trim());
+    };
+    const timer = setTimeout(() => finish(""), timeoutMs);
+    const poll = setInterval(async () => {
+      try {
+        const id = String(await OneSignal.User.pushSubscription.getIdAsync() || "").trim();
+        if (id) finish(id);
+      } catch {}
+    }, 350);
+    OneSignal.User.pushSubscription.addEventListener("change", (ev) => {
+      const id = String(ev?.current?.id || "").trim();
+      if (id) finish(id);
+    });
+  });
+}
+
+async function initNativePushNotifications() {
+  if (!pushConfigured() || !isNativeAppShell()) return false;
+  if (_initPromise) return _initPromise;
+  _initPromise = (async () => {
+    try {
+      const OneSignal = await getNativeOneSignal();
+      await OneSignal.initialize(_appId);
+
+      OneSignal.Notifications.addEventListener("click", (event) => {
+        try {
+          const notif = event?.notification || event;
+          const data = notif?.additionalData || notif?.data || event?.additionalData || {};
+          navigateFromPushData(data);
+        } catch {}
+      });
+
+      OneSignal.Notifications.addEventListener("permissionChange", () => {
+        void refreshNativePushState();
+      });
+
+      OneSignal.User.pushSubscription.addEventListener("change", async (ev) => {
+        _nativeOptedIn = Boolean(ev?.current?.optedIn);
+        const id = String(ev?.current?.id || "").trim();
+        if (id && _linkedUserId) await registerSubscriptionWithBackend(id, nativePlatform());
+      });
+
+      await refreshNativePushState();
+      return true;
+    } catch (e) {
+      console.warn("[push] native init failed", e);
+      return false;
+    }
+  })();
+  return _initPromise;
+}
+
+async function initWebPushNotifications() {
   if (!pushConfigured() || isNativeAppShell()) return false;
   if (_initPromise) return _initPromise;
   _initPromise = (async () => {
     try {
-      const OneSignal = await waitForOneSignalReady();
+      const OneSignal = await waitForOneSignalWebReady();
       await OneSignal.init({
         appId: _appId,
         serviceWorkerPath: "/OneSignalSDKWorker.js",
@@ -158,16 +282,7 @@ export async function initPushNotifications() {
       OneSignal.Notifications.addEventListener("click", (event) => {
         try {
           const data = event?.notification?.additionalData || event?.notification?.data || {};
-          const route = String(data?.nabad_route || "").trim();
-          if (!route) return;
-          stashPendingPushRoute(route);
-          const hash = `#/${route.replace(/^\/+/, "")}`;
-          if (location.hash !== hash) location.hash = hash;
-          try {
-            globalThis.__nabadNavigateFromPush?.(route);
-          } catch {
-            globalThis.__nabadApplyRoute?.();
-          }
+          navigateFromPushData(data);
         } catch {}
       });
       return true;
@@ -179,7 +294,13 @@ export async function initPushNotifications() {
   return _initPromise;
 }
 
-async function registerSubscriptionWithBackend(subscriptionId) {
+export async function initPushNotifications() {
+  if (!pushConfigured()) return false;
+  if (isNativeAppShell()) return initNativePushNotifications();
+  return initWebPushNotifications();
+}
+
+async function registerSubscriptionWithBackend(subscriptionId, platform = "web") {
   const token = globalThis.__nabadGetAuthToken?.() || "";
   if (!token || !subscriptionId) return;
   const headers = {
@@ -194,7 +315,7 @@ async function registerSubscriptionWithBackend(subscriptionId) {
     const r = await fetch(url, {
       method: "POST",
       headers,
-      body: JSON.stringify({ subscriptionId, platform: "web" }),
+      body: JSON.stringify({ subscriptionId, platform }),
     });
     if (!r.ok) console.warn("[push] register HTTP", r.status);
   } catch (e) {
@@ -216,35 +337,55 @@ async function unregisterSubscriptionFromBackend(subscriptionId) {
   } catch {}
 }
 
-function bindPushSubscriptionListener(uid) {
+function bindWebPushSubscriptionListener(uid) {
   try {
-    const OneSignal = getOneSignal();
+    const OneSignal = getOneSignalWeb();
     OneSignal.User?.PushSubscription?.addEventListener?.("change", async (ev) => {
       const next = String(ev?.current?.id || OneSignal.User?.PushSubscription?.id || "").trim();
-      if (next && _linkedUserId === uid) await registerSubscriptionWithBackend(next);
+      if (next && _linkedUserId === uid) await registerSubscriptionWithBackend(next, "web");
     });
   } catch {}
 }
 
 export async function syncPushAuth(userId) {
   const uid = String(userId || "").trim().toLowerCase();
-  if (!uid || !pushConfigured() || isNativeAppShell()) return;
-  await initPushNotifications();
+  if (!uid || !pushConfigured()) return;
+  if (isNativeAppShell()) {
+    await initNativePushNotifications();
+    try {
+      const OneSignal = await getNativeOneSignal();
+      if (_linkedUserId && _linkedUserId !== uid) {
+        await logoutPushAuth({ skipBackend: true });
+      }
+      await OneSignal.login(uid);
+      _linkedUserId = uid;
+      await refreshNativePushState();
+      if (_nativePermState === "granted") {
+        await OneSignal.User.pushSubscription.optIn();
+        await refreshNativePushState();
+        const subId = String(await OneSignal.User.pushSubscription.getIdAsync() || "").trim();
+        if (subId) await registerSubscriptionWithBackend(subId, nativePlatform());
+      }
+    } catch (e) {
+      console.warn("[push] sync native auth failed", e);
+    }
+    return;
+  }
+  await initWebPushNotifications();
   try {
-    const OneSignal = getOneSignal();
+    const OneSignal = getOneSignalWeb();
     if (!OneSignal?.login) return;
     if (_linkedUserId && _linkedUserId !== uid) {
       await logoutPushAuth({ skipBackend: true });
     }
     await OneSignal.login(uid);
     _linkedUserId = uid;
-    bindPushSubscriptionListener(uid);
+    bindWebPushSubscriptionListener(uid);
     if (getPushPermissionState() === "granted") {
-      await ensurePushOptedIn();
+      await ensureWebPushOptedIn();
       const subId = String(OneSignal.User?.PushSubscription?.id || "").trim();
-      if (subId) await registerSubscriptionWithBackend(subId);
+      if (subId) await registerSubscriptionWithBackend(subId, "web");
     }
-    // iOS home-screen PWAs block permission prompts unless triggered by a user tap.
     const nativePerm = getPushPermissionState();
     if (nativePerm === "default" && !isIosStandalonePwa()) {
       try {
@@ -258,19 +399,31 @@ export async function syncPushAuth(userId) {
 
 export async function refreshPushRegistration(userId) {
   const uid = String(userId || "").trim().toLowerCase();
-  if (!uid || !pushConfigured() || isNativeAppShell()) return { ok: false };
+  if (!uid || !pushConfigured()) return { ok: false };
   await initPushNotifications();
   try {
-    const OneSignal = getOneSignal();
+    if (isNativeAppShell()) {
+      const OneSignal = await getNativeOneSignal();
+      await OneSignal.login(uid);
+      _linkedUserId = uid;
+      await refreshNativePushState();
+      if (_nativePermState === "granted") {
+        await OneSignal.User.pushSubscription.optIn();
+      }
+      const subId = await waitForNativePushSubscriptionId(5000);
+      if (subId) await registerSubscriptionWithBackend(subId, nativePlatform());
+      return { ok: Boolean(subId), subscriptionId: subId || "" };
+    }
+    const OneSignal = getOneSignalWeb();
     if (!OneSignal?.login) return { ok: false };
     await OneSignal.login(uid);
     _linkedUserId = uid;
-    bindPushSubscriptionListener(uid);
+    bindWebPushSubscriptionListener(uid);
     if (getPushPermissionState() === "granted") {
-      await ensurePushOptedIn();
+      await ensureWebPushOptedIn();
     }
-    const subId = await waitForPushSubscriptionId(5000);
-    if (subId) await registerSubscriptionWithBackend(subId);
+    const subId = await waitForWebPushSubscriptionId(5000);
+    if (subId) await registerSubscriptionWithBackend(subId, "web");
     return { ok: Boolean(subId), subscriptionId: subId || "" };
   } catch (e) {
     console.warn("[push] refresh registration failed", e);
@@ -284,11 +437,45 @@ export async function enablePushNotifications(userId) {
   if (!uid || !pushConfigured()) {
     return { ok: false, reason: "not_configured" };
   }
-  if (isNativeAppShell()) {
-    return { ok: false, reason: "native_app" };
-  }
+
   await initPushNotifications();
-  const OneSignal = getOneSignal();
+
+  if (isNativeAppShell()) {
+    const OneSignal = await getNativeOneSignal();
+    if (_linkedUserId !== uid) {
+      await syncPushAuth(uid);
+    }
+    await refreshNativePushState();
+    if (_nativePermState === "denied") {
+      return { ok: false, state: "denied" };
+    }
+    if (_nativePermState !== "granted") {
+      try {
+        const accepted = await OneSignal.Notifications.requestPermission(false);
+        await refreshNativePushState();
+        if (!accepted && _nativePermState !== "granted") {
+          return { ok: false, state: _nativePermState, reason: "permission_declined" };
+        }
+      } catch (e) {
+        console.warn("[push] native permission request failed", e);
+        await refreshNativePushState();
+        return { ok: false, state: _nativePermState, reason: "request_failed" };
+      }
+    }
+    await OneSignal.User.pushSubscription.optIn();
+    await refreshNativePushState();
+    const subId = await waitForNativePushSubscriptionId(12000);
+    if (subId) {
+      await registerSubscriptionWithBackend(subId, nativePlatform());
+      return { ok: true, state: "granted", subscriptionId: subId };
+    }
+    if (isPushOptedIn()) {
+      return { ok: true, state: "granted", reason: "subscription_pending" };
+    }
+    return { ok: false, state: _nativePermState, reason: "subscription_failed" };
+  }
+
+  const OneSignal = getOneSignalWeb();
   if (!OneSignal?.Notifications) {
     return { ok: false, reason: "sdk_missing" };
   }
@@ -302,7 +489,7 @@ export async function enablePushNotifications(userId) {
   if (_linkedUserId !== uid) {
     await syncPushAuth(uid);
   }
-  bindPushSubscriptionListener(uid);
+  bindWebPushSubscriptionListener(uid);
 
   const nativePerm = getPushPermissionState();
   if (nativePerm === "denied") {
@@ -321,11 +508,11 @@ export async function enablePushNotifications(userId) {
     }
   }
 
-  await ensurePushOptedIn();
+  await ensureWebPushOptedIn();
 
-  const subId = await waitForPushSubscriptionId(12000);
+  const subId = await waitForWebPushSubscriptionId(12000);
   if (subId) {
-    await registerSubscriptionWithBackend(subId);
+    await registerSubscriptionWithBackend(subId, "web");
     return { ok: true, state: "granted", subscriptionId: subId };
   }
 
@@ -337,13 +524,13 @@ export async function enablePushNotifications(userId) {
 }
 
 export async function maybePromptPushAfterLogin(userId) {
-  if (!pushConfigured() || !userId || isNativeAppShell()) return;
+  if (!pushConfigured() || !userId) return;
   if (getPushPermissionState() !== "default") return;
   try {
     if (localStorage.getItem("nabad_push_prompt_v1") === "1") return;
     localStorage.setItem("nabad_push_prompt_v1", "1");
   } catch {}
-  const msg = isIosStandalonePwa()
+  const msg = isNativeAppShell() || isIosStandalonePwa()
     ? "Tap Settings → Push alerts to enable."
     : "Enable push alerts in Settings.";
   try {
@@ -354,10 +541,18 @@ export async function maybePromptPushAfterLogin(userId) {
 export async function logoutPushAuth({ skipBackend = false } = {}) {
   if (!pushConfigured()) return;
   try {
-    const OneSignal = getOneSignal();
-    const subId = OneSignal?.User?.PushSubscription?.id;
-    if (!skipBackend && subId) await unregisterSubscriptionFromBackend(String(subId));
-    await OneSignal?.logout?.();
+    if (isNativeAppShell()) {
+      const OneSignal = await getNativeOneSignal();
+      const subId = String(await OneSignal.User.pushSubscription.getIdAsync() || "").trim();
+      if (!skipBackend && subId) await unregisterSubscriptionFromBackend(subId);
+      await OneSignal.logout();
+    } else {
+      const OneSignal = getOneSignalWeb();
+      const subId = OneSignal?.User?.PushSubscription?.id;
+      if (!skipBackend && subId) await unregisterSubscriptionFromBackend(String(subId));
+      await OneSignal?.logout?.();
+    }
   } catch {}
   _linkedUserId = "";
+  _nativeOptedIn = false;
 }

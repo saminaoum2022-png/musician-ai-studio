@@ -130,7 +130,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260703-155536";
+const APP_BUILD = "20260703-204556";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -4524,10 +4524,6 @@ if (btnSettingsMusicPrefs) {
 function syncSettingsPushRow() {
   const sub = document.getElementById("settingsPushSub");
   if (!sub) return;
-  if (isNativeAppShell()) {
-    sub.textContent = "Use Safari home-screen app for push alerts";
-    return;
-  }
   if (!_onesignalAppId) {
     sub.textContent = "Push alerts unavailable on this build";
     return;
@@ -4610,10 +4606,10 @@ if (btnSettingsNotifications) {
         });
       } else if (result.ok) {
         showToast("Push alerts enabled.", { icon: "🔔", durationMs: 2800 });
-      } else if (result.reason === "native_app") {
-        showToast("Push works from the Safari home-screen app. The dev install can't register yet.", {
+      } else if (result.reason === "subscription_failed") {
+        showToast("Couldn't register for push. Check iPhone Settings → NabadAi → Notifications, then try again.", {
           icon: "🔔",
-          durationMs: 6800,
+          durationMs: 7200,
         });
       } else if (result.reason === "unsupported") {
         showToast("Add nabadai.com to your home screen in Safari, then enable push here.", {
@@ -19987,8 +19983,9 @@ function saveAuthSession(sess, { persist = true } = {}) {
   const prevUserId = String(authSession?.user?.id || "");
   authSession = sess ? normalizeAuthSession(sess) : null;
   const nextUserId = String(authSession?.user?.id || "");
-  if (prevUserId && nextUserId && prevUserId !== nextUserId) {
-    onAuthAccountSwitched(prevUserId, nextUserId);
+  // First sign-in (prev empty) still had activeProfile.id === "guest" — mint a real handle.
+  if (nextUserId && prevUserId !== nextUserId) {
+    onAuthAccountSwitched(prevUserId || "guest", nextUserId);
   }
   if (authSession) {
     const payload = JSON.stringify(authSession);
@@ -37708,10 +37705,14 @@ function syncActiveProfileIdFromSession() {
     onAuthAccountSwitched(cur, String(uid));
     return;
   }
+  const nextUsername = isPlaceholderUsername(activeProfile.username)
+    ? deriveUsernameFromAuth(authSession.user) || activeProfile.username
+    : activeProfile.username;
   saveProfile({
     ...activeProfile,
     id: String(uid),
     email: authSession.user.email || activeProfile.email || "",
+    username: nextUsername,
   });
   invalidateLibraryMemCache();
   renderPersonaSelect();

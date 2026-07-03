@@ -35,6 +35,26 @@ function patchAppleSignInSwiftPm() {
   console.log("patch-ios-capacitor-plugins: patched apple-sign-in Package.swift for Capacitor 8 SPM");
 }
 
+/** App does not use OneSignal.Location — skip the native location module. */
+function patchOneSignalDisableLocation() {
+  const pkgPath = path.join(root, "node_modules/@onesignal/capacitor-plugin/Package.swift");
+  if (!fs.existsSync(pkgPath)) {
+    console.warn("patch-ios-capacitor-plugins: OneSignal Package.swift not found, skipping");
+    return;
+  }
+  const before = fs.readFileSync(pkgPath, "utf8");
+  const after = before.replace(
+    /let oneSignalDisableLocation = oneSignalEnvFlag\("ONESIGNAL_DISABLE_LOCATION"\)/,
+    "let oneSignalDisableLocation = true",
+  );
+  if (after === before) {
+    console.warn("patch-ios-capacitor-plugins: OneSignal Package.swift already patched or unexpected format");
+    return;
+  }
+  fs.writeFileSync(pkgPath, after);
+  console.log("patch-ios-capacitor-plugins: disabled OneSignal Location module");
+}
+
 if (!fs.existsSync(configPath)) {
   console.error("patch-ios-capacitor-plugins: missing", configPath);
   process.exit(1);
@@ -47,3 +67,4 @@ fs.writeFileSync(configPath, JSON.stringify(config, null, "\t") + "\n");
 console.log("patch-ios-capacitor-plugins: packageClassList =", merged.join(", "));
 
 patchAppleSignInSwiftPm();
+patchOneSignalDisableLocation();

@@ -18213,6 +18213,21 @@ body[data-route="generate"] .coachFab,
 body[data-route="profile"] .coachFab{
   display: inline-flex;
 }
+/* Smart / hidden: orb stays dormant until a pill or job status surfaces it. */
+body[data-coach-orb-mode="smart"] .coachFab:not(.coachFab--surfaced),
+body[data-coach-orb-mode="hidden"] .coachFab:not(.coachFab--surfaced){
+  display: none !important;
+}
+body[data-coach-orb-mode="smart"][data-route="discover"] .coachFab.coachFab--surfaced,
+body[data-coach-orb-mode="smart"][data-route="challenges"] .coachFab.coachFab--surfaced,
+body[data-coach-orb-mode="smart"][data-route="generate"] .coachFab.coachFab--surfaced,
+body[data-coach-orb-mode="smart"][data-route="profile"] .coachFab.coachFab--surfaced,
+body[data-coach-orb-mode="hidden"][data-route="discover"] .coachFab.coachFab--surfaced,
+body[data-coach-orb-mode="hidden"][data-route="challenges"] .coachFab.coachFab--surfaced,
+body[data-coach-orb-mode="hidden"][data-route="generate"] .coachFab.coachFab--surfaced,
+body[data-coach-orb-mode="hidden"][data-route="profile"] .coachFab.coachFab--surfaced{
+  display: inline-flex;
+}
 /* Never during entry/onboarding flows or while a full-screen sheet is open. */
 body.isIntro .coachFab,
 body.isAuth .coachFab,
@@ -18360,6 +18375,49 @@ body[data-route="settings"] main.grid{
   color: rgba(223, 231, 251, 0.52);
   font-size: 14px;
   line-height: 1.45;
+}
+.settingsOrbModeBlock{
+  padding: 4px 4px 10px;
+}
+.settingsOrbModeIntro{
+  margin: 0 0 10px;
+  color: rgba(223, 231, 251, 0.52);
+  font-size: 13px;
+  line-height: 1.45;
+}
+.settingsOrbModeTabs{
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+.settingsOrbModeTab{
+  -webkit-appearance: none;
+  appearance: none;
+  flex: 1 1 auto;
+  min-width: 0;
+  border: 1px solid rgba(255,255,255,0.08);
+  background: rgba(255,255,255,0.03);
+  color: rgba(232,238,247,0.62);
+  font-size: 12.5px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  padding: 8px 10px;
+  border-radius: 999px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: background 180ms ease, color 180ms ease, border-color 180ms ease;
+}
+.settingsOrbModeTab.isActive{
+  background: linear-gradient(180deg, rgba(45,212,191,0.18), rgba(63,115,240,0.14));
+  border-color: rgba(45,212,191,0.28);
+  color: #fff;
+}
+.settingsOrbModeSub{
+  margin: 0;
+  color: rgba(223, 231, 251, 0.46);
+  font-size: 12.5px;
+  line-height: 1.4;
 }
 .settingsFeed{
   display: flex;

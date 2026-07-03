@@ -1,13 +1,23 @@
 /**
- * Coach orb status while Suno generation runs — persistent pill, no overlay bar.
- * Blocks idle nudges and contextual hints until the run finishes or is cancelled.
+ * Coach orb status — generation, music video, instrumental, and ready flashes.
+ * Blocks idle nudges and contextual hints while a status pill is active.
  */
+
+import {
+  getCoachOrbMode,
+  surfaceCoachOrb,
+  syncCoachOrbShellForMode,
+  unsurfaceCoachOrbIfIdle,
+} from "./coach-orb-prefs.js";
 
 export const COACH_PILL_DEFAULT = "Need help? 🎵";
 const COACH_READY_VISIBLE_MS = 9000;
+const COACH_PRIORITY_READY_MS = 8000;
 
 let _generationLocked = false;
 let _statusActive = false;
+let _priorityActive = false;
+let _pillVisible = false;
 let _readyFlashTimer = null;
 let _onArmHook = null;
 
@@ -30,13 +40,21 @@ function coachFabIsVisible() {
   return r.width > 0 && r.height > 0;
 }
 
+function refreshOrbShell() {
+  syncCoachOrbShellForMode({
+    statusActive: _statusActive || _generationLocked,
+    priorityActive: _priorityActive,
+    pillVisible: _pillVisible,
+    mode: getCoachOrbMode(),
+  });
+}
+
 function setPillText(text) {
   const pill = coachPillEl();
   if (pill) pill.textContent = String(text || COACH_PILL_DEFAULT);
 }
 
-function showStatusPill(text, { generating = false } = {}) {
-  if (!coachFabIsVisible()) return;
+function showStatusPill(text, { generating = false, priority = false } = {}) {
   const fab = coachFabEl();
   if (!fab) return;
   if (_readyFlashTimer) {
@@ -47,6 +65,9 @@ function showStatusPill(text, { generating = false } = {}) {
   fab.classList.remove("coachFab--hint");
   fab.classList.add("coachFab--nudge");
   fab.classList.toggle("coachFab--generating", generating);
+  _pillVisible = true;
+  surfaceCoachOrb({ priority: priority || generating });
+  refreshOrbShell();
 }
 
 function resetCoachPill({ restoreDefault = true } = {}) {
@@ -55,6 +76,10 @@ function resetCoachPill({ restoreDefault = true } = {}) {
   if (restoreDefault) setPillText(COACH_PILL_DEFAULT);
   _generationLocked = false;
   _statusActive = false;
+  _priorityActive = false;
+  _pillVisible = false;
+  refreshOrbShell();
+  unsurfaceCoachOrbIfIdle();
 }
 
 export function isCoachGenerationLocked() {
@@ -62,7 +87,11 @@ export function isCoachGenerationLocked() {
 }
 
 export function isCoachStatusActive() {
-  return _statusActive;
+  return _statusActive || _priorityActive;
+}
+
+export function isCoachPriorityActive() {
+  return _priorityActive;
 }
 
 export function coachGeneratingPillText(variantCount = 2) {
@@ -79,29 +108,35 @@ export function coachStillCreatingPillText() {
   return "Still creating — usually 1–2 min…";
 }
 
+export function coachMusicVideoPillText(title) {
+  const t = String(title || "Your song").trim() || "Your song";
+  return `Music video · ${t.slice(0, 28)}${t.length > 28 ? "…" : ""}`;
+}
+
+export function coachInstrumentalPillText(title) {
+  const t = String(title || "Your song").trim() || "Your song";
+  return `Instrumental · ${t.slice(0, 28)}${t.length > 28 ? "…" : ""}`;
+}
+
 /** Persistent pill for the whole backend run. */
 export function beginCoachGenerationStatus({ variantCount = 2 } = {}) {
   try { _onArmHook?.(); } catch {}
   _generationLocked = true;
   _statusActive = true;
-  showStatusPill(coachGeneratingPillText(variantCount), { generating: true });
+  showStatusPill(coachGeneratingPillText(variantCount), { generating: true, priority: true });
 }
 
 /** Long poll — soften copy but keep the pill up. */
 export function bumpCoachGenerationStillWorking() {
   if (!_generationLocked) return;
-  showStatusPill(coachStillCreatingPillText(), { generating: true });
+  showStatusPill(coachStillCreatingPillText(), { generating: true, priority: true });
 }
 
 /** Success flash, then release. */
 export function finishCoachGenerationReady({ variantCount = 1 } = {}) {
   _generationLocked = false;
   _statusActive = true;
-  if (!coachFabIsVisible()) {
-    resetCoachPill();
-    return;
-  }
-  showStatusPill(coachReadyPillText(variantCount), { generating: false });
+  showStatusPill(coachReadyPillText(variantCount), { generating: false, priority: true });
   const fab = coachFabEl();
   if (fab) fab.classList.remove("coachFab--generating");
   if (_readyFlashTimer) clearTimeout(_readyFlashTimer);
@@ -120,6 +155,40 @@ export function cancelCoachGenerationStatus() {
   resetCoachPill({ restoreDefault: true });
 }
 
+/** Music video or instrumental extraction — orb replaces the old banner cards. */
+export function beginCoachPriorityStatus(text, { generating = true } = {}) {
+  try { _onArmHook?.(); } catch {}
+  _priorityActive = true;
+  _statusActive = true;
+  showStatusPill(text, { generating, priority: true });
+}
+
+export function updateCoachPriorityStatus(text, { generating = true } = {}) {
+  if (!_priorityActive && !_statusActive) return;
+  showStatusPill(text, { generating, priority: true });
+}
+
+export function finishCoachPriorityStatus(text, { success = true } = {}) {
+  _priorityActive = false;
+  _statusActive = true;
+  showStatusPill(text, { generating: false, priority: true });
+  const fab = coachFabEl();
+  if (fab) fab.classList.remove("coachFab--generating");
+  if (_readyFlashTimer) clearTimeout(_readyFlashTimer);
+  _readyFlashTimer = setTimeout(() => {
+    resetCoachPill({ restoreDefault: true });
+    _readyFlashTimer = null;
+  }, success ? COACH_PRIORITY_READY_MS : 5000);
+}
+
+export function cancelCoachPriorityStatus() {
+  if (_readyFlashTimer) {
+    clearTimeout(_readyFlashTimer);
+    _readyFlashTimer = null;
+  }
+  resetCoachPill({ restoreDefault: true });
+}
+
 /** Boot / route restore when session still has a pending task. */
 export function syncCoachGenerationStatusFromPending(pending) {
   if (!pending?.taskId) {
@@ -128,3 +197,32 @@ export function syncCoachGenerationStatusFromPending(pending) {
   }
   beginCoachGenerationStatus({ variantCount: pending.variantCount });
 }
+
+/** Called from idle nudges / contextual hints in app.js */
+export function notifyCoachOrbPillShown({ contextual = false, priority = false } = {}) {
+  const fab = coachFabEl();
+  if (!fab) return;
+  _pillVisible = true;
+  fab.classList.toggle("coachFab--hint", Boolean(contextual));
+  fab.classList.add("coachFab--nudge");
+  surfaceCoachOrb({ priority });
+  refreshOrbShell();
+}
+
+export function notifyCoachOrbPillHidden() {
+  if (_statusActive || _generationLocked || _priorityActive) return;
+  _pillVisible = false;
+  refreshOrbShell();
+}
+
+export function syncCoachOrbAfterRouteChange() {
+  if (_statusActive || _generationLocked || _priorityActive || _pillVisible) {
+    refreshOrbShell();
+    return;
+  }
+  unsurfaceCoachOrbIfIdle();
+  refreshOrbShell();
+}
+
+/** Legacy helper — generation module used to bail when orb wasn't visible. */
+export { coachFabIsVisible };

@@ -126,7 +126,7 @@
       onload="this.media='all'"
     />
     <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Display:wght@900&family=Inter:wght@900&display=swap" /></noscript>
-    <link rel="stylesheet" href="./styles.css?v=20260703-002839" />
+    <link rel="stylesheet" href="./styles.css?v=20260703-133057" />
 
     <meta name="description" content="NabadAi is an AI music studio. Hum a melody, write lyrics, and ship a song." />
     <meta property="og:type" content="website" />
@@ -3323,6 +3323,21 @@
               </div>
             </section>
 
+            <section class="settingsSection" aria-labelledby="settingsOrbTitle">
+              <h2 id="settingsOrbTitle" class="settingsSectionLabel">NabadAI Orb</h2>
+              <div class="settingsList">
+                <div class="settingsOrbModeBlock">
+                  <p class="settingsOrbModeIntro">The orb shares tips and tracks your songs, music videos, and instrumentals.</p>
+                  <div id="settingsOrbModeTabs" class="settingsOrbModeTabs" role="radiogroup" aria-label="NabadAI Orb visibility">
+                    <button type="button" class="settingsOrbModeTab" data-coach-orb-mode="always" role="radio" aria-checked="true">Always on</button>
+                    <button type="button" class="settingsOrbModeTab" data-coach-orb-mode="smart" role="radio" aria-checked="false">Smart</button>
+                    <button type="button" class="settingsOrbModeTab" data-coach-orb-mode="hidden" role="radio" aria-checked="false">Status only</button>
+                  </div>
+                  <p id="settingsOrbModeSub" class="settingsOrbModeSub">Orb stays visible on main tabs</p>
+                </div>
+              </div>
+            </section>
+
             <section class="settingsSection" aria-labelledby="settingsCreditsTitle">
               <h2 id="settingsCreditsTitle" class="settingsSectionLabel">Credits &amp; plan</h2>
               <div class="settingsList">
@@ -4345,6 +4360,6 @@
     </script>
     <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
     <script src="./env.client.js" onerror="void 0"></script>
-    <script type="module" src="./src/app.js?v=20260703-002839"></script>
+    <script type="module" src="./src/app.js?v=20260703-133057"></script>
   </body>
 </html>

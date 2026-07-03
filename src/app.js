@@ -73,7 +73,24 @@ import {
   syncCoachGenerationStatusFromPending,
   configureCoachGeneration,
   COACH_PILL_DEFAULT,
+  beginCoachPriorityStatus,
+  updateCoachPriorityStatus,
+  finishCoachPriorityStatus,
+  cancelCoachPriorityStatus,
+  coachMusicVideoPillText,
+  coachInstrumentalPillText,
+  notifyCoachOrbPillShown,
+  notifyCoachOrbPillHidden,
+  syncCoachOrbAfterRouteChange,
 } from "./coach-generation.js";
+import {
+  applyCoachOrbModeToBody,
+  getCoachOrbMode,
+  setCoachOrbMode,
+  coachOrbModeSub,
+  coachOrbAllowsIdleNudges,
+  coachOrbAllowsContextHints,
+} from "./coach-orb-prefs.js";
 import { initTheme } from "./theme.js";
 import { initSoundsStudioOnce } from "./sounds-studio.js";
 import {
@@ -107,7 +124,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260703-002839";
+const APP_BUILD = "20260703-133057";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -140,6 +157,11 @@ try {
   initTheme();
 } catch (e) {
   console.warn("[theme] init failed", e);
+}
+try {
+  applyCoachOrbModeToBody();
+} catch (e) {
+  console.warn("[coach-orb] init failed", e);
 }
 
 const IS_NATIVE_SHELL = typeof location !== "undefined" && location.protocol === "capacitor:";
@@ -3568,6 +3590,7 @@ function applyRoute({ passGen } = {}) {
     renderPersonaSelect();
     try { refreshSettingsMusicPrefsRow(); } catch {}
     try { syncSettingsPushRow(); } catch {}
+    try { syncSettingsOrbMode(); } catch {}
     if (!_onesignalAppId) {
       void loadPublicConfig().then(() => {
         try { syncSettingsPushRow(); } catch {}
@@ -3774,6 +3797,9 @@ function applyRoute({ passGen } = {}) {
   updateProfilePersonaRow();
   try {
     syncCoachGenerationStatusFromPending(getGenerationPending());
+  } catch {}
+  try {
+    syncCoachOrbAfterRouteChange();
   } catch {}
   try {
     updatePlayerSecondaryChrome();
@@ -4508,6 +4534,38 @@ function syncSettingsPushRow() {
     sub.textContent = "Off — tap to enable push alerts";
   }
 }
+
+function syncSettingsOrbMode(mode = getCoachOrbMode()) {
+  const root = document.getElementById("settingsOrbModeTabs");
+  const sub = document.getElementById("settingsOrbModeSub");
+  const next = applyCoachOrbModeToBody(mode);
+  if (root) {
+    root.querySelectorAll("[data-coach-orb-mode]").forEach((btn) => {
+      const active = String(btn.getAttribute("data-coach-orb-mode") || "") === next;
+      btn.classList.toggle("isActive", active);
+      btn.setAttribute("aria-checked", active ? "true" : "false");
+    });
+  }
+  if (sub) sub.textContent = coachOrbModeSub(next);
+  try { syncCoachOrbAfterRouteChange(); } catch {}
+}
+
+(() => {
+  const root = document.getElementById("settingsOrbModeTabs");
+  if (!root || root.dataset.boundOrbMode === "1") return;
+  root.dataset.boundOrbMode = "1";
+  root.addEventListener("click", (ev) => {
+    const btn = ev.target?.closest?.("[data-coach-orb-mode]");
+    if (!btn || !root.contains(btn)) return;
+    ev.preventDefault();
+    const mode = String(btn.getAttribute("data-coach-orb-mode") || "").trim();
+    if (!mode || mode === getCoachOrbMode()) return;
+    haptic("light");
+    setCoachOrbMode(mode);
+    syncSettingsOrbMode(mode);
+  });
+  try { syncSettingsOrbMode(); } catch {}
+})();
 const btnSettingsNotifications = document.getElementById("btnSettingsNotifications");
 if (btnSettingsNotifications) {
   btnSettingsNotifications.addEventListener("click", () => {
@@ -15194,6 +15252,9 @@ function pushLocalGenerationReadyActivity(entries) {
   const seen = new Set(_activityFeedState.items.map((item) => String(item?.id || "")));
   if (seen.has(id)) return;
   _activityFeedState.items.unshift(n);
+  try {
+    persistGenerationReadyActivity(n);
+  } catch {}
   try {
     renderActivityFeedFromState();
   } catch {}
@@ -26487,6 +26548,76 @@ function renderNotificationRows(list) {
 
 const ACTIVITY_FEED_SNAPSHOT_MS = 120000;
 const ACTIVITY_FEED_SNAPSHOT_KEY = "nabad_activity_feed_snap_v3";
+const GENERATION_READY_ACTIVITY_KEY = "nabad_generation_ready_activity_v1";
+const GENERATION_READY_ACTIVITY_MAX = 48;
+
+function generationReadyTrackKey(meta) {
+  const ids = (Array.isArray(meta?.track_ids) ? meta.track_ids : [])
+    .map((id) => String(id || "").trim())
+    .filter(Boolean)
+    .sort();
+  return ids.join("|") || String(meta?.song_id || "").trim();
+}
+
+function loadPersistedGenerationReadyActivities() {
+  try {
+    const raw = localStorage.getItem(GENERATION_READY_ACTIVITY_KEY);
+    const list = JSON.parse(raw);
+    return Array.isArray(list) ? list.filter((n) => String(n?.type || "") === "generation_ready") : [];
+  } catch {
+    return [];
+  }
+}
+
+function savePersistedGenerationReadyActivities(list) {
+  try {
+    localStorage.setItem(
+      GENERATION_READY_ACTIVITY_KEY,
+      JSON.stringify(list.slice(0, GENERATION_READY_ACTIVITY_MAX)),
+    );
+  } catch {}
+}
+
+function persistGenerationReadyActivity(n) {
+  if (!n || String(n.type || "") !== "generation_ready") return;
+  const key = generationReadyTrackKey(n.metadata);
+  let list = loadPersistedGenerationReadyActivities();
+  if (key) {
+    list = list.filter((item) => generationReadyTrackKey(item?.metadata) !== key);
+  }
+  list.unshift({ ...n, local: true, pinned: true });
+  savePersistedGenerationReadyActivities(list);
+}
+
+function mergePersistedGenerationReadyActivities() {
+  const persisted = loadPersistedGenerationReadyActivities();
+  if (!persisted.length) return false;
+  const seenIds = new Set(_activityFeedState.items.map((i) => String(i?.id || "")));
+  const seenTracks = new Set();
+  for (const item of _activityFeedState.items) {
+    if (String(item?.type || "") === "generation_ready") {
+      const k = generationReadyTrackKey(item?.metadata);
+      if (k) seenTracks.add(k);
+    }
+  }
+  let added = false;
+  for (const n of persisted) {
+    const id = String(n?.id || "");
+    if (id && seenIds.has(id)) continue;
+    const k = generationReadyTrackKey(n?.metadata);
+    if (k && seenTracks.has(k)) continue;
+    _activityFeedState.items.push(n);
+    if (k) seenTracks.add(k);
+    if (id) seenIds.add(id);
+    added = true;
+  }
+  if (added) {
+    _activityFeedState.items.sort(
+      (a, b) => new Date(b?.created_at || 0).getTime() - new Date(a?.created_at || 0).getTime(),
+    );
+  }
+  return added;
+}
 const ACTIVITY_FILTER_TAB_KEY = "nabad_activity_filter_tab_v1";
 let _activityFilterTab = (() => {
   try {
@@ -27300,6 +27431,7 @@ async function fetchActivityBatch() {
         if (batch.length < limit) _activityFeedState.hasMore = false;
       }
     }
+    try { mergePersistedGenerationReadyActivities(); } catch {}
     renderActivityFeedFromState();
     const unread = _activityFeedState.items.filter((n) => !n?.read_at).length;
     if (els.activityLead) {
@@ -27347,6 +27479,8 @@ async function enterActivityRoute({ reset = false } = {}) {
     els.activityStatus.textContent = "";
   }
   await fetchActivityBatch();
+  try { mergePersistedGenerationReadyActivities(); } catch {}
+  renderActivityFeedFromState();
   const unread = _activityFeedState.items.filter((n) => !n?.read_at).length;
   if (unread) {
     void socialApi("/api/social", {
@@ -29309,9 +29443,10 @@ async function runLibraryInstrumentalForTrack(t) {
     setStatus("This song is missing generation ids for instrumental request.");
     return;
   }
+  const title = String(t?.title || "Your song").trim() || "Your song";
   try {
     setStatus("Getting instrumental for selected song…");
-    setLoading(true, { title: "Getting your instrumental version…", sub: "Processing selected library song." });
+    beginCoachPriorityStatus(coachInstrumentalPillText(title), { generating: true });
     const stemsTok = getSupabaseAuthToken();
     const r = await fetch(apiUrl("/api/suno/stems"), {
       method: "POST",
@@ -29342,7 +29477,7 @@ async function runLibraryInstrumentalForTrack(t) {
     });
   } catch (err) {
     setStatus(`Library instrumental failed: ${err?.message || String(err)}`);
-    setLoading(false);
+    cancelCoachPriorityStatus();
   }
 }
 
@@ -38465,8 +38600,11 @@ async function deliverMusicVideoUrl(videoUrl, title) {
  */
 async function createSunoMusicVideoForTrack(track, { onStatus } = {}) {
   const t = track || {};
+  const title = String(t?.title || "Your song").trim() || "Your song";
   const say = (m) => {
-    updateVideoRenderCard(m);
+    try {
+      updateCoachPriorityStatus(String(m || coachMusicVideoPillText(title)), { generating: true });
+    } catch {}
     try { onStatus?.(m); } catch {}
   };
   const taskId = String(t.taskId || t?.meta?.taskId || "").trim();
@@ -38483,12 +38621,12 @@ async function createSunoMusicVideoForTrack(track, { onStatus } = {}) {
   }
   let videoTaskId =
     cached?.taskId && musicVideoWithinRetention(cached) ? String(cached.taskId).trim() : "";
-  showVideoRenderCard(t);
   try {
+    beginCoachPriorityStatus(coachMusicVideoPillText(title), { generating: true });
     if (videoTaskId) {
       say("Resuming your music video…");
     } else {
-      say("Creating your music video — rendering visuals synced to the beat…");
+      say("Creating your music video…");
       const token = getSupabaseAuthToken();
       const rawHandle = String(activeProfile?.username || "").trim().replace(/^@+/, "");
       const r = await fetch(apiUrl("/api/suno/video"), {
@@ -38508,7 +38646,7 @@ async function createSunoMusicVideoForTrack(track, { onStatus } = {}) {
         if (Number(d?.code) === 409) {
           const recoverUrl = String(cached?.videoUrl || "").trim();
           if (recoverUrl) {
-            hideVideoRenderCard();
+            finishCoachPriorityStatus("Music video ready ✓");
             openMusicVideoViewer(recoverUrl, t.title, { coverUrl });
             return;
           }
@@ -38534,10 +38672,10 @@ async function createSunoMusicVideoForTrack(track, { onStatus } = {}) {
     }
     const videoUrl = await pollSunoMusicVideo(videoTaskId, { onStatus: say });
     saveMusicVideoMetaForTrack(t, { taskId: videoTaskId, videoUrl, createdAt: Date.now() });
-    hideVideoRenderCard();
+    finishCoachPriorityStatus("Music video ready ✓");
     openMusicVideoViewer(videoUrl, t.title, { coverUrl });
   } catch (e) {
-    hideVideoRenderCard();
+    cancelCoachPriorityStatus();
     throw e;
   }
 }
@@ -38675,11 +38813,17 @@ async function downloadLibraryVideoTrack(track, { onRendered } = {}) {
 async function pollLibraryStemsUntilDone(taskId, kind, opts = {}) {
   const sourceTitle = String(opts.sourceTitle || "").trim();
   const sourceArtUrl = String(opts.sourceArtUrl || "").trim();
+  const titleBase = sourceTitle || lastSunoTitle || "Generated song";
   let tries = 0;
   const maxTries = kind === "multi" ? 80 : 60;
   const delayMs = kind === "multi" ? 5000 : 4500;
   while (tries < maxTries) {
     tries += 1;
+    if (kind !== "multi") {
+      try {
+        updateCoachPriorityStatus(coachInstrumentalPillText(titleBase), { generating: true });
+      } catch {}
+    }
     await new Promise((r) => setTimeout(r, delayMs));
     try {
       const r = await fetch(apiUrl(`/api/suno/stems_status?taskId=${encodeURIComponent(taskId)}`));
@@ -38708,7 +38852,7 @@ async function pollLibraryStemsUntilDone(taskId, kind, opts = {}) {
             data?.error ||
             `${kind === "multi" ? "Multi-stems" : "Instrumental"} failed.`;
           setStatus(reason);
-          setLoading(false);
+          if (kind !== "multi") cancelCoachPriorityStatus();
           return;
         }
         continue;
@@ -38726,7 +38870,6 @@ async function pollLibraryStemsUntilDone(taskId, kind, opts = {}) {
         if (els.btnLoadInstrumental) els.btnLoadInstrumental.disabled = !lastSunoInstUrl;
         if (els.btnPlayInstrumental) els.btnPlayInstrumental.disabled = !lastSunoInstUrl;
         setStatus("Instrumental version is ready.");
-        const titleBase = sourceTitle || lastSunoTitle || "Generated song";
         const artBase = sourceArtUrl || lastSunoArtUrl || "";
         if (lastSunoInstUrl) {
           addToLibrary({
@@ -38736,13 +38879,13 @@ async function pollLibraryStemsUntilDone(taskId, kind, opts = {}) {
             kind: "instrumental",
           });
         }
+        finishCoachPriorityStatus("Instrumental ready ✓");
       }
-      setLoading(false);
       return;
     } catch {}
   }
   setStatus(`${kind === "multi" ? "Multi-stems" : "Instrumental"} is delayed. Please try again.`);
-  setLoading(false);
+  if (kind !== "multi") cancelCoachPriorityStatus();
 }
 
 /** Globe / lock chip for profile link visibility on library-style rows. */
@@ -44817,7 +44960,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
               kind: "instrumental",
             });
           }
-          setLoading(false);
+          finishCoachPriorityStatus("Instrumental ready ✓");
           setStemsBtn("Get instrumental version", false);
           void refreshSunoCredits();
           return;
@@ -44831,7 +44974,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
             data?.error ||
             "Instrumental processing failed or timed out.";
           setStatus(`Instrumental failed: ${reason}`);
-          setLoading(false);
+          cancelCoachPriorityStatus();
           setStemsBtn("Get instrumental version", false);
         }
       } catch {}
@@ -45894,7 +46037,10 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       setStemsBtn("Getting instrumental…", true);
       setStatus("Getting your instrumental version…");
       setProgress(15);
-      setLoading(true, { title: "Getting your instrumental version…", sub: "Processing your track now." });
+      beginCoachPriorityStatus(
+        coachInstrumentalPillText(lastSunoTitle || "Your song"),
+        { generating: true },
+      );
 
       const data = await trackCreditsAround(
         "Instrumental version",
@@ -45934,10 +46080,10 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       console.error(e);
       setStatus(`Stem request failed: ${e?.message || String(e)}`);
       setProgress(0);
-      setLoading(false);
+      cancelCoachPriorityStatus();
       setStemsBtn("Get instrumental version", false);
     } finally {
-      // Keep loading visible until polling resolves (success/fail/timeout).
+      // Keep orb status visible until polling resolves (success/fail/timeout).
     }
   });
 
@@ -46497,31 +46643,38 @@ function dismissCoachFabNudge() {
   const fab = document.getElementById("coachFab");
   if (fab) fab.classList.remove("coachFab--nudge", "coachFab--hint", "coachFab--generating");
   if (_coachNudgeHideTimer) { clearTimeout(_coachNudgeHideTimer); _coachNudgeHideTimer = null; }
+  try { notifyCoachOrbPillHidden(); } catch {}
 }
 function showCoachFabPill(text, { visibleMs = COACH_NUDGE_VISIBLE_MS, contextual = false } = {}) {
   if (isCoachStatusActive()) return;
-  if (!coachFabIsVisible() || isCoachThreadId(_conversationId)) return;
+  if (contextual && !coachOrbAllowsContextHints()) return;
+  if (!contextual && !coachOrbAllowsIdleNudges()) return;
+  if (isCoachThreadId(_conversationId)) return;
   const fab = document.getElementById("coachFab");
   if (!fab) return;
   setCoachPillText(text);
   fab.classList.toggle("coachFab--hint", Boolean(contextual));
   fab.classList.add("coachFab--nudge");
   fab.classList.remove("coachFab--generating");
+  try { notifyCoachOrbPillShown({ contextual, priority: false }); } catch {}
   if (_coachNudgeHideTimer) clearTimeout(_coachNudgeHideTimer);
   _coachNudgeHideTimer = setTimeout(() => {
     if (isCoachStatusActive()) return;
     fab.classList.remove("coachFab--nudge", "coachFab--hint", "coachFab--generating");
     setCoachPillText(COACH_PILL_DEFAULT);
+    try { notifyCoachOrbPillHidden(); } catch {}
   }, visibleMs);
 }
 function showCoachFabNudge() {
   if (isCoachStatusActive()) return;
+  if (!coachOrbAllowsIdleNudges()) return;
   showCoachFabPill(COACH_PILL_DEFAULT, { visibleMs: COACH_NUDGE_VISIBLE_MS });
 }
 function scheduleCoachFabNudge(delay = COACH_NUDGE_DELAY_MS) {
+  if (!coachOrbAllowsIdleNudges()) return;
   if (_coachNudgeArmTimer) clearTimeout(_coachNudgeArmTimer);
   _coachNudgeArmTimer = setTimeout(function tick() {
-    if (!isCoachStatusActive()) showCoachFabNudge();
+    if (!isCoachStatusActive() && coachOrbAllowsIdleNudges()) showCoachFabNudge();
     _coachNudgeArmTimer = setTimeout(tick, COACH_NUDGE_COOLDOWN_MS);
   }, delay);
 }
@@ -46538,10 +46691,11 @@ const COACH_HINT_SEEN = new Set();     // tip keys shown this session
 // boolean to stop a priority chain at the first tip that fires.
 function showCoachContextHint(text, key) {
   if (isCoachStatusActive()) return false;
+  if (!coachOrbAllowsContextHints()) return false;
   const now = Date.now();
   if (now - _coachHintLastAt < COACH_HINT_COOLDOWN_MS) return false;
   if (key && COACH_HINT_SEEN.has(key)) return false;
-  if (!coachFabIsVisible() || isCoachThreadId(_conversationId)) return false;
+  if (isCoachThreadId(_conversationId)) return false;
   _coachHintLastAt = now;
   if (key) COACH_HINT_SEEN.add(key);
   showCoachFabPill(text, { visibleMs: COACH_HINT_VISIBLE_MS, contextual: true });

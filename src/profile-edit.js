@@ -10,6 +10,8 @@ let _draft = null;
 let _dirty = false;
 let _activeSheet = "";
 let _genresTouched = false;
+let _usernameCheckTimer = 0;
+let _originalUsername = "";
 
 const SOCIAL_FIELDS = [
   { key: "instagram", label: "Instagram", placeholder: "instagram.com/you" },
@@ -100,6 +102,7 @@ export function hydrateProfileEditDraft(profile) {
   };
   _dirty = false;
   _genresTouched = false;
+  _originalUsername = normalizeUsername(_draft.username);
   renderProfileEditPage();
 }
 
@@ -169,6 +172,11 @@ function applyAvatarToEditPhoto() {
   }
 }
 
+function usernamePreview() {
+  const handle = normalizeUsername(_draft?.username);
+  return handle ? `@${handle}` : "Choose username";
+}
+
 function renderProfileEditPage() {
   const page = qs('[data-route="profile-edit"]');
   if (!page || !_draft) return;
@@ -179,6 +187,7 @@ function renderProfileEditPage() {
     el.classList.toggle("profileEditRowValue--empty", empty);
   };
   setVal("#profileEditDisplayNameVal", displayNamePreview(), !String(_draft.displayName || "").trim());
+  setVal("#profileEditUsernameVal", usernamePreview(), !normalizeUsername(_draft?.username));
   setVal("#profileEditBioVal", bioPreview(), !cleanBio(_draft.bio));
   setVal("#profileEditGenresVal", genresPreview(), !_draft.genres.length);
   setVal("#profileEditPersonaVal", personaPreview(), !_draft.personaId);
@@ -264,6 +273,69 @@ function openDisplayNameEditor() {
     onDone: (val) => {
       _draft.displayName = val.slice(0, 48);
     },
+  });
+}
+
+function openUsernameEditor() {
+  clearTimeout(_usernameCheckTimer);
+  const body = openProfileEditSheet("username", "Username");
+  if (!body) return;
+  const startVal = normalizeUsername(_draft?.username) || _originalUsername;
+  body.innerHTML = `
+    <div class="profileEditSheetFieldWrap">
+      <input id="profileEditSheetUsernameField" class="profileEditSheetInput" type="text" maxlength="32" value="${escapeHtml(startVal)}" placeholder="yourname" autocapitalize="none" autocomplete="username" spellcheck="false" inputmode="text" />
+      <p id="profileEditSheetUsernameStatus" class="profileEditSheetHint">Letters, numbers, dots, and underscores only.</p>
+    </div>
+    <div class="profileEditSheetActions">
+      <button type="button" class="profileEditSheetDone" data-profile-edit-sheet-done="1">Done</button>
+    </div>
+  `;
+  const field = qs("#profileEditSheetUsernameField");
+  const statusEl = qs("#profileEditSheetUsernameStatus");
+  const doneBtn = body.querySelector("[data-profile-edit-sheet-done]");
+  field?.focus();
+  try { field?.select(); } catch {}
+
+  const setStatus = (mode, text) => {
+    if (!statusEl) return;
+    statusEl.textContent = text;
+    statusEl.className = `profileEditSheetHint profileEditSheetHint--${mode}`;
+    if (doneBtn) {
+      doneBtn.disabled = mode === "bad" || mode === "invalid" || mode === "checking";
+    }
+  };
+
+  const scheduleCheck = (raw) => {
+    clearTimeout(_usernameCheckTimer);
+    const handle = normalizeUsername(raw);
+    if (!handle || handle === "guest") {
+      setStatus("invalid", "Enter a valid username.");
+      return;
+    }
+    if (handle === _originalUsername) {
+      setStatus("ok", "This is your current username.");
+      return;
+    }
+    setStatus("checking", "Checking availability…");
+    _usernameCheckTimer = setTimeout(async () => {
+      const ok = await _deps?.checkUsernameAvailable?.(handle, _originalUsername);
+      if (ok) setStatus("ok", `@${handle} is available`);
+      else setStatus("bad", `@${handle} is already taken`);
+    }, 400);
+  };
+
+  field?.addEventListener("input", () => scheduleCheck(field.value));
+  scheduleCheck(startVal);
+
+  doneBtn?.addEventListener("click", () => {
+    if (doneBtn?.disabled) return;
+    const handle = normalizeUsername(field?.value);
+    if (!handle || handle === "guest") return;
+    _draft.username = handle;
+    closeProfileEditSheet();
+    renderProfileEditPage();
+    markDirty();
+    try { _deps?.haptic?.("light"); } catch {}
   });
 }
 
@@ -395,6 +467,16 @@ export async function saveProfileEditDraft({ navigateBack = true } = {}) {
   if (!_draft || !_deps) return false;
   const base = _deps.getActiveProfile();
   const next = profileFromDraft(base);
+  const nextHandle = normalizeUsername(next.username);
+  if (nextHandle && nextHandle !== "guest") {
+    const available = await _deps.checkUsernameAvailable?.(nextHandle, _originalUsername || normalizeUsername(base.username));
+    if (!available) {
+      try {
+        _deps.showToast?.(`@${nextHandle} is already taken`, { icon: "!", durationMs: 2800 });
+      } catch {}
+      return false;
+    }
+  }
   const email = String(_deps.getAuthSession?.()?.user?.email || base.email || "").trim().toLowerCase();
   const id = email || `user:${next.username}`;
   const payload = {
@@ -469,6 +551,7 @@ export function initProfileEditOnce(deps) {
     const field = row.getAttribute("data-profile-edit-field");
     try { _deps?.haptic?.("light"); } catch {}
     if (field === "displayName") openDisplayNameEditor();
+    else if (field === "username") openUsernameEditor();
     else if (field === "bio") openBioEditor();
     else if (field === "genres") openGenresEditor();
     else if (field === "persona") openPersonaEditor();

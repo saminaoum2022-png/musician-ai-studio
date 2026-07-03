@@ -43093,6 +43093,36 @@ body.profileEditSheetOpen{
   font-size: 13px;
   color: rgba(223, 231, 251, 0.42);
 }
+.profileEditSheetHint--ok{
+  color: rgba(120, 220, 160, 0.88);
+}
+.profileEditSheetHint--bad{
+  color: rgba(255, 130, 130, 0.92);
+}
+.profileEditSheetHint--checking{
+  color: rgba(223, 231, 251, 0.52);
+}
+.profileUsernameAvailability{
+  margin: 4px 0 0;
+  padding: 0 2px;
+  font-size: 13px;
+  line-height: 1.35;
+  color: rgba(223, 231, 251, 0.42);
+  text-align: center;
+}
+.profileUsernameAvailability--ok{
+  color: rgba(120, 220, 160, 0.88);
+}
+.profileUsernameAvailability--bad{
+  color: rgba(255, 130, 130, 0.92);
+}
+.profileUsernameAvailability--checking{
+  color: rgba(223, 231, 251, 0.52);
+}
+.profileEditSheetDone:disabled{
+  opacity: 0.42;
+  cursor: not-allowed;
+}
 .profileEditSheetActions{
   margin-top: auto;
   padding-top: 8px;

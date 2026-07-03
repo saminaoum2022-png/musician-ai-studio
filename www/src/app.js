@@ -140,7 +140,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260704-005759";
+const APP_BUILD = "20260704-013359";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -11074,6 +11074,53 @@ function followingMusicTypeLabel(type) {
   return "New drop";
 }
 
+function followActMetaSublineHtml(parts) {
+  const items = (parts || []).filter(Boolean);
+  if (!items.length) return "";
+  return items
+    .map((html, i) => (i === 0 ? html : `<span class="followActMetaDot" aria-hidden="true">·</span>${html}`))
+    .join("");
+}
+
+/** X-style feed header: avatar + username row + subline (time / created / badge) + trailing menu. */
+function followActXstyleTopHtml(opts) {
+  const {
+    profileHref,
+    userId = "",
+    avatarSrc = "",
+    initials = "U",
+    whoHtml = "",
+    isOwn = false,
+    when = "",
+    createdChipHtml = "",
+    badgeHtml = "",
+    trailingHtml = "",
+    avatarLabel = "Profile",
+  } = opts;
+  const userPrimary = isOwn
+    ? whoHtml
+    : `<a class="followActUserLink followActUserLink--badge" href="${escapeHtml(profileHref)}" data-route-link="user">${whoHtml}</a>`;
+  const subline = followActMetaSublineHtml([
+    `<span class="followActWhen">${escapeHtml(when)}</span>`,
+    createdChipHtml,
+    badgeHtml,
+  ]);
+  return `
+        <div class="followActTop">
+          <a class="followActAvatar" href="${escapeHtml(profileHref)}" data-route-link="user" data-avatar-user-id="${escapeHtml(String(userId || ""))}" aria-label="${escapeHtml(avatarLabel)}">
+            <span class="followActAvatarRing" aria-hidden="true"></span>
+            ${avatarSrc
+              ? `<img src="${escapeHtml(avatarSrc)}" alt="" width="40" height="40" decoding="async" loading="lazy" />`
+              : `<span class="followActAvatarFallback">${escapeHtml(initials)}</span>`}
+          </a>
+          <div class="followActHeadStack">
+            <div class="followActMetaPrimary">${userPrimary}</div>
+            ${subline ? `<div class="followActMetaSub">${subline}</div>` : ""}
+          </div>
+          ${trailingHtml}
+        </div>`;
+}
+
 function followingActivityBadgeHtml(kind, type, opts = {}) {
   const safeType = escapeHtml(String(type || "").trim());
   // "New drop" (plain release) is on nearly every post, so it adds noise
@@ -11205,27 +11252,21 @@ function followingStatusRowHtml(post, profMap, idx, opts = {}) {
     : "";
   const ownCls = isOwn ? " followAct--own" : "";
   if (xstyle) {
-    const metaInner = isOwn
-      ? `${who}<span class="followActMetaDot" aria-hidden="true">·</span><span class="followActWhen">${escapeHtml(when)}</span>`
-      : `<a class="followActUserLink followActUserLink--badge" href="${escapeHtml(profileHref)}" data-route-link="user">${who}</a><span class="followActMetaDot" aria-hidden="true">·</span><span class="followActWhen">${escapeHtml(when)}</span>`;
+    const statusBadge = followingActivityBadgeHtml("status", postType, { post });
     return `
       <article class="followAct followAct--status followAct--xstyle${ownCls}" data-follow-act="status" data-follow-status-type="${escapeHtml(postType)}" data-follow-status-id="${escapeHtml(postId)}" style="--i:${idx}">
-        <div class="followActTop">
-          <a class="followActAvatar" href="${escapeHtml(profileHref)}" data-route-link="user" data-avatar-user-id="${escapeHtml(userId)}" aria-label="${isOwn ? "Your profile" : handle ? `@${escapeHtml(handle)} profile` : "Profile"}">
-            <span class="followActAvatarRing" aria-hidden="true"></span>
-            ${avatarSrc
-              ? `<img src="${escapeHtml(avatarSrc)}" alt="" width="40" height="40" decoding="async" loading="lazy" />`
-              : `<span class="followActAvatarFallback">${escapeHtml(initials)}</span>`}
-          </a>
-          <div class="followActHeadStack">
-            <div class="followActMeta">
-              ${metaInner}
-              <span class="followActMetaDot" aria-hidden="true">·</span>
-              ${followingActivityBadgeHtml("status", postType, { post })}
-              ${menuBtn}
-            </div>
-          </div>
-        </div>
+        ${followActXstyleTopHtml({
+          profileHref,
+          userId,
+          avatarSrc,
+          initials,
+          whoHtml: who,
+          isOwn,
+          when,
+          badgeHtml: statusBadge,
+          trailingHtml: menuBtn,
+          avatarLabel: isOwn ? "Your profile" : handle ? `@${escapeHtml(handle)} profile` : "Profile",
+        })}
         <div class="followActContent followActBody--static">
           ${contentHtml}
         </div>
@@ -13152,7 +13193,7 @@ function followingActivityRowHtml(t, profMap, idx, opts = {}) {
   const CREATED_CHIP_MIN_GAP_MS = 48 * 60 * 60 * 1000;
   const createdChipHtml =
     createdTsRaw && postedTs && postedTs - createdTsRaw > CREATED_CHIP_MIN_GAP_MS
-      ? `<span class="followActMetaDot" aria-hidden="true">·</span><span class="followActWhen followActWhenCreated">created ${escapeHtml(relativeTime(createdTsRaw))}</span>`
+      ? `<span class="followActWhen followActWhenCreated">created ${escapeHtml(relativeTime(createdTsRaw))}</span>`
       : "";
   const playsPending = t.playCount == null && !Number.isFinite(Number(t.playCount));
   const plays = playsPending ? null : Math.max(0, Number(t.playCount) || 0);
@@ -13252,29 +13293,21 @@ function followingActivityRowHtml(t, profMap, idx, opts = {}) {
   const mediaBlockWithProgressHtml = mediaBlockHtml;
   const topMenuHtml = songMenuBtn ? `<div class="followActTopMenu">${songMenuBtn}</div>` : "";
   if (xstyle) {
+    const badgeHtml = orig ? "" : (followingActivityBadgeHtml("music", type) || "");
     return `
       <article class="followAct followAct--music followAct--xstyle" data-follow-act="${type}" data-profile-act-song-id="${escapeHtml(String(t.id || ""))}" style="--i:${idx}" data-user-lib-url="${encUrl}" data-user-lib-title="${encTitle}" data-user-lib-art="${encArt}" data-discovery-by="${encBy}" ${playData}>
-        <div class="followActTop">
-          <a class="followActAvatar" href="${escapeHtml(profileHref)}" data-route-link="user" data-avatar-user-id="${escapeHtml(String(t.userId || ""))}" aria-label="${handle ? `@${escapeHtml(handle)} profile` : "Profile"}">
-            <span class="followActAvatarRing" aria-hidden="true"></span>
-            ${avatarSrc
-              ? `<img src="${escapeHtml(avatarSrc)}" alt="" width="40" height="40" decoding="async" loading="lazy" />`
-              : `<span class="followActAvatarFallback">${escapeHtml(initials)}</span>`}
-          </a>
-          <div class="followActHeadStack">
-            <div class="followActMeta">
-              <a class="followActUserLink followActUserLink--badge" href="${escapeHtml(profileHref)}" data-route-link="user">${feedUsernameHtml(handle, prof)}</a>
-              <span class="followActMetaDot" aria-hidden="true">·</span>
-              <span class="followActWhen">${escapeHtml(when)}</span>
-              ${createdChipHtml}
-              ${(() => {
-                const badge = followingActivityBadgeHtml("music", type);
-                return badge ? `<span class="followActMetaDot" aria-hidden="true">·</span>${badge}` : "";
-              })()}
-            </div>
-          </div>
-          ${topMenuHtml}
-        </div>
+        ${followActXstyleTopHtml({
+          profileHref,
+          userId: t.userId,
+          avatarSrc,
+          initials,
+          whoHtml: feedUsernameHtml(handle, prof),
+          when,
+          createdChipHtml,
+          badgeHtml,
+          trailingHtml: topMenuHtml,
+          avatarLabel: handle ? `@${escapeHtml(handle)} profile` : "Profile",
+        })}
         ${caption ? `<div class="followActContent">${captionHtml}</div>` : ""}
         ${mashupBlockHtml || remixPairHtml || mediaBlockWithProgressHtml}
         <div class="followActActionsBar">
@@ -13340,9 +13373,8 @@ function followingActivitySkeletonHtml() {
       <div class="followActTop">
         <span class="followActAvatar followActSkel followActSkelAvatar"></span>
         <div class="followActHeadStack">
-          <div class="followActMeta">
-            <span class="followActSkel followActSkelMetaLine"></span>
-          </div>
+          <div class="followActMetaPrimary"><span class="followActSkel followActSkelMetaLine"></span></div>
+          <div class="followActMetaSub"><span class="followActSkel followActSkelMetaLine short"></span></div>
         </div>
       </div>
       <div class="followActContent">
@@ -13362,9 +13394,8 @@ function followingActivitySkeletonHtml() {
       <div class="followActTop">
         <span class="followActAvatar followActSkel followActSkelAvatar"></span>
         <div class="followActHeadStack">
-          <div class="followActMeta">
-            <span class="followActSkel followActSkelMetaLine"></span>
-          </div>
+          <div class="followActMetaPrimary"><span class="followActSkel followActSkelMetaLine"></span></div>
+          <div class="followActMetaSub"><span class="followActSkel followActSkelMetaLine short"></span></div>
         </div>
       </div>
       <div class="followActContent">

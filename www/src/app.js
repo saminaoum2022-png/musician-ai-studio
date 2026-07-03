@@ -130,7 +130,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260703-204556";
+const APP_BUILD = "20260703-205208";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -50385,6 +50385,7 @@ void (async () => {
   const pendingPushAfterBoot = consumePendingPushRoute();
   if (pendingPushAfterBoot && (isAppLoggedIn() || getSupabaseAuthToken())) {
     try { location.hash = `#/${pendingPushAfterBoot}`; } catch {}
+    scheduleApplyRoute();
   }
 
   // Always hydrate from cloud when a valid session exists (not only callback flows).

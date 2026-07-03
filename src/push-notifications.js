@@ -13,12 +13,42 @@ let _nativeOptedIn = false;
 
 const PENDING_PUSH_ROUTE_KEY = "nabad_pending_push_route:v1";
 
+function normalizePushPayload(raw) {
+  const notif = raw?.notification || raw;
+  const data = notif?.additionalData || notif?.data || raw?.additionalData || raw || {};
+  if (!data || typeof data !== "object") return {};
+  return {
+    route: String(data.nabad_route || "").trim(),
+    category: String(data.nabad_category || "").trim(),
+    entityId: String(data.nabad_entity_id || data.nabad_entityId || "").trim(),
+  };
+}
+
+/** Turn OneSignal custom data into an in-app hash path (no leading #/). */
+export function resolvePushHashPath(payload = {}) {
+  const category = String(payload?.category || payload?.nabad_category || "").trim();
+  const entityId = String(payload?.entityId || payload?.nabad_entity_id || "").trim();
+  const route = String(payload?.route || payload?.nabad_route || "").trim().replace(/^\/+/, "");
+
+  if (category === "dm_message" && entityId) {
+    return `messages-thread?thread=${encodeURIComponent(entityId)}`;
+  }
+  if (route) return route;
+  return "";
+}
+
 export function stashPendingPushRoute(route) {
   const clean = String(route || "").trim().replace(/^\/+/, "");
   if (!clean) return;
   try {
     sessionStorage.setItem(PENDING_PUSH_ROUTE_KEY, clean);
   } catch {}
+}
+
+export function stashPendingPushPayload(raw) {
+  const hashPath = resolvePushHashPath(normalizePushPayload(raw));
+  if (hashPath) stashPendingPushRoute(hashPath);
+  return hashPath;
 }
 
 export function consumePendingPushRoute() {
@@ -99,14 +129,13 @@ async function refreshNativePushState() {
   }
 }
 
-function navigateFromPushData(data) {
-  const route = String(data?.nabad_route || "").trim();
-  if (!route) return;
-  stashPendingPushRoute(route);
-  const hash = `#/${route.replace(/^\/+/, "")}`;
+function navigateFromPushData(raw) {
+  const hashPath = stashPendingPushPayload(raw);
+  if (!hashPath) return;
+  const hash = `#/${hashPath.replace(/^\/+/, "")}`;
   if (location.hash !== hash) location.hash = hash;
   try {
-    globalThis.__nabadNavigateFromPush?.(route);
+    globalThis.__nabadNavigateFromPush?.(hashPath);
   } catch {
     globalThis.__nabadApplyRoute?.();
   }
@@ -240,9 +269,7 @@ async function initNativePushNotifications() {
 
       OneSignal.Notifications.addEventListener("click", (event) => {
         try {
-          const notif = event?.notification || event;
-          const data = notif?.additionalData || notif?.data || event?.additionalData || {};
-          navigateFromPushData(data);
+          navigateFromPushData(event);
         } catch {}
       });
 
@@ -281,8 +308,7 @@ async function initWebPushNotifications() {
       });
       OneSignal.Notifications.addEventListener("click", (event) => {
         try {
-          const data = event?.notification?.additionalData || event?.notification?.data || {};
-          navigateFromPushData(data);
+          navigateFromPushData(event);
         } catch {}
       });
       return true;

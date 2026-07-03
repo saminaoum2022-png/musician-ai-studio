@@ -649,9 +649,13 @@ html[data-theme="light"] .profileAuraNameInput:disabled{
 }
 
 html[data-theme="light"] .profileMusicStylesInline,
+html[data-theme="light"] .profileAuraIdentity > .profileHandleSubline,
 html[data-theme="light"] .profileAuraIdentity > .profileIdentityLine,
 html[data-theme="light"] .profileHeroBioText{
   color: var(--muted);
+}
+html[data-theme="light"] .profileDisplayNameLine{
+  color: var(--text);
 }
 
 html[data-theme="light"] .profileIdentityLine strong{
@@ -13214,17 +13218,87 @@ body:not([data-route="profile"]) #profileAuraHeaderChromeRoot{
   z-index: 2;
   box-shadow: 0 6px 14px rgba(0,0,0,0.35);
 }
+.profileAuraNameStack{
+  width: 100%;
+  max-width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0;
+}
+.profileDisplayNameLine{
+  margin: 0;
+  padding: 0;
+  border: 0;
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  line-height: 1.15;
+  color: #fff;
+  text-align: center;
+  flex: 0 1 auto;
+  width: auto;
+  max-width: min(100%, 260px);
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 .profileAuraNameRow{
   position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   margin-top: 0;
   align-self: center;
   width: 100%;
   max-width: 100%;
+}
+.profileAuraNameCluster{
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+}
+.profileAuraNameCenterWrap{
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  max-width: 100%;
+  min-width: 0;
+}
+.profileAuraNameAffixes{
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 0 auto;
+}
+/* View mode: center name/handle alone; badge + Edit hang off the right. */
+.profileAura:not(.profileAuraEditing) .profileAuraNameCenterWrap{
+  display: inline-block;
+  vertical-align: middle;
+}
+.profileAura:not(.profileAuraEditing) .profileAuraNameAffixes{
+  position: absolute;
+  left: 100%;
+  top: 50%;
+  transform: translateY(-50%);
+  margin-left: 6px;
+  white-space: nowrap;
+}
+.profileAuraNameStack--hasDisplayName .profileDisplayNameLine{
+  display: block;
+  max-width: min(calc(100vw - 128px), 280px);
+}
+.profileAura:not(.profileAuraEditing) .profileAuraNameStack:not(.profileAuraNameStack--hasDisplayName) .profileAuraNameInput{
+  display: block;
+  max-width: min(calc(100vw - 128px), 280px);
 }
 .profileAuraNameRow > :not(.profileAuraNameSkeleton){
   position: relative;
@@ -13235,6 +13309,24 @@ body:not([data-route="profile"]) #profileAuraHeaderChromeRoot{
   align-self: flex-start;
   flex-wrap: nowrap;
   gap: 8px;
+}
+.profileAura.profileAuraEditing .profileAuraNameCenterWrap{
+  display: inline-flex;
+  flex: 1 1 auto;
+  width: 100%;
+  max-width: 100%;
+  justify-content: flex-start;
+}
+.profileAura.profileAuraEditing .profileAuraNameAffixes{
+  position: static;
+  transform: none;
+  margin-left: 0;
+}
+.profileAura.profileAuraEditing .profileAuraNameCluster{
+  flex: 1 1 auto;
+  width: 100%;
+  max-width: 100%;
+  justify-content: flex-start;
 }
 /* Verified check + gender stay pinned beside the field, never wrap. */
 .profileAura.profileAuraEditing .profileNabadCertCheck,
@@ -13783,7 +13875,10 @@ body:not([data-route="profile"]) #profileAuraHeaderChromeRoot{
 .profileAuraNameRow[data-loading="true"] .profileAuraNameSkeleton{
   display: block;
 }
+.profileAuraNameRow[data-loading="true"] .profileAuraNameCenterWrap,
+.profileAuraNameRow[data-loading="true"] .profileAuraNameCluster,
 .profileAuraNameRow[data-loading="true"] .profileAuraNameInput,
+.profileAuraNameRow[data-loading="true"] .profileDisplayNameLine,
 .profileAuraNameRow[data-loading="true"] .profilePreviewGenderIcon,
 .profileAuraNameRow[data-loading="true"] .profileEditPill{
   visibility: hidden;
@@ -13791,7 +13886,8 @@ body:not([data-route="profile"]) #profileAuraHeaderChromeRoot{
 #profileAuraNameRow[data-loading="true"] + .profileMusicStylesInline{
   visibility: hidden;
 }
-#profileAuraNameRow[data-loading="true"] + .profileMusicStylesInline + .profileIdentityLine{
+#profileAuraNameRow[data-loading="true"] + .profileHandleSubline,
+#profileAuraNameStack:has(#profileAuraNameRow[data-loading="true"]) .profileHandleSubline{
   visibility: hidden;
 }
 .profileAuraNameRow > [hidden]{
@@ -13809,7 +13905,24 @@ body[data-route="profile"]:has(#profileAuraNameRow[data-loading="true"]) #profil
   .profileAuraNameSkeleton{ animation: none !important; }
 }
 
-/* Persona line — below @handle row (not inline after verified badge). */
+/* @handle subline — below display name when set. */
+.profileAuraIdentity > .profileHandleSubline,
+.profileAuraNameStack > .profileHandleSubline{
+  margin: 3px 0 0;
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  color: rgba(223, 231, 251, 0.46);
+  line-height: 1.2;
+  display: block;
+  min-width: 0;
+  max-width: min(100%, 320px);
+  width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-align: center;
+}
 .profileAuraIdentity > .profileIdentityLine{
   margin: 3px auto 0;
   font-size: 13px;
@@ -13844,6 +13957,7 @@ body[data-route="profile"]:has(#profileAuraNameRow[data-loading="true"]) #profil
 }
 /* In edit mode, hide identity line entirely — the timbre picker is up
    in the chip slot and the input fields own the visual space. */
+.profileAura.profileAuraEditing .profileHandleSubline,
 .profileAura.profileAuraEditing .profileIdentityLine{ display: none !important; }
 
 /* Music styles — dot-separated line under @handle (view mode). */
@@ -20613,6 +20727,23 @@ html[data-theme="light"] .soundsStudioTempoValue{
   height: 100%;
   display: block;
 }
+.profileNabadCertCheck--inline{
+  width: 14px;
+  height: 14px;
+  flex: 0 0 auto;
+}
+.profileHandleText{
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.profileAuraNameStack > .profileHandleSubline{
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  max-width: min(100%, 320px);
+}
 /* ---------- Profile avatar — story squircle, "Na" fallback ----------
    Same rounded-square language as story tiles. Teal→purple ring only
    when this user has a live story (muted grey ring once fully seen). */
@@ -24453,6 +24584,18 @@ body.createChooserSheetOpen .footer{
   color: inherit;
   text-decoration: none;
   min-width: 0;
+}
+.followActUserLink--badge{
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 100%;
+  min-width: 0;
+}
+.followActUserLink--badge .followActUser{
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .followActUserLink:hover .followActUser{
   text-decoration: underline;
@@ -34785,6 +34928,21 @@ section.mentorPage{
   text-decoration: none;
   letter-spacing: -0.01em;
 }
+.feedReplyNameWithBadge{
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 100%;
+  min-width: 0;
+}
+.feedReplyNameText{
+  font-size: inherit;
+  font-weight: inherit;
+  color: inherit;
+}
+.followActRepostVerb{
+  font-weight: 650;
+}
 .feedReplyWhen{
   font-size: 12.5px;
   color: rgba(232, 238, 247, 0.48);
@@ -37151,6 +37309,13 @@ body[data-route="generate"] .aiGenerate{
   overflow: hidden;
   text-overflow: ellipsis;
 }
+.discoverFeedSongByLine{
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 100%;
+  min-width: 0;
+}
 .discoverFeedOrigin{
   display: block;
   max-width: 100%;
@@ -37377,7 +37542,10 @@ body[data-route="generate"] .aiGenerate{
   background: linear-gradient(145deg, rgba(124, 92, 255, 0.35), rgba(35, 213, 171, 0.2));
 }
 .discoverFeedFollowHandle{
-  display: block;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
   width: 100%;
   font-size: 12px;
   font-weight: 800;
@@ -37386,6 +37554,7 @@ body[data-route="generate"] .aiGenerate{
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
 }
 .discoverFeedFollowCta{
   width: 100%;
@@ -43088,6 +43257,40 @@ body.profileEditSheetOpen{
   outline: none;
   border-color: rgba(255, 255, 255, 0.16);
 }
+.profileEditSheetAtWrap{
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 14px;
+  padding: 0 14px;
+  background: rgba(255, 255, 255, 0.04);
+}
+.profileEditSheetAtWrap:focus-within{
+  border-color: rgba(255, 255, 255, 0.16);
+}
+.profileEditSheetAt{
+  font-size: 17px;
+  font-weight: 650;
+  color: rgba(248, 250, 255, 0.72);
+  user-select: none;
+}
+.profileEditSheetInput--at{
+  border: 0;
+  background: transparent;
+  padding-left: 0;
+  flex: 1;
+  min-width: 0;
+}
+.profileEditSheetInput--at:focus{
+  border-color: transparent;
+}
+.profileEditRow--locked{
+  opacity: 0.72;
+}
+.profileEditRow--locked .profileEditRowValue{
+  font-size: 14px;
+}
 .profileEditSheetHint{
   margin: 0;
   font-size: 13px;
@@ -43101,6 +43304,11 @@ body.profileEditSheetOpen{
 }
 .profileEditSheetHint--checking{
   color: rgba(223, 231, 251, 0.52);
+}
+.profileEditSheetHint--note{
+  margin-top: 10px;
+  color: rgba(223, 231, 251, 0.58);
+  line-height: 1.4;
 }
 .profileUsernameAvailability{
   margin: 4px 0 0;

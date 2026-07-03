@@ -99,6 +99,7 @@ import {
   onProfileEditRouteActive,
   openProfileEditPage,
 } from "./profile-edit.js";
+import { USERNAME_MAX_LENGTH, DISPLAY_NAME_MAX_LENGTH } from "./profile-limits.js";
 import {
   initNabadVerificationUi,
   lyricsEditedAfterNabadDraft,
@@ -130,7 +131,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260703-212037";
+const APP_BUILD = "20260703-223057";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -941,6 +942,8 @@ const els = {
   // Liquid pulse redesign nodes
   profileAuraTopRow: document.getElementById("profileAuraTopRow"),
   profileAuraNameRow: document.getElementById("profileAuraNameRow"),
+  profileAuraNameStack: document.getElementById("profileAuraNameStack"),
+  profileDisplayNameLine: document.getElementById("profileDisplayNameLine"),
   profileNabadCertBadge: document.getElementById("profileNabadCertBadge"),
   profileNabadCertCheck: document.getElementById("profileNabadCertCheck"),
   profileMusicStylesInline: document.getElementById("profileMusicStylesInline"),
@@ -8167,9 +8170,47 @@ function discoverTrackDurationSec(track) {
   return 0;
 }
 
-function discoverCreatorVerifiedBadgeHtml(prof) {
+const USERNAME_VERIFIED_BADGE_SVG = `<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path fill="currentColor" d="M12 1.5 14.6 4l3.5-.4.7 3.5 3 1.9-1.6 3.2 1.6 3.2-3 1.9-.7 3.5L14.6 20 12 22.5 9.4 20l-3.5.4-.7-3.5-3-1.9 1.6-3.2L2.2 8.6l3-1.9.7-3.5L9.4 4 12 1.5Z"/><path fill="#0a0c12" d="m10.6 14.6-2.3-2.3 1.3-1.3 1 1 3.4-3.4 1.3 1.3-4.7 4.7Z"/></svg>`;
+
+/** Inline verified checkmark beside `@username` in feeds, comments, and Discover. */
+function usernameVerifiedBadgeHtml(prof, opts = {}) {
   if (!isPublicProfileVerifiedForDisplay(prof)) return "";
-  return `<span class="discoverTemplatesVerified" aria-label="Verified creator"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path fill="currentColor" d="M12 1.5 14.6 4l3.5-.4.7 3.5 3 1.9-1.6 3.2 1.6 3.2-3 1.9-.7 3.5L14.6 20 12 22.5 9.4 20l-3.5.4-.7-3.5-3-1.9 1.6-3.2L2.2 8.6l3-1.9.7-3.5L9.4 4 12 1.5Z"/><path fill="#0a0c12" d="m10.6 14.6-2.3-2.3 1.3-1.3 1 1 3.4-3.4 1.3 1.3-4.7 4.7Z"/></svg></span>`;
+  const cls = String(opts.className || "profileNabadCertCheck profileNabadCertCheck--inline").trim();
+  const label = String(opts.label || "Verified Nabad Creator").trim();
+  return `<span class="${escapeHtml(cls)}" role="img" aria-label="${escapeHtml(label)}" title="${escapeHtml(label)}">${USERNAME_VERIFIED_BADGE_SVG}</span>`;
+}
+
+/** `@handle` label with optional verified badge — use inside links or meta rows. */
+function feedUsernameHtml(handle, prof, opts = {}) {
+  const className = String(opts.className || "followActUser").trim();
+  const fallback = String(opts.fallback || "A musician").trim();
+  const badge = opts.badge !== false;
+  const h = String(handle || prof?.username || "").trim().replace(/^@/, "");
+  if (!h) return `<strong class="${className}">${fallback}</strong>`;
+  const badgeHtml = badge ? usernameVerifiedBadgeHtml(prof) : "";
+  return `<strong class="${className}">@${escapeHtml(h)}</strong>${badgeHtml}`;
+}
+
+function discoverCreatorVerifiedBadgeHtml(prof) {
+  return usernameVerifiedBadgeHtml(prof, {
+    className: "discoverTemplatesVerified profileNabadCertCheck--inline",
+    label: "Verified creator",
+  });
+}
+
+function discoverFeedByLineHtml(byLine, prof, opts = {}) {
+  const raw = String(byLine || "").trim();
+  if (!raw || raw === "Creator") {
+    return `<span class="discoverFeedSongBy">${escapeHtml(raw || "Creator")}</span>`;
+  }
+  const prefix = opts.byPrefix != null ? String(opts.byPrefix) : "by ";
+  const handle = raw.replace(/^@/, "");
+  const line = raw.startsWith("@") ? raw : `@${handle}`;
+  const badge = usernameVerifiedBadgeHtml(prof, {
+    className: "discoverTemplatesVerified profileNabadCertCheck--inline",
+    label: "Verified creator",
+  });
+  return `<span class="discoverFeedSongBy discoverFeedSongByLine"><span>${escapeHtml(prefix ? `${prefix}${line}` : line)}</span>${badge}</span>`;
 }
 
 function discoverTemplatesMetricsHtml(t) {
@@ -8384,11 +8425,11 @@ function discoverFeedSongRowHtml(t, profMap, opts = {}) {
     const playText = plays > 0
       ? `${discoverHubStatLabel(plays)} ${plays === 1 ? "play" : "plays"}`
       : "New";
-    secondaryHtml = `<span class="discoverFeedSongMeta"><span class="discoverFeedSongBy">${escapeHtml(byLine)}</span><span class="discoverFeedSongMetaDot" aria-hidden="true">·</span><span class="discoverFeedSongPlays">${escapeHtml(playText)}</span></span>`;
+    secondaryHtml = `<span class="discoverFeedSongMeta">${discoverFeedByLineHtml(byLine, prof, { byPrefix: "" })}<span class="discoverFeedSongMetaDot" aria-hidden="true">·</span><span class="discoverFeedSongPlays">${escapeHtml(playText)}</span></span>`;
   } else {
     const byHtml = opts.hideByLine
       ? ""
-      : `<span class="discoverFeedSongBy">${opts.byPrefix || "by "}${escapeHtml(byLine)}</span>`;
+      : discoverFeedByLineHtml(byLine, prof, { byPrefix: opts.byPrefix != null ? opts.byPrefix : "by " });
     const originHtml = opts.originHtml != null
       ? opts.originHtml
       : (opts.hideOrigin ? "" : discoverOriginLineHtml(t));
@@ -8564,7 +8605,7 @@ function discoverFeedChallengeBlockHtml(c, tracks, profMap, opts = {}) {
               </span>
               <span class="discoverFeedChallengeHeroMeta">
                 <strong class="discoverFeedSongTitle">${escapeHtml(title)}</strong>
-                ${handle ? `<span class="discoverFeedSongBy">by @${escapeHtml(handle)}</span>` : ""}
+                ${handle ? discoverFeedByLineHtml(`@${handle}`, prof) : ""}
                 <span class="discoverFeedOrigin">${escapeHtml(origin)}</span>
               </span>
             </button>
@@ -8617,6 +8658,7 @@ function discoverSuggestedCreatorsFromTracks(tracks, profMap, limit = 12) {
         userId: row.userId,
         handle,
         avatar: String(prof?.avatar || "").trim(),
+        prof,
         songs: row.songs,
       };
     })
@@ -8635,13 +8677,13 @@ function discoverFeedCreatorAvatarHtml(prof, handle) {
 function discoverFeedFollowCardHtml(creator) {
   const handle = String(creator.handle || "").trim();
   const userId = String(creator.userId || "").trim();
-  const prof = { avatar: creator.avatar };
+  const prof = creator.prof || { user_id: userId, username: handle, avatar: creator.avatar };
   return `
     <article class="discoverFeedFollowCard">
       <button type="button" class="discoverFeedFollowAvBtn" data-discover-creator="${encodeURIComponent(handle)}" aria-label="View @${escapeHtml(handle)} profile">
         ${discoverFeedCreatorAvatarHtml(prof, handle)}
       </button>
-      <strong class="discoverFeedFollowHandle">@${escapeHtml(handle)}</strong>
+      <span class="discoverFeedFollowHandle">${feedUsernameHtml(handle, prof, { className: "discoverFeedFollowHandle" })}</span>
       <button
         type="button"
         class="discoverFeedFollowCta"
@@ -11087,12 +11129,10 @@ function followingStatusRowHtml(post, profMap, idx, opts = {}) {
   );
   const who = isOwn
     ? `<span class="followActYouLabel">You</span>`
-    : handle
-      ? `<strong class="followActUser">@${escapeHtml(handle)}</strong>`
-      : `<strong class="followActUser">A musician</strong>`;
+    : feedUsernameHtml(handle, prof);
   const whoLineInner = isOwn
     ? `${who}<span class="followActWhen">${escapeHtml(when)}</span>`
-    : `<a class="followActUserLink" href="${escapeHtml(profileHref)}" data-route-link="user">${who}</a><span class="followActWhen">${escapeHtml(when)}</span>`;
+    : `<a class="followActUserLink followActUserLink--badge" href="${escapeHtml(profileHref)}" data-route-link="user">${who}</a><span class="followActWhen">${escapeHtml(when)}</span>`;
   const menuBtn = isOwn
     ? `<div class="followActMenuWrap">
         <button type="button" class="followActMore" data-follow-status-menu="${escapeHtml(postId)}" aria-label="Post options" aria-haspopup="true" aria-expanded="false">
@@ -11111,7 +11151,7 @@ function followingStatusRowHtml(post, profMap, idx, opts = {}) {
   if (xstyle) {
     const metaInner = isOwn
       ? `${who}<span class="followActMetaDot" aria-hidden="true">·</span><span class="followActWhen">${escapeHtml(when)}</span>`
-      : `<a class="followActUserLink" href="${escapeHtml(profileHref)}" data-route-link="user">${who}</a><span class="followActMetaDot" aria-hidden="true">·</span><span class="followActWhen">${escapeHtml(when)}</span>`;
+      : `<a class="followActUserLink followActUserLink--badge" href="${escapeHtml(profileHref)}" data-route-link="user">${who}</a><span class="followActMetaDot" aria-hidden="true">·</span><span class="followActWhen">${escapeHtml(when)}</span>`;
     return `
       <article class="followAct followAct--status followAct--xstyle${ownCls}" data-follow-act="status" data-follow-status-type="${escapeHtml(postType)}" data-follow-status-id="${escapeHtml(postId)}" style="--i:${idx}">
         <div class="followActTop">
@@ -13167,7 +13207,7 @@ function followingActivityRowHtml(t, profMap, idx, opts = {}) {
           </a>
           <div class="followActHeadStack">
             <div class="followActMeta">
-              <a class="followActUserLink" href="${escapeHtml(profileHref)}" data-route-link="user">${handle ? `<strong class="followActUser">@${escapeHtml(handle)}</strong>` : `<strong class="followActUser">A musician</strong>`}</a>
+              <a class="followActUserLink followActUserLink--badge" href="${escapeHtml(profileHref)}" data-route-link="user">${feedUsernameHtml(handle, prof)}</a>
               <span class="followActMetaDot" aria-hidden="true">·</span>
               <span class="followActWhen">${escapeHtml(when)}</span>
               ${createdChipHtml}
@@ -13201,9 +13241,7 @@ function followingActivityRowHtml(t, profMap, idx, opts = {}) {
     ? "— plays"
     : `${formatStatCount(plays)} ${plays === 1 ? "play" : "plays"}`;
   const playFoot = `<div class="followActFoot"><span class="followActFootStat" data-play-foot-stat="1">${escapeHtml(playFootLabel)}</span></div>`;
-  const who = handle
-    ? `<strong class="followActUser">@${escapeHtml(handle)}</strong>`
-    : `<strong class="followActUser">A musician</strong>`;
+  const who = feedUsernameHtml(handle, prof);
   return `
     <article class="followAct followAct--music" data-follow-act="${type}" style="--i:${idx}" data-user-lib-url="${encUrl}" data-user-lib-title="${encTitle}" data-user-lib-art="${encArt}" data-discovery-by="${encBy}" ${playData}>
       <div class="followActTop">
@@ -13215,7 +13253,7 @@ function followingActivityRowHtml(t, profMap, idx, opts = {}) {
         </a>
         <div class="followActTopText">
           <div class="followActWhoLine">
-            <a class="followActUserLink" href="${escapeHtml(profileHref)}" data-route-link="user">${who}</a>
+            <a class="followActUserLink followActUserLink--badge" href="${escapeHtml(profileHref)}" data-route-link="user">${who}</a>
             <span class="followActWhen">${escapeHtml(when)}</span>
             ${createdChipHtml}
           </div>
@@ -13678,7 +13716,11 @@ async function loadFeedReplyList() {
 
 function feedReplyRowHtml(reply) {
   const handle = String(reply?.username || "").trim();
-  const safeHandle = escapeHtml(handle);
+  const replyProf = {
+    user_id: reply?.userId,
+    username: reply?.username,
+    sound_certified: reply?.soundCertified,
+  };
   const initials = (handle || "U").replace(/^@/, "").slice(0, 2).toUpperCase();
   const avatarRaw = String(reply?.avatar || "").trim();
   const avatarSrc = avatarRaw ? normalizeProfileAvatarForImg(avatarRaw) : "";
@@ -13695,16 +13737,17 @@ function feedReplyRowHtml(reply) {
   const deleteBtn = isOwn
     ? `<button type="button" class="feedReplyDelete" data-feed-reply-delete="${replyId}">Remove</button>`
     : "";
+  const nameHtml = feedUsernameHtml(handle, replyProf, { className: "feedReplyNameText", fallback: "A musician" });
   return `
     <article class="feedReplyRow" data-feed-reply-id="${replyId}">
-      <a class="feedReplyAvatar" href="${escapeHtml(href)}" data-route-link="user" aria-label="${handle ? `@${safeHandle} profile` : "Profile"}">
+      <a class="feedReplyAvatar" href="${escapeHtml(href)}" data-route-link="user" aria-label="${handle ? `@${escapeHtml(handle.replace(/^@/, ""))} profile` : "Profile"}">
         ${avatarSrc
           ? `<img src="${escapeHtml(avatarSrc)}" alt="" width="36" height="36" decoding="async" loading="lazy" />`
           : `<span class="feedReplyAvatarFallback">${escapeHtml(initials)}</span>`}
       </a>
       <div>
         <div class="feedReplyMeta">
-          <a class="feedReplyName" href="${escapeHtml(href)}" data-route-link="user">${handle ? `@${safeHandle}` : "A musician"}</a>
+          <a class="feedReplyName feedReplyNameWithBadge" href="${escapeHtml(href)}" data-route-link="user">${nameHtml}</a>
           <span aria-hidden="true">·</span>
           <span class="feedReplyWhen">${escapeHtml(when)}</span>
         </div>
@@ -14286,7 +14329,9 @@ function followingRepostRowHtml(item, profMap, idx) {
   const reposterId = String(rp.userId || "");
   const prof = resolveProfileForFeedCreator(reposterId, profMap);
   const handle = String(prof?.username || "").trim();
-  const who = handle ? `@${escapeHtml(handle)}` : "Someone";
+  const repostUserHtml = handle
+    ? feedUsernameHtml(handle, prof)
+    : `<strong class="followActUser">Someone</strong>`;
   const href = handle ? `#/u/${encodeURIComponent(handle)}` : "#";
   const when = relativeTime(Number(rp.ts || item.ts || 0));
   const note = String(rp.body || "").trim();
@@ -14294,7 +14339,7 @@ function followingRepostRowHtml(item, profMap, idx) {
   const banner = `
         <div class="followActRepostBanner">
           <span class="followActRepostIco" aria-hidden="true">${repostIconSvgHtml("followActRepostBannerIco")}</span>
-          <a class="followActRepostByLink" href="${escapeHtml(href)}" data-route-link="user"><strong>${who}</strong> reposted</a>
+          <a class="followActRepostByLink followActUserLink--badge" href="${escapeHtml(href)}" data-route-link="user">${repostUserHtml}<span class="followActRepostVerb"> reposted</span></a>
           <span class="followActMetaDot" aria-hidden="true">·</span>
           <span class="followActWhen">${escapeHtml(when)}</span>
         </div>
@@ -19354,7 +19399,52 @@ function normalizeProfileUsername(raw) {
     .toLowerCase()
     .replace(/^@+/, "")
     .replace(/[^a-z0-9_.]/g, "")
-    .slice(0, 32);
+    .slice(0, USERNAME_MAX_LENGTH);
+}
+
+const USERNAME_CHANGE_COOLDOWN_MS = 30 * 24 * 60 * 60 * 1000;
+
+function getUsernameChangeBlockedUntil(profile, nextHandle) {
+  const current = normalizeProfileUsername(profile?.username);
+  const next = normalizeProfileUsername(nextHandle ?? profile?.username);
+  if (!next || next === current) return 0;
+  if (isPlaceholderUsername(current)) return 0;
+  const ts = Number(profile?.usernameChangedAt || 0);
+  if (!ts) return 0;
+  const unlock = ts + USERNAME_CHANGE_COOLDOWN_MS;
+  return unlock > Date.now() ? unlock : 0;
+}
+
+function canChangeUsername(profile, nextHandle) {
+  return getUsernameChangeBlockedUntil(profile, nextHandle) === 0;
+}
+
+function isUsernameChangeOnCooldown(profile) {
+  const current = normalizeProfileUsername(profile?.username);
+  if (isPlaceholderUsername(current)) return false;
+  const ts = Number(profile?.usernameChangedAt || 0);
+  if (!ts) return false;
+  return ts + USERNAME_CHANGE_COOLDOWN_MS > Date.now();
+}
+
+function getUsernameCooldownUnlockTime(profile) {
+  if (!isUsernameChangeOnCooldown(profile)) return 0;
+  return Number(profile?.usernameChangedAt || 0) + USERNAME_CHANGE_COOLDOWN_MS;
+}
+
+function formatUsernameCooldownHint(blockedUntil) {
+  const ms = Number(blockedUntil || 0) - Date.now();
+  if (ms <= 0) return "Username can be changed now.";
+  const days = Math.ceil(ms / (24 * 60 * 60 * 1000));
+  if (days <= 1) return "Username can be changed again tomorrow.";
+  return `Username can be changed again in ${days} days.`;
+}
+
+function normalizeDisplayName(raw) {
+  return String(raw || "")
+    .trim()
+    .replace(/^@+/, "")
+    .slice(0, DISPLAY_NAME_MAX_LENGTH);
 }
 
 async function isUsernameAvailableForCurrentUser(rawUsername, originalUsername) {
@@ -21639,6 +21729,7 @@ async function supabaseUpsertProfile(profile) {
   const payload = {
     user_id: authSession?.user?.id,
     username: outgoingUsername,
+    display_name: normalizeDisplayName(profile.displayName || ""),
     email: profile.email || "",
     gender: profile.gender || "",
     voice_timbre: profile.voiceTimbre || "",
@@ -21655,6 +21746,9 @@ async function supabaseUpsertProfile(profile) {
       : null,
     updated_at: new Date().toISOString(),
   };
+  if (profile.usernameChangedAt) {
+    payload.username_changed_at = new Date(Number(profile.usernameChangedAt)).toISOString();
+  }
   const r = await fetch(`${SUPABASE_URL}/rest/v1/profiles`, {
     method: "POST",
     headers: {
@@ -21699,7 +21793,10 @@ async function supabaseLoadProfile() {
   return {
     id: p.user_id || activeProfile.id,
     username: p.username || "guest",
-    displayName: String(activeProfile?.displayName || "").trim(),
+    displayName: String(p.display_name || activeProfile?.displayName || "").trim(),
+    usernameChangedAt: p.username_changed_at
+      ? Date.parse(p.username_changed_at) || 0
+      : Number(activeProfile?.usernameChangedAt || 0),
     email: p.email || "",
     gender: p.gender || "",
     voiceTimbre: p.voice_timbre || "",
@@ -28698,7 +28795,7 @@ async function fetchProfilesByUserIdsMap(userIds) {
   const timer = setTimeout(() => ctrl.abort(), supabaseRestTimeoutMs());
   try {
     const r = await fetch(
-      `${SUPABASE_URL}/rest/v1/profiles?user_id=in.(${inClause})&select=user_id,username,avatar`,
+      `${SUPABASE_URL}/rest/v1/profiles?user_id=in.(${inClause})&select=user_id,username,avatar,sound_certified`,
       {
         headers: { apikey: SUPABASE_ANON_KEY, Accept: "application/json" },
         cache: "no-store",
@@ -36026,20 +36123,63 @@ function shouldShowProfileHeaderSkeleton() {
 }
 
 /* =================================================================
- *  Single identity line — persona when set. Music styles under @handle.
+ *  Profile header names — display name (big) + @handle (subline).
  * ================================================================= */
 function renderProfileIdentityLine() {
-  const el = els.profileIdentityLine;
-  if (!el) return;
-  const friendly = String(activeProfile?.displayName || "").trim();
-  if (!friendly || profileEditing) {
-    el.hidden = true;
-    el.textContent = "";
-    el.innerHTML = "";
+  const displayEl = els.profileDisplayNameLine || document.getElementById("profileDisplayNameLine");
+  const subEl = els.profileIdentityLine;
+  const handleTextEl = document.getElementById("profileHandleText");
+  const input = els.profilePreviewUsernameInput;
+  const stack = els.profileAuraNameStack || document.getElementById("profileAuraNameStack");
+  const friendly = normalizeDisplayName(activeProfile?.displayName);
+  const handle = normalizeProfileUsername(activeProfile?.username);
+  const handleText = handle ? `@${handle}` : "@guest";
+
+  if (profileEditing) {
+    if (displayEl) {
+      displayEl.hidden = true;
+      displayEl.textContent = "";
+    }
+    if (subEl) {
+      subEl.hidden = true;
+      if (handleTextEl) handleTextEl.textContent = "";
+      else subEl.textContent = "";
+    }
+    if (input) {
+      input.hidden = false;
+      input.value = handleText;
+    }
+    stack?.classList.remove("profileAuraNameStack--hasDisplayName");
     return;
   }
-  el.hidden = false;
-  el.textContent = friendly;
+
+  if (input) input.value = handleText;
+
+  if (friendly) {
+    if (displayEl) {
+      displayEl.hidden = false;
+      displayEl.textContent = friendly;
+    }
+    if (input) input.hidden = true;
+    if (subEl) {
+      subEl.hidden = false;
+      if (handleTextEl) handleTextEl.textContent = handleText;
+      else subEl.textContent = handleText;
+    }
+    stack?.classList.add("profileAuraNameStack--hasDisplayName");
+  } else {
+    if (displayEl) {
+      displayEl.hidden = true;
+      displayEl.textContent = "";
+    }
+    if (input) input.hidden = false;
+    if (subEl) {
+      subEl.hidden = true;
+      if (handleTextEl) handleTextEl.textContent = "";
+      else subEl.textContent = "";
+    }
+    stack?.classList.remove("profileAuraNameStack--hasDisplayName");
+  }
 }
 
 /* =================================================================
@@ -36198,9 +36338,9 @@ function isPublicProfileVerifiedForDisplay(prof) {
   if (!prof) return false;
   if (INTERIM_ALWAYS_SHOW_PUBLIC_PROFILE_VERIFIED) return true;
   if (isFounderBadgeUsername(prof.username)) return true;
-  const uid = String(prof.user_id || "").trim();
+  const uid = String(prof.user_id || prof.userId || "").trim();
   if (!uid) return false;
-  const sc = prof.sound_certified;
+  const sc = prof.sound_certified ?? prof.soundCertified;
   if (sc === true || sc === "t" || sc === "true") return true;
   try {
     if (_nabadCertifiedUserIds && _nabadCertifiedUserIds.has(uid)) return true;
@@ -36220,6 +36360,15 @@ function renderProfileNabadCertBadge() {
   const check = els.profileNabadCertCheck;
   const legacy = els.profileNabadCertBadge;
   const show = isNabadSoundCertified();
+  const subEl = els.profileIdentityLine;
+  const affixes = document.getElementById("profileAuraNameAffixes");
+  const hasDisplayName = Boolean(normalizeDisplayName(activeProfile?.displayName));
+  const home = hasDisplayName && subEl ? subEl : affixes;
+  if (check && home) {
+    if (check.parentElement !== home) {
+      home.insertBefore(check, home.firstChild || null);
+    }
+  }
   if (check) {
     check.hidden = !show;
     check.setAttribute("aria-hidden", show ? "false" : "true");
@@ -48014,6 +48163,11 @@ try {
     personaTypeLabel,
     getAuthSession: () => authSession,
     checkUsernameAvailable: (handle, original) => isUsernameAvailableForCurrentUser(handle, original),
+    getUsernameChangeBlockedUntil: (profile, nextHandle) => getUsernameChangeBlockedUntil(profile, nextHandle),
+    isUsernameChangeOnCooldown,
+    getUsernameCooldownUnlockTime,
+    formatUsernameCooldownHint,
+    isPlaceholderUsername,
     els,
     applyRoute: scheduleApplyRoute,
     haptic,
@@ -49012,7 +49166,7 @@ if (els.personaActiveBannerClear) {
 if (els.btnProfileSave) {
   els.btnProfileSave.addEventListener("click", async () => {
     const usernameRaw = String(els.profilePreviewUsernameInput?.value || "").trim().toLowerCase();
-    const cleaned = usernameRaw.replace(/[^a-z0-9_.]/g, "").slice(0, 32);
+    const cleaned = usernameRaw.replace(/[^a-z0-9_.]/g, "").slice(0, USERNAME_MAX_LENGTH);
     // If the user's input is empty / unusable, never fall back to
     // "guest". Prefer the handle they previously picked; only mint a
     // new anonymous one when there's nothing real to keep. This is
@@ -49030,12 +49184,23 @@ if (els.btnProfileSave) {
       username = "guest";
     }
     if (username && username !== "guest") {
+      const blockedUntil = getUsernameChangeBlockedUntil(activeProfile, username);
+      if (blockedUntil > Date.now()) {
+        showToast(formatUsernameCooldownHint(blockedUntil), { icon: "!", durationMs: 3200 });
+        return;
+      }
       const available = await isUsernameAvailableForCurrentUser(username, activeProfile.username);
       if (!available) {
         showToast(`@${username} is already taken`, { icon: "!", durationMs: 2800 });
         return;
       }
     }
+    const prevHandle = normalizeProfileUsername(activeProfile.username);
+    const usernameChangedAt =
+      username !== prevHandle && username && !isPlaceholderUsername(username)
+        ? Date.now()
+        : Number(activeProfile.usernameChangedAt || 0);
+    const displayName = normalizeDisplayName(activeProfile.displayName || "");
     const email = String(authSession?.user?.email || activeProfile.email || "").trim().toLowerCase();
     const voiceTimbre = String(els.profilePreviewTimbreInput?.value || "").trim();
     const bio = String(els.profilePreviewBioInput?.value || "").trim().slice(0, 280);
@@ -49051,8 +49216,9 @@ if (els.btnProfileSave) {
     saveProfile({
       id,
       username,
+      displayName,
+      usernameChangedAt,
       email,
-      displayName: String(activeProfile.displayName || "").trim(),
       voiceTimbre,
       bio,
       avatar: activeProfile.avatar || "",

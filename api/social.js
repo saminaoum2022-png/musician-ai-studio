@@ -201,7 +201,7 @@ async function profileByUserId(userId) {
   const uid = cleanUserId(userId);
   if (!uid) return null;
   if (profileCache?.has(uid)) return profileCache.get(uid);
-  const r = await svcFetch(`profiles?select=user_id,username,avatar&user_id=eq.${encodeURIComponent(uid)}&limit=1`);
+  const r = await svcFetch(`profiles?select=user_id,username,avatar,sound_certified&user_id=eq.${encodeURIComponent(uid)}&limit=1`);
   const row = Array.isArray(r.data) && r.data[0] ? r.data[0] : null;
   if (profileCache) profileCache.set(uid, row);
   return row;
@@ -489,6 +489,7 @@ async function fetchRepliesForTarget({ targetKind, targetId, limit = 50 }) {
     createdAt: row.created_at,
     username: profiles[i]?.username || "",
     avatar: profiles[i]?.avatar || "",
+    soundCertified: profiles[i]?.sound_certified === true || profiles[i]?.sound_certified === "t",
   }));
 }
 

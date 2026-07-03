@@ -3,6 +3,7 @@
  */
 
 import { MUSIC_PREFERENCE_GENRES, parseMusicPreferencesFromProfile, markMusicPreferencesComplete } from "./music-preferences.js";
+import { USERNAME_MAX_LENGTH, DISPLAY_NAME_MAX_LENGTH } from "./profile-limits.js";
 
 let _deps = null;
 let _inited = false;
@@ -50,7 +51,7 @@ function normalizeUsername(raw) {
     .toLowerCase()
     .replace(/^@+/, "")
     .replace(/[^a-z0-9_.]/g, "")
-    .slice(0, 32);
+    .slice(0, USERNAME_MAX_LENGTH);
 }
 
 function cleanBio(raw) {
@@ -66,7 +67,7 @@ function profileFromDraft(base = {}) {
   }
   return {
     ...base,
-    displayName: String(_draft.displayName || "").trim().slice(0, 48),
+    displayName: normalizeDisplayName(_draft.displayName),
     username,
     bio: cleanBio(_draft.bio),
     avatar: String(_draft.avatar || base.avatar || "").trim(),
@@ -118,11 +119,16 @@ function syncSaveButton() {
   btn.setAttribute("aria-disabled", _dirty ? "false" : "true");
 }
 
+function normalizeDisplayName(raw) {
+  return String(raw || "")
+    .trim()
+    .replace(/^@+/, "")
+    .slice(0, DISPLAY_NAME_MAX_LENGTH);
+}
+
 function displayNamePreview() {
-  const friendly = String(_draft?.displayName || "").trim();
-  if (friendly) return friendly;
-  const handle = normalizeUsername(_draft?.username);
-  return handle ? `@${handle}` : "Add display name";
+  const friendly = normalizeDisplayName(_draft?.displayName);
+  return friendly || "Add display name";
 }
 
 function bioPreview() {
@@ -174,7 +180,19 @@ function applyAvatarToEditPhoto() {
 
 function usernamePreview() {
   const handle = normalizeUsername(_draft?.username);
-  return handle ? `@${handle}` : "Choose username";
+  if (!handle) return "Choose username";
+  const profile = _deps?.getActiveProfile?.() || {};
+  const blockedUntil = _deps?.getUsernameCooldownUnlockTime?.(profile) || 0;
+  if (blockedUntil > Date.now()) {
+    const days = Math.ceil((blockedUntil - Date.now()) / (24 * 60 * 60 * 1000));
+    return `@${handle} · ${days}d until next change`;
+  }
+  return `@${handle}`;
+}
+
+function usernameRowLocked() {
+  const profile = _deps?.getActiveProfile?.() || {};
+  return Boolean(_deps?.isUsernameChangeOnCooldown?.(profile));
 }
 
 function renderProfileEditPage() {
@@ -195,7 +213,18 @@ function renderProfileEditPage() {
     setVal(`#profileEditSocialVal-${key}`, socialPreview(key), !String(_draft.links?.[key] || "").trim());
   });
   applyAvatarToEditPhoto();
+  syncUsernameRowUi();
   syncSaveButton();
+}
+
+function syncUsernameRowUi() {
+  const row = qs('[data-profile-edit-field="username"]');
+  if (!row) return;
+  const locked = usernameRowLocked();
+  row.classList.toggle("profileEditRow--locked", locked);
+  const chev = row.querySelector(".profileEditRowChev");
+  if (chev) chev.hidden = locked;
+  row.setAttribute("aria-disabled", locked ? "true" : "false");
 }
 
 function closeProfileEditSheet() {
@@ -235,16 +264,17 @@ function bindSheetDismiss() {
   });
 }
 
-function openTextEditor({ title, value, placeholder, multiline = false, maxLength = 120, onDone }) {
+function openTextEditor({ title, value, placeholder, multiline = false, maxLength = 120, hint = "", onDone }) {
   const body = openProfileEditSheet("text", title);
   if (!body) return;
   const fieldId = "profileEditSheetField";
+  const hintText = hint || (multiline ? "Share what makes your music yours." : "This is how others will recognize you.");
   body.innerHTML = `
     <div class="profileEditSheetFieldWrap">
       ${multiline
         ? `<textarea id="${fieldId}" class="profileEditSheetTextarea" maxlength="${maxLength}" placeholder="${escapeHtml(placeholder)}" rows="6">${escapeHtml(value)}</textarea>`
         : `<input id="${fieldId}" class="profileEditSheetInput" type="text" maxlength="${maxLength}" value="${escapeHtml(value)}" placeholder="${escapeHtml(placeholder)}" autocapitalize="sentences" autocomplete="off" spellcheck="false" />`}
-      <p class="profileEditSheetHint">${multiline ? "Share what makes your music yours." : "This is how others will recognize you."}</p>
+      <p class="profileEditSheetHint">${escapeHtml(hintText)}</p>
     </div>
     <div class="profileEditSheetActions">
       <button type="button" class="profileEditSheetDone" data-profile-edit-sheet-done="1">Done</button>
@@ -267,24 +297,40 @@ function openTextEditor({ title, value, placeholder, multiline = false, maxLengt
 function openDisplayNameEditor() {
   openTextEditor({
     title: "Display name",
-    value: String(_draft.displayName || "").trim() || normalizeUsername(_draft.username),
-    placeholder: "Your name",
-    maxLength: 48,
+    value: normalizeDisplayName(_draft.displayName),
+    placeholder: "Samy Naoum",
+    maxLength: DISPLAY_NAME_MAX_LENGTH,
+    hint: `Up to ${DISPLAY_NAME_MAX_LENGTH} characters · spaces allowed`,
     onDone: (val) => {
-      _draft.displayName = val.slice(0, 48);
+      _draft.displayName = normalizeDisplayName(val);
     },
   });
 }
 
 function openUsernameEditor() {
+  const profile = _deps?.getActiveProfile?.() || {};
+  const blockedUntil = _deps?.getUsernameCooldownUnlockTime?.(profile) || 0;
+  if (blockedUntil > Date.now()) {
+    try {
+      _deps?.showToast?.(
+        _deps?.formatUsernameCooldownHint?.(blockedUntil) || "Username is locked for now.",
+        { icon: "!", durationMs: 3200 },
+      );
+    } catch {}
+    return;
+  }
   clearTimeout(_usernameCheckTimer);
   const body = openProfileEditSheet("username", "Username");
   if (!body) return;
   const startVal = normalizeUsername(_draft?.username) || _originalUsername;
   body.innerHTML = `
     <div class="profileEditSheetFieldWrap">
-      <input id="profileEditSheetUsernameField" class="profileEditSheetInput" type="text" maxlength="32" value="${escapeHtml(startVal)}" placeholder="yourname" autocapitalize="none" autocomplete="username" spellcheck="false" inputmode="text" />
-      <p id="profileEditSheetUsernameStatus" class="profileEditSheetHint">Letters, numbers, dots, and underscores only.</p>
+      <div class="profileEditSheetAtWrap">
+        <span class="profileEditSheetAt" aria-hidden="true">@</span>
+        <input id="profileEditSheetUsernameField" class="profileEditSheetInput profileEditSheetInput--at" type="text" maxlength="${USERNAME_MAX_LENGTH}" value="${escapeHtml(startVal)}" placeholder="yourname" autocapitalize="none" autocomplete="username" spellcheck="false" inputmode="text" aria-label="Username without @ prefix" />
+      </div>
+      <p class="profileEditSheetHint profileEditSheetHint--note">You can only change your username once every 30 days.</p>
+      <p id="profileEditSheetUsernameStatus" class="profileEditSheetHint">Up to ${USERNAME_MAX_LENGTH} characters · letters, numbers, dots, and underscores</p>
     </div>
     <div class="profileEditSheetActions">
       <button type="button" class="profileEditSheetDone" data-profile-edit-sheet-done="1">Done</button>
@@ -468,6 +514,19 @@ export async function saveProfileEditDraft({ navigateBack = true } = {}) {
   const base = _deps.getActiveProfile();
   const next = profileFromDraft(base);
   const nextHandle = normalizeUsername(next.username);
+  const prevHandle = normalizeUsername(_originalUsername || base.username);
+  if (nextHandle && nextHandle !== prevHandle) {
+    const blockedUntil = _deps?.getUsernameChangeBlockedUntil?.(base, nextHandle) || 0;
+    if (blockedUntil > Date.now()) {
+      try {
+        _deps.showToast?.(
+          _deps?.formatUsernameCooldownHint?.(blockedUntil) || "Username is locked for now.",
+          { icon: "!", durationMs: 3200 },
+        );
+      } catch {}
+      return false;
+    }
+  }
   if (nextHandle && nextHandle !== "guest") {
     const available = await _deps.checkUsernameAvailable?.(nextHandle, _originalUsername || normalizeUsername(base.username));
     if (!available) {
@@ -479,11 +538,21 @@ export async function saveProfileEditDraft({ navigateBack = true } = {}) {
   }
   const email = String(_deps.getAuthSession?.()?.user?.email || base.email || "").trim().toLowerCase();
   const id = email || `user:${next.username}`;
+  let usernameChangedAt = Number(base.usernameChangedAt || 0);
+  if (
+    nextHandle &&
+    nextHandle !== prevHandle &&
+    !(_deps?.isPlaceholderUsername?.(nextHandle))
+  ) {
+    usernameChangedAt = Date.now();
+  }
   const payload = {
     ...base,
     ...next,
+    displayName: normalizeDisplayName(next.displayName),
     id,
     email,
+    usernameChangedAt,
     voiceTimbre: base.voiceTimbre || "",
     isPublic: base.isPublic !== false,
   };

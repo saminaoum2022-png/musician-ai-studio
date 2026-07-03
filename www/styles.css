@@ -29448,10 +29448,14 @@ body[data-route="messages"]{
   align-self: flex-start;
   margin-top: 2px;
 }
-/* Icon-only DM entry: drop the glass container, keep the bubble (kept the full
-   tap target). Higher specificity (.friendsMessagesBtn.discoveryRefreshBtn)
-   beats the shared glass rule. */
-.friendsMessagesBtn.discoveryRefreshBtn{
+/* Icon-only header actions (search, DM): no glass pill — matches typography-first Discover chrome. */
+.discoveryHeadIconBtn{
+  position: relative;
+  flex: 0 0 auto;
+  align-self: flex-start;
+  margin-top: 2px;
+}
+.discoveryHeadIconBtn.discoveryRefreshBtn{
   border: 0;
   background: transparent;
   -webkit-backdrop-filter: none;
@@ -29459,15 +29463,22 @@ body[data-route="messages"]{
   box-shadow: none;
   color: rgba(244, 247, 255, 0.95);
 }
-.friendsMessagesBtn.discoveryRefreshBtn:hover{
+.discoveryHeadIconBtn.discoveryRefreshBtn:hover{
   background: transparent;
   border-color: transparent;
   box-shadow: none;
+  color: #ffffff;
 }
-.friendsMessagesBtn.discoveryRefreshBtn:active{
+.discoveryHeadIconBtn.discoveryRefreshBtn:active{
   transform: scale(0.9);
 }
-.friendsMessagesBtn .discoveryRefreshIco{
+.discoveryHeadIconBtn.discoveryRefreshBtn.isActive{
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
+  color: #ffffff;
+}
+.discoveryHeadIconBtn .discoveryRefreshIco{
   width: 25px;
   height: 25px;
   stroke-width: 1.9;

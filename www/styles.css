@@ -24601,6 +24601,24 @@ body.createChooserSheetOpen .footer{
   overflow: hidden;
   text-overflow: ellipsis;
 }
+.followActUserWrap--badge{
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  max-width: 100%;
+}
+.followActUserWrap--badge .followActUser{
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.followActUserWrap--badge .profileNabadCertCheck--inline{
+  flex: 0 0 auto;
+  align-self: center;
+  margin: 0;
+}
 .followActUserLink:hover .followActUser{
   text-decoration: underline;
 }
@@ -33424,7 +33442,15 @@ section.mentorPage{
 }
 .followAct--xstyle .followActMetaPrimary{
   min-width: 0;
+  max-width: 100%;
   line-height: 1.15;
+}
+.followAct--xstyle .followActUserLink--badge{
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  max-width: 100%;
+  vertical-align: top;
 }
 .followAct--xstyle .followActMetaSub{
   display: flex;
@@ -33573,17 +33599,27 @@ section.mentorPage{
   color: rgba(232, 238, 247, 0.48);
 }
 .followAct--xstyle.followAct--repost > .followActRepostBanner .followActRepostByLink{
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  max-width: 100%;
+  flex: 0 1 auto;
   color: rgba(248, 250, 255, 0.98);
   text-decoration: none;
 }
-.followAct--xstyle.followAct--repost > .followActRepostBanner .followActUser,
-.followAct--xstyle.followAct--repost > .followActRepostBanner .followActRepostByLink strong{
+.followAct--xstyle.followAct--repost > .followActRepostBanner .followActRepostByLink .followActUserWrap--badge{
+  min-width: 0;
+  flex: 0 1 auto;
+}
+.followAct--xstyle.followAct--repost > .followActRepostBanner .followActRepostByLink .followActUserWrap--badge .followActUser{
   font-size: var(--feed-repost-actor-user-size);
   font-weight: 800;
   letter-spacing: -0.01em;
   color: rgba(248, 250, 255, 0.98);
 }
 .followAct--xstyle.followAct--repost > .followActRepostBanner .followActRepostVerb{
+  flex: 0 0 auto;
   font-size: inherit;
   font-weight: 600;
   color: rgba(232, 238, 247, 0.52);

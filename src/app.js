@@ -140,7 +140,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260704-014037";
+const APP_BUILD = "20260704-020126";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -8247,6 +8247,47 @@ function feedUsernameHtml(handle, prof, opts = {}) {
   return `<strong class="${className}">@${escapeHtml(h)}</strong>${badgeHtml}`;
 }
 
+/** Social feeds: display name when set, otherwise `@handle`. Discover keeps `@handle`. */
+function feedActorDisplayLabel(handle, prof) {
+  const h = screenshotHandle(String(handle || prof?.username || "").trim().replace(/^@/, ""));
+  const friendly = screenshotDisplayName(normalizeDisplayName(prof?.display_name || prof?.displayName || ""));
+  if (friendly) return friendly;
+  if (h) return `@${h}`;
+  return "";
+}
+
+function feedActorInitials(handle, prof) {
+  const friendly = screenshotDisplayName(normalizeDisplayName(prof?.display_name || prof?.displayName || ""));
+  if (friendly) {
+    const parts = friendly.trim().split(/\s+/).filter(Boolean);
+    if (parts.length >= 2) return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+    return friendly.slice(0, 2).toUpperCase();
+  }
+  return (handle || prof?.username || "U").replace(/^@/, "").slice(0, 2).toUpperCase();
+}
+
+function feedActorProfileLabel(handle, prof, { own = false } = {}) {
+  if (own) return "Your profile";
+  const label = feedActorDisplayLabel(handle, prof);
+  return label ? `${label} profile` : "Profile";
+}
+
+function feedDisplayNameHtml(handle, prof, opts = {}) {
+  const className = String(opts.className || "followActUser").trim();
+  const fallback = String(opts.fallback || "A musician").trim();
+  const badge = opts.badge !== false;
+  const h = screenshotHandle(String(handle || prof?.username || "").trim().replace(/^@/, ""));
+  const friendly = screenshotDisplayName(normalizeDisplayName(prof?.display_name || prof?.displayName || ""));
+  const badgeHtml = badge ? usernameVerifiedBadgeHtml(prof) : "";
+  let labelHtml;
+  if (friendly) labelHtml = escapeHtml(friendly);
+  else if (h) labelHtml = `@${escapeHtml(h)}`;
+  else labelHtml = escapeHtml(fallback);
+  const nameHtml = `<strong class="${className}">${labelHtml}</strong>`;
+  if (!badgeHtml) return nameHtml;
+  return `<span class="followActUserWrap followActUserWrap--badge">${nameHtml}${badgeHtml}</span>`;
+}
+
 function discoverCreatorVerifiedBadgeHtml(prof) {
   return usernameVerifiedBadgeHtml(prof, {
     className: "discoverTemplatesVerified profileNabadCertCheck--inline",
@@ -11215,7 +11256,7 @@ function followingStatusRowHtml(post, profMap, idx, opts = {}) {
   const handle = String(post?.username || prof?.username || "").trim();
   const avatarRaw = String(post?.avatar || prof?.avatar || "").trim();
   const avatarSrc = avatarRaw ? normalizeProfileAvatarForImg(avatarRaw) : "";
-  const initials = (handle || "U").replace(/^@/, "").slice(0, 2).toUpperCase();
+  const initials = feedActorInitials(handle, prof);
   const profileHref = handle ? `#/u/${encodeURIComponent(handle)}` : "#";
   const ts = post?.createdAt || post?.created_at;
   const when = ts ? relativeTime(new Date(ts).getTime()) : "Just now";
@@ -11232,7 +11273,7 @@ function followingStatusRowHtml(post, profMap, idx, opts = {}) {
   );
   const who = isOwn
     ? `<span class="followActYouLabel">You</span>`
-    : feedUsernameHtml(handle, prof);
+    : feedDisplayNameHtml(handle, prof);
   const whoLineInner = isOwn
     ? `${who}<span class="followActWhen">${escapeHtml(when)}</span>`
     : `<a class="followActUserLink followActUserLink--badge" href="${escapeHtml(profileHref)}" data-route-link="user">${who}</a><span class="followActWhen">${escapeHtml(when)}</span>`;
@@ -11265,7 +11306,7 @@ function followingStatusRowHtml(post, profMap, idx, opts = {}) {
           when,
           badgeHtml: statusBadge,
           trailingHtml: menuBtn,
-          avatarLabel: isOwn ? "Your profile" : handle ? `@${escapeHtml(handle)} profile` : "Profile",
+          avatarLabel: feedActorProfileLabel(handle, prof, { own: isOwn }),
         })}
         <div class="followActContent followActBody--static">
           ${contentHtml}
@@ -13181,7 +13222,7 @@ function followingActivityRowHtml(t, profMap, idx, opts = {}) {
   const { artSafe, encUrl, encTitle, encBy, encArt, playData } = followingActivityPlayAttrs(t, profMap, byLine);
   const avatarRaw = String(prof?.avatar || "").trim();
   const avatarSrc = avatarRaw ? normalizeProfileAvatarForImg(avatarRaw) : "";
-  const initials = (handle || "U").replace(/^@/, "").slice(0, 2).toUpperCase();
+  const initials = feedActorInitials(handle, prof);
   const profileHref = handle ? `#/u/${encodeURIComponent(handle)}` : "#";
   // The feed event is the PUBLISH, so the main timestamp is the publish
   // moment (matches the row's position in the feed). When the song itself
@@ -13301,12 +13342,12 @@ function followingActivityRowHtml(t, profMap, idx, opts = {}) {
           userId: t.userId,
           avatarSrc,
           initials,
-          whoHtml: feedUsernameHtml(handle, prof),
+          whoHtml: feedDisplayNameHtml(handle, prof),
           when,
           createdChipHtml,
           badgeHtml,
           trailingHtml: topMenuHtml,
-          avatarLabel: handle ? `@${escapeHtml(handle)} profile` : "Profile",
+          avatarLabel: feedActorProfileLabel(handle, prof),
         })}
         ${caption ? `<div class="followActContent">${captionHtml}</div>` : ""}
         ${mashupBlockHtml || remixPairHtml || mediaBlockWithProgressHtml}
@@ -13330,7 +13371,7 @@ function followingActivityRowHtml(t, profMap, idx, opts = {}) {
     ? "— plays"
     : `${formatStatCount(plays)} ${plays === 1 ? "play" : "plays"}`;
   const playFoot = `<div class="followActFoot"><span class="followActFootStat" data-play-foot-stat="1">${escapeHtml(playFootLabel)}</span></div>`;
-  const who = feedUsernameHtml(handle, prof);
+  const who = feedDisplayNameHtml(handle, prof);
   return `
     <article class="followAct followAct--music" data-follow-act="${type}" style="--i:${idx}" data-user-lib-url="${encUrl}" data-user-lib-title="${encTitle}" data-user-lib-art="${encArt}" data-discovery-by="${encBy}" ${playData}>
       <div class="followActTop">
@@ -13928,11 +13969,11 @@ function feedReplyRowHtml(reply) {
   const deleteBtn = isOwn
     ? `<button type="button" class="feedReplyDelete" data-feed-reply-delete="${replyId}">Remove</button>`
     : "";
-  const nameHtml = feedUsernameHtml(handle, replyProf, { className: "feedReplyNameText", fallback: "A musician" });
+  const nameHtml = feedDisplayNameHtml(handle, replyProf, { className: "feedReplyNameText", fallback: "A musician" });
   const replyHandle = handle.replace(/^@/, "");
   return `
     <article class="feedReplyRow" data-feed-reply-id="${replyId}" data-reply-handle="${escapeHtml(replyHandle)}">
-      <a class="feedReplyAvatar" href="${escapeHtml(href)}" data-route-link="user" aria-label="${handle ? `@${escapeHtml(handle.replace(/^@/, ""))} profile` : "Profile"}">
+      <a class="feedReplyAvatar" href="${escapeHtml(href)}" data-route-link="user" aria-label="${escapeHtml(feedActorProfileLabel(handle, replyProf))}">
         ${avatarSrc
           ? `<img src="${escapeHtml(avatarSrc)}" alt="" width="36" height="36" decoding="async" loading="lazy" />`
           : `<span class="feedReplyAvatarFallback">${escapeHtml(initials)}</span>`}
@@ -14542,7 +14583,7 @@ function followingRepostRowHtml(item, profMap, idx) {
   const prof = resolveProfileForFeedCreator(reposterId, profMap);
   const handle = String(prof?.username || "").trim();
   const repostUserHtml = handle
-    ? feedUsernameHtml(handle, prof)
+    ? feedDisplayNameHtml(handle, prof)
     : `<strong class="followActUser">Someone</strong>`;
   const href = handle ? `#/u/${encodeURIComponent(handle)}` : "#";
   const when = relativeTime(Number(rp.ts || item.ts || 0));
@@ -29089,7 +29130,7 @@ async function fetchProfilesByUserIdsMap(userIds) {
   const timer = setTimeout(() => ctrl.abort(), supabaseRestTimeoutMs());
   try {
     const r = await fetch(
-      `${SUPABASE_URL}/rest/v1/profiles?user_id=in.(${inClause})&select=user_id,username,avatar,sound_certified`,
+      `${SUPABASE_URL}/rest/v1/profiles?user_id=in.(${inClause})&select=user_id,username,display_name,avatar,sound_certified`,
       {
         headers: { apikey: SUPABASE_ANON_KEY, Accept: "application/json" },
         cache: "no-store",

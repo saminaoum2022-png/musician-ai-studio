@@ -20719,7 +20719,7 @@ html[data-theme="light"] .soundsStudioTempoValue{
   width: 18px;
   height: 18px;
   margin: 0;
-  color: #4ea4ff;
+  color: var(--brand-violet);
   filter: none;
   overflow: visible;
 }
@@ -38270,7 +38270,7 @@ body[data-route="generate"] .aiGenerate{
   flex: 0 0 auto;
   width: 14px;
   height: 14px;
-  color: #4ea4ff;
+  color: var(--brand-violet);
 }
 .discoverTemplatesVerified svg{
   width: 100%;

@@ -132,7 +132,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260703-230808";
+const APP_BUILD = "20260703-232122";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -2881,6 +2881,8 @@ function syncLibraryTabDotFromStorage() {
 let _notificationsUnreadCount = 0;
 let _notificationsUnreadFetchInFlight = false;
 let _notificationsUnreadLastFetchedAt = 0;
+const NOTIFICATIONS_BADGE_MIN_GAP_MS = 15000;
+let _notificationsLiveRefreshWired = false;
 /** Signed-in profile tab: squircle photo in the tab bar. */
 function syncMobileTabbarProfileAvatar() {
   const link = els.profileTabLink;
@@ -2955,7 +2957,7 @@ async function refreshNotificationsUnreadBadge({ force = false } = {}) {
   }
   const now = Date.now();
   if (_notificationsUnreadFetchInFlight) return;
-  if (!force && now - _notificationsUnreadLastFetchedAt < 60000) return;
+  if (!force && now - _notificationsUnreadLastFetchedAt < NOTIFICATIONS_BADGE_MIN_GAP_MS) return;
   _notificationsUnreadFetchInFlight = true;
   try {
     const data = await socialApi("/api/social?type=notifications");
@@ -2967,6 +2969,22 @@ async function refreshNotificationsUnreadBadge({ force = false } = {}) {
   } finally {
     _notificationsUnreadFetchInFlight = false;
   }
+}
+
+function wireNotificationsLiveRefreshOnce() {
+  if (_notificationsLiveRefreshWired) return;
+  _notificationsLiveRefreshWired = true;
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState !== "visible" || !authSession?.user?.id) return;
+    void refreshNotificationsUnreadBadge({ force: true });
+    if (String(document.body.getAttribute("data-route") || "") === "activity") {
+      void refreshActivityFeedHead();
+    }
+  });
+  window.setInterval(() => {
+    if (document.visibilityState !== "visible" || !authSession?.user?.id) return;
+    void refreshNotificationsUnreadBadge();
+  }, NOTIFICATIONS_BADGE_MIN_GAP_MS);
 }
 
 function resolveEmptyHashRoute() {
@@ -3534,7 +3552,8 @@ function applyRoute({ passGen } = {}) {
     }
   } catch {}
   if (isLoggedIn) {
-    void refreshNotificationsUnreadBadge({ force: wanted === "friends" || wanted === "settings" });
+    wireNotificationsLiveRefreshOnce();
+    void refreshNotificationsUnreadBadge({ force: wanted === "friends" || wanted === "settings" || wanted === "activity" });
     if (MESSAGES_FEATURE_ENABLED) {
       void refreshMessagesUnreadBadge({ force: wanted === "friends" || wanted === "messages" || wanted === "messages-thread" });
     }
@@ -3776,6 +3795,7 @@ function applyRoute({ passGen } = {}) {
       if (!paintActivityFeedSnapshotIfFresh() && _activityFeedState.items.length) {
         renderActivityFeedFromState();
       }
+      void refreshActivityFeedHead();
       restoreRouteScroll("activity");
       markRouteHeavy("activity");
     } else {
@@ -14050,6 +14070,10 @@ async function submitFeedReply() {
       });
       applyFeedSocialStatsToDom(document);
       try { haptic("light"); } catch {}
+      const mentioned = Number(data?.mentionsNotified || 0);
+      if (mentioned > 0) {
+        showToast(`Mentioned ${mentioned} ${mentioned === 1 ? "person" : "people"}.`, { durationMs: 2400 });
+      }
       // Scroll list to the new reply.
       if (list) list.scrollTop = list.scrollHeight;
     }
@@ -27743,6 +27767,28 @@ function syncActivityLoadMoreUi() {
   }
 }
 
+async function refreshActivityFeedHead() {
+  if (!authSession?.user?.id) return;
+  try {
+    const data = await socialApi(`/api/social?type=notifications&limit=${ACTIVITY_PAGE_SIZE}&offset=0`);
+    const batch = Array.isArray(data?.notifications) ? data.notifications : [];
+    if (!batch.length) return;
+    const seen = new Set(_activityFeedState.items.map((n) => String(n?.id || "")));
+    const fresh = batch.filter((n) => {
+      const id = String(n?.id || "");
+      return id && !seen.has(id);
+    });
+    if (!fresh.length) return;
+    _activityFeedState.items.unshift(...fresh);
+    fresh.forEach((n) => cacheActivitySongArtFromNotification(n));
+    await enrichActivitySongArt(fresh);
+    renderActivityFeedFromState();
+    updateNotificationsEntryBadges(_activityFeedState.items.filter((n) => !n?.read_at).length);
+  } catch (e) {
+    console.warn("[activity/head-refresh]", e);
+  }
+}
+
 async function fetchActivityBatch() {
   if (_activityFeedState.loading || !_activityFeedState.hasMore) return;
   _activityFeedState.loading = true;
@@ -27820,6 +27866,7 @@ async function enterActivityRoute({ reset = false } = {}) {
     els.activityStatus.textContent = "";
   }
   await fetchActivityBatch();
+  await refreshActivityFeedHead();
   try { mergePersistedGenerationReadyActivities(); } catch {}
   renderActivityFeedFromState();
   const unread = _activityFeedState.items.filter((n) => !n?.read_at).length;

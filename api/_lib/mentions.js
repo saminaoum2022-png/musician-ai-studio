@@ -61,13 +61,13 @@ async function isMutualFollow(svcFetch, userA, userB) {
 async function profileByUsername(svcFetch, username) {
   const handle = cleanUsername(username);
   if (!handle) return null;
+  const ilike = encodeURIComponent(handle.replace(/\\/g, "\\\\").replace(/%/g, "\\%").replace(/_/g, "\\_"));
+  const r = await svcFetch(`profiles?select=user_id,username,avatar&username=ilike.${ilike}&limit=1`);
+  if (Array.isArray(r.data) && r.data[0]) return r.data[0];
   const eq = encodeURIComponent(handle);
-  const r = await svcFetch(
+  const r2 = await svcFetch(
     `profiles?select=user_id,username,avatar&username=eq.${eq}&limit=1`,
   );
-  if (Array.isArray(r.data) && r.data[0]) return r.data[0];
-  const ilike = encodeURIComponent(handle.replace(/\\/g, "\\\\").replace(/%/g, "\\%").replace(/_/g, "\\_"));
-  const r2 = await svcFetch(`profiles?select=user_id,username,avatar&username=ilike.${ilike}&limit=1`);
   return Array.isArray(r2.data) && r2.data[0] ? r2.data[0] : null;
 }
 
@@ -167,13 +167,12 @@ async function processMentions({
   for (const prof of targets) {
     const mentioned = cleanUserId(prof.user_id);
     if (!mentioned) continue;
-    const stored = await insertMentionRow(svcFetch, {
+    void insertMentionRow(svcFetch, {
       sourceKind: sk,
       sourceId: sid,
       actorUserId: actor,
       mentionedUserId: mentioned,
     });
-    if (!stored) continue;
 
     const entityId = `${sk}:${sid}:mention:${mentioned}`;
     if (await notificationExists({ userId: mentioned, type: "social_mention", entityId })) continue;

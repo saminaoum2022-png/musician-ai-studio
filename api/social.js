@@ -1889,7 +1889,7 @@ async function handlePost(req, res, user) {
       replyId: row.id,
       body: text,
     });
-    void processMentions({
+    const mentionResult = await processMentions({
       svcFetch,
       insertNotification,
       notificationExists,
@@ -1901,10 +1901,11 @@ async function handlePost(req, res, user) {
       targetId: targetId,
       songTitle: target.title || "",
       songArtUrl: target.artUrl || "",
-    });
+    }).catch(() => ({ notified: 0 }));
     return sendJson(res, 200, {
       ok: true,
       count,
+      mentionsNotified: Number(mentionResult?.notified || 0),
       reply: {
         id: row.id,
         userId: row.user_id,

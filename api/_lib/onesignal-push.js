@@ -18,6 +18,8 @@ const PUSH_TEMPLATES = {
   follow: { route: "activity" },
   social_like: { route: "activity" },
   social_reply: { route: "activity" },
+  social_mention: { route: "activity" },
+  social_repost: { route: "activity" },
   chart_rank: { route: "activity" },
   dm_message: { route: "friends" },
   challenge_update: { route: "challenges" },
@@ -52,6 +54,8 @@ function composePushCopy({ type, actorDisplayName }) {
     if (type === "follow") return { body: `${actor} followed you` };
     if (type === "social_like" || type === "song_feedback") return { body: `${actor} liked your song` };
     if (type === "social_reply") return { body: `${actor} commented on your song` };
+    if (type === "social_mention") return { body: `${actor} mentioned you` };
+    if (type === "social_repost") return { body: `${actor} reposted your song` };
     if (type === "remix") return { body: `${actor} remixed your song` };
     if (type === "challenge_update") return { body: `${actor} joined your challenge` };
   }

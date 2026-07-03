@@ -79,11 +79,36 @@ export function screenshotDisplayName(raw) {
   return DEMO_DISPLAY_NAMES[hashIndex(name, DEMO_DISPLAY_NAMES.length)];
 }
 
+export function disableScreenshotMode() {
+  try {
+    localStorage.removeItem(STORAGE_KEY);
+  } catch {}
+  enabled = false;
+  try {
+    document.documentElement.classList.remove("screenshot-mode");
+  } catch {}
+  try {
+    const show = (id) => {
+      const el = document.getElementById(id);
+      if (el) el.style.display = "";
+    };
+    show("footerBuild");
+    show("envBadge");
+  } catch {}
+}
+
 export function applyScreenshotModeFromDeepLink(rawUrl) {
   const url = String(rawUrl || "").trim();
   if (!url) return false;
   let navigated = false;
   try {
+    if (/[?&]screenshot=0(?:&|$|#)/.test(url) || url.includes("screenshot=0")) {
+      disableScreenshotMode();
+      try {
+        if (typeof location !== "undefined") location.reload();
+      } catch {}
+      return true;
+    }
     if (/[?&]screenshot=1(?:&|$|#)/.test(url) || url.includes("screenshot=1")) {
       localStorage.setItem(STORAGE_KEY, "1");
       initScreenshotMode();

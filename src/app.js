@@ -140,7 +140,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260703-232122";
+const APP_BUILD = "20260704-002659";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -22632,7 +22632,7 @@ async function fetchPublicProfileRowByUserId(userId) {
   if (!uid || !SUPABASE_URL || !SUPABASE_ANON_KEY) return null;
   const headers = { apikey: SUPABASE_ANON_KEY, Accept: "application/json" };
   const base = `${SUPABASE_URL}/rest/v1/profiles`;
-  const selFull = "user_id,username,avatar,bio,voice_timbre,sound_certified";
+  const selFull = "user_id,username,display_name,avatar,bio,voice_timbre,sound_certified";
   const selCore = "user_id,username,avatar,bio,voice_timbre";
   const filter = `user_id=eq.${encodeURIComponent(uid)}`;
   const tryOne = async (selectList) => {
@@ -22657,7 +22657,7 @@ async function fetchPublicProfileRowByUsername(username) {
   if (!handle || !SUPABASE_URL || !SUPABASE_ANON_KEY) return null;
   const headers = { apikey: SUPABASE_ANON_KEY, Accept: "application/json" };
   const base = `${SUPABASE_URL}/rest/v1/profiles`;
-  const selFull = "user_id,username,avatar,bio,voice_timbre,sound_certified";
+  const selFull = "user_id,username,display_name,avatar,bio,voice_timbre,sound_certified";
   const selCore = "user_id,username,avatar,bio,voice_timbre";
   const eq = `username=eq.${encodeURIComponent(handle)}`;
   const il = `username=ilike.${encodeURIComponent(escapeUsernameForIlikeExact(handle))}`;
@@ -26536,6 +26536,14 @@ function applyUserPublicAvatar(url, displayName = "") {
       img.dataset.empty = "true";
     } catch {}
   };
+  img.onload = () => {
+    try {
+      if (img.dataset.empty !== "true") {
+        img.style.opacity = "";
+        img.style.visibility = "";
+      }
+    } catch {}
+  };
   if (isRealUserAvatarUrl(normalized)) {
     img.dataset.empty = "false";
     img.src = normalized;
@@ -26547,12 +26555,32 @@ function applyUserPublicAvatar(url, displayName = "") {
   }
 }
 
+function renderUserPublicIdentity(prof, handleFallback = "") {
+  const handle = screenshotHandle(normalizeProfileUsername(prof?.username || handleFallback));
+  const friendly = screenshotDisplayName(normalizeDisplayName(prof?.display_name || prof?.displayName || ""));
+  const stack = document.getElementById("userPublicNameStack");
+  const displayEl = document.getElementById("userPublicDisplayName");
+  if (displayEl) {
+    if (friendly) {
+      displayEl.textContent = friendly;
+      displayEl.hidden = false;
+    } else {
+      displayEl.textContent = "";
+      displayEl.hidden = true;
+    }
+  }
+  if (els.userPublicName) {
+    els.userPublicName.textContent = handle ? `@${handle}` : "@?";
+  }
+  stack?.classList.toggle("userPublicNameStack--hasDisplayName", Boolean(friendly));
+}
+
 function setUserPublicLoading(on, username = "") {
   const loading = Boolean(on);
   els.userPublicCard?.setAttribute?.("data-loading", loading ? "true" : "false");
   const handle = String(username || "").replace(/^@/, "").trim();
   if (loading) {
-    if (els.userPublicName && handle) els.userPublicName.textContent = `@${handle}`;
+    renderUserPublicIdentity({ username: handle }, handle);
     applyUserPublicAvatar("", handle);
     if (els.userPublicVoice) els.userPublicVoice.style.display = "none";
     if (els.userPublicBio) els.userPublicBio.style.display = "none";
@@ -32917,7 +32945,7 @@ async function renderUserProfilePublicLibraryAsync(username, userId = "", gen = 
   }
   if (!prof?.user_id) {
     if (!stillCurrent()) return;
-    if (els.userPublicName) els.userPublicName.textContent = handle ? `@${handle}` : "@?";
+    renderUserPublicIdentity(null, handle);
     applyUserPublicAvatar("", handle);
     if (els.userPublicVoice) els.userPublicVoice.style.display = "none";
     if (els.userPublicBio) {
@@ -32947,9 +32975,9 @@ async function renderUserProfilePublicLibraryAsync(username, userId = "", gen = 
     return;
   }
   if (!stillCurrent()) return;
-  const displayName = String(prof.username || handle || "user").trim();
-  if (els.userPublicName) els.userPublicName.textContent = `@${displayName}`;
-  applyUserPublicAvatar(prof.avatar, displayName);
+  renderUserPublicIdentity(prof, handle);
+  const publicHandle = String(prof.username || handle || "user").trim();
+  applyUserPublicAvatar(prof.avatar, publicHandle);
   if (els.userPublicVoice) {
     const chip = els.userPublicVoice;
     const labelEl = chip.querySelector(".profileAuraVoiceChipText");
@@ -33000,7 +33028,7 @@ async function renderUserProfilePublicLibraryAsync(username, userId = "", gen = 
   } catch {}
   if (!stillCurrent()) return;
   if (!resolvedSocialStats) {
-    const socialData = await fetchSocialStatsForProfile({ username: displayName, userId: prof.user_id });
+    const socialData = await fetchSocialStatsForProfile({ username: publicHandle, userId: prof.user_id });
     resolvedSocialStats = socialData?.stats || null;
   }
   currentUserPublicProfileId = String(prof.user_id || "");
@@ -33021,7 +33049,7 @@ async function renderUserProfilePublicLibraryAsync(username, userId = "", gen = 
     if (els.userPublicSongs) els.userPublicSongs.innerHTML = "";
     _userPublicFeedTracks = [];
     if (els.userPublicEmpty) {
-      els.userPublicEmpty.textContent = `No public Library songs from @${displayName} yet — they can mark songs Public in Library (⋯ menu).`;
+      els.userPublicEmpty.textContent = `No public Library songs from @${publicHandle} yet — they can mark songs Public in Library (⋯ menu).`;
       els.userPublicEmpty.style.display = "";
     }
     syncUserPublicVerifiedBadge(prof);
@@ -33048,7 +33076,7 @@ async function renderUserProfilePublicLibraryAsync(username, userId = "", gen = 
   const timelineItems = [...restSongItems, ...repostItems].sort((a, b) => b.ts - a.ts);
   const feedItems = [...pinnedItems, ...timelineItems];
   const allTracks = feedItems.map((it) => it.track);
-  const byLine = `@${displayName}`;
+  const byLine = `@${publicHandle}`;
   const paintPublicFeed = (items) => {
     if (!stillCurrent() || !els.userPublicSongs) return;
     els.userPublicSongs.innerHTML = items
@@ -36780,13 +36808,13 @@ function renderUserProfile(rawUsername, { soft = false } = {}) {
   const publicMatches = matches.filter(isHubPostVisibleOnPublicProfile);
   const latestPublic = publicMatches[0] || null;
   const latestAny = matches[0] || null;
-  const displayName = screenshotHandle(latestAny?.creator || username || "user");
+  const handle = screenshotHandle(latestAny?.creator || username || "user");
   const metaUserId = String(latestAny?.meta?.creatorUserId || latestAny?.meta?.creator_user_id || "").trim();
 
-  if (els.userPublicName) els.userPublicName.textContent = `@${displayName}`;
+  renderUserPublicIdentity({ username: handle }, handle);
   applyUserPublicAvatar(
     latestPublic?.creatorAvatar || latestAny?.creatorAvatar || "",
-    displayName
+    handle
   );
   if (els.userPublicVoice) {
     const chip = els.userPublicVoice;
@@ -36821,7 +36849,7 @@ function renderUserProfile(rawUsername, { soft = false } = {}) {
   currentUserPublicProfileId = metaUserId;
   renderUserPublicSocialStats({ songCount: publicMatches.length, stats: currentUserPublicSocialStats });
   renderUserPublicFollowButton();
-  void refreshUserPublicSocial({ username: displayName, userId: metaUserId, songCount: publicMatches.length });
+  void refreshUserPublicSocial({ username: handle, userId: metaUserId, songCount: publicMatches.length });
   if (els.userPublicSongsCount) {
     els.userPublicSongsCount.textContent = publicMatches.length ? String(publicMatches.length) : "";
   }
@@ -36833,13 +36861,14 @@ function renderUserProfile(rawUsername, { soft = false } = {}) {
       const hasPrivateOnly = matches.length > 0 && !publicMatches.length;
       els.userPublicEmpty.textContent = username
         ? hasPrivateOnly
-          ? `No public songs from @${displayName} yet — their releases may be set to private.`
-          : `No public songs from @${displayName} yet.`
+          ? `No public songs from @${handle} yet — their releases may be set to private.`
+          : `No public songs from @${handle} yet.`
         : "User not found.";
       els.userPublicEmpty.style.display = "";
     }
     void fetchPublicProfileRowByUsername(username).then((p) => {
       try {
+        if (p) renderUserPublicIdentity(p, username);
         syncUserPublicVerifiedBadge(p);
       } catch {}
     });
@@ -36851,8 +36880,8 @@ function renderUserProfile(rawUsername, { soft = false } = {}) {
 
   if (els.userPublicSongs) {
     const slice = publicMatches.slice(0, 60).filter((p) => String(p?.url || "").trim());
-    const byLine = `@${displayName}`;
-    const pubBase = { byLine, rawHandle: displayName, ownerUserId: currentUserPublicProfileId };
+    const byLine = `@${handle}`;
+    const pubBase = { byLine, rawHandle: handle, ownerUserId: currentUserPublicProfileId };
     els.userPublicSongs.innerHTML = `<div class="discoverFeedListStack">${slice
       .map((p, i) =>
         userPublicDiscoveryRowHtml(
@@ -36902,6 +36931,7 @@ function renderUserProfile(rawUsername, { soft = false } = {}) {
   }
   void fetchPublicProfileRowByUsername(username).then((p) => {
     try {
+      if (p) renderUserPublicIdentity(p, username);
       syncUserPublicVerifiedBadge(p);
     } catch {}
   });

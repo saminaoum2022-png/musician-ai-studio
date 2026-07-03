@@ -15513,28 +15513,28 @@ body[data-route="user"] section.card.wide[data-route="user"]{
   display: none;
   box-sizing: border-box;
 }
-.userPublicAvatar[data-empty="true"] + .userPublicAvatarFallback{
+.userPublicAvatarWrap .userPublicAvatarFallback.activityAvatarSilhouette{
+  display: none;
+}
+.userPublicAvatar[data-empty="true"] + .userPublicAvatarFallback,
+.userPublicAvatarWrap .userPublicAvatar[data-empty="true"] + .userPublicAvatarFallback.activityAvatarSilhouette{
   display: flex;
 }
 .userPublicAvatarWrap .userPublicAvatarFallback.activityAvatarSilhouette svg{
   width: 44px;
   height: 44px;
 }
-.userPublic[data-loading="true"] .userPublicAvatar{
-  opacity: 0.42;
-  filter: saturate(0.7);
+.userPublic[data-loading="true"] .userPublicAvatar[data-empty="true"]{
+  visibility: hidden;
+  opacity: 0;
+  filter: none;
   background:
     linear-gradient(90deg, rgba(255,255,255,0.04) 0%, rgba(255,255,255,0.13) 50%, rgba(255,255,255,0.04) 100%),
     rgba(255,255,255,0.035);
   background-size: 200% 100%;
   animation: profileSkelShimmer 1.25s ease-in-out infinite;
 }
-.userPublic[data-loading="true"] .userPublicAvatar[data-empty="true"]{
-  visibility: hidden;
-  opacity: 0;
-  animation: none;
-}
-.userPublic[data-loading="true"] .userPublicAvatarFallback{
+.userPublic[data-loading="true"] .userPublicAvatar[data-empty="true"] + .userPublicAvatarFallback{
   display: flex;
   background:
     linear-gradient(90deg, rgba(255,255,255,0.04) 0%, rgba(255,255,255,0.13) 50%, rgba(255,255,255,0.04) 100%),
@@ -15552,6 +15552,31 @@ body[data-route="user"] section.card.wide[data-route="user"]{
   min-width:0;
   width: 100%;
   overflow: visible;
+}
+.userPublicNameStack{
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0;
+  width: 100%;
+  min-width: 0;
+}
+.userPublicDisplayName{
+  margin: 0;
+  padding: 0;
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  line-height: 1.15;
+  color: #fff;
+  text-align: center;
+  max-width: min(100%, 280px);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.userPublicDisplayName[hidden]{
+  display: none !important;
 }
 .userPublicNameRow{
   display: flex;
@@ -15571,17 +15596,25 @@ body[data-route="user"] section.card.wide[data-route="user"]{
   margin-left: 0;
 }
 .userPublicName{
-  font-size: clamp(27px, 7.2vw, 38px);
-  font-weight:900;
-  letter-spacing:-0.045em;
-  background: linear-gradient(95deg, #f7f4ff 0%, #e0d6ff 50%, #d3f0ec 100%);
-  -webkit-background-clip:text;
-          background-clip:text;
-  -webkit-text-fill-color: transparent;
-  white-space:nowrap;
-  overflow:hidden;
-  text-overflow:ellipsis;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   max-width: 100%;
+}
+.userPublicNameStack--hasDisplayName .userPublicName{
+  margin-top: 3px;
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  color: rgba(223, 231, 251, 0.46);
+  line-height: 1.2;
+}
+.userPublicNameStack:not(.userPublicNameStack--hasDisplayName) .userPublicName{
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  line-height: 1.15;
+  color: #fff;
 }
 .userPublicVoice{
   margin: 0 auto;
@@ -15786,8 +15819,8 @@ body[data-route="user"] section.card.wide[data-route="user"]{
   opacity: 0.74;
 }
 @media (prefers-reduced-motion: reduce){
-  .userPublic[data-loading="true"] .userPublicAvatar,
-  .userPublic[data-loading="true"] .userPublicAvatarFallback,
+  .userPublic[data-loading="true"] .userPublicAvatar[data-empty="true"],
+  .userPublic[data-loading="true"] .userPublicAvatar[data-empty="true"] + .userPublicAvatarFallback,
   .userPublicSkelBlock{
     animation: none !important;
   }
@@ -15847,9 +15880,6 @@ body[data-route="user"] section.card.wide[data-route="user"]{
   .userPublicAvatarWrap{
     width: 92px;
     height: 92px;
-  }
-  .userPublicName{
-    font-size: clamp(27px, 7.8vw, 34px);
   }
 }
 @media (max-width:390px){

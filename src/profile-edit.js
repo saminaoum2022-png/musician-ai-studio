@@ -537,22 +537,19 @@ export async function saveProfileEditDraft({ navigateBack = true } = {}) {
     }
   }
   const email = String(_deps.getAuthSession?.()?.user?.email || base.email || "").trim().toLowerCase();
-  const id = email || `user:${next.username}`;
-  let usernameChangedAt = Number(base.usernameChangedAt || 0);
-  if (
+  const authId = String(_deps.getAuthSession?.()?.user?.id || "").trim();
+  const id = authId || String(base.id || "").trim() || (email ? email : `user:${next.username}`);
+  const usernameWillChange =
     nextHandle &&
     nextHandle !== prevHandle &&
-    !(_deps?.isPlaceholderUsername?.(nextHandle))
-  ) {
-    usernameChangedAt = Date.now();
-  }
+    !(_deps?.isPlaceholderUsername?.(nextHandle));
   const payload = {
     ...base,
     ...next,
     displayName: normalizeDisplayName(next.displayName),
     id,
     email,
-    usernameChangedAt,
+    usernameChangedAt: Number(base.usernameChangedAt || 0),
     voiceTimbre: base.voiceTimbre || "",
     isPublic: base.isPublic !== false,
   };
@@ -567,10 +564,19 @@ export async function saveProfileEditDraft({ navigateBack = true } = {}) {
       _deps.els.sunoPersonaId.value = _draft.personaId || "";
     }
   }
+  let cloudSaved = false;
   try {
     await _deps.supabaseUpsertProfile(payload);
+    cloudSaved = true;
   } catch (e) {
     _deps.setStatus?.(`Saved locally. Cloud sync skipped: ${e?.message || String(e)}`);
+  }
+  if (cloudSaved && usernameWillChange) {
+    payload.usernameChangedAt = Date.now();
+    _deps.saveProfile(payload);
+    try {
+      await _deps.supabaseUpsertProfile(payload);
+    } catch {}
   }
   _deps.syncProfileUi?.(payload);
   _dirty = false;

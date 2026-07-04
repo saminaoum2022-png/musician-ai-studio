@@ -140,7 +140,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260704-105200";
+const APP_BUILD = "20260704-112725";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -19424,9 +19424,11 @@ function loadProfile() {
   } catch {}
 }
 function saveProfile(p) {
-  activeProfile = p;
+  const authId = String(authSession?.user?.id || "").trim();
+  const next = authId ? { ...p, id: authId } : { ...p };
+  activeProfile = next;
   try {
-    localStorage.setItem(profileStorageKey(p?.id), JSON.stringify(p));
+    localStorage.setItem(profileStorageKey(next.id), JSON.stringify(next));
   } catch {}
 }
 
@@ -19516,13 +19518,31 @@ async function mergeActiveProfileFromCloud() {
   const cloud = await supabaseLoadProfile();
   if (!cloud) return false;
   const localFilled = localProfileFilledForCloudMerge();
+  // A failed username change must not lock the handle for 30 days — only honor
+  // local cooldown when the cloud row also recorded one.
+  if (cloud && !cloud.usernameChangedAt && localFilled.usernameChangedAt) {
+    delete localFilled.usernameChangedAt;
+  }
+  const founderAccount =
+    isFounderBadgeUsername(cloud?.username || localFilled?.username) ||
+    isFounderBadgeEmail(cloud?.email || localFilled?.email || authSession?.user?.email);
+  const hadFounderCooldown = founderAccount && Boolean(cloud?.usernameChangedAt || localFilled.usernameChangedAt);
+  if (founderAccount) {
+    delete localFilled.usernameChangedAt;
+  }
   const nextProfile = {
     ...cloud,
     ...localFilled,
     id: String(authSession.user.id),
     email: localFilled.email || cloud.email || authSession.user.email || "",
   };
+  if (founderAccount) {
+    delete nextProfile.usernameChangedAt;
+  }
   saveProfile(nextProfile);
+  if (hadFounderCooldown) {
+    supabaseUpsertProfile({ ...nextProfile, clearUsernameCooldown: true }).catch(() => {});
+  }
   if (els.profilePreviewUsernameInput) {
     els.profilePreviewUsernameInput.value = nextProfile.username ? `@${nextProfile.username}` : "@guest";
   }
@@ -19664,6 +19684,12 @@ function getUsernameChangeBlockedUntil(profile, nextHandle) {
   const next = normalizeProfileUsername(nextHandle ?? profile?.username);
   if (!next || next === current) return 0;
   if (isPlaceholderUsername(current)) return 0;
+  if (
+    isFounderBadgeUsername(current) ||
+    isFounderBadgeEmail(profile?.email || authSession?.user?.email)
+  ) {
+    return 0;
+  }
   const ts = Number(profile?.usernameChangedAt || 0);
   if (!ts) return 0;
   const unlock = ts + USERNAME_CHANGE_COOLDOWN_MS;
@@ -19677,6 +19703,12 @@ function canChangeUsername(profile, nextHandle) {
 function isUsernameChangeOnCooldown(profile) {
   const current = normalizeProfileUsername(profile?.username);
   if (isPlaceholderUsername(current)) return false;
+  if (
+    isFounderBadgeUsername(current) ||
+    isFounderBadgeEmail(profile?.email || authSession?.user?.email)
+  ) {
+    return false;
+  }
   const ts = Number(profile?.usernameChangedAt || 0);
   if (!ts) return false;
   return ts + USERNAME_CHANGE_COOLDOWN_MS > Date.now();
@@ -21950,11 +21982,12 @@ async function supabaseUpsertProfile(profile) {
   let outgoingAvatar = String(profile.avatar || "").trim();
   let outgoingBio = String(profile.bio || "").trim();
   let outgoingGenres = String(profile.genres || "").trim();
+  let outgoingDisplayName = normalizeDisplayName(profile.displayName || "");
   let outgoingInstagram = String(profile.links?.instagram || "").trim();
   let outgoingYoutube = String(profile.links?.youtube || "").trim();
   let outgoingTiktok = String(profile.links?.tiktok || "").trim();
   const needsCloudPeek =
-    (!outgoingAvatar || !outgoingBio || !outgoingGenres || !outgoingInstagram || !outgoingYoutube || !outgoingTiktok) &&
+    (!outgoingAvatar || !outgoingBio || !outgoingGenres || !outgoingDisplayName || !outgoingInstagram || !outgoingYoutube || !outgoingTiktok) &&
     authSession?.user?.id;
   if (needsCloudPeek) {
     try {
@@ -21968,6 +22001,9 @@ async function supabaseUpsertProfile(profile) {
         }
         if (!outgoingGenres && String(existing.genres || "").trim()) {
           outgoingGenres = String(existing.genres).trim();
+        }
+        if (!outgoingDisplayName && String(existing.displayName || "").trim()) {
+          outgoingDisplayName = normalizeDisplayName(existing.displayName);
         }
         if (!outgoingInstagram && String(existing.links?.instagram || "").trim()) {
           outgoingInstagram = String(existing.links.instagram).trim();
@@ -21984,7 +22020,7 @@ async function supabaseUpsertProfile(profile) {
   const payload = {
     user_id: authSession?.user?.id,
     username: outgoingUsername,
-    display_name: normalizeDisplayName(profile.displayName || ""),
+    display_name: outgoingDisplayName,
     email: profile.email || "",
     gender: profile.gender || "",
     voice_timbre: profile.voiceTimbre || "",
@@ -22003,6 +22039,8 @@ async function supabaseUpsertProfile(profile) {
   };
   if (profile.usernameChangedAt) {
     payload.username_changed_at = new Date(Number(profile.usernameChangedAt)).toISOString();
+  } else if (profile.clearUsernameCooldown) {
+    payload.username_changed_at = null;
   }
   const r = await fetch(`${SUPABASE_URL}/rest/v1/profiles`, {
     method: "POST",
@@ -38333,6 +38371,10 @@ function syncActiveProfileIdFromSession() {
   const cur = String(activeProfile?.id || "guest");
   if (cur === String(uid)) return;
   if (cur && cur !== "guest" && cur !== String(uid)) {
+    if (cur.includes("@") || cur.startsWith("user:")) {
+      saveProfile({ ...activeProfile, id: String(uid) });
+      return;
+    }
     onAuthAccountSwitched(cur, String(uid));
     return;
   }
@@ -49574,7 +49616,7 @@ if (els.btnProfileSave) {
       tiktok: String(activeProfile.links?.tiktok || "").trim(),
       spotify: String(activeProfile.links?.spotify || "").trim(),
     };
-    const id = email || `user:${username}`;
+    const id = String(authSession?.user?.id || activeProfile.id || "").trim() || (email || `user:${username}`);
     saveProfile({
       id,
       username,
@@ -49592,6 +49634,8 @@ if (els.btnProfileSave) {
       await supabaseUpsertProfile({
         id,
         username,
+        displayName,
+        usernameChangedAt,
         email,
         voiceTimbre,
         bio,
@@ -51099,6 +51143,9 @@ void (async () => {
       // chosen handle. Only let local win for username when it's
       // actually user-customized.
       const localFilled = localProfileFilledForCloudMerge();
+      if (!cloud.usernameChangedAt && localFilled.usernameChangedAt) {
+        delete localFilled.usernameChangedAt;
+      }
       nextProfile = {
         ...cloud,
         ...localFilled,

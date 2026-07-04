@@ -7165,6 +7165,7 @@ h2{ margin:0 0 12px; font-size:16px; letter-spacing:-0.01em; }
 /* Hub tab screens — title row matches Discover (size + left edge). */
 .discoveryStudioHead .appScreenTitle,
 .messagesHeadCopy .appScreenTitle,
+.soundsStudioHeadCopy .appScreenTitle,
 .settingsPageHeadText .appScreenTitle,
 .appScreenHeader .appScreenTitle{
   margin: 0;
@@ -20359,8 +20360,8 @@ a.vwPrimary,
 .soundsStudioHead{
   display: flex;
   align-items: flex-start;
-  gap: 12px;
-  padding: 2px 0 20px;
+  gap: 8px;
+  padding: 4px 2px 8px;
 }
 .soundsStudioBack{
   margin-top: 2px;
@@ -20369,19 +20370,11 @@ a.vwPrimary,
   flex: 1 1 auto;
   min-width: 0;
 }
-.soundsStudioEyebrow{
-  margin: 0 0 4px;
-  font-size: 13px;
-  font-weight: 600;
-  letter-spacing: -0.01em;
+.soundsStudioLead{
+  margin: 4px 0 0;
   color: rgba(223, 231, 251, 0.52);
-}
-.soundsStudioTitle{
-  margin: 0;
-  font-size: 24px;
-  font-weight: 700;
-  letter-spacing: -0.03em;
-  color: #fff;
+  font-size: 12px;
+  line-height: 1.4;
 }
 .soundsStudioMark{
   flex: 0 0 auto;
@@ -20643,11 +20636,8 @@ a.vwPrimary,
   font-weight: 600;
   opacity: 0.68;
 }
-html[data-theme="light"] .soundsStudioEyebrow{
+html[data-theme="light"] .soundsStudioLead{
   color: rgba(71, 88, 110, 0.72);
-}
-html[data-theme="light"] .soundsStudioTitle{
-  color: var(--text);
 }
 html[data-theme="light"] .soundsStudioMark{
   color: #12b896;
@@ -22875,6 +22865,14 @@ body[data-route="discover"] > .app{
   flex: 1 1 auto;
   min-width: 0;
   /* Typography: `.appScreenTitle` in markup (Lab-scale). */
+}
+.discoveryStudioHead .discoveryStudioH2.appScreenTitle{
+  font-size: clamp(28px, 6vw, 36px);
+  font-weight: 850;
+  letter-spacing: -0.04em;
+  line-height: 1.1;
+  color: var(--text);
+  text-shadow: 0 0 40px rgba(124, 92, 255, 0.25);
 }
 .discoveryStudioTag.appScreenLead{
   margin: 6px 0 0;
@@ -26556,6 +26554,7 @@ html[data-theme="light"] .discoverySearchBarWrap .searchBar{
   body.trackSheetOpen .mobileTabbar{ display: none !important; }
   .searchPage{ padding: 8px 0 28px; gap: 16px; }
   .discoveryPage{ gap: 12px; }
+  .friendsPage{ padding: 8px 0 28px; gap: 12px; }
   .discoveryDiscoverGrid{
     gap: 10px;
     padding: 0 2px 28px;
@@ -29115,16 +29114,19 @@ section.activityPage{
 }
 .activityPage{
   position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
   width: 100%;
   max-width: 640px;
   margin: 0 auto;
-  padding: 0 0 88px;
+  padding: 8px 0 88px;
   box-sizing: border-box;
 }
 .activityPage .discoverFeedTabs{
   position: static;
-  margin: 0 0 10px;
-  padding: 0 0 4px;
+  margin: 0 -2px 22px;
+  padding: 0 0 6px;
   background: none;
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
@@ -37049,7 +37051,9 @@ body[data-route="generate"] .aiGenerate{
   margin: 0 -2px 22px;
   padding: 0 0 6px;
 }
-.discoveryPaneDiscover > .discoveryStudioHead{
+.discoveryPaneDiscover > .discoveryStudioHead,
+.friendsPage > .discoveryStudioHead,
+.activityPage > .discoveryStudioHead{
   padding-bottom: 22px;
 }
 #discoverFeedTabs .nabadTabsTrack{
@@ -40647,15 +40651,6 @@ body[data-route="friends"] .friendsPage{
 /* Scoped to the section (not the body route attr) so the header layout is
    correct on the very first paint — otherwise the DM icon rendered with the
    base header alignment/padding and visibly jumped once data-route landed. */
-.friendsPage .discoveryStudioHead{
-  padding: 0 22px 16px;
-  align-items: center;
-}
-.friendsPage .appScreenTitle{
-  font-size: clamp(28px, 6vw, 36px);
-  line-height: 1.05;
-  letter-spacing: -0.04em;
-}
 .friendsPage .followActStack{
   gap: 0;
   padding: 0 0 calc(var(--bottomNavClearance, 110px) + 22px);
@@ -41049,9 +41044,6 @@ body[data-route="friends"] .followAct--xstyle .followActActions .followActAct[da
 }
 
 @media (max-width: 430px){
-  .friendsPage .discoveryStudioHead{
-    padding-inline: 18px;
-  }
   .friendsPage .followActStack .followAct.followAct--xstyle{
     padding-inline: 18px;
   }
@@ -41183,7 +41175,6 @@ body[data-route="friends"] .followAct--xstyle .followActActions .followActAct[da
     max-width: 720px;
     margin-inline: auto;
   }
-  .friendsPage .discoveryStudioHead{ justify-content: flex-start; }
 
   /* --- Discover as a multi-column grid --- */
   /* `:not([hidden])` so the "View Full Top 10" collapse still works — an

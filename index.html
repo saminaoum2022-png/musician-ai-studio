@@ -126,7 +126,7 @@
       onload="this.media='all'"
     />
     <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Display:wght@900&family=Inter:wght@900&display=swap" /></noscript>
-    <link rel="stylesheet" href="./styles.css?v=20260704-160012" />
+    <link rel="stylesheet" href="./styles.css?v=20260704-162849" />
 
     <meta name="description" content="NabadAi is an AI music studio. Hum a melody, write lyrics, and ship a song." />
     <meta property="og:type" content="website" />
@@ -1322,7 +1322,7 @@
             </button>
             <div class="messagesHeadCopy">
               <h2 class="discoveryStudioH2 appScreenTitle">Messages</h2>
-              <p class="messagesLead" id="messagesLead">Chat with creators you follow.</p>
+              <p class="messagesLead" id="messagesLead">Chat with creators you're a fan of.</p>
             </div>
           </header>
           <nav class="nabadTabs discoverFeedTabs" id="messagesFilterTabs" aria-label="Message filters">
@@ -2063,7 +2063,7 @@
                 <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M6.4 5 5 6.4 10.6 12 5 17.6 6.4 19 12 13.4 17.6 19 19 17.6 13.4 12 19 6.4 17.6 5 12 10.6Z"/></svg>
               </button>
               <p class="feedReplySheetKicker">Repost</p>
-              <h2 class="feedReplySheetTitle" id="repostComposeHeader">Repost to your followers</h2>
+              <h2 class="feedReplySheetTitle" id="repostComposeHeader">Repost to your fans</h2>
             </header>
             <div class="repostComposePreview">
               <span class="repostComposeArt" id="repostComposeArt" aria-hidden="true"></span>
@@ -2135,7 +2135,7 @@
                 <span class="followComposeCount" id="followComposeCount" aria-live="polite">0 / 320</span>
                 <button type="button" class="followComposePost solid" id="followComposePost" disabled>Post</button>
               </div>
-              <p class="followComposeHint" id="followComposeSignInHint" hidden>Sign in to post — your followers see it here on Friends.</p>
+              <p class="followComposeHint" id="followComposeSignInHint" hidden>Sign in to post — your fans see it here on Friends.</p>
             </section>
           </div>
         </div>
@@ -2463,7 +2463,7 @@
                 <p id="userPublicFollowsYou" class="userPublicRelationStatus" hidden></p>
                 <div class="userPublicFollowRow" id="userPublicFollowRow" hidden>
                   <button id="btnUserPublicMessage" class="userPublicMessageBtn" type="button" hidden>Message</button>
-                  <button id="btnUserPublicFollow" class="userPublicFollowBtn" type="button" hidden>Follow</button>
+                  <button id="btnUserPublicFollow" class="userPublicFollowBtn" type="button" hidden>Become a fan</button>
                 </div>
               </div>
               <button id="btnUserPublicBack" class="nabadBackBtn userPublicBack" type="button" aria-label="Back" hidden>
@@ -2614,9 +2614,9 @@
                   <strong class="profileStatValue" id="profileStatPillPublicValue">0</strong>
                   <span class="profileStatLabel">Plays</span>
                 </div>
-                <div class="profileStatCol" data-stat="followers" title="Followers arrive with social profiles.">
+                <div class="profileStatCol" data-stat="followers" title="Fans who support your music.">
                   <strong class="profileStatValue" id="profileStatPillLikesValue">0</strong>
-                  <span class="profileStatLabel">Followers</span>
+                  <span class="profileStatLabel">Fans</span>
                 </div>
               </div>
 
@@ -3609,7 +3609,7 @@
         </section>
         <section class="deskRailCard deskRailCtaCard" aria-labelledby="deskRailCtaLabel">
           <h2 class="deskRailLabel" id="deskRailCtaLabel">Find your people</h2>
-          <p class="deskRailCtaSub">Follow creators to fill your feed and start chatting.</p>
+          <p class="deskRailCtaSub">Become a fan of creators to fill your feed and start chatting.</p>
           <a href="#/friends" class="deskRailCtaBtn">Find creators</a>
         </section>
       </aside>
@@ -4185,7 +4185,7 @@
           <div>
             <p class="notificationsCenterKicker">Latest updates</p>
             <h2 id="notificationsCenterTitle">Notifications</h2>
-            <p id="notificationsCenterLead" class="notificationsCenterLead">Follows and creator activity will appear here.</p>
+            <p id="notificationsCenterLead" class="notificationsCenterLead">Fans and creator activity will appear here.</p>
           </div>
           <button type="button" id="notificationsCenterClose" class="notificationsCenterClose" aria-label="Close notifications" data-notifications-close="1">
             <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -4223,7 +4223,7 @@
           <button type="button" class="messagesShareSheetClose" id="sendToFriendSheetClose" aria-label="Close">×</button>
         </header>
         <div id="sendToFriendPreview" class="sendToFriendPreview" aria-hidden="true"></div>
-        <p id="sendToFriendLead" class="messagesShareSheetLead">Pick someone you follow who follows you back.</p>
+        <p id="sendToFriendLead" class="messagesShareSheetLead">Pick someone you fan who fans you back.</p>
         <div id="sendToFriendList" class="messagesShareList" role="listbox" aria-label="Friends"></div>
         <div id="sendToFriendConfirm" class="messagesShareConfirm" hidden aria-hidden="true"></div>
       </section>
@@ -4453,6 +4453,6 @@
     </script>
     <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
     <script src="./env.client.js" onerror="void 0"></script>
-    <script type="module" src="./src/app.js?v=20260704-160012"></script>
+    <script type="module" src="./src/app.js?v=20260704-162849"></script>
   </body>
 </html>

@@ -612,7 +612,7 @@ async function handlePost(req, res, user) {
       }
       const mutual = await isMutualFollow(user.userId, targetUserId);
       if (!mutual) {
-        return sendJson(res, 403, { ok: false, error: "Follow each other to chat, or send a request" });
+        return sendJson(res, 403, { ok: false, error: "Become mutual fans to chat, or send a request" });
       }
       thread = await getOrCreateThread(user.userId, targetUserId);
     } else {

@@ -17,10 +17,10 @@ and NabadAi generates a finished song with vocals.
 
 MAIN AREAS (bottom navigation — five tabs):
 - Discover: a feed to explore songs from the community, plus the "Top This Week" chart and challenges.
-- Friends: people you follow / who follow you, the Friends feed, and Messages (direct chats and the NabadAi Coach).
+- Friends: creators you fan / who fan you, the Friends feed, and Messages (direct chats and the NabadAi Coach).
 - Create (the center "+" tab): where you make a new song.
-- Activity: your notifications — updates about your songs (e.g. entering the weekly chart), follows, likes, replies, and achievements. It has filters: All, Social, Achievements.
-- Profile: your public page, your songs, stats (Songs, Plays, Followers), Persona, playlists, credits, and Settings.
+- Activity: your notifications — updates about your songs (e.g. entering the weekly chart), new fans, likes, replies, and achievements. It has filters: All, Social, Achievements.
+- Profile: your public page, your songs, stats (Songs, Plays, Fans), Persona, playlists, credits, and Settings.
 
 CREATING A SONG (Create tab) — start modes (tabs on Create):
 - "Lyrics": two sub-tabs — "Write" (type or paste your own lyrics) and "Generate" (let NabadAi write/refine lyrics for you, free).
@@ -48,7 +48,7 @@ PERSONA (a signature voice):
 ANALYTICS — see who listened (owner-only, private to you):
 - Each of your songs has a private "Song analytics" view ("Only you can see who played this song"), reachable from your Activity feed.
 - It shows total PLAYS, the number of unique LISTENERS, and a list of WHO LISTENED (their @handles, with how many times each played it). If no one has played it yet, it says so.
-- Your Profile shows "Songs", "Plays", and "Followers" stats. There is also a private "Private feedback" inbox (creator-only) for whispers left on your songs.
+- Your Profile shows "Songs", "Plays", and "Fans" stats. There is also a private "Private feedback" inbox (creator-only) for whispers left on your songs.
 
 MUSIC PRESENCE — let friends see what you're into:
 - Music presence lets your friends see what you're currently playing or creating ("Now Playing"). It only appears in Settings when you're signed in.
@@ -140,12 +140,12 @@ CREDITS — balance and what each action costs:
 - If a generation can't be completed, the credits for it are refunded automatically.
 
 PROFILE & SOCIAL:
-- Your Profile has tabs: Posts (your published activity), Songs (your full library), **My Vocals** (studio recordings you saved from NabadAi Studio — see Studio section), and Playlist. It shows your Songs, Plays, and Followers stats.
-- You can follow other creators. When two people follow each other, they can message each other directly; otherwise you can send a message request.
+- Your Profile has tabs: Posts (your published activity), Songs (your full library), **My Vocals** (studio recordings you saved from NabadAi Studio — see Studio section), and Playlist. It shows your Songs, Plays, and Fans stats.
+- You can become a fan of other creators. When two people fan each other, they can message each other directly; otherwise you can send a message request.
 - On someone else's song you can Repost it. Use the "…" (more options) menu on a profile to Report user or Block user.
 
 MESSAGES & FRIENDS:
-- Messages has filters: All, Requests, Chats. You can message people you mutually follow; if you don't follow each other yet, send a message request.
+- Messages has filters: All, Requests, Chats. You can message people you mutually fan; if you're not mutual fans yet, send a message request.
 - The NabadAi Coach (this assistant) is pinned at the top of your Messages inbox.
 - You can block or report users from their profile if needed; manage blocks in Settings → "Blocked accounts".
 

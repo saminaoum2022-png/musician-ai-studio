@@ -144,7 +144,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260704-160012";
+const APP_BUILD = "20260704-162849";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -166,7 +166,59 @@ const HUB_FEATURE_ENABLED = false;
 /** Retired — text/voice status posts (UPDATE, SONG REQUEST, etc.) are no longer shown or created. */
 const STATUS_POSTS_FEATURE_ENABLED = false;
 
-/** Direct messages — inbox from Friends header; mutual follow = chat, else request (v1 text). */
+/** Direct messages — inbox from Friends header; mutual fan = chat, else request (v1 text). */
+
+/** User-facing fan terminology — backend/API still uses follow/unfollow. */
+const FAN_COPY = {
+  statLabel: "Fans",
+  ctaProfile: "Become a fan",
+  ctaCompact: "Fan",
+  ctaActive: "Fan ✓",
+  ctaBusy: "Fanning…",
+  statusYouFan: "You're a fan",
+  statusYourFan: "Your fan",
+  statusMutual: "Mutual fans",
+  signIn: "Sign in to become a fan.",
+  confirmUnfan(who) {
+    return `Stop being a fan of ${who}?`;
+  },
+  toastBecameFan(handle) {
+    return handle ? `You're now a fan of @${handle}.` : "You're now a fan.";
+  },
+  toastUnfan: "You unfanned this creator.",
+  toastError: "Could not update fan status.",
+  whoToFan: "Who to fan",
+  creatorsToFan: "Creators to fan",
+  emptyTitle: "Fan musicians to see activity",
+  emptySignInBody: "Fan musicians from Discover — their drops and remixes show up here.",
+  emptyBody: "Pick a few creators on Discover — new songs, remixes, and challenges land here.",
+  repostHeader: "Repost to your fans",
+  repostToast: "Reposted to your fans.",
+  postToast: "Posted — your fans will see it",
+  composeHint: "Sign in to post — your fans see it here on Friends.",
+  notifFollowTitle(u) {
+    return u ? `@${u} became your fan` : "Someone became your fan";
+  },
+  notifFollowBody: "They can now see your public songs in their Friends feed.",
+  activityCategory: "New fan",
+  fromSomeoneYouFan: "From someone you fan",
+  reachedTheirFans: "It reached their fans",
+};
+
+function fanCtaLabel(isFan, { compact = false } = {}) {
+  if (isFan) return FAN_COPY.ctaActive;
+  return compact ? FAN_COPY.ctaCompact : FAN_COPY.ctaProfile;
+}
+
+function fanRelationLabel(stats) {
+  if (!stats) return "";
+  const following = Boolean(stats.isFollowing);
+  const followsYou = Boolean(stats.followsViewer);
+  if (following && followsYou) return FAN_COPY.statusMutual;
+  if (followsYou) return FAN_COPY.statusYourFan;
+  if (following) return FAN_COPY.statusYouFan;
+  return "";
+}
 const MESSAGES_FEATURE_ENABLED = true;
 
 (() => {
@@ -8836,8 +8888,8 @@ function discoverFeedFollowCardHtml(creator) {
         class="discoverFeedFollowCta"
         data-discover-follow-user-id="${escapeHtml(userId)}"
         data-discover-follow-handle="${escapeHtml(handle)}"
-        aria-label="Follow @${escapeHtml(handle)}"
-      >Follow</button>
+        aria-label="Become a fan of @${escapeHtml(handle)}"
+      >${FAN_COPY.ctaCompact}</button>
     </article>`;
 }
 
@@ -8847,7 +8899,7 @@ function discoverFeedSuggestedFollowBlockHtml(tracks, profMap) {
   const cards = creators.map((c) => discoverFeedFollowCardHtml(c)).join("");
   return `
     <section class="discoverFeedSection discoverFeedSection--suggestedFollow">
-      ${discoverFeedSectionHeadHtml("Creators to follow")}
+      ${discoverFeedSectionHeadHtml(FAN_COPY.creatorsToFan)}
       <div class="discoverFeedCarouselRow">
         <div class="discoverFeedCarouselRail discoverFeedCarouselRail--follow">${cards}</div>
       </div>
@@ -8866,7 +8918,7 @@ async function paintDiscoverFeedFollowCards() {
   buttons.forEach((btn) => {
     const uid = String(btn.getAttribute("data-discover-follow-user-id") || "").trim();
     const isFollowing = following.has(uid);
-    btn.textContent = isFollowing ? "Following" : "Follow";
+    btn.textContent = fanCtaLabel(isFollowing, { compact: true });
     btn.classList.toggle("isFollowing", isFollowing);
     btn.dataset.following = isFollowing ? "1" : "0";
   });
@@ -8874,7 +8926,7 @@ async function paintDiscoverFeedFollowCards() {
 
 async function handleDiscoverFeedFollowClick(btn, targetUserId) {
   if (!authSession?.user?.id || !getSupabaseAuthToken()) {
-    showToast("Sign in to follow creators.");
+    showToast(FAN_COPY.signIn);
     location.hash = "#/auth";
     return;
   }
@@ -8883,7 +8935,7 @@ async function handleDiscoverFeedFollowClick(btn, targetUserId) {
   if (wasFollowing) {
     const who = handle ? `@${handle}` : "this creator";
     let ok = true;
-    try { ok = window.confirm(`Unfollow ${who}?`); } catch { ok = true; }
+    try { ok = window.confirm(FAN_COPY.confirmUnfan(who)); } catch { ok = true; }
     if (!ok) return;
   }
   btn.disabled = true;
@@ -8898,12 +8950,12 @@ async function handleDiscoverFeedFollowClick(btn, targetUserId) {
     _followingListCache = null;
     _followingListCacheAt = 0;
     const nowFollowing = !wasFollowing;
-    btn.textContent = nowFollowing ? "Following" : "Follow";
+    btn.textContent = fanCtaLabel(nowFollowing, { compact: true });
     btn.classList.toggle("isFollowing", nowFollowing);
     btn.dataset.following = nowFollowing ? "1" : "0";
-    showToast(nowFollowing ? (handle ? `Following @${handle}.` : "Following creator.") : "Unfollowed creator.");
+    showToast(nowFollowing ? FAN_COPY.toastBecameFan(handle) : FAN_COPY.toastUnfan);
   } catch (e) {
-    showToast(e?.message || "Could not update follow.");
+    showToast(e?.message || FAN_COPY.toastError);
   } finally {
     btn.disabled = false;
   }
@@ -9494,7 +9546,7 @@ function renderDiscoverSuggestedCreatorsSection() {
           <span class="discoverHubCreatorGenres">${c.genres.map((g) => `<span class="discoverHubGenreChip">${escapeHtml(g)}</span>`).join("")}</span>
         </span>
       </button>
-      <button type="button" class="discoverHubFollowBtn" data-discover-follow="${encodeURIComponent(c.handle)}" aria-label="Follow @${escapeHtml(c.handle)}">Follow</button>
+      <button type="button" class="discoverHubFollowBtn" data-discover-follow="${encodeURIComponent(c.handle)}" aria-label="Become a fan of @${escapeHtml(c.handle)}">${FAN_COPY.ctaCompact}</button>
     </article>`).join("");
   mount.innerHTML = `
     ${discoverHubSectionHeadHtml("Creators you may like")}
@@ -9671,14 +9723,14 @@ function bindDiscoverHubV1Once() {
         return;
       }
       if (!getSupabaseAuthToken()) {
-        showToast("Sign in to follow creators.");
+        showToast(FAN_COPY.signIn);
         location.hash = "#/auth";
         return;
       }
-      followBtn.textContent = "Following";
+      followBtn.textContent = FAN_COPY.ctaActive;
       followBtn.classList.add("isFollowing");
       followBtn.disabled = true;
-      showToast("Following — full social graph coming soon.");
+      showToast("You're a fan — full social graph coming soon.");
     }
   });
 }
@@ -12850,7 +12902,7 @@ function bindFollowingComposeOnce() {
       resetStatusVoiceCompose();
       closeFriendsComposeSheet();
       haptic("success");
-      try { showToast("Posted — followers will see it", { icon: "✓", durationMs: 2200 }); } catch {}
+      try { showToast(FAN_COPY.postToast, { icon: "✓", durationMs: 2200 }); } catch {}
       await prependFriendsOwnPost(_friendsOwnPostPin);
       if (
         (document.body.getAttribute("data-route") || "") === "profile" &&
@@ -13527,13 +13579,13 @@ function whoToFollowSectionHtml(creators) {
           <strong class="friendsWtfName">@${safeHandle}</strong>
           <span class="friendsWtfSub">Musician on Nabadai</span>
         </a>
-        <button type="button" class="friendsWtfFollow" data-friends-follow="${safeUid}" data-friends-follow-handle="${safeHandle}">Follow</button>
+        <button type="button" class="friendsWtfFollow" data-friends-follow="${safeUid}" data-friends-follow-handle="${safeHandle}">${FAN_COPY.ctaCompact}</button>
       </li>`;
   }).filter(Boolean).join("");
   if (!rows) return "";
   return `
-    <section class="friendsWhoToFollow" aria-label="Who to follow">
-      <h3 class="friendsWtfTitle">Who to follow</h3>
+    <section class="friendsWhoToFollow" aria-label="${escapeHtml(FAN_COPY.whoToFan)}">
+      <h3 class="friendsWtfTitle">${escapeHtml(FAN_COPY.whoToFan)}</h3>
       <ul class="friendsWtfList" role="list">${rows}</ul>
       <a class="friendsWtfMore" href="#/discover" data-route-link="discover">Show more</a>
     </section>`;
@@ -13764,7 +13816,7 @@ async function submitRepost() {
     });
     applyFeedSocialStatsToDom(document);
     closeRepostComposeSheet();
-    showToast("Reposted to your followers.");
+    showToast("Reposted to your fans.");
     if (String(document.body.getAttribute("data-route") || "") === "friends") {
       void refreshDiscoveryFollowingFeed({ force: true });
     }
@@ -13915,7 +13967,7 @@ function openFeedReplySheet({ targetKind, targetId, handle, sub }) {
   if (subEl) {
     subEl.textContent = sub
       ? sub.slice(0, 200)
-      : "Tap a comment to mention them. Only mutual followers get notified.";
+      : "Tap a comment to mention them. Only mutual fans get notified.";
   }
 
   const list = document.getElementById("feedReplyList");
@@ -14306,7 +14358,7 @@ async function handleFriendsWtfFollow(btn) {
   const handle = String(btn.getAttribute("data-friends-follow-handle") || "").trim();
   if (!targetUserId) return;
   if (!authSession?.user?.id || !getSupabaseAuthToken()) {
-    showToast("Sign in to follow creators.");
+    showToast(FAN_COPY.signIn);
     location.hash = "#/auth";
     return;
   }
@@ -14314,7 +14366,7 @@ async function handleFriendsWtfFollow(btn) {
   btn.dataset.followBusy = "1";
   btn.disabled = true;
   const prevLabel = btn.textContent;
-  btn.textContent = "Following…";
+  btn.textContent = FAN_COPY.ctaBusy;
   try {
     haptic("light");
   } catch {}
@@ -14323,10 +14375,8 @@ async function handleFriendsWtfFollow(btn) {
       method: "POST",
       body: JSON.stringify({ action: "follow", targetUserId }),
     });
-    btn.textContent = "Following";
+    btn.textContent = FAN_COPY.ctaActive;
     btn.classList.add("isFollowed");
-    // Slide the row out, then refresh the feed so the new follow gets
-    // pulled into the timeline and a fresh suggestion takes its place.
     const row = btn.closest(".friendsWtfRow");
     if (row) {
       row.classList.add("isLeaving");
@@ -14337,12 +14387,12 @@ async function handleFriendsWtfFollow(btn) {
     } else {
       void refreshDiscoveryFollowingFeed({ force: true });
     }
-    showToast(handle ? `Following @${handle}.` : "Following creator.");
+    showToast(FAN_COPY.toastBecameFan(handle));
   } catch (e) {
-    btn.textContent = prevLabel || "Follow";
+    btn.textContent = prevLabel || FAN_COPY.ctaCompact;
     btn.disabled = false;
     delete btn.dataset.followBusy;
-    showToast(e?.message || "Could not follow.");
+    showToast(e?.message || FAN_COPY.toastError);
   }
 }
 
@@ -14839,7 +14889,7 @@ async function refreshDiscoveryFollowingFeed(opts = {}) {
         renderDiscoveryFollowingEmpty(
           statusEl,
           "Sign in to see activity",
-          "Follow musicians from Discover — their drops and remixes show up here.",
+          FAN_COPY.emptySignInBody,
           `<a class="solid discoveryEmptyCta" href="#/auth">Sign in</a>`,
         );
         return;
@@ -14852,7 +14902,7 @@ async function refreshDiscoveryFollowingFeed(opts = {}) {
       renderDiscoveryFollowingEmpty(
         statusEl,
         "Sign in to see activity",
-        "Follow musicians from Discover — their drops and remixes show up here.",
+        FAN_COPY.emptySignInBody,
           `<a class="solid discoveryEmptyCta" href="#/auth">Sign in</a>`,
       );
       return;
@@ -14877,8 +14927,8 @@ async function refreshDiscoveryFollowingFeed(opts = {}) {
       listEl.innerHTML = "";
       renderDiscoveryFollowingEmpty(
         statusEl,
-        "Follow musicians to see activity",
-        "Pick a few creators on Discover — new songs, remixes, and challenges land here.",
+        FAN_COPY.emptyTitle,
+        FAN_COPY.emptyBody,
         `<a class="solid discoveryEmptyCta" href="#/discover" data-route-link="discover">Browse Discover</a>`,
       );
       void (async () => {
@@ -14982,7 +15032,7 @@ async function refreshDiscoveryFollowingFeed(opts = {}) {
       renderDiscoveryFollowingEmpty(
         statusEl,
         "Quiet for now",
-        "New song drops from people you follow will show up here.",
+        "New song drops from creators you fan will show up here.",
       );
       return;
     }
@@ -15612,7 +15662,7 @@ function pushLocalGenerationReadyActivity(entries) {
   if (els.activityLead) {
     els.activityLead.textContent = unread
       ? `${unread} unread ${unread === 1 ? "update" : "updates"} from your music circle.`
-      : "Follows, likes, comments, milestones, and remixes.";
+      : "Fans, likes, comments, milestones, and remixes.";
   }
   try {
     finishCoachGenerationReady({ variantCount });
@@ -22222,7 +22272,7 @@ function ensurePublishReleaseSheet() {
         </div>
       </div>
       <label class="publishReleaseLabel" for="publishReleaseCaption">Release note <span>(optional)</span></label>
-      <textarea id="publishReleaseCaption" class="publishReleaseCaption" rows="3" maxlength="160" placeholder="Say something about the mood, story, or moment… Mention mutual followers with @username"></textarea>
+      <textarea id="publishReleaseCaption" class="publishReleaseCaption" rows="3" maxlength="160" placeholder="Say something about the mood, story, or moment… Mention mutual fans with @username"></textarea>
       <div class="publishReleasePermits" role="group" aria-label="Collaboration permissions">
         <label class="publishReleasePermit">
           <input id="publishAllowRemix" type="checkbox" checked />
@@ -24932,7 +24982,7 @@ async function openSendToFriendSheet(ref) {
   const friends = await fetchMutualFriendsForShare();
   _sendToFriendCandidates = friends;
   if (!friends.length) {
-    list.innerHTML = `<div class="messagesShareEmpty">Follow each other with someone first — then you can send songs here.</div>`;
+    list.innerHTML = `<div class="messagesShareEmpty">Become mutual fans with someone first — then you can send songs here.</div>`;
     return;
   }
   list.innerHTML = friends.map((f, idx) => {
@@ -25135,13 +25185,7 @@ function formatDmInboxPreview(raw) {
 }
 
 function dmRelationshipLabel(stats) {
-  if (!stats) return "";
-  const following = Boolean(stats.isFollowing);
-  const followsYou = Boolean(stats.followsViewer);
-  if (following && followsYou) return "Following each other";
-  if (followsYou) return "Follows you";
-  if (following) return "Following";
-  return "";
+  return fanRelationLabel(stats);
 }
 
 /* ============================================================================
@@ -25816,7 +25860,7 @@ function renderMessagesInbox() {
     let emptyLead = "When you and another creator follow each other, you can chat here.";
     if (filter === "requests") {
       emptyTitle = "No requests";
-      emptyLead = "When someone messages you without mutual follow, their request shows up here.";
+      emptyLead = "When someone messages you without being a mutual fan, their request shows up here.";
     } else if (filter === "chats") {
       emptyTitle = "No chats yet";
       emptyLead = "Start a conversation from a creator profile.";
@@ -26877,7 +26921,7 @@ function renderUserPublicSocialStats({ songCount, stats }) {
       </div>
       <div class="profileStatCol" data-stat="followers">
         <strong class="profileStatValue">${formatStatCount(followers)}</strong>
-        <span class="profileStatLabel">Followers</span>
+        <span class="profileStatLabel">${FAN_COPY.statLabel}</span>
       </div>
     `;
     els.userPublicStats.style.display = "";
@@ -26994,12 +27038,7 @@ function setUserPublicLoading(on, username = "") {
 }
 
 function userPublicRelationLabel(stats) {
-  if (!stats) return "";
-  const following = Boolean(stats.isFollowing);
-  const followsYou = Boolean(stats.followsViewer);
-  if (following && followsYou) return "Following each other";
-  if (followsYou) return "Follows you";
-  return "";
+  return fanRelationLabel(stats);
 }
 
 function renderUserPublicFollowButton() {
@@ -27021,10 +27060,10 @@ function renderUserPublicFollowButton() {
   btn.hidden = !canShow;
   if (!canShow) return;
   const isFollowing = Boolean(currentUserPublicSocialStats?.isFollowing);
-  btn.textContent = isFollowing ? "Following" : "Follow";
+  btn.textContent = fanCtaLabel(isFollowing, { compact: false });
   btn.dataset.following = isFollowing ? "true" : "false";
-  btn.setAttribute("aria-label", isFollowing ? "Unfollow creator" : "Follow creator");
-  btn.title = isFollowing ? "Tap again to unfollow" : "Follow creator";
+  btn.setAttribute("aria-label", isFollowing ? "Unfan creator" : "Become a fan of this creator");
+  btn.title = isFollowing ? "Tap again to unfan" : "Become a fan of this creator";
 }
 
 async function refreshUserPublicSocial({ username, userId, songCount }) {
@@ -27040,7 +27079,7 @@ async function toggleCurrentUserPublicFollow() {
   const targetUserId = String(currentUserPublicProfileId || "").trim();
   if (!targetUserId) return;
   if (!authSession?.user?.id || !getSupabaseAuthToken()) {
-    showToast("Sign in to follow creators.");
+    showToast(FAN_COPY.signIn);
     location.hash = "#/auth";
     return;
   }
@@ -27050,7 +27089,7 @@ async function toggleCurrentUserPublicFollow() {
     const handle = String(els.userPublicName?.textContent || "").trim() || "this creator";
     let ok = true;
     try {
-      ok = window.confirm(`Unfollow ${handle}?`);
+      ok = window.confirm(FAN_COPY.confirmUnfan(handle));
     } catch {
       ok = true;
     }
@@ -27074,12 +27113,12 @@ async function toggleCurrentUserPublicFollow() {
       stats: currentUserPublicSocialStats,
     });
     renderUserPublicFollowButton();
-    showToast(wasFollowing ? "Unfollowed creator." : "Following creator.");
+    showToast(wasFollowing ? FAN_COPY.toastUnfan : FAN_COPY.toastBecameFan(String(els.userPublicName?.textContent || "").replace(/^@/, "").trim()));
     if (wasFollowing && (document.body.getAttribute("data-route") || "") === "friends") {
       void refreshDiscoveryFollowingFeed();
     }
   } catch (e) {
-    showToast(e?.message || "Could not update follow.");
+    showToast(e?.message || FAN_COPY.toastError);
   } finally {
     if (btn) btn.disabled = false;
   }
@@ -27087,18 +27126,18 @@ async function toggleCurrentUserPublicFollow() {
 
 async function showFollowingSummary() {
   if (!authSession?.user?.id) {
-    showToast("Sign in to manage followed creators.");
+    showToast("Sign in to see who you fan.");
     return;
   }
   try {
     const list = await fetchFollowingListForFeed();
     if (!list.length) {
-      alert("Following\n\nYou are not following any creators yet.");
+      alert("Creators you fan\n\nYou are not a fan of any creators yet.");
       return;
     }
-    alert(`Following\n\n${list.map((x) => `@${x.username || x.userId}`).join("\n")}`);
+    alert(`Creators you fan\n\n${list.map((x) => `@${x.username || x.userId}`).join("\n")}`);
   } catch (e) {
-    showToast(e?.message || "Could not load following.");
+    showToast(e?.message || "Could not load your fan list.");
   }
 }
 
@@ -27177,8 +27216,8 @@ function notificationMessage(n) {
   const username = String(n?.metadata?.actor_username || "").replace(/^@/, "").trim();
   if (n?.type === "follow") {
     return {
-      title: username ? `@${username} started following you` : "Someone started following you",
-      body: "They can now find your public songs in their Following feed.",
+      title: FAN_COPY.notifFollowTitle(username),
+      body: FAN_COPY.notifFollowBody,
       action: username ? "View profile" : "",
     };
   }
@@ -27284,7 +27323,7 @@ function notificationMessage(n) {
     const target = notificationTargetLabel(n?.metadata);
     return {
       title: username ? `@${username} reposted ${target}` : `Someone reposted ${target}`,
-      body: "It went out to their followers' Friends feed.",
+      body: "It went out to their fans' Friends feed.",
       action: username ? "View profile" : "",
     };
   }
@@ -28033,13 +28072,13 @@ function activityItemDisplayParts(n, msg) {
     return {
       category: "Repost",
       title: username ? `${username} reposted your song` : "Someone reposted your song",
-      description: songTitle || "It reached their followers",
+      description: songTitle || FAN_COPY.reachedTheirFans,
     };
   }
   if (t === "follow") {
     return {
-      category: "New Follower",
-      title: username ? `${username} started following you` : "Someone started following you",
+      category: FAN_COPY.activityCategory,
+      title: username ? `${username} became your fan` : "Someone became your fan",
       description: "They can see your public songs in their feed",
     };
   }
@@ -28059,7 +28098,7 @@ function activityItemDisplayParts(n, msg) {
       return {
         category: "New Song",
         title: username ? `${username} published ${gc} songs` : `${gc} new songs`,
-        description: titles ? `${titles}${more}` : "From someone you follow",
+        description: titles ? `${titles}${more}` : FAN_COPY.fromSomeoneYouFan,
       };
     }
     const songTitle = String(meta.song_title || "a new song").trim();
@@ -28096,7 +28135,7 @@ function activityItemHtml(n) {
       msg.title = username ? `@${username} published ${gc} songs` : `A creator published ${gc} songs`;
       const titles = (n._groupTitles || []).slice(0, 3).join(" · ");
       const more = (n._groupTitles || []).length > 3 ? ` +${n._groupTitles.length - 3} more` : "";
-      msg.body = titles ? `${titles}${more}` : `${gc} new songs in your Following feed.`;
+      msg.body = titles ? `${titles}${more}` : `${gc} new songs from creators you fan.`;
     } else if (t === "song_feedback" || t === "social_reply") {
       const details = (n._groupDetails || []).slice(0, 3).map((d) => `"${d.slice(0, 60)}${d.length > 60 ? "…" : ""}"`);
       if (details.length) msg.body = details.join(" · ");
@@ -28145,7 +28184,7 @@ function activityEmptyHtml(filter = _activityFilterTab) {
       <div class="activityEmpty">
         <div class="activityEmptyIcon" aria-hidden="true"><svg viewBox="0 0 24 24" width="24" height="24"><path fill="currentColor" d="M12 21s-7.2-4.35-9.6-8.55C.6 9.15 2.1 5.7 5.4 5.1c1.8-.3 3.45.45 4.35 1.95.9-1.5 2.55-2.25 4.35-1.95 3.3.6 4.8 4.05 3 7.35C19.2 16.65 12 21 12 21Z"/></svg></div>
         <strong>No social activity yet</strong>
-        <span>Likes, followers, remixes, and replies will show up here.</span>
+        <span>Likes, fans, remixes, and replies will show up here.</span>
       </div>`;
   }
   if (filter === "achievements") {
@@ -28160,7 +28199,7 @@ function activityEmptyHtml(filter = _activityFilterTab) {
     <div class="activityEmpty">
       <div class="activityEmptyIcon" aria-hidden="true"><svg viewBox="0 0 24 24" width="24" height="24"><path fill="currentColor" d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg></div>
       <strong>No activity yet</strong>
-      <span>Your likes, rankings, followers and remix activity will appear here.</span>
+      <span>Your likes, rankings, fans and remix activity will appear here.</span>
     </div>`;
 }
 
@@ -28263,7 +28302,7 @@ async function fetchActivityBatch() {
     if (els.activityLead) {
       els.activityLead.textContent = unread
         ? `${unread} unread ${unread === 1 ? "update" : "updates"} from your music circle.`
-        : "Follows, likes, comments, milestones, and remixes.";
+        : "Fans, likes, comments, milestones, and remixes.";
     }
     updateNotificationsEntryBadges(unread);
   } catch (e) {
@@ -28319,7 +28358,7 @@ async function enterActivityRoute({ reset = false } = {}) {
       });
       updateNotificationsEntryBadges(0);
       renderActivityFeedFromState();
-      if (els.activityLead) els.activityLead.textContent = "Follows, likes, comments, milestones, and remixes.";
+      if (els.activityLead) els.activityLead.textContent = "Fans, likes, comments, milestones, and remixes.";
     }).catch(() => {});
   }
 }
@@ -29718,17 +29757,17 @@ async function refreshPublicTrackSheetFollowRow(ctx) {
   btn.hidden = false;
   const labelEl = btn.querySelector(".discoverTrackSheetRowLabel");
   if (!authSession?.user?.id) {
-    if (labelEl) labelEl.textContent = "Follow Creator";
+    if (labelEl) labelEl.textContent = FAN_COPY.ctaProfile;
     btn.dataset.following = "0";
     return;
   }
   try {
     const ids = await fetchFollowingUserIdsForFeed();
     const following = ids.includes(ownerId);
-    if (labelEl) labelEl.textContent = following ? "Following" : "Follow Creator";
+    if (labelEl) labelEl.textContent = fanCtaLabel(following, { compact: false });
     btn.dataset.following = following ? "1" : "0";
   } catch {
-    if (labelEl) labelEl.textContent = "Follow Creator";
+    if (labelEl) labelEl.textContent = FAN_COPY.ctaProfile;
     btn.dataset.following = "0";
   }
 }
@@ -29738,7 +29777,7 @@ async function handlePublicTrackSheetFollow(ctx) {
   const handle = String(ctx?.handle || "").trim();
   if (!targetUserId) return;
   if (!authSession?.user?.id || !getSupabaseAuthToken()) {
-    showToast("Sign in to follow creators.");
+    showToast(FAN_COPY.signIn);
     try {
       location.hash = "#/auth";
     } catch {}
@@ -29750,7 +29789,7 @@ async function handlePublicTrackSheetFollow(ctx) {
     const who = handle ? `@${handle}` : "this creator";
     let ok = true;
     try {
-      ok = window.confirm(`Unfollow ${who}?`);
+      ok = window.confirm(FAN_COPY.confirmUnfan(who));
     } catch {
       ok = true;
     }
@@ -29767,10 +29806,10 @@ async function handlePublicTrackSheetFollow(ctx) {
     });
     _followingListCache = null;
     _followingListCacheAt = 0;
-    showToast(wasFollowing ? "Unfollowed creator." : handle ? `Following @${handle}.` : "Following creator.");
+    showToast(wasFollowing ? FAN_COPY.toastUnfan : FAN_COPY.toastBecameFan(handle));
     if (_trackSheetCtx?.mode === "public") void refreshPublicTrackSheetFollowRow(_trackSheetCtx);
   } catch (e) {
-    showToast(e?.message || "Could not update follow.");
+    showToast(e?.message || FAN_COPY.toastError);
   } finally {
     if (btn) btn.disabled = false;
   }
@@ -29845,7 +29884,7 @@ function renderTrackSheetPublic(ctx) {
   `;
   const hideProfileRow = Boolean(ctx.hideDiscoverProfile) || !String(ctx.handle || "").trim();
   l.innerHTML = `
-    ${publicTrackSheetRowHtml("follow_creator", "Follow Creator", ' id="publicSheetRowFollow"')}
+    ${publicTrackSheetRowHtml("follow_creator", FAN_COPY.ctaProfile, ' id="publicSheetRowFollow"')}
     ${hideProfileRow ? "" : publicTrackSheetRowHtml("profile", "View Profile")}
     ${publicTrackSheetRowHtml("add_playlist", "Add to Playlist")}
     ${publicTrackSheetRowHtml("song_details", "Song Details")}

@@ -14315,18 +14315,25 @@ button.profileMusicStylesLine:hover .profileMusicStylePill{
 }
 .profileTopWeekLikes svg{ width: 11px; height: 11px; color: #ff688f; }
 .profileFeaturedCreationWrap{
-  margin: 0 0 8px;
+  margin: 2px 0 4px;
   max-width: 100%;
+}
+.userPublicFeaturedWrap{
+  margin-top: 2px;
+  margin-bottom: 8px;
 }
 .profileFeaturedCreationWrap[hidden]{
   display: none !important;
+}
+.profileFeaturedCreationWrap:not([hidden]) + .profileSongsBlock .profileSegBar{
+  margin-top: 10px;
 }
 .profileFeaturedCreation{
   margin: 0;
   max-width: 100%;
 }
 .profileFeaturedCreationKicker{
-  margin: 0 0 6px;
+  margin: 0 0 4px;
   padding: 0 2px;
   color: rgba(223, 231, 251, 0.42);
   font-size: 11px;
@@ -14419,7 +14426,7 @@ button.profileMusicStylesLine:hover .profileMusicStylePill{
 
 /* Legacy featured-song styles — kept for public profile song lists. */
 .profileFeaturedSong{
-  margin: 0 0 14px;
+  margin: 0;
   max-width: 100%;
 }
 .profileFeaturedSongMain{

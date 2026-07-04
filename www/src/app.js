@@ -144,7 +144,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260705-004508";
+const APP_BUILD = "20260705-005245";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -19761,6 +19761,14 @@ function saveProfile(p) {
   }
 }
 
+/** True only when swapping one signed-in account for another — not
+ *  re-sign-in after logout (prev empty) or a token refresh (same id). */
+function isRealAuthUserSwitch(prevUserId, nextUserId) {
+  const prev = String(prevUserId || "").trim();
+  const next = String(nextUserId || "").trim();
+  return Boolean(prev && next && prev !== next);
+}
+
 /** Wipe in-memory + UI caches when the signed-in Supabase user changes. */
 function onAuthAccountSwitched(prevUserId, nextUserId) {
   saveHubFeed([]);
@@ -19770,7 +19778,7 @@ function onAuthAccountSwitched(prevUserId, nextUserId) {
   _myHubPostsFirstLoadDone = false;
   _myHubPostsLastFetchMs = 0;
   _libraryHydrateCompleted = false;
-  _libraryHydrateInFlight = false;
+  _libraryHydrateInFlight = true;
   _libraryReconcileLastAt = 0;
   invalidateLibraryMemCache();
   invalidateProfileActivitiesCache();
@@ -19782,26 +19790,33 @@ function onAuthAccountSwitched(prevUserId, nextUserId) {
   clearSocialFetchCaches();
   clearSignedInUiCaches();
   const user = authSession?.user;
-  activeProfile = {
-    id: nextUserId,
-    username: deriveUsernameFromAuth(user) || "guest",
-    displayName: "",
-    email: String(user?.email || ""),
-    gender: "",
-    voiceTimbre: "",
-    bio: "",
-    avatar: "",
-    genres: "",
-    links: {},
-    isPublic: true,
-    callingCardUrl: "",
-    callingCardUpdatedAt: 0,
-    soundCertified: false,
-  };
-  saveProfile(activeProfile);
-  saveLibraryFor(nextUserId, []);
-  saveLibrary([]);
+  loadProfile();
+  if (String(activeProfile?.id || "") !== String(nextUserId)) {
+    activeProfile = {
+      id: nextUserId,
+      username: deriveUsernameFromAuth(user) || "guest",
+      displayName: "",
+      email: String(user?.email || ""),
+      gender: "",
+      voiceTimbre: "",
+      bio: "",
+      avatar: "",
+      genres: "",
+      links: {},
+      isPublic: true,
+      callingCardUrl: "",
+      callingCardUpdatedAt: 0,
+      soundCertified: false,
+    };
+    saveProfile(activeProfile);
+  } else if (user?.email && !activeProfile.email) {
+    activeProfile = { ...activeProfile, email: String(user.email) };
+    saveProfile(activeProfile);
+  }
+  // Never wipe mas:library:v1:{uid} on disk — unpublished drafts for the
+  // incoming account must survive account switches on this device.
   clearGuestLocalData();
+  void ensureUserLibraryHydrated(undefined, { reason: "onAuthAccountSwitched" });
   try {
     console.info("[auth] account switched", { from: prevUserId, to: nextUserId });
   } catch {}
@@ -20887,9 +20902,20 @@ function saveAuthSession(sess, { persist = true } = {}) {
   const prevUserId = String(authSession?.user?.id || "");
   authSession = sess ? normalizeAuthSession(sess) : null;
   const nextUserId = String(authSession?.user?.id || "");
-  // First sign-in (prev empty) still had activeProfile.id === "guest" — mint a real handle.
-  if (nextUserId && prevUserId !== nextUserId) {
-    onAuthAccountSwitched(prevUserId || "guest", nextUserId);
+  if (isRealAuthUserSwitch(prevUserId, nextUserId)) {
+    onAuthAccountSwitched(prevUserId, nextUserId);
+    try { refreshProfileHandleFromActiveProfile(); } catch {}
+    if (!shouldShowProfileHeaderSkeleton()) setProfileHeaderLoading(false);
+  } else if (nextUserId && !prevUserId) {
+    // Re-sign-in after logout: session was cleared but mas:library/profile
+    // blobs for this uid were kept on disk — reload them instead of treating
+    // this like a fresh account (which used to wipe unpublished drafts).
+    loadProfile();
+    syncActiveProfileIdFromSession();
+    invalidateLibraryMemCache();
+    _libraryHydrateCompleted = false;
+    _libraryHydrateInFlight = true;
+    void ensureUserLibraryHydrated(undefined, { reason: "saveAuthSession:relogin" });
     try { refreshProfileHandleFromActiveProfile(); } catch {}
     if (!shouldShowProfileHeaderSkeleton()) setProfileHeaderLoading(false);
   }

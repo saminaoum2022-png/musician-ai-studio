@@ -144,7 +144,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260704-194928";
+const APP_BUILD = "20260704-201829";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -3827,7 +3827,7 @@ function applyRoute({ passGen } = {}) {
       markLibraryTabDot(false);
       if (authSession?.user?.id) {
         const run = () => {
-          void mergeCloudSongsIntoLocalLibrary().then((publicChanged) => {
+          void mergeCloudSongsIntoLocalLibrary({ reason: "applyRoute:profile-idle" }).then((publicChanged) => {
             if (publicChanged) try { refreshOwnSongsUi({ soft: false }); } catch {}
           });
         };
@@ -3847,12 +3847,16 @@ function applyRoute({ passGen } = {}) {
       renderProfileCallingCardHint();
       if (
         authSession?.user?.id &&
+        !profileCloudRecentlyMerged() &&
         (shouldShowProfileHeaderSkeleton() || profileNeedsCloudRefresh())
       ) {
         setProfileHeaderLoading(true);
         void (async () => {
           try {
-            const merged = await mergeActiveProfileFromCloud();
+            const merged = await mergeActiveProfileFromCloud({
+              reason: "applyRoute:profile",
+              skipIfRecent: true,
+            });
             if (merged) {
               void ensurePersonalizedUsernameSyncedToCloud();
             }
@@ -11736,16 +11740,17 @@ function applyFollowActPlayCountsToDom(listEl, tracks, patchLogFn) {
 }
 
 let _mergeCloudInFlight = false;
-async function mergeCloudSongsIntoLocalLibrary() {
+async function mergeCloudSongsIntoLocalLibrary(opts = {}) {
   if (!authSession?.user?.id) return false;
   if (_mergeCloudInFlight) return false;
   _mergeCloudInFlight = true;
+  logSupabaseFetch("library_merge", String(opts.reason || "mergeCloudSongsIntoLocalLibrary"));
   try {
   syncActiveProfileIdFromSession();
   if (!_libraryHydrateCompleted || _libraryHydrateInFlight) {
-    await ensureUserLibraryHydrated();
+    await ensureUserLibraryHydrated(undefined, { reason: opts.reason || "mergeCloudSongsIntoLocalLibrary" });
   }
-  const cloudRows = await supabaseLoadUserSongs();
+  const cloudRows = await supabaseLoadUserSongs({ reason: opts.reason || "mergeCloudSongsIntoLocalLibrary" });
   if (!Array.isArray(cloudRows) || !cloudRows.length) return false;
   const tombstones = loadLibraryTombstoneKeySet();
   const cloudFiltered = partitionCloudLibraryRows(cloudRows, tombstones);
@@ -11946,6 +11951,15 @@ async function renderProfileActivities(opts = {}) {
   if (route === "profile" && _profileSongsSegment !== "activities") {
     return;
   }
+  const reason = String(opts.reason || "renderProfileActivities");
+  try {
+    console.info("[profile/posts] render", {
+      reason,
+      force: Boolean(opts.force),
+      deferCloud: Boolean(opts.deferCloud),
+      extend: Boolean(opts.extend),
+    });
+  } catch {}
   const force = Boolean(opts.force);
   const extend = Boolean(opts.extend);
   const listEl = document.getElementById("profileActivitiesList");
@@ -11974,12 +11988,12 @@ async function renderProfileActivities(opts = {}) {
     !snap.html.includes("followAct--skel") &&
     profileActSnapshotMatchesIdentity(snap.html);
   if (!opts.deferCloud) {
-    await mergeCloudSongsIntoLocalLibrary();
-    await refreshOwnerPublicPostsCache({ force: opts.force });
+    await mergeCloudSongsIntoLocalLibrary({ reason: `${reason}:cloud` });
+    await refreshOwnerPublicPostsCache({ force: opts.force, reason: `${reason}:posts` });
   } else if (!getOwnerPublicPostsSongs()) {
-    void refreshOwnerPublicPostsCache().then(() => {
+    void refreshOwnerPublicPostsCache({ reason: `${reason}:defer` }).then(() => {
       if ((document.body.getAttribute("data-route") || "") === "profile" && _profileSongsSegment === "activities") {
-        void renderProfileActivities({ deferCloud: true });
+        void renderProfileActivities({ deferCloud: true, reason: `${reason}:defer-followup` });
       }
     });
   }
@@ -19565,6 +19579,9 @@ function onAuthAccountSwitched(prevUserId, nextUserId) {
   invalidateLibraryMemCache();
   invalidateProfileActivitiesCache();
   invalidateUserSongsLoadCache();
+  _profileLoadCache = null;
+  _profileLoadCacheAt = 0;
+  _profileCloudMergedAt = 0;
   clearSocialFetchCaches();
   clearSignedInUiCaches();
   const user = authSession?.user;
@@ -19693,18 +19710,36 @@ function profileNeedsCloudRefresh() {
   return !hasAvatar || !bio;
 }
 
-function refreshProfilePostsAfterIdentityMerge() {
+function refreshProfilePostsAfterIdentityMerge(prevProfile, nextProfile) {
+  const prev = prevProfile || activeProfile;
+  const next = nextProfile || activeProfile;
+  const identityChanged = profileIdentityFeedKey(prev) !== profileIdentityFeedKey(next);
+  if (!identityChanged) return;
+  try {
+    console.info("[profile/identity] feed refresh", {
+      prev: profileIdentityFeedKey(prev),
+      next: profileIdentityFeedKey(next),
+    });
+  } catch {}
   invalidateProfileActivitiesCache();
   try { renderProfilePreviewFromInputs(); } catch {}
   const route = document.body.getAttribute("data-route") || "";
   if (route === "profile" && _profileSongsSegment === "activities") {
-    void renderProfileActivities({ force: true });
+    void renderProfileActivities({ force: true, reason: "identity-merge" });
   }
 }
 
-async function mergeActiveProfileFromCloud() {
+async function mergeActiveProfileFromCloud(opts = {}) {
   if (!authSession?.user?.id) return false;
-  const cloud = await supabaseLoadProfile();
+  if (opts.skipIfRecent && profileCloudRecentlyMerged()) {
+    try { console.info("[profile/cloud] skip merge — recent boot merge"); } catch {}
+    return false;
+  }
+  const prevProfile = { ...activeProfile };
+  let cloud = opts.cloud || null;
+  if (!cloud) {
+    cloud = await supabaseLoadProfile({ reason: opts.reason || "mergeActiveProfileFromCloud" });
+  }
   if (!cloud) return false;
   const localFilled = localProfileFilledForCloudMerge();
   // A failed username change must not lock the handle for 30 days — only honor
@@ -19743,7 +19778,8 @@ async function mergeActiveProfileFromCloud() {
   if (els.profilePreviewBioInput) els.profilePreviewBioInput.value = nextProfile.bio || "";
   if (els.profileIsPublic) els.profileIsPublic.checked = nextProfile.isPublic !== false;
   try { syncSettingsPrivacyToggle(); } catch {}
-  refreshProfilePostsAfterIdentityMerge();
+  _profileCloudMergedAt = Date.now();
+  refreshProfilePostsAfterIdentityMerge(prevProfile, nextProfile);
   return true;
 }
 
@@ -22261,9 +22297,22 @@ async function supabaseUpsertProfile(profile) {
     throw new Error(`Cloud save failed (${r.status}): ${txt.slice(0, 140)}`);
   }
 }
-async function supabaseLoadProfile() {
+async function supabaseLoadProfile(opts = {}) {
+  const reason = String(opts.reason || "unknown");
+  const force = Boolean(opts.force);
   const token = getSupabaseAuthToken();
   if (!token || !authSession?.user?.id) return null;
+  const now = Date.now();
+  if (!force && _profileLoadCache && now - _profileLoadCacheAt < PROFILE_LOAD_CACHE_MS) {
+    logSupabaseFetch("profile", reason, { cache: "hit" });
+    return _profileLoadCache;
+  }
+  if (!force && _profileLoadInFlight) {
+    logSupabaseFetch("profile", reason, { cache: "in-flight" });
+    return _profileLoadInFlight;
+  }
+  logSupabaseFetch("profile", reason, { cache: "miss" });
+  const run = async () => {
   const uid = encodeURIComponent(authSession.user.id);
   // 8s timeout — same reasoning as supabaseFetchUser: a hung profile
   // fetch was the root cause of the "stuck loading + @guest" report.
@@ -22287,7 +22336,7 @@ async function supabaseLoadProfile() {
   const arr = await r.json().catch(() => []);
   if (!Array.isArray(arr) || !arr.length) return null;
   const p = arr[0];
-  return {
+  const profile = {
     id: p.user_id || activeProfile.id,
     username: p.username || "guest",
     displayName: String(p.display_name || activeProfile?.displayName || "").trim(),
@@ -22313,6 +22362,20 @@ async function supabaseLoadProfile() {
     soundCertified: p.sound_certified === true || p.sound_certified === "t" || p.sound_certified === "true",
     savedPersonas: parseSavedPersonasFromCloud(p.saved_personas),
   };
+  _profileLoadCache = profile;
+  _profileLoadCacheAt = Date.now();
+  return profile;
+  };
+  if (force) {
+    _profileLoadInFlight = null;
+    return run();
+  }
+  _profileLoadInFlight = run();
+  try {
+    return await _profileLoadInFlight;
+  } finally {
+    _profileLoadInFlight = null;
+  }
 }
 /** Last status of the most recent `supabaseLoadUserSongs` call. The
  *  Library renderer uses this to differentiate between "cloud has
@@ -22326,6 +22389,36 @@ let _userSongsLoadPromise = null;
 let _userSongsLoadCache = null;
 let _userSongsLoadCacheAt = 0;
 const USER_SONGS_LOAD_CACHE_MS = 30_000;
+let _profileLoadCache = null;
+let _profileLoadCacheAt = 0;
+let _profileLoadInFlight = null;
+const PROFILE_LOAD_CACHE_MS = 30_000;
+let _profileCloudMergedAt = 0;
+const PROFILE_CLOUD_MERGE_MS = 30_000;
+let _ownerPublicPostsInFlight = null;
+
+function logSupabaseFetch(kind, reason, extra = {}) {
+  try {
+    console.info(`[supabase/fetch] ${kind}`, {
+      reason: String(reason || "unknown"),
+      route: document.body.getAttribute("data-route") || "",
+      segment: _profileSongsSegment || "",
+      ...extra,
+    });
+  } catch {}
+}
+
+function profileCloudRecentlyMerged() {
+  return Boolean(_profileCloudMergedAt && Date.now() - _profileCloudMergedAt < PROFILE_CLOUD_MERGE_MS);
+}
+
+function profileIdentityFeedKey(p) {
+  if (!p) return "";
+  return [
+    normalizeProfileUsername(p.username),
+    normalizeDisplayName(p.displayName || ""),
+  ].join("|");
+}
 const _profileRowCache = new Map();
 const PROFILE_ROW_CACHE_MS = 60_000;
 const _songPlayCountCache = new Map();
@@ -22497,15 +22590,19 @@ function openPublishReleaseSheet(trackId, opts = {}) {
 
 async function supabaseLoadUserSongs(opts = {}) {
   const force = Boolean(opts.force);
+  const reason = String(opts.reason || "unknown");
   const now = Date.now();
   if (!force && _userSongsLoadCache && now - _userSongsLoadCacheAt < USER_SONGS_LOAD_CACHE_MS) {
+    logSupabaseFetch("user_songs", reason, { cache: "hit", rows: _userSongsLoadCache.length });
     return _userSongsLoadCache;
   }
   if (!force && _userSongsLoadPromise) {
+    logSupabaseFetch("user_songs", reason, { cache: "in-flight" });
     return _userSongsLoadPromise;
   }
+  logSupabaseFetch("user_songs", reason, { cache: force ? "force" : "miss" });
   const run = async () => {
-    const rows = await fetchUserSongsFromNetwork();
+    const rows = await fetchUserSongsFromNetwork(reason);
     _userSongsLoadCache = rows;
     _userSongsLoadCacheAt = Date.now();
     return rows;
@@ -22522,7 +22619,7 @@ async function supabaseLoadUserSongs(opts = {}) {
   }
 }
 
-async function fetchUserSongsFromNetwork() {
+async function fetchUserSongsFromNetwork(reason = "unknown") {
   const token = getSupabaseAuthToken();
   if (!token || !authSession?.user?.id) {
     _lastUserSongsLoadStatus = "auth";
@@ -23510,6 +23607,7 @@ function getOwnerPublicPostCount() {
 /** Cloud is source of truth for public posts — same list visitors see on #/u/you. */
 async function refreshOwnerPublicPostsCache(opts = {}) {
   const uid = authSession?.user?.id;
+  const reason = String(opts.reason || "unknown");
   if (!uid) {
     _ownerPublicPostsCache = { at: Date.now(), songs: [] };
     return [];
@@ -23520,8 +23618,15 @@ async function refreshOwnerPublicPostsCache(opts = {}) {
     _ownerPublicPostsCache &&
     Date.now() - _ownerPublicPostsCache.at < OWNER_PUBLIC_POSTS_CACHE_MS
   ) {
+    logSupabaseFetch("owner_public_posts", reason, { cache: "hit", rows: _ownerPublicPostsCache.songs.length });
     return _ownerPublicPostsCache.songs;
   }
+  if (!force && _ownerPublicPostsInFlight) {
+    logSupabaseFetch("owner_public_posts", reason, { cache: "in-flight" });
+    return _ownerPublicPostsInFlight;
+  }
+  logSupabaseFetch("owner_public_posts", reason, { cache: force ? "force" : "miss" });
+  const run = async () => {
   try {
     const batch = await supabaseFetchPublicLibraryRowsForFilter(
       `user_id=eq.${encodeURIComponent(String(uid))}`,
@@ -23543,6 +23648,16 @@ async function refreshOwnerPublicPostsCache(opts = {}) {
     return songs;
   } catch {
     return _ownerPublicPostsCache?.songs || [];
+  }
+  };
+  if (force) {
+    return run();
+  }
+  _ownerPublicPostsInFlight = run();
+  try {
+    return await _ownerPublicPostsInFlight;
+  } finally {
+    _ownerPublicPostsInFlight = null;
   }
 }
 
@@ -36538,11 +36653,16 @@ function renderProfileOwnStats() {
   const songCountForOwnHeader = HUB_FEATURE_ENABLED ? hubItems.length : publicPostCount;
   if (authSession?.user?.id && !HUB_FEATURE_ENABLED) {
     const prevCount = publicPostCount;
-    void refreshOwnerPublicPostsCache().then((songs) => {
-      if (Array.isArray(songs) && songs.length !== prevCount) {
-        try { renderProfileOwnStats(); } catch {}
-      }
-    });
+    const cacheFresh =
+      _ownerPublicPostsCache &&
+      Date.now() - _ownerPublicPostsCache.at < OWNER_PUBLIC_POSTS_CACHE_MS;
+    if (!cacheFresh) {
+      void refreshOwnerPublicPostsCache({ reason: "renderProfileOwnStats" }).then((songs) => {
+        if (Array.isArray(songs) && songs.length !== prevCount) {
+          try { renderProfileOwnStats(); } catch {}
+        }
+      });
+    }
   }
 
   if (els.profileOwnSongCount) {
@@ -37958,7 +38078,11 @@ function renderProfileSongs(opts = {}) {
   const actList = document.getElementById("profileActivitiesList");
   const libEl = document.getElementById("libraryList");
   if (_profileSongsSegment === "activities") {
-    void renderProfileActivities({ force: !getOwnerPublicPostsSongs()?.length });
+    void renderProfileActivities({
+      force: !getOwnerPublicPostsSongs()?.length,
+      reason: "renderProfileSongs",
+      deferCloud: Boolean(opts.deferCloud),
+    });
     return;
   }
   if (actList) actList.hidden = true;
@@ -39257,7 +39381,7 @@ async function runTasksWithConcurrency(items, limit, fn) {
   await Promise.all(Array.from({ length: workers }, () => worker()));
 }
 
-async function ensureUserLibraryHydrated(prefetchedCloud) {
+async function ensureUserLibraryHydrated(prefetchedCloud, opts = {}) {
   if (!authSession?.user?.id) {
     // No session → there's nothing to hydrate; mark complete so the
     // empty-state stops showing the "Loading your library…" copy and
@@ -39292,7 +39416,9 @@ async function ensureUserLibraryHydrated(prefetchedCloud) {
 
   // 1) Load cloud + local candidates and merge-dedupe.
   const cloudSongsRaw =
-    prefetchedCloud !== undefined ? prefetchedCloud : await supabaseLoadUserSongs();
+    prefetchedCloud !== undefined
+      ? prefetchedCloud
+      : await supabaseLoadUserSongs({ reason: opts.reason || "ensureUserLibraryHydrated" });
   const tombstones = loadLibraryTombstoneKeySet();
   // Songs the cloud says are deleted (soft-deleted on this or another
   // device). Used to prune local copies so a stale local row can't
@@ -51659,7 +51785,6 @@ void (async () => {
   await waitForNativeAuthHydration();
   invalidateAuthBoot();
   await ensureAuthBoot({ force: true });
-  if (isAppLoggedIn()) scheduleApplyRoute();
   await loadPublicConfig();
   const usedCodeFlow = await maybeHandleAuthCodeFromQuery();
   const usedTokenFlow = !usedCodeFlow && maybeHandleMagicLinkFromHash();
@@ -51675,12 +51800,12 @@ void (async () => {
   const pendingPushAfterBoot = consumePendingPushRoute();
   if (pendingPushAfterBoot && (isAppLoggedIn() || getSupabaseAuthToken())) {
     try { location.hash = `#/${pendingPushAfterBoot}`; } catch {}
-    scheduleApplyRoute();
   }
 
   // Always hydrate from cloud when a valid session exists (not only callback flows).
   if (authSession?.user?.id) {
-    const cloud = await supabaseLoadProfile();
+    const prevProfile = { ...activeProfile };
+    const cloud = await supabaseLoadProfile({ reason: "boot" });
     let nextProfile;
     if (cloud) {
       // Local-first merge. Cloud is the fallback for fields the user
@@ -51768,7 +51893,7 @@ void (async () => {
       usernameShouldPush
       || cloud.avatar !== nextProfile.avatar
       || cloud.bio !== nextProfile.bio
-      || cloud.displayName !== nextProfile.displayName
+      || normalizeDisplayName(cloud.displayName) !== normalizeDisplayName(nextProfile.displayName)
       || cloud.voiceTimbre !== nextProfile.voiceTimbre
       || cloud.isPublic !== nextProfile.isPublic
     );
@@ -51780,9 +51905,12 @@ void (async () => {
     if (els.profilePreviewTimbreInput) els.profilePreviewTimbreInput.value = activeProfile.voiceTimbre || "";
     if (els.profilePreviewBioInput) els.profilePreviewBioInput.value = activeProfile.bio || "";
     if (els.profileIsPublic) els.profileIsPublic.checked = activeProfile.isPublic !== false;
+    _profileCloudMergedAt = Date.now();
     renderProfilePreviewFromInputs();
-    refreshProfilePostsAfterIdentityMerge();
-    renderProfileHubShared();
+    refreshProfilePostsAfterIdentityMerge(prevProfile, nextProfile);
+    if ((document.body.getAttribute("data-route") || "") === "profile") {
+      renderProfileHubShared();
+    }
 
     try {
       if (cloud?.savedPersonas?.length) {
@@ -51808,6 +51936,7 @@ void (async () => {
       setTimeout(startDeferredQueries, 250);
     }
     renderPersonaSelect();
+    scheduleApplyRoute();
   } else if (!isAppLoggedIn() && !getSupabaseAuthToken()) {
     await waitForNativeAuthHydration(1200);
     invalidateAuthBoot();

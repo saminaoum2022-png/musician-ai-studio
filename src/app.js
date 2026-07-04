@@ -144,7 +144,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260704-214024";
+const APP_BUILD = "20260704-233457";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -11840,7 +11840,7 @@ function profileSelfProfMap(uid) {
     display_name: displayName,
     displayName,
     avatar: String(activeProfile?.avatar || "").trim(),
-    sound_certified: Boolean(activeProfile?.soundCertified),
+    sound_certified: profileSoundCertifiedTruthy(activeProfile?.soundCertified),
   });
   return m;
 }
@@ -19629,7 +19629,7 @@ function saveProfile(p) {
         display_name: normalizeDisplayName(next.displayName || ""),
         displayName: normalizeDisplayName(next.displayName || ""),
         avatar: String(next.avatar || "").trim(),
-        sound_certified: Boolean(next.soundCertified),
+        sound_certified: profileSoundCertifiedTruthy(next.soundCertified),
       },
       at: Date.now(),
     });
@@ -19688,12 +19688,49 @@ function localProfileBelongsToAuthUser() {
   return Boolean(authId && localId && authId === localId);
 }
 
+function profileSoundCertifiedTruthy(v) {
+  return v === true || v === "t" || v === "true" || v === 1;
+}
+
+/** Server-owned flag — cloud true must never be clobbered by local `false`. */
+function resolveMergedSoundCertified(cloud, localFilled, active = activeProfile) {
+  if (profileSoundCertifiedTruthy(cloud?.soundCertified)) return true;
+  if (profileSoundCertifiedTruthy(localFilled?.soundCertified)) return true;
+  if (profileSoundCertifiedTruthy(active?.soundCertified)) return true;
+  const uid = String(active?.id || authSession?.user?.id || "").trim();
+  try {
+    if (uid && _nabadCertifiedUserIds?.has(uid)) return true;
+  } catch {}
+  return false;
+}
+
+async function syncProfileSoundCertifiedFromCloud(reason = "syncSoundCertified") {
+  if (!authSession?.user?.id) return;
+  try {
+    const cloud = await supabaseLoadProfile({ reason });
+    if (!cloud) return;
+    const certified = resolveMergedSoundCertified(cloud, {}, activeProfile);
+    if (certified === profileSoundCertifiedTruthy(activeProfile?.soundCertified)) return;
+    activeProfile = { ...activeProfile, soundCertified: certified };
+    saveProfile(activeProfile);
+    renderProfileNabadCertBadge();
+    syncUserPublicVerifiedBadge({
+      user_id: authSession.user.id,
+      username: activeProfile.username,
+      display_name: activeProfile.displayName,
+      sound_certified: certified,
+    });
+  } catch {}
+}
+
 function localProfileFilledForCloudMerge() {
   if (!localProfileBelongsToAuthUser()) return {};
   const looksFilled = (v) => v !== "" && v != null;
   return Object.fromEntries(
     Object.entries(activeProfile).filter(([k, v]) => {
       if (k === "username" && isPlaceholderUsername(v)) return false;
+      // Never spread local `soundCertified: false` over cloud `true`.
+      if (k === "soundCertified") return profileSoundCertifiedTruthy(v);
       return looksFilled(v);
     }),
   );
@@ -19771,6 +19808,7 @@ function applyMergedIdentityFields(nextProfile, cloud, localFilled) {
   nextProfile.username = username;
   nextProfile.displayName = resolveMergedDisplayName(cloud, localFilled, nextProfile);
   nextProfile.usernameChangedAt = resolveMergedUsernameChangedAt(cloud, localFilled, nextProfile, username);
+  nextProfile.soundCertified = resolveMergedSoundCertified(cloud, localFilled, nextProfile);
   return nextProfile;
 }
 
@@ -27323,7 +27361,14 @@ function renderUserPublicIdentity(prof, handleFallback = "") {
   const displayEl = document.getElementById("userPublicDisplayName");
   if (displayEl) {
     if (friendly) {
-      displayEl.textContent = friendly;
+      let textEl = displayEl.querySelector(".userPublicDisplayNameText");
+      if (!textEl) {
+        displayEl.textContent = "";
+        textEl = document.createElement("span");
+        textEl.className = "userPublicDisplayNameText";
+        displayEl.appendChild(textEl);
+      }
+      textEl.textContent = friendly;
       displayEl.hidden = false;
     } else {
       displayEl.textContent = "";
@@ -27334,6 +27379,7 @@ function renderUserPublicIdentity(prof, handleFallback = "") {
     els.userPublicName.textContent = handle ? `@${handle}` : "@?";
   }
   stack?.classList.toggle("userPublicNameStack--hasDisplayName", Boolean(friendly));
+  syncUserPublicVerifiedBadge(prof);
 }
 
 function setUserPublicLoading(on, username = "") {
@@ -29911,6 +29957,7 @@ function resolveProfileForFeedCreator(userId, profMap) {
       user_id: uid,
       display_name: ownDisplayName,
       displayName: ownDisplayName,
+      sound_certified: prof?.sound_certified ?? prof?.soundCertified ?? activeProfile?.soundCertified,
     });
   }
   return screenshotProf(prof);
@@ -37160,6 +37207,7 @@ function shouldShowProfileHeaderSkeleton() {
  * ================================================================= */
 function renderProfileIdentityLine() {
   const displayEl = els.profileDisplayNameLine || document.getElementById("profileDisplayNameLine");
+  const displayTextEl = document.getElementById("profileDisplayNameText");
   const subEl = els.profileIdentityLine;
   const handleTextEl = document.getElementById("profileHandleText");
   const input = els.profilePreviewUsernameInput;
@@ -37171,7 +37219,8 @@ function renderProfileIdentityLine() {
   if (profileEditing) {
     if (displayEl) {
       displayEl.hidden = true;
-      displayEl.textContent = "";
+      if (displayTextEl) displayTextEl.textContent = "";
+      else displayEl.textContent = "";
     }
     if (subEl) {
       subEl.hidden = true;
@@ -37183,6 +37232,7 @@ function renderProfileIdentityLine() {
       input.value = handleText;
     }
     stack?.classList.remove("profileAuraNameStack--hasDisplayName");
+    renderProfileNabadCertBadge();
     return;
   }
 
@@ -37191,7 +37241,8 @@ function renderProfileIdentityLine() {
   if (friendly) {
     if (displayEl) {
       displayEl.hidden = false;
-      displayEl.textContent = friendly;
+      if (displayTextEl) displayTextEl.textContent = friendly;
+      else displayEl.textContent = friendly;
     }
     if (input) input.hidden = true;
     if (subEl) {
@@ -37203,7 +37254,8 @@ function renderProfileIdentityLine() {
   } else {
     if (displayEl) {
       displayEl.hidden = true;
-      displayEl.textContent = "";
+      if (displayTextEl) displayTextEl.textContent = "";
+      else displayEl.textContent = "";
     }
     if (input) input.hidden = true;
     if (subEl) {
@@ -37213,6 +37265,7 @@ function renderProfileIdentityLine() {
     }
     stack?.classList.remove("profileAuraNameStack--hasDisplayName");
   }
+  renderProfileNabadCertBadge();
 }
 
 /* =================================================================
@@ -37366,22 +37419,15 @@ function renderProfileTopWeek(items) {
 
 function renderProfileAboutCard() { /* no-op — see renderProfileSignatureCard */ }
 
-/** True when this account should show the "Verified Nabad Creator"
- *  pill under the avatar. Gated — never shown by default. Sources:
- *    1) `activeProfile.soundCertified` from Supabase `profiles.sound_certified`
- *       (after you run the migration + set rows server-side).
- *    2) Optional env allowlist `NABAD_CERTIFIED_USER_IDS` exposed via
- *       `/api/public-config` as `nabadCertifiedUserIds` (comma-separated
- *       auth UUIDs) for staging / early partners only. */
+/** True when this account should show the "Verified Nabad Creator" checkmark.
+ *  Gated by Supabase `profiles.sound_certified` (server-owned) or the optional
+ *  env UUID allowlist — not by username/handle. */
 function isNabadSoundCertified() {
   if (!authSession?.user?.id) return false;
   if (INTERIM_ALWAYS_SHOW_PUBLIC_PROFILE_VERIFIED) return true;
-  const uid = String(authSession.user.id);
-  if (isFounderBadgeUsername(activeProfile?.username)) return true;
-  if (isFounderBadgeEmail(activeProfile?.email || authSession?.user?.email)) return true;
-  if (Boolean(activeProfile?.soundCertified)) return true;
+  if (profileSoundCertifiedTruthy(activeProfile?.soundCertified)) return true;
   try {
-    if (_nabadCertifiedUserIds && _nabadCertifiedUserIds.has(uid)) return true;
+    if (_nabadCertifiedUserIds && _nabadCertifiedUserIds.has(String(authSession.user.id))) return true;
   } catch {}
   return false;
 }
@@ -37390,15 +37436,19 @@ function isNabadSoundCertified() {
 function isPublicProfileVerifiedForDisplay(prof) {
   if (!prof) return false;
   if (INTERIM_ALWAYS_SHOW_PUBLIC_PROFILE_VERIFIED) return true;
-  if (isFounderBadgeUsername(prof.username)) return true;
+  if (profileSoundCertifiedTruthy(prof.sound_certified ?? prof.soundCertified)) return true;
   const uid = String(prof.user_id || prof.userId || "").trim();
-  if (!uid) return false;
-  const sc = prof.sound_certified ?? prof.soundCertified;
-  if (sc === true || sc === "t" || sc === "true") return true;
   try {
-    if (_nabadCertifiedUserIds && _nabadCertifiedUserIds.has(uid)) return true;
+    if (uid && _nabadCertifiedUserIds && _nabadCertifiedUserIds.has(uid)) return true;
   } catch {}
   return false;
+}
+
+function profileVerifiedBadgeAnchor(friendlyDisplayName) {
+  const displayLine = els.profileDisplayNameLine || document.getElementById("profileDisplayNameLine");
+  const handleLine = els.profileIdentityLine || document.getElementById("profileIdentityLine");
+  if (friendlyDisplayName && displayLine) return displayLine;
+  return handleLine;
 }
 
 function syncUserPublicVerifiedBadge(prof) {
@@ -37407,13 +37457,22 @@ function syncUserPublicVerifiedBadge(prof) {
   const show = isPublicProfileVerifiedForDisplay(prof);
   el.hidden = !show;
   el.setAttribute("aria-hidden", show ? "false" : "true");
+  if (!show) return;
+  const friendly = normalizeDisplayName(prof?.display_name || prof?.displayName || "");
+  const displayEl = document.getElementById("userPublicDisplayName");
+  const nameRow = document.querySelector(".userPublicNameRow");
+  const anchor = friendly && displayEl ? displayEl : nameRow;
+  if (anchor && el.parentElement !== anchor) anchor.appendChild(el);
 }
 
 function renderProfileNabadCertBadge() {
   const check = els.profileNabadCertCheck;
   const legacy = els.profileNabadCertBadge;
   const show = isNabadSoundCertified() && !profileEditing;
+  const friendly = normalizeDisplayName(activeProfile?.displayName);
+  const anchor = profileVerifiedBadgeAnchor(friendly);
   if (check) {
+    if (show && anchor && check.parentElement !== anchor) anchor.appendChild(check);
     check.hidden = !show;
     check.setAttribute("aria-hidden", show ? "false" : "true");
   }
@@ -49289,6 +49348,7 @@ function syncProfileUiFromEdit(profile = activeProfile) {
   renderPersonaSelect();
   refreshOwnSongsUi();
   invalidateProfileActivitiesCache();
+  void syncProfileSoundCertifiedFromCloud("syncProfileUiFromEdit");
   if ((document.body.getAttribute("data-route") || "") === "profile" && _profileSongsSegment === "activities") {
     void renderProfileActivities({ force: true });
   }

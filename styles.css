@@ -13242,19 +13242,24 @@ body:not([data-route="profile"]) #profileAuraHeaderChromeRoot{
   margin: 0;
   padding: 0;
   border: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  max-width: min(calc(100vw - 128px), 280px);
+  min-width: 0;
+}
+.profileDisplayNameText{
   font-size: 22px;
   font-weight: 700;
   letter-spacing: -0.03em;
   line-height: 1.15;
   color: #fff;
   text-align: center;
-  flex: 0 1 auto;
-  width: auto;
-  max-width: min(100%, 260px);
   min-width: 0;
-  white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .profileAuraNameRow{
   position: relative;
@@ -15676,6 +15681,26 @@ body[data-route="user"] section.card.wide[data-route="user"]{
   overflow: hidden;
   text-overflow: ellipsis;
   max-width: 100%;
+}
+.userPublicNameStack--hasDisplayName .userPublicDisplayName{
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  margin-top: 0;
+  max-width: min(calc(100vw - 128px), 280px);
+  min-width: 0;
+}
+.userPublicDisplayNameText{
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  line-height: 1.15;
+  color: #fff;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .userPublicNameStack--hasDisplayName .userPublicName{
   margin-top: 3px;

@@ -144,7 +144,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260704-234332";
+const APP_BUILD = "20260704-235743";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -14070,7 +14070,7 @@ function openFeedReplySheet({ targetKind, targetId, handle, sub }) {
   }
 
   const list = document.getElementById("feedReplyList");
-  if (list) list.innerHTML = `<div class="feedReplyRowLoading" aria-hidden="true" style="padding:24px;text-align:center;color:rgba(232,238,247,0.4);font-size:13px;">Loading…</div>`;
+  if (list) list.innerHTML = feedReplyListSkeletonHtml();
 
   const input = document.getElementById("feedReplyInput");
   if (input) input.value = "";
@@ -14094,12 +14094,26 @@ function openFeedReplySheet({ targetKind, targetId, handle, sub }) {
 function closeFeedReplySheet() {
   const sheet = document.getElementById("feedReplySheet");
   if (!sheet) return;
+  closeAllFeedReplyMenus();
   sheet.setAttribute("aria-hidden", "true");
   applyFeedReplyKeyboardInset(0);
   window.setTimeout(() => {
     sheet.hidden = true;
     _feedReplyContext = null;
   }, 220);
+}
+
+function feedReplyListSkeletonHtml() {
+  const row = `
+    <div class="feedReplySkelRow">
+      <div class="feedReplySkelAvatar"></div>
+      <div class="feedReplySkelBody">
+        <div class="feedReplySkelLine feedReplySkelLine--name"></div>
+        <div class="feedReplySkelLine feedReplySkelLine--body"></div>
+        <div class="feedReplySkelLine feedReplySkelLine--bodyShort"></div>
+      </div>
+    </div>`;
+  return `<div class="feedReplyListSkeleton" aria-busy="true" aria-label="Loading replies">${row}${row}${row}</div>`;
 }
 
 async function loadFeedReplyList() {
@@ -14145,9 +14159,8 @@ function feedReplyRowHtml(reply) {
     authSession?.user?.id &&
     String(reply.userId) === String(authSession.user.id),
   );
-  const deleteBtn = isOwn
-    ? `<button type="button" class="feedReplyDelete" data-feed-reply-delete="${replyId}">Remove</button>`
-    : "";
+  const signedIn = Boolean(authSession?.user?.id && getSupabaseAuthToken());
+  const menuHtml = feedReplyMoreMenuHtml({ replyId, isOwn, signedIn });
   const nameHtml = feedDisplayNameHtml(handle, replyProf, { className: "feedReplyNameText", fallback: "A musician" });
   const replyHandle = handle.replace(/^@/, "");
   return `
@@ -14157,16 +14170,76 @@ function feedReplyRowHtml(reply) {
           ? `<img src="${escapeHtml(avatarSrc)}" alt="" width="36" height="36" decoding="async" loading="lazy" />`
           : `<span class="feedReplyAvatarFallback">${escapeHtml(initials)}</span>`}
       </a>
-      <div>
+      <div class="feedReplyMain">
         <div class="feedReplyMeta">
-          <a class="feedReplyName feedReplyNameWithBadge" href="${escapeHtml(href)}" data-route-link="user">${nameHtml}</a>
-          <span aria-hidden="true">·</span>
-          <span class="feedReplyWhen">${escapeHtml(when)}</span>
+          <div class="feedReplyMetaText">
+            <a class="feedReplyName feedReplyNameWithBadge" href="${escapeHtml(href)}" data-route-link="user">${nameHtml}</a>
+            <span aria-hidden="true">·</span>
+            <span class="feedReplyWhen">${escapeHtml(when)}</span>
+          </div>
+          ${menuHtml}
         </div>
         ${userTextWithMentionsHtml(bodyRaw, { tag: "p", className: "feedReplyBody", escapeHtml })}
-        ${deleteBtn}
       </div>
     </article>`;
+}
+
+function feedReplyMoreMenuHtml({ replyId, isOwn, signedIn }) {
+  if (!signedIn) return "";
+  const deleteItem = isOwn
+    ? `<button type="button" class="feedReplyMenuItem feedReplyMenuItem--danger" data-feed-reply-delete="${replyId}" role="menuitem">Delete</button>`
+    : "";
+  const reportItem = !isOwn
+    ? `<button type="button" class="feedReplyMenuItem" data-feed-reply-report="${replyId}" role="menuitem">Report comment</button>`
+    : "";
+  const items = deleteItem || reportItem;
+  if (!items) return "";
+  return `
+    <div class="feedReplyMenuWrap">
+      <button type="button" class="feedReplyMore" data-feed-reply-menu="${replyId}" aria-label="Comment options" aria-haspopup="true" aria-expanded="false">
+        <svg class="feedReplyMoreIco" viewBox="0 0 20 6" width="18" height="5" aria-hidden="true">
+          <circle cx="3" cy="3" r="1.35" fill="currentColor"/>
+          <circle cx="10" cy="3" r="1.35" fill="currentColor"/>
+          <circle cx="17" cy="3" r="1.35" fill="currentColor"/>
+        </svg>
+      </button>
+      <div class="feedReplyMenu" hidden role="menu">${items}</div>
+    </div>`;
+}
+
+function closeAllFeedReplyMenus() {
+  document.querySelectorAll(".feedReplyMenu").forEach((menu) => {
+    menu.hidden = true;
+  });
+  document.querySelectorAll(".feedReplyRow--menuOpen").forEach((row) => {
+    row.classList.remove("feedReplyRow--menuOpen");
+    const btn = row.querySelector("[data-feed-reply-menu]");
+    if (btn) btn.setAttribute("aria-expanded", "false");
+  });
+}
+
+function reportFeedReplyFromRow(row) {
+  if (!authSession?.user?.id || !getSupabaseAuthToken()) {
+    showToast("Sign in to report comments.");
+    location.hash = "#/auth";
+    return;
+  }
+  const replyId = String(row?.getAttribute("data-feed-reply-id") || "").trim();
+  const handleRaw = String(row?.getAttribute("data-reply-handle") || "").trim().replace(/^@/, "");
+  const body = String(row?.querySelector(".feedReplyBody")?.textContent || "").trim().slice(0, 280);
+  const ctx = _feedReplyContext;
+  const href = nabadaiReportCommentMailtoHref({
+    replyId,
+    handle: handleRaw ? `@${handleRaw}` : "",
+    body,
+    targetKind: ctx?.targetKind || "",
+    targetId: ctx?.targetId || "",
+  });
+  closeAllFeedReplyMenus();
+  try {
+    window.location.href = href;
+    showToast("Opening your email to send this report…", { icon: "✉", durationMs: 3200 });
+  } catch {}
 }
 
 /* ---------------------------------------------------------------------
@@ -14427,14 +14500,39 @@ function bindFeedReplySheetOnce() {
   });
 
   list.addEventListener("click", (e) => {
+    const menuBtn = e.target.closest("[data-feed-reply-menu]");
+    if (menuBtn && list.contains(menuBtn)) {
+      e.preventDefault();
+      e.stopPropagation();
+      const row = menuBtn.closest(".feedReplyRow");
+      const menu = row?.querySelector(".feedReplyMenu");
+      const wasOpen = row?.classList.contains("feedReplyRow--menuOpen");
+      closeAllFeedReplyMenus();
+      if (!wasOpen && row && menu) {
+        row.classList.add("feedReplyRow--menuOpen");
+        menu.hidden = false;
+        menuBtn.setAttribute("aria-expanded", "true");
+      }
+      return;
+    }
+    const reportBtn = e.target.closest("[data-feed-reply-report]");
+    if (reportBtn && list.contains(reportBtn)) {
+      e.preventDefault();
+      e.stopPropagation();
+      const row = reportBtn.closest(".feedReplyRow");
+      if (row) reportFeedReplyFromRow(row);
+      return;
+    }
     const del = e.target.closest("[data-feed-reply-delete]");
     if (del) {
       e.preventDefault();
+      e.stopPropagation();
+      closeAllFeedReplyMenus();
       void deleteFeedReply(del.getAttribute("data-feed-reply-delete"));
       return;
     }
     const row = e.target.closest(".feedReplyRow");
-    if (!row || e.target.closest(".feedReplyDelete, .feedReplyAvatar, .feedReplyName, .userMention, a[data-route-link]")) return;
+    if (!row || e.target.closest(".feedReplyMenuWrap, .feedReplyAvatar, .feedReplyName, .userMention, a[data-route-link]")) return;
     const handle = String(row.getAttribute("data-reply-handle") || "").trim().replace(/^@/, "");
     if (!handle) return;
     input.value = `@${handle} `;
@@ -14450,6 +14548,14 @@ function bindFeedReplySheetOnce() {
     if (e.key !== "Escape") return;
     if (sheet.getAttribute("aria-hidden") === "false") closeFeedReplySheet();
   });
+
+  if (!document.documentElement.dataset.feedReplyMenuDocBound) {
+    document.documentElement.dataset.feedReplyMenuDocBound = "1";
+    document.addEventListener("click", (e) => {
+      if (e.target.closest(".feedReplyMenuWrap")) return;
+      closeAllFeedReplyMenus();
+    });
+  }
 }
 
 async function handleFriendsWtfFollow(btn) {
@@ -51497,6 +51603,22 @@ function nabadaiReportContentMailtoHref(ctx, note) {
   if (ctx?.songId) lines.push(`Song ID: ${ctx.songId}`);
   if (ctx?.url) lines.push(`Audio: ${ctx.url}`);
   lines.push("", "Reason / details:", cleanNote, "", "---", "App: NabadAi Music");
+  if (build) lines.push(`Build: ${build}`);
+  lines.push(`Reported by: ${account}`);
+  return `mailto:${email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(lines.join("\n"))}`;
+}
+function nabadaiReportCommentMailtoHref({ replyId, handle, body, targetKind, targetId }) {
+  const email = "support@nabadai.com";
+  const subject = "NabadAi Music — comment report";
+  const build = String(document.getElementById("footerBuild")?.textContent || "").trim();
+  const account =
+    String(authSession?.user?.email || activeProfile?.email || "").trim() || "guest";
+  const lines = ["I'd like to report this comment:", ""];
+  if (replyId) lines.push(`Comment ID: ${replyId}`);
+  if (handle) lines.push(`Author: ${handle}`);
+  if (targetKind && targetId) lines.push(`On: ${targetKind} ${targetId}`);
+  if (body) lines.push("", "Comment text:", body.slice(0, 500));
+  lines.push("", "Reason / details:", "(describe the issue)", "", "---", "App: NabadAi Music");
   if (build) lines.push(`Build: ${build}`);
   lines.push(`Reported by: ${account}`);
   return `mailto:${email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(lines.join("\n"))}`;

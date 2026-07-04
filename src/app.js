@@ -144,7 +144,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260704-205156";
+const APP_BUILD = "20260704-210828";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -18687,33 +18687,22 @@ function snapshotNabadAiLyricsDraft(text) {
   _nabadAiLyricsDraft = draft;
   _lyricsGeneratedInNabad = true;
 }
+let _nabadBackfillSessionRan = false;
 function backfillNabadVerificationInLibrary() {
   if (_nabadBackfillSessionRan) return;
   _nabadBackfillSessionRan = true;
   try {
     const items = loadLibrary();
     let changed = false;
-    const cloudHeal = [];
     const next = items.map((t) => {
       const meta = stampNabadVerificationMeta(t.meta, t);
       const prev = t.meta?.nabadVerification || "";
       const nextMark = meta.nabadVerification || "";
       if (prev === nextMark && meta.nabadVerification === t.meta?.nabadVerification) return t;
       changed = true;
-      const updated = { ...t, meta };
-      if (nextMark === "creator" && authSession?.user?.id && String(prev) !== "creator") cloudHeal.push(updated);
-      return updated;
+      return { ...t, meta };
     });
     if (changed) saveLibrary(next);
-    for (const track of cloudHeal) {
-      const healKey = userSongCloudHealKey(track);
-      if (healKey && userSongCloudHealDone(NABAD_CLOUD_HEAL_PREFIX, healKey)) continue;
-      void supabasePatchUserSong(track, { meta: track.meta || {} }, { reason: "nabad-verification-backfill" })
-        .then((res) => {
-          if (res && res.ok !== false && healKey) markUserSongCloudHealDone(NABAD_CLOUD_HEAL_PREFIX, healKey);
-        })
-        .catch(() => null);
-    }
   } catch {}
 }
 
@@ -22921,6 +22910,14 @@ async function supabasePatchUserSong(track, patch, opts = {}) {
     body.discover_expires_at = patch.discoverExpiresAt.trim();
   }
   if (Object.keys(body).length === 0) return { ok: false, reason: "noop" };
+  try {
+    console.warn("[supabase/patch] user_songs", {
+      reason,
+      cloudId: String(track?.cloudSongId || track?.id || "").slice(0, 36),
+      keys: Object.keys(body),
+      route: document.body.getAttribute("data-route") || "",
+    });
+  } catch {}
   logSupabaseFetch("user_songs_patch", reason, {
     cloudId: String(track?.cloudSongId || track?.id || "").slice(0, 36),
     keys: Object.keys(body),
@@ -33197,24 +33194,16 @@ try {
 
 /** Re-kick any publishes that were interrupted (app closed / crashed) while a
  *  song was still in the optimistic "Publishing…" state. Runs once after the
- *  library hydrates on launch. Guards against double-runs within a session. */
-const _resumedPublishIds = new Set();
+ *  library hydrates on launch. Boot stays GET-only — user must tap publish again. */
 function resumePendingPublishes() {
   if (!authSession?.user?.id) return;
-  const items = loadLibrary();
-  for (const t of items) {
-    if (!t || !t.publishPending || t.publicOnProfile) continue;
-    const id = String(t.id || "").trim();
-    if (!id || _resumedPublishIds.has(id)) continue;
-    _resumedPublishIds.add(id);
-    const o = t.publishOpts || {};
-    void setLibraryTrackPublicOnProfile(id, true, {
-      _background: true,
-      releaseCaption: o.releaseCaption || "",
-      allowRemix: o.allowRemix !== false,
-      allowMashup: o.allowMashup !== false,
+  const stuck = loadLibrary().filter((t) => t?.publishPending && !t.publicOnProfile);
+  if (!stuck.length) return;
+  try {
+    console.info("[library/publish] skipping boot auto-resume (GET-only boot)", {
+      count: stuck.length,
     });
-  }
+  } catch {}
 }
 
 async function setLibraryTrackPublicOnProfile(trackId, wantPublic, opts = {}) {
@@ -37918,61 +37907,6 @@ async function playHubPostFromProfile(postId, opts) {
  *  changes (re-login, share, unpublish). */
 const PROFILE_RELEASES_PAGE_SIZE = 10;
 let _profileReleasesShown = PROFILE_RELEASES_PAGE_SIZE;
-const _releaseCaptionCloudHealKeys = new Set();
-const RELEASE_CAPTION_HEAL_PREFIX = "mas:release-caption-heal:v1";
-const NABAD_CLOUD_HEAL_PREFIX = "mas:nabad-cloud-heal:v1";
-let _nabadBackfillSessionRan = false;
-
-function userSongCloudHealKey(track) {
-  const cloudId = String(track?.cloudSongId || "").trim();
-  if (cloudId && isPostgresUuidString(cloudId)) return cloudId;
-  const rowId = String(track?.id || "").trim();
-  if (rowId && isPostgresUuidString(rowId)) return rowId;
-  const audioId = String(track?.audioId || "").trim();
-  if (audioId) return `audio:${audioId}`;
-  const taskId = String(track?.taskId || "").trim();
-  if (taskId) return `task:${taskId}`;
-  return "";
-}
-
-function userSongCloudHealDone(prefix, key) {
-  if (!key) return false;
-  try {
-    return localStorage.getItem(`${prefix}:${key}`) === "1";
-  } catch {
-    return false;
-  }
-}
-
-function markUserSongCloudHealDone(prefix, key) {
-  if (!key) return;
-  try {
-    localStorage.setItem(`${prefix}:${key}`, "1");
-  } catch {}
-}
-
-function queueReleaseCaptionCloudHeal(track, reason = "unknown") {
-  if (!authSession?.user?.id || !track || !track.publicOnProfile || !releaseCaptionForTrack(track)) return;
-  const key = userSongCloudHealKey(track);
-  if (!key || _releaseCaptionCloudHealKeys.has(key)) return;
-  if (userSongCloudHealDone(RELEASE_CAPTION_HEAL_PREFIX, key)) return;
-  _releaseCaptionCloudHealKeys.add(key);
-  void supabasePatchUserSong(track, { meta: track.meta || {} }, { reason: `release-caption-heal:${reason}` }).then((res) => {
-    if (res && res.ok !== false) markUserSongCloudHealDone(RELEASE_CAPTION_HEAL_PREFIX, key);
-    else _releaseCaptionCloudHealKeys.delete(key);
-  }).catch(() => {
-    _releaseCaptionCloudHealKeys.delete(key);
-  });
-}
-
-function backfillReleaseCaptionsToCloud(items, reason = "library-hydrate") {
-  if (!authSession?.user?.id) return;
-  for (const t of items || []) {
-    if (Boolean(t?.publicOnProfile) && releaseCaptionForTrack(t)) {
-      queueReleaseCaptionCloudHeal(t, reason);
-    }
-  }
-}
 
 function resetProfileReleasesPagination() {
   _profileReleasesShown = PROFILE_RELEASES_PAGE_SIZE;
@@ -39550,23 +39484,13 @@ async function ensureUserLibraryHydrated(prefetchedCloud, opts = {}) {
   clearTimeout(safetyTimer);
   saveLibrary(mergedDeduped);
   backfillNabadVerificationInLibrary();
-  backfillReleaseCaptionsToCloud(mergedDeduped.filter((t) => Boolean(t.publicOnProfile)));
   refreshOwnSongsUi();
   try { resumePendingPublishes(); } catch {}
 
   if (!mergedDeduped.length) return;
 
-  // Heal covers that never made it to the cloud (kept as data: URLs
-  // locally) so they stop reverting to the placeholder logo.
-  void backfillPendingCoverUploads(mergedDeduped);
-
-  // Local-first: private songs are NEVER auto-uploaded to the cloud. A song
-  // reaches the cloud only when the user explicitly publishes it. Removing
-  // the old "local row missing from cloud → re-upload it" loop permanently
-  // kills the resurrection bug: a stale local copy of a song that was deleted
-  // on another device can no longer push that song back into the cloud (and
-  // from there onto every device). Local-only songs simply stay local and
-  // visible on this device; nothing here writes them to the server.
+  // Custom covers (data: URLs) upload lazily when the user opens a track —
+  // not on boot, so cold open stays GET-only against user_songs.
   _libraryReconcileLastAt = Date.now();
 }
 // ─── Lightweight cloud → local reconcile for ongoing sync ─────────────

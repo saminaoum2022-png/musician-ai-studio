@@ -4980,10 +4980,10 @@ input.userTextBidi--rtl{
   font-size:18px;
   line-height:1;
   display:inline-block;
-  color:#ff6b88;
+  color: var(--danger);
   text-shadow:
-    0 0 6px rgba(255, 107, 136, 0.45),
-    0 0 14px rgba(255, 80, 110, 0.20);
+    0 0 6px rgba(255, 77, 109, 0.45),
+    0 0 14px rgba(255, 77, 109, 0.20);
   transition:
     transform 220ms cubic-bezier(.2,1.4,.4,1),
     font-size 280ms cubic-bezier(0.22, 1, 0.36, 1);
@@ -5005,8 +5005,8 @@ input.userTextBidi--rtl{
 }
 /* Once liked (count > 0), turn the chip a touch warmer so it reads as "you liked something here". */
 .hubLike[data-count]:not([data-count="0"]){
-  border-color: rgba(255, 107, 136, 0.35);
-  background: linear-gradient(180deg, rgba(255, 107, 136, 0.10), rgba(255, 107, 136, 0.04));
+  border-color: rgba(255, 77, 109, 0.35);
+  background: linear-gradient(180deg, rgba(255, 77, 109, 0.10), rgba(255, 77, 109, 0.04));
 }
 
 /* Reactions — secondary chips. Smaller, subtler. */
@@ -15367,8 +15367,8 @@ body[data-route="profile"]:has(#profileAura.profileAuraEditing) #profileAuraHead
 }
 .profileHubLikeHeartSvg{
   flex: 0 0 auto;
-  color: #ff6b88;
-  filter: drop-shadow(0 0 5px rgba(255, 107, 136, 0.42));
+  color: var(--danger);
+  filter: drop-shadow(0 0 5px rgba(255, 77, 109, 0.42));
 }
 .profileHubLikeCount{
   font-variant-numeric: tabular-nums;
@@ -23485,9 +23485,6 @@ button.discoverySpotCard{
 .profileRepostsList{
   margin-top: 4px;
 }
-body[data-user-public-seg="reposts"] .userPublicSongsCount{
-  display: none !important;
-}
 body[data-user-public-seg="posts"] .userPublicRepostsCount{
   display: none !important;
 }
@@ -23498,7 +23495,8 @@ body[data-profile-songs-seg="reposts"] .profileSongsToolbar{
   display: none !important;
 }
 #profileRepostsCount,
-#userPublicRepostsCount{
+#userPublicRepostsCount,
+#userPublicSongsCount{
   display: none !important;
 }
 .profileRepostsList.profileActivitiesList.followActStack .followAct.followAct--xstyle,
@@ -29473,7 +29471,7 @@ button.activityRow--unavailable{
   color: rgba(94, 234, 212, 0.82);
 }
 .activityRow--social_like .activityRowCategory{
-  color: rgba(244, 114, 182, 0.86);
+  color: var(--danger);
 }
 .activityRow--follow .activityRowCategory{
   color: rgba(52, 211, 153, 0.86);
@@ -29603,7 +29601,7 @@ button.activityRow--unavailable{
   color: #fff;
 }
 .activityRowBadge--social_like{
-  background: linear-gradient(135deg, rgba(236,72,153,0.96), rgba(244,114,182,0.92));
+  background: linear-gradient(135deg, #ff4d6d, #ff8aa2);
   color: #fff;
 }
 .activityRowBadge--social_reply{
@@ -34956,8 +34954,8 @@ section.mentorPage{
   color: rgba(232, 238, 247, 0.88);
 }
 .followActAct[data-friends-act="like"]:hover{
-  color: rgba(244, 114, 182, 0.95);
-  background: rgba(236, 72, 153, 0.10);
+  color: var(--danger);
+  background: rgba(255, 77, 109, 0.10);
 }
 .followActAct[data-friends-act="reply"]:hover{
   color: rgba(96, 165, 250, 0.95);
@@ -35006,14 +35004,14 @@ section.mentorPage{
   100% { transform: scale(1); }
 }
 .followActAct[data-friends-act="like"].isLiked{
-  color: rgba(244, 114, 182, 0.98);
+  color: var(--danger);
 }
 .followActAct[data-friends-act="like"].isLiked .followActActIco{
   fill: currentColor;
   stroke: currentColor;
 }
 .followActAct[data-friends-act="like"].isLiked:hover{
-  background: rgba(236, 72, 153, 0.12);
+  background: rgba(255, 77, 109, 0.12);
 }
 
 /* =====================================================================
@@ -41229,8 +41227,8 @@ body[data-route="friends"] .followAct--xstyle .followActActions .followActAct{
 }
 body[data-route="friends"] .followAct--xstyle .followActActions .followActAct.isLiked,
 body[data-route="friends"] .followAct--xstyle .followActActions .followActAct[data-friends-act="like"].isLiked{
-  color: rgba(244,114,182,.98);
-  text-shadow: 0 0 18px rgba(244,114,182,.22);
+  color: var(--danger);
+  text-shadow: 0 0 18px rgba(255, 77, 109, 0.22);
 }
 
 @media (max-width: 430px){

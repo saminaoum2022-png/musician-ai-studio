@@ -144,7 +144,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260704-170339";
+const APP_BUILD = "20260704-171249";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -23120,12 +23120,10 @@ function syncUserPublicSegmentUi() {
   const isReposts = _userPublicSegment === "reposts";
   const postsList = els.userPublicSongs;
   const repostsList = document.getElementById("userPublicRepostsList");
-  const postsCount = els.userPublicSongsCount;
   const segBar = document.getElementById("userPublicSegBar");
   if (segBar && !segBar.hidden) setUserPublicSegActive(_userPublicSegment);
   if (postsList) postsList.hidden = !isPosts;
   if (repostsList) repostsList.hidden = !isReposts;
-  if (postsCount) postsCount.hidden = !isPosts || !String(postsCount.textContent || "").trim();
   try { document.body.setAttribute("data-user-public-seg", _userPublicSegment); } catch {}
 }
 
@@ -26906,6 +26904,13 @@ function notifyRemixPublished({ originalPostId, remixPostId, remixTitle, origina
   }).catch(() => {});
 }
 
+function userPublicStatsSongCount() {
+  const statVal = els.userPublicStats?.querySelector('[data-stat="songs"] .profileStatValue');
+  const raw = String(statVal?.textContent || "").replace(/,/g, "").trim();
+  const n = parseInt(raw, 10);
+  return Number.isFinite(n) ? n : 0;
+}
+
 function renderUserPublicSocialStats({ songCount, stats }) {
   const followers = Number(stats?.followers || 0);
   const plays = Number(stats?.plays || 0);
@@ -27122,7 +27127,7 @@ async function toggleCurrentUserPublicFollow() {
       isFollowing: !wasFollowing,
     };
     renderUserPublicSocialStats({
-      songCount: parseInt(String(els.userPublicSongsCount?.textContent || "0"), 10) || 0,
+      songCount: _userPublicProfileCache?.postItems?.length ?? userPublicStatsSongCount(),
       stats: currentUserPublicSocialStats,
     });
     renderUserPublicFollowButton();
@@ -33567,15 +33572,6 @@ async function renderUserProfilePublicLibraryAsync(username, userId = "", gen = 
     prof,
     publicHandle,
   };
-  if (els.userPublicSongsCount) {
-    if (postItems.length) {
-      els.userPublicSongsCount.textContent = `${postItems.length} posts`;
-      els.userPublicSongsCount.hidden = false;
-    } else {
-      els.userPublicSongsCount.textContent = "";
-      els.userPublicSongsCount.hidden = true;
-    }
-  }
   syncUserPublicSegmentUi();
   renderUserPublicSegmentFromCache();
   setUserPublicLoading(false);
@@ -37353,9 +37349,6 @@ function renderUserProfile(rawUsername, { soft = false } = {}) {
   renderUserPublicSocialStats({ songCount: publicMatches.length, stats: currentUserPublicSocialStats });
   renderUserPublicFollowButton();
   void refreshUserPublicSocial({ username: handle, userId: metaUserId, songCount: publicMatches.length });
-  if (els.userPublicSongsCount) {
-    els.userPublicSongsCount.textContent = publicMatches.length ? String(publicMatches.length) : "";
-  }
 
   if (!publicMatches.length) {
     if (els.userPublicSongs) els.userPublicSongs.innerHTML = "";

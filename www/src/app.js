@@ -144,7 +144,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260704-235743";
+const APP_BUILD = "20260705-000747";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -818,8 +818,6 @@ const els = {
   playerRemixRow: document.getElementById("playerRemixRow"),
   btnPlayerRemix: document.getElementById("btnPlayerRemix"),
   btnPlayerLyrics: document.getElementById("btnPlayerLyrics"),
-  playerReleaseNote: document.getElementById("playerReleaseNote"),
-  playerReleaseNoteText: document.getElementById("playerReleaseNoteText"),
   playerFeedbackAuras: document.getElementById("playerFeedbackAuras"),
   btnPlayerFeedbackSend: document.getElementById("btnPlayerFeedbackSend"),
   playerFeedbackPopover: document.getElementById("playerFeedbackPopover"),
@@ -14021,6 +14019,28 @@ function bindFeedReplyKeyboardInput(input) {
   });
 }
 
+function syncFeedReplyInputHeight(input = document.getElementById("feedReplyInput")) {
+  if (!input) return;
+  input.style.height = "auto";
+  const min = 42;
+  const max = 112;
+  const next = Math.min(max, Math.max(min, input.scrollHeight));
+  input.style.height = `${next}px`;
+  input.style.overflowY = input.scrollHeight > max ? "auto" : "hidden";
+}
+
+function dismissFeedReplyKeyboard() {
+  const input = document.getElementById("feedReplyInput");
+  if (input && document.activeElement === input) {
+    try { input.blur(); } catch {}
+  }
+  const Keyboard = getNativeKeyboardPlugin();
+  if (Keyboard?.hide) {
+    try { Keyboard.hide(); } catch {}
+  }
+  applyFeedReplyKeyboardInset(0);
+}
+
 let _feedReplyContext = null;
 let _feedReplyBound = false;
 
@@ -14073,7 +14093,10 @@ function openFeedReplySheet({ targetKind, targetId, handle, sub }) {
   if (list) list.innerHTML = feedReplyListSkeletonHtml();
 
   const input = document.getElementById("feedReplyInput");
-  if (input) input.value = "";
+  if (input) {
+    input.value = "";
+    syncFeedReplyInputHeight(input);
+  }
   updateFeedReplyFormState();
 
   sheet.hidden = false;
@@ -14081,11 +14104,7 @@ function openFeedReplySheet({ targetKind, targetId, handle, sub }) {
   window.requestAnimationFrame(() => {
     sheet.setAttribute("aria-hidden", "false");
     applyFeedReplyKeyboardInset(0);
-    if (input) {
-      bindFeedReplyKeyboardInput(input);
-      try { input.focus({ preventScroll: true }); } catch { input.focus(); }
-      scheduleFeedReplyKeyboardInsetSync();
-    }
+    if (input) bindFeedReplyKeyboardInput(input);
   });
 
   void loadFeedReplyList();
@@ -14095,6 +14114,7 @@ function closeFeedReplySheet() {
   const sheet = document.getElementById("feedReplySheet");
   if (!sheet) return;
   closeAllFeedReplyMenus();
+  dismissFeedReplyKeyboard();
   sheet.setAttribute("aria-hidden", "true");
   applyFeedReplyKeyboardInset(0);
   window.setTimeout(() => {
@@ -14398,6 +14418,7 @@ function updateFeedReplyFormState() {
   counter.textContent = `${total} / 280`;
   counter.classList.toggle("isNear", total > 240 && total <= 280);
   counter.classList.toggle("isOver", total > 280);
+  syncFeedReplyInputHeight(input);
 }
 
 async function submitFeedReply() {
@@ -14486,7 +14507,10 @@ function bindFeedReplySheetOnce() {
     if (e.target.closest("[data-feed-reply-dismiss]")) {
       e.preventDefault();
       closeFeedReplySheet();
+      return;
     }
+    if (e.target.closest(".feedReplyForm, .feedReplyInput, .feedReplyRow, .feedReplyMenuWrap")) return;
+    dismissFeedReplyKeyboard();
   });
 
   input.addEventListener("input", () => {
@@ -14537,6 +14561,7 @@ function bindFeedReplySheetOnce() {
     if (!handle) return;
     input.value = `@${handle} `;
     applyUserTextInputDir(input);
+    syncFeedReplyInputHeight(input);
     input.focus();
     try {
       input.setSelectionRange(input.value.length, input.value.length);
@@ -17196,11 +17221,6 @@ function setPlayerFeedback(track) {
   void setupPlayerCoverFeedback(track);
 }
 
-function setPlayerReleaseNote(caption) {
-  const note = String(caption || "").trim();
-  applyUserTextBidi(els.playerReleaseNoteText, note);
-  if (els.playerReleaseNote) els.playerReleaseNote.hidden = !note;
-}
 
 function setPlayerRemixAttribution(remixOf) {
   const text = remixAttributionText(remixOf);
@@ -42951,7 +42971,6 @@ function setPlayerMeta({ title, subtitle, artUrl, releaseCaption, remixOf, chall
   } else {
     setPlayerRemixAttribution(remixOf || remixAttributionForTrack(currentPlayerTrackRef));
   }
-  setPlayerReleaseNote(releaseCaption);
   setPlayerFeedback(currentPlayerTrackRef);
   const artWrap = document.querySelector(".playerArtWrap");
   if (artWrap) {

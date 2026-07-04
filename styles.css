@@ -6761,7 +6761,6 @@ body.hubJumpingToTop #hubList .hubRow{
   color: rgba(226, 232, 246, 0.6);
   overflow-wrap: anywhere;
 }
-.playerReleaseNote,
 .playerRemixAttribution,
 .playerMashupAttribution,
 .playerChallengeAttribution,
@@ -6777,7 +6776,6 @@ body.hubJumpingToTop #hubList .hubRow{
   box-shadow: 0 14px 34px rgba(0,0,0,0.22);
   text-align: start;
 }
-.playerReleaseNote[hidden],
 .playerRemixAttribution[hidden],
 .playerMashupAttribution[hidden],
 .playerChallengeAttribution[hidden],
@@ -6887,26 +6885,7 @@ body.hubJumpingToTop #hubList .hubRow{
   font-size: 14px;
   font-weight: 800;
 }
-.playerReleaseNoteLabel{
-  margin-bottom: 5px;
-  font-size: 10px;
-  font-weight: 900;
-  letter-spacing: 0.13em;
-  text-transform: uppercase;
-  color: rgba(180,168,255,0.88);
-}
-.playerReleaseNoteText{
-  color: rgba(244,247,255,0.88);
-  font-size: 13px;
-  font-weight: 650;
-  font-style: italic;
-  line-height: 1.45;
-  overflow-wrap: anywhere;
-  display: -webkit-box;
-  -webkit-line-clamp: 3;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
+/* Legacy song-details feedback panel — player uses cover overlay now. */
 .playerFeedbackPanel[hidden]{ display: none !important; }
 /* Legacy song-details feedback panel — player uses cover overlay now. */
 .songFeedbackDetailsHint{
@@ -35548,14 +35527,17 @@ section.mentorPage{
 .feedReplyInput{
   width: 100%;
   resize: none;
-  padding: 12px 14px;
+  min-height: 42px;
+  max-height: 112px;
+  overflow-y: hidden;
+  padding: 10px 14px;
   border-radius: 16px;
   border: 1px solid var(--border);
   background: rgba(255, 255, 255, 0.03);
   color: rgba(244, 247, 255, 0.98);
   font: inherit;
   font-size: 15px;
-  line-height: 1.4;
+  line-height: 1.35;
   outline: none;
   transition: border-color 160ms ease, background 160ms ease;
   -webkit-appearance: none;

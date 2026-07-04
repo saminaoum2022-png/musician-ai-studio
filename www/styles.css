@@ -13291,7 +13291,7 @@ body:not([data-route="profile"]) #profileAuraHeaderChromeRoot{
   gap: 6px;
   flex: 0 0 auto;
 }
-/* View mode: center name/handle alone; badge + Edit hang off the right. */
+/* View mode: center name/handle; Edit hangs off the right of the title block. */
 .profileAura:not(.profileAuraEditing) .profileAuraNameCenterWrap{
   display: inline-block;
   vertical-align: middle;
@@ -13299,8 +13299,8 @@ body:not([data-route="profile"]) #profileAuraHeaderChromeRoot{
 .profileAura:not(.profileAuraEditing) .profileAuraNameAffixes{
   position: absolute;
   left: 100%;
-  top: 50%;
-  transform: translateY(-50%);
+  top: 0;
+  transform: none;
   margin-left: 6px;
   white-space: nowrap;
 }
@@ -13308,9 +13308,40 @@ body:not([data-route="profile"]) #profileAuraHeaderChromeRoot{
   display: block;
   max-width: min(calc(100vw - 128px), 280px);
 }
-.profileAura:not(.profileAuraEditing) .profileAuraNameStack:not(.profileAuraNameStack--hasDisplayName) .profileAuraNameInput{
-  display: block;
+.profileAuraNameStack--hasDisplayName .profileAuraNameCenterWrap > .profileHandleSubline{
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  margin: 3px 0 0;
+  width: 100%;
+  max-width: min(100%, 320px);
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  color: rgba(223, 231, 251, 0.46);
+  line-height: 1.2;
+}
+.profileAuraNameStack:not(.profileAuraNameStack--hasDisplayName) .profileAuraNameCenterWrap > .profileHandleSubline{
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  margin: 0;
+  width: auto;
   max-width: min(calc(100vw - 128px), 280px);
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  color: #fff;
+  line-height: 1.15;
+}
+.profileAuraNameStack:not(.profileAuraNameStack--hasDisplayName) .profileAuraNameAffixes{
+  top: 50%;
+  transform: translateY(-50%);
+}
+.profileAura:not(.profileAuraEditing) .profileAuraNameStack:not(.profileAuraNameStack--hasDisplayName) .profileAuraNameInput{
+  display: none !important;
 }
 .profileAuraNameRow > :not(.profileAuraNameSkeleton){
   position: relative;
@@ -13891,15 +13922,12 @@ body:not([data-route="profile"]) #profileAuraHeaderChromeRoot{
 .profileAuraNameRow[data-loading="true"] .profileAuraNameCluster,
 .profileAuraNameRow[data-loading="true"] .profileAuraNameInput,
 .profileAuraNameRow[data-loading="true"] .profileDisplayNameLine,
+.profileAuraNameRow[data-loading="true"] .profileHandleSubline,
 .profileAuraNameRow[data-loading="true"] .profilePreviewGenderIcon,
 .profileAuraNameRow[data-loading="true"] .profileEditPill{
   visibility: hidden;
 }
 #profileAuraNameRow[data-loading="true"] + .profileMusicStylesInline{
-  visibility: hidden;
-}
-#profileAuraNameRow[data-loading="true"] + .profileHandleSubline,
-#profileAuraNameStack:has(#profileAuraNameRow[data-loading="true"]) .profileHandleSubline{
   visibility: hidden;
 }
 .profileAuraNameRow > [hidden]{
@@ -13917,9 +13945,8 @@ body[data-route="profile"]:has(#profileAuraNameRow[data-loading="true"]) #profil
   .profileAuraNameSkeleton{ animation: none !important; }
 }
 
-/* @handle subline — below display name when set. */
-.profileAuraIdentity > .profileHandleSubline,
-.profileAuraNameStack > .profileHandleSubline{
+/* @handle row — verified badge lives here; display name stays badge-free above. */
+.profileAuraIdentity > .profileHandleSubline{
   margin: 3px 0 0;
   font-size: 14px;
   font-weight: 500;
@@ -15106,7 +15133,7 @@ button.profileMusicStylesLine:hover .profileMusicStylePill{
   font-size: 1em;
   font-weight: 600;
 }
-/* Compact Edit pill after verified badge — same quiet surface as credits, smaller. */
+/* Compact Edit pill beside the display name — verified badge lives on @handle only. */
 .profileEditPill{
   -webkit-appearance: none;
   appearance: none;
@@ -20788,17 +20815,20 @@ html[data-theme="light"] .soundsStudioTempoValue{
   height: 14px;
   flex: 0 0 auto;
 }
-.profileHandleText{
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.profileAuraNameStack > .profileHandleSubline{
+.profileAuraNameStack > .profileHandleSubline,
+.profileAuraNameCenterWrap > .profileHandleSubline{
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 4px;
-  max-width: min(100%, 320px);
+  min-width: 0;
+  white-space: nowrap;
+  text-align: center;
+}
+.profileHandleText{
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 /* ---------- Profile avatar — story squircle, "Na" fallback ----------
    Same rounded-square language as story tiles. Teal→purple ring only

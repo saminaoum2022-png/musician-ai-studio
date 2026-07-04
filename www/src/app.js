@@ -144,7 +144,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260704-173132";
+const APP_BUILD = "20260704-193229";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -11607,7 +11607,11 @@ function readFollowActListDomKey(listEl) {
 }
 
 function profileActivitiesFeedKey(feedItems) {
-  return (feedItems || [])
+  const identity = [
+    String(activeProfile?.username || "").trim(),
+    normalizeDisplayName(activeProfile?.displayName || ""),
+  ].join(":");
+  const items = (feedItems || [])
     .map((item) => {
       if (item?.kind === "repost") {
         const id = String(item?.repost?.id || "").trim();
@@ -11618,6 +11622,7 @@ function profileActivitiesFeedKey(feedItems) {
     })
     .filter(Boolean)
     .join("|");
+  return items ? `${identity}|${items}` : identity;
 }
 
 function friendsFeedItemsKey(items) {
@@ -11814,10 +11819,18 @@ function profileSelfProfMap(uid) {
   const m = new Map();
   const id = String(uid || "").trim();
   if (!id) return m;
+  let displayName = normalizeDisplayName(activeProfile?.displayName || "");
+  if (!displayName) {
+    const cached = _profileRowCache.get(id);
+    displayName = normalizeDisplayName(cached?.row?.display_name || cached?.row?.displayName || "");
+  }
   m.set(id, {
     user_id: id,
     username: String(activeProfile?.username || "").trim(),
+    display_name: displayName,
+    displayName,
     avatar: String(activeProfile?.avatar || "").trim(),
+    sound_certified: Boolean(activeProfile?.soundCertified),
   });
   return m;
 }
@@ -11957,7 +11970,8 @@ async function renderProfileActivities(opts = {}) {
     snap &&
     Date.now() - snap.at < PROFILE_ACT_SNAPSHOT_MS &&
     snap.html &&
-    !snap.html.includes("followAct--skel");
+    !snap.html.includes("followAct--skel") &&
+    profileActSnapshotMatchesIdentity(snap.html);
   if (!opts.deferCloud) {
     await mergeCloudSongsIntoLocalLibrary();
     await refreshOwnerPublicPostsCache({ force: opts.force });
@@ -14437,8 +14451,18 @@ function countFollowActsInHtml(html) {
 }
 
 /** Reject legacy snapshots that dumped the full feed with no Load more row. */
+function profileActSnapshotMatchesIdentity(html) {
+  const friendly = normalizeDisplayName(activeProfile?.displayName || "");
+  if (!friendly) return true;
+  if (String(html || "").includes(friendly)) return true;
+  const handle = String(activeProfile?.username || "").trim();
+  if (handle && String(html || "").includes(`@${handle}`)) return false;
+  return true;
+}
+
 function profileActSnapshotValid(html, totalPublicPosts) {
   if (!html || html.includes("followAct--skel")) return false;
+  if (!profileActSnapshotMatchesIdentity(html)) return false;
   if (html.includes("profileActEmpty")) return true;
   const shown = countFollowActsInHtml(html);
   const hasLoadMore = html.includes("profile-act-loadmore-sentinel");
@@ -19510,6 +19534,20 @@ function saveProfile(p) {
   try {
     localStorage.setItem(profileStorageKey(next.id), JSON.stringify(next));
   } catch {}
+  const uid = String(next.id || "").trim();
+  if (uid && uid !== "guest") {
+    _profileRowCache.set(uid, {
+      row: {
+        user_id: uid,
+        username: String(next.username || "").trim(),
+        display_name: normalizeDisplayName(next.displayName || ""),
+        displayName: normalizeDisplayName(next.displayName || ""),
+        avatar: String(next.avatar || "").trim(),
+        sound_certified: Boolean(next.soundCertified),
+      },
+      at: Date.now(),
+    });
+  }
 }
 
 /** Wipe in-memory + UI caches when the signed-in Supabase user changes. */
@@ -19585,12 +19623,82 @@ function localProfileHasRichContent() {
   );
 }
 
+/** Pick the canonical username when merging local + cloud profile rows.
+ *  Stale local handles must not clobber a newer cloud username — that
+ *  was the "I changed it then it reverted" bug after sign-in or boot. */
+function resolveMergedUsername(cloud, localFilled, active = activeProfile) {
+  const cloudName = normalizeProfileUsername(cloud?.username);
+  const localName = normalizeProfileUsername(
+    localFilled?.username != null ? localFilled.username : active?.username,
+  );
+  if (isPlaceholderUsername(localName) && !isPlaceholderUsername(cloudName)) return cloudName;
+  if (isPlaceholderUsername(cloudName) && !isPlaceholderUsername(localName)) return localName;
+  if (!localName) return cloudName;
+  if (!cloudName) return localName;
+  if (localName === cloudName) return localName;
+  const cloudTs = Number(cloud?.usernameChangedAt || 0);
+  const localTs = Number(
+    localFilled?.usernameChangedAt != null ? localFilled.usernameChangedAt : active?.usernameChangedAt || 0,
+  );
+  if (localTs > cloudTs) return localName;
+  if (cloudTs > localTs) return cloudName;
+  return cloudName;
+}
+
+function resolveMergedDisplayName(cloud, localFilled, active = activeProfile) {
+  const cloudDn = normalizeDisplayName(cloud?.displayName);
+  const localDn = normalizeDisplayName(
+    localFilled?.displayName != null ? localFilled.displayName : active?.displayName,
+  );
+  if (!localDn) return cloudDn;
+  if (!cloudDn) return localDn;
+  if (localDn === cloudDn) return localDn;
+  const cloudTs = Number(cloud?.usernameChangedAt || 0);
+  const localTs = Number(
+    localFilled?.usernameChangedAt != null ? localFilled.usernameChangedAt : active?.usernameChangedAt || 0,
+  );
+  if (localTs > cloudTs) return localDn;
+  return cloudDn;
+}
+
+function resolveMergedUsernameChangedAt(cloud, localFilled, active = activeProfile, mergedUsername) {
+  const merged = normalizeProfileUsername(mergedUsername);
+  const cloudName = normalizeProfileUsername(cloud?.username);
+  const localName = normalizeProfileUsername(
+    localFilled?.username != null ? localFilled.username : active?.username,
+  );
+  const cloudTs = Number(cloud?.usernameChangedAt || 0);
+  const localTs = Number(
+    localFilled?.usernameChangedAt != null ? localFilled.usernameChangedAt : active?.usernameChangedAt || 0,
+  );
+  if (merged === cloudName && merged !== localName) return cloudTs || localTs;
+  if (merged === localName && merged !== cloudName) return localTs || cloudTs;
+  return Math.max(cloudTs, localTs);
+}
+
+function applyMergedIdentityFields(nextProfile, cloud, localFilled) {
+  const username = resolveMergedUsername(cloud, localFilled, nextProfile);
+  nextProfile.username = username;
+  nextProfile.displayName = resolveMergedDisplayName(cloud, localFilled, nextProfile);
+  nextProfile.usernameChangedAt = resolveMergedUsernameChangedAt(cloud, localFilled, nextProfile, username);
+  return nextProfile;
+}
+
 function profileNeedsCloudRefresh() {
   if (!authSession?.user?.id) return false;
   const av = String(activeProfile?.avatar || "").trim();
   const bio = String(activeProfile?.bio || "").trim();
   const hasAvatar = av && !/nabadai-logo\.png(?:$|\?)|splash-mark\.png(?:$|\?)/i.test(av);
   return !hasAvatar || !bio;
+}
+
+function refreshProfilePostsAfterIdentityMerge() {
+  invalidateProfileActivitiesCache();
+  try { renderProfilePreviewFromInputs(); } catch {}
+  const route = document.body.getAttribute("data-route") || "";
+  if (route === "profile" && _profileSongsSegment === "activities") {
+    void renderProfileActivities({ force: true });
+  }
 }
 
 async function mergeActiveProfileFromCloud() {
@@ -19610,12 +19718,16 @@ async function mergeActiveProfileFromCloud() {
   if (founderAccount) {
     delete localFilled.usernameChangedAt;
   }
-  const nextProfile = {
-    ...cloud,
-    ...localFilled,
-    id: String(authSession.user.id),
-    email: localFilled.email || cloud.email || authSession.user.email || "",
-  };
+  const nextProfile = applyMergedIdentityFields(
+    {
+      ...cloud,
+      ...localFilled,
+      id: String(authSession.user.id),
+      email: localFilled.email || cloud.email || authSession.user.email || "",
+    },
+    cloud,
+    localFilled,
+  );
   if (founderAccount) {
     delete nextProfile.usernameChangedAt;
   }
@@ -19630,7 +19742,7 @@ async function mergeActiveProfileFromCloud() {
   if (els.profilePreviewBioInput) els.profilePreviewBioInput.value = nextProfile.bio || "";
   if (els.profileIsPublic) els.profileIsPublic.checked = nextProfile.isPublic !== false;
   try { syncSettingsPrivacyToggle(); } catch {}
-  renderProfilePreviewFromInputs();
+  refreshProfilePostsAfterIdentityMerge();
   return true;
 }
 
@@ -21167,6 +21279,7 @@ function resetProfileUiToGuest() {
   activeProfile = {
     id: "guest",
     username: "guest",
+    displayName: "",
     email: "",
     voiceTimbre: "",
     bio: "",
@@ -22047,11 +22160,21 @@ async function supabaseUpsertProfile(profile) {
   // if anything sneaks through the boot merge, this stops it from
   // becoming permanent on the server.
   let outgoingUsername = profile.username || "";
-  if (isPlaceholderUsername(outgoingUsername) && authSession?.user?.id) {
+  if (authSession?.user?.id) {
     try {
       const existing = await supabaseLoadProfile();
-      if (existing && existing.username && !isPlaceholderUsername(existing.username)) {
-        outgoingUsername = existing.username;
+      if (existing?.username && !isPlaceholderUsername(existing.username)) {
+        if (isPlaceholderUsername(outgoingUsername)) {
+          outgoingUsername = existing.username;
+        } else {
+          const outName = normalizeProfileUsername(outgoingUsername);
+          const existName = normalizeProfileUsername(existing.username);
+          const outTs = Number(profile.usernameChangedAt || 0);
+          const existTs = Number(existing.usernameChangedAt || 0);
+          if (outName !== existName && existTs > outTs) {
+            outgoingUsername = existing.username;
+          }
+        }
       }
     } catch {}
   }
@@ -29567,12 +29690,26 @@ function resolveProfileForFeedCreator(userId, profMap) {
   }
 
   const chosen = authId && uid === authId ? chosenUsernameForAuthUser() : "";
+  const ownDisplayName = authId && uid === authId
+    ? normalizeDisplayName(activeProfile?.displayName || prof?.displayName || prof?.display_name || "")
+    : "";
   if (chosen && (!cloudName || isPlaceholderUsername(cloudName) || autoUsernameMatchesAuthUser(cloudName, authId))) {
     return screenshotProf({
       ...(prof || {}),
       user_id: uid,
       username: chosen,
+      display_name: ownDisplayName || prof?.display_name || prof?.displayName || "",
+      displayName: ownDisplayName || prof?.displayName || prof?.display_name || "",
       avatar: String(activeProfile?.avatar || prof?.avatar || "").trim() || prof?.avatar || "",
+      sound_certified: prof?.sound_certified ?? prof?.soundCertified ?? activeProfile?.soundCertified,
+    });
+  }
+  if (ownDisplayName && prof && !normalizeDisplayName(prof?.displayName || prof?.display_name || "")) {
+    return screenshotProf({
+      ...prof,
+      user_id: uid,
+      display_name: ownDisplayName,
+      displayName: ownDisplayName,
     });
   }
   return screenshotProf(prof);
@@ -36879,11 +37016,11 @@ function renderProfileIdentityLine() {
       displayEl.hidden = true;
       displayEl.textContent = "";
     }
-    if (input) input.hidden = false;
+    if (input) input.hidden = true;
     if (subEl) {
-      subEl.hidden = true;
-      if (handleTextEl) handleTextEl.textContent = "";
-      else subEl.textContent = "";
+      subEl.hidden = false;
+      if (handleTextEl) handleTextEl.textContent = handleText;
+      else subEl.textContent = handleText;
     }
     stack?.classList.remove("profileAuraNameStack--hasDisplayName");
   }
@@ -37066,16 +37203,7 @@ function syncUserPublicVerifiedBadge(prof) {
 function renderProfileNabadCertBadge() {
   const check = els.profileNabadCertCheck;
   const legacy = els.profileNabadCertBadge;
-  const show = isNabadSoundCertified();
-  const subEl = els.profileIdentityLine;
-  const affixes = document.getElementById("profileAuraNameAffixes");
-  const hasDisplayName = Boolean(normalizeDisplayName(activeProfile?.displayName));
-  const home = hasDisplayName && subEl ? subEl : affixes;
-  if (check && home) {
-    if (check.parentElement !== home) {
-      home.insertBefore(check, home.firstChild || null);
-    }
-  }
+  const show = isNabadSoundCertified() && !profileEditing;
   if (check) {
     check.hidden = !show;
     check.setAttribute("aria-hidden", show ? "false" : "true");
@@ -48978,6 +49106,10 @@ function syncProfileUiFromEdit(profile = activeProfile) {
   renderProfileMusicStylesInline(profile);
   renderPersonaSelect();
   refreshOwnSongsUi();
+  invalidateProfileActivitiesCache();
+  if ((document.body.getAttribute("data-route") || "") === "profile" && _profileSongsSegment === "activities") {
+    void renderProfileActivities({ force: true });
+  }
 }
 
 try {
@@ -50557,15 +50689,10 @@ function logoutCurrentUser() {
   saveAuthSession(null);
   void clearAuthSessionEverywhere();
   if (prevUserId) {
-    // Keep mas:library:v1:{uid} on disk — private drafts survive sign-out on
-    // this device/browser and return when the same user signs back in.
-    // Account delete still wipes library explicitly.
-    try {
-      localStorage.removeItem(profileStorageKey(prevUserId));
-      const raw = localStorage.getItem(PROFILE_KEY);
-      const p = raw ? JSON.parse(raw) : null;
-      if (String(p?.id || "") === prevUserId) localStorage.removeItem(PROFILE_KEY);
-    } catch {}
+    // Keep mas:library:v1:{uid} and mas:profile:v1:{uid} on disk — drafts and
+    // display identity survive sign-out on this device and return when the same
+    // user signs back in without waiting for a cold cloud fetch.
+    // Account delete still wipes both explicitly.
     saveHubFeed([]);
     invalidateLibraryMemCache();
   }
@@ -51581,12 +51708,16 @@ void (async () => {
       if (!cloud.usernameChangedAt && localFilled.usernameChangedAt) {
         delete localFilled.usernameChangedAt;
       }
-      nextProfile = {
-        ...cloud,
-        ...localFilled,
-        id: String(authSession.user.id),
-        email: localFilled.email || cloud.email || authSession.user.email || "",
-      };
+      nextProfile = applyMergedIdentityFields(
+        {
+          ...cloud,
+          ...localFilled,
+          id: String(authSession.user.id),
+          email: localFilled.email || cloud.email || authSession.user.email || "",
+        },
+        cloud,
+        localFilled,
+      );
     } else {
       // First sign-in for this user. Don't fall back to the boot-time
       // `username: "guest"` default — that's the unauthenticated
@@ -51631,10 +51762,18 @@ void (async () => {
     // need to land on the server (new username, new avatar/bio that
     // were only in local). Fire-and-forget via the debounced sync so
     // boot stays snappy on slow networks.
+    const usernameDrift =
+      cloud &&
+      normalizeProfileUsername(cloud.username) !== normalizeProfileUsername(nextProfile.username);
+    const usernameShouldPush =
+      usernameDrift &&
+      resolveMergedUsername(cloud, localProfileFilledForCloudMerge(), nextProfile) ===
+        normalizeProfileUsername(nextProfile.username);
     const cloudIsStale = cloud && (
-      cloud.username !== nextProfile.username
+      usernameShouldPush
       || cloud.avatar !== nextProfile.avatar
       || cloud.bio !== nextProfile.bio
+      || cloud.displayName !== nextProfile.displayName
       || cloud.voiceTimbre !== nextProfile.voiceTimbre
       || cloud.isPublic !== nextProfile.isPublic
     );
@@ -51647,6 +51786,7 @@ void (async () => {
     if (els.profilePreviewBioInput) els.profilePreviewBioInput.value = activeProfile.bio || "";
     if (els.profileIsPublic) els.profileIsPublic.checked = activeProfile.isPublic !== false;
     renderProfilePreviewFromInputs();
+    refreshProfilePostsAfterIdentityMerge();
     renderProfileHubShared();
 
     try {

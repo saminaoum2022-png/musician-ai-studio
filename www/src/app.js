@@ -140,7 +140,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260704-120417";
+const APP_BUILD = "20260704-124247";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -404,6 +404,22 @@ function isFounderBadgeEmail(raw) {
     }
     if (!cap.Plugins?.Share) {
       cap.registerPlugin("Share");
+    }
+    if (!cap.Plugins?.Haptics) {
+      if (isNative) {
+        cap.registerPlugin("Haptics");
+      } else {
+        cap.registerPlugin("Haptics", {
+          web: () => ({
+            async impact() {},
+            async notification() {},
+            async vibrate() {},
+            async selectionStart() {},
+            async selectionChanged() {},
+            async selectionEnd() {},
+          }),
+        });
+      }
     }
   } catch {
     /* Already registered elsewhere */
@@ -2674,11 +2690,33 @@ function flushTabRouteNavigation(route, targetHash) {
   }
 }
 
+function createTabMorphTapPending(tabLink) {
+  if (tabLink?.getAttribute?.("data-route-link") !== "challenges") return false;
+  if ((document.body.getAttribute("data-route") || "") !== "generate") return false;
+  const generating = Boolean(els.btnSunoGenerate?.disabled);
+  const hasInput = Boolean(
+    String(els.sunoPrompt?.value || "").trim() ||
+    String(els.sunoStyle?.value || "").trim() ||
+    imageMoodAppliedForNextGen
+  );
+  const hasResult = (els.resultCard?.style.display || "none") !== "none";
+  return generating || (hasInput && !hasResult);
+}
+
 function attachTabRefresh() {
   const tabs = document.querySelectorAll(".mobileTabbar a[data-route-link]");
   tabs.forEach((a) => {
     if (a.dataset.tabNavBound) return;
     a.dataset.tabNavBound = "1";
+    a.addEventListener(
+      "pointerdown",
+      () => {
+        if (document.body.classList.contains("echoComposeOpen")) return;
+        if (createTabMorphTapPending(a)) return;
+        haptic("light");
+      },
+      { passive: true },
+    );
     a.addEventListener("click", (e) => {
       const linkRoute = tabBarRouteKey(a.getAttribute("data-route-link") || "");
       if (!TAB_REFRESH_ACTIONS[linkRoute]) return;
@@ -12661,7 +12699,8 @@ function wireRouteLinkHapticsOnce() {
     (e) => {
       const a = e.target?.closest?.("a[data-route-link]");
       if (!a) return;
-      if (!a.closest(".mobileTabbar") && !a.closest(".journeyBar")) return;
+      // Bottom tabs fire haptics on pointerdown in attachTabRefresh().
+      if (!a.closest(".journeyBar")) return;
       if (document.body.classList.contains("echoComposeOpen")) return;
       haptic("light");
     },

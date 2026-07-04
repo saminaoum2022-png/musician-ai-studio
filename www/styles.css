@@ -13979,13 +13979,18 @@ body[data-route="profile"]:has(#profileAuraNameRow[data-loading="true"]) #profil
   max-width: min(100%, 340px);
   text-align: center;
 }
+.userPublicMusicStyles{
+  margin: 6px auto 2px;
+}
 .profileMusicStylesInline[hidden]{ display: none !important; }
 .profileMusicStylesLine{
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 6px;
   justify-content: center;
   align-items: center;
+  max-width: 100%;
+  overflow: hidden;
   border: none;
   background: transparent;
   padding: 0;
@@ -13994,12 +13999,18 @@ body[data-route="profile"]:has(#profileAuraNameRow[data-loading="true"]) #profil
   cursor: default;
   -webkit-tap-highlight-color: transparent;
 }
+.profileMusicStylesLine--readonly{
+  pointer-events: none;
+}
 button.profileMusicStylesLine{
   cursor: pointer;
 }
 .profileMusicStylePill{
   display: inline-flex;
+  flex: 0 1 auto;
   align-items: center;
+  min-width: 0;
+  max-width: 38%;
   padding: 4px 10px;
   border-radius: 999px;
   border: 1px solid rgba(255, 255, 255, 0.06);
@@ -14009,6 +14020,14 @@ button.profileMusicStylesLine{
   letter-spacing: 0.01em;
   line-height: 1.2;
   color: rgba(223, 231, 251, 0.62);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.profileMusicStylePill--more{
+  flex: 0 0 auto;
+  max-width: none;
+  color: rgba(223, 231, 251, 0.48);
 }
 button.profileMusicStylesLine:hover .profileMusicStylePill{
   border-color: rgba(255, 255, 255, 0.1);

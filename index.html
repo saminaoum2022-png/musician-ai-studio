@@ -126,7 +126,7 @@
       onload="this.media='all'"
     />
     <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Display:wght@900&family=Inter:wght@900&display=swap" /></noscript>
-    <link rel="stylesheet" href="./styles.css?v=20260704-150928" />
+    <link rel="stylesheet" href="./styles.css?v=20260704-151847" />
 
     <meta name="description" content="NabadAi is an AI music studio. Hum a melody, write lyrics, and ship a song." />
     <meta property="og:type" content="website" />
@@ -494,7 +494,7 @@
             <button type="button" id="btnMusicPrefsSkip" class="musicPrefsSkip">Skip</button>
             <header class="musicPrefsHeader">
               <h1 class="musicPrefsTitle">Choose your music styles</h1>
-              <p class="musicPrefsSubtitle">Pick at least 3 genres to personalize your feed, challenges and recommendations.</p>
+              <p class="musicPrefsSubtitle">Pick at least 3 genres — choose as many as you like. We show your top 3 on your profile.</p>
             </header>
             <div id="musicPrefsGrid" class="musicPrefsGrid" role="group" aria-label="Music genres"></div>
             <footer class="musicPrefsFooter">
@@ -2474,6 +2474,9 @@
               </button>
             </div>
             <div class="userPublicBio profileHeroBio" id="userPublicBio"></div>
+            <div id="userPublicMusicStyles" class="profileMusicStylesInline userPublicMusicStyles" hidden aria-hidden="true">
+              <div id="userPublicMusicStylesRow" class="profileMusicStylesLine profileMusicStylesLine--readonly" aria-label="Music styles"></div>
+            </div>
             <audio id="userPublicCallingCardAudio" preload="none" playsinline></audio>
             <div class="userPublicStats profileStatsRow" id="userPublicStats"></div>
             <div class="userPublicSongsBlock profileSongsBlock">
@@ -4396,6 +4399,6 @@
     </script>
     <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
     <script src="./env.client.js" onerror="void 0"></script>
-    <script type="module" src="./src/app.js?v=20260704-150928"></script>
+    <script type="module" src="./src/app.js?v=20260704-151847"></script>
   </body>
 </html>

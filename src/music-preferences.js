@@ -28,6 +28,25 @@ export const MUSIC_PREFERENCE_GENRES = [
 ];
 
 export const MUSIC_PREFS_MIN_SELECTION = 3;
+/** Profile hero — show at most this many style pills (one row). */
+export const PROFILE_MUSIC_STYLES_DISPLAY_MAX = 3;
+
+export function profileMusicStylesDisplaySlice(labels, max = PROFILE_MUSIC_STYLES_DISPLAY_MAX) {
+  const prefs = (labels || []).map((s) => String(s || "").trim()).filter(Boolean);
+  const cap = Math.max(1, Number(max) || PROFILE_MUSIC_STYLES_DISPLAY_MAX);
+  return {
+    shown: prefs.slice(0, cap),
+    extra: Math.max(0, prefs.length - cap),
+    total: prefs.length,
+  };
+}
+
+export function profileMusicStylesAriaLine(labels, max = PROFILE_MUSIC_STYLES_DISPLAY_MAX) {
+  const { shown, extra, total } = profileMusicStylesDisplaySlice(labels, max);
+  if (!total) return "";
+  if (!extra) return shown.join(" · ");
+  return `${shown.join(" · ")} · +${extra} more`;
+}
 
 let _deps = null;
 let _inited = false;

@@ -48,6 +48,9 @@ import {
   onMusicPreferencesRouteActive,
   openMusicPreferencesEditor,
   parseMusicPreferencesFromProfile,
+  profileMusicStylesAriaLine,
+  profileMusicStylesDisplaySlice,
+  PROFILE_MUSIC_STYLES_DISPLAY_MAX,
   shouldShowMusicPreferencesScreen,
 } from "./music-preferences.js";
 import {
@@ -140,7 +143,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260704-150928";
+const APP_BUILD = "20260704-151847";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -1003,6 +1006,8 @@ const els = {
   userPublicVerified: document.getElementById("userPublicVerified"),
   userPublicVoice: document.getElementById("userPublicVoice"),
   userPublicBio: document.getElementById("userPublicBio"),
+  userPublicMusicStyles: document.getElementById("userPublicMusicStyles"),
+  userPublicMusicStylesRow: document.getElementById("userPublicMusicStylesRow"),
   userPublicStats: document.getElementById("userPublicStats"),
   userPublicSongsCount: document.getElementById("userPublicSongsCount"),
   userPublicSongs: document.getElementById("userPublicSongs"),
@@ -22795,8 +22800,10 @@ async function fetchPublicProfileRowByUserId(userId) {
   if (!uid || !SUPABASE_URL || !SUPABASE_ANON_KEY) return null;
   const headers = { apikey: SUPABASE_ANON_KEY, Accept: "application/json" };
   const base = `${SUPABASE_URL}/rest/v1/profiles`;
-  const selFull = "user_id,username,display_name,avatar,bio,voice_timbre,sound_certified";
-  const selCore = "user_id,username,avatar,bio,voice_timbre";
+  const selFull = "user_id,username,display_name,avatar,bio,voice_timbre,sound_certified,genres";
+  const selCore = "user_id,username,avatar,bio,voice_timbre,genres";
+  const selLegacy = "user_id,username,display_name,avatar,bio,voice_timbre,sound_certified";
+  const selLegacyCore = "user_id,username,avatar,bio,voice_timbre";
   const filter = `user_id=eq.${encodeURIComponent(uid)}`;
   const tryOne = async (selectList) => {
     try {
@@ -22811,7 +22818,12 @@ async function fetchPublicProfileRowByUserId(userId) {
       return null;
     }
   };
-  return (await tryOne(selFull)) || (await tryOne(selCore));
+  return (
+    (await tryOne(selFull))
+    || (await tryOne(selCore))
+    || (await tryOne(selLegacy))
+    || (await tryOne(selLegacyCore))
+  );
 }
 
 /** Public `profiles` row by handle — anon when `profiles_select_public_directory` exists. */
@@ -22820,8 +22832,10 @@ async function fetchPublicProfileRowByUsername(username) {
   if (!handle || !SUPABASE_URL || !SUPABASE_ANON_KEY) return null;
   const headers = { apikey: SUPABASE_ANON_KEY, Accept: "application/json" };
   const base = `${SUPABASE_URL}/rest/v1/profiles`;
-  const selFull = "user_id,username,display_name,avatar,bio,voice_timbre,sound_certified";
-  const selCore = "user_id,username,avatar,bio,voice_timbre";
+  const selFull = "user_id,username,display_name,avatar,bio,voice_timbre,sound_certified,genres";
+  const selCore = "user_id,username,avatar,bio,voice_timbre,genres";
+  const selLegacy = "user_id,username,display_name,avatar,bio,voice_timbre,sound_certified";
+  const selLegacyCore = "user_id,username,avatar,bio,voice_timbre";
   const eq = `username=eq.${encodeURIComponent(handle)}`;
   const il = `username=ilike.${encodeURIComponent(escapeUsernameForIlikeExact(handle))}`;
   const tryOne = async (filter, selectList) => {
@@ -22837,13 +22851,17 @@ async function fetchPublicProfileRowByUsername(username) {
       return null;
     }
   };
-  // `sound_certified` breaks the whole request if the column is not migrated yet — fall back to `selCore`.
+  // `sound_certified` / `genres` break the whole request if columns are not migrated yet — fall back.
   // `eq` is case-sensitive — try escaped `ilike` second so `@Samy_CEO` still resolves.
   const row =
     (await tryOne(eq, selFull)) ||
     (await tryOne(eq, selCore)) ||
+    (await tryOne(eq, selLegacy)) ||
+    (await tryOne(eq, selLegacyCore)) ||
     (await tryOne(il, selFull)) ||
-    (await tryOne(il, selCore));
+    (await tryOne(il, selCore)) ||
+    (await tryOne(il, selLegacy)) ||
+    (await tryOne(il, selLegacyCore));
   return row ? screenshotProf(row) : null;
 }
 
@@ -26747,6 +26765,7 @@ function setUserPublicLoading(on, username = "") {
     applyUserPublicAvatar("", handle);
     if (els.userPublicVoice) els.userPublicVoice.style.display = "none";
     if (els.userPublicBio) els.userPublicBio.style.display = "none";
+    if (els.userPublicMusicStyles) els.userPublicMusicStyles.hidden = true;
     if (els.userPublicStats) {
       els.userPublicStats.innerHTML = userPublicStatsSkeletonHtml();
       els.userPublicStats.style.display = "";
@@ -33129,6 +33148,7 @@ async function renderUserProfilePublicLibraryAsync(username, userId = "", gen = 
       els.userPublicBio.textContent = "";
       els.userPublicBio.style.display = "none";
     }
+    if (els.userPublicMusicStyles) els.userPublicMusicStyles.hidden = true;
     if (els.userPublicStats) els.userPublicStats.style.display = "none";
     if (els.userPublicSongsCount) {
       els.userPublicSongsCount.textContent = "";
@@ -33178,6 +33198,7 @@ async function renderUserProfilePublicLibraryAsync(username, userId = "", gen = 
       els.userPublicBio.style.display = "none";
     }
   }
+  try { renderUserPublicMusicStyles(prof); } catch {}
   const songs = await supabaseFetchPublicLibraryForUserId(prof.user_id);
   if (!stillCurrent()) return;
   for (const t of songs) {
@@ -36798,14 +36819,43 @@ function renderProfileNabadCertBadge() {
 
 
 /* =================================================================
- *  Music styles under @handle — dot-separated editorial line.
+ *  Music styles under @handle — up to 3 pills on one row.
  * ================================================================= */
+function profileMusicStylesPillsHtml(prefs) {
+  const { shown, extra } = profileMusicStylesDisplaySlice(prefs);
+  let html = shown
+    .map((label) => `<span class="profileMusicStylePill">${escapeHtml(label)}</span>`)
+    .join("");
+  if (extra > 0) {
+    html += `<span class="profileMusicStylePill profileMusicStylePill--more">+${extra}</span>`;
+  }
+  return html;
+}
+
+function renderUserPublicMusicStyles(prof) {
+  const wrap = els.userPublicMusicStyles;
+  const row = els.userPublicMusicStylesRow;
+  if (!wrap || !row) return;
+  const prefs = parseMusicPreferencesFromProfile(prof);
+  if (!prefs.length) {
+    wrap.hidden = true;
+    row.innerHTML = "";
+    row.removeAttribute("aria-label");
+    wrap.setAttribute("aria-hidden", "true");
+    return;
+  }
+  row.innerHTML = profileMusicStylesPillsHtml(prefs);
+  row.setAttribute("aria-label", `Music styles: ${profileMusicStylesAriaLine(prefs)}`);
+  wrap.hidden = false;
+  wrap.setAttribute("aria-hidden", "false");
+}
+
 function renderProfileMusicStylesInline(profile = activeProfile) {
   const wrap = els.profileMusicStylesInline;
   const btn = els.profileMusicStylesBtn;
   if (!wrap || !btn) return;
   const signedIn = Boolean(authSession?.user?.id);
-  const isOwn = signedIn && String(profile?.id || "") === String(authSession?.user?.id || "");
+  const isOwn = signedIn && String(profile?.id || profile?.user_id || "") === String(authSession?.user?.id || "");
   if (!signedIn || profileEditing) {
     wrap.hidden = true;
     btn.textContent = "";
@@ -36831,11 +36881,8 @@ function renderProfileMusicStylesInline(profile = activeProfile) {
     return;
   }
   btn.classList.remove("profileMusicStylesLine--empty");
-  const shown = prefs.length > 5 ? prefs.slice(0, 5) : prefs;
-  btn.innerHTML = shown.map((label) => `<span class="profileMusicStylePill">${escapeHtml(label)}</span>`).join("");
-  const line = prefs.length <= 5
-    ? prefs.join(" · ")
-    : `${prefs.slice(0, 4).join(" · ")} · +${prefs.length - 4}`;
+  btn.innerHTML = profileMusicStylesPillsHtml(prefs);
+  const line = profileMusicStylesAriaLine(prefs);
   btn.setAttribute("aria-label", isOwn ? `Music styles: ${line}. Tap to edit.` : `Music styles: ${line}`);
   wrap.hidden = false;
   wrap.setAttribute("aria-hidden", "false");

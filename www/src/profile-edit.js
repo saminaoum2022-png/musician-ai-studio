@@ -2,7 +2,7 @@
  * Edit Profile — dedicated creator workspace (not Settings).
  */
 
-import { MUSIC_PREFERENCE_GENRES, parseMusicPreferencesFromProfile, markMusicPreferencesComplete } from "./music-preferences.js";
+import { MUSIC_PREFERENCE_GENRES, parseMusicPreferencesFromProfile, markMusicPreferencesComplete, profileMusicStylesDisplaySlice } from "./music-preferences.js";
 import { USERNAME_MAX_LENGTH, DISPLAY_NAME_MAX_LENGTH } from "./profile-limits.js";
 
 let _deps = null;
@@ -139,8 +139,9 @@ function bioPreview() {
 function genresPreview() {
   const list = _draft?.genres || [];
   if (!list.length) return "Choose genres";
-  if (list.length <= 3) return list.join(" · ");
-  return `${list.slice(0, 3).join(" · ")} · +${list.length - 3}`;
+  const { shown, extra } = profileMusicStylesDisplaySlice(list);
+  if (!extra) return shown.join(" · ");
+  return `${shown.join(" · ")} · +${extra}`;
 }
 
 function socialPreview(key) {

@@ -15052,7 +15052,8 @@ button.profileMusicStylesLine:hover .profileMusicStylePill{
   align-self: center;
   min-height: 34px;
   padding: 5px 14px 5px 10px;
-  gap: 8px;
+  gap: 7px;
+  font-size: 18px;
   border: 0;
   background: rgba(255, 255, 255, 0.06);
   box-shadow: none;
@@ -15072,7 +15073,7 @@ button.profileMusicStylesLine:hover .profileMusicStylePill{
 }
 .profileCreditsPill--toolbar .profileCreditsPillValue{
   color: #fff;
-  font-size: 18px;
+  font-size: 1em;
   font-weight: 600;
 }
 /* Compact Edit pill after verified badge — same quiet surface as credits, smaller. */
@@ -15110,17 +15111,23 @@ button.profileMusicStylesLine:hover .profileMusicStylePill{
   display: none !important;
 }
 .profileCreditsPillMark{
-  width: 18px;
-  height: 18px;
+  width: 16px;
+  height: 16px;
   flex: 0 0 auto;
   display: block;
   line-height: 0;
 }
 .profileCreditsPillMarkLogo{
-  width: 18px;
-  height: 18px;
+  width: 100%;
+  height: 100%;
   display: block;
   object-fit: contain;
+}
+/* Toolbar credits chip — N mark sits on the number cap line: smaller than
+   the em box, still a touch taller than the digit glyphs. */
+.profileCreditsPill--toolbar .profileCreditsPillMark{
+  width: 0.82em;
+  height: 0.82em;
 }
 /* In edit mode hide credits in the portal chrome. */
 body[data-route="profile"]:has(#profileAura.profileAuraEditing) #profileAuraHeaderChromeRoot .profileCreditsPill--toolbar{

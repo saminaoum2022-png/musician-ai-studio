@@ -144,7 +144,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260704-212343";
+const APP_BUILD = "20260704-214024";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -3869,7 +3869,7 @@ function applyRoute({ passGen } = {}) {
       try { renderProfilePreviewFromInputs(); } catch {}
       restoreRouteScroll("profile");
     }
-    scheduleProfileSongsRender({ deferCloud: profileHeavy });
+    scheduleProfileSongsRender();
   }
   if (wanted === "profile-edit") {
     setProfileEditing(false);
@@ -11950,20 +11950,74 @@ async function enrichProfileActivitiesAfterPaint(libRows, feedItems, profMap, li
   }
 }
 
+function profileActivitiesIsHydrating() {
+  if (!authSession?.user?.id) return false;
+  return _libraryHydrateInFlight || !_libraryHydrateCompleted;
+}
+
+function profileActivitiesHasPaintCache(uid) {
+  hydrateProfileActSnapshotFromStorage();
+  const snap = _profileActSnapshot;
+  if (
+    snap &&
+    Date.now() - snap.at < PROFILE_ACT_SNAPSHOT_MS &&
+    snap.html &&
+    !snap.html.includes("followAct--skel") &&
+    profileActSnapshotMatchesIdentity(snap.html)
+  ) {
+    return true;
+  }
+  const ownerPosts = getOwnerPublicPostsSongs();
+  if (Array.isArray(ownerPosts) && ownerPosts.length) return true;
+  if (
+    loadLibrary().some(
+      (t) => String(t?.url || "").trim() && Boolean(t.publicOnProfile),
+    )
+  ) {
+    return true;
+  }
+  const listEl = document.getElementById("profileActivitiesList");
+  if (listEl) {
+    const domKey = readFollowActListDomKey(listEl);
+    if (domKey.length > 0 && !listEl.querySelector(".followAct--skel")) return true;
+  }
+  return false;
+}
+
+function scheduleProfileActivitiesCloudRefresh(opts = {}) {
+  const reason = String(opts.reason || "profileActivitiesBackground");
+  const force = Boolean(opts.force);
+  const now = Date.now();
+  if (_profileActCloudRefreshInFlight) return;
+  if (!force && now - _profileActCloudRefreshLastAt < PROFILE_ACT_MIN_FETCH_GAP_MS) return;
+  _profileActCloudRefreshInFlight = true;
+  void (async () => {
+    try {
+      await mergeCloudSongsIntoLocalLibrary({ reason: `${reason}:cloud` });
+      await refreshOwnerPublicPostsCache({ force, reason: `${reason}:posts` });
+      _profileActCloudRefreshLastAt = Date.now();
+      if (
+        (document.body.getAttribute("data-route") || "") === "profile" &&
+        _profileSongsSegment === "activities"
+      ) {
+        void renderProfileActivities({ fromCloudRefresh: true, reason: `${reason}:followup` });
+      }
+    } catch (e) {
+      try {
+        console.warn("[profile/posts/cloud]", e);
+      } catch {}
+    } finally {
+      _profileActCloudRefreshInFlight = false;
+    }
+  })();
+}
+
 async function renderProfileActivities(opts = {}) {
   const route = document.body.getAttribute("data-route") || "";
   if (route === "profile" && _profileSongsSegment !== "activities") {
     return;
   }
   const reason = String(opts.reason || "renderProfileActivities");
-  try {
-    console.info("[profile/posts] render", {
-      reason,
-      force: Boolean(opts.force),
-      deferCloud: Boolean(opts.deferCloud),
-      extend: Boolean(opts.extend),
-    });
-  } catch {}
   const force = Boolean(opts.force);
   const extend = Boolean(opts.extend);
   const listEl = document.getElementById("profileActivitiesList");
@@ -11981,6 +12035,16 @@ async function renderProfileActivities(opts = {}) {
     return;
   }
   const uid = String(authSession.user.id);
+  const hasPaintCache = profileActivitiesHasPaintCache(uid);
+  try {
+    console.info("[profile/posts] render", {
+      reason,
+      force,
+      extend,
+      fromCloudRefresh: Boolean(opts.fromCloudRefresh),
+      hasPaintCache,
+    });
+  } catch {}
   if (!extend && !force) resetProfileActivitiesPagination();
   wireProfileActivitiesLoadMoreOnce();
   hydrateProfileActSnapshotFromStorage();
@@ -11991,15 +12055,17 @@ async function renderProfileActivities(opts = {}) {
     snap.html &&
     !snap.html.includes("followAct--skel") &&
     profileActSnapshotMatchesIdentity(snap.html);
-  if (!opts.deferCloud) {
-    await mergeCloudSongsIntoLocalLibrary({ reason: `${reason}:cloud` });
-    await refreshOwnerPublicPostsCache({ force: opts.force, reason: `${reason}:posts` });
-  } else if (!getOwnerPublicPostsSongs()) {
-    void refreshOwnerPublicPostsCache({ reason: `${reason}:defer` }).then(() => {
-      if ((document.body.getAttribute("data-route") || "") === "profile" && _profileSongsSegment === "activities") {
-        void renderProfileActivities({ deferCloud: true, reason: `${reason}:defer-followup` });
-      }
-    });
+  if (!opts.fromCloudRefresh && !extend) {
+    scheduleProfileActivitiesCloudRefresh({ force, reason });
+  }
+  if (!extend && !hasPaintCache && profileActivitiesIsHydrating()) {
+    const domKey = readFollowActListDomKey(listEl);
+    const hasRealFeed = domKey.length > 0 && !listEl.querySelector(".followAct--skel");
+    if (!hasRealFeed) {
+      listEl.innerHTML = followingActivitySkeletonHtml();
+    }
+    syncProfileActivitiesLoadMoreUi(0);
+    return;
   }
   try {
   let libRows = (getOwnerPublicPostsSongs() || []).filter((t) => String(t?.url || "").trim());
@@ -14458,6 +14524,8 @@ let _profileActEnrichGen = 0;
 const PROFILE_ACT_SNAPSHOT_MS = 120000;
 const PROFILE_ACT_MIN_FETCH_GAP_MS = 45000;
 const PROFILE_ACT_SNAPSHOT_KEY = "nabad_profile_act_snap_v3";
+let _profileActCloudRefreshLastAt = 0;
+let _profileActCloudRefreshInFlight = false;
 const PROFILE_ACTIVITIES_PAGE_SIZE = 6;
 let _profileActivitiesShown = PROFILE_ACTIVITIES_PAGE_SIZE;
 /** Max public posts fetched for profile stats, Posts tab, and public profile link. */
@@ -14534,7 +14602,7 @@ function wireProfileActivitiesLoadMoreOnce() {
     haptic("light");
     const total = getOwnerPublicPostCount();
     _profileActivitiesShown = Math.min(total, _profileActivitiesShown + PROFILE_ACTIVITIES_PAGE_SIZE);
-    void renderProfileActivities({ extend: true, deferCloud: true });
+    void renderProfileActivities({ extend: true });
   });
 }
 
@@ -14588,6 +14656,8 @@ function clearSignedInUiCaches() {
   _ownSocialStatsPlays = null;
   _ownSocialStatsLastFetchAt = 0;
   _ownSocialStatsInFlight = false;
+  _profileActCloudRefreshLastAt = 0;
+  _profileActCloudRefreshInFlight = false;
 }
 
 function resetProfileActivitiesGuestUi() {
@@ -38069,7 +38139,6 @@ function bindProfileSongsSegmentOnce() {
 }
 
 function renderProfileSongs(opts = {}) {
-  const deferCloud = Boolean(opts.deferCloud);
   const route = document.body.getAttribute("data-route") || "";
   if (route !== "profile") {
     renderLibrary();
@@ -38080,9 +38149,7 @@ function renderProfileSongs(opts = {}) {
   const libEl = document.getElementById("libraryList");
   if (_profileSongsSegment === "activities") {
     void renderProfileActivities({
-      force: !getOwnerPublicPostsSongs()?.length,
       reason: "renderProfileSongs",
-      deferCloud: Boolean(opts.deferCloud),
     });
     return;
   }

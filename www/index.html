@@ -126,7 +126,7 @@
       onload="this.media='all'"
     />
     <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Display:wght@900&family=Inter:wght@900&display=swap" /></noscript>
-    <link rel="stylesheet" href="./styles.css?v=20260705-001950" />
+    <link rel="stylesheet" href="./styles.css?v=20260705-004508" />
 
     <meta name="description" content="NabadAi is an AI music studio. Hum a melody, write lyrics, and ship a song." />
     <meta property="og:type" content="website" />
@@ -202,7 +202,7 @@
           </details>
           <details class="faqItem">
             <summary>Who can see my profile and activity?</summary>
-            <p>You're in control. Under <strong>Settings → Music Presence</strong> you can turn off <em>Show my activity</em>, change <em>Visibility</em>, and hide song titles. Privacy controls live in the same place.</p>
+            <p>You're in control. Under <strong>Settings → Music presence</strong> you can turn off <em>Show my activity</em> or hide song titles. Your profile privacy toggle lives under Account.</p>
           </details>
           <details class="faqItem">
             <summary>How do I delete my account?</summary>
@@ -3316,16 +3316,6 @@
             <section class="settingsSection" aria-labelledby="settingsAccountTitle">
               <h2 id="settingsAccountTitle" class="settingsSectionLabel">Account</h2>
               <div class="settingsList">
-                <a id="settingsEditProfileRow" class="settingsRow settingsRowLink" href="#/profile-edit">
-                  <span class="settingsRowIco" aria-hidden="true">
-                    <svg viewBox="0 0 24 24"><path d="M4 20h16"/><path d="M6 4h12v16"/><path d="M8 9h8M8 13h5"/></svg>
-                  </span>
-                  <span class="settingsRowBody">
-                    <span class="settingsRowTitle">Edit profile</span>
-                    <span class="settingsRowSub">Photo, username, bio, genres, and social links</span>
-                  </span>
-                  <span class="settingsRowChev" aria-hidden="true">›</span>
-                </a>
                 <button class="settingsRow settingsRowLink" type="button" id="btnSettingsMusicPrefs" hidden>
                   <span class="settingsRowIco" aria-hidden="true">
                     <svg viewBox="0 0 24 24"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
@@ -3388,19 +3378,10 @@
                   </span>
                   <span class="settingsRowBody">
                     <span class="settingsRowTitle">Show my activity</span>
-                    <span class="settingsRowSub">Let friends see what you're playing or creating</span>
+                    <span class="settingsRowSub">Friends only — share what you're playing or creating</span>
                   </span>
                   <input type="checkbox" id="settingsPresenceEnabledToggle" class="settingsSwitch" checked aria-label="Show my music activity" />
                 </label>
-                <div class="settingsRow settingsRowStatic">
-                  <span class="settingsRowIco" aria-hidden="true">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M16 11a4 4 0 1 0-8 0"/><circle cx="12" cy="7" r="3"/><path d="M3 21a7 7 0 0 1 14 0"/><path d="M18 14a5 5 0 0 1 3 7"/></svg>
-                  </span>
-                  <span class="settingsRowBody">
-                    <span class="settingsRowTitle">Visibility</span>
-                    <span class="settingsRowSub">Friends only</span>
-                  </span>
-                </div>
                 <label class="settingsRow settingsRowToggle">
                   <span class="settingsRowIco" aria-hidden="true">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7a11.6 11.6 0 0 1-5-1.1"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/><path d="M3 3l18 18"/></svg>
@@ -3437,18 +3418,8 @@
                     <svg viewBox="0 0 24 24"><path d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7H14a3.5 3.5 0 0 1 0 7H6"/></svg>
                   </span>
                   <span class="settingsRowBody">
-                    <span class="settingsRowTitle">Manage credits</span>
-                    <span class="settingsRowSub">Balance and activity</span>
-                  </span>
-                  <span class="settingsRowChev" aria-hidden="true">›</span>
-                </a>
-                <a class="settingsRow settingsRowLink" href="#/credits">
-                  <span class="settingsRowIco" aria-hidden="true">
-                    <svg viewBox="0 0 24 24"><path d="M21 2l-2 2"/><path d="M3 2l2 2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/><rect x="3" y="11" width="18" height="11" rx="2"/></svg>
-                  </span>
-                  <span class="settingsRowBody">
-                    <span class="settingsRowTitle">Redeem code</span>
-                    <span class="settingsRowSub">Enter a promo code</span>
+                    <span class="settingsRowTitle">Credits</span>
+                    <span class="settingsRowSub">Balance, redeem codes, and activity</span>
                   </span>
                   <span class="settingsRowChev" aria-hidden="true">›</span>
                 </a>
@@ -4455,6 +4426,6 @@
     </script>
     <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
     <script src="./env.client.js" onerror="void 0"></script>
-    <script type="module" src="./src/app.js?v=20260705-001950"></script>
+    <script type="module" src="./src/app.js?v=20260705-004508"></script>
   </body>
 </html>

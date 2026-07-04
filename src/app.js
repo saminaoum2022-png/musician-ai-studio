@@ -144,7 +144,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260705-001950";
+const APP_BUILD = "20260705-004508";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -690,7 +690,6 @@ const els = {
   settingsBtnLogout: document.getElementById("settingsBtnLogout"),
   btnSettingsMemberId: document.getElementById("btnSettingsMemberId"),
   settingsMemberIdSub: document.getElementById("settingsMemberIdSub"),
-  settingsEditProfileRow: document.getElementById("settingsEditProfileRow"),
   settingsHelpRow: document.getElementById("settingsHelpRow"),
   settingsReportRow: document.getElementById("settingsReportRow"),
   notificationsCenter: document.getElementById("notificationsCenter"),
@@ -50614,11 +50613,6 @@ document.addEventListener("keydown", (e) => {
     closeNotificationsCenter();
   }
 });
-if (els.settingsEditProfileRow) {
-  els.settingsEditProfileRow.addEventListener("click", () => {
-    try { haptic("light"); } catch {}
-  });
-}
 if (els.btnProfileEditPill) {
   els.btnProfileEditPill.addEventListener("click", (e) => {
     e.preventDefault();

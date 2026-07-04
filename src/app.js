@@ -144,7 +144,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260704-210828";
+const APP_BUILD = "20260704-212343";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -11750,7 +11750,11 @@ async function mergeCloudSongsIntoLocalLibrary(opts = {}) {
   if (!_libraryHydrateCompleted || _libraryHydrateInFlight) {
     await ensureUserLibraryHydrated(undefined, { reason: opts.reason || "mergeCloudSongsIntoLocalLibrary" });
   }
-  const cloudRows = await supabaseLoadUserSongs({ reason: opts.reason || "mergeCloudSongsIntoLocalLibrary" });
+  const cloudRows =
+    Array.isArray(_userSongsLoadCache) &&
+    Date.now() - _userSongsLoadCacheAt < USER_SONGS_LOAD_CACHE_MS
+      ? _userSongsLoadCache
+      : await supabaseLoadUserSongs({ reason: opts.reason || "mergeCloudSongsIntoLocalLibrary" });
   if (!Array.isArray(cloudRows) || !cloudRows.length) return false;
   const tombstones = loadLibraryTombstoneKeySet();
   const cloudFiltered = partitionCloudLibraryRows(cloudRows, tombstones);
@@ -36643,6 +36647,11 @@ function restoreProfileInputsFromActive() {
   renderProfileAuraVoiceChip();
 }
 
+function profileRouteNeedsCloudSocialData() {
+  const route = String(document.body.getAttribute("data-route") || "");
+  return route === "profile" || route === "profile-edit";
+}
+
 function renderProfileOwnStats() {
   const hubItems = HUB_FEATURE_ENABLED ? getProfileOwnerHubItems() : [];
   const lib = loadLibrary();
@@ -36654,7 +36663,8 @@ function renderProfileOwnStats() {
   const songCountForPills = HUB_FEATURE_ENABLED ? hubItems.length : publicPostCount;
   const hubLikesOnly = HUB_FEATURE_ENABLED ? totalLikes : 0;
   const songCountForOwnHeader = HUB_FEATURE_ENABLED ? hubItems.length : publicPostCount;
-  if (authSession?.user?.id && !HUB_FEATURE_ENABLED) {
+  const profileCloudActive = profileRouteNeedsCloudSocialData();
+  if (authSession?.user?.id && !HUB_FEATURE_ENABLED && profileCloudActive) {
     const prevCount = publicPostCount;
     const cacheFresh =
       _ownerPublicPostsCache &&
@@ -36726,7 +36736,7 @@ function renderProfileOwnStats() {
   if (els.profileStatPillLikesValue) {
     els.profileStatPillLikesValue.textContent = formatStatCount(_ownSocialStatsFollowers ?? 0);
   }
-  void refreshOwnProfileSocialStats();
+  if (profileCloudActive) void refreshOwnProfileSocialStats();
 
   const lineEl = els.profileAuraStatLine;
   if (lineEl) {
@@ -39512,7 +39522,11 @@ async function reconcileLibraryFromCloud({ force = false } = {}) {
   if (!force && Date.now() - _libraryReconcileLastAt < LIBRARY_RECONCILE_MIN_INTERVAL_MS) return;
   _libraryReconcileInFlight = true;
   try {
-    const cloudRaw = await supabaseLoadUserSongs();
+    const cloudRaw =
+      Array.isArray(_userSongsLoadCache) &&
+      Date.now() - _userSongsLoadCacheAt < USER_SONGS_LOAD_CACHE_MS
+        ? _userSongsLoadCache
+        : await supabaseLoadUserSongs({ reason: "reconcileLibraryFromCloud" });
     if (!Array.isArray(cloudRaw)) return;
     const tombstones = loadLibraryTombstoneKeySet();
     const cloudDeadSigs = cloudDeletedSignatureSet(cloudRaw, tombstones);

@@ -92,12 +92,26 @@ async function verifyUser(req) {
   }
 }
 
+/** RPC names that returned 404 — skip re-calling so production logs stay clean. */
+const unavailableRpcs = new Set();
+
+function isRpcUnavailable(name) {
+  return unavailableRpcs.has(String(name || "").trim());
+}
+
 async function callRpc(name, body) {
+  const rpcName = String(name || "").trim();
+  if (!rpcName) {
+    return { ok: false, status: 400, error: "Missing RPC name" };
+  }
+  if (unavailableRpcs.has(rpcName)) {
+    return { ok: false, status: 404, data: null, skipped: true };
+  }
   if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
     return { ok: false, status: 500, error: "Missing SUPABASE_SERVICE_ROLE_KEY on server" };
   }
   try {
-    const r = await fetch(`${SUPABASE_URL}/rest/v1/rpc/${name}`, {
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/rpc/${rpcName}`, {
       method: "POST",
       headers: {
         apikey: SUPABASE_SERVICE_ROLE_KEY,
@@ -109,6 +123,7 @@ async function callRpc(name, body) {
     const text = await r.text().catch(() => "");
     let data = null;
     try { data = JSON.parse(text); } catch { data = text; }
+    if (r.status === 404) unavailableRpcs.add(rpcName);
     return { ok: r.ok, status: r.status, data };
   } catch (e) {
     return { ok: false, status: 500, error: e?.message || String(e) };
@@ -175,6 +190,7 @@ async function readJsonBody(req) {
 module.exports = {
   verifyUser,
   callRpc,
+  isRpcUnavailable,
   selectFromTable,
   adminEmails,
   isAdminEmail,

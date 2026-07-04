@@ -140,7 +140,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260704-130653";
+const APP_BUILD = "20260704-135824";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -2934,6 +2934,7 @@ const LIBRARY_TAB_DOT_KEY = "mas:libraryTabDot:v1";
 const PROFILE_SONGS_SEGMENT_KEY = "mas:profileSongsSeg:v1";
 let _profileSongsSegment = "activities";
 let _profileSongsSegmentBound = false;
+/** Songs tab: all library rows vs public-on-profile only. */
 function markLibraryTabDot(on) {
   try {
     if (on) localStorage.setItem(LIBRARY_TAB_DOT_KEY, "1");
@@ -11872,7 +11873,6 @@ async function renderProfileActivities(opts = {}) {
   const extend = Boolean(opts.extend);
   const listEl = document.getElementById("profileActivitiesList");
   const libEl = document.getElementById("libraryList");
-  const countEl = document.getElementById("profileActivitiesCount");
   if (!listEl) return;
   if (libEl) libEl.hidden = true;
   listEl.hidden = false;
@@ -11882,7 +11882,6 @@ async function renderProfileActivities(opts = {}) {
         <p class="profileActEmptyTitle">Sign in to see your posts</p>
         <p class="profileActEmptyText">Your published songs and challenge entries land here.</p>
       </div>`;
-    if (countEl) countEl.hidden = true;
     syncProfileActivitiesLoadMoreUi(0);
     return;
   }
@@ -11912,11 +11911,6 @@ async function renderProfileActivities(opts = {}) {
     libRows = loadLibrary()
       .filter((t) => String(t?.url || "").trim() && Boolean(t.publicOnProfile))
       .map((t) => ({ ...t, userId: String(t.userId || uid) }));
-  }
-  const pubN = libRows.length;
-  if (countEl) {
-    countEl.textContent = pubN ? `${pubN} PUBLIC` : "";
-    countEl.hidden = !pubN;
   }
   const profMap = profileSelfProfMap(uid);
   const musicItems = libRows.map((track) => ({
@@ -14510,7 +14504,6 @@ function clearSignedInUiCaches() {
 
 function resetProfileActivitiesGuestUi() {
   const listEl = document.getElementById("profileActivitiesList");
-  const countEl = document.getElementById("profileActivitiesCount");
   const libEl = document.getElementById("libraryList");
   if (listEl) {
     listEl.hidden = false;
@@ -14520,7 +14513,6 @@ function resetProfileActivitiesGuestUi() {
         <p class="profileActEmptyText">Your published songs and challenge entries land here.</p>
       </div>`;
   }
-  if (countEl) countEl.hidden = true;
   if (libEl) {
     libEl.hidden = true;
     libEl.innerHTML = "";
@@ -36172,10 +36164,11 @@ function renderProfileOwnStats() {
         els.profileOwnStats.innerHTML = "";
       }
     } else if (lib.length) {
+      const vaultCount = lib.filter(isPrivateVaultTrack).length;
       els.profileOwnStats.innerHTML = `
-        <span><strong>${pubLibCount}</strong> public on profile link</span>
+        <span><strong>${publicPostCount}</strong> post${publicPostCount === 1 ? "" : "s"}</span>
         <span aria-hidden="true">·</span>
-        <span><strong>${lib.length}</strong> saved</span>
+        <span><strong>${vaultCount}</strong> private</span>
       `;
     } else {
       els.profileOwnStats.innerHTML = "";
@@ -36211,9 +36204,9 @@ function renderProfileOwnStats() {
       lineEl.innerHTML =
         bits.length > 0 ? bits.join('<span class="profileAuraStatsSepDot" aria-hidden="true"> · </span>') : "No releases yet";
     } else if (publicPostCount) {
-      lineEl.innerHTML = `<strong>${publicPostCount}</strong> public on your profile link`;
-    } else if (lib.length) {
-      lineEl.textContent = "No Library songs marked public yet — use ⋯ on each row in Library.";
+      lineEl.innerHTML = `<strong>${publicPostCount}</strong> post${publicPostCount === 1 ? "" : "s"} on your profile link`;
+    } else if (lib.filter(isPrivateVaultTrack).length) {
+      lineEl.textContent = "Publish from ⋯ on a song — it moves to Posts when live.";
     } else {
       lineEl.textContent = "No saves yet";
     }
@@ -37377,7 +37370,6 @@ function queueReleaseCaptionCloudHeal(track) {
 
 function syncProfileSongsSegmentUi() {
   const allCount = document.getElementById("libraryCount");
-  const actCount = document.getElementById("profileActivitiesCount");
   const activitiesList = document.getElementById("profileActivitiesList");
   const libList = document.getElementById("libraryList");
   const isAll = _profileSongsSegment === "all";
@@ -37385,7 +37377,6 @@ function syncProfileSongsSegmentUi() {
   const isActivities = _profileSongsSegment === "activities";
   const isVocals = _profileSongsSegment === "vocals";
   const vocalsList = document.getElementById("profileVocalsList");
-  const onProfile = (document.body.getAttribute("data-route") || "") === "profile";
   try {
     document.body.setAttribute("data-profile-songs-seg", _profileSongsSegment);
   } catch {}
@@ -37394,7 +37385,6 @@ function syncProfileSongsSegmentUi() {
   if (allCount) allCount.hidden = !isAll;
   const playlistCount = document.getElementById("profilePlaylistCount");
   if (playlistCount) playlistCount.hidden = !isPlaylist;
-  if (actCount) actCount.hidden = !isActivities;
   if (activitiesList) activitiesList.hidden = !isActivities;
   if (vocalsList) vocalsList.hidden = !isVocals;
   if (libList) libList.hidden = isActivities || isVocals;
@@ -37410,6 +37400,16 @@ function syncProfileSongsSegmentUi() {
     _librarySelectedIds.clear();
   }
   try { updateLibrarySelectToolbar(); } catch {}
+}
+
+/** Profile Songs tab — private vault only; published tracks live in Posts. */
+function getProfileLibraryDisplayItems() {
+  return sortLibraryForDisplay(loadLibrary().filter(isPrivateVaultTrack));
+}
+
+function formatProfileLibraryCountLabel(n) {
+  const word = n === 1 ? "song" : "songs";
+  return `${n} ${word}`;
 }
 
 function bindProfileSongsSegmentOnce() {
@@ -38104,12 +38104,29 @@ function renderProfileHubShared() {
   } catch {}
 }
 
-/** Max tracks persisted locally (matches `addToLibrary`). Keeps JSON under
- *  typical mobile localStorage limits when cloud merge pulls 100+ rows. */
+/** Max private vault tracks persisted locally. Live public posts are kept
+ *  separately and do not consume this cap — they belong in Posts, not Songs. */
 const LIBRARY_MAX_TRACKS = 100;
 
+/** Profile Songs tab: private vault + in-flight publishes. Live public rows
+ *  appear in Posts only (still stored locally for playback metadata). */
+function isPrivateVaultTrack(t) {
+  if (!t) return false;
+  if (t.publishPending) return true;
+  return !Boolean(t.publicOnProfile);
+}
+
 function capLibraryItems(items) {
-  return Array.isArray(items) ? items.slice(0, LIBRARY_MAX_TRACKS) : [];
+  if (!Array.isArray(items)) return [];
+  const vault = [];
+  const live = [];
+  for (const t of items) {
+    if (Boolean(t.publicOnProfile) && !t.publishPending) live.push(t);
+    else vault.push(t);
+  }
+  vault.sort((a, b) => Number(b?.ts || 0) - Number(a?.ts || 0));
+  const cappedVault = vault.slice(0, LIBRARY_MAX_TRACKS);
+  return [...cappedVault, ...live];
 }
 
 /** Sync identity for a track. The song URL changes over a track's life
@@ -39730,11 +39747,12 @@ function libRowProfileVisChipHtml(isPublic) {
   const cls = pub ? "public" : "private";
   const label = pub ? "Public on your profile link" : "Private — not on profile link";
   const safeLabel = escapeHtml(label);
-  const globe =
-    '<svg class="libRowVisIco" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path fill="currentColor" d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.94-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.45 2.1 1.17 2.83l-1.17 1.1zm6.9.75c-.64-.98-1.02-2.15-1.02-3.43v-3h-2v-2h2V9c0-.46.06-.9.17-1.32L13 5.35V5c0-1.1-.45-2.1-1.17-2.83l1.41-1.41C16.59 3.06 19 7.12 19 12c0 1.79-.44 3.48-1.22 4.97l-1.88-1.29z"/></svg>';
   const lock =
     '<svg class="libRowVisIco" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path fill="currentColor" d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z"/></svg>';
-  return `<span class="libRowChip libRowChipProfileVis libRowChipProfileVis--${cls}" role="img" title="${safeLabel}" aria-label="${safeLabel}">${pub ? globe : lock}</span>`;
+  if (pub) {
+    return `<span class="libRowChip libRowChipProfileVis libRowChipProfileVis--public" role="img" title="${safeLabel}" aria-label="${safeLabel}">Public</span>`;
+  }
+  return `<span class="libRowChip libRowChipProfileVis libRowChipProfileVis--${cls}" role="img" title="${safeLabel}" aria-label="${safeLabel}">${lock}</span>`;
 }
 
 /** Owner-only "Publishing…" chip shown while a song is being saved permanently
@@ -39809,14 +39827,17 @@ const _librarySelectedIds = new Set();
 
 function updateLibrarySelectToolbar() {
   const toggle = document.getElementById("btnLibrarySelectMode");
+  const cancel = document.getElementById("btnLibrarySelectCancel");
   const del = document.getElementById("btnLibraryDeleteSelected");
   const onAllSongs =
     (document.body.getAttribute("data-route") || "") === "profile" &&
     _profileSongsSegment === "all";
-  const hasSongs = loadLibrary().length > 0;
-  if (toggle) {
-    toggle.hidden = !(onAllSongs && hasSongs);
-    toggle.textContent = _librarySelectMode ? "Cancel" : "Select";
+  const hasSongs = onAllSongs
+    ? getProfileLibraryDisplayItems().length > 0
+    : loadLibrary().length > 0;
+  if (toggle) toggle.hidden = true;
+  if (cancel) {
+    cancel.hidden = !(onAllSongs && hasSongs && _librarySelectMode);
   }
   if (del) {
     del.hidden = !(onAllSongs && hasSongs && _librarySelectMode);
@@ -39855,12 +39876,12 @@ function removeManyFromLibrary(ids) {
 }
 
 function bindLibrarySelectControls() {
-  const toggle = document.getElementById("btnLibrarySelectMode");
-  if (toggle && !toggle.dataset.bound) {
-    toggle.dataset.bound = "1";
-    toggle.addEventListener("click", () => {
+  const cancel = document.getElementById("btnLibrarySelectCancel");
+  if (cancel && !cancel.dataset.bound) {
+    cancel.dataset.bound = "1";
+    cancel.addEventListener("click", () => {
       haptic("light");
-      setLibrarySelectMode(!_librarySelectMode);
+      setLibrarySelectMode(false);
     });
   }
   const del = document.getElementById("btnLibraryDeleteSelected");
@@ -39933,8 +39954,31 @@ function wireLibraryLoadMoreOnce() {
     if (!btn || !els.libraryList.contains(btn)) return;
     e.preventDefault();
     haptic("light");
-    libVisibleCount = Math.min(loadLibrary().length, libVisibleCount + LIB_PAGE_SIZE);
+    libVisibleCount = Math.min(getProfileLibraryDisplayItems().length, libVisibleCount + LIB_PAGE_SIZE);
     renderLibrary();
+  });
+}
+
+function wireLibraryRowLongPress() {
+  if (!els.libraryList || _librarySelectMode) return;
+  const onProfileAll =
+    (document.body.getAttribute("data-route") || "") === "profile" &&
+    _profileSongsSegment === "all";
+  if (!onProfileAll) return;
+  els.libraryList.querySelectorAll(".libRow[data-lib-row]").forEach((row) => {
+    if (row.dataset.longPressBound) return;
+    row.dataset.longPressBound = "1";
+    attachLongPress(row, () => {
+      if (_librarySelectMode) return;
+      haptic("medium");
+      setLibrarySelectMode(true);
+      const id = String(row.getAttribute("data-lib-row") || "");
+      if (id) {
+        _librarySelectedIds.add(id);
+        row.classList.add("libRowSelected");
+        updateLibrarySelectToolbar();
+      }
+    }, 550);
   });
 }
 
@@ -40207,9 +40251,13 @@ function renderLibrary() {
   backfillNabadVerificationInLibrary();
   if ((document.body.getAttribute("data-route") || "") === "profile" && _profileSongsSegment !== "all") return;
   bindLibraryDelegatedListeners();
-  const items = sortLibraryForDisplay(loadLibrary());
+  const onProfileAll =
+    (document.body.getAttribute("data-route") || "") === "profile" &&
+    _profileSongsSegment === "all";
+  const items = onProfileAll ? getProfileLibraryDisplayItems() : sortLibraryForDisplay(loadLibrary());
   syncLibraryStorageBanner();
   const totalCount = items.length;
+  const vaultCount = onProfileAll ? totalCount : loadLibrary().filter(isPrivateVaultTrack).length;
   // Reset the window if the underlying list shrunk OR is the same size
   // as last render but only on a full re-render after a route swap. The
   // simplest heuristic: any time the count drops, snap back to page 1.
@@ -40224,14 +40272,19 @@ function renderLibrary() {
   const hasMore = totalCount > visibleItems.length;
   const countEl = document.getElementById("libraryCount");
   if (countEl) {
-    const onProfileAll =
-      (document.body.getAttribute("data-route") || "") === "profile" &&
-      _profileSongsSegment === "all";
-    if (!totalCount) {
+    if (_librarySelectMode) {
+      countEl.textContent = _librarySelectedIds.size
+        ? `${_librarySelectedIds.size} selected`
+        : "Select songs";
+      countEl.hidden = false;
+    } else if (!vaultCount && !onProfileAll && !loadLibrary().length) {
       countEl.textContent = "";
       countEl.hidden = true;
+    } else if (onProfileAll) {
+      countEl.textContent = formatProfileLibraryCountLabel(totalCount);
+      countEl.hidden = false;
     } else {
-      countEl.textContent = onProfileAll ? String(totalCount) : `${totalCount} saved`;
+      countEl.textContent = `${totalCount} saved`;
       countEl.hidden = false;
     }
   }
@@ -40243,6 +40296,17 @@ function renderLibrary() {
   updateLibrarySelectToolbar();
   const generatingHtml = libraryGeneratingRowsHtml();
   if (!totalCount) {
+    if (onProfileAll && loadLibrary().some((t) => Boolean(t.publicOnProfile))) {
+      els.libraryList.innerHTML = `
+        <div class="emptyState">
+          <div class="emptyStateIcon" aria-hidden="true">♪</div>
+          <p class="emptyStateTitle">All your songs are published</p>
+          <p class="emptyStateHint">Published tracks live in <strong>Posts</strong>. Use <strong>Playlist</strong> to queue them, or unpublish from a post to bring one back here.</p>
+          <button type="button" class="emptyStateCta" data-profile-songs-switch="activities">View posts</button>
+        </div>
+      `;
+      return;
+    }
     // PWA cold start: localStorage is empty, hydrate hasn't completed
     // yet. Show a "Loading…" state so the user doesn't see the "Nothing
     // here yet" CTA flash for a couple of seconds and assume their
@@ -40357,10 +40421,12 @@ function renderLibrary() {
         const displayTitle = isSound ? shortenSoundTitle(rawTitle) : rawTitle;
         const safeTitle = escapeHtml(displayTitle);
         const subBits = [];
-        if (dateLabel) subBits.push(`<span class="libRowDot">${escapeHtml(dateLabel)}</span>`);
-        if (isFeaturedOnProfile(t)) subBits.push(`<span class="libRowChip">Pinned</span>`);
-        if (isInstrumental) subBits.push(`<span class="libRowChip">Instrumental</span>`);
-        if (isSound) subBits.push(`<span class="libRowChip">Sound</span>`);
+        const subMeta = [];
+        if (dateLabel) subMeta.push(dateLabel);
+        if (isInstrumental) subMeta.push("Instrumental");
+        if (isSound) subMeta.push("Sound");
+        if (subMeta.length) subBits.push(`<span class="libRowDot">${escapeHtml(subMeta.join(" · "))}</span>`);
+        if (isFeaturedOnProfile(t)) subBits.push(`<span class="libRowChip libRowChipPin">Pinned</span>`);
         const profilePublic = Boolean(t.publicOnProfile);
         const isFirst = i === 0;
         const loadingAttr = isFirst
@@ -40405,6 +40471,7 @@ function renderLibrary() {
   } else {
     setTimeout(_scheduleThumbBackfill, 600);
   }
+  try { wireLibraryRowLongPress(); } catch {}
 }
 function songDetailsValue(v) {
   const s = String(v == null ? "" : v).trim();

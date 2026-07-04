@@ -126,7 +126,7 @@
       onload="this.media='all'"
     />
     <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Display:wght@900&family=Inter:wght@900&display=swap" /></noscript>
-    <link rel="stylesheet" href="./styles.css?v=20260704-130653" />
+    <link rel="stylesheet" href="./styles.css?v=20260704-135824" />
 
     <meta name="description" content="NabadAi is an AI music studio. Hum a melody, write lyrics, and ship a song." />
     <meta property="og:type" content="website" />
@@ -2567,9 +2567,9 @@
               </div>
 
               <div class="profileStatsRow" id="profileStatsPills" aria-live="polite" hidden>
-                <div class="profileStatCol" data-stat="songs">
+                <div class="profileStatCol" data-stat="posts">
                   <strong class="profileStatValue" id="profileStatPillSongsValue">0</strong>
-                  <span class="profileStatLabel">Songs</span>
+                  <span class="profileStatLabel">Posts</span>
                 </div>
                 <div class="profileStatCol" data-stat="plays" id="profileStatPillPublicWrap">
                   <strong class="profileStatValue" id="profileStatPillPublicValue">0</strong>
@@ -2766,13 +2766,15 @@
               </button>
             </nav>
             <div class="profileSongsToolbar libraryHeaderRow">
-              <p id="libraryCount" class="libraryCount" hidden aria-live="polite"></p>
-              <p id="profilePlaylistCount" class="libraryCount" hidden aria-live="polite"></p>
-              <p id="profileActivitiesCount" class="libraryCount" hidden aria-live="polite"></p>
+              <div class="profileSongsToolbarLeading">
+                <p id="libraryCount" class="libraryCount" hidden aria-live="polite"></p>
+                <p id="profilePlaylistCount" class="libraryCount" hidden aria-live="polite"></p>
+              </div>
               <div class="profileSongsToolbarActions">
                 <div class="librarySelectControls">
+                  <button type="button" id="btnLibrarySelectCancel" class="librarySelectToggleBtn" hidden>Cancel</button>
                   <button type="button" id="btnLibraryDeleteSelected" class="librarySelectDeleteBtn" hidden disabled>Delete</button>
-                  <button type="button" id="btnLibrarySelectMode" class="librarySelectToggleBtn" hidden>Select</button>
+                  <button type="button" id="btnLibrarySelectMode" class="librarySelectToggleBtn" hidden aria-hidden="true">Select</button>
                 </div>
               </div>
             </div>
@@ -4394,6 +4396,6 @@
     </script>
     <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
     <script src="./env.client.js" onerror="void 0"></script>
-    <script type="module" src="./src/app.js?v=20260704-130653"></script>
+    <script type="module" src="./src/app.js?v=20260704-135824"></script>
   </body>
 </html>

@@ -3979,6 +3979,17 @@ input.userTextBidi--rtl{
   background: rgba(124,92,255,0.16);
   border: 1px solid rgba(124,92,255,0.32);
 }
+.libRowChipPin{
+  height: 18px;
+  padding: 0 7px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: rgba(232, 238, 247, 0.62);
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.12);
+}
 .libRowEq{
   flex: 0 0 auto;
   display: none;
@@ -15356,7 +15367,7 @@ body[data-route="profile"]:has(#profileAura.profileAuraEditing) #profileAuraHead
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  line-height: 0;
+  line-height: 1;
   background: transparent;
 }
 .libRowVisIco{
@@ -15366,7 +15377,13 @@ body[data-route="profile"]:has(#profileAura.profileAuraEditing) #profileAuraHead
   opacity: 0.72;
 }
 .libRowChipProfileVis--public{
-  color: rgba(186, 206, 255, 0.88);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--brand-teal);
+  background: var(--brand-teal-muted);
+  padding: 4px 9px;
 }
 .libRowChipProfileVis--private{
   color: rgba(168, 180, 199, 0.72);
@@ -23501,16 +23518,71 @@ button.discoverySpotCard{
   margin: 28px 0 10px;
   min-height: 0;
   display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  gap: 8px;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.profileSongsToolbarLeading{
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px 12px;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+.profileLibraryFilters{
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.profileLibraryFilter{
+  height: 28px;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(232, 238, 247, 0.62);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  transition: color 140ms ease, border-color 140ms ease, background 140ms ease, transform 120ms ease;
+  -webkit-tap-highlight-color: transparent;
+}
+.profileLibraryFilter:active{ transform: scale(0.97); }
+.profileLibraryFilter.is-active{
+  color: rgba(232, 238, 247, 0.92);
+  border-color: rgba(255, 255, 255, 0.22);
+  background: rgba(255, 255, 255, 0.08);
+}
+.profileLibraryFilter--public.is-active{
+  color: var(--brand-teal);
+  border-color: rgba(35, 213, 171, 0.42);
+  background: var(--brand-teal-muted);
+}
+html[data-theme="light"] .profileLibraryFilter{
+  border-color: rgba(0, 0, 0, 0.1);
+  background: rgba(0, 0, 0, 0.03);
+  color: rgba(20, 24, 32, 0.58);
+}
+html[data-theme="light"] .profileLibraryFilter.is-active{
+  color: rgba(20, 24, 32, 0.88);
+  border-color: rgba(0, 0, 0, 0.16);
+  background: rgba(0, 0, 0, 0.06);
+}
+html[data-theme="light"] .profileLibraryFilter--public.is-active{
+  color: #0f9b7a;
+  border-color: rgba(35, 213, 171, 0.45);
+  background: rgba(35, 213, 171, 0.12);
 }
 .profileSongsToolbarActions{
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
   gap: 10px;
-  width: 100%;
+  flex: 0 0 auto;
   min-width: 0;
 }
 .profileSongsToolbarActions .libraryRecoverLink{
@@ -23522,6 +23594,9 @@ button.discoverySpotCard{
   flex: 0 0 auto;
   margin-left: 0;
 }
+body[data-profile-songs-seg="activities"] .profileSongsToolbar{
+  display: none;
+}
 body[data-profile-songs-seg="activities"] .profileSongsToolbarActions{
   display: none;
 }
@@ -23531,7 +23606,9 @@ body[data-profile-songs-seg="activities"] .profileSongsToolbarActions{
 .profileSongsToolbar .libraryCount{
   color: rgba(232, 238, 247, 0.58);
   font-weight: 600;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.02em;
+  text-transform: none;
+  font-size: 13px;
 }
 /* Multi-select mode for the Songs list (Select → tap rows → Delete (n)) */
 .librarySelectControls{

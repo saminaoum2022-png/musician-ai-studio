@@ -33537,10 +33537,12 @@ section.mentorPage{
   --feed-song-art-size: 78px;
   --feed-song-card-min-h: 88px;
   --feed-post-divider-gap: 28px;
-  --feed-header-row-gap: 1px;
-  --feed-caption-gap: 4px;
-  --feed-art-gap: 8px;
+  --feed-header-row-gap: 2px;
+  --feed-caption-gap: 6px;
+  --feed-art-gap: 10px;
   --feed-repost-banner-gap: 6px;
+  --feed-repost-section-gap: 10px;
+  --feed-repost-nested-caption-gap: 6px;
   --feed-username-size: 14px;
   display: flex;
   flex-direction: column;
@@ -33784,7 +33786,7 @@ section.mentorPage{
   --feed-repost-nested-avatar: 36px;
 }
 .followAct--xstyle.followAct--repost > .followActRepostBanner{
-  margin-bottom: var(--feed-caption-gap, 4px);
+  margin-bottom: var(--feed-repost-banner-gap, 6px);
   font-size: 12px;
   color: rgba(232, 238, 247, 0.48);
 }
@@ -33820,9 +33822,15 @@ section.mentorPage{
   color: rgba(232, 238, 247, 0.42);
 }
 .followAct--xstyle.followAct--repost > .followActRepostNote{
-  margin: 0 0 var(--feed-caption-gap, 4px);
+  margin: 0 0 var(--feed-repost-section-gap, 10px);
   font-size: 14px;
-  line-height: 1.35;
+  line-height: 1.45;
+}
+.followAct--xstyle.followAct--repost > .followActRepostBanner + .followActTop{
+  margin-top: 4px;
+}
+.followAct--xstyle.followAct--repost > .followActRepostNote + .followActTop{
+  margin-top: 0;
 }
 .followAct--xstyle.followAct--repost > .followActTop{
   margin-top: 0;
@@ -33843,21 +33851,28 @@ section.mentorPage{
   color: rgba(232, 238, 247, 0.42);
 }
 .followAct--xstyle.followAct--repost > .followActContent{
-  margin-top: var(--feed-caption-gap, 4px);
+  margin-top: var(--feed-repost-nested-caption-gap, 6px);
 }
 .followAct--xstyle.followAct--repost > .followActQuoteRow:has(.feedHeroPlayer),
 .followAct--xstyle.followAct--repost > .followActRemixFlow,
 .followAct--xstyle.followAct--repost > .followActRemixPair,
 .followAct--xstyle.followAct--repost > .followActMashup,
 .followAct--xstyle.followAct--repost > .followActMediaWrap{
-  margin-top: var(--feed-art-gap, 8px);
+  margin-top: var(--feed-art-gap, 10px);
 }
 .followAct--xstyle.followAct--repost > .followActContent:not(:empty) + .followActQuoteRow:has(.feedHeroPlayer),
 .followAct--xstyle.followAct--repost > .followActContent:not(:empty) + .followActRemixFlow,
 .followAct--xstyle.followAct--repost > .followActContent:not(:empty) + .followActRemixPair,
 .followAct--xstyle.followAct--repost > .followActContent:not(:empty) + .followActMashup,
 .followAct--xstyle.followAct--repost > .followActContent:not(:empty) + .followActMediaWrap{
-  margin-top: var(--feed-art-gap, 8px);
+  margin-top: var(--feed-art-gap, 10px);
+}
+.followAct--xstyle.followAct--repost > .followActTop + .followActQuoteRow:has(.feedHeroPlayer),
+.followAct--xstyle.followAct--repost > .followActTop + .followActRemixFlow,
+.followAct--xstyle.followAct--repost > .followActTop + .followActRemixPair,
+.followAct--xstyle.followAct--repost > .followActTop + .followActMashup,
+.followAct--xstyle.followAct--repost > .followActTop + .followActMediaWrap{
+  margin-top: var(--feed-art-gap, 10px);
 }
 
 /* Repost compose sheet preview row (dark theme, matches reply sheet). */
@@ -40912,6 +40927,13 @@ body[data-route="friends"] .followAct--xstyle.followAct--repost > .followActTop 
 body[data-route="friends"] .followAct--xstyle.followAct--repost > .followActTop > .followActAvatar img,
 body[data-route="friends"] .followAct--xstyle.followAct--repost > .followActTop > .followActAvatarFallback{
   border-radius: 12px;
+}
+body[data-route="friends"] .followAct--xstyle.followAct--repost > .followActRepostNote{
+  font-size: 16px;
+  line-height: 1.45;
+  letter-spacing: -.01em;
+  color: rgba(239,244,255,.82);
+  margin-bottom: var(--feed-repost-section-gap, 10px);
 }
 body[data-route="friends"] .followAct--xstyle.followAct--repost .followActCaption,
 body[data-route="friends"] .followAct--xstyle.followAct--repost .followActStatusText{

@@ -126,7 +126,7 @@
       onload="this.media='all'"
     />
     <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Display:wght@900&family=Inter:wght@900&display=swap" /></noscript>
-    <link rel="stylesheet" href="./styles.css?v=20260704-151847" />
+    <link rel="stylesheet" href="./styles.css?v=20260704-160012" />
 
     <meta name="description" content="NabadAi is an AI music studio. Hum a melody, write lyrics, and ship a song." />
     <meta property="og:type" content="website" />
@@ -2479,9 +2479,45 @@
             </div>
             <audio id="userPublicCallingCardAudio" preload="none" playsinline></audio>
             <div class="userPublicStats profileStatsRow" id="userPublicStats"></div>
+            <nav class="profileSegBar profileSegBar--dual" id="userPublicSegBar" role="tablist" aria-label="Profile content" hidden>
+              <button type="button" class="profileSegTab is-active" role="tab" aria-selected="true" data-user-public-segment="posts" id="userPublicSegPosts" aria-label="Posts">
+                <span class="profileSegIconWrap" aria-hidden="true">
+                  <svg class="profileSegIcon profileSegIcon--line" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" focusable="false">
+                    <rect x="3" y="3" width="7" height="7" rx="1.5"/>
+                    <rect x="14" y="3" width="7" height="7" rx="1.5"/>
+                    <rect x="3" y="14" width="7" height="7" rx="1.5"/>
+                    <rect x="14" y="14" width="7" height="7" rx="1.5"/>
+                  </svg>
+                  <svg class="profileSegIcon profileSegIcon--fill" viewBox="0 0 24 24" fill="currentColor" focusable="false">
+                    <rect x="3" y="3" width="7" height="7" rx="1.5"/>
+                    <rect x="14" y="3" width="7" height="7" rx="1.5"/>
+                    <rect x="3" y="14" width="7" height="7" rx="1.5"/>
+                    <rect x="14" y="14" width="7" height="7" rx="1.5"/>
+                  </svg>
+                </span>
+              </button>
+              <button type="button" class="profileSegTab" role="tab" aria-selected="false" data-user-public-segment="reposts" id="userPublicSegReposts" aria-label="Reposts">
+                <span class="profileSegIconWrap" aria-hidden="true">
+                  <svg class="profileSegIcon profileSegIcon--line" viewBox="0 0 24 24" fill="currentColor" focusable="false">
+                    <g transform="translate(12 12) scale(0.78) translate(-12 -12)">
+                      <path d="M17 1l4 4-4 4V6H9a4 4 0 0 0-4 4v1H3v-1a6 6 0 0 1 6-6h8V1Z"/>
+                      <path d="M7 23l-4-4 4-4v3h8a4 4 0 0 0 4-4v-1h2v1a6 6 0 0 1-6 6H7v3Z"/>
+                    </g>
+                  </svg>
+                  <svg class="profileSegIcon profileSegIcon--fill" viewBox="0 0 24 24" fill="currentColor" focusable="false">
+                    <g transform="translate(12 12) scale(0.78) translate(-12 -12)">
+                      <path d="M17 1l4 4-4 4V6H9a4 4 0 0 0-4 4v1H3v-1a6 6 0 0 1 6-6h8V1Z"/>
+                      <path d="M7 23l-4-4 4-4v3h8a4 4 0 0 0 4-4v-1h2v1a6 6 0 0 1-6 6H7v3Z"/>
+                    </g>
+                  </svg>
+                </span>
+              </button>
+            </nav>
             <div class="userPublicSongsBlock profileSongsBlock">
               <p id="userPublicSongsCount" class="libraryCount userPublicSongsCount" hidden aria-live="polite"></p>
+              <p id="userPublicRepostsCount" class="libraryCount userPublicRepostsCount" hidden aria-live="polite"></p>
               <div id="userPublicSongs" class="userPublicSongs profileActivitiesList followActStack"></div>
+              <div id="userPublicRepostsList" class="userPublicRepostsList profileActivitiesList followActStack" hidden aria-live="polite"></div>
             </div>
             <div id="userPublicEmpty" class="hint userPublicEmpty" style="display:none"></div>
           </div>
@@ -2767,11 +2803,28 @@
                   </svg>
                 </span>
               </button>
+              <button type="button" class="profileSegTab" role="tab" aria-selected="false" data-profile-songs-segment="reposts" id="profileSongsSegReposts" aria-label="Reposts">
+                <span class="profileSegIconWrap" aria-hidden="true">
+                  <svg class="profileSegIcon profileSegIcon--line" viewBox="0 0 24 24" fill="currentColor" focusable="false">
+                    <g transform="translate(12 12) scale(0.78) translate(-12 -12)">
+                      <path d="M17 1l4 4-4 4V6H9a4 4 0 0 0-4 4v1H3v-1a6 6 0 0 1 6-6h8V1Z"/>
+                      <path d="M7 23l-4-4 4-4v3h8a4 4 0 0 0 4-4v-1h2v1a6 6 0 0 1-6 6H7v3Z"/>
+                    </g>
+                  </svg>
+                  <svg class="profileSegIcon profileSegIcon--fill" viewBox="0 0 24 24" fill="currentColor" focusable="false">
+                    <g transform="translate(12 12) scale(0.78) translate(-12 -12)">
+                      <path d="M17 1l4 4-4 4V6H9a4 4 0 0 0-4 4v1H3v-1a6 6 0 0 1 6-6h8V1Z"/>
+                      <path d="M7 23l-4-4 4-4v3h8a4 4 0 0 0 4-4v-1h2v1a6 6 0 0 1-6 6H7v3Z"/>
+                    </g>
+                  </svg>
+                </span>
+              </button>
             </nav>
             <div class="profileSongsToolbar libraryHeaderRow">
               <div class="profileSongsToolbarLeading">
                 <p id="libraryCount" class="libraryCount" hidden aria-live="polite"></p>
                 <p id="profilePlaylistCount" class="libraryCount" hidden aria-live="polite"></p>
+                <p id="profileRepostsCount" class="libraryCount" hidden aria-live="polite"></p>
               </div>
               <div class="profileSongsToolbarActions">
                 <div class="librarySelectControls">
@@ -2783,6 +2836,7 @@
             </div>
             <div id="libraryList" class="libraryList profileHubSharedList"></div>
             <div id="profileVocalsList" class="studioVocalsList" hidden aria-live="polite"></div>
+            <div id="profileRepostsList" class="profileRepostsList profileActivitiesList followActStack" hidden aria-live="polite"></div>
             <div id="profileActivitiesList" class="profileActivitiesList followActStack" hidden aria-live="polite"></div>
             <div id="profileActivitiesLoadMoreWrap" class="profileReleasesLoadMoreRow profileActLoadMoreRow" hidden>
               <button type="button" id="profileActivitiesLoadMore" class="profileReleasesLoadMore profileActLoadMore" aria-label="Load more posts">
@@ -4399,6 +4453,6 @@
     </script>
     <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
     <script src="./env.client.js" onerror="void 0"></script>
-    <script type="module" src="./src/app.js?v=20260704-151847"></script>
+    <script type="module" src="./src/app.js?v=20260704-160012"></script>
   </body>
 </html>

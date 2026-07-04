@@ -144,7 +144,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260704-193229";
+const APP_BUILD = "20260704-194928";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -1059,6 +1059,7 @@ const els = {
   userPublicVerified: document.getElementById("userPublicVerified"),
   userPublicVoice: document.getElementById("userPublicVoice"),
   userPublicBio: document.getElementById("userPublicBio"),
+  userPublicBioText: document.getElementById("userPublicBioText"),
   userPublicMusicStyles: document.getElementById("userPublicMusicStyles"),
   userPublicMusicStylesRow: document.getElementById("userPublicMusicStylesRow"),
   userPublicStats: document.getElementById("userPublicStats"),
@@ -27143,7 +27144,7 @@ function setUserPublicLoading(on, username = "") {
     renderUserPublicIdentity({ username: handle }, handle);
     applyUserPublicAvatar("", handle);
     if (els.userPublicVoice) els.userPublicVoice.style.display = "none";
-    if (els.userPublicBio) els.userPublicBio.style.display = "none";
+    renderUserPublicBio("");
     if (els.userPublicMusicStyles) els.userPublicMusicStyles.hidden = true;
     const segBarLoad = document.getElementById("userPublicSegBar");
     if (segBarLoad) segBarLoad.hidden = true;
@@ -33565,10 +33566,7 @@ async function renderUserProfilePublicLibraryAsync(username, userId = "", gen = 
     renderUserPublicIdentity(null, handle);
     applyUserPublicAvatar("", handle);
     if (els.userPublicVoice) els.userPublicVoice.style.display = "none";
-    if (els.userPublicBio) {
-      els.userPublicBio.textContent = "";
-      els.userPublicBio.style.display = "none";
-    }
+    if (els.userPublicBio) renderUserPublicBio("");
     if (els.userPublicMusicStyles) els.userPublicMusicStyles.hidden = true;
     const segBarMissing = document.getElementById("userPublicSegBar");
     if (segBarMissing) segBarMissing.hidden = true;
@@ -33610,18 +33608,7 @@ async function renderUserProfilePublicLibraryAsync(username, userId = "", gen = 
     chip.style.display = pretty ? "" : "none";
     chip.dataset.state = "idle";
   }
-  if (els.userPublicBio) {
-    const bio = String(prof.bio || "").trim();
-    if (bio && !/^add a short bio/i.test(bio)) {
-      applyUserTextBidi(els.userPublicBio, bio);
-      els.userPublicBio.style.display = "";
-    } else {
-      els.userPublicBio.textContent = "";
-      els.userPublicBio.dir = "";
-      els.userPublicBio.classList.remove("userTextBidi--rtl");
-      els.userPublicBio.style.display = "none";
-    }
-  }
+  renderUserPublicBio(prof.bio);
   try { renderUserPublicMusicStyles(prof); } catch {}
   bindUserPublicSegmentOnce();
   try {
@@ -33693,14 +33680,13 @@ async function renderUserProfilePublicLibraryAsync(username, userId = "", gen = 
     ...repostItems.map((it) => String(it.track.userId || "")).filter(Boolean),
   ]);
   if (!stillCurrent()) return;
-  const sortedSongs = sortLibraryForDisplay(songs);
-  const pinnedItems = [];
-  const restSongItems = [];
-  for (const t of sortedSongs) {
-    const item = { kind: "music", ts: profileActivitiesFeedTs(t), track: t };
-    (isFeaturedOnProfile(t) ? pinnedItems : restSongItems).push(item);
-  }
-  const postItems = [...pinnedItems, ...restSongItems.sort((a, b) => b.ts - a.ts)];
+  const postItems = songs
+    .map((t) => ({
+      kind: "music",
+      ts: profileActivitiesFeedTs(t),
+      track: t,
+    }))
+    .sort((a, b) => b.ts - a.ts);
   const allTracks = [...postItems, ...repostItems].map((it) => it.track);
   _userPublicProfileCache = {
     postItems,
@@ -37048,6 +37034,26 @@ function renderProfileHeroBio() {
   applyUserTextBidi(text, screenshotSanitizeCopy(cleaned));
 }
 
+function renderUserPublicBio(bioRaw) {
+  const wrap = els.userPublicBio;
+  const text = els.userPublicBioText || wrap;
+  if (!wrap) return;
+  const cleaned = String(bioRaw || "").trim();
+  if (!cleaned || /^add a short bio/i.test(cleaned)) {
+    wrap.hidden = true;
+    wrap.style.display = "none";
+    if (text) {
+      text.textContent = "";
+      text.dir = "";
+      text.classList.remove("userTextBidi--rtl");
+    }
+    return;
+  }
+  wrap.hidden = false;
+  wrap.style.display = "";
+  applyUserTextBidi(text, cleaned);
+}
+
 /* =================================================================
  *  Spotify-x-Nabad — render helpers
  *
@@ -37460,18 +37466,7 @@ function renderUserProfile(rawUsername, { soft = false } = {}) {
     chip.style.display = pretty ? "" : "none";
     chip.dataset.state = "idle";
   }
-  if (els.userPublicBio) {
-    const bio = String(latestPublic?.meta?.bio || "").trim();
-    if (bio) {
-      applyUserTextBidi(els.userPublicBio, bio);
-      els.userPublicBio.style.display = "";
-    } else {
-      els.userPublicBio.textContent = "";
-      els.userPublicBio.dir = "";
-      els.userPublicBio.classList.remove("userTextBidi--rtl");
-      els.userPublicBio.style.display = "none";
-    }
-  }
+  renderUserPublicBio(latestPublic?.meta?.bio || "");
 
   currentUserPublicProfileId = metaUserId;
   renderUserPublicSocialStats({ songCount: publicMatches.length, stats: currentUserPublicSocialStats });

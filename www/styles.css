@@ -15812,20 +15812,6 @@ body[data-route="user"] section.card.wide[data-route="user"]{
 }
 .userPublicBio{
   min-width: 0;
-  width: 100%;
-  max-width: 460px;
-  margin: 0 auto 0;
-  padding: 0;
-  font-size:13.5px;
-  line-height:1.5;
-  color: rgba(228, 232, 244, 0.86);
-  text-align: center;
-  font-style: italic;
-  border: 0;
-  border-radius: 0;
-  background: transparent;
-  overflow-wrap: anywhere;
-  word-break: break-word;
 }
 .userPublicStats{
   /* Inherits layout from .profileStatsPills when both classes are present. */

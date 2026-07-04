@@ -126,7 +126,7 @@
       onload="this.media='all'"
     />
     <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Display:wght@900&family=Inter:wght@900&display=swap" /></noscript>
-    <link rel="stylesheet" href="./styles.css?v=20260704-193229" />
+    <link rel="stylesheet" href="./styles.css?v=20260704-194928" />
 
     <meta name="description" content="NabadAi is an AI music studio. Hum a melody, write lyrics, and ship a song." />
     <meta property="og:type" content="website" />
@@ -2473,12 +2473,15 @@
                 <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.7" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.7" fill="currentColor" stroke="none"/><circle cx="19" cy="12" r="1.7" fill="currentColor" stroke="none"/></svg>
               </button>
             </div>
-            <div class="userPublicBio profileHeroBio" id="userPublicBio"></div>
             <div id="userPublicMusicStyles" class="profileMusicStylesInline userPublicMusicStyles" hidden aria-hidden="true">
               <div id="userPublicMusicStylesRow" class="profileMusicStylesLine profileMusicStylesLine--readonly" aria-label="Music styles"></div>
             </div>
             <audio id="userPublicCallingCardAudio" preload="none" playsinline></audio>
             <div class="userPublicStats profileStatsRow" id="userPublicStats"></div>
+            <div class="userPublicBio profileHeroBio" id="userPublicBio" hidden>
+              <span class="profileHeroBioQuote" aria-hidden="true">"</span>
+              <p id="userPublicBioText" class="profileHeroBioText"></p>
+            </div>
             <nav class="profileSegBar profileSegBar--dual" id="userPublicSegBar" role="tablist" aria-label="Profile content" hidden>
               <button type="button" class="profileSegTab is-active" role="tab" aria-selected="true" data-user-public-segment="posts" id="userPublicSegPosts" aria-label="Posts">
                 <span class="profileSegIconWrap" aria-hidden="true">
@@ -4453,6 +4456,6 @@
     </script>
     <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
     <script src="./env.client.js" onerror="void 0"></script>
-    <script type="module" src="./src/app.js?v=20260704-193229"></script>
+    <script type="module" src="./src/app.js?v=20260704-194928"></script>
   </body>
 </html>

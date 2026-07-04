@@ -144,7 +144,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260705-005245";
+const APP_BUILD = "20260705-010438";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -33466,16 +33466,39 @@ try {
 
 /** Re-kick any publishes that were interrupted (app closed / crashed) while a
  *  song was still in the optimistic "Publishing…" state. Runs once after the
- *  library hydrates on launch. Boot stays GET-only — user must tap publish again. */
+ *  library hydrates on launch. */
+let _resumePendingPublishesInFlight = false;
+const _publishBackgroundInflight = new Set();
+
 function resumePendingPublishes() {
   if (!authSession?.user?.id) return;
+  if (_resumePendingPublishesInFlight) return;
   const stuck = loadLibrary().filter((t) => t?.publishPending && !t.publicOnProfile);
   if (!stuck.length) return;
+  _resumePendingPublishesInFlight = true;
   try {
-    console.info("[library/publish] skipping boot auto-resume (GET-only boot)", {
+    console.info("[library/publish] auto-resuming interrupted publishes", {
       count: stuck.length,
     });
   } catch {}
+  void (async () => {
+    try {
+      for (const t of stuck) {
+        const id = String(t?.id || "").trim();
+        if (!id) continue;
+        const saved = t.publishOpts && typeof t.publishOpts === "object" ? t.publishOpts : {};
+        await setLibraryTrackPublicOnProfile(id, true, {
+          releaseCaption: String(saved.releaseCaption || "").trim(),
+          allowRemix: saved.allowRemix !== false,
+          allowMashup: saved.allowMashup !== false,
+          _background: true,
+          _resume: true,
+        });
+      }
+    } finally {
+      _resumePendingPublishesInFlight = false;
+    }
+  })();
 }
 
 async function setLibraryTrackPublicOnProfile(trackId, wantPublic, opts = {}) {
@@ -33518,6 +33541,12 @@ async function setLibraryTrackPublicOnProfile(trackId, wantPublic, opts = {}) {
     }
   }
 
+  if (wantPublic && opts._background) {
+    if (_publishBackgroundInflight.has(id)) return { ok: true, pending: true };
+    _publishBackgroundInflight.add(id);
+  }
+
+  try {
   if (wantPublic) {
     await persistTrackCoverIfNeeded(track);
     items = loadLibrary();
@@ -33758,6 +33787,9 @@ async function setLibraryTrackPublicOnProfile(trackId, wantPublic, opts = {}) {
     if (route === "profile" && _profileSongsSegment === "activities") void renderProfileActivities();
   } catch {}
   return { ok: true };
+  } finally {
+    if (wantPublic && opts._background) _publishBackgroundInflight.delete(id);
+  }
 }
 
 async function renamePrivateLibraryTrack(trackId) {

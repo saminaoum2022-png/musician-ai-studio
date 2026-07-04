@@ -144,7 +144,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260704-162849";
+const APP_BUILD = "20260704-170339";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -173,7 +173,7 @@ const FAN_COPY = {
   statLabel: "Fans",
   ctaProfile: "Become a fan",
   ctaCompact: "Fan",
-  ctaActive: "Fan ✓",
+  ctaActive: "Fan",
   ctaBusy: "Fanning…",
   statusYouFan: "You're a fan",
   statusYourFan: "Your fan",
@@ -206,7 +206,7 @@ const FAN_COPY = {
 };
 
 function fanCtaLabel(isFan, { compact = false } = {}) {
-  if (isFan) return FAN_COPY.ctaActive;
+  if (isFan) return compact ? FAN_COPY.ctaActive : FAN_COPY.statusYouFan;
   return compact ? FAN_COPY.ctaCompact : FAN_COPY.ctaProfile;
 }
 
@@ -27038,7 +27038,19 @@ function setUserPublicLoading(on, username = "") {
 }
 
 function userPublicRelationLabel(stats) {
-  return fanRelationLabel(stats);
+  if (!stats) return "";
+  const following = Boolean(stats.isFollowing);
+  const followsYou = Boolean(stats.followsViewer);
+  if (following && followsYou) return FAN_COPY.statusMutual;
+  if (followsYou) return FAN_COPY.statusYourFan;
+  return "";
+}
+
+function setUserPublicFollowBtnDisabled(disabled) {
+  const btn = els.btnUserPublicFollow;
+  if (!btn) return;
+  btn.setAttribute("aria-disabled", disabled ? "true" : "false");
+  btn.classList.toggle("is-disabled", disabled);
 }
 
 function renderUserPublicFollowButton() {
@@ -27064,6 +27076,7 @@ function renderUserPublicFollowButton() {
   btn.dataset.following = isFollowing ? "true" : "false";
   btn.setAttribute("aria-label", isFollowing ? "Unfan creator" : "Become a fan of this creator");
   btn.title = isFollowing ? "Tap again to unfan" : "Become a fan of this creator";
+  setUserPublicFollowBtnDisabled(false);
 }
 
 async function refreshUserPublicSocial({ username, userId, songCount }) {
@@ -27095,7 +27108,7 @@ async function toggleCurrentUserPublicFollow() {
     }
     if (!ok) return;
   }
-  if (btn) btn.disabled = true;
+  setUserPublicFollowBtnDisabled(true);
   try {
     const data = await socialApi("/api/social", {
       method: "POST",
@@ -27120,7 +27133,7 @@ async function toggleCurrentUserPublicFollow() {
   } catch (e) {
     showToast(e?.message || FAN_COPY.toastError);
   } finally {
-    if (btn) btn.disabled = false;
+    setUserPublicFollowBtnDisabled(false);
   }
 }
 
@@ -51079,7 +51092,16 @@ if (els.settingsBtnLogout) {
   els.settingsBtnLogout.addEventListener("click", () => void requestSignOut());
 }
 if (els.btnUserPublicFollow) {
-  els.btnUserPublicFollow.addEventListener("click", () => void toggleCurrentUserPublicFollow());
+  els.btnUserPublicFollow.addEventListener("click", () => {
+    if (els.btnUserPublicFollow.getAttribute("aria-disabled") === "true") return;
+    void toggleCurrentUserPublicFollow();
+  });
+  els.btnUserPublicFollow.addEventListener("keydown", (e) => {
+    if (e.key !== "Enter" && e.key !== " ") return;
+    e.preventDefault();
+    if (els.btnUserPublicFollow.getAttribute("aria-disabled") === "true") return;
+    void toggleCurrentUserPublicFollow();
+  });
 }
 if (els.btnUserPublicMessage) {
   els.btnUserPublicMessage.addEventListener("click", () => void openUserPublicMessage());

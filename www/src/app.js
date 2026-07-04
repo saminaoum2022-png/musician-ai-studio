@@ -144,7 +144,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260704-201829";
+const APP_BUILD = "20260704-205156";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -16604,7 +16604,7 @@ async function setLibraryTrackFeaturedOnProfile(id, featured) {
   try { renderLibrary(); } catch {}
   const changed = nextLib.filter((t) => String(t.id) === trackId || previousFeaturedIds.has(String(t.id)));
   for (const t of changed) {
-    await supabasePatchUserSong(t, { meta: t.meta || {} }).catch(() => null);
+    await supabasePatchUserSong(t, { meta: t.meta || {} }, { reason: "featured-pin-toggle" }).catch(() => null);
   }
 }
 
@@ -18251,7 +18251,7 @@ async function persistTrackCoverIfNeeded(track) {
           });
         }
       } catch {}
-      void supabasePatchUserSong(prev, { artUrl: imageUrl, meta: nextMeta });
+      void supabasePatchUserSong(prev, { artUrl: imageUrl, meta: nextMeta }, { reason: "cover-upload" });
       return imageUrl;
     } catch (e) {
       try {
@@ -18688,6 +18688,8 @@ function snapshotNabadAiLyricsDraft(text) {
   _lyricsGeneratedInNabad = true;
 }
 function backfillNabadVerificationInLibrary() {
+  if (_nabadBackfillSessionRan) return;
+  _nabadBackfillSessionRan = true;
   try {
     const items = loadLibrary();
     let changed = false;
@@ -18704,7 +18706,13 @@ function backfillNabadVerificationInLibrary() {
     });
     if (changed) saveLibrary(next);
     for (const track of cloudHeal) {
-      void supabasePatchUserSong(track, { meta: track.meta || {} }).catch(() => null);
+      const healKey = userSongCloudHealKey(track);
+      if (healKey && userSongCloudHealDone(NABAD_CLOUD_HEAL_PREFIX, healKey)) continue;
+      void supabasePatchUserSong(track, { meta: track.meta || {} }, { reason: "nabad-verification-backfill" })
+        .then((res) => {
+          if (res && res.ok !== false && healKey) markUserSongCloudHealDone(NABAD_CLOUD_HEAL_PREFIX, healKey);
+        })
+        .catch(() => null);
     }
   } catch {}
 }
@@ -19582,6 +19590,7 @@ function onAuthAccountSwitched(prevUserId, nextUserId) {
   _profileLoadCache = null;
   _profileLoadCacheAt = 0;
   _profileCloudMergedAt = 0;
+  _nabadBackfillSessionRan = false;
   clearSocialFetchCaches();
   clearSignedInUiCaches();
   const user = authSession?.user;
@@ -22830,8 +22839,9 @@ function isPostgresUuidString(v) {
  *  uploads from the Player. Fire-and-forget; failures fall back to
  *  localStorage being authoritative until the next reconcile.
  */
-async function supabasePatchUserSong(track, patch) {
+async function supabasePatchUserSong(track, patch, opts = {}) {
   if (!authSession?.user?.id) return { ok: false, reason: "no_auth" };
+  const reason = String(opts.reason || "unknown");
   const uid = encodeURIComponent(authSession.user.id);
   const songUrl = String(track?.url || "").trim();
   const url = encodeURIComponent(songUrl);
@@ -22911,6 +22921,10 @@ async function supabasePatchUserSong(track, patch) {
     body.discover_expires_at = patch.discoverExpiresAt.trim();
   }
   if (Object.keys(body).length === 0) return { ok: false, reason: "noop" };
+  logSupabaseFetch("user_songs_patch", reason, {
+    cloudId: String(track?.cloudSongId || track?.id || "").slice(0, 36),
+    keys: Object.keys(body),
+  });
   const sendPatch = (payload) =>
     supabaseAuthedFetch(`${SUPABASE_URL}/rest/v1/user_songs?${filter}`, {
       method: "PATCH",
@@ -22969,7 +22983,7 @@ async function supabaseSoftDeleteUserSong(track) {
     meta,
     publicOnProfile: false,
     publishedAt: null,
-  });
+  }, { reason: "soft-delete" });
 }
 
 async function supabaseDeleteUserSong(track) {
@@ -33348,7 +33362,7 @@ async function setLibraryTrackPublicOnProfile(trackId, wantPublic, opts = {}) {
     publicOnProfile: next.publicOnProfile,
     ...(willBePublic && publishedAt ? { publishedAt } : {}),
     ...(willBePublic ? { meta: nextMeta } : {}),
-  });
+  }, { reason: willBePublic ? "publish" : "unpublish" });
   recordPublishAudit(track.id, {
     phase: "toggle:cloud",
     to: willBePublic,
@@ -33428,7 +33442,7 @@ async function setLibraryTrackPublicOnProfile(trackId, wantPublic, opts = {}) {
               publicOnProfile: true,
               ...(publishedAt ? { publishedAt } : {}),
               ...(nextMeta ? { meta: nextMeta } : {}),
-            });
+            }, { reason: "publish-heal-repatch" });
           }
         } catch {}
         invalidateUserSongsLoadCache();
@@ -33513,7 +33527,7 @@ async function renamePrivateLibraryTrack(trackId) {
   nextItems[idx] = next;
   saveLibrary(nextItems);
   try { refreshOwnSongsUi(); } catch {}
-  const patch = await supabasePatchUserSong(track, { title: nextTitle });
+  const patch = await supabasePatchUserSong(track, { title: nextTitle }, { reason: "rename-song" });
   if (patch && patch.ok === false && patch.reason && patch.reason !== "noop") {
     showToast(cloudSyncFailureMessage(patch.details, { action: "rename" }), { durationMs: 5200 });
     return { ok: false };
@@ -37905,20 +37919,63 @@ async function playHubPostFromProfile(postId, opts) {
 const PROFILE_RELEASES_PAGE_SIZE = 10;
 let _profileReleasesShown = PROFILE_RELEASES_PAGE_SIZE;
 const _releaseCaptionCloudHealKeys = new Set();
-function resetProfileReleasesPagination() {
-  _profileReleasesShown = PROFILE_RELEASES_PAGE_SIZE;
+const RELEASE_CAPTION_HEAL_PREFIX = "mas:release-caption-heal:v1";
+const NABAD_CLOUD_HEAL_PREFIX = "mas:nabad-cloud-heal:v1";
+let _nabadBackfillSessionRan = false;
+
+function userSongCloudHealKey(track) {
+  const cloudId = String(track?.cloudSongId || "").trim();
+  if (cloudId && isPostgresUuidString(cloudId)) return cloudId;
+  const rowId = String(track?.id || "").trim();
+  if (rowId && isPostgresUuidString(rowId)) return rowId;
+  const audioId = String(track?.audioId || "").trim();
+  if (audioId) return `audio:${audioId}`;
+  const taskId = String(track?.taskId || "").trim();
+  if (taskId) return `task:${taskId}`;
+  return "";
 }
 
-function queueReleaseCaptionCloudHeal(track) {
+function userSongCloudHealDone(prefix, key) {
+  if (!key) return false;
+  try {
+    return localStorage.getItem(`${prefix}:${key}`) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function markUserSongCloudHealDone(prefix, key) {
+  if (!key) return;
+  try {
+    localStorage.setItem(`${prefix}:${key}`, "1");
+  } catch {}
+}
+
+function queueReleaseCaptionCloudHeal(track, reason = "unknown") {
   if (!authSession?.user?.id || !track || !track.publicOnProfile || !releaseCaptionForTrack(track)) return;
-  const key = String(track.cloudSongId || track.audioId || track.taskId || track.id || track.url || "").trim();
+  const key = userSongCloudHealKey(track);
   if (!key || _releaseCaptionCloudHealKeys.has(key)) return;
+  if (userSongCloudHealDone(RELEASE_CAPTION_HEAL_PREFIX, key)) return;
   _releaseCaptionCloudHealKeys.add(key);
-  void supabasePatchUserSong(track, { meta: track.meta || {} }).then((res) => {
-    if (res && res.ok === false) _releaseCaptionCloudHealKeys.delete(key);
+  void supabasePatchUserSong(track, { meta: track.meta || {} }, { reason: `release-caption-heal:${reason}` }).then((res) => {
+    if (res && res.ok !== false) markUserSongCloudHealDone(RELEASE_CAPTION_HEAL_PREFIX, key);
+    else _releaseCaptionCloudHealKeys.delete(key);
   }).catch(() => {
     _releaseCaptionCloudHealKeys.delete(key);
   });
+}
+
+function backfillReleaseCaptionsToCloud(items, reason = "library-hydrate") {
+  if (!authSession?.user?.id) return;
+  for (const t of items || []) {
+    if (Boolean(t?.publicOnProfile) && releaseCaptionForTrack(t)) {
+      queueReleaseCaptionCloudHeal(t, reason);
+    }
+  }
+}
+
+function resetProfileReleasesPagination() {
+  _profileReleasesShown = PROFILE_RELEASES_PAGE_SIZE;
 }
 
 function syncProfileSongsSegmentUi() {
@@ -38372,7 +38429,6 @@ function renderProfileLibraryPublicOnLinkSection() {
   const withUrl = loadLibrary().filter((t) => String(t?.url || "").trim());
   const allLib = withUrl.filter((t) => Boolean(t.publicOnProfile));
   allLib.sort((a, b) => libraryTrackPublicTs(b) - libraryTrackPublicTs(a));
-  allLib.forEach(queueReleaseCaptionCloudHeal);
   if (_profileReleasesShown < PROFILE_RELEASES_PAGE_SIZE) {
     _profileReleasesShown = PROFILE_RELEASES_PAGE_SIZE;
   }
@@ -39291,7 +39347,7 @@ function setTrackPublishState(id, fields) {
   saveLibrary(items);
 }
 
-function patchLibraryTrack(id, patch) {
+function patchLibraryTrack(id, patch, reason = "library-edit") {
   if (!id) return;
   const items = loadLibrary();
   const idx = items.findIndex((x) => String(x.id) === String(id));
@@ -39309,7 +39365,7 @@ function patchLibraryTrack(id, patch) {
     title: items[idx].title,
     artUrl: items[idx].artUrl,
     meta: items[idx].meta,
-  });
+  }, { reason });
 }
 async function syncHubCoverForTrack(track, coverUrl) {
   const title = String(track?.title || "").trim();
@@ -39494,6 +39550,7 @@ async function ensureUserLibraryHydrated(prefetchedCloud, opts = {}) {
   clearTimeout(safetyTimer);
   saveLibrary(mergedDeduped);
   backfillNabadVerificationInLibrary();
+  backfillReleaseCaptionsToCloud(mergedDeduped.filter((t) => Boolean(t.publicOnProfile)));
   refreshOwnSongsUi();
   try { resumePendingPublishes(); } catch {}
 
@@ -39836,7 +39893,7 @@ function saveMusicVideoMetaForTrack(track, mv) {
     saveLibrary(lib);
     if (track.meta && typeof track.meta === "object") track.meta.musicVideo = merged;
     else track.meta = { musicVideo: merged };
-    try { void supabasePatchUserSong(row, { meta: { musicVideo: merged } }); } catch {}
+    try { void supabasePatchUserSong(row, { meta: { musicVideo: merged } }, { reason: "music-video-meta" }); } catch {}
   } catch {}
 }
 
@@ -40817,7 +40874,6 @@ function syncProfileHubSharedRowsFromPlayer() {
 
 function renderLibrary() {
   if (!els.libraryList) return;
-  backfillNabadVerificationInLibrary();
   if ((document.body.getAttribute("data-route") || "") === "profile" && _profileSongsSegment !== "all") return;
   bindLibraryDelegatedListeners();
   const onProfileAll =
@@ -44719,7 +44775,7 @@ function patchLibraryRowWithRefreshedUrl(trackId, proxiedUrlForLibrary, rawRemot
   } catch {}
   const forCloud = String(rawRemoteUrl || "").trim();
   if (forCloud) {
-    void supabasePatchUserSong(prevTrack, { songUrl: forCloud });
+    void supabasePatchUserSong(prevTrack, { songUrl: forCloud }, { reason: "archive-url-refresh" });
   }
   return row;
 }

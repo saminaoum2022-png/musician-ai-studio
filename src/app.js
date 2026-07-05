@@ -163,7 +163,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260705-151656";
+const APP_BUILD = "20260705-155022";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -12732,8 +12732,10 @@ async function finishPostAuthNavigation() {
     if (pushTarget) {
       try { location.hash = `#/${pushTarget}`; } catch {}
       syncRoutePanelVisibility(pushTarget.split(/[?#&]/)[0].trim() || "activity");
-      try { applyRoute(); } catch { scheduleApplyRoute(); }
-      void tryRecoverGenerationFromPushNotification();
+      void (async () => {
+        await tryRecoverGenerationFromPushNotification();
+        try { applyRoute(); } catch { scheduleApplyRoute(); }
+      })();
       void ensureAuthBoot({ force: true, fast: true });
       return;
     }
@@ -12794,8 +12796,10 @@ async function navigateFromPushRoute(route) {
       return;
     }
     try { location.hash = `#/${clean}`; } catch {}
-    scheduleApplyRoute();
-    void tryRecoverGenerationFromPushNotification();
+    void (async () => {
+      await tryRecoverGenerationFromPushNotification();
+      scheduleApplyRoute();
+    })();
   } catch (e) {
     console.warn("[push] navigate failed", e);
     scheduleApplyRoute();
@@ -45269,9 +45273,8 @@ async function recoverSongFromTaskId(taskId, { silent = false, pushCategory = ""
   if (!tid) throw new Error("Missing task ID.");
 
   if (libraryHasTaskAudio(tid)) {
-    clearRecoverableGenerationTask();
+    finalizeRecoveredGenerationJob(tid, { category: pushCategory || "generation_ready", silent });
     try { refreshOwnSongsUi({ soft: true }); } catch { refreshOwnSongsUi(); }
-    markLibraryTabDot(true);
     return true;
   }
 
@@ -45311,10 +45314,11 @@ async function recoverSongFromTaskId(taskId, { silent = false, pushCategory = ""
     metaBase.photoMode = true;
   }
   const kind = cat === "hum_track_ready" ? "instrumental" : "full";
+  const savedEntries = [];
 
   if (parsed.first?.audioUrl) {
     const prox = toAudioProxyUrl(parsed.first.audioUrl);
-    addToLibrary({
+    savedEntries.push(addToLibrary({
       title: parsed.first.title || "Recovered song",
       artUrl: parsed.first.imageUrl || "",
       url: prox || parsed.first.audioUrl,
@@ -45322,11 +45326,11 @@ async function recoverSongFromTaskId(taskId, { silent = false, pushCategory = ""
       audioId: parsed.first.audioId || "",
       kind,
       meta: metaBase,
-    });
+    }));
   }
   if (parsed.second?.audioUrl) {
     const prox2 = toAudioProxyUrl(parsed.second.audioUrl);
-    addToLibrary({
+    savedEntries.push(addToLibrary({
       title: parsed.second.title || "Recovered song B",
       artUrl: parsed.second.imageUrl || "",
       url: prox2 || parsed.second.audioUrl,
@@ -45334,11 +45338,14 @@ async function recoverSongFromTaskId(taskId, { silent = false, pushCategory = ""
       audioId: parsed.second.audioId || "",
       kind,
       meta: metaBase,
-    });
+    }));
   }
 
-  clearRecoverableGenerationTask();
-  updateLibraryRecoverBanner();
+  finalizeRecoveredGenerationJob(tid, {
+    category: cat || "generation_ready",
+    silent,
+    entries: savedEntries,
+  });
   if (!silent) {
     showToast("Song added to your Library.", { icon: "✓", durationMs: 3200 });
     try {
@@ -45356,10 +45363,84 @@ function libraryHasTaskAudio(taskId) {
   );
 }
 
-async function recoverSoundFromTaskId(taskId, { silent = true } = {}) {
+function libraryEntriesForTaskId(taskId) {
+  const tid = String(taskId || "").trim();
+  if (!tid) return [];
+  return loadLibrary().filter(
+    (x) => String(x.taskId || "").trim() === tid && String(x.url || "").trim(),
+  );
+}
+
+/** Push recover / manual recover — same “job done” cleanup as in-app poll success. */
+function finalizeRecoveredGenerationJob(taskId, { category = "", silent = true, entries = null } = {}) {
+  const tid = String(taskId || "").trim();
+  if (!tid) return;
+  const cat = String(category || "generation_ready").trim();
+  const rows = Array.isArray(entries) ? entries.filter(Boolean) : libraryEntriesForTaskId(tid);
+
+  stopGeneratePoll();
+  try { stopSoundGenerationPolling(); } catch {}
+
+  const pending = getGenerationPending();
+  if (!pending?.taskId || String(pending.taskId) === tid) {
+    clearGenerationPending(tid);
+    syncGenerationPendingLibraryUi();
+  }
+
+  const backendTid = String(loadPendingBackendTask() || sunoTaskId || "").trim();
+  if (backendTid === tid) {
+    try { savePendingBackendTask(""); } catch {}
+    if (String(sunoTaskId || "") === tid) sunoTaskId = null;
+    try { setGenerateFieldsLocked(false); } catch {}
+    try { setLoading(false); } catch {}
+    try {
+      if (els.btnSunoGenerate) {
+        els.btnSunoGenerate.textContent = "Regenerate";
+        els.btnSunoGenerate.disabled = false;
+        els.btnSunoGenerate.dataset.mode = "generate";
+      }
+    } catch {}
+  }
+
+  clearRecoverableGenerationTask();
+  updateLibraryRecoverBanner();
+  markLibraryTabDot(true);
+
+  if (cat === "sound_ready") {
+    clearPriorityPending(tid);
+    try { finishCoachPriorityStatus("Sound ready ✓"); } catch {}
+    return;
+  }
+  if (cat === "instrumental_ready") {
+    clearPriorityPending(tid);
+    try { finishCoachPriorityStatus("Instrumental ready ✓"); } catch {}
+    return;
+  }
+  if (cat === "music_video_ready") {
+    clearPriorityPending(tid);
+    try { finishCoachPriorityStatus("Music video ready ✓"); } catch {}
+    return;
+  }
+
+  if (rows.length) {
+    try {
+      pushLocalGenerationReadyActivity(rows, { taskId: tid });
+    } catch {
+      try { finishCoachGenerationReady({ variantCount: rows.length || 1 }); } catch {}
+    }
+  } else {
+    try { finishCoachGenerationReady({ variantCount: 1 }); } catch {}
+  }
+  try { syncCoachGenerationStatusFromPending(getGenerationPending()); } catch {}
+}
+
+async function recoverSoundFromTaskId(taskId, { silent = true, pushCategory = "sound_ready" } = {}) {
   const tid = String(taskId || "").trim();
   if (!tid) return false;
-  if (libraryHasTaskAudio(tid)) return true;
+  if (libraryHasTaskAudio(tid)) {
+    finalizeRecoveredGenerationJob(tid, { category: pushCategory, silent });
+    return true;
+  }
   const r = await fetch(apiUrl(`/api/suno/status?taskId=${encodeURIComponent(tid)}`));
   const data = await r.json().catch(() => ({}));
   if (!r.ok) return false;
@@ -45376,17 +45457,20 @@ async function recoverSoundFromTaskId(taskId, { silent = true } = {}) {
     kind: "sound",
     meta: { mode: "sound", recoveredFromPush: true },
   });
-  markLibraryTabDot(true);
+  finalizeRecoveredGenerationJob(tid, { category: pushCategory, silent });
   if (!silent) {
     showToast("Sound saved to your Library", { icon: "✓", durationMs: 3200 });
   }
   return true;
 }
 
-async function recoverInstrumentalFromTaskId(taskId, { silent = true } = {}) {
+async function recoverInstrumentalFromTaskId(taskId, { silent = true, pushCategory = "instrumental_ready" } = {}) {
   const tid = String(taskId || "").trim();
   if (!tid) return false;
-  if (libraryHasTaskAudio(tid)) return true;
+  if (libraryHasTaskAudio(tid)) {
+    finalizeRecoveredGenerationJob(tid, { category: pushCategory, silent });
+    return true;
+  }
   const r = await fetch(apiUrl(`/api/suno/stems_status?taskId=${encodeURIComponent(tid)}`));
   const data = await r.json().catch(() => ({}));
   if (!r.ok) return false;
@@ -45404,14 +45488,14 @@ async function recoverInstrumentalFromTaskId(taskId, { silent = true } = {}) {
     kind: "instrumental",
     meta: { recoveredFromPush: true },
   });
-  markLibraryTabDot(true);
+  finalizeRecoveredGenerationJob(tid, { category: pushCategory, silent });
   if (!silent) {
     showToast("Instrumental added to your Library.", { icon: "✓", durationMs: 3200 });
   }
   return true;
 }
 
-async function recoverMusicVideoFromTaskId(taskId, { silent = true } = {}) {
+async function recoverMusicVideoFromTaskId(taskId, { silent = true, pushCategory = "music_video_ready" } = {}) {
   const tid = String(taskId || "").trim();
   if (!tid) return false;
   const token = getSupabaseAuthToken();
@@ -45427,6 +45511,7 @@ async function recoverMusicVideoFromTaskId(taskId, { silent = true } = {}) {
   const row = items.find((t) => String(t?.meta?.musicVideo?.taskId || "").trim() === tid);
   if (!row) return false;
   saveMusicVideoMetaForTrack(row, { taskId: tid, videoUrl: url, createdAt: Date.now() });
+  finalizeRecoveredGenerationJob(tid, { category: pushCategory, silent });
   try { refreshOwnSongsUi({ soft: true }); } catch { refreshOwnSongsUi(); }
   if (!silent) {
     showToast("Music video is ready — open it from your song menu.", { icon: "✓", durationMs: 3200 });
@@ -45437,25 +45522,31 @@ async function recoverMusicVideoFromTaskId(taskId, { silent = true } = {}) {
 async function tryRecoverGenerationFromPushNotification() {
   const pending = consumePendingPushTask();
   if (!pending?.taskId) return false;
-  if (!isAppLoggedIn() && !getSupabaseAuthToken()) {
-    stashPendingPushTask(pending.taskId, pending.category);
-    return false;
-  }
   const { taskId, category } = pending;
+
   if (libraryHasTaskAudio(taskId)) {
+    finalizeRecoveredGenerationJob(taskId, { category, silent: true });
     try { refreshOwnSongsUi({ soft: true }); } catch { refreshOwnSongsUi(); }
-    markLibraryTabDot(true);
     return true;
+  }
+
+  if (!isAppLoggedIn() && !getSupabaseAuthToken()) {
+    stashPendingPushTask(taskId, category);
+    return false;
   }
   try {
     if (category === "sound_ready") {
-      return await recoverSoundFromTaskId(taskId, { silent: true });
+      return await recoverSoundFromTaskId(taskId, { silent: true, pushCategory: category });
     }
     if (category === "instrumental_ready") {
-      return await recoverInstrumentalFromTaskId(taskId, { silent: true });
+      return await recoverInstrumentalFromTaskId(taskId, { silent: true, pushCategory: category });
     }
     if (category === "music_video_ready") {
-      return await recoverMusicVideoFromTaskId(taskId, { silent: true });
+      const ok = await recoverMusicVideoFromTaskId(taskId, { silent: true, pushCategory: category });
+      if (ok) {
+        try { refreshOwnSongsUi({ soft: true }); } catch { refreshOwnSongsUi(); }
+      }
+      return ok;
     }
     return await recoverSongFromTaskId(taskId, { silent: true, pushCategory: category });
   } catch (e) {

@@ -9,6 +9,7 @@ import {
   syncCoachOrbShellForMode,
   unsurfaceCoachOrbIfIdle,
 } from "./coach-orb-prefs.js";
+import { peekPendingPushTask } from "./push-notifications.js";
 
 export const COACH_PILL_DEFAULT = "Need help? 🎵";
 const COACH_READY_VISIBLE_MS = 9000;
@@ -205,12 +206,24 @@ export function cancelCoachPriorityStatus() {
   resetCoachPill({ restoreDefault: true });
 }
 
+function pushRecoverPendingForTask(pending) {
+  const push = peekPendingPushTask();
+  if (!push?.taskId || !pending) return false;
+  const pushId = String(push.taskId).trim();
+  if (!pushId) return false;
+  const ids = [pending.taskId, pending.videoTaskId]
+    .map((x) => String(x || "").trim())
+    .filter(Boolean);
+  return ids.includes(pushId);
+}
+
 /** Boot / route restore when session still has a pending song-style task. */
 export function syncCoachGenerationStatusFromPending(pending) {
   if (!pending?.taskId) {
     if (_generationLocked) cancelCoachGenerationStatus();
     return;
   }
+  if (pushRecoverPendingForTask(pending)) return;
   let pillText = "";
   if (pending.source === "hum_track") {
     pillText = coachHumTrackGeneratingPillText(
@@ -228,6 +241,7 @@ export function syncCoachPriorityStatusFromPending(pending) {
     if (_priorityActive) cancelCoachPriorityStatus();
     return;
   }
+  if (pushRecoverPendingForTask(pending)) return;
   const title = String(pending.title || "").trim() || "Your creation";
   if (pending.kind === "sound") {
     beginCoachPriorityStatus(coachSoundPillText(title), { generating: true });

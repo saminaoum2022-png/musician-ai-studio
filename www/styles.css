@@ -43457,31 +43457,45 @@ body[data-route="studio"] .deskRail { display: none !important; }
   max-width: 28em;
 }
 
-/* Studio card — secondary row: neutral shell, violet icon tile only. */
+/* Studio card — premium dark purple (Create hub featured row). */
 .challengesPage.homeDesk .homeDeskStudioPromo--featured {
   position: relative;
-  border-color: rgba(255, 255, 255, 0.1);
-  background: rgba(255, 255, 255, 0.02);
+  background: #14111c;
+  border: 1px solid rgba(138, 92, 255, 0.28);
   box-shadow: none;
 }
 .challengesPage.homeDesk .homeDeskStudioPromo--featured:active {
-  border-color: rgba(255, 255, 255, 0.14);
-  background: rgba(255, 255, 255, 0.05);
+  background: #18121f;
+  border-color: rgba(138, 92, 255, 0.38);
+}
+.challengesPage.homeDesk .homeDeskStudioPromo--featured .homeDeskSectionKicker {
+  color: #8a5cff;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.challengesPage.homeDesk .homeDeskStudioPromo--featured .homeDeskPromoDesc {
+  color: rgba(196, 192, 208, 0.72);
 }
 .challengesPage.homeDesk .homeDeskStudioPromo--featured .homeDeskStudioTile {
-  background: rgba(124, 92, 255, 0.14);
-  border-color: rgba(124, 92, 255, 0.32);
+  padding: 5px;
+  background: rgba(138, 92, 255, 0.07);
+  border: 1px solid rgba(138, 92, 255, 0.22);
+  box-shadow: none;
+  overflow: hidden;
 }
 .challengesPage.homeDesk .homeDeskStudioPromo--featured .homeDeskStudioIco {
-  color: var(--brand-violet-hover, #9178ff);
+  width: 100%;
+  height: 100%;
+  display: block;
+  aspect-ratio: 4 / 3;
 }
-/* Tiny animated waveform beside the mic. */
-.challengesPage.homeDesk .homeDeskStudioPromo--featured .homeDeskStudioWave {
-  animation: homeDeskStudioWave 1.8s ease-in-out infinite;
-}
-@keyframes homeDeskStudioWave {
-  0%, 100% { opacity: 0.35; }
-  50% { opacity: 0.9; }
+.challengesPage.homeDesk .homeDeskStudioPromo--featured .homeDeskNewBadge {
+  background: rgba(138, 92, 255, 0.55);
+  border-color: rgba(138, 92, 255, 0.42);
+  font-size: 8px;
+  letter-spacing: 0.06em;
+  padding: 3px 7px;
 }
 
 /* NEW badge — small pill, top-right of the Studio card. */
@@ -43500,10 +43514,6 @@ body[data-route="studio"] .deskRail { display: none !important; }
   border: 1px solid rgba(167, 139, 250, 0.35);
   box-shadow: none;
   pointer-events: none;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .challengesPage.homeDesk .homeDeskStudioPromo--featured .homeDeskStudioWave { animation: none; }
 }
 
 /* ---------- Edit Profile (creator workspace) ---------- */

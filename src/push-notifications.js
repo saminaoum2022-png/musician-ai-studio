@@ -12,6 +12,34 @@ let _nativePermState = "default";
 let _nativeOptedIn = false;
 
 const PENDING_PUSH_ROUTE_KEY = "nabad_pending_push_route:v1";
+const PENDING_PUSH_TASK_KEY = "nabad_pending_push_task:v1";
+
+export const GENERATION_PUSH_CATEGORIES = new Set([
+  "generation_ready",
+  "photo_ready",
+  "hum_track_ready",
+  "sound_ready",
+  "music_video_ready",
+  "instrumental_ready",
+]);
+
+let _appIsActive = typeof document !== "undefined" ? !document.hidden : true;
+
+export function setAppActiveState(active) {
+  _appIsActive = Boolean(active);
+}
+
+export function isAppActiveForPush() {
+  try {
+    if (!_appIsActive) return false;
+    if (typeof document !== "undefined" && document.hidden) return false;
+  } catch {}
+  return true;
+}
+
+export function isGenerationPushCategory(category) {
+  return GENERATION_PUSH_CATEGORIES.has(String(category || "").trim());
+}
 
 function normalizePushPayload(raw) {
   const notif = raw?.notification || raw;
@@ -22,6 +50,41 @@ function normalizePushPayload(raw) {
     category: String(data.nabad_category || "").trim(),
     entityId: String(data.nabad_entity_id || data.nabad_entityId || "").trim(),
   };
+}
+
+export function stashPendingPushTask(taskId, category) {
+  const tid = String(taskId || "").trim();
+  const cat = String(category || "").trim();
+  if (!tid || !isGenerationPushCategory(cat)) return;
+  try {
+    sessionStorage.setItem(
+      PENDING_PUSH_TASK_KEY,
+      JSON.stringify({ taskId: tid, category: cat, at: Date.now() }),
+    );
+  } catch {}
+}
+
+export function peekPendingPushTask() {
+  try {
+    const raw = sessionStorage.getItem(PENDING_PUSH_TASK_KEY);
+    if (!raw) return null;
+    const o = JSON.parse(raw);
+    if (!o?.taskId) return null;
+    return {
+      taskId: String(o.taskId).trim(),
+      category: String(o.category || "generation_ready").trim(),
+    };
+  } catch {
+    return null;
+  }
+}
+
+export function consumePendingPushTask() {
+  const hit = peekPendingPushTask();
+  try {
+    sessionStorage.removeItem(PENDING_PUSH_TASK_KEY);
+  } catch {}
+  return hit;
 }
 
 /** Turn OneSignal custom data into an in-app hash path (no leading #/). */
@@ -46,9 +109,30 @@ export function stashPendingPushRoute(route) {
 }
 
 export function stashPendingPushPayload(raw) {
-  const hashPath = resolvePushHashPath(normalizePushPayload(raw));
+  const payload = normalizePushPayload(raw);
+  const hashPath = resolvePushHashPath(payload);
   if (hashPath) stashPendingPushRoute(hashPath);
+  if (payload.entityId && isGenerationPushCategory(payload.category)) {
+    stashPendingPushTask(payload.entityId, payload.category);
+  }
   return hashPath;
+}
+
+function shouldSuppressForegroundGenerationPush(raw) {
+  if (!isAppActiveForPush()) return false;
+  const { category } = normalizePushPayload(raw);
+  return isGenerationPushCategory(category);
+}
+
+function attachForegroundGenerationPushFilter(OneSignal) {
+  if (!OneSignal?.Notifications?.addEventListener) return;
+  OneSignal.Notifications.addEventListener("foregroundWillDisplay", (event) => {
+    try {
+      const notif = event?.notification || event?.getNotification?.() || event;
+      if (!shouldSuppressForegroundGenerationPush(notif)) return;
+      if (typeof event.preventDefault === "function") event.preventDefault();
+    } catch {}
+  });
 }
 
 export function consumePendingPushRoute() {
@@ -273,6 +357,8 @@ async function initNativePushNotifications() {
         } catch {}
       });
 
+      attachForegroundGenerationPushFilter(OneSignal);
+
       OneSignal.Notifications.addEventListener("permissionChange", () => {
         void refreshNativePushState();
       });
@@ -311,6 +397,7 @@ async function initWebPushNotifications() {
           navigateFromPushData(event);
         } catch {}
       });
+      attachForegroundGenerationPushFilter(OneSignal);
       return true;
     } catch (e) {
       console.warn("[push] init failed", e);

@@ -31,7 +31,8 @@ import {
   setUserPublicSegActive,
 } from "./profile-seg-tabs.js";
 import { initEcho, openEchoFromCreateChooser } from "./echo.js";
-import { initHumTrack, bindHumTrackHomeCard, openHumTrackSheet } from "./hum-track.js";
+import { initHumTrack, bindHumTrackHomeCard, openHumTrackSheet, kickHumTrackGenerationPoll } from "./hum-track.js";
+import { createAdaptivePollLoop, stopPollLoop } from "./generation-poll.js";
 import {
   getInitialBootHash,
   getPostOnboardingHash,
@@ -146,7 +147,10 @@ import {
   refreshPushRegistration,
   syncPushAuth,
   consumePendingPushRoute,
+  consumePendingPushTask,
+  setAppActiveState,
   stashPendingPushRoute,
+  stashPendingPushTask,
 } from "./push-notifications.js";
 import {
   applyScreenshotModeFromDeepLink,
@@ -159,7 +163,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260705-144252";
+const APP_BUILD = "20260705-151656";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -4421,10 +4425,7 @@ function resetCreateDraft() {
   if (els.resultCard2) els.resultCard2.style.display = "none";
   // Stop every poll loop that could re-lock the UI mid-reset.
   try {
-    if (generatePollTimer) {
-      clearInterval(generatePollTimer);
-      generatePollTimer = null;
-    }
+    stopGeneratePoll();
   } catch {}
   try {
     if (typeof stemsPollTimer !== "undefined" && stemsPollTimer) {
@@ -12732,6 +12733,7 @@ async function finishPostAuthNavigation() {
       try { location.hash = `#/${pushTarget}`; } catch {}
       syncRoutePanelVisibility(pushTarget.split(/[?#&]/)[0].trim() || "activity");
       try { applyRoute(); } catch { scheduleApplyRoute(); }
+      void tryRecoverGenerationFromPushNotification();
       void ensureAuthBoot({ force: true, fast: true });
       return;
     }
@@ -12793,6 +12795,7 @@ async function navigateFromPushRoute(route) {
     }
     try { location.hash = `#/${clean}`; } catch {}
     scheduleApplyRoute();
+    void tryRecoverGenerationFromPushNotification();
   } catch (e) {
     console.warn("[push] navigate failed", e);
     scheduleApplyRoute();
@@ -15719,6 +15722,21 @@ let sunoStemsTaskId = null;
 let sunoMultiStemsTaskId = null;
 let generatePollTimer = null;
 let _startGeneratePolling = null;
+
+function stopGeneratePoll() {
+  stopPollLoop(generatePollTimer);
+  generatePollTimer = null;
+}
+
+function resolveGenerationPollStartedAt() {
+  return Number(getGenerationPending()?.startedAt) || Date.now();
+}
+
+function kickForegroundGenerationPolls() {
+  try { generatePollTimer?.kick?.(); } catch {}
+  try { soundPollTimer?.kick?.(); } catch {}
+  try { kickHumTrackGenerationPoll(); } catch {}
+}
 let _showResultCardHoisted = null;
 let stemsPollTimer = null;
 let multiStemsPollTimer = null;
@@ -21402,79 +21420,84 @@ function extractFirstClipFromSunoStatusPayload(data) {
 }
 
 function stopSoundGenerationPolling() {
-  if (soundPollTimer) {
-    clearInterval(soundPollTimer);
-    soundPollTimer = null;
-  }
+  stopPollLoop(soundPollTimer);
+  soundPollTimer = null;
 }
 
 function startSoundGenerationPolling(meta) {
   stopSoundGenerationPolling();
-  let tries = 0;
   const maxTries = 160;
   const pillTitle = String(meta?.fallbackTitle || "Your sound").trim() || "Your sound";
-  soundPollTimer = setInterval(async () => {
-    tries += 1;
-    try {
-      updateCoachPriorityStatus(coachSoundPillText(pillTitle), { generating: true });
-      const r = await fetch(apiUrl(`/api/suno/status?taskId=${encodeURIComponent(soundTaskId)}`));
-      const data = await r.json().catch(() => ({}));
-      if (!r.ok) throw new Error(data?.error || "Status failed");
-      const status = String(data?.data?.status || data?.status || "").toUpperCase();
-      const clip = extractFirstClipFromSunoStatusPayload(data);
-      if (clip.audioUrl) {
-        const url = toAudioProxyUrl(clip.audioUrl) || clip.audioUrl;
-        stopSoundGenerationPolling();
-        const candidate = String(clip.title || meta.fallbackTitle || "Sound").trim();
-        const finalTitle = shortenSoundTitle(candidate || "Sound");
-        addToLibrary({
-          title: finalTitle,
-          artUrl: clip.imageUrl || "./assets/icons/splash-mark.png",
-          url,
-          taskId: soundTaskId || "",
-          audioId: String(clip.audioId || ""),
-          kind: "sound",
-          meta: meta.libraryMeta,
-        });
-        setStatus("Sound saved to Library.");
-        finishCoachPriorityStatus("Sound ready ✓");
-        clearPriorityPending(soundTaskId);
-        pushLocalJobReadyActivity({
-          type: "sound_ready",
-          title: finalTitle,
-        });
-        void maybeNotifyJobReadyPush({ kind: "sound", title: finalTitle, taskId: soundTaskId });
-        if (els.btnSoundGenerate) els.btnSoundGenerate.disabled = false;
-        markLibraryTabDot(true);
-        showToast("Sound saved to your Library", { icon: "✓", durationMs: 3200 });
-        void refreshMyCredits({ silent: true });
-        return;
+  const startedAt = Number(getPriorityPending()?.startedAt) || Date.now();
+  soundPollTimer = createAdaptivePollLoop({
+    startedAt,
+    maxTries,
+    onTick: async (tries) => {
+      try {
+        updateCoachPriorityStatus(coachSoundPillText(pillTitle), { generating: true });
+        const r = await fetch(apiUrl(`/api/suno/status?taskId=${encodeURIComponent(soundTaskId)}`));
+        const data = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(data?.error || "Status failed");
+        const status = String(data?.data?.status || data?.status || "").toUpperCase();
+        const clip = extractFirstClipFromSunoStatusPayload(data);
+        if (clip.audioUrl) {
+          const url = toAudioProxyUrl(clip.audioUrl) || clip.audioUrl;
+          stopSoundGenerationPolling();
+          const candidate = String(clip.title || meta.fallbackTitle || "Sound").trim();
+          const finalTitle = shortenSoundTitle(candidate || "Sound");
+          addToLibrary({
+            title: finalTitle,
+            artUrl: clip.imageUrl || "./assets/icons/splash-mark.png",
+            url,
+            taskId: soundTaskId || "",
+            audioId: String(clip.audioId || ""),
+            kind: "sound",
+            meta: meta.libraryMeta,
+          });
+          setStatus("Sound saved to Library.");
+          finishCoachPriorityStatus("Sound ready ✓");
+          clearPriorityPending(soundTaskId);
+          pushLocalJobReadyActivity({
+            type: "sound_ready",
+            title: finalTitle,
+          });
+          void maybeNotifyJobReadyPush({ kind: "sound", title: finalTitle, taskId: soundTaskId });
+          if (els.btnSoundGenerate) els.btnSoundGenerate.disabled = false;
+          markLibraryTabDot(true);
+          showToast("Sound saved to your Library", { icon: "✓", durationMs: 3200 });
+          void refreshMyCredits({ silent: true });
+          return "stop";
+        }
+        if (status === "FAILED" || status === "ERROR") {
+          stopSoundGenerationPolling();
+          setStatus("Sound generation failed upstream. Check Recent activity for charges.");
+          cancelCoachPriorityStatus();
+          clearPriorityPending(soundTaskId);
+          if (els.btnSoundGenerate) els.btnSoundGenerate.disabled = false;
+          return "stop";
+        }
+        if (tries >= maxTries) {
+          stopSoundGenerationPolling();
+          setStatus("Still processing — check Library in a minute.");
+          cancelCoachPriorityStatus();
+          clearPriorityPending(soundTaskId);
+          if (els.btnSoundGenerate) els.btnSoundGenerate.disabled = false;
+          return "stop";
+        }
+        return "continue";
+      } catch (e) {
+        if (tries >= 10) {
+          stopSoundGenerationPolling();
+          setStatus(`Could not get sound status: ${e?.message || String(e)}`);
+          cancelCoachPriorityStatus();
+          clearPriorityPending(soundTaskId);
+          if (els.btnSoundGenerate) els.btnSoundGenerate.disabled = false;
+          return "stop";
+        }
+        return "continue";
       }
-      if (status === "FAILED" || status === "ERROR") {
-        stopSoundGenerationPolling();
-        setStatus("Sound generation failed upstream. Check Recent activity for charges.");
-        cancelCoachPriorityStatus();
-        clearPriorityPending(soundTaskId);
-        if (els.btnSoundGenerate) els.btnSoundGenerate.disabled = false;
-        return;
-      }
-      if (tries >= maxTries) {
-        stopSoundGenerationPolling();
-        setStatus("Still processing — check Library in a minute.");
-        cancelCoachPriorityStatus();
-        clearPriorityPending(soundTaskId);
-        if (els.btnSoundGenerate) els.btnSoundGenerate.disabled = false;
-      }
-    } catch (e) {
-      if (tries >= 10) {
-        stopSoundGenerationPolling();
-        setStatus(`Could not get sound status: ${e?.message || String(e)}`);
-        cancelCoachPriorityStatus();
-        clearPriorityPending(soundTaskId);
-        if (els.btnSoundGenerate) els.btnSoundGenerate.disabled = false;
-      }
-    }
-  }, 4500);
+    },
+  });
 }
 
 function b64urlFromBytes(bytes) {
@@ -44879,10 +44902,7 @@ function dismissPendingBackendTask({ silent = false, skipRecoverSave = false } =
     } catch {}
   }
   try {
-    if (generatePollTimer) {
-      clearInterval(generatePollTimer);
-      generatePollTimer = null;
-    }
+    stopGeneratePoll();
   } catch {}
   try { savePendingBackendTask(""); } catch {}
   try { sunoTaskId = ""; } catch {}
@@ -45244,9 +45264,16 @@ function patchLibraryRowWithRefreshedUrl(trackId, proxiedUrlForLibrary, rawRemot
  * Safe to call after the user dismissed a stuck spinner — the audio may
  * already exist server-side.
  */
-async function recoverSongFromTaskId(taskId, { silent = false } = {}) {
+async function recoverSongFromTaskId(taskId, { silent = false, pushCategory = "" } = {}) {
   const tid = String(taskId || "").trim();
   if (!tid) throw new Error("Missing task ID.");
+
+  if (libraryHasTaskAudio(tid)) {
+    clearRecoverableGenerationTask();
+    try { refreshOwnSongsUi({ soft: true }); } catch { refreshOwnSongsUi(); }
+    markLibraryTabDot(true);
+    return true;
+  }
 
   const r = await fetch(apiUrl(`/api/suno/status?taskId=${encodeURIComponent(tid)}`));
   const data = await r.json().catch(() => ({}));
@@ -45275,6 +45302,15 @@ async function recoverSongFromTaskId(taskId, { silent = false } = {}) {
       : {};
   metaBase.recoveredFromTaskId = tid;
   metaBase.recoveredAt = Date.now();
+  const cat = String(pushCategory || "").trim();
+  if (cat === "hum_track_ready") {
+    metaBase.humTrack = true;
+    metaBase.recoveredFromPush = true;
+  }
+  if (cat === "photo_ready") {
+    metaBase.photoMode = true;
+  }
+  const kind = cat === "hum_track_ready" ? "instrumental" : "full";
 
   if (parsed.first?.audioUrl) {
     const prox = toAudioProxyUrl(parsed.first.audioUrl);
@@ -45284,7 +45320,7 @@ async function recoverSongFromTaskId(taskId, { silent = false } = {}) {
       url: prox || parsed.first.audioUrl,
       taskId: tid,
       audioId: parsed.first.audioId || "",
-      kind: "full",
+      kind,
       meta: metaBase,
     });
   }
@@ -45296,7 +45332,7 @@ async function recoverSongFromTaskId(taskId, { silent = false } = {}) {
       url: prox2 || parsed.second.audioUrl,
       taskId: tid,
       audioId: parsed.second.audioId || "",
-      kind: "full",
+      kind,
       meta: metaBase,
     });
   }
@@ -45310,6 +45346,122 @@ async function recoverSongFromTaskId(taskId, { silent = false } = {}) {
     } catch {}
   }
   return true;
+}
+
+function libraryHasTaskAudio(taskId) {
+  const tid = String(taskId || "").trim();
+  if (!tid) return false;
+  return loadLibrary().some(
+    (x) => String(x.taskId || "").trim() === tid && String(x.url || "").trim(),
+  );
+}
+
+async function recoverSoundFromTaskId(taskId, { silent = true } = {}) {
+  const tid = String(taskId || "").trim();
+  if (!tid) return false;
+  if (libraryHasTaskAudio(tid)) return true;
+  const r = await fetch(apiUrl(`/api/suno/status?taskId=${encodeURIComponent(tid)}`));
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) return false;
+  const clip = extractFirstClipFromSunoStatusPayload(data);
+  if (!clip.audioUrl) return false;
+  const url = toAudioProxyUrl(clip.audioUrl) || clip.audioUrl;
+  const finalTitle = shortenSoundTitle(String(clip.title || "Sound").trim() || "Sound");
+  addToLibrary({
+    title: finalTitle,
+    artUrl: clip.imageUrl || "./assets/icons/splash-mark.png",
+    url,
+    taskId: tid,
+    audioId: String(clip.audioId || ""),
+    kind: "sound",
+    meta: { mode: "sound", recoveredFromPush: true },
+  });
+  markLibraryTabDot(true);
+  if (!silent) {
+    showToast("Sound saved to your Library", { icon: "✓", durationMs: 3200 });
+  }
+  return true;
+}
+
+async function recoverInstrumentalFromTaskId(taskId, { silent = true } = {}) {
+  const tid = String(taskId || "").trim();
+  if (!tid) return false;
+  if (libraryHasTaskAudio(tid)) return true;
+  const r = await fetch(apiUrl(`/api/suno/stems_status?taskId=${encodeURIComponent(tid)}`));
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) return false;
+  const resp = data?.data?.response || data?.response || data?.data || data;
+  const instrumentalUrl =
+    deepFindFirstStringByKeys(resp, ["instrumentalUrl", "instrumental_url", "accompanimentUrl"]) ||
+    deepFindFirstStringByKeys(data, ["instrumentalUrl", "instrumental_url", "accompanimentUrl"]);
+  if (!instrumentalUrl) return false;
+  const prox = toAudioProxyUrl(instrumentalUrl) || instrumentalUrl;
+  addToLibrary({
+    title: "Recovered instrumental",
+    artUrl: "",
+    url: prox,
+    taskId: tid,
+    kind: "instrumental",
+    meta: { recoveredFromPush: true },
+  });
+  markLibraryTabDot(true);
+  if (!silent) {
+    showToast("Instrumental added to your Library.", { icon: "✓", durationMs: 3200 });
+  }
+  return true;
+}
+
+async function recoverMusicVideoFromTaskId(taskId, { silent = true } = {}) {
+  const tid = String(taskId || "").trim();
+  if (!tid) return false;
+  const token = getSupabaseAuthToken();
+  const r = await fetch(apiUrl(`/api/suno/video?taskId=${encodeURIComponent(tid)}`), {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok) return false;
+  const st = String(d?.status || "").toUpperCase();
+  const url = String(d?.videoUrl || "").trim();
+  if (st !== "SUCCESS" || !url) return false;
+  const items = loadLibrary();
+  const row = items.find((t) => String(t?.meta?.musicVideo?.taskId || "").trim() === tid);
+  if (!row) return false;
+  saveMusicVideoMetaForTrack(row, { taskId: tid, videoUrl: url, createdAt: Date.now() });
+  try { refreshOwnSongsUi({ soft: true }); } catch { refreshOwnSongsUi(); }
+  if (!silent) {
+    showToast("Music video is ready — open it from your song menu.", { icon: "✓", durationMs: 3200 });
+  }
+  return true;
+}
+
+async function tryRecoverGenerationFromPushNotification() {
+  const pending = consumePendingPushTask();
+  if (!pending?.taskId) return false;
+  if (!isAppLoggedIn() && !getSupabaseAuthToken()) {
+    stashPendingPushTask(pending.taskId, pending.category);
+    return false;
+  }
+  const { taskId, category } = pending;
+  if (libraryHasTaskAudio(taskId)) {
+    try { refreshOwnSongsUi({ soft: true }); } catch { refreshOwnSongsUi(); }
+    markLibraryTabDot(true);
+    return true;
+  }
+  try {
+    if (category === "sound_ready") {
+      return await recoverSoundFromTaskId(taskId, { silent: true });
+    }
+    if (category === "instrumental_ready") {
+      return await recoverInstrumentalFromTaskId(taskId, { silent: true });
+    }
+    if (category === "music_video_ready") {
+      return await recoverMusicVideoFromTaskId(taskId, { silent: true });
+    }
+    return await recoverSongFromTaskId(taskId, { silent: true, pushCategory: category });
+  } catch (e) {
+    console.warn("[push-recover]", e?.message || e);
+    return false;
+  }
 }
 
 function updateLibraryRecoverBanner() {
@@ -46711,10 +46863,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
   };
 
   const handleGenerationFailure = (failureInfo, rawState) => {
-    if (generatePollTimer) {
-      clearInterval(generatePollTimer);
-      generatePollTimer = null;
-    }
+    stopGeneratePoll();
     setGenerateBtn("Generate song", false, "generate");
     savePendingBackendTask("");
     clearGenerationPending(sunoTaskId || loadPendingBackendTask());
@@ -46774,128 +46923,132 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
   };
 
   const startGeneratePolling = () => {
-    if (generatePollTimer) clearInterval(generatePollTimer);
-    let tries = 0;
+    stopGeneratePoll();
     let consecutiveFetchErrors = 0;
-    const maxTries = 160; // ~12 minutes at 4.5s interval
-    generatePollTimer = setInterval(async () => {
-      tries += 1;
-      try {
-        const state = await fetchGenerationStatus();
-        consecutiveFetchErrors = 0;
-        if (!state) return;
-        // Check for explicit upstream failure flags before status — Suno
-        // sometimes keeps `status: PENDING` while signalling rejection via
-        // successFlag / errorMessage (esp. for copyright fingerprinting on
-        // hummed/uploaded references).
-        const failure = interpretSunoFailure(state);
-        const failedByFlag =
-          failure.kind === "copyright"
-          || failure.kind === "sensitive"
-          || (failure.kind === "transient" && !!state.errorMessage)
-          || (failure.kind && state.successFlag && state.successFlag !== "SUCCESS" && state.successFlag !== "PENDING" && state.successFlag !== "TEXT_SUCCESS" && state.successFlag !== "FIRST_SUCCESS");
-        if (failedByFlag && !state.hasAudio) {
-          handleGenerationFailure(failure, state);
-          return;
-        }
-        if (state.status === "SUCCESS" && state.hasAudio) {
-          clearInterval(generatePollTimer);
-          generatePollTimer = null;
-          setGenerateBtn("Regenerate", false, "generate");
-          showResultCard(true);
-          let genMeta = lastGenerationMeta;
-          if (pendingGeneratedCoverDataUrl) {
-            const coverMeta = {
-              imageUrl: pendingGeneratedCoverDataUrl,
-              photoMode: true,
-            };
-            genMeta = genMeta && typeof genMeta === "object"
-              ? { ...genMeta, ...coverMeta }
-              : coverMeta;
+    const maxTries = 160;
+    const startedAt = resolveGenerationPollStartedAt();
+    generatePollTimer = createAdaptivePollLoop({
+      startedAt,
+      maxTries,
+      onTick: async (tries) => {
+        try {
+          const state = await fetchGenerationStatus();
+          consecutiveFetchErrors = 0;
+          if (!state) return "continue";
+          // Check for explicit upstream failure flags before status — Suno
+          // sometimes keeps `status: PENDING` while signalling rejection via
+          // successFlag / errorMessage (esp. for copyright fingerprinting on
+          // hummed/uploaded references).
+          const failure = interpretSunoFailure(state);
+          const failedByFlag =
+            failure.kind === "copyright"
+            || failure.kind === "sensitive"
+            || (failure.kind === "transient" && !!state.errorMessage)
+            || (failure.kind && state.successFlag && state.successFlag !== "SUCCESS" && state.successFlag !== "PENDING" && state.successFlag !== "TEXT_SUCCESS" && state.successFlag !== "FIRST_SUCCESS");
+          if (failedByFlag && !state.hasAudio) {
+            handleGenerationFailure(failure, state);
+            return "stop";
           }
-          const variantAEntry = addToLibrary({
-            title: lastSunoTitle,
-            artUrl: lastSunoArtUrl,
-            url: lastSunoProxyUrl || lastSunoFullUrl,
-            taskId: sunoTaskId || "",
-            audioId: sunoAudioId || "",
-            kind: "full",
-            meta: genMeta,
-          });
-          const savedEntries = [variantAEntry].filter(Boolean);
-          if (lastSunoProxyUrl2 || lastSunoFullUrl2) {
-            savedEntries.push(addToLibrary({
-              title: lastSunoTitle2 || "Generated song B",
-              artUrl: lastSunoArtUrl2 || lastSunoArtUrl || "",
-              url: lastSunoProxyUrl2 || lastSunoFullUrl2,
+          if (state.status === "SUCCESS" && state.hasAudio) {
+            stopGeneratePoll();
+            setGenerateBtn("Regenerate", false, "generate");
+            showResultCard(true);
+            let genMeta = lastGenerationMeta;
+            if (pendingGeneratedCoverDataUrl) {
+              const coverMeta = {
+                imageUrl: pendingGeneratedCoverDataUrl,
+                photoMode: true,
+              };
+              genMeta = genMeta && typeof genMeta === "object"
+                ? { ...genMeta, ...coverMeta }
+                : coverMeta;
+            }
+            const variantAEntry = addToLibrary({
+              title: lastSunoTitle,
+              artUrl: lastSunoArtUrl,
+              url: lastSunoProxyUrl || lastSunoFullUrl,
               taskId: sunoTaskId || "",
-              audioId: lastSunoAudioId2 || "",
+              audioId: sunoAudioId || "",
               kind: "full",
               meta: genMeta,
-            }));
-          }
-          const genTaskId = sunoTaskId || "";
-          clearGenerationPending(genTaskId);
-          try {
-            pushLocalGenerationReadyActivity(savedEntries.filter(Boolean), { taskId: genTaskId });
-          } catch {}
-          syncGenerationPendingLibraryUi();
-          pendingGeneratedCoverDataUrl = "";
-          resetNabadLyricsDraftState();
-          els.btnSunoStems.disabled = !(sunoAudioId);
-          if (els.btnSunoMultiStems) els.btnSunoMultiStems.disabled = !(sunoAudioId);
-          setStatus("Song is ready. Press Play full.");
-          savePendingBackendTask("");
-          try {
-            const rec = loadRecoverableGenerationTask();
-            if (rec?.taskId && String(sunoTaskId || "") === rec.taskId) {
-              clearRecoverableGenerationTask();
+            });
+            const savedEntries = [variantAEntry].filter(Boolean);
+            if (lastSunoProxyUrl2 || lastSunoFullUrl2) {
+              savedEntries.push(addToLibrary({
+                title: lastSunoTitle2 || "Generated song B",
+                artUrl: lastSunoArtUrl2 || lastSunoArtUrl || "",
+                url: lastSunoProxyUrl2 || lastSunoFullUrl2,
+                taskId: sunoTaskId || "",
+                audioId: lastSunoAudioId2 || "",
+                kind: "full",
+                meta: genMeta,
+              }));
             }
-          } catch {}
-          try {
-            updateLibraryRecoverBanner();
-          } catch {}
-          // Unlock before markGenerationReadyNotice — that helper used to throw
-          // on a stale showResultCard reference, which left generateLocked on.
-          setGenerateFieldsLocked(false);
-          setProgress(0);
-          markGenerationReadyNotice();
-          // Avoid stale vocal reference leaking into the next generation.
-          clearVocalReferenceSelection();
-          return;
+            const genTaskId = sunoTaskId || "";
+            clearGenerationPending(genTaskId);
+            try {
+              pushLocalGenerationReadyActivity(savedEntries.filter(Boolean), { taskId: genTaskId });
+            } catch {}
+            syncGenerationPendingLibraryUi();
+            pendingGeneratedCoverDataUrl = "";
+            resetNabadLyricsDraftState();
+            els.btnSunoStems.disabled = !(sunoAudioId);
+            if (els.btnSunoMultiStems) els.btnSunoMultiStems.disabled = !(sunoAudioId);
+            setStatus("Song is ready. Press Play full.");
+            savePendingBackendTask("");
+            try {
+              const rec = loadRecoverableGenerationTask();
+              if (rec?.taskId && String(sunoTaskId || "") === rec.taskId) {
+                clearRecoverableGenerationTask();
+              }
+            } catch {}
+            try {
+              updateLibraryRecoverBanner();
+            } catch {}
+            // Unlock before markGenerationReadyNotice — that helper used to throw
+            // on a stale showResultCard reference, which left generateLocked on.
+            setGenerateFieldsLocked(false);
+            setProgress(0);
+            markGenerationReadyNotice();
+            // Avoid stale vocal reference leaking into the next generation.
+            clearVocalReferenceSelection();
+            return "stop";
+          }
+          if (state.status === "FAILED") {
+            // FAILED status: try to surface a specific reason. If Suno gave
+            // us enough fields to classify (copyright, content, etc.) the
+            // toast is detailed; otherwise we fall back to a generic message.
+            handleGenerationFailure(
+              failure.kind ? failure : { kind: "generic", headline: "Generation failed. Please try again.", detail: state.errorMessage || "" },
+              state
+            );
+            return "stop";
+          }
+          if (tries >= maxTries) {
+            setGenerateBtn("Check status", false, "resume");
+            setStatus("Still processing in backend. Tap Check status.");
+            setGenerateFieldsLocked(false);
+            try { bumpCoachGenerationStillWorking(); } catch {}
+            return "stop";
+          }
+          return "continue";
+        } catch (err) {
+          consecutiveFetchErrors += 1;
+          // Quietly retry transient network blips, but bail with a clear
+          // message if the status endpoint has been failing for ~45s — the
+          // old code swallowed every error so the spinner stayed forever.
+          if (consecutiveFetchErrors >= 10) {
+            handleGenerationFailure({
+              kind: "transient",
+              headline: "Lost connection while checking generation status",
+              detail: "We couldn't reach the backend. Tap Generate to try again, or check your network.",
+            });
+            return "stop";
+          }
+          return "continue";
         }
-        if (state.status === "FAILED") {
-          // FAILED status: try to surface a specific reason. If Suno gave
-          // us enough fields to classify (copyright, content, etc.) the
-          // toast is detailed; otherwise we fall back to a generic message.
-          handleGenerationFailure(
-            failure.kind ? failure : { kind: "generic", headline: "Generation failed. Please try again.", detail: state.errorMessage || "" },
-            state
-          );
-          return;
-        }
-        if (tries >= maxTries) {
-          clearInterval(generatePollTimer);
-          generatePollTimer = null;
-          setGenerateBtn("Check status", false, "resume");
-          setStatus("Still processing in backend. Tap Check status.");
-          setGenerateFieldsLocked(false);
-          try { bumpCoachGenerationStillWorking(); } catch {}
-        }
-      } catch (err) {
-        consecutiveFetchErrors += 1;
-        // Quietly retry transient network blips, but bail with a clear
-        // message if the status endpoint has been failing for ~45s — the
-        // old code swallowed every error so the spinner stayed forever.
-        if (consecutiveFetchErrors >= 10) {
-          handleGenerationFailure({
-            kind: "transient",
-            headline: "Lost connection while checking generation status",
-            detail: "We couldn't reach the backend. Tap Generate to try again, or check your network.",
-          });
-        }
-      }
-    }, 4500);
+      },
+    });
   };
   _startGeneratePolling = startGeneratePolling;
   _showResultCardHoisted = showResultCard;
@@ -51121,12 +51274,15 @@ if (isCapacitorNativeAuth()) {
     const APP_RESUME_REFRESH_GAP_MS = 15000;
     try {
       CapApp.addListener("appStateChange", ({ isActive }) => {
+        setAppActiveState(Boolean(isActive));
         if (!isActive) {
           if (authSession) {
             void persistAuthSessionEverywhere(JSON.stringify(authSession));
           }
           return;
         }
+        void tryRecoverGenerationFromPushNotification();
+        kickForegroundGenerationPolls();
         // While Google/Apple OAuth browser is open, ignore resume — deep link
         // (`appUrlOpen`) or `browserFinished` handles completion.
         if (_oauthBrowserOpen) return;
@@ -52353,6 +52509,16 @@ try {
   };
   globalThis.__nabadShowToast = (msg, opts) => showToast(msg, opts);
   globalThis.__nabadApiBase = _resolvedApiBase || "";
+  try {
+    setAppActiveState(!document.hidden);
+    document.addEventListener("visibilitychange", () => {
+      setAppActiveState(!document.hidden);
+      if (!document.hidden) {
+        void tryRecoverGenerationFromPushNotification();
+        kickForegroundGenerationPolls();
+      }
+    });
+  } catch {}
 } catch {}
 applyClientEnvBootstrap();
 loadPublicConfigFromCache();
@@ -52419,6 +52585,7 @@ void (async () => {
   const pendingPushAfterBoot = consumePendingPushRoute();
   if (pendingPushAfterBoot && (isAppLoggedIn() || getSupabaseAuthToken())) {
     try { location.hash = `#/${pendingPushAfterBoot}`; } catch {}
+    void tryRecoverGenerationFromPushNotification();
   }
 
   // Always hydrate from cloud when a valid session exists (not only callback flows).

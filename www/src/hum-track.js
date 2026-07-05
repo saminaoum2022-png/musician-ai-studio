@@ -4,6 +4,7 @@
  */
 import { HUM_TRACK_INSTRUMENTS, getHumTrackPreset } from "./hum-track-instruments.js";
 import { humTrackIconMarkup } from "./hum-track-icons.js";
+import { createAdaptivePollLoop, stopPollLoop } from "./generation-poll.js";
 
 let ctx = null;
 let wired = false;
@@ -144,10 +145,12 @@ function resetHumTrackSession() {
 }
 
 function stopHumTrackPolling() {
-  if (humTrackPollTimer) {
-    clearInterval(humTrackPollTimer);
-    humTrackPollTimer = null;
-  }
+  stopPollLoop(humTrackPollTimer);
+  humTrackPollTimer = null;
+}
+
+export function kickHumTrackGenerationPoll() {
+  try { humTrackPollTimer?.kick?.(); } catch {}
 }
 
 function stopHumTrackRecording(finalize = true) {
@@ -315,51 +318,58 @@ function failHumTrackGeneration(taskId, message) {
 
 function startHumTrackPolling(taskId, instrumentId) {
   stopHumTrackPolling();
-  let tries = 0;
   const maxTries = 160;
-  humTrackPollTimer = setInterval(async () => {
-    tries += 1;
-    try {
-      const r = await fetch(ctx.apiUrl(`/api/suno/status?taskId=${encodeURIComponent(taskId)}`));
-      const data = await r.json().catch(() => ({}));
-      if (!r.ok) throw new Error(data?.error || "Status check failed");
-      const state = parseSunoStatusPayload(data);
-      const failed =
-        state.status === "FAILED" ||
-        (state.successFlag &&
-          state.successFlag !== "SUCCESS" &&
-          state.successFlag !== "PENDING" &&
-          state.successFlag !== "TEXT_SUCCESS" &&
-          state.successFlag !== "FIRST_SUCCESS" &&
-          !state.hasAudio);
-      if (failed && !state.hasAudio) {
-        failHumTrackGeneration(taskId, state.errorMessage || "Generation failed. Try recording again.");
-        return;
+  const startedAt = Number(ctx?.getGenerationPending?.()?.startedAt) || Date.now();
+  humTrackPollTimer = createAdaptivePollLoop({
+    startedAt,
+    maxTries,
+    onTick: async (tries) => {
+      try {
+        const r = await fetch(ctx.apiUrl(`/api/suno/status?taskId=${encodeURIComponent(taskId)}`));
+        const data = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(data?.error || "Status check failed");
+        const state = parseSunoStatusPayload(data);
+        const failed =
+          state.status === "FAILED" ||
+          (state.successFlag &&
+            state.successFlag !== "SUCCESS" &&
+            state.successFlag !== "PENDING" &&
+            state.successFlag !== "TEXT_SUCCESS" &&
+            state.successFlag !== "FIRST_SUCCESS" &&
+            !state.hasAudio);
+        if (failed && !state.hasAudio) {
+          failHumTrackGeneration(taskId, state.errorMessage || "Generation failed. Try recording again.");
+          return "stop";
+        }
+        if (state.status === "SUCCESS" && state.hasAudio) {
+          finishHumTrackSuccess(taskId, instrumentId, state.tracks);
+          return "stop";
+        }
+        if (tries > 0 && tries % 80 === 0) {
+          try {
+            ctx?.bumpCoachGenerationStillWorking?.();
+          } catch {}
+        }
+        if (tries >= maxTries) {
+          try {
+            ctx?.bumpCoachGenerationStillWorking?.();
+          } catch {}
+          ctx?.showToast?.("Still creating — the Coach will notify you when it's ready.", {
+            durationMs: 6000,
+          });
+          stopHumTrackPolling();
+          return "stop";
+        }
+        return "continue";
+      } catch (err) {
+        if (tries >= 10) {
+          failHumTrackGeneration(taskId, err?.message || "Lost connection while generating.");
+          return "stop";
+        }
+        return "continue";
       }
-      if (state.status === "SUCCESS" && state.hasAudio) {
-        finishHumTrackSuccess(taskId, instrumentId, state.tracks);
-        return;
-      }
-      if (tries > 0 && tries % 80 === 0) {
-        try {
-          ctx?.bumpCoachGenerationStillWorking?.();
-        } catch {}
-      }
-      if (tries >= maxTries) {
-        try {
-          ctx?.bumpCoachGenerationStillWorking?.();
-        } catch {}
-        ctx?.showToast?.("Still creating — the Coach will notify you when it's ready.", {
-          durationMs: 6000,
-        });
-        stopHumTrackPolling();
-      }
-    } catch (err) {
-      if (tries >= 10) {
-        failHumTrackGeneration(taskId, err?.message || "Lost connection while generating.");
-      }
-    }
-  }, 4500);
+    },
+  });
 }
 
 function armHumTrackGeneration(taskId, instrumentId, label) {

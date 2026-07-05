@@ -79,8 +79,8 @@ function contextualRoots(opts = {}) {
   /** @type {NabadRootId[]} */
   const roots = ["symbolic_mood"];
 
-  if (humTrack || visualMode === "instrument_still_life") {
-    roots.push("instrument_sculpture", "soft_grain", "breathing_room");
+  if (humTrack || visualMode === "studio_nook_still_life") {
+    roots.push("editorial_still", "soft_grain", "breathing_room");
   } else if (visualMode === "figure") {
     roots.push("editorial_still", "soft_grain", "silhouette");
   } else if (visualMode === "abstract") {

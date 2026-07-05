@@ -133,16 +133,18 @@ export function coverArtParamsFromTrack(track) {
   const lyrics = String(
     meta.lyricsInput || meta.finalPrompt || meta.prompt || meta.soundPrompt || "",
   ).trim();
-  const artworkHint = resolveArtworkHint(meta);
-  const artworkResolved = resolveUserArtworkPrompt({
-    artworkStyle: meta?.artworkStyle,
-    artworkHint,
-    styleSent: meta?.styleSent,
-    style: meta?.styleInput,
-    styleInput: meta?.styleInput,
-  });
   const humTrack = Boolean(meta.humTrack);
   const avoidBase = String(meta?.avoidTagsInput || "").trim();
+  const artworkHint = humTrack ? "" : resolveArtworkHint(meta);
+  const artworkResolved = humTrack
+    ? ""
+    : resolveUserArtworkPrompt({
+      artworkStyle: meta?.artworkStyle,
+      artworkHint,
+      styleSent: meta?.styleSent,
+      style: meta?.styleInput,
+      styleInput: meta?.styleInput,
+    });
   return {
     songId: String(track?.id || meta?.taskId || track?.taskId || "").trim(),
     title: String(track?.title || "Untitled").trim(),

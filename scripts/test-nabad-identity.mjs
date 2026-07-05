@@ -42,8 +42,9 @@ assert(a.phraseBundleId === nabadPhraseBundleId(a.roots), "bundle id matches roo
 assert(a2.phraseBundleId === a.phraseBundleId, "deterministic for same songId");
 assert(b.phraseBundleId !== a.phraseBundleId, "different songs differ");
 
-const hum = nabadIdentityPhrases({ songId: "hum-1", bucketKey: "default", humTrack: true, visualMode: "instrument_still_life" });
-assert(hum.roots.includes("instrument_sculpture"), "hum track includes instrument_sculpture");
+const hum = nabadIdentityPhrases({ songId: "hum-1", bucketKey: "default", humTrack: true, visualMode: "studio_nook_still_life" });
+assert(hum.roots.includes("editorial_still"), "hum track includes editorial_still");
+assert(!hum.roots.includes("instrument_sculpture"), "hum track skips instrument_sculpture");
 
 const avoid = nabadIdentityAvoid();
 assert(avoid.length >= 3 && avoid.length <= 6, "compact identity avoid list");

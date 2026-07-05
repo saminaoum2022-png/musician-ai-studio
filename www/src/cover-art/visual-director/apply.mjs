@@ -45,7 +45,7 @@ export function applyVisualDirection(coverInput, direction, opts = {}) {
   const avoidMerged = [
     ...nabadIdentityAvoid(),
     ...(direction?.avoidConcepts || []),
-    ...(humTrack || direction?.visualMode === "instrument_still_life"
+    ...(humTrack || direction?.visualMode === "studio_nook_still_life"
       ? humTrackAvoidTags("").split(/,\s*/)
       : []),
     String(coverInput?.avoidTagsInput || "").trim(),

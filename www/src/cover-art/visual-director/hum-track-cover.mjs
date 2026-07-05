@@ -1,11 +1,11 @@
 /**
- * Hum Track cover constraints — instrument-only still life, no people/hands.
+ * Hum Track cover constraints — instrument-adjacent studio nook, no instruments in frame.
  */
 
 export const HUM_TRACK_SCENE_GUARD =
-  "empty studio, instrument-only frame, no people, no human figures, no faces, no hands, no fingers, no musician, no performer, no body parts";
+  "empty musician studio nook, warm wood table, window sunlight with long shadows, dried botanicals, no instruments visible, no people, no human figures, no faces, no hands, no fingers, no musician, no performer, no body parts";
 
-/** Extra negative-prompt tags for Pollinations (anatomy + surreal object failures). */
+/** Extra negative-prompt tags for Pollinations (anatomy + instrument render failures). */
 export const HUM_TRACK_AVOID = Object.freeze([
   "people",
   "human figure",
@@ -28,27 +28,51 @@ export const HUM_TRACK_AVOID = Object.freeze([
   "deformed hands",
   "disfigured face",
   "mutated limbs",
+  "instrument",
+  "ukulele",
+  "guitar",
+  "violin",
+  "cello",
+  "viola",
+  "piano keys",
+  "keyboard keys",
+  "flute",
+  "synthesizer",
+  "string instrument",
+  "instrument body",
+  "neck",
+  "headstock",
+  "tuning pegs",
+  "f-holes",
+  "sound hole",
+  "bridge",
+  "bow",
+  "strings on instrument",
 ]);
 
+/** Per-instrument prop-only still life — same studio vibe, no instrument hero. */
 /** @type {Record<string, string>} */
-const INSTRUMENT_STILL = {
+const INSTRUMENT_NOOK_PROPS = {
   piano:
-    "single grand piano, black lacquer, correct keyboard and lid geometry, product still life",
+    "empty piano bench, sheet music on wooden stand, metronome on table, moody teal studio, no keyboard visible",
   acoustic_guitar:
-    "single acoustic guitar on stand, natural wood body, six strings, plausible bridge and tuning pegs",
+    "empty wooden A-frame stand, closed gig bag, guitar picks and capo on warm wood table, window sun shadows",
   electric_guitar:
-    "single electric guitar on stand, solid body, six strings, correct headstock and pickups",
+    "empty guitar stand without instrument, coiled cable and effect pedal on floor, violet-teal studio spill light",
   violin:
-    "single violin on velvet surface, four strings, correct f-holes and chin rest, no bow in hand",
+    "open empty velvet-lined case, rosin cake and sheet music on wood table, warm dramatic light, no violin or bow",
   flute:
-    "single silver flute resting on studio surface, correct keys and embouchure hole",
+    "empty velvet-lined case interior, cleaning cloth on studio table, soft airy bokeh, no flute visible",
   ukulele:
-    "single ukulele on stand, small four-string body, correct scale length and sound hole",
+    "empty small wooden stand, closed soft gig bag, picks and handwritten tab paper on table, sunny window shadows",
   synth:
-    "single synthesizer keyboard on stand, clean keys and knobs, product photography",
+    "empty keyboard stand without keys, coiled midi cable and patch notes on desk, neon purple accent glow, no synthesizer",
   strings:
-    "solo string instrument as sculptural hero, cello or viola form, four strings, studio still life",
+    "empty instrument stand, rosin and sheet music on wood table, rich amber studio light, no cello violin or bow",
 };
+
+const GENERIC_NOOK =
+  "empty instrument stand, closed soft case, sheet music and small props on warm wood table, moody studio nook";
 
 function normalizeInstrumentId(raw) {
   return String(raw || "")
@@ -72,14 +96,19 @@ function guessInstrumentIdFromLabel(label) {
 }
 
 /**
+ * Prop-only studio nook phrase for any Hum Track instrument (no instrument in frame).
  * @param {string} instrumentLabel
  * @param {string} [instrumentId]
  */
-export function humTrackInstrumentStillPhrase(instrumentLabel, instrumentId = "") {
+export function humTrackStudioNookPhrase(instrumentLabel, instrumentId = "") {
   const id = normalizeInstrumentId(instrumentId) || guessInstrumentIdFromLabel(instrumentLabel);
-  const label = String(instrumentLabel || "instrument").trim() || "instrument";
-  if (id && INSTRUMENT_STILL[id]) return INSTRUMENT_STILL[id];
-  return `single ${label}, photoreal product still life, correct proportions, clean geometry`;
+  if (id && INSTRUMENT_NOOK_PROPS[id]) return INSTRUMENT_NOOK_PROPS[id];
+  return GENERIC_NOOK;
+}
+
+/** @deprecated Use humTrackStudioNookPhrase — kept for any stale imports. */
+export function humTrackInstrumentStillPhrase(instrumentLabel, instrumentId = "") {
+  return humTrackStudioNookPhrase(instrumentLabel, instrumentId);
 }
 
 /**
@@ -88,7 +117,7 @@ export function humTrackInstrumentStillPhrase(instrumentLabel, instrumentId = ""
  */
 export function appendHumTrackSceneGuards(sceneHint, maxLen = 220) {
   const base = String(sceneHint || "").trim();
-  if (/no people|instrument-only/i.test(base)) return base.slice(0, maxLen);
+  if (/no instruments visible|studio nook/i.test(base)) return base.slice(0, maxLen);
   if (!base) return HUM_TRACK_SCENE_GUARD.slice(0, maxLen);
   const suffix = `, ${HUM_TRACK_SCENE_GUARD}`;
   const room = Math.max(0, maxLen - suffix.length);

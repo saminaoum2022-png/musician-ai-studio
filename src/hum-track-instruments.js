@@ -8,7 +8,7 @@ export const HUM_TRACK_INSTRUMENTS = [
     negativeTags:
       "vocals, singing, humming, voice, speech, drums, percussion, bass, guitar, strings, full band, synth, pad, orchestral",
     coverArtHint:
-      "grand piano keys close-up, moody purple studio lighting, single instrument still life, no people, no writing",
+      "empty piano bench, sheet music on wooden stand, metronome on table, moody teal studio, no keyboard visible, no people, no writing",
   },
   {
     id: "acoustic_guitar",
@@ -18,7 +18,7 @@ export const HUM_TRACK_INSTRUMENTS = [
     negativeTags:
       "vocals, singing, humming, voice, speech, drums, percussion, bass, piano, electric guitar, full band, synth, pad",
     coverArtHint:
-      "acoustic guitar body and soundhole, warm wood grain, soft spotlight, handcrafted instrument still life, no people, no writing",
+      "empty wooden stand, closed gig bag, picks and capo on warm wood table, window sun shadows, no guitar visible, no people, no writing",
   },
   {
     id: "electric_guitar",
@@ -28,7 +28,7 @@ export const HUM_TRACK_INSTRUMENTS = [
     negativeTags:
       "vocals, singing, humming, voice, speech, drums, percussion, bass, piano, acoustic guitar, full band, synth, pad",
     coverArtHint:
-      "electric guitar silhouette, clean modern studio, purple accent lighting, sleek instrument still life, no people, no writing",
+      "empty guitar stand, coiled cable and effect pedal, violet-teal studio spill light, no guitar visible, no people, no writing",
   },
   {
     id: "violin",
@@ -38,7 +38,7 @@ export const HUM_TRACK_INSTRUMENTS = [
     negativeTags:
       "vocals, singing, humming, voice, speech, drums, percussion, bass, piano, guitar, full band, synth, pad, orchestral section",
     coverArtHint:
-      "violin and bow on velvet, warm dramatic lighting, classical instrument portrait, no people, no writing",
+      "open empty velvet-lined case, rosin and sheet music on wood table, warm dramatic light, no violin or bow, no people, no writing",
   },
   {
     id: "flute",
@@ -48,7 +48,7 @@ export const HUM_TRACK_INSTRUMENTS = [
     negativeTags:
       "vocals, singing, humming, voice, speech, drums, percussion, bass, piano, guitar, strings, full band, synth, pad",
     coverArtHint:
-      "silver flute gleaming, soft bokeh background, airy minimal instrument still life, no people, no writing",
+      "empty velvet-lined case interior, cleaning cloth on studio table, soft airy bokeh, no flute visible, no people, no writing",
   },
   {
     id: "ukulele",
@@ -58,7 +58,7 @@ export const HUM_TRACK_INSTRUMENTS = [
     negativeTags:
       "vocals, singing, humming, voice, speech, drums, percussion, bass, piano, guitar, full band, synth, pad",
     coverArtHint:
-      "ukulele close-up, warm handcrafted wood, sunny soft tones, cheerful instrument still life, no people, no writing",
+      "empty small wooden stand, closed soft gig bag, picks and tab paper on table, sunny window shadows, no ukulele visible, no people, no writing",
   },
   {
     id: "synth",
@@ -68,7 +68,7 @@ export const HUM_TRACK_INSTRUMENTS = [
     negativeTags:
       "vocals, singing, humming, voice, speech, drums, percussion, bass, piano, guitar, strings, full band, pad, orchestral",
     coverArtHint:
-      "retro synthesizer knobs and keys, neon purple glow, electronic instrument still life, no people, no writing",
+      "empty keyboard stand without keys, coiled midi cable and patch notes, neon purple accent glow, no synthesizer visible, no people, no writing",
   },
   {
     id: "strings",
@@ -78,7 +78,7 @@ export const HUM_TRACK_INSTRUMENTS = [
     negativeTags:
       "vocals, singing, humming, voice, speech, drums, percussion, bass, piano, guitar, full band, synth pad, heavy orchestral",
     coverArtHint:
-      "solo cello or violin in soft focus, rich amber concert lighting, strings instrument portrait, no people, no writing",
+      "empty instrument stand, rosin and sheet music on wood table, rich amber studio light, no cello violin or bow, no people, no writing",
   },
 ];
 

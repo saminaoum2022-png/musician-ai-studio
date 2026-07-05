@@ -9,7 +9,7 @@ export const POLLINATIONS_COVER_HEIGHT = 1024;
 
 /** Keep in sync with hum-track-cover.mjs — no imports here (server loads this via dynamic import). */
 const HUM_TRACK_SCENE_GUARD =
-  "empty studio, instrument-only frame, no people, no human figures, no faces, no hands, no fingers, no musician, no performer, no body parts";
+  "empty musician studio nook, warm wood table, window sunlight with long shadows, dried botanicals, no instruments visible, no people, no human figures, no faces, no hands, no fingers, no musician, no performer, no body parts";
 
 const NO_TEXT_LEAD =
   "pure photograph with absolutely zero text letters or words visible anywhere, visual scene only, ";
@@ -33,7 +33,7 @@ const STYLE_CORE =
   "premium cinematic visual art, elegant composition, rich color grading, high-end editorial look, moody dark tones with luminous accents, deep teal and violet palette when appropriate, natural anatomy, physically plausible lighting, clean geometry, single focal subject, balanced composition, professional photography, minimal visual noise, high image coherence, realistic proportions, clean perspective";
 
 const HUM_TRACK_STYLE_CORE =
-  "premium cinematic visual art, elegant composition, rich color grading, moody dark tones with luminous accents, deep teal and violet palette, photoreal instrument product still life, clean object geometry, physically plausible lighting, single instrument focal subject, balanced composition, professional studio photography, minimal visual noise, high image coherence, clean perspective, no human subjects";
+  "premium cinematic visual art, elegant composition, rich color grading, moody dark tones with luminous accents, deep teal and violet palette, photoreal studio nook still life, props only, warm wood surfaces, window sunlight with long shadows, dried botanical accents, balanced composition, professional studio photography, minimal visual noise, high image coherence, clean perspective, no instruments visible, no human subjects";
 
 const USER_STYLE_CORE =
   "cinematic lighting, rich color grading, high-end editorial look";
@@ -458,7 +458,7 @@ const TEXT_TRIGGER_REPLACEMENTS = [
   ["greeting card", "blank textured paper surface"],
   ["signature version", ""],
   ["signature", ""],
-  ["hum track", "solo instrument product still life on studio surface"],
+  ["hum track", "musician studio nook still life with props, no instruments visible"],
   ["album cover art", "cinematic still life"],
   ["album cover", "cinematic still life"],
 ];

@@ -3,7 +3,7 @@
  */
 import {
   appendHumTrackSceneGuards,
-  humTrackInstrumentStillPhrase,
+  humTrackStudioNookPhrase,
 } from "./hum-track-cover.mjs";
 
 /** @typedef {import("./context.js").CoverDirectorContext} CoverDirectorContext */
@@ -52,10 +52,10 @@ export function enrichDirectorContext(ctx) {
   const next = { ...ctx, occasionLabel: occasion || ctx.occasionLabel };
 
   if (ctx.sourcePath === "hum_track" && ctx.instrumentLabel) {
-    next.visualModeHint = "instrument_still_life";
-    const still = humTrackInstrumentStillPhrase(ctx.instrumentLabel, ctx.instrumentId);
+    next.visualModeHint = "studio_nook_still_life";
+    const nook = humTrackStudioNookPhrase(ctx.instrumentLabel, ctx.instrumentId);
     next.storyScene = appendHumTrackSceneGuards(
-      next.storyScene || `${still}, moody studio spill light, no writing`,
+      next.storyScene || `${nook}, moody studio spill light, no writing`,
     );
   }
 

@@ -2,9 +2,7 @@
  * Rule-based Visual Director — no LLM required.
  */
 import { fnv1a } from "./hash.mjs";
-import {
-  humTrackInstrumentStillPhrase,
-} from "./hum-track-cover.mjs";
+import { humTrackStudioNookPhrase } from "./hum-track-cover.mjs";
 import { nabadIdentityPhrases } from "./nabad-identity.mjs";
 import { validateVisualDirection } from "./schema.mjs";
 
@@ -25,7 +23,7 @@ function mainSubjectFromContext(ctx) {
     return String(ctx.artworkHint || ctx.artworkStyle).slice(0, 120);
   }
   if (ctx.humTrack && ctx.instrumentLabel) {
-    return `${humTrackInstrumentStillPhrase(ctx.instrumentLabel, ctx.instrumentId)}, premium studio still life`;
+    return `${humTrackStudioNookPhrase(ctx.instrumentLabel, ctx.instrumentId)}, premium studio nook still life`;
   }
   if (ctx.storyScene) {
     return ctx.storyScene.replace(/, no (people|faces|writing).*$/i, "").trim().slice(0, 120);
@@ -43,7 +41,9 @@ function mainSubjectFromContext(ctx) {
 }
 
 function settingFromContext(ctx) {
-  if (ctx.sourcePath === "hum_track") return "moody studio with soft violet-teal spill light";
+  if (ctx.sourcePath === "hum_track") {
+    return "moody studio nook with soft violet-teal spill light, window sunlight and long shadows";
+  }
   if (ctx.sourcePath === "sound") return ctx.energy > 0.7 ? "dynamic neon atmospheric space" : "calm minimal atmospheric void";
   if (ctx.sourcePath === "mashup") return "layered depth planes with dual glow accents";
   if (/ocean|beach|sea|coast/i.test(ctx.storyScene)) return "coastal horizon at dusk";
@@ -68,7 +68,7 @@ function visualSymbolsFromContext(ctx) {
 }
 
 function visualModeFromContext(ctx) {
-  if (ctx.humTrack || ctx.visualModeHint === "instrument_still_life") return "instrument_still_life";
+  if (ctx.humTrack || ctx.visualModeHint === "studio_nook_still_life") return "studio_nook_still_life";
   if (ctx.visualModeHint === "figure") return "figure";
   if (ctx.visualModeHint === "abstract" || ctx.sourcePath === "instrumental") return "abstract";
   return "landscape";
@@ -94,6 +94,16 @@ function extraAvoid(ctx) {
       "surreal objects",
       "impossible geometry",
       "melded objects",
+      "instrument",
+      "ukulele",
+      "guitar",
+      "violin",
+      "piano keys",
+      "flute",
+      "synthesizer",
+      "neck",
+      "headstock",
+      "strings on instrument",
     );
   }
   if (ctx.sourcePath === "sound") avoid.push("literal lyrics text", "ui elements");
@@ -122,13 +132,13 @@ export function resolveHeuristicVisualDirection(ctx) {
     occasion: ctx.occasionLabel || null,
     setting: settingFromContext(ctx),
     visualSymbols: visualSymbolsFromContext(ctx),
-    instrumentFocus: ctx.humTrack && ctx.instrumentLabel ? `solo ${ctx.instrumentLabel}` : null,
+    instrumentFocus: null,
     composition: pickComposition(ctx.songId),
     lighting: ctx.energy > 0.75
       ? "sharp rim light with controlled kinetic glow"
       : "soft cinematic rim light with teal-violet atmospheric fill",
-    cameraStyle: visualMode === "instrument_still_life"
-      ? "macro product still life photograph, empty studio, no human subjects"
+    cameraStyle: visualMode === "studio_nook_still_life"
+      ? "editorial studio nook still life photograph, props only, no instruments, no human subjects"
       : visualMode === "figure"
         ? "wide cinematic silhouette photograph"
         : "premium editorial landscape photograph",

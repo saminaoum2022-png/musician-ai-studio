@@ -20,26 +20,26 @@ const NO_TEXT_REINFORCE =
   "completely wordless photograph, zero readable characters in the entire frame, blank signs, empty screens, no labels";
 
 const NEGATIVE_TEXT_PROMPT =
-  "text, words, letters, numbers, typography, font, writing, caption, subtitle, watermark, logo, album cover title, song title, track title, artist name, band name, signage, billboard, poster text, newspaper, book, magazine, speech bubble, label, stamp, signature, handwritten, calligraphy, cursive, script font, decorative lettering, word art, letter shapes, holiday lettering, christmas text, greeting card text, festive banner, neon sign with words, arabic text, english text, quotes, meme text, ui overlay, readable characters, sentences, lyrics on screen, cd cover text, record label, tracklist, credits block, diploma text, certificate text, graffiti letters, title card, greeting card, banner text, embroidered text, carved letters, glowing words, light text, 3d text";
+  "text, words, letters, numbers, typography, font, writing, caption, subtitle, watermark, logo, album cover title, song title, track title, artist name, band name, signage, billboard, poster text, newspaper, book, magazine, speech bubble, label, stamp, signature, handwritten, calligraphy, cursive, script font, decorative lettering, word art, letter shapes, holiday lettering, christmas text, greeting card text, festive banner, neon sign with words, arabic text, english text, quotes, meme text, ui overlay, readable characters, sentences, lyrics on screen, cd cover text, record label, tracklist, credits block, diploma text, certificate text, graffiti letters, title card, greeting card, banner text, embroidered text, carved letters, glowing words, light text, 3d text, bad anatomy, deformed anatomy, extra fingers, missing fingers, duplicate limbs, floating limbs, mutated hands, broken hands, crossed eyes, lazy eye, crooked eyes, disfigured face, cropped face, duplicate subject, floating objects, blurry, low quality, jpeg artifacts, oversaturated, distorted perspective";
 
 const STYLE_CORE =
-  "premium cinematic visual art, elegant composition, rich color grading, high-end editorial look, moody dark tones with luminous accents, deep teal and violet palette when appropriate";
+  "premium cinematic visual art, elegant composition, rich color grading, high-end editorial look, moody dark tones with luminous accents, deep teal and violet palette when appropriate, natural anatomy, physically plausible lighting, clean geometry, single focal subject, balanced composition, professional photography, minimal visual noise, high image coherence, realistic proportions, clean perspective";
 
 const USER_STYLE_CORE =
   "cinematic lighting, rich color grading, high-end editorial look";
 
 const MOOD_PALETTES = {
-  love: "rose gold, soft magenta, warm coral, violet dusk",
-  party: "electric teal, vivid violet, gold sparkle, neon bloom",
-  happy: "bright teal, sunny amber, soft white bloom",
-  sad: "deep indigo, muted violet, cold teal whisper",
-  chill: "deep teal, soft cyan, muted violet mist",
-  wedding: "champagne gold, ivory glow, soft violet",
-  hype: "aggressive teal, sharp violet, high contrast",
-  dark: "near-black void, deep purple, toxic teal trace",
-  dreamy: "lavender, teal mist, pearlescent white",
-  epic: "royal violet, teal beam, bright gold crest",
-  default: "deep void black, deep teal, rich violet, rose-gold accent",
+  love: "rose gold warm glow, soft magenta lighting, warm coral highlights, violet dusk atmospheric haze",
+  party: "electric teal, cool cyan lighting, vivid violet, soft purple atmospheric glow, gold sparkle, neon bloom",
+  happy: "bright teal, cool cyan lighting, sunny amber warmth, soft white bloom",
+  sad: "deep indigo, muted blue atmospheric haze, muted violet, cold teal whisper",
+  chill: "deep teal, cool cyan lighting, soft cyan mist, muted violet atmospheric glow",
+  wedding: "champagne gold warm glow, ivory soft light, soft violet atmospheric haze",
+  hype: "aggressive teal, cool cyan rim light, sharp violet, soft purple atmospheric glow, high contrast",
+  dark: "near-black void, deep purple atmospheric haze, toxic teal trace glow",
+  dreamy: "lavender soft glow, teal mist, pearlescent white light",
+  epic: "royal violet, soft purple atmospheric glow, teal beam, bright gold crest light",
+  default: "deep void black, deep teal, cool cyan lighting, rich violet, soft purple atmospheric glow, rose-gold accent warm glow",
 };
 
 /** Story themes — chosen from title + lyrics + style, highest match wins. */
@@ -189,12 +189,12 @@ const ABSTRACT_FALLBACKS = [
 ];
 
 const COMPOSITIONS = [
-  "centered subject with strong negative space",
-  "wide cinematic framing",
-  "subject small against vast sky",
-  "low horizon with towering sky glow",
-  "symmetric balanced composition",
-  "diagonal dramatic perspective",
+  "centered single focal subject with strong negative space",
+  "symmetrical balanced composition with clear focal point",
+  "rule of thirds framing with one dominant subject",
+  "centered subject with clean horizon and balanced weight",
+  "symmetric composition with single clear focal subject",
+  "rule of thirds with subject placed on vertical third",
 ];
 
 function clamp(n, lo, hi) {

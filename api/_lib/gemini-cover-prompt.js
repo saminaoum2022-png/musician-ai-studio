@@ -80,6 +80,8 @@ function buildGeminiCoverBrief(input, { bucketKey, palette, artworkHint = "", oc
     "Output plain text only: comma-separated visual description, max 220 characters.",
     "No markdown, no quotes, no JSON.",
     "Describe subject, setting, lighting mood, and composition only.",
+    "Prefer one dominant subject, one clear environment, realistic photography, simple composition, and minimal visual clutter.",
+    "Avoid surreal or impossible combinations unless the mood, genre, or art direction below explicitly calls for them.",
     "CRITICAL: absolutely no readable text, letters, numbers, logos, signage, posters, banners, captions, song titles, or watermarks anywhere in the scene.",
     "Do NOT name colors or color palettes — brand color grading is appended separately.",
     "Avoid visible faces; distant silhouettes are ok.",

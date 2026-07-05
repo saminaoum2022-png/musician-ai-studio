@@ -129,7 +129,9 @@ function resolveArtworkHint(meta) {
 export function coverArtParamsFromTrack(track) {
   const meta = track?.meta && typeof track.meta === "object" ? track.meta : {};
   const styleBlob = `${meta.styleInput || ""} ${meta.styleSent || ""}`;
-  const lyrics = String(meta.lyricsInput || meta.finalPrompt || meta.prompt || "").trim();
+  const lyrics = String(
+    meta.lyricsInput || meta.finalPrompt || meta.prompt || meta.soundPrompt || "",
+  ).trim();
   const artworkHint = resolveArtworkHint(meta);
   const artworkResolved = resolveUserArtworkPrompt({
     artworkStyle: meta?.artworkStyle,

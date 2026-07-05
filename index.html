@@ -126,7 +126,7 @@
       onload="this.media='all'"
     />
     <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Display:wght@900&family=Inter:wght@900&display=swap" /></noscript>
-    <link rel="stylesheet" href="./styles.css?v=20260706-003438" />
+    <link rel="stylesheet" href="./styles.css?v=20260706-014454" />
 
     <meta name="description" content="NabadAi is an AI music studio. Hum a melody, write lyrics, and ship a song." />
     <meta property="og:type" content="website" />
@@ -1141,39 +1141,43 @@
             <div id="voiceWizardBody" class="personaFlowBody voiceWizardStep"></div>
           </div>
 
-          <div id="imageMoodModal" class="imageMoodSheet" hidden aria-hidden="true">
-            <div class="imageMoodSheetBackdrop" data-image-mood-dismiss="1"></div>
-            <div class="imageMoodCard modalCard" role="dialog" aria-modal="true" aria-labelledby="imageMoodSheetTitle">
-              <header class="imageMoodHead">
-                <button type="button" id="btnCloseImageMood" class="nabadBackBtn imageMoodBack" aria-label="Close">
-                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
+          <div id="imageMoodModal" class="imageMoodSheet photoMoodSheet" hidden aria-hidden="true">
+            <div class="imageMoodSheetBackdrop photoMoodBackdrop" data-image-mood-dismiss="1"></div>
+            <div class="imageMoodCard photoMoodCard modalCard" role="dialog" aria-modal="true" aria-labelledby="imageMoodSheetTitle">
+              <header class="photoMoodHead">
+                <button type="button" id="btnCloseImageMood" class="nabadBackBtn photoMoodBack" aria-label="Back">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6 9 12l6 6"/></svg>
                 </button>
-                <div class="imageMoodHeadTitles">
-                  <p class="imageMoodKicker">Photo mood</p>
-                  <div class="modalTitle" id="imageMoodSheetTitle">Image Mood Assistant</div>
+                <div class="photoMoodHeadCopy">
+                  <p class="photoMoodKicker">Photo mood</p>
+                  <h2 class="photoMoodTitle" id="imageMoodSheetTitle">Analyze your photo</h2>
+                  <p class="photoMoodSub" id="imageMoodLead">We'll read the mood and suggest tags for your song.</p>
                 </div>
               </header>
-              <div class="imageMoodBody">
-                <p id="imageMoodLead" class="imageMoodLead">Pick a photo — we’ll read the mood and suggest tags for your song.</p>
-                <label class="imageMoodPick field">
-                  <span class="imageMoodPickLabel">Choose photo</span>
-                  <input id="imageMoodUpload" class="imageMoodUploadInput" type="file" accept="image/*" />
-                </label>
+              <div class="photoMoodBody imageMoodBody">
+                <section class="photoMoodSection">
+                  <label class="photoMoodPick imageMoodPick field">
+                    <span class="photoMoodPickLabel imageMoodPickLabel">Choose photo</span>
+                    <input id="imageMoodUpload" class="imageMoodUploadInput" type="file" accept="image/*" />
+                  </label>
+                </section>
                 <div class="imageMoodPreviewWrap">
                   <img id="imageMoodPreview" alt="Mood preview" hidden />
                 </div>
-                <div id="imageMoodOutput" class="imageMoodOutput">
-                  <div class="imageMoodEmpty">Choose a photo, then tap Analyze.</div>
-                </div>
+                <section class="photoMoodSection photoMoodSection--results">
+                  <div id="imageMoodOutput" class="imageMoodOutput">
+                    <div class="imageMoodEmpty">Choose a photo, then tap Analyze.</div>
+                  </div>
+                </section>
               </div>
-              <footer class="imageMoodFooter">
-                <label id="imageMoodCoverRow" class="imageMoodCoverRow proToggleRow" for="imageMoodUseAsCover">
+              <footer class="photoMoodFoot imageMoodFooter">
+                <label id="imageMoodCoverRow" class="photoMoodToggle imageMoodCoverRow proToggleRow" for="imageMoodUseAsCover">
                   <input id="imageMoodUseAsCover" type="checkbox" checked />
                   <span>Use this image as the song cover</span>
                 </label>
-                <div class="imageMoodActions">
-                  <button id="btnAnalyzeImageMood" class="primary" type="button">Analyze</button>
-                  <button id="btnApplyImageMood" class="ghost" type="button" disabled>Apply to song</button>
+                <div class="photoMoodActions imageMoodActions">
+                  <button id="btnAnalyzeImageMood" class="photoMoodPrimary primary" type="button">Analyze</button>
+                  <button id="btnApplyImageMood" class="photoMoodSecondary ghost" type="button" disabled>Apply to song</button>
                 </div>
               </footer>
             </div>
@@ -1448,10 +1452,20 @@
 
         <section class="challengesPage wide homeDesk" data-route="challenges" id="homeDeskPage">
           <div class="challengesAmbient" aria-hidden="true"></div>
+          <div class="homeDeskTopChrome">
           <header class="homeDeskHead homeDeskHead--seg">
             <h2 class="homeDeskGreeting" id="homeDeskGreeting">Hey, there</h2>
             <p class="homeDeskGreetingSub" id="homeDeskGreetingSub" aria-live="polite">What are we creating today?</p>
           </header>
+
+          <nav class="nabadTabs homeDeskSeg" role="tablist" aria-label="Create sections">
+            <div class="nabadTabsTrack">
+              <button type="button" class="nabadTabsTab homeDeskSegBtn is-active" data-home-seg="start" role="tab" aria-selected="true" aria-controls="homeDeskPanelStart"><span class="nabadTabsLabel">Create</span></button>
+              <button type="button" class="nabadTabsTab homeDeskSegBtn" data-home-seg="sparks" role="tab" aria-selected="false" aria-controls="homeDeskPanelSparks"><span class="nabadTabsLabel">Sparks</span></button>
+              <button type="button" class="nabadTabsTab homeDeskSegBtn" data-home-seg="templates" role="tab" aria-selected="false" aria-controls="homeDeskPanelTemplates"><span class="nabadTabsLabel">Templates</span></button>
+            </div>
+          </nav>
+          </div>
 
           <section class="campaignBanner" id="campaignBanner" hidden aria-label="Live event">
             <button type="button" class="campaignBannerBtn" id="campaignBannerBtn">
@@ -1465,14 +1479,6 @@
               <span class="campaignBannerEmoji" id="campaignBannerEmoji" aria-hidden="true">🏆</span>
             </button>
           </section>
-
-          <nav class="nabadTabs homeDeskSeg" role="tablist" aria-label="Create sections">
-            <div class="nabadTabsTrack">
-              <button type="button" class="nabadTabsTab homeDeskSegBtn is-active" data-home-seg="start" role="tab" aria-selected="true" aria-controls="homeDeskPanelStart"><span class="nabadTabsLabel">Create</span></button>
-              <button type="button" class="nabadTabsTab homeDeskSegBtn" data-home-seg="sparks" role="tab" aria-selected="false" aria-controls="homeDeskPanelSparks"><span class="nabadTabsLabel">Sparks</span></button>
-              <button type="button" class="nabadTabsTab homeDeskSegBtn" data-home-seg="templates" role="tab" aria-selected="false" aria-controls="homeDeskPanelTemplates"><span class="nabadTabsLabel">Templates</span></button>
-            </div>
-          </nav>
 
           <div class="homeDeskSegPanels">
             <div class="homeDeskSegPanel homeDeskCreatePanel is-active" id="homeDeskPanelStart" data-home-panel="start" role="tabpanel">
@@ -4508,6 +4514,6 @@
     </script>
     <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
     <script src="./env.client.js" onerror="void 0"></script>
-    <script type="module" src="./src/app.js?v=20260706-003438"></script>
+    <script type="module" src="./src/app.js?v=20260706-014454"></script>
   </body>
 </html>

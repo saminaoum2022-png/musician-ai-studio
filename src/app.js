@@ -170,7 +170,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260706-003438";
+const APP_BUILD = "20260706-014454";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -2749,6 +2749,65 @@ function triggerTabRefresh(route) {
   }, 900);
 }
 
+/** When true, #/challenges should show the Create hub even if a song draft exists. */
+let _createHubExitBypassSessionPin = false;
+
+function isPersonaFlowActive() {
+  if (getCreateFlow() === "persona") return true;
+  const sheet = document.getElementById("voiceWizardSheet");
+  return Boolean(sheet && !sheet.hidden && sheet.getAttribute("aria-hidden") !== "true");
+}
+
+function isOnCreateHubRoute() {
+  const current = tabBarRouteKey(document.body.getAttribute("data-route") || "");
+  const hashRoute = hashRouteKey();
+  return (
+    current === "challenges" &&
+    hashRoute === "challenges" &&
+    /^#\/challenges\b/i.test(String(location.hash || ""))
+  );
+}
+
+/** Skip the generate panel slide when opening Persona / Hum / Photo from the Create hub. */
+let _skipGenerateRouteEnter = false;
+
+/** One smooth hop from Create hub → #/generate sub-flow (no double route pass / slide). */
+function enterGenerateSubFlow(flow, onReady) {
+  const prevRoute = tabBarRouteKey(document.body.getAttribute("data-route") || "");
+  const onGenerate =
+    prevRoute === "generate" &&
+    /^#\/generate\b/i.test(String(location.hash || ""));
+  const needNav = String(location.hash || "") !== "#/generate";
+
+  if (onGenerate && !needNav) {
+    if (flow) setCreateFlow(flow);
+    else if (getCreateFlow()) clearCreateFlow();
+    try { onReady?.(); } catch {}
+    return;
+  }
+
+  _skipGenerateRouteEnter = true;
+  if (needNav) {
+    try {
+      history.replaceState(null, "", "#/generate");
+    } catch {
+      try { location.hash = "#/generate"; } catch {}
+    }
+  }
+  syncRoutePanelVisibility("generate");
+  if (flow) setCreateFlow(flow);
+  else if (getCreateFlow()) clearCreateFlow();
+  try { onReady?.(); } catch {}
+  scheduleApplyRoute();
+}
+
+function exitAltCreateFlowToHub() {
+  if (isPersonaFlowActive()) abandonPersonaFlow();
+  else if (getCreateFlow()) clearCreateFlow();
+  _createHubExitBypassSessionPin = true;
+  flushTabRouteNavigation("challenges", "#/challenges");
+}
+
 function flushTabRouteNavigation(route, targetHash) {
   const prev = tabBarRouteKey(document.body.getAttribute("data-route") || "");
   bumpApplyRouteGeneration();
@@ -2780,6 +2839,7 @@ function createTabMorphTapPending(tabLink) {
   if (tabLink?.getAttribute?.("data-route-link") !== "challenges") return false;
   if ((document.body.getAttribute("data-route") || "") !== "generate") return false;
   const flow = getCreateFlow();
+  if (flow === "persona") return false;
   if (flow === "humtrack") {
     return humTrackIsGenerating() || humTrackReadyForGenerate();
   }
@@ -2821,8 +2881,9 @@ function attachTabRefresh() {
       let targetHash = href.startsWith("#") ? href : `#/${href.replace(/^#?\/?/, "")}`;
       let route = linkRoute;
 
-      // Resume in-progress generation or an unfinished draft on the song form.
-      if (linkRoute === "challenges") {
+      // Resume in-progress generation or an unfinished draft — but not when
+      // already on the Create hub (+ should refresh the desk, not jump to Lyrics).
+      if (linkRoute === "challenges" && !isOnCreateHubRoute()) {
         const createNav = resolveCreateTabNavigation();
         if (createNav.route === "generate") {
           route = "generate";
@@ -2834,9 +2895,20 @@ function attachTabRefresh() {
         document.body.getAttribute("data-route") === "generate" &&
         /^#\/generate\b/i.test(String(location.hash || ""));
 
+      if (linkRoute === "challenges" && isPersonaFlowActive()) {
+        e.preventDefault();
+        e.stopPropagation();
+        exitAltCreateFlowToHub();
+        return;
+      }
+
       if (route === "generate" && onGenerateForm) {
         e.preventDefault();
         e.stopPropagation();
+        if (isPersonaFlowActive()) {
+          exitAltCreateFlowToHub();
+          return;
+        }
         if (getCreateFlow() && !createTabMorphTapPending(a)) {
           clearCreateFlow();
           flushTabRouteNavigation("challenges", "#/challenges");
@@ -3674,13 +3746,16 @@ function applyRoute({ passGen } = {}) {
   if (prevRoute && prevRoute !== wanted) {
     captureRouteScroll(prevRoute);
   }
+  if (prevRoute === "challenges" && wanted !== "challenges") {
+    _createHubExitBypassSessionPin = false;
+  }
   if (prevRoute === "messages-thread" && wanted !== "messages-thread") {
     stopMessagesThreadRealtime();
     resetMessagesThreadRouteState();
     clearMessagesThreadComposerInset();
     document.body.classList.remove("messagesThreadEntering", "messagesThreadLeaving");
   }
-  if (wanted === "challenges" && hasActiveCreateSession()) {
+  if (wanted === "challenges" && hasActiveCreateSession() && !_createHubExitBypassSessionPin && !isOnCreateHubRoute()) {
     wanted = "generate";
     try {
       if (!/^#\/generate\b/i.test(String(location.hash || ""))) {
@@ -3689,6 +3764,9 @@ function applyRoute({ passGen } = {}) {
     } catch {
       try { location.hash = "#/generate"; } catch {}
     }
+  }
+  if (wanted === "generate") {
+    _createHubExitBypassSessionPin = false;
   }
   if (prevRoute !== wanted) {
     closeCreateChooserSheet({ immediate: true });
@@ -3700,8 +3778,12 @@ function applyRoute({ passGen } = {}) {
   if (routeApplyStale(gate)) return;
   if (prevRoute !== wanted) invalidateInFlightRouteFeedWork(prevRoute);
   const navDir = navDirectionFor(wanted);
+  const skipEnterAnim =
+    _skipGenerateRouteEnter ||
+    (prevRoute === "challenges" && wanted === "generate" && Boolean(getCreateFlow()));
   syncRoutePanelVisibility(wanted);
-  animateRouteEnter(wanted, navDir);
+  animateRouteEnter(wanted, skipEnterAnim ? "none" : navDir);
+  if (_skipGenerateRouteEnter) _skipGenerateRouteEnter = false;
   if (wanted === "auth" && prevRoute !== "auth") {
     try { resetAuthEmailPanel(); } catch {}
   } else if (prevRoute === "auth" && wanted !== "auth") {
@@ -4539,9 +4621,12 @@ function resetCreateDraft() {
 }
 
 window.addEventListener("hashchange", () => {
-  if (!_tabNavFromClick) bumpApplyRouteGeneration();
+  const tabNavHandled = _tabNavFromClick;
+  if (!tabNavHandled) bumpApplyRouteGeneration();
   _tabNavFromClick = false;
   closeCreateChooserSheet({ immediate: true });
+  // flushTabRouteNavigation already ran applyRoute for tab-bar navigations.
+  if (tabNavHandled) return;
   scheduleApplyRoute();
 });
 /** Do not set #/auth before Keychain/native session restore — that was kicking users off Home. */
@@ -4906,6 +4991,7 @@ try {
     mountFixedOverlaysToBody,
     setPostAuthReturnHash,
     scheduleApplyRoute,
+    enterGenerateSubFlow,
     recordCreateActivity,
     setCreateFlow,
     clearCreateFlow,
@@ -6886,8 +6972,8 @@ function campaignDaysLeftLabel(c) {
 function renderCampaignBanner() {
   const wrap = document.getElementById("campaignBanner");
   if (!wrap) return;
-  // The banner is a shared header widget. The Create ("start") tab must stay
-  // distraction-free, so hide it there; it still shows on Sparks/Templates.
+  // The banner sits below the Create/Sparks/Templates tabs. Hide on Create
+  // so that tab stays clean; show on Sparks/Templates without shifting the tabs.
   if (_homeSeg === "start") {
     wrap.hidden = true;
     return;
@@ -9844,11 +9930,7 @@ function bindHomeDeskOnce(page) {
       const card = String(promoCard.getAttribute("data-home-card") || "").trim();
       recordCreateActivity(card);
       if (card === "song") {
-        clearCreateFlow();
-        try {
-          location.hash = "#/generate";
-        } catch {}
-        scheduleApplyRoute();
+        enterGenerateSubFlow(null, null);
         return;
       }
       if (card === "persona") {
@@ -9865,7 +9947,7 @@ function bindHomeDeskOnce(page) {
           setStatus("Sign in to use Photo Mood.");
           return;
         }
-        openImageMoodSheet();
+        openPhotoMoodFlow();
         return;
       }
       if (card === "humtrack") {
@@ -12714,8 +12796,9 @@ function clearCreateFlow() {
   try { syncCreateTabMorph(); } catch {}
 }
 
-/** Drop alt create flows (Hum Track / Sounds) when leaving #/generate. */
+/** Drop alt create flows (Hum Track / Sounds / Persona) when leaving #/generate. */
 function leaveGenerateRouteCleanup() {
+  if (isPersonaFlowActive()) abandonPersonaFlow();
   if (hasActiveCreateSession()) return;
   pendingSearchRemixMeta = null;
   clearCreateChallengeContext();
@@ -12756,11 +12839,7 @@ function openSoundsFlow() {
     setStatus("Sign in to generate sounds.");
     return;
   }
-  setCreateFlow("sounds");
-  if (String(location.hash || "") !== "#/generate") {
-    try { location.hash = "#/generate"; } catch {}
-  }
-  scheduleApplyRoute();
+  enterGenerateSubFlow("sounds", null);
 }
 
 function setCreateEntryIntent(intent) {
@@ -15904,19 +15983,18 @@ function setCreatePhotoAttachmentPreview(dataUrl = "", summary = "") {
   }
 }
 
+function openPhotoMoodFlow() {
+  setCreateEntryIntent("song");
+  enterGenerateSubFlow(null, () => {
+    try { setActiveCreateTab("photo"); } catch {}
+  });
+}
+
 function openImageMoodSheet() {
   setCreateEntryIntent("song");
   try {
     setActiveCreateTab("photo");
   } catch {}
-  if (String(location.hash || "") !== "#/generate") {
-    try {
-      location.hash = "#/generate";
-    } catch {}
-    try {
-      scheduleApplyRoute();
-    } catch {}
-  }
   mountFixedOverlaysToBody();
   const sheet = els.imageMoodModal || document.getElementById("imageMoodModal");
   if (!sheet) return;
@@ -36138,7 +36216,7 @@ function ensureVoiceWizardSheet() {
   return sheet;
 }
 
-function closeVoiceWizard() {
+function abandonPersonaFlow() {
   const sheet = document.getElementById("voiceWizardSheet");
   if (sheet) {
     sheet.hidden = true;
@@ -36148,8 +36226,21 @@ function closeVoiceWizard() {
   try {
     closeVocalRecorderModal();
   } catch {}
-  voiceWizardState.abort = true;
-  clearCreateFlow();
+  voiceWizardState = {
+    abort: true,
+    sampleFile: null,
+    verifyFile: null,
+    verifyPhrase: "",
+    name: "My voice",
+    language: "en",
+    skill: "intermediate",
+    validateTaskId: "",
+  };
+  if (getCreateFlow() === "persona") clearCreateFlow();
+}
+
+function closeVoiceWizard() {
+  abandonPersonaFlow();
   try {
     location.hash = "#/challenges";
   } catch {}
@@ -36656,17 +36747,10 @@ async function openVoiceWizard() {
   };
   const sheet = ensureVoiceWizardSheet();
   if (!sheet) return;
-  setCreateFlow("persona");
-  if (String(location.hash || "") !== "#/generate") {
-    try {
-      location.hash = "#/generate";
-    } catch {}
-  }
-  scheduleApplyRoute();
-  sheet.hidden = false;
-  sheet.setAttribute("aria-hidden", "false");
-  renderVoiceWizardStep1Sample();
-  wireVoiceWizardStep1Sample();
+  enterGenerateSubFlow("persona", () => {
+    renderVoiceWizardStep1Sample();
+    wireVoiceWizardStep1Sample();
+  });
 }
 
 function openProfilePersonaPanel() {
@@ -45141,6 +45225,9 @@ function hasActiveCreateSession() {
 }
 
 function resolveCreateTabNavigation() {
+  if (isPersonaFlowActive()) {
+    return { route: "challenges", hash: "#/challenges" };
+  }
   if (hasActiveCreateSession()) {
     return { route: "generate", hash: "#/generate" };
   }
@@ -45156,6 +45243,9 @@ function resolveCreateTabNavigation() {
     if (generating || hasPrompt) {
       return { route: "generate", hash: "#/generate" };
     }
+  }
+  if (flow === "persona") {
+    return { route: "challenges", hash: "#/challenges" };
   }
   return { route: "challenges", hash: "#/challenges" };
 }
@@ -47504,7 +47594,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
         haptic("light");
         if (String(personaPill.dataset.personaAction || "create") === "create") {
           _singerPersonaDrawerOpen = false;
-          openProfilePersonaPanel();
+          void openVoiceWizard();
           return;
         }
         _singerPersonaDrawerOpen = !_singerPersonaDrawerOpen;
@@ -47517,7 +47607,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
         if (create) {
           haptic("light");
           _singerPersonaDrawerOpen = false;
-          openProfilePersonaPanel();
+          void openVoiceWizard();
           return;
         }
         const chip = e.target?.closest?.("[data-singer-persona-id]");
@@ -49534,6 +49624,13 @@ syncCreateTabMorph();
     if (isCreateChooserOpen()) {
       ev.preventDefault();
       closeCreateChooserSheet({ immediate: true });
+      return;
+    }
+    // Persona: + always returns to the Create hub (Studio / cards), not Create Song.
+    if (isPersonaFlowActive()) {
+      ev.preventDefault();
+      ev.stopPropagation();
+      exitAltCreateFlowToHub();
       return;
     }
     const route = document.body.getAttribute("data-route") || "";

@@ -839,39 +839,34 @@ html[data-theme="light"] #playerSeek::-moz-range-track{
 }
 
 html[data-theme="light"] .modalCard,
-html[data-theme="light"] .imageMoodSheet .imageMoodCard.modalCard{
+html[data-theme="light"] .photoMoodSheet .imageMoodCard.modalCard{
   border-color: rgba(15, 23, 40, 0.09);
-  background:
-    radial-gradient(110% 90% at 10% 0%, rgba(35, 213, 171, 0.12), transparent 50%),
-    radial-gradient(120% 100% at 95% 0%, rgba(124, 92, 255, 0.14), transparent 56%),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(244, 247, 252, 0.96));
+  background: rgba(255, 255, 255, 0.98);
   box-shadow: 0 20px 50px rgba(88, 104, 140, 0.14);
 }
 
+html[data-theme="light"] .photoMoodBackdrop,
 html[data-theme="light"] .imageMoodSheetBackdrop{
-  background:
-    radial-gradient(90% 70% at 50% 100%, rgba(124, 92, 255, 0.10), transparent 62%),
-    rgba(236, 240, 247, 0.82);
+  background: rgba(236, 240, 247, 0.82);
+  -webkit-backdrop-filter: blur(8px) saturate(110%);
+          backdrop-filter: blur(8px) saturate(110%);
 }
 
+html[data-theme="light"] .photoMoodFoot,
 html[data-theme="light"] .imageMoodFooter{
   border-top-color: rgba(15, 23, 40, 0.08);
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(248, 250, 255, 0.98));
+  background: rgba(248, 250, 255, 0.98);
 }
 
-html[data-theme="light"] .imageMoodClose{
-  border-color: rgba(15, 23, 40, 0.10);
-  background: rgba(255, 255, 255, 0.9);
-  color: var(--text);
-}
-
+html[data-theme="light"] .photoMoodSub,
 html[data-theme="light"] .imageMoodLead{
   color: var(--muted);
 }
 
+html[data-theme="light"] .photoMoodPickLabel,
 html[data-theme="light"] .imageMoodPickLabel{
-  border-color: rgba(124, 92, 255, 0.28);
-  background: rgba(124, 92, 255, 0.10);
+  border-color: rgba(15, 23, 40, 0.10);
+  background: rgba(255, 255, 255, 0.92);
   color: var(--text);
 }
 
@@ -9799,7 +9794,7 @@ body[data-route="moment"] .momentStudio{
   display: flex;
   align-items: flex-end;
   justify-content: center;
-  padding: 10px 10px max(10px, env(safe-area-inset-bottom, 0px));
+  padding: 12px 12px calc(var(--tabbar-h, calc(62px + env(safe-area-inset-bottom, 0px))) + 10px);
   pointer-events: none;
   box-sizing: border-box;
 }
@@ -9813,136 +9808,150 @@ body.imageMoodSheetOpen .mobileTabbar{
   opacity: 0.35;
   pointer-events: none;
 }
+.photoMoodBackdrop,
 .imageMoodSheetBackdrop{
   position: absolute;
   inset: 0;
-  background:
-    radial-gradient(90% 70% at 50% 100%, rgba(124,92,255,0.06), transparent 62%),
-    rgba(3, 5, 10, 0.78);
+  background: rgba(4, 6, 12, 0.52);
+  -webkit-backdrop-filter: blur(8px) saturate(110%);
+          backdrop-filter: blur(8px) saturate(110%);
 }
+.photoMoodSheet .imageMoodCard,
 .imageMoodSheet .imageMoodCard{
   position: relative;
   z-index: 1;
   width: min(560px, 100%);
-  max-height: min(90dvh, calc(100dvh - env(safe-area-inset-top, 0px) - 24px));
+  max-height: min(78dvh, calc(100dvh - env(safe-area-inset-top, 0px) - var(--tabbar-h, 72px) - 28px));
   margin: 0;
   padding: 0;
   overflow: hidden;
   display: flex;
   flex-direction: column;
-  border-radius: 22px 22px 16px 16px;
+  border-radius: 22px;
 }
+.photoMoodSheet .imageMoodCard.modalCard,
 .imageMoodSheet .imageMoodCard.modalCard{
   padding: 0;
-}
-.modalCard{
-  width: min(560px, 100%);
-  border:1px solid rgba(255,255,255,0.11);
-  border-radius:24px;
-  background:
-    radial-gradient(110% 90% at 10% 0%, rgba(94,234,212,0.16), transparent 50%),
-    radial-gradient(120% 100% at 95% 0%, rgba(124,92,255,0.18), transparent 56%),
-    linear-gradient(180deg, rgba(15,22,36,0.94), rgba(7,10,18,0.96));
-  box-shadow:
-    0 24px 64px rgba(0,0,0,0.56),
-    inset 0 1px 0 rgba(255,255,255,0.06);
-  backdrop-filter: blur(18px);
-  -webkit-backdrop-filter: blur(18px);
-  padding: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(12, 14, 20, 0.98);
+  box-shadow: 0 20px 48px rgba(0, 0, 0, 0.45);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
 }
 .imageMoodCard{
   display:flex;
   flex-direction:column;
   gap: 0;
 }
-.imageMoodBody{
+.photoMoodHead{
+  flex: 0 0 auto;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 14px 16px 10px;
+}
+.photoMoodBack{
+  margin-top: 2px;
+  flex: 0 0 auto;
+}
+.photoMoodHeadCopy{
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.photoMoodKicker{
+  margin: 0 0 4px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(232, 238, 247, 0.42);
+}
+.photoMoodTitle{
+  margin: 0;
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: rgba(248, 250, 255, 0.96);
+}
+.photoMoodSub{
+  margin: 6px 0 0;
+  font-size: 13px;
+  line-height: 1.45;
+  color: rgba(232, 238, 247, 0.58);
+}
+.imageMoodBody,
+.photoMoodBody{
   flex: 1 1 auto;
   min-height: 0;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
-  padding: 0 14px 14px;
+  padding: 0 16px 12px;
   display: flex;
   flex-direction: column;
   gap: 12px;
 }
+.photoMoodSection{
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.photoMoodFoot,
 .imageMoodFooter{
   flex: 0 0 auto;
-  padding: 12px 14px calc(14px + env(safe-area-inset-bottom, 0px));
-  border-top: 1px solid rgba(255,255,255,0.09);
-  background:
-    linear-gradient(180deg, rgba(8,12,20,0.72), rgba(6,9,16,0.98));
+  padding: 12px 16px 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(12, 14, 20, 0.98);
   display: flex;
   flex-direction: column;
   gap: 10px;
 }
 .imageMoodCard.analyzing{
-  position:relative;
-  box-shadow: 0 0 0 1px rgba(124,92,255,0.30), 0 20px 52px rgba(12,18,34,0.55);
+  position: relative;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.10), 0 20px 48px rgba(0, 0, 0, 0.45);
 }
 .imageMoodCard.analyzing::before{
-  content:"";
-  position:absolute;
-  inset:-2px;
-  border-radius:18px;
-  pointer-events:none;
-  background: linear-gradient(120deg, rgba(124,92,255,0.30), rgba(35,213,171,0.22), rgba(124,92,255,0.24));
-  filter: blur(10px);
-  animation: lyricAura 2.6s ease-in-out infinite;
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background: linear-gradient(120deg, transparent 30%, rgba(255, 255, 255, 0.04) 50%, transparent 70%);
+  background-size: 200% 100%;
+  animation: photoMoodShimmer 1.8s ease-in-out infinite;
 }
-.imageMoodHead{
-  flex: 0 0 auto;
-  display:flex;
-  align-items:center;
-  gap:12px;
-  padding: 14px 14px 10px;
-}
-.imageMoodHeadTitles{
-  flex: 1;
-  min-width: 0;
-}
-.imageMoodBack{
-  /* layout hook — visuals from .nabadBackBtn */
-}
-.imageMoodKicker{
-  margin:0 0 3px;
-  color: rgba(94,234,212,0.82);
-  font-size: 10px;
-  font-weight: 900;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-}
-.imageMoodClose{
-  min-height: 38px;
-  border-radius: 14px;
-  border: 1px solid rgba(255,255,255,0.11);
-  background: rgba(255,255,255,0.07);
-  color: rgba(244,247,255,0.94);
-  padding: 0 14px;
-  font-weight: 900;
+@keyframes photoMoodShimmer{
+  0%{ background-position: 100% 0; }
+  100%{ background-position: -100% 0; }
 }
 .imageMoodLead{
   margin: 0;
-  color: rgba(223,231,251,0.62);
+  color: rgba(232, 238, 247, 0.58);
   font-size: 13px;
   line-height: 1.45;
 }
-.imageMoodPick{
+.imageMoodPick,
+.photoMoodPick{
   margin: 0;
   min-width: 0;
   cursor: pointer;
 }
-.imageMoodPickLabel{
+.imageMoodPickLabel,
+.photoMoodPickLabel{
   display: flex;
   align-items: center;
   justify-content: center;
-  min-height: 44px;
-  padding: 0 14px;
-  border-radius: 14px;
-  border: 1px solid rgba(124,92,255,0.38);
-  background: rgba(124,92,255,0.14);
-  color: rgba(244,247,255,0.94);
+  min-height: 48px;
+  padding: 0 16px;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(248, 250, 255, 0.92);
   font-size: 14px;
-  font-weight: 800;
+  font-weight: 700;
+}
+.imageMoodPickLabel:active,
+.photoMoodPickLabel:active{
+  background: rgba(255, 255, 255, 0.07);
 }
 .imageMoodUploadInput{
   position: absolute;
@@ -9958,10 +9967,8 @@ body.imageMoodSheetOpen .mobileTabbar{
 .imageMoodPreviewWrap{
   min-height: 0;
   border-radius: 16px;
-  border: 1px solid rgba(255,255,255,0.10);
-  background:
-    linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.01)),
-    rgba(7,10,18,0.58);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.02);
   display: none;
   align-items: center;
   justify-content: center;
@@ -9970,12 +9977,12 @@ body.imageMoodSheetOpen .mobileTabbar{
 .imageMoodPreviewWrap.hasPreview{
   display: flex;
   min-height: 140px;
-  max-height: min(36vh, 220px);
+  max-height: min(32vh, 200px);
 }
 #imageMoodPreview{
   width: 100%;
   height: 100%;
-  max-height: min(36vh, 220px);
+  max-height: min(32vh, 200px);
   object-fit: cover;
   display: block;
 }
@@ -9986,43 +9993,48 @@ body.imageMoodSheetOpen .mobileTabbar{
   display: grid;
   gap: 8px;
   border-radius: 16px;
-  border: 1px solid rgba(255,255,255,0.10);
-  background: rgba(4,7,14,0.50);
-  padding: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.02);
+  padding: 12px;
   font-size: 13px;
-  color: rgba(225,235,248,0.9);
+  color: rgba(232, 238, 247, 0.86);
   line-height: 1.45;
   min-height: 72px;
 }
+.photoMoodToggle,
 .imageMoodCoverRow{
   margin: 0;
+  color: rgba(232, 238, 247, 0.72);
+  font-size: 13px;
 }
 .imageMoodResultRow{
-  border-radius:14px;
-  background: rgba(255,255,255,0.045);
-  padding:10px 11px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  padding: 10px 11px;
 }
 .imageMoodResultRow span{
-  display:block;
-  color: rgba(94,234,212,0.78);
-  font-size:10px;
-  font-weight:900;
-  letter-spacing:0.11em;
-  text-transform:uppercase;
-  margin-bottom:4px;
+  display: block;
+  color: rgba(232, 238, 247, 0.42);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  margin-bottom: 4px;
 }
 .imageMoodResultRow p{
-  margin:0;
-  color: rgba(232,238,247,0.86);
+  margin: 0;
+  color: rgba(248, 250, 255, 0.88);
   word-break: break-word;
 }
 .imageMoodEmpty{
-  color: rgba(223,231,251,0.48);
+  color: rgba(232, 238, 247, 0.42);
   align-self: center;
   padding: 12px 8px;
   text-align: center;
   font-size: 13px;
 }
+.photoMoodActions,
 .imageMoodActions{
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -10031,6 +10043,8 @@ body.imageMoodSheetOpen .mobileTabbar{
   margin: 0;
   align-items: stretch;
 }
+.photoMoodPrimary,
+.photoMoodSecondary,
 .imageMoodActions .primary,
 .imageMoodActions .ghost{
   position: relative !important;
@@ -10039,9 +10053,28 @@ body.imageMoodSheetOpen .mobileTabbar{
   bottom: auto !important;
   transform: none !important;
   width: 100%;
-  min-height: 46px;
+  min-height: 48px;
   margin: 0;
   justify-content: center;
+  border-radius: 16px;
+  font-size: 14px;
+  font-weight: 800;
+  box-shadow: none;
+}
+.photoMoodPrimary,
+.imageMoodActions .primary{
+  background: rgba(35, 213, 171, 0.16);
+  border: 1px solid rgba(35, 213, 171, 0.32);
+}
+.photoMoodSecondary,
+.imageMoodActions .ghost{
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  color: rgba(248, 250, 255, 0.88);
+}
+.photoMoodSecondary:disabled,
+.imageMoodActions .ghost:disabled{
+  opacity: 0.45;
 }
 
 /* Moments — squircle tiles (rounded square, photo fill, thin ring) */
@@ -28949,15 +28982,30 @@ body[data-route="challenges"] .app{
   line-height: 1;
   letter-spacing: -0.05em;
 }
+.homeDeskTopChrome{
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  margin: 0 -2px;
+  padding: 0 2px 2px;
+  background:
+    linear-gradient(180deg, var(--bg) 0%, var(--bg) 78%, rgba(5, 7, 13, 0));
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+html[data-theme="light"] .homeDeskTopChrome{
+  background:
+    linear-gradient(180deg, var(--bg) 0%, var(--bg) 78%, rgba(244, 247, 252, 0));
+}
 .homeDeskSeg{
   display: block;
-  margin: 20px 0 24px;
+  margin: 16px 0 0;
   padding: 0;
   border: 0;
   border-radius: 0;
   background: none;
   position: relative;
-  z-index: 12;
+  z-index: 1;
   pointer-events: auto;
 }
 .homeDeskSeg .nabadTabsTrack{
@@ -28999,6 +29047,8 @@ body[data-route="challenges"] .app{
 }
 .homeDeskSegPanels{
   display: block;
+  position: relative;
+  z-index: 1;
 }
 .homeDeskSegPanel{
   display: none;
@@ -35995,7 +36045,11 @@ body[data-route="generate"] .aiGenerate{
 }
 
 /* ─── Live event campaign (World Cup → Christmas → …) ─────────────────── */
-.campaignBanner{ margin: 4px 0 14px; }
+.campaignBanner{
+  position: relative;
+  z-index: 1;
+  margin: 14px 0 18px;
+}
 .campaignBanner[hidden]{ display: none !important; }
 .campaignBannerBtn{
   position: relative;

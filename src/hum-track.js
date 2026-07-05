@@ -535,14 +535,7 @@ export function openHumTrackFlow() {
     return;
   }
   resetHumTrackSession();
-  ctx?.setCreateFlow?.("humtrack");
-  if (String(location.hash || "") !== "#/generate") {
-    try {
-      location.hash = "#/generate";
-    } catch {}
-  }
-  ctx?.scheduleApplyRoute?.();
-  syncHumTrackUi();
+  ctx?.enterGenerateSubFlow?.("humtrack", () => syncHumTrackUi());
 }
 
 /** @deprecated use openHumTrackFlow */

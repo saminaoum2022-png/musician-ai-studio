@@ -76,7 +76,6 @@ function syncHumTrackUi() {
   const statusEl = el("humTrackRecordStatus");
   const metaEl = el("humTrackRecordMeta");
   const btnRecord = el("btnHumTrackRecord");
-  const btnGenerate = el("btnHumTrackGenerate");
   const chipRow = el("humTrackInstrumentRow");
 
   syncHumTrackRecordIcon();
@@ -103,7 +102,7 @@ function syncHumTrackUi() {
     } else if (isRecording) {
       statusEl.textContent = "Recording… hum your melody, then tap again to stop.";
     } else if (hasRecording) {
-      statusEl.textContent = "Melody captured. Tap Generate when ready.";
+      statusEl.textContent = "Melody captured. Tap Create to generate your track.";
     } else {
       statusEl.textContent = "Hum a short melody (15–30 seconds works best).";
     }
@@ -121,14 +120,10 @@ function syncHumTrackUi() {
     }
   }
 
-  if (btnGenerate) {
-    btnGenerate.disabled = humTrackGenerating || !hasRecording || isRecording;
-    btnGenerate.textContent = humTrackGenerating ? "Generating…" : "Generate track";
-  }
-
   sheet.querySelectorAll("[data-hum-track-dismiss]").forEach((node) => {
     if (node instanceof HTMLButtonElement) node.disabled = humTrackGenerating;
   });
+  try { ctx?.syncCreateTabMorph?.(); } catch {}
 }
 
 function resetHumTrackSession() {
@@ -172,18 +167,16 @@ function stopHumTrackRecording(finalize = true) {
   humTrackStream = null;
 }
 
-function dismissHumTrackSheetToCreate() {
-  const sheet = el("humTrackSheet");
-  if (sheet) {
-    sheet.hidden = true;
-    sheet.setAttribute("aria-hidden", "true");
-    sheet.classList.remove("isGenerating");
-    document.body.classList.remove("humTrackSheetOpen");
-  }
+function leaveHumTrackFlow() {
+  ctx?.clearCreateFlow?.();
   try {
     location.hash = "#/challenges";
   } catch {}
   ctx?.scheduleApplyRoute?.();
+}
+
+function dismissHumTrackSheetToCreate() {
+  leaveHumTrackFlow();
 }
 
 function trackFromSunoRow(raw) {
@@ -514,13 +507,26 @@ function resumeHumTrackIfPending() {
   startHumTrackPolling(pending.taskId, humTrackInstrument);
 }
 
-export function openHumTrackSheet() {
+export function humTrackReadyForGenerate() {
+  const isRecording = Boolean(humTrackRecorder && humTrackRecorder.state === "recording");
+  return Boolean(humTrackBlob && humTrackBlob.size > 0) && !isRecording && !humTrackGenerating;
+}
+
+export function humTrackIsGenerating() {
+  return humTrackGenerating;
+}
+
+export function triggerHumTrackGenerate() {
+  return submitHumTrackGeneration();
+}
+
+export function openHumTrackFlow() {
   if (humTrackGenerating) {
-    dismissHumTrackSheetToCreate();
+    leaveHumTrackFlow();
     return;
   }
   if (!ctx?.getAuthSession?.()?.user?.id) {
-    ctx?.setPostAuthReturnHash?.("#/challenges");
+    ctx?.setPostAuthReturnHash?.("#/generate");
     try {
       location.hash = "#/auth";
     } catch {}
@@ -528,29 +534,42 @@ export function openHumTrackSheet() {
     ctx?.showToast?.("Sign in to use Hum Track.", { durationMs: 4500 });
     return;
   }
-  ctx?.mountFixedOverlaysToBody?.();
-  const sheet = el("humTrackSheet");
-  if (!sheet) return;
   resetHumTrackSession();
-  sheet.hidden = false;
-  sheet.setAttribute("aria-hidden", "false");
-  document.body.classList.add("humTrackSheetOpen");
+  ctx?.setCreateFlow?.("humtrack");
+  if (String(location.hash || "") !== "#/generate") {
+    try {
+      location.hash = "#/generate";
+    } catch {}
+  }
+  ctx?.scheduleApplyRoute?.();
   syncHumTrackUi();
 }
 
-export function closeHumTrackSheet() {
+/** @deprecated use openHumTrackFlow */
+export function openHumTrackSheet() {
+  openHumTrackFlow();
+}
+
+export function closeHumTrackFlow() {
   if (humTrackGenerating) {
     dismissHumTrackSheetToCreate();
     return;
   }
   const sheet = el("humTrackSheet");
-  if (!sheet) return;
+  if (sheet) {
+    sheet.hidden = true;
+    sheet.setAttribute("aria-hidden", "true");
+    sheet.classList.remove("isGenerating");
+  }
   stopHumTrackRecording(false);
   stopHumTrackPolling();
-  sheet.hidden = true;
-  sheet.setAttribute("aria-hidden", "true");
-  document.body.classList.remove("humTrackSheetOpen");
   resetHumTrackSession();
+  leaveHumTrackFlow();
+}
+
+/** @deprecated use closeHumTrackFlow */
+export function closeHumTrackSheet() {
+  closeHumTrackFlow();
 }
 
 function renderHumTrackInstrumentChips() {
@@ -581,7 +600,7 @@ function wireHumTrackSheetOnce() {
       return;
     }
     if (e.target?.closest?.("[data-hum-track-dismiss]")) {
-      closeHumTrackSheet();
+      closeHumTrackFlow();
       return;
     }
     if (e.target?.closest?.("#btnHumTrackRecord")) {
@@ -589,10 +608,6 @@ function wireHumTrackSheetOnce() {
       void startHumTrackRecording().catch((err) => {
         ctx?.showToast?.(err?.message || "Microphone access failed.", { icon: "⚠", durationMs: 6000 });
       });
-      return;
-    }
-    if (e.target?.closest?.("#btnHumTrackGenerate")) {
-      void submitHumTrackGeneration();
       return;
     }
   });
@@ -619,7 +634,7 @@ function wireHumTrackSheetOnce() {
   });
 
   el("btnCloseHumTrack")?.addEventListener("click", () => {
-    closeHumTrackSheet();
+    closeHumTrackFlow();
   });
 
   resumeHumTrackIfPending();
@@ -718,6 +733,6 @@ export function bindHumTrackHomeCard(page) {
     if (!card || !page.contains(card)) return;
     ctx?.haptic?.("light");
     ctx?.recordCreateActivity?.("humtrack");
-    openHumTrackSheet();
+    openHumTrackFlow();
   });
 }

@@ -23,7 +23,7 @@ function syncSoundPresetChips(page, promptEl) {
   });
 }
 
-export function initSoundsStudioOnce({ promptEl, haptic }) {
+export function initSoundsStudioOnce({ promptEl, haptic, syncCreateTabMorph, clearCreateFlow, scheduleApplyRoute }) {
   const page = document.querySelector('[data-route="sounds"]');
   if (!page || page.dataset.boundSoundsStudio === "1") return;
   page.dataset.boundSoundsStudio = "1";
@@ -37,9 +37,21 @@ export function initSoundsStudioOnce({ promptEl, haptic }) {
       promptEl.focus();
       try { haptic?.("light"); } catch {}
       syncSoundPresetChips(page, promptEl);
+      try { syncCreateTabMorph?.(); } catch {}
     });
   });
 
-  promptEl?.addEventListener("input", () => syncSoundPresetChips(page, promptEl));
+  promptEl?.addEventListener("input", () => {
+    syncSoundPresetChips(page, promptEl);
+    try { syncCreateTabMorph?.(); } catch {}
+  });
+
+  page.querySelector(".soundsStudioBack")?.addEventListener("click", (ev) => {
+    ev.preventDefault();
+    try { clearCreateFlow?.(); } catch {}
+    try { location.hash = "#/challenges"; } catch {}
+    try { scheduleApplyRoute?.(); } catch {}
+  });
+
   syncSoundPresetChips(page, promptEl);
 }

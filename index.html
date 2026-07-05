@@ -126,7 +126,7 @@
       onload="this.media='all'"
     />
     <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Display:wght@900&family=Inter:wght@900&display=swap" /></noscript>
-    <link rel="stylesheet" href="./styles.css?v=20260705-233121" />
+    <link rel="stylesheet" href="./styles.css?v=20260706-001019" />
 
     <meta name="description" content="NabadAi is an AI music studio. Hum a melody, write lyrics, and ship a song." />
     <meta property="og:type" content="website" />
@@ -622,12 +622,9 @@
               </div>
             </details>
 
-            <div class="soundsStudioAction">
-              <button id="btnSoundGenerate" class="soundsStudioGenerate primary" type="button">
-                <span class="soundsStudioGenerateText">Generate sound</span>
-                <span class="soundsStudioGenerateCost" id="soundGenerateCost">2.5 credits</span>
-              </button>
-            </div>
+            <p class="soundsStudioTabHint">Tap the Create button when your prompt is ready.</p>
+            <button id="btnSoundGenerate" class="soundsStudioGenerate srOnly" type="button" hidden aria-hidden="true" tabindex="-1">Generate sound</button>
+            <span id="soundGenerateCost" class="srOnly" hidden aria-hidden="true">2.5 credits</span>
           </div>
         </section>
 
@@ -1087,19 +1084,18 @@
           </div>
           </div>
 
-          <div id="humTrackSheet" class="humTrackSheet feedReplySheet" hidden aria-hidden="true">
-            <div class="feedReplySheetBackdrop humTrackSheetBackdrop" data-hum-track-dismiss="1"></div>
-            <div class="feedReplySheetCard humTrackSheetCard" role="dialog" aria-modal="true" aria-labelledby="humTrackSheetTitle">
-              <div class="feedReplySheetGrab" aria-hidden="true"></div>
-              <header class="feedReplySheetHead humTrackSheetHead">
-                <button type="button" id="btnCloseHumTrack" class="feedReplySheetClose" aria-label="Close">
-                  <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M6.4 5 5 6.4 10.6 12 5 17.6 6.4 19 12 13.4 17.6 19 19 17.6 13.4 12 19 6.4 17.6 5 12 10.6Z"/></svg>
+          <div id="humTrackSheet" class="createAltFlow humTrackFlow" hidden aria-hidden="true">
+              <header class="humTrackFlowHead">
+                <button type="button" id="btnCloseHumTrack" class="nabadBackBtn humTrackFlowBack" aria-label="Back to Create">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6 9 12l6 6"/></svg>
                 </button>
-                <p class="feedReplySheetKicker">Quick start</p>
-                <h2 class="feedReplySheetTitle" id="humTrackSheetTitle">Hum Track</h2>
-                <p class="feedReplySheetSub" id="humTrackSheetSub">Hum your melody — we turn it into a solo instrumental. Always instrumental, one instrument.</p>
+                <div class="humTrackFlowHeadCopy">
+                  <p class="humTrackFlowKicker">Quick start</p>
+                  <h2 class="humTrackFlowTitle" id="humTrackSheetTitle">Hum Track</h2>
+                  <p class="humTrackFlowSub" id="humTrackSheetSub">Hum your melody — we turn it into a solo instrumental. Always instrumental, one instrument.</p>
+                </div>
               </header>
-              <div class="humTrackSheetBody">
+              <div class="humTrackFlowBody">
                 <section class="humTrackSection" aria-labelledby="humTrackInstrumentLabel">
                   <h3 class="humTrackSectionLabel" id="humTrackInstrumentLabel">Instrument</h3>
                   <div id="humTrackInstrumentRow" class="humTrackChipRow" role="group" aria-label="Choose instrument"></div>
@@ -1121,11 +1117,7 @@
                   </div>
                 </section>
               </div>
-              <footer class="humTrackSheetFooter">
-                <button id="btnHumTrackGenerate" class="humTrackGenerateBtn" type="button" disabled>Generate track</button>
-                <p class="humTrackFootnote">Uses the same credits as a song generation. Result is always instrumental.</p>
-              </footer>
-            </div>
+              <p class="humTrackFootnote">Tap the Create button when your hum is ready. Uses the same credits as a song generation.</p>
           </div>
 
           <div id="imageMoodModal" class="imageMoodSheet" hidden aria-hidden="true">
@@ -1491,14 +1483,14 @@
                   <span class="homeDeskStudioTileWrap">
                     <span class="homeDeskStudioTile">
                       <svg class="homeDeskStudioIco" viewBox="0 0 120 90" fill="none" aria-hidden="true" focusable="false">
-                        <path d="M24 18V72" stroke="#8A5CFF" stroke-width="3.2" stroke-linecap="round" opacity="0.38"/>
-                        <rect x="17" y="46" width="14" height="10" rx="3" fill="#8A5CFF"/>
-                        <path d="M48 18V72" stroke="#8A5CFF" stroke-width="3.2" stroke-linecap="round" opacity="0.38"/>
-                        <rect x="41" y="32" width="14" height="10" rx="3" fill="#8A5CFF"/>
-                        <path d="M72 18V72" stroke="#8A5CFF" stroke-width="3.2" stroke-linecap="round" opacity="0.38"/>
-                        <rect x="65" y="54" width="14" height="10" rx="3" fill="#8A5CFF"/>
-                        <path d="M96 18V72" stroke="#8A5CFF" stroke-width="3.2" stroke-linecap="round" opacity="0.38"/>
-                        <rect x="89" y="28" width="14" height="10" rx="3" fill="#8A5CFF"/>
+                        <path d="M24 18V72" stroke="#A56CFF" stroke-width="3.2" stroke-linecap="round" opacity="0.52"/>
+                        <rect x="17" y="46" width="14" height="10" rx="3" fill="#A56CFF"/>
+                        <path d="M48 18V72" stroke="#A56CFF" stroke-width="3.2" stroke-linecap="round" opacity="0.52"/>
+                        <rect x="41" y="32" width="14" height="10" rx="3" fill="#A56CFF"/>
+                        <path d="M72 18V72" stroke="#A56CFF" stroke-width="3.2" stroke-linecap="round" opacity="0.52"/>
+                        <rect x="65" y="54" width="14" height="10" rx="3" fill="#A56CFF"/>
+                        <path d="M96 18V72" stroke="#A56CFF" stroke-width="3.2" stroke-linecap="round" opacity="0.52"/>
+                        <rect x="89" y="28" width="14" height="10" rx="3" fill="#A56CFF"/>
                       </svg>
                     </span>
                   </span>
@@ -4490,6 +4482,6 @@
     </script>
     <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
     <script src="./env.client.js" onerror="void 0"></script>
-    <script type="module" src="./src/app.js?v=20260705-233121"></script>
+    <script type="module" src="./src/app.js?v=20260706-001019"></script>
   </body>
 </html>

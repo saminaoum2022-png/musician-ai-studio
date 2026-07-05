@@ -31,7 +31,7 @@ import {
   setUserPublicSegActive,
 } from "./profile-seg-tabs.js";
 import { initEcho, openEchoFromCreateChooser } from "./echo.js";
-import { initHumTrack, bindHumTrackHomeCard, openHumTrackSheet, kickHumTrackGenerationPoll } from "./hum-track.js";
+import { initHumTrack, bindHumTrackHomeCard, openHumTrackFlow, humTrackReadyForGenerate, humTrackIsGenerating, triggerHumTrackGenerate, kickHumTrackGenerationPoll } from "./hum-track.js";
 import { createAdaptivePollLoop, stopPollLoop } from "./generation-poll.js";
 import {
   getInitialBootHash,
@@ -170,7 +170,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260705-233121";
+const APP_BUILD = "20260706-001019";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -2752,6 +2752,9 @@ function flushTabRouteNavigation(route, targetHash) {
   const prev = tabBarRouteKey(document.body.getAttribute("data-route") || "");
   bumpApplyRouteGeneration();
   if (prev !== route) invalidateInFlightRouteFeedWork(prev);
+  if (prev === "generate" && route !== "generate") {
+    leaveGenerateRouteCleanup();
+  }
   if (location.hash !== targetHash) {
     _tabNavFromClick = true;
     try {
@@ -2775,6 +2778,15 @@ function flushTabRouteNavigation(route, targetHash) {
 function createTabMorphTapPending(tabLink) {
   if (tabLink?.getAttribute?.("data-route-link") !== "challenges") return false;
   if ((document.body.getAttribute("data-route") || "") !== "generate") return false;
+  const flow = getCreateFlow();
+  if (flow === "humtrack") {
+    return humTrackIsGenerating() || humTrackReadyForGenerate();
+  }
+  if (flow === "sounds") {
+    const hasPrompt = Boolean(String(els.soundPrompt?.value || "").trim());
+    const generating = Boolean(els.btnSoundGenerate?.disabled);
+    return generating || hasPrompt;
+  }
   const generating = Boolean(els.btnSunoGenerate?.disabled);
   const hasInput = Boolean(
     String(els.sunoPrompt?.value || "").trim() ||
@@ -2824,6 +2836,11 @@ function attachTabRefresh() {
       if (route === "generate" && onGenerateForm) {
         e.preventDefault();
         e.stopPropagation();
+        if (getCreateFlow() && !createTabMorphTapPending(a)) {
+          clearCreateFlow();
+          flushTabRouteNavigation("challenges", "#/challenges");
+          return;
+        }
         restoreCreatePageOnRouteEnter();
         return;
       }
@@ -3196,7 +3213,13 @@ function shouldHoldBootSplashForRoute(wanted) {
 }
 
 function syncRoutePanelVisibility(wanted) {
-  const route = String(wanted || "").trim();
+  let route = String(wanted || "").trim();
+  if (route === "sounds") {
+    setCreateFlow("sounds");
+    route = "generate";
+  } else if (route !== "generate" && getCreateFlow()) {
+    clearCreateFlow();
+  }
   if (!route) return;
   document.body.setAttribute("data-route", route);
   try { document.body.dataset.route = route; } catch {}
@@ -3204,15 +3227,18 @@ function syncRoutePanelVisibility(wanted) {
   document.body.classList.toggle("isOnboarding", route === "onboarding");
   document.body.classList.toggle("isAuth", route === "auth");
   document.body.classList.toggle("isMusicPrefs", route === "music-preferences");
+  const flow = getCreateFlow();
   document.querySelectorAll("[data-route]").forEach((el) => {
     const key = el.getAttribute("data-route");
-    const show = key === route;
+    let show = key === route;
+    if (route === "generate" && flow === "sounds" && key === "sounds") show = true;
     if (show && (route === "onboarding" || route === "music-preferences")) {
       el.style.display = "flex";
     } else {
       el.style.display = show ? "" : "none";
     }
   });
+  syncCreateFlowUi();
   document.querySelectorAll("[data-route-link]").forEach((a) => {
     const link = a.getAttribute("data-route-link");
     const active = link === route
@@ -3690,11 +3716,8 @@ function applyRoute({ passGen } = {}) {
   if (wanted !== "discover" && wanted !== "discover-playlist" && wanted !== "friends") {
     try { document.body.removeAttribute("data-discovery-segment"); } catch {}
   }
-  if (prevRoute === "generate" && wanted !== "generate" && !hasActiveCreateSession()) {
-    pendingSearchRemixMeta = null;
-    clearCreateChallengeContext();
-    setCreateChallengeHint(null);
-    clearCreateChallengeFocus();
+  if (wanted !== "generate" && !hasActiveCreateSession() && (prevRoute === "generate" || getCreateFlow())) {
+    leaveGenerateRouteCleanup();
   }
   if (els.brandSecondary) {
     els.brandSecondary.textContent = wanted === "hub" ? "Hub" : wanted === "challenges" ? "Create" : "Music";
@@ -4883,6 +4906,9 @@ try {
     setPostAuthReturnHash,
     scheduleApplyRoute,
     recordCreateActivity,
+    setCreateFlow,
+    clearCreateFlow,
+    syncCreateTabMorph,
     setGenerationPending,
     clearGenerationPending,
     getGenerationPending,
@@ -9817,6 +9843,7 @@ function bindHomeDeskOnce(page) {
       const card = String(promoCard.getAttribute("data-home-card") || "").trim();
       recordCreateActivity(card);
       if (card === "song") {
+        clearCreateFlow();
         try {
           location.hash = "#/generate";
         } catch {}
@@ -9841,7 +9868,7 @@ function bindHomeDeskOnce(page) {
         return;
       }
       if (card === "humtrack") {
-        openHumTrackSheet();
+        openHumTrackFlow();
         return;
       }
       if (card === "mashup") {
@@ -9867,8 +9894,7 @@ function bindHomeDeskOnce(page) {
         return;
       }
       if (card === "sounds") {
-        try { location.hash = "#/sounds"; } catch {}
-        scheduleApplyRoute();
+        openSoundsFlow();
         return;
       }
       return;
@@ -12503,7 +12529,7 @@ function openFriendsComposeSheet() {
   }
 }
 
-const FIXED_OVERLAY_IDS = ["createChooserSheet", "friendsComposeSheet", "imageMoodModal", "humTrackSheet"];
+const FIXED_OVERLAY_IDS = ["createChooserSheet", "friendsComposeSheet", "imageMoodModal"];
 
 /** Keep full-screen overlays on `body` — `main.grid.routeSwap` transform breaks iOS touch on fixed children. */
 function mountFixedOverlaysToBody() {
@@ -12663,6 +12689,70 @@ function consumePendingDiscoveryIdea() {
     return JSON.parse(raw);
   } catch {}
   return null;
+}
+
+function getCreateFlow() {
+  return String(document.body.getAttribute("data-create-flow") || "").trim().toLowerCase();
+}
+
+function setCreateFlow(flow) {
+  const next = String(flow || "").trim().toLowerCase();
+  if (!next || next === "song") {
+    document.body.removeAttribute("data-create-flow");
+  } else {
+    document.body.setAttribute("data-create-flow", next);
+  }
+  syncCreateFlowUi();
+  try { syncCreateTabMorph(); } catch {}
+}
+
+function clearCreateFlow() {
+  if (!getCreateFlow()) return;
+  document.body.removeAttribute("data-create-flow");
+  syncCreateFlowUi();
+  try { syncCreateTabMorph(); } catch {}
+}
+
+/** Drop alt create flows (Hum Track / Sounds) when leaving #/generate. */
+function leaveGenerateRouteCleanup() {
+  if (hasActiveCreateSession()) return;
+  pendingSearchRemixMeta = null;
+  clearCreateChallengeContext();
+  setCreateChallengeHint(null);
+  clearCreateChallengeFocus();
+  clearCreateFlow();
+}
+
+function syncCreateFlowUi() {
+  const flow = getCreateFlow();
+  const onGenerate = (document.body.getAttribute("data-route") || "") === "generate";
+  const humPanel = document.getElementById("humTrackSheet");
+  if (humPanel) {
+    const showHum = onGenerate && flow === "humtrack";
+    humPanel.hidden = !showHum;
+    humPanel.setAttribute("aria-hidden", showHum ? "false" : "true");
+  }
+  const title = document.querySelector(".createPageHeader .appScreenTitle");
+  if (title && onGenerate) {
+    if (flow === "humtrack") title.textContent = "Hum Track";
+    else if (flow === "sounds") title.textContent = "Sounds";
+    else title.textContent = "Create";
+  }
+}
+
+function openSoundsFlow() {
+  if (!authSession?.user?.id) {
+    setPostAuthReturnHash("#/generate");
+    try { location.hash = "#/auth"; } catch {}
+    scheduleApplyRoute();
+    setStatus("Sign in to generate sounds.");
+    return;
+  }
+  setCreateFlow("sounds");
+  if (String(location.hash || "") !== "#/generate") {
+    try { location.hash = "#/generate"; } catch {}
+  }
+  scheduleApplyRoute();
 }
 
 function setCreateEntryIntent(intent) {
@@ -45054,6 +45144,19 @@ function resolveCreateTabNavigation() {
   if (hasActiveCreateSession()) {
     return { route: "generate", hash: "#/generate" };
   }
+  const flow = getCreateFlow();
+  if (flow === "humtrack") {
+    if (humTrackIsGenerating() || humTrackReadyForGenerate()) {
+      return { route: "generate", hash: "#/generate" };
+    }
+  }
+  if (flow === "sounds") {
+    const hasPrompt = Boolean(String(els.soundPrompt?.value || "").trim());
+    const generating = Boolean(els.btnSoundGenerate?.disabled);
+    if (generating || hasPrompt) {
+      return { route: "generate", hash: "#/generate" };
+    }
+  }
   return { route: "challenges", hash: "#/challenges" };
 }
 
@@ -49205,6 +49308,7 @@ function syncCreateTabMorphNow() {
   const tooltip = document.getElementById("tabCreateTooltip");
   const route = document.body.getAttribute("data-route");
   const onCreate = route === "generate";
+  const flow = getCreateFlow();
 
   const hasInput = Boolean(
     String(els.sunoPrompt?.value || "").trim() ||
@@ -49213,12 +49317,16 @@ function syncCreateTabMorphNow() {
   );
   const generating = Boolean(els.btnSunoGenerate?.disabled);
   const hasResult = (els.resultCard?.style.display || "none") !== "none";
+  const humGenerating = flow === "humtrack" && humTrackIsGenerating();
+  const humReady = flow === "humtrack" && humTrackReadyForGenerate();
+  const soundPromptReady = flow === "sounds" && Boolean(String(els.soundPrompt?.value || "").trim());
+  const soundGenerating = flow === "sounds" && Boolean(els.btnSoundGenerate?.disabled);
 
   // Reset listen-flash bookkeeping when the user starts a fresh run.
-  if (generating) _tabListenFlashedForRun = false;
+  if (generating || humGenerating || soundGenerating) _tabListenFlashedForRun = false;
 
   // Detect rising edge: result just became visible while on Create.
-  const justFinished = onCreate && hasResult && !_tabLastHasResult && !_tabListenFlashedForRun;
+  const justFinished = onCreate && flow !== "humtrack" && flow !== "sounds" && hasResult && !_tabLastHasResult && !_tabListenFlashedForRun;
   _tabLastHasResult = hasResult;
 
   if (justFinished) {
@@ -49244,18 +49352,30 @@ function syncCreateTabMorphNow() {
     return;
   }
 
-  if (generating) {
+  if (humGenerating || soundGenerating || generating) {
     tab.classList.add("tabIsGenerating");
     tab.classList.remove("tabIsReady", "tabIsListen");
     if (tooltip) tooltip.hidden = true;
     return;
   }
 
+  if (flow === "humtrack") {
+    tab.classList.toggle("tabIsReady", humReady);
+    tab.classList.remove("tabIsGenerating", "tabIsListen");
+    if (tooltip) tooltip.hidden = !humReady;
+    return;
+  }
+
+  if (flow === "sounds") {
+    tab.classList.toggle("tabIsReady", soundPromptReady);
+    tab.classList.remove("tabIsGenerating", "tabIsListen");
+    if (tooltip) tooltip.hidden = !soundPromptReady;
+    return;
+  }
+
   const ready = hasInput && !hasResult;
   tab.classList.toggle("tabIsReady", ready);
   tab.classList.remove("tabIsGenerating");
-  // Show the bobbing "Tap to generate" wand pill whenever the song is ready to
-  // generate; hide it once generating / done / not ready.
   if (tooltip) tooltip.hidden = !ready;
 }
 
@@ -49418,6 +49538,27 @@ syncCreateTabMorph();
     }
     const route = document.body.getAttribute("data-route") || "";
     if (route !== "generate") return;
+    const flow = getCreateFlow();
+    if (flow === "humtrack") {
+      if (humTrackIsGenerating()) return;
+      if (humTrackReadyForGenerate()) {
+        ev.preventDefault();
+        ev.stopPropagation();
+        haptic("impact");
+        void triggerHumTrackGenerate();
+      }
+      return;
+    }
+    if (flow === "sounds") {
+      const hasPrompt = Boolean(String(els.soundPrompt?.value || "").trim());
+      const generating = Boolean(els.btnSoundGenerate?.disabled);
+      if (generating || !hasPrompt) return;
+      ev.preventDefault();
+      ev.stopPropagation();
+      haptic("impact");
+      void submitSoundGenerate();
+      return;
+    }
     const hasInput = Boolean(
       String(els.sunoPrompt?.value || "").trim() ||
       String(els.sunoStyle?.value || "").trim() ||
@@ -50085,7 +50226,13 @@ const soundGenerateCostEl = document.getElementById("soundGenerateCost");
 if (soundGenerateCostEl) {
   soundGenerateCostEl.textContent = `${formatCreditsAmount(SOUND_CREDIT_COST)} credits`;
 }
-initSoundsStudioOnce({ promptEl: els.soundPrompt, haptic });
+initSoundsStudioOnce({
+  promptEl: els.soundPrompt,
+  haptic,
+  syncCreateTabMorph,
+  clearCreateFlow,
+  scheduleApplyRoute,
+});
 
 function syncProfileUiFromEdit(profile = activeProfile) {
   if (els.profilePreviewUsernameInput) {
@@ -50137,22 +50284,29 @@ try {
   console.error("[profile-edit] init failed", e);
 }
 if (els.btnSoundGenerate) {
-  els.btnSoundGenerate.addEventListener("click", async () => {
-    const prompt = String(els.soundPrompt?.value || "").trim();
-    if (!prompt) {
-      setStatus("Describe the sound you want (up to 500 characters).");
-      return;
-    }
-    const token = getSupabaseAuthToken();
-    if (!token) {
-      setStatus("Sign in to generate sounds.");
-      location.hash = "#/auth";
-      return;
-    }
-    try {
-      els.btnSoundGenerate.disabled = true;
-      const soundTitle = shortenSoundTitle((prompt.split(/\r?\n/)[0] || "").trim() || "Sound");
-      beginCoachPriorityStatus(coachSoundPillText(soundTitle), { generating: true });
+  els.btnSoundGenerate.addEventListener("click", () => {
+    void submitSoundGenerate();
+  });
+}
+
+async function submitSoundGenerate() {
+  const prompt = String(els.soundPrompt?.value || "").trim();
+  if (!prompt) {
+    setStatus("Describe the sound you want (up to 500 characters).");
+    return;
+  }
+  const token = getSupabaseAuthToken();
+  if (!token) {
+    setStatus("Sign in to generate sounds.");
+    location.hash = "#/auth";
+    return;
+  }
+  if (els.btnSoundGenerate?.disabled) return;
+  try {
+    els.btnSoundGenerate.disabled = true;
+    syncCreateTabMorph();
+    const soundTitle = shortenSoundTitle((prompt.split(/\r?\n/)[0] || "").trim() || "Sound");
+    beginCoachPriorityStatus(coachSoundPillText(soundTitle), { generating: true });
       const payload = {
         prompt,
         soundLoop: Boolean(els.soundLoop?.checked),
@@ -50177,18 +50331,21 @@ if (els.btnSoundGenerate) {
         );
         cancelCoachPriorityStatus();
         els.btnSoundGenerate.disabled = false;
+        syncCreateTabMorph();
         return;
       }
       if (r.status === 401) {
         setStatus("Sign in to generate sounds.");
         cancelCoachPriorityStatus();
         els.btnSoundGenerate.disabled = false;
+        syncCreateTabMorph();
         return;
       }
       if (!r.ok) {
         setStatus(d?.error || "Sound request failed.");
         cancelCoachPriorityStatus();
         els.btnSoundGenerate.disabled = false;
+        syncCreateTabMorph();
         return;
       }
       if (d?._credits && Number.isFinite(Number(d._credits.balance))) {
@@ -50200,6 +50357,7 @@ if (els.btnSoundGenerate) {
         setStatus("Sound task did not return an id — check Library shortly.");
         cancelCoachPriorityStatus();
         els.btnSoundGenerate.disabled = false;
+        syncCreateTabMorph();
         return;
       }
       setPriorityPending({
@@ -50223,12 +50381,15 @@ if (els.btnSoundGenerate) {
         },
       });
       setStatus("Sound is generating…");
-    } catch (e) {
-      setStatus(`Sound failed: ${e?.message || String(e)}`);
-      cancelCoachPriorityStatus();
-      els.btnSoundGenerate.disabled = false;
-    }
-  });
+      clearCreateFlow();
+      try { location.hash = "#/challenges"; } catch {}
+      scheduleApplyRoute();
+  } catch (e) {
+    setStatus(`Sound failed: ${e?.message || String(e)}`);
+    cancelCoachPriorityStatus();
+    els.btnSoundGenerate.disabled = false;
+    syncCreateTabMorph();
+  }
 }
 // Profile library cloud merge runs from applyRoute — avoid a second fetch on hashchange.
 window.addEventListener("hashchange", () => {

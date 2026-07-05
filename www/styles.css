@@ -1496,14 +1496,26 @@ body.booting .bootSplashDots{
   animation: tabRefreshSpin 0.85s cubic-bezier(0.4, 0, 0.2, 1) infinite;
   transform-origin: 50% 50%;
 }
+/* Create tab icon is absolutely centered — keep translate in the spin keyframes. */
+.mobileTabbar a.tabCreate.isRefreshing .tabIco{
+  animation: tabCreateRefreshSpin 0.85s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  transform-origin: center center;
+}
 @keyframes tabRefreshSpin{
   0%   { transform: rotate(0deg); }
   100% { transform: rotate(360deg); }
+}
+@keyframes tabCreateRefreshSpin{
+  0%   { transform: translate(-50%, -50%) rotate(0deg); }
+  100% { transform: translate(-50%, -50%) rotate(360deg); }
 }
 @media (prefers-reduced-motion: reduce){
   .mobileTabbar a.isRefreshing .tabIco{
     animation: none;
     opacity: 0.6;
+  }
+  .mobileTabbar a.tabCreate.isRefreshing .tabIco{
+    transform: translate(-50%, -50%);
   }
 }
 
@@ -32003,9 +32015,9 @@ body[data-route="mashup"] .app{
   display: none;
 }
 .challengesPage.homeDesk .homeDeskSongPromo.homeDeskPromo--hero{
-  border-color: rgba(35, 213, 171, 0.26);
+  border-color: rgba(35, 213, 171, 0.38);
   background:
-    linear-gradient(145deg, rgba(35, 213, 171, 0.11) 0%, rgba(35, 213, 171, 0.03) 40%, rgba(255, 255, 255, 0.025) 100%);
+    linear-gradient(145deg, rgba(35, 213, 171, 0.2) 0%, rgba(35, 213, 171, 0.09) 44%, rgba(35, 213, 171, 0.03) 100%);
   box-shadow: 0 10px 28px rgba(0, 0, 0, 0.2);
 }
 .challengesPage.homeDesk .homeDeskSectionKicker{
@@ -32019,8 +32031,8 @@ body[data-route="mashup"] .app{
   background: rgba(255, 255, 255, 0.05);
 }
 .challengesPage.homeDesk .homeDeskSongPromo.homeDeskPromo--hero:active{
-  background: linear-gradient(145deg, rgba(35, 213, 171, 0.14) 0%, rgba(35, 213, 171, 0.05) 40%, rgba(255, 255, 255, 0.04) 100%);
-  border-color: rgba(35, 213, 171, 0.32);
+  background: linear-gradient(145deg, rgba(35, 213, 171, 0.2) 0%, rgba(35, 213, 171, 0.08) 42%, rgba(255, 255, 255, 0.04) 100%);
+  border-color: rgba(35, 213, 171, 0.4);
 }
 .challengesPage.homeDesk .homeDeskPersonaPromo:active,
 .challengesPage.homeDesk .homeDeskMashupPromo:active{
@@ -32064,8 +32076,8 @@ body[data-route="mashup"] .app{
   display: none;
 }
 .challengesPage.homeDesk .homeDeskSongTile{
-  background: rgba(35, 213, 171, 0.1);
-  border-color: rgba(35, 213, 171, 0.28);
+  background: rgba(35, 213, 171, 0.13);
+  border: 1px solid rgba(35, 213, 171, 0.3);
 }
 .challengesPage.homeDesk .homeDeskPersonaTile,
 .challengesPage.homeDesk .homeDeskMashupTile{
@@ -32083,7 +32095,7 @@ body[data-route="mashup"] .app{
   animation: none;
 }
 .challengesPage.homeDesk .homeDeskSongPenIco{
-  color: var(--brand-teal);
+  color: rgba(52, 226, 191, 0.92);
   animation: none;
 }
 .challengesPage.homeDesk .homeDeskPersonaIco{
@@ -43457,15 +43469,15 @@ body[data-route="studio"] .deskRail { display: none !important; }
 .challengesPage.homeDesk .homeDeskStudioPromo--featured {
   position: relative;
   background: #14111c;
-  border: 1px solid rgba(138, 92, 255, 0.28);
+  border: 1px solid rgba(138, 92, 255, 0.34);
   box-shadow: none;
 }
 .challengesPage.homeDesk .homeDeskStudioPromo--featured:active {
   background: #18121f;
-  border-color: rgba(138, 92, 255, 0.38);
+  border-color: rgba(138, 92, 255, 0.44);
 }
 .challengesPage.homeDesk .homeDeskStudioPromo--featured .homeDeskSectionKicker {
-  color: #8a5cff;
+  color: #a56cff;
   font-weight: 700;
   letter-spacing: 0.1em;
   text-transform: uppercase;
@@ -43475,9 +43487,9 @@ body[data-route="studio"] .deskRail { display: none !important; }
 }
 .challengesPage.homeDesk .homeDeskStudioPromo--featured .homeDeskStudioTile {
   padding: 5px;
-  background: rgba(138, 92, 255, 0.07);
-  border: 1px solid rgba(138, 92, 255, 0.22);
-  box-shadow: none;
+  background: rgba(138, 92, 255, 0.16);
+  border: 1px solid rgba(154, 108, 255, 0.42);
+  box-shadow: inset 0 0 24px rgba(138, 92, 255, 0.12);
   overflow: hidden;
 }
 .challengesPage.homeDesk .homeDeskStudioPromo--featured .homeDeskStudioIco {
@@ -44066,12 +44078,88 @@ html[data-theme="light"] .profileEditSheetTextarea{
   height: 50px;
 }
 
-body.humTrackSheetOpen .mobileTabbar{
-  opacity: 0.35;
-  pointer-events: none;
+/* Hum Track + Sounds — inline create flows (bottom tab stays visible) */
+body[data-route="generate"][data-create-flow="humtrack"] #simpleBox,
+body[data-route="generate"][data-create-flow="sounds"] #simpleBox{
+  display: none !important;
+}
+/* Sounds panel is a sibling route section — must override main.grid route guard */
+body[data-route="generate"][data-create-flow="sounds"] main.grid > [data-route="generate"]{
+  display: none !important;
+}
+body[data-route="generate"][data-create-flow="sounds"] main.grid > [data-route="sounds"]{
+  display: block !important;
+}
+body[data-route="generate"][data-create-flow="humtrack"] .card.wide[data-route="generate"]{
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
+  padding-top: 0;
+}
+.humTrackFlow{
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding: 0 0 calc(12px + env(safe-area-inset-bottom, 0px));
+  min-width: 0;
+  animation: sectionFadeIn 260ms ease;
+}
+.humTrackFlow[hidden]{
+  display: none !important;
+}
+.humTrackFlowHead{
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 4px 2px 12px;
+}
+.humTrackFlowBack{
+  margin-top: 2px;
+}
+.humTrackFlowHeadCopy{
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.humTrackFlowKicker{
+  margin: 0 0 4px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(232, 238, 247, 0.42);
+}
+.humTrackFlowTitle{
+  margin: 0;
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  color: rgba(248, 250, 255, 0.96);
+}
+.humTrackFlowSub{
+  margin: 6px 0 0;
+  font-size: 13px;
+  line-height: 1.45;
+  color: rgba(232, 238, 247, 0.58);
+}
+.humTrackFlowBody{
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: 4px 2px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+.soundsStudioTabHint{
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.4;
+  text-align: center;
+  color: rgba(232, 238, 247, 0.38);
 }
 .humTrackSheet{
-  z-index: 126;
+  z-index: auto;
 }
 .humTrackSheetBackdrop{
   background: rgba(4, 6, 12, 0.72);
@@ -44288,6 +44376,8 @@ body.humTrackSheetOpen .mobileTabbar{
   text-align: center;
   color: rgba(232, 238, 247, 0.38);
 }
+.humTrackFlow.isGenerating .humTrackRecordBtn,
+.humTrackFlow.isGenerating .humTrackChip,
 .humTrackSheet.isGenerating .humTrackRecordBtn,
 .humTrackSheet.isGenerating .humTrackChip{
   pointer-events: none;

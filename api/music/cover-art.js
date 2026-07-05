@@ -12,6 +12,7 @@ const { runVisualDirector } = require("../_lib/visual-director");
 const MAX_FIELD = 160;
 const MAX_STYLE = 980;
 const MAX_ARTWORK = 280;
+const MAX_AVOID = 900;
 let _promptMod = null;
 
 async function getPromptModule() {
@@ -42,6 +43,39 @@ function sendJson(res, code, data) {
   res.statusCode = code;
   res.setHeader("Content-Type", "application/json");
   res.end(JSON.stringify(data));
+}
+
+async function fetchPollinationsCover(upstreamUrl, { attempts = 3, timeoutMs = 28000 } = {}) {
+  let lastError = "unknown";
+  for (let i = 0; i < attempts; i += 1) {
+    if (i > 0) {
+      await new Promise((r) => setTimeout(r, 900 * i));
+    }
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+    try {
+      const upstream = await fetch(upstreamUrl, {
+        headers: { "User-Agent": "NabadAi-CoverArt/1.0" },
+        signal: ctrl.signal,
+      });
+      const mime = String(upstream.headers.get("content-type") || "image/jpeg").split(";")[0].trim();
+      const buf = Buffer.from(await upstream.arrayBuffer());
+      if (!upstream.ok) {
+        lastError = `HTTP ${upstream.status}`;
+        continue;
+      }
+      if (/json/i.test(mime) || buf.length < 512) {
+        lastError = buf.length < 512 ? "empty_image" : "upstream_json";
+        continue;
+      }
+      return { ok: true, buf, mime: mime || "image/jpeg" };
+    } catch (e) {
+      lastError = e?.name === "AbortError" ? "timeout" : (e?.message || String(e));
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+  return { ok: false, error: lastError };
 }
 
 module.exports = async function handler(req, res) {
@@ -105,8 +139,8 @@ module.exports = async function handler(req, res) {
     const vdApplied = vd.applied;
     const promptInput = vd.mode === "apply" && vdApplied?.coverInput ? vdApplied.coverInput : coverInput;
     const effectiveAvoidTags = vd.mode === "apply" && vdApplied?.avoidMerged
-      ? String(vdApplied.avoidMerged).slice(0, MAX_FIELD)
-      : avoidTagsInput;
+      ? String(vdApplied.avoidMerged).slice(0, MAX_AVOID)
+      : avoidTagsInput.slice(0, MAX_AVOID);
 
     let nabadBriefLine = "";
     if (vd.mode === "apply" && vdApplied?.identityPhrases) {
@@ -153,23 +187,13 @@ module.exports = async function handler(req, res) {
     );
 
     const upstreamUrl = buildPollinationsUrl(prompt, seed, { avoidTags: effectiveAvoidTags });
-    const upstream = await fetch(upstreamUrl, {
-      headers: { "User-Agent": "NabadAi-CoverArt/1.0" },
-    });
-
-    if (!upstream.ok) {
-      const errText = await upstream.text().catch(() => "");
-      console.warn("[music/cover-art] pollinations failed", upstream.status, errText.slice(0, 200));
+    const polled = await fetchPollinationsCover(upstreamUrl);
+    if (!polled.ok) {
+      console.warn("[music/cover-art] pollinations failed", polled.error);
       return sendJson(res, 502, { error: "Cover image generation failed upstream." });
     }
 
-    const mime = String(upstream.headers.get("content-type") || "image/jpeg").split(";")[0].trim();
-    const buf = Buffer.from(await upstream.arrayBuffer());
-    if (buf.length < 512) {
-      return sendJson(res, 502, { error: "Cover image response was empty." });
-    }
-
-    const dataUrl = `data:${mime || "image/jpeg"};base64,${buf.toString("base64")}`;
+    const dataUrl = `data:${polled.mime || "image/jpeg"};base64,${polled.buf.toString("base64")}`;
 
     return sendJson(res, 200, {
       ok: true,

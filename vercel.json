@@ -16,6 +16,9 @@
     },
     "api/songs/archive.js": {
       "maxDuration": 60
+    },
+    "api/music/cover-art.js": {
+      "maxDuration": 60
     }
   },
   "crons": [

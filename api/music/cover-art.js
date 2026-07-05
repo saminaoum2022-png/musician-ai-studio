@@ -84,7 +84,6 @@ module.exports = async function handler(req, res) {
       artworkStyle: String(body?.artworkStyle || "").trim().slice(0, MAX_ARTWORK),
       artworkHint: String(body?.artworkHint || "").trim().slice(0, MAX_ARTWORK),
       humTrack: Boolean(body?.humTrack),
-      instrumentId: String(body?.instrumentId || body?.instrument || "").trim().slice(0, 40),
       instrumentLabel: String(body?.instrumentLabel || "").trim().slice(0, 40),
       skipGeminiScene: Boolean(body?.skipGeminiScene || body?.humTrack),
       searchTemplateTitle: String(body?.searchTemplateTitle || "").trim().slice(0, MAX_FIELD),

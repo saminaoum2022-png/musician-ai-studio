@@ -17,9 +17,6 @@ import { NABAD_DNA_VERSION } from "./nabad-identity.mjs";
  * @property {string} setting
  * @property {string[]} visualSymbols
  * @property {string|null} instrumentFocus
- * @property {string|null} instrumentId
- * @property {"direct"|"identity"|null} instrumentRenderMode
- * @property {string|null} instrumentPalette
  * @property {string} composition
  * @property {string} lighting
  * @property {string} cameraStyle
@@ -27,7 +24,7 @@ import { NABAD_DNA_VERSION } from "./nabad-identity.mjs";
  * @property {CoverVisualMode} visualMode
  * @property {string|null} bucketHint
  * @property {{ dnaVersion: number, roots: string[], phraseBundleId: string }} nabadIdentity
- * @property {{ director: "heuristic"|"gemini"|"preset", model?: string, cached?: boolean, instrumentVisualIdentity?: boolean }} provenance
+ * @property {{ director: "heuristic"|"gemini"|"preset", model?: string, cached?: boolean }} provenance
  */
 
 export const VISUAL_DIRECTION_VERSION = 1;
@@ -80,12 +77,6 @@ export function validateVisualDirection(raw) {
     setting: trimField(raw.setting, 100) || "cinematic atmospheric environment",
     visualSymbols: asStringArray(raw.visualSymbols, 5),
     instrumentFocus: raw.instrumentFocus ? trimField(raw.instrumentFocus, 40) : null,
-    instrumentId: raw.instrumentId ? trimField(raw.instrumentId, 40) : null,
-    instrumentRenderMode:
-      raw.instrumentRenderMode === "direct" || raw.instrumentRenderMode === "identity"
-        ? raw.instrumentRenderMode
-        : null,
-    instrumentPalette: raw.instrumentPalette ? trimField(raw.instrumentPalette, 120) : null,
     composition,
     lighting: trimField(raw.lighting, 100) || "cinematic rim light with soft atmospheric fill",
     cameraStyle: trimField(raw.cameraStyle, 80) || "premium editorial photograph",
@@ -101,7 +92,6 @@ export function validateVisualDirection(raw) {
       director: raw.provenance?.director === "gemini" ? "gemini" : raw.provenance?.director === "preset" ? "preset" : "heuristic",
       model: raw.provenance?.model ? trimField(raw.provenance.model, 60) : undefined,
       cached: Boolean(raw.provenance?.cached),
-      instrumentVisualIdentity: Boolean(raw.provenance?.instrumentVisualIdentity),
     },
   };
 }
@@ -110,7 +100,6 @@ export function buildSceneHintFromDirection(direction) {
   if (!direction) return "";
   const parts = [
     direction.mainSubject,
-    direction.instrumentPalette,
     direction.setting,
     direction.lighting,
     direction.visualSymbols.length ? direction.visualSymbols.join(", ") : "",

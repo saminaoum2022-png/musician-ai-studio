@@ -1,11 +1,6 @@
 /**
  * Path-specific enrichments for Visual Director context.
  */
-import {
-  instrumentSceneForProfile,
-  resolveHumInstrumentVisual,
-} from "./instrument-visual-identity.mjs";
-
 /** @typedef {import("./context.js").CoverDirectorContext} CoverDirectorContext */
 
 const OCCASION_RE = [
@@ -51,17 +46,10 @@ export function enrichDirectorContext(ctx) {
   const occasion = inferOccasion(ctx);
   const next = { ...ctx, occasionLabel: occasion || ctx.occasionLabel };
 
-  if (ctx.sourcePath === "hum_track" && (ctx.instrumentId || ctx.instrumentLabel)) {
-    const profile = resolveHumInstrumentVisual(ctx.instrumentId, ctx.instrumentLabel);
-    if (profile) {
-      next.instrumentId = profile.id;
-      next.visualModeHint = profile.renderMode === "direct" ? "instrument_still_life" : "abstract";
-      next.storyScene = next.storyScene || instrumentSceneForProfile(profile);
-    } else {
-      next.visualModeHint = "instrument_still_life";
-      next.storyScene = next.storyScene
-        || `solo ${ctx.instrumentLabel} as sculptural hero, moody studio spill light, no people, no writing`;
-    }
+  if (ctx.sourcePath === "hum_track" && ctx.instrumentLabel) {
+    next.visualModeHint = "instrument_still_life";
+    next.storyScene = next.storyScene
+      || `solo ${ctx.instrumentLabel} as sculptural hero, moody studio spill light, no people, no writing`;
   }
 
   if (ctx.sourcePath === "sound") {

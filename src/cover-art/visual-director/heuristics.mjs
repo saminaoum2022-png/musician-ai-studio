@@ -2,13 +2,6 @@
  * Rule-based Visual Director — no LLM required.
  */
 import { fnv1a } from "./hash.mjs";
-import {
-  instrumentLightingForProfile,
-  instrumentMainSubjectForProfile,
-  instrumentPaletteForProfile,
-  instrumentSettingForProfile,
-  resolveHumInstrumentVisual,
-} from "./instrument-visual-identity.mjs";
 import { nabadIdentityPhrases } from "./nabad-identity.mjs";
 import { validateVisualDirection } from "./schema.mjs";
 
@@ -24,16 +17,7 @@ function pickComposition(songId) {
   return COMPOSITIONS[fnv1a(`${songId}:vd-comp`) % COMPOSITIONS.length];
 }
 
-function humInstrumentProfile(ctx) {
-  if (!ctx.humTrack || (!ctx.instrumentId && !ctx.instrumentLabel)) return null;
-  return resolveHumInstrumentVisual(ctx.instrumentId, ctx.instrumentLabel);
-}
-
 function mainSubjectFromContext(ctx) {
-  const humProfile = humInstrumentProfile(ctx);
-  if (humProfile) {
-    return instrumentMainSubjectForProfile(humProfile);
-  }
   if (ctx.artworkHint || ctx.artworkStyle) {
     return String(ctx.artworkHint || ctx.artworkStyle).slice(0, 120);
   }
@@ -56,11 +40,6 @@ function mainSubjectFromContext(ctx) {
 }
 
 function settingFromContext(ctx) {
-  const humProfile = humInstrumentProfile(ctx);
-  if (humProfile) {
-    const setting = instrumentSettingForProfile(humProfile);
-    if (setting) return setting;
-  }
   if (ctx.sourcePath === "hum_track") return "moody studio with soft violet-teal spill light";
   if (ctx.sourcePath === "sound") return ctx.energy > 0.7 ? "dynamic neon atmospheric space" : "calm minimal atmospheric void";
   if (ctx.sourcePath === "mashup") return "layered depth planes with dual glow accents";
@@ -74,10 +53,6 @@ function settingFromContext(ctx) {
 function visualSymbolsFromContext(ctx) {
   /** @type {string[]} */
   const symbols = [];
-  const humProfile = humInstrumentProfile(ctx);
-  if (humProfile?.symbolicElements?.length) {
-    symbols.push(...humProfile.symbolicElements);
-  }
   const occasion = String(ctx.occasionLabel || "").toLowerCase();
   if (occasion === "birthday") symbols.push("soft candle glow", "celebration balloons as bokeh");
   if (occasion === "wedding") symbols.push("chandelier bokeh", "soft floral glow");
@@ -90,10 +65,6 @@ function visualSymbolsFromContext(ctx) {
 }
 
 function visualModeFromContext(ctx) {
-  const humProfile = humInstrumentProfile(ctx);
-  if (humProfile) {
-    return humProfile.renderMode === "direct" ? "instrument_still_life" : "abstract";
-  }
   if (ctx.humTrack || ctx.visualModeHint === "instrument_still_life") return "instrument_still_life";
   if (ctx.visualModeHint === "figure") return "figure";
   if (ctx.visualModeHint === "abstract" || ctx.sourcePath === "instrumental") return "abstract";
@@ -103,10 +74,6 @@ function visualModeFromContext(ctx) {
 function extraAvoid(ctx) {
   /** @type {string[]} */
   const avoid = [];
-  const humProfile = humInstrumentProfile(ctx);
-  if (humProfile?.avoidConcepts?.length) {
-    avoid.push(...humProfile.avoidConcepts);
-  }
   if (ctx.humTrack && ctx.instrumentLabel) {
     avoid.push("full band", "wrong instrument", "microphone performance shot");
   }
@@ -119,7 +86,6 @@ function extraAvoid(ctx) {
  * @param {CoverDirectorContext} ctx
  */
 export function resolveHeuristicVisualDirection(ctx) {
-  const humProfile = humInstrumentProfile(ctx);
   const visualMode = visualModeFromContext(ctx);
   const identity = nabadIdentityPhrases({
     songId: ctx.songId,
@@ -127,36 +93,26 @@ export function resolveHeuristicVisualDirection(ctx) {
     energy: ctx.energy,
     visualMode,
     humTrack: ctx.humTrack,
-    instrumentRenderMode: humProfile?.renderMode || null,
   });
-
-  const lighting = humProfile
-    ? instrumentLightingForProfile(humProfile)
-    : ctx.energy > 0.75
-      ? "sharp rim light with controlled kinetic glow"
-      : "soft cinematic rim light with teal-violet atmospheric fill";
 
   const raw = {
     sourcePath: ctx.sourcePath,
-    confidence: humProfile || ctx.artworkHint || ctx.storyScene ? 0.72 : 0.58,
+    confidence: ctx.artworkHint || ctx.storyScene ? 0.68 : 0.58,
     mainSubject: mainSubjectFromContext(ctx),
     emotion: ctx.mood || "balanced",
     occasion: ctx.occasionLabel || null,
     setting: settingFromContext(ctx),
     visualSymbols: visualSymbolsFromContext(ctx),
     instrumentFocus: ctx.humTrack && ctx.instrumentLabel ? `solo ${ctx.instrumentLabel}` : null,
-    instrumentId: humProfile?.id || normalizeHumInstrumentIdFallback(ctx),
-    instrumentRenderMode: humProfile?.renderMode || null,
-    instrumentPalette: humProfile ? instrumentPaletteForProfile(humProfile) : null,
     composition: pickComposition(ctx.songId),
-    lighting,
+    lighting: ctx.energy > 0.75
+      ? "sharp rim light with controlled kinetic glow"
+      : "soft cinematic rim light with teal-violet atmospheric fill",
     cameraStyle: visualMode === "instrument_still_life"
       ? "macro instrument still life photograph"
-      : humProfile?.renderMode === "identity"
-        ? "cinematic symbolic environment photograph"
-        : visualMode === "figure"
-          ? "wide cinematic silhouette photograph"
-          : "premium editorial landscape photograph",
+      : visualMode === "figure"
+        ? "wide cinematic silhouette photograph"
+        : "premium editorial landscape photograph",
     avoidConcepts: extraAvoid(ctx),
     visualMode,
     bucketHint: ctx.bucketKey,
@@ -165,17 +121,8 @@ export function resolveHeuristicVisualDirection(ctx) {
       roots: identity.roots,
       phraseBundleId: identity.phraseBundleId,
     },
-    provenance: {
-      director: humProfile ? "preset" : ctx.humTrack && ctx.instrumentLabel ? "preset" : "heuristic",
-      instrumentVisualIdentity: humProfile?.renderMode === "identity",
-    },
+    provenance: { director: ctx.humTrack && ctx.instrumentLabel ? "preset" : "heuristic" },
   };
 
   return validateVisualDirection(raw);
-}
-
-function normalizeHumInstrumentIdFallback(ctx) {
-  const id = String(ctx.instrumentId || "").trim();
-  if (id) return id;
-  return String(ctx.instrumentLabel || "").trim().toLowerCase().replace(/\s+/g, "_") || null;
 }

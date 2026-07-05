@@ -35,7 +35,6 @@ export function applyVisualDirection(coverInput, direction, opts = {}) {
         energy: coverInput?.energy,
         visualMode: direction?.visualMode,
         humTrack: coverInput?.humTrack,
-        instrumentRenderMode: direction?.instrumentRenderMode || null,
       });
 
   const sceneHint = buildSceneHintFromDirection(direction);
@@ -65,14 +64,6 @@ export function applyVisualDirection(coverInput, direction, opts = {}) {
 
   /** @type {object} */
   const enriched = { ...coverInput, avoidTagsInput: avoidMerged };
-
-  if (
-    direction?.sourcePath === "hum_track"
-    && direction?.instrumentRenderMode === "identity"
-  ) {
-    enriched.artworkHint = "";
-    enriched.artworkStyle = "";
-  }
 
   if (!hasUserArtwork && directorScene) {
     enriched.directorSceneHint = directorScene;

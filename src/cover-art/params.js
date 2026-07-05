@@ -175,11 +175,11 @@ export function shouldUseAbstractCover(track) {
   const meta = track?.meta && typeof track.meta === "object" ? track.meta : {};
   if (!meta.pollinationsCoverPending) return false;
   if (meta.photoMode || meta.imageOnlyInstrumental) return false;
-  if (meta.coverGenAttempted) return false;
   if (String(meta?.coverSource || "") === "pollinations" && meta?.nabadAbstractCover) return false;
   if (String(track?.artUrl || meta?.imageUrl || "").startsWith("data:") && meta?.nabadAbstractCover) {
     return false;
   }
+  if (meta.coverGenAttempted && !isDefaultSongCoverUrl(track?.artUrl || meta?.imageUrl)) return false;
   return true;
 }
 

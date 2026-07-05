@@ -175,7 +175,6 @@ async function runCoverJobForTrack(track, id) {
       dataUrl: DEFAULT_SONG_COVER_URL,
       coverSource: "placeholder",
       nabadAbstractCover: false,
-      coverGenAttempted: true,
     }),
   ).then((failed) => {
     if (failed) refreshPlayerIfTrack(failed);

@@ -2,11 +2,14 @@
  * Story-aware Pollinations prompts — derived from title, lyrics, style, mood.
  * User never writes these. Same song id + same story → same seed + same scene.
  */
-import { HUM_TRACK_SCENE_GUARD } from "./visual-director/hum-track-cover.mjs";
 
 /** Pollinations output; Suno CDN covers were typically ~512×512 JPEG. */
 export const POLLINATIONS_COVER_WIDTH = 1024;
 export const POLLINATIONS_COVER_HEIGHT = 1024;
+
+/** Keep in sync with hum-track-cover.mjs — no imports here (server loads this via dynamic import). */
+const HUM_TRACK_SCENE_GUARD =
+  "empty studio, instrument-only frame, no people, no human figures, no faces, no hands, no fingers, no musician, no performer, no body parts";
 
 const NO_TEXT_LEAD =
   "pure photograph with absolutely zero text letters or words visible anywhere, visual scene only, ";

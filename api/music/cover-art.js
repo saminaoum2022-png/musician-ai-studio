@@ -45,7 +45,7 @@ function sendJson(res, code, data) {
   res.end(JSON.stringify(data));
 }
 
-async function fetchPollinationsCover(upstreamUrl, { attempts = 3, timeoutMs = 28000 } = {}) {
+async function fetchPollinationsCover(upstreamUrl, { attempts = 2, timeoutMs = 24000 } = {}) {
   let lastError = "unknown";
   for (let i = 0; i < attempts; i += 1) {
     if (i > 0) {

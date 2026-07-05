@@ -79,13 +79,61 @@ function inferSonicProfile(meta) {
   return "balanced";
 }
 
+const OCCASION_COVER_HINTS = [
+  {
+    re: /birthday|bday|happy birthday|sana helwa|عيد ميلاد/i,
+    hint: "celebration balloons and soft candle glow, festive party atmosphere, no people, no writing",
+  },
+  {
+    re: /wedding|bridal|bride|groom|زفاف|عرس|عروس/i,
+    hint: "elegant wedding ceremony lights, dancing silhouettes, floral glow, no faces, no writing",
+  },
+  {
+    re: /christmas|xmas|noël|noel|holiday season|yuletide|بيت الميلاد/i,
+    hint: "evergreen tree with warm golden lights and star glow, cozy winter atmosphere, no writing",
+  },
+  {
+    re: /anniversary|romantic|valentine|love song/i,
+    hint: "intimate romantic atmosphere, couple silhouettes under glowing sky, no faces, no writing",
+  },
+  {
+    re: /prom|graduation|congrats|congratulations|new year|mom day|for mom/i,
+    hint: "celebration lights and confetti atmosphere, festive silhouettes, no writing",
+  },
+];
+
+function occasionArtworkHintFromMeta(meta) {
+  const blob = [
+    meta?.challenge?.occasion,
+    meta?.challenge?.title,
+    meta?.searchTemplateTitle,
+  ]
+    .filter(Boolean)
+    .join(" ");
+  if (!blob.trim()) return "";
+  for (const row of OCCASION_COVER_HINTS) {
+    if (row.re.test(blob)) return row.hint;
+  }
+  return "";
+}
+
+function resolveArtworkHint(meta) {
+  const parts = [
+    String(meta?.artworkHint || "").trim(),
+    String(meta?.artworkStyle || "").trim(),
+    occasionArtworkHintFromMeta(meta),
+  ].filter(Boolean);
+  return parts.join(", ").slice(0, 280);
+}
+
 export function coverArtParamsFromTrack(track) {
   const meta = track?.meta && typeof track.meta === "object" ? track.meta : {};
   const styleBlob = `${meta.styleInput || ""} ${meta.styleSent || ""}`;
   const lyrics = String(meta.lyricsInput || meta.finalPrompt || meta.prompt || "").trim();
+  const artworkHint = resolveArtworkHint(meta);
   const artworkResolved = resolveUserArtworkPrompt({
     artworkStyle: meta?.artworkStyle,
-    artworkHint: meta?.artworkHint,
+    artworkHint,
     styleSent: meta?.styleSent,
     style: meta?.styleInput,
     styleInput: meta?.styleInput,
@@ -106,8 +154,13 @@ export function coverArtParamsFromTrack(track) {
     lyricsInput: lyrics,
     finalPrompt: String(meta.finalPrompt || "").trim(),
     artworkStyle: artworkResolved,
-    artworkHint: String(meta?.artworkHint || "").trim(),
+    artworkHint,
     avoidTagsInput: String(meta?.avoidTagsInput || "").trim(),
+    humTrack: Boolean(meta.humTrack),
+    instrumentLabel: String(meta.instrumentLabel || "").trim(),
+    skipGeminiScene: Boolean(meta.humTrack),
+    searchTemplateTitle: String(meta.searchTemplateTitle || "").trim(),
+    occasionLabel: String(meta?.challenge?.occasion || "").trim(),
   };
 }
 

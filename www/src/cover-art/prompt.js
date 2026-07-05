@@ -448,6 +448,9 @@ const TEXT_TRIGGER_REPLACEMENTS = [
   ["greeting card", "blank textured paper surface"],
   ["signature version", ""],
   ["signature", ""],
+  ["hum track", "solo instrument studio portrait"],
+  ["album cover art", "cinematic still life"],
+  ["album cover", "cinematic still life"],
 ];
 
 function stripTitleTokens(text, title) {
@@ -548,7 +551,10 @@ export function buildAbstractCoverPrompt(input, options = {}) {
   const sonicProfile = String(input?.sonicProfile || inferSonicProfile(`${genre} ${styleBlob}`));
   const userArtworkRaw = resolveUserArtworkPrompt(input);
   const userArtwork = sanitizeArtworkPrompt(userArtworkRaw, { title });
-  const sceneOverride = sanitizeArtworkPrompt(String(options.sceneOverride || "").trim(), { title });
+  const sceneOverrideRaw = sanitizeArtworkPrompt(String(options.sceneOverride || "").trim(), { title });
+  const sceneOverride = sceneOverrideRaw && userArtwork
+    ? sanitizeArtworkPrompt(`${userArtwork}, ${sceneOverrideRaw}`, { title })
+    : sceneOverrideRaw;
 
   const { scene, visualMode, storyTheme, bucketKey } = buildSceneFromStory(input);
   const visualScene = toVisualOnlyPrompt(scene, { title });
@@ -592,6 +598,7 @@ export function buildAbstractCoverPrompt(input, options = {}) {
     parts = [
       NO_TEXT_LEAD,
       userArtwork,
+      palette,
       NO_TEXT_REINFORCE,
       SAFETY_PREFIX + USER_STYLE_CORE,
       composition,

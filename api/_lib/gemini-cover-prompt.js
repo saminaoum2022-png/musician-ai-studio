@@ -64,31 +64,40 @@ function trimField(value, max = 240) {
     .slice(0, max);
 }
 
-function buildGeminiCoverBrief(input, { bucketKey, palette, artworkHint = "" } = {}) {
-  const title = trimField(input?.title, 120);
+function buildGeminiCoverBrief(input, { bucketKey, palette, artworkHint = "", occasionLabel = "" } = {}) {
+  const humTrack = Boolean(input?.humTrack || input?.skipGeminiScene);
+  const instrumentLabel = trimField(input?.instrumentLabel, 40);
   const mood = trimField(input?.mood, 80);
   const genre = trimField(input?.genre || input?.styleInput || input?.style, 140);
   const style = trimField(`${input?.styleInput || ""} ${input?.styleSent || ""}`, 220);
   const lyrics = trimField(input?.lyrics || input?.lyricsInput || "", 360);
   const hint = trimField(artworkHint, 220);
+  const occasion = trimField(occasionLabel || input?.occasionLabel, 80);
+  const templateTitle = trimField(input?.searchTemplateTitle, 120);
 
   return [
-    "Write ONE album-cover scene phrase for an AI image model.",
+    "Write ONE wordless photograph scene phrase for an AI image model.",
     "Output plain text only: comma-separated visual description, max 220 characters.",
-    "No markdown, no quotes, no JSON, no song title, no artist name.",
+    "No markdown, no quotes, no JSON.",
     "Describe subject, setting, lighting mood, and composition only.",
-    "Do NOT include readable text, letters, numbers, logos, signage, posters, or watermarks in the scene.",
+    "CRITICAL: absolutely no readable text, letters, numbers, logos, signage, posters, banners, captions, song titles, or watermarks anywhere in the scene.",
     "Do NOT name colors or color palettes — brand color grading is appended separately.",
     "Avoid visible faces; distant silhouettes are ok.",
     "",
     `Mood bucket: ${bucketKey || "default"}`,
-    `Brand palette (for your mood only — do not repeat in output): ${palette || "deep teal, rich violet, cinematic dark tones"}`,
-    title ? `Song title (context only — do not print): ${title}` : "",
+    `Brand palette (for mood only — do not repeat in output): ${palette || "deep teal, rich violet, cinematic dark tones"}`,
+    humTrack && instrumentLabel
+      ? `Instrument focus (must dominate the scene): solo ${instrumentLabel}`
+      : "",
+    occasion ? `Occasion context (visual only, never as text): ${occasion}` : "",
+    templateTitle && !humTrack
+      ? `Template context (never render as text): ${templateTitle}`
+      : "",
     mood ? `Mood: ${mood}` : "",
     genre ? `Genre: ${genre}` : "",
     style ? `Style: ${style}` : "",
-    hint ? `Art direction: ${hint}` : "",
-    lyrics ? `Lyrics excerpt: ${lyrics}` : "",
+    hint ? `Art direction (visual only): ${hint}` : "",
+    lyrics ? `Lyrics excerpt (never render as text): ${lyrics}` : "",
   ]
     .filter(Boolean)
     .join("\n");
@@ -122,6 +131,9 @@ async function tryGeminiCoverScene(input, context = {}) {
   const geminiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || "";
   if (!geminiKey || !isGeminiCoverPromptEnabled()) {
     return { ok: false, error: "disabled" };
+  }
+  if (input?.skipGeminiScene || input?.humTrack) {
+    return { ok: false, error: "skipped_hum_track" };
   }
 
   const songId = String(input?.songId || input?.id || "").trim();

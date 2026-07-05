@@ -60,6 +60,7 @@ module.exports = async function handler(req, res) {
       buildPollinationsUrl,
       moodPaletteForBucket,
       classifyVisualBucket,
+      sanitizeArtworkPrompt,
     } = await getPromptModule();
 
     const avoidTagsInput = String(body?.avoidTagsInput || body?.avoidTags || "").trim().slice(0, MAX_FIELD);
@@ -80,6 +81,11 @@ module.exports = async function handler(req, res) {
       finalPrompt: String(body?.finalPrompt || "").trim().slice(0, MAX_FIELD),
       artworkStyle: String(body?.artworkStyle || "").trim().slice(0, MAX_ARTWORK),
       artworkHint: String(body?.artworkHint || "").trim().slice(0, MAX_ARTWORK),
+      humTrack: Boolean(body?.humTrack),
+      instrumentLabel: String(body?.instrumentLabel || "").trim().slice(0, 40),
+      skipGeminiScene: Boolean(body?.skipGeminiScene || body?.humTrack),
+      searchTemplateTitle: String(body?.searchTemplateTitle || "").trim().slice(0, MAX_FIELD),
+      occasionLabel: String(body?.occasionLabel || "").trim().slice(0, MAX_FIELD),
     };
 
     const bucketKey = classifyVisualBucket(coverInput);
@@ -88,18 +94,21 @@ module.exports = async function handler(req, res) {
 
     let geminiScene = "";
     let geminiModel = "";
-    try {
-      const gem = await tryGeminiCoverScene(coverInput, {
-        bucketKey,
-        palette: brandPalette,
-        artworkHint,
-      });
-      if (gem?.ok && gem.scene) {
-        geminiScene = gem.scene;
-        geminiModel = gem.model || "";
+    if (!coverInput.skipGeminiScene) {
+      try {
+        const gem = await tryGeminiCoverScene(coverInput, {
+          bucketKey,
+          palette: brandPalette,
+          artworkHint,
+          occasionLabel: coverInput.occasionLabel,
+        });
+        if (gem?.ok && gem.scene) {
+          geminiScene = sanitizeArtworkPrompt(gem.scene, { title: coverInput.title });
+          geminiModel = gem.model || "";
+        }
+      } catch (e) {
+        console.warn("[music/cover-art] gemini scene skipped", e?.message || e);
       }
-    } catch (e) {
-      console.warn("[music/cover-art] gemini scene skipped", e?.message || e);
     }
 
     const promptOpts = geminiScene

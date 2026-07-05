@@ -59,6 +59,7 @@ import {
 import {
   configureCoverArt,
   ensureAbstractCoverForTrack,
+  backfillPendingAbstractCovers,
 } from "./cover-art/generate.js";
 import { isPollinationsCoverEligible, shouldUseAbstractCover } from "./cover-art/params.js";
 import { DEFAULT_SONG_COVER_URL, isLogoCoverUrl, normalizeSongCoverUrl, playerEmptyArtUrl } from "./cover-art/placeholders.js";
@@ -163,7 +164,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260705-171400";
+const APP_BUILD = "20260705-173204";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -40016,6 +40017,7 @@ async function ensureUserLibraryHydrated(prefetchedCloud, opts = {}) {
   clearTimeout(safetyTimer);
   saveLibrary(mergedDeduped);
   backfillNabadVerificationInLibrary();
+  try { backfillPendingAbstractCovers(mergedDeduped); } catch {}
   refreshOwnSongsUi();
   try { resumePendingPublishes(); } catch {}
 
@@ -40208,6 +40210,7 @@ function addToLibrary(track) {
     if (shouldUseAbstractCover(newTrack)) {
       void ensureAbstractCoverForTrack(newTrack);
     }
+    try { backfillPendingAbstractCovers(loadLibrary()); } catch {}
   })();
   return newTrack;
 }

@@ -1,6 +1,7 @@
 /**
  * Visual Director structured output — song-specific concept layer.
  */
+import { appendHumTrackSceneGuards } from "./hum-track-cover.mjs";
 import { NABAD_DNA_VERSION } from "./nabad-identity.mjs";
 
 /** @typedef {"create"|"template"|"spark"|"live"|"hum_track"|"sound"|"mashup"|"instrumental"|"unknown"} CoverSourcePath */
@@ -104,5 +105,9 @@ export function buildSceneHintFromDirection(direction) {
     direction.lighting,
     direction.visualSymbols.length ? direction.visualSymbols.join(", ") : "",
   ].filter(Boolean);
-  return trimField(parts.join(", "), 220);
+  let hint = trimField(parts.join(", "), 220);
+  if (direction.visualMode === "instrument_still_life" || direction.sourcePath === "hum_track") {
+    hint = appendHumTrackSceneGuards(hint);
+  }
+  return trimField(hint, 220);
 }

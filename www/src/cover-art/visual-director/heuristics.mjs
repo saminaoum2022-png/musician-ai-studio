@@ -2,6 +2,9 @@
  * Rule-based Visual Director — no LLM required.
  */
 import { fnv1a } from "./hash.mjs";
+import {
+  humTrackInstrumentStillPhrase,
+} from "./hum-track-cover.mjs";
 import { nabadIdentityPhrases } from "./nabad-identity.mjs";
 import { validateVisualDirection } from "./schema.mjs";
 
@@ -22,7 +25,7 @@ function mainSubjectFromContext(ctx) {
     return String(ctx.artworkHint || ctx.artworkStyle).slice(0, 120);
   }
   if (ctx.humTrack && ctx.instrumentLabel) {
-    return `solo ${ctx.instrumentLabel} as sculptural hero, premium studio still life`;
+    return `${humTrackInstrumentStillPhrase(ctx.instrumentLabel, ctx.instrumentId)}, premium studio still life`;
   }
   if (ctx.storyScene) {
     return ctx.storyScene.replace(/, no (people|faces|writing).*$/i, "").trim().slice(0, 120);
@@ -75,7 +78,23 @@ function extraAvoid(ctx) {
   /** @type {string[]} */
   const avoid = [];
   if (ctx.humTrack && ctx.instrumentLabel) {
-    avoid.push("full band", "wrong instrument", "microphone performance shot");
+    avoid.push(
+      "people",
+      "human figure",
+      "face",
+      "hands",
+      "fingers",
+      "musician",
+      "performer",
+      "portrait",
+      "holding instrument",
+      "full band",
+      "wrong instrument",
+      "microphone performance shot",
+      "surreal objects",
+      "impossible geometry",
+      "melded objects",
+    );
   }
   if (ctx.sourcePath === "sound") avoid.push("literal lyrics text", "ui elements");
   if (ctx.sourcePath === "mashup") avoid.push("split-screen collage", "two album covers");
@@ -109,7 +128,7 @@ export function resolveHeuristicVisualDirection(ctx) {
       ? "sharp rim light with controlled kinetic glow"
       : "soft cinematic rim light with teal-violet atmospheric fill",
     cameraStyle: visualMode === "instrument_still_life"
-      ? "macro instrument still life photograph"
+      ? "macro product still life photograph, empty studio, no human subjects"
       : visualMode === "figure"
         ? "wide cinematic silhouette photograph"
         : "premium editorial landscape photograph",

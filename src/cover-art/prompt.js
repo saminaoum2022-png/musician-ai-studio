@@ -2,6 +2,7 @@
  * Story-aware Pollinations prompts — derived from title, lyrics, style, mood.
  * User never writes these. Same song id + same story → same seed + same scene.
  */
+import { HUM_TRACK_SCENE_GUARD } from "./visual-director/hum-track-cover.mjs";
 
 /** Pollinations output; Suno CDN covers were typically ~512×512 JPEG. */
 export const POLLINATIONS_COVER_WIDTH = 1024;
@@ -16,6 +17,9 @@ const SAFETY_PREFIX =
 const SAFETY_SUFFIX =
   "absolutely no text, no words, no letters, no numbers, no captions, no subtitles, no typography, no writing, no logo text, no song name, no watermark, no readable signage, no speech bubbles, no banners, no posters, no book pages, no diplomas, no certificates, no newspapers, silhouettes only without facial details, fine art photography quality";
 
+const HUM_TRACK_SAFETY_SUFFIX =
+  "absolutely no text, no words, no letters, no numbers, no captions, no subtitles, no typography, no writing, no logo text, no song name, no watermark, no readable signage, no people, no faces, no hands, no human figures, fine art photography quality";
+
 const NO_TEXT_REINFORCE =
   "completely wordless photograph, zero readable characters in the entire frame, blank signs, empty screens, no labels";
 
@@ -24,6 +28,9 @@ const NEGATIVE_TEXT_PROMPT =
 
 const STYLE_CORE =
   "premium cinematic visual art, elegant composition, rich color grading, high-end editorial look, moody dark tones with luminous accents, deep teal and violet palette when appropriate, natural anatomy, physically plausible lighting, clean geometry, single focal subject, balanced composition, professional photography, minimal visual noise, high image coherence, realistic proportions, clean perspective";
+
+const HUM_TRACK_STYLE_CORE =
+  "premium cinematic visual art, elegant composition, rich color grading, moody dark tones with luminous accents, deep teal and violet palette, photoreal instrument product still life, clean object geometry, physically plausible lighting, single instrument focal subject, balanced composition, professional studio photography, minimal visual noise, high image coherence, clean perspective, no human subjects";
 
 const USER_STYLE_CORE =
   "cinematic lighting, rich color grading, high-end editorial look";
@@ -448,7 +455,7 @@ const TEXT_TRIGGER_REPLACEMENTS = [
   ["greeting card", "blank textured paper surface"],
   ["signature version", ""],
   ["signature", ""],
-  ["hum track", "solo instrument studio portrait"],
+  ["hum track", "solo instrument product still life on studio surface"],
   ["album cover art", "cinematic still life"],
   ["album cover", "cinematic still life"],
 ];
@@ -572,6 +579,11 @@ export function buildAbstractCoverPrompt(input, options = {}) {
         ? "visual_director"
         : "auto_story";
 
+  const isHumTrack = Boolean(input?.humTrack);
+  const styleCore = isHumTrack ? HUM_TRACK_STYLE_CORE : STYLE_CORE;
+  const safetySuffix = isHumTrack ? HUM_TRACK_SAFETY_SUFFIX : SAFETY_SUFFIX;
+  const humGuard = isHumTrack ? HUM_TRACK_SCENE_GUARD : "";
+
   let parts;
   if (sceneOverride) {
     parts = userArtwork
@@ -584,13 +596,14 @@ export function buildAbstractCoverPrompt(input, options = {}) {
           SAFETY_PREFIX + USER_STYLE_CORE,
           composition,
           NO_TEXT_REINFORCE,
-          SAFETY_SUFFIX,
+          safetySuffix,
         ]
       : [
           NO_TEXT_LEAD,
-          SAFETY_PREFIX + STYLE_CORE,
+          SAFETY_PREFIX + styleCore,
           sceneOverride,
           nabadIdentityPhrases,
+          humGuard,
           palette,
           composition,
           storyMoodPhrase(storyTheme),
@@ -599,7 +612,7 @@ export function buildAbstractCoverPrompt(input, options = {}) {
           brightnessPhrase(brightness),
           sonicPhrase(sonicProfile),
           NO_TEXT_REINFORCE,
-          SAFETY_SUFFIX,
+          safetySuffix,
         ];
   } else if (userArtwork) {
     parts = [
@@ -611,14 +624,15 @@ export function buildAbstractCoverPrompt(input, options = {}) {
       SAFETY_PREFIX + USER_STYLE_CORE,
       composition,
       NO_TEXT_REINFORCE,
-      SAFETY_SUFFIX,
+      safetySuffix,
     ];
   } else {
     parts = [
       NO_TEXT_LEAD,
-      SAFETY_PREFIX + STYLE_CORE,
+      SAFETY_PREFIX + styleCore,
       visualScene,
       nabadIdentityPhrases,
+      humGuard,
       composition,
       storyMoodPhrase(storyTheme),
       bucketMoodPhrase(bucketKey),
@@ -626,7 +640,7 @@ export function buildAbstractCoverPrompt(input, options = {}) {
       brightnessPhrase(brightness),
       sonicPhrase(sonicProfile),
       NO_TEXT_REINFORCE,
-      SAFETY_SUFFIX,
+      safetySuffix,
     ];
   }
 

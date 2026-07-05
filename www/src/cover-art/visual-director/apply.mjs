@@ -1,6 +1,7 @@
 /**
  * Merge Visual Director + Nabad DNA into prompt-builder inputs.
  */
+import { humTrackAvoidTags } from "./hum-track-cover.mjs";
 import { nabadIdentityAvoid, nabadIdentityPhrases, NABAD_ROOT_PHRASES } from "./nabad-identity.mjs";
 import { buildSceneHintFromDirection } from "./schema.mjs";
 
@@ -40,9 +41,13 @@ export function applyVisualDirection(coverInput, direction, opts = {}) {
   const sceneHint = buildSceneHintFromDirection(direction);
   const userArtwork = sanitizeScenePhrase(String(coverInput?.artworkStyle || coverInput?.artworkHint || "").trim());
 
+  const humTrack = Boolean(coverInput?.humTrack || direction?.sourcePath === "hum_track");
   const avoidMerged = [
     ...nabadIdentityAvoid(),
     ...(direction?.avoidConcepts || []),
+    ...(humTrack || direction?.visualMode === "instrument_still_life"
+      ? humTrackAvoidTags("").split(/,\s*/)
+      : []),
     String(coverInput?.avoidTagsInput || "").trim(),
   ]
     .filter(Boolean)

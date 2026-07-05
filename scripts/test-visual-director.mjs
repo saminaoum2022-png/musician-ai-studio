@@ -42,13 +42,17 @@ const hum = await resolveVisualDirection({
   songId: "test-hum-1",
   title: "Hum Piano",
   humTrack: true,
+  instrument: "piano",
   instrumentLabel: "Piano",
   skipGeminiScene: true,
   energy: 0.5,
 }, { applyToPrompt: true });
 
 assert(hum.direction?.sourcePath === "hum_track", "hum path inferred");
+assert(hum.direction?.visualMode === "instrument_still_life", "hum track locks instrument still life");
 assert(hum.direction?.instrumentFocus === "solo Piano", "instrument focus locked");
+assert(/no people|instrument-only/i.test(hum.sceneHint || ""), "hum scene hint blocks people");
+assert(/people|hands|face/i.test(hum.avoidMerged || ""), "hum avoid list includes anatomy guards");
 assert(hum.directorApplied, "apply mode sets directorApplied");
 assert(hum.coverInput?.nabadIdentityPhrases, "DNA phrases attached in apply mode");
 

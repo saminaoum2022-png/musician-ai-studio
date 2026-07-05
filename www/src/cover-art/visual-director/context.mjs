@@ -23,6 +23,7 @@
  * @property {string} searchTemplateTitle
  * @property {boolean} humTrack
  * @property {string} instrumentLabel
+ * @property {string} instrumentId
  * @property {boolean} skipGeminiScene
  * @property {string} avoidTagsInput
  * @property {string} bucketKey
@@ -112,6 +113,7 @@ export function buildCoverDirectorContext(input, hints = {}) {
     searchTemplateTitle: String(input?.searchTemplateTitle || "").trim(),
     humTrack: Boolean(input?.humTrack),
     instrumentLabel: String(input?.instrumentLabel || "").trim(),
+    instrumentId: String(input?.instrument || input?.instrumentId || "").trim(),
     skipGeminiScene: Boolean(input?.skipGeminiScene || input?.humTrack),
     avoidTagsInput: String(input?.avoidTagsInput || input?.avoidTags || "").trim(),
     bucketKey,

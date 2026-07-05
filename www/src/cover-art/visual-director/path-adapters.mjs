@@ -1,6 +1,11 @@
 /**
  * Path-specific enrichments for Visual Director context.
  */
+import {
+  appendHumTrackSceneGuards,
+  humTrackInstrumentStillPhrase,
+} from "./hum-track-cover.mjs";
+
 /** @typedef {import("./context.js").CoverDirectorContext} CoverDirectorContext */
 
 const OCCASION_RE = [
@@ -48,8 +53,10 @@ export function enrichDirectorContext(ctx) {
 
   if (ctx.sourcePath === "hum_track" && ctx.instrumentLabel) {
     next.visualModeHint = "instrument_still_life";
-    next.storyScene = next.storyScene
-      || `solo ${ctx.instrumentLabel} as sculptural hero, moody studio spill light, no people, no writing`;
+    const still = humTrackInstrumentStillPhrase(ctx.instrumentLabel, ctx.instrumentId);
+    next.storyScene = appendHumTrackSceneGuards(
+      next.storyScene || `${still}, moody studio spill light, no writing`,
+    );
   }
 
   if (ctx.sourcePath === "sound") {

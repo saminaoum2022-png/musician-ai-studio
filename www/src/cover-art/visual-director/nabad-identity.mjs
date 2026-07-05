@@ -77,16 +77,16 @@ function contextualRoots(opts = {}) {
   const humTrack = Boolean(opts.humTrack);
   const bucketKey = String(opts.bucketKey || "default").toLowerCase();
   /** @type {NabadRootId[]} */
-  const roots = ["editorial_still", "symbolic_mood"];
+  const roots = ["symbolic_mood"];
 
   if (humTrack || visualMode === "instrument_still_life") {
-    roots.push("instrument_sculpture");
+    roots.push("instrument_sculpture", "soft_grain", "breathing_room");
   } else if (visualMode === "figure") {
-    roots.push("silhouette");
+    roots.push("editorial_still", "soft_grain", "silhouette");
   } else if (visualMode === "abstract") {
-    roots.push("quiet_motion", "soft_grain");
+    roots.push("editorial_still", "quiet_motion", "soft_grain");
   } else {
-    roots.push("soft_grain");
+    roots.push("editorial_still", "soft_grain");
     if (energy > 0.72) roots.push("quiet_motion");
   }
 

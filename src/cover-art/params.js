@@ -2,6 +2,7 @@
  * Derive Pollinations cover-art params from a library track / generation meta.
  */
 import { classifyVisualBucket, resolveUserArtworkPrompt } from "./prompt.js";
+import { humTrackAvoidTags } from "./visual-director/hum-track-cover.mjs";
 
 const MOOD_TAG_MAP = {
   chill: "Chill",
@@ -140,6 +141,8 @@ export function coverArtParamsFromTrack(track) {
     style: meta?.styleInput,
     styleInput: meta?.styleInput,
   });
+  const humTrack = Boolean(meta.humTrack);
+  const avoidBase = String(meta?.avoidTagsInput || "").trim();
   return {
     songId: String(track?.id || meta?.taskId || track?.taskId || "").trim(),
     title: String(track?.title || "Untitled").trim(),
@@ -157,10 +160,11 @@ export function coverArtParamsFromTrack(track) {
     finalPrompt: String(meta.finalPrompt || "").trim(),
     artworkStyle: artworkResolved,
     artworkHint,
-    avoidTagsInput: String(meta?.avoidTagsInput || "").trim(),
-    humTrack: Boolean(meta.humTrack),
+    avoidTagsInput: humTrack ? humTrackAvoidTags(avoidBase) : avoidBase,
+    humTrack,
+    instrument: String(meta.instrument || "").trim(),
     instrumentLabel: String(meta.instrumentLabel || "").trim(),
-    skipGeminiScene: Boolean(meta.humTrack),
+    skipGeminiScene: humTrack,
     searchTemplateTitle: String(meta.searchTemplateTitle || "").trim(),
     occasionLabel: String(meta?.challenge?.occasion || "").trim(),
   };

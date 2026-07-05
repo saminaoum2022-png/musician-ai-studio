@@ -64,7 +64,7 @@ function trimField(value, max = 240) {
     .slice(0, max);
 }
 
-function buildGeminiCoverBrief(input, { bucketKey, palette, artworkHint = "", occasionLabel = "" } = {}) {
+function buildGeminiCoverBrief(input, { bucketKey, palette, artworkHint = "", occasionLabel = "", nabadBriefLine = "", visualDirection = null } = {}) {
   const humTrack = Boolean(input?.humTrack || input?.skipGeminiScene);
   const instrumentLabel = trimField(input?.instrumentLabel, 40);
   const mood = trimField(input?.mood, 80);
@@ -74,6 +74,8 @@ function buildGeminiCoverBrief(input, { bucketKey, palette, artworkHint = "", oc
   const hint = trimField(artworkHint, 220);
   const occasion = trimField(occasionLabel || input?.occasionLabel, 80);
   const templateTitle = trimField(input?.searchTemplateTitle, 120);
+  const directorSubject = trimField(visualDirection?.mainSubject, 160);
+  const directorSetting = trimField(visualDirection?.setting, 120);
 
   return [
     "Write ONE wordless photograph scene phrase for an AI image model.",
@@ -85,6 +87,9 @@ function buildGeminiCoverBrief(input, { bucketKey, palette, artworkHint = "", oc
     "CRITICAL: absolutely no readable text, letters, numbers, logos, signage, posters, banners, captions, song titles, or watermarks anywhere in the scene.",
     "Do NOT name colors or color palettes — brand color grading is appended separately.",
     "Avoid visible faces; distant silhouettes are ok.",
+    nabadBriefLine ? trimField(nabadBriefLine, 220) : "",
+    directorSubject ? `Visual direction subject (visual only): ${directorSubject}` : "",
+    directorSetting ? `Visual direction setting: ${directorSetting}` : "",
     "",
     `Mood bucket: ${bucketKey || "default"}`,
     `Brand palette (for mood only — do not repeat in output): ${palette || "deep teal, rich violet, cinematic dark tones"}`,
@@ -130,6 +135,10 @@ function isGeminiCoverPromptEnabled() {
  * @param {{ bucketKey?: string, palette?: string, artworkHint?: string }} context
  */
 async function tryGeminiCoverScene(input, context = {}) {
+  const nabadBriefLine = String(context?.nabadBriefLine || "").trim();
+  const visualDirection = context?.visualDirection && typeof context.visualDirection === "object"
+    ? context.visualDirection
+    : null;
   const geminiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || "";
   if (!geminiKey || !isGeminiCoverPromptEnabled()) {
     return { ok: false, error: "disabled" };

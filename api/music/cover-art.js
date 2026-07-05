@@ -7,6 +7,7 @@ const { pathToFileURL } = require("url");
 const { verifyUser } = require("../_lib/credits-auth");
 const { applyCors } = require("../_lib/cors");
 const { tryGeminiCoverScene } = require("../_lib/gemini-cover-prompt");
+const { runVisualDirector } = require("../_lib/visual-director");
 
 const MAX_FIELD = 160;
 const MAX_STYLE = 980;
@@ -61,6 +62,7 @@ module.exports = async function handler(req, res) {
       moodPaletteForBucket,
       classifyVisualBucket,
       sanitizeArtworkPrompt,
+      resolveStoryTheme,
     } = await getPromptModule();
 
     const avoidTagsInput = String(body?.avoidTagsInput || body?.avoidTags || "").trim().slice(0, MAX_FIELD);
@@ -91,16 +93,36 @@ module.exports = async function handler(req, res) {
     const bucketKey = classifyVisualBucket(coverInput);
     const brandPalette = moodPaletteForBucket(bucketKey);
     const artworkHint = String(coverInput.artworkHint || coverInput.artworkStyle || "").trim();
+    const { theme, storyScore } = resolveStoryTheme(coverInput);
+
+    const vd = await runVisualDirector(coverInput, {
+      bucketKey,
+      storyThemeId: storyScore > 0 && theme?.id ? theme.id : undefined,
+      storyScene: theme?.scene || "",
+      visualModeHint: theme?.visualMode || "",
+    });
+    const vdApplied = vd.applied;
+    const promptInput = vd.mode === "apply" && vdApplied?.coverInput ? vdApplied.coverInput : coverInput;
+    const effectiveAvoidTags = vd.mode === "apply" && vdApplied?.avoidMerged
+      ? String(vdApplied.avoidMerged).slice(0, MAX_FIELD)
+      : avoidTagsInput;
+
+    let nabadBriefLine = "";
+    if (vd.mode === "apply" && vdApplied?.identityPhrases) {
+      nabadBriefLine = `Nabad look: ${String(vdApplied.identityPhrases).trim()}.`;
+    }
 
     let geminiScene = "";
     let geminiModel = "";
     if (!coverInput.skipGeminiScene) {
       try {
-        const gem = await tryGeminiCoverScene(coverInput, {
+        const gem = await tryGeminiCoverScene(promptInput, {
           bucketKey,
           palette: brandPalette,
           artworkHint,
           occasionLabel: coverInput.occasionLabel,
+          visualDirection: vd.mode === "apply" ? vd.direction : null,
+          nabadBriefLine: vd.mode === "apply" ? nabadBriefLine : "",
         });
         if (gem?.ok && gem.scene) {
           geminiScene = sanitizeArtworkPrompt(gem.scene, { title: coverInput.title });
@@ -111,16 +133,25 @@ module.exports = async function handler(req, res) {
       }
     }
 
-    const promptOpts = geminiScene
-      ? { sceneOverride: geminiScene, artworkSourceOverride: "gemini_scene", geminiModel }
-      : {};
+    const promptOpts = {
+      ...(geminiScene
+        ? { sceneOverride: geminiScene, artworkSourceOverride: "gemini_scene", geminiModel }
+        : {}),
+      ...(vd.mode === "apply" && vdApplied?.sceneHint
+        ? { directorSceneHint: vdApplied.sceneHint }
+        : {}),
+      ...(vd.mode === "apply" && vdApplied?.identityPhrases
+        ? { nabadIdentityPhrases: vdApplied.identityPhrases }
+        : {}),
+      ...(vd.mode === "apply" && vd.direction ? { visualDirection: vd.direction } : {}),
+    };
 
     const { prompt, seed, bucket, visualMode, storyTheme, artworkSource, params } = buildAbstractCoverPrompt(
-      coverInput,
+      promptInput,
       promptOpts,
     );
 
-    const upstreamUrl = buildPollinationsUrl(prompt, seed, { avoidTags: avoidTagsInput });
+    const upstreamUrl = buildPollinationsUrl(prompt, seed, { avoidTags: effectiveAvoidTags });
     const upstream = await fetch(upstreamUrl, {
       headers: { "User-Agent": "NabadAi-CoverArt/1.0" },
     });
@@ -147,7 +178,11 @@ module.exports = async function handler(req, res) {
       visualMode,
       storyTheme,
       artworkSource,
-      params,
+      params: {
+        ...params,
+        visualDirectorMode: vd.mode,
+        ...(vd.direction ? { visualDirection: vd.direction } : {}),
+      },
       coverWidth: params?.coverWidth || 1024,
       coverHeight: params?.coverHeight || 1024,
       provider: "pollinations",

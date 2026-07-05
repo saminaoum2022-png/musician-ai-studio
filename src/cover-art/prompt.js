@@ -536,7 +536,7 @@ function buildCoverSeed(input, storyTheme, bucketKey, userArtwork) {
 
 /**
  * @param {object} input
- * @param {{ sceneOverride?: string, artworkSourceOverride?: string, geminiModel?: string }} [options]
+ * @param {{ sceneOverride?: string, artworkSourceOverride?: string, geminiModel?: string, directorSceneHint?: string, nabadIdentityPhrases?: string, visualDirection?: object }} [options]
  * @returns {{ prompt: string, seed: number, bucket: string, visualMode: string, storyTheme: string, artworkSource: string, params: object }}
  */
 export function buildAbstractCoverPrompt(input, options = {}) {
@@ -557,7 +557,10 @@ export function buildAbstractCoverPrompt(input, options = {}) {
     : sceneOverrideRaw;
 
   const { scene, visualMode, storyTheme, bucketKey } = buildSceneFromStory(input);
-  const visualScene = toVisualOnlyPrompt(scene, { title });
+  const directorSceneHint = sanitizeArtworkPrompt(String(options.directorSceneHint || "").trim(), { title });
+  const nabadIdentityPhrases = sanitizeArtworkPrompt(String(options.nabadIdentityPhrases || "").trim(), { title });
+  const storyScene = toVisualOnlyPrompt(scene, { title });
+  const visualScene = !sceneOverride && !userArtwork && directorSceneHint ? directorSceneHint : storyScene;
   const palette = moodPaletteForBucket(bucketKey);
   const composition = COMPOSITIONS[fnv1a(`${songId}:composition`) % COMPOSITIONS.length];
   const seed = buildCoverSeed(input, storyTheme, bucketKey, userArtwork);
@@ -565,7 +568,9 @@ export function buildAbstractCoverPrompt(input, options = {}) {
     ? String(options.artworkSourceOverride || "gemini_scene")
     : userArtwork
       ? "user_artwork"
-      : "auto_story";
+      : directorSceneHint
+        ? "visual_director"
+        : "auto_story";
 
   let parts;
   if (sceneOverride) {
@@ -573,6 +578,7 @@ export function buildAbstractCoverPrompt(input, options = {}) {
       ? [
           NO_TEXT_LEAD,
           sceneOverride,
+          nabadIdentityPhrases,
           palette,
           NO_TEXT_REINFORCE,
           SAFETY_PREFIX + USER_STYLE_CORE,
@@ -584,6 +590,7 @@ export function buildAbstractCoverPrompt(input, options = {}) {
           NO_TEXT_LEAD,
           SAFETY_PREFIX + STYLE_CORE,
           sceneOverride,
+          nabadIdentityPhrases,
           palette,
           composition,
           storyMoodPhrase(storyTheme),
@@ -598,6 +605,7 @@ export function buildAbstractCoverPrompt(input, options = {}) {
     parts = [
       NO_TEXT_LEAD,
       userArtwork,
+      nabadIdentityPhrases,
       palette,
       NO_TEXT_REINFORCE,
       SAFETY_PREFIX + USER_STYLE_CORE,
@@ -610,6 +618,7 @@ export function buildAbstractCoverPrompt(input, options = {}) {
       NO_TEXT_LEAD,
       SAFETY_PREFIX + STYLE_CORE,
       visualScene,
+      nabadIdentityPhrases,
       composition,
       storyMoodPhrase(storyTheme),
       bucketMoodPhrase(bucketKey),
@@ -646,6 +655,9 @@ export function buildAbstractCoverPrompt(input, options = {}) {
       userArtworkRaw: userArtworkRaw || undefined,
       geminiScene: sceneOverride || undefined,
       geminiModel: options.geminiModel || undefined,
+      directorSceneHint: directorSceneHint || undefined,
+      nabadIdentityPhrases: nabadIdentityPhrases || undefined,
+      visualDirection: options.visualDirection || undefined,
       coverWidth: POLLINATIONS_COVER_WIDTH,
       coverHeight: POLLINATIONS_COVER_HEIGHT,
     },

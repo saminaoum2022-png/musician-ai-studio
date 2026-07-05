@@ -15,11 +15,19 @@ export function getGenerationPending() {
   }
 }
 
-export function setGenerationPending({ taskId, title, variantCount = GENERATION_VARIANT_COUNT }) {
+export function setGenerationPending({
+  taskId,
+  title,
+  variantCount = GENERATION_VARIANT_COUNT,
+  source = "",
+  instrumentId = "",
+} = {}) {
   const pending = {
     taskId: String(taskId || "").trim(),
     title: String(title || "").trim() || "New song",
     variantCount: Math.max(1, Math.min(GENERATION_VARIANT_COUNT, Number(variantCount) || GENERATION_VARIANT_COUNT)),
+    source: String(source || "").trim(),
+    instrumentId: String(instrumentId || "").trim(),
     startedAt: Date.now(),
   };
   if (!pending.taskId) return null;

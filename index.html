@@ -126,7 +126,7 @@
       onload="this.media='all'"
     />
     <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Display:wght@900&family=Inter:wght@900&display=swap" /></noscript>
-    <link rel="stylesheet" href="./styles.css?v=20260705-123053" />
+    <link rel="stylesheet" href="./styles.css?v=20260705-131619" />
 
     <meta name="description" content="NabadAi is an AI music studio. Hum a melody, write lyrics, and ship a song." />
     <meta property="og:type" content="website" />
@@ -360,7 +360,6 @@
                     <div class="onboardingPersonaSilhouette" aria-hidden="true">
                       <span class="onboardingPersonaHead"></span>
                       <span class="onboardingPersonaShoulders"></span>
-                      <span class="onboardingPersonaMicBadge"></span>
                     </div>
                     <span class="onboardingPersonaLabel">Your voice</span>
                   </div>
@@ -1110,9 +1109,7 @@
                   <div class="humTrackRecordPanel">
                     <button id="btnHumTrackRecord" class="humTrackRecordBtn" type="button" aria-label="Record hum">
                       <span class="humTrackRecordRing" aria-hidden="true"></span>
-                      <svg class="humTrackRecordIco" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                        <path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/>
-                      </svg>
+                      <span id="humTrackRecordIconHost" class="humTrackRecordIconHost" aria-hidden="true"></span>
                     </button>
                     <p id="humTrackRecordStatus" class="humTrackRecordStatus">Hum a short melody (15–30 seconds works best).</p>
                     <p id="humTrackRecordMeta" class="humTrackRecordMeta" hidden></p>
@@ -1536,10 +1533,12 @@
                     <span class="homeDeskPromoVisual homeDeskPromoVisual--humtrack" aria-hidden="true">
                       <span class="homeDeskHumTrackTileWrap">
                         <span class="homeDeskHumTrackTile">
-                          <svg class="homeDeskHumTrackIco" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
-                            <path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/>
-                            <path d="M9 18v3"/>
-                            <path d="M15 18v3"/>
+                          <svg class="homeDeskHumTrackIco" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+                            <path d="M7.85 5 19.35 2.75"/>
+                            <path d="M7.85 5v10.35"/>
+                            <path d="M19.35 2.75v10.6"/>
+                            <circle cx="4.35" cy="18.1" r="3.35"/>
+                            <circle cx="15.85" cy="16.1" r="3.35"/>
                           </svg>
                         </span>
                       </span>
@@ -1547,24 +1546,6 @@
                     <span class="homeDeskPromoCopy">
                       <span class="homeDeskPromoTitle" id="homeDeskHumTrackPromoTitle">Hum Track</span>
                       <span class="homeDeskPromoDesc">Hum a melody — get a solo instrumental on the instrument you pick.</span>
-                    </span>
-                    <span class="homeDeskPromoChev" aria-hidden="true">→</span>
-                  </button>
-
-                  <button type="button" class="homeDeskPromoCard homeDeskPersonaPromo homeDeskPromo--quick" data-home-card="persona" aria-label="Persona — save your voice once and use it across every song">
-                    <span class="homeDeskPromoVisual homeDeskPromoVisual--persona" aria-hidden="true">
-                      <span class="homeDeskPersonaTileWrap">
-                        <span class="homeDeskPersonaTile">
-                          <svg class="homeDeskPersonaMicIco" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-                            <path fill="currentColor" d="M12 14a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v5a3 3 0 0 0 3 3Z"/>
-                            <path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" d="M19 11a7 7 0 0 1-14 0"/>
-                          </svg>
-                        </span>
-                      </span>
-                    </span>
-                    <span class="homeDeskPromoCopy">
-                      <span class="homeDeskPromoTitle" id="homeDeskPersonaPromoTitle">Persona</span>
-                      <span class="homeDeskPromoDesc">Save your voice once and use it as inspiration across every song you create.</span>
                     </span>
                     <span class="homeDeskPromoChev" aria-hidden="true">→</span>
                   </button>
@@ -1584,6 +1565,24 @@
                     <span class="homeDeskPromoCopy">
                       <span class="homeDeskPromoTitle" id="homeDeskSoundsPromoTitle">Sounds</span>
                       <span class="homeDeskPromoDesc">Create sound effects, ambience and short AI audio clips.</span>
+                    </span>
+                    <span class="homeDeskPromoChev" aria-hidden="true">→</span>
+                  </button>
+
+                  <button type="button" class="homeDeskPromoCard homeDeskPersonaPromo homeDeskPromo--quick" data-home-card="persona" aria-label="Persona — save your voice once and use it across every song">
+                    <span class="homeDeskPromoVisual homeDeskPromoVisual--persona" aria-hidden="true">
+                      <span class="homeDeskPersonaTileWrap">
+                        <span class="homeDeskPersonaTile">
+                          <svg class="homeDeskPersonaIco" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                            <circle cx="12" cy="8.4" r="3.7" fill="currentColor"/>
+                            <path d="M4.4 19.6c.9-3.6 4-5.8 7.6-5.8s6.7 2.2 7.6 5.8c.1.5-.3.9-.8.9H5.2c-.5 0-.9-.4-.8-.9Z" fill="currentColor"/>
+                          </svg>
+                        </span>
+                      </span>
+                    </span>
+                    <span class="homeDeskPromoCopy">
+                      <span class="homeDeskPromoTitle" id="homeDeskPersonaPromoTitle">Persona</span>
+                      <span class="homeDeskPromoDesc">Save your voice once and use it as inspiration across every song you create.</span>
                     </span>
                     <span class="homeDeskPromoChev" aria-hidden="true">→</span>
                   </button>
@@ -4488,6 +4487,6 @@
     </script>
     <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
     <script src="./env.client.js" onerror="void 0"></script>
-    <script type="module" src="./src/app.js?v=20260705-123053"></script>
+    <script type="module" src="./src/app.js?v=20260705-131619"></script>
   </body>
 </html>

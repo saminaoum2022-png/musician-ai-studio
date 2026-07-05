@@ -1243,7 +1243,7 @@ html[data-theme="light"] .homeDeskSongTile{
     0 12px 28px rgba(124, 92, 255, 0.16),
     inset 0 0 0 1px rgba(255, 255, 255, 0.65);
 }
-html[data-theme="light"] .homeDeskPersonaMicIco{
+html[data-theme="light"] .homeDeskPersonaIco{
   color: var(--primary);
 }
 html[data-theme="light"] .onboardingEchoWave i{
@@ -2488,24 +2488,6 @@ html.is-web-shell body.isIntro .introWelcomeDecor{
   border-radius: 38px 38px 0 0;
   background: linear-gradient(180deg, rgba(255,255,255,0.88) 0%, rgba(160,170,205,0.70) 100%);
   box-shadow: 0 12px 28px -14px rgba(0,0,0,0.5);
-}
-.onboardingPersonaMicBadge{
-  position: absolute;
-  right: -4px;
-  bottom: 2px;
-  width: 26px;
-  height: 26px;
-  border-radius: 50%;
-  background: linear-gradient(145deg, #7c5cff, #23d5ab);
-  border: 2px solid rgba(12,16,28,0.85);
-  box-shadow: 0 6px 16px -6px rgba(124,92,255,0.65);
-}
-.onboardingPersonaMicBadge::after{
-  content:"";
-  position: absolute;
-  inset: 7px 9px 6px;
-  border: 1.5px solid rgba(255,255,255,0.9);
-  border-radius: 5px 5px 8px 8px;
 }
 .onboardingPersonaLabel{
   font-size: 13px;
@@ -28535,7 +28517,7 @@ body[data-route="challenges"] .app{
 .challengesPage.homeDesk .homeDeskQuickStartsStack .homeDeskSoundsIco{
   color: rgba(248, 250, 255, 0.82);
 }
-.challengesPage.homeDesk .homeDeskQuickStartsStack .homeDeskPersonaMicIco{
+.challengesPage.homeDesk .homeDeskQuickStartsStack .homeDeskPersonaIco{
   color: var(--brand-violet, #a78bfa);
 }
 .homeDeskCreateStack .homeDeskPromoCopy p,
@@ -28643,6 +28625,7 @@ body[data-route="challenges"] .app{
 .homeDeskPromoVisual--photo .homeDeskPhotoTileWrap,
 .homeDeskPromoVisual--mashup .homeDeskMashupTileWrap,
 .homeDeskPromoVisual--persona .homeDeskPersonaTileWrap,
+.homeDeskPromoVisual--humtrack .homeDeskHumTrackTileWrap,
 .homeDeskPromoVisual--studio .homeDeskStudioTileWrap,
 .homeDeskPromoVisual--song .homeDeskSongTileWrap{
   transform: scale(0.68);
@@ -28843,7 +28826,7 @@ body[data-route="challenges"] .app{
   border-radius: 19px;
   background: linear-gradient(160deg, #141028 0%, #0a0c14 100%);
 }
-.homeDeskPersonaMicIco{
+.homeDeskPersonaIco{
   position: relative;
   z-index: 1;
   width: 36px;
@@ -28851,8 +28834,8 @@ body[data-route="challenges"] .app{
   color: rgba(168,150,255,0.92);
   display: block;
 }
-.homeDeskCreateStack .homeDeskPersonaMicIco,
-.homeDeskPromo--compact .homeDeskPersonaMicIco{
+.homeDeskCreateStack .homeDeskPersonaIco,
+.homeDeskPromo--compact .homeDeskPersonaIco{
   width: 50px;
   height: 50px;
 }
@@ -32060,15 +32043,17 @@ body[data-route="mashup"] .app{
 .challengesPage.homeDesk .homeDeskPersonaPulse,
 .challengesPage.homeDesk .homeDeskPhotoPulse,
 .challengesPage.homeDesk .homeDeskStudioPulse,
+.challengesPage.homeDesk .homeDeskHumTrackPulse,
 .challengesPage.homeDesk .homeDeskMashupPulse,
 .challengesPage.homeDesk .homeDeskPhotoSpark{
   display: none;
 }
 .challengesPage.homeDesk .homeDeskSongTile,
 .challengesPage.homeDesk .homeDeskPersonaTile,
+.challengesPage.homeDesk .homeDeskMashupTile,
 .challengesPage.homeDesk .homeDeskPhotoTile,
 .challengesPage.homeDesk .homeDeskStudioTile,
-.challengesPage.homeDesk .homeDeskMashupTile,
+.challengesPage.homeDesk .homeDeskHumTrackTile,
 .challengesPage.homeDesk .homeDeskSoundsTile{
   padding: 0;
   box-shadow: none;
@@ -32077,6 +32062,7 @@ body[data-route="mashup"] .app{
 .challengesPage.homeDesk .homeDeskPersonaTile::before,
 .challengesPage.homeDesk .homeDeskPhotoTile::before,
 .challengesPage.homeDesk .homeDeskStudioTile::before,
+.challengesPage.homeDesk .homeDeskHumTrackTile::before,
 .challengesPage.homeDesk .homeDeskMashupTile::before,
 .challengesPage.homeDesk .homeDeskSoundsTile::before{
   display: none;
@@ -32104,7 +32090,7 @@ body[data-route="mashup"] .app{
   color: var(--brand-teal);
   animation: none;
 }
-.challengesPage.homeDesk .homeDeskPersonaMicIco{
+.challengesPage.homeDesk .homeDeskPersonaIco{
   color: var(--brand-violet);
   animation: none;
 }
@@ -44051,9 +44037,9 @@ html[data-theme="light"] .profileEditSheetTextarea{
 }
 .homeDeskHumTrackTile{
   position: relative;
-  width: 72px;
-  height: 72px;
-  border-radius: 20px;
+  width: 108px;
+  height: 108px;
+  border-radius: 22px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -44061,18 +44047,17 @@ html[data-theme="light"] .profileEditSheetTextarea{
   background: rgba(255, 255, 255, 0.04);
 }
 .homeDeskHumTrackIco{
-  width: 28px;
-  height: 28px;
+  position: relative;
+  z-index: 1;
+  width: 36px;
+  height: 36px;
   display: block;
-  color: rgba(248, 250, 255, 0.82);
+  color: rgba(248, 250, 255, 0.88);
 }
-.homeDeskCreateStack .homeDeskHumTrackIco{
-  width: 24px;
-  height: 24px;
-}
-.homeDeskPromoVisual--humtrack .homeDeskHumTrackTileWrap{
-  transform: scale(0.68);
-  transform-origin: center center;
+.homeDeskCreateStack .homeDeskHumTrackIco,
+.homeDeskPromo--compact .homeDeskHumTrackIco{
+  width: 50px;
+  height: 50px;
 }
 
 body.humTrackSheetOpen .mobileTabbar{
@@ -44130,14 +44115,38 @@ body.humTrackSheetOpen .mobileTabbar{
   background: rgba(255, 255, 255, 0.03);
   color: rgba(248, 250, 255, 0.86);
   border-radius: 999px;
-  padding: 9px 14px;
+  padding: 8px 12px 8px 10px;
   font-size: 13px;
   font-weight: 600;
   letter-spacing: -0.01em;
   line-height: 1;
   cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   transition: background 160ms ease, border-color 160ms ease, color 160ms ease;
   -webkit-tap-highlight-color: transparent;
+}
+.humTrackChipIco{
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  opacity: 0.82;
+}
+.humTrackChip.is-active .humTrackChipIco{
+  opacity: 1;
+}
+.humTrackChipSvg{
+  width: 18px;
+  height: 18px;
+}
+.humTrackRecordIconHost{
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 .humTrackChip.is-active{
   border-color: rgba(255, 255, 255, 0.28);

@@ -123,12 +123,18 @@ export function coachSoundPillText(title) {
   return `Creating sound · ${t.slice(0, 28)}${t.length > 28 ? "…" : ""}`;
 }
 
+export function coachHumTrackGeneratingPillText(instrumentLabel) {
+  const l = String(instrumentLabel || "instrument").trim() || "instrument";
+  return `Hum Track · ${l}…`;
+}
+
 /** Persistent pill for the whole backend run. */
-export function beginCoachGenerationStatus({ variantCount = 2 } = {}) {
+export function beginCoachGenerationStatus({ variantCount = 2, pillText = "" } = {}) {
   try { _onArmHook?.(); } catch {}
   _generationLocked = true;
   _statusActive = true;
-  showStatusPill(coachGeneratingPillText(variantCount), { generating: true, priority: true });
+  const text = String(pillText || "").trim() || coachGeneratingPillText(variantCount);
+  showStatusPill(text, { generating: true, priority: true });
 }
 
 /** Long poll — soften copy but keep the pill up. */
@@ -200,7 +206,13 @@ export function syncCoachGenerationStatusFromPending(pending) {
     if (_generationLocked) cancelCoachGenerationStatus();
     return;
   }
-  beginCoachGenerationStatus({ variantCount: pending.variantCount });
+  const pillText =
+    pending.source === "hum_track"
+      ? coachHumTrackGeneratingPillText(
+          pending.title?.replace(/^Hum Track ·\s*/i, "") || pending.instrumentId || "instrument",
+        )
+      : "";
+  beginCoachGenerationStatus({ variantCount: pending.variantCount, pillText });
 }
 
 /** Called from idle nudges / contextual hints in app.js */

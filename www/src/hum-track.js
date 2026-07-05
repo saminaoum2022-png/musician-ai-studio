@@ -3,6 +3,7 @@
  * Wired from app.js via initHumTrack(ctx).
  */
 import { HUM_TRACK_INSTRUMENTS, getHumTrackPreset } from "./hum-track-instruments.js";
+import { humTrackIconMarkup } from "./hum-track-icons.js";
 
 let ctx = null;
 let wired = false;
@@ -60,6 +61,12 @@ function vocalFilenameForMime(mime) {
   return "hum-track.m4a";
 }
 
+function syncHumTrackRecordIcon() {
+  const host = el("humTrackRecordIconHost");
+  if (!host) return;
+  host.innerHTML = humTrackIconMarkup(humTrackInstrument, { className: "humTrackRecordIco" });
+}
+
 function syncHumTrackUi() {
   const sheet = el("humTrackSheet");
   if (!sheet) return;
@@ -71,11 +78,16 @@ function syncHumTrackUi() {
   const btnGenerate = el("btnHumTrackGenerate");
   const chipRow = el("humTrackInstrumentRow");
 
+  syncHumTrackRecordIcon();
+
   if (chipRow) {
     chipRow.querySelectorAll("[data-hum-instrument]").forEach((btn) => {
-      const active = btn.getAttribute("data-hum-instrument") === humTrackInstrument;
+      const id = btn.getAttribute("data-hum-instrument") || "";
+      const active = id === humTrackInstrument;
       btn.classList.toggle("is-active", active);
       btn.setAttribute("aria-pressed", active ? "true" : "false");
+      const iconHost = btn.querySelector(".humTrackChipIco");
+      if (iconHost) iconHost.innerHTML = humTrackIconMarkup(id, { className: "humTrackChipSvg" });
     });
   }
 
@@ -86,7 +98,7 @@ function syncHumTrackUi() {
 
   if (statusEl) {
     if (humTrackGenerating) {
-      statusEl.textContent = "Generating your instrumental…";
+      statusEl.textContent = "Generating in the background — check the Coach orb.";
     } else if (isRecording) {
       statusEl.textContent = "Recording… hum your melody, then tap again to stop.";
     } else if (hasRecording) {
@@ -157,83 +169,44 @@ function stopHumTrackRecording(finalize = true) {
   humTrackStream = null;
 }
 
-async function startHumTrackRecording() {
-  if (!navigator.mediaDevices?.getUserMedia) {
-    throw new Error("Microphone needs the NabadAi app or a secure (HTTPS) page.");
+function dismissHumTrackSheetToCreate() {
+  const sheet = el("humTrackSheet");
+  if (sheet) {
+    sheet.hidden = true;
+    sheet.setAttribute("aria-hidden", "true");
+    sheet.classList.remove("isGenerating");
+    document.body.classList.remove("humTrackSheetOpen");
   }
-  if (humTrackRecorder && humTrackRecorder.state === "recording") {
-    humTrackRecorder.stop();
-    return;
-  }
-
-  humTrackRecordSession += 1;
-  const session = humTrackRecordSession;
-  humTrackBlob = null;
-  humTrackChunks = [];
-
-  let stream;
   try {
-    stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
-  } catch (e1) {
-    stream = await navigator.mediaDevices.getUserMedia({
-      audio: {
-        echoCancellation: { ideal: true },
-        noiseSuppression: { ideal: true },
-        autoGainControl: { ideal: true },
-      },
-      video: false,
-    });
-  }
+    location.hash = "#/challenges";
+  } catch {}
+  ctx?.scheduleApplyRoute?.();
+}
 
-  if (session !== humTrackRecordSession) {
-    try {
-      for (const tr of stream.getTracks()) tr.stop();
-    } catch {}
-    return;
-  }
-
-  humTrackStream = stream;
-  const mime = ctx?.pickRecorderMimeType?.() || "";
-  humTrackRecorder = mime
-    ? new MediaRecorder(stream, { mimeType: mime })
-    : new MediaRecorder(stream);
-
-  humTrackRecorder.ondataavailable = (ev) => {
-    if (ev.data && ev.data.size > 0) humTrackChunks.push(ev.data);
-  };
-  humTrackRecorder.onstop = () => {
-    try {
-      for (const tr of humTrackStream?.getTracks?.() || []) tr.stop();
-    } catch {}
-    humTrackStream = null;
-    humTrackRecorder = null;
-    if (session !== humTrackRecordSession) return;
-    const type = humTrackChunks[0]?.type || mime || "audio/webm";
-    const blob = new Blob(humTrackChunks, { type });
-    humTrackChunks = [];
-    if (blob.size > 0) {
-      humTrackBlob = blob;
-      humTrackSource = "record";
-    }
-    void (async () => {
-      if (!humTrackBlob) return;
-      const ok = await humBlobLooksUsable(humTrackBlob);
-      if (!ok) {
-        humTrackBlob = null;
-        humTrackSource = "";
-        ctx?.showToast?.(
-          "That recording looks empty or too quiet. On the simulator, use Upload hum or test on your iPhone.",
-          { icon: "!", durationMs: 8000 },
-        );
-      }
-      syncHumTrackUi();
-    })();
-    syncHumTrackUi();
-  };
-
-  humTrackRecorder.start(250);
-  ctx?.haptic?.("light");
-  syncHumTrackUi();
+function trackFromSunoRow(raw) {
+  if (!raw || typeof raw !== "object") return null;
+  const audioUrl =
+    raw.sourceAudioUrl ||
+    raw.source_audio_url ||
+    raw.sourceStreamAudioUrl ||
+    raw.source_stream_audio_url ||
+    raw.audioUrl ||
+    raw.audio_url ||
+    raw.streamAudioUrl ||
+    raw.stream_audio_url ||
+    "";
+  if (!audioUrl) return null;
+  const imageUrl =
+    raw.sourceImageUrl ||
+    raw.source_image_url ||
+    raw.imageUrl ||
+    raw.image_url ||
+    raw.coverUrl ||
+    raw.cover_url ||
+    "";
+  const title = raw.title || raw.songTitle || raw.song_title || "";
+  const audioId = raw.id || raw.audioId || raw.audio_id || raw.songId || raw.song_id || "";
+  return { audioUrl, imageUrl, title, audioId };
 }
 
 function parseSunoStatusPayload(data) {
@@ -243,30 +216,90 @@ function parseSunoStatusPayload(data) {
   const errorMessage = String(
     inner.errorMessage || data?.errorMessage || inner.msg || data?.msg || data?.error || "",
   ).trim();
-  const tracks = inner.sunoData || inner.response?.sunoData || inner.response || inner.tracks || [];
-  const list = Array.isArray(tracks) ? tracks : [];
-  const first = list[0] || inner.response || inner;
-  const audioUrl =
-    first?.sourceAudioUrl ||
-    first?.source_audio_url ||
-    first?.sourceStreamAudioUrl ||
-    first?.source_stream_audio_url ||
-    first?.audioUrl ||
-    first?.audio_url ||
-    first?.streamAudioUrl ||
-    first?.stream_audio_url ||
-    "";
-  const imageUrl =
-    first?.sourceImageUrl ||
-    first?.source_image_url ||
-    first?.imageUrl ||
-    first?.image_url ||
-    first?.coverUrl ||
-    first?.cover_url ||
-    "";
-  const title = first?.title || first?.songTitle || first?.song_title || "";
-  const audioId = first?.id || first?.audioId || first?.audio_id || first?.songId || first?.song_id || "";
-  return { status, successFlag, errorMessage, audioUrl, imageUrl, title, audioId };
+  const genData =
+    inner.response?.sunoData ||
+    inner.response?.suno_data ||
+    data?.data?.response?.sunoData ||
+    data?.data?.response?.suno_data ||
+    inner.sunoData ||
+    [];
+  const list = Array.isArray(genData) ? genData : [];
+  const tracks = [];
+  for (let i = 0; i < list.length && i < 2; i++) {
+    const t = trackFromSunoRow(list[i]);
+    if (t) tracks.push(t);
+  }
+  if (!tracks.length) {
+    const fallback = trackFromSunoRow(inner.response || inner);
+    if (fallback) tracks.push(fallback);
+  }
+  return {
+    status,
+    successFlag,
+    errorMessage,
+    tracks,
+    hasAudio: tracks.length > 0,
+  };
+}
+
+function finishHumTrackSuccess(taskId, instrumentId, tracks) {
+  stopHumTrackPolling();
+  humTrackGenerating = false;
+  humTrackTaskId = "";
+  const label = instrumentLabel(instrumentId);
+  const baseTitle = `Hum Track · ${label}`;
+  const savedEntries = [];
+  tracks.slice(0, 2).forEach((t, i) => {
+    const fallbackTitle = i === 0 ? baseTitle : `${baseTitle} B`;
+    const title = String(t.title || "").trim() || fallbackTitle;
+    const proxyUrl = ctx.toAudioProxyUrl(t.audioUrl);
+    savedEntries.push(
+      ctx.addToLibrary({
+        title,
+        artUrl: t.imageUrl || "",
+        url: proxyUrl || t.audioUrl,
+        taskId,
+        audioId: t.audioId || "",
+        kind: "instrumental",
+        meta: {
+          humTrack: true,
+          instrument: instrumentId,
+          instrumentLabel: label,
+          variant: i === 0 ? "A" : "B",
+        },
+      }),
+    );
+  });
+  ctx?.clearGenerationPending?.(taskId);
+  try {
+    ctx?.pushLocalGenerationReadyActivity?.(savedEntries.filter(Boolean));
+  } catch {
+    try {
+      ctx?.finishCoachGenerationReady?.({ variantCount: savedEntries.filter(Boolean).length || 1 });
+    } catch {}
+  }
+  try {
+    ctx?.voidRefreshProfile?.();
+  } catch {}
+  const n = savedEntries.filter(Boolean).length;
+  ctx?.showToast?.(
+    n > 1 ? `${label} tracks are ready in your library.` : `${label} track is ready in your library.`,
+    { icon: "✓", durationMs: 5200 },
+  );
+}
+
+function failHumTrackGeneration(taskId, message) {
+  stopHumTrackPolling();
+  humTrackGenerating = false;
+  humTrackTaskId = "";
+  ctx?.clearGenerationPending?.(taskId);
+  try {
+    ctx?.cancelCoachGenerationStatus?.();
+  } catch {}
+  ctx?.showToast?.(message || "Generation failed. Try recording again.", {
+    icon: "✗",
+    durationMs: 9000,
+  });
 }
 
 function startHumTrackPolling(taskId, instrumentId) {
@@ -287,61 +320,51 @@ function startHumTrackPolling(taskId, instrumentId) {
           state.successFlag !== "PENDING" &&
           state.successFlag !== "TEXT_SUCCESS" &&
           state.successFlag !== "FIRST_SUCCESS" &&
-          !state.audioUrl);
-      if (failed && !state.audioUrl) {
-        stopHumTrackPolling();
-        humTrackGenerating = false;
-        el("humTrackSheet")?.classList.remove("isGenerating");
-        syncHumTrackUi();
-        ctx?.showToast?.(state.errorMessage || "Generation failed. Try recording again.", {
-          icon: "✗",
-          durationMs: 9000,
-        });
+          !state.hasAudio);
+      if (failed && !state.hasAudio) {
+        failHumTrackGeneration(taskId, state.errorMessage || "Generation failed. Try recording again.");
         return;
       }
-      if (state.status === "SUCCESS" && state.audioUrl) {
-        stopHumTrackPolling();
-        humTrackGenerating = false;
-        const label = instrumentLabel(instrumentId);
-        const title = String(state.title || "").trim() || `Hum Track · ${label}`;
-        const proxyUrl = ctx.toAudioProxyUrl(state.audioUrl);
-        ctx.addToLibrary({
-          title,
-          artUrl: state.imageUrl || "",
-          url: proxyUrl || state.audioUrl,
-          taskId,
-          audioId: state.audioId || "",
-          kind: "instrumental",
-          meta: {
-            humTrack: true,
-            instrument: instrumentId,
-            instrumentLabel: label,
-          },
-        });
-        ctx?.showToast?.(`${label} track is ready in your library.`, { icon: "✓", durationMs: 5200 });
-        closeHumTrackSheet();
-        try {
-          ctx?.voidRefreshProfile?.();
-        } catch {}
+      if (state.status === "SUCCESS" && state.hasAudio) {
+        finishHumTrackSuccess(taskId, instrumentId, state.tracks);
         return;
       }
       if (tries >= maxTries) {
+        try {
+          ctx?.bumpCoachGenerationStillWorking?.();
+        } catch {}
+        ctx?.showToast?.("Still creating — the Coach will notify you when it's ready.", {
+          durationMs: 6000,
+        });
         stopHumTrackPolling();
-        humTrackGenerating = false;
-        el("humTrackSheet")?.classList.remove("isGenerating");
-        syncHumTrackUi();
-        ctx?.showToast?.("Still processing — check Profile → Songs in a minute.", { durationMs: 7000 });
       }
     } catch (err) {
       if (tries >= 10) {
-        stopHumTrackPolling();
-        humTrackGenerating = false;
-        el("humTrackSheet")?.classList.remove("isGenerating");
-        syncHumTrackUi();
-        ctx?.showToast?.(err?.message || "Lost connection while generating.", { icon: "⚠", durationMs: 8000 });
+        failHumTrackGeneration(taskId, err?.message || "Lost connection while generating.");
       }
     }
   }, 4500);
+}
+
+function armHumTrackGeneration(taskId, instrumentId, label) {
+  humTrackTaskId = taskId;
+  humTrackGenerating = true;
+  ctx?.setGenerationPending?.({
+    taskId,
+    title: `Hum Track · ${label}`,
+    variantCount: ctx?.generationVariantCount || 2,
+    source: "hum_track",
+    instrumentId,
+  });
+  ctx?.syncGenerationPendingLibraryUi?.();
+  try {
+    ctx?.beginCoachGenerationStatus?.({
+      variantCount: ctx?.generationVariantCount || 2,
+      pillText: ctx?.coachHumTrackGeneratingPillText?.(label),
+    });
+  } catch {}
+  dismissHumTrackSheetToCreate();
+  startHumTrackPolling(taskId, instrumentId);
 }
 
 async function submitHumTrackGeneration() {
@@ -420,18 +443,38 @@ async function submitHumTrackGeneration() {
       }
       const taskId = ctx.extractTaskIdLoose(dd);
       if (!taskId) throw new Error("No task id returned from server");
-      humTrackTaskId = taskId;
-      startHumTrackPolling(taskId, instrumentId);
+      armHumTrackGeneration(taskId, instrumentId, label);
     });
   } catch (e) {
     humTrackGenerating = false;
+    humTrackTaskId = "";
     el("humTrackSheet")?.classList.remove("isGenerating");
     syncHumTrackUi();
     ctx?.showToast?.(e?.message || "Could not start generation.", { icon: "✗", durationMs: 9000 });
   }
 }
 
+function resumeHumTrackIfPending() {
+  const pending = ctx?.getGenerationPending?.();
+  if (!pending?.taskId || pending.source !== "hum_track") return;
+  humTrackTaskId = pending.taskId;
+  humTrackInstrument = pending.instrumentId || "piano";
+  humTrackGenerating = true;
+  const label = instrumentLabel(humTrackInstrument);
+  try {
+    ctx?.beginCoachGenerationStatus?.({
+      variantCount: pending.variantCount || ctx?.generationVariantCount || 2,
+      pillText: ctx?.coachHumTrackGeneratingPillText?.(label),
+    });
+  } catch {}
+  startHumTrackPolling(pending.taskId, humTrackInstrument);
+}
+
 export function openHumTrackSheet() {
+  if (humTrackGenerating) {
+    dismissHumTrackSheetToCreate();
+    return;
+  }
   if (!ctx?.getAuthSession?.()?.user?.id) {
     ctx?.setPostAuthReturnHash?.("#/challenges");
     try {
@@ -452,7 +495,10 @@ export function openHumTrackSheet() {
 }
 
 export function closeHumTrackSheet() {
-  if (humTrackGenerating) return;
+  if (humTrackGenerating) {
+    dismissHumTrackSheetToCreate();
+    return;
+  }
   const sheet = el("humTrackSheet");
   if (!sheet) return;
   stopHumTrackRecording(false);
@@ -469,7 +515,7 @@ function renderHumTrackInstrumentChips() {
   row.dataset.rendered = "1";
   row.innerHTML = HUM_TRACK_INSTRUMENTS.map(
     (inst) =>
-      `<button type="button" class="humTrackChip" data-hum-instrument="${inst.id}" aria-pressed="${inst.id === humTrackInstrument ? "true" : "false"}">${inst.label}</button>`,
+      `<button type="button" class="humTrackChip" data-hum-instrument="${inst.id}" aria-pressed="${inst.id === humTrackInstrument ? "true" : "false"}"><span class="humTrackChipIco" aria-hidden="true"></span><span class="humTrackChipLabel">${inst.label}</span></button>`,
   ).join("");
 }
 
@@ -491,7 +537,7 @@ function wireHumTrackSheetOnce() {
       return;
     }
     if (e.target?.closest?.("[data-hum-track-dismiss]")) {
-      if (!humTrackGenerating) closeHumTrackSheet();
+      closeHumTrackSheet();
       return;
     }
     if (e.target?.closest?.("#btnHumTrackRecord")) {
@@ -505,8 +551,6 @@ function wireHumTrackSheetOnce() {
       void submitHumTrackGeneration();
       return;
     }
-    const uploadInput = e.target?.closest?.("#humTrackUploadInput");
-    if (uploadInput && sheet.contains(uploadInput)) return;
   });
 
   el("humTrackUploadInput")?.addEventListener("change", (e) => {
@@ -531,8 +575,90 @@ function wireHumTrackSheetOnce() {
   });
 
   el("btnCloseHumTrack")?.addEventListener("click", () => {
-    if (!humTrackGenerating) closeHumTrackSheet();
+    closeHumTrackSheet();
   });
+
+  resumeHumTrackIfPending();
+}
+
+async function startHumTrackRecording() {
+  if (!navigator.mediaDevices?.getUserMedia) {
+    throw new Error("Microphone needs the NabadAi app or a secure (HTTPS) page.");
+  }
+  if (humTrackRecorder && humTrackRecorder.state === "recording") {
+    humTrackRecorder.stop();
+    return;
+  }
+
+  humTrackRecordSession += 1;
+  const session = humTrackRecordSession;
+  humTrackBlob = null;
+  humTrackSource = "";
+  humTrackChunks = [];
+
+  let stream;
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+  } catch {
+    stream = await navigator.mediaDevices.getUserMedia({
+      audio: {
+        echoCancellation: { ideal: true },
+        noiseSuppression: { ideal: true },
+        autoGainControl: { ideal: true },
+      },
+      video: false,
+    });
+  }
+
+  if (session !== humTrackRecordSession) {
+    try {
+      for (const tr of stream.getTracks()) tr.stop();
+    } catch {}
+    return;
+  }
+
+  humTrackStream = stream;
+  const mime = ctx?.pickRecorderMimeType?.() || "";
+  humTrackRecorder = mime
+    ? new MediaRecorder(stream, { mimeType: mime })
+    : new MediaRecorder(stream);
+
+  humTrackRecorder.ondataavailable = (ev) => {
+    if (ev.data && ev.data.size > 0) humTrackChunks.push(ev.data);
+  };
+  humTrackRecorder.onstop = () => {
+    try {
+      for (const tr of humTrackStream?.getTracks?.() || []) tr.stop();
+    } catch {}
+    humTrackStream = null;
+    humTrackRecorder = null;
+    if (session !== humTrackRecordSession) return;
+    const type = humTrackChunks[0]?.type || mime || "audio/webm";
+    const blob = new Blob(humTrackChunks, { type });
+    humTrackChunks = [];
+    if (blob.size > 0) {
+      humTrackBlob = blob;
+      humTrackSource = "record";
+    }
+    void (async () => {
+      if (!humTrackBlob) return;
+      const ok = await humBlobLooksUsable(humTrackBlob);
+      if (!ok) {
+        humTrackBlob = null;
+        humTrackSource = "";
+        ctx?.showToast?.(
+          "That recording looks empty or too quiet. On the simulator, use Upload hum or test on your iPhone.",
+          { icon: "!", durationMs: 8000 },
+        );
+      }
+      syncHumTrackUi();
+    })();
+    syncHumTrackUi();
+  };
+
+  humTrackRecorder.start(250);
+  ctx?.haptic?.("light");
+  syncHumTrackUi();
 }
 
 export function initHumTrack(deps) {

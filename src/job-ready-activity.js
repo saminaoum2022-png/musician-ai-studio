@@ -1,0 +1,76 @@
+/**
+ * Local Activity rows + optional push when a background job finishes.
+ */
+
+const JOB_ACTIVITY_KEY = "nabad_job_ready_activity_v1";
+
+export function persistJobReadyActivity(n) {
+  if (!n?.id) return;
+  try {
+    const raw = localStorage.getItem(JOB_ACTIVITY_KEY);
+    const list = raw ? JSON.parse(raw) : [];
+    const arr = Array.isArray(list) ? list : [];
+    arr.unshift(n);
+    localStorage.setItem(JOB_ACTIVITY_KEY, JSON.stringify(arr.slice(0, 40)));
+  } catch {}
+}
+
+export function loadPersistedJobReadyActivities() {
+  try {
+    const raw = localStorage.getItem(JOB_ACTIVITY_KEY);
+    const list = raw ? JSON.parse(raw) : [];
+    return Array.isArray(list) ? list : [];
+  } catch {
+    return [];
+  }
+}
+
+export function buildJobReadyActivity({ type, title, metadata = {} } = {}) {
+  const t = String(type || "").trim();
+  const jobTitle = String(title || "Your creation").trim() || "Your creation";
+  if (!t) return null;
+  return {
+    id: `local-job-${t}-${Date.now()}`,
+    type: t,
+    created_at: new Date().toISOString(),
+    read_at: null,
+    local: true,
+    metadata: {
+      job_title: jobTitle,
+      ...metadata,
+    },
+  };
+}
+
+/** Ask server to send a push if the user left the app (deduped with Suno callback). */
+export async function maybeNotifyJobReadyPush({ kind, title, taskId } = {}) {
+  const k = String(kind || "").trim();
+  const tid = String(taskId || "").trim();
+  if (!k || !tid) return;
+  let hidden = false;
+  try {
+    hidden = document.hidden || document.visibilityState === "hidden";
+  } catch {}
+  if (!hidden) return;
+  const token = globalThis.__nabadGetAuthToken?.() || "";
+  if (!token) return;
+  const headers = {
+    "Content-Type": "application/json",
+    Authorization: `Bearer ${token}`,
+  };
+  const bypass = globalThis.__VERCEL_PROTECTION_BYPASS__;
+  if (bypass) headers["x-vercel-protection-bypass"] = bypass;
+  const base = String(globalThis.__nabadApiBase || "").replace(/\/$/, "");
+  const url = base ? `${base}/api/push/job-ready` : "/api/push/job-ready";
+  try {
+    await fetch(url, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        kind: k,
+        title: String(title || "").trim().slice(0, 120),
+        taskId: tid,
+      }),
+    });
+  } catch {}
+}

@@ -86,10 +86,23 @@ import {
   coachInstrumentalPillText,
   coachSoundPillText,
   coachHumTrackGeneratingPillText,
+  coachPhotoMoodPillText,
+  syncCoachPriorityStatusFromPending,
   notifyCoachOrbPillShown,
   notifyCoachOrbPillHidden,
   syncCoachOrbAfterRouteChange,
 } from "./coach-generation.js";
+import {
+  clearPriorityPending,
+  getPriorityPending,
+  setPriorityPending,
+} from "./priority-pending.js";
+import {
+  buildJobReadyActivity,
+  loadPersistedJobReadyActivities,
+  maybeNotifyJobReadyPush,
+  persistJobReadyActivity,
+} from "./job-ready-activity.js";
 import {
   applyCoachOrbModeToBody,
   getCoachOrbMode,
@@ -146,7 +159,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260705-133224";
+const APP_BUILD = "20260705-140607";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -3977,6 +3990,9 @@ function applyRoute({ passGen } = {}) {
     syncCoachGenerationStatusFromPending(getGenerationPending());
   } catch {}
   try {
+    syncCoachPriorityStatusFromPending(getPriorityPending());
+  } catch {}
+  try {
     syncCoachOrbAfterRouteChange();
   } catch {}
   try {
@@ -4870,6 +4886,7 @@ try {
     finishCoachGenerationReady,
     coachHumTrackGeneratingPillText,
     pushLocalGenerationReadyActivity,
+    maybeNotifyJobReadyPush,
     voidRefreshProfile: () => {
       try {
         renderProfileSongs();
@@ -15908,7 +15925,7 @@ function markGenerationReadyNotice() {
   } catch {}
 }
 
-function pushLocalGenerationReadyActivity(entries) {
+function pushLocalGenerationReadyActivity(entries, { taskId = "" } = {}) {
   const list = (Array.isArray(entries) ? entries : []).filter((e) => e && String(e.id || "").trim());
   if (!list.length) return;
   const titles = list.map((e) => String(e.title || "Generated song").trim());
@@ -15955,6 +15972,34 @@ function pushLocalGenerationReadyActivity(entries) {
   try {
     finishCoachGenerationReady({ variantCount });
   } catch {}
+  void maybeNotifyJobReadyPush({
+    kind: "song",
+    title: titles[0] || "Your song",
+    taskId: String(taskId || getGenerationPending()?.taskId || "").trim(),
+  });
+}
+
+function pushLocalJobReadyActivity({ type, title, metadata = {} } = {}) {
+  const n = buildJobReadyActivity({ type, title, metadata });
+  if (!n) return;
+  const seen = new Set(_activityFeedState.items.map((item) => String(item?.id || "")));
+  if (seen.has(n.id)) return;
+  _activityFeedState.items.unshift(n);
+  try {
+    persistJobReadyActivity(n);
+  } catch {}
+  try {
+    renderActivityFeedFromState();
+  } catch {}
+  const unread = _activityFeedState.items.filter((item) => !item?.read_at).length;
+  try {
+    updateNotificationsEntryBadges(unread);
+  } catch {}
+  if (els.activityLead) {
+    els.activityLead.textContent = unread
+      ? `${unread} unread ${unread === 1 ? "update" : "updates"} from your music circle.`
+      : "Fans, likes, comments, milestones, and remixes.";
+  }
 }
 
 function syncGenerationPendingLibraryUi() {
@@ -21393,6 +21438,12 @@ function startSoundGenerationPolling(meta) {
         });
         setStatus("Sound saved to Library.");
         finishCoachPriorityStatus("Sound ready ✓");
+        clearPriorityPending(soundTaskId);
+        pushLocalJobReadyActivity({
+          type: "sound_ready",
+          title: finalTitle,
+        });
+        void maybeNotifyJobReadyPush({ kind: "sound", title: finalTitle, taskId: soundTaskId });
         if (els.btnSoundGenerate) els.btnSoundGenerate.disabled = false;
         markLibraryTabDot(true);
         showToast("Sound saved to your Library", { icon: "✓", durationMs: 3200 });
@@ -21403,6 +21454,7 @@ function startSoundGenerationPolling(meta) {
         stopSoundGenerationPolling();
         setStatus("Sound generation failed upstream. Check Recent activity for charges.");
         cancelCoachPriorityStatus();
+        clearPriorityPending(soundTaskId);
         if (els.btnSoundGenerate) els.btnSoundGenerate.disabled = false;
         return;
       }
@@ -21410,6 +21462,7 @@ function startSoundGenerationPolling(meta) {
         stopSoundGenerationPolling();
         setStatus("Still processing — check Library in a minute.");
         cancelCoachPriorityStatus();
+        clearPriorityPending(soundTaskId);
         if (els.btnSoundGenerate) els.btnSoundGenerate.disabled = false;
       }
     } catch (e) {
@@ -21417,6 +21470,7 @@ function startSoundGenerationPolling(meta) {
         stopSoundGenerationPolling();
         setStatus(`Could not get sound status: ${e?.message || String(e)}`);
         cancelCoachPriorityStatus();
+        clearPriorityPending(soundTaskId);
         if (els.btnSoundGenerate) els.btnSoundGenerate.disabled = false;
       }
     }
@@ -27739,6 +27793,7 @@ function notificationIconForType(type) {
   if (t === "public_song") return "P";
   if (t === "song_live") return "♪";
   if (t === "generation_ready") return "✓";
+  if (t === "sound_ready" || t === "music_video_ready" || t === "instrumental_ready") return "✓";
   return "•";
 }
 
@@ -27772,6 +27827,9 @@ function activityTypeBadgeSvg(type) {
     return `<svg viewBox="0 0 24 24" width="11" height="11" aria-hidden="true"><path fill="currentColor" d="M12 3v10.55A4 4 0 1 0 14 17V7h4V3h-6Z"/></svg>`;
   }
   if (t === "generation_ready") {
+    return `<svg viewBox="0 0 24 24" width="11" height="11" aria-hidden="true"><path fill="currentColor" d="M9 16.2 4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4L9 16.2Z"/></svg>`;
+  }
+  if (t === "sound_ready" || t === "music_video_ready" || t === "instrumental_ready") {
     return `<svg viewBox="0 0 24 24" width="11" height="11" aria-hidden="true"><path fill="currentColor" d="M9 16.2 4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4L9 16.2Z"/></svg>`;
   }
   return `<svg viewBox="0 0 24 24" width="11" height="11" aria-hidden="true"><path fill="currentColor" d="M20 12v5H4v-5H2v7h20v-7h-2Zm-6 .5-7-4v8l7-4ZM4 9h16V4H4v5Z"/></svg>`;
@@ -27872,6 +27930,30 @@ function notificationMessage(n) {
       title: `"${title}" is ready`,
       body: "Saved to your Library — tap to listen.",
       action: "Play",
+    };
+  }
+  if (n?.type === "sound_ready") {
+    const title = String(n?.metadata?.job_title || "Your sound").trim();
+    return {
+      title: `"${title}" is ready`,
+      body: "Saved to your Library.",
+      action: "Open Library",
+    };
+  }
+  if (n?.type === "music_video_ready") {
+    const title = String(n?.metadata?.job_title || "Your song").trim();
+    return {
+      title: `Music video for "${title}" is ready`,
+      body: "Watch it from your song menu.",
+      action: "Open Library",
+    };
+  }
+  if (n?.type === "instrumental_ready") {
+    const title = String(n?.metadata?.job_title || "Your song").trim();
+    return {
+      title: `Instrumental for "${title}" is ready`,
+      body: "Saved to your Library.",
+      action: "Open Library",
     };
   }
   if (n?.type === "social_like") {
@@ -28033,7 +28115,26 @@ function mergePersistedGenerationReadyActivities() {
   }
   return added;
 }
-const ACTIVITY_FILTER_TAB_KEY = "nabad_activity_filter_tab_v1";
+
+function mergePersistedJobReadyActivities() {
+  const persisted = loadPersistedJobReadyActivities();
+  if (!persisted.length) return false;
+  const seenIds = new Set(_activityFeedState.items.map((i) => String(i?.id || "")));
+  let added = false;
+  for (const n of persisted) {
+    const id = String(n?.id || "");
+    if (id && seenIds.has(id)) continue;
+    _activityFeedState.items.push(n);
+    if (id) seenIds.add(id);
+    added = true;
+  }
+  if (added) {
+    _activityFeedState.items.sort(
+      (a, b) => new Date(b?.created_at || 0).getTime() - new Date(a?.created_at || 0).getTime(),
+    );
+  }
+  return added;
+}
 let _activityFilterTab = (() => {
   try {
     const saved = String(sessionStorage.getItem(ACTIVITY_FILTER_TAB_KEY) || "").trim();
@@ -28105,7 +28206,7 @@ function activityDayLabel(bucket) {
 function activityNotificationMatchesFilter(n, tab = _activityFilterTab) {
   if (tab === "all") return true;
   const t = String(n?.type || "").trim();
-  if (tab === "achievements") return t === "chart_rank" || t === "play_milestone" || t === "song_live" || t === "generation_ready";
+  if (tab === "achievements") return t === "chart_rank" || t === "play_milestone" || t === "song_live" || t === "generation_ready" || t === "sound_ready" || t === "music_video_ready" || t === "instrumental_ready";
   if (tab === "social") {
     return ["follow", "remix", "social_like", "social_reply", "social_repost", "social_mention", "public_song", "song_feedback"].includes(t);
   }
@@ -28132,7 +28233,7 @@ function activityActorAvatarHtml(n, cls) {
 /** Milestone rows are about your songs — lead with cover art, not a blank silhouette. */
 function activityRowUsesSongLeadVisual(n) {
   const t = String(n?.type || "").trim();
-  return t === "chart_rank" || t === "play_milestone" || t === "song_live" || t === "generation_ready";
+  return t === "chart_rank" || t === "play_milestone" || t === "song_live" || t === "generation_ready" || t === "sound_ready" || t === "music_video_ready" || t === "instrumental_ready";
 }
 
 function activityNotificationShowRightCover(n) {
@@ -28426,6 +28527,9 @@ function notificationActivityHref(n) {
   if (t === "generation_ready") {
     return "#/profile?seg=all";
   }
+  if (t === "sound_ready" || t === "music_video_ready" || t === "instrumental_ready") {
+    return "#/profile?seg=all";
+  }
   if (t === "song_feedback" && songId) return `#/player?track=${encodeURIComponent(songId)}`;
   if (t === "remix") {
     const remixSongId = String(meta.remix_song_id || meta.song_id || "").trim();
@@ -28459,6 +28563,12 @@ async function openActivityNotificationTarget(n) {
   }
   const t = String(n?.type || "").trim();
   if (t === "generation_ready") {
+    try { sessionStorage.setItem(PROFILE_SONGS_SEGMENT_KEY, "all"); } catch {}
+    _profileSongsSegment = "all";
+    location.hash = "#/profile?seg=all";
+    return;
+  }
+  if (t === "sound_ready" || t === "music_video_ready" || t === "instrumental_ready") {
     try { sessionStorage.setItem(PROFILE_SONGS_SEGMENT_KEY, "all"); } catch {}
     _profileSongsSegment = "all";
     location.hash = "#/profile?seg=all";
@@ -28607,6 +28717,30 @@ function activityItemDisplayParts(n, msg) {
       category: "Ready",
       title,
       description: "Saved to your songs — tap to open",
+    };
+  }
+  if (t === "sound_ready") {
+    const title = String(meta.job_title || "Your sound").trim();
+    return {
+      category: "Ready",
+      title,
+      description: "Saved to your Library",
+    };
+  }
+  if (t === "music_video_ready") {
+    const title = String(meta.job_title || "Your song").trim();
+    return {
+      category: "Ready",
+      title: `Music video · ${title}`,
+      description: "Watch it from your song menu",
+    };
+  }
+  if (t === "instrumental_ready") {
+    const title = String(meta.job_title || "Your song").trim();
+    return {
+      category: "Ready",
+      title: `Instrumental · ${title}`,
+      description: "Saved to your Library",
     };
   }
   if (t === "social_like") {
@@ -28881,6 +29015,7 @@ async function fetchActivityBatch() {
       }
     }
     try { mergePersistedGenerationReadyActivities(); } catch {}
+    try { mergePersistedJobReadyActivities(); } catch {}
     renderActivityFeedFromState();
     const unread = _activityFeedState.items.filter((n) => !n?.read_at).length;
     if (els.activityLead) {
@@ -28930,6 +29065,7 @@ async function enterActivityRoute({ reset = false } = {}) {
   await fetchActivityBatch();
   await refreshActivityFeedHead();
   try { mergePersistedGenerationReadyActivities(); } catch {}
+  try { mergePersistedJobReadyActivities(); } catch {}
   renderActivityFeedFromState();
   const unread = _activityFeedState.items.filter((n) => !n?.read_at).length;
   if (unread) {
@@ -30939,6 +31075,11 @@ async function runLibraryInstrumentalForTrack(t) {
     } catch {}
     sunoStemsTaskId = d?.data?.taskId || d?.data?.task_id || d?.taskId || null;
     if (!sunoStemsTaskId) throw new Error("Missing stems task id");
+    setPriorityPending({
+      kind: "instrumental",
+      taskId: sunoStemsTaskId,
+      title,
+    });
     setStatus("Instrumental requested from library song. Processing now…");
     void pollLibraryStemsUntilDone(sunoStemsTaskId, "inst", {
       sourceTitle: t.title,
@@ -40409,6 +40550,7 @@ async function createSunoMusicVideoForTrack(track, { onStatus } = {}) {
         body: JSON.stringify({
           taskId,
           audioId,
+          title,
           ...(rawHandle ? { author: rawHandle.slice(0, 50) } : {}),
         }),
       });
@@ -40441,12 +40583,27 @@ async function createSunoMusicVideoForTrack(track, { onStatus } = {}) {
         saveMusicVideoMetaForTrack(t, { taskId: videoTaskId, videoUrl: "", createdAt: Date.now() });
       }
     }
+    if (videoTaskId) {
+      setPriorityPending({
+        kind: "music_video",
+        taskId: videoTaskId,
+        videoTaskId,
+        title,
+      });
+    }
     const videoUrl = await pollSunoMusicVideo(videoTaskId, { onStatus: say });
     saveMusicVideoMetaForTrack(t, { taskId: videoTaskId, videoUrl, createdAt: Date.now() });
     finishCoachPriorityStatus("Music video ready ✓");
+    clearPriorityPending(videoTaskId);
+    pushLocalJobReadyActivity({
+      type: "music_video_ready",
+      title,
+    });
+    void maybeNotifyJobReadyPush({ kind: "music_video", title, taskId: videoTaskId });
     openMusicVideoViewer(videoUrl, t.title, { coverUrl });
   } catch (e) {
     cancelCoachPriorityStatus();
+    clearPriorityPending(videoTaskId || getPriorityPending()?.taskId);
     throw e;
   }
 }
@@ -40624,6 +40781,7 @@ async function pollLibraryStemsUntilDone(taskId, kind, opts = {}) {
             `${kind === "multi" ? "Multi-stems" : "Instrumental"} failed.`;
           setStatus(reason);
           if (kind !== "multi") cancelCoachPriorityStatus();
+          clearPriorityPending(taskId);
           return;
         }
         continue;
@@ -40651,12 +40809,21 @@ async function pollLibraryStemsUntilDone(taskId, kind, opts = {}) {
           });
         }
         finishCoachPriorityStatus("Instrumental ready ✓");
+        clearPriorityPending(taskId);
+        pushLocalJobReadyActivity({
+          type: "instrumental_ready",
+          title: titleBase,
+        });
+        void maybeNotifyJobReadyPush({ kind: "instrumental", title: titleBase, taskId });
       }
       return;
     } catch {}
   }
   setStatus(`${kind === "multi" ? "Multi-stems" : "Instrumental"} is delayed. Please try again.`);
-  if (kind !== "multi") cancelCoachPriorityStatus();
+  if (kind !== "multi") {
+    cancelCoachPriorityStatus();
+    clearPriorityPending(taskId);
+  }
 }
 
 /** Globe / lock chip for profile link visibility on library-style rows. */
@@ -44873,6 +45040,7 @@ function restoreCreatePageOnRouteEnter() {
       try { _startGeneratePolling(); } catch {}
     }
     try { syncCoachGenerationStatusFromPending(getGenerationPending()); } catch {}
+    try { syncCoachPriorityStatusFromPending(getPriorityPending()); } catch {}
   } else {
     try { setGenerateFieldsLocked(false); } catch {}
   }
@@ -46666,9 +46834,10 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
               meta: genMeta,
             }));
           }
-          clearGenerationPending(sunoTaskId || "");
+          const genTaskId = sunoTaskId || "";
+          clearGenerationPending(genTaskId);
           try {
-            pushLocalGenerationReadyActivity(savedEntries.filter(Boolean));
+            pushLocalGenerationReadyActivity(savedEntries.filter(Boolean), { taskId: genTaskId });
           } catch {}
           syncGenerationPendingLibraryUi();
           pendingGeneratedCoverDataUrl = "";
@@ -46796,6 +46965,16 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
             });
           }
           finishCoachPriorityStatus("Instrumental ready ✓");
+          clearPriorityPending(sunoStemsTaskId);
+          pushLocalJobReadyActivity({
+            type: "instrumental_ready",
+            title: lastSunoTitle || "Generated song",
+          });
+          void maybeNotifyJobReadyPush({
+            kind: "instrumental",
+            title: lastSunoTitle || "Generated song",
+            taskId: sunoStemsTaskId,
+          });
           setStemsBtn("Get instrumental version", false);
           void refreshSunoCredits();
           return;
@@ -46810,6 +46989,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
             "Instrumental processing failed or timed out.";
           setStatus(`Instrumental failed: ${reason}`);
           cancelCoachPriorityStatus();
+          clearPriorityPending(sunoStemsTaskId);
           setStemsBtn("Get instrumental version", false);
         }
       } catch {}
@@ -47042,6 +47222,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       setGenerateBtn("Checking...", true, "resume");
       startGeneratePolling();
       try { syncCoachGenerationStatusFromPending(getGenerationPending()); } catch {}
+      try { syncCoachPriorityStatusFromPending(getPriorityPending()); } catch {}
       return;
     }
     const promptText = String(els.sunoPrompt?.value || "").trim();
@@ -47221,6 +47402,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
         customMode: true,
         instrumental: shouldGenerateInstrumental,
         model: modelForRequest,
+        ...(imageMoodAppliedForNextGen ? { watchKind: "photo" } : {}),
         personaId: personaIdSel || undefined,
         personaModel: personaModelSel || undefined,
       };
@@ -47483,9 +47665,17 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
         setGenerationPending({
           taskId: sunoTaskId,
           title: String(els.sunoTitle?.value || "").trim(),
+          source: imageMoodAppliedForNextGen ? "photo" : "",
         });
         syncGenerationPendingLibraryUi();
-        try { beginCoachGenerationStatus({ variantCount: GENERATION_VARIANT_COUNT }); } catch {}
+        try {
+          beginCoachGenerationStatus({
+            variantCount: GENERATION_VARIANT_COUNT,
+            pillText: imageMoodAppliedForNextGen
+              ? coachPhotoMoodPillText(GENERATION_VARIANT_COUNT)
+              : "",
+          });
+        } catch {}
         try { setLoading(false); } catch {}
       }
       sunoAudioId = null;
@@ -47908,6 +48098,13 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       printSunoStems(data);
       sunoStemsTaskId = data?.data?.taskId || data?.data?.task_id || data?.taskId || null;
       printSuno({ stemsTaskId: sunoStemsTaskId, requested: "instrumental_version" });
+      if (sunoStemsTaskId) {
+        setPriorityPending({
+          kind: "instrumental",
+          taskId: sunoStemsTaskId,
+          title: lastSunoTitle || "Generated song",
+        });
+      }
       setStatus("Instrumental version requested. Processing now…");
       startStemsPolling();
       setProgress(0);
@@ -48616,6 +48813,62 @@ function scheduleCreateHints() {
   }, 480);
 }
 
+function resumePriorityJobsIfPending() {
+  const pending = getPriorityPending();
+  if (!pending?.kind) return;
+  if (pending.kind === "sound" && pending.taskId && !soundPollTimer) {
+    soundTaskId = pending.taskId;
+    startSoundGenerationPolling({
+      fallbackTitle: pending.title,
+      libraryMeta: { mode: "sound" },
+    });
+    return;
+  }
+  if (pending.kind === "instrumental" && pending.taskId && !sunoStemsTaskId) {
+    sunoStemsTaskId = pending.taskId;
+    void pollLibraryStemsUntilDone(pending.taskId, "inst", {
+      sourceTitle: pending.title,
+      sourceArtUrl: "",
+    });
+    return;
+  }
+  if (pending.kind === "music_video" && (pending.videoTaskId || pending.taskId)) {
+    const vid = pending.videoTaskId || pending.taskId;
+    void (async () => {
+      try {
+        const videoUrl = await pollSunoMusicVideo(vid, {
+          onStatus: (m) => {
+            try {
+              updateCoachPriorityStatus(
+                String(m || coachMusicVideoPillText(pending.title)),
+                { generating: true },
+              );
+            } catch {}
+          },
+        });
+        finishCoachPriorityStatus("Music video ready ✓");
+        clearPriorityPending(vid);
+        pushLocalJobReadyActivity({
+          type: "music_video_ready",
+          title: pending.title,
+        });
+        void maybeNotifyJobReadyPush({
+          kind: "music_video",
+          title: pending.title,
+          taskId: vid,
+        });
+        showToast("Music video ready — open it from your song menu.", {
+          icon: "✓",
+          durationMs: 4200,
+        });
+      } catch {
+        cancelCoachPriorityStatus();
+        clearPriorityPending(vid);
+      }
+    })();
+  }
+}
+
 (() => {
   try {
     configureCoachGeneration({
@@ -48631,6 +48884,8 @@ function scheduleCreateHints() {
   if (fab) fab.addEventListener("click", () => openNabadCoach());
   try { scheduleCoachFabNudge(); } catch {}
   try { syncCoachGenerationStatusFromPending(getGenerationPending()); } catch {}
+  try { syncCoachPriorityStatusFromPending(getPriorityPending()); } catch {}
+  try { resumePriorityJobsIfPending(); } catch {}
   // Watch the Create fields locally for the contextual tips. Fire on blur so
   // the orb pill isn't trapped behind the on-screen keyboard.
   els.sunoStyle?.addEventListener("blur", scheduleCreateHints);
@@ -49675,6 +49930,11 @@ if (els.btnSoundGenerate) {
         els.btnSoundGenerate.disabled = false;
         return;
       }
+      setPriorityPending({
+        kind: "sound",
+        taskId: soundTaskId,
+        title: soundTitle,
+      });
       const fallbackTitle = shortenSoundTitle((prompt.split(/\r?\n/)[0] || "").trim() || "Sound");
       startSoundGenerationPolling({
         fallbackTitle,
@@ -52554,7 +52814,7 @@ async function studioSeparateVocals(track, onPhase) {
       "Content-Type": "application/json",
       ...(tok ? { Authorization: `Bearer ${tok}` } : {}),
     },
-    body: JSON.stringify({ taskId, audioId, type: "separate_vocal" }),
+    body: JSON.stringify({ taskId, audioId, type: "separate_vocal", source: "studio", notifyPush: false }),
   });
   const d = await r.json().catch(() => ({}));
   if (r.status === 402 || d?.code === "insufficient_credits") {

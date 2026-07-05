@@ -40,6 +40,7 @@ const {
 } = require("../_lib/credits-auth");
 const { applyCors } = require("../_lib/cors");
 const { resolveHumTrackPreset } = require("../_lib/hum-track-presets");
+const { queueRegisterSunoWatch } = require("../_lib/suno-generation-watch");
 
 const MAX_UPLOAD_BYTES = 25 * 1024 * 1024;
 // Reference-audio generations (cover / extend / add-instrumental) all
@@ -324,6 +325,10 @@ module.exports = async function handler(req, res) {
             uploadUrl,
           });
         }
+        registerStemsWatch(user, body, coverData, {
+          kind: instrumentPreset ? "hum_track" : "song",
+          variantCount: 2,
+        });
         return json(res, 200, {
           ...(coverData || { raw: coverText }),
           uploadUrl,
@@ -365,6 +370,7 @@ module.exports = async function handler(req, res) {
             uploadUrl,
           });
         }
+        registerStemsWatch(user, body, extData, { kind: "song", variantCount: 2 });
         return json(res, 200, {
           ...(extData || { raw: extText }),
           uploadUrl,
@@ -474,6 +480,7 @@ module.exports = async function handler(req, res) {
           uploadUrl,
         });
       }
+      registerStemsWatch(user, body, addData, { kind: "song", variantCount: 2 });
       return json(res, 200, {
         ...(addData || { raw: addText }),
         uploadUrl,
@@ -510,6 +517,7 @@ module.exports = async function handler(req, res) {
       await refund(`suno_code_${data.code}`);
       return json(res, 502, { error: "Request was rejected upstream", details: data });
     }
+    registerStemsWatch(user, body, data, { kind: "instrumental", variantCount: 1 });
     return json(res, 200, {
       ...(data || { raw: text }),
       _credits: { spent: isAdmin ? 0 : cost, balance: balanceAfterDebit, admin: isAdmin || undefined },
@@ -520,6 +528,39 @@ module.exports = async function handler(req, res) {
 };
 
 // === helpers ===
+
+function extractSunoTaskId(data) {
+  return String(
+    data?.data?.taskId ||
+      data?.data?.task_id ||
+      data?.taskId ||
+      data?.task_id ||
+      "",
+  ).trim();
+}
+
+function registerStemsWatch(user, body, responseData, { kind, variantCount = 2 } = {}) {
+  const taskId = extractSunoTaskId(responseData);
+  if (!taskId) return;
+  const source = String(body?.source || "").trim();
+  const notifyPush = body?.notifyPush !== false && source !== "studio";
+  const instrumentPreset = String(body?.instrumentPreset || "").trim();
+  const watchKind =
+    kind ||
+    (source === "studio"
+      ? "studio_guide"
+      : instrumentPreset
+        ? "hum_track"
+        : "instrumental");
+  queueRegisterSunoWatch({
+    userId: user.userId,
+    taskId,
+    kind: watchKind,
+    title: String(body?.title || "").trim(),
+    variantCount,
+    notifyPush,
+  });
+}
 
 /** True when the user's style asks for speech / VO instead of sung delivery. */
 function wantsSpokenDelivery(text) {

@@ -27,6 +27,12 @@ const PUSH_TEMPLATES = {
   song_feedback: { route: "activity" },
   play_milestone: { route: "activity" },
   public_song: { route: "activity" },
+  generation_ready: { route: "challenges" },
+  photo_ready: { route: "challenges" },
+  hum_track_ready: { route: "challenges" },
+  sound_ready: { route: "challenges" },
+  music_video_ready: { route: "profile" },
+  instrumental_ready: { route: "profile" },
 };
 
 function pushEnabled() {
@@ -45,6 +51,19 @@ function cleanDisplayName(v) {
 
 function composePushCopy({ type, actorDisplayName }) {
   const actor = cleanDisplayName(actorDisplayName);
+  const t = String(type || "").trim();
+  const customBody = String(actorDisplayName || "").trim();
+  if (
+    customBody &&
+    (t === "generation_ready" ||
+      t === "photo_ready" ||
+      t === "hum_track_ready" ||
+      t === "sound_ready" ||
+      t === "music_video_ready" ||
+      t === "instrumental_ready")
+  ) {
+    return { body: customBody.slice(0, 180) };
+  }
   if (type === "dm_message") {
     return {
       body: `New message from ${actor || "someone"}`,

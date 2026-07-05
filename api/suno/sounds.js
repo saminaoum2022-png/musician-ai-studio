@@ -14,6 +14,7 @@ const {
   isAdminEmail,
 } = require("../_lib/credits-auth");
 const { applyCors } = require("../_lib/cors");
+const { queueRegisterSunoWatch } = require("../_lib/suno-generation-watch");
 
 const SOUND_COST = 2.5;
 
@@ -114,6 +115,18 @@ module.exports = async function handler(req, res) {
       return json(res, 502, { error: msg, details: data });
     }
 
+    const soundTaskId = extractSunoTaskId(data);
+    if (soundTaskId) {
+      queueRegisterSunoWatch({
+        userId: user.userId,
+        taskId: soundTaskId,
+        kind: "sound",
+        title: prompt.split(/\r?\n/)[0]?.trim().slice(0, 120) || "Your sound",
+        variantCount: 1,
+        notifyPush: body?.notifyPush !== false,
+      });
+    }
+
     return json(res, 200, {
       ...(data || { raw: text }),
       _credits: {
@@ -170,4 +183,14 @@ function safeJson(txt) {
   } catch {
     return null;
   }
+}
+
+function extractSunoTaskId(data) {
+  return String(
+    data?.data?.taskId ||
+      data?.data?.task_id ||
+      data?.taskId ||
+      data?.task_id ||
+      "",
+  ).trim();
 }

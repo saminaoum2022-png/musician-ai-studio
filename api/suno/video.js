@@ -18,6 +18,7 @@
 const { verifyUser } = require("../_lib/credits-auth");
 const { applyCors } = require("../_lib/cors");
 const { readJson, sendJson, sunoJsonRequest } = require("../_lib/suno-upstream");
+const { queueRegisterSunoWatch } = require("../_lib/suno-generation-watch");
 
 module.exports = async function handler(req, res) {
   if (applyCors(req, res)) return;
@@ -100,6 +101,14 @@ module.exports = async function handler(req, res) {
 
     const videoTaskId = String(upstream.data?.data?.taskId || "").trim();
     if (!videoTaskId) return sendJson(res, 502, { error: "The video engine did not return a task id" });
+    queueRegisterSunoWatch({
+      userId: user.userId,
+      taskId: videoTaskId,
+      kind: "music_video",
+      title: String(body?.title || "").trim(),
+      variantCount: 1,
+      notifyPush: body?.notifyPush !== false,
+    });
     return sendJson(res, 200, { taskId: videoTaskId });
   } catch (e) {
     return sendJson(res, 500, { error: e?.message || String(e) });

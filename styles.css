@@ -28467,9 +28467,9 @@ body[data-route="challenges"] .app{
 }
 .homeDeskSoundsTile{
   position: relative;
-  width: 72px;
-  height: 72px;
-  border-radius: 20px;
+  width: 108px;
+  height: 108px;
+  border-radius: 22px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -28477,17 +28477,13 @@ body[data-route="challenges"] .app{
   background: rgba(255, 255, 255, 0.04);
 }
 .homeDeskSoundsIco{
-  width: 28px;
-  height: 28px;
+  width: 36px;
+  height: 36px;
   display: block;
 }
 .homeDeskCreateStack .homeDeskSoundsIco{
   width: 50px;
   height: 50px;
-}
-.homeDeskPromoVisual--sounds .homeDeskSoundsTileWrap{
-  transform: scale(0.68);
-  transform-origin: center center;
 }
 .challengesPage.homeDesk .homeDeskQuickStartsStack .homeDeskPhotoPromo,
 .challengesPage.homeDesk .homeDeskQuickStartsStack .homeDeskHumTrackPromo,

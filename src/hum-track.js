@@ -246,7 +246,8 @@ function finishHumTrackSuccess(taskId, instrumentId, tracks) {
   stopHumTrackPolling();
   humTrackGenerating = false;
   humTrackTaskId = "";
-  const label = instrumentLabel(instrumentId);
+  const preset = getHumTrackPreset(instrumentId);
+  const label = preset.label;
   const baseTitle = `Hum Track · ${label}`;
   const savedEntries = [];
   tracks.slice(0, 2).forEach((t, i) => {
@@ -266,6 +267,9 @@ function finishHumTrackSuccess(taskId, instrumentId, tracks) {
           instrument: instrumentId,
           instrumentLabel: label,
           variant: i === 0 ? "A" : "B",
+          styleInput: preset.style,
+          styleSent: preset.style,
+          artworkHint: preset.coverArtHint || "",
         },
       }),
     );
@@ -278,6 +282,13 @@ function finishHumTrackSuccess(taskId, instrumentId, tracks) {
       ctx?.finishCoachGenerationReady?.({ variantCount: savedEntries.filter(Boolean).length || 1 });
     } catch {}
   }
+  try {
+    ctx?.maybeNotifyJobReadyPush?.({
+      kind: "hum_track",
+      title: baseTitle,
+      taskId,
+    });
+  } catch {}
   try {
     ctx?.voidRefreshProfile?.();
   } catch {}
@@ -328,6 +339,11 @@ function startHumTrackPolling(taskId, instrumentId) {
       if (state.status === "SUCCESS" && state.hasAudio) {
         finishHumTrackSuccess(taskId, instrumentId, state.tracks);
         return;
+      }
+      if (tries > 0 && tries % 80 === 0) {
+        try {
+          ctx?.bumpCoachGenerationStillWorking?.();
+        } catch {}
       }
       if (tries >= maxTries) {
         try {

@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024" fill="none">
+  <defs>
+    <linearGradient id="coachOrbG" x1="26" y1="24" x2="74" y2="80" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#36e7c0"/>
+      <stop offset=".42" stop-color="#3f73f0"/>
+      <stop offset="1" stop-color="#6a23da"/>
+    </linearGradient>
+    <radialGradient id="coachOrbHi" cx=".36" cy=".30" r=".75">
+      <stop offset="0" stop-color="#ffffff" stop-opacity=".55"/>
+      <stop offset=".45" stop-color="#ffffff" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="bgGlow" cx="50%" cy="48%" r="42%">
+      <stop offset="0%" stop-color="#5b3cff" stop-opacity="0.22"/>
+      <stop offset="55%" stop-color="#3f73f0" stop-opacity="0.08"/>
+      <stop offset="100%" stop-color="#05070d" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="orbShadow" x="-50%" y="-50%" width="200%" height="200%">
+      <feDropShadow dx="0" dy="18" stdDeviation="22" flood-color="#5b3cff" flood-opacity="0.35"/>
+      <feDropShadow dx="0" dy="8" stdDeviation="8" flood-color="#ffffff" flood-opacity="0.12"/>
+    </filter>
+  </defs>
+
+  <!-- App dark background -->
+  <rect width="1024" height="1024" fill="#05070d"/>
+  <rect width="1024" height="1024" fill="url(#bgGlow)"/>
+
+  <!-- Coach orb (100x100 artboard scaled & centered) -->
+  <g transform="translate(512 512) scale(5.6) translate(-50 -50)" filter="url(#orbShadow)">
+    <circle cx="50" cy="50" r="45" fill="none" stroke="#16264f" stroke-width="2.3"/>
+    <path d="M50 12 A38 38 0 0 1 88 50" fill="none" stroke="#2dd4bf" stroke-width="2.3" stroke-linecap="round" opacity="0.82"/>
+    <path d="M50 88 A38 38 0 0 1 12 50" fill="none" stroke="#2dd4bf" stroke-width="2.3" stroke-linecap="round" opacity="0.82"/>
+    <circle cx="50" cy="50" r="27.5" fill="url(#coachOrbG)"/>
+    <circle cx="50" cy="50" r="27.5" fill="url(#coachOrbHi)"/>
+  </g>
+</svg>

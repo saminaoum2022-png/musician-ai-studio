@@ -21,6 +21,7 @@ const {
   sendJson,
 } = require("../_lib/credits-auth");
 const { applyCors } = require("../_lib/cors");
+const { queueRegisterSunoWatch } = require("../_lib/suno-generation-watch");
 
 const FULL_SONG_COST = 12;
 
@@ -181,6 +182,19 @@ module.exports = async function handler(req, res) {
       return json(res, 502, { error: msg, details: data });
     }
 
+    const sunoTaskId = extractSunoTaskId(data);
+    const watchKind = String(body?.watchKind || "").trim() === "photo" ? "photo" : "song";
+    if (sunoTaskId) {
+      queueRegisterSunoWatch({
+        userId: user.userId,
+        taskId: sunoTaskId,
+        kind: watchKind,
+        title: String(title || body?.title || "").trim(),
+        variantCount: 2,
+        notifyPush: body?.notifyPush !== false,
+      });
+    }
+
     return json(res, 200, {
       ...(data || { raw: text }),
       _credits: {
@@ -233,6 +247,16 @@ function safeJson(txt) {
   } catch {
     return null;
   }
+}
+
+function extractSunoTaskId(data) {
+  return String(
+    data?.data?.taskId ||
+      data?.data?.task_id ||
+      data?.taskId ||
+      data?.task_id ||
+      "",
+  ).trim();
 }
 
 function clamp01(x) {

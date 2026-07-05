@@ -128,6 +128,11 @@ export function coachHumTrackGeneratingPillText(instrumentLabel) {
   return `Hum Track · ${l}…`;
 }
 
+export function coachPhotoMoodPillText(variantCount = 2) {
+  const n = Math.max(1, Number(variantCount) || 2);
+  return n > 1 ? "Photo Mood · creating songs…" : "Photo Mood · creating song…";
+}
+
 /** Persistent pill for the whole backend run. */
 export function beginCoachGenerationStatus({ variantCount = 2, pillText = "" } = {}) {
   try { _onArmHook?.(); } catch {}
@@ -200,19 +205,41 @@ export function cancelCoachPriorityStatus() {
   resetCoachPill({ restoreDefault: true });
 }
 
-/** Boot / route restore when session still has a pending task. */
+/** Boot / route restore when session still has a pending song-style task. */
 export function syncCoachGenerationStatusFromPending(pending) {
   if (!pending?.taskId) {
     if (_generationLocked) cancelCoachGenerationStatus();
     return;
   }
-  const pillText =
-    pending.source === "hum_track"
-      ? coachHumTrackGeneratingPillText(
-          pending.title?.replace(/^Hum Track ·\s*/i, "") || pending.instrumentId || "instrument",
-        )
-      : "";
+  let pillText = "";
+  if (pending.source === "hum_track") {
+    pillText = coachHumTrackGeneratingPillText(
+      pending.title?.replace(/^Hum Track ·\s*/i, "") || pending.instrumentId || "instrument",
+    );
+  } else if (pending.source === "photo") {
+    pillText = coachPhotoMoodPillText(pending.variantCount);
+  }
   beginCoachGenerationStatus({ variantCount: pending.variantCount, pillText });
+}
+
+/** Boot / route restore for Sounds, instrumental, music video jobs. */
+export function syncCoachPriorityStatusFromPending(pending) {
+  if (!pending?.kind) {
+    if (_priorityActive) cancelCoachPriorityStatus();
+    return;
+  }
+  const title = String(pending.title || "").trim() || "Your creation";
+  if (pending.kind === "sound") {
+    beginCoachPriorityStatus(coachSoundPillText(title), { generating: true });
+    return;
+  }
+  if (pending.kind === "instrumental") {
+    beginCoachPriorityStatus(coachInstrumentalPillText(title), { generating: true });
+    return;
+  }
+  if (pending.kind === "music_video") {
+    beginCoachPriorityStatus(coachMusicVideoPillText(title), { generating: true });
+  }
 }
 
 /** Called from idle nudges / contextual hints in app.js */

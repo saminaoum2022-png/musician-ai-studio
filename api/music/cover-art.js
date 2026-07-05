@@ -1,12 +1,13 @@
 /**
  * POST /api/music/cover-art
- * Generates a deterministic mood-rich abstract cover via Pollinations.
+ * Generates a deterministic mood-rich abstract cover (Gemini image test provider).
  */
 const path = require("path");
 const { pathToFileURL } = require("url");
 const { verifyUser } = require("../_lib/credits-auth");
 const { applyCors } = require("../_lib/cors");
 const { tryGeminiCoverScene } = require("../_lib/gemini-cover-prompt");
+const { generateCoverImageViaGemini } = require("../_lib/gemini-cover-image");
 const { runVisualDirector } = require("../_lib/visual-director");
 
 const MAX_FIELD = 160;
@@ -58,7 +59,7 @@ module.exports = async function handler(req, res) {
 
     const {
       buildAbstractCoverPrompt,
-      buildPollinationsUrl,
+      buildCoverNegativePrompt,
       moodPaletteForBucket,
       classifyVisualBucket,
       sanitizeArtworkPrompt,
@@ -151,19 +152,21 @@ module.exports = async function handler(req, res) {
       promptOpts,
     );
 
-    const upstreamUrl = buildPollinationsUrl(prompt, seed, { avoidTags: effectiveAvoidTags });
-    const upstream = await fetch(upstreamUrl, {
-      headers: { "User-Agent": "NabadAi-CoverArt/1.0" },
+    const negativePrompt = buildCoverNegativePrompt(effectiveAvoidTags);
+    const geminiImage = await generateCoverImageViaGemini({
+      prompt,
+      negativePrompt,
+      width: params?.coverWidth || 1024,
+      height: params?.coverHeight || 1024,
     });
 
-    if (!upstream.ok) {
-      const errText = await upstream.text().catch(() => "");
-      console.warn("[music/cover-art] pollinations failed", upstream.status, errText.slice(0, 200));
+    if (!geminiImage.ok) {
+      console.warn("[music/cover-art] gemini image failed", geminiImage.error);
       return sendJson(res, 502, { error: "Cover image generation failed upstream." });
     }
 
-    const mime = String(upstream.headers.get("content-type") || "image/jpeg").split(";")[0].trim();
-    const buf = Buffer.from(await upstream.arrayBuffer());
+    const mime = String(geminiImage.mime || "image/png").split(";")[0].trim();
+    const buf = geminiImage.buf;
     if (buf.length < 512) {
       return sendJson(res, 502, { error: "Cover image response was empty." });
     }
@@ -185,7 +188,8 @@ module.exports = async function handler(req, res) {
       },
       coverWidth: params?.coverWidth || 1024,
       coverHeight: params?.coverHeight || 1024,
-      provider: "pollinations",
+      provider: "gemini",
+      geminiImageModel: geminiImage.model || "",
       abstract: true,
     });
   } catch (e) {

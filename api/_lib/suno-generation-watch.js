@@ -3,6 +3,7 @@
  */
 
 const { queuePrivacySafePush } = require("./onesignal-push");
+const { verifySunoWatchReady } = require("./suno-job-ready");
 
 const SUPABASE_URL = (process.env.SUPABASE_URL || "").replace(/\/$/, "");
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
@@ -150,13 +151,14 @@ function extractCallbackTaskId(body) {
   );
 }
 
-function callbackLooksSuccessful(body) {
-  const code = Number(body?.code);
-  if (Number.isFinite(code) && code === 200) return true;
+function callbackLooksFailed(body) {
   const flag = String(
-    body?.data?.successFlag || body?.data?.status || body?.successFlag || "",
+    body?.data?.successFlag || body?.data?.status || body?.successFlag || body?.status || "",
   ).toUpperCase();
-  return flag === "SUCCESS" || flag === "COMPLETE";
+  if (flag === "FAILED" || flag === "ERROR") return true;
+  const code = Number(body?.code);
+  if (Number.isFinite(code) && code !== 200) return true;
+  return false;
 }
 
 async function handleSunoCallback(body) {
@@ -164,11 +166,21 @@ async function handleSunoCallback(body) {
   if (!taskId) return { ok: false, reason: "no_task_id" };
   const row = await fetchWatchByTaskId(taskId);
   if (!row) return { ok: false, reason: "watch_not_found" };
-  const success = callbackLooksSuccessful(body);
-  if (!success) {
+
+  if (callbackLooksFailed(body)) {
     await markWatchStatus(taskId, "failed");
     return { ok: false, reason: "failed" };
   }
+
+  const verified = await verifySunoWatchReady(taskId, row.kind);
+  if (verified.failed) {
+    await markWatchStatus(taskId, "failed");
+    return { ok: false, reason: "failed" };
+  }
+  if (!verified.ready) {
+    return { ok: false, reason: "not_ready_yet", status: verified.status || "" };
+  }
+
   await markWatchStatus(taskId, "complete");
   return sendWatchReadyPush(row);
 }
@@ -190,6 +202,17 @@ async function notifyJobReadyFromClient({ userId, taskId, kind, title = "" } = {
   }
   if (!row) return { ok: false, reason: "watch_missing" };
   if (row.status === "notified" || row.notified_at) return { ok: true, skipped: true };
+
+  const watchKind = String(row.kind || kind || "song").trim();
+  const verified = await verifySunoWatchReady(tid, watchKind);
+  if (verified.failed) {
+    await markWatchStatus(tid, "failed");
+    return { ok: false, reason: "failed" };
+  }
+  if (!verified.ready) {
+    return { ok: false, reason: "not_ready" };
+  }
+
   await markWatchStatus(tid, "complete");
   return sendWatchReadyPush({ ...row, title: title || row.title });
 }

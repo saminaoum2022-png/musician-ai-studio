@@ -22,6 +22,7 @@
  * @property {string} occasionLabel
  * @property {string} searchTemplateTitle
  * @property {boolean} humTrack
+ * @property {string} instrumentId
  * @property {string} instrumentLabel
  * @property {boolean} skipGeminiScene
  * @property {string} avoidTagsInput
@@ -111,6 +112,7 @@ export function buildCoverDirectorContext(input, hints = {}) {
     occasionLabel: String(input?.occasionLabel || input?.challenge?.occasion || "").trim(),
     searchTemplateTitle: String(input?.searchTemplateTitle || "").trim(),
     humTrack: Boolean(input?.humTrack),
+    instrumentId: String(input?.instrumentId || input?.instrument || "").trim(),
     instrumentLabel: String(input?.instrumentLabel || "").trim(),
     skipGeminiScene: Boolean(input?.skipGeminiScene || input?.humTrack),
     avoidTagsInput: String(input?.avoidTagsInput || input?.avoidTags || "").trim(),

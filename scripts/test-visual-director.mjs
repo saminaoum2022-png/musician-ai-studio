@@ -42,15 +42,35 @@ const hum = await resolveVisualDirection({
   songId: "test-hum-1",
   title: "Hum Piano",
   humTrack: true,
+  instrumentId: "piano",
   instrumentLabel: "Piano",
   skipGeminiScene: true,
   energy: 0.5,
 }, { applyToPrompt: true });
 
 assert(hum.direction?.sourcePath === "hum_track", "hum path inferred");
+assert(hum.direction?.instrumentRenderMode === "direct", "piano uses direct instrument rendering");
 assert(hum.direction?.instrumentFocus === "solo Piano", "instrument focus locked");
 assert(hum.directorApplied, "apply mode sets directorApplied");
 assert(hum.coverInput?.nabadIdentityPhrases, "DNA phrases attached in apply mode");
+
+const humViolin = await resolveVisualDirection({
+  songId: "test-hum-violin",
+  title: "Hum Violin",
+  humTrack: true,
+  instrumentId: "violin",
+  instrumentLabel: "Violin",
+  skipGeminiScene: true,
+  energy: 0.5,
+}, { applyToPrompt: true });
+
+assert(humViolin.direction?.instrumentRenderMode === "identity", "violin uses instrument visual identity");
+assert(humViolin.direction?.visualMode === "abstract", "identity hum tracks use abstract visual mode");
+assert(!humViolin.coverInput?.artworkHint, "identity hum strips literal artwork hint");
+assert(
+  /bow-stroke|rosin|f-hole/i.test(humViolin.direction?.mainSubject || ""),
+  "violin identity scene is symbolic not literal",
+);
 
 const wedding = await resolveVisualDirection({
   songId: "test-wedding-1",

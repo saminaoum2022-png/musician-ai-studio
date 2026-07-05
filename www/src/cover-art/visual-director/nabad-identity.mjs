@@ -68,18 +68,21 @@ export function nabadIdentityAvoid() {
 
 /**
  * Pick contextual roots beyond the always-on core set.
- * @param {{ energy?: number, visualMode?: string, humTrack?: boolean, bucketKey?: string }} opts
+ * @param {{ energy?: number, visualMode?: string, humTrack?: boolean, bucketKey?: string, instrumentRenderMode?: "direct"|"identity"|null }} opts
  * @returns {NabadRootId[]}
  */
 function contextualRoots(opts = {}) {
   const energy = clampEnergy(opts.energy);
   const visualMode = String(opts.visualMode || "").toLowerCase();
   const humTrack = Boolean(opts.humTrack);
+  const renderMode = opts.instrumentRenderMode;
   const bucketKey = String(opts.bucketKey || "default").toLowerCase();
   /** @type {NabadRootId[]} */
   const roots = ["editorial_still", "symbolic_mood"];
 
-  if (humTrack || visualMode === "instrument_still_life") {
+  if (humTrack && renderMode === "identity") {
+    roots.push("quiet_motion", "soft_grain");
+  } else if (humTrack || visualMode === "instrument_still_life") {
     roots.push("instrument_sculpture");
   } else if (visualMode === "figure") {
     roots.push("silhouette");
@@ -99,7 +102,7 @@ function contextualRoots(opts = {}) {
 
 /**
  * Sample 4–6 DNA clauses for one cover. Deterministic per songId.
- * @param {{ songId?: string, bucketKey?: string, energy?: number, visualMode?: string, humTrack?: boolean }} opts
+ * @param {{ songId?: string, bucketKey?: string, energy?: number, visualMode?: string, humTrack?: boolean, instrumentRenderMode?: "direct"|"identity"|null }} opts
  */
 export function nabadIdentityPhrases(opts = {}) {
   const songId = String(opts.songId || "nabad-song").trim();

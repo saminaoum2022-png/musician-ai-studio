@@ -159,6 +159,7 @@ export function coverArtParamsFromTrack(track) {
     artworkHint,
     avoidTagsInput: String(meta?.avoidTagsInput || "").trim(),
     humTrack: Boolean(meta.humTrack),
+    instrumentId: String(meta.instrument || meta.instrumentId || "").trim(),
     instrumentLabel: String(meta.instrumentLabel || "").trim(),
     skipGeminiScene: Boolean(meta.humTrack),
     searchTemplateTitle: String(meta.searchTemplateTitle || "").trim(),

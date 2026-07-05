@@ -126,7 +126,7 @@
       onload="this.media='all'"
     />
     <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Display:wght@900&family=Inter:wght@900&display=swap" /></noscript>
-    <link rel="stylesheet" href="./styles.css?v=20260706-001019" />
+    <link rel="stylesheet" href="./styles.css?v=20260706-003438" />
 
     <meta name="description" content="NabadAi is an AI music studio. Hum a melody, write lyrics, and ship a song." />
     <meta property="og:type" content="website" />
@@ -1118,6 +1118,27 @@
                 </section>
               </div>
               <p class="humTrackFootnote">Tap the Create button when your hum is ready. Uses the same credits as a song generation.</p>
+          </div>
+
+          <div id="voiceWizardSheet" class="createAltFlow personaFlow" hidden aria-hidden="true">
+            <header class="personaFlowHead">
+              <button type="button" id="btnClosePersonaFlow" class="nabadBackBtn personaFlowBack" aria-label="Back to Create">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6 9 12l6 6"/></svg>
+              </button>
+              <div class="personaFlowHeadCopy">
+                <p class="personaFlowKicker">Your voice</p>
+                <h2 class="personaFlowTitle" id="voiceWizardTitle">Persona</h2>
+                <p class="personaFlowSub">Sing once — use your voice on every song you generate.</p>
+              </div>
+            </header>
+            <div class="personaFlowSteps" id="voiceWizardSteps" aria-label="Persona setup progress">
+              <span class="vwStep" data-step="1"><i>1</i>Sample</span>
+              <span class="vwStepLine"></span>
+              <span class="vwStep" data-step="2"><i>2</i>Verify</span>
+              <span class="vwStepLine"></span>
+              <span class="vwStep" data-step="3"><i>3</i>Voice</span>
+            </div>
+            <div id="voiceWizardBody" class="personaFlowBody voiceWizardStep"></div>
           </div>
 
           <div id="imageMoodModal" class="imageMoodSheet" hidden aria-hidden="true">
@@ -3708,24 +3729,29 @@
           <div id="songDetailsContent" class="songDetailsContent"></div>
         </div>
       </div>
-      <div id="vocalRecorderModal" class="songDetailsModal modalNoTextSelect" style="display:none">
-        <div class="songDetailsBackdrop" id="vocalRecorderBackdrop"></div>
-        <div class="songDetailsSheet recorderSheet">
-          <div class="row" style="justify-content:space-between;align-items:center">
-            <h2 id="vocalRecorderModalTitle" style="margin:0">Record vocal reference</h2>
-            <button id="btnCloseVocalRecorder" class="ghost" type="button">Close</button>
+      <div id="vocalRecorderModal" class="songDetailsModal personaRecorderModal modalNoTextSelect" style="display:none" aria-hidden="true">
+        <div class="songDetailsBackdrop personaRecorderBackdrop" id="vocalRecorderBackdrop"></div>
+        <div class="songDetailsSheet recorderSheet personaRecorderSheet">
+          <header class="personaRecorderHead">
+            <button id="btnCloseVocalRecorder" class="nabadBackBtn personaRecorderBack" type="button" aria-label="Close">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6 9 12l6 6"/></svg>
+            </button>
+            <div class="personaRecorderHeadCopy">
+              <p id="vocalRecorderKicker" class="personaRecorderKicker">Sample</p>
+              <h2 id="vocalRecorderModalTitle" class="personaRecorderTitle">Record voice sample</h2>
+            </div>
+          </header>
+          <div id="vocalRecorderPhraseWrap" class="vocalRecorderPhraseWrap personaRecorderPhraseWrap" hidden>
+            <p class="vocalRecorderPhraseLabel personaFlowSectionLabel">Sing this phrase</p>
+            <div id="vocalRecorderPhrasePrompt" class="vocalRecorderPhrasePrompt personaRecorderPhrase" aria-live="polite"></div>
           </div>
-          <div id="vocalRecorderPhraseWrap" class="vocalRecorderPhraseWrap" hidden>
-            <p class="vocalRecorderPhraseLabel">Sing this phrase</p>
-            <div id="vocalRecorderPhrasePrompt" class="vocalRecorderPhrasePrompt voiceWizardPhrase" aria-live="polite"></div>
+          <div class="recorderCenter personaRecorderStage">
+            <button id="btnRecorderToggle" class="recButton personaRecButton" type="button" aria-label="Record">●</button>
+            <div id="recorderStatus" class="personaRecorderStatus hint">Tap ● to start recording</div>
           </div>
-          <div class="recorderCenter">
-            <button id="btnRecorderToggle" class="recButton" type="button">●</button>
-            <div id="recorderStatus" class="hint">Tap to start recording</div>
-          </div>
-          <div class="row" style="justify-content:flex-end; margin-top:10px">
-            <button id="btnRecorderUse" class="primary" type="button" disabled>Use recording</button>
-          </div>
+          <footer class="personaRecorderFoot">
+            <button id="btnRecorderUse" class="primary vwPrimary personaRecorderUse" type="button" disabled>Use this recording</button>
+          </footer>
         </div>
       </div>
       <!-- Calling card recorder. Long-press your own avatar to open.
@@ -4482,6 +4508,6 @@
     </script>
     <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
     <script src="./env.client.js" onerror="void 0"></script>
-    <script type="module" src="./src/app.js?v=20260706-001019"></script>
+    <script type="module" src="./src/app.js?v=20260706-003438"></script>
   </body>
 </html>

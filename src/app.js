@@ -170,7 +170,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260706-001019";
+const APP_BUILD = "20260706-003438";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -677,6 +677,7 @@ const els = {
   btnMagicRecordVocal: document.getElementById("btnMagicRecordVocal"),
   vocalRecorderModal: document.getElementById("vocalRecorderModal"),
   vocalRecorderModalTitle: document.getElementById("vocalRecorderModalTitle"),
+  vocalRecorderKicker: document.getElementById("vocalRecorderKicker"),
   vocalRecorderPhraseWrap: document.getElementById("vocalRecorderPhraseWrap"),
   vocalRecorderPhrasePrompt: document.getElementById("vocalRecorderPhrasePrompt"),
   vocalRecorderBackdrop: document.getElementById("vocalRecorderBackdrop"),
@@ -12732,10 +12733,17 @@ function syncCreateFlowUi() {
     humPanel.hidden = !showHum;
     humPanel.setAttribute("aria-hidden", showHum ? "false" : "true");
   }
+  const personaPanel = document.getElementById("voiceWizardSheet");
+  if (personaPanel) {
+    const showPersona = onGenerate && flow === "persona";
+    personaPanel.hidden = !showPersona;
+    personaPanel.setAttribute("aria-hidden", showPersona ? "false" : "true");
+  }
   const title = document.querySelector(".createPageHeader .appScreenTitle");
   if (title && onGenerate) {
     if (flow === "humtrack") title.textContent = "Hum Track";
     else if (flow === "sounds") title.textContent = "Sounds";
+    else if (flow === "persona") title.textContent = "Persona";
     else title.textContent = "Create";
   }
 }
@@ -17872,16 +17880,26 @@ function openVocalRecorderModal() {
   if (forWizard) {
     els.vocalRecorderModal.classList.add("recorderOverWizard");
     hideVoiceWizardForRecorder(true);
+    try { document.body.classList.add("personaRecorderOpen"); } catch {}
   } else {
     els.vocalRecorderModal.classList.remove("recorderOverWizard");
     els.vocalRecorderModal.classList.remove("recorderOverWizard--verify");
     hideVoiceWizardForRecorder(false);
+    try { document.body.classList.remove("personaRecorderOpen"); } catch {}
   }
   syncVocalRecorderPhrasePrompt();
+  const isVerify = forWizard && vocalRecorderContext?.step === "verify";
+  if (els.vocalRecorderKicker) {
+    els.vocalRecorderKicker.textContent = forWizard
+      ? (isVerify ? "Verify" : "Sample")
+      : "Vocal reference";
+  }
   if (els.vocalRecorderModalTitle) {
     els.vocalRecorderModalTitle.textContent =
       vocalRecorderContext?.title ||
-      (forWizard ? "Record your voice" : "Record vocal reference");
+      (forWizard
+        ? (isVerify ? "Record verification" : "Record voice sample")
+        : "Record vocal reference");
   }
   if (els.btnRecorderUse) {
     els.btnRecorderUse.textContent = forWizard ? "Use this recording" : "Use recording";
@@ -17890,21 +17908,23 @@ function openVocalRecorderModal() {
       : !getVocalReferenceFile();
   }
   els.vocalRecorderModal.style.display = "";
+  els.vocalRecorderModal.setAttribute("aria-hidden", "false");
   setRecorderToggleRecordingUi(Boolean(vocalRefRecorder && vocalRefRecorder.state === "recording"));
   if (forWizard) {
-    const isVerify = vocalRecorderContext?.step === "verify";
     setVocalRecorderStatusAll(
       isVerify
         ? "Sing the phrase above, then tap ● to record"
-        : "Starting microphone…"
+        : "Tap ● to record 15–30 seconds of singing"
     );
   }
 }
 function closeVocalRecorderModal() {
   if (!els.vocalRecorderModal) return;
   els.vocalRecorderModal.style.display = "none";
+  els.vocalRecorderModal.setAttribute("aria-hidden", "true");
   els.vocalRecorderModal.classList.remove("recorderOverWizard");
   els.vocalRecorderModal.classList.remove("recorderOverWizard--verify");
+  try { document.body.classList.remove("personaRecorderOpen"); } catch {}
   if (els.vocalRecorderPhraseWrap) els.vocalRecorderPhraseWrap.hidden = true;
   hideVoiceWizardForRecorder(false);
   setRecorderToggleRecordingUi(false);
@@ -36111,41 +36131,10 @@ function renderSettingsVoicesHub() {
 }
 
 function ensureVoiceWizardSheet() {
-  let sheet = document.getElementById("voiceWizardSheet");
-  if (sheet) return sheet;
-  sheet = document.createElement("div");
-  sheet.id = "voiceWizardSheet";
-  sheet.className = "voiceWizardSheet";
-  sheet.hidden = true;
-  sheet.innerHTML = `
-    <div class="voiceWizardBackdrop" data-voice-wizard-close></div>
-    <div class="voiceWizardCard voiceWizardCard--full" role="dialog" aria-modal="true" aria-labelledby="voiceWizardTitle">
-      <div class="voiceWizardHero">
-        <button type="button" class="voiceWizardClose" data-voice-wizard-close aria-label="Close">✕</button>
-        <div class="voiceWizardHeroArt" aria-hidden="true">
-          <span class="vwHeroGlow"></span>
-          <span class="vwHeroMic" aria-hidden="true">
-            <svg viewBox="0 0 24 24" width="28" height="28" focusable="false">
-              <path fill="currentColor" d="M12 14.25a3.5 3.5 0 0 0 3.5-3.5V6.5a3.5 3.5 0 1 0-7 0v4.25a3.5 3.5 0 0 0 3.5 3.5Zm5.75-3.5a.75.75 0 0 1 1.5 0 7.25 7.25 0 0 1-6.5 7.21V20a.75.75 0 0 1-1.5 0v-2.04a7.25 7.25 0 0 1-6.5-7.21.75.75 0 0 1 1.5 0 5.75 5.75 0 0 0 11.5 0Z"/>
-            </svg>
-          </span>
-        </div>
-        <h3 id="voiceWizardTitle">Create your voice</h3>
-        <p class="voiceWizardHeroSub">Sing once — every song you generate can sound like you.</p>
-        <div class="voiceWizardSteps" id="voiceWizardSteps">
-          <span class="vwStep" data-step="1"><i>1</i>Sample</span>
-          <span class="vwStepLine"></span>
-          <span class="vwStep" data-step="2"><i>2</i>Verify</span>
-          <span class="vwStepLine"></span>
-          <span class="vwStep" data-step="3"><i>3</i>Voice</span>
-        </div>
-      </div>
-      <div id="voiceWizardBody" class="voiceWizardStep"></div>
-    </div>`;
-  document.body.appendChild(sheet);
-  sheet.addEventListener("click", (e) => {
-    if (e.target.closest("[data-voice-wizard-close]")) closeVoiceWizard();
-  });
+  const sheet = document.getElementById("voiceWizardSheet");
+  if (!sheet || sheet.dataset.wiredPersonaFlow === "1") return sheet;
+  sheet.dataset.wiredPersonaFlow = "1";
+  document.getElementById("btnClosePersonaFlow")?.addEventListener("click", () => closeVoiceWizard());
   return sheet;
 }
 
@@ -36153,12 +36142,18 @@ function closeVoiceWizard() {
   const sheet = document.getElementById("voiceWizardSheet");
   if (sheet) {
     sheet.hidden = true;
+    sheet.setAttribute("aria-hidden", "true");
     sheet.classList.remove("voiceWizardSheet--recorderActive");
   }
   try {
     closeVocalRecorderModal();
   } catch {}
   voiceWizardState.abort = true;
+  clearCreateFlow();
+  try {
+    location.hash = "#/challenges";
+  } catch {}
+  scheduleApplyRoute();
 }
 
 let voiceWizardState = { abort: false, sampleFile: null, verifyFile: null, verifyPhrase: "" };
@@ -36327,11 +36322,11 @@ function renderVoiceWizardProcessing(title, items, variant = "listen") {
       ? `<div class="vwBuildLoader" aria-hidden="true"><span class="vwBuildRing"></span><span class="vwBuildCore">♪</span></div>`
       : `<div class="vwListenLoader" aria-hidden="true"><span class="vwListenRing"></span><span class="vwListenRing"></span><span class="vwListenRing"></span><span class="vwListenDot"></span></div>`;
   renderVoiceWizardStep(`
-    <div class="vwCard vwProcessing">
+    <div class="vwCard vwProcessing personaFlowProcessing">
       ${loader}
       <div class="vwProcessingTitle">${escapeHtml(title)}</div>
       <ul class="vwProcessingList">${rows}</ul>
-      <p class="vwCardSub">Keep the app open — this only takes a moment.</p>
+      <p class="personaFlowSectionLead">Keep the app open — this only takes a moment.</p>
     </div>`);
 }
 
@@ -36352,9 +36347,9 @@ function voiceWizardLangSkillHtml() {
   const skillChip = (val, label, sub) =>
     `<button type="button" class="optChip vwSkillChip${val === skill ? " isActive" : ""}" data-val="${val}"><b>${label}</b><span>${sub}</span></button>`;
   return `
-    <div class="vwCard">
-      <div class="vwCardTitle">Verification phrase language</div>
-      <p class="vwCardSub">For step 2 only — the short phrase you’ll sing to verify it’s you. Your sample can stay in Arabic or any language.</p>
+    <section class="personaFlowSection">
+      <h3 class="personaFlowSectionLabel">Verification phrase language</h3>
+      <p class="personaFlowSectionLead">For step 2 only — your sample can stay in Arabic or any language.</p>
       <input type="hidden" id="voiceWizardLang" value="${escapeHtml(lang)}" />
       <div class="vwChipRow" id="voiceWizardLangRow">
         ${langChip("en", "English")}
@@ -36362,10 +36357,10 @@ function voiceWizardLangSkillHtml() {
         ${langChip("es", "Spanish")}
         ${langChip("hi", "Hindi")}
       </div>
-    </div>
-    <div class="vwCard">
-      <div class="vwCardTitle">Your singing level</div>
-      <p class="vwCardSub">Be honest — this tells the AI how much to polish versus preserve your natural voice.</p>
+    </section>
+    <section class="personaFlowSection">
+      <h3 class="personaFlowSectionLabel">Your singing level</h3>
+      <p class="personaFlowSectionLead">Be honest — this tells the AI how much to polish versus preserve your natural voice.</p>
       <input type="hidden" id="voiceWizardSkill" value="${escapeHtml(skill)}" />
       <div class="vwChipRow vwChipRow--stack" id="voiceWizardSkillRow">
         ${skillChip("beginner", "Casual", "I sing for fun")}
@@ -36373,7 +36368,7 @@ function voiceWizardLangSkillHtml() {
         ${skillChip("advanced", "Trained", "I sing seriously")}
         ${skillChip("professional", "Professional", "Singing is my craft")}
       </div>
-    </div>`;
+    </section>`;
 }
 
 function wireVoiceWizardStep1Sample() {
@@ -36503,9 +36498,9 @@ function renderVoiceWizardVerifyStep(phrase, token) {
   setVoiceWizardStage(2);
   voiceWizardState.verifyPhrase = String(phrase || "").trim();
   renderVoiceWizardStep(`
-    <div class="vwCard vwStudioCard">
-      <div class="vwCardTitle">Sing this phrase</div>
-      <p class="vwCardSub">Clearly, in a singing voice — about 10–20 seconds. This proves the voice is really yours.</p>
+    <section class="personaFlowSection">
+      <h3 class="personaFlowSectionLabel">Sing this phrase</h3>
+      <p class="personaFlowSectionLead">Clearly, in a singing voice — about 10–20 seconds. This proves the voice is really yours.</p>
       <div class="voiceWizardPhrase vwPhrase" id="voiceWizardPhrase">${escapeHtml(phrase)}</div>
       <div class="recorderCenter voiceWizardRecPrompt">
         <button type="button" class="recButton" id="voiceWizardRecordVerify" aria-label="Record verification">●</button>
@@ -36513,7 +36508,7 @@ function renderVoiceWizardVerifyStep(phrase, token) {
       </div>
       <button type="button" class="vwGhostLink" id="voiceWizardPickVerify">Upload verification file instead</button>
       <input type="file" id="voiceWizardVerifyFile" hidden accept="audio/*,video/*,.mp4,.m4a,.mov" />
-    </div>
+    </section>
     <div class="voiceWizardActions">
       <button type="button" class="primary vwPrimary" id="voiceWizardSubmitBtn" disabled>Create my voice</button>
     </div>`);
@@ -36605,13 +36600,13 @@ function renderVoiceWizardStep1Sample() {
   setVoiceWizardStage(1);
   const hasSample = Boolean(voiceWizardState.sampleFile);
   renderVoiceWizardStep(`
-    <div class="vwCard vwStudioCard">
-      <div class="vwCardTitle">Step 1 · Record your voice</div>
-      <p class="vwCardSub">15–30 seconds of clear singing a cappella — just your voice, no backing track and no echo. Any language (Arabic works great).</p>
-      <div class="vwTipRow" aria-hidden="true">
-        <span class="vwTip">Quiet room</span>
-        <span class="vwTip">Close to the mic</span>
-        <span class="vwTip">Sing, don’t talk</span>
+    <section class="personaFlowSection">
+      <h3 class="personaFlowSectionLabel">Record your voice</h3>
+      <p class="personaFlowSectionLead">15–30 seconds of clear singing a cappella — just your voice, no backing track. Any language works.</p>
+      <div class="personaFlowTips" aria-hidden="true">
+        <span class="personaFlowTip">Quiet room</span>
+        <span class="personaFlowTip">Close to mic</span>
+        <span class="personaFlowTip">Sing, don’t talk</span>
       </div>
       <div class="recorderCenter voiceWizardRecPrompt">
         <button type="button" class="recButton" id="voiceWizardRecordSample" aria-label="Record voice sample">●</button>
@@ -36619,11 +36614,11 @@ function renderVoiceWizardStep1Sample() {
       </div>
       <button type="button" class="vwGhostLink" id="voiceWizardPickSample">Upload a file instead</button>
       <input type="file" id="voiceWizardSampleFile" hidden accept="audio/*,video/*,.mp4,.m4a,.mov" />
-    </div>
-    <div class="vwCard">
-      <div class="vwCardTitle">Voice name</div>
+    </section>
+    <section class="personaFlowSection personaFlowSection--field">
+      <label class="personaFlowSectionLabel" for="voiceWizardName">Voice name</label>
       <input id="voiceWizardName" class="vwInput" type="text" maxlength="64" placeholder="My voice" value="${escapeHtml(voiceWizardState.name || "My voice")}" />
-    </div>
+    </section>
     <div class="voiceWizardActions">
       <button type="button" class="primary vwPrimary" id="voiceWizardSampleContinueBtn" ${hasSample ? "" : "disabled"}>Continue</button>
     </div>`);
@@ -36632,10 +36627,6 @@ function renderVoiceWizardStep1Sample() {
 function renderVoiceWizardStep1Setup() {
   setVoiceWizardStage(1);
   renderVoiceWizardStep(`
-    <div class="vwCard vwStudioCard vwCard--compact">
-      <div class="vwCardTitle">Before step 2 · Verify</div>
-      <p class="vwCardSub">Choose the verification phrase language and your singing level — then we’ll prepare the phrase you’ll sing next.</p>
-    </div>
     ${voiceWizardLangSkillHtml()}
     <div class="voiceWizardActions voiceWizardActions--split">
       <button type="button" class="vwSecondaryBtn" id="voiceWizardSetupBackBtn">Back</button>
@@ -36664,7 +36655,16 @@ async function openVoiceWizard() {
     validateTaskId: "",
   };
   const sheet = ensureVoiceWizardSheet();
+  if (!sheet) return;
+  setCreateFlow("persona");
+  if (String(location.hash || "") !== "#/generate") {
+    try {
+      location.hash = "#/generate";
+    } catch {}
+  }
+  scheduleApplyRoute();
   sheet.hidden = false;
+  sheet.setAttribute("aria-hidden", "false");
   renderVoiceWizardStep1Sample();
   wireVoiceWizardStep1Sample();
 }

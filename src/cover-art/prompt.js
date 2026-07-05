@@ -518,6 +518,10 @@ export function buildCoverNegativePrompt(avoidTags) {
   return `${NEGATIVE_TEXT_PROMPT}, ${extra.join(", ")}`;
 }
 
+export function moodPaletteForBucket(bucketKey) {
+  return MOOD_PALETTES[bucketKey] || MOOD_PALETTES.default;
+}
+
 function buildCoverSeed(input, storyTheme, bucketKey, userArtwork) {
   const songId = String(input?.songId || input?.id || "").trim();
   if (userArtwork) {
@@ -529,9 +533,10 @@ function buildCoverSeed(input, storyTheme, bucketKey, userArtwork) {
 
 /**
  * @param {object} input
+ * @param {{ sceneOverride?: string, artworkSourceOverride?: string, geminiModel?: string }} [options]
  * @returns {{ prompt: string, seed: number, bucket: string, visualMode: string, storyTheme: string, artworkSource: string, params: object }}
  */
-export function buildAbstractCoverPrompt(input) {
+export function buildAbstractCoverPrompt(input, options = {}) {
   const songId = String(input?.songId || input?.id || input?.title || "nabad-song").trim();
   const title = String(input?.title || "").trim();
   const genre = String(input?.genre || input?.style || "").trim().slice(0, 120);
@@ -543,42 +548,77 @@ export function buildAbstractCoverPrompt(input) {
   const sonicProfile = String(input?.sonicProfile || inferSonicProfile(`${genre} ${styleBlob}`));
   const userArtworkRaw = resolveUserArtworkPrompt(input);
   const userArtwork = sanitizeArtworkPrompt(userArtworkRaw, { title });
+  const sceneOverride = sanitizeArtworkPrompt(String(options.sceneOverride || "").trim(), { title });
 
   const { scene, visualMode, storyTheme, bucketKey } = buildSceneFromStory(input);
   const visualScene = toVisualOnlyPrompt(scene, { title });
+  const palette = moodPaletteForBucket(bucketKey);
   const composition = COMPOSITIONS[fnv1a(`${songId}:composition`) % COMPOSITIONS.length];
   const seed = buildCoverSeed(input, storyTheme, bucketKey, userArtwork);
-  const artworkSource = userArtwork ? "user_artwork" : "auto_story";
+  const artworkSource = sceneOverride
+    ? String(options.artworkSourceOverride || "gemini_scene")
+    : userArtwork
+      ? "user_artwork"
+      : "auto_story";
 
-  const parts = userArtwork
-    ? [
-        NO_TEXT_LEAD,
-        userArtwork,
-        NO_TEXT_REINFORCE,
-        SAFETY_PREFIX + USER_STYLE_CORE,
-        composition,
-        NO_TEXT_REINFORCE,
-        SAFETY_SUFFIX,
-      ]
-    : [
-        NO_TEXT_LEAD,
-        SAFETY_PREFIX + STYLE_CORE,
-        visualScene,
-        composition,
-        storyMoodPhrase(storyTheme),
-        bucketMoodPhrase(bucketKey),
-        tempoPhrase(tempo),
-        brightnessPhrase(brightness),
-        sonicPhrase(sonicProfile),
-        NO_TEXT_REINFORCE,
-        SAFETY_SUFFIX,
-      ];
+  let parts;
+  if (sceneOverride) {
+    parts = userArtwork
+      ? [
+          NO_TEXT_LEAD,
+          sceneOverride,
+          palette,
+          NO_TEXT_REINFORCE,
+          SAFETY_PREFIX + USER_STYLE_CORE,
+          composition,
+          NO_TEXT_REINFORCE,
+          SAFETY_SUFFIX,
+        ]
+      : [
+          NO_TEXT_LEAD,
+          SAFETY_PREFIX + STYLE_CORE,
+          sceneOverride,
+          palette,
+          composition,
+          storyMoodPhrase(storyTheme),
+          bucketMoodPhrase(bucketKey),
+          tempoPhrase(tempo),
+          brightnessPhrase(brightness),
+          sonicPhrase(sonicProfile),
+          NO_TEXT_REINFORCE,
+          SAFETY_SUFFIX,
+        ];
+  } else if (userArtwork) {
+    parts = [
+      NO_TEXT_LEAD,
+      userArtwork,
+      NO_TEXT_REINFORCE,
+      SAFETY_PREFIX + USER_STYLE_CORE,
+      composition,
+      NO_TEXT_REINFORCE,
+      SAFETY_SUFFIX,
+    ];
+  } else {
+    parts = [
+      NO_TEXT_LEAD,
+      SAFETY_PREFIX + STYLE_CORE,
+      visualScene,
+      composition,
+      storyMoodPhrase(storyTheme),
+      bucketMoodPhrase(bucketKey),
+      tempoPhrase(tempo),
+      brightnessPhrase(brightness),
+      sonicPhrase(sonicProfile),
+      NO_TEXT_REINFORCE,
+      SAFETY_SUFFIX,
+    ];
+  }
 
   return {
     prompt: parts.filter(Boolean).join(", "),
     seed,
     bucket: bucketKey,
-    visualMode: userArtwork ? "user_directed" : visualMode,
+    visualMode: sceneOverride || userArtwork ? "user_directed" : visualMode,
     storyTheme,
     artworkSource,
     params: {
@@ -591,11 +631,14 @@ export function buildAbstractCoverPrompt(input) {
       brightness,
       sonicProfile,
       bucket: bucketKey,
-      visualMode: userArtwork ? "user_directed" : visualMode,
+      brandPalette: palette,
+      visualMode: sceneOverride || userArtwork ? "user_directed" : visualMode,
       storyTheme,
       artworkSource,
       userArtwork: userArtwork || undefined,
       userArtworkRaw: userArtworkRaw || undefined,
+      geminiScene: sceneOverride || undefined,
+      geminiModel: options.geminiModel || undefined,
       coverWidth: POLLINATIONS_COVER_WIDTH,
       coverHeight: POLLINATIONS_COVER_HEIGHT,
     },

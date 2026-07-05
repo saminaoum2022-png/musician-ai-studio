@@ -6,6 +6,7 @@ const path = require("path");
 const { pathToFileURL } = require("url");
 const { verifyUser } = require("../_lib/credits-auth");
 const { applyCors } = require("../_lib/cors");
+const { tryGeminiCoverScene } = require("../_lib/gemini-cover-prompt");
 
 const MAX_FIELD = 160;
 const MAX_STYLE = 980;
@@ -54,11 +55,16 @@ module.exports = async function handler(req, res) {
     const songId = String(body?.songId || body?.id || "").trim();
     if (!songId) return sendJson(res, 400, { error: "songId is required." });
 
-    const { buildAbstractCoverPrompt, buildPollinationsUrl } = await getPromptModule();
+    const {
+      buildAbstractCoverPrompt,
+      buildPollinationsUrl,
+      moodPaletteForBucket,
+      classifyVisualBucket,
+    } = await getPromptModule();
 
     const avoidTagsInput = String(body?.avoidTagsInput || body?.avoidTags || "").trim().slice(0, MAX_FIELD);
 
-    const { prompt, seed, bucket, visualMode, storyTheme, artworkSource, params } = buildAbstractCoverPrompt({
+    const coverInput = {
       songId,
       title: String(body?.title || "").trim().slice(0, MAX_FIELD),
       genre: String(body?.genre || body?.style || "").trim().slice(0, MAX_FIELD),
@@ -74,7 +80,36 @@ module.exports = async function handler(req, res) {
       finalPrompt: String(body?.finalPrompt || "").trim().slice(0, MAX_FIELD),
       artworkStyle: String(body?.artworkStyle || "").trim().slice(0, MAX_ARTWORK),
       artworkHint: String(body?.artworkHint || "").trim().slice(0, MAX_ARTWORK),
-    });
+    };
+
+    const bucketKey = classifyVisualBucket(coverInput);
+    const brandPalette = moodPaletteForBucket(bucketKey);
+    const artworkHint = String(coverInput.artworkHint || coverInput.artworkStyle || "").trim();
+
+    let geminiScene = "";
+    let geminiModel = "";
+    try {
+      const gem = await tryGeminiCoverScene(coverInput, {
+        bucketKey,
+        palette: brandPalette,
+        artworkHint,
+      });
+      if (gem?.ok && gem.scene) {
+        geminiScene = gem.scene;
+        geminiModel = gem.model || "";
+      }
+    } catch (e) {
+      console.warn("[music/cover-art] gemini scene skipped", e?.message || e);
+    }
+
+    const promptOpts = geminiScene
+      ? { sceneOverride: geminiScene, artworkSourceOverride: "gemini_scene", geminiModel }
+      : {};
+
+    const { prompt, seed, bucket, visualMode, storyTheme, artworkSource, params } = buildAbstractCoverPrompt(
+      coverInput,
+      promptOpts,
+    );
 
     const upstreamUrl = buildPollinationsUrl(prompt, seed, { avoidTags: avoidTagsInput });
     const upstream = await fetch(upstreamUrl, {

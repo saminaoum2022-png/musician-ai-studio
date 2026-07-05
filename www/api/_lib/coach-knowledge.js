@@ -52,14 +52,12 @@ ANALYTICS — see who listened (owner-only, private to you):
 
 MUSIC PRESENCE — let friends see what you're into:
 - Music presence lets your friends see what you're currently playing or creating ("Now Playing"). It only appears in Settings when you're signed in.
-- In Settings → "Music presence": toggle **"Show my activity"** on/off (subtitle: friends only — share what you're playing or creating). Toggle **"Hide song titles"** to show "Now Playing" without the track name. Visibility is always friends-only — there is no public option. It's fully optional.
-- Profile **Privacy** (Settings → Account → "Privacy") is separate: it controls whether your public profile is visible to others.
+- In Settings → "Music presence": toggle "Show my activity" on/off, and toggle "Hide song titles" (shows "Now Playing" without the track name). Visibility is "Friends only". It's fully optional.
 
 PUBLISHING & PRIVACY OF SONGS:
 - New songs are PRIVATE by default — they live ONLY on the device you made them on (your local library) and only you can see them. A private song is not posted to your public profile until you publish it.
-- IMPORTANT — private songs are NOT backed up to your cloud account and do NOT sync to your other devices. So a private song won't appear when you sign in on another phone or after reinstalling, and if you delete it, it's gone for good. **Exception:** if you sign out and sign back in on the **same device**, your unpublished drafts on that device are kept and come back. (The audio is still saved on that device so the draft keeps playing there and publishing it later is instant.) If a song matters to you and you want it kept safely / available everywhere, **PUBLISH** it.
+- IMPORTANT — private songs are NOT backed up to your account and do NOT sync to your other devices. So a private song won't appear when you sign in on another phone or after reinstalling, and if you delete it, it's gone for good. (The audio is still saved on that device so the draft keeps playing there and publishing it later is instant.) If a song matters to you and you want it kept safely / available everywhere, PUBLISH it.
 - PUBLISHING is what saves a song to your NabadAi account: a published song is kept permanently and shows up on any device you sign in to, plus your public profile and Discover. To share a song publicly, open it and tap "Publish" (the "Release this song" sheet). You can add an optional release note and choose whether to "Allow others to remix this song" and "Allow others to use it in mashups".
-- If the song isn't archived to permanent storage yet, publish shows **"Publishing…"** right away (you don't wait on a spinner) — archiving and going live finish in the background, and you'll get a toast when it's live. If you close the app mid-publish, it **auto-resumes** when you reopen the app.
 - To make it private again, use "Hide from public profile" — it's removed from your public profile and Discover, but your own copy stays.
 - Deleting a song removes it from your library ("Remove from your Library?"); you can also multi-select and delete several at once. Songs generated together (the A and B variants) are independent — deleting one does not delete the other.
 
@@ -130,39 +128,36 @@ NABADAI STUDIO — record your real voice over a song:
   - If a project draft exists, use **Continue Draft** on Create or reopen it from Studio **Projects**.
 
 DISCOVER, CHALLENGES, PLAYLISTS, SEARCH:
-- Discover: browse the feed with tabs (For You, Templates, Challenges, Remixes, All), and the "Top This Week" chart — the top songs ranked by plays and reactions over the last 7 days (it lists 10). **The play count on the chart is "plays this week" (a rolling 7-day window), not all-time total plays** — all-time plays appear elsewhere (song cards, profile stats). You may get a notification when one of your songs enters the chart or hits a new peak rank. On feed posts you can Like and Reply.
+- Discover: browse the feed with tabs (For You, Templates, Challenges, Remixes, All), and the "Top This Week" chart — the top songs ranked by plays and reactions over the last 7 days (it lists 10). You may get a notification when one of your songs enters the chart or hits a new peak rank. On feed posts you can Like and Reply.
 - Search: tap the magnifier on Discover to find songs, creators, and ideas; it shows popular searches.
 - Challenges: themed prompts (and live events/campaigns) you join by creating a song for that theme.
 - Playlists: add songs to playlists to organize what you like (Profile → Playlist). Playlists are kept on your device.
 
 CREDITS — balance and what each action costs:
-- Some actions use credits. See your balance on your Profile and under Settings → "Credits & plan" → **Credits** (one screen: balance, redeem promo codes, and recent activity). Paid subscriptions are "Coming soon"; for more credits you can redeem a promo code on that page or contact support at help@nabadai.com.
+- Some actions use credits. See your balance on your Profile and under Settings → "Credits & plan" (also a "Credits" page). You add credits by redeeming a promo code ("Redeem code") — each code can be used once per account. Paid subscriptions are "Coming soon"; for more credits you can also contact support at help@nabadai.com.
 - Costs: generating a song = 12 credits (returns 2 variations); a Mashup = 12 credits; a Remix = 10 credits; saving a Persona = 5 credits; a Sound = 2.5 credits; getting the instrumental version = 2 credits.
 - Free: writing/refining lyrics with AI, the "✦ Boost style" suggestions, suggesting artwork, the Voice Lab scan, and generating a music video.
 - If a generation can't be completed, the credits for it are refunded automatically.
 
 PROFILE & SOCIAL:
-- Your Profile has tabs: Posts (your published activity), Songs (your full library), **My Vocals** (studio recordings you saved from NabadAi Studio — see Studio section), and Playlist. It shows your Songs, Plays, and **Fans** stats. Edit your profile (photo, display name, username, bio, genres, social links) from **Profile → Edit** (the edit control on your profile header) — not from Settings.
-- **Fans (fan terminology):** The app uses warm "fan" language in the UI instead of "follow". On-screen labels include **"Become a fan"**, **"Fan"** (compact button), **"You're a fan"**, **"Your fan"** (someone who fanned you), and **"Mutual fans"** when you fan each other. To stop, confirm **unfan** when prompted. Profile stats say **Fans** (not "followers"). Notifications say things like "@handle became your fan". The bottom tab is still labelled **Friends** — that's your social home: activity from creators you fan, plus Messages.
-- **Friends feed:** Fan musicians from Discover (or their profile) to see their drops, remixes, and posts here. Empty state: "Fan musicians to see activity" / "Who to fan" suggestions. Reposting shares to **your fans**.
+- Your Profile has tabs: Posts (your published activity), Songs (your full library), **My Vocals** (studio recordings you saved from NabadAi Studio — see Studio section), and Playlist. It shows your Songs, Plays, and Fans stats.
+- You can become a fan of other creators. When two people fan each other, they can message each other directly; otherwise you can send a message request.
 - On someone else's song you can Repost it. Use the "…" (more options) menu on a profile to Report user or Block user.
 
 MESSAGES & FRIENDS:
-- Messages has filters: All, Requests, Chats. You can message people you **mutually fan**; if you're not mutual fans yet, send a message request.
-- The NabadAi Coach (this assistant) is pinned at the top of your Messages inbox (under the Friends tab).
+- Messages has filters: All, Requests, Chats. You can message people you mutually fan; if you're not mutual fans yet, send a message request.
+- The NabadAi Coach (this assistant) is pinned at the top of your Messages inbox.
 - You can block or report users from their profile if needed; manage blocks in Settings → "Blocked accounts".
 
-SETTINGS (Profile → Settings) — sections:
-- Account: "Music styles" (personalize your For You feed), "Push alerts", "Privacy" (public profile toggle), "Member ID" (when signed in), and Sign in / Sign out.
+SETTINGS (in Profile) — sections:
+- Account: "Edit profile" (name, bio, avatar, public songs), "Music styles" (personalize your For You feed), "Push alerts", "Privacy", and Sign in.
 - Music presence (signed-in only): see above.
-- NabadAi Orb: Always on / Smart / Status only — controls the floating coach orb on main tabs.
-- Credits & plan: **Credits** (balance, redeem codes, activity), **Subscription — Coming soon**.
-- Creator tools: "Voice Lab" (voice scan and range labels).
-- Your voices: record and manage Personas (sync across devices).
+- Credits & plan: "Manage credits", "Redeem code", "Subscription — Coming soon".
+- Creator tools: "Sounds", "Voice Lab" (voice scan and range labels).
 - Safety: "Blocked accounts".
 - Support: "Help & FAQ", "Terms & Privacy", "Contact support".
 - About: app name and version.
-- Danger zone: "Sign out" and "Delete account" (permanent). Sign-out keeps unpublished drafts on **this device**; publish songs you want kept in your account on every device.
+- Danger zone: "Sign out" and "Delete account" (permanent).
 
 ACCOUNT HELP (what the Coach can and cannot do):
 - The Coach can EXPLAIN how to do things (e.g. "how do I reset my password" -> guide them to the sign-in screen's reset option, or Settings; "how do I get more credits" -> Settings → Credits & plan → Redeem code, or contact support).

@@ -23538,21 +23538,28 @@ button.discoverySpotCard{
   justify-content: space-evenly;
   align-items: flex-start;
   width: 100%;
-  margin: 22px 0 0;
+  --profile-seg-gap: 22px;
+  margin: var(--profile-seg-gap) 0 0;
   padding: 0;
   background: none;
   border: 0;
   box-shadow: none;
 }
 .profileSegBar--dual{
-  margin: 18px 0 6px;
+  margin: 18px 0 0;
 }
 .profileSegBar--dual .profileSegTab{
   flex: 1 1 0;
 }
+.profileSongsBlock > .profileActivitiesList:not([hidden]),
+.profileSongsBlock > .profileRepostsList:not([hidden]),
+.userPublicSongsBlock > #userPublicSongs:not([hidden]),
+.userPublicSongsBlock > #userPublicRepostsList:not([hidden]){
+  margin-top: var(--profile-seg-gap, 22px);
+}
 .userPublicRepostsList,
 .profileRepostsList{
-  margin-top: 4px;
+  margin-top: 0;
 }
 body[data-user-public-seg="posts"] .userPublicRepostsCount{
   display: none !important;
@@ -33689,11 +33696,14 @@ section.mentorPage{
 #userPublicRepostsList.followActStack .followAct.followAct--xstyle + .followAct.followAct--xstyle{
   padding-top: var(--feed-post-divider-gap, 12px);
 }
-.friendsPage .followActStack .followAct.followAct--xstyle:first-child,
+.friendsPage .followActStack .followAct.followAct--xstyle:first-child{
+  padding-top: 10px;
+}
 .profileActivitiesList.followActStack .followAct.followAct--xstyle:first-child,
 #profileRepostsList.followActStack .followAct.followAct--xstyle:first-child,
+#userPublicSongs.followActStack .followAct.followAct--xstyle:first-child,
 #userPublicRepostsList.followActStack .followAct.followAct--xstyle:first-child{
-  padding-top: 10px;
+  padding-top: 0;
 }
 /* And undo the `.followAct--music/--status` left/right padding override
  * that the friends scope applies, which would otherwise pull the row

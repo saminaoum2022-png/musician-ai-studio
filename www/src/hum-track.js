@@ -277,6 +277,7 @@ function finishHumTrackSuccess(taskId, instrumentId, tracks) {
       }),
     );
   });
+  ctx?.cancelParallelCoverForTask?.(taskId);
   ctx?.clearGenerationPending?.(taskId);
   try {
     ctx?.pushLocalGenerationReadyActivity?.(savedEntries.filter(Boolean));
@@ -306,6 +307,7 @@ function failHumTrackGeneration(taskId, message) {
   stopHumTrackPolling();
   humTrackGenerating = false;
   humTrackTaskId = "";
+  ctx?.cancelParallelCoverForTask?.(taskId);
   ctx?.clearGenerationPending?.(taskId);
   try {
     ctx?.cancelCoachGenerationStatus?.();
@@ -375,6 +377,22 @@ function startHumTrackPolling(taskId, instrumentId) {
 function armHumTrackGeneration(taskId, instrumentId, label) {
   humTrackTaskId = taskId;
   humTrackGenerating = true;
+  const preset = getHumTrackPreset(instrumentId);
+  const baseTitle = `Hum Track · ${label}`;
+  ctx?.startParallelCoverForTask?.(
+    taskId,
+    ctx.buildParallelCoverVariants?.(taskId, {
+      title: baseTitle,
+      meta: {
+        humTrack: true,
+        instrument: instrumentId,
+        instrumentLabel: label,
+        styleInput: preset.style,
+        styleSent: preset.style,
+      },
+      variantCount: ctx?.generationVariantCount || 2,
+    }) || [],
+  );
   ctx?.setGenerationPending?.({
     taskId,
     title: `Hum Track · ${label}`,

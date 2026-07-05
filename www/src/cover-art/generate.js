@@ -1,7 +1,7 @@
 /**
  * Client-side abstract cover generation via /api/music/cover-art
  */
-import { coverArtParamsFromTrack, shouldUseAbstractCover } from "./params.js";
+import { coverArtParamsFromTrack, isPollinationsCoverEligible, shouldUseAbstractCover } from "./params.js";
 import { DEFAULT_SONG_COVER_URL, isDefaultSongCoverUrl } from "./placeholders.js";
 import { stampCoverWithSplashMark } from "./branding.js";
 
@@ -234,6 +234,196 @@ export function watchPendingCoverArt() {
 }
 
 let _backfillQueued = new Set();
+
+/** In-flight Pollinations jobs keyed by Suno taskId → variant key → entry. */
+const _parallelCoverByTask = new Map();
+
+/** Stable cover song id shared between parallel prefetch and addToLibrary. */
+export function parallelCoverSongId(taskId, variantKey = "A") {
+  const tid = String(taskId || "").trim();
+  const key = String(variantKey || "A").trim().toUpperCase() || "A";
+  if (!tid) return "";
+  return `pc_${tid.replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 40)}_${key}`;
+}
+
+function parallelVariantKeyFromTrack(track, fallback = "A") {
+  const explicit = String(track?.coverVariantKey || track?.meta?.variant || "").trim().toUpperCase();
+  if (explicit === "A" || explicit === "B") return explicit;
+  const title = String(track?.title || "").trim();
+  if (/\bB$/i.test(title) || title.endsWith(" B")) return "B";
+  return fallback;
+}
+
+/**
+ * Start Pollinations while Suno is still generating (same params as library row will use).
+ * @param {string} taskId
+ * @param {{ key?: string, title?: string, meta?: object }[]} variants
+ */
+export function startParallelCoverForTask(taskId, variants) {
+  const tid = String(taskId || "").trim();
+  if (!tid || !Array.isArray(variants) || !variants.length) return;
+
+  cancelParallelCoverForTask(tid);
+  const plan = new Map();
+
+  for (const row of variants) {
+    const key = String(row?.key || "A").trim().toUpperCase() || "A";
+    const meta = row?.meta && typeof row.meta === "object" ? row.meta : {};
+    if (!isPollinationsCoverEligible(meta)) continue;
+
+    const songId = parallelCoverSongId(tid, key);
+    if (!songId) continue;
+
+    const pseudoTrack = {
+      id: songId,
+      title: String(row?.title || "Untitled").trim() || "Untitled",
+      artUrl: DEFAULT_SONG_COVER_URL,
+      taskId: tid,
+      meta: {
+        ...meta,
+        variant: key,
+        pollinationsCoverPending: true,
+      },
+    };
+
+    /** @type {{ key: string, songId: string, result: object|null, job: Promise<object|null> }} */
+    const entry = {
+      key,
+      songId,
+      result: null,
+      job: Promise.resolve(null),
+    };
+
+    entry.job = runParallelCoverJob(pseudoTrack, songId).then((result) => {
+      entry.result = result;
+      return result;
+    });
+    plan.set(key, entry);
+  }
+
+  if (plan.size) _parallelCoverByTask.set(tid, plan);
+}
+
+export function cancelParallelCoverForTask(taskId) {
+  _parallelCoverByTask.delete(String(taskId || "").trim());
+}
+
+/** Build A/B variant specs for standard two-output generations. */
+export function buildParallelCoverVariants(taskId, { title, meta, variantCount = 2 } = {}) {
+  const tid = String(taskId || "").trim();
+  if (!tid) return [];
+  const base = String(title || "Generated song").trim() || "Generated song";
+  const m = meta && typeof meta === "object" ? meta : {};
+  const count = Math.max(1, Math.min(2, Number(variantCount) || 2));
+  const rows = [
+    { key: "A", title: base, meta: { ...m, variant: "A" }, songId: parallelCoverSongId(tid, "A") },
+  ];
+  if (count > 1) {
+    const titleB = base.endsWith(" B") ? base : `${base} B`;
+    rows.push({
+      key: "B",
+      title: titleB,
+      meta: { ...m, variant: "B" },
+      songId: parallelCoverSongId(tid, "B"),
+    });
+  }
+  return rows;
+}
+
+async function runParallelCoverJob(track, songId) {
+  const params = coverArtParamsFromTrack(track);
+  if (!params.songId) return null;
+
+  let lastErr = null;
+  for (let attempt = 0; attempt < COVER_CLIENT_ATTEMPTS; attempt += 1) {
+    if (attempt > 0) {
+      await new Promise((r) => setTimeout(r, 1500 * attempt));
+    }
+    try {
+      const result = await fetchAbstractCoverArt(params);
+      const stampedUrl = await stampCoverWithSplashMark(result.dataUrl);
+      const patch = {
+        dataUrl: stampedUrl,
+        seed: result.seed,
+        bucket: result.bucket,
+        params: result.params || params,
+        clearCoverPending: true,
+      };
+      const patched = await enqueueLibraryPatch(() => patchLibraryTrackCover(songId, patch));
+      if (patched) {
+        const { persistTrackCoverIfNeeded } = d();
+        void persistTrackCoverIfNeeded?.(patched);
+        refreshPlayerIfTrack(patched);
+        return patch;
+      }
+      return patch;
+    } catch (e) {
+      lastErr = e;
+      try {
+        console.warn(
+          "[cover-art]",
+          attempt < COVER_CLIENT_ATTEMPTS - 1 ? "parallel retry pending" : "parallel failed",
+          e?.message || e,
+        );
+      } catch {}
+    }
+  }
+
+  try {
+    console.warn("[cover-art]", lastErr?.message || lastErr || "Parallel cover generation failed");
+  } catch {}
+  return null;
+}
+
+/** Apply a prefetched cover when the library row lands (or return true if already patched). */
+export async function applyParallelCoverForTrack(track) {
+  const tid = String(track?.taskId || "").trim();
+  const key = parallelVariantKeyFromTrack(track);
+  if (!tid) return false;
+
+  const plan = _parallelCoverByTask.get(tid);
+  const entry = plan?.get(key);
+  if (!entry) return false;
+
+  const id = String(track?.id || entry.songId || "").trim();
+  if (!id) return false;
+
+  if (entry.result?.dataUrl) {
+    const patched = await enqueueLibraryPatch(() =>
+      patchLibraryTrackCover(id, { ...entry.result, clearCoverPending: true }),
+    );
+    if (patched) {
+      const { persistTrackCoverIfNeeded } = d();
+      void persistTrackCoverIfNeeded?.(patched);
+      refreshPlayerIfTrack(patched);
+      return true;
+    }
+  }
+
+  if (entry.job) {
+    const result = await entry.job;
+    if (result?.dataUrl) {
+      const patched = await enqueueLibraryPatch(() =>
+        patchLibraryTrackCover(id, { ...result, clearCoverPending: true }),
+      );
+      if (patched) {
+        const { persistTrackCoverIfNeeded } = d();
+        void persistTrackCoverIfNeeded?.(patched);
+        refreshPlayerIfTrack(patched);
+        return true;
+      }
+    }
+  }
+
+  return false;
+}
+
+export function resolveParallelCoverSongId(track) {
+  const tid = String(track?.taskId || "").trim();
+  if (!tid) return "";
+  const key = parallelVariantKeyFromTrack(track);
+  return parallelCoverSongId(tid, key);
+}
 
 /** Retry library rows still on the music-note placeholder (race or transient API fail). */
 export function backfillPendingAbstractCovers(items) {

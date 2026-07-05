@@ -61,6 +61,11 @@ import {
   ensureAbstractCoverForTrack,
   backfillPendingAbstractCovers,
   watchPendingCoverArt,
+  startParallelCoverForTask,
+  cancelParallelCoverForTask,
+  buildParallelCoverVariants,
+  applyParallelCoverForTrack,
+  resolveParallelCoverSongId,
 } from "./cover-art/generate.js";
 import { isPollinationsCoverEligible, shouldUseAbstractCover } from "./cover-art/params.js";
 import { DEFAULT_SONG_COVER_URL, isLogoCoverUrl, normalizeSongCoverUrl, playerEmptyArtUrl } from "./cover-art/placeholders.js";
@@ -165,7 +170,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260705-225614";
+const APP_BUILD = "20260705-230956";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -4890,6 +4895,9 @@ try {
     coachHumTrackGeneratingPillText,
     pushLocalGenerationReadyActivity,
     maybeNotifyJobReadyPush,
+    startParallelCoverForTask,
+    buildParallelCoverVariants,
+    cancelParallelCoverForTask,
     voidRefreshProfile: () => {
       try {
         renderProfileSongs();
@@ -40165,8 +40173,9 @@ function addToLibrary(track) {
   // for this song again — lift any deletion tombstone for it.
   clearLibraryTombstonesForTrack(track);
   const stampedMeta = stampNabadVerificationMeta(track.meta, track);
+  const parallelId = resolveParallelCoverSongId(track);
   const newTrack = {
-    id: `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+    id: String(track.id || parallelId || "").trim() || `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
     ts: Date.now(),
     title: track.title || "Generated song",
     artUrl: track.artUrl || "",
@@ -40209,7 +40218,8 @@ function addToLibrary(track) {
     // one exists, since PATCH matches nothing).
     await persistTrackCoverIfNeeded(newTrack);
     queueArchiveLibraryTrack(newTrack);
-    if (shouldUseAbstractCover(newTrack)) {
+    const parallelApplied = await applyParallelCoverForTrack(newTrack);
+    if (!parallelApplied && shouldUseAbstractCover(newTrack)) {
       void ensureAbstractCoverForTrack(newTrack);
     }
     try { backfillPendingAbstractCovers(loadLibrary()); } catch {}
@@ -46964,6 +46974,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
     setGenerateBtn("Generate song", false, "generate");
     savePendingBackendTask("");
     clearGenerationPending(sunoTaskId || loadPendingBackendTask());
+    cancelParallelCoverForTask(sunoTaskId || loadPendingBackendTask());
     syncGenerationPendingLibraryUi();
     // Keep the vocal reference intact on failure so the user can retry
     // immediately instead of having to re-record. We only clear it on a
@@ -47067,7 +47078,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
               taskId: sunoTaskId || "",
               audioId: sunoAudioId || "",
               kind: "full",
-              meta: genMeta,
+              meta: { ...genMeta, variant: "A" },
             });
             const savedEntries = [variantAEntry].filter(Boolean);
             if (lastSunoProxyUrl2 || lastSunoFullUrl2) {
@@ -47078,9 +47089,10 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
                 taskId: sunoTaskId || "",
                 audioId: lastSunoAudioId2 || "",
                 kind: "full",
-                meta: genMeta,
+                meta: { ...genMeta, variant: "B" },
               }));
             }
+            cancelParallelCoverForTask(sunoTaskId || "");
             const genTaskId = sunoTaskId || "";
             clearGenerationPending(genTaskId);
             try {
@@ -47918,6 +47930,16 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
           source: imageMoodAppliedForNextGen ? "photo" : "",
         });
         syncGenerationPendingLibraryUi();
+        if (!imageMoodAppliedForNextGen && !pendingGeneratedCoverDataUrl && isPollinationsCoverEligible(lastGenerationMeta)) {
+          startParallelCoverForTask(
+            sunoTaskId,
+            buildParallelCoverVariants(sunoTaskId, {
+              title: String(els.sunoTitle?.value || "").trim() || "Generated song",
+              meta: lastGenerationMeta,
+              variantCount: GENERATION_VARIANT_COUNT,
+            }),
+          );
+        }
         try {
           beginCoachGenerationStatus({
             variantCount: GENERATION_VARIANT_COUNT,

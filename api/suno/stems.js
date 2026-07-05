@@ -39,6 +39,7 @@ const {
   isAdminEmail,
 } = require("../_lib/credits-auth");
 const { applyCors } = require("../_lib/cors");
+const { resolveHumTrackPreset } = require("../_lib/hum-track-presets");
 
 const MAX_UPLOAD_BYTES = 25 * 1024 * 1024;
 // Reference-audio generations (cover / extend / add-instrumental) all
@@ -164,6 +165,10 @@ module.exports = async function handler(req, res) {
       const dialectHint = String(body?.dialectHint || "").trim();
       const personaId = String(body?.personaId || "").trim();
       const negativeTags = String(body?.negativeTags || "").trim();
+      const instrumentPreset = String(body?.instrumentPreset || "")
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z0-9_]/g, "");
       // Optional weights for backing / mix modes. The client forwards
       // audioWeight=0.95, styleWeight=0.25 for those modes so Suno
       // tracks the uploaded vocal melody instead of letting the style
@@ -229,15 +234,28 @@ module.exports = async function handler(req, res) {
       const coverModes = new Set(["vocal_full", "vocal_cover", "song_remix", "song_cover", "vocal_instrumental"]);
       if (coverModes.has(referenceMode)) {
         const coverInstrumental = referenceMode === "vocal_instrumental";
-        // Enrich style with dialect only — uploaded audio drives melody and voice.
-        const coverStyle = buildCoverStyle({
-          baseStyle: style,
-          dialect,
-          dialectHint,
-          vocalGender,
-          voiceTimbre,
-        });
-        const coverNegative = trimNegativeTags(negativeTags);
+        const humTrackPreset = instrumentPreset ? resolveHumTrackPreset(instrumentPreset) : null;
+        // Hum Track: server-owned solo-instrument tags. Otherwise enrich user style.
+        const coverStyle = humTrackPreset
+          ? humTrackPreset.style
+          : buildCoverStyle({
+              baseStyle: style,
+              dialect,
+              dialectHint,
+              vocalGender,
+              voiceTimbre,
+            });
+        const coverNegative = humTrackPreset
+          ? humTrackPreset.negativeTags
+          : trimNegativeTags(negativeTags);
+        const coverStyleWeight =
+          humTrackPreset && audioWeight === null && styleWeight === null
+            ? 0.22
+            : styleWeight !== null
+            ? styleWeight
+            : 0.5;
+        const coverAudioWeight =
+          humTrackPreset && audioWeight === null && styleWeight === null ? 0.95 : audioWeight;
         const coverPayload = {
           uploadUrl,
           customMode: true,
@@ -246,8 +264,15 @@ module.exports = async function handler(req, res) {
           callBackUrl,
           prompt: coverInstrumental ? "" : (prompt || ""),
           style: coverStyle,
-          title: title || (coverInstrumental ? "Instrumental cover from reference" : "Cover from reference"),
-          styleWeight: 0.5,
+          title:
+            title ||
+            (humTrackPreset
+              ? `Hum Track · ${humTrackPreset.label}`
+              : coverInstrumental
+              ? "Instrumental cover from reference"
+              : "Cover from reference"),
+          styleWeight: coverStyleWeight,
+          ...(coverAudioWeight !== null ? { audioWeight: coverAudioWeight } : {}),
           ...(coverNegative ? { negativeTags: coverNegative } : {}),
           ...(vocalGender === "m" || vocalGender === "f" ? { vocalGender } : {}),
           ...(!coverInstrumental && personaId ? { personaId } : {}),

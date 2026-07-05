@@ -28412,6 +28412,7 @@ body[data-route="challenges"] .app{
 .homeDeskCreateStack .homeDeskPromo--quick,
 .homeDeskCreateStack .homeDeskPersonaPromo,
 .homeDeskCreateStack .homeDeskPhotoPromo,
+.homeDeskCreateStack .homeDeskHumTrackPromo,
 .homeDeskCreateStack .homeDeskSoundsPromo{
   padding: 12px 14px;
   gap: 12px;
@@ -28438,6 +28439,7 @@ body[data-route="challenges"] .app{
   transform: scale(0.64);
 }
 .homeDeskCreateStack .homeDeskPromo--quick .homeDeskPromoVisual--photo .homeDeskPhotoTileWrap,
+.homeDeskCreateStack .homeDeskPromo--quick .homeDeskPromoVisual--humtrack .homeDeskHumTrackTileWrap,
 .homeDeskCreateStack .homeDeskPromo--quick .homeDeskPromoVisual--persona .homeDeskPersonaTileWrap,
 .homeDeskCreateStack .homeDeskPromo--quick .homeDeskPromoVisual--sounds .homeDeskSoundsTileWrap{
   transform: scale(0.52);
@@ -28506,6 +28508,7 @@ body[data-route="challenges"] .app{
   transform-origin: center center;
 }
 .challengesPage.homeDesk .homeDeskQuickStartsStack .homeDeskPhotoPromo,
+.challengesPage.homeDesk .homeDeskQuickStartsStack .homeDeskHumTrackPromo,
 .challengesPage.homeDesk .homeDeskQuickStartsStack .homeDeskPersonaPromo,
 .challengesPage.homeDesk .homeDeskQuickStartsStack .homeDeskSoundsPromo{
   border: 1px solid rgba(255, 255, 255, 0.08);
@@ -28513,12 +28516,14 @@ body[data-route="challenges"] .app{
   box-shadow: none;
 }
 .challengesPage.homeDesk .homeDeskQuickStartsStack .homeDeskPhotoPromo:active,
+.challengesPage.homeDesk .homeDeskQuickStartsStack .homeDeskHumTrackPromo:active,
 .challengesPage.homeDesk .homeDeskQuickStartsStack .homeDeskPersonaPromo:active,
 .challengesPage.homeDesk .homeDeskQuickStartsStack .homeDeskSoundsPromo:active{
   background: rgba(255, 255, 255, 0.05);
   border-color: rgba(255, 255, 255, 0.12);
 }
 .challengesPage.homeDesk .homeDeskQuickStartsStack .homeDeskPhotoTile,
+.challengesPage.homeDesk .homeDeskQuickStartsStack .homeDeskHumTrackTile,
 .challengesPage.homeDesk .homeDeskQuickStartsStack .homeDeskPersonaTile,
 .challengesPage.homeDesk .homeDeskQuickStartsStack .homeDeskSoundsTile{
   background: rgba(255, 255, 255, 0.04);
@@ -28526,6 +28531,7 @@ body[data-route="challenges"] .app{
   box-shadow: none;
 }
 .challengesPage.homeDesk .homeDeskQuickStartsStack .homeDeskPhotoIco,
+.challengesPage.homeDesk .homeDeskQuickStartsStack .homeDeskHumTrackIco,
 .challengesPage.homeDesk .homeDeskQuickStartsStack .homeDeskSoundsIco{
   color: rgba(248, 250, 255, 0.82);
 }
@@ -44030,3 +44036,246 @@ html[data-theme="light"] .profileEditSheetTextarea{
   border-color: rgba(15, 23, 42, 0.08);
   color: rgba(15, 23, 42, 0.92);
 }
+
+/* ===================================================================
+ * Hum Track — quick start card + sheet
+ * =================================================================== */
+
+.homeDeskHumTrackTileWrap{
+  position: relative;
+  width: 108px;
+  height: 108px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.homeDeskHumTrackTile{
+  position: relative;
+  width: 72px;
+  height: 72px;
+  border-radius: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(255, 255, 255, 0.04);
+}
+.homeDeskHumTrackIco{
+  width: 28px;
+  height: 28px;
+  display: block;
+  color: rgba(248, 250, 255, 0.82);
+}
+.homeDeskCreateStack .homeDeskHumTrackIco{
+  width: 24px;
+  height: 24px;
+}
+.homeDeskPromoVisual--humtrack .homeDeskHumTrackTileWrap{
+  transform: scale(0.68);
+  transform-origin: center center;
+}
+
+body.humTrackSheetOpen .mobileTabbar{
+  opacity: 0.35;
+  pointer-events: none;
+}
+.humTrackSheet{
+  z-index: 126;
+}
+.humTrackSheetBackdrop{
+  background: rgba(4, 6, 12, 0.72);
+}
+.humTrackSheetCard{
+  background: rgba(12, 14, 20, 0.98);
+  border-color: rgba(255, 255, 255, 0.08);
+  box-shadow:
+    0 -20px 48px rgba(0, 0, 0, 0.55),
+    inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+.humTrackSheetHead{
+  border-bottom-color: rgba(255, 255, 255, 0.06);
+}
+.humTrackSheetBody{
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: 8px 18px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+.humTrackSection{
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.humTrackSectionLabel{
+  margin: 0;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(232, 238, 247, 0.42);
+}
+.humTrackChipRow{
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.humTrackChip{
+  -webkit-appearance: none;
+  appearance: none;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.03);
+  color: rgba(248, 250, 255, 0.86);
+  border-radius: 999px;
+  padding: 9px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 160ms ease, border-color 160ms ease, color 160ms ease;
+  -webkit-tap-highlight-color: transparent;
+}
+.humTrackChip.is-active{
+  border-color: rgba(255, 255, 255, 0.28);
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+}
+.humTrackRecordPanel{
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 18px 12px 8px;
+  border-radius: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  background: rgba(255, 255, 255, 0.02);
+}
+.humTrackRecordBtn{
+  -webkit-appearance: none;
+  appearance: none;
+  position: relative;
+  width: 84px;
+  height: 84px;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(248, 250, 255, 0.9);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform 140ms ease, background 160ms ease;
+}
+.humTrackRecordBtn:active{
+  transform: scale(0.96);
+}
+.humTrackRecordRing{
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+.humTrackRecordBtn.isRecording{
+  background: rgba(255, 77, 109, 0.08);
+}
+.humTrackRecordBtn.isRecording .humTrackRecordRing{
+  border-color: rgba(255, 77, 109, 0.55);
+  box-shadow: 0 0 0 4px rgba(255, 77, 109, 0.12);
+}
+.humTrackRecordIco{
+  width: 30px;
+  height: 30px;
+}
+.humTrackRecordStatus{
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.45;
+  text-align: center;
+  color: rgba(232, 238, 247, 0.72);
+  max-width: 28em;
+}
+.humTrackRecordMeta{
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: rgba(232, 238, 247, 0.48);
+}
+.humTrackUploadBtn{
+  -webkit-appearance: none;
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 4px;
+  padding: 9px 14px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(248, 250, 255, 0.82);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.humTrackUploadBtn:active{
+  opacity: 0.75;
+}
+.humTrackSimHint{
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.4;
+  text-align: center;
+  color: rgba(232, 238, 247, 0.38);
+  max-width: 26em;
+}
+.humTrackSheetFooter{
+  flex: 0 0 auto;
+  padding: 12px 18px calc(14px + env(safe-area-inset-bottom, 0px));
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(8, 10, 14, 0.96);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.humTrackGenerateBtn{
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 14px;
+  padding: 14px 16px;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: rgba(248, 250, 255, 0.96);
+  background: rgba(255, 255, 255, 0.08);
+  cursor: pointer;
+  transition: opacity 160ms ease, background 160ms ease, border-color 160ms ease;
+  -webkit-tap-highlight-color: transparent;
+}
+.humTrackGenerateBtn:disabled{
+  opacity: 0.42;
+  cursor: default;
+}
+.humTrackGenerateBtn:not(:disabled):active{
+  background: rgba(255, 255, 255, 0.12);
+}
+.humTrackFootnote{
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.4;
+  text-align: center;
+  color: rgba(232, 238, 247, 0.38);
+}
+.humTrackSheet.isGenerating .humTrackRecordBtn,
+.humTrackSheet.isGenerating .humTrackChip{
+  pointer-events: none;
+  opacity: 0.55;
+}
+

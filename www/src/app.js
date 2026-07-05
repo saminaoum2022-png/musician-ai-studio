@@ -31,6 +31,7 @@ import {
   setUserPublicSegActive,
 } from "./profile-seg-tabs.js";
 import { initEcho, openEchoFromCreateChooser } from "./echo.js";
+import { initHumTrack, bindHumTrackHomeCard, openHumTrackSheet } from "./hum-track.js";
 import {
   getInitialBootHash,
   getPostOnboardingHash,
@@ -144,7 +145,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260705-010438";
+const APP_BUILD = "20260705-123053";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -4838,6 +4839,31 @@ try {
   wireRouteLinkHapticsOnce();
   bindFriendsPageOnce();
   wireFriendsComposeFabOnce();
+} catch {}
+try {
+  initHumTrack({
+    apiUrl,
+    getAuthSession: () => authSession,
+    getSupabaseAuthToken,
+    computeBytesFingerprint,
+    trackCreditsAround,
+    addToLibrary,
+    toAudioProxyUrl,
+    extractTaskIdLoose,
+    pickRecorderMimeType,
+    latestSunoModel: LATEST_SUNO_MODEL,
+    haptic,
+    showToast,
+    mountFixedOverlaysToBody,
+    setPostAuthReturnHash,
+    scheduleApplyRoute,
+    recordCreateActivity,
+    voidRefreshProfile: () => {
+      try {
+        renderProfileSongs();
+      } catch {}
+    },
+  });
 } catch {}
 try {
   initEcho({
@@ -9741,6 +9767,9 @@ function bindHomeDeskOnce(page) {
   if (!page || page.dataset.boundHomeDesk === "1") return;
   page.dataset.boundHomeDesk = "1";
   wireHomeDeskSegOnce();
+  try {
+    bindHumTrackHomeCard(page);
+  } catch {}
   page.addEventListener("click", (e) => {
     const promoCard = e.target?.closest?.("[data-home-card]");
     if (promoCard && page.contains(promoCard)) {
@@ -9769,6 +9798,10 @@ function bindHomeDeskOnce(page) {
           return;
         }
         openImageMoodSheet();
+        return;
+      }
+      if (card === "humtrack") {
+        openHumTrackSheet();
         return;
       }
       if (card === "mashup") {
@@ -12430,7 +12463,7 @@ function openFriendsComposeSheet() {
   }
 }
 
-const FIXED_OVERLAY_IDS = ["createChooserSheet", "friendsComposeSheet", "imageMoodModal"];
+const FIXED_OVERLAY_IDS = ["createChooserSheet", "friendsComposeSheet", "imageMoodModal", "humTrackSheet"];
 
 /** Keep full-screen overlays on `body` — `main.grid.routeSwap` transform breaks iOS touch on fixed children. */
 function mountFixedOverlaysToBody() {

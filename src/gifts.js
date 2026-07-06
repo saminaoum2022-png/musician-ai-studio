@@ -2,7 +2,8 @@
  * Post gifts — send paid or promo credits to another creator (never re-gift received gifts).
  */
 
-import { GIFT_TIER_OPTIONS, giftTierName } from "./gift-tier-icons.js";
+import { GIFT_TIER_OPTIONS } from "./gift-tier-icons.js";
+import { showGiftSentOverlay } from "./gift-sent-overlay.js";
 
 const GIFT_TIERS = GIFT_TIER_OPTIONS.map((o) => o.tier);
 
@@ -175,14 +176,8 @@ async function sendGift(amount) {
       } catch {}
       return;
     }
-    try {
-      _deps?.haptic?.("success");
-    } catch {}
-    const name = giftTierName(amount);
-    _deps?.showToast?.(`${name} sent · ${amount} credit${amount === 1 ? "" : "s"}`, {
-      durationMs: 2600,
-    });
     closeGiftSheet();
+    showGiftSentOverlay(amount, { haptic: _deps?.haptic });
     if (typeof _deps?.refreshCredits === "function") {
       await _deps.refreshCredits({ silent: true });
     }

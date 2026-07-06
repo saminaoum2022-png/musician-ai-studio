@@ -20351,6 +20351,112 @@ a.vwPrimary,
 .giftSheetTier:disabled .giftSheetTierIcon{
   color: rgba(255,255,255,0.55);
 }
+
+/* Gift sent — premium center overlay (~1s, transparent backdrop) */
+.giftSentOverlay{
+  position: fixed;
+  inset: 0;
+  z-index: 130;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  pointer-events: none;
+  background: transparent;
+}
+.giftSentOverlay[hidden]{
+  display: none !important;
+}
+.giftSentStage{
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  opacity: 0;
+  transform: scale(0.75);
+  will-change: transform, opacity;
+}
+.giftSentOverlay.isActive .giftSentStage{
+  animation: giftSentReveal 1000ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+@keyframes giftSentReveal{
+  0%{
+    opacity: 0;
+    transform: scale(0.75);
+  }
+  12%{
+    opacity: 1;
+    transform: scale(1.15);
+  }
+  28%{
+    opacity: 1;
+    transform: scale(1);
+  }
+  72%{
+    opacity: 1;
+    transform: scale(1);
+  }
+  100%{
+    opacity: 0;
+    transform: scale(1);
+  }
+}
+.giftSentIconStack{
+  position: relative;
+  width: 76px;
+  height: 76px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.giftSentGlow{
+  position: absolute;
+  inset: -18px;
+  border-radius: 50%;
+  pointer-events: none;
+  filter: blur(26px);
+  opacity: 0.95;
+}
+.giftSentStage--mic .giftSentGlow{
+  background: rgba(242, 244, 248, 0.25);
+}
+.giftSentStage--mic .giftSentSvg{
+  color: #F2F4F8;
+}
+.giftSentStage--pulse .giftSentGlow{
+  background:
+    radial-gradient(circle at 42% 50%, rgba(124, 92, 255, 0.28) 0%, transparent 68%),
+    radial-gradient(circle at 62% 44%, rgba(34, 230, 210, 0.20) 0%, transparent 62%);
+}
+.giftSentStage--star .giftSentGlow{
+  background: rgba(255, 209, 102, 0.30);
+}
+.giftSentIcon{
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.giftSentSvg{
+  width: 46px;
+  height: 46px;
+  display: block;
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.giftSentLabel{
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+  color: rgba(255, 255, 255, 0.94);
+  text-shadow: 0 1px 14px rgba(0, 0, 0, 0.38);
+}
+
 .creditsCard{
   border-radius: 16px;
   border: 1px solid rgba(255,255,255,0.10);

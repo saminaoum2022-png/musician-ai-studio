@@ -48,7 +48,7 @@ module.exports = async function handler(req, res) {
     paidBalance: bucketsReady ? paidBalance : balance,
     giftBalance: bucketsReady ? giftBalance : 0,
     promoBalance: bucketsReady ? promoBalance : 0,
-    giftableBalance: bucketsReady ? paidBalance : 0,
+    giftableBalance: bucketsReady ? paidBalance + promoBalance : 0,
     bucketsReady,
     ledger,
     isAdmin: isAdminEmail(user.email),

@@ -3,8 +3,8 @@
 --
 -- Rules:
 --   paid_balance   — purchased / admin-granted; can gift + generate
---   gift_balance   — received from others; generate only (not re-giftable)
---   promo_balance  — promo codes; generate only (not giftable)
+--   gift_balance   — received from others; generate only (never re-giftable)
+--   promo_balance  — promo codes; giftable for testing + generate (never re-gift received gifts)
 --   balance        — total (paid + gift + promo), kept in sync
 
 begin;
@@ -278,7 +278,7 @@ $$;
 revoke all on function public.grant_paid_credits(uuid, numeric, text) from public;
 grant execute on function public.grant_paid_credits(uuid, numeric, text) to service_role;
 
--- Send gift: only paid_balance is debited; recipient gets gift_balance.
+-- Send gift: paid + promo can be sent (testing); gift_balance never sent. Recipient gets gift_balance.
 create or replace function public.send_gift(
   p_sender_id uuid,
   p_recipient_id uuid,
@@ -296,6 +296,9 @@ declare
   v_gift_id uuid;
   v_recent integer;
   v_allowed numeric(14, 4)[];
+  v_giftable numeric(14, 4);
+  v_from_paid numeric(14, 4) := 0;
+  v_from_promo numeric(14, 4) := 0;
 begin
   if p_sender_id is null or p_recipient_id is null then
     return json_build_object('ok', false, 'status', 'bad_request', 'message', 'Missing users.');
@@ -324,15 +327,20 @@ begin
   end if;
 
   select * into v_sender from public.user_credits where user_id = p_sender_id for update;
-  if not found or v_sender.paid_balance < p_amount then
+  v_giftable := coalesce(v_sender.paid_balance, 0) + coalesce(v_sender.promo_balance, 0);
+  if not found or v_giftable < p_amount then
     return json_build_object(
       'ok', false,
-      'status', 'insufficient_paid',
-      'message', 'Not enough paid credits to gift. Only purchased credits can be gifted.',
+      'status', 'insufficient_giftable',
+      'message', 'Not enough credits to gift. Paid and promo credits can be sent — received gift credits cannot.',
       'paid_balance', coalesce(v_sender.paid_balance, 0),
-      'giftable', coalesce(v_sender.paid_balance, 0)
+      'promo_balance', coalesce(v_sender.promo_balance, 0),
+      'giftable', v_giftable
     );
   end if;
+
+  v_from_paid := least(coalesce(v_sender.paid_balance, 0), p_amount);
+  v_from_promo := p_amount - v_from_paid;
 
   select * into v_recipient from public.user_credits where user_id = p_recipient_id for update;
   if not found then
@@ -343,7 +351,8 @@ begin
 
   update public.user_credits
     set balance = balance - p_amount,
-        paid_balance = paid_balance - p_amount,
+        paid_balance = paid_balance - v_from_paid,
+        promo_balance = promo_balance - v_from_promo,
         updated_at = now()
     where user_id = p_sender_id
     returning * into v_sender;
@@ -371,6 +380,8 @@ begin
     'amount', p_amount,
     'sender_balance', v_sender.balance,
     'sender_paid_balance', v_sender.paid_balance,
+    'sender_promo_balance', v_sender.promo_balance,
+    'giftable', coalesce(v_sender.paid_balance, 0) + coalesce(v_sender.promo_balance, 0),
     'recipient_balance', v_recipient.balance,
     'recipient_gift_balance', v_recipient.gift_balance
   );

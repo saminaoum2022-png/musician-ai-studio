@@ -2,7 +2,8 @@
  * POST /api/gifts/send
  * Body: { targetKind: "song"|"status", targetId, amount: 1|3|5, recipientUserId? }
  *
- * Only paid_balance can be gifted. Recipient receives gift_balance (create-only, not re-giftable).
+ * Paid + promo credits can be gifted (testing). gift_balance is never sent.
+ * Recipient receives gift_balance (create-only, not re-giftable).
  */
 const {
   verifyUser,
@@ -80,7 +81,7 @@ module.exports = async function handler(req, res) {
   const out = rpc.data || {};
   if (!rpc.ok || out.ok === false) {
     const status =
-      out.status === "insufficient_paid" ? 402 :
+      out.status === "insufficient_giftable" || out.status === "insufficient_paid" ? 402 :
       out.status === "rate_limited" ? 429 :
       400;
     return sendJson(res, status, {

@@ -172,7 +172,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260706-171249";
+const APP_BUILD = "20260706-172641";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -5055,7 +5055,10 @@ try {
     getAuthToken: getSupabaseAuthToken,
     getAuthUserId: () => String(authSession?.user?.id || "").trim(),
     getGiftableBalance: () =>
-      Number(creditsState.giftableBalance ?? creditsState.paidBalance ?? 0),
+      Number(
+        creditsState.giftableBalance ??
+          (Number(creditsState.paidBalance ?? 0) + Number(creditsState.promoBalance ?? 0))
+      ),
     formatCreditsAmount,
     refreshCredits: refreshMyCredits,
     showToast,

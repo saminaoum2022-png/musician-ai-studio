@@ -1,5 +1,5 @@
 /**
- * Post gifts — send paid credits to another creator from a published post.
+ * Post gifts — send paid or promo credits to another creator (never re-gift received gifts).
  */
 
 const GIFT_TIERS = [1, 3, 5];
@@ -38,12 +38,12 @@ function paintGiftSheet() {
     ? `Support @${p.recipientHandle} · ${title}`
     : `Support this creator · ${title}`;
   const giftable = Number(_deps?.getGiftableBalance?.() || 0);
-  avail.textContent = `${_deps?.formatCreditsAmount?.(giftable) ?? giftable} paid credits available to gift`;
+  avail.textContent = `${_deps?.formatCreditsAmount?.(giftable) ?? giftable} credits available to gift`;
   if (note) {
     note.textContent =
       giftable > 0
-        ? "Only purchased (paid) credits can be gifted. Received gift credits stay in your balance for creating."
-        : "You need paid credits to gift. Promo and received gift credits cannot be sent.";
+        ? "Paid and promo credits can be gifted. Received gift credits are for creating only."
+        : "You need paid or promo credits to gift. Received gift credits cannot be sent.";
   }
   const tierWrap = el("giftSheetTiers");
   if (tierWrap) {

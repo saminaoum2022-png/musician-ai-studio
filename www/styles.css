@@ -35510,7 +35510,6 @@ section.mentorPage{
 .followActActIco--comment,
 .followActActIco--like,
 .followActActIco--plays,
-.followActActIco--gift,
 .followActActIco--analytics{
   fill: none;
   stroke: currentColor;
@@ -35518,11 +35517,18 @@ section.mentorPage{
   stroke-linecap: round;
   stroke-linejoin: round;
 }
+.followActActIco--comment{
+  transform: translateY(0);
+}
+.followActActIco--like{
+  transform: translateY(0);
+}
 .followActActIco--gift{
-  transform: translateY(0.5px) scale(1.06);
+  transform: translateY(0);
+  fill: none;
 }
 .followActActIco--plays{
-  transform: translateY(1px) scale(1.12);
+  transform: translateY(1px);
 }
 .followActActIco--analytics{
   transform: translateY(0.5px);

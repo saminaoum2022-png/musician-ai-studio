@@ -172,7 +172,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260706-184541";
+const APP_BUILD = "20260706-232841";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -13364,7 +13364,7 @@ function followActActionsRowHtml({ kind, targetId, targetUserId, plays, playsPen
   const giftBlock =
     kind === "music" && !isOwner && myId
       ? `<button type="button" class="followActAct followActAct--gift" data-friends-act="gift" aria-label="Gift credits">
-        ${feedActIconGift()}
+        ${feedActIconGift(undefined, targetId)}
       </button>`
       : "";
   return `

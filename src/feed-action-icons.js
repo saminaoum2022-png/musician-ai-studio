@@ -2,28 +2,38 @@
  * Custom SVG icons for the post interaction bar.
  */
 
-/** Comment — speech bubble with ellipsis (interaction bar). */
-export function feedActIconComment(klass = "followActActIco followActActIco--comment") {
-  const cls = String(klass || "followActActIco followActActIco--comment").trim() || "followActActIco followActActIco--comment";
-  return `<svg class="${cls}" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M20 11.35c0 4.04-3.62 7.32-8.08 7.32-1.45 0-2.82-.35-4-.97L4.1 19.25l1.24-3.55C4.4 14.48 3.84 12.98 3.84 11.35c0-4.04 3.62-7.32 8.08-7.32S20 7.31 20 11.35Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M8.7 11.45h.01M12 11.45h.01M15.3 11.45h.01" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+let _giftGradSeq = 0;
+
+function giftGradientId(scope) {
+  const base = String(scope || "")
+    .replace(/[^a-zA-Z0-9_-]/g, "")
+    .slice(0, 40);
+  return base ? `giftGradient-${base}` : `giftGradient-${++_giftGradSeq}`;
 }
 
-/** Like — outlined heart (interaction bar). */
+/** Comment — speech bubble (interaction bar). */
+export function feedActIconComment(klass = "followActActIco followActActIco--comment") {
+  const cls = String(klass || "followActActIco followActActIco--comment").trim() || "followActActIco followActActIco--comment";
+  return `<svg class="${cls}" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M6.6 5.5 H17.4 C19.1 5.5 20.5 6.9 20.5 8.6 V12.4 C20.5 14.1 19.1 15.5 17.4 15.5 H10.6 L7.0 18.6 V15.5 H6.6 C4.9 15.5 3.5 14.1 3.5 12.4 V8.6 C3.5 6.9 4.9 5.5 6.6 5.5Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+}
+
+/** Like — outlined heart (interaction bar). Liked state filled via CSS (.isLiked). */
 export function feedActIconLike(klass = "followActActIco followActActIco--like") {
   const cls = String(klass || "followActActIco followActActIco--like").trim() || "followActActIco followActActIco--like";
-  return `<svg class="${cls}" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 20.2C9.4 17.9 5 14.2 4.05 10.35C3.35 7.5 5.2 4.8 8.05 4.8C9.75 4.8 11.05 5.65 12 7.05C12.95 5.65 14.25 4.8 15.95 4.8C18.8 4.8 20.65 7.5 19.95 10.35C19 14.2 14.6 17.9 12 20.2Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+  return `<svg class="${cls}" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 20 C11.2 19.3 10.2 18.4 9.2 17.5 C6.4 15.1 4.5 13.1 4.5 9.9 C4.5 7.3 6.3 5.5 8.8 5.5 C10.2 5.5 11.3 6.1 12 7.2 C12.7 6.1 13.8 5.5 15.2 5.5 C17.7 5.5 19.5 7.3 19.5 9.9 C19.5 13.1 17.6 15.1 14.8 17.5 C13.8 18.4 12.8 19.3 12 20Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 }
 
 /** Plays — rounded play triangle (interaction bar). */
 export function feedActIconPlays(klass = "followActActIco followActActIco--plays") {
   const cls = String(klass || "followActActIco followActActIco--plays").trim() || "followActActIco followActActIco--plays";
-  return `<svg class="${cls}" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M7.5 5.6C7.5 4.55 8.65 3.9 9.55 4.45L18.05 9.85C18.9 10.4 18.9 11.6 18.05 12.15L9.55 17.55C8.65 18.1 7.5 17.45 7.5 16.4V5.6Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+  return `<svg class="${cls}" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M8 6.7 C8 5.6 9.2 4.9 10.15 5.5 L17.25 10 C18.2 10.6 18.2 12 17.25 12.6 L10.15 17.1 C9.2 17.7 8 17 8 15.9 V6.7Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 }
 
-/** Gift — minimal present (interaction bar). Bow loops ~12% smaller for mobile legibility. */
-export function feedActIconGift(klass = "followActActIco followActActIco--gift") {
+/** Gift — gradient present (interaction bar). Pass scopeId so gradient ids stay unique per post. */
+export function feedActIconGift(klass = "followActActIco followActActIco--gift", scopeId = "") {
   const cls = String(klass || "followActActIco followActActIco--gift").trim() || "followActActIco followActActIco--gift";
-  return `<svg class="${cls}" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M6.5 9.5H17.5C18.3 9.5 19 10.2 19 11V17.2C19 18.75 17.75 20 16.2 20H7.8C6.25 20 5 18.75 5 17.2V11C5 10.2 5.7 9.5 6.5 9.5Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M4.8 7.2H19.2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M12 7.2C11.12 6.02 10.24 5.31 9.36 5.31C8.62 5.31 8.02 5.72 8.02 6.02C8.02 6.34 8.63 7.2 9.74 7.2H12Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M12 7.2C12.88 6.02 13.76 5.31 14.64 5.31C15.3 5.31 15.98 5.72 15.98 6.02C15.98 6.34 15.37 7.2 14.26 7.2H12Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+  const gradId = giftGradientId(scopeId);
+  return `<svg class="${cls}" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" aria-hidden="true"><defs><linearGradient id="${gradId}" x1="4" y1="4" x2="20" y2="20" gradientUnits="userSpaceOnUse"><stop offset="0%" stop-color="#E7FFD9"/><stop offset="45%" stop-color="#A8F4D8"/><stop offset="100%" stop-color="#63E5C7"/></linearGradient></defs><rect x="5" y="10" width="14" height="9" rx="2.2" stroke="url(#${gradId})" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><rect x="4" y="7.2" width="16" height="3" rx="1.5" stroke="url(#${gradId})" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M12 7.2V19" stroke="url(#${gradId})" stroke-width="1.6" stroke-linecap="round"/><path d="M12 7.2 C11.3 5.6 10.2 4.5 8.9 4.5 C7.9 4.5 7.2 5.2 7.2 6 C7.2 6.8 7.9 7.2 9.3 7.2H12" stroke="url(#${gradId})" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M12 7.2 C12.7 5.6 13.8 4.5 15.1 4.5 C16.1 4.5 16.8 5.2 16.8 6 C16.8 6.8 16.1 7.2 14.7 7.2H12" stroke="url(#${gradId})" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 }
 
 /** Analytics — simple bar chart (interaction bar, owner-only). */

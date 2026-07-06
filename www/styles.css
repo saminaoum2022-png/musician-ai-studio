@@ -1532,6 +1532,85 @@ body.booting .bootSplashDots{
   }
 }
 
+/* Pull-to-refresh — content moves with finger; spinner rides on content */
+.ptrMovable{
+  --ptr-offset: 0px;
+  --ptr-rotate: 0deg;
+  position: relative;
+  transform: translate3d(0, var(--ptr-offset), 0);
+  will-change: transform;
+  backface-visibility: hidden;
+}
+.ptrMovable.isPtrSnapping{
+  transition: transform 0.38s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.ptrSpinnerAnchor{
+  position: absolute;
+  left: 50%;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  margin-left: -16px;
+  transform: translate3d(0, calc(var(--ptr-offset) * -0.82 - 6px), 0);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.16s ease;
+}
+.ptrMovable.isPtrPulling .ptrSpinnerAnchor,
+.ptrMovable.isPtrRefreshing .ptrSpinnerAnchor{
+  opacity: 1;
+}
+.ptrSpinnerRing{
+  display: block;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  box-sizing: border-box;
+  border: 2.5px solid rgba(255, 255, 255, 0.2);
+  border-top-color: rgba(255, 255, 255, 0.94);
+  transform: rotate(var(--ptr-rotate, 0deg));
+  transform-origin: 50% 50%;
+  will-change: transform;
+}
+.ptrMovable.isPtrReady:not(.isPtrRefreshing) .ptrSpinnerRing{
+  border-top-color: rgba(124, 92, 255, 0.96);
+}
+.ptrMovable.isPtrRefreshing .ptrSpinnerRing{
+  animation: ptrRingSpin 0.75s linear infinite;
+}
+/* Profile: fixed below notch, tracks pull so it stays above the avatar */
+.ptrMovable--profile.isPtrPulling .ptrSpinnerAnchor,
+.ptrMovable--profile.isPtrRefreshing .ptrSpinnerAnchor{
+  position: fixed;
+  top: calc(env(safe-area-inset-top, 0px) + 18px + var(--ptr-offset, 0px) * 0.26);
+  left: 50%;
+  margin-left: -16px;
+  transform: none;
+  z-index: 55;
+}
+@media (max-width: 720px){
+  .ptrMovable--profile.isPtrPulling .ptrSpinnerAnchor,
+  .ptrMovable--profile.isPtrRefreshing .ptrSpinnerAnchor{
+    top: calc(env(safe-area-inset-top, 0px) + 14px + var(--ptr-offset, 0px) * 0.22);
+  }
+}
+@keyframes ptrRingSpin{
+  from{ transform: rotate(0deg); }
+  to{ transform: rotate(360deg); }
+}
+@media (prefers-reduced-motion: reduce){
+  .ptrMovable.isPtrSnapping{
+    transition-duration: 0.01ms;
+  }
+  .ptrMovable.isPtrRefreshing .ptrSpinnerRing{
+    animation: none;
+  }
+}
+
 .app{ max-width:1100px; margin:0 auto; padding:26px 18px 34px; }
 body[data-route="profile"] > .app,
 body[data-route="user"] > .app{

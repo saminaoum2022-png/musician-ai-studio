@@ -122,6 +122,7 @@ import {
   coachOrbAllowsContextHints,
 } from "./coach-orb-prefs.js";
 import { initTheme } from "./theme.js";
+import { initPullToRefresh } from "./pull-to-refresh.js";
 import { initSoundsStudioOnce } from "./sounds-studio.js";
 import {
   initProfileEditOnce,
@@ -172,7 +173,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260707-012259";
+const APP_BUILD = "20260707-020557";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -2706,9 +2707,9 @@ const TAB_REFRESH_ACTIONS = {
       if (page) void refreshHomeDeskJoinCounts(page);
     } catch (e) { console.warn("[tabRefresh/challenges]", e); }
   },
-  activity() {
+  activity(opts = {}) {
     try {
-      void enterActivityRoute({ reset: true });
+      void enterActivityRoute({ reset: true, readOnly: Boolean(opts.readOnly) });
     } catch (e) { console.warn("[tabRefresh/activity]", e); }
   },
   discover() {
@@ -2725,33 +2726,115 @@ const TAB_REFRESH_ACTIONS = {
   mentor() {
     resetMentorSession();
   },
-  profile() {
+  profile(opts = {}) {
+    void _routeRefreshGate.profile.begin();
     void Promise.resolve(refreshMyCredits({ silent: true })).catch(() => {});
     void Promise.resolve(refreshMyHubPostsFast({ force: true })).catch(() => {});
-    void Promise.resolve(refreshNotificationsUnreadBadge({ force: true })).catch(() => {});
+    if (!opts.readOnly) {
+      void Promise.resolve(refreshNotificationsUnreadBadge({ force: true })).catch(() => {});
+    }
     scheduleProfileSongsRender();
     void Promise.resolve(reconcileLibraryFromCloud())
-      .catch((e) => console.warn("[tabRefresh/profile-songs]", e));
+      .catch((e) => console.warn("[tabRefresh/profile-songs]", e))
+      .finally(() => _routeRefreshGate.profile.end());
   },
 };
 
+const PTR_REFRESH_COOLDOWN_MS = 25000;
+const PTR_REFRESH_ROUTES = new Set(["discover", "friends", "profile", "activity"]);
+
+function ptrDevLog(message, detail) {
+  try {
+    const host = String(location?.hostname || "");
+    if (host !== "localhost" && host !== "127.0.0.1" && !/\.local$/i.test(host)) return;
+    if (detail !== undefined) console.log(`[ptr] ${message}`, detail);
+    else console.log(`[ptr] ${message}`);
+  } catch {}
+}
+
+function makeRefreshGate() {
+  let inFlight = false;
+  let lastPullAt = 0;
+  return {
+    get inFlight() { return inFlight; },
+    get lastPullAt() { return lastPullAt; },
+    begin() { inFlight = true; },
+    end() { inFlight = false; },
+    markPull() { lastPullAt = Date.now(); },
+    pullCooldownRemaining() {
+      return Math.max(0, PTR_REFRESH_COOLDOWN_MS - (Date.now() - lastPullAt));
+    },
+  };
+}
+
+const _routeRefreshGate = {
+  discover: makeRefreshGate(),
+  friends: makeRefreshGate(),
+  profile: makeRefreshGate(),
+  activity: makeRefreshGate(),
+};
+
+function isRouteRefreshInFlight(route) {
+  const gate = _routeRefreshGate[route];
+  if (gate?.inFlight) return true;
+  if (route === "friends" && _friendsFeedRefreshInFlight) return true;
+  if (route === "discover" && _discoverFeedRefreshInFlight) return true;
+  if (route === "activity" && _activityFeedState.loading) return true;
+  return false;
+}
+
+function isPullToRefreshRouteEnabled() {
+  const route = tabBarRouteKey(document.body.getAttribute("data-route") || "");
+  if (!PTR_REFRESH_ROUTES.has(route)) return false;
+  if (document.body.classList.contains("echoComposeOpen")) return false;
+  if (route === "profile") {
+    return _profileSongsSegment === "activities" || _profileSongsSegment === "all";
+  }
+  if (route === "activity" && !authSession?.user?.id) return false;
+  return true;
+}
+
 let _tabRefreshSpinTimer = 0;
 
-function triggerTabRefresh(route) {
+function triggerTabRefresh(route, opts = {}) {
+  const source = String(opts.source || "tab");
+  const pull = source === "pull";
   const fn = TAB_REFRESH_ACTIONS[route];
-  if (!fn) return;
-  try { fn(); } catch (e) { console.warn("[tabRefresh]", e); }
-  try { window.scrollTo({ top: 0, behavior: "smooth" }); } catch {}
+  if (!fn) return false;
+
+  if (isRouteRefreshInFlight(route)) {
+    ptrDevLog("refresh skipped (already refreshing)", route);
+    return false;
+  }
+
+  const gate = _routeRefreshGate[route];
+  if (pull && gate && gate.pullCooldownRemaining() > 0) {
+    ptrDevLog("refresh skipped (throttled)", route);
+    return false;
+  }
+
+  if (pull && gate) gate.markPull();
+  ptrDevLog("refresh started", { route, source });
+
+  try {
+    fn({ readOnly: pull, ...opts });
+  } catch (e) {
+    console.warn("[tabRefresh]", e);
+    return false;
+  }
+  try { window.scrollTo({ top: 0, behavior: pull ? "auto" : "smooth" }); } catch {}
   // Fixed visual: a single, satisfying rotation regardless of network.
   // 900ms ≈ one rotation of the CSS animation, plus a tiny breath.
   const tabEl = document.querySelector(`.mobileTabbar a[data-route-link="${route}"]`);
-  if (!tabEl) return;
-  tabEl.classList.add("isRefreshing");
-  if (_tabRefreshSpinTimer) clearTimeout(_tabRefreshSpinTimer);
-  _tabRefreshSpinTimer = setTimeout(() => {
-    tabEl.classList.remove("isRefreshing");
-    _tabRefreshSpinTimer = 0;
-  }, 900);
+  if (tabEl) {
+    tabEl.classList.add("isRefreshing");
+    if (_tabRefreshSpinTimer) clearTimeout(_tabRefreshSpinTimer);
+    _tabRefreshSpinTimer = setTimeout(() => {
+      tabEl.classList.remove("isRefreshing");
+      _tabRefreshSpinTimer = 0;
+    }, 900);
+  }
+  return true;
 }
 
 /** When true, #/challenges should show the Create hub even if a song draft exists. */
@@ -15323,6 +15406,7 @@ async function refreshDiscoveryFollowingFeed(opts = {}) {
     return;
   }
   _friendsFeedRefreshInFlight = true;
+  _routeRefreshGate.friends.begin();
   try {
   const force = Boolean(opts.force);
   const gen = ++_discoveryFollowingGen;
@@ -15629,6 +15713,7 @@ async function refreshDiscoveryFollowingFeed(opts = {}) {
   }
   } finally {
     _friendsFeedRefreshInFlight = false;
+    _routeRefreshGate.friends.end();
     if (_friendsFeedRefreshQueued) {
       _friendsFeedRefreshQueued = false;
       void refreshDiscoveryFollowingFeed(opts);
@@ -29367,6 +29452,44 @@ async function refreshActivityFeedHead() {
   }
 }
 
+async function fetchActivityFeedFromTop() {
+  if (_activityFeedState.loading) return;
+  _activityFeedState.loading = true;
+  _routeRefreshGate.activity.begin();
+  _activityFeedLastFetchAt = Date.now();
+  syncActivityLoadMoreUi();
+  try {
+    const limit = ACTIVITY_PAGE_SIZE;
+    const data = await socialApi(`/api/social?type=notifications&limit=${limit}&offset=0`);
+    const batch = Array.isArray(data?.notifications) ? data.notifications : [];
+    _activityFeedState.items = batch;
+    _activityFeedState.offset = batch.length;
+    _activityFeedState.hasMore = batch.length >= limit;
+    batch.forEach((n) => cacheActivitySongArtFromNotification(n));
+    if (batch.length) await enrichActivitySongArt(batch);
+    if (batch.length) await validateActivityNotificationsAvailability(batch);
+    try { mergePersistedGenerationReadyActivities(); } catch {}
+    try { mergePersistedJobReadyActivities(); } catch {}
+    renderActivityFeedFromState();
+    const unread = _activityFeedState.items.filter((n) => !n?.read_at).length;
+    if (els.activityLead) {
+      els.activityLead.textContent = unread
+        ? `${unread} unread ${unread === 1 ? "update" : "updates"} from your music circle.`
+        : "Fans, likes, comments, milestones, and remixes.";
+    }
+    updateNotificationsEntryBadges(unread);
+  } catch (e) {
+    if (els.activityStatus) {
+      els.activityStatus.hidden = false;
+      els.activityStatus.textContent = e?.message || "Could not load activity.";
+    }
+  } finally {
+    _activityFeedState.loading = false;
+    _routeRefreshGate.activity.end();
+    syncActivityLoadMoreUi();
+  }
+}
+
 async function fetchActivityBatch() {
   if (_activityFeedState.loading || !_activityFeedState.hasMore) return;
   _activityFeedState.loading = true;
@@ -29421,18 +29544,19 @@ async function fetchActivityBatch() {
   }
 }
 
-async function enterActivityRoute({ reset = false } = {}) {
+async function enterActivityRoute({ reset = false, readOnly = false } = {}) {
   if (!authSession?.user?.id) {
     location.hash = "#/auth";
     return;
   }
   if (reset) {
-    _activityFeedState.items = [];
     _activityFeedState.offset = 0;
     _activityFeedState.hasMore = true;
     _activityFeedState.loading = false;
     _activityUnavailableKeys.clear();
-    if (els.activityFeed) {
+    const hasVisible =
+      _activityFeedState.items.length > 0 || paintActivityFeedSnapshotIfFresh();
+    if (!hasVisible && els.activityFeed) {
       els.activityFeed.innerHTML = activitySkeletonHtml();
     }
   } else if (!_activityFeedState.items.length && els.activityFeed) {
@@ -29444,13 +29568,17 @@ async function enterActivityRoute({ reset = false } = {}) {
     els.activityStatus.hidden = true;
     els.activityStatus.textContent = "";
   }
-  await fetchActivityBatch();
+  if (reset) {
+    await fetchActivityFeedFromTop();
+  } else {
+    await fetchActivityBatch();
+  }
   await refreshActivityFeedHead();
   try { mergePersistedGenerationReadyActivities(); } catch {}
   try { mergePersistedJobReadyActivities(); } catch {}
   renderActivityFeedFromState();
   const unread = _activityFeedState.items.filter((n) => !n?.read_at).length;
-  if (unread) {
+  if (unread && !readOnly) {
     void socialApi("/api/social", {
       method: "POST",
       body: JSON.stringify({ action: "mark_notifications_read" }),
@@ -32766,6 +32894,7 @@ function classifyDiscoverPlaylistsForTrack(track) {
 }
 
 let _discoveryFeedGen = 0;
+let _discoverFeedRefreshInFlight = false;
 /** Playable Discover feed rows (spotlight + list) for shuffle-next on the mini player. */
 let _discoveryFeedTracks = [];
 /** Last profile map from Discover refresh (playlist screen rows). */
@@ -33931,19 +34060,34 @@ function discoverySpotCardHtml(t, profMap, idx) {
 }
 
 async function refreshDiscoverFeed() {
+  if (_discoverFeedRefreshInFlight) return;
+  _discoverFeedRefreshInFlight = true;
+  _routeRefreshGate.discover.begin();
   const gen = ++_discoveryFeedGen;
   void ensurePersonalizedUsernameSyncedToCloud();
   const statusEl = document.getElementById("discoveryFeedStatus");
   const listEl = document.getElementById("discoveryFeedList");
-  if (!statusEl) return;
+  if (!statusEl) {
+    _discoverFeedRefreshInFlight = false;
+    _routeRefreshGate.discover.end();
+    return;
+  }
   bindDiscoverHubV1Once();
   bindDiscoverFeedTabsOnce();
-  paintDiscoverTopSectionsLoading();
+  const mount = document.getElementById("discoverFeedMount");
+  const hasCachedMount =
+    mount &&
+    !mount.classList.contains("isLoading") &&
+    mount.innerHTML.trim().length > 0 &&
+    !mount.querySelector(".discoverFeedSkeleton");
+  if (!hasCachedMount) {
+    paintDiscoverTopSectionsLoading();
+  }
   statusEl.textContent = "";
   statusEl.hidden = true;
   if (listEl) {
     listEl.hidden = true;
-    listEl.innerHTML = "";
+    if (!hasCachedMount) listEl.innerHTML = "";
   }
 
   try {
@@ -34005,6 +34149,9 @@ async function refreshDiscoverFeed() {
       });
     }
     console.warn("[discover] feed refresh failed", err);
+  } finally {
+    _discoverFeedRefreshInFlight = false;
+    _routeRefreshGate.discover.end();
   }
 }
 
@@ -53380,6 +53527,15 @@ setProfileEditing(false);
 // click time, so it stays correct across hash changes without needing
 // a rebind.
 try { attachTabRefresh(); } catch (e) { console.warn("[tabRefresh] init", e); }
+try {
+  initPullToRefresh({
+    triggerTabRefresh,
+    getRoute: () => tabBarRouteKey(document.body.getAttribute("data-route") || ""),
+    isRouteEnabled: isPullToRefreshRouteEnabled,
+    isRefreshInFlight: isRouteRefreshInFlight,
+    haptic,
+  });
+} catch (e) { console.warn("[ptr] init", e); }
 
 // Voice Lab → AI maqam verification. The phone sends only the extracted
 // analysis numbers (never the voice). Returns null on any failure / when

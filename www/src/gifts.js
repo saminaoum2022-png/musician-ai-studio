@@ -2,11 +2,14 @@
  * Post gifts — send paid or promo credits to another creator (never re-gift received gifts).
  */
 
-const GIFT_TIERS = [1, 3, 5];
+import { GIFT_TIER_OPTIONS, giftTierName } from "./gift-tier-icons.js";
+
+const GIFT_TIERS = GIFT_TIER_OPTIONS.map((o) => o.tier);
 
 let _deps = null;
 let _pending = null;
 let _sending = false;
+let _sendingTier = 0;
 
 function el(id) {
   return document.getElementById(id);
@@ -18,6 +21,7 @@ function closeGiftSheet() {
   sheet.hidden = true;
   sheet.setAttribute("aria-hidden", "true");
   _pending = null;
+  _sendingTier = 0;
 }
 
 function setGiftSheetOpen(open) {
@@ -25,6 +29,24 @@ function setGiftSheetOpen(open) {
   if (!sheet) return;
   sheet.hidden = !open;
   sheet.setAttribute("aria-hidden", open ? "false" : "true");
+}
+
+function mountGiftTierButtons() {
+  const wrap = el("giftSheetTiers");
+  if (!wrap || wrap.dataset.mounted === "1") return;
+  wrap.dataset.mounted = "1";
+  wrap.innerHTML = GIFT_TIER_OPTIONS.map(
+    (opt) => `
+    <button
+      type="button"
+      class="giftSheetTier"
+      data-gift-tier="${opt.tier}"
+      aria-label="Send ${opt.name} gift, ${opt.creditsLabel}">
+      <span class="giftSheetTierIcon" aria-hidden="true">${opt.icon()}</span>
+      <span class="giftSheetTierName">${opt.name}</span>
+      <span class="giftSheetTierValue">${opt.creditsLabel}</span>
+    </button>`,
+  ).join("");
 }
 
 function paintGiftSheet() {
@@ -52,12 +74,14 @@ function paintGiftSheet() {
       const disabled = !Number.isFinite(tier) || tier > giftable || _sending;
       btn.disabled = disabled;
       btn.setAttribute("aria-disabled", disabled ? "true" : "false");
+      btn.classList.toggle("isSending", _sending && tier === _sendingTier);
     });
   }
 }
 
 export function initGifts(deps) {
   _deps = deps || {};
+  mountGiftTierButtons();
   const sheet = el("giftSheet");
   if (!sheet || sheet.dataset.giftsBound === "1") return;
   sheet.dataset.giftsBound = "1";
@@ -102,6 +126,7 @@ export function openGiftSheetFromButton(btn) {
     songTitle: titleEl?.textContent?.trim() || "",
     recipientHandle: handleEl?.textContent?.replace(/^@/, "").trim() || "",
   };
+  _sendingTier = 0;
   paintGiftSheet();
   setGiftSheetOpen(true);
   try {
@@ -118,6 +143,7 @@ async function sendGift(amount) {
     return;
   }
   _sending = true;
+  _sendingTier = amount;
   paintGiftSheet();
   try {
     const r = await fetch(_deps.apiUrl("/api/gifts/send"), {
@@ -152,8 +178,8 @@ async function sendGift(amount) {
     try {
       _deps?.haptic?.("success");
     } catch {}
-    _deps?.showToast?.(`Gift sent · ${amount} credit${amount === 1 ? "" : "s"}`, {
-      icon: "🎁",
+    const name = giftTierName(amount);
+    _deps?.showToast?.(`${name} sent · ${amount} credit${amount === 1 ? "" : "s"}`, {
       durationMs: 2600,
     });
     closeGiftSheet();
@@ -167,6 +193,7 @@ async function sendGift(amount) {
     } catch {}
   } finally {
     _sending = false;
+    _sendingTier = 0;
     paintGiftSheet();
   }
 }

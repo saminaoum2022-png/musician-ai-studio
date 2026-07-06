@@ -172,7 +172,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260707-004811";
+const APP_BUILD = "20260707-011608";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -15070,6 +15070,9 @@ function clearSignedInUiCaches() {
   _ownSocialStatsPlays = null;
   _ownSocialStatsLastFetchAt = 0;
   _ownSocialStatsInFlight = false;
+  try {
+    sessionStorage.removeItem(OWN_SOCIAL_STATS_SESSION_KEY);
+  } catch {}
   _profileActCloudRefreshLastAt = 0;
   _profileActCloudRefreshInFlight = false;
 }
@@ -30383,6 +30386,53 @@ let _ownSocialStatsFollowers = null;
 let _ownSocialStatsPlays = null;
 let _ownSocialStatsLastFetchAt = 0;
 const OWN_SOCIAL_STATS_MIN_GAP_MS = 30000;
+const OWN_SOCIAL_STATS_SESSION_KEY = "nabad:ownSocialStats:v1";
+
+function hydrateOwnSocialStatsFromSession(userId) {
+  const uid = String(userId || "").trim();
+  if (!uid) return false;
+  try {
+    const raw = sessionStorage.getItem(OWN_SOCIAL_STATS_SESSION_KEY);
+    if (!raw) return false;
+    const parsed = JSON.parse(raw);
+    if (String(parsed?.userId || "") !== uid) return false;
+    _ownSocialStatsPlays = Number(parsed.plays);
+    _ownSocialStatsFollowers = Number(parsed.followers);
+    _ownSocialStatsLastFetchAt = Number(parsed.at || 0);
+    return Number.isFinite(_ownSocialStatsPlays) && Number.isFinite(_ownSocialStatsFollowers);
+  } catch {
+    return false;
+  }
+}
+
+function persistOwnSocialStatsSession(userId, plays, followers) {
+  const uid = String(userId || "").trim();
+  if (!uid) return;
+  try {
+    sessionStorage.setItem(
+      OWN_SOCIAL_STATS_SESSION_KEY,
+      JSON.stringify({ userId: uid, plays, followers, at: Date.now() }),
+    );
+  } catch {}
+}
+
+function paintOwnProfileSocialStatPills() {
+  const playsPending = _ownSocialStatsPlays == null;
+  const fansPending = _ownSocialStatsFollowers == null;
+  if (els.profileStatPillPublicValue) {
+    els.profileStatPillPublicValue.classList.toggle("isLoading", playsPending);
+    els.profileStatPillPublicValue.textContent = playsPending
+      ? ""
+      : formatStatCount(_ownSocialStatsPlays);
+  }
+  if (els.profileStatPillLikesValue) {
+    els.profileStatPillLikesValue.classList.toggle("isLoading", fansPending);
+    els.profileStatPillLikesValue.textContent = fansPending
+      ? ""
+      : formatStatCount(_ownSocialStatsFollowers);
+  }
+}
+
 async function refreshOwnProfileSocialStats({ force = false } = {}) {
   const uid = String(authSession?.user?.id || activeProfile?.id || "").trim();
   if (!uid || uid === "guest") return;
@@ -30391,12 +30441,11 @@ async function refreshOwnProfileSocialStats({ force = false } = {}) {
     _ownSocialStatsFollowers = null;
     _ownSocialStatsPlays = null;
     _ownSocialStatsLastFetchAt = 0;
+    hydrateOwnSocialStatsFromSession(uid);
+    paintOwnProfileSocialStatPills();
   }
-  if (_ownSocialStatsFollowers != null && els.profileStatPillLikesValue) {
-    els.profileStatPillLikesValue.textContent = formatStatCount(_ownSocialStatsFollowers);
-  }
-  if (_ownSocialStatsPlays != null && els.profileStatPillPublicValue) {
-    els.profileStatPillPublicValue.textContent = formatStatCount(_ownSocialStatsPlays);
+  if (_ownSocialStatsFollowers != null || _ownSocialStatsPlays != null) {
+    paintOwnProfileSocialStatPills();
   }
   if (
     !force &&
@@ -30414,12 +30463,8 @@ async function refreshOwnProfileSocialStats({ force = false } = {}) {
     _ownSocialStatsFollowers = followers;
     _ownSocialStatsPlays = plays;
     _ownSocialStatsLastFetchAt = Date.now();
-    if (els.profileStatPillLikesValue) {
-      els.profileStatPillLikesValue.textContent = formatStatCount(followers);
-    }
-    if (els.profileStatPillPublicValue) {
-      els.profileStatPillPublicValue.textContent = formatStatCount(plays);
-    }
+    persistOwnSocialStatsSession(uid, plays, followers);
+    paintOwnProfileSocialStatPills();
   } finally {
     _ownSocialStatsInFlight = false;
   }
@@ -37504,6 +37549,8 @@ function profileRouteNeedsCloudSocialData() {
 }
 
 function renderProfileOwnStats() {
+  const uid = String(authSession?.user?.id || "").trim();
+  if (uid && uid !== "guest") hydrateOwnSocialStatsFromSession(uid);
   const hubItems = HUB_FEATURE_ENABLED ? getProfileOwnerHubItems() : [];
   const lib = loadLibrary();
   const pubLib = lib.filter((t) => Boolean(t.publicOnProfile));
@@ -37581,12 +37628,7 @@ function renderProfileOwnStats() {
   if (els.profileStatPillSongsValue) {
     els.profileStatPillSongsValue.textContent = formatStatCount(songCountForPills);
   }
-  if (els.profileStatPillPublicValue) {
-    els.profileStatPillPublicValue.textContent = formatStatCount(_ownSocialStatsPlays ?? 0);
-  }
-  if (els.profileStatPillLikesValue) {
-    els.profileStatPillLikesValue.textContent = formatStatCount(_ownSocialStatsFollowers ?? 0);
-  }
+  paintOwnProfileSocialStatPills();
   if (profileCloudActive) void refreshOwnProfileSocialStats();
 
   const lineEl = els.profileAuraStatLine;

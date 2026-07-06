@@ -21438,6 +21438,17 @@ html[data-theme="light"] .soundsStudioTempoValue{
   letter-spacing: -0.03em;
   color: #fff;
 }
+.profileStatValue.isLoading{
+  display: inline-block;
+  min-width: 34px;
+  min-height: 1em;
+  color: transparent;
+  border-radius: 6px;
+  vertical-align: middle;
+  background: linear-gradient(90deg, rgba(255,255,255,0.04) 0%, rgba(255,255,255,0.12) 50%, rgba(255,255,255,0.04) 100%);
+  background-size: 200% 100%;
+  animation: profileSkelShimmer 1.25s ease-in-out infinite;
+}
 .profileStatLabel{
   font-size: clamp(11px, 2.8vw, 13px);
   font-weight: 500;

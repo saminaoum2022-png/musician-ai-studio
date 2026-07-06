@@ -13,6 +13,7 @@ const {
   setCors,
   readJsonBody,
 } = require("../_lib/credits-auth");
+const { notifyGiftReceived } = require("../_lib/gift-notifications");
 
 const ALLOWED = new Set([1, 3, 5]);
 
@@ -40,9 +41,12 @@ module.exports = async function handler(req, res) {
     return sendJson(res, 400, { error: "Choose 1, 3, or 5 credits for a published post." });
   }
 
+  let targetTitle = "";
+  let targetArtUrl = "";
+
   if (targetKind === "song") {
     const songRes = await selectFromTable(
-      `user_songs?select=id,user_id,title,public_on_profile&id=eq.${encodeURIComponent(targetId)}&limit=1`,
+      `user_songs?select=id,user_id,title,art_url,public_on_profile&id=eq.${encodeURIComponent(targetId)}&limit=1`,
     );
     const song = Array.isArray(songRes.data) ? songRes.data[0] : null;
     if (!song?.id) return sendJson(res, 404, { error: "Song not found." });
@@ -50,6 +54,8 @@ module.exports = async function handler(req, res) {
       return sendJson(res, 400, { error: "Gifts are only for published posts." });
     }
     recipientUserId = String(song.user_id || recipientUserId || "").trim();
+    targetTitle = String(song.title || "").trim();
+    targetArtUrl = String(song.art_url || "").trim();
     if (!recipientUserId) return sendJson(res, 400, { error: "Missing recipient." });
     if (recipientUserId === user.userId) {
       return sendJson(res, 400, { error: "You cannot gift your own post." });
@@ -91,6 +97,19 @@ module.exports = async function handler(req, res) {
       giftable: out.giftable,
     });
   }
+
+  void notifyGiftReceived({
+    giftId: out.gift_id,
+    senderUserId: user.userId,
+    recipientUserId,
+    amount: out.amount || amount,
+    targetKind,
+    targetId,
+    targetTitle,
+    targetArtUrl,
+  }).catch((e) => {
+    console.warn("[gift] notify failed", e?.message || e);
+  });
 
   return sendJson(res, 200, {
     ok: true,

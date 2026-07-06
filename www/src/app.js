@@ -172,7 +172,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260706-172641";
+const APP_BUILD = "20260706-174201";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -28143,6 +28143,7 @@ function notificationIconForType(type) {
   if (t === "social_reply") return "↩";
   if (t === "social_mention") return "@";
   if (t === "social_repost") return "↻";
+  if (t === "gift_received") return "🎁";
   if (t === "play_milestone") return "▶";
   if (t === "chart_rank") return "★";
   if (t === "public_song") return "P";
@@ -28177,6 +28178,9 @@ function activityTypeBadgeSvg(type) {
   }
   if (t === "social_repost") {
     return `<svg viewBox="0 0 24 24" width="11" height="11" aria-hidden="true"><path fill="currentColor" d="M17 1l4 4-4 4V6H9a4 4 0 0 0-4 4v1H3v-1a6 6 0 0 1 6-6h8V1ZM7 23l-4-4 4-4v3h8a4 4 0 0 0 4-4v-1h2v1a6 6 0 0 1-6 6H7v3Z"/></svg>`;
+  }
+  if (t === "gift_received") {
+    return `<svg viewBox="0 0 24 24" width="11" height="11" aria-hidden="true"><path fill="currentColor" d="M20 7h-2.18A3 3 0 0 0 19 5a3 3 0 0 0-5.2-2.1A3 3 0 0 0 11 5a3 3 0 0 0 1.18 2H10a2 2 0 0 0-2 2v1H6v2h2v8a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2v-8h2v-2h-2V9a2 2 0 0 0-2-2Zm-7-2a1 1 0 0 1 1.73-.73l.27.27.27-.27A1 1 0 0 1 17 5a1 1 0 0 1-1 1h-3Zm-2 0a1 1 0 0 1 1.73-.73L13 4.54l.27-.27A1 1 0 0 1 15 5a1 1 0 0 1-1 1h-3ZM8 10h8v8H8v-8Z"/></svg>`;
   }
   if (t === "song_live") {
     return `<svg viewBox="0 0 24 24" width="11" height="11" aria-hidden="true"><path fill="currentColor" d="M12 3v10.55A4 4 0 1 0 14 17V7h4V3h-6Z"/></svg>`;
@@ -28345,6 +28349,16 @@ function notificationMessage(n) {
     return {
       title: username ? `@${username} reposted ${target}` : `Someone reposted ${target}`,
       body: "It went out to their fans' Friends feed.",
+      action: username ? "View profile" : "",
+    };
+  }
+  if (n?.type === "gift_received") {
+    const target = notificationTargetLabel(n?.metadata);
+    const amt = Number(n?.metadata?.gift_amount || 0);
+    const credits = Number.isFinite(amt) && amt > 0 ? `${formatCreditsAmount(amt)} credit${amt === 1 ? "" : "s"}` : "";
+    return {
+      title: username ? `@${username} sent you a gift` : "You received a gift",
+      body: credits ? `${credits} on ${target}` : `On ${target}`,
       action: username ? "View profile" : "",
     };
   }
@@ -28563,7 +28577,7 @@ function activityNotificationMatchesFilter(n, tab = _activityFilterTab) {
   const t = String(n?.type || "").trim();
   if (tab === "achievements") return t === "chart_rank" || t === "play_milestone" || t === "song_live" || t === "generation_ready" || t === "sound_ready" || t === "music_video_ready" || t === "instrumental_ready";
   if (tab === "social") {
-    return ["follow", "remix", "social_like", "social_reply", "social_repost", "social_mention", "public_song", "song_feedback"].includes(t);
+    return ["follow", "remix", "social_like", "social_reply", "social_repost", "social_mention", "public_song", "song_feedback", "gift_received"].includes(t);
   }
   return true;
 }
@@ -28656,7 +28670,7 @@ async function validateActivityNotificationsAvailability(notifications) {
         t === "play_milestone" ||
         t === "song_feedback" ||
         t === "remix" ||
-        ((t === "social_like" || t === "social_reply" || t === "social_repost" || t === "social_mention") && String(meta.target_kind || "") === "song"));
+        ((t === "social_like" || t === "social_reply" || t === "social_repost" || t === "social_mention" || t === "gift_received") && String(meta.target_kind || "") === "song"));
     if (songLinked) songIds.add(sid);
     if (t === "remix") {
       const remixPostId = String(meta.remix_post_id || "").trim();
@@ -28728,7 +28742,7 @@ function activitySongIdForNotification(n) {
   if (t === "remix") {
     return String(meta.remix_song_id || meta.remix_post_id || "").trim();
   }
-  if ((t === "social_like" || t === "social_reply" || t === "social_repost" || t === "social_mention") && String(meta.target_kind || "") === "song") {
+  if ((t === "social_like" || t === "social_reply" || t === "social_repost" || t === "social_mention" || t === "gift_received") && String(meta.target_kind || "") === "song") {
     return String(meta.target_id || "").trim();
   }
   return "";
@@ -28737,7 +28751,7 @@ function activitySongIdForNotification(n) {
 function activityNotificationHasSongCover(n) {
   const t = String(n?.type || "").trim();
   if (t === "follow") return false;
-  if (t === "social_like" || t === "social_reply" || t === "social_repost" || t === "social_mention") {
+  if (t === "social_like" || t === "social_reply" || t === "social_repost" || t === "social_mention" || t === "gift_received") {
     return String(n?.metadata?.target_kind || "") === "song";
   }
   return ["play_milestone", "chart_rank", "song_feedback", "public_song", "remix"].includes(t);
@@ -28896,10 +28910,10 @@ function notificationActivityHref(n) {
       return `#/player?hub=${encodeURIComponent(remixPostId)}`;
     }
   }
-  if ((t === "social_like" || t === "social_reply" || t === "social_repost" || t === "social_mention") && targetKind === "song" && targetId) {
+  if ((t === "social_like" || t === "social_reply" || t === "social_repost" || t === "social_mention" || t === "gift_received") && targetKind === "song" && targetId) {
     return `#/player?track=${encodeURIComponent(targetId)}`;
   }
-  if ((t === "social_like" || t === "social_reply" || t === "social_repost" || t === "social_mention") && (targetKind === "echo" || targetKind === "status")) {
+  if ((t === "social_like" || t === "social_reply" || t === "social_repost" || t === "social_mention" || t === "gift_received") && (targetKind === "echo" || targetKind === "status")) {
     return "#/friends";
   }
   if ((t === "follow" || t === "public_song") && username) {
@@ -28961,7 +28975,7 @@ async function openActivityNotificationTarget(n) {
     (t === "chart_rank" ||
       t === "play_milestone" ||
       t === "song_feedback" ||
-      ((t === "social_like" || t === "social_reply" || t === "social_repost" || t === "social_mention") && String(meta.target_kind || "") === "song"));
+      ((t === "social_like" || t === "social_reply" || t === "social_repost" || t === "social_mention" || t === "gift_received") && String(meta.target_kind || "") === "song"));
 
   if (songLinked) {
     if (await resolveAndPlayActivityTrack(songId)) return;
@@ -29009,7 +29023,7 @@ function activityRowArtworkHtml(n) {
   if (preferSong && songUrl) {
     return `<img class="activityRowArt" src="${escapeHtml(songUrl)}" alt="" loading="lazy" decoding="async" />`;
   }
-  if (t === "follow" || t === "social_like" || t === "social_reply" || t === "social_repost" || t === "social_mention" || t === "public_song" || t === "remix") {
+  if (t === "follow" || t === "social_like" || t === "social_reply" || t === "social_repost" || t === "social_mention" || t === "gift_received" || t === "public_song" || t === "remix") {
     const actorArt = String(n?.metadata?.actor_avatar || "").trim();
     if (isRealUserAvatarUrl(actorArt)) {
       return `<img class="activityRowArt activityRowArt--avatar" src="${escapeHtml(normalizeProfileAvatarForImg(actorArt))}" alt="" loading="lazy" decoding="async" />`;
@@ -29146,6 +29160,16 @@ function activityItemDisplayParts(n, msg) {
       category: "Repost",
       title: username ? `${username} reposted your song` : "Someone reposted your song",
       description: songTitle || FAN_COPY.reachedTheirFans,
+    };
+  }
+  if (t === "gift_received") {
+    const songTitle = String(meta.target_title || meta.song_title || "").trim();
+    const amt = Number(meta.gift_amount || 0);
+    const credits = Number.isFinite(amt) && amt > 0 ? `${formatCreditsAmount(amt)} credit${amt === 1 ? "" : "s"}` : "Credits";
+    return {
+      category: "Gift",
+      title: username ? `${username} sent you a gift` : "You received a gift",
+      description: songTitle ? `${credits} · ${songTitle}` : credits,
     };
   }
   if (t === "follow") {

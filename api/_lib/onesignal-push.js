@@ -27,6 +27,7 @@ const PUSH_TEMPLATES = {
   song_feedback: { route: "activity" },
   play_milestone: { route: "activity" },
   public_song: { route: "activity" },
+  gift_received: { route: "activity" },
   generation_ready: { route: "challenges" },
   photo_ready: { route: "challenges" },
   hum_track_ready: { route: "challenges" },
@@ -49,7 +50,7 @@ function cleanDisplayName(v) {
   return s.slice(0, 40);
 }
 
-function composePushCopy({ type, actorDisplayName }) {
+function composePushCopy({ type, actorDisplayName, metadata }) {
   const actor = cleanDisplayName(actorDisplayName);
   const t = String(type || "").trim();
   const customBody = String(actorDisplayName || "").trim();
@@ -76,6 +77,11 @@ function composePushCopy({ type, actorDisplayName }) {
     if (type === "social_mention") return { body: `${actor} mentioned you` };
     if (type === "social_repost") return { body: `${actor} reposted your song` };
     if (type === "remix") return { body: `${actor} remixed your song` };
+    if (type === "gift_received") {
+      const amt = Number(metadata?.amount);
+      const suffix = Number.isFinite(amt) && amt > 0 ? ` · ${amt} credit${amt === 1 ? "" : "s"}` : "";
+      return { body: `${actor} sent you a gift${suffix}` };
+    }
     if (type === "challenge_update") return { body: `${actor} joined your challenge` };
   }
   if (type === "chart_rank") return { body: "Top 10 update" };
@@ -215,12 +221,16 @@ async function postOneSignalNotification(payload) {
  * Send a generic push alert. Fire-and-forget from API handlers.
  * @param {{ userId: string, type: string, entityId?: string|null, actorDisplayName?: string }} opts
  */
-async function sendPrivacySafePush({ userId, type, entityId = null, actorDisplayName = "" }) {
+async function sendPrivacySafePush({ userId, type, entityId = null, actorDisplayName = "", metadata = null }) {
   if (!pushEnabled()) return { ok: false, skipped: true, reason: "push_not_configured" };
   const uid = cleanUserId(userId);
   const tpl = templateForType(type);
   if (!uid || !tpl) return { ok: false, skipped: true, reason: "unsupported_type" };
-  const copy = composePushCopy({ type: String(type || "").trim(), actorDisplayName });
+  const copy = composePushCopy({
+    type: String(type || "").trim(),
+    actorDisplayName,
+    metadata: metadata && typeof metadata === "object" ? metadata : null,
+  });
 
   const data = {
     nabad_route: tpl.route,

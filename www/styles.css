@@ -34030,6 +34030,10 @@ section.mentorPage{
   --feed-song-art-size: 78px;
   --feed-song-card-min-h: 88px;
   --feed-post-divider-gap: 28px;
+  --feed-post-divider-color: rgba(255, 255, 255, 0.063);
+  --feed-cover-radius: 19px;
+  --feed-cover-art-radius: 18px;
+  --feed-cover-art-width: min(72%, 253px);
   --feed-header-row-gap: 2px;
   --feed-caption-gap: 6px;
   --feed-art-gap: 10px;
@@ -34043,7 +34047,7 @@ section.mentorPage{
   gap: 0;
   padding: 0 14px var(--feed-post-divider-gap);
   border: 0;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+  border-bottom: 1px solid var(--feed-post-divider-color, rgba(255, 255, 255, 0.063));
   background: transparent;
   border-radius: 0;
   box-shadow: none;
@@ -34075,7 +34079,7 @@ section.mentorPage{
   padding-left: 14px;
   padding-right: 14px;
   border: 0;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+  border-bottom: 1px solid var(--feed-post-divider-color, rgba(255, 255, 255, 0.063));
   background: transparent;
   border-radius: 0;
   box-shadow: none;
@@ -34527,7 +34531,7 @@ section.mentorPage{
   width: 100%;
   aspect-ratio: 1 / 1.12;
   min-height: 300px;
-  border-radius: 18px;
+  border-radius: var(--feed-cover-radius, 19px);
   overflow: hidden;
   background: rgba(255,255,255,0.04);
 }
@@ -34552,10 +34556,10 @@ section.mentorPage{
   left: 50%;
   top: 38%;
   transform: translate(-50%, -50%);
-  width: min(68%, 240px);
+  width: var(--feed-cover-art-width, min(72%, 253px));
   aspect-ratio: 1 / 1;
   z-index: 1;
-  border-radius: 12px;
+  border-radius: var(--feed-cover-art-radius, 18px);
   overflow: hidden;
   box-shadow: 0 10px 32px rgba(0, 0, 0, 0.34);
 }
@@ -34572,8 +34576,8 @@ section.mentorPage{
   top: 38%;
   transform: translate(-50%, -50%);
   z-index: 3;
-  width: 56px;
-  height: 56px;
+  width: 53px;
+  height: 53px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -34640,7 +34644,7 @@ section.mentorPage{
   line-height: 1;
 }
 .feedHeroPlayerProgTrack{
-  height: 3px;
+  height: 4px;
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.11);
   overflow: hidden;
@@ -34703,7 +34707,7 @@ section.mentorPage{
   display: block;
   width: 100%;
   aspect-ratio: 1 / 1;
-  border-radius: 14px;
+  border-radius: var(--feed-cover-radius, 19px);
   overflow: hidden;
   background: rgba(255,255,255,0.04);
 }
@@ -41676,7 +41680,7 @@ body[data-route="friends"] .followAct--xstyle > .followActQuoteRow:has(.feedHero
   aspect-ratio: 1 / 1;
   max-height: none;
   border: 0;
-  border-radius: 28px;
+  border-radius: var(--feed-cover-radius, 19px);
   background: rgba(10,14,22,.46);
   box-shadow: none;
   overflow: hidden;
@@ -41696,7 +41700,7 @@ body[data-route="friends"] .followAct--xstyle > .followActQuoteRow:has(.feedHero
   width: 100%;
   margin: 14px 0 0;
   aspect-ratio: 1 / 1;
-  border-radius: 28px;
+  border-radius: var(--feed-cover-radius, 19px);
   pointer-events: none;
 }
 :is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle .followActMedia .discoverCoverPlay,
@@ -41734,8 +41738,8 @@ body[data-route="friends"] .followAct--xstyle > .followActQuoteRow:has(.feedHero
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 64px;
-  height: 64px;
+  width: 61px;
+  height: 61px;
   border-radius: 999px;
   color: #fff;
   background: rgba(14,18,26,.42);
@@ -41755,8 +41759,8 @@ body[data-route="friends"] .followAct--xstyle > .followActQuoteRow:has(.feedHero
 }
 /* While this track is playing, ease the button back so the artwork breathes */
 :is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle.discoveryRowPlaying .followActMediaPlayBtn{
-  width: 56px;
-  height: 56px;
+  width: 53px;
+  height: 53px;
   opacity: .9;
   background: rgba(14,18,26,.34);
 }
@@ -41811,7 +41815,7 @@ body[data-route="friends"] .followAct--xstyle > .followActQuoteRow:has(.feedHero
   cursor: default;
 }
 :is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followActRealtimeSeek::-webkit-slider-runnable-track{
-  height: 3px;
+  height: 4px;
   border-radius: 999px;
   background:
     linear-gradient(90deg, rgba(255, 255, 255, 0.82), rgba(255, 255, 255, 0.58)) 0 / var(--feedSeekPct) 100% no-repeat,
@@ -41840,12 +41844,12 @@ body[data-route="friends"] .followAct--xstyle > .followActQuoteRow:has(.feedHero
   box-shadow: 0 0 0 3px rgba(var(--cover-prog-rgb), 0.24), 0 4px 10px rgba(0,0,0,.32);
 }
 :is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followActRealtimeSeek::-moz-range-track{
-  height: 3px;
+  height: 4px;
   border-radius: 999px;
   background: rgba(232,238,247,.16);
 }
 :is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followActRealtimeSeek::-moz-range-progress{
-  height: 3px;
+  height: 4px;
   border-radius: 999px;
   background: linear-gradient(90deg, rgba(255, 255, 255, 0.82), rgba(255, 255, 255, 0.55));
 }
@@ -41869,14 +41873,14 @@ body[data-route="friends"] .followAct--xstyle > .followActQuoteRow:has(.feedHero
 }
 body[data-route="friends"] .followAct--xstyle .followActQuoteCard--hero{
   border: 0;
-  border-radius: 28px;
+  border-radius: var(--feed-cover-radius, 19px);
   background: transparent;
   box-shadow: none;
 }
 body[data-route="friends"] .followAct--xstyle .feedHeroPlayerStage.followActQuoteArt--hero{
   min-height: 320px;
   aspect-ratio: 1 / 1.03;
-  border-radius: 28px;
+  border-radius: var(--feed-cover-radius, 19px);
   border: 1px solid rgba(255,255,255,.11);
   background:
     radial-gradient(circle at 50% 8%, rgba(118, 88, 255, .16), transparent 34%),
@@ -41892,14 +41896,14 @@ body[data-route="friends"] .feedHeroPlayerBlurBg{
 }
 body[data-route="friends"] .feedHeroPlayerArtFrame{
   top: 42%;
-  width: min(68%, 256px);
-  border-radius: 20px;
+  width: min(72%, 270px);
+  border-radius: var(--feed-cover-art-radius, 18px);
   box-shadow: 0 18px 42px rgba(0,0,0,.32);
 }
 body[data-route="friends"] .feedHeroPlayerCenterPlay{
   top: 42%;
-  width: 66px;
-  height: 66px;
+  width: 63px;
+  height: 63px;
   border-color: rgba(255,255,255,.16);
   background:
     radial-gradient(circle at 38% 28%, rgba(255,255,255,.18), transparent 34%),
@@ -41931,7 +41935,7 @@ body[data-route="friends"] .feedHeroPlayerTime{
   color: rgba(232,238,247,.62);
 }
 body[data-route="friends"] .feedHeroPlayerProgTrack{
-  height: 4px;
+  height: 5px;
   background: rgba(255,255,255,.13);
 }
 body[data-route="friends"] .feedHeroPlayerControls{
@@ -41982,10 +41986,10 @@ body[data-route="friends"] .followAct--xstyle .followActActions .followActAct[da
   }
   body[data-route="friends"] .followAct--xstyle .feedHeroPlayerStage.followActQuoteArt--hero{
     min-height: 306px;
-    border-radius: 26px;
+    border-radius: var(--feed-cover-radius, 19px);
   }
   body[data-route="friends"] .feedHeroPlayerArtFrame{
-    width: min(70%, 242px);
+    width: min(74%, 255px);
   }
   body[data-route="friends"] .feedHeroPlayerChrome{
     padding-inline: 18px;

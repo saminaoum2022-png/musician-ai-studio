@@ -1,7 +1,7 @@
 /**
  * In-app + push notification when someone receives a gift.
  */
-const { queuePrivacySafePush } = require("./onesignal-push");
+const { sendPrivacySafePush } = require("./onesignal-push");
 
 const SUPABASE_URL = (process.env.SUPABASE_URL || "").replace(/\/$/, "");
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
@@ -80,11 +80,20 @@ async function notifyGiftReceived({
   const gid = String(giftId || "").trim();
   const kind = String(targetKind || "").trim();
   const tid = String(targetId || "").trim();
-  if (!recipient || !sender || !gid || !kind || !tid) return false;
+  if (!recipient || !sender || !gid || !kind || !tid) {
+    console.warn("[gift] notify skipped — missing fields", {
+      recipient: Boolean(recipient),
+      sender: Boolean(sender),
+      giftId: gid,
+      targetKind: kind,
+      targetId: tid,
+    });
+    return false;
+  }
 
   const senderProfile = await profileByUserId(sender);
   const giftAmount = Number(amount) || 0;
-  const entityId = `${kind}:${tid}:gift:${gid}`;
+  const entityId = `${kind}:${tid}:gift:${gid}`.slice(0, 180);
   const metadata = {
     actor_username: senderProfile?.username || "",
     actor_avatar: senderProfile?.avatar || "",
@@ -106,16 +115,23 @@ async function notifyGiftReceived({
       metadata,
     }),
   });
-  if (!ins.ok) return false;
+  if (!ins.ok) {
+    console.warn("[gift] notification insert failed", ins.status, ins.text || ins.data);
+    return false;
+  }
 
   const actorDisplayName = String(metadata.actor_username || "").replace(/^@/, "").trim();
-  queuePrivacySafePush({
-    userId: recipient,
-    type: "gift_received",
-    entityId,
-    actorDisplayName,
-    metadata: { amount: giftAmount },
-  });
+  try {
+    await sendPrivacySafePush({
+      userId: recipient,
+      type: "gift_received",
+      entityId,
+      actorDisplayName,
+      metadata: { amount: giftAmount },
+    });
+  } catch (e) {
+    console.warn("[gift] push failed", e?.message || e);
+  }
   return true;
 }
 

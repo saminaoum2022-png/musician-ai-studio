@@ -98,18 +98,27 @@ module.exports = async function handler(req, res) {
     });
   }
 
-  void notifyGiftReceived({
-    giftId: out.gift_id,
-    senderUserId: user.userId,
-    recipientUserId,
-    amount: out.amount || amount,
-    targetKind,
-    targetId,
-    targetTitle,
-    targetArtUrl,
-  }).catch((e) => {
+  // Must await — Vercel kills the lambda after the response; fire-and-forget never ran.
+  try {
+    const notified = await notifyGiftReceived({
+      giftId: out.gift_id || out.giftId,
+      senderUserId: user.userId,
+      recipientUserId,
+      amount: out.amount || amount,
+      targetKind,
+      targetId,
+      targetTitle,
+      targetArtUrl,
+    });
+    if (!notified) {
+      console.warn("[gift] notification not created", {
+        giftId: out.gift_id || out.giftId,
+        recipientUserId,
+      });
+    }
+  } catch (e) {
     console.warn("[gift] notify failed", e?.message || e);
-  });
+  }
 
   return sendJson(res, 200, {
     ok: true,

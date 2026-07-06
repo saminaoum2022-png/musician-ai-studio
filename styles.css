@@ -35201,7 +35201,8 @@ section.mentorPage{
 .followActActIco--comment,
 .followActActIco--like,
 .followActActIco--plays,
-.followActActIco--gift{
+.followActActIco--gift,
+.followActActIco--analytics{
   fill: none;
   stroke: currentColor;
   stroke-width: 2;
@@ -35215,8 +35216,7 @@ section.mentorPage{
   transform: translateY(1px) scale(1.12);
 }
 .followActActIco--analytics{
-  fill: currentColor;
-  stroke: none;
+  transform: translateY(0.5px);
 }
 .followActAct[data-friends-act="reply"],
 .followActAct[data-friends-act="like"],

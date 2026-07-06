@@ -26,8 +26,8 @@ export function feedActIconGift(klass = "followActActIco followActActIco--gift")
   return `<svg class="${cls}" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M6.5 9.5H17.5C18.3 9.5 19 10.2 19 11V17.2C19 18.75 17.75 20 16.2 20H7.8C6.25 20 5 18.75 5 17.2V11C5 10.2 5.7 9.5 6.5 9.5Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M4.8 7.2H19.2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M12 7.2C11.12 6.02 10.24 5.31 9.36 5.31C8.62 5.31 8.02 5.72 8.02 6.02C8.02 6.34 8.63 7.2 9.74 7.2H12Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M12 7.2C12.88 6.02 13.76 5.31 14.64 5.31C15.3 5.31 15.98 5.72 15.98 6.02C15.98 6.34 15.37 7.2 14.26 7.2H12Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 }
 
-/** Analytics — filled bar chart (interaction bar, owner-only). */
+/** Analytics — simple bar chart (interaction bar, owner-only). */
 export function feedActIconAnalytics(klass = "followActActIco followActActIco--analytics") {
   const cls = String(klass || "followActActIco followActActIco--analytics").trim() || "followActActIco followActActIco--analytics";
-  return `<svg class="${cls}" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 13h3v7H4zM10.5 8h3v12h-3zM17 4h3v16h-3z"/></svg>`;
+  return `<svg class="${cls}" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M5 19H19" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M7.5 16V11" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M12 16V7" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M16.5 16V9.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>`;
 }

@@ -98,26 +98,38 @@ module.exports = async function handler(req, res) {
     });
   }
 
-  // Must await — Vercel kills the lambda after the response; fire-and-forget never ran.
-  try {
-    const notified = await notifyGiftReceived({
-      giftId: out.gift_id || out.giftId,
-      senderUserId: user.userId,
-      recipientUserId,
-      amount: out.amount || amount,
-      targetKind,
-      targetId,
-      targetTitle,
-      targetArtUrl,
+  // Return quickly; finish notify + push after the response (Vercel waitUntil).
+  const notifyPayload = {
+    giftId: out.gift_id || out.giftId,
+    senderUserId: user.userId,
+    recipientUserId,
+    amount: out.amount || amount,
+    targetKind,
+    targetId,
+    targetTitle,
+    targetArtUrl,
+  };
+  const notifyWork = notifyGiftReceived(notifyPayload)
+    .then((notified) => {
+      if (!notified) {
+        console.warn("[gift] notification not created", {
+          giftId: notifyPayload.giftId,
+          recipientUserId,
+        });
+      }
+    })
+    .catch((e) => {
+      console.warn("[gift] notify failed", e?.message || e);
     });
-    if (!notified) {
-      console.warn("[gift] notification not created", {
-        giftId: out.gift_id || out.giftId,
-        recipientUserId,
-      });
-    }
-  } catch (e) {
-    console.warn("[gift] notify failed", e?.message || e);
+
+  let waitUntilFn = null;
+  try {
+    waitUntilFn = require("@vercel/functions").waitUntil;
+  } catch {}
+  if (typeof waitUntilFn === "function") {
+    waitUntilFn(notifyWork);
+  } else {
+    await notifyWork;
   }
 
   return sendJson(res, 200, {

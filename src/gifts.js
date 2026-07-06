@@ -2,10 +2,11 @@
  * Post gifts — send paid or promo credits to another creator (never re-gift received gifts).
  */
 
-import { GIFT_TIER_OPTIONS } from "./gift-tier-icons.js";
-import { showGiftSentOverlay } from "./gift-sent-overlay.js";
+import { GIFT_TIER_OPTIONS, giftTierSheetIconHtml } from "./gift-tier-icons.js";
+import { showGiftSentOverlay, previewGiftSent, hideGiftSentOverlay } from "./gift-sent-overlay.js";
 
 const GIFT_TIERS = GIFT_TIER_OPTIONS.map((o) => o.tier);
+const PREVIEW_HOLD_MS = 380;
 
 let _deps = null;
 let _pending = null;
@@ -40,10 +41,10 @@ function mountGiftTierButtons() {
     (opt) => `
     <button
       type="button"
-      class="giftSheetTier"
+      class="giftSheetTier giftSheetTier--${opt.key}"
       data-gift-tier="${opt.tier}"
       aria-label="Send ${opt.name} gift, ${opt.creditsLabel}">
-      <span class="giftSheetTierIcon" aria-hidden="true">${opt.icon()}</span>
+      ${giftTierSheetIconHtml(opt.key)}
       <span class="giftSheetTierName">${opt.name}</span>
       <span class="giftSheetTierValue">${opt.creditsLabel}</span>
     </button>`,
@@ -80,9 +81,58 @@ function paintGiftSheet() {
   }
 }
 
+function bindGiftTierPreviewHold() {
+  const wrap = el("giftSheetTiers");
+  if (!wrap || wrap.dataset.previewBound === "1") return;
+  wrap.dataset.previewBound = "1";
+  wrap.querySelectorAll("[data-gift-tier]").forEach((btn) => {
+    const tier = Number(btn.getAttribute("data-gift-tier"));
+    if (!Number.isFinite(tier)) return;
+    let holdTimer = null;
+    let previewed = false;
+
+    const clearHold = () => {
+      if (holdTimer) {
+        clearTimeout(holdTimer);
+        holdTimer = null;
+      }
+    };
+
+    btn.addEventListener("pointerdown", () => {
+      previewed = false;
+      clearHold();
+      holdTimer = setTimeout(() => {
+        previewed = true;
+        previewGiftSent(tier, { haptic: _deps?.haptic });
+      }, PREVIEW_HOLD_MS);
+    });
+
+    btn.addEventListener("pointerup", clearHold);
+    btn.addEventListener("pointerleave", clearHold);
+    btn.addEventListener("pointercancel", clearHold);
+
+    btn.addEventListener(
+      "click",
+      (e) => {
+        if (!previewed) return;
+        e.preventDefault();
+        e.stopPropagation();
+        previewed = false;
+      },
+      true,
+    );
+  });
+}
+
 export function initGifts(deps) {
   _deps = deps || {};
   mountGiftTierButtons();
+  bindGiftTierPreviewHold();
+  try {
+    if (typeof globalThis !== "undefined") {
+      globalThis.previewGiftSent = (tier) => previewGiftSent(tier, { haptic: _deps?.haptic });
+    }
+  } catch {}
   const sheet = el("giftSheet");
   if (!sheet || sheet.dataset.giftsBound === "1") return;
   sheet.dataset.giftsBound = "1";
@@ -143,9 +193,20 @@ async function sendGift(amount) {
     _deps?.showToast?.("Sign in to send a gift.", { icon: "!" });
     return;
   }
+
+  const payload = {
+    targetKind: _pending.targetKind,
+    targetId: _pending.targetId,
+    recipientUserId: _pending.recipientUserId,
+    amount,
+  };
+
   _sending = true;
   _sendingTier = amount;
   paintGiftSheet();
+  closeGiftSheet();
+  showGiftSentOverlay(amount, { haptic: _deps?.haptic });
+
   try {
     const r = await fetch(_deps.apiUrl("/api/gifts/send"), {
       method: "POST",
@@ -153,15 +214,11 @@ async function sendGift(amount) {
         "Content-Type": "application/json",
         Authorization: `Bearer ${token}`,
       },
-      body: JSON.stringify({
-        targetKind: _pending.targetKind,
-        targetId: _pending.targetId,
-        recipientUserId: _pending.recipientUserId,
-        amount,
-      }),
+      body: JSON.stringify(payload),
     });
     const d = await r.json().catch(() => ({}));
     if (!r.ok) {
+      hideGiftSentOverlay();
       const msg = String(d?.error || "Could not send gift.");
       if (d?.code === "gifts_not_migrated") {
         _deps?.showToast?.("Gifts backend not ready — run supabase/gifts.sql first.", {
@@ -176,12 +233,12 @@ async function sendGift(amount) {
       } catch {}
       return;
     }
-    closeGiftSheet();
-    showGiftSentOverlay(amount, { haptic: _deps?.haptic });
+
     if (typeof _deps?.refreshCredits === "function") {
-      await _deps.refreshCredits({ silent: true });
+      void _deps.refreshCredits({ silent: true });
     }
   } catch (e) {
+    hideGiftSentOverlay();
     _deps?.showToast?.(e?.message || "Gift failed.", { icon: "!", durationMs: 3200 });
     try {
       _deps?.haptic?.("error");

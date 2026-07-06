@@ -126,7 +126,7 @@
       onload="this.media='all'"
     />
     <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Display:wght@900&family=Inter:wght@900&display=swap" /></noscript>
-    <link rel="stylesheet" href="./styles.css?v=20260706-022232" />
+    <link rel="stylesheet" href="./styles.css?v=20260706-151144" />
 
     <meta name="description" content="NabadAi is an AI music studio. Hum a melody, write lyrics, and ship a song." />
     <meta property="og:type" content="website" />
@@ -2173,6 +2173,28 @@
           </div>
         </div>
 
+        <div id="giftSheet" class="feedReplySheet giftSheet" aria-hidden="true" hidden>
+          <div class="feedReplySheetBackdrop" data-gift-dismiss="1"></div>
+          <div class="feedReplySheetCard giftSheetCard" role="dialog" aria-modal="true" aria-labelledby="giftSheetTitle">
+            <div class="feedReplySheetGrab" aria-hidden="true"></div>
+            <header class="feedReplySheetHead">
+              <button type="button" class="feedReplySheetClose" data-gift-dismiss="1" aria-label="Close">
+                <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M6.4 5 5 6.4 10.6 12 5 17.6 6.4 19 12 13.4 17.6 19 19 17.6 13.4 12 19 6.4 17.6 5 12 10.6Z"/></svg>
+              </button>
+              <p class="feedReplySheetKicker">Gift</p>
+              <h2 class="feedReplySheetTitle" id="giftSheetTitle">Send credits</h2>
+              <p class="feedReplySheetSub" id="giftSheetSub"></p>
+            </header>
+            <p class="giftSheetAvailable" id="giftSheetAvailable"></p>
+            <p class="giftSheetNote" id="giftSheetNote"></p>
+            <div class="giftSheetTiers" id="giftSheetTiers">
+              <button type="button" class="giftSheetTier" data-gift-tier="1">1 credit</button>
+              <button type="button" class="giftSheetTier" data-gift-tier="3">3 credits</button>
+              <button type="button" class="giftSheetTier" data-gift-tier="5">5 credits</button>
+            </div>
+          </div>
+        </div>
+
         <div id="friendsComposeSheet" class="friendsComposeSheet" aria-hidden="true" hidden>
           <div class="friendsComposeSheetBackdrop" data-friends-compose-dismiss="1"></div>
           <div class="friendsComposeSheetCard" role="dialog" aria-modal="true" aria-labelledby="followComposePrompt">
@@ -2964,7 +2986,24 @@
           <div class="creditsHero">
             <div class="creditsHeroLabel">Balance</div>
             <div class="creditsHeroValue"><span id="creditsBalanceBig">0</span></div>
-            <div class="creditsHeroSub">credits</div>
+            <div class="creditsHeroSub">credits total</div>
+            <div id="creditsBreakdown" class="creditsBreakdown" hidden>
+              <div class="creditsBreakdownRow">
+                <span class="creditsBreakdownLabel">Paid credits</span>
+                <span class="creditsBreakdownValue" id="creditsPaidValue">0</span>
+              </div>
+              <div class="creditsBreakdownHint" id="creditsPaidHint">Purchased or charged — can gift and create.</div>
+              <div class="creditsBreakdownRow">
+                <span class="creditsBreakdownLabel">Gift credits received</span>
+                <span class="creditsBreakdownValue" id="creditsGiftValue">0</span>
+              </div>
+              <div class="creditsBreakdownHint">Received from other users — create only, not giftable.</div>
+              <div class="creditsBreakdownRow">
+                <span class="creditsBreakdownLabel">Promo credits</span>
+                <span class="creditsBreakdownValue" id="creditsPromoValue">0</span>
+              </div>
+              <div class="creditsBreakdownHint">From promo codes — create only, not giftable.</div>
+            </div>
             <div id="creditsHeroEmail" class="creditsHeroEmail" style="display:none"></div>
           </div>
 
@@ -2993,6 +3032,7 @@
               <li><strong>1 sound</strong> (loop / ambience) = <strong>2.5 credits</strong>.</li>
               <li><strong>Lyrics are free</strong> — write as many drafts as you like.</li>
               <li>Each promo code can be redeemed <strong>once per account</strong>.</li>
+              <li><strong>Only paid credits can be gifted</strong> to other creators on their posts. Received gift credits and promo credits are for creating only.</li>
               <li>If a generation fails, your credits are <strong>refunded automatically</strong>.</li>
               <li>Need more credits? Redeem a promo code or email <strong>help@nabadai.com</strong>.</li>
             </ul>
@@ -3007,6 +3047,14 @@
 
           <section id="creditsAdminCard" class="creditsCard creditsAdminCard" style="display:none">
             <h3 class="creditsCardTitle">Admin</h3>
+            <div class="creditsAdminGrantRow">
+              <p class="creditsCardLead">Grant paid credits (giftable) for testing gifts.</p>
+              <div class="creditsRedeemRow">
+                <input id="creditsGrantPaidInput" class="creditsRedeemInput" type="number" min="1" max="500" step="1" placeholder="Amount" inputmode="numeric" />
+                <button type="button" id="btnCreditsGrantPaid" class="primary creditsRedeemBtn">Grant paid</button>
+              </div>
+              <div id="creditsGrantPaidMsg" class="creditsRedeemMsg" style="display:none"></div>
+            </div>
             <div class="creditsAdminGrid">
               <div class="creditsAdminStat">
                 <div class="creditsAdminStatLabel">Master engine balance</div>
@@ -4514,6 +4562,6 @@
     </script>
     <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
     <script src="./env.client.js" onerror="void 0"></script>
-    <script type="module" src="./src/app.js?v=20260706-022232"></script>
+    <script type="module" src="./src/app.js?v=20260706-151144"></script>
   </body>
 </html>

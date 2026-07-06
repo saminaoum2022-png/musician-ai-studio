@@ -20218,6 +20218,88 @@ a.vwPrimary,
   color: rgba(232,238,247,0.50);
   margin-top: 8px;
 }
+.creditsBreakdown{
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid rgba(255,255,255,0.10);
+  text-align: left;
+}
+.creditsBreakdownRow{
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+.creditsBreakdownLabel{
+  font-size: 13px;
+  font-weight: 600;
+  color: rgba(232,238,247,0.82);
+}
+.creditsBreakdownValue{
+  font-size: 15px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: #fff;
+}
+.creditsBreakdownHint{
+  font-size: 12px;
+  line-height: 1.35;
+  color: rgba(232,238,247,0.48);
+  margin: -2px 0 4px;
+}
+.creditsAdminGrantRow{
+  margin-bottom: 14px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+}
+.giftSheetCard{
+  padding-bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+}
+.giftSheetAvailable{
+  margin: 0 16px 6px;
+  font-size: 14px;
+  font-weight: 700;
+  color: rgba(232,238,247,0.88);
+}
+.giftSheetNote{
+  margin: 0 16px 14px;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: rgba(232,238,247,0.52);
+}
+.giftSheetTiers{
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  padding: 0 16px 8px;
+}
+.giftSheetTier{
+  appearance: none;
+  min-height: 44px;
+  border-radius: 14px;
+  border: 1px solid rgba(255,255,255,0.12);
+  background: rgba(255,255,255,0.05);
+  color: rgba(255,255,255,0.92);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 160ms ease, transform 160ms ease, opacity 160ms ease;
+  -webkit-tap-highlight-color: transparent;
+}
+.giftSheetTier:hover:not(:disabled){
+  background: rgba(255,255,255,0.09);
+}
+.giftSheetTier:active:not(:disabled){
+  transform: scale(0.96);
+}
+.giftSheetTier:disabled{
+  opacity: 0.38;
+  cursor: not-allowed;
+}
 .creditsCard{
   border-radius: 16px;
   border: 1px solid rgba(255,255,255,0.10);
@@ -34028,9 +34110,19 @@ section.mentorPage{
 }
 .followAct--xstyle .followActActions .followActAct{
   align-items: center;
-  min-height: 28px;
-  padding-top: 4px;
-  padding-bottom: 4px;
+  min-height: 44px;
+  padding-block: 6px;
+}
+.followAct--xstyle .followActActions .followActAct[data-friends-act="reply"],
+.followAct--xstyle .followActActions .followActAct[data-friends-act="like"],
+.followAct--xstyle .followActActions .followActAct[data-friends-act="plays"],
+.followAct--xstyle .followActActions .followActAct[data-friends-act="gift"],
+.followAct--xstyle .followActActions .followActAct.followActAct--gift,
+.followAct--xstyle .followActActions .followActAct[data-friends-act="analytics"],
+.followAct--xstyle .followActActions .followActAct.followActAct--analytics{
+  gap: 5px;
+  min-width: 44px;
+  justify-content: center;
 }
 .followAct--xstyle .followActActions .followActAct--stat:empty{
   min-height: 0;
@@ -35095,16 +35187,66 @@ section.mentorPage{
   stroke-linejoin: round;
   display: block;
 }
+.followActActIco--comment,
+.followActActIco--like,
+.followActActIco--plays,
+.followActActIco--gift,
+.followActActIco--analytics{
+  width: 22px;
+  height: 22px;
+  flex-shrink: 0;
+  display: block;
+}
+.followActActIco--comment,
+.followActActIco--like,
+.followActActIco--plays,
+.followActActIco--gift{
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.followActActIco--plays{
+  transform: scale(1.12);
+  transform-origin: center;
+}
+.followActActIco--analytics{
+  fill: currentColor;
+  stroke: none;
+}
+.followActAct[data-friends-act="reply"],
+.followActAct[data-friends-act="like"],
+.followActAct[data-friends-act="plays"],
+.followActAct[data-friends-act="gift"],
+.followActAct.followActAct--gift,
+.followActAct[data-friends-act="analytics"],
+.followActAct.followActAct--analytics{
+  gap: 5px;
+  min-width: 44px;
+  min-height: 44px;
+  padding-block: 6px;
+  align-items: center;
+  justify-content: center;
+}
+.followActAct[data-friends-act="reply"] .followActActCount,
+.followActAct[data-friends-act="like"] .followActActCount,
+.followActAct[data-friends-act="plays"] .followActActCount{
+  font-size: 12.5px;
+}
 /* Slightly larger interaction icons in the premium feed cards (Friends, own
    Profile, public profiles). Scoped so Discover and other rows stay at 16px. */
 :is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followActActIco{
   width: 18px;
   height: 18px;
 }
-.followActAct[data-friends-act="plays"] .followActActIco,
-.followActAct--analytics .followActActIco{
-  fill: currentColor;
-  stroke: none;
+:is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followActActIco--comment,
+:is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followActActIco--like,
+:is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followActActIco--plays,
+:is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followActActIco--gift,
+:is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followActActIco--analytics{
+  width: 22px;
+  height: 22px;
 }
 .followActActCount{
   font-variant-numeric: tabular-nums;
@@ -35124,11 +35266,12 @@ section.mentorPage{
   100% { transform: scale(1); }
 }
 .followActAct[data-friends-act="like"].isLiked{
-  color: var(--danger);
+  color: #FF4D5A;
 }
+.followActAct[data-friends-act="like"].isLiked .followActActIco--like,
 .followActAct[data-friends-act="like"].isLiked .followActActIco{
-  fill: currentColor;
-  stroke: currentColor;
+  fill: #FF4D5A;
+  stroke: #FF4D5A;
 }
 .followActAct[data-friends-act="like"].isLiked:hover{
   background: rgba(255, 77, 109, 0.12);
@@ -41490,17 +41633,28 @@ body[data-route="friends"] .followAct--xstyle .followActActions{
 }
 body[data-route="friends"] .followAct--xstyle .followActActions .followActAct{
   justify-content: center;
-  min-height: 34px;
-  padding: 4px 9px;
+  min-height: 44px;
+  padding-block: 6px;
+  padding-inline: 9px;
   border: 0;
   background: transparent;
   color: rgba(232,238,247,.46);
   font-size: 14px;
   font-weight: 800;
 }
+body[data-route="friends"] .followAct--xstyle .followActActions .followActAct[data-friends-act="reply"],
+body[data-route="friends"] .followAct--xstyle .followActActions .followActAct[data-friends-act="like"],
+body[data-route="friends"] .followAct--xstyle .followActActions .followActAct[data-friends-act="plays"],
+body[data-route="friends"] .followAct--xstyle .followActActions .followActAct[data-friends-act="gift"],
+body[data-route="friends"] .followAct--xstyle .followActActions .followActAct.followActAct--gift,
+body[data-route="friends"] .followAct--xstyle .followActActions .followActAct[data-friends-act="analytics"],
+body[data-route="friends"] .followAct--xstyle .followActActions .followActAct.followActAct--analytics{
+  gap: 5px;
+  min-width: 44px;
+}
 body[data-route="friends"] .followAct--xstyle .followActActions .followActAct.isLiked,
 body[data-route="friends"] .followAct--xstyle .followActActions .followActAct[data-friends-act="like"].isLiked{
-  color: var(--danger);
+  color: #FF4D5A;
   text-shadow: 0 0 18px rgba(255, 77, 109, 0.22);
 }
 

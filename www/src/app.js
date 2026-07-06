@@ -70,6 +70,8 @@ import {
 import { isPollinationsCoverEligible, shouldUseAbstractCover } from "./cover-art/params.js";
 import { DEFAULT_SONG_COVER_URL, isLogoCoverUrl, normalizeSongCoverUrl, playerEmptyArtUrl } from "./cover-art/placeholders.js";
 import { initCoverArtOverlay, syncCoverArtOverlay } from "./cover-art/overlay.js";
+import { feedActIconAnalytics, feedActIconComment, feedActIconGift, feedActIconLike, feedActIconPlays } from "./feed-action-icons.js";
+import { initGifts, openGiftSheetFromButton } from "./gifts.js";
 import {
   clearGenerationPending,
   GENERATION_VARIANT_COUNT,
@@ -170,7 +172,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260706-022232";
+const APP_BUILD = "20260706-151144";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -775,6 +777,9 @@ const els = {
   creditsHeroEmail: document.getElementById("creditsHeroEmail"),
   creditsRedeemInput: document.getElementById("creditsRedeemInput"),
   btnCreditsRedeem: document.getElementById("btnCreditsRedeem"),
+  creditsGrantPaidInput: document.getElementById("creditsGrantPaidInput"),
+  btnCreditsGrantPaid: document.getElementById("btnCreditsGrantPaid"),
+  creditsGrantPaidMsg: document.getElementById("creditsGrantPaidMsg"),
   creditsRedeemMsg: document.getElementById("creditsRedeemMsg"),
   creditsLedgerList: document.getElementById("creditsLedgerList"),
   creditsAdminCard: document.getElementById("creditsAdminCard"),
@@ -5042,6 +5047,19 @@ try {
     toAudioProxyUrl,
     normalizeAudioUrlForPlayback,
     primeAudioElementInGesture,
+  });
+} catch {}
+try {
+  initGifts({
+    apiUrl,
+    getAuthToken: getSupabaseAuthToken,
+    getAuthUserId: () => String(authSession?.user?.id || "").trim(),
+    getGiftableBalance: () =>
+      Number(creditsState.giftableBalance ?? creditsState.paidBalance ?? 0),
+    formatCreditsAmount,
+    refreshCredits: refreshMyCredits,
+    showToast,
+    haptic,
   });
 } catch {}
 try {
@@ -13320,7 +13338,7 @@ function followActActionsRowHtml({ kind, targetId, targetUserId, plays, playsPen
   const playsBlock =
     kind === "music"
       ? `<span class="followActAct followActAct--stat" data-friends-act="plays" data-play-count-pending="${pending ? "1" : "0"}" aria-label="${escapeHtml(playsAria)}">
-        <svg class="followActActIco" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4v16l14-8L5 4Z"/></svg>
+        ${feedActIconPlays()}
         <span class="followActActCount">${escapeHtml(playsLabel)}</span>
       </span>`
       : `<span class="followActAct followActAct--stat" aria-hidden="true"></span>`;
@@ -13329,7 +13347,7 @@ function followActActionsRowHtml({ kind, targetId, targetUserId, plays, playsPen
   const analyticsBlock =
     kind === "music" && isOwner
       ? `<button type="button" class="followActAct followActAct--analytics" data-friends-act="analytics" aria-label="Song analytics">
-        <svg class="followActActIco" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 13h3v7H4zM10.5 8h3v12h-3zM17 4h3v16h-3z"/></svg>
+        ${feedActIconAnalytics()}
       </button>`
       : "";
   // Repost is only meaningful on someone else's song — never your own.
@@ -13340,16 +13358,23 @@ function followActActionsRowHtml({ kind, targetId, targetUserId, plays, playsPen
         <span class="followActActCount" data-friends-act-count="repost"></span>
       </button>`
       : "";
+  const giftBlock =
+    kind === "music" && !isOwner && myId
+      ? `<button type="button" class="followActAct followActAct--gift" data-friends-act="gift" aria-label="Gift credits">
+        ${feedActIconGift()}
+      </button>`
+      : "";
   return `
     <div class="followActActions" data-friends-act-row="1" data-friends-act-kind="${safeKind}" data-friends-act-target-kind="${safeTargetKind}" data-friends-act-id="${safeId}" data-friends-act-uid="${safeUid}">
       <button type="button" class="followActAct" data-friends-act="reply" aria-label="Reply">
-        <svg class="followActActIco" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v10H8l-4 4V5Z"/></svg>
+        ${feedActIconComment()}
         <span class="followActActCount" data-friends-act-count="reply"></span>
       </button>
       <button type="button" class="followActAct" data-friends-act="like" aria-label="Like" aria-pressed="false">
-        <svg class="followActActIco" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s-7-4.5-9.5-9A5.5 5.5 0 0 1 12 6a5.5 5.5 0 0 1 9.5 6c-2.5 4.5-9.5 9-9.5 9Z"/></svg>
+        ${feedActIconLike()}
         <span class="followActActCount" data-friends-act-count="like"></span>
       </button>
+      ${giftBlock}
       ${analyticsBlock}
       ${playsBlock}
       ${repostBlock}
@@ -15750,6 +15775,7 @@ function bindFriendsPageOnce() {
         e.stopPropagation();
         if (kind === "like") void handleFeedLikeTap(actBtn);
         else if (kind === "reply") void openFeedReplySheetFromButton(actBtn);
+        else if (kind === "gift") openGiftSheetFromButton(actBtn);
         else if (kind === "repost") void handleFeedRepostTap(actBtn);
         else if (kind === "analytics") void openSongAnalyticsSheet(actBtn);
         return;
@@ -15788,6 +15814,7 @@ function wireUserPublicFollowActHostOnce(host) {
       e.stopPropagation();
       if (kind === "like") void handleFeedLikeTap(actBtn);
       else if (kind === "reply") void openFeedReplySheetFromButton(actBtn);
+      else if (kind === "gift") openGiftSheetFromButton(actBtn);
       else if (kind === "repost") void handleFeedRepostTap(actBtn);
       else if (kind === "analytics") void openSongAnalyticsSheet(actBtn);
       return;
@@ -21329,6 +21356,11 @@ const FULL_SONG_CREDIT_COST = 12;
 const SOUND_CREDIT_COST = 2.5;
 const creditsState = {
   balance: 0,
+  paidBalance: 0,
+  giftBalance: 0,
+  promoBalance: 0,
+  giftableBalance: 0,
+  bucketsReady: false,
   ledger: [],
   isAdmin: false,
   loaded: false,
@@ -21347,6 +21379,22 @@ function formatCreditsAmount(n) {
   const clamped = Math.max(0, x);
   const s = clamped.toFixed(4).replace(/\.?0+$/, "");
   return s || "0";
+}
+
+function renderCreditsBreakdown() {
+  const root = document.getElementById("creditsBreakdown");
+  if (!root) return;
+  if (!creditsState.bucketsReady) {
+    root.hidden = true;
+    return;
+  }
+  root.hidden = false;
+  const paidEl = document.getElementById("creditsPaidValue");
+  const giftEl = document.getElementById("creditsGiftValue");
+  const promoEl = document.getElementById("creditsPromoValue");
+  if (paidEl) paidEl.textContent = formatCreditsAmount(creditsState.paidBalance);
+  if (giftEl) giftEl.textContent = formatCreditsAmount(creditsState.giftBalance);
+  if (promoEl) promoEl.textContent = formatCreditsAmount(creditsState.promoBalance);
 }
 
 function paintCreditsDisplays() {
@@ -21372,6 +21420,7 @@ function paintCreditsDisplays() {
     els.profileCreditsLink.classList.toggle("isAdmin", admin);
     els.profileCreditsLink.setAttribute("aria-label", `${aria}. Tap to manage credits.`);
   }
+  renderCreditsBreakdown();
 }
 
 function setCreditsBalance(n) {
@@ -21384,6 +21433,9 @@ function setCreditsBalance(n) {
 function formatLedgerReason(reason) {
   const r = String(reason || "");
   if (r === "promo_redeem") return "Promo code redeemed";
+  if (r === "paid_purchase") return "Paid credits added";
+  if (r === "gift_sent") return "Gift sent";
+  if (r === "gift_received") return "Gift received";
   if (r === "full_song") return "Full song generation";
   if (r === "sound_generate") return "Sound generation";
   if (r === "refund_full_song") return "Refund (failed generation)";
@@ -21444,6 +21496,11 @@ async function refreshMyCredits({ silent = false } = {}) {
     const d = await r.json().catch(() => ({}));
     if (!r.ok) throw new Error(d?.error || `credits/me ${r.status}`);
     creditsState.balance = Number(d?.balance || 0);
+    creditsState.paidBalance = Number(d?.paidBalance ?? 0);
+    creditsState.giftBalance = Number(d?.giftBalance ?? 0);
+    creditsState.promoBalance = Number(d?.promoBalance ?? 0);
+    creditsState.giftableBalance = Number(d?.giftableBalance ?? d?.paidBalance ?? 0);
+    creditsState.bucketsReady = Boolean(d?.bucketsReady);
     creditsState.ledger = Array.isArray(d?.ledger) ? d.ledger : [];
     creditsState.isAdmin = Boolean(d?.isAdmin);
     if (!creditsState.isAdmin) sunoCreditsLive = null;
@@ -21538,6 +21595,70 @@ function setCreditsRedeemMsg(text, kind) {
   els.creditsRedeemMsg.classList.add(
     kind === "ok" ? "isOk" : kind === "warn" ? "isWarn" : "isErr"
   );
+}
+
+function setCreditsGrantPaidMsg(text, kind) {
+  if (!els.creditsGrantPaidMsg) return;
+  if (!text) {
+    els.creditsGrantPaidMsg.style.display = "none";
+    els.creditsGrantPaidMsg.textContent = "";
+    els.creditsGrantPaidMsg.classList.remove("isOk", "isWarn", "isErr");
+    return;
+  }
+  els.creditsGrantPaidMsg.style.display = "";
+  els.creditsGrantPaidMsg.textContent = text;
+  els.creditsGrantPaidMsg.classList.remove("isOk", "isWarn", "isErr");
+  els.creditsGrantPaidMsg.classList.add(
+    kind === "ok" ? "isOk" : kind === "warn" ? "isWarn" : "isErr"
+  );
+}
+
+async function grantPaidCredits(rawAmount) {
+  const token = getSupabaseAuthToken();
+  if (!token) {
+    setCreditsGrantPaidMsg("Sign in first.", "err");
+    return;
+  }
+  if (!creditsState.isAdmin) {
+    setCreditsGrantPaidMsg("Admin only.", "err");
+    return;
+  }
+  const amount = Number(rawAmount);
+  if (!Number.isFinite(amount) || amount <= 0 || amount > 500) {
+    setCreditsGrantPaidMsg("Enter an amount between 1 and 500.", "warn");
+    return;
+  }
+  if (els.btnCreditsGrantPaid) els.btnCreditsGrantPaid.disabled = true;
+  setCreditsGrantPaidMsg("Granting…", "warn");
+  try {
+    const r = await fetch(apiUrl("/api/credits/grant-paid"), {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ amount }),
+    });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok || !d?.ok) {
+      const msg =
+        d?.code === "gifts_not_migrated"
+          ? "Run supabase/gifts.sql in Supabase first."
+          : d?.error || d?.message || "Could not grant paid credits.";
+      setCreditsGrantPaidMsg(msg, "err");
+      return;
+    }
+    setCreditsGrantPaidMsg(
+      `+${formatCreditsAmount(d.granted)} paid credits added. Paid balance: ${formatCreditsAmount(d.paidBalance)}.`,
+      "ok"
+    );
+    if (els.creditsGrantPaidInput) els.creditsGrantPaidInput.value = "";
+    await refreshMyCredits();
+  } catch (e) {
+    setCreditsGrantPaidMsg(e?.message || "Network error.", "err");
+  } finally {
+    if (els.btnCreditsGrantPaid) els.btnCreditsGrantPaid.disabled = false;
+  }
 }
 
 async function redeemPromoCode(rawCode) {
@@ -21943,6 +22064,11 @@ function resetProfileUiToGuest() {
   // [data-logged-in] flag on <body> so a "0 credits" tag doesn't
   // appear for guests — `renderAuthStatus()` flips that flag.
   creditsState.balance = 0;
+  creditsState.paidBalance = 0;
+  creditsState.giftBalance = 0;
+  creditsState.promoBalance = 0;
+  creditsState.giftableBalance = 0;
+  creditsState.bucketsReady = false;
   creditsState.ledger = [];
   creditsState.isAdmin = false;
   creditsState.loaded = false;
@@ -24007,6 +24133,7 @@ function wireProfileFollowActFeedListOnce(host) {
       e.stopPropagation();
       if (kind === "like") void handleFeedLikeTap(actBtn);
       else if (kind === "reply") void openFeedReplySheetFromButton(actBtn);
+      else if (kind === "gift") openGiftSheetFromButton(actBtn);
       else if (kind === "repost") void handleFeedRepostTap(actBtn);
       else if (kind === "analytics") void openSongAnalyticsSheet(actBtn);
       return;
@@ -50297,6 +50424,24 @@ wireAdminCodesListCopy();
 if (els.btnCreditsRedeem) {
   els.btnCreditsRedeem.addEventListener("click", () => {
     void redeemPromoCode(els.creditsRedeemInput?.value || "");
+  });
+}
+if (els.btnCreditsGrantPaid) {
+  els.btnCreditsGrantPaid.addEventListener("click", () => {
+    void grantPaidCredits(els.creditsGrantPaidInput?.value || "");
+  });
+}
+if (els.creditsGrantPaidInput) {
+  els.creditsGrantPaidInput.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      void grantPaidCredits(els.creditsGrantPaidInput.value || "");
+    }
+  });
+  els.creditsGrantPaidInput.addEventListener("input", () => {
+    if (els.creditsGrantPaidMsg && els.creditsGrantPaidMsg.style.display !== "none") {
+      setCreditsGrantPaidMsg("", "");
+    }
   });
 }
 if (els.creditsRedeemInput) {

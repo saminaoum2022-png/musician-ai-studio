@@ -1396,6 +1396,24 @@ body{
      and break sticky/iOS bottom-bar offsets. */
   overflow-x: clip;
 }
+/* Mobile shell: long-press is used for preview, record, etc. — not text selection.
+ * Re-enable only where users genuinely edit or copy (inputs, lyrics, legal). */
+html,
+body{
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+input,
+textarea,
+select,
+[contenteditable="true"],
+.allowTextSelect,
+.allowTextSelect *{
+  -webkit-user-select: text;
+  user-select: text;
+  -webkit-touch-callout: default;
+}
 body[data-route="hub"],
 body[data-route="challenges"]{
   background: var(--bg);

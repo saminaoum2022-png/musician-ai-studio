@@ -172,7 +172,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260706-183753";
+const APP_BUILD = "20260706-184541";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -44401,7 +44401,22 @@ function dismissPlayerConfirm(answer) {
     _playerConfirmResolver = null;
   }
 }
+function isTextSelectionAllowedTarget(el) {
+  if (!el || el === document.body) return false;
+  const tag = String(el.tagName || "").toUpperCase();
+  if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return true;
+  if (el.isContentEditable) return true;
+  try {
+    if (el.closest?.(".allowTextSelect")) return true;
+  } catch {}
+  return false;
+}
+
 if (typeof document !== "undefined") {
+  document.addEventListener("selectstart", (e) => {
+    if (!isTextSelectionAllowedTarget(e.target)) e.preventDefault();
+  }, { capture: true });
+
   document.addEventListener("DOMContentLoaded", () => {
     try { initNabadVerificationUi(); } catch {}
     try { initCoverImageFallbackOnce(); } catch {}

@@ -231,15 +231,12 @@ export function showGiftSentOverlay(amount, { haptic: _hapticDep } = {}) {
 
   hideTimer = setTimeout(() => {
     if (token !== animToken) return;
-    root.classList.add("isLeaving");
-    root.classList.remove("isActive");
-    fadeTimer = setTimeout(() => {
-      if (token !== animToken) return;
-      root.hidden = true;
-      root.setAttribute("aria-hidden", "true");
-      root.classList.remove("isLeaving");
-      clearHapticTimers();
-    }, 280);
+    /* Animations end at opacity 0 with fill-mode forwards — hide immediately.
+       Do not remove isActive first; that resets base styles and flashes dim/icon. */
+    root.hidden = true;
+    root.setAttribute("aria-hidden", "true");
+    root.classList.remove("isActive", "isLeaving");
+    clearHapticTimers();
   }, OVERLAY_MS);
 }
 
@@ -249,8 +246,8 @@ export function hideGiftSentOverlay() {
   if (!root || root.hidden) return;
   clearTimers();
   animToken += 1;
-  root.classList.remove("isActive");
   root.classList.add("isLeaving");
+  root.classList.remove("isActive");
   fadeTimer = setTimeout(() => {
     root.hidden = true;
     root.setAttribute("aria-hidden", "true");

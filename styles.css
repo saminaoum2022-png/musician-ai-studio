@@ -20486,17 +20486,32 @@ a.vwPrimary,
   animation: giftSentDimIn 2650ms ease forwards;
 }
 .giftSentOverlay.isLeaving .giftSentDim{
-  animation: giftSentDimOut 280ms ease forwards;
+  opacity: 0;
+  animation: none;
+  transition: opacity 140ms ease;
+}
+/* Keep icon stack hidden when isActive drops — base .giftSentStage is opacity:1 */
+.giftSentOverlay.isLeaving .giftSentStage{
+  opacity: 0;
+  transform: scale(1.02);
+  animation: none;
+}
+.giftSentOverlay.isLeaving .giftSentIconStack{
+  animation: none;
+}
+.giftSentOverlay.isLeaving .giftSentGlow--base,
+.giftSentOverlay.isLeaving .giftSentGlow--clash{
+  opacity: 0;
+  animation: none;
+}
+.giftSentOverlay.isLeaving .giftSentLabel{
+  opacity: 0;
 }
 @keyframes giftSentDimIn{
   0%{ opacity: 0; }
   4%{ opacity: 1; }
   78%{ opacity: 1; }
   100%{ opacity: 0; }
-}
-@keyframes giftSentDimOut{
-  from{ opacity: 0.75; }
-  to{ opacity: 0; }
 }
 .giftSentStage{
   position: relative;

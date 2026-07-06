@@ -126,7 +126,7 @@
       onload="this.media='all'"
     />
     <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Display:wght@900&family=Inter:wght@900&display=swap" /></noscript>
-    <link rel="stylesheet" href="./styles.css?v=20260707-002459" />
+    <link rel="stylesheet" href="./styles.css?v=20260707-004811" />
 
     <meta name="description" content="NabadAi is an AI music studio. Hum a melody, write lyrics, and ship a song." />
     <meta property="og:type" content="website" />
@@ -2177,18 +2177,20 @@
           <div class="feedReplySheetBackdrop" data-gift-dismiss="1"></div>
           <div class="feedReplySheetCard giftSheetCard" role="dialog" aria-modal="true" aria-labelledby="giftSheetTitle">
             <div class="feedReplySheetGrab" aria-hidden="true"></div>
-            <header class="feedReplySheetHead">
+            <header class="feedReplySheetHead giftSheetHead">
               <button type="button" class="feedReplySheetClose" data-gift-dismiss="1" aria-label="Close">
                 <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M6.4 5 5 6.4 10.6 12 5 17.6 6.4 19 12 13.4 17.6 19 19 17.6 13.4 12 19 6.4 17.6 5 12 10.6Z"/></svg>
               </button>
-              <p class="feedReplySheetKicker">Gift</p>
-              <h2 class="feedReplySheetTitle" id="giftSheetTitle">Send a gift</h2>
-              <p class="feedReplySheetSub" id="giftSheetSub"></p>
+              <h2 class="feedReplySheetTitle giftSheetTitle" id="giftSheetTitle">Send a Gift</h2>
+              <p class="feedReplySheetSub giftSheetSub" id="giftSheetSub"></p>
             </header>
-            <p class="giftSheetAvailable" id="giftSheetAvailable"></p>
-            <p class="giftSheetNote" id="giftSheetNote"></p>
+            <div class="giftSheetBalance" id="giftSheetBalance" aria-live="polite">
+              <p class="giftSheetBalanceLabel">Your balance</p>
+              <p class="giftSheetBalanceAmount" id="giftSheetBalanceAmount">0</p>
+              <p class="giftSheetBalanceCaption">Credits Available</p>
+            </div>
             <div class="giftSheetTiers" id="giftSheetTiers" aria-label="Choose a gift"></div>
-            <p class="giftSheetPreviewHint" id="giftSheetPreviewHint">Hold Mic, Pulse, or Star to preview the animation</p>
+            <p class="giftSheetPreviewHint" id="giftSheetPreviewHint">Hold to preview</p>
           </div>
         </div>
 
@@ -4559,6 +4561,6 @@
     </script>
     <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
     <script src="./env.client.js" onerror="void 0"></script>
-    <script type="module" src="./src/app.js?v=20260707-002459"></script>
+    <script type="module" src="./src/app.js?v=20260707-004811"></script>
   </body>
 </html>

@@ -53,22 +53,12 @@ function mountGiftTierButtons() {
 
 function paintGiftSheet() {
   const sub = el("giftSheetSub");
-  const avail = el("giftSheetAvailable");
-  const note = el("giftSheetNote");
-  if (!sub || !avail) return;
+  const balanceAmount = el("giftSheetBalanceAmount");
+  if (!sub || !balanceAmount) return;
   const p = _pending || {};
-  const title = String(p.songTitle || "this post").trim() || "this post";
-  sub.textContent = p.recipientHandle
-    ? `Support @${p.recipientHandle} · ${title}`
-    : `Support this creator · ${title}`;
+  sub.textContent = p.recipientHandle ? `to @${p.recipientHandle}` : "to this creator";
   const giftable = Number(_deps?.getGiftableBalance?.() || 0);
-  avail.textContent = `${_deps?.formatCreditsAmount?.(giftable) ?? giftable} credits available to gift`;
-  if (note) {
-    note.textContent =
-      giftable > 0
-        ? "Paid and promo credits can be gifted. Received gift credits are for creating only."
-        : "You need paid or promo credits to gift. Received gift credits cannot be sent.";
-  }
+  balanceAmount.textContent = String(_deps?.formatCreditsAmount?.(giftable) ?? giftable);
   const tierWrap = el("giftSheetTiers");
   if (tierWrap) {
     tierWrap.querySelectorAll("[data-gift-tier]").forEach((btn) => {

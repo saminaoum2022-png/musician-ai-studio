@@ -23969,14 +23969,14 @@ body[data-profile-songs-seg="reposts"] .profileSongsToolbar{
 .profileRepostsList.profileActivitiesList.followActStack .followAct.followAct--xstyle,
 #profileRepostsList.followActStack .followAct.followAct--xstyle,
 #userPublicRepostsList.followActStack .followAct.followAct--xstyle{
-  padding: 0 14px var(--feed-post-divider-gap, 28px);
+  padding: 0 14px var(--feed-post-gap-after-actions, 12px);
   padding-left: 14px;
   padding-right: 14px;
 }
 .profileRepostsList.profileActivitiesList.followActStack .followAct,
 #profileRepostsList.followActStack .followAct,
 #userPublicRepostsList.followActStack .followAct{
-  padding: 0 14px var(--feed-post-divider-gap, 28px);
+  padding: 0 14px var(--feed-post-gap-after-actions, 12px);
   padding-left: 14px;
   padding-right: 14px;
 }
@@ -34029,7 +34029,8 @@ section.mentorPage{
 .followAct--xstyle{
   --feed-song-art-size: 78px;
   --feed-song-card-min-h: 88px;
-  --feed-post-divider-gap: 28px;
+  --feed-post-gap-after-actions: 12px;
+  --feed-post-gap-before-header: 12px;
   --feed-post-divider-color: rgba(255, 255, 255, 0.063);
   --feed-cover-radius: 19px;
   --feed-cover-art-radius: 18px;
@@ -34045,7 +34046,7 @@ section.mentorPage{
   flex-direction: column;
   align-items: stretch;
   gap: 0;
-  padding: 0 14px var(--feed-post-divider-gap);
+  padding: 0 14px var(--feed-post-gap-after-actions, 12px);
   border: 0;
   border-bottom: 1px solid var(--feed-post-divider-color, rgba(255, 255, 255, 0.063));
   background: transparent;
@@ -34060,7 +34061,7 @@ section.mentorPage{
   padding-top: 10px;
 }
 .followActStack .followAct.followAct--xstyle + .followAct.followAct--xstyle{
-  padding-top: var(--feed-post-divider-gap, 12px);
+  padding-top: var(--feed-post-gap-before-header, 12px);
 }
 .followActStack .followAct.followAct--xstyle:hover,
 .followAct--xstyle:hover{
@@ -34075,7 +34076,7 @@ section.mentorPage{
   flex-direction: column;
   align-items: stretch;
   gap: 0;
-  padding: 0 14px var(--feed-post-divider-gap, 28px);
+  padding: 0 14px var(--feed-post-gap-after-actions, 12px);
   padding-left: 14px;
   padding-right: 14px;
   border: 0;
@@ -34089,7 +34090,7 @@ section.mentorPage{
 .profileActivitiesList.followActStack .followAct.followAct--xstyle + .followAct.followAct--xstyle,
 #profileRepostsList.followActStack .followAct.followAct--xstyle + .followAct.followAct--xstyle,
 #userPublicRepostsList.followActStack .followAct.followAct--xstyle + .followAct.followAct--xstyle{
-  padding-top: var(--feed-post-divider-gap, 12px);
+  padding-top: var(--feed-post-gap-before-header, 12px);
 }
 .friendsPage .followActStack .followAct.followAct--xstyle:first-child{
   padding-top: 10px;
@@ -41576,15 +41577,15 @@ body[data-route="friends"] .friendsPage{
 }
 .friendsPage .followActStack .followAct.followAct--xstyle{
   margin: 0;
-  padding: 0 20px 30px;
+  padding: 0 20px var(--feed-post-gap-after-actions, 12px);
   border: 0;
   border-radius: 0;
   background: transparent;
   box-shadow: none;
-  border-bottom: 1px solid rgba(232, 238, 247, .075);
+  border-bottom: 1px solid var(--feed-post-divider-color, rgba(255, 255, 255, 0.063));
 }
 .friendsPage .followActStack .followAct.followAct--xstyle + .followAct.followAct--xstyle{
-  padding-top: 30px;
+  padding-top: var(--feed-post-gap-before-header, 12px);
 }
 body[data-route="friends"] .followAct--xstyle .followActTop{
   gap: 12px;

@@ -35196,6 +35196,7 @@ section.mentorPage{
   height: 22px;
   flex-shrink: 0;
   display: block;
+  transform-origin: center;
 }
 .followActActIco--comment,
 .followActActIco--like,
@@ -35207,9 +35208,11 @@ section.mentorPage{
   stroke-linecap: round;
   stroke-linejoin: round;
 }
+.followActActIco--gift{
+  transform: translateY(0.5px) scale(1.06);
+}
 .followActActIco--plays{
-  transform: scale(1.12);
-  transform-origin: center;
+  transform: translateY(1px) scale(1.12);
 }
 .followActActIco--analytics{
   fill: currentColor;

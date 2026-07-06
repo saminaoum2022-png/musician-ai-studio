@@ -20,10 +20,10 @@ export function feedActIconPlays(klass = "followActActIco followActActIco--plays
   return `<svg class="${cls}" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M7.5 5.6C7.5 4.55 8.65 3.9 9.55 4.45L18.05 9.85C18.9 10.4 18.9 11.6 18.05 12.15L9.55 17.55C8.65 18.1 7.5 17.45 7.5 16.4V5.6Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 }
 
-/** Gift — minimal present (interaction bar). */
+/** Gift — minimal present (interaction bar). Bow loops ~12% smaller for mobile legibility. */
 export function feedActIconGift(klass = "followActActIco followActActIco--gift") {
   const cls = String(klass || "followActActIco followActActIco--gift").trim() || "followActActIco followActActIco--gift";
-  return `<svg class="${cls}" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M6.4 9.3H17.6C18.35 9.3 18.9 9.85 18.9 10.6V18.2C18.9 19.2 18.1 20 17.1 20H6.9C5.9 20 5.1 19.2 5.1 18.2V10.6C5.1 9.85 5.65 9.3 6.4 9.3Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 7.2H19V10H5V7.2Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M12 7.2C10.9 5.4 9.85 4.4 8.75 4.4C7.75 4.4 7.1 5.05 7.1 5.9C7.1 6.75 7.85 7.2 8.9 7.2H12Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M12 7.2C13.1 5.4 14.15 4.4 15.25 4.4C16.25 4.4 16.9 5.05 16.9 5.9C16.9 6.75 16.15 7.2 15.1 7.2H12Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+  return `<svg class="${cls}" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M6.5 9.5H17.5C18.3 9.5 19 10.2 19 11V17.2C19 18.75 17.75 20 16.2 20H7.8C6.25 20 5 18.75 5 17.2V11C5 10.2 5.7 9.5 6.5 9.5Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M4.8 7.2H19.2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M12 7.2C11.12 6.02 10.24 5.31 9.36 5.31C8.62 5.31 8.02 5.72 8.02 6.02C8.02 6.34 8.63 7.2 9.74 7.2H12Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M12 7.2C12.88 6.02 13.76 5.31 14.64 5.31C15.3 5.31 15.98 5.72 15.98 6.02C15.98 6.34 15.37 7.2 14.26 7.2H12Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 }
 
 /** Analytics — filled bar chart (interaction bar, owner-only). */

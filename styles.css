@@ -1586,7 +1586,7 @@ body.booting .bootSplashDots{
 .ptrMovable--profile.isPtrPulling .ptrSpinnerAnchor,
 .ptrMovable--profile.isPtrRefreshing .ptrSpinnerAnchor{
   position: fixed;
-  top: calc(env(safe-area-inset-top, 0px) + 18px + var(--ptr-offset, 0px) * 0.26);
+  top: calc(env(safe-area-inset-top, 0px) + 12px + var(--ptr-offset, 0px) * 0.18);
   left: 50%;
   margin-left: -16px;
   transform: none;
@@ -1595,7 +1595,7 @@ body.booting .bootSplashDots{
 @media (max-width: 720px){
   .ptrMovable--profile.isPtrPulling .ptrSpinnerAnchor,
   .ptrMovable--profile.isPtrRefreshing .ptrSpinnerAnchor{
-    top: calc(env(safe-area-inset-top, 0px) + 14px + var(--ptr-offset, 0px) * 0.22);
+    top: calc(env(safe-area-inset-top, 0px) + 10px + var(--ptr-offset, 0px) * 0.15);
   }
 }
 @keyframes ptrRingSpin{

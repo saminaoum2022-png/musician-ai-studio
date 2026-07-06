@@ -173,7 +173,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260707-020557";
+const APP_BUILD = "20260707-023049";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -11894,12 +11894,8 @@ function readFollowActListDomKey(listEl) {
   return keys.join("|");
 }
 
-function profileActivitiesFeedKey(feedItems) {
-  const identity = [
-    String(activeProfile?.username || "").trim(),
-    normalizeDisplayName(activeProfile?.displayName || ""),
-  ].join(":");
-  const items = (feedItems || [])
+function profileActivitiesFeedItemsKey(feedItems) {
+  return (feedItems || [])
     .map((item) => {
       if (item?.kind === "repost") {
         const id = String(item?.repost?.id || "").trim();
@@ -11910,7 +11906,21 @@ function profileActivitiesFeedKey(feedItems) {
     })
     .filter(Boolean)
     .join("|");
+}
+
+function profileActivitiesFeedKey(feedItems) {
+  const identity = [
+    String(activeProfile?.username || "").trim(),
+    normalizeDisplayName(activeProfile?.displayName || ""),
+  ].join(":");
+  const items = profileActivitiesFeedItemsKey(feedItems);
   return items ? `${identity}|${items}` : identity;
+}
+
+function profileActivitiesDomMatchesFeed(listEl, feedItems) {
+  const domKey = readFollowActListDomKey(listEl);
+  const itemsKey = profileActivitiesFeedItemsKey(feedItems);
+  return Boolean(itemsKey && domKey === itemsKey && !listEl?.querySelector(".followAct--skel"));
 }
 
 function friendsFeedItemsKey(items) {
@@ -12179,9 +12189,10 @@ function patchProfileActivityMediaRows(listEl, feedItems, profMap) {
   return patchFollowActMediaRows(listEl, feedItems, profMap, logProfilePostsPatch);
 }
 
-async function enrichProfileActivitiesAfterPaint(libRows, feedItems, profMap, listEl, enrichGen) {
+async function enrichProfileActivitiesAfterPaint(libRows, feedItems, profMap, listEl, enrichGen, opts = {}) {
   if (!listEl || !feedItems.length) return;
   if (enrichGen !== _profileActEnrichGen) return;
+  const soft = Boolean(opts.soft);
   const mediaSigBefore = libRows.map((t) => profileActMediaSig(t, profMap)).join("|");
   try {
     const playCountMap = libRows.length
@@ -12200,10 +12211,12 @@ async function enrichProfileActivitiesAfterPaint(libRows, feedItems, profMap, li
     }
     updatePlayCountsOnly(listEl, playCountMap, logProfilePostsPatch);
 
-    await Promise.all([
-      hydrateRemixOriginalsForTracks(libRows),
-      hydrateMashupSourcesForTracks(libRows),
-    ]);
+    if (!soft) {
+      await Promise.all([
+        hydrateRemixOriginalsForTracks(libRows),
+        hydrateMashupSourcesForTracks(libRows),
+      ]);
+    }
     if (enrichGen !== _profileActEnrichGen) return;
     if (
       String(document.body.getAttribute("data-route") || "") !== "profile" ||
@@ -12212,7 +12225,7 @@ async function enrichProfileActivitiesAfterPaint(libRows, feedItems, profMap, li
       return;
     }
     const mediaSigAfter = libRows.map((t) => profileActMediaSig(t, profMap)).join("|");
-    if (mediaSigBefore !== mediaSigAfter) {
+    if (!soft && mediaSigBefore !== mediaSigAfter) {
       patchProfileActivityMediaRows(listEl, feedItems, profMap);
       _profileActSnapshot = { at: Date.now(), html: listEl.innerHTML };
       persistProfileActSnapshot();
@@ -12276,14 +12289,23 @@ function scheduleProfileActivitiesCloudRefresh(opts = {}) {
   _profileActCloudRefreshInFlight = true;
   void (async () => {
     try {
+      const prevSig = profilePublicPostsSig(_ownerPublicPostsCache?.songs || getOwnerPublicPostsSongs());
       await mergeCloudSongsIntoLocalLibrary({ reason: `${reason}:cloud` });
       await refreshOwnerPublicPostsCache({ force, reason: `${reason}:posts` });
       _profileActCloudRefreshLastAt = Date.now();
+      const nextSig = profilePublicPostsSig(getOwnerPublicPostsSongs());
+      const cloudDataChanged = prevSig !== nextSig;
       if (
         (document.body.getAttribute("data-route") || "") === "profile" &&
         _profileSongsSegment === "activities"
       ) {
-        void renderProfileActivities({ fromCloudRefresh: true, reason: `${reason}:followup` });
+        if (cloudDataChanged || force) {
+          void renderProfileActivities({
+            fromCloudRefresh: true,
+            cloudDataChanged,
+            reason: `${reason}:followup`,
+          });
+        }
       }
     } catch (e) {
       try {
@@ -12328,7 +12350,7 @@ async function renderProfileActivities(opts = {}) {
       hasPaintCache,
     });
   } catch {}
-  if (!extend && !force) resetProfileActivitiesPagination();
+  if (force) resetProfileActivitiesPagination();
   wireProfileActivitiesLoadMoreOnce();
   hydrateProfileActSnapshotFromStorage();
   const snap = _profileActSnapshot;
@@ -12338,6 +12360,13 @@ async function renderProfileActivities(opts = {}) {
     snap.html &&
     !snap.html.includes("followAct--skel") &&
     profileActSnapshotMatchesIdentity(snap.html);
+  if (!extend) {
+    const domKeyBoot = readFollowActListDomKey(listEl);
+    const hasRealFeedBoot = domKeyBoot.length > 0 && !listEl.querySelector(".followAct--skel");
+    if (!hasRealFeedBoot && snapFresh) {
+      listEl.innerHTML = snap.html;
+    }
+  }
   if (!opts.fromCloudRefresh && !extend) {
     scheduleProfileActivitiesCloudRefresh({ force, reason });
   }
@@ -12373,7 +12402,6 @@ async function renderProfileActivities(opts = {}) {
   const visibleFeedItems = feedItems.slice(0, _profileActivitiesShown);
   const visibleLibRows = visibleFeedItems.map((item) => item.track);
   const remainingPosts = Math.max(0, totalPosts - visibleFeedItems.length);
-  const desiredKey = profileActivitiesFeedKey(visibleFeedItems);
   const domKey = readFollowActListDomKey(listEl);
   const hasSkeleton = Boolean(listEl.querySelector(".followAct--skel"));
   const hasRealFeed = domKey.length > 0 && !hasSkeleton;
@@ -12389,12 +12417,12 @@ async function renderProfileActivities(opts = {}) {
     syncProfileActivitiesLoadMoreUi(0);
     return;
   }
-  const skipListRebuild = desiredKey && domKey === desiredKey && !hasSkeleton;
+  const skipListRebuild = profileActivitiesDomMatchesFeed(listEl, visibleFeedItems);
   if (!skipListRebuild) {
     let listPainted = false;
     if (!extend && !hasRealFeed && snapFresh) {
       listEl.innerHTML = snap.html;
-      if (readFollowActListDomKey(listEl) === desiredKey) {
+      if (profileActivitiesDomMatchesFeed(listEl, visibleFeedItems)) {
         listPainted = true;
       }
     }
@@ -12408,7 +12436,7 @@ async function renderProfileActivities(opts = {}) {
     persistProfileActSnapshot();
   } else {
     try {
-      console.info("[profile/posts] list rebuild skipped (dom matches)", desiredKey.split("|").length);
+      console.info("[profile/posts] list rebuild skipped (dom matches)", visibleFeedItems.length);
     } catch {}
   }
   syncProfileActivitiesLoadMoreUi(remainingPosts);
@@ -12417,7 +12445,15 @@ async function renderProfileActivities(opts = {}) {
   } catch {}
   applyFeedSocialStatsToDom(listEl);
   const enrichGen = ++_profileActEnrichGen;
-  void enrichProfileActivitiesAfterPaint(visibleLibRows, visibleFeedItems, effectiveProfMap, listEl, enrichGen);
+  const softEnrich = skipListRebuild && !force;
+  void enrichProfileActivitiesAfterPaint(
+    visibleLibRows,
+    visibleFeedItems,
+    effectiveProfMap,
+    listEl,
+    enrichGen,
+    { soft: softEnrich },
+  );
   } catch (e) {
     try {
       console.warn("[profile/activities]", e);

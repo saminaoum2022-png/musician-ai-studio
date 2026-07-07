@@ -173,7 +173,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260707-023049";
+const APP_BUILD = "20260707-124647";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -31350,6 +31350,8 @@ function renderTrackSheetProfileHub(p) {
   `;
   l.innerHTML = `
     ${TRACK_SHEET_ADD_PLAYLIST_ROW}
+    <button type="button" class="discoverTrackSheetRow" data-track-sheet-action="library_dl_audio">Download audio</button>
+    <button type="button" class="discoverTrackSheetRow" data-track-sheet-action="library_dl_video">Download video</button>
     <button type="button" class="discoverTrackSheetRow" data-track-sheet-action="profile_hub_vis" data-track-sheet-pub-to="${profilePublic ? "private" : "public"}">${profilePublic ? "Hide from public profile" : "Show on public profile"}</button>
     <button type="button" class="discoverTrackSheetRow" data-track-sheet-action="profile_hub_proof">Proof of creation</button>
   `;
@@ -31416,13 +31418,18 @@ function openDiscoverTrackSheetFromEl(el) {
 }
 
 function openPlayerTrackOptionsSheet() {
-  const libRow = resolvePlayerLibraryTrack();
-  const libraryId = libRow?.id
-    ? String(loadLibrary().find((x) => String(x.id) === String(libRow.id))?.id || "").trim()
-    : "";
+  const libRow = findPlayerLibraryTrackRow();
+  const libraryId = libRow?.id ? String(libRow.id).trim() : "";
   if (libraryId) {
     openLibraryTrackOptionsFromMenuButton(libraryId);
     return;
+  }
+  if (playerCurrentUserOwnsTrack()) {
+    const hubPost = hubPostForPlayerSource();
+    if (hubPost?.id) {
+      openProfileHubPostSheet(String(hubPost.id));
+      return;
+    }
   }
   const t = currentPlayerTrackRef;
   const url = String(t?.url || "").trim();
@@ -32143,6 +32150,46 @@ function runTrackSheetAction(action, sourceEl) {
 
   if (ctx.mode === "profile_hub") {
     const sid = String(ctx.hubPostId || "");
+    const hubDownloadTrack = () => {
+      const post = loadHubFeed().find((x) => String(x.id) === sid);
+      return findPlayerLibraryTrackRow() || trackRefFromHubPost(post);
+    };
+    if (action === "library_dl_audio") {
+      shut();
+      const t = hubDownloadTrack();
+      if (!t?.url) {
+        showToast("This song isn't downloadable yet.", { icon: "!", durationMs: 3200 });
+        return;
+      }
+      void (async () => {
+        try {
+          setStatus("Preparing audio download…");
+          await downloadLibraryAudioTrack(t);
+          setStatus("Audio download is ready.");
+        } catch (err) {
+          setStatus(`Audio download failed: ${err?.message || String(err)}`);
+        }
+      })();
+      return;
+    }
+    if (action === "library_dl_video") {
+      shut();
+      const t = hubDownloadTrack();
+      if (!t?.url) {
+        showToast("This song isn't downloadable yet.", { icon: "!", durationMs: 3200 });
+        return;
+      }
+      void (async () => {
+        try {
+          setStatus("Preparing video download…");
+          await downloadLibraryVideoTrack(t);
+          setStatus("Video download is ready.");
+        } catch (err) {
+          setStatus(`Video download failed: ${err?.message || String(err)}`);
+        }
+      })();
+      return;
+    }
     if (action === "profile_hub_player") {
       shut();
       void playHubPostFromProfile(sid, { openPlayer: true });
@@ -33275,16 +33322,20 @@ function trackRefFromLibraryTrack(t) {
 
 function trackRefFromHubPost(p) {
   if (!p) return null;
+  const url = String(p.url || "").trim();
+  if (!url) return null;
   return {
-    url: String(p.url || "").trim(),
+    id: String(p.id || ""),
+    url,
     title: String(p.title || "").trim() || "Song",
     artUrl: String(p.artUrl || "").trim(),
     songId: String(p.songId || p.id || "").trim(),
-    ownerUserId: String(authSession?.user?.id || activeProfile?.id || "").trim(),
-    taskId: String(p.taskId || "").trim(),
-    audioId: String(p.audioId || "").trim(),
+    ownerUserId: String(p?.meta?.creatorUserId || authSession?.user?.id || activeProfile?.id || "").trim(),
+    taskId: String(p?.taskId || p?.meta?.taskId || "").trim(),
+    audioId: String(p?.audioId || p?.meta?.audioId || "").trim(),
     byLine: String(activeProfile?.username || "").trim() ? `@${activeProfile.username}` : "Your song",
-    kind: "full",
+    meta: p.meta || {},
+    kind: String(p.kind || "full").trim() || "full",
   };
 }
 
@@ -38942,6 +38993,9 @@ async function playHubPostFromProfile(postId, opts) {
     title: p.title || "Hub song",
     artUrl: p.artUrl || p.creatorAvatar || "",
     meta: p.meta || {},
+    taskId: String(p?.meta?.taskId || "").trim(),
+    audioId: String(p?.meta?.audioId || "").trim(),
+    ownerUserId: String(p?.meta?.creatorUserId || "").trim(),
   };
   miniSource = { type: "profile_hub", postId: pid };
   libraryNowPlayingId = null;
@@ -43873,9 +43927,82 @@ function setPlayerMeta({ title, subtitle, artUrl, releaseCaption, remixOf, chall
 // other paths don't).
 let lastPlayerHttpUrl = "";
 
+function hubPostForPlayerSource() {
+  const postId = String(
+    miniSource?.postId ||
+      (miniSource?.type === "profile_hub" ? currentPlayerTrackRef?.id : "") ||
+      "",
+  ).trim();
+  if (!postId) return null;
+  return loadHubFeed().find((x) => String(x.id) === postId) || null;
+}
+
+/** Actual Library row for the current player track, if any. */
+function findPlayerLibraryTrackRow() {
+  const lib = loadLibrary();
+  const currentId = String(currentPlayerTrackRef?.id || "").trim();
+  const canonical = libraryTrackCanonicalUrl(String(currentPlayerTrackRef?.url || playerEl?.src || ""));
+
+  if (currentId) {
+    const byId = lib.find((x) => String(x.id) === currentId);
+    if (byId) return byId;
+  }
+
+  if (canonical) {
+    const byUrl = lib.find((x) => libraryTrackCanonicalUrl(x?.url) === canonical);
+    if (byUrl) return byUrl;
+  }
+
+  const hubPost = hubPostForPlayerSource();
+  if (hubPost?.url) {
+    const hubCanon = libraryTrackCanonicalUrl(hubPost.url);
+    if (hubCanon) {
+      const byHubUrl = lib.find((x) => libraryTrackCanonicalUrl(x?.url) === hubCanon);
+      if (byHubUrl) return byHubUrl;
+    }
+    const taskId = String(hubPost?.meta?.taskId || "").trim();
+    const audioId = String(hubPost?.meta?.audioId || "").trim();
+    if (taskId && audioId) {
+      const byMeta = lib.find(
+        (x) =>
+          String(x?.taskId || x?.meta?.taskId || "").trim() === taskId &&
+          String(x?.audioId || x?.meta?.audioId || "").trim() === audioId,
+      );
+      if (byMeta) return byMeta;
+    }
+  }
+
+  return null;
+}
+
+function playerCurrentUserOwnsTrack() {
+  const mine = String(authSession?.user?.id || "").trim();
+  const myHandle = String(activeProfile?.username || "").trim().toLowerCase();
+
+  if (miniSource?.type === "library") return true;
+
+  const ownerId = String(
+    currentPlayerTrackRef?.ownerUserId || currentPlayerTrackRef?.userId || "",
+  ).trim();
+  if (mine && ownerId && ownerId === mine) return true;
+
+  const hubPost = hubPostForPlayerSource();
+  if (hubPost) {
+    const creatorUid = String(hubPost?.meta?.creatorUserId || "").trim();
+    if (mine && creatorUid && creatorUid === mine) return true;
+    const creator = String(hubPost?.creator || "").trim().toLowerCase();
+    if (myHandle && creator && creator === myHandle) return true;
+  }
+
+  if (findPlayerLibraryTrackRow()) return true;
+
+  return false;
+}
+
 /** Discover / another user's public Library: listen-only — no cover edit,
  *  trim-to-clip, or Hub publish (those flows assume you own the row). */
 function playerSourceIsExternalListenOnly() {
+  if (playerCurrentUserOwnsTrack()) return false;
   const ms = String(miniSource?.type || "");
   if (ms === "discover_feed" || ms === "discover_playlist" || ms === "public_profile_lib" || ms === "profile_hub") return true;
   const id = String(currentPlayerTrackRef?.id || "");
@@ -43884,14 +44011,11 @@ function playerSourceIsExternalListenOnly() {
 }
 
 function resolvePlayerLibraryTrack() {
-  const lib = loadLibrary();
-  const currentId = String(currentPlayerTrackRef?.id || "").trim();
-  const canonical = libraryTrackCanonicalUrl(String(currentPlayerTrackRef?.url || playerEl?.src || ""));
-  return (
-    (currentId ? lib.find((x) => String(x.id) === currentId) : null) ||
-    lib.find((x) => libraryTrackCanonicalUrl(x?.url) === canonical) ||
-    currentPlayerTrackRef
-  );
+  const row = findPlayerLibraryTrackRow();
+  if (row) return row;
+  const fromHub = trackRefFromHubPost(hubPostForPlayerSource());
+  if (fromHub?.url) return fromHub;
+  return currentPlayerTrackRef;
 }
 
 function updatePlayerSecondaryChrome() {

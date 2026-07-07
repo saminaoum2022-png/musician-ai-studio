@@ -173,7 +173,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260707-124647";
+const APP_BUILD = "20260707-144320";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -2441,9 +2441,13 @@ async function ensureFriendsFeedPrerequisites() {
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
     await loadPublicConfig();
   }
+  if (getSupabaseAuthToken() || authSession?.refresh_token) {
+    await refreshSupabaseSessionIfNeeded();
+    ensureAuthSessionUserFromToken();
+  }
   if (getSupabaseAuthToken() && !authSession?.user?.id) {
     try {
-      await refreshAuthStateFromSupabase();
+      await refreshAuthStateFromSupabase({ force: true });
     } catch {}
   }
   return !friendsFeedBlockedMessage();
@@ -15512,13 +15516,13 @@ async function refreshDiscoveryFollowingFeed(opts = {}) {
   }
 
   if (!authSession?.user?.id) {
-    const token = getSupabaseAuthToken();
+    const token = getSupabaseAuthToken() || authSession?.refresh_token;
     if (
       token &&
       String(document.body.getAttribute("data-route") || "") === "friends"
     ) {
       try {
-        await refreshAuthStateFromSupabase();
+        await rehydrateAuthSessionOnForeground({ force: true });
       } catch {}
       if (authSession?.user?.id) {
         _friendsFeedAuthRetry = 0;
@@ -22089,6 +22093,53 @@ async function refreshAuthStateFromSupabase({ force = false } = {}) {
   renderAuthStatus();
   return null;
 }
+
+/** Restore + refresh session after backgrounding (expired JWT, lost in-memory user). */
+async function rehydrateAuthSessionOnForeground({ force = false } = {}) {
+  try {
+    await restoreAuthSessionFromAllStores();
+    loadAuthSession();
+    ensureAuthSessionUserFromToken();
+
+    const expAt = authSessionExpiresAtMs();
+    const tokenStale = !expAt || expAt <= Date.now() + 5 * 60 * 1000;
+    if (authSession?.refresh_token && (force || tokenStale)) {
+      await refreshSupabaseSessionIfNeeded({ force: true });
+      loadAuthSession();
+      ensureAuthSessionUserFromToken();
+    }
+
+    if (getSupabaseAuthToken() && !authSession?.user?.id) {
+      await refreshAuthStateFromSupabase({ force: true });
+    } else if (force || tokenStale) {
+      await refreshAuthStateFromSupabase({ force });
+    }
+
+    loadAuthSession();
+    ensureAuthSessionUserFromToken();
+    renderAuthStatus();
+    return Boolean(authSession?.user?.id || getSupabaseAuthToken());
+  } catch (e) {
+    console.warn("[auth] foreground rehydrate failed", e);
+    try { renderAuthStatus(); } catch {}
+    return Boolean(authSession?.user?.id || getSupabaseAuthToken());
+  }
+}
+
+function refreshActiveFeedAfterAuthRehydrate() {
+  const route = String(document.body.getAttribute("data-route") || "");
+  if (route === "discover") void refreshDiscoverFeed();
+  if (route === "friends") {
+    hydrateFriendsFeedSnapshotFromStorage();
+    void refreshDiscoveryFollowingFeed({ force: true });
+  }
+  if (route === "activity") void refreshActivityFeedHead();
+  if (route === "profile") {
+    if (_profileSongsSegment === "activities") void renderProfileActivities();
+    else try { refreshOwnSongsUi({ soft: false }); } catch {}
+  }
+}
+
 function renderAuthStatus() {
   if (!els.authStatus) return;
   const email = authSession?.user?.email || "";
@@ -52209,22 +52260,14 @@ if (isCapacitorNativeAuth()) {
           _appResumeRefreshAt = Date.now();
           void (async () => {
             try {
-              await restoreAuthSessionFromAllStores();
-              loadAuthSession();
-              ensureAuthSessionUserFromToken();
-              if (!authSession?.access_token) {
+              const ok = await rehydrateAuthSessionOnForeground({ force: true });
+              if (!ok && !getSupabaseAuthToken() && !authSession?.refresh_token) {
                 invalidateAuthBoot();
                 await ensureAuthBoot({ force: true });
                 scheduleApplyRoute();
                 return;
               }
-              const route = String(document.body.getAttribute("data-route") || "");
-              if (route === "friends") {
-                hydrateFriendsFeedSnapshotFromStorage();
-                void refreshDiscoveryFollowingFeed();
-              } else if (route === "profile" && _profileSongsSegment === "activities") {
-                void renderProfileActivities();
-              }
+              refreshActiveFeedAfterAuthRehydrate();
             } catch (e) {
               console.warn("[auth] resume refresh failed", e);
             }
@@ -53431,6 +53474,16 @@ try {
       if (!document.hidden) {
         void tryRecoverGenerationFromPushNotification();
         kickForegroundGenerationPolls();
+        void (async () => {
+          try {
+            const hadSession = Boolean(getSupabaseAuthToken() || authSession?.refresh_token);
+            if (!hadSession) return;
+            const ok = await rehydrateAuthSessionOnForeground();
+            if (ok) refreshActiveFeedAfterAuthRehydrate();
+          } catch (e) {
+            console.warn("[auth] visibility rehydrate failed", e);
+          }
+        })();
       }
     });
   } catch {}

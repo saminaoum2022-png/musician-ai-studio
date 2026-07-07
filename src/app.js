@@ -181,7 +181,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260707-182600";
+const APP_BUILD = "20260707-234154";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -30484,6 +30484,12 @@ async function pollMashupTask(taskId, metaBase) {
         return;
       }
       if (parsed.status === "SUCCESS" && parsed.hasAudio) {
+        if ((parsed.audioClipCount || 0) < GENERATION_VARIANT_COUNT && tries < maxTries) {
+          setMashupStatus(
+            `Variant ${parsed.audioClipCount || 1} of ${GENERATION_VARIANT_COUNT} ready — still blending…`,
+          );
+          return;
+        }
         stopMashupPolling();
         _mashupState.generating = false;
         _mashupState.taskId = "";
@@ -30504,7 +30510,7 @@ async function pollMashupTask(taskId, metaBase) {
             taskId: tid,
             audioId: parsed.first.audioId || "",
             kind: "full",
-            meta: genMeta,
+            meta: { ...genMeta, variant: "A" },
           }));
         }
         if (parsed.second?.audioUrl) {
@@ -30515,7 +30521,7 @@ async function pollMashupTask(taskId, metaBase) {
             taskId: tid,
             audioId: parsed.second.audioId || "",
             kind: "full",
-            meta: genMeta,
+            meta: { ...genMeta, variant: "B" },
           }));
         }
         setMashupProgress(false);
@@ -46234,7 +46240,84 @@ function parseSunoGenerationRecordInfo(data) {
   const first = pick(arr[0]);
   const second = pick(arr[1]);
   const hasAudio = Boolean((first && first.audioUrl) || (second && second.audioUrl));
-  return { status, first, second, hasAudio };
+  const audioClipCount = (first?.audioUrl ? 1 : 0) + (second?.audioUrl ? 1 : 0);
+  return { status, first, second, hasAudio, audioClipCount };
+}
+
+function resolveExpectedGenerationVariants(taskId) {
+  const tid = String(taskId || "").trim();
+  const pending = getGenerationPending();
+  if (tid && pending?.taskId && String(pending.taskId) === tid) {
+    return Math.max(
+      1,
+      Math.min(GENERATION_VARIANT_COUNT, Number(pending.variantCount) || GENERATION_VARIANT_COUNT),
+    );
+  }
+  return GENERATION_VARIANT_COUNT;
+}
+
+function libraryEntriesForTaskId(taskId) {
+  const tid = String(taskId || "").trim();
+  if (!tid) return [];
+  return loadLibrary().filter(
+    (x) => String(x.taskId || "").trim() === tid && String(x.url || "").trim(),
+  );
+}
+
+function libraryTaskAudioCount(taskId) {
+  return libraryEntriesForTaskId(taskId).length;
+}
+
+function libraryHasAllTaskVariants(taskId, expectedCount) {
+  const tid = String(taskId || "").trim();
+  if (!tid) return false;
+  const need = Math.max(
+    1,
+    Math.min(GENERATION_VARIANT_COUNT, Number(expectedCount) || GENERATION_VARIANT_COUNT),
+  );
+  return libraryTaskAudioCount(tid) >= need;
+}
+
+function libraryAlreadyHasSunoClip(existingRows, clip) {
+  const aid = String(clip?.audioId || "").trim();
+  const canon = libraryTrackCanonicalUrl(toAudioProxyUrl(clip?.audioUrl) || clip?.audioUrl || "");
+  for (const row of existingRows) {
+    if (aid && String(row?.audioId || "").trim() === aid) return true;
+    if (canon && libraryTrackCanonicalUrl(row?.url) === canon) return true;
+  }
+  return false;
+}
+
+/** Add any Suno A/B clips not already in Library for this taskId. */
+function addMissingSunoClipsToLibrary(taskId, parsed, { metaBase = {}, kind = "full", baseTitle = "" } = {}) {
+  const tid = String(taskId || "").trim();
+  if (!tid || !parsed) return [];
+  const existing = libraryEntriesForTaskId(tid);
+  const saved = [];
+  const base = String(baseTitle || "Generated song").trim() || "Generated song";
+  const specs = [
+    { clip: parsed.first, variant: "A", titleFallback: base },
+    { clip: parsed.second, variant: "B", titleFallback: base.endsWith(" B") ? base : `${base} B` },
+  ];
+  for (const { clip, variant, titleFallback } of specs) {
+    if (!clip?.audioUrl) continue;
+    if (libraryAlreadyHasSunoClip(existing, clip)) continue;
+    const prox = toAudioProxyUrl(clip.audioUrl) || clip.audioUrl;
+    const entry = addToLibrary({
+      title: String(clip.title || "").trim() || titleFallback,
+      artUrl: clip.imageUrl || "",
+      url: prox,
+      taskId: tid,
+      audioId: clip.audioId || "",
+      kind,
+      meta: { ...(metaBase || {}), variant },
+    });
+    if (entry) {
+      saved.push(entry);
+      existing.push(entry);
+    }
+  }
+  return saved;
 }
 
 /** If `t` has a Suno `taskId`, re-fetch record-info and return a current
@@ -46407,7 +46490,8 @@ async function recoverSongFromTaskId(taskId, { silent = false, pushCategory = ""
   const tid = String(taskId || "").trim();
   if (!tid) throw new Error("Missing task ID.");
 
-  if (libraryHasTaskAudio(tid)) {
+  const expectedVariants = resolveExpectedGenerationVariants(tid);
+  if (libraryHasAllTaskVariants(tid, expectedVariants)) {
     finalizeRecoveredGenerationJob(tid, { category: pushCategory || "generation_ready", silent });
     try { refreshOwnSongsUi({ soft: true }); } catch { refreshOwnSongsUi(); }
     return true;
@@ -46449,40 +46533,38 @@ async function recoverSongFromTaskId(taskId, { silent = false, pushCategory = ""
     metaBase.photoMode = true;
   }
   const kind = cat === "hum_track_ready" ? "instrumental" : "full";
-  const savedEntries = [];
+  const rec = loadRecoverableGenerationTask();
+  const savedEntries = addMissingSunoClipsToLibrary(tid, parsed, {
+    metaBase,
+    kind,
+    baseTitle: rec?.titleHint || parsed.first?.title || "Recovered song",
+  });
 
-  if (parsed.first?.audioUrl) {
-    const prox = toAudioProxyUrl(parsed.first.audioUrl);
-    savedEntries.push(addToLibrary({
-      title: parsed.first.title || "Recovered song",
-      artUrl: parsed.first.imageUrl || "",
-      url: prox || parsed.first.audioUrl,
-      taskId: tid,
-      audioId: parsed.first.audioId || "",
-      kind,
-      meta: metaBase,
-    }));
-  }
-  if (parsed.second?.audioUrl) {
-    const prox2 = toAudioProxyUrl(parsed.second.audioUrl);
-    savedEntries.push(addToLibrary({
-      title: parsed.second.title || "Recovered song B",
-      artUrl: parsed.second.imageUrl || "",
-      url: prox2 || parsed.second.audioUrl,
-      taskId: tid,
-      audioId: parsed.second.audioId || "",
-      kind,
-      meta: metaBase,
-    }));
+  if (!savedEntries.length && !libraryHasAllTaskVariants(tid, expectedVariants)) {
+    if (
+      !silent &&
+      parsed.audioClipCount > 0 &&
+      parsed.audioClipCount < expectedVariants
+    ) {
+      showToast(
+        "First variant is ready — still waiting on the second. Try Recover again in a moment.",
+        { icon: "♪", durationMs: 5200 },
+      );
+    }
+    return false;
   }
 
   finalizeRecoveredGenerationJob(tid, {
     category: cat || "generation_ready",
     silent,
-    entries: savedEntries,
+    entries: libraryEntriesForTaskId(tid),
   });
   if (!silent) {
-    showToast("Song added to your Library.", { icon: "✓", durationMs: 3200 });
+    const n = libraryTaskAudioCount(tid);
+    showToast(
+      n > 1 ? "Both song variants are in your Library." : "Song added to your Library.",
+      { icon: "✓", durationMs: 3200 },
+    );
     try {
       setStatus("Song recovered — check Library.");
     } catch {}
@@ -46493,17 +46575,7 @@ async function recoverSongFromTaskId(taskId, { silent = false, pushCategory = ""
 function libraryHasTaskAudio(taskId) {
   const tid = String(taskId || "").trim();
   if (!tid) return false;
-  return loadLibrary().some(
-    (x) => String(x.taskId || "").trim() === tid && String(x.url || "").trim(),
-  );
-}
-
-function libraryEntriesForTaskId(taskId) {
-  const tid = String(taskId || "").trim();
-  if (!tid) return [];
-  return loadLibrary().filter(
-    (x) => String(x.taskId || "").trim() === tid && String(x.url || "").trim(),
-  );
+  return libraryTaskAudioCount(tid) > 0;
 }
 
 /** Push recover / manual recover — same “job done” cleanup as in-app poll success. */
@@ -46659,7 +46731,12 @@ async function tryRecoverGenerationFromPushNotification() {
   if (!pending?.taskId) return false;
   const { taskId, category } = pending;
 
-  if (libraryHasTaskAudio(taskId)) {
+  const songLike =
+    category === "generation_ready" ||
+    category === "hum_track_ready" ||
+    category === "photo_ready";
+  const expectedVariants = songLike ? resolveExpectedGenerationVariants(taskId) : 1;
+  if (songLike ? libraryHasAllTaskVariants(taskId, expectedVariants) : libraryHasTaskAudio(taskId)) {
     finalizeRecoveredGenerationJob(taskId, { category, silent: true });
     try { refreshOwnSongsUi({ soft: true }); } catch { refreshOwnSongsUi(); }
     return true;
@@ -46694,9 +46771,8 @@ function updateLibraryRecoverBanner() {
   try {
     const rec = loadRecoverableGenerationTask();
     if (!rec?.taskId) return;
-    const lib = loadLibrary();
-    const already = lib.some((x) => String(x.taskId || "").trim() === rec.taskId);
-    if (already) clearRecoverableGenerationTask();
+    const expected = resolveExpectedGenerationVariants(rec.taskId);
+    if (libraryHasAllTaskVariants(rec.taskId, expected)) clearRecoverableGenerationTask();
   } catch {}
 }
 
@@ -48079,9 +48155,15 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       lastSunoTitle2 = String(title2 || "").trim() || "Generated song B";
       await cacheGeneratedAudio2(lastSunoProxyUrl2 || audioUrl2);
     }
+    const expectedVariants = resolveExpectedGenerationVariants(sunoTaskId);
+    const audioClipCount = (audioUrl ? 1 : 0) + (audioUrl2 ? 1 : 0);
+    const hasAllExpectedVariants = audioClipCount >= expectedVariants;
     return {
       status,
       hasAudio: Boolean(lastSunoFullUrl || audioUrl),
+      hasAllExpectedVariants,
+      expectedVariants,
+      audioClipCount,
       successFlag,
       errorCode,
       errorMessage,
@@ -48176,7 +48258,25 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
             handleGenerationFailure(failure, state);
             return "stop";
           }
-          if (state.status === "SUCCESS" && state.hasAudio) {
+          if (
+            state.status === "SUCCESS" &&
+            state.hasAudio &&
+            !state.hasAllExpectedVariants
+          ) {
+            setStatus(
+              `Variant ${state.audioClipCount || 1} of ${state.expectedVariants || GENERATION_VARIANT_COUNT} ready — waiting for the rest…`,
+            );
+            if (tries >= maxTries) {
+              setGenerateBtn("Check status", false, "resume");
+              setStatus("Still waiting on variant B. Tap Check status or open Library.");
+              setGenerateFieldsLocked(false);
+              try { bumpCoachGenerationStillWorking(); } catch {}
+              stopGeneratePoll();
+              return "stop";
+            }
+            return "continue";
+          }
+          if (state.status === "SUCCESS" && state.hasAudio && state.hasAllExpectedVariants) {
             stopGeneratePoll();
             setGenerateBtn("Regenerate", false, "generate");
             showResultCard(true);

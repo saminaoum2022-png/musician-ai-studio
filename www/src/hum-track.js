@@ -235,6 +235,7 @@ function parseSunoStatusPayload(data) {
     errorMessage,
     tracks,
     hasAudio: tracks.length > 0,
+    audioClipCount: tracks.length,
   };
 }
 
@@ -335,6 +336,27 @@ function startHumTrackPolling(taskId, instrumentId) {
         if (failed && !state.hasAudio) {
           failHumTrackGeneration(taskId, state.errorMessage || "Generation failed. Try recording again.");
           return "stop";
+        }
+        const expectedVariants = Math.max(
+          1,
+          Math.min(2, Number(ctx?.generationVariantCount) || 2),
+        );
+        if (
+          state.status === "SUCCESS" &&
+          state.hasAudio &&
+          state.audioClipCount < expectedVariants
+        ) {
+          if (tries >= maxTries) {
+            try {
+              ctx?.bumpCoachGenerationStillWorking?.();
+            } catch {}
+            ctx?.showToast?.("Still waiting on the second variant — check Library in a minute.", {
+              durationMs: 6000,
+            });
+            stopHumTrackPolling();
+            return "stop";
+          }
+          return "continue";
         }
         if (state.status === "SUCCESS" && state.hasAudio) {
           finishHumTrackSuccess(taskId, instrumentId, state.tracks);

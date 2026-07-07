@@ -23,7 +23,7 @@ function ensureOverlay() {
   overlayEl.setAttribute("aria-hidden", "true");
   overlayEl.setAttribute("aria-live", "polite");
   overlayEl.innerHTML = `
-    <div class="giftSentDim" aria-hidden="true"></div>
+    <div class="giftSentDim" aria-hidden="true" data-gift-dismiss="1"></div>
     <div class="giftSentStage">
       <div class="giftSentIconStack">
         <div class="giftSentGlow giftSentGlow--base" aria-hidden="true"></div>
@@ -31,9 +31,55 @@ function ensureOverlay() {
         <div class="giftSentIcon" aria-hidden="true"></div>
       </div>
       <p class="giftSentLabel"></p>
+      <p class="giftSentSub" hidden></p>
+      <div class="giftSentActions" hidden>
+        <button type="button" class="giftSentAction giftSentAction--primary" data-gift-action="messages">Open Messages</button>
+        <button type="button" class="giftSentAction giftSentAction--secondary" data-gift-action="reply">Reply</button>
+      </div>
     </div>`;
   document.body.appendChild(overlayEl);
+  overlayEl.addEventListener("click", (e) => {
+    if (!overlayEl.classList.contains("giftSentOverlay--received")) return;
+    if (!overlayEl.classList.contains("isReceivedReady")) return;
+    if (e.target.closest("[data-gift-action]")) return;
+    if (e.target.closest(".giftSentStage")) return;
+    finishGiftReceivedReveal("dismiss");
+  });
+  overlayEl.querySelector('[data-gift-action="messages"]')?.addEventListener("click", (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    finishGiftReceivedReveal("messages");
+  });
+  overlayEl.querySelector('[data-gift-action="reply"]')?.addEventListener("click", (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    finishGiftReceivedReveal("reply");
+  });
   return overlayEl;
+}
+
+let receivedRevealOpts = null;
+
+function resetGiftOverlayModes(root) {
+  root.classList.remove("giftSentOverlay--received", "isReceivedReady");
+  const sub = root.querySelector(".giftSentSub");
+  const actions = root.querySelector(".giftSentActions");
+  if (sub) {
+    sub.hidden = true;
+    sub.textContent = "";
+  }
+  if (actions) actions.hidden = true;
+  receivedRevealOpts = null;
+}
+
+function finishGiftReceivedReveal(action) {
+  const onOpenMessages = receivedRevealOpts?.onOpenMessages;
+  const onReply = receivedRevealOpts?.onReply;
+  const onDismiss = receivedRevealOpts?.onDismiss;
+  hideGiftSentOverlay();
+  if (action === "messages") onOpenMessages?.();
+  else if (action === "reply") onReply?.();
+  else onDismiss?.();
 }
 
 function clearHapticTimers() {
@@ -205,6 +251,7 @@ export function showGiftSentOverlay(amount, { haptic: _hapticDep } = {}) {
   const label = root.querySelector(".giftSentLabel");
   if (!stage || !iconWrap || !label) return;
 
+  resetGiftOverlayModes(root);
   stage.className = `giftSentStage giftSentStage--${key}`;
   iconWrap.innerHTML =
     key === "pulse"
@@ -240,14 +287,83 @@ export function showGiftSentOverlay(amount, { haptic: _hapticDep } = {}) {
   }, OVERLAY_MS);
 }
 
+/**
+ * Receiver reveal after tapping a gift activity notification.
+ * @param {{
+ *   amount: number,
+ *   senderUsername?: string,
+ *   detailLine?: string,
+ *   onOpenMessages?: () => void,
+ *   onReply?: () => void,
+ *   onDismiss?: () => void,
+ * }} opts
+ */
+export function showGiftReceivedReveal(opts = {}) {
+  const amount = Number(opts.amount);
+  if (!Number.isFinite(amount) || amount <= 0) return;
+  const def = giftTierDef(amount);
+  const key = def.key;
+  const root = ensureOverlay();
+  const stage = root.querySelector(".giftSentStage");
+  const iconWrap = root.querySelector(".giftSentIcon");
+  const label = root.querySelector(".giftSentLabel");
+  const sub = root.querySelector(".giftSentSub");
+  const actions = root.querySelector(".giftSentActions");
+  if (!stage || !iconWrap || !label || !sub || !actions) return;
+
+  resetGiftOverlayModes(root);
+  receivedRevealOpts = opts;
+  root.classList.add("giftSentOverlay--received");
+
+  stage.className = `giftSentStage giftSentStage--${key}`;
+  iconWrap.innerHTML =
+    key === "pulse"
+      ? giftTierSvg("pulse", { context: "overlay", pulseDraw: true })
+      : key === "star"
+        ? giftTierSvg("star", { context: "overlay", starSpin: true })
+        : giftTierSvg(key, { context: "overlay" });
+
+  const sender = String(opts.senderUsername || "").replace(/^@/, "").trim();
+  label.textContent = sender ? `@${sender} sent you a ${def.name}` : `${def.name} received`;
+  const detail = String(opts.detailLine || def.creditsLabel || "").trim();
+  if (detail) {
+    sub.textContent = detail;
+    sub.hidden = false;
+  }
+
+  clearTimers();
+  animToken += 1;
+  const token = animToken;
+
+  root.hidden = false;
+  root.setAttribute("aria-hidden", "false");
+  root.classList.remove("isLeaving", "isReceivedReady");
+  void root.offsetWidth;
+  root.classList.add("isActive");
+
+  playGiftHapticRhythm(key);
+  requestAnimationFrame(() => {
+    playGiftSentSound(key);
+  });
+
+  hideTimer = setTimeout(() => {
+    if (token !== animToken) return;
+    root.classList.remove("isActive");
+    root.classList.add("isReceivedReady");
+    actions.hidden = false;
+    clearHapticTimers();
+  }, OVERLAY_MS);
+}
+
 /** Dismiss overlay early (e.g. send failed after optimistic play). */
 export function hideGiftSentOverlay() {
   const root = overlayEl;
   if (!root || root.hidden) return;
   clearTimers();
   animToken += 1;
+  resetGiftOverlayModes(root);
   root.classList.add("isLeaving");
-  root.classList.remove("isActive");
+  root.classList.remove("isActive", "isReceivedReady");
   fadeTimer = setTimeout(() => {
     root.hidden = true;
     root.setAttribute("aria-hidden", "true");

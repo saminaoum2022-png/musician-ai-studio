@@ -72,6 +72,8 @@ import { DEFAULT_SONG_COVER_URL, isLogoCoverUrl, normalizeSongCoverUrl, playerEm
 import { initCoverArtOverlay, syncCoverArtOverlay } from "./cover-art/overlay.js";
 import { feedActIconAnalytics, feedActIconComment, feedActIconGift, feedActIconLike, feedActIconPlays } from "./feed-action-icons.js";
 import { initGifts, openGiftSheetFromButton } from "./gifts.js";
+import { showGiftReceivedReveal } from "./gift-sent-overlay.js";
+import { giftTierDef } from "./gift-tier-icons.js";
 import {
   clearGenerationPending,
   GENERATION_VARIANT_COUNT,
@@ -173,7 +175,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260707-145144";
+const APP_BUILD = "20260707-173407";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -25342,12 +25344,21 @@ function markInboxThreadReadLocally(threadId) {
   return changed;
 }
 
-function navigateToMessagesThread({ threadId, headerUser, targetUserId, partnerStats } = {}) {
+function navigateToMessagesThread({
+  threadId,
+  headerUser,
+  targetUserId,
+  partnerStats,
+  composerDraft = "",
+  composerAutofocus = false,
+} = {}) {
   stashMessagesNavPrefetch({
     threadId: String(threadId || "").trim(),
     headerUser: normalizeChatHeaderUser(headerUser),
     targetUserId: String(targetUserId || headerUser?.userId || "").trim(),
     partnerStats: normalizePartnerStats(partnerStats),
+    composerDraft: String(composerDraft || "").trim(),
+    composerAutofocus: Boolean(composerAutofocus),
   });
   const params = new URLSearchParams();
   const tid = String(threadId || "").trim();
@@ -27449,6 +27460,7 @@ function enterMessagesThreadRoute(threadId, targetUserId = "") {
   const bootToken = ++_messagesThreadBootToken;
   const tid = String(threadId || pref?.threadId || "").trim();
   const uid = String(targetUserId || pref?.targetUserId || pref?.headerUser?.userId || "").trim();
+  const composerDraft = String(pref?.composerDraft || "").trim();
 
   if (!tid && !uid && !pref?.headerUser) {
     try { location.hash = "#/messages"; } catch {}
@@ -27505,7 +27517,13 @@ function enterMessagesThreadRoute(threadId, targetUserId = "") {
   }
 
   const input = document.getElementById("messagesComposerInput");
-  if (input) input.value = "";
+  if (input) {
+    input.value = composerDraft;
+    if (composerDraft) {
+      applyUserTextInputDir(input);
+      syncMessagesComposerInputHeight(input);
+    }
+  }
   rememberMessagesViewportBaseBottom({ force: true });
   wireMessagesThreadKeyboardOnce();
   wireMessagesNativeKeyboardOnce();
@@ -27529,6 +27547,9 @@ function enterMessagesThreadRoute(threadId, targetUserId = "") {
     void refreshPartnerPresence();
   }
   void bootstrapMessagesThread({ bootToken, threadId: tid, targetUserId: uid });
+  if (composerDraft && pref?.composerAutofocus) {
+    scheduleMessagesComposerAutofocus({ bootToken, delayMs: 280 });
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -29195,12 +29216,84 @@ function notificationActivityHref(n) {
   return "";
 }
 
+function markActivityNotificationReadLocally(n) {
+  const id = String(n?.id || "").trim();
+  if (!id) return;
+  let changed = false;
+  _activityFeedState.items = (_activityFeedState.items || []).map((item) => {
+    if (String(item?.id || "") !== id || item?.read_at) return item;
+    changed = true;
+    return { ...item, read_at: new Date().toISOString() };
+  });
+  if (!changed) return;
+  const unread = _activityFeedState.items.filter((item) => !item?.read_at).length;
+  updateNotificationsEntryBadges(unread);
+  renderActivityFeedFromState();
+}
+
+function giftReceivedReplyDraft(amount, songTitle = "") {
+  const def = giftTierDef(amount);
+  const title = String(songTitle || "").trim();
+  if (title) return `Thanks for the ${def.name} gift on “${title}”! 🎁`;
+  return `Thanks for the ${def.name} gift! 🎁`;
+}
+
+function openGiftThreadFromNotification(n, { reply = false } = {}) {
+  const meta = n?.metadata || {};
+  const senderUserId = String(n?.actor_user_id || "").trim();
+  const senderUsername = String(meta.actor_username || "").replace(/^@/, "").trim();
+  const amount = Number(meta.gift_amount || 0);
+  const songTitle = String(meta.target_title || meta.song_title || "").trim();
+  if (!senderUserId) {
+    showToast("Could not open messages for this gift.", { icon: "!", durationMs: 3200 });
+    return;
+  }
+  const headerUser = {
+    userId: senderUserId,
+    username: senderUsername,
+    avatarUrl: String(meta.actor_avatar || "").trim(),
+    displayName: senderUsername,
+  };
+  navigateToMessagesThread({
+    targetUserId: senderUserId,
+    headerUser,
+    composerDraft: reply ? giftReceivedReplyDraft(amount, songTitle) : "",
+    composerAutofocus: Boolean(reply),
+  });
+}
+
+function openGiftReceivedFromNotification(n) {
+  const meta = n?.metadata || {};
+  const amount = Number(meta.gift_amount || 0);
+  if (!Number.isFinite(amount) || amount <= 0) {
+    showToast("Could not open this gift.", { icon: "!", durationMs: 3200 });
+    return;
+  }
+  markActivityNotificationReadLocally(n);
+  const senderUsername = String(meta.actor_username || "").replace(/^@/, "").trim();
+  const songTitle = String(meta.target_title || meta.song_title || "").trim();
+  const credits = `${formatCreditsAmount(amount)} credit${amount === 1 ? "" : "s"}`;
+  const detailLine = songTitle ? `${credits} · ${songTitle}` : credits;
+  try { haptic("light"); } catch {}
+  showGiftReceivedReveal({
+    amount,
+    senderUsername,
+    detailLine,
+    onOpenMessages: () => openGiftThreadFromNotification(n, { reply: false }),
+    onReply: () => openGiftThreadFromNotification(n, { reply: true }),
+  });
+}
+
 async function openActivityNotificationTarget(n) {
   if (activityNotificationIsUnavailable(n)) {
     showToast("This post is not available anymore.", { icon: "!", durationMs: 3800 });
     return;
   }
   const t = String(n?.type || "").trim();
+  if (t === "gift_received") {
+    openGiftReceivedFromNotification(n);
+    return;
+  }
   if (t === "generation_ready") {
     try { sessionStorage.setItem(PROFILE_SONGS_SEGMENT_KEY, "all"); } catch {}
     _profileSongsSegment = "all";

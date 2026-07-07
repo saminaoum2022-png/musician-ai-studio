@@ -181,7 +181,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260707-181135";
+const APP_BUILD = "20260707-182600";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -12073,65 +12073,20 @@ async function mergeCloudSongsIntoLocalLibrary(opts = {}) {
   }
   if (!cloudSongs.length) return false;
 
-  const sigOf = librarySyncSigOf;
   const local = loadLibrary();
   const prevPublicSig = profilePublicPostsSig(local);
-  const localBySig = new Map();
-  for (const t of local) localBySig.set(sigOf(t), t);
-
-  const merged = [];
-  const seen = new Set();
-  const seenStable = new Set();
-  let changed = false;
-  for (const c of cloudSongs) {
-    const sig = sigOf(c);
-    if (seen.has(sig)) continue;
-    seen.add(sig);
-    const stable = libraryTrackStableKey(c);
-    if (libraryTrackCanonicalUrl(c?.url)) seenStable.add(stable);
-    const localCopy = localBySig.get(sig);
-    if (localCopy) {
-      const next = mergeLibraryCloudWithLocal(c, localCopy);
-      // Smoking gun: the cloud row says private but we still think it's public.
-      // Something un-published it elsewhere (other device / stale build / server).
-      if (Boolean(localCopy.publicOnProfile) === true && Boolean(c.publicOnProfile) === false) {
-        recordPublishAudit(localCopy.id || c.id, {
-          phase: "reconcile:cloudPrivate",
-          localPublic: true,
-          cloudPublic: false,
-          cloudId: String(c.cloudSongId || c.id || "").slice(0, 8),
-        });
-      }
-      if (
-        Boolean(next.publicOnProfile) !== Boolean(localCopy.publicOnProfile) ||
-        String(next.url || "") !== String(localCopy.url || "") ||
-        String(next.title || "") !== String(localCopy.title || "")
-      ) {
-        changed = true;
-      }
-      merged.push(next);
-      continue;
-    }
-    merged.push(c);
-    changed = true;
+  const { keep: mergedDeduped, extras: mergedDupExtras } = mergeCloudRowsWithLocalLibrary(
+    cloudSongs,
+    local.filter(
+      (row) => !isTrackTombstoned(row, tombstones) && !isTrackMarkedDeleted(row),
+    ),
+  );
+  if (mergedDupExtras.length) {
+    void supabaseDeleteUserSongRowsByIds(
+      mergedDupExtras.map((extra) => extra?.cloudSongId || extra?.id),
+    );
   }
-  for (const t of local) {
-    const sig = sigOf(t);
-    const stable = libraryTrackStableKey(t);
-    if (
-      seen.has(sig) ||
-      (libraryTrackCanonicalUrl(t?.url) && seenStable.has(stable)) ||
-      isTrackTombstoned(t, tombstones) ||
-      isTrackMarkedDeleted(t)
-    ) {
-      continue;
-    }
-    seen.add(sig);
-    if (libraryTrackCanonicalUrl(t?.url)) seenStable.add(stable);
-    merged.push(t);
-  }
-  const { keep: mergedDeduped } = dedupeCloudSongRows(merged);
-  if (mergedDeduped.length !== merged.length) changed = true;
+  let changed = libraryRowCountSig(local) !== libraryRowCountSig(mergedDeduped);
   if (!changed) return false;
   mergedDeduped.sort((a, b) => Number(b?.ts || 0) - Number(a?.ts || 0));
   const nextPublicSig = profilePublicPostsSig(mergedDeduped);
@@ -40331,9 +40286,11 @@ function partitionCloudLibraryRows(rows, tombstones) {
 /** Dedupe keys for one row — any shared key means the same logical song. */
 function collectLibraryDedupeKeys(r) {
   const keys = [];
+  const id = String(r?.id || "").trim();
   const aid = String(r?.audioId || r?.audio_id || "").trim();
   const kind = String(r?.kind || "full").trim();
   const canon = libraryTrackCanonicalUrl(r?.url);
+  if (id) keys.push(`id:${id}`);
   if (canon) keys.push(`stable:${libraryTrackStableKey(r)}`);
   if (aid) keys.push(`aid:${aid}|${kind}`);
   if (!keys.length) keys.push(librarySyncSigOf(r));
@@ -40376,11 +40333,103 @@ function dedupeCloudSongRows(rows) {
     const cur = groups.get(root);
     groups.set(root, cur ? mergeLibraryDuplicateRows(cur, row) : row);
   }
+  // Path compression can leave rows under stale roots — fold again.
+  const finalGroups = new Map();
+  for (const [root, row] of groups) {
+    const finalRoot = find(root);
+    const cur = finalGroups.get(finalRoot);
+    finalGroups.set(finalRoot, cur ? mergeLibraryDuplicateRows(cur, row) : row);
+  }
 
-  const keep = [...groups.values()];
+  const keep = [...finalGroups.values()];
   const keptIds = new Set(keep.map((r) => String(r?.cloudSongId || r?.id || "")));
   const extras = list.filter((r) => !keptIds.has(String(r?.cloudSongId || r?.id || "")));
   return { keep, extras };
+}
+
+function buildLibraryLocalIndexes(locals) {
+  const bySig = new Map();
+  const byStable = new Map();
+  const byAudio = new Map();
+  const byId = new Map();
+  for (const t of locals) {
+    const sig = librarySyncSigOf(t);
+    if (!bySig.has(sig)) bySig.set(sig, t);
+    const canon = libraryTrackCanonicalUrl(t?.url);
+    if (canon) {
+      const stable = libraryTrackStableKey(t);
+      if (!byStable.has(stable)) byStable.set(stable, t);
+    }
+    const aid = String(t?.audioId || "").trim();
+    const kind = String(t?.kind || "full").trim();
+    if (aid && !byAudio.has(`${aid}|${kind}`)) byAudio.set(`${aid}|${kind}`, t);
+    const id = String(t?.id || "").trim();
+    if (id && !byId.has(id)) byId.set(id, t);
+  }
+  return { bySig, byStable, byAudio, byId };
+}
+
+function findLocalRowForCloud(c, indexes, consumed) {
+  const pick = (row) => {
+    if (!row) return null;
+    const id = String(row.id || "");
+    if (!id || consumed.has(id)) return null;
+    return row;
+  };
+  let hit = pick(indexes.bySig.get(librarySyncSigOf(c)));
+  if (hit) return hit;
+  const aid = String(c?.audioId || "").trim();
+  const kind = String(c?.kind || "full").trim();
+  if (aid) {
+    hit = pick(indexes.byAudio.get(`${aid}|${kind}`));
+    if (hit) return hit;
+  }
+  const canon = libraryTrackCanonicalUrl(c?.url);
+  if (canon) {
+    hit = pick(indexes.byStable.get(libraryTrackStableKey(c)));
+    if (hit) return hit;
+  }
+  const cid = String(c?.cloudSongId || c?.id || "").trim();
+  if (isShareUuid(cid)) {
+    hit = pick(indexes.byId.get(cid));
+    if (hit) return hit;
+  }
+  return null;
+}
+
+/** Merge cloud rows with local library copies without leaving URL/audio-id twins. */
+function mergeCloudRowsWithLocalLibrary(cloudSongs, localCandidates) {
+  const indexes = buildLibraryLocalIndexes(localCandidates);
+  const consumed = new Set();
+  const merged = [];
+  const seen = new Set();
+  const seenStable = new Set();
+  const sigOf = librarySyncSigOf;
+
+  const addRow = (row) => {
+    const sig = sigOf(row);
+    if (seen.has(sig)) return;
+    const stable = libraryTrackStableKey(row);
+    if (libraryTrackCanonicalUrl(row?.url) && seenStable.has(stable)) return;
+    seen.add(sig);
+    if (libraryTrackCanonicalUrl(row?.url)) seenStable.add(stable);
+    merged.push(row);
+  };
+
+  for (const c of cloudSongs) {
+    const localCopy = findLocalRowForCloud(c, indexes, consumed);
+    if (localCopy) {
+      consumed.add(String(localCopy.id));
+      addRow(mergeLibraryCloudWithLocal(c, localCopy));
+    } else {
+      addRow(c);
+    }
+  }
+  for (const t of localCandidates) {
+    if (consumed.has(String(t?.id || ""))) continue;
+    addRow(t);
+  }
+  return dedupeCloudSongRows(merged);
 }
 
 /** Merge a cloud row with its local twin without dropping public profile
@@ -40498,12 +40547,15 @@ function libraryRowIdsSig(items) {
     .join("|");
 }
 
+function libraryRowCountSig(items) {
+  const list = Array.isArray(items) ? items : [];
+  return `${list.length}|${libraryRowIdsSig(list)}`;
+}
+
 function dedupeAndSaveLibraryIfNeeded() {
   const items = loadLibrary();
   const { keep } = dedupeCloudSongRows(items);
-  if (keep.length === items.length && libraryRowIdsSig(keep) === libraryRowIdsSig(items)) {
-    return false;
-  }
+  if (libraryRowCountSig(items) === libraryRowCountSig(keep)) return false;
   saveLibrary(keep);
   return true;
 }
@@ -40991,37 +41043,10 @@ async function ensureUserLibraryHydrated(prefetchedCloud, opts = {}) {
   // account's songs into a new sign-up on the same device.
   const localCandidates = localForUser;
 
-  const sigOf = librarySyncSigOf;
-  const localBySig = new Map();
-  for (const t of localCandidates) localBySig.set(sigOf(t), t);
-
-  const merged = [];
-  const seen = new Set();
-  const seenStable = new Set();
-  const addMerged = (row) => {
-    const sig = sigOf(row);
-    if (seen.has(sig)) return;
-    const stable = libraryTrackStableKey(row);
-    if (libraryTrackCanonicalUrl(row?.url) && seenStable.has(stable)) return;
-    seen.add(sig);
-    if (libraryTrackCanonicalUrl(row?.url)) seenStable.add(stable);
-    merged.push(row);
-  };
-  // Cloud rows win, but NEVER at the cost of a custom cover: the slim
-  // cloud select carries no `meta`, and replacing the local copy wholesale
-  // used to wipe data: covers (photo-mood art) until the upload had
-  // landed — the song then showed the placeholder logo. Merge like the
-  // reconcile path: keep local id, custom art, and local meta.
-  cloudSongs.forEach((c) => {
-    const localCopy = localBySig.get(sigOf(c));
-    if (!localCopy) {
-      addMerged(c);
-      return;
-    }
-    addMerged(mergeLibraryCloudWithLocal(c, localCopy));
-  });
-  localCandidates.forEach(addMerged);
-  const { keep: mergedDeduped, extras: mergedDupExtras } = dedupeCloudSongRows(merged);
+  const { keep: mergedDeduped, extras: mergedDupExtras } = mergeCloudRowsWithLocalLibrary(
+    cloudSongs,
+    localCandidates,
+  );
   if (mergedDupExtras.length) {
     void supabaseDeleteUserSongRowsByIds(
       mergedDupExtras.map((extra) => extra?.cloudSongId || extra?.id),
@@ -41094,59 +41119,12 @@ async function reconcileLibraryFromCloud({ force = false } = {}) {
       cloudDeadSigs,
     );
 
-    // Identity pins a logical track (audio id, falling back to canonical
-    // URL) without depending on the DB id (cloud rows use UUIDs, local
-    // rows use timestamp+random) or on URL drift.
-    const sigOf = librarySyncSigOf;
-    const localBySig = new Map();
-    for (const t of local) localBySig.set(sigOf(t), t);
-    const cloudSigs = new Set(cloud.map(sigOf));
-    const cloudStableKeys = new Set(cloud.map(libraryTrackStableKey));
-
-    const merged = [];
-    const seen = new Set();
-    const seenStable = new Set(cloud.map(libraryTrackStableKey));
-    // Cloud is the source of truth — but we keep the local id (so any
-    // open menus / now-playing references stay valid) and we keep the
-    // local cover when the local copy has a custom data: URL that the
-    // cloud row doesn't carry yet (Phase C will fix that).
-    for (const c of cloud) {
-      const sig = sigOf(c);
-      if (seen.has(sig)) continue;
-      seen.add(sig);
-      const localCopy = localBySig.get(sig);
-      if (localCopy) {
-        merged.push(mergeLibraryCloudWithLocal(c, localCopy));
-      } else {
-        merged.push(c);
-      }
+    const { keep: mergedDeduped } = mergeCloudRowsWithLocalLibrary(cloud, local);
+    mergedDeduped.sort((a, b) => Number(b?.ts || 0) - Number(a?.ts || 0));
+    if (libraryRowCountSig(loadLibrary()) === libraryRowCountSig(mergedDeduped)) {
+      _libraryReconcileLastAt = Date.now();
+      return;
     }
-
-    // Local-only tracks (created in this session before the cloud
-    // insert finished, or where insert failed). Keep them visible and
-    // re-attempt the insert in the background.
-    for (const t of local) {
-      const sig = sigOf(t);
-      const stable = libraryTrackStableKey(t);
-      if (
-        isTrackMarkedDeleted(t) ||
-        cloudSigs.has(sig) ||
-        cloudStableKeys.has(stable) ||
-        seen.has(sig) ||
-        seenStable.has(stable)
-      ) {
-        continue;
-      }
-      seen.add(sig);
-      seenStable.add(stable);
-      merged.push(t);
-      // Local-first: keep the local-only song visible but NEVER upload it to
-      // the cloud. Cloud rows are created only when the user publishes. This
-      // is the second half of the resurrection fix (see ensureUserLibraryHydrated).
-    }
-
-    merged.sort((a, b) => Number(b?.ts || 0) - Number(a?.ts || 0));
-    const { keep: mergedDeduped } = dedupeCloudSongRows(merged);
     saveLibrary(mergedDeduped);
     if ((document.body.getAttribute("data-route") || "") === "profile") {
       refreshOwnSongsUi();
@@ -46375,13 +46353,26 @@ async function tryRefreshLibraryTrackAudioFromSuno(t) {
 /** Persist a refreshed remote URL on the Library row and PATCH cloud `song_url`. */
 function patchLibraryRowWithRefreshedUrl(trackId, proxiedUrlForLibrary, rawRemoteUrl, prevTrack) {
   const items = loadLibrary();
-  const idx = items.findIndex((x) => String(x.id) === String(trackId));
-  if (idx < 0) return null;
+  const seed =
+    prevTrack ||
+    items.find((x) => String(x.id) === String(trackId)) ||
+    null;
+  const aid = String(seed?.audioId || "").trim();
+  const kind = String(seed?.kind || "full").trim();
   const nextUrl = String(proxiedUrlForLibrary || "").trim();
   if (!nextUrl) return null;
-  const row = { ...items[idx], url: nextUrl };
-  const next = [...items];
-  next[idx] = row;
+  let changed = false;
+  const next = items.map((row) => {
+    const idMatch = String(row.id) === String(trackId);
+    const audioMatch =
+      aid &&
+      String(row.audioId || "").trim() === aid &&
+      String(row.kind || "full").trim() === kind;
+    if (!idMatch && !audioMatch) return row;
+    changed = true;
+    return { ...row, url: nextUrl };
+  });
+  if (!changed) return null;
   try {
     saveLibrary(next);
   } catch {
@@ -46392,9 +46383,19 @@ function patchLibraryRowWithRefreshedUrl(trackId, proxiedUrlForLibrary, rawRemot
   } catch {}
   const forCloud = String(rawRemoteUrl || "").trim();
   if (forCloud) {
-    void supabasePatchUserSong(prevTrack, { songUrl: forCloud }, { reason: "archive-url-refresh" });
+    void supabasePatchUserSong(seed || prevTrack, { songUrl: forCloud }, { reason: "archive-url-refresh" });
   }
-  return row;
+  return (
+    next.find((x) => String(x.id) === String(trackId)) ||
+    (aid
+      ? next.find(
+          (x) =>
+            String(x.audioId || "").trim() === aid &&
+            String(x.kind || "full").trim() === kind,
+        )
+      : null) ||
+    seed
+  );
 }
 
 /**

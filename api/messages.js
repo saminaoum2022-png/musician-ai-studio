@@ -310,9 +310,11 @@ async function handleGet(req, res, user) {
     const thread = Array.isArray(tr.data) && tr.data[0] ? tr.data[0] : null;
     if (!thread) return sendJson(res, 404, { ok: false, error: "Thread not found" });
     const limit = Math.min(80, Math.max(1, Number(url.searchParams.get("limit")) || 80));
-    const msgs = await svcFetch(
-      `dm_messages?select=id,sender_id,body,created_at&thread_id=eq.${encodeURIComponent(threadId)}&order=created_at.desc&limit=${limit}`,
-    );
+    const before = String(url.searchParams.get("before") || "").trim();
+    let msgPath =
+      `dm_messages?select=id,sender_id,body,created_at&thread_id=eq.${encodeURIComponent(threadId)}&order=created_at.desc&limit=${limit}`;
+    if (before) msgPath += `&created_at=lt.${encodeURIComponent(before)}`;
+    const msgs = await svcFetch(msgPath);
     const rows = Array.isArray(msgs.data) ? [...msgs.data].reverse() : [];
     const partnerId = threadPartnerId(thread, user.userId);
     const prof = partnerId ? await profileByUserId(partnerId) : null;

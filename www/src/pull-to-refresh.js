@@ -62,6 +62,23 @@ export function initPullToRefresh(deps) {
     movable.insertBefore(anchor, movable.firstChild);
   }
 
+  /** Skip PTR when the touch starts inside a nested scroll container (e.g. DM thread). */
+  function ptrNestedScrollContainer(target) {
+    let node = target instanceof Element ? target : null;
+    while (node && node !== document.body && node !== document.documentElement) {
+      const style = window.getComputedStyle(node);
+      const oy = style.overflowY;
+      if (
+        (oy === "auto" || oy === "scroll" || oy === "overlay")
+        && node.scrollHeight > node.clientHeight + 2
+      ) {
+        return node;
+      }
+      node = node.parentElement;
+    }
+    return null;
+  }
+
   function ensurePtrShells() {
     wrapDiscoverFeedBody();
     wrapSiblingsAfter(
@@ -227,6 +244,7 @@ export function initPullToRefresh(deps) {
       if (!isRouteEnabled()) return;
       if (window.scrollY > 2) return;
       if (e.touches.length !== 1) return;
+      if (ptrNestedScrollContainer(e.target)) return;
       ensurePtrShells();
       activeMovable = getMovable();
       if (!activeMovable) return;

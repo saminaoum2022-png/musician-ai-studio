@@ -31103,6 +31103,17 @@ body.messagesThreadKeyboardOpen[data-route="messages-thread"] .messagesThreadPag
   pointer-events: none;
   visibility: hidden;
 }
+.messagesThreadOlderLoader{
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 10px 0 6px;
+  min-height: 36px;
+}
+.messagesThreadOlderLoader .ptrSpinnerRing{
+  width: 22px;
+  height: 22px;
+}
 .messagesThreadLoading,
 .messagesThreadEmpty{
   padding: 48px 16px 32px;

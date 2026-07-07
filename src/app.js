@@ -173,7 +173,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260707-144320";
+const APP_BUILD = "20260707-145144";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -2788,7 +2788,9 @@ function isRouteRefreshInFlight(route) {
 }
 
 function isPullToRefreshRouteEnabled() {
-  const route = tabBarRouteKey(document.body.getAttribute("data-route") || "");
+  const rawRoute = String(document.body.getAttribute("data-route") || "").trim();
+  if (rawRoute === "messages" || rawRoute === "messages-thread") return false;
+  const route = tabBarRouteKey(rawRoute);
   if (!PTR_REFRESH_ROUTES.has(route)) return false;
   if (document.body.classList.contains("echoComposeOpen")) return false;
   if (route === "profile") {
@@ -24701,6 +24703,10 @@ let _messagesLoading = false;
 let _messagesRefreshing = false;
 let _messagesThreadBootToken = 0;
 let _messagesLastFetchedAt = "";
+let _messagesHasMoreOlder = true;
+let _messagesLoadingOlder = false;
+const MESSAGES_THREAD_PAGE_SIZE = 80;
+const MESSAGES_THREAD_LOAD_OLDER_THRESHOLD_PX = 120;
 const _messagesThreadCache = new Map();
 const _chatPartnerStatsCache = new Map();
 let _messagesInboxLoading = false;
@@ -25472,10 +25478,13 @@ function renderMessagesMount({ scrollToBottom = true, forceScroll = false } = {}
     return;
   }
   const stickToBottom = scrollToBottom && (forceScroll || _messagesThreadNeedsInitialScroll || shouldAutoScrollMessagesMount());
+  const olderLoader = _messagesLoadingOlder
+    ? `<div class="messagesThreadOlderLoader" aria-busy="true" aria-label="Loading older messages"><span class="ptrSpinnerRing"></span></div>`
+    : "";
   // Show a timestamp only at the end of a cluster (sender change or a gap),
   // instead of stamping every bubble — quieter, more like a native chat.
   const MSG_GROUP_GAP_MS = 5 * 60 * 1000;
-  mount.innerHTML = `<div class="messagesBubbleStack">${msgs
+  mount.innerHTML = `${olderLoader}<div class="messagesBubbleStack">${msgs
     .map((m, i) => {
       const next = msgs[i + 1];
       let showTime = true;
@@ -25536,6 +25545,85 @@ function mergeThreadMessages(incoming, { scrollToBottom = true } = {}) {
 
 function appendThreadMessages(newMsgs) {
   mergeThreadMessages(newMsgs, { scrollToBottom: true });
+}
+
+function prependThreadMessages(newMsgs) {
+  const rows = Array.isArray(newMsgs) ? newMsgs : [];
+  if (!rows.length) return 0;
+  let list = [...(Array.isArray(_messagesList) ? _messagesList : [])];
+  const existingIds = new Set(list.map((m) => String(m?.id || "")));
+  let added = 0;
+  for (const m of rows) {
+    const serverId = String(m?.id || "");
+    if (!serverId || isPendingThreadMessageId(serverId) || existingIds.has(serverId)) continue;
+    list.push({ ...m, sendStatus: m.sendStatus || "delivered" });
+    existingIds.add(serverId);
+    added += 1;
+  }
+  if (!added) return 0;
+  _messagesList = list.sort(
+    (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
+  );
+  renderMessagesMount({ scrollToBottom: false });
+  return added;
+}
+
+async function loadOlderThreadMessages() {
+  const tid = String(_conversationId || "").trim();
+  if (!tid || isCoachThreadId(tid)) return;
+  if (_messagesLoadingOlder || !_messagesHasMoreOlder || _messagesLoading) return;
+  if (String(document.body.getAttribute("data-route") || "") !== "messages-thread") return;
+
+  const list = Array.isArray(_messagesList) ? _messagesList : [];
+  const oldest = list.find((m) => m?.created_at && !isPendingThreadMessageId(m?.id));
+  if (!oldest?.created_at) {
+    _messagesHasMoreOlder = false;
+    return;
+  }
+
+  _messagesLoadingOlder = true;
+  renderMessagesMount({ scrollToBottom: false });
+  const mount = document.getElementById("messagesThreadMount");
+  const prevScrollHeight = Math.max(0, Number(mount?.scrollHeight) || 0);
+  const prevScrollTop = Math.max(0, Number(mount?.scrollTop) || 0);
+
+  try {
+    const before = encodeURIComponent(String(oldest.created_at));
+    const data = await messagesApi(
+      `/api/messages?type=thread&threadId=${encodeURIComponent(tid)}&limit=${MESSAGES_THREAD_PAGE_SIZE}&before=${before}`,
+    );
+    if (_conversationId !== tid) return;
+    const incoming = Array.isArray(data?.messages) ? data.messages : [];
+    if (!incoming.length) {
+      _messagesHasMoreOlder = false;
+      return;
+    }
+    if (incoming.length < MESSAGES_THREAD_PAGE_SIZE) _messagesHasMoreOlder = false;
+    const added = prependThreadMessages(incoming);
+    if (!added) _messagesHasMoreOlder = false;
+    if (mount && added) {
+      const nextScrollHeight = Math.max(0, Number(mount.scrollHeight) || 0);
+      mount.scrollTop = prevScrollTop + (nextScrollHeight - prevScrollHeight);
+    }
+    saveActiveThreadToCache();
+  } catch (e) {
+    console.warn("[messages] load older", e);
+  } finally {
+    _messagesLoadingOlder = false;
+    if (_conversationId === tid) renderMessagesMount({ scrollToBottom: false });
+  }
+}
+
+function wireMessagesThreadScrollOnce() {
+  if (document.documentElement.dataset.messagesThreadScrollWired) return;
+  document.documentElement.dataset.messagesThreadScrollWired = "1";
+  const mount = document.getElementById("messagesThreadMount");
+  if (!mount) return;
+  mount.addEventListener("scroll", () => {
+    if (String(document.body.getAttribute("data-route") || "") !== "messages-thread") return;
+    if ((mount.scrollTop || 0) > MESSAGES_THREAD_LOAD_OLDER_THRESHOLD_PX) return;
+    void loadOlderThreadMessages();
+  }, { passive: true });
 }
 
 function newClientMessageId() {
@@ -25687,6 +25775,8 @@ function resetMessagesThreadRouteState() {
   _messagesLoading = false;
   _messagesRefreshing = false;
   _messagesLastFetchedAt = "";
+  _messagesHasMoreOlder = true;
+  _messagesLoadingOlder = false;
 }
 
 function beginMessagesThreadEnterTransition() {
@@ -27177,7 +27267,7 @@ async function loadMessagesForConversation(threadId, { bootToken = 0, silent = f
     _messagesRefreshing = true;
   }
   try {
-    const data = await messagesApi(`/api/messages?type=thread&threadId=${encodeURIComponent(tid)}&limit=80`);
+    const data = await messagesApi(`/api/messages?type=thread&threadId=${encodeURIComponent(tid)}&limit=${MESSAGES_THREAD_PAGE_SIZE}`);
     if (bootToken && bootToken !== _messagesThreadBootToken) return false;
     if (_conversationId && _conversationId !== tid) return false;
     const partner = data?.thread || null;
@@ -27195,11 +27285,13 @@ async function loadMessagesForConversation(threadId, { bootToken = 0, silent = f
     if (replace) {
       _messagesList = incoming.map((m) => ({ ...m, sendStatus: m.sendStatus || "delivered" }));
       syncMessagesLastFetchedAtFromList();
+      _messagesHasMoreOlder = incoming.length >= MESSAGES_THREAD_PAGE_SIZE;
     } else if (silent || hasCache || (Array.isArray(_messagesList) && _messagesList.length)) {
       if (incoming.length) mergeThreadMessages(incoming, { scrollToBottom: false });
     } else {
       _messagesList = incoming;
       syncMessagesLastFetchedAtFromList();
+      _messagesHasMoreOlder = incoming.length >= MESSAGES_THREAD_PAGE_SIZE;
     }
     saveThreadMessagesCache(tid, {
       messages: _messagesList,
@@ -27377,6 +27469,8 @@ function enterMessagesThreadRoute(threadId, targetUserId = "") {
   }
 
   _messagesThreadNeedsInitialScroll = true;
+  _messagesHasMoreOlder = true;
+  _messagesLoadingOlder = false;
   _conversationId = tid;
   const threadCache = tid ? getThreadMessagesCache(tid) : null;
   if (threadCache?.loadedOnce) {
@@ -27415,6 +27509,7 @@ function enterMessagesThreadRoute(threadId, targetUserId = "") {
   rememberMessagesViewportBaseBottom({ force: true });
   wireMessagesThreadKeyboardOnce();
   wireMessagesNativeKeyboardOnce();
+  wireMessagesThreadScrollOnce();
   setMessagesNativeKeyboardScroll(true);
   setMessagesNativeAccessoryBar(false);
   updateMessagesComposerReserve();

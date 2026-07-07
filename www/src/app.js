@@ -181,7 +181,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260707-180430";
+const APP_BUILD = "20260707-181135";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -40328,46 +40328,53 @@ function partitionCloudLibraryRows(rows, tombstones) {
   return alive;
 }
 
+/** Dedupe keys for one row — any shared key means the same logical song. */
+function collectLibraryDedupeKeys(r) {
+  const keys = [];
+  const aid = String(r?.audioId || r?.audio_id || "").trim();
+  const kind = String(r?.kind || "full").trim();
+  const canon = libraryTrackCanonicalUrl(r?.url);
+  if (canon) keys.push(`stable:${libraryTrackStableKey(r)}`);
+  if (aid) keys.push(`aid:${aid}|${kind}`);
+  if (!keys.length) keys.push(librarySyncSigOf(r));
+  return keys;
+}
+
 function dedupeCloudSongRows(rows) {
   const list = Array.isArray(rows) ? rows : [];
   if (!list.length) return { keep: [], extras: [] };
 
-  const groups = new Map();
-  const stableToGroup = new Map();
-
-  const mergeIntoGroup = (groupKey, row) => {
-    const cur = groups.get(groupKey);
-    groups.set(groupKey, cur ? mergeLibraryDuplicateRows(cur, row) : row);
+  const parent = new Map();
+  const find = (k) => {
+    if (!parent.has(k)) parent.set(k, k);
+    let p = k;
+    while (parent.get(p) !== p) p = parent.get(p);
+    return p;
+  };
+  const union = (a, b) => {
+    const ra = find(a);
+    const rb = find(b);
+    if (ra !== rb) parent.set(rb, ra);
   };
 
-  // Rows keyed by Suno audio id first.
-  for (const r of list) {
-    const aid = String(r?.audioId || r?.audio_id || "").trim();
-    if (!aid) continue;
-    const kind = String(r?.kind || "full").trim();
-    const groupKey = `aid:${aid}|${kind}`;
-    mergeIntoGroup(groupKey, r);
-    const stable = libraryTrackStableKey(r);
-    if (libraryTrackCanonicalUrl(r?.url)) stableToGroup.set(stable, groupKey);
+  const entries = list.map((row) => ({ row, keys: collectLibraryDedupeKeys(row) }));
+  const keyFirst = new Map();
+  for (const { keys } of entries) {
+    keys.forEach((k) => {
+      if (!parent.has(k)) parent.set(k, k);
+    });
+    for (let i = 1; i < keys.length; i += 1) union(keys[0], keys[i]);
+    for (const k of keys) {
+      if (keyFirst.has(k)) union(k, keyFirst.get(k));
+      keyFirst.set(k, find(k));
+    }
   }
 
-  // URL-only twins (same canonical audio, missing audioId on one copy) fold
-  // into the audio-id group so Profile → All songs doesn't show two rows.
-  for (const r of list) {
-    const aid = String(r?.audioId || r?.audio_id || "").trim();
-    if (aid) continue;
-    const stable = libraryTrackStableKey(r);
-    const canon = libraryTrackCanonicalUrl(r?.url);
-    let groupKey;
-    if (canon && stableToGroup.has(stable)) {
-      groupKey = stableToGroup.get(stable);
-    } else if (canon) {
-      groupKey = `stable:${stable}`;
-      if (!stableToGroup.has(stable)) stableToGroup.set(stable, groupKey);
-    } else {
-      groupKey = librarySyncSigOf(r);
-    }
-    mergeIntoGroup(groupKey, r);
+  const groups = new Map();
+  for (const { row, keys } of entries) {
+    const root = find(keys[0]);
+    const cur = groups.get(root);
+    groups.set(root, cur ? mergeLibraryDuplicateRows(cur, row) : row);
   }
 
   const keep = [...groups.values()];
@@ -40484,10 +40491,19 @@ function mergeLibraryDuplicateRows(a, b) {
   return merged;
 }
 
+function libraryRowIdsSig(items) {
+  return (Array.isArray(items) ? items : [])
+    .map((t) => String(t?.id || ""))
+    .sort()
+    .join("|");
+}
+
 function dedupeAndSaveLibraryIfNeeded() {
   const items = loadLibrary();
   const { keep } = dedupeCloudSongRows(items);
-  if (keep.length === items.length) return false;
+  if (keep.length === items.length && libraryRowIdsSig(keep) === libraryRowIdsSig(items)) {
+    return false;
+  }
   saveLibrary(keep);
   return true;
 }
@@ -40784,7 +40800,8 @@ function classifyPersistError(e) {
 }
 
 function saveLibrary(items) {
-  const capped = capLibraryItems(items);
+  const { keep } = dedupeCloudSongRows(Array.isArray(items) ? items : []);
+  const capped = capLibraryItems(keep);
   const key = getLibraryStorageKey();
   // The mem cache is the source of truth for `loadLibrary()` /
   // `renderLibrary()` during this session. Update it FIRST so the UI
@@ -40857,7 +40874,8 @@ async function syncHubCoverForTrack(track, coverUrl) {
 }
 function saveLibraryFor(id, items) {
   const writeKey = profileLibraryKeyFor(id);
-  const capped = capLibraryItems(items);
+  const { keep } = dedupeCloudSongRows(Array.isArray(items) ? items : []);
+  const capped = capLibraryItems(keep);
   const isActive = writeKey === getLibraryStorageKey();
   if (isActive) {
     _libraryMemCache = capped;

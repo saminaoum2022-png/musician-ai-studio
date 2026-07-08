@@ -115,6 +115,7 @@ import {
 import {
   clearPriorityPending,
   getPriorityPending,
+  libraryPriorityGeneratingRowsHtml,
   setPriorityPending,
 } from "./priority-pending.js";
 import {
@@ -183,7 +184,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260709-011117";
+const APP_BUILD = "20260709-012920";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -16642,9 +16643,24 @@ function syncGenerationPendingLibraryUi() {
   } catch {}
 }
 
+function hasActiveProfileJobPending() {
+  if (getGenerationPending()?.taskId) return true;
+  const pri = getPriorityPending();
+  return Boolean(
+    pri?.kind
+    && (String(pri.taskId || "").trim() || String(pri.videoTaskId || "").trim()),
+  );
+}
+
+/** Refresh Profile Songs shimmer, then land on Songs (all) while any job runs. */
+function wireProfileSongsForActiveJob() {
+  syncGenerationPendingLibraryUi();
+  openProfileSongsWhileGenerating();
+}
+
 /** While Suno runs, show Profile → Songs (all) shimmer instead of staying on Create. */
 function openProfileSongsWhileGenerating() {
-  if (!getGenerationPending()?.taskId) return;
+  if (!hasActiveProfileJobPending()) return;
   try { sessionStorage.setItem(PROFILE_SONGS_SEGMENT_KEY, "all"); } catch {}
   _profileSongsSegment = "all";
   syncGenerationPendingLibraryUi();
@@ -32249,6 +32265,7 @@ async function runLibraryInstrumentalForTrack(t) {
       taskId: sunoStemsTaskId,
       title,
     });
+    try { wireProfileSongsForActiveJob(); } catch {}
     setStatus("Instrumental requested from library song. Processing now…");
     void pollLibraryStemsUntilDone(sunoStemsTaskId, "inst", {
       sourceTitle: t.title,
@@ -41984,6 +42001,7 @@ async function createSunoMusicVideoForTrack(track, { onStatus } = {}) {
         videoTaskId,
         title,
       });
+      try { wireProfileSongsForActiveJob(); } catch {}
     }
     const videoUrl = await pollSunoMusicVideo(videoTaskId, { onStatus: say });
     saveMusicVideoMetaForTrack(t, { taskId: videoTaskId, videoUrl, createdAt: Date.now() });
@@ -42764,7 +42782,7 @@ function renderLibrary() {
     _librarySelectedIds.clear();
   }
   updateLibrarySelectToolbar();
-  const generatingHtml = libraryGeneratingRowsHtml();
+  const generatingHtml = libraryGeneratingRowsHtml() + libraryPriorityGeneratingRowsHtml();
   if (!totalCount) {
     if (onProfileAll && loadLibrary().some((t) => Boolean(t.publicOnProfile))) {
       els.libraryList.innerHTML = `
@@ -49872,6 +49890,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
           taskId: sunoStemsTaskId,
           title: lastSunoTitle || "Generated song",
         });
+        try { wireProfileSongsForActiveJob(); } catch {}
       }
       setStatus("Instrumental version requested. Processing now…");
       startStemsPolling();
@@ -50650,6 +50669,7 @@ function resumePriorityJobsIfPending() {
   try { syncCoachGenerationStatusFromPending(getGenerationPending()); } catch {}
   try { syncCoachPriorityStatusFromPending(getPriorityPending()); } catch {}
   try { resumePriorityJobsIfPending(); } catch {}
+  try { wireProfileSongsForActiveJob(); } catch {}
   // Watch the Create fields locally for the contextual tips. Fire on blur so
   // the orb pill isn't trapped behind the on-screen keyboard.
   els.sunoStyle?.addEventListener("blur", scheduleCreateHints);
@@ -51779,6 +51799,7 @@ async function submitSoundGenerate() {
         taskId: soundTaskId,
         title: soundTitle,
       });
+      try { wireProfileSongsForActiveJob(); } catch {}
       const fallbackTitle = shortenSoundTitle((prompt.split(/\r?\n/)[0] || "").trim() || "Sound");
       startSoundGenerationPolling({
         fallbackTitle,
@@ -51796,8 +51817,6 @@ async function submitSoundGenerate() {
       });
       setStatus("Sound is generating…");
       clearCreateFlow();
-      try { location.hash = "#/challenges"; } catch {}
-      scheduleApplyRoute();
   } catch (e) {
     setStatus(`Sound failed: ${e?.message || String(e)}`);
     cancelCoachPriorityStatus();

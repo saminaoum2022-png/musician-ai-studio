@@ -13108,6 +13108,8 @@ button:disabled{ opacity:0.5; cursor:not-allowed; }
   --profile-header-gap: 10px;
   --profile-avatar-size: 96px;
   --profile-stats-max-w: 360px;
+  --profile-pro-banner-inset: 10px;
+  --profile-pro-banner-max-w: 440px;
   --profile-stat-col-pad-x: 4px;
   position: relative;
   isolation: isolate;
@@ -22339,9 +22341,12 @@ html[data-theme="light"] .soundsStudioTempoValue{
   display: flex;
   align-items: center;
   gap: 10px;
-  width: min(100%, var(--profile-stats-max-w, 360px));
+  width: min(
+    calc(100% - (var(--profile-pro-banner-inset, 10px) * 2)),
+    var(--profile-pro-banner-max-w, 440px)
+  );
   margin: 12px auto 6px;
-  padding: 12px 12px 12px 14px;
+  padding: 12px 14px 12px 14px;
   border-radius: 16px;
   text-decoration: none;
   color: inherit;
@@ -22606,6 +22611,11 @@ html[data-theme="light"] .nabadVerifyPopoverText{
   .profileStatsRow{
     width: min(100%, 340px);
     margin-top: 9px;
+  }
+  .profileProBanner{
+    --profile-pro-banner-inset: 8px;
+    --profile-pro-banner-max-w: 100%;
+    padding: 11px 12px;
   }
   .profileStatValue{
     font-size: clamp(20px, 5.4vw, 24px);

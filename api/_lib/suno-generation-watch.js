@@ -11,6 +11,32 @@ const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
 
 /** Notifies faster than this after watch creation are treated as premature. */
 const PREMATURE_NOTIFY_MS = 15000;
+/** Ignore Suno stub "ready" signals until the watch has aged at least this long. */
+const MIN_WATCH_AGE_MS = 45000;
+
+function defaultVariantCountForKind(kind) {
+  const k = String(kind || "song").trim();
+  if (k === "sound" || k === "music_video" || k === "instrumental" || k === "studio_guide") {
+    return 1;
+  }
+  return 2;
+}
+
+function watchAgeMs(row) {
+  const created = new Date(row?.created_at).getTime();
+  if (!Number.isFinite(created)) return 0;
+  return Date.now() - created;
+}
+
+function canNotifyWatchNow(row, verified, { forceRenotify = false } = {}) {
+  const ageMs = watchAgeMs(row);
+  if (ageMs >= MIN_WATCH_AGE_MS) return true;
+  if (!forceRenotify) return false;
+  const clipLagMs = Number(verified?.clipLagMs || 0);
+  const minLag = Number(verified?.minClipLagMs || minClipLagForVariants(row?.variant_count || 1));
+  if (clipLagMs < minLag) return false;
+  return wasLikelyPrematureNotify(row) || shouldRenotifyWatch(row, verified);
+}
 
 function wasFalseEarlyNotify(row, verified) {
   if (!row?.notified_at) return false;
@@ -106,12 +132,30 @@ async function registerSunoWatch({
   const tid = cleanTaskId(taskId);
   const k = String(kind || "").trim();
   if (!uid || !tid || !k) return { ok: false, reason: "invalid_args" };
+  const desiredVariantCount = Math.max(
+    1,
+    Math.min(2, Number(variantCount) || defaultVariantCountForKind(k)),
+  );
+  const existing = await fetchWatchByTaskId(tid);
+  if (existing) {
+    const patch = {
+      kind: k || existing.kind,
+      title: String(title || existing.title || "").trim().slice(0, 120),
+      variant_count: Math.max(Number(existing.variant_count) || 1, desiredVariantCount),
+      notify_push: notifyPush !== false,
+    };
+    const r = await rest(`suno_generation_watch?task_id=eq.${encodeURIComponent(tid)}`, {
+      method: "PATCH",
+      body: patch,
+    });
+    return { ok: r.ok, row: { ...existing, ...patch } };
+  }
   const row = {
     user_id: uid,
     task_id: tid,
     kind: k,
     title: String(title || "").trim().slice(0, 120),
-    variant_count: Math.max(1, Math.min(2, Number(variantCount) || 1)),
+    variant_count: desiredVariantCount,
     notify_push: notifyPush !== false,
     status: "pending",
     notified_at: null,
@@ -120,7 +164,7 @@ async function registerSunoWatch({
   const r = await rest("suno_generation_watch", {
     method: "POST",
     body: row,
-    prefer: "resolution=merge-duplicates",
+    prefer: "return=representation",
   });
   return { ok: r.ok, row };
 }
@@ -223,6 +267,15 @@ async function maybeNotifyWatchRow(row, { forceRenotify = false } = {}) {
     return { ok: false, reason: "not_ready", status: verified.status || "" };
   }
 
+  if (!canNotifyWatchNow(row, verified, { forceRenotify })) {
+    return {
+      ok: false,
+      reason: "watch_too_young",
+      ageMs: watchAgeMs(row),
+      minAgeMs: MIN_WATCH_AGE_MS,
+    };
+  }
+
   const alreadyNotified = Boolean(row.notified_at || row.status === "notified");
   if (alreadyNotified) {
     if (forceRenotify || shouldRenotifyWatch(row, verified)) {
@@ -260,12 +313,16 @@ async function retrySunoWatchReadyAndNotify(row, { attempts = 36, delayMs = 5000
 
     if (verified.ready) {
       const alreadyNotified = Boolean(current.notified_at || current.status === "notified");
-      if (alreadyNotified && !shouldRenotifyWatch(current, verified)) {
+      const renotify = shouldRenotifyWatch(current, verified);
+      if (alreadyNotified && !renotify) {
         return { ok: true, skipped: true, reason: "already_notified" };
       }
-      return maybeNotifyWatchRow(current, {
-        forceRenotify: shouldRenotifyWatch(current, verified),
-      });
+      const notifyResult = await maybeNotifyWatchRow(current, { forceRenotify: renotify });
+      if (notifyResult?.reason === "watch_too_young" && i < attempts - 1) {
+        await sleep(delayMs);
+        continue;
+      }
+      return notifyResult;
     }
 
     if (i < attempts - 1) await sleep(delayMs);
@@ -329,9 +386,17 @@ async function handleSunoCallback(body) {
     return { ok: false, reason: "not_ready_yet", status: verified.status || "" };
   }
 
-  return maybeNotifyWatchRow(row, {
-    forceRenotify: shouldRenotifyWatch(row, verified),
-  });
+  const renotify = shouldRenotifyWatch(row, verified);
+  const notifyResult = await maybeNotifyWatchRow(row, { forceRenotify: renotify });
+  if (notifyResult?.reason === "watch_too_young") {
+    scheduleBackgroundWork(
+      retrySunoWatchReadyAndNotify(row).catch((e) => {
+        console.warn("[suno-watch] young-watch retry failed", taskId, e?.message || e);
+      }),
+    );
+    return { ok: false, reason: "watch_too_young", ageMs: notifyResult.ageMs || 0 };
+  }
+  return notifyResult;
 }
 
 async function notifyJobReadyFromClient({ userId, taskId, kind, title = "" } = {}) {
@@ -340,11 +405,13 @@ async function notifyJobReadyFromClient({ userId, taskId, kind, title = "" } = {
   if (!uid || !tid) return { ok: false, reason: "invalid_args" };
   let row = await fetchWatchByTaskId(tid);
   if (!row) {
+    const watchKind = String(kind || "song").trim() || "song";
     await registerSunoWatch({
       userId: uid,
       taskId: tid,
-      kind: String(kind || "song").trim() || "song",
+      kind: watchKind,
       title,
+      variantCount: defaultVariantCountForKind(watchKind),
       notifyPush: true,
     });
     row = await fetchWatchByTaskId(tid);
@@ -377,11 +444,68 @@ function queueRegisterSunoWatch(opts) {
   });
 }
 
+/**
+ * Backstop when Suno callbacks or waitUntil retries miss a completion.
+ * Re-checks pending watches and premature notifies from the last few hours.
+ */
+async function sweepSunoGenerationWatches({ limit = 30 } = {}) {
+  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+    return { ok: false, reason: "no_supabase" };
+  }
+  const since = new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString();
+  const max = Math.max(1, Math.min(50, Number(limit) || 30));
+  const [pendingRes, notifiedRes] = await Promise.all([
+    rest(
+      `suno_generation_watch?status=eq.pending&created_at=gte.${encodeURIComponent(since)}&select=*&order=created_at.asc&limit=${max}`,
+    ),
+    rest(
+      `suno_generation_watch?status=eq.notified&created_at=gte.${encodeURIComponent(since)}&select=*&order=created_at.desc&limit=${max}`,
+    ),
+  ]);
+
+  const candidates = [];
+  if (pendingRes.ok && Array.isArray(pendingRes.data)) candidates.push(...pendingRes.data);
+  if (notifiedRes.ok && Array.isArray(notifiedRes.data)) {
+    for (const row of notifiedRes.data) {
+      if (wasLikelyPrematureNotify(row)) candidates.push(row);
+    }
+  }
+
+  const seen = new Set();
+  const results = [];
+  for (const row of candidates) {
+    const taskId = cleanTaskId(row?.task_id);
+    if (!taskId || seen.has(taskId)) continue;
+    seen.add(taskId);
+    if (String(row.kind || "") === "studio_guide") continue;
+
+    const verified = await verifyWatchRowReady(row);
+    if (verified.failed) {
+      await markWatchStatus(taskId, "failed");
+      queueUpdateMusicGenerationByTaskId(taskId, { status: "failed", error_message: "sweep_verify_failed" });
+      results.push({ taskId, ok: false, reason: "failed" });
+      continue;
+    }
+    if (!verified.ready) {
+      results.push({ taskId, ok: false, reason: "not_ready" });
+      continue;
+    }
+
+    const renotify = shouldRenotifyWatch(row, verified);
+    const notifyResult = await maybeNotifyWatchRow(row, { forceRenotify: renotify });
+    results.push({ taskId, ...notifyResult });
+  }
+
+  return { ok: true, checked: seen.size, results };
+}
+
 module.exports = {
   registerSunoWatch,
   queueRegisterSunoWatch,
   handleSunoCallback,
   notifyJobReadyFromClient,
+  sweepSunoGenerationWatches,
   pushBodyForWatch,
   wasLikelyPrematureNotify,
+  MIN_WATCH_AGE_MS,
 };

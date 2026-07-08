@@ -19,7 +19,8 @@
     }
   },
   "crons": [
-    { "path": "/api/social?type=chart_notify_cron", "schedule": "0 17 * * *" }
+    { "path": "/api/social?type=chart_notify_cron", "schedule": "0 17 * * *" },
+    { "path": "/api/cron/suno-watch-sweep", "schedule": "*/2 * * * *" }
   ],
   "rewrites": [
     { "source": "/s/:id", "destination": "/api/share?id=:id" }

@@ -186,7 +186,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260708-232126";
+const APP_BUILD = "20260709-005255";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -16147,6 +16147,48 @@ function kickForegroundGenerationPolls() {
   try { generatePollTimer?.kick?.(); } catch {}
   try { soundPollTimer?.kick?.(); } catch {}
   try { kickHumTrackGenerationPoll(); } catch {}
+}
+
+let _resumeGenCheckInflight = false;
+
+/** When the app returns from background, finish any generation Suno already completed. */
+async function resumePendingGenerationOnForeground() {
+  if (_resumeGenCheckInflight) return;
+  const pending = getGenerationPending();
+  const rec = loadRecoverableGenerationTask?.() || null;
+  const tid = String(
+    pending?.taskId ||
+      rec?.taskId ||
+      sunoTaskId ||
+      loadPendingBackendTask?.() ||
+      "",
+  ).trim();
+  if (!tid) return;
+
+  const expectedVariants = resolveExpectedGenerationVariants(tid);
+  if (libraryHasAllTaskVariants(tid, expectedVariants)) {
+    finalizeRecoveredGenerationJob(tid, { silent: true });
+    return;
+  }
+
+  _resumeGenCheckInflight = true;
+  try {
+    const recovered = await recoverSongFromTaskId(tid, { silent: true });
+    if (!recovered) {
+      kickForegroundGenerationPolls();
+      const title = String(pending?.title || rec?.titleHint || els.sunoTitle?.value || "Your song").trim();
+      const pushKind = pending?.source === "photo" ? "photo" : "song";
+      void maybeNotifyJobReadyPush({
+        kind: pushKind,
+        title,
+        taskId: tid,
+      });
+    }
+  } catch {
+    kickForegroundGenerationPolls();
+  } finally {
+    _resumeGenCheckInflight = false;
+  }
 }
 let _showResultCardHoisted = null;
 let stemsPollTimer = null;
@@ -46923,6 +46965,50 @@ function patchLibraryRowWithRefreshedUrl(trackId, proxiedUrlForLibrary, rawRemot
   );
 }
 
+/** Patch empty library art from a Suno CDN image URL (recovery path). */
+function patchLibraryTrackSunoArt(trackId, imageUrl) {
+  const id = String(trackId || "").trim();
+  const url = String(imageUrl || "").trim();
+  if (!id || !url) return null;
+  const items = loadLibrary().slice();
+  const idx = items.findIndex((x) => String(x?.id || "") === id);
+  if (idx < 0) return null;
+  const prev = items[idx];
+  if (String(prev?.artUrl || "").trim() && !isDefaultSongCoverUrl(prev.artUrl)) return prev;
+  const next = {
+    ...prev,
+    artUrl: url,
+    meta: { ...(prev.meta || {}), imageUrl: url },
+    ts: Date.now(),
+  };
+  items[idx] = next;
+  saveLibrary(items);
+  try {
+    refreshOwnSongsUi({ soft: true });
+  } catch {
+    refreshOwnSongsUi();
+  }
+  return next;
+}
+
+async function backfillRecoveredGenerationCovers(taskId, entries) {
+  const rows = (Array.isArray(entries) ? entries : libraryEntriesForTaskId(taskId)).filter(Boolean);
+  for (const row of rows) {
+    let track = row;
+    const patched = await applyParallelCoverForTrack(track);
+    if (patched) {
+      const refreshed = loadLibrary().find((x) => String(x?.id || "") === String(track.id || ""));
+      if (refreshed) track = refreshed;
+    }
+    if (shouldUseAbstractCover(track)) {
+      void ensureAbstractCoverForTrack(track);
+    }
+  }
+  try {
+    backfillPendingAbstractCovers(loadLibrary());
+  } catch {}
+}
+
 /**
  * Poll Suno once for a completed generation and add tracks to Library.
  * Safe to call after the user dismissed a stuck spinner — the audio may
@@ -46981,6 +47067,13 @@ async function recoverSongFromTaskId(taskId, { silent = false, pushCategory = ""
     kind,
     baseTitle: rec?.titleHint || parsed.first?.title || "Recovered song",
   });
+
+  for (const entry of savedEntries) {
+    if (!entry) continue;
+    const clip = entry?.meta?.variant === "B" ? parsed.second : parsed.first;
+    if (clip?.imageUrl) patchLibraryTrackSunoArt(entry.id, clip.imageUrl);
+  }
+  void backfillRecoveredGenerationCovers(tid, savedEntries);
 
   if (!savedEntries.length && !libraryHasAllTaskVariants(tid, expectedVariants)) {
     if (
@@ -53030,6 +53123,7 @@ if (isCapacitorNativeAuth()) {
         }
         void tryRecoverGenerationFromPushNotification();
         kickForegroundGenerationPolls();
+        void resumePendingGenerationOnForeground();
         // While Google/Apple OAuth browser is open, ignore resume — deep link
         // (`appUrlOpen`) or `browserFinished` handles completion.
         if (_oauthBrowserOpen) return;
@@ -54255,6 +54349,7 @@ try {
       if (!document.hidden) {
         void tryRecoverGenerationFromPushNotification();
         kickForegroundGenerationPolls();
+        void resumePendingGenerationOnForeground();
         void (async () => {
           try {
             const hadSession = Boolean(getSupabaseAuthToken() || authSession?.refresh_token);

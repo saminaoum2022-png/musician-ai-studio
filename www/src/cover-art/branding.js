@@ -49,7 +49,7 @@ export async function stampCoverWithSplashMark(dataUrl) {
 
     ctx.drawImage(cover, 0, 0, w, h);
 
-    const markMax = Math.round(Math.min(w, h) * 0.085);
+    const markMax = Math.round(Math.min(w, h) * 0.0765);
     const markScale = markMax / Math.max(mark.naturalWidth || mark.width, 1);
     const markW = Math.round((mark.naturalWidth || mark.width) * markScale);
     const markH = Math.round((mark.naturalHeight || mark.height) * markScale);
@@ -58,7 +58,7 @@ export async function stampCoverWithSplashMark(dataUrl) {
     const y = h - markH - pad;
 
     ctx.save();
-    ctx.globalAlpha = 0.88;
+    ctx.globalAlpha = 0.704;
     ctx.shadowColor = "rgba(0,0,0,0.45)";
     ctx.shadowBlur = Math.max(4, Math.round(markW * 0.08));
     ctx.shadowOffsetX = 0;

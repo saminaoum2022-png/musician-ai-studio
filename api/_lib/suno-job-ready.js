@@ -31,7 +31,8 @@ function clipLooksPlayable(clip) {
 
 function minClipLagForVariants(variantCount) {
   const n = Math.max(1, Math.min(2, Number(variantCount) || 1));
-  return n >= 2 ? 70000 : 35000;
+  // False-ready hum jobs peaked ~44s; legit 2-variant remixes can finish ~60s.
+  return n >= 2 ? 55000 : 35000;
 }
 
 function parseGenerationRecordInfo(data, { variantCount = 1 } = {}) {

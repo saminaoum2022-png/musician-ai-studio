@@ -95,11 +95,6 @@ export async function maybeNotifyJobReadyPush({ kind, title, taskId } = {}) {
   const k = String(kind || "").trim();
   const tid = String(taskId || "").trim();
   if (!k || !tid) return;
-  let hidden = false;
-  try {
-    hidden = document.hidden || document.visibilityState === "hidden";
-  } catch {}
-  if (!hidden) return;
   const token = globalThis.__nabadGetAuthToken?.() || "";
   if (!token) return;
   const headers = {

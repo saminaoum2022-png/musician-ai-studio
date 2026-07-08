@@ -141,6 +141,55 @@ async function sendWatchReadyPush(row) {
   return { ok: true };
 }
 
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function scheduleBackgroundWork(promise) {
+  let waitUntilFn = null;
+  try {
+    waitUntilFn = require("@vercel/functions").waitUntil;
+  } catch {}
+  if (typeof waitUntilFn === "function") {
+    waitUntilFn(promise);
+    return;
+  }
+  void promise;
+}
+
+/**
+ * Suno callbacks often fire before record-info has playable URLs.
+ * Keep checking until audio exists or the watch fails / times out.
+ */
+async function retrySunoWatchReadyAndNotify(row, { attempts = 24, delayMs = 5000 } = {}) {
+  const taskId = cleanTaskId(row?.task_id);
+  const kind = String(row?.kind || "").trim();
+  if (!taskId || !kind) return { ok: false, reason: "invalid_args" };
+
+  for (let i = 0; i < attempts; i += 1) {
+    const current = await fetchWatchByTaskId(taskId);
+    if (!current) return { ok: false, reason: "watch_gone" };
+    if (current.notified_at || current.status === "notified") {
+      return { ok: true, skipped: true, reason: "already_notified" };
+    }
+    if (current.status === "failed") return { ok: false, reason: "failed" };
+
+    const verified = await verifySunoWatchReady(taskId, kind);
+    if (verified.failed) {
+      await markWatchStatus(taskId, "failed");
+      queueUpdateMusicGenerationByTaskId(taskId, { status: "failed", error_message: "verify_failed" });
+      return { ok: false, reason: "failed" };
+    }
+    if (verified.ready) {
+      await markWatchStatus(taskId, "complete");
+      queueUpdateMusicGenerationByTaskId(taskId, { status: "completed" });
+      return sendWatchReadyPush(current);
+    }
+    if (i < attempts - 1) await sleep(delayMs);
+  }
+  return { ok: false, reason: "not_ready_timeout", status: row?.status || "" };
+}
+
 function extractCallbackTaskId(body) {
   const data = body?.data && typeof body.data === "object" ? body.data : {};
   return cleanTaskId(
@@ -181,6 +230,11 @@ async function handleSunoCallback(body) {
     return { ok: false, reason: "failed" };
   }
   if (!verified.ready) {
+    scheduleBackgroundWork(
+      retrySunoWatchReadyAndNotify(row).catch((e) => {
+        console.warn("[suno-watch] callback retry failed", taskId, e?.message || e);
+      }),
+    );
     return { ok: false, reason: "not_ready_yet", status: verified.status || "" };
   }
 

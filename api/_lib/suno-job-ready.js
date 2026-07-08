@@ -23,12 +23,20 @@ function pickClipAudio(first) {
 function parseGenerationRecordInfo(data) {
   const inner = data?.data && typeof data.data === "object" ? data.data : data || {};
   const status = String(inner.status || data?.status || "").toUpperCase();
+  const successFlag = String(inner.successFlag || data?.successFlag || "").toUpperCase();
   const genData = inner.response?.sunoData || inner.response?.suno_data || [];
   const arr = Array.isArray(genData) ? genData : [];
   const hasAudio = arr.some((clip) => pickClipAudio(clip));
-  const failed = status === "FAILED" || status === "ERROR";
-  const ready = status === "SUCCESS" && hasAudio;
-  return { status, hasAudio, failed, ready };
+  const failed =
+    status === "FAILED"
+    || status === "ERROR"
+    || successFlag === "FAILED"
+    || successFlag === "ERROR"
+    || successFlag === "CREATE_TASK_FAILED"
+    || successFlag === "GENERATE_AUDIO_FAILED";
+  // Suno callbacks often arrive before status flips to SUCCESS — playable URLs are enough.
+  const ready = hasAudio && !failed;
+  return { status, successFlag, hasAudio, failed, ready };
 }
 
 function deepFindFirstStringByKeys(obj, keys) {

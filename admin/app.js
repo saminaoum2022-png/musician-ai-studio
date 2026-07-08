@@ -466,10 +466,21 @@ function showApp() {
 }
 
 async function boot() {
+  // Hide dashboard until we know auth state; login shows by default in HTML.
+  if (els.appShell) els.appShell.hidden = true;
+  if (els.loginScreen) els.loginScreen.hidden = false;
+
   try {
     await loadConfig();
   } catch (e) {
-    document.body.innerHTML = `<div class="loading" style="padding:40px">${e.message}</div>`;
+    if (els.loginScreen) {
+      els.loginScreen.hidden = false;
+      const err = document.getElementById("loginError");
+      if (err) {
+        err.hidden = false;
+        err.textContent = e?.message || "Could not load config";
+      }
+    }
     return;
   }
 

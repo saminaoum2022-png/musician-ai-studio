@@ -27,6 +27,10 @@
   "rewrites": [
     { "source": "/s/:id", "destination": "/api/share?id=:id" },
     {
+      "source": "/admin",
+      "destination": "/admin/index.html"
+    },
+    {
       "source": "/",
       "has": [{ "type": "host", "value": "admin.nabadai.com" }],
       "destination": "/admin/index.html"

@@ -182,7 +182,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260708-143917";
+const APP_BUILD = "20260708-155919";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -776,6 +776,7 @@ const els = {
   profileCreditsBalance: document.getElementById("profileCreditsBalance"),
   profileCreditsNote: document.getElementById("profileCreditsNote"),
   profileCreditsLink: document.getElementById("profileCreditsLink"),
+  profileProBanner: document.getElementById("profileProBanner"),
   profilePersonaRow: document.getElementById("profilePersonaRow"),
   profilePersonaLabel: document.getElementById("profilePersonaLabel"),
   profilePersonaSignatureTitle: document.getElementById("profilePersonaSignatureTitle"),
@@ -3506,6 +3507,12 @@ function navDirectionFor(wanted) {
   // Instagram now-playing): it rises up from the bottom whenever we open it
   // from any other screen, regardless of forward/back classification.
   if (w === "player") {
+    const pIdx = _navStack.lastIndexOf(w);
+    if (pIdx >= 0 && pIdx < _navStack.length - 1) _navStack = _navStack.slice(0, pIdx + 1);
+    else _navStack.push(w);
+    return "present";
+  }
+  if (w === "pro") {
     const pIdx = _navStack.lastIndexOf(w);
     if (pIdx >= 0 && pIdx < _navStack.length - 1) _navStack = _navStack.slice(0, pIdx + 1);
     else _navStack.push(w);
@@ -21515,10 +21522,31 @@ const creditsState = {
   bucketsReady: false,
   ledger: [],
   isAdmin: false,
+  proActive: false,
+  proPlanId: null,
+  proStatus: null,
+  proPeriodEnd: null,
   loaded: false,
   inFlight: false,
   lastError: "",
 };
+
+function applyProSubscriptionState(pro) {
+  const row = pro && typeof pro === "object" ? pro : {};
+  creditsState.proActive = Boolean(row.active);
+  creditsState.proPlanId = row.planId ? String(row.planId) : null;
+  creditsState.proStatus = row.status ? String(row.status) : null;
+  creditsState.proPeriodEnd = row.currentPeriodEnd ? String(row.currentPeriodEnd) : null;
+  try { syncProfileProBanner(); } catch {}
+}
+
+function syncProfileProBanner() {
+  if (!els.profileProBanner) return;
+  const isAuthed = isAppLoggedIn();
+  const show = isAuthed && !creditsState.proActive;
+  els.profileProBanner.hidden = !show;
+  els.profileProBanner.setAttribute("aria-hidden", show ? "false" : "true");
+}
 
 /** Live Suno API remaining credits (same pool as `SUNO_API_KEY`). Shown on
  *  the Profile pill + Credits hero when `creditsState.isAdmin` is true,
@@ -21633,6 +21661,7 @@ async function refreshMyCredits({ silent = false } = {}) {
   if (!token) {
     creditsState.loaded = false;
     creditsState.isAdmin = false;
+    applyProSubscriptionState(null);
     sunoCreditsLive = null;
     setCreditsBalance(0);
     creditsState.ledger = [];
@@ -21655,6 +21684,7 @@ async function refreshMyCredits({ silent = false } = {}) {
     creditsState.bucketsReady = Boolean(d?.bucketsReady);
     creditsState.ledger = Array.isArray(d?.ledger) ? d.ledger : [];
     creditsState.isAdmin = Boolean(d?.isAdmin);
+    applyProSubscriptionState(d?.pro);
     if (!creditsState.isAdmin) sunoCreditsLive = null;
     creditsState.loaded = true;
     creditsState.lastError = "";
@@ -22198,6 +22228,7 @@ function renderAuthStatus() {
     els.profileCreditsLink.style.display = isAuthed ? "" : "none";
     els.profileCreditsLink.setAttribute("aria-hidden", isAuthed ? "false" : "true");
   }
+  try { syncProfileProBanner(); } catch {}
   // Same idea for the Share button — a logged-out user has no
   // profile worth sharing yet, and the @guest URL leaks the
   // placeholder handle. We tolerate both the legacy big-pill button

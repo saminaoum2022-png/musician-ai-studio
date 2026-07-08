@@ -13,6 +13,7 @@ const {
   sendJson,
   setCors,
 } = require("../_lib/credits-auth");
+const { fetchProSubscriptionForUser } = require("../_lib/pro-subscription");
 
 module.exports = async function handler(req, res) {
   setCors(res);
@@ -41,6 +42,7 @@ module.exports = async function handler(req, res) {
   const promoBalance = row && row.promo_balance != null ? Number(row.promo_balance || 0) : null;
   const bucketsReady = paidBalance != null && giftBalance != null && promoBalance != null;
   const ledger = Array.isArray(ledgerRes.data) ? ledgerRes.data : [];
+  const pro = await fetchProSubscriptionForUser(user.userId);
 
   return sendJson(res, 200, {
     ok: true,
@@ -53,5 +55,6 @@ module.exports = async function handler(req, res) {
     ledger,
     isAdmin: isAdminEmail(user.email),
     email: user.email,
+    pro,
   });
 };

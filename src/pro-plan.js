@@ -7,6 +7,7 @@ import {
   PRO_FEATURES,
   PRO_LAUNCH_COPY,
   PRO_PLANS,
+  planCreditsMeta,
   songsFromCredits,
 } from "./pro-plan-config.js";
 
@@ -15,6 +16,7 @@ let _deps = null;
 
 let _mounted = false;
 let _selectedPlan = "monthly";
+let _selectedPack = "pack_60";
 let _activeTab = "pro";
 let _benefitsExpanded = false;
 let _pageBound = false;
@@ -51,8 +53,8 @@ function isNativeIos() {
 function planCardHtml(plan, selected) {
   const isSelected = selected === plan.id;
   const trial = plan.trialDays > 0;
-  const songs = songsFromCredits(plan.creditsPerPeriod);
   const suffix = String(plan.priceSuffix || "").replace(/^\s*\/\s*/, "");
+  const meta = planCreditsMeta(plan);
   return `
     <button
       type="button"
@@ -60,16 +62,24 @@ function planCardHtml(plan, selected) {
       data-pro-plan="${esc(plan.id)}"
       aria-pressed="${isSelected ? "true" : "false"}"
     >
-      ${plan.saveBadge ? `<span class="proPlanCardSave">${esc(plan.saveBadge)}</span>` : ""}
-      ${plan.badge ? `<span class="proPlanCardBadge">${esc(plan.badge)}</span>` : ""}
-      <span class="proPlanCardLabel">${esc(plan.label)}</span>
-      <span class="proPlanCardPrice">
-        <strong>${esc(plan.priceDisplay)}</strong>
-        <span>/${esc(suffix)}</span>
+      <span class="proPlanCardRadio" aria-hidden="true"></span>
+      <span class="proPlanCardBody">
+        <span class="proPlanCardTop">
+          <span class="proPlanCardLabel">${esc(plan.label)}</span>
+          ${plan.saveBadge ? `<span class="proPlanCardSave">${esc(plan.saveBadge)}</span>` : ""}
+          ${plan.badge ? `<span class="proPlanCardBadge">${esc(plan.badge)}</span>` : ""}
+        </span>
+        <span class="proPlanCardMeta">${esc(meta)}</span>
+        ${trial
+    ? `<span class="proPlanCardTrial">${esc(plan.trialLabel)}</span>`
+    : `<span class="proPlanCardTrial proPlanCardTrial--spacer" aria-hidden="true">&#8203;</span>`}
       </span>
-      <span class="proPlanCardCredits">${esc(String(plan.creditsPerPeriod))} credits</span>
-      <span class="proPlanCardSongs">≈ ${esc(songs)}</span>
-      ${trial ? `<span class="proPlanCardTrial">${esc(plan.trialLabel)}</span>` : ""}
+      <span class="proPlanCardPriceCol">
+        <span class="proPlanCardPrice">
+          <strong>${esc(plan.priceDisplay)}</strong>
+          <span>/${esc(suffix)}</span>
+        </span>
+      </span>
     </button>`;
 }
 
@@ -88,24 +98,32 @@ function benefitsDetailHtml() {
   `).join("");
 }
 
-function packRowHtml(pack) {
-  const songs = pack.songsHint || songsFromCredits(pack.credits);
+function packRowHtml(pack, selected) {
+  const isSelected = selected === pack.id;
+  const songs = songsFromCredits(pack.credits);
+  const meta = `${pack.credits.toLocaleString()} credits · ≈ ${songs}`;
   return `
     <button
       type="button"
-      class="proPackRow"
+      class="proPlanCard proPlanCard--pack${isSelected ? " isSelected" : ""}"
       data-credit-pack="${esc(pack.id)}"
-      aria-label="Buy ${esc(pack.label)} pack, ${esc(String(pack.credits))} credits, ${esc(pack.priceDisplay)}"
+      aria-pressed="${isSelected ? "true" : "false"}"
+      aria-label="Select ${esc(pack.label)} pack, ${esc(String(pack.credits))} credits, ${esc(pack.priceDisplay)}"
     >
-      <span class="proPackRowTop">
-        <span class="proPackRowLabelWrap">
-          <span class="proPackRowLabel">${esc(pack.label)}</span>
-          ${pack.badge ? `<span class="proPackRowBadge">${esc(pack.badge)}</span>` : ""}
+      <span class="proPlanCardRadio" aria-hidden="true"></span>
+      <span class="proPlanCardBody">
+        <span class="proPlanCardTop">
+          <span class="proPlanCardLabel">${esc(pack.label)}</span>
+          ${pack.badge ? `<span class="proPlanCardBadge">${esc(pack.badge)}</span>` : ""}
         </span>
-        <span class="proPackRowPrice">${esc(pack.priceDisplay)}</span>
+        <span class="proPlanCardMeta">${esc(meta)}</span>
+        <span class="proPlanCardTrial proPlanCardTrial--spacer" aria-hidden="true">&#8203;</span>
       </span>
-      <span class="proPackRowCredits">${esc(String(pack.credits))} credits</span>
-      <span class="proPackRowSongs">≈ ${esc(songs)}</span>
+      <span class="proPlanCardPriceCol">
+        <span class="proPlanCardPrice">
+          <strong>${esc(pack.priceDisplay)}</strong>
+        </span>
+      </span>
     </button>
   `;
 }
@@ -155,6 +173,10 @@ function paintCta() {
   if (sub) sub.textContent = priceSubline(plan);
 }
 
+function selectedPack() {
+  return CREDIT_PACKS.find((p) => p.id === _selectedPack) || CREDIT_PACKS[1];
+}
+
 function paintPlanCards() {
   const page = root();
   if (!page) return;
@@ -162,6 +184,47 @@ function paintPlanCards() {
   if (!grid) return;
   grid.innerHTML = PRO_PLANS.map((p) => planCardHtml(p, _selectedPlan)).join("");
   paintCta();
+}
+
+function paintPackCards() {
+  const page = root();
+  if (!page) return;
+  const list = page.querySelector(".proPackList");
+  if (!list) return;
+  list.innerHTML = CREDIT_PACKS.map((p) => packRowHtml(p, _selectedPack)).join("");
+  paintPackCta();
+}
+
+function packCtaLabel(pack) {
+  return `Buy ${pack.label} · ${pack.credits} credits`;
+}
+
+function packPriceSubline(pack) {
+  return `${pack.priceDisplay} one-time. Credits never expire.`;
+}
+
+function paintPackCta() {
+  const btn = document.getElementById("btnProBuyPack");
+  const sub = document.getElementById("proPackSub");
+  const pack = selectedPack();
+  if (btn) {
+    btn.textContent = packCtaLabel(pack);
+    btn.dataset.creditPack = pack.id;
+  }
+  if (sub) sub.textContent = packPriceSubline(pack);
+}
+
+function paintDockMode() {
+  const page = root();
+  if (!page) return;
+  const dockPro = page.querySelector("#proDockPro");
+  const dockCredits = page.querySelector("#proDockCredits");
+  const dockProExtras = page.querySelector("#proDockProExtras");
+  if (dockPro) dockPro.hidden = _activeTab !== "pro";
+  if (dockCredits) dockCredits.hidden = _activeTab !== "credits";
+  if (dockProExtras) dockProExtras.hidden = _activeTab !== "pro";
+  if (_activeTab === "credits") paintPackCta();
+  else paintCta();
 }
 
 function paintTabState({ animate = true } = {}) {
@@ -172,6 +235,7 @@ function paintTabState({ animate = true } = {}) {
   const thumb = page.querySelector(".proSegThumb");
   const tabs = page.querySelectorAll(".proSegTab");
   const panels = page.querySelectorAll(".proTabPanel");
+  const dock = page.querySelector("#proBottomDock");
 
   tabs.forEach((tab) => {
     const on = tab.getAttribute("data-pro-tab") === _activeTab;
@@ -189,6 +253,9 @@ function paintTabState({ animate = true } = {}) {
       panel.hidden = true;
     }
   });
+
+  if (dock) dock.hidden = false;
+  paintDockMode();
 
   if (seg && thumb) {
     const activeTab = page.querySelector(`.proSegTab[data-pro-tab="${_activeTab}"]`);
@@ -208,10 +275,12 @@ function paintTabState({ animate = true } = {}) {
 function paintBenefitsExpanded() {
   const page = root();
   if (!page) return;
+  const expand = page.querySelector("#proBenefitsExpand");
   const details = page.querySelector("#proBenefitsDetails");
   const toggle = page.querySelector("#btnProBenefitsToggle");
   if (!toggle) return;
   const open = _benefitsExpanded;
+  if (expand) expand.hidden = !open;
   if (details) details.hidden = !open;
   toggle.setAttribute("aria-expanded", open ? "true" : "false");
   toggle.classList.toggle("isOpen", open);
@@ -276,65 +345,79 @@ function renderProPlanPage({ preserveTab = true } = {}) {
   const packsLead = String(PRO_LAUNCH_COPY.packsLead || "").replace(/\n/g, " ");
 
   host.innerHTML = `
-    <div class="proHeroCopy" aria-labelledby="proHeroTitle">
-      <h3 id="proHeroTitle" class="proHeroTitle">
-        <span class="proHeroTitleLine">Create more.</span>
-        <span class="proHeroTitleLine">Sound pro.</span>
-      </h3>
-      <p class="proHeroLead">${esc(PRO_LAUNCH_COPY.lead)}</p>
-    </div>
+    <div class="proShell">
+      <div class="proScrollBody">
+        <div class="proHeroCopy" aria-labelledby="proHeroTitle">
+          <h3 id="proHeroTitle" class="proHeroTitle">
+            <span class="proHeroTitleLine">Create more.</span>
+            <span class="proHeroTitleLine">Sound pro.</span>
+          </h3>
+          <p class="proHeroLead">${esc(PRO_LAUNCH_COPY.lead)}</p>
+        </div>
 
-    <section class="proMain" aria-label="Pro or credits">
-      <div class="proSeg" role="tablist" aria-label="Pro or credits">
-        <span class="proSegThumb" aria-hidden="true"></span>
-        <button type="button" class="proSegTab isActive" role="tab" data-pro-tab="pro" aria-selected="true" id="proTabPro">Pro</button>
-        <button type="button" class="proSegTab" role="tab" data-pro-tab="credits" aria-selected="false" id="proTabCredits">Credits</button>
-      </div>
-
-      <div class="proTabStage">
-        <div class="proTabPanel isActive" data-pro-tab-panel="pro" role="tabpanel" aria-labelledby="proTabPro">
-          <section class="proPlans" aria-label="Choose a plan">
-            <div class="proPlanGrid">
-              ${PRO_PLANS.map((p) => planCardHtml(p, _selectedPlan)).join("")}
-            </div>
-          </section>
-
-          <div class="proCtaBlock">
-            <button type="button" id="btnProSubscribe" class="primary proSubscribeBtn" data-pro-plan="${esc(plan.id)}">
-              ${esc(ctaLabel(plan))}
-            </button>
-            <p id="proSubscribeSub" class="proSubscribeSub"></p>
+        <section class="proMain" aria-label="Pro or credits">
+          <div class="proSeg" role="tablist" aria-label="Pro or credits">
+            <span class="proSegThumb" aria-hidden="true"></span>
+            <button type="button" class="proSegTab isActive" role="tab" data-pro-tab="pro" aria-selected="true" id="proTabPro">Pro</button>
+            <button type="button" class="proSegTab" role="tab" data-pro-tab="credits" aria-selected="false" id="proTabCredits">Credits</button>
           </div>
 
-          <section class="proBenefits" aria-labelledby="proFeaturesTitle">
-            <h3 id="proFeaturesTitle" class="proBenefitsTitle">Everything in Pro</h3>
-            <ul class="proBenefitsList">${benefitsListHtml()}</ul>
-            <ul id="proBenefitsDetails" class="proBenefitDetails" hidden>${benefitsDetailHtml()}</ul>
-            <button type="button" id="btnProBenefitsToggle" class="proBenefitsToggle" aria-expanded="false">
-              View all benefits
-              <span class="proBenefitsChev" aria-hidden="true">›</span>
-            </button>
-          </section>
-        </div>
+          <div class="proTabStage">
+            <div class="proTabPanel isActive" data-pro-tab-panel="pro" role="tabpanel" aria-labelledby="proTabPro">
+              <section class="proPlans" aria-label="Choose a plan">
+                <div class="proPlanGrid">
+                  ${PRO_PLANS.map((p) => planCardHtml(p, _selectedPlan)).join("")}
+                </div>
+              </section>
+            </div>
 
-        <div class="proTabPanel" data-pro-tab-panel="credits" role="tabpanel" aria-labelledby="proTabCredits" hidden>
-          <header class="proCreditsHead">
-            <h3 class="proCreditsHeadline">${esc(PRO_LAUNCH_COPY.packsHeadline)}</h3>
-            <p class="proCreditsLead">${esc(packsLead)}</p>
-          </header>
-          <div class="proPackList">${CREDIT_PACKS.map((pack) => packRowHtml(pack)).join("")}</div>
-        </div>
+            <div class="proTabPanel" data-pro-tab-panel="credits" role="tabpanel" aria-labelledby="proTabCredits" hidden>
+              <header class="proCreditsHead">
+                <h3 class="proCreditsHeadline">${esc(PRO_LAUNCH_COPY.packsHeadline)}</h3>
+                <p class="proCreditsLead">${esc(packsLead)}</p>
+              </header>
+              <div class="proPackList">${CREDIT_PACKS.map((pack) => packRowHtml(pack, _selectedPack)).join("")}</div>
+            </div>
+          </div>
+        </section>
+
+        <section id="proBenefitsExpand" class="proBenefitsExpand" hidden aria-labelledby="proFeaturesTitle">
+          <h3 id="proFeaturesTitle" class="proBenefitsTitle">Everything in Pro</h3>
+          <ul class="proBenefitsList">${benefitsListHtml()}</ul>
+          <ul id="proBenefitsDetails" class="proBenefitDetails" hidden>${benefitsDetailHtml()}</ul>
+        </section>
       </div>
-    </section>
 
-    <p class="proStatusNote">${esc(statusNote)}</p>
-    <button type="button" class="proRestoreLink" data-pro-restore>Restore purchases</button>
+      <footer class="proBottomDock" id="proBottomDock">
+        <div class="proCtaBlock" id="proDockPro">
+          <button type="button" id="btnProSubscribe" class="primary proSubscribeBtn" data-pro-plan="${esc(plan.id)}">
+            ${esc(ctaLabel(plan))}
+          </button>
+          <p id="proSubscribeSub" class="proSubscribeSub"></p>
+        </div>
+        <div class="proCtaBlock" id="proDockCredits" hidden>
+          <button type="button" id="btnProBuyPack" class="primary proSubscribeBtn" data-credit-pack="${esc(selectedPack().id)}">
+            ${esc(packCtaLabel(selectedPack()))}
+          </button>
+          <p id="proPackSub" class="proSubscribeSub"></p>
+        </div>
+        <div id="proDockProExtras">
+          <button type="button" id="btnProBenefitsToggle" class="proBenefitsToggle" aria-expanded="false">
+            View all benefits
+            <span class="proBenefitsChev" aria-hidden="true">›</span>
+          </button>
+          <button type="button" class="proRestoreLink" data-pro-restore>Restore purchases</button>
+        </div>
+        <p class="proStatusNote">${esc(statusNote)}</p>
+      </footer>
+    </div>
   `;
 
   bindProPlanPageOnce();
   bindProBackOnce();
   paintProBackLink();
   paintCta();
+  paintPackCta();
   paintTabState({ animate: false });
   paintBenefitsExpanded();
 }
@@ -407,6 +490,20 @@ function bindProPlanPageOnce() {
       }
       return;
     }
+    const packBtn = ev.target?.closest?.(".proPlanCard[data-credit-pack]");
+    if (packBtn) {
+      const id = String(packBtn.getAttribute("data-credit-pack") || "").trim();
+      if (CREDIT_PACKS.some((p) => p.id === id)) {
+        _selectedPack = id;
+        paintPackCards();
+      }
+      return;
+    }
+    if (ev.target?.closest?.("#btnProBuyPack")) {
+      ev.preventDefault();
+      handlePackClick(_selectedPack);
+      return;
+    }
     const tabBtn = ev.target?.closest?.(".proSegTab");
     if (tabBtn) {
       ev.preventDefault();
@@ -428,11 +525,6 @@ function bindProPlanPageOnce() {
       ev.preventDefault();
       _deps?.showToast?.("Restore purchases — coming with App Store setup.", { durationMs: 2800 });
       return;
-    }
-    const packBtn = ev.target?.closest?.("[data-credit-pack]");
-    if (packBtn) {
-      ev.preventDefault();
-      handlePackClick(String(packBtn.getAttribute("data-credit-pack") || ""));
     }
   });
 
@@ -459,6 +551,7 @@ export function onProPlanRouteActive({ entering = false } = {}) {
   paintProBackLink();
   if (needsRender || entering) {
     paintPlanCards();
+    paintPackCards();
     paintTabState({ animate: false });
     paintBenefitsExpanded();
   }

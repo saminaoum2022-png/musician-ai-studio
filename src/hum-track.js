@@ -212,6 +212,7 @@ function parseSunoStatusPayload(data) {
   const errorMessage = String(
     inner.errorMessage || data?.errorMessage || inner.msg || data?.msg || data?.error || "",
   ).trim();
+  const errorCode = inner.errorCode ?? data?.errorCode ?? null;
   const genData =
     inner.response?.sunoData ||
     inner.response?.suno_data ||
@@ -233,6 +234,7 @@ function parseSunoStatusPayload(data) {
     status,
     successFlag,
     errorMessage,
+    errorCode,
     tracks,
     hasAudio: tracks.length > 0,
     audioClipCount: tracks.length,
@@ -297,25 +299,43 @@ function finishHumTrackSuccess(taskId, instrumentId, tracks) {
   );
 }
 
-function failHumTrackGeneration(taskId, message) {
+function failHumTrackGeneration(taskId, { failureKind = "generic", title = "Hum Track", detail = "" } = {}) {
   stopHumTrackPolling();
   humTrackGenerating = false;
   humTrackTaskId = "";
+  el("humTrackSheet")?.classList.remove("isGenerating");
+  syncHumTrackUi();
   ctx?.cancelParallelCoverForTask?.(taskId);
   ctx?.clearGenerationPending?.(taskId);
+  ctx?.syncGenerationPendingLibraryUi?.();
   try {
     ctx?.cancelCoachGenerationStatus?.();
   } catch {}
-  ctx?.showToast?.(message || "Generation failed. Try recording again.", {
-    icon: "✗",
-    durationMs: 9000,
-  });
+  const userCopy = ctx?.sunoFailureUserCopy?.(failureKind, { isRemix: false }) || {
+    toast: detail || "Generation failed. Try recording again.",
+    activityTitle: "Generation didn't finish",
+    activityBody: detail || "Something went wrong. Try again.",
+  };
+  try {
+    ctx?.pushLocalGenerationFailedActivity?.({
+      title,
+      taskId,
+      failureKind,
+      isRemix: false,
+    });
+  } catch {}
+  ctx?.showToast?.(userCopy.toast, { icon: "✗", durationMs: 9000 });
+  try {
+    ctx?.voidRefreshProfile?.();
+  } catch {}
 }
 
 function startHumTrackPolling(taskId, instrumentId) {
   stopHumTrackPolling();
   const maxTries = 160;
   const startedAt = Number(ctx?.getGenerationPending?.()?.startedAt) || Date.now();
+  const label = instrumentLabel(instrumentId);
+  const baseTitle = `Hum Track · ${label}`;
   humTrackPollTimer = createAdaptivePollLoop({
     startedAt,
     maxTries,
@@ -325,16 +345,30 @@ function startHumTrackPolling(taskId, instrumentId) {
         const data = await r.json().catch(() => ({}));
         if (!r.ok) throw new Error(data?.error || "Status check failed");
         const state = parseSunoStatusPayload(data);
-        const failed =
-          state.status === "FAILED" ||
-          (state.successFlag &&
-            state.successFlag !== "SUCCESS" &&
-            state.successFlag !== "PENDING" &&
-            state.successFlag !== "TEXT_SUCCESS" &&
-            state.successFlag !== "FIRST_SUCCESS" &&
-            !state.hasAudio);
-        if (failed && !state.hasAudio) {
-          failHumTrackGeneration(taskId, state.errorMessage || "Generation failed. Try recording again.");
+        const failure = ctx?.interpretSunoFailure?.({
+          status: state.status,
+          successFlag: state.successFlag,
+          errorCode: state.errorCode,
+          errorMessage: state.errorMessage,
+        }) || { kind: null };
+        const failedByFlag =
+          failure.kind === "copyright"
+          || failure.kind === "sensitive"
+          || failure.kind === "audio_verify"
+          || failure.kind === "tooLong"
+          || failure.kind === "credits"
+          || failure.kind === "needsLyricsOrInstrumental"
+          || failure.kind === "transient"
+          || state.status === "FAILED"
+          || state.status === "ERROR"
+          || state.status === "FAILURE"
+          || (failure.kind && ["CREATE_TASK_FAILED", "GENERATE_AUDIO_FAILED", "CALLBACK_EXCEPTION", "FAILED", "ERROR", "SENSITIVE_WORD_ERROR"].includes(state.successFlag));
+        if (failedByFlag && !state.hasAudio) {
+          failHumTrackGeneration(taskId, {
+            failureKind: failure.kind || "generic",
+            title: baseTitle,
+            detail: failure.detail,
+          });
           return "stop";
         }
         const expectedVariants = Math.max(
@@ -380,7 +414,11 @@ function startHumTrackPolling(taskId, instrumentId) {
         return "continue";
       } catch (err) {
         if (tries >= 10) {
-          failHumTrackGeneration(taskId, err?.message || "Lost connection while generating.");
+          failHumTrackGeneration(taskId, {
+            failureKind: "generic",
+            title: baseTitle,
+            detail: err?.message || "Lost connection while generating.",
+          });
           return "stop";
         }
         return "continue";
@@ -495,11 +533,43 @@ async function submitHumTrackGeneration() {
         );
       }
       if (!rr.ok) {
-        const more = dd?.detailMessage || dd?.details?.message || dd?.details?.error || dd?.error || "";
+        const more =
+          dd?.detailMessage || dd?.details?.message || dd?.details?.error || dd?.error || dd?.msg || "";
+        const failure = ctx?.interpretSunoFailure?.({
+          status: dd?.status || dd?.details?.status,
+          successFlag: dd?.successFlag || dd?.details?.successFlag,
+          errorCode: dd?.errorCode || dd?.details?.errorCode,
+          errorMessage: more,
+        });
+        if (failure?.kind) {
+          const e = new Error(failure.detail);
+          e._friendly = failure;
+          throw e;
+        }
         throw new Error(more || "Upload failed");
       }
       if (typeof dd?.code !== "undefined" && Number(dd.code) !== 200) {
+        const failure = ctx?.interpretSunoFailure?.({
+          status: dd?.status || dd?.data?.status,
+          successFlag: dd?.successFlag || dd?.data?.successFlag,
+          errorCode: dd?.errorCode || dd?.data?.errorCode,
+          errorMessage: dd?.msg || dd?.message || dd?.data?.errorMessage || "",
+        });
+        if (failure?.kind) {
+          const e = new Error(failure.detail);
+          e._friendly = failure;
+          throw e;
+        }
         throw new Error(dd?.msg || dd?.message || "Generation failed to start");
+      }
+      if (dd?.data && typeof dd.data?.code !== "undefined" && Number(dd.data.code) !== 200) {
+        const failure = ctx?.interpretSunoFailure?.(dd.data);
+        if (failure?.kind) {
+          const e = new Error(failure.detail);
+          e._friendly = failure;
+          throw e;
+        }
+        throw new Error(dd?.data?.msg || dd?.data?.message || "Generation failed to start");
       }
       const taskId = ctx.extractTaskIdLoose(dd);
       if (!taskId) throw new Error("No task id returned from server");
@@ -510,7 +580,23 @@ async function submitHumTrackGeneration() {
     humTrackTaskId = "";
     el("humTrackSheet")?.classList.remove("isGenerating");
     syncHumTrackUi();
-    ctx?.showToast?.(e?.message || "Could not start generation.", { icon: "✗", durationMs: 9000 });
+    const friendly = e?._friendly;
+    const failureKind = friendly?.kind || "generic";
+    const userCopy = friendly
+      ? ctx?.sunoFailureUserCopy?.(failureKind, { isRemix: false })
+      : null;
+    const toastMsg = userCopy?.toast || e?.message || "Could not start generation.";
+    if (friendly) {
+      try {
+        ctx?.pushLocalGenerationFailedActivity?.({
+          title: `Hum Track · ${instrumentLabel(humTrackInstrument)}`,
+          taskId: "",
+          failureKind,
+          isRemix: false,
+        });
+      } catch {}
+    }
+    ctx?.showToast?.(toastMsg, { icon: "✗", durationMs: 9000 });
   }
 }
 

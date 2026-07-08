@@ -186,7 +186,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260708-211055";
+const APP_BUILD = "20260708-220433";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -5157,6 +5157,9 @@ try {
     startParallelCoverForTask,
     buildParallelCoverVariants,
     cancelParallelCoverForTask,
+    interpretSunoFailure,
+    sunoFailureUserCopy,
+    pushLocalGenerationFailedActivity,
     voidRefreshProfile: () => {
       try {
         renderProfileSongs();
@@ -16458,6 +16461,137 @@ function sunoFailureUserCopy(kind, { isRemix = false } = {}) {
     activityTitle: "Generation didn't finish",
     activityBody: "Something went wrong. Tap Generate to try again.",
   };
+}
+
+function isBenignSunoStatusMessage(msg) {
+  const m = String(msg || "").trim().toLowerCase();
+  return !m || m === "success" || m === "ok" || m === "pending";
+}
+
+/** @returns {{ kind: string|null, headline: string, detail: string }} */
+function interpretSunoFailure(raw) {
+  if (!raw) return { kind: null, headline: "", detail: "" };
+  const taskStatus = String(raw.status || "").toUpperCase();
+  const flag = String(raw.successFlag || raw.flag || "").toUpperCase();
+  const code = Number(raw.errorCode || 0);
+  const msg = String(raw.errorMessage || raw.msg || raw.message || raw.error || "").trim();
+  const m = msg.toLowerCase();
+  const inProgress =
+    taskStatus === "PENDING"
+    || taskStatus === "RUNNING"
+    || taskStatus === "PROCESSING"
+    || flag === "PENDING"
+    || flag === "TEXT_SUCCESS"
+    || flag === "FIRST_SUCCESS";
+  if (inProgress && isBenignSunoStatusMessage(msg) && !code) {
+    return { kind: null, headline: "", detail: "" };
+  }
+  const looksCopyright =
+    m.includes("copyright")
+    || m.includes("copyrighted")
+    || m.includes("infringe")
+    || m.includes("fingerprint")
+    || m.includes("rights holder")
+    || m.includes("protected song")
+    || m.includes("commercial track")
+    || m.includes("known song");
+  const looksSensitive =
+    flag === "SENSITIVE_WORD_ERROR"
+    || code === 451
+    || m.includes("sensitive")
+    || m.includes("policy")
+    || m.includes("prohibited")
+    || m.includes("explicit content");
+  if (looksCopyright) {
+    return {
+      kind: "copyright",
+      headline: "Copyright detected",
+      detail: "Try a different melody or re-record your clip.",
+    };
+  }
+  if (looksSensitive) {
+    return {
+      kind: "sensitive",
+      headline: "Content blocked",
+      detail: "Adjust the lyrics, style tags, or vocal reference and try again.",
+    };
+  }
+  const looksEmptyLyrics531 =
+    code === 531
+    || (m.includes("extending lyrics") && (m.includes("empty") || m.includes("too short")));
+  if (looksEmptyLyrics531) {
+    return {
+      kind: "needsLyricsOrInstrumental",
+      headline: "Wrong mode for hum-only — add lyrics or use Add Instrumental",
+      detail:
+        "Full song mode needs lyrics in the Lyrics box. "
+        + "For a melody-only recording, tap Add Instrumental on the Hum tab (no lyrics needed)."
+        + (msg ? `\n\nDetails: ${msg}` : ""),
+    };
+  }
+  const looksAudioVerify =
+    m.includes("couldn't verify your audio")
+    || m.includes("could not verify your audio")
+    || m.includes("verify your audio")
+    || m.includes("unable to verify")
+    || m.includes("invalid audio");
+  if (looksAudioVerify) {
+    return {
+      kind: "audio_verify",
+      headline: "Audio not accepted",
+      detail: "The engine couldn't verify the reference audio. Try again or use a different source.",
+    };
+  }
+  const genericSuno413 =
+    code === 413
+    && (m.includes("isn't quite right") || m.includes("check your inputs") || m.includes("uploaded audio"));
+  if (genericSuno413 || (code === 413 && looksCopyright)) {
+    return {
+      kind: "copyright",
+      headline: "Copyright detected",
+      detail: "Try a different melody or re-record your clip.",
+    };
+  }
+  if (code === 413 || m.includes("too long")) {
+    return {
+      kind: "tooLong",
+      headline: "Too long",
+      detail: "Lyrics or style tags exceeded the length limit. Shorten them and try again.",
+    };
+  }
+  if (code === 429 || flag === "INSUFFICIENT_CREDITS" || m.includes("insufficient credit")) {
+    return {
+      kind: "credits",
+      headline: "Insufficient credits",
+      detail: "Top up credits and try again.",
+    };
+  }
+  if (
+    flag === "CALLBACK_EXCEPTION"
+    || flag === "GENERATE_AUDIO_FAILED"
+    || flag === "CREATE_TASK_FAILED"
+    || (code >= 500 && code < 600)
+  ) {
+    return {
+      kind: "transient",
+      headline: "Generation failed",
+      detail: "Something went wrong upstream. Please try again in a moment.",
+    };
+  }
+  const explicitFailFlag =
+    flag === "FAILED"
+    || flag === "ERROR"
+    || flag === "CREATE_TASK_FAILED"
+    || flag === "GENERATE_AUDIO_FAILED"
+    || flag === "CALLBACK_EXCEPTION";
+  if (explicitFailFlag || code > 0 || (msg && !isBenignSunoStatusMessage(msg))) {
+    return {
+      kind: "generic",
+      headline: "Generation failed",
+      detail: "Something went wrong. Please try again.",
+    };
+  }
+  return { kind: null, headline: "", detail: "" };
 }
 
 function pushLocalGenerationFailedActivity({
@@ -48236,150 +48370,6 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
     syncGenerateOrbVisibility();
     updateBrandPulse();
   };
-
-  /**
-   * Translate a Suno failure payload into a clear, user-friendly message.
-   * Suno reports content-policy rejections (e.g. humming a copyrighted melody)
-   * via a few different fields depending on the endpoint and stage:
-   *   - successFlag: "SENSITIVE_WORD_ERROR" | "CREATE_TASK_FAILED" | "GENERATE_AUDIO_FAILED" | "CALLBACK_EXCEPTION"
-   *   - errorCode  : 400 | 451 | 429 | 413 | 500
-   *   - errorMessage / msg / message: free-form text, sometimes contains "copyright" / "fingerprint" / "sensitive"
-   *
-   * Returns { kind, headline, detail }.
-   *   kind = "copyright" | "sensitive" | "audio_verify" | "tooLong" | "credits" | "transient" | "generic" | null
-   */
-  function isBenignSunoStatusMessage(msg) {
-    const m = String(msg || "").trim().toLowerCase();
-    return !m || m === "success" || m === "ok" || m === "pending";
-  }
-
-  function interpretSunoFailure(raw) {
-    if (!raw) return { kind: null, headline: "", detail: "" };
-    const taskStatus = String(raw.status || "").toUpperCase();
-    const flag = String(raw.successFlag || raw.flag || "").toUpperCase();
-    // Upstream task error only — never treat API wrapper `code: 200` as failure.
-    const code = Number(raw.errorCode || 0);
-    const msg = String(raw.errorMessage || raw.msg || raw.message || raw.error || "").trim();
-    const m = msg.toLowerCase();
-    const inProgress =
-      taskStatus === "PENDING"
-      || taskStatus === "RUNNING"
-      || taskStatus === "PROCESSING"
-      || flag === "PENDING"
-      || flag === "TEXT_SUCCESS"
-      || flag === "FIRST_SUCCESS";
-    if (inProgress && isBenignSunoStatusMessage(msg) && !code) {
-      return { kind: null, headline: "", detail: "" };
-    }
-    const looksCopyright =
-      m.includes("copyright")
-      || m.includes("infringe")
-      || m.includes("fingerprint")
-      || m.includes("rights holder")
-      || m.includes("protected song")
-      || m.includes("commercial track")
-      || m.includes("known song");
-    const looksSensitive =
-      flag === "SENSITIVE_WORD_ERROR"
-      || code === 451
-      || m.includes("sensitive")
-      || m.includes("policy")
-      || m.includes("prohibited")
-      || m.includes("explicit content");
-    if (looksCopyright) {
-      return {
-        kind: "copyright",
-        headline: "Copyright detected",
-        detail: "Try a different melody or re-record your clip.",
-      };
-    }
-    if (looksSensitive) {
-      return {
-        kind: "sensitive",
-        headline: "Content blocked",
-        detail: "Adjust the lyrics, style tags, or vocal reference and try again.",
-      };
-    }
-    // 531 with "extending lyrics" almost always means upload-cover ran with
-    // empty/missing lyrics — same symptom if user left Full song selected
-    // for a hum-only take. Not an instrumental/add-instrumental failure.
-    const looksEmptyLyrics531 =
-      code === 531
-      || (m.includes("extending lyrics") && (m.includes("empty") || m.includes("too short")));
-    if (looksEmptyLyrics531) {
-      return {
-        kind: "needsLyricsOrInstrumental",
-        headline: "Wrong mode for hum-only — add lyrics or use Add Instrumental",
-        detail:
-          "Full song mode needs lyrics in the Lyrics box. "
-          + "For a melody-only recording, tap Add Instrumental on the Hum tab (no lyrics needed)."
-          + (msg ? `\n\nDetails: ${msg}` : ""),
-      };
-    }
-    const looksAudioVerify =
-      m.includes("couldn't verify your audio")
-      || m.includes("could not verify your audio")
-      || m.includes("verify your audio")
-      || m.includes("unable to verify")
-      || m.includes("invalid audio");
-    if (looksAudioVerify) {
-      return {
-        kind: "audio_verify",
-        headline: "Audio not accepted",
-        detail: "The engine couldn't verify the reference audio. Try again or use a different source.",
-      };
-    }
-    const genericSuno413 =
-      code === 413
-      && (m.includes("isn't quite right") || m.includes("check your inputs") || m.includes("uploaded audio"));
-    if (genericSuno413 || (code === 413 && looksCopyright)) {
-      return {
-        kind: "copyright",
-        headline: "Copyright detected",
-        detail: "Try a different melody or re-record your clip.",
-      };
-    }
-    if (code === 413 || m.includes("too long")) {
-      return {
-        kind: "tooLong",
-        headline: "Too long",
-        detail: "Lyrics or style tags exceeded the length limit. Shorten them and try again.",
-      };
-    }
-    if (code === 429 || flag === "INSUFFICIENT_CREDITS" || m.includes("insufficient credit")) {
-      return {
-        kind: "credits",
-        headline: "Insufficient credits",
-        detail: "Top up credits and try again.",
-      };
-    }
-    if (
-      flag === "CALLBACK_EXCEPTION"
-      || flag === "GENERATE_AUDIO_FAILED"
-      || flag === "CREATE_TASK_FAILED"
-      || (code >= 500 && code < 600)
-    ) {
-      return {
-        kind: "transient",
-        headline: "Generation failed",
-        detail: "Something went wrong upstream. Please try again in a moment.",
-      };
-    }
-    const explicitFailFlag =
-      flag === "FAILED"
-      || flag === "ERROR"
-      || flag === "CREATE_TASK_FAILED"
-      || flag === "GENERATE_AUDIO_FAILED"
-      || flag === "CALLBACK_EXCEPTION";
-    if (explicitFailFlag || code > 0 || (msg && !isBenignSunoStatusMessage(msg))) {
-      return {
-        kind: "generic",
-        headline: "Generation failed",
-        detail: "Something went wrong. Please try again.",
-      };
-    }
-    return { kind: null, headline: "", detail: "" };
-  }
 
   const fetchGenerationStatus = async () => {
     if (!sunoTaskId) return null;

@@ -453,6 +453,7 @@ function armHumTrackGeneration(taskId, instrumentId, label) {
     source: "hum_track",
     instrumentId,
   });
+  ctx?.hideCreateResultCards?.();
   ctx?.syncGenerationPendingLibraryUi?.();
   try {
     ctx?.beginCoachGenerationStatus?.({
@@ -489,6 +490,7 @@ async function submitHumTrackGeneration() {
   }
 
   humTrackGenerating = true;
+  ctx?.hideCreateResultCards?.();
   el("humTrackSheet")?.classList.add("isGenerating");
   syncHumTrackUi();
   ctx?.haptic?.("impact");

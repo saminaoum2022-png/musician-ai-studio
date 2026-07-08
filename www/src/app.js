@@ -184,7 +184,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260709-020059";
+const APP_BUILD = "20260709-022230";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -4235,9 +4235,13 @@ function applyRoute({ passGen } = {}) {
     generationReadyNotice = false;
     renderGenerateReadyDot();
     setLoading(false);
-    try {
-      if (typeof _showResultCardHoisted === "function") _showResultCardHoisted(true);
-    } catch {}
+    if (!createJobHidesResultCards()) {
+      try {
+        if (typeof _showResultCardHoisted === "function") _showResultCardHoisted(true);
+      } catch {}
+    } else {
+      hideCreateResultCards();
+    }
   }
   if (wanted === "generate") {
     try { renderPersonaSelect(); } catch {}
@@ -5144,6 +5148,7 @@ try {
     getGenerationPending,
     syncGenerationPendingLibraryUi,
     openProfileSongsWhileGenerating,
+    hideCreateResultCards,
     generationVariantCount: GENERATION_VARIANT_COUNT,
     beginCoachGenerationStatus,
     bumpCoachGenerationStillWorking,
@@ -16638,6 +16643,7 @@ function pushLocalGenerationFailedActivity({
 }
 
 function syncGenerationPendingLibraryUi() {
+  if (createJobHidesResultCards()) hideCreateResultCards();
   try {
     refreshOwnSongsUi();
   } catch {}
@@ -16654,6 +16660,7 @@ function hasActiveProfileJobPending() {
 
 /** Refresh Profile Songs shimmer, then land on Songs (all) while any job runs. */
 function wireProfileSongsForActiveJob() {
+  hideCreateResultCards();
   syncGenerationPendingLibraryUi();
   openProfileSongsWhileGenerating();
 }
@@ -30919,6 +30926,7 @@ async function startMashupGeneration() {
   const requestPayload = await buildSimpleMashupRequest(prompt);
   _mashupState.starting = true;
   _mashupState.generating = false;
+  hideCreateResultCards();
   setMashupBlending(false);
   setMashupProgress(false);
   setMashupStatus("");
@@ -32235,6 +32243,7 @@ async function runLibraryInstrumentalForTrack(t) {
   }
   const title = String(t?.title || "Your song").trim() || "Your song";
   try {
+    hideCreateResultCards();
     setStatus("Getting instrumental for selected song…");
     beginCoachPriorityStatus(coachInstrumentalPillText(title), { generating: true });
     const stemsTok = getSupabaseAuthToken();
@@ -41945,6 +41954,7 @@ async function createSunoMusicVideoForTrack(track, { onStatus } = {}) {
   let videoTaskId =
     cached?.taskId && musicVideoWithinRetention(cached) ? String(cached.taskId).trim() : "";
   try {
+    hideCreateResultCards();
     beginCoachPriorityStatus(coachMusicVideoPillText(title), { generating: true });
     if (videoTaskId) {
       say("Resuming your music video…");
@@ -46477,6 +46487,23 @@ function createSessionHasDraftContent() {
   );
 }
 
+function hideCreateResultCards() {
+  if (els.resultCard) els.resultCard.style.display = "none";
+  if (els.resultCard2) els.resultCard2.style.display = "none";
+  try { syncGenerateOrbVisibility(); } catch {}
+}
+
+function createJobHidesResultCards() {
+  if (createSessionIsGenerating()) return true;
+  if (typeof humTrackIsGenerating === "function" && humTrackIsGenerating()) return true;
+  if (Boolean(els.btnSoundGenerate?.disabled) && String(soundTaskId || "").trim()) return true;
+  if (_mashupState?.generating || _mashupState?.starting) return true;
+  if (String(getGenerationPending()?.taskId || "").trim()) return true;
+  const pri = getPriorityPending();
+  if (pri?.kind && (String(pri.taskId || "").trim() || String(pri.videoTaskId || "").trim())) return true;
+  return false;
+}
+
 function createSessionHasResultVisible() {
   return (els.resultCard?.style.display || "none") !== "none";
 }
@@ -46534,6 +46561,7 @@ function restoreCreatePageOnRouteEnter() {
 
   if (generating) {
     try { setGenerateFieldsLocked(true); } catch {}
+    hideCreateResultCards();
     const tid = String(sunoTaskId || loadPendingBackendTask() || "").trim();
     if (tid) {
       sunoTaskId = tid;
@@ -48267,11 +48295,13 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
   }
   const showResultCard = (show) => {
     if (!els.resultCard) return;
-    els.resultCard.style.display = show ? "" : "none";
-    if (els.resultCard2) els.resultCard2.style.display = show && (lastSunoFullUrl2 || lastSunoProxyUrl2) ? "" : "none";
     if (!show) {
-      syncGenerateOrbVisibility();
+      hideCreateResultCards();
       return;
+    }
+    els.resultCard.style.display = "";
+    if (els.resultCard2) {
+      els.resultCard2.style.display = (lastSunoFullUrl2 || lastSunoProxyUrl2) ? "" : "none";
     }
     if (els.resultTitle) els.resultTitle.textContent = lastSunoTitle || "Generated song";
     const metaLine = buildGeneratedResultMetaLine();
@@ -48986,6 +49016,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       try { syncCoachGenerationStatusFromPending(getGenerationPending()); } catch {}
       try { syncCoachPriorityStatusFromPending(getPriorityPending()); } catch {}
       try { openProfileSongsWhileGenerating(); } catch {}
+      hideCreateResultCards();
       return;
     }
     const promptText = String(els.sunoPrompt?.value || "").trim();
@@ -49033,7 +49064,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       let engineLabel = "Nabad AI";
       setGenerateBtn("Generating…", true, "generate");
       setGenerateFieldsLocked(true);
-      showResultCard(false);
+      hideCreateResultCards();
       els.btnSunoStems.disabled = true;
       if (els.btnSunoMultiStems) els.btnSunoMultiStems.disabled = true;
       setProgress(5);
@@ -49829,6 +49860,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
   const bootPendingTask = loadPendingBackendTask();
   if (bootPendingTask && !generatePollTimer) {
     sunoTaskId = bootPendingTask;
+    hideCreateResultCards();
     setGenerateBtn("Checking…", true, "resume");
     setStatus("Pending backend task found. Reconnecting…");
     setLoading(true, {
@@ -49846,6 +49878,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
     }
     try {
       setStemsBtn("Getting instrumental…", true);
+      hideCreateResultCards();
       setStatus("Getting your instrumental version…");
       setProgress(15);
       beginCoachPriorityStatus(
@@ -50603,6 +50636,7 @@ function scheduleCreateHints() {
 function resumePriorityJobsIfPending() {
   const pending = getPriorityPending();
   if (!pending?.kind) return;
+  hideCreateResultCards();
   if (pending.kind === "sound" && pending.taskId && !soundPollTimer) {
     soundTaskId = pending.taskId;
     startSoundGenerationPolling({
@@ -50730,6 +50764,8 @@ function syncCreateTabMorphNow() {
   const humReady = flow === "humtrack" && humTrackReadyForGenerate();
   const soundPromptReady = flow === "sounds" && Boolean(String(els.soundPrompt?.value || "").trim());
   const soundGenerating = flow === "sounds" && Boolean(els.btnSoundGenerate?.disabled);
+  const jobInFlight = createJobHidesResultCards();
+  if (jobInFlight) hideCreateResultCards();
 
   // Reset listen-flash bookkeeping when the user starts a fresh run.
   if (generating || humGenerating || soundGenerating) _tabListenFlashedForRun = false;
@@ -51737,6 +51773,7 @@ async function submitSoundGenerate() {
   }
   if (els.btnSoundGenerate?.disabled) return;
   try {
+    hideCreateResultCards();
     els.btnSoundGenerate.disabled = true;
     syncCreateTabMorph();
     const soundTitle = shortenSoundTitle((prompt.split(/\r?\n/)[0] || "").trim() || "Sound");

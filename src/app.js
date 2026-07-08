@@ -78,6 +78,7 @@ import {
 import { initCoverArtOverlay, syncCoverArtOverlay } from "./cover-art/overlay.js";
 import { feedActIconAnalytics, feedActIconComment, feedActIconGift, feedActIconLike, feedActIconPlays } from "./feed-action-icons.js";
 import { initGifts, openGiftSheetFromButton } from "./gifts.js";
+import { configureProPlan, onProPlanRouteActive } from "./pro-plan.js";
 import { showGiftReceivedReveal } from "./gift-sent-overlay.js";
 import { giftTierDef } from "./gift-tier-icons.js";
 import {
@@ -181,7 +182,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260707-234154";
+const APP_BUILD = "20260708-123408";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -3708,7 +3709,7 @@ function applyRoute({ passGen } = {}) {
     "intro", "onboarding", "music-preferences", "start", "auth", "generate",
     ...(HUB_FEATURE_ENABLED ? ["hub"] : []),
     ...(MESSAGES_FEATURE_ENABLED ? ["messages", "messages-thread"] : []),
-    "settings", "profile", "profile-edit", "player", "discover", "discover-playlist", "friends", "challenges", "activity", "mashup", "mentor", "vocal", "stems", "studio", "advanced", "user", "credits", "sounds",
+    "settings", "profile", "profile-edit", "player", "discover", "discover-playlist", "friends", "challenges", "activity", "mashup", "mentor", "vocal", "stems", "studio", "advanced", "user", "credits", "pro", "sounds",
   ]);
   const onboardingParsed = parseOnboardingRoute(route);
   let normalized = pendingPublicUsername ? "user" : (route === "start" ? "auth" : route);
@@ -3828,6 +3829,7 @@ function applyRoute({ passGen } = {}) {
           stems: "Stems",
           advanced: "Advanced",
           credits: "Credits",
+          pro: "NabadAi Pro",
           sounds: "Sounds",
         };
         try {
@@ -4109,6 +4111,9 @@ function applyRoute({ passGen } = {}) {
   if (routeApplyStale(gate)) return;
   if (wanted === "credits" || wanted === "sounds") {
     void refreshMyCredits({ silent: true });
+  }
+  if (wanted === "pro") {
+    try { onProPlanRouteActive(); } catch {}
   }
   if (wanted === "friends") {
     try { onLeaveSearchRoute(); } catch {}
@@ -5162,6 +5167,22 @@ try {
     haptic,
   });
 } catch {}
+try {
+  configureProPlan({
+    showToast,
+    isLoggedIn: () => Boolean(isAppLoggedIn() || getSupabaseAuthToken()),
+    isNativeIos: () => {
+      try {
+        const cap = globalThis.Capacitor;
+        return Boolean(cap?.isNativePlatform?.() && cap?.getPlatform?.() === "ios");
+      } catch {
+        return false;
+      }
+    },
+  });
+} catch (err) {
+  console.error("[pro-plan] configure failed", err);
+}
 try {
   wireTrackOptionsSheetOnce();
   bindUserPlaylistPickerOnce();

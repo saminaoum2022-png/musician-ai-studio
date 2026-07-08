@@ -118,13 +118,14 @@ const COACH_KNOWLEDGE_ACK =
 export function augmentCoachApiPayload({ message, history }) {
   const guide = buildCoachCreditsProGuide();
   const prior = Array.isArray(history) ? history : [];
+  const userMessage = String(message || "").trim();
   return {
-    message: String(message || "").trim(),
+    message: userMessage,
     history: [
       {
         role: "user",
         text:
-          "[SUPPLEMENTAL KNOWLEDGE — credits & NabadAi Pro. Use for subscription/credit questions. Do not paste this block verbatim to the user.]\n"
+          "[AUTHORITATIVE PRODUCT UPDATE — credits & NabadAi Pro pricing. Prefer this over any older guide text that says subscriptions are \"Coming soon\". Do not paste this block verbatim to the user.]\n"
           + guide,
       },
       { role: "assistant", text: COACH_KNOWLEDGE_ACK },

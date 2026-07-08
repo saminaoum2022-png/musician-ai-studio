@@ -118,9 +118,12 @@ import {
   setPriorityPending,
 } from "./priority-pending.js";
 import {
+  buildGenerationFailedActivity,
   buildJobReadyActivity,
+  loadPersistedGenerationFailedActivities,
   loadPersistedJobReadyActivities,
   maybeNotifyJobReadyPush,
+  persistGenerationFailedActivity,
   persistJobReadyActivity,
 } from "./job-ready-activity.js";
 import {
@@ -183,7 +186,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260708-165011";
+const APP_BUILD = "20260708-203233";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -16375,6 +16378,101 @@ function pushLocalGenerationReadyActivity(entries, { taskId = "" } = {}) {
   });
 }
 
+/** Short user-facing copy — never expose raw Suno error text in UI. */
+function sunoFailureUserCopy(kind, { isRemix = false } = {}) {
+  const k = String(kind || "generic");
+  if (k === "copyright") {
+    return {
+      toast: "Copyright detected — try a different melody or re-record.",
+      activityTitle: "Generation didn't finish",
+      activityBody: "Copyright detected — try again with different audio.",
+    };
+  }
+  if (k === "sensitive") {
+    return {
+      toast: "Content blocked — adjust your lyrics or style.",
+      activityTitle: "Generation didn't finish",
+      activityBody: "Content policy blocked this request.",
+    };
+  }
+  if (k === "audio_verify") {
+    return {
+      toast: isRemix
+        ? "Couldn't use that song as a remix source — try another track or try again."
+        : "Couldn't verify your audio — re-record or tap Generate again.",
+      activityTitle: "Generation didn't finish",
+      activityBody: isRemix
+        ? "Remix source audio wasn't accepted — try a different song."
+        : "Audio reference wasn't accepted — try again.",
+    };
+  }
+  if (k === "tooLong") {
+    return {
+      toast: "Lyrics or style are too long — shorten and retry.",
+      activityTitle: "Generation didn't finish",
+      activityBody: "Request was too long — shorten lyrics or style.",
+    };
+  }
+  if (k === "credits") {
+    return {
+      toast: "Not enough credits for this generation.",
+      activityTitle: "Generation didn't finish",
+      activityBody: "Not enough credits — open Profile → Credits.",
+    };
+  }
+  if (k === "needsLyricsOrInstrumental") {
+    return {
+      toast: "Add lyrics or switch to Add Instrumental for hum-only takes.",
+      activityTitle: "Generation didn't finish",
+      activityBody: "Wrong mode for this recording — add lyrics or use Add Instrumental.",
+    };
+  }
+  return {
+    toast: "Something went wrong — please try again.",
+    activityTitle: "Generation didn't finish",
+    activityBody: "Something went wrong. Tap Generate to try again.",
+  };
+}
+
+function pushLocalGenerationFailedActivity({
+  title = "Your song",
+  taskId = "",
+  failureKind = "generic",
+  isRemix = false,
+} = {}) {
+  const copy = sunoFailureUserCopy(failureKind, { isRemix });
+  const n = buildGenerationFailedActivity({
+    title,
+    taskId,
+    failureKind,
+    isRemix,
+  });
+  if (!n) return;
+  n.metadata = {
+    ...n.metadata,
+    activity_title: copy.activityTitle,
+    activity_body: copy.activityBody,
+  };
+  const seen = new Set(_activityFeedState.items.map((item) => String(item?.id || "")));
+  if (seen.has(n.id)) return;
+  _activityFeedState.items.unshift(n);
+  try {
+    persistGenerationFailedActivity(n);
+  } catch {}
+  try {
+    renderActivityFeedFromState();
+  } catch {}
+  const unread = _activityFeedState.items.filter((item) => !item?.read_at).length;
+  try {
+    updateNotificationsEntryBadges(unread);
+  } catch {}
+  if (els.activityLead) {
+    els.activityLead.textContent = unread
+      ? `${unread} unread ${unread === 1 ? "update" : "updates"} from your music circle.`
+      : "Fans, likes, comments, milestones, and remixes.";
+  }
+}
+
 function pushLocalJobReadyActivity({ type, title, metadata = {} } = {}) {
   const n = buildJobReadyActivity({ type, title, metadata });
   if (!n) return;
@@ -17913,6 +18011,10 @@ async function fetchAudioForRemix(rawUrl) {
       }
       const blob = await r.blob();
       if (!blob || blob.size < 1024) throw new Error("Source audio is empty");
+      const mime = String(blob.type || "").trim().toLowerCase();
+      if (mime.startsWith("text/") || mime.includes("html")) {
+        throw new Error("Source link returned a web page, not audio — try another song");
+      }
       return blob;
     } finally {
       clearTimeout(timer);
@@ -18023,6 +18125,9 @@ async function startHubRemix(post) {
       if (refreshed?.url) remixAudioUrl = String(refreshed.url).trim();
     } catch {}
     const blob = await fetchAudioForRemix(remixAudioUrl);
+    if (blob.size < 40 * 1024) {
+      throw new Error("Source audio looks too short — pick a full song or try again");
+    }
     const mime = blob.type && blob.type !== "application/octet-stream" ? blob.type : "audio/mpeg";
     const ext = mime.includes("mpeg") ? "mp3" : (mime.split("/")[1] || "mp3").split(";")[0];
     const safeBase = String(post.title || "remix-source")
@@ -28491,6 +28596,7 @@ function notificationIconForType(type) {
   if (t === "public_song") return "P";
   if (t === "song_live") return "♪";
   if (t === "generation_ready") return "✓";
+  if (t === "generation_failed") return "✗";
   if (t === "sound_ready" || t === "music_video_ready" || t === "instrumental_ready") return "✓";
   return "•";
 }
@@ -28529,6 +28635,9 @@ function activityTypeBadgeSvg(type) {
   }
   if (t === "generation_ready") {
     return `<svg viewBox="0 0 24 24" width="11" height="11" aria-hidden="true"><path fill="currentColor" d="M9 16.2 4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4L9 16.2Z"/></svg>`;
+  }
+  if (t === "generation_failed") {
+    return `<svg viewBox="0 0 24 24" width="11" height="11" aria-hidden="true"><path fill="currentColor" d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Zm1 14h-2v-2h2v2Zm0-4h-2V7h2v5Z"/></svg>`;
   }
   if (t === "sound_ready" || t === "music_video_ready" || t === "instrumental_ready") {
     return `<svg viewBox="0 0 24 24" width="11" height="11" aria-hidden="true"><path fill="currentColor" d="M9 16.2 4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4L9 16.2Z"/></svg>`;
@@ -28631,6 +28740,16 @@ function notificationMessage(n) {
       title: `"${title}" is ready`,
       body: "Saved to your Library — tap to listen.",
       action: "Play",
+    };
+  }
+  if (n?.type === "generation_failed") {
+    const title = String(n?.metadata?.song_title || "Your song").trim();
+    const activityTitle = String(n?.metadata?.activity_title || "Generation didn't finish").trim();
+    const activityBody = String(n?.metadata?.activity_body || "Something went wrong. Tap Generate to try again.").trim();
+    return {
+      title: activityTitle,
+      body: activityBody.includes(title) ? activityBody : `${title} — ${activityBody}`,
+      action: "Try again",
     };
   }
   if (n?.type === "sound_ready") {
@@ -28827,6 +28946,26 @@ function mergePersistedGenerationReadyActivities() {
   return added;
 }
 
+function mergePersistedGenerationFailedActivities() {
+  const persisted = loadPersistedGenerationFailedActivities();
+  if (!persisted.length) return false;
+  const seenIds = new Set(_activityFeedState.items.map((i) => String(i?.id || "")));
+  let added = false;
+  for (const n of persisted) {
+    const id = String(n?.id || "");
+    if (id && seenIds.has(id)) continue;
+    _activityFeedState.items.push(n);
+    if (id) seenIds.add(id);
+    added = true;
+  }
+  if (added) {
+    _activityFeedState.items.sort(
+      (a, b) => new Date(b?.created_at || 0).getTime() - new Date(a?.created_at || 0).getTime(),
+    );
+  }
+  return added;
+}
+
 function mergePersistedJobReadyActivities() {
   const persisted = loadPersistedJobReadyActivities();
   if (!persisted.length) return false;
@@ -28917,7 +29056,7 @@ function activityDayLabel(bucket) {
 function activityNotificationMatchesFilter(n, tab = _activityFilterTab) {
   if (tab === "all") return true;
   const t = String(n?.type || "").trim();
-  if (tab === "achievements") return t === "chart_rank" || t === "play_milestone" || t === "song_live" || t === "generation_ready" || t === "sound_ready" || t === "music_video_ready" || t === "instrumental_ready";
+  if (tab === "achievements") return t === "chart_rank" || t === "play_milestone" || t === "song_live" || t === "generation_ready" || t === "generation_failed" || t === "sound_ready" || t === "music_video_ready" || t === "instrumental_ready";
   if (tab === "social") {
     return ["follow", "remix", "social_like", "social_reply", "social_repost", "social_mention", "public_song", "song_feedback", "gift_received"].includes(t);
   }
@@ -28944,7 +29083,7 @@ function activityActorAvatarHtml(n, cls) {
 /** Milestone rows are about your songs — lead with cover art, not a blank silhouette. */
 function activityRowUsesSongLeadVisual(n) {
   const t = String(n?.type || "").trim();
-  return t === "chart_rank" || t === "play_milestone" || t === "song_live" || t === "generation_ready" || t === "sound_ready" || t === "music_video_ready" || t === "instrumental_ready";
+  return t === "chart_rank" || t === "play_milestone" || t === "song_live" || t === "generation_ready" || t === "generation_failed" || t === "sound_ready" || t === "music_video_ready" || t === "instrumental_ready";
 }
 
 function activityNotificationShowRightCover(n) {
@@ -29237,6 +29376,9 @@ function notificationActivityHref(n) {
   if (t === "song_live" && songId) return `#/player?track=${encodeURIComponent(songId)}`;
   if (t === "generation_ready") {
     return "#/profile?seg=all";
+  }
+  if (t === "generation_failed") {
+    return "#/generate";
   }
   if (t === "sound_ready" || t === "music_video_ready" || t === "instrumental_ready") {
     return "#/profile?seg=all";
@@ -29795,6 +29937,7 @@ async function fetchActivityFeedFromTop() {
     if (batch.length) await enrichActivitySongArt(batch);
     if (batch.length) await validateActivityNotificationsAvailability(batch);
     try { mergePersistedGenerationReadyActivities(); } catch {}
+    try { mergePersistedGenerationFailedActivities(); } catch {}
     try { mergePersistedJobReadyActivities(); } catch {}
     renderActivityFeedFromState();
     const unread = _activityFeedState.items.filter((n) => !n?.read_at).length;
@@ -29846,6 +29989,7 @@ async function fetchActivityBatch() {
       }
     }
     try { mergePersistedGenerationReadyActivities(); } catch {}
+    try { mergePersistedGenerationFailedActivities(); } catch {}
     try { mergePersistedJobReadyActivities(); } catch {}
     renderActivityFeedFromState();
     const unread = _activityFeedState.items.filter((n) => !n?.read_at).length;
@@ -29901,6 +30045,7 @@ async function enterActivityRoute({ reset = false, readOnly = false } = {}) {
   }
   await refreshActivityFeedHead();
   try { mergePersistedGenerationReadyActivities(); } catch {}
+  try { mergePersistedGenerationFailedActivities(); } catch {}
   try { mergePersistedJobReadyActivities(); } catch {}
   renderActivityFeedFromState();
   const unread = _activityFeedState.items.filter((n) => !n?.read_at).length;
@@ -48050,7 +48195,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
    *   - errorMessage / msg / message: free-form text, sometimes contains "copyright" / "fingerprint" / "sensitive"
    *
    * Returns { kind, headline, detail }.
-   *   kind = "copyright" | "sensitive" | "tooLong" | "credits" | "transient" | "generic" | null
+   *   kind = "copyright" | "sensitive" | "audio_verify" | "tooLong" | "credits" | "transient" | "generic" | null
    */
   function interpretSunoFailure(raw) {
     if (!raw) return { kind: null, headline: "", detail: "" };
@@ -48076,28 +48221,15 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
     if (looksCopyright) {
       return {
         kind: "copyright",
-        headline: "The content filter flagged this take — tap Generate again",
-        detail:
-          "This is almost always a false positive. The engine caches every audio "
-          + "upload for ~14 days, and when you record + retry the same melody "
-          + "it sometimes matches its own cached fingerprint and rejects it as "
-          + "\"copyrighted\".\n\n"
-          + "Fix:\n"
-          + "• Tap Generate again — we apply a small random pitch/tempo nudge "
-          + "to every upload, so the next try sends a fresh fingerprint it "
-          + "hasn't seen.\n"
-          + "• If it keeps failing, re-record (don't reuse the same take) and "
-          + "vary the phrasing slightly."
-          + (msg ? `\n\nDetails: ${msg}` : ""),
+        headline: "Copyright detected",
+        detail: "Try a different melody or re-record your clip.",
       };
     }
     if (looksSensitive) {
       return {
         kind: "sensitive",
-        headline: "Couldn't generate — content policy",
-        detail:
-          "The content policy blocked this request. Please adjust the lyrics, style tags, or vocal reference and try again."
-          + (msg ? `\n\nDetails: ${msg}` : ""),
+        headline: "Content blocked",
+        detail: "Adjust the lyrics, style tags, or vocal reference and try again.",
       };
     }
     // 531 with "extending lyrics" almost always means upload-cover ran with
@@ -48116,33 +48248,41 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
           + (msg ? `\n\nDetails: ${msg}` : ""),
       };
     }
+    const looksAudioVerify =
+      m.includes("couldn't verify your audio")
+      || m.includes("could not verify your audio")
+      || m.includes("verify your audio")
+      || m.includes("unable to verify")
+      || m.includes("invalid audio");
+    if (looksAudioVerify) {
+      return {
+        kind: "audio_verify",
+        headline: "Audio not accepted",
+        detail: "The engine couldn't verify the reference audio. Try again or use a different source.",
+      };
+    }
     const genericSuno413 =
       code === 413
       && (m.includes("isn't quite right") || m.includes("check your inputs") || m.includes("uploaded audio"));
     if (genericSuno413 || (code === 413 && looksCopyright)) {
       return {
         kind: "copyright",
-        headline: "Suno rejected this clip — try again or re-record",
-        detail:
-          "Suno flagged the audio or lyrics (often a false positive on voice clips). "
-          + "Try Generate again, re-record, or add your own lyrics on the Lyrics tab."
-          + (msg ? `\n\nDetails: ${msg}` : ""),
+        headline: "Copyright detected",
+        detail: "Try a different melody or re-record your clip.",
       };
     }
     if (code === 413 || m.includes("too long")) {
       return {
         kind: "tooLong",
-        headline: "Couldn't generate — too long",
-        detail: "Lyrics or style tags exceeded the length limit. Shorten them and try again."
-          + (msg ? `\n\nDetails: ${msg}` : ""),
+        headline: "Too long",
+        detail: "Lyrics or style tags exceeded the length limit. Shorten them and try again.",
       };
     }
     if (code === 429 || flag === "INSUFFICIENT_CREDITS" || m.includes("insufficient credit")) {
       return {
         kind: "credits",
-        headline: "Couldn't generate — insufficient credits",
-        detail: "The generation budget ran out. Top up credits and try again."
-          + (msg ? `\n\nDetails: ${msg}` : ""),
+        headline: "Insufficient credits",
+        detail: "Top up credits and try again.",
       };
     }
     if (
@@ -48153,16 +48293,15 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
     ) {
       return {
         kind: "transient",
-        headline: "Generation failed upstream",
-        detail: "The engine couldn't complete the task. This is usually a temporary issue — please try again."
-          + (msg ? `\n\nDetails: ${msg}` : ""),
+        headline: "Generation failed",
+        detail: "Something went wrong upstream. Please try again in a moment.",
       };
     }
     if (flag || msg || code) {
       return {
         kind: "generic",
         headline: "Generation failed",
-        detail: msg || `The engine returned ${flag || `code ${code}`}.`,
+        detail: "Something went wrong. Please try again.",
       };
     }
     return { kind: null, headline: "", detail: "" };
@@ -48297,9 +48436,8 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
     try { cancelCoachGenerationStatus(); } catch {}
     setProgress(0);
     const info = failureInfo || { kind: "generic", headline: "Generation failed", detail: "" };
-    // Dump everything Suno told us into the console so we (and the user)
-    // can grab it for debugging. Includes successFlag, errorCode, raw
-    // errorMessage, and the taskId so it pairs with Vercel logs.
+    const isRemix = Boolean(currentRemixSource?.originalUrl || currentRemixSource?.url || vocalRefOrigin === "remix");
+    const userCopy = sunoFailureUserCopy(info.kind, { isRemix });
     try {
       console.warn("[generate] failure", {
         kind: info.kind,
@@ -48309,36 +48447,22 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
         successFlag: rawState?.successFlag || null,
         errorCode: rawState?.errorCode || null,
         errorMessage: rawState?.errorMessage || null,
+        isRemix,
       });
     } catch {}
-    const fullDetail = [info.headline, info.detail].filter(Boolean).join("\n\n");
-    setStatus(`${info.headline}${info.detail ? `: ${info.detail.split("\n")[0]}` : ""}`);
-    // Build a toast that surfaces the RAW Suno error too. The friendly
-    // interpretation is great when our classifier matches, but when it
-    // doesn't (e.g. Suno's underpainting/add-instrumental rejects with a
-    // brand-new code we haven't seen) we want the user to see the actual
-    // server message so we can debug without a screenshot of the Suno
-    // dashboard.
-    let toastBody = fullDetail || info.headline || "Generation failed";
+    setStatus(userCopy.toast);
     try {
-      const rawBits = [];
-      if (rawState?.successFlag) rawBits.push(`flag: ${rawState.successFlag}`);
-      if (rawState?.errorCode) rawBits.push(`code: ${rawState.errorCode}`);
-      if (rawState?.errorMessage) rawBits.push(`msg: ${rawState.errorMessage}`);
-      if (sunoTaskId) rawBits.push(`task: ${String(sunoTaskId).slice(0, 12)}…`);
-      const rawLine = rawBits.join(" · ");
-      if (rawLine && !toastBody.includes(rawLine)) {
-        toastBody = `${toastBody}\n\nRaw: ${rawLine}`;
-      }
+      showToast(userCopy.toast, {
+        icon: info.kind === "copyright" || info.kind === "sensitive" ? "!" : "✗",
+        durationMs: 9000,
+      });
     } catch {}
     try {
-      const icon =
-        info.kind === "copyright" || info.kind === "sensitive" || info.kind === "needsLyricsOrInstrumental"
-          ? "!"
-          : "✗";
-      showToast(toastBody, {
-        icon,
-        durationMs: 14000,
+      pushLocalGenerationFailedActivity({
+        title: String(els.sunoTitle?.value || currentRemixSource?.title || "Your song").trim(),
+        taskId: sunoTaskId || loadPendingBackendTask() || "",
+        failureKind: info.kind || "generic",
+        isRemix,
       });
     } catch {}
   };
@@ -48364,7 +48488,14 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
           const failedByFlag =
             failure.kind === "copyright"
             || failure.kind === "sensitive"
+            || failure.kind === "audio_verify"
+            || failure.kind === "tooLong"
+            || failure.kind === "credits"
+            || failure.kind === "needsLyricsOrInstrumental"
             || (failure.kind === "transient" && !!state.errorMessage)
+            || (failure.kind === "generic" && !!state.errorMessage)
+            || state.status === "FAILED"
+            || (failure.kind && state.errorCode && Number(state.errorCode) > 0 && Number(state.errorCode) !== 200)
             || (failure.kind && state.successFlag && state.successFlag !== "SUCCESS" && state.successFlag !== "PENDING" && state.successFlag !== "TEXT_SUCCESS" && state.successFlag !== "FIRST_SUCCESS");
           if (failedByFlag && !state.hasAudio) {
             handleGenerationFailure(failure, state);
@@ -49167,7 +49298,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
                 ...upstreamPayload,
                 errorMessage: upstreamPayload?.msg || upstreamPayload?.message || upstreamPayload?.error || more,
               });
-              if (intent.kind === "copyright" || intent.kind === "sensitive") {
+              if (intent.kind) {
                 const e = new Error(intent.detail);
                 e._friendly = intent;
                 throw e;
@@ -49177,7 +49308,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
             if (typeof dd?.code !== "undefined" && Number(dd.code) !== 200) {
               const bodyErr = dd?.msg || dd?.message || dd?.error || "Reference upload failed";
               const intent = interpretSunoFailure(dd);
-              if (intent.kind === "copyright" || intent.kind === "sensitive") {
+              if (intent.kind) {
                 const e = new Error(intent.detail);
                 e._friendly = intent;
                 throw e;
@@ -49187,7 +49318,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
             if (dd?.data && typeof dd.data?.code !== "undefined" && Number(dd.data.code) !== 200) {
               const nestedErr = dd?.data?.msg || dd?.data?.message || dd?.data?.error || "Reference upload failed";
               const intent = interpretSunoFailure(dd.data);
-              if (intent.kind === "copyright" || intent.kind === "sensitive") {
+              if (intent.kind) {
                 const e = new Error(intent.detail);
                 e._friendly = intent;
                 throw e;
@@ -49375,20 +49506,32 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       console.error(e);
       const friendly = e?._friendly;
       if (friendly) {
-        setStatus(`${friendly.headline}: ${(friendly.detail || "").split("\n")[0]}`);
+        const isRemix = Boolean(currentRemixSource?.originalUrl || vocalRefOrigin === "remix");
+        const userCopy = sunoFailureUserCopy(friendly.kind, { isRemix });
+        setStatus(userCopy.toast);
         try {
-          showToast(
-            [friendly.headline, friendly.detail].filter(Boolean).join("\n\n"),
-            {
-              icon: "!",
-              durationMs: friendly.kind === "copyright" || friendly.kind === "sensitive" ? 12000 : 8000,
-            }
-          );
+          showToast(userCopy.toast, { icon: "!", durationMs: 9000 });
+        } catch {}
+        try {
+          pushLocalGenerationFailedActivity({
+            title: String(els.sunoTitle?.value || currentRemixSource?.title || "Your song").trim(),
+            taskId: sunoTaskId || "",
+            failureKind: friendly.kind || "generic",
+            isRemix,
+          });
         } catch {}
       } else {
         setStatus(`Generation failed: ${e?.message || String(e)}`);
         try {
-          showToast(String(e?.message || e || "Generation failed"), { icon: "✗", durationMs: 8000 });
+          showToast("Something went wrong — please try again.", { icon: "✗", durationMs: 8000 });
+        } catch {}
+        try {
+          pushLocalGenerationFailedActivity({
+            title: String(els.sunoTitle?.value || "Your song").trim(),
+            taskId: sunoTaskId || "",
+            failureKind: "generic",
+            isRemix: Boolean(currentRemixSource?.originalUrl || vocalRefOrigin === "remix"),
+          });
         } catch {}
       }
       setGenerateBtn("Generate song", false, "generate");

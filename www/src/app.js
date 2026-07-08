@@ -186,7 +186,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260708-210006";
+const APP_BUILD = "20260708-211055";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -3871,13 +3871,38 @@ function applyRoute({ passGen } = {}) {
     document.body.classList.remove("messagesThreadEntering", "messagesThreadLeaving");
   }
   if (wanted === "challenges" && hasActiveCreateSession() && !_createHubExitBypassSessionPin && !isOnCreateHubRoute()) {
-    wanted = "generate";
+    if (createSessionIsGenerating()) {
+      wanted = "profile";
+      try { sessionStorage.setItem(PROFILE_SONGS_SEGMENT_KEY, "all"); } catch {}
+      _profileSongsSegment = "all";
+      try {
+        if (!/^#\/profile\b/i.test(String(location.hash || "")) || !/[?&]seg=all/i.test(String(location.hash || ""))) {
+          history.replaceState(null, "", "#/profile?seg=all");
+        }
+      } catch {
+        try { location.hash = "#/profile?seg=all"; } catch {}
+      }
+    } else {
+      wanted = "generate";
+      try {
+        if (!/^#\/generate\b/i.test(String(location.hash || ""))) {
+          history.replaceState(null, "", "#/generate");
+        }
+      } catch {
+        try { location.hash = "#/generate"; } catch {}
+      }
+    }
+  }
+  if (wanted === "generate" && createSessionIsGenerating()) {
+    wanted = "profile";
+    try { sessionStorage.setItem(PROFILE_SONGS_SEGMENT_KEY, "all"); } catch {}
+    _profileSongsSegment = "all";
     try {
-      if (!/^#\/generate\b/i.test(String(location.hash || ""))) {
-        history.replaceState(null, "", "#/generate");
+      if (!/^#\/profile\b/i.test(String(location.hash || "")) || !/[?&]seg=all/i.test(String(location.hash || ""))) {
+        history.replaceState(null, "", "#/profile?seg=all");
       }
     } catch {
-      try { location.hash = "#/generate"; } catch {}
+      try { location.hash = "#/profile?seg=all"; } catch {}
     }
   }
   if (wanted === "generate") {
@@ -5120,6 +5145,7 @@ try {
     clearGenerationPending,
     getGenerationPending,
     syncGenerationPendingLibraryUi,
+    openProfileSongsWhileGenerating,
     generationVariantCount: GENERATION_VARIANT_COUNT,
     beginCoachGenerationStatus,
     bumpCoachGenerationStillWorking,
@@ -16500,6 +16526,28 @@ function syncGenerationPendingLibraryUi() {
   try {
     refreshOwnSongsUi();
   } catch {}
+}
+
+/** While Suno runs, show Profile → Songs (all) shimmer instead of staying on Create. */
+function openProfileSongsWhileGenerating() {
+  if (!getGenerationPending()?.taskId) return;
+  try { sessionStorage.setItem(PROFILE_SONGS_SEGMENT_KEY, "all"); } catch {}
+  _profileSongsSegment = "all";
+  syncGenerationPendingLibraryUi();
+  const route = document.body.getAttribute("data-route") || "";
+  const hash = String(location.hash || "");
+  const onProfileAll =
+    route === "profile"
+    && (_profileSongsSegment === "all" || /[?&]seg=all/i.test(hash));
+  if (onProfileAll) {
+    try { syncProfileSongsSegmentUi(); } catch {}
+    try { renderProfileSongs(); } catch {}
+    return;
+  }
+  try {
+    location.hash = "#/profile?seg=all";
+  } catch {}
+  try { scheduleApplyRoute(); } catch {}
 }
 
 // Single source of truth for the active vocal reference. Updated whenever the
@@ -46394,6 +46442,9 @@ function resolveCreateTabNavigation() {
   if (isPersonaFlowActive()) {
     return { route: "challenges", hash: "#/challenges" };
   }
+  if (createSessionIsGenerating()) {
+    return { route: "profile", hash: "#/profile?seg=all" };
+  }
   if (hasActiveCreateSession()) {
     return { route: "generate", hash: "#/generate" };
   }
@@ -48973,6 +49024,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       startGeneratePolling();
       try { syncCoachGenerationStatusFromPending(getGenerationPending()); } catch {}
       try { syncCoachPriorityStatusFromPending(getPriorityPending()); } catch {}
+      try { openProfileSongsWhileGenerating(); } catch {}
       return;
     }
     const promptText = String(els.sunoPrompt?.value || "").trim();
@@ -49436,6 +49488,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
               : "",
           });
         } catch {}
+        try { openProfileSongsWhileGenerating(); } catch {}
         try { setLoading(false); } catch {}
       }
       sunoAudioId = null;

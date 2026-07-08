@@ -422,6 +422,7 @@ function armHumTrackGeneration(taskId, instrumentId, label) {
       pillText: ctx?.coachHumTrackGeneratingPillText?.(label),
     });
   } catch {}
+  try { ctx?.openProfileSongsWhileGenerating?.(); } catch {}
   dismissHumTrackSheetToCreate();
   startHumTrackPolling(taskId, instrumentId);
 }

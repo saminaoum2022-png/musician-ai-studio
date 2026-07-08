@@ -4,6 +4,7 @@
 
 const { queuePrivacySafePush } = require("./onesignal-push");
 const { verifySunoWatchReady } = require("./suno-job-ready");
+const { queueUpdateMusicGenerationByTaskId } = require("./music-generation-log");
 
 const SUPABASE_URL = (process.env.SUPABASE_URL || "").replace(/\/$/, "");
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
@@ -169,12 +170,14 @@ async function handleSunoCallback(body) {
 
   if (callbackLooksFailed(body)) {
     await markWatchStatus(taskId, "failed");
+    queueUpdateMusicGenerationByTaskId(taskId, { status: "failed", error_message: "callback_failed" });
     return { ok: false, reason: "failed" };
   }
 
   const verified = await verifySunoWatchReady(taskId, row.kind);
   if (verified.failed) {
     await markWatchStatus(taskId, "failed");
+    queueUpdateMusicGenerationByTaskId(taskId, { status: "failed", error_message: "verify_failed" });
     return { ok: false, reason: "failed" };
   }
   if (!verified.ready) {
@@ -182,6 +185,7 @@ async function handleSunoCallback(body) {
   }
 
   await markWatchStatus(taskId, "complete");
+  queueUpdateMusicGenerationByTaskId(taskId, { status: "completed" });
   return sendWatchReadyPush(row);
 }
 

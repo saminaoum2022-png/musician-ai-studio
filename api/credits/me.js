@@ -9,10 +9,12 @@
 const {
   verifyUser,
   selectFromTable,
+  callRpc,
   isAdminEmail,
   sendJson,
   setCors,
 } = require("../_lib/credits-auth");
+const { fetchProfileRole } = require("../_lib/admin-auth");
 const { fetchProSubscriptionForUser } = require("../_lib/pro-subscription");
 
 module.exports = async function handler(req, res) {
@@ -43,6 +45,9 @@ module.exports = async function handler(req, res) {
   const bucketsReady = paidBalance != null && giftBalance != null && promoBalance != null;
   const ledger = Array.isArray(ledgerRes.data) ? ledgerRes.data : [];
   const pro = await fetchProSubscriptionForUser(user.userId);
+  const role = await fetchProfileRole(user.userId);
+  const isAdmin = role === "admin" || isAdminEmail(user.email);
+  void callRpc("touch_user_last_active", { p_user_id: user.userId }).catch(() => null);
 
   return sendJson(res, 200, {
     ok: true,
@@ -53,7 +58,7 @@ module.exports = async function handler(req, res) {
     giftableBalance: bucketsReady ? paidBalance + promoBalance : 0,
     bucketsReady,
     ledger,
-    isAdmin: isAdminEmail(user.email),
+    isAdmin,
     email: user.email,
     pro,
   });

@@ -7,20 +7,24 @@
 const {
   verifyUser,
   callRpc,
-  isAdminEmail,
   sendJson,
   setCors,
   readJsonBody,
 } = require("../_lib/credits-auth");
+const { verifyAdmin, adminForbidden, adminUnauthorized } = require("../_lib/admin-auth");
 
 module.exports = async function handler(req, res) {
   setCors(res);
   if (req.method === "OPTIONS") return res.end();
   if (req.method !== "POST") return sendJson(res, 405, { error: "Method not allowed" });
 
-  const user = await verifyUser(req);
-  if (!user) return sendJson(res, 401, { error: "Not signed in" });
-  if (!isAdminEmail(user.email)) return sendJson(res, 403, { error: "Forbidden" });
+  const admin = await verifyAdmin(req);
+  if (!admin) {
+    const user = await verifyUser(req);
+    if (!user) return adminUnauthorized(res);
+    return adminForbidden(res);
+  }
+  const user = admin;
 
   let body = {};
   try {

@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="dark" />
+    <meta name="robots" content="noindex, nofollow" />
+    <title>Nabad AI Admin</title>
+    <meta name="theme-color" content="#05070d" />
+    <link rel="icon" href="/favicon.ico" sizes="any" />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div id="loginScreen" class="loginScreen" hidden>
+      <div class="loginCard">
+        <div class="loginBrand">
+          <div class="loginLogo" aria-hidden="true">N</div>
+          <h1>Nabad AI Admin</h1>
+          <p>Sign in with your admin account</p>
+        </div>
+        <form id="loginForm" class="loginForm">
+          <label class="field">
+            <span>Email</span>
+            <input id="loginEmail" type="email" autocomplete="username" required />
+          </label>
+          <label class="field">
+            <span>Password</span>
+            <input id="loginPassword" type="password" autocomplete="current-password" required />
+          </label>
+          <button type="submit" class="btnPrimary" id="btnLogin">Sign in</button>
+          <p id="loginError" class="loginError" hidden></p>
+        </form>
+      </div>
+    </div>
+
+    <div id="appShell" class="appShell" hidden>
+      <aside class="sidebar">
+        <div class="sidebarBrand">
+          <div class="sidebarLogo" aria-hidden="true">N</div>
+          <div>
+            <div class="sidebarTitle">Nabad AI</div>
+            <div class="sidebarSub">Admin</div>
+          </div>
+        </div>
+        <nav class="sidebarNav" aria-label="Admin sections">
+          <button type="button" class="navItem isActive" data-view="overview">Overview</button>
+          <button type="button" class="navItem" data-view="suno">Suno bucket</button>
+          <button type="button" class="navItem" data-view="users">Users</button>
+          <button type="button" class="navItem" data-view="credits">Credits</button>
+          <button type="button" class="navItem" data-view="generations">Generations</button>
+          <button type="button" class="navItem" data-view="subscriptions">Subscriptions</button>
+        </nav>
+        <div class="sidebarFoot">
+          <div id="adminUserEmail" class="adminUserEmail">—</div>
+          <button type="button" class="btnGhost" id="btnSignOut">Sign out</button>
+        </div>
+      </aside>
+
+      <main class="main">
+        <header class="topbar">
+          <div>
+            <h2 id="pageTitle" class="pageTitle">Overview</h2>
+            <p id="pageSub" class="pageSub">Platform health at a glance</p>
+          </div>
+          <button type="button" class="btnGhost" id="btnRefresh">Refresh</button>
+        </header>
+
+        <div id="viewOverview" class="viewPanel" data-panel="overview"></div>
+        <div id="viewSuno" class="viewPanel" data-panel="suno" hidden></div>
+        <div id="viewUsers" class="viewPanel" data-panel="users" hidden></div>
+        <div id="viewCredits" class="viewPanel" data-panel="credits" hidden></div>
+        <div id="viewGenerations" class="viewPanel" data-panel="generations" hidden></div>
+        <div id="viewSubscriptions" class="viewPanel" data-panel="subscriptions" hidden></div>
+
+        <div id="globalError" class="globalError" hidden></div>
+      </main>
+    </div>
+
+    <script type="module" src="./app.js"></script>
+  </body>
+</html>

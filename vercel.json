@@ -25,7 +25,17 @@
     { "path": "/api/social?type=chart_notify_cron", "schedule": "0 17 * * *" }
   ],
   "rewrites": [
-    { "source": "/s/:id", "destination": "/api/share?id=:id" }
+    { "source": "/s/:id", "destination": "/api/share?id=:id" },
+    {
+      "source": "/",
+      "has": [{ "type": "host", "value": "admin.nabadai.com" }],
+      "destination": "/admin/index.html"
+    },
+    {
+      "source": "/:path*",
+      "has": [{ "type": "host", "value": "admin.nabadai.com" }],
+      "destination": "/admin/:path*"
+    }
   ],
   "headers": [
     {
@@ -68,6 +78,12 @@
       "source": "/terms",
       "headers": [
         { "key": "Cache-Control", "value": "no-cache, must-revalidate" }
+      ]
+    },
+    {
+      "source": "/admin/(.*)",
+      "headers": [
+        { "key": "Cache-Control", "value": "no-store, must-revalidate" }
       ]
     }
   ]

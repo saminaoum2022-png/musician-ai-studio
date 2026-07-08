@@ -17,11 +17,12 @@
 const {
   verifyUser,
   callRpc,
-  isAdminEmail,
   sendJson,
 } = require("../_lib/credits-auth");
+const { userIsAdmin } = require("../_lib/admin-auth");
 const { applyCors } = require("../_lib/cors");
 const { queueRegisterSunoWatch } = require("../_lib/suno-generation-watch");
+const { queueLogMusicGeneration } = require("../_lib/music-generation-log");
 
 const FULL_SONG_COST = 12;
 
@@ -41,7 +42,7 @@ module.exports = async function handler(req, res) {
     // Admin bypass: owner accounts (ADMIN_EMAILS env) skip the per-user
     // balance deduction entirely. The Suno API call below still hits the
     // master Suno account, so usage shows up there directly.
-    const isAdmin = isAdminEmail(user.email);
+    const isAdmin = await userIsAdmin(user);
     let balanceAfterDebit = null;
     if (!isAdmin) {
       const debit = await callRpc("consume_credits", {
@@ -171,6 +172,14 @@ module.exports = async function handler(req, res) {
       if (!isAdmin) {
         await refund(user.userId, FULL_SONG_COST, "refund_full_song", "suno_http_error").catch(() => null);
       }
+      queueLogMusicGeneration({
+        userId: user.userId,
+        kind: watchKindForBody(body),
+        prompt: buildPromptLabel(prompt, mergedStyle, title),
+        status: isAdmin ? "failed" : "refunded",
+        creditsUsed: isAdmin ? 0 : FULL_SONG_COST,
+        errorMessage: `suno_http_${r.status}`,
+      });
       return json(res, 502, { error: "Upstream engine error", status: r.status, details: data || text });
     }
     const sunoCode = data && typeof data === "object" && "code" in data ? Number(data.code) : 200;
@@ -179,11 +188,27 @@ module.exports = async function handler(req, res) {
         await refund(user.userId, FULL_SONG_COST, "refund_full_song", `suno_code_${sunoCode}`).catch(() => null);
       }
       const msg = data?.msg || data?.message || data?.error || "Request was rejected upstream";
+      queueLogMusicGeneration({
+        userId: user.userId,
+        kind: watchKindForBody(body),
+        prompt: buildPromptLabel(prompt, mergedStyle, title),
+        status: isAdmin ? "failed" : "refunded",
+        creditsUsed: isAdmin ? 0 : FULL_SONG_COST,
+        errorMessage: msg,
+      });
       return json(res, 502, { error: msg, details: data });
     }
 
     const sunoTaskId = extractSunoTaskId(data);
-    const watchKind = String(body?.watchKind || "").trim() === "photo" ? "photo" : "song";
+    const watchKind = watchKindForBody(body);
+    queueLogMusicGeneration({
+      userId: user.userId,
+      taskId: sunoTaskId,
+      kind: watchKind,
+      prompt: buildPromptLabel(prompt, mergedStyle, title),
+      status: "pending",
+      creditsUsed: isAdmin ? 0 : FULL_SONG_COST,
+    });
     if (sunoTaskId) {
       queueRegisterSunoWatch({
         userId: user.userId,
@@ -261,4 +286,14 @@ function extractSunoTaskId(data) {
 
 function clamp01(x) {
   return Math.max(0, Math.min(1, x));
+}
+
+function watchKindForBody(body) {
+  return String(body?.watchKind || "").trim() === "photo" ? "photo" : "song";
+}
+
+function buildPromptLabel(prompt, style, title) {
+  const bits = [String(title || "").trim(), String(prompt || "").trim(), String(style || "").trim()]
+    .filter(Boolean);
+  return bits.join(" · ").slice(0, 500);
 }

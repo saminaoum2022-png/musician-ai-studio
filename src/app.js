@@ -184,7 +184,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260709-022230";
+const APP_BUILD = "20260709-032648";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -1158,6 +1158,8 @@ let hubAudio = null;
 let hubAudioPostId = null;
 let hubNowMeta = null;
 let miniSource = null;
+/** Between tap and first audible frame — drives cover-art spinner on song rows. */
+let _playbackPending = null;
 /** Avoid mini-player toggling when scroll hovers near the visibility threshold. */
 let hubPlayingPostProminent = false;
 function isPlayingHubPostVisible() {
@@ -2046,10 +2048,7 @@ async function startHubPlayback(postId) {
     document.querySelector(`[data-hub-play="${postId}"]`);
   const coverWrap = playBtn?.closest?.(".hubCoverWrap")
     || document.querySelector(`.hubCoverWrap[data-hub-cover="${postId}"]`);
-  coverWrap?.classList.add("isPlaying");
-  // Loading shimmer on the progress bar — confirms "we heard you tap" while
-  // the audio element is buffering. Cleared as soon as play() resolves
-  // (success or failure), so it never lingers on a finished/dead row.
+  coverWrap?.classList.remove("isPlaying");
   coverWrap?.classList.add("isLoading");
   // Force focus visuals onto the playing row immediately. Useful when the
   // user taps ▶ on a card that isn't centered — without this, the row
@@ -2133,6 +2132,7 @@ async function startHubPlayback(postId) {
     return;
   }
   coverWrap?.classList.remove("isLoading");
+  coverWrap?.classList.add("isPlaying");
   if (p?.meta?.clip && Number.isFinite(Number(p.meta.clip.startSec))) {
     try {
       a.currentTime = Math.max(0, Number(p.meta.clip.startSec));
@@ -7829,6 +7829,7 @@ function initDeskRail() {
       const by = decodeDiscoverDataAttr(trendRow, "data-challenge-entry-by") || "";
       e.preventDefault();
       try { haptic("light"); } catch {}
+      primeDiscoverPlaybackPendingFromEl(trendRow);
       void playLibraryUrlOnPlayer(raw, title, art, { discoverFeed: true, openPlayer: false, discoverBy: by, playSource: publicPlaySourceFromEl(trendRow) });
       return;
     }
@@ -8905,13 +8906,18 @@ function discoverPauseBtnSvg(size = 16) {
   return `<svg viewBox="0 0 24 24" width="${size}" height="${size}"><path fill="currentColor" d="M6 5h4v14H6V5Zm8 0h4v14h-4V5Z"/></svg>`;
 }
 
+/** Play / pause / loading icons for cover overlays and frosted post buttons. */
+function coverArtPlayStateIconsHtml(size = 12) {
+  return `<span class="coverArtPlayIco coverArtPlayIco--play">${discoverPlayBtnSvg(size)}</span><span class="coverArtPlayIco coverArtPlayIco--pause">${discoverPauseBtnSvg(size)}</span><span class="coverArtPlayIco coverArtPlayIco--loading"><span class="coverArtPlaySpinner"></span></span>`;
+}
+
 /** Centered play/pause overlay — toggled via `.libRowPlaying` / `.discoveryRowPlaying`. */
 function coverArtPlaybackOverlayHtml(opts = {}) {
   const hero = Boolean(opts.hero);
   const feedCard = Boolean(opts.feedCard);
   const size = hero ? 16 : (feedCard ? 14 : 12);
   const cls = `coverArtPlayOverlay discoverCoverPlay${hero ? " discoverCoverPlay--hero" : ""}${feedCard ? " coverArtPlayOverlay--feedCard" : ""}`;
-  return `<span class="${cls}" aria-hidden="true"><span class="coverArtPlayIco coverArtPlayIco--play">${discoverPlayBtnSvg(size)}</span><span class="coverArtPlayIco coverArtPlayIco--pause">${discoverPauseBtnSvg(size)}</span></span>`;
+  return `<span class="${cls}" aria-hidden="true">${coverArtPlayStateIconsHtml(size)}</span>`;
 }
 
 /** Mini equalizer for card covers (feed cards, mini player cover). List rows use `.libRowEq`. */
@@ -8921,7 +8927,7 @@ function coverArtEqualizerHtml() {
 
 function discoverListPlayBtnHtml(extraClass = "") {
   const cls = extraClass ? `discoverListPlayBtn ${extraClass}` : "discoverListPlayBtn";
-  return `<span class="${cls}" aria-hidden="true">${discoverPlayBtnSvg(14)}</span>`;
+  return `<span class="${cls}" aria-hidden="true">${coverArtPlayStateIconsHtml(14)}</span>`;
 }
 
 /** Gradient hero play — Top This Week #1 and Featured Creation only. */
@@ -9102,7 +9108,7 @@ function discoverFeedChallengeCreationsRailHtml(entries, profMap) {
     return `
       <button type="button" class="discoverFeedChallengeMini" ${playAttrs} aria-label="Play ${escapeHtml(title)}">
         <img src="${escapeHtml(art)}" alt="" loading="lazy" decoding="async" />
-        <span class="discoverFeedChallengeMiniPlay" aria-hidden="true">▶</span>
+        <span class="discoverFeedChallengeMiniPlay" aria-hidden="true">${coverArtPlayStateIconsHtml(12)}</span>
       </button>`;
   }).join("");
 }
@@ -9209,7 +9215,7 @@ function discoverFeedChallengeBlockHtml(c, tracks, profMap, opts = {}) {
     return `
       <button type="button" class="discoverFeedChallengeMini" ${playAttrs} aria-label="Play ${escapeHtml(String(t.title || "Untitled"))}">
         <img src="${escapeHtml(art)}" alt="" loading="lazy" decoding="async" />
-        <span class="discoverFeedChallengeMiniPlay" aria-hidden="true">▶</span>
+        <span class="discoverFeedChallengeMiniPlay" aria-hidden="true">${coverArtPlayStateIconsHtml(12)}</span>
       </button>`;
   }).join("");
   return `
@@ -13769,8 +13775,7 @@ function feedHeroPlayerCardHtml(opts) {
                   <img class="followActQuoteImg feedHeroPlayerArt" src="${escapeHtml(artSafe)}" alt="" decoding="async" loading="lazy" />
                 </span>
                 <span class="feedHeroPlayerCenterPlay" aria-hidden="true">
-                  <span class="coverArtPlayIco coverArtPlayIco--play">${discoverPlayBtnSvg(22)}</span>
-                  <span class="coverArtPlayIco coverArtPlayIco--pause">${discoverPauseBtnSvg(22)}</span>
+                  ${coverArtPlayStateIconsHtml(22)}
                 </span>
                 <span class="feedHeroPlayerChrome">
                   <span class="feedHeroPlayerInfo followActQuoteOverlayInner">
@@ -13966,8 +13971,7 @@ function followingActivityRowHtml(t, profMap, idx, opts = {}) {
               <img class="followActMediaImg" src="${escapeHtml(artSafe)}" alt="" decoding="async" loading="lazy" />
               <span class="followActMediaScrim" aria-hidden="true"></span>
               <span class="followActMediaPlayBtn" aria-hidden="true">
-                <span class="coverArtPlayIco coverArtPlayIco--play">${discoverPlayBtnSvg(28)}</span>
-                <span class="coverArtPlayIco coverArtPlayIco--pause">${discoverPauseBtnSvg(28)}</span>
+                ${coverArtPlayStateIconsHtml(28)}
               </span>
               <span class="followActMediaTitle" aria-hidden="true">${safeTitle}</span>
             </button>
@@ -15859,6 +15863,7 @@ function bindDiscoveryDiscoverControls() {
         if (!raw) return;
         e.preventDefault();
         haptic("light");
+        primeDiscoverPlaybackPendingFromEl(challengePlay);
         void playLibraryUrlOnPlayer(raw, title, art, { discoverFeed: true, openPlayer: false, discoverBy: by, playSource: publicPlaySourceFromEl(challengePlay) });
         return;
       }
@@ -23729,10 +23734,10 @@ function ensurePublishReleaseSheet() {
           <span>Allow others to use it in mashups</span>
         </label>
       </div>
-      <div id="publishReleaseMeta" class="publishReleaseMeta"></div>
+      <div id="publishReleaseMeta" class="publishReleaseMeta" hidden></div>
       <div class="publishReleaseActions">
-        <button type="button" class="ghost publishReleaseBtn" data-publish-release-close="1">Cancel</button>
-        <button type="button" class="primary publishReleaseBtn publishReleaseBtn--primary" id="publishReleaseConfirm">Publish</button>
+        <button type="button" class="publishReleaseBtn publishReleaseBtn--cancel" data-publish-release-close="1">Cancel</button>
+        <button type="button" class="publishReleaseBtn publishReleaseBtn--publish" id="publishReleaseConfirm">Publish</button>
       </div>
     </div>
   `;
@@ -23807,11 +23812,13 @@ function openPublishReleaseSheet(trackId, opts = {}) {
   if (remixToggle) remixToggle.checked = trackAllowsRemix(track);
   if (mashupToggle) mashupToggle.checked = trackAllowsMashup(track);
   if (metaEl) {
-    metaEl.innerHTML = `
-      <span>Public profile</span>
-      <span>Stamped now</span>
-      ${remixOf ? `<span>Remix of @${escapeHtml(remixOf.creatorUsername || "creator")}</span>` : ""}
-    `;
+    if (remixOf) {
+      metaEl.hidden = false;
+      metaEl.innerHTML = `<span>Remix of @${escapeHtml(remixOf.creatorUsername || "creator")}</span>`;
+    } else {
+      metaEl.innerHTML = "";
+      metaEl.hidden = true;
+    }
   }
   sheet.hidden = false;
   requestAnimationFrame(() => sheet.classList.add("isOpen"));
@@ -32113,6 +32120,8 @@ async function playLibraryListRowById(id, opts) {
   let t = loadLibrary().find((x) => x.id === id);
   if (!t?.url) return;
   primeGlobalPlayerInGesture();
+  setPlaybackPending({ type: "library", id });
+  try { syncAllPlaybackRowHighlights(); } catch {}
   try {
     stopHubPlayback();
   } catch {}
@@ -32883,35 +32892,94 @@ function wireTrackOptionsSheetOnce() {
 }
 
 
-/** Same contract as Library rows: `active` when this feed URL is loaded from Discover;
- *  `audible` when audio is actively playing (EQ + pause badge). */
+function setPlaybackPending(pending) {
+  _playbackPending = pending && typeof pending === "object" ? { ...pending } : null;
+}
+
+function clearPlaybackPending() {
+  _playbackPending = null;
+}
+
+function playbackPendingMatchesUrl(trackUrl) {
+  const u = String(trackUrl || "").trim();
+  if (!u || !_playbackPending) return false;
+  if (_playbackPending.type === "url") {
+    return audioUrlsEquivalent(String(_playbackPending.url || "").trim(), u);
+  }
+  const cur = String(currentPlayerTrackRef?.url || "").trim();
+  return cur && audioUrlsEquivalent(cur, u);
+}
+
+function playbackPendingMatchesLibrary(trackId) {
+  return _playbackPending?.type === "library" && String(_playbackPending.id || "") === String(trackId || "");
+}
+
+function playbackPendingMatchesProfileHub(postId) {
+  return _playbackPending?.type === "profile_hub" && String(_playbackPending.postId || "") === String(postId || "");
+}
+
+function playbackPendingMatchesStudioVocal(vocalId) {
+  return _playbackPending?.type === "studio_vocal" && String(_playbackPending.id || "") === String(vocalId || "");
+}
+
+function syncAllPlaybackRowHighlights() {
+  try { syncDiscoveryPlayingHighlights(); } catch {}
+  try { syncUserPublicFeedPlayingHighlights(); } catch {}
+  try { syncLibraryRowsFromPlayer(); } catch {}
+  try { syncMyVocalsRowsFromPlayer(); } catch {}
+  try { syncProfileHubSharedRowsFromPlayer(); } catch {}
+  try { syncUserPlaylistPlayingHighlights(); } catch {}
+}
+
+/** Set pending + repaint Discover rows the instant a cover is tapped. */
+function primeDiscoverPlaybackPendingFromEl(el) {
+  const raw = decodeDiscoveryPlayUrl(el);
+  if (!raw) return false;
+  const pendingUrl = unwrapInnermostHttpAudioUrl(raw) || raw;
+  setPlaybackPending({ type: "url", url: String(pendingUrl || "").trim() });
+  try { syncAllPlaybackRowHighlights(); } catch {}
+  return true;
+}
+
+/** Inline Discover play targets beyond library rows / feed posts (Top 10, carousels). */
+const DISCOVER_INLINE_PLAY_HOSTS =
+  ".chartWeekWinnerTap,.chartWeekRunnerTap,.chartWeekLeaderRow,.discoverFeedTemplateCard,.discoverHubPickCardPlay,.discoverFeedChallengeMini,.discoverChallengeSpotCard,.discoverHubTopEntry,.discoverHubEntryMini,.deskRailTrendRow";
+
+/** Same contract as Library rows: `active` when loaded, `audible` when playing,
+ *  `loading` between tap and first audible frame (spinner on cover play button). */
 function getDiscoveryPlaybackUiForUrl(trackUrl) {
   const u = String(trackUrl || "").trim();
-  if (!u) return { active: false, audible: false };
-  if (!isDiscoverStyleMiniSource()) return { active: false, audible: false };
+  if (!u) return { active: false, audible: false, loading: false };
+  if (playbackPendingMatchesUrl(u)) {
+    return { active: true, audible: false, loading: true };
+  }
+  if (!isDiscoverStyleMiniSource()) return { active: false, audible: false, loading: false };
   const cur = String(currentPlayerTrackRef?.url || "").trim();
-  if (!cur || !audioUrlsEquivalent(cur, u)) return { active: false, audible: false };
+  if (!cur || !audioUrlsEquivalent(cur, u)) return { active: false, audible: false, loading: false };
   const a = ensurePlayer();
-  if (!a) return { active: true, audible: false };
+  if (!a) return { active: true, audible: false, loading: false };
   const dur = getPlayerDuration();
   const ct = Number.isFinite(a.currentTime) ? a.currentTime : 0;
   const audible = Boolean(!a.paused && !a.ended && (dur > 0 || ct > 0));
-  return { active: true, audible };
+  return { active: true, audible, loading: false };
 }
 
 /** Public `#/u/…` song rows: same UI contract as Discover, keyed off `public_profile_lib`. */
 function getPublicProfileLibPlaybackUiForUrl(trackUrl) {
   const u = String(trackUrl || "").trim();
-  if (!u) return { active: false, audible: false };
-  if (miniSource?.type !== "public_profile_lib") return { active: false, audible: false };
+  if (!u) return { active: false, audible: false, loading: false };
+  if (playbackPendingMatchesUrl(u)) {
+    return { active: true, audible: false, loading: true };
+  }
+  if (miniSource?.type !== "public_profile_lib") return { active: false, audible: false, loading: false };
   const cur = String(currentPlayerTrackRef?.url || "").trim();
-  if (!cur || !audioUrlsEquivalent(cur, u)) return { active: false, audible: false };
+  if (!cur || !audioUrlsEquivalent(cur, u)) return { active: false, audible: false, loading: false };
   const a = ensurePlayer();
-  if (!a) return { active: true, audible: false };
+  if (!a) return { active: true, audible: false, loading: false };
   const dur = getPlayerDuration();
   const ct = Number.isFinite(a.currentTime) ? a.currentTime : 0;
   const audible = Boolean(!a.paused && !a.ended && (dur > 0 || ct > 0));
-  return { active: true, audible };
+  return { active: true, audible, loading: false };
 }
 
 /** When Discover is already playing this URL, toggle pause/play (thumb + spotlight). */
@@ -32962,6 +33030,7 @@ function playDiscoverTarget(el, opts = {}) {
   primeGlobalPlayerInGesture();
   haptic("light");
   if (!opts.skipToggle && toggleDiscoverFeedPlaybackIfSameUrl(t.raw)) return;
+  primeDiscoverPlaybackPendingFromEl(el);
   void playLibraryUrlOnPlayer(t.raw, t.title, t.art, {
     discoverFeed: true,
     openPlayer: false,
@@ -32995,6 +33064,8 @@ function togglePublicProfileLibPlaybackIfSameUrl(rawUrl) {
 function syncDiscoveryPlayingHighlights() {
   const roots = [
     document.getElementById("discoveryPaneDiscover"),
+    document.getElementById("discoverFeedMount"),
+    document.getElementById("deskRailTrending"),
     document.getElementById("friendsPage"),
     document.getElementById("profileActivitiesList"),
     document.getElementById("profileRepostsList"),
@@ -33008,7 +33079,7 @@ function syncDiscoveryPlayingHighlights() {
   if (!roots.length) return;
 
   const resetDiscoveryHost = (host) => {
-    host.classList.remove("discoveryRowPlaying", "discoveryRowActive");
+    host.classList.remove("discoveryRowPlaying", "discoveryRowActive", "discoveryRowLoading");
     try {
       host.style.removeProperty("--cover-glow-rgb");
       host.style.removeProperty("--cover-prog-rgb");
@@ -33053,26 +33124,30 @@ function syncDiscoveryPlayingHighlights() {
     root.querySelectorAll(".followAct").forEach(resetDiscoveryHost);
     root.querySelectorAll(".discoverFeedSongRow").forEach(resetDiscoveryHost);
     root.querySelectorAll(".messagesDmSongCard").forEach(resetDiscoveryHost);
+    root.querySelectorAll(DISCOVER_INLINE_PLAY_HOSTS).forEach(resetDiscoveryHost);
   }
   syncFriendsFeedProgressBars();
 
   const curRef = String(currentPlayerTrackRef?.url || "").trim();
-  if (!isDiscoverStyleMiniSource() || !curRef) return;
+  const pendingUrl = _playbackPending?.type === "url" ? String(_playbackPending.url || "").trim() : "";
+  if ((!isDiscoverStyleMiniSource() && !_playbackPending) || (!curRef && !pendingUrl)) return;
 
   const paintHost = (host, urlEl) => {
     if (!urlEl) return;
     const trackUrl = decodeDiscoveryPlayUrl(urlEl);
-    const { active, audible } = getDiscoveryPlaybackUiForUrl(trackUrl);
-    if (!active) return;
+    const { active, audible, loading } = getDiscoveryPlaybackUiForUrl(trackUrl);
+    if (!active && !loading) return;
     host.classList.toggle("discoveryRowPlaying", audible);
-    host.classList.toggle("discoveryRowActive", active && !audible);
+    host.classList.toggle("discoveryRowLoading", Boolean(loading));
+    host.classList.toggle("discoveryRowActive", active && !audible && !loading);
     if (host.classList.contains("followAct")) {
       const title = decodeDiscoverDataAttr(urlEl, "data-user-lib-title") || "Song";
+      const label = audible ? `Pause ${title}` : loading ? `Loading ${title}` : `Play ${title}`;
       host.querySelectorAll("[data-user-lib-play]").forEach((btn) => {
-        btn.setAttribute("aria-label", audible ? `Pause ${title}` : `Play ${title}`);
+        btn.setAttribute("aria-label", label);
       });
       const mediaPlay = host.querySelector(".followActMediaPlay");
-      if (mediaPlay) mediaPlay.textContent = audible ? "❚❚" : "▶";
+      if (mediaPlay) mediaPlay.textContent = audible ? "❚❚" : loading ? "…" : "▶";
     } else if (host.classList.contains("discoveryRow")) {
       const artBtn = host.querySelector("[data-discovery-inline-play]");
       if (artBtn) {
@@ -33097,7 +33172,7 @@ function syncDiscoveryPlayingHighlights() {
     const artHint =
       String(decodeDiscoverDataAttr(host, "data-user-lib-art") || "").trim() ||
       String(decodeDiscoverDataAttr(urlEl, "data-user-lib-art") || "").trim() ||
-      String(host.querySelector?.(".followActMediaImg, .followActCover img, .discoverySpotCardArt img, .discoveryRowArt img, .discoverFeedSongArt img, .messagesDmSongArt img")?.getAttribute?.("src") || "").trim();
+      String(host.querySelector?.(".followActMediaImg, .followActCover img, .discoverySpotCardArt img, .discoveryRowArt img, .discoverFeedSongArt img, .messagesDmSongArt img, .chartWeekWinnerArt img, .chartWeekRunnerArt img, .discoverFeedTemplateCover img, .discoverHubPickCover img, .discoverFeedChallengeMini img")?.getAttribute?.("src") || "").trim();
     if (active) applyCoverGlowRgb(host, artHint);
   };
 
@@ -33120,6 +33195,9 @@ function syncDiscoveryPlayingHighlights() {
     root.querySelectorAll(".discoverFeedSongRow").forEach((row) => {
       const playBtn = row.querySelector(".discoverFeedSongRowPlay");
       paintHost(row, playBtn);
+    });
+    root.querySelectorAll(DISCOVER_INLINE_PLAY_HOSTS).forEach((host) => {
+      paintHost(host, host);
     });
   }
   syncFriendsFeedProgressBars();
@@ -33197,7 +33275,7 @@ function syncUserPublicFeedPlayingHighlights() {
     ".discoverFeedSongRowPlay, [data-discovery-inline-play], [data-user-lib-play]";
 
   const resetDiscoveryHost = (host) => {
-    host.classList.remove("discoveryRowPlaying", "discoveryRowActive");
+    host.classList.remove("discoveryRowPlaying", "discoveryRowActive", "discoveryRowLoading");
     try {
       host.style.removeProperty("--cover-glow-rgb");
       host.style.removeProperty("--cover-prog-rgb");
@@ -33216,7 +33294,8 @@ function syncUserPublicFeedPlayingHighlights() {
   }
 
   const curRef = String(currentPlayerTrackRef?.url || "").trim();
-  if (miniSource?.type !== "public_profile_lib" || !curRef) return;
+  const pendingUrl = _playbackPending?.type === "url" ? String(_playbackPending.url || "").trim() : "";
+  if ((miniSource?.type !== "public_profile_lib" && !_playbackPending) || (!curRef && !pendingUrl)) return;
 
   for (const root of roots) {
     if (root.hidden) continue;
@@ -33224,12 +33303,14 @@ function syncUserPublicFeedPlayingHighlights() {
       const playBtn = row.querySelector(PLAY_BTN_SELECTOR);
       if (!playBtn) return;
       const trackUrl = decodeDiscoveryUserLibUrl(playBtn) || decodeDiscoveryUserLibUrl(row);
-      const { active, audible } = getPublicProfileLibPlaybackUiForUrl(trackUrl);
-      if (!active) return;
+      const { active, audible, loading } = getPublicProfileLibPlaybackUiForUrl(trackUrl);
+      if (!active && !loading) return;
       row.classList.toggle("discoveryRowPlaying", audible);
-      row.classList.toggle("discoveryRowActive", active && !audible);
+      row.classList.toggle("discoveryRowLoading", Boolean(loading));
+      row.classList.toggle("discoveryRowActive", active && !audible && !loading);
       const name = decodeDiscoverDataAttr(playBtn, "data-user-lib-title") || "Song";
-      playBtn.setAttribute("aria-label", audible ? `Pause ${name}` : `Play ${name}`);
+      const label = audible ? `Pause ${name}` : loading ? `Loading ${name}` : `Play ${name}`;
+      playBtn.setAttribute("aria-label", label);
       const artHint =
         String(decodeDiscoverDataAttr(playBtn, "data-user-lib-art") || "").trim() ||
         String(row.querySelector?.(".discoverFeedSongArt img, .discoveryRowArt img, .followActMediaImg")?.getAttribute?.("src") || "").trim();
@@ -34069,15 +34150,19 @@ function setUserPlaylistQueue(playlistId, items) {
 
 function getUserPlaylistPlaybackUiForItem(item) {
   const u = String(item?.url || "").trim();
-  if (!u || miniSource?.type !== "user_playlist") return { active: false, audible: false };
+  if (!u) return { active: false, audible: false, loading: false };
+  if (playbackPendingMatchesUrl(u)) {
+    return { active: true, audible: false, loading: true };
+  }
+  if (!u || miniSource?.type !== "user_playlist") return { active: false, audible: false, loading: false };
   const cur = String(currentPlayerTrackRef?.url || "").trim();
-  if (!cur || !audioUrlsEquivalent(cur, u)) return { active: false, audible: false };
+  if (!cur || !audioUrlsEquivalent(cur, u)) return { active: false, audible: false, loading: false };
   const a = ensurePlayer();
-  if (!a) return { active: true, audible: false };
+  if (!a) return { active: true, audible: false, loading: false };
   const dur = getPlayerDuration();
   const ct = Number.isFinite(a.currentTime) ? a.currentTime : 0;
   const audible = Boolean(!a.paused && !a.ended && (dur > 0 || ct > 0));
-  return { active: true, audible };
+  return { active: true, audible, loading: false };
 }
 
 async function playUserPlaylistTrackAt(playlistId, index, opts = {}) {
@@ -34090,6 +34175,8 @@ async function playUserPlaylistTrackAt(playlistId, index, opts = {}) {
   if (!item?.url) return;
   primeGlobalPlayerInGesture();
   haptic("light");
+  setPlaybackPending({ type: "url", url: String(item.url || "").trim() });
+  try { syncAllPlaybackRowHighlights(); } catch {}
   await playLibraryUrlOnPlayer(item.url, item.title, item.artUrl, {
     userPlaylist: true,
     playlistId,
@@ -34139,19 +34226,20 @@ function syncUserPlaylistPlayingHighlights() {
   if ((document.body.getAttribute("data-route") || "") !== "profile") return;
   if (_profileSongsSegment !== "playlist") return;
   list.querySelectorAll(".libRow").forEach((row) => {
-    row.classList.remove("libRowPlaying", "libRowActive");
+    row.classList.remove("libRowPlaying", "libRowActive", "libRowLoading");
   });
-  if (miniSource?.type !== "user_playlist") return;
+  if (miniSource?.type !== "user_playlist" && !_playbackPending) return;
   const cur = String(currentPlayerTrackRef?.url || "").trim();
-  if (!cur) return;
+  if (!cur && !_playbackPending) return;
   list.querySelectorAll("[data-pl-row]").forEach((row) => {
     const urlEnc = row.getAttribute("data-pl-url") || "";
     let url = urlEnc;
     try { url = decodeURIComponent(urlEnc); } catch {}
-    const { active, audible } = getUserPlaylistPlaybackUiForItem({ url });
-    if (!active) return;
+    const { active, audible, loading } = getUserPlaylistPlaybackUiForItem({ url });
+    if (!active && !loading) return;
     row.classList.toggle("libRowPlaying", audible);
-    row.classList.toggle("libRowActive", active && !audible);
+    row.classList.toggle("libRowLoading", Boolean(loading));
+    row.classList.toggle("libRowActive", active && !audible && !loading);
   });
 }
 
@@ -34724,7 +34812,7 @@ function discoveryFeedCardHtml(t, profMap, idx) {
         <button type="button" class="discoverySpotCard discoveryFeedCard${richClass}" data-user-lib-play="1" data-user-lib-url="${encUrl}" data-user-lib-title="${encTitle}" data-user-lib-art="${encArt}" data-discovery-by="${encBy}" ${playData} aria-label="Play ${safeTitle}">
         <span class="discoverySpotCardArt"><img src="${escapeHtml(artSafe)}" alt="" loading="${imgLoad}"${imgPriority} decoding="async" /></span>
         <span class="discoverySpotCardShade" aria-hidden="true"></span>
-        <span class="discoverySpotCardArtBadge" aria-hidden="true">▶</span>
+        <span class="discoverySpotCardArtBadge" aria-hidden="true">${coverArtPlayStateIconsHtml(14)}</span>
         <span class="discoveryFeedCardTop">
           ${badge ? `<span class="discoveryFeedCardBadge">${badge}</span>` : ""}
         </span>
@@ -35300,6 +35388,8 @@ async function playLibraryUrlOnPlayer(rawUrl, title, artUrl, opts) {
   } catch {}
   let playableRaw = unwrapInnermostHttpAudioUrl(raw) || raw;
   const initialPlayableRaw = playableRaw;
+  setPlaybackPending({ type: "url", url: playableRaw });
+  try { syncAllPlaybackRowHighlights(); } catch {}
   const refreshCandidate = playSource?.taskId ? {
     taskId: playSource.taskId,
     audioId: playSource.audioId || "",
@@ -39576,6 +39666,8 @@ async function playHubPostFromProfile(postId, opts) {
   primeGlobalPlayerInGesture();
   const p = loadHubFeed().find((x) => String(x.id) === pid);
   if (!p?.url) return;
+  setPlaybackPending({ type: "profile_hub", postId: pid });
+  try { syncAllPlaybackRowHighlights(); } catch {}
   closeTrackOptionsSheet();
   try {
     stopHubPlayback();
@@ -39872,15 +39964,18 @@ function stopVocalsPlayback() {
 
 function getStudioVocalRowPlaybackUi(vocalId) {
   const idStr = String(vocalId || "");
+  if (playbackPendingMatchesStudioVocal(idStr)) {
+    return { active: true, audible: false, loading: true };
+  }
   if (miniSource?.type !== "studio_vocal" || String(miniSource.id || "") !== idStr) {
-    return { active: false, audible: false };
+    return { active: false, audible: false, loading: false };
   }
   const a = playerEl;
-  if (!a) return { active: true, audible: false };
+  if (!a) return { active: true, audible: false, loading: false };
   const dur = getPlayerDuration();
   const cur = Number.isFinite(a.currentTime) ? a.currentTime : 0;
   const audible = !a.paused && !a.ended && (dur > 0 || cur > 0);
-  return { active: true, audible };
+  return { active: true, audible, loading: false };
 }
 
 function syncMyVocalsRowsFromPlayer() {
@@ -39890,8 +39985,8 @@ function syncMyVocalsRowsFromPlayer() {
   if (!host) return;
   host.querySelectorAll(".libRow[data-vocal-row]").forEach((row) => {
     const id = row.getAttribute("data-vocal-row");
-    const { active, audible } = getStudioVocalRowPlaybackUi(id);
-    applyLibRowNowPlayingChrome(row, active, audible);
+    const { active, audible, loading } = getStudioVocalRowPlaybackUi(id);
+    applyLibRowNowPlayingChrome(row, active, audible, loading);
   });
 }
 
@@ -39928,8 +40023,9 @@ function renderMyVocals() {
   host.innerHTML = `
     <ul class="libraryRows" role="list">
       ${items.map((v) => {
-        const { active, audible } = getStudioVocalRowPlaybackUi(v.id);
+        const { active, audible, loading } = getStudioVocalRowPlaybackUi(v.id);
         const playing = audible;
+        const rowLoading = Boolean(loading);
         const art = escapeHtml(v.artUrl || placeholder);
         const safeTitle = escapeHtml(v.title || "Studio song");
         const subBits = [];
@@ -39938,8 +40034,8 @@ function renderMyVocals() {
         if (dateLabel) subBits.push(`<span class="libRowDot">${escapeHtml(dateLabel)}</span>`);
         subBits.push(`<span class="libRowChip">${v.published ? "Published" : "On this device"}</span>`);
         return `
-          <li class="libRow ${playing ? "libRowPlaying" : ""}${active && !audible ? " libRowActive" : ""}" data-vocal-row="${escapeHtml(v.id)}">
-            <button class="libRowMain" type="button" data-vocal-play="${escapeHtml(v.id)}" aria-label="${playing ? "Pause" : "Play"} ${safeTitle}">
+          <li class="libRow ${playing ? "libRowPlaying" : ""}${active && !audible && !rowLoading ? " libRowActive" : ""}${rowLoading ? " libRowLoading" : ""}" data-vocal-row="${escapeHtml(v.id)}">
+            <button class="libRowMain" type="button" data-vocal-play="${escapeHtml(v.id)}" aria-label="${playing ? "Pause" : rowLoading ? "Loading" : "Play"} ${safeTitle}">
               <span class="libRowArt">
                 <img src="${art}" alt="" width="56" height="56" decoding="async" loading="lazy" />
                 ${typeof coverArtPlaybackOverlayHtml === "function" ? coverArtPlaybackOverlayHtml() : ""}
@@ -39988,6 +40084,8 @@ async function playVocalById(id, opts = {}) {
       return;
     }
     primeGlobalPlayerInGesture();
+    setPlaybackPending({ type: "studio_vocal", id: vocalId });
+    try { syncAllPlaybackRowHighlights(); } catch {}
     _vocalsBlobUrl = URL.createObjectURL(blob);
     _vocalsPlayingId = vocalId;
 
@@ -40017,6 +40115,7 @@ async function playVocalById(id, opts = {}) {
     }
     renderMyVocals();
   } catch {
+    clearPlaybackPending();
     showToast("Couldn’t play that here.");
     stopVocalsPlayback();
     renderMyVocals();
@@ -42663,39 +42762,51 @@ function getLibraryHydratingSkeletonHtml() {
  *  "now playing" treatment should run while audio is actually playing. */
 function getLibraryRowPlaybackUiForTrack(trackId) {
   const idStr = String(trackId || "");
+  if (playbackPendingMatchesLibrary(idStr)) {
+    return { active: true, audible: false, loading: true };
+  }
   if (miniSource?.type !== "library" || String(miniSource.id || "") !== idStr) {
-    return { active: false, audible: false };
+    return { active: false, audible: false, loading: false };
   }
   const a = playerEl;
-  if (!a) return { active: true, audible: false };
+  if (!a) return { active: true, audible: false, loading: false };
   const dur = getPlayerDuration();
   const cur = Number.isFinite(a.currentTime) ? a.currentTime : 0;
   const audible = !a.paused && !a.ended && (dur > 0 || cur > 0);
-  return { active: true, audible };
+  return { active: true, audible, loading: false };
 }
 
 /** Profile → Hub release row matches `miniSource.type === "profile_hub"`. */
 function getProfileHubRowPlaybackUi(postId) {
   const sid = String(postId || "");
+  if (playbackPendingMatchesProfileHub(sid)) {
+    return { active: true, audible: false, loading: true };
+  }
   if (miniSource?.type !== "profile_hub" || String(miniSource.postId || "") !== sid) {
-    return { active: false, audible: false };
+    return { active: false, audible: false, loading: false };
   }
   const a = playerEl;
-  if (!a) return { active: true, audible: false };
+  if (!a) return { active: true, audible: false, loading: false };
   const dur = getPlayerDuration();
   const cur = Number.isFinite(a.currentTime) ? a.currentTime : 0;
   const audible = !a.paused && !a.ended && (dur > 0 || cur > 0);
-  return { active: true, audible };
+  return { active: true, audible, loading: false };
 }
 
-function applyLibRowNowPlayingChrome(row, active, audible) {
+function applyLibRowNowPlayingChrome(row, active, audible, loading = false) {
   const wantPlaying = Boolean(audible);
-  const wantActive = Boolean(active && !audible);
-  if (row.classList.contains("libRowPlaying") === wantPlaying && row.classList.contains("libRowActive") === wantActive) {
+  const wantLoading = Boolean(loading);
+  const wantActive = Boolean(active && !audible && !loading);
+  if (
+    row.classList.contains("libRowPlaying") === wantPlaying
+    && row.classList.contains("libRowActive") === wantActive
+    && row.classList.contains("libRowLoading") === wantLoading
+  ) {
     return;
   }
   row.classList.toggle("libRowPlaying", wantPlaying);
   row.classList.toggle("libRowActive", wantActive);
+  row.classList.toggle("libRowLoading", wantLoading);
   if (audible || active) {
     const img = row.querySelector(".libRowArt img");
     applyCoverGlowRgb(row, img?.getAttribute?.("src") || "");
@@ -42713,7 +42824,7 @@ function applyLibRowNowPlayingChrome(row, active, audible) {
   const titleEl = row.querySelector(".libRowTitle");
   const name = titleEl ? String(titleEl.textContent || "").trim() || "song" : "song";
   if (mainBtn) {
-    mainBtn.setAttribute("aria-label", audible ? `Pause ${name}` : `Play ${name}`);
+    mainBtn.setAttribute("aria-label", audible ? `Pause ${name}` : loading ? `Loading ${name}` : `Play ${name}`);
   }
 }
 
@@ -42724,8 +42835,8 @@ function syncLibraryRowsFromPlayer() {
   if (!rows.length) return;
   rows.forEach((row) => {
     const id = row.getAttribute("data-lib-row");
-    const { active, audible } = getLibraryRowPlaybackUiForTrack(id);
-    applyLibRowNowPlayingChrome(row, active, audible);
+    const { active, audible, loading } = getLibraryRowPlaybackUiForTrack(id);
+    applyLibRowNowPlayingChrome(row, active, audible, loading);
   });
 }
 
@@ -42735,13 +42846,13 @@ function syncProfileHubSharedRowsFromPlayer() {
   if (route !== "profile" || !els.profileHubSharedList) return;
   els.profileHubSharedList.querySelectorAll(".libRow[data-profile-lib-row]").forEach((row) => {
     const id = row.getAttribute("data-profile-lib-row");
-    const { active, audible } = getLibraryRowPlaybackUiForTrack(id);
-    applyLibRowNowPlayingChrome(row, active, audible);
+    const { active, audible, loading } = getLibraryRowPlaybackUiForTrack(id);
+    applyLibRowNowPlayingChrome(row, active, audible, loading);
   });
   els.profileHubSharedList.querySelectorAll(".libRow[data-profile-hub-row]").forEach((row) => {
     const sid = row.getAttribute("data-profile-hub-row");
-    const { active, audible } = getProfileHubRowPlaybackUi(sid);
-    applyLibRowNowPlayingChrome(row, active, audible);
+    const { active, audible, loading } = getProfileHubRowPlaybackUi(sid);
+    applyLibRowNowPlayingChrome(row, active, audible, loading);
   });
 }
 
@@ -42911,7 +43022,7 @@ function renderLibrary() {
           t.artUrl ||
           DEFAULT_SONG_COVER_URL
         );
-        const { active: libActive, audible: libAudible } = getLibraryRowPlaybackUiForTrack(t.id);
+        const { active: libActive, audible: libAudible, loading: libLoading } = getLibraryRowPlaybackUiForTrack(t.id);
         const dateLabel = formatLibraryDate(t.ts);
         const isInstrumental = t.kind === "instrumental";
         const isSound = t.kind === "sound";
@@ -42932,8 +43043,8 @@ function renderLibrary() {
           : `loading="lazy" fetchpriority="low"`;
         const isSelected = _librarySelectMode && _librarySelectedIds.has(String(t.id));
         return `
-          <li class="libRow ${libAudible ? "libRowPlaying" : ""}${libActive && !libAudible ? " libRowActive" : ""}${isSelected ? " libRowSelected" : ""}" data-lib-row="${t.id}">
-            <button class="libRowMain" type="button" data-lib-play="${t.id}" aria-label="${_librarySelectMode ? `Select ${safeTitle}` : `${libAudible ? "Pause" : "Play"} ${safeTitle}`}">
+          <li class="libRow ${libAudible ? "libRowPlaying" : ""}${libActive && !libAudible && !libLoading ? " libRowActive" : ""}${libLoading ? " libRowLoading" : ""}${isSelected ? " libRowSelected" : ""}" data-lib-row="${t.id}">
+            <button class="libRowMain" type="button" data-lib-play="${t.id}" aria-label="${_librarySelectMode ? `Select ${safeTitle}` : `${libAudible ? "Pause" : libLoading ? "Loading" : "Play"} ${safeTitle}`}">
               ${_librarySelectMode ? `<span class="libRowCheck" aria-hidden="true"></span>` : ""}
               <span class="libRowArt">
                 <img src="${escapeHtml(art)}" alt="" width="56" height="56" decoding="async" ${loadingAttr} />
@@ -46058,16 +46169,20 @@ async function playInline(url, label, source) {
   const playUrl = normalizeAudioUrlForPlayback(url);
   void primeAudioDurationHint(playUrl);
   try {
-    syncDiscoveryPlayingHighlights();
+    syncAllPlaybackRowHighlights();
     renderHubNowPlaying();
   } catch {}
   // Kick play immediately while the tap gesture may still be valid on iOS.
   void hubAudioPlayWithRetry(a).then((ok) => {
-    if (!ok) return;
+    if (!ok) {
+      clearPlaybackPending();
+      try { syncAllPlaybackRowHighlights(); } catch {}
+      return;
+    }
     if (els.btnPlayerPlay) els.btnPlayerPlay.disabled = true;
     if (els.btnPlayerPause) els.btnPlayerPause.disabled = false;
     try {
-      syncDiscoveryPlayingHighlights();
+      syncAllPlaybackRowHighlights();
       renderHubNowPlaying();
     } catch {}
   });
@@ -46080,6 +46195,7 @@ async function playInline(url, label, source) {
     if (els.btnPlayerPlay) els.btnPlayerPlay.disabled = true;
     if (els.btnPlayerPause) els.btnPlayerPause.disabled = false;
   } catch (e) {
+    clearPlaybackPending();
     setStatus(`In-app playback failed (${e?.name || "error"}). Tap Open Direct.`);
     // Don't fail silently on inline taps — the usual cause is an expired link.
     try {
@@ -46090,7 +46206,7 @@ async function playInline(url, label, source) {
     } catch {}
   }
   try {
-    syncDiscoveryPlayingHighlights();
+    syncAllPlaybackRowHighlights();
     renderHubNowPlaying();
   } catch {}
 }
@@ -46221,6 +46337,7 @@ function syncPlayerUI() {
   const cur = Number.isFinite(playerEl.currentTime) ? playerEl.currentTime : 0;
   const artWrap = document.querySelector(".playerArtWrap");
   const playing = !playerEl.paused && !playerEl.ended && (dur > 0 || cur > 0);
+  if (playing && _playbackPending) clearPlaybackPending();
   if (artWrap) artWrap.classList.toggle("isNowPlaying", playing);
   // Player card class for global focus styling (gradient title etc.)
   const playerCard = document.querySelector(".playerCard");
@@ -46239,22 +46356,7 @@ function syncPlayerUI() {
   renderHubNowPlaying();
   syncResultCardsFromPlayer();
   try {
-    syncDiscoveryPlayingHighlights();
-  } catch {}
-  try {
-    syncUserPublicFeedPlayingHighlights();
-  } catch {}
-  try {
-    syncLibraryRowsFromPlayer();
-  } catch {}
-  try {
-    syncMyVocalsRowsFromPlayer();
-  } catch {}
-  try {
-    syncProfileHubSharedRowsFromPlayer();
-  } catch {}
-  try {
-    syncUserPlaylistPlayingHighlights();
+    syncAllPlaybackRowHighlights();
   } catch {}
   syncLockScreenNowPlaying();
   try { renderDeskRailNowPlaying(); } catch {}

@@ -4640,6 +4640,9 @@ input.userTextBidi--rtl{
   .hubCoverWrap.isLoading .hubPlayProgress{
     animation: none !important;
   }
+  .coverArtPlaySpinner{
+    animation: none !important;
+  }
 }
 
 /*
@@ -5782,6 +5785,9 @@ input.userTextBidi--rtl{
   flex: 0 0 auto;
   accent-color: #7c5cff;
 }
+.publishReleaseMeta[hidden]{
+  display: none !important;
+}
 .publishReleaseMeta{
   display: flex;
   flex-wrap: wrap;
@@ -5799,14 +5805,43 @@ input.userTextBidi--rtl{
 }
 .publishReleaseActions{
   display: flex;
-  justify-content: flex-end;
+  justify-content: center;
+  align-items: center;
   gap: 10px;
+  margin-top: 6px;
 }
 .publishReleaseBtn{
-  min-width: 104px;
+  flex: 1 1 0;
+  max-width: 168px;
+  min-width: 120px;
   border-radius: 999px;
-  padding: 11px 18px;
+  padding: 12px 20px;
+  font-size: 14px;
   font-weight: 850;
+  line-height: 1.1;
+  border: 1px solid rgba(255,255,255,0.10);
+  background: rgba(255,255,255,0.055);
+  color: rgba(238,244,255,0.92);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.06);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform 120ms ease, border-color 160ms ease, background 160ms ease;
+}
+.publishReleaseBtn--cancel:hover{
+  border-color: rgba(255,255,255,0.18);
+  background: rgba(255,255,255,0.08);
+}
+.publishReleaseBtn--publish{
+  border-color: rgba(35, 213, 171, 0.35);
+  background: var(--brand-cta-bg);
+  color: #051018;
+  box-shadow: var(--brand-cta-shadow);
+}
+.publishReleaseBtn--publish:hover{
+  background: var(--brand-cta-bg-hover);
+}
+.publishReleaseBtn:active{
+  transform: translateY(1px) scale(0.985);
 }
 @media (prefers-reduced-motion: reduce){
   .playerConfirm,
@@ -24715,8 +24750,10 @@ button.discoveryFeedCard.discoverySpotCard{
 }
 .discoveryFeedCard.discoveryRowPlaying .discoverySpotCardArtBadge,
 .discoveryFeedCard.discoveryRowActive .discoverySpotCardArtBadge,
+.discoveryFeedCard.discoveryRowLoading .discoverySpotCardArtBadge,
 .discoverySpotCard.discoveryRowPlaying .discoverySpotCardArtBadge,
-.discoverySpotCard.discoveryRowActive .discoverySpotCardArtBadge{
+.discoverySpotCard.discoveryRowActive .discoverySpotCardArtBadge,
+.discoverySpotCard.discoveryRowLoading .discoverySpotCardArtBadge{
   opacity: 1;
   z-index: 5;
 }
@@ -24834,8 +24871,37 @@ button.discoverySpotCard{
   border-color: rgba(255,255,255,0.48);
   box-shadow: 0 8px 26px rgba(var(--cover-glow-rgb), 0.22);
 }
-.discoverySpotCard.discoveryRowActive .discoverySpotCardArtBadge{
+.discoverySpotCard.discoveryRowActive .discoverySpotCardArtBadge,
+.discoverySpotCard.discoveryRowLoading .discoverySpotCardArtBadge{
   opacity: 1;
+}
+.discoveryFeedCard.discoveryRowLoading .discoverySpotCardArtBadge,
+.discoverySpotCard.discoveryRowLoading .discoverySpotCardArtBadge{
+  opacity: 1;
+  background: rgba(8,11,18,0.62);
+  border-color: rgba(255,255,255,0.34);
+}
+.discoverySpotCardArtBadge .coverArtPlayIco--pause,
+.discoverySpotCardArtBadge .coverArtPlayIco--loading{
+  display: none;
+}
+.discoverySpotCard.discoveryRowPlaying .discoverySpotCardArtBadge .coverArtPlayIco--play,
+.discoveryFeedCard.discoveryRowPlaying .discoverySpotCardArtBadge .coverArtPlayIco--play{
+  display: none;
+}
+.discoverySpotCard.discoveryRowPlaying .discoverySpotCardArtBadge .coverArtPlayIco--pause,
+.discoveryFeedCard.discoveryRowPlaying .discoverySpotCardArtBadge .coverArtPlayIco--pause{
+  display: flex;
+}
+.discoverySpotCard.discoveryRowLoading .discoverySpotCardArtBadge .coverArtPlayIco--play,
+.discoverySpotCard.discoveryRowLoading .discoverySpotCardArtBadge .coverArtPlayIco--pause,
+.discoveryFeedCard.discoveryRowLoading .discoverySpotCardArtBadge .coverArtPlayIco--play,
+.discoveryFeedCard.discoveryRowLoading .discoverySpotCardArtBadge .coverArtPlayIco--pause{
+  display: none !important;
+}
+.discoverySpotCard.discoveryRowLoading .discoverySpotCardArtBadge .coverArtPlayIco--loading,
+.discoveryFeedCard.discoveryRowLoading .discoverySpotCardArtBadge .coverArtPlayIco--loading{
+  display: flex !important;
 }
 .discoverySpotCardText{
   position: absolute;
@@ -26777,7 +26843,8 @@ body.createChooserSheetOpen .footer{
 }
 .followAct:hover .followActCoverPlay,
 .followAct.discoveryRowPlaying .followActCoverPlay,
-.followAct.discoveryRowActive .followActCoverPlay{
+.followAct.discoveryRowActive .followActCoverPlay,
+.followAct.discoveryRowLoading .followActCoverPlay{
   opacity: 1;
 }
 .followAct--skel{
@@ -27189,6 +27256,9 @@ body.createChooserSheetOpen .footer{
   box-shadow: 0 6px 18px rgba(var(--cover-glow-rgb), 0.22);
 }
 .discoveryRow.discoveryRowActive .discoveryRowArtBadge{
+  opacity: 1;
+}
+.discoveryRow.discoveryRowLoading .discoveryRowArtBadge{
   opacity: 1;
 }
 .discoveryRowEq{
@@ -32354,8 +32424,12 @@ body.messagesThreadKeyboardOpen[data-route="messages-thread"] .messagesThreadPag
   align-self: center;
 }
 .messagesDmSongCard.discoveryRowPlaying .coverArtPlayIco--play,
-.messagesDmSongCard:not(.discoveryRowPlaying) .coverArtPlayIco--pause{
+.messagesDmSongCard.discoveryRowLoading .coverArtPlayIco--play,
+.messagesDmSongCard:not(.discoveryRowPlaying):not(.discoveryRowLoading) .coverArtPlayIco--pause{
   opacity: 0;
+}
+.messagesDmSongCard.discoveryRowLoading .coverArtPlayIco--loading{
+  opacity: 1;
 }
 /* The shared equalizer base is display:none, so opacity alone never reveals it.
    Show the bars on the chat card while the song is playing/active. */
@@ -35073,6 +35147,7 @@ section.mentorPage{
   }
   .discoverySpotCard.discoveryRowPlaying .discoverySpotCardArtBadge,
   .discoverySpotCard.discoveryRowActive .discoverySpotCardArtBadge,
+  .discoverySpotCard.discoveryRowLoading .discoverySpotCardArtBadge,
   .discoverySpotCard:focus-visible .discoverySpotCardArtBadge{
     opacity: 1;
   }
@@ -35707,12 +35782,17 @@ section.mentorPage{
   display: none;
 }
 .followAct.discoveryRowPlaying .feedHeroPlayerCenterPlay .coverArtPlayIco--play,
-.followAct.discoveryRowActive .feedHeroPlayerCenterPlay .coverArtPlayIco--play{
+.followAct.discoveryRowLoading .feedHeroPlayerCenterPlay .coverArtPlayIco--play{
   display: none;
 }
-.followAct.discoveryRowPlaying .feedHeroPlayerCenterPlay .coverArtPlayIco--pause,
-.followAct.discoveryRowActive .feedHeroPlayerCenterPlay .coverArtPlayIco--pause{
+.followAct.discoveryRowPlaying .feedHeroPlayerCenterPlay .coverArtPlayIco--pause{
   display: flex;
+}
+.followAct.discoveryRowLoading .feedHeroPlayerCenterPlay .coverArtPlayIco--loading{
+  display: flex;
+}
+.feedHeroPlayerCenterPlay .coverArtPlayIco--loading{
+  display: none;
 }
 .feedHeroPlayerChrome{
   position: absolute;
@@ -39335,6 +39415,129 @@ body[data-route="generate"] .aiGenerate{
 .hubCoverWrap.isPlaying .coverArtPlayIco--pause{
   display: flex;
 }
+.coverArtPlayIco--loading{
+  display: none;
+}
+.coverArtPlaySpinner{
+  width: 18px;
+  height: 18px;
+  border: 2px solid rgba(255,255,255,0.28);
+  border-top-color: rgba(255,255,255,0.95);
+  border-radius: 50%;
+  animation: coverArtPlaySpin 0.75s linear infinite;
+}
+@keyframes coverArtPlaySpin{
+  to { transform: rotate(360deg); }
+}
+.libRowLoading .coverArtPlayIco--play,
+.libRowLoading .coverArtPlayIco--pause,
+.discoveryRowLoading .coverArtPlayIco--play,
+.discoveryRowLoading .coverArtPlayIco--pause,
+.followAct.discoveryRowLoading .coverArtPlayIco--play,
+.followAct.discoveryRowLoading .coverArtPlayIco--pause,
+.discoverFeedSongRow.discoveryRowLoading .coverArtPlayIco--play,
+.discoverFeedSongRow.discoveryRowLoading .coverArtPlayIco--pause,
+.hubCoverWrap.isLoading .coverArtPlayIco--play,
+.hubCoverWrap.isLoading .coverArtPlayIco--pause{
+  display: none !important;
+}
+.libRowLoading .coverArtPlayIco--loading,
+.discoveryRowLoading .coverArtPlayIco--loading,
+.followAct.discoveryRowLoading .coverArtPlayIco--loading,
+.discoverFeedSongRow.discoveryRowLoading .coverArtPlayIco--loading,
+.hubCoverWrap.isLoading .coverArtPlayIco--loading{
+  display: flex;
+}
+.libRowLoading .discoverCoverPlay,
+.discoveryRowLoading .discoverCoverPlay,
+.followAct.discoveryRowLoading .discoverCoverPlay,
+.followAct.discoveryRowLoading .followActMedia .discoverCoverPlay,
+.discoverFeedSongRow.discoveryRowLoading .discoverCoverPlay,
+.hubCoverWrap.isLoading .discoverCoverPlay{
+  opacity: 1;
+  background: rgba(0,0,0,0.34);
+}
+.libRowLoading{
+  background: rgba(var(--cover-glow-rgb, 124, 92, 255), 0.04);
+}
+.discoveryRowLoading,
+.followAct.discoveryRowLoading,
+.discoverFeedSongRow.discoveryRowLoading,
+.chartWeekWinnerTap.discoveryRowLoading,
+.chartWeekRunnerTap.discoveryRowLoading,
+.chartWeekLeaderRow.discoveryRowLoading,
+.discoverFeedTemplateCard.discoveryRowLoading,
+.discoverHubPickCardPlay.discoveryRowLoading,
+.discoverFeedChallengeMini.discoveryRowLoading,
+.discoverChallengeSpotCard.discoveryRowLoading{
+  background: rgba(var(--cover-glow-rgb, 124, 92, 255), 0.04);
+}
+.chartWeekWinnerArt .discoverCoverPlay,
+.chartWeekRunnerArt .discoverCoverPlay,
+.discoverFeedTemplateCover .discoverCoverPlay,
+.discoverHubPickCover .discoverCoverPlay{
+  opacity: 0;
+}
+.chartWeekWinnerTap.discoveryRowLoading .chartWeekWinnerArt .discoverCoverPlay,
+.chartWeekWinnerTap.discoveryRowPlaying .chartWeekWinnerArt .discoverCoverPlay,
+.chartWeekWinnerTap.discoveryRowActive .chartWeekWinnerArt .discoverCoverPlay,
+.chartWeekRunnerTap.discoveryRowLoading .chartWeekRunnerArt .discoverCoverPlay,
+.chartWeekRunnerTap.discoveryRowPlaying .chartWeekRunnerArt .discoverCoverPlay,
+.chartWeekRunnerTap.discoveryRowActive .chartWeekRunnerArt .discoverCoverPlay,
+.discoverFeedTemplateCard.discoveryRowLoading .discoverFeedTemplateCover .discoverCoverPlay,
+.discoverFeedTemplateCard.discoveryRowPlaying .discoverFeedTemplateCover .discoverCoverPlay,
+.discoverFeedTemplateCard.discoveryRowActive .discoverFeedTemplateCover .discoverCoverPlay,
+.discoverHubPickCardPlay.discoveryRowLoading .discoverHubPickCover .discoverCoverPlay,
+.discoverHubPickCardPlay.discoveryRowPlaying .discoverHubPickCover .discoverCoverPlay,
+.discoverHubPickCardPlay.discoveryRowActive .discoverHubPickCover .discoverCoverPlay{
+  opacity: 1;
+  background: rgba(0,0,0,0.34);
+}
+.discoverListPlayBtn .coverArtPlayIco--pause,
+.discoverListPlayBtn .coverArtPlayIco--loading{
+  display: none;
+}
+.discoveryRowLoading .discoverListPlayBtn .coverArtPlayIco--play,
+.chartWeekLeaderRow.discoveryRowLoading .discoverListPlayBtn .coverArtPlayIco--play,
+.deskRailTrendRow.discoveryRowLoading .discoverListPlayBtn .coverArtPlayIco--play{
+  display: none !important;
+}
+.discoveryRowLoading .discoverListPlayBtn .coverArtPlayIco--loading,
+.chartWeekLeaderRow.discoveryRowLoading .discoverListPlayBtn .coverArtPlayIco--loading,
+.deskRailTrendRow.discoveryRowLoading .discoverListPlayBtn .coverArtPlayIco--loading{
+  display: flex !important;
+}
+.discoveryRowPlaying .discoverListPlayBtn .coverArtPlayIco--play,
+.chartWeekLeaderRow.discoveryRowPlaying .discoverListPlayBtn .coverArtPlayIco--play,
+.deskRailTrendRow.discoveryRowPlaying .discoverListPlayBtn .coverArtPlayIco--play{
+  display: none !important;
+}
+.discoveryRowPlaying .discoverListPlayBtn .coverArtPlayIco--pause,
+.chartWeekLeaderRow.discoveryRowPlaying .discoverListPlayBtn .coverArtPlayIco--pause,
+.deskRailTrendRow.discoveryRowPlaying .discoverListPlayBtn .coverArtPlayIco--pause{
+  display: flex !important;
+}
+.discoveryRowLoading .discoverListPlayBtn,
+.chartWeekLeaderRow.discoveryRowLoading .discoverListPlayBtn,
+.deskRailTrendRow.discoveryRowLoading .discoverListPlayBtn{
+  opacity: 1;
+}
+.discoverFeedChallengeMiniPlay .coverArtPlayIco--pause,
+.discoverFeedChallengeMiniPlay .coverArtPlayIco--loading{
+  display: none;
+}
+.discoverFeedChallengeMini.discoveryRowLoading .discoverFeedChallengeMiniPlay .coverArtPlayIco--play{
+  display: none !important;
+}
+.discoverFeedChallengeMini.discoveryRowLoading .discoverFeedChallengeMiniPlay .coverArtPlayIco--loading{
+  display: flex !important;
+}
+.discoverFeedChallengeMini.discoveryRowPlaying .discoverFeedChallengeMiniPlay .coverArtPlayIco--play{
+  display: none !important;
+}
+.discoverFeedChallengeMini.discoveryRowPlaying .discoverFeedChallengeMiniPlay .coverArtPlayIco--pause{
+  display: flex !important;
+}
 .coverArtEq{
   position: absolute;
   top: 6px;
@@ -39447,6 +39650,17 @@ body[data-route="generate"] .aiGenerate{
 }
 .discoverFeedSongRow:has(.discoverFeedSongRowPlay:active){
   background: rgba(255,255,255,0.03);
+}
+.discoverFeedSongArt .discoverCoverPlay{
+  opacity: 0;
+}
+.discoverFeedSongRow:hover .discoverFeedSongArt .discoverCoverPlay,
+.discoverFeedSongRow.discoveryRowPlaying .discoverFeedSongArt .discoverCoverPlay,
+.discoverFeedSongRow.discoveryRowActive .discoverFeedSongArt .discoverCoverPlay,
+.discoverFeedSongRow.discoveryRowLoading .discoverFeedSongArt .discoverCoverPlay,
+.discoverFeedSongRowPlay:active .discoverFeedSongArt .discoverCoverPlay{
+  opacity: 1;
+  background: rgba(0,0,0,0.34);
 }
 .discoverFeedSongRowPlay{
   display: grid;
@@ -42856,6 +43070,31 @@ body[data-route="friends"] .followAct--xstyle > .followActQuoteRow:has(.feedHero
 }
 :is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle .followActMediaPlayBtn .coverArtPlayIco--play{
   margin-left: 3px;
+}
+:is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle .followActMediaPlayBtn .coverArtPlayIco--pause,
+:is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle .followActMediaPlayBtn .coverArtPlayIco--loading{
+  display: none;
+}
+:is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle.discoveryRowPlaying .followActMediaPlayBtn .coverArtPlayIco--play{
+  display: none;
+}
+:is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle.discoveryRowPlaying .followActMediaPlayBtn .coverArtPlayIco--pause{
+  display: flex;
+}
+:is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle.discoveryRowLoading .followActMediaPlayBtn .coverArtPlayIco--play,
+:is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle.discoveryRowLoading .followActMediaPlayBtn .coverArtPlayIco--pause{
+  display: none !important;
+}
+:is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle.discoveryRowLoading .followActMediaPlayBtn .coverArtPlayIco--loading{
+  display: flex !important;
+}
+:is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle.discoveryRowLoading .followActMediaPlayBtn .coverArtPlaySpinner{
+  width: 22px;
+  height: 22px;
+  border-width: 2.5px;
+}
+:is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle.discoveryRowLoading .followActMediaPlayBtn{
+  opacity: 1;
 }
 :is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle .followActMedia:active .followActMediaPlayBtn{
   transform: translate(-50%, -50%) scale(.92);

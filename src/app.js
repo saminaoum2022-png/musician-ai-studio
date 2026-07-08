@@ -119,12 +119,9 @@ import {
 } from "./priority-pending.js";
 import {
   buildGenerationFailedActivity,
-  buildJobReadyActivity,
   loadPersistedGenerationFailedActivities,
-  loadPersistedJobReadyActivities,
   maybeNotifyJobReadyPush,
   persistGenerationFailedActivity,
-  persistJobReadyActivity,
 } from "./job-ready-activity.js";
 import {
   applyCoachOrbModeToBody,
@@ -186,7 +183,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260709-005255";
+const APP_BUILD = "20260709-011117";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -16399,48 +16396,12 @@ function pushLocalGenerationReadyActivity(entries, { taskId = "" } = {}) {
   const list = (Array.isArray(entries) ? entries : []).filter((e) => e && String(e.id || "").trim());
   if (!list.length) return;
   const titles = list.map((e) => String(e.title || "Generated song").trim());
-  const trackIds = list.map((e) => String(e.id || "").trim());
-  const artUrls = list.map((e) =>
-    String(e.meta?.imageThumb || e.meta?.imageUrl || e.artUrl || "").trim(),
-  );
   const variantCount = list.length;
-  const id = `local-gen-${trackIds.join("-")}-${Date.now()}`;
-  const n = {
-    id,
-    type: "generation_ready",
-    created_at: new Date().toISOString(),
-    read_at: null,
-    local: true,
-    metadata: {
-      song_title: titles[0] || "Your song",
-      song_titles: titles,
-      track_ids: trackIds,
-      song_id: trackIds[0] || "",
-      variant_count: variantCount,
-      art_url: artUrls[0] || "",
-      art_urls: artUrls,
-    },
-  };
-  const seen = new Set(_activityFeedState.items.map((item) => String(item?.id || "")));
-  if (seen.has(id)) return;
-  _activityFeedState.items.unshift(n);
-  try {
-    persistGenerationReadyActivity(n);
-  } catch {}
-  try {
-    renderActivityFeedFromState();
-  } catch {}
-  const unread = _activityFeedState.items.filter((item) => !item?.read_at).length;
-  try {
-    updateNotificationsEntryBadges(unread);
-  } catch {}
-  if (els.activityLead) {
-    els.activityLead.textContent = unread
-      ? `${unread} unread ${unread === 1 ? "update" : "updates"} from your music circle.`
-      : "Fans, likes, comments, milestones, and remixes.";
-  }
   try {
     finishCoachGenerationReady({ variantCount });
+  } catch {}
+  try {
+    markLibraryTabDot(true);
   } catch {}
   void maybeNotifyJobReadyPush({
     kind: "song",
@@ -16660,29 +16621,6 @@ function pushLocalGenerationFailedActivity({
   _activityFeedState.items.unshift(n);
   try {
     persistGenerationFailedActivity(n);
-  } catch {}
-  try {
-    renderActivityFeedFromState();
-  } catch {}
-  const unread = _activityFeedState.items.filter((item) => !item?.read_at).length;
-  try {
-    updateNotificationsEntryBadges(unread);
-  } catch {}
-  if (els.activityLead) {
-    els.activityLead.textContent = unread
-      ? `${unread} unread ${unread === 1 ? "update" : "updates"} from your music circle.`
-      : "Fans, likes, comments, milestones, and remixes.";
-  }
-}
-
-function pushLocalJobReadyActivity({ type, title, metadata = {} } = {}) {
-  const n = buildJobReadyActivity({ type, title, metadata });
-  if (!n) return;
-  const seen = new Set(_activityFeedState.items.map((item) => String(item?.id || "")));
-  if (seen.has(n.id)) return;
-  _activityFeedState.items.unshift(n);
-  try {
-    persistJobReadyActivity(n);
   } catch {}
   try {
     renderActivityFeedFromState();
@@ -22293,10 +22231,6 @@ function startSoundGenerationPolling(meta) {
           setStatus("Sound saved to Library.");
           finishCoachPriorityStatus("Sound ready ✓");
           clearPriorityPending(soundTaskId);
-          pushLocalJobReadyActivity({
-            type: "sound_ready",
-            title: finalTitle,
-          });
           void maybeNotifyJobReadyPush({ kind: "sound", title: finalTitle, taskId: soundTaskId });
           if (els.btnSoundGenerate) els.btnSoundGenerate.disabled = false;
           markLibraryTabDot(true);
@@ -29100,74 +29034,33 @@ function renderNotificationRows(list) {
 const ACTIVITY_FEED_SNAPSHOT_MS = 120000;
 const ACTIVITY_FEED_SNAPSHOT_KEY = "nabad_activity_feed_snap_v3";
 const GENERATION_READY_ACTIVITY_KEY = "nabad_generation_ready_activity_v1";
-const GENERATION_READY_ACTIVITY_MAX = 48;
+const JOB_READY_ACTIVITY_KEY = "nabad_job_ready_activity_v1";
+const LOCAL_JOB_COMPLETION_ACTIVITY_TYPES = new Set([
+  "generation_ready",
+  "sound_ready",
+  "music_video_ready",
+  "instrumental_ready",
+]);
 
-function generationReadyTrackKey(meta) {
-  const ids = (Array.isArray(meta?.track_ids) ? meta.track_ids : [])
-    .map((id) => String(id || "").trim())
-    .filter(Boolean)
-    .sort();
-  return ids.join("|") || String(meta?.song_id || "").trim();
+function isLocalJobCompletionActivity(n) {
+  return LOCAL_JOB_COMPLETION_ACTIVITY_TYPES.has(String(n?.type || "").trim());
 }
 
-function loadPersistedGenerationReadyActivities() {
+function clearPersistedLocalJobCompletionActivities() {
   try {
-    const raw = localStorage.getItem(GENERATION_READY_ACTIVITY_KEY);
-    const list = JSON.parse(raw);
-    return Array.isArray(list) ? list.filter((n) => String(n?.type || "") === "generation_ready") : [];
-  } catch {
-    return [];
-  }
-}
-
-function savePersistedGenerationReadyActivities(list) {
+    localStorage.removeItem(GENERATION_READY_ACTIVITY_KEY);
+  } catch {}
   try {
-    localStorage.setItem(
-      GENERATION_READY_ACTIVITY_KEY,
-      JSON.stringify(list.slice(0, GENERATION_READY_ACTIVITY_MAX)),
-    );
+    localStorage.removeItem(JOB_READY_ACTIVITY_KEY);
   } catch {}
 }
 
-function persistGenerationReadyActivity(n) {
-  if (!n || String(n.type || "") !== "generation_ready") return;
-  const key = generationReadyTrackKey(n.metadata);
-  let list = loadPersistedGenerationReadyActivities();
-  if (key) {
-    list = list.filter((item) => generationReadyTrackKey(item?.metadata) !== key);
-  }
-  list.unshift({ ...n, local: true, pinned: true });
-  savePersistedGenerationReadyActivities(list);
-}
-
-function mergePersistedGenerationReadyActivities() {
-  const persisted = loadPersistedGenerationReadyActivities();
-  if (!persisted.length) return false;
-  const seenIds = new Set(_activityFeedState.items.map((i) => String(i?.id || "")));
-  const seenTracks = new Set();
-  for (const item of _activityFeedState.items) {
-    if (String(item?.type || "") === "generation_ready") {
-      const k = generationReadyTrackKey(item?.metadata);
-      if (k) seenTracks.add(k);
-    }
-  }
-  let added = false;
-  for (const n of persisted) {
-    const id = String(n?.id || "");
-    if (id && seenIds.has(id)) continue;
-    const k = generationReadyTrackKey(n?.metadata);
-    if (k && seenTracks.has(k)) continue;
-    _activityFeedState.items.push(n);
-    if (k) seenTracks.add(k);
-    if (id) seenIds.add(id);
-    added = true;
-  }
-  if (added) {
-    _activityFeedState.items.sort(
-      (a, b) => new Date(b?.created_at || 0).getTime() - new Date(a?.created_at || 0).getTime(),
-    );
-  }
-  return added;
+/** Drop legacy local job rows — Activity is social/milestones only. */
+function purgeLocalJobCompletionActivitiesInFeed() {
+  const before = (_activityFeedState.items || []).length;
+  _activityFeedState.items = (_activityFeedState.items || []).filter((n) => !isLocalJobCompletionActivity(n));
+  clearPersistedLocalJobCompletionActivities();
+  return before !== _activityFeedState.items.length;
 }
 
 function mergePersistedGenerationFailedActivities() {
@@ -29190,25 +29083,6 @@ function mergePersistedGenerationFailedActivities() {
   return added;
 }
 
-function mergePersistedJobReadyActivities() {
-  const persisted = loadPersistedJobReadyActivities();
-  if (!persisted.length) return false;
-  const seenIds = new Set(_activityFeedState.items.map((i) => String(i?.id || "")));
-  let added = false;
-  for (const n of persisted) {
-    const id = String(n?.id || "");
-    if (id && seenIds.has(id)) continue;
-    _activityFeedState.items.push(n);
-    if (id) seenIds.add(id);
-    added = true;
-  }
-  if (added) {
-    _activityFeedState.items.sort(
-      (a, b) => new Date(b?.created_at || 0).getTime() - new Date(a?.created_at || 0).getTime(),
-    );
-  }
-  return added;
-}
 let _activityFilterTab = (() => {
   try {
     const saved = String(sessionStorage.getItem(ACTIVITY_FILTER_TAB_KEY) || "").trim();
@@ -29278,9 +29152,10 @@ function activityDayLabel(bucket) {
 }
 
 function activityNotificationMatchesFilter(n, tab = _activityFilterTab) {
+  if (isLocalJobCompletionActivity(n)) return false;
   if (tab === "all") return true;
   const t = String(n?.type || "").trim();
-  if (tab === "achievements") return t === "chart_rank" || t === "play_milestone" || t === "song_live" || t === "generation_ready" || t === "generation_failed" || t === "sound_ready" || t === "music_video_ready" || t === "instrumental_ready";
+  if (tab === "achievements") return t === "chart_rank" || t === "play_milestone" || t === "song_live" || t === "generation_failed";
   if (tab === "social") {
     return ["follow", "remix", "social_like", "social_reply", "social_repost", "social_mention", "public_song", "song_feedback", "gift_received"].includes(t);
   }
@@ -29307,7 +29182,7 @@ function activityActorAvatarHtml(n, cls) {
 /** Milestone rows are about your songs — lead with cover art, not a blank silhouette. */
 function activityRowUsesSongLeadVisual(n) {
   const t = String(n?.type || "").trim();
-  return t === "chart_rank" || t === "play_milestone" || t === "song_live" || t === "generation_ready" || t === "generation_failed" || t === "sound_ready" || t === "music_video_ready" || t === "instrumental_ready";
+  return t === "chart_rank" || t === "play_milestone" || t === "song_live" || t === "generation_failed";
 }
 
 function activityNotificationShowRightCover(n) {
@@ -30160,9 +30035,8 @@ async function fetchActivityFeedFromTop() {
     batch.forEach((n) => cacheActivitySongArtFromNotification(n));
     if (batch.length) await enrichActivitySongArt(batch);
     if (batch.length) await validateActivityNotificationsAvailability(batch);
-    try { mergePersistedGenerationReadyActivities(); } catch {}
+    try { purgeLocalJobCompletionActivitiesInFeed(); } catch {}
     try { mergePersistedGenerationFailedActivities(); } catch {}
-    try { mergePersistedJobReadyActivities(); } catch {}
     renderActivityFeedFromState();
     const unread = _activityFeedState.items.filter((n) => !n?.read_at).length;
     if (els.activityLead) {
@@ -30212,9 +30086,8 @@ async function fetchActivityBatch() {
         if (batch.length < limit) _activityFeedState.hasMore = false;
       }
     }
-    try { mergePersistedGenerationReadyActivities(); } catch {}
+    try { purgeLocalJobCompletionActivitiesInFeed(); } catch {}
     try { mergePersistedGenerationFailedActivities(); } catch {}
-    try { mergePersistedJobReadyActivities(); } catch {}
     renderActivityFeedFromState();
     const unread = _activityFeedState.items.filter((n) => !n?.read_at).length;
     if (els.activityLead) {
@@ -30268,9 +30141,8 @@ async function enterActivityRoute({ reset = false, readOnly = false } = {}) {
     await fetchActivityBatch();
   }
   await refreshActivityFeedHead();
-  try { mergePersistedGenerationReadyActivities(); } catch {}
+  try { purgeLocalJobCompletionActivitiesInFeed(); } catch {}
   try { mergePersistedGenerationFailedActivities(); } catch {}
-  try { mergePersistedJobReadyActivities(); } catch {}
   renderActivityFeedFromState();
   const unread = _activityFeedState.items.filter((n) => !n?.read_at).length;
   if (unread && !readOnly) {
@@ -42117,10 +41989,6 @@ async function createSunoMusicVideoForTrack(track, { onStatus } = {}) {
     saveMusicVideoMetaForTrack(t, { taskId: videoTaskId, videoUrl, createdAt: Date.now() });
     finishCoachPriorityStatus("Music video ready ✓");
     clearPriorityPending(videoTaskId);
-    pushLocalJobReadyActivity({
-      type: "music_video_ready",
-      title,
-    });
     void maybeNotifyJobReadyPush({ kind: "music_video", title, taskId: videoTaskId });
     openMusicVideoViewer(videoUrl, t.title, { coverUrl });
   } catch (e) {
@@ -42332,10 +42200,6 @@ async function pollLibraryStemsUntilDone(taskId, kind, opts = {}) {
         }
         finishCoachPriorityStatus("Instrumental ready ✓");
         clearPriorityPending(taskId);
-        pushLocalJobReadyActivity({
-          type: "instrumental_ready",
-          title: titleBase,
-        });
         void maybeNotifyJobReadyPush({ kind: "instrumental", title: titleBase, taskId });
       }
       return;
@@ -48850,10 +48714,6 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
           }
           finishCoachPriorityStatus("Instrumental ready ✓");
           clearPriorityPending(sunoStemsTaskId);
-          pushLocalJobReadyActivity({
-            type: "instrumental_ready",
-            title: lastSunoTitle || "Generated song",
-          });
           void maybeNotifyJobReadyPush({
             kind: "instrumental",
             title: lastSunoTitle || "Generated song",
@@ -50756,10 +50616,6 @@ function resumePriorityJobsIfPending() {
         });
         finishCoachPriorityStatus("Music video ready ✓");
         clearPriorityPending(vid);
-        pushLocalJobReadyActivity({
-          type: "music_video_ready",
-          title: pending.title,
-        });
         void maybeNotifyJobReadyPush({
           kind: "music_video",
           title: pending.title,

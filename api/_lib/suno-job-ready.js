@@ -1,6 +1,6 @@
 /**
  * Verify Suno tasks are playable before sending generation push alerts.
- * Mirrors in-app polling: SUCCESS + audio (or video/stem URLs), not bare code 200.
+ * Mirrors in-app polling: SUCCESS + real clip audio (not task-accepted callbacks).
  */
 
 const { sunoJsonRequest } = require("./suno-upstream");
@@ -20,13 +20,24 @@ function pickClipAudio(first) {
   ).trim();
 }
 
-function parseGenerationRecordInfo(data) {
+function clipLooksPlayable(clip) {
+  const url = pickClipAudio(clip);
+  if (!url.startsWith("http")) return false;
+  const id = String(clip?.id || clip?.audioId || clip?.audio_id || "").trim();
+  const duration = Number(clip?.duration ?? clip?.duration_seconds ?? 0);
+  // Generated clips have stable ids and non-trivial duration; reject task-accept noise.
+  return id.length >= 8 && Number.isFinite(duration) && duration > 1;
+}
+
+function parseGenerationRecordInfo(data, { variantCount = 1 } = {}) {
   const inner = data?.data && typeof data.data === "object" ? data.data : data || {};
   const status = String(inner.status || data?.status || "").toUpperCase();
   const successFlag = String(inner.successFlag || data?.successFlag || "").toUpperCase();
   const genData = inner.response?.sunoData || inner.response?.suno_data || [];
   const arr = Array.isArray(genData) ? genData : [];
-  const hasAudio = arr.some((clip) => pickClipAudio(clip));
+  const audioClipCount = arr.filter((clip) => clipLooksPlayable(clip)).length;
+  const expectedVariants = Math.max(1, Math.min(2, Number(variantCount) || 1));
+  const hasAudio = audioClipCount > 0;
   const failed =
     status === "FAILED"
     || status === "ERROR"
@@ -34,9 +45,17 @@ function parseGenerationRecordInfo(data) {
     || successFlag === "ERROR"
     || successFlag === "CREATE_TASK_FAILED"
     || successFlag === "GENERATE_AUDIO_FAILED";
-  // Suno callbacks often arrive before status flips to SUCCESS — playable URLs are enough.
-  const ready = hasAudio && !failed;
-  return { status, successFlag, hasAudio, failed, ready };
+  const statusSucceeded = status === "SUCCESS" || successFlag === "SUCCESS";
+  const ready = statusSucceeded && audioClipCount >= expectedVariants && !failed;
+  return {
+    status,
+    successFlag,
+    hasAudio,
+    audioClipCount,
+    expectedVariants,
+    failed,
+    ready,
+  };
 }
 
 function deepFindFirstStringByKeys(obj, keys) {
@@ -58,7 +77,7 @@ function deepFindFirstStringByKeys(obj, keys) {
   return "";
 }
 
-async function verifyGenerationAudioReady(taskId, apiKey) {
+async function verifyGenerationAudioReady(taskId, apiKey, { variantCount = 1 } = {}) {
   const upstream = await sunoJsonRequest("/api/v1/generate/record-info", {
     apiKey,
     query: { taskId },
@@ -66,7 +85,7 @@ async function verifyGenerationAudioReady(taskId, apiKey) {
   if (!upstream.ok || !upstream.data) {
     return { ready: false, reason: "upstream_error" };
   }
-  const parsed = parseGenerationRecordInfo(upstream.data);
+  const parsed = parseGenerationRecordInfo(upstream.data, { variantCount });
   if (parsed.failed) return { ready: false, failed: true, reason: "failed", ...parsed };
   if (parsed.ready) return { ready: true, ...parsed };
   return { ready: false, reason: "not_ready", ...parsed };
@@ -92,11 +111,11 @@ async function verifyInstrumentalReady(taskId, apiKey) {
   const instrumentalUrl =
     deepFindFirstStringByKeys(resp, ["instrumentalUrl", "instrumental_url", "accompanimentUrl"]) ||
     deepFindFirstStringByKeys(data, ["instrumentalUrl", "instrumental_url", "accompanimentUrl"]);
-  if (flag === "FAILED" || flag === "ERROR") {
+  if (flag === "FAILED" || flag === "ERROR" || flag === "CREATE_TASK_FAILED") {
     return { ready: false, failed: true, reason: "failed", status: flag };
   }
-  if (instrumentalUrl) {
-    return { ready: true, status: flag || "SUCCESS" };
+  if ((flag === "SUCCESS" || flag === "COMPLETE") && instrumentalUrl) {
+    return { ready: true, status: flag };
   }
   return { ready: false, reason: "not_ready", status: flag };
 }
@@ -131,8 +150,9 @@ async function verifyMusicVideoReady(taskId, apiKey) {
 /**
  * @param {string} taskId
  * @param {string} kind - suno_generation_watch.kind
+ * @param {{ variantCount?: number }} [opts]
  */
-async function verifySunoWatchReady(taskId, kind) {
+async function verifySunoWatchReady(taskId, kind, { variantCount = 1 } = {}) {
   const apiKey = process.env.SUNO_API_KEY;
   const tid = String(taskId || "").trim();
   if (!apiKey) return { ready: false, reason: "no_api_key" };
@@ -143,10 +163,11 @@ async function verifySunoWatchReady(taskId, kind) {
   if (k === "instrumental") return verifyInstrumentalReady(tid, apiKey);
   if (k === "studio_guide") return { ready: false, reason: "skipped" };
   // song, photo, sound, hum_track
-  return verifyGenerationAudioReady(tid, apiKey);
+  return verifyGenerationAudioReady(tid, apiKey, { variantCount });
 }
 
 module.exports = {
   parseGenerationRecordInfo,
   verifySunoWatchReady,
+  clipLooksPlayable,
 };

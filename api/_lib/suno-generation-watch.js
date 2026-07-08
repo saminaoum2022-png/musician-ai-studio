@@ -2,12 +2,15 @@
  * Register Suno tasks for callback-driven push when generation completes.
  */
 
-const { queuePrivacySafePush } = require("./onesignal-push");
+const { sendPrivacySafePush } = require("./onesignal-push");
 const { verifySunoWatchReady } = require("./suno-job-ready");
 const { queueUpdateMusicGenerationByTaskId } = require("./music-generation-log");
 
 const SUPABASE_URL = (process.env.SUPABASE_URL || "").replace(/\/$/, "");
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
+
+/** Notifies faster than this after watch creation are treated as premature. */
+const PREMATURE_NOTIFY_MS = 15000;
 
 function serviceHeaders(extra = {}) {
   return {
@@ -93,6 +96,8 @@ async function registerSunoWatch({
     variant_count: Math.max(1, Math.min(2, Number(variantCount) || 1)),
     notify_push: notifyPush !== false,
     status: "pending",
+    notified_at: null,
+    completed_at: null,
   };
   const r = await rest("suno_generation_watch", {
     method: "POST",
@@ -112,11 +117,12 @@ async function fetchWatchByTaskId(taskId) {
   return r.data[0];
 }
 
-async function markWatchStatus(taskId, status) {
+async function markWatchStatus(taskId, status, extra = {}) {
   const tid = cleanTaskId(taskId);
   if (!tid) return;
   const patch = {
     status,
+    ...extra,
     ...(status === "complete" || status === "notified" ? { completed_at: new Date().toISOString() } : {}),
     ...(status === "notified" ? { notified_at: new Date().toISOString() } : {}),
   };
@@ -126,19 +132,47 @@ async function markWatchStatus(taskId, status) {
   });
 }
 
-async function sendWatchReadyPush(row) {
+function wasLikelyPrematureNotify(row) {
+  if (!row?.notified_at || !row?.created_at) return false;
+  const created = new Date(row.created_at).getTime();
+  const notified = new Date(row.notified_at).getTime();
+  if (!Number.isFinite(created) || !Number.isFinite(notified)) return false;
+  return notified - created < PREMATURE_NOTIFY_MS;
+}
+
+async function verifyWatchRowReady(row) {
+  const taskId = cleanTaskId(row?.task_id);
+  const kind = String(row?.kind || "").trim();
+  if (!taskId || !kind) return { ready: false, reason: "invalid_args" };
+  return verifySunoWatchReady(taskId, kind, {
+    variantCount: row?.variant_count || 1,
+  });
+}
+
+async function sendWatchReadyPush(row, { forceRenotify = false } = {}) {
   if (!row?.user_id || row.notify_push === false) return { ok: false, skipped: true };
   if (String(row.kind || "") === "studio_guide") return { ok: false, skipped: true };
-  if (row.notified_at || row.status === "notified") return { ok: false, skipped: true };
+
+  const alreadyNotified = Boolean(row.notified_at || row.status === "notified");
+  if (alreadyNotified && !forceRenotify) {
+    return { ok: false, skipped: true, reason: "already_notified" };
+  }
+
   const pushType = pushKindForWatchKind(row.kind);
-  queuePrivacySafePush({
+  const pushResult = await sendPrivacySafePush({
     userId: row.user_id,
     type: pushType,
     entityId: String(row.task_id || "").slice(0, 180),
     actorDisplayName: pushBodyForWatch(row),
   });
+
+  if (!pushResult.ok && !pushResult.skipped) {
+    console.warn("[suno-watch] push delivery failed", row.task_id, pushResult.reason || pushResult.error);
+    return pushResult;
+  }
+
   await markWatchStatus(row.task_id, "notified");
-  return { ok: true };
+  return { ok: true, push: pushResult };
 }
 
 function sleep(ms) {
@@ -157,34 +191,64 @@ function scheduleBackgroundWork(promise) {
   void promise;
 }
 
+async function maybeNotifyWatchRow(row, { forceRenotify = false } = {}) {
+  const taskId = cleanTaskId(row?.task_id);
+  if (!taskId) return { ok: false, reason: "invalid_args" };
+
+  const verified = await verifyWatchRowReady(row);
+  if (verified.failed) {
+    await markWatchStatus(taskId, "failed");
+    queueUpdateMusicGenerationByTaskId(taskId, { status: "failed", error_message: "verify_failed" });
+    return { ok: false, reason: "failed" };
+  }
+  if (!verified.ready) {
+    return { ok: false, reason: "not_ready", status: verified.status || "" };
+  }
+
+  const alreadyNotified = Boolean(row.notified_at || row.status === "notified");
+  if (alreadyNotified) {
+    if (forceRenotify || wasLikelyPrematureNotify(row)) {
+      await markWatchStatus(taskId, "complete", { notified_at: null });
+    } else {
+      return { ok: true, skipped: true, reason: "already_notified" };
+    }
+  } else {
+    await markWatchStatus(taskId, "complete");
+  }
+
+  queueUpdateMusicGenerationByTaskId(taskId, { status: "completed" });
+  return sendWatchReadyPush(row, { forceRenotify: true });
+}
+
 /**
  * Suno callbacks often fire before record-info has playable URLs.
  * Keep checking until audio exists or the watch fails / times out.
  */
-async function retrySunoWatchReadyAndNotify(row, { attempts = 24, delayMs = 5000 } = {}) {
+async function retrySunoWatchReadyAndNotify(row, { attempts = 36, delayMs = 5000 } = {}) {
   const taskId = cleanTaskId(row?.task_id);
-  const kind = String(row?.kind || "").trim();
-  if (!taskId || !kind) return { ok: false, reason: "invalid_args" };
+  if (!taskId) return { ok: false, reason: "invalid_args" };
 
   for (let i = 0; i < attempts; i += 1) {
     const current = await fetchWatchByTaskId(taskId);
     if (!current) return { ok: false, reason: "watch_gone" };
-    if (current.notified_at || current.status === "notified") {
-      return { ok: true, skipped: true, reason: "already_notified" };
-    }
     if (current.status === "failed") return { ok: false, reason: "failed" };
 
-    const verified = await verifySunoWatchReady(taskId, kind);
+    const verified = await verifyWatchRowReady(current);
     if (verified.failed) {
       await markWatchStatus(taskId, "failed");
       queueUpdateMusicGenerationByTaskId(taskId, { status: "failed", error_message: "verify_failed" });
       return { ok: false, reason: "failed" };
     }
+
     if (verified.ready) {
-      await markWatchStatus(taskId, "complete");
-      queueUpdateMusicGenerationByTaskId(taskId, { status: "completed" });
-      return sendWatchReadyPush(current);
+      const premature = wasLikelyPrematureNotify(current);
+      const alreadyNotified = Boolean(current.notified_at || current.status === "notified");
+      if (alreadyNotified && !premature) {
+        return { ok: true, skipped: true, reason: "already_notified" };
+      }
+      return maybeNotifyWatchRow(current, { forceRenotify: premature });
     }
+
     if (i < attempts - 1) await sleep(delayMs);
   }
   return { ok: false, reason: "not_ready_timeout", status: row?.status || "" };
@@ -205,10 +269,14 @@ function callbackLooksFailed(body) {
   const flag = String(
     body?.data?.successFlag || body?.data?.status || body?.successFlag || body?.status || "",
   ).toUpperCase();
-  if (flag === "FAILED" || flag === "ERROR") return true;
-  const code = Number(body?.code);
-  if (Number.isFinite(code) && code !== 200) return true;
-  return false;
+  return (
+    flag === "FAILED"
+    || flag === "ERROR"
+    || flag === "CREATE_TASK_FAILED"
+    || flag === "GENERATE_AUDIO_FAILED"
+    || flag === "CALLBACK_EXCEPTION"
+    || flag === "SENSITIVE_WORD_ERROR"
+  );
 }
 
 async function handleSunoCallback(body) {
@@ -218,12 +286,16 @@ async function handleSunoCallback(body) {
   if (!row) return { ok: false, reason: "watch_not_found" };
 
   if (callbackLooksFailed(body)) {
-    await markWatchStatus(taskId, "failed");
-    queueUpdateMusicGenerationByTaskId(taskId, { status: "failed", error_message: "callback_failed" });
-    return { ok: false, reason: "failed" };
+    const verified = await verifyWatchRowReady(row);
+    if (verified.failed) {
+      await markWatchStatus(taskId, "failed");
+      queueUpdateMusicGenerationByTaskId(taskId, { status: "failed", error_message: "callback_failed" });
+      return { ok: false, reason: "failed" };
+    }
+    // Interim failure-shaped callback — keep watching via retry.
   }
 
-  const verified = await verifySunoWatchReady(taskId, row.kind);
+  const verified = await verifyWatchRowReady(row);
   if (verified.failed) {
     await markWatchStatus(taskId, "failed");
     queueUpdateMusicGenerationByTaskId(taskId, { status: "failed", error_message: "verify_failed" });
@@ -238,9 +310,9 @@ async function handleSunoCallback(body) {
     return { ok: false, reason: "not_ready_yet", status: verified.status || "" };
   }
 
-  await markWatchStatus(taskId, "complete");
-  queueUpdateMusicGenerationByTaskId(taskId, { status: "completed" });
-  return sendWatchReadyPush(row);
+  return maybeNotifyWatchRow(row, {
+    forceRenotify: wasLikelyPrematureNotify(row),
+  });
 }
 
 async function notifyJobReadyFromClient({ userId, taskId, kind, title = "" } = {}) {
@@ -259,10 +331,9 @@ async function notifyJobReadyFromClient({ userId, taskId, kind, title = "" } = {
     row = await fetchWatchByTaskId(tid);
   }
   if (!row) return { ok: false, reason: "watch_missing" };
-  if (row.status === "notified" || row.notified_at) return { ok: true, skipped: true };
 
-  const watchKind = String(row.kind || kind || "song").trim();
-  const verified = await verifySunoWatchReady(tid, watchKind);
+  const merged = { ...row, title: title || row.title };
+  const verified = await verifyWatchRowReady(merged);
   if (verified.failed) {
     await markWatchStatus(tid, "failed");
     return { ok: false, reason: "failed" };
@@ -271,8 +342,13 @@ async function notifyJobReadyFromClient({ userId, taskId, kind, title = "" } = {
     return { ok: false, reason: "not_ready" };
   }
 
-  await markWatchStatus(tid, "complete");
-  return sendWatchReadyPush({ ...row, title: title || row.title });
+  const premature = wasLikelyPrematureNotify(merged);
+  const alreadyNotified = Boolean(merged.notified_at || merged.status === "notified");
+  if (alreadyNotified && !premature) {
+    return { ok: true, skipped: true, reason: "already_notified" };
+  }
+
+  return maybeNotifyWatchRow(merged, { forceRenotify: premature || alreadyNotified });
 }
 
 function queueRegisterSunoWatch(opts) {
@@ -287,4 +363,5 @@ module.exports = {
   handleSunoCallback,
   notifyJobReadyFromClient,
   pushBodyForWatch,
+  wasLikelyPrematureNotify,
 };

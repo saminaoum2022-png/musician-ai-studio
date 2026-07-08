@@ -274,14 +274,14 @@ function finishHumTrackSuccess(taskId, instrumentId, tracks) {
     );
   });
   ctx?.cancelParallelCoverForTask?.(taskId);
-  ctx?.clearGenerationPending?.(taskId);
   try {
-    ctx?.pushLocalGenerationReadyActivity?.(savedEntries.filter(Boolean));
+    ctx?.pushLocalGenerationReadyActivity?.(savedEntries.filter(Boolean), { taskId });
   } catch {
     try {
       ctx?.finishCoachGenerationReady?.({ variantCount: savedEntries.filter(Boolean).length || 1 });
     } catch {}
   }
+  ctx?.clearGenerationPending?.(taskId);
   try {
     ctx?.maybeNotifyJobReadyPush?.({
       kind: "hum_track",

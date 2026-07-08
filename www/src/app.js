@@ -79,6 +79,7 @@ import { initCoverArtOverlay, syncCoverArtOverlay } from "./cover-art/overlay.js
 import { feedActIconAnalytics, feedActIconComment, feedActIconGift, feedActIconLike, feedActIconPlays } from "./feed-action-icons.js";
 import { initGifts, openGiftSheetFromButton } from "./gifts.js";
 import { configureProPlan, onProPlanRouteActive, setProReturnRoute } from "./pro-plan.js";
+import { augmentCoachApiPayload } from "./coach-knowledge.js";
 import { showGiftReceivedReveal } from "./gift-sent-overlay.js";
 import { giftTierDef } from "./gift-tier-icons.js";
 import {
@@ -182,7 +183,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260708-155919";
+const APP_BUILD = "20260708-162450";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -4026,6 +4027,7 @@ function applyRoute({ passGen } = {}) {
     }, 80);
   }
   if (wanted === "profile") {
+    try { syncOwnProfileSocialStatsUi(); } catch {}
     try {
       const pq = new URLSearchParams(String(rawRouteQuery || ""));
       const segQ = pq.get("seg");
@@ -15222,7 +15224,7 @@ function clearSignedInUiCaches() {
   _ownSocialStatsLastFetchAt = 0;
   _ownSocialStatsInFlight = false;
   try {
-    sessionStorage.removeItem(OWN_SOCIAL_STATS_SESSION_KEY);
+    sessionStorage.removeItem(OWN_SOCIAL_STATS_LEGACY_SESSION_KEY);
   } catch {}
   _profileActCloudRefreshLastAt = 0;
   _profileActCloudRefreshInFlight = false;
@@ -27645,7 +27647,7 @@ function coachWelcomeMessage() {
   return {
     id: "coach:welcome",
     sender_id: COACH_SENDER_ID,
-    body: "Hey! I'm **NabadAi Coach** 🎵 your guide to making music here.\n\nAsk me anything — writing a song, picking a style, publishing, Discover, challenges, credits, and more.\n\nI can't see your account or anyone's private info, so please don't share passwords. 🎧",
+    body: "Hey! I'm **NabadAi Coach** 🎵 your guide to making music here.\n\nAsk me anything — writing a song, picking a style, publishing, credits, **NabadAi Pro**, and more.\n\nI can't see your balance or account details, but I can explain costs and where to subscribe. Please don't share passwords. 🎧",
     created_at: new Date().toISOString(),
     sendStatus: "delivered",
   };
@@ -27758,10 +27760,11 @@ async function sendCoachMessage(text, input) {
   let replyText = "";
   let errorText = "";
   try {
+    const payload = augmentCoachApiPayload({ message: text, history });
     const data = await messagesApi("/api/coach", {
       method: "POST",
       timeoutMs: 22000,
-      body: JSON.stringify({ message: text, history }),
+      body: JSON.stringify(payload),
     });
     replyText = String(data?.reply || "").trim();
   } catch (e) {
@@ -27788,7 +27791,7 @@ async function sendCoachMessage(text, input) {
 function coachInboxRowHtml() {
   const chat = loadCoachChat();
   const last = [...chat].reverse().find((m) => String(m.body || "").trim() && m.id !== "coach:welcome");
-  const preview = last ? formatDmInboxPreview(last.body) : "Ask me anything about using Nabad";
+  const preview = last ? formatDmInboxPreview(last.body) : "Ask about credits, Pro, or making music";
   return `
     <button type="button" class="messagesRow messagesRow--coach" data-messages-thread="${COACH_THREAD_ID}">
       ${coachAvatarHtml("messagesRowAvatar")}
@@ -30839,71 +30842,108 @@ async function showNotificationsSummary() {
 
 let _ownSocialStatsInFlight = false;
 let _ownSocialStatsLastUserId = "";
+/** @type {number | null} */
 let _ownSocialStatsFollowers = null;
+/** @type {number | null} */
 let _ownSocialStatsPlays = null;
 let _ownSocialStatsLastFetchAt = 0;
 const OWN_SOCIAL_STATS_MIN_GAP_MS = 30000;
-const OWN_SOCIAL_STATS_SESSION_KEY = "nabad:ownSocialStats:v1";
+const OWN_SOCIAL_STATS_CACHE_PREFIX = "nabad:ownSocialStats:v1:";
+const OWN_SOCIAL_STATS_LEGACY_SESSION_KEY = "nabad:ownSocialStats:v1";
 
-function hydrateOwnSocialStatsFromSession(userId) {
+function ownSocialStatsCacheKey(userId) {
+  return `${OWN_SOCIAL_STATS_CACHE_PREFIX}${String(userId || "").trim()}`;
+}
+
+/** Sync read — never hits the network. */
+function readOwnSocialStatsCacheSnapshot(userId) {
   const uid = String(userId || "").trim();
-  if (!uid) return false;
+  if (!uid) return null;
   try {
-    const raw = sessionStorage.getItem(OWN_SOCIAL_STATS_SESSION_KEY);
-    if (!raw) return false;
+    let raw = localStorage.getItem(ownSocialStatsCacheKey(uid));
+    if (!raw) {
+      const legacy = sessionStorage.getItem(OWN_SOCIAL_STATS_LEGACY_SESSION_KEY);
+      if (legacy) {
+        const legacyParsed = JSON.parse(legacy);
+        if (String(legacyParsed?.userId || "") === uid) {
+          raw = legacy;
+          localStorage.setItem(ownSocialStatsCacheKey(uid), legacy);
+        }
+      }
+    }
+    if (!raw) return null;
     const parsed = JSON.parse(raw);
-    if (String(parsed?.userId || "") !== uid) return false;
-    _ownSocialStatsPlays = Number(parsed.plays);
-    _ownSocialStatsFollowers = Number(parsed.followers);
-    _ownSocialStatsLastFetchAt = Number(parsed.at || 0);
-    return Number.isFinite(_ownSocialStatsPlays) && Number.isFinite(_ownSocialStatsFollowers);
+    if (parsed?.userId && String(parsed.userId) !== uid) return null;
+    const plays = Number(parsed.plays);
+    const followers = Number(parsed.followers);
+    if (!Number.isFinite(plays) || !Number.isFinite(followers)) return null;
+    return { plays, followers, at: Number(parsed.at || 0) };
   } catch {
-    return false;
+    return null;
   }
 }
 
-function persistOwnSocialStatsSession(userId, plays, followers) {
+function hydrateOwnSocialStatsCache(userId) {
+  const snap = readOwnSocialStatsCacheSnapshot(userId);
+  if (!snap) return false;
+  _ownSocialStatsPlays = snap.plays;
+  _ownSocialStatsFollowers = snap.followers;
+  _ownSocialStatsLastFetchAt = snap.at;
+  return true;
+}
+
+function persistOwnSocialStatsCache(userId, plays, followers) {
   const uid = String(userId || "").trim();
   if (!uid) return;
   try {
-    sessionStorage.setItem(
-      OWN_SOCIAL_STATS_SESSION_KEY,
-      JSON.stringify({ userId: uid, plays, followers, at: Date.now() }),
-    );
+    const payload = JSON.stringify({ userId: uid, plays, followers, at: Date.now() });
+    localStorage.setItem(ownSocialStatsCacheKey(uid), payload);
+    sessionStorage.setItem(OWN_SOCIAL_STATS_LEGACY_SESSION_KEY, payload);
   } catch {}
 }
 
-function paintOwnProfileSocialStatPills() {
-  const playsPending = _ownSocialStatsPlays == null;
-  const fansPending = _ownSocialStatsFollowers == null;
-  if (els.profileStatPillPublicValue) {
-    els.profileStatPillPublicValue.classList.toggle("isLoading", playsPending);
-    els.profileStatPillPublicValue.textContent = playsPending
-      ? ""
-      : formatStatCount(_ownSocialStatsPlays);
+/** Instant paint from device cache — no API. Safe on every Profile open. */
+function syncOwnProfileSocialStatsUi() {
+  const uid = String(authSession?.user?.id || activeProfile?.id || "").trim();
+  if (!uid || uid === "guest") return;
+  if (_ownSocialStatsLastUserId !== uid) {
+    _ownSocialStatsLastUserId = uid;
+    hydrateOwnSocialStatsCache(uid);
   }
-  if (els.profileStatPillLikesValue) {
-    els.profileStatPillLikesValue.classList.toggle("isLoading", fansPending);
-    els.profileStatPillLikesValue.textContent = fansPending
-      ? ""
-      : formatStatCount(_ownSocialStatsFollowers);
+  if (els.profileStatsPills) els.profileStatsPills.hidden = false;
+  paintOwnProfileSocialStatPills();
+}
+
+function paintOwnProfileSocialStatPills() {
+  const uid = String(authSession?.user?.id || activeProfile?.id || "").trim();
+  if (!uid || uid === "guest") return;
+  const snap = readOwnSocialStatsCacheSnapshot(uid);
+  const plays = Number.isFinite(snap?.plays)
+    ? snap.plays
+    : Number.isFinite(_ownSocialStatsPlays)
+      ? _ownSocialStatsPlays
+      : null;
+  const fans = Number.isFinite(snap?.followers)
+    ? snap.followers
+    : Number.isFinite(_ownSocialStatsFollowers)
+      ? _ownSocialStatsFollowers
+      : null;
+  // Never flash 0 while cache/memory is still unknown — keep last painted value.
+  if (!Number.isFinite(plays) && !Number.isFinite(fans)) return;
+  if (els.profileStatPillPublicValue && Number.isFinite(plays)) {
+    els.profileStatPillPublicValue.classList.remove("isLoading");
+    els.profileStatPillPublicValue.textContent = formatStatCount(plays);
+  }
+  if (els.profileStatPillLikesValue && Number.isFinite(fans)) {
+    els.profileStatPillLikesValue.classList.remove("isLoading");
+    els.profileStatPillLikesValue.textContent = formatStatCount(fans);
   }
 }
 
 async function refreshOwnProfileSocialStats({ force = false } = {}) {
   const uid = String(authSession?.user?.id || activeProfile?.id || "").trim();
   if (!uid || uid === "guest") return;
-  if (_ownSocialStatsLastUserId !== uid) {
-    _ownSocialStatsLastUserId = uid;
-    _ownSocialStatsFollowers = null;
-    _ownSocialStatsPlays = null;
-    _ownSocialStatsLastFetchAt = 0;
-    hydrateOwnSocialStatsFromSession(uid);
-    paintOwnProfileSocialStatPills();
-  }
-  if (_ownSocialStatsFollowers != null || _ownSocialStatsPlays != null) {
-    paintOwnProfileSocialStatPills();
-  }
+  syncOwnProfileSocialStatsUi();
   if (
     !force &&
     _ownSocialStatsLastFetchAt &&
@@ -30920,7 +30960,7 @@ async function refreshOwnProfileSocialStats({ force = false } = {}) {
     _ownSocialStatsFollowers = followers;
     _ownSocialStatsPlays = plays;
     _ownSocialStatsLastFetchAt = Date.now();
-    persistOwnSocialStatsSession(uid, plays, followers);
+    persistOwnSocialStatsCache(uid, plays, followers);
     paintOwnProfileSocialStatPills();
   } finally {
     _ownSocialStatsInFlight = false;
@@ -38076,8 +38116,7 @@ function profileRouteNeedsCloudSocialData() {
 }
 
 function renderProfileOwnStats() {
-  const uid = String(authSession?.user?.id || "").trim();
-  if (uid && uid !== "guest") hydrateOwnSocialStatsFromSession(uid);
+  syncOwnProfileSocialStatsUi();
   const hubItems = HUB_FEATURE_ENABLED ? getProfileOwnerHubItems() : [];
   const lib = loadLibrary();
   const pubLib = lib.filter((t) => Boolean(t.publicOnProfile));
@@ -54024,8 +54063,9 @@ void refreshSunoCredits();
 renderCreditsHistory();
 loadAuthSession();
 ensureAuthSessionUserFromToken();
-loadProfile();
 syncActiveProfileIdFromSession();
+try { syncOwnProfileSocialStatsUi(); } catch {}
+loadProfile();
 try { refreshProfileHandleFromActiveProfile(); } catch {}
 renderAuthStatus();
 const _bootOAuthCodePending = hasOAuthCodeInUrl();
@@ -54190,6 +54230,7 @@ void (async () => {
     if (els.profilePreviewBioInput) els.profilePreviewBioInput.value = activeProfile.bio || "";
     if (els.profileIsPublic) els.profileIsPublic.checked = activeProfile.isPublic !== false;
     _profileCloudMergedAt = Date.now();
+    try { syncOwnProfileSocialStatsUi(); } catch {}
     renderProfilePreviewFromInputs();
     refreshProfilePostsAfterIdentityMerge(prevProfile, nextProfile);
     if ((document.body.getAttribute("data-route") || "") === "profile") {
@@ -54255,6 +54296,7 @@ if (els.profilePreviewTimbreInput) els.profilePreviewTimbreInput.value = activeP
 if (els.profilePreviewBioInput) els.profilePreviewBioInput.value = activeProfile.bio || "";
 if (els.profileIsPublic) els.profileIsPublic.checked = activeProfile.isPublic !== false;
 try { syncSettingsPrivacyToggle(); } catch {}
+try { syncOwnProfileSocialStatsUi(); } catch {}
 renderProfilePreviewFromInputs();
 try {
   const stored = sessionStorage.getItem(PROFILE_SONGS_SEGMENT_KEY);

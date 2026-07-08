@@ -3566,6 +3566,7 @@ body[data-route="stems"] main.grid > [data-route="stems"],
 body[data-route="advanced"] main.grid > [data-route="advanced"],
 body[data-route="studio"] main.grid > [data-route="studio"],
 body[data-route="settings"] main.grid > [data-route="settings"],
+body[data-route="pro"] main.grid > [data-route="pro"],
 body[data-route="profile-edit"] main.grid > [data-route="profile-edit"]{
   display: block !important;
 }
@@ -21043,36 +21044,92 @@ a.vwPrimary,
 }
 
 /* ---------- NabadAi Pro (plans + credit packs) ---------- */
+body[data-route="pro"] .app{
+  padding-left: 0;
+  padding-right: 0;
+}
+body[data-route="pro"] main.grid{
+  background: #05070d;
+}
+body[data-route="pro"] main.grid > [data-route="pro"]{
+  display: block !important;
+  animation: none !important;
+  transform: none !important;
+  will-change: auto !important;
+}
+main.grid > section.wide[data-route="pro"],
+main.grid > [data-route="pro"].proPage{
+  animation: none !important;
+  transform: none !important;
+  will-change: auto !important;
+}
+main.grid > [data-route="pro"].routeEnter,
+main.grid > [data-route="pro"].routeEnter--push,
+main.grid > [data-route="pro"].routeEnter--pop,
+main.grid > [data-route="pro"].routeEnter--fade,
+main.grid > [data-route="pro"].routeEnter--present{
+  animation: none !important;
+  transform: none !important;
+  will-change: auto !important;
+}
 .proPage{
   display: flex;
   flex-direction: column;
   gap: 0;
-  padding: 0 0 36px;
+  width: 100%;
+  max-width: 640px;
+  margin: 0 auto;
+  padding:
+    0
+    max(22px, env(safe-area-inset-right, 0px))
+    36px
+    max(22px, env(safe-area-inset-left, 0px));
+  box-sizing: border-box;
   min-width: 0;
-  animation: sectionFadeIn 260ms ease;
 }
 .proPage *{ min-width: 0; }
+.proPlanMount{
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  min-width: 0;
+}
 .proHeader{
+  position: sticky;
+  top: 0;
+  z-index: 30;
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 2px 0 10px;
-}
-.proTitle{
   margin: 0;
-  font-size: 17px;
-  font-weight: 700;
-  letter-spacing: -0.02em;
-  color: rgba(232,238,247,0.92);
+  padding:
+    calc(env(safe-area-inset-top, 0px) + 14px)
+    0
+    16px;
+  background: #05070d;
+  pointer-events: none;
+}
+.proBack,
+#btnProBack{
+  flex: 0 0 auto;
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  min-height: 44px;
+  margin: 0 0 0 -8px;
+  position: relative;
+  z-index: 31;
+  touch-action: manipulation;
+  pointer-events: auto;
 }
 .proMain{
   display: flex;
   flex-direction: column;
   gap: 20px;
-  margin-top: 6px;
+  margin-top: 2px;
 }
 .proHeroCopy{
-  padding: 8px 6px 22px;
+  padding: 4px 4px 20px;
   text-align: center;
 }
 .proHeroTitle{
@@ -21105,8 +21162,12 @@ a.vwPrimary,
 .proPlanGrid{
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
+  gap: 12px;
   width: 100%;
+  padding-top: 8px;
+}
+.proPlanCard--monthly{
+  margin-top: 6px;
 }
 .proPlanCard{
   position: relative;
@@ -21115,13 +21176,14 @@ a.vwPrimary,
   align-items: flex-start;
   gap: 4px;
   text-align: left;
-  padding: 16px 14px 14px;
+  padding: 18px 14px 14px;
   border-radius: 14px;
   border: 1px solid rgba(255,255,255,0.08);
   background: transparent;
   color: inherit;
   cursor: pointer;
-  transition: border-color 180ms ease, background 180ms ease, box-shadow 180ms ease, transform 180ms ease;
+  transition: border-color 180ms ease, background 180ms ease, box-shadow 180ms ease;
+  -webkit-tap-highlight-color: transparent;
 }
 .proPlanCard:hover{
   border-color: rgba(255,255,255,0.14);
@@ -21132,9 +21194,26 @@ a.vwPrimary,
   box-shadow: 0 0 0 1px rgba(124,92,255,0.12);
 }
 .proPlanCard--monthly.isSelected{
-  border-color: rgba(124,92,255,0.48);
+  border-color: rgba(124,92,255,0.50);
   background: rgba(124,92,255,0.07);
-  box-shadow: 0 0 0 1px rgba(124,92,255,0.18);
+  box-shadow: 0 0 0 1px rgba(124,92,255,0.20);
+}
+.proPlanCardSave{
+  position: absolute;
+  top: -9px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 2;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 4px 8px;
+  border-radius: 999px;
+  color: #fff;
+  background: linear-gradient(135deg, rgba(124,92,255,0.95), rgba(35,213,171,0.88));
+  box-shadow: 0 4px 14px rgba(124,92,255,0.28);
+  white-space: nowrap;
 }
 .proPlanCardBadge{
   position: absolute;
@@ -21281,23 +21360,22 @@ a.vwPrimary,
 .proTabStage{
   position: relative;
   min-height: 0;
+  isolation: isolate;
 }
 .proTabPanel{
   display: flex;
   flex-direction: column;
   gap: 28px;
-  opacity: 0;
-  transform: translateY(6px);
-  transition: opacity 240ms ease, transform 280ms cubic-bezier(0.22, 1, 0.36, 1);
-  pointer-events: none;
 }
-.proTabPanel.isActive{
-  opacity: 1;
-  transform: translateY(0);
-  pointer-events: auto;
-}
+.proTabPanel:not(.isActive),
 .proTabPanel[hidden]{
   display: none !important;
+  pointer-events: none !important;
+}
+.proTabPanel.isActive{
+  position: relative;
+  z-index: 1;
+  pointer-events: auto;
 }
 
 .proBenefits{
@@ -21513,10 +21591,15 @@ a.vwPrimary,
 
 @media (max-width: 380px){
   .proPlanGrid{ grid-template-columns: 1fr; }
-  .proPlanCardBadge{
+  .proPlanCardBadge,
+  .proPlanCardSave{
     position: static;
     align-self: flex-start;
+    transform: none;
     margin-bottom: 4px;
+  }
+  .proPlanCard--monthly .proPlanCardSave{
+    align-self: center;
   }
 }
 

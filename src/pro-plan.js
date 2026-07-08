@@ -10,7 +10,7 @@ import {
   songsFromCredits,
 } from "./pro-plan-config.js";
 
-/** @type {{ showToast?: (msg: string, opts?: object) => void, isLoggedIn?: () => boolean, isNativeIos?: () => boolean } | null} */
+/** @type {{ showToast?: (msg: string, opts?: object) => void, isLoggedIn?: () => boolean, isNativeIos?: () => boolean, navigateToRoute?: (route: string) => void } | null} */
 let _deps = null;
 
 let _mounted = false;
@@ -18,6 +18,9 @@ let _selectedPlan = "monthly";
 let _activeTab = "pro";
 let _benefitsExpanded = false;
 let _pageBound = false;
+let _backBound = false;
+let _resizePaintTimer = 0;
+let _returnRoute = "settings";
 
 function esc(s) {
   return String(s ?? "")
@@ -29,6 +32,10 @@ function esc(s) {
 
 function root() {
   return document.querySelector('[data-route="pro"]');
+}
+
+function mount() {
+  return document.getElementById("proPlanMount");
 }
 
 function isNativeIos() {
@@ -53,6 +60,7 @@ function planCardHtml(plan, selected) {
       data-pro-plan="${esc(plan.id)}"
       aria-pressed="${isSelected ? "true" : "false"}"
     >
+      ${plan.saveBadge ? `<span class="proPlanCardSave">${esc(plan.saveBadge)}</span>` : ""}
       ${plan.badge ? `<span class="proPlanCardBadge">${esc(plan.badge)}</span>` : ""}
       <span class="proPlanCardLabel">${esc(plan.label)}</span>
       <span class="proPlanCardPrice">
@@ -103,8 +111,8 @@ function packRowHtml(pack) {
 }
 
 function proPageNeedsRender() {
-  const page = root();
-  return !page || !page.querySelector(".proTabStage");
+  const host = mount();
+  return !host || !host.querySelector(".proTabStage");
 }
 
 function ensureProPageRendered() {
@@ -175,18 +183,10 @@ function paintTabState({ animate = true } = {}) {
     const on = panel.getAttribute("data-pro-tab-panel") === _activeTab;
     if (on) {
       panel.hidden = false;
-      if (animate) {
-        requestAnimationFrame(() => panel.classList.add("isActive"));
-      } else {
-        panel.classList.add("isActive");
-      }
+      panel.classList.add("isActive");
     } else {
       panel.classList.remove("isActive");
-      const hide = () => {
-        if (!panel.classList.contains("isActive")) panel.hidden = true;
-      };
-      if (animate) setTimeout(hide, 240);
-      else hide();
+      panel.hidden = true;
     }
   });
 
@@ -202,8 +202,7 @@ function paintTabState({ animate = true } = {}) {
   }
 
   page.dataset.proTab = _activeTab;
-  if (!animate) seg?.classList.add("proSeg--noAnim");
-  else seg?.classList.remove("proSeg--noAnim");
+  seg?.classList.toggle("proSeg--noAnim", !animate);
 }
 
 function paintBenefitsExpanded() {
@@ -226,9 +225,44 @@ function setActiveTab(tab, { animate = true } = {}) {
   paintTabState({ animate });
 }
 
+function navigateAwayFromPro(route) {
+  const target = String(route || "settings").trim() || "settings";
+  if (typeof _deps?.navigateToRoute === "function") {
+    _deps.navigateToRoute(target);
+    return;
+  }
+  try {
+    location.hash = `#/${target}`;
+  } catch {}
+}
+
+function paintProBackLink() {
+  const backBtn = document.getElementById("btnProBack");
+  if (!backBtn) return;
+  const route = _returnRoute || "settings";
+  backBtn.href = `#/${route}`;
+  backBtn.setAttribute("data-route-link", route);
+  const labels = {
+    credits: "Back to Credits",
+    settings: "Back to Settings",
+    profile: "Back to Profile",
+  };
+  backBtn.setAttribute("aria-label", labels[route] || labels.settings);
+}
+
+export function setProReturnRoute(route) {
+  const r = String(route || "").trim();
+  if (r === "credits" || r === "settings" || r === "profile") {
+    _returnRoute = r;
+  } else {
+    _returnRoute = "settings";
+  }
+  paintProBackLink();
+}
+
 function renderProPlanPage({ preserveTab = true } = {}) {
-  const page = root();
-  if (!page) return;
+  const host = mount();
+  if (!host) return;
   if (!preserveTab) {
     _activeTab = "pro";
     _benefitsExpanded = false;
@@ -241,14 +275,7 @@ function renderProPlanPage({ preserveTab = true } = {}) {
   const statusNote = native ? PRO_LAUNCH_COPY.iapSoon : PRO_LAUNCH_COPY.webOnly;
   const packsLead = String(PRO_LAUNCH_COPY.packsLead || "").replace(/\n/g, " ");
 
-  page.innerHTML = `
-    <header class="proHeader">
-      <a href="#/settings" class="nabadBackBtn proBack" aria-label="Back to Settings">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6 9 12l6 6"/></svg>
-      </a>
-      <h2 class="proTitle">NabadAi Pro</h2>
-    </header>
-
+  host.innerHTML = `
     <div class="proHeroCopy" aria-labelledby="proHeroTitle">
       <h3 id="proHeroTitle" class="proHeroTitle">
         <span class="proHeroTitleLine">Create more.</span>
@@ -305,10 +332,11 @@ function renderProPlanPage({ preserveTab = true } = {}) {
   `;
 
   bindProPlanPageOnce();
+  bindProBackOnce();
+  paintProBackLink();
   paintCta();
   paintTabState({ animate: false });
   paintBenefitsExpanded();
-  requestAnimationFrame(() => paintTabState({ animate: true }));
 }
 
 function handleSubscribeClick() {
@@ -353,14 +381,25 @@ function handlePackClick(packId) {
   _deps?.showToast?.(`${pack.label} pack (${pack.credits} credits) — IAP wiring comes next.`, { durationMs: 3000 });
 }
 
+function bindProBackOnce() {
+  const backBtn = document.getElementById("btnProBack");
+  if (!backBtn || _backBound) return;
+  _backBound = true;
+  backBtn.addEventListener("click", (ev) => {
+    ev.preventDefault();
+    ev.stopPropagation();
+    navigateAwayFromPro(_returnRoute || "settings");
+  });
+}
+
 function bindProPlanPageOnce() {
-  const page = root();
-  if (!page || _pageBound) return;
+  const host = mount();
+  if (!host || _pageBound) return;
   _pageBound = true;
 
-  page.addEventListener("click", (ev) => {
-    const planBtn = ev.target?.closest?.("[data-pro-plan]");
-    if (planBtn && planBtn.classList.contains("proPlanCard")) {
+  host.addEventListener("click", (ev) => {
+    const planBtn = ev.target?.closest?.(".proPlanCard[data-pro-plan]");
+    if (planBtn) {
       const id = String(planBtn.getAttribute("data-pro-plan") || "").trim();
       if (id === "weekly" || id === "monthly") {
         _selectedPlan = id;
@@ -397,7 +436,11 @@ function bindProPlanPageOnce() {
     }
   });
 
-  window.addEventListener("resize", () => paintTabState({ animate: false }), { passive: true });
+  window.addEventListener("resize", () => {
+    if ((document.body.getAttribute("data-route") || "") !== "pro") return;
+    window.clearTimeout(_resizePaintTimer);
+    _resizePaintTimer = window.setTimeout(() => paintTabState({ animate: false }), 120);
+  }, { passive: true });
 }
 
 export function configureProPlan(deps) {
@@ -406,11 +449,17 @@ export function configureProPlan(deps) {
 
 export function initProPlanOnce() {
   ensureProPageRendered();
+  bindProBackOnce();
 }
 
-export function onProPlanRouteActive() {
+export function onProPlanRouteActive({ entering = false } = {}) {
+  const needsRender = proPageNeedsRender();
   ensureProPageRendered();
-  paintPlanCards();
-  paintTabState({ animate: false });
-  paintBenefitsExpanded();
+  bindProBackOnce();
+  paintProBackLink();
+  if (needsRender || entering) {
+    paintPlanCards();
+    paintTabState({ animate: false });
+    paintBenefitsExpanded();
+  }
 }

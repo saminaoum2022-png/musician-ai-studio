@@ -78,7 +78,7 @@ import {
 import { initCoverArtOverlay, syncCoverArtOverlay } from "./cover-art/overlay.js";
 import { feedActIconAnalytics, feedActIconComment, feedActIconGift, feedActIconLike, feedActIconPlays } from "./feed-action-icons.js";
 import { initGifts, openGiftSheetFromButton } from "./gifts.js";
-import { configureProPlan, onProPlanRouteActive } from "./pro-plan.js";
+import { configureProPlan, onProPlanRouteActive, setProReturnRoute } from "./pro-plan.js";
 import { showGiftReceivedReveal } from "./gift-sent-overlay.js";
 import { giftTierDef } from "./gift-tier-icons.js";
 import {
@@ -182,7 +182,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260708-123408";
+const APP_BUILD = "20260708-143917";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -3479,7 +3479,7 @@ function tabBarRouteKey(route = "") {
 const NAV_TAB_ROOTS = new Set(["discover", "friends", "challenges", "activity", "profile"]);
 // Screens that run their own bespoke transition or appear at boot/auth and
 // should not get the generic slide/fade.
-const NAV_ANIM_SKIP = new Set(["messages-thread", "auth", "intro", "onboarding", "music-preferences"]);
+const NAV_ANIM_SKIP = new Set(["messages-thread", "auth", "intro", "onboarding", "music-preferences", "pro"]);
 let _navStack = [];
 
 function navPrefersReducedMotion() {
@@ -4113,7 +4113,8 @@ function applyRoute({ passGen } = {}) {
     void refreshMyCredits({ silent: true });
   }
   if (wanted === "pro") {
-    try { onProPlanRouteActive(); } catch {}
+    try { setProReturnRoute(prevRoute); } catch {}
+    try { onProPlanRouteActive({ entering: prevRoute !== "pro" }); } catch {}
   }
   if (wanted === "friends") {
     try { onLeaveSearchRoute(); } catch {}
@@ -5177,6 +5178,26 @@ try {
         return Boolean(cap?.isNativePlatform?.() && cap?.getPlatform?.() === "ios");
       } catch {
         return false;
+      }
+    },
+    navigateToRoute: (route) => {
+      const r = String(route || "settings").trim() || "settings";
+      const targetHash = `#/${r}`;
+      try {
+        if (location.hash !== targetHash) location.hash = targetHash;
+      } catch {
+        location.hash = targetHash;
+      }
+      bumpApplyRouteGeneration();
+      syncRoutePanelVisibility(r);
+      if (_applyRouteRaf) {
+        cancelAnimationFrame(_applyRouteRaf);
+        _applyRouteRaf = 0;
+      }
+      if (_applyRouteInFlight) {
+        _applyRouteQueued = true;
+      } else {
+        void runApplyRouteOnce();
       }
     },
   });

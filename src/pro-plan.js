@@ -14,7 +14,7 @@ let _deps = null;
 
 let _mounted = false;
 let _selectedPlan = "monthly";
-let _benefitsExpanded = false;
+let _benefitsExpanded = true;
 let _pageBound = false;
 let _backBound = false;
 let _returnRoute = "settings";
@@ -80,15 +80,6 @@ function benefitsListHtml() {
   `).join("");
 }
 
-function benefitsDetailHtml() {
-  return PRO_FEATURES.map((f) => `
-    <li class="proBenefitDetailRow">
-      <span class="proBenefitDetailLabel">${esc(f.label)}</span>
-      <span class="proBenefitDetailSub">${esc(f.sub)}</span>
-    </li>
-  `).join("");
-}
-
 function proPageNeedsRender() {
   const host = mount();
   return !host || !host.querySelector(".proTabStage");
@@ -143,12 +134,10 @@ function paintPlanCards() {
 
 function paintBenefitsExpanded() {
   const expand = mount()?.querySelector("#proBenefitsExpand");
-  const details = mount()?.querySelector("#proBenefitsDetails");
   const toggle = document.getElementById("btnProBenefitsToggle");
   if (!toggle) return;
   const open = _benefitsExpanded;
   if (expand) expand.hidden = !open;
-  if (details) details.hidden = !open;
   toggle.setAttribute("aria-expanded", open ? "true" : "false");
   toggle.classList.toggle("isOpen", open);
   toggle.innerHTML = `${open ? "Hide benefits" : "View all benefits"}<span class="proBenefitsChev" aria-hidden="true">›</span>`;
@@ -192,8 +181,7 @@ export function setProReturnRoute(route) {
 function renderProPlanPage({ preserveTab = true } = {}) {
   const host = mount();
   if (!host) return;
-  if (!preserveTab) _benefitsExpanded = false;
-  else _benefitsExpanded = false;
+  if (!preserveTab) _benefitsExpanded = true;
 
   const plan = selectedPlan();
   const native = isNativeIos();
@@ -222,10 +210,9 @@ function renderProPlanPage({ preserveTab = true } = {}) {
           </div>
         </section>
 
-        <section id="proBenefitsExpand" class="proBenefitsExpand" hidden aria-labelledby="proFeaturesTitle">
+        <section id="proBenefitsExpand" class="proBenefitsExpand" aria-labelledby="proFeaturesTitle">
           <h3 id="proFeaturesTitle" class="proBenefitsTitle">Everything in Pro</h3>
           <ul class="proBenefitsList">${benefitsListHtml()}</ul>
-          <ul id="proBenefitsDetails" class="proBenefitDetails" hidden>${benefitsDetailHtml()}</ul>
         </section>
       </div>
 
@@ -237,8 +224,8 @@ function renderProPlanPage({ preserveTab = true } = {}) {
           <p id="proSubscribeSub" class="proSubscribeSub"></p>
         </div>
         <div id="proDockProExtras">
-          <button type="button" id="btnProBenefitsToggle" class="proBenefitsToggle" aria-expanded="false">
-            View all benefits
+          <button type="button" id="btnProBenefitsToggle" class="proBenefitsToggle isOpen" aria-expanded="true">
+            Hide benefits
             <span class="proBenefitsChev" aria-hidden="true">›</span>
           </button>
           <button type="button" class="proRestoreLink" data-pro-restore>Restore purchases</button>
@@ -338,6 +325,7 @@ export function onProPlanRouteActive({ entering = false } = {}) {
   bindProBackOnce();
   paintProBackLink();
   if (needsRender || entering) {
+    if (entering) _benefitsExpanded = true;
     paintPlanCards();
     paintBenefitsExpanded();
   }

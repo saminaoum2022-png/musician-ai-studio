@@ -25,8 +25,13 @@ function clipLooksPlayable(clip) {
   if (!url.startsWith("http")) return false;
   const id = String(clip?.id || clip?.audioId || clip?.audio_id || "").trim();
   const duration = Number(clip?.duration ?? clip?.duration_seconds ?? 0);
-  // Generated clips have stable ids and non-trivial duration; reject task-accept noise.
-  return id.length >= 8 && Number.isFinite(duration) && duration > 1;
+  // Real generated clips have stable ids and meaningful length (not task-accept stubs).
+  return id.length >= 8 && Number.isFinite(duration) && duration >= 8;
+}
+
+function minClipLagForVariants(variantCount) {
+  const n = Math.max(1, Math.min(2, Number(variantCount) || 1));
+  return n >= 2 ? 70000 : 35000;
 }
 
 function parseGenerationRecordInfo(data, { variantCount = 1 } = {}) {
@@ -35,7 +40,8 @@ function parseGenerationRecordInfo(data, { variantCount = 1 } = {}) {
   const successFlag = String(inner.successFlag || data?.successFlag || "").toUpperCase();
   const genData = inner.response?.sunoData || inner.response?.suno_data || [];
   const arr = Array.isArray(genData) ? genData : [];
-  const audioClipCount = arr.filter((clip) => clipLooksPlayable(clip)).length;
+  const playableClips = arr.filter((clip) => clipLooksPlayable(clip));
+  const audioClipCount = playableClips.length;
   const expectedVariants = Math.max(1, Math.min(2, Number(variantCount) || 1));
   const hasAudio = audioClipCount > 0;
   const failed =
@@ -46,13 +52,29 @@ function parseGenerationRecordInfo(data, { variantCount = 1 } = {}) {
     || successFlag === "CREATE_TASK_FAILED"
     || successFlag === "GENERATE_AUDIO_FAILED";
   const statusSucceeded = status === "SUCCESS" || successFlag === "SUCCESS";
-  const ready = statusSucceeded && audioClipCount >= expectedVariants && !failed;
+  const taskCreateMs = Number(inner.createTime || inner.create_time || data?.createTime || 0);
+  const clipCreateMs = playableClips
+    .map((clip) => Number(clip.createTime || clip.create_time || 0))
+    .filter((n) => Number.isFinite(n) && n > 0);
+  const clipLagMs =
+    taskCreateMs > 0 && clipCreateMs.length
+      ? Math.min(...clipCreateMs) - taskCreateMs
+      : 0;
+  const minClipLagMs = minClipLagForVariants(expectedVariants);
+  const clipsMatured = clipLagMs >= minClipLagMs;
+  const ready =
+    statusSucceeded
+    && audioClipCount >= expectedVariants
+    && clipsMatured
+    && !failed;
   return {
     status,
     successFlag,
     hasAudio,
     audioClipCount,
     expectedVariants,
+    clipLagMs,
+    minClipLagMs,
     failed,
     ready,
   };
@@ -170,4 +192,5 @@ module.exports = {
   parseGenerationRecordInfo,
   verifySunoWatchReady,
   clipLooksPlayable,
+  minClipLagForVariants,
 };

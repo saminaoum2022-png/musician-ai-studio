@@ -3,7 +3,7 @@
  */
 
 const { sendPrivacySafePush } = require("./onesignal-push");
-const { verifySunoWatchReady } = require("./suno-job-ready");
+const { verifySunoWatchReady, minClipLagForVariants } = require("./suno-job-ready");
 const { queueUpdateMusicGenerationByTaskId } = require("./music-generation-log");
 
 const SUPABASE_URL = (process.env.SUPABASE_URL || "").replace(/\/$/, "");
@@ -11,6 +11,24 @@ const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
 
 /** Notifies faster than this after watch creation are treated as premature. */
 const PREMATURE_NOTIFY_MS = 15000;
+
+function wasFalseEarlyNotify(row, verified) {
+  if (!row?.notified_at) return false;
+  if (wasLikelyPrematureNotify(row)) return true;
+  if (!verified?.ready) return false;
+  const created = new Date(row.created_at).getTime();
+  const notified = new Date(row.notified_at).getTime();
+  if (!Number.isFinite(created) || !Number.isFinite(notified)) return false;
+  const notifyAgeMs = notified - created;
+  const clipLagMs = Number(verified.clipLagMs || 0);
+  const minLag = Number(verified.minClipLagMs || minClipLagForVariants(row?.variant_count || 1));
+  if (clipLagMs >= minLag && notifyAgeMs + 15000 < clipLagMs) return true;
+  return false;
+}
+
+function shouldRenotifyWatch(row, verified) {
+  return wasFalseEarlyNotify(row, verified);
+}
 
 function serviceHeaders(extra = {}) {
   return {
@@ -207,7 +225,7 @@ async function maybeNotifyWatchRow(row, { forceRenotify = false } = {}) {
 
   const alreadyNotified = Boolean(row.notified_at || row.status === "notified");
   if (alreadyNotified) {
-    if (forceRenotify || wasLikelyPrematureNotify(row)) {
+    if (forceRenotify || shouldRenotifyWatch(row, verified)) {
       await markWatchStatus(taskId, "complete", { notified_at: null });
     } else {
       return { ok: true, skipped: true, reason: "already_notified" };
@@ -241,12 +259,13 @@ async function retrySunoWatchReadyAndNotify(row, { attempts = 36, delayMs = 5000
     }
 
     if (verified.ready) {
-      const premature = wasLikelyPrematureNotify(current);
       const alreadyNotified = Boolean(current.notified_at || current.status === "notified");
-      if (alreadyNotified && !premature) {
+      if (alreadyNotified && !shouldRenotifyWatch(current, verified)) {
         return { ok: true, skipped: true, reason: "already_notified" };
       }
-      return maybeNotifyWatchRow(current, { forceRenotify: premature });
+      return maybeNotifyWatchRow(current, {
+        forceRenotify: shouldRenotifyWatch(current, verified),
+      });
     }
 
     if (i < attempts - 1) await sleep(delayMs);
@@ -311,7 +330,7 @@ async function handleSunoCallback(body) {
   }
 
   return maybeNotifyWatchRow(row, {
-    forceRenotify: wasLikelyPrematureNotify(row),
+    forceRenotify: shouldRenotifyWatch(row, verified),
   });
 }
 
@@ -342,13 +361,14 @@ async function notifyJobReadyFromClient({ userId, taskId, kind, title = "" } = {
     return { ok: false, reason: "not_ready" };
   }
 
-  const premature = wasLikelyPrematureNotify(merged);
   const alreadyNotified = Boolean(merged.notified_at || merged.status === "notified");
-  if (alreadyNotified && !premature) {
+  if (alreadyNotified && !shouldRenotifyWatch(merged, verified)) {
     return { ok: true, skipped: true, reason: "already_notified" };
   }
 
-  return maybeNotifyWatchRow(merged, { forceRenotify: premature || alreadyNotified });
+  return maybeNotifyWatchRow(merged, {
+    forceRenotify: shouldRenotifyWatch(merged, verified) || alreadyNotified,
+  });
 }
 
 function queueRegisterSunoWatch(opts) {

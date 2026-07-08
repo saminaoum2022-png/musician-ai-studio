@@ -186,7 +186,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260708-203233";
+const APP_BUILD = "20260708-204245";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -48197,12 +48197,29 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
    * Returns { kind, headline, detail }.
    *   kind = "copyright" | "sensitive" | "audio_verify" | "tooLong" | "credits" | "transient" | "generic" | null
    */
+  function isBenignSunoStatusMessage(msg) {
+    const m = String(msg || "").trim().toLowerCase();
+    return !m || m === "success" || m === "ok" || m === "pending";
+  }
+
   function interpretSunoFailure(raw) {
     if (!raw) return { kind: null, headline: "", detail: "" };
+    const taskStatus = String(raw.status || "").toUpperCase();
     const flag = String(raw.successFlag || raw.flag || "").toUpperCase();
-    const code = Number(raw.errorCode || raw.code || 0);
+    // Upstream task error only — never treat API wrapper `code: 200` as failure.
+    const code = Number(raw.errorCode || 0);
     const msg = String(raw.errorMessage || raw.msg || raw.message || raw.error || "").trim();
     const m = msg.toLowerCase();
+    const inProgress =
+      taskStatus === "PENDING"
+      || taskStatus === "RUNNING"
+      || taskStatus === "PROCESSING"
+      || flag === "PENDING"
+      || flag === "TEXT_SUCCESS"
+      || flag === "FIRST_SUCCESS";
+    if (inProgress && isBenignSunoStatusMessage(msg) && !code) {
+      return { kind: null, headline: "", detail: "" };
+    }
     const looksCopyright =
       m.includes("copyright")
       || m.includes("infringe")
@@ -48297,7 +48314,13 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
         detail: "Something went wrong upstream. Please try again in a moment.",
       };
     }
-    if (flag || msg || code) {
+    const explicitFailFlag =
+      flag === "FAILED"
+      || flag === "ERROR"
+      || flag === "CREATE_TASK_FAILED"
+      || flag === "GENERATE_AUDIO_FAILED"
+      || flag === "CALLBACK_EXCEPTION";
+    if (explicitFailFlag || code > 0 || (msg && !isBenignSunoStatusMessage(msg))) {
       return {
         kind: "generic",
         headline: "Generation failed",
@@ -48320,14 +48343,19 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
     const inner = data?.data || data || {};
     const status = String(inner.status || data?.status || "").toUpperCase();
     const successFlag = String(inner.successFlag || data?.successFlag || "").toUpperCase();
-    const errorCode = inner.errorCode || data?.errorCode || data?.code || null;
-    const errorMessage = String(
+    const errorCode = inner.errorCode || data?.errorCode || null;
+    const rawStatusMessage = String(
       inner.errorMessage
       || data?.errorMessage
       || inner.msg
       || data?.msg
       || ""
     ).trim();
+    const errorMessage =
+      isBenignSunoStatusMessage(rawStatusMessage)
+      && (status === "PENDING" || status === "RUNNING" || status === "PROCESSING")
+        ? ""
+        : rawStatusMessage;
     const genData = inner.response?.sunoData || inner.response?.suno_data || data?.data?.response?.sunoData || data?.data?.response?.suno_data || [];
     const first = Array.isArray(genData) ? genData[0] : null;
     const second = Array.isArray(genData) ? genData[1] : null;
@@ -48492,11 +48520,9 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
             || failure.kind === "tooLong"
             || failure.kind === "credits"
             || failure.kind === "needsLyricsOrInstrumental"
-            || (failure.kind === "transient" && !!state.errorMessage)
-            || (failure.kind === "generic" && !!state.errorMessage)
+            || failure.kind === "transient"
             || state.status === "FAILED"
-            || (failure.kind && state.errorCode && Number(state.errorCode) > 0 && Number(state.errorCode) !== 200)
-            || (failure.kind && state.successFlag && state.successFlag !== "SUCCESS" && state.successFlag !== "PENDING" && state.successFlag !== "TEXT_SUCCESS" && state.successFlag !== "FIRST_SUCCESS");
+            || (failure.kind && ["CREATE_TASK_FAILED", "GENERATE_AUDIO_FAILED", "CALLBACK_EXCEPTION", "FAILED", "ERROR", "SENSITIVE_WORD_ERROR"].includes(state.successFlag));
           if (failedByFlag && !state.hasAudio) {
             handleGenerationFailure(failure, state);
             return "stop";

@@ -5,14 +5,12 @@
  */
 
 import {
-  CREDIT_PACKS,
   FULL_SONG_CREDIT_COST,
   PRO_FEATURES,
   PRO_LAUNCH_COPY,
   PRO_PLANS,
   PRO_TRIAL_CREDITS,
   planCreditsMeta,
-  songsFromCredits,
 } from "./pro-plan-config.js";
 
 const SOUND_CREDIT_COST = 2.5;
@@ -32,13 +30,6 @@ function proPlansGuideLines() {
     const trial = plan.trialDays > 0 ? ` · ${plan.trialLabel}` : "";
     const save = plan.saveBadge ? ` · ${plan.saveBadge}` : "";
     return `- ${plan.label}: ${plan.priceDisplay}${plan.priceSuffix}${trial}${save} — ${planCreditsMeta(plan)} (${plan.creditsNote})`;
-  }).join("\n");
-}
-
-function creditPacksGuideLines() {
-  return CREDIT_PACKS.map((pack) => {
-    const badge = pack.badge ? ` · ${pack.badge}` : "";
-    return `- ${pack.label}: ${pack.priceDisplay} — ${pack.credits.toLocaleString()} credits · ≈ ${songsFromCredits(pack.credits)}${badge}`;
   }).join("\n");
 }
 
@@ -64,7 +55,7 @@ WHERE TO SEE BALANCE & PLANS:
 - Credits page also has a NabadAi Pro upsell card with "View plans".
 
 CREDIT BUCKETS (Credits breakdown):
-- Paid credits: from subscriptions or one-time packs — you can create songs AND gift Mic/Pulse/Star.
+- Paid credits: from subscriptions — you can create songs AND gift Mic/Pulse/Star.
 - Gift credits received: sent by other users — create songs only; cannot re-gift.
 - Promo credits: from promo codes — can create and gift during testing.
 - Credits never expire. If a generation fails, credits are refunded automatically.
@@ -90,11 +81,6 @@ ${proFeaturesGuideLines()}
 - Free users: NabadAi Coach has a daily message limit. Pro = unlimited Coach messages.
 - Cancel anytime: iPhone Settings → Apple ID → Subscriptions (Apple manages billing).
 
-ONE-TIME CREDIT PACKS (Credits tab on NabadAi Pro screen — no subscription):
-${creditPacksGuideLines()}
-${PRO_LAUNCH_COPY.packsLead}
-Monthly Pro is the best overall deal (lowest $/credit plus Pro features).
-
 PURCHASE STATUS:
 - ${PRO_LAUNCH_COPY.iapSoon}
 - ${PRO_LAUNCH_COPY.webOnly}
@@ -102,7 +88,7 @@ PURCHASE STATUS:
 
 COACH BEHAVIOR FOR THESE TOPICS:
 - Explain costs before suggesting an action that spends credits.
-- For "not enough credits": mention redeeming a promo code (Credits page), credit packs, or NabadAi Pro — never ask for payment details.
+- For "not enough credits": mention redeeming a promo code (Credits page) or subscribing to NabadAi Pro — never ask for payment details.
 - For Pro questions: point to Profile Pro banner, Settings → NabadAi Pro, or Credits → View plans.
 - You cannot see the user's balance or subscription status — tell them where to check on screen.
 `.trim();

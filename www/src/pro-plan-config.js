@@ -88,7 +88,7 @@ export const CREDIT_PACKS = Object.freeze([
     priceDisplay: "$1.99",
     label: "Starter",
     markup: PACK_TIER_MARKUP.starter,
-    credits: packCreditsForPrice(1.99, PACK_TIER_MARKUP.starter),
+    credits: 200,
   },
   {
     id: "pack_60",
@@ -97,7 +97,7 @@ export const CREDIT_PACKS = Object.freeze([
     priceDisplay: "$7.99",
     label: "Creator",
     markup: PACK_TIER_MARKUP.creator,
-    credits: packCreditsForPrice(7.99, PACK_TIER_MARKUP.creator),
+    credits: 850,
     badge: "Popular",
   },
   {
@@ -107,7 +107,7 @@ export const CREDIT_PACKS = Object.freeze([
     priceDisplay: "$12.99",
     label: "Studio",
     markup: PACK_TIER_MARKUP.studio,
-    credits: packCreditsForPrice(12.99, PACK_TIER_MARKUP.studio),
+    credits: 1400,
     badge: "Best value",
   },
 ]);
@@ -138,7 +138,7 @@ export const PRO_LAUNCH_COPY = Object.freeze({
     "Credits never expire.",
   ],
   iapSoon: "In-app purchase connects after App Store setup. Preview the plans below.",
-  webOnly: "Subscriptions and credit packs are available in the NabadAi iPhone app.",
+  webOnly: "Subscriptions are available in the NabadAi iPhone app.",
 });
 
 export function planCreditsTotal(plan) {

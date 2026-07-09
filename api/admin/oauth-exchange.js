@@ -28,7 +28,11 @@ module.exports = async function handler(req, res) {
       apikey: anonKey,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ auth_code: code, code_verifier: codeVerifier }),
+    body: JSON.stringify({
+      auth_code: code,
+      code_verifier: codeVerifier,
+      redirect_uri: "https://www.nabadai.com/admin/",
+    }),
   });
   const data = await r.json().catch(() => ({}));
   if (!r.ok || !data?.access_token) {

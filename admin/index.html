@@ -15,7 +15,10 @@
           var host = window.location.hostname || "";
           var search = window.location.search || "";
           var hash = window.location.hash || "";
-          if (host === "nabadai.com" && window.location.search.indexOf("code=") !== -1) {
+          if (
+            host === "nabadai.com" &&
+            (search.indexOf("code=") !== -1 || hash.indexOf("access_token=") !== -1)
+          ) {
             window.location.replace("https://www.nabadai.com/admin/" + search + hash);
           }
         } catch (e) {}
@@ -129,6 +132,6 @@
       </main>
     </div>
 
-    <script type="module" src="/admin/app.js"></script>
+    <script type="module" src="/admin/app.js?v=20260709-oauth2"></script>
   </body>
 </html>

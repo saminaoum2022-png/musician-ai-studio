@@ -149,17 +149,29 @@ function randomVerifier(len = 64) {
   return b64urlFromBytes(bytes).slice(0, len);
 }
 
-function setOAuthMarkers(verifier) {
-  localStorage.setItem(AUTH_PKCE_KEY, verifier);
+function setOAuthMarkers(verifier = "") {
+  if (verifier) {
+    localStorage.setItem(AUTH_PKCE_KEY, verifier);
+    try {
+      sessionStorage.setItem(AUTH_PKCE_KEY, verifier);
+    } catch {}
+  }
   localStorage.setItem(AUTH_PENDING_KEY, String(Date.now()));
   const secure = location.protocol === "https:" ? "; Secure" : "";
-  document.cookie = `${PKCE_COOKIE}=${encodeURIComponent(verifier)}; Path=/; Max-Age=600; SameSite=Lax${secure}`;
-  document.cookie = `${PENDING_COOKIE}=1; Path=/; Max-Age=600; SameSite=Lax${secure}`;
+  const domain = /\.?nabadai\.com$/i.test(location.hostname) ? "; Domain=.nabadai.com" : "";
+  if (verifier) {
+    document.cookie = `${PKCE_COOKIE}=${encodeURIComponent(verifier)}; Path=/; Max-Age=600; SameSite=Lax${secure}${domain}`;
+  }
+  document.cookie = `${PENDING_COOKIE}=1; Path=/; Max-Age=600; SameSite=Lax${secure}${domain}`;
 }
 
 function readPkceVerifier() {
   const fromStore = localStorage.getItem(AUTH_PKCE_KEY) || "";
   if (fromStore) return fromStore;
+  try {
+    const fromSession = sessionStorage.getItem(AUTH_PKCE_KEY) || "";
+    if (fromSession) return fromSession;
+  } catch {}
   const m = document.cookie.match(new RegExp(`(?:^|; )${PKCE_COOKIE}=([^;]*)`));
   return m ? decodeURIComponent(m[1]) : "";
 }
@@ -172,8 +184,12 @@ function hasOAuthPending() {
 function clearOAuthMarkers() {
   localStorage.removeItem(AUTH_PKCE_KEY);
   localStorage.removeItem(AUTH_PENDING_KEY);
-  document.cookie = `${PKCE_COOKIE}=; Path=/; Max-Age=0`;
-  document.cookie = `${PENDING_COOKIE}=; Path=/; Max-Age=0`;
+  try {
+    sessionStorage.removeItem(AUTH_PKCE_KEY);
+  } catch {}
+  const domain = /\.?nabadai\.com$/i.test(location.hostname) ? "; Domain=.nabadai.com" : "";
+  document.cookie = `${PKCE_COOKIE}=; Path=/; Max-Age=0${domain}`;
+  document.cookie = `${PENDING_COOKIE}=; Path=/; Max-Age=0${domain}`;
 }
 
 function showLoginError(msg) {
@@ -310,13 +326,13 @@ function clearOAuthCallbackFromUrl() {
 async function buildGoogleOAuthUrl() {
   const { supabaseUrl, supabaseAnonKey } = state.config;
   if (!supabaseUrl || !supabaseAnonKey) throw new Error("Supabase config missing");
-  const verifier = randomVerifier(64);
-  setOAuthMarkers(verifier);
-  const challenge = await sha256Base64Url(verifier);
+  // Mark admin OAuth so the main app hands off the callback to /admin/.
+  setOAuthMarkers();
   const redirectTo = encodeURIComponent(oauthRedirectTarget());
   const scope = encodeURIComponent("email profile");
   const apikey = encodeURIComponent(supabaseAnonKey);
-  return `${supabaseUrl}/auth/v1/authorize?provider=google&response_type=code&scope=${scope}&apikey=${apikey}&code_challenge=${encodeURIComponent(challenge)}&code_challenge_method=S256&redirect_to=${redirectTo}`;
+  // Implicit flow: tokens land in the URL hash — no PKCE verifier for Safari to lose.
+  return `${supabaseUrl}/auth/v1/authorize?provider=google&response_type=token&scope=${scope}&apikey=${apikey}&redirect_to=${redirectTo}`;
 }
 
 function sessionFromTokenPayload(data, fallbackEmail = "") {
@@ -332,19 +348,49 @@ function sessionFromTokenPayload(data, fallbackEmail = "") {
   };
 }
 
-async function exchangeOAuthCodeForSession(code) {
-  const verifier = readPkceVerifier();
-  if (!verifier) throw new Error("Sign-in expired — tap Continue with Google again");
-
-  const r = await fetch("/api/admin/oauth-exchange", {
+async function exchangeOAuthCodeDirect(code, verifier) {
+  const { supabaseUrl, supabaseAnonKey } = state.config;
+  const r = await fetch(`${supabaseUrl}/auth/v1/token?grant_type=pkce`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ code, code_verifier: verifier }),
+    headers: {
+      apikey: supabaseAnonKey,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      auth_code: code,
+      code_verifier: verifier,
+      redirect_uri: oauthRedirectTarget(),
+    }),
   });
   const data = await r.json().catch(() => ({}));
   if (!r.ok || !data?.access_token) {
-    throw new Error(data?.error || data?.error_description || data?.msg || "Google sign-in failed");
+    const msg = data?.error_description || data?.msg || data?.message || `OAuth exchange failed (${r.status})`;
+    throw new Error(msg);
   }
+  return data;
+}
+
+async function exchangeOAuthCodeForSession(code) {
+  const verifier = readPkceVerifier();
+  if (!verifier) {
+    throw new Error("Sign-in state was lost (Safari). Hard-refresh and try Continue with Google again.");
+  }
+
+  let data;
+  try {
+    data = await exchangeOAuthCodeDirect(code, verifier);
+  } catch (directErr) {
+    const r = await fetch("/api/admin/oauth-exchange", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ code, code_verifier: verifier }),
+    });
+    data = await r.json().catch(() => ({}));
+    if (!r.ok || !data?.access_token) {
+      throw new Error(data?.error || directErr?.message || "Google sign-in failed");
+    }
+  }
+
   clearOAuthMarkers();
   writeSession(sessionFromTokenPayload(data));
   await hydrateSessionEmail();
@@ -484,7 +530,8 @@ async function adminFetch(view, { offset = 0, limit = PAGE_SIZE } = {}) {
     throw new Error("Session expired — sign in again");
   }
   if (r.status === 403) {
-    throw new Error("This account is not an admin");
+    const who = state.session?.email ? ` (${state.session.email})` : "";
+    throw new Error(`This account is not an admin${who}. Use saminaoum2022@gmail.com.`);
   }
   if (!r.ok) {
     throw new Error(data?.error || `Request failed (${r.status})`);
@@ -808,10 +855,24 @@ async function boot() {
   try {
     const handledOAuth = await maybeHandleAuthCallback();
     if (handledOAuth) {
-      showLoginError("");
+      if (!state.session?.access_token) {
+        showLogin();
+        showLoginError("Google sign-in did not return a session. Try again.");
+        return;
+      }
+      await hydrateSessionEmail();
+      const signedInAs = state.session?.email || "unknown";
+      if (!state.session?.email) {
+        showLogin();
+        showLoginError("Could not read your Google email. Use saminaoum2022@gmail.com or email + password.");
+        return;
+      }
+      showLoginError(`Signed in as ${signedInAs}. Opening dashboard…`);
       showApp();
       setView("overview");
       await loadView({ force: true });
+      if (els.loginScreen && !els.loginScreen.hidden) return;
+      showLoginError("");
       return;
     }
   } catch (e) {

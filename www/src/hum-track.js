@@ -165,6 +165,17 @@ function stopHumTrackRecording(finalize = true) {
   humTrackStream = null;
 }
 
+function closeHumTrackUiOnly() {
+  ctx?.clearCreateFlow?.();
+  const sheet = el("humTrackSheet");
+  if (sheet) {
+    sheet.hidden = true;
+    sheet.setAttribute("aria-hidden", "true");
+    sheet.classList.remove("isGenerating");
+  }
+  try { ctx?.syncCreateTabMorph?.(); } catch {}
+}
+
 function leaveHumTrackFlow() {
   ctx?.clearCreateFlow?.();
   try {
@@ -459,8 +470,8 @@ function armHumTrackGeneration(taskId, instrumentId, label) {
       pillText: ctx?.coachHumTrackGeneratingPillText?.(label),
     });
   } catch {}
+  closeHumTrackUiOnly();
   try { ctx?.openProfileSongsWhileGenerating?.(); } catch {}
-  dismissHumTrackSheetToCreate();
   startHumTrackPolling(taskId, instrumentId);
 }
 
@@ -654,7 +665,8 @@ export function openHumTrackSheet() {
 
 export function closeHumTrackFlow() {
   if (humTrackGenerating) {
-    dismissHumTrackSheetToCreate();
+    closeHumTrackUiOnly();
+    try { ctx?.openProfileSongsWhileGenerating?.(); } catch {}
     return;
   }
   const sheet = el("humTrackSheet");

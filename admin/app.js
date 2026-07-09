@@ -718,11 +718,7 @@ async function boot() {
   } catch (e) {
     if (els.loginScreen) {
       els.loginScreen.hidden = false;
-      const err = document.getElementById("loginError");
-      if (err) {
-        err.hidden = false;
-        err.textContent = e?.message || "Could not load config";
-      }
+      showLoginError(e?.message || "Could not load config");
     }
     return;
   }
@@ -736,9 +732,19 @@ async function boot() {
     return;
   }
 
+  const oauthPreview = parseOAuthCallback();
+  if (oauthPreview.code) {
+    showLoginError("Finishing Google sign-in…");
+  } else if (oauthPreview.error) {
+    showLoginError(decodeURIComponent(String(oauthPreview.error).replace(/\+/g, " ")));
+    clearOAuthCallbackFromUrl();
+    return;
+  }
+
   try {
     const handledOAuth = await maybeHandleAuthCallback();
     if (handledOAuth) {
+      showLoginError("");
       showApp();
       setView("overview");
       await loadView({ force: true });

@@ -9,6 +9,18 @@
     <meta name="theme-color" content="#05070d" />
     <link rel="icon" href="/favicon.ico" sizes="any" />
     <link rel="stylesheet" href="/admin/styles.css" />
+    <script>
+      (function () {
+        try {
+          var host = window.location.hostname || "";
+          var search = window.location.search || "";
+          var hash = window.location.hash || "";
+          if (host === "nabadai.com" && window.location.search.indexOf("code=") !== -1) {
+            window.location.replace("https://www.nabadai.com/admin/" + search + hash);
+          }
+        } catch (e) {}
+      })();
+    </script>
   </head>
   <body>
     <noscript>

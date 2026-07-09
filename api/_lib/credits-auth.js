@@ -15,7 +15,7 @@
 const SUPABASE_URL = (process.env.SUPABASE_URL || "").replace(/\/$/, "");
 const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || "";
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
-const DEFAULT_ADMIN = "saminaoum2022@gmail.com,saminaoum2023@gmail.com";
+const DEFAULT_ADMIN = "saminaoum2022@gmail.com";
 
 function readBearer(req) {
   const raw = req.headers?.authorization || req.headers?.Authorization || "";

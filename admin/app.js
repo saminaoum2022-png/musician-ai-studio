@@ -1,6 +1,8 @@
 const SESSION_KEY = "nabad_admin_session_v1";
 const AUTH_PKCE_KEY = "nabad_admin_pkce_v1";
 const AUTH_PENDING_KEY = "nabad_admin_oauth_pending_v1";
+const PKCE_COOKIE = "nabad_admin_pkce";
+const PENDING_COOKIE = "nabad_admin_oauth_pending";
 /** Fixed redirect — must match an entry in Supabase → Auth → Redirect URLs. */
 const ADMIN_OAUTH_REDIRECT = "https://www.nabadai.com/admin/";
 const PAGE_SIZE = 50;
@@ -147,6 +149,33 @@ function randomVerifier(len = 64) {
   return b64urlFromBytes(bytes).slice(0, len);
 }
 
+function setOAuthMarkers(verifier) {
+  localStorage.setItem(AUTH_PKCE_KEY, verifier);
+  localStorage.setItem(AUTH_PENDING_KEY, String(Date.now()));
+  const secure = location.protocol === "https:" ? "; Secure" : "";
+  document.cookie = `${PKCE_COOKIE}=${encodeURIComponent(verifier)}; Path=/; Max-Age=600; SameSite=Lax${secure}`;
+  document.cookie = `${PENDING_COOKIE}=1; Path=/; Max-Age=600; SameSite=Lax${secure}`;
+}
+
+function readPkceVerifier() {
+  const fromStore = localStorage.getItem(AUTH_PKCE_KEY) || "";
+  if (fromStore) return fromStore;
+  const m = document.cookie.match(new RegExp(`(?:^|; )${PKCE_COOKIE}=([^;]*)`));
+  return m ? decodeURIComponent(m[1]) : "";
+}
+
+function hasOAuthPending() {
+  if (localStorage.getItem(AUTH_PENDING_KEY) || localStorage.getItem(AUTH_PKCE_KEY)) return true;
+  return /(?:^|; )nabad_admin_oauth_pending=/.test(document.cookie);
+}
+
+function clearOAuthMarkers() {
+  localStorage.removeItem(AUTH_PKCE_KEY);
+  localStorage.removeItem(AUTH_PENDING_KEY);
+  document.cookie = `${PKCE_COOKIE}=; Path=/; Max-Age=0`;
+  document.cookie = `${PENDING_COOKIE}=; Path=/; Max-Age=0`;
+}
+
 function showLoginError(msg) {
   if (!els.loginError) return;
   if (!msg) {
@@ -282,8 +311,7 @@ async function buildGoogleOAuthUrl() {
   const { supabaseUrl, supabaseAnonKey } = state.config;
   if (!supabaseUrl || !supabaseAnonKey) throw new Error("Supabase config missing");
   const verifier = randomVerifier(64);
-  localStorage.setItem(AUTH_PKCE_KEY, verifier);
-  localStorage.setItem(AUTH_PENDING_KEY, String(Date.now()));
+  setOAuthMarkers(verifier);
   const challenge = await sha256Base64Url(verifier);
   const redirectTo = encodeURIComponent(oauthRedirectTarget());
   const scope = encodeURIComponent("email profile");
@@ -305,30 +333,26 @@ function sessionFromTokenPayload(data, fallbackEmail = "") {
 }
 
 async function exchangeOAuthCodeForSession(code) {
-  const { supabaseUrl, supabaseAnonKey } = state.config;
-  const verifier = localStorage.getItem(AUTH_PKCE_KEY) || "";
+  const verifier = readPkceVerifier();
   if (!verifier) throw new Error("Sign-in expired — tap Continue with Google again");
-  const r = await fetch(`${supabaseUrl}/auth/v1/token?grant_type=pkce`, {
+
+  const r = await fetch("/api/admin/oauth-exchange", {
     method: "POST",
-    headers: {
-      apikey: supabaseAnonKey,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ auth_code: code, code_verifier: verifier }),
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ code, code_verifier: verifier }),
   });
   const data = await r.json().catch(() => ({}));
   if (!r.ok || !data?.access_token) {
-    throw new Error(data?.error_description || data?.msg || data?.message || "Google sign-in failed");
+    throw new Error(data?.error || data?.error_description || data?.msg || "Google sign-in failed");
   }
-  localStorage.removeItem(AUTH_PKCE_KEY);
-  localStorage.removeItem(AUTH_PENDING_KEY);
+  clearOAuthMarkers();
   writeSession(sessionFromTokenPayload(data));
+  await hydrateSessionEmail();
   return true;
 }
 
 function finishOAuthSession(data) {
-  localStorage.removeItem(AUTH_PKCE_KEY);
-  localStorage.removeItem(AUTH_PENDING_KEY);
+  clearOAuthMarkers();
   writeSession(sessionFromTokenPayload(data));
 }
 
@@ -343,6 +367,7 @@ async function maybeHandleAuthCallback() {
       refresh_token: parsed.refreshToken,
       expires_in: parsed.expiresIn,
     });
+    await hydrateSessionEmail();
     clearOAuthCallbackFromUrl();
     return true;
   }
@@ -353,22 +378,39 @@ async function maybeHandleAuthCallback() {
 }
 
 function maybeShowInterruptedOAuthError() {
-  const pending = localStorage.getItem(AUTH_PENDING_KEY);
-  const verifier = localStorage.getItem(AUTH_PKCE_KEY);
-  if (!pending || !verifier) return;
-  const ageMs = Date.now() - Number(pending || 0);
-  if (!Number.isFinite(ageMs) || ageMs > 10 * 60 * 1000) {
-    localStorage.removeItem(AUTH_PENDING_KEY);
-    localStorage.removeItem(AUTH_PKCE_KEY);
+  if (!hasOAuthPending()) return;
+  const pending = Number(localStorage.getItem(AUTH_PENDING_KEY) || 0);
+  const ageMs = pending ? Date.now() - pending : 0;
+  if (pending && (!Number.isFinite(ageMs) || ageMs > 10 * 60 * 1000)) {
+    clearOAuthMarkers();
     return;
   }
   const parsed = parseOAuthCallback();
   if (parsed.code || parsed.accessToken || parsed.error) return;
-  localStorage.removeItem(AUTH_PENDING_KEY);
-  localStorage.removeItem(AUTH_PKCE_KEY);
+  clearOAuthMarkers();
   showLoginError(
-    "Google sign-in returned without credentials. Try again, use Chrome instead of Safari, or sign in with email + password.",
+    "Google sign-in returned without credentials. Hard-refresh, try Chrome, or use email + password.",
   );
+}
+
+async function hydrateSessionEmail() {
+  if (!state.session?.access_token || !state.config) return;
+  const { supabaseUrl, supabaseAnonKey } = state.config;
+  try {
+    const r = await fetch(`${supabaseUrl}/auth/v1/user`, {
+      headers: {
+        apikey: supabaseAnonKey,
+        Authorization: `Bearer ${state.session.access_token}`,
+      },
+    });
+    const data = await r.json().catch(() => ({}));
+    if (r.ok && data?.email) {
+      writeSession({
+        ...state.session,
+        email: String(data.email).trim().toLowerCase(),
+      });
+    }
+  } catch {}
 }
 
 async function signInWithGoogle() {
@@ -402,6 +444,7 @@ async function signIn(email, password) {
     throw new Error(data?.error_description || data?.msg || data?.message || "Sign in failed");
   }
   writeSession(sessionFromTokenPayload(data, email));
+  await hydrateSessionEmail();
 }
 
 async function refreshSessionIfNeeded() {

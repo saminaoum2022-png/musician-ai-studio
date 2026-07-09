@@ -184,7 +184,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260709-115348";
+const APP_BUILD = "20260709-115758";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -23103,7 +23103,8 @@ async function maybeHandleAuthCodeFromQuery() {
     try {
       const adminPending =
         localStorage.getItem("nabad_admin_oauth_pending_v1") ||
-        localStorage.getItem("nabad_admin_pkce_v1");
+        localStorage.getItem("nabad_admin_pkce_v1") ||
+        /(?:^|; )nabad_admin_oauth_pending=/.test(document.cookie || "");
       if (adminPending) {
         window.location.replace(`/admin/${window.location.search}${window.location.hash}`);
         return true;

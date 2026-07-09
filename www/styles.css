@@ -17373,31 +17373,28 @@ body.trackSheetOpen .footer{
     padding-block-start: 48px;
   }
   body[data-route="player"] .app{
-    /* Full-height shell so the player can vertically center inside the viewport
-       and the bottom black band feels balanced (not pinned at the top). */
     min-height: 100vh;
     min-height: 100svh;
-    /* Original insets restore vertical balance for cover + transport. */
-    padding: calc(env(safe-area-inset-top) + 12px) 14px calc(env(safe-area-inset-bottom) + 12px) !important;
-    /* Center .grid (which holds the player card) vertically. */
+    padding: 0 0 calc(env(safe-area-inset-bottom) + 12px) !important;
     display: flex;
     flex-direction: column;
-    justify-content: center;
+    justify-content: flex-start;
   }
   body[data-route="player"] main.grid{
     margin: 0;
+    width: 100%;
   }
   body[data-route="player"] .playerCard{
     padding: 0;
-    /* Fixed back sits in the viewport corner; ~48px ≈ old in-flow header + margin
-       so artwork sits where it did before (no extra safe-area here — .app handles notch). */
-    padding-block-start: 48px;
     min-height: 0;
     display: flex;
     flex-direction: column;
+    width: 100%;
+    background: transparent;
+    border: none;
+    box-shadow: none;
   }
-  /* Fixed header as soon as the player card paints — do not wait on body[data-route]
-     (hash → applyRoute can lag one frame and the ⋯ button visibly jumps). */
+  /* Fixed header floats over the edge-to-edge cover. */
   .playerCard .playerHeader{
     position: fixed;
     top: 0;
@@ -17405,19 +17402,93 @@ body.trackSheetOpen .footer{
     z-index: 200;
     margin: 0;
     padding-block-start: calc(env(safe-area-inset-top, 0px) + 10px);
-    padding-inline-start: calc(14px + env(safe-area-inset-left, 0px));
-    padding-inline-end: calc(14px + env(safe-area-inset-right, 0px));
+    padding-block-end: 28px;
+    padding-inline-start: calc(16px + env(safe-area-inset-left, 0px));
+    padding-inline-end: calc(16px + env(safe-area-inset-right, 0px));
     max-width: 100%;
     box-sizing: border-box;
     pointer-events: none;
+    background: linear-gradient(
+      180deg,
+      rgba(0, 0, 0, 0.52) 0%,
+      rgba(0, 0, 0, 0.22) 55%,
+      transparent 100%
+    );
   }
   .playerCard .playerHeader .nabadBackBtn,
   .playerCard .playerHeader .playerMenuBtn{
     pointer-events: auto;
   }
+  body[data-route="player"] .playerHeader .nabadBackBtn,
+  body[data-route="player"] .playerHeader .playerMenuBtn{
+    border-color: rgba(255,255,255,0.14);
+    background: rgba(0,0,0,0.28);
+    -webkit-backdrop-filter: blur(12px);
+            backdrop-filter: blur(12px);
+    color: rgba(255,255,255,0.92);
+  }
   body[data-route="player"] .playerShell{
     flex: 0 1 auto;
     align-content: start;
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    width: 100%;
+  }
+  body[data-route="player"] .playerArtCol{
+    width: 100%;
+    margin: 0;
+    gap: 10px;
+  }
+  body[data-route="player"] .playerArtWrap{
+    border: none;
+    padding: 0;
+    background: transparent;
+    box-shadow: none;
+    border-radius: 0;
+  }
+  body[data-route="player"] .playerArtWrap.isNowPlaying{
+    border: none;
+    box-shadow: none;
+  }
+  body[data-route="player"] .playerArtWrap.isEmpty{
+    background: #0a0c12;
+  }
+  body[data-route="player"] .playerArtStage{
+    width: 100%;
+    height: min(54vh, 440px);
+    min-height: 280px;
+    border-radius: 0;
+    overflow: hidden;
+  }
+  body[data-route="player"] .playerArtStage::after{
+    content: "";
+    position: absolute;
+    inset: auto 0 0 0;
+    height: 48%;
+    background: linear-gradient(
+      to top,
+      rgba(6, 8, 14, 0.98) 0%,
+      rgba(6, 8, 14, 0.55) 42%,
+      transparent 100%
+    );
+    pointer-events: none;
+    z-index: 3;
+  }
+  body[data-route="player"] .playerArt{
+    width: 100%;
+    height: 100%;
+    aspect-ratio: auto;
+    object-fit: cover;
+    border-radius: 0;
+  }
+  body[data-route="player"] .playerFeedbackInboxBtn{
+    margin-inline: 16px;
+  }
+  body[data-route="player"] .playerMeta{
+    padding: 18px 20px 0;
+    width: 100%;
+    box-sizing: border-box;
   }
   body[data-route="player"] .playerSecondaryRow{
     margin-bottom: 0;
@@ -17434,15 +17505,6 @@ body.trackSheetOpen .footer{
   }
   .playerShell{
     gap: 14px;
-  }
-  .playerArtWrap{
-    border: none;
-    padding: 0;
-    background: transparent;
-    box-shadow: none;
-  }
-  .playerArt{
-    border-radius: 18px;
   }
   body:not([data-route="player"]) .playerHeader{
     margin-bottom: 10px;

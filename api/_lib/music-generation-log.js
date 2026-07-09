@@ -6,7 +6,8 @@
 const SUPABASE_URL = (process.env.SUPABASE_URL || "").replace(/\/$/, "");
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
 
-const SUNO_USD_PER_CREDIT = Number(process.env.SUNO_USD_PER_CREDIT || "0.008");
+// Suno pack: $5.25 / 1000 credits → $0.00525 per credit (12 credits = $0.063 per generation).
+const SUNO_USD_PER_CREDIT = Number(process.env.SUNO_USD_PER_CREDIT || "0.00525");
 
 function serviceHeaders(extra = {}) {
   return {

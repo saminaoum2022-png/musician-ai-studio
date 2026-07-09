@@ -34,11 +34,25 @@ where user_id = (
 | Variable | Purpose |
 |----------|---------|
 | `ADMIN_EMAILS` | Fallback admin gate (comma-separated) |
-| `SUNO_USD_PER_CREDIT` | Est. API cost per credit (default `0.008`) |
+| `SUNO_USD_PER_CREDIT` | Est. API cost per credit (default `0.00525` — $5.25 / 1000 credits) |
 
 ## Access
 
-Open **https://admin.nabadai.com** in a desktop browser and sign in with your admin Supabase account.
+Open **https://admin.nabadai.com** in a desktop browser.
+
+- **Google accounts** (most NabadAi users): tap **Continue with Google** — your Google password does not go in the email/password form.
+- **Email/password accounts**: use the form below the divider.
+
+Your account must be an admin (`profiles.role = 'admin'` in Supabase, or your email in `ADMIN_EMAILS`).
+
+### Supabase redirect URL (required for Google)
+
+In **Supabase → Authentication → URL configuration → Redirect URLs**, add:
+
+- `https://admin.nabadai.com/`
+- `https://nabadai.com/admin/` (if you open admin from the main domain)
+
+Without these, Google sign-in will fail after you pick your account.
 
 ## API
 

@@ -1,4 +1,5 @@
 const SESSION_KEY = "nabad_admin_session_v1";
+const AUTH_PKCE_KEY = "nabad_admin_pkce_v1";
 const PAGE_SIZE = 50;
 
 const state = {
@@ -15,6 +16,7 @@ const els = {
   loginForm: document.getElementById("loginForm"),
   loginEmail: document.getElementById("loginEmail"),
   loginPassword: document.getElementById("loginPassword"),
+  btnLoginGoogle: document.getElementById("btnLoginGoogle"),
   loginError: document.getElementById("loginError"),
   btnLogin: document.getElementById("btnLogin"),
   btnSignOut: document.getElementById("btnSignOut"),
@@ -117,6 +119,90 @@ function writeSession(sess) {
   localStorage.setItem(SESSION_KEY, JSON.stringify(sess));
 }
 
+function b64urlFromBytes(bytes) {
+  let bin = "";
+  for (let i = 0; i < bytes.length; i += 1) bin += String.fromCharCode(bytes[i]);
+  return btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+}
+
+async function sha256Base64Url(input) {
+  const enc = new TextEncoder().encode(input);
+  const buf = await crypto.subtle.digest("SHA-256", enc);
+  return b64urlFromBytes(new Uint8Array(buf));
+}
+
+function randomVerifier(len = 64) {
+  const bytes = new Uint8Array(len);
+  crypto.getRandomValues(bytes);
+  return b64urlFromBytes(bytes).slice(0, len);
+}
+
+function oauthRedirectTarget() {
+  const path = window.location.pathname || "/";
+  return `${window.location.origin}${path.endsWith("/") ? path : `${path}/`}`;
+}
+
+async function buildGoogleOAuthUrl() {
+  const { supabaseUrl, supabaseAnonKey } = state.config;
+  if (!supabaseUrl || !supabaseAnonKey) throw new Error("Supabase config missing");
+  const verifier = randomVerifier(64);
+  localStorage.setItem(AUTH_PKCE_KEY, verifier);
+  const challenge = await sha256Base64Url(verifier);
+  const redirectTo = encodeURIComponent(oauthRedirectTarget());
+  const scope = encodeURIComponent("email profile");
+  return `${supabaseUrl}/auth/v1/authorize?provider=google&response_type=code&scope=${scope}&code_challenge=${encodeURIComponent(challenge)}&code_challenge_method=S256&redirect_to=${redirectTo}`;
+}
+
+function sessionFromTokenPayload(data, fallbackEmail = "") {
+  const email =
+    String(data?.user?.email || data?.email || fallbackEmail || "")
+      .trim()
+      .toLowerCase();
+  return {
+    access_token: data.access_token,
+    refresh_token: data.refresh_token,
+    expires_at: Date.now() + Number(data.expires_in || 3600) * 1000,
+    email,
+  };
+}
+
+async function exchangeOAuthCodeForSession(code) {
+  const { supabaseUrl, supabaseAnonKey } = state.config;
+  const verifier = localStorage.getItem(AUTH_PKCE_KEY) || "";
+  if (!verifier) throw new Error("Sign-in expired — tap Continue with Google again");
+  const r = await fetch(`${supabaseUrl}/auth/v1/token?grant_type=pkce`, {
+    method: "POST",
+    headers: {
+      apikey: supabaseAnonKey,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ auth_code: code, code_verifier: verifier }),
+  });
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok || !data?.access_token) {
+    throw new Error(data?.error_description || data?.msg || data?.message || "Google sign-in failed");
+  }
+  localStorage.removeItem(AUTH_PKCE_KEY);
+  writeSession(sessionFromTokenPayload(data));
+  return true;
+}
+
+async function maybeHandleAuthCodeFromQuery() {
+  const sp = new URLSearchParams(window.location.search || "");
+  const code = sp.get("code");
+  if (!code) return false;
+  await exchangeOAuthCodeForSession(code);
+  try {
+    window.history.replaceState({}, document.title, oauthRedirectTarget());
+  } catch {}
+  return true;
+}
+
+async function signInWithGoogle() {
+  const url = await buildGoogleOAuthUrl();
+  window.location.assign(url);
+}
+
 async function loadConfig() {
   const r = await fetch("/api/public-config");
   if (!r.ok) throw new Error("Could not load app config");
@@ -142,12 +228,7 @@ async function signIn(email, password) {
   if (!r.ok) {
     throw new Error(data?.error_description || data?.msg || data?.message || "Sign in failed");
   }
-  writeSession({
-    access_token: data.access_token,
-    refresh_token: data.refresh_token,
-    expires_at: Date.now() + Number(data.expires_in || 3600) * 1000,
-    email: String(email).toLowerCase(),
-  });
+  writeSession(sessionFromTokenPayload(data, email));
 }
 
 async function refreshSessionIfNeeded() {
@@ -485,6 +566,25 @@ async function boot() {
   }
 
   state.session = readSession();
+  try {
+    const hadOAuthCode = Boolean(new URLSearchParams(window.location.search || "").get("code"));
+    if (hadOAuthCode) {
+      await maybeHandleAuthCodeFromQuery();
+      showApp();
+      setView("overview");
+      await loadView({ force: true });
+      return;
+    }
+  } catch (e) {
+    writeSession(null);
+    showLogin();
+    if (els.loginError) {
+      els.loginError.hidden = false;
+      els.loginError.textContent = e?.message || "Google sign-in failed";
+    }
+    return;
+  }
+
   if (state.session) {
     try {
       showApp();
@@ -512,6 +612,18 @@ els.loginForm?.addEventListener("submit", async (e) => {
     els.loginError.textContent = err?.message || "Sign in failed";
   } finally {
     els.btnLogin.disabled = false;
+  }
+});
+
+els.btnLoginGoogle?.addEventListener("click", async () => {
+  els.loginError.hidden = true;
+  if (els.btnLoginGoogle) els.btnLoginGoogle.disabled = true;
+  try {
+    await signInWithGoogle();
+  } catch (err) {
+    els.loginError.hidden = false;
+    els.loginError.textContent = err?.message || "Could not start Google sign-in";
+    if (els.btnLoginGoogle) els.btnLoginGoogle.disabled = false;
   }
 });
 

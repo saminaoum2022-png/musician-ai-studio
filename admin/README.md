@@ -54,6 +54,37 @@ In **Supabase → Authentication → URL configuration → Redirect URLs**, add:
 
 Without these, Google sign-in will fail after you pick your account.
 
+### Email + password (if Google does not work)
+
+Google accounts do not have a password until you set one. Easiest options:
+
+**Option A — Supabase Dashboard (no terminal)**
+
+1. [Supabase Dashboard](https://supabase.com) → your project → **Authentication** → **Users**
+2. Find your email (e.g. `saminaoum2022@gmail.com`) → **⋮** → **Send password recovery**
+3. Open the email, set a new password
+4. Sign in at **https://www.nabadai.com/admin/** with that email + password
+
+**Option B — script (sets password immediately)**
+
+From the repo root, with your **service role** key from Supabase → Settings → API:
+
+```bash
+export SUPABASE_URL="https://YOUR_PROJECT.supabase.co"
+export SUPABASE_SERVICE_ROLE_KEY="eyJ..."
+export ADMIN_EMAIL="saminaoum2022@gmail.com"
+node scripts/set-admin-password.mjs
+```
+
+The script prints a generated password and sets `profiles.role = 'admin'`.
+
+Then grant admin if needed:
+
+```sql
+update public.profiles set role = 'admin'
+where user_id = (select id from auth.users where lower(email) = lower('saminaoum2022@gmail.com'));
+```
+
 ## API
 
 `GET /api/music/admin?view=overview|suno|users|credits|generations|subscriptions`

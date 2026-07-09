@@ -1,5 +1,8 @@
 const SESSION_KEY = "nabad_admin_session_v1";
 const AUTH_PKCE_KEY = "nabad_admin_pkce_v1";
+const AUTH_PENDING_KEY = "nabad_admin_oauth_pending_v1";
+/** Fixed redirect — must match an entry in Supabase → Auth → Redirect URLs. */
+const ADMIN_OAUTH_REDIRECT = "https://www.nabadai.com/admin/";
 const PAGE_SIZE = 50;
 
 const state = {
@@ -137,9 +140,61 @@ function randomVerifier(len = 64) {
   return b64urlFromBytes(bytes).slice(0, len);
 }
 
+function showLoginError(msg) {
+  if (!els.loginError) return;
+  if (!msg) {
+    els.loginError.hidden = true;
+    els.loginError.textContent = "";
+    return;
+  }
+  els.loginError.hidden = false;
+  els.loginError.textContent = msg;
+}
+
 function oauthRedirectTarget() {
-  const path = window.location.pathname || "/";
-  return `${window.location.origin}${path.endsWith("/") ? path : `${path}/`}`;
+  // Prefer a fixed production URL so Supabase always returns to /admin/, not the home page.
+  try {
+    const { origin, pathname } = window.location;
+    const onAdminPath = /\/admin\/?$/i.test(pathname || "");
+    if (origin.includes("nabadai.com") && onAdminPath) return ADMIN_OAUTH_REDIRECT;
+    if (origin.includes("localhost") || origin.includes("127.0.0.1")) {
+      const path = pathname || "/admin/";
+      return `${origin}${path.endsWith("/") ? path : `${path}/`}`;
+    }
+    if (origin.includes("vercel.app")) {
+      return `${origin}/admin/`;
+    }
+  } catch {}
+  return ADMIN_OAUTH_REDIRECT;
+}
+
+function parseOAuthCallback() {
+  const out = { code: "", error: "" };
+  try {
+    const search = new URLSearchParams(window.location.search || "");
+    out.code = search.get("code") || "";
+    out.error =
+      search.get("error_description") ||
+      search.get("error") ||
+      "";
+    if (!out.code && window.location.hash) {
+      const hash = window.location.hash.replace(/^#/, "");
+      const idx = hash.indexOf("?");
+      const hashQs = new URLSearchParams(idx >= 0 ? hash.slice(idx + 1) : hash);
+      out.code = out.code || hashQs.get("code") || "";
+      out.error = out.error || hashQs.get("error_description") || hashQs.get("error") || "";
+      if (!out.code && hash.includes("access_token=")) {
+        out.error = out.error || "Got a legacy token callback — use Continue with Google again.";
+      }
+    }
+  } catch {}
+  return out;
+}
+
+function clearOAuthCallbackFromUrl() {
+  try {
+    window.history.replaceState({}, document.title, oauthRedirectTarget());
+  } catch {}
 }
 
 async function buildGoogleOAuthUrl() {
@@ -147,10 +202,12 @@ async function buildGoogleOAuthUrl() {
   if (!supabaseUrl || !supabaseAnonKey) throw new Error("Supabase config missing");
   const verifier = randomVerifier(64);
   localStorage.setItem(AUTH_PKCE_KEY, verifier);
+  sessionStorage.setItem(AUTH_PENDING_KEY, String(Date.now()));
   const challenge = await sha256Base64Url(verifier);
   const redirectTo = encodeURIComponent(oauthRedirectTarget());
   const scope = encodeURIComponent("email profile");
-  return `${supabaseUrl}/auth/v1/authorize?provider=google&response_type=code&scope=${scope}&code_challenge=${encodeURIComponent(challenge)}&code_challenge_method=S256&redirect_to=${redirectTo}`;
+  const apikey = encodeURIComponent(supabaseAnonKey);
+  return `${supabaseUrl}/auth/v1/authorize?provider=google&response_type=code&scope=${scope}&apikey=${apikey}&code_challenge=${encodeURIComponent(challenge)}&code_challenge_method=S256&redirect_to=${redirectTo}`;
 }
 
 function sessionFromTokenPayload(data, fallbackEmail = "") {
@@ -183,19 +240,37 @@ async function exchangeOAuthCodeForSession(code) {
     throw new Error(data?.error_description || data?.msg || data?.message || "Google sign-in failed");
   }
   localStorage.removeItem(AUTH_PKCE_KEY);
+  sessionStorage.removeItem(AUTH_PENDING_KEY);
   writeSession(sessionFromTokenPayload(data));
   return true;
 }
 
-async function maybeHandleAuthCodeFromQuery() {
-  const sp = new URLSearchParams(window.location.search || "");
-  const code = sp.get("code");
+async function maybeHandleAuthCallback() {
+  const { code, error } = parseOAuthCallback();
+  if (error) throw new Error(decodeURIComponent(String(error).replace(/\+/g, " ")));
   if (!code) return false;
   await exchangeOAuthCodeForSession(code);
-  try {
-    window.history.replaceState({}, document.title, oauthRedirectTarget());
-  } catch {}
+  clearOAuthCallbackFromUrl();
   return true;
+}
+
+function maybeShowInterruptedOAuthError() {
+  const pending = sessionStorage.getItem(AUTH_PENDING_KEY);
+  const verifier = localStorage.getItem(AUTH_PKCE_KEY);
+  if (!pending || !verifier) return;
+  const ageMs = Date.now() - Number(pending || 0);
+  if (!Number.isFinite(ageMs) || ageMs > 10 * 60 * 1000) {
+    sessionStorage.removeItem(AUTH_PENDING_KEY);
+    localStorage.removeItem(AUTH_PKCE_KEY);
+    return;
+  }
+  const { code, error } = parseOAuthCallback();
+  if (code || error) return;
+  sessionStorage.removeItem(AUTH_PENDING_KEY);
+  localStorage.removeItem(AUTH_PKCE_KEY);
+  showLoginError(
+    "Google sign-in did not return to admin (the auth code was lost). Use email + password, or tap Continue with Google again.",
+  );
 }
 
 async function signInWithGoogle() {
@@ -530,8 +605,17 @@ async function loadView({ force = false } = {}) {
     RENDERERS[view](data);
   } catch (e) {
     panel.innerHTML = "";
-    showError(e?.message || String(e));
-    if (String(e?.message || "").includes("sign in")) showLogin();
+    const msg = e?.message || String(e);
+    showError(msg);
+    if (
+      msg.includes("sign in") ||
+      msg.includes("not an admin") ||
+      msg.includes("Session expired")
+    ) {
+      writeSession(null);
+      showLogin();
+      showLoginError(msg);
+    }
   }
 }
 
@@ -567,9 +651,8 @@ async function boot() {
 
   state.session = readSession();
   try {
-    const hadOAuthCode = Boolean(new URLSearchParams(window.location.search || "").get("code"));
-    if (hadOAuthCode) {
-      await maybeHandleAuthCodeFromQuery();
+    const handledOAuth = await maybeHandleAuthCallback();
+    if (handledOAuth) {
       showApp();
       setView("overview");
       await loadView({ force: true });
@@ -578,12 +661,11 @@ async function boot() {
   } catch (e) {
     writeSession(null);
     showLogin();
-    if (els.loginError) {
-      els.loginError.hidden = false;
-      els.loginError.textContent = e?.message || "Google sign-in failed";
-    }
+    showLoginError(e?.message || "Google sign-in failed");
     return;
   }
+
+  maybeShowInterruptedOAuthError();
 
   if (state.session) {
     try {
@@ -591,8 +673,11 @@ async function boot() {
       setView("overview");
       await loadView();
       return;
-    } catch {
+    } catch (e) {
       writeSession(null);
+      showLogin();
+      showLoginError(e?.message || "Could not load admin dashboard");
+      return;
     }
   }
   showLogin();
@@ -600,7 +685,7 @@ async function boot() {
 
 els.loginForm?.addEventListener("submit", async (e) => {
   e.preventDefault();
-  els.loginError.hidden = true;
+  showLoginError("");
   els.btnLogin.disabled = true;
   try {
     await signIn(els.loginEmail.value.trim(), els.loginPassword.value);
@@ -608,21 +693,19 @@ els.loginForm?.addEventListener("submit", async (e) => {
     setView("overview");
     await loadView({ force: true });
   } catch (err) {
-    els.loginError.hidden = false;
-    els.loginError.textContent = err?.message || "Sign in failed";
+    showLoginError(err?.message || "Sign in failed");
   } finally {
     els.btnLogin.disabled = false;
   }
 });
 
 els.btnLoginGoogle?.addEventListener("click", async () => {
-  els.loginError.hidden = true;
+  showLoginError("");
   if (els.btnLoginGoogle) els.btnLoginGoogle.disabled = true;
   try {
     await signInWithGoogle();
   } catch (err) {
-    els.loginError.hidden = false;
-    els.loginError.textContent = err?.message || "Could not start Google sign-in";
+    showLoginError(err?.message || "Could not start Google sign-in");
     if (els.btnLoginGoogle) els.btnLoginGoogle.disabled = false;
   }
 });

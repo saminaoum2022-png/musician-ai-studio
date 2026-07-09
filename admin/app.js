@@ -246,7 +246,7 @@ function oauthRedirectTarget() {
 }
 
 function parseOAuthCallback() {
-  const out = { code: "", error: "" };
+  const out = { code: "", error: "", accessToken: "", refreshToken: "", expiresIn: 3600 };
   try {
     const search = new URLSearchParams(window.location.search || "");
     out.code = search.get("code") || "";
@@ -254,15 +254,19 @@ function parseOAuthCallback() {
       search.get("error_description") ||
       search.get("error") ||
       "";
-    if (!out.code && window.location.hash) {
-      const hash = window.location.hash.replace(/^#/, "");
-      const idx = hash.indexOf("?");
-      const hashQs = new URLSearchParams(idx >= 0 ? hash.slice(idx + 1) : hash);
+    const hash = String(window.location.hash || "").replace(/^#/, "");
+    if (hash) {
+      const tokenPart = hash.includes("access_token=")
+        ? hash.slice(hash.indexOf("access_token="))
+        : hash;
+      const hashQs = new URLSearchParams(
+        tokenPart.includes("?") ? tokenPart.slice(tokenPart.indexOf("?") + 1) : tokenPart,
+      );
       out.code = out.code || hashQs.get("code") || "";
       out.error = out.error || hashQs.get("error_description") || hashQs.get("error") || "";
-      if (!out.code && hash.includes("access_token=")) {
-        out.error = out.error || "Got a legacy token callback — use Continue with Google again.";
-      }
+      out.accessToken = hashQs.get("access_token") || "";
+      out.refreshToken = hashQs.get("refresh_token") || "";
+      out.expiresIn = Number(hashQs.get("expires_in") || 3600);
     }
   } catch {}
   return out;
@@ -279,7 +283,7 @@ async function buildGoogleOAuthUrl() {
   if (!supabaseUrl || !supabaseAnonKey) throw new Error("Supabase config missing");
   const verifier = randomVerifier(64);
   localStorage.setItem(AUTH_PKCE_KEY, verifier);
-  sessionStorage.setItem(AUTH_PENDING_KEY, String(Date.now()));
+  localStorage.setItem(AUTH_PENDING_KEY, String(Date.now()));
   const challenge = await sha256Base64Url(verifier);
   const redirectTo = encodeURIComponent(oauthRedirectTarget());
   const scope = encodeURIComponent("email profile");
@@ -317,36 +321,53 @@ async function exchangeOAuthCodeForSession(code) {
     throw new Error(data?.error_description || data?.msg || data?.message || "Google sign-in failed");
   }
   localStorage.removeItem(AUTH_PKCE_KEY);
-  sessionStorage.removeItem(AUTH_PENDING_KEY);
+  localStorage.removeItem(AUTH_PENDING_KEY);
   writeSession(sessionFromTokenPayload(data));
   return true;
 }
 
+function finishOAuthSession(data) {
+  localStorage.removeItem(AUTH_PKCE_KEY);
+  localStorage.removeItem(AUTH_PENDING_KEY);
+  writeSession(sessionFromTokenPayload(data));
+}
+
 async function maybeHandleAuthCallback() {
-  const { code, error } = parseOAuthCallback();
-  if (error) throw new Error(decodeURIComponent(String(error).replace(/\+/g, " ")));
-  if (!code) return false;
-  await exchangeOAuthCodeForSession(code);
+  const parsed = parseOAuthCallback();
+  if (parsed.error) {
+    throw new Error(decodeURIComponent(String(parsed.error).replace(/\+/g, " ")));
+  }
+  if (parsed.accessToken) {
+    finishOAuthSession({
+      access_token: parsed.accessToken,
+      refresh_token: parsed.refreshToken,
+      expires_in: parsed.expiresIn,
+    });
+    clearOAuthCallbackFromUrl();
+    return true;
+  }
+  if (!parsed.code) return false;
+  await exchangeOAuthCodeForSession(parsed.code);
   clearOAuthCallbackFromUrl();
   return true;
 }
 
 function maybeShowInterruptedOAuthError() {
-  const pending = sessionStorage.getItem(AUTH_PENDING_KEY);
+  const pending = localStorage.getItem(AUTH_PENDING_KEY);
   const verifier = localStorage.getItem(AUTH_PKCE_KEY);
   if (!pending || !verifier) return;
   const ageMs = Date.now() - Number(pending || 0);
   if (!Number.isFinite(ageMs) || ageMs > 10 * 60 * 1000) {
-    sessionStorage.removeItem(AUTH_PENDING_KEY);
+    localStorage.removeItem(AUTH_PENDING_KEY);
     localStorage.removeItem(AUTH_PKCE_KEY);
     return;
   }
-  const { code, error } = parseOAuthCallback();
-  if (code || error) return;
-  sessionStorage.removeItem(AUTH_PENDING_KEY);
+  const parsed = parseOAuthCallback();
+  if (parsed.code || parsed.accessToken || parsed.error) return;
+  localStorage.removeItem(AUTH_PENDING_KEY);
   localStorage.removeItem(AUTH_PKCE_KEY);
   showLoginError(
-    "Google sign-in did not return to admin (the auth code was lost). Use email + password, or tap Continue with Google again.",
+    "Google sign-in returned without credentials. Try again, use Chrome instead of Safari, or sign in with email + password.",
   );
 }
 
@@ -733,7 +754,7 @@ async function boot() {
   }
 
   const oauthPreview = parseOAuthCallback();
-  if (oauthPreview.code) {
+  if (oauthPreview.code || oauthPreview.accessToken) {
     showLoginError("Finishing Google sign-in…");
   } else if (oauthPreview.error) {
     showLoginError(decodeURIComponent(String(oauthPreview.error).replace(/\+/g, " ")));

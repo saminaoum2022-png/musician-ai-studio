@@ -184,7 +184,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260709-114857";
+const APP_BUILD = "20260709-115348";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -23096,17 +23096,20 @@ async function maybeHandleAuthCodeFromQuery() {
   try {
     const sp = new URLSearchParams(window.location.search || "");
     const code = sp.get("code");
-    if (!code) return false;
-    // Admin dashboard started this OAuth flow — hand off before we burn the code.
+    const hash = String(window.location.hash || "");
+    const hasOAuthReturn = Boolean(code) || hash.includes("access_token=") || hash.includes("code=");
+    if (!hasOAuthReturn) return false;
+    // Admin dashboard started this OAuth flow — hand off before we burn the code/tokens.
     try {
       const adminPending =
-        sessionStorage.getItem("nabad_admin_oauth_pending_v1") ||
+        localStorage.getItem("nabad_admin_oauth_pending_v1") ||
         localStorage.getItem("nabad_admin_pkce_v1");
       if (adminPending) {
         window.location.replace(`/admin/${window.location.search}${window.location.hash}`);
         return true;
       }
     } catch {}
+    if (!code) return false;
     beginLoginSettling("Finishing sign in…");
     const ok = await exchangeOAuthCodeForSession(code);
     if (!ok) {

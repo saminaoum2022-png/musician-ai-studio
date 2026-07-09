@@ -93,6 +93,17 @@ where user_id = (select id from auth.users where lower(email) = lower('saminaoum
 
 Requires `Authorization: Bearer <supabase access_token>` and `profiles.role = 'admin'`.
 
+### Grant paid credits (portal + in-app)
+
+`POST /api/credits/grant-paid` with body `{ "amount": 50, "email": "user@example.com" }`.
+
+- **Admin portal** — Credits tab → **Grant paid credits** form (email optional; blank = your account).
+- **iOS app** — Credits → Admin card → **Grant paid** (self only).
+
+Manual grants are for support or gift testing. **NabadAi Pro** (including sandbox purchases) adds credits through the normal billing webhook — do not zero or replace those grants.
+
+Requires the same admin auth as the dashboard.
+
 ## Suno bucket model
 
 - **Master Suno balance** — live credits on your Suno API account (the bucket you purchase).

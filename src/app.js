@@ -185,7 +185,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260709-160731";
+const APP_BUILD = "20260709-164306";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -21965,7 +21965,8 @@ function syncProfileProBanner() {
 
 /** Live Suno API remaining credits (same pool as `SUNO_API_KEY`). Shown on
  *  the Profile pill + Credits hero when `creditsState.isAdmin` is true,
- *  because admin generations skip the per-user Supabase ledger. */
+ *  because admin generations skip the per-user Supabase ledger. Suno master
+ *  balance lives on the Credits admin card + web portal only. */
 let sunoCreditsLive = null;
 
 function formatCreditsAmount(n) {
@@ -21994,21 +21995,9 @@ function renderCreditsBreakdown() {
 
 function paintCreditsDisplays() {
   const admin = Boolean(creditsState.isAdmin);
-  let disp = "0";
-  let aria = "";
-  if (admin) {
-    if (sunoCreditsLive != null && Number.isFinite(sunoCreditsLive)) {
-      disp = formatCreditsAmount(sunoCreditsLive);
-      aria = `Engine balance ${disp} credits`;
-    } else {
-      disp = "—";
-      aria = "Engine balance loading or unavailable";
-    }
-  } else {
-    const v = Number.isFinite(Number(creditsState.balance)) ? Math.max(0, Number(creditsState.balance)) : 0;
-    disp = formatCreditsAmount(v);
-    aria = `App credits balance ${disp}`;
-  }
+  const v = Number.isFinite(Number(creditsState.balance)) ? Math.max(0, Number(creditsState.balance)) : 0;
+  const disp = formatCreditsAmount(v);
+  const aria = `App credits balance ${disp}`;
   if (els.profileCreditsBalance) els.profileCreditsBalance.textContent = disp;
   if (els.creditsBalanceBig) els.creditsBalanceBig.textContent = disp;
   if (els.profileCreditsLink) {
@@ -51890,7 +51879,7 @@ window.addEventListener("hashchange", () => {
 
 // Refresh credits when Profile / Credits / Sounds open. `refreshMyCredits`
 // pulls the Supabase ledger; for admin users it also triggers
-// `refreshAdminCreditsView`, which seeds `sunoCreditsLive` for the pill.
+// `refreshAdminCreditsView`, which updates the Credits admin card (Suno bucket, etc.).
 window.addEventListener("hashchange", () => {
   const route = document.body.getAttribute("data-route") || "";
   if (route === "profile" || route === "credits" || route === "sounds") void refreshMyCredits({ silent: true });

@@ -11,6 +11,9 @@ const {
   setCors,
 } = require("./credits-auth");
 
+const SUPABASE_URL = (process.env.SUPABASE_URL || "").replace(/\/$/, "");
+const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
+
 const profileRoleCache = new Map();
 const PROFILE_ROLE_CACHE_TTL_MS = 60_000;
 
@@ -51,10 +54,42 @@ function adminUnauthorized(res) {
   return sendJson(res, 401, { error: "Not signed in" });
 }
 
+/** Resolve auth.users id by email (admin grant flows). */
+async function resolveUserIdByEmail(email) {
+  const normalized = String(email || "").trim().toLowerCase();
+  if (!normalized || !SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) return null;
+  let page = 1;
+  const perPage = 200;
+  for (let guard = 0; guard < 20; guard += 1) {
+    try {
+      const r = await fetch(
+        `${SUPABASE_URL}/auth/v1/admin/users?page=${page}&per_page=${perPage}`,
+        {
+          headers: {
+            apikey: SUPABASE_SERVICE_ROLE_KEY,
+            Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+          },
+        },
+      );
+      if (!r.ok) return null;
+      const data = await r.json().catch(() => null);
+      const users = Array.isArray(data?.users) ? data.users : [];
+      const hit = users.find((u) => String(u?.email || "").toLowerCase() === normalized);
+      if (hit?.id) return String(hit.id);
+      if (users.length < perPage) break;
+      page += 1;
+    } catch {
+      return null;
+    }
+  }
+  return null;
+}
+
 module.exports = {
   verifyAdmin,
   userIsAdmin,
   fetchProfileRole,
+  resolveUserIdByEmail,
   adminForbidden,
   adminUnauthorized,
   sendJson,

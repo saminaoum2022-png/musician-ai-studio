@@ -257,6 +257,28 @@ button, input {
   line-height: 1.45;
 }
 
+.grantForm {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: flex-end;
+}
+.grantField {
+  flex: 1 1 220px;
+  margin: 0;
+}
+.grantField--amount {
+  flex: 0 1 140px;
+}
+.grantMsg {
+  margin: 12px 0 0;
+  font-size: 0.86rem;
+  line-height: 1.45;
+}
+.grantMsg.isOk { color: var(--ok); }
+.grantMsg.isWarn { color: var(--warn); }
+.grantMsg.isErr { color: var(--danger); }
+
 .tableWrap { overflow: auto; border-radius: 10px; border: 1px solid var(--border); }
 table {
   width: 100%;

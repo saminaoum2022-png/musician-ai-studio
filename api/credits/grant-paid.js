@@ -1,8 +1,9 @@
 /**
  * POST /api/credits/grant-paid
- * Body: { amount: number, userId?: uuid }
+ * Body: { amount: number, userId?: uuid, email?: string }
  *
  * Admin-only: grants paid credits (giftable) for testing / future IAP wiring.
+ * Omit userId and email to grant to the signed-in admin.
  */
 const {
   verifyUser,
@@ -11,7 +12,12 @@ const {
   setCors,
   readJsonBody,
 } = require("../_lib/credits-auth");
-const { verifyAdmin, adminForbidden, adminUnauthorized } = require("../_lib/admin-auth");
+const {
+  verifyAdmin,
+  resolveUserIdByEmail,
+  adminForbidden,
+  adminUnauthorized,
+} = require("../_lib/admin-auth");
 
 module.exports = async function handler(req, res) {
   setCors(res);
@@ -34,9 +40,24 @@ module.exports = async function handler(req, res) {
   }
 
   const amount = Number(body?.amount);
-  const targetUserId = String(body?.userId || body?.user_id || user.userId).trim();
   if (!Number.isFinite(amount) || amount <= 0 || amount > 500) {
-    return sendJson(res, 400, { error: "Amount must be between 0 and 500." });
+    return sendJson(res, 400, { error: "Amount must be between 1 and 500." });
+  }
+
+  const email = String(body?.email || "").trim().toLowerCase();
+  const explicitUserId = String(body?.userId || body?.user_id || "").trim();
+  let targetUserId = explicitUserId || user.userId;
+  let targetEmail = email || user.email || "";
+
+  if (email) {
+    const resolved = await resolveUserIdByEmail(email);
+    if (!resolved) {
+      return sendJson(res, 404, { error: `No user found for ${email}.` });
+    }
+    targetUserId = resolved;
+    targetEmail = email;
+  } else if (explicitUserId) {
+    targetUserId = explicitUserId;
   }
 
   const rpc = await callRpc("grant_paid_credits", {
@@ -60,6 +81,7 @@ module.exports = async function handler(req, res) {
   return sendJson(res, 200, {
     ok: true,
     userId: targetUserId,
+    email: targetEmail || null,
     granted: out.granted,
     balance: out.balance,
     paidBalance: out.paid_balance,

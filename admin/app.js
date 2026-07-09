@@ -53,7 +53,7 @@ const VIEW_META = {
   overview: { title: "Overview", sub: "Platform health at a glance" },
   suno: { title: "Suno bucket", sub: "Master API credits vs user liability" },
   users: { title: "Users", sub: "Signups, activity, balances, and songs" },
-  credits: { title: "Credits", sub: "Every credit added or deducted" },
+  credits: { title: "Credits", sub: "Grant paid credits and view every ledger entry" },
   generations: { title: "Generations", sub: "Song and audio generation requests" },
   subscriptions: { title: "Subscriptions", sub: "NabadAi Pro status by user" },
 };
@@ -607,6 +607,22 @@ function renderCredits(data) {
     : `<tr><td colspan="7" class="loading">No transactions yet — run supabase/admin_dashboard.sql</td></tr>`;
 
   els.panels.credits.innerHTML = `
+    <div class="sectionCard grantCard">
+      <h3 class="sectionTitle">Grant paid credits</h3>
+      <p class="sectionNote">Manual grants for support or testing gifts — separate from NabadAi Pro subscription credits, which are added automatically via billing. Leave email blank to grant to your signed-in account.</p>
+      <form id="grantCreditsForm" class="grantForm">
+        <label class="field grantField">
+          <span>User email</span>
+          <input id="grantCreditsEmail" type="email" placeholder="creator@example.com" autocomplete="off" />
+        </label>
+        <label class="field grantField grantField--amount">
+          <span>Amount</span>
+          <input id="grantCreditsAmount" type="number" min="1" max="500" step="1" required placeholder="50" inputmode="numeric" />
+        </label>
+        <button type="submit" class="btnPrimary" id="btnGrantCredits">Grant credits</button>
+      </form>
+      <p id="grantCreditsMsg" class="grantMsg" hidden></p>
+    </div>
     <div class="tableWrap">
       <table>
         <thead>
@@ -708,6 +724,57 @@ function setView(view) {
   }
   for (const [key, panel] of Object.entries(els.panels)) {
     panel.hidden = key !== view;
+  }
+}
+
+async function adminGrantPaidCredits({ email = "", amount } = {}) {
+  await refreshSessionIfNeeded();
+  const token = state.session?.access_token;
+  if (!token) throw new Error("Not signed in");
+
+  const body = { amount: Number(amount) };
+  const trimmedEmail = String(email || "").trim().toLowerCase();
+  if (trimmedEmail) body.email = trimmedEmail;
+
+  const r = await fetch("/api/credits/grant-paid", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(body),
+  });
+  const data = await r.json().catch(() => ({}));
+  if (r.status === 401) {
+    writeSession(null);
+    throw new Error("Session expired — sign in again");
+  }
+  if (r.status === 403) {
+    throw new Error("This account is not an admin.");
+  }
+  if (!r.ok || !data?.ok) {
+    throw new Error(data?.error || `Grant failed (${r.status})`);
+  }
+  return data;
+}
+
+function setGrantCreditsMsg(text, kind = "ok") {
+  const el = document.getElementById("grantCreditsMsg");
+  if (!el) return;
+  if (!text) {
+    el.hidden = true;
+    el.textContent = "";
+    el.className = "grantMsg";
+    return;
+  }
+  el.hidden = false;
+  el.textContent = text;
+  el.className = `grantMsg is${kind === "ok" ? "Ok" : kind === "warn" ? "Warn" : "Err"}`;
+}
+
+function clearCreditsCache() {
+  for (const key of Object.keys(state.cache)) {
+    if (key.startsWith("credits:")) delete state.cache[key];
   }
 }
 
@@ -916,6 +983,42 @@ for (const btn of els.navItems) {
     void loadView();
   });
 }
+
+document.body.addEventListener("submit", (e) => {
+  const form = e.target.closest("#grantCreditsForm");
+  if (!form) return;
+  e.preventDefault();
+  void (async () => {
+    const emailInput = form.querySelector("#grantCreditsEmail");
+    const amountInput = form.querySelector("#grantCreditsAmount");
+    const btn = form.querySelector("#btnGrantCredits");
+    const amount = Number(amountInput?.value);
+    if (!Number.isFinite(amount) || amount <= 0 || amount > 500) {
+      setGrantCreditsMsg("Enter an amount between 1 and 500.", "warn");
+      return;
+    }
+    if (btn) btn.disabled = true;
+    setGrantCreditsMsg("Granting…", "warn");
+    try {
+      const data = await adminGrantPaidCredits({
+        email: emailInput?.value || "",
+        amount,
+      });
+      const who = data.email || state.session?.email || "user";
+      if (amountInput) amountInput.value = "";
+      clearCreditsCache();
+      if (state.view === "credits") await loadView({ force: true });
+      setGrantCreditsMsg(
+        `Granted ${fmtNum(data.granted, 1)} paid credits to ${who}. New balance: ${fmtNum(data.balance, 1)}.`,
+        "ok",
+      );
+    } catch (err) {
+      setGrantCreditsMsg(err?.message || "Grant failed", "err");
+    } finally {
+      if (btn) btn.disabled = false;
+    }
+  })();
+});
 
 document.body.addEventListener("click", (e) => {
   const pageBtn = e.target.closest("[data-page]");

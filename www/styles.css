@@ -6012,6 +6012,9 @@ body.hubJumpingToTop #hubList .hubRow{
   gap: 12px;
   margin-bottom: 4px;
 }
+.playerHeaderMark{
+  display: none;
+}
 .playerMenuBtn{
   display: inline-flex;
   align-items: center;
@@ -6067,7 +6070,7 @@ body.hubJumpingToTop #hubList .hubRow{
   gap: 8px;
   min-width: 0;
 }
-/* ── Floating karaoke (borderless 3-line stack on cover fade) ── */
+/* ── Karaoke (3-line stack; below cover on mobile player) ── */
 .playerKaraokeFloat{
   position: absolute;
   left: 20px;
@@ -6084,6 +6087,18 @@ body.hubJumpingToTop #hubList .hubRow{
   text-align: center;
 }
 .playerKaraokeFloat[hidden]{ display: none !important; }
+.playerKaraokeBelow{
+  position: static;
+  left: auto;
+  right: auto;
+  bottom: auto;
+  z-index: auto;
+  justify-content: center;
+  gap: 4px;
+  padding: 8px 24px 2px;
+  width: 100%;
+  box-sizing: border-box;
+}
 .playerKaraokeLine{
   margin: 0;
   width: 100%;
@@ -6311,6 +6326,25 @@ body.hubJumpingToTop #hubList .hubRow{
   min-height: 22px;
   margin-top: 4px;
 }
+.playerCreatorInline{
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+  max-width: 100%;
+}
+.playerPlaysCount{
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  color: rgba(223, 231, 251, 0.42);
+  white-space: nowrap;
+}
+.playerPlaysCount[hidden]{
+  display: none !important;
+}
 .playerCreatorIdentity{
   display: inline-flex;
   align-items: center;
@@ -6390,7 +6424,7 @@ body.hubJumpingToTop #hubList .hubRow{
   display:flex;
   flex-direction: column;
   gap: 4px;
-  margin-top: 22px;
+  margin-top: 16px;
   width: 100%;
 }
 .playerTimeRow{
@@ -6503,7 +6537,59 @@ body.hubJumpingToTop #hubList .hubRow{
   align-items: center;
   justify-content: center;
   gap: 32px;
-  margin-top: 14px;
+  margin-top: 12px;
+}
+
+/* ---- Vertical social rail (Reels-style, right of cover) ------------ */
+.playerSocialRail{
+  position: absolute;
+  right: 14px;
+  top: 50%;
+  transform: translateY(-46%);
+  z-index: 8;
+  pointer-events: auto;
+}
+.playerSocialRail[hidden]{ display: none !important; }
+.playerSocialActions{
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  margin: 0;
+  padding: 0;
+  max-width: none;
+}
+.playerSocialAct{
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-width: 44px;
+  padding: 2px 4px;
+  color: rgba(255, 255, 255, 0.9);
+}
+.playerSocialAct .followActActIco,
+.playerSocialActIco .followActActIco{
+  width: 28px;
+  height: 28px;
+}
+.playerSocialAct--share .followActActIco{
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.playerSocialAct .followActActCount{
+  font-size: 11px;
+  font-weight: 650;
+  line-height: 1;
+  color: rgba(223, 231, 251, 0.72);
+  min-width: 0;
+}
+.playerSocialAct[data-friends-act="like"].isLiked{
+  color: #FF4D5A;
 }
 .playerSkipBtn{
   width: 30px;
@@ -17138,7 +17224,7 @@ body.trackSheetOpen .footer{
   body[data-route="player"] .app{
     min-height: 100vh;
     min-height: 100svh;
-    padding: 0 0 calc(env(safe-area-inset-bottom) + 12px) !important;
+    padding: 0 !important;
     display: flex;
     flex-direction: column;
     justify-content: flex-start;
@@ -17146,10 +17232,16 @@ body.trackSheetOpen .footer{
   body[data-route="player"] main.grid{
     margin: 0;
     width: 100%;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
   }
   body[data-route="player"] .playerCard{
     padding: 0;
-    min-height: 0;
+    flex: 1;
+    min-height: 100svh;
+    min-height: 100svh;
     display: flex;
     flex-direction: column;
     width: 100%;
@@ -17190,18 +17282,39 @@ body.trackSheetOpen .footer{
             backdrop-filter: blur(12px);
     color: rgba(255,255,255,0.92);
   }
+  body[data-route="player"] .playerHeader{
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    align-items: center;
+  }
+  body[data-route="player"] .playerHeader .nabadBackBtn{
+    justify-self: start;
+  }
+  body[data-route="player"] .playerHeaderMark{
+    display: block;
+    justify-self: center;
+    width: 18px;
+    height: 18px;
+    background: url("./assets/icons/splash-mark.png") center / contain no-repeat;
+    opacity: 0.22;
+    pointer-events: none;
+  }
+  body[data-route="player"] .playerHeader .playerMenuBtn{
+    justify-self: end;
+  }
   body[data-route="player"] .playerShell{
-    flex: 0 1 auto;
-    align-content: start;
+    flex: 1;
+    align-content: stretch;
     display: flex;
     flex-direction: column;
     gap: 0;
     width: 100%;
+    min-height: 0;
   }
   body[data-route="player"] .playerArtCol{
     width: 100%;
     margin: 0;
-    gap: 10px;
+    gap: 0;
   }
   body[data-route="player"] .playerArtWrap{
     border: none;
@@ -17246,10 +17359,117 @@ body.trackSheetOpen .footer{
     object-fit: cover;
     border-radius: 0;
   }
+  body[data-route="player"] .playerKaraokeBelow{
+    padding: 6px 24px 0;
+    flex: 0 0 auto;
+  }
+  body[data-route="player"] .playerKaraokeBelow .playerKaraokeLine--prev,
+  body[data-route="player"] .playerKaraokeBelow .playerKaraokeLine--next{
+    color: rgba(223, 231, 251, 0.38);
+    text-shadow: none;
+    font-size: 14.5px;
+    min-height: 18px;
+  }
+  body[data-route="player"] .playerKaraokeBelow .playerKaraokeLine--current{
+    color: rgba(240, 244, 255, 0.96);
+    text-shadow: none;
+    filter: none;
+    -webkit-text-fill-color: currentColor;
+    background: none;
+    font-size: 19.5px;
+    min-height: 28px;
+  }
+  body[data-route="player"] .playerCard.isPlaying .playerKaraokeBelow .playerKaraokeLine--current{
+    background: linear-gradient(95deg, #ffffff 0%, #f0ebff 52%, #dff8f2 100%);
+    -webkit-background-clip: text;
+            background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
   body[data-route="player"] .playerMeta{
-    padding: 56px 20px 0;
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 11;
+    padding: 10px 20px calc(env(safe-area-inset-bottom, 0px) + 2px);
+    margin-top: 0;
     width: 100%;
     box-sizing: border-box;
+    align-items: flex-start;
+    text-align: left;
+    flex: 0 0 auto;
+    pointer-events: auto;
+    background: linear-gradient(
+      180deg,
+      transparent 0%,
+      rgba(6, 8, 14, 0.72) 28%,
+      rgba(6, 8, 14, 0.96) 100%
+    );
+  }
+  body[data-route="player"] .playerTitleRow{
+    justify-content: flex-start;
+    gap: 6px;
+  }
+  body[data-route="player"] .playerTitle{
+    margin-top: 0;
+    font-size: 15px;
+    font-weight: 650;
+    letter-spacing: -0.02em;
+    line-height: 1.25;
+    color: rgba(240, 244, 255, 0.94);
+  }
+  body[data-route="player"] .playerCard.isPlaying .playerTitle{
+    background: none;
+    -webkit-text-fill-color: currentColor;
+    color: rgba(240, 244, 255, 0.96);
+  }
+  body[data-route="player"] .playerCreatorRow{
+    margin-top: 3px;
+    justify-content: flex-start;
+    align-items: center;
+  }
+  body[data-route="player"] .playerCreatorInline{
+    gap: 8px;
+  }
+  body[data-route="player"] .playerCreatorIdentity{
+    justify-content: flex-start;
+  }
+  body[data-route="player"] .playerBecomeFanBtn{
+    margin: 0;
+    flex: 0 0 auto;
+  }
+  body[data-route="player"] .playerPlaysCount{
+    font-size: 11.5px;
+    color: rgba(223, 231, 251, 0.4);
+  }
+  body[data-route="player"] .playerCreatorHandle{
+    font-size: 13px;
+    font-weight: 500;
+    color: rgba(223, 231, 251, 0.58);
+  }
+  body[data-route="player"] .playerTimeline{
+    margin-top: 12px;
+  }
+  body[data-route="player"] .playerTransport{
+    margin-top: 8px;
+    margin-bottom: 0;
+    align-self: center;
+    width: 100%;
+  }
+  body[data-route="player"] .playerSocialRail{
+    position: fixed;
+    right: 12px;
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 172px);
+    top: auto;
+    transform: none;
+    z-index: 12;
+  }
+  body[data-route="player"] .playerChallengeAttribution,
+  body[data-route="player"] .playerTemplateAttribution{
+    display: none !important;
+  }
+  body[data-route="player"] .footer{
+    display: none !important;
   }
   .footer{
     bottom: calc(62px + env(safe-area-inset-bottom, 0px));
@@ -17257,9 +17477,6 @@ body.trackSheetOpen .footer{
   }
   body:has(.hubNowPlaying.isVisible) .footer{
     bottom: calc(151px + env(safe-area-inset-bottom, 0px));
-  }
-  body[data-route="player"] .footer{
-    bottom: calc(12px + env(safe-area-inset-bottom, 0px));
   }
   .playerShell{
     gap: 14px;

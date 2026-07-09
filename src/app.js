@@ -76,7 +76,7 @@ import {
   playerEmptyArtUrl,
 } from "./cover-art/placeholders.js";
 import { initCoverArtOverlay, syncCoverArtOverlay } from "./cover-art/overlay.js";
-import { feedActIconAnalytics, feedActIconComment, feedActIconGift, feedActIconLike, feedActIconPlays } from "./feed-action-icons.js";
+import { feedActIconAnalytics, feedActIconComment, feedActIconGift, feedActIconLike, feedActIconPlays, feedActIconRepost, feedActIconShare } from "./feed-action-icons.js";
 import { initGifts, openGiftSheetFromButton } from "./gifts.js";
 import { configureProPlan, onProPlanRouteActive, refreshProSubscriptionUi, setProReturnRoute } from "./pro-plan.js";
 import { setRevenueCatApiKey, resetRevenueCatSession } from "./billing/revenuecat.js";
@@ -185,7 +185,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260709-225038";
+const APP_BUILD = "20260710-004849";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -827,6 +827,8 @@ const els = {
   playerKaraokeLinePrev: document.getElementById("playerKaraokeLinePrev"),
   playerKaraokeLineCurrent: document.getElementById("playerKaraokeLineCurrent"),
   playerKaraokeLineNext: document.getElementById("playerKaraokeLineNext"),
+  playerSocialRail: document.getElementById("playerSocialRail"),
+  playerSocialActions: document.getElementById("playerSocialActions"),
   musicVideoModal: document.getElementById("musicVideoModal"),
   musicVideoCover: document.getElementById("musicVideoCover"),
   musicVideoLoader: document.getElementById("musicVideoLoader"),
@@ -854,6 +856,7 @@ const els = {
   playerNabadBadge: document.getElementById("playerNabadBadge"),
   playerCreatorIdentity: document.getElementById("playerCreatorIdentity"),
   btnPlayerBecomeFan: document.getElementById("btnPlayerBecomeFan"),
+  playerPlaysCount: document.getElementById("playerPlaysCount"),
   playerSubtitle: document.getElementById("playerSubtitle"),
   playerChallengeAttribution: document.getElementById("playerChallengeAttribution"),
   playerChallengeAttributionText: document.getElementById("playerChallengeAttributionText"),
@@ -17607,65 +17610,23 @@ function wirePlayerAttributionActionsOnce() {
   });
 }
 
-function setPlayerChallengeAttribution(challenge) {
-  wirePlayerAttributionActionsOnce();
-  const c = challenge && (challenge.id || challenge.title || challenge.campaign) ? challenge : null;
-  const kind = creationSourceKind(c);
-  if (kind === "template") {
-    _playerChallengeCtx = null;
-    if (els.playerChallengeAttributionText) els.playerChallengeAttributionText.textContent = "";
-    if (els.playerChallengeAttribution) {
-      els.playerChallengeAttribution.hidden = true;
-      els.playerChallengeAttribution.disabled = true;
-      els.playerChallengeAttribution.setAttribute("aria-label", "");
-    }
-    return;
-  }
-  _playerChallengeCtx = c;
-  const text = playerChallengeAttributionText(c);
-  if (els.playerChallengeAttributionText) els.playerChallengeAttributionText.textContent = text;
+function setPlayerChallengeAttribution(_challenge) {
+  _playerChallengeCtx = null;
+  if (els.playerChallengeAttributionText) els.playerChallengeAttributionText.textContent = "";
   if (els.playerChallengeAttribution) {
-    els.playerChallengeAttribution.hidden = !text;
-    const canOpen = Boolean(c && (String(c.campaign || "").trim() || String(c.id || "").trim()));
-    els.playerChallengeAttribution.disabled = !canOpen;
-    const joinLabel = kind === "live" ? "Join live event" : "Join spark";
-    const label = c?.title ? `${joinLabel}: ${c.title}` : joinLabel;
-    els.playerChallengeAttribution.setAttribute("aria-label", text && canOpen ? label : "");
+    els.playerChallengeAttribution.hidden = true;
+    els.playerChallengeAttribution.disabled = true;
+    els.playerChallengeAttribution.setAttribute("aria-label", "");
   }
 }
 
-function setPlayerTemplateAttribution(track, opts = {}) {
-  wirePlayerAttributionActionsOnce();
-  const challenge = opts.challenge ?? challengeMetaForTrack(track);
-  let tpl = templateMetaForTrack(track);
-  const chKind = creationSourceKind(challenge);
-  if (!tpl && challenge && chKind === "template") {
-    tpl = {
-      searchTemplateId: String(challenge.id || "").trim() || `occasion:${String(challenge.occasion || "occasion").trim()}`,
-      searchTemplateTitle: String(challenge.title || challenge.occasion || "Template").trim(),
-      styleInput: String(track?.meta?.styleInput || track?.meta?.styleSent || "").trim(),
-    };
-  }
-  if (tpl && challenge && chKind !== "template" && playerAttributionsOverlap(challenge, tpl)) {
-    _playerTemplateCtx = null;
-    if (els.playerTemplateAttributionText) els.playerTemplateAttributionText.textContent = "";
-    if (els.playerTemplateAttribution) {
-      els.playerTemplateAttribution.hidden = true;
-      els.playerTemplateAttribution.disabled = true;
-      els.playerTemplateAttribution.setAttribute("aria-label", "");
-    }
-    return;
-  }
-  _playerTemplateCtx = tpl;
-  const text = tpl ? String(tpl.searchTemplateTitle || "Template").trim() : "";
-  if (els.playerTemplateAttributionText) els.playerTemplateAttributionText.textContent = text;
+function setPlayerTemplateAttribution(_track, _opts = {}) {
+  _playerTemplateCtx = null;
+  if (els.playerTemplateAttributionText) els.playerTemplateAttributionText.textContent = "";
   if (els.playerTemplateAttribution) {
-    els.playerTemplateAttribution.hidden = !text;
-    els.playerTemplateAttribution.disabled = !tpl;
-    els.playerTemplateAttribution.setAttribute(
-      "aria-label",
-      text ? `Use template: ${text}` : "",
-    );
+    els.playerTemplateAttribution.hidden = true;
+    els.playerTemplateAttribution.disabled = true;
+    els.playerTemplateAttribution.setAttribute("aria-label", "");
   }
 }
 
@@ -44720,6 +44681,7 @@ function setPlayerMeta({ title, subtitle, artUrl, releaseCaption, remixOf, chall
   } catch {
     syncCoverArtOverlay(false);
   }
+  syncPlayerPlaysCount();
 }
 
 // Most recent http(s) URL handed to the player. Used by Download Video
@@ -44947,6 +44909,153 @@ function updatePlayerSecondaryChrome() {
   const card = document.querySelector(".playerCard");
   if (card) card.dataset.readOnlyListen = ro ? "1" : "0";
   void syncPlayerCreatorChrome();
+  syncPlayerPlaysCount();
+  void syncPlayerSocialRail();
+}
+
+function resolvePlayerPlayCount() {
+  const t = currentPlayerTrackRef || {};
+  const lib = resolvePlayerLibraryTrack();
+  const from = lib || t;
+  let n = Number(from?.playCount ?? from?.meta?.playCount);
+  if (!Number.isFinite(n) || n < 0) {
+    const hit = findDiscoverFeedTrack({
+      songId: trackCloudShareId(t) || t.songId || t.cloudSongId,
+      ownerUserId: t.ownerUserId || t.userId,
+      url: t.url,
+    });
+    n = Number(hit?.playCount);
+  }
+  return Number.isFinite(n) && n >= 0 ? n : null;
+}
+
+function syncPlayerPlaysCount() {
+  const el = els.playerPlaysCount;
+  if (!el) return;
+  const n = resolvePlayerPlayCount();
+  if (n == null || n <= 0) {
+    el.hidden = true;
+    el.textContent = "";
+    return;
+  }
+  el.hidden = false;
+  el.textContent = `· ${formatStatCount(n)} plays`;
+}
+
+function playerSocialTargetFromRef(ref) {
+  const t = ref || currentPlayerTrackRef || {};
+  const lib = resolvePlayerLibraryTrack();
+  const songId = String(
+    trackCloudShareId(t) ||
+    trackCloudShareId(lib) ||
+    t.songId ||
+    t.cloudSongId ||
+    "",
+  ).trim();
+  if (!isShareUuid(songId)) return null;
+  const ownerUserId = String(
+    t.ownerUserId ||
+    t.userId ||
+    lib?.ownerUserId ||
+    authSession?.user?.id ||
+    "",
+  ).trim();
+  return { songId, ownerUserId };
+}
+
+function ensurePlayerSocialRailIcons(scope = "player") {
+  const gradScope = String(scope || "player").trim() || "player";
+  document.querySelectorAll("[data-player-social-ico]").forEach((slot) => {
+    const kind = String(slot.getAttribute("data-player-social-ico") || "").trim();
+    if (kind === "share") delete slot.dataset.filled;
+    if (kind !== "gift" && slot.dataset.filled === "1") return;
+    let svg = "";
+    if (kind === "like") svg = feedActIconLike();
+    else if (kind === "reply") svg = feedActIconComment();
+    else if (kind === "gift") svg = feedActIconGift(undefined, gradScope);
+    else if (kind === "share") svg = feedActIconShare();
+    if (!svg) return;
+    slot.innerHTML = svg;
+    if (kind !== "gift") slot.dataset.filled = "1";
+  });
+}
+
+async function hydratePlayerSocialStats(songId) {
+  const sid = String(songId || "").trim();
+  if (!sid) return;
+  try {
+    const params = new URLSearchParams();
+    params.set("type", "feed_social_stats");
+    params.set("song_ids", sid);
+    const data = await socialApi(`/api/social?${params.toString()}`);
+    if (data?.likes?.song?.[sid]) {
+      const info = data.likes.song[sid];
+      setFeedSocialStat("song", sid, {
+        likeCount: Number(info?.count) || 0,
+        liked: Boolean(info?.liked),
+      });
+    }
+    if (data?.replies?.song?.[sid]) {
+      const info = data.replies.song[sid];
+      setFeedSocialStat("song", sid, {
+        replyCount: Number(info?.count) || 0,
+      });
+    }
+    if (data?.reposts?.song?.[sid]) {
+      const info = data.reposts.song[sid];
+      setFeedSocialStat("song", sid, {
+        repostCount: Number(info?.count) || 0,
+        reposted: Boolean(info?.reposted),
+      });
+    }
+    applyFeedSocialStatsToDom(document);
+  } catch {
+    applyFeedSocialStatsToDom(document);
+  }
+}
+
+async function syncPlayerSocialRail() {
+  const rail = els.playerSocialRail;
+  const row = els.playerSocialActions;
+  if (!rail || !row) return;
+  const target = playerSocialTargetFromRef();
+  if (!target?.songId) {
+    rail.hidden = true;
+    return;
+  }
+  const myId = String(authSession?.user?.id || "").trim();
+  const isOwner = Boolean(myId && target.ownerUserId && myId === target.ownerUserId);
+  row.setAttribute("data-friends-act-kind", "music");
+  row.setAttribute("data-friends-act-target-kind", "song");
+  row.setAttribute("data-friends-act-id", target.songId);
+  row.setAttribute("data-friends-act-uid", target.ownerUserId);
+  ensurePlayerSocialRailIcons(target.songId);
+  const giftBtn = row.querySelector('[data-friends-act="gift"]');
+  const shareBtn = row.querySelector('[data-friends-act="share"]');
+  if (giftBtn) giftBtn.hidden = isOwner || !myId;
+  if (shareBtn) shareBtn.hidden = false;
+  rail.hidden = false;
+  applyFeedSocialStatsToDom(document);
+  await hydratePlayerSocialStats(target.songId);
+}
+
+function wirePlayerSocialRailOnce() {
+  const card = document.querySelector(".playerCard");
+  if (!card || card.dataset.playerSocialWired === "1") return;
+  card.dataset.playerSocialWired = "1";
+  ensurePlayerSocialRailIcons();
+  card.addEventListener("click", (e) => {
+    const actBtn = e.target.closest("[data-friends-act]");
+    if (!actBtn || !els.playerSocialActions?.contains(actBtn)) return;
+    const kind = actBtn.getAttribute("data-friends-act");
+    if (kind === "plays") return;
+    e.preventDefault();
+    e.stopPropagation();
+    if (kind === "like") void handleFeedLikeTap(actBtn);
+    else if (kind === "reply") void openFeedReplySheetFromButton(actBtn);
+    else if (kind === "gift") openGiftSheetFromButton(actBtn);
+    else if (kind === "share") void openShareChooserForTrack(trackRefFromCurrentPlayer());
+  });
 }
 
 const PLAYER_SKIP_SEC = 15;
@@ -52168,6 +52277,7 @@ if (els.btnPlayerToggle) {
   syncPlayerToggleUI();
 }
 if (els.btnPlayerBack) {
+  wirePlayerSocialRailOnce();
   els.btnPlayerBack.addEventListener("click", () => {
     // The mobile tab bar is hidden on /player (full-screen Now Playing),
     // so the back chevron is the user's only way out. If we have history

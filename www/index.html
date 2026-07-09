@@ -172,7 +172,7 @@
       onload="this.media='all'"
     />
     <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Display:wght@900&family=Inter:wght@900&display=swap" /></noscript>
-    <link rel="stylesheet" href="./styles.css?v=20260709-225038" />
+    <link rel="stylesheet" href="./styles.css?v=20260710-004849" />
 
     <meta name="description" content="NabadAi is an AI music studio. Hum a melody, write lyrics, and ship a song." />
     <meta property="og:type" content="website" />
@@ -2317,6 +2317,7 @@
             <button id="btnPlayerBack" class="nabadBackBtn playerBack" type="button" aria-label="Back">
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6 9 12l6 6"/></svg>
             </button>
+            <span class="playerHeaderMark" aria-hidden="true"></span>
             <button id="btnPlayerMenu" class="playerMenuBtn" type="button" aria-label="Song options">⋯</button>
           </div>
           <div class="playerShell">
@@ -2325,11 +2326,30 @@
               <div class="playerArtStage">
                 <img id="playerArt" class="playerArt isPlaceholder" src="./assets/icons/splash-mark.png" alt="" />
               </div>
-              <div id="playerKaraokeStrip" class="playerKaraokeFloat" hidden aria-live="polite" aria-label="Synced lyrics">
-                <p id="playerKaraokeLinePrev" class="playerKaraokeLine playerKaraokeLine--prev" dir="auto" aria-hidden="true"></p>
-                <p id="playerKaraokeLineCurrent" class="playerKaraokeLine playerKaraokeLine--current" dir="auto"></p>
-                <p id="playerKaraokeLineNext" class="playerKaraokeLine playerKaraokeLine--next" dir="auto" aria-hidden="true"></p>
-              </div>
+              <aside id="playerSocialRail" class="playerSocialRail" hidden aria-label="Song interactions">
+                <div id="playerSocialActions" class="followActActions playerSocialActions" data-friends-act-row="1" data-friends-act-kind="music" data-friends-act-target-kind="song" data-friends-act-id="" data-friends-act-uid="">
+                  <button type="button" class="followActAct playerSocialAct" data-friends-act="like" aria-label="Like" aria-pressed="false">
+                    <span class="playerSocialActIco" data-player-social-ico="like" aria-hidden="true"></span>
+                    <span class="followActActCount" data-friends-act-count="like"></span>
+                  </button>
+                  <button type="button" class="followActAct playerSocialAct" data-friends-act="reply" aria-label="Comment" aria-pressed="false">
+                    <span class="playerSocialActIco" data-player-social-ico="reply" aria-hidden="true"></span>
+                    <span class="followActActCount" data-friends-act-count="reply"></span>
+                  </button>
+                  <button type="button" class="followActAct playerSocialAct followActAct--gift playerSocialAct--gift" data-friends-act="gift" aria-label="Gift credits" hidden>
+                    <span class="playerSocialActIco" data-player-social-ico="gift" aria-hidden="true"></span>
+                    <span class="followActActCount" data-friends-act-count="gift"></span>
+                  </button>
+                  <button type="button" class="followActAct playerSocialAct playerSocialAct--share" data-friends-act="share" aria-label="Share">
+                    <span class="playerSocialActIco" data-player-social-ico="share" aria-hidden="true"></span>
+                  </button>
+                </div>
+              </aside>
+            </div>
+            <div id="playerKaraokeStrip" class="playerKaraokeFloat playerKaraokeBelow" hidden aria-live="polite" aria-label="Synced lyrics">
+              <p id="playerKaraokeLinePrev" class="playerKaraokeLine playerKaraokeLine--prev" dir="auto" aria-hidden="true"></p>
+              <p id="playerKaraokeLineCurrent" class="playerKaraokeLine playerKaraokeLine--current" dir="auto"></p>
+              <p id="playerKaraokeLineNext" class="playerKaraokeLine playerKaraokeLine--next" dir="auto" aria-hidden="true"></p>
             </div>
             </div>
             <div class="playerMeta">
@@ -2338,8 +2358,11 @@
                 <span id="playerNabadBadge" class="playerNabadBadgeSlot" hidden></span>
               </div>
               <div class="playerCreatorRow" id="playerCreatorRow">
-                <div id="playerCreatorIdentity" class="playerCreatorIdentity"></div>
-                <button id="btnPlayerBecomeFan" class="playerBecomeFanBtn" type="button" hidden>Become a fan</button>
+                <div class="playerCreatorInline">
+                  <div id="playerCreatorIdentity" class="playerCreatorIdentity"></div>
+                  <button id="btnPlayerBecomeFan" class="playerBecomeFanBtn" type="button" hidden>Become a fan</button>
+                  <span id="playerPlaysCount" class="playerPlaysCount" hidden aria-label="Play count"></span>
+                </div>
               </div>
               <span id="playerSubtitle" class="srOnly" aria-hidden="true"></span>
 
@@ -4515,6 +4538,6 @@
     </script>
     <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
     <script src="./env.client.js" onerror="void 0"></script>
-    <script type="module" src="./src/app.js?v=20260709-225038"></script>
+    <script type="module" src="./src/app.js?v=20260710-004849"></script>
   </body>
 </html>

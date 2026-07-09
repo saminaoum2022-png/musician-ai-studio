@@ -36,6 +36,18 @@ export function feedActIconGift(klass = "followActActIco followActActIco--gift",
   return `<svg class="${cls}" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" aria-hidden="true"><defs><linearGradient id="${gradId}" x1="4" y1="4" x2="20" y2="20" gradientUnits="userSpaceOnUse"><stop offset="0%" stop-color="#E7FFD9"/><stop offset="45%" stop-color="#A8F4D8"/><stop offset="100%" stop-color="#63E5C7"/></linearGradient></defs><rect x="5" y="10" width="14" height="9" rx="2.2" stroke="url(#${gradId})" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><rect x="4" y="7.2" width="16" height="3" rx="1.5" stroke="url(#${gradId})" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M12 7.2V19" stroke="url(#${gradId})" stroke-width="1.6" stroke-linecap="round"/><path d="M12 7.2 C11.3 5.6 10.2 4.5 8.9 4.5 C7.9 4.5 7.2 5.2 7.2 6 C7.2 6.8 7.9 7.2 9.3 7.2H12" stroke="url(#${gradId})" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M12 7.2 C12.7 5.6 13.8 4.5 15.1 4.5 C16.1 4.5 16.8 5.2 16.8 6 C16.8 6.8 16.1 7.2 14.7 7.2H12" stroke="url(#${gradId})" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 }
 
+/** Repost — circular arrows (interaction bar). */
+export function feedActIconRepost(klass = "followActActIco followActActIco--repost") {
+  const cls = String(klass || "followActActIco followActActIco--repost").trim() || "followActActIco followActActIco--repost";
+  return `<svg class="${cls}" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M17 2l3 3-3 3V7H10a3.5 3.5 0 0 0-3.5 3.5v.5H5v-.5A5.5 5.5 0 0 1 10 5h7V2Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M7 22l-3-3 3-3v2h7a3.5 3.5 0 0 0 3.5-3.5v-.5h1.5v.5A5.5 5.5 0 0 1 14 22H7v-1Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+}
+
+/** Share — connected nodes (interaction bar). */
+export function feedActIconShare(klass = "followActActIco followActActIco--share") {
+  const cls = String(klass || "followActActIco followActActIco--share").trim() || "followActActIco followActActIco--share";
+  return `<svg class="${cls}" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="17.5" cy="6.5" r="2.25" stroke="currentColor" stroke-width="2"/><circle cx="6.5" cy="12" r="2.25" stroke="currentColor" stroke-width="2"/><circle cx="17.5" cy="17.5" r="2.25" stroke="currentColor" stroke-width="2"/><path d="M8.6 10.9 L15.4 7.6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M8.6 13.1 L15.4 16.4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>`;
+}
+
 /** Analytics — simple bar chart (interaction bar, owner-only). */
 export function feedActIconAnalytics(klass = "followActActIco followActActIco--analytics") {
   const cls = String(klass || "followActActIco followActActIco--analytics").trim() || "followActActIco followActActIco--analytics";

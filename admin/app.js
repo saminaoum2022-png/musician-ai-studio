@@ -326,13 +326,13 @@ function clearOAuthCallbackFromUrl() {
 async function buildGoogleOAuthUrl() {
   const { supabaseUrl, supabaseAnonKey } = state.config;
   if (!supabaseUrl || !supabaseAnonKey) throw new Error("Supabase config missing");
-  // Mark admin OAuth so the main app hands off the callback to /admin/.
-  setOAuthMarkers();
+  const verifier = randomVerifier(64);
+  setOAuthMarkers(verifier);
+  const challenge = await sha256Base64Url(verifier);
   const redirectTo = encodeURIComponent(oauthRedirectTarget());
   const scope = encodeURIComponent("email profile");
-  const apikey = encodeURIComponent(supabaseAnonKey);
-  // Implicit flow: tokens land in the URL hash — no PKCE verifier for Safari to lose.
-  return `${supabaseUrl}/auth/v1/authorize?provider=google&response_type=token&scope=${scope}&apikey=${apikey}&redirect_to=${redirectTo}`;
+  // PKCE code flow — Supabase manages OAuth state internally (required).
+  return `${supabaseUrl}/auth/v1/authorize?provider=google&response_type=code&scope=${scope}&code_challenge=${encodeURIComponent(challenge)}&code_challenge_method=S256&redirect_to=${redirectTo}`;
 }
 
 function sessionFromTokenPayload(data, fallbackEmail = "") {
@@ -359,7 +359,6 @@ async function exchangeOAuthCodeDirect(code, verifier) {
     body: JSON.stringify({
       auth_code: code,
       code_verifier: verifier,
-      redirect_uri: oauthRedirectTarget(),
     }),
   });
   const data = await r.json().catch(() => ({}));

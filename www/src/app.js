@@ -23096,8 +23096,13 @@ async function maybeHandleAuthCodeFromQuery() {
   try {
     const sp = new URLSearchParams(window.location.search || "");
     const code = sp.get("code");
+    const oauthError = sp.get("error") || sp.get("error_description") || "";
     const hash = String(window.location.hash || "");
-    const hasOAuthReturn = Boolean(code) || hash.includes("access_token=") || hash.includes("code=");
+    const hasOAuthReturn =
+      Boolean(code) ||
+      Boolean(oauthError) ||
+      hash.includes("access_token=") ||
+      hash.includes("code=");
     if (!hasOAuthReturn) return false;
     // Admin dashboard started this OAuth flow — hand off before we burn the code/tokens.
     try {

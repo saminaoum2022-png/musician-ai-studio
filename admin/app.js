@@ -1,11 +1,16 @@
+import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.8/+esm";
+
 const SESSION_KEY = "nabad_admin_session_v1";
 const AUTH_PKCE_KEY = "nabad_admin_pkce_v1";
 const AUTH_PENDING_KEY = "nabad_admin_oauth_pending_v1";
 const PKCE_COOKIE = "nabad_admin_pkce";
 const PENDING_COOKIE = "nabad_admin_oauth_pending";
-/** Fixed redirect — must match an entry in Supabase → Auth → Redirect URLs. */
-const ADMIN_OAUTH_REDIRECT = "https://www.nabadai.com/admin/";
+/** OAuth callback — use site root (same as main app) so Supabase state/PKCE work reliably. */
+const ADMIN_OAUTH_REDIRECT = "https://www.nabadai.com/";
+const ADMIN_PAGE_PATH = "/admin/";
 const PAGE_SIZE = 50;
+
+let supabaseAuth = null;
 
 const state = {
   config: null,
@@ -131,24 +136,6 @@ function writeSession(sess) {
   localStorage.setItem(SESSION_KEY, JSON.stringify(sess));
 }
 
-function b64urlFromBytes(bytes) {
-  let bin = "";
-  for (let i = 0; i < bytes.length; i += 1) bin += String.fromCharCode(bytes[i]);
-  return btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
-}
-
-async function sha256Base64Url(input) {
-  const enc = new TextEncoder().encode(input);
-  const buf = await crypto.subtle.digest("SHA-256", enc);
-  return b64urlFromBytes(new Uint8Array(buf));
-}
-
-function randomVerifier(len = 64) {
-  const bytes = new Uint8Array(len);
-  crypto.getRandomValues(bytes);
-  return b64urlFromBytes(bytes).slice(0, len);
-}
-
 function setOAuthMarkers(verifier = "") {
   if (verifier) {
     localStorage.setItem(AUTH_PKCE_KEY, verifier);
@@ -163,17 +150,6 @@ function setOAuthMarkers(verifier = "") {
     document.cookie = `${PKCE_COOKIE}=${encodeURIComponent(verifier)}; Path=/; Max-Age=600; SameSite=Lax${secure}${domain}`;
   }
   document.cookie = `${PENDING_COOKIE}=1; Path=/; Max-Age=600; SameSite=Lax${secure}${domain}`;
-}
-
-function readPkceVerifier() {
-  const fromStore = localStorage.getItem(AUTH_PKCE_KEY) || "";
-  if (fromStore) return fromStore;
-  try {
-    const fromSession = sessionStorage.getItem(AUTH_PKCE_KEY) || "";
-    if (fromSession) return fromSession;
-  } catch {}
-  const m = document.cookie.match(new RegExp(`(?:^|; )${PKCE_COOKIE}=([^;]*)`));
-  return m ? decodeURIComponent(m[1]) : "";
 }
 
 function hasOAuthPending() {
@@ -273,21 +249,50 @@ function showResetScreen() {
   if (els.resetScreen) els.resetScreen.hidden = false;
 }
 
+function getSupabaseClient() {
+  if (!state.config?.supabaseUrl || !state.config?.supabaseAnonKey) {
+    throw new Error("Supabase config missing");
+  }
+  if (!supabaseAuth) {
+    supabaseAuth = createClient(state.config.supabaseUrl, state.config.supabaseAnonKey, {
+      auth: {
+        flowType: "pkce",
+        autoRefreshToken: false,
+        persistSession: false,
+        detectSessionInUrl: false,
+      },
+    });
+  }
+  return supabaseAuth;
+}
+
 function oauthRedirectTarget() {
-  // Prefer a fixed production URL so Supabase always returns to /admin/, not the home page.
   try {
-    const { origin, pathname } = window.location;
-    const onAdminPath = /\/admin\/?$/i.test(pathname || "");
-    if (origin.includes("nabadai.com") && onAdminPath) return ADMIN_OAUTH_REDIRECT;
-    if (origin.includes("localhost") || origin.includes("127.0.0.1")) {
-      const path = pathname || "/admin/";
-      return `${origin}${path.endsWith("/") ? path : `${path}/`}`;
+    const { origin, hostname } = window.location;
+    if (hostname.includes("nabadai.com")) return ADMIN_OAUTH_REDIRECT;
+    if (hostname.includes("localhost") || hostname.includes("127.0.0.1")) {
+      return `${origin}/`;
     }
-    if (origin.includes("vercel.app")) {
-      return `${origin}/admin/`;
+    if (hostname.includes("vercel.app")) {
+      return `${origin}/`;
     }
   } catch {}
   return ADMIN_OAUTH_REDIRECT;
+}
+
+function clearOAuthCallbackFromUrl() {
+  try {
+    window.history.replaceState({}, document.title, ADMIN_PAGE_PATH);
+  } catch {}
+}
+
+function sessionFromSupabaseSession(sess) {
+  return {
+    access_token: sess.access_token,
+    refresh_token: sess.refresh_token,
+    expires_at: sess.expires_at ? Number(sess.expires_at) * 1000 : Date.now() + 3_600_000,
+    email: String(sess.user?.email || "").trim().toLowerCase(),
+  };
 }
 
 function parseOAuthCallback() {
@@ -317,24 +322,6 @@ function parseOAuthCallback() {
   return out;
 }
 
-function clearOAuthCallbackFromUrl() {
-  try {
-    window.history.replaceState({}, document.title, oauthRedirectTarget());
-  } catch {}
-}
-
-async function buildGoogleOAuthUrl() {
-  const { supabaseUrl, supabaseAnonKey } = state.config;
-  if (!supabaseUrl || !supabaseAnonKey) throw new Error("Supabase config missing");
-  const verifier = randomVerifier(64);
-  setOAuthMarkers(verifier);
-  const challenge = await sha256Base64Url(verifier);
-  const redirectTo = encodeURIComponent(oauthRedirectTarget());
-  const scope = encodeURIComponent("email profile");
-  // PKCE code flow — Supabase manages OAuth state internally (required).
-  return `${supabaseUrl}/auth/v1/authorize?provider=google&response_type=code&scope=${scope}&code_challenge=${encodeURIComponent(challenge)}&code_challenge_method=S256&redirect_to=${redirectTo}`;
-}
-
 function sessionFromTokenPayload(data, fallbackEmail = "") {
   const email =
     String(data?.user?.email || data?.email || fallbackEmail || "")
@@ -348,51 +335,18 @@ function sessionFromTokenPayload(data, fallbackEmail = "") {
   };
 }
 
-async function exchangeOAuthCodeDirect(code, verifier) {
-  const { supabaseUrl, supabaseAnonKey } = state.config;
-  const r = await fetch(`${supabaseUrl}/auth/v1/token?grant_type=pkce`, {
-    method: "POST",
-    headers: {
-      apikey: supabaseAnonKey,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      auth_code: code,
-      code_verifier: verifier,
-    }),
-  });
-  const data = await r.json().catch(() => ({}));
-  if (!r.ok || !data?.access_token) {
-    const msg = data?.error_description || data?.msg || data?.message || `OAuth exchange failed (${r.status})`;
-    throw new Error(msg);
-  }
-  return data;
-}
-
 async function exchangeOAuthCodeForSession(code) {
-  const verifier = readPkceVerifier();
-  if (!verifier) {
-    throw new Error("Sign-in state was lost (Safari). Hard-refresh and try Continue with Google again.");
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase.auth.exchangeCodeForSession(code);
+  if (error) {
+    throw new Error(error.message || "Google sign-in failed");
   }
-
-  let data;
-  try {
-    data = await exchangeOAuthCodeDirect(code, verifier);
-  } catch (directErr) {
-    const r = await fetch("/api/admin/oauth-exchange", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ code, code_verifier: verifier }),
-    });
-    data = await r.json().catch(() => ({}));
-    if (!r.ok || !data?.access_token) {
-      throw new Error(data?.error || directErr?.message || "Google sign-in failed");
-    }
+  const sess = data?.session;
+  if (!sess?.access_token) {
+    throw new Error("Google sign-in did not return a session");
   }
-
   clearOAuthMarkers();
-  writeSession(sessionFromTokenPayload(data));
-  await hydrateSessionEmail();
+  writeSession(sessionFromSupabaseSession(sess));
   return true;
 }
 
@@ -459,8 +413,16 @@ async function hydrateSessionEmail() {
 }
 
 async function signInWithGoogle() {
-  const url = await buildGoogleOAuthUrl();
-  window.location.assign(url);
+  setOAuthMarkers();
+  const supabase = getSupabaseClient();
+  const { error } = await supabase.auth.signInWithOAuth({
+    provider: "google",
+    options: {
+      redirectTo: oauthRedirectTarget(),
+      queryParams: { prompt: "select_account" },
+    },
+  });
+  if (error) throw new Error(error.message || "Could not start Google sign-in");
 }
 
 async function loadConfig() {
@@ -846,6 +808,7 @@ async function boot() {
   if (oauthPreview.code || oauthPreview.accessToken) {
     showLoginError("Finishing Google sign-in…");
   } else if (oauthPreview.error) {
+    clearOAuthMarkers();
     showLoginError(decodeURIComponent(String(oauthPreview.error).replace(/\+/g, " ")));
     clearOAuthCallbackFromUrl();
     return;

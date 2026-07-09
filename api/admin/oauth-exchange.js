@@ -5,6 +5,21 @@
 const { readJson, sendJson } = require("../_lib/suno-upstream");
 const { applyCors } = require("../_lib/cors");
 
+const PKCE_COOKIE = "nabad_admin_pkce_srv";
+
+function readPkceCookie(req) {
+  const raw = String(req.headers.cookie || "");
+  const m = raw.match(new RegExp(`(?:^|; )${PKCE_COOKIE}=([^;]*)`));
+  return m ? decodeURIComponent(m[1]) : "";
+}
+
+function clearPkceCookieHeader(req) {
+  const host = String(req.headers.host || "").toLowerCase();
+  const secure = host.includes("nabadai.com") || host.includes("vercel.app") ? "Secure; " : "";
+  const domain = host.includes("nabadai.com") ? "Domain=.nabadai.com; " : "";
+  return `${PKCE_COOKIE}=; Path=/; Max-Age=0; HttpOnly; ${secure}SameSite=Lax; ${domain}`;
+}
+
 module.exports = async function handler(req, res) {
   if (applyCors(req, res)) return;
   if (req.method !== "POST") return sendJson(res, 405, { error: "Method not allowed" });
@@ -17,9 +32,12 @@ module.exports = async function handler(req, res) {
 
   const body = await readJson(req);
   const code = String(body?.code || "").trim();
-  const codeVerifier = String(body?.code_verifier || "").trim();
+  const codeVerifier =
+    readPkceCookie(req) || String(body?.code_verifier || "").trim();
   if (!code || !codeVerifier) {
-    return sendJson(res, 400, { error: "Missing code or code_verifier" });
+    return sendJson(res, 400, {
+      error: "Sign-in expired — tap Continue with Google again",
+    });
   }
 
   const r = await fetch(`${supabaseUrl}/auth/v1/token?grant_type=pkce`, {
@@ -35,5 +53,7 @@ module.exports = async function handler(req, res) {
     const msg = data?.error_description || data?.msg || data?.message || "OAuth exchange failed";
     return sendJson(res, r.status >= 400 ? r.status : 502, { error: msg, details: data });
   }
+
+  res.setHeader("Set-Cookie", clearPkceCookieHeader(req));
   return sendJson(res, 200, data);
 };

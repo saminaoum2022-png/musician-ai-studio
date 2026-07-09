@@ -1,5 +1,3 @@
-import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.8/+esm";
-
 const SESSION_KEY = "nabad_admin_session_v1";
 const AUTH_PKCE_KEY = "nabad_admin_pkce_v1";
 const AUTH_PENDING_KEY = "nabad_admin_oauth_pending_v1";
@@ -9,8 +7,6 @@ const PENDING_COOKIE = "nabad_admin_oauth_pending";
 const ADMIN_OAUTH_REDIRECT = "https://www.nabadai.com/admin/";
 const ADMIN_PAGE_PATH = "/admin/";
 const PAGE_SIZE = 50;
-
-let supabaseAuth = null;
 
 const state = {
   config: null,
@@ -152,40 +148,6 @@ function setOAuthMarkers(verifier = "") {
   document.cookie = `${PENDING_COOKIE}=1; Path=/; Max-Age=600; SameSite=Lax${secure}${domain}`;
 }
 
-function readPkceVerifier() {
-  const fromStore = localStorage.getItem(AUTH_PKCE_KEY) || "";
-  if (fromStore) return fromStore;
-  try {
-    const fromSession = sessionStorage.getItem(AUTH_PKCE_KEY) || "";
-    if (fromSession) return fromSession;
-  } catch {}
-  const m = document.cookie.match(new RegExp(`(?:^|; )${PKCE_COOKIE}=([^;]*)`));
-  return m ? decodeURIComponent(m[1]) : "";
-}
-
-function createAdminAuthStorage() {
-  const prefix = "nabad_admin_sb_";
-  return {
-    getItem(key) {
-      const verifier = readPkceVerifier();
-      if (String(key).includes("code-verifier") && verifier) return verifier;
-      return localStorage.getItem(prefix + key);
-    },
-    setItem(key, value) {
-      localStorage.setItem(prefix + key, value);
-      if (String(key).includes("code-verifier") && value) {
-        setOAuthMarkers(value);
-      }
-    },
-    removeItem(key) {
-      localStorage.removeItem(prefix + key);
-      if (String(key).includes("code-verifier")) {
-        clearOAuthMarkers();
-      }
-    },
-  };
-}
-
 function hasOAuthPending() {
   if (localStorage.getItem(AUTH_PENDING_KEY) || localStorage.getItem(AUTH_PKCE_KEY)) return true;
   return /(?:^|; )nabad_admin_oauth_pending=/.test(document.cookie);
@@ -283,25 +245,6 @@ function showResetScreen() {
   if (els.resetScreen) els.resetScreen.hidden = false;
 }
 
-function getSupabaseClient() {
-  if (!state.config?.supabaseUrl || !state.config?.supabaseAnonKey) {
-    throw new Error("Supabase config missing");
-  }
-  if (!supabaseAuth) {
-    supabaseAuth = createClient(state.config.supabaseUrl, state.config.supabaseAnonKey, {
-      auth: {
-        flowType: "pkce",
-        autoRefreshToken: false,
-        persistSession: false,
-        detectSessionInUrl: false,
-        storage: createAdminAuthStorage(),
-        storageKey: "nabad-admin-auth",
-      },
-    });
-  }
-  return supabaseAuth;
-}
-
 function oauthRedirectTarget() {
   try {
     const { origin, hostname } = window.location;
@@ -320,15 +263,6 @@ function clearOAuthCallbackFromUrl() {
   try {
     window.history.replaceState({}, document.title, ADMIN_PAGE_PATH);
   } catch {}
-}
-
-function sessionFromSupabaseSession(sess) {
-  return {
-    access_token: sess.access_token,
-    refresh_token: sess.refresh_token,
-    expires_at: sess.expires_at ? Number(sess.expires_at) * 1000 : Date.now() + 3_600_000,
-    email: String(sess.user?.email || "").trim().toLowerCase(),
-  };
 }
 
 function parseOAuthCallback() {
@@ -372,30 +306,15 @@ function sessionFromTokenPayload(data, fallbackEmail = "") {
 }
 
 async function exchangeOAuthCodeForSession(code) {
-  const supabase = getSupabaseClient();
-  const { data, error } = await supabase.auth.exchangeCodeForSession(code);
-  if (!error && data?.session?.access_token) {
-    clearOAuthMarkers();
-    writeSession(sessionFromSupabaseSession(data.session));
-    return true;
-  }
-
-  const verifier = readPkceVerifier();
-  if (!verifier) {
-    throw new Error(
-      error?.message ||
-        "Sign-in state was lost. Open https://www.nabadai.com/admin/ and try Google again.",
-    );
-  }
-
   const r = await fetch("/api/admin/oauth-exchange", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ code, code_verifier: verifier }),
+    credentials: "same-origin",
+    body: JSON.stringify({ code }),
   });
   const payload = await r.json().catch(() => ({}));
   if (!r.ok || !payload?.access_token) {
-    throw new Error(payload?.error || error?.message || "Google sign-in failed");
+    throw new Error(payload?.error || "Google sign-in failed — tap Continue with Google again");
   }
   clearOAuthMarkers();
   writeSession(sessionFromTokenPayload(payload));
@@ -466,15 +385,17 @@ async function hydrateSessionEmail() {
 
 async function signInWithGoogle() {
   setOAuthMarkers();
-  const supabase = getSupabaseClient();
-  const { error } = await supabase.auth.signInWithOAuth({
-    provider: "google",
-    options: {
-      redirectTo: oauthRedirectTarget(),
-      queryParams: { prompt: "select_account" },
-    },
+  const r = await fetch("/api/admin/oauth-start", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "same-origin",
+    body: JSON.stringify({ redirect_to: oauthRedirectTarget() }),
   });
-  if (error) throw new Error(error.message || "Could not start Google sign-in");
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok || !data?.url) {
+    throw new Error(data?.error || "Could not start Google sign-in");
+  }
+  window.location.assign(data.url);
 }
 
 async function loadConfig() {

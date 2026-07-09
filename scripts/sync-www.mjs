@@ -101,6 +101,91 @@ function copyNativePushVendor() {
 
 copyNativePushVendor();
 
+function addJsExtensionsToRelativeImports(code) {
+  const withExt = (spec) => (spec.endsWith(".js") ? spec : `${spec}.js`);
+  return code
+    .replace(/from '(\.\/[^']+)'/g, (_, spec) => `from '${withExt(spec)}'`)
+    .replace(/from "(\.\/[^"]+)"/g, (_, spec) => `from "${withExt(spec)}"`)
+    .replace(/import\('(\.\/[^']+)'\)/g, (_, spec) => `import('${withExt(spec)}')`);
+}
+
+function patchVendorImports(code, fileLabel) {
+  let out = code;
+  out = out.replaceAll(
+    'from "@capacitor/core"',
+    'from "../../vendor/capacitor-core/index.js"',
+  );
+  out = out.replaceAll(
+    "from '@capacitor/core'",
+    "from '../../vendor/capacitor-core/index.js'",
+  );
+  out = out.replaceAll(
+    'from "@revenuecat/purchases-typescript-internal-esm"',
+    'from "../revenuecat-internal/index.js"',
+  );
+  out = out.replaceAll(
+    "from '@revenuecat/purchases-typescript-internal-esm'",
+    "from '../revenuecat-internal/index.js'",
+  );
+  out = addJsExtensionsToRelativeImports(out);
+  if (out !== code) {
+    console.log(`sync-www: patched imports in ${fileLabel}`);
+  }
+  return out;
+}
+
+function walkJsFiles(dir, out = []) {
+  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+    const full = path.join(dir, entry.name);
+    if (entry.isDirectory()) walkJsFiles(full, out);
+    else if (entry.name.endsWith(".js")) out.push(full);
+  }
+  return out;
+}
+
+function copyRevenueCatVendor() {
+  const rcEsmSrc = path.join(root, "node_modules/@revenuecat/purchases-capacitor/dist/esm");
+  const rcInternalSrc = path.join(
+    root,
+    "node_modules/@revenuecat/purchases-typescript-internal-esm/dist",
+  );
+  if (!fs.existsSync(rcEsmSrc) || !fs.existsSync(rcInternalSrc)) {
+    console.warn("sync-www: RevenueCat packages missing — skip billing vendor");
+    return;
+  }
+
+  const rcDestDir = path.join(root, "www/vendor/revenuecat");
+  const rcInternalDestDir = path.join(root, "www/vendor/revenuecat-internal");
+  fs.mkdirSync(rcDestDir, { recursive: true });
+  fs.mkdirSync(rcInternalDestDir, { recursive: true });
+
+  execSync(`rsync -a --include='*.js' --include='generated/***' --exclude='*' "${rcInternalSrc}/" "${rcInternalDestDir}/"`, {
+    cwd: root,
+    stdio: "inherit",
+    shell: true,
+  });
+
+  for (const file of walkJsFiles(rcInternalDestDir)) {
+    const rel = path.relative(rcInternalDestDir, file);
+    let code = fs.readFileSync(file, "utf8");
+    code = addJsExtensionsToRelativeImports(code);
+    fs.writeFileSync(file, code);
+    console.log(`sync-www: patched imports in revenuecat-internal/${rel}`);
+  }
+
+  for (const name of fs.readdirSync(rcEsmSrc)) {
+    if (!name.endsWith(".js")) continue;
+    const srcFile = path.join(rcEsmSrc, name);
+    let code = fs.readFileSync(srcFile, "utf8");
+    code = patchVendorImports(code, `revenuecat/${name}`);
+    fs.writeFileSync(path.join(rcDestDir, name), code);
+  }
+
+  console.log("sync-www: RevenueCat vendor → www/vendor/revenuecat/");
+}
+
+copyRevenueCatVendor();
+
 const splashAssets = path.join(root, "assets", "splash");
 const wwwSplashAssets = path.join(root, "www", "assets", "splash");
 if (fs.existsSync(splashAssets)) {

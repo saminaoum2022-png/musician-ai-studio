@@ -16,7 +16,7 @@ export function isBillingConfigured() {
 }
 
 async function purchasesModule() {
-  return import("@revenuecat/purchases-capacitor");
+  return import("../../vendor/revenuecat/index.js");
 }
 
 export async function ensureRevenueCat(userId) {

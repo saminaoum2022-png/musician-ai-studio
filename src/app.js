@@ -78,7 +78,7 @@ import {
 import { initCoverArtOverlay, syncCoverArtOverlay } from "./cover-art/overlay.js";
 import { feedActIconAnalytics, feedActIconComment, feedActIconGift, feedActIconLike, feedActIconPlays } from "./feed-action-icons.js";
 import { initGifts, openGiftSheetFromButton } from "./gifts.js";
-import { configureProPlan, onProPlanRouteActive, setProReturnRoute } from "./pro-plan.js";
+import { configureProPlan, onProPlanRouteActive, refreshProSubscriptionUi, setProReturnRoute } from "./pro-plan.js";
 import { setRevenueCatApiKey, resetRevenueCatSession } from "./billing/revenuecat.js";
 import { augmentCoachApiPayload } from "./coach-knowledge.js";
 import { showGiftReceivedReveal } from "./gift-sent-overlay.js";
@@ -185,7 +185,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260709-140929";
+const APP_BUILD = "20260709-160731";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -5250,6 +5250,12 @@ try {
         void runApplyRouteOnce();
       }
     },
+    getProState: () => ({
+      active: Boolean(creditsState.proActive),
+      planId: creditsState.proPlanId,
+      status: creditsState.proStatus,
+      periodEnd: creditsState.proPeriodEnd,
+    }),
   });
 } catch (err) {
   console.error("[pro-plan] configure failed", err);
@@ -20889,6 +20895,15 @@ function scheduleProfileCloudSync({ delayMs = 600 } = {}) {
     if (!authSession?.user?.id) return;
     _profileCloudSyncInFlight = true;
     try {
+      if (!localProfileHasRichContent()) {
+        try {
+          await mergeActiveProfileFromCloud({ reason: "scheduleProfileCloudSync-guard" });
+        } catch {}
+      }
+      if (!localProfileHasRichContent()) {
+        try { console.info("[profile] skip cloud sync — local shell empty, refusing to push"); } catch {}
+        return;
+      }
       await supabaseUpsertProfile(activeProfile);
     } catch (e) {
       console.warn("[profile] cloud sync failed (will retry on next save)", e);
@@ -21840,15 +21855,112 @@ function applyProSubscriptionState(pro) {
   creditsState.proPlanId = row.planId ? String(row.planId) : null;
   creditsState.proStatus = row.status ? String(row.status) : null;
   creditsState.proPeriodEnd = row.currentPeriodEnd ? String(row.currentPeriodEnd) : null;
-  try { syncProfileProBanner(); } catch {}
+  try { syncProSubscriptionUi(); } catch {}
+}
+
+function proPlanLabelShort(planId) {
+  const id = String(planId || "").trim();
+  if (id === "weekly") return "Weekly plan";
+  if (id === "monthly") return "Monthly plan";
+  return "Active subscription";
+}
+
+function formatProRenewShort(iso) {
+  const raw = String(iso || "").trim();
+  if (!raw) return "";
+  try {
+    const d = new Date(raw);
+    if (Number.isNaN(d.getTime())) return "";
+    return `Renews ${d.toLocaleDateString(undefined, { month: "short", day: "numeric" })}`;
+  } catch {
+    return "";
+  }
+}
+
+function syncProSubscriptionUi() {
+  syncProfileProBanner();
+  syncSettingsProRow();
+  syncCreditsProUpsell();
+  try { refreshProSubscriptionUi(); } catch {}
+}
+
+function syncSettingsProRow() {
+  const pill = document.getElementById("settingsProPill");
+  const sub = document.getElementById("settingsProSub");
+  const active = Boolean(creditsState.proActive);
+  if (pill) {
+    pill.hidden = !active;
+    const trialing = String(creditsState.proStatus || "").toLowerCase() === "trialing";
+    pill.textContent = trialing ? "Trial" : "Active";
+    pill.classList.toggle("settingsProPill--trial", trialing);
+  }
+  if (sub) {
+    if (active) {
+      const renew = formatProRenewShort(creditsState.proPeriodEnd);
+      const bits = [proPlanLabelShort(creditsState.proPlanId), renew].filter(Boolean);
+      sub.textContent = bits.join(" · ") || "Your Pro benefits are unlocked";
+    } else {
+      sub.textContent = "Weekly and monthly plans, benefits";
+    }
+  }
+}
+
+function syncCreditsProUpsell() {
+  const card = document.getElementById("creditsProUpsell");
+  if (!card) return;
+  const show = isAppLoggedIn() && !creditsState.proActive;
+  card.hidden = !show;
+  card.setAttribute("aria-hidden", show ? "false" : "true");
 }
 
 function syncProfileProBanner() {
   if (!els.profileProBanner) return;
   const isAuthed = isAppLoggedIn();
-  const show = isAuthed && !creditsState.proActive;
-  els.profileProBanner.hidden = !show;
-  els.profileProBanner.setAttribute("aria-hidden", show ? "false" : "true");
+  const cta = document.getElementById("profileProBannerCta");
+  const sub = document.getElementById("profileProBannerSub");
+  if (!isAuthed) {
+    els.profileProBanner.hidden = true;
+    els.profileProBanner.setAttribute("aria-hidden", "true");
+    return;
+  }
+
+  if (creditsState.proActive) {
+    els.profileProBanner.hidden = false;
+    els.profileProBanner.setAttribute("aria-hidden", "false");
+    els.profileProBanner.classList.add("profileProBanner--active");
+    els.profileProBanner.setAttribute("href", "#/pro");
+    els.profileProBanner.setAttribute("data-route-link", "pro");
+    els.profileProBanner.setAttribute(
+      "aria-label",
+      "NabadAi Pro — your subscription is active",
+    );
+    if (cta) {
+      const trialing = String(creditsState.proStatus || "").toLowerCase() === "trialing";
+      cta.textContent = trialing ? "Trial" : "Active";
+      cta.classList.add("profileProBannerCta--status");
+    }
+    if (sub) {
+      const renew = formatProRenewShort(creditsState.proPeriodEnd);
+      const plan = proPlanLabelShort(creditsState.proPlanId);
+      sub.textContent = [plan, renew].filter(Boolean).join(" · ") || "Pro benefits unlocked";
+    }
+    return;
+  }
+
+  els.profileProBanner.classList.remove("profileProBanner--active");
+  els.profileProBanner.setAttribute("href", "#/pro");
+  els.profileProBanner.setAttribute("data-route-link", "pro");
+  els.profileProBanner.setAttribute(
+    "aria-label",
+    "NabadAi Pro — subscribe for Studio, unlimited Coach, and more credits",
+  );
+  els.profileProBanner.hidden = false;
+  els.profileProBanner.setAttribute("aria-hidden", "false");
+  if (cta) {
+    cta.textContent = "Subscribe now";
+    cta.classList.remove("profileProBannerCta--status");
+  }
+  if (sub) sub.textContent = "Studio, unlimited Coach & 1,000+ credits/mo";
 }
 
 /** Live Suno API remaining credits (same pool as `SUNO_API_KEY`). Shown on
@@ -22527,7 +22639,7 @@ function renderAuthStatus() {
     els.profileCreditsLink.style.display = isAuthed ? "" : "none";
     els.profileCreditsLink.setAttribute("aria-hidden", isAuthed ? "false" : "true");
   }
-  try { syncProfileProBanner(); } catch {}
+  try { syncProSubscriptionUi(); } catch {}
   // Same idea for the Share button — a logged-out user has no
   // profile worth sharing yet, and the @guest URL leaks the
   // placeholder handle. We tolerate both the legacy big-pill button
@@ -23536,6 +23648,18 @@ async function supabaseUpsertProfile(profile) {
       : null,
     updated_at: new Date().toISOString(),
   };
+  if (authSession?.user?.id) {
+    try {
+      const existing = await supabaseLoadProfile({ force: true, reason: "upsertWipeGuard" });
+      if (profileUpsertWouldWipeCloud(existing, payload)) {
+        try {
+          console.warn("[profile] blocked cloud upsert that would wipe saved profile fields");
+        } catch {}
+        await mergeActiveProfileFromCloud({ cloud: existing, reason: "upsertWipeGuard-recover" });
+        return;
+      }
+    } catch {}
+  }
   if (profile.usernameChangedAt) {
     payload.username_changed_at = new Date(Number(profile.usernameChangedAt)).toISOString();
   } else if (profile.clearUsernameCooldown) {
@@ -23669,6 +23793,45 @@ function logSupabaseFetch(kind, reason, extra = {}) {
 
 function profileCloudRecentlyMerged() {
   return Boolean(_profileCloudMergedAt && Date.now() - _profileCloudMergedAt < PROFILE_CLOUD_MERGE_MS);
+}
+
+function profileCloudAvatarFilled(raw) {
+  const av = String(raw || "").trim();
+  return Boolean(av && !/nabadai-logo\.png(?:$|\?)|splash-mark\.png(?:$|\?)/i.test(av));
+}
+
+function profileCloudRowHasRichContent(row) {
+  if (!row || typeof row !== "object") return false;
+  const links = row.links && typeof row.links === "object" ? row.links : {};
+  return Boolean(
+    profileCloudAvatarFilled(row.avatar)
+      || String(row.bio || "").trim()
+      || String(row.genres || "").trim()
+      || normalizeDisplayName(row.displayName || row.display_name || "")
+      || String(row.voiceTimbre || row.voice_timbre || "").trim()
+      || Object.values(links).some((v) => String(v || "").trim()),
+  );
+}
+
+/** Block upserts that would erase avatar / display name / genres / bio on the server. */
+function profileUpsertWouldWipeCloud(existing, outgoing) {
+  if (!existing || !outgoing) return false;
+  if (!profileCloudRowHasRichContent(existing)) return false;
+
+  const pairs = [
+    [profileCloudAvatarFilled(existing.avatar), profileCloudAvatarFilled(outgoing.avatar)],
+    [String(existing.bio || "").trim(), String(outgoing.bio || "").trim()],
+    [String(existing.genres || "").trim(), String(outgoing.genres || "").trim()],
+    [
+      normalizeDisplayName(existing.displayName || existing.display_name || ""),
+      normalizeDisplayName(outgoing.display_name || outgoing.displayName || ""),
+    ],
+    [
+      String(existing.voiceTimbre || existing.voice_timbre || "").trim(),
+      String(outgoing.voice_timbre || outgoing.voiceTimbre || "").trim(),
+    ],
+  ];
+  return pairs.some(([was, next]) => Boolean(was && !next));
 }
 
 function profileIdentityFeedKey(p) {

@@ -18939,6 +18939,28 @@ body[data-route="settings"] main.grid{
   line-height: 1;
   font-weight: 300;
 }
+.settingsProPill{
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 24px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: #04120f;
+  background: linear-gradient(135deg, #5ef5d6, #23d5ab 58%, #12b88f);
+  box-shadow: 0 4px 12px rgba(35, 213, 171, 0.22);
+}
+.settingsProPill--trial{
+  color: #f4f0ff;
+  background: linear-gradient(135deg, rgba(124, 92, 255, 0.95), rgba(88, 62, 210, 0.95));
+  box-shadow: 0 4px 12px rgba(124, 92, 255, 0.22);
+}
+.settingsProPill[hidden]{ display: none; }
+
 .settingsSwitch{
   flex: 0 0 auto;
   appearance: none;
@@ -21409,6 +21431,67 @@ main.grid > [data-route="pro"].routeEnter--present{
     0 0 0 3px rgba(124,92,255,0.18),
     inset 0 1px 0 rgba(255,255,255,0.28);
 }
+.proPlanCard.isCurrentPlan{
+  border-color: rgba(35, 213, 171, 0.55);
+  box-shadow:
+    0 0 0 1px rgba(35, 213, 171, 0.18) inset,
+    0 10px 24px rgba(35, 213, 171, 0.12);
+  cursor: default;
+}
+.proPlanCard.isCurrentPlan::after{
+  content: "Current plan";
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: rgba(35, 213, 171, 0.95);
+}
+.proPlanCard.isCurrentPlan .proPlanCardRadio{
+  border-color: rgba(35, 213, 171, 0.95);
+  background:
+    radial-gradient(circle at 35% 30%, rgba(255,255,255,0.35), transparent 48%),
+    linear-gradient(145deg, rgba(35, 213, 171, 0.95), rgba(18, 184, 143, 0.88));
+}
+.proActiveStatus{
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 100%;
+  padding: 14px 16px;
+  border-radius: 16px;
+  text-align: center;
+  border: 1px solid rgba(35, 213, 171, 0.28);
+  background:
+    radial-gradient(120% 100% at 50% 0%, rgba(35, 213, 171, 0.14), transparent 62%),
+    rgba(255, 255, 255, 0.03);
+}
+.proActiveStatusTitle{
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: rgba(238, 244, 255, 0.96);
+}
+.proActiveStatusPlan,
+.proActiveStatusRenew{
+  margin: 0;
+  font-size: 13px;
+  color: rgba(232, 238, 247, 0.72);
+}
+.proActiveStatusManage{
+  margin: 6px 0 0;
+  font-size: 11px;
+  line-height: 1.4;
+  color: rgba(232, 238, 247, 0.42);
+}
+.proDockProExtras--subscribed{
+  opacity: 0.72;
+}
+.proActiveStatus[hidden]{ display: none; }
+
 .proPlanCardBody{
   flex: 1 1 auto;
   display: flex;
@@ -22493,6 +22576,19 @@ html[data-theme="light"] .profileProBannerTitle{
 }
 html[data-theme="light"] .profileProBannerSub{
   color: var(--muted);
+}
+
+.profileProBanner--active{
+  border-color: rgba(35, 213, 171, 0.45);
+  background:
+    radial-gradient(130% 120% at 100% 0%, rgba(35, 213, 171, 0.22), transparent 58%),
+    radial-gradient(90% 80% at 0% 100%, rgba(124, 92, 255, 0.12), transparent 55%),
+    linear-gradient(135deg, rgba(35, 213, 171, 0.12), rgba(18, 22, 36, 0.92) 48%, rgba(124, 92, 255, 0.08));
+}
+.profileProBannerCta--status{
+  color: #eafff8;
+  background: linear-gradient(135deg, rgba(35, 213, 171, 0.95), rgba(18, 184, 143, 0.95));
+  box-shadow: 0 4px 14px rgba(35, 213, 171, 0.28);
 }
 
 .profileStatCol{

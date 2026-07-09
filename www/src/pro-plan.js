@@ -14,7 +14,7 @@ import {
   restoreProPurchases,
 } from "./billing/revenuecat.js";
 
-/** @type {{ showToast?: (msg: string, opts?: object) => void, isLoggedIn?: () => boolean, isNativeIos?: () => boolean, navigateToRoute?: (route: string) => void } | null} */
+/** @type {{ showToast?: (msg: string, opts?: object) => void, isLoggedIn?: () => boolean, isNativeIos?: () => boolean, navigateToRoute?: (route: string) => void, getProState?: () => { active?: boolean, planId?: string|null, status?: string|null, periodEnd?: string|null } } | null} */
 let _deps = null;
 
 let _mounted = false;
@@ -119,7 +119,123 @@ function priceSubline(plan) {
   return `${plan.priceDisplay}/${suffix}. Cancel anytime.`;
 }
 
+function readProState() {
+  try {
+    return typeof _deps?.getProState === "function" ? _deps.getProState() || {} : {};
+  } catch {
+    return {};
+  }
+}
+
+function proPlanDisplayName(planId) {
+  const id = String(planId || "").trim();
+  if (id === "weekly") return "Weekly";
+  if (id === "monthly") return "Monthly";
+  return "Pro";
+}
+
+function formatProRenewLabel(iso) {
+  const raw = String(iso || "").trim();
+  if (!raw) return "";
+  try {
+    const d = new Date(raw);
+    if (Number.isNaN(d.getTime())) return "";
+    return `Renews ${d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}`;
+  } catch {
+    return "";
+  }
+}
+
+function proStatusHeadline(status) {
+  const s = String(status || "").toLowerCase();
+  if (s === "trialing") return "Free trial active";
+  if (s === "grace") return "Pro active — billing retry";
+  return "You're subscribed";
+}
+
+function ensureProActiveStatusEl() {
+  const dock = document.getElementById("proDockPro");
+  let el = document.getElementById("proActiveStatus");
+  if (!el && dock) {
+    el = document.createElement("div");
+    el.id = "proActiveStatus";
+    el.className = "proActiveStatus";
+    el.hidden = true;
+    const btn = document.getElementById("btnProSubscribe");
+    if (btn) dock.insertBefore(el, btn);
+    else dock.appendChild(el);
+  }
+  return el;
+}
+
+export function refreshProSubscriptionUi() {
+  paintSubscribedState();
+}
+
+function paintSubscribedState() {
+  const state = readProState();
+  const active = Boolean(state.active);
+  const shell = mount()?.querySelector(".proShell");
+  if (shell) shell.classList.toggle("proShell--subscribed", active);
+
+  const btn = document.getElementById("btnProSubscribe");
+  const sub = document.getElementById("proSubscribeSub");
+  const statusEl = ensureProActiveStatusEl();
+  const extras = document.getElementById("proDockProExtras");
+  const restoreBtn = mount()?.querySelector("[data-pro-restore]");
+
+  if (active) {
+    const planId = String(state.planId || "").trim();
+    const planName = proPlanDisplayName(planId);
+    const renew = formatProRenewLabel(state.periodEnd);
+    const headline = proStatusHeadline(state.status);
+    if (statusEl) {
+      statusEl.hidden = false;
+      statusEl.innerHTML = `
+        <p class="proActiveStatusTitle">${esc(headline)}</p>
+        <p class="proActiveStatusPlan">NabadAi Pro · ${esc(planName)}</p>
+        ${renew ? `<p class="proActiveStatusRenew">${esc(renew)}</p>` : ""}
+        <p class="proActiveStatusManage">Manage or cancel in iPhone Settings → Subscriptions.</p>
+      `;
+    }
+    if (btn) {
+      btn.hidden = true;
+      btn.disabled = true;
+    }
+    if (sub) sub.textContent = "";
+    if (restoreBtn) restoreBtn.hidden = true;
+    if (extras) extras.classList.add("proDockProExtras--subscribed");
+
+    mount()?.querySelectorAll(".proPlanCard[data-pro-plan]").forEach((card) => {
+      const id = String(card.getAttribute("data-pro-plan") || "");
+      const isCurrent = Boolean(planId && id === planId);
+      card.classList.toggle("isCurrentPlan", isCurrent);
+      card.setAttribute("aria-disabled", "true");
+      card.disabled = true;
+    });
+    return;
+  }
+
+  if (statusEl) statusEl.hidden = true;
+  if (btn) {
+    btn.hidden = false;
+    btn.disabled = false;
+  }
+  if (restoreBtn) restoreBtn.hidden = false;
+  if (extras) extras.classList.remove("proDockProExtras--subscribed");
+  mount()?.querySelectorAll(".proPlanCard[data-pro-plan]").forEach((card) => {
+    card.classList.remove("isCurrentPlan");
+    card.removeAttribute("aria-disabled");
+    card.disabled = false;
+  });
+  paintCta();
+}
+
 function paintCta() {
+  if (readProState().active) {
+    paintSubscribedState();
+    return;
+  }
   const btn = document.getElementById("btnProSubscribe");
   const sub = document.getElementById("proSubscribeSub");
   const plan = selectedPlan();
@@ -135,6 +251,7 @@ function paintPlanCards() {
   if (!grid) return;
   grid.innerHTML = PRO_PLANS.map((p) => planCardHtml(p, _selectedPlan)).join("");
   paintCta();
+  paintSubscribedState();
 }
 
 function paintBenefitsExpanded() {
@@ -247,6 +364,7 @@ function renderProPlanPage({ preserveTab = true } = {}) {
   paintProBackLink();
   paintCta();
   paintBenefitsExpanded();
+  paintSubscribedState();
 }
 
 async function handleSubscribeClick() {
@@ -345,6 +463,7 @@ function bindProPlanPageOnce() {
   host.addEventListener("click", (ev) => {
     const planBtn = ev.target?.closest?.(".proPlanCard[data-pro-plan]");
     if (planBtn) {
+      if (readProState().active) return;
       const id = String(planBtn.getAttribute("data-pro-plan") || "").trim();
       if (id === "weekly" || id === "monthly") {
         _selectedPlan = id;
@@ -354,6 +473,7 @@ function bindProPlanPageOnce() {
     }
     if (ev.target?.closest?.("#btnProSubscribe")) {
       ev.preventDefault();
+      if (readProState().active) return;
       handleSubscribeClick();
       return;
     }
@@ -390,4 +510,5 @@ export function onProPlanRouteActive({ entering = false } = {}) {
     paintPlanCards();
     paintBenefitsExpanded();
   }
+  paintSubscribedState();
 }

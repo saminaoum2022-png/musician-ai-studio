@@ -137,7 +137,8 @@ export const PRO_LAUNCH_COPY = Object.freeze({
     "Subscription credits and purchased credits are both giftable.",
     "Credits never expire.",
   ],
-  iapSoon: "In-app purchase connects after App Store setup. Preview the plans below.",
+  iapSoon: "Connect App Store + RevenueCat to enable purchases.",
+  iosReady: "Subscribe with your Apple ID. Cancel anytime in iPhone Settings → Subscriptions.",
   webOnly: "Subscriptions are available in the NabadAi iPhone app.",
 });
 

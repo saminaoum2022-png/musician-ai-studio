@@ -28,6 +28,11 @@ module.exports = async function handler(req, res) {
       supabaseUrl: process.env.SUPABASE_URL || "",
       supabaseAnonKey: process.env.SUPABASE_ANON_KEY || "",
       onesignalAppId: process.env.ONESIGNAL_APP_ID || "",
+      revenueCatIosApiKey: process.env.REVENUECAT_IOS_API_KEY || "",
+      billingEnabled: Boolean(
+        String(process.env.REVENUECAT_IOS_API_KEY || "").trim() &&
+          String(process.env.REVENUECAT_SECRET_API_KEY || "").trim(),
+      ),
       // Optional UUID allowlist (env NABAD_CERTIFIED_USER_IDS) until
       // profiles.sound_certified is wired in Supabase.
       nabadCertifiedUserIds,

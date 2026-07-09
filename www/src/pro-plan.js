@@ -1,5 +1,5 @@
 /**
- * NabadAi Pro — subscription UI (design-first; IAP wires in later).
+ * NabadAi Pro — subscription UI + iOS billing (RevenueCat).
  */
 
 import {
@@ -8,6 +8,11 @@ import {
   PRO_PLANS,
   planCreditsMeta,
 } from "./pro-plan-config.js";
+import {
+  isBillingConfigured,
+  purchaseProPlan,
+  restoreProPurchases,
+} from "./billing/revenuecat.js";
 
 /** @type {{ showToast?: (msg: string, opts?: object) => void, isLoggedIn?: () => boolean, isNativeIos?: () => boolean, navigateToRoute?: (route: string) => void } | null} */
 let _deps = null;
@@ -185,7 +190,9 @@ function renderProPlanPage({ preserveTab = true } = {}) {
 
   const plan = selectedPlan();
   const native = isNativeIos();
-  const statusNote = native ? PRO_LAUNCH_COPY.iapSoon : PRO_LAUNCH_COPY.webOnly;
+  const statusNote = native
+    ? (isBillingConfigured() ? PRO_LAUNCH_COPY.iosReady : PRO_LAUNCH_COPY.iapSoon)
+    : PRO_LAUNCH_COPY.webOnly;
 
   host.innerHTML = `
     <div class="proShell">
@@ -242,7 +249,7 @@ function renderProPlanPage({ preserveTab = true } = {}) {
   paintBenefitsExpanded();
 }
 
-function handleSubscribeClick() {
+async function handleSubscribeClick() {
   const plan = selectedPlan();
   const native = isNativeIos();
   const loggedIn = typeof _deps?.isLoggedIn === "function" ? _deps.isLoggedIn() : false;
@@ -257,12 +264,31 @@ function handleSubscribeClick() {
     _deps?.showToast?.("Open NabadAi on your iPhone to subscribe.", { durationMs: 3200 });
     return;
   }
-  _deps?.showToast?.(
-    plan.trialDays > 0
-      ? `Pro ${plan.label} (${plan.trialLabel}) — IAP wiring comes next.`
-      : `Pro ${plan.label} — IAP wiring comes next.`,
-    { durationMs: 3200 },
-  );
+  if (!isBillingConfigured()) {
+    _deps?.showToast?.("Billing is not configured yet. Finish App Store Connect + RevenueCat setup.", {
+      durationMs: 3600,
+    });
+    return;
+  }
+  const userId = typeof _deps?.getUserId === "function" ? _deps.getUserId() : "";
+  const btn = document.getElementById("btnProSubscribe");
+  if (btn) btn.disabled = true;
+  try {
+    await purchaseProPlan(plan.id, {
+      userId,
+      getAuthToken: _deps?.getAuthToken,
+      apiBase: _deps?.getApiBase?.() || "",
+    });
+    await _deps?.refreshCredits?.();
+    _deps?.showToast?.("Welcome to NabadAi Pro!", { durationMs: 3200 });
+    navigateAwayFromPro(_returnRoute);
+  } catch (err) {
+    if (!err?.userCancelled) {
+      _deps?.showToast?.(err?.message || "Purchase failed", { durationMs: 3600 });
+    }
+  } finally {
+    if (btn) btn.disabled = false;
+  }
 }
 
 function bindProBackOnce() {
@@ -274,6 +300,41 @@ function bindProBackOnce() {
     ev.stopPropagation();
     navigateAwayFromPro(_returnRoute || "settings");
   });
+}
+
+async function handleRestoreClick() {
+  const native = isNativeIos();
+  const loggedIn = typeof _deps?.isLoggedIn === "function" ? _deps.isLoggedIn() : false;
+  if (!loggedIn) {
+    _deps?.showToast?.("Sign in to restore purchases.", { durationMs: 2800 });
+    return;
+  }
+  if (!native) {
+    _deps?.showToast?.("Restore purchases on your iPhone.", { durationMs: 2800 });
+    return;
+  }
+  if (!isBillingConfigured()) {
+    _deps?.showToast?.("Billing is not configured yet.", { durationMs: 2800 });
+    return;
+  }
+  try {
+    const data = await restoreProPurchases({
+      userId: typeof _deps?.getUserId === "function" ? _deps.getUserId() : "",
+      getAuthToken: _deps?.getAuthToken,
+      apiBase: _deps?.getApiBase?.() || "",
+    });
+    await _deps?.refreshCredits?.();
+    if (data?.pro?.active) {
+      _deps?.showToast?.("Pro subscription restored.", { durationMs: 3000 });
+      navigateAwayFromPro(_returnRoute);
+    } else {
+      _deps?.showToast?.("No active Pro subscription found.", { durationMs: 3000 });
+    }
+  } catch (err) {
+    if (!err?.userCancelled) {
+      _deps?.showToast?.(err?.message || "Restore failed", { durationMs: 3200 });
+    }
+  }
 }
 
 function bindProPlanPageOnce() {
@@ -304,7 +365,7 @@ function bindProPlanPageOnce() {
     }
     if (ev.target?.closest?.("[data-pro-restore]")) {
       ev.preventDefault();
-      _deps?.showToast?.("Restore purchases — coming with App Store setup.", { durationMs: 2800 });
+      void handleRestoreClick();
       return;
     }
   });

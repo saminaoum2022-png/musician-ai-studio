@@ -79,6 +79,7 @@ import { initCoverArtOverlay, syncCoverArtOverlay } from "./cover-art/overlay.js
 import { feedActIconAnalytics, feedActIconComment, feedActIconGift, feedActIconLike, feedActIconPlays } from "./feed-action-icons.js";
 import { initGifts, openGiftSheetFromButton } from "./gifts.js";
 import { configureProPlan, onProPlanRouteActive, setProReturnRoute } from "./pro-plan.js";
+import { setRevenueCatApiKey, resetRevenueCatSession } from "./billing/revenuecat.js";
 import { augmentCoachApiPayload } from "./coach-knowledge.js";
 import { showGiftReceivedReveal } from "./gift-sent-overlay.js";
 import { giftTierDef } from "./gift-tier-icons.js";
@@ -184,7 +185,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260709-115758";
+const APP_BUILD = "20260709-140929";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -2392,6 +2393,7 @@ function applyPublicConfigPayload(d) {
   SUPABASE_ANON_KEY = String(d?.supabaseAnonKey || "");
   configurePushFromPublicConfig(String(d?.onesignalAppId || "").trim());
   _onesignalAppId = String(d?.onesignalAppId || "").trim();
+  setRevenueCatApiKey(String(d?.revenueCatIosApiKey || "").trim());
   const ids = Array.isArray(d?.nabadCertifiedUserIds) ? d.nabadCertifiedUserIds : [];
   _nabadCertifiedUserIds = new Set(
     ids.map((x) => String(x || "").trim()).filter(Boolean),
@@ -5216,6 +5218,10 @@ try {
   configureProPlan({
     showToast,
     isLoggedIn: () => Boolean(isAppLoggedIn() || getSupabaseAuthToken()),
+    getUserId: () => String(authSession?.user?.id || "").trim(),
+    getAuthToken: getSupabaseAuthToken,
+    getApiBase: () => String(_resolvedApiBase || API_BASE || "").trim(),
+    refreshCredits: () => refreshMyCredits({ silent: false }),
     isNativeIos: () => {
       try {
         const cap = globalThis.Capacitor;
@@ -53433,6 +53439,7 @@ async function requestSignOut() {
 function logoutCurrentUser() {
   const prevUserId = String(authSession?.user?.id || "");
   saveAuthSession(null);
+  resetRevenueCatSession();
   void clearAuthSessionEverywhere();
   if (prevUserId) {
     // Keep mas:library:v1:{uid} and mas:profile:v1:{uid} on disk — drafts and

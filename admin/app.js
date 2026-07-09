@@ -11,6 +11,7 @@ const state = {
   view: "overview",
   offset: 0,
   cache: {},
+  recoveryTokenHash: "",
 };
 
 const els = {
@@ -21,6 +22,12 @@ const els = {
   loginPassword: document.getElementById("loginPassword"),
   btnLoginGoogle: document.getElementById("btnLoginGoogle"),
   loginError: document.getElementById("loginError"),
+  resetScreen: document.getElementById("resetScreen"),
+  resetForm: document.getElementById("resetForm"),
+  resetPassword: document.getElementById("resetPassword"),
+  resetPasswordConfirm: document.getElementById("resetPasswordConfirm"),
+  resetError: document.getElementById("resetError"),
+  btnResetPassword: document.getElementById("btnResetPassword"),
   btnLogin: document.getElementById("btnLogin"),
   btnSignOut: document.getElementById("btnSignOut"),
   btnRefresh: document.getElementById("btnRefresh"),
@@ -149,6 +156,76 @@ function showLoginError(msg) {
   }
   els.loginError.hidden = false;
   els.loginError.textContent = msg;
+}
+
+function showResetError(msg) {
+  if (!els.resetError) return;
+  if (!msg) {
+    els.resetError.hidden = true;
+    els.resetError.textContent = "";
+    return;
+  }
+  els.resetError.hidden = false;
+  els.resetError.textContent = msg;
+}
+
+function parseRecoveryCallback() {
+  try {
+    const search = new URLSearchParams(window.location.search || "");
+    const type = search.get("type") || "";
+    const tokenHash = search.get("token_hash") || "";
+    if (type === "recovery" && tokenHash) {
+      return { tokenHash, type };
+    }
+    const hash = String(window.location.hash || "").replace(/^#/, "");
+    if (hash.includes("type=recovery")) {
+      const hashQs = new URLSearchParams(hash.includes("?") ? hash.slice(hash.indexOf("?") + 1) : hash);
+      const hType = hashQs.get("type") || "";
+      const hToken = hashQs.get("token_hash") || "";
+      if (hType === "recovery" && hToken) return { tokenHash: hToken, type: hType };
+    }
+  } catch {}
+  return null;
+}
+
+async function verifyRecoveryToken(tokenHash) {
+  const { supabaseUrl, supabaseAnonKey } = state.config;
+  const r = await fetch(`${supabaseUrl}/auth/v1/verify`, {
+    method: "POST",
+    headers: {
+      apikey: supabaseAnonKey,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ type: "recovery", token_hash: tokenHash }),
+  });
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok || !data?.access_token) {
+    throw new Error(data?.error_description || data?.msg || data?.message || "Recovery link expired — request a new one");
+  }
+  return data;
+}
+
+async function updateUserPassword(accessToken, password) {
+  const { supabaseUrl, supabaseAnonKey } = state.config;
+  const r = await fetch(`${supabaseUrl}/auth/v1/user`, {
+    method: "PUT",
+    headers: {
+      apikey: supabaseAnonKey,
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ password }),
+  });
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) {
+    throw new Error(data?.error_description || data?.msg || data?.message || "Could not save password");
+  }
+}
+
+function showResetScreen() {
+  if (els.loginScreen) els.loginScreen.hidden = true;
+  if (els.appShell) els.appShell.hidden = true;
+  if (els.resetScreen) els.resetScreen.hidden = false;
 }
 
 function oauthRedirectTarget() {
@@ -620,6 +697,7 @@ async function loadView({ force = false } = {}) {
 }
 
 function showLogin() {
+  if (els.resetScreen) els.resetScreen.hidden = true;
   els.loginScreen.hidden = false;
   els.appShell.hidden = true;
 }
@@ -650,6 +728,14 @@ async function boot() {
   }
 
   state.session = readSession();
+
+  const recovery = parseRecoveryCallback();
+  if (recovery?.tokenHash) {
+    state.recoveryTokenHash = recovery.tokenHash;
+    showResetScreen();
+    return;
+  }
+
   try {
     const handledOAuth = await maybeHandleAuthCallback();
     if (handledOAuth) {
@@ -707,6 +793,42 @@ els.btnLoginGoogle?.addEventListener("click", async () => {
   } catch (err) {
     showLoginError(err?.message || "Could not start Google sign-in");
     if (els.btnLoginGoogle) els.btnLoginGoogle.disabled = false;
+  }
+});
+
+els.resetForm?.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  showResetError("");
+  const pass = els.resetPassword?.value || "";
+  const confirm = els.resetPasswordConfirm?.value || "";
+  if (pass.length < 8) {
+    showResetError("Password must be at least 8 characters.");
+    return;
+  }
+  if (pass !== confirm) {
+    showResetError("Passwords do not match.");
+    return;
+  }
+  const tokenHash = state.recoveryTokenHash || parseRecoveryCallback()?.tokenHash || "";
+  if (!tokenHash) {
+    showResetError("Recovery link expired — request a new password reset email from Supabase.");
+    return;
+  }
+  if (els.btnResetPassword) els.btnResetPassword.disabled = true;
+  try {
+    const verified = await verifyRecoveryToken(tokenHash);
+    await updateUserPassword(verified.access_token, pass);
+    writeSession(sessionFromTokenPayload(verified));
+    state.recoveryTokenHash = "";
+    clearOAuthCallbackFromUrl();
+    if (els.resetScreen) els.resetScreen.hidden = true;
+    showApp();
+    setView("overview");
+    await loadView({ force: true });
+  } catch (err) {
+    showResetError(err?.message || "Could not set password");
+  } finally {
+    if (els.btnResetPassword) els.btnResetPassword.disabled = false;
   }
 });
 

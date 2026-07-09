@@ -52,6 +52,28 @@
       </div>
     </div>
 
+    <div id="resetScreen" class="loginScreen" hidden>
+      <div class="loginCard">
+        <div class="loginBrand">
+          <div class="loginLogo" aria-hidden="true">N</div>
+          <h1>Set admin password</h1>
+          <p>Choose a password for your Google account so you can sign in to admin.</p>
+        </div>
+        <form id="resetForm" class="loginForm">
+          <label class="field">
+            <span>New password</span>
+            <input id="resetPassword" type="password" autocomplete="new-password" minlength="8" required />
+          </label>
+          <label class="field">
+            <span>Confirm password</span>
+            <input id="resetPasswordConfirm" type="password" autocomplete="new-password" minlength="8" required />
+          </label>
+          <button type="submit" class="btnPrimary" id="btnResetPassword">Save password</button>
+          <p id="resetError" class="loginError" hidden></p>
+        </form>
+      </div>
+    </div>
+
     <div id="appShell" class="appShell" hidden>
       <aside class="sidebar">
         <div class="sidebarBrand">

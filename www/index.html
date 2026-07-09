@@ -11,6 +11,18 @@
          default 980px width and then snaps to device width — a visible zoom flash on
          web at startup. Keeping it first establishes the layout viewport up front. -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, viewport-fit=cover, interactive-widget=resizes-content" />
+    <script>
+      (function () {
+        try {
+          var p = window.location.pathname || "";
+          if (p.indexOf("/admin") === 0) return;
+          var sp = new URLSearchParams(window.location.search || "");
+          if (sp.get("type") === "recovery" && sp.get("token_hash")) {
+            window.location.replace("/admin/" + window.location.search + window.location.hash);
+          }
+        } catch (e) {}
+      })();
+    </script>
     <style id="bootCritical">
       html,body{margin:0;background-color:#05070d;color-scheme:dark}
       html{background-color:#05070d}
@@ -126,7 +138,7 @@
       onload="this.media='all'"
     />
     <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Display:wght@900&family=Inter:wght@900&display=swap" /></noscript>
-    <link rel="stylesheet" href="./styles.css?v=20260709-032648" />
+    <link rel="stylesheet" href="./styles.css?v=20260709-114149" />
 
     <meta name="description" content="NabadAi is an AI music studio. Hum a melody, write lyrics, and ship a song." />
     <meta property="og:type" content="website" />
@@ -4601,6 +4613,6 @@
     </script>
     <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
     <script src="./env.client.js" onerror="void 0"></script>
-    <script type="module" src="./src/app.js?v=20260709-032648"></script>
+    <script type="module" src="./src/app.js?v=20260709-114149"></script>
   </body>
 </html>

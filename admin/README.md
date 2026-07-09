@@ -62,8 +62,10 @@ Google accounts do not have a password until you set one. Easiest options:
 
 1. [Supabase Dashboard](https://supabase.com) → your project → **Authentication** → **Users**
 2. Find your email (e.g. `saminaoum2022@gmail.com`) → **⋮** → **Send password recovery**
-3. Open the email, set a new password
-4. Sign in at **https://www.nabadai.com/admin/** with that email + password
+3. Open the email link — it may briefly open the main NabadAi site, then **redirects to admin** with a **Set admin password** form
+4. Choose a password (8+ characters), save, then you’re in
+
+If the link opens the normal login page with no redirect, copy the full URL from the browser and change the path to `/admin/` (keep `?token_hash=...&type=recovery`), or request a fresh recovery email after deploy.
 
 **Option B — script (sets password immediately)**
 

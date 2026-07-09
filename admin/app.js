@@ -5,8 +5,8 @@ const AUTH_PKCE_KEY = "nabad_admin_pkce_v1";
 const AUTH_PENDING_KEY = "nabad_admin_oauth_pending_v1";
 const PKCE_COOKIE = "nabad_admin_pkce";
 const PENDING_COOKIE = "nabad_admin_oauth_pending";
-/** OAuth callback — use site root (same as main app) so Supabase state/PKCE work reliably. */
-const ADMIN_OAUTH_REDIRECT = "https://www.nabadai.com/";
+/** OAuth callback — must stay on www so PKCE storage matches after Google redirect. */
+const ADMIN_OAUTH_REDIRECT = "https://www.nabadai.com/admin/";
 const ADMIN_PAGE_PATH = "/admin/";
 const PAGE_SIZE = 50;
 
@@ -152,6 +152,40 @@ function setOAuthMarkers(verifier = "") {
   document.cookie = `${PENDING_COOKIE}=1; Path=/; Max-Age=600; SameSite=Lax${secure}${domain}`;
 }
 
+function readPkceVerifier() {
+  const fromStore = localStorage.getItem(AUTH_PKCE_KEY) || "";
+  if (fromStore) return fromStore;
+  try {
+    const fromSession = sessionStorage.getItem(AUTH_PKCE_KEY) || "";
+    if (fromSession) return fromSession;
+  } catch {}
+  const m = document.cookie.match(new RegExp(`(?:^|; )${PKCE_COOKIE}=([^;]*)`));
+  return m ? decodeURIComponent(m[1]) : "";
+}
+
+function createAdminAuthStorage() {
+  const prefix = "nabad_admin_sb_";
+  return {
+    getItem(key) {
+      const verifier = readPkceVerifier();
+      if (String(key).includes("code-verifier") && verifier) return verifier;
+      return localStorage.getItem(prefix + key);
+    },
+    setItem(key, value) {
+      localStorage.setItem(prefix + key, value);
+      if (String(key).includes("code-verifier") && value) {
+        setOAuthMarkers(value);
+      }
+    },
+    removeItem(key) {
+      localStorage.removeItem(prefix + key);
+      if (String(key).includes("code-verifier")) {
+        clearOAuthMarkers();
+      }
+    },
+  };
+}
+
 function hasOAuthPending() {
   if (localStorage.getItem(AUTH_PENDING_KEY) || localStorage.getItem(AUTH_PKCE_KEY)) return true;
   return /(?:^|; )nabad_admin_oauth_pending=/.test(document.cookie);
@@ -260,6 +294,8 @@ function getSupabaseClient() {
         autoRefreshToken: false,
         persistSession: false,
         detectSessionInUrl: false,
+        storage: createAdminAuthStorage(),
+        storageKey: "nabad-admin-auth",
       },
     });
   }
@@ -271,10 +307,10 @@ function oauthRedirectTarget() {
     const { origin, hostname } = window.location;
     if (hostname.includes("nabadai.com")) return ADMIN_OAUTH_REDIRECT;
     if (hostname.includes("localhost") || hostname.includes("127.0.0.1")) {
-      return `${origin}/`;
+      return `${origin}${ADMIN_PAGE_PATH}`;
     }
     if (hostname.includes("vercel.app")) {
-      return `${origin}/`;
+      return `${origin}${ADMIN_PAGE_PATH}`;
     }
   } catch {}
   return ADMIN_OAUTH_REDIRECT;
@@ -338,15 +374,31 @@ function sessionFromTokenPayload(data, fallbackEmail = "") {
 async function exchangeOAuthCodeForSession(code) {
   const supabase = getSupabaseClient();
   const { data, error } = await supabase.auth.exchangeCodeForSession(code);
-  if (error) {
-    throw new Error(error.message || "Google sign-in failed");
+  if (!error && data?.session?.access_token) {
+    clearOAuthMarkers();
+    writeSession(sessionFromSupabaseSession(data.session));
+    return true;
   }
-  const sess = data?.session;
-  if (!sess?.access_token) {
-    throw new Error("Google sign-in did not return a session");
+
+  const verifier = readPkceVerifier();
+  if (!verifier) {
+    throw new Error(
+      error?.message ||
+        "Sign-in state was lost. Open https://www.nabadai.com/admin/ and try Google again.",
+    );
+  }
+
+  const r = await fetch("/api/admin/oauth-exchange", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ code, code_verifier: verifier }),
+  });
+  const payload = await r.json().catch(() => ({}));
+  if (!r.ok || !payload?.access_token) {
+    throw new Error(payload?.error || error?.message || "Google sign-in failed");
   }
   clearOAuthMarkers();
-  writeSession(sessionFromSupabaseSession(sess));
+  writeSession(sessionFromTokenPayload(payload));
   return true;
 }
 
@@ -775,8 +827,9 @@ function showLogin() {
 }
 
 function showApp() {
-  els.loginScreen.hidden = true;
-  els.appShell.hidden = false;
+  if (els.resetScreen) els.resetScreen.hidden = true;
+  if (els.loginScreen) els.loginScreen.hidden = true;
+  if (els.appShell) els.appShell.hidden = false;
   els.adminUserEmail.textContent = state.session?.email || "";
 }
 

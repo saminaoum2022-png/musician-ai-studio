@@ -60,6 +60,34 @@ const HUM_TRACK_INSTRUMENTS = {
     negativeTags:
       "vocals, singing, humming, voice, speech, drums, percussion, bass, piano, guitar, full band, synth pad, heavy orchestral",
   },
+  saxophone: {
+    label: "Saxophone",
+    style:
+      "solo saxophone, single instrument only, melodic lead, instrumental, no vocals, no drums, no bass, no piano, no guitar",
+    negativeTags:
+      "vocals, singing, humming, voice, speech, drums, percussion, bass, piano, guitar, strings, full band, synth, pad, brass section, trumpet",
+  },
+  cello: {
+    label: "Cello",
+    style:
+      "solo cello, single instrument only, melodic lead, instrumental, no vocals, no drums, no bass, no piano, no guitar",
+    negativeTags:
+      "vocals, singing, humming, voice, speech, drums, percussion, bass, piano, guitar, full band, synth, pad, orchestral section",
+  },
+  oud: {
+    label: "Oud",
+    style:
+      "solo oud, single instrument only, melodic lead, fingerpicked, instrumental, no vocals, no drums, no bass, no piano",
+    negativeTags:
+      "vocals, singing, humming, voice, speech, drums, percussion, bass, piano, guitar, strings, full band, synth, pad",
+  },
+  kalimba: {
+    label: "Kalimba",
+    style:
+      "solo kalimba, thumb piano, single instrument only, melodic lead, instrumental, no vocals, no drums, no bass, no piano, no guitar",
+    negativeTags:
+      "vocals, singing, humming, voice, speech, drums, percussion, bass, piano, guitar, strings, full band, synth, pad",
+  },
 };
 
 function resolveHumTrackPreset(presetId) {

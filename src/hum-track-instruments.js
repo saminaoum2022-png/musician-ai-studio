@@ -80,6 +80,46 @@ export const HUM_TRACK_INSTRUMENTS = [
     coverArtHint:
       "empty instrument stand, rosin and sheet music on wood table, rich amber studio light, no cello violin or bow, no people, no writing",
   },
+  {
+    id: "saxophone",
+    label: "Sax",
+    style:
+      "solo saxophone, single instrument only, melodic lead, instrumental, no vocals, no drums, no bass, no piano, no guitar",
+    negativeTags:
+      "vocals, singing, humming, voice, speech, drums, percussion, bass, piano, guitar, strings, full band, synth, pad, brass section, trumpet",
+    coverArtHint:
+      "empty velvet-lined case, reed and ligature on wood table, moody amber jazz studio light, no saxophone visible, no people, no writing",
+  },
+  {
+    id: "cello",
+    label: "Cello",
+    style:
+      "solo cello, single instrument only, melodic lead, instrumental, no vocals, no drums, no bass, no piano, no guitar",
+    negativeTags:
+      "vocals, singing, humming, voice, speech, drums, percussion, bass, piano, guitar, full band, synth, pad, orchestral section",
+    coverArtHint:
+      "empty tall stand, rosin and sheet music on floor, warm dramatic studio light, no cello or bow, no people, no writing",
+  },
+  {
+    id: "oud",
+    label: "Oud",
+    style:
+      "solo oud, single instrument only, melodic lead, fingerpicked, instrumental, no vocals, no drums, no bass, no piano",
+    negativeTags:
+      "vocals, singing, humming, voice, speech, drums, percussion, bass, piano, guitar, strings, full band, synth, pad",
+    coverArtHint:
+      "empty wooden stand, closed fabric case, spare strings on warm wood table, golden studio nook, no oud visible, no people, no writing",
+  },
+  {
+    id: "kalimba",
+    label: "Kalimba",
+    style:
+      "solo kalimba, thumb piano, single instrument only, melodic lead, instrumental, no vocals, no drums, no bass, no piano, no guitar",
+    negativeTags:
+      "vocals, singing, humming, voice, speech, drums, percussion, bass, piano, guitar, strings, full band, synth, pad",
+    coverArtHint:
+      "small wooden props and felt pads on table, soft golden window light, no kalimba visible, no people, no writing",
+  },
 ];
 
 export function getHumTrackPreset(id) {

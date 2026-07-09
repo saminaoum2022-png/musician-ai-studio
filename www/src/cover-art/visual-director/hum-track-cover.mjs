@@ -69,6 +69,14 @@ const INSTRUMENT_NOOK_PROPS = {
     "empty keyboard stand without keys, coiled midi cable and patch notes on desk, neon purple accent glow, no synthesizer",
   strings:
     "empty instrument stand, rosin and sheet music on wood table, rich amber studio light, no cello violin or bow",
+  saxophone:
+    "empty velvet-lined case, reed and ligature on wood table, moody amber jazz studio light, no saxophone visible",
+  cello:
+    "empty tall stand, rosin and sheet music on floor, warm dramatic studio light, no cello or bow",
+  oud:
+    "empty wooden stand, closed fabric case, spare strings on warm wood table, golden studio nook, no oud visible",
+  kalimba:
+    "small wooden props and felt pads on table, soft golden window light, no kalimba visible",
 };
 
 const GENERIC_NOOK =
@@ -83,6 +91,10 @@ function normalizeInstrumentId(raw) {
 
 function guessInstrumentIdFromLabel(label) {
   const s = String(label || "").trim().toLowerCase();
+  if (/sax/.test(s)) return "saxophone";
+  if (/cello/.test(s)) return "cello";
+  if (/oud/.test(s)) return "oud";
+  if (/kalimba|thumb piano/.test(s)) return "kalimba";
   if (/ukulele/.test(s)) return "ukulele";
   if (/acoustic/.test(s)) return "acoustic_guitar";
   if (/electric.*guitar/.test(s)) return "electric_guitar";

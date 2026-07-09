@@ -86,8 +86,6 @@ function syncHumTrackUi() {
       const active = id === humTrackInstrument;
       btn.classList.toggle("is-active", active);
       btn.setAttribute("aria-pressed", active ? "true" : "false");
-      const iconHost = btn.querySelector(".humTrackChipIco");
-      if (iconHost) iconHost.innerHTML = humTrackIconMarkup(id, { className: "humTrackChipSvg" });
     });
   }
 
@@ -682,7 +680,7 @@ function renderHumTrackInstrumentChips() {
   row.dataset.rendered = "1";
   row.innerHTML = HUM_TRACK_INSTRUMENTS.map(
     (inst) =>
-      `<button type="button" class="humTrackChip" data-hum-instrument="${inst.id}" aria-pressed="${inst.id === humTrackInstrument ? "true" : "false"}"><span class="humTrackChipIco" aria-hidden="true"></span><span class="humTrackChipLabel">${inst.label}</span></button>`,
+      `<button type="button" class="humTrackChip" data-hum-instrument="${inst.id}" aria-pressed="${inst.id === humTrackInstrument ? "true" : "false"}">${inst.label}</button>`,
   ).join("");
 }
 

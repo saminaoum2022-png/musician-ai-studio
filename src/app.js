@@ -185,7 +185,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260709-211105";
+const APP_BUILD = "20260709-221435";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -818,9 +818,7 @@ const els = {
   playerTimeCurrent: document.getElementById("playerTimeCurrent"),
   playerTimeTotal: document.getElementById("playerTimeTotal"),
   btnPlayerShare: document.getElementById("btnPlayerShare"),
-  btnPlayerAddPlaylist: document.getElementById("btnPlayerAddPlaylist"),
   btnPlayerDownloadVideo: document.getElementById("btnPlayerDownloadVideo"),
-  btnPlayerMusicVideo: document.getElementById("btnPlayerMusicVideo"),
   playerLyricsOverlay: document.getElementById("playerLyricsOverlay"),
   playerLyricsBg: document.getElementById("playerLyricsBg"),
   playerLyricsTitle: document.getElementById("playerLyricsTitle"),
@@ -828,6 +826,10 @@ const els = {
   playerLyricsScroll: document.getElementById("playerLyricsScroll"),
   playerLyricsList: document.getElementById("playerLyricsList"),
   btnClosePlayerLyrics: document.getElementById("btnClosePlayerLyrics"),
+  playerKaraokeStrip: document.getElementById("playerKaraokeStrip"),
+  playerKaraokeLinePrev: document.getElementById("playerKaraokeLinePrev"),
+  playerKaraokeLineCurrent: document.getElementById("playerKaraokeLineCurrent"),
+  playerKaraokeLineNext: document.getElementById("playerKaraokeLineNext"),
   musicVideoModal: document.getElementById("musicVideoModal"),
   musicVideoCover: document.getElementById("musicVideoCover"),
   musicVideoLoader: document.getElementById("musicVideoLoader"),
@@ -853,6 +855,8 @@ const els = {
   playerArt: document.getElementById("playerArt"),
   playerTitle: document.getElementById("playerTitle"),
   playerNabadBadge: document.getElementById("playerNabadBadge"),
+  playerCreatorIdentity: document.getElementById("playerCreatorIdentity"),
+  btnPlayerBecomeFan: document.getElementById("btnPlayerBecomeFan"),
   playerSubtitle: document.getElementById("playerSubtitle"),
   playerChallengeAttribution: document.getElementById("playerChallengeAttribution"),
   playerChallengeAttributionText: document.getElementById("playerChallengeAttributionText"),
@@ -860,22 +864,10 @@ const els = {
   playerTemplateAttributionText: document.getElementById("playerTemplateAttributionText"),
   playerRemixAttribution: document.getElementById("playerRemixAttribution"),
   playerRemixAttributionText: document.getElementById("playerRemixAttributionText"),
-  playerRemixRow: document.getElementById("playerRemixRow"),
   btnPlayerRemix: document.getElementById("btnPlayerRemix"),
-  btnPlayerLyrics: document.getElementById("btnPlayerLyrics"),
-  playerFeedbackAuras: document.getElementById("playerFeedbackAuras"),
-  btnPlayerFeedbackSend: document.getElementById("btnPlayerFeedbackSend"),
-  playerFeedbackPopover: document.getElementById("playerFeedbackPopover"),
-  playerFeedbackPopoverChips: document.getElementById("playerFeedbackPopoverChips"),
-  btnPlayerFeedbackInbox: document.getElementById("btnPlayerFeedbackInbox"),
-  playerFeedbackInboxCount: document.getElementById("playerFeedbackInboxCount"),
-  playerFeedbackInboxList: document.getElementById("playerFeedbackInboxList"),
-  playerFeedbackInboxSheet: document.getElementById("playerFeedbackInboxSheet"),
   btnLoadFull: document.getElementById("btnLoadFull"),
   btnLoadVocals: document.getElementById("btnLoadVocals"),
   btnLoadInstrumental: document.getElementById("btnLoadInstrumental"),
-  btnShareFullHub: document.getElementById("btnShareFullHub"),
-  btnPlayerChangeCover: document.getElementById("btnPlayerChangeCover"),
   playerCoverUpload: document.getElementById("playerCoverUpload"),
   playerConfirm: document.getElementById("playerConfirm"),
   playerConfirmThumb: document.getElementById("playerConfirmThumb"),
@@ -15843,7 +15835,6 @@ async function refreshDiscoveryFollowingFeed(opts = {}) {
 }
 
 function bindDiscoveryDiscoverControls() {
-  wirePlayerFeedbackUiOnce();
   wireUserPublicFeedRowsOnce();
   bindDiscoverHubV1Once();
   if (_discoveryDiscoverBound) return;
@@ -17596,414 +17587,6 @@ async function setLibraryTrackFeaturedOnProfile(id, featured) {
   for (const t of changed) {
     await supabasePatchUserSong(t, { meta: t.meta || {} }, { reason: "featured-pin-toggle" }).catch(() => null);
   }
-}
-
-const SONG_FEEDBACK_TYPES = [
-  { id: "hook", label: "Loved the hook" },
-  { id: "lyrics", label: "Lyrics hit" },
-  { id: "replay", label: "Would replay" },
-  { id: "remix", label: "Remix-worthy" },
-];
-
-const _songFeedbackCache = new Map();
-const _FEEDBACK_AURA_SLOTS = ["left", "center", "right"];
-const _FEEDBACK_AURA_REPLAY_MAX = 8;
-const _FEEDBACK_AURA_LIFETIME_MS = 980;
-const _FEEDBACK_AURA_REPLAY_GAP_MS = 260;
-let _playerFeedbackAuraSlot = 0;
-let _playerFeedbackReplayGen = 0;
-let _playerFeedbackReplayTimers = [];
-let _playerFeedbackPopoverSongId = "";
-
-function feedbackLabelForType(type) {
-  const hit = SONG_FEEDBACK_TYPES.find((x) => x.id === type);
-  return hit?.label || "Feedback";
-}
-
-function totalFeedbackCount(counts) {
-  const c = counts && typeof counts === "object" ? counts : {};
-  return SONG_FEEDBACK_TYPES.reduce((n, item) => n + Number(c[item.id] || 0), 0);
-}
-
-function publicFeedbackContextForTrack(track) {
-  const songId = String(track?.songId || track?.cloudSongId || track?.id || "").trim();
-  const ownerUserId = String(track?.ownerUserId || track?.userId || "").trim();
-  if (!songId) return null;
-  if (!ownerUserId && !track?.publicOnProfile && !String(track?.id || "").startsWith("public_")) return null;
-  return { songId, ownerUserId };
-}
-
-function playPrivateFeedbackSendSound() {
-  try {
-    const Ctx = window.AudioContext || window.webkitAudioContext;
-    if (!Ctx) return;
-    const ctx = new Ctx();
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    const now = ctx.currentTime;
-    osc.type = "sine";
-    osc.frequency.setValueAtTime(480, now);
-    osc.frequency.exponentialRampToValueAtTime(920, now + 0.055);
-    gain.gain.setValueAtTime(0.0001, now);
-    gain.gain.exponentialRampToValueAtTime(0.11, now + 0.008);
-    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.12);
-    osc.connect(gain);
-    gain.connect(ctx.destination);
-    osc.start(now);
-    osc.stop(now + 0.13);
-    osc.onended = () => {
-      try { ctx.close(); } catch {}
-    };
-  } catch {}
-}
-
-function clearPlayerFeedbackReplayTimers() {
-  for (const t of _playerFeedbackReplayTimers) {
-    try { clearTimeout(t); } catch {}
-  }
-  _playerFeedbackReplayTimers = [];
-}
-
-function feedbackTypeFromLabel(label) {
-  const raw = String(label || "").split(" · ")[0].trim();
-  const hit = SONG_FEEDBACK_TYPES.find((x) => x.label === raw);
-  return hit?.id || "";
-}
-
-function spawnPlayerFeedbackAura(label, slotIndex, feedbackType = "") {
-  const host = els.playerFeedbackAuras;
-  if (!host || !label) return;
-  const slot = _FEEDBACK_AURA_SLOTS[Number(slotIndex) % _FEEDBACK_AURA_SLOTS.length];
-  const type = String(feedbackType || "").trim() || feedbackTypeFromLabel(label);
-  const typeClass = type ? ` playerFeedbackAura--type-${type}` : "";
-  const pill = document.createElement("span");
-  pill.className = `playerFeedbackAura playerFeedbackAura--${slot}${typeClass}`;
-  pill.textContent = String(label);
-  host.appendChild(pill);
-  const removeMs = _FEEDBACK_AURA_LIFETIME_MS;
-  const timer = window.setTimeout(() => {
-    try { pill.remove(); } catch {}
-  }, removeMs);
-  _playerFeedbackReplayTimers.push(timer);
-}
-
-function buildFeedbackAuraReplayQueue(counts, isCreatorOwner) {
-  const queue = [];
-  for (const item of SONG_FEEDBACK_TYPES) {
-    const n = Number(counts?.[item.id] || 0);
-    if (!n) continue;
-    const label = isCreatorOwner && n > 1
-      ? `${item.label} · ${formatStatCount(n)}`
-      : item.label;
-    queue.push({ label, type: item.id });
-  }
-  return queue.slice(0, _FEEDBACK_AURA_REPLAY_MAX);
-}
-
-function scheduleFeedbackAuraReplay(counts, { isCreatorOwner = false } = {}) {
-  clearPlayerFeedbackReplayTimers();
-  if (els.playerFeedbackAuras) els.playerFeedbackAuras.innerHTML = "";
-  const queue = buildFeedbackAuraReplayQueue(counts, isCreatorOwner);
-  if (!queue.length) return;
-  const gen = ++_playerFeedbackReplayGen;
-  queue.forEach((entry, idx) => {
-    const timer = window.setTimeout(() => {
-      if (gen !== _playerFeedbackReplayGen) return;
-      spawnPlayerFeedbackAura(entry.label, idx, entry.type);
-    }, idx * _FEEDBACK_AURA_REPLAY_GAP_MS);
-    _playerFeedbackReplayTimers.push(timer);
-  });
-}
-
-function renderPlayerFeedbackPopoverChips(songId) {
-  const host = els.playerFeedbackPopoverChips;
-  if (!host) return;
-  const sid = String(songId || "").trim();
-  const cached = _songFeedbackCache.get(sid) || {};
-  const viewer = new Set(cached.viewer || []);
-  host.innerHTML = SONG_FEEDBACK_TYPES.map((item) => {
-    const active = viewer.has(item.id);
-    return `<button type="button" class="playerFeedbackPopoverChip${active ? " isActive" : ""}" data-song-feedback-type="${escapeHtml(item.id)}" data-song-feedback-song="${escapeHtml(sid)}" aria-pressed="${active ? "true" : "false"}">${escapeHtml(item.label)}</button>`;
-  }).join("");
-}
-
-function closePlayerFeedbackPopover() {
-  if (els.playerFeedbackPopover) {
-    els.playerFeedbackPopover.classList.remove("isVisible");
-    els.playerFeedbackPopover.hidden = true;
-  }
-  if (els.btnPlayerFeedbackSend) els.btnPlayerFeedbackSend.setAttribute("aria-expanded", "false");
-  _playerFeedbackPopoverSongId = "";
-}
-
-function openPlayerFeedbackPopover() {
-  const ctx = publicFeedbackContextForTrack(currentPlayerTrackRef);
-  if (!ctx?.songId) return;
-  _playerFeedbackPopoverSongId = ctx.songId;
-  renderPlayerFeedbackPopoverChips(ctx.songId);
-  if (els.playerFeedbackPopover) {
-    els.playerFeedbackPopover.hidden = false;
-    els.playerFeedbackPopover.classList.remove("isVisible");
-    window.requestAnimationFrame(() => {
-      els.playerFeedbackPopover?.classList.add("isVisible");
-    });
-  }
-  if (els.btnPlayerFeedbackSend) els.btnPlayerFeedbackSend.setAttribute("aria-expanded", "true");
-}
-
-function togglePlayerFeedbackPopover(forceOpen) {
-  const isOpen = Boolean(els.playerFeedbackPopover && !els.playerFeedbackPopover.hidden && els.playerFeedbackPopover.classList.contains("isVisible"));
-  const open = forceOpen === true ? true : forceOpen === false ? false : !isOpen;
-  if (!open) {
-    closePlayerFeedbackPopover();
-    return;
-  }
-  const ctx = publicFeedbackContextForTrack(currentPlayerTrackRef);
-  if (!ctx?.songId) {
-    closePlayerFeedbackPopover();
-    return;
-  }
-  if (isOpen && _playerFeedbackPopoverSongId === ctx.songId) {
-    closePlayerFeedbackPopover();
-    return;
-  }
-  openPlayerFeedbackPopover();
-}
-
-async function hydrateSongFeedbackSummary(songId) {
-  const sid = String(songId || "").trim();
-  if (!sid) return null;
-  try {
-    const data = await socialApi(`/api/social?type=song_feedback&songId=${encodeURIComponent(sid)}`);
-    _songFeedbackCache.set(sid, {
-      counts: data?.counts || {},
-      viewer: Array.isArray(data?.viewer) ? data.viewer : [],
-    });
-    return _songFeedbackCache.get(sid);
-  } catch {
-    return _songFeedbackCache.get(sid) || null;
-  }
-}
-
-function updatePlayerFeedbackInboxChrome(songId, counts) {
-  const ctx = publicFeedbackContextForTrack(currentPlayerTrackRef);
-  const sid = String(songId || ctx?.songId || "").trim();
-  const ownerId = String(ctx?.ownerUserId || currentPlayerTrackRef?.ownerUserId || "").trim();
-  const mine = String(authSession?.user?.id || "").trim();
-  const isOwner = Boolean(sid && ownerId && mine && ownerId === mine);
-  const total = totalFeedbackCount(counts);
-  if (els.btnPlayerFeedbackInbox) {
-    els.btnPlayerFeedbackInbox.hidden = !isOwner || total <= 0;
-  }
-  if (els.playerFeedbackInboxCount) {
-    if (isOwner && total > 0) {
-      els.playerFeedbackInboxCount.textContent = String(total);
-      els.playerFeedbackInboxCount.hidden = false;
-    } else {
-      els.playerFeedbackInboxCount.textContent = "";
-      els.playerFeedbackInboxCount.hidden = true;
-    }
-  }
-}
-
-async function setupPlayerCoverFeedback(track) {
-  closePlayerFeedbackPopover();
-  clearPlayerFeedbackReplayTimers();
-  if (els.playerFeedbackAuras) els.playerFeedbackAuras.innerHTML = "";
-  const ctx = publicFeedbackContextForTrack(track);
-  const mine = String(authSession?.user?.id || "").trim();
-  const canSend = Boolean(
-    ctx?.songId &&
-    ctx?.ownerUserId &&
-    mine &&
-    ctx.ownerUserId !== mine &&
-    !track?.fromSharedLink,
-  );
-  const isOwner = Boolean(ctx?.songId && ctx?.ownerUserId && mine && ctx.ownerUserId === mine);
-  if (els.btnPlayerFeedbackSend) els.btnPlayerFeedbackSend.hidden = !canSend;
-  if (!ctx?.songId || track?.fromSharedLink) {
-    updatePlayerFeedbackInboxChrome("", {});
-    return;
-  }
-  const cached = await hydrateSongFeedbackSummary(ctx.songId);
-  const counts = cached?.counts || {};
-  updatePlayerFeedbackInboxChrome(ctx.songId, counts);
-  if (totalFeedbackCount(counts) > 0) {
-    scheduleFeedbackAuraReplay(counts, { isCreatorOwner: isOwner });
-  }
-  if (canSend) renderPlayerFeedbackPopoverChips(ctx.songId);
-}
-
-function playerFeedbackInboxRowHtml(item) {
-  const handle = String(item?.username || "").trim();
-  const safeHandle = handle ? `@${escapeHtml(handle)}` : "Listener";
-  const label = escapeHtml(String(item?.feedbackLabel || feedbackLabelForType(item?.feedbackType)).trim());
-  const avatarRaw = String(item?.avatar || "").trim();
-  const avatarSrc = avatarRaw ? normalizeProfileAvatarForImg(avatarRaw) : "";
-  const initials = (handle || "U").replace(/^@/, "").slice(0, 2).toUpperCase();
-  const href = handle ? `#/u/${encodeURIComponent(handle)}` : "#";
-  const ts = item?.createdAt ? new Date(item.createdAt).getTime() : 0;
-  const when = ts ? relativeTime(ts) : "";
-  return `
-    <article class="playerFeedbackInboxRow" role="listitem">
-      <a class="playerFeedbackInboxAvatar" href="${escapeHtml(href)}" data-route-link="user" aria-label="${safeHandle} profile">
-        ${avatarSrc
-          ? `<img src="${escapeHtml(avatarSrc)}" alt="" width="36" height="36" decoding="async" loading="lazy" />`
-          : escapeHtml(initials)}
-      </a>
-      <div class="playerFeedbackInboxBody">
-        <div class="playerFeedbackInboxWho">${safeHandle}</div>
-        <div class="playerFeedbackInboxWhat">${label}</div>
-      </div>
-      ${when ? `<span class="playerFeedbackInboxWhen">${escapeHtml(when)}</span>` : ""}
-    </article>`;
-}
-
-function closePlayerFeedbackInbox() {
-  const sheet = els.playerFeedbackInboxSheet;
-  if (!sheet) return;
-  sheet.setAttribute("aria-hidden", "true");
-  window.setTimeout(() => {
-    sheet.hidden = true;
-  }, 220);
-}
-
-async function loadPlayerFeedbackInbox() {
-  const ctx = publicFeedbackContextForTrack(currentPlayerTrackRef);
-  const list = els.playerFeedbackInboxList;
-  if (!ctx?.songId || !list) return;
-  list.innerHTML = `<div class="playerFeedbackInboxEmpty">Loading private feedback…</div>`;
-  try {
-    const data = await socialApi(`/api/social?type=song_feedback_inbox&songId=${encodeURIComponent(ctx.songId)}`);
-    const items = Array.isArray(data?.items) ? data.items : [];
-    if (!items.length) {
-      list.innerHTML = `<div class="playerFeedbackInboxEmpty">No private feedback yet — listeners can send it from the player cover.</div>`;
-      return;
-    }
-    list.innerHTML = items.map((item) => playerFeedbackInboxRowHtml(item)).join("");
-  } catch (e) {
-    list.innerHTML = `<div class="playerFeedbackInboxEmpty">${escapeHtml(e?.message || "Could not load private feedback.")}</div>`;
-  }
-}
-
-function openPlayerFeedbackInbox() {
-  const sheet = els.playerFeedbackInboxSheet;
-  if (!sheet) return;
-  const title = String(currentPlayerTrackRef?.title || "this song").trim();
-  const sub = document.getElementById("playerFeedbackInboxSub");
-  if (sub) sub.textContent = title ? `On “${title}”` : "Who sent private feedback on this song.";
-  sheet.hidden = false;
-  window.requestAnimationFrame(() => {
-    sheet.setAttribute("aria-hidden", "false");
-  });
-  void loadPlayerFeedbackInbox();
-}
-
-let _playerFeedbackUiBound = false;
-function wirePlayerFeedbackUiOnce() {
-  if (_playerFeedbackUiBound) return;
-  _playerFeedbackUiBound = true;
-  if (els.btnPlayerFeedbackSend) {
-    els.btnPlayerFeedbackSend.addEventListener("click", (e) => {
-      e.stopPropagation();
-      haptic("impact");
-      togglePlayerFeedbackPopover();
-    });
-  }
-  if (els.playerFeedbackPopoverChips) {
-    els.playerFeedbackPopoverChips.addEventListener("click", (e) => {
-      const btn = e.target.closest("[data-song-feedback-type]");
-      if (!btn) return;
-      e.preventDefault();
-      e.stopPropagation();
-      const songId = btn.getAttribute("data-song-feedback-song");
-      const type = btn.getAttribute("data-song-feedback-type");
-      const label = feedbackLabelForType(type);
-      closePlayerFeedbackPopover();
-      haptic("success");
-      playPrivateFeedbackSendSound();
-      spawnPlayerFeedbackAura(label, _playerFeedbackAuraSlot++, type);
-      void submitSongFeedback(songId, type, { skipAura: true, skipClose: true });
-    });
-  }
-  if (els.btnPlayerFeedbackInbox) {
-    els.btnPlayerFeedbackInbox.addEventListener("click", () => {
-      haptic("light");
-      openPlayerFeedbackInbox();
-    });
-  }
-  document.addEventListener("click", (e) => {
-    if (els.playerFeedbackPopover?.hidden) return;
-    if (e.target.closest("#playerFeedbackPopover, #btnPlayerFeedbackSend")) return;
-    closePlayerFeedbackPopover();
-  });
-  document.addEventListener("click", (e) => {
-    if (e.target.closest("[data-player-feedback-inbox-dismiss]")) closePlayerFeedbackInbox();
-  });
-  document.addEventListener("keydown", (e) => {
-    if (e.key !== "Escape") return;
-    if (els.playerFeedbackInboxSheet && !els.playerFeedbackInboxSheet.hidden) closePlayerFeedbackInbox();
-    if (els.playerFeedbackPopover && !els.playerFeedbackPopover.hidden) closePlayerFeedbackPopover();
-  });
-}
-
-function songDetailsFeedbackHintHtml(track) {
-  const ctx = publicFeedbackContextForTrack(track);
-  if (!ctx?.songId) return "";
-  return `<p class="hint songFeedbackDetailsHint">Private feedback lives on the player cover — tap the whisper icon on the artwork.</p>`;
-}
-
-async function submitSongFeedback(songId, feedbackType, opts = {}) {
-  const sid = String(songId || "").trim();
-  const type = String(feedbackType || "").trim();
-  const skipAura = Boolean(opts.skipAura);
-  const skipClose = Boolean(opts.skipClose);
-  if (!sid || !type) return;
-  if (!authSession?.user?.id) {
-    showToast("Sign in to send private feedback.", { icon: "!", durationMs: 3200 });
-    try { location.hash = "#/auth"; } catch {}
-    return;
-  }
-  try {
-    const data = await socialApi("/api/social", {
-      method: "POST",
-      body: JSON.stringify({ action: "song_feedback", songId: sid, feedbackType: type }),
-    });
-    _songFeedbackCache.set(sid, {
-      counts: data?.counts || {},
-      viewer: Array.isArray(data?.viewer) ? data.viewer : [],
-    });
-    if (data?.reason === "own_song") {
-      showToast("Private feedback is for listeners on your public songs.");
-    } else if (data?.reason === "song_not_public") {
-      showToast("Private feedback works only on public profile songs.");
-    } else if (data?.reason === "missing_input") {
-      showToast("Could not identify this song for feedback.");
-    } else if (data?.counted === false) {
-      showToast("Could not send private feedback yet.");
-    } else if (data?.existing) {
-      showToast("You already sent that feedback.");
-    } else {
-      if (!skipClose) closePlayerFeedbackPopover();
-      if (!skipAura) {
-        haptic("success");
-        playPrivateFeedbackSendSound();
-        spawnPlayerFeedbackAura(feedbackLabelForType(type), _playerFeedbackAuraSlot++, type);
-      }
-      showToast("Private feedback sent.", { durationMs: 1800 });
-    }
-    if (String(currentPlayerTrackRef?.songId || "") === sid) {
-      renderPlayerFeedbackPopoverChips(sid);
-      updatePlayerFeedbackInboxChrome(sid, data?.counts || _songFeedbackCache.get(sid)?.counts || {});
-    }
-  } catch (e) {
-    showToast(e?.message || "Could not send private feedback.");
-  }
-}
-
-function setPlayerFeedback(track) {
-  wirePlayerFeedbackUiOnce();
-  void setupPlayerCoverFeedback(track);
 }
 
 
@@ -31913,6 +31496,7 @@ async function handlePublicTrackSheetFollow(ctx) {
     _followingListCacheAt = 0;
     showToast(wasFollowing ? FAN_COPY.toastUnfan : FAN_COPY.toastBecameFan(handle));
     if (_trackSheetCtx?.mode === "public") void refreshPublicTrackSheetFollowRow(_trackSheetCtx);
+    if (playerSourceIsExternalListenOnly()) void refreshPlayerFanBtn(targetUserId, handle);
   } catch (e) {
     showToast(e?.message || FAN_COPY.toastError);
   } finally {
@@ -32075,6 +31659,7 @@ function renderTrackSheetLibrary(track) {
   l.innerHTML = `
     ${recordEligible ? `<button type="button" class="discoverTrackSheetRow discoverTrackSheetRow--studio" data-track-sheet-action="library_record_voice">Open in Studio</button>` : ""}
     ${TRACK_SHEET_ADD_PLAYLIST_ROW}
+    <button type="button" class="discoverTrackSheetRow" data-track-sheet-action="library_change_cover">Change cover</button>
     <button type="button" class="discoverTrackSheetRow" data-track-sheet-action="library_pin">${escapeHtml(pinLabel)}</button>
     <button type="button" class="discoverTrackSheetRow" data-track-sheet-action="library_dl_audio">Download audio</button>
     <button type="button" class="discoverTrackSheetRow" data-track-sheet-action="library_dl_video">Download video</button>
@@ -32858,6 +32443,11 @@ function runTrackSheetAction(action, sourceEl) {
     if (action === "library_rename") {
       shut();
       void renamePrivateLibraryTrack(t.id);
+      return;
+    }
+    if (action === "library_change_cover") {
+      shut();
+      openPlayerChangeCoverPicker();
       return;
     }
     if (action === "library_details") {
@@ -43417,10 +43007,8 @@ async function resolveFullMetaForTrackRef(t) {
 
 /** Lightweight lyrics-only view reusing the song details sheet shell. */
 /* ─── Synced (karaoke) lyrics ──────────────────────────────────────────────
-   Word-level timing from /api/music/timestamped-lyrics, grouped into lines
-   and rendered as a full-screen overlay over the player. The active line
-   follows playback; tapping a line seeks. Falls back to the static lyrics
-   sheet when no timing data exists (instrumentals, imports, old songs). */
+   Word-level timing from /api/music/timestamped-lyrics. Floating glass strip
+   on the player cover (autostarts on play); Lyrics pill opens full overlay. */
 
 const TIMED_LYRICS_LS_KEY = "nabad_timed_lyrics_v1";
 const timedLyricsMemCache = new Map();
@@ -43500,6 +43088,191 @@ function groupTimedLyricsIntoLines(words) {
   }
   push();
   return lines;
+}
+
+/** Resolve Suno ids for synced lyrics from a slim or full player track ref. */
+function resolveKaraokeIdsFromTrackRef(t) {
+  if (!t) return null;
+  const lib = loadLibrary();
+  const currentId = String(t?.id || "").trim();
+  const canonical = libraryTrackCanonicalUrl(String(t?.url || playerEl?.src || ""));
+  const full =
+    (currentId ? lib.find((x) => String(x.id) === currentId) : null) ||
+    lib.find((x) => libraryTrackCanonicalUrl(x?.url) === canonical) ||
+    t;
+  let taskId = String(full?.taskId || full?.meta?.taskId || t?.taskId || "").trim();
+  let audioId = String(full?.audioId || full?.meta?.audioId || t?.audioId || "").trim();
+  const isInstrumental = String(full?.kind || t?.kind || "") === "instrumental";
+  if (!isInstrumental && (!taskId || !audioId)) {
+    const base = String(t?.title || full?.title || "")
+      .replace(/\s*[•·\-]\s*instrumental\s*$/i, "")
+      .trim()
+      .toLowerCase();
+    if (base) {
+      const sibling =
+        lib.find(
+          (x) =>
+            String(x.kind || "") !== "instrumental" &&
+            String(x.title || "").trim().toLowerCase() === base &&
+            (x.taskId || x?.meta?.taskId) &&
+            (x.audioId || x?.meta?.audioId),
+        ) ||
+        lib.find(
+          (x) =>
+            String(x.kind || "") !== "instrumental" &&
+            String(x.title || "").toLowerCase().includes(base) &&
+            (x.taskId || x?.meta?.taskId) &&
+            (x.audioId || x?.meta?.audioId),
+        );
+      if (sibling) {
+        taskId = String(sibling.taskId || sibling.meta?.taskId || "").trim();
+        audioId = String(sibling.audioId || sibling.meta?.audioId || "").trim();
+      }
+    }
+  }
+  if (!taskId || !audioId || isInstrumental) return null;
+  return { taskId, audioId, full: full || t };
+}
+
+function activeLyricLineIndexForTime(lines, t, lead = 0.25) {
+  let idx = -1;
+  for (let i = 0; i < lines.length; i++) {
+    if (!lines[i].isSection && lines[i].startS <= t + lead) idx = i;
+  }
+  return idx;
+}
+
+let playerKaraokeStripState = null;
+let playerKaraokeAutostartSeq = 0;
+
+function playerKaraokeLineText(lines, idx) {
+  if (idx < 0 || !lines[idx]) return "";
+  return String(lines[idx].text || "").trim();
+}
+
+function nearestLyricLineIndices(lines, idx) {
+  let prev = -1;
+  for (let i = idx - 1; i >= 0; i--) {
+    if (!lines[i]?.isSection) {
+      prev = i;
+      break;
+    }
+  }
+  let next = -1;
+  for (let i = idx + 1; i < lines.length; i++) {
+    if (!lines[i]?.isSection) {
+      next = i;
+      break;
+    }
+  }
+  return { prev, next };
+}
+
+function setPlayerKaraokeLineEl(el, text, { visible = true } = {}) {
+  if (!el) return;
+  const safe = String(text || "").trim();
+  el.textContent = safe;
+  if (visible && safe) el.removeAttribute("aria-hidden");
+  else el.setAttribute("aria-hidden", "true");
+}
+
+function renderPlayerKaraokeStripLines(st, idx) {
+  const lines = st?.lines || [];
+  const { prev, next } = nearestLyricLineIndices(lines, idx);
+  setPlayerKaraokeLineEl(els.playerKaraokeLinePrev, playerKaraokeLineText(lines, prev));
+  setPlayerKaraokeLineEl(els.playerKaraokeLineCurrent, playerKaraokeLineText(lines, idx));
+  setPlayerKaraokeLineEl(els.playerKaraokeLineNext, playerKaraokeLineText(lines, next));
+  st.renderedIdx = idx;
+}
+
+function syncPlayerKaraokeStrip() {
+  const st = playerKaraokeStripState;
+  if (!st || !playerEl || !els.playerKaraokeStrip || els.playerKaraokeStrip.hidden) return;
+  let idx = st.displayIdx;
+  if (!playerEl.paused) {
+    idx = activeLyricLineIndexForTime(st.lines, Number(playerEl.currentTime) || 0);
+    st.displayIdx = idx;
+  }
+  if (idx < 0) {
+    for (let i = 0; i < st.lines.length; i++) {
+      if (!st.lines[i].isSection) {
+        idx = i;
+        break;
+      }
+    }
+  }
+  if (idx === st.renderedIdx) return;
+  renderPlayerKaraokeStripLines(st, idx);
+}
+
+function attachPlayerKaraokeListeners() {
+  const a = ensurePlayer();
+  a.removeEventListener("timeupdate", syncPlayerKaraokeStrip);
+  a.addEventListener("timeupdate", syncPlayerKaraokeStrip);
+  a.removeEventListener("pause", syncPlayerKaraokeStrip);
+  a.addEventListener("pause", syncPlayerKaraokeStrip);
+  a.removeEventListener("play", syncPlayerKaraokeStrip);
+  a.addEventListener("play", syncPlayerKaraokeStrip);
+}
+
+function detachPlayerKaraokeListeners() {
+  const a = ensurePlayer();
+  a.removeEventListener("timeupdate", syncPlayerKaraokeStrip);
+  a.removeEventListener("pause", syncPlayerKaraokeStrip);
+  a.removeEventListener("play", syncPlayerKaraokeStrip);
+}
+
+function showPlayerKaraokeStrip({ lines, words, audioId }) {
+  playerKaraokeStripState = {
+    lines,
+    words,
+    audioId,
+    displayIdx: -1,
+    renderedIdx: -2,
+  };
+  if (els.playerKaraokeStrip) els.playerKaraokeStrip.hidden = false;
+  attachPlayerKaraokeListeners();
+  syncPlayerKaraokeStrip();
+}
+
+function clearPlayerKaraokeStripUi() {
+  playerKaraokeStripState = null;
+  if (els.playerKaraokeStrip) els.playerKaraokeStrip.hidden = true;
+  setPlayerKaraokeLineEl(els.playerKaraokeLinePrev, "");
+  setPlayerKaraokeLineEl(els.playerKaraokeLineCurrent, "");
+  setPlayerKaraokeLineEl(els.playerKaraokeLineNext, "");
+  detachPlayerKaraokeListeners();
+}
+
+function hidePlayerKaraokeStrip() {
+  playerKaraokeAutostartSeq += 1;
+  clearPlayerKaraokeStripUi();
+}
+
+async function maybeAutostartPlayerKaraoke() {
+  if (!playerEl || playerEl.paused) return;
+  const seq = ++playerKaraokeAutostartSeq;
+  const ids = resolveKaraokeIdsFromTrackRef(currentPlayerTrackRef);
+  if (!ids) {
+    hidePlayerKaraokeStrip();
+    return;
+  }
+  if (playerKaraokeStripState?.audioId === ids.audioId) {
+    attachPlayerKaraokeListeners();
+    syncPlayerKaraokeStrip();
+    if (els.playerKaraokeStrip) els.playerKaraokeStrip.hidden = false;
+    return;
+  }
+  clearPlayerKaraokeStripUi();
+  try {
+    const words = await fetchTimedLyrics(ids.taskId, ids.audioId);
+    if (seq !== playerKaraokeAutostartSeq) return;
+    if (!playerEl || playerEl.paused) return;
+    if (!Array.isArray(words) || !words.length) return;
+    const lines = groupTimedLyricsIntoLines(words);
+    if (!lines.some((l) => !l.isSection)) return;
+    showPlayerKaraokeStrip({ lines, words, audioId: ids.audioId });
+  } catch {}
 }
 
 let playerLyricsState = null; // { lines, activeIdx, userScrollUntil }
@@ -43740,7 +43513,6 @@ function renderAboutThisSong({ track, title, subtitle, lyrics, owner = false } =
       ${templateTitle ? songDetailsFlatRow("Template", templateTitle) : ""}
       ${ownerRows}
     </div>
-    ${owner && track ? songDetailsFeedbackHintHtml(track) : ""}
     <div class="songDetailsLyricsBlock">
       <div class="songDetailsSectionHead">
         <div class="songDetailsSectionTitle">Lyrics</div>
@@ -44690,17 +44462,20 @@ function ensurePlayer() {
     syncPlayerUI();
     syncLockScreenNowPlaying({ force: true });
     try { presenceTick(); } catch {}
+    void maybeAutostartPlayerKaraoke();
   });
   playerEl.addEventListener("pause", () => {
     syncPlayerUI();
     syncLockScreenNowPlaying({ force: true });
     try { presenceTick(); } catch {}
+    try { syncPlayerKaraokeStrip(); } catch {}
   });
   playerEl.addEventListener("play", () => { try { setProfileAuraAudioState(true); } catch {} });
   playerEl.addEventListener("pause", () => { try { setProfileAuraAudioState(isAnyAppAudioPlaying()); } catch {} });
   playerEl.addEventListener("ended", () => {
     const elSeq = Number(playerEl?.dataset?.playerSeq || 0);
     if (elSeq !== _playerPlaybackSeq) return;
+    hidePlayerKaraokeStrip();
     if (els.btnPlayerPlay) els.btnPlayerPlay.disabled = false;
     if (els.btnPlayerPause) els.btnPlayerPause.disabled = true;
     try { setProfileAuraAudioState(isAnyAppAudioPlaying()); } catch {}
@@ -44926,6 +44701,7 @@ function setPlayerMeta({ title, subtitle, artUrl, releaseCaption, remixOf, chall
   const hasTrack = Boolean(artUrl);
   if (els.playerTitle) els.playerTitle.textContent = title || "Now Playing";
   if (els.playerSubtitle) els.playerSubtitle.textContent = screenshotSanitizeCopy(subtitle || "");
+  void syncPlayerCreatorChrome(subtitle);
   if (els.playerArt) {
     if (hasTrack) setCoverImageSrc(els.playerArt, artUrl);
     else setCoverImageSrc(els.playerArt, playerEmptyArtUrl(), { allowEmpty: true });
@@ -44942,12 +44718,13 @@ function setPlayerMeta({ title, subtitle, artUrl, releaseCaption, remixOf, chall
   } else {
     setPlayerRemixAttribution(remixOf || remixAttributionForTrack(currentPlayerTrackRef));
   }
-  setPlayerFeedback(currentPlayerTrackRef);
   const artWrap = document.querySelector(".playerArtWrap");
+  const timeline = document.getElementById("playerTimeline");
   if (artWrap) {
     artWrap.classList.toggle("isEmpty", !hasTrack);
     applyCoverGlowRgb(artWrap, hasTrack ? artUrl : "");
   }
+  if (timeline) applyCoverGlowRgb(timeline, hasTrack ? artUrl : "");
   hubNowMeta = {
     title: title || "Now playing",
     art: artUrl || placeholderCoverDataUrl(),
@@ -45070,42 +44847,148 @@ function resolvePlayerLibraryTrack() {
   return currentPlayerTrackRef;
 }
 
+function openPlayerChangeCoverPicker() {
+  if (playerSourceIsExternalListenOnly()) {
+    showToast("Only your own library songs can change cover.");
+    return;
+  }
+  if (!currentPlayerTrackRef?.id) {
+    setStatus("Open a library song first.");
+    return;
+  }
+  els.playerCoverUpload?.click();
+}
+
+async function refreshPlayerFanBtn(ownerId, handle) {
+  const btn = els.btnPlayerBecomeFan;
+  if (!btn || btn.hidden) return;
+  const uid = String(ownerId || "").trim();
+  const h = String(handle || "").trim();
+  btn.dataset.targetUserId = uid;
+  btn.dataset.handle = h;
+  if (!uid) return;
+  if (!authSession?.user?.id) {
+    btn.textContent = FAN_COPY.ctaProfile;
+    btn.dataset.following = "0";
+    return;
+  }
+  try {
+    const ids = await fetchFollowingUserIdsForFeed();
+    const following = ids.includes(uid);
+    btn.textContent = following ? FAN_COPY.ctaActive : FAN_COPY.ctaProfile;
+    btn.dataset.following = following ? "1" : "0";
+  } catch {
+    btn.textContent = FAN_COPY.ctaProfile;
+    btn.dataset.following = "0";
+  }
+}
+
+async function syncPlayerCreatorChrome(subtitle = "") {
+  const identity = els.playerCreatorIdentity;
+  const fanBtn = els.btnPlayerBecomeFan;
+  if (!identity) return;
+
+  const t = currentPlayerTrackRef || {};
+  const ro = playerSourceIsExternalListenOnly();
+  const ownerId = String(t.ownerUserId || t.userId || "").trim();
+  const mine = String(authSession?.user?.id || "").trim();
+  let handle = String(t.byLine || t.creator || "").trim().replace(/^@/, "");
+
+  if (ro && ownerId) {
+    const prof = await fetchPublicProfileRowByUserId(ownerId);
+    const displayHandle = screenshotHandle(handle || prof?.username || "");
+    const badge = usernameVerifiedBadgeHtml(prof, {
+      className: "profileNabadCertCheck profileNabadCertCheck--inline playerCreatorVerified",
+      label: "Verified creator",
+    });
+    identity.innerHTML = displayHandle
+      ? `<span class="playerCreatorHandle">@${escapeHtml(displayHandle)}</span>${badge}`
+      : `<span class="playerCreatorMeta">${escapeHtml(screenshotSanitizeCopy(subtitle || "Creator"))}</span>`;
+    const showFan = Boolean(mine && ownerId !== mine);
+    if (fanBtn) {
+      fanBtn.hidden = !showFan;
+      if (showFan) void refreshPlayerFanBtn(ownerId, displayHandle);
+    }
+    return;
+  }
+
+  const myHandle = screenshotHandle(String(activeProfile?.username || "").trim());
+  if (myHandle && mine) {
+    const prof = {
+      user_id: mine,
+      username: myHandle,
+      sound_certified: activeProfile?.soundCertified,
+      soundCertified: activeProfile?.soundCertified,
+    };
+    const badge = usernameVerifiedBadgeHtml(prof, {
+      className: "profileNabadCertCheck profileNabadCertCheck--inline playerCreatorVerified",
+      label: "Verified creator",
+    });
+    identity.innerHTML = `<span class="playerCreatorHandle">@${escapeHtml(myHandle)}</span>${badge}`;
+  } else {
+    const meta = screenshotSanitizeCopy(subtitle || "");
+    identity.innerHTML = meta ? `<span class="playerCreatorMeta">${escapeHtml(meta)}</span>` : "";
+  }
+  if (fanBtn) fanBtn.hidden = true;
+}
+
+async function handlePlayerBecomeFanClick() {
+  const btn = els.btnPlayerBecomeFan;
+  const targetUserId = String(btn?.dataset.targetUserId || currentPlayerTrackRef?.ownerUserId || "").trim();
+  const handle = String(btn?.dataset.handle || "").trim();
+  if (!targetUserId) return;
+  if (!authSession?.user?.id || !getSupabaseAuthToken()) {
+    showToast(FAN_COPY.signIn);
+    try { location.hash = "#/auth"; } catch {}
+    return;
+  }
+  const wasFollowing = btn?.dataset.following === "1";
+  if (wasFollowing) {
+    const who = handle ? `@${handle}` : "this creator";
+    let ok = true;
+    try { ok = window.confirm(FAN_COPY.confirmUnfan(who)); } catch { ok = true; }
+    if (!ok) return;
+  }
+  if (btn) btn.disabled = true;
+  try {
+    await socialApi("/api/social", {
+      method: "POST",
+      body: JSON.stringify({
+        action: wasFollowing ? "unfollow" : "follow",
+        targetUserId,
+      }),
+    });
+    _followingListCache = null;
+    _followingListCacheAt = 0;
+    showToast(wasFollowing ? FAN_COPY.toastUnfan : FAN_COPY.toastBecameFan(handle));
+    void refreshPlayerFanBtn(targetUserId, handle);
+    if (_trackSheetCtx?.mode === "public") void refreshPublicTrackSheetFollowRow(_trackSheetCtx);
+  } catch (e) {
+    showToast(e?.message || FAN_COPY.toastError);
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
 function updatePlayerSecondaryChrome() {
   const ro = playerSourceIsExternalListenOnly();
-  const row = document.querySelector(".playerSecondaryRow");
-  if (row) {
-    row.hidden = ro;
-    row.classList.toggle("isListenOnlyHidden", ro);
-  }
   const card = document.querySelector(".playerCard");
   if (card) card.dataset.readOnlyListen = ro ? "1" : "0";
-  // Download is owner-only: listening to someone else's song (Discover,
-  // public profiles, shared links) hides the video download entirely.
+  const hasTrack = Boolean(String(currentPlayerTrackRef?.url || "").trim());
+  const isStudioVocal = miniSource?.type === "studio_vocal" || currentPlayerTrackRef?.kind === "studio_vocal";
+  const trackRef = currentPlayerTrackRef || {};
+  const allowRemix = hasTrack && !isStudioVocal && trackAllowsRemix(trackRef);
+  const allowMashup = allowRemix && trackAllowsMashup(trackRef) && Boolean(mashupSongCloudId(trackRef));
+  if (els.btnPlayerRemix) els.btnPlayerRemix.hidden = !allowRemix;
+  if (els.btnPlayerMashup) els.btnPlayerMashup.hidden = !allowMashup;
+  // Download is owner-only: listening to someone else's song hides it entirely.
   if (els.btnPlayerDownloadVideo) els.btnPlayerDownloadVideo.hidden = ro;
-  if (els.playerRemixRow) {
-    const isStudioVocal = miniSource?.type === "studio_vocal" || currentPlayerTrackRef?.kind === "studio_vocal";
-    els.playerRemixRow.hidden = isStudioVocal || !String(currentPlayerTrackRef?.url || "").trim();
-  }
-  if (els.btnPlayerMusicVideo && !ro) {
-    const isStudioVocal = miniSource?.type === "studio_vocal" || currentPlayerTrackRef?.kind === "studio_vocal";
-    if (isStudioVocal) {
-      els.btnPlayerMusicVideo.hidden = true;
-    } else {
-      els.btnPlayerMusicVideo.hidden = false;
-      const mvWatchable = musicVideoIsWatchable(musicVideoMetaFromTrack(resolvePlayerLibraryTrack()));
-      const label = mvWatchable ? "Watch music video" : "Create music video";
-      els.btnPlayerMusicVideo.setAttribute("aria-label", label);
-      const span = els.btnPlayerMusicVideo.querySelector("span");
-      if (span) span.textContent = mvWatchable ? "Watch" : "Video";
-    }
-  }
-  if (els.btnPlayerAddPlaylist) {
-    els.btnPlayerAddPlaylist.disabled = !String(currentPlayerTrackRef?.url || "").trim();
-  }
+  void syncPlayerCreatorChrome();
 }
 
 function setPlayerSource(url, label) {
   const a = ensurePlayer();
+  hidePlayerKaraokeStrip();
   _playerPlaybackSeq += 1;
   try { a.dataset.playerSeq = String(_playerPlaybackSeq); } catch {}
   a.pause();
@@ -52310,6 +52193,12 @@ if (els.btnPlayerMenu) {
     openPlayerTrackOptionsSheet();
   });
 }
+if (els.btnPlayerBecomeFan) {
+  els.btnPlayerBecomeFan.addEventListener("click", () => {
+    haptic("light");
+    void handlePlayerBecomeFanClick();
+  });
+}
 if (els.btnUserPublicBack) {
   els.btnUserPublicBack.addEventListener("click", () => {
     haptic("light");
@@ -52335,17 +52224,6 @@ if (els.btnPlayerShare) {
       return;
     }
     await openShareChooserForTrack(ref);
-  });
-}
-if (els.btnPlayerAddPlaylist) {
-  els.btnPlayerAddPlaylist.addEventListener("click", () => {
-    haptic("light");
-    const ref = trackRefFromCurrentPlayer();
-    if (!ref?.url) {
-      showToast("Open a song first, then add to playlist.");
-      return;
-    }
-    openUserPlaylistPicker(ref);
   });
 }
 if (els.btnPlayerRemix) {
@@ -52427,45 +52305,6 @@ if (els.btnPlayerMashup) {
     openMashupWithPrefill(ref, "a");
   });
 }
-if (els.btnPlayerLyrics) {
-  els.btnPlayerLyrics.addEventListener("click", async () => {
-    haptic("light");
-    const t = currentPlayerTrackRef;
-    if (!t) {
-      showToast("Open a song first.", { icon: "!", durationMs: 2800 });
-      return;
-    }
-    els.btnPlayerLyrics.disabled = true;
-    try {
-      // Prefer the synced karaoke view when we have generation ids. The
-      // player ref can be slim, so resolve the full Library row first.
-      const lib = loadLibrary();
-      const currentId = String(t?.id || "").trim();
-      const canonical = libraryTrackCanonicalUrl(String(t?.url || playerEl?.src || ""));
-      const full =
-        (currentId ? lib.find((x) => String(x.id) === currentId) : null) ||
-        lib.find((x) => libraryTrackCanonicalUrl(x?.url) === canonical) ||
-        t;
-      const taskId = String(full?.taskId || full?.meta?.taskId || t?.taskId || "").trim();
-      const audioId = String(full?.audioId || full?.meta?.audioId || t?.audioId || "").trim();
-      const isInstrumental = String(full?.kind || t?.kind || "") === "instrumental";
-      const title = t.title || full?.title || els.playerTitle?.textContent || "Lyrics";
-      const subtitle = String(t.byLine || t.creator || full?.byLine || "").trim();
-      if (taskId && audioId && !isInstrumental) {
-        try {
-          const words = await fetchTimedLyrics(taskId, audioId);
-          if (words && openPlayerLyricsOverlay({ title, subtitle, words })) return;
-        } catch {}
-      }
-      // No timing data — fall back to the unified About-this-song sheet.
-      const lyrics = await resolveLyricsForTrackRef(t);
-      const ownsTrack = !playerSourceIsExternalListenOnly();
-      openSongInfoSheet({ title, subtitle, lyrics, track: full || t, mode: ownsTrack ? "owner" : "public" });
-    } finally {
-      els.btnPlayerLyrics.disabled = false;
-    }
-  });
-}
 if (els.btnPlayerDownloadVideo) {
   els.btnPlayerDownloadVideo.addEventListener("click", async () => {
     if (playerSourceIsExternalListenOnly()) {
@@ -52503,64 +52342,10 @@ if (els.btnPlayerDownloadVideo) {
     }
   });
 }
-if (els.btnPlayerMusicVideo) {
-  els.btnPlayerMusicVideo.addEventListener("click", async () => {
-    if (playerSourceIsExternalListenOnly()) {
-      showToast("Only the creator can create a video for this song.");
-      return;
-    }
-    haptic("light");
-    const btn = els.btnPlayerMusicVideo;
-    if (btn.disabled) return;
-    const track = resolvePlayerLibraryTrack();
-    btn.disabled = true;
-    btn.classList.add("busyPulse");
-    try {
-      // Progress lives in the pinned render card (cover + live status).
-      await createSunoMusicVideoForTrack(track, { onStatus: (m) => setStatus(m) });
-    } catch (e) {
-      showToast(e?.message || String(e), { icon: "!", durationMs: 4400 });
-    } finally {
-      btn.disabled = false;
-      btn.classList.remove("busyPulse");
-    }
-  });
-}
 if (els.playerVol) {
   els.playerVol.addEventListener("input", () => {
     const a = ensurePlayer();
     a.volume = clampNum(Number(els.playerVol.value), 0, 1);
-  });
-}
-if (els.btnShareFullHub) {
-  els.btnShareFullHub.addEventListener("click", async () => {
-    if (playerSourceIsExternalListenOnly()) return;
-    const url = String(currentPlayerTrackRef?.url || playerEl?.src || "").trim();
-    if (!url) {
-      showToast("No loaded song to publish.");
-      return;
-    }
-    const lib = loadLibrary();
-    const currentId = String(currentPlayerTrackRef?.id || "").trim();
-    const canonical = libraryTrackCanonicalUrl(url);
-    const track =
-      (currentId ? lib.find((x) => String(x.id) === currentId) : null) ||
-      lib.find((x) => libraryTrackCanonicalUrl(x?.url) === canonical);
-    if (!track?.id) {
-      showToast("Save this song to your Library before publishing.", { icon: "!", durationMs: 3600 });
-      return;
-    }
-    openPublishReleaseSheet(track.id, { source: "player" });
-  });
-}
-if (els.btnPlayerChangeCover) {
-  els.btnPlayerChangeCover.addEventListener("click", () => {
-    if (playerSourceIsExternalListenOnly()) return;
-    if (!currentPlayerTrackRef?.id) {
-      setStatus("Open a library song first.");
-      return;
-    }
-    els.playerCoverUpload?.click();
   });
 }
 if (els.playerCoverUpload) {

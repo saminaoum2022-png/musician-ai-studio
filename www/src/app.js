@@ -185,7 +185,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260709-221435";
+const APP_BUILD = "20260709-225038";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -766,10 +766,7 @@ const els = {
   mashupControls: document.getElementById("mashupControls"),
   mashupPickerTabLibrary: document.getElementById("mashupPickerTabLibrary"),
   mashupPickerTabDiscover: document.getElementById("mashupPickerTabDiscover"),
-  btnPlayerMashup: document.getElementById("btnPlayerMashup"),
-  playerMashupAttribution: document.getElementById("playerMashupAttribution"),
-  playerMashupAttributionText: document.getElementById("playerMashupAttributionText"),
-  playerMashupSources: document.getElementById("playerMashupSources"),
+  btnPlayerMashup: null,
   btnMashupGenerate: document.getElementById("btnMashupGenerate"),
   btnMashupBack: document.getElementById("btnMashupBack"),
   mashupStatus: document.getElementById("mashupStatus"),
@@ -817,8 +814,8 @@ const els = {
   btnPlayerToggle: document.getElementById("btnPlayerToggle"),
   playerTimeCurrent: document.getElementById("playerTimeCurrent"),
   playerTimeTotal: document.getElementById("playerTimeTotal"),
-  btnPlayerShare: document.getElementById("btnPlayerShare"),
-  btnPlayerDownloadVideo: document.getElementById("btnPlayerDownloadVideo"),
+  btnPlayerRewind: document.getElementById("btnPlayerRewind"),
+  btnPlayerForward: document.getElementById("btnPlayerForward"),
   playerLyricsOverlay: document.getElementById("playerLyricsOverlay"),
   playerLyricsBg: document.getElementById("playerLyricsBg"),
   playerLyricsTitle: document.getElementById("playerLyricsTitle"),
@@ -862,9 +859,6 @@ const els = {
   playerChallengeAttributionText: document.getElementById("playerChallengeAttributionText"),
   playerTemplateAttribution: document.getElementById("playerTemplateAttribution"),
   playerTemplateAttributionText: document.getElementById("playerTemplateAttributionText"),
-  playerRemixAttribution: document.getElementById("playerRemixAttribution"),
-  playerRemixAttributionText: document.getElementById("playerRemixAttributionText"),
-  btnPlayerRemix: document.getElementById("btnPlayerRemix"),
   btnLoadFull: document.getElementById("btnLoadFull"),
   btnLoadVocals: document.getElementById("btnLoadVocals"),
   btnLoadInstrumental: document.getElementById("btnLoadInstrumental"),
@@ -17590,31 +17584,9 @@ async function setLibraryTrackFeaturedOnProfile(id, featured) {
 }
 
 
-function setPlayerRemixAttribution(remixOf) {
-  const text = remixAttributionText(remixOf);
-  if (els.playerRemixAttributionText) els.playerRemixAttributionText.textContent = text;
-  if (els.playerRemixAttribution) els.playerRemixAttribution.hidden = !text;
-}
+function setPlayerRemixAttribution(_remixOf) {}
 
-function setPlayerMashupAttribution(mashupOf) {
-  const text = mashupAttributionText(mashupOf);
-  if (els.playerMashupAttributionText) els.playerMashupAttributionText.textContent = text;
-  if (els.playerMashupAttribution) els.playerMashupAttribution.hidden = !text;
-  if (els.playerMashupSources) {
-    if (!text) {
-      els.playerMashupSources.innerHTML = "";
-      els.playerMashupSources.hidden = true;
-      return;
-    }
-    const artA = escapeHtml(String(mashupOf.a?.artUrl || placeholderCoverDataUrl()));
-    const artB = escapeHtml(String(mashupOf.b?.artUrl || placeholderCoverDataUrl()));
-    els.playerMashupSources.innerHTML = `
-      <img class="playerMashupSourceImg" src="${artA}" alt="" decoding="async" loading="lazy" />
-      <span class="playerMashupX" aria-hidden="true">×</span>
-      <img class="playerMashupSourceImg" src="${artB}" alt="" decoding="async" loading="lazy" />`;
-    els.playerMashupSources.hidden = false;
-  }
-}
+function setPlayerMashupAttribution(_mashupOf) {}
 
 let _playerChallengeCtx = null;
 let _playerTemplateCtx = null;
@@ -44974,16 +44946,27 @@ function updatePlayerSecondaryChrome() {
   const ro = playerSourceIsExternalListenOnly();
   const card = document.querySelector(".playerCard");
   if (card) card.dataset.readOnlyListen = ro ? "1" : "0";
-  const hasTrack = Boolean(String(currentPlayerTrackRef?.url || "").trim());
-  const isStudioVocal = miniSource?.type === "studio_vocal" || currentPlayerTrackRef?.kind === "studio_vocal";
-  const trackRef = currentPlayerTrackRef || {};
-  const allowRemix = hasTrack && !isStudioVocal && trackAllowsRemix(trackRef);
-  const allowMashup = allowRemix && trackAllowsMashup(trackRef) && Boolean(mashupSongCloudId(trackRef));
-  if (els.btnPlayerRemix) els.btnPlayerRemix.hidden = !allowRemix;
-  if (els.btnPlayerMashup) els.btnPlayerMashup.hidden = !allowMashup;
-  // Download is owner-only: listening to someone else's song hides it entirely.
-  if (els.btnPlayerDownloadVideo) els.btnPlayerDownloadVideo.hidden = ro;
   void syncPlayerCreatorChrome();
+}
+
+const PLAYER_SKIP_SEC = 15;
+
+function skipPlayerBySeconds(delta) {
+  const a = ensurePlayer();
+  const dur = getPlayerDuration();
+  if (!(dur > 0)) return;
+  const next = Math.max(0, Math.min(dur, (Number(a.currentTime) || 0) + delta));
+  a.currentTime = next;
+  syncPlayerUI();
+  try { haptic("light"); } catch {}
+}
+
+function syncPlayerSkipButtons() {
+  const a = playerEl;
+  const hasSrc = Boolean(a && (a.src || a.currentSrc));
+  const enabled = hasSrc && getPlayerDuration() > 0;
+  if (els.btnPlayerRewind) els.btnPlayerRewind.disabled = !enabled;
+  if (els.btnPlayerForward) els.btnPlayerForward.disabled = !enabled;
 }
 
 function setPlayerSource(url, label) {
@@ -46420,6 +46403,7 @@ function syncPlayerUI() {
   } catch {}
   syncLockScreenNowPlaying();
   try { renderDeskRailNowPlaying(); } catch {}
+  syncPlayerSkipButtons();
 }
 
 function getParams() {
@@ -52152,6 +52136,17 @@ function syncPlayerToggleUI() {
     if (icon.innerHTML !== next) icon.innerHTML = next;
   }
   btn.setAttribute("aria-label", isPlaying ? "Pause" : "Play");
+  syncPlayerSkipButtons();
+}
+if (els.btnPlayerRewind) {
+  els.btnPlayerRewind.addEventListener("click", () => {
+    skipPlayerBySeconds(-PLAYER_SKIP_SEC);
+  });
+}
+if (els.btnPlayerForward) {
+  els.btnPlayerForward.addEventListener("click", () => {
+    skipPlayerBySeconds(PLAYER_SKIP_SEC);
+  });
 }
 if (els.btnPlayerToggle) {
   els.btnPlayerToggle.addEventListener("click", () => {
@@ -52211,134 +52206,6 @@ if (els.btnUserPublicBack) {
       history.back();
     } else {
       location.hash = "#/discover";
-    }
-  });
-}
-if (els.btnPlayerShare) {
-  wireInAppShareSheetsOnce();
-  els.btnPlayerShare.addEventListener("click", async () => {
-    haptic("light");
-    const ref = trackRefFromCurrentPlayer();
-    if (!ref?.url) {
-      showToast("Open a song first, then share.");
-      return;
-    }
-    await openShareChooserForTrack(ref);
-  });
-}
-if (els.btnPlayerRemix) {
-  els.btnPlayerRemix.addEventListener("click", async () => {
-    haptic("light");
-    const t = currentPlayerTrackRef;
-    const url = String(t?.url || "").trim();
-    if (!url) {
-      showToast("Open a song first, then remix.", { icon: "!", durationMs: 3200 });
-      return;
-    }
-    if (!authSession?.user?.id) {
-      showToast("Sign in to remix songs.", { icon: "!", durationMs: 3800 });
-      try { location.hash = "#/auth"; } catch {}
-      return;
-    }
-    els.btnPlayerRemix.disabled = true;
-    try {
-      if (playerSourceIsExternalListenOnly()) {
-        // Someone else's song (Discover / public profile / shared link / hub
-        // post): same flow as the Discover sheet's Remix action.
-        const songId = String(t?.songId || t?.cloudSongId || "").trim();
-        const ownerUserId = String(t?.ownerUserId || "").trim();
-        const fetched = songId && ownerUserId
-          ? await supabaseFetchPublicSongRemixMeta({ songId, ownerUserId })
-          : { lyricsInput: "", styleInput: "" };
-        // The public fetch only covers public-on-profile songs; link-only
-        // shares and hub posts carry their lyrics on the track ref instead.
-        const local = remixMetaFromSongMeta(t?.meta);
-        const remixMeta = {
-          lyricsInput: fetched.lyricsInput || local.lyricsInput,
-          styleInput: fetched.styleInput || local.styleInput,
-        };
-        // Old songs: cloud meta may have lost the lyrics — run the full
-        // recovery chain (cloud row → hub post → Suno record-info).
-        if (!remixMeta.lyricsInput) {
-          remixMeta.lyricsInput = await resolveLyricsForTrackRef(t);
-        }
-        await startHubRemix({
-          url,
-          id: songId || String(t?.id || ""),
-          songId,
-          ownerUserId,
-          title: t?.title || els.playerTitle?.textContent || "Song",
-          creator: String(t?.byLine || t?.creator || "").replace(/^@/, ""),
-          artUrl: t?.artUrl || els.playerArt?.src || "",
-          taskId: t?.taskId || t?.meta?.taskId || "",
-          audioId: t?.audioId || t?.meta?.audioId || "",
-          meta: remixMeta,
-        });
-      } else {
-        // Own song from Library: reuse the Library remix flow (refreshes the
-        // audio URL and carries lyrics/style metadata over).
-        await startLibraryRemixForLibraryTrack(t);
-      }
-    } finally {
-      els.btnPlayerRemix.disabled = false;
-    }
-  });
-}
-if (els.btnPlayerMashup) {
-  els.btnPlayerMashup.addEventListener("click", () => {
-    haptic("light");
-    const t = currentPlayerTrackRef;
-    if (!String(t?.url || "").trim()) {
-      showToast("Open a song first, then mash up.", { icon: "!", durationMs: 3200 });
-      return;
-    }
-    if (!authSession?.user?.id) {
-      showToast("Sign in to mash up songs.", { icon: "!", durationMs: 3800 });
-      try { location.hash = "#/auth"; } catch {}
-      return;
-    }
-    const ref = mashupRefFromPlayerTrack(t);
-    if (!ref) {
-      showToast("This song can't be used in a mashup yet.", { icon: "!", durationMs: 3600 });
-      return;
-    }
-    openMashupWithPrefill(ref, "a");
-  });
-}
-if (els.btnPlayerDownloadVideo) {
-  els.btnPlayerDownloadVideo.addEventListener("click", async () => {
-    if (playerSourceIsExternalListenOnly()) {
-      showToast("Only the creator can download this song.");
-      return;
-    }
-    haptic("light");
-    const track = resolvePlayerLibraryTrack();
-    if (!String(track?.url || "").trim()) {
-      showToast("This song isn't downloadable. Re-open it from Library and try again.");
-      return;
-    }
-    const btn = els.btnPlayerDownloadVideo;
-    const originalHtml = btn.innerHTML;
-    btn.disabled = true;
-    btn.innerHTML = `<span class="dlSpin" aria-hidden="true"></span>`;
-    btn.setAttribute("aria-label", "Rendering video…");
-    showToast("Rendering video — this takes a few seconds…", { durationMs: 4000 });
-    const slowHint = setTimeout(() => {
-      showToast("Still rendering your video…", { durationMs: 5000 });
-    }, 15000);
-    const finishSpinner = () => {
-      btn.disabled = false;
-      btn.innerHTML = originalHtml;
-      btn.setAttribute("aria-label", "Download as video");
-    };
-    try {
-      await downloadLibraryVideoTrack(track, { onRendered: finishSpinner });
-    } catch (e) {
-      const msg = e?.message ? String(e.message).slice(0, 80) : "Render failed";
-      showToast(`Couldn't render: ${msg}`, { durationMs: 3500 });
-    } finally {
-      clearTimeout(slowHint);
-      finishSpinner();
     }
   });
 }

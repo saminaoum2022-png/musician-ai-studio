@@ -6497,68 +6497,44 @@ body.hubJumpingToTop #hubList .hubRow{
 }
 #playerSeek:active::-webkit-slider-thumb{ transform: scale(1.08); }
 
-/* ---- Primary transport: Share · Mashup | Play | Remix · Download ---- */
+/* ---- Primary transport: −15s | Play | +15s ------------------------ */
 .playerTransport{
-  display: grid;
-  grid-template-columns: 1fr auto 1fr;
-  align-items: center;
-  justify-items: center;
-  margin-top: 14px;
-  gap: 8px;
-}
-.playerTransportSide{
-  display: grid;
-  align-items: center;
-  gap: 0;
-  min-width: 0;
-  width: 100%;
-}
-.playerTransportSide--left{
-  justify-self: start;
-  grid-template-columns: 44px minmax(0, 1fr);
-}
-.playerTransportSide--right{
-  justify-self: end;
-  grid-template-columns: minmax(0, 1fr) 44px;
-}
-.playerTransportSlot{
   display: flex;
   align-items: center;
   justify-content: center;
-  min-width: 0;
-  padding: 0 4px;
+  gap: 32px;
+  margin-top: 14px;
 }
-.playerActionsReserve{
-  min-height: 52px;
-  margin-top: 4px;
-}
-.playerSideBtn{
-  width: 44px;
-  height: 44px;
-  border-radius: 999px;
+.playerSkipBtn{
+  width: 30px;
+  height: 30px;
   border: none;
   background: transparent;
-  color: rgba(223, 231, 251, 0.78);
+  color: rgba(223, 231, 251, 0.82);
   display: inline-flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  transition:
-    color 180ms ease,
-    background 180ms ease,
-    transform 120ms ease;
-  -webkit-tap-highlight-color: transparent;
   padding: 0;
+  flex: 0 0 30px;
+  -webkit-tap-highlight-color: transparent;
+  transition: color 160ms ease, transform 120ms ease, opacity 160ms ease;
 }
-.playerSideBtn .ico{ width: 20px; height: 20px; }
-.playerSideBtn:hover{
-  color: #fff;
-  background: rgba(255, 255, 255, 0.05);
+.playerSkipBtn .playerSkipIco{
+  width: 30px;
+  height: 30px;
+  display: block;
 }
-.playerSideBtn:active{ transform: scale(0.92); }
-.playerSideBtn[disabled]{
-  opacity: 0.45;
-  cursor: wait;
+.playerSkipBtn:hover{
+  color: rgba(255, 255, 255, 0.92);
+}
+.playerSkipBtn:active{
+  transform: scale(0.9);
+}
+.playerSkipBtn[disabled]{
+  opacity: 0.34;
+  cursor: default;
+  transform: none;
 }
 
 .playerToggleBtn{

@@ -6,6 +6,10 @@ import { PRO_PRODUCT_IDS } from "../pro-plan-config.js";
 
 let _apiKey = "";
 let _configuredFor = "";
+let _offeringsCache = null;
+let _offeringsCacheAt = 0;
+let _warmInFlight = null;
+const OFFERINGS_CACHE_TTL_MS = 5 * 60 * 1000;
 
 export function setRevenueCatApiKey(key) {
   _apiKey = String(key || "").trim();
@@ -79,7 +83,7 @@ export async function purchaseProPlan(planId, opts = {}) {
   const { Purchases } = await purchasesModule();
 
   try {
-    const offerings = await Purchases.getOfferings();
+    const offerings = await loadOfferings();
     const pkg = findPackageForProduct(offerings, productId);
     if (pkg) {
       await Purchases.purchasePackage({ aPackage: pkg });
@@ -111,6 +115,39 @@ export async function restoreProPurchases(opts = {}) {
   return syncBillingWithServer(opts);
 }
 
+async function loadOfferings({ force = false } = {}) {
+  const now = Date.now();
+  if (!force && _offeringsCache && now - _offeringsCacheAt < OFFERINGS_CACHE_TTL_MS) {
+    return _offeringsCache;
+  }
+  const { Purchases } = await purchasesModule();
+  const offerings = await Purchases.getOfferings();
+  _offeringsCache = offerings;
+  _offeringsCacheAt = Date.now();
+  return offerings;
+}
+
+/** Pre-configure RevenueCat + cache offerings so the App Store sheet opens faster. */
+export async function warmBilling(userId) {
+  const uid = String(userId || "").trim();
+  if (!_apiKey || !uid) return;
+  if (_warmInFlight) return _warmInFlight;
+  _warmInFlight = (async () => {
+    try {
+      await ensureRevenueCat(uid);
+      await loadOfferings();
+    } catch (e) {
+      console.warn("[billing] warm failed", e?.message || e);
+    } finally {
+      _warmInFlight = null;
+    }
+  })();
+  return _warmInFlight;
+}
+
 export function resetRevenueCatSession() {
   _configuredFor = "";
+  _offeringsCache = null;
+  _offeringsCacheAt = 0;
+  _warmInFlight = null;
 }

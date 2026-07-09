@@ -12,6 +12,7 @@ import {
   isBillingConfigured,
   purchaseProPlan,
   restoreProPurchases,
+  warmBilling,
 } from "./billing/revenuecat.js";
 
 /** @type {{ showToast?: (msg: string, opts?: object) => void, isLoggedIn?: () => boolean, isNativeIos?: () => boolean, navigateToRoute?: (route: string) => void, getProState?: () => { active?: boolean, planId?: string|null, status?: string|null, periodEnd?: string|null } } | null} */
@@ -367,6 +368,15 @@ function renderProPlanPage({ preserveTab = true } = {}) {
   paintSubscribedState();
 }
 
+function warmBillingIfReady() {
+  if (!isNativeIos() || !isBillingConfigured()) return;
+  const loggedIn = typeof _deps?.isLoggedIn === "function" ? _deps.isLoggedIn() : false;
+  if (!loggedIn) return;
+  const userId = typeof _deps?.getUserId === "function" ? _deps.getUserId() : "";
+  if (!userId) return;
+  void warmBilling(userId);
+}
+
 async function handleSubscribeClick() {
   const plan = selectedPlan();
   const native = isNativeIos();
@@ -390,8 +400,13 @@ async function handleSubscribeClick() {
   }
   const userId = typeof _deps?.getUserId === "function" ? _deps.getUserId() : "";
   const btn = document.getElementById("btnProSubscribe");
-  if (btn) btn.disabled = true;
+  const prevLabel = btn?.textContent || "";
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = "Opening…";
+  }
   try {
+    await warmBilling(userId);
     await purchaseProPlan(plan.id, {
       userId,
       getAuthToken: _deps?.getAuthToken,
@@ -405,7 +420,10 @@ async function handleSubscribeClick() {
       _deps?.showToast?.(err?.message || "Purchase failed", { durationMs: 3600 });
     }
   } finally {
-    if (btn) btn.disabled = false;
+    if (btn) {
+      btn.disabled = false;
+      if (!readProState().active) btn.textContent = prevLabel || ctaLabel(selectedPlan());
+    }
   }
 }
 
@@ -505,6 +523,7 @@ export function onProPlanRouteActive({ entering = false } = {}) {
   ensureProPageRendered();
   bindProBackOnce();
   paintProBackLink();
+  warmBillingIfReady();
   if (needsRender || entering) {
     if (entering) _benefitsExpanded = true;
     paintPlanCards();

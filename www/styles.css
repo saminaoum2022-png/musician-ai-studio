@@ -17288,6 +17288,12 @@ body.trackSheetOpen .footer{
   body[data-route="player"] .mobileTabbar{
     display: none !important;
   }
+  body[data-route="player"]{
+    --player-chrome-safe: env(safe-area-inset-bottom, 0px);
+    --player-social-rail-bottom: calc(var(--player-chrome-safe) + 172px);
+    --player-karaoke-bottom: calc(var(--player-chrome-safe) + 258px);
+    --player-cover-height: min(70svh, 600px);
+  }
   body[data-route="messages-thread"] .hubNowPlaying{
     display: none !important;
   }
@@ -17419,7 +17425,7 @@ body.trackSheetOpen .footer{
   }
   body[data-route="player"] .playerArtWrap{
     border: none;
-    padding: 0 0 52px;
+    padding: 0;
     background: #0a0c12;
     box-shadow: none;
     border-radius: 0;
@@ -17435,8 +17441,8 @@ body.trackSheetOpen .footer{
   }
   body[data-route="player"] .playerArtStage{
     width: 100%;
-    height: min(65vh, 540px);
-    min-height: 280px;
+    height: var(--player-cover-height);
+    min-height: 300px;
     border-radius: 0;
     overflow: hidden;
     background: #0a0c12;
@@ -17467,10 +17473,11 @@ body.trackSheetOpen .footer{
             mask-image: linear-gradient(to bottom, #000 0%, #000 92%, rgba(0, 0, 0, 0.55) 97%, transparent 100%);
   }
   body[data-route="player"] .playerArtWrap .playerKaraokeFloat{
+    position: fixed;
     left: 24px;
-    right: 24px;
-    bottom: -32px;
-    z-index: 6;
+    right: 64px;
+    bottom: var(--player-karaoke-bottom);
+    z-index: 10;
     gap: 5px;
     padding: 0;
     background: none;
@@ -17503,7 +17510,11 @@ body.trackSheetOpen .footer{
     filter: drop-shadow(0 1px 12px rgba(0, 0, 0, 0.5));
   }
   body[data-route="player"] .playerInstrumentalLabel{
-    bottom: -30px;
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: calc(var(--player-karaoke-bottom) - 6px);
+    z-index: 10;
   }
   body[data-route="player"] .playerTransport{
     margin-top: 8px;
@@ -17584,7 +17595,7 @@ body.trackSheetOpen .footer{
   body[data-route="player"] .playerSocialRail{
     position: fixed;
     right: 12px;
-    bottom: calc(env(safe-area-inset-bottom, 0px) + 172px);
+    bottom: var(--player-social-rail-bottom);
     top: auto;
     transform: none;
     z-index: 12;

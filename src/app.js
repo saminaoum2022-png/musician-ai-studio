@@ -185,7 +185,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260710-133422";
+const APP_BUILD = "20260710-160719";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -587,6 +587,10 @@ initLockScreenNowPlaying({
   onNext: () => {
     if (miniSource?.type === "discover_playlist" && _discoverPlaylistQueue?.length) {
       void playNextDiscoverPlaylistTrack(currentPlayerTrackRef?.url, { manual: true });
+      return;
+    }
+    if (discoverReelModeActive()) {
+      void playNextDiscoverReelTrack(currentPlayerTrackRef?.url, { manual: true });
       return;
     }
     if (miniSource?.type === "discover_feed" && _discoveryFeedTracks?.length) {
@@ -7835,8 +7839,14 @@ function initDeskRail() {
       const by = decodeDiscoverDataAttr(trendRow, "data-challenge-entry-by") || "";
       e.preventDefault();
       try { haptic("light"); } catch {}
-      primeDiscoverPlaybackPendingFromEl(trendRow);
-      void playLibraryUrlOnPlayer(raw, title, art, { discoverFeed: true, openPlayer: false, discoverBy: by, playSource: publicPlaySourceFromEl(trendRow) });
+      void playDiscoverFeedEntry({
+        raw,
+        title,
+        art,
+        by,
+        playSource: publicPlaySourceFromEl(trendRow),
+        el: trendRow,
+      });
       return;
     }
     if (e.target.closest("[data-desk-rail-toggle]")) {
@@ -15879,8 +15889,14 @@ function bindDiscoveryDiscoverControls() {
         if (!raw) return;
         e.preventDefault();
         haptic("light");
-        primeDiscoverPlaybackPendingFromEl(challengePlay);
-        void playLibraryUrlOnPlayer(raw, title, art, { discoverFeed: true, openPlayer: false, discoverBy: by, playSource: publicPlaySourceFromEl(challengePlay) });
+        void playDiscoverFeedEntry({
+          raw,
+          title,
+          art,
+          by,
+          playSource: publicPlaySourceFromEl(challengePlay),
+          el: challengePlay,
+        });
         return;
       }
       const menuBtn = e.target.closest("[data-discovery-open-sheet]");
@@ -32737,22 +32753,148 @@ function resolveDiscoverPlayTarget(el) {
   };
 }
 
-function playDiscoverTarget(el, opts = {}) {
-  const t = resolveDiscoverPlayTarget(el);
-  if (!t) return;
-  if (!t.raw) {
+function shouldUseDiscoverReelPlayer() {
+  return _discoverFeedTab === "for-you" && (_discoveryFeedTracks?.length || 0) > 1;
+}
+
+function buildDiscoverReelQueue() {
+  return [...(_discoveryFeedTracks || [])]
+    .filter((t) => String(t.url || "").trim())
+    .sort((a, b) => (Number(b.playCount) || 0) - (Number(a.playCount) || 0));
+}
+
+function setDiscoverReelQueue(tracks) {
+  _discoverReelQueue = Array.isArray(tracks) ? tracks : [];
+}
+
+function findDiscoverReelIndexForTarget(t) {
+  if (!_discoverReelQueue.length || !t) return 0;
+  const songId = String(t.songId || t.playSource?.songId || "").trim();
+  const url = String(t.raw || t.url || "").trim();
+  const idx = _discoverReelQueue.findIndex((row) => {
+    if (songId && String(row.songId || row.id || "") === songId) return true;
+    if (url && audioUrlsEquivalent(String(row.url || ""), url)) return true;
+    return false;
+  });
+  return idx >= 0 ? idx : 0;
+}
+
+function discoverReelModeActive() {
+  return Boolean(
+    miniSource?.type === "discover_feed" &&
+    miniSource?.discoverReel &&
+    _discoverReelQueue.length > 1,
+  );
+}
+
+async function playDiscoverReelAt(index, opts = {}) {
+  if (!_discoverReelQueue.length) return;
+  const idx = Math.max(0, Math.min(_discoverReelQueue.length - 1, Number(index) || 0));
+  const pick = _discoverReelQueue[idx];
+  if (!pick?.url) return;
+  if (!opts.silent) haptic("light");
+  const card = document.querySelector(".playerCard");
+  if (card && opts.silent) {
+    card.classList.add("isReelSwapping");
+    window.setTimeout(() => {
+      try { card.classList.remove("isReelSwapping"); } catch {}
+    }, 220);
+  }
+  hidePlayerKaraokeStrip();
+  await playLibraryUrlOnPlayer(pick.url, pick.title, pick.artUrl, {
+    discoverFeed: true,
+    discoverReel: true,
+    reelIndex: idx,
+    openPlayer: opts.openPlayer !== false,
+    discoverBy: pick.byLine,
+    playSource: pick.songId && pick.ownerUserId
+      ? { type: "public_song", songId: pick.songId, ownerUserId: pick.ownerUserId, taskId: pick.taskId, audioId: pick.audioId }
+      : null,
+  });
+}
+
+async function playNextDiscoverReelTrack(excludeUrl, opts = {}) {
+  if (_discoverReelAdvancing) return;
+  if (!discoverReelModeActive()) return;
+  const curIdx = Number.isFinite(miniSource?.reelIndex) ? Number(miniSource.reelIndex) : -1;
+  let idx = curIdx;
+  if (idx < 0) {
+    const cur = String(excludeUrl || currentPlayerTrackRef?.url || "").trim();
+    idx = _discoverReelQueue.findIndex((t) => audioUrlsEquivalent(String(t.url || ""), cur));
+  }
+  const nextIdx = idx + 1;
+  if (nextIdx >= _discoverReelQueue.length) {
+    if (opts.manual) showToast("End of For You", { durationMs: 2200 });
+    return;
+  }
+  _discoverReelAdvancing = true;
+  const token = ++_discoverReelAdvanceToken;
+  try {
+    await playDiscoverReelAt(nextIdx, { openPlayer: true, silent: !opts.manual });
+  } finally {
+    if (token === _discoverReelAdvanceToken) _discoverReelAdvancing = false;
+  }
+}
+
+async function playPrevDiscoverReelTrack(opts = {}) {
+  if (_discoverReelAdvancing) return;
+  if (!discoverReelModeActive()) return;
+  const curIdx = Number.isFinite(miniSource?.reelIndex) ? Number(miniSource.reelIndex) : 0;
+  const prevIdx = curIdx - 1;
+  if (prevIdx < 0) {
+    if (opts.manual) showToast("Start of For You", { durationMs: 2200 });
+    return;
+  }
+  _discoverReelAdvancing = true;
+  const token = ++_discoverReelAdvanceToken;
+  try {
+    await playDiscoverReelAt(prevIdx, { openPlayer: true, silent: !opts.manual });
+  } finally {
+    if (token === _discoverReelAdvanceToken) _discoverReelAdvancing = false;
+  }
+}
+
+async function playDiscoverFeedEntry({ raw, title, art, by, playSource, el, opts = {} } = {}) {
+  const url = String(raw || "").trim();
+  if (!url) {
     showToast("This song has no playable audio yet.", { durationMs: 3800 });
     return;
   }
   primeGlobalPlayerInGesture();
-  haptic("light");
-  if (!opts.skipToggle && toggleDiscoverFeedPlaybackIfSameUrl(t.raw)) return;
-  primeDiscoverPlaybackPendingFromEl(el);
-  void playLibraryUrlOnPlayer(t.raw, t.title, t.art, {
+  if (!opts.skipToggle && toggleDiscoverFeedPlaybackIfSameUrl(url)) return;
+  if (el) primeDiscoverPlaybackPendingFromEl(el);
+  const useReel = !opts.skipReel && shouldUseDiscoverReelPlayer() && opts.openPlayer !== false;
+  if (useReel) {
+    setDiscoverReelQueue(buildDiscoverReelQueue());
+    const idx = findDiscoverReelIndexForTarget({
+      raw: url,
+      songId: playSource?.songId,
+      playSource,
+    });
+    await playDiscoverReelAt(idx, { openPlayer: true });
+    return;
+  }
+  if (!opts.silent) haptic("light");
+  await playLibraryUrlOnPlayer(url, title, art, {
     discoverFeed: true,
-    openPlayer: false,
-    discoverBy: t.by,
+    openPlayer: opts.openPlayer === true,
+    discoverBy: by,
+    playSource,
+  });
+}
+
+function playDiscoverTarget(el, opts = {}) {
+  const t = resolveDiscoverPlayTarget(el);
+  if (!t) return;
+  haptic("light");
+  void playDiscoverFeedEntry({
+    raw: t.raw,
+    title: t.title,
+    art: t.art,
+    by: t.by,
     playSource: t.playSource,
+    el,
+    opts,
   });
 }
 
@@ -33389,6 +33531,10 @@ let _discoverPlaylistScreenSlug = "";
 let _discoverPlaylistScreenBound = false;
 let _discoverPlaylistAdvancing = false;
 let _discoverPlaylistAdvanceToken = 0;
+/** For You swipe-player queue (chart order, in-memory only). */
+let _discoverReelQueue = [];
+let _discoverReelAdvancing = false;
+let _discoverReelAdvanceToken = 0;
 /** User-curated profile playlists (local per account). */
 let _userPlaylistQueue = [];
 let _userPlaylistQueueId = "";
@@ -34316,6 +34462,8 @@ function toggleDiscoverStylePlaybackIfSameUrl(rawUrl) {
   if (!isDiscoverStyleMiniSource()) return false;
   const cur = String(currentPlayerTrackRef?.url || "").trim();
   if (!raw || !cur || !audioUrlsEquivalent(raw, cur)) return false;
+  const route = document.body.getAttribute("data-route") || "";
+  if (route !== "player" && shouldUseDiscoverReelPlayer()) return false;
   const a = ensurePlayer();
   const dur = getPlayerDuration();
   const ct = Number.isFinite(a.currentTime) ? a.currentTime : 0;
@@ -35150,7 +35298,13 @@ async function playLibraryUrlOnPlayer(rawUrl, title, artUrl, opts) {
       playlistIndex: Number(opts?.playlistIndex) || 0,
     }
     : fromDiscover
-      ? { ...(playSource || {}), type: "discover_feed", url: playableRaw }
+      ? {
+        ...(playSource || {}),
+        type: "discover_feed",
+        url: playableRaw,
+        discoverReel: Boolean(opts?.discoverReel),
+        reelIndex: Number.isFinite(opts?.reelIndex) ? Number(opts.reelIndex) : 0,
+      }
       : { ...(playSource || {}), type: "public_profile_lib", url: playableRaw };
   miniSource = publicSource;
   resetPublicPlayTracking(miniSource);
@@ -44517,6 +44671,9 @@ function ensurePlayer() {
     if (miniSource?.type === "discover_playlist" && _discoverPlaylistQueue.length) {
       void playNextDiscoverPlaylistTrack(currentPlayerTrackRef?.url);
     }
+    if (discoverReelModeActive()) {
+      void playNextDiscoverReelTrack(currentPlayerTrackRef?.url);
+    }
     if (miniSource?.type === "user_playlist" && _userPlaylistQueue.length) {
       void playNextUserPlaylistTrack(currentPlayerTrackRef?.url);
     }
@@ -45047,7 +45204,10 @@ async function handlePlayerBecomeFanClick() {
 function updatePlayerSecondaryChrome() {
   const ro = playerSourceIsExternalListenOnly();
   const card = document.querySelector(".playerCard");
-  if (card) card.dataset.readOnlyListen = ro ? "1" : "0";
+  if (card) {
+    card.dataset.readOnlyListen = ro ? "1" : "0";
+    card.dataset.discoverReel = discoverReelModeActive() ? "1" : "0";
+  }
   void syncPlayerCreatorChrome();
   syncPlayerPlaysCount();
   syncPlayerInstrumentalLabel();
@@ -45247,6 +45407,48 @@ function navigateToPlayerCreatorProfile() {
   if (uid && mine && uid === mine) location.hash = "#/profile";
 }
 
+function wirePlayerDiscoverReelSwipeOnce() {
+  const shell = document.querySelector(".playerShell");
+  if (!shell || shell.dataset.discoverReelSwipeWired === "1") return;
+  shell.dataset.discoverReelSwipeWired = "1";
+  let touchStartY = 0;
+  let touchStartX = 0;
+  let wheelAccum = 0;
+  let wheelTimer = 0;
+  shell.addEventListener("touchstart", (e) => {
+    if (!discoverReelModeActive()) return;
+    if (e.touches.length !== 1) return;
+    touchStartY = e.touches[0].clientY;
+    touchStartX = e.touches[0].clientX;
+  }, { passive: true });
+  shell.addEventListener("touchend", (e) => {
+    if (!discoverReelModeActive()) return;
+    const touch = e.changedTouches[0];
+    if (!touch) return;
+    const dy = touch.clientY - touchStartY;
+    const dx = touch.clientX - touchStartX;
+    if (Math.abs(dx) > Math.abs(dy)) return;
+    if (Math.abs(dy) < 72) return;
+    if (dy < 0) void playNextDiscoverReelTrack(currentPlayerTrackRef?.url, { manual: true });
+    else void playPrevDiscoverReelTrack({ manual: true });
+  }, { passive: true });
+  shell.addEventListener("wheel", (e) => {
+    if (!discoverReelModeActive()) return;
+    if (Math.abs(e.deltaY) < 8) return;
+    wheelAccum += e.deltaY;
+    if (wheelTimer) return;
+    wheelTimer = window.setTimeout(() => {
+      const delta = wheelAccum;
+      wheelAccum = 0;
+      wheelTimer = 0;
+      if (Math.abs(delta) < 48) return;
+      if (delta > 0) void playNextDiscoverReelTrack(currentPlayerTrackRef?.url, { manual: true });
+      else void playPrevDiscoverReelTrack({ manual: true });
+    }, 80);
+    e.preventDefault();
+  }, { passive: false });
+}
+
 function wirePlayerSocialRailOnce() {
   const card = document.querySelector(".playerCard");
   if (!card || card.dataset.playerSocialWired === "1") return;
@@ -45293,6 +45495,10 @@ async function handlePlayerShuffle() {
   try { haptic("light"); } catch {}
   if (miniSource?.type === "discover_playlist" && _discoverPlaylistQueue.length) {
     await playNextDiscoverPlaylistTrack(currentPlayerTrackRef?.url, { manual: true });
+    return;
+  }
+  if (discoverReelModeActive()) {
+    await playNextDiscoverReelTrack(currentPlayerTrackRef?.url, { manual: true });
     return;
   }
   if (miniSource?.type === "discover_feed" && _discoveryFeedTracks.length) {
@@ -52050,6 +52256,10 @@ if (els.hubNowExpand && !els.hubNowExpand.dataset.boundHubExp) {
       void playNextDiscoverPlaylistTrack(currentPlayerTrackRef?.url, { manual: true });
       return;
     }
+    if (discoverReelModeActive()) {
+      void playNextDiscoverReelTrack(currentPlayerTrackRef?.url, { manual: true });
+      return;
+    }
     if (miniSource?.type === "discover_feed" && _discoveryFeedTracks.length) {
       void playRandomDiscoveryFeedTrack(currentPlayerTrackRef?.url);
       return;
@@ -52543,6 +52753,7 @@ if (els.btnPlayerToggle) {
   syncPlayerToggleUI();
 }
 wirePlayerSocialRailOnce();
+wirePlayerDiscoverReelSwipeOnce();
 wireInAppShareSheetsOnce();
 if (els.btnPlayerBack) {
   els.btnPlayerBack.addEventListener("click", () => {

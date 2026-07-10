@@ -17618,6 +17618,13 @@ body.trackSheetOpen .footer{
   body[data-route="player"] .playerTemplateAttribution{
     display: none !important;
   }
+  body[data-route="player"] .playerCard[data-discover-reel="1"] .playerArt{
+    transition: opacity 0.22s ease, transform 0.22s ease;
+  }
+  body[data-route="player"] .playerCard[data-discover-reel="1"].isReelSwapping .playerArt{
+    opacity: 0.72;
+    transform: scale(0.985);
+  }
   body[data-route="player"] .footer{
     display: none !important;
   }

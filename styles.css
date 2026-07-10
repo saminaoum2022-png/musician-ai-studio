@@ -17295,6 +17295,8 @@ body.trackSheetOpen .footer{
     /* Between heart and comment — same cut on device and simulator, no extra crop. */
     --player-cover-bottom: calc(var(--player-chrome-safe) + 320px);
     --player-cover-height: calc(100svh - var(--player-cover-bottom));
+    /* Title/creator row anchor — matches fixed playerMeta stack above transport. */
+    --player-reel-meta-bottom: calc(var(--player-chrome-safe) + 104px);
   }
   body[data-route="messages-thread"] .hubNowPlaying{
     display: none !important;
@@ -17614,34 +17616,58 @@ body.trackSheetOpen .footer{
     transform: none;
     z-index: 12;
   }
+  /* Discover reel: keep the rail slot from the first frame so cover/title never jump. */
+  body[data-route="player"] .playerCard[data-discover-reel="1"] .playerSocialRail,
+  body[data-route="player"] .playerCard[data-discover-reel="1"] .playerSocialRail[hidden]{
+    display: flex !important;
+    visibility: visible !important;
+  }
+  body[data-route="player"] .playerCard[data-discover-reel="1"] .playerSocialRail{
+    opacity: var(--reel-rail-opacity, 1);
+    transition: opacity 220ms ease;
+  }
+  body[data-route="player"] .playerCard[data-discover-reel="1"].isReelRailFaded .playerSocialRail{
+    opacity: 0;
+    pointer-events: none;
+  }
+  body[data-route="player"] .playerCard[data-discover-reel="1"] .playerArtWrap{
+    --cover-glow-rgb: 100, 108, 128;
+  }
+  body[data-route="player"] .playerCard[data-discover-reel="1"] .playerArtWrap .playerKaraokeFloat{
+    right: 64px;
+  }
   body[data-route="player"] .playerChallengeAttribution,
   body[data-route="player"] .playerTemplateAttribution{
     display: none !important;
   }
   body[data-route="player"] .playerReelAnimLayer{
     position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: calc(env(safe-area-inset-bottom, 0px) + 168px);
+    inset: 0;
     z-index: 15;
     overflow: hidden;
     pointer-events: none;
-    background: #0a0c12;
+    background: transparent;
   }
   body[data-route="player"] .playerReelAnimPanel{
     position: absolute;
     inset: 0;
-    display: flex;
-    flex-direction: column;
     will-change: transform;
   }
+  body[data-route="player"] .playerReelAnimPanel--out{
+    z-index: 1;
+  }
+  body[data-route="player"] .playerReelAnimPanel--in{
+    z-index: 2;
+  }
   body[data-route="player"] .playerReelAnimCover{
-    flex: 1 1 auto;
-    min-height: 0;
-    position: relative;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: var(--player-cover-bottom);
     overflow: hidden;
     background: #0a0c12;
+    z-index: 1;
   }
   body[data-route="player"] .playerReelAnimCover::after{
     content: "";
@@ -17667,14 +17693,15 @@ body.trackSheetOpen .footer{
     display: block;
   }
   body[data-route="player"] .playerReelAnimMeta{
-    flex: 0 0 auto;
-    padding: 8px 20px 10px;
-    background: linear-gradient(
-      180deg,
-      transparent 0%,
-      rgba(6, 8, 14, 0.72) 28%,
-      rgba(6, 8, 14, 0.96) 100%
-    );
+    position: fixed;
+    left: 20px;
+    right: 64px;
+    bottom: var(--player-reel-meta-bottom);
+    padding: 0;
+    margin: 0;
+    background: none;
+    z-index: 2;
+    text-align: left;
   }
   body[data-route="player"] .playerReelAnimTitle{
     margin: 0;
@@ -17691,7 +17718,6 @@ body.trackSheetOpen .footer{
     color: rgba(210, 218, 235, 0.78);
   }
   body[data-route="player"] .playerCard.isReelAnimating .playerArtStage,
-  body[data-route="player"] .playerCard.isReelAnimating .playerSocialRail,
   body[data-route="player"] .playerCard.isReelAnimating .playerKaraokeFloat,
   body[data-route="player"] .playerCard.isReelAnimating .playerTitleRow,
   body[data-route="player"] .playerCard.isReelAnimating .playerCreatorRow{

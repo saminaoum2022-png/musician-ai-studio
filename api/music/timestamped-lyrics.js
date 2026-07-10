@@ -5,13 +5,17 @@
  * POST /api/music/timestamped-lyrics   { taskId, audioId }
  *   <- { alignedWords: [{ word, startS, endS, success }], hootCer }
  *
- * Word timing never changes once a track is rendered, so clients cache the
- * response per audioId and only hit this once per song. waveformData is
- * dropped from the response to keep the payload small.
+ * Server caches per audioId in Supabase after the first Suno fetch (0.5 credits).
+ * Clients also cache locally; repeat plays/devices hit the server cache only.
  */
 const { verifyUser } = require("../_lib/credits-auth");
 const { applyCors } = require("../_lib/cors");
 const { readJson, sendJson, sunoJsonRequest } = require("../_lib/suno-upstream");
+const {
+  getCachedTimestampedLyrics,
+  queueCacheTimestampedLyrics,
+  normalizeAlignedWords,
+} = require("../_lib/music-timestamped-lyrics-cache");
 
 module.exports = async function handler(req, res) {
   if (applyCors(req, res)) return;
@@ -31,6 +35,11 @@ module.exports = async function handler(req, res) {
       return sendJson(res, 400, { error: "Synced lyrics need the song's taskId and audioId." });
     }
 
+    const cached = await getCachedTimestampedLyrics(audioId);
+    if (cached?.alignedWords?.length) {
+      return sendJson(res, 200, cached);
+    }
+
     const upstream = await sunoJsonRequest("/api/v1/generate/get-timestamped-lyrics", {
       method: "POST",
       apiKey,
@@ -47,19 +56,18 @@ module.exports = async function handler(req, res) {
       });
     }
 
-    const alignedWords = words
-      .map((w) => ({
-        word: String(w?.word ?? ""),
-        startS: Number(w?.startS ?? w?.start_s ?? 0),
-        endS: Number(w?.endS ?? w?.end_s ?? 0),
-        success: w?.success !== false,
-      }))
-      .filter((w) => w.word !== "");
+    const alignedWords = normalizeAlignedWords(words);
+    const hootCer = Number.isFinite(Number(d.hootCer)) ? Number(d.hootCer) : null;
 
-    return sendJson(res, 200, {
+    queueCacheTimestampedLyrics({
+      audioId,
+      taskId,
+      provider: "suno",
       alignedWords,
-      hootCer: Number.isFinite(Number(d.hootCer)) ? Number(d.hootCer) : null,
+      hootCer,
     });
+
+    return sendJson(res, 200, { alignedWords, hootCer });
   } catch (e) {
     return sendJson(res, 500, { error: e?.message || String(e) });
   }

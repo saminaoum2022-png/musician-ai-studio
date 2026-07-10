@@ -17292,7 +17292,9 @@ body.trackSheetOpen .footer{
     --player-chrome-safe: env(safe-area-inset-bottom, 0px);
     --player-social-rail-bottom: calc(var(--player-chrome-safe) + 172px);
     --player-karaoke-bottom: calc(var(--player-chrome-safe) + 258px);
-    --player-cover-height: min(70svh, 600px);
+    /* Gift-row level — fixed from viewport bottom so device matches simulator. */
+    --player-cover-bottom: calc(var(--player-chrome-safe) + 230px);
+    --player-cover-height: calc(100svh - var(--player-cover-bottom));
   }
   body[data-route="messages-thread"] .hubNowPlaying{
     display: none !important;
@@ -17431,6 +17433,7 @@ body.trackSheetOpen .footer{
     border-radius: 0;
     position: relative;
     overflow: visible;
+    min-height: var(--player-cover-height);
   }
   body[data-route="player"] .playerArtWrap.isNowPlaying{
     border: none;
@@ -17440,12 +17443,18 @@ body.trackSheetOpen .footer{
     background: #0a0c12;
   }
   body[data-route="player"] .playerArtStage{
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: var(--player-cover-bottom);
     width: 100%;
-    height: var(--player-cover-height);
+    height: auto;
     min-height: 300px;
     border-radius: 0;
     overflow: hidden;
     background: #0a0c12;
+    z-index: 2;
   }
   body[data-route="player"] .playerArtStage::after{
     content: "";

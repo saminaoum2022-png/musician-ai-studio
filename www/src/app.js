@@ -185,7 +185,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260710-131133";
+const APP_BUILD = "20260710-133422";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -45209,6 +45209,7 @@ async function syncPlayerSocialRail() {
   const target = playerSocialTargetFromRef();
   if (!target?.songId) {
     rail.hidden = true;
+    rail.closest(".playerArtWrap")?.classList.add("playerArtWrap--noSocialRail");
     return;
   }
   const myId = String(authSession?.user?.id || "").trim();
@@ -45228,6 +45229,7 @@ async function syncPlayerSocialRail() {
   if (giftBtn) giftBtn.hidden = !canGift;
   if (shareBtn) shareBtn.hidden = false;
   rail.hidden = false;
+  rail.closest(".playerArtWrap")?.classList.remove("playerArtWrap--noSocialRail");
   void syncPlayerSocialCreatorAvatar();
   applyFeedSocialStatsToDom(document);
   await hydratePlayerSocialStats(target.songId);

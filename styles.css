@@ -17494,6 +17494,12 @@ body.trackSheetOpen .footer{
     box-shadow: none;
     border: none;
   }
+  /* Unpublished / private songs hide the social rail — center lyrics on full width. */
+  body[data-route="player"] .playerArtWrap.playerArtWrap--noSocialRail .playerKaraokeFloat,
+  body[data-route="player"] .playerArtWrap:has(.playerSocialRail[hidden]) .playerKaraokeFloat{
+    left: 24px;
+    right: 24px;
+  }
   body[data-route="player"] .playerArtWrap .playerKaraokeLine--prev,
   body[data-route="player"] .playerArtWrap .playerKaraokeLine--next{
     color: rgba(223, 231, 251, 0.42);

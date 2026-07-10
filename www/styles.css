@@ -17292,8 +17292,8 @@ body.trackSheetOpen .footer{
     --player-chrome-safe: env(safe-area-inset-bottom, 0px);
     --player-social-rail-bottom: calc(var(--player-chrome-safe) + 172px);
     --player-karaoke-bottom: calc(var(--player-chrome-safe) + 258px);
-    /* Gift-row level — fixed from viewport bottom so device matches simulator. */
-    --player-cover-bottom: calc(var(--player-chrome-safe) + 230px);
+    /* Between heart and comment — same cut on device and simulator, no extra crop. */
+    --player-cover-bottom: calc(var(--player-chrome-safe) + 320px);
     --player-cover-height: calc(100svh - var(--player-cover-bottom));
   }
   body[data-route="messages-thread"] .hubNowPlaying{
@@ -17450,7 +17450,7 @@ body.trackSheetOpen .footer{
     bottom: var(--player-cover-bottom);
     width: 100%;
     height: auto;
-    min-height: 300px;
+    min-height: 280px;
     border-radius: 0;
     overflow: hidden;
     background: #0a0c12;
@@ -17460,13 +17460,13 @@ body.trackSheetOpen .footer{
     content: "";
     position: absolute;
     inset: auto 0 0 0;
-    height: 108px;
+    height: 120px;
     background: linear-gradient(
       to top,
       #0a0c12 0%,
-      #0a0c12 48%,
-      rgba(10, 12, 18, 0.82) 72%,
-      rgba(10, 12, 18, 0.28) 90%,
+      #0a0c12 52%,
+      rgba(10, 12, 18, 0.88) 72%,
+      rgba(10, 12, 18, 0.42) 88%,
       transparent 100%
     );
     pointer-events: none;
@@ -17477,9 +17477,8 @@ body.trackSheetOpen .footer{
     height: 100%;
     aspect-ratio: auto;
     object-fit: cover;
+    object-position: center top;
     border-radius: 0;
-    -webkit-mask-image: linear-gradient(to bottom, #000 0%, #000 92%, rgba(0, 0, 0, 0.55) 97%, transparent 100%);
-            mask-image: linear-gradient(to bottom, #000 0%, #000 92%, rgba(0, 0, 0, 0.55) 97%, transparent 100%);
   }
   body[data-route="player"] .playerArtWrap .playerKaraokeFloat{
     position: fixed;

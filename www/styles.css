@@ -6087,6 +6087,24 @@ body.hubJumpingToTop #hubList .hubRow{
   text-align: center;
 }
 .playerKaraokeFloat[hidden]{ display: none !important; }
+.playerInstrumentalLabel{
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 24px;
+  z-index: 5;
+  margin: 0;
+  text-align: center;
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.3);
+  pointer-events: none;
+}
+.playerInstrumentalLabel[hidden]{
+  display: none !important;
+}
 .playerKaraokeBelow{
   position: static;
   left: auto;
@@ -6536,8 +6554,45 @@ body.hubJumpingToTop #hubList .hubRow{
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 32px;
+  gap: 22px;
   margin-top: 12px;
+}
+.playerAuxBtn{
+  width: 28px;
+  height: 28px;
+  border: none;
+  background: transparent;
+  color: rgba(223, 231, 251, 0.62);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
+  flex: 0 0 28px;
+  -webkit-tap-highlight-color: transparent;
+  transition: color 160ms ease, transform 120ms ease, opacity 160ms ease;
+}
+.playerAuxBtn .playerAuxIco{
+  width: 22px;
+  height: 22px;
+  display: block;
+}
+.playerAuxBtn:hover{
+  color: rgba(255, 255, 255, 0.9);
+}
+.playerAuxBtn:active{
+  transform: scale(0.9);
+}
+.playerAuxBtn[aria-pressed="true"],
+.playerAuxBtn.isActive{
+  color: rgba(255, 255, 255, 0.96);
+}
+.playerAuxBtn--shuffle .playerAuxIco{
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 /* ---- Vertical social rail (Reels-style, right of cover) ------------ */
@@ -6590,6 +6645,50 @@ body.hubJumpingToTop #hubList .hubRow{
 }
 .playerSocialAct[data-friends-act="like"].isLiked{
   color: #FF4D5A;
+}
+.playerSocialAct--like{
+  gap: 5px;
+}
+.playerSocialLikeStack{
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+}
+.playerSocialCreatorAvatar{
+  display: block;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border-radius: var(--nabad-squircle-radius);
+  overflow: hidden;
+  border: 2px solid rgba(255, 255, 255, 0.14);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.32);
+  flex: 0 0 auto;
+  background: transparent;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.playerSocialCreatorAvatar:active{
+  transform: scale(0.96);
+}
+.playerSocialAct[data-friends-act="reply"]:hover,
+.playerSocialAct[data-friends-act="reply"]:active,
+.playerSocialAct[data-friends-act="reply"]:focus-visible{
+  color: rgba(255, 255, 255, 0.9);
+  background: transparent;
+}
+.playerSocialCreatorAvatar[hidden]{
+  display: none !important;
+}
+.playerSocialCreatorAvatarImg{
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  border-radius: inherit;
+  background: rgba(255, 255, 255, 0.06);
 }
 .playerSkipBtn{
   width: 30px;
@@ -17310,19 +17409,22 @@ body.trackSheetOpen .footer{
     gap: 0;
     width: 100%;
     min-height: 0;
+    background: #0a0c12;
   }
   body[data-route="player"] .playerArtCol{
     width: 100%;
     margin: 0;
     gap: 0;
+    background: #0a0c12;
   }
   body[data-route="player"] .playerArtWrap{
     border: none;
-    padding: 0;
-    background: transparent;
+    padding: 0 0 52px;
+    background: #0a0c12;
     box-shadow: none;
     border-radius: 0;
     position: relative;
+    overflow: visible;
   }
   body[data-route="player"] .playerArtWrap.isNowPlaying{
     border: none;
@@ -17333,20 +17435,23 @@ body.trackSheetOpen .footer{
   }
   body[data-route="player"] .playerArtStage{
     width: 100%;
-    height: min(54vh, 440px);
+    height: min(65vh, 540px);
     min-height: 280px;
     border-radius: 0;
     overflow: hidden;
+    background: #0a0c12;
   }
   body[data-route="player"] .playerArtStage::after{
     content: "";
     position: absolute;
     inset: auto 0 0 0;
-    height: 48%;
+    height: 108px;
     background: linear-gradient(
       to top,
-      rgba(6, 8, 14, 0.98) 0%,
-      rgba(6, 8, 14, 0.55) 42%,
+      #0a0c12 0%,
+      #0a0c12 48%,
+      rgba(10, 12, 18, 0.82) 72%,
+      rgba(10, 12, 18, 0.28) 90%,
       transparent 100%
     );
     pointer-events: none;
@@ -17358,32 +17463,58 @@ body.trackSheetOpen .footer{
     aspect-ratio: auto;
     object-fit: cover;
     border-radius: 0;
+    -webkit-mask-image: linear-gradient(to bottom, #000 0%, #000 92%, rgba(0, 0, 0, 0.55) 97%, transparent 100%);
+            mask-image: linear-gradient(to bottom, #000 0%, #000 92%, rgba(0, 0, 0, 0.55) 97%, transparent 100%);
   }
-  body[data-route="player"] .playerKaraokeBelow{
-    padding: 6px 24px 0;
-    flex: 0 0 auto;
+  body[data-route="player"] .playerArtWrap .playerKaraokeFloat{
+    left: 24px;
+    right: 24px;
+    bottom: 8px;
+    z-index: 6;
+    gap: 5px;
+    padding: 0;
+    background: none;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    box-shadow: none;
+    border: none;
   }
-  body[data-route="player"] .playerKaraokeBelow .playerKaraokeLine--prev,
-  body[data-route="player"] .playerKaraokeBelow .playerKaraokeLine--next{
-    color: rgba(223, 231, 251, 0.38);
-    text-shadow: none;
+  body[data-route="player"] .playerArtWrap .playerKaraokeLine--prev,
+  body[data-route="player"] .playerArtWrap .playerKaraokeLine--next{
+    color: rgba(223, 231, 251, 0.42);
     font-size: 14.5px;
     min-height: 18px;
+    text-shadow: 0 1px 12px rgba(0, 0, 0, 0.5);
   }
-  body[data-route="player"] .playerKaraokeBelow .playerKaraokeLine--current{
+  body[data-route="player"] .playerArtWrap .playerKaraokeLine--current{
     color: rgba(240, 244, 255, 0.96);
-    text-shadow: none;
+    font-size: 19.5px;
+    min-height: 28px;
+    text-shadow: 0 1px 16px rgba(0, 0, 0, 0.58);
     filter: none;
     -webkit-text-fill-color: currentColor;
     background: none;
-    font-size: 19.5px;
-    min-height: 28px;
   }
-  body[data-route="player"] .playerCard.isPlaying .playerKaraokeBelow .playerKaraokeLine--current{
+  body[data-route="player"] .playerCard.isPlaying .playerArtWrap .playerKaraokeLine--current{
     background: linear-gradient(95deg, #ffffff 0%, #f0ebff 52%, #dff8f2 100%);
     -webkit-background-clip: text;
             background-clip: text;
     -webkit-text-fill-color: transparent;
+    filter: drop-shadow(0 1px 12px rgba(0, 0, 0, 0.5));
+  }
+  body[data-route="player"] .playerInstrumentalLabel{
+    bottom: 10px;
+  }
+  body[data-route="player"] .playerTransport{
+    margin-top: 8px;
+    margin-bottom: 0;
+    align-self: center;
+    width: min(100%, 340px);
+    margin-inline: auto;
+    padding: 0 6px;
+    box-sizing: border-box;
+    justify-content: space-between;
+    gap: 0;
   }
   body[data-route="player"] .playerMeta{
     position: fixed;
@@ -17412,7 +17543,7 @@ body.trackSheetOpen .footer{
   }
   body[data-route="player"] .playerTitle{
     margin-top: 0;
-    font-size: 15px;
+    font-size: 16.5px;
     font-weight: 650;
     letter-spacing: -0.02em;
     line-height: 1.25;
@@ -17449,12 +17580,6 @@ body.trackSheetOpen .footer{
   }
   body[data-route="player"] .playerTimeline{
     margin-top: 12px;
-  }
-  body[data-route="player"] .playerTransport{
-    margin-top: 8px;
-    margin-bottom: 0;
-    align-self: center;
-    width: 100%;
   }
   body[data-route="player"] .playerSocialRail{
     position: fixed;

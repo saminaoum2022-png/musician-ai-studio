@@ -48,6 +48,12 @@ export function feedActIconShare(klass = "followActActIco followActActIco--share
   return `<svg class="${cls}" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="17.5" cy="6.5" r="2.25" stroke="currentColor" stroke-width="2"/><circle cx="6.5" cy="12" r="2.25" stroke="currentColor" stroke-width="2"/><circle cx="17.5" cy="17.5" r="2.25" stroke="currentColor" stroke-width="2"/><path d="M8.6 10.9 L15.4 7.6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M8.6 13.1 L15.4 16.4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>`;
 }
 
+/** Shuffle — intertwined curves (player transport). */
+export function feedActIconShuffle(klass = "playerAuxIco") {
+  const cls = String(klass || "playerAuxIco").trim() || "playerAuxIco";
+  return `<svg class="${cls}" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M18 4l3 3-3 3" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M18 20l3-3-3-3" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M3 7h3a5 5 0 0 1 5 5 5 5 0 0 0 5 5h5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M21 7h-5a5 5 0 0 0-5 5 5 5 0 0 1-5 5H3" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+}
+
 /** Analytics — simple bar chart (interaction bar, owner-only). */
 export function feedActIconAnalytics(klass = "followActActIco followActActIco--analytics") {
   const cls = String(klass || "followActActIco followActActIco--analytics").trim() || "followActActIco followActActIco--analytics";

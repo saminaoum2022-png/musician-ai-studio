@@ -172,7 +172,7 @@
       onload="this.media='all'"
     />
     <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Display:wght@900&family=Inter:wght@900&display=swap" /></noscript>
-    <link rel="stylesheet" href="./styles.css?v=20260710-004849" />
+    <link rel="stylesheet" href="./styles.css?v=20260710-114451" />
 
     <meta name="description" content="NabadAi is an AI music studio. Hum a melody, write lyrics, and ship a song." />
     <meta property="og:type" content="website" />
@@ -2325,14 +2325,25 @@
             <div class="playerArtWrap isEmpty">
               <div class="playerArtStage">
                 <img id="playerArt" class="playerArt isPlaceholder" src="./assets/icons/splash-mark.png" alt="" />
+                <p id="playerInstrumentalLabel" class="playerInstrumentalLabel" hidden aria-hidden="true">Instrumental</p>
+              </div>
+              <div id="playerKaraokeStrip" class="playerKaraokeFloat" hidden aria-live="polite" aria-label="Synced lyrics">
+                <p id="playerKaraokeLinePrev" class="playerKaraokeLine playerKaraokeLine--prev" dir="auto" aria-hidden="true"></p>
+                <p id="playerKaraokeLineCurrent" class="playerKaraokeLine playerKaraokeLine--current" dir="auto"></p>
+                <p id="playerKaraokeLineNext" class="playerKaraokeLine playerKaraokeLine--next" dir="auto" aria-hidden="true"></p>
               </div>
               <aside id="playerSocialRail" class="playerSocialRail" hidden aria-label="Song interactions">
                 <div id="playerSocialActions" class="followActActions playerSocialActions" data-friends-act-row="1" data-friends-act-kind="music" data-friends-act-target-kind="song" data-friends-act-id="" data-friends-act-uid="">
-                  <button type="button" class="followActAct playerSocialAct" data-friends-act="like" aria-label="Like" aria-pressed="false">
-                    <span class="playerSocialActIco" data-player-social-ico="like" aria-hidden="true"></span>
-                    <span class="followActActCount" data-friends-act-count="like"></span>
-                  </button>
-                  <button type="button" class="followActAct playerSocialAct" data-friends-act="reply" aria-label="Comment" aria-pressed="false">
+                  <div class="playerSocialLikeStack">
+                    <button type="button" id="playerSocialCreatorAvatar" class="playerSocialCreatorAvatar" hidden aria-label="Creator profile">
+                      <img id="playerSocialCreatorAvatarImg" class="playerSocialCreatorAvatarImg" src="" alt="" />
+                    </button>
+                    <button type="button" class="followActAct playerSocialAct playerSocialAct--like" data-friends-act="like" aria-label="Like" aria-pressed="false">
+                      <span class="playerSocialActIco" data-player-social-ico="like" aria-hidden="true"></span>
+                      <span class="followActActCount" data-friends-act-count="like"></span>
+                    </button>
+                  </div>
+                  <button type="button" class="followActAct playerSocialAct" data-friends-act="reply" aria-label="Comment">
                     <span class="playerSocialActIco" data-player-social-ico="reply" aria-hidden="true"></span>
                     <span class="followActActCount" data-friends-act-count="reply"></span>
                   </button>
@@ -2345,11 +2356,6 @@
                   </button>
                 </div>
               </aside>
-            </div>
-            <div id="playerKaraokeStrip" class="playerKaraokeFloat playerKaraokeBelow" hidden aria-live="polite" aria-label="Synced lyrics">
-              <p id="playerKaraokeLinePrev" class="playerKaraokeLine playerKaraokeLine--prev" dir="auto" aria-hidden="true"></p>
-              <p id="playerKaraokeLineCurrent" class="playerKaraokeLine playerKaraokeLine--current" dir="auto"></p>
-              <p id="playerKaraokeLineNext" class="playerKaraokeLine playerKaraokeLine--next" dir="auto" aria-hidden="true"></p>
             </div>
             </div>
             <div class="playerMeta">
@@ -2377,6 +2383,9 @@
 
               <!-- Primary transport: −15s | Play | +15s -->
               <div class="playerTransport">
+                <button id="btnPlayerShuffle" class="playerAuxBtn playerAuxBtn--shuffle" type="button" aria-label="Shuffle" aria-pressed="false">
+                  <svg class="playerAuxIco" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M18 4l3 3-3 3" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M18 20l3-3-3-3" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M3 7h3a5 5 0 0 1 5 5 5 5 0 0 0 5 5h5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M21 7h-5a5 5 0 0 0-5 5 5 5 0 0 1-5 5H3" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </button>
                 <button id="btnPlayerRewind" class="playerSkipBtn" type="button" disabled aria-label="Skip back 15 seconds">
                   <svg class="playerSkipIco" viewBox="0 0 24 24" aria-hidden="true">
                     <path fill="currentColor" d="M11.5 4.5V2L6.5 7l5 5V9c2.76 0 5 2.24 5 5s-2.24 5-5 5-5-2.24-5-5H4.5c0 3.59 2.91 6.5 6.5 6.5S17.5 14.59 17.5 11 14.59 4.5 11.5 4.5Z"/>
@@ -2391,6 +2400,9 @@
                   <svg class="playerSkipIco" viewBox="0 0 24 24" aria-hidden="true">
                     <path fill="currentColor" d="M12.5 4.5V2l5 5-5 5V9c-2.76 0-5 2.24-5 5s2.24 5 5 5 5-2.24 5-5H19.5c0 3.59-2.91 6.5-6.5 6.5S6.5 14.59 6.5 11 8.91 4.5 12.5 4.5Z"/>
                   </svg>
+                </button>
+                <button id="btnPlayerRepeat" class="playerAuxBtn" type="button" aria-label="Repeat" aria-pressed="false">
+                  <svg class="playerAuxIco" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M17 1l4 4-4 4V6H9a4 4 0 0 0-4 4v1H3v-1a6 6 0 0 1 6-6h8V1ZM7 23l-4-4 4-4v3h8a4 4 0 0 0 4-4v-1h2v1a6 6 0 0 1-6 6H7v3Z"/></svg>
                 </button>
               </div>
 
@@ -4538,6 +4550,6 @@
     </script>
     <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
     <script src="./env.client.js" onerror="void 0"></script>
-    <script type="module" src="./src/app.js?v=20260710-004849"></script>
+    <script type="module" src="./src/app.js?v=20260710-114451"></script>
   </body>
 </html>

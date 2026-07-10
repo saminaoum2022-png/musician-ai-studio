@@ -77,7 +77,7 @@ import {
 } from "./cover-art/placeholders.js";
 import { initCoverArtOverlay, syncCoverArtOverlay } from "./cover-art/overlay.js";
 import { feedActIconAnalytics, feedActIconComment, feedActIconGift, feedActIconLike, feedActIconPlays, feedActIconRepost, feedActIconShare } from "./feed-action-icons.js";
-import { initGifts, openGiftSheetFromButton } from "./gifts.js";
+import { initGifts, openGiftSheetForTarget, openGiftSheetFromButton } from "./gifts.js";
 import { configureProPlan, onProPlanRouteActive, refreshProSubscriptionUi, setProReturnRoute } from "./pro-plan.js";
 import { setRevenueCatApiKey, resetRevenueCatSession } from "./billing/revenuecat.js";
 import { augmentCoachApiPayload } from "./coach-knowledge.js";
@@ -185,7 +185,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260710-004849";
+const APP_BUILD = "20260710-114451";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -816,6 +816,8 @@ const els = {
   playerTimeTotal: document.getElementById("playerTimeTotal"),
   btnPlayerRewind: document.getElementById("btnPlayerRewind"),
   btnPlayerForward: document.getElementById("btnPlayerForward"),
+  btnPlayerShuffle: document.getElementById("btnPlayerShuffle"),
+  btnPlayerRepeat: document.getElementById("btnPlayerRepeat"),
   playerLyricsOverlay: document.getElementById("playerLyricsOverlay"),
   playerLyricsBg: document.getElementById("playerLyricsBg"),
   playerLyricsTitle: document.getElementById("playerLyricsTitle"),
@@ -827,8 +829,11 @@ const els = {
   playerKaraokeLinePrev: document.getElementById("playerKaraokeLinePrev"),
   playerKaraokeLineCurrent: document.getElementById("playerKaraokeLineCurrent"),
   playerKaraokeLineNext: document.getElementById("playerKaraokeLineNext"),
+  playerInstrumentalLabel: document.getElementById("playerInstrumentalLabel"),
   playerSocialRail: document.getElementById("playerSocialRail"),
   playerSocialActions: document.getElementById("playerSocialActions"),
+  playerSocialCreatorAvatar: document.getElementById("playerSocialCreatorAvatar"),
+  playerSocialCreatorAvatarImg: document.getElementById("playerSocialCreatorAvatarImg"),
   musicVideoModal: document.getElementById("musicVideoModal"),
   musicVideoCover: document.getElementById("musicVideoCover"),
   musicVideoLoader: document.getElementById("musicVideoLoader"),
@@ -14522,19 +14527,30 @@ let _feedReplyBound = false;
 
 function openFeedReplySheetFromButton(btn) {
   const row = btn.closest(".followActActions");
-  const article = btn.closest(".followAct");
-  if (!row || !article) return;
+  if (!row) return;
   const targetKind = row.getAttribute("data-friends-act-target-kind") || "";
   const targetId = row.getAttribute("data-friends-act-id") || "";
   if (!targetKind || !targetId) return;
 
-  const handleEl = article.querySelector(".followActUser");
-  const handle = String(handleEl?.textContent || "").trim();
-  const subEl =
-    article.querySelector(".followActStatusText") ||
-    article.querySelector(".followActQuoteTitle") ||
-    article.querySelector(".followActHead");
-  const sub = String(subEl?.textContent || "").trim();
+  const article = btn.closest(".followAct");
+  const playerSocial = btn.closest(".playerSocialActions");
+  let handle = "";
+  let sub = "";
+  if (article) {
+    const handleEl = article.querySelector(".followActUser");
+    handle = String(handleEl?.textContent || "").trim();
+    const subEl =
+      article.querySelector(".followActStatusText") ||
+      article.querySelector(".followActQuoteTitle") ||
+      article.querySelector(".followActHead");
+    sub = String(subEl?.textContent || "").trim();
+  } else if (playerSocial) {
+    const handleEl = els.playerCreatorIdentity?.querySelector(".playerCreatorHandle");
+    handle = String(handleEl?.textContent || "").trim();
+    sub = String(els.playerTitle?.textContent || "").trim();
+  } else {
+    return;
+  }
 
   openFeedReplySheet({
     targetKind,
@@ -43067,6 +43083,23 @@ function resolveKaraokeIdsFromTrackRef(t) {
   return { taskId, audioId, full: full || t };
 }
 
+function playerCurrentTrackIsInstrumental() {
+  const t = currentPlayerTrackRef;
+  if (!t) return false;
+  const lib = resolvePlayerLibraryTrack();
+  const full = lib || t;
+  const kind = String(full?.kind || t?.kind || "").trim();
+  return kind === "instrumental" || kind === "sound";
+}
+
+function syncPlayerInstrumentalLabel() {
+  const el = els.playerInstrumentalLabel;
+  if (!el) return;
+  const show = playerCurrentTrackIsInstrumental() && !playerKaraokeStripState;
+  el.hidden = !show;
+  el.setAttribute("aria-hidden", show ? "false" : "true");
+}
+
 function activeLyricLineIndexForTime(lines, t, lead = 0.25) {
   let idx = -1;
   for (let i = 0; i < lines.length; i++) {
@@ -43164,6 +43197,7 @@ function showPlayerKaraokeStrip({ lines, words, audioId }) {
     renderedIdx: -2,
   };
   if (els.playerKaraokeStrip) els.playerKaraokeStrip.hidden = false;
+  syncPlayerInstrumentalLabel();
   attachPlayerKaraokeListeners();
   syncPlayerKaraokeStrip();
 }
@@ -43174,6 +43208,7 @@ function clearPlayerKaraokeStripUi() {
   setPlayerKaraokeLineEl(els.playerKaraokeLinePrev, "");
   setPlayerKaraokeLineEl(els.playerKaraokeLineCurrent, "");
   setPlayerKaraokeLineEl(els.playerKaraokeLineNext, "");
+  syncPlayerInstrumentalLabel();
   detachPlayerKaraokeListeners();
 }
 
@@ -43188,6 +43223,7 @@ async function maybeAutostartPlayerKaraoke() {
   const ids = resolveKaraokeIdsFromTrackRef(currentPlayerTrackRef);
   if (!ids) {
     hidePlayerKaraokeStrip();
+    syncPlayerInstrumentalLabel();
     return;
   }
   if (playerKaraokeStripState?.audioId === ids.audioId) {
@@ -44409,6 +44445,13 @@ function ensurePlayer() {
     const elSeq = Number(playerEl?.dataset?.playerSeq || 0);
     if (elSeq !== _playerPlaybackSeq) return;
     hidePlayerKaraokeStrip();
+    if (playerRepeatEnabled && playerEl && currentPlayerTrackRef?.url) {
+      try {
+        playerEl.currentTime = 0;
+        void playerEl.play();
+        return;
+      } catch {}
+    }
     if (els.btnPlayerPlay) els.btnPlayerPlay.disabled = false;
     if (els.btnPlayerPause) els.btnPlayerPause.disabled = true;
     try { setProfileAuraAudioState(isAnyAppAudioPlaying()); } catch {}
@@ -44682,6 +44725,7 @@ function setPlayerMeta({ title, subtitle, artUrl, releaseCaption, remixOf, chall
     syncCoverArtOverlay(false);
   }
   syncPlayerPlaysCount();
+  syncPlayerInstrumentalLabel();
 }
 
 // Most recent http(s) URL handed to the player. Used by Download Video
@@ -44843,6 +44887,7 @@ async function syncPlayerCreatorChrome(subtitle = "") {
       fanBtn.hidden = !showFan;
       if (showFan) void refreshPlayerFanBtn(ownerId, displayHandle);
     }
+    void syncPlayerSocialCreatorAvatar();
     return;
   }
 
@@ -44864,6 +44909,45 @@ async function syncPlayerCreatorChrome(subtitle = "") {
     identity.innerHTML = meta ? `<span class="playerCreatorMeta">${escapeHtml(meta)}</span>` : "";
   }
   if (fanBtn) fanBtn.hidden = true;
+  void syncPlayerSocialCreatorAvatar();
+}
+
+async function syncPlayerSocialCreatorAvatar() {
+  const wrap = els.playerSocialCreatorAvatar;
+  const img = els.playerSocialCreatorAvatarImg;
+  if (!wrap || !img) return;
+
+  const t = currentPlayerTrackRef || {};
+  const ownerId = String(t.ownerUserId || t.userId || "").trim();
+  const mine = String(authSession?.user?.id || "").trim();
+  let avatarUrl = "";
+  let handle = String(t.byLine || t.creator || "").trim().replace(/^@/, "");
+
+  if (ownerId) {
+    if (mine && ownerId === mine) {
+      avatarUrl = String(activeProfile?.avatar || "").trim();
+      handle = handle || String(activeProfile?.username || "").trim();
+    } else {
+      const prof = await fetchPublicProfileRowByUserId(ownerId);
+      avatarUrl = String(prof?.avatar || "").trim();
+      handle = handle || String(prof?.username || "").trim();
+    }
+  } else if (mine) {
+    avatarUrl = String(activeProfile?.avatar || "").trim();
+    handle = handle || String(activeProfile?.username || "").trim();
+  }
+
+  wrap.dataset.userHandle = handle;
+  wrap.dataset.userId = ownerId || mine || "";
+
+  if (!avatarUrl || avatarUrl === "./assets/icons/splash-mark.png") {
+    wrap.hidden = true;
+    img.removeAttribute("src");
+    return;
+  }
+
+  setCoverImageSrc(img, avatarUrl);
+  wrap.hidden = false;
 }
 
 async function handlePlayerBecomeFanClick() {
@@ -44910,6 +44994,7 @@ function updatePlayerSecondaryChrome() {
   if (card) card.dataset.readOnlyListen = ro ? "1" : "0";
   void syncPlayerCreatorChrome();
   syncPlayerPlaysCount();
+  syncPlayerInstrumentalLabel();
   void syncPlayerSocialRail();
 }
 
@@ -44953,14 +45038,61 @@ function playerSocialTargetFromRef(ref) {
     "",
   ).trim();
   if (!isShareUuid(songId)) return null;
+  const external = playerSourceIsExternalListenOnly();
   const ownerUserId = String(
     t.ownerUserId ||
     t.userId ||
     lib?.ownerUserId ||
-    authSession?.user?.id ||
+    lib?.userId ||
+    (external ? "" : authSession?.user?.id || "") ||
     "",
   ).trim();
   return { songId, ownerUserId };
+}
+
+function openPlayerGiftSheet() {
+  if (!authSession?.user?.id || !getSupabaseAuthToken()) {
+    showToast("Sign in to send a gift.", { icon: "!" });
+    try {
+      location.hash = "#/auth";
+    } catch {}
+    return;
+  }
+  const t = currentPlayerTrackRef || {};
+  const target = playerSocialTargetFromRef();
+  const recipientUserId = String(
+    t.ownerUserId ||
+    t.userId ||
+    target?.ownerUserId ||
+    els.playerSocialCreatorAvatar?.dataset.userId ||
+    "",
+  ).trim();
+  const songId = String(target?.songId || t.songId || t.cloudSongId || "").trim();
+  const mine = String(authSession.user.id).trim();
+  if (!songId || !isShareUuid(songId)) {
+    showToast("Gifts are available on published songs.", { icon: "!" });
+    return;
+  }
+  if (!recipientUserId || recipientUserId === mine) {
+    showToast("You can only gift other creators.", { icon: "!" });
+    return;
+  }
+  const handle = String(
+    els.playerSocialCreatorAvatar?.dataset.userHandle ||
+    els.playerCreatorIdentity?.querySelector(".playerCreatorHandle")?.textContent ||
+    t.byLine ||
+    "",
+  )
+    .trim()
+    .replace(/^@/, "");
+  const title = String(els.playerTitle?.textContent || t.title || "").trim();
+  openGiftSheetForTarget({
+    targetKind: "song",
+    targetId: songId,
+    recipientUserId,
+    recipientHandle: handle,
+    songTitle: title,
+  });
 }
 
 function ensurePlayerSocialRailIcons(scope = "player") {
@@ -45024,19 +45156,37 @@ async function syncPlayerSocialRail() {
     return;
   }
   const myId = String(authSession?.user?.id || "").trim();
-  const isOwner = Boolean(myId && target.ownerUserId && myId === target.ownerUserId);
+  const t = currentPlayerTrackRef || {};
+  const recipientUserId = String(
+    t.ownerUserId || t.userId || target.ownerUserId || "",
+  ).trim();
+  const isOwner = Boolean(myId && recipientUserId && myId === recipientUserId);
+  const canGift = Boolean(myId && recipientUserId && !isOwner);
   row.setAttribute("data-friends-act-kind", "music");
   row.setAttribute("data-friends-act-target-kind", "song");
   row.setAttribute("data-friends-act-id", target.songId);
-  row.setAttribute("data-friends-act-uid", target.ownerUserId);
+  row.setAttribute("data-friends-act-uid", recipientUserId);
   ensurePlayerSocialRailIcons(target.songId);
   const giftBtn = row.querySelector('[data-friends-act="gift"]');
   const shareBtn = row.querySelector('[data-friends-act="share"]');
-  if (giftBtn) giftBtn.hidden = isOwner || !myId;
+  if (giftBtn) giftBtn.hidden = !canGift;
   if (shareBtn) shareBtn.hidden = false;
   rail.hidden = false;
+  void syncPlayerSocialCreatorAvatar();
   applyFeedSocialStatsToDom(document);
   await hydratePlayerSocialStats(target.songId);
+}
+
+function navigateToPlayerCreatorProfile() {
+  const wrap = els.playerSocialCreatorAvatar;
+  const handle = String(wrap?.dataset.userHandle || "").trim().replace(/^@/, "");
+  if (handle) {
+    location.hash = `#/u/${encodeURIComponent(handle)}`;
+    return;
+  }
+  const uid = String(wrap?.dataset.userId || "").trim();
+  const mine = String(authSession?.user?.id || "").trim();
+  if (uid && mine && uid === mine) location.hash = "#/profile";
 }
 
 function wirePlayerSocialRailOnce() {
@@ -45045,6 +45195,13 @@ function wirePlayerSocialRailOnce() {
   card.dataset.playerSocialWired = "1";
   ensurePlayerSocialRailIcons();
   card.addEventListener("click", (e) => {
+    const avatarBtn = e.target.closest(".playerSocialCreatorAvatar");
+    if (avatarBtn && els.playerSocialActions?.contains(avatarBtn)) {
+      e.preventDefault();
+      e.stopPropagation();
+      navigateToPlayerCreatorProfile();
+      return;
+    }
     const actBtn = e.target.closest("[data-friends-act]");
     if (!actBtn || !els.playerSocialActions?.contains(actBtn)) return;
     const kind = actBtn.getAttribute("data-friends-act");
@@ -45053,12 +45210,51 @@ function wirePlayerSocialRailOnce() {
     e.stopPropagation();
     if (kind === "like") void handleFeedLikeTap(actBtn);
     else if (kind === "reply") void openFeedReplySheetFromButton(actBtn);
-    else if (kind === "gift") openGiftSheetFromButton(actBtn);
+    else if (kind === "gift") openPlayerGiftSheet();
     else if (kind === "share") void openShareChooserForTrack(trackRefFromCurrentPlayer());
   });
 }
 
 const PLAYER_SKIP_SEC = 15;
+let playerRepeatEnabled = false;
+
+function syncPlayerAuxTransport() {
+  if (els.btnPlayerRepeat) {
+    els.btnPlayerRepeat.setAttribute("aria-pressed", playerRepeatEnabled ? "true" : "false");
+    els.btnPlayerRepeat.classList.toggle("isActive", playerRepeatEnabled);
+  }
+}
+
+function togglePlayerRepeat() {
+  playerRepeatEnabled = !playerRepeatEnabled;
+  syncPlayerAuxTransport();
+  try { haptic("light"); } catch {}
+}
+
+async function handlePlayerShuffle() {
+  try { haptic("light"); } catch {}
+  if (miniSource?.type === "discover_playlist" && _discoverPlaylistQueue.length) {
+    await playNextDiscoverPlaylistTrack(currentPlayerTrackRef?.url, { manual: true });
+    return;
+  }
+  if (miniSource?.type === "discover_feed" && _discoveryFeedTracks.length) {
+    await playRandomDiscoveryFeedTrack(currentPlayerTrackRef?.url);
+    return;
+  }
+  if (miniSource?.type === "public_profile_lib" && _userPublicFeedTracks.length) {
+    await playRandomUserPublicFeedTrack(currentPlayerTrackRef?.url);
+    return;
+  }
+  const lib = loadLibrary().filter((t) => String(t?.url || "").trim());
+  if (lib.length > 1) {
+    const cur = String(currentPlayerTrackRef?.url || playerEl?.src || "").trim();
+    const pool = lib.filter((t) => String(t.url || "").trim() !== cur);
+    const pick = pool[Math.floor(Math.random() * pool.length)] || lib[0];
+    await playLibraryUrlOnPlayer(pick.url, pick.title, pick.artUrl, { openPlayer: false });
+    return;
+  }
+  showToast("Nothing else to shuffle.");
+}
 
 function skipPlayerBySeconds(delta) {
   const a = ensurePlayer();
@@ -45076,6 +45272,7 @@ function syncPlayerSkipButtons() {
   const enabled = hasSrc && getPlayerDuration() > 0;
   if (els.btnPlayerRewind) els.btnPlayerRewind.disabled = !enabled;
   if (els.btnPlayerForward) els.btnPlayerForward.disabled = !enabled;
+  if (els.btnPlayerShuffle) els.btnPlayerShuffle.disabled = !hasSrc;
 }
 
 function setPlayerSource(url, label) {
@@ -46513,6 +46710,7 @@ function syncPlayerUI() {
   syncLockScreenNowPlaying();
   try { renderDeskRailNowPlaying(); } catch {}
   syncPlayerSkipButtons();
+  syncPlayerAuxTransport();
 }
 
 function getParams() {
@@ -52257,6 +52455,16 @@ if (els.btnPlayerForward) {
     skipPlayerBySeconds(PLAYER_SKIP_SEC);
   });
 }
+if (els.btnPlayerShuffle) {
+  els.btnPlayerShuffle.addEventListener("click", () => {
+    void handlePlayerShuffle();
+  });
+}
+if (els.btnPlayerRepeat) {
+  els.btnPlayerRepeat.addEventListener("click", () => {
+    togglePlayerRepeat();
+  });
+}
 if (els.btnPlayerToggle) {
   els.btnPlayerToggle.addEventListener("click", () => {
     if (!playerEl) return;
@@ -52276,8 +52484,8 @@ if (els.btnPlayerToggle) {
   }
   syncPlayerToggleUI();
 }
+wirePlayerSocialRailOnce();
 if (els.btnPlayerBack) {
-  wirePlayerSocialRailOnce();
   els.btnPlayerBack.addEventListener("click", () => {
     // The mobile tab bar is hidden on /player (full-screen Now Playing),
     // so the back chevron is the user's only way out. If we have history

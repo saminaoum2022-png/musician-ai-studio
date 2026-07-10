@@ -140,32 +140,50 @@ export function initGifts(deps) {
   });
 }
 
-export function openGiftSheetFromButton(btn) {
+function playerGiftMetaFromDom() {
+  const handleEl = document.querySelector("#playerCreatorIdentity .playerCreatorHandle");
+  const avatar = document.getElementById("playerSocialCreatorAvatar");
+  const handle = String(
+    avatar?.dataset?.userHandle ||
+    handleEl?.textContent ||
+    "",
+  )
+    .trim()
+    .replace(/^@/, "");
+  const title = String(document.getElementById("playerTitle")?.textContent || "").trim();
+  const recipientUserId = String(avatar?.dataset?.userId || "").trim();
+  return { handle, title, recipientUserId };
+}
+
+export function openGiftSheetForTarget({
+  targetKind = "song",
+  targetId = "",
+  recipientUserId = "",
+  songTitle = "",
+  recipientHandle = "",
+} = {}) {
   if (!_deps?.getAuthUserId?.()) {
     _deps?.showToast?.("Sign in to send a gift.", { icon: "!" });
     return;
   }
-  const row = btn?.closest?.(".followActActions[data-friends-act-row]");
-  if (!row) return;
-  const targetKind = row.getAttribute("data-friends-act-target-kind") || "";
-  const targetId = row.getAttribute("data-friends-act-id") || "";
-  const recipientUserId = row.getAttribute("data-friends-act-uid") || "";
-  if (!targetId || !recipientUserId) return;
+  const targetIdNorm = String(targetId || "").trim();
+  const recipientUserIdNorm = String(recipientUserId || "").trim();
+  if (!targetIdNorm || !recipientUserIdNorm) {
+    _deps?.showToast?.("Gifts are available on published songs.", { icon: "!" });
+    return;
+  }
   if (targetKind !== "song") {
     _deps?.showToast?.("Gifts are available on published songs.", { icon: "!" });
     return;
   }
-  if (recipientUserId === _deps.getAuthUserId()) return;
+  if (recipientUserIdNorm === _deps.getAuthUserId()) return;
 
-  const article = row.closest(".followAct");
-  const titleEl = article?.querySelector?.(".followActSong, .discoverFeedSongTitle");
-  const handleEl = article?.querySelector?.(".followActUser, .followActUserLink strong");
   _pending = {
     targetKind,
-    targetId,
-    recipientUserId,
-    songTitle: titleEl?.textContent?.trim() || "",
-    recipientHandle: handleEl?.textContent?.replace(/^@/, "").trim() || "",
+    targetId: targetIdNorm,
+    recipientUserId: recipientUserIdNorm,
+    songTitle: String(songTitle || "").trim(),
+    recipientHandle: String(recipientHandle || "").trim().replace(/^@/, ""),
   };
   _sendingTier = 0;
   paintGiftSheet();
@@ -173,6 +191,39 @@ export function openGiftSheetFromButton(btn) {
   try {
     _deps?.haptic?.("light");
   } catch {}
+}
+
+export function openGiftSheetFromButton(btn) {
+  if (!_deps?.getAuthUserId?.()) {
+    _deps?.showToast?.("Sign in to send a gift.", { icon: "!" });
+    return;
+  }
+  const row = btn?.closest?.(".followActActions[data-friends-act-row], .playerSocialActions");
+  if (!row) return;
+  const targetKind = row.getAttribute("data-friends-act-target-kind") || "";
+  const targetId = row.getAttribute("data-friends-act-id") || "";
+  let recipientUserId = row.getAttribute("data-friends-act-uid") || "";
+
+  const article = row.closest(".followAct");
+  const titleEl = article?.querySelector?.(".followActSong, .discoverFeedSongTitle");
+  const handleEl = article?.querySelector?.(".followActUser, .followActUserLink strong");
+  let songTitle = titleEl?.textContent?.trim() || "";
+  let recipientHandle = handleEl?.textContent?.replace(/^@/, "").trim() || "";
+
+  if (row.classList.contains("playerSocialActions")) {
+    const playerMeta = playerGiftMetaFromDom();
+    if (!recipientUserId) recipientUserId = playerMeta.recipientUserId;
+    if (!songTitle) songTitle = playerMeta.title;
+    if (!recipientHandle) recipientHandle = playerMeta.handle;
+  }
+
+  openGiftSheetForTarget({
+    targetKind,
+    targetId,
+    recipientUserId,
+    songTitle,
+    recipientHandle,
+  });
 }
 
 async function sendGift(amount) {

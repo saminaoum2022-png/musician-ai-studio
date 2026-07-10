@@ -17395,7 +17395,7 @@ body.trackSheetOpen .footer{
     width: 18px;
     height: 18px;
     background: url("./assets/icons/splash-mark.png") center / contain no-repeat;
-    opacity: 0.22;
+    opacity: 0.42;
     pointer-events: none;
   }
   body[data-route="player"] .playerHeader .playerMenuBtn{
@@ -17469,7 +17469,7 @@ body.trackSheetOpen .footer{
   body[data-route="player"] .playerArtWrap .playerKaraokeFloat{
     left: 24px;
     right: 24px;
-    bottom: 8px;
+    bottom: -20px;
     z-index: 6;
     gap: 5px;
     padding: 0;
@@ -17503,7 +17503,7 @@ body.trackSheetOpen .footer{
     filter: drop-shadow(0 1px 12px rgba(0, 0, 0, 0.5));
   }
   body[data-route="player"] .playerInstrumentalLabel{
-    bottom: 10px;
+    bottom: -18px;
   }
   body[data-route="player"] .playerTransport{
     margin-top: 8px;

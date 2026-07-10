@@ -185,7 +185,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260710-114451";
+const APP_BUILD = "20260710-120729";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -41841,6 +41841,64 @@ async function createSunoMusicVideoForTrack(track, { onStatus } = {}) {
   }
 }
 
+async function fetchVideoLyricLinesForTrack(track) {
+  const ids = resolveKaraokeIdsFromTrackRef(track);
+  if (!ids?.taskId || !ids?.audioId) return null;
+  try {
+    const words = await fetchTimedLyrics(ids.taskId, ids.audioId);
+    if (!Array.isArray(words) || !words.length) return null;
+    const lines = groupTimedLyricsIntoLines(words)
+      .filter((line) => !line.isSection && String(line.text || "").trim())
+      .map((line) => ({
+        text: String(line.text).trim(),
+        startS: Number(line.startS) || 0,
+        endS: Number(line.endS) || 0,
+      }));
+    return lines.length ? lines : null;
+  } catch {
+    return null;
+  }
+}
+
+function serverAudioUrlForVideoRender(serverAudioUrl) {
+  return isArchivedSongStorageUrl(serverAudioUrl)
+    ? serverAudioUrl
+    : apiUrl(`/api/suno/audio?url=${encodeURIComponent(serverAudioUrl)}`);
+}
+
+async function requestRenderedVideoBlob({
+  serverAudioUrl,
+  imageUrl,
+  trackTitle,
+  lyrics,
+  signal,
+} = {}) {
+  const r = await apiFetch("/api/render-video", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      audioUrl: serverAudioUrlForVideoRender(serverAudioUrl),
+      title: trackTitle,
+      ...(imageUrl ? { imageUrl } : {}),
+      ...(lyrics?.length ? { lyrics } : {}),
+    }),
+    signal,
+  });
+  if (!r.ok) {
+    let detail = "";
+    try {
+      detail = (await r.json())?.error || "";
+    } catch {}
+    if (r.status === 504 || /timed out/i.test(detail)) {
+      throw new Error("Video render timed out — try Download audio instead.");
+    }
+    throw new Error(detail || `HTTP ${r.status}`);
+  }
+  const blob = await r.blob();
+  if (!blob?.size || blob.size < 2048) throw new Error("Server returned an empty video file");
+  return blob;
+}
+
 async function downloadLibraryVideoTrack(track, { onRendered } = {}) {
   const isHttpUrl = (u) => /^https?:\/\//i.test(String(u || "").trim());
   let t = track;
@@ -41878,31 +41936,37 @@ async function downloadLibraryVideoTrack(track, { onRendered } = {}) {
   const imageUrl = (artCandidates.find((s) => isHttpUrl(s)) || "").trim();
   const filename = `${trackTitle.replace(/[\\/:*?"<>|]/g, "").trim() || "song"}.mp4`;
   const safeExportName = sanitizeNativeExportFilename(filename, "song.mp4");
+  const lyrics = await fetchVideoLyricLinesForTrack(t);
 
-  // Native iOS: let URLSession download the MP4 straight to disk — avoids
-  // holding multi‑MB blobs in WKWebView memory and survives slow renders better.
+  const ctrl = new AbortController();
+  const renderTimer = setTimeout(() => ctrl.abort(), lyrics?.length ? 90000 : 75000);
+
+  // Native iOS without synced lyrics: URLSession download avoids holding large blobs in WKWebView.
   const fs = getCapFilesystemPlugin();
-  if (isCapacitorNativeAuth() && fs?.downloadFile && fs?.stat) {
-    const audioForServer = isArchivedSongStorageUrl(serverAudioUrl)
-      ? serverAudioUrl
-      : apiUrl(`/api/suno/audio?url=${encodeURIComponent(serverAudioUrl)}`);
+  if (isCapacitorNativeAuth() && fs?.downloadFile && fs?.stat && !lyrics?.length) {
+    const audioForServer = serverAudioUrlForVideoRender(serverAudioUrl);
     const params = new URLSearchParams({ audioUrl: audioForServer, title: trackTitle });
     if (imageUrl) params.set("imageUrl", imageUrl);
     const renderUrl = `${apiUrl("/api/render-video")}?${params.toString()}`;
     const rel = `NabadAi/exports/${Date.now()}-${safeExportName}`;
     const downloadMs = 75000;
-    const dl = await Promise.race([
-      fs.downloadFile({
-        path: rel,
-        directory: "DOCUMENTS",
-        url: renderUrl,
-        headers: getApiFetchHeaders(),
-        recursive: true,
-      }),
-      new Promise((_, reject) => {
-        setTimeout(() => reject(new Error("Video render timed out — try Wi‑Fi or Download audio.")), downloadMs);
-      }),
-    ]);
+    let dl;
+    try {
+      dl = await Promise.race([
+        fs.downloadFile({
+          path: rel,
+          directory: "DOCUMENTS",
+          url: renderUrl,
+          headers: getApiFetchHeaders(),
+          recursive: true,
+        }),
+        new Promise((_, reject) => {
+          setTimeout(() => reject(new Error("Video render timed out — try Wi‑Fi or Download audio.")), downloadMs);
+        }),
+      ]);
+    } finally {
+      clearTimeout(renderTimer);
+    }
     let filePath = String(dl?.path || "").trim();
     const stat = await fs.stat({ path: rel, directory: "DOCUMENTS" });
     const bytes = Number(stat?.size || 0);
@@ -41935,18 +41999,13 @@ async function downloadLibraryVideoTrack(track, { onRendered } = {}) {
     return;
   }
 
-  const ctrl = new AbortController();
-  const renderTimer = setTimeout(() => ctrl.abort(), 75000);
-  let r;
+  let blob;
   try {
-    r = await apiFetch("/api/render-video", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        audioUrl: serverAudioUrl,
-        ...(imageUrl ? { imageUrl } : {}),
-        title: trackTitle,
-      }),
+    blob = await requestRenderedVideoBlob({
+      serverAudioUrl,
+      imageUrl,
+      trackTitle,
+      lyrics,
       signal: ctrl.signal,
     });
   } catch (e) {
@@ -41957,18 +42016,14 @@ async function downloadLibraryVideoTrack(track, { onRendered } = {}) {
   } finally {
     clearTimeout(renderTimer);
   }
-  if (!r.ok) {
-    let detail = "";
-    try {
-      detail = (await r.json())?.error || "";
-    } catch {}
-    if (r.status === 504 || /timed out/i.test(detail)) {
-      throw new Error("Video render timed out — try Download audio instead.");
-    }
-    throw new Error(detail || `HTTP ${r.status}`);
+  try {
+    onRendered?.();
+  } catch {}
+  if (isCapacitorNativeAuth()) {
+    const { filePath } = await writeBlobToNativeCache(blob, safeExportName);
+    openVideoSaveModal({ filePath, title: trackTitle });
+    return;
   }
-  const blob = await r.blob();
-  if (!blob?.size || blob.size < 2048) throw new Error("Server returned an empty video file");
   await deliverDownloadBlobToDevice(blob, { filename, title: trackTitle, isVideo: true });
 }
 async function pollLibraryStemsUntilDone(taskId, kind, opts = {}) {

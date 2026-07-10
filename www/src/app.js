@@ -185,7 +185,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260710-160719";
+const APP_BUILD = "20260710-162503";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -32787,19 +32787,123 @@ function discoverReelModeActive() {
   );
 }
 
+function discoverReelPickAt(index) {
+  if (!_discoverReelQueue.length) return null;
+  const idx = Math.max(0, Math.min(_discoverReelQueue.length - 1, Number(index) || 0));
+  return _discoverReelQueue[idx] || null;
+}
+
+function captureCurrentDiscoverReelPick() {
+  const t = currentPlayerTrackRef || {};
+  let byLine = String(t.byLine || "").trim();
+  if (!byLine) {
+    const handle = String(
+      els.playerCreatorIdentity?.querySelector(".playerCreatorHandle")?.textContent || "",
+    ).trim().replace(/^@/, "");
+    if (handle) byLine = `@${handle}`;
+  }
+  return {
+    url: String(t.url || "").trim(),
+    title: String(t.title || els.playerTitle?.textContent || "Untitled").trim(),
+    artUrl: String(t.artUrl || els.playerArt?.getAttribute("src") || "").trim(),
+    byLine: byLine || "Creator",
+  };
+}
+
+function paintDiscoverReelAnimPanel(panel, pick) {
+  if (!panel || !pick) return;
+  const img = panel.querySelector(".playerReelAnimArt");
+  const titleEl = panel.querySelector(".playerReelAnimTitle");
+  const creatorEl = panel.querySelector(".playerReelAnimCreator");
+  if (img) {
+    const art = String(pick.artUrl || "").trim();
+    if (art) setCoverImageSrc(img, art);
+    else setCoverImageSrc(img, playerEmptyArtUrl(), { allowEmpty: true });
+  }
+  if (titleEl) titleEl.textContent = String(pick.title || "Untitled");
+  if (creatorEl) creatorEl.textContent = String(pick.byLine || "Creator");
+}
+
+function setDiscoverReelAnimLayerActive(active) {
+  const card = document.querySelector(".playerCard");
+  if (card) card.classList.toggle("isReelAnimating", Boolean(active));
+}
+
+function resetDiscoverReelAnimPanels(outPanel, inPanel) {
+  if (outPanel) {
+    outPanel.style.transition = "none";
+    outPanel.style.transform = "";
+  }
+  if (inPanel) {
+    inPanel.style.transition = "none";
+    inPanel.style.transform = "";
+  }
+}
+
+function discoverReelSlideWait(ms) {
+  return new Promise((resolve) => window.setTimeout(resolve, ms));
+}
+
+async function runDiscoverReelSlideTransition(direction, targetIdx, opts = {}) {
+  if (_discoverReelSlideAnimating) return false;
+  const layer = document.getElementById("playerReelAnimLayer");
+  const outPanel = layer?.querySelector(".playerReelAnimPanel--out");
+  const inPanel = layer?.querySelector(".playerReelAnimPanel--in");
+  const target = discoverReelPickAt(targetIdx);
+  if (!target?.url) return false;
+  if (!layer || !outPanel || !inPanel) {
+    await playDiscoverReelAt(targetIdx, { openPlayer: true, silent: opts.silent, skipSlide: true });
+    return true;
+  }
+
+  const dir = direction > 0 ? 1 : -1;
+  paintDiscoverReelAnimPanel(outPanel, captureCurrentDiscoverReelPick());
+  paintDiscoverReelAnimPanel(inPanel, target);
+
+  _discoverReelSlideAnimating = true;
+  const outOff = dir > 0 ? "-100%" : "100%";
+  const inStart = dir > 0 ? "100%" : "-100%";
+
+  resetDiscoverReelAnimPanels(outPanel, inPanel);
+  outPanel.style.transform = "translateY(0)";
+  inPanel.style.transform = `translateY(${inStart})`;
+  layer.hidden = false;
+  layer.setAttribute("aria-hidden", "false");
+  setDiscoverReelAnimLayerActive(true);
+
+  await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+
+  const easing = "cubic-bezier(0.22, 1, 0.36, 1)";
+  outPanel.style.transition = `transform ${DISCOVER_REEL_SLIDE_MS}ms ${easing}`;
+  inPanel.style.transition = `transform ${DISCOVER_REEL_SLIDE_MS}ms ${easing}`;
+  outPanel.style.transform = `translateY(${outOff})`;
+  inPanel.style.transform = "translateY(0)";
+
+  if (!opts.silent) haptic("medium");
+
+  await discoverReelSlideWait(DISCOVER_REEL_SLIDE_MS);
+
+  hidePlayerKaraokeStrip();
+  await playDiscoverReelAt(targetIdx, {
+    openPlayer: true,
+    silent: true,
+    skipSlide: true,
+  });
+
+  resetDiscoverReelAnimPanels(outPanel, inPanel);
+  layer.hidden = true;
+  layer.setAttribute("aria-hidden", "true");
+  setDiscoverReelAnimLayerActive(false);
+  _discoverReelSlideAnimating = false;
+  return true;
+}
+
 async function playDiscoverReelAt(index, opts = {}) {
   if (!_discoverReelQueue.length) return;
   const idx = Math.max(0, Math.min(_discoverReelQueue.length - 1, Number(index) || 0));
   const pick = _discoverReelQueue[idx];
   if (!pick?.url) return;
-  if (!opts.silent) haptic("light");
-  const card = document.querySelector(".playerCard");
-  if (card && opts.silent) {
-    card.classList.add("isReelSwapping");
-    window.setTimeout(() => {
-      try { card.classList.remove("isReelSwapping"); } catch {}
-    }, 220);
-  }
+  if (!opts.silent && !opts.skipSlide) haptic("light");
   hidePlayerKaraokeStrip();
   await playLibraryUrlOnPlayer(pick.url, pick.title, pick.artUrl, {
     discoverFeed: true,
@@ -32814,7 +32918,7 @@ async function playDiscoverReelAt(index, opts = {}) {
 }
 
 async function playNextDiscoverReelTrack(excludeUrl, opts = {}) {
-  if (_discoverReelAdvancing) return;
+  if (_discoverReelAdvancing || _discoverReelSlideAnimating) return;
   if (!discoverReelModeActive()) return;
   const curIdx = Number.isFinite(miniSource?.reelIndex) ? Number(miniSource.reelIndex) : -1;
   let idx = curIdx;
@@ -32830,14 +32934,18 @@ async function playNextDiscoverReelTrack(excludeUrl, opts = {}) {
   _discoverReelAdvancing = true;
   const token = ++_discoverReelAdvanceToken;
   try {
-    await playDiscoverReelAt(nextIdx, { openPlayer: true, silent: !opts.manual });
+    if (opts.skipSlide) {
+      await playDiscoverReelAt(nextIdx, { openPlayer: true, silent: !opts.manual, skipSlide: true });
+    } else {
+      await runDiscoverReelSlideTransition(1, nextIdx, opts);
+    }
   } finally {
     if (token === _discoverReelAdvanceToken) _discoverReelAdvancing = false;
   }
 }
 
 async function playPrevDiscoverReelTrack(opts = {}) {
-  if (_discoverReelAdvancing) return;
+  if (_discoverReelAdvancing || _discoverReelSlideAnimating) return;
   if (!discoverReelModeActive()) return;
   const curIdx = Number.isFinite(miniSource?.reelIndex) ? Number(miniSource.reelIndex) : 0;
   const prevIdx = curIdx - 1;
@@ -32848,7 +32956,11 @@ async function playPrevDiscoverReelTrack(opts = {}) {
   _discoverReelAdvancing = true;
   const token = ++_discoverReelAdvanceToken;
   try {
-    await playDiscoverReelAt(prevIdx, { openPlayer: true, silent: !opts.manual });
+    if (opts.skipSlide) {
+      await playDiscoverReelAt(prevIdx, { openPlayer: true, silent: !opts.manual, skipSlide: true });
+    } else {
+      await runDiscoverReelSlideTransition(-1, prevIdx, opts);
+    }
   } finally {
     if (token === _discoverReelAdvanceToken) _discoverReelAdvancing = false;
   }
@@ -33535,6 +33647,9 @@ let _discoverPlaylistAdvanceToken = 0;
 let _discoverReelQueue = [];
 let _discoverReelAdvancing = false;
 let _discoverReelAdvanceToken = 0;
+let _discoverReelSlideAnimating = false;
+const DISCOVER_REEL_SLIDE_MS = 340;
+const DISCOVER_REEL_DRAG_COMMIT_PX = 84;
 /** User-curated profile playlists (local per account). */
 let _userPlaylistQueue = [];
 let _userPlaylistQueueId = "";
@@ -45411,29 +45526,170 @@ function wirePlayerDiscoverReelSwipeOnce() {
   const shell = document.querySelector(".playerShell");
   if (!shell || shell.dataset.discoverReelSwipeWired === "1") return;
   shell.dataset.discoverReelSwipeWired = "1";
+  const layer = document.getElementById("playerReelAnimLayer");
+  const outPanel = layer?.querySelector(".playerReelAnimPanel--out");
+  const inPanel = layer?.querySelector(".playerReelAnimPanel--in");
   let touchStartY = 0;
   let touchStartX = 0;
+  let touchDragY = 0;
+  let touchDragging = false;
+  let touchDragDir = 0;
+  let touchDragTargetIdx = -1;
   let wheelAccum = 0;
   let wheelTimer = 0;
+
+  function discoverReelDragTargetIdx(dir) {
+    const curIdx = Number.isFinite(miniSource?.reelIndex)
+      ? Number(miniSource.reelIndex)
+      : _discoverReelQueue.findIndex((t) =>
+        audioUrlsEquivalent(String(t.url || ""), String(currentPlayerTrackRef?.url || "")),
+      );
+    if (curIdx < 0) return -1;
+    const next = curIdx + (dir > 0 ? 1 : -1);
+    if (next < 0 || next >= _discoverReelQueue.length) return -1;
+    return next;
+  }
+
+  function resetDiscoverReelDragPreview() {
+    touchDragging = false;
+    touchDragDir = 0;
+    touchDragTargetIdx = -1;
+    touchDragY = 0;
+    if (!layer?.hidden) {
+      resetDiscoverReelAnimPanels(outPanel, inPanel);
+      layer.hidden = true;
+      layer.setAttribute("aria-hidden", "true");
+      setDiscoverReelAnimLayerActive(false);
+    }
+  }
+
+  function paintDiscoverReelDragPreview(dir, targetIdx, dyPx) {
+    if (!layer || !outPanel || !inPanel || targetIdx < 0) return;
+    const target = discoverReelPickAt(targetIdx);
+    if (!target?.url) return;
+    const h = layer.clientHeight || window.innerHeight;
+    paintDiscoverReelAnimPanel(outPanel, captureCurrentDiscoverReelPick());
+    paintDiscoverReelAnimPanel(inPanel, target);
+    resetDiscoverReelAnimPanels(outPanel, inPanel);
+    outPanel.style.transform = `translateY(${dyPx}px)`;
+    inPanel.style.transform = `translateY(${dyPx + (dir > 0 ? h : -h)}px)`;
+    if (layer.hidden) {
+      layer.hidden = false;
+      layer.setAttribute("aria-hidden", "false");
+      setDiscoverReelAnimLayerActive(true);
+    }
+  }
+
+  async function finishDiscoverReelDrag(dir, targetIdx, dyPx) {
+    if (!layer || !outPanel || !inPanel || targetIdx < 0) {
+      resetDiscoverReelDragPreview();
+      return;
+    }
+    const h = layer.clientHeight || window.innerHeight;
+    const commit = Math.abs(dyPx) >= DISCOVER_REEL_DRAG_COMMIT_PX;
+    if (!commit) {
+      const easing = "cubic-bezier(0.22, 1, 0.36, 1)";
+      outPanel.style.transition = `transform ${DISCOVER_REEL_SLIDE_MS}ms ${easing}`;
+      inPanel.style.transition = `transform ${DISCOVER_REEL_SLIDE_MS}ms ${easing}`;
+      outPanel.style.transform = "translateY(0)";
+      inPanel.style.transform = `translateY(${dir > 0 ? h : -h}px)`;
+      await discoverReelSlideWait(DISCOVER_REEL_SLIDE_MS);
+      resetDiscoverReelDragPreview();
+      return;
+    }
+    _discoverReelSlideAnimating = true;
+    const outOff = dir > 0 ? -h : h;
+    const easing = "cubic-bezier(0.22, 1, 0.36, 1)";
+    outPanel.style.transition = `transform ${DISCOVER_REEL_SLIDE_MS}ms ${easing}`;
+    inPanel.style.transition = `transform ${DISCOVER_REEL_SLIDE_MS}ms ${easing}`;
+    outPanel.style.transform = `translateY(${outOff}px)`;
+    inPanel.style.transform = "translateY(0)";
+    haptic("medium");
+    await discoverReelSlideWait(DISCOVER_REEL_SLIDE_MS);
+    _discoverReelAdvancing = true;
+    const token = ++_discoverReelAdvanceToken;
+    try {
+      hidePlayerKaraokeStrip();
+      await playDiscoverReelAt(targetIdx, { openPlayer: true, silent: true, skipSlide: true });
+    } finally {
+      if (token === _discoverReelAdvanceToken) _discoverReelAdvancing = false;
+    }
+    resetDiscoverReelAnimPanels(outPanel, inPanel);
+    layer.hidden = true;
+    layer.setAttribute("aria-hidden", "true");
+    setDiscoverReelAnimLayerActive(false);
+    _discoverReelSlideAnimating = false;
+    touchDragging = false;
+    touchDragDir = 0;
+    touchDragTargetIdx = -1;
+    touchDragY = 0;
+  }
+
   shell.addEventListener("touchstart", (e) => {
-    if (!discoverReelModeActive()) return;
+    if (!discoverReelModeActive() || _discoverReelSlideAnimating || _discoverReelAdvancing) return;
     if (e.touches.length !== 1) return;
     touchStartY = e.touches[0].clientY;
     touchStartX = e.touches[0].clientX;
+    touchDragY = 0;
+    touchDragging = true;
+    touchDragDir = 0;
+    touchDragTargetIdx = -1;
   }, { passive: true });
+
+  shell.addEventListener("touchmove", (e) => {
+    if (!touchDragging || !discoverReelModeActive()) return;
+    const y = e.touches[0].clientY;
+    const x = e.touches[0].clientX;
+    const dy = y - touchStartY;
+    const dx = x - touchStartX;
+    if (Math.abs(dx) > Math.abs(dy) + 8) return;
+    if (Math.abs(dy) < 6) return;
+    const dir = dy < 0 ? 1 : -1;
+    if (touchDragDir !== dir) {
+      touchDragDir = dir;
+      touchDragTargetIdx = discoverReelDragTargetIdx(dir);
+    }
+    if (touchDragTargetIdx < 0) return;
+    touchDragY = dy;
+    paintDiscoverReelDragPreview(dir, touchDragTargetIdx, dy);
+    e.preventDefault();
+  }, { passive: false });
+
   shell.addEventListener("touchend", (e) => {
-    if (!discoverReelModeActive()) return;
+    if (!touchDragging) return;
+    touchDragging = false;
     const touch = e.changedTouches[0];
-    if (!touch) return;
+    if (!touch) {
+      resetDiscoverReelDragPreview();
+      return;
+    }
     const dy = touch.clientY - touchStartY;
     const dx = touch.clientX - touchStartX;
-    if (Math.abs(dx) > Math.abs(dy)) return;
-    if (Math.abs(dy) < 72) return;
-    if (dy < 0) void playNextDiscoverReelTrack(currentPlayerTrackRef?.url, { manual: true });
+    if (Math.abs(dx) > Math.abs(dy)) {
+      resetDiscoverReelDragPreview();
+      return;
+    }
+    const dir = dy < 0 ? 1 : -1;
+    const targetIdx = discoverReelDragTargetIdx(dir);
+    if (targetIdx < 0 || Math.abs(dy) < 12) {
+      resetDiscoverReelDragPreview();
+      return;
+    }
+    if (layer && !layer.hidden && touchDragTargetIdx >= 0) {
+      void finishDiscoverReelDrag(dir, targetIdx, dy);
+      return;
+    }
+    if (Math.abs(dy) < DISCOVER_REEL_DRAG_COMMIT_PX) return;
+    if (dir > 0) void playNextDiscoverReelTrack(currentPlayerTrackRef?.url, { manual: true });
     else void playPrevDiscoverReelTrack({ manual: true });
   }, { passive: true });
+
+  shell.addEventListener("touchcancel", () => {
+    resetDiscoverReelDragPreview();
+  }, { passive: true });
+
   shell.addEventListener("wheel", (e) => {
-    if (!discoverReelModeActive()) return;
+    if (!discoverReelModeActive() || _discoverReelSlideAnimating || _discoverReelAdvancing) return;
     if (Math.abs(e.deltaY) < 8) return;
     wheelAccum += e.deltaY;
     if (wheelTimer) return;

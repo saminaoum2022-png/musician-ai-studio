@@ -172,7 +172,7 @@
       onload="this.media='all'"
     />
     <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Display:wght@900&family=Inter:wght@900&display=swap" /></noscript>
-    <link rel="stylesheet" href="./styles.css?v=20260710-160719" />
+    <link rel="stylesheet" href="./styles.css?v=20260710-162503" />
 
     <meta name="description" content="NabadAi is an AI music studio. Hum a melody, write lyrics, and ship a song." />
     <meta property="og:type" content="website" />
@@ -2313,6 +2313,26 @@
         </div>
 
         <section class="card wide playerCard" data-route="player">
+          <div id="playerReelAnimLayer" class="playerReelAnimLayer" hidden aria-hidden="true">
+            <div class="playerReelAnimPanel playerReelAnimPanel--out">
+              <div class="playerReelAnimCover">
+                <img class="playerReelAnimArt" alt="" />
+              </div>
+              <div class="playerReelAnimMeta">
+                <p class="playerReelAnimTitle"></p>
+                <p class="playerReelAnimCreator"></p>
+              </div>
+            </div>
+            <div class="playerReelAnimPanel playerReelAnimPanel--in">
+              <div class="playerReelAnimCover">
+                <img class="playerReelAnimArt" alt="" />
+              </div>
+              <div class="playerReelAnimMeta">
+                <p class="playerReelAnimTitle"></p>
+                <p class="playerReelAnimCreator"></p>
+              </div>
+            </div>
+          </div>
           <div class="playerHeader">
             <button id="btnPlayerBack" class="nabadBackBtn playerBack" type="button" aria-label="Back">
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6 9 12l6 6"/></svg>
@@ -4550,6 +4570,6 @@
     </script>
     <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
     <script src="./env.client.js" onerror="void 0"></script>
-    <script type="module" src="./src/app.js?v=20260710-160719"></script>
+    <script type="module" src="./src/app.js?v=20260710-162503"></script>
   </body>
 </html>

@@ -185,7 +185,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260710-120729";
+const APP_BUILD = "20260710-121814";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -26385,6 +26385,7 @@ async function openShareChooserForTrack(ref) {
     showToast("Open a song first, then share.");
     return;
   }
+  wireInAppShareSheetsOnce();
   _pendingInAppShareRef = shareRef;
   if (!MESSAGES_FEATURE_ENABLED || !authSession?.user?.id) {
     await shareTrackLinkExternally(shareRef);
@@ -52540,6 +52541,7 @@ if (els.btnPlayerToggle) {
   syncPlayerToggleUI();
 }
 wirePlayerSocialRailOnce();
+wireInAppShareSheetsOnce();
 if (els.btnPlayerBack) {
   els.btnPlayerBack.addEventListener("click", () => {
     // The mobile tab bar is hidden on /player (full-screen Now Playing),

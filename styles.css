@@ -32795,14 +32795,19 @@ html.is-web-shell body.messagesThreadViewportSized[data-route="messages-thread"]
 .messagesShareSheet[hidden]{
   display: none !important;
 }
+.shareChooserSheetBackdrop,
+.sendToFriendSheetBackdrop,
 .messagesShareSheetBackdrop{
   position: absolute;
   inset: 0;
-  background: rgba(2, 4, 10, 0.72);
-  backdrop-filter: blur(6px);
+  z-index: 0;
+  background: rgba(2, 4, 10, 0.82);
 }
+.shareChooserSheetCard,
+.sendToFriendSheetCard,
 .messagesShareSheetCard{
   position: relative;
+  z-index: 1;
   width: min(100%, 420px);
   max-height: min(70dvh, 520px);
   display: flex;

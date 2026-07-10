@@ -17469,7 +17469,7 @@ body.trackSheetOpen .footer{
   body[data-route="player"] .playerArtWrap .playerKaraokeFloat{
     left: 24px;
     right: 24px;
-    bottom: -20px;
+    bottom: -32px;
     z-index: 6;
     gap: 5px;
     padding: 0;
@@ -17503,7 +17503,7 @@ body.trackSheetOpen .footer{
     filter: drop-shadow(0 1px 12px rgba(0, 0, 0, 0.5));
   }
   body[data-route="player"] .playerInstrumentalLabel{
-    bottom: -18px;
+    bottom: -30px;
   }
   body[data-route="player"] .playerTransport{
     margin-top: 8px;

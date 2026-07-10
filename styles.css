@@ -17297,6 +17297,8 @@ body.trackSheetOpen .footer{
     --player-cover-height: calc(100svh - var(--player-cover-bottom));
     /* Title/creator row anchor — matches fixed playerMeta stack above transport. */
     --player-reel-meta-bottom: calc(var(--player-chrome-safe) + 104px);
+    /* Push the cover bottom fade lower without changing cover crop or lyrics. */
+    --player-cover-fade-shift: 32px;
   }
   body[data-route="messages-thread"] .hubNowPlaying{
     display: none !important;
@@ -17461,8 +17463,11 @@ body.trackSheetOpen .footer{
   body[data-route="player"] .playerArtStage::after{
     content: "";
     position: absolute;
-    inset: auto 0 0 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
     height: 120px;
+    transform: translateY(var(--player-cover-fade-shift, 0));
     background: linear-gradient(
       to top,
       #0a0c12 0%,
@@ -17672,8 +17677,11 @@ body.trackSheetOpen .footer{
   body[data-route="player"] .playerReelAnimCover::after{
     content: "";
     position: absolute;
-    inset: auto 0 0 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
     height: 120px;
+    transform: translateY(var(--player-cover-fade-shift, 0));
     background: linear-gradient(
       to top,
       #0a0c12 0%,

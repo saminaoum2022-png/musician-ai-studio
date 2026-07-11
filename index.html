@@ -172,7 +172,7 @@
       onload="this.media='all'"
     />
     <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Display:wght@900&family=Inter:wght@900&display=swap" /></noscript>
-    <link rel="stylesheet" href="./styles.css?v=20260712-011124" />
+    <link rel="stylesheet" href="./styles.css?v=20260712-021631" />
 
     <meta name="description" content="NabadAi is an AI music studio. Hum a melody, write lyrics, and ship a song." />
     <meta property="og:type" content="website" />
@@ -2345,12 +2345,29 @@
             <div class="playerArtWrap isEmpty">
               <div class="playerArtStage">
                 <img id="playerArt" class="playerArt isPlaceholder" src="./assets/icons/splash-mark.png" alt="" />
+                <div id="playerCoverGenOverlay" class="playerCoverGenOverlay" hidden aria-hidden="true">
+                  <span class="playerCoverGenAura"></span>
+                  <span class="playerCoverGenShimmer"></span>
+                  <p class="playerCoverGenLabel">Creating cover…</p>
+                </div>
                 <p id="playerInstrumentalLabel" class="playerInstrumentalLabel" hidden aria-hidden="true">Instrumental</p>
               </div>
               <div id="playerKaraokeStrip" class="playerKaraokeFloat" hidden aria-live="polite" aria-label="Synced lyrics">
                 <p id="playerKaraokeLinePrev" class="playerKaraokeLine playerKaraokeLine--prev" dir="auto" aria-hidden="true"></p>
                 <p id="playerKaraokeLineCurrent" class="playerKaraokeLine playerKaraokeLine--current" dir="auto"></p>
                 <p id="playerKaraokeLineNext" class="playerKaraokeLine playerKaraokeLine--next" dir="auto" aria-hidden="true"></p>
+              </div>
+              <div id="playerCoverToolsRail" class="playerCoverToolsRail" hidden aria-label="Cover tools">
+                <button id="btnPlayerRegenCover" type="button" class="playerCoverToolBtn playerCoverToolBtn--magic" aria-label="Regenerate cover" hidden>
+                  <span class="playerCoverToolSpark" aria-hidden="true">✦</span>
+                </button>
+                <button id="btnPlayerEditThumb" type="button" class="playerCoverToolBtn" aria-label="Edit square thumbnail" hidden>
+                  <svg class="playerCoverToolIco" viewBox="0 0 24 24" aria-hidden="true">
+                    <rect x="3" y="5" width="18" height="14" rx="2.5" fill="none" stroke="currentColor" stroke-width="2"/>
+                    <circle cx="8.5" cy="10" r="1.6" fill="currentColor"/>
+                    <path d="M21 16.5 16.5 12l-4.2 4.2-2.3-2.3L3 18.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                  </svg>
+                </button>
               </div>
               <aside id="playerSocialRail" class="playerSocialRail" hidden aria-label="Song interactions">
                 <div id="playerSocialActions" class="followActActions playerSocialActions" data-friends-act-row="1" data-friends-act-kind="music" data-friends-act-target-kind="song" data-friends-act-id="" data-friends-act-uid="">
@@ -2450,6 +2467,35 @@
               </button>
 
               <input id="playerCoverUpload" type="file" accept="image/*" style="display:none" />
+
+              <div id="thumbEditSheet" class="thumbEditSheet" role="dialog" aria-modal="true" aria-labelledby="thumbEditTitle" hidden>
+                <div id="thumbEditBackdrop" class="thumbEditBackdrop" aria-hidden="true"></div>
+                <div class="thumbEditPanel">
+                  <div class="thumbEditHead">
+                    <button id="btnThumbEditClose" type="button" class="thumbEditClose" aria-label="Close">✕</button>
+                    <h2 id="thumbEditTitle" class="thumbEditTitle">Edit thumbnail</h2>
+                    <button id="btnThumbEditSave" type="button" class="thumbEditSave">Save</button>
+                  </div>
+                  <p class="thumbEditHint">Adjust how the square thumbnail looks in feeds and lists. The full portrait cover stays for the player and reel.</p>
+                  <div class="thumbEditPreviewWrap">
+                    <div class="thumbEditPreviewLabel">Square preview</div>
+                    <div class="thumbEditPreviewFrame">
+                      <canvas id="thumbEditPreviewCanvas" class="thumbEditPreviewCanvas" width="280" height="280" aria-label="Thumbnail preview"></canvas>
+                    </div>
+                  </div>
+                  <div class="thumbEditControls">
+                    <label class="thumbEditControl">
+                      <span class="thumbEditControlLabel">Zoom</span>
+                      <input id="thumbEditZoom" type="range" min="1" max="2.5" step="0.01" value="1" />
+                    </label>
+                    <label class="thumbEditControl">
+                      <span class="thumbEditControlLabel">Move up / down</span>
+                      <input id="thumbEditOffset" type="range" min="-100" max="100" step="1" value="0" />
+                    </label>
+                    <button id="btnThumbEditChangePhoto" type="button" class="thumbEditChangePhoto">Change photo</button>
+                  </div>
+                </div>
+              </div>
 
               <!-- Centered confirm modal (publish, clip publish, cover save). -->
               <div id="playerConfirm" class="playerConfirm" role="dialog" aria-modal="true" aria-labelledby="playerConfirmText" hidden>
@@ -4570,6 +4616,6 @@
     </script>
     <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
     <script src="./env.client.js" onerror="void 0"></script>
-    <script type="module" src="./src/app.js?v=20260712-011124"></script>
+    <script type="module" src="./src/app.js?v=20260712-021631"></script>
   </body>
 </html>

@@ -3,13 +3,13 @@
  * User never writes these. Same song id + same story → same seed + same scene.
  */
 
-/** Pollinations output — 9:16 portrait for full-screen reel player (no crop). */
+/** Pollinations flux returns native 9:16 for 720×1280 (typically ~576×1024). */
 export const POLLINATIONS_COVER_WIDTH = 720;
 export const POLLINATIONS_COVER_HEIGHT = 1280;
 
-/** Baked into every cover prompt so Flux composes for vertical full-screen. */
-const PORTRAIT_FRAME =
-  "vertical portrait orientation, tall 9:16 mobile full-screen framing, key subject centered in frame";
+/** Compose for vertical album art — waist-up only, never full-body stretch. */
+const PORTRAIT_COMPOSE_FRAME =
+  "vertical album art composition, subject in the upper two-thirds, waist-up or head-and-shoulders framing only, natural human proportions, correct anatomy, no full-body vertical stretch, no elongated features, no stretched limbs";
 
 /** Keep in sync with hum-track-cover.mjs — no imports here (server loads this via dynamic import). */
 const HUM_TRACK_SCENE_GUARD =
@@ -31,10 +31,10 @@ const NO_TEXT_REINFORCE =
   "completely wordless photograph, zero readable characters in the entire frame, blank signs, empty screens, no labels";
 
 const NEGATIVE_TEXT_PROMPT =
-  "text, words, letters, numbers, typography, font, writing, caption, subtitle, watermark, logo, album cover title, song title, track title, artist name, band name, signage, billboard, poster text, newspaper, book, magazine, speech bubble, label, stamp, signature, handwritten, calligraphy, cursive, script font, decorative lettering, word art, letter shapes, holiday lettering, christmas text, greeting card text, festive banner, neon sign with words, arabic text, english text, quotes, meme text, ui overlay, readable characters, sentences, lyrics on screen, cd cover text, record label, tracklist, credits block, diploma text, certificate text, graffiti letters, title card, greeting card, banner text, embroidered text, carved letters, glowing words, light text, 3d text, bad anatomy, deformed anatomy, extra fingers, missing fingers, duplicate limbs, floating limbs, mutated hands, broken hands, crossed eyes, lazy eye, crooked eyes, disfigured face, cropped face, duplicate subject, floating objects, blurry, low quality, jpeg artifacts, oversaturated, distorted perspective";
+  "text, words, letters, numbers, typography, font, writing, caption, subtitle, watermark, logo, album cover title, song title, track title, artist name, band name, signage, billboard, poster text, newspaper, book, magazine, speech bubble, label, stamp, signature, handwritten, calligraphy, cursive, script font, decorative lettering, word art, letter shapes, holiday lettering, christmas text, greeting card text, festive banner, neon sign with words, arabic text, english text, quotes, meme text, ui overlay, readable characters, sentences, lyrics on screen, cd cover text, record label, tracklist, credits block, diploma text, certificate text, graffiti letters, title card, greeting card, banner text, embroidered text, carved letters, glowing words, light text, 3d text, bad anatomy, deformed anatomy, extra fingers, missing fingers, duplicate limbs, floating limbs, mutated hands, broken hands, crossed eyes, lazy eye, crooked eyes, disfigured face, cropped face, duplicate subject, floating objects, blurry, low quality, jpeg artifacts, oversaturated, distorted perspective, elongated face, stretched portrait, vertically stretched body, squashed proportions, wrong aspect ratio, fisheye portrait, close-up portrait, beauty portrait, fashion portrait, headshot, detailed facial features, recognizable face, portrait photography, full body portrait, tall thin figure, unnaturally long neck, stretched silhouette";
 
 const STYLE_CORE =
-  "premium cinematic visual art, elegant composition, rich color grading, high-end editorial look, moody dark tones with luminous accents, deep teal and violet palette when appropriate, natural anatomy, physically plausible lighting, clean geometry, single focal subject, balanced composition, professional photography, minimal visual noise, high image coherence, realistic proportions, clean perspective";
+  "premium cinematic visual art, elegant composition, rich color grading, high-end editorial look, moody dark tones with luminous accents, deep teal and violet palette when appropriate, natural anatomy, physically plausible lighting, clean geometry, single focal subject, balanced vertical composition, professional photography, minimal visual noise, high image coherence, realistic proportions, clean perspective, silhouettes preferred over detailed faces";
 
 const HUM_TRACK_STYLE_CORE =
   "premium cinematic visual art, elegant composition, rich color grading, moody dark tones with luminous accents, deep teal and violet palette, photoreal studio nook still life, props only, warm wood surfaces, window sunlight with long shadows, dried botanical accents, balanced composition, professional studio photography, minimal visual noise, high image coherence, clean perspective, no instruments visible, no human subjects";
@@ -548,6 +548,20 @@ function buildCoverSeed(input, storyTheme, bucketKey, userArtwork) {
   return fnv1a(`${songId}|${storyTheme}|${bucketKey}|${storyBlob}`) % 2147483646;
 }
 
+/** Keep people as backlit silhouettes — strip language that triggers detailed face portraits. */
+function withFigureSilhouetteGuard(scene, mode) {
+  let s = String(scene || "").trim();
+  if (!s) return s;
+  s = s.replace(/\b(vertical portrait|9:16|tall vertical|full[- ]screen vertical|portrait orientation|close-up|closeup|headshot|beauty portrait|fashion model|detailed face|visible face|facial features|portrait photography)\b/gi, " ");
+  const needsSilhouette =
+    mode === "figure" ||
+    /\b(person|people|woman|man|girl|boy|mother|mom|father|bride|groom|couple|dancer|performer|face|portrait|silhouette)\b/i.test(s);
+  if (needsSilhouette) {
+    s = `${s}, backlit black silhouettes only, no visible facial features, no close-up faces, no portrait photography`;
+  }
+  return s.replace(/\s+/g, " ").trim();
+}
+
 /**
  * @param {object} input
  * @param {{ sceneOverride?: string, artworkSourceOverride?: string, geminiModel?: string, directorSceneHint?: string, nabadIdentityPhrases?: string, visualDirection?: object }} [options]
@@ -566,7 +580,7 @@ export function buildAbstractCoverPrompt(input, options = {}) {
   const userArtworkRaw = resolveUserArtworkPrompt(input);
   const userArtwork = sanitizeArtworkPrompt(userArtworkRaw, { title });
   const sceneOverrideRaw = sanitizeArtworkPrompt(String(options.sceneOverride || "").trim(), { title });
-  const sceneOverride = sceneOverrideRaw && userArtwork
+  let sceneOverride = sceneOverrideRaw && userArtwork
     ? sanitizeArtworkPrompt(`${userArtwork}, ${sceneOverrideRaw}`, { title })
     : sceneOverrideRaw;
 
@@ -574,7 +588,12 @@ export function buildAbstractCoverPrompt(input, options = {}) {
   const directorSceneHint = sanitizeArtworkPrompt(String(options.directorSceneHint || "").trim(), { title });
   const nabadIdentityPhrases = sanitizeArtworkPrompt(String(options.nabadIdentityPhrases || "").trim(), { title });
   const storyScene = toVisualOnlyPrompt(scene, { title });
-  const visualScene = !sceneOverride && !userArtwork && directorSceneHint ? directorSceneHint : storyScene;
+  let visualScene = !sceneOverride && !userArtwork && directorSceneHint ? directorSceneHint : storyScene;
+  const effectiveMode = sceneOverride || userArtwork ? "user_directed" : visualMode;
+  sceneOverride = sceneOverride
+    ? withFigureSilhouetteGuard(sceneOverride, effectiveMode)
+    : "";
+  visualScene = withFigureSilhouetteGuard(visualScene, visualMode);
   const palette = moodPaletteForBucket(bucketKey);
   const composition = COMPOSITIONS[fnv1a(`${songId}:composition`) % COMPOSITIONS.length];
   const seed = buildCoverSeed(input, storyTheme, bucketKey, userArtwork);
@@ -596,7 +615,7 @@ export function buildAbstractCoverPrompt(input, options = {}) {
     parts = userArtwork
       ? [
           NO_TEXT_LEAD,
-          PORTRAIT_FRAME,
+          PORTRAIT_COMPOSE_FRAME,
           sceneOverride,
           nabadIdentityPhrases,
           palette,
@@ -608,7 +627,7 @@ export function buildAbstractCoverPrompt(input, options = {}) {
         ]
       : [
           NO_TEXT_LEAD,
-          PORTRAIT_FRAME,
+          PORTRAIT_COMPOSE_FRAME,
           SAFETY_PREFIX + styleCore,
           sceneOverride,
           nabadIdentityPhrases,
@@ -626,7 +645,7 @@ export function buildAbstractCoverPrompt(input, options = {}) {
   } else if (userArtwork) {
     parts = [
       NO_TEXT_LEAD,
-      PORTRAIT_FRAME,
+      PORTRAIT_COMPOSE_FRAME,
       userArtwork,
       nabadIdentityPhrases,
       palette,
@@ -639,7 +658,7 @@ export function buildAbstractCoverPrompt(input, options = {}) {
   } else {
     parts = [
       NO_TEXT_LEAD,
-      PORTRAIT_FRAME,
+      PORTRAIT_COMPOSE_FRAME,
       SAFETY_PREFIX + styleCore,
       visualScene,
       nabadIdentityPhrases,
@@ -686,6 +705,7 @@ export function buildAbstractCoverPrompt(input, options = {}) {
       coverWidth: POLLINATIONS_COVER_WIDTH,
       coverHeight: POLLINATIONS_COVER_HEIGHT,
       coverAspect: "9:16",
+      coverSourceAspect: "9:16",
     },
   };
 }

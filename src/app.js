@@ -66,6 +66,7 @@ import {
   buildParallelCoverVariants,
   applyParallelCoverForTrack,
   resolveParallelCoverSongId,
+  regenerateAbstractCoverForTrack,
 } from "./cover-art/generate.js";
 import { isPollinationsCoverEligible, shouldUseAbstractCover } from "./cover-art/params.js";
 import {
@@ -76,6 +77,7 @@ import {
   playerEmptyArtUrl,
 } from "./cover-art/placeholders.js";
 import { initCoverArtOverlay, syncCoverArtOverlay } from "./cover-art/overlay.js";
+import { portrait916CropRect } from "./cover-art/portrait-normalize.js";
 import { feedActIconAnalytics, feedActIconComment, feedActIconGift, feedActIconLike, feedActIconPlays, feedActIconRepost, feedActIconShare } from "./feed-action-icons.js";
 import { initGifts, openGiftSheetForTarget, openGiftSheetFromButton } from "./gifts.js";
 import { configureProPlan, onProPlanRouteActive, refreshProSubscriptionUi, setProReturnRoute } from "./pro-plan.js";
@@ -185,7 +187,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260712-011124";
+const APP_BUILD = "20260712-021631";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -875,6 +877,18 @@ const els = {
   btnLoadVocals: document.getElementById("btnLoadVocals"),
   btnLoadInstrumental: document.getElementById("btnLoadInstrumental"),
   playerCoverUpload: document.getElementById("playerCoverUpload"),
+  playerCoverToolsRail: document.getElementById("playerCoverToolsRail"),
+  playerCoverGenOverlay: document.getElementById("playerCoverGenOverlay"),
+  btnPlayerRegenCover: document.getElementById("btnPlayerRegenCover"),
+  btnPlayerEditThumb: document.getElementById("btnPlayerEditThumb"),
+  thumbEditSheet: document.getElementById("thumbEditSheet"),
+  thumbEditBackdrop: document.getElementById("thumbEditBackdrop"),
+  btnThumbEditClose: document.getElementById("btnThumbEditClose"),
+  btnThumbEditSave: document.getElementById("btnThumbEditSave"),
+  btnThumbEditChangePhoto: document.getElementById("btnThumbEditChangePhoto"),
+  thumbEditPreviewCanvas: document.getElementById("thumbEditPreviewCanvas"),
+  thumbEditZoom: document.getElementById("thumbEditZoom"),
+  thumbEditOffset: document.getElementById("thumbEditOffset"),
   playerConfirm: document.getElementById("playerConfirm"),
   playerConfirmThumb: document.getElementById("playerConfirmThumb"),
   playerConfirmText: document.getElementById("playerConfirmText"),
@@ -18746,6 +18760,26 @@ function coverSquareCropRect(w, h) {
   return { sx, sy, crop };
 }
 
+/** User-adjustable square thumb crop from the full portrait cover. */
+function thumbFrameCropRect(w, h, frame = {}) {
+  const iw = Number(w) || 0;
+  const ih = Number(h) || 0;
+  const crop = Math.min(iw, ih);
+  if (!iw || !ih) return { sx: 0, sy: 0, crop: 1 };
+  const scale = Math.max(1, Math.min(2.5, Number(frame?.scale) || 1));
+  const offsetY = Math.max(-1, Math.min(1, Number(frame?.offsetY) || 0));
+  const side = Math.min(iw, ih, crop / scale);
+  const sx = (iw - side) / 2;
+  const defaultSy = ih > iw * 1.08 ? 0 : (ih - side) / 2;
+  const maxSy = Math.max(0, ih - side);
+  const travelDown = Math.max(0, maxSy - defaultSy);
+  const travelUp = Math.max(0, defaultSy);
+  const sy = offsetY >= 0
+    ? Math.min(maxSy, defaultSy + offsetY * travelDown)
+    : Math.max(0, defaultSy + offsetY * travelUp);
+  return { sx, sy, crop: side };
+}
+
 /** Derive the paired `_thumb` object URL for a Supabase song_covers main asset. */
 function supabaseSongCoverThumbUrl(url) {
   const s = String(url || "").trim().split("?")[0].split("#")[0];
@@ -18809,6 +18843,11 @@ function trackCoverArtForDisplay(track) {
 /** Square post / list tiles: crop portrait in CSS (top-biased) like Discover
  *  feed rows, instead of blowing up a tight baked `_thumb` square. */
 function trackCoverArtForSquareTile(track, opts = {}) {
+  const m = track?.meta || {};
+  const customThumb = m.thumbFrame && String(m.imageThumb || "").trim();
+  if (customThumb && !customThumb.startsWith("data:") && !isLogoCoverUrl(customThumb)) {
+    return customThumb;
+  }
   const w = Math.min(768, Math.max(128, Number(opts.width) || 512));
   const display = trackCoverArtForDisplay(track);
   if (!display || display === DEFAULT_SONG_COVER_URL) return display;
@@ -18908,6 +18947,47 @@ async function persistTrackCoverIfNeeded(track) {
     return await job;
   } finally {
     _coverUploadInflight.delete(id);
+  }
+}
+
+/** Upload a freshly edited square thumb when the main cover is already on Storage. */
+async function persistTrackThumbIfNeeded(track) {
+  const id = String(track?.id || "").trim();
+  if (!id || !authSession?.user?.id) return null;
+  const thumbData = String(track?.meta?.imageThumb || "").trim();
+  if (!thumbData.startsWith("data:")) return null;
+  const inflightKey = `${id}:thumb`;
+  if (_coverUploadInflight.has(inflightKey)) return _coverUploadInflight.get(inflightKey);
+  const job = (async () => {
+    try {
+      const thumbBlob = await dataUrlToBlob(thumbData);
+      const imageThumb = await uploadSongCoverBlob(thumbBlob, id, "thumb");
+      const items = loadLibrary();
+      const idx = items.findIndex((x) => String(x.id) === id);
+      if (idx < 0) return imageThumb;
+      const prev = items[idx];
+      const nextMeta = { ...(prev.meta || {}), imageThumb, thumbFrame: track?.meta?.thumbFrame || prev.meta?.thumbFrame };
+      items[idx] = { ...prev, meta: nextMeta, ts: Date.now() };
+      saveLibrary(items);
+      try {
+        refreshOwnSongsUi({ soft: true });
+      } catch {
+        try { refreshOwnSongsUi(); } catch {}
+      }
+      void supabasePatchUserSong(prev, { meta: nextMeta }, { reason: "thumb-upload" });
+      return imageThumb;
+    } catch (e) {
+      try {
+        console.warn("[song_covers/thumb]", e?.message || e);
+      } catch {}
+      return null;
+    }
+  })();
+  _coverUploadInflight.set(inflightKey, job);
+  try {
+    return await job;
+  } finally {
+    _coverUploadInflight.delete(inflightKey);
   }
 }
 
@@ -45208,13 +45288,15 @@ function setPlayerMeta({ title, subtitle, artUrl, releaseCaption, remixOf, chall
     syncCoverArtOverlay(
       hasTrack &&
         abstractLive &&
-        !els.playerArt?.classList.contains("isCoverPlaceholder"),
+        !els.playerArt?.classList.contains("isCoverPlaceholder") &&
+        !document.querySelector(".playerArtWrap")?.classList.contains("isCoverGenerating"),
     );
   } catch {
     syncCoverArtOverlay(false);
   }
   syncPlayerPlaysCount();
   syncPlayerInstrumentalLabel();
+  try { syncPlayerCoverToolsRail(); } catch {}
 }
 
 // Most recent http(s) URL handed to the player. Used by Download Video
@@ -45324,6 +45406,193 @@ function openPlayerChangeCoverPicker() {
     return;
   }
   els.playerCoverUpload?.click();
+}
+
+function playerCanRegenerateCover(track) {
+  if (!track?.id) return false;
+  const meta = track.meta || {};
+  if (meta.photoMode || meta.imageOnlyInstrumental) return false;
+  return isPollinationsCoverEligible(meta);
+}
+
+function playerCanEditThumb(track) {
+  if (!track?.id) return false;
+  const url = trackCoverArtForDisplay(track);
+  return Boolean(url && url !== DEFAULT_SONG_COVER_URL && !isDefaultSongCoverUrl(url));
+}
+
+function syncPlayerCoverToolsRail() {
+  const rail = els.playerCoverToolsRail;
+  if (!rail) return;
+  const own = playerCurrentUserOwnsTrack() && !playerSourceIsExternalListenOnly();
+  const track = resolvePlayerLibraryTrack();
+  if (!own || !track) {
+    rail.hidden = true;
+    return;
+  }
+  const canRegen = playerCanRegenerateCover(track);
+  const canEdit = playerCanEditThumb(track);
+  if (!canRegen && !canEdit) {
+    rail.hidden = true;
+    return;
+  }
+  rail.hidden = false;
+  if (els.btnPlayerRegenCover) els.btnPlayerRegenCover.hidden = !canRegen;
+  if (els.btnPlayerEditThumb) els.btnPlayerEditThumb.hidden = !canEdit;
+}
+
+let _thumbEditTrackId = "";
+let _thumbEditFrame = { scale: 1, offsetY: 0 };
+let _thumbEditImage = null;
+let _thumbEditPreviewTimer = 0;
+
+function readThumbEditControls() {
+  const scale = clampNum(Number(els.thumbEditZoom?.value || 1), 1, 2.5);
+  const offsetY = clampNum(Number(els.thumbEditOffset?.value || 0), -100, 100) / 100;
+  _thumbEditFrame = { scale, offsetY };
+}
+
+function queueThumbEditPreview() {
+  if (_thumbEditPreviewTimer) clearTimeout(_thumbEditPreviewTimer);
+  _thumbEditPreviewTimer = setTimeout(() => {
+    _thumbEditPreviewTimer = 0;
+    readThumbEditControls();
+    void paintThumbEditPreviewCanvas(_thumbEditImage, _thumbEditFrame);
+  }, 16);
+}
+
+function closeThumbEditSheet() {
+  if (els.thumbEditSheet) els.thumbEditSheet.hidden = true;
+  _thumbEditTrackId = "";
+  _thumbEditImage = null;
+}
+
+async function openThumbEditSheet(track) {
+  if (!track?.id || !playerCanEditThumb(track)) return;
+  const src = trackCoverArtForDisplay(track);
+  if (!src) return;
+  _thumbEditTrackId = String(track.id);
+  const saved = track?.meta?.thumbFrame;
+  _thumbEditFrame = {
+    scale: clampNum(Number(saved?.scale) || 1, 1, 2.5),
+    offsetY: clampNum(Number(saved?.offsetY) || 0, -1, 1),
+  };
+  if (els.thumbEditZoom) els.thumbEditZoom.value = String(_thumbEditFrame.scale);
+  if (els.thumbEditOffset) els.thumbEditOffset.value = String(Math.round(_thumbEditFrame.offsetY * 100));
+  try {
+    setStatus("Loading cover…");
+    _thumbEditImage = await loadCoverRasterImage(src);
+  } catch (e) {
+    setStatus(`Could not load cover: ${e?.message || String(e)}`);
+    return;
+  }
+  if (els.thumbEditSheet) els.thumbEditSheet.hidden = false;
+  await paintThumbEditPreviewCanvas(_thumbEditImage, _thumbEditFrame);
+  setStatus("");
+}
+
+async function saveThumbEditSheet() {
+  const id = String(_thumbEditTrackId || "").trim();
+  if (!id || !_thumbEditImage) return;
+  const track = loadLibrary().find((x) => String(x.id) === id);
+  if (!track) {
+    closeThumbEditSheet();
+    return;
+  }
+  readThumbEditControls();
+  const src = trackCoverArtForDisplay(track);
+  setStatus("Saving thumbnail…");
+  const thumb = await buildCoverThumbWithFrame(src, _thumbEditFrame);
+  if (!thumb) {
+    setStatus("Could not save thumbnail.");
+    return;
+  }
+  const nextMeta = {
+    ...(track.meta || {}),
+    imageThumb: thumb,
+    thumbFrame: { ..._thumbEditFrame },
+  };
+  patchLibraryTrack(id, { meta: nextMeta });
+  const fresh = loadLibrary().find((x) => String(x.id) === id) || { ...track, meta: nextMeta };
+  currentPlayerTrackRef = fresh;
+  closeThumbEditSheet();
+  showShareToast("Thumbnail updated");
+  setStatus("");
+  void (async () => {
+    await persistTrackThumbIfNeeded(fresh);
+    try {
+      const route = String(document.body.getAttribute("data-route") || "");
+      if (route === "profile" && _profileSongsSegment === "activities") void renderProfileActivities();
+      if (route === "discover") void refreshDiscoverFeed();
+      if (route === "friends") void refreshDiscoveryFollowingFeed();
+    } catch {}
+  })();
+}
+
+function setPlayerCoverGenerating(active) {
+  const on = Boolean(active);
+  const wrap = document.querySelector(".playerArtWrap");
+  wrap?.classList.toggle("isCoverGenerating", on);
+  if (els.playerCoverGenOverlay) {
+    els.playerCoverGenOverlay.hidden = !on;
+    els.playerCoverGenOverlay.setAttribute("aria-hidden", on ? "false" : "true");
+  }
+  if (els.btnPlayerRegenCover) {
+    els.btnPlayerRegenCover.classList.toggle("isBusy", on);
+    els.btnPlayerRegenCover.setAttribute("aria-busy", on ? "true" : "false");
+  }
+  if (on) {
+    try { syncCoverArtOverlay(false); } catch {}
+  } else {
+    try {
+      const track = resolvePlayerLibraryTrack() || currentPlayerTrackRef;
+      const abstractLive =
+        Boolean(track?.meta?.nabadAbstractCover) ||
+        String(track?.meta?.coverSource || "") === "pollinations";
+      syncCoverArtOverlay(
+        Boolean(track?.id) &&
+          abstractLive &&
+          !els.playerArt?.classList.contains("isCoverPlaceholder"),
+      );
+    } catch {}
+  }
+}
+
+async function regeneratePlayerCover() {
+  const track = resolvePlayerLibraryTrack();
+  if (!track?.id || !playerCanRegenerateCover(track)) return;
+  const ok = await playerInlineConfirm({
+    text: "Generate a new AI cover? Your full portrait cover and reel view will update. You can re-edit the square thumbnail afterward.",
+    confirmLabel: "Regenerate",
+    cancelLabel: "Cancel",
+    thumbUrl: trackCoverArtForDisplay(track),
+  });
+  if (!ok) return;
+  setPlayerCoverGenerating(true);
+  setStatus("Generating new cover…");
+  try {
+    const updated = await regenerateAbstractCoverForTrack(track);
+    if (updated) {
+      currentPlayerTrackRef = updated;
+      setPlayerMeta({
+        title: updated.title || els.playerTitle?.textContent || "Now Playing",
+        subtitle: els.playerSubtitle?.textContent || "",
+        artUrl: trackCoverArtForDisplay(updated),
+        releaseCaption: releaseCaptionForTrack(updated) || "",
+        remixOf: remixAttributionForTrack(updated) || null,
+      }, { coverImmediate: true });
+      flashPlayerCover();
+      showShareToast("Cover regenerated");
+      setStatus("");
+    } else {
+      setStatus("Cover regeneration failed.");
+    }
+  } catch (e) {
+    setStatus(`Cover failed: ${e?.message || String(e)}`);
+  } finally {
+    setPlayerCoverGenerating(false);
+    syncPlayerCoverToolsRail();
+  }
 }
 
 async function refreshPlayerFanBtn(ownerId, handle) {
@@ -45680,6 +45949,7 @@ async function syncPlayerSocialRail() {
     return;
   }
   await hydratePlayerSocialStats(songId);
+  try { syncPlayerCoverToolsRail(); } catch {}
 }
 
 function navigateToPlayerCreatorProfile() {
@@ -46277,12 +46547,13 @@ async function encodeCoverRasterDataUrl(dataUrl, opts = {}) {
     canvas.height = out;
     ctx.drawImage(img, sx, sy, crop, crop, 0, 0, out, out);
   } else {
-    const scale = Math.min(1, maxSide / Math.max(w, h));
-    const tw = Math.max(1, Math.round(w * scale));
-    const th = Math.max(1, Math.round(h * scale));
+    const { sx, sy, sw, sh } = portrait916CropRect(w, h);
+    const scale = Math.min(1, maxSide / Math.max(sw, sh));
+    const tw = Math.max(1, Math.round(sw * scale));
+    const th = Math.max(1, Math.round(sh * scale));
     canvas.width = tw;
     canvas.height = th;
-    ctx.drawImage(img, 0, 0, tw, th);
+    ctx.drawImage(img, sx, sy, sw, sh, 0, 0, tw, th);
   }
   if (preferWebp) {
     try {
@@ -46323,42 +46594,48 @@ async function prepareMomentCoverDataUrl(fileOrDataUrl) {
 
 /** Build a small square (256px) thumbnail — top-biased crop for portrait covers. */
 async function buildCoverThumbDataUrl(src) {
+  return buildCoverThumbWithFrame(src, null);
+}
+
+async function loadCoverRasterImage(src) {
   const s = String(src || "").trim();
-  if (!s) return "";
-  if (s.startsWith("./")) return ""; // bundled placeholder, no thumb needed
-  try {
-    if (s.startsWith("data:image/")) {
-      return encodeCoverRasterDataUrl(s, {
-        maxSide: 256,
-        quality: 0.72,
-        preferWebp: true,
-        squareCrop: true,
-      });
-    }
-    const img = await new Promise((resolve, reject) => {
+  if (!s) throw new Error("Missing image");
+  if (s.startsWith("data:") || s.startsWith("blob:")) {
+    return new Promise((resolve, reject) => {
       const i = new Image();
-      // crossOrigin lets us paint remote covers (Suno CDN) into a canvas
-      // when the host serves CORS headers. If it doesn't, the draw will
-      // throw a SecurityError and we return "" — caller falls back to
-      // the original src, no harm done.
-      if (!s.startsWith("data:") && !s.startsWith("blob:")) {
-        i.crossOrigin = "anonymous";
-      }
       i.onload = () => resolve(i);
       i.onerror = () => reject(new Error("Could not decode image"));
       i.src = s;
     });
+  }
+  return new Promise((resolve, reject) => {
+    const i = new Image();
+    i.crossOrigin = "anonymous";
+    i.onload = () => resolve(i);
+    i.onerror = () => reject(new Error("Could not decode image"));
+    i.src = s;
+  });
+}
+
+/** Build a square list thumb using optional user framing (scale + vertical offset). */
+async function buildCoverThumbWithFrame(src, frame) {
+  const s = String(src || "").trim();
+  if (!s || s.startsWith("./")) return "";
+  try {
+    const img = await loadCoverRasterImage(s);
     const w = Number(img.width || 0);
     const h = Number(img.height || 0);
     if (!w || !h) return "";
     const out = 256;
-    const { sx, sy, crop } = coverSquareCropRect(w, h);
+    const rect = frame && typeof frame === "object"
+      ? thumbFrameCropRect(w, h, frame)
+      : coverSquareCropRect(w, h);
     const canvas = document.createElement("canvas");
     canvas.width = out;
     canvas.height = out;
     const ctx = canvas.getContext("2d");
     if (!ctx) return "";
-    ctx.drawImage(img, sx, sy, crop, crop, 0, 0, out, out);
+    ctx.drawImage(img, rect.sx, rect.sy, rect.crop, rect.crop, 0, 0, out, out);
     try {
       const webp = canvas.toDataURL("image/webp", 0.72);
       if (webp.startsWith("data:image/webp")) return webp;
@@ -46367,6 +46644,20 @@ async function buildCoverThumbDataUrl(src) {
   } catch {
     return "";
   }
+}
+
+async function paintThumbEditPreviewCanvas(img, frame) {
+  const canvas = els.thumbEditPreviewCanvas;
+  if (!canvas || !img) return;
+  const w = Number(img.width || 0);
+  const h = Number(img.height || 0);
+  if (!w || !h) return;
+  const out = Math.min(280, Number(canvas.width) || 280);
+  const rect = thumbFrameCropRect(w, h, frame);
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return;
+  ctx.clearRect(0, 0, out, out);
+  ctx.drawImage(img, rect.sx, rect.sy, rect.crop, rect.crop, 0, 0, out, out);
 }
 
 function preferDirectAudioUrl(url) {
@@ -53229,6 +53520,43 @@ if (els.btnPlayerMenu) {
     openPlayerTrackOptionsSheet();
   });
 }
+if (els.btnPlayerRegenCover) {
+  els.btnPlayerRegenCover.addEventListener("click", (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    try { haptic("light"); } catch {}
+    void regeneratePlayerCover();
+  });
+}
+if (els.btnPlayerEditThumb) {
+  els.btnPlayerEditThumb.addEventListener("click", (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    try { haptic("light"); } catch {}
+    void openThumbEditSheet(resolvePlayerLibraryTrack());
+  });
+}
+if (els.btnThumbEditClose) {
+  els.btnThumbEditClose.addEventListener("click", () => closeThumbEditSheet());
+}
+if (els.thumbEditBackdrop) {
+  els.thumbEditBackdrop.addEventListener("click", () => closeThumbEditSheet());
+}
+if (els.btnThumbEditSave) {
+  els.btnThumbEditSave.addEventListener("click", () => { void saveThumbEditSheet(); });
+}
+if (els.thumbEditZoom) {
+  els.thumbEditZoom.addEventListener("input", () => queueThumbEditPreview());
+}
+if (els.thumbEditOffset) {
+  els.thumbEditOffset.addEventListener("input", () => queueThumbEditPreview());
+}
+if (els.btnThumbEditChangePhoto) {
+  els.btnThumbEditChangePhoto.addEventListener("click", () => {
+    closeThumbEditSheet();
+    openPlayerChangeCoverPicker();
+  });
+}
 if (els.btnPlayerBecomeFan) {
   els.btnPlayerBecomeFan.addEventListener("click", () => {
     haptic("light");
@@ -53290,6 +53618,7 @@ if (els.playerCoverUpload) {
       ...(currentPlayerTrackRef.meta || {}),
       imageUrl: url,
       ...(thumb ? { imageThumb: thumb } : {}),
+      thumbFrame: undefined,
     };
     patchLibraryTrack(currentPlayerTrackRef.id, { artUrl: url, meta: newMeta });
     const trackRef = { ...currentPlayerTrackRef, artUrl: url, meta: newMeta };

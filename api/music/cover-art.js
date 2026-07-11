@@ -6,6 +6,7 @@ const path = require("path");
 const { pathToFileURL } = require("url");
 const { verifyUser } = require("../_lib/credits-auth");
 const { applyCors } = require("../_lib/cors");
+const { normalizeCoverPortraitBuffer, COVER_PORTRAIT_W, COVER_PORTRAIT_H } = require("../_lib/cover-portrait-normalize");
 const { tryGeminiCoverScene } = require("../_lib/gemini-cover-prompt");
 const { runVisualDirector } = require("../_lib/visual-director");
 
@@ -193,7 +194,17 @@ module.exports = async function handler(req, res) {
       return sendJson(res, 502, { error: "Cover image generation failed upstream." });
     }
 
-    const dataUrl = `data:${polled.mime || "image/jpeg"};base64,${polled.buf.toString("base64")}`;
+    let outBuf = polled.buf;
+    let outMime = polled.mime || "image/jpeg";
+    try {
+      const normalized = await normalizeCoverPortraitBuffer(polled.buf);
+      outBuf = normalized.buf;
+      outMime = normalized.mime || "image/jpeg";
+    } catch (e) {
+      console.warn("[music/cover-art] portrait normalize skipped", e?.message || e);
+    }
+
+    const dataUrl = `data:${outMime || "image/jpeg"};base64,${outBuf.toString("base64")}`;
 
     return sendJson(res, 200, {
       ok: true,
@@ -208,8 +219,8 @@ module.exports = async function handler(req, res) {
         visualDirectorMode: vd.mode,
         ...(vd.direction ? { visualDirection: vd.direction } : {}),
       },
-      coverWidth: params?.coverWidth || 720,
-      coverHeight: params?.coverHeight || 1280,
+      coverWidth: params?.coverWidth || COVER_PORTRAIT_W,
+      coverHeight: params?.coverHeight || COVER_PORTRAIT_H,
       provider: "pollinations",
       abstract: true,
     });

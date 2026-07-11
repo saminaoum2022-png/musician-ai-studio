@@ -82,6 +82,8 @@ function buildGeminiCoverBrief(input, { bucketKey, palette, artworkHint = "", oc
     "Output plain text only: comma-separated visual description, max 220 characters.",
     "No markdown, no quotes, no JSON.",
     "Describe subject, setting, lighting mood, and composition only.",
+    "The image model outputs a vertical 9:16 album cover frame — compose subject in the upper two-thirds, waist-up or head-and-shoulders only, never full-body vertical stretch.",
+    "Prefer backlit silhouettes without visible facial features; avoid close-up portraits and detailed faces.",
     "Prefer one dominant subject, one clear environment, realistic photography, simple composition, and minimal visual clutter.",
     "Avoid surreal or impossible combinations unless the mood, genre, or art direction below explicitly calls for them.",
     "CRITICAL: absolutely no readable text, letters, numbers, logos, signage, posters, banners, captions, song titles, or watermarks anywhere in the scene.",

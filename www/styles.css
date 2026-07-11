@@ -6657,6 +6657,264 @@ body.hubJumpingToTop #hubList .hubRow{
   justify-content: center;
   gap: 18px;
 }
+
+/* ---- Owner cover tools (regen + thumb edit), top-right under ⋯ menu ---- */
+.playerCoverToolsRail{
+  position: absolute;
+  top: 12px;
+  right: 14px;
+  z-index: 9;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  pointer-events: auto;
+}
+.playerCoverToolsRail[hidden]{ display: none !important; }
+.playerCoverToolBtn{
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,0.14);
+  background: rgba(8,11,18,0.52);
+  -webkit-backdrop-filter: blur(12px);
+          backdrop-filter: blur(12px);
+  color: rgba(255,255,255,0.92);
+  cursor: pointer;
+  transition: transform 140ms ease, background 140ms ease, border-color 140ms ease;
+  -webkit-tap-highlight-color: transparent;
+}
+.playerCoverToolBtn[hidden]{ display: none !important; }
+.playerCoverToolBtn:hover{
+  background: rgba(8,11,18,0.68);
+  border-color: rgba(255,255,255,0.22);
+}
+.playerCoverToolBtn:active{ transform: scale(0.94); }
+.playerCoverToolBtn.isBusy{
+  opacity: 0.55;
+  pointer-events: none;
+}
+.playerCoverToolBtn--magic{
+  border-color: rgba(124,92,255,0.45);
+  background: linear-gradient(180deg, rgba(124,92,255,0.34), rgba(35,213,171,0.18));
+  box-shadow: 0 6px 18px rgba(124,92,255,0.22);
+}
+.playerCoverToolBtn--magic:hover{
+  border-color: rgba(124,92,255,0.58);
+  background: linear-gradient(180deg, rgba(124,92,255,0.42), rgba(35,213,171,0.24));
+}
+.playerCoverToolBtn--magic.isBusy{
+  opacity: 1;
+  animation: playerCoverMagicPulse 1.8s ease-in-out infinite;
+}
+.playerCoverToolSpark{
+  font-size: 16px;
+  line-height: 1;
+  font-weight: 650;
+  background: linear-gradient(135deg, #d4c8ff 0%, #23d5ab 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  filter: drop-shadow(0 0 6px rgba(124,92,255,0.35));
+}
+.playerCoverToolIco{
+  width: 18px;
+  height: 18px;
+  display: block;
+}
+@keyframes playerCoverMagicPulse{
+  0%, 100%{
+    box-shadow: 0 0 0 1px rgba(124,92,255,0.35), 0 8px 20px rgba(124,92,255,0.28);
+    transform: scale(1);
+  }
+  50%{
+    box-shadow: 0 0 0 1px rgba(35,213,171,0.42), 0 10px 24px rgba(124,92,255,0.38);
+    transform: scale(1.04);
+  }
+}
+
+/* Cover regen — lyrics-style AI working shimmer on player art */
+.playerCoverGenOverlay{
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  pointer-events: none;
+  overflow: hidden;
+  border-radius: inherit;
+}
+.playerCoverGenOverlay[hidden]{ display: none !important; }
+.playerCoverGenAura{
+  position: absolute;
+  inset: -4%;
+  background: linear-gradient(120deg, rgba(124,92,255,0.45), rgba(35,213,171,0.35), rgba(124,92,255,0.30));
+  filter: blur(24px);
+  animation: lyricAura 2.6s ease-in-out infinite;
+}
+.playerCoverGenShimmer{
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(125deg, transparent 30%, rgba(255,255,255,0.12) 48%, rgba(35,213,171,0.10) 52%, transparent 70%);
+  background-size: 220% 100%;
+  animation: lyricShimmer 2.8s linear infinite;
+}
+.playerCoverGenLabel{
+  position: absolute;
+  left: 50%;
+  bottom: 16%;
+  transform: translateX(-50%);
+  margin: 0;
+  padding: 8px 14px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 650;
+  letter-spacing: 0.01em;
+  color: rgba(248,250,255,0.96);
+  text-shadow: 0 2px 12px rgba(0,0,0,0.45);
+  background: rgba(8,11,18,0.42);
+  border: 1px solid rgba(255,255,255,0.12);
+  -webkit-backdrop-filter: blur(10px);
+          backdrop-filter: blur(10px);
+  white-space: nowrap;
+}
+.playerArtWrap.isCoverGenerating{
+  border-color: rgba(124,92,255,0.32);
+  box-shadow:
+    0 0 0 1px rgba(124,92,255,0.22),
+    0 14px 48px -16px rgba(124,92,255,0.28);
+}
+.playerArtWrap.isCoverGenerating .playerArt{
+  filter: saturate(1.02) brightness(0.96);
+}
+@media (prefers-reduced-motion: reduce){
+  .playerCoverGenAura,
+  .playerCoverGenShimmer,
+  .playerCoverToolBtn--magic.isBusy{
+    animation: none;
+  }
+}
+
+/* Thumb framing editor sheet */
+.thumbEditSheet{
+  position: fixed;
+  inset: 0;
+  z-index: 120;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+.thumbEditSheet[hidden]{ display: none !important; }
+.thumbEditBackdrop{
+  position: absolute;
+  inset: 0;
+  background: rgba(0,0,0,0.62);
+}
+.thumbEditPanel{
+  position: relative;
+  width: min(100%, 520px);
+  max-height: min(92svh, 720px);
+  overflow: auto;
+  border-radius: 22px 22px 0 0;
+  background: linear-gradient(180deg, rgba(18,22,32,0.98), rgba(10,12,18,0.98));
+  border: 1px solid rgba(255,255,255,0.08);
+  box-shadow: 0 -12px 48px rgba(0,0,0,0.45);
+  padding: 14px 16px calc(16px + env(safe-area-inset-bottom));
+}
+.thumbEditHead{
+  display: grid;
+  grid-template-columns: 40px 1fr auto;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.thumbEditTitle{
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  text-align: center;
+  color: rgba(248,250,255,0.96);
+}
+.thumbEditClose,
+.thumbEditSave{
+  border: 0;
+  background: transparent;
+  color: rgba(223,231,251,0.82);
+  font-size: 14px;
+  font-weight: 650;
+  cursor: pointer;
+  padding: 8px;
+}
+.thumbEditSave{
+  color: rgba(94,234,212,0.95);
+}
+.thumbEditHint{
+  margin: 0 0 14px;
+  font-size: 13px;
+  line-height: 1.45;
+  color: rgba(223,231,251,0.62);
+  text-align: center;
+}
+.thumbEditPreviewWrap{
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+.thumbEditPreviewLabel{
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: rgba(223,231,251,0.48);
+}
+.thumbEditPreviewFrame{
+  width: min(72vw, 280px);
+  aspect-ratio: 1 / 1;
+  border-radius: 16px;
+  overflow: hidden;
+  border: 1px solid rgba(255,255,255,0.10);
+  box-shadow: 0 10px 36px rgba(0,0,0,0.35);
+  background: rgba(255,255,255,0.04);
+}
+.thumbEditPreviewCanvas{
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+.thumbEditControls{
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.thumbEditControl{
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.thumbEditControlLabel{
+  font-size: 12px;
+  font-weight: 650;
+  color: rgba(223,231,251,0.72);
+}
+.thumbEditControl input[type="range"]{
+  width: 100%;
+}
+.thumbEditChangePhoto{
+  align-self: center;
+  margin-top: 4px;
+  padding: 10px 16px;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,0.12);
+  background: rgba(255,255,255,0.05);
+  color: rgba(248,250,255,0.9);
+  font-size: 13px;
+  font-weight: 650;
+  cursor: pointer;
+}
 .playerSocialCreatorAvatar{
   display: block;
   width: 32px;
@@ -17414,6 +17672,12 @@ body.trackSheetOpen .footer{
   body[data-route="player"] .playerHeader .playerMenuBtn{
     justify-self: end;
   }
+  body[data-route="player"] .playerCoverToolsRail{
+    position: fixed;
+    top: calc(env(safe-area-inset-top, 0px) + 52px);
+    right: 12px;
+    z-index: 13;
+  }
   body[data-route="player"] .playerShell{
     flex: 1;
     align-content: stretch;
@@ -17482,14 +17746,13 @@ body.trackSheetOpen .footer{
   }
   body[data-route="player"] .playerArt{
     position: absolute;
-    top: 50%;
-    left: 50%;
-    width: auto;
-    height: auto;
-    min-width: 100%;
-    min-height: 100%;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    min-width: 0;
+    min-height: 0;
     max-width: none;
-    transform: translate(-50%, -50%);
+    transform: none;
     aspect-ratio: unset;
     object-fit: cover;
     object-position: center top;

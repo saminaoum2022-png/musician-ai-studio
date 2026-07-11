@@ -17292,9 +17292,9 @@ body.trackSheetOpen .footer{
     --player-chrome-safe: env(safe-area-inset-bottom, 0px);
     --player-social-rail-bottom: calc(var(--player-chrome-safe) + 172px);
     --player-karaoke-bottom: calc(var(--player-chrome-safe) + 258px);
-    /* Between heart and comment — same cut on device and simulator, no extra crop. */
-    --player-cover-bottom: calc(var(--player-chrome-safe) + 320px);
-    --player-cover-height: calc(100svh - var(--player-cover-bottom));
+    /* Full-bleed cover behind fixed chrome (title, lyrics, transport). */
+    --player-cover-bottom: 0px;
+    --player-cover-height: 100svh;
     /* Title/creator row anchor — matches fixed playerMeta stack above transport. */
     --player-reel-meta-bottom: calc(var(--player-chrome-safe) + 104px);
     /* Push the cover bottom fade lower without changing cover crop or lyrics. */

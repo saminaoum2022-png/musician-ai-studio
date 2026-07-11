@@ -185,7 +185,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260710-170736";
+const APP_BUILD = "20260712-003416";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -18734,10 +18734,44 @@ function trackCoverArtCandidates(track) {
     .filter((c) => !isLogoCoverUrl(c));
 }
 
-/** For Discover / Friends / Activity feeds — only HTTP URLs (no data: blobs). */
+/** Derive the paired `_thumb` object URL for a Supabase song_covers main asset. */
+function supabaseSongCoverThumbUrl(url) {
+  const s = String(url || "").trim().split("?")[0].split("#")[0];
+  const m = s.match(/^(https?:\/\/[^/]+)\/storage\/v1\/object\/public\/song_covers\/(.+?)\.([a-z0-9]+)$/i);
+  if (!m) return "";
+  const [, origin, objectBase, ext] = m;
+  if (/_thumb$/i.test(objectBase)) return "";
+  return `${origin}/storage/v1/object/public/song_covers/${objectBase}_thumb.${ext}`;
+}
+
+/** If a list tile thumb 404s, fall back to the main cover object. */
+function supabaseSongCoverMainFromThumbUrl(url) {
+  const s = String(url || "").trim().split("?")[0].split("#")[0];
+  const m = s.match(/^(https?:\/\/[^/]+)\/storage\/v1\/object\/public\/song_covers\/(.+?)_thumb\.([a-z0-9]+)$/i);
+  if (!m) return "";
+  const [, origin, objectBase, ext] = m;
+  return `${origin}/storage/v1/object/public/song_covers/${objectBase}.${ext}`;
+}
+
+/** For Discover / Friends / Activity feeds — prefer thumbs; only HTTP URLs (no data: blobs). */
 function trackCoverArtForFeed(track) {
+  const m = track?.meta || {};
+  const metaThumb = String(m.imageThumb || "").trim();
+  if (metaThumb && !metaThumb.startsWith("data:") && !isLogoCoverUrl(metaThumb)) return metaThumb;
+
   for (const c of trackCoverArtCandidates(track)) {
-    if (c && !c.startsWith("data:")) return c;
+    if (!c || c.startsWith("data:") || isLogoCoverUrl(c)) continue;
+    if (/_thumb\.(webp|jpg|jpeg|png)/i.test(c)) return c;
+    if (/\/storage\/v1\/object\/public\/song_covers\//i.test(c)) {
+      // Only guess the paired thumb when meta already points at it — old rows
+      // may not have a `_thumb` object yet and would 404 in list tiles.
+      if (metaThumb && supabaseSongCoverThumbUrl(c) === metaThumb.split("?")[0]) {
+        return metaThumb;
+      }
+      const transformed = toCoverThumbUrl(c, { width: 256, quality: 72 });
+      if (transformed && transformed !== c) return transformed;
+    }
+    return c;
   }
   return DEFAULT_SONG_COVER_URL;
 }
@@ -18757,16 +18791,26 @@ async function persistTrackCoverIfNeeded(track) {
   const job = (async () => {
     try {
       const mainSrc = fullData.startsWith("data:") ? fullData : thumbData;
-      const mainBlob = await dataUrlToBlob(mainSrc);
-      const imageUrl = await uploadSongCoverBlob(mainBlob, id, "");
+      const displayData = await encodeCoverRasterDataUrl(mainSrc, {
+        maxSide: 1280,
+        quality: 0.82,
+        preferWebp: true,
+      });
+      const displayBlob = await dataUrlToBlob(displayData);
+      const imageUrl = await uploadSongCoverBlob(displayBlob, id, "");
       let imageThumb = imageUrl;
-      if (thumbData.startsWith("data:") && thumbData !== mainSrc) {
-        try {
-          const thumbBlob = await dataUrlToBlob(thumbData);
-          imageThumb = await uploadSongCoverBlob(thumbBlob, id, "thumb");
-        } catch {
-          imageThumb = imageUrl;
-        }
+      try {
+        const thumbSrc =
+          thumbData.startsWith("data:") && thumbData !== mainSrc ? thumbData : mainSrc;
+        const thumbDataOut = await encodeCoverRasterDataUrl(thumbSrc, {
+          maxSide: 256,
+          quality: 0.72,
+          preferWebp: true,
+        });
+        const thumbBlob = await dataUrlToBlob(thumbDataOut);
+        imageThumb = await uploadSongCoverBlob(thumbBlob, id, "thumb");
+      } catch {
+        imageThumb = imageUrl;
       }
       const items = loadLibrary();
       const idx = items.findIndex((x) => String(x.id) === id);
@@ -31020,8 +31064,8 @@ function maybeRecordQualifiedPublicPlay() {
 async function supabaseFetchDiscoveryPublicSongs(limit) {
   const lim = Math.max(1, Math.min(80, Number(limit) || 48));
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return [];
-  const colsWithPublished = "id,created_at,published_at,title,song_url,task_id,audio_id,kind,art_url,user_id,meta_remix_of:meta->remixOf,meta_mashup_of:meta->mashupOf,meta_release_caption:meta->>releaseCaption,meta_challenge:meta->challenge,meta_style:meta->>styleInput,meta_style_sent:meta->>styleSent,meta_template_id:meta->>searchTemplateId,meta_template_title:meta->>searchTemplateTitle,meta_dialect:meta->>dialect,meta_lyrics:meta->>lyricsInput,meta_final_prompt:meta->>finalPrompt,meta_nabad_verification:meta->>nabadVerification,meta_tags:meta->tags,meta_allow_remix:meta->allowRemix,meta_allow_mashup:meta->allowMashup,meta_deleted_at:meta->>deletedAt";
-  const colsLegacy = "id,created_at,title,song_url,task_id,audio_id,kind,art_url,user_id,meta_remix_of:meta->remixOf,meta_mashup_of:meta->mashupOf,meta_release_caption:meta->>releaseCaption,meta_challenge:meta->challenge,meta_style:meta->>styleInput,meta_style_sent:meta->>styleSent,meta_template_id:meta->>searchTemplateId,meta_template_title:meta->>searchTemplateTitle,meta_dialect:meta->>dialect,meta_lyrics:meta->>lyricsInput,meta_final_prompt:meta->>finalPrompt,meta_nabad_verification:meta->>nabadVerification,meta_tags:meta->tags,meta_allow_remix:meta->allowRemix,meta_allow_mashup:meta->allowMashup,meta_deleted_at:meta->>deletedAt";
+  const colsWithPublished = "id,created_at,published_at,title,song_url,task_id,audio_id,kind,art_url,user_id,meta_image_thumb:meta->>imageThumb,meta_remix_of:meta->remixOf,meta_mashup_of:meta->mashupOf,meta_release_caption:meta->>releaseCaption,meta_challenge:meta->challenge,meta_style:meta->>styleInput,meta_style_sent:meta->>styleSent,meta_template_id:meta->>searchTemplateId,meta_template_title:meta->>searchTemplateTitle,meta_dialect:meta->>dialect,meta_lyrics:meta->>lyricsInput,meta_final_prompt:meta->>finalPrompt,meta_nabad_verification:meta->>nabadVerification,meta_tags:meta->tags,meta_allow_remix:meta->allowRemix,meta_allow_mashup:meta->allowMashup,meta_deleted_at:meta->>deletedAt";
+  const colsLegacy = "id,created_at,title,song_url,task_id,audio_id,kind,art_url,user_id,meta_image_thumb:meta->>imageThumb,meta_remix_of:meta->remixOf,meta_mashup_of:meta->mashupOf,meta_release_caption:meta->>releaseCaption,meta_challenge:meta->challenge,meta_style:meta->>styleInput,meta_style_sent:meta->>styleSent,meta_template_id:meta->>searchTemplateId,meta_template_title:meta->>searchTemplateTitle,meta_dialect:meta->>dialect,meta_lyrics:meta->>lyricsInput,meta_final_prompt:meta->>finalPrompt,meta_nabad_verification:meta->>nabadVerification,meta_tags:meta->tags,meta_allow_remix:meta->allowRemix,meta_allow_mashup:meta->allowMashup,meta_deleted_at:meta->>deletedAt";
   const artUrlGuard = `&or=${encodeURIComponent("(art_url.is.null,art_url.not.like.data:*)")}`;
   try {
     let r = await fetch(
@@ -31063,6 +31107,7 @@ async function supabaseFetchDiscoveryPublicSongs(limit) {
             kind: s.kind || "full",
             userId: String(s.user_id || "").trim(),
             meta: {
+              ...(String(s.meta_image_thumb || "").trim() ? { imageThumb: String(s.meta_image_thumb).trim() } : {}),
               ...(s.meta_remix_of ? { remixOf: s.meta_remix_of } : {}),
               ...(s.meta_mashup_of ? { mashupOf: s.meta_mashup_of } : {}),
               ...(String(s.meta_release_caption || "").trim() ? { releaseCaption: String(s.meta_release_caption).trim() } : {}),
@@ -45024,6 +45069,16 @@ function handleCoverImageError(img) {
   }
   if (!img.dataset.coverSrc) img.dataset.coverSrc = original;
   const attempt = Number(img.dataset.coverRetry || "0");
+  if (attempt === 0 && coverImageIsListThumb(img)) {
+    const main = supabaseSongCoverMainFromThumbUrl(original);
+    if (main && main !== original) {
+      img.dataset.coverRetry = "1";
+      img.dataset.coverSrc = main;
+      img.classList.remove("isCoverPlaceholder");
+      img.src = main;
+      return;
+    }
+  }
   const maxRetries = coverImageIsListThumb(img) ? 0 : COVER_IMG_RETRY_DELAYS_MS.length;
   if (attempt >= maxRetries) {
     applyBrokenCoverPlaceholder(img);
@@ -46155,18 +46210,22 @@ function readFileAsDataUrl(file) {
   });
 }
 
-/** Downscale a raster image data URL to JPEG for smaller localStorage + Hub payloads. */
-async function downscaleImageDataUrl(dataUrl, maxSide = 1600, quality = 0.82) {
-  if (!String(dataUrl).startsWith("data:image/")) return dataUrl;
+/** Downscale a raster image data URL for smaller storage payloads. */
+async function encodeCoverRasterDataUrl(dataUrl, opts = {}) {
+  const src = String(dataUrl || "");
+  if (!src.startsWith("data:image/")) return src;
+  const maxSide = Number(opts.maxSide) || 1280;
+  const quality = Number(opts.quality) || 0.82;
+  const preferWebp = opts.preferWebp !== false;
   const img = await new Promise((resolve, reject) => {
     const i = new Image();
     i.onload = () => resolve(i);
     i.onerror = () => reject(new Error("Could not decode image"));
-    i.src = dataUrl;
+    i.src = src;
   });
   const w = Number(img.width || 0);
   const h = Number(img.height || 0);
-  if (!w || !h) return dataUrl;
+  if (!w || !h) return src;
   const scale = Math.min(1, maxSide / Math.max(w, h));
   const tw = Math.max(1, Math.round(w * scale));
   const th = Math.max(1, Math.round(h * scale));
@@ -46174,9 +46233,20 @@ async function downscaleImageDataUrl(dataUrl, maxSide = 1600, quality = 0.82) {
   canvas.width = tw;
   canvas.height = th;
   const ctx = canvas.getContext("2d");
-  if (!ctx) return dataUrl;
+  if (!ctx) return src;
   ctx.drawImage(img, 0, 0, tw, th);
+  if (preferWebp) {
+    try {
+      const webp = canvas.toDataURL("image/webp", quality);
+      if (webp.startsWith("data:image/webp")) return webp;
+    } catch {}
+  }
   return canvas.toDataURL("image/jpeg", quality);
+}
+
+/** Downscale a raster image data URL to JPEG for smaller localStorage + Hub payloads. */
+async function downscaleImageDataUrl(dataUrl, maxSide = 1600, quality = 0.82) {
+  return encodeCoverRasterDataUrl(dataUrl, { maxSide, quality, preferWebp: false });
 }
 
 /** Turn a user-picked cover into a persistent data URL (no blob: URLs).
@@ -46241,6 +46311,10 @@ async function buildCoverThumbDataUrl(src) {
     const ctx = canvas.getContext("2d");
     if (!ctx) return "";
     ctx.drawImage(img, 0, 0, tw, th);
+    try {
+      const webp = canvas.toDataURL("image/webp", 0.72);
+      if (webp.startsWith("data:image/webp")) return webp;
+    } catch {}
     return canvas.toDataURL("image/jpeg", 0.7);
   } catch {
     return "";

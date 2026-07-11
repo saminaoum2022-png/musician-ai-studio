@@ -6743,13 +6743,20 @@ body.hubJumpingToTop #hubList .hubRow{
   inset: 0;
   z-index: 5;
   pointer-events: none;
-  overflow: hidden;
+  overflow: visible;
   border-radius: inherit;
 }
 .playerCoverGenOverlay[hidden]{ display: none !important; }
+.playerCoverGenDim{
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  background: rgba(4, 7, 12, 0.52);
+}
 .playerCoverGenAura{
   position: absolute;
   inset: -4%;
+  z-index: 2;
   background: linear-gradient(120deg, rgba(124,92,255,0.45), rgba(35,213,171,0.35), rgba(124,92,255,0.30));
   filter: blur(24px);
   animation: lyricAura 2.6s ease-in-out infinite;
@@ -6757,28 +6764,31 @@ body.hubJumpingToTop #hubList .hubRow{
 .playerCoverGenShimmer{
   position: absolute;
   inset: 0;
+  z-index: 3;
   background: linear-gradient(125deg, transparent 30%, rgba(255,255,255,0.12) 48%, rgba(35,213,171,0.10) 52%, transparent 70%);
   background-size: 220% 100%;
   animation: lyricShimmer 2.8s linear infinite;
 }
 .playerCoverGenLabel{
-  position: absolute;
+  position: fixed;
   left: 50%;
-  bottom: 16%;
-  transform: translateX(-50%);
+  top: 50%;
+  transform: translate(-50%, -50%);
   margin: 0;
-  padding: 8px 14px;
+  padding: 10px 18px;
   border-radius: 999px;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 650;
   letter-spacing: 0.01em;
-  color: rgba(248,250,255,0.96);
-  text-shadow: 0 2px 12px rgba(0,0,0,0.45);
-  background: rgba(8,11,18,0.42);
-  border: 1px solid rgba(255,255,255,0.12);
-  -webkit-backdrop-filter: blur(10px);
-          backdrop-filter: blur(10px);
+  color: rgba(248,250,255,0.98);
+  text-shadow: 0 2px 16px rgba(0,0,0,0.55);
+  background: rgba(8,11,18,0.58);
+  border: 1px solid rgba(255,255,255,0.14);
+  -webkit-backdrop-filter: blur(14px);
+          backdrop-filter: blur(14px);
   white-space: nowrap;
+  z-index: 60;
+  box-shadow: 0 12px 40px -12px rgba(0,0,0,0.55);
 }
 .playerArtWrap.isCoverGenerating{
   border-color: rgba(124,92,255,0.32);
@@ -6787,7 +6797,18 @@ body.hubJumpingToTop #hubList .hubRow{
     0 14px 48px -16px rgba(124,92,255,0.28);
 }
 .playerArtWrap.isCoverGenerating .playerArt{
-  filter: saturate(1.02) brightness(0.96);
+  filter: saturate(0.92) brightness(0.48);
+  transition: filter 320ms ease;
+}
+@keyframes playerCoverRevealIn{
+  from{ opacity: 0; transform: scale(1.018); filter: brightness(1.08) saturate(1.04); }
+  to{ opacity: 1; transform: scale(1); filter: none; }
+}
+.playerArt.playerCoverReveal--enter{
+  animation: playerCoverRevealIn 560ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+@media (prefers-reduced-motion: reduce){
+  .playerArt.playerCoverReveal--enter{ animation: none; }
 }
 @media (prefers-reduced-motion: reduce){
   .playerCoverGenAura,

@@ -259,7 +259,8 @@ function patchLibraryTrackCover(trackId, patch) {
   return next;
 }
 
-function refreshPlayerIfTrack(track) {
+function refreshPlayerIfTrack(track, opts = {}) {
+  if (opts.skipPlayerRefresh || opts.coverRegenerate) return;
   const { currentPlayerTrackRef, libraryNowPlayingId, setPlayerMeta, releaseCaptionForTrack, remixAttributionForTrack } = d();
   try {
     const playingId = String(currentPlayerTrackRef?.()?.id || currentPlayerTrackRef?.id || libraryNowPlayingId?.() || "").trim();
@@ -305,7 +306,7 @@ async function runCoverJobForTrack(track, id, opts = {}) {
       if (!patched) return null;
       const { persistTrackCoverIfNeeded } = d();
       void persistTrackCoverIfNeeded?.(patched);
-      refreshPlayerIfTrack(patched);
+      refreshPlayerIfTrack(patched, opts);
       return patched;
     } catch (e) {
       lastErr = e;

@@ -187,7 +187,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260712-030355";
+const APP_BUILD = "20260712-031725";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -18924,13 +18924,18 @@ async function persistTrackCoverIfNeeded(track) {
         ).trim();
         if (playingId && playingId === id) {
           const row = items[idx];
-          setPlayerMeta({
-            title: row.title || "Now Playing",
-            subtitle: document.getElementById("playerSubtitle")?.textContent || "",
-            artUrl: imageUrl,
-            releaseCaption: releaseCaptionForTrack(row) || "",
-            remixOf: remixAttributionForTrack(row) || null,
-          });
+          const onPlayer = String(document.body.getAttribute("data-route") || "") === "player";
+          if (onPlayer) {
+            await applyPlayerCoverReveal(imageUrl);
+          } else {
+            setPlayerMeta({
+              title: row.title || "Now Playing",
+              subtitle: document.getElementById("playerSubtitle")?.textContent || "",
+              artUrl: imageUrl,
+              releaseCaption: releaseCaptionForTrack(row) || "",
+              remixOf: remixAttributionForTrack(row) || null,
+            });
+          }
         }
       } catch {}
       void supabasePatchUserSong(prev, { artUrl: imageUrl, meta: nextMeta }, { reason: "cover-upload" });
@@ -45122,6 +45127,11 @@ function applyCoverImageStateClasses(img, raw, src, empty) {
 /** Assign cover URL without clearing the current frame until the next image is decoded. */
 function assignCoverImageSrc(img, url, opts = {}) {
   if (!img) return;
+  const isPlayerArt = img.id === "playerArt" || img.classList.contains("playerArt");
+  if (isPlayerArt && !opts.forcePlayerCover) {
+    const wrap = document.querySelector(".playerArtWrap");
+    if (wrap?.classList.contains("isCoverGenerating")) return;
+  }
   const raw = String(url || "").trim();
   const empty = opts.allowEmpty && !raw;
   const fallback = empty ? placeholderCoverDataUrl() : raw || brokenCoverPlaceholderUrl();
@@ -45242,6 +45252,77 @@ function initCoverImageFallbackOnce() {
     },
     true,
   );
+}
+
+/** Preload + fade the player cover in without flashing the placeholder tile. */
+async function applyPlayerCoverReveal(url) {
+  const img = els.playerArt;
+  const raw = String(url || "").trim();
+  if (!img || !raw || isDefaultSongCoverUrl(raw) || isLogoCoverUrl(raw)) return false;
+
+  const prevRaw = String(img.dataset.coverSrc || "").trim();
+  if (prevRaw === raw && img.complete && img.naturalWidth > 0 && !img.classList.contains("isCoverPlaceholder")) {
+    return true;
+  }
+
+  const pre = new Image();
+  if (/^https?:\/\//i.test(raw)) pre.crossOrigin = "anonymous";
+  await new Promise((resolve, reject) => {
+    pre.onload = () => resolve();
+    pre.onerror = () => reject(new Error("Cover load failed"));
+    pre.src = raw;
+  });
+  try {
+    if (typeof pre.decode === "function") await pre.decode();
+  } catch {}
+
+  img.dataset.coverSrc = raw;
+  img.dataset.coverRetry = "0";
+  img.dataset.coverFallback = "";
+  img.classList.remove("isPlaceholder", "isCoverPlaceholder");
+  applyCoverImageStateClasses(img, raw, raw, false);
+
+  setPlayerCoverGenerating(false);
+
+  await new Promise((resolve) => {
+    let done = false;
+    const finish = () => {
+      if (done) return;
+      done = true;
+      img.classList.remove("playerCoverReveal--enter");
+      resolve();
+    };
+    img.addEventListener("animationend", finish, { once: true });
+    img.classList.remove("playerCoverReveal--enter");
+    // eslint-disable-next-line no-unused-expressions
+    img.offsetWidth;
+    img.classList.add("playerCoverReveal--enter");
+    img.src = raw;
+    window.setTimeout(finish, 620);
+  });
+
+  const artWrap = document.querySelector(".playerArtWrap");
+  if (artWrap) applyCoverGlowRgb(artWrap, raw);
+  const timeline = document.getElementById("playerTimeline");
+  if (timeline) applyCoverGlowRgb(timeline, raw);
+  hubNowMeta = {
+    ...(hubNowMeta || {}),
+    art: raw,
+  };
+  renderHubNowPlaying();
+  syncLockScreenNowPlaying({ force: true });
+  try {
+    const track = resolvePlayerLibraryTrack() || currentPlayerTrackRef;
+    const abstractLive =
+      Boolean(track?.meta?.nabadAbstractCover) ||
+      String(track?.meta?.coverSource || "") === "pollinations";
+    syncCoverArtOverlay(
+      Boolean(track?.id) &&
+        abstractLive &&
+        !img.classList.contains("isCoverPlaceholder"),
+    );
+  } catch {}
+  return true;
 }
 
 function setCoverImageSrc(img, url, opts = {}) {
@@ -45579,20 +45660,13 @@ async function regeneratePlayerCover() {
   });
   if (!ok) return;
   setPlayerCoverGenerating(true);
-  setStatus("Generating new cover…");
   try {
     const updated = await regenerateAbstractCoverForTrack(track);
     if (updated) {
       currentPlayerTrackRef = updated;
-      setPlayerMeta({
-        title: updated.title || els.playerTitle?.textContent || "Now Playing",
-        subtitle: els.playerSubtitle?.textContent || "",
-        artUrl: trackCoverArtForDisplay(updated),
-        releaseCaption: releaseCaptionForTrack(updated) || "",
-        remixOf: remixAttributionForTrack(updated) || null,
-      }, { coverImmediate: true });
+      const artUrl = trackCoverArtForDisplay(updated);
+      await applyPlayerCoverReveal(artUrl);
       flashPlayerCover();
-      showShareToast("Cover regenerated");
       setStatus("");
     } else {
       setStatus("Cover regeneration failed.");

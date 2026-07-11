@@ -15,6 +15,36 @@ const COVER_FETCH_TIMEOUT_MS = 95000;
 const COVER_CLIENT_ATTEMPTS = 3;
 const COVER_WATCH_INTERVAL_MS = 12000;
 
+/** Center-crop a cover data URL to a square list thumb (portrait-safe). */
+async function squareCoverThumbFromDataUrl(dataUrl, maxSide = 256) {
+  const src = String(dataUrl || "");
+  if (!src.startsWith("data:image/")) return "";
+  const img = await new Promise((resolve, reject) => {
+    const i = new Image();
+    i.onload = () => resolve(i);
+    i.onerror = () => reject(new Error("Could not decode image"));
+    i.src = src;
+  });
+  const w = Number(img.width || 0);
+  const h = Number(img.height || 0);
+  if (!w || !h) return "";
+  const out = Math.max(1, Math.round(maxSide));
+  const crop = Math.min(w, h);
+  const sx = (w - crop) / 2;
+  const sy = (h - crop) / 2;
+  const canvas = document.createElement("canvas");
+  canvas.width = out;
+  canvas.height = out;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return "";
+  ctx.drawImage(img, sx, sy, crop, crop, 0, 0, out, out);
+  try {
+    const webp = canvas.toDataURL("image/webp", 0.72);
+    if (webp.startsWith("data:image/webp")) return webp;
+  } catch {}
+  return canvas.toDataURL("image/jpeg", 0.7);
+}
+
 export function configureCoverArt(deps) {
   _deps = deps;
 }
@@ -74,6 +104,7 @@ function patchLibraryTrackCover(trackId, patch) {
   const prev = items[idx];
   const {
     dataUrl,
+    thumbUrl,
     seed,
     params,
     bucket,
@@ -85,7 +116,7 @@ function patchLibraryTrackCover(trackId, patch) {
   const nextMeta = {
     ...(prev.meta || {}),
     imageUrl: dataUrl,
-    imageThumb: dataUrl,
+    imageThumb: thumbUrl || dataUrl,
     nabadAbstractCover,
     coverSource,
     coverSeed: seed || prev.meta?.coverSeed || "",
@@ -145,9 +176,14 @@ async function runCoverJobForTrack(track, id) {
     try {
       const result = await fetchAbstractCoverArt(params);
       const stampedUrl = await stampCoverWithSplashMark(result.dataUrl);
+      let thumbUrl = "";
+      try {
+        thumbUrl = await squareCoverThumbFromDataUrl(stampedUrl);
+      } catch {}
       const patched = await enqueueLibraryPatch(() =>
         patchLibraryTrackCover(id, {
           dataUrl: stampedUrl,
+          thumbUrl,
           seed: result.seed,
           bucket: result.bucket,
           params: result.params || params,

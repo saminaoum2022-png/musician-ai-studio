@@ -3,9 +3,13 @@
  * User never writes these. Same song id + same story → same seed + same scene.
  */
 
-/** Pollinations output; Suno CDN covers were typically ~512×512 JPEG. */
-export const POLLINATIONS_COVER_WIDTH = 1024;
-export const POLLINATIONS_COVER_HEIGHT = 1024;
+/** Pollinations output — 9:16 portrait for full-screen reel player (no crop). */
+export const POLLINATIONS_COVER_WIDTH = 720;
+export const POLLINATIONS_COVER_HEIGHT = 1280;
+
+/** Baked into every cover prompt so Flux composes for vertical full-screen. */
+const PORTRAIT_FRAME =
+  "vertical portrait orientation, tall 9:16 mobile full-screen framing, key subject centered in frame";
 
 /** Keep in sync with hum-track-cover.mjs — no imports here (server loads this via dynamic import). */
 const HUM_TRACK_SCENE_GUARD =
@@ -592,6 +596,7 @@ export function buildAbstractCoverPrompt(input, options = {}) {
     parts = userArtwork
       ? [
           NO_TEXT_LEAD,
+          PORTRAIT_FRAME,
           sceneOverride,
           nabadIdentityPhrases,
           palette,
@@ -603,6 +608,7 @@ export function buildAbstractCoverPrompt(input, options = {}) {
         ]
       : [
           NO_TEXT_LEAD,
+          PORTRAIT_FRAME,
           SAFETY_PREFIX + styleCore,
           sceneOverride,
           nabadIdentityPhrases,
@@ -620,6 +626,7 @@ export function buildAbstractCoverPrompt(input, options = {}) {
   } else if (userArtwork) {
     parts = [
       NO_TEXT_LEAD,
+      PORTRAIT_FRAME,
       userArtwork,
       nabadIdentityPhrases,
       palette,
@@ -632,6 +639,7 @@ export function buildAbstractCoverPrompt(input, options = {}) {
   } else {
     parts = [
       NO_TEXT_LEAD,
+      PORTRAIT_FRAME,
       SAFETY_PREFIX + styleCore,
       visualScene,
       nabadIdentityPhrases,
@@ -677,6 +685,7 @@ export function buildAbstractCoverPrompt(input, options = {}) {
       visualDirection: options.visualDirection || undefined,
       coverWidth: POLLINATIONS_COVER_WIDTH,
       coverHeight: POLLINATIONS_COVER_HEIGHT,
+      coverAspect: "9:16",
     },
   };
 }

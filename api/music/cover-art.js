@@ -208,8 +208,8 @@ module.exports = async function handler(req, res) {
         visualDirectorMode: vd.mode,
         ...(vd.direction ? { visualDirection: vd.direction } : {}),
       },
-      coverWidth: params?.coverWidth || 1024,
-      coverHeight: params?.coverHeight || 1024,
+      coverWidth: params?.coverWidth || 720,
+      coverHeight: params?.coverHeight || 1280,
       provider: "pollinations",
       abstract: true,
     });

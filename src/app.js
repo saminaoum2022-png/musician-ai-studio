@@ -185,7 +185,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260712-003416";
+const APP_BUILD = "20260712-003937";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -18806,6 +18806,7 @@ async function persistTrackCoverIfNeeded(track) {
           maxSide: 256,
           quality: 0.72,
           preferWebp: true,
+          squareCrop: true,
         });
         const thumbBlob = await dataUrlToBlob(thumbDataOut);
         imageThumb = await uploadSongCoverBlob(thumbBlob, id, "thumb");
@@ -46217,6 +46218,7 @@ async function encodeCoverRasterDataUrl(dataUrl, opts = {}) {
   const maxSide = Number(opts.maxSide) || 1280;
   const quality = Number(opts.quality) || 0.82;
   const preferWebp = opts.preferWebp !== false;
+  const squareCrop = Boolean(opts.squareCrop);
   const img = await new Promise((resolve, reject) => {
     const i = new Image();
     i.onload = () => resolve(i);
@@ -46226,15 +46228,25 @@ async function encodeCoverRasterDataUrl(dataUrl, opts = {}) {
   const w = Number(img.width || 0);
   const h = Number(img.height || 0);
   if (!w || !h) return src;
-  const scale = Math.min(1, maxSide / Math.max(w, h));
-  const tw = Math.max(1, Math.round(w * scale));
-  const th = Math.max(1, Math.round(h * scale));
   const canvas = document.createElement("canvas");
-  canvas.width = tw;
-  canvas.height = th;
   const ctx = canvas.getContext("2d");
   if (!ctx) return src;
-  ctx.drawImage(img, 0, 0, tw, th);
+  if (squareCrop) {
+    const out = Math.max(1, Math.round(maxSide));
+    const crop = Math.min(w, h);
+    const sx = (w - crop) / 2;
+    const sy = (h - crop) / 2;
+    canvas.width = out;
+    canvas.height = out;
+    ctx.drawImage(img, sx, sy, crop, crop, 0, 0, out, out);
+  } else {
+    const scale = Math.min(1, maxSide / Math.max(w, h));
+    const tw = Math.max(1, Math.round(w * scale));
+    const th = Math.max(1, Math.round(h * scale));
+    canvas.width = tw;
+    canvas.height = th;
+    ctx.drawImage(img, 0, 0, tw, th);
+  }
   if (preferWebp) {
     try {
       const webp = canvas.toDataURL("image/webp", quality);
@@ -46272,19 +46284,20 @@ async function prepareMomentCoverDataUrl(fileOrDataUrl) {
   return dataUrl;
 }
 
-/** Build a small (256px) JPEG thumbnail from any cover URL/data-URL.
- *  Library rows render at ~56px so this is plenty crisp; the saving
- *  is dramatic on lists with many custom covers because we no longer
- *  hand the browser a 1024px image to decode for every row.
- *
- *  Returns "" on failure (CORS, decode error) so callers can fall
- *  back to the original cover URL.
- */
+/** Build a small square (256px) thumbnail — center-crop for portrait covers. */
 async function buildCoverThumbDataUrl(src) {
   const s = String(src || "").trim();
   if (!s) return "";
   if (s.startsWith("./")) return ""; // bundled placeholder, no thumb needed
   try {
+    if (s.startsWith("data:image/")) {
+      return encodeCoverRasterDataUrl(s, {
+        maxSide: 256,
+        quality: 0.72,
+        preferWebp: true,
+        squareCrop: true,
+      });
+    }
     const img = await new Promise((resolve, reject) => {
       const i = new Image();
       // crossOrigin lets us paint remote covers (Suno CDN) into a canvas
@@ -46298,19 +46311,19 @@ async function buildCoverThumbDataUrl(src) {
       i.onerror = () => reject(new Error("Could not decode image"));
       i.src = s;
     });
-    const max = 256;
     const w = Number(img.width || 0);
     const h = Number(img.height || 0);
     if (!w || !h) return "";
-    const scale = Math.min(1, max / Math.max(w, h));
-    const tw = Math.max(1, Math.round(w * scale));
-    const th = Math.max(1, Math.round(h * scale));
+    const out = 256;
+    const crop = Math.min(w, h);
+    const sx = (w - crop) / 2;
+    const sy = (h - crop) / 2;
     const canvas = document.createElement("canvas");
-    canvas.width = tw;
-    canvas.height = th;
+    canvas.width = out;
+    canvas.height = out;
     const ctx = canvas.getContext("2d");
     if (!ctx) return "";
-    ctx.drawImage(img, 0, 0, tw, th);
+    ctx.drawImage(img, sx, sy, crop, crop, 0, 0, out, out);
     try {
       const webp = canvas.toDataURL("image/webp", 0.72);
       if (webp.startsWith("data:image/webp")) return webp;

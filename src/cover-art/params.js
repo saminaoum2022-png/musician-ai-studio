@@ -83,23 +83,23 @@ function inferSonicProfile(meta) {
 const OCCASION_COVER_HINTS = [
   {
     re: /birthday|bday|happy birthday|sana helwa|عيد ميلاد/i,
-    hint: "celebration balloons and soft candle glow, festive party atmosphere, no people, no writing",
+    hint: "celebration still life, balloons and soft candle glow on dark surface, festive party atmosphere, no people, no writing",
   },
   {
     re: /wedding|bridal|bride|groom|زفاف|عرس|عروس/i,
-    hint: "elegant wedding ceremony lights, dancing silhouettes, floral glow, no faces, no writing",
+    hint: "wedding still life, diamond solitaire rings on ivory satin, soft floral glow, no people, no writing",
   },
   {
     re: /christmas|xmas|noël|noel|holiday season|yuletide|بيت الميلاد/i,
-    hint: "evergreen tree with warm golden lights and star glow, cozy winter atmosphere, no writing",
+    hint: "evergreen tree with warm golden lights and star glow, cozy winter atmosphere, no people, no writing",
   },
   {
     re: /anniversary|romantic|valentine|love song/i,
-    hint: "intimate romantic atmosphere, couple silhouettes under glowing sky, no faces, no writing",
+    hint: "romantic still life, intertwined gold rings and rose petals with soft candlelight, no people, no writing",
   },
   {
     re: /prom|graduation|congrats|congratulations|new year|mom day|for mom/i,
-    hint: "celebration lights and confetti atmosphere, festive silhouettes, no writing",
+    hint: "celebration still life, confetti and golden lights on dark surface, no people, no writing",
   },
 ];
 

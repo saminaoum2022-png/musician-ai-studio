@@ -2,6 +2,8 @@
  * Client-side abstract cover generation via /api/music/cover-art
  */
 import { canRegeneratePollinationsCover, coverArtParamsFromTrack, isPollinationsCoverEligible, shouldUseAbstractCover } from "./params.js";
+import { buildAbstractCoverPrompt, buildPollinationsUrl, classifyVisualBucket, COVER_PROMPT_POLICY_VERSION, resolveStoryTheme } from "./prompt.js";
+import { resolveVisualDirection } from "./visual-director/director.mjs";
 import { DEFAULT_SONG_COVER_URL, isDefaultSongCoverUrl } from "./placeholders.js";
 import { stampCoverWithSplashMark } from "./branding.js";
 import { normalizePortraitCoverDataUrl } from "./portrait-normalize.js";
@@ -72,11 +74,119 @@ function trackNeedsCoverRetry(track) {
   return isDefaultSongCoverUrl(track?.artUrl || meta?.imageUrl);
 }
 
-export async function fetchAbstractCoverArt(params) {
+async function blobToDataUrl(blob, mime = "image/jpeg") {
+  return await new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.onerror = () => reject(new Error("Could not read cover image"));
+    reader.readAsDataURL(blob);
+  });
+}
+
+/** Local regen bundle: Visual Director + Nabad DNA + latest prompt policy (no server Gemini cache). */
+async function resolveRegenPromptBundle(params) {
+  const regenSalt = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+  const bucketKey = classifyVisualBucket(params);
+  const { theme, storyScore } = resolveStoryTheme(params);
+
+  const vd = await resolveVisualDirection(params, {
+    applyToPrompt: true,
+    tryGemini: false,
+    hints: {
+      bucketKey,
+      storyThemeId: storyScore > 0 && theme?.id ? theme.id : undefined,
+      storyScene: theme?.scene || "",
+      visualModeHint: theme?.visualMode || "still_life",
+    },
+  });
+
+  const promptInput = vd.coverInput || params;
+  const built = buildAbstractCoverPrompt(promptInput, {
+    regenSalt,
+    directorSceneHint: vd.sceneHint || "",
+    nabadIdentityPhrases: vd.identityPhrases || "",
+    visualDirection: vd.direction || undefined,
+  });
+
+  const avoidTags = [params.avoidTagsInput || "", vd.avoidMerged || ""].filter(Boolean).join(", ");
+  return {
+    ...built,
+    avoidTags,
+    regenSalt,
+    visualDirection: vd.direction || null,
+  };
+}
+
+/** Regen uses bundled director + prompt — Pollinations direct (no stale server/Gemini cache). */
+async function fetchRegeneratedCoverArt(params) {
+  const bundle = await resolveRegenPromptBundle(params);
+  const upstreamUrl = buildPollinationsUrl(bundle.prompt, bundle.seed, {
+    avoidTags: bundle.avoidTags,
+  });
+
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), COVER_FETCH_TIMEOUT_MS);
+  try {
+    const r = await fetch(upstreamUrl, { signal: ctrl.signal });
+    const mime = String(r.headers.get("content-type") || "image/jpeg").split(";")[0].trim();
+    const buf = await r.arrayBuffer();
+    if (!r.ok) throw new Error(`Cover upstream failed (${r.status})`);
+    if (/json/i.test(mime) || buf.byteLength < 512) {
+      throw new Error("Cover upstream returned an empty image.");
+    }
+    const dataUrl = await blobToDataUrl(new Blob([buf], { type: mime || "image/jpeg" }));
+    if (!dataUrl.startsWith("data:image/")) throw new Error("Invalid cover image.");
+    return {
+      dataUrl,
+      seed: bundle.seed,
+      bucket: bundle.bucket,
+      visualMode: bundle.visualMode,
+      storyTheme: bundle.storyTheme,
+      artworkSource: bundle.artworkSource,
+      params: {
+        ...(bundle.params || {}),
+        coverRegenerate: true,
+        visualDirectorMode: "apply",
+        ...(bundle.visualDirection ? { visualDirection: bundle.visualDirection } : {}),
+      },
+    };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+export async function fetchAbstractCoverArt(params, opts = {}) {
+  if (opts.coverRegenerate) {
+    try {
+      return await fetchRegeneratedCoverArt(params);
+    } catch (directErr) {
+      try {
+        console.warn("[cover-art] direct regen failed, trying API fallback", directErr?.message || directErr);
+      } catch {}
+    }
+  }
+
   const { apiUrl, getSupabaseAuthToken } = d();
   const token = getSupabaseAuthToken?.() || "";
   const headers = { "Content-Type": "application/json" };
   if (token) headers.Authorization = `Bearer ${token}`;
+
+  const body = { ...params };
+  if (opts.coverRegenerate) {
+    const bundle = await resolveRegenPromptBundle(params);
+    body.coverRegenerate = true;
+    body.skipGeminiScene = true;
+    body.promptPolicyVersion = COVER_PROMPT_POLICY_VERSION;
+    body.regenSalt = bundle.regenSalt;
+    body.clientPrompt = bundle.prompt;
+    body.clientSeed = bundle.seed;
+    body.clientBucket = bundle.bucket;
+    body.clientStoryTheme = bundle.storyTheme;
+    body.clientVisualMode = bundle.visualMode;
+    body.clientArtworkSource = bundle.artworkSource;
+    body.clientParams = bundle.params;
+    body.clientAvoidTags = bundle.avoidTags;
+  }
 
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), COVER_FETCH_TIMEOUT_MS);
@@ -85,7 +195,7 @@ export async function fetchAbstractCoverArt(params) {
       method: "POST",
       headers,
       signal: ctrl.signal,
-      body: JSON.stringify(params),
+      body: JSON.stringify(body),
     });
     const data = await r.json().catch(() => ({}));
     if (!r.ok) throw new Error(data?.error || `Cover art failed (${r.status})`);
@@ -165,7 +275,7 @@ function refreshPlayerIfTrack(track) {
   } catch {}
 }
 
-async function runCoverJobForTrack(track, id) {
+async function runCoverJobForTrack(track, id, opts = {}) {
   const params = coverArtParamsFromTrack(track);
   if (!params.songId) return null;
 
@@ -175,7 +285,7 @@ async function runCoverJobForTrack(track, id) {
       await new Promise((r) => setTimeout(r, 1500 * attempt));
     }
     try {
-      const result = await fetchAbstractCoverArt(params);
+      const result = await fetchAbstractCoverArt(params, opts);
       const normalizedUrl = await normalizePortraitCoverDataUrl(result.dataUrl);
       const stampedUrl = await stampCoverWithSplashMark(normalizedUrl);
       let thumbUrl = "";
@@ -274,7 +384,7 @@ export async function regenerateAbstractCoverForTrack(track) {
     return items[idx];
   });
   watchPendingCoverArt();
-  const job = runCoverJobForTrack(reset, id);
+  const job = runCoverJobForTrack(reset, id, { coverRegenerate: true });
   _inflight.set(id, job);
   try {
     return await job;

@@ -187,7 +187,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260712-022325";
+const APP_BUILD = "20260712-030355";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -23589,6 +23589,13 @@ function userSongPublishedAtValue(row) {
   return String(row?.published_at || row?.publishedAt || "").trim();
 }
 
+/** True once a library row has been published (profile / Discover). */
+function libraryTrackIsPublished(track) {
+  if (!track) return false;
+  if (track.publicOnProfile) return true;
+  return Boolean(userSongPublishedAtValue(track));
+}
+
 function libraryTrackPublicTs(track) {
   const published = userSongPublishedAtValue(track);
   if (published) {
@@ -31797,7 +31804,7 @@ function renderTrackSheetLibrary(track) {
   l.innerHTML = `
     ${recordEligible ? `<button type="button" class="discoverTrackSheetRow discoverTrackSheetRow--studio" data-track-sheet-action="library_record_voice">Open in Studio</button>` : ""}
     ${TRACK_SHEET_ADD_PLAYLIST_ROW}
-    <button type="button" class="discoverTrackSheetRow" data-track-sheet-action="library_change_cover">Change cover</button>
+    ${profilePublic ? "" : `<button type="button" class="discoverTrackSheetRow" data-track-sheet-action="library_change_cover">Change cover</button>`}
     <button type="button" class="discoverTrackSheetRow" data-track-sheet-action="library_pin">${escapeHtml(pinLabel)}</button>
     <button type="button" class="discoverTrackSheetRow" data-track-sheet-action="library_dl_audio">Download audio</button>
     <button type="button" class="discoverTrackSheetRow" data-track-sheet-action="library_dl_video">Download video</button>
@@ -45401,7 +45408,12 @@ function openPlayerChangeCoverPicker() {
     showToast("Only your own library songs can change cover.");
     return;
   }
-  if (!currentPlayerTrackRef?.id) {
+  const track = resolvePlayerLibraryTrack() || currentPlayerTrackRef;
+  if (libraryTrackIsPublished(track)) {
+    showToast("Cover can only be changed before you publish.", { icon: "!", durationMs: 3200 });
+    return;
+  }
+  if (!track?.id) {
     setStatus("Open a library song first.");
     return;
   }
@@ -45424,7 +45436,7 @@ function syncPlayerCoverToolsRail() {
   if (!rail) return;
   const own = playerCurrentUserOwnsTrack() && !playerSourceIsExternalListenOnly();
   const track = resolvePlayerLibraryTrack();
-  if (!own || !track) {
+  if (!own || !track || libraryTrackIsPublished(track)) {
     rail.hidden = true;
     return;
   }
@@ -45466,7 +45478,7 @@ function closeThumbEditSheet() {
 }
 
 async function openThumbEditSheet(track) {
-  if (!track?.id || !playerCanEditThumb(track)) return;
+  if (!track?.id || libraryTrackIsPublished(track) || !playerCanEditThumb(track)) return;
   const src = trackCoverArtForDisplay(track);
   if (!src) return;
   _thumbEditTrackId = String(track.id);
@@ -45558,7 +45570,7 @@ function setPlayerCoverGenerating(active) {
 
 async function regeneratePlayerCover() {
   const track = resolvePlayerLibraryTrack();
-  if (!track?.id || !playerCanRegenerateCover(track)) return;
+  if (!track?.id || libraryTrackIsPublished(track) || !playerCanRegenerateCover(track)) return;
   const ok = await playerInlineConfirm({
     text: "Generate a new AI cover? Your full portrait cover and reel view will update. You can re-edit the square thumbnail afterward.",
     confirmLabel: "Regenerate",
@@ -53585,7 +53597,13 @@ if (els.playerVol) {
 if (els.playerCoverUpload) {
   els.playerCoverUpload.addEventListener("change", async () => {
     const f = els.playerCoverUpload?.files?.[0];
-    if (!f || !currentPlayerTrackRef?.id) {
+    const track = resolvePlayerLibraryTrack() || currentPlayerTrackRef;
+    if (!f || !track?.id) {
+      try { els.playerCoverUpload.value = ""; } catch {}
+      return;
+    }
+    if (libraryTrackIsPublished(track)) {
+      showToast("Cover can only be changed before you publish.", { icon: "!", durationMs: 3200 });
       try { els.playerCoverUpload.value = ""; } catch {}
       return;
     }

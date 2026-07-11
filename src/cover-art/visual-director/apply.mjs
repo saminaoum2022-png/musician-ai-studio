@@ -93,7 +93,7 @@ export function applyVisualDirection(coverInput, direction, opts = {}) {
  */
 export function nabadBriefLine(direction, identityOneLiner) {
   const line = String(identityOneLiner || "").trim()
-    || "deep void, teal-violet haze, soft bloom, one hero, generous empty space, no faces";
+    || "deep void, teal-violet haze, soft bloom, one hero object, generous empty space, no people";
   if (!direction) return `Nabad look: ${line}.`;
   return [
     `Nabad look: ${line}.`,

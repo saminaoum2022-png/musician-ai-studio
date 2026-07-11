@@ -10,12 +10,26 @@ export function portrait916CropRect(w, h) {
   if (!iw || !ih) return { sx: 0, sy: 0, sw: iw, sh: ih };
   const srcAr = iw / ih;
   if (srcAr > TARGET_AR) {
-    const sw = Math.round(ih * TARGET_AR);
-    return { sx: Math.round((iw - sw) / 2), sy: 0, sw, sh: ih };
+    const sh = ih;
+    const sw = Math.min(iw, Math.max(1, Math.floor(sh * TARGET_AR)));
+    return { sx: Math.max(0, Math.floor((iw - sw) / 2)), sy: 0, sw, sh };
   }
-  const sh = Math.round(iw / TARGET_AR);
-  const sy = ih > iw * 1.08 ? 0 : Math.round((ih - sh) / 2);
-  return { sx: 0, sy, sw: iw, sh };
+  const sw = iw;
+  const sh = Math.min(ih, Math.max(1, Math.floor(sw / TARGET_AR)));
+  const sy = ih > iw * 1.08 ? 0 : Math.max(0, Math.floor((ih - sh) / 2));
+  return { sx: 0, sy, sw, sh };
+}
+
+/** Draw source crop into dest using cover scaling — never non-uniform stretch. */
+function drawCoverPortrait916(ctx, img, sx, sy, sw, sh) {
+  const tw = COVER_PORTRAIT_W;
+  const th = COVER_PORTRAIT_H;
+  const scale = Math.max(tw / sw, th / sh);
+  const dw = Math.round(sw * scale);
+  const dh = Math.round(sh * scale);
+  const dx = Math.round((tw - dw) / 2);
+  const dy = 0;
+  ctx.drawImage(img, sx, sy, sw, sh, dx, dy, dw, dh);
 }
 
 /** Crop to 9:16 (never stretch) and resize to 720×1280. */
@@ -37,7 +51,7 @@ export async function normalizePortraitCoverDataUrl(dataUrl) {
   canvas.height = COVER_PORTRAIT_H;
   const ctx = canvas.getContext("2d");
   if (!ctx) return src;
-  ctx.drawImage(img, sx, sy, sw, sh, 0, 0, COVER_PORTRAIT_W, COVER_PORTRAIT_H);
+  drawCoverPortrait916(ctx, img, sx, sy, sw, sh);
   try {
     const webp = canvas.toDataURL("image/webp", 0.82);
     if (webp.startsWith("data:image/webp")) return webp;

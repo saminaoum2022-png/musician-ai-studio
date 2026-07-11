@@ -17,7 +17,7 @@ export const NABAD_ROOT_PHRASES = {
   single_hero: "single clear focal subject",
   breathing_room: "generous negative space and premium restraint",
   editorial_still: "premium cinematic editorial still photography",
-  silhouette: "distant silhouettes only, no visible faces",
+  silhouette: "symbolic object still life, no human forms",
   instrument_sculpture: "solo instrument as sculptural hero, moody studio spill light",
   symbolic_mood: "emotion conveyed through light and environment, not literal props",
   soft_grain: "fine photographic grain with clean coherent geometry",
@@ -36,8 +36,17 @@ const CORE_ROOTS = /** @type {NabadRootId[]} */ ([
 ]);
 
 const IDENTITY_AVOID = Object.freeze([
-  "close-up faces",
+  "people",
+  "human",
+  "human figure",
+  "face",
+  "faces",
+  "hands",
+  "fingers",
+  "silhouette",
+  "portrait",
   "portrait photography",
+  "close-up faces",
   "clip-art look",
   "flat stock lighting",
   "readable text",
@@ -81,8 +90,8 @@ function contextualRoots(opts = {}) {
 
   if (humTrack || visualMode === "studio_nook_still_life") {
     roots.push("editorial_still", "soft_grain", "breathing_room");
-  } else if (visualMode === "figure") {
-    roots.push("editorial_still", "soft_grain", "silhouette");
+  } else if (visualMode === "figure" || visualMode === "still_life") {
+    roots.push("editorial_still", "soft_grain", "symbolic_mood");
   } else if (visualMode === "abstract") {
     roots.push("editorial_still", "quiet_motion", "soft_grain");
   } else {

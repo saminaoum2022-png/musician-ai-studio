@@ -4,6 +4,8 @@
  */
 const CACHE_TTL_MS = 60 * 60 * 1000;
 const CACHE_MAX = 400;
+/** Keep in sync with src/cover-art/prompt.js COVER_PROMPT_POLICY_VERSION */
+const COVER_PROMPT_POLICY_VERSION = 2;
 const sceneCache = new Map();
 
 const PREFERRED_MODELS = ["gemini-2.0-flash-lite", "gemini-2.0-flash", "gemini-2.5-flash", "gemini-1.5-flash"];
@@ -81,14 +83,14 @@ function buildGeminiCoverBrief(input, { bucketKey, palette, artworkHint = "", oc
     "Write ONE wordless photograph scene phrase for an AI image model.",
     "Output plain text only: comma-separated visual description, max 220 characters.",
     "No markdown, no quotes, no JSON.",
-    "Describe subject, setting, lighting mood, and composition only.",
-    "The image model outputs a vertical 9:16 album cover frame — compose subject in the upper two-thirds, waist-up or head-and-shoulders only, never full-body vertical stretch.",
-    "Prefer backlit silhouettes without visible facial features; avoid close-up portraits and detailed faces.",
-    "Prefer one dominant subject, one clear environment, realistic photography, simple composition, and minimal visual clutter.",
+    "Describe symbolic objects, setting, lighting mood, and composition only.",
+    "CRITICAL: absolutely no people, no humans, no faces, no hands, no fingers, no bodies, no silhouettes, no portraits — objects and environments only.",
+    "For occasions, use symbolic props (e.g. wedding → diamond rings on satin; birthday → balloons and candles; graduation → cap and diploma on table).",
+    "The image model outputs a square frame — compose the hero object centered for square still life; the app crops to vertical 9:16 afterward.",
+    "Prefer one dominant object, one clear environment, realistic photography, simple composition, and minimal visual clutter.",
     "Avoid surreal or impossible combinations unless the mood, genre, or art direction below explicitly calls for them.",
     "CRITICAL: absolutely no readable text, letters, numbers, logos, signage, posters, banners, captions, song titles, or watermarks anywhere in the scene.",
     "Do NOT name colors or color palettes — brand color grading is appended separately.",
-    "Avoid visible faces; distant silhouettes are ok.",
     nabadBriefLine ? trimField(nabadBriefLine, 220) : "",
     directorSubject ? `Visual direction subject (visual only): ${directorSubject}` : "",
     directorSetting ? `Visual direction setting: ${directorSetting}` : "",
@@ -124,6 +126,10 @@ function sanitizeGeminiScene(raw, { title = "" } = {}) {
     s = s.replace(new RegExp(esc, "gi"), " ");
   }
   s = s.replace(/\b(deep teal|rich violet|electric teal|vivid violet|purple glow|violet dusk|teal and violet)\b/gi, " ");
+  s = s.replace(
+    /\b(person|people|human|humans|man|woman|child|couple|crowd|dancer|performer|musician|face|faces|portrait|silhouette|figure|body|hand|hands|finger|fingers|bride|groom|athlete|headshot)\b/gi,
+    " ",
+  );
   return s.replace(/\s+/g, " ").trim().slice(0, 220);
 }
 
@@ -150,7 +156,7 @@ async function tryGeminiCoverScene(input, context = {}) {
   }
 
   const songId = String(input?.songId || input?.id || "").trim();
-  const cacheKey = songId || `anon:${trimField(input?.title, 80)}`;
+  const cacheKey = `${COVER_PROMPT_POLICY_VERSION}|${songId || `anon:${trimField(input?.title, 80)}`}`;
   const cached = cacheGet(cacheKey);
   if (cached?.scene) {
     return { ok: true, scene: cached.scene, model: cached.model, cached: true };

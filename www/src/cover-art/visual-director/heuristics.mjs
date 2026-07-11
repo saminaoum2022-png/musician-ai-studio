@@ -2,6 +2,7 @@
  * Rule-based Visual Director — no LLM required.
  */
 import { fnv1a } from "./hash.mjs";
+import { enforceNoHumansScene } from "../prompt.js";
 import { humTrackStudioNookPhrase } from "./hum-track-cover.mjs";
 import { nabadIdentityPhrases } from "./nabad-identity.mjs";
 import { validateVisualDirection } from "./schema.mjs";
@@ -20,24 +21,26 @@ function pickComposition(songId) {
 
 function mainSubjectFromContext(ctx) {
   if (ctx.artworkHint || ctx.artworkStyle) {
-    return String(ctx.artworkHint || ctx.artworkStyle).slice(0, 120);
+    return enforceNoHumansScene(String(ctx.artworkHint || ctx.artworkStyle).slice(0, 120));
   }
   if (ctx.humTrack && ctx.instrumentLabel) {
     return `${humTrackStudioNookPhrase(ctx.instrumentLabel, ctx.instrumentId)}, premium studio nook still life`;
   }
   if (ctx.storyScene) {
-    return ctx.storyScene.replace(/, no (people|faces|writing).*$/i, "").trim().slice(0, 120);
+    return enforceNoHumansScene(
+      ctx.storyScene.replace(/, no (people|faces|writing).*$/i, "").trim().slice(0, 120),
+    );
   }
   if (ctx.sourcePath === "sound" && ctx.lyrics) {
-    return ctx.lyrics.split(/\r?\n/)[0].trim().slice(0, 100) || "abstract sonic atmosphere";
+    return enforceNoHumansScene(ctx.lyrics.split(/\r?\n/)[0].trim().slice(0, 100) || "abstract sonic atmosphere");
   }
   if (ctx.sourcePath === "mashup") {
-    return "layered luminous depth where two musical moods meet, symbolic abstract forms";
+    return "layered luminous depth where two musical moods meet, symbolic abstract forms, no people";
   }
   if (ctx.sourcePath === "instrumental") {
     return "premium abstract living light gradients with cinematic bloom, no people";
   }
-  return "premium emotional music atmosphere with cinematic environmental storytelling";
+  return "premium symbolic object still life with cinematic environmental mood, no people";
 }
 
 function settingFromContext(ctx) {
@@ -58,9 +61,9 @@ function visualSymbolsFromContext(ctx) {
   const symbols = [];
   const occasion = String(ctx.occasionLabel || "").toLowerCase();
   if (occasion === "birthday") symbols.push("soft candle glow", "celebration balloons as bokeh");
-  if (occasion === "wedding") symbols.push("chandelier bokeh", "soft floral glow");
+  if (occasion === "wedding") symbols.push("diamond rings on satin", "soft floral glow");
   if (occasion === "christmas") symbols.push("evergreen lights", "warm star glow");
-  if (occasion === "graduation") symbols.push("caps in air as silhouettes");
+  if (occasion === "graduation") symbols.push("mortarboard cap", "rolled diploma", "golden tassel");
   if (ctx.sourcePath === "mashup") symbols.push("interwoven light arcs");
   if (ctx.sonicProfile === "electronic") symbols.push("subtle neon sparkle");
   if (ctx.sonicProfile === "acoustic") symbols.push("organic warm light");
@@ -69,24 +72,32 @@ function visualSymbolsFromContext(ctx) {
 
 function visualModeFromContext(ctx) {
   if (ctx.humTrack || ctx.visualModeHint === "studio_nook_still_life") return "studio_nook_still_life";
-  if (ctx.visualModeHint === "figure") return "figure";
+  if (ctx.visualModeHint === "figure" || ctx.visualModeHint === "still_life") return "landscape";
   if (ctx.visualModeHint === "abstract" || ctx.sourcePath === "instrumental") return "abstract";
   return "landscape";
 }
 
+const GLOBAL_HUMAN_AVOID = Object.freeze([
+  "people",
+  "human",
+  "human figure",
+  "face",
+  "faces",
+  "hands",
+  "fingers",
+  "silhouette",
+  "portrait",
+  "body",
+  "anatomy",
+]);
+
 function extraAvoid(ctx) {
   /** @type {string[]} */
-  const avoid = [];
+  const avoid = [...GLOBAL_HUMAN_AVOID];
   if (ctx.humTrack && ctx.instrumentLabel) {
     avoid.push(
-      "people",
-      "human figure",
-      "face",
-      "hands",
-      "fingers",
       "musician",
       "performer",
-      "portrait",
       "holding instrument",
       "full band",
       "wrong instrument",
@@ -139,9 +150,7 @@ export function resolveHeuristicVisualDirection(ctx) {
       : "soft cinematic rim light with teal-violet atmospheric fill",
     cameraStyle: visualMode === "studio_nook_still_life"
       ? "editorial studio nook still life photograph, props only, no instruments, no human subjects"
-      : visualMode === "figure"
-        ? "wide cinematic silhouette photograph"
-        : "premium editorial landscape photograph",
+      : "premium editorial still life or landscape photograph, symbolic objects only, no human subjects",
     avoidConcepts: extraAvoid(ctx),
     visualMode,
     bucketHint: ctx.bucketKey,

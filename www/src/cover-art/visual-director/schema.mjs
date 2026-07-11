@@ -31,7 +31,15 @@ import { NABAD_DNA_VERSION } from "./nabad-identity.mjs";
 export const VISUAL_DIRECTION_VERSION = 1;
 
 const BASE_AVOID = Object.freeze([
+  "people",
+  "human",
+  "human figure",
+  "face",
   "faces",
+  "hands",
+  "fingers",
+  "silhouette",
+  "portrait",
   "readable text",
   "typography",
   "watermark",

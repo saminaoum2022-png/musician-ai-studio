@@ -1,5 +1,5 @@
 /**
- * Pollinations may return the wrong aspect (e.g. ~3:4 for a portrait request).
+ * Pollinations often returns square or wrong aspect for portrait requests.
  * Top-biased cover-crop to true 9:16 — never non-uniform stretch.
  */
 const sharp = require("sharp");
@@ -14,12 +14,14 @@ function cropRectForPortrait916(w, h) {
   if (!iw || !ih) return { left: 0, top: 0, width: iw, height: ih };
   const srcAr = iw / ih;
   if (srcAr > TARGET_AR) {
-    const cropW = Math.round(ih * TARGET_AR);
-    return { left: Math.round((iw - cropW) / 2), top: 0, width: cropW, height: ih };
+    const cropH = ih;
+    const cropW = Math.min(iw, Math.max(1, Math.floor(cropH * TARGET_AR)));
+    return { left: Math.max(0, Math.floor((iw - cropW) / 2)), top: 0, width: cropW, height: cropH };
   }
-  const cropH = Math.round(iw / TARGET_AR);
-  const top = ih > iw * 1.08 ? 0 : Math.round((ih - cropH) / 2);
-  return { left: 0, top, width: iw, height: cropH };
+  const cropW = iw;
+  const cropH = Math.min(ih, Math.max(1, Math.floor(cropW / TARGET_AR)));
+  const top = ih > iw * 1.08 ? 0 : Math.max(0, Math.floor((ih - cropH) / 2));
+  return { left: 0, top, width: cropW, height: cropH };
 }
 
 /** @returns {Promise<{ buf: Buffer, mime: string, width: number, height: number }>} */
@@ -37,8 +39,10 @@ async function normalizeCoverPortraitBuffer(inputBuf) {
     return { buf: src, mime: "image/jpeg", width: w, height: h };
   }
 
+  const crop = cropRectForPortrait916(w, h);
   const out = await img
-    .resize(TARGET_W, TARGET_H, { fit: "cover", position: "north" })
+    .extract(crop)
+    .resize(TARGET_W, TARGET_H, { fit: "fill", withoutEnlargement: false })
     .jpeg({ quality: 82, mozjpeg: true })
     .toBuffer();
 

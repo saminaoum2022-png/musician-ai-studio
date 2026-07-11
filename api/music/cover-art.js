@@ -14,6 +14,7 @@ const MAX_FIELD = 160;
 const MAX_STYLE = 980;
 const MAX_ARTWORK = 280;
 const MAX_AVOID = 900;
+const MAX_CLIENT_PROMPT = 4500;
 let _promptMod = null;
 
 async function getPromptModule() {
@@ -101,6 +102,9 @@ module.exports = async function handler(req, res) {
     } = await getPromptModule();
 
     const avoidTagsInput = String(body?.avoidTagsInput || body?.avoidTags || "").trim().slice(0, MAX_FIELD);
+    const coverRegenerate = Boolean(body?.coverRegenerate);
+    const clientPrompt = String(body?.clientPrompt || "").trim().slice(0, MAX_CLIENT_PROMPT);
+    const clientSeedRaw = Number(body?.clientSeed);
 
     const coverInput = {
       songId,
@@ -121,7 +125,7 @@ module.exports = async function handler(req, res) {
       humTrack: Boolean(body?.humTrack),
       instrumentLabel: String(body?.instrumentLabel || "").trim().slice(0, 40),
       instrument: String(body?.instrument || body?.instrumentId || "").trim().slice(0, 40),
-      skipGeminiScene: Boolean(body?.skipGeminiScene || body?.humTrack),
+      skipGeminiScene: Boolean(body?.skipGeminiScene || body?.humTrack || coverRegenerate),
       searchTemplateTitle: String(body?.searchTemplateTitle || "").trim().slice(0, MAX_FIELD),
       occasionLabel: String(body?.occasionLabel || "").trim().slice(0, MAX_FIELD),
     };
@@ -142,6 +146,46 @@ module.exports = async function handler(req, res) {
     const effectiveAvoidTags = vd.mode === "apply" && vdApplied?.avoidMerged
       ? String(vdApplied.avoidMerged).slice(0, MAX_AVOID)
       : avoidTagsInput.slice(0, MAX_AVOID);
+
+    /** Regen: client bundle builds prompt locally (latest policy) — skip Gemini + server prompt rewrite. */
+    if (coverRegenerate && clientPrompt) {
+      const seed = Number.isFinite(clientSeedRaw) && clientSeedRaw > 0
+        ? Math.floor(clientSeedRaw) % 2147483646
+        : Math.floor(Math.random() * 2147483645) + 1;
+      const upstreamUrl = buildPollinationsUrl(clientPrompt, seed, {
+        avoidTags: String(body?.clientAvoidTags || effectiveAvoidTags || "").slice(0, MAX_AVOID),
+      });
+      const polled = await fetchPollinationsCover(upstreamUrl);
+      if (!polled.ok) {
+        console.warn("[music/cover-art] pollinations failed (client regen prompt)", polled.error);
+        return sendJson(res, 502, { error: "Cover image generation failed upstream." });
+      }
+      let outBuf = polled.buf;
+      let outMime = polled.mime || "image/jpeg";
+      try {
+        const normalized = await normalizeCoverPortraitBuffer(polled.buf);
+        outBuf = normalized.buf;
+        outMime = normalized.mime || "image/jpeg";
+      } catch (e) {
+        console.warn("[music/cover-art] portrait normalize skipped", e?.message || e);
+      }
+      const dataUrl = `data:${outMime || "image/jpeg"};base64,${outBuf.toString("base64")}`;
+      return sendJson(res, 200, {
+        ok: true,
+        dataUrl,
+        seed,
+        bucket: String(body?.clientBucket || "default"),
+        visualMode: String(body?.clientVisualMode || "still_life"),
+        storyTheme: String(body?.clientStoryTheme || "regen"),
+        artworkSource: String(body?.clientArtworkSource || "client_regen"),
+        params: body?.clientParams && typeof body.clientParams === "object" ? body.clientParams : {},
+        coverWidth: COVER_PORTRAIT_W,
+        coverHeight: COVER_PORTRAIT_H,
+        provider: "pollinations",
+        abstract: true,
+        coverRegenerate: true,
+      });
+    }
 
     let nabadBriefLine = "";
     if (vd.mode === "apply" && vdApplied?.identityPhrases) {

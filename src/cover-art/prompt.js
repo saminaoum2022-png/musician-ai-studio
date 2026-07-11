@@ -3,13 +3,23 @@
  * User never writes these. Same song id + same story → same seed + same scene.
  */
 
-/** Pollinations flux returns native 9:16 for 720×1280 (typically ~576×1024). */
-export const POLLINATIONS_COVER_WIDTH = 720;
-export const POLLINATIONS_COVER_HEIGHT = 1280;
+/** Bump when cover prompt policy changes — busts Gemini scene cache on the server. */
+export const COVER_PROMPT_POLICY_VERSION = 2;
+/** Pollinations flux reliably returns ~768×768 square — request square, crop to 9:16 (avoids vertical stretch). */
+export const POLLINATIONS_COVER_WIDTH = 1024;
+export const POLLINATIONS_COVER_HEIGHT = 1024;
 
-/** Compose for vertical album art — waist-up only, never full-body stretch. */
-const PORTRAIT_COMPOSE_FRAME =
-  "vertical album art composition, subject in the upper two-thirds, waist-up or head-and-shoulders framing only, natural human proportions, correct anatomy, no full-body vertical stretch, no elongated features, no stretched limbs";
+/** Square canvas keeps object proportions natural; we vertical-crop to 9:16 for the reel. */
+const STILL_LIFE_COMPOSE_FRAME =
+  "square still life album art composition, single hero object centered in the middle third, natural object proportions, no vertical stretch, no elongated props, no people";
+
+/** Appended to every cover prompt — Flux cannot render humans reliably. */
+const NO_HUMANS_GUARD =
+  "absolutely no people, no humans, no faces, no hands, no fingers, no bodies, no silhouettes, no portraits, no anatomy, objects and environments only";
+
+/** Strip human-trigger words from any scene phrase (Gemini, user artwork, story). */
+const HUMAN_TRIGGER_RE =
+  /\b(person|people|human|humans|man|woman|men|women|girl|boy|child|children|baby|couple|crowd|dancer|dancers|performer|performers|musician|musicians|face|faces|facial|portrait|portraits|silhouette|silhouettes|figure|figures|body|bodies|hand|hands|finger|fingers|arm|arms|leg|legs|head|heads|eye|eyes|mouth|mouths|bride|groom|athlete|model|selfie|headshot|head-and-shoulders|waist-up|full-body|close-up|closeup)\b/gi;
 
 /** Keep in sync with hum-track-cover.mjs — no imports here (server loads this via dynamic import). */
 const HUM_TRACK_SCENE_GUARD =
@@ -22,7 +32,7 @@ const SAFETY_PREFIX =
   "typography-free pure visual art, textless image, no written language anywhere, ";
 
 const SAFETY_SUFFIX =
-  "absolutely no text, no words, no letters, no numbers, no captions, no subtitles, no typography, no writing, no logo text, no song name, no watermark, no readable signage, no speech bubbles, no banners, no posters, no book pages, no diplomas, no certificates, no newspapers, silhouettes only without facial details, fine art photography quality";
+  "absolutely no text, no words, no letters, no numbers, no captions, no subtitles, no typography, no writing, no logo text, no song name, no watermark, no readable signage, no speech bubbles, no banners, no posters, no book pages, no diplomas, no certificates, no newspapers, no people, no human figures, fine art photography quality";
 
 const HUM_TRACK_SAFETY_SUFFIX =
   "absolutely no text, no words, no letters, no numbers, no captions, no subtitles, no typography, no writing, no logo text, no song name, no watermark, no readable signage, no people, no faces, no hands, no human figures, fine art photography quality";
@@ -31,10 +41,10 @@ const NO_TEXT_REINFORCE =
   "completely wordless photograph, zero readable characters in the entire frame, blank signs, empty screens, no labels";
 
 const NEGATIVE_TEXT_PROMPT =
-  "text, words, letters, numbers, typography, font, writing, caption, subtitle, watermark, logo, album cover title, song title, track title, artist name, band name, signage, billboard, poster text, newspaper, book, magazine, speech bubble, label, stamp, signature, handwritten, calligraphy, cursive, script font, decorative lettering, word art, letter shapes, holiday lettering, christmas text, greeting card text, festive banner, neon sign with words, arabic text, english text, quotes, meme text, ui overlay, readable characters, sentences, lyrics on screen, cd cover text, record label, tracklist, credits block, diploma text, certificate text, graffiti letters, title card, greeting card, banner text, embroidered text, carved letters, glowing words, light text, 3d text, bad anatomy, deformed anatomy, extra fingers, missing fingers, duplicate limbs, floating limbs, mutated hands, broken hands, crossed eyes, lazy eye, crooked eyes, disfigured face, cropped face, duplicate subject, floating objects, blurry, low quality, jpeg artifacts, oversaturated, distorted perspective, elongated face, stretched portrait, vertically stretched body, squashed proportions, wrong aspect ratio, fisheye portrait, close-up portrait, beauty portrait, fashion portrait, headshot, detailed facial features, recognizable face, portrait photography, full body portrait, tall thin figure, unnaturally long neck, stretched silhouette";
+  "text, words, letters, numbers, typography, font, writing, caption, subtitle, watermark, logo, album cover title, song title, track title, artist name, band name, signage, billboard, poster text, newspaper, book, magazine, speech bubble, label, stamp, signature, handwritten, calligraphy, cursive, script font, decorative lettering, word art, letter shapes, holiday lettering, christmas text, greeting card text, festive banner, neon sign with words, arabic text, english text, quotes, meme text, ui overlay, readable characters, sentences, lyrics on screen, cd cover text, record label, tracklist, credits block, diploma text, certificate text, graffiti letters, title card, greeting card, banner text, embroidered text, carved letters, glowing words, light text, 3d text, people, person, human, humans, humanoid, man, woman, child, baby, crowd, dancer, performer, musician, face, faces, portrait, portraits, silhouette, silhouettes, body, bodies, hand, hands, finger, fingers, arm, arms, leg, legs, head, heads, eye, eyes, mouth, mouths, teeth, nose, ear, skin, anatomy, bad anatomy, deformed anatomy, extra fingers, missing fingers, six fingers, duplicate limbs, floating limbs, mutated hands, broken hands, multiple mouths, crossed eyes, lazy eye, crooked eyes, disfigured face, cropped face, duplicate subject, floating objects, blurry, low quality, jpeg artifacts, oversaturated, distorted perspective, elongated face, stretched portrait, vertically stretched body, squashed proportions, wrong aspect ratio, fisheye portrait, close-up portrait, beauty portrait, fashion portrait, headshot, detailed facial features, recognizable face, portrait photography, full body portrait, tall thin figure, unnaturally long neck, stretched silhouette, selfie, model, fashion model, vertically stretched object, elongated object, stretched props, unnaturally tall object";
 
 const STYLE_CORE =
-  "premium cinematic visual art, elegant composition, rich color grading, high-end editorial look, moody dark tones with luminous accents, deep teal and violet palette when appropriate, natural anatomy, physically plausible lighting, clean geometry, single focal subject, balanced vertical composition, professional photography, minimal visual noise, high image coherence, realistic proportions, clean perspective, silhouettes preferred over detailed faces";
+  "premium cinematic visual art, elegant composition, rich color grading, high-end editorial look, moody dark tones with luminous accents, deep teal and violet palette when appropriate, physically plausible lighting, clean geometry, single focal object, balanced vertical composition, professional still life photography, minimal visual noise, high image coherence, clean perspective, symbolic objects only, no human subjects";
 
 const HUM_TRACK_STYLE_CORE =
   "premium cinematic visual art, elegant composition, rich color grading, moody dark tones with luminous accents, deep teal and violet palette, photoreal studio nook still life, props only, warm wood surfaces, window sunlight with long shadows, dried botanical accents, balanced composition, professional studio photography, minimal visual noise, high image coherence, clean perspective, no instruments visible, no human subjects";
@@ -70,56 +80,56 @@ const STORY_THEMES = [
     id: "prom_formal",
     re: /prom|prom night|homecoming|formal dance|school dance|senior year|senior night|university ball|college ball|graduation ball|graduation night|debs|matric|leaving cert|bal de promo|soirée de promo|حفل التخرج|حفل تخرج|سهرة تخرج|بروف|promenade/i,
     scene:
-      "elegant formal school prom or university ball atmosphere, decorated ballroom with chandeliers and soft golden lights, young people dancing as silhouettes in formal wear, festive celebration mood, no visible faces",
-    visualMode: "figure",
+      "elegant ballroom still life, crystal chandelier bokeh, formal table setting with candles and sequin fabric, festive celebration mood, no people",
+    visualMode: "still_life",
     bucket: "party",
   },
   {
     id: "graduation",
     re: /graduation|graduate|diploma|commencement|cap and gown|mortarboard|تخرج/i,
     scene:
-      "graduation celebration atmosphere, graduate silhouettes with caps thrown in the air, campus or hall lights at dusk, proud joyful mood, no faces",
-    visualMode: "figure",
+      "graduation still life, mortarboard cap and rolled diploma on dark velvet, golden tassel detail, confetti scatter, proud celebratory mood, no people",
+    visualMode: "still_life",
     bucket: "happy",
   },
   {
     id: "wedding",
     re: /wedding|bridal|bride|groom|marriage|ceremony|first dance|dabke entrance|زفاف|عرس|عروس/i,
     scene:
-      "elegant wedding celebration atmosphere, bride and groom silhouettes dancing or standing together, warm golden ceremony lights, graceful premium mood, no faces",
-    visualMode: "figure",
+      "wedding still life, diamond solitaire rings on ivory satin, soft floral bouquet and champagne gold bokeh, elegant ceremony mood, no people",
+    visualMode: "still_life",
     bucket: "wedding",
   },
   {
     id: "club_night",
     re: /club|nightclub|dj|afterparty|turn up|night out|rave|discoteca|ملهى|نادي/i,
     scene:
-      "vibrant nightclub atmosphere, dancing crowd silhouettes under colorful lights and bokeh, high energy celebration, no faces",
-    visualMode: "figure",
+      "nightclub still life, neon lights and disco ball reflections, cocktail glass bokeh on bar counter, high energy mood, no people",
+    visualMode: "still_life",
     bucket: "party",
   },
   {
     id: "concert_stage",
     re: /concert|festival|live show|on stage|stadium|arena|tour|headliner|حفلة|مسرح/i,
     scene:
-      "live concert atmosphere, performer and crowd silhouettes on stage with dramatic spotlights, epic scale, no faces",
-    visualMode: "figure",
+      "empty concert stage still life, dramatic spotlights and microphone stand on dark stage, epic scale, no people",
+    visualMode: "still_life",
     bucket: "hype",
   },
   {
     id: "heartbreak",
     re: /heartbreak|broken heart|goodbye|farewell|miss you|without you|left me|tears|lonely|alone|empty|goodnight|وداع|فراق|وحيد|بكي|دمع/i,
     scene:
-      "lonely melancholic atmosphere, solitary person silhouette by a rain-lit window or empty street, quiet emotional weight, no face",
-    visualMode: "figure",
+      "melancholic still life, wilted rose and rain-streaked window glass, empty teacup on windowsill, quiet emotional weight, no people",
+    visualMode: "still_life",
     bucket: "sad",
   },
   {
     id: "romance",
     re: /love you|my love|romantic|romance|darling|valentine|kiss|together forever|habibi|habibti|حبيب|حبيبي|حبيبتي|عشق|حب|قلبي/i,
     scene:
-      "intimate romantic atmosphere, couple silhouettes close together under a glowing sky, tender warmth, no visible faces",
-    visualMode: "figure",
+      "romantic still life, intertwined gold rings and soft candlelight on dark surface, rose petals scatter, tender warmth, no people",
+    visualMode: "still_life",
     bucket: "love",
   },
   {
@@ -174,23 +184,23 @@ const STORY_THEMES = [
     id: "workout_power",
     re: /workout|gym|training|run|running|champion|victory|win|power|beast mode|anthem|كأس|بطل|قوة/i,
     scene:
-      "intense powerful atmosphere, athlete or crowd silhouettes in dramatic backlight, kinetic energy, no faces",
-    visualMode: "figure",
+      "athletic still life, kettlebell and running shoes on gym floor, dramatic backlight streaks, kinetic energy mood, no people",
+    visualMode: "still_life",
     bucket: "hype",
   },
   {
     id: "celebration",
     re: /party|celebration|birthday|cheers|toast|dance|dancing|fiesta|celebrate|احتفال|رقص|عيد/i,
     scene:
-      "joyful celebration atmosphere, people dancing as silhouettes with warm festive lights, no faces",
-    visualMode: "figure",
+      "celebration still life, confetti burst and champagne flute bokeh, warm festive lights, joyful mood, no people",
+    visualMode: "still_life",
     bucket: "party",
   },
   {
     id: "dreamy_ethereal",
     re: /dream|dreamy|ethereal|float|cosmic|space|galaxy|nebula|magic|fantasy|حلم|فضاء/i,
     scene:
-      "surreal dreamlike atmosphere, soft fog and pearlescent light, weightless magical mood, abstract human form optional as distant silhouette only",
+      "surreal dreamlike abstract atmosphere, soft fog and pearlescent light, weightless magical mood, no figures",
     visualMode: "abstract",
     bucket: "dreamy",
   },
@@ -200,6 +210,7 @@ const ABSTRACT_FALLBACKS = [
   "premium abstract living light gradients, glass diffusion, cinematic bloom, no people",
   "atmospheric color field with soft aurora glow and elegant negative space, no figures",
   "luxury abstract light sculpture mood, teal and violet luminous accents, no human subjects",
+  "symbolic object still life with soft bokeh and premium negative space, no people",
 ];
 
 const COMPOSITIONS = [
@@ -321,22 +332,29 @@ function moodBucketFallback(bucketKey, energy) {
   const palette = MOOD_PALETTES[bucketKey] || MOOD_PALETTES.default;
   if (bucketKey === "party" || bucketKey === "hype") {
     return {
-      scene: "festive high-energy atmosphere, dancing silhouettes under colorful lights, no faces",
-      visualMode: "figure",
+      scene: "festive still life, colorful light bokeh and confetti accents, no people",
+      visualMode: "still_life",
       palette,
     };
   }
   if (bucketKey === "love") {
     return {
-      scene: "romantic atmosphere, couple silhouettes under glowing sky, no visible faces",
-      visualMode: "figure",
+      scene: "romantic still life, roses and soft golden candlelight on dark surface, no people",
+      visualMode: "still_life",
       palette,
     };
   }
   if (bucketKey === "sad") {
     return {
-      scene: "melancholic atmosphere, lone silhouette in moody darkness, no face",
-      visualMode: "figure",
+      scene: "melancholic still life, single wilted flower and moody rain-lit window, no people",
+      visualMode: "still_life",
+      palette,
+    };
+  }
+  if (bucketKey === "wedding") {
+    return {
+      scene: "wedding still life, diamond rings on satin with soft floral glow, no people",
+      visualMode: "still_life",
       palette,
     };
   }
@@ -465,6 +483,11 @@ const TEXT_TRIGGER_REPLACEMENTS = [
   ["hum track", "musician studio nook still life with props, no instruments visible"],
   ["album cover art", "cinematic still life"],
   ["album cover", "cinematic still life"],
+  ["portrait", "symbolic object still life"],
+  ["silhouette", "symbolic object still life"],
+  ["couple", "intertwined rings still life"],
+  ["person", "symbolic object"],
+  ["people", "symbolic objects"],
 ];
 
 function stripTitleTokens(text, title) {
@@ -518,6 +541,7 @@ export function sanitizeArtworkPrompt(raw, { title = "" } = {}) {
   s = s.replace(/\balbum cover\b/gi, "cinematic scene");
   s = s.replace(TYPOGRAPHY_RE, " ");
   s = s.replace(TEXT_REQUEST_RE, " ");
+  s = s.replace(HUMAN_TRIGGER_RE, " ");
   return s.replace(/\s+/g, " ").trim().slice(0, 280);
 }
 
@@ -539,32 +563,30 @@ export function moodPaletteForBucket(bucketKey) {
   return MOOD_PALETTES[bucketKey] || MOOD_PALETTES.default;
 }
 
-function buildCoverSeed(input, storyTheme, bucketKey, userArtwork) {
+function buildCoverSeed(input, storyTheme, bucketKey, userArtwork, regenSalt = "") {
   const songId = String(input?.songId || input?.id || "").trim();
   if (userArtwork) {
     return fnv1a(`${songId}|user:${userArtwork}|${userArtwork.length}`) % 2147483646;
   }
   const storyBlob = buildStoryBlob(input);
-  return fnv1a(`${songId}|${storyTheme}|${bucketKey}|${storyBlob}`) % 2147483646;
+  let seed = fnv1a(`${songId}|${storyTheme}|${bucketKey}|${storyBlob}`) % 2147483646;
+  if (regenSalt) {
+    seed = fnv1a(`${seed}|regen:${regenSalt}`) % 2147483646;
+  }
+  return seed;
 }
 
-/** Keep people as backlit silhouettes — strip language that triggers detailed face portraits. */
-function withFigureSilhouetteGuard(scene, mode) {
+/** Strip human language from scenes; never generate people in cover art. */
+export function enforceNoHumansScene(scene) {
   let s = String(scene || "").trim();
   if (!s) return s;
-  s = s.replace(/\b(vertical portrait|9:16|tall vertical|full[- ]screen vertical|portrait orientation|close-up|closeup|headshot|beauty portrait|fashion model|detailed face|visible face|facial features|portrait photography)\b/gi, " ");
-  const needsSilhouette =
-    mode === "figure" ||
-    /\b(person|people|woman|man|girl|boy|mother|mom|father|bride|groom|couple|dancer|performer|face|portrait|silhouette)\b/i.test(s);
-  if (needsSilhouette) {
-    s = `${s}, backlit black silhouettes only, no visible facial features, no close-up faces, no portrait photography`;
-  }
-  return s.replace(/\s+/g, " ").trim();
+  s = s.replace(HUMAN_TRIGGER_RE, " ");
+  return s.replace(/\s+/g, " ").replace(/,\s*,/g, ",").trim();
 }
 
 /**
  * @param {object} input
- * @param {{ sceneOverride?: string, artworkSourceOverride?: string, geminiModel?: string, directorSceneHint?: string, nabadIdentityPhrases?: string, visualDirection?: object }} [options]
+ * @param {{ sceneOverride?: string, artworkSourceOverride?: string, geminiModel?: string, directorSceneHint?: string, nabadIdentityPhrases?: string, visualDirection?: object, regenSalt?: string }} [options]
  * @returns {{ prompt: string, seed: number, bucket: string, visualMode: string, storyTheme: string, artworkSource: string, params: object }}
  */
 export function buildAbstractCoverPrompt(input, options = {}) {
@@ -578,25 +600,25 @@ export function buildAbstractCoverPrompt(input, options = {}) {
   const brightness = parseBrightness(input?.brightness);
   const sonicProfile = String(input?.sonicProfile || inferSonicProfile(`${genre} ${styleBlob}`));
   const userArtworkRaw = resolveUserArtworkPrompt(input);
-  const userArtwork = sanitizeArtworkPrompt(userArtworkRaw, { title });
+  let userArtwork = sanitizeArtworkPrompt(userArtworkRaw, { title });
   const sceneOverrideRaw = sanitizeArtworkPrompt(String(options.sceneOverride || "").trim(), { title });
   let sceneOverride = sceneOverrideRaw && userArtwork
     ? sanitizeArtworkPrompt(`${userArtwork}, ${sceneOverrideRaw}`, { title })
     : sceneOverrideRaw;
 
   const { scene, visualMode, storyTheme, bucketKey } = buildSceneFromStory(input);
-  const directorSceneHint = sanitizeArtworkPrompt(String(options.directorSceneHint || "").trim(), { title });
+  const directorSceneHint = enforceNoHumansScene(
+    sanitizeArtworkPrompt(String(options.directorSceneHint || "").trim(), { title }),
+  );
   const nabadIdentityPhrases = sanitizeArtworkPrompt(String(options.nabadIdentityPhrases || "").trim(), { title });
   const storyScene = toVisualOnlyPrompt(scene, { title });
   let visualScene = !sceneOverride && !userArtwork && directorSceneHint ? directorSceneHint : storyScene;
-  const effectiveMode = sceneOverride || userArtwork ? "user_directed" : visualMode;
-  sceneOverride = sceneOverride
-    ? withFigureSilhouetteGuard(sceneOverride, effectiveMode)
-    : "";
-  visualScene = withFigureSilhouetteGuard(visualScene, visualMode);
+  sceneOverride = sceneOverride ? enforceNoHumansScene(sceneOverride) : "";
+  visualScene = enforceNoHumansScene(visualScene);
+  userArtwork = userArtwork ? enforceNoHumansScene(userArtwork) : "";
   const palette = moodPaletteForBucket(bucketKey);
   const composition = COMPOSITIONS[fnv1a(`${songId}:composition`) % COMPOSITIONS.length];
-  const seed = buildCoverSeed(input, storyTheme, bucketKey, userArtwork);
+  const seed = buildCoverSeed(input, storyTheme, bucketKey, userArtwork, String(options.regenSalt || "").trim());
   const artworkSource = sceneOverride
     ? String(options.artworkSourceOverride || "gemini_scene")
     : userArtwork
@@ -615,7 +637,7 @@ export function buildAbstractCoverPrompt(input, options = {}) {
     parts = userArtwork
       ? [
           NO_TEXT_LEAD,
-          PORTRAIT_COMPOSE_FRAME,
+          STILL_LIFE_COMPOSE_FRAME,
           sceneOverride,
           nabadIdentityPhrases,
           palette,
@@ -623,11 +645,12 @@ export function buildAbstractCoverPrompt(input, options = {}) {
           SAFETY_PREFIX + USER_STYLE_CORE,
           composition,
           NO_TEXT_REINFORCE,
+          NO_HUMANS_GUARD,
           safetySuffix,
         ]
       : [
           NO_TEXT_LEAD,
-          PORTRAIT_COMPOSE_FRAME,
+          STILL_LIFE_COMPOSE_FRAME,
           SAFETY_PREFIX + styleCore,
           sceneOverride,
           nabadIdentityPhrases,
@@ -640,12 +663,13 @@ export function buildAbstractCoverPrompt(input, options = {}) {
           brightnessPhrase(brightness),
           sonicPhrase(sonicProfile),
           NO_TEXT_REINFORCE,
+          NO_HUMANS_GUARD,
           safetySuffix,
         ];
   } else if (userArtwork) {
     parts = [
       NO_TEXT_LEAD,
-      PORTRAIT_COMPOSE_FRAME,
+      STILL_LIFE_COMPOSE_FRAME,
       userArtwork,
       nabadIdentityPhrases,
       palette,
@@ -653,12 +677,13 @@ export function buildAbstractCoverPrompt(input, options = {}) {
       SAFETY_PREFIX + USER_STYLE_CORE,
       composition,
       NO_TEXT_REINFORCE,
+      NO_HUMANS_GUARD,
       safetySuffix,
     ];
   } else {
     parts = [
       NO_TEXT_LEAD,
-      PORTRAIT_COMPOSE_FRAME,
+      STILL_LIFE_COMPOSE_FRAME,
       SAFETY_PREFIX + styleCore,
       visualScene,
       nabadIdentityPhrases,
@@ -670,6 +695,7 @@ export function buildAbstractCoverPrompt(input, options = {}) {
       brightnessPhrase(brightness),
       sonicPhrase(sonicProfile),
       NO_TEXT_REINFORCE,
+      NO_HUMANS_GUARD,
       safetySuffix,
     ];
   }
@@ -705,7 +731,7 @@ export function buildAbstractCoverPrompt(input, options = {}) {
       coverWidth: POLLINATIONS_COVER_WIDTH,
       coverHeight: POLLINATIONS_COVER_HEIGHT,
       coverAspect: "9:16",
-      coverSourceAspect: "9:16",
+      coverSourceAspect: "1:1",
     },
   };
 }

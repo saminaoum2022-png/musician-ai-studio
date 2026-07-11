@@ -185,7 +185,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260712-010019";
+const APP_BUILD = "20260712-011124";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -13513,7 +13513,7 @@ function bindFollowingComposeOnce() {
 }
 
 function followingActivityPlayAttrs(t, profMap, byLine) {
-  const artSafe = trackCoverArtForFeed(t);
+  const artSafe = trackCoverArtForSquareTile(t);
   const rawTitle = String(t.title || "Untitled");
   const encUrl = encodeURIComponent(String(t.url || ""));
   const encTitle = encodeURIComponent(rawTitle);
@@ -18804,6 +18804,22 @@ function trackCoverArtForDisplay(track) {
     return c;
   }
   return DEFAULT_SONG_COVER_URL;
+}
+
+/** Square post / list tiles: crop portrait in CSS (top-biased) like Discover
+ *  feed rows, instead of blowing up a tight baked `_thumb` square. */
+function trackCoverArtForSquareTile(track, opts = {}) {
+  const w = Math.min(768, Math.max(128, Number(opts.width) || 512));
+  const display = trackCoverArtForDisplay(track);
+  if (!display || display === DEFAULT_SONG_COVER_URL) return display;
+  if (display.startsWith("data:") || display.startsWith("blob:") || display.startsWith("./")) {
+    return display;
+  }
+  if (/\/storage\/v1\/object\/public\/song_covers\//i.test(display)) {
+    const resized = toCoverThumbUrl(display, { width: w, quality: 75 });
+    if (resized && resized !== display) return resized;
+  }
+  return display;
 }
 
 const _coverUploadInflight = new Map();
@@ -24507,7 +24523,7 @@ function paintUserPublicPosts(postItems, profMap, publicHandle) {
   _userPublicFeedTracks = postItems
     .map((item) => {
       const t = item.track;
-      const artSafe = trackCoverArtForFeed(t);
+      const artSafe = trackCoverArtForSquareTile(t);
       return {
         url: String(t.url || "").trim(),
         title: String(t.title || "Untitled"),
@@ -40409,9 +40425,7 @@ function renderProfileLibraryPublicOnLinkSection() {
       ${rows
         .map((t) => {
           const safeTitle = esc(String(t.title || "Untitled"));
-          const art = String(
-            (t.meta && (t.meta.imageThumb || t.meta.imageUrl)) || t.artUrl || DEFAULT_SONG_COVER_URL,
-          );
+          const art = trackCoverArtForSquareTile(t, { width: 256 });
           const dateLabel = formatLibraryDate(t.ts);
           const subBits = [];
           if (dateLabel) subBits.push(`<span class="libRowDot">${esc(dateLabel)}</span>`);
@@ -43197,16 +43211,7 @@ function renderLibrary() {
     <ul class="libraryRows" role="list">
       ${generatingHtml}
       ${visibleItems.map((t, i) => {
-        // Prefer the small thumbnail when one is saved (custom covers
-        // generate it on save). Fall back to the full-size cover, then
-        // the original artUrl, then the bundled placeholder. Library
-        // rows render small (~56px) so the thumb is always sharp enough
-        // and shaves the decode cost off long lists.
-        const art = String(
-          (t.meta && (t.meta.imageThumb || t.meta.imageUrl)) ||
-          t.artUrl ||
-          DEFAULT_SONG_COVER_URL
-        );
+        const art = trackCoverArtForSquareTile(t, { width: 256 });
         const { active: libActive, audible: libAudible, loading: libLoading } = getLibraryRowPlaybackUiForTrack(t.id);
         const dateLabel = formatLibraryDate(t.ts);
         const isInstrumental = t.kind === "instrumental";

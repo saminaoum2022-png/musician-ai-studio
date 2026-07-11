@@ -26956,6 +26956,7 @@ body.createChooserSheetOpen .footer{
   width: 100%;
   height: 100%;
   object-fit: cover;
+  object-position: center top;
   display: block;
 }
 .followActMediaPlay{
@@ -36169,7 +36170,7 @@ section.mentorPage{
   width: 100%;
   height: 100%;
   object-fit: cover;
-  object-position: center;
+  object-position: center top;
   display: block;
 }
 .feedHeroPlayerCenterPlay{
@@ -36608,6 +36609,7 @@ section.mentorPage{
   width: 100%;
   height: 100%;
   object-fit: cover;
+  object-position: center top;
 }
 .followActRemixTileChip{
   position: absolute;
@@ -36875,6 +36877,7 @@ section.mentorPage{
   width: 100%;
   height: 100%;
   object-fit: cover;
+  object-position: center top;
   display: block;
 }
 .followActQuoteCard .discoverCoverPlay{
@@ -43435,6 +43438,7 @@ body[data-route="friends"] .followAct--xstyle > .followActQuoteRow:has(.feedHero
   width: 100%;
   height: 100%;
   object-fit: cover;
+  object-position: center top;
 }
 /* Skeleton cover: a dedicated element that inherits NOTHING from the
    .followActMedia / .followActMediaWrap base rules (those used a 50px offset,

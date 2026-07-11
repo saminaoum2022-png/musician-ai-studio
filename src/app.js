@@ -68,7 +68,7 @@ import {
   resolveParallelCoverSongId,
   regenerateAbstractCoverForTrack,
 } from "./cover-art/generate.js";
-import { isPollinationsCoverEligible, shouldUseAbstractCover } from "./cover-art/params.js";
+import { canRegeneratePollinationsCover, isPollinationsCoverEligible, shouldUseAbstractCover } from "./cover-art/params.js";
 import {
   DEFAULT_SONG_COVER_URL,
   isDefaultSongCoverUrl,
@@ -187,7 +187,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260712-021631";
+const APP_BUILD = "20260712-022325";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -45410,9 +45410,7 @@ function openPlayerChangeCoverPicker() {
 
 function playerCanRegenerateCover(track) {
   if (!track?.id) return false;
-  const meta = track.meta || {};
-  if (meta.photoMode || meta.imageOnlyInstrumental) return false;
-  return isPollinationsCoverEligible(meta);
+  return canRegeneratePollinationsCover(track);
 }
 
 function playerCanEditThumb(track) {

@@ -1,7 +1,7 @@
 /**
  * Client-side abstract cover generation via /api/music/cover-art
  */
-import { coverArtParamsFromTrack, isPollinationsCoverEligible, shouldUseAbstractCover } from "./params.js";
+import { canRegeneratePollinationsCover, coverArtParamsFromTrack, isPollinationsCoverEligible, shouldUseAbstractCover } from "./params.js";
 import { DEFAULT_SONG_COVER_URL, isDefaultSongCoverUrl } from "./placeholders.js";
 import { stampCoverWithSplashMark } from "./branding.js";
 import { normalizePortraitCoverDataUrl } from "./portrait-normalize.js";
@@ -253,7 +253,7 @@ export async function retryAbstractCoverForTrack(track) {
 /** User-requested new Pollinations cover (replaces an existing abstract cover). */
 export async function regenerateAbstractCoverForTrack(track) {
   const id = String(track?.id || "").trim();
-  if (!id || !isPollinationsCoverEligible(track?.meta || {})) return null;
+  if (!id || !canRegeneratePollinationsCover(track)) return null;
   if (_inflight.has(id)) return _inflight.get(id);
   const meta = track?.meta && typeof track.meta === "object" ? track.meta : {};
   const reset = {

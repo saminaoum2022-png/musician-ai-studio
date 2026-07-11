@@ -192,4 +192,11 @@ export function isPollinationsCoverEligible(meta) {
   return true;
 }
 
+/** User may tap regen — only tracks that already have an AI Pollinations cover. */
+export function canRegeneratePollinationsCover(track) {
+  const meta = track?.meta && typeof track.meta === "object" ? track.meta : {};
+  if (meta.photoMode || meta.imageOnlyInstrumental) return false;
+  return String(meta?.coverSource || "") === "pollinations" && Boolean(meta?.nabadAbstractCover);
+}
+
 export { MOOD_TAG_MAP };

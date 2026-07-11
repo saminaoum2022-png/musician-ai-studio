@@ -18068,6 +18068,9 @@ body.trackSheetOpen .footer{
   body[data-route="generate"] .app{
     padding-bottom: calc(118px + env(safe-area-inset-bottom));
   }
+  body[data-route="generate"].createKeyboardOpen .app{
+    padding-bottom: calc(118px + env(safe-area-inset-bottom) + var(--create-keyboard-inset, 0px));
+  }
   body[data-route="generate"] .footer{
     display: none;
   }
@@ -18163,6 +18166,17 @@ body.trackSheetOpen .footer{
   .card.wide[data-route="generate"] .inputPanel--style input{
     min-height: 36px;
     padding-top: 4px;
+  }
+  .card.wide[data-route="generate"] input,
+  .card.wide[data-route="generate"] textarea,
+  .card.wide[data-route="generate"] .inputPanel{
+    scroll-margin-top: 88px;
+    scroll-margin-bottom: calc(132px + env(safe-area-inset-bottom, 0px));
+  }
+  body[data-route="generate"].createKeyboardOpen .card.wide[data-route="generate"] input,
+  body[data-route="generate"].createKeyboardOpen .card.wide[data-route="generate"] textarea,
+  body[data-route="generate"].createKeyboardOpen .card.wide[data-route="generate"] .inputPanel{
+    scroll-margin-bottom: calc(var(--create-keyboard-inset, 0px) + 24px + env(safe-area-inset-bottom, 0px));
   }
   .vocalQuickRow{
     gap: 6px;

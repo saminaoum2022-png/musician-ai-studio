@@ -13214,18 +13214,18 @@ body.generateLocked [data-route="generate"] #btnNewSong{
   z-index: 3;
 }
 /* Generate focus mode: keep identity, reduce noise while editing any card */
-body[data-route="generate"] .createSectionStack.focusInput{
+body[data-route="generate"] #createFlow.focusInput{
   gap: 12px;
 }
-body[data-route="generate"] .createSectionStack.focusInput .inputPanel{
+body[data-route="generate"] #createFlow.focusInput .inputPanel{
   transition: border-color 180ms ease, box-shadow 180ms ease, opacity 180ms ease;
 }
-body[data-route="generate"] .createSectionStack.focusInput .inputPanel:not(.isFocusCard){
+body[data-route="generate"] #createFlow.focusInput .inputPanel:not(.isFocusCard){
   opacity: 0.72;
   filter: none;
   transform: none;
 }
-body[data-route="generate"] .createSectionStack.focusInput .inputPanel.isFocusCard{
+body[data-route="generate"] #createFlow.focusInput .inputPanel.isFocusCard{
   opacity: 1;
   transform: none;
   border-color: rgba(124,92,255,0.36);
@@ -18070,11 +18070,6 @@ body.trackSheetOpen .footer{
   }
   body[data-route="generate"].createKeyboardOpen .app{
     padding-bottom: calc(118px + env(safe-area-inset-bottom) + var(--create-keyboard-inset, 0px));
-  }
-  body[data-route="generate"].createKeyboardOpen .card.wide[data-route="generate"]{
-    transform: translateY(calc(-1 * var(--create-keyboard-shift, 0px)));
-    transition: transform 0.28s cubic-bezier(0.32, 0.72, 0, 1);
-    will-change: transform;
   }
   body[data-route="generate"] .footer{
     display: none;

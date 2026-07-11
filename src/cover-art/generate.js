@@ -15,7 +15,7 @@ const COVER_FETCH_TIMEOUT_MS = 95000;
 const COVER_CLIENT_ATTEMPTS = 3;
 const COVER_WATCH_INTERVAL_MS = 12000;
 
-/** Center-crop a cover data URL to a square list thumb (portrait-safe). */
+/** Square-crop a cover data URL to a list thumb (top-biased for portrait). */
 async function squareCoverThumbFromDataUrl(dataUrl, maxSide = 256) {
   const src = String(dataUrl || "");
   if (!src.startsWith("data:image/")) return "";
@@ -31,7 +31,7 @@ async function squareCoverThumbFromDataUrl(dataUrl, maxSide = 256) {
   const out = Math.max(1, Math.round(maxSide));
   const crop = Math.min(w, h);
   const sx = (w - crop) / 2;
-  const sy = (h - crop) / 2;
+  const sy = h > w * 1.08 ? 0 : (h - crop) / 2;
   const canvas = document.createElement("canvas");
   canvas.width = out;
   canvas.height = out;

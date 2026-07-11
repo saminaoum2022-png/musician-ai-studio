@@ -185,7 +185,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260712-003937";
+const APP_BUILD = "20260712-010019";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -7514,8 +7514,9 @@ function chartMovementHtml(entry) {
   return `<span class="chartMove chartMove--same">●</span>`;
 }
 
-function chartEntryPlayAttrs(e) {
-  const artSafe = trackCoverArtForFeed({ artUrl: e.artUrl, meta: {} });
+function chartEntryPlayAttrs(e, opts = {}) {
+  const artPick = opts.display ? trackCoverArtForDisplay : trackCoverArtForFeed;
+  const artSafe = artPick({ artUrl: e.artUrl, meta: e.meta || {} });
   const by = e.username ? `@${e.username}` : "Creator";
   return `data-challenge-entry-play="${encodeURIComponent(e.url || "")}" data-challenge-entry-title="${encodeURIComponent(e.title || "Song")}" data-challenge-entry-art="${encodeURIComponent(artSafe)}" data-challenge-entry-by="${encodeURIComponent(by)}" data-play-song-id="${encodeURIComponent(e.songId || "")}" data-play-owner-id="${encodeURIComponent(e.userId || "")}" data-play-task-id="${encodeURIComponent(e.taskId || "")}" data-play-audio-id="${encodeURIComponent(e.audioId || "")}"`;
 }
@@ -7552,13 +7553,13 @@ function chartWeekPlaysText(plays, compact = false) {
 }
 
 function chartWeekWinnerHtml(hero) {
-  const heroArt = trackCoverArtForFeed({ artUrl: hero.artUrl, meta: {} });
+  const heroArt = trackCoverArtForDisplay({ artUrl: hero.artUrl, meta: hero.meta || {} });
   const heroPlays = Number(hero.weeklyPlays || 0);
   const title = String(hero.title || "Untitled").trim();
   const menu = discoverSheetMenuBtnHtml(hero, null, { className: "discoverCardMenuBtn chartWeekMenuBtn" });
   return `
     <div class="chartWeekWinner">
-      <button type="button" class="chartWeekWinnerTap" ${chartEntryPlayAttrs(hero)} aria-label="Play ${escapeHtml(title)}, number 1 this week">
+      <button type="button" class="chartWeekWinnerTap" ${chartEntryPlayAttrs(hero, { display: true })} aria-label="Play ${escapeHtml(title)}, number 1 this week">
         <span class="chartWeekWinnerArt">
           <img src="${escapeHtml(heroArt)}" alt="" loading="lazy" decoding="async" />
           ${discoverCoverPlayOverlayHtml({ hero: true })}
@@ -8996,7 +8997,7 @@ function discoverUserLibPlayAttrs(t, profMap, opts = {}) {
     ? String(opts.byLine)
     : (handle ? `@${handle}` : "Creator");
   const rawTitle = String(t.title || "Untitled");
-  const artSafe = trackCoverArtForFeed(t);
+  const artSafe = trackCoverArtForDisplay(t);
   const encUrl = encodeURIComponent(String(t.url || ""));
   const encTitle = encodeURIComponent(rawTitle);
   const encBy = encodeURIComponent(byLine);
@@ -9098,7 +9099,7 @@ function discoverFeaturedChallengeHeroArt(c, topEntry) {
   if (featuredPhoto) return featuredPhoto;
   const challengeArt = discoverChallengeArtUrl(c?.id);
   if (challengeArt) return challengeArt;
-  if (topEntry) return trackCoverArtForFeed(topEntry);
+  if (topEntry) return trackCoverArtForDisplay(topEntry);
   return DEFAULT_SONG_COVER_URL;
 }
 
@@ -9197,7 +9198,7 @@ function discoverFeedChallengeBlockHtml(c, tracks, profMap, opts = {}) {
       const prof = resolveProfileForFeedCreator(top.userId, profMap);
       const handle = String(prof?.username || "").trim();
       const title = String(top.title || "Untitled").trim();
-      const art = trackCoverArtForFeed(top);
+      const art = trackCoverArtForDisplay(top);
       const playAttrs = discoverHubTrackPlayAttrs(top, profMap);
       const origin = discoverChallengeRankText(top, tracks);
       const menu = discoverSheetMenuBtnHtml(top, profMap, { className: "discoverCardMenuBtn discoverFeedChallengeMenuBtn" });
@@ -9542,13 +9543,14 @@ function discoverHubTrackPlayAttrs(t, profMap) {
   return chartEntryPlayAttrs({
     url: t.url,
     title: t.title,
-    artUrl: trackCoverArtForFeed(t),
+    artUrl: t.artUrl,
+    meta: t.meta || {},
     username: handle,
     songId: t.id,
     userId: t.userId,
     taskId: t.taskId,
     audioId: t.audioId,
-  });
+  }, { display: true });
 }
 
 function discoverHubReactionCount(t) {
@@ -18734,6 +18736,16 @@ function trackCoverArtCandidates(track) {
     .filter((c) => !isLogoCoverUrl(c));
 }
 
+/** Square crop for list thumbs — portrait covers use the top band, not dead center. */
+function coverSquareCropRect(w, h) {
+  const iw = Number(w) || 0;
+  const ih = Number(h) || 0;
+  const crop = Math.min(iw, ih);
+  const sx = (iw - crop) / 2;
+  const sy = ih > iw * 1.08 ? 0 : (ih - crop) / 2;
+  return { sx, sy, crop };
+}
+
 /** Derive the paired `_thumb` object URL for a Supabase song_covers main asset. */
 function supabaseSongCoverThumbUrl(url) {
   const s = String(url || "").trim().split("?")[0].split("#")[0];
@@ -18771,6 +18783,24 @@ function trackCoverArtForFeed(track) {
       const transformed = toCoverThumbUrl(c, { width: 256, quality: 72 });
       if (transformed && transformed !== c) return transformed;
     }
+    return c;
+  }
+  return DEFAULT_SONG_COVER_URL;
+}
+
+/** Full-resolution cover for large Discover tiles (chart #1 hero, feed cards). */
+function trackCoverArtForDisplay(track) {
+  const m = track?.meta || {};
+  const candidates = [
+    String(m.imageUrl || "").trim(),
+    String(track?.artUrl || "").trim(),
+  ]
+    .filter(Boolean)
+    .filter((c) => !isLogoCoverUrl(c));
+
+  for (const c of candidates) {
+    if (!c || c.startsWith("data:") || isLogoCoverUrl(c)) continue;
+    if (/_thumb\.(webp|jpg|jpeg|png)/i.test(c)) continue;
     return c;
   }
   return DEFAULT_SONG_COVER_URL;
@@ -33088,6 +33118,10 @@ async function playDiscoverFeedEntry({ raw, title, art, by, playSource, el, opts
       songId: playSource?.songId,
       playSource,
     });
+    const tappedArt = String(art || "").trim();
+    if (tappedArt && _discoverReelQueue[idx]) {
+      _discoverReelQueue[idx] = { ..._discoverReelQueue[idx], artUrl: tappedArt };
+    }
     const card = document.querySelector(".playerCard");
     if (card) card.dataset.discoverReel = "1";
     resetDiscoverReelRailFade();
@@ -33780,7 +33814,7 @@ let _userPublicFeedTracks = [];
 let _challengeEntryTracks = [];
 
 function discoveryTrackPlaybackMeta(t, profMap) {
-  const artSafe = trackCoverArtForFeed(t);
+  const artSafe = trackCoverArtForDisplay(t);
   const prof = resolveProfileForFeedCreator(t.userId, profMap);
   const handle = String(prof?.username || "").trim();
   const byLine = handle ? `@${handle}` : "Creator";
@@ -34862,7 +34896,7 @@ function discoveryTrackRowHtml(t, profMap, idx) {
 
 /** Discover grid tile — cover-first; badges + one caption line max. */
 function discoveryFeedCardHtml(t, profMap, idx) {
-  const artSafe = trackCoverArtForFeed(t);
+  const artSafe = trackCoverArtForDisplay(t);
   const prof = resolveProfileForFeedCreator(t.userId, profMap);
   const handle = String(prof?.username || "").trim();
   const byLine = handle ? `@${handle}` : "Creator";
@@ -46233,9 +46267,7 @@ async function encodeCoverRasterDataUrl(dataUrl, opts = {}) {
   if (!ctx) return src;
   if (squareCrop) {
     const out = Math.max(1, Math.round(maxSide));
-    const crop = Math.min(w, h);
-    const sx = (w - crop) / 2;
-    const sy = (h - crop) / 2;
+    const { sx, sy, crop } = coverSquareCropRect(w, h);
     canvas.width = out;
     canvas.height = out;
     ctx.drawImage(img, sx, sy, crop, crop, 0, 0, out, out);
@@ -46284,7 +46316,7 @@ async function prepareMomentCoverDataUrl(fileOrDataUrl) {
   return dataUrl;
 }
 
-/** Build a small square (256px) thumbnail — center-crop for portrait covers. */
+/** Build a small square (256px) thumbnail — top-biased crop for portrait covers. */
 async function buildCoverThumbDataUrl(src) {
   const s = String(src || "").trim();
   if (!s) return "";
@@ -46315,9 +46347,7 @@ async function buildCoverThumbDataUrl(src) {
     const h = Number(img.height || 0);
     if (!w || !h) return "";
     const out = 256;
-    const crop = Math.min(w, h);
-    const sx = (w - crop) / 2;
-    const sy = (h - crop) / 2;
+    const { sx, sy, crop } = coverSquareCropRect(w, h);
     const canvas = document.createElement("canvas");
     canvas.width = out;
     canvas.height = out;

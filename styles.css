@@ -3895,6 +3895,7 @@ body[data-route="profile-edit"] main.grid > [data-route="profile-edit"]{
   width: 100%;
   height: 100%;
   object-fit: cover;
+  object-position: center top;
   display: block;
   transition: filter 200ms ease;
 }
@@ -17453,8 +17454,8 @@ body.trackSheetOpen .footer{
     right: 0;
     bottom: var(--player-cover-bottom);
     width: 100%;
-    height: auto;
-    min-height: 280px;
+    height: var(--player-cover-height);
+    min-height: 0;
     border-radius: 0;
     overflow: hidden;
     background: #0a0c12;
@@ -17480,12 +17481,25 @@ body.trackSheetOpen .footer{
     z-index: 3;
   }
   body[data-route="player"] .playerArt{
-    width: 100%;
-    height: 100%;
-    aspect-ratio: auto;
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: auto;
+    height: auto;
+    min-width: 100%;
+    min-height: 100%;
+    max-width: none;
+    transform: translate(-50%, -50%);
+    aspect-ratio: unset;
     object-fit: cover;
     object-position: center top;
     border-radius: 0;
+  }
+  /* Full-screen player: crop to fill — never stretch (breath animation uses transform). */
+  body[data-route="player"] .playerArtWrap.isNowPlaying .playerArt,
+  body[data-route="player"] .playerArtWrap.isCoverLive.isNowPlaying .playerArt{
+    animation: none;
+    filter: none;
   }
   body[data-route="player"] .playerArtWrap .playerKaraokeFloat{
     position: fixed;
@@ -17670,6 +17684,7 @@ body.trackSheetOpen .footer{
     left: 0;
     right: 0;
     bottom: var(--player-cover-bottom);
+    height: var(--player-cover-height);
     overflow: hidden;
     background: #0a0c12;
     z-index: 1;
@@ -17694,8 +17709,15 @@ body.trackSheetOpen .footer{
     z-index: 2;
   }
   body[data-route="player"] .playerReelAnimArt{
-    width: 100%;
-    height: 100%;
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: auto;
+    height: auto;
+    min-width: 100%;
+    min-height: 100%;
+    max-width: none;
+    transform: translate(-50%, -50%);
     object-fit: cover;
     object-position: center top;
     display: block;
@@ -40107,6 +40129,7 @@ body[data-route="generate"] .aiGenerate{
   width: 100%;
   height: 100%;
   object-fit: cover;
+  object-position: center top;
   display: block;
 }
 .discoverFeedSongBody{

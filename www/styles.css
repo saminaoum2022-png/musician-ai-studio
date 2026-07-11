@@ -18071,6 +18071,11 @@ body.trackSheetOpen .footer{
   body[data-route="generate"].createKeyboardOpen .app{
     padding-bottom: calc(118px + env(safe-area-inset-bottom) + var(--create-keyboard-inset, 0px));
   }
+  body[data-route="generate"].createKeyboardOpen .card.wide[data-route="generate"]{
+    transform: translateY(calc(-1 * var(--create-keyboard-shift, 0px)));
+    transition: transform 0.28s cubic-bezier(0.32, 0.72, 0, 1);
+    will-change: transform;
+  }
   body[data-route="generate"] .footer{
     display: none;
   }
@@ -18172,11 +18177,6 @@ body.trackSheetOpen .footer{
   .card.wide[data-route="generate"] .inputPanel{
     scroll-margin-top: 88px;
     scroll-margin-bottom: calc(132px + env(safe-area-inset-bottom, 0px));
-  }
-  body[data-route="generate"].createKeyboardOpen .card.wide[data-route="generate"] input,
-  body[data-route="generate"].createKeyboardOpen .card.wide[data-route="generate"] textarea,
-  body[data-route="generate"].createKeyboardOpen .card.wide[data-route="generate"] .inputPanel{
-    scroll-margin-bottom: calc(var(--create-keyboard-inset, 0px) + 24px + env(safe-area-inset-bottom, 0px));
   }
   .vocalQuickRow{
     gap: 6px;

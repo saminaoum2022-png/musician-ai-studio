@@ -187,7 +187,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260712-032632";
+const APP_BUILD = "20260712-033239";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -52405,16 +52405,33 @@ function setGenerateInputFocus(activePanel) {
   });
 }
 
+let _createFocusedField = null;
+let _createKeyboardHeight = 0;
+
+function getCreatePageRoot() {
+  return document.querySelector('.card.wide[data-route="generate"]');
+}
+
+function setCreateNativeKeyboardScroll(disabled) {
+  const Keyboard = getNativeKeyboardPlugin();
+  if (!Keyboard?.setScroll) return;
+  try { Keyboard.setScroll({ isDisabled: Boolean(disabled) }); } catch {}
+}
+
 function isGenerateRouteActive() {
   return String(document.body.getAttribute("data-route") || "") === "generate";
 }
 
 function isCreateFormField(el) {
   if (!(el instanceof Element) || !isGenerateRouteActive()) return false;
-  const flow = document.getElementById("createFlow");
-  if (!flow?.contains(el)) return false;
+  const root = getCreatePageRoot();
+  if (!root?.contains(el)) return false;
   const tag = String(el.tagName || "").toUpperCase();
-  return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT";
+  if (tag === "INPUT") {
+    const type = String(el.getAttribute("type") || "text").toLowerCase();
+    return type !== "hidden" && type !== "file";
+  }
+  return tag === "TEXTAREA" || tag === "SELECT";
 }
 
 function measureCreateViewportKeyboardInset() {
@@ -52423,83 +52440,82 @@ function measureCreateViewportKeyboardInset() {
   return Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop));
 }
 
-function applyCreateKeyboardInset(rawInset) {
-  const measured = measureCreateViewportKeyboardInset();
-  const inset = Math.max(0, Math.round(Number(rawInset) || 0), measured);
-  const open = inset > 0 && isGenerateRouteActive() && isCreateFormField(document.activeElement);
-  document.body.classList.toggle("createKeyboardOpen", open);
-  try {
-    document.documentElement.style.setProperty("--create-keyboard-inset", open ? `${inset}px` : "0px");
-  } catch {}
+function resolveCreateKeyboardHeight(rawInset = 0) {
+  const fromEvent = Math.max(0, Math.round(Number(rawInset) || 0));
+  const fromState = Math.max(0, Math.round(Number(_createKeyboardHeight) || 0));
+  const fromVv = measureCreateViewportKeyboardInset();
+  return Math.max(fromEvent, fromState, fromVv);
 }
 
-function scrollCreateFieldIntoView(el) {
-  if (!el || !(el instanceof Element)) return;
-  const panel = el.closest(".inputPanel") || el;
-  const vv = window.visualViewport;
-  const topInset = Math.max(0, Math.round(vv?.offsetTop || 0));
-  const inset = Math.max(
-    0,
-    parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--create-keyboard-inset")) || 0,
-    measureCreateViewportKeyboardInset(),
-  );
-  const visibleBottom = vv ? vv.height + topInset : window.innerHeight - inset;
-  const margin = 24;
-  const targetBottom = visibleBottom - margin;
+function updateCreateKeyboardLayout(rawInset = 0) {
+  const field = _createFocusedField || (isCreateFormField(document.activeElement) ? document.activeElement : null);
+  if (!isGenerateRouteActive() || !field) {
+    clearCreatePageKeyboardInset();
+    return;
+  }
+
+  const kb = resolveCreateKeyboardHeight(rawInset);
+  if (kb > 0) _createKeyboardHeight = kb;
+
+  const panel = field.closest(".inputPanel") || field;
   const rect = panel.getBoundingClientRect();
-  if (rect.bottom > targetBottom) {
-    window.scrollBy({ top: rect.bottom - targetBottom + 16, behavior: "smooth" });
-  } else if (rect.top < topInset + 80) {
-    window.scrollBy({ top: rect.top - topInset - 96, behavior: "smooth" });
+  const tabbarReserve = 72;
+  const visibleBottom = window.innerHeight - Math.max(kb, _createKeyboardHeight) - tabbarReserve;
+  const shift = Math.max(0, Math.ceil(rect.bottom - visibleBottom + 24));
+
+  document.body.classList.toggle("createKeyboardOpen", kb > 0 || shift > 0);
+  try {
+    document.documentElement.style.setProperty("--create-keyboard-inset", `${Math.max(kb, _createKeyboardHeight)}px`);
+    document.documentElement.style.setProperty("--create-keyboard-shift", `${shift}px`);
+  } catch {}
+
+  if (kb > 0 || shift > 0) {
+    setCreateNativeKeyboardScroll(true);
+    const scrollDelta = rect.bottom - (window.innerHeight - Math.max(kb, _createKeyboardHeight) - 16);
+    if (scrollDelta > 0) {
+      window.scrollTo({ top: window.scrollY + scrollDelta, behavior: "auto" });
+    }
   }
 }
 
-function scheduleCreateFieldScrollIntoView(el) {
-  if (!el) return;
-  const run = () => scrollCreateFieldIntoView(el);
+function scheduleCreateKeyboardLayoutSync(rawInset = 0) {
+  const run = () => updateCreateKeyboardLayout(rawInset);
   run();
-  window.setTimeout(run, 60);
-  window.setTimeout(run, 180);
-  window.setTimeout(run, 360);
-}
-
-function syncCreatePageKeyboardInset() {
-  if (!isGenerateRouteActive()) {
-    applyCreateKeyboardInset(0);
-    return;
-  }
-  if (!isCreateFormField(document.activeElement)) {
-    applyCreateKeyboardInset(0);
-    return;
-  }
-  applyCreateKeyboardInset(measureCreateViewportKeyboardInset());
-}
-
-function scheduleCreatePageKeyboardInsetSync() {
-  syncCreatePageKeyboardInset();
-  window.setTimeout(syncCreatePageKeyboardInset, 60);
-  window.setTimeout(syncCreatePageKeyboardInset, 180);
-  window.setTimeout(syncCreatePageKeyboardInset, 360);
+  window.requestAnimationFrame(run);
+  [60, 160, 320, 520, 760].forEach((ms) => window.setTimeout(run, ms));
 }
 
 function clearCreatePageKeyboardInset() {
+  _createFocusedField = null;
+  _createKeyboardHeight = 0;
   document.body.classList.remove("createKeyboardOpen");
   try {
     document.documentElement.style.setProperty("--create-keyboard-inset", "0px");
+    document.documentElement.style.setProperty("--create-keyboard-shift", "0px");
   } catch {}
+  setCreateNativeKeyboardScroll(false);
+}
+
+function handleCreateFieldFocus(target) {
+  if (!isCreateFormField(target)) return;
+  _createFocusedField = target;
+  const panel = target.closest(".inputPanel");
+  setGenerateInputFocus(panel || null);
+  setCreateNativeKeyboardScroll(true);
+  scheduleCreateKeyboardLayoutSync(_createKeyboardHeight);
 }
 
 function wireCreatePageKeyboardOnce() {
   if (document.documentElement.dataset.createPageKbWired) return;
   document.documentElement.dataset.createPageKbWired = "1";
 
-  const vv = window.visualViewport;
   const onViewportChange = () => {
-    if (isGenerateRouteActive() && isCreateFormField(document.activeElement)) {
-      syncCreatePageKeyboardInset();
-      scheduleCreateFieldScrollIntoView(document.activeElement);
-    }
+    if (!isGenerateRouteActive() || !_createFocusedField) return;
+    if (getNativeKeyboardPlugin()) return;
+    _createKeyboardHeight = measureCreateViewportKeyboardInset();
+    scheduleCreateKeyboardLayoutSync(_createKeyboardHeight);
   };
+  const vv = window.visualViewport;
   if (vv) {
     vv.addEventListener("resize", onViewportChange);
     vv.addEventListener("scroll", onViewportChange);
@@ -52507,48 +52523,42 @@ function wireCreatePageKeyboardOnce() {
 
   const Keyboard = getNativeKeyboardPlugin();
   if (Keyboard?.addListener) {
-    Keyboard.addListener("keyboardWillShow", (info) => {
-      if (!isGenerateRouteActive() || !isCreateFormField(document.activeElement)) return;
-      applyCreateKeyboardInset(info?.keyboardHeight ?? measureCreateViewportKeyboardInset());
-      scheduleCreateFieldScrollIntoView(document.activeElement);
-    });
-    Keyboard.addListener("keyboardDidShow", (info) => {
-      if (!isGenerateRouteActive() || !isCreateFormField(document.activeElement)) return;
-      applyCreateKeyboardInset(info?.keyboardHeight ?? measureCreateViewportKeyboardInset());
-      scheduleCreateFieldScrollIntoView(document.activeElement);
-    });
-    Keyboard.addListener("keyboardWillHide", () => {
+    const onNativeShow = (info) => {
+      if (!isGenerateRouteActive()) return;
+      if (!_createFocusedField && isCreateFormField(document.activeElement)) {
+        _createFocusedField = document.activeElement;
+      }
+      if (!_createFocusedField) return;
+      _createKeyboardHeight = Math.max(0, Math.round(Number(info?.keyboardHeight) || 0));
+      scheduleCreateKeyboardLayoutSync(_createKeyboardHeight);
+    };
+    const onNativeHide = () => {
       if (!isGenerateRouteActive()) return;
       clearCreatePageKeyboardInset();
-    });
-    Keyboard.addListener("keyboardDidHide", () => {
-      if (!isGenerateRouteActive()) return;
-      clearCreatePageKeyboardInset();
-    });
+      setGenerateInputFocus(null);
+    };
+    Keyboard.addListener("keyboardWillShow", onNativeShow);
+    Keyboard.addListener("keyboardDidShow", onNativeShow);
+    Keyboard.addListener("keyboardWillHide", onNativeHide);
+    Keyboard.addListener("keyboardDidHide", onNativeHide);
   }
 
-  const flow = document.getElementById("createFlow");
-  if (flow) {
-    flow.addEventListener("focusin", (e) => {
+  const root = getCreatePageRoot();
+  if (root) {
+    root.addEventListener("focusin", (e) => {
       if (!isGenerateRouteActive()) return;
-      const target = e.target;
-      if (!isCreateFormField(target)) return;
-      const panel = target.closest(".inputPanel");
-      setGenerateInputFocus(panel || null);
-      scheduleCreatePageKeyboardInsetSync();
-      scheduleCreateFieldScrollIntoView(target);
+      handleCreateFieldFocus(e.target);
     });
-    flow.addEventListener("focusout", () => {
+    root.addEventListener("focusout", () => {
       window.setTimeout(() => {
         const active = document.activeElement;
         if (isCreateFormField(active)) {
-          const panel = active.closest(".inputPanel");
-          setGenerateInputFocus(panel || null);
+          handleCreateFieldFocus(active);
           return;
         }
         setGenerateInputFocus(null);
-        clearCreatePageKeyboardInset();
-      }, 80);
+        if (!getNativeKeyboardPlugin()) clearCreatePageKeyboardInset();
+      }, 120);
     });
   }
 }

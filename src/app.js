@@ -187,7 +187,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260712-145612";
+const APP_BUILD = "20260712-150647";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -12868,7 +12868,7 @@ function openFriendsComposeSheet() {
   }
 }
 
-const FIXED_OVERLAY_IDS = ["createChooserSheet", "friendsComposeSheet", "imageMoodModal"];
+const FIXED_OVERLAY_IDS = ["createChooserSheet", "friendsComposeSheet", "imageMoodModal", "coverRegenSheet"];
 
 /** Keep full-screen overlays on `body` — `main.grid.routeSwap` transform breaks iOS touch on fixed children. */
 function mountFixedOverlaysToBody() {
@@ -45686,7 +45686,105 @@ async function regeneratePlayerCover(artworkHint = "", trackId = "") {
 
 let _coverRegenTrackId = "";
 
+function isCoverRegenSheetOpen() {
+  return Boolean(els.coverRegenSheet && !els.coverRegenSheet.hidden);
+}
+
+function applyCoverRegenKeyboardInset(rawInset) {
+  const inset = Math.max(0, Math.round(Number(rawInset) || 0));
+  if (els.coverRegenSheet) {
+    els.coverRegenSheet.style.setProperty("--cover-regen-keyboard-inset", `${inset}px`);
+  }
+  document.body.classList.toggle("coverRegenKeyboardOpen", isCoverRegenSheetOpen() && inset > 0);
+}
+
+function syncCoverRegenSheetKeyboardInset() {
+  if (!isCoverRegenSheetOpen()) {
+    applyCoverRegenKeyboardInset(0);
+    return;
+  }
+  if (getNativeKeyboardPlugin()) return;
+  const vv = window.visualViewport;
+  if (!vv) {
+    applyCoverRegenKeyboardInset(0);
+    return;
+  }
+  const inset = Math.max(0, Math.round(window.innerHeight - vv.height - (vv.offsetTop || 0)));
+  applyCoverRegenKeyboardInset(inset);
+}
+
+function scheduleCoverRegenKeyboardInsetSync() {
+  syncCoverRegenSheetKeyboardInset();
+  window.setTimeout(syncCoverRegenSheetKeyboardInset, 60);
+  window.setTimeout(syncCoverRegenSheetKeyboardInset, 180);
+  window.setTimeout(() => {
+    syncCoverRegenSheetKeyboardInset();
+    scrollCoverRegenInputIntoView();
+  }, 360);
+}
+
+function scrollCoverRegenInputIntoView() {
+  const input = els.coverRegenArtworkInput;
+  if (!input || document.activeElement !== input) return;
+  try {
+    input.scrollIntoView({ block: "center", inline: "nearest", behavior: "smooth" });
+  } catch {
+    try { input.scrollIntoView(true); } catch {}
+  }
+}
+
+function wireCoverRegenSheetKeyboardOnce() {
+  if (document.documentElement.dataset.coverRegenKbWired) return;
+  document.documentElement.dataset.coverRegenKbWired = "1";
+
+  const vv = window.visualViewport;
+  const onViewportChange = () => {
+    if (isCoverRegenSheetOpen()) syncCoverRegenSheetKeyboardInset();
+  };
+  if (vv) {
+    vv.addEventListener("resize", onViewportChange);
+    vv.addEventListener("scroll", onViewportChange);
+  }
+
+  const Keyboard = getNativeKeyboardPlugin();
+  if (!Keyboard?.addListener) return;
+  Keyboard.addListener("keyboardWillShow", (info) => {
+    if (!isCoverRegenSheetOpen()) return;
+    applyCoverRegenKeyboardInset(info?.keyboardHeight);
+  });
+  Keyboard.addListener("keyboardDidShow", (info) => {
+    if (!isCoverRegenSheetOpen()) return;
+    applyCoverRegenKeyboardInset(info?.keyboardHeight);
+    scrollCoverRegenInputIntoView();
+  });
+  Keyboard.addListener("keyboardWillHide", () => {
+    if (!isCoverRegenSheetOpen()) return;
+    applyCoverRegenKeyboardInset(0);
+  });
+}
+
+function bindCoverRegenKeyboardInput(input) {
+  if (!input || input.dataset.coverRegenKbInput === "1") return;
+  input.dataset.coverRegenKbInput = "1";
+  input.addEventListener("focus", () => scheduleCoverRegenKeyboardInsetSync());
+  input.addEventListener("blur", () => {
+    window.setTimeout(() => {
+      const active = document.activeElement;
+      if (!isCoverRegenSheetOpen() || active !== input) applyCoverRegenKeyboardInset(0);
+    }, 80);
+  });
+}
+
+function dismissCoverRegenKeyboard() {
+  const Keyboard = getNativeKeyboardPlugin();
+  if (Keyboard?.hide) {
+    try { Keyboard.hide(); } catch {}
+  }
+  applyCoverRegenKeyboardInset(0);
+}
+
 function closeCoverRegenSheet() {
+  dismissCoverRegenKeyboard();
   if (els.coverRegenSheet) els.coverRegenSheet.hidden = true;
   _coverRegenTrackId = "";
   if (els.btnCoverRegenGo) els.btnCoverRegenGo.disabled = false;
@@ -45744,6 +45842,7 @@ function suggestArtworkTextFromTrack(track) {
 
 function openCoverRegenSheet(track) {
   if (!track?.id || libraryTrackIsPublished(track) || !playerCanRegenerateCover(track)) return;
+  mountFixedOverlaysToBody();
   _coverRegenTrackId = String(track.id);
   const meta = track?.meta && typeof track.meta === "object" ? track.meta : {};
   const pref = String(meta.artworkHint || meta.artworkStyle || "").trim();
@@ -45759,10 +45858,10 @@ function openCoverRegenSheet(track) {
     }
   }
   renderCoverRegenSuggestions();
+  wireCoverRegenSheetKeyboardOnce();
+  bindCoverRegenKeyboardInput(els.coverRegenArtworkInput);
+  applyCoverRegenKeyboardInset(0);
   if (els.coverRegenSheet) els.coverRegenSheet.hidden = false;
-  requestAnimationFrame(() => {
-    try { els.coverRegenArtworkInput?.focus({ preventScroll: true }); } catch {}
-  });
 }
 
 async function confirmCoverRegenSheet() {
@@ -53865,6 +53964,8 @@ els.coverRegenArtworkInput?.addEventListener("keydown", (e) => {
     void confirmCoverRegenSheet();
   }
 });
+wireCoverRegenSheetKeyboardOnce();
+bindCoverRegenKeyboardInput(els.coverRegenArtworkInput);
 if (els.btnPlayerEditThumb) {
   els.btnPlayerEditThumb.addEventListener("click", (e) => {
     e.preventDefault();

@@ -6917,6 +6917,10 @@ body.hubJumpingToTop #hubList .hubRow{
   display: flex;
   align-items: flex-end;
   justify-content: center;
+  --cover-regen-keyboard-inset: 0px;
+}
+.coverRegenSheet:not([hidden]){
+  padding-bottom: var(--cover-regen-keyboard-inset, 0px);
 }
 .coverRegenSheet[hidden]{ display: none !important; }
 .coverRegenBackdrop{
@@ -6929,8 +6933,12 @@ body.hubJumpingToTop #hubList .hubRow{
 .coverRegenPanel{
   position: relative;
   width: min(100%, 520px);
-  max-height: min(92svh, 680px);
+  max-height: min(
+    92svh,
+    calc(100dvh - var(--cover-regen-keyboard-inset, 0px) - 12px - env(safe-area-inset-top, 0px))
+  );
   overflow: auto;
+  -webkit-overflow-scrolling: touch;
   border-radius: 22px 22px 0 0;
   background:
     linear-gradient(180deg, rgba(124,92,255,0.10), transparent 28%),
@@ -7049,6 +7057,12 @@ body.hubJumpingToTop #hubList .hubRow{
   opacity: 0.55;
   cursor: not-allowed;
   transform: none;
+}
+body.coverRegenKeyboardOpen .coverRegenPreviewWrap{
+  display: none;
+}
+body.coverRegenKeyboardOpen .coverRegenHint{
+  margin-bottom: 10px;
 }
 .playerSocialCreatorAvatar{
   display: block;

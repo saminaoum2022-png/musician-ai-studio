@@ -187,7 +187,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260712-151422";
+const APP_BUILD = "20260712-153051";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -18841,12 +18841,17 @@ function trackCoverArtForDisplay(track) {
     .filter(Boolean)
     .filter((c) => !isLogoCoverUrl(c));
 
+  let dataFallback = "";
   for (const c of candidates) {
-    if (!c || c.startsWith("data:") || isLogoCoverUrl(c)) continue;
+    if (!c) continue;
+    if (c.startsWith("data:")) {
+      if (!dataFallback) dataFallback = c;
+      continue;
+    }
     if (/_thumb\.(webp|jpg|jpeg|png)/i.test(c)) continue;
     return c;
   }
-  return DEFAULT_SONG_COVER_URL;
+  return dataFallback || DEFAULT_SONG_COVER_URL;
 }
 
 /** Square post / list tiles: crop portrait in CSS (top-biased) like Discover
@@ -18935,7 +18940,9 @@ async function persistTrackCoverIfNeeded(track) {
           const row = items[idx];
           const onPlayer = String(document.body.getAttribute("data-route") || "") === "player";
           if (onPlayer) {
-            await applyPlayerCoverReveal(imageUrl);
+            const cur = String(els.playerArt?.dataset.coverSrc || "").trim();
+            const quietUpgrade = cur.startsWith("data:") && els.playerArt?.complete && els.playerArt.naturalWidth > 0;
+            await applyPlayerCoverReveal(imageUrl, { quiet: quietUpgrade });
           } else {
             setPlayerMeta({
               title: row.title || "Now Playing",
@@ -45336,13 +45343,14 @@ function initCoverImageFallbackOnce() {
 }
 
 /** Preload + fade the player cover in without flashing the placeholder tile. */
-async function applyPlayerCoverReveal(url) {
+async function applyPlayerCoverReveal(url, opts = {}) {
   const img = els.playerArt;
   const raw = String(url || "").trim();
   if (!img || !raw || isDefaultSongCoverUrl(raw) || isLogoCoverUrl(raw)) return false;
 
   const prevRaw = String(img.dataset.coverSrc || "").trim();
   if (prevRaw === raw && img.complete && img.naturalWidth > 0 && !img.classList.contains("isCoverPlaceholder")) {
+    setPlayerCoverGenerating(false);
     return true;
   }
 
@@ -45363,6 +45371,30 @@ async function applyPlayerCoverReveal(url) {
   img.classList.remove("isPlaceholder", "isCoverPlaceholder");
   applyCoverImageStateClasses(img, raw, raw, false);
 
+  if (opts.quiet) {
+    img.src = raw;
+    try {
+      if (typeof img.decode === "function") await img.decode();
+    } catch {}
+    const artWrap = document.querySelector(".playerArtWrap");
+    if (artWrap) applyCoverGlowRgb(artWrap, raw);
+    const timeline = document.getElementById("playerTimeline");
+    if (timeline) applyCoverGlowRgb(timeline, raw);
+    hubNowMeta = { ...(hubNowMeta || {}), art: raw };
+    renderHubNowPlaying();
+    syncLockScreenNowPlaying({ force: true });
+    return true;
+  }
+
+  // Keep the shimmer overlay until the new frame is swapped in underneath.
+  img.src = raw;
+  try {
+    if (typeof img.decode === "function") await img.decode();
+  } catch {}
+  await new Promise((resolve) => {
+    requestAnimationFrame(() => requestAnimationFrame(resolve));
+  });
+
   setPlayerCoverGenerating(false);
 
   await new Promise((resolve) => {
@@ -45378,7 +45410,6 @@ async function applyPlayerCoverReveal(url) {
     // eslint-disable-next-line no-unused-expressions
     img.offsetWidth;
     img.classList.add("playerCoverReveal--enter");
-    img.src = raw;
     window.setTimeout(finish, 620);
   });
 
@@ -45742,9 +45773,15 @@ async function regeneratePlayerCover(artworkHint = "", trackId = "") {
     if (updated) {
       currentPlayerTrackRef = updated;
       const artUrl = trackCoverArtForDisplay(updated);
-      await applyPlayerCoverReveal(artUrl);
-      flashPlayerCover();
-      setStatus("");
+      const revealed = artUrl && !isDefaultSongCoverUrl(artUrl) && !isLogoCoverUrl(artUrl)
+        ? await applyPlayerCoverReveal(artUrl)
+        : false;
+      if (revealed) {
+        flashPlayerCover();
+        setStatus("");
+      } else {
+        setStatus("Cover regeneration failed.");
+      }
     } else {
       setStatus("Cover regeneration failed.");
     }

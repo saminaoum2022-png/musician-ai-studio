@@ -6698,43 +6698,16 @@ body.hubJumpingToTop #hubList .hubRow{
   opacity: 0.55;
   pointer-events: none;
 }
-.playerCoverToolBtn--magic{
-  border-color: rgba(124,92,255,0.45);
-  background: linear-gradient(180deg, rgba(124,92,255,0.34), rgba(35,213,171,0.18));
-  box-shadow: 0 6px 18px rgba(124,92,255,0.22);
-}
-.playerCoverToolBtn--magic:hover{
-  border-color: rgba(124,92,255,0.58);
-  background: linear-gradient(180deg, rgba(124,92,255,0.42), rgba(35,213,171,0.24));
-}
-.playerCoverToolBtn--magic.isBusy{
-  opacity: 1;
-  animation: playerCoverMagicPulse 1.8s ease-in-out infinite;
-}
 .playerCoverToolSpark{
   font-size: 16px;
   line-height: 1;
   font-weight: 650;
-  background: linear-gradient(135deg, #d4c8ff 0%, #23d5ab 100%);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-  filter: drop-shadow(0 0 6px rgba(124,92,255,0.35));
+  color: inherit;
 }
 .playerCoverToolIco{
   width: 18px;
   height: 18px;
   display: block;
-}
-@keyframes playerCoverMagicPulse{
-  0%, 100%{
-    box-shadow: 0 0 0 1px rgba(124,92,255,0.35), 0 8px 20px rgba(124,92,255,0.28);
-    transform: scale(1);
-  }
-  50%{
-    box-shadow: 0 0 0 1px rgba(35,213,171,0.42), 0 10px 24px rgba(124,92,255,0.38);
-    transform: scale(1.04);
-  }
 }
 
 /* Cover regen — lyrics-style AI working shimmer on player art */
@@ -6812,8 +6785,7 @@ body.hubJumpingToTop #hubList .hubRow{
 }
 @media (prefers-reduced-motion: reduce){
   .playerCoverGenAura,
-  .playerCoverGenShimmer,
-  .playerCoverToolBtn--magic.isBusy{
+  .playerCoverGenShimmer{
     animation: none;
   }
 }

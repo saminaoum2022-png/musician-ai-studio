@@ -1,6 +1,6 @@
 /**
  * POST /api/lyrics
- * Body: { seed?: string, style?: string, mode?: "continue"|"full"|"arrange"|"challenge", lyricsProvider?: "gemini" }
+ * Body: { seed?: string, style?: string, mode?: "continue"|"full"|"arrange"|"challenge"|"remix_reply", sourceLyrics?: string, sourceTitle?: string, sourceCreator?: string, lyricsProvider?: "gemini" }
  *
  * Provider:
  * 1) Suno lyrics API, unless lyricsProvider is "gemini"
@@ -17,13 +17,32 @@ module.exports = async function handler(req, res) {
     const style = String(body?.style || "").trim().slice(0, 700);
     const dialect = String(body?.dialect || "").trim().slice(0, 120);
     const dialectHint = String(body?.dialectHint || "").trim().slice(0, 220);
+    const sourceLyrics = String(body?.sourceLyrics || "").trim().slice(0, 3500);
+    const sourceTitle = String(body?.sourceTitle || "").trim().slice(0, 160);
+    const sourceCreator = String(body?.sourceCreator || "").trim().slice(0, 80);
     const lyricsProvider = String(body?.lyricsProvider || body?.providerPreference || "").trim().toLowerCase();
     const geminiOnly = ["gemini", "gemini-only", "emoni"].includes(lyricsProvider);
-    const mode = detectModeFromSeed(seed, body?.mode);
+    const requestedMode = String(body?.mode || "").trim().toLowerCase();
+    if (requestedMode === "remix_reply" && !sourceLyrics) {
+      return json(res, 400, {
+        error: "Remix reply needs the original song lyrics. Wait for them to load, then try again.",
+        provider: "none",
+        debug: { mode: "remix_reply", sourceLyrics: "missing" },
+      });
+    }
+    const mode = requestedMode === "remix_reply" && sourceLyrics
+      ? "remix_reply"
+      : detectModeFromSeed(seed, body?.mode);
     const nonce = Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 8);
-    const prompt = buildPrompt({ seed, style, mode, nonce, dialect, dialectHint });
+    const prompt = buildPrompt({ seed, style, mode, nonce, dialect, dialectHint, sourceLyrics, sourceTitle, sourceCreator });
     const sunoPrompt = buildSunoPrompt({ seed, style, mode, dialect, dialectHint });
-    const complianceTerms = extractComplianceTerms({ seed, style });
+    const complianceTerms = mode === "remix_reply"
+      ? [...new Set([
+        ...extractComplianceTerms({ seed: sourceLyrics, style }),
+        ...extractComplianceTerms({ seed, style }),
+      ])]
+      : extractComplianceTerms({ seed, style });
+    const geminiTemperature = mode === "remix_reply" ? 0.72 : 0.9;
     const sunoKey = process.env.SUNO_API_KEY || "";
 
     const debug = {};
@@ -36,20 +55,25 @@ module.exports = async function handler(req, res) {
           debug: { nonce, gemini: "missing_gemini_key" },
         });
       }
-      const gemResult = await tryGeminiLyrics({ geminiKey, prompt });
+      const gemResult = await tryGeminiLyrics({ geminiKey, prompt, temperature: geminiTemperature });
       if (gemResult?.ok) {
-        const normalized = sanitizeLyricsOutput(gemResult.lyrics);
+        let normalized = sanitizeLyricsOutput(gemResult.lyrics);
+        if (mode === "remix_reply" && isMetaAiLyrics(normalized)) {
+          const fixed = await repairMetaAiLyrics({ geminiKey, prompt, text: normalized, temperature: geminiTemperature });
+          if (fixed) normalized = fixed;
+        }
         const repaired = await maybeRepairOnce({
           text: normalized,
           prompt,
           complianceTerms,
           sunoKey: "",
           geminiKey,
+          temperature: geminiTemperature,
         });
         return json(res, 200, {
           lyrics: repaired.text,
           provider: repaired.provider || "gemini",
-          debug: { nonce, gemini: "ok", lyricsProvider: "gemini" },
+          debug: { nonce, gemini: "ok", lyricsProvider: "gemini", mode },
         });
       }
       return json(res, 502, {
@@ -87,20 +111,25 @@ module.exports = async function handler(req, res) {
     }
 
     if (geminiKey) {
-      const gemResult = await tryGeminiLyrics({ geminiKey, prompt });
+      const gemResult = await tryGeminiLyrics({ geminiKey, prompt, temperature: geminiTemperature });
       if (gemResult?.ok) {
-        const normalized = sanitizeLyricsOutput(gemResult.lyrics);
+        let normalized = sanitizeLyricsOutput(gemResult.lyrics);
+        if (mode === "remix_reply" && isMetaAiLyrics(normalized)) {
+          const fixed = await repairMetaAiLyrics({ geminiKey, prompt, text: normalized, temperature: geminiTemperature });
+          if (fixed) normalized = fixed;
+        }
         const repaired = await maybeRepairOnce({
           text: normalized,
           prompt,
           complianceTerms,
           sunoKey,
           geminiKey,
+          temperature: geminiTemperature,
         });
         return json(res, 200, {
           lyrics: repaired.text,
           provider: repaired.provider || "gemini",
-          debug: { ...debug, nonce, gemini: "ok" },
+          debug: { ...debug, nonce, gemini: "ok", mode },
         });
       }
       debug.gemini = gemResult?.error || "failed";
@@ -158,7 +187,7 @@ async function trySunoLyrics({ sunoKey, prompt, callBackUrl }) {
   }
 }
 
-async function maybeRepairOnce({ text, prompt, complianceTerms, sunoKey, geminiKey }) {
+async function maybeRepairOnce({ text, prompt, complianceTerms, sunoKey, geminiKey, temperature = 0.9 }) {
   if (isCompliantEnough(text, complianceTerms)) return { text };
   const repairPrompt = [
     "Rewrite the lyrics to strictly follow the original request.",
@@ -172,7 +201,7 @@ async function maybeRepairOnce({ text, prompt, complianceTerms, sunoKey, geminiK
     text,
   ].join("\n");
   if (geminiKey) {
-    const g = await tryGeminiLyrics({ geminiKey, prompt: repairPrompt });
+    const g = await tryGeminiLyrics({ geminiKey, prompt: repairPrompt, temperature });
     if (g?.ok) {
       const out = sanitizeLyricsOutput(g.lyrics);
       if (out) return { text: out, provider: "gemini-repair" };
@@ -181,7 +210,43 @@ async function maybeRepairOnce({ text, prompt, complianceTerms, sunoKey, geminiK
   return { text };
 }
 
-async function tryGeminiLyrics({ geminiKey, prompt }) {
+function isMetaAiLyrics(text) {
+  const t = String(text || "").toLowerCase();
+  const patterns = [
+    /\b(artificial intelligence|language model|chatbot|chat bot)\b/,
+    /\b(i am|i'm|i’m)\s+(an?\s+)?(ai|system|bot|robot|machine)\b/,
+    /\b(built from|trained on)\s+(data|code)\b/,
+    /ذكاء\s*اصطناع/,
+    /\bانا\s+نظام\b/,
+    /\bما\s+عندي\s+(قلب|روح)\b/,
+    /\bمن\s+(هال|ال)?بيانات\b/,
+    /\bvoice\s+(assistant|system)\b/,
+    /\bgenerat(e|ing)\s+lyrics\b/,
+    /\bnot\s+just\s+silence\b/,
+  ];
+  return patterns.some((re) => re.test(t));
+}
+
+async function repairMetaAiLyrics({ geminiKey, prompt, text, temperature = 0.72 }) {
+  const repairPrompt = [
+    "The lyrics below broke the rules by describing AI, software, systems, data, or having no heart/soul.",
+    "Rewrite as a HUMAN singer replying to another human in the same love/story song.",
+    "Never mention AI, systems, algorithms, data, chatbots, or that you are generating text.",
+    "Stay in the original song's emotional story. Output ONLY lyrics with section tags.",
+    "",
+    "Original request:",
+    prompt,
+    "",
+    "Bad meta output to replace:",
+    text,
+  ].join("\n");
+  const g = await tryGeminiLyrics({ geminiKey, prompt: repairPrompt, temperature });
+  if (!g?.ok) return "";
+  const out = sanitizeLyricsOutput(g.lyrics);
+  return out && !isMetaAiLyrics(out) ? out : "";
+}
+
+async function tryGeminiLyrics({ geminiKey, prompt, temperature = 0.9 }) {
   const discovered = await listGeminiGenerateModels(geminiKey);
   const preferred = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-2.0-flash-lite", "gemini-1.5-flash"];
   const models = [...preferred, ...discovered].filter(Boolean).filter((v, i, a) => a.indexOf(v) === i);
@@ -193,7 +258,7 @@ async function tryGeminiLyrics({ geminiKey, prompt }) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         contents: [{ role: "user", parts: [{ text: prompt }] }],
-        generationConfig: { temperature: 0.9 },
+        generationConfig: { temperature: Number(temperature) || 0.9 },
       }),
     });
     const text = await r.text().catch(() => "");
@@ -251,13 +316,57 @@ const POP_RHYME_METER_LINES_CONTINUE = [
   "- New lines should rhyme with the established scheme in each section.",
 ];
 
-function buildPrompt({ seed, style, mode, nonce, dialect, dialectHint }) {
+const REMIX_REPLY_GUARDRAILS = [
+  "STRICT — you are writing lyrics for a HUMAN singer (Person B) answering another HUMAN singer (Person A).",
+  "NEVER mention AI, artificial intelligence, systems, algorithms, data, chatbots, robots, or software.",
+  "NEVER say you have no heart/soul or that you are a machine, program, or voice assistant.",
+  "Do NOT write about listeners, voices in abstract, or 'the one who spoke before me' as a meta concept — respond to the STORY in the original lyrics (love, sadness, names, situation).",
+  "Echo specific feelings, names, or images from the original song so the reply clearly connects.",
+];
+
+function buildPrompt({ seed, style, mode, nonce, dialect, dialectHint, sourceLyrics, sourceTitle, sourceCreator }) {
   const dialectLines = [
     dialect ? `Target dialect/accent: ${dialect}` : "",
     dialectHint ? `Dialect hint line (follow this flavor): ${dialectHint}` : "",
   ]
     .filter(Boolean)
     .join("\n");
+  if (mode === "remix_reply") {
+    const creatorLine = sourceCreator ? `Original voice: @${sourceCreator.replace(/^@+/, "")}` : "";
+    const angle = seed
+      ? `Remixer's angle (follow this intent):\n${seed}`
+      : "Write a natural reply in a new voice — answer, comfort, push back, or continue the story as if responding to the original singer.";
+    return [
+      "Write NEW lyrics for a song REMIX that replies to an existing song over the same melody.",
+      "This is a conversational back-and-forth: the remix is the second voice answering the first.",
+      ...REMIX_REPLY_GUARDRAILS,
+      "Do NOT copy long phrases from the original. Do NOT rearrange the original lines.",
+      "Match the original song's language and emotional world unless the remixer's angle says otherwise.",
+      "Output lyrics only with section tags.",
+      "If the remixer's angle asks for ONLY specific sections (e.g. just [Verse 2], just [Chorus], Verse 2 + Chorus), output ONLY those sections — not a full song.",
+      "Otherwise use this full structure:",
+      "[Verse 1]",
+      "[Pre-Chorus]",
+      "[Chorus]",
+      "[Verse 2]",
+      "[Chorus]",
+      "[Bridge]",
+      "[Final Chorus]",
+      "[Outro]",
+      "Verse 1 may acknowledge what the original said; chorus should feel like the direct answer or counter-voice.",
+      ...POP_RHYME_METER_LINES,
+      `Variation token: ${nonce}`,
+      ...(dialectLines ? [dialectLines] : []),
+      style ? `Style/Tags: ${style}` : "Style/Tags: none",
+      sourceTitle ? `Original song title: ${sourceTitle}` : "",
+      creatorLine,
+      "",
+      "Original song lyrics to respond to:",
+      sourceLyrics || "(none)",
+      "",
+      angle,
+    ].join("\n");
+  }
   if (mode === "arrange") {
     return [
       "You are arranging user-provided lyrics for AI singing.",
@@ -559,7 +668,7 @@ function pickVariantSeed(text) {
 }
 
 function detectModeFromSeed(seed, requestedMode) {
-  if (requestedMode === "arrange" || requestedMode === "continue" || requestedMode === "full" || requestedMode === "challenge") {
+  if (requestedMode === "arrange" || requestedMode === "continue" || requestedMode === "full" || requestedMode === "challenge" || requestedMode === "remix_reply") {
     return requestedMode;
   }
   const s = String(seed || "");

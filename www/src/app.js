@@ -187,7 +187,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260712-161407";
+const APP_BUILD = "20260712-164958";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -661,6 +661,8 @@ const els = {
   remixSourceCover: document.getElementById("remixSourceCover"),
   remixSourceTitle: document.getElementById("remixSourceTitle"),
   remixSourceSub: document.getElementById("remixSourceSub"),
+  remixSourceLyricsPanel: document.getElementById("remixSourceLyricsPanel"),
+  remixSourceLyricsText: document.getElementById("remixSourceLyricsText"),
   remixSourceCancel: document.getElementById("remixSourceCancel"),
   personaActiveBanner: document.getElementById("personaActiveBanner"),
   personaActiveBannerLabel: document.getElementById("personaActiveBannerLabel"),
@@ -4313,6 +4315,13 @@ function syncLyricsPlaceholder() {
   if (instrumental) {
     els.sunoPrompt.placeholder =
       "Instrumental mode: lyrics will be ignored. Hum a melody or describe the mood in Style / Tags.";
+    return;
+  }
+  if (currentRemixSource) {
+    els.sunoPrompt.placeholder =
+      lyricsInputMode === "generate"
+        ? "Your reply (optional)…\n\ne.g. Only write Verse 2 answering her.\nOr leave empty for a full reply."
+        : "Write your reply lyrics…";
     return;
   }
   els.sunoPrompt.placeholder =
@@ -17715,11 +17724,38 @@ function clearRemixSource({ keepRefFile = false } = {}) {
   }
 }
 
+function remixSourceLyricsText() {
+  const src = currentRemixSource;
+  if (!src) return "";
+  return String(src.sourceLyrics || src.meta?.lyricsInput || "").trim();
+}
+
+async function ensureRemixSourceLyrics() {
+  if (!currentRemixSource) return "";
+  let text = remixSourceLyricsText();
+  if (text) return text;
+  try {
+    text = String(await resolveLyricsForTrackRef({
+      id: currentRemixSource.id || "",
+      songId: currentRemixSource.songId || "",
+      cloudSongId: currentRemixSource.songId || "",
+      taskId: currentRemixSource.taskId || currentRemixSource.meta?.taskId || "",
+      audioId: currentRemixSource.audioId || currentRemixSource.meta?.audioId || "",
+      meta: currentRemixSource.meta || {},
+    }) || "").trim();
+    if (text) currentRemixSource.sourceLyrics = text;
+  } catch {}
+  renderRemixSourceBanner();
+  return text;
+}
+
 function renderRemixSourceBanner() {
   if (!els.remixSourceBanner) return;
   if (!currentRemixSource) {
     els.remixSourceBanner.hidden = true;
     if (els.remixSourceCover) els.remixSourceCover.style.backgroundImage = "";
+    if (els.remixSourceLyricsPanel) els.remixSourceLyricsPanel.hidden = true;
+    if (els.remixSourceLyricsText) els.remixSourceLyricsText.textContent = "";
     return;
   }
   els.remixSourceBanner.hidden = false;
@@ -17728,12 +17764,24 @@ function renderRemixSourceBanner() {
   if (els.remixSourceTitle) {
     els.remixSourceTitle.textContent = creator ? `${title} · @${creator}` : title;
   }
+  const sourceLyrics = remixSourceLyricsText();
   if (els.remixSourceSub) {
-    els.remixSourceSub.textContent = "Your new lyrics will be sung over this melody.";
+    els.remixSourceSub.textContent = sourceLyrics
+      ? "Tap ✦ Generate to write a reply, or type your angle below."
+      : "Loading original lyrics…";
   }
   if (els.remixSourceCover) {
     const cover = String(currentRemixSource.coverUrl || "").trim();
     els.remixSourceCover.style.backgroundImage = cover ? `url("${cover.replace(/"/g, '\\"')}")` : "";
+  }
+  if (els.remixSourceLyricsPanel && els.remixSourceLyricsText) {
+    if (sourceLyrics) {
+      els.remixSourceLyricsPanel.hidden = false;
+      els.remixSourceLyricsText.textContent = sourceLyrics;
+    } else {
+      els.remixSourceLyricsPanel.hidden = true;
+      els.remixSourceLyricsText.textContent = "";
+    }
   }
 }
 
@@ -17926,35 +17974,30 @@ async function startHubRemix(post) {
       coverUrl: post.artUrl || "",
       originalUrl: remixAudioUrl || post.url || "",
       meta: post.meta || null,
+      sourceLyrics: String(post?.meta?.lyricsInput || "").trim(),
     });
     if (els.sunoPrompt) {
-      els.sunoPrompt.value = String(post?.meta?.lyricsInput || "").trim();
+      els.sunoPrompt.value = "";
       try { autoResizeLyricsBox(); } catch {}
     }
+    try { setLyricsInputMode("generate", { silent: true }); } catch {}
+    try { syncLyricsPlaceholder(); } catch {}
     if (els.sunoStyle) els.sunoStyle.value = String(post?.meta?.styleInput || "").trim();
     if (els.sunoTitle) els.sunoTitle.value = `${post.title || "Track"} Remix`;
     location.hash = "#/generate";
-    setStatus(`Remix ready: ${post.title || "Track"} — adjust lyrics and tap Generate.`);
+    setStatus(`Remix ready: ${post.title || "Track"} — tap ✦ Generate to reply, or write your own lyrics.`);
     try { syncGenerateOrbVisibility(); } catch {}
     // Late lyric rescue: if the prefill came up empty (slim feed meta,
     // cloud hiccup, missing local meta), retry the full resolution chain
     // in the background and fill the box — but only if the user hasn't
     // typed anything in the meantime.
-    if (els.sunoPrompt && !String(els.sunoPrompt.value || "").trim()) {
+    if (els.sunoPrompt && !remixSourceLyricsText()) {
       void (async () => {
         try {
-          const text = await resolveLyricsForTrackRef({
-            id: post.id || "",
-            songId: post.songId || "",
-            cloudSongId: post.songId || "",
-            taskId: post.taskId || post?.meta?.taskId || "",
-            audioId: post.audioId || post?.meta?.audioId || "",
-            meta: post.meta || {},
-          });
-          if (text && els.sunoPrompt && !String(els.sunoPrompt.value || "").trim()) {
-            els.sunoPrompt.value = text;
-            try { autoResizeLyricsBox(); } catch {}
-            showToast("Original lyrics loaded.", { icon: "♪", durationMs: 2200 });
+          const text = await ensureRemixSourceLyrics();
+          if (text) {
+            renderRemixSourceBanner();
+            showToast("Original lyrics loaded for your reply.", { icon: "♪", durationMs: 2200 });
           }
         } catch {}
       })();
@@ -49669,9 +49712,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
     const lyricsBoxEl = els.sunoPrompt.closest(".lyricsBox");
     const seed = String(els.sunoPrompt.value || "").trim();
     const challenge = challengePromptContext();
-    const mode = challenge ? "challenge" : detectLyricsMode(seed);
-    const requestSeed = challenge ? challengePromptMagicSeed(seed, challenge) : seed;
-    const lyricsProvider = "";
+    const lyricsProvider = "gemini";
     const style = String(els.sunoStyle?.value || "").trim();
     const dialect = String(els.sunoDialect?.value || "").trim();
     const dialectHint = String(els.sunoDialectHint?.value || "").trim();
@@ -49680,6 +49721,24 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       resolveSingerGenderForGeneration({ hasReference: Boolean(getVocalReferenceFile()) })
     );
     const lyricDialectHint = [dialectHint, addressNote].filter(Boolean).join(" ");
+    let mode = challenge ? "challenge" : detectLyricsMode(seed);
+    let requestSeed = challenge ? challengePromptMagicSeed(seed, challenge) : seed;
+    let remixReplyBody = null;
+    if (!challenge && currentRemixSource) {
+      const sourceLyrics = await ensureRemixSourceLyrics();
+      if (!sourceLyrics) {
+        showToast("Original lyrics still loading — wait a moment, then try ✦ Generate again.", { icon: "!", durationMs: 3200 });
+        setStatus("Waiting for original lyrics before writing a reply…");
+        return;
+      }
+      mode = "remix_reply";
+      requestSeed = seed;
+      remixReplyBody = {
+        sourceLyrics,
+        sourceTitle: String(currentRemixSource.title || "").trim(),
+        sourceCreator: String(currentRemixSource.creator || "").trim(),
+      };
+    }
     try {
       if (els.btnLyricsMagic) {
         els.btnLyricsMagic.disabled = true;
@@ -49690,11 +49749,19 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       if (lyricsBoxEl) lyricsBoxEl.classList.add("generating");
       if (els.sunoPrompt) els.sunoPrompt.disabled = true;
       if (els.sunoStyle) els.sunoStyle.disabled = true;
-      setStatus(challenge ? "AI is drafting short challenge lyrics…" : mode === "continue" ? "AI is continuing your lyrics…" : mode === "arrange" ? "AI is arranging your lyrics for singing…" : "AI is writing structured lyrics…");
+      setStatus(challenge ? "AI is drafting short challenge lyrics…" : mode === "remix_reply" ? "AI is writing your reply to this song…" : mode === "continue" ? "AI is continuing your lyrics…" : mode === "arrange" ? "AI is arranging your lyrics for singing…" : "AI is writing structured lyrics…");
       const r = await fetch(apiUrl("/api/lyrics"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ seed: requestSeed, style, mode, dialect, dialectHint: lyricDialectHint, lyricsProvider }),
+        body: JSON.stringify({
+          seed: requestSeed,
+          style,
+          mode,
+          dialect,
+          dialectHint: lyricDialectHint,
+          lyricsProvider,
+          ...(remixReplyBody || {}),
+        }),
       });
       const data = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(data?.error || "Lyrics generation failed");
@@ -50978,7 +51045,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
           const rr = await fetch(apiUrl("/api/lyrics"), {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ seed: userPrompt, style: userStyle, mode: "arrange", dialect, dialectHint: lyricDialectHint }),
+            body: JSON.stringify({ seed: userPrompt, style: userStyle, mode: "arrange", dialect, dialectHint: lyricDialectHint, lyricsProvider: "gemini" }),
           });
           const dd = await rr.json().catch(() => ({}));
           if (rr.ok && dd?.lyrics) {

@@ -172,7 +172,7 @@
       onload="this.media='all'"
     />
     <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Display:wght@900&family=Inter:wght@900&display=swap" /></noscript>
-    <link rel="stylesheet" href="./styles.css?v=20260712-171535" />
+    <link rel="stylesheet" href="./styles.css?v=20260712-175003" />
 
     <meta name="description" content="NabadAi is an AI music studio. Hum a melody, write lyrics, and ship a song." />
     <meta property="og:type" content="website" />
@@ -413,13 +413,48 @@
                 <h2 class="onboardingTitle">Build your music identity</h2>
                 <p class="onboardingLead">Save your voice once and carry it across every track — your signature sound inside Nabad.</p>
               </article>
+              <article class="onboardingSlide" data-onboarding-slide="4" aria-hidden="true">
+                <div class="onboardingMock onboardingMock--coach" aria-hidden="true">
+                  <div class="onboardingCoachChat">
+                    <div class="onboardingCoachBubble onboardingCoachBubble--user">Review my verse — does the flow work?</div>
+                    <div class="onboardingCoachRow">
+                      <span class="onboardingCoachOrbMini" aria-hidden="true">
+                        <svg viewBox="0 0 100 100" aria-hidden="true">
+                          <defs>
+                            <linearGradient id="onboardingCoachOrbG" x1="26" y1="24" x2="74" y2="80" gradientUnits="userSpaceOnUse">
+                              <stop offset="0" stop-color="#36e7c0"/>
+                              <stop offset=".42" stop-color="#3f73f0"/>
+                              <stop offset="1" stop-color="#6a23da"/>
+                            </linearGradient>
+                          </defs>
+                          <circle cx="50" cy="50" r="45" fill="url(#onboardingCoachOrbG)"/>
+                        </svg>
+                      </span>
+                      <div class="onboardingCoachBubble onboardingCoachBubble--coach">
+                        Strong hook — try tightening line 3 so the syllables land on the beat.
+                      </div>
+                    </div>
+                  </div>
+                  <div class="onboardingCoachFabMock" aria-hidden="true">
+                    <span class="onboardingCoachFabPill">Need help? 🎵</span>
+                    <span class="onboardingCoachFabOrb">
+                      <svg viewBox="0 0 100 100" aria-hidden="true">
+                        <circle cx="50" cy="50" r="45" fill="url(#onboardingCoachOrbG)"/>
+                      </svg>
+                    </span>
+                  </div>
+                </div>
+                <h2 class="onboardingTitle">Meet NabadAi Coach</h2>
+                <p class="onboardingLead">Get lyric feedback, Arabic prosody tips, and answers about the app — tap the orb anytime or chat in Messages.</p>
+              </article>
             </div>
             <footer class="onboardingFooter">
               <div class="onboardingDots" role="tablist" aria-label="Onboarding progress">
-                <button type="button" class="onboardingDot is-active" data-onboarding-dot="0" aria-current="step" aria-label="Slide 1 of 4"></button>
-                <button type="button" class="onboardingDot" data-onboarding-dot="1" aria-label="Slide 2 of 4"></button>
-                <button type="button" class="onboardingDot" data-onboarding-dot="2" aria-label="Slide 3 of 4"></button>
-                <button type="button" class="onboardingDot" data-onboarding-dot="3" aria-label="Slide 4 of 4"></button>
+                <button type="button" class="onboardingDot is-active" data-onboarding-dot="0" aria-current="step" aria-label="Slide 1 of 5"></button>
+                <button type="button" class="onboardingDot" data-onboarding-dot="1" aria-label="Slide 2 of 5"></button>
+                <button type="button" class="onboardingDot" data-onboarding-dot="2" aria-label="Slide 3 of 5"></button>
+                <button type="button" class="onboardingDot" data-onboarding-dot="3" aria-label="Slide 4 of 5"></button>
+                <button type="button" class="onboardingDot" data-onboarding-dot="4" aria-label="Slide 5 of 5"></button>
               </div>
               <button type="button" id="btnOnboardingNext" class="onboardingPrimaryBtn">Next</button>
             </footer>
@@ -3705,6 +3740,16 @@
             <section class="settingsSection" aria-labelledby="settingsSupportTitle">
               <h2 id="settingsSupportTitle" class="settingsSectionLabel">Support</h2>
               <div class="settingsList">
+                <button type="button" id="btnSettingsReplayOnboarding" class="settingsRow settingsRowLink">
+                  <span class="settingsRowIco" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="14" rx="2"/><path d="M7 8h6M7 12h4"/><circle cx="17" cy="17" r="4"/><path d="m18 15.5 1.5 1.5L21 15"/></svg>
+                  </span>
+                  <span class="settingsRowBody">
+                    <span class="settingsRowTitle">Feature tour</span>
+                    <span class="settingsRowSub">Replay intro — create, remix, Coach, and more</span>
+                  </span>
+                  <span class="settingsRowChev" aria-hidden="true">›</span>
+                </button>
                 <button id="btnSettingsHelpFaq" class="settingsRow settingsRowLink" type="button">
                   <span class="settingsRowIco" aria-hidden="true">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.2a2.6 2.6 0 0 1 5 .9c0 1.7-2.5 2.2-2.5 3.9" stroke-linecap="round"/><circle cx="12" cy="17.4" r="0.6" fill="currentColor" stroke="none"/></svg>
@@ -3777,8 +3822,6 @@
 
             <p class="settingsFoot"><span id="envBadge">Build detecting...</span></p>
           </div>
-
-          <button type="button" id="btnSettingsReplayOnboarding" hidden aria-hidden="true"></button>
         </section>
       </main>
 
@@ -4601,34 +4644,43 @@
 
     <script>
       (function () {
-        var done = false;
-        try { done = localStorage.getItem("nabadai_onboarding_v1_done") === "1"; } catch (e) {}
+        function bootSessionUserId() {
+          try {
+            var raw = localStorage.getItem("mas:supabase:session:v1");
+            if (!raw) return "";
+            var sess = JSON.parse(raw);
+            return String((sess && sess.user && sess.user.id) || "").trim();
+          } catch (e) { return ""; }
+        }
+        function bootOnboardingDone() {
+          var uid = bootSessionUserId();
+          try {
+            if (uid) return localStorage.getItem("nabadai_onboarding_v2_done:" + uid) === "1";
+            return localStorage.getItem("nabadai_onboarding_v2_done") === "1";
+          } catch (e) { return false; }
+        }
+        var done = bootOnboardingDone();
         var h = String(location.hash || "").replace(/^#\/?/, "").split(/[?#&]/)[0] || "";
         if (/^u\//.test(h)) h = "user";
         if (h === "hub" || h === "home" || h === "start") h = "discover";
         if (h === "sparks") h = "challenges";
         var guestMode = false;
         try { guestMode = localStorage.getItem("nabadai_guest_mode_v1") === "1"; } catch (e) {}
+        var hasSessionEarly = false;
+        try {
+          var rawEarly = localStorage.getItem("mas:supabase:session:v1");
+          hasSessionEarly = !!(rawEarly && rawEarly.indexOf("access_token") !== -1);
+        } catch (e) {}
+        var bootUid = bootSessionUserId();
+        var needsOnboarding = bootUid ? !bootOnboardingDone() : !done;
         if (!h) {
-          if (!done) {
-            var hasSessionEarly = false;
-            try {
-              var rawEarly = localStorage.getItem("mas:supabase:session:v1");
-              hasSessionEarly = !!(rawEarly && rawEarly.indexOf("access_token") !== -1);
-            } catch (e) {}
-            h = hasSessionEarly ? "discover" : "auth";
-          } else {
-            var hasSession = false;
-            try {
-              var raw = localStorage.getItem("mas:supabase:session:v1");
-              hasSession = !!(raw && raw.indexOf("access_token") !== -1);
-            } catch (e) {}
-            h = hasSession ? "discover" : (guestMode ? "discover" : "auth");
-          }
+          if (needsOnboarding) h = "onboarding";
+          else h = hasSessionEarly ? "discover" : (guestMode ? "discover" : "auth");
         }
+        if (/^onboarding\/\d+$/.test(h)) h = "onboarding";
         var ok = /^(intro|onboarding|music-preferences|auth|generate|challenges|activity|discover|friends|profile|profile-edit|settings|player|sounds|user|vocal|stems|studio|advanced|credits|mentor)$/.test(h);
         if (!ok) {
-          if (!done) h = "auth";
+          if (needsOnboarding) h = "onboarding";
           else {
             var hasSessionFallback = false;
             try {
@@ -4647,6 +4699,6 @@
     </script>
     <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
     <script src="./env.client.js" onerror="void 0"></script>
-    <script type="module" src="./src/app.js?v=20260712-171535"></script>
+    <script type="module" src="./src/app.js?v=20260712-175003"></script>
   </body>
 </html>

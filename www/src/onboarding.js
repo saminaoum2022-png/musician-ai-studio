@@ -2,21 +2,39 @@
  * Phase A — first-run onboarding (welcome + feature slides → auth / home).
  */
 
-export const ONBOARDING_STORAGE_KEY = "nabadai_onboarding_v1_done";
+export const ONBOARDING_STORAGE_KEY = "nabadai_onboarding_v2_done";
 export const ONBOARDING_ACTIVE_KEY = "nabadai_onboarding_active";
 
-const SLIDE_COUNT = 4;
+const SLIDE_COUNT = 5;
 
 let _step = 0;
 let _deps = null;
 let _inited = false;
 
-export function isOnboardingComplete() {
+function onboardingUserKey(userId) {
+  return `${ONBOARDING_STORAGE_KEY}:${String(userId || "").trim()}`;
+}
+
+export function isOnboardingComplete(userId) {
+  const uid = String(userId || "").trim();
+  if (uid) {
+    try {
+      return localStorage.getItem(onboardingUserKey(uid)) === "1";
+    } catch {
+      return false;
+    }
+  }
   try {
     return localStorage.getItem(ONBOARDING_STORAGE_KEY) === "1";
   } catch {
     return false;
   }
+}
+
+export function shouldShowOnboardingForUser(userId) {
+  const uid = String(userId || "").trim();
+  if (!uid) return !isOnboardingComplete();
+  return !isOnboardingComplete(uid);
 }
 
 export function isOnboardingActive() {
@@ -27,18 +45,22 @@ export function isOnboardingActive() {
   }
 }
 
-export function markOnboardingComplete() {
+export function markOnboardingComplete(userId) {
+  const uid = String(userId || "").trim();
   try {
-    localStorage.setItem(ONBOARDING_STORAGE_KEY, "1");
+    if (uid) localStorage.setItem(onboardingUserKey(uid), "1");
+    else localStorage.setItem(ONBOARDING_STORAGE_KEY, "1");
   } catch {}
   try {
     sessionStorage.removeItem(ONBOARDING_ACTIVE_KEY);
   } catch {}
 }
 
-export function resetOnboarding() {
+export function resetOnboarding(userId) {
+  const uid = String(userId || "").trim();
   try {
     localStorage.removeItem(ONBOARDING_STORAGE_KEY);
+    if (uid) localStorage.removeItem(onboardingUserKey(uid));
   } catch {}
   try {
     sessionStorage.removeItem(ONBOARDING_ACTIVE_KEY);
@@ -47,8 +69,8 @@ export function resetOnboarding() {
 }
 
 /** Settings / debug — full intro + slides again. */
-export function replayOnboarding() {
-  resetOnboarding();
+export function replayOnboarding(userId) {
+  resetOnboarding(userId);
   try {
     sessionStorage.setItem(ONBOARDING_ACTIVE_KEY, "1");
   } catch {}
@@ -62,26 +84,29 @@ export function replayOnboarding() {
   } catch {}
 }
 
-export function shouldSkipIntroOrOnboardingRoute() {
-  return isOnboardingComplete() && !isOnboardingActive();
+export function shouldSkipIntroOrOnboardingRoute(userId) {
+  if (isOnboardingActive()) return false;
+  const uid = String(userId || "").trim();
+  if (uid) return isOnboardingComplete(uid);
+  return isOnboardingComplete();
 }
 
 export function getPostOnboardingHash(getAuthSession) {
   const session = typeof getAuthSession === "function" ? getAuthSession() : null;
-  if (session?.user?.id) return "#/challenges";
+  if (session?.user?.id) return "#/discover";
   try {
-    if (localStorage.getItem("nabadai_guest_mode_v1") === "1") return "#/challenges";
+    if (localStorage.getItem("nabadai_guest_mode_v1") === "1") return "#/discover";
   } catch {}
   return "#/auth";
 }
 
 export function getInitialBootHash(getAuthSession) {
-  if (!isOnboardingComplete()) {
-    const session = typeof getAuthSession === "function" ? getAuthSession() : null;
-    // First-run, logged-out users see the onboarding slides before auth.
-    // Returning/logged-in users are unaffected; onboarding marks itself done
-    // on finish/skip so it only ever shows once.
-    if (!session?.user?.id) return "#/onboarding";
+  const session = typeof getAuthSession === "function" ? getAuthSession() : null;
+  if (session?.user?.id && shouldShowOnboardingForUser(session.user.id)) {
+    return "#/onboarding";
+  }
+  if (!session?.user?.id && !isOnboardingComplete()) {
+    return "#/onboarding";
   }
   return getPostOnboardingHash(getAuthSession);
 }
@@ -137,8 +162,18 @@ function syncOnboardingHash() {
 }
 
 function finishOnboarding() {
-  markOnboardingComplete();
-  const hash = getPostOnboardingHash(_deps?.getAuthSession);
+  const session = typeof _deps?.getAuthSession === "function" ? _deps.getAuthSession() : null;
+  const uid = String(session?.user?.id || "").trim();
+  markOnboardingComplete(uid);
+  let hash = "#/auth";
+  if (uid) {
+    const showMusicPrefs = typeof _deps?.shouldShowMusicPreferences === "function"
+      ? Boolean(_deps.shouldShowMusicPreferences())
+      : false;
+    hash = showMusicPrefs ? "#/music-preferences" : "#/discover";
+  } else {
+    hash = getPostOnboardingHash(_deps?.getAuthSession);
+  }
   try {
     location.hash = hash;
   } catch {}
@@ -171,7 +206,7 @@ function advanceOnboarding() {
 }
 
 /**
- * @param {{ getAuthSession: () => object|null, applyRoute: () => void }} deps
+ * @param {{ getAuthSession: () => object|null, applyRoute: () => void, shouldShowMusicPreferences?: () => boolean }} deps
  */
 export function initOnboarding(deps) {
   if (_inited) return;
@@ -205,7 +240,8 @@ export function initOnboarding(deps) {
   if (replayBtn) {
     replayBtn.addEventListener("click", (e) => {
       e.preventDefault();
-      replayOnboarding();
+      try { replayBtn.blur(); } catch {}
+      replayOnboarding(_deps?.getAuthSession?.()?.user?.id);
     });
   }
 

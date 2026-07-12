@@ -173,17 +173,10 @@ export function buildMusicPreferencesGenreGridHtml() {
   return MUSIC_PREFERENCE_GENRES.map((g) => `
     <button
       type="button"
-      class="musicPrefsGenre"
+      class="profileEditGenreChip"
       data-music-pref="${escapeAttr(g.id)}"
       aria-pressed="false"
-    >
-      <span class="musicPrefsGenreLabel">${escapeHtml(g.label)}</span>
-      <span class="musicPrefsGenreCheck" aria-hidden="true">
-        <svg viewBox="0 0 12 10" width="10" height="8" fill="none">
-          <path d="M1 5.2 4.2 8.4 11 1.6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
-        </svg>
-      </span>
-    </button>`).join("");
+    >${escapeHtml(g.label)}</button>`).join("");
 }
 
 function ensureMusicPrefsGridMounted() {
@@ -201,7 +194,7 @@ function paintMusicPrefsSelection() {
   root.querySelectorAll("[data-music-pref]").forEach((btn) => {
     const id = String(btn.getAttribute("data-music-pref") || "").trim();
     const on = _selected.has(id);
-    btn.classList.toggle("is-selected", on);
+    btn.classList.toggle("isSelected", on);
     btn.setAttribute("aria-pressed", on ? "true" : "false");
   });
   const countEl = qs("#musicPrefsCount");

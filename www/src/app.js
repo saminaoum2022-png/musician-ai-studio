@@ -37,9 +37,10 @@ import {
   getInitialBootHash,
   getPostOnboardingHash,
   initOnboarding,
-  markOnboardingComplete,
+  ONBOARDING_ACTIVE_KEY,
   onOnboardingRouteActive,
   parseOnboardingRoute,
+  shouldShowOnboardingForUser,
   shouldSkipIntroOrOnboardingRoute,
 } from "./onboarding.js";
 import {
@@ -187,7 +188,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260712-171535";
+const APP_BUILD = "20260712-175003";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -3370,10 +3371,29 @@ function wireNotificationsLiveRefreshOnce() {
 
 function resolveEmptyHashRoute() {
   ensureAuthSessionUserFromToken();
-  if (isAppLoggedIn() || getSupabaseAuthToken()) return "discover";
-  if (!shouldSkipIntroOrOnboardingRoute()) return "auth";
+  const uid = String(authSession?.user?.id || "").trim();
+  if (isAppLoggedIn() || getSupabaseAuthToken()) {
+    if (uid && shouldShowOnboardingForUser(uid)) return "onboarding";
+    return "discover";
+  }
+  if (!shouldSkipIntroOrOnboardingRoute()) return "onboarding";
   if (isGuestModeEnabled()) return "discover";
   return "auth";
+}
+
+/** Logged-in users who haven't finished the current feature tour → #/onboarding. */
+function redirectToOnboardingIfNeeded() {
+  ensureAuthSessionUserFromToken();
+  const uid = String(authSession?.user?.id || "").trim();
+  if (!uid || !shouldShowOnboardingForUser(uid)) return false;
+  const route = String(location.hash || "").replace(/^#\/?/, "").split(/[?#&]/)[0] || "";
+  if (route === "onboarding" || route.startsWith("onboarding/") || route === "music-preferences") {
+    return false;
+  }
+  if (route === "player" && parseSharedTrackIdFromLocation()) return false;
+  try { sessionStorage.setItem(ONBOARDING_ACTIVE_KEY, "1"); } catch {}
+  try { location.hash = "#/onboarding"; } catch {}
+  return true;
 }
 
 /** `/#/player?track=UUID` or `/s/:uuid` — WhatsApp share listeners must not hit auth walls. */
@@ -3409,7 +3429,7 @@ function parseSharedTrackIdFromLocation() {
 function shouldHoldBootSplashForRoute(wanted) {
   if (!document.body.classList.contains("booting")) return false;
   if (parseSharedTrackIdFromLocation()) return false;
-  if (!shouldSkipIntroOrOnboardingRoute() && wanted === "auth") return true;
+  if (!shouldSkipIntroOrOnboardingRoute(authSession?.user?.id) && wanted === "auth") return true;
   if (wanted === "auth" && getSupabaseAuthToken()) return true;
   if (wanted === "auth" && !_authBootDone) return true;
   return false;
@@ -3787,8 +3807,15 @@ function applyRoute({ passGen } = {}) {
   ensureAuthSessionUserFromToken();
   const hasAuthToken = Boolean(getSupabaseAuthToken());
   if (isLoginSettling()) {
+    const uid = String(authSession?.user?.id || "").trim();
+    const needsOnboarding = uid && shouldShowOnboardingForUser(uid);
     if (hasAuthToken || isLoggedIn) {
-      if (wanted === "auth" || wanted === "intro" || wanted === "onboarding") {
+      if (wanted === "auth" || wanted === "intro") {
+        wanted = needsOnboarding ? "onboarding" : "discover";
+        try {
+          history.replaceState(null, "", `#/${wanted}`);
+        } catch {}
+      } else if (wanted === "onboarding" && !needsOnboarding && shouldSkipIntroOrOnboardingRoute(uid)) {
         wanted = "discover";
         try {
           history.replaceState(null, "", "#/discover");
@@ -3803,9 +3830,10 @@ function applyRoute({ passGen } = {}) {
   }
   // Keychain/session often loads after first paint — never keep a signed-in user on #/auth.
   if (wanted === "auth" && (isLoggedIn || hasAuthToken)) {
-    wanted = "discover";
+    const uid = String(authSession?.user?.id || "").trim();
+    wanted = uid && shouldShowOnboardingForUser(uid) ? "onboarding" : "discover";
     try {
-      history.replaceState(null, "", "#/discover");
+      history.replaceState(null, "", `#/${wanted}`);
     } catch {}
   }
   if (wanted === "intro") {
@@ -3814,7 +3842,7 @@ function applyRoute({ passGen } = {}) {
       history.replaceState(null, "", `#/${wanted}`);
     } catch {}
   }
-  if (shouldSkipIntroOrOnboardingRoute() && wanted === "onboarding") {
+  if (shouldSkipIntroOrOnboardingRoute(authSession?.user?.id) && wanted === "onboarding") {
     wanted = isLoggedIn ? "discover" : "auth";
     try {
       history.replaceState(null, "", `#/${wanted}`);
@@ -4821,6 +4849,8 @@ function scheduleInitialHash() {
         } catch {
           location.hash = "#/auth";
         }
+      } else if (redirectToOnboardingIfNeeded()) {
+        /* keep onboarding hash */
       } else if (isAppLoggedIn() && String(location.hash || "").replace(/^#\/?/, "").split(/[?#&]/)[0] === "auth") {
         try {
           location.hash = "#/challenges";
@@ -4841,6 +4871,7 @@ try {
   initOnboarding({
     getAuthSession: () => authSession,
     applyRoute,
+    shouldShowMusicPreferences: () => shouldShowMusicPreferencesScreen(authSession?.user?.id, activeProfile),
   });
 } catch (e) {
   console.error("[onboarding] init failed", e);
@@ -5114,7 +5145,7 @@ void loadAppTourModule()
       scheduleApplyRoute,
       haptic,
       showToast,
-      shouldOfferHomeTour: () => shouldSkipIntroOrOnboardingRoute(),
+      shouldOfferHomeTour: () => shouldSkipIntroOrOnboardingRoute(authSession?.user?.id),
       onTourStepPrepare(tourId, stepIndex, key) {
         if (tourId !== "persona" || key !== "personaGenerate") return;
         try { renderSingerPersonaRow(); } catch {}
@@ -13141,10 +13172,16 @@ async function finishPostAuthNavigation() {
   setGuestModeEnabled(false);
   loadAuthSession();
   ensureAuthSessionUserFromToken();
-  if (authSession?.user?.id) {
-    try { markOnboardingComplete(); } catch {}
-  }
   endLoginSettling({ minimum: true });
+  const postAuthUid = String(authSession?.user?.id || "").trim();
+  if (postAuthUid && shouldShowOnboardingForUser(postAuthUid)) {
+    try { sessionStorage.setItem(ONBOARDING_ACTIVE_KEY, "1"); } catch {}
+    try { location.hash = "#/onboarding"; } catch {}
+    syncRoutePanelVisibility("onboarding");
+    try { applyRoute(); } catch { scheduleApplyRoute(); }
+    void ensureAuthBoot({ force: true, fast: true });
+    return;
+  }
   if (
     authSession?.user?.id
     && !isMusicPreferencesComplete(authSession.user.id, activeProfile)
@@ -56284,7 +56321,14 @@ void (async () => {
     await finishPostAuthNavigation();
   }
 
-  const pendingPushAfterBoot = consumePendingPushRoute();
+  const bootUid = String(authSession?.user?.id || "").trim();
+  const needsOnboardingBoot = bootUid && shouldShowOnboardingForUser(bootUid);
+  if (needsOnboardingBoot) {
+    redirectToOnboardingIfNeeded();
+    scheduleApplyRoute();
+  }
+
+  const pendingPushAfterBoot = !needsOnboardingBoot ? consumePendingPushRoute() : null;
   if (pendingPushAfterBoot && (isAppLoggedIn() || getSupabaseAuthToken())) {
     try { location.hash = `#/${pendingPushAfterBoot}`; } catch {}
     void tryRecoverGenerationFromPushNotification();

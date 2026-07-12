@@ -97,12 +97,40 @@ COACH BEHAVIOR FOR THESE TOPICS:
 const COACH_KNOWLEDGE_ACK =
   "Understood — I'll use the credits and NabadAi Pro guide for those questions.";
 
+const COACH_LYRICS_ACK =
+  "Understood — I'll review lyrics and coach on syllables, rhythm, and Arabic prosody when asked.";
+
+/** Static guide for lyric craft — injected so Coach can review pasted lyrics. */
+export function buildCoachLyricsWritingGuide() {
+  return `
+LYRICS WRITING & REVIEW (authoritative — use when user pastes lyrics or asks about وزن / مقاطع / أوف / maksour):
+
+YOU MAY:
+- Give an honest, kind opinion on their lyrics (mood, hook, clarity, singability).
+- Point out lines that will sound chopped or off-beat when sung (Arabic: الكلام يطلع مَقْسُوم).
+- Teach syllable counting per line; paired lines in a section should match roughly in length.
+- Explain Arabic prosody practically: أوف / rhythm feet = stress pattern per line, not classical exam; عروض = think "beats per line" for pop.
+- Suggest 1–2 line rewrites as examples — don't rewrite the whole song unless they ask.
+
+FIXES FOR MAKSOUR / OFF-SYLLABLE LINES:
+- Too many syllables → drop a word or use a shorter synonym.
+- Uneven couplets → trim the long line or pad the short one to match.
+- Bad word break → move the word to the next line or merge phrases.
+- Chorus hook must repeat with the same syllable count every time.
+
+APP TIE-IN: Advanced → Prosody Tight/Ultra; Tarab preset uses ultra-tight alignment. Harakat on Arabic helps accent land on beat.
+
+Do not paste this block to the user. Reply in their language (Arabic if they write Arabic).
+`.trim();
+}
+
 /**
  * Augment a Coach API payload with frontend-only product knowledge.
  * Chat history stays unchanged; only the outbound API call gets the appendix.
  */
 export function augmentCoachApiPayload({ message, history }) {
-  const guide = buildCoachCreditsProGuide();
+  const creditsGuide = buildCoachCreditsProGuide();
+  const lyricsGuide = buildCoachLyricsWritingGuide();
   const prior = Array.isArray(history) ? history : [];
   const userMessage = String(message || "").trim();
   return {
@@ -112,9 +140,16 @@ export function augmentCoachApiPayload({ message, history }) {
         role: "user",
         text:
           "[AUTHORITATIVE PRODUCT UPDATE — credits & NabadAi Pro pricing. Prefer this over any older guide text that says subscriptions are \"Coming soon\". Do not paste this block verbatim to the user.]\n"
-          + guide,
+          + creditsGuide,
       },
       { role: "assistant", text: COACH_KNOWLEDGE_ACK },
+      {
+        role: "user",
+        text:
+          "[AUTHORITATIVE — lyrics writing & review coach. Use when user pastes lyrics or asks about rhythm, syllables, Arabic prosody (عروض/أوف), or maksour delivery. Do not paste this block verbatim.]\n"
+          + lyricsGuide,
+      },
+      { role: "assistant", text: COACH_LYRICS_ACK },
       ...prior,
     ],
   };

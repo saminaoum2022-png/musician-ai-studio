@@ -187,7 +187,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260712-164958";
+const APP_BUILD = "20260712-171111";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -27980,7 +27980,7 @@ function coachWelcomeMessage() {
   return {
     id: "coach:welcome",
     sender_id: COACH_SENDER_ID,
-    body: "Hey! I'm **NabadAi Coach** 🎵 your guide to making music here.\n\nAsk me anything — writing a song, picking a style, publishing, credits, **NabadAi Pro**, and more.\n\nI can't see your balance or account details, but I can explain costs and where to subscribe. Please don't share passwords. 🎧",
+    body: "Hey! I'm **NabadAi Coach** 🎵 your guide to making music here.\n\nAsk me anything — writing a song, **feedback on your lyrics** (syllables, rhythm, Arabic وزن/أوف), picking a style, publishing, credits, **NabadAi Pro**, and more.\n\nPaste lyrics and ask what works or what sounds maksour when sung. I can't see your balance or account details, but I can explain costs and where to subscribe. Please don't share passwords. 🎧",
     created_at: new Date().toISOString(),
     sendStatus: "delivered",
   };
@@ -28124,7 +28124,7 @@ async function sendCoachMessage(text, input) {
 function coachInboxRowHtml() {
   const chat = loadCoachChat();
   const last = [...chat].reverse().find((m) => String(m.body || "").trim() && m.id !== "coach:welcome");
-  const preview = last ? formatDmInboxPreview(last.body) : "Ask about credits, Pro, or making music";
+  const preview = last ? formatDmInboxPreview(last.body) : "Ask about lyrics, credits, Pro, or making music";
   return `
     <button type="button" class="messagesRow messagesRow--coach" data-messages-thread="${COACH_THREAD_ID}">
       ${coachAvatarHtml("messagesRowAvatar")}

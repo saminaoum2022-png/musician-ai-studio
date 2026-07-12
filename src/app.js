@@ -187,7 +187,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260712-154629";
+const APP_BUILD = "20260712-161407";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -18925,11 +18925,11 @@ async function persistTrackCoverIfNeeded(track) {
       items[idx] = { ...prev, artUrl: imageUrl, meta: nextMeta, ts: Date.now() };
       saveLibrary(items);
       try {
-        patchLibraryRowCoverArt(id, imageUrl);
-        refreshOwnSongsUi({ soft: true });
+        patchLibraryRowCoverArt(id);
+        refreshOwnSongsUi({ soft: false });
       } catch {
         try {
-          refreshOwnSongsUi();
+          refreshOwnSongsUi({ soft: false });
         } catch {}
       }
       try {
@@ -45265,14 +45265,23 @@ function assignCoverImageSrc(img, url, opts = {}) {
   applySrc(fallback);
 }
 
-function patchLibraryRowCoverArt(trackId, artUrl) {
+function patchLibraryRowCoverArt(trackId) {
   const id = String(trackId || "").trim();
-  const src = String(artUrl || "").trim();
-  if (!id || !src) return;
-  const row = document.querySelector(`.libRow[data-lib-row="${CSS.escape(id)}"]`);
-  const img = row?.querySelector(".libRowArt img");
-  if (!img) return;
-  assignCoverImageSrc(img, src);
+  if (!id) return;
+  const track = loadLibrary().find((x) => String(x.id) === id);
+  if (!track) return;
+  let src = trackCoverArtForSquareTile(track, { width: 256 });
+  if (!src || isDefaultSongCoverUrl(src) || isLogoCoverUrl(src)) return;
+  src = coverImageRetryUrl(src, 0) || src;
+  document
+    .querySelectorAll(
+      `.libRow[data-lib-row="${CSS.escape(id)}"], .libRow[data-profile-lib-row="${CSS.escape(id)}"]`,
+    )
+    .forEach((row) => {
+      const img = row.querySelector(".libRowArt img");
+      if (!img) return;
+      assignCoverImageSrc(img, src, { immediate: true, updateClasses: true });
+    });
 }
 
 function applyBrokenCoverPlaceholder(img) {
@@ -45779,6 +45788,10 @@ async function regeneratePlayerCover(artworkHint = "", trackId = "") {
       if (revealed) {
         flashPlayerCover();
         setStatus("");
+        try {
+          patchLibraryRowCoverArt(updated.id);
+          refreshOwnSongsUi({ soft: false });
+        } catch {}
       } else {
         setStatus("Cover regeneration failed.");
       }
@@ -45965,9 +45978,7 @@ function openCoverRegenSheet(track) {
   if (!track?.id || libraryTrackIsPublished(track) || !playerCanRegenerateCover(track)) return;
   mountFixedOverlaysToBody();
   _coverRegenTrackId = String(track.id);
-  const meta = track?.meta && typeof track.meta === "object" ? track.meta : {};
-  const pref = String(meta.artworkHint || meta.artworkStyle || "").trim();
-  if (els.coverRegenArtworkInput) els.coverRegenArtworkInput.value = pref;
+  if (els.coverRegenArtworkInput) els.coverRegenArtworkInput.value = "";
   if (els.coverRegenPreviewArt) {
     const artUrl = trackCoverArtForDisplay(track);
     if (artUrl) {

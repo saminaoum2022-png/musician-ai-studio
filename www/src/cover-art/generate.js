@@ -114,9 +114,11 @@ async function resolveRegenPromptBundle(params, regenOpts = {}) {
       };
   const built = buildAbstractCoverPrompt(promptInput, {
     regenSalt,
-    directorSceneHint: regenAutoMusic ? "" : (vd.sceneHint || ""),
-    nabadIdentityPhrases: vd.identityPhrases || "",
-    visualDirection: regenAutoMusic ? undefined : (vd.direction || undefined),
+    directorSceneHint: hintOverride || regenAutoMusic ? "" : (vd.sceneHint || ""),
+    nabadIdentityPhrases: hintOverride
+      ? "premium cinematic editorial still photography, generous negative space"
+      : (vd.identityPhrases || ""),
+    visualDirection: hintOverride || regenAutoMusic ? undefined : (vd.direction || undefined),
     userArtworkOverride: hintOverride || undefined,
     forceMusicFallback: regenAutoMusic,
   });
@@ -237,8 +239,10 @@ function patchLibraryTrackCover(trackId, patch) {
     coverGenAttempted = false,
     clearCoverPending = false,
   } = patch;
+  const prevMeta = prev.meta && typeof prev.meta === "object" ? prev.meta : {};
+  const { thumbFrame: _dropThumbFrame, ...metaWithoutThumbFrame } = prevMeta;
   const nextMeta = {
-    ...(prev.meta || {}),
+    ...metaWithoutThumbFrame,
     imageUrl: dataUrl,
     imageThumb: thumbUrl || dataUrl,
     nabadAbstractCover,
@@ -262,8 +266,8 @@ function patchLibraryTrackCover(trackId, patch) {
   items[idx] = next;
   saveLibrary(items);
   try {
-    patchLibraryRowCoverArt?.(tid, dataUrl);
-    refreshOwnSongsUi?.({ soft: true });
+    patchLibraryRowCoverArt?.(tid);
+    refreshOwnSongsUi?.({ soft: false });
   } catch {
     try {
       refreshOwnSongsUi?.();

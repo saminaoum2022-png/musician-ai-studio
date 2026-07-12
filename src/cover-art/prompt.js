@@ -4,7 +4,7 @@
  */
 
 /** Bump when cover prompt policy changes — busts Gemini scene cache on the server. */
-export const COVER_PROMPT_POLICY_VERSION = 5;
+export const COVER_PROMPT_POLICY_VERSION = 6;
 /** Pollinations flux reliably returns ~768×768 square — request square, crop to 9:16 (avoids vertical stretch). */
 export const POLLINATIONS_COVER_WIDTH = 1024;
 export const POLLINATIONS_COVER_HEIGHT = 1024;
@@ -244,7 +244,7 @@ const OBJECT_COMPOSITIONS = [
 ];
 
 const CONCRETE_OBJECT_RE =
-  /\b(balloon|balloons|cake|cupcake|house|home|heart|hearts|ring|rings|flower|flowers|rose|roses|candle|candles|gift|gifts|present|presents|star|stars|moon|sun|tree|car|clock|book|key|keys|cup|glass|wine|champagne|confetti|diamond|gem|jewel|umbrella|door|window|chair|table|lamp|lantern|snowflake|snowman|pumpkin|cross|anchor|boat|plane|bicycle|bike|camera|phone|shell|feather|butterfly|bear|teddy|toy|box|treasure|coin|medal|trophy|graduation|mortarboard|diploma|wedding|bouquet|chandelier|microphone|guitar|piano|violin|drum|instrument|cookie|cookies|donut|doughnut|ice cream|pizza|fruit|apple|orange|lemon|cherry|cherries|pearl|pearl necklace|necklace|bracelet|watch|shoe|shoes|hat|scarf|envelope|letter|envelope|flag|firework|fireworks|sparkler|sparklers|velvet|satin|ribbon|ribbons|bow|bows)\b/i;
+  /\b(balloon|balloons|cake|cupcake|house|home|heart|hearts|ring|rings|flower|flowers|rose|roses|candle|candles|gift|gifts|present|presents|moon|sun|tree|car|clock|book|key|keys|cup|glass|wine|champagne|confetti|diamond|gem|jewel|umbrella|door|window|chair|table|lamp|lantern|snowflake|snowman|pumpkin|cross|anchor|boat|plane|bicycle|bike|camera|phone|shell|feather|butterfly|bear|teddy|toy|box|treasure|coin|medal|trophy|graduation|mortarboard|diploma|wedding|bouquet|chandelier|microphone|guitar|piano|violin|drum|instrument|cookie|cookies|donut|doughnut|ice cream|pizza|fruit|apple|orange|lemon|cherry|cherries|pearl|pearl necklace|necklace|bracelet|watch|shoe|shoes|hat|scarf|envelope|letter|envelope|flag|firework|fireworks|sparkler|sparklers|velvet|satin|ribbon|ribbons|bow|bows)\b/i;
 
 function clamp(n, lo, hi) {
   return Math.min(hi, Math.max(lo, n));
@@ -376,10 +376,16 @@ export function compositionPhraseForCover(songId, artworkText = "", visualMode =
 function enrichUserArtworkHint(raw) {
   let s = String(raw || "").trim();
   if (!s) return s;
-  if (/\bstar\s*sky\b/i.test(s)) {
-    s = s.replace(/\bstar\s*sky\b/gi, "night sky filled with stars and soft cosmic glow");
-  } else if (/\bstarry\b/i.test(s) && !/night sky/i.test(s)) {
-    s = `${s}, night sky filled with stars`;
+  const hasObjectSubject = isConcreteObjectArtworkHint(s);
+  if (!hasObjectSubject) {
+    if (/\bstar\s*sky\b/i.test(s)) {
+      s = s.replace(/\bstar\s*sky\b/gi, "night sky filled with stars and soft cosmic glow");
+    } else if (/\bstarry\b/i.test(s) && !/night sky/i.test(s)) {
+      s = `${s}, night sky filled with stars`;
+    }
+  }
+  if (/\bhearts?\b/i.test(s) && !/heart-shaped|heart shape|still life/i.test(s)) {
+    s = `${s}, decorative heart-shaped prop as the clear focal subject`;
   }
   if (/\b(dog|puppy|cat|pet)\b/i.test(s) && !/still life|leash|bowl|collar|paw print/i.test(s)) {
     s = `${s}, cozy pet leash and water bowl still life, warm soft light, no animals, no people`;
@@ -387,18 +393,18 @@ function enrichUserArtworkHint(raw) {
   if (/\b(microphone|mic|podcast|equalizer|waveform|sound wave|audio)\b/i.test(s) && !/music|studio/i.test(s)) {
     s = `${s}, premium music studio atmosphere`;
   }
-  if (isConcreteObjectArtworkHint(s) && !/medium.?sized|modest scale|pulled back|negative space|30%|one-third|not close-up|not oversized/i.test(s)) {
+  if (hasObjectSubject && !/medium.?sized|modest scale|pulled back|negative space|30%|one-third|not close-up|not oversized|focal subject/i.test(s)) {
     s = `${s}, medium-sized still life props with generous negative space, not close-up, not oversized`;
   }
   return s.replace(/\s+/g, " ").trim().slice(0, 280);
 }
 
 function composeFrameForArtwork(userArtwork) {
-  if (isSkyOrSpaceHint(userArtwork) || /landscape|ocean|mountain|city|skyline|environment|horizon/i.test(userArtwork)) {
-    return "vertical cinematic album art, wide atmospheric environment, immersive landscape depth, no people";
-  }
   if (isConcreteObjectArtworkHint(userArtwork)) {
     return OBJECT_COMPOSE_FRAME;
+  }
+  if (isSkyOrSpaceHint(userArtwork) || /landscape|ocean|mountain|city|skyline|environment|horizon/i.test(userArtwork)) {
+    return "vertical cinematic album art, wide atmospheric environment, immersive landscape depth, no people";
   }
   return MUSIC_COVER_FRAME;
 }

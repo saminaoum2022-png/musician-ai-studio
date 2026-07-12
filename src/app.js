@@ -187,7 +187,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260712-150647";
+const APP_BUILD = "20260712-151422";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -23619,6 +23619,73 @@ function libraryTrackPublicTs(track) {
   return Number(track?.ts || 0);
 }
 
+function isPublishReleaseSheetOpen() {
+  const sheet = document.getElementById("publishReleaseSheet");
+  return Boolean(sheet && !sheet.hidden && sheet.classList.contains("isOpen"));
+}
+
+function applyPublishReleaseKeyboardInset(rawInset) {
+  const inset = Math.max(0, Math.round(Number(rawInset) || 0));
+  const sheet = document.getElementById("publishReleaseSheet");
+  if (sheet) sheet.style.setProperty("--publish-release-keyboard-inset", `${inset}px`);
+  document.body.classList.toggle("publishReleaseKeyboardOpen", isPublishReleaseSheetOpen() && inset > 0);
+}
+
+function syncPublishReleaseSheetKeyboardInset() {
+  if (!isPublishReleaseSheetOpen()) {
+    applyPublishReleaseKeyboardInset(0);
+    return;
+  }
+  if (getNativeKeyboardPlugin()) return;
+  const vv = window.visualViewport;
+  if (!vv) {
+    applyPublishReleaseKeyboardInset(0);
+    return;
+  }
+  const inset = Math.max(0, Math.round(window.innerHeight - vv.height - (vv.offsetTop || 0)));
+  applyPublishReleaseKeyboardInset(inset);
+}
+
+function schedulePublishReleaseKeyboardInsetSync() {
+  syncPublishReleaseSheetKeyboardInset();
+  window.setTimeout(syncPublishReleaseSheetKeyboardInset, 60);
+  window.setTimeout(syncPublishReleaseSheetKeyboardInset, 180);
+  window.setTimeout(() => {
+    syncPublishReleaseSheetKeyboardInset();
+    scrollPublishReleaseCaptionIntoView();
+  }, 360);
+}
+
+function scrollPublishReleaseCaptionIntoView() {
+  const input = document.getElementById("publishReleaseCaption");
+  if (!input || document.activeElement !== input) return;
+  try {
+    input.scrollIntoView({ block: "center", inline: "nearest", behavior: "smooth" });
+  } catch {
+    try { input.scrollIntoView(true); } catch {}
+  }
+}
+
+function bindPublishReleaseKeyboardInput(input) {
+  if (!input || input.dataset.publishReleaseKbInput === "1") return;
+  input.dataset.publishReleaseKbInput = "1";
+  input.addEventListener("focus", () => schedulePublishReleaseKeyboardInsetSync());
+  input.addEventListener("blur", () => {
+    window.setTimeout(() => {
+      const active = document.activeElement;
+      if (!isPublishReleaseSheetOpen() || active !== input) applyPublishReleaseKeyboardInset(0);
+    }, 80);
+  });
+}
+
+function dismissPublishReleaseKeyboard() {
+  const Keyboard = getNativeKeyboardPlugin();
+  if (Keyboard?.hide) {
+    try { Keyboard.hide(); } catch {}
+  }
+  applyPublishReleaseKeyboardInset(0);
+}
+
 function ensurePublishReleaseSheet() {
   let sheet = document.getElementById("publishReleaseSheet");
   if (sheet) return sheet;
@@ -23665,6 +23732,8 @@ function ensurePublishReleaseSheet() {
   sheet.querySelector("#publishReleaseCaption")?.addEventListener("input", (e) => {
     applyUserTextInputDir(e.currentTarget);
   });
+  bindPublishReleaseKeyboardInput(sheet.querySelector("#publishReleaseCaption"));
+  wireBottomSheetKeyboardOnce();
   const confirm = sheet.querySelector("#publishReleaseConfirm");
   if (confirm) {
     confirm.addEventListener("click", () => {
@@ -23683,6 +23752,7 @@ function ensurePublishReleaseSheet() {
 function closePublishReleaseSheet() {
   const sheet = document.getElementById("publishReleaseSheet");
   if (!sheet) return;
+  dismissPublishReleaseKeyboard();
   sheet.classList.remove("isOpen");
   setTimeout(() => {
     if (!sheet.classList.contains("isOpen")) sheet.hidden = true;
@@ -23722,8 +23792,10 @@ function openPublishReleaseSheet(trackId, opts = {}) {
   if (caption) {
     caption.value = String(track?.meta?.releaseCaption || "").trim();
     applyUserTextInputDir(caption);
-    caption.focus?.();
   }
+  wireBottomSheetKeyboardOnce();
+  bindPublishReleaseKeyboardInput(caption);
+  applyPublishReleaseKeyboardInset(0);
   const remixToggle = sheet.querySelector("#publishAllowRemix");
   const mashupToggle = sheet.querySelector("#publishAllowMashup");
   if (remixToggle) remixToggle.checked = trackAllowsRemix(track);
@@ -45733,13 +45805,14 @@ function scrollCoverRegenInputIntoView() {
   }
 }
 
-function wireCoverRegenSheetKeyboardOnce() {
-  if (document.documentElement.dataset.coverRegenKbWired) return;
-  document.documentElement.dataset.coverRegenKbWired = "1";
+function wireBottomSheetKeyboardOnce() {
+  if (document.documentElement.dataset.bottomSheetKbWired) return;
+  document.documentElement.dataset.bottomSheetKbWired = "1";
 
   const vv = window.visualViewport;
   const onViewportChange = () => {
     if (isCoverRegenSheetOpen()) syncCoverRegenSheetKeyboardInset();
+    if (isPublishReleaseSheetOpen()) syncPublishReleaseSheetKeyboardInset();
   };
   if (vv) {
     vv.addEventListener("resize", onViewportChange);
@@ -45749,18 +45822,29 @@ function wireCoverRegenSheetKeyboardOnce() {
   const Keyboard = getNativeKeyboardPlugin();
   if (!Keyboard?.addListener) return;
   Keyboard.addListener("keyboardWillShow", (info) => {
-    if (!isCoverRegenSheetOpen()) return;
-    applyCoverRegenKeyboardInset(info?.keyboardHeight);
+    const h = info?.keyboardHeight;
+    if (isCoverRegenSheetOpen()) applyCoverRegenKeyboardInset(h);
+    if (isPublishReleaseSheetOpen()) applyPublishReleaseKeyboardInset(h);
   });
   Keyboard.addListener("keyboardDidShow", (info) => {
-    if (!isCoverRegenSheetOpen()) return;
-    applyCoverRegenKeyboardInset(info?.keyboardHeight);
-    scrollCoverRegenInputIntoView();
+    const h = info?.keyboardHeight;
+    if (isCoverRegenSheetOpen()) {
+      applyCoverRegenKeyboardInset(h);
+      scrollCoverRegenInputIntoView();
+    }
+    if (isPublishReleaseSheetOpen()) {
+      applyPublishReleaseKeyboardInset(h);
+      scrollPublishReleaseCaptionIntoView();
+    }
   });
   Keyboard.addListener("keyboardWillHide", () => {
-    if (!isCoverRegenSheetOpen()) return;
-    applyCoverRegenKeyboardInset(0);
+    if (isCoverRegenSheetOpen()) applyCoverRegenKeyboardInset(0);
+    if (isPublishReleaseSheetOpen()) applyPublishReleaseKeyboardInset(0);
   });
+}
+
+function wireCoverRegenSheetKeyboardOnce() {
+  wireBottomSheetKeyboardOnce();
 }
 
 function bindCoverRegenKeyboardInput(input) {

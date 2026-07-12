@@ -4,7 +4,7 @@
  */
 
 /** Bump when cover prompt policy changes — busts Gemini scene cache on the server. */
-export const COVER_PROMPT_POLICY_VERSION = 2;
+export const COVER_PROMPT_POLICY_VERSION = 4;
 /** Pollinations flux reliably returns ~768×768 square — request square, crop to 9:16 (avoids vertical stretch). */
 export const POLLINATIONS_COVER_WIDTH = 1024;
 export const POLLINATIONS_COVER_HEIGHT = 1024;
@@ -12,6 +12,22 @@ export const POLLINATIONS_COVER_HEIGHT = 1024;
 /** Square canvas keeps object proportions natural; we vertical-crop to 9:16 for the reel. */
 const STILL_LIFE_COMPOSE_FRAME =
   "square still life album art composition, single hero object centered in the middle third, natural object proportions, no vertical stretch, no elongated props, no people";
+
+/** Music-leaning frame — avoids plain square blocks when the theme is vague or user-directed. */
+const MUSIC_COVER_FRAME =
+  "vertical cinematic album art, full-frame immersive environment, atmospheric depth, premium music artwork aesthetic, natural proportions, no vertical stretch, no plain solid blocks, no people";
+
+const MONOCHROME_PALETTE =
+  "high contrast black and white monochrome photography, silver grey tones, dramatic shadows, no color tint";
+
+const MUSIC_FALLBACK_SCENES = [
+  "abstract audio waveform and sound aura in deep teal and violet, luminous morphing energy, premium music artwork, no people",
+  "glowing equalizer bars and soft sonic ripples in teal-violet gradient, cinematic music visualization, no people",
+  "premium podcast studio microphone on moody desk with teal-violet bokeh lights, atmospheric music cover, no people",
+  "floating sound waves and aurora glow in nabad teal and violet colors, abstract music atmosphere, no people",
+  "vintage condenser microphone silhouette against soft gradient aura, cinematic music studio mood, no people",
+  "rhythmic light pulses and audio spectrum bloom in deep void, elegant music-inspired abstract art, no people",
+];
 
 /** Appended to every cover prompt — Flux cannot render humans reliably. */
 const NO_HUMANS_GUARD =
@@ -41,10 +57,10 @@ const NO_TEXT_REINFORCE =
   "completely wordless photograph, zero readable characters in the entire frame, blank signs, empty screens, no labels";
 
 const NEGATIVE_TEXT_PROMPT =
-  "text, words, letters, numbers, typography, font, writing, caption, subtitle, watermark, logo, album cover title, song title, track title, artist name, band name, signage, billboard, poster text, newspaper, book, magazine, speech bubble, label, stamp, signature, handwritten, calligraphy, cursive, script font, decorative lettering, word art, letter shapes, holiday lettering, christmas text, greeting card text, festive banner, neon sign with words, arabic text, english text, quotes, meme text, ui overlay, readable characters, sentences, lyrics on screen, cd cover text, record label, tracklist, credits block, diploma text, certificate text, graffiti letters, title card, greeting card, banner text, embroidered text, carved letters, glowing words, light text, 3d text, people, person, human, humans, humanoid, man, woman, child, baby, crowd, dancer, performer, musician, face, faces, portrait, portraits, silhouette, silhouettes, body, bodies, hand, hands, finger, fingers, arm, arms, leg, legs, head, heads, eye, eyes, mouth, mouths, teeth, nose, ear, skin, anatomy, bad anatomy, deformed anatomy, extra fingers, missing fingers, six fingers, duplicate limbs, floating limbs, mutated hands, broken hands, multiple mouths, crossed eyes, lazy eye, crooked eyes, disfigured face, cropped face, duplicate subject, floating objects, blurry, low quality, jpeg artifacts, oversaturated, distorted perspective, elongated face, stretched portrait, vertically stretched body, squashed proportions, wrong aspect ratio, fisheye portrait, close-up portrait, beauty portrait, fashion portrait, headshot, detailed facial features, recognizable face, portrait photography, full body portrait, tall thin figure, unnaturally long neck, stretched silhouette, selfie, model, fashion model, vertically stretched object, elongated object, stretched props, unnaturally tall object";
+  "plain solid square block, flat color rectangle, empty geometric block, meaningless placeholder shape, solid teal square, featureless box, blank panel, low detail abstract block, text, words, letters, numbers, typography, font, writing, caption, subtitle, watermark, logo, album cover title, song title, track title, artist name, band name, signage, billboard, poster text, newspaper, book, magazine, speech bubble, label, stamp, signature, handwritten, calligraphy, cursive, script font, decorative lettering, word art, letter shapes, holiday lettering, christmas text, greeting card text, festive banner, neon sign with words, arabic text, english text, quotes, meme text, ui overlay, readable characters, sentences, lyrics on screen, cd cover text, record label, tracklist, credits block, diploma text, certificate text, graffiti letters, title card, greeting card, banner text, embroidered text, carved letters, glowing words, light text, 3d text, people, person, human, humans, humanoid, man, woman, child, baby, crowd, dancer, performer, musician, face, faces, portrait, portraits, silhouette, silhouettes, body, bodies, hand, hands, finger, fingers, arm, arms, leg, legs, head, heads, eye, eyes, mouth, mouths, teeth, nose, ear, skin, anatomy, bad anatomy, deformed anatomy, extra fingers, missing fingers, six fingers, duplicate limbs, floating limbs, mutated hands, broken hands, multiple mouths, crossed eyes, lazy eye, crooked eyes, disfigured face, cropped face, duplicate subject, floating objects, blurry, low quality, jpeg artifacts, oversaturated, distorted perspective, elongated face, stretched portrait, vertically stretched body, squashed proportions, wrong aspect ratio, fisheye portrait, close-up portrait, beauty portrait, fashion portrait, headshot, detailed facial features, recognizable face, portrait photography, full body portrait, tall thin figure, unnaturally long neck, stretched silhouette, selfie, model, fashion model, vertically stretched object, elongated object, stretched props, unnaturally tall object";
 
 const STYLE_CORE =
-  "premium cinematic visual art, elegant composition, rich color grading, high-end editorial look, moody dark tones with luminous accents, deep teal and violet palette when appropriate, physically plausible lighting, clean geometry, single focal object, balanced vertical composition, professional still life photography, minimal visual noise, high image coherence, clean perspective, symbolic objects only, no human subjects";
+  "premium cinematic visual art, elegant composition, rich color grading, high-end editorial look, moody dark tones with luminous accents, deep teal and violet palette when appropriate, physically plausible lighting, atmospheric depth, immersive environment, balanced vertical composition, professional music-inspired photography, minimal visual noise, high image coherence, clean perspective, symbolic objects only, no human subjects";
 
 const HUM_TRACK_STYLE_CORE =
   "premium cinematic visual art, elegant composition, rich color grading, moody dark tones with luminous accents, deep teal and violet palette, photoreal studio nook still life, props only, warm wood surfaces, window sunlight with long shadows, dried botanical accents, balanced composition, professional studio photography, minimal visual noise, high image coherence, clean perspective, no instruments visible, no human subjects";
@@ -206,12 +222,7 @@ const STORY_THEMES = [
   },
 ];
 
-const ABSTRACT_FALLBACKS = [
-  "premium abstract living light gradients, glass diffusion, cinematic bloom, no people",
-  "atmospheric color field with soft aurora glow and elegant negative space, no figures",
-  "luxury abstract light sculpture mood, teal and violet luminous accents, no human subjects",
-  "symbolic object still life with soft bokeh and premium negative space, no people",
-];
+const ABSTRACT_FALLBACKS = MUSIC_FALLBACK_SCENES;
 
 const COMPOSITIONS = [
   "centered single focal subject with strong negative space",
@@ -328,12 +339,61 @@ function pickFrom(list, seedKey, salt) {
   return list[fnv1a(`${seedKey}:${salt}`) % list.length];
 }
 
+function isMonochromeArtworkHint(text) {
+  return /\b(black\s*(and|&)\s*white|b&w|monochrome|grayscale|greyscale)\b/i.test(String(text || ""));
+}
+
+function isSkyOrSpaceHint(text) {
+  return /\b(star|stars|starry|night sky|galaxy|cosmos|space|nebula|milky way|aurora|constellation)\b/i.test(String(text || ""));
+}
+
+function enrichUserArtworkHint(raw) {
+  let s = String(raw || "").trim();
+  if (!s) return s;
+  if (/\bstar\s*sky\b/i.test(s)) {
+    s = s.replace(/\bstar\s*sky\b/gi, "night sky filled with stars and soft cosmic glow");
+  } else if (/\bstarry\b/i.test(s) && !/night sky/i.test(s)) {
+    s = `${s}, night sky filled with stars`;
+  }
+  if (/\b(dog|puppy|cat|pet)\b/i.test(s) && !/still life|leash|bowl|collar|paw print/i.test(s)) {
+    s = `${s}, cozy pet leash and water bowl still life, warm soft light, no animals, no people`;
+  }
+  if (/\b(microphone|mic|podcast|equalizer|waveform|sound wave|audio)\b/i.test(s) && !/music|studio/i.test(s)) {
+    s = `${s}, premium music studio atmosphere`;
+  }
+  return s.replace(/\s+/g, " ").trim().slice(0, 280);
+}
+
+function composeFrameForArtwork(userArtwork) {
+  if (isSkyOrSpaceHint(userArtwork) || /landscape|ocean|mountain|city|skyline|environment|horizon/i.test(userArtwork)) {
+    return "vertical cinematic album art, wide atmospheric environment, immersive landscape depth, no people";
+  }
+  return MUSIC_COVER_FRAME;
+}
+
+function paletteForUserArtwork(userArtwork, bucketKey) {
+  if (isMonochromeArtworkHint(userArtwork)) return MONOCHROME_PALETTE;
+  if (isSkyOrSpaceHint(userArtwork)) {
+    return "deep midnight blue, soft starlight silver, subtle violet atmospheric haze";
+  }
+  return moodPaletteForBucket(bucketKey);
+}
+
+function prepareDirectUserArtworkHint(raw) {
+  let s = toVisualOnlyPrompt(String(raw || "").trim(), { title: "" });
+  s = enrichUserArtworkHint(s);
+  s = enforceNoHumansScene(s);
+  return s.replace(/\s+/g, " ").trim().slice(0, 280);
+}
+
+export { prepareDirectUserArtworkHint };
+
 function moodBucketFallback(bucketKey, energy) {
   const palette = MOOD_PALETTES[bucketKey] || MOOD_PALETTES.default;
   if (bucketKey === "party" || bucketKey === "hype") {
     return {
-      scene: "festive still life, colorful light bokeh and confetti accents, no people",
-      visualMode: "still_life",
+      scene: pickFrom(MUSIC_FALLBACK_SCENES, bucketKey, "party-music"),
+      visualMode: "abstract",
       palette,
     };
   }
@@ -360,7 +420,7 @@ function moodBucketFallback(bucketKey, energy) {
   }
   if (energy > 0.7) {
     return {
-      scene: "dynamic celebratory light atmosphere, abstract motion and sparkle, no human subjects",
+      scene: pickFrom(MUSIC_FALLBACK_SCENES, bucketKey, "energy-music"),
       visualMode: "abstract",
       palette,
     };
@@ -586,7 +646,7 @@ export function enforceNoHumansScene(scene) {
 
 /**
  * @param {object} input
- * @param {{ sceneOverride?: string, artworkSourceOverride?: string, geminiModel?: string, directorSceneHint?: string, nabadIdentityPhrases?: string, visualDirection?: object, regenSalt?: string }} [options]
+ * @param {{ sceneOverride?: string, artworkSourceOverride?: string, geminiModel?: string, directorSceneHint?: string, nabadIdentityPhrases?: string, visualDirection?: object, regenSalt?: string, userArtworkOverride?: string, forceMusicFallback?: boolean }} [options]
  * @returns {{ prompt: string, seed: number, bucket: string, visualMode: string, storyTheme: string, artworkSource: string, params: object }}
  */
 export function buildAbstractCoverPrompt(input, options = {}) {
@@ -599,8 +659,12 @@ export function buildAbstractCoverPrompt(input, options = {}) {
   const energy = parseEnergy(input?.energy);
   const brightness = parseBrightness(input?.brightness);
   const sonicProfile = String(input?.sonicProfile || inferSonicProfile(`${genre} ${styleBlob}`));
-  const userArtworkRaw = resolveUserArtworkPrompt(input);
-  let userArtwork = sanitizeArtworkPrompt(userArtworkRaw, { title });
+  const userArtworkOverride = String(options.userArtworkOverride || "").trim().slice(0, 280);
+  const forceMusicFallback = Boolean(options.forceMusicFallback && !userArtworkOverride);
+  const userArtworkRaw = userArtworkOverride || (forceMusicFallback ? "" : resolveUserArtworkPrompt(input));
+  let userArtwork = userArtworkOverride
+    ? prepareDirectUserArtworkHint(userArtworkRaw)
+    : sanitizeArtworkPrompt(enrichUserArtworkHint(userArtworkRaw), { title });
   const sceneOverrideRaw = sanitizeArtworkPrompt(String(options.sceneOverride || "").trim(), { title });
   let sceneOverride = sceneOverrideRaw && userArtwork
     ? sanitizeArtworkPrompt(`${userArtwork}, ${sceneOverrideRaw}`, { title })
@@ -612,20 +676,26 @@ export function buildAbstractCoverPrompt(input, options = {}) {
   );
   const nabadIdentityPhrases = sanitizeArtworkPrompt(String(options.nabadIdentityPhrases || "").trim(), { title });
   const storyScene = toVisualOnlyPrompt(scene, { title });
-  let visualScene = !sceneOverride && !userArtwork && directorSceneHint ? directorSceneHint : storyScene;
+  let visualScene = forceMusicFallback
+    ? pickFrom(MUSIC_FALLBACK_SCENES, songId, String(options.regenSalt || "regen-auto"))
+    : !sceneOverride && !userArtwork && directorSceneHint
+      ? directorSceneHint
+      : storyScene;
   sceneOverride = sceneOverride ? enforceNoHumansScene(sceneOverride) : "";
   visualScene = enforceNoHumansScene(visualScene);
   userArtwork = userArtwork ? enforceNoHumansScene(userArtwork) : "";
   const palette = moodPaletteForBucket(bucketKey);
   const composition = COMPOSITIONS[fnv1a(`${songId}:composition`) % COMPOSITIONS.length];
   const seed = buildCoverSeed(input, storyTheme, bucketKey, userArtwork, String(options.regenSalt || "").trim());
-  const artworkSource = sceneOverride
-    ? String(options.artworkSourceOverride || "gemini_scene")
-    : userArtwork
-      ? "user_artwork"
-      : directorSceneHint
-        ? "visual_director"
-        : "auto_story";
+  const artworkSource = forceMusicFallback
+    ? "regen_music_auto"
+    : sceneOverride
+      ? String(options.artworkSourceOverride || "gemini_scene")
+      : userArtwork
+        ? "user_artwork"
+        : directorSceneHint
+          ? "visual_director"
+          : "auto_story";
 
   const isHumTrack = Boolean(input?.humTrack);
   const styleCore = isHumTrack ? HUM_TRACK_STYLE_CORE : STYLE_CORE;
@@ -637,10 +707,10 @@ export function buildAbstractCoverPrompt(input, options = {}) {
     parts = userArtwork
       ? [
           NO_TEXT_LEAD,
-          STILL_LIFE_COMPOSE_FRAME,
+          composeFrameForArtwork(userArtwork),
           sceneOverride,
           nabadIdentityPhrases,
-          palette,
+          paletteForUserArtwork(userArtwork, bucketKey),
           NO_TEXT_REINFORCE,
           SAFETY_PREFIX + USER_STYLE_CORE,
           composition,
@@ -650,7 +720,7 @@ export function buildAbstractCoverPrompt(input, options = {}) {
         ]
       : [
           NO_TEXT_LEAD,
-          STILL_LIFE_COMPOSE_FRAME,
+          MUSIC_COVER_FRAME,
           SAFETY_PREFIX + styleCore,
           sceneOverride,
           nabadIdentityPhrases,
@@ -667,12 +737,14 @@ export function buildAbstractCoverPrompt(input, options = {}) {
           safetySuffix,
         ];
   } else if (userArtwork) {
+    const userPalette = paletteForUserArtwork(userArtwork, bucketKey);
     parts = [
       NO_TEXT_LEAD,
-      STILL_LIFE_COMPOSE_FRAME,
+      composeFrameForArtwork(userArtwork),
       userArtwork,
       nabadIdentityPhrases,
-      palette,
+      userPalette,
+      sonicPhrase(sonicProfile),
       NO_TEXT_REINFORCE,
       SAFETY_PREFIX + USER_STYLE_CORE,
       composition,
@@ -683,17 +755,18 @@ export function buildAbstractCoverPrompt(input, options = {}) {
   } else {
     parts = [
       NO_TEXT_LEAD,
-      STILL_LIFE_COMPOSE_FRAME,
+      MUSIC_COVER_FRAME,
+      NO_HUMANS_GUARD,
       SAFETY_PREFIX + styleCore,
       visualScene,
       nabadIdentityPhrases,
       humGuard,
+      sonicPhrase(sonicProfile),
+      palette,
       composition,
-      storyMoodPhrase(storyTheme),
-      bucketMoodPhrase(bucketKey),
+      ...(forceMusicFallback ? [] : [storyMoodPhrase(storyTheme), bucketMoodPhrase(bucketKey)]),
       tempoPhrase(tempo),
       brightnessPhrase(brightness),
-      sonicPhrase(sonicProfile),
       NO_TEXT_REINFORCE,
       NO_HUMANS_GUARD,
       safetySuffix,

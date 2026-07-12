@@ -187,7 +187,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260712-141808";
+const APP_BUILD = "20260712-145612";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -889,6 +889,14 @@ const els = {
   thumbEditPreviewCanvas: document.getElementById("thumbEditPreviewCanvas"),
   thumbEditZoom: document.getElementById("thumbEditZoom"),
   thumbEditOffset: document.getElementById("thumbEditOffset"),
+  coverRegenSheet: document.getElementById("coverRegenSheet"),
+  coverRegenBackdrop: document.getElementById("coverRegenBackdrop"),
+  btnCoverRegenClose: document.getElementById("btnCoverRegenClose"),
+  btnCoverRegenGo: document.getElementById("btnCoverRegenGo"),
+  btnCoverRegenSuggest: document.getElementById("btnCoverRegenSuggest"),
+  coverRegenArtworkInput: document.getElementById("coverRegenArtworkInput"),
+  coverRegenSuggestRow: document.getElementById("coverRegenSuggestRow"),
+  coverRegenPreviewArt: document.getElementById("coverRegenPreviewArt"),
   playerConfirm: document.getElementById("playerConfirm"),
   playerConfirmThumb: document.getElementById("playerConfirmThumb"),
   playerConfirmText: document.getElementById("playerConfirmText"),
@@ -45650,19 +45658,15 @@ function setPlayerCoverGenerating(active) {
   }
 }
 
-async function regeneratePlayerCover() {
-  const track = resolvePlayerLibraryTrack();
+async function regeneratePlayerCover(artworkHint = "", trackId = "") {
+  const track = trackId
+    ? loadLibrary().find((x) => String(x.id) === String(trackId))
+    : resolvePlayerLibraryTrack();
   if (!track?.id || libraryTrackIsPublished(track) || !playerCanRegenerateCover(track)) return;
-  const ok = await playerInlineConfirm({
-    text: "Generate a new AI cover? Your full portrait cover and reel view will update. You can re-edit the square thumbnail afterward.",
-    confirmLabel: "Regenerate",
-    cancelLabel: "Cancel",
-    thumbUrl: trackCoverArtForDisplay(track),
-  });
-  if (!ok) return;
+  const hint = String(artworkHint || "").trim().slice(0, 280);
   setPlayerCoverGenerating(true);
   try {
-    const updated = await regenerateAbstractCoverForTrack(track);
+    const updated = await regenerateAbstractCoverForTrack(track, hint ? { artworkHint: hint } : {});
     if (updated) {
       currentPlayerTrackRef = updated;
       const artUrl = trackCoverArtForDisplay(updated);
@@ -45678,6 +45682,100 @@ async function regeneratePlayerCover() {
     setPlayerCoverGenerating(false);
     syncPlayerCoverToolsRail();
   }
+}
+
+let _coverRegenTrackId = "";
+
+function closeCoverRegenSheet() {
+  if (els.coverRegenSheet) els.coverRegenSheet.hidden = true;
+  _coverRegenTrackId = "";
+  if (els.btnCoverRegenGo) els.btnCoverRegenGo.disabled = false;
+}
+
+function coverRegenArtworkTagsFromInput() {
+  return String(els.coverRegenArtworkInput?.value || "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
+function writeCoverRegenArtworkTags(list) {
+  if (els.coverRegenArtworkInput) els.coverRegenArtworkInput.value = list.join(", ");
+  renderCoverRegenSuggestions();
+}
+
+function renderCoverRegenSuggestions() {
+  const row = els.coverRegenSuggestRow;
+  if (!row) return;
+  const selected = new Set(coverRegenArtworkTagsFromInput().map((t) => t.toLowerCase()));
+  row.innerHTML = ARTWORK_BASE_SUGGESTIONS.map((tag) => {
+    const on = selected.has(tag.toLowerCase());
+    return `<button type="button" class="styleSuggestPill${on ? " isActive" : ""}" data-cover-regen-tag="${escapeHtml(tag)}" aria-pressed="${on ? "true" : "false"}">${escapeHtml(tag)}</button>`;
+  }).join("");
+}
+
+function suggestArtworkTextFromParts({ style = "", lyrics = "" } = {}) {
+  const raw = String(lyrics || "");
+  const styleStr = String(style || "");
+  const hasArabic = /[\u0600-\u06FF]/.test(raw) || /arabic|oud|darbuka|maqam|dabke/i.test(styleStr);
+  const parts = [];
+  parts.push(hasArabic ? "Cinematic desert portrait" : "Cinematic portrait");
+  const lyricsLower = raw.toLowerCase();
+  if (/(sad|cry|tears|alone|lonely|miss|hurt|\u062d\u0632\u064a\u0646|\u062f\u0645\u0639\u0629|\u0641\u0631\u0627\u0642)/.test(lyricsLower)) {
+    parts.push("melancholic mood", "moody low light");
+  } else if (/(love|heart|habibi|romance|\u062d\u0628|\u062d\u0628\u064a\u0628\u064a|\u0642\u0644\u0628|\u063a\u0631\u0627\u0645)/.test(lyricsLower)) {
+    parts.push("romantic mood", "warm golden light");
+  } else if (/(party|dance|club|night|\u0631\u0642\u0635|\u0633\u0647\u0631\u0629|\u062d\u0641\u0644\u0629)/.test(lyricsLower)) {
+    parts.push("vibrant energy", "neon lights");
+  } else {
+    parts.push("cinematic mood");
+  }
+  if (/piano|strings|orchestra|cinematic|classical/i.test(styleStr)) parts.push("film grain", "shallow depth of field");
+  if (/edm|house|electronic|synth|trap|techno/i.test(styleStr)) parts.push("futuristic", "glowing accents");
+  return [...new Set(parts)].slice(0, 5).join(", ");
+}
+
+function suggestArtworkTextFromTrack(track) {
+  const meta = track?.meta && typeof track.meta === "object" ? track.meta : {};
+  const style = `${meta.styleInput || ""} ${meta.styleSent || ""}`.trim();
+  const lyrics = String(meta.lyricsInput || meta.finalPrompt || meta.prompt || meta.soundPrompt || "").trim();
+  return suggestArtworkTextFromParts({ style, lyrics });
+}
+
+function openCoverRegenSheet(track) {
+  if (!track?.id || libraryTrackIsPublished(track) || !playerCanRegenerateCover(track)) return;
+  _coverRegenTrackId = String(track.id);
+  const meta = track?.meta && typeof track.meta === "object" ? track.meta : {};
+  const pref = String(meta.artworkHint || meta.artworkStyle || "").trim();
+  if (els.coverRegenArtworkInput) els.coverRegenArtworkInput.value = pref;
+  if (els.coverRegenPreviewArt) {
+    const artUrl = trackCoverArtForDisplay(track);
+    if (artUrl) {
+      els.coverRegenPreviewArt.src = artUrl;
+      els.coverRegenPreviewArt.hidden = false;
+    } else {
+      els.coverRegenPreviewArt.removeAttribute("src");
+      els.coverRegenPreviewArt.hidden = true;
+    }
+  }
+  renderCoverRegenSuggestions();
+  if (els.coverRegenSheet) els.coverRegenSheet.hidden = false;
+  requestAnimationFrame(() => {
+    try { els.coverRegenArtworkInput?.focus({ preventScroll: true }); } catch {}
+  });
+}
+
+async function confirmCoverRegenSheet() {
+  const id = String(_coverRegenTrackId || "").trim();
+  if (!id) return;
+  const track = loadLibrary().find((x) => String(x.id) === id);
+  if (!track) {
+    closeCoverRegenSheet();
+    return;
+  }
+  const hint = String(els.coverRegenArtworkInput?.value || "").trim().slice(0, 280);
+  closeCoverRegenSheet();
+  await regeneratePlayerCover(hint, id);
 }
 
 async function refreshPlayerFanBtn(ownerId, handle) {
@@ -51884,24 +51982,10 @@ function renderArtworkSuggestions() {
   }).join("");
 }
 function suggestArtworkText() {
-  const style = String(els.sunoStyle?.value || "");
-  const raw = String(els.sunoPrompt?.value || "");
-  const lyrics = raw.toLowerCase();
-  const hasArabic = /[\u0600-\u06FF]/.test(raw) || /arabic|oud|darbuka|maqam|dabke/i.test(style);
-  const parts = [];
-  parts.push(hasArabic ? "Cinematic desert portrait" : "Cinematic portrait");
-  if (/(sad|cry|tears|alone|lonely|miss|hurt|\u062d\u0632\u064a\u0646|\u062f\u0645\u0639\u0629|\u0641\u0631\u0627\u0642)/.test(lyrics)) {
-    parts.push("melancholic mood", "moody low light");
-  } else if (/(love|heart|habibi|romance|\u062d\u0628|\u062d\u0628\u064a\u0628\u064a|\u0642\u0644\u0628|\u063a\u0631\u0627\u0645)/.test(lyrics)) {
-    parts.push("romantic mood", "warm golden light");
-  } else if (/(party|dance|club|night|\u0631\u0642\u0635|\u0633\u0647\u0631\u0629|\u062d\u0641\u0644\u0629)/.test(lyrics)) {
-    parts.push("vibrant energy", "neon lights");
-  } else {
-    parts.push("cinematic mood");
-  }
-  if (/piano|strings|orchestra|cinematic|classical/i.test(style)) parts.push("film grain", "shallow depth of field");
-  if (/edm|house|electronic|synth|trap|techno/i.test(style)) parts.push("futuristic", "glowing accents");
-  return [...new Set(parts)].slice(0, 5).join(", ");
+  return suggestArtworkTextFromParts({
+    style: els.sunoStyle?.value || "",
+    lyrics: els.sunoPrompt?.value || "",
+  });
 }
 (function bindArtworkAssistant() {
   const row = els.artworkSuggestRow;
@@ -53734,9 +53818,53 @@ if (els.btnPlayerRegenCover) {
     e.preventDefault();
     e.stopPropagation();
     try { haptic("light"); } catch {}
-    void regeneratePlayerCover();
+    openCoverRegenSheet(resolvePlayerLibraryTrack());
   });
 }
+if (els.btnCoverRegenClose) {
+  els.btnCoverRegenClose.addEventListener("click", () => closeCoverRegenSheet());
+}
+if (els.coverRegenBackdrop) {
+  els.coverRegenBackdrop.addEventListener("click", () => closeCoverRegenSheet());
+}
+if (els.btnCoverRegenGo) {
+  els.btnCoverRegenGo.addEventListener("click", () => { void confirmCoverRegenSheet(); });
+}
+if (els.btnCoverRegenSuggest) {
+  els.btnCoverRegenSuggest.addEventListener("click", () => {
+    const track = loadLibrary().find((x) => String(x.id) === String(_coverRegenTrackId || ""));
+    if (!track) return;
+    try { haptic("light"); } catch {}
+    if (els.coverRegenArtworkInput) {
+      els.coverRegenArtworkInput.value = suggestArtworkTextFromTrack(track);
+    }
+    renderCoverRegenSuggestions();
+    showToast("Artwork idea drafted from your song", { icon: "\u2726", durationMs: 2400 });
+  });
+}
+if (els.coverRegenSuggestRow) {
+  els.coverRegenSuggestRow.addEventListener("click", (e) => {
+    const btn = e.target?.closest?.("[data-cover-regen-tag]");
+    if (!btn || !els.coverRegenSuggestRow.contains(btn)) return;
+    e.preventDefault();
+    try { haptic("light"); } catch {}
+    const tag = btn.getAttribute("data-cover-regen-tag");
+    const cur = coverRegenArtworkTagsFromInput();
+    const have = new Set(cur.map((t) => t.toLowerCase()));
+    if (have.has(tag.toLowerCase())) {
+      writeCoverRegenArtworkTags(cur.filter((t) => t.toLowerCase() !== tag.toLowerCase()));
+    } else {
+      writeCoverRegenArtworkTags([...cur, tag]);
+    }
+  });
+}
+els.coverRegenArtworkInput?.addEventListener("input", renderCoverRegenSuggestions);
+els.coverRegenArtworkInput?.addEventListener("keydown", (e) => {
+  if (e.key === "Enter") {
+    e.preventDefault();
+    void confirmCoverRegenSheet();
+  }
+});
 if (els.btnPlayerEditThumb) {
   els.btnPlayerEditThumb.addEventListener("click", (e) => {
     e.preventDefault();

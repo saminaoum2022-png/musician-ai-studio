@@ -172,7 +172,7 @@
       onload="this.media='all'"
     />
     <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Display:wght@900&family=Inter:wght@900&display=swap" /></noscript>
-    <link rel="stylesheet" href="./styles.css?v=20260712-141808" />
+    <link rel="stylesheet" href="./styles.css?v=20260712-145612" />
 
     <meta name="description" content="NabadAi is an AI music studio. Hum a melody, write lyrics, and ship a song." />
     <meta property="og:type" content="website" />
@@ -2498,6 +2498,30 @@
                 </div>
               </div>
 
+              <div id="coverRegenSheet" class="coverRegenSheet" role="dialog" aria-modal="true" aria-labelledby="coverRegenTitle" hidden>
+                <div id="coverRegenBackdrop" class="coverRegenBackdrop" aria-hidden="true"></div>
+                <div class="coverRegenPanel">
+                  <div class="coverRegenHead">
+                    <button id="btnCoverRegenClose" type="button" class="coverRegenClose" aria-label="Close">✕</button>
+                    <h2 id="coverRegenTitle" class="coverRegenTitle">New cover</h2>
+                    <span class="coverRegenHeadSpacer" aria-hidden="true"></span>
+                  </div>
+                  <p class="coverRegenHint">Optional artwork hint for Pollinations. Leave blank and Nabad will choose from your song.</p>
+                  <div class="coverRegenPreviewWrap">
+                    <img id="coverRegenPreviewArt" class="coverRegenPreviewArt" alt="" />
+                  </div>
+                  <label class="coverRegenField">
+                    <div class="coverRegenFieldHead">
+                      <span>Artwork hint</span>
+                      <button id="btnCoverRegenSuggest" class="lyricsMagicBtn styleBoostBtn" type="button" title="Suggest artwork from your song" aria-label="Suggest artwork from your song">✦</button>
+                    </div>
+                    <input id="coverRegenArtworkInput" type="text" maxlength="280" placeholder="Neon desert, celebration still life…" autocomplete="off" enterkeyhint="done" />
+                  </label>
+                  <div id="coverRegenSuggestRow" class="styleSuggestRow coverRegenSuggestRow" role="group" aria-label="Artwork suggestions"></div>
+                  <button id="btnCoverRegenGo" type="button" class="coverRegenGoBtn">Generate new cover</button>
+                </div>
+              </div>
+
               <!-- Centered confirm modal (publish, clip publish, cover save). -->
               <div id="playerConfirm" class="playerConfirm" role="dialog" aria-modal="true" aria-labelledby="playerConfirmText" hidden>
                 <div class="playerConfirmCard">
@@ -4617,6 +4641,6 @@
     </script>
     <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
     <script src="./env.client.js" onerror="void 0"></script>
-    <script type="module" src="./src/app.js?v=20260712-141808"></script>
+    <script type="module" src="./src/app.js?v=20260712-145612"></script>
   </body>
 </html>

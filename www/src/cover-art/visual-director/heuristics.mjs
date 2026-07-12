@@ -2,7 +2,7 @@
  * Rule-based Visual Director — no LLM required.
  */
 import { fnv1a } from "./hash.mjs";
-import { enforceNoHumansScene } from "../prompt.js";
+import { enforceNoHumansScene, prepareDirectUserArtworkHint } from "../prompt.js";
 import { humTrackStudioNookPhrase } from "./hum-track-cover.mjs";
 import { nabadIdentityPhrases } from "./nabad-identity.mjs";
 import { validateVisualDirection } from "./schema.mjs";
@@ -21,7 +21,7 @@ function pickComposition(songId) {
 
 function mainSubjectFromContext(ctx) {
   if (ctx.artworkHint || ctx.artworkStyle) {
-    return enforceNoHumansScene(String(ctx.artworkHint || ctx.artworkStyle).slice(0, 120));
+    return prepareDirectUserArtworkHint(String(ctx.artworkHint || ctx.artworkStyle).slice(0, 280));
   }
   if (ctx.humTrack && ctx.instrumentLabel) {
     return `${humTrackStudioNookPhrase(ctx.instrumentLabel, ctx.instrumentId)}, premium studio nook still life`;
@@ -40,7 +40,7 @@ function mainSubjectFromContext(ctx) {
   if (ctx.sourcePath === "instrumental") {
     return "premium abstract living light gradients with cinematic bloom, no people";
   }
-  return "premium symbolic object still life with cinematic environmental mood, no people";
+  return "abstract sound aura and luminous waveform energy in teal and violet, premium music artwork mood, no people";
 }
 
 function settingFromContext(ctx) {

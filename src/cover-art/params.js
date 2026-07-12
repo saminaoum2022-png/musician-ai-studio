@@ -127,24 +127,31 @@ function resolveArtworkHint(meta) {
   return parts.join(", ").slice(0, 280);
 }
 
-export function coverArtParamsFromTrack(track) {
+export function coverArtParamsFromTrack(track, opts = {}) {
   const meta = track?.meta && typeof track.meta === "object" ? track.meta : {};
+  const hintOverride = String(opts.artworkHintOverride ?? opts.artworkHint ?? "").trim().slice(0, 280);
+  const regenAutoMusic = Boolean(opts.regenAutoMusic);
   const styleBlob = `${meta.styleInput || ""} ${meta.styleSent || ""}`;
   const lyrics = String(
     meta.lyricsInput || meta.finalPrompt || meta.prompt || meta.soundPrompt || "",
   ).trim();
   const humTrack = Boolean(meta.humTrack);
   const avoidBase = String(meta?.avoidTagsInput || "").trim();
-  const artworkHint = humTrack ? "" : resolveArtworkHint(meta);
+  const artworkHint = humTrack
+    ? ""
+    : hintOverride || (regenAutoMusic ? "" : resolveArtworkHint(meta));
   const artworkResolved = humTrack
     ? ""
-    : resolveUserArtworkPrompt({
-      artworkStyle: meta?.artworkStyle,
-      artworkHint,
-      styleSent: meta?.styleSent,
-      style: meta?.styleInput,
-      styleInput: meta?.styleInput,
-    });
+    : hintOverride
+      || (regenAutoMusic
+        ? ""
+        : resolveUserArtworkPrompt({
+          artworkStyle: meta?.artworkStyle,
+          artworkHint,
+          styleSent: meta?.styleSent,
+          style: meta?.styleInput,
+          styleInput: meta?.styleInput,
+        }));
   return {
     songId: String(track?.id || meta?.taskId || track?.taskId || "").trim(),
     title: String(track?.title || "Untitled").trim(),
@@ -162,6 +169,8 @@ export function coverArtParamsFromTrack(track) {
     finalPrompt: String(meta.finalPrompt || "").trim(),
     artworkStyle: artworkResolved,
     artworkHint,
+    regenArtworkHint: hintOverride || undefined,
+    regenAutoMusic,
     avoidTagsInput: humTrack ? humTrackAvoidTags(avoidBase) : avoidBase,
     humTrack,
     instrument: String(meta.instrument || "").trim(),

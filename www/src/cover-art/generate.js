@@ -84,8 +84,12 @@ async function blobToDataUrl(blob, mime = "image/jpeg") {
 }
 
 /** Local regen bundle: Visual Director + Nabad DNA + latest prompt policy (no server Gemini cache). */
-async function resolveRegenPromptBundle(params) {
+async function resolveRegenPromptBundle(params, regenOpts = {}) {
   const regenSalt = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+  const hintOverride = String(
+    regenOpts.artworkHint || regenOpts.artworkStyle || params?.regenArtworkHint || "",
+  ).trim().slice(0, 280);
+  const regenAutoMusic = Boolean(regenOpts.regenAutoMusic || params?.regenAutoMusic || !hintOverride);
   const bucketKey = classifyVisualBucket(params);
   const { theme, storyScore } = resolveStoryTheme(params);
 
@@ -100,12 +104,21 @@ async function resolveRegenPromptBundle(params) {
     },
   });
 
-  const promptInput = vd.coverInput || params;
+  const promptInput = hintOverride
+    ? { ...(vd.coverInput || params), artworkStyle: hintOverride, artworkHint: hintOverride, regenAutoMusic: false }
+    : {
+        ...(vd.coverInput || params),
+        artworkStyle: "",
+        artworkHint: "",
+        regenAutoMusic: true,
+      };
   const built = buildAbstractCoverPrompt(promptInput, {
     regenSalt,
-    directorSceneHint: vd.sceneHint || "",
+    directorSceneHint: regenAutoMusic ? "" : (vd.sceneHint || ""),
     nabadIdentityPhrases: vd.identityPhrases || "",
-    visualDirection: vd.direction || undefined,
+    visualDirection: regenAutoMusic ? undefined : (vd.direction || undefined),
+    userArtworkOverride: hintOverride || undefined,
+    forceMusicFallback: regenAutoMusic,
   });
 
   const avoidTags = [params.avoidTagsInput || "", vd.avoidMerged || ""].filter(Boolean).join(", ");
@@ -118,8 +131,8 @@ async function resolveRegenPromptBundle(params) {
 }
 
 /** Regen uses bundled director + prompt — Pollinations direct (no stale server/Gemini cache). */
-async function fetchRegeneratedCoverArt(params) {
-  const bundle = await resolveRegenPromptBundle(params);
+async function fetchRegeneratedCoverArt(params, regenOpts = {}) {
+  const bundle = await resolveRegenPromptBundle(params, regenOpts);
   const upstreamUrl = buildPollinationsUrl(bundle.prompt, bundle.seed, {
     avoidTags: bundle.avoidTags,
   });
@@ -158,7 +171,7 @@ async function fetchRegeneratedCoverArt(params) {
 export async function fetchAbstractCoverArt(params, opts = {}) {
   if (opts.coverRegenerate) {
     try {
-      return await fetchRegeneratedCoverArt(params);
+      return await fetchRegeneratedCoverArt(params, opts);
     } catch (directErr) {
       try {
         console.warn("[cover-art] direct regen failed, trying API fallback", directErr?.message || directErr);
@@ -173,7 +186,7 @@ export async function fetchAbstractCoverArt(params, opts = {}) {
 
   const body = { ...params };
   if (opts.coverRegenerate) {
-    const bundle = await resolveRegenPromptBundle(params);
+    const bundle = await resolveRegenPromptBundle(params, opts);
     body.coverRegenerate = true;
     body.skipGeminiScene = true;
     body.promptPolicyVersion = COVER_PROMPT_POLICY_VERSION;
@@ -277,7 +290,11 @@ function refreshPlayerIfTrack(track, opts = {}) {
 }
 
 async function runCoverJobForTrack(track, id, opts = {}) {
-  const params = coverArtParamsFromTrack(track);
+  const hint = String(opts.artworkHint || opts.artworkStyle || "").trim();
+  const params = coverArtParamsFromTrack(track, {
+    artworkHintOverride: hint,
+    regenAutoMusic: Boolean(opts.regenAutoMusic || (opts.coverRegenerate && !hint)),
+  });
   if (!params.songId) return null;
 
   let lastErr = null;
@@ -362,11 +379,12 @@ export async function retryAbstractCoverForTrack(track) {
 }
 
 /** User-requested new Pollinations cover (replaces an existing abstract cover). */
-export async function regenerateAbstractCoverForTrack(track) {
+export async function regenerateAbstractCoverForTrack(track, opts = {}) {
   const id = String(track?.id || "").trim();
   if (!id || !canRegeneratePollinationsCover(track)) return null;
   if (_inflight.has(id)) return _inflight.get(id);
   const meta = track?.meta && typeof track.meta === "object" ? track.meta : {};
+  const hintOverride = String(opts.artworkHint ?? opts.artworkStyle ?? "").trim().slice(0, 280);
   const reset = {
     ...track,
     meta: {
@@ -374,6 +392,9 @@ export async function regenerateAbstractCoverForTrack(track) {
       coverGenAttempted: false,
       pollinationsCoverPending: true,
       thumbFrame: undefined,
+      ...(hintOverride
+        ? { artworkHint: hintOverride, artworkStyle: hintOverride }
+        : {}),
     },
   };
   await enqueueLibraryPatch(() => {
@@ -385,7 +406,11 @@ export async function regenerateAbstractCoverForTrack(track) {
     return items[idx];
   });
   watchPendingCoverArt();
-  const job = runCoverJobForTrack(reset, id, { coverRegenerate: true });
+  const job = runCoverJobForTrack(reset, id, {
+    coverRegenerate: true,
+    artworkHint: hintOverride || undefined,
+    regenAutoMusic: !hintOverride,
+  });
   _inflight.set(id, job);
   try {
     return await job;

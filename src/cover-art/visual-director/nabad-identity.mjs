@@ -14,7 +14,7 @@ export const NABAD_ROOT_PHRASES = {
   atmosphere: "teal-violet atmospheric haze and soft cyan fill",
   accent: "subtle rose-gold accent glow at low intensity",
   bloom: "glassy diffusion and soft luminous edges",
-  single_hero: "single clear focal subject",
+  single_hero: "single clear focal subject at modest scale",
   breathing_room: "generous negative space and premium restraint",
   editorial_still: "premium cinematic editorial still photography",
   silhouette: "symbolic object still life, no human forms",

@@ -46,9 +46,9 @@ const BASE_AVOID = Object.freeze([
 ]);
 
 const COMPOSITION_VOCAB = Object.freeze([
-  "centered single focal subject with strong negative space",
-  "symmetrical balanced composition with clear focal point",
-  "rule of thirds framing with one dominant subject",
+  "medium-scale props with generous negative space, object presence about 30% of frame",
+  "modest-sized symbolic objects on rule-of-thirds placement, pulled-back camera distance",
+  "editorial still life with small-to-medium props and wide environmental context",
 ]);
 
 function trimField(value, max = 120) {

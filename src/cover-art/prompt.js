@@ -4,14 +4,17 @@
  */
 
 /** Bump when cover prompt policy changes — busts Gemini scene cache on the server. */
-export const COVER_PROMPT_POLICY_VERSION = 4;
+export const COVER_PROMPT_POLICY_VERSION = 5;
 /** Pollinations flux reliably returns ~768×768 square — request square, crop to 9:16 (avoids vertical stretch). */
 export const POLLINATIONS_COVER_WIDTH = 1024;
 export const POLLINATIONS_COVER_HEIGHT = 1024;
 
 /** Square canvas keeps object proportions natural; we vertical-crop to 9:16 for the reel. */
-const STILL_LIFE_COMPOSE_FRAME =
-  "square still life album art composition, single hero object centered in the middle third, natural object proportions, no vertical stretch, no elongated props, no people";
+const OBJECT_COMPOSE_FRAME =
+  "square still life album art composition, medium-sized props at natural scale occupying roughly 25-35% of frame, camera pulled back with wide breathing room, atmospheric background and generous margins for vertical reel crop, objects grouped on rule of thirds not dead center, not macro close-up, not oversized hero prop filling frame, natural proportions, no vertical stretch, no elongated props, no people";
+
+/** @deprecated alias — use OBJECT_COMPOSE_FRAME */
+const STILL_LIFE_COMPOSE_FRAME = OBJECT_COMPOSE_FRAME;
 
 /** Music-leaning frame — avoids plain square blocks when the theme is vague or user-directed. */
 const MUSIC_COVER_FRAME =
@@ -57,7 +60,7 @@ const NO_TEXT_REINFORCE =
   "completely wordless photograph, zero readable characters in the entire frame, blank signs, empty screens, no labels";
 
 const NEGATIVE_TEXT_PROMPT =
-  "plain solid square block, flat color rectangle, empty geometric block, meaningless placeholder shape, solid teal square, featureless box, blank panel, low detail abstract block, text, words, letters, numbers, typography, font, writing, caption, subtitle, watermark, logo, album cover title, song title, track title, artist name, band name, signage, billboard, poster text, newspaper, book, magazine, speech bubble, label, stamp, signature, handwritten, calligraphy, cursive, script font, decorative lettering, word art, letter shapes, holiday lettering, christmas text, greeting card text, festive banner, neon sign with words, arabic text, english text, quotes, meme text, ui overlay, readable characters, sentences, lyrics on screen, cd cover text, record label, tracklist, credits block, diploma text, certificate text, graffiti letters, title card, greeting card, banner text, embroidered text, carved letters, glowing words, light text, 3d text, people, person, human, humans, humanoid, man, woman, child, baby, crowd, dancer, performer, musician, face, faces, portrait, portraits, silhouette, silhouettes, body, bodies, hand, hands, finger, fingers, arm, arms, leg, legs, head, heads, eye, eyes, mouth, mouths, teeth, nose, ear, skin, anatomy, bad anatomy, deformed anatomy, extra fingers, missing fingers, six fingers, duplicate limbs, floating limbs, mutated hands, broken hands, multiple mouths, crossed eyes, lazy eye, crooked eyes, disfigured face, cropped face, duplicate subject, floating objects, blurry, low quality, jpeg artifacts, oversaturated, distorted perspective, elongated face, stretched portrait, vertically stretched body, squashed proportions, wrong aspect ratio, fisheye portrait, close-up portrait, beauty portrait, fashion portrait, headshot, detailed facial features, recognizable face, portrait photography, full body portrait, tall thin figure, unnaturally long neck, stretched silhouette, selfie, model, fashion model, vertically stretched object, elongated object, stretched props, unnaturally tall object";
+  "plain solid square block, flat color rectangle, empty geometric block, meaningless placeholder shape, solid teal square, featureless box, blank panel, low detail abstract block, text, words, letters, numbers, typography, font, writing, caption, subtitle, watermark, logo, album cover title, song title, track title, artist name, band name, signage, billboard, poster text, newspaper, book, magazine, speech bubble, label, stamp, signature, handwritten, calligraphy, cursive, script font, decorative lettering, word art, letter shapes, holiday lettering, christmas text, greeting card text, festive banner, neon sign with words, arabic text, english text, quotes, meme text, ui overlay, readable characters, sentences, lyrics on screen, cd cover text, record label, tracklist, credits block, diploma text, certificate text, graffiti letters, title card, greeting card, banner text, embroidered text, carved letters, glowing words, light text, 3d text, people, person, human, humans, humanoid, man, woman, child, baby, crowd, dancer, performer, musician, face, faces, portrait, portraits, silhouette, silhouettes, body, bodies, hand, hands, finger, fingers, arm, arms, leg, legs, head, heads, eye, eyes, mouth, mouths, teeth, nose, ear, skin, anatomy, bad anatomy, deformed anatomy, extra fingers, missing fingers, six fingers, duplicate limbs, floating limbs, mutated hands, broken hands, multiple mouths, crossed eyes, lazy eye, crooked eyes, disfigured face, cropped face, duplicate subject, floating objects, blurry, low quality, jpeg artifacts, oversaturated, distorted perspective, elongated face, stretched portrait, vertically stretched body, squashed proportions, wrong aspect ratio, fisheye portrait, close-up portrait, beauty portrait, fashion portrait, headshot, detailed facial features, recognizable face, portrait photography, full body portrait, tall thin figure, unnaturally long neck, stretched silhouette, selfie, model, fashion model, vertically stretched object, elongated object, stretched props, unnaturally tall object, macro close-up, extreme close-up, oversized object filling entire frame, giant prop dominating frame, object too large, fills frame edge to edge, cropped too tight, tight crop on single prop, low resolution zoom, object touching all four edges";
 
 const STYLE_CORE =
   "premium cinematic visual art, elegant composition, rich color grading, high-end editorial look, moody dark tones with luminous accents, deep teal and violet palette when appropriate, physically plausible lighting, atmospheric depth, immersive environment, balanced vertical composition, professional music-inspired photography, minimal visual noise, high image coherence, clean perspective, symbolic objects only, no human subjects";
@@ -233,6 +236,16 @@ const COMPOSITIONS = [
   "rule of thirds with subject placed on vertical third",
 ];
 
+const OBJECT_COMPOSITIONS = [
+  "medium-scale props on a surface with generous negative space, object presence about 30% of frame, safe margins for vertical crop",
+  "modest-sized symbolic objects on rule-of-thirds placement, wide environmental context, pulled-back camera distance",
+  "editorial still life with small-to-medium props, natural viewing distance, atmospheric background clearly visible",
+  "grouped objects at moderate scale in lower or upper third, ample empty space around edges for reel framing",
+];
+
+const CONCRETE_OBJECT_RE =
+  /\b(balloon|balloons|cake|cupcake|house|home|heart|hearts|ring|rings|flower|flowers|rose|roses|candle|candles|gift|gifts|present|presents|star|stars|moon|sun|tree|car|clock|book|key|keys|cup|glass|wine|champagne|confetti|diamond|gem|jewel|umbrella|door|window|chair|table|lamp|lantern|snowflake|snowman|pumpkin|cross|anchor|boat|plane|bicycle|bike|camera|phone|shell|feather|butterfly|bear|teddy|toy|box|treasure|coin|medal|trophy|graduation|mortarboard|diploma|wedding|bouquet|chandelier|microphone|guitar|piano|violin|drum|instrument|cookie|cookies|donut|doughnut|ice cream|pizza|fruit|apple|orange|lemon|cherry|cherries|pearl|pearl necklace|necklace|bracelet|watch|shoe|shoes|hat|scarf|envelope|letter|envelope|flag|firework|fireworks|sparkler|sparklers|velvet|satin|ribbon|ribbons|bow|bows)\b/i;
+
 function clamp(n, lo, hi) {
   return Math.min(hi, Math.max(lo, n));
 }
@@ -347,6 +360,19 @@ function isSkyOrSpaceHint(text) {
   return /\b(star|stars|starry|night sky|galaxy|cosmos|space|nebula|milky way|aurora|constellation)\b/i.test(String(text || ""));
 }
 
+export function isConcreteObjectArtworkHint(text) {
+  return CONCRETE_OBJECT_RE.test(String(text || ""));
+}
+
+export function compositionPhraseForCover(songId, artworkText = "", visualMode = "") {
+  const mode = String(visualMode || "").toLowerCase();
+  if (isConcreteObjectArtworkHint(artworkText) || mode === "still_life") {
+    const key = isConcreteObjectArtworkHint(artworkText) ? "obj-comp" : "still-comp";
+    return OBJECT_COMPOSITIONS[fnv1a(`${songId}:${key}`) % OBJECT_COMPOSITIONS.length];
+  }
+  return COMPOSITIONS[fnv1a(`${songId}:composition`) % COMPOSITIONS.length];
+}
+
 function enrichUserArtworkHint(raw) {
   let s = String(raw || "").trim();
   if (!s) return s;
@@ -361,12 +387,18 @@ function enrichUserArtworkHint(raw) {
   if (/\b(microphone|mic|podcast|equalizer|waveform|sound wave|audio)\b/i.test(s) && !/music|studio/i.test(s)) {
     s = `${s}, premium music studio atmosphere`;
   }
+  if (isConcreteObjectArtworkHint(s) && !/medium.?sized|modest scale|pulled back|negative space|30%|one-third|not close-up|not oversized/i.test(s)) {
+    s = `${s}, medium-sized still life props with generous negative space, not close-up, not oversized`;
+  }
   return s.replace(/\s+/g, " ").trim().slice(0, 280);
 }
 
 function composeFrameForArtwork(userArtwork) {
   if (isSkyOrSpaceHint(userArtwork) || /landscape|ocean|mountain|city|skyline|environment|horizon/i.test(userArtwork)) {
     return "vertical cinematic album art, wide atmospheric environment, immersive landscape depth, no people";
+  }
+  if (isConcreteObjectArtworkHint(userArtwork)) {
+    return OBJECT_COMPOSE_FRAME;
   }
   return MUSIC_COVER_FRAME;
 }
@@ -685,7 +717,11 @@ export function buildAbstractCoverPrompt(input, options = {}) {
   visualScene = enforceNoHumansScene(visualScene);
   userArtwork = userArtwork ? enforceNoHumansScene(userArtwork) : "";
   const palette = moodPaletteForBucket(bucketKey);
-  const composition = COMPOSITIONS[fnv1a(`${songId}:composition`) % COMPOSITIONS.length];
+  const composition = compositionPhraseForCover(
+    songId,
+    userArtwork || userArtworkRaw || sceneOverride || visualScene,
+    sceneOverride || userArtwork ? "user_directed" : visualMode,
+  );
   const seed = buildCoverSeed(input, storyTheme, bucketKey, userArtwork, String(options.regenSalt || "").trim());
   const artworkSource = forceMusicFallback
     ? "regen_music_auto"

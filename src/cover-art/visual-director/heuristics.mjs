@@ -1,22 +1,17 @@
 /**
  * Rule-based Visual Director — no LLM required.
  */
-import { fnv1a } from "./hash.mjs";
-import { enforceNoHumansScene, prepareDirectUserArtworkHint } from "../prompt.js";
+import { enforceNoHumansScene, prepareDirectUserArtworkHint, compositionPhraseForCover, isConcreteObjectArtworkHint } from "../prompt.js";
 import { humTrackStudioNookPhrase } from "./hum-track-cover.mjs";
 import { nabadIdentityPhrases } from "./nabad-identity.mjs";
 import { validateVisualDirection } from "./schema.mjs";
 
 /** @typedef {import("./context.js").CoverDirectorContext} CoverDirectorContext */
 
-const COMPOSITIONS = [
-  "centered single focal subject with strong negative space",
-  "symmetrical balanced composition with clear focal point",
-  "rule of thirds framing with one dominant subject",
-];
-
-function pickComposition(songId) {
-  return COMPOSITIONS[fnv1a(`${songId}:vd-comp`) % COMPOSITIONS.length];
+function pickComposition(songId, ctx) {
+  const hint = String(ctx?.artworkHint || ctx?.artworkStyle || ctx?.storyScene || "").trim();
+  const visualMode = String(ctx?.visualModeHint || "").toLowerCase();
+  return compositionPhraseForCover(songId, hint, visualMode === "still_life" ? "still_life" : "");
 }
 
 function mainSubjectFromContext(ctx) {
@@ -144,13 +139,15 @@ export function resolveHeuristicVisualDirection(ctx) {
     setting: settingFromContext(ctx),
     visualSymbols: visualSymbolsFromContext(ctx),
     instrumentFocus: null,
-    composition: pickComposition(ctx.songId),
+    composition: pickComposition(ctx.songId, ctx),
     lighting: ctx.energy > 0.75
       ? "sharp rim light with controlled kinetic glow"
       : "soft cinematic rim light with teal-violet atmospheric fill",
-    cameraStyle: visualMode === "studio_nook_still_life"
-      ? "editorial studio nook still life photograph, props only, no instruments, no human subjects"
-      : "premium editorial still life or landscape photograph, symbolic objects only, no human subjects",
+    cameraStyle: isConcreteObjectArtworkHint(ctx.artworkHint || ctx.artworkStyle)
+      ? "editorial still life photograph, medium-scale props, pulled-back camera, generous margins, no human subjects"
+      : visualMode === "studio_nook_still_life"
+        ? "editorial studio nook still life photograph, props only, no instruments, no human subjects"
+        : "premium editorial still life or landscape photograph, symbolic objects only, no human subjects",
     avoidConcepts: extraAvoid(ctx),
     visualMode,
     bucketHint: ctx.bucketKey,

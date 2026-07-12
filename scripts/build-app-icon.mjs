@@ -18,8 +18,8 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, "..");
 const SOURCE = path.join(ROOT, "assets", "icons", "splash-mark.png");
 const APP_BG = { r: 5, g: 7, b: 13, alpha: 1 }; // #05070d
-/** Logo width vs canvas — ~76% fill zoomed out 20% → ~61%, centered on #05070d. */
-const MARK_CANVAS_FILL = 0.608;
+/** Logo width vs canvas — ~61% fill; reduced 10% (0.608 → 0.547) for app icon. */
+const MARK_CANVAS_FILL = 0.547;
 
 const ICON_DIR = path.join(
   ROOT,

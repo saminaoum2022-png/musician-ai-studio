@@ -10586,21 +10586,59 @@ body.imageMoodSheetOpen .mobileTabbar{
 }
 .imageMoodCard.analyzing{
   position: relative;
-  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.10), 0 20px 48px rgba(0, 0, 0, 0.45);
+  box-shadow:
+    0 0 0 1px rgba(35, 213, 171, 0.28),
+    0 20px 48px rgba(0, 0, 0, 0.45);
 }
-.imageMoodCard.analyzing::before{
-  content: "";
+.imageMoodOutput.isAnalyzing{
+  position: relative;
+  overflow: hidden;
+  min-height: 120px;
+  border-color: rgba(35, 213, 171, 0.28);
+  box-shadow:
+    0 0 0 1px rgba(124, 92, 255, 0.18),
+    0 14px 36px rgba(14, 18, 30, 0.28);
+}
+.imageMoodAnalyzingState{
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 96px;
+  padding: 18px 12px;
+  overflow: hidden;
+  border-radius: 12px;
+}
+.imageMoodAnalyzingAura{
+  position: absolute;
+  inset: -8%;
+  background: linear-gradient(120deg, rgba(124, 92, 255, 0.38), rgba(35, 213, 171, 0.28), rgba(124, 92, 255, 0.24));
+  filter: blur(18px);
+  animation: lyricAura 2.6s ease-in-out infinite;
+  pointer-events: none;
+}
+.imageMoodAnalyzingShimmer{
   position: absolute;
   inset: 0;
-  border-radius: inherit;
+  background: linear-gradient(125deg, transparent 28%, rgba(255, 255, 255, 0.16) 48%, rgba(35, 213, 171, 0.14) 52%, transparent 72%);
+  background-size: 220% 100%;
+  animation: lyricShimmer 2.4s linear infinite;
   pointer-events: none;
-  background: linear-gradient(120deg, transparent 30%, rgba(255, 255, 255, 0.04) 50%, transparent 70%);
-  background-size: 200% 100%;
-  animation: photoMoodShimmer 1.8s ease-in-out infinite;
 }
-@keyframes photoMoodShimmer{
-  0%{ background-position: 100% 0; }
-  100%{ background-position: -100% 0; }
+.imageMoodAnalyzingLabel{
+  position: relative;
+  z-index: 1;
+  margin: 0;
+  padding: 8px 14px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  color: rgba(248, 250, 255, 0.96);
+  background: rgba(8, 11, 18, 0.52);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  -webkit-backdrop-filter: blur(10px);
+          backdrop-filter: blur(10px);
 }
 .imageMoodLead{
   margin: 0;
@@ -10744,6 +10782,38 @@ body.imageMoodSheetOpen .mobileTabbar{
 .imageMoodActions .primary{
   background: rgba(35, 213, 171, 0.16);
   border: 1px solid rgba(35, 213, 171, 0.32);
+  color: rgba(232, 255, 248, 0.92);
+  transition: background 180ms ease, border-color 180ms ease, box-shadow 180ms ease, transform 180ms ease, opacity 180ms ease;
+}
+.photoMoodPrimary:disabled,
+.imageMoodActions .primary:disabled{
+  opacity: 0.42;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+.photoMoodPrimary.isReady:not(:disabled),
+.imageMoodActions .primary.isReady:not(:disabled){
+  color: #041510;
+  background: linear-gradient(180deg, #3ee7bf 0%, #23d5ab 100%);
+  border-color: rgba(35, 213, 171, 0.85);
+  box-shadow:
+    0 0 0 1px rgba(35, 213, 171, 0.35),
+    0 10px 24px rgba(35, 213, 171, 0.28);
+  animation: photoMoodCtaPulse 1.8s ease-in-out infinite;
+}
+.photoMoodPrimary.isBusy:not(:disabled),
+.imageMoodActions .primary.isBusy{
+  opacity: 1;
+  color: rgba(232, 255, 248, 0.96);
+  background: linear-gradient(120deg, rgba(35, 213, 171, 0.22), rgba(124, 92, 255, 0.22), rgba(35, 213, 171, 0.22));
+  background-size: 220% 100%;
+  border-color: rgba(35, 213, 171, 0.45);
+  animation: lyricShimmer 2.2s linear infinite;
+  cursor: wait;
+}
+@keyframes photoMoodCtaPulse{
+  0%, 100%{ box-shadow: 0 0 0 1px rgba(35, 213, 171, 0.30), 0 10px 24px rgba(35, 213, 171, 0.22); }
+  50%{ box-shadow: 0 0 0 2px rgba(35, 213, 171, 0.45), 0 12px 28px rgba(35, 213, 171, 0.36); }
 }
 .photoMoodSecondary,
 .imageMoodActions .ghost{
@@ -10754,6 +10824,15 @@ body.imageMoodSheetOpen .mobileTabbar{
 .photoMoodSecondary:disabled,
 .imageMoodActions .ghost:disabled{
   opacity: 0.45;
+}
+html[data-theme="light"] .imageMoodAnalyzingLabel{
+  color: rgba(15, 23, 40, 0.92);
+  background: rgba(255, 255, 255, 0.72);
+  border-color: rgba(15, 23, 40, 0.10);
+}
+html[data-theme="light"] .photoMoodPrimary.isReady:not(:disabled),
+html[data-theme="light"] .imageMoodActions .primary.isReady:not(:disabled){
+  color: #041510;
 }
 
 /* Moments — squircle tiles (rounded square, photo fill, thin ring) */

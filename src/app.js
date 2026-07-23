@@ -188,7 +188,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260712-175003";
+const APP_BUILD = "20260723-143129";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -16394,9 +16394,16 @@ function resetImageMoodSheetSession() {
   }
   const card = els.imageMoodOutput?.closest?.(".imageMoodCard")
     || els.imageMoodModal?.querySelector?.(".imageMoodCard");
-  if (card) card.classList.remove("analyzing");
+  if (card) {
+    card.classList.remove("analyzing", "hasPhotoReady");
+  }
+  if (els.imageMoodOutput) els.imageMoodOutput.classList.remove("isAnalyzing");
   if (els.btnApplyImageMood) els.btnApplyImageMood.disabled = true;
-  if (els.btnAnalyzeImageMood) els.btnAnalyzeImageMood.disabled = true;
+  if (els.btnAnalyzeImageMood) {
+    els.btnAnalyzeImageMood.disabled = true;
+    els.btnAnalyzeImageMood.classList.remove("isReady", "isBusy");
+    els.btnAnalyzeImageMood.textContent = "Analyze";
+  }
   if (!imageMoodAppliedForNextGen && els.imageMoodSummary) {
     els.imageMoodSummary.textContent = "";
     els.imageMoodSummary.hidden = true;
@@ -16415,12 +16422,77 @@ function closeImageMoodSheet() {
   resetImageMoodSheetSession();
 }
 
-function syncImageMoodSheetUi() {
-  const applyBtn = document.getElementById("btnApplyImageMood");
-  const analyzeBtn = document.getElementById("btnAnalyzeImageMood");
+const IMAGE_MOOD_SUBJECT_TAG_BLOCKLIST = new Set([
+  "dog", "dogs", "puppy", "cat", "cats", "kitten", "pet", "pets", "animal", "animals",
+  "house", "home", "room", "kitchen", "bedroom", "living", "indoor", "indoors", "outdoor", "outdoors",
+  "person", "people", "man", "woman", "boy", "girl", "baby", "child", "kids", "family", "face", "portrait",
+  "car", "cars", "bike", "phone", "jewelry", "ring", "necklace", "watch", "product",
+  "food", "coffee", "drink", "flower", "flowers", "tree", "trees", "sky", "cloud", "clouds",
+  "beach", "ocean", "sea", "mountain", "city", "street", "building", "selfie",
+]);
+
+function looksLikeImageMoodSubjectTag(tag, subject = "") {
+  const t = String(tag || "").trim().toLowerCase();
+  if (!t) return true;
+  if (IMAGE_MOOD_SUBJECT_TAG_BLOCKLIST.has(t)) return true;
+  if (/^[a-z]+$/.test(t) && IMAGE_MOOD_SUBJECT_TAG_BLOCKLIST.has(t.replace(/s$/, ""))) return true;
+  const sub = String(subject || "").toLowerCase();
+  if (!sub) return false;
+  // Whole-token only — keep "warm acoustic" when subject is "a warm dog".
+  const subjectNouns = sub.split(/[^a-z0-9]+/).filter((w) => w.length > 2 && IMAGE_MOOD_SUBJECT_TAG_BLOCKLIST.has(w));
+  if (!subjectNouns.length) return false;
+  const tagTokens = t.split(/[^a-z0-9]+/).filter(Boolean);
+  return subjectNouns.some((w) => tagTokens.includes(w));
+}
+
+/** Keep musical style tags only — subjects belong in lyric seed, not Style. */
+function sanitizeImageMoodForClient(raw) {
+  if (!raw || typeof raw !== "object") return raw;
+  const subject = String(raw.subject || "").trim();
+  const rawTags = Array.isArray(raw.tags) ? raw.tags.map((x) => String(x || "").trim()).filter(Boolean) : [];
+  const tags = rawTags.filter((t) => !looksLikeImageMoodSubjectTag(t, subject));
+  let lyricSeed = String(raw.lyricSeed || "").trim();
+  if (!lyricSeed && subject) {
+    lyricSeed = `Write lyrics inspired by ${subject} — keep it personal, concrete, and singable.`;
+  }
+  // Rescue subject nouns that wrongly landed in tags into the lyric seed.
+  const leaked = rawTags.filter((t) => looksLikeImageMoodSubjectTag(t, subject));
+  if (!lyricSeed && leaked.length) {
+    lyricSeed = `Write lyrics inspired by ${leaked.slice(0, 3).join(", ")} — keep it personal and singable.`;
+  }
+  const vocalRaw = String(raw.vocalSuggestion || "").trim().toLowerCase();
+  const vocalSuggestion = vocalRaw === "instrumental" || vocalRaw === "lyrics"
+    ? vocalRaw
+    : (subject || leaked.length ? "lyrics" : "instrumental");
+  return {
+    ...raw,
+    subject,
+    tags,
+    lyricSeed,
+    vocalSuggestion,
+  };
+}
+
+function syncImageMoodSheetUi({ analyzing = false } = {}) {
+  const applyBtn = document.getElementById("btnApplyImageMood") || els.btnApplyImageMood;
+  const analyzeBtn = document.getElementById("btnAnalyzeImageMood") || els.btnAnalyzeImageMood;
   const hasFile = Boolean(els.imageMoodUpload?.files?.[0]);
-  if (applyBtn) applyBtn.disabled = !imageMoodData;
-  if (analyzeBtn) analyzeBtn.disabled = !hasFile;
+  const card = els.imageMoodModal?.querySelector?.(".imageMoodCard")
+    || els.imageMoodOutput?.closest?.(".imageMoodCard");
+  if (applyBtn) applyBtn.disabled = !imageMoodData || analyzing;
+  if (analyzeBtn) {
+    analyzeBtn.disabled = !hasFile || analyzing;
+    analyzeBtn.classList.toggle("isReady", Boolean(hasFile && !analyzing && !imageMoodData));
+    analyzeBtn.classList.toggle("isBusy", Boolean(analyzing));
+    analyzeBtn.textContent = analyzing ? "Analyzing…" : "Analyze";
+  }
+  if (card) {
+    card.classList.toggle("analyzing", Boolean(analyzing));
+    card.classList.toggle("hasPhotoReady", Boolean(hasFile));
+  }
+  if (els.imageMoodOutput) {
+    els.imageMoodOutput.classList.toggle("isAnalyzing", Boolean(analyzing));
+  }
   const pickLabel = document.querySelector(".imageMoodPickLabel");
   const file = els.imageMoodUpload?.files?.[0];
   if (pickLabel) {
@@ -16443,27 +16515,30 @@ function syncImageMoodPreviewUi(show) {
 
 function applyImageMoodToSongFields() {
   if (!imageMoodData) return;
-  const tags = Array.isArray(imageMoodData.tags) ? imageMoodData.tags.filter(Boolean) : [];
+  const mood = sanitizeImageMoodForClient(imageMoodData);
+  imageMoodData = mood;
+  const tags = Array.isArray(mood.tags) ? mood.tags.filter(Boolean) : [];
   if (els.sunoStyle && tags.length) {
     const existing = String(els.sunoStyle.value || "").trim();
     const current = existing ? existing.split(",").map((s) => s.trim()).filter(Boolean) : [];
     const merged = [...new Set([...current, ...tags])].slice(0, 12);
     els.sunoStyle.value = merged.join(", ");
   }
-  const lyricSeed = String(imageMoodData.lyricSeed || "").trim();
-  if (els.sunoPrompt && lyricSeed && !String(els.sunoPrompt.value || "").trim()) {
+  const wantsLyrics = String(mood.vocalSuggestion || "lyrics") !== "instrumental";
+  const lyricSeed = String(mood.lyricSeed || "").trim();
+  if (els.sunoPrompt && lyricSeed && wantsLyrics && !String(els.sunoPrompt.value || "").trim()) {
     els.sunoPrompt.value = lyricSeed;
     try {
       autoResizeLyricsBox();
     } catch {}
   }
   imageMoodAppliedForNextGen = true;
-  if (els.sunoArtworkStyle && imageMoodData.artworkHint) {
+  if (els.sunoArtworkStyle && mood.artworkHint) {
     const cur = String(els.sunoArtworkStyle.value || "").trim();
-    if (!cur) els.sunoArtworkStyle.value = String(imageMoodData.artworkHint).trim();
+    if (!cur) els.sunoArtworkStyle.value = String(mood.artworkHint).trim();
   }
   const summaryTags = tags.slice(0, 4).join(", ");
-  const summaryText = String(imageMoodData.concept || summaryTags || "Image mood applied.").trim();
+  const summaryText = String(mood.concept || summaryTags || "Image mood applied.").trim();
   if (els.imageMoodUseAsCover?.checked && imageMoodCoverDataUrl) {
     pendingGeneratedCoverDataUrl = imageMoodCoverDataUrl;
     if (els.imageMoodSummary) {
@@ -49878,13 +49953,18 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       els.imageMoodOutput.innerHTML = `<div class="imageMoodEmpty">No analysis yet.</div>`;
       return;
     }
-    const tags = Array.isArray(m.tags) ? m.tags.join(", ") : "";
+    const mood = sanitizeImageMoodForClient(m);
+    const tags = Array.isArray(mood.tags) ? mood.tags.join(", ") : "";
+    const vocalNote = mood.vocalSuggestion === "instrumental"
+      ? "Instrumental vibe — clear lyrics before generate if you want that."
+      : "Lyric idea ready — keep it, edit it, or use Magic to expand.";
     const rows = [
-      m.concept ? ["Mood", m.concept] : null,
-      tags ? ["Suggested tags", tags] : null,
-      m.lyricSeed ? ["Lyric seed", m.lyricSeed] : null,
-      m.artworkHint ? ["Artwork hint", m.artworkHint] : null,
-      m.source ? ["Source", m.source] : null,
+      mood.concept ? ["Mood", mood.concept] : null,
+      tags ? ["Style tags → Style", tags] : null,
+      mood.subject ? ["Scene (lyrics fuel)", mood.subject] : null,
+      mood.lyricSeed ? ["Lyric idea", mood.lyricSeed] : null,
+      mood.artworkHint ? ["Artwork hint", mood.artworkHint] : null,
+      vocalNote ? ["Song path", vocalNote] : null,
     ].filter(Boolean);
     els.imageMoodOutput.innerHTML = rows.length
       ? rows.map(([label, value]) => `
@@ -49902,10 +49982,15 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       return;
     }
     try {
-      if (els.btnAnalyzeImageMood) els.btnAnalyzeImageMood.disabled = true;
-      if (els.btnApplyImageMood) els.btnApplyImageMood.disabled = true;
-      const card = els.imageMoodOutput?.closest?.(".imageMoodCard");
-      if (card) card.classList.add("analyzing");
+      try { syncImageMoodSheetUi({ analyzing: true }); } catch {}
+      if (els.imageMoodOutput) {
+        els.imageMoodOutput.innerHTML = `
+          <div class="imageMoodAnalyzingState" aria-live="polite">
+            <span class="imageMoodAnalyzingAura" aria-hidden="true"></span>
+            <span class="imageMoodAnalyzingShimmer" aria-hidden="true"></span>
+            <p class="imageMoodAnalyzingLabel">Reading the mood…</p>
+          </div>`;
+      }
       let dataUrl = await fileToDataUrl(file);
       dataUrl = await downscaleImageDataUrl(dataUrl, 1600, 0.82);
       // Safety cap: keep request under Vercel payload limits.
@@ -49920,29 +50005,34 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       });
       const d = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(d?.error || "Image analysis failed");
-      imageMoodData = d || null;
+      imageMoodData = sanitizeImageMoodForClient(d || null);
       renderImageMood(imageMoodData);
-      try { syncImageMoodSheetUi(); } catch {}
+      try { syncImageMoodSheetUi({ analyzing: false }); } catch {}
       if (els.imageMoodSummary) {
-        const tags = Array.isArray(d?.tags) ? d.tags.slice(0, 4).join(", ") : "";
-        els.imageMoodSummary.textContent = tags || String(d?.concept || "Image mood ready.");
+        const tags = Array.isArray(imageMoodData?.tags) ? imageMoodData.tags.slice(0, 4).join(", ") : "";
+        els.imageMoodSummary.textContent = tags || String(imageMoodData?.concept || "Image mood ready.");
         els.imageMoodSummary.hidden = false;
       }
-      if (els.btnApplyImageMood) els.btnApplyImageMood.disabled = false;
-      setStatus("Image mood ready. Tap apply to use it.");
+      setStatus("Image mood ready. Tap Apply to send style tags + lyric idea into your song.");
     } catch (e) {
+      if (els.imageMoodOutput) {
+        els.imageMoodOutput.innerHTML = `<div class="imageMoodEmpty">Analysis failed — try another photo.</div>`;
+      }
       setStatus(`Image mood failed: ${e?.message || String(e)}`);
     } finally {
-      if (els.btnAnalyzeImageMood) els.btnAnalyzeImageMood.disabled = false;
-      const card = els.imageMoodOutput?.closest?.(".imageMoodCard");
-      if (card) card.classList.remove("analyzing");
+      try { syncImageMoodSheetUi({ analyzing: false }); } catch {}
     }
   };
   const applyImageMood = () => {
     if (!imageMoodData) return;
     applyImageMoodToSongFields();
+    const wantsLyrics = String(imageMoodData?.vocalSuggestion || "lyrics") !== "instrumental";
     closeImageMoodModal();
-    setStatus("Image mood applied. If no lyrics are provided, generation will be instrumental.");
+    setStatus(
+      wantsLyrics
+        ? "Photo Mood applied — style tags in Style, scene in Lyrics. Clear lyrics if you want instrumental."
+        : "Photo Mood applied — style tags ready. Leave lyrics empty for instrumental, or write/Magic for vocals."
+    );
     syncGenerateOrbVisibility();
   };
 

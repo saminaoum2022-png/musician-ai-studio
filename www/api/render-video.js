@@ -14,7 +14,7 @@
 
 const MAX_AUDIO_BYTES = 60 * 1024 * 1024;
 const MAX_IMAGE_BYTES = 12 * 1024 * 1024;
-const FETCH_TIMEOUT_MS = 25000;
+const FETCH_TIMEOUT_MS = 45000;
 const OUT_W = 720;
 const OUT_H = 1280;
 const OUT_FPS = 24;

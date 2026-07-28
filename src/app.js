@@ -189,7 +189,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260728-233505";
+const APP_BUILD = "20260729-000735";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -19110,6 +19110,21 @@ function trackCoverArtForSquareTile(track, opts = {}) {
   if (customThumb && !customThumb.startsWith("data:") && !isLogoCoverUrl(customThumb)) {
     return customThumb;
   }
+  // Unpublished drafts often still hold data: URLs in memory while Storage
+  // upload is in flight — prefer them over a stale HTTP thumb from partial sync.
+  const isUnpublished = Boolean(track?.publishPending) || !Boolean(track?.publicOnProfile);
+  if (isUnpublished) {
+    const dataThumb = String(m.imageThumb || "").trim();
+    if (dataThumb.startsWith("data:") && !isLogoCoverUrl(dataThumb)) return dataThumb;
+    const displayEarly = trackCoverArtForDisplay(track);
+    if (
+      (displayEarly.startsWith("data:") || displayEarly.startsWith("blob:")) &&
+      !isDefaultSongCoverUrl(displayEarly) &&
+      !isLogoCoverUrl(displayEarly)
+    ) {
+      return displayEarly;
+    }
+  }
   const thumb = String(m.imageThumb || "").trim();
   if (thumb && !thumb.startsWith("data:") && !isLogoCoverUrl(thumb)) return thumb;
 
@@ -19306,6 +19321,37 @@ async function backfillPendingCoverUploads(items) {
     // eslint-disable-next-line no-await-in-loop
     await persistTrackCoverIfNeeded(t);
   }
+}
+
+/** Upload data: covers for visible unpublished rows (list tiles + video export). */
+function scheduleLibraryCoverUploadsForVisible(items) {
+  if (!authSession?.user?.id) return;
+  const pending = (Array.isArray(items) ? items : [])
+    .filter(
+      (t) =>
+        (Boolean(t?.publishPending) || !Boolean(t?.publicOnProfile)) &&
+        (String(t?.artUrl || "").startsWith("data:") ||
+          String(t?.meta?.imageUrl || "").startsWith("data:")),
+    )
+    .slice(0, 6);
+  for (const t of pending) {
+    void persistTrackCoverIfNeeded(t);
+  }
+}
+
+/** Re-wire list row imgs through assignCoverImageSrc so retries/fallbacks work. */
+function wireLibraryRowCoverImages() {
+  document.querySelectorAll(".libRow[data-lib-row]").forEach((row) => {
+    const id = String(row.getAttribute("data-lib-row") || "").trim();
+    if (!id) return;
+    const track = loadLibrary().find((x) => String(x.id) === id);
+    if (!track) return;
+    const img = row.querySelector(".libRowArt img");
+    if (!img) return;
+    const art = trackCoverArtForSquareTile(track, { width: 256 });
+    if (!art || isDefaultSongCoverUrl(art) || isLogoCoverUrl(art)) return;
+    assignCoverImageSrc(img, art, { immediate: true, updateClasses: true });
+  });
 }
 
 async function saveCallingCard() {
@@ -42173,6 +42219,7 @@ async function ensureUserLibraryHydrated(prefetchedCloud, opts = {}) {
   backfillNabadVerificationInLibrary();
   try { backfillPendingAbstractCovers(mergedDeduped); } catch {}
   try { watchPendingCoverArt(); } catch {}
+  void backfillPendingCoverUploads(mergedDeduped);
   refreshOwnSongsUi();
   try { resumePendingPublishes(); } catch {}
 
@@ -42747,6 +42794,20 @@ async function createSunoMusicVideoForTrack(track, { onStatus } = {}) {
   }
 }
 
+function withTimeout(promise, ms, fallback = null) {
+  return Promise.race([
+    promise,
+    new Promise((resolve) => setTimeout(() => resolve(fallback), ms)),
+  ]);
+}
+
+function isVideoRenderTimeoutError(e) {
+  if (!e) return false;
+  if (e.name === "AbortError") return true;
+  const msg = String(e.message || e || "");
+  return /timed out|504|aborted|fetch failed|network/i.test(msg);
+}
+
 async function fetchVideoLyricLinesForTrack(track) {
   const ids = resolveKaraokeIdsFromTrackRef(track);
   if (!ids?.taskId || !ids?.audioId) return null;
@@ -42805,6 +42866,47 @@ async function requestRenderedVideoBlob({
   return blob;
 }
 
+async function requestRenderedVideoBlobResilient({
+  serverAudioUrl,
+  imageUrl,
+  trackTitle,
+  lyrics,
+  say,
+} = {}) {
+  const attempts = [
+    {
+      lyrics,
+      label: lyrics?.length ? "Rendering 9:16 video with lyrics…" : "Rendering 9:16 video…",
+    },
+    ...(lyrics?.length
+      ? [{ lyrics: null, label: "Retrying without lyrics (slow connection)…" }]
+      : []),
+  ];
+  let lastErr = null;
+  for (let i = 0; i < attempts.length; i += 1) {
+    const attempt = attempts[i];
+    const ctrl = new AbortController();
+    const renderTimer = setTimeout(() => ctrl.abort(), 65000);
+    try {
+      say(attempt.label);
+      return await requestRenderedVideoBlob({
+        serverAudioUrl,
+        imageUrl,
+        trackTitle,
+        lyrics: attempt.lyrics,
+        signal: ctrl.signal,
+      });
+    } catch (e) {
+      lastErr = e;
+      const canRetry = i < attempts.length - 1 && isVideoRenderTimeoutError(e);
+      if (!canRetry) throw e;
+    } finally {
+      clearTimeout(renderTimer);
+    }
+  }
+  throw lastErr || new Error("Video render failed");
+}
+
 async function downloadLibraryVideoTrack(track, { onRendered } = {}) {
   const isHttpUrl = (u) => /^https?:\/\//i.test(String(u || "").trim());
   let t = track;
@@ -42822,13 +42924,26 @@ async function downloadLibraryVideoTrack(track, { onRendered } = {}) {
   };
 
   beginCoachPriorityStatus(coachExportVideoPillText(trackTitle), { generating: true });
-  say("Rendering video with sound + lyrics…");
+  say("Preparing video export…");
 
   try {
+    const coverNeedsUpload =
+      !isHttpUrl(trackCoverArtForDisplay(t)) &&
+      (String(t?.meta?.imageUrl || "").startsWith("data:") ||
+        String(t?.artUrl || "").startsWith("data:"));
+    if (coverNeedsUpload) {
+      say("Uploading cover for video…");
+      try {
+        await withTimeout(persistTrackCoverIfNeeded(t), 30000, null);
+        const fresh = loadLibrary().find((x) => String(x.id) === String(t.id));
+        if (fresh) t = fresh;
+      } catch {}
+    }
+
     say("Preparing audio…");
     const rawForPlay = unwrapInnermostHttpAudioUrl(t.url);
     let trackUrl = normalizeAudioUrlForPlayback(toAudioProxyUrl(rawForPlay) || rawForPlay);
-    const refreshed = await tryRefreshLibraryTrackAudioFromSuno(t);
+    const refreshed = await withTimeout(tryRefreshLibraryTrackAudioFromSuno(t), 5000, null);
     if (refreshed?.url) {
       const freshInner = String(refreshed.url).trim();
       const newProx = normalizeAudioUrlForPlayback(toAudioProxyUrl(freshInner) || freshInner);
@@ -42866,7 +42981,7 @@ async function downloadLibraryVideoTrack(track, { onRendered } = {}) {
     say("Loading timestamped lyrics…");
     let lyrics = null;
     try {
-      lyrics = await fetchVideoLyricLinesForTrack(t);
+      lyrics = await withTimeout(fetchVideoLyricLinesForTrack(t), 10000, null);
     } catch {
       lyrics = null;
     }
@@ -42876,29 +42991,13 @@ async function downloadLibraryVideoTrack(track, { onRendered } = {}) {
       say("Rendering video (cover + sound)…");
     }
 
-    const ctrl = new AbortController();
-    const renderTimer = setTimeout(() => ctrl.abort(), lyrics?.length ? 95000 : 80000);
-
-    // Always POST so lyrics ship with the render. (The old native GET path
-    // skipped lyrics and could produce hard-to-play 1fps stills on iOS.)
-    let blob;
-    try {
-      say(lyrics?.length ? "Rendering 9:16 video with lyrics…" : "Rendering 9:16 video…");
-      blob = await requestRenderedVideoBlob({
-        serverAudioUrl,
-        imageUrl,
-        trackTitle,
-        lyrics,
-        signal: ctrl.signal,
-      });
-    } catch (e) {
-      if (e?.name === "AbortError") {
-        throw new Error("Video render timed out — try again on Wi‑Fi.");
-      }
-      throw e;
-    } finally {
-      clearTimeout(renderTimer);
-    }
+    const blob = await requestRenderedVideoBlobResilient({
+      serverAudioUrl,
+      imageUrl,
+      trackTitle,
+      lyrics,
+      say,
+    });
 
     say("Opening Save Video…");
     try {
@@ -43730,6 +43829,10 @@ function renderLibrary() {
   try {
     syncDiscoveryPlayingHighlights();
   } catch {}
+  try {
+    wireLibraryRowCoverImages();
+  } catch {}
+  scheduleLibraryCoverUploadsForVisible(visibleItems);
   const _scheduleThumbBackfill = () => { void backfillLibraryThumbsLazy(); };
   if (typeof requestIdleCallback === "function") {
     requestIdleCallback(_scheduleThumbBackfill, { timeout: 1500 });

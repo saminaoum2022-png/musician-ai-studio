@@ -107,6 +107,7 @@ import {
   finishCoachPriorityStatus,
   cancelCoachPriorityStatus,
   coachMusicVideoPillText,
+  coachExportVideoPillText,
   coachInstrumentalPillText,
   coachSoundPillText,
   coachHumTrackGeneratingPillText,
@@ -188,7 +189,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260728-224529";
+const APP_BUILD = "20260728-231218";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -23307,7 +23308,9 @@ async function writeBlobToNativeCache(blob, filename) {
 
 /**
  * Standard iOS share sheet (UIActivityViewController) for a local file.
- * Must be called from a fresh user tap after async work — iOS blocks deferred sheets.
+ * Prefer calling this as soon as the file is ready — iOS usually allows it
+ * when the whole flow started from a user tap. Falls back to a fresh-tap
+ * modal if the sheet is blocked.
  */
 async function presentNativeIosShareSheetForFile(filePath) {
   const Share = getCapacitorSharePlugin();
@@ -23331,7 +23334,7 @@ function closeVideoSaveModal() {
   try { document.body.style.overflow = ""; } catch {}
 }
 
-/** After render finishes, ask for a fresh tap so iOS allows the share sheet. */
+/** Fallback only: if iOS blocks a deferred share sheet, ask for one fresh tap. */
 function openVideoSaveModal({ filePath, title }) {
   const path = normalizeFilePathForIosShare(filePath);
   if (!/^file:\/\//i.test(path)) throw new Error("Could not access the rendered video.");
@@ -23340,6 +23343,25 @@ function openVideoSaveModal({ filePath, title }) {
   if (els.videoSaveModal) els.videoSaveModal.style.display = "";
   try { document.body.style.overflow = "hidden"; } catch {}
   try { haptic("success"); } catch {}
+}
+
+/**
+ * Open the system iOS share sheet (Save Video → Photos permission) as soon as
+ * the file is ready. If the OS blocks a deferred sheet, fall back to our
+ * one-tap “Save Video” sheet so a fresh gesture can present it.
+ */
+async function presentNativeVideoSaveWhenReady({ filePath, title } = {}) {
+  const path = normalizeFilePathForIosShare(filePath);
+  if (!/^file:\/\//i.test(path)) throw new Error("Could not access the rendered video.");
+  try { hideToast(); } catch {}
+  try {
+    await presentNativeIosShareSheetForFile(path);
+    return { usedSystemSheet: true };
+  } catch (e) {
+    if (shareSheetCanceledError(e)) return { usedSystemSheet: true, canceled: true };
+    openVideoSaveModal({ filePath: path, title });
+    return { usedSystemSheet: false };
+  }
 }
 
 async function triggerPendingNativeVideoSave() {
@@ -23414,7 +23436,7 @@ async function deliverDownloadBlobToDevice(blob, { filename, title, isVideo } = 
     try {
       const { filePath } = await writeBlobToNativeCache(blob, safeName);
       if (isVideo) {
-        openVideoSaveModal({ filePath, title: trackTitle });
+        await presentNativeVideoSaveWhenReady({ filePath, title: trackTitle });
       } else {
         await presentNativeIosShareSheetForFile(filePath);
       }
@@ -32819,11 +32841,13 @@ function runTrackSheetAction(action, sourceEl) {
       shut();
       void (async () => {
         try {
-          setStatus("Preparing video download…");
+          setStatus("Rendering video…");
           await downloadLibraryVideoTrack(t);
           setStatus("Video download is ready.");
         } catch (err) {
-          setStatus(`Video download failed: ${err?.message || String(err)}`);
+          const m = err?.message || String(err);
+          setStatus(`Video download failed: ${m}`);
+          try { showToast(m, { icon: "!", durationMs: 4400 }); } catch {}
         }
       })();
       return;
@@ -33000,11 +33024,13 @@ function runTrackSheetAction(action, sourceEl) {
       }
       void (async () => {
         try {
-          setStatus("Preparing video download…");
+          setStatus("Rendering video…");
           await downloadLibraryVideoTrack(t);
           setStatus("Video download is ready.");
         } catch (err) {
-          setStatus(`Video download failed: ${err?.message || String(err)}`);
+          const m = err?.message || String(err);
+          setStatus(`Video download failed: ${m}`);
+          try { showToast(m, { icon: "!", durationMs: 4400 }); } catch {}
         }
       })();
       return;
@@ -42533,7 +42559,7 @@ els.btnSaveMusicVideo?.addEventListener("click", async () => {
     const filename = `${safeTitle}-music-video.mp4`;
     if (isCapacitorNativeAuth()) {
       const { filePath } = await writeBlobToNativeCache(blob, filename);
-      openVideoSaveModal({ filePath, title: ctx.title });
+      await presentNativeVideoSaveWhenReady({ filePath, title: ctx.title });
     } else {
       await deliverDownloadBlobToDevice(blob, { filename, title: ctx.title, isVideo: true });
     }
@@ -42732,127 +42758,115 @@ async function downloadLibraryVideoTrack(track, { onRendered } = {}) {
   let t = track;
   if (!t?.url) throw new Error("Missing audio URL");
 
-  const rawForPlay = unwrapInnermostHttpAudioUrl(t.url);
-  let trackUrl = normalizeAudioUrlForPlayback(toAudioProxyUrl(rawForPlay) || rawForPlay);
-  const refreshed = await tryRefreshLibraryTrackAudioFromSuno(t);
-  if (refreshed?.url) {
-    const freshInner = String(refreshed.url).trim();
-    const newProx = normalizeAudioUrlForPlayback(toAudioProxyUrl(freshInner) || freshInner);
-    if (freshInner !== rawForPlay) {
-      const updated = patchLibraryRowWithRefreshedUrl(String(t.id), newProx, freshInner, t);
-      if (updated) t = updated;
-    }
-    trackUrl = newProx;
-  }
-
-  const resolvePlaybackUrl = (url) => {
-    const n = normalizeAudioUrlForPlayback(String(url || "").trim());
-    return isHttpUrl(n) ? n : "";
-  };
-  let serverAudioUrl = "";
-  if (refreshed?.url && isHttpUrl(refreshed.url)) {
-    serverAudioUrl = String(refreshed.url).trim();
-  } else if (isHttpUrl(rawForPlay)) {
-    serverAudioUrl = rawForPlay;
-  } else {
-    serverAudioUrl = resolvePlaybackUrl(trackUrl);
-  }
-  if (!serverAudioUrl) throw new Error("This song isn't downloadable. Try opening it from Library again.");
-
   const trackTitle = String(t?.title || "song").trim() || "song";
-  const artCandidates = [t?.meta && t.meta.imageUrl, t?.artUrl];
-  const imageUrl = (artCandidates.find((s) => isHttpUrl(s)) || "").trim();
-  const filename = `${trackTitle.replace(/[\\/:*?"<>|]/g, "").trim() || "song"}.mp4`;
-  const safeExportName = sanitizeNativeExportFilename(filename, "song.mp4");
-  const lyrics = await fetchVideoLyricLinesForTrack(t);
-
-  const ctrl = new AbortController();
-  const renderTimer = setTimeout(() => ctrl.abort(), lyrics?.length ? 90000 : 75000);
-
-  // Native iOS without synced lyrics: URLSession download avoids holding large blobs in WKWebView.
-  const fs = getCapFilesystemPlugin();
-  if (isCapacitorNativeAuth() && fs?.downloadFile && fs?.stat && !lyrics?.length) {
-    const audioForServer = serverAudioUrlForVideoRender(serverAudioUrl);
-    const params = new URLSearchParams({ audioUrl: audioForServer, title: trackTitle });
-    if (imageUrl) params.set("imageUrl", imageUrl);
-    const renderUrl = `${apiUrl("/api/render-video")}?${params.toString()}`;
-    const rel = `NabadAi/exports/${Date.now()}-${safeExportName}`;
-    const downloadMs = 75000;
-    let dl;
+  const say = (m) => {
+    const msg = String(m || coachExportVideoPillText(trackTitle));
     try {
-      dl = await Promise.race([
-        fs.downloadFile({
-          path: rel,
-          directory: "DOCUMENTS",
-          url: renderUrl,
-          headers: getApiFetchHeaders(),
-          recursive: true,
-        }),
-        new Promise((_, reject) => {
-          setTimeout(() => reject(new Error("Video render timed out — try Wi‑Fi or Download audio.")), downloadMs);
-        }),
-      ]);
+      updateCoachPriorityStatus(msg, { generating: true });
+    } catch {}
+    try {
+      showToast(msg, { sticky: true, icon: "♪" });
+    } catch {}
+  };
+
+  beginCoachPriorityStatus(coachExportVideoPillText(trackTitle), { generating: true });
+  say("Rendering video with sound + lyrics…");
+
+  try {
+    say("Preparing audio…");
+    const rawForPlay = unwrapInnermostHttpAudioUrl(t.url);
+    let trackUrl = normalizeAudioUrlForPlayback(toAudioProxyUrl(rawForPlay) || rawForPlay);
+    const refreshed = await tryRefreshLibraryTrackAudioFromSuno(t);
+    if (refreshed?.url) {
+      const freshInner = String(refreshed.url).trim();
+      const newProx = normalizeAudioUrlForPlayback(toAudioProxyUrl(freshInner) || freshInner);
+      if (freshInner !== rawForPlay) {
+        const updated = patchLibraryRowWithRefreshedUrl(String(t.id), newProx, freshInner, t);
+        if (updated) t = updated;
+      }
+      trackUrl = newProx;
+    }
+
+    const resolvePlaybackUrl = (url) => {
+      const n = normalizeAudioUrlForPlayback(String(url || "").trim());
+      return isHttpUrl(n) ? n : "";
+    };
+    let serverAudioUrl = "";
+    if (refreshed?.url && isHttpUrl(refreshed.url)) {
+      serverAudioUrl = String(refreshed.url).trim();
+    } else if (isHttpUrl(rawForPlay)) {
+      serverAudioUrl = rawForPlay;
+    } else {
+      serverAudioUrl = resolvePlaybackUrl(trackUrl);
+    }
+    if (!serverAudioUrl) throw new Error("This song isn't downloadable. Try opening it from Library again.");
+
+    const displayArt = trackCoverArtForDisplay(t);
+    const artCandidates = [
+      displayArt,
+      t?.meta && t.meta.imageUrl,
+      t?.artUrl,
+    ];
+    const imageUrl = (artCandidates.find((s) => isHttpUrl(s)) || "").trim();
+    const filename = `${trackTitle.replace(/[\\/:*?"<>|]/g, "").trim() || "song"}.mp4`;
+    const safeExportName = sanitizeNativeExportFilename(filename, "song.mp4");
+
+    say("Loading timestamped lyrics…");
+    let lyrics = null;
+    try {
+      lyrics = await fetchVideoLyricLinesForTrack(t);
+    } catch {
+      lyrics = null;
+    }
+    if (lyrics?.length) {
+      say(`Burning ${lyrics.length} lyric lines…`);
+    } else {
+      say("Rendering video (cover + sound)…");
+    }
+
+    const ctrl = new AbortController();
+    const renderTimer = setTimeout(() => ctrl.abort(), lyrics?.length ? 95000 : 80000);
+
+    // Always POST so lyrics ship with the render. (The old native GET path
+    // skipped lyrics and could produce hard-to-play 1fps stills on iOS.)
+    let blob;
+    try {
+      say(lyrics?.length ? "Rendering 9:16 video with lyrics…" : "Rendering 9:16 video…");
+      blob = await requestRenderedVideoBlob({
+        serverAudioUrl,
+        imageUrl,
+        trackTitle,
+        lyrics,
+        signal: ctrl.signal,
+      });
+    } catch (e) {
+      if (e?.name === "AbortError") {
+        throw new Error("Video render timed out — try again on Wi‑Fi.");
+      }
+      throw e;
     } finally {
       clearTimeout(renderTimer);
     }
-    let filePath = String(dl?.path || "").trim();
-    const stat = await fs.stat({ path: rel, directory: "DOCUMENTS" });
-    const bytes = Number(stat?.size || 0);
-    if (!filePath && /^file:\/\//i.test(String(stat?.uri || ""))) {
-      filePath = String(stat.uri).trim();
-    }
-    if (!bytes || bytes < 2048) {
-      let errMsg = "Video render failed on the server.";
-      try {
-        const rf = await fs.readFile({ path: rel, directory: "DOCUMENTS", encoding: "utf8" });
-        const parsed = JSON.parse(String(rf?.data || rf || ""));
-        if (parsed?.error) errMsg = String(parsed.error);
-      } catch {}
-      try {
-        await fs.deleteFile({ path: rel, directory: "DOCUMENTS" });
-      } catch {}
-      if (/timed out|504|gateway/i.test(errMsg)) {
-        errMsg = "Video render timed out — try Download audio, or a shorter song.";
-      }
-      throw new Error(errMsg);
-    }
-    if (!/^file:\/\//i.test(filePath)) {
-      throw new Error("Could not access the rendered video on this device.");
-    }
-    filePath = normalizeFilePathForIosShare(filePath);
+
+    say("Opening Save Video…");
     try {
       onRendered?.();
     } catch {}
-    openVideoSaveModal({ filePath, title: trackTitle });
-    return;
-  }
-
-  let blob;
-  try {
-    blob = await requestRenderedVideoBlob({
-      serverAudioUrl,
-      imageUrl,
-      trackTitle,
-      lyrics,
-      signal: ctrl.signal,
-    });
-  } catch (e) {
-    if (e?.name === "AbortError") {
-      throw new Error("Video render timed out — try again on Wi‑Fi.");
+    if (isCapacitorNativeAuth()) {
+      const { filePath } = await writeBlobToNativeCache(blob, safeExportName);
+      finishCoachPriorityStatus("Video ready ✓");
+      // System share sheet → Save Video → Photos permission (NSPhotoLibraryAddUsageDescription).
+      await presentNativeVideoSaveWhenReady({ filePath, title: trackTitle });
+      return;
     }
+    try { hideToast(); } catch {}
+    await deliverDownloadBlobToDevice(blob, { filename, title: trackTitle, isVideo: true });
+    finishCoachPriorityStatus("Video ready ✓");
+  } catch (e) {
+    try { hideToast(); } catch {}
+    try { cancelCoachPriorityStatus(); } catch {}
     throw e;
-  } finally {
-    clearTimeout(renderTimer);
   }
-  try {
-    onRendered?.();
-  } catch {}
-  if (isCapacitorNativeAuth()) {
-    const { filePath } = await writeBlobToNativeCache(blob, safeExportName);
-    openVideoSaveModal({ filePath, title: trackTitle });
-    return;
-  }
-  await deliverDownloadBlobToDevice(blob, { filename, title: trackTitle, isVideo: true });
 }
 async function pollLibraryStemsUntilDone(taskId, kind, opts = {}) {
   const sourceTitle = String(opts.sourceTitle || "").trim();
@@ -47510,6 +47524,19 @@ async function sharePublicTrackLink(track, { title, byLine } = {}) {
  * after a short pause. Falls back to setStatus if the toast element
  * isn't present (older shells). */
 let toastDismissTimer = null;
+
+function hideToast() {
+  if (toastDismissTimer) {
+    try { clearTimeout(toastDismissTimer); } catch {}
+    toastDismissTimer = null;
+  }
+  const el = els.toast;
+  if (!el) return;
+  el.classList.remove("show");
+  el.classList.remove("isLong");
+  el.onclick = null;
+}
+
 function showToast(message, opts) {
   const text = String(message || "").trim();
   if (!text) return;
@@ -47532,7 +47559,17 @@ function showToast(message, opts) {
   el.classList.add("show");
   if (toastDismissTimer) {
     try { clearTimeout(toastDismissTimer); } catch {}
+    toastDismissTimer = null;
   }
+
+  // Sticky toasts stay up until hideToast() / a non-sticky toast / tap.
+  // Used while video export is rendering so the user sees progress until
+  // the system Save Video sheet appears.
+  if (opts?.sticky) {
+    el.onclick = () => hideToast();
+    return;
+  }
+
   // Default windows: 2.2s for short, 7s for long. Caller can still
   // override via durationMs but we cap at 12s so the UI never stays
   // stuck behind a forgotten toast.
@@ -47548,12 +47585,7 @@ function showToast(message, opts) {
   // their own schedule once they've finished reading. We rebind
   // each call so the latest text is what's dismissed cleanly.
   el.onclick = () => {
-    if (toastDismissTimer) {
-      try { clearTimeout(toastDismissTimer); } catch {}
-      toastDismissTimer = null;
-    }
-    el.classList.remove("show");
-    el.classList.remove("isLong");
+    hideToast();
   };
 }
 function showShareToast(message) {

@@ -61,7 +61,7 @@
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>NabadAi Music accesses your photo library so you can choose images for stories and song covers.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
-	<string>NabadAi Music saves story photos you capture to your library when you choose to.</string>
+	<string>NabadAi saves song videos and story photos to your Photos library when you tap Save Video.</string>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>

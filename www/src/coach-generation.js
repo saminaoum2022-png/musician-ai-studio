@@ -114,6 +114,11 @@ export function coachMusicVideoPillText(title) {
   return `Music video · ${t.slice(0, 28)}${t.length > 28 ? "…" : ""}`;
 }
 
+export function coachExportVideoPillText(title) {
+  const t = String(title || "Your song").trim() || "Your song";
+  return `Rendering video · ${t.slice(0, 26)}${t.length > 26 ? "…" : ""}`;
+}
+
 export function coachInstrumentalPillText(title) {
   const t = String(title || "Your song").trim() || "Your song";
   return `Instrumental · ${t.slice(0, 28)}${t.length > 28 ? "…" : ""}`;

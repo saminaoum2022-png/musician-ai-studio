@@ -1,26 +1,26 @@
-// Render a "song video" on the fly: still cover image + audio = mp4.
+// Render a "song video" on the fly: cover image + audio = mp4.
 // Used by the Download Video button so the user can save and share their
-// song as a single file (most chat apps + social platforms accept mp4
-// directly, unlike a bare audio URL).
+// song as a single file (chat apps + social accept mp4 directly).
 //
 // GET  /api/render-video?audioUrl=...&imageUrl=...&title=...
 // POST /api/render-video  { audioUrl, imageUrl, title, lyrics? }
 //   lyrics: [{ text, startS, endS }] — optional synced lines burned into the export
 //
-// Streaming the mp4 back via res.end(buffer). For songs >5 min the
-// encode time may approach Vercel's 60s ceiling; we cap input fetch to
-// 25s and keep the encode at -preset ultrafast for headroom.
+// Output is 9:16 (720×1280) to match Discover/post framing, with AAC audio
+// and CFR 24fps so iOS Photos/share sheets actually play sound (1fps still
+// encodes often ship silent or unplayable on iPhone).
 //
-// Requires ffmpeg-static to be packaged with the function (see
-// vercel.json `includeFiles`).
+// Requires ffmpeg-static (see vercel.json `includeFiles`).
 
-const MAX_AUDIO_BYTES = 60 * 1024 * 1024; // 60MB — way more than any song
-const MAX_IMAGE_BYTES = 12 * 1024 * 1024; // 12MB — covers any reasonable cover
+const MAX_AUDIO_BYTES = 60 * 1024 * 1024;
+const MAX_IMAGE_BYTES = 12 * 1024 * 1024;
 const FETCH_TIMEOUT_MS = 25000;
+const OUT_W = 720;
+const OUT_H = 1280;
+const OUT_FPS = 24;
 
 function sanitizeFilename(name) {
   const trimmed = String(name || "song").trim();
-  // Strip filesystem-hostile chars; keep unicode (titles often have it).
   return trimmed
     .replace(/[\\/:*?"<>|\u0000-\u001F]/g, "")
     .replace(/\s+/g, " ")
@@ -55,7 +55,6 @@ function audioExtFromContentType(ct, fallbackUrl) {
   if (lower.includes("flac")) return "flac";
   if (lower.includes("ogg")) return "ogg";
   if (lower.includes("webm")) return "webm";
-  // Fall back to URL extension
   try {
     const u = new URL(fallbackUrl);
     const m = u.pathname.match(/\.(mp3|m4a|aac|wav|flac|ogg|webm)$/i);
@@ -113,6 +112,7 @@ function normalizeLyricLines(raw) {
   return lines;
 }
 
+/** ASS styled like in-player karaoke: white current line, soft outline, lower third. */
 function buildAssFromLyricLines(lines) {
   const events = lines
     .map(
@@ -122,14 +122,14 @@ function buildAssFromLyricLines(lines) {
     .join("\n");
   return `[Script Info]
 ScriptType: v4.00+
-PlayResX: 720
-PlayResY: 720
+PlayResX: ${OUT_W}
+PlayResY: ${OUT_H}
 WrapStyle: 0
 ScaledBorderAndShadow: yes
 
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: Current,Arial,28,&H00FFFFFF,&H000000FF,&H00101010,&H80000000,1,0,0,0,100,100,0,0,1,2,1,2,36,36,88,1
+Style: Current,Arial,54,&H00FFFFFF,&H000000FF,&H64000000,&H80000000,1,0,0,0,100,100,0,0,1,3,0,2,48,48,220,1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
@@ -208,8 +208,6 @@ module.exports = async function handler(req, res) {
       res.end(JSON.stringify({ error: "Missing audioUrl" }));
       return;
     }
-    // Node's fetch only handles http/https. A blob:, data:, or relative URL
-    // would otherwise crash with a vague "Failed to parse URL" message.
     if (!/^https?:\/\//i.test(audioUrl)) {
       res.statusCode = 400;
       res.setHeader("Content-Type", "application/json");
@@ -219,8 +217,6 @@ module.exports = async function handler(req, res) {
       }));
       return;
     }
-    // Image is optional. Drop any non-http(s) imageUrl so the render
-    // falls back to a black background instead of failing the whole job.
     const safeImageUrl = imageUrl && /^https?:\/\//i.test(imageUrl) ? imageUrl : "";
 
     let ffmpegPath = null;
@@ -233,8 +229,6 @@ module.exports = async function handler(req, res) {
       return;
     }
 
-    // Pull both assets in parallel. Image is optional — if it fails or
-    // the URL is empty, we render with a solid black background instead.
     const audioPromise = fetchToBuffer(audioUrl, MAX_AUDIO_BYTES);
     const imagePromise = safeImageUrl
       ? fetchToBuffer(safeImageUrl, MAX_IMAGE_BYTES).catch(() => null)
@@ -264,17 +258,15 @@ module.exports = async function handler(req, res) {
       cleanup.push(assPath);
     }
 
-    const hasLyrics = Boolean(assPath);
-    const baseVf =
-      "scale=720:720:force_original_aspect_ratio=decrease,pad=720:720:(ow-iw)/2:(oh-ih)/2:color=black";
-    const vf = hasLyrics
-      ? `${baseVf},subtitles='${ffmpegEscapeFilterPath(assPath)}'`
-      : baseVf;
+    // 9:16 cover-crop (top-biased) — same framing as Discover / posts.
+    // Always CFR 24fps + AAC stereo so iPhone playback keeps the audio track.
+    const scaleCrop =
+      `scale=${OUT_W}:${OUT_H}:force_original_aspect_ratio=increase,` +
+      `crop=${OUT_W}:${OUT_H}:(iw-ow)/2:0,fps=${OUT_FPS},format=yuv420p`;
+    const vchain = assPath
+      ? `${scaleCrop},subtitles='${ffmpegEscapeFilterPath(assPath)}'`
+      : scaleCrop;
 
-    // 720x720 square output — faster encode so we stay inside Vercel's 60s limit.
-    // -preset ultrafast + -threads 0 keep headroom on longer songs.
-    // -shortest stops video when audio ends.
-    // Lyric exports run at 24fps so line changes land on time; still covers stay at 1fps.
     const ffArgs = [
       "-y",
       "-hide_banner",
@@ -282,28 +274,34 @@ module.exports = async function handler(req, res) {
       "error",
       "-threads",
       "0",
+      "-fflags",
+      "+genpts",
     ];
     if (imagePath) {
-      ffArgs.push("-loop", "1", "-i", imagePath);
+      ffArgs.push("-loop", "1", "-framerate", String(OUT_FPS), "-i", imagePath);
     } else {
-      // No image — generate a solid black 720x720 source.
       ffArgs.push(
         "-f", "lavfi",
-        "-i", `color=c=black:s=720x720:r=${hasLyrics ? 24 : 1}`,
+        "-i", `color=c=black:s=${OUT_W}x${OUT_H}:r=${OUT_FPS}`,
       );
     }
     ffArgs.push(
       "-i", audioPath,
-      "-map", "0:v:0",
-      "-map", "1:a:0",
+      "-filter_complex",
+      `[0:v]${vchain}[v];[1:a]aformat=sample_fmts=fltp:channel_layouts=stereo,aresample=async=1:first_pts=0[a]`,
+      "-map", "[v]",
+      "-map", "[a]",
       "-c:v", "libx264",
-      "-tune", hasLyrics ? "film" : "stillimage",
+      "-tune", "stillimage",
       "-pix_fmt", "yuv420p",
       "-preset", "ultrafast",
-      "-r", hasLyrics ? "24" : "1",
-      "-vf", vf,
+      "-profile:v", "baseline",
+      "-level", "3.1",
       "-c:a", "aac",
-      "-b:a", "128k",
+      "-profile:a", "aac_low",
+      "-b:a", "192k",
+      "-ar", "44100",
+      "-ac", "2",
       "-movflags", "+faststart",
       "-shortest",
       outPath,
@@ -313,6 +311,9 @@ module.exports = async function handler(req, res) {
     cleanup.push(outPath);
 
     const out = fs.readFileSync(outPath);
+    if (!out?.length || out.length < 2048) {
+      throw new Error("ffmpeg produced an empty video");
+    }
     const filename = `${sanitizeFilename(title)}.mp4`;
 
     res.statusCode = 200;
@@ -323,6 +324,7 @@ module.exports = async function handler(req, res) {
       `attachment; filename="${filename}"; filename*=UTF-8''${encodeURIComponent(filename)}`,
     );
     res.setHeader("Cache-Control", "no-store");
+    res.setHeader("X-Nabad-Video-Has-Lyrics", lyricLines.length ? "1" : "0");
     res.end(out);
   } catch (e) {
     const msg = e?.message ? String(e.message) : "render failed";

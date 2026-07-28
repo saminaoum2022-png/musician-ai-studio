@@ -189,7 +189,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260729-002550";
+const APP_BUILD = "20260729-010146";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -18967,6 +18967,15 @@ function supabaseSongCoverMainFromThumbUrl(url) {
   return `${origin}/storage/v1/object/public/song_covers/${objectBase}.${ext}`;
 }
 
+/** Image-transform URLs can 404 on mobile / some Supabase tiers — map back to object URL. */
+function supabaseRenderImageToObjectUrl(url) {
+  const s = String(url || "").trim();
+  const m = s.match(/^(https?:\/\/[^/]+)\/storage\/v1\/render\/image\/public\/(.+?)(?:\?|#|$)/i);
+  if (!m) return "";
+  const [, origin, rest] = m;
+  return `${origin}/storage/v1/object/public/${rest.split("?")[0].split("#")[0]}`;
+}
+
 /** For Discover / Friends / Activity feeds — prefer thumbs; only HTTP URLs (no data: blobs). */
 function trackCoverArtForFeed(track) {
   const m = track?.meta || {};
@@ -19164,7 +19173,6 @@ function trackCoverArtForSquareTile(track, opts = {}) {
   const thumb = String(m.imageThumb || "").trim();
   if (thumb && !thumb.startsWith("data:") && !isLogoCoverUrl(thumb)) return thumb;
 
-  const w = Math.min(768, Math.max(128, Number(opts.width) || 512));
   const display = trackCoverArtForDisplay(track);
   if (!display || display === DEFAULT_SONG_COVER_URL || isDefaultSongCoverUrl(display)) {
     const feed = trackCoverArtForFeed(track);
@@ -19175,10 +19183,26 @@ function trackCoverArtForSquareTile(track, opts = {}) {
     return display;
   }
   if (/\/storage\/v1\/object\/public\/song_covers\//i.test(display)) {
-    const resized = toCoverThumbUrl(display, { width: w, quality: 75 });
-    if (resized && resized !== display) return resized;
+    // Raw Storage object URLs — not `/render/image/…` transforms, which 404
+    // intermittently on mobile / projects without Image Transform enabled.
+    const thumbObj = String(m.imageThumb || "").trim();
+    if (thumbObj && !thumbObj.startsWith("data:") && !isLogoCoverUrl(thumbObj)) {
+      return thumbObj.split("?")[0].split("#")[0];
+    }
+    const mainObj = display.split("?")[0].split("#")[0];
+    const pairedThumb = supabaseSongCoverThumbUrl(mainObj);
+    if (pairedThumb) return pairedThumb;
+    return mainObj;
   }
   return display;
+}
+
+/** List tile src — never hand `<img>` a transform URL. */
+function libraryListCoverSrc(track, opts = {}) {
+  const src = trackCoverArtForSquareTile(track, opts);
+  if (!src) return src;
+  const objectUrl = supabaseRenderImageToObjectUrl(src);
+  return objectUrl || src;
 }
 
 const _coverUploadInflight = new Map();
@@ -19226,6 +19250,7 @@ async function persistTrackCoverIfNeeded(track) {
         ...(prev.meta || {}),
         imageUrl,
         imageThumb,
+        coverUploadPending: false,
         ...(prev.meta?.photoMode || track?.meta?.photoMode ? { photoMode: true } : {}),
       };
       items[idx] = { ...prev, artUrl: imageUrl, meta: nextMeta, ts: Date.now() };
@@ -19265,6 +19290,17 @@ async function persistTrackCoverIfNeeded(track) {
     } catch (e) {
       try {
         console.warn("[song_covers]", e?.message || e);
+      } catch {}
+      try {
+        const items = loadLibrary();
+        const idx = items.findIndex((x) => String(x.id) === id);
+        if (idx >= 0) {
+          items[idx] = {
+            ...items[idx],
+            meta: { ...(items[idx].meta || {}), coverUploadPending: true },
+          };
+          saveLibrary(items);
+        }
       } catch {}
       return null;
     }
@@ -19350,12 +19386,50 @@ async function backfillPendingCoverUploads(items) {
     .filter(
       (t) =>
         String(t?.artUrl || "").startsWith("data:") ||
-        String(t?.meta?.imageUrl || "").startsWith("data:"),
+        String(t?.meta?.imageUrl || "").startsWith("data:") ||
+        Boolean(t?.meta?.coverUploadPending),
     )
     .slice(0, 8);
   for (const t of pending) {
-    // eslint-disable-next-line no-await-in-loop
-    await persistTrackCoverIfNeeded(t);
+    if (
+      String(t?.artUrl || "").startsWith("data:") ||
+      String(t?.meta?.imageUrl || "").startsWith("data:")
+    ) {
+      // eslint-disable-next-line no-await-in-loop
+      await persistTrackCoverIfNeeded(t);
+    } else if (t?.meta?.coverUploadPending && shouldUseAbstractCover(t)) {
+      // eslint-disable-next-line no-await-in-loop
+      await ensureAbstractCoverForTrack(t);
+    }
+  }
+}
+
+/** Re-fetch visible unpublished rows whose cover never reached Storage. */
+function retryPendingLibraryCoverArt(items) {
+  if (!authSession?.user?.id) return;
+  const pending = (Array.isArray(items) ? items : [])
+    .filter((t) => {
+      const isUnpub = Boolean(t?.publishPending) || !Boolean(t?.publicOnProfile);
+      if (!isUnpub) return false;
+      if (
+        String(t?.artUrl || "").startsWith("data:") ||
+        String(t?.meta?.imageUrl || "").startsWith("data:")
+      ) {
+        return true;
+      }
+      if (t?.meta?.coverUploadPending && shouldUseAbstractCover(t)) return true;
+      return false;
+    })
+    .slice(0, 6);
+  for (const t of pending) {
+    if (
+      String(t?.artUrl || "").startsWith("data:") ||
+      String(t?.meta?.imageUrl || "").startsWith("data:")
+    ) {
+      void persistTrackCoverIfNeeded(t);
+    } else if (t?.meta?.coverUploadPending) {
+      void ensureAbstractCoverForTrack(t);
+    }
   }
 }
 
@@ -19384,7 +19458,7 @@ function wireLibraryRowCoverImages() {
     if (!track) return;
     const img = row.querySelector(".libRowArt img");
     if (!img) return;
-    const art = trackCoverArtForSquareTile(track, { width: 256 });
+    const art = libraryListCoverSrc(track, { width: 256 });
     if (!art || isDefaultSongCoverUrl(art) || isLogoCoverUrl(art)) return;
     assignCoverImageSrc(img, art, { immediate: true, updateClasses: true });
   });
@@ -24225,8 +24299,8 @@ async function fetchUserSongsFromNetwork(reason = "unknown") {
   // happens to be a legacy `data:` URL*, same trick we use on `hub_posts`
   // for cover_url / creator_avatar. The cheap `art_url is null` branch
   // covers freshly inserted rows where we deliberately wrote null.
-  const colsWithPublished = "id,created_at,published_at,title,song_url,task_id,audio_id,kind,art_url,public_on_profile,meta_remix_of:meta->remixOf,meta_mashup_of:meta->mashupOf,meta_release_caption:meta->>releaseCaption,meta_challenge:meta->challenge,meta_featured_on_profile:meta->>featuredOnProfile,meta_nabad_verification:meta->>nabadVerification,meta_has_reference:meta->hasReference,meta_vocal_ref:meta->>vocalRefOrigin,meta_mode:meta->>mode,meta_persona_id:meta->>personaId,meta_lyrics_edited:meta->lyricsEditedByUser,meta_lyrics_generated:meta->lyricsGeneratedInNabad,meta_lyrics:meta->>lyricsInput,meta_search_template:meta->>searchTemplateId,meta_deleted_at:meta->>deletedAt";
-  const colsLegacy = "id,created_at,title,song_url,task_id,audio_id,kind,art_url,public_on_profile,meta_remix_of:meta->remixOf,meta_mashup_of:meta->mashupOf,meta_release_caption:meta->>releaseCaption,meta_challenge:meta->challenge,meta_featured_on_profile:meta->>featuredOnProfile,meta_nabad_verification:meta->>nabadVerification,meta_has_reference:meta->hasReference,meta_vocal_ref:meta->>vocalRefOrigin,meta_mode:meta->>mode,meta_persona_id:meta->>personaId,meta_lyrics_edited:meta->lyricsEditedByUser,meta_lyrics_generated:meta->lyricsGeneratedInNabad,meta_lyrics:meta->>lyricsInput,meta_search_template:meta->>searchTemplateId,meta_deleted_at:meta->>deletedAt";
+  const colsWithPublished = "id,created_at,published_at,title,song_url,task_id,audio_id,kind,art_url,public_on_profile,meta_remix_of:meta->remixOf,meta_mashup_of:meta->mashupOf,meta_release_caption:meta->>releaseCaption,meta_challenge:meta->challenge,meta_featured_on_profile:meta->>featuredOnProfile,meta_nabad_verification:meta->>nabadVerification,meta_has_reference:meta->hasReference,meta_vocal_ref:meta->>vocalRefOrigin,meta_mode:meta->>mode,meta_persona_id:meta->>personaId,meta_lyrics_edited:meta->lyricsEditedByUser,meta_lyrics_generated:meta->lyricsGeneratedInNabad,meta_lyrics:meta->>lyricsInput,meta_search_template:meta->>searchTemplateId,meta_deleted_at:meta->>deletedAt,meta_image_url:meta->>imageUrl,meta_image_thumb:meta->>imageThumb,meta_photo_mode:meta->photoMode,meta_nabad_abstract_cover:meta->nabadAbstractCover";
+  const colsLegacy = "id,created_at,title,song_url,task_id,audio_id,kind,art_url,public_on_profile,meta_remix_of:meta->remixOf,meta_mashup_of:meta->mashupOf,meta_release_caption:meta->>releaseCaption,meta_challenge:meta->challenge,meta_featured_on_profile:meta->>featuredOnProfile,meta_nabad_verification:meta->>nabadVerification,meta_has_reference:meta->hasReference,meta_vocal_ref:meta->>vocalRefOrigin,meta_mode:meta->>mode,meta_persona_id:meta->>personaId,meta_lyrics_edited:meta->lyricsEditedByUser,meta_lyrics_generated:meta->lyricsGeneratedInNabad,meta_lyrics:meta->>lyricsInput,meta_search_template:meta->>searchTemplateId,meta_deleted_at:meta->>deletedAt,meta_image_url:meta->>imageUrl,meta_image_thumb:meta->>imageThumb,meta_photo_mode:meta->photoMode,meta_nabad_abstract_cover:meta->nabadAbstractCover";
   const artUrlGuard = `&or=${encodeURIComponent("(art_url.is.null,art_url.not.like.data:*)")}`;
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), 12000);
@@ -24305,6 +24379,16 @@ async function fetchUserSongsFromNetwork(reason = "unknown") {
         ...(s.meta_lyrics_generated === true || s.meta_lyrics_generated === "true" ? { lyricsGeneratedInNabad: true } : {}),
         ...(String(s.meta_lyrics || "").trim() ? { lyricsInput: String(s.meta_lyrics).trim() } : {}),
         ...(String(s.meta_search_template || "").trim() ? { searchTemplateId: String(s.meta_search_template).trim() } : {}),
+        ...(String(s.meta_image_url || "").trim() && !String(s.meta_image_url).startsWith("data:")
+          ? { imageUrl: String(s.meta_image_url).trim() }
+          : {}),
+        ...(String(s.meta_image_thumb || "").trim() && !String(s.meta_image_thumb).startsWith("data:")
+          ? { imageThumb: String(s.meta_image_thumb).trim() }
+          : {}),
+        ...(s.meta_photo_mode === true || s.meta_photo_mode === "true" ? { photoMode: true } : {}),
+        ...(s.meta_nabad_abstract_cover === true || s.meta_nabad_abstract_cover === "true"
+          ? { nabadAbstractCover: true }
+          : {}),
       },
       publishedAt: selectedPublishedAt ? userSongPublishedAtValue(s) : "",
       publicOnProfile: Boolean(
@@ -41942,8 +42026,14 @@ function slimTrackForStorage(t) {
   if (art.startsWith("data:")) out.artUrl = "";
   if (out.meta && typeof out.meta === "object") {
     const meta = { ...out.meta };
-    if (typeof meta.imageUrl === "string" && meta.imageUrl.startsWith("data:")) delete meta.imageUrl;
-    if (typeof meta.imageThumb === "string" && meta.imageThumb.startsWith("data:")) delete meta.imageThumb;
+    if (typeof meta.imageUrl === "string" && meta.imageUrl.startsWith("data:")) {
+      delete meta.imageUrl;
+      meta.coverUploadPending = true;
+    }
+    if (typeof meta.imageThumb === "string" && meta.imageThumb.startsWith("data:")) {
+      delete meta.imageThumb;
+      meta.coverUploadPending = true;
+    }
     out.meta = meta;
   }
   return out;
@@ -43812,7 +43902,7 @@ function renderLibrary() {
     <ul class="libraryRows" role="list">
       ${generatingHtml}
       ${visibleItems.map((t, i) => {
-        const art = trackCoverArtForSquareTile(t, { width: 256 });
+        const art = libraryListCoverSrc(t, { width: 256 });
         const { active: libActive, audible: libAudible, loading: libLoading } = getLibraryRowPlaybackUiForTrack(t.id);
         const dateLabel = formatLibraryDate(t.ts);
         const isInstrumental = t.kind === "instrumental";
@@ -43828,8 +43918,8 @@ function renderLibrary() {
         if (subMeta.length) subBits.push(`<span class="libRowDot">${escapeHtml(subMeta.join(" · "))}</span>`);
         if (isFeaturedOnProfile(t)) subBits.push(`<span class="libRowChip libRowChipPin">Pinned</span>`);
         const profilePublic = Boolean(t.publicOnProfile);
-        const isFirst = i === 0;
-        const loadingAttr = isFirst
+        const eagerCover = i < 8;
+        const loadingAttr = eagerCover
           ? `loading="eager" fetchpriority="high"`
           : `loading="lazy" fetchpriority="low"`;
         const isSelected = _librarySelectMode && _librarySelectedIds.has(String(t.id));
@@ -43869,6 +43959,7 @@ function renderLibrary() {
     wireLibraryRowCoverImages();
   } catch {}
   scheduleLibraryCoverUploadsForVisible(visibleItems);
+  retryPendingLibraryCoverArt(visibleItems);
   const _scheduleThumbBackfill = () => { void backfillLibraryThumbsLazy(); };
   if (typeof requestIdleCallback === "function") {
     requestIdleCallback(_scheduleThumbBackfill, { timeout: 1500 });
@@ -45707,7 +45798,7 @@ function patchLibraryRowCoverArt(trackId) {
   if (!id) return;
   const track = loadLibrary().find((x) => String(x.id) === id);
   if (!track) return;
-  let src = trackCoverArtForSquareTile(track, { width: 256 });
+  let src = libraryListCoverSrc(track, { width: 256 });
   if (!src || isDefaultSongCoverUrl(src) || isLogoCoverUrl(src)) return;
   src = coverImageRetryUrl(src, 0) || src;
   document
@@ -45740,17 +45831,29 @@ function handleCoverImageError(img) {
   }
   if (!img.dataset.coverSrc) img.dataset.coverSrc = original;
   const attempt = Number(img.dataset.coverRetry || "0");
-  if (attempt === 0 && coverImageIsListThumb(img)) {
+  if (attempt === 0) {
+    const fromRender = supabaseRenderImageToObjectUrl(original);
+    if (fromRender && fromRender !== original) {
+      img.dataset.coverRetry = "1";
+      img.dataset.coverSrc = fromRender;
+      img.classList.remove("isCoverPlaceholder");
+      img.removeAttribute("crossorigin");
+      img.src = fromRender;
+      return;
+    }
+  }
+  if (attempt <= 1 && coverImageIsListThumb(img)) {
     const main = supabaseSongCoverMainFromThumbUrl(original);
     if (main && main !== original) {
-      img.dataset.coverRetry = "1";
+      img.dataset.coverRetry = String(Math.max(attempt + 1, 2));
       img.dataset.coverSrc = main;
       img.classList.remove("isCoverPlaceholder");
+      img.removeAttribute("crossorigin");
       img.src = main;
       return;
     }
   }
-  const maxRetries = coverImageIsListThumb(img) ? 0 : COVER_IMG_RETRY_DELAYS_MS.length;
+  const maxRetries = COVER_IMG_RETRY_DELAYS_MS.length;
   if (attempt >= maxRetries) {
     applyBrokenCoverPlaceholder(img);
     return;

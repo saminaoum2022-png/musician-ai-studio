@@ -188,7 +188,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260728-223635";
+const APP_BUILD = "20260728-224529";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -18989,7 +18989,10 @@ function trackCoverArtForFeed(track) {
   return DEFAULT_SONG_COVER_URL;
 }
 
-/** Full-resolution cover for large Discover tiles (chart #1 hero, feed cards). */
+/** Full-resolution cover for large Discover tiles / player / feed cards.
+ *  Prefer portrait `imageUrl`, but NEVER drop a real thumb/art URL — many
+ *  published rows only have a `_thumb` (or artUrl === imageThumb). Showing a
+ *  square is better than the music-note placeholder. */
 function trackCoverArtForDisplay(track) {
   const m = track?.meta || {};
   const listThumb = String(m.imageThumb || "").trim();
@@ -19001,45 +19004,52 @@ function trackCoverArtForDisplay(track) {
     .filter((c) => !isLogoCoverUrl(c));
 
   let dataFallback = "";
+  let thumbFallback = "";
   for (const c of candidates) {
     if (!c) continue;
     if (c.startsWith("data:")) {
       if (!dataFallback) dataFallback = c;
       continue;
     }
-    if (/_thumb\.(webp|jpg|jpeg|png)/i.test(c)) {
-      const main = supabaseSongCoverMainFromThumbUrl(c);
-      if (main) return main;
+    const isThumbFile = /_thumb\.(webp|jpg|jpeg|png)/i.test(c);
+    const isListThumb = Boolean(listThumb && c === listThumb);
+    if (isThumbFile || isListThumb) {
+      if (!thumbFallback) thumbFallback = c;
       continue;
     }
-    // Square list thumbs (custom crop) must never fill the tall player stage.
-    if (listThumb && c === listThumb) continue;
     return c;
   }
+  if (thumbFallback) return thumbFallback;
+  if (listThumb && !listThumb.startsWith("data:") && !isLogoCoverUrl(listThumb)) return listThumb;
   return dataFallback || DEFAULT_SONG_COVER_URL;
 }
 
-/** Tall player / hero stage: always prefer full portrait art over list thumbs. */
+/** Tall player stage: prefer true portrait `imageUrl` when present so list
+ *  thumbs do not look zoomed. If a track only has a thumb, keep the thumb —
+ *  never replace it with the music-note placeholder. */
 function resolvePlayerCoverArtUrl(artUrl) {
   const ref = currentPlayerTrackRef;
   const passed = String(artUrl || "").trim();
-  if (ref) {
-    const display = trackCoverArtForDisplay({
-      ...ref,
-      artUrl: passed || ref.artUrl,
-      meta: ref.meta || {},
-    });
-    if (display && !isDefaultSongCoverUrl(display) && !isLogoCoverUrl(display)) return display;
+  const meta = ref?.meta || {};
+  const imageUrl = String(meta.imageUrl || "").trim();
+  const listThumb = String(meta.imageThumb || "").trim();
+  if (
+    imageUrl &&
+    !isLogoCoverUrl(imageUrl) &&
+    !imageUrl.startsWith("data:") &&
+    !/_thumb\./i.test(imageUrl) &&
+    imageUrl !== listThumb
+  ) {
+    return imageUrl;
   }
-  if (/_thumb\./i.test(passed)) {
-    const main = supabaseSongCoverMainFromThumbUrl(passed);
-    if (main) return main;
-  }
-  const fromPassed = trackCoverArtForDisplay({ artUrl: passed, meta: {} });
-  if (fromPassed && !isDefaultSongCoverUrl(fromPassed) && !isLogoCoverUrl(fromPassed)) {
-    return fromPassed;
-  }
-  return passed || DEFAULT_SONG_COVER_URL;
+  const display = trackCoverArtForDisplay({
+    ...(ref || {}),
+    artUrl: passed || ref?.artUrl,
+    meta,
+  });
+  if (display && !isDefaultSongCoverUrl(display) && !isLogoCoverUrl(display)) return display;
+  if (passed && !isLogoCoverUrl(passed)) return passed;
+  return DEFAULT_SONG_COVER_URL;
 }
 
 /** Square post / list tiles: crop portrait in CSS (top-biased) like Discover
@@ -19050,9 +19060,16 @@ function trackCoverArtForSquareTile(track, opts = {}) {
   if (customThumb && !customThumb.startsWith("data:") && !isLogoCoverUrl(customThumb)) {
     return customThumb;
   }
+  const thumb = String(m.imageThumb || "").trim();
+  if (thumb && !thumb.startsWith("data:") && !isLogoCoverUrl(thumb)) return thumb;
+
   const w = Math.min(768, Math.max(128, Number(opts.width) || 512));
   const display = trackCoverArtForDisplay(track);
-  if (!display || display === DEFAULT_SONG_COVER_URL) return display;
+  if (!display || display === DEFAULT_SONG_COVER_URL || isDefaultSongCoverUrl(display)) {
+    const feed = trackCoverArtForFeed(track);
+    if (feed && !isDefaultSongCoverUrl(feed) && !isLogoCoverUrl(feed)) return feed;
+    return display;
+  }
   if (display.startsWith("data:") || display.startsWith("blob:") || display.startsWith("./")) {
     return display;
   }

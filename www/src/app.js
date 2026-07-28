@@ -189,7 +189,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260728-231218";
+const APP_BUILD = "20260728-233505";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -19025,32 +19025,81 @@ function trackCoverArtForDisplay(track) {
   return dataFallback || DEFAULT_SONG_COVER_URL;
 }
 
-/** Tall player stage: prefer true portrait `imageUrl` when present so list
- *  thumbs do not look zoomed. If a track only has a thumb, keep the thumb —
- *  never replace it with the music-note placeholder. */
-function resolvePlayerCoverArtUrl(artUrl) {
-  const ref = currentPlayerTrackRef;
-  const passed = String(artUrl || "").trim();
-  const meta = ref?.meta || {};
-  const imageUrl = String(meta.imageUrl || "").trim();
-  const listThumb = String(meta.imageThumb || "").trim();
-  if (
-    imageUrl &&
-    !isLogoCoverUrl(imageUrl) &&
-    !imageUrl.startsWith("data:") &&
-    !/_thumb\./i.test(imageUrl) &&
-    imageUrl !== listThumb
-  ) {
-    return imageUrl;
+/** Tall player stage: single source of truth from the track row. */
+function resolvePlayerCoverArtUrl(artUrl, trackRef) {
+  const ref = trackRef || currentPlayerTrackRef;
+  if (ref) {
+    const display = trackCoverArtForDisplay(ref);
+    if (display && !isDefaultSongCoverUrl(display) && !isLogoCoverUrl(display)) return display;
   }
-  const display = trackCoverArtForDisplay({
-    ...(ref || {}),
-    artUrl: passed || ref?.artUrl,
-    meta,
-  });
-  if (display && !isDefaultSongCoverUrl(display) && !isLogoCoverUrl(display)) return display;
-  if (passed && !isLogoCoverUrl(passed)) return passed;
+  const passed = String(artUrl || "").trim();
+  if (passed && !isLogoCoverUrl(passed) && !isDefaultSongCoverUrl(passed)) return passed;
   return DEFAULT_SONG_COVER_URL;
+}
+
+/** Smaller list thumb for instant player paint while full portrait loads. */
+function resolvePlayerCoverQuickArt(trackRef) {
+  const ref = trackRef || currentPlayerTrackRef;
+  if (!ref) return "";
+  const display = trackCoverArtForDisplay(ref);
+  const quick = trackCoverArtForSquareTile(ref, { width: 384 });
+  if (
+    !quick ||
+    quick === display ||
+    isDefaultSongCoverUrl(quick) ||
+    isLogoCoverUrl(quick) ||
+    isDefaultSongCoverUrl(display) ||
+    isLogoCoverUrl(display)
+  ) {
+    return "";
+  }
+  return quick;
+}
+
+let _playerCoverAssignSeq = 0;
+
+function playerCoverAssignSeq() {
+  return _playerCoverAssignSeq;
+}
+
+function bumpPlayerCoverAssignSeq() {
+  _playerCoverAssignSeq += 1;
+  return _playerCoverAssignSeq;
+}
+
+function playerCoverAssignIsCurrent(img, seq) {
+  if (!img) return false;
+  return String(img.dataset.coverAssignSeq || "") === String(seq);
+}
+
+/** After a quick thumb paints, upgrade to full portrait when it finishes loading. */
+function schedulePlayerCoverUpgrade(fullArt, trackId, seq) {
+  const raw = String(fullArt || "").trim();
+  const img = els.playerArt;
+  if (!img || !raw || isDefaultSongCoverUrl(raw) || isLogoCoverUrl(raw)) return;
+  const pre = new Image();
+  if (/^https?:\/\//i.test(raw)) pre.crossOrigin = "anonymous";
+  pre.onload = () => {
+    if (!playerCoverAssignIsCurrent(img, seq)) return;
+    if (trackId && String(currentPlayerTrackRef?.id || "") !== String(trackId)) return;
+    if (String(img.dataset.coverSrc || "").trim() === raw) return;
+    img.dataset.coverSrc = raw;
+    img.dataset.coverRetry = "0";
+    img.dataset.coverFallback = "";
+    img.classList.remove("isPlaceholder", "isCoverPlaceholder");
+    img.src = raw;
+    applyCoverImageStateClasses(img, raw, raw, false);
+    try {
+      const artWrap = document.querySelector(".playerArtWrap");
+      if (artWrap) applyCoverGlowRgb(artWrap, raw);
+      const timeline = document.getElementById("playerTimeline");
+      if (timeline) applyCoverGlowRgb(timeline, raw);
+    } catch {}
+    hubNowMeta = { ...(hubNowMeta || {}), art: raw };
+    try { renderHubNowPlaying(); syncLockScreenNowPlaying({ force: true }); } catch {}
+  };
+  pre.onerror = () => {};
+  pre.src = raw;
 }
 
 /** Square post / list tiles: crop portrait in CSS (top-biased) like Discover
@@ -19148,7 +19197,7 @@ async function persistTrackCoverIfNeeded(track) {
           if (onPlayer) {
             const cur = String(els.playerArt?.dataset.coverSrc || "").trim();
             const quietUpgrade = cur.startsWith("data:") && els.playerArt?.complete && els.playerArt.naturalWidth > 0;
-            await applyPlayerCoverReveal(imageUrl, { quiet: quietUpgrade });
+            await applyPlayerCoverReveal(imageUrl, { quiet: quietUpgrade, trackId: id });
           } else {
             setPlayerMeta({
               title: row.title || "Now Playing",
@@ -19156,7 +19205,7 @@ async function persistTrackCoverIfNeeded(track) {
               artUrl: imageUrl,
               releaseCaption: releaseCaptionForTrack(row) || "",
               remixOf: remixAttributionForTrack(row) || null,
-            });
+            }, { trackRef: row });
           }
         }
       } catch {}
@@ -32383,9 +32432,10 @@ async function playLibraryListRowById(id, opts) {
         remixOf: remixAttributionForTrack(updated),
       };
       if (opts?.openPlayer === true) {
-        await playOnPlayerPage(newProx, "Full song", meta);
+        await playOnPlayerPage(newProx, "Full song", meta, { trackRef: updated });
       } else {
         await playInline(newProx, "Full song", { type: "library", id });
+        setPlayerMeta(meta, { trackRef: updated });
       }
     } catch {}
   })();
@@ -32397,14 +32447,14 @@ async function playLibraryListRowById(id, opts) {
     releaseCaption: releaseCaptionForTrack(t),
     remixOf: remixAttributionForTrack(t),
   };
-  setPlayerMeta(meta);
   miniSource = { type: "library", id };
   libraryNowPlayingId = id;
   refreshOwnSongsUi();
   const openPlayer = opts?.openPlayer === true;
   if (openPlayer) {
-    await playOnPlayerPage(playSource, "Full song", meta);
+    await playOnPlayerPage(playSource, "Full song", meta, { trackRef: t });
   } else {
+    setPlayerMeta(meta, { trackRef: t });
     await playInline(playSource, "Full song", { type: "library", id });
   }
 }
@@ -36024,7 +36074,8 @@ async function playLibraryUrlOnPlayer(rawUrl, title, artUrl, opts) {
     refreshOwnSongsUi({ soft: fromDiscover || fromPlaylist || fromUserPlaylist });
   } catch {}
   const userPlTitle = fromUserPlaylist ? getUserPlaylistById(opts?.playlistId)?.title || "Playlist" : "";
-  const resolvedArt = resolvePlayerCoverArtUrl(artUrl || placeholderCoverDataUrl());
+  const trackRef = currentPlayerTrackRef;
+  const resolvedArt = resolvePlayerCoverArtUrl(artUrl || placeholderCoverDataUrl(), trackRef);
   currentPlayerTrackRef = {
     ...currentPlayerTrackRef,
     artUrl: resolvedArt,
@@ -36046,7 +36097,7 @@ async function playLibraryUrlOnPlayer(rawUrl, title, artUrl, opts) {
     ownerUserId: currentPlayerTrackRef.ownerUserId,
   };
   if (!openPlayer) {
-    setPlayerMeta(meta);
+    setPlayerMeta(meta, { trackRef: currentPlayerTrackRef, coverImmediate: Boolean(opts.reelSwap) });
     try {
       syncDiscoveryPlayingHighlights();
     } catch {}
@@ -36057,6 +36108,7 @@ async function playLibraryUrlOnPlayer(rawUrl, title, artUrl, opts) {
   } else {
     await playOnPlayerPage(prox, title || "Song", meta, {
       reelSwap: Boolean(opts.discoverReel),
+      trackRef: currentPlayerTrackRef,
     });
   }
 }
@@ -45459,6 +45511,15 @@ function assignCoverImageSrc(img, url, opts = {}) {
   const fallback = empty ? placeholderCoverDataUrl() : raw || brokenCoverPlaceholderUrl();
   const updateClasses = opts.updateClasses !== false;
 
+  let assignSeq = Number(opts.coverAssignSeq || 0);
+  if (isPlayerArt) {
+    if (!assignSeq) assignSeq = bumpPlayerCoverAssignSeq();
+    img.dataset.coverAssignSeq = String(assignSeq);
+    // Player must paint immediately — waiting on preload leaves the prior
+    // song's cover (wrong art) or a blank frame on slow connections.
+    opts.immediate = true;
+  }
+
   const prevRaw = String(img.dataset.coverSrc || "").trim();
   if (prevRaw === raw) {
     const showing = String(img.currentSrc || img.src || "").trim();
@@ -45474,6 +45535,7 @@ function assignCoverImageSrc(img, url, opts = {}) {
   img.dataset.coverFallback = "";
 
   const applySrc = (finalSrc) => {
+    if (isPlayerArt && assignSeq && !playerCoverAssignIsCurrent(img, assignSeq)) return;
     img.src = finalSrc;
     if (updateClasses) applyCoverImageStateClasses(img, raw, finalSrc, empty);
   };
@@ -45484,10 +45546,12 @@ function assignCoverImageSrc(img, url, opts = {}) {
     const pre = new Image();
     if (/^https?:\/\//i.test(raw)) pre.crossOrigin = "anonymous";
     pre.onload = () => {
+      if (isPlayerArt && assignSeq && !playerCoverAssignIsCurrent(img, assignSeq)) return;
       if (String(img.dataset.coverSrc || "").trim() !== raw) return;
       applySrc(raw);
     };
     pre.onerror = () => {
+      if (isPlayerArt && assignSeq && !playerCoverAssignIsCurrent(img, assignSeq)) return;
       if (String(img.dataset.coverSrc || "").trim() !== raw) return;
       applySrc(brokenCoverPlaceholderUrl());
     };
@@ -45591,6 +45655,10 @@ async function applyPlayerCoverReveal(url, opts = {}) {
   const raw = String(url || "").trim();
   if (!img || !raw || isDefaultSongCoverUrl(raw) || isLogoCoverUrl(raw)) return false;
 
+  const trackId = String(opts.trackId || currentPlayerTrackRef?.id || "").trim();
+  const seq = bumpPlayerCoverAssignSeq();
+  img.dataset.coverAssignSeq = String(seq);
+
   const prevRaw = String(img.dataset.coverSrc || "").trim();
   if (prevRaw === raw && img.complete && img.naturalWidth > 0 && !img.classList.contains("isCoverPlaceholder")) {
     setPlayerCoverGenerating(false);
@@ -45607,6 +45675,9 @@ async function applyPlayerCoverReveal(url, opts = {}) {
   try {
     if (typeof pre.decode === "function") await pre.decode();
   } catch {}
+
+  if (!playerCoverAssignIsCurrent(img, seq)) return false;
+  if (trackId && String(currentPlayerTrackRef?.id || "") !== trackId) return false;
 
   img.dataset.coverSrc = raw;
   img.dataset.coverRetry = "0";
@@ -45685,15 +45756,27 @@ function setCoverImageSrc(img, url, opts = {}) {
 }
 
 function setPlayerMeta({ title, subtitle, artUrl, releaseCaption, remixOf, challenge, mashupOf } = {}, opts = {}) {
-  const resolvedArt = artUrl ? resolvePlayerCoverArtUrl(artUrl) : artUrl;
+  const track = opts.trackRef || resolvePlayerLibraryTrack() || currentPlayerTrackRef;
+  const resolvedArt = artUrl ? resolvePlayerCoverArtUrl(artUrl, track) : artUrl;
   const hasTrack = Boolean(resolvedArt);
   const coverOpts = opts.coverImmediate ? { immediate: true } : {};
   if (els.playerTitle) els.playerTitle.textContent = title || "Now Playing";
   if (els.playerSubtitle) els.playerSubtitle.textContent = screenshotSanitizeCopy(subtitle || "");
   void syncPlayerCreatorChrome(subtitle);
   if (els.playerArt) {
-    if (hasTrack) setCoverImageSrc(els.playerArt, resolvedArt, coverOpts);
-    else setCoverImageSrc(els.playerArt, playerEmptyArtUrl(), { allowEmpty: true, ...coverOpts });
+    if (hasTrack) {
+      const quickArt = !opts.coverImmediate ? resolvePlayerCoverQuickArt(track) : "";
+      if (quickArt) {
+        const seq = bumpPlayerCoverAssignSeq();
+        els.playerArt.dataset.coverAssignSeq = String(seq);
+        setCoverImageSrc(els.playerArt, quickArt, { immediate: true, coverAssignSeq: seq });
+        schedulePlayerCoverUpgrade(resolvedArt, track?.id, seq);
+      } else {
+        setCoverImageSrc(els.playerArt, resolvedArt, coverOpts);
+      }
+    } else {
+      setCoverImageSrc(els.playerArt, playerEmptyArtUrl(), { allowEmpty: true, ...coverOpts });
+    }
     els.playerArt.classList.toggle("isPlaceholder", !hasTrack);
   }
   setPlayerChallengeAttribution(challenge || challengeMetaForTrack(currentPlayerTrackRef));
@@ -48123,14 +48206,18 @@ function updateListenRefButton() {
 
 async function playOnPlayerPage(url, label, meta = null, opts = {}) {
   if (!url) return;
+  const metaOpts = {
+    coverImmediate: Boolean(opts.reelSwap),
+    trackRef: opts.trackRef || null,
+  };
   if (meta && (meta.title || meta.subtitle || meta.artUrl)) {
-    setPlayerMeta(meta, { coverImmediate: Boolean(opts.reelSwap) });
+    setPlayerMeta(meta, metaOpts);
   } else {
     setPlayerMeta({
       title: lastSunoTitle || "Generated song",
       subtitle: label ? `Generated • ${label}` : "Generated",
       artUrl: lastSunoArtUrl,
-    }, { coverImmediate: Boolean(opts.reelSwap) });
+    }, metaOpts);
   }
   setPlayerSource(url, label);
   const shareListen =

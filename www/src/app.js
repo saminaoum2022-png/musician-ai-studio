@@ -188,7 +188,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260723-143129";
+const APP_BUILD = "20260728-223635";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -13582,12 +13582,15 @@ function bindFollowingComposeOnce() {
 }
 
 function followingActivityPlayAttrs(t, profMap, byLine) {
+  // List tiles stay square; play attrs must carry full portrait art so the
+  // player never opens a zoomed thumb crop.
   const artSafe = trackCoverArtForSquareTile(t);
+  const displayArt = trackCoverArtForDisplay(t);
   const rawTitle = String(t.title || "Untitled");
   const encUrl = encodeURIComponent(String(t.url || ""));
   const encTitle = encodeURIComponent(rawTitle);
   const encBy = encodeURIComponent(byLine || "");
-  const encArt = encodeURIComponent(artSafe);
+  const encArt = encodeURIComponent(displayArt || artSafe);
   const encSongId = encodeURIComponent(String(t.id || t.songId || ""));
   const encOwnerId = encodeURIComponent(String(t.userId || ""));
   const encTaskId = encodeURIComponent(String(t.taskId || ""));
@@ -18989,6 +18992,7 @@ function trackCoverArtForFeed(track) {
 /** Full-resolution cover for large Discover tiles (chart #1 hero, feed cards). */
 function trackCoverArtForDisplay(track) {
   const m = track?.meta || {};
+  const listThumb = String(m.imageThumb || "").trim();
   const candidates = [
     String(m.imageUrl || "").trim(),
     String(track?.artUrl || "").trim(),
@@ -19003,10 +19007,39 @@ function trackCoverArtForDisplay(track) {
       if (!dataFallback) dataFallback = c;
       continue;
     }
-    if (/_thumb\.(webp|jpg|jpeg|png)/i.test(c)) continue;
+    if (/_thumb\.(webp|jpg|jpeg|png)/i.test(c)) {
+      const main = supabaseSongCoverMainFromThumbUrl(c);
+      if (main) return main;
+      continue;
+    }
+    // Square list thumbs (custom crop) must never fill the tall player stage.
+    if (listThumb && c === listThumb) continue;
     return c;
   }
   return dataFallback || DEFAULT_SONG_COVER_URL;
+}
+
+/** Tall player / hero stage: always prefer full portrait art over list thumbs. */
+function resolvePlayerCoverArtUrl(artUrl) {
+  const ref = currentPlayerTrackRef;
+  const passed = String(artUrl || "").trim();
+  if (ref) {
+    const display = trackCoverArtForDisplay({
+      ...ref,
+      artUrl: passed || ref.artUrl,
+      meta: ref.meta || {},
+    });
+    if (display && !isDefaultSongCoverUrl(display) && !isLogoCoverUrl(display)) return display;
+  }
+  if (/_thumb\./i.test(passed)) {
+    const main = supabaseSongCoverMainFromThumbUrl(passed);
+    if (main) return main;
+  }
+  const fromPassed = trackCoverArtForDisplay({ artUrl: passed, meta: {} });
+  if (fromPassed && !isDefaultSongCoverUrl(fromPassed) && !isLogoCoverUrl(fromPassed)) {
+    return fromPassed;
+  }
+  return passed || DEFAULT_SONG_COVER_URL;
 }
 
 /** Square post / list tiles: crop portrait in CSS (top-biased) like Discover
@@ -24858,7 +24891,7 @@ function paintUserPublicPosts(postItems, profMap, publicHandle) {
   _userPublicFeedTracks = postItems
     .map((item) => {
       const t = item.track;
-      const artSafe = trackCoverArtForSquareTile(t);
+      const artSafe = trackCoverArtForDisplay(t);
       return {
         url: String(t.url || "").trim(),
         title: String(t.title || "Untitled"),
@@ -32306,7 +32339,7 @@ async function playLibraryListRowById(id, opts) {
       const meta = {
         title: updated.title || "Library song",
         subtitle: "Library · Full song",
-        artUrl: (updated.meta && updated.meta.imageUrl) || updated.artUrl || placeholderCoverDataUrl(),
+        artUrl: trackCoverArtForDisplay(updated) || placeholderCoverDataUrl(),
         releaseCaption: releaseCaptionForTrack(updated),
         remixOf: remixAttributionForTrack(updated),
       };
@@ -32321,7 +32354,7 @@ async function playLibraryListRowById(id, opts) {
   const meta = {
     title: t.title || "Library song",
     subtitle: "Library · Full song",
-    artUrl: (t.meta && t.meta.imageUrl) || t.artUrl || placeholderCoverDataUrl(),
+    artUrl: trackCoverArtForDisplay(t) || placeholderCoverDataUrl(),
     releaseCaption: releaseCaptionForTrack(t),
     remixOf: remixAttributionForTrack(t),
   };
@@ -33471,7 +33504,12 @@ async function playDiscoverFeedEntry({ raw, title, art, by, playSource, el, opts
     });
     const tappedArt = String(art || "").trim();
     if (tappedArt && _discoverReelQueue[idx]) {
-      _discoverReelQueue[idx] = { ..._discoverReelQueue[idx], artUrl: tappedArt };
+      const row = _discoverReelQueue[idx];
+      const display = trackCoverArtForDisplay({ ...row, artUrl: tappedArt, meta: row.meta || {} });
+      const safeArt = display && !isDefaultSongCoverUrl(display) ? display : tappedArt;
+      if (!/_thumb\./i.test(safeArt)) {
+        _discoverReelQueue[idx] = { ...row, artUrl: safeArt };
+      }
     }
     const card = document.querySelector(".playerCard");
     if (card) card.dataset.discoverReel = "1";
@@ -35167,6 +35205,7 @@ function wireDiscoverySpotCardImages(root) {
 
 function discoverPlaylistLibRowHtml(t, profMap, idx) {
   const artSafe = trackCoverArtForFeed(t);
+  const displayArt = trackCoverArtForDisplay(t);
   const prof = resolveProfileForFeedCreator(t.userId, profMap);
   const handle = String(prof?.username || "").trim();
   const byLine = handle ? `@${handle}` : "Creator";
@@ -35175,7 +35214,7 @@ function discoverPlaylistLibRowHtml(t, profMap, idx) {
   const encUrl = encodeURIComponent(String(t.url || ""));
   const encTitle = encodeURIComponent(rawTitle);
   const encBy = encodeURIComponent(byLine);
-  const encArt = encodeURIComponent(artSafe);
+  const encArt = encodeURIComponent(displayArt || artSafe);
   const encSongId = encodeURIComponent(String(t.id || ""));
   const encOwnerId = encodeURIComponent(String(t.userId || ""));
   const encTaskId = encodeURIComponent(String(t.taskId || ""));
@@ -35942,6 +35981,11 @@ async function playLibraryUrlOnPlayer(rawUrl, title, artUrl, opts) {
     refreshOwnSongsUi({ soft: fromDiscover || fromPlaylist || fromUserPlaylist });
   } catch {}
   const userPlTitle = fromUserPlaylist ? getUserPlaylistById(opts?.playlistId)?.title || "Playlist" : "";
+  const resolvedArt = resolvePlayerCoverArtUrl(artUrl || placeholderCoverDataUrl());
+  currentPlayerTrackRef = {
+    ...currentPlayerTrackRef,
+    artUrl: resolvedArt,
+  };
   const meta = {
     title: title || "Song",
     subtitle: fromUserPlaylist
@@ -35951,7 +35995,7 @@ async function playLibraryUrlOnPlayer(rawUrl, title, artUrl, opts) {
       : fromDiscover
         ? byLine || "Discover feed"
         : "Public profile",
-    artUrl: artUrl || placeholderCoverDataUrl(),
+    artUrl: resolvedArt,
     releaseCaption,
     remixOf,
     challenge,
@@ -39968,8 +40012,9 @@ function renderUserProfile(rawUsername, { soft = false } = {}) {
       )
       .join("")}</div>`;
     _userPublicFeedTracks = slice.map((p) => {
-      const artSafe = trackCoverArtForFeed(p) !== "./assets/icons/splash-mark.png"
-        ? trackCoverArtForFeed(p)
+      const display = trackCoverArtForDisplay(p);
+      const artSafe = display && display !== "./assets/icons/splash-mark.png" && !isDefaultSongCoverUrl(display)
+        ? display
         : (String(p.artUrl || p.creatorAvatar || "").trim() && !String(p.artUrl || "").startsWith("data:")
           ? String(p.artUrl || p.creatorAvatar || "").trim()
           : "./assets/icons/splash-mark.png");
@@ -40175,7 +40220,10 @@ async function playHubPostFromProfile(postId, opts) {
   const meta = {
     title: p.title || "Hub song",
     subtitle: `Hub • @${String(p.creator || "").trim() || "creator"}`,
-    artUrl: p.artUrl || p.creatorAvatar || placeholderCoverDataUrl(),
+    artUrl: trackCoverArtForDisplay({ artUrl: p.artUrl, meta: p.meta || {} })
+      || p.artUrl
+      || p.creatorAvatar
+      || placeholderCoverDataUrl(),
   };
 
   const applyClipStart = () => {
@@ -45606,13 +45654,14 @@ function setCoverImageSrc(img, url, opts = {}) {
 }
 
 function setPlayerMeta({ title, subtitle, artUrl, releaseCaption, remixOf, challenge, mashupOf } = {}, opts = {}) {
-  const hasTrack = Boolean(artUrl);
+  const resolvedArt = artUrl ? resolvePlayerCoverArtUrl(artUrl) : artUrl;
+  const hasTrack = Boolean(resolvedArt);
   const coverOpts = opts.coverImmediate ? { immediate: true } : {};
   if (els.playerTitle) els.playerTitle.textContent = title || "Now Playing";
   if (els.playerSubtitle) els.playerSubtitle.textContent = screenshotSanitizeCopy(subtitle || "");
   void syncPlayerCreatorChrome(subtitle);
   if (els.playerArt) {
-    if (hasTrack) setCoverImageSrc(els.playerArt, artUrl, coverOpts);
+    if (hasTrack) setCoverImageSrc(els.playerArt, resolvedArt, coverOpts);
     else setCoverImageSrc(els.playerArt, playerEmptyArtUrl(), { allowEmpty: true, ...coverOpts });
     els.playerArt.classList.toggle("isPlaceholder", !hasTrack);
   }
@@ -45631,12 +45680,12 @@ function setPlayerMeta({ title, subtitle, artUrl, releaseCaption, remixOf, chall
   const timeline = document.getElementById("playerTimeline");
   if (artWrap) {
     artWrap.classList.toggle("isEmpty", !hasTrack);
-    applyCoverGlowRgb(artWrap, hasTrack ? artUrl : "");
+    applyCoverGlowRgb(artWrap, hasTrack ? resolvedArt : "");
   }
-  if (timeline) applyCoverGlowRgb(timeline, hasTrack ? artUrl : "");
+  if (timeline) applyCoverGlowRgb(timeline, hasTrack ? resolvedArt : "");
   hubNowMeta = {
     title: title || "Now playing",
-    art: artUrl || placeholderCoverDataUrl(),
+    art: resolvedArt || placeholderCoverDataUrl(),
     subtitle: subtitle || "",
   };
   try {

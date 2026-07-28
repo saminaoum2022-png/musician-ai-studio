@@ -189,7 +189,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260729-000735";
+const APP_BUILD = "20260729-002550";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -2304,7 +2304,7 @@ function renderHubNowPlaying() {
       });
     }
     const artSrc = hubNowMeta.art || DEFAULT_SONG_COVER_URL;
-    assignCoverImageSrc(els.hubNowArt, artSrc, { updateClasses: false });
+    assignCoverImageSrc(els.hubNowArt, artSrc, { updateClasses: false, immediate: true });
     syncHubNowAuraFromCoverUrl(artSrc);
   }
   if (els.hubNowTitle) els.hubNowTitle.textContent = hubNowMeta.title || "Now playing";
@@ -19025,11 +19025,45 @@ function trackCoverArtForDisplay(track) {
   return dataFallback || DEFAULT_SONG_COVER_URL;
 }
 
+function isSquareListCoverUrl(url) {
+  const s = String(url || "").trim();
+  return /_thumb\.(webp|jpg|jpeg|png)/i.test(s);
+}
+
+/** Tall player + mini player: never paint a list square thumb in a portrait frame. */
+function trackCoverArtForPlayer(track) {
+  const m = track?.meta || {};
+  const display = trackCoverArtForDisplay(track);
+  const fullMeta = String(m.imageUrl || "").trim();
+  const artUrl = String(track?.artUrl || "").trim();
+
+  for (const candidate of [fullMeta, artUrl]) {
+    if (
+      !candidate ||
+      isLogoCoverUrl(candidate) ||
+      isDefaultSongCoverUrl(candidate) ||
+      isSquareListCoverUrl(candidate)
+    ) {
+      continue;
+    }
+    if (candidate.startsWith("data:") || candidate.startsWith("blob:")) return candidate;
+    if (isSquareListCoverUrl(display)) return candidate;
+    if (display !== candidate) return candidate;
+  }
+
+  if (isSquareListCoverUrl(display)) {
+    const main = supabaseSongCoverMainFromThumbUrl(display);
+    if (main) return main;
+  }
+
+  return display;
+}
+
 /** Tall player stage: single source of truth from the track row. */
 function resolvePlayerCoverArtUrl(artUrl, trackRef) {
   const ref = trackRef || currentPlayerTrackRef;
   if (ref) {
-    const display = trackCoverArtForDisplay(ref);
+    const display = trackCoverArtForPlayer(ref);
     if (display && !isDefaultSongCoverUrl(display) && !isLogoCoverUrl(display)) return display;
   }
   const passed = String(artUrl || "").trim();
@@ -19041,7 +19075,7 @@ function resolvePlayerCoverArtUrl(artUrl, trackRef) {
 function resolvePlayerCoverQuickArt(trackRef) {
   const ref = trackRef || currentPlayerTrackRef;
   if (!ref) return "";
-  const display = trackCoverArtForDisplay(ref);
+  const display = trackCoverArtForPlayer(ref);
   const quick = trackCoverArtForSquareTile(ref, { width: 384 });
   if (
     !quick ||
@@ -19049,7 +19083,9 @@ function resolvePlayerCoverQuickArt(trackRef) {
     isDefaultSongCoverUrl(quick) ||
     isLogoCoverUrl(quick) ||
     isDefaultSongCoverUrl(display) ||
-    isLogoCoverUrl(display)
+    isLogoCoverUrl(display) ||
+    isSquareListCoverUrl(quick) ||
+    isSquareListCoverUrl(display)
   ) {
     return "";
   }
@@ -32473,15 +32509,15 @@ async function playLibraryListRowById(id, opts) {
       const meta = {
         title: updated.title || "Library song",
         subtitle: "Library · Full song",
-        artUrl: trackCoverArtForDisplay(updated) || placeholderCoverDataUrl(),
+        artUrl: trackCoverArtForPlayer(updated) || placeholderCoverDataUrl(),
         releaseCaption: releaseCaptionForTrack(updated),
         remixOf: remixAttributionForTrack(updated),
       };
       if (opts?.openPlayer === true) {
-        await playOnPlayerPage(newProx, "Full song", meta, { trackRef: updated });
+        await playOnPlayerPage(newProx, "Full song", meta, { trackRef: updated, coverImmediate: true });
       } else {
         await playInline(newProx, "Full song", { type: "library", id });
-        setPlayerMeta(meta, { trackRef: updated });
+        setPlayerMeta(meta, { trackRef: updated, coverImmediate: true });
       }
     } catch {}
   })();
@@ -32489,7 +32525,7 @@ async function playLibraryListRowById(id, opts) {
   const meta = {
     title: t.title || "Library song",
     subtitle: "Library · Full song",
-    artUrl: trackCoverArtForDisplay(t) || placeholderCoverDataUrl(),
+    artUrl: trackCoverArtForPlayer(t) || placeholderCoverDataUrl(),
     releaseCaption: releaseCaptionForTrack(t),
     remixOf: remixAttributionForTrack(t),
   };
@@ -32498,9 +32534,9 @@ async function playLibraryListRowById(id, opts) {
   refreshOwnSongsUi();
   const openPlayer = opts?.openPlayer === true;
   if (openPlayer) {
-    await playOnPlayerPage(playSource, "Full song", meta, { trackRef: t });
+    await playOnPlayerPage(playSource, "Full song", meta, { trackRef: t, coverImmediate: true });
   } else {
-    setPlayerMeta(meta, { trackRef: t });
+    setPlayerMeta(meta, { trackRef: t, coverImmediate: true });
     await playInline(playSource, "Full song", { type: "library", id });
   }
 }
@@ -48310,7 +48346,7 @@ function updateListenRefButton() {
 async function playOnPlayerPage(url, label, meta = null, opts = {}) {
   if (!url) return;
   const metaOpts = {
-    coverImmediate: Boolean(opts.reelSwap),
+    coverImmediate: Boolean(opts.reelSwap || opts.coverImmediate),
     trackRef: opts.trackRef || null,
   };
   if (meta && (meta.title || meta.subtitle || meta.artUrl)) {

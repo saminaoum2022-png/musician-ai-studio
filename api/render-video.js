@@ -7,17 +7,18 @@
 //   lyrics: [{ text, startS, endS }] — optional synced lines burned into the export
 //
 // Output is 9:16 (720×1280) to match Discover/post framing, with AAC audio
-// and CFR 24fps so iOS Photos/share sheets actually play sound (1fps still
-// encodes often ship silent or unplayable on iPhone).
+// and CFR 2fps still-image video (fast enough for Vercel 60s; AAC keeps sound
+// on iPhone — old 1fps exports were missing proper audio mux flags).
 //
 // Requires ffmpeg-static (see vercel.json `includeFiles`).
 
 const MAX_AUDIO_BYTES = 60 * 1024 * 1024;
 const MAX_IMAGE_BYTES = 12 * 1024 * 1024;
-const FETCH_TIMEOUT_MS = 45000;
+const FETCH_TIMEOUT_MS = 50000;
+const FFMPEG_TIMEOUT_MS = 48000;
 const OUT_W = 720;
 const OUT_H = 1280;
-const OUT_FPS = 24;
+const OUT_FPS = 2;
 
 function sanitizeFilename(name) {
   const trimmed = String(name || "song").trim();
@@ -27,11 +28,31 @@ function sanitizeFilename(name) {
     .slice(0, 80) || "song";
 }
 
+/** Unwrap nested `/api/suno/audio?url=…` so we fetch Suno directly (one hop). */
+function resolveFetchUrl(url) {
+  const s = String(url || "").trim();
+  if (!s) return s;
+  try {
+    const u = new URL(s);
+    const path = u.pathname || "";
+    if (/\/api\/suno\/audio$/i.test(path) || /\/suno\/audio$/i.test(path)) {
+      const inner = u.searchParams.get("url");
+      if (inner && /^https?:\/\//i.test(inner)) return inner;
+    }
+  } catch {}
+  return s;
+}
+
 async function fetchToBuffer(url, maxBytes) {
+  const target = resolveFetchUrl(url);
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), FETCH_TIMEOUT_MS);
   try {
-    const r = await fetch(url, { signal: ctrl.signal, redirect: "follow" });
+    const r = await fetch(target, {
+      signal: ctrl.signal,
+      redirect: "follow",
+      headers: { "User-Agent": "Mozilla/5.0 (compatible; NabadAi/1.0)" },
+    });
     clearTimeout(timer);
     if (!r.ok) throw new Error(`fetch ${r.status} ${r.statusText}`);
     const len = Number(r.headers.get("content-length") || 0);
@@ -101,7 +122,8 @@ function normalizeLyricLines(raw) {
       startS: Number(row?.startS ?? row?.start_s ?? 0),
       endS: Number(row?.endS ?? row?.end_s ?? 0),
     }))
-    .filter((row) => row.text);
+    .filter((row) => row.text)
+    .slice(0, 120);
   for (let i = 0; i < lines.length; i++) {
     const cur = lines[i];
     const next = lines[i + 1];
@@ -129,7 +151,7 @@ ScaledBorderAndShadow: yes
 
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: Current,Arial,54,&H00FFFFFF,&H000000FF,&H64000000,&H80000000,1,0,0,0,100,100,0,0,1,3,0,2,48,48,220,1
+Style: Current,DejaVu Sans,54,&H00FFFFFF,&H000000FF,&H64000000,&H80000000,1,0,0,0,100,100,0,0,1,3,0,2,48,48,220,1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
@@ -144,16 +166,33 @@ function ffmpegEscapeFilterPath(filePath) {
     .replace(/'/g, "'\\''");
 }
 
-function runFfmpeg(ffmpegPath, args) {
+function runFfmpeg(ffmpegPath, args, timeoutMs = FFMPEG_TIMEOUT_MS) {
   const { spawn } = require("child_process");
   return new Promise((resolve, reject) => {
     const p = spawn(ffmpegPath, args);
     let stderr = "";
+    let settled = false;
+    const timer = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      try {
+        p.kill("SIGKILL");
+      } catch {}
+      reject(new Error(`ffmpeg timed out after ${timeoutMs}ms`));
+    }, timeoutMs);
     p.stderr.on("data", (d) => {
       stderr += d.toString();
     });
-    p.on("error", reject);
+    p.on("error", (e) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      reject(e);
+    });
     p.on("close", (code) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
       if (code === 0) resolve();
       else reject(new Error(`ffmpeg exit ${code}: ${stderr.slice(0, 600)}`));
     });
@@ -171,6 +210,62 @@ async function readJsonBody(req) {
     });
     req.on("error", reject);
   });
+}
+
+function buildFfmpegArgs({ ffmpegPath, imagePath, audioPath, assPath, outPath }) {
+  const scaleCrop =
+    `scale=${OUT_W}:${OUT_H}:force_original_aspect_ratio=increase,` +
+    `crop=${OUT_W}:${OUT_H}:(iw-ow)/2:0,fps=${OUT_FPS},format=yuv420p`;
+  const vchain = assPath
+    ? `${scaleCrop},subtitles='${ffmpegEscapeFilterPath(assPath)}':force_style='FontName=DejaVu Sans'`
+    : scaleCrop;
+
+  const ffArgs = [
+    "-y",
+    "-hide_banner",
+    "-loglevel",
+    "error",
+    "-threads",
+    "0",
+    "-fflags",
+    "+genpts",
+  ];
+  if (imagePath) {
+    ffArgs.push("-loop", "1", "-framerate", String(OUT_FPS), "-i", imagePath);
+  } else {
+    ffArgs.push(
+      "-f", "lavfi",
+      "-i", `color=c=black:s=${OUT_W}x${OUT_H}:r=${OUT_FPS}`,
+    );
+  }
+  ffArgs.push(
+    "-i", audioPath,
+    "-filter_complex",
+    `[0:v]${vchain}[v];[1:a]aformat=sample_fmts=fltp:channel_layouts=stereo,aresample=async=1:first_pts=0[a]`,
+    "-map", "[v]",
+    "-map", "[a]",
+    "-c:v", "libx264",
+    "-tune", "stillimage",
+    "-pix_fmt", "yuv420p",
+    "-preset", "ultrafast",
+    "-profile:v", "baseline",
+    "-level", "3.1",
+    "-r", String(OUT_FPS),
+    "-c:a", "aac",
+    "-profile:a", "aac_low",
+    "-b:a", "192k",
+    "-ar", "44100",
+    "-ac", "2",
+    "-movflags", "+faststart",
+    "-shortest",
+    outPath,
+  );
+  return ffArgs;
+}
+
+function lyricsBurnLikelyFailed(err) {
+  const msg = String(err?.message || err || "").toLowerCase();
+  return /subtitle|ass|libass|font|ffmpeg exit/i.test(msg);
 }
 
 module.exports = async function handler(req, res) {
@@ -258,56 +353,19 @@ module.exports = async function handler(req, res) {
       cleanup.push(assPath);
     }
 
-    // 9:16 cover-crop (top-biased) — same framing as Discover / posts.
-    // Always CFR 24fps + AAC stereo so iPhone playback keeps the audio track.
-    const scaleCrop =
-      `scale=${OUT_W}:${OUT_H}:force_original_aspect_ratio=increase,` +
-      `crop=${OUT_W}:${OUT_H}:(iw-ow)/2:0,fps=${OUT_FPS},format=yuv420p`;
-    const vchain = assPath
-      ? `${scaleCrop},subtitles='${ffmpegEscapeFilterPath(assPath)}'`
-      : scaleCrop;
-
-    const ffArgs = [
-      "-y",
-      "-hide_banner",
-      "-loglevel",
-      "error",
-      "-threads",
-      "0",
-      "-fflags",
-      "+genpts",
-    ];
-    if (imagePath) {
-      ffArgs.push("-loop", "1", "-framerate", String(OUT_FPS), "-i", imagePath);
-    } else {
-      ffArgs.push(
-        "-f", "lavfi",
-        "-i", `color=c=black:s=${OUT_W}x${OUT_H}:r=${OUT_FPS}`,
-      );
+    const ffBase = { ffmpegPath, imagePath, audioPath, outPath };
+    let burnedLyrics = false;
+    try {
+      await runFfmpeg(ffmpegPath, buildFfmpegArgs({ ...ffBase, assPath }));
+      burnedLyrics = Boolean(assPath);
+    } catch (firstErr) {
+      if (assPath && lyricsBurnLikelyFailed(firstErr)) {
+        console.warn("[render-video] lyric burn failed, retrying without subtitles:", firstErr?.message || firstErr);
+        await runFfmpeg(ffmpegPath, buildFfmpegArgs({ ...ffBase, assPath: "" }));
+      } else {
+        throw firstErr;
+      }
     }
-    ffArgs.push(
-      "-i", audioPath,
-      "-filter_complex",
-      `[0:v]${vchain}[v];[1:a]aformat=sample_fmts=fltp:channel_layouts=stereo,aresample=async=1:first_pts=0[a]`,
-      "-map", "[v]",
-      "-map", "[a]",
-      "-c:v", "libx264",
-      "-tune", "stillimage",
-      "-pix_fmt", "yuv420p",
-      "-preset", "ultrafast",
-      "-profile:v", "baseline",
-      "-level", "3.1",
-      "-c:a", "aac",
-      "-profile:a", "aac_low",
-      "-b:a", "192k",
-      "-ar", "44100",
-      "-ac", "2",
-      "-movflags", "+faststart",
-      "-shortest",
-      outPath,
-    );
-
-    await runFfmpeg(ffmpegPath, ffArgs);
     cleanup.push(outPath);
 
     const out = fs.readFileSync(outPath);
@@ -324,12 +382,13 @@ module.exports = async function handler(req, res) {
       `attachment; filename="${filename}"; filename*=UTF-8''${encodeURIComponent(filename)}`,
     );
     res.setHeader("Cache-Control", "no-store");
-    res.setHeader("X-Nabad-Video-Has-Lyrics", lyricLines.length ? "1" : "0");
+    res.setHeader("X-Nabad-Video-Has-Lyrics", burnedLyrics ? "1" : "0");
     res.end(out);
   } catch (e) {
     const msg = e?.message ? String(e.message) : "render failed";
     console.error("[render-video] failed:", msg, e?.stack || "");
-    res.statusCode = 500;
+    const timedOut = /timed out|abort|504/i.test(msg);
+    res.statusCode = timedOut ? 504 : 500;
     res.setHeader("Content-Type", "application/json");
     res.setHeader("Cache-Control", "no-store");
     res.end(JSON.stringify({ error: msg }));

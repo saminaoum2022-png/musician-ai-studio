@@ -189,7 +189,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260729-010146";
+const APP_BUILD = "20260730-211914";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -42927,13 +42927,6 @@ function withTimeout(promise, ms, fallback = null) {
   ]);
 }
 
-function isVideoRenderTimeoutError(e) {
-  if (!e) return false;
-  if (e.name === "AbortError") return true;
-  const msg = String(e.message || e || "");
-  return /timed out|504|aborted|fetch failed|network/i.test(msg);
-}
-
 async function fetchVideoLyricLinesForTrack(track) {
   const ids = resolveKaraokeIdsFromTrackRef(track);
   if (!ids?.taskId || !ids?.audioId) return null;
@@ -42954,9 +42947,22 @@ async function fetchVideoLyricLinesForTrack(track) {
 }
 
 function serverAudioUrlForVideoRender(serverAudioUrl) {
-  return isArchivedSongStorageUrl(serverAudioUrl)
-    ? serverAudioUrl
-    : apiUrl(`/api/suno/audio?url=${encodeURIComponent(serverAudioUrl)}`);
+  const raw = String(serverAudioUrl || "").trim();
+  if (!raw) return raw;
+  // render-video runs server-side — fetch Suno/archived URLs directly.
+  // Avoid nesting through /api/suno/audio (double serverless hop + timeout).
+  if (isArchivedSongStorageUrl(raw)) return raw;
+  return unwrapInnermostHttpAudioUrl(raw) || raw;
+}
+
+function isVideoRenderRetryableError(e, hadLyrics = false) {
+  if (!e) return false;
+  if (e.name === "AbortError") return true;
+  const msg = String(e.message || e || "");
+  if (/timed out|504|aborted|fetch failed|network|502|503/i.test(msg)) return true;
+  if (/500|ffmpeg|render failed|fetch 4|empty video/i.test(msg)) return true;
+  if (hadLyrics && /subtitle|ass|lyric/i.test(msg)) return true;
+  return false;
 }
 
 async function requestRenderedVideoBlob({
@@ -42983,7 +42989,10 @@ async function requestRenderedVideoBlob({
       detail = (await r.json())?.error || "";
     } catch {}
     if (r.status === 504 || /timed out/i.test(detail)) {
-      throw new Error("Video render timed out — try Download audio instead.");
+      throw new Error("Video render timed out — try again on Wi‑Fi.");
+    }
+    if (r.status >= 500) {
+      throw new Error(detail || `Server error (${r.status}) — try Download audio instead.`);
     }
     throw new Error(detail || `HTTP ${r.status}`);
   }
@@ -42999,32 +43008,48 @@ async function requestRenderedVideoBlobResilient({
   lyrics,
   say,
 } = {}) {
+  const safeImage = String(imageUrl || "").trim();
+  const objectImage = safeImage ? (supabaseRenderImageToObjectUrl(safeImage) || safeImage) : "";
   const attempts = [
     {
       lyrics,
+      imageUrl: objectImage,
       label: lyrics?.length ? "Rendering 9:16 video with lyrics…" : "Rendering 9:16 video…",
     },
-    ...(lyrics?.length
-      ? [{ lyrics: null, label: "Retrying without lyrics (slow connection)…" }]
-      : []),
   ];
+  if (lyrics?.length) {
+    attempts.push({
+      lyrics: null,
+      imageUrl: objectImage,
+      label: "Retrying without lyrics (slow connection)…",
+    });
+  }
+  if (objectImage) {
+    attempts.push({
+      lyrics: null,
+      imageUrl: "",
+      label: "Retrying with sound only…",
+    });
+  }
+
   let lastErr = null;
   for (let i = 0; i < attempts.length; i += 1) {
     const attempt = attempts[i];
     const ctrl = new AbortController();
-    const renderTimer = setTimeout(() => ctrl.abort(), 65000);
+    const renderTimer = setTimeout(() => ctrl.abort(), 58000);
     try {
       say(attempt.label);
       return await requestRenderedVideoBlob({
         serverAudioUrl,
-        imageUrl,
+        imageUrl: attempt.imageUrl,
         trackTitle,
         lyrics: attempt.lyrics,
         signal: ctrl.signal,
       });
     } catch (e) {
       lastErr = e;
-      const canRetry = i < attempts.length - 1 && isVideoRenderTimeoutError(e);
+      const hadLyrics = Boolean(lyrics?.length);
+      const canRetry = i < attempts.length - 1 && isVideoRenderRetryableError(e, hadLyrics);
       if (!canRetry) throw e;
     } finally {
       clearTimeout(renderTimer);

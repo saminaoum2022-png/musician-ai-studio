@@ -291,13 +291,18 @@ function buildFfmpegArgs({ imagePath, audioPath, outPath, fps = 1, durationSec =
   if (imagePath) {
     ffArgs.push("-loop", "1", "-framerate", "1", "-i", imagePath);
   } else {
-    ffArgs.push("-loop", "1", "-f", "lavfi", "-i", `color=c=black:s=${outW}x${outH}:r=1`);
+    // lavfi color is already infinite; -loop is invalid before lavfi inputs.
+    ffArgs.push("-f", "lavfi", "-i", `color=c=black:s=${outW}x${outH}:r=1`);
   }
   ffArgs.push("-i", audioPath);
   ffArgs.push(
     "-map", "0:v:0",
     "-map", "1:a:0",
-    "-vf", vf,
+  );
+  if (imagePath) {
+    ffArgs.push("-vf", vf);
+  }
+  ffArgs.push(
     "-c:v", "libx264", "-tune", "stillimage", "-pix_fmt", "yuv420p",
     "-preset", "ultrafast", "-profile:v", "baseline",
     "-c:a", "aac", "-b:a", "96k", "-ar", "44100", "-ac", "2",
@@ -366,7 +371,7 @@ async function renderToResponse({
     imagePath = path.join(tmpDir, `nabad-vid-${stamp}.${imgExt}`);
     fs.writeFileSync(imagePath, imageBuffer);
     cleanup.push(imagePath);
-  } else if (imageUrlFallback && !longSong) {
+  } else if (imageUrlFallback && !(audioBuffer?.length && longSong)) {
     try {
       const image = await fetchToBuffer(imageUrlFallback, MAX_IMAGE_BYTES, IMAGE_FETCH_MS);
       const imgExt = imageExtFromContentType(image.contentType, imageName);

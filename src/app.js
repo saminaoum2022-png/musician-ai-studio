@@ -189,7 +189,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260804-123013";
+const APP_BUILD = "20260804-124312";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -33057,7 +33057,7 @@ function runTrackSheetAction(action, sourceEl) {
       shut();
       void (async () => {
         try {
-          setStatus("Rendering video…");
+          setStatus("Preparing video export…");
           await downloadLibraryVideoTrack(t);
           setStatus("Video download is ready.");
         } catch (err) {
@@ -33240,7 +33240,7 @@ function runTrackSheetAction(action, sourceEl) {
       }
       void (async () => {
         try {
-          setStatus("Rendering video…");
+          setStatus("Preparing video export…");
           await downloadLibraryVideoTrack(t);
           setStatus("Video download is ready.");
         } catch (err) {
@@ -42949,12 +42949,17 @@ async function fetchVideoLyricLinesForTrack(track) {
 function serverAudioUrlForVideoRender(serverAudioUrl) {
   const raw = String(serverAudioUrl || "").trim();
   if (!raw) return raw;
-  // render-video runs server-side — fetch Suno/archived URLs directly.
-  // Avoid nesting through /api/suno/audio (double serverless hop + timeout).
   if (isArchivedSongStorageUrl(raw)) return raw;
-  return unwrapInnermostHttpAudioUrl(raw) || raw;
+  const leaf = unwrapInnermostHttpAudioUrl(raw) || raw;
+  if (isArchivedSongStorageUrl(leaf)) return leaf;
+  // Server fetches through our audio proxy (same hop as playback on the phone).
+  if (/^https?:\/\//i.test(leaf)) {
+    return apiUrl(`/api/suno/audio?url=${encodeURIComponent(leaf)}`);
+  }
+  return raw;
 }
 
+const VIDEO_RENDER_BASE64_MAX_BYTES = 2.5 * 1024 * 1024;
 const VIDEO_RENDER_MULTIPART_MAX_BYTES = 3.5 * 1024 * 1024;
 
 async function fetchTrackAudioBlobForVideoExport(track) {
@@ -42999,6 +43004,44 @@ async function fetchCoverBlobForVideoExport(imageUrl) {
   } catch {
     return null;
   }
+}
+
+async function requestRenderedVideoBase64Json({
+  audioBlob,
+  imageBlob,
+  trackTitle,
+  signal,
+} = {}) {
+  const audioBase64 = await blobToBase64Payload(audioBlob);
+  const body = {
+    audioBase64,
+    title: String(trackTitle || "song").trim() || "song",
+    fast: true,
+  };
+  if (imageBlob?.size) {
+    body.imageBase64 = await blobToBase64Payload(imageBlob);
+  }
+  const r = await apiFetch("/api/render-video", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+    signal,
+  });
+  if (!r.ok) {
+    let detail = "";
+    try { detail = (await r.json())?.error || ""; } catch {
+      try { detail = (await r.text()).slice(0, 200); } catch {}
+    }
+    if (r.status === 504 || /timed out/i.test(detail)) {
+      throw new Error("Video render timed out — try again on Wi‑Fi.");
+    }
+    if (r.status === 413) throw new Error("Audio file too large for upload");
+    if (r.status >= 500) throw new Error(detail || `Server error (${r.status})`);
+    throw new Error(detail || `HTTP ${r.status}`);
+  }
+  const blob = await r.blob();
+  if (!blob?.size || blob.size < 2048) throw new Error("Server returned an empty video file");
+  return blob;
 }
 
 async function requestRenderedVideoMultipart({
@@ -43104,12 +43147,25 @@ async function requestRenderedVideoBlobResilient({
   if (String(imageUrl || "").trim()) {
     imageBlob = await withTimeout(fetchCoverBlobForVideoExport(imageUrl), 8000, null);
   }
-  say("Rendering video…");
 
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), 90000);
   try {
-    if (audioBlob.size <= VIDEO_RENDER_MULTIPART_MAX_BYTES) {
+    say("Rendering video…");
+    if (isCapacitorNativeAuth() && audioBlob.size <= VIDEO_RENDER_BASE64_MAX_BYTES) {
+      try {
+        const blob = await requestRenderedVideoBase64Json({
+          audioBlob,
+          imageBlob,
+          trackTitle,
+          signal: ctrl.signal,
+        });
+        return { kind: "blob", blob };
+      } catch (e) {
+        if (!isVideoRenderRetryableError(e, false)) throw e;
+      }
+    }
+    if (!isCapacitorNativeAuth() && audioBlob.size <= VIDEO_RENDER_MULTIPART_MAX_BYTES) {
       try {
         const blob = await requestRenderedVideoMultipart({
           audioBlob,

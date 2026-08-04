@@ -9,6 +9,7 @@
 const Busboy = require("busboy");
 
 const MAX_AUDIO_BYTES = 60 * 1024 * 1024;
+const MAX_BASE64_AUDIO_BYTES = 2.5 * 1024 * 1024;
 const MAX_MULTIPART_AUDIO_BYTES = 4 * 1024 * 1024;
 const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
 const TOTAL_BUDGET_MS = 55000;
@@ -31,18 +32,36 @@ function isFastRender(params) {
   return true;
 }
 
+function isArchivedStorageUrl(url) {
+  return /\/storage\/v1\/object\/public\/song_archive\//i.test(String(url || ""));
+}
+
 function resolveFetchUrl(url) {
   const s = String(url || "").trim();
   if (!s) return s;
   try {
     const u = new URL(s);
     const path = u.pathname || "";
+    // Keep our audio proxy — direct Suno CDN fetch from Vercel often 500s/timeouts.
+    if (/\/api\/suno\/audio$/i.test(path) && /nabadai\.com$/i.test(u.hostname.replace(/^www\./, ""))) {
+      return s;
+    }
     if (/\/api\/suno\/audio$/i.test(path) || /\/suno\/audio$/i.test(path)) {
       const inner = u.searchParams.get("url");
       if (inner && /^https?:\/\//i.test(inner)) return inner;
     }
   } catch {}
   return s;
+}
+
+function absoluteNabadAudioProxyUrl(leaf) {
+  const target = resolveFetchUrl(String(leaf || "").trim());
+  if (!target || !/^https?:\/\//i.test(target)) return "";
+  if (/\/api\/suno\/audio$/i.test(new URL(target).pathname || "")) return target;
+  const base = process.env.VERCEL_URL
+    ? `https://${String(process.env.VERCEL_URL).replace(/^https?:\/\//, "")}`
+    : "https://www.nabadai.com";
+  return `${base.replace(/\/$/, "")}/api/suno/audio?url=${encodeURIComponent(target)}`;
 }
 
 async function fetchToBuffer(url, maxBytes, timeoutMs) {
@@ -356,10 +375,57 @@ module.exports = async function handler(req, res) {
     try { params = await readJsonBody(req); } catch { params = {}; }
 
     const audioUrl = resolveFetchUrl(String(params.audioUrl || "").trim());
+    const audioBase64 = String(params.audioBase64 || params.audio_base64 || "").trim();
+    const imageBase64 = String(params.imageBase64 || params.image_base64 || "").trim();
     const title = String(params.title || "song").trim();
     const isFast = isFastRender(params);
     const imageUrl = String(params.imageUrl || "").trim();
     const safeImageUrl = imageUrl && /^https?:\/\//i.test(imageUrl) ? imageUrl : "";
+
+    if (audioBase64) {
+      let audioBuffer;
+      try {
+        audioBuffer = Buffer.from(audioBase64, "base64");
+      } catch {
+        res.statusCode = 400;
+        res.setHeader("Content-Type", "application/json");
+        res.end(JSON.stringify({ error: "Invalid audioBase64" }));
+        return;
+      }
+      if (!audioBuffer?.length || audioBuffer.length < 1024) {
+        res.statusCode = 400;
+        res.setHeader("Content-Type", "application/json");
+        res.end(JSON.stringify({ error: "audioBase64 too small" }));
+        return;
+      }
+      if (audioBuffer.length > MAX_BASE64_AUDIO_BYTES) {
+        res.statusCode = 413;
+        res.setHeader("Content-Type", "application/json");
+        res.end(JSON.stringify({ error: "audioBase64 too large" }));
+        return;
+      }
+      let imageBuffer = null;
+      if (imageBase64) {
+        try {
+          imageBuffer = Buffer.from(imageBase64, "base64");
+        } catch {
+          imageBuffer = null;
+        }
+      }
+      await renderToResponse({
+        res,
+        title,
+        isFast,
+        audioBuffer,
+        audioContentType: "audio/mpeg",
+        audioName: "song.mp3",
+        imageBuffer,
+        imageContentType: "image/jpeg",
+        imageName: "cover.jpg",
+        startedMs,
+      });
+      return;
+    }
 
     if (!audioUrl || !/^https?:\/\//i.test(audioUrl)) {
       res.statusCode = 400;
@@ -372,7 +438,7 @@ module.exports = async function handler(req, res) {
       res,
       title,
       isFast,
-      audioUrlFallback: audioUrl,
+      audioUrlFallback: isArchivedStorageUrl(audioUrl) ? audioUrl : (absoluteNabadAudioProxyUrl(audioUrl) || audioUrl),
       imageUrlFallback: safeImageUrl,
       startedMs,
     });

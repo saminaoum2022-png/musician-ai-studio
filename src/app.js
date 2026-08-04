@@ -189,7 +189,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260804-114501";
+const APP_BUILD = "20260804-121029";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -42978,25 +42978,42 @@ async function downloadRenderedVideoToNativeFile({
   trackTitle,
   safeExportName,
   fast,
+  timeoutMs = 55000,
 } = {}) {
   const fs = getCapFilesystemPlugin();
   if (!fs?.downloadFile || !fs?.stat) return null;
   const url = buildRenderVideoGetUrl({ serverAudioUrl, imageUrl, trackTitle, fast });
   if (!url) return null;
   const rel = `NabadAi/exports/${Date.now()}-${safeExportName}`;
-  await fs.downloadFile({
-    url,
-    path: rel,
-    directory: "DOCUMENTS",
-    recursive: true,
+
+  const downloadJob = (async () => {
+    await fs.downloadFile({
+      url,
+      path: rel,
+      directory: "DOCUMENTS",
+      recursive: true,
+    });
+    const st = await fs.stat({ path: rel, directory: "DOCUMENTS" });
+    const filePath = String(st?.uri || "").trim();
+    const size = Number(st?.size || 0);
+    if (!/^file:\/\//i.test(filePath) || size < 2048) {
+      throw new Error("Downloaded video file is empty or incomplete");
+    }
+    return { filePath, rel };
+  })();
+
+  let timer = null;
+  const timed = new Promise((_, reject) => {
+    timer = setTimeout(
+      () => reject(new Error("Native video download timed out")),
+      Math.max(10000, Number(timeoutMs) || 55000),
+    );
   });
-  const st = await fs.stat({ path: rel, directory: "DOCUMENTS" });
-  const filePath = String(st?.uri || "").trim();
-  const size = Number(st?.size || 0);
-  if (!/^file:\/\//i.test(filePath) || size < 2048) {
-    throw new Error("Downloaded video file is empty or incomplete");
+  try {
+    return await Promise.race([downloadJob, timed]);
+  } finally {
+    if (timer) clearTimeout(timer);
   }
-  return { filePath, rel };
 }
 
 function isVideoRenderRetryableError(e, hadLyrics = false) {
@@ -43060,30 +43077,23 @@ async function requestRenderedVideoBlobResilient({
   const nativeFirst = isCapacitorNativeAuth();
   const attempts = [];
 
-  // Sound-only first — fastest path; cover is optional second pass.
+  // One render with cover (server skips cover if image fetch is slow). No second full encode.
   if (nativeFirst && safeExportName) {
     attempts.push({
       mode: "native",
       imageUrl: "",
       fast: true,
-      label: "Rendering video (sound)…",
+      label: "Rendering video…",
+      timeoutMs: 55000,
     });
-    if (objectImage) {
-      attempts.push({
-        mode: "native",
-        imageUrl: objectImage,
-        fast: true,
-        label: "Adding cover art…",
-      });
-    }
   }
-
   attempts.push({
     mode: "post",
     lyrics: null,
     imageUrl: "",
     fast: true,
-    label: "Rendering video (sound)…",
+    label: "Rendering video…",
+    timeoutMs: 65000,
   });
   if (objectImage) {
     attempts.push({
@@ -43092,6 +43102,7 @@ async function requestRenderedVideoBlobResilient({
       imageUrl: objectImage,
       fast: true,
       label: "Adding cover art…",
+      timeoutMs: 65000,
     });
   }
   // Lyrics only on web when user has a fast connection (last resort).
@@ -43109,22 +43120,19 @@ async function requestRenderedVideoBlobResilient({
   for (let i = 0; i < attempts.length; i += 1) {
     const attempt = attempts[i];
     const ctrl = new AbortController();
-    const timeoutMs = attempt.mode === "native" ? 75000 : attempt.fast ? 65000 : 58000;
+    const timeoutMs = attempt.timeoutMs || (attempt.mode === "native" ? 55000 : 65000);
     const renderTimer = setTimeout(() => ctrl.abort(), timeoutMs);
     try {
       say(attempt.label);
       if (attempt.mode === "native") {
-        const nativeResult = await withTimeout(
-          downloadRenderedVideoToNativeFile({
-            serverAudioUrl,
-            imageUrl: attempt.imageUrl,
-            trackTitle,
-            safeExportName,
-            fast: attempt.fast,
-          }),
+        const nativeResult = await downloadRenderedVideoToNativeFile({
+          serverAudioUrl,
+          imageUrl: attempt.imageUrl,
+          trackTitle,
+          safeExportName,
+          fast: attempt.fast,
           timeoutMs,
-          null,
-        );
+        });
         if (nativeResult?.filePath) {
           return { kind: "nativeFile", filePath: nativeResult.filePath };
         }

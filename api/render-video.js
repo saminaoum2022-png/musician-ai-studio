@@ -1,20 +1,21 @@
 // Render a "song video" on the fly: cover image + audio = mp4.
-// Used by the Download Video button so the user can save and share their
-// song as a single file (chat apps + social accept mp4 directly).
 //
-// GET  /api/render-video?audioUrl=...&imageUrl=...&title=...&fast=1
-// POST /api/render-video  { audioUrl, imageUrl, title, lyrics?, fast? }
+// POST multipart/form-data  audio=<file>  title=...  image=<file>?  fast=1
+// POST application/json     { audioUrl, imageUrl?, title, fast? }
 //
-// Fast mode (default): 1fps, no lyrics, local temp files only (no ffmpeg HTTP inputs).
+// Prefer multipart from the phone (audio already loaded via our proxy) so the
+// server never fetches Suno CDN on a slow link.
+
+const Busboy = require("busboy");
 
 const MAX_AUDIO_BYTES = 60 * 1024 * 1024;
+const MAX_MULTIPART_AUDIO_BYTES = 4 * 1024 * 1024;
 const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
 const TOTAL_BUDGET_MS = 55000;
-const FAST_AUDIO_FETCH_MS = 22000;
-const FAST_IMAGE_FETCH_MS = 5000;
+const AUDIO_FETCH_MS = 40000;
+const IMAGE_FETCH_MS = 5000;
 const OUT_W = 720;
 const OUT_H = 1280;
-const OUT_FPS = 2;
 
 function sanitizeFilename(name) {
   const trimmed = String(name || "song").trim();
@@ -69,39 +70,37 @@ async function fetchToBuffer(url, maxBytes, timeoutMs) {
   }
 }
 
-function audioExtFromContentType(ct, fallbackUrl) {
+function audioExtFromContentType(ct, fallbackUrl, fallbackName = "") {
   const lower = String(ct || "").toLowerCase();
   if (lower.includes("mpeg")) return "mp3";
-  if (lower.includes("mp4")) return "m4a";
+  if (lower.includes("mp4") || lower.includes("m4a")) return "m4a";
   if (lower.includes("aac")) return "aac";
   if (lower.includes("wav")) return "wav";
   if (lower.includes("ogg")) return "ogg";
   if (lower.includes("webm")) return "webm";
-  try {
-    const u = new URL(fallbackUrl);
-    const m = u.pathname.match(/\.(mp3|m4a|aac|wav|ogg|webm)$/i);
-    if (m) return m[1].toLowerCase();
-  } catch {}
+  for (const src of [fallbackName, fallbackUrl]) {
+    try {
+      const m = String(src || "").match(/\.(mp3|m4a|aac|wav|ogg|webm)$/i);
+      if (m) return m[1].toLowerCase();
+    } catch {}
+  }
   return "mp3";
 }
 
-function imageExtFromContentType(ct, fallbackUrl) {
+function imageExtFromContentType(ct, fallbackName = "") {
   const lower = String(ct || "").toLowerCase();
   if (lower.includes("jpeg") || lower.includes("jpg")) return "jpg";
   if (lower.includes("png")) return "png";
   if (lower.includes("webp")) return "webp";
-  try {
-    const u = new URL(fallbackUrl);
-    const m = u.pathname.match(/\.(jpg|jpeg|png|webp)$/i);
-    if (m) return m[1].toLowerCase().replace("jpeg", "jpg");
-  } catch {}
+  const m = String(fallbackName || "").match(/\.(jpg|jpeg|png|webp)$/i);
+  if (m) return m[1].toLowerCase().replace("jpeg", "jpg");
   return "jpg";
 }
 
 function runFfmpeg(ffmpegPath, args, timeoutMs) {
   const { spawn } = require("child_process");
   return new Promise((resolve, reject) => {
-    const p = spawn(ffmpegPath, args);
+    const p = spawn(ffmpegPath, args, { stdio: ["ignore", "ignore", "pipe"] });
     let stderr = "";
     let settled = false;
     const timer = setTimeout(() => {
@@ -140,15 +139,57 @@ async function readJsonBody(req) {
   });
 }
 
-/** Reliable local-file encode — avoids ffmpeg HTTP inputs that fail on Vercel. */
+function readMultipart(req) {
+  return new Promise((resolve, reject) => {
+    const bb = Busboy({
+      headers: req.headers,
+      limits: { fileSize: MAX_MULTIPART_AUDIO_BYTES, files: 2, fields: 8 },
+    });
+    const out = {
+      title: "song",
+      fast: true,
+      audio: null,
+      image: null,
+    };
+    bb.on("field", (name, val) => {
+      if (name === "title") out.title = String(val || "song").trim() || "song";
+      if (name === "fast") out.fast = String(val || "1") !== "0";
+    });
+    bb.on("file", (name, file, info) => {
+      const chunks = [];
+      let truncated = false;
+      file.on("data", (d) => chunks.push(d));
+      file.on("limit", () => { truncated = true; });
+      file.on("end", () => {
+        if (truncated) return;
+        const buffer = Buffer.concat(chunks);
+        if (name === "audio") {
+          out.audio = {
+            buffer,
+            filename: String(info?.filename || "song.mp3"),
+            mime: String(info?.mimeType || "audio/mpeg"),
+          };
+        } else if (name === "image") {
+          out.image = {
+            buffer,
+            filename: String(info?.filename || "cover.jpg"),
+            mime: String(info?.mimeType || "image/jpeg"),
+          };
+        }
+      });
+    });
+    bb.on("error", reject);
+    bb.on("finish", () => resolve(out));
+    req.pipe(bb);
+  });
+}
+
 function buildFfmpegArgs({ imagePath, audioPath, outPath, fps = 1 }) {
   const outFps = Math.max(1, Number(fps) || 1);
   const vf =
     `scale=${OUT_W}:${OUT_H}:force_original_aspect_ratio=increase,` +
     `crop=${OUT_W}:${OUT_H},fps=${outFps},format=yuv420p`;
-  const ffArgs = [
-    "-y", "-hide_banner", "-loglevel", "error", "-threads", "0",
-  ];
+  const ffArgs = ["-y", "-hide_banner", "-loglevel", "error", "-nostdin", "-threads", "0"];
   if (imagePath) {
     ffArgs.push("-loop", "1", "-framerate", String(outFps), "-i", imagePath);
   } else {
@@ -157,148 +198,194 @@ function buildFfmpegArgs({ imagePath, audioPath, outPath, fps = 1 }) {
   ffArgs.push("-i", audioPath);
   ffArgs.push(
     "-vf", vf,
-    "-c:v", "libx264",
-    "-tune", "stillimage",
-    "-pix_fmt", "yuv420p",
-    "-preset", "ultrafast",
-    "-profile:v", "baseline",
-    "-c:a", "aac",
-    "-b:a", "128k",
-    "-ar", "44100",
-    "-ac", "2",
-    "-movflags", "+faststart",
-    "-shortest",
-    outPath,
+    "-c:v", "libx264", "-tune", "stillimage", "-pix_fmt", "yuv420p",
+    "-preset", "ultrafast", "-profile:v", "baseline",
+    "-c:a", "aac", "-b:a", "128k", "-ar", "44100", "-ac", "2",
+    "-movflags", "+faststart", "-shortest", outPath,
   );
   return ffArgs;
+}
+
+async function renderToResponse({
+  res,
+  title,
+  isFast,
+  audioBuffer,
+  audioContentType,
+  audioName,
+  audioUrlFallback,
+  imageBuffer,
+  imageContentType,
+  imageName,
+  imageUrlFallback,
+  startedMs,
+}) {
+  const fs = require("fs");
+  const os = require("os");
+  const path = require("path");
+
+  let ffmpegPath = null;
+  try { ffmpegPath = require("ffmpeg-static"); } catch {}
+  if (!ffmpegPath) throw new Error("ffmpeg unavailable on server");
+
+  const cleanup = [];
+  const remainingMs = (floor = 8000) =>
+    Math.max(floor, TOTAL_BUDGET_MS - (Date.now() - startedMs));
+
+  const tmpDir = os.tmpdir();
+  const stamp = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  const outPath = path.join(tmpDir, `nabad-vid-${stamp}.mp4`);
+
+  let audioPath = "";
+  if (audioBuffer?.length) {
+    const audioExt = audioExtFromContentType(audioContentType, "", audioName);
+    audioPath = path.join(tmpDir, `nabad-vid-${stamp}.${audioExt}`);
+    fs.writeFileSync(audioPath, audioBuffer);
+    cleanup.push(audioPath);
+  } else if (audioUrlFallback) {
+    const audio = await fetchToBuffer(audioUrlFallback, MAX_AUDIO_BYTES, AUDIO_FETCH_MS);
+    const audioExt = audioExtFromContentType(audio.contentType, audioUrlFallback, audioName);
+    audioPath = path.join(tmpDir, `nabad-vid-${stamp}.${audioExt}`);
+    fs.writeFileSync(audioPath, audio.buffer);
+    cleanup.push(audioPath);
+  } else {
+    throw new Error("Missing audio");
+  }
+
+  let imagePath = "";
+  if (imageBuffer?.length) {
+    const imgExt = imageExtFromContentType(imageContentType, imageName);
+    imagePath = path.join(tmpDir, `nabad-vid-${stamp}.${imgExt}`);
+    fs.writeFileSync(imagePath, imageBuffer);
+    cleanup.push(imagePath);
+  } else if (imageUrlFallback) {
+    try {
+      const image = await fetchToBuffer(imageUrlFallback, MAX_IMAGE_BYTES, IMAGE_FETCH_MS);
+      const imgExt = imageExtFromContentType(image.contentType, imageName);
+      imagePath = path.join(tmpDir, `nabad-vid-${stamp}.${imgExt}`);
+      fs.writeFileSync(imagePath, image.buffer);
+      cleanup.push(imagePath);
+    } catch (imgErr) {
+      console.warn("[render-video] cover skipped:", imgErr?.message || imgErr);
+    }
+  }
+
+  const encodeFps = isFast ? 1 : 2;
+  const ffBase = { audioPath, outPath, fps: encodeFps };
+
+  try {
+    await runFfmpeg(ffmpegPath, buildFfmpegArgs({ ...ffBase, imagePath }), remainingMs(10000));
+  } catch (firstErr) {
+    if (imagePath) {
+      console.warn("[render-video] cover encode failed, sound-only:", firstErr?.message || firstErr);
+      await runFfmpeg(ffmpegPath, buildFfmpegArgs({ ...ffBase, imagePath: "" }), remainingMs(8000));
+    } else {
+      throw firstErr;
+    }
+  }
+  cleanup.push(outPath);
+
+  const outStat = fs.statSync(outPath);
+  if (!outStat?.size || outStat.size < 2048) throw new Error("ffmpeg produced an empty video");
+
+  const filename = `${sanitizeFilename(title)}.mp4`;
+  res.statusCode = 200;
+  res.setHeader("Content-Type", "video/mp4");
+  res.setHeader("Content-Length", String(outStat.size));
+  res.setHeader(
+    "Content-Disposition",
+    `attachment; filename="${filename}"; filename*=UTF-8''${encodeURIComponent(filename)}`,
+  );
+  res.setHeader("Cache-Control", "no-store");
+  if (isFast) res.setHeader("X-Nabad-Video-Fast", "1");
+
+  await new Promise((resolve, reject) => {
+    const stream = fs.createReadStream(outPath);
+    stream.on("error", reject);
+    res.on("error", reject);
+    stream.on("end", resolve);
+    stream.pipe(res);
+  });
+
+  for (const f of cleanup) {
+    try { fs.unlinkSync(f); } catch {}
+  }
 }
 
 module.exports = async function handler(req, res) {
   const { applyCors } = require("./_lib/cors");
   if (applyCors(req, res)) return;
 
-  const fs = require("fs");
-  const os = require("os");
-  const path = require("path");
-
-  let cleanup = [];
   const startedMs = Date.now();
-  const remainingMs = (floor = 8000) =>
-    Math.max(floor, TOTAL_BUDGET_MS - (Date.now() - startedMs));
+  let cleanup = [];
 
   try {
-    let params = {};
-    if (req.method === "POST") {
-      try { params = await readJsonBody(req); } catch { params = {}; }
-    } else {
-      try {
-        const u = new URL(req.url, "http://x");
-        params = {
-          audioUrl: u.searchParams.get("audioUrl") || "",
-          imageUrl: u.searchParams.get("imageUrl") || "",
-          title: u.searchParams.get("title") || "",
-          fast: u.searchParams.get("fast") || "",
-        };
-      } catch { params = {}; }
+    if (req.method !== "POST") {
+      res.statusCode = 405;
+      res.setHeader("Content-Type", "application/json");
+      res.end(JSON.stringify({ error: "POST required" }));
+      return;
     }
 
+    const contentType = String(req.headers["content-type"] || "").toLowerCase();
+
+    if (contentType.includes("multipart/form-data")) {
+      const form = await readMultipart(req);
+      if (!form.audio?.buffer?.length) {
+        res.statusCode = 400;
+        res.setHeader("Content-Type", "application/json");
+        res.end(JSON.stringify({ error: "Missing audio file" }));
+        return;
+      }
+      await renderToResponse({
+        res,
+        title: form.title,
+        isFast: isFastRender(form),
+        audioBuffer: form.audio.buffer,
+        audioContentType: form.audio.mime,
+        audioName: form.audio.filename,
+        imageBuffer: form.image?.buffer,
+        imageContentType: form.image?.mime,
+        imageName: form.image?.filename,
+        startedMs,
+      });
+      return;
+    }
+
+    let params = {};
+    try { params = await readJsonBody(req); } catch { params = {}; }
+
     const audioUrl = resolveFetchUrl(String(params.audioUrl || "").trim());
-    const imageUrl = String(params.imageUrl || "").trim();
     const title = String(params.title || "song").trim();
     const isFast = isFastRender(params);
-    const encodeFps = isFast ? 1 : OUT_FPS;
+    const imageUrl = String(params.imageUrl || "").trim();
+    const safeImageUrl = imageUrl && /^https?:\/\//i.test(imageUrl) ? imageUrl : "";
 
     if (!audioUrl || !/^https?:\/\//i.test(audioUrl)) {
       res.statusCode = 400;
       res.setHeader("Content-Type", "application/json");
-      res.setHeader("Cache-Control", "no-store");
       res.end(JSON.stringify({ error: audioUrl ? "Invalid audioUrl" : "Missing audioUrl" }));
       return;
     }
 
-    let ffmpegPath = null;
-    try { ffmpegPath = require("ffmpeg-static"); } catch {}
-    if (!ffmpegPath) {
-      res.statusCode = 500;
-      res.setHeader("Content-Type", "application/json");
-      res.end(JSON.stringify({ error: "ffmpeg unavailable on server" }));
-      return;
-    }
-
-    const safeImageUrl = imageUrl && /^https?:\/\//i.test(imageUrl) ? imageUrl : "";
-    const tmpDir = os.tmpdir();
-    const stamp = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-    const outPath = path.join(tmpDir, `nabad-vid-${stamp}.mp4`);
-
-    const audio = await fetchToBuffer(audioUrl, MAX_AUDIO_BYTES, FAST_AUDIO_FETCH_MS);
-    const audioExt = audioExtFromContentType(audio.contentType, audioUrl);
-    const audioPath = path.join(tmpDir, `nabad-vid-${stamp}.${audioExt}`);
-    fs.writeFileSync(audioPath, audio.buffer);
-    cleanup.push(audioPath);
-
-    let imagePath = "";
-    if (safeImageUrl) {
-      try {
-        const image = await fetchToBuffer(safeImageUrl, MAX_IMAGE_BYTES, FAST_IMAGE_FETCH_MS);
-        const imgExt = imageExtFromContentType(image.contentType, safeImageUrl);
-        imagePath = path.join(tmpDir, `nabad-vid-${stamp}.${imgExt}`);
-        fs.writeFileSync(imagePath, image.buffer);
-        cleanup.push(imagePath);
-      } catch (imgErr) {
-        console.warn("[render-video] cover skipped:", imgErr?.message || imgErr);
-      }
-    }
-
-    const ffBase = { audioPath, outPath, fps: encodeFps };
-    const ffmpegMs = remainingMs(10000);
-
-    try {
-      await runFfmpeg(ffmpegPath, buildFfmpegArgs({ ...ffBase, imagePath }), ffmpegMs);
-    } catch (firstErr) {
-      if (imagePath) {
-        console.warn("[render-video] encode with cover failed, retrying sound-only:", firstErr?.message || firstErr);
-        await runFfmpeg(
-          ffmpegPath,
-          buildFfmpegArgs({ ...ffBase, imagePath: "" }),
-          remainingMs(8000),
-        );
-      } else {
-        throw firstErr;
-      }
-    }
-    cleanup.push(outPath);
-
-    const outStat = fs.statSync(outPath);
-    if (!outStat?.size || outStat.size < 2048) {
-      throw new Error("ffmpeg produced an empty video");
-    }
-    const filename = `${sanitizeFilename(title)}.mp4`;
-
-    res.statusCode = 200;
-    res.setHeader("Content-Type", "video/mp4");
-    res.setHeader("Content-Length", String(outStat.size));
-    res.setHeader(
-      "Content-Disposition",
-      `attachment; filename="${filename}"; filename*=UTF-8''${encodeURIComponent(filename)}`,
-    );
-    res.setHeader("Cache-Control", "no-store");
-    if (isFast) res.setHeader("X-Nabad-Video-Fast", "1");
-
-    await new Promise((resolve, reject) => {
-      const stream = fs.createReadStream(outPath);
-      stream.on("error", reject);
-      res.on("error", reject);
-      stream.on("end", resolve);
-      stream.pipe(res);
+    await renderToResponse({
+      res,
+      title,
+      isFast,
+      audioUrlFallback: audioUrl,
+      imageUrlFallback: safeImageUrl,
+      startedMs,
     });
   } catch (e) {
     const msg = e?.message ? String(e.message) : "render failed";
     console.error("[render-video] failed:", msg, e?.stack || "");
     const timedOut = /timed out|abort/i.test(msg);
-    res.statusCode = timedOut ? 504 : 500;
-    res.setHeader("Content-Type", "application/json");
-    res.setHeader("Cache-Control", "no-store");
-    res.end(JSON.stringify({ error: msg }));
+    if (!res.headersSent) {
+      res.statusCode = timedOut ? 504 : 500;
+      res.setHeader("Content-Type", "application/json");
+      res.setHeader("Cache-Control", "no-store");
+      res.end(JSON.stringify({ error: msg }));
+    }
   } finally {
     const fs = require("fs");
     for (const f of cleanup) {

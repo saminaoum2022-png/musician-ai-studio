@@ -189,7 +189,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260804-134817";
+const APP_BUILD = "20260804-135947";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -43264,20 +43264,36 @@ async function requestRenderedVideoBlobResilient({
   track,
   say,
 } = {}) {
-  say("Downloading audio…");
-  const { blob: audioBlob } = await fetchTrackAudioBlobForVideoExport(
-    track || { url: serverAudioUrl, title: trackTitle },
-  );
-
-  let imageBlob = null;
-  if (String(imageUrl || "").trim()) {
-    imageBlob = await withTimeout(fetchCoverBlobForVideoExport(imageUrl), 8000, null);
-  }
-
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), 150000);
-  let lastUploadErr = null;
+
   try {
+    const archivedUrl = [serverAudioUrl, track?.url]
+      .map((u) => String(u || "").trim())
+      .find((u) => isArchivedSongStorageUrl(u));
+    if (archivedUrl) {
+      say("Building video…");
+      const blob = await requestRenderedVideoBlob({
+        serverAudioUrl: archivedUrl,
+        imageUrl: String(imageUrl || "").trim() || undefined,
+        trackTitle,
+        fast: true,
+        signal: ctrl.signal,
+      });
+      return { kind: "blob", blob };
+    }
+
+    say("Downloading audio…");
+    const { blob: audioBlob } = await fetchTrackAudioBlobForVideoExport(
+      track || { url: serverAudioUrl, title: trackTitle },
+    );
+
+    let imageBlob = null;
+    if (String(imageUrl || "").trim()) {
+      imageBlob = await withTimeout(fetchCoverBlobForVideoExport(imageUrl), 8000, null);
+    }
+
+    let lastUploadErr = null;
     if (audioBlob.size <= VIDEO_RENDER_BASE64_SAFE_MAX_BYTES) {
       say("Uploading audio for video…");
       try {
@@ -43323,6 +43339,9 @@ async function requestRenderedVideoBlobResilient({
         if (!isVideoRenderRetryableError(e, false)) throw e;
       }
     }
+    if (audioBlob.size > VIDEO_RENDER_RAW_MAX_BYTES) {
+      throw new Error("Audio file is too large for video export on this device.");
+    }
   } finally {
     clearTimeout(timer);
   }
@@ -43332,9 +43351,6 @@ async function requestRenderedVideoBlobResilient({
     throw new Error("Video render timed out — stay on Wi‑Fi and try again.");
   }
   if (msg) throw lastUploadErr;
-  if (audioBlob.size > VIDEO_RENDER_RAW_MAX_BYTES) {
-    throw new Error("Audio file is too large for video export on this device.");
-  }
   throw new Error("Video upload failed — stay on Wi‑Fi and try again.");
 }
 

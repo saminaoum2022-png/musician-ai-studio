@@ -284,16 +284,14 @@ function buildFfmpegArgs({ imagePath, audioPath, outPath, fps = 1, durationSec =
   const veryLong = dur > 75;
   const outW = veryLong && isFast ? 480 : longSong && isFast ? 540 : OUT_W;
   const outH = veryLong && isFast ? 854 : longSong && isFast ? 960 : OUT_H;
-  const outFps = veryLong && isFast ? 0.25 : longSong && isFast ? 0.5 : Math.max(1, Number(fps) || 1);
-  const vf = longSong && isFast
-    ? `scale=${outW}:${outH}:force_original_aspect_ratio=increase,crop=${outW}:${outH},format=yuv420p`
-    : `scale=${OUT_W}:${OUT_H}:force_original_aspect_ratio=increase,` +
-      `crop=${OUT_W}:${OUT_H},fps=${outFps},format=yuv420p`;
+  const vf =
+    `scale=${outW}:${outH}:force_original_aspect_ratio=increase,` +
+    `crop=${outW}:${outH},format=yuv420p`;
   const ffArgs = ["-y", "-hide_banner", "-loglevel", "error", "-nostdin", "-threads", "0"];
   if (imagePath) {
-    ffArgs.push("-loop", "1", "-framerate", String(outFps), "-i", imagePath);
+    ffArgs.push("-loop", "1", "-framerate", "1", "-i", imagePath);
   } else {
-    ffArgs.push("-loop", "1", "-f", "lavfi", "-i", `color=c=black:s=${outW}x${outH}:r=${outFps}`);
+    ffArgs.push("-loop", "1", "-f", "lavfi", "-i", `color=c=black:s=${outW}x${outH}:r=1`);
   }
   ffArgs.push("-i", audioPath);
   ffArgs.push(
@@ -302,16 +300,11 @@ function buildFfmpegArgs({ imagePath, audioPath, outPath, fps = 1, durationSec =
     "-vf", vf,
     "-c:v", "libx264", "-tune", "stillimage", "-pix_fmt", "yuv420p",
     "-preset", "ultrafast", "-profile:v", "baseline",
-    "-c:a", "aac", "-b:a", "128k", "-ar", "44100", "-ac", "2",
+    "-c:a", "aac", "-b:a", "96k", "-ar", "44100", "-ac", "2",
     "-movflags", "+faststart",
+    "-shortest",
+    outPath,
   );
-  if (longSong && isFast) ffArgs.push("-r", "1");
-  if (dur > 0.5) {
-    ffArgs.push("-t", String(Math.ceil(dur + 0.35)));
-  } else {
-    ffArgs.push("-shortest");
-  }
-  ffArgs.push(outPath);
   return ffArgs;
 }
 
@@ -364,13 +357,16 @@ async function renderToResponse({
     throw new Error("Missing audio");
   }
 
+  const audioDurationSec = probeMediaDurationSec(ffmpegPath, audioPath);
+  const longSong = audioDurationSec > 45;
+
   let imagePath = "";
   if (imageBuffer?.length) {
     const imgExt = imageExtFromContentType(imageContentType, imageName);
     imagePath = path.join(tmpDir, `nabad-vid-${stamp}.${imgExt}`);
     fs.writeFileSync(imagePath, imageBuffer);
     cleanup.push(imagePath);
-  } else if (imageUrlFallback) {
+  } else if (imageUrlFallback && !longSong) {
     try {
       const image = await fetchToBuffer(imageUrlFallback, MAX_IMAGE_BYTES, IMAGE_FETCH_MS);
       const imgExt = imageExtFromContentType(image.contentType, imageName);
@@ -383,11 +379,10 @@ async function renderToResponse({
   }
 
   const encodeFps = isFast ? 1 : 2;
-  const audioDurationSec = probeMediaDurationSec(ffmpegPath, audioPath);
   const ffBase = { audioPath, outPath, fps: encodeFps, durationSec: audioDurationSec, isFast };
   const ffmpegMs = audioBuffer?.length
-    ? Math.min(remainingMs(6000), Math.max(45000, Math.ceil(audioDurationSec * 420) + 12000))
-    : Math.min(remainingMs(8000), Math.max(28000, Math.ceil(audioDurationSec * 380) + 8000));
+    ? Math.min(remainingMs(6000), Math.max(42000, Math.ceil(audioDurationSec * 320) + 8000))
+    : Math.min(remainingMs(8000), Math.max(32000, Math.ceil(audioDurationSec * 280) + 6000));
 
   try {
     await runFfmpeg(ffmpegPath, buildFfmpegArgs({ ...ffBase, imagePath }), ffmpegMs);
@@ -405,15 +400,17 @@ async function renderToResponse({
   }
   cleanup.push(outPath);
 
-  const outDurationSec = probeMediaDurationSec(ffmpegPath, outPath);
-  if (
-    audioDurationSec > 3 &&
-    outDurationSec > 0 &&
-    outDurationSec < audioDurationSec * 0.85
-  ) {
-    throw new Error(
-      `Video truncated (${Math.round(outDurationSec)}s of ${Math.round(audioDurationSec)}s) — try again on Wi‑Fi`,
-    );
+  if (!audioBuffer?.length) {
+    const outDurationSec = probeMediaDurationSec(ffmpegPath, outPath);
+    if (
+      audioDurationSec > 3 &&
+      outDurationSec > 0 &&
+      outDurationSec < audioDurationSec * 0.85
+    ) {
+      throw new Error(
+        `Video truncated (${Math.round(outDurationSec)}s of ${Math.round(audioDurationSec)}s) — try again on Wi‑Fi`,
+      );
+    }
   }
 
   const outStat = fs.statSync(outPath);
@@ -478,7 +475,7 @@ module.exports = async function handler(req, res) {
         imageBuffer: form.image?.buffer,
         imageContentType: form.image?.mime,
         imageName: form.image?.filename,
-        startedMs,
+        startedMs: Date.now(),
       });
       return;
     }
@@ -500,7 +497,7 @@ module.exports = async function handler(req, res) {
         audioContentType: contentType.split(";")[0].trim() || "application/octet-stream",
         audioName: meta.audioName,
         imageUrlFallback: meta.imageUrl,
-        startedMs,
+        startedMs: Date.now(),
       });
       return;
     }
@@ -556,7 +553,7 @@ module.exports = async function handler(req, res) {
         imageBuffer,
         imageContentType: "image/jpeg",
         imageName: "cover.jpg",
-        startedMs,
+        startedMs: Date.now(),
       });
       return;
     }

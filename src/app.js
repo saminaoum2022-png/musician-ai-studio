@@ -189,7 +189,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260804-141303";
+const APP_BUILD = "20260804-141733";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -43268,6 +43268,7 @@ async function requestRenderedVideoBlobResilient({
 } = {}) {
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), 150000);
+  let lastUploadErr = null;
 
   try {
     const archivedUrl = [serverAudioUrl, track?.url]
@@ -43314,7 +43315,6 @@ async function requestRenderedVideoBlobResilient({
       imageBlob = await withTimeout(fetchCoverBlobForVideoExport(imageUrl), 8000, null);
     }
 
-    let lastUploadErr = null;
     if (audioBlob.size <= VIDEO_RENDER_BASE64_SAFE_MAX_BYTES) {
       say("Uploading audio for video…");
       try {

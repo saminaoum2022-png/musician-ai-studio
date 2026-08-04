@@ -189,7 +189,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260730-211914";
+const APP_BUILD = "20260804-114501";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -42955,12 +42955,56 @@ function serverAudioUrlForVideoRender(serverAudioUrl) {
   return unwrapInnermostHttpAudioUrl(raw) || raw;
 }
 
+const VIDEO_RENDER_GET_URL_MAX = 6000;
+
+function buildRenderVideoGetUrl({ serverAudioUrl, imageUrl, trackTitle, fast } = {}) {
+  const qs = new URLSearchParams();
+  qs.set("audioUrl", serverAudioUrlForVideoRender(serverAudioUrl));
+  qs.set("title", String(trackTitle || "song").trim() || "song");
+  const img = String(imageUrl || "").trim();
+  if (img) qs.set("imageUrl", img);
+  if (fast) qs.set("fast", "1");
+  const bypass = getVercelProtectionBypass();
+  if (bypass) qs.set("x-vercel-protection-bypass", bypass);
+  const full = apiUrl(`/api/render-video?${qs.toString()}`);
+  if (full.length > VIDEO_RENDER_GET_URL_MAX) return null;
+  return full;
+}
+
+/** Native iOS: stream MP4 straight to Documents (avoids WKWebView blob + base64). */
+async function downloadRenderedVideoToNativeFile({
+  serverAudioUrl,
+  imageUrl,
+  trackTitle,
+  safeExportName,
+  fast,
+} = {}) {
+  const fs = getCapFilesystemPlugin();
+  if (!fs?.downloadFile || !fs?.stat) return null;
+  const url = buildRenderVideoGetUrl({ serverAudioUrl, imageUrl, trackTitle, fast });
+  if (!url) return null;
+  const rel = `NabadAi/exports/${Date.now()}-${safeExportName}`;
+  await fs.downloadFile({
+    url,
+    path: rel,
+    directory: "DOCUMENTS",
+    recursive: true,
+  });
+  const st = await fs.stat({ path: rel, directory: "DOCUMENTS" });
+  const filePath = String(st?.uri || "").trim();
+  const size = Number(st?.size || 0);
+  if (!/^file:\/\//i.test(filePath) || size < 2048) {
+    throw new Error("Downloaded video file is empty or incomplete");
+  }
+  return { filePath, rel };
+}
+
 function isVideoRenderRetryableError(e, hadLyrics = false) {
   if (!e) return false;
   if (e.name === "AbortError") return true;
   const msg = String(e.message || e || "");
   if (/timed out|504|aborted|fetch failed|network|502|503/i.test(msg)) return true;
-  if (/500|ffmpeg|render failed|fetch 4|empty video/i.test(msg)) return true;
+  if (/500|ffmpeg|render failed|fetch 4|empty video|incomplete|unavailable/i.test(msg)) return true;
   if (hadLyrics && /subtitle|ass|lyric/i.test(msg)) return true;
   return false;
 }
@@ -42970,6 +43014,7 @@ async function requestRenderedVideoBlob({
   imageUrl,
   trackTitle,
   lyrics,
+  fast = true,
   signal,
 } = {}) {
   const r = await apiFetch("/api/render-video", {
@@ -42978,8 +43023,9 @@ async function requestRenderedVideoBlob({
     body: JSON.stringify({
       audioUrl: serverAudioUrlForVideoRender(serverAudioUrl),
       title: trackTitle,
+      fast: fast ? true : false,
       ...(imageUrl ? { imageUrl } : {}),
-      ...(lyrics?.length ? { lyrics } : {}),
+      ...(lyrics?.length && !fast ? { lyrics } : {}),
     }),
     signal,
   });
@@ -43006,29 +43052,56 @@ async function requestRenderedVideoBlobResilient({
   imageUrl,
   trackTitle,
   lyrics,
+  safeExportName,
   say,
 } = {}) {
   const safeImage = String(imageUrl || "").trim();
   const objectImage = safeImage ? (supabaseRenderImageToObjectUrl(safeImage) || safeImage) : "";
-  const attempts = [
-    {
-      lyrics,
-      imageUrl: objectImage,
-      label: lyrics?.length ? "Rendering 9:16 video with lyrics…" : "Rendering 9:16 video…",
-    },
-  ];
-  if (lyrics?.length) {
+  const nativeFirst = isCapacitorNativeAuth();
+  const attempts = [];
+
+  // Sound-only first — fastest path; cover is optional second pass.
+  if (nativeFirst && safeExportName) {
     attempts.push({
-      lyrics: null,
-      imageUrl: objectImage,
-      label: "Retrying without lyrics (slow connection)…",
+      mode: "native",
+      imageUrl: "",
+      fast: true,
+      label: "Rendering video (sound)…",
     });
+    if (objectImage) {
+      attempts.push({
+        mode: "native",
+        imageUrl: objectImage,
+        fast: true,
+        label: "Adding cover art…",
+      });
+    }
   }
+
+  attempts.push({
+    mode: "post",
+    lyrics: null,
+    imageUrl: "",
+    fast: true,
+    label: "Rendering video (sound)…",
+  });
   if (objectImage) {
     attempts.push({
+      mode: "post",
       lyrics: null,
-      imageUrl: "",
-      label: "Retrying with sound only…",
+      imageUrl: objectImage,
+      fast: true,
+      label: "Adding cover art…",
+    });
+  }
+  // Lyrics only on web when user has a fast connection (last resort).
+  if (!nativeFirst && lyrics?.length) {
+    attempts.push({
+      mode: "post",
+      lyrics,
+      imageUrl: objectImage,
+      fast: false,
+      label: "Rendering 9:16 video with lyrics…",
     });
   }
 
@@ -43036,26 +43109,78 @@ async function requestRenderedVideoBlobResilient({
   for (let i = 0; i < attempts.length; i += 1) {
     const attempt = attempts[i];
     const ctrl = new AbortController();
-    const renderTimer = setTimeout(() => ctrl.abort(), 58000);
+    const timeoutMs = attempt.mode === "native" ? 75000 : attempt.fast ? 65000 : 58000;
+    const renderTimer = setTimeout(() => ctrl.abort(), timeoutMs);
     try {
       say(attempt.label);
-      return await requestRenderedVideoBlob({
+      if (attempt.mode === "native") {
+        const nativeResult = await withTimeout(
+          downloadRenderedVideoToNativeFile({
+            serverAudioUrl,
+            imageUrl: attempt.imageUrl,
+            trackTitle,
+            safeExportName,
+            fast: attempt.fast,
+          }),
+          timeoutMs,
+          null,
+        );
+        if (nativeResult?.filePath) {
+          return { kind: "nativeFile", filePath: nativeResult.filePath };
+        }
+        throw new Error("Native video download unavailable");
+      }
+      const blob = await requestRenderedVideoBlob({
         serverAudioUrl,
         imageUrl: attempt.imageUrl,
         trackTitle,
         lyrics: attempt.lyrics,
+        fast: attempt.fast,
         signal: ctrl.signal,
       });
+      return { kind: "blob", blob };
     } catch (e) {
       lastErr = e;
-      const hadLyrics = Boolean(lyrics?.length);
-      const canRetry = i < attempts.length - 1 && isVideoRenderRetryableError(e, hadLyrics);
+      const canRetry = i < attempts.length - 1 && isVideoRenderRetryableError(e, Boolean(attempt.lyrics?.length));
       if (!canRetry) throw e;
     } finally {
       clearTimeout(renderTimer);
     }
   }
   throw lastErr || new Error("Video render failed");
+}
+
+/** Archive remote audio to Supabase before server render (required for reliable export). */
+async function ensureTrackAudioArchivedForVideoExport(track, say) {
+  let t = track;
+  let leaf = unwrapInnermostHttpAudioUrl(t?.url) || String(t?.url || "").trim();
+  if (isArchivedSongStorageUrl(leaf) || isArchivedSongStorageUrl(t?.url)) {
+    const archived = isArchivedSongStorageUrl(t?.url) ? String(t.url).trim() : leaf;
+    return { track: t, serverAudioUrl: archived };
+  }
+  if (!getSupabaseAuthToken()) {
+    throw new Error("Sign in to export video.");
+  }
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    if (attempt === 0) say("Saving audio for export…");
+    else say(`Saving audio (retry ${attempt + 1}/3)…`);
+    try {
+      const archived = await withTimeout(archiveLibraryTrackToCloud(t), 55000, null);
+      if (archived && isArchivedSongStorageUrl(archived)) {
+        const fresh = loadLibrary().find((x) => String(x.id) === String(t.id));
+        if (fresh) t = fresh;
+        return { track: t, serverAudioUrl: archived };
+      }
+    } catch {}
+    if (attempt < 2) await new Promise((r) => setTimeout(r, 2000 * (attempt + 1)));
+    const latest = loadLibrary().find((x) => String(x.id) === String(t.id));
+    if (latest) t = latest;
+    leaf = unwrapInnermostHttpAudioUrl(t?.url) || String(t?.url || "").trim();
+    if (isArchivedSongStorageUrl(leaf)) {
+      return { track: t, serverAudioUrl: leaf };
+    }
+  }
+  throw new Error("Could not save audio to cloud. Try Wi‑Fi, then export again.");
 }
 
 async function downloadLibraryVideoTrack(track, { onRendered } = {}) {
@@ -43119,6 +43244,8 @@ async function downloadLibraryVideoTrack(track, { onRendered } = {}) {
     }
     if (!serverAudioUrl) throw new Error("This song isn't downloadable. Try opening it from Library again.");
 
+    ({ track: t, serverAudioUrl } = await ensureTrackAudioArchivedForVideoExport(t, say));
+
     const displayArt = trackCoverArtForDisplay(t);
     const artCandidates = [
       displayArt,
@@ -43129,24 +43256,22 @@ async function downloadLibraryVideoTrack(track, { onRendered } = {}) {
     const filename = `${trackTitle.replace(/[\\/:*?"<>|]/g, "").trim() || "song"}.mp4`;
     const safeExportName = sanitizeNativeExportFilename(filename, "song.mp4");
 
-    say("Loading timestamped lyrics…");
     let lyrics = null;
-    try {
-      lyrics = await withTimeout(fetchVideoLyricLinesForTrack(t), 10000, null);
-    } catch {
-      lyrics = null;
+    if (!isCapacitorNativeAuth()) {
+      try {
+        lyrics = await withTimeout(fetchVideoLyricLinesForTrack(t), 8000, null);
+      } catch {
+        lyrics = null;
+      }
     }
-    if (lyrics?.length) {
-      say(`Burning ${lyrics.length} lyric lines…`);
-    } else {
-      say("Rendering video (cover + sound)…");
-    }
+    say("Rendering video…");
 
-    const blob = await requestRenderedVideoBlobResilient({
+    const rendered = await requestRenderedVideoBlobResilient({
       serverAudioUrl,
       imageUrl,
       trackTitle,
       lyrics,
+      safeExportName,
       say,
     });
 
@@ -43154,6 +43279,13 @@ async function downloadLibraryVideoTrack(track, { onRendered } = {}) {
     try {
       onRendered?.();
     } catch {}
+    if (rendered?.kind === "nativeFile" && rendered.filePath) {
+      finishCoachPriorityStatus("Video ready ✓");
+      await presentNativeVideoSaveWhenReady({ filePath: rendered.filePath, title: trackTitle });
+      return;
+    }
+    const blob = rendered?.blob;
+    if (!blob?.size) throw new Error("Video render failed");
     if (isCapacitorNativeAuth()) {
       const { filePath } = await writeBlobToNativeCache(blob, safeExportName);
       finishCoachPriorityStatus("Video ready ✓");

@@ -1,7 +1,8 @@
 // Render a "song video" on the fly: cover image + audio = mp4.
 //
 // POST multipart/form-data  audio=<file>  title=...  image=<file>?  fast=1
-// POST application/json     { audioUrl, imageUrl?, title, fast? }
+// POST application/octet-stream / audio/*  raw audio body + X-Nabad-* headers
+// POST application/json     { audioUrl, audioBase64?, imageUrl?, title, fast? }
 //
 // Prefer multipart from the phone (audio already loaded via our proxy) so the
 // server never fetches Suno CDN on a slow link.
@@ -10,6 +11,7 @@ const Busboy = require("busboy");
 
 const MAX_AUDIO_BYTES = 60 * 1024 * 1024;
 const MAX_BASE64_AUDIO_BYTES = 4 * 1024 * 1024;
+const MAX_RAW_AUDIO_BYTES = 4 * 1024 * 1024;
 const MAX_MULTIPART_AUDIO_BYTES = 4 * 1024 * 1024;
 const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
 const TOTAL_BUDGET_MS = 58000;
@@ -157,6 +159,40 @@ async function readJsonBody(req) {
     });
     req.on("error", reject);
   });
+}
+
+function readRawBody(req, maxBytes) {
+  return new Promise((resolve, reject) => {
+    const chunks = [];
+    let size = 0;
+    req.on("data", (chunk) => {
+      size += chunk.length;
+      if (size > maxBytes) {
+        reject(new Error("audio too large"));
+        try { req.destroy(); } catch {}
+        return;
+      }
+      chunks.push(chunk);
+    });
+    req.on("end", () => resolve(Buffer.concat(chunks)));
+    req.on("error", reject);
+  });
+}
+
+function headerMetaValue(req, name, fallback = "") {
+  try {
+    return decodeURIComponent(String(req.headers[name] || fallback).trim());
+  } catch {
+    return String(req.headers[name] || fallback).trim();
+  }
+}
+
+function isRawAudioContentType(contentType) {
+  const ct = String(contentType || "").toLowerCase();
+  return (
+    ct.includes("application/octet-stream") ||
+    ct.startsWith("audio/")
+  );
 }
 
 function readMultipart(req) {
@@ -415,6 +451,32 @@ module.exports = async function handler(req, res) {
         imageBuffer: form.image?.buffer,
         imageContentType: form.image?.mime,
         imageName: form.image?.filename,
+        startedMs,
+      });
+      return;
+    }
+
+    if (isRawAudioContentType(contentType)) {
+      const audioBuffer = await readRawBody(req, MAX_RAW_AUDIO_BYTES);
+      if (!audioBuffer?.length || audioBuffer.length < 1024) {
+        res.statusCode = 400;
+        res.setHeader("Content-Type", "application/json");
+        res.end(JSON.stringify({ error: "Missing audio body" }));
+        return;
+      }
+      const title = headerMetaValue(req, "x-nabad-title", "song") || "song";
+      const isFast = String(req.headers["x-nabad-fast"] || "1") !== "0";
+      const audioName = headerMetaValue(req, "x-nabad-audio-name", "song.mp3") || "song.mp3";
+      const imageUrl = headerMetaValue(req, "x-nabad-image-url", "");
+      const safeImageUrl = imageUrl && /^https?:\/\//i.test(imageUrl) ? imageUrl : "";
+      await renderToResponse({
+        res,
+        title,
+        isFast,
+        audioBuffer,
+        audioContentType: contentType.split(";")[0].trim() || "audio/mpeg",
+        audioName,
+        imageUrlFallback: safeImageUrl,
         startedMs,
       });
       return;

@@ -15,7 +15,7 @@ function applyCors(req, res) {
   res.setHeader("Access-Control-Allow-Methods", "GET,POST,PATCH,DELETE,OPTIONS");
   res.setHeader(
     "Access-Control-Allow-Headers",
-    "Content-Type, Authorization, apikey, x-client-info"
+    "Content-Type, Authorization, apikey, x-client-info, X-Nabad-Title, X-Nabad-Fast, X-Nabad-Audio-Name, X-Nabad-Image-Url"
   );
   if (req.method === "OPTIONS") {
     res.statusCode = 204;

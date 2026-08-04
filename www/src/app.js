@@ -189,7 +189,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260804-131832";
+const APP_BUILD = "20260804-133904";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -43000,7 +43000,8 @@ function serverAudioUrlForVideoRender(serverAudioUrl) {
   return raw;
 }
 
-const VIDEO_RENDER_BASE64_MAX_BYTES = 4 * 1024 * 1024;
+const VIDEO_RENDER_BASE64_SAFE_MAX_BYTES = 2 * 1024 * 1024;
+const VIDEO_RENDER_RAW_MAX_BYTES = 4 * 1024 * 1024;
 const VIDEO_RENDER_MULTIPART_MAX_BYTES = 4 * 1024 * 1024;
 
 /** Prefer the full local Library row (taskId, archive state) over feed/cloud refs. */
@@ -43108,6 +43109,48 @@ async function requestRenderedVideoBase64Json({
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
+    signal,
+  });
+  if (!r.ok) {
+    let detail = "";
+    try { detail = (await r.json())?.error || ""; } catch {
+      try { detail = (await r.text()).slice(0, 200); } catch {}
+    }
+    if (r.status === 504 || /timed out/i.test(detail)) {
+      throw new Error("Video render timed out — try again on Wi‑Fi.");
+    }
+    if (r.status === 413) throw new Error("Audio file too large for upload");
+    if (r.status >= 500) throw new Error(detail || `Server error (${r.status})`);
+    throw new Error(detail || `HTTP ${r.status}`);
+  }
+  const blob = await r.blob();
+  if (!blob?.size || blob.size < 2048) throw new Error("Server returned an empty video file");
+  return blob;
+}
+
+async function requestRenderedVideoRawBinary({
+  audioBlob,
+  trackTitle,
+  imageUrl,
+  signal,
+} = {}) {
+  const audioName = String(trackTitle || "song").replace(/[^\w.\-]+/g, "_").slice(0, 40) || "song";
+  const title = String(trackTitle || "song").trim() || "song";
+  const headers = {
+    ...getApiFetchHeaders(),
+    "Content-Type": "audio/mpeg",
+    "X-Nabad-Title": encodeURIComponent(title),
+    "X-Nabad-Fast": "1",
+    "X-Nabad-Audio-Name": encodeURIComponent(`${audioName}.mp3`),
+  };
+  const coverUrl = String(imageUrl || "").trim();
+  if (/^https?:\/\//i.test(coverUrl)) {
+    headers["X-Nabad-Image-Url"] = coverUrl;
+  }
+  const r = await fetch(apiUrl("/api/render-video"), {
+    method: "POST",
+    headers,
+    body: audioBlob,
     signal,
   });
   if (!r.ok) {
@@ -43235,12 +43278,25 @@ async function requestRenderedVideoBlobResilient({
   const timer = setTimeout(() => ctrl.abort(), 90000);
   try {
     say("Rendering video…");
-    if (audioBlob.size <= VIDEO_RENDER_BASE64_MAX_BYTES) {
+    if (audioBlob.size <= VIDEO_RENDER_BASE64_SAFE_MAX_BYTES) {
       try {
         const blob = await requestRenderedVideoBase64Json({
           audioBlob,
           imageBlob: null,
           trackTitle,
+          signal: ctrl.signal,
+        });
+        return { kind: "blob", blob };
+      } catch (e) {
+        if (!isVideoRenderRetryableError(e, false)) throw e;
+      }
+    }
+    if (audioBlob.size <= VIDEO_RENDER_RAW_MAX_BYTES) {
+      try {
+        const blob = await requestRenderedVideoRawBinary({
+          audioBlob,
+          trackTitle,
+          imageUrl: String(imageUrl || "").trim(),
           signal: ctrl.signal,
         });
         return { kind: "blob", blob };

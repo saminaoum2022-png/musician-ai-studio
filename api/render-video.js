@@ -516,11 +516,21 @@ module.exports = async function handler(req, res) {
 
     const audioUrl = resolveFetchUrl(String(params.audioUrl || "").trim());
     const audioBase64 = String(params.audioBase64 || params.audio_base64 || "").trim();
-    const imageBase64 = String(params.imageBase64 || params.image_base64 || "").trim();
+    const imageBase64Param = String(params.imageBase64 || params.image_base64 || "").trim();
     const title = String(params.title || "song").trim();
     const isFast = isFastRender(params);
     const imageUrl = String(params.imageUrl || "").trim();
     const safeImageUrl = imageUrl && /^https?:\/\//i.test(imageUrl) ? imageUrl : "";
+
+    let imageBufferFromParam = null;
+    if (imageBase64Param) {
+      try {
+        imageBufferFromParam = Buffer.from(imageBase64Param, "base64");
+        if (!imageBufferFromParam?.length) imageBufferFromParam = null;
+      } catch {
+        imageBufferFromParam = null;
+      }
+    }
 
     if (audioBase64) {
       let audioBuffer;
@@ -544,14 +554,7 @@ module.exports = async function handler(req, res) {
         res.end(JSON.stringify({ error: "audioBase64 too large" }));
         return;
       }
-      let imageBuffer = null;
-      if (imageBase64) {
-        try {
-          imageBuffer = Buffer.from(imageBase64, "base64");
-        } catch {
-          imageBuffer = null;
-        }
-      }
+      let imageBuffer = imageBufferFromParam;
       await renderToResponse({
         res,
         title,
@@ -579,7 +582,10 @@ module.exports = async function handler(req, res) {
       title,
       isFast,
       audioUrlFallback: isArchivedStorageUrl(audioUrl) ? audioUrl : (absoluteNabadAudioProxyUrl(audioUrl) || audioUrl),
-      imageUrlFallback: safeImageUrl,
+      imageBuffer: imageBufferFromParam,
+      imageContentType: "image/jpeg",
+      imageName: "cover.jpg",
+      imageUrlFallback: imageBufferFromParam ? "" : safeImageUrl,
       startedMs: Date.now(),
     });
   } catch (e) {

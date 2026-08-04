@@ -203,7 +203,18 @@ function readMultipart(req) {
   });
 }
 
-function buildFfmpegArgs({ imagePath, audioPath, outPath, fps = 1 }) {
+function probeMediaDurationSec(ffmpegPath, filePath) {
+  const { spawnSync } = require("child_process");
+  const r = spawnSync(ffmpegPath, ["-hide_banner", "-i", filePath, "-f", "null", "-"], {
+    encoding: "utf8",
+  });
+  const text = `${r.stderr || ""}\n${r.stdout || ""}`;
+  const m = text.match(/Duration:\s*(\d+):(\d{2}):(\d{2}(?:\.\d+)?)/);
+  if (!m) return 0;
+  return Number(m[1]) * 3600 + Number(m[2]) * 60 + Number(parseFloat(m[3]));
+}
+
+function buildFfmpegArgs({ imagePath, audioPath, outPath, fps = 1, durationSec = 0 }) {
   const outFps = Math.max(1, Number(fps) || 1);
   const vf =
     `scale=${OUT_W}:${OUT_H}:force_original_aspect_ratio=increase,` +
@@ -212,16 +223,26 @@ function buildFfmpegArgs({ imagePath, audioPath, outPath, fps = 1 }) {
   if (imagePath) {
     ffArgs.push("-loop", "1", "-framerate", String(outFps), "-i", imagePath);
   } else {
-    ffArgs.push("-f", "lavfi", "-i", `color=c=black:s=${OUT_W}x${OUT_H}:r=${outFps}`);
+    // Loop the generated black frame for the full song (non-loop lavfi can end early).
+    ffArgs.push("-loop", "1", "-f", "lavfi", "-i", `color=c=black:s=${OUT_W}x${OUT_H}:r=${outFps}`);
   }
   ffArgs.push("-i", audioPath);
   ffArgs.push(
+    "-map", "0:v:0",
+    "-map", "1:a:0",
     "-vf", vf,
     "-c:v", "libx264", "-tune", "stillimage", "-pix_fmt", "yuv420p",
     "-preset", "ultrafast", "-profile:v", "baseline",
     "-c:a", "aac", "-b:a", "128k", "-ar", "44100", "-ac", "2",
-    "-movflags", "+faststart", "-shortest", outPath,
+    "-movflags", "+faststart",
   );
+  const dur = Number(durationSec) || 0;
+  if (dur > 0.5) {
+    ffArgs.push("-t", String(Math.ceil(dur + 0.35)));
+  } else {
+    ffArgs.push("-shortest");
+  }
+  ffArgs.push(outPath);
   return ffArgs;
 }
 
@@ -290,19 +311,38 @@ async function renderToResponse({
   }
 
   const encodeFps = isFast ? 1 : 2;
-  const ffBase = { audioPath, outPath, fps: encodeFps };
+  const audioDurationSec = probeMediaDurationSec(ffmpegPath, audioPath);
+  const ffBase = { audioPath, outPath, fps: encodeFps, durationSec: audioDurationSec };
+  const ffmpegMs = audioBuffer?.length
+    ? Math.max(40000, remainingMs(8000))
+    : Math.max(30000, remainingMs(8000));
 
   try {
-    await runFfmpeg(ffmpegPath, buildFfmpegArgs({ ...ffBase, imagePath }), remainingMs(10000));
+    await runFfmpeg(ffmpegPath, buildFfmpegArgs({ ...ffBase, imagePath }), ffmpegMs);
   } catch (firstErr) {
     if (imagePath) {
       console.warn("[render-video] cover encode failed, sound-only:", firstErr?.message || firstErr);
-      await runFfmpeg(ffmpegPath, buildFfmpegArgs({ ...ffBase, imagePath: "" }), remainingMs(8000));
+      await runFfmpeg(
+        ffmpegPath,
+        buildFfmpegArgs({ ...ffBase, imagePath: "" }),
+        Math.max(25000, remainingMs(8000)),
+      );
     } else {
       throw firstErr;
     }
   }
   cleanup.push(outPath);
+
+  const outDurationSec = probeMediaDurationSec(ffmpegPath, outPath);
+  if (
+    audioDurationSec > 3 &&
+    outDurationSec > 0 &&
+    outDurationSec < audioDurationSec * 0.85
+  ) {
+    throw new Error(
+      `Video truncated (${Math.round(outDurationSec)}s of ${Math.round(audioDurationSec)}s) — try again on Wi‑Fi`,
+    );
+  }
 
   const outStat = fs.statSync(outPath);
   if (!outStat?.size || outStat.size < 2048) throw new Error("ffmpeg produced an empty video");

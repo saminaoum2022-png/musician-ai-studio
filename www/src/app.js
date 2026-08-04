@@ -189,7 +189,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260804-124312";
+const APP_BUILD = "20260804-125855";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -43156,7 +43156,7 @@ async function requestRenderedVideoBlobResilient({
       try {
         const blob = await requestRenderedVideoBase64Json({
           audioBlob,
-          imageBlob,
+          imageBlob: null,
           trackTitle,
           signal: ctrl.signal,
         });
@@ -43184,11 +43184,11 @@ async function requestRenderedVideoBlobResilient({
 
   say("Rendering video (cloud)…");
   const ctrl2 = new AbortController();
-  const timer2 = setTimeout(() => ctrl2.abort(), 65000);
+  const timer2 = setTimeout(() => ctrl2.abort(), 90000);
   try {
     const blob = await requestRenderedVideoBlob({
       serverAudioUrl,
-      imageUrl: "",
+      imageUrl: String(imageUrl || "").trim(),
       trackTitle,
       fast: true,
       signal: ctrl2.signal,

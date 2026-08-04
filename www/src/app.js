@@ -189,7 +189,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260804-140407";
+const APP_BUILD = "20260804-141303";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -43243,7 +43243,9 @@ async function requestRenderedVideoBlob({
     let detail = "";
     try {
       detail = (await r.json())?.error || "";
-    } catch {}
+    } catch {
+      try { detail = (await r.text()).slice(0, 240); } catch {}
+    }
     if (r.status === 504 || /timed out/i.test(detail)) {
       throw new Error("Video render timed out — try again on Wi‑Fi.");
     }
@@ -43273,14 +43275,33 @@ async function requestRenderedVideoBlobResilient({
       .find((u) => isArchivedSongStorageUrl(u));
     if (archivedUrl) {
       say("Building video…");
-      const blob = await requestRenderedVideoBlob({
-        serverAudioUrl: archivedUrl,
-        imageUrl: String(imageUrl || "").trim() || undefined,
-        trackTitle,
-        fast: true,
-        signal: ctrl.signal,
-      });
-      return { kind: "blob", blob };
+      const coverUrl = String(imageUrl || "").trim() || undefined;
+      try {
+        const blob = await requestRenderedVideoBlob({
+          serverAudioUrl: archivedUrl,
+          imageUrl: coverUrl,
+          trackTitle,
+          fast: true,
+          signal: ctrl.signal,
+        });
+        return { kind: "blob", blob };
+      } catch (e) {
+        if (!isVideoRenderRetryableError(e, false)) throw e;
+        if (coverUrl) {
+          try {
+            const blob = await requestRenderedVideoBlob({
+              serverAudioUrl: archivedUrl,
+              trackTitle,
+              fast: true,
+              signal: ctrl.signal,
+            });
+            return { kind: "blob", blob };
+          } catch (e2) {
+            if (!isVideoRenderRetryableError(e2, false)) throw e2;
+          }
+        }
+        say("Retrying video export…");
+      }
     }
 
     say("Downloading audio…");

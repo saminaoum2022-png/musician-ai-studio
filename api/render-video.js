@@ -269,7 +269,7 @@ function readMultipart(req) {
 
 function probeMediaDurationSec(ffmpegPath, filePath) {
   const { spawnSync } = require("child_process");
-  const r = spawnSync(ffmpegPath, ["-hide_banner", "-i", filePath, "-f", "null", "-"], {
+  const r = spawnSync(ffmpegPath, ["-hide_banner", "-i", filePath], {
     encoding: "utf8",
   });
   const text = `${r.stderr || ""}\n${r.stdout || ""}`;
@@ -373,7 +373,11 @@ async function renderToResponse({
     cleanup.push(imagePath);
   } else if (imageUrlFallback && !(audioBuffer?.length && longSong)) {
     try {
-      const image = await fetchToBuffer(imageUrlFallback, MAX_IMAGE_BYTES, IMAGE_FETCH_MS);
+      const image = await fetchToBuffer(
+        imageUrlFallback,
+        MAX_IMAGE_BYTES,
+        Math.min(IMAGE_FETCH_MS, remainingMs(4000)),
+      );
       const imgExt = imageExtFromContentType(image.contentType, imageName);
       imagePath = path.join(tmpDir, `nabad-vid-${stamp}.${imgExt}`);
       fs.writeFileSync(imagePath, image.buffer);
@@ -405,7 +409,7 @@ async function renderToResponse({
   }
   cleanup.push(outPath);
 
-  if (!audioBuffer?.length) {
+  if (!isFast && !audioBuffer?.length) {
     const outDurationSec = probeMediaDurationSec(ffmpegPath, outPath);
     if (
       audioDurationSec > 3 &&
@@ -576,7 +580,7 @@ module.exports = async function handler(req, res) {
       isFast,
       audioUrlFallback: isArchivedStorageUrl(audioUrl) ? audioUrl : (absoluteNabadAudioProxyUrl(audioUrl) || audioUrl),
       imageUrlFallback: safeImageUrl,
-      startedMs,
+      startedMs: Date.now(),
     });
   } catch (e) {
     const msg = e?.message ? String(e.message) : "render failed";

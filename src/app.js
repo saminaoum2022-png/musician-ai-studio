@@ -189,7 +189,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260804-133904";
+const APP_BUILD = "20260804-134817";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -43136,21 +43136,21 @@ async function requestRenderedVideoRawBinary({
 } = {}) {
   const audioName = String(trackTitle || "song").replace(/[^\w.\-]+/g, "_").slice(0, 40) || "song";
   const title = String(trackTitle || "song").trim() || "song";
-  const headers = {
-    ...getApiFetchHeaders(),
-    "Content-Type": "audio/mpeg",
-    "X-Nabad-Title": encodeURIComponent(title),
-    "X-Nabad-Fast": "1",
-    "X-Nabad-Audio-Name": encodeURIComponent(`${audioName}.mp3`),
-  };
+  const qs = new URLSearchParams({
+    title,
+    fast: "1",
+    audioName: `${audioName}.mp3`,
+  });
   const coverUrl = String(imageUrl || "").trim();
-  if (/^https?:\/\//i.test(coverUrl)) {
-    headers["X-Nabad-Image-Url"] = coverUrl;
-  }
-  const r = await fetch(apiUrl("/api/render-video"), {
+  if (/^https?:\/\//i.test(coverUrl)) qs.set("imageUrl", coverUrl);
+  const body = await audioBlob.arrayBuffer();
+  const r = await fetch(`${apiUrl("/api/render-video")}?${qs.toString()}`, {
     method: "POST",
-    headers,
-    body: audioBlob,
+    headers: {
+      ...getApiFetchHeaders(),
+      "Content-Type": "application/octet-stream",
+    },
+    body,
     signal,
   });
   if (!r.ok) {
@@ -43275,10 +43275,11 @@ async function requestRenderedVideoBlobResilient({
   }
 
   const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), 90000);
+  const timer = setTimeout(() => ctrl.abort(), 150000);
+  let lastUploadErr = null;
   try {
-    say("Rendering video…");
     if (audioBlob.size <= VIDEO_RENDER_BASE64_SAFE_MAX_BYTES) {
+      say("Uploading audio for video…");
       try {
         const blob = await requestRenderedVideoBase64Json({
           audioBlob,
@@ -43288,10 +43289,12 @@ async function requestRenderedVideoBlobResilient({
         });
         return { kind: "blob", blob };
       } catch (e) {
+        lastUploadErr = e;
         if (!isVideoRenderRetryableError(e, false)) throw e;
       }
     }
     if (audioBlob.size <= VIDEO_RENDER_RAW_MAX_BYTES) {
+      say("Uploading audio for video…");
       try {
         const blob = await requestRenderedVideoRawBinary({
           audioBlob,
@@ -43301,10 +43304,12 @@ async function requestRenderedVideoBlobResilient({
         });
         return { kind: "blob", blob };
       } catch (e) {
+        lastUploadErr = e;
         if (!isVideoRenderRetryableError(e, false)) throw e;
       }
     }
-    if (audioBlob.size <= VIDEO_RENDER_MULTIPART_MAX_BYTES) {
+    if (!isCapacitorNativeAuth() && audioBlob.size <= VIDEO_RENDER_MULTIPART_MAX_BYTES) {
+      say("Uploading audio for video…");
       try {
         const blob = await requestRenderedVideoMultipart({
           audioBlob,
@@ -43314,6 +43319,7 @@ async function requestRenderedVideoBlobResilient({
         });
         return { kind: "blob", blob };
       } catch (e) {
+        lastUploadErr = e;
         if (!isVideoRenderRetryableError(e, false)) throw e;
       }
     }
@@ -43321,21 +43327,15 @@ async function requestRenderedVideoBlobResilient({
     clearTimeout(timer);
   }
 
-  say("Rendering video (cloud)…");
-  const ctrl2 = new AbortController();
-  const timer2 = setTimeout(() => ctrl2.abort(), 90000);
-  try {
-    const blob = await requestRenderedVideoBlob({
-      serverAudioUrl,
-      imageUrl: String(imageUrl || "").trim(),
-      trackTitle,
-      fast: true,
-      signal: ctrl2.signal,
-    });
-    return { kind: "blob", blob };
-  } finally {
-    clearTimeout(timer2);
+  const msg = String(lastUploadErr?.message || "").trim();
+  if (/timed out|504|server error \(500\)|ffmpeg/i.test(msg)) {
+    throw new Error("Video render timed out — stay on Wi‑Fi and try again.");
   }
+  if (msg) throw lastUploadErr;
+  if (audioBlob.size > VIDEO_RENDER_RAW_MAX_BYTES) {
+    throw new Error("Audio file is too large for video export on this device.");
+  }
+  throw new Error("Video upload failed — stay on Wi‑Fi and try again.");
 }
 
 /** Archive remote audio to Supabase before server render (required for reliable export). */

@@ -187,6 +187,33 @@ function headerMetaValue(req, name, fallback = "") {
   }
 }
 
+function queryMetaValue(req, key, fallback = "") {
+  try {
+    const u = new URL(String(req.url || "/api/render-video"), "https://nabadai.com");
+    const v = u.searchParams.get(key);
+    if (v == null || v === "") return fallback;
+    return String(v).trim();
+  } catch {
+    return fallback;
+  }
+}
+
+function rawUploadMeta(req) {
+  const title = queryMetaValue(req, "title", "") || headerMetaValue(req, "x-nabad-title", "song") || "song";
+  const fastRaw = queryMetaValue(req, "fast", "") || String(req.headers["x-nabad-fast"] || "1");
+  const audioName =
+    queryMetaValue(req, "audioName", "") ||
+    headerMetaValue(req, "x-nabad-audio-name", "song.mp3") ||
+    "song.mp3";
+  const imageUrl = queryMetaValue(req, "imageUrl", "") || headerMetaValue(req, "x-nabad-image-url", "");
+  return {
+    title,
+    isFast: String(fastRaw) !== "0",
+    audioName,
+    imageUrl: imageUrl && /^https?:\/\//i.test(imageUrl) ? imageUrl : "",
+  };
+}
+
 function isRawAudioContentType(contentType) {
   const ct = String(contentType || "").toLowerCase();
   return (
@@ -254,9 +281,10 @@ function probeMediaDurationSec(ffmpegPath, filePath) {
 function buildFfmpegArgs({ imagePath, audioPath, outPath, fps = 1, durationSec = 0, isFast = true }) {
   const dur = Number(durationSec) || 0;
   const longSong = dur > 45;
-  const outW = longSong && isFast ? 540 : OUT_W;
-  const outH = longSong && isFast ? 960 : OUT_H;
-  const outFps = Math.max(1, Number(fps) || 1);
+  const veryLong = dur > 75;
+  const outW = veryLong && isFast ? 480 : longSong && isFast ? 540 : OUT_W;
+  const outH = veryLong && isFast ? 854 : longSong && isFast ? 960 : OUT_H;
+  const outFps = veryLong && isFast ? 0.25 : longSong && isFast ? 0.5 : Math.max(1, Number(fps) || 1);
   const vf = longSong && isFast
     ? `scale=${outW}:${outH}:force_original_aspect_ratio=increase,crop=${outW}:${outH},format=yuv420p`
     : `scale=${OUT_W}:${OUT_H}:force_original_aspect_ratio=increase,` +
@@ -265,7 +293,6 @@ function buildFfmpegArgs({ imagePath, audioPath, outPath, fps = 1, durationSec =
   if (imagePath) {
     ffArgs.push("-loop", "1", "-framerate", String(outFps), "-i", imagePath);
   } else {
-    // Loop the generated black frame for the full song (non-loop lavfi can end early).
     ffArgs.push("-loop", "1", "-f", "lavfi", "-i", `color=c=black:s=${outW}x${outH}:r=${outFps}`);
   }
   ffArgs.push("-i", audioPath);
@@ -464,19 +491,15 @@ module.exports = async function handler(req, res) {
         res.end(JSON.stringify({ error: "Missing audio body" }));
         return;
       }
-      const title = headerMetaValue(req, "x-nabad-title", "song") || "song";
-      const isFast = String(req.headers["x-nabad-fast"] || "1") !== "0";
-      const audioName = headerMetaValue(req, "x-nabad-audio-name", "song.mp3") || "song.mp3";
-      const imageUrl = headerMetaValue(req, "x-nabad-image-url", "");
-      const safeImageUrl = imageUrl && /^https?:\/\//i.test(imageUrl) ? imageUrl : "";
+      const meta = rawUploadMeta(req);
       await renderToResponse({
         res,
-        title,
-        isFast,
+        title: meta.title,
+        isFast: meta.isFast,
         audioBuffer,
-        audioContentType: contentType.split(";")[0].trim() || "audio/mpeg",
-        audioName,
-        imageUrlFallback: safeImageUrl,
+        audioContentType: contentType.split(";")[0].trim() || "application/octet-stream",
+        audioName: meta.audioName,
+        imageUrlFallback: meta.imageUrl,
         startedMs,
       });
       return;

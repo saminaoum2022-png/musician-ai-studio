@@ -9,11 +9,12 @@
 const Busboy = require("busboy");
 
 const MAX_AUDIO_BYTES = 60 * 1024 * 1024;
-const MAX_BASE64_AUDIO_BYTES = 2.5 * 1024 * 1024;
+const MAX_BASE64_AUDIO_BYTES = 4 * 1024 * 1024;
 const MAX_MULTIPART_AUDIO_BYTES = 4 * 1024 * 1024;
 const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
-const TOTAL_BUDGET_MS = 55000;
-const AUDIO_FETCH_MS = 40000;
+const TOTAL_BUDGET_MS = 58000;
+const AUDIO_FETCH_MS = 22000;
+const ARCHIVED_AUDIO_FETCH_MS = 12000;
 const IMAGE_FETCH_MS = 5000;
 const OUT_W = 720;
 const OUT_H = 1280;
@@ -214,17 +215,22 @@ function probeMediaDurationSec(ffmpegPath, filePath) {
   return Number(m[1]) * 3600 + Number(m[2]) * 60 + Number(parseFloat(m[3]));
 }
 
-function buildFfmpegArgs({ imagePath, audioPath, outPath, fps = 1, durationSec = 0 }) {
+function buildFfmpegArgs({ imagePath, audioPath, outPath, fps = 1, durationSec = 0, isFast = true }) {
+  const dur = Number(durationSec) || 0;
+  const longSong = dur > 45;
+  const outW = longSong && isFast ? 540 : OUT_W;
+  const outH = longSong && isFast ? 960 : OUT_H;
   const outFps = Math.max(1, Number(fps) || 1);
-  const vf =
-    `scale=${OUT_W}:${OUT_H}:force_original_aspect_ratio=increase,` +
-    `crop=${OUT_W}:${OUT_H},fps=${outFps},format=yuv420p`;
+  const vf = longSong && isFast
+    ? `scale=${outW}:${outH}:force_original_aspect_ratio=increase,crop=${outW}:${outH},format=yuv420p`
+    : `scale=${OUT_W}:${OUT_H}:force_original_aspect_ratio=increase,` +
+      `crop=${OUT_W}:${OUT_H},fps=${outFps},format=yuv420p`;
   const ffArgs = ["-y", "-hide_banner", "-loglevel", "error", "-nostdin", "-threads", "0"];
   if (imagePath) {
     ffArgs.push("-loop", "1", "-framerate", String(outFps), "-i", imagePath);
   } else {
     // Loop the generated black frame for the full song (non-loop lavfi can end early).
-    ffArgs.push("-loop", "1", "-f", "lavfi", "-i", `color=c=black:s=${OUT_W}x${OUT_H}:r=${outFps}`);
+    ffArgs.push("-loop", "1", "-f", "lavfi", "-i", `color=c=black:s=${outW}x${outH}:r=${outFps}`);
   }
   ffArgs.push("-i", audioPath);
   ffArgs.push(
@@ -236,7 +242,7 @@ function buildFfmpegArgs({ imagePath, audioPath, outPath, fps = 1, durationSec =
     "-c:a", "aac", "-b:a", "128k", "-ar", "44100", "-ac", "2",
     "-movflags", "+faststart",
   );
-  const dur = Number(durationSec) || 0;
+  if (longSong && isFast) ffArgs.push("-r", "1");
   if (dur > 0.5) {
     ffArgs.push("-t", String(Math.ceil(dur + 0.35)));
   } else {
@@ -283,7 +289,10 @@ async function renderToResponse({
     fs.writeFileSync(audioPath, audioBuffer);
     cleanup.push(audioPath);
   } else if (audioUrlFallback) {
-    const audio = await fetchToBuffer(audioUrlFallback, MAX_AUDIO_BYTES, AUDIO_FETCH_MS);
+    const fetchMs = isArchivedStorageUrl(audioUrlFallback)
+      ? Math.min(ARCHIVED_AUDIO_FETCH_MS, remainingMs(12000))
+      : Math.min(AUDIO_FETCH_MS, remainingMs(15000));
+    const audio = await fetchToBuffer(audioUrlFallback, MAX_AUDIO_BYTES, fetchMs);
     const audioExt = audioExtFromContentType(audio.contentType, audioUrlFallback, audioName);
     audioPath = path.join(tmpDir, `nabad-vid-${stamp}.${audioExt}`);
     fs.writeFileSync(audioPath, audio.buffer);
@@ -312,10 +321,10 @@ async function renderToResponse({
 
   const encodeFps = isFast ? 1 : 2;
   const audioDurationSec = probeMediaDurationSec(ffmpegPath, audioPath);
-  const ffBase = { audioPath, outPath, fps: encodeFps, durationSec: audioDurationSec };
+  const ffBase = { audioPath, outPath, fps: encodeFps, durationSec: audioDurationSec, isFast };
   const ffmpegMs = audioBuffer?.length
-    ? Math.max(40000, remainingMs(8000))
-    : Math.max(30000, remainingMs(8000));
+    ? Math.min(remainingMs(6000), Math.max(45000, Math.ceil(audioDurationSec * 420) + 12000))
+    : Math.min(remainingMs(8000), Math.max(28000, Math.ceil(audioDurationSec * 380) + 8000));
 
   try {
     await runFfmpeg(ffmpegPath, buildFfmpegArgs({ ...ffBase, imagePath }), ffmpegMs);
@@ -325,7 +334,7 @@ async function renderToResponse({
       await runFfmpeg(
         ffmpegPath,
         buildFfmpegArgs({ ...ffBase, imagePath: "" }),
-        Math.max(25000, remainingMs(8000)),
+        Math.max(22000, Math.min(remainingMs(6000), ffmpegMs)),
       );
     } else {
       throw firstErr;

@@ -189,7 +189,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260804-125855";
+const APP_BUILD = "20260804-131832";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -32289,8 +32289,13 @@ function renderTrackSheetDiscover(ctx) {
   const shuffleLabel = ctx.usePublicProfileShuffle
     ? "Play another from this profile"
     : "Play another from Discover";
+  const ownDownloadRows = trackSheetCtxIsOwnSong(ctx)
+    ? `<button type="button" class="discoverTrackSheetRow" data-track-sheet-action="library_dl_audio">Download audio</button>
+    <button type="button" class="discoverTrackSheetRow" data-track-sheet-action="library_dl_video">Download video</button>`
+    : "";
   l.innerHTML = `
     ${TRACK_SHEET_ADD_PLAYLIST_ROW}
+    ${ownDownloadRows}
     <button type="button" class="discoverTrackSheetRow" data-track-sheet-action="profile" id="discoverSheetRowProfile"${hideProfileRow ? " hidden" : ""}>View profile</button>
     <button type="button" class="discoverTrackSheetRow" data-track-sheet-action="lyrics">About this song</button>
     <button type="button" class="discoverTrackSheetRow" data-track-sheet-action="copy">Copy link</button>
@@ -32375,6 +32380,8 @@ function renderTrackSheetProfileLib(t) {
   `;
   l.innerHTML = `
     ${TRACK_SHEET_ADD_PLAYLIST_ROW}
+    <button type="button" class="discoverTrackSheetRow" data-track-sheet-action="library_dl_audio">Download audio</button>
+    <button type="button" class="discoverTrackSheetRow" data-track-sheet-action="library_dl_video">Download video</button>
     <button type="button" class="discoverTrackSheetRow" data-track-sheet-action="profile_lib_featured">${escapeHtml(featuredLabel)}</button>
   `;
   d.innerHTML = `
@@ -32752,6 +32759,40 @@ function runTrackSheetAction(action, sourceEl) {
     }
     openUserPlaylistPicker(ref);
     return;
+  }
+
+  if (action === "library_dl_audio" || action === "library_dl_video") {
+    const fromProfileLib = ctx.mode === "profile_lib";
+    const fromDiscoverOwn =
+      (ctx.mode === "discover" || ctx.mode === "public") && trackSheetCtxIsOwnSong(ctx);
+    if (fromProfileLib || fromDiscoverOwn) {
+      const ref = fromProfileLib
+        ? loadLibrary().find((x) => String(x.id) === String(ctx.libraryId))
+        : resolveTrackForVideoExport(trackRefFromTrackSheetCtx(ctx));
+      if (!ref?.url) {
+        showToast("This song isn't downloadable yet.", { icon: "!", durationMs: 3200 });
+        return;
+      }
+      shut();
+      void (async () => {
+        try {
+          if (action === "library_dl_audio") {
+            setStatus("Preparing audio download…");
+            await downloadLibraryAudioTrack(ref);
+            setStatus("Audio download is ready.");
+          } else {
+            setStatus("Preparing video export…");
+            await downloadLibraryVideoTrack(ref);
+            setStatus("Video download is ready.");
+          }
+        } catch (err) {
+          const m = err?.message || String(err);
+          setStatus(`${action === "library_dl_audio" ? "Audio" : "Video"} download failed: ${m}`);
+          try { showToast(m, { icon: "!", durationMs: 4400 }); } catch {}
+        }
+      })();
+      return;
+    }
   }
 
   if (ctx.mode === "vocals") {
@@ -33215,7 +33256,7 @@ function runTrackSheetAction(action, sourceEl) {
     };
     if (action === "library_dl_audio") {
       shut();
-      const t = hubDownloadTrack();
+      const t = resolveTrackForVideoExport(hubDownloadTrack()) || hubDownloadTrack();
       if (!t?.url) {
         showToast("This song isn't downloadable yet.", { icon: "!", durationMs: 3200 });
         return;
@@ -33233,7 +33274,7 @@ function runTrackSheetAction(action, sourceEl) {
     }
     if (action === "library_dl_video") {
       shut();
-      const t = hubDownloadTrack();
+      const t = resolveTrackForVideoExport(hubDownloadTrack()) || hubDownloadTrack();
       if (!t?.url) {
         showToast("This song isn't downloadable yet.", { icon: "!", durationMs: 3200 });
         return;
@@ -42959,8 +43000,50 @@ function serverAudioUrlForVideoRender(serverAudioUrl) {
   return raw;
 }
 
-const VIDEO_RENDER_BASE64_MAX_BYTES = 2.5 * 1024 * 1024;
-const VIDEO_RENDER_MULTIPART_MAX_BYTES = 3.5 * 1024 * 1024;
+const VIDEO_RENDER_BASE64_MAX_BYTES = 4 * 1024 * 1024;
+const VIDEO_RENDER_MULTIPART_MAX_BYTES = 4 * 1024 * 1024;
+
+/** Prefer the full local Library row (taskId, archive state) over feed/cloud refs. */
+function resolveTrackForVideoExport(input) {
+  if (!input) return null;
+  const lib = loadLibrary();
+  const id = String(input.id || "").trim();
+  if (id) {
+    const byId = lib.find((x) => String(x.id) === id);
+    if (byId?.url) return byId;
+  }
+  const cloudId = String(input.cloudSongId || input.songId || "").trim();
+  if (cloudId) {
+    const byCloud = lib.find(
+      (x) => String(x.id) === cloudId || String(x.cloudSongId || "") === cloudId,
+    );
+    if (byCloud?.url) return byCloud;
+  }
+  const canon = libraryTrackCanonicalUrl(String(input.url || "").trim());
+  if (canon) {
+    const byUrl = lib.find((x) => libraryTrackCanonicalUrl(x?.url) === canon);
+    if (byUrl?.url) return byUrl;
+  }
+  const taskId = String(input.taskId || input.meta?.taskId || "").trim();
+  const audioId = String(input.audioId || input.meta?.audioId || "").trim();
+  if (taskId && audioId) {
+    const byMeta = lib.find(
+      (x) =>
+        String(x?.taskId || x?.meta?.taskId || "").trim() === taskId &&
+        String(x?.audioId || x?.meta?.audioId || "").trim() === audioId,
+    );
+    if (byMeta?.url) return byMeta;
+  }
+  return String(input.url || "").trim() ? input : null;
+}
+
+function trackSheetCtxIsOwnSong(ctx) {
+  if (!ctx) return false;
+  if (ctx.mode === "library" || ctx.mode === "profile_lib" || ctx.mode === "profile_hub") return true;
+  const uid = String(authSession?.user?.id || "").trim();
+  const ownerId = String(ctx.ownerUserId || "").trim();
+  return Boolean(uid && ownerId && uid === ownerId);
+}
 
 async function fetchTrackAudioBlobForVideoExport(track) {
   const isHttpUrl = (u) => /^https?:\/\//i.test(String(u || "").trim());
@@ -43152,7 +43235,7 @@ async function requestRenderedVideoBlobResilient({
   const timer = setTimeout(() => ctrl.abort(), 90000);
   try {
     say("Rendering video…");
-    if (isCapacitorNativeAuth() && audioBlob.size <= VIDEO_RENDER_BASE64_MAX_BYTES) {
+    if (audioBlob.size <= VIDEO_RENDER_BASE64_MAX_BYTES) {
       try {
         const blob = await requestRenderedVideoBase64Json({
           audioBlob,
@@ -43165,7 +43248,7 @@ async function requestRenderedVideoBlobResilient({
         if (!isVideoRenderRetryableError(e, false)) throw e;
       }
     }
-    if (!isCapacitorNativeAuth() && audioBlob.size <= VIDEO_RENDER_MULTIPART_MAX_BYTES) {
+    if (audioBlob.size <= VIDEO_RENDER_MULTIPART_MAX_BYTES) {
       try {
         const blob = await requestRenderedVideoMultipart({
           audioBlob,
@@ -43234,7 +43317,7 @@ async function ensureTrackAudioArchivedForVideoExport(track, say) {
 
 async function downloadLibraryVideoTrack(track, { onRendered } = {}) {
   const isHttpUrl = (u) => /^https?:\/\//i.test(String(u || "").trim());
-  let t = track;
+  let t = resolveTrackForVideoExport(track) || track;
   if (!t?.url) throw new Error("Missing audio URL");
 
   const trackTitle = String(t?.title || "song").trim() || "song";

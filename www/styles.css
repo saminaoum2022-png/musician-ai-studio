@@ -19630,6 +19630,14 @@ input::placeholder, textarea::placeholder{
 .hubNowPlaying.isVisible ~ .coachFab{
   bottom: calc(var(--tabbar-h, 62px) + 95px);
 }
+@media (min-width: 721px){
+  html.is-web-shell .coachFab{
+    bottom: 18px;
+  }
+  html.is-web-shell .hubNowPlaying.isVisible ~ .coachFab{
+    bottom: 96px;
+  }
+}
 /* Show only on the main tab routes (including Create, where it surfaces
    on-device contextual tips like the Arabic-harakat hint). */
 body[data-route="discover"] .coachFab,
@@ -44859,6 +44867,7 @@ body[data-route="friends"] .followAct--xstyle .followActActions .followActAct[da
 }
 body.isAuth:not(.booting) .authInner,
 body.isIntro:not(.booting) .introInner,
+body.isOnboarding:not(.booting) .onboardingInner,
 body.isMusicPrefs:not(.booting) .musicPrefsInner{
   animation: uxEntryFadeIn 320ms cubic-bezier(0.32, 0.72, 0, 1) both;
 }
@@ -44892,6 +44901,7 @@ body.isAuth:not(.booting) .authGateChoices:not([hidden]){
 @media (prefers-reduced-motion: reduce){
   body.isAuth .authInner,
   body.isIntro .introInner,
+  body.isOnboarding .onboardingInner,
   body.isMusicPrefs .musicPrefsInner,
   .authEmailForm:not([hidden]),
   body.isAuth .authGateChoices:not([hidden]),
@@ -45307,11 +45317,15 @@ body[data-route="studio"] main.grid {
 }
 body[data-route="studio"] .deskRail { display: none !important; }
 
-/* Desktop / wide web: auth is a full-viewport sign-in screen — collapse the
-   app shell grid and hide the right rail so the card centers on the viewport.
-   Scoped to is-web-shell so the native Capacitor shell is unchanged. */
+/* Desktop / wide web: immersive entry screens (auth, onboarding, intro,
+   music prefs) — collapse the app shell grid and hide the right rail so
+   content centers on the viewport. Scoped to is-web-shell so the native
+   Capacitor shell is unchanged. */
 @media (min-width: 721px){
-  html.is-web-shell body[data-route="auth"] > .app{
+  html.is-web-shell body[data-route="auth"] > .app,
+  html.is-web-shell body[data-route="onboarding"] > .app,
+  html.is-web-shell body[data-route="intro"] > .app,
+  html.is-web-shell body[data-route="music-preferences"] > .app{
     display: flex !important;
     flex-direction: column !important;
     align-items: stretch !important;
@@ -45323,7 +45337,10 @@ body[data-route="studio"] .deskRail { display: none !important; }
     min-height: 100svh;
     height: 100svh;
   }
-  html.is-web-shell body[data-route="auth"] main.grid{
+  html.is-web-shell body[data-route="auth"] main.grid,
+  html.is-web-shell body[data-route="onboarding"] main.grid,
+  html.is-web-shell body[data-route="intro"] main.grid,
+  html.is-web-shell body[data-route="music-preferences"] main.grid{
     display: flex !important;
     flex: 1 1 auto !important;
     align-items: center !important;
@@ -45333,10 +45350,16 @@ body[data-route="studio"] .deskRail { display: none !important; }
     min-height: 0;
     grid-column: unset !important;
   }
-  html.is-web-shell body[data-route="auth"] .deskRail{
+  html.is-web-shell body[data-route="auth"] .deskRail,
+  html.is-web-shell body[data-route="onboarding"] .deskRail,
+  html.is-web-shell body[data-route="intro"] .deskRail,
+  html.is-web-shell body[data-route="music-preferences"] .deskRail{
     display: none !important;
   }
-  html.is-web-shell body.isAuth .authScreen{
+  html.is-web-shell body.isAuth .authScreen,
+  html.is-web-shell body.isOnboarding .onboardingScreen,
+  html.is-web-shell body.isIntro .introScreen,
+  html.is-web-shell body.isMusicPrefs .musicPrefsScreen{
     width: 100%;
     min-height: 100%;
     background:
@@ -45346,6 +45369,208 @@ body[data-route="studio"] .deskRail { display: none !important; }
   html.is-web-shell body.isAuth .authInner{
     max-width: 420px;
     padding: 48px 32px 40px;
+  }
+  html.is-web-shell body.isOnboarding .onboardingInner{
+    max-width: 440px;
+    margin-inline: auto;
+    padding:
+      max(28px, env(safe-area-inset-top, 0))
+      32px
+      max(28px, env(safe-area-inset-bottom, 0));
+  }
+  html.is-web-shell body.isIntro .introInner{
+    max-width: 440px;
+    margin-inline: auto;
+  }
+  html.is-web-shell body.isMusicPrefs .musicPrefsInner{
+    max-width: 480px;
+    margin-inline: auto;
+  }
+
+  /* Immersive routes — collapse the sidebar grid on web desktop. */
+  html.is-web-shell body[data-route="pro"] > .app,
+  html.is-web-shell body[data-route="player"] > .app,
+  html.is-web-shell body[data-route="moment"] > .app,
+  html.is-web-shell body[data-route="hub"] > .app{
+    display: flex !important;
+    flex-direction: column !important;
+    max-width: none !important;
+    width: 100% !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    min-height: 100svh;
+  }
+  html.is-web-shell body[data-route="pro"] main.grid,
+  html.is-web-shell body[data-route="player"] main.grid,
+  html.is-web-shell body[data-route="moment"] main.grid,
+  html.is-web-shell body[data-route="hub"] main.grid{
+    display: flex !important;
+    flex: 1 1 auto !important;
+    flex-direction: column !important;
+    margin: 0 !important;
+    max-width: none !important;
+    min-height: 0;
+    grid-column: unset !important;
+    overflow: hidden;
+  }
+  html.is-web-shell body[data-route="pro"] .header,
+  html.is-web-shell body[data-route="pro"] .deskRail,
+  html.is-web-shell body[data-route="pro"] .footer,
+  html.is-web-shell body[data-route="pro"] .coachFab,
+  html.is-web-shell body[data-route="pro"] .generateOrb,
+  html.is-web-shell body[data-route="pro"] .mobileTabbar,
+  html.is-web-shell body[data-route="player"] .header,
+  html.is-web-shell body[data-route="player"] .deskRail,
+  html.is-web-shell body[data-route="player"] .footer,
+  html.is-web-shell body[data-route="player"] .mobileTabbar,
+  html.is-web-shell body[data-route="moment"] .deskRail,
+  html.is-web-shell body[data-route="hub"] .deskRail{
+    display: none !important;
+  }
+
+  /* Player — full-viewport Now Playing on web desktop (matches mobile). */
+  html.is-web-shell body[data-route="player"]{
+    --player-chrome-safe: 0px;
+    --player-social-rail-bottom: 172px;
+    --player-karaoke-bottom: 258px;
+    --player-cover-bottom: 0px;
+    --player-cover-height: 100svh;
+    --player-reel-meta-bottom: 104px;
+    --player-cover-fade-shift: 32px;
+    overflow: hidden;
+    height: 100svh;
+  }
+  html.is-web-shell body[data-route="player"] .hubNowPlaying,
+  html.is-web-shell body[data-route="player"] .coachFab{
+    display: none !important;
+  }
+  html.is-web-shell body[data-route="player"] .playerCard{
+    flex: 1;
+    min-height: 100svh;
+    padding: 0;
+    background: transparent;
+    border: none;
+    box-shadow: none;
+  }
+  html.is-web-shell body[data-route="player"] .playerCard .playerHeader{
+    position: fixed;
+    top: 0;
+    inset-inline: 0;
+    z-index: 200;
+    margin: 0;
+    padding: 18px 16px 28px;
+    max-width: 100%;
+    box-sizing: border-box;
+    pointer-events: none;
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    align-items: center;
+    background: linear-gradient(180deg, rgba(0,0,0,0.52) 0%, rgba(0,0,0,0.22) 55%, transparent 100%);
+  }
+  html.is-web-shell body[data-route="player"] .playerCard .playerHeader .nabadBackBtn,
+  html.is-web-shell body[data-route="player"] .playerCard .playerHeader .playerMenuBtn{
+    pointer-events: auto;
+    border-color: rgba(255,255,255,0.14);
+    background: rgba(0,0,0,0.28);
+    -webkit-backdrop-filter: blur(12px);
+            backdrop-filter: blur(12px);
+    color: rgba(255,255,255,0.92);
+  }
+  html.is-web-shell body[data-route="player"] .playerCoverToolsRail{
+    position: fixed;
+    top: 60px;
+    right: 16px;
+    z-index: 13;
+  }
+  html.is-web-shell body[data-route="player"] .playerShell{
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    width: 100%;
+    min-height: 0;
+    background: #0a0c12;
+  }
+  html.is-web-shell body[data-route="player"] .playerArtCol{
+    width: 100%;
+    margin: 0;
+    gap: 0;
+    background: #0a0c12;
+  }
+  html.is-web-shell body[data-route="player"] .playerArtWrap{
+    border: none;
+    padding: 0;
+    background: #0a0c12;
+    box-shadow: none;
+    border-radius: 0;
+    position: relative;
+    overflow: visible;
+    min-height: var(--player-cover-height);
+  }
+  html.is-web-shell body[data-route="player"] .playerArtStage{
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: var(--player-cover-bottom);
+    width: 100%;
+    height: var(--player-cover-height);
+    border-radius: 0;
+    overflow: hidden;
+    background: #0a0c12;
+    z-index: 2;
+  }
+  html.is-web-shell body[data-route="player"] .playerArtStage::after{
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 120px;
+    transform: translateY(var(--player-cover-fade-shift, 0));
+    background: linear-gradient(to top, #0a0c12 0%, #0a0c12 52%, rgba(10,12,18,0.88) 72%, rgba(10,12,18,0.42) 88%, transparent 100%);
+    pointer-events: none;
+    z-index: 3;
+  }
+  html.is-web-shell body[data-route="player"] .playerArt{
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: center top;
+    border-radius: 0;
+  }
+  html.is-web-shell body[data-route="player"] .playerArtWrap .playerKaraokeFloat{
+    position: fixed;
+    left: 24px;
+    right: 64px;
+    bottom: var(--player-karaoke-bottom);
+    z-index: 10;
+  }
+  html.is-web-shell body[data-route="player"] .playerMeta{
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 11;
+    padding: 10px 20px 12px;
+    margin: 0;
+    width: 100%;
+    box-sizing: border-box;
+    background: linear-gradient(180deg, transparent 0%, rgba(6,8,14,0.72) 28%, rgba(6,8,14,0.96) 100%);
+  }
+  html.is-web-shell body[data-route="player"] .playerSocialRail{
+    position: fixed;
+    right: 12px;
+    bottom: var(--player-social-rail-bottom);
+    z-index: 12;
+  }
+  html.is-web-shell body[data-route="player"] .playerTransport{
+    margin-top: 8px;
+    align-self: center;
+    width: min(100%, 340px);
+    margin-inline: auto;
   }
 }
 

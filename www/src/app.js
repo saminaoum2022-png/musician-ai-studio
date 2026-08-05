@@ -189,7 +189,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260806-000027";
+const APP_BUILD = "20260806-004415";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -3475,6 +3475,7 @@ function syncRoutePanelVisibility(wanted) {
       || (route === "messages" && link === "friends")
       || (route === "messages-thread" && link === "friends"));
   });
+  try { syncDeskRailVisibility(); } catch {}
 }
 
 function routeApplyFallback(err) {
@@ -7832,9 +7833,11 @@ let _deskRailBound = false;
 function deskRailActive() {
   try {
     const route = document.body.getAttribute("data-route") || "";
-    if (route === "auth" || route === "intro" || route === "onboarding" || route === "music-preferences") {
-      return false;
-    }
+    const skip = new Set([
+      "auth", "intro", "onboarding", "music-preferences",
+      "pro", "player", "moment", "studio", "hub",
+    ]);
+    if (skip.has(route)) return false;
     return window.matchMedia("(min-width: 1200px)").matches;
   } catch { return false; }
 }
@@ -7889,13 +7892,18 @@ async function renderDeskRailTrending() {
     wrap.hidden = true;
   }
 }
-function initDeskRail() {
+function syncDeskRailVisibility() {
   const rail = document.getElementById("deskRail");
   if (!rail) return;
-  if (!deskRailActive()) { rail.hidden = true; return; }
-  rail.hidden = false;
-  renderDeskRailNowPlaying();
-  void renderDeskRailTrending();
+  const on = deskRailActive();
+  rail.hidden = !on;
+  if (on) {
+    renderDeskRailNowPlaying();
+    void renderDeskRailTrending();
+  }
+}
+function initDeskRail() {
+  syncDeskRailVisibility();
   if (_deskRailBound) return;
   _deskRailBound = true;
   document.addEventListener("click", (e) => {
@@ -7935,9 +7943,7 @@ function initDeskRail() {
   window.addEventListener("resize", () => {
     window.clearTimeout(_railResizeT);
     _railResizeT = window.setTimeout(() => {
-      const on = deskRailActive();
-      rail.hidden = !on;
-      if (on) { renderDeskRailNowPlaying(); void renderDeskRailTrending(); }
+      try { syncDeskRailVisibility(); } catch {}
     }, 200);
   });
 }

@@ -189,7 +189,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260804-143958";
+const APP_BUILD = "20260806-000027";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -7830,7 +7830,13 @@ async function refreshDiscoverWeeklyChart() {
  * never render or fetch for it. Reuses existing player state + weekly chart. */
 let _deskRailBound = false;
 function deskRailActive() {
-  try { return window.matchMedia("(min-width: 1200px)").matches; } catch { return false; }
+  try {
+    const route = document.body.getAttribute("data-route") || "";
+    if (route === "auth" || route === "intro" || route === "onboarding" || route === "music-preferences") {
+      return false;
+    }
+    return window.matchMedia("(min-width: 1200px)").matches;
+  } catch { return false; }
 }
 function renderDeskRailNowPlaying() {
   const card = document.getElementById("deskRailNowPlaying");

@@ -45307,6 +45307,48 @@ body[data-route="studio"] main.grid {
 }
 body[data-route="studio"] .deskRail { display: none !important; }
 
+/* Desktop / wide web: auth is a full-viewport sign-in screen — collapse the
+   app shell grid and hide the right rail so the card centers on the viewport.
+   Scoped to is-web-shell so the native Capacitor shell is unchanged. */
+@media (min-width: 721px){
+  html.is-web-shell body[data-route="auth"] > .app{
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: stretch !important;
+    justify-content: center !important;
+    max-width: none !important;
+    width: 100% !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    min-height: 100svh;
+    height: 100svh;
+  }
+  html.is-web-shell body[data-route="auth"] main.grid{
+    display: flex !important;
+    flex: 1 1 auto !important;
+    align-items: center !important;
+    justify-content: center !important;
+    margin: 0 !important;
+    max-width: none !important;
+    min-height: 0;
+    grid-column: unset !important;
+  }
+  html.is-web-shell body[data-route="auth"] .deskRail{
+    display: none !important;
+  }
+  html.is-web-shell body.isAuth .authScreen{
+    width: 100%;
+    min-height: 100%;
+    background:
+      radial-gradient(90% 70% at 50% 0%, rgba(124,92,255,0.16), transparent 62%),
+      #05070d !important;
+  }
+  html.is-web-shell body.isAuth .authInner{
+    max-width: 420px;
+    padding: 48px 32px 40px;
+  }
+}
+
 .studioRoute { padding: 0; }
 
 .studio {

@@ -189,7 +189,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260806-135208";
+const APP_BUILD = "20260806-133822";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -2390,50 +2390,6 @@ function apiUrl(p) {
   return base ? `${base.replace(/\/$/, "")}${path}` : path;
 }
 const PUBLIC_CONFIG_CACHE_KEY = "mas:public-config:v3";
-/** Clears poisoned native caches whenever a new build is installed over the same app. */
-const LAST_SHIPPED_BUILD_KEY = "nabad:last-shipped-build";
-let _nativeNetworkReadyPromise = null;
-function resetNativeNetworkReadyPromise() {
-  _nativeNetworkReadyPromise = null;
-}
-function migrateCachesOnBuildChange() {
-  try {
-    const prev = String(localStorage.getItem(LAST_SHIPPED_BUILD_KEY) || "").trim();
-    if (prev === APP_BUILD) return;
-    localStorage.setItem(LAST_SHIPPED_BUILD_KEY, APP_BUILD);
-    localStorage.removeItem(PUBLIC_CONFIG_CACHE_KEY);
-    localStorage.removeItem("nabad_generation_failed_activity_v1");
-    const ownPrefix = "nabad:ownSocialStats:v1:";
-    const staleKeys = [];
-    for (let i = 0; i < localStorage.length; i++) {
-      const k = localStorage.key(i);
-      if (k && k.startsWith(ownPrefix)) staleKeys.push(k);
-    }
-    staleKeys.forEach((k) => {
-      try { localStorage.removeItem(k); } catch {}
-    });
-    try {
-      sessionStorage.removeItem("nabad_friends_feed_snap_v3");
-      sessionStorage.removeItem("nabad_activity_feed_snap_v3");
-      sessionStorage.removeItem("nabad_profile_act_snap_v3");
-    } catch {}
-    resetNativeNetworkReadyPromise();
-    if (isNativeShell()) setResolvedApiBase(defaultNativeApiBase());
-  } catch {}
-}
-/** Native: one shared boot gate so /api/* never runs before public-config + API base resolve. */
-function ensureNativeNetworkReady() {
-  if (!isNativeShell()) return Promise.resolve();
-  if (_nativeNetworkReadyPromise) return _nativeNetworkReadyPromise;
-  _nativeNetworkReadyPromise = (async () => {
-    await loadPublicConfig();
-    await ensureNativeApiBaseResolved();
-  })().catch((e) => {
-    resetNativeNetworkReadyPromise();
-    throw e;
-  });
-  return _nativeNetworkReadyPromise;
-}
 let lastPublicConfigStatus = 0;
 let lastPublicConfigError = "";
 
@@ -25571,7 +25527,7 @@ function socialApiErrorMessage(err) {
 }
 
 async function socialApi(path, opts = {}) {
-  if (isNativeShell()) await ensureNativeNetworkReady();
+  if (isNativeShell()) await ensureNativeApiBaseResolved();
   const timeoutMs = Math.max(4000, Number(opts?.timeoutMs) || 12000);
   const { timeoutMs: _drop, ...fetchOpts } = opts;
   const run = async (signal) => {
@@ -26841,7 +26797,7 @@ async function openUserPublicMessage() {
 }
 
 async function messagesApi(path, opts = {}) {
-  if (isNativeShell()) await ensureNativeNetworkReady();
+  if (isNativeShell()) await ensureNativeApiBaseResolved();
   const timeoutMs = Math.max(4000, Number(opts?.timeoutMs) || 12000);
   const { timeoutMs: _drop, ...fetchOpts } = opts;
   const run = async (signal) => {
@@ -28743,11 +28699,11 @@ async function loadMessagesInbox({ silent = false } = {}) {
 
   const run = (async () => {
     try {
-      if (isNativeShell()) await ensureNativeNetworkReady();
+      if (isNativeShell()) await ensureNativeApiBaseResolved();
       let data = await messagesApi("/api/messages?type=inbox");
       if (!data?.ok) {
         await new Promise((r) => window.setTimeout(r, 1200));
-        if (isNativeShell()) await ensureNativeNetworkReady();
+        if (isNativeShell()) await ensureNativeApiBaseResolved();
         data = await messagesApi("/api/messages?type=inbox");
       }
       if (!data?.ok) throw new Error(data?.error || "Could not load messages.");
@@ -29768,7 +29724,6 @@ function paintActivityFeedSnapshotIfFresh() {
 const ACTIVITY_PAGE_SIZE = 20;
 const ACTIVITY_MIN_FETCH_GAP_MS = 800;
 let _activityFeedLastFetchAt = 0;
-let _activityFeedLastFetchOk = false;
 let _activityFeedState = {
   items: [],
   offset: 0,
@@ -30740,7 +30695,6 @@ async function refreshActivityFeedHead() {
 async function fetchActivityFeedFromTop() {
   if (_activityFeedState.loading) return;
   _activityFeedState.loading = true;
-  _activityFeedLastFetchOk = false;
   _routeRefreshGate.activity.begin();
   _activityFeedLastFetchAt = Date.now();
   syncActivityLoadMoreUi();
@@ -30748,7 +30702,6 @@ async function fetchActivityFeedFromTop() {
     const limit = ACTIVITY_PAGE_SIZE;
     const data = await socialApi(`/api/social?type=notifications&limit=${limit}&offset=0`);
     const batch = Array.isArray(data?.notifications) ? data.notifications : [];
-    _activityFeedLastFetchOk = true;
     _activityFeedState.items = batch;
     _activityFeedState.offset = batch.length;
     _activityFeedState.hasMore = batch.length >= limit;
@@ -30780,7 +30733,6 @@ async function fetchActivityFeedFromTop() {
 async function fetchActivityBatch() {
   if (_activityFeedState.loading || !_activityFeedState.hasMore) return;
   _activityFeedState.loading = true;
-  _activityFeedLastFetchOk = false;
   _activityFeedLastFetchAt = Date.now();
   syncActivityLoadMoreUi();
   try {
@@ -30788,7 +30740,6 @@ async function fetchActivityBatch() {
     const offset = _activityFeedState.offset;
     const data = await socialApi(`/api/social?type=notifications&limit=${limit}&offset=${offset}`);
     const batch = Array.isArray(data?.notifications) ? data.notifications : [];
-    _activityFeedLastFetchOk = true;
     if (!batch.length) {
       _activityFeedState.hasMore = false;
     } else {
@@ -30864,9 +30815,7 @@ async function enterActivityRoute({ reset = false, readOnly = false } = {}) {
   }
   await refreshActivityFeedHead();
   try { purgeLocalJobCompletionActivitiesInFeed(); } catch {}
-  if (_activityFeedLastFetchOk) {
-    try { mergePersistedGenerationFailedActivities(); } catch {}
-  }
+  try { mergePersistedGenerationFailedActivities(); } catch {}
   renderActivityFeedFromState();
   const unread = _activityFeedState.items.filter((n) => !n?.read_at).length;
   if (unread && !readOnly) {
@@ -57482,7 +57431,6 @@ try {
     });
   } catch {}
 } catch {}
-migrateCachesOnBuildChange();
 applyClientEnvBootstrap();
 loadPublicConfigFromCache();
 void refreshSunoCredits();
@@ -57497,7 +57445,7 @@ renderAuthStatus();
 const _bootOAuthCodePending = hasOAuthCodeInUrl();
 if (_bootOAuthCodePending) {
   try { beginLoginSettling("Finishing sign in…"); } catch {}
-} else if (!isCapacitorNativeAuth() && !isNativeShell()) {
+} else if (!isCapacitorNativeAuth()) {
   safeApplyRoute();
 }
 // `ensureAuthBoot()` (Preferences / native restore) runs before each route apply.

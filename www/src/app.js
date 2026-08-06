@@ -189,7 +189,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260806-112140";
+const APP_BUILD = "20260806-133822";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -2348,6 +2348,16 @@ function nativeApiBaseCandidates() {
   for (const u of NATIVE_API_BASE_CANDIDATES) out.push(u.replace(/\/$/, ""));
   return [...new Set(out.filter(Boolean))];
 }
+/** Default Vercel host for native /api/* — never leave this empty on iOS. */
+function defaultNativeApiBase() {
+  if (API_BASE) return API_BASE;
+  try {
+    if (window.Capacitor?.isNativePlatform?.()) {
+      return nativeApiBaseCandidates()[0] || "https://www.nabadai.com";
+    }
+  } catch {}
+  return "";
+}
 const API_BASE = (() => {
   try {
     if (window.Capacitor?.isNativePlatform?.()) {
@@ -2366,7 +2376,7 @@ function setResolvedApiBase(base) {
     } catch {}
     return;
   }
-  const b = String(base || "").trim().replace(/\/$/, "");
+  const b = String(base || "").trim().replace(/\/$/, "") || defaultNativeApiBase();
   _resolvedApiBase = b;
   try {
     globalThis.__nabadApiBase = b;
@@ -2376,7 +2386,7 @@ function setResolvedApiBase(base) {
 function apiUrl(p) {
   const path = String(p || "").startsWith("/") ? p : `/${p}`;
   if (!isNativeShell()) return path;
-  const base = _resolvedApiBase || API_BASE;
+  const base = _resolvedApiBase || defaultNativeApiBase();
   return base ? `${base.replace(/\/$/, "")}${path}` : path;
 }
 const PUBLIC_CONFIG_CACHE_KEY = "mas:public-config:v3";
@@ -2437,7 +2447,7 @@ function loadPublicConfigFromCache() {
     if (!raw) return false;
     const parsed = JSON.parse(raw);
     applyPublicConfigPayload(parsed);
-    if (isNativeShell() && parsed?.apiBase) setResolvedApiBase(parsed.apiBase);
+    if (isNativeShell()) setResolvedApiBase(parsed?.apiBase || defaultNativeApiBase());
     else _resolvedApiBase = "";
     return Boolean(SUPABASE_URL && SUPABASE_ANON_KEY);
   } catch {
@@ -2477,7 +2487,7 @@ function applyClientEnvBootstrap() {
         window.__VERCEL_PROTECTION_BYPASS__ = bypass;
       } catch {}
     }
-    if (isNativeShell() && env.apiBase) setResolvedApiBase(env.apiBase);
+    if (isNativeShell()) setResolvedApiBase(env.apiBase || defaultNativeApiBase());
     else _resolvedApiBase = "";
     return Boolean(SUPABASE_URL && SUPABASE_ANON_KEY);
   } catch {
@@ -3281,6 +3291,7 @@ function syncLibraryTabDotFromStorage() {
 }
 
 let _notificationsUnreadCount = 0;
+let _notificationsCenterLastList = [];
 let _notificationsUnreadFetchInFlight = false;
 let _notificationsUnreadLastFetchedAt = 0;
 const NOTIFICATIONS_BADGE_MIN_GAP_MS = 15000;
@@ -5992,11 +6003,11 @@ async function supabaseSearchPublicProfiles(qNorm) {
   const token = escapePostgrestIlikeToken(qNorm);
   if (!token) return [];
   const wild = `*${token}*`;
-  const orRaw = `(username.ilike.${wild},bio.ilike.${wild})`;
+  const orRaw = `(username.ilike.${wild},display_name.ilike.${wild},bio.ilike.${wild})`;
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), 8000);
   try {
-    const url = `${SUPABASE_URL}/rest/v1/profiles?or=${encodeURIComponent(orRaw)}&select=username,avatar,user_id&limit=14`;
+    const url = `${SUPABASE_URL}/rest/v1/profiles?or=${encodeURIComponent(orRaw)}&select=username,display_name,avatar,user_id&limit=14`;
     const r = await fetch(url, {
       headers: { apikey: SUPABASE_ANON_KEY },
       signal: ctrl.signal,
@@ -6007,6 +6018,7 @@ async function supabaseSearchPublicProfiles(qNorm) {
     return rows
       .map((row) => ({
         handle: String(row.username || "").trim(),
+        displayName: normalizeDisplayName(row.display_name || row.displayName || ""),
         avatar: String(row.avatar || "").trim() || "./assets/icons/splash-mark.png",
         userId: String(row.user_id || "").trim(),
       }))
@@ -6191,10 +6203,22 @@ function renderSearchPeople(query) {
     if (!handle || isPlaceholderUsername(handle)) continue;
     const key = handle.toLowerCase();
     if (seen.has(key)) continue;
-    if (!key.includes(qNorm)) continue;
+    let cachedDn = "";
+    for (const entry of _profileRowCache.values()) {
+      const row = entry?.row;
+      if (String(row?.username || "").trim().toLowerCase() === key) {
+        cachedDn = normalizeDisplayName(row?.display_name || row?.displayName || "");
+        break;
+      }
+    }
+    const matches =
+      key.includes(qNorm) ||
+      (cachedDn && cachedDn.toLowerCase().includes(qNorm));
+    if (!matches) continue;
     seen.add(key);
     hubPeople.push({
       handle,
+      displayName: cachedDn,
       avatar: String(p?.creatorAvatar || "./assets/icons/splash-mark.png"),
     });
     if (hubPeople.length >= 12) break;
@@ -6206,12 +6230,21 @@ function renderSearchPeople(query) {
       return;
     }
     stripEl.hidden = false;
-    rowEl.innerHTML = people.map((u) => `
+    rowEl.innerHTML = people.map((u) => {
+      const handle = screenshotHandle(u.handle);
+      const dn = normalizeDisplayName(u.displayName || "");
+      const primary = dn || `@${handle}`;
+      const sub = dn ? `@${handle}` : "";
+      return `
     <button class="searchPersonCard" type="button" data-search-user="${encodeURIComponent(u.handle)}">
       <img class="searchPersonAvatar" src="${escapeHtml(u.avatar)}" alt="" loading="lazy" />
-      <div class="searchPersonName">@${escapeHtml(screenshotHandle(u.handle))}</div>
+      <div class="searchPersonText">
+        <div class="searchPersonName">${escapeHtml(primary)}</div>
+        ${sub ? `<div class="searchPersonHandle">${escapeHtml(sub)}</div>` : ""}
+      </div>
     </button>
-  `).join("");
+  `;
+    }).join("");
     bindSearchPeopleRowClickHandlers(rowEl);
   };
   paint(hubPeople);
@@ -6226,7 +6259,7 @@ function renderSearchPeople(query) {
       const k = c.handle.toLowerCase();
       if (seen2.has(k)) continue;
       seen2.add(k);
-      merged.push({ handle: c.handle, avatar: c.avatar });
+      merged.push({ handle: c.handle, displayName: c.displayName, avatar: c.avatar });
       if (merged.length >= 12) break;
     }
     paint(merged);
@@ -25494,6 +25527,7 @@ function socialApiErrorMessage(err) {
 }
 
 async function socialApi(path, opts = {}) {
+  if (isNativeShell()) await ensureNativeApiBaseResolved();
   const timeoutMs = Math.max(4000, Number(opts?.timeoutMs) || 12000);
   const { timeoutMs: _drop, ...fetchOpts } = opts;
   const run = async (signal) => {
@@ -26763,6 +26797,7 @@ async function openUserPublicMessage() {
 }
 
 async function messagesApi(path, opts = {}) {
+  if (isNativeShell()) await ensureNativeApiBaseResolved();
   const timeoutMs = Math.max(4000, Number(opts?.timeoutMs) || 12000);
   const { timeoutMs: _drop, ...fetchOpts } = opts;
   const run = async (signal) => {
@@ -28664,7 +28699,14 @@ async function loadMessagesInbox({ silent = false } = {}) {
 
   const run = (async () => {
     try {
-      const data = await messagesApi("/api/messages?type=inbox");
+      if (isNativeShell()) await ensureNativeApiBaseResolved();
+      let data = await messagesApi("/api/messages?type=inbox");
+      if (!data?.ok) {
+        await new Promise((r) => window.setTimeout(r, 1200));
+        if (isNativeShell()) await ensureNativeApiBaseResolved();
+        data = await messagesApi("/api/messages?type=inbox");
+      }
+      if (!data?.ok) throw new Error(data?.error || "Could not load messages.");
       _messagesInboxState = {
         threads: Array.isArray(data?.threads) ? data.threads : [],
         requests: Array.isArray(data?.requests) ? data.requests : [],
@@ -28855,7 +28897,7 @@ function bindMessagesPageOnce() {
       const pl = e.target.closest("[data-user-lib-play]");
       if (pl && threadMount.contains(pl)) {
         e.preventDefault();
-        playDiscoverTarget(pl);
+        playDmSongFromEl(pl);
       }
     }
   });
@@ -29548,21 +29590,32 @@ function renderNotificationRows(list) {
     const icon = notificationIconForType(n?.type);
     const unread = !n?.read_at;
     const time = relativeTime(new Date(n?.created_at || Date.now()).getTime());
-    const href = username
-      ? `#/u/${encodeURIComponent(username)}${actorUserId ? `?uid=${encodeURIComponent(actorUserId)}` : ""}`
+    const profileHref = notificationActorProfileHref(n);
+    const splitTap = activityNotificationSplitTap(n);
+    const songHref = splitTap ? notificationActivityHref(n) : "";
+    const notifId = String(n?.id || "").trim();
+    const actionHtml = profileHref && !splitTap
+      ? `<a class="notificationsItemAction" href="${profileHref}" data-notifications-close="1">${escapeHtml(msg.action || "Open")}</a>`
       : "";
-    const actionHtml = href
-      ? `<a class="notificationsItemAction" href="${href}" data-notifications-close="1">${escapeHtml(msg.action || "Open")}</a>`
-      : "";
+    const avatarTap = profileHref
+      ? `<button type="button" class="notificationsItemAvatarWrap notificationsItemProfileTap" data-activity-profile-href="${escapeHtml(profileHref)}" aria-label="View ${escapeHtml(username ? `@${username}` : "profile")}">`
+      : `<div class="notificationsItemAvatarWrap">`;
+    const avatarTapClose = profileHref ? "</button>" : "</div>";
+    const bodyTapAttrs = splitTap && songHref
+      ? ` class="notificationsItemBody notificationsItemTargetTap" role="button" tabindex="0" data-notification-id="${escapeHtml(notifId)}" data-activity-href="${escapeHtml(songHref)}" aria-label="Open song"`
+      : ` class="notificationsItemBody"`;
+    const titleHtml = splitTap
+      ? activityRowTitleHtml(n, msg.title, { splitTap: true })
+      : escapeHtml(msg.title);
     return `
-      <article class="notificationsItem${unread ? " isUnread" : ""}">
-        <div class="notificationsItemAvatarWrap">
+      <article class="notificationsItem${unread ? " isUnread" : ""}${splitTap ? " notificationsItem--split" : ""}">
+        ${avatarTap}
           ${activityActorAvatarHtml(n, "notificationsItemAvatar")}
           <span class="notificationsItemBadge" aria-hidden="true">${escapeHtml(icon)}</span>
-        </div>
-        <div class="notificationsItemBody">
+        ${avatarTapClose}
+        <div${bodyTapAttrs}>
           <div class="notificationsItemTop">
-            <strong>${escapeHtml(msg.title)}</strong>
+            <strong>${titleHtml}</strong>
             <span>${escapeHtml(time)}</span>
           </div>
           ${userTextHtml(msg.body, { tag: "p", escapeHtml })}
@@ -30050,6 +30103,64 @@ function notificationActivityHref(n) {
   return "";
 }
 
+function notificationActorProfileHref(n) {
+  const meta = n?.metadata || {};
+  const username = String(meta.actor_username || "").replace(/^@/, "").trim();
+  const actorUserId = String(n?.actor_user_id || "").trim();
+  if (!username) return "";
+  return `#/u/${encodeURIComponent(username)}${actorUserId ? `?uid=${encodeURIComponent(actorUserId)}` : ""}`;
+}
+
+/** Like/reply/repost/mention/gift on a song — avatar/name → profile, body → song. */
+function activityNotificationSplitTap(n) {
+  const t = String(n?.type || "").trim();
+  const meta = n?.metadata || {};
+  if (!notificationActorProfileHref(n)) return false;
+  const targetKind = String(meta.target_kind || "").trim();
+  const targetId = String(meta.target_id || "").trim();
+  if (
+    (t === "social_like" || t === "social_reply" || t === "social_repost" || t === "social_mention" || t === "gift_received") &&
+    targetKind === "song" &&
+    targetId
+  ) {
+    return true;
+  }
+  if (t === "remix") {
+    const remixSongId = String(meta.remix_song_id || meta.song_id || "").trim();
+    const remixPostId = String(meta.remix_post_id || "").trim();
+    return Boolean((remixSongId && isShareUuid(remixSongId)) || (remixPostId && isShareUuid(remixPostId)));
+  }
+  if (t === "song_feedback") {
+    const songId = String(meta.song_id || "").trim();
+    return Boolean(songId && isShareUuid(songId));
+  }
+  return false;
+}
+
+function navigateActivityActorProfile(href) {
+  const raw = String(href || "").trim();
+  if (!raw) return;
+  try { haptic("light"); } catch {}
+  _userPublicReturnHash = "#/activity";
+  location.hash = raw.startsWith("#") ? raw : `#${raw}`;
+}
+
+function activityRowTitleHtml(n, titleText, { splitTap = false } = {}) {
+  const safe = escapeHtml(String(titleText || ""));
+  if (!splitTap) return safe;
+  const profileHref = notificationActorProfileHref(n);
+  const username = screenshotHandle(String(n?.metadata?.actor_username || "").replace(/^@/, "").trim());
+  if (!profileHref || !username) return safe;
+  const plain = String(titleText || "");
+  const prefixes = [`@${username}`, username];
+  for (const prefix of prefixes) {
+    if (!plain.startsWith(prefix)) continue;
+    const rest = plain.slice(prefix.length);
+    return `<button type="button" class="activityRowActorLink" data-activity-profile-href="${escapeHtml(profileHref)}">${escapeHtml(prefix)}</button>${escapeHtml(rest)}`;
+  }
+  return safe;
+}
+
 function markActivityNotificationReadLocally(n) {
   const id = String(n?.id || "").trim();
   if (!id) return;
@@ -30445,15 +30556,35 @@ function activityItemHtml(n) {
   const unread = !n?.read_at;
   const time = relativeTime(new Date(n?.created_at || Date.now()).getTime());
   const href = unavailable ? "" : notificationActivityHref(n);
-  const tag = href ? "button" : "article";
-  const typeAttr = href ? ' type="button"' : "";
+  const splitTap = !unavailable && activityNotificationSplitTap(n);
+  const profileHref = splitTap ? notificationActorProfileHref(n) : "";
   const notifType = String(n?.type || "").trim() || "default";
   const notifId = String(n?.id || "").trim();
-  const dataHref = href
-    ? ` data-activity-href="${escapeHtml(href)}"${notifId ? ` data-activity-id="${escapeHtml(notifId)}"` : ""}`
-    : "";
+  const titleHtml = activityRowTitleHtml(n, parts.title, { splitTap });
   const descHtml = parts.description
     ? userTextHtml(parts.description, { tag: "p", className: "activityRowDesc", escapeHtml })
+    : "";
+  if (splitTap && href) {
+    return `
+    <article class="activityRow activityRow--${escapeHtml(notifType)} activityRow--split${unread ? " isUnread" : ""}" data-activity-href="${escapeHtml(href)}"${notifId ? ` data-activity-id="${escapeHtml(notifId)}"` : ""}>
+      <button type="button" class="activityRowArtWrap activityRowProfileTap" data-activity-profile-href="${escapeHtml(profileHref)}" aria-label="View profile">
+        ${activityRowArtworkHtml(n)}
+        ${activityTypeBadgeHtml(notifType)}
+      </button>
+      <div class="activityRowBody activityRowTargetTap" role="button" tabindex="0" aria-label="Open song">
+        <div class="activityRowMetaTop">
+          <span class="activityRowCategory">${escapeHtml(parts.category)}</span>
+          <span class="activityRowTime">${escapeHtml(time)}</span>
+        </div>
+        <strong class="activityRowTitle">${titleHtml}</strong>
+        ${descHtml}
+      </div>
+    </article>`;
+  }
+  const tag = href ? "button" : "article";
+  const typeAttr = href ? ' type="button"' : "";
+  const dataHref = href
+    ? ` data-activity-href="${escapeHtml(href)}"${notifId ? ` data-activity-id="${escapeHtml(notifId)}"` : ""}`
     : "";
   return `
     <${tag} class="activityRow activityRow--${escapeHtml(notifType)}${unread ? " isUnread" : ""}${unavailable ? " activityRow--unavailable" : ""}"${typeAttr}${dataHref}>
@@ -30721,6 +30852,13 @@ function bindActivityPageOnce() {
     });
   }
   els.activityFeed?.addEventListener("click", (ev) => {
+    const profileTap = ev.target.closest("[data-activity-profile-href]");
+    if (profileTap && els.activityFeed.contains(profileTap)) {
+      ev.preventDefault();
+      ev.stopPropagation();
+      navigateActivityActorProfile(profileTap.getAttribute("data-activity-profile-href") || "");
+      return;
+    }
     const row = ev.target.closest("[data-activity-href]");
     if (!row) return;
     const href = row.getAttribute("data-activity-href") || "";
@@ -31605,6 +31743,7 @@ async function refreshNotificationsCenter() {
       els.notificationsCenterStatus.textContent = "";
     }
     renderNotificationRows(list);
+    _notificationsCenterLastList = list;
     updateNotificationsEntryBadges(unread);
     if (unread) void socialApi("/api/social", {
       method: "POST",
@@ -31670,6 +31809,15 @@ function readOwnSocialStatsCacheSnapshot(userId) {
 function hydrateOwnSocialStatsCache(userId) {
   const snap = readOwnSocialStatsCacheSnapshot(userId);
   if (!snap) return false;
+  // Fresh install can cache 0/0 when the stats API fails once — ignore that if we
+  // already have public posts on this account.
+  if (snap.plays === 0 && snap.followers === 0 && getOwnerPublicPostCount() > 5) {
+    try {
+      localStorage.removeItem(ownSocialStatsCacheKey(userId));
+      sessionStorage.removeItem(OWN_SOCIAL_STATS_LEGACY_SESSION_KEY);
+    } catch {}
+    return false;
+  }
   _ownSocialStatsPlays = snap.plays;
   _ownSocialStatsFollowers = snap.followers;
   _ownSocialStatsLastFetchAt = snap.at;
@@ -31738,9 +31886,16 @@ async function refreshOwnProfileSocialStats({ force = false } = {}) {
   if (_ownSocialStatsInFlight && !force) return;
   _ownSocialStatsInFlight = true;
   try {
-    const data = await fetchSocialStatsForProfile({ userId: uid });
-    const followers = Number(data?.stats?.followers || 0);
-    const plays = Number(data?.stats?.plays || 0);
+    if (isNativeShell()) await ensureNativeApiBaseResolved();
+    let data = await fetchSocialStatsForProfile({ userId: uid });
+    if (!data?.ok || !data?.stats) {
+      await new Promise((r) => window.setTimeout(r, 1200));
+      if (isNativeShell()) await ensureNativeApiBaseResolved();
+      data = await fetchSocialStatsForProfile({ userId: uid });
+    }
+    if (!data?.ok || !data?.stats) return;
+    const followers = Number(data.stats.followers || 0);
+    const plays = Number(data.stats.plays || 0);
     _ownSocialStatsFollowers = followers;
     _ownSocialStatsPlays = plays;
     _ownSocialStatsLastFetchAt = Date.now();
@@ -33601,7 +33756,7 @@ function setDiscoverReelQueue(tracks) {
 }
 
 function findDiscoverReelIndexForTarget(t) {
-  if (!_discoverReelQueue.length || !t) return 0;
+  if (!_discoverReelQueue.length || !t) return -1;
   const songId = String(t.songId || t.playSource?.songId || "").trim();
   const url = String(t.raw || t.url || "").trim();
   const idx = _discoverReelQueue.findIndex((row) => {
@@ -33609,7 +33764,7 @@ function findDiscoverReelIndexForTarget(t) {
     if (url && audioUrlsEquivalent(String(row.url || ""), url)) return true;
     return false;
   });
-  return idx >= 0 ? idx : 0;
+  return idx;
 }
 
 function discoverReelModeActive() {
@@ -33875,20 +34030,22 @@ async function playDiscoverFeedEntry({ raw, title, art, by, playSource, el, opts
       songId: playSource?.songId,
       playSource,
     });
-    const tappedArt = String(art || "").trim();
-    if (tappedArt && _discoverReelQueue[idx]) {
-      const row = _discoverReelQueue[idx];
-      const display = trackCoverArtForDisplay({ ...row, artUrl: tappedArt, meta: row.meta || {} });
-      const safeArt = display && !isDefaultSongCoverUrl(display) ? display : tappedArt;
-      if (!/_thumb\./i.test(safeArt)) {
-        _discoverReelQueue[idx] = { ...row, artUrl: safeArt };
+    if (idx >= 0) {
+      const tappedArt = String(art || "").trim();
+      if (tappedArt && _discoverReelQueue[idx]) {
+        const row = _discoverReelQueue[idx];
+        const display = trackCoverArtForDisplay({ ...row, artUrl: tappedArt, meta: row.meta || {} });
+        const safeArt = display && !isDefaultSongCoverUrl(display) ? display : tappedArt;
+        if (!/_thumb\./i.test(safeArt)) {
+          _discoverReelQueue[idx] = { ...row, artUrl: safeArt };
+        }
       }
+      const card = document.querySelector(".playerCard");
+      if (card) card.dataset.discoverReel = "1";
+      resetDiscoverReelRailFade();
+      await playDiscoverReelAt(idx, { openPlayer: true });
+      return;
     }
-    const card = document.querySelector(".playerCard");
-    if (card) card.dataset.discoverReel = "1";
-    resetDiscoverReelRailFade();
-    await playDiscoverReelAt(idx, { openPlayer: true });
-    return;
   }
   if (!opts.silent) haptic("light");
   await playLibraryUrlOnPlayer(url, title, art, {
@@ -33896,6 +34053,36 @@ async function playDiscoverFeedEntry({ raw, title, art, by, playSource, el, opts
     openPlayer: opts.openPlayer === true,
     discoverBy: by,
     playSource,
+  });
+}
+
+/** DM song cards embed the exact URL/title/art — never route through Discover reel. */
+function playDmSongFromEl(el) {
+  if (!el) return;
+  let raw = "";
+  const enc = el.getAttribute("data-user-lib-url");
+  if (enc) {
+    try {
+      raw = decodeURIComponent(enc);
+    } catch {
+      raw = enc;
+    }
+  }
+  raw = String(raw || "").trim();
+  if (!raw) {
+    showToast("This song has no playable audio yet.", { durationMs: 3800 });
+    return;
+  }
+  const title = decodeDiscoverDataAttr(el, "data-user-lib-title") || "Song";
+  const art = decodeDiscoverDataAttr(el, "data-user-lib-art") || "";
+  const by = decodeDiscoverDataAttr(el, "data-discovery-by") || "";
+  haptic("light");
+  primeGlobalPlayerInGesture();
+  void playLibraryUrlOnPlayer(raw, title, art, {
+    discoverFeed: false,
+    openPlayer: true,
+    discoverBy: by,
+    playSource: null,
   });
 }
 
@@ -54739,10 +54926,46 @@ function syncProfileUiFromEdit(profile = activeProfile) {
   renderProfileMusicStylesInline(profile);
   renderPersonaSelect();
   refreshOwnSongsUi();
-  invalidateProfileActivitiesCache();
+  invalidateProfileIdentityCachesAfterSave(profile);
   void syncProfileSoundCertifiedFromCloud("syncProfileUiFromEdit");
   if ((document.body.getAttribute("data-route") || "") === "profile" && _profileSongsSegment === "activities") {
     void renderProfileActivities({ force: true });
+  }
+}
+
+/** After display name / avatar / bio save — drop stale social caches so the new identity shows everywhere quickly. */
+function invalidateProfileIdentityCachesAfterSave(profile = activeProfile) {
+  const uid = String(profile?.id || authSession?.user?.id || "").trim();
+  invalidateProfileActivitiesCache();
+  _profileLoadCache = null;
+  _profileLoadCacheAt = 0;
+  _userPublicProfileCache = null;
+  _friendsFeedSnapshot = null;
+  try {
+    sessionStorage.removeItem(FRIENDS_FEED_SNAPSHOT_KEY);
+  } catch {}
+  if (uid && uid !== "guest") {
+    _profileRowCache.set(uid, {
+      row: {
+        user_id: uid,
+        username: String(profile.username || "").trim(),
+        display_name: normalizeDisplayName(profile.displayName || ""),
+        displayName: normalizeDisplayName(profile.displayName || ""),
+        avatar: String(profile.avatar || "").trim(),
+        sound_certified: profileSoundCertifiedTruthy(profile.soundCertified),
+      },
+      at: Date.now(),
+    });
+  }
+  try { renderProfileHubShared(); } catch {}
+  try { renderProfileOwnStats(); } catch {}
+  try { syncMobileTabbarProfileAvatar(); } catch {}
+  const route = String(document.body.getAttribute("data-route") || "");
+  if (route === "friends" || route === "discover") {
+    void refreshDiscoveryFollowingFeed({ force: true }).catch(() => {});
+  }
+  if (route === "messages" || route === "messages-thread") {
+    void loadMessagesInbox({ silent: true }).catch(() => {});
   }
 }
 
@@ -55782,6 +56005,28 @@ if (els.notificationsCenter) {
   els.notificationsCenter.addEventListener("click", (e) => {
     const t = e.target;
     if (t?.closest?.("[data-notifications-close]")) closeNotificationsCenter();
+    const profileTap = t?.closest?.("[data-activity-profile-href]");
+    if (profileTap && els.notificationsCenter.contains(profileTap)) {
+      e.preventDefault();
+      navigateActivityActorProfile(profileTap.getAttribute("data-activity-profile-href") || "");
+      closeNotificationsCenter();
+      return;
+    }
+    const songTap = t?.closest?.(".notificationsItemTargetTap");
+    if (songTap && els.notificationsCenter.contains(songTap)) {
+      if (t?.closest?.("[data-activity-profile-href]")) return;
+      e.preventDefault();
+      const notifId = songTap.getAttribute("data-notification-id") || "";
+      const n = notifId
+        ? _notificationsCenterLastList.find((item) => String(item?.id || "") === notifId)
+        : null;
+      if (n) void openActivityNotificationTarget(n);
+      else {
+        const href = songTap.getAttribute("data-activity-href") || "";
+        if (href) void openActivityTargetFromHref(href);
+      }
+      closeNotificationsCenter();
+    }
   });
 }
 

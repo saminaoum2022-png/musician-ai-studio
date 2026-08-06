@@ -189,7 +189,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260806-162909";
+const APP_BUILD = "20260806-164622";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -6134,15 +6134,41 @@ function getSearchTemplates() {
   });
 }
 
-function escapePostgrestIlikeToken(qNorm) {
-  const t = String(qNorm || "")
+function normalizeDiscoverSearchQuery(raw) {
+  return String(raw || "")
     .trim()
-    .toLowerCase()
+    .replace(/^@+/, "")
+    .toLowerCase();
+}
+
+function escapePostgrestIlikeToken(qNorm) {
+  const t = normalizeDiscoverSearchQuery(qNorm)
     .replace(/,/g, " ")
     .replace(/\s+/g, " ")
     .slice(0, 36);
   if (t.length < 2) return "";
   return t.replace(/\\/g, "\\\\").replace(/%/g, "\\%").replace(/_/g, "\\_").replace(/\*/g, "");
+}
+
+function profileDisplayNameForSearchHandle(handle, userId = "") {
+  const key = String(handle || "").trim().toLowerCase();
+  const uid = String(userId || "").trim();
+  if (uid) {
+    const fromDiscover = _discoveryLastProfMap?.get?.(uid);
+    const dnDiscover = normalizeDisplayName(fromDiscover?.display_name || fromDiscover?.displayName || "");
+    if (dnDiscover) return dnDiscover;
+    const cached = _profileRowCache.get(uid)?.row;
+    const dnCached = normalizeDisplayName(cached?.display_name || cached?.displayName || "");
+    if (dnCached) return dnCached;
+  }
+  if (!key) return "";
+  for (const entry of _profileRowCache.values()) {
+    const row = entry?.row;
+    if (String(row?.username || "").trim().toLowerCase() === key) {
+      return normalizeDisplayName(row?.display_name || row?.displayName || "");
+    }
+  }
+  return "";
 }
 
 async function supabaseSearchPublicProfiles(qNorm) {
@@ -6334,7 +6360,7 @@ function renderSearchPeople(query) {
   const stripEl = document.getElementById("searchPeopleStrip");
   const rowEl = document.getElementById("searchPeopleRow");
   if (!stripEl || !rowEl) return;
-  const qNorm = String(query || "").trim().toLowerCase();
+  const qNorm = normalizeDiscoverSearchQuery(query);
   if (!qNorm) {
     stripEl.hidden = true;
     rowEl.innerHTML = "";
@@ -6350,14 +6376,8 @@ function renderSearchPeople(query) {
     if (!handle || isPlaceholderUsername(handle)) continue;
     const key = handle.toLowerCase();
     if (seen.has(key)) continue;
-    let cachedDn = "";
-    for (const entry of _profileRowCache.values()) {
-      const row = entry?.row;
-      if (String(row?.username || "").trim().toLowerCase() === key) {
-        cachedDn = normalizeDisplayName(row?.display_name || row?.displayName || "");
-        break;
-      }
-    }
+    const creatorUserId = String(p?.meta?.creatorUserId || p?.userId || "").trim();
+    const cachedDn = profileDisplayNameForSearchHandle(handle, creatorUserId);
     const matches =
       key.includes(qNorm) ||
       (cachedDn && cachedDn.toLowerCase().includes(qNorm));
@@ -6399,7 +6419,7 @@ function renderSearchPeople(query) {
     const cloud = await supabaseSearchPublicProfiles(qNorm);
     if (seq !== _searchPeopleFetchGen) return;
     const input = document.getElementById("searchInput");
-    if (String(input?.value || "").trim().toLowerCase() !== qNorm) return;
+    if (normalizeDiscoverSearchQuery(input?.value) !== qNorm) return;
     const merged = [...hubPeople];
     const seen2 = new Set(merged.map((h) => h.handle.toLowerCase()));
     for (const c of cloud) {
@@ -6417,6 +6437,7 @@ function searchTrackMatchesQuery(track, qNorm) {
   if (!qNorm || !track) return false;
   const prof = _discoveryLastProfMap?.get?.(track.userId);
   const handle = String(prof?.username || "").trim();
+  const displayName = normalizeDisplayName(prof?.display_name || prof?.displayName || "");
   const hay = [
     track.title,
     track.creator,
@@ -6424,6 +6445,7 @@ function searchTrackMatchesQuery(track, qNorm) {
     track.style,
     track.caption,
     handle,
+    displayName,
     track.meta?.styleInput,
     track.meta?.finalPrompt,
     track.meta?.lyricsInput,
@@ -6438,7 +6460,7 @@ function renderSearchTracks(query) {
   const section = document.getElementById("searchTracksSection");
   const grid = document.getElementById("searchTracksGrid");
   if (!section || !grid) return;
-  const qNorm = String(query || "").trim().toLowerCase();
+  const qNorm = normalizeDiscoverSearchQuery(query);
   if (!qNorm) {
     section.hidden = true;
     grid.innerHTML = "";
@@ -6508,7 +6530,7 @@ function updateSearchEmptyState(query) {
   const emptyEl = document.getElementById("searchEmpty");
   const trendingEl = document.getElementById("searchTrendingLabel");
   if (!emptyEl) return;
-  const qNorm = String(query || "").trim().toLowerCase();
+  const qNorm = normalizeDiscoverSearchQuery(query);
   if (trendingEl) trendingEl.hidden = Boolean(qNorm) || !DISCOVER_SEARCH_SHOW_IDEA_SHELVES;
   if (!qNorm) {
     emptyEl.hidden = true;
@@ -25071,6 +25093,39 @@ async function fetchPublicProfileRowByUsername(username) {
   return row ? screenshotProf(row) : null;
 }
 
+/** Public profile by display name — case-insensitive exact match when handle lookup fails. */
+async function fetchPublicProfileRowByDisplayName(displayName) {
+  const name = normalizeDisplayName(displayName);
+  if (!name || !SUPABASE_URL || !SUPABASE_ANON_KEY) return null;
+  const headers = { apikey: SUPABASE_ANON_KEY, Accept: "application/json" };
+  const base = `${SUPABASE_URL}/rest/v1/profiles`;
+  const selFull = "user_id,username,display_name,avatar,bio,voice_timbre,sound_certified,genres";
+  const selCore = "user_id,username,avatar,bio,voice_timbre,genres";
+  const selLegacy = "user_id,username,display_name,avatar,bio,voice_timbre,sound_certified";
+  const selLegacyCore = "user_id,username,avatar,bio,voice_timbre";
+  const escaped = escapeUsernameForIlikeExact(name);
+  const filter = `display_name=ilike.${encodeURIComponent(escaped)}`;
+  const tryOne = async (selectList) => {
+    try {
+      const r = await nativeSafeFetch(`${base}?${filter}&select=${selectList}&limit=1`, {
+        headers,
+        cache: "no-store",
+      });
+      if (!r.ok) return null;
+      const arr = await r.json().catch(() => []);
+      return Array.isArray(arr) && arr[0] ? arr[0] : null;
+    } catch {
+      return null;
+    }
+  };
+  const row =
+    (await tryOne(selFull)) ||
+    (await tryOne(selCore)) ||
+    (await tryOne(selLegacy)) ||
+    (await tryOne(selLegacyCore));
+  return row ? screenshotProf(row) : null;
+}
+
 function mapPublicLibrarySongRows(arr, selectedPublishedAt) {
   if (!Array.isArray(arr)) return [];
   return arr
@@ -36784,6 +36839,7 @@ async function renderUserProfilePublicLibraryAsync(username, userId = "", gen = 
     : null;
   let resolvedSocialStats = null;
   if (!prof?.user_id) prof = await fetchPublicProfileRowByUsername(handle);
+  if (!prof?.user_id) prof = await fetchPublicProfileRowByDisplayName(handle);
   if (!prof?.user_id && preferredUserId) {
     const socialData = await fetchSocialStatsForProfile({ userId: preferredUserId });
     if (socialData?.profile?.user_id) {

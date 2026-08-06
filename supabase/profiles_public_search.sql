@@ -1,4 +1,4 @@
--- Optional: Search v2 "People" strip queries `profiles` as anon (username/bio ilike).
+-- Optional: Search "People" strip queries `profiles` as anon (username, display_name, bio ilike).
 -- Only run when `public.profiles` already has RLS enabled and owners can still
 -- `SELECT` their own row via a separate policy (typical Supabase setup).
 --

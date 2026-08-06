@@ -31,6 +31,7 @@ module.exports = async function handler(req, res) {
     req.headers["X-Nabad-Client-Shell"] ||
     "";
   const welcome = await grantSignupWelcomeCreditsIfNeeded(user.userId, {
+    email: user.email,
     signupPlatform: readSignupPlatform(user.raw),
     clientShell,
   });

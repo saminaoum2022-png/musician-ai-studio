@@ -15,6 +15,7 @@ const {
   sendJson,
   readJsonBody,
 } = require("../_lib/credits-auth");
+const { recordWelcomeEligibilityUsed } = require("../_lib/signup-welcome-credits");
 
 const SUPABASE_URL = (process.env.SUPABASE_URL || "").replace(/\/$/, "");
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
@@ -61,6 +62,11 @@ module.exports = async function handler(req, res) {
       error: result.error || "Could not delete account",
     });
   }
+
+  void recordWelcomeEligibilityUsed(user.email, {
+    userId: user.userId,
+    source: "account_deleted",
+  });
 
   return sendJson(res, 200, {
     ok: true,

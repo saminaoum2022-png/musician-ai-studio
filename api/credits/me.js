@@ -17,6 +17,7 @@ const {
 const { fetchProfileRole } = require("../_lib/admin-auth");
 const { fetchProSubscriptionForUser } = require("../_lib/pro-subscription");
 const { grantSignupWelcomeCreditsIfNeeded, WELCOME_CREDITS, readSignupPlatform } = require("../_lib/signup-welcome-credits");
+const { ensureProfileRow } = require("../_lib/ensure-profile-row");
 
 module.exports = async function handler(req, res) {
   setCors(res);
@@ -25,6 +26,8 @@ module.exports = async function handler(req, res) {
 
   const user = await verifyUser(req);
   if (!user) return sendJson(res, 401, { error: "Not signed in" });
+
+  await ensureProfileRow(user).catch(() => null);
 
   const clientShell =
     req.headers["x-nabad-client-shell"] ||

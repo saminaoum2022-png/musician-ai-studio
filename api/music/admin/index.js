@@ -23,6 +23,7 @@ const {
   callRpc,
 } = require("../../_lib/credits-auth");
 const { SUNO_USD_PER_CREDIT } = require("../../_lib/music-generation-log");
+const { ensureProfileRow } = require("../../_lib/ensure-profile-row");
 
 const SUPABASE_URL = (process.env.SUPABASE_URL || "").replace(/\/$/, "");
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
@@ -238,20 +239,44 @@ async function fetchProfilesForAdmin(limit, offset) {
 
 async function getUsers(limit, offset) {
   const authMap = await fetchAuthUsersMap();
-  const profRes = await fetchProfilesForAdmin(limit, offset);
-  const profiles = Array.isArray(profRes.data) ? profRes.data : [];
+  let profRes = await fetchProfilesForAdmin(limit, offset);
+  let profiles = Array.isArray(profRes.data) ? profRes.data : [];
   if (!profRes.ok && !profiles.length) {
     return { users: [], total: 0, error: "profiles_fetch_failed" };
   }
-  const ids = profiles.map((p) => p.user_id).filter(Boolean);
+  let ids = profiles.map((p) => p.user_id).filter(Boolean);
 
   const allProfRes = await serviceFetch("profiles?select=user_id&limit=10000");
-  const profileIdSet = new Set(
+  let profileIdSet = new Set(
     (Array.isArray(allProfRes.data) ? allProfRes.data : []).map((p) => p.user_id).filter(Boolean),
   );
   const orphanAuthUsers = [];
   if (offset === 0) {
+    const orphanEntries = [];
     for (const [userId, auth] of authMap) {
+      if (profileIdSet.has(userId)) continue;
+      orphanEntries.push({ userId, auth });
+    }
+    orphanEntries.sort((a, b) =>
+      String(b.auth.signupAt || "").localeCompare(String(a.auth.signupAt || "")),
+    );
+    for (const { userId, auth } of orphanEntries) {
+      await ensureProfileRow({
+        userId,
+        email: auth.email,
+        signupPlatform: auth.signupPlatform,
+      }).catch(() => null);
+    }
+    if (orphanEntries.length) {
+      profRes = await fetchProfilesForAdmin(limit, offset);
+      profiles = Array.isArray(profRes.data) ? profRes.data : profiles;
+      ids = profiles.map((p) => p.user_id).filter(Boolean);
+      const refreshed = await serviceFetch("profiles?select=user_id&limit=10000");
+      profileIdSet = new Set(
+        (Array.isArray(refreshed.data) ? refreshed.data : []).map((p) => p.user_id).filter(Boolean),
+      );
+    }
+    for (const { userId, auth } of orphanEntries) {
       if (profileIdSet.has(userId)) continue;
       orphanAuthUsers.push({
         userId,
@@ -273,7 +298,6 @@ async function getUsers(limit, offset) {
         profilePending: true,
       });
     }
-    orphanAuthUsers.sort((a, b) => String(b.signupAt || "").localeCompare(String(a.signupAt || "")));
   }
 
   if (!ids.length && !orphanAuthUsers.length) {

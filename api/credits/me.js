@@ -16,6 +16,7 @@ const {
 } = require("../_lib/credits-auth");
 const { fetchProfileRole } = require("../_lib/admin-auth");
 const { fetchProSubscriptionForUser } = require("../_lib/pro-subscription");
+const { grantSignupWelcomeCreditsIfNeeded, WELCOME_CREDITS, readSignupPlatform } = require("../_lib/signup-welcome-credits");
 
 module.exports = async function handler(req, res) {
   setCors(res);
@@ -24,6 +25,15 @@ module.exports = async function handler(req, res) {
 
   const user = await verifyUser(req);
   if (!user) return sendJson(res, 401, { error: "Not signed in" });
+
+  const clientShell =
+    req.headers["x-nabad-client-shell"] ||
+    req.headers["X-Nabad-Client-Shell"] ||
+    "";
+  const welcome = await grantSignupWelcomeCreditsIfNeeded(user.userId, {
+    signupPlatform: readSignupPlatform(user.raw),
+    clientShell,
+  });
 
   const balanceRes = await selectFromTable(
     `user_credits?select=balance,paid_balance,gift_balance,promo_balance,updated_at&user_id=eq.${encodeURIComponent(user.userId)}`
@@ -61,5 +71,7 @@ module.exports = async function handler(req, res) {
     isAdmin,
     email: user.email,
     pro,
+    welcomeGranted: welcome.granted > 0 ? welcome.granted : 0,
+    welcomeCreditsAmount: WELCOME_CREDITS,
   });
 };

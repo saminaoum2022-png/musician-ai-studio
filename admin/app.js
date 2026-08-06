@@ -91,6 +91,7 @@ function fmtDate(iso) {
 function fmtReason(reason) {
   const map = {
     promo_redeem: "Promo code",
+    signup_welcome: "Welcome bonus",
     full_song: "Song generation",
     paid_purchase: "Paid / admin grant",
     refund_full_song: "Refund",

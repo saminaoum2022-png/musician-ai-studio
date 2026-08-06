@@ -189,7 +189,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260806-110056";
+const APP_BUILD = "20260806-112140";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -2400,6 +2400,12 @@ function getApiFetchHeaders(extra = {}) {
   const headers = { ...(extra || {}) };
   const bypass = getVercelProtectionBypass();
   if (bypass) headers["x-vercel-protection-bypass"] = bypass;
+  if (isNativeShell()) {
+    const plat = String(window.Capacitor?.getPlatform?.() || "ios").toLowerCase();
+    headers["X-Nabad-Client-Shell"] = plat === "android" ? "android" : "ios";
+  } else {
+    headers["X-Nabad-Client-Shell"] = "web";
+  }
   return headers;
 }
 
@@ -22253,7 +22259,7 @@ async function refreshMyCredits({ silent = false } = {}) {
   creditsState.inFlight = true;
   try {
     const r = await fetch(apiUrl("/api/credits/me"), {
-      headers: { Authorization: `Bearer ${token}` },
+      headers: getApiFetchHeaders({ Authorization: `Bearer ${token}` }),
     });
     const d = await r.json().catch(() => ({}));
     if (!r.ok) throw new Error(d?.error || `credits/me ${r.status}`);
@@ -22271,6 +22277,13 @@ async function refreshMyCredits({ silent = false } = {}) {
     creditsState.lastError = "";
     setCreditsBalance(creditsState.balance);
     renderCreditsLedger();
+    const welcomeGranted = Number(d?.welcomeGranted || 0);
+    if (welcomeGranted > 0) {
+      showToast?.(
+        `Welcome to NabadAi — ${welcomeGranted} free credits added. That's 2 full songs to try.`,
+        { durationMs: 4200 },
+      );
+    }
     if (els.creditsHeroEmail && d?.email) {
       els.creditsHeroEmail.textContent = String(d.email);
       els.creditsHeroEmail.style.display = "";

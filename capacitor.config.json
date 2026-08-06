@@ -10,9 +10,6 @@
     "handleApplicationNotifications": false
   },
   "plugins": {
-    "CapacitorHttp": {
-      "enabled": true
-    },
     "Keyboard": {
       "resize": "none"
     }

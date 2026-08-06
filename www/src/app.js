@@ -189,7 +189,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260806-155133";
+const APP_BUILD = "20260806-161727";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -2510,12 +2510,22 @@ async function capacitorHttpFetch(url, init = {}) {
       method,
       headers: hdrs,
       data,
-      responseType: "json",
+      responseType: "text",
       connectTimeout: 15000,
       readTimeout: 15000,
     });
     const status = Number(resp?.status || 0);
-    const body = resp?.data;
+    const rawBody = resp?.data;
+    const textBody =
+      typeof rawBody === "string" ? rawBody : rawBody == null ? "" : JSON.stringify(rawBody);
+    let parsedBody = rawBody;
+    if (typeof rawBody === "string" && rawBody.trim()) {
+      try {
+        parsedBody = JSON.parse(rawBody);
+      } catch {
+        parsedBody = rawBody;
+      }
+    }
     return {
       ok: status >= 200 && status < 300,
       status,
@@ -2526,12 +2536,29 @@ async function capacitorHttpFetch(url, init = {}) {
           return h[k] ?? h[String(k).toLowerCase()] ?? null;
         },
       },
-      json: async () => body,
-      text: async () => (typeof body === "string" ? body : JSON.stringify(body ?? "")),
+      json: async () => parsedBody,
+      text: async () => textBody,
+      clone: function cloneCapHttpResponse() {
+        return this;
+      },
     };
   } catch {
     return null;
   }
+}
+
+/** Native WKWebView often fails cross-origin Supabase REST — route through CapacitorHttp when needed. */
+async function nativeSafeFetch(url, init = {}) {
+  const u = String(url || "");
+  if (!isNativeShell()) return fetch(u, init);
+  await ensureNativeNetworkReady();
+  try {
+    const r = await fetch(u, init);
+    if (r && Number(r.status) !== 0) return r;
+  } catch {}
+  const native = await capacitorHttpFetch(u, init);
+  if (native && Number(native.status) > 0) return native;
+  throw new TypeError("Failed to fetch");
 }
 
 function applyPublicConfigPayload(d) {
@@ -6018,7 +6045,7 @@ async function supabaseSelectSearchTemplates() {
   try {
     const sel =
       "id,shelf,occasion,title,sub,chip,style,lyrics,keywords,cover_url,preview_url,sort_order,active";
-    const r = await fetch(
+    const r = await nativeSafeFetch(
       `${SUPABASE_URL}/rest/v1/search_templates?select=${encodeURIComponent(sel)}&active=eq.true&order=shelf.asc,sort_order.asc,id.asc`,
       {
         headers: { apikey: SUPABASE_ANON_KEY },
@@ -6128,7 +6155,7 @@ async function supabaseSearchPublicProfiles(qNorm) {
   const timer = setTimeout(() => ctrl.abort(), 8000);
   try {
     const url = `${SUPABASE_URL}/rest/v1/profiles?or=${encodeURIComponent(orRaw)}&select=username,display_name,avatar,user_id&limit=14`;
-    const r = await fetch(url, {
+    const r = await nativeSafeFetch(url, {
       headers: { apikey: SUPABASE_ANON_KEY },
       signal: ctrl.signal,
     });
@@ -7464,14 +7491,14 @@ async function fetchCampaignSongs(campaignId) {
   const cols = "id,created_at,published_at,title,song_url,task_id,audio_id,kind,art_url,user_id,meta_challenge:meta->challenge";
   const colsLegacy = "id,created_at,title,song_url,task_id,audio_id,kind,art_url,user_id,meta_challenge:meta->challenge";
   try {
-    let r = await fetch(
+    let r = await nativeSafeFetch(
       `${SUPABASE_URL}/rest/v1/user_songs?${filter}&select=${cols}&order=published_at.desc.nullslast,created_at.desc&limit=200`,
       { headers: { apikey: SUPABASE_ANON_KEY, Accept: "application/json" }, cache: "no-store" },
     );
     if (!r.ok) {
       const txt = await r.clone().text().catch(() => "");
       if (/published_at|42703|column/i.test(txt)) {
-        r = await fetch(
+        r = await nativeSafeFetch(
           `${SUPABASE_URL}/rest/v1/user_songs?${filter}&select=${colsLegacy}&order=created_at.desc&limit=200`,
           { headers: { apikey: SUPABASE_ANON_KEY, Accept: "application/json" }, cache: "no-store" },
         );
@@ -11519,7 +11546,7 @@ async function uploadStatusVoiceBlob(blob) {
   const contentType = storageContentTypeForAudioBlob(blob);
   const ext = callingCardExtensionFromMime(contentType);
   const key = `${uid}/${Date.now()}.${ext}`;
-  const r = await fetch(`${SUPABASE_URL}/storage/v1/object/status_audio/${key}`, {
+  const r = await nativeSafeFetch(`${SUPABASE_URL}/storage/v1/object/status_audio/${key}`, {
     method: "POST",
     headers: {
       apikey: SUPABASE_ANON_KEY,
@@ -12850,7 +12877,7 @@ async function supabaseRestWithAuth(path, opts = {}) {
     Math.max(4000, Number(opts.timeoutMs) || supabaseRestTimeoutMs()),
   );
   try {
-    return await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
+    return await nativeSafeFetch(`${SUPABASE_URL}/rest/v1/${path}`, {
       method: opts.method || "GET",
       headers: {
         apikey: SUPABASE_ANON_KEY,
@@ -17415,7 +17442,7 @@ async function hydrateMashupSourcesForTracks(tracks) {
     const headers = { apikey: SUPABASE_ANON_KEY, Accept: "application/json" };
     const token = getSupabaseAuthToken();
     if (token) headers.Authorization = `Bearer ${token}`;
-    const r = await fetch(
+    const r = await nativeSafeFetch(
       `${SUPABASE_URL}/rest/v1/user_songs?id=in.(${inList})&select=id,title,art_url,song_url,user_id,task_id,audio_id`,
       { headers, cache: "no-store" },
     );
@@ -17552,7 +17579,7 @@ async function hydrateRemixOriginalsForTracks(tracks) {
   if (!wantedIds.size || !SUPABASE_URL || !SUPABASE_ANON_KEY) return;
   try {
     const inList = [...wantedIds].map((id) => encodeURIComponent(id)).join(",");
-    const r = await fetch(
+    const r = await nativeSafeFetch(
       `${SUPABASE_URL}/rest/v1/user_songs?id=in.(${inList})&public_on_profile=eq.true&select=id,title,art_url,song_url,user_id,task_id,audio_id`,
       { headers: { apikey: SUPABASE_ANON_KEY, Accept: "application/json" }, cache: "no-store" },
     );
@@ -19008,7 +19035,7 @@ async function uploadCallingCardBlob(blob) {
   if (!SUPABASE_URL) throw new Error("Supabase not configured");
   const ext = callingCardExtensionFromMime(blob.type);
   const key = callingCardStorageKey(uid, ext);
-  const r = await fetch(`${SUPABASE_URL}/storage/v1/object/calling_cards/${key}`, {
+  const r = await nativeSafeFetch(`${SUPABASE_URL}/storage/v1/object/calling_cards/${key}`, {
     method: "POST",
     headers: {
       apikey: SUPABASE_ANON_KEY,
@@ -19036,7 +19063,7 @@ async function uploadCallingCardBlob(blob) {
 async function deleteCallingCardObject(storageKey) {
   const token = getSupabaseAuthToken();
   if (!token || !SUPABASE_URL || !storageKey) return;
-  await fetch(`${SUPABASE_URL}/storage/v1/object/calling_cards/${storageKey}`, {
+  await nativeSafeFetch(`${SUPABASE_URL}/storage/v1/object/calling_cards/${storageKey}`, {
     method: "DELETE",
     headers: {
       apikey: SUPABASE_ANON_KEY,
@@ -19071,7 +19098,7 @@ async function uploadSongCoverBlob(blob, trackId, suffix = "") {
   if (!SUPABASE_URL) throw new Error("Supabase not configured");
   const ext = extFromCoverMime(blob.type);
   const key = songCoverStorageKey(uid, trackId, suffix, ext);
-  const r = await fetch(`${SUPABASE_URL}/storage/v1/object/song_covers/${key}`, {
+  const r = await nativeSafeFetch(`${SUPABASE_URL}/storage/v1/object/song_covers/${key}`, {
     method: "POST",
     headers: {
       apikey: SUPABASE_ANON_KEY,
@@ -19791,7 +19818,7 @@ async function fetchCallingCardForUsername(username) {
   const handle = String(username || "").replace(/^@/, "").trim();
   if (!handle) return null;
   try {
-    const r = await fetch(
+    const r = await nativeSafeFetch(
       `${SUPABASE_URL}/rest/v1/profiles?username=eq.${encodeURIComponent(handle)}&select=calling_card_url,calling_card_updated_at&limit=1`,
       { headers: { apikey: SUPABASE_ANON_KEY } }
     );
@@ -21772,7 +21799,7 @@ async function hubFetchPostMetaFull(postId) {
     const headers = { apikey: SUPABASE_ANON_KEY };
     const tok = getSupabaseAuthToken();
     if (tok) headers.Authorization = `Bearer ${tok}`;
-    const r = await fetch(
+    const r = await nativeSafeFetch(
       `${SUPABASE_URL}/rest/v1/hub_posts?id=eq.${encodeURIComponent(id)}&select=meta&limit=1`,
       { headers },
     );
@@ -21792,7 +21819,7 @@ async function hubFetchPostProofFull(postId) {
   const id = String(postId || "").trim();
   if (!id) return null;
   try {
-    const r = await fetch(
+    const r = await nativeSafeFetch(
       `${SUPABASE_URL}/rest/v1/hub_posts?id=eq.${encodeURIComponent(id)}&select=proof&limit=1`,
       { headers: { apikey: SUPABASE_ANON_KEY } },
     );
@@ -21848,14 +21875,14 @@ async function supabaseSelectHub({ sinceIsoTs = "" } = {}) {
   // permanently null'd and the filter becomes a no-op.
   const hubListUrl = (selectCols) =>
     `${SUPABASE_URL}/rest/v1/hub_posts?select=${encodeURIComponent(selectCols)}&order=created_at.desc&limit=30${sinceFilter}${HUB_POSTS_JSON_LIST_DATA_GUARD}`;
-  let r = await fetch(hubListUrl(HUB_SELECT_COLUMNS_FEED), {
+  let r = await nativeSafeFetch(hubListUrl(HUB_SELECT_COLUMNS_FEED), {
     headers: {
       apikey: SUPABASE_ANON_KEY,
     },
     signal: ctrl.signal,
   });
   if (!r.ok) {
-    const r2 = await fetch(hubListUrl(HUB_SELECT_COLUMNS_LEAN), {
+    const r2 = await nativeSafeFetch(hubListUrl(HUB_SELECT_COLUMNS_LEAN), {
       headers: { apikey: SUPABASE_ANON_KEY },
       signal: ctrl.signal,
     });
@@ -21896,7 +21923,7 @@ async function supabaseSelectMyHubPosts({ uid, username } = {}) {
     if (uid) {
       const q = `${encodeURIComponent("meta->>creatorUserId")}=eq.${encodeURIComponent(uid)}`;
       reqs.push(
-        fetch(
+        nativeSafeFetch(
           `${SUPABASE_URL}/rest/v1/hub_posts?select=${encodeURIComponent(selectCols)}&${q}${HUB_POSTS_JSON_LIST_DATA_GUARD}&order=created_at.desc&limit=15`,
           { headers: { apikey: SUPABASE_ANON_KEY }, signal: ctrl.signal },
         ),
@@ -21904,7 +21931,7 @@ async function supabaseSelectMyHubPosts({ uid, username } = {}) {
     }
     if (username && username !== "guest") {
       reqs.push(
-        fetch(
+        nativeSafeFetch(
           `${SUPABASE_URL}/rest/v1/hub_posts?select=${encodeURIComponent(
             selectCols,
           )}&creator_username=eq.${encodeURIComponent(username)}${HUB_POSTS_JSON_LIST_DATA_GUARD}&order=created_at.desc&limit=15`,
@@ -22140,7 +22167,7 @@ async function supabaseAuthedFetch(url, init = {}) {
       apikey: SUPABASE_ANON_KEY,
       Authorization: `Bearer ${token}`,
     };
-    const r = await fetch(url, { ...init, headers }).catch(() => null);
+    const r = await nativeSafeFetch(url, { ...init, headers }).catch(() => null);
     if (!r) return { ok: false, status: 0, text: "", reason: "network" };
     const txt = await r.text().catch(() => "");
     if (r.ok) return { ok: true, status: r.status, text: txt, reason: "" };
@@ -22779,7 +22806,7 @@ async function supabaseFetchUser(token) {
   const timer = setTimeout(() => ctrl.abort(), 8000);
   let r;
   try {
-    r = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
+    r = await nativeSafeFetch(`${SUPABASE_URL}/auth/v1/user`, {
       headers: {
         apikey: SUPABASE_ANON_KEY,
         Authorization: `Bearer ${token}`,
@@ -22813,7 +22840,7 @@ async function recordSignupPlatformIfNeeded() {
     const meta = user.user_metadata || user.raw_user_meta_data || {};
     if (String(meta.signup_platform || "").trim()) return;
     const platform = detectSignupPlatform();
-    const r = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
+    const r = await nativeSafeFetch(`${SUPABASE_URL}/auth/v1/user`, {
       method: "PUT",
       headers: {
         apikey: SUPABASE_ANON_KEY,
@@ -22841,7 +22868,7 @@ async function refreshSupabaseSessionIfNeeded({ force = false } = {}) {
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), 8000);
   try {
-    const r = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=refresh_token`, {
+    const r = await nativeSafeFetch(`${SUPABASE_URL}/auth/v1/token?grant_type=refresh_token`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -23228,7 +23255,7 @@ async function supabaseSignUpWithPassword(email, password) {
   const timer = setTimeout(() => ctrl.abort(), authFetchTimeoutMs());
   let r;
   try {
-    r = await fetch(`${SUPABASE_URL}/auth/v1/signup`, {
+    r = await nativeSafeFetch(`${SUPABASE_URL}/auth/v1/signup`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -23250,7 +23277,7 @@ async function supabaseSignUpWithPassword(email, password) {
 
 async function supabaseResendSignupConfirmation(email) {
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY) throw new Error("Supabase config missing");
-  const r = await fetch(`${SUPABASE_URL}/auth/v1/resend`, {
+  const r = await nativeSafeFetch(`${SUPABASE_URL}/auth/v1/resend`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -23272,7 +23299,7 @@ async function supabaseSignInWithPassword(email, password) {
   const timer = setTimeout(() => ctrl.abort(), authFetchTimeoutMs());
   let r;
   try {
-    r = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {
+    r = await nativeSafeFetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -23419,7 +23446,7 @@ async function runEmailPasswordAuth() {
 
 async function supabaseSendOtp(email) {
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY) throw new Error("Supabase config missing");
-  const r = await fetch(`${SUPABASE_URL}/auth/v1/otp`, {
+  const r = await nativeSafeFetch(`${SUPABASE_URL}/auth/v1/otp`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -23487,7 +23514,7 @@ async function exchangeOAuthCodeForSession(code) {
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), authFetchTimeoutMs());
   try {
-    const r = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=pkce`, {
+    const r = await nativeSafeFetch(`${SUPABASE_URL}/auth/v1/token?grant_type=pkce`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -23533,7 +23560,7 @@ async function exchangeAppleIdTokenForSession(idToken) {
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), authFetchTimeoutMs());
   try {
-    const r = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=id_token`, {
+    const r = await nativeSafeFetch(`${SUPABASE_URL}/auth/v1/token?grant_type=id_token`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -23621,7 +23648,7 @@ async function maybeHandleAuthCodeFromQuery() {
 }
 async function supabaseVerifyOtp(email, token) {
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY) throw new Error("Supabase config missing");
-  const r = await fetch(`${SUPABASE_URL}/auth/v1/verify`, {
+  const r = await nativeSafeFetch(`${SUPABASE_URL}/auth/v1/verify`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -24051,7 +24078,7 @@ async function supabaseUpsertProfile(profile) {
   } else if (profile.clearUsernameCooldown) {
     payload.username_changed_at = null;
   }
-  const r = await fetch(`${SUPABASE_URL}/rest/v1/profiles`, {
+  const r = await nativeSafeFetch(`${SUPABASE_URL}/rest/v1/profiles`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -24089,7 +24116,7 @@ async function supabaseLoadProfile(opts = {}) {
   const timer = setTimeout(() => ctrl.abort(), 8000);
   let r;
   try {
-    r = await fetch(`${SUPABASE_URL}/rest/v1/profiles?user_id=eq.${uid}&select=*`, {
+    r = await nativeSafeFetch(`${SUPABASE_URL}/rest/v1/profiles?user_id=eq.${uid}&select=*`, {
       headers: {
         apikey: SUPABASE_ANON_KEY,
         Authorization: `Bearer ${token}`,
@@ -24510,6 +24537,7 @@ async function supabaseLoadUserSongs(opts = {}) {
 }
 
 async function fetchUserSongsFromNetwork(reason = "unknown") {
+  if (isNativeShell()) await ensureNativeNetworkReady();
   const token = getSupabaseAuthToken();
   if (!token || !authSession?.user?.id) {
     _lastUserSongsLoadStatus = "auth";
@@ -24533,7 +24561,7 @@ async function fetchUserSongsFromNetwork(reason = "unknown") {
   let r;
   let selectedPublishedAt = true;
   try {
-    r = await fetch(`${SUPABASE_URL}/rest/v1/user_songs?user_id=eq.${uid}&select=${colsWithPublished}&order=created_at.desc&limit=500${artUrlGuard}`, {
+    r = await nativeSafeFetch(`${SUPABASE_URL}/rest/v1/user_songs?user_id=eq.${uid}&select=${colsWithPublished}&order=created_at.desc&limit=500${artUrlGuard}`, {
       headers: {
         apikey: SUPABASE_ANON_KEY,
         Authorization: `Bearer ${token}`,
@@ -24545,7 +24573,7 @@ async function fetchUserSongsFromNetwork(reason = "unknown") {
       const txt = await r.clone().text().catch(() => "");
       if (/published_at|42703|column/i.test(txt)) {
         selectedPublishedAt = false;
-        r = await fetch(`${SUPABASE_URL}/rest/v1/user_songs?user_id=eq.${uid}&select=${colsLegacy}&order=created_at.desc&limit=500${artUrlGuard}`, {
+        r = await nativeSafeFetch(`${SUPABASE_URL}/rest/v1/user_songs?user_id=eq.${uid}&select=${colsLegacy}&order=created_at.desc&limit=500${artUrlGuard}`, {
           headers: {
             apikey: SUPABASE_ANON_KEY,
             Authorization: `Bearer ${token}`,
@@ -24919,7 +24947,7 @@ async function supabaseDeleteUserSong(track) {
   if (!filters.length) return;
   await Promise.all(
     filters.map((filter) =>
-      fetch(`${SUPABASE_URL}/rest/v1/user_songs?${filter}`, {
+      nativeSafeFetch(`${SUPABASE_URL}/rest/v1/user_songs?${filter}`, {
         method: "DELETE",
         headers: {
           apikey: SUPABASE_ANON_KEY,
@@ -24949,7 +24977,7 @@ async function supabaseDeleteUserSongRowsByIds(rowIds) {
   for (let i = 0; i < ids.length; i += CHUNK) {
     const chunk = ids.slice(i, i + CHUNK);
     const inList = chunk.map((id) => encodeURIComponent(id)).join(",");
-    await fetch(
+    await nativeSafeFetch(
       `${SUPABASE_URL}/rest/v1/user_songs?user_id=eq.${uid}&id=in.(${inList})`,
       {
         method: "DELETE",
@@ -24985,7 +25013,7 @@ async function fetchPublicProfileRowByUserId(userId) {
   const filter = `user_id=eq.${encodeURIComponent(uid)}`;
   const tryOne = async (selectList) => {
     try {
-      const r = await fetch(`${base}?${filter}&select=${selectList}&limit=1`, {
+      const r = await nativeSafeFetch(`${base}?${filter}&select=${selectList}&limit=1`, {
         headers,
         cache: "no-store",
       });
@@ -25018,7 +25046,7 @@ async function fetchPublicProfileRowByUsername(username) {
   const il = `username=ilike.${encodeURIComponent(escapeUsernameForIlikeExact(handle))}`;
   const tryOne = async (filter, selectList) => {
     try {
-      const r = await fetch(`${base}?${filter}&select=${selectList}&limit=1`, {
+      const r = await nativeSafeFetch(`${base}?${filter}&select=${selectList}&limit=1`, {
         headers,
         cache: "no-store",
       });
@@ -25091,7 +25119,7 @@ async function fetchPublicSongsByIds(ids) {
   const guard = `&or=${encodeURIComponent("(art_url.is.null,art_url.not.like.data:*)")}`;
   try {
     let selectedPublishedAt = true;
-    let r = await fetch(
+    let r = await nativeSafeFetch(
       `${SUPABASE_URL}/rest/v1/user_songs?id=in.(${inList})&public_on_profile=eq.true&select=${cols}${guard}`,
       { headers, cache: "no-store" },
     );
@@ -25099,7 +25127,7 @@ async function fetchPublicSongsByIds(ids) {
       const txt = await r.clone().text().catch(() => "");
       if (/published_at|42703|column/i.test(txt)) {
         selectedPublishedAt = false;
-        r = await fetch(
+        r = await nativeSafeFetch(
           `${SUPABASE_URL}/rest/v1/user_songs?id=in.(${inList})&public_on_profile=eq.true&select=${colsLegacy}${guard}`,
           { headers, cache: "no-store" },
         );
@@ -25131,7 +25159,7 @@ async function fetchFollowingRepostsForFeed(followingIds, limit = 40) {
   const headers = { apikey: SUPABASE_ANON_KEY, ...(token ? { Authorization: `Bearer ${token}` } : {}) };
   const lim = Math.min(60, Math.max(1, Number(limit) || 40));
   try {
-    const r = await fetch(
+    const r = await nativeSafeFetch(
       `${SUPABASE_URL}/rest/v1/social_reposts?user_id=in.(${inList})&target_kind=eq.song&select=id,user_id,target_id,body,created_at&order=created_at.desc&limit=${lim}`,
       { headers, cache: "no-store" },
     );
@@ -25159,7 +25187,7 @@ async function fetchUserRepostsForProfile(userId, limit = 40) {
   const headers = { apikey: SUPABASE_ANON_KEY, ...(token ? { Authorization: `Bearer ${token}` } : {}) };
   const lim = Math.min(60, Math.max(1, Number(limit) || 40));
   try {
-    const r = await fetch(
+    const r = await nativeSafeFetch(
       `${SUPABASE_URL}/rest/v1/social_reposts?user_id=eq.${encodeURIComponent(uid)}&target_kind=eq.song&select=id,user_id,target_id,body,created_at&order=created_at.desc&limit=${lim}`,
       { headers, cache: "no-store" },
     );
@@ -25434,7 +25462,7 @@ async function supabaseFetchPublicLibraryRowsForFilter(filterQuery, perUserLimit
     };
   };
   try {
-    let r = await fetch(
+    let r = await nativeSafeFetch(
       `${SUPABASE_URL}/rest/v1/user_songs?${filterQuery}&public_on_profile=eq.true&select=${colsWithPublished}&order=published_at.desc.nullslast,created_at.desc&limit=${lim}${artUrlGuard}`,
       { headers: authHeaders(), cache: "no-store" },
     );
@@ -25443,7 +25471,7 @@ async function supabaseFetchPublicLibraryRowsForFilter(filterQuery, perUserLimit
       const txt = await r.clone().text().catch(() => "");
       if (/published_at|42703|column/i.test(txt)) {
         selectedPublishedAt = false;
-        r = await fetch(
+        r = await nativeSafeFetch(
           `${SUPABASE_URL}/rest/v1/user_songs?${filterQuery}&public_on_profile=eq.true&select=${colsLegacy}&order=created_at.desc&limit=${lim}${artUrlGuard}`,
           { headers: authHeaders(), cache: "no-store" },
         );
@@ -25542,6 +25570,7 @@ async function refreshOwnerPublicPostsCache(opts = {}) {
   logSupabaseFetch("owner_public_posts", reason, { cache: force ? "force" : "miss" });
   const run = async () => {
   try {
+    if (isNativeShell()) await ensureNativeNetworkReady();
     const batch = await supabaseFetchPublicLibraryRowsForFilter(
       `user_id=eq.${encodeURIComponent(String(uid))}`,
       PROFILE_PUBLIC_POSTS_LIMIT,
@@ -25607,7 +25636,7 @@ async function supabaseFetchPublicSongRemixMeta({ songId, ownerUserId }) {
   try {
     const token = getSupabaseAuthToken();
     const filter = `id=eq.${encodeURIComponent(sid)}&user_id=eq.${encodeURIComponent(uid)}&public_on_profile=eq.true`;
-    const r = await fetch(
+    const r = await nativeSafeFetch(
       `${SUPABASE_URL}/rest/v1/user_songs?${filter}&select=meta&limit=1`,
       {
         headers: {
@@ -30003,8 +30032,8 @@ async function validateActivityNotificationsAvailability(notifications) {
       const headers = { apikey: SUPABASE_ANON_KEY, Accept: "application/json" };
       const token = getSupabaseAuthToken();
       if (token) headers.Authorization = `Bearer ${token}`;
-      const r = await fetch(
-        `${SUPABASE_URL}/rest/v1/user_songs?id=in.(${inList})&select=id,song_url,task_id,meta`,
+const r = await nativeSafeFetch(
+      `${SUPABASE_URL}/rest/v1/user_songs?id=in.(${inList})&select=id,song_url,task_id,meta`,
         { headers, cache: "no-store" },
       );
       if (r.ok) {
@@ -30120,7 +30149,7 @@ async function enrichActivitySongArt(notifications) {
     const headers = { apikey: SUPABASE_ANON_KEY, Accept: "application/json" };
     const token = getSupabaseAuthToken();
     if (token) headers.Authorization = `Bearer ${token}`;
-    const r = await fetch(
+    const r = await nativeSafeFetch(
       `${SUPABASE_URL}/rest/v1/user_songs?id=in.(${inList})&select=id,art_url`,
       { headers, cache: "no-store" },
     );
@@ -32107,30 +32136,40 @@ function maybeRecordQualifiedPublicPlay() {
 
 /** Recent `user_songs` rows anyone marked public (RLS: `public_on_profile` select). */
 async function supabaseFetchDiscoveryPublicSongs(limit) {
+  if (isNativeShell()) await ensureNativeNetworkReady();
   const lim = Math.max(1, Math.min(80, Number(limit) || 48));
+  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+    applyClientEnvBootstrap();
+    loadPublicConfigFromCache();
+  }
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return [];
   const colsWithPublished = "id,created_at,published_at,title,song_url,task_id,audio_id,kind,art_url,user_id,meta_image_thumb:meta->>imageThumb,meta_remix_of:meta->remixOf,meta_mashup_of:meta->mashupOf,meta_release_caption:meta->>releaseCaption,meta_challenge:meta->challenge,meta_style:meta->>styleInput,meta_style_sent:meta->>styleSent,meta_template_id:meta->>searchTemplateId,meta_template_title:meta->>searchTemplateTitle,meta_dialect:meta->>dialect,meta_lyrics:meta->>lyricsInput,meta_final_prompt:meta->>finalPrompt,meta_nabad_verification:meta->>nabadVerification,meta_tags:meta->tags,meta_allow_remix:meta->allowRemix,meta_allow_mashup:meta->allowMashup,meta_deleted_at:meta->>deletedAt";
   const colsLegacy = "id,created_at,title,song_url,task_id,audio_id,kind,art_url,user_id,meta_image_thumb:meta->>imageThumb,meta_remix_of:meta->remixOf,meta_mashup_of:meta->mashupOf,meta_release_caption:meta->>releaseCaption,meta_challenge:meta->challenge,meta_style:meta->>styleInput,meta_style_sent:meta->>styleSent,meta_template_id:meta->>searchTemplateId,meta_template_title:meta->>searchTemplateTitle,meta_dialect:meta->>dialect,meta_lyrics:meta->>lyricsInput,meta_final_prompt:meta->>finalPrompt,meta_nabad_verification:meta->>nabadVerification,meta_tags:meta->tags,meta_allow_remix:meta->allowRemix,meta_allow_mashup:meta->allowMashup,meta_deleted_at:meta->>deletedAt";
   const artUrlGuard = `&or=${encodeURIComponent("(art_url.is.null,art_url.not.like.data:*)")}`;
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 12000);
   try {
-    let r = await fetch(
+    let r = await nativeSafeFetch(
       `${SUPABASE_URL}/rest/v1/user_songs?public_on_profile=eq.true&select=${colsWithPublished}&order=published_at.desc.nullslast,created_at.desc&limit=${lim}${artUrlGuard}`,
-      { headers: { apikey: SUPABASE_ANON_KEY, Accept: "application/json" }, cache: "no-store" },
+      { headers: { apikey: SUPABASE_ANON_KEY, Accept: "application/json" }, cache: "no-store", signal: ctrl.signal },
     );
     let selectedPublishedAt = true;
     if (!r.ok) {
       const txt = await r.clone().text().catch(() => "");
       if (/published_at|42703|column/i.test(txt)) {
         selectedPublishedAt = false;
-        r = await fetch(
+        r = await nativeSafeFetch(
           `${SUPABASE_URL}/rest/v1/user_songs?public_on_profile=eq.true&select=${colsLegacy}&order=created_at.desc&limit=${lim}${artUrlGuard}`,
-          { headers: { apikey: SUPABASE_ANON_KEY, Accept: "application/json" }, cache: "no-store" },
+          { headers: { apikey: SUPABASE_ANON_KEY, Accept: "application/json" }, cache: "no-store", signal: ctrl.signal },
         );
       }
     }
     if (!r.ok) {
       const det = await r.text().catch(() => "");
-      console.warn("[discovery/user_songs]", r.status, det.slice(0, 280));
+      console.warn("[discovery/user_songs]", r.status, det.slice(0, 280), {
+        hasUrl: Boolean(SUPABASE_URL),
+        hasKey: Boolean(SUPABASE_ANON_KEY),
+      });
       return [];
     }
     const arr = dedupePublicSongRowsRaw(await r.json().catch(() => []));
@@ -32177,6 +32216,8 @@ async function supabaseFetchDiscoveryPublicSongs(limit) {
   } catch (e) {
     console.warn("[discovery/user_songs]", e);
     return [];
+  } finally {
+    clearTimeout(timer);
   }
 }
 
@@ -32199,7 +32240,7 @@ async function fetchProfilesByUserIdsMap(userIds) {
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), supabaseRestTimeoutMs());
   try {
-    const r = await fetch(
+    const r = await nativeSafeFetch(
       `${SUPABASE_URL}/rest/v1/profiles?user_id=in.(${inClause})&select=user_id,username,display_name,avatar,sound_certified`,
       {
         headers: { apikey: SUPABASE_ANON_KEY, Accept: "application/json" },
@@ -36054,6 +36095,7 @@ async function refreshDiscoverFeed() {
   }
 
   try {
+    if (isNativeShell()) await ensureNativeNetworkReady();
     const rows = await supabaseFetchDiscoveryPublicSongs(64);
     if (gen !== _discoveryFeedGen) return;
     const playable = rows.filter((t) => String(t.url || "").trim());
@@ -36916,7 +36958,7 @@ async function supabaseInsertHub(post) {
     proof: post.proof || null,
     meta: post.meta || null,
   };
-  const r = await fetch(`${SUPABASE_URL}/rest/v1/hub_posts`, {
+  const r = await nativeSafeFetch(`${SUPABASE_URL}/rest/v1/hub_posts`, {
     method: "POST",
     headers: {
       apikey: SUPABASE_ANON_KEY,
@@ -36938,7 +36980,7 @@ async function supabasePatchHub(id, patch) {
   };
   const tok = getSupabaseAuthToken();
   if (tok) headers.Authorization = `Bearer ${tok}`;
-  const r = await fetch(`${SUPABASE_URL}/rest/v1/hub_posts?id=eq.${encodeURIComponent(id)}`, {
+  const r = await nativeSafeFetch(`${SUPABASE_URL}/rest/v1/hub_posts?id=eq.${encodeURIComponent(id)}`, {
     method: "PATCH",
     headers,
     body: JSON.stringify(patch),
@@ -36955,7 +36997,7 @@ async function supabaseDeleteHub(id) {
     Prefer: "return=minimal",
   };
   if (token) headers.Authorization = `Bearer ${token}`;
-  const r = await fetch(`${SUPABASE_URL}/rest/v1/hub_posts?id=eq.${encodeURIComponent(id)}`, {
+  const r = await nativeSafeFetch(`${SUPABASE_URL}/rest/v1/hub_posts?id=eq.${encodeURIComponent(id)}`, {
     method: "DELETE",
     headers,
   });
@@ -38248,7 +38290,7 @@ async function supabaseUpsertSavedPersonas(items) {
     })),
     updated_at: new Date().toISOString(),
   };
-  const r = await fetch(`${SUPABASE_URL}/rest/v1/profiles`, {
+  const r = await nativeSafeFetch(`${SUPABASE_URL}/rest/v1/profiles`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -42682,6 +42724,7 @@ async function ensureUserLibraryHydrated(prefetchedCloud, opts = {}) {
   const uid = String(authSession.user.id);
   syncActiveProfileIdFromSession();
 
+  if (isNativeShell()) await ensureNativeNetworkReady();
   _libraryHydrateInFlight = true;
   // Safety net: if the network hangs (e.g. captive Wi-Fi / blocked
   // request), don't pin the user on a "Loading…" forever. After 15s
@@ -44227,7 +44270,7 @@ async function runLibraryDiagnostic() {
       if (heavy.length) lines.push(`heavy keys: ${heavy.slice(0, 6).join(", ")}`);
     } catch {}
     try {
-      const r1 = await fetch(`${SUPABASE_URL}/rest/v1/user_songs?select=id&limit=1`, {
+      const r1 = await nativeSafeFetch(`${SUPABASE_URL}/rest/v1/user_songs?select=id&limit=1`, {
         headers: {
           apikey: SUPABASE_ANON_KEY,
           Authorization: `Bearer ${token}`,
@@ -44241,7 +44284,7 @@ async function runLibraryDiagnostic() {
       lines.push(`probe.unfiltered ERR: ${e?.message || String(e)}`);
     }
     try {
-      const r2 = await fetch(`${SUPABASE_URL}/rest/v1/user_songs?user_id=eq.${encodeURIComponent(uid)}&select=id,title&limit=3`, {
+      const r2 = await nativeSafeFetch(`${SUPABASE_URL}/rest/v1/user_songs?user_id=eq.${encodeURIComponent(uid)}&select=id,title&limit=3`, {
         headers: {
           apikey: SUPABASE_ANON_KEY,
           Authorization: `Bearer ${token}`,
@@ -44253,7 +44296,7 @@ async function runLibraryDiagnostic() {
       lines.push(`probe.filtered ERR: ${e?.message || String(e)}`);
     }
     try {
-      const r3 = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
+      const r3 = await nativeSafeFetch(`${SUPABASE_URL}/auth/v1/user`, {
         headers: {
           apikey: SUPABASE_ANON_KEY,
           Authorization: `Bearer ${token}`,
@@ -44715,7 +44758,7 @@ async function supabaseFetchSongMetaById(songId) {
   if (!isShareUuid(sid) || !SUPABASE_URL || !SUPABASE_ANON_KEY) return null;
   try {
     const token = getSupabaseAuthToken();
-    const r = await fetch(
+    const r = await nativeSafeFetch(
       `${SUPABASE_URL}/rest/v1/user_songs?id=eq.${encodeURIComponent(sid)}&select=meta&limit=1`,
       {
         headers: {
@@ -48814,7 +48857,7 @@ async function fetchHubPostRowById(postId) {
     const headers = { apikey: SUPABASE_ANON_KEY, Accept: "application/json" };
     const token = getSupabaseAuthToken();
     if (token) headers.Authorization = `Bearer ${token}`;
-    const r = await fetch(
+    const r = await nativeSafeFetch(
       `${SUPABASE_URL}/rest/v1/hub_posts?id=eq.${encodeURIComponent(id)}&select=id,title,song_url,cover_url,creator_username,meta&limit=1`,
       { headers, cache: "no-store" },
     );
@@ -48919,8 +48962,8 @@ async function fetchSharedSongByCloudId(cloudId) {
       const headers = { apikey: SUPABASE_ANON_KEY, Accept: "application/json" };
       if (token) headers.Authorization = `Bearer ${token}`;
       const cols = "id,user_id,title,art_url,song_url,task_id,audio_id,meta";
-      const r = await fetch(
-        `${SUPABASE_URL}/rest/v1/user_songs?id=eq.${encodeURIComponent(id)}&select=${encodeURIComponent(cols)}&limit=1`,
+const r = await nativeSafeFetch(
+      `${SUPABASE_URL}/rest/v1/user_songs?id=eq.${encodeURIComponent(id)}&select=${encodeURIComponent(cols)}&limit=1`,
         { headers, cache: "no-store" },
       );
       if (r.ok) {

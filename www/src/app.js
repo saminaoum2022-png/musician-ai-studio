@@ -189,7 +189,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260806-140241";
+const APP_BUILD = "20260806-135208";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -2401,8 +2401,7 @@ function migrateCachesOnBuildChange() {
     const prev = String(localStorage.getItem(LAST_SHIPPED_BUILD_KEY) || "").trim();
     if (prev === APP_BUILD) return;
     localStorage.setItem(LAST_SHIPPED_BUILD_KEY, APP_BUILD);
-    // Keep mas:public-config — wiping it on OTA left native with no Supabase/API
-    // settings until a live fetch succeeded (Discover worked; /api/* did not).
+    localStorage.removeItem(PUBLIC_CONFIG_CACHE_KEY);
     localStorage.removeItem("nabad_generation_failed_activity_v1");
     const ownPrefix = "nabad:ownSocialStats:v1:";
     const staleKeys = [];
@@ -2427,11 +2426,8 @@ function ensureNativeNetworkReady() {
   if (!isNativeShell()) return Promise.resolve();
   if (_nativeNetworkReadyPromise) return _nativeNetworkReadyPromise;
   _nativeNetworkReadyPromise = (async () => {
-    applyClientEnvBootstrap();
-    if (!SUPABASE_URL || !SUPABASE_ANON_KEY) loadPublicConfigFromCache();
-    if (!SUPABASE_URL || !SUPABASE_ANON_KEY) await loadPublicConfig();
-    else if (!_resolvedApiBase) await ensureNativeApiBaseResolved();
-    else await ensureNativeApiBaseResolved();
+    await loadPublicConfig();
+    await ensureNativeApiBaseResolved();
   })().catch((e) => {
     resetNativeNetworkReadyPromise();
     throw e;
@@ -25574,42 +25570,8 @@ function socialApiErrorMessage(err) {
   return msg || "Please try again in a moment.";
 }
 
-async function prepareApiAuthForFetch() {
-  if (!getSupabaseAuthToken() && !authSession?.refresh_token) return;
-  try {
-    await refreshSupabaseSessionIfNeeded();
-  } catch {}
-}
-
-function isNativeApiNetworkError(err) {
-  const msg = String(err?.message || err || "").toLowerCase();
-  return /failed to fetch|load failed|networkerror|network request failed|aborted/.test(msg);
-}
-
-async function retryNativeApiFetch(run, timeoutMs) {
-  if (!isNativeShell()) return null;
-  const tried = new Set([String(_resolvedApiBase || "").replace(/\/$/, "")]);
-  for (const base of nativeApiBaseCandidates()) {
-    const b = String(base || "").replace(/\/$/, "");
-    if (!b || tried.has(b)) continue;
-    tried.add(b);
-    setResolvedApiBase(b);
-    const retry = new AbortController();
-    const retryTimer = window.setTimeout(() => retry.abort(), timeoutMs);
-    try {
-      return await run(retry.signal);
-    } catch {
-      /* try next origin */
-    } finally {
-      window.clearTimeout(retryTimer);
-    }
-  }
-  return null;
-}
-
 async function socialApi(path, opts = {}) {
   if (isNativeShell()) await ensureNativeNetworkReady();
-  await prepareApiAuthForFetch();
   const timeoutMs = Math.max(4000, Number(opts?.timeoutMs) || 12000);
   const { timeoutMs: _drop, ...fetchOpts } = opts;
   const run = async (signal) => {
@@ -25642,10 +25604,17 @@ async function socialApi(path, opts = {}) {
     if (e?.name === "AbortError") {
       throw new Error("Request timed out — check your connection and try again.");
     }
-    if (isNativeShell() && (isNativeApiNetworkError(e) || !_resolvedApiBase)) {
-      const retried = await retryNativeApiFetch(run, timeoutMs);
-      if (retried != null) return retried;
-      if (!_resolvedApiBase) await ensureNativeApiBaseResolved();
+    if (isNativeShell() && !_resolvedApiBase) {
+      const fixed = await ensureNativeApiBaseResolved();
+      if (fixed) {
+        const retry = new AbortController();
+        const retryTimer = window.setTimeout(() => retry.abort(), timeoutMs);
+        try {
+          return await run(retry.signal);
+        } finally {
+          window.clearTimeout(retryTimer);
+        }
+      }
     }
     throw e;
   } finally {
@@ -26873,7 +26842,6 @@ async function openUserPublicMessage() {
 
 async function messagesApi(path, opts = {}) {
   if (isNativeShell()) await ensureNativeNetworkReady();
-  await prepareApiAuthForFetch();
   const timeoutMs = Math.max(4000, Number(opts?.timeoutMs) || 12000);
   const { timeoutMs: _drop, ...fetchOpts } = opts;
   const run = async (signal) => {
@@ -26906,10 +26874,17 @@ async function messagesApi(path, opts = {}) {
     if (e?.name === "AbortError") {
       throw new Error("Request timed out — check your connection and try again.");
     }
-    if (isNativeShell() && (isNativeApiNetworkError(e) || !_resolvedApiBase)) {
-      const retried = await retryNativeApiFetch(run, timeoutMs);
-      if (retried != null) return retried;
-      if (!_resolvedApiBase) await ensureNativeApiBaseResolved();
+    if (isNativeShell() && !_resolvedApiBase) {
+      const fixed = await ensureNativeApiBaseResolved();
+      if (fixed) {
+        const retry = new AbortController();
+        const retryTimer = window.setTimeout(() => retry.abort(), timeoutMs);
+        try {
+          return await run(retry.signal);
+        } finally {
+          window.clearTimeout(retryTimer);
+        }
+      }
     }
     throw e;
   } finally {
@@ -31962,11 +31937,11 @@ async function refreshOwnProfileSocialStats({ force = false } = {}) {
   if (_ownSocialStatsInFlight && !force) return;
   _ownSocialStatsInFlight = true;
   try {
-    if (isNativeShell()) await ensureNativeNetworkReady();
+    if (isNativeShell()) await ensureNativeApiBaseResolved();
     let data = await fetchSocialStatsForProfile({ userId: uid });
     if (!data?.ok || !data?.stats) {
       await new Promise((r) => window.setTimeout(r, 1200));
-      if (isNativeShell()) await ensureNativeNetworkReady();
+      if (isNativeShell()) await ensureNativeApiBaseResolved();
       data = await fetchSocialStatsForProfile({ userId: uid });
     }
     if (!data?.ok || !data?.stats) return;

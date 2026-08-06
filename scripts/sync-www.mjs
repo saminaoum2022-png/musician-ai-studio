@@ -201,9 +201,3 @@ if (fs.existsSync(discoverAssets)) {
   execSync(`rsync -a assets/discover/ www/assets/discover/`, { cwd: root, stdio: "inherit" });
   console.log("sync-www: assets/discover/ → www/assets/discover/");
 }
-
-try {
-  execSync("node scripts/sync-native-env.mjs", { cwd: root, stdio: "inherit" });
-} catch (e) {
-  console.warn("sync-www: sync-native-env skipped or failed");
-}

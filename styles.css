@@ -20196,6 +20196,28 @@ body.notificationsCenterOpen{
   height: 44px;
   flex: 0 0 auto;
 }
+.notificationsItemProfileTap{
+  appearance: none;
+  border: 0;
+  padding: 0;
+  margin: 0;
+  background: transparent;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.notificationsItemProfileTap:active{
+  opacity: 0.88;
+}
+.notificationsItemTargetTap{
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.notificationsItemTargetTap:active{
+  opacity: 0.92;
+}
+.notificationsItemTargetTap .activityRowActorLink{
+  color: #c4b5fd;
+}
 .notificationsItemAvatar{
   width: 44px;
   height: 44px;
@@ -28651,6 +28673,14 @@ body.createChooserSheetOpen .footer{
   border: 1px solid rgba(255,255,255,0.08);
   object-fit: cover;
 }
+.searchPersonText{
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+  max-width: 76px;
+}
 .searchPersonName{
   font-size: 12px;
   font-weight: 700;
@@ -32159,6 +32189,49 @@ button.activityRow{
 }
 button.activityRow--unavailable{
   pointer-events: none;
+}
+.activityRow--split{
+  cursor: default;
+}
+.activityRow--split:active{
+  background: transparent;
+}
+.activityRowProfileTap{
+  appearance: none;
+  border: 0;
+  padding: 0;
+  margin: 0;
+  background: transparent;
+  cursor: pointer;
+  flex: 0 0 auto;
+  -webkit-tap-highlight-color: transparent;
+}
+.activityRowProfileTap:active{
+  opacity: 0.88;
+}
+.activityRowTargetTap{
+  flex: 1 1 auto;
+  min-width: 0;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.activityRowTargetTap:active{
+  opacity: 0.92;
+}
+.activityRowActorLink{
+  appearance: none;
+  border: 0;
+  padding: 0;
+  margin: 0;
+  background: transparent;
+  font: inherit;
+  font-weight: inherit;
+  color: #c4b5fd;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.activityRowActorLink:active{
+  opacity: 0.85;
 }
 .activityRowArtWrap{
   position: relative;

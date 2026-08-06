@@ -244,14 +244,50 @@ async function getUsers(limit, offset) {
     return { users: [], total: 0, error: "profiles_fetch_failed" };
   }
   const ids = profiles.map((p) => p.user_id).filter(Boolean);
-  if (!ids.length) return { users: [], total: profRes.total ?? 0 };
+
+  const allProfRes = await serviceFetch("profiles?select=user_id&limit=10000");
+  const profileIdSet = new Set(
+    (Array.isArray(allProfRes.data) ? allProfRes.data : []).map((p) => p.user_id).filter(Boolean),
+  );
+  const orphanAuthUsers = [];
+  if (offset === 0) {
+    for (const [userId, auth] of authMap) {
+      if (profileIdSet.has(userId)) continue;
+      orphanAuthUsers.push({
+        userId,
+        name: "—",
+        username: "",
+        email: auth.email || "",
+        signupAt: auth.signupAt || null,
+        role: "user",
+        subscriptionStatus: "none",
+        subscriptionPlan: null,
+        subscriptionPeriodEnd: null,
+        credits: 0,
+        paidCredits: 0,
+        giftCredits: 0,
+        promoCredits: 0,
+        songsGenerated: 0,
+        lastActiveAt: null,
+        signupPlatform: auth.signupPlatform || null,
+        profilePending: true,
+      });
+    }
+    orphanAuthUsers.sort((a, b) => String(b.signupAt || "").localeCompare(String(a.signupAt || "")));
+  }
+
+  if (!ids.length && !orphanAuthUsers.length) {
+    return { users: [], total: profRes.total ?? 0 };
+  }
 
   const inClause = ids.map((id) => encodeURIComponent(id)).join(",");
-  const [creditsRes, subsRes, songsRes] = await Promise.all([
-    serviceFetch(`user_credits?select=user_id,balance,paid_balance,gift_balance,promo_balance,updated_at&user_id=in.(${inClause})`),
-    serviceFetch(`pro_subscriptions?select=user_id,plan_id,status,current_period_end&user_id=in.(${inClause})`),
-    serviceFetch(`user_songs?select=user_id&user_id=in.(${inClause})&limit=5000`),
-  ]);
+  const [creditsRes, subsRes, songsRes] = ids.length
+    ? await Promise.all([
+        serviceFetch(`user_credits?select=user_id,balance,paid_balance,gift_balance,promo_balance,updated_at&user_id=in.(${inClause})`),
+        serviceFetch(`pro_subscriptions?select=user_id,plan_id,status,current_period_end&user_id=in.(${inClause})`),
+        serviceFetch(`user_songs?select=user_id&user_id=in.(${inClause})&limit=5000`),
+      ])
+    : [{ data: [] }, { data: [] }, { data: [] }];
 
   const creditsByUser = new Map();
   for (const row of Array.isArray(creditsRes.data) ? creditsRes.data : []) {
@@ -291,7 +327,10 @@ async function getUsers(limit, offset) {
     };
   });
 
-  return { users, total: profRes.total ?? users.length };
+  return {
+    users: [...orphanAuthUsers, ...users],
+    total: (profRes.total ?? users.length) + orphanAuthUsers.length,
+  };
 }
 
 async function getCredits(limit, offset) {

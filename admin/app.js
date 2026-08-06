@@ -119,6 +119,13 @@ function signupPlatformBadgeClass(platform) {
   return "none";
 }
 
+function userNameCell(u) {
+  const pending = u.profilePending
+    ? `<br><span class="badge pending">Profile pending</span>`
+    : "";
+  return `${u.name || "—"}<br><span style="color:var(--muted);font-size:0.76rem">@${u.username || "—"}</span>${pending}`;
+}
+
 function showError(msg) {
   if (!msg) {
     els.globalError.hidden = true;
@@ -575,7 +582,7 @@ function renderUsers(data) {
   const body = rows.length
     ? rows.map((u) => `
       <tr>
-        <td>${u.name || "—"}<br><span style="color:var(--muted);font-size:0.76rem">@${u.username || "—"}</span></td>
+        <td>${userNameCell(u)}</td>
         <td>${u.email || "—"}</td>
         <td>${fmtDate(u.signupAt)}</td>
         <td><span class="badge ${signupPlatformBadgeClass(u.signupPlatform)}">${fmtSignupPlatform(u.signupPlatform)}</span></td>

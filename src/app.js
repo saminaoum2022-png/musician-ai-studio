@@ -189,7 +189,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260806-171232";
+const APP_BUILD = "20260806-222824";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -21280,12 +21280,17 @@ function scheduleProfileCloudSync({ delayMs = 600 } = {}) {
     if (!authSession?.user?.id) return;
     _profileCloudSyncInFlight = true;
     try {
-      if (!localProfileHasRichContent()) {
+      let cloudRow = null;
+      try {
+        cloudRow = await supabaseLoadProfile({ reason: "scheduleProfileCloudSync-precheck" });
+      } catch {}
+      const isNewCloudUser = !cloudRow?.user_id;
+      if (!localProfileHasRichContent() && !isNewCloudUser) {
         try {
           await mergeActiveProfileFromCloud({ reason: "scheduleProfileCloudSync-guard" });
         } catch {}
       }
-      if (!localProfileHasRichContent()) {
+      if (!localProfileHasRichContent() && !isNewCloudUser) {
         try { console.info("[profile] skip cloud sync — local shell empty, refusing to push"); } catch {}
         return;
       }
@@ -57871,7 +57876,12 @@ void (async () => {
     );
     // Cloud fetch failed: never push an empty shell that would erase avatar/bio.
     if (cloudIsStale) scheduleProfileCloudSync({ delayMs: 400 });
-    else if (!cloud && localProfileHasRichContent()) scheduleProfileCloudSync({ delayMs: 600 });
+    else if (!cloud) {
+      // First sign-in — create public.profiles so admin, search, and social identity work.
+      void supabaseUpsertProfile(nextProfile).catch((e) => {
+        try { console.warn("[profile] first-sign-in cloud create failed", e); } catch {}
+      });
+    } else if (localProfileHasRichContent()) scheduleProfileCloudSync({ delayMs: 600 });
 
     if (els.profilePreviewUsernameInput) els.profilePreviewUsernameInput.value = activeProfile.username ? `@${activeProfile.username}` : "@guest";
     if (els.profilePreviewTimbreInput) els.profilePreviewTimbreInput.value = activeProfile.voiceTimbre || "";

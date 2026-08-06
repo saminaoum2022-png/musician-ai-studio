@@ -11,9 +11,9 @@ npm run sync:ios
 
 cd "$IOS_DIR"
 echo "run-ios-device: building for device $DEVICE_ID"
-xcodebuild -scheme App -configuration Release -destination "id=$DEVICE_ID" -allowProvisioningUpdates build | tail -5
+xcodebuild -scheme App -configuration Debug -destination "id=$DEVICE_ID" -allowProvisioningUpdates build | tail -5
 
-APP_PATH=$(find "$HOME/Library/Developer/Xcode/DerivedData" -path "*/Build/Products/Release-iphoneos/App.app" -not -path "*/Index.noindex/*" 2>/dev/null | head -1)
+APP_PATH=$(find "$HOME/Library/Developer/Xcode/DerivedData" -path "*/Build/Products/Debug-iphoneos/App.app" -not -path "*/Index.noindex/*" 2>/dev/null | head -1)
 if [ -z "$APP_PATH" ] || [ ! -d "$APP_PATH" ]; then
   echo "run-ios-device: ERROR — could not find App.app in DerivedData" >&2
   exit 1

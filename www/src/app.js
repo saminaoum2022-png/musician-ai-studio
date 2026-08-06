@@ -189,7 +189,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260806-114616";
+const APP_BUILD = "20260806-112140";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -28855,7 +28855,7 @@ function bindMessagesPageOnce() {
       const pl = e.target.closest("[data-user-lib-play]");
       if (pl && threadMount.contains(pl)) {
         e.preventDefault();
-        playDmSongFromEl(pl);
+        playDiscoverTarget(pl);
       }
     }
   });
@@ -33601,7 +33601,7 @@ function setDiscoverReelQueue(tracks) {
 }
 
 function findDiscoverReelIndexForTarget(t) {
-  if (!_discoverReelQueue.length || !t) return -1;
+  if (!_discoverReelQueue.length || !t) return 0;
   const songId = String(t.songId || t.playSource?.songId || "").trim();
   const url = String(t.raw || t.url || "").trim();
   const idx = _discoverReelQueue.findIndex((row) => {
@@ -33609,7 +33609,7 @@ function findDiscoverReelIndexForTarget(t) {
     if (url && audioUrlsEquivalent(String(row.url || ""), url)) return true;
     return false;
   });
-  return idx;
+  return idx >= 0 ? idx : 0;
 }
 
 function discoverReelModeActive() {
@@ -33875,22 +33875,20 @@ async function playDiscoverFeedEntry({ raw, title, art, by, playSource, el, opts
       songId: playSource?.songId,
       playSource,
     });
-    if (idx >= 0) {
-      const tappedArt = String(art || "").trim();
-      if (tappedArt && _discoverReelQueue[idx]) {
-        const row = _discoverReelQueue[idx];
-        const display = trackCoverArtForDisplay({ ...row, artUrl: tappedArt, meta: row.meta || {} });
-        const safeArt = display && !isDefaultSongCoverUrl(display) ? display : tappedArt;
-        if (!/_thumb\./i.test(safeArt)) {
-          _discoverReelQueue[idx] = { ...row, artUrl: safeArt };
-        }
+    const tappedArt = String(art || "").trim();
+    if (tappedArt && _discoverReelQueue[idx]) {
+      const row = _discoverReelQueue[idx];
+      const display = trackCoverArtForDisplay({ ...row, artUrl: tappedArt, meta: row.meta || {} });
+      const safeArt = display && !isDefaultSongCoverUrl(display) ? display : tappedArt;
+      if (!/_thumb\./i.test(safeArt)) {
+        _discoverReelQueue[idx] = { ...row, artUrl: safeArt };
       }
-      const card = document.querySelector(".playerCard");
-      if (card) card.dataset.discoverReel = "1";
-      resetDiscoverReelRailFade();
-      await playDiscoverReelAt(idx, { openPlayer: true });
-      return;
     }
+    const card = document.querySelector(".playerCard");
+    if (card) card.dataset.discoverReel = "1";
+    resetDiscoverReelRailFade();
+    await playDiscoverReelAt(idx, { openPlayer: true });
+    return;
   }
   if (!opts.silent) haptic("light");
   await playLibraryUrlOnPlayer(url, title, art, {
@@ -33898,36 +33896,6 @@ async function playDiscoverFeedEntry({ raw, title, art, by, playSource, el, opts
     openPlayer: opts.openPlayer === true,
     discoverBy: by,
     playSource,
-  });
-}
-
-/** DM song cards embed the exact URL/title/art — never route through Discover reel. */
-function playDmSongFromEl(el) {
-  if (!el) return;
-  let raw = "";
-  const enc = el.getAttribute("data-user-lib-url");
-  if (enc) {
-    try {
-      raw = decodeURIComponent(enc);
-    } catch {
-      raw = enc;
-    }
-  }
-  raw = String(raw || "").trim();
-  if (!raw) {
-    showToast("This song has no playable audio yet.", { durationMs: 3800 });
-    return;
-  }
-  const title = decodeDiscoverDataAttr(el, "data-user-lib-title") || "Song";
-  const art = decodeDiscoverDataAttr(el, "data-user-lib-art") || "";
-  const by = decodeDiscoverDataAttr(el, "data-discovery-by") || "";
-  haptic("light");
-  primeGlobalPlayerInGesture();
-  void playLibraryUrlOnPlayer(raw, title, art, {
-    discoverFeed: false,
-    openPlayer: true,
-    discoverBy: by,
-    playSource: null,
   });
 }
 

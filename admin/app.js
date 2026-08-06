@@ -101,6 +101,23 @@ function fmtReason(reason) {
   return map[reason] || String(reason || "—").replace(/_/g, " ");
 }
 
+function fmtSignupPlatform(platform) {
+  const map = {
+    web: "Website",
+    ios: "iOS app",
+    android: "Android app",
+  };
+  return map[String(platform || "").toLowerCase()] || "—";
+}
+
+function signupPlatformBadgeClass(platform) {
+  const p = String(platform || "").toLowerCase();
+  if (p === "web") return "platformWeb";
+  if (p === "ios") return "platformIos";
+  if (p === "android") return "platformAndroid";
+  return "none";
+}
+
 function showError(msg) {
   if (!msg) {
     els.globalError.hidden = true;
@@ -560,20 +577,21 @@ function renderUsers(data) {
         <td>${u.name || "—"}<br><span style="color:var(--muted);font-size:0.76rem">@${u.username || "—"}</span></td>
         <td>${u.email || "—"}</td>
         <td>${fmtDate(u.signupAt)}</td>
+        <td><span class="badge ${signupPlatformBadgeClass(u.signupPlatform)}">${fmtSignupPlatform(u.signupPlatform)}</span></td>
         <td><span class="badge ${u.subscriptionStatus || "none"}">${u.subscriptionStatus || "none"}</span></td>
         <td class="num">${fmtNum(u.credits, 1)}</td>
         <td class="num">${fmtNum(u.songsGenerated)}</td>
         <td>${fmtDate(u.lastActiveAt)}</td>
       </tr>
     `).join("")
-    : `<tr><td colspan="7" class="loading">No users yet</td></tr>`;
+    : `<tr><td colspan="8" class="loading">No users yet</td></tr>`;
 
   els.panels.users.innerHTML = `
     <div class="tableWrap">
       <table>
         <thead>
           <tr>
-            <th>User</th><th>Email</th><th>Signup</th><th>Subscription</th>
+            <th>User</th><th>Email</th><th>Signup</th><th>Platform</th><th>Subscription</th>
             <th>Credits</th><th>Songs</th><th>Last active</th>
           </tr>
         </thead>

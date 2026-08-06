@@ -1,0 +1,4 @@
+-- OPTIONAL — not required for admin Platform column (stored on auth user metadata instead).
+-- Only run if you want signup_platform duplicated on public.profiles for SQL reporting.
+--
+-- alter table public.profiles add column if not exists signup_platform text;

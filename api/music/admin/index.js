@@ -104,9 +104,11 @@ async function fetchAuthUsersMap() {
       const users = Array.isArray(data?.users) ? data.users : [];
       for (const u of users) {
         if (u?.id) {
+          const meta = u.user_metadata || u.raw_user_meta_data || {};
           map.set(String(u.id), {
             email: String(u.email || "").toLowerCase(),
             signupAt: u.created_at || null,
+            signupPlatform: String(meta.signup_platform || "").trim().toLowerCase() || null,
           });
         }
       }
@@ -222,12 +224,25 @@ async function getOverview() {
   };
 }
 
+async function fetchProfilesForAdmin(limit, offset) {
+  const baseSelect = "user_id,username,display_name,role,last_active_at,created_at";
+  const order = `order=created_at.desc&limit=${limit}&offset=${offset}`;
+  let profRes = await serviceFetch(
+    `profiles?select=${baseSelect},signup_platform&${order}`,
+  );
+  if (!profRes.ok) {
+    profRes = await serviceFetch(`profiles?select=${baseSelect}&${order}`);
+  }
+  return profRes;
+}
+
 async function getUsers(limit, offset) {
   const authMap = await fetchAuthUsersMap();
-  const profRes = await serviceFetch(
-    `profiles?select=user_id,username,display_name,role,last_active_at,created_at&order=created_at.desc&limit=${limit}&offset=${offset}`,
-  );
+  const profRes = await fetchProfilesForAdmin(limit, offset);
   const profiles = Array.isArray(profRes.data) ? profRes.data : [];
+  if (!profRes.ok && !profiles.length) {
+    return { users: [], total: 0, error: "profiles_fetch_failed" };
+  }
   const ids = profiles.map((p) => p.user_id).filter(Boolean);
   if (!ids.length) return { users: [], total: profRes.total ?? 0 };
 
@@ -272,6 +287,7 @@ async function getUsers(limit, offset) {
       promoCredits: Number(cr.promo_balance || 0),
       songsGenerated: songCounts.get(p.user_id) || 0,
       lastActiveAt: p.last_active_at || cr.updated_at || null,
+      signupPlatform: auth.signupPlatform || String(p.signup_platform || "").trim().toLowerCase() || null,
     };
   });
 

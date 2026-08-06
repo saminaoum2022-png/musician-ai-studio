@@ -189,7 +189,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260806-004415";
+const APP_BUILD = "20260806-110056";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -2445,6 +2445,19 @@ function isNativeShell() {
   } catch {
     return false;
   }
+}
+
+/** web | ios | android — captured once on first cloud profile upsert. */
+function detectSignupPlatform() {
+  try {
+    if (isNativeShell()) {
+      const plat = String(window.Capacitor?.getPlatform?.() || "").toLowerCase();
+      if (plat === "android") return "android";
+      if (plat === "ios") return "ios";
+      return "ios";
+    }
+  } catch {}
+  return "web";
 }
 
 function applyClientEnvBootstrap() {
@@ -20677,6 +20690,7 @@ function ensureAuthBoot({ force = false, fast = false } = {}) {
         if (shouldShowProfileHeaderSkeleton()) setProfileHeaderLoading(true);
         else setProfileHeaderLoading(false);
         try { refreshProfileHandleFromActiveProfile(); } catch {}
+        void recordSignupPlatformIfNeeded();
       }
       renderAuthStatus();
       _authBootDone = true;
@@ -22620,6 +22634,38 @@ async function supabaseFetchUser(token) {
   lastAuthDebug = "";
   return await r.json().catch(() => null);
 }
+
+/** Store web | ios | android on the auth user — no SQL / profiles column needed. */
+async function recordSignupPlatformIfNeeded() {
+  const token = getSupabaseAuthToken();
+  if (!token || !SUPABASE_URL || !SUPABASE_ANON_KEY) return;
+  try {
+    const sessMeta = authSession?.user?.user_metadata || authSession?.user?.raw_user_meta_data || {};
+    if (String(sessMeta.signup_platform || "").trim()) return;
+    const user = await supabaseFetchUser(token);
+    if (!user?.id) return;
+    const meta = user.user_metadata || user.raw_user_meta_data || {};
+    if (String(meta.signup_platform || "").trim()) return;
+    const platform = detectSignupPlatform();
+    const r = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
+      method: "PUT",
+      headers: {
+        apikey: SUPABASE_ANON_KEY,
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ data: { signup_platform: platform } }),
+    });
+    if (!r.ok) return;
+    const updated = await r.json().catch(() => null);
+    if (updated?.id && authSession) {
+      saveAuthSession(
+        { ...authSession, user: updated },
+        { persist: true },
+      );
+    }
+  } catch {}
+}
 async function refreshSupabaseSessionIfNeeded({ force = false } = {}) {
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return false;
   if (!authSession?.refresh_token) return Boolean(getSupabaseAuthToken());
@@ -23741,19 +23787,20 @@ async function supabaseUpsertProfile(profile) {
   // if anything sneaks through the boot merge, this stops it from
   // becoming permanent on the server.
   let outgoingUsername = profile.username || "";
+  let cloudExisting = null;
   if (authSession?.user?.id) {
     try {
-      const existing = await supabaseLoadProfile();
-      if (existing?.username && !isPlaceholderUsername(existing.username)) {
+      cloudExisting = await supabaseLoadProfile();
+      if (cloudExisting?.username && !isPlaceholderUsername(cloudExisting.username)) {
         if (isPlaceholderUsername(outgoingUsername)) {
-          outgoingUsername = existing.username;
+          outgoingUsername = cloudExisting.username;
         } else {
           const outName = normalizeProfileUsername(outgoingUsername);
-          const existName = normalizeProfileUsername(existing.username);
+          const existName = normalizeProfileUsername(cloudExisting.username);
           const outTs = Number(profile.usernameChangedAt || 0);
-          const existTs = Number(existing.usernameChangedAt || 0);
+          const existTs = Number(cloudExisting.usernameChangedAt || 0);
           if (outName !== existName && existTs > outTs) {
-            outgoingUsername = existing.username;
+            outgoingUsername = cloudExisting.username;
           }
         }
       }
@@ -23917,6 +23964,7 @@ async function supabaseLoadProfile(opts = {}) {
       : 0,
     soundCertified: p.sound_certified === true || p.sound_certified === "t" || p.sound_certified === "true",
     savedPersonas: parseSavedPersonasFromCloud(p.saved_personas),
+    signupPlatform: String(p.signup_platform || "").trim(),
   };
   _profileLoadCache = profile;
   _profileLoadCacheAt = Date.now();

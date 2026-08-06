@@ -2,7 +2,7 @@
 -- Run in Supabase SQL Editor before enabling admin.nabadai.com
 --
 -- Adds:
---   profiles.role, profiles.last_active_at, profiles.created_at
+--   profiles.role, profiles.last_active_at, profiles.created_at, profiles.signup_platform
 --   credits_transactions (before/after balance audit)
 --   music_generation_logs (every generation request)
 --   Admin RLS + updated credit RPCs that log transactions

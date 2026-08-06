@@ -189,7 +189,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260806-133822";
+const APP_BUILD = "20260806-144448";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -2351,11 +2351,9 @@ function nativeApiBaseCandidates() {
 /** Default Vercel host for native /api/* — never leave this empty on iOS. */
 function defaultNativeApiBase() {
   if (API_BASE) return API_BASE;
-  try {
-    if (window.Capacitor?.isNativePlatform?.()) {
-      return nativeApiBaseCandidates()[0] || "https://www.nabadai.com";
-    }
-  } catch {}
+  if (isNativeShell()) {
+    return nativeApiBaseCandidates()[0] || "https://www.nabadai.com";
+  }
   return "";
 }
 const API_BASE = (() => {
@@ -2363,11 +2361,31 @@ const API_BASE = (() => {
     if (window.Capacitor?.isNativePlatform?.()) {
       return nativeApiBaseCandidates()[0] || "";
     }
+    const p = String(location.protocol || "").toLowerCase();
+    if (p === "capacitor:" || p === "ionic:") {
+      return nativeApiBaseCandidates()[0] || "https://www.nabadai.com";
+    }
+    if (document.documentElement?.classList?.contains("is-native-shell")) {
+      return nativeApiBaseCandidates()[0] || "https://www.nabadai.com";
+    }
   } catch {}
   return "";
 })();
 /** Host that successfully served `/api/public-config` (Friends/social need the same origin). */
-let _resolvedApiBase = API_BASE;
+let _resolvedApiBase = API_BASE || (() => {
+  try {
+    const baked = String(window.__NABAD_CLIENT_ENV__?.apiBase || "").trim().replace(/\/$/, "");
+    if (baked && isNativeShell()) return baked;
+  } catch {}
+  return "";
+})();
+function forceNativeApiBase(base) {
+  const b = String(base || "").trim().replace(/\/$/, "") || defaultNativeApiBase() || "https://www.nabadai.com";
+  _resolvedApiBase = b;
+  try {
+    globalThis.__nabadApiBase = b;
+  } catch {}
+}
 function setResolvedApiBase(base) {
   if (!isNativeShell()) {
     _resolvedApiBase = "";
@@ -2376,20 +2394,64 @@ function setResolvedApiBase(base) {
     } catch {}
     return;
   }
-  const b = String(base || "").trim().replace(/\/$/, "") || defaultNativeApiBase();
-  _resolvedApiBase = b;
-  try {
-    globalThis.__nabadApiBase = b;
-  } catch {}
+  forceNativeApiBase(base);
 }
 /** Web always hits same-origin `/api/*`. Native uses resolved Vercel host (env.client.js). */
 function apiUrl(p) {
   const path = String(p || "").startsWith("/") ? p : `/${p}`;
   if (!isNativeShell()) return path;
-  const base = _resolvedApiBase || defaultNativeApiBase();
-  return base ? `${base.replace(/\/$/, "")}${path}` : path;
+  const base = _resolvedApiBase || defaultNativeApiBase() || "https://www.nabadai.com";
+  return `${base.replace(/\/$/, "")}${path}`;
 }
 const PUBLIC_CONFIG_CACHE_KEY = "mas:public-config:v3";
+/** Clears poisoned native caches whenever a new build is installed over the same app. */
+const LAST_SHIPPED_BUILD_KEY = "nabad:last-shipped-build";
+let _nativeNetworkReadyPromise = null;
+function resetNativeNetworkReadyPromise() {
+  _nativeNetworkReadyPromise = null;
+}
+function migrateCachesOnBuildChange() {
+  try {
+    const prev = String(localStorage.getItem(LAST_SHIPPED_BUILD_KEY) || "").trim();
+    if (prev === APP_BUILD) return;
+    localStorage.setItem(LAST_SHIPPED_BUILD_KEY, APP_BUILD);
+    // Keep mas:public-config — wiping it on OTA left native with no Supabase/API
+    // settings until a live fetch succeeded (Discover worked; /api/* did not).
+    localStorage.removeItem("nabad_generation_failed_activity_v1");
+    const ownPrefix = "nabad:ownSocialStats:v1:";
+    const staleKeys = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k && k.startsWith(ownPrefix)) staleKeys.push(k);
+    }
+    staleKeys.forEach((k) => {
+      try { localStorage.removeItem(k); } catch {}
+    });
+    try {
+      sessionStorage.removeItem("nabad_friends_feed_snap_v3");
+      sessionStorage.removeItem("nabad_activity_feed_snap_v3");
+      sessionStorage.removeItem("nabad_profile_act_snap_v3");
+    } catch {}
+    resetNativeNetworkReadyPromise();
+    if (isNativeShell()) setResolvedApiBase(defaultNativeApiBase());
+  } catch {}
+}
+/** Native: one shared boot gate so /api/* never runs before public-config + API base resolve. */
+function ensureNativeNetworkReady() {
+  if (!isNativeShell()) return Promise.resolve();
+  if (_nativeNetworkReadyPromise) return _nativeNetworkReadyPromise;
+  _nativeNetworkReadyPromise = (async () => {
+    applyClientEnvBootstrap();
+    if (!SUPABASE_URL || !SUPABASE_ANON_KEY) loadPublicConfigFromCache();
+    if (!SUPABASE_URL || !SUPABASE_ANON_KEY) await loadPublicConfig();
+    else if (!_resolvedApiBase) await ensureNativeApiBaseResolved();
+    else await ensureNativeApiBaseResolved();
+  })().catch((e) => {
+    resetNativeNetworkReadyPromise();
+    throw e;
+  });
+  return _nativeNetworkReadyPromise;
+}
 let lastPublicConfigStatus = 0;
 let lastPublicConfigError = "";
 
@@ -2421,7 +2483,55 @@ function getApiFetchHeaders(extra = {}) {
 
 function apiFetch(path, opts = {}) {
   const headers = getApiFetchHeaders(opts.headers || {});
-  return fetch(apiUrl(path), { ...opts, headers });
+  const url = apiUrl(path);
+  const init = { ...opts, headers };
+  const run = () => fetch(url, init);
+  if (!isNativeShell()) return run();
+  return run().catch(async (err) => {
+    const native = await capacitorHttpFetch(url, init);
+    if (native) return native;
+    throw err;
+  });
+}
+
+/** iOS WKWebView sometimes fails cross-origin fetch — use native URLSession. */
+async function capacitorHttpFetch(url, init = {}) {
+  try {
+    const CapHttp = window.Capacitor?.Plugins?.CapacitorHttp;
+    if (!CapHttp?.request) return null;
+    const method = String(init.method || "GET").toUpperCase();
+    const hdrs = { ...(init.headers || {}) };
+    let data;
+    if (init.body != null && init.body !== "") {
+      data = typeof init.body === "string" ? init.body : String(init.body);
+    }
+    const resp = await CapHttp.request({
+      url: String(url),
+      method,
+      headers: hdrs,
+      data,
+      responseType: "json",
+      connectTimeout: 15000,
+      readTimeout: 15000,
+    });
+    const status = Number(resp?.status || 0);
+    const body = resp?.data;
+    return {
+      ok: status >= 200 && status < 300,
+      status,
+      url: String(resp?.url || url),
+      headers: {
+        get: (k) => {
+          const h = resp?.headers || {};
+          return h[k] ?? h[String(k).toLowerCase()] ?? null;
+        },
+      },
+      json: async () => body,
+      text: async () => (typeof body === "string" ? body : JSON.stringify(body ?? "")),
+    };
+  } catch {
+    return null;
+  }
 }
 
 function applyPublicConfigPayload(d) {
@@ -2457,10 +2567,16 @@ function loadPublicConfigFromCache() {
 
 function isNativeShell() {
   try {
-    return Boolean(window.Capacitor?.isNativePlatform?.());
-  } catch {
-    return false;
-  }
+    if (window.Capacitor?.isNativePlatform?.()) return true;
+  } catch {}
+  try {
+    const p = String(location.protocol || "").toLowerCase();
+    if (p === "capacitor:" || p === "ionic:") return true;
+  } catch {}
+  try {
+    if (document.documentElement?.classList?.contains("is-native-shell")) return true;
+  } catch {}
+  return false;
 }
 
 /** web | ios | android — captured once on first cloud profile upsert. */
@@ -2487,8 +2603,12 @@ function applyClientEnvBootstrap() {
         window.__VERCEL_PROTECTION_BYPASS__ = bypass;
       } catch {}
     }
-    if (isNativeShell()) setResolvedApiBase(env.apiBase || defaultNativeApiBase());
-    else _resolvedApiBase = "";
+    if (isNativeShell()) {
+      forceNativeApiBase(env.apiBase || defaultNativeApiBase());
+    } else {
+      _resolvedApiBase = "";
+      try { globalThis.__nabadApiBase = ""; } catch {}
+    }
     return Boolean(SUPABASE_URL && SUPABASE_ANON_KEY);
   } catch {
     return false;
@@ -25526,8 +25646,42 @@ function socialApiErrorMessage(err) {
   return msg || "Please try again in a moment.";
 }
 
+async function prepareApiAuthForFetch() {
+  if (!getSupabaseAuthToken() && !authSession?.refresh_token) return;
+  try {
+    await refreshSupabaseSessionIfNeeded();
+  } catch {}
+}
+
+function isNativeApiNetworkError(err) {
+  const msg = String(err?.message || err || "").toLowerCase();
+  return /failed to fetch|load failed|networkerror|network request failed|aborted/.test(msg);
+}
+
+async function retryNativeApiFetch(run, timeoutMs) {
+  if (!isNativeShell()) return null;
+  const tried = new Set([String(_resolvedApiBase || "").replace(/\/$/, "")]);
+  for (const base of nativeApiBaseCandidates()) {
+    const b = String(base || "").replace(/\/$/, "");
+    if (!b || tried.has(b)) continue;
+    tried.add(b);
+    setResolvedApiBase(b);
+    const retry = new AbortController();
+    const retryTimer = window.setTimeout(() => retry.abort(), timeoutMs);
+    try {
+      return await run(retry.signal);
+    } catch {
+      /* try next origin */
+    } finally {
+      window.clearTimeout(retryTimer);
+    }
+  }
+  return null;
+}
+
 async function socialApi(path, opts = {}) {
-  if (isNativeShell()) await ensureNativeApiBaseResolved();
+  if (isNativeShell()) await ensureNativeNetworkReady();
+  await prepareApiAuthForFetch();
   const timeoutMs = Math.max(4000, Number(opts?.timeoutMs) || 12000);
   const { timeoutMs: _drop, ...fetchOpts } = opts;
   const run = async (signal) => {
@@ -25560,17 +25714,10 @@ async function socialApi(path, opts = {}) {
     if (e?.name === "AbortError") {
       throw new Error("Request timed out — check your connection and try again.");
     }
-    if (isNativeShell() && !_resolvedApiBase) {
-      const fixed = await ensureNativeApiBaseResolved();
-      if (fixed) {
-        const retry = new AbortController();
-        const retryTimer = window.setTimeout(() => retry.abort(), timeoutMs);
-        try {
-          return await run(retry.signal);
-        } finally {
-          window.clearTimeout(retryTimer);
-        }
-      }
+    if (isNativeShell() && (isNativeApiNetworkError(e) || !_resolvedApiBase)) {
+      const retried = await retryNativeApiFetch(run, timeoutMs);
+      if (retried != null) return retried;
+      if (!_resolvedApiBase) await ensureNativeApiBaseResolved();
     }
     throw e;
   } finally {
@@ -26797,7 +26944,8 @@ async function openUserPublicMessage() {
 }
 
 async function messagesApi(path, opts = {}) {
-  if (isNativeShell()) await ensureNativeApiBaseResolved();
+  if (isNativeShell()) await ensureNativeNetworkReady();
+  await prepareApiAuthForFetch();
   const timeoutMs = Math.max(4000, Number(opts?.timeoutMs) || 12000);
   const { timeoutMs: _drop, ...fetchOpts } = opts;
   const run = async (signal) => {
@@ -26830,17 +26978,10 @@ async function messagesApi(path, opts = {}) {
     if (e?.name === "AbortError") {
       throw new Error("Request timed out — check your connection and try again.");
     }
-    if (isNativeShell() && !_resolvedApiBase) {
-      const fixed = await ensureNativeApiBaseResolved();
-      if (fixed) {
-        const retry = new AbortController();
-        const retryTimer = window.setTimeout(() => retry.abort(), timeoutMs);
-        try {
-          return await run(retry.signal);
-        } finally {
-          window.clearTimeout(retryTimer);
-        }
-      }
+    if (isNativeShell() && (isNativeApiNetworkError(e) || !_resolvedApiBase)) {
+      const retried = await retryNativeApiFetch(run, timeoutMs);
+      if (retried != null) return retried;
+      if (!_resolvedApiBase) await ensureNativeApiBaseResolved();
     }
     throw e;
   } finally {
@@ -28699,11 +28840,11 @@ async function loadMessagesInbox({ silent = false } = {}) {
 
   const run = (async () => {
     try {
-      if (isNativeShell()) await ensureNativeApiBaseResolved();
+      if (isNativeShell()) await ensureNativeNetworkReady();
       let data = await messagesApi("/api/messages?type=inbox");
       if (!data?.ok) {
         await new Promise((r) => window.setTimeout(r, 1200));
-        if (isNativeShell()) await ensureNativeApiBaseResolved();
+        if (isNativeShell()) await ensureNativeNetworkReady();
         data = await messagesApi("/api/messages?type=inbox");
       }
       if (!data?.ok) throw new Error(data?.error || "Could not load messages.");
@@ -29724,6 +29865,7 @@ function paintActivityFeedSnapshotIfFresh() {
 const ACTIVITY_PAGE_SIZE = 20;
 const ACTIVITY_MIN_FETCH_GAP_MS = 800;
 let _activityFeedLastFetchAt = 0;
+let _activityFeedLastFetchOk = false;
 let _activityFeedState = {
   items: [],
   offset: 0,
@@ -30695,6 +30837,7 @@ async function refreshActivityFeedHead() {
 async function fetchActivityFeedFromTop() {
   if (_activityFeedState.loading) return;
   _activityFeedState.loading = true;
+  _activityFeedLastFetchOk = false;
   _routeRefreshGate.activity.begin();
   _activityFeedLastFetchAt = Date.now();
   syncActivityLoadMoreUi();
@@ -30702,6 +30845,7 @@ async function fetchActivityFeedFromTop() {
     const limit = ACTIVITY_PAGE_SIZE;
     const data = await socialApi(`/api/social?type=notifications&limit=${limit}&offset=0`);
     const batch = Array.isArray(data?.notifications) ? data.notifications : [];
+    _activityFeedLastFetchOk = true;
     _activityFeedState.items = batch;
     _activityFeedState.offset = batch.length;
     _activityFeedState.hasMore = batch.length >= limit;
@@ -30733,6 +30877,7 @@ async function fetchActivityFeedFromTop() {
 async function fetchActivityBatch() {
   if (_activityFeedState.loading || !_activityFeedState.hasMore) return;
   _activityFeedState.loading = true;
+  _activityFeedLastFetchOk = false;
   _activityFeedLastFetchAt = Date.now();
   syncActivityLoadMoreUi();
   try {
@@ -30740,6 +30885,7 @@ async function fetchActivityBatch() {
     const offset = _activityFeedState.offset;
     const data = await socialApi(`/api/social?type=notifications&limit=${limit}&offset=${offset}`);
     const batch = Array.isArray(data?.notifications) ? data.notifications : [];
+    _activityFeedLastFetchOk = true;
     if (!batch.length) {
       _activityFeedState.hasMore = false;
     } else {
@@ -30815,7 +30961,9 @@ async function enterActivityRoute({ reset = false, readOnly = false } = {}) {
   }
   await refreshActivityFeedHead();
   try { purgeLocalJobCompletionActivitiesInFeed(); } catch {}
-  try { mergePersistedGenerationFailedActivities(); } catch {}
+  if (_activityFeedLastFetchOk) {
+    try { mergePersistedGenerationFailedActivities(); } catch {}
+  }
   renderActivityFeedFromState();
   const unread = _activityFeedState.items.filter((n) => !n?.read_at).length;
   if (unread && !readOnly) {
@@ -31886,11 +32034,11 @@ async function refreshOwnProfileSocialStats({ force = false } = {}) {
   if (_ownSocialStatsInFlight && !force) return;
   _ownSocialStatsInFlight = true;
   try {
-    if (isNativeShell()) await ensureNativeApiBaseResolved();
+    if (isNativeShell()) await ensureNativeNetworkReady();
     let data = await fetchSocialStatsForProfile({ userId: uid });
     if (!data?.ok || !data?.stats) {
       await new Promise((r) => window.setTimeout(r, 1200));
-      if (isNativeShell()) await ensureNativeApiBaseResolved();
+      if (isNativeShell()) await ensureNativeNetworkReady();
       data = await fetchSocialStatsForProfile({ userId: uid });
     }
     if (!data?.ok || !data?.stats) return;
@@ -57399,6 +57547,10 @@ try {
     });
   } catch {}
 } catch {}
+migrateCachesOnBuildChange();
+if (isNativeShell() && window.__NABAD_CLIENT_ENV__?.apiBase) {
+  forceNativeApiBase(window.__NABAD_CLIENT_ENV__.apiBase);
+}
 applyClientEnvBootstrap();
 loadPublicConfigFromCache();
 void refreshSunoCredits();
@@ -57413,7 +57565,7 @@ renderAuthStatus();
 const _bootOAuthCodePending = hasOAuthCodeInUrl();
 if (_bootOAuthCodePending) {
   try { beginLoginSettling("Finishing sign in…"); } catch {}
-} else if (!isCapacitorNativeAuth()) {
+} else if (!isCapacitorNativeAuth() && !isNativeShell()) {
   safeApplyRoute();
 }
 // `ensureAuthBoot()` (Preferences / native restore) runs before each route apply.

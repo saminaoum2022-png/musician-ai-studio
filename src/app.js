@@ -189,7 +189,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260806-164622";
+const APP_BUILD = "20260806-171232";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -22444,6 +22444,20 @@ function renderCreditsLedger() {
     .join("");
 }
 
+function paintCreditsAccountEmail(serverEmail = "") {
+  const email = String(
+    serverEmail || authSession?.user?.email || activeProfile?.email || "",
+  ).trim();
+  if (!els.creditsHeroEmail) return;
+  if (email) {
+    els.creditsHeroEmail.textContent = email;
+    els.creditsHeroEmail.style.display = "";
+  } else {
+    els.creditsHeroEmail.textContent = "";
+    els.creditsHeroEmail.style.display = "none";
+  }
+}
+
 async function refreshMyCredits({ silent = false } = {}) {
   if (creditsState.inFlight) return creditsState;
   const token = getSupabaseAuthToken();
@@ -22455,13 +22469,15 @@ async function refreshMyCredits({ silent = false } = {}) {
     setCreditsBalance(0);
     creditsState.ledger = [];
     renderCreditsLedger();
+    paintCreditsAccountEmail("");
     if (els.creditsAdminCard) els.creditsAdminCard.style.display = "none";
     return creditsState;
   }
   creditsState.inFlight = true;
   try {
-    const r = await fetch(apiUrl("/api/credits/me"), {
-      headers: getApiFetchHeaders({ Authorization: `Bearer ${token}` }),
+    if (isNativeShell()) await ensureNativeNetworkReady();
+    const r = await apiFetch("/api/credits/me", {
+      headers: { Authorization: `Bearer ${token}` },
     });
     const d = await r.json().catch(() => ({}));
     if (!r.ok) throw new Error(d?.error || `credits/me ${r.status}`);
@@ -22486,18 +22502,14 @@ async function refreshMyCredits({ silent = false } = {}) {
         { durationMs: 4200 },
       );
     }
-    if (els.creditsHeroEmail && d?.email) {
-      els.creditsHeroEmail.textContent = String(d.email);
-      els.creditsHeroEmail.style.display = "";
-    } else if (els.creditsHeroEmail) {
-      els.creditsHeroEmail.style.display = "none";
-    }
+    paintCreditsAccountEmail(d?.email);
     if (els.creditsAdminCard) {
       els.creditsAdminCard.style.display = creditsState.isAdmin ? "" : "none";
     }
     if (creditsState.isAdmin) await refreshAdminCreditsView();
   } catch (e) {
     creditsState.lastError = e?.message || String(e);
+    paintCreditsAccountEmail(authSession?.user?.email || activeProfile?.email);
     if (!silent) console.warn("[credits/me]", creditsState.lastError);
   } finally {
     creditsState.inFlight = false;
@@ -22509,7 +22521,8 @@ async function refreshAdminCreditsView() {
   const token = getSupabaseAuthToken();
   if (!token) return;
   try {
-    const r = await fetch(apiUrl("/api/credits/admin"), {
+    if (isNativeShell()) await ensureNativeNetworkReady();
+    const r = await apiFetch("/api/credits/admin", {
       headers: { Authorization: `Bearer ${token}` },
     });
     if (!r.ok) return;
@@ -22609,7 +22622,7 @@ async function grantPaidCredits(rawAmount) {
   if (els.btnCreditsGrantPaid) els.btnCreditsGrantPaid.disabled = true;
   setCreditsGrantPaidMsg("Granting…", "warn");
   try {
-    const r = await fetch(apiUrl("/api/credits/grant-paid"), {
+    const r = await apiFetch("/api/credits/grant-paid", {
       method: "POST",
       headers: {
         Authorization: `Bearer ${token}`,
@@ -22653,7 +22666,7 @@ async function redeemPromoCode(rawCode) {
   if (els.btnCreditsRedeem) els.btnCreditsRedeem.disabled = true;
   setCreditsRedeemMsg("Redeeming…", "warn");
   try {
-    const r = await fetch(apiUrl("/api/credits/redeem"), {
+    const r = await apiFetch("/api/credits/redeem", {
       method: "POST",
       headers: {
         Authorization: `Bearer ${token}`,

@@ -189,7 +189,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260806-141022";
+const APP_BUILD = "20260806-140241";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -2351,9 +2351,11 @@ function nativeApiBaseCandidates() {
 /** Default Vercel host for native /api/* — never leave this empty on iOS. */
 function defaultNativeApiBase() {
   if (API_BASE) return API_BASE;
-  if (isNativeShell()) {
-    return nativeApiBaseCandidates()[0] || "https://www.nabadai.com";
-  }
+  try {
+    if (window.Capacitor?.isNativePlatform?.()) {
+      return nativeApiBaseCandidates()[0] || "https://www.nabadai.com";
+    }
+  } catch {}
   return "";
 }
 const API_BASE = (() => {
@@ -2361,31 +2363,11 @@ const API_BASE = (() => {
     if (window.Capacitor?.isNativePlatform?.()) {
       return nativeApiBaseCandidates()[0] || "";
     }
-    const p = String(location.protocol || "").toLowerCase();
-    if (p === "capacitor:" || p === "ionic:") {
-      return nativeApiBaseCandidates()[0] || "https://www.nabadai.com";
-    }
-    if (document.documentElement?.classList?.contains("is-native-shell")) {
-      return nativeApiBaseCandidates()[0] || "https://www.nabadai.com";
-    }
   } catch {}
   return "";
 })();
 /** Host that successfully served `/api/public-config` (Friends/social need the same origin). */
-let _resolvedApiBase = API_BASE || (() => {
-  try {
-    const baked = String(window.__NABAD_CLIENT_ENV__?.apiBase || "").trim().replace(/\/$/, "");
-    if (baked && isNativeShell()) return baked;
-  } catch {}
-  return "";
-})();
-function forceNativeApiBase(base) {
-  const b = String(base || "").trim().replace(/\/$/, "") || defaultNativeApiBase() || "https://www.nabadai.com";
-  _resolvedApiBase = b;
-  try {
-    globalThis.__nabadApiBase = b;
-  } catch {}
-}
+let _resolvedApiBase = API_BASE;
 function setResolvedApiBase(base) {
   if (!isNativeShell()) {
     _resolvedApiBase = "";
@@ -2394,14 +2376,18 @@ function setResolvedApiBase(base) {
     } catch {}
     return;
   }
-  forceNativeApiBase(base);
+  const b = String(base || "").trim().replace(/\/$/, "") || defaultNativeApiBase();
+  _resolvedApiBase = b;
+  try {
+    globalThis.__nabadApiBase = b;
+  } catch {}
 }
 /** Web always hits same-origin `/api/*`. Native uses resolved Vercel host (env.client.js). */
 function apiUrl(p) {
   const path = String(p || "").startsWith("/") ? p : `/${p}`;
   if (!isNativeShell()) return path;
-  const base = _resolvedApiBase || defaultNativeApiBase() || "https://www.nabadai.com";
-  return `${base.replace(/\/$/, "")}${path}`;
+  const base = _resolvedApiBase || defaultNativeApiBase();
+  return base ? `${base.replace(/\/$/, "")}${path}` : path;
 }
 const PUBLIC_CONFIG_CACHE_KEY = "mas:public-config:v3";
 /** Clears poisoned native caches whenever a new build is installed over the same app. */
@@ -2483,55 +2469,7 @@ function getApiFetchHeaders(extra = {}) {
 
 function apiFetch(path, opts = {}) {
   const headers = getApiFetchHeaders(opts.headers || {});
-  const url = apiUrl(path);
-  const init = { ...opts, headers };
-  const run = () => fetch(url, init);
-  if (!isNativeShell()) return run();
-  return run().catch(async (err) => {
-    const native = await capacitorHttpFetch(url, init);
-    if (native) return native;
-    throw err;
-  });
-}
-
-/** iOS WKWebView sometimes fails cross-origin fetch — use native URLSession. */
-async function capacitorHttpFetch(url, init = {}) {
-  try {
-    const CapHttp = window.Capacitor?.Plugins?.CapacitorHttp;
-    if (!CapHttp?.request) return null;
-    const method = String(init.method || "GET").toUpperCase();
-    const hdrs = { ...(init.headers || {}) };
-    let data;
-    if (init.body != null && init.body !== "") {
-      data = typeof init.body === "string" ? init.body : String(init.body);
-    }
-    const resp = await CapHttp.request({
-      url: String(url),
-      method,
-      headers: hdrs,
-      data,
-      responseType: "json",
-      connectTimeout: 15000,
-      readTimeout: 15000,
-    });
-    const status = Number(resp?.status || 0);
-    const body = resp?.data;
-    return {
-      ok: status >= 200 && status < 300,
-      status,
-      url: String(resp?.url || url),
-      headers: {
-        get: (k) => {
-          const h = resp?.headers || {};
-          return h[k] ?? h[String(k).toLowerCase()] ?? null;
-        },
-      },
-      json: async () => body,
-      text: async () => (typeof body === "string" ? body : JSON.stringify(body ?? "")),
-    };
-  } catch {
-    return null;
-  }
+  return fetch(apiUrl(path), { ...opts, headers });
 }
 
 function applyPublicConfigPayload(d) {
@@ -2567,16 +2505,10 @@ function loadPublicConfigFromCache() {
 
 function isNativeShell() {
   try {
-    if (window.Capacitor?.isNativePlatform?.()) return true;
-  } catch {}
-  try {
-    const p = String(location.protocol || "").toLowerCase();
-    if (p === "capacitor:" || p === "ionic:") return true;
-  } catch {}
-  try {
-    if (document.documentElement?.classList?.contains("is-native-shell")) return true;
-  } catch {}
-  return false;
+    return Boolean(window.Capacitor?.isNativePlatform?.());
+  } catch {
+    return false;
+  }
 }
 
 /** web | ios | android — captured once on first cloud profile upsert. */
@@ -2603,12 +2535,8 @@ function applyClientEnvBootstrap() {
         window.__VERCEL_PROTECTION_BYPASS__ = bypass;
       } catch {}
     }
-    if (isNativeShell()) {
-      forceNativeApiBase(env.apiBase || defaultNativeApiBase());
-    } else {
-      _resolvedApiBase = "";
-      try { globalThis.__nabadApiBase = ""; } catch {}
-    }
+    if (isNativeShell()) setResolvedApiBase(env.apiBase || defaultNativeApiBase());
+    else _resolvedApiBase = "";
     return Boolean(SUPABASE_URL && SUPABASE_ANON_KEY);
   } catch {
     return false;
@@ -57580,9 +57508,6 @@ try {
   } catch {}
 } catch {}
 migrateCachesOnBuildChange();
-if (isNativeShell() && window.__NABAD_CLIENT_ENV__?.apiBase) {
-  forceNativeApiBase(window.__NABAD_CLIENT_ENV__.apiBase);
-}
 applyClientEnvBootstrap();
 loadPublicConfigFromCache();
 void refreshSunoCredits();

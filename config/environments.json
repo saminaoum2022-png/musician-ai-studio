@@ -1,0 +1,12 @@
+{
+  "production": {
+    "label": "Production — live web + TestFlight",
+    "branch": "main",
+    "apiBase": "https://www.nabadai.com"
+  },
+  "staging": {
+    "label": "Staging — daily dev (simulator + preview API)",
+    "branch": "staging",
+    "apiBase": "https://musician-ai-studio-git-staging-saminaoum2022-png.vercel.app"
+  }
+}

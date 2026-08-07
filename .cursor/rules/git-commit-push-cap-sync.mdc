@@ -5,23 +5,22 @@ alwaysApply: true
 
 # Ship workflow (musician-ai-studio)
 
-**Real users now test the live web app + physical iPhone, so those are production. Do NOT push to git / deploy web / install to the iPhone until the user has previewed on the simulator and approved.** The simulator is the safe staging copy; the live web URL and the physical iPhone are production.
+**Production = `main` branch + nabadai.com + TestFlight.** Daily work goes on the **`staging` branch** and staging Vercel preview API (see `staging-vs-production.mdc`). Do NOT push to `main` / deploy production / install TestFlight builds until the user has previewed on the simulator and approved.
 
-## Why the simulator is a safe staging copy
+## Staging vs production
 
-The iOS app (simulator **and** physical iPhone) is a Capacitor shell that loads **bundled local `www/` assets**, NOT the live `nabadai.com` URL. So building frontend changes into the simulator is fully isolated from live web users — nothing ships until you `git push` (web) or `run:ios` (iPhone).
+- **`staging` branch + `npm run sim`**: bundled frontend + **staging API** — safe for backend and frontend iteration.
+- **`main` branch push**: production web + API — affects live users and TestFlight (same backend once they refresh web; TestFlight uses bundled frontend until a new build).
+- **Supabase** is still shared across staging/production API until a staging Supabase project is configured in Vercel Preview env vars. SQL migrations on the production DB still affect live testers — call that out before running SQL.
 
-**Important exception — the backend is shared.** Both the simulator and the live web call the **same deployed API** (`api/` on Vercel) and the **same Supabase DB**. So:
-- **Frontend-only changes** (`index.html`, `styles.css`, `src/`, `www/` mirrors): simulator preview is fully isolated and safe to iterate on. ✅
-- **Backend changes** (`api/`, DB/SQL, schema): the simulator hits the **deployed** API, so there is no isolated preview — testing them requires deploying (which affects live users) or running the API locally. Call this out to the user before touching `api/` or DB while users are testing.
+The iOS simulator loads **bundled local `www/`** and, with `npm run sim`, talks to the **staging** API — not nabadai.com.
 
 ## Step 1 — Preview on the simulator (default after any app change; do NOT deploy yet)
 
 When you finish a task that changes tracked project files (`www/`, `src/`, root `index.html` / `styles.css`, etc.), preview it on the simulator **before ending the turn**, without committing or pushing:
 
-1. **`npm run sync:www`** — mirror `src/` / `index.html` / `styles.css` into `www/` **without** bumping the build id (avoid version churn during iteration).
-2. **`sh ios/App/scripts/run-ios-sim.sh`** — syncs `www` into the iOS shell, builds for the booted simulator (default `iPhone 17 Pro`), installs, and launches. The physical-iPhone `run:ios` does NOT update the simulator and vice-versa — each needs its own build.
-3. Take a simulator screenshot (`xcrun simctl io booted screenshot /tmp/x.png`) and show the user. **Then stop and wait for approval.** Do not git-push or `run:ios` in the same turn unless the user already said to ship.
+1. **`npm run sim`** — bakes **staging** API env, syncs `www` into the iOS shell, builds for the booted simulator (default `iPhone 17 Pro`), installs, and launches. (Equivalent: `npm run env:staging && sh ios/App/scripts/run-ios-sim.sh`.) The physical-iPhone `run:ios` does NOT update the simulator and vice-versa — each needs its own build.
+2. Take a simulator screenshot (`xcrun simctl io booted screenshot /tmp/x.png`) and show the user. **Then stop and wait for approval.** Do not git-push to `main` or `run:ios` with production env in the same turn unless the user already said to ship.
 
 ## Step 2 — Ship to production (ONLY after the user approves)
 
@@ -30,8 +29,8 @@ Once the user approves the simulator preview (e.g. "approved", "push it", "ship 
 1. **`git status`** — confirm what changed.
 2. **`npm run stamp:build`** — stamps a fresh, unique build id into the cache-busting asset URLs (`styles.css?v=…`, `src/app.js?v=…`) and the `APP_BUILD` marker, **and** mirrors everything into `www/` (it runs `sync-www` internally). The static `?v=` is what busts the WKWebView (native) and browser/CDN caches; without a bump the device/web keep serving stale code (the recurring "I don't see my change" problem). The id also shows in the faint on-screen build marker, so you can confirm a device got the new build.
 3. **`git add`** the relevant paths (including the stamped `index.html`, `src/app.js`, and their `www/` mirrors) and **`git commit -m "…"`** with a short, accurate message (full sentences, no fluff).
-4. **`git push`** to the current branch’s upstream (usually `origin main`). That is the deploy step for the web app (Vercel).
-5. **`npm run run:ios`** from the repo root — syncs `www`, builds for the connected iPhone, installs, and launches (no Xcode debugger). Do not stop at `npx cap sync ios` unless `run:ios` fails (no device, signing error, etc.); report the failure and what succeeded.
+4. **`git push origin main`** — production deploy (Vercel + nabadai.com). Merge from `staging` first unless the user explicitly ships a hotfix on `main`.
+5. **`npm run env:production`** then **`npm run run:ios`** — syncs `www` with **production** API baked in, builds for the connected iPhone, installs, and launches (no Xcode debugger). Do not stop at `npx cap sync ios` unless `run:ios` fails (no device, signing error, etc.); report the failure and what succeeded.
 6. If `run:ios` changes tracked files under `ios/`, commit and push those too in the same pass.
 
 If push fails, fix or report and do not claim success. If build/launch fails after a successful push, say so clearly — web deploy may still be live.

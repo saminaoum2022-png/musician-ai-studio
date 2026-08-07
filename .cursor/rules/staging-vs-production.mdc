@@ -1,0 +1,54 @@
+---
+description: Staging vs production — daily work on staging branch/API; TestFlight + live web only from main
+alwaysApply: true
+---
+
+# Staging vs production (musician-ai-studio)
+
+TestFlight testers and live web users are **production**. Daily dev uses a **separate staging API** so backend + frontend changes do not hit testers until you ship.
+
+## Environments
+
+| | **Staging** | **Production** |
+|---|-------------|----------------|
+| Git branch | `staging` | `main` |
+| API | Vercel preview for `staging` branch (`config/environments.json`) | `https://www.nabadai.com` |
+| Web users | Preview URL only (not nabadai.com) | nabadai.com |
+| iOS simulator | `npm run sim` (bakes **staging** API into bundled `www/`) | — |
+| TestFlight / live iPhone prod | — | Archive/install with **production** env |
+| Supabase | **Shared today** — same DB unless Preview env vars point to a staging project | Production project |
+
+**Backend code** is isolated per branch (staging push → preview deploy; main push → production). **Database** is still shared until a second Supabase project is wired in Vercel → Settings → Environment Variables → **Preview**.
+
+## Daily workflow (default)
+
+1. **`git checkout staging`** — all feature/fix work commits here.
+2. Change code (`src/`, `api/`, etc.).
+3. **`npm run sim`** — sync www, bake **staging** `env.client.js`, build simulator. Safe for backend + frontend iteration.
+4. **`git push origin staging`** — deploys **staging API only** (Vercel preview). Does **not** affect TestFlight or nabadai.com.
+
+Do **not** push to `main` while testers are on TestFlight unless shipping.
+
+## Ship to TestFlight + production (when approved)
+
+1. Merge **`staging` → `main`** (or cherry-pick); resolve conflicts on `main`.
+2. **`npm run stamp:build`** — bump build id + sync `www/`.
+3. **`npm run env:production`** — bake production API into `env.client.js` before any TestFlight/device prod install.
+4. **`git add` / `commit` / `git push origin main`** — deploys production web + API.
+5. **TestFlight**: Archive in Xcode (Release) or approved `run:ios` with production env — **never** ship a TestFlight build baked with staging API.
+6. Run any **Supabase SQL** on production project before or with the API deploy if the release depends on new RPCs/tables.
+
+## Commands
+
+- `npm run env:staging` — point bundled iOS/web native env at staging API
+- `npm run env:production` — point at nabadai.com (TestFlight / prod device)
+- `npm run sim` — **staging** simulator preview (default for agents after app changes)
+- `npm run run:ios` — physical device; use **`npm run env:production`** first if matching TestFlight
+
+## Agent rules
+
+- **Default branch for changes:** `staging`, not `main`.
+- **Default simulator command:** `npm run sim` (staging API).
+- **Before `git push origin main`:** user must explicitly approve shipping to production/TestFlight.
+- **Backend + DB on staging:** OK to push `staging` branch; call out that **shared Supabase** means SQL migrations still affect live data until a staging DB exists.
+- Update `config/environments.json` → `staging.apiBase` if the Vercel preview URL differs after first deploy.

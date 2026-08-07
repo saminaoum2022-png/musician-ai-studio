@@ -190,7 +190,7 @@ import { MUSIC_VIDEO_FEATURE_ENABLED } from "./feature-flags.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260807-163824";
+const APP_BUILD = "20260807-170208";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -13816,11 +13816,12 @@ function bindFollowingComposeOnce() {
   syncFollowingComposeUi();
 }
 
-function followingActivityPlayAttrs(t, profMap, byLine) {
-  // List tiles stay square; play attrs must carry full portrait art so the
-  // player never opens a zoomed thumb crop.
-  const artSafe = trackCoverArtForSquareTile(t);
+function followingActivityPlayAttrs(t, profMap, byLine, opts = {}) {
+  // Feed post covers are full-width squares — use portrait/full art and crop
+  // in CSS. Small remix tiles keep the list thumb to save bandwidth.
   const displayArt = trackCoverArtForDisplay(t);
+  const thumbArt = trackCoverArtForSquareTile(t);
+  const artSafe = opts.useThumb ? thumbArt : displayArt || thumbArt;
   const rawTitle = String(t.title || "Untitled");
   const encUrl = encodeURIComponent(String(t.url || ""));
   const encTitle = encodeURIComponent(rawTitle);
@@ -14130,7 +14131,7 @@ function followActRealtimeProgressHtml(encUrl, safeTitle) {
 
 function feedRemixFlowPlayerHtml(t, profMap, orig, main) {
   const origBy = orig.username ? `@${orig.username}` : "Original";
-  const o = followingActivityPlayAttrs(orig, profMap, origBy);
+  const o = followingActivityPlayAttrs(orig, profMap, origBy, { useThumb: true });
   const {
     encUrl,
     encTitle,
@@ -14246,7 +14247,7 @@ function followingActivityRowHtml(t, profMap, idx, opts = {}) {
       });
     } else {
       const origBy = orig.username ? `@${orig.username}` : "Original";
-      const o = followingActivityPlayAttrs(orig, profMap, origBy);
+      const o = followingActivityPlayAttrs(orig, profMap, origBy, { useThumb: true });
       remixPairHtml = `
       <div class="followActRemixPair" role="group" aria-label="Original and remix">
         <button type="button" class="followActRemixTile" data-user-lib-play="1" data-user-lib-url="${o.encUrl}" data-user-lib-title="${o.encTitle}" data-user-lib-art="${o.encArt}" data-discovery-by="${encodeURIComponent(origBy)}" ${o.playData} aria-label="Play original ${escapeHtml(orig.title)}">
@@ -25242,6 +25243,12 @@ function mapPublicLibrarySongRows(arr, selectedPublishedAt) {
             ...(String(s.meta_release_caption || "").trim() ? { releaseCaption: String(s.meta_release_caption).trim() } : {}),
             ...(s.meta_challenge ? { challenge: s.meta_challenge } : {}),
             ...(String(s.meta_featured_on_profile || "").toLowerCase() === "true" ? { featuredOnProfile: true } : {}),
+            ...(String(s.meta_image_url || "").trim() && !String(s.meta_image_url).startsWith("data:")
+              ? { imageUrl: String(s.meta_image_url).trim() }
+              : {}),
+            ...(String(s.meta_image_thumb || "").trim() && !String(s.meta_image_thumb).startsWith("data:")
+              ? { imageThumb: String(s.meta_image_thumb).trim() }
+              : {}),
           },
           publicOnProfile: true,
         },
@@ -25252,6 +25259,9 @@ function mapPublicLibrarySongRows(arr, selectedPublishedAt) {
     .sort((a, b) => Number(b.ts || 0) - Number(a.ts || 0));
 }
 
+const PUBLIC_LIBRARY_SONG_META_COLS =
+  "meta_remix_of:meta->remixOf,meta_mashup_of:meta->mashupOf,meta_release_caption:meta->>releaseCaption,meta_challenge:meta->challenge,meta_featured_on_profile:meta->>featuredOnProfile,meta_image_url:meta->>imageUrl,meta_image_thumb:meta->>imageThumb";
+
 /** Fetch a set of public songs by id (for repost originals), keyed by song
  *  id. Returns playable track objects with userId attached. Safe if the
  *  table/columns are missing — resolves to an empty map. */
@@ -25260,7 +25270,7 @@ async function fetchPublicSongsByIds(ids) {
   const uuids = [...new Set((ids || []).map((x) => String(x || "").trim()).filter(Boolean))].slice(0, 60);
   if (!uuids.length || !SUPABASE_URL || !SUPABASE_ANON_KEY) return out;
   const cols =
-    "user_id,id,created_at,published_at,title,song_url,task_id,audio_id,kind,art_url,meta_remix_of:meta->remixOf,meta_mashup_of:meta->mashupOf,meta_release_caption:meta->>releaseCaption,meta_challenge:meta->challenge,meta_featured_on_profile:meta->>featuredOnProfile";
+    `user_id,id,created_at,published_at,title,song_url,task_id,audio_id,kind,art_url,${PUBLIC_LIBRARY_SONG_META_COLS}`;
   const colsLegacy = cols.replace(",published_at", "");
   const inList = uuids.map((id) => `"${id}"`).join(",");
   const token = getSupabaseAuthToken();
@@ -25599,9 +25609,9 @@ async function supabaseFetchPublicLibraryRowsForFilter(filterQuery, perUserLimit
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY || !filterQuery) return new Map();
   const lim = Math.min(120, Math.max(12, Number(perUserLimit) || 80));
   const colsWithPublished =
-    "user_id,id,created_at,published_at,title,song_url,task_id,audio_id,kind,art_url,meta_remix_of:meta->remixOf,meta_mashup_of:meta->mashupOf,meta_release_caption:meta->>releaseCaption,meta_challenge:meta->challenge,meta_featured_on_profile:meta->>featuredOnProfile";
+    `user_id,id,created_at,published_at,title,song_url,task_id,audio_id,kind,art_url,${PUBLIC_LIBRARY_SONG_META_COLS}`;
   const colsLegacy =
-    "user_id,id,created_at,title,song_url,task_id,audio_id,kind,art_url,meta_remix_of:meta->remixOf,meta_mashup_of:meta->mashupOf,meta_release_caption:meta->>releaseCaption,meta_challenge:meta->challenge,meta_featured_on_profile:meta->>featuredOnProfile";
+    `user_id,id,created_at,title,song_url,task_id,audio_id,kind,art_url,${PUBLIC_LIBRARY_SONG_META_COLS}`;
   const artUrlGuard = `&or=${encodeURIComponent("(art_url.is.null,art_url.not.like.data:*)")}`;
   const authHeaders = () => {
     const token = getSupabaseAuthToken();

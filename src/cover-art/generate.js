@@ -253,6 +253,8 @@ function patchLibraryTrackCover(trackId, patch) {
     params,
     bucket,
     coverSource = "pollinations",
+    coverImageProvider = "",
+    regenFallbackReason = "",
     nabadAbstractCover = true,
     coverGenAttempted = false,
     clearCoverPending = false,
@@ -270,6 +272,8 @@ function patchLibraryTrackCover(trackId, patch) {
     coverStoryTheme: params?.storyTheme || prev.meta?.coverStoryTheme || "",
     coverArtworkSource: params?.artworkSource || prev.meta?.coverArtworkSource || "",
     coverParams: params || prev.meta?.coverParams,
+    coverImageProvider: coverImageProvider || params?.regenAttemptedProvider || prev.meta?.coverImageProvider || "",
+    regenFallbackReason: regenFallbackReason || params?.regenFallbackReason || "",
     photoMode: false,
     coverNabadMark: coverSource === "pollinations",
     coverGenAttempted: coverGenAttempted || prev.meta?.coverGenAttempted || false,
@@ -339,6 +343,8 @@ async function runCoverJobForTrack(track, id, opts = {}) {
           seed: result.seed,
           bucket: result.bucket,
           params: result.params || params,
+          coverImageProvider: String(result.provider || result.regenAttemptedProvider || "").trim(),
+          regenFallbackReason: String(result.regenFallbackReason || result.params?.regenFallbackReason || "").trim(),
           clearCoverPending: true,
           replacePhotoCover: Boolean(opts.coverRegenerate),
         }),
@@ -347,6 +353,8 @@ async function runCoverJobForTrack(track, id, opts = {}) {
       const { persistTrackCoverIfNeeded } = d();
       void persistTrackCoverIfNeeded?.(patched);
       refreshPlayerIfTrack(patched, opts);
+      patched._coverRegenProvider = String(result.provider || "").trim();
+      patched._coverRegenFallbackReason = String(result.regenFallbackReason || result.params?.regenFallbackReason || "").trim();
       return patched;
     } catch (e) {
       lastErr = e;

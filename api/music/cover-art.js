@@ -104,22 +104,55 @@ function coverDataUrlFromBuffer(outBuf, outMime) {
 
 /** Regen only — Gemini image when configured, Pollinations fallback. */
 async function fetchRegenCoverImage({ prompt, seed, avoidTags, buildPollinationsUrl }) {
-  const provider = resolveCoverRegenImageProvider();
-  if (provider === "gemini") {
+  const attemptedProvider = resolveCoverRegenImageProvider();
+  if (attemptedProvider === "gemini") {
     const gem = await tryGeminiCoverImage({ prompt });
     if (gem.ok) {
-      return { ok: true, buf: gem.buf, mime: gem.mime || "image/png", provider: "gemini", geminiModel: gem.model || "" };
+      return {
+        ok: true,
+        buf: gem.buf,
+        mime: gem.mime || "image/png",
+        provider: "gemini",
+        geminiModel: gem.model || "",
+        regenAttemptedProvider: "gemini",
+      };
     }
     console.warn("[music/cover-art] gemini regen failed", gem.error);
     if (!geminiRegenFallbackEnabled()) {
-      return { ok: false, error: gem.error || "gemini_failed" };
+      return { ok: false, error: gem.error || "gemini_failed", regenAttemptedProvider: "gemini" };
     }
+    const upstreamUrl = buildPollinationsUrl(prompt, seed, { avoidTags });
+    const polled = await fetchPollinationsCover(upstreamUrl);
+    if (!polled.ok) {
+      return {
+        ok: false,
+        error: polled.error || "pollinations_failed",
+        regenAttemptedProvider: "gemini",
+        regenFallbackReason: gem.error || "gemini_failed",
+      };
+    }
+    return {
+      ok: true,
+      buf: polled.buf,
+      mime: polled.mime || "image/jpeg",
+      provider: "pollinations",
+      geminiModel: "",
+      regenAttemptedProvider: "gemini",
+      regenFallbackReason: gem.error || "gemini_failed",
+    };
   }
 
   const upstreamUrl = buildPollinationsUrl(prompt, seed, { avoidTags });
   const polled = await fetchPollinationsCover(upstreamUrl);
-  if (!polled.ok) return { ok: false, error: polled.error || "pollinations_failed" };
-  return { ok: true, buf: polled.buf, mime: polled.mime || "image/jpeg", provider: "pollinations", geminiModel: "" };
+  if (!polled.ok) return { ok: false, error: polled.error || "pollinations_failed", regenAttemptedProvider: "pollinations" };
+  return {
+    ok: true,
+    buf: polled.buf,
+    mime: polled.mime || "image/jpeg",
+    provider: "pollinations",
+    geminiModel: "",
+    regenAttemptedProvider: "pollinations",
+  };
 }
 
 async function sendRegenCoverJson(res, {
@@ -128,6 +161,8 @@ async function sendRegenCoverJson(res, {
   seed,
   provider,
   geminiModel = "",
+  regenAttemptedProvider = "",
+  regenFallbackReason = "",
   bucket = "default",
   visualMode = "user_directed",
   storyTheme = "user_regen",
@@ -146,10 +181,14 @@ async function sendRegenCoverJson(res, {
     params: {
       ...params,
       ...(geminiModel ? { geminiImageModel: geminiModel } : {}),
+      ...(regenAttemptedProvider ? { regenAttemptedProvider } : {}),
+      ...(regenFallbackReason ? { regenFallbackReason } : {}),
     },
     coverWidth: COVER_PORTRAIT_W,
     coverHeight: COVER_PORTRAIT_H,
     provider,
+    regenAttemptedProvider: regenAttemptedProvider || provider,
+    ...(regenFallbackReason ? { regenFallbackReason } : {}),
     abstract: true,
     coverRegenerate: true,
   });
@@ -250,6 +289,8 @@ module.exports = async function handler(req, res) {
           seed,
           provider: rendered.provider,
           geminiModel: rendered.geminiModel,
+          regenAttemptedProvider: rendered.regenAttemptedProvider,
+          regenFallbackReason: rendered.regenFallbackReason,
           params: { ...(built.params || {}), regenUserHint },
         });
       }
@@ -276,6 +317,8 @@ module.exports = async function handler(req, res) {
         seed,
         provider: rendered.provider,
         geminiModel: rendered.geminiModel,
+        regenAttemptedProvider: rendered.regenAttemptedProvider,
+        regenFallbackReason: rendered.regenFallbackReason,
         bucket: String(body?.clientBucket || "default"),
         visualMode: String(body?.clientVisualMode || "still_life"),
         storyTheme: String(body?.clientStoryTheme || "regen"),

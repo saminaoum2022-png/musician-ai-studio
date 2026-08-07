@@ -189,7 +189,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260807-135022";
+const APP_BUILD = "20260807-140135";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -47289,7 +47289,18 @@ async function regeneratePlayerCover(artworkHint = "", trackId = "") {
         : false;
       if (revealed) {
         flashPlayerCover();
-        setStatus("");
+        const provider = String(updated._coverRegenProvider || updated.meta?.coverImageProvider || "").trim();
+        const fallback = String(updated._coverRegenFallbackReason || updated.meta?.regenFallbackReason || "").trim();
+        if (provider === "gemini") {
+          setStatus("Cover updated via Gemini.");
+        } else if (fallback) {
+          setStatus(`Cover updated via Pollinations (Gemini failed: ${fallback}).`);
+        } else if (provider === "pollinations") {
+          setStatus("Cover updated via Pollinations.");
+        } else {
+          setStatus("");
+        }
+        window.setTimeout(() => setStatus(""), provider ? 4200 : 0);
         try {
           patchLibraryRowCoverArt(updated.id);
           refreshOwnSongsUi({ soft: false });

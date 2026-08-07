@@ -1,6 +1,6 @@
 /**
  * One-time welcome credits for new website signups (web users can't buy yet).
- * Uses existing refund_credits RPC → promo_balance.
+ * Uses grant_promo_credits RPC → promo_balance (see supabase/grant_promo_credits.sql).
  *
  * Anti-abuse: welcome_credit_claims table keyed by email (survives account delete).
  */
@@ -189,7 +189,7 @@ async function grantSignupWelcomeCreditsIfNeeded(
     }
   }
 
-  const rpc = await callRpc("refund_credits", {
+  const rpc = await callRpc("grant_promo_credits", {
     p_user_id: userId,
     p_amount: WELCOME_CREDITS,
     p_reason: WELCOME_REASON,

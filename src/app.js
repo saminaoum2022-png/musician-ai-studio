@@ -190,7 +190,7 @@ import { MUSIC_VIDEO_FEATURE_ENABLED } from "./feature-flags.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260807-161837";
+const APP_BUILD = "20260807-163824";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -9572,11 +9572,11 @@ function discoverSuggestedCreatorsFromTracks(tracks, profMap, limit = 12) {
 
 function discoverFeedCreatorAvatarHtml(prof, handle) {
   const raw = String(prof?.avatar || "").trim();
-  if (isRealUserAvatarUrl(raw)) {
-    return `<img class="discoverFeedFollowAv" src="${escapeHtml(normalizeProfileAvatarForImg(raw))}" alt="" loading="lazy" decoding="async" />`;
-  }
   const letter = String(handle || "C").replace(/^@/, "").slice(0, 1).toUpperCase() || "C";
-  return `<span class="discoverFeedFollowAv discoverFeedFollowAvFallback" aria-hidden="true">${escapeHtml(letter)}</span>`;
+  if (isRealUserAvatarUrl(raw)) {
+    return `<span class="discoverFeedFollowAv" aria-hidden="true"><img src="${escapeHtml(normalizeProfileAvatarForImg(raw))}" alt="" loading="lazy" decoding="async" /></span>`;
+  }
+  return `<span class="discoverFeedFollowAv" aria-hidden="true"><span class="discoverFeedFollowAvFallback">${escapeHtml(letter)}</span></span>`;
 }
 
 function discoverFeedFollowCardHtml(creator) {

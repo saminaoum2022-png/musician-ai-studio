@@ -2,7 +2,7 @@
  * Client-side abstract cover generation via /api/music/cover-art
  */
 import { canRegeneratePollinationsCover, canRegenerateTrackCover, coverArtParamsFromTrack, isPollinationsCoverEligible, shouldUseAbstractCover } from "./params.js";
-import { buildAbstractCoverPrompt, buildPollinationsUrl, buildUserRegenCoverPrompt, classifyVisualBucket, COVER_PROMPT_POLICY_VERSION, resolveStoryTheme } from "./prompt.js";
+import { buildAbstractCoverPrompt, buildPollinationsUrl, classifyVisualBucket, COVER_PROMPT_POLICY_VERSION, resolveStoryTheme } from "./prompt.js";
 import { resolveVisualDirection } from "./visual-director/director.mjs";
 import { DEFAULT_SONG_COVER_URL, isDefaultSongCoverUrl } from "./placeholders.js";
 import { stampCoverWithSplashMark } from "./branding.js";
@@ -96,22 +96,6 @@ async function resolveRegenPromptBundle(params, regenOpts = {}) {
   ).trim().slice(0, 280);
   const regenAutoMusic = Boolean(regenOpts.regenAutoMusic || params?.regenAutoMusic || !hintOverride);
 
-  if (hintOverride) {
-    const direct = buildUserRegenCoverPrompt(hintOverride, {
-      songId: params?.songId || "",
-      regenSalt,
-    });
-    if (direct) {
-      const avoidTags = [params.avoidTagsInput || ""].filter(Boolean).join(", ");
-      return {
-        ...direct,
-        avoidTags,
-        regenSalt,
-        visualDirection: null,
-      };
-    }
-  }
-
   const bucketKey = classifyVisualBucket(params);
   const { theme, storyScore } = resolveStoryTheme(params);
 
@@ -137,10 +121,8 @@ async function resolveRegenPromptBundle(params, regenOpts = {}) {
   const built = buildAbstractCoverPrompt(promptInput, {
     regenSalt,
     directorSceneHint: hintOverride || regenAutoMusic ? "" : (vd.sceneHint || ""),
-    nabadIdentityPhrases: hintOverride
-      ? "premium cinematic editorial still photography, generous negative space"
-      : (vd.identityPhrases || ""),
-    visualDirection: hintOverride || regenAutoMusic ? undefined : (vd.direction || undefined),
+    nabadIdentityPhrases: vd.identityPhrases || "",
+    visualDirection: vd.direction || undefined,
     userArtworkOverride: hintOverride || undefined,
     forceMusicFallback: regenAutoMusic,
   });

@@ -4,7 +4,7 @@
  */
 
 /** Bump when cover prompt policy changes — busts Gemini scene cache on the server. */
-export const COVER_PROMPT_POLICY_VERSION = 7;
+export const COVER_PROMPT_POLICY_VERSION = 8;
 /** Pollinations flux reliably returns ~768×768 square — request square, crop to 9:16 (avoids vertical stretch). */
 export const POLLINATIONS_COVER_WIDTH = 1024;
 export const POLLINATIONS_COVER_HEIGHT = 1024;
@@ -426,10 +426,17 @@ function prepareDirectUserArtworkHint(raw) {
 
 export { prepareDirectUserArtworkHint };
 
-/** Explicit user regen from the player sheet — short, subject-first (Flux ignores long safety tails). */
-export function buildUserRegenCoverPrompt(hint, { songId = "", regenSalt = "" } = {}) {
+/** @deprecated Prefer buildAbstractCoverPrompt with userArtworkOverride + Visual Director. */
+export function buildUserRegenCoverPrompt(hint, { songId = "", regenSalt = "", coverInput = null } = {}) {
   const userArtwork = prepareDirectUserArtworkHint(hint);
   if (!userArtwork) return null;
+  if (coverInput && typeof coverInput === "object") {
+    const built = buildAbstractCoverPrompt(
+      { ...coverInput, artworkHint: userArtwork, artworkStyle: userArtwork },
+      { regenSalt, userArtworkOverride: userArtwork },
+    );
+    if (built?.prompt) return built;
+  }
   const seed = buildCoverSeed({ songId }, "user_regen", "default", userArtwork, regenSalt);
   const frame = isConcreteObjectArtworkHint(userArtwork) ? OBJECT_COMPOSE_FRAME : MUSIC_COVER_FRAME;
   const prompt = [

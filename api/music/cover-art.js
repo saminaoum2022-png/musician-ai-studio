@@ -262,41 +262,7 @@ module.exports = async function handler(req, res) {
       ? String(vdApplied.avoidMerged).slice(0, MAX_AVOID)
       : avoidTagsInput.slice(0, MAX_AVOID);
 
-    /** Regen with typed hint — server rebuilds short subject-first prompt (never lyrics/Gemini auto). */
-    if (coverRegenerate && regenUserHint) {
-      const { buildUserRegenCoverPrompt, buildPollinationsUrl } = await getPromptModule();
-      const built = buildUserRegenCoverPrompt(regenUserHint, {
-        songId,
-        regenSalt: String(body?.regenSalt || Date.now()),
-      });
-      if (built?.prompt) {
-        const seed = Number.isFinite(clientSeedRaw) && clientSeedRaw > 0
-          ? Math.floor(clientSeedRaw) % 2147483646
-          : built.seed;
-        const rendered = await fetchRegenCoverImage({
-          prompt: built.prompt,
-          seed,
-          avoidTags: String(body?.clientAvoidTags || avoidTagsInput || "").slice(0, MAX_AVOID),
-          buildPollinationsUrl,
-        });
-        if (!rendered.ok) {
-          console.warn("[music/cover-art] regen failed (user hint)", rendered.error);
-          return sendJson(res, 502, { error: "Cover image generation failed upstream." });
-        }
-        return sendRegenCoverJson(res, {
-          buf: rendered.buf,
-          mime: rendered.mime,
-          seed,
-          provider: rendered.provider,
-          geminiModel: rendered.geminiModel,
-          regenAttemptedProvider: rendered.regenAttemptedProvider,
-          regenFallbackReason: rendered.regenFallbackReason,
-          params: { ...(built.params || {}), regenUserHint },
-        });
-      }
-    }
-
-    /** Regen: client bundle builds prompt locally (latest policy) — skip Gemini scene + server prompt rewrite. */
+    /** Regen: client bundle (Visual Director + Nabad DNA + mood palette) — Gemini or Pollinations. */
     if (coverRegenerate && clientPrompt) {
       const seed = Number.isFinite(clientSeedRaw) && clientSeedRaw > 0
         ? Math.floor(clientSeedRaw) % 2147483646
@@ -323,7 +289,10 @@ module.exports = async function handler(req, res) {
         visualMode: String(body?.clientVisualMode || "still_life"),
         storyTheme: String(body?.clientStoryTheme || "regen"),
         artworkSource: String(body?.clientArtworkSource || "client_regen"),
-        params: body?.clientParams && typeof body.clientParams === "object" ? body.clientParams : {},
+        params: {
+          ...(body?.clientParams && typeof body.clientParams === "object" ? body.clientParams : {}),
+          ...(regenUserHint ? { regenUserHint } : {}),
+        },
       });
     }
 

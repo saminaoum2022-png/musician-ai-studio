@@ -802,7 +802,7 @@ async function computeWeeklyChart() {
 
   const candidateIds = curRanked.map(([sid]) => sid);
   const songsR = await svcFetch(
-    `user_songs?select=id,title,song_url,art_url,user_id,task_id,audio_id&id=in.(${candidateIds.map(encodeURIComponent).join(",")})&public_on_profile=eq.true&limit=20`,
+    `user_songs?select=id,title,song_url,art_url,user_id,task_id,audio_id,meta&id=in.(${candidateIds.map(encodeURIComponent).join(",")})&public_on_profile=eq.true&limit=20`,
   );
   const songById = new Map(
     (Array.isArray(songsR.data) ? songsR.data : []).map((s) => [String(s.id), s]),
@@ -815,6 +815,10 @@ async function computeWeeklyChart() {
     const rank = chart.length + 1;
     const prevRank = prevRankMap.get(sid) || 0;
     const delta = prevRank ? prevRank - rank : 0;
+    const rawMeta = song.meta && typeof song.meta === "object" ? song.meta : {};
+    const metaImageUrl = String(rawMeta.imageUrl || rawMeta.image_url || "").trim();
+    const metaImageThumb = String(rawMeta.imageThumb || rawMeta.image_thumb || "").trim();
+    const artUrl = String(song.art_url || metaImageUrl || metaImageThumb || "").trim();
     chart.push({
       songId: sid,
       rank,
@@ -824,7 +828,11 @@ async function computeWeeklyChart() {
       score,
       weeklyPlays: curPlays.get(sid) || 0,
       title: String(song.title || "Song").trim(),
-      artUrl: String(song.art_url || "").trim(),
+      artUrl,
+      meta: {
+        imageUrl: metaImageUrl || artUrl,
+        imageThumb: metaImageThumb,
+      },
       url: String(song.song_url || "").trim(),
       taskId: String(song.task_id || ""),
       audioId: String(song.audio_id || ""),

@@ -7744,7 +7744,7 @@ function bindCampaignUiOnce() {
 }
 
 // ─── Weekly chart (Top songs of the week) ───────────────────────────────
-const WEEKLY_CHART_CACHE_KEY = "mas:weeklyChart:v1";
+const WEEKLY_CHART_CACHE_KEY = "mas:weeklyChart:v2";
 function loadPersistedWeeklyChart() {
   try {
     const raw = localStorage.getItem(WEEKLY_CHART_CACHE_KEY);
@@ -7865,7 +7865,7 @@ function chartWeekWinnerHtml(hero) {
 }
 
 function chartWeekRunnerHtml(e) {
-  const art = trackCoverArtForFeed({ artUrl: e.artUrl, meta: {} });
+  const art = trackCoverArtForFeed({ artUrl: e.artUrl, meta: e.meta || {} });
   const plays = Number(e.weeklyPlays || 0);
   const rank = Number(e.rank) || 0;
   const title = String(e.title || "Untitled").trim();
@@ -7891,7 +7891,7 @@ function chartWeekRunnerHtml(e) {
 }
 
 function chartWeekLeaderboardRowHtml(e) {
-  const art = trackCoverArtForFeed({ artUrl: e.artUrl, meta: {} });
+  const art = trackCoverArtForFeed({ artUrl: e.artUrl, meta: e.meta || {} });
   const plays = Number(e.weeklyPlays || 0);
   const rank = Number(e.rank) || 0;
   const title = String(e.title || "Untitled").trim();
@@ -8101,7 +8101,7 @@ async function renderDeskRailTrending() {
     if (!top.length) { wrap.hidden = true; return; }
     wrap.hidden = false;
     wrap.innerHTML = top.map((e, i) => {
-      const art = trackCoverArtForFeed({ artUrl: e.artUrl, meta: {} });
+      const art = trackCoverArtForFeed({ artUrl: e.artUrl, meta: e.meta || {} });
       const title = String(e.title || "Untitled").trim();
       return `<button type="button" class="deskRailTrendRow" ${chartEntryPlayAttrs(e)} aria-label="Play ${escapeHtml(title)}">
         <span class="deskRailTrendRank">${i + 1}</span>
@@ -19209,24 +19209,42 @@ function supabaseRenderImageToObjectUrl(url) {
   return `${origin}/storage/v1/object/public/${rest.split("?")[0].split("#")[0]}`;
 }
 
+/** List tiles: only trust meta.imageThumb when it looks like a real thumb asset. */
+function feedMetaThumbUsable(metaThumb, track) {
+  const thumb = String(metaThumb || "").trim();
+  if (!thumb || thumb.startsWith("data:") || isLogoCoverUrl(thumb)) return false;
+  if (/_thumb\.(webp|jpg|jpeg|png)/i.test(thumb)) return true;
+  const bases = [
+    String(track?.artUrl || "").trim(),
+    String(track?.meta?.imageUrl || "").trim(),
+  ]
+    .map((u) => u.split("?")[0].split("#")[0])
+    .filter(Boolean);
+  const thumbBase = thumb.split("?")[0].split("#")[0];
+  return bases.some((base) => supabaseSongCoverThumbUrl(base) === thumbBase || base === thumbBase);
+}
+
 /** For Discover / Friends / Activity feeds — prefer thumbs; only HTTP URLs (no data: blobs). */
 function trackCoverArtForFeed(track) {
   const m = track?.meta || {};
   const metaThumb = String(m.imageThumb || "").trim();
-  if (metaThumb && !metaThumb.startsWith("data:") && !isLogoCoverUrl(metaThumb)) return metaThumb;
+  if (feedMetaThumbUsable(metaThumb, track)) return metaThumb;
 
   for (const c of trackCoverArtCandidates(track)) {
     if (!c || c.startsWith("data:") || isLogoCoverUrl(c)) continue;
+    if (c === metaThumb && !feedMetaThumbUsable(metaThumb, track)) continue;
     if (/_thumb\.(webp|jpg|jpeg|png)/i.test(c)) return c;
     if (/\/storage\/v1\/object\/public\/song_covers\//i.test(c)) {
-      // Only guess the paired thumb when meta already points at it — old rows
-      // may not have a `_thumb` object yet and would 404 in list tiles.
-      if (metaThumb && supabaseSongCoverThumbUrl(c) === metaThumb.split("?")[0]) {
+      if (metaThumb && supabaseSongCoverThumbUrl(c.split("?")[0]) === metaThumb.split("?")[0]) {
         return metaThumb;
       }
-      const transformed = toCoverThumbUrl(c, { width: 256, quality: 72 });
-      if (transformed && transformed !== c) return transformed;
+      const mainObj = c.split("?")[0].split("#")[0];
+      const pairedThumb = supabaseSongCoverThumbUrl(mainObj);
+      if (pairedThumb) return pairedThumb;
+      return mainObj;
     }
+    const transformed = toCoverThumbUrl(c, { width: 256, quality: 72 });
+    if (transformed && transformed !== c) return transformed;
     return c;
   }
   return DEFAULT_SONG_COVER_URL;

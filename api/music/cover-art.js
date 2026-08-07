@@ -8,6 +8,11 @@ const { verifyUser } = require("../_lib/credits-auth");
 const { applyCors } = require("../_lib/cors");
 const { normalizeCoverPortraitBuffer, COVER_PORTRAIT_W, COVER_PORTRAIT_H } = require("../_lib/cover-portrait-normalize");
 const { tryGeminiCoverScene } = require("../_lib/gemini-cover-prompt");
+const {
+  resolveCoverRegenImageProvider,
+  geminiRegenFallbackEnabled,
+  tryGeminiCoverImage,
+} = require("../_lib/gemini-cover-image");
 const { runVisualDirector } = require("../_lib/visual-director");
 
 const MAX_FIELD = 160;
@@ -78,6 +83,76 @@ async function fetchPollinationsCover(upstreamUrl, { attempts = 2, timeoutMs = 2
     }
   }
   return { ok: false, error: lastError };
+}
+
+async function normalizeCoverResponseBuffer(buf) {
+  let outBuf = buf;
+  let outMime = "image/jpeg";
+  try {
+    const normalized = await normalizeCoverPortraitBuffer(buf);
+    outBuf = normalized.buf;
+    outMime = normalized.mime || "image/jpeg";
+  } catch (e) {
+    console.warn("[music/cover-art] portrait normalize skipped", e?.message || e);
+  }
+  return { outBuf, outMime };
+}
+
+function coverDataUrlFromBuffer(outBuf, outMime) {
+  return `data:${outMime || "image/jpeg"};base64,${outBuf.toString("base64")}`;
+}
+
+/** Regen only — Gemini image when configured, Pollinations fallback. */
+async function fetchRegenCoverImage({ prompt, seed, avoidTags, buildPollinationsUrl }) {
+  const provider = resolveCoverRegenImageProvider();
+  if (provider === "gemini") {
+    const gem = await tryGeminiCoverImage({ prompt });
+    if (gem.ok) {
+      return { ok: true, buf: gem.buf, mime: gem.mime || "image/png", provider: "gemini", geminiModel: gem.model || "" };
+    }
+    console.warn("[music/cover-art] gemini regen failed", gem.error);
+    if (!geminiRegenFallbackEnabled()) {
+      return { ok: false, error: gem.error || "gemini_failed" };
+    }
+  }
+
+  const upstreamUrl = buildPollinationsUrl(prompt, seed, { avoidTags });
+  const polled = await fetchPollinationsCover(upstreamUrl);
+  if (!polled.ok) return { ok: false, error: polled.error || "pollinations_failed" };
+  return { ok: true, buf: polled.buf, mime: polled.mime || "image/jpeg", provider: "pollinations", geminiModel: "" };
+}
+
+async function sendRegenCoverJson(res, {
+  buf,
+  mime,
+  seed,
+  provider,
+  geminiModel = "",
+  bucket = "default",
+  visualMode = "user_directed",
+  storyTheme = "user_regen",
+  artworkSource = "user_artwork",
+  params = {},
+}) {
+  const { outBuf, outMime } = await normalizeCoverResponseBuffer(buf);
+  return sendJson(res, 200, {
+    ok: true,
+    dataUrl: coverDataUrlFromBuffer(outBuf, outMime),
+    seed,
+    bucket,
+    visualMode,
+    storyTheme,
+    artworkSource,
+    params: {
+      ...params,
+      ...(geminiModel ? { geminiImageModel: geminiModel } : {}),
+    },
+    coverWidth: COVER_PORTRAIT_W,
+    coverHeight: COVER_PORTRAIT_H,
+    provider,
+    abstract: true,
+    coverRegenerate: true,
+  });
 }
 
 module.exports = async function handler(req, res) {
@@ -159,79 +234,53 @@ module.exports = async function handler(req, res) {
         const seed = Number.isFinite(clientSeedRaw) && clientSeedRaw > 0
           ? Math.floor(clientSeedRaw) % 2147483646
           : built.seed;
-        const upstreamUrl = buildPollinationsUrl(built.prompt, seed, {
+        const rendered = await fetchRegenCoverImage({
+          prompt: built.prompt,
+          seed,
           avoidTags: String(body?.clientAvoidTags || avoidTagsInput || "").slice(0, MAX_AVOID),
+          buildPollinationsUrl,
         });
-        const polled = await fetchPollinationsCover(upstreamUrl);
-        if (!polled.ok) {
-          console.warn("[music/cover-art] pollinations failed (user regen hint)", polled.error);
+        if (!rendered.ok) {
+          console.warn("[music/cover-art] regen failed (user hint)", rendered.error);
           return sendJson(res, 502, { error: "Cover image generation failed upstream." });
         }
-        let outBuf = polled.buf;
-        let outMime = polled.mime || "image/jpeg";
-        try {
-          const normalized = await normalizeCoverPortraitBuffer(polled.buf);
-          outBuf = normalized.buf;
-          outMime = normalized.mime || "image/jpeg";
-        } catch (e) {
-          console.warn("[music/cover-art] portrait normalize skipped", e?.message || e);
-        }
-        const dataUrl = `data:${outMime || "image/jpeg"};base64,${outBuf.toString("base64")}`;
-        return sendJson(res, 200, {
-          ok: true,
-          dataUrl,
+        return sendRegenCoverJson(res, {
+          buf: rendered.buf,
+          mime: rendered.mime,
           seed,
-          bucket: "default",
-          visualMode: "user_directed",
-          storyTheme: "user_regen",
-          artworkSource: "user_artwork",
+          provider: rendered.provider,
+          geminiModel: rendered.geminiModel,
           params: { ...(built.params || {}), regenUserHint },
-          coverWidth: COVER_PORTRAIT_W,
-          coverHeight: COVER_PORTRAIT_H,
-          provider: "pollinations",
-          abstract: true,
-          coverRegenerate: true,
         });
       }
     }
 
-    /** Regen: client bundle builds prompt locally (latest policy) — skip Gemini + server prompt rewrite. */
+    /** Regen: client bundle builds prompt locally (latest policy) — skip Gemini scene + server prompt rewrite. */
     if (coverRegenerate && clientPrompt) {
       const seed = Number.isFinite(clientSeedRaw) && clientSeedRaw > 0
         ? Math.floor(clientSeedRaw) % 2147483646
         : Math.floor(Math.random() * 2147483645) + 1;
-      const upstreamUrl = buildPollinationsUrl(clientPrompt, seed, {
+      const rendered = await fetchRegenCoverImage({
+        prompt: clientPrompt,
+        seed,
         avoidTags: String(body?.clientAvoidTags || effectiveAvoidTags || "").slice(0, MAX_AVOID),
+        buildPollinationsUrl,
       });
-      const polled = await fetchPollinationsCover(upstreamUrl);
-      if (!polled.ok) {
-        console.warn("[music/cover-art] pollinations failed (client regen prompt)", polled.error);
+      if (!rendered.ok) {
+        console.warn("[music/cover-art] regen failed (client prompt)", rendered.error);
         return sendJson(res, 502, { error: "Cover image generation failed upstream." });
       }
-      let outBuf = polled.buf;
-      let outMime = polled.mime || "image/jpeg";
-      try {
-        const normalized = await normalizeCoverPortraitBuffer(polled.buf);
-        outBuf = normalized.buf;
-        outMime = normalized.mime || "image/jpeg";
-      } catch (e) {
-        console.warn("[music/cover-art] portrait normalize skipped", e?.message || e);
-      }
-      const dataUrl = `data:${outMime || "image/jpeg"};base64,${outBuf.toString("base64")}`;
-      return sendJson(res, 200, {
-        ok: true,
-        dataUrl,
+      return sendRegenCoverJson(res, {
+        buf: rendered.buf,
+        mime: rendered.mime,
         seed,
+        provider: rendered.provider,
+        geminiModel: rendered.geminiModel,
         bucket: String(body?.clientBucket || "default"),
         visualMode: String(body?.clientVisualMode || "still_life"),
         storyTheme: String(body?.clientStoryTheme || "regen"),
         artworkSource: String(body?.clientArtworkSource || "client_regen"),
         params: body?.clientParams && typeof body.clientParams === "object" ? body.clientParams : {},
-        coverWidth: COVER_PORTRAIT_W,
-        coverHeight: COVER_PORTRAIT_H,
-        provider: "pollinations",
-        abstract: true,
-        coverRegenerate: true,
       });
     }
 
@@ -286,21 +335,11 @@ module.exports = async function handler(req, res) {
       return sendJson(res, 502, { error: "Cover image generation failed upstream." });
     }
 
-    let outBuf = polled.buf;
-    let outMime = polled.mime || "image/jpeg";
-    try {
-      const normalized = await normalizeCoverPortraitBuffer(polled.buf);
-      outBuf = normalized.buf;
-      outMime = normalized.mime || "image/jpeg";
-    } catch (e) {
-      console.warn("[music/cover-art] portrait normalize skipped", e?.message || e);
-    }
-
-    const dataUrl = `data:${outMime || "image/jpeg"};base64,${outBuf.toString("base64")}`;
+    const { outBuf, outMime } = await normalizeCoverResponseBuffer(polled.buf);
 
     return sendJson(res, 200, {
       ok: true,
-      dataUrl,
+      dataUrl: coverDataUrlFromBuffer(outBuf, outMime),
       seed,
       bucket,
       visualMode,

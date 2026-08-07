@@ -15,7 +15,8 @@ TestFlight testers and live web users are **production**. Daily dev uses a **sep
 | API | Vercel preview for `staging` branch (`config/environments.json`) | `https://www.nabadai.com` |
 | Web users | Preview URL only (not nabadai.com) | nabadai.com |
 | iOS simulator | `npm run sim` (bakes **staging** API into bundled `www/`) | — |
-| TestFlight / live iPhone prod | — | Archive/install with **production** env |
+| **Your iPhone (dev)** | `npm run run:ios:staging` — staging frontend + staging API | — |
+| TestFlight (testers + prod check) | — | Archive from `main` with **production** env |
 | Supabase | **Shared today** — same DB unless Preview env vars point to a staging project | Production project |
 
 **Backend code** is isolated per branch (staging push → preview deploy; main push → production). **Database** is still shared until a second Supabase project is wired in Vercel → Settings → Environment Variables → **Preview**.
@@ -43,7 +44,21 @@ Do **not** push to `main` while testers are on TestFlight unless shipping.
 - `npm run env:staging` — point bundled iOS/web native env at staging API
 - `npm run env:production` — point at nabadai.com (TestFlight / prod device)
 - `npm run sim` — **staging** simulator preview (default for agents after app changes)
-- `npm run run:ios` — physical device; use **`npm run env:production`** first if matching TestFlight
+- `npm run run:ios:staging` — install **staging** build on your connected iPhone (daily bug-fix testing)
+- `npm run run:ios:production` — install **production** build on iPhone (match TestFlight before archive)
+
+## Your iPhone: staging vs TestFlight
+
+**Yes — your phone can run staging.** Use `npm run run:ios:staging` while fixing bugs on the `staging` branch.
+
+**Same app slot:** dev install and TestFlight share bundle id `com.nabadai.music`, so installing staging **replaces** the TestFlight build on that phone until you reinstall from TestFlight or run `run:ios:production` + archive again.
+
+Typical split:
+- **Your phone** → staging dev build (`run:ios:staging`) while iterating
+- **TestFlight testers** → production only, after merge to `main` + Xcode archive
+- **Simulator** → staging (`npm run sim`) — fastest loop
+
+Optional later: a second app icon (e.g. “NabadAi Staging”) needs a separate bundle id in Xcode — only worth it if you want staging and TestFlight installed side-by-side.
 
 ## Agent rules
 

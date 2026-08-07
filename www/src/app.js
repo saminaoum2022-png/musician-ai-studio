@@ -22406,6 +22406,7 @@ function setCreditsBalance(n) {
 
 function formatLedgerReason(reason) {
   const r = String(reason || "");
+  if (r === "signup_welcome") return "Welcome bonus";
   if (r === "promo_redeem") return "Promo code redeemed";
   if (r === "paid_purchase") return "Paid credits added";
   if (r === "gift_sent") return "Gift sent";
@@ -22434,7 +22435,11 @@ function renderCreditsLedger() {
       const sign = delta > 0 ? "+" : delta < 0 ? "−" : "";
       const cls = delta > 0 ? "isPositive" : delta < 0 ? "isNegative" : "";
       const reason = formatLedgerReason(row?.reason);
-      const ref = String(row?.ref || "").trim();
+      const rawRef = String(row?.ref || "").trim();
+      const ref =
+        row?.reason === "signup_welcome" && rawRef === "new_user_web"
+          ? "Website signup"
+          : rawRef;
       const ts = row?.created_at ? new Date(row.created_at) : null;
       const when = ts && !Number.isNaN(ts.valueOf()) ? ts.toLocaleString() : "";
       return `

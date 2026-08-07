@@ -9,6 +9,8 @@
     "env:staging": "node scripts/use-api-env.mjs staging",
     "env:production": "node scripts/use-api-env.mjs production",
     "sim": "npm run env:staging && sh ios/App/scripts/run-ios-sim.sh",
+    "run:ios:staging": "npm run env:staging && sh ios/App/scripts/run-ios-device.sh",
+    "run:ios:production": "npm run env:production && sh ios/App/scripts/run-ios-device.sh",
     "stamp:build": "node scripts/stamp-build.mjs && node scripts/sync-www.mjs",
     "sync:www": "node scripts/sync-www.mjs",
     "build:icons": "node scripts/build-app-icon.mjs",

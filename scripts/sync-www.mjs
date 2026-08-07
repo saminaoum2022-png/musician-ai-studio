@@ -203,7 +203,12 @@ if (fs.existsSync(discoverAssets)) {
 }
 
 try {
-  execSync("node scripts/sync-native-env.mjs", { cwd: root, stdio: "inherit" });
+  const apiEnv = String(process.env.NABAD_API_ENV || "").trim().toLowerCase();
+  if (apiEnv === "staging" || apiEnv === "production") {
+    execSync(`node scripts/use-api-env.mjs ${apiEnv}`, { cwd: root, stdio: "inherit" });
+  } else {
+    execSync("node scripts/sync-native-env.mjs", { cwd: root, stdio: "inherit" });
+  }
 } catch {
-  console.warn("sync-www: sync-native-env skipped or failed");
+  console.warn("sync-www: native env bake skipped or failed");
 }

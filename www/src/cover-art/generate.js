@@ -228,6 +228,8 @@ function patchLibraryTrackCover(trackId, patch) {
   const idx = items.findIndex((x) => String(x.id) === tid);
   if (idx < 0) return null;
   const prev = items[idx];
+  const prevMeta = prev.meta && typeof prev.meta === "object" ? prev.meta : {};
+  if (prevMeta.photoMode) return prev;
   const {
     dataUrl,
     thumbUrl,
@@ -239,7 +241,6 @@ function patchLibraryTrackCover(trackId, patch) {
     coverGenAttempted = false,
     clearCoverPending = false,
   } = patch;
-  const prevMeta = prev.meta && typeof prev.meta === "object" ? prev.meta : {};
   const { thumbFrame: _dropThumbFrame, ...metaWithoutThumbFrame } = prevMeta;
   const nextMeta = {
     ...metaWithoutThumbFrame,

@@ -21,6 +21,7 @@ export function setGenerationPending({
   variantCount = GENERATION_VARIANT_COUNT,
   source = "",
   instrumentId = "",
+  photoCoverDataUrl = "",
 } = {}) {
   const pending = {
     taskId: String(taskId || "").trim(),
@@ -30,6 +31,8 @@ export function setGenerationPending({
     instrumentId: String(instrumentId || "").trim(),
     startedAt: Date.now(),
   };
+  const cover = String(photoCoverDataUrl || "").trim();
+  if (cover.startsWith("data:")) pending.photoCoverDataUrl = cover;
   if (!pending.taskId) return null;
   try {
     sessionStorage.setItem(STORAGE_KEY, JSON.stringify(pending));

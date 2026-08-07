@@ -4943,7 +4943,7 @@ function resetCreateDraft() {
   } catch {}
   try { savePendingBackendTask(""); } catch {}
   clearGenerationPending();
-  pendingGeneratedCoverDataUrl = "";
+  clearPhotoCoverForGeneration();
   pendingBackendTaskId = "";
   imageMoodAppliedForNextGen = false;
   imageMoodData = null;
@@ -16521,7 +16521,10 @@ async function resumePendingGenerationOnForeground() {
 
   _resumeGenCheckInflight = true;
   try {
-    const recovered = await recoverSongFromTaskId(tid, { silent: true });
+    const recovered = await recoverSongFromTaskId(tid, {
+      silent: true,
+      pushCategory: pending?.source === "photo" ? "photo_ready" : "",
+    });
     if (!recovered) {
       kickForegroundGenerationPolls();
       const title = String(pending?.title || rec?.titleHint || els.sunoTitle?.value || "Your song").trim();
@@ -16777,13 +16780,13 @@ function applyImageMoodToSongFields() {
   const summaryTags = tags.slice(0, 4).join(", ");
   const summaryText = String(mood.concept || summaryTags || "Image mood applied.").trim();
   if (els.imageMoodUseAsCover?.checked && imageMoodCoverDataUrl) {
-    pendingGeneratedCoverDataUrl = imageMoodCoverDataUrl;
+    stashPhotoCoverForGeneration(imageMoodCoverDataUrl);
     if (els.imageMoodSummary) {
       els.imageMoodSummary.textContent = `${summaryText} · cover ready for next song`;
       els.imageMoodSummary.hidden = false;
     }
   } else {
-    pendingGeneratedCoverDataUrl = "";
+    clearPhotoCoverForGeneration();
     if (els.imageMoodSummary) {
       els.imageMoodSummary.textContent = summaryText;
       els.imageMoodSummary.hidden = false;
@@ -16795,6 +16798,59 @@ function applyImageMoodToSongFields() {
   } catch {}
 }
 let pendingGeneratedCoverDataUrl = "";
+const PHOTO_COVER_SESSION_KEY = "nabad.generation.photoCover.v1";
+
+function stashPhotoCoverForGeneration(dataUrl = "") {
+  const s = String(dataUrl || "").trim();
+  pendingGeneratedCoverDataUrl = s.startsWith("data:") ? s : "";
+  try {
+    if (pendingGeneratedCoverDataUrl) {
+      sessionStorage.setItem(PHOTO_COVER_SESSION_KEY, pendingGeneratedCoverDataUrl);
+    } else {
+      sessionStorage.removeItem(PHOTO_COVER_SESSION_KEY);
+    }
+  } catch {}
+}
+
+function resolvePendingPhotoCoverDataUrl() {
+  const mem = String(pendingGeneratedCoverDataUrl || "").trim();
+  if (mem.startsWith("data:")) return mem;
+  try {
+    const stored = String(sessionStorage.getItem(PHOTO_COVER_SESSION_KEY) || "").trim();
+    if (stored.startsWith("data:")) {
+      pendingGeneratedCoverDataUrl = stored;
+      return stored;
+    }
+  } catch {}
+  try {
+    const fromPending = String(getGenerationPending()?.photoCoverDataUrl || "").trim();
+    if (fromPending.startsWith("data:")) {
+      pendingGeneratedCoverDataUrl = fromPending;
+      return fromPending;
+    }
+  } catch {}
+  try {
+    const fromRec = String(loadRecoverableGenerationTask()?.photoCoverDataUrl || "").trim();
+    if (fromRec.startsWith("data:")) {
+      pendingGeneratedCoverDataUrl = fromRec;
+      return fromRec;
+    }
+  } catch {}
+  return "";
+}
+
+function clearPhotoCoverForGeneration() {
+  pendingGeneratedCoverDataUrl = "";
+  try {
+    sessionStorage.removeItem(PHOTO_COVER_SESSION_KEY);
+  } catch {}
+}
+
+function photoCoverMetaForGeneration() {
+  const cover = resolvePendingPhotoCoverDataUrl();
+  if (!cover) return null;
+  return { imageUrl: cover, photoMode: true };
+}
 let pendingBackendTaskId = "";
 const PENDING_TASK_KEY = "mas:pending_backend_task_v1";
 const RECOVERY_TASK_KEY = "mas:gen_task_recovery_v1";
@@ -19236,14 +19292,7 @@ function trackCoverArtForFeed(track) {
     if (/_thumb\.(webp|jpg|jpeg|png)/i.test(c)) return c;
     if (/\/storage\/v1\/object\/public\/song_covers\//i.test(c)) {
       const mainObj = c.split("?")[0].split("#")[0];
-      if (metaThumb && supabaseSongCoverThumbUrl(mainObj) === metaThumb.split("?")[0]) {
-        return metaThumb;
-      }
-      // Only guess `_thumb` when meta confirms it — otherwise the object may
-      // not exist (manual cover upload without thumb) and list tiles 404.
-      if (feedMetaThumbUsable(metaThumb, track) && metaThumb.split("?")[0] === supabaseSongCoverThumbUrl(mainObj)) {
-        return metaThumb;
-      }
+      if (feedMetaThumbUsable(metaThumb, track)) return metaThumb.split("?")[0];
       return mainObj;
     }
     const transformed = toCoverThumbUrl(c, { width: 256, quality: 72 });
@@ -49781,6 +49830,7 @@ function loadPendingBackendTask() {
 function saveRecoverableGenerationTask(taskId, titleHint) {
   const t = String(taskId || "").trim();
   if (!t) return;
+  const photoCoverDataUrl = resolvePendingPhotoCoverDataUrl();
   try {
     localStorage.setItem(
       RECOVERY_TASK_KEY,
@@ -49788,6 +49838,7 @@ function saveRecoverableGenerationTask(taskId, titleHint) {
         taskId: t,
         savedAt: Date.now(),
         titleHint: String(titleHint || "").trim().slice(0, 120),
+        ...(photoCoverDataUrl ? { photoCoverDataUrl, photoMode: true } : {}),
       })
     );
   } catch {}
@@ -49808,6 +49859,8 @@ function loadRecoverableGenerationTask() {
       taskId: String(o.taskId),
       savedAt,
       titleHint: String(o.titleHint || ""),
+      photoCoverDataUrl: String(o.photoCoverDataUrl || "").trim(),
+      photoMode: Boolean(o.photoMode),
     };
   } catch {
     return null;
@@ -50046,9 +50099,12 @@ function addMissingSunoClipsToLibrary(taskId, parsed, { metaBase = {}, kind = "f
     if (!clip?.audioUrl) continue;
     if (libraryAlreadyHasSunoClip(existing, clip)) continue;
     const prox = toAudioProxyUrl(clip.audioUrl) || clip.audioUrl;
+    const pendingPhotoCover = String(metaBase?.imageUrl || "").trim().startsWith("data:")
+      ? metaBase.imageUrl
+      : "";
     const entry = addToLibrary({
       title: String(clip.title || "").trim() || titleFallback,
-      artUrl: clip.imageUrl || "",
+      artUrl: pendingPhotoCover || clip.imageUrl || "",
       url: prox,
       taskId: tid,
       audioId: clip.audioId || "",
@@ -50234,6 +50290,7 @@ function patchLibraryTrackSunoArt(trackId, imageUrl) {
   if (idx < 0) return null;
   const prev = items[idx];
   if (String(prev?.artUrl || "").trim() && !isDefaultSongCoverUrl(prev.artUrl)) return prev;
+  if (prev?.meta?.photoMode) return prev;
   const next = {
     ...prev,
     artUrl: url,
@@ -50253,6 +50310,7 @@ function patchLibraryTrackSunoArt(trackId, imageUrl) {
 async function backfillRecoveredGenerationCovers(taskId, entries) {
   const rows = (Array.isArray(entries) ? entries : libraryEntriesForTaskId(taskId)).filter(Boolean);
   for (const row of rows) {
+    if (row?.meta?.photoMode) continue;
     let track = row;
     const patched = await applyParallelCoverForTrack(track);
     if (patched) {
@@ -50309,6 +50367,16 @@ async function recoverSongFromTaskId(taskId, { silent = false, pushCategory = ""
     lastGenerationMeta && typeof lastGenerationMeta === "object"
       ? { ...lastGenerationMeta }
       : {};
+  const pendingGen = getGenerationPending();
+  const recoverRec = loadRecoverableGenerationTask();
+  const photoCover =
+    resolvePendingPhotoCoverDataUrl()
+    || String(recoverRec?.photoCoverDataUrl || "").trim()
+    || String(pendingGen?.photoCoverDataUrl || "").trim();
+  if (photoCover.startsWith("data:")) {
+    metaBase.photoMode = true;
+    metaBase.imageUrl = photoCover;
+  }
   metaBase.recoveredFromTaskId = tid;
   metaBase.recoveredAt = Date.now();
   const cat = String(pushCategory || "").trim();
@@ -50316,7 +50384,7 @@ async function recoverSongFromTaskId(taskId, { silent = false, pushCategory = ""
     metaBase.humTrack = true;
     metaBase.recoveredFromPush = true;
   }
-  if (cat === "photo_ready") {
+  if (cat === "photo_ready" || pendingGen?.source === "photo" || recoverRec?.photoMode) {
     metaBase.photoMode = true;
   }
   const kind = cat === "hum_track_ready" ? "instrumental" : "full";
@@ -50329,6 +50397,7 @@ async function recoverSongFromTaskId(taskId, { silent = false, pushCategory = ""
 
   for (const entry of savedEntries) {
     if (!entry) continue;
+    if (entry?.meta?.photoMode) continue;
     const clip = entry?.meta?.variant === "B" ? parsed.second : parsed.first;
     if (clip?.imageUrl) patchLibraryTrackSunoArt(entry.id, clip.imageUrl);
   }
@@ -51342,8 +51411,18 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       try { syncImageMoodSheetUi({ analyzing: false }); } catch {}
     }
   };
-  const applyImageMood = () => {
+  const applyImageMood = async () => {
     if (!imageMoodData) return;
+    const file = els.imageMoodUpload?.files?.[0];
+    if (
+      els.imageMoodUseAsCover?.checked &&
+      file &&
+      !String(imageMoodCoverDataUrl || "").startsWith("data:")
+    ) {
+      try {
+        imageMoodCoverDataUrl = await prepareMomentCoverDataUrl(file);
+      } catch {}
+    }
     applyImageMoodToSongFields();
     const wantsLyrics = String(imageMoodData?.vocalSuggestion || "lyrics") !== "instrumental";
     closeImageMoodModal();
@@ -51458,7 +51537,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
     els.btnAnalyzeImageMood.addEventListener("click", () => void analyzeImageMood());
   }
   if (els.btnApplyImageMood) {
-    els.btnApplyImageMood.addEventListener("click", applyImageMood);
+    els.btnApplyImageMood.addEventListener("click", () => void applyImageMood());
   }
   if (els.btnCloseVocalRecorder) {
     els.btnCloseVocalRecorder.addEventListener("click", closeVocalRecorderModal);
@@ -51699,7 +51778,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
     if (rm2) rm2.textContent = metaLine;
     if (els.resultArt) {
       const resultArtSrc =
-        pendingGeneratedCoverDataUrl ||
+        resolvePendingPhotoCoverDataUrl() ||
         (lastGenerationMeta?.photoMode ? lastSunoArtUrl : "") ||
         placeholderCoverDataUrl();
       setCoverImageSrc(els.resultArt, resultArtSrc || brokenCoverPlaceholderUrl());
@@ -51728,7 +51807,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
     if (els.resultTitle2) els.resultTitle2.textContent = lastSunoTitle2 || "Generated song B";
     if (els.resultArt2) {
       const resultArt2Src =
-        pendingGeneratedCoverDataUrl ||
+        resolvePendingPhotoCoverDataUrl() ||
         (lastGenerationMeta?.photoMode ? (lastSunoArtUrl2 || lastSunoArtUrl) : "") ||
         placeholderCoverDataUrl();
       setCoverImageSrc(els.resultArt2, resultArt2Src || brokenCoverPlaceholderUrl());
@@ -51824,8 +51903,9 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       lastSunoFullUrl = audioUrl;
       lastSunoProxyUrl = toAudioProxyUrl(audioUrl);
       lastSunoArtUrl = imageUrl || lastSunoArtUrl;
-      if (pendingGeneratedCoverDataUrl) {
-        lastSunoArtUrl = pendingGeneratedCoverDataUrl;
+      {
+        const photoCover = resolvePendingPhotoCoverDataUrl();
+        if (photoCover) lastSunoArtUrl = photoCover;
       }
       lastSunoTitle = String(title || "").trim() || lastSunoTitle;
       setLink(els.sunoFullLink, lastSunoProxyUrl || audioUrl);
@@ -51862,8 +51942,9 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       lastSunoFullUrl2 = audioUrl2;
       lastSunoProxyUrl2 = toAudioProxyUrl(audioUrl2);
       lastSunoArtUrl2 = imageUrl2 || "";
-      if (pendingGeneratedCoverDataUrl) {
-        lastSunoArtUrl2 = pendingGeneratedCoverDataUrl;
+      {
+        const photoCover = resolvePendingPhotoCoverDataUrl();
+        if (photoCover) lastSunoArtUrl2 = photoCover;
       }
       lastSunoTitle2 = String(title2 || "").trim() || "Generated song B";
       await cacheGeneratedAudio2(lastSunoProxyUrl2 || audioUrl2);
@@ -51984,14 +52065,11 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
             setGenerateBtn("Regenerate", false, "generate");
             showResultCard(true);
             let genMeta = lastGenerationMeta;
-            if (pendingGeneratedCoverDataUrl) {
-              const coverMeta = {
-                imageUrl: pendingGeneratedCoverDataUrl,
-                photoMode: true,
-              };
+            const photoCoverMeta = photoCoverMetaForGeneration();
+            if (photoCoverMeta) {
               genMeta = genMeta && typeof genMeta === "object"
-                ? { ...genMeta, ...coverMeta }
-                : coverMeta;
+                ? { ...genMeta, ...photoCoverMeta }
+                : photoCoverMeta;
             }
             const variantAEntry = addToLibrary({
               title: lastSunoTitle,
@@ -52021,7 +52099,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
               pushLocalGenerationReadyActivity(savedEntries.filter(Boolean), { taskId: genTaskId });
             } catch {}
             syncGenerationPendingLibraryUi();
-            pendingGeneratedCoverDataUrl = "";
+            clearPhotoCoverForGeneration();
             resetNabadLyricsDraftState();
             els.btnSunoStems.disabled = !(sunoAudioId);
             if (els.btnSunoMultiStems) els.btnSunoMultiStems.disabled = !(sunoAudioId);
@@ -52613,6 +52691,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       setCreateChallengeHint(null);
       const aiLyricsDraft = String(_nabadAiLyricsDraft || "").trim();
       const lyricsEditedByUser = lyricsEditedAfterNabadDraft(userPrompt, aiLyricsDraft);
+      const photoCoverMeta = photoCoverMetaForGeneration();
       lastGenerationMeta = {
         engine,
         mode: modeLabel,
@@ -52648,6 +52727,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
         remixOfHubPostId: currentRemixSource?.id || null,
         ...(currentRemixSource ? { remixOf: remixAttributionFromSource(currentRemixSource) } : {}),
         ...remixMeta,
+        ...(photoCoverMeta || {}),
       };
       if (shouldGenerateInstrumental) {
         setStatus(
@@ -52848,9 +52928,10 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
           taskId: sunoTaskId,
           title: String(els.sunoTitle?.value || "").trim(),
           source: imageMoodAppliedForNextGen ? "photo" : "",
+          photoCoverDataUrl: resolvePendingPhotoCoverDataUrl(),
         });
         syncGenerationPendingLibraryUi();
-        if (!imageMoodAppliedForNextGen && !pendingGeneratedCoverDataUrl && isPollinationsCoverEligible(lastGenerationMeta)) {
+        if (!imageMoodAppliedForNextGen && !resolvePendingPhotoCoverDataUrl() && isPollinationsCoverEligible(lastGenerationMeta)) {
           startParallelCoverForTask(
             sunoTaskId,
             buildParallelCoverVariants(sunoTaskId, {

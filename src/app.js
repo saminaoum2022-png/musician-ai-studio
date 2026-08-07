@@ -19235,12 +19235,8 @@ function trackCoverArtForFeed(track) {
     if (c === metaThumb && !feedMetaThumbUsable(metaThumb, track)) continue;
     if (/_thumb\.(webp|jpg|jpeg|png)/i.test(c)) return c;
     if (/\/storage\/v1\/object\/public\/song_covers\//i.test(c)) {
-      if (metaThumb && supabaseSongCoverThumbUrl(c.split("?")[0]) === metaThumb.split("?")[0]) {
-        return metaThumb;
-      }
       const mainObj = c.split("?")[0].split("#")[0];
-      const pairedThumb = supabaseSongCoverThumbUrl(mainObj);
-      if (pairedThumb) return pairedThumb;
+      if (feedMetaThumbUsable(metaThumb, track)) return metaThumb.split("?")[0];
       return mainObj;
     }
     const transformed = toCoverThumbUrl(c, { width: 256, quality: 72 });

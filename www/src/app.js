@@ -19209,22 +19209,41 @@ function supabaseRenderImageToObjectUrl(url) {
   return `${origin}/storage/v1/object/public/${rest.split("?")[0].split("#")[0]}`;
 }
 
+/** List tiles: only trust meta.imageThumb when it looks like a real thumb asset. */
+function feedMetaThumbUsable(metaThumb, track) {
+  const thumb = String(metaThumb || "").trim();
+  if (!thumb || thumb.startsWith("data:") || isLogoCoverUrl(thumb)) return false;
+  if (/_thumb\.(webp|jpg|jpeg|png)/i.test(thumb)) return true;
+  const bases = [
+    String(track?.artUrl || "").trim(),
+    String(track?.meta?.imageUrl || "").trim(),
+  ]
+    .map((u) => u.split("?")[0].split("#")[0])
+    .filter(Boolean);
+  const thumbBase = thumb.split("?")[0].split("#")[0];
+  return bases.some((base) => supabaseSongCoverThumbUrl(base) === thumbBase || base === thumbBase);
+}
+
 /** For Discover / Friends / Activity feeds — prefer thumbs; only HTTP URLs (no data: blobs). */
 function trackCoverArtForFeed(track) {
   const m = track?.meta || {};
   const metaThumb = String(m.imageThumb || "").trim();
-  if (metaThumb && !metaThumb.startsWith("data:") && !isLogoCoverUrl(metaThumb)) return metaThumb;
+  if (feedMetaThumbUsable(metaThumb, track)) return metaThumb;
 
   for (const c of trackCoverArtCandidates(track)) {
     if (!c || c.startsWith("data:") || isLogoCoverUrl(c)) continue;
+    if (c === metaThumb && !feedMetaThumbUsable(metaThumb, track)) continue;
     if (/_thumb\.(webp|jpg|jpeg|png)/i.test(c)) return c;
     if (/\/storage\/v1\/object\/public\/song_covers\//i.test(c)) {
-      if (metaThumb && supabaseSongCoverThumbUrl(c.split("?")[0]) === metaThumb.split("?")[0]) {
+      const mainObj = c.split("?")[0].split("#")[0];
+      if (metaThumb && supabaseSongCoverThumbUrl(mainObj) === metaThumb.split("?")[0]) {
         return metaThumb;
       }
-      const mainObj = c.split("?")[0].split("#")[0];
-      const pairedThumb = supabaseSongCoverThumbUrl(mainObj);
-      if (pairedThumb) return pairedThumb;
+      // Only guess `_thumb` when meta confirms it — otherwise the object may
+      // not exist (manual cover upload without thumb) and list tiles 404.
+      if (feedMetaThumbUsable(metaThumb, track) && metaThumb.split("?")[0] === supabaseSongCoverThumbUrl(mainObj)) {
+        return metaThumb;
+      }
       return mainObj;
     }
     const transformed = toCoverThumbUrl(c, { width: 256, quality: 72 });

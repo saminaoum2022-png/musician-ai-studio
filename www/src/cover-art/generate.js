@@ -1,7 +1,7 @@
 /**
  * Client-side abstract cover generation via /api/music/cover-art
  */
-import { canRegeneratePollinationsCover, coverArtParamsFromTrack, isPollinationsCoverEligible, shouldUseAbstractCover } from "./params.js";
+import { canRegeneratePollinationsCover, canRegenerateTrackCover, coverArtParamsFromTrack, isPollinationsCoverEligible, shouldUseAbstractCover } from "./params.js";
 import { buildAbstractCoverPrompt, buildPollinationsUrl, classifyVisualBucket, COVER_PROMPT_POLICY_VERSION, resolveStoryTheme } from "./prompt.js";
 import { resolveVisualDirection } from "./visual-director/director.mjs";
 import { DEFAULT_SONG_COVER_URL, isDefaultSongCoverUrl } from "./placeholders.js";
@@ -383,19 +383,23 @@ export async function retryAbstractCoverForTrack(track) {
   return ensureAbstractCoverForTrack(reset);
 }
 
-/** User-requested new Pollinations cover (replaces an existing abstract cover). */
+/** User-requested new Pollinations cover (replaces abstract or Photo Mood photo). */
 export async function regenerateAbstractCoverForTrack(track, opts = {}) {
   const id = String(track?.id || "").trim();
-  if (!id || !canRegeneratePollinationsCover(track)) return null;
-  if (_inflight.has(id)) return _inflight.get(id);
   const meta = track?.meta && typeof track.meta === "object" ? track.meta : {};
-  const hintOverride = String(opts.artworkHint ?? opts.artworkStyle ?? "").trim().slice(0, 280);
+  const fromPhoto = Boolean(meta.photoMode);
+  if (!id || !canRegenerateTrackCover(track)) return null;
+  if (_inflight.has(id)) return _inflight.get(id);
+  const hintOverride = String(
+    opts.artworkHint ?? opts.artworkStyle ?? meta.artworkHint ?? meta.artworkStyle ?? "",
+  ).trim().slice(0, 280);
   const reset = {
     ...track,
     meta: {
       ...meta,
       coverGenAttempted: false,
       pollinationsCoverPending: true,
+      photoMode: false,
       thumbFrame: undefined,
       ...(hintOverride
         ? { artworkHint: hintOverride, artworkStyle: hintOverride }
@@ -414,7 +418,7 @@ export async function regenerateAbstractCoverForTrack(track, opts = {}) {
   const job = runCoverJobForTrack(reset, id, {
     coverRegenerate: true,
     artworkHint: hintOverride || undefined,
-    regenAutoMusic: !hintOverride,
+    regenAutoMusic: !hintOverride && !fromPhoto,
   });
   _inflight.set(id, job);
   try {

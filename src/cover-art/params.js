@@ -201,11 +201,18 @@ export function isPollinationsCoverEligible(meta) {
   return true;
 }
 
-/** User may tap regen — only tracks that already have an AI Pollinations cover. */
+/** User may tap regen — Pollinations abstract covers and Photo Mood photo covers. */
 export function canRegeneratePollinationsCover(track) {
   const meta = track?.meta && typeof track.meta === "object" ? track.meta : {};
   if (meta.photoMode || meta.imageOnlyInstrumental) return false;
   return String(meta?.coverSource || "") === "pollinations" && Boolean(meta?.nabadAbstractCover);
+}
+
+/** Player cover magic-wand — includes Photo Mood rows still on an uploaded photo. */
+export function canRegenerateTrackCover(track) {
+  if (canRegeneratePollinationsCover(track)) return true;
+  const meta = track?.meta && typeof track.meta === "object" ? track.meta : {};
+  return Boolean(meta.photoMode);
 }
 
 export { MOOD_TAG_MAP };

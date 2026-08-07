@@ -69,7 +69,7 @@ import {
   resolveParallelCoverSongId,
   regenerateAbstractCoverForTrack,
 } from "./cover-art/generate.js";
-import { canRegeneratePollinationsCover, isPollinationsCoverEligible, shouldUseAbstractCover } from "./cover-art/params.js";
+import { canRegenerateTrackCover, isPollinationsCoverEligible, shouldUseAbstractCover } from "./cover-art/params.js";
 import {
   DEFAULT_SONG_COVER_URL,
   isDefaultSongCoverUrl,
@@ -47125,7 +47125,7 @@ function openPlayerChangeCoverPicker() {
 
 function playerCanRegenerateCover(track) {
   if (!track?.id) return false;
-  return canRegeneratePollinationsCover(track);
+  return canRegenerateTrackCover(track);
 }
 
 function playerCanEditThumb(track) {

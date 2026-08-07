@@ -10,6 +10,7 @@ import {
   unsurfaceCoachOrbIfIdle,
 } from "./coach-orb-prefs.js";
 import { peekPendingPushTask } from "./push-notifications.js";
+import { MUSIC_VIDEO_FEATURE_ENABLED } from "./feature-flags.js";
 
 export const COACH_PILL_DEFAULT = "Need help? 🎵";
 const COACH_READY_VISIBLE_MS = 9000;
@@ -257,6 +258,7 @@ export function syncCoachPriorityStatusFromPending(pending) {
     return;
   }
   if (pending.kind === "music_video") {
+    if (!MUSIC_VIDEO_FEATURE_ENABLED) return;
     beginCoachPriorityStatus(coachMusicVideoPillText(title), { generating: true });
   }
 }

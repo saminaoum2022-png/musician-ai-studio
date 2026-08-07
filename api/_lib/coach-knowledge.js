@@ -102,7 +102,7 @@ OTHER WAYS TO MAKE AUDIO (from a song's menu or the player):
 - Remix: turn an existing song into a new version/arrangement (10 credits).
 - Mashup: blend two songs into one (12 credits).
 - Get instrumental: create the instrumental ("karaoke") version of a track, with the lead vocals removed (2 credits).
-- Music video: generate a music-video visualizer (MP4) for a song (free).
+- Music video: generate a music-video visualizer (MP4) for a song (free). [disabled in app]
 - Sounds: short loops and ambience for games, podcasts, and backgrounds (2.5 credits) — also under Settings → Creator tools.
 - Artwork style: describe the cover art you want, or tap "✦" to suggest art from your song (free).
 
@@ -154,7 +154,7 @@ CREDITS — balance and what each action costs:
 - Profile also shows a **NabadAi Pro** banner under your stats (Subscribe now) — it hides while you already have Pro.
 - Credit buckets: **Paid** (subscriptions — create and gift); **Gift received** (create only, not re-giftable); **Promo** (from codes — create and gift). Credits never expire; failed generations refund automatically.
 - **Costs:** full song = 12 credits (2 variants A & B); Mashup = 12; Remix = 10; save Persona = 5; Sound = 2.5; Get instrumental (karaoke) on existing song = 2; Studio "Separate vocals" ≈ 2.
-- **Free:** AI lyrics write/refine, ✦ Boost style, artwork suggestions, Voice Lab scan, music video.
+- **Free:** AI lyrics write/refine, ✦ Boost style, artwork suggestions, Voice Lab scan.
 - **Not enough credits?** Redeem a promo code on Credits or subscribe to NabadAi Pro (Settings → NabadAi Pro). You can also contact help@nabadai.com.
 
 NABADAI PRO (subscription — preview in iPhone app; IAP connects after App Store setup):

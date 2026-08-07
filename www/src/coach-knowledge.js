@@ -66,7 +66,7 @@ WHAT COSTS CREDITS:
 - Save a Persona voice = ${PERSONA_CREDIT_COST} credits · Sound = ${SOUND_CREDIT_COST} credits.
 - Instrumental (karaoke) version = ${INSTRUMENTAL_CREDIT_COST} credits.
 - NabadAi Studio "Separate vocals" for a clean guide track ≈ ${STUDIO_SEPARATE_VOCALS_COST} credits.
-FREE (no credits): AI lyrics write/refine, ✦ Boost style, artwork suggestions, Voice Lab scan, music video.
+FREE (no credits): AI lyrics write/refine, ✦ Boost style, artwork suggestions, Voice Lab scan.
 
 GIFTING CREDITS (on someone else's published song post):
 - Tap Gift on the post → Mic (${GIFT_TIERS[0].credits} cr), Pulse (${GIFT_TIERS[1].credits} cr), or Star (${GIFT_TIERS[2].credits} cr).

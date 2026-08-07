@@ -186,10 +186,11 @@ import {
   screenshotProf,
   screenshotSanitizeCopy,
 } from "./screenshot-mode.js";
+import { MUSIC_VIDEO_FEATURE_ENABLED } from "./feature-flags.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260807-140135";
+const APP_BUILD = "20260807-161837";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -32881,7 +32882,7 @@ function renderTrackSheetLibrary(track) {
   const isSound = kind === "sound";
   const remixEligible = !isSound && Boolean(track?.url && String(track.url).trim());
   const personaEligible = !isInstrumental && !isSound && Boolean(track?.taskId) && Boolean(track?.audioId);
-  const musicVideoEligible = !isSound && Boolean(track?.taskId) && Boolean(track?.audioId);
+  const musicVideoEligible = MUSIC_VIDEO_FEATURE_ENABLED && !isSound && Boolean(track?.taskId) && Boolean(track?.audioId);
   const mvWatchable = musicVideoIsWatchable(musicVideoMetaFromTrack(track));
   const musicVideoLabel = mvWatchable ? "Watch music video" : "Create music video";
   const profilePublic = Boolean(track.publicOnProfile);
@@ -33675,6 +33676,7 @@ function runTrackSheetAction(action, sourceEl) {
       return;
     }
     if (action === "library_music_video") {
+      if (!MUSIC_VIDEO_FEATURE_ENABLED) return;
       shut();
       void (async () => {
         try {
@@ -43469,6 +43471,9 @@ async function deliverMusicVideoUrl(videoUrl, title) {
  * song meta, and open the in-app viewer (saving is a button in the viewer).
  */
 async function createSunoMusicVideoForTrack(track, { onStatus } = {}) {
+  if (!MUSIC_VIDEO_FEATURE_ENABLED) {
+    throw new Error("Music videos are not available in this version.");
+  }
   const t = track || {};
   const title = String(t?.title || "Your song").trim() || "Your song";
   const say = (m) => {
@@ -50594,6 +50599,7 @@ async function recoverInstrumentalFromTaskId(taskId, { silent = true, pushCatego
 }
 
 async function recoverMusicVideoFromTaskId(taskId, { silent = true, pushCategory = "music_video_ready" } = {}) {
+  if (!MUSIC_VIDEO_FEATURE_ENABLED) return false;
   const tid = String(taskId || "").trim();
   if (!tid) return false;
   const token = getSupabaseAuthToken();
@@ -50645,6 +50651,7 @@ async function tryRecoverGenerationFromPushNotification() {
       return await recoverInstrumentalFromTaskId(taskId, { silent: true, pushCategory: category });
     }
     if (category === "music_video_ready") {
+      if (!MUSIC_VIDEO_FEATURE_ENABLED) return false;
       const ok = await recoverMusicVideoFromTaskId(taskId, { silent: true, pushCategory: category });
       if (ok) {
         try { refreshOwnSongsUi({ soft: true }); } catch { refreshOwnSongsUi(); }
@@ -54137,6 +54144,10 @@ function resumePriorityJobsIfPending() {
     return;
   }
   if (pending.kind === "music_video" && (pending.videoTaskId || pending.taskId)) {
+    if (!MUSIC_VIDEO_FEATURE_ENABLED) {
+      clearPriorityPending(pending.videoTaskId || pending.taskId);
+      return;
+    }
     const vid = pending.videoTaskId || pending.taskId;
     void (async () => {
       try {

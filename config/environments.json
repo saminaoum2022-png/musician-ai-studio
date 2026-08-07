@@ -7,6 +7,6 @@
   "staging": {
     "label": "Staging — daily dev (simulator + preview API)",
     "branch": "staging",
-    "apiBase": "https://musician-ai-studio-git-staging-saminaoum2022-png.vercel.app"
+    "apiBase": "https://musician-ai-studio-git-staging-nabadais-projects.vercel.app"
   }
 }

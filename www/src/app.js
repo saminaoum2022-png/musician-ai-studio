@@ -190,7 +190,7 @@ import { MUSIC_VIDEO_FEATURE_ENABLED } from "./feature-flags.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260807-170208";
+const APP_BUILD = "20260807-195844";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -1179,6 +1179,8 @@ const els = {
 
 // Must be initialized before any startup route/render calls.
 var imageMoodAppliedForNextGen = false;
+/** Photo attached as cover only — no mood analysis, lyrics/style unchanged. */
+var imageMoodCoverOnlyForNextGen = false;
 let currentProofPost = null;
 let hubAudio = null;
 let hubAudioPostId = null;
@@ -4947,6 +4949,7 @@ function resetCreateDraft() {
   clearPhotoCoverForGeneration();
   pendingBackendTaskId = "";
   imageMoodAppliedForNextGen = false;
+  imageMoodCoverOnlyForNextGen = false;
   imageMoodData = null;
   imageMoodCoverDataUrl = "";
   setCreatePhotoAttachmentPreview("");
@@ -16719,9 +16722,16 @@ function syncImageMoodSheetUi({ analyzing = false } = {}) {
   const applyBtn = document.getElementById("btnApplyImageMood") || els.btnApplyImageMood;
   const analyzeBtn = document.getElementById("btnAnalyzeImageMood") || els.btnAnalyzeImageMood;
   const hasFile = Boolean(els.imageMoodUpload?.files?.[0]);
+  const hasCoverData = String(imageMoodCoverDataUrl || "").startsWith("data:");
   const card = els.imageMoodModal?.querySelector?.(".imageMoodCard")
     || els.imageMoodOutput?.closest?.(".imageMoodCard");
-  if (applyBtn) applyBtn.disabled = !imageMoodData || analyzing;
+  if (applyBtn) {
+    const canApplyMood = Boolean(imageMoodData) && !analyzing;
+    const canApplyCoverOnly = hasCoverData && !imageMoodData && !analyzing;
+    applyBtn.disabled = !(canApplyMood || canApplyCoverOnly);
+    applyBtn.textContent = imageMoodData ? "Apply to song" : "Use as cover";
+    applyBtn.classList.toggle("isReady", Boolean(canApplyCoverOnly || canApplyMood));
+  }
   if (analyzeBtn) {
     analyzeBtn.disabled = !hasFile || analyzing;
     analyzeBtn.classList.toggle("isReady", Boolean(hasFile && !analyzing && !imageMoodData));
@@ -16757,6 +16767,7 @@ function syncImageMoodPreviewUi(show) {
 
 function applyImageMoodToSongFields() {
   if (!imageMoodData) return;
+  imageMoodCoverOnlyForNextGen = false;
   const mood = sanitizeImageMoodForClient(imageMoodData);
   imageMoodData = mood;
   const tags = Array.isArray(mood.tags) ? mood.tags.filter(Boolean) : [];
@@ -16843,15 +16854,42 @@ function resolvePendingPhotoCoverDataUrl() {
 
 function clearPhotoCoverForGeneration() {
   pendingGeneratedCoverDataUrl = "";
+  imageMoodCoverOnlyForNextGen = false;
   try {
     sessionStorage.removeItem(PHOTO_COVER_SESSION_KEY);
   } catch {}
 }
 
+async function applyCoverOnlyFromPhotoMood() {
+  const file = els.imageMoodUpload?.files?.[0];
+  if (file && !String(imageMoodCoverDataUrl || "").startsWith("data:")) {
+    try {
+      imageMoodCoverDataUrl = await prepareMomentCoverDataUrl(file);
+    } catch {
+      setStatus("Could not load that photo.");
+      return false;
+    }
+  }
+  if (!String(imageMoodCoverDataUrl || "").startsWith("data:")) return false;
+  imageMoodCoverOnlyForNextGen = true;
+  imageMoodAppliedForNextGen = false;
+  stashPhotoCoverForGeneration(imageMoodCoverDataUrl);
+  const summary = "Cover only — lyrics and style unchanged.";
+  setCreatePhotoAttachmentPreview(imageMoodCoverDataUrl, summary);
+  if (els.imageMoodSummary) {
+    els.imageMoodSummary.textContent = "Cover attached — generate when you're ready.";
+    els.imageMoodSummary.hidden = false;
+  }
+  return true;
+}
+
 function photoCoverMetaForGeneration() {
   const cover = resolvePendingPhotoCoverDataUrl();
   if (!cover) return null;
-  return { imageUrl: cover, photoMode: true };
+  if (imageMoodAppliedForNextGen) {
+    return { imageUrl: cover, photoMode: true };
+  }
+  return { imageUrl: cover, customCoverOnly: true };
 }
 let pendingBackendTaskId = "";
 const PENDING_TASK_KEY = "mas:pending_backend_task_v1";
@@ -49881,7 +49919,12 @@ function saveRecoverableGenerationTask(taskId, titleHint) {
         taskId: t,
         savedAt: Date.now(),
         titleHint: String(titleHint || "").trim().slice(0, 120),
-        ...(photoCoverDataUrl ? { photoCoverDataUrl, photoMode: true } : {}),
+        ...(photoCoverDataUrl
+          ? {
+            photoCoverDataUrl,
+            ...(imageMoodAppliedForNextGen ? { photoMode: true } : { photoCoverOnly: true }),
+          }
+          : {}),
       })
     );
   } catch {}
@@ -49904,6 +49947,7 @@ function loadRecoverableGenerationTask() {
       titleHint: String(o.titleHint || ""),
       photoCoverDataUrl: String(o.photoCoverDataUrl || "").trim(),
       photoMode: Boolean(o.photoMode),
+      photoCoverOnly: Boolean(o.photoCoverOnly),
     };
   } catch {
     return null;
@@ -49928,6 +49972,7 @@ function createSessionHasDraftContent() {
     String(els.sunoAvoidTags?.value || "").trim() ||
     String(els.sunoTitle?.value || "").trim() ||
     imageMoodAppliedForNextGen ||
+    resolvePendingPhotoCoverDataUrl() ||
     vocalRef
   );
 }
@@ -50333,7 +50378,7 @@ function patchLibraryTrackSunoArt(trackId, imageUrl) {
   if (idx < 0) return null;
   const prev = items[idx];
   if (String(prev?.artUrl || "").trim() && !isDefaultSongCoverUrl(prev.artUrl)) return prev;
-  if (prev?.meta?.photoMode) return prev;
+  if (prev?.meta?.photoMode || prev?.meta?.customCoverOnly) return prev;
   const next = {
     ...prev,
     artUrl: url,
@@ -50353,7 +50398,7 @@ function patchLibraryTrackSunoArt(trackId, imageUrl) {
 async function backfillRecoveredGenerationCovers(taskId, entries) {
   const rows = (Array.isArray(entries) ? entries : libraryEntriesForTaskId(taskId)).filter(Boolean);
   for (const row of rows) {
-    if (row?.meta?.photoMode) continue;
+    if (row?.meta?.photoMode || row?.meta?.customCoverOnly) continue;
     let track = row;
     const patched = await applyParallelCoverForTrack(track);
     if (patched) {
@@ -50406,6 +50451,7 @@ async function recoverSongFromTaskId(taskId, { silent = false, pushCategory = ""
     return false;
   }
 
+  const cat = String(pushCategory || "").trim();
   const metaBase =
     lastGenerationMeta && typeof lastGenerationMeta === "object"
       ? { ...lastGenerationMeta }
@@ -50416,19 +50462,29 @@ async function recoverSongFromTaskId(taskId, { silent = false, pushCategory = ""
     resolvePendingPhotoCoverDataUrl()
     || String(recoverRec?.photoCoverDataUrl || "").trim()
     || String(pendingGen?.photoCoverDataUrl || "").trim();
+  const moodPhoto =
+    cat === "photo_ready" ||
+    pendingGen?.source === "photo" ||
+    recoverRec?.photoMode;
+  const coverOnlyPhoto =
+    recoverRec?.photoCoverOnly ||
+    pendingGen?.photoCoverOnly ||
+    imageMoodCoverOnlyForNextGen;
   if (photoCover.startsWith("data:")) {
-    metaBase.photoMode = true;
     metaBase.imageUrl = photoCover;
+    if (moodPhoto && !coverOnlyPhoto) {
+      metaBase.photoMode = true;
+    } else {
+      metaBase.customCoverOnly = true;
+    }
+  } else if (moodPhoto && !coverOnlyPhoto) {
+    metaBase.photoMode = true;
   }
   metaBase.recoveredFromTaskId = tid;
   metaBase.recoveredAt = Date.now();
-  const cat = String(pushCategory || "").trim();
   if (cat === "hum_track_ready") {
     metaBase.humTrack = true;
     metaBase.recoveredFromPush = true;
-  }
-  if (cat === "photo_ready" || pendingGen?.source === "photo" || recoverRec?.photoMode) {
-    metaBase.photoMode = true;
   }
   const kind = cat === "hum_track_ready" ? "instrumental" : "full";
   const rec = loadRecoverableGenerationTask();
@@ -50440,7 +50496,7 @@ async function recoverSongFromTaskId(taskId, { silent = false, pushCategory = ""
 
   for (const entry of savedEntries) {
     if (!entry) continue;
-    if (entry?.meta?.photoMode) continue;
+    if (entry?.meta?.photoMode || entry?.meta?.customCoverOnly) continue;
     const clip = entry?.meta?.variant === "B" ? parsed.second : parsed.first;
     if (clip?.imageUrl) patchLibraryTrackSunoArt(entry.id, clip.imageUrl);
   }
@@ -51457,7 +51513,13 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
     }
   };
   const applyImageMood = async () => {
-    if (!imageMoodData) return;
+    if (!imageMoodData) {
+      if (!(await applyCoverOnlyFromPhotoMood())) return;
+      closeImageMoodModal();
+      setStatus("Cover attached — generate when you're ready.");
+      syncGenerateOrbVisibility();
+      return;
+    }
     const file = els.imageMoodUpload?.files?.[0];
     if (
       els.imageMoodUseAsCover?.checked &&
@@ -51574,7 +51636,8 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       // themselves (analysis costs a network round-trip they may not want
       // yet — e.g. when they picked the wrong photo).
       if (els.imageMoodOutput) {
-        els.imageMoodOutput.innerHTML = `<div class="imageMoodEmpty">Photo ready — tap Analyze.</div>`;
+        els.imageMoodOutput.innerHTML =
+          `<div class="imageMoodEmpty">Photo ready — Use as cover or tap Analyze for mood.</div>`;
       }
     });
   }
@@ -52974,6 +53037,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
           title: String(els.sunoTitle?.value || "").trim(),
           source: imageMoodAppliedForNextGen ? "photo" : "",
           photoCoverDataUrl: resolvePendingPhotoCoverDataUrl(),
+          photoCoverOnly: imageMoodCoverOnlyForNextGen,
         });
         syncGenerationPendingLibraryUi();
         if (!imageMoodAppliedForNextGen && !resolvePendingPhotoCoverDataUrl() && isPollinationsCoverEligible(lastGenerationMeta)) {

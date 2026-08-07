@@ -22,6 +22,7 @@ export function setGenerationPending({
   source = "",
   instrumentId = "",
   photoCoverDataUrl = "",
+  photoCoverOnly = false,
 } = {}) {
   const pending = {
     taskId: String(taskId || "").trim(),
@@ -32,7 +33,10 @@ export function setGenerationPending({
     startedAt: Date.now(),
   };
   const cover = String(photoCoverDataUrl || "").trim();
-  if (cover.startsWith("data:")) pending.photoCoverDataUrl = cover;
+  if (cover.startsWith("data:")) {
+    pending.photoCoverDataUrl = cover;
+    if (photoCoverOnly) pending.photoCoverOnly = true;
+  }
   if (!pending.taskId) return null;
   try {
     sessionStorage.setItem(STORAGE_KEY, JSON.stringify(pending));

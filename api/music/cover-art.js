@@ -103,6 +103,7 @@ module.exports = async function handler(req, res) {
 
     const avoidTagsInput = String(body?.avoidTagsInput || body?.avoidTags || "").trim().slice(0, MAX_FIELD);
     const coverRegenerate = Boolean(body?.coverRegenerate);
+    const regenUserHint = String(body?.regenUserHint || "").trim().slice(0, MAX_ARTWORK);
     const clientPrompt = String(body?.clientPrompt || "").trim().slice(0, MAX_CLIENT_PROMPT);
     const clientSeedRaw = Number(body?.clientSeed);
 
@@ -146,6 +147,53 @@ module.exports = async function handler(req, res) {
     const effectiveAvoidTags = vd.mode === "apply" && vdApplied?.avoidMerged
       ? String(vdApplied.avoidMerged).slice(0, MAX_AVOID)
       : avoidTagsInput.slice(0, MAX_AVOID);
+
+    /** Regen with typed hint — server rebuilds short subject-first prompt (never lyrics/Gemini auto). */
+    if (coverRegenerate && regenUserHint) {
+      const { buildUserRegenCoverPrompt, buildPollinationsUrl } = await getPromptModule();
+      const built = buildUserRegenCoverPrompt(regenUserHint, {
+        songId,
+        regenSalt: String(body?.regenSalt || Date.now()),
+      });
+      if (built?.prompt) {
+        const seed = Number.isFinite(clientSeedRaw) && clientSeedRaw > 0
+          ? Math.floor(clientSeedRaw) % 2147483646
+          : built.seed;
+        const upstreamUrl = buildPollinationsUrl(built.prompt, seed, {
+          avoidTags: String(body?.clientAvoidTags || avoidTagsInput || "").slice(0, MAX_AVOID),
+        });
+        const polled = await fetchPollinationsCover(upstreamUrl);
+        if (!polled.ok) {
+          console.warn("[music/cover-art] pollinations failed (user regen hint)", polled.error);
+          return sendJson(res, 502, { error: "Cover image generation failed upstream." });
+        }
+        let outBuf = polled.buf;
+        let outMime = polled.mime || "image/jpeg";
+        try {
+          const normalized = await normalizeCoverPortraitBuffer(polled.buf);
+          outBuf = normalized.buf;
+          outMime = normalized.mime || "image/jpeg";
+        } catch (e) {
+          console.warn("[music/cover-art] portrait normalize skipped", e?.message || e);
+        }
+        const dataUrl = `data:${outMime || "image/jpeg"};base64,${outBuf.toString("base64")}`;
+        return sendJson(res, 200, {
+          ok: true,
+          dataUrl,
+          seed,
+          bucket: "default",
+          visualMode: "user_directed",
+          storyTheme: "user_regen",
+          artworkSource: "user_artwork",
+          params: { ...(built.params || {}), regenUserHint },
+          coverWidth: COVER_PORTRAIT_W,
+          coverHeight: COVER_PORTRAIT_H,
+          provider: "pollinations",
+          abstract: true,
+          coverRegenerate: true,
+        });
+      }
+    }
 
     /** Regen: client bundle builds prompt locally (latest policy) — skip Gemini + server prompt rewrite. */
     if (coverRegenerate && clientPrompt) {

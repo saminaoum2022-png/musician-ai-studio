@@ -189,7 +189,7 @@ import {
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260806-222824";
+const APP_BUILD = "20260807-135022";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -47278,8 +47278,9 @@ async function regeneratePlayerCover(artworkHint = "", trackId = "") {
   if (!track?.id || libraryTrackIsPublished(track) || !playerCanRegenerateCover(track)) return;
   const hint = String(artworkHint || "").trim().slice(0, 280);
   setPlayerCoverGenerating(true);
+  setStatus(hint ? `Generating cover: ${hint}` : "Generating new cover from song…");
   try {
-    const updated = await regenerateAbstractCoverForTrack(track, hint ? { artworkHint: hint } : {});
+    const updated = await regenerateAbstractCoverForTrack(track, { artworkHint: hint, regenFromSheet: true });
     if (updated) {
       currentPlayerTrackRef = updated;
       const artUrl = trackCoverArtForDisplay(updated);
@@ -47308,6 +47309,21 @@ async function regeneratePlayerCover(artworkHint = "", trackId = "") {
 }
 
 let _coverRegenTrackId = "";
+let _coverRegenDraftHint = "";
+
+async function readCoverRegenArtworkHint() {
+  const input = els.coverRegenArtworkInput;
+  if (input) {
+    input.blur();
+    dismissCoverRegenKeyboard();
+  }
+  await new Promise((resolve) => {
+    requestAnimationFrame(() => requestAnimationFrame(resolve));
+  });
+  const fromDraft = String(_coverRegenDraftHint || "").trim();
+  const fromInput = String(input?.value || "").trim();
+  return (fromDraft || fromInput).slice(0, 280);
+}
 
 function isCoverRegenSheetOpen() {
   return Boolean(els.coverRegenSheet && !els.coverRegenSheet.hidden);
@@ -47479,6 +47495,7 @@ function openCoverRegenSheet(track) {
   if (!track?.id || libraryTrackIsPublished(track) || !playerCanRegenerateCover(track)) return;
   mountFixedOverlaysToBody();
   _coverRegenTrackId = String(track.id);
+  _coverRegenDraftHint = "";
   if (els.coverRegenArtworkInput) els.coverRegenArtworkInput.value = "";
   if (els.coverRegenPreviewArt) {
     const artUrl = trackCoverArtForDisplay(track);
@@ -47505,7 +47522,7 @@ async function confirmCoverRegenSheet() {
     closeCoverRegenSheet();
     return;
   }
-  const hint = String(els.coverRegenArtworkInput?.value || "").trim().slice(0, 280);
+  const hint = await readCoverRegenArtworkHint();
   closeCoverRegenSheet();
   await regeneratePlayerCover(hint, id);
 }
@@ -55719,7 +55736,10 @@ if (els.coverRegenSuggestRow) {
     }
   });
 }
-els.coverRegenArtworkInput?.addEventListener("input", renderCoverRegenSuggestions);
+els.coverRegenArtworkInput?.addEventListener("input", (e) => {
+  _coverRegenDraftHint = String(e.target?.value || "");
+  renderCoverRegenSuggestions();
+});
 els.coverRegenArtworkInput?.addEventListener("keydown", (e) => {
   if (e.key === "Enter") {
     e.preventDefault();

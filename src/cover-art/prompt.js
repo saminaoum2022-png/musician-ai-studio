@@ -4,7 +4,7 @@
  */
 
 /** Bump when cover prompt policy changes — busts Gemini scene cache on the server. */
-export const COVER_PROMPT_POLICY_VERSION = 6;
+export const COVER_PROMPT_POLICY_VERSION = 7;
 /** Pollinations flux reliably returns ~768×768 square — request square, crop to 9:16 (avoids vertical stretch). */
 export const POLLINATIONS_COVER_WIDTH = 1024;
 export const POLLINATIONS_COVER_HEIGHT = 1024;
@@ -426,6 +426,33 @@ function prepareDirectUserArtworkHint(raw) {
 
 export { prepareDirectUserArtworkHint };
 
+/** Explicit user regen from the player sheet — short, subject-first (Flux ignores long safety tails). */
+export function buildUserRegenCoverPrompt(hint, { songId = "", regenSalt = "" } = {}) {
+  const userArtwork = prepareDirectUserArtworkHint(hint);
+  if (!userArtwork) return null;
+  const seed = buildCoverSeed({ songId }, "user_regen", "default", userArtwork, regenSalt);
+  const frame = isConcreteObjectArtworkHint(userArtwork) ? OBJECT_COMPOSE_FRAME : MUSIC_COVER_FRAME;
+  const prompt = [
+    `album art photograph, ${userArtwork} as the single clear focal subject filling the visual idea`,
+    frame,
+    userArtwork,
+    compositionPhraseForCover(songId, userArtwork, "user_directed"),
+    NO_HUMANS_GUARD,
+    "cinematic lighting, rich color grading, no text, no words, no letters, no typography, no people",
+  ]
+    .filter(Boolean)
+    .join(", ");
+  return {
+    prompt,
+    seed,
+    bucket: "default",
+    visualMode: "user_directed",
+    storyTheme: "user_regen",
+    artworkSource: "user_artwork",
+    params: { songId, userArtwork, userArtworkRaw: String(hint || "").trim() },
+  };
+}
+
 function moodBucketFallback(bucketKey, energy) {
   const palette = MOOD_PALETTES[bucketKey] || MOOD_PALETTES.default;
   if (bucketKey === "party" || bucketKey === "hype") {
@@ -664,7 +691,11 @@ export function moodPaletteForBucket(bucketKey) {
 function buildCoverSeed(input, storyTheme, bucketKey, userArtwork, regenSalt = "") {
   const songId = String(input?.songId || input?.id || "").trim();
   if (userArtwork) {
-    return fnv1a(`${songId}|user:${userArtwork}|${userArtwork.length}`) % 2147483646;
+    let seed = fnv1a(`${songId}|user:${userArtwork}|${userArtwork.length}`) % 2147483646;
+    if (regenSalt) {
+      seed = fnv1a(`${seed}|regen:${regenSalt}`) % 2147483646;
+    }
+    return seed;
   }
   const storyBlob = buildStoryBlob(input);
   let seed = fnv1a(`${songId}|${storyTheme}|${bucketKey}|${storyBlob}`) % 2147483646;

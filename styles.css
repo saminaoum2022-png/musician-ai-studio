@@ -19460,6 +19460,7 @@ input::placeholder, textarea::placeholder{
   0%,100%{ transform: scale(1); }
   50%{ transform: scale(1.02); }
 }
+}
 /* --- Nabad Coach floating shortcut (opens the Coach thread in Messages) --- */
 .coachFab{
   display: none;
@@ -19763,7 +19764,6 @@ body.trackSheetOpen .coachFab{
   .inputPanel textarea{
     font-size:16px;
   }
-}
 }
 
 /* -----------------------------------------------------------------

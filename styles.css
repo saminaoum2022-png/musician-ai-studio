@@ -1666,6 +1666,13 @@ h1{ margin:0; font-weight:800; letter-spacing:-0.03em; font-size:28px; }
   0%,100%{ transform: scale(1); }
   50%{ transform: scale(1.016); }
 }
+.brandMark{
+  display:block;
+  flex-shrink:0;
+  width:32px;
+  height:32px;
+  background:url("./assets/icons/splash-mark.png") center / contain no-repeat;
+}
 .brandPrimary{
   /* Inter Display is drawn for large sizes — heavier + cleaner than UI Inter at 900,
    * and avoids the fuzzy fake-bold that `font-weight: 850` triggers on mobile. */
@@ -1673,11 +1680,7 @@ h1{ margin:0; font-weight:800; letter-spacing:-0.03em; font-size:28px; }
   font-weight:900;
   letter-spacing:-0.052em;
   font-stretch: 100%;
-  background-image: linear-gradient(135deg, rgba(124,92,255,0.98), rgba(35,213,171,0.95));
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-  text-shadow: 0 0 22px rgba(124,92,255,0.18);
+  color:rgba(247,250,255,0.94);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
@@ -1693,6 +1696,10 @@ h1{ margin:0; font-weight:800; letter-spacing:-0.03em; font-size:28px; }
 @media (min-width: 721px){
   body[data-route="hub"] .brandTitle{
     font-size: 32px;
+  }
+  .brandTitle .brandMark{
+    width:34px;
+    height:34px;
   }
 }
 .subtitle{ margin:6px 0 0; color:var(--muted); max-width:740px; line-height:1.35; }
@@ -29705,7 +29712,6 @@ body[data-route="hub"] .hubBrand{
   cursor: pointer;
   position: relative;
   min-height: 36px;
-  /* Keep the gradient text from picking up the parent's transparent fill. */
   color: #fff;
   transition: transform 160ms ease, background 200ms ease, border-color 200ms ease;
 }
@@ -29715,6 +29721,10 @@ body[data-route="hub"] .hubBrand:hover{
 }
 body[data-route="hub"] .hubBrand:active{
   transform: scale(0.97);
+}
+body[data-route="hub"] .hubBrandMark{
+  width:24px;
+  height:24px;
 }
 body[data-route="hub"] .hubBrandWordmark{
   display: inline-flex;

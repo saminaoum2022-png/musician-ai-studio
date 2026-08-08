@@ -5,7 +5,7 @@
     <!-- color-scheme first: makes the browser's pre-paint canvas dark instead of
          the default white, killing the white flash before the dark splash paints
          while the render-blocking styles.css is still loading (web only). -->
-    <meta name="color-scheme" content="dark" />
+    <meta name="color-scheme" content="dark light" />
     <!-- Viewport MUST be the first thing after charset: if it is parsed after the
          inline boot <style>/scripts, the browser does its first layout/paint at the
          default 980px width and then snaps to device width — a visible zoom flash on
@@ -85,21 +85,36 @@
     </style>
     <script>
       (function () {
-        try { localStorage.removeItem("nabadai_theme_v1"); } catch (e) {}
-        var bg = "#05070d";
-        var fg = "#eef4ff";
+        var KEY = "nabadai_theme_v1";
+        var pref = "dark";
+        try {
+          var stored = localStorage.getItem(KEY);
+          if (stored === "light" || stored === "dark" || stored === "system") pref = stored;
+        } catch (e) {}
+        var effective = pref;
+        if (pref === "system") {
+          try {
+            effective = window.matchMedia && window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
+          } catch (e2) {
+            effective = "dark";
+          }
+        }
+        var isLight = effective === "light";
+        var bg = isLight ? "#F6F7FB" : "#05070d";
+        var fg = isLight ? "#15171C" : "#eef4ff";
+        var scheme = isLight ? "light" : "dark";
         var html = document.documentElement;
         var isCapShell = location.protocol === "capacitor:";
         var isStandalone = window.navigator.standalone === true
           || (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches);
-        html.setAttribute("data-theme", "dark");
+        html.setAttribute("data-theme", effective);
         html.classList.add(isCapShell ? "is-native-shell" : "is-web-shell");
         if (isStandalone) html.classList.add("is-standalone-pwa");
         html.style.background = bg;
-        html.style.colorScheme = "dark";
+        html.style.colorScheme = scheme;
         var style = document.createElement("style");
         style.id = "themeCritical";
-        var base = "html,body{background-color:" + bg + ";color:" + fg + ";margin:0}html{color-scheme:dark}";
+        var base = "html,body{background-color:" + bg + ";color:" + fg + ";margin:0}html{color-scheme:" + scheme + "}";
         var bootHide =
           "body.booting{background:" + bg + ";overflow:hidden}" +
           "body.booting>*:not(#bootSplash):not(#loginSettlingOverlay){display:none!important}" +
@@ -172,7 +187,7 @@
       onload="this.media='all'"
     />
     <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Display:wght@900&family=Inter:wght@900&display=swap" /></noscript>
-    <link rel="stylesheet" href="./styles.css?v=20260808-162902" />
+    <link rel="stylesheet" href="./styles.css?v=20260809-012149" />
 
     <meta name="description" content="Create complete songs from lyrics, a hum, or a photo with NabadAi. Explore AI music tools, Arabic styles, voice personas, and creator sharing." />
     <meta property="og:type" content="website" />
@@ -3670,6 +3685,26 @@
               </div>
             </section>
 
+            <section class="settingsSection" aria-labelledby="settingsAppearanceTitle">
+              <h2 id="settingsAppearanceTitle" class="settingsSectionLabel">Appearance</h2>
+              <div class="settingsList">
+                <div class="settingsRow settingsThemeRow">
+                  <span class="settingsRowIco" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>
+                  </span>
+                  <span class="settingsRowBody">
+                    <span class="settingsRowTitle">Theme</span>
+                    <span class="settingsRowSub" id="settingsThemeSub">Dark mode</span>
+                  </span>
+                  <div id="settingsThemePicker" class="settingsThemePicker" role="radiogroup" aria-label="App theme">
+                    <button type="button" class="settingsThemeOpt is-active" data-theme-pref="dark" role="radio" aria-checked="true">Dark</button>
+                    <button type="button" class="settingsThemeOpt" data-theme-pref="light" role="radio" aria-checked="false">Light</button>
+                    <button type="button" class="settingsThemeOpt" data-theme-pref="system" role="radio" aria-checked="false">Auto</button>
+                  </div>
+                </div>
+              </div>
+            </section>
+
             <section class="settingsSection" aria-labelledby="settingsOrbTitle">
               <h2 id="settingsOrbTitle" class="settingsSectionLabel">NabadAI Orb</h2>
               <div class="settingsList">
@@ -4727,6 +4762,6 @@
     </script>
     <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
     <script src="./env.client.js" onerror="void 0"></script>
-    <script type="module" src="./src/app.js?v=20260808-162902"></script>
+    <script type="module" src="./src/app.js?v=20260809-012149"></script>
   </body>
 </html>

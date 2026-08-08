@@ -138,7 +138,7 @@ import {
   coachOrbAllowsContextHints,
   surfaceCoachOrb,
 } from "./coach-orb-prefs.js";
-import { initTheme } from "./theme.js";
+import { initTheme, syncSettingsThemePicker } from "./theme.js";
 import { initPullToRefresh } from "./pull-to-refresh.js";
 import { initSoundsStudioOnce } from "./sounds-studio.js";
 import {
@@ -194,7 +194,7 @@ import { MUSIC_VIDEO_FEATURE_ENABLED } from "./feature-flags.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260808-162902";
+const APP_BUILD = "20260809-012149";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -4273,6 +4273,7 @@ function applyRoute({ passGen } = {}) {
     try { syncSettingsPushRow(); } catch {}
     try { syncSettingsMemberIdRow(); } catch {}
     try { syncSettingsOrbMode(); } catch {}
+    try { syncSettingsThemePicker(); } catch {}
     if (!_onesignalAppId) {
       void loadPublicConfig().then(() => {
         try { syncSettingsPushRow(); } catch {}
@@ -9596,16 +9597,7 @@ function discoverFeaturedChallengeKicker(c) {
 }
 
 function discoverFeedChallengeCreationsRailHtml(entries, profMap) {
-  return (entries || []).map((t) => {
-    const art = trackCoverArtForFeed(t);
-    const playAttrs = discoverHubTrackPlayAttrs(t, profMap);
-    const title = String(t.title || "Untitled").trim();
-    return `
-      <button type="button" class="discoverFeedChallengeMini" ${playAttrs} aria-label="Play ${escapeHtml(title)}">
-        <img src="${escapeHtml(art)}" alt="" loading="lazy" decoding="async" />
-        <span class="discoverFeedChallengeMiniPlay" aria-hidden="true">${coverArtPlayStateIconsHtml(12)}</span>
-      </button>`;
-  }).join("");
+  return (entries || []).map((t) => discoverFeedTemplateCardHtml(t, profMap)).join("");
 }
 
 /** For You — immersive featured challenge hero + top creations carousel. */

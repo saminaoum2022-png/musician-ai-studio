@@ -8199,6 +8199,7 @@ function openDeskCoachPanel() {
   }
   try { haptic("light"); } catch {}
   dismissCoachFabNudge();
+  if (MESSAGES_FEATURE_ENABLED) bindMessagesPageOnce();
   _deskCoachOpen = true;
   document.body.classList.add("deskCoachOpen");
   dockMessagesThreadToCoachPanel();
@@ -8231,6 +8232,9 @@ function syncDeskCoachPanel() {
   }
 }
 function initDeskCoachPanel() {
+  if (!isNativeShell() && document.documentElement.classList.contains("is-web-shell")) {
+    if (MESSAGES_FEATURE_ENABLED) bindMessagesPageOnce();
+  }
   if (window.matchMedia) {
     const mq = window.matchMedia("(min-width: 1200px)");
     const onMq = () => {

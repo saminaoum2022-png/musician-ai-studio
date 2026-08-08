@@ -19628,14 +19628,15 @@ input::placeholder, textarea::placeholder{
   to   { opacity: 1; }
 }
 /* Lift above the mini-player when it's on screen. */
-.hubNowPlaying.isVisible ~ .coachFab{
+.hubNowPlaying.isVisible ~ .coachFab,
+body:has(.hubNowPlaying.isVisible) .coachFab{
   bottom: calc(var(--tabbar-h, 62px) + 95px);
 }
 @media (min-width: 721px){
   html.is-web-shell .coachFab{
     bottom: 18px;
   }
-  html.is-web-shell .hubNowPlaying.isVisible ~ .coachFab{
+  html.is-web-shell body:has(.hubNowPlaying.isVisible) .coachFab{
     bottom: 96px;
   }
 }
@@ -44929,13 +44930,29 @@ body[data-route="friends"] .followAct--xstyle .followActActions .followActAct[da
   html.is-web-shell body.deskCoachOpen .coachFab{
     display: none !important;
   }
-  /* Keep the orb visible above the right rail on wide desktop web. */
+  /* Desktop web: pin the orb to the viewport bottom-right corner. */
   html.is-web-shell .coachFab{
-    right: calc(var(--nb-rail, 320px) + 24px);
-    bottom: 24px;
+    right: 28px;
+    bottom: 28px;
+    z-index: 240;
   }
-  html.is-web-shell .hubNowPlaying.isVisible ~ .coachFab{
-    bottom: 102px;
+  html.is-web-shell body:has(.hubNowPlaying.isVisible) .coachFab{
+    bottom: 108px;
+  }
+  html.is-web-shell .deskCoachPanel .messagesThreadPage.deskCoachDocked .messagesThreadHead{
+    z-index: 3;
+    pointer-events: auto;
+  }
+  html.is-web-shell .deskCoachPanel .messagesThreadPage.deskCoachDocked .messagesComposer{
+    z-index: 3;
+    pointer-events: auto;
+  }
+  html.is-web-shell .deskCoachPanel .messagesThreadPage.deskCoachDocked .messagesThreadMount{
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    padding-top: calc(var(--messages-thread-head-reserve, 72px) + 8px);
+    padding-bottom: calc(var(--messages-composer-reserve, 68px) + 8px);
   }
 }
 

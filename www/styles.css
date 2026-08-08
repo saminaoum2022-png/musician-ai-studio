@@ -1748,9 +1748,9 @@ h1{ margin:0; font-weight:800; letter-spacing:-0.03em; font-size:28px; }
   text-align:center;
 }
 .journeyStep.active{
-  color: var(--text);
-  border-color: rgba(124,92,255,0.55);
-  background: linear-gradient(180deg, rgba(124,92,255,0.30), rgba(124,92,255,0.13));
+  color: #fff;
+  border-color: rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.08);
 }
 .journeyStep.hasNotice{
   position: relative;
@@ -8189,6 +8189,10 @@ html[data-theme="light"] .remixSourceLyricsPanel{
      page scroll — the cause of the "stuck scrolling back to top" jank on web.
      `clip` clamps horizontal overflow without creating a scroller. */
   overflow-x: clip;
+  /* Match mobile: no purple card wash — panels carry their own glass surfaces. */
+  border: 0;
+  background: transparent;
+  box-shadow: none;
 }
 .createPageHeader{
   max-width: 100%;
@@ -18454,9 +18458,6 @@ body.trackSheetOpen .footer{
     gap: var(--space-2);
   }
   .card.wide[data-route="generate"]{
-    border: 0;
-    background: transparent;
-    box-shadow: none;
     border-radius:0;
     padding: 2px 0;
     max-width: 100%;
@@ -31267,7 +31268,7 @@ body[data-route="challenges"] .app{
   color: rgba(248, 250, 255, 0.82);
 }
 .challengesPage.homeDesk .homeDeskQuickStartsStack .homeDeskPersonaIco{
-  color: var(--brand-violet, #a78bfa);
+  color: rgba(248, 250, 255, 0.82);
 }
 .homeDeskCreateStack .homeDeskPromoCopy p,
 .homeDeskCreateStack .homeDeskPromoCopy .homeDeskPromoDesc{
@@ -34903,8 +34904,8 @@ body[data-route="mashup"] .app{
 }
 .challengesPage.homeDesk .homeDeskPersonaTile,
 .challengesPage.homeDesk .homeDeskMashupTile{
-  background: rgba(124, 92, 255, 0.1);
-  border-color: rgba(124, 92, 255, 0.28);
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(255, 255, 255, 0.06);
 }
 .challengesPage.homeDesk .homeDeskPhotoTile,
 .challengesPage.homeDesk .homeDeskStudioTile{
@@ -34921,7 +34922,7 @@ body[data-route="mashup"] .app{
   animation: none;
 }
 .challengesPage.homeDesk .homeDeskPersonaIco{
-  color: var(--brand-violet);
+  color: rgba(248, 250, 255, 0.88);
   animation: none;
 }
 .challengesPage.homeDesk .homeDeskMashupDisc--a{
@@ -38855,6 +38856,10 @@ section.mentorPage{
 
 /* ── Create surface — neutral selected pills: brighter fill + soft white glow,
    no brand purple. Scoped to the route so other pages keep their accents. */
+body[data-route="generate"] .createPageHeader .appScreenTitle,
+body[data-route="generate"] .appScreenTitle{
+  text-shadow: none;
+}
 body[data-route="generate"] .optChip.isActive,
 body[data-route="generate"] .styleSuggestPill.isActive,
 body[data-route="generate"] .addressPill.isActive{
@@ -44638,8 +44643,9 @@ body[data-route="friends"] .followAct--xstyle .followActActions .followActAct[da
     color: #f6f8ff;
   }
   .journeyStep.active{
-    background: rgba(124,92,255,0.16);
+    background: rgba(255, 255, 255, 0.08);
     color: #fff;
+    border-color: rgba(255, 255, 255, 0.14);
   }
   .journeyIco{
     display: inline-flex;

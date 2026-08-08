@@ -1,0 +1,18 @@
+{
+  "en-US": {
+    "01-discover.png": "Discover music made by creators",
+    "04-activity.png": "See every reaction in one place",
+    "05-friends.png": "Share songs with your friends",
+    "06-sounds.png": "Create sounds for any moment",
+    "09-nabad-coach.png": "Get feedback from your AI music coach",
+    "10-song-player.png": "Play, remix, and make it yours"
+  },
+  "ar-SA": {
+    "01-discover.png": "اكتشف موسيقى يصنعها المبدعون",
+    "04-activity.png": "تابع كل تفاعل في مكان واحد",
+    "05-friends.png": "شارك الأغاني مع أصدقائك",
+    "06-sounds.png": "أنشئ أصواتاً لكل لحظة",
+    "09-nabad-coach.png": "طوّر موسيقاك مع مدرب NabadAi",
+    "10-song-player.png": "استمع وأعد المزج بطريقتك"
+  }
+}

@@ -14,6 +14,16 @@ const root = path.join(__dirname, "..");
 const copies = [
   ["index.html", "index.html"],
   ["styles.css", "styles.css"],
+  ["privacy.html", "privacy.html"],
+  ["terms.html", "terms.html"],
+  ["support.html", "support.html"],
+  ["legal.css", "legal.css"],
+  ["marketing.css", "marketing.css"],
+  ["ai-music-generator.html", "ai-music-generator.html"],
+  ["hum-to-song.html", "hum-to-song.html"],
+  ["lyrics-to-song.html", "lyrics-to-song.html"],
+  ["photo-to-song.html", "photo-to-song.html"],
+  ["arabic-ai-music-generator.html", "arabic-ai-music-generator.html"],
 ];
 
 for (const [from, to] of copies) {
@@ -36,6 +46,33 @@ for (const [from, to] of copies) {
     }
   }
   console.log(`sync-www: ${from} → www/${to}`);
+}
+
+const seoArabicSrc = path.join(root, "ar");
+const seoArabicDest = path.join(root, "www", "ar");
+if (fs.existsSync(seoArabicSrc)) {
+  fs.mkdirSync(seoArabicDest, { recursive: true });
+  execSync("rsync -a --delete ar/ www/ar/", { cwd: root, stdio: "inherit" });
+  console.log("sync-www: ar/ → www/ar/");
+}
+
+const seoMarketingFiles = [
+  "nabadai-social-card.png",
+  "seo-hero-device.png",
+  "seo-hero-device-source.jpg",
+  "seo-hero-player.png",
+  "seo-hero-create-flow.png",
+  "app-store-screenshots/02-create-hub.png",
+  "app-store-screenshots/08-generate-song.png",
+  "app-store-screenshots/10-song-player.png",
+];
+for (const rel of seoMarketingFiles) {
+  const src = path.join(root, "assets", "marketing", rel);
+  const dest = path.join(root, "www", "assets", "marketing", rel);
+  if (!fs.existsSync(src)) continue;
+  fs.mkdirSync(path.dirname(dest), { recursive: true });
+  fs.copyFileSync(src, dest);
+  console.log(`sync-www: assets/marketing/${rel} → www/assets/marketing/${rel}`);
 }
 
 for (const worker of ["OneSignalSDKWorker.js", "OneSignalSDKUpdaterWorker.js"]) {
@@ -65,7 +102,7 @@ for (const name of brandRootFiles) {
   }
 }
 
-const brandIconFiles = ["icon-192.png", "icon-512.png", "apple-touch-icon.png"];
+const brandIconFiles = ["icon-192.png", "icon-512.png", "apple-touch-icon.png", "splash-mark.png"];
 for (const name of brandIconFiles) {
   const src = path.join(root, "assets", "icons", name);
   const dest = path.join(root, "www", "assets", "icons", name);

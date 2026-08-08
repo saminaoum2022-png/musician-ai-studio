@@ -107,6 +107,28 @@ For **every row below**, use:
 
 ---
 
+### 8. Identifiers → **Device ID**
+
+| Field | Value |
+|-------|--------|
+| Why collected | OneSignal push token / device identifier used to deliver notifications |
+| Linked to user | Yes |
+| Tracking | No |
+| Purposes | **App Functionality** |
+
+---
+
+### 9. Purchases → **Purchase History**
+
+| Field | Value |
+|-------|--------|
+| Why collected | RevenueCat subscription entitlement and purchase-status management |
+| Linked to user | Yes |
+| Tracking | No |
+| Purposes | **App Functionality** |
+
+---
+
 ## Do **not** declare (unless you add features later)
 
 | Category | Reason |
@@ -114,12 +136,11 @@ For **every row below**, use:
 | Location | App does not request location permission or store GPS |
 | Contacts | No address-book access |
 | Browsing / Search History | People search queries are not stored as a separate “search history” product |
-| Purchases | No Apple IAP; credits are promo/server-side, not Payment Info |
 | Financial Info | None |
 | Health / Fitness | None |
 | Sensitive Info | None |
 | Diagnostics (Crash / Performance) | No crash reporting SDK (e.g. Sentry/Firebase) in the client |
-| Device ID for advertising | None |
+| Device ID for advertising | Push identifiers are used for app functionality only, never advertising |
 | Data Used to Track You | No cross-app tracking |
 
 ---
@@ -143,7 +164,7 @@ Answer **No** to “sell data” and **No** to “track users across apps/websit
 
 The iOS manifest in `ios/App/App/PrivacyInfo.xcprivacy` lists:
 
-- Email, User ID, Photos/Videos, Audio, Other User Content  
+- Email, Name, User ID, Photos/Videos, Audio, Other User Content, Product Interaction, Device ID, Purchase History  
 - `NSPrivacyTracking` = false  
 - Required-reason APIs: UserDefaults (CA92.1), File Timestamp (C617.1)
 
@@ -154,11 +175,11 @@ Keep App Store labels aligned with that file after any SDK upgrade.
 ## Privacy Policy URL (required)
 
 ```
-https://musician-ai-studio.vercel.app/privacy
+https://www.nabadai.com/privacy
 ```
 
 Terms (support / legal reference):
 
 ```
-https://musician-ai-studio.vercel.app/terms
+https://www.nabadai.com/terms
 ```

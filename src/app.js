@@ -23332,7 +23332,7 @@ function getAuthEmailRedirectTo() {
       return `${o}/`;
     }
   } catch {}
-  return "https://nabadai.com/";
+  return "https://www.nabadai.com/";
 }
 
 /** Sign-up with confirm-email may return `user` nested or flat `{ id, email }`. */
@@ -48358,7 +48358,7 @@ function unwrapInnermostHttpAudioUrl(url) {
   const originBase =
     API_BASE ||
     (typeof location !== "undefined" && location.origin ? location.origin : "") ||
-    "https://nabadai.com";
+    "https://www.nabadai.com";
   for (let i = 0; i < 8; i++) {
     if (!cur.toLowerCase().includes("api/suno/audio")) break;
     try {
@@ -48828,16 +48828,7 @@ function trackCloudShareId(track) {
 
 /** Deployed https origin for share links — not `capacitor://localhost` in the native shell. */
 function publicWebOrigin() {
-  try {
-    const origin = String(location.origin || "").replace(/\/$/, "");
-    if (/^https?:\/\//i.test(origin) && !/localhost|127\.0\.0\.1|capacitor/i.test(origin)) {
-      return origin;
-    }
-  } catch {}
-  const base = String(_resolvedApiBase || API_BASE || NATIVE_API_BASE_CANDIDATES[0] || "")
-    .trim()
-    .replace(/\/$/, "");
-  return base || "https://nabadai.com";
+  return "https://www.nabadai.com";
 }
 
 /** Public link with Open Graph preview (`/s/:id`) — not a raw .mp3 URL. */
@@ -56583,6 +56574,24 @@ function resetGoogleAuthButton() {
 }
 let _lastOAuthCodeHandled = "";
 
+function handleNativeContentDeepLink(url) {
+  try {
+    const parsed = new URL(String(url || ""));
+    const host = parsed.hostname.toLowerCase();
+    if (host !== "www.nabadai.com" && host !== "nabadai.com") return false;
+    const match = parsed.pathname.match(/^\/s\/([^/]+)\/?$/);
+    if (!match) return false;
+    const trackId = decodeURIComponent(match[1] || "").trim();
+    if (!trackId) return false;
+    location.hash = `#/player?track=${encodeURIComponent(trackId)}`;
+    try { syncRoutePanelVisibility("player"); } catch {}
+    try { safeApplyRoute(); } catch {}
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 async function handleNativeAuthDeepLink(url) {
   try {
     const raw = String(url || "");
@@ -56663,6 +56672,7 @@ if (isCapacitorNativeAuth()) {
           try { safeApplyRoute(); } catch {}
           return;
         }
+        if (handleNativeContentDeepLink(event?.url)) return;
         void handleNativeAuthDeepLink(event?.url);
       });
     } catch {}

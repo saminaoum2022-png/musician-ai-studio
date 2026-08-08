@@ -4,10 +4,9 @@
 //
 // Routed via vercel.json rewrite: /s/:id → /api/share?id=:id
 
-const SITE_NAME = "Nabadai";
-const DEFAULT_TITLE = "Listen on Nabadai";
-const DEFAULT_DESCRIPTION = "Made on Nabadai. Take a listen.";
-const DEFAULT_IMAGE = "https://www.nabadai.com/icon-512.png";
+const SITE_NAME = "NabadAi";
+const SITE_ORIGIN = "https://www.nabadai.com";
+const DEFAULT_IMAGE = `${SITE_ORIGIN}/assets/marketing/nabadai-social-card.png`;
 
 function escapeAttr(s) {
   return String(s == null ? "" : s)
@@ -22,15 +21,6 @@ function escapeHtml(s) {
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;");
-}
-
-function absoluteUrl(req, path) {
-  const proto = req.headers["x-forwarded-proto"] || "https";
-  const host = req.headers["x-forwarded-host"] || req.headers.host || "";
-  if (!host) return path;
-  if (/^https?:\/\//i.test(path)) return path;
-  const slash = path.startsWith("/") ? "" : "/";
-  return `${proto}://${host}${slash}${path}`;
 }
 
 function supaHeaders() {
@@ -56,9 +46,17 @@ async function supaGet(path, { signal } = {}) {
 }
 
 async function fetchLibraryTrack(id, signal) {
-  const cols = ["id", "title", "art_url", "song_url", "user_id"].join(",");
+  const cols = [
+    "id",
+    "title",
+    "art_url",
+    "song_url",
+    "user_id",
+    "published_at",
+    "public_on_profile",
+  ].join(",");
   const row = await supaGet(
-    `user_songs?select=${encodeURIComponent(cols)}&id=eq.${encodeURIComponent(id)}&limit=1`,
+    `user_songs?select=${encodeURIComponent(cols)}&id=eq.${encodeURIComponent(id)}&public_on_profile=eq.true&limit=1`,
     { signal },
   );
   if (!row) return null;
@@ -80,6 +78,7 @@ async function fetchLibraryTrack(id, signal) {
     song_url: row.song_url || "",
     creator_username,
     creator_avatar,
+    published_at: row.published_at || "",
   };
 }
 
@@ -101,7 +100,7 @@ function shareRedirectFor(record, id) {
   return `/#/player?track=${encodeURIComponent(id)}`;
 }
 
-function renderHtml({ title, description, image, url, redirectTo, creator, songUrl }) {
+function renderHtml({ title, description, image, url, redirectTo, creator, songUrl, publishedAt }) {
   const safeTitle = escapeAttr(title);
   const safeDesc = escapeAttr(description);
   const safeImg = escapeAttr(image);
@@ -109,6 +108,18 @@ function renderHtml({ title, description, image, url, redirectTo, creator, songU
   const safeRedirect = escapeAttr(redirectTo);
   const safeCreator = escapeHtml(creator || "");
   const safeSong = escapeAttr(songUrl || "");
+  const recordingSchema = JSON.stringify({
+    "@context": "https://schema.org",
+    "@type": "MusicRecording",
+    name: title,
+    url,
+    image,
+    byArtist: creator
+      ? { "@type": "Person", name: `@${creator}` }
+      : { "@type": "Organization", name: SITE_NAME },
+    datePublished: publishedAt || undefined,
+    audio: songUrl || undefined,
+  }).replace(/</g, "\\u003c");
   const audioTag = songUrl
     ? `<meta property="og:audio" content="${safeSong}" /><meta property="og:audio:type" content="audio/mpeg" />`
     : "";
@@ -119,14 +130,14 @@ function renderHtml({ title, description, image, url, redirectTo, creator, songU
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>${safeTitle}</title>
 <meta name="description" content="${safeDesc}" />
+<meta name="robots" content="index, follow, max-image-preview:large" />
 
 <meta property="og:type" content="music.song" />
 <meta property="og:site_name" content="${SITE_NAME}" />
 <meta property="og:title" content="${safeTitle}" />
 <meta property="og:description" content="${safeDesc}" />
 <meta property="og:image" content="${safeImg}" />
-<meta property="og:image:width" content="1200" />
-<meta property="og:image:height" content="630" />
+<meta property="og:image:alt" content="Cover art for ${safeTitle}" />
 <meta property="og:url" content="${safeUrl}" />
 ${audioTag}
 
@@ -134,8 +145,10 @@ ${audioTag}
 <meta name="twitter:title" content="${safeTitle}" />
 <meta name="twitter:description" content="${safeDesc}" />
 <meta name="twitter:image" content="${safeImg}" />
+<meta name="twitter:image:alt" content="Cover art for ${safeTitle}" />
 
 <link rel="canonical" href="${safeUrl}" />
+<script type="application/ld+json">${recordingSchema}</script>
 <style>
   html,body{margin:0;padding:0;background:#12151e;color:#e9eefb;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;}
   .wrap{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;text-align:center;gap:18px;}
@@ -145,26 +158,14 @@ ${audioTag}
   .cta{display:inline-block;margin-top:6px;padding:14px 28px;border-radius:999px;border:1px solid rgba(124,92,255,0.55);background:linear-gradient(135deg,rgba(124,92,255,0.95),rgba(35,213,171,0.92));color:#fff;font-weight:800;font-size:15px;letter-spacing:0.2px;text-decoration:none;box-shadow:0 14px 36px -10px rgba(124,92,255,0.6);}
   .hint{font-size:12px;color:rgba(223,231,251,0.55);max-width:300px;line-height:1.4;}
 </style>
-<script>
-  (function(){
-    var url = ${JSON.stringify(redirectTo)};
-    try { location.replace(url); }
-    catch (e) {
-      try { location.href = url; } catch (e2) {}
-    }
-    setTimeout(function(){
-      try { if (location.pathname.indexOf("/s/") === 0) location.href = url; } catch (e) {}
-    }, 600);
-  })();
-</script>
 </head>
 <body>
   <div class="wrap">
     <img class="cover" src="${safeImg}" alt="${safeTitle}" />
     <div class="title">${escapeHtml(title)}</div>
     ${safeCreator ? `<div class="creator">by @${safeCreator}</div>` : ""}
-    <a class="cta" href="${safeRedirect}">▶ Open in Nabadai</a>
-    <div class="hint">If the player doesn't open automatically, tap the button above.</div>
+    <a class="cta" href="${safeRedirect}">▶ Open in NabadAi</a>
+    <div class="hint">Listen, create, and share music with NabadAi.</div>
   </div>
 </body>
 </html>`;
@@ -186,20 +187,27 @@ module.exports = async function handler(req, res) {
 
   const record = id ? await fetchShareRecord(id) : null;
 
-  const plainTitle = String(record?.title || "").trim() || "this song";
-  const title = record?.title
-    ? `${plainTitle}${record.creator_username ? ` — by @${record.creator_username}` : ""} · ${SITE_NAME}`
-    : DEFAULT_TITLE;
-  const description = record?.creator_username
-    ? `“${plainTitle}” by @${record.creator_username} on Nabadai`
-    : record?.title
-      ? `Listen to “${plainTitle}” on Nabadai`
-      : DEFAULT_DESCRIPTION;
+  if (!id || !record) {
+    res.statusCode = 404;
+    res.setHeader("Content-Type", "text/html; charset=utf-8");
+    res.setHeader("Cache-Control", "no-store");
+    res.setHeader("X-Robots-Tag", "noindex, nofollow");
+    res.end(`<!doctype html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Song not found — NabadAi</title><meta name="robots" content="noindex,nofollow"></head><body><main><h1>Song not found</h1><p>This song is unavailable or no longer public.</p><a href="${SITE_ORIGIN}/">Open NabadAi</a></main></body></html>`);
+    return;
+  }
 
-  let image = record?.cover_url || record?.creator_avatar || DEFAULT_IMAGE;
-  if (!/^https?:\/\//i.test(image)) image = absoluteUrl(req, image);
+  const plainTitle = String(record.title || "").trim() || "Untitled song";
+  const title = `${plainTitle}${record.creator_username ? ` — by @${record.creator_username}` : ""} · ${SITE_NAME}`;
+  const description = record.creator_username
+    ? `“${plainTitle}” by @${record.creator_username} on NabadAi`
+    : `Listen to “${plainTitle}” on NabadAi`;
 
-  const url = absoluteUrl(req, id ? `/s/${encodeURIComponent(id)}` : "/");
+  let image = record.cover_url || record.creator_avatar || DEFAULT_IMAGE;
+  if (!/^https?:\/\//i.test(image)) {
+    image = `${SITE_ORIGIN}${image.startsWith("/") ? "" : "/"}${image}`;
+  }
+
+  const url = `${SITE_ORIGIN}/s/${encodeURIComponent(id)}`;
   const redirectTo = shareRedirectFor(record, id);
 
   const html = renderHtml({
@@ -210,6 +218,7 @@ module.exports = async function handler(req, res) {
     redirectTo,
     creator: record?.creator_username || "",
     songUrl: record?.song_url || "",
+    publishedAt: record?.published_at || "",
   });
 
   res.statusCode = 200;

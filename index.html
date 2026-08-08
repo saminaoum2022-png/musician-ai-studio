@@ -109,7 +109,7 @@
         document.head.appendChild(style);
       })();
     </script>
-    <title>NabadAi</title>
+    <title>NabadAi — AI Music Generator &amp; Song Maker</title>
     <meta name="theme-color" content="#05070d" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
@@ -174,26 +174,51 @@
     <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Display:wght@900&family=Inter:wght@900&display=swap" /></noscript>
     <link rel="stylesheet" href="./styles.css?v=20260808-113208" />
 
-    <meta name="description" content="NabadAi is an AI music studio. Hum a melody, write lyrics, and ship a song." />
+    <meta name="description" content="Create complete songs from lyrics, a hum, or a photo with NabadAi. Explore AI music tools, Arabic styles, voice personas, and creator sharing." />
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="NabadAi" />
+    <meta property="og:locale" content="en_US" />
     <meta property="og:url" content="https://www.nabadai.com/" />
-    <meta property="og:title" content="NabadAi" />
-    <meta property="og:description" content="NabadAi is an AI music studio. Hum a melody, write lyrics, and ship a song." />
-    <meta property="og:image" content="https://www.nabadai.com/icon-512.png" />
-    <meta property="og:image:width" content="512" />
-    <meta property="og:image:height" content="512" />
+    <meta property="og:title" content="NabadAi — AI Music Generator &amp; Song Maker" />
+    <meta property="og:description" content="Create complete songs from lyrics, a hum, or a photo. Explore Arabic styles, voice personas, and creator sharing." />
+    <meta property="og:image" content="https://www.nabadai.com/assets/marketing/nabadai-social-card.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="NabadAi AI music studio" />
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content="NabadAi" />
-    <meta name="twitter:description" content="NabadAi is an AI music studio. Hum a melody, write lyrics, and ship a song." />
-    <meta name="twitter:image" content="https://www.nabadai.com/icon-512.png" />
+    <meta name="twitter:title" content="NabadAi — AI Music Generator &amp; Song Maker" />
+    <meta name="twitter:description" content="Create complete songs from lyrics, a hum, or a photo with NabadAi." />
+    <meta name="twitter:image" content="https://www.nabadai.com/assets/marketing/nabadai-social-card.png" />
+    <meta name="twitter:image:alt" content="NabadAi AI music studio" />
     <script type="application/ld+json">
       {
         "@context": "https://schema.org",
-        "@type": "Organization",
-        "name": "NabadAi",
-        "url": "https://www.nabadai.com",
-        "logo": "https://www.nabadai.com/icon-512.png"
+        "@graph": [
+          {
+            "@type": "Organization",
+            "@id": "https://www.nabadai.com/#organization",
+            "name": "NabadAi",
+            "url": "https://www.nabadai.com/",
+            "logo": "https://www.nabadai.com/icon-512.png"
+          },
+          {
+            "@type": "WebSite",
+            "@id": "https://www.nabadai.com/#website",
+            "name": "NabadAi",
+            "url": "https://www.nabadai.com/",
+            "publisher": { "@id": "https://www.nabadai.com/#organization" },
+            "inLanguage": ["en", "ar"]
+          },
+          {
+            "@type": "SoftwareApplication",
+            "name": "NabadAi Music",
+            "applicationCategory": "MultimediaApplication",
+            "operatingSystem": "Web, iOS",
+            "url": "https://www.nabadai.com/",
+            "description": "An AI music studio for creating songs from lyrics, a hum, or a photo.",
+            "publisher": { "@id": "https://www.nabadai.com/#organization" }
+          }
+        ]
       }
     </script>
 </head>

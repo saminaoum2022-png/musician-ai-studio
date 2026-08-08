@@ -1,0 +1,22 @@
+{
+  "applinks": {
+    "details": [
+      {
+        "appIDs": [
+          "D9P29385BD.com.nabadai.music"
+        ],
+        "components": [
+          {
+            "/": "/s/*",
+            "comment": "Open public NabadAi song links in the iOS app."
+          }
+        ]
+      }
+    ]
+  },
+  "webcredentials": {
+    "apps": [
+      "D9P29385BD.com.nabadai.music"
+    ]
+  }
+}

@@ -19704,6 +19704,12 @@ body[data-coach-orb-mode="hidden"][data-route="profile"] .coachFab.coachFab--sur
     transform-origin: bottom right;
     animation: none;
   }
+  html.is-web-shell body.deskCoachOpen .coachFab{
+    display: none !important;
+    visibility: hidden !important;
+    opacity: 0 !important;
+    pointer-events: none !important;
+  }
 }
 /* Never during entry/onboarding flows or while a full-screen sheet is open. */
 body.isIntro .coachFab,

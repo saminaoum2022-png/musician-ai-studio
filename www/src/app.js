@@ -191,7 +191,7 @@ import { MUSIC_VIDEO_FEATURE_ENABLED } from "./feature-flags.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260808-155157";
+const APP_BUILD = "20260808-155607";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -8211,6 +8211,7 @@ function openDeskCoachPanel() {
   enterCoachThread(bootToken);
   updateDeskCoachBackBtn();
   syncDeskRailVisibility();
+  try { syncCoachFabDesktopAnchor(); } catch {}
 }
 function closeDeskCoachPanel({ clearConversation = true, reopenAsRoute = false } = {}) {
   if (!_deskCoachOpen) return;
@@ -8221,6 +8222,7 @@ function closeDeskCoachPanel({ clearConversation = true, reopenAsRoute = false }
   updateDeskCoachBackBtn();
   if (clearConversation) _conversationId = "";
   syncDeskRailVisibility();
+  try { syncCoachFabDesktopAnchor(); } catch {}
   if (reopenAsRoute && wasCoach) {
     navigateToMessagesThread({ threadId: COACH_THREAD_ID });
   }
@@ -8245,8 +8247,16 @@ function syncCoachFabDesktopAnchor() {
     fab.style.removeProperty("bottom");
     fab.style.removeProperty("display");
     fab.style.removeProperty("opacity");
+    fab.style.removeProperty("position");
     return;
   }
+  if (_deskCoachOpen || document.body.classList.contains("deskCoachOpen")) {
+    fab.style.setProperty("display", "none", "important");
+    fab.style.setProperty("opacity", "0", "important");
+    fab.style.setProperty("pointer-events", "none", "important");
+    return;
+  }
+  fab.style.removeProperty("pointer-events");
   const route = String(document.body.getAttribute("data-route") || "");
   const coachRoute = new Set(["discover", "challenges", "generate", "profile"]).has(route);
   if (coachRoute) {
@@ -8260,6 +8270,9 @@ function syncCoachFabDesktopAnchor() {
   if (coachRoute) {
     fab.style.setProperty("display", "flex", "important");
     fab.style.setProperty("opacity", "1", "important");
+  } else {
+    fab.style.removeProperty("display");
+    fab.style.removeProperty("opacity");
   }
 }
 function initDeskCoachPanel() {

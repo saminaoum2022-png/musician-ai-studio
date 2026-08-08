@@ -281,6 +281,17 @@ export function notifyCoachOrbPillHidden() {
 }
 
 export function syncCoachOrbAfterRouteChange() {
+  const route = String(document.body?.getAttribute("data-route") || "");
+  const coachRoute = ["discover", "challenges", "generate", "profile"].includes(route);
+  const deskWebCoach =
+    coachRoute
+    && document.documentElement?.classList.contains("is-web-shell")
+    && typeof window !== "undefined"
+    && window.matchMedia?.("(min-width: 721px)")?.matches;
+  if (deskWebCoach) {
+    surfaceCoachOrb();
+    return;
+  }
   if (_statusActive || _generationLocked || _priorityActive || _pillVisible) {
     refreshOrbShell();
     return;

@@ -136,6 +136,7 @@ import {
   coachOrbModeSub,
   coachOrbAllowsIdleNudges,
   coachOrbAllowsContextHints,
+  surfaceCoachOrb,
 } from "./coach-orb-prefs.js";
 import { initTheme } from "./theme.js";
 import { initPullToRefresh } from "./pull-to-refresh.js";
@@ -190,7 +191,7 @@ import { MUSIC_VIDEO_FEATURE_ENABLED } from "./feature-flags.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260808-151825";
+const APP_BUILD = "20260808-154113";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -4496,6 +4497,7 @@ function applyRoute({ passGen } = {}) {
   try {
     syncCoachOrbAfterRouteChange();
   } catch {}
+  try { syncCoachFabDesktopAnchor(); } catch {}
   try {
     updatePlayerSecondaryChrome();
   } catch {}
@@ -8241,12 +8243,23 @@ function syncCoachFabDesktopAnchor() {
     fab.style.removeProperty("left");
     fab.style.removeProperty("right");
     fab.style.removeProperty("bottom");
+    fab.style.removeProperty("display");
+    fab.style.removeProperty("opacity");
     return;
+  }
+  const route = String(document.body.getAttribute("data-route") || "");
+  const coachRoute = new Set(["discover", "challenges", "generate", "profile"]).has(route);
+  if (coachRoute) {
+    try { surfaceCoachOrb(); } catch {}
   }
   const hubUp = Boolean(document.querySelector(".hubNowPlaying.isVisible"));
   fab.style.setProperty("left", "auto", "important");
-  fab.style.setProperty("right", "28px", "important");
-  fab.style.setProperty("bottom", hubUp ? "108px" : "28px", "important");
+  fab.style.setProperty("right", "24px", "important");
+  fab.style.setProperty("bottom", hubUp ? "108px" : "24px", "important");
+  if (coachRoute) {
+    fab.style.setProperty("display", "flex", "important");
+    fab.style.setProperty("opacity", "1", "important");
+  }
 }
 function initDeskCoachPanel() {
   if (!isNativeShell() && document.documentElement.classList.contains("is-web-shell")) {
@@ -54227,13 +54240,20 @@ function showCoachFabPill(text, { visibleMs = COACH_NUDGE_VISIBLE_MS, contextual
     try { notifyCoachOrbPillHidden(); } catch {}
   }, visibleMs);
 }
+function deskCoachFabDesktopWeb() {
+  return !isNativeShell()
+    && document.documentElement.classList.contains("is-web-shell")
+    && window.matchMedia("(min-width: 721px)").matches;
+}
 function showCoachFabNudge() {
   if (isCoachStatusActive()) return;
   if (!coachOrbAllowsIdleNudges()) return;
+  if (deskCoachFabDesktopWeb()) return;
   showCoachFabPill(COACH_PILL_DEFAULT, { visibleMs: COACH_NUDGE_VISIBLE_MS });
 }
 function scheduleCoachFabNudge(delay = COACH_NUDGE_DELAY_MS) {
   if (!coachOrbAllowsIdleNudges()) return;
+  if (deskCoachFabDesktopWeb()) return;
   if (_coachNudgeArmTimer) clearTimeout(_coachNudgeArmTimer);
   _coachNudgeArmTimer = setTimeout(function tick() {
     if (!isCoachStatusActive() && coachOrbAllowsIdleNudges()) showCoachFabNudge();

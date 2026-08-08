@@ -19632,28 +19632,6 @@ input::placeholder, textarea::placeholder{
 body:has(.hubNowPlaying.isVisible) .coachFab{
   bottom: calc(var(--tabbar-h, 62px) + 95px);
 }
-@media (min-width: 721px){
-  html.is-web-shell .coachFab{
-    left: auto !important;
-    right: 28px !important;
-    bottom: 28px !important;
-    z-index: 240;
-    direction: ltr;
-  }
-  html.is-web-shell body:has(.hubNowPlaying.isVisible) .coachFab{
-    bottom: 108px !important;
-  }
-  /* Desktop web: idle "Need help?" sits above the orb, not spilling left. */
-  html.is-web-shell .coachFab--nudge:not(.coachFab--hint) .coachFabPill{
-    right: 0;
-    left: auto;
-    top: auto;
-    bottom: calc(100% + 12px);
-    transform: translateY(0) scale(1);
-    transform-origin: bottom right;
-    animation: none;
-  }
-}
 /* Show only on the main tab routes (including Create, where it surfaces
    on-device contextual tips like the Arabic-harakat hint). */
 body[data-route="discover"] .coachFab,
@@ -19676,6 +19654,55 @@ body[data-coach-orb-mode="hidden"][data-route="challenges"] .coachFab.coachFab--
 body[data-coach-orb-mode="hidden"][data-route="generate"] .coachFab.coachFab--surfaced,
 body[data-coach-orb-mode="hidden"][data-route="profile"] .coachFab.coachFab--surfaced{
   display: inline-flex;
+}
+/* Desktop web: orb stays visible on main tabs — overrides smart/hidden above. */
+@media (min-width: 721px){
+  html.is-web-shell body[data-route="discover"] .coachFab,
+  html.is-web-shell body[data-route="challenges"] .coachFab,
+  html.is-web-shell body[data-route="generate"] .coachFab,
+  html.is-web-shell body[data-route="profile"] .coachFab{
+    display: flex !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    animation: none !important;
+    position: fixed !important;
+    left: auto !important;
+    right: 24px !important;
+    bottom: 24px !important;
+    width: 56px !important;
+    height: 56px !important;
+    z-index: 1000 !important;
+    overflow: visible;
+    background: rgba(6, 10, 18, 0.92);
+    box-shadow: 0 10px 32px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.14);
+    direction: ltr;
+  }
+  html.is-web-shell body:has(.hubNowPlaying.isVisible)[data-route="discover"] .coachFab,
+  html.is-web-shell body:has(.hubNowPlaying.isVisible)[data-route="challenges"] .coachFab,
+  html.is-web-shell body:has(.hubNowPlaying.isVisible)[data-route="generate"] .coachFab,
+  html.is-web-shell body:has(.hubNowPlaying.isVisible)[data-route="profile"] .coachFab{
+    bottom: 108px !important;
+  }
+  html.is-web-shell .coachFab .coachFabIco,
+  html.is-web-shell .coachFab .coachFabIco svg,
+  html.is-web-shell .coachFab .coachOrbArc{
+    animation: none !important;
+    opacity: 1 !important;
+  }
+  html.is-web-shell .coachFab--nudge:not(.coachFab--hint):not(.coachFab--generating) .coachFabPill{
+    display: none !important;
+  }
+  html.is-web-shell .coachFab--hint .coachFabPill,
+  html.is-web-shell .coachFab--generating .coachFabPill{
+    display: block !important;
+    right: 0;
+    left: auto;
+    top: auto;
+    bottom: calc(100% + 12px);
+    transform: translateY(0) scale(1);
+    transform-origin: bottom right;
+    animation: none;
+  }
 }
 /* Never during entry/onboarding flows or while a full-screen sheet is open. */
 body.isIntro .coachFab,

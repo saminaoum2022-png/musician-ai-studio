@@ -190,7 +190,7 @@ import { MUSIC_VIDEO_FEATURE_ENABLED } from "./feature-flags.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260808-151014";
+const APP_BUILD = "20260808-151825";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -54217,6 +54217,7 @@ function showCoachFabPill(text, { visibleMs = COACH_NUDGE_VISIBLE_MS, contextual
   fab.classList.toggle("coachFab--hint", Boolean(contextual));
   fab.classList.add("coachFab--nudge");
   fab.classList.remove("coachFab--generating");
+  try { syncCoachFabDesktopAnchor(); } catch {}
   try { notifyCoachOrbPillShown({ contextual, priority: false }); } catch {}
   if (_coachNudgeHideTimer) clearTimeout(_coachNudgeHideTimer);
   _coachNudgeHideTimer = setTimeout(() => {

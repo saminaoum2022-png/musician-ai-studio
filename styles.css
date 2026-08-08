@@ -44686,7 +44686,8 @@ body[data-route="friends"] .followAct--xstyle .followActActions .followActAct[da
 }
 
 /* --- Right rail (>=1200px) --- */
-.deskRail{ display: none; }
+.deskRail,
+.deskCoachPanel{ display: none; }
 @media (min-width: 1200px){
   .app{
     max-width: 1380px;
@@ -44871,6 +44872,71 @@ body[data-route="friends"] .followAct--xstyle .followActActions .followActAct[da
     transition: background 140ms ease;
   }
   .deskRailCtaBtn:hover{ background: rgba(255,255,255,0.13); }
+
+  /* --- Desktop Coach panel (web shell): Coach docks in the right column --- */
+  html.is-web-shell body.deskCoachOpen aside.deskCoachPanel{
+    grid-column: 3;
+    grid-row: 1 / -1;
+    position: sticky;
+    top: 20px;
+    align-self: start;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    height: calc(100vh - 64px);
+    max-height: calc(100vh - 64px);
+  }
+  html.is-web-shell body.deskCoachOpen aside.deskRail{
+    display: none !important;
+  }
+  html.is-web-shell .deskCoachPanel .messagesThreadPage.deskCoachDocked{
+    display: flex !important;
+    flex-direction: column;
+    flex: 1 1 auto;
+    min-height: 0;
+    height: 100%;
+    max-width: none;
+    margin: 0;
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 20px;
+    overflow: hidden;
+    position: relative;
+  }
+  html.is-web-shell .deskCoachPanel .messagesThreadPage.deskCoachDocked .messagesThreadHead{
+    position: absolute;
+    left: 0;
+    right: 0;
+    width: 100%;
+    transform: none;
+    border-radius: 20px 20px 0 0;
+    padding-left: 16px;
+    padding-right: 16px;
+    padding-top: 12px;
+  }
+  html.is-web-shell .deskCoachPanel .messagesThreadPage.deskCoachDocked .messagesComposer{
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: 100%;
+    max-width: none;
+    transform: none;
+    border-radius: 0 0 20px 20px;
+  }
+  html.is-web-shell body.deskCoachOpen .messagesComposerShare{
+    display: none;
+  }
+  html.is-web-shell body.deskCoachOpen .coachFab{
+    display: none !important;
+  }
+  /* Keep the orb visible above the right rail on wide desktop web. */
+  html.is-web-shell .coachFab{
+    right: calc(var(--nb-rail, 320px) + 24px);
+    bottom: 24px;
+  }
+  html.is-web-shell .hubNowPlaying.isVisible ~ .coachFab{
+    bottom: 102px;
+  }
 }
 
 /* --- Desktop DM thread: keep the shell instead of the mobile takeover --- */

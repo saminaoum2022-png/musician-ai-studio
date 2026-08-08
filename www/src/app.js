@@ -3656,6 +3656,7 @@ function syncRoutePanelVisibility(wanted) {
       || (route === "messages-thread" && link === "friends"));
   });
   try { syncDeskRailVisibility(); } catch {}
+  try { syncDeskCoachPanel(); } catch {}
 }
 
 function routeApplyFallback(err) {
@@ -8120,15 +8121,137 @@ async function renderDeskRailTrending() {
 function syncDeskRailVisibility() {
   const rail = document.getElementById("deskRail");
   if (!rail) return;
-  const on = deskRailActive();
+  const on = deskRailActive() && !isDeskCoachOpen();
   rail.hidden = !on;
   if (on) {
     renderDeskRailNowPlaying();
     void renderDeskRailTrending();
   }
 }
+
+/* ===== Desktop Coach panel (≥1200px web) — dock Coach in the right column =====
+ * Clicking the orb opens Coach beside Create/Discover without leaving the page.
+ * Mobile and native shells keep navigating to #/messages-thread. */
+let _deskCoachOpen = false;
+let _deskCoachThreadAnchor = null;
+
+function isDeskCoachOpen() {
+  return Boolean(_deskCoachOpen);
+}
+function deskCoachPanelEligible() {
+  if (isNativeShell()) return false;
+  try {
+    if (!document.documentElement.classList.contains("is-web-shell")) return false;
+    if (!window.matchMedia("(min-width: 1200px)").matches) return false;
+    const route = document.body.getAttribute("data-route") || "";
+    return new Set(["discover", "challenges", "generate", "profile"]).has(route);
+  } catch {
+    return false;
+  }
+}
+function updateDeskCoachBackBtn() {
+  const btn = document.getElementById("messagesThreadBackBtn");
+  if (!btn) return;
+  if (_deskCoachOpen) {
+    btn.setAttribute("aria-label", "Close Coach");
+  } else {
+    btn.setAttribute("aria-label", "Back to Messages");
+  }
+}
+function dockMessagesThreadToCoachPanel() {
+  const page = document.getElementById("messagesThreadPage");
+  const panel = document.getElementById("deskCoachPanel");
+  const main = document.querySelector("main.grid");
+  if (!page || !panel || !main) return;
+  if (!_deskCoachThreadAnchor) {
+    _deskCoachThreadAnchor = document.createComment("deskCoachThreadAnchor");
+    main.insertBefore(_deskCoachThreadAnchor, page);
+  }
+  page.classList.add("deskCoachDocked");
+  panel.appendChild(page);
+  panel.hidden = false;
+  page.style.display = "flex";
+}
+function undockMessagesThreadFromCoachPanel() {
+  const page = document.getElementById("messagesThreadPage");
+  const panel = document.getElementById("deskCoachPanel");
+  const main = document.querySelector("main.grid");
+  if (!page || !main) return;
+  page.classList.remove("deskCoachDocked");
+  page.style.display = "";
+  if (_deskCoachThreadAnchor && _deskCoachThreadAnchor.parentNode === main) {
+    main.insertBefore(page, _deskCoachThreadAnchor.nextSibling);
+  } else {
+    main.appendChild(page);
+  }
+  if (panel) panel.hidden = true;
+}
+function openDeskCoachPanel() {
+  if (!deskCoachPanelEligible()) {
+    try { haptic("light"); } catch {}
+    dismissCoachFabNudge();
+    navigateToMessagesThread({ threadId: COACH_THREAD_ID });
+    return;
+  }
+  if (_deskCoachOpen) {
+    closeDeskCoachPanel();
+    return;
+  }
+  try { haptic("light"); } catch {}
+  dismissCoachFabNudge();
+  _deskCoachOpen = true;
+  document.body.classList.add("deskCoachOpen");
+  dockMessagesThreadToCoachPanel();
+  const bootToken = ++_messagesThreadBootToken;
+  stopMessagesThreadRealtime();
+  enterCoachThread(bootToken);
+  updateDeskCoachBackBtn();
+  syncDeskRailVisibility();
+}
+function closeDeskCoachPanel({ clearConversation = true, reopenAsRoute = false } = {}) {
+  if (!_deskCoachOpen) return;
+  const wasCoach = isCoachThreadId(_conversationId);
+  _deskCoachOpen = false;
+  document.body.classList.remove("deskCoachOpen");
+  undockMessagesThreadFromCoachPanel();
+  updateDeskCoachBackBtn();
+  if (clearConversation) _conversationId = "";
+  syncDeskRailVisibility();
+  if (reopenAsRoute && wasCoach) {
+    navigateToMessagesThread({ threadId: COACH_THREAD_ID });
+  }
+}
+function syncDeskCoachPanel() {
+  const route = String(document.body.getAttribute("data-route") || "");
+  if (!_deskCoachOpen) return;
+  if (!deskCoachPanelEligible() || route === "messages-thread" || route === "messages") {
+    closeDeskCoachPanel({
+      clearConversation: route !== "messages-thread",
+    });
+  }
+}
+function initDeskCoachPanel() {
+  if (window.matchMedia) {
+    const mq = window.matchMedia("(min-width: 1200px)");
+    const onMq = () => {
+      if (_deskCoachOpen && !deskCoachPanelEligible()) {
+        closeDeskCoachPanel({
+          clearConversation: false,
+          reopenAsRoute: isCoachThreadId(_conversationId),
+        });
+      }
+    };
+    try {
+      mq.addEventListener("change", onMq);
+    } catch {
+      mq.addListener(onMq);
+    }
+  }
+}
+
 function initDeskRail() {
   syncDeskRailVisibility();
+  try { initDeskCoachPanel(); } catch {}
   if (_deskRailBound) return;
   _deskRailBound = true;
   document.addEventListener("click", (e) => {
@@ -29178,6 +29301,10 @@ function bindMessagesPageOnce() {
     if (backThread) {
       e.preventDefault();
       try { haptic("light"); } catch {}
+      if (_deskCoachOpen) {
+        closeDeskCoachPanel();
+        return;
+      }
       leaveMessagesThreadRoute(() => {
         try { location.hash = "#/messages"; } catch {}
       });
@@ -54011,6 +54138,10 @@ if (els.btnGenerateOrb && els.btnSunoGenerate) {
 
 // Global shortcut to the NabadAi Coach (AI guide that lives in Messages).
 function openNabadCoach() {
+  if (deskCoachPanelEligible()) {
+    openDeskCoachPanel();
+    return;
+  }
   try { haptic("light"); } catch {}
   dismissCoachFabNudge();
   navigateToMessagesThread({ threadId: COACH_THREAD_ID });

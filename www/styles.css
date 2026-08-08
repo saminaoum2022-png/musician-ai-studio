@@ -20077,6 +20077,7 @@ body[data-logged-in="true"] #settingsBtnSignIn{
 }
 body[data-logged-in="false"] #settingsBtnLogout,
 body[data-logged-in="false"] #settingsBtnDeleteAccount,
+#settingsPrivacyRow,
 body[data-logged-in="false"] #settingsPrivacyRow,
 body[data-logged-in="false"] #btnSettingsNotifications,
 body[data-logged-in="false"] #btnSettingsMusicPrefs{

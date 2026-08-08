@@ -191,7 +191,7 @@ import { MUSIC_VIDEO_FEATURE_ENABLED } from "./feature-flags.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260808-155607";
+const APP_BUILD = "20260808-162250";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -5121,7 +5121,8 @@ function refreshSettingsMusicPrefsRow() {
 function syncSettingsPrivacyToggle(isAuthed = Boolean(authSession?.user?.id || getSupabaseAuthToken())) {
   const row = document.getElementById("settingsPrivacyRow");
   const toggle = document.getElementById("settingsProfilePublicToggle");
-  if (row) row.hidden = !isAuthed;
+  // Profile public/private is deferred — see docs/FUTURE_PRODUCT_NOTES.md. Keep hidden until enforced end-to-end.
+  if (row) row.hidden = true;
   try { syncSettingsPresenceToggles(isAuthed); } catch {}
   if (!toggle) return;
   toggle.checked = els.profileIsPublic ? els.profileIsPublic.checked : activeProfile.isPublic !== false;

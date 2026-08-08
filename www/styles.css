@@ -9085,6 +9085,8 @@ html[data-theme="light"] .remixSourceLyricsPanel{
   box-sizing:border-box;
   padding:12px;
   border-radius:12px;
+  unicode-bidi: plaintext;
+  text-align: start;
 }
 .lyricsAssistBar{
   display:flex;

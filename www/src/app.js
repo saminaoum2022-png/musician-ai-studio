@@ -159,6 +159,9 @@ import {
 import {
   applyUserTextBidi,
   applyUserTextInputDir,
+  applyLyricsInputBidi,
+  insertTextAtInputSelection,
+  normalizePastedUserText,
   userTextHtml,
 } from "./text-bidi.js";
 import { userTextWithMentionsHtml } from "./mentions.js";
@@ -191,7 +194,7 @@ import { MUSIC_VIDEO_FEATURE_ENABLED } from "./feature-flags.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260808-162250";
+const APP_BUILD = "20260808-162902";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -54593,11 +54596,33 @@ function syncGenerateOrbVisibility() {
 function autoResizeLyricsBox() {
   if (!els.sunoPrompt) return;
   const el = els.sunoPrompt;
+  try { applyLyricsInputBidi(el); } catch {}
   el.style.height = "auto";
   const base = 132;
   const max = 340;
   const next = Math.max(base, Math.min(max, el.scrollHeight));
   el.style.height = `${next}px`;
+}
+
+function wireLyricsPromptBidiOnce() {
+  const el = els.sunoPrompt;
+  if (!el || el.dataset.lyricsBidiWired) return;
+  el.dataset.lyricsBidiWired = "1";
+  try { applyLyricsInputBidi(el); } catch {}
+
+  const onPaste = (e) => {
+    const raw = e.clipboardData?.getData("text/plain");
+    if (raw == null) return;
+    e.preventDefault();
+    const text = normalizePastedUserText(raw);
+    insertTextAtInputSelection(el, text);
+    try { applyLyricsInputBidi(el); } catch {}
+    try { syncArabicAddressVisibility(); } catch {}
+    try { autoResizeLyricsBox(); } catch {}
+    el.dispatchEvent(new Event("input", { bubbles: true }));
+  };
+
+  el.addEventListener("paste", onPaste);
 }
 function setGenerateInputFocus(activePanel) {
   const flow = document.getElementById("createFlow");
@@ -55003,6 +55028,7 @@ if (els.brandTitle) {
 }
 els.sunoPrompt?.addEventListener("input", autoResizeLyricsBox);
 els.sunoPrompt?.addEventListener("focus", autoResizeLyricsBox);
+wireLyricsPromptBidiOnce();
 wireCreatePageKeyboardOnce();
 setTimeout(autoResizeLyricsBox, 0);
 // Defer the cold-start Library + Hub renders to after first paint.

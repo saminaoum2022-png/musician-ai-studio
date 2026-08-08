@@ -19674,8 +19674,8 @@ body[data-coach-orb-mode="hidden"][data-route="profile"] .coachFab.coachFab--sur
     height: 56px !important;
     z-index: 1000 !important;
     overflow: visible;
-    background: rgba(6, 10, 18, 0.92);
-    box-shadow: 0 10px 32px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.14);
+    background: transparent !important;
+    box-shadow: none;
     direction: ltr;
   }
   html.is-web-shell body:has(.hubNowPlaying.isVisible)[data-route="discover"] .coachFab,
@@ -19683,12 +19683,6 @@ body[data-coach-orb-mode="hidden"][data-route="profile"] .coachFab.coachFab--sur
   html.is-web-shell body:has(.hubNowPlaying.isVisible)[data-route="generate"] .coachFab,
   html.is-web-shell body:has(.hubNowPlaying.isVisible)[data-route="profile"] .coachFab{
     bottom: 108px !important;
-  }
-  html.is-web-shell .coachFab .coachFabIco,
-  html.is-web-shell .coachFab .coachFabIco svg,
-  html.is-web-shell .coachFab .coachOrbArc{
-    animation: none !important;
-    opacity: 1 !important;
   }
   html.is-web-shell .coachFab--nudge:not(.coachFab--hint):not(.coachFab--generating) .coachFabPill{
     display: none !important;

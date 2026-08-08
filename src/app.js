@@ -194,7 +194,7 @@ import { MUSIC_VIDEO_FEATURE_ENABLED } from "./feature-flags.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260809-012149";
+const APP_BUILD = "20260809-020550";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -6755,6 +6755,11 @@ function homeDeskGreetingName() {
   return email || "there";
 }
 
+function homeDeskGreetingHtml() {
+  const name = escapeHtml(homeDeskGreetingName());
+  return `Hey, <span class="homeDeskGreetingName">${name}</span>`;
+}
+
 /* -------------------------------------------------------------------------- */
 /* Create page — smart contextual greeting                                     */
 /* -------------------------------------------------------------------------- */
@@ -10725,7 +10730,7 @@ function renderHomeDesk() {
   _homeSeg = readHomeSeg();
   syncHomeSegUi();
   const greeting = document.getElementById("homeDeskGreeting");
-  if (greeting) greeting.textContent = `Hey, ${homeDeskGreetingName()}`;
+  if (greeting) greeting.innerHTML = homeDeskGreetingHtml();
   renderCampaignBanner();
   bindCampaignUiOnce();
   renderHomeDeskQuickStarts();

@@ -213,7 +213,7 @@ html[data-theme="light"]{
   --nav-bg: rgba(255, 255, 255, 0.96);
   --nav-border: #E1E4EA;
   --nav-item-opacity: 1;
-  --nav-item-active: var(--primary);
+  --nav-item-active: var(--text-primary);
   --nav-item-hover: var(--text-secondary);
   --card-bg: #FFFFFF;
   --tab-strip-bg: transparent;
@@ -467,32 +467,33 @@ html[data-theme="light"] .settingsThemeOpt.is-active{
   html[data-theme="light"] .mobileTabbar a.active,
   html[data-theme="light"] .mobileTabbar a.active .tabIco,
   html[data-theme="light"] .mobileTabbar a.friendsTab.active{
-    color: var(--primary);
+    color: var(--text-primary);
     opacity: 1;
   }
   html[data-theme="light"] .mobileTabbar a.active:not(.tabCreate)::before{
     display: none;
   }
   html[data-theme="light"] .mobileTabbar a.active .tabIco{
-    stroke: var(--primary);
+    stroke: var(--text-primary);
     filter: none;
   }
   html[data-theme="light"] .mobileTabbar a.active .tabLabel{
     text-shadow: none;
+    color: var(--text-primary);
   }
   html[data-theme="light"] .mobileTabbar a.active .tabIcoDiscover circle[fill="none"],
   html[data-theme="light"] .mobileTabbar a.active .tabIcoDiscover path[fill="none"]{
-    stroke: var(--primary);
+    stroke: var(--text-primary);
   }
   html[data-theme="light"] .mobileTabbar a.active .tabIcoDiscover circle[fill="currentColor"]{
-    fill: var(--primary);
+    fill: var(--text-primary);
   }
   html[data-theme="light"] .mobileTabbar a.active .tabIcoPlay polygon{
-    fill: var(--primary);
+    fill: var(--text-primary);
   }
   html[data-theme="light"] .mobileTabbar a.active .tabIcoFriends path,
   html[data-theme="light"] .mobileTabbar a.active .tabIcoFriends circle{
-    stroke: var(--primary);
+    stroke: var(--text-primary);
   }
 }
 
@@ -602,39 +603,52 @@ html[data-theme="light"] .nabadTabsTab.homeDeskSegBtn.is-active{
   box-shadow: none;
 }
 
-html[data-theme="light"] .homeDeskPhotoPromo{
-  border-color: rgba(244, 114, 182, 0.28);
-  background:
-    radial-gradient(120% 120% at 0% 0%, rgba(244, 114, 182, 0.10), transparent 55%),
-    radial-gradient(100% 100% at 100% 100%, rgba(124, 92, 255, 0.08), transparent 50%),
-    linear-gradient(135deg, rgba(255, 255, 255, 0.98), rgba(252, 242, 248, 0.92));
-  box-shadow: 0 14px 36px rgba(88, 104, 140, 0.10);
-}
-
-html[data-theme="light"] .homeDeskPersonaPromo{
-  border-color: rgba(124, 92, 255, 0.28);
-  background:
-    radial-gradient(120% 120% at 0% 0%, rgba(124, 92, 255, 0.10), transparent 55%),
-    linear-gradient(135deg, rgba(255, 255, 255, 0.98), rgba(242, 248, 255, 0.92));
-  box-shadow: 0 14px 36px rgba(88, 104, 140, 0.10);
-}
-
-html[data-theme="light"] .homeDeskSongPromo{
-  border-color: rgba(34, 211, 238, 0.28);
-  background:
-    radial-gradient(120% 120% at 0% 0%, rgba(34, 211, 238, 0.10), transparent 55%),
-    linear-gradient(135deg, rgba(255, 255, 255, 0.98), rgba(240, 252, 255, 0.92));
-  box-shadow: 0 14px 36px rgba(88, 104, 140, 0.10);
+html[data-theme="light"] .homeDeskPhotoPromo,
+html[data-theme="light"] .homeDeskPersonaPromo,
+html[data-theme="light"] .homeDeskSongPromo,
+html[data-theme="light"] .challengesPage.homeDesk .homeDeskSongPromo,
+html[data-theme="light"] .challengesPage.homeDesk .homeDeskStudioPromo,
+html[data-theme="light"] .challengesPage.homeDesk .homeDeskStudioPromo--featured,
+html[data-theme="light"] .challengesPage.homeDesk .homeDeskPhotoPromo,
+html[data-theme="light"] .challengesPage.homeDesk .homeDeskPersonaPromo,
+html[data-theme="light"] .challengesPage.homeDesk .homeDeskQuickStartsStack .homeDeskPhotoPromo,
+html[data-theme="light"] .challengesPage.homeDesk .homeDeskQuickStartsStack .homeDeskHumTrackPromo,
+html[data-theme="light"] .challengesPage.homeDesk .homeDeskQuickStartsStack .homeDeskPersonaPromo,
+html[data-theme="light"] .challengesPage.homeDesk .homeDeskQuickStartsStack .homeDeskSoundsPromo,
+html[data-theme="light"] .challengesPage.homeDesk .homeDeskCreateStack .homeDeskHumTrackPromo,
+html[data-theme="light"] .challengesPage.homeDesk .homeDeskCreateStack .homeDeskSoundsPromo{
+  border-color: var(--border);
+  background: transparent;
+  box-shadow: none;
 }
 
 html[data-theme="light"] .homeDeskPromoCopy h3,
-html[data-theme="light"] .homeDeskPromoCopy .homeDeskPromoTitle{
-  color: var(--text);
+html[data-theme="light"] .homeDeskPromoCopy .homeDeskPromoTitle,
+html[data-theme="light"] .challengesPage.homeDesk .homeDeskPromoCopy .homeDeskPromoTitle{
+  color: var(--text-primary);
 }
 
 html[data-theme="light"] .homeDeskPromoCopy p,
-html[data-theme="light"] .homeDeskPromoCopy .homeDeskPromoDesc{
-  color: var(--muted);
+html[data-theme="light"] .homeDeskPromoCopy .homeDeskPromoDesc,
+html[data-theme="light"] .challengesPage.homeDesk .homeDeskPromoCopy .homeDeskPromoDesc,
+html[data-theme="light"] .challengesPage.homeDesk .homeDeskSectionKicker,
+html[data-theme="light"] .challengesPage.homeDesk .homeDeskStudioPromo--featured .homeDeskSectionKicker,
+html[data-theme="light"] .challengesPage.homeDesk .homeDeskStudioPromo--featured .homeDeskPromoDesc{
+  color: var(--text-secondary);
+}
+
+html[data-theme="light"] .homeDeskGreetingSub,
+html[data-theme="light"] .homeDeskQuickStartsTitle,
+html[data-theme="light"] .homeDeskSectionHead h3{
+  color: var(--text-secondary);
+}
+html[data-theme="light"] .homeDeskSectionHead h3,
+html[data-theme="light"] .homeDeskGreeting,
+html[data-theme="light"] .challengesPage.homeDesk .homeDeskQuickStartsTitle{
+  color: var(--text-primary);
+}
+html[data-theme="light"] .homeDeskQuickStartsTitle{
+  color: var(--text-muted);
 }
 
 html[data-theme="light"] .homeDeskPromoBtn{
@@ -713,14 +727,43 @@ html[data-theme="light"] .profileAuraNameInput:disabled{
   -webkit-text-fill-color: var(--text);
 }
 
-html[data-theme="light"] .profileMusicStylesInline,
+html[data-theme="light"] .profileAuraNameCenterWrap > .profileHandleSubline,
 html[data-theme="light"] .profileAuraIdentity > .profileHandleSubline,
 html[data-theme="light"] .profileAuraIdentity > .profileIdentityLine,
+html[data-theme="light"] .profileDisplayNameText{
+  color: var(--text-primary);
+}
+html[data-theme="light"] .profileAuraNameStack--hasDisplayName .profileAuraNameCenterWrap > .profileHandleSubline{
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+html[data-theme="light"] .profileAuraNameStack:not(.profileAuraNameStack--hasDisplayName) .profileAuraNameCenterWrap > .profileHandleSubline{
+  color: var(--text-primary);
+  font-weight: 700;
+}
 html[data-theme="light"] .profileHeroBioText{
-  color: var(--muted);
+  color: var(--text-secondary);
 }
 html[data-theme="light"] .profileDisplayNameLine{
-  color: var(--text);
+  color: var(--text-primary);
+}
+html[data-theme="light"] .profileMusicStylePill{
+  border-color: var(--border);
+  background: rgba(15, 23, 40, 0.04);
+  color: var(--text-secondary);
+}
+html[data-theme="light"] .profileMusicStylePill--more{
+  color: var(--text-muted);
+}
+html[data-theme="light"] button.profileMusicStylesLine:hover .profileMusicStylePill{
+  border-color: rgba(15, 23, 40, 0.14);
+  color: var(--text-primary);
+}
+html[data-theme="light"] .profileMusicStylesLine--empty{
+  color: var(--text-muted);
+}
+html[data-theme="light"] .profileMusicStylesLine--empty:hover{
+  color: var(--text-secondary);
 }
 
 html[data-theme="light"] .profileIdentityLine strong{
@@ -1195,8 +1238,26 @@ html[data-theme="light"] .followActEmptyFace{
   box-shadow: 0 8px 20px rgba(124, 92, 255, 0.12);
 }
 html[data-theme="light"] .followActEmptyFaceFallback{
-  color: var(--muted);
-  background: rgba(124, 92, 255, 0.10);
+  color: var(--text-secondary);
+  background: var(--surface-secondary);
+}
+html[data-theme="light"] .followActBadge--release .followActBadgeLabel,
+html[data-theme="light"] .followActBadge--release .followActBadgeIco{
+  color: var(--text-secondary);
+}
+html[data-theme="light"] .followActBadge--release .followActBadgeIco{
+  background: var(--surface-secondary);
+  border-color: var(--border);
+}
+html[data-theme="light"] body[data-route="friends"] .followAct--xstyle .followActActions .followActAct{
+  color: var(--text-secondary);
+}
+html[data-theme="light"] body[data-route="friends"] .followAct--xstyle .followActActions .followActAct .followActActCount{
+  color: var(--text-muted);
+  font-weight: 700;
+}
+html[data-theme="light"] body[data-route="friends"] .followAct--xstyle .followActTop > .followActAvatar{
+  box-shadow: 0 4px 14px rgba(88, 104, 140, 0.10);
 }
 html[data-theme="light"] .challengeFeatureCard::before{
   background:
@@ -1301,7 +1362,7 @@ html[data-theme="light"] .tabProfileAvatarImg{
   border-color: rgba(15, 23, 40, 0.08);
 }
 html[data-theme="light"] .tabProfileLink.active .tabLabel{
-  color: var(--primary);
+  color: var(--text-primary);
   font-weight: 800;
 }
 html[data-theme="light"] .mentorPageLead,
@@ -1315,12 +1376,28 @@ html[data-theme="light"] .onboardingEchoTile::before,
 html[data-theme="light"] .homeDeskSongTile::before{
   background: linear-gradient(160deg, rgba(255, 255, 255, 0.99) 0%, rgba(244, 247, 252, 0.94) 100%);
 }
+html[data-theme="light"] .challengesPage.homeDesk .homeDeskSongTile::before,
+html[data-theme="light"] .challengesPage.homeDesk .homeDeskPersonaTile::before,
+html[data-theme="light"] .challengesPage.homeDesk .homeDeskStudioTile::before,
+html[data-theme="light"] .challengesPage.homeDesk .homeDeskPhotoTile::before,
+html[data-theme="light"] .challengesPage.homeDesk .homeDeskHumTrackTile::before,
+html[data-theme="light"] .challengesPage.homeDesk .homeDeskSoundsTile::before{
+  background: transparent;
+}
 html[data-theme="light"] .homeDeskPersonaTile,
 html[data-theme="light"] .onboardingEchoTile,
 html[data-theme="light"] .homeDeskSongTile{
   box-shadow:
     0 12px 28px rgba(124, 92, 255, 0.16),
     inset 0 0 0 1px rgba(255, 255, 255, 0.65);
+}
+html[data-theme="light"] .challengesPage.homeDesk .homeDeskSongTile,
+html[data-theme="light"] .challengesPage.homeDesk .homeDeskPersonaTile,
+html[data-theme="light"] .challengesPage.homeDesk .homeDeskStudioTile,
+html[data-theme="light"] .challengesPage.homeDesk .homeDeskPhotoTile,
+html[data-theme="light"] .challengesPage.homeDesk .homeDeskHumTrackTile,
+html[data-theme="light"] .challengesPage.homeDesk .homeDeskSoundsTile{
+  box-shadow: none;
 }
 html[data-theme="light"] .homeDeskPersonaIco{
   color: var(--primary);
@@ -1339,20 +1416,12 @@ html[data-theme="light"] .onboardingEchoPulse{
 }
 html[data-theme="light"] .homeDeskSpark.challengeFeatureCard,
 html[data-theme="light"] .challengeFeatureCard.homeDeskSpark{
-  border-color: rgba(35, 213, 171, 0.26);
-  background:
-    radial-gradient(120% 120% at 0% 0%, rgba(35, 213, 171, 0.12), transparent 55%),
-    radial-gradient(100% 100% at 100% 18%, rgba(124, 92, 255, 0.10), transparent 58%),
-    linear-gradient(135deg, rgba(255, 255, 255, 0.99), rgba(242, 252, 250, 0.94));
-  box-shadow:
-    0 14px 36px rgba(88, 104, 140, 0.12),
-    inset 0 1px 0 rgba(255, 255, 255, 0.98);
+  border-color: var(--chart-surface-border);
+  background: var(--chart-surface);
+  box-shadow: var(--chart-surface-shadow);
 }
 html[data-theme="light"] .homeDeskSpark.challengeFeatureCard::before{
-  opacity: 0.85;
-  background:
-    linear-gradient(90deg, rgba(35, 213, 171, 0.10), transparent 48%),
-    radial-gradient(circle at 88% 18%, rgba(124, 92, 255, 0.08), transparent 34%);
+  display: none;
 }
 html[data-theme="light"] .homeDeskSpark.challengeFeatureCard h3,
 html[data-theme="light"] .homeDeskSpark.challengeFeatureCard p{
@@ -1388,21 +1457,46 @@ html[data-theme="light"] .discoveryIdeaTags span{
   color: rgba(15, 23, 40, 0.68);
 }
 html[data-theme="light"] .challengePresetLab{
-  border-color: rgba(15, 23, 40, 0.10);
-  background:
-    radial-gradient(120% 100% at 8% 0%, rgba(35, 213, 171, 0.10), transparent 58%),
-    radial-gradient(95% 85% at 100% 12%, rgba(124, 92, 255, 0.08), transparent 62%),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.99), rgba(244, 247, 252, 0.94));
-  box-shadow:
-    0 14px 36px rgba(88, 104, 140, 0.12),
-    inset 0 1px 0 rgba(255, 255, 255, 0.98);
+  border-color: var(--border);
+  background: transparent;
+  box-shadow: none;
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
 }
 html[data-theme="light"] .challengePresetLab::before{
-  background:
-    radial-gradient(circle at 12% 0%, rgba(35, 213, 171, 0.10), transparent 36%),
-    radial-gradient(circle at 85% 10%, rgba(124, 92, 255, 0.08), transparent 38%);
+  display: none;
+}
+html[data-theme="light"] .homeDeskEntries{
+  border-color: var(--border);
+  background: transparent;
+  box-shadow: none;
+}
+html[data-theme="light"] .challengesPage.homeDesk .homeDeskSongPenIco,
+html[data-theme="light"] .challengesPage.homeDesk .homeDeskStudioIco,
+html[data-theme="light"] .challengesPage.homeDesk .homeDeskPhotoIco,
+html[data-theme="light"] .challengesPage.homeDesk .homeDeskPersonaIco,
+html[data-theme="light"] .challengesPage.homeDesk .homeDeskHumTrackIco,
+html[data-theme="light"] .challengesPage.homeDesk .homeDeskSoundsIco,
+html[data-theme="light"] .challengesPage.homeDesk .homeDeskQuickStartsStack .homeDeskHumTrackIco,
+html[data-theme="light"] .challengesPage.homeDesk .homeDeskQuickStartsStack .homeDeskSoundsIco,
+html[data-theme="light"] .challengesPage.homeDesk .homeDeskPromoChev{
+  color: var(--text-secondary);
+}
+html[data-theme="light"] .challengesPage.homeDesk .homeDeskSongTile,
+html[data-theme="light"] .challengesPage.homeDesk .homeDeskStudioTile,
+html[data-theme="light"] .challengesPage.homeDesk .homeDeskPhotoTile,
+html[data-theme="light"] .challengesPage.homeDesk .homeDeskPersonaTile,
+html[data-theme="light"] .challengesPage.homeDesk .homeDeskHumTrackTile,
+html[data-theme="light"] .challengesPage.homeDesk .homeDeskSoundsTile,
+html[data-theme="light"] .challengesPage.homeDesk .homeDeskStudioPromo--featured .homeDeskStudioTile{
+  background: var(--surface-secondary);
+  border-color: var(--border);
+  box-shadow: none;
+}
+html[data-theme="light"] .challengesPage.homeDesk .homeDeskNewBadge{
+  color: var(--text-primary);
+  background: var(--surface-secondary);
+  border-color: var(--border);
 }
 html[data-theme="light"] .homeDeskMakeSeg{
   background: rgba(255, 255, 255, 0.78);
@@ -27521,7 +27615,7 @@ body.createChooserSheetOpen .footer{
   padding: 12px 14px 12px 6px;
   border-radius: 0;
   border: 0;
-  border-bottom: 1px solid rgba(255,255,255,0.07);
+  border-bottom: 1px solid var(--row-divider);
   background: transparent;
   box-shadow: none;
   overflow: visible;
@@ -27561,7 +27655,7 @@ body.createChooserSheetOpen .footer{
   border: 0;
   border-radius: 4px;
   background: transparent;
-  color: rgba(232,238,247,0.42);
+  color: var(--icon-muted);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -27784,7 +27878,7 @@ body.createChooserSheetOpen .footer{
   margin: 6px 0 0;
   font-size: 13.5px;
   line-height: 1.45;
-  color: rgba(232,238,247,0.78);
+  color: var(--text-secondary);
 }
 .followActMedia{
   position: relative;
@@ -27872,8 +27966,8 @@ body.createChooserSheetOpen .footer{
   height: 40px;
   border-radius: var(--nabad-squircle-radius);
   overflow: visible;
-  border: 2px solid rgba(255,255,255,0.1);
-  background: rgba(255,255,255,0.04);
+  border: 2px solid var(--border);
+  background: var(--surface-secondary);
   display: block;
   text-decoration: none;
   box-sizing: border-box;
@@ -27926,9 +28020,13 @@ body.createChooserSheetOpen .footer{
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 13px;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Inter", sans-serif;
+  font-size: 14px;
   font-weight: 800;
-  color: rgba(232,238,247,0.55);
+  letter-spacing: -0.02em;
+  color: var(--text-secondary);
+  background: var(--surface-secondary);
+  user-select: none;
 }
 .followActBody{
   min-width: 0;
@@ -28119,11 +28217,11 @@ body.createChooserSheetOpen .footer{
 .followAct--skel{
   pointer-events: none;
   background: transparent;
-  border-bottom-color: rgba(255,255,255,0.05);
+  border-bottom-color: var(--border);
 }
 .followActSkel{
   border-radius: 8px;
-  background: linear-gradient(90deg, rgba(255,255,255,0.04) 0%, rgba(255,255,255,0.09) 50%, rgba(255,255,255,0.04) 100%);
+  background: var(--skeleton-shimmer-soft);
   background-size: 200% 100%;
   animation: discoveryShimmer 1.15s ease-in-out infinite;
 }
@@ -28164,7 +28262,7 @@ body.createChooserSheetOpen .footer{
  * =================================================================== */
 .followAct.followAct--xstyle.followAct--skel,
 .followActStack .followAct.followAct--xstyle.followAct--skel{
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  border-bottom: 1px solid var(--border);
   background: transparent;
 }
 .followAct--xstyle.followAct--skel .followActAvatar.followActSkelAvatar{
@@ -31087,14 +31185,14 @@ body[data-route="challenges"] .app{
 }
 .homeDeskSectionHead h3{
   margin: 0;
-  color: #f3f6ff;
+  color: var(--text-primary);
   font-size: 20px;
   letter-spacing: -0.03em;
 }
 .homeDeskSectionLead{
   margin: 8px 0 0;
   max-width: 560px;
-  color: rgba(223,231,251,0.58);
+  color: var(--text-secondary);
   font-size: 13px;
   line-height: 1.42;
 }
@@ -31226,7 +31324,7 @@ body[data-route="challenges"] .app{
   font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: rgba(223, 231, 251, 0.48);
+  color: var(--text-muted);
 }
 .homeDeskQuickStartsStack{
   display: flex;
@@ -31346,6 +31444,7 @@ body[data-route="challenges"] .app{
   width: 36px;
   height: 36px;
   display: block;
+  color: var(--text-secondary);
 }
 .homeDeskCreateStack .homeDeskSoundsIco{
   width: 50px;
@@ -31355,16 +31454,16 @@ body[data-route="challenges"] .app{
 .challengesPage.homeDesk .homeDeskQuickStartsStack .homeDeskHumTrackPromo,
 .challengesPage.homeDesk .homeDeskQuickStartsStack .homeDeskPersonaPromo,
 .challengesPage.homeDesk .homeDeskQuickStartsStack .homeDeskSoundsPromo{
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(255, 255, 255, 0.015);
+  border: 1px solid var(--border);
+  background: transparent;
   box-shadow: none;
 }
 .challengesPage.homeDesk .homeDeskQuickStartsStack .homeDeskPhotoPromo:active,
 .challengesPage.homeDesk .homeDeskQuickStartsStack .homeDeskHumTrackPromo:active,
 .challengesPage.homeDesk .homeDeskQuickStartsStack .homeDeskPersonaPromo:active,
 .challengesPage.homeDesk .homeDeskQuickStartsStack .homeDeskSoundsPromo:active{
-  background: rgba(255, 255, 255, 0.05);
-  border-color: rgba(255, 255, 255, 0.12);
+  background: var(--surface-secondary);
+  border-color: var(--border);
 }
 .challengesPage.homeDesk .homeDeskQuickStartsStack .homeDeskPhotoTile,
 .challengesPage.homeDesk .homeDeskQuickStartsStack .homeDeskHumTrackTile,
@@ -31377,10 +31476,10 @@ body[data-route="challenges"] .app{
 .challengesPage.homeDesk .homeDeskQuickStartsStack .homeDeskPhotoIco,
 .challengesPage.homeDesk .homeDeskQuickStartsStack .homeDeskHumTrackIco,
 .challengesPage.homeDesk .homeDeskQuickStartsStack .homeDeskSoundsIco{
-  color: rgba(248, 250, 255, 0.82);
+  color: var(--text-secondary);
 }
 .challengesPage.homeDesk .homeDeskQuickStartsStack .homeDeskPersonaIco{
-  color: rgba(248, 250, 255, 0.82);
+  color: var(--text-secondary);
 }
 .homeDeskCreateStack .homeDeskPromoCopy p,
 .homeDeskCreateStack .homeDeskPromoCopy .homeDeskPromoDesc{
@@ -31814,8 +31913,9 @@ body[data-route="challenges"] .app{
   -webkit-backdrop-filter: blur(12px);
 }
 html[data-theme="light"] .homeDeskTopChrome{
-  background:
-    linear-gradient(180deg, var(--bg) 0%, var(--bg) 78%, rgba(244, 247, 252, 0));
+  background: transparent;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
 }
 .homeDeskSeg{
   display: block;
@@ -31969,10 +32069,17 @@ html[data-theme="light"] .homeDeskTopChrome{
 }
 .homeDeskGreeting{
   margin: 0;
-  color: #f3f6ff;
+  color: var(--text-primary);
   font-size: clamp(28px, 7vw, 42px);
   line-height: 0.95;
   letter-spacing: -0.06em;
+}
+.homeDeskGreetingName{
+  background: var(--brand-signature-gradient);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
 }
 .homeDeskSub{
   margin: 10px 0 0;
@@ -34956,31 +35063,31 @@ body[data-route="mashup"] .app{
   box-shadow: none;
 }
 .challengesPage.homeDesk .homeDeskSectionKicker{
-  color: rgba(223, 231, 251, 0.72);
+  color: var(--text-muted);
 }
 .challengesPage.homeDesk .homeDeskPromoCopy .homeDeskPromoDesc{
-  color: rgba(223, 231, 251, 0.72);
+  color: var(--text-secondary);
 }
 .challengesPage.homeDesk .homeDeskPromoCard:active{
   transform: scale(0.985);
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--surface-secondary);
 }
 .challengesPage.homeDesk .homeDeskSongPromo.homeDeskPromo--hero:active{
-  background: rgba(255, 255, 255, 0.05);
-  border-color: rgba(255, 255, 255, 0.14);
+  background: var(--surface-secondary);
+  border-color: var(--border);
 }
 .challengesPage.homeDesk .homeDeskPersonaPromo:active,
 .challengesPage.homeDesk .homeDeskMashupPromo:active{
-  border-color: rgba(255, 255, 255, 0.14);
-  background: rgba(255, 255, 255, 0.05);
+  border-color: var(--border);
+  background: var(--surface-secondary);
 }
 .challengesPage.homeDesk .homeDeskPhotoPromo:active,
 .challengesPage.homeDesk .homeDeskStudioPromo:active{
-  border-color: rgba(255, 255, 255, 0.14);
-  background: rgba(255, 255, 255, 0.05);
+  border-color: var(--border);
+  background: var(--surface-secondary);
 }
 .challengesPage.homeDesk .homeDeskPromoCopy .homeDeskPromoTitle{
-  color: #fff;
+  color: var(--text-primary);
 }
 .challengesPage.homeDesk .homeDeskSongPulse,
 .challengesPage.homeDesk .homeDeskPersonaPulse,
@@ -35025,16 +35132,18 @@ body[data-route="mashup"] .app{
   border-color: rgba(255, 255, 255, 0.08);
 }
 .challengesPage.homeDesk .homeDeskPhotoIco,
-.challengesPage.homeDesk .homeDeskStudioIco{
-  color: rgba(248, 250, 255, 0.88);
+.challengesPage.homeDesk .homeDeskStudioIco,
+.challengesPage.homeDesk .homeDeskHumTrackIco,
+.challengesPage.homeDesk .homeDeskSoundsIco{
+  color: var(--text-secondary);
   animation: none;
 }
 .challengesPage.homeDesk .homeDeskSongPenIco{
-  color: rgba(248, 250, 255, 0.88);
+  color: var(--text-secondary);
   animation: none;
 }
 .challengesPage.homeDesk .homeDeskPersonaIco{
-  color: rgba(248, 250, 255, 0.88);
+  color: var(--text-secondary);
   animation: none;
 }
 .challengesPage.homeDesk .homeDeskMashupDisc--a{
@@ -37351,12 +37460,12 @@ section.mentorPage{
   padding: 0;
   font-size: 14px;
   line-height: 1.35;
-  color: rgba(232, 238, 247, 0.78);
+  color: var(--text-secondary);
 }
 .followAct--xstyle .followActStatusText{
   font-size: 15px;
   line-height: 1.45;
-  color: rgba(244, 247, 255, 0.96);
+  color: var(--text-primary);
   margin: 0;
   white-space: pre-wrap;
   word-wrap: break-word;
@@ -40492,7 +40601,7 @@ body[data-route="generate"] .aiGenerate{
 }
 #discoverFeedTabs .nabadTabsTab.is-active{
   color: var(--tab-active);
-  font-weight: 600;
+  font-weight: 700;
   background: transparent;
   box-shadow: none;
 }
@@ -40638,7 +40747,7 @@ body[data-route="generate"] .aiGenerate{
 .discoverFeedSongMetaDot{
   flex: 0 0 auto;
   padding: 0 5px;
-  color: rgba(232,238,247,0.32);
+  color: var(--text-muted);
   font-weight: 600;
   user-select: none;
 }
@@ -40661,7 +40770,7 @@ body[data-route="generate"] .aiGenerate{
   border: 0;
   border-radius: 0;
   background: transparent;
-  color: rgba(232,238,247,0.38);
+  color: var(--icon-muted);
   font-size: 20px;
   font-weight: 700;
   line-height: 1;
@@ -40673,7 +40782,7 @@ body[data-route="generate"] .aiGenerate{
 .discoverCardMenuBtn:active,
 .discoveryRowSide:active{
   opacity: 0.9;
-  color: rgba(232,238,247,0.82);
+  color: var(--text-secondary);
 }
 .discoverCardMenuBtn:focus-visible,
 .discoveryRowSide:focus-visible{
@@ -40989,7 +41098,7 @@ body[data-route="generate"] .aiGenerate{
   right: 0;
 }
 .discoverFeedSongRow:has(.discoverFeedSongRowPlay:active){
-  background: rgba(255,255,255,0.03);
+  background: var(--surface-secondary);
 }
 .discoverFeedSongArt .discoverCoverPlay{
   opacity: 0;
@@ -41112,11 +41221,11 @@ body[data-route="generate"] .aiGenerate{
   display: grid;
   place-items: center;
   flex: none;
-  color: rgba(248, 250, 255, 0.76);
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: var(--icon-muted);
+  background: var(--surface-secondary);
+  border: 1px solid var(--border);
   box-shadow: none;
-  opacity: 0.52;
+  opacity: 0.72;
   transition: opacity 160ms ease, background 160ms ease, border-color 160ms ease, color 160ms ease;
 }
 .discoverFeedSongRow:active .discoverListPlayBtn,
@@ -41125,9 +41234,9 @@ body[data-route="generate"] .aiGenerate{
 .chartWeekLeaderRow:active .discoverListPlayBtn,
 .discoverWeeklyChartPageList .chartWeekLeaderRow:active .discoverListPlayBtn{
   opacity: 0.92;
-  background: rgba(255, 255, 255, 0.08);
-  border-color: rgba(255, 255, 255, 0.12);
-  color: rgba(248, 250, 255, 0.92);
+  background: var(--surface);
+  border-color: var(--border);
+  color: var(--text-primary);
 }
 .discoverFeedTemplateGrid{
   display: grid;
@@ -41642,14 +41751,14 @@ body[data-route="generate"] .aiGenerate{
   font-size: clamp(20px, 5.2vw, 24px);
   font-weight: 850;
   letter-spacing: -0.03em;
-  color: #f8faff;
+  color: var(--text-primary);
   line-height: 1.12;
 }
 .discoverTemplatesIntroSub{
   margin: 6px 0 0;
   font-size: 13px;
   line-height: 1.45;
-  color: rgba(223, 231, 251, 0.52);
+  color: var(--text-secondary);
 }
 .discoverTemplatesSort{
   flex: 0 0 auto;
@@ -41663,17 +41772,17 @@ body[data-route="generate"] .aiGenerate{
   font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: rgba(223, 231, 251, 0.38);
+  color: var(--text-muted);
 }
 .discoverTemplatesSort select{
   appearance: none;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid var(--border);
   border-radius: 999px;
   background:
-    rgba(255, 255, 255, 0.04)
+    var(--surface-secondary)
     url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23dfe7fb' stroke-width='2.2' stroke-linecap='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E")
     no-repeat right 12px center;
-  color: #f8faff;
+  color: var(--text-primary);
   font: inherit;
   font-size: 12px;
   font-weight: 700;
@@ -41683,8 +41792,8 @@ body[data-route="generate"] .aiGenerate{
   -webkit-tap-highlight-color: transparent;
 }
 .discoverTemplatesSort select:active{
-  border-color: rgba(94, 234, 212, 0.28);
-  background-color: rgba(124, 92, 255, 0.08);
+  border-color: var(--border);
+  background-color: var(--surface);
 }
 .discoverTemplatesFilters{
   margin: 0 -2px;
@@ -41711,7 +41820,7 @@ body[data-route="generate"] .aiGenerate{
   padding: 0;
   border: none;
   background: none;
-  color: rgba(223, 231, 251, 0.62);
+  color: var(--text-secondary);
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
 }
@@ -41723,8 +41832,8 @@ body[data-route="generate"] .aiGenerate{
   place-items: center;
   font-size: 20px;
   line-height: 1;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border);
+  background: var(--surface-secondary);
   transition:
     border-color 200ms ease,
     background 200ms ease,
@@ -41738,9 +41847,17 @@ body[data-route="generate"] .aiGenerate{
   white-space: nowrap;
 }
 .discoverTemplatesChip.is-active{
-  color: #f8faff;
+  color: var(--text-primary);
+}
+.discoverTemplatesChip.is-active .discoverTemplatesChipLabel{
+  font-weight: 800;
 }
 .discoverTemplatesChip.is-active .discoverTemplatesChipIcon{
+  border-color: var(--border);
+  background: var(--surface);
+  box-shadow: var(--elev-1);
+}
+html:not([data-theme="light"]) .discoverTemplatesChip.is-active .discoverTemplatesChipIcon{
   border-color: rgba(35, 213, 171, 0.34);
   background: linear-gradient(135deg, rgba(35, 213, 171, 0.16), rgba(124, 92, 255, 0.18));
   box-shadow:
@@ -41776,8 +41893,8 @@ body[data-route="generate"] .aiGenerate{
   aspect-ratio: 4 / 5;
   border-radius: 18px;
   overflow: hidden;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: var(--surface-secondary);
+  border: 1px solid var(--border);
 }
 .discoverTemplatesCard--tall .discoverTemplatesCover{
   aspect-ratio: 3 / 4.2;
@@ -41831,7 +41948,7 @@ body[data-route="generate"] .aiGenerate{
   font-size: 14px;
   font-weight: 800;
   letter-spacing: -0.02em;
-  color: #f8faff;
+  color: var(--text-primary);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -41846,7 +41963,7 @@ body[data-route="generate"] .aiGenerate{
 .discoverTemplatesBy{
   min-width: 0;
   font-size: 11px;
-  color: rgba(223, 231, 251, 0.48);
+  color: var(--song-row-creator-color);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -41868,7 +41985,7 @@ body[data-route="generate"] .aiGenerate{
   min-width: 0;
   font-size: 11px;
   font-weight: 650;
-  color: rgba(94, 234, 212, 0.88);
+  color: var(--song-row-desc-color);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -41881,10 +41998,10 @@ body[data-route="generate"] .aiGenerate{
   font-size: 10px;
   font-weight: 700;
   letter-spacing: -0.01em;
-  color: rgba(223, 231, 251, 0.42);
+  color: var(--text-muted);
 }
 .discoverTemplatesMetrics--new{
-  color: rgba(94, 234, 212, 0.72);
+  color: var(--text-secondary);
 }
 
 /* ─── Discover V1 — community hub sections ───────────────────────────── */
@@ -42028,10 +42145,10 @@ body[data-route="generate"] .aiGenerate{
   min-height: 88px;
   padding: 10px 8px;
   border-radius: 12px;
-  border: 1px dashed rgba(255, 255, 255, 0.1);
+  border: 1px dashed var(--border);
   font-size: 11px;
   font-weight: 700;
-  color: rgba(223, 231, 251, 0.5);
+  color: var(--text-muted);
   text-align: center;
 }
 .discoverChallengeCard .discoverChallengeHero{
@@ -42073,11 +42190,12 @@ body[data-route="generate"] .aiGenerate{
 }
 .discoverChallengeCard .discoverChallengeHero .chartHeroTitle{
   font-size: 13px;
+  color: var(--text-primary);
 }
 .discoverChallengeCard .discoverChallengeHero .chartHeroBy{
   font-size: 10.5px;
   font-weight: 600;
-  color: rgba(223, 231, 251, 0.48);
+  color: var(--text-secondary);
 }
 .discoverChallengeCard .discoverChallengeHero .chartHeroPlays{
   font-size: 10px;
@@ -42169,7 +42287,7 @@ body[data-route="generate"] .aiGenerate{
   font-size: 12px;
   font-weight: 850;
   line-height: 1.15;
-  color: #fff;
+  color: var(--text-primary);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -42177,7 +42295,7 @@ body[data-route="generate"] .aiGenerate{
 .discoverChallengeMeta{
   font-size: 9.5px;
   font-weight: 650;
-  color: rgba(223, 231, 251, 0.44);
+  color: var(--text-secondary);
 }
 .discoverChallengeJoin{
   flex: none;
@@ -43969,8 +44087,10 @@ html[data-theme="light"] #discoverFeedTabs .nabadTabsTrack{
   border-radius: 0;
   box-shadow: none;
 }
-html[data-theme="light"] #discoverFeedTabs .nabadTabsTab.is-active{
+html[data-theme="light"] #discoverFeedTabs .nabadTabsTab.is-active,
+html[data-theme="light"] .discoverFeedTabs .nabadTabsTab.is-active{
   color: var(--text-primary);
+  font-weight: 700;
 }
 html[data-theme="light"] .discoverWeeklyChart--final .chartWeekWinner,
 html[data-theme="light"] .discoverWeeklyChartPageList .chartWeekLeaderRow{
@@ -44034,6 +44154,37 @@ html[data-theme="light"] .discoverWeeklyChart .chartToggleBtn{
   border-color: rgba(124, 92, 255, 0.2);
   background: rgba(124, 92, 255, 0.06);
   color: rgba(88, 64, 200, 0.88);
+}
+/* Discover tab panels — Templates, Challenges, Remixes (match For You typography) */
+html[data-theme="light"] .discoverTemplatesSort select{
+  background:
+    var(--surface-secondary)
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%235F6572' stroke-width='2.2' stroke-linecap='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E")
+    no-repeat right 12px center;
+}
+html[data-theme="light"] .discoverTemplatesChip.is-active{
+  color: var(--text-primary);
+}
+html[data-theme="light"] .discoverFeedChallengeHeroMain:has(.discoverFeedChallengeHeroPlay:active){
+  background: var(--surface-secondary);
+}
+html[data-theme="light"] .discoverFeedSection--challenge .discoverFeedSongTitle,
+html[data-theme="light"] .discoverFeedListStack .discoverFeedSongTitle,
+html[data-theme="light"] .discoverFeedListStack--remix .discoverFeedSongTitle{
+  color: var(--song-row-title-color);
+}
+html[data-theme="light"] .discoverFeedSection--challenge .discoverFeedSongBy,
+html[data-theme="light"] .discoverFeedSection--challenge .discoverFeedOrigin,
+html[data-theme="light"] .discoverFeedListStack .discoverFeedSongBy,
+html[data-theme="light"] .discoverFeedListStack .discoverFeedOrigin{
+  color: var(--song-row-creator-color);
+}
+html[data-theme="light"] .discoverFeedListStack .discoverFeedOrigin{
+  color: var(--song-row-desc-color);
+}
+html[data-theme="light"] .discoverChallengeCard .discoverChallengeHeroArt{
+  border-color: var(--border);
+  box-shadow: var(--elev-1);
 }
 html[data-theme="light"] .settingsGroup{
   border-color: rgba(15, 23, 40, 0.1);
@@ -44313,8 +44464,8 @@ body[data-route="friends"] .followAct--xstyle .followActTop > .followActAvatar{
   height: 44px;
   flex: 0 0 44px;
   border-radius: 16px;
-  border-color: rgba(255,255,255,.12);
-  box-shadow: 0 10px 26px rgba(0,0,0,.28);
+  border-color: var(--border);
+  box-shadow: var(--elev-1);
 }
 body[data-route="friends"] .followAct--xstyle .followActAvatar img,
 body[data-route="friends"] .followAct--xstyle .followActAvatarFallback{
@@ -44327,14 +44478,14 @@ body[data-route="friends"] .followAct--xstyle .followActMeta{
   gap: 7px;
   font-size: 14px;
   line-height: 1.2;
-  color: rgba(232,238,247,.5);
+  color: var(--text-muted);
 }
 body[data-route="friends"] .followAct--xstyle .followActMeta .followActBadgeLabel{
   font-size: 12px;
   font-weight: 800;
   letter-spacing: .08em;
   text-transform: uppercase;
-  color: rgba(232,238,247,0.6);
+  color: var(--text-secondary);
 }
 body[data-route="friends"] .followAct--xstyle > .followActContent{
   margin-top: var(--feed-caption-gap, 4px);
@@ -44344,7 +44495,10 @@ body[data-route="friends"] .followAct--xstyle .followActStatusText{
   font-size: 16px;
   line-height: 1.45;
   letter-spacing: -.01em;
-  color: rgba(239,244,255,.82);
+  color: var(--text-primary);
+}
+body[data-route="friends"] .followAct--xstyle .followActCaption{
+  color: var(--text-secondary);
 }
 /* Friends repost: nested original stays secondary; reposter uses shared --feed-username-size */
 body[data-route="friends"] .followAct--xstyle.followAct--repost{
@@ -44366,7 +44520,7 @@ body[data-route="friends"] .followAct--xstyle.followAct--repost > .followActRepo
   font-size: 16px;
   line-height: 1.45;
   letter-spacing: -.01em;
-  color: rgba(239,244,255,.82);
+  color: var(--text-primary);
   margin-bottom: var(--feed-repost-section-gap, 10px);
 }
 body[data-route="friends"] .followAct--xstyle.followAct--repost .followActCaption,
@@ -44374,7 +44528,7 @@ body[data-route="friends"] .followAct--xstyle.followAct--repost .followActStatus
   font-size: 14px;
   line-height: 1.35;
   letter-spacing: normal;
-  color: rgba(232, 238, 247, 0.78);
+  color: var(--text-secondary);
 }
 body[data-route="friends"] .followAct--xstyle > .followActQuoteRow:has(.feedHeroPlayer){
   margin-top: var(--feed-art-gap, 10px);
@@ -44704,9 +44858,12 @@ body[data-route="friends"] .followAct--xstyle .followActActions .followActAct{
   padding-inline: 9px;
   border: 0;
   background: transparent;
-  color: rgba(232,238,247,.46);
+  color: var(--icon-muted);
   font-size: 14px;
   font-weight: 800;
+}
+body[data-route="friends"] .followAct--xstyle .followActActions .followActAct .followActActCount{
+  color: var(--text-muted);
 }
 body[data-route="friends"] .followAct--xstyle .followActActions .followActAct[data-friends-act="reply"],
 body[data-route="friends"] .followAct--xstyle .followActActions .followActAct[data-friends-act="like"],
@@ -46984,7 +47141,7 @@ body[data-route="studio"] .deskRail { display: none !important; }
 /* -------------------------------------------------------------------------- */
 .homeDeskGreetingSub {
   margin: 10px 0 0;
-  color: rgba(223, 231, 251, 0.58);
+  color: var(--text-secondary);
   font-size: 15px;
   line-height: 1.4;
   letter-spacing: -0.01em;
@@ -46997,27 +47154,27 @@ body[data-route="studio"] .deskRail { display: none !important; }
   position: relative;
   border-radius: 22px;
   overflow: hidden;
-  background: rgba(255, 255, 255, 0.02);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: transparent;
+  border: 1px solid var(--border);
   box-shadow: none;
 }
 .challengesPage.homeDesk .homeDeskStudioPromo--featured:active {
-  background: rgba(255, 255, 255, 0.05);
-  border-color: rgba(255, 255, 255, 0.14);
+  background: var(--surface-secondary);
+  border-color: var(--border);
 }
 .challengesPage.homeDesk .homeDeskStudioPromo--featured .homeDeskSectionKicker {
-  color: rgba(223, 231, 251, 0.72);
+  color: var(--text-muted);
   font-weight: 700;
   letter-spacing: 0.1em;
   text-transform: uppercase;
 }
 .challengesPage.homeDesk .homeDeskStudioPromo--featured .homeDeskPromoDesc {
-  color: rgba(196, 192, 208, 0.72);
+  color: var(--text-secondary);
 }
 .challengesPage.homeDesk .homeDeskStudioPromo--featured .homeDeskStudioTile {
   padding: 5px;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: var(--surface-secondary);
+  border: 1px solid var(--border);
   box-shadow: none;
   overflow: hidden;
 }
@@ -47599,7 +47756,7 @@ html[data-theme="light"] .profileEditSheetTextarea{
   width: 36px;
   height: 36px;
   display: block;
-  color: rgba(248, 250, 255, 0.88);
+  color: var(--text-secondary);
 }
 .homeDeskCreateStack .homeDeskHumTrackIco,
 .homeDeskPromo--compact .homeDeskHumTrackIco{
@@ -48259,6 +48416,61 @@ html[data-theme="light"] .settingsOrbModeTab.isActive{
 html[data-theme="light"] .followActAct:hover{
   background: rgba(15, 23, 40, 0.05);
 }
+/* Create hub — sit directly on the page gradient (no nested white sheet). */
+html[data-theme="light"] .challengesPage.homeDesk,
+html[data-theme="light"] .challengesPage.homeDesk .homeDeskSegPanels,
+html[data-theme="light"] .challengesPage.homeDesk .homeDeskCreatePanel,
+html[data-theme="light"] .challengesPage.homeDesk .homeDeskCreateStack,
+html[data-theme="light"] .challengesPage.homeDesk .homeDeskPrimaryActions,
+html[data-theme="light"] .challengesPage.homeDesk .homeDeskQuickStarts{
+  background: transparent;
+  box-shadow: none;
+}
+html[data-theme="light"] .challengesPage.homeDesk .homeDeskSongPromo,
+html[data-theme="light"] .challengesPage.homeDesk .homeDeskStudioPromo,
+html[data-theme="light"] .challengesPage.homeDesk .homeDeskStudioPromo--featured,
+html[data-theme="light"] .challengesPage.homeDesk .homeDeskPhotoPromo,
+html[data-theme="light"] .challengesPage.homeDesk .homeDeskPersonaPromo,
+html[data-theme="light"] .challengesPage.homeDesk .homeDeskHumTrackPromo,
+html[data-theme="light"] .challengesPage.homeDesk .homeDeskSoundsPromo,
+html[data-theme="light"] .challengesPage.homeDesk .homeDeskMashupPromo,
+html[data-theme="light"] .challengesPage.homeDesk .homeDeskSongPromo.homeDeskPromo--hero{
+  background: transparent;
+  box-shadow: none;
+  border-color: var(--border);
+}
+html[data-theme="light"] .challengesPage.homeDesk .homeDeskPersonaPromo::before{
+  display: none;
+}
+html[data-theme="light"] .challengesPage.homeDesk .homeDeskCreateStack .homeDeskPromoCard,
+html[data-theme="light"] .challengesPage.homeDesk .homeDeskCreateStack .homeDeskSongPromo,
+html[data-theme="light"] .challengesPage.homeDesk .homeDeskCreateStack .homeDeskStudioPromo,
+html[data-theme="light"] .challengesPage.homeDesk .homeDeskCreateStack .homeDeskPhotoPromo,
+html[data-theme="light"] .challengesPage.homeDesk .homeDeskCreateStack .homeDeskHumTrackPromo,
+html[data-theme="light"] .challengesPage.homeDesk .homeDeskCreateStack .homeDeskSoundsPromo,
+html[data-theme="light"] .challengesPage.homeDesk .homeDeskCreateStack .homeDeskPersonaPromo{
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+html[data-theme="light"] .challengesPage.homeDesk .homeDeskCreateStack .homeDeskPromoCard + .homeDeskPromoCard,
+html[data-theme="light"] .challengesPage.homeDesk .homeDeskPrimaryActions .homeDeskPromoCard + .homeDeskPromoCard{
+  border-top: 1px solid var(--border);
+}
+html[data-theme="light"] .challengesPage.homeDesk .homeDeskQuickStarts{
+  border-top: 1px solid var(--border);
+  padding-top: 8px;
+}
+html[data-theme="light"] .challengesPage.homeDesk .homeDeskSongTile,
+html[data-theme="light"] .challengesPage.homeDesk .homeDeskStudioTile,
+html[data-theme="light"] .challengesPage.homeDesk .homeDeskPhotoTile,
+html[data-theme="light"] .challengesPage.homeDesk .homeDeskHumTrackTile,
+html[data-theme="light"] .challengesPage.homeDesk .homeDeskSoundsTile,
+html[data-theme="light"] .challengesPage.homeDesk .homeDeskPersonaTile{
+  background: rgba(15, 23, 40, 0.04);
+  border-color: rgba(15, 23, 40, 0.08);
+}
 html[data-theme="light"] .discoveryStudioHead .discoveryStudioH2.appScreenTitle,
 html[data-theme="light"] .appScreenTitle{
   text-shadow: none;
@@ -48269,6 +48481,12 @@ html[data-theme="light"] .appScreenTitle{
     box-shadow: none;
   }
   html[data-theme="light"] #discoverFeedTabs.discoverFeedTabs{
+    margin-left: -12px;
+    margin-right: -12px;
+    padding-left: 14px;
+    padding-right: 14px;
+  }
+  html[data-theme="light"] .homeDeskTopChrome{
     margin-left: -12px;
     margin-right: -12px;
     padding-left: 14px;

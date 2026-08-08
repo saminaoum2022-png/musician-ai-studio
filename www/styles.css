@@ -34838,10 +34838,9 @@ body[data-route="mashup"] .app{
 .challengesPage.homeDesk .homeDeskSongPromo.homeDeskPromo--hero{
   border-radius: 22px;
   overflow: hidden;
-  border-color: rgba(35, 213, 171, 0.38);
-  background:
-    linear-gradient(145deg, rgba(35, 213, 171, 0.2) 0%, rgba(35, 213, 171, 0.09) 44%, rgba(35, 213, 171, 0.03) 100%);
-  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.2);
+  border-color: rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.02);
+  box-shadow: none;
 }
 .challengesPage.homeDesk .homeDeskSectionKicker{
   color: rgba(223, 231, 251, 0.72);
@@ -34854,8 +34853,8 @@ body[data-route="mashup"] .app{
   background: rgba(255, 255, 255, 0.05);
 }
 .challengesPage.homeDesk .homeDeskSongPromo.homeDeskPromo--hero:active{
-  background: linear-gradient(145deg, rgba(35, 213, 171, 0.2) 0%, rgba(35, 213, 171, 0.08) 42%, rgba(255, 255, 255, 0.04) 100%);
-  border-color: rgba(35, 213, 171, 0.4);
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.14);
 }
 .challengesPage.homeDesk .homeDeskPersonaPromo:active,
 .challengesPage.homeDesk .homeDeskMashupPromo:active{
@@ -34899,8 +34898,8 @@ body[data-route="mashup"] .app{
   display: none;
 }
 .challengesPage.homeDesk .homeDeskSongTile{
-  background: rgba(35, 213, 171, 0.13);
-  border: 1px solid rgba(35, 213, 171, 0.3);
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
 }
 .challengesPage.homeDesk .homeDeskPersonaTile,
 .challengesPage.homeDesk .homeDeskMashupTile{
@@ -34918,7 +34917,7 @@ body[data-route="mashup"] .app{
   animation: none;
 }
 .challengesPage.homeDesk .homeDeskSongPenIco{
-  color: rgba(52, 226, 191, 0.92);
+  color: rgba(248, 250, 255, 0.88);
   animation: none;
 }
 .challengesPage.homeDesk .homeDeskPersonaIco{
@@ -46727,21 +46726,21 @@ body[data-route="studio"] .deskRail { display: none !important; }
   max-width: 28em;
 }
 
-/* Studio card — premium dark purple (Create hub featured row). */
+/* Featured Create rows share the same restrained neutral treatment. */
 .challengesPage.homeDesk .homeDeskStudioPromo--featured {
   position: relative;
   border-radius: 22px;
   overflow: hidden;
-  background: #14111c;
-  border: 1px solid rgba(138, 92, 255, 0.34);
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.1);
   box-shadow: none;
 }
 .challengesPage.homeDesk .homeDeskStudioPromo--featured:active {
-  background: #18121f;
-  border-color: rgba(138, 92, 255, 0.44);
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.14);
 }
 .challengesPage.homeDesk .homeDeskStudioPromo--featured .homeDeskSectionKicker {
-  color: #a56cff;
+  color: rgba(223, 231, 251, 0.72);
   font-weight: 700;
   letter-spacing: 0.1em;
   text-transform: uppercase;
@@ -46751,9 +46750,9 @@ body[data-route="studio"] .deskRail { display: none !important; }
 }
 .challengesPage.homeDesk .homeDeskStudioPromo--featured .homeDeskStudioTile {
   padding: 5px;
-  background: rgba(138, 92, 255, 0.16);
-  border: 1px solid rgba(154, 108, 255, 0.42);
-  box-shadow: inset 0 0 24px rgba(138, 92, 255, 0.12);
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: none;
   overflow: hidden;
 }
 .challengesPage.homeDesk .homeDeskStudioPromo--featured .homeDeskStudioIco {
@@ -46763,8 +46762,8 @@ body[data-route="studio"] .deskRail { display: none !important; }
   aspect-ratio: 4 / 3;
 }
 .challengesPage.homeDesk .homeDeskStudioPromo--featured .homeDeskNewBadge {
-  background: rgba(138, 92, 255, 0.55);
-  border-color: rgba(138, 92, 255, 0.42);
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.14);
   font-size: 8px;
   letter-spacing: 0.06em;
   padding: 3px 7px;

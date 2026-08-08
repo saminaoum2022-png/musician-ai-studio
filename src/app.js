@@ -3657,6 +3657,7 @@ function syncRoutePanelVisibility(wanted) {
   });
   try { syncDeskRailVisibility(); } catch {}
   try { syncDeskCoachPanel(); } catch {}
+  try { syncCoachFabDesktopAnchor(); } catch {}
 }
 
 function routeApplyFallback(err) {
@@ -8231,13 +8232,31 @@ function syncDeskCoachPanel() {
     });
   }
 }
+function syncCoachFabDesktopAnchor() {
+  const fab = document.getElementById("coachFab");
+  if (!fab || isNativeShell()) return;
+  if (!document.documentElement.classList.contains("is-web-shell")) return;
+  const wide = window.matchMedia("(min-width: 721px)").matches;
+  if (!wide) {
+    fab.style.removeProperty("left");
+    fab.style.removeProperty("right");
+    fab.style.removeProperty("bottom");
+    return;
+  }
+  const hubUp = Boolean(document.querySelector(".hubNowPlaying.isVisible"));
+  fab.style.setProperty("left", "auto", "important");
+  fab.style.setProperty("right", "28px", "important");
+  fab.style.setProperty("bottom", hubUp ? "108px" : "28px", "important");
+}
 function initDeskCoachPanel() {
   if (!isNativeShell() && document.documentElement.classList.contains("is-web-shell")) {
     if (MESSAGES_FEATURE_ENABLED) bindMessagesPageOnce();
+    syncCoachFabDesktopAnchor();
   }
   if (window.matchMedia) {
-    const mq = window.matchMedia("(min-width: 1200px)");
+    const mq = window.matchMedia("(min-width: 721px)");
     const onMq = () => {
+      try { syncCoachFabDesktopAnchor(); } catch {}
       if (_deskCoachOpen && !deskCoachPanelEligible()) {
         closeDeskCoachPanel({
           clearConversation: false,
@@ -54198,6 +54217,7 @@ function showCoachFabPill(text, { visibleMs = COACH_NUDGE_VISIBLE_MS, contextual
   fab.classList.toggle("coachFab--hint", Boolean(contextual));
   fab.classList.add("coachFab--nudge");
   fab.classList.remove("coachFab--generating");
+  try { syncCoachFabDesktopAnchor(); } catch {}
   try { notifyCoachOrbPillShown({ contextual, priority: false }); } catch {}
   if (_coachNudgeHideTimer) clearTimeout(_coachNudgeHideTimer);
   _coachNudgeHideTimer = setTimeout(() => {

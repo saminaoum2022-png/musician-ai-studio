@@ -190,7 +190,7 @@ import { MUSIC_VIDEO_FEATURE_ENABLED } from "./feature-flags.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260808-145741";
+const APP_BUILD = "20260808-151014";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -3657,6 +3657,7 @@ function syncRoutePanelVisibility(wanted) {
   });
   try { syncDeskRailVisibility(); } catch {}
   try { syncDeskCoachPanel(); } catch {}
+  try { syncCoachFabDesktopAnchor(); } catch {}
 }
 
 function routeApplyFallback(err) {
@@ -8231,13 +8232,31 @@ function syncDeskCoachPanel() {
     });
   }
 }
+function syncCoachFabDesktopAnchor() {
+  const fab = document.getElementById("coachFab");
+  if (!fab || isNativeShell()) return;
+  if (!document.documentElement.classList.contains("is-web-shell")) return;
+  const wide = window.matchMedia("(min-width: 721px)").matches;
+  if (!wide) {
+    fab.style.removeProperty("left");
+    fab.style.removeProperty("right");
+    fab.style.removeProperty("bottom");
+    return;
+  }
+  const hubUp = Boolean(document.querySelector(".hubNowPlaying.isVisible"));
+  fab.style.setProperty("left", "auto", "important");
+  fab.style.setProperty("right", "28px", "important");
+  fab.style.setProperty("bottom", hubUp ? "108px" : "28px", "important");
+}
 function initDeskCoachPanel() {
   if (!isNativeShell() && document.documentElement.classList.contains("is-web-shell")) {
     if (MESSAGES_FEATURE_ENABLED) bindMessagesPageOnce();
+    syncCoachFabDesktopAnchor();
   }
   if (window.matchMedia) {
-    const mq = window.matchMedia("(min-width: 1200px)");
+    const mq = window.matchMedia("(min-width: 721px)");
     const onMq = () => {
+      try { syncCoachFabDesktopAnchor(); } catch {}
       if (_deskCoachOpen && !deskCoachPanelEligible()) {
         closeDeskCoachPanel({
           clearConversation: false,

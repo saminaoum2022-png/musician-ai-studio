@@ -19634,10 +19634,24 @@ body:has(.hubNowPlaying.isVisible) .coachFab{
 }
 @media (min-width: 721px){
   html.is-web-shell .coachFab{
-    bottom: 18px;
+    left: auto !important;
+    right: 28px !important;
+    bottom: 28px !important;
+    z-index: 240;
+    direction: ltr;
   }
   html.is-web-shell body:has(.hubNowPlaying.isVisible) .coachFab{
-    bottom: 96px;
+    bottom: 108px !important;
+  }
+  /* Desktop web: idle "Need help?" sits above the orb, not spilling left. */
+  html.is-web-shell .coachFab--nudge:not(.coachFab--hint) .coachFabPill{
+    right: 0;
+    left: auto;
+    top: auto;
+    bottom: calc(100% + 12px);
+    transform: translateY(0) scale(1);
+    transform-origin: bottom right;
+    animation: none;
   }
 }
 /* Show only on the main tab routes (including Create, where it surfaces
@@ -44929,15 +44943,6 @@ body[data-route="friends"] .followAct--xstyle .followActActions .followActAct[da
   }
   html.is-web-shell body.deskCoachOpen .coachFab{
     display: none !important;
-  }
-  /* Desktop web: pin the orb to the viewport bottom-right corner. */
-  html.is-web-shell .coachFab{
-    right: 28px;
-    bottom: 28px;
-    z-index: 240;
-  }
-  html.is-web-shell body:has(.hubNowPlaying.isVisible) .coachFab{
-    bottom: 108px;
   }
   html.is-web-shell .deskCoachPanel .messagesThreadPage.deskCoachDocked .messagesThreadHead{
     z-index: 3;

@@ -36848,7 +36848,7 @@ section.mentorPage{
   flex-wrap: wrap;
   gap: 6px;
   min-width: 0;
-  color: rgba(232, 238, 247, 0.55);
+  color: var(--text-muted);
   font-size: 12px;
   line-height: 1.2;
 }
@@ -37467,7 +37467,31 @@ section.mentorPage{
   padding-right: 4px;
 }
 .followAct--xstyle .followActMashup .followActQuoteCard{
-  padding-right: 10px;
+  align-items: center;
+  padding: 10px 12px;
+  min-height: 0;
+}
+.followAct--xstyle .followActMashup .followActQuoteBody{
+  gap: 4px;
+}
+.followAct--xstyle .followActMashup{
+  gap: 10px;
+  margin-top: 0;
+}
+.followAct--xstyle .followActMashupSources{
+  gap: 6px;
+}
+.followAct--xstyle .followActMashupSource{
+  min-width: 0;
+  border-radius: 12px;
+}
+.followAct--xstyle .followActQuoteChip--mashup{
+  margin-bottom: 0;
+}
+.followAct--xstyle .followActQuoteChip--mashup .mashupAttributionPill{
+  height: 18px;
+  padding: 0 7px;
+  font-size: 9px;
 }
 .followAct.discoveryRowPlaying.followAct--xstyle .followActQuoteCard:not(.followActQuoteCard--hero),
 .followAct.discoveryRowActive.followAct--xstyle .followActQuoteCard:not(.followActQuoteCard--hero){
@@ -37673,6 +37697,37 @@ section.mentorPage{
 }
 .followActRemixFlow .followActQuoteRow--remixHero{
   margin-top: 0;
+}
+.followActRemixFlowOrig--static{
+  cursor: default;
+}
+.followActRemixFlowOrig--static:active{
+  transform: none;
+}
+.followActRemixFlow .followActMediaWrap--remixResult{
+  width: 100%;
+  margin-left: 0;
+  margin-top: 0;
+}
+.followActRemixFlow .followActMediaWrap--remixResult .followActMedia{
+  width: 100%;
+  margin: 0;
+  aspect-ratio: 1 / 1;
+  max-height: none;
+  border: 0;
+  border-radius: var(--feed-cover-radius, 19px);
+  overflow: hidden;
+}
+.followActRemixFlow .followActMediaWrap--remixResult .followActMediaImg{
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center top;
+}
+.followActMediaChip--remix .remixAttributionPill{
+  height: 20px;
+  padding: 0 8px;
+  font-size: 10px;
 }
 
 /* Quoted-track card — bordered mini-card with art + title + sub + play */
@@ -44681,6 +44736,17 @@ body[data-route="friends"] .followAct--xstyle > .followActQuoteRow:has(.feedHero
   border: 0;
   box-shadow: none;
 }
+:is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle > .followActRemixFlow{
+  margin-top: var(--feed-art-gap, 10px);
+  width: 100%;
+  margin-left: 0;
+  margin-right: 0;
+}
+:is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle .followActRemixFlow .followActMediaWrap--remixResult .followActMedia{
+  border-radius: var(--feed-cover-radius, 19px);
+  background: rgba(10,14,22,.46);
+  box-shadow: none;
+}
 :is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle > .followActContent + .followActMediaWrap{
   margin-top: var(--feed-art-gap, 10px);
 }
@@ -48770,6 +48836,80 @@ html[data-theme="light"] #userPublicSongs.followActStack .followAct.followAct--x
 html[data-theme="light"] .followActStack .followAct.followAct--xstyle:hover,
 html[data-theme="light"] .followAct--xstyle:hover{
   background: var(--card);
+}
+
+/* Remix / Mashup / Challenge inline tags beside post time */
+html[data-theme="light"] .followAct--xstyle .followActMetaSub .followActBadge--remix .followActBadgeLabel,
+html[data-theme="light"] .followAct--xstyle .followActMetaSub .followActBadge--mashup .followActBadgeLabel,
+html[data-theme="light"] .followAct--xstyle .followActMetaSub .followActBadge--challenge .followActBadgeLabel{
+  color: var(--text-secondary);
+}
+html[data-theme="light"] .followAct--xstyle .followActMetaSub .followActBadge--remix .followActBadgeIco,
+html[data-theme="light"] .followAct--xstyle .followActMetaSub .followActBadge--mashup .followActBadgeIco,
+html[data-theme="light"] .followAct--xstyle .followActMetaSub .followActBadge--challenge .followActBadgeIco{
+  color: var(--text-secondary);
+}
+
+/* Mashup result card + source tiles on white feed cards */
+html[data-theme="light"] .followAct--xstyle .followActQuoteCard:not(.followActQuoteCard--hero){
+  border-color: var(--border);
+  background: var(--surface-secondary);
+  box-shadow: none;
+}
+html[data-theme="light"] .followAct--xstyle .followActQuoteCard--mashup{
+  border-color: rgba(236, 72, 153, 0.24);
+  background:
+    linear-gradient(145deg, rgba(236, 72, 153, 0.06), rgba(124, 92, 255, 0.04)),
+    var(--surface-secondary);
+}
+html[data-theme="light"] .followActMashupSource{
+  border-color: var(--border);
+  background: var(--card);
+}
+html[data-theme="light"] .followActMashupX{
+  color: var(--text-muted);
+}
+html[data-theme="light"] .mashupAttributionPill{
+  border-color: rgba(219, 39, 119, 0.28);
+  background: linear-gradient(135deg, #f472b6, #ec4899 58%, #db2777);
+  color: #fff;
+  box-shadow: 0 2px 8px rgba(236, 72, 153, 0.2);
+}
+html[data-theme="light"] .remixAttributionPill{
+  border-color: rgba(109, 77, 245, 0.24);
+  background: linear-gradient(135deg, #a78bfa, #7c5cff 58%, #6d4df5);
+  color: #fff;
+  box-shadow: 0 2px 8px rgba(124, 92, 255, 0.18);
+}
+html[data-theme="light"] .mashupAttributionLine,
+html[data-theme="light"] .remixAttributionLine{
+  color: var(--text-secondary);
+}
+html[data-theme="light"] .followActRemixFlowOrig{
+  border-color: var(--border);
+  background: var(--surface-secondary);
+}
+html[data-theme="light"] .followActRemixFlowOrigChip{
+  color: var(--text-muted);
+}
+html[data-theme="light"] .followActRemixFlowOrigTitle{
+  color: var(--text-primary);
+}
+html[data-theme="light"] .followActRemixFlowOrigBy{
+  color: var(--text-secondary);
+}
+html[data-theme="light"] .followActRemixFlowBridgeLine{
+  background: var(--border);
+}
+html[data-theme="light"] .followActRemixFlowBridgeLabel{
+  color: var(--text-secondary);
+}
+html[data-theme="light"] .followActRemixFlowOrig--static{
+  border-color: var(--border);
+  background: var(--surface-secondary);
+}
+html[data-theme="light"] :is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followActRemixFlow .followActMediaWrap--remixResult .followActMedia{
+  background: var(--surface-secondary);
 }
 
 /* Public profile (#/u/…) — light mode matches own profile + Friends feed. */

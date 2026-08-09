@@ -12620,7 +12620,13 @@ function logFriendsFeedPatch(kind, detail) {
   } catch {}
 }
 
-const FOLLOW_ACT_MEDIA_SEL = ".followActQuoteRow, .followActRemixPair, .followActMashup, .followActMediaWrap";
+const FOLLOW_ACT_MEDIA_SEL = ".followActQuoteRow, .followActRemixPair, .followActRemixFlow, .followActMashup, .followActMediaWrap";
+
+/** Top-level post media only — nested `.followActMediaWrap` inside remix/mashup must not patch separately. */
+function followActTopLevelMediaNodes(root) {
+  if (!root?.children) return [];
+  return [...root.children].filter((el) => el.matches(FOLLOW_ACT_MEDIA_SEL));
+}
 
 function profileActMediaSig(t, profMap) {
   const mashupOf = mashupAttributionForTrack(t);
@@ -12630,9 +12636,10 @@ function profileActMediaSig(t, profMap) {
     return `mashup:${String(a.songId || a.url || "")}:${String(b.songId || b.url || "")}`;
   }
   const remixOf = remixAttributionForTrack(t);
-  const orig =
-    remixOf && t._remixOriginal && String(t._remixOriginal.url || "").trim() ? t._remixOriginal : null;
-  if (orig) return `remixpair:${String(orig.songId || orig.url || "")}`;
+  if (remixOf) {
+    const orig = remixOriginalForFeedTrack(t);
+    if (orig) return `remixpair:${String(orig.id || orig.url || remixOf.songId || "")}`;
+  }
   return "quote";
 }
 
@@ -12783,8 +12790,8 @@ function patchFollowActRowMedia(article, track, profMap, idx) {
     contentEl.remove();
   }
 
-  article.querySelectorAll(FOLLOW_ACT_MEDIA_SEL).forEach((n) => n.remove());
-  nextArticle.querySelectorAll(FOLLOW_ACT_MEDIA_SEL).forEach((node) => {
+  followActTopLevelMediaNodes(article).forEach((n) => n.remove());
+  followActTopLevelMediaNodes(nextArticle).forEach((node) => {
     actRow.before(node.cloneNode(true));
   });
   return true;
@@ -14358,9 +14365,98 @@ function followActRealtimeProgressHtml(encUrl, safeTitle) {
           </div>`;
 }
 
-function feedRemixFlowPlayerHtml(t, profMap, orig, main) {
+function feedRemixSquareMediaHtml(main, safeTitle) {
+  const { encUrl, encTitle, encArt, encBy, playData, artSafe } = main;
+  return `
+          <div class="followActMediaWrap followActMediaWrap--remixResult">
+            <button type="button" class="followActMedia followActMedia--remixResult" data-user-lib-play="1" data-user-lib-url="${encUrl}" data-user-lib-title="${encTitle}" data-user-lib-art="${encArt}" data-discovery-by="${encBy}" ${playData} aria-label="Play remix ${safeTitle}">
+              <img class="followActMediaImg" src="${escapeHtml(artSafe)}" alt="" decoding="async" loading="lazy" />
+              <span class="followActMediaScrim" aria-hidden="true"></span>
+              <span class="followActMediaPlayBtn" aria-hidden="true">
+                ${coverArtPlayStateIconsHtml(28)}
+              </span>
+              <span class="followActMediaChip followActMediaChip--remix">${remixPillHtml()}</span>
+              <span class="followActMediaTitle" aria-hidden="true">${safeTitle}</span>
+            </button>
+            ${followActRealtimeProgressHtml(encUrl, safeTitle)}
+          </div>`;
+}
+
+function feedRemixFlowOrigBlockHtml(orig, profMap) {
   const origBy = orig.username ? `@${orig.username}` : "Original";
   const o = followingActivityPlayAttrs(orig, profMap, origBy, { useThumb: true });
+  const hasUrl = String(orig.url || "").trim();
+  const art = escapeHtml(o.artSafe || "./assets/icons/splash-mark.png");
+  const title = escapeHtml(String(orig.title || "Original song").trim() || "Original song");
+  const bodyHtml = `
+          <span class="followActRemixFlowOrigArt">
+            <img src="${art}" alt="" decoding="async" loading="lazy" />
+          </span>
+          <span class="followActRemixFlowOrigBody">
+            <span class="followActRemixFlowOrigChip">Original</span>
+            <span class="followActRemixFlowOrigTitle">${title}</span>
+            <span class="followActRemixFlowOrigBy">${escapeHtml(origBy)}</span>
+          </span>`;
+  if (!hasUrl) {
+    return `
+        <div class="followActRemixFlowOrig followActRemixFlowOrig--static" aria-label="Original ${title}">
+          ${bodyHtml}
+        </div>`;
+  }
+  return `
+        <button type="button" class="followActRemixFlowOrig" data-user-lib-play="1" data-user-lib-url="${o.encUrl}" data-user-lib-title="${o.encTitle}" data-user-lib-art="${o.encArt}" data-discovery-by="${encodeURIComponent(origBy)}" ${o.playData} aria-label="Play original ${title}">
+          ${bodyHtml}
+          <span class="followActRemixFlowOrigPlay" aria-hidden="true">${discoverPlayBtnSvg(14)}</span>
+        </button>`;
+}
+
+function remixOriginalForFeedTrack(track) {
+  const remixOf = remixAttributionForTrack(track);
+  if (!remixOf) return null;
+  if (track._remixOriginal) {
+    const hydrated = track._remixOriginal;
+    if (String(hydrated.url || "").trim()) return hydrated;
+    if (String(hydrated.title || remixOf.title || "").trim()) return hydrated;
+  }
+  const sid = String(remixOf.songId || remixOf.id || "").trim();
+  if (sid) {
+    try {
+      const local = loadLibrary().find(
+        (s) =>
+          String(s?.id || "") === sid ||
+          String(s?.cloudSongId || "") === sid,
+      );
+      if (local) {
+        return {
+          id: sid,
+          title: String(local.title || remixOf.title || "Original song").trim(),
+          artUrl: normalizeSongCoverUrl(
+            String(local.artUrl || local.meta?.artUrl || remixOf.artUrl || remixOf.coverUrl || "").trim(),
+          ),
+          url: String(local.url || "").trim(),
+          userId: String(local.userId || remixOf.ownerUserId || ""),
+          taskId: String(local.taskId || ""),
+          audioId: String(local.audioId || ""),
+          kind: local.kind || "full",
+          username: String(remixOf.creatorUsername || "").trim(),
+          publicOnProfile: Boolean(local.publicOnProfile),
+        };
+      }
+    } catch {}
+  }
+  return {
+    id: sid,
+    title: String(remixOf.title || "Original song").trim(),
+    artUrl: normalizeSongCoverUrl(String(remixOf.artUrl || remixOf.coverUrl || "").trim()),
+    url: "",
+    userId: String(remixOf.ownerUserId || "").trim(),
+    username: String(remixOf.creatorUsername || "").trim(),
+    kind: "full",
+    publicOnProfile: false,
+  };
+}
+
+function feedRemixFlowPlayerHtml(t, profMap, orig, main) {
   const {
     encUrl,
     encTitle,
@@ -14370,43 +14466,38 @@ function feedRemixFlowPlayerHtml(t, profMap, orig, main) {
     artSafe,
     safeTitle,
     subtitle,
+    xstyle = false,
   } = main;
-  const songMenuBtn = discoverSheetMenuBtnHtml(t, profMap, { className: "discoverCardMenuBtn followActQuoteMenuBtn" });
-  const remixHero = feedHeroPlayerCardHtml({
-    track: t,
-    artSafe,
-    encUrl,
-    encTitle,
-    encArt,
-    encBy,
-    playData,
-    safeTitle,
-    subtitle,
-    titleHtml: `<span class="followActQuoteTitle">${safeTitle}</span>`,
-    menuBtnHtml: songMenuBtn,
-    ariaLabel: `Play remix ${String(t?.title || "song")}`,
-    rowExtraClass: "followActQuoteRow--remixHero",
-  });
+  const remixResultHtml = xstyle
+    ? feedRemixSquareMediaHtml(
+        { encUrl, encTitle, encArt, encBy, playData, artSafe },
+        safeTitle,
+      )
+    : feedHeroPlayerCardHtml({
+        track: t,
+        artSafe,
+        encUrl,
+        encTitle,
+        encArt,
+        encBy,
+        playData,
+        safeTitle,
+        subtitle,
+        titleHtml: `<span class="followActQuoteTitle">${safeTitle}</span>`,
+        menuBtnHtml: discoverSheetMenuBtnHtml(t, profMap, { className: "discoverCardMenuBtn followActQuoteMenuBtn" }),
+        ariaLabel: `Play remix ${String(t?.title || "song")}`,
+        rowExtraClass: "followActQuoteRow--remixHero",
+      });
   return `
       <div class="followActRemixFlow" role="group" aria-label="Original to remix">
-        <button type="button" class="followActRemixFlowOrig" data-user-lib-play="1" data-user-lib-url="${o.encUrl}" data-user-lib-title="${o.encTitle}" data-user-lib-art="${o.encArt}" data-discovery-by="${encodeURIComponent(origBy)}" ${o.playData} aria-label="Play original ${escapeHtml(orig.title)}">
-          <span class="followActRemixFlowOrigArt">
-            <img src="${escapeHtml(o.artSafe)}" alt="" decoding="async" loading="lazy" />
-          </span>
-          <span class="followActRemixFlowOrigBody">
-            <span class="followActRemixFlowOrigChip">Original</span>
-            <span class="followActRemixFlowOrigTitle">${escapeHtml(orig.title)}</span>
-            <span class="followActRemixFlowOrigBy">${escapeHtml(origBy)}</span>
-          </span>
-          <span class="followActRemixFlowOrigPlay" aria-hidden="true">${discoverPlayBtnSvg(14)}</span>
-        </button>
+        ${feedRemixFlowOrigBlockHtml(orig, profMap)}
         <div class="followActRemixFlowBridge" aria-hidden="true">
           <span class="followActRemixFlowBridgeLine"></span>
           ${remixIconSvgHtml()}
           <span class="followActRemixFlowBridgeLabel">Remix</span>
           <span class="followActRemixFlowBridgeLine"></span>
         </div>
-        ${remixHero}
+        ${remixResultHtml}
       </div>`;
 }
 
@@ -14457,9 +14548,8 @@ function followingActivityRowHtml(t, profMap, idx, opts = {}) {
     subtitle,
     xstyle,
   });
-  // Remix posts with a playable public original render BOTH songs as two
-  // square tiles side by side — original left, remix right.
-  const orig = !mashupBlockHtml && t._remixOriginal && String(t._remixOriginal.url || "").trim() ? t._remixOriginal : null;
+  // Remix: original reference on top, remix result below (Friends + Profile Posts).
+  const orig = !mashupBlockHtml ? remixOriginalForFeedTrack(t) : null;
   let remixPairHtml = "";
   let showHeadLine = !mashupBlockHtml;
   if (orig) {
@@ -14473,6 +14563,7 @@ function followingActivityRowHtml(t, profMap, idx, opts = {}) {
         artSafe,
         safeTitle,
         subtitle,
+        xstyle: true,
       });
     } else {
       const origBy = orig.username ? `@${orig.username}` : "Original";
@@ -17949,6 +18040,11 @@ async function hydrateRemixOriginalsForTracks(tracks) {
         username: String(remixOf.creatorUsername || "").trim(),
         publicOnProfile: true,
       };
+    }
+    for (const t of list) {
+      if (t._remixOriginal && String(t._remixOriginal.url || "").trim()) continue;
+      const stub = remixOriginalForFeedTrack(t);
+      if (stub && String(stub.url || "").trim()) t._remixOriginal = stub;
     }
   } catch {}
 }

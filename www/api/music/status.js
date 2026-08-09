@@ -1,7 +1,7 @@
 /**
- * Provider-neutral generation status — MiniMax (mmx_*) and Lyria (lyr_*) tasks.
+ * Provider-neutral generation status — MiniMax (mmx_*), Lyria (lyr_*), ElevenLabs (elv_*) tasks.
  *
- * GET /api/music/status?taskId=mmx_...|lyr_...
+ * GET /api/music/status?taskId=mmx_...|lyr_...|elv_...
  */
 const { verifyUser } = require("../_lib/credits-auth");
 const { applyCors } = require("../_lib/cors");

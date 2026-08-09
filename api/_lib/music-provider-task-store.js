@@ -9,6 +9,7 @@ const BUCKET = "song_archive";
 function providerFolder(taskId) {
   const tid = String(taskId || "").trim();
   if (tid.startsWith("lyr_")) return "lyria";
+  if (tid.startsWith("elv_")) return "elevenlabs";
   return "minimax";
 }
 
@@ -53,7 +54,7 @@ async function loadMusicProviderTaskStatus({ userId, taskId }) {
 
 function isMusicProviderTaskId(taskId) {
   const tid = String(taskId || "").trim();
-  return tid.startsWith("mmx_") || tid.startsWith("lyr_");
+  return tid.startsWith("mmx_") || tid.startsWith("lyr_") || tid.startsWith("elv_");
 }
 
 function isMinimaxTaskId(taskId) {
@@ -62,6 +63,10 @@ function isMinimaxTaskId(taskId) {
 
 function isLyriaTaskId(taskId) {
   return String(taskId || "").trim().startsWith("lyr_");
+}
+
+function isElevenlabsTaskId(taskId) {
+  return String(taskId || "").trim().startsWith("elv_");
 }
 
 // Back-compat aliases for MiniMax spike call sites.
@@ -74,6 +79,7 @@ module.exports = {
   isMusicProviderTaskId,
   isMinimaxTaskId,
   isLyriaTaskId,
+  isElevenlabsTaskId,
   saveMinimaxTaskStatus,
   loadMinimaxTaskStatus,
   taskObjectKey,

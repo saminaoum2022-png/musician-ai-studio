@@ -1,13 +1,14 @@
 /**
- * Provider-neutral full song generation — MiniMax + Lyria admin spikes.
+ * Provider-neutral full song generation — MiniMax + Lyria + ElevenLabs admin spikes.
  *
- * POST /api/music/generate?provider=minimax|lyria
+ * POST /api/music/generate?provider=minimax|lyria|elevenlabs
  *   Same auth/credits shell as /api/suno/generate; admin-only unless
- *   MINIMAX_GENERATE_ENABLED=1 or LYRIA_GENERATE_ENABLED=1 (Preview/staging).
+ *   MINIMAX_GENERATE_ENABLED=1, LYRIA_GENERATE_ENABLED=1, or ELEVENLABS_GENERATE_ENABLED=1.
  *
  * Env:
  * - MINIMAX_API_KEY, MINIMAX_KEY_KIND, MINIMAX_MUSIC_MODEL, MINIMAX_GENERATE_ENABLED
  * - GEMINI_API_KEY / GOOGLE_API_KEY, LYRIA_MUSIC_MODEL, LYRIA_GENERATE_ENABLED
+ * - ELEVENLABS_API_KEY, ELEVENLABS_MUSIC_MODEL, ELEVENLABS_MUSIC_LENGTH_MS, ELEVENLABS_GENERATE_ENABLED
  */
 const crypto = require("crypto");
 const {
@@ -31,6 +32,13 @@ const {
   resolveLyriaModel,
 } = require("../_lib/lyria-upstream");
 const {
+  buildElevenMusicPrompt,
+  elevenlabsGenerateEnabled,
+  elevenlabsGenerateMusic,
+  resolveElevenMusicLengthMs,
+  resolveElevenMusicModel,
+} = require("../_lib/elevenlabs-music-upstream");
+const {
   saveMusicProviderTaskStatus,
   providerFolder,
 } = require("../_lib/music-provider-task-store");
@@ -44,6 +52,7 @@ const FULL_SONG_COST = 12;
 const BUCKET = "song_archive";
 const MINIMAX_PROVIDER_COST_USD = Number(process.env.MINIMAX_USD_PER_TRACK || "0");
 const LYRIA_PROVIDER_COST_USD = Number(process.env.LYRIA_USD_PER_TRACK || "0.08");
+const ELEVENLABS_PROVIDER_COST_USD = Number(process.env.ELEVENLABS_USD_PER_TRACK || "0.45");
 
 function minimaxGenerateEnabled() {
   const v = String(process.env.MINIMAX_GENERATE_ENABLED || "").trim().toLowerCase();
@@ -55,6 +64,7 @@ function resolveProvider(req) {
     const url = new URL(req.url, "http://localhost");
     const p = String(url.searchParams.get("provider") || "minimax").trim().toLowerCase();
     if (p === "lyria") return "lyria";
+    if (p === "elevenlabs" || p === "eleven") return "elevenlabs";
     return "minimax";
   } catch {
     return "minimax";
@@ -62,7 +72,8 @@ function resolveProvider(req) {
 }
 
 function newTaskId(provider) {
-  const prefix = provider === "lyria" ? "lyr" : "mmx";
+  const prefix =
+    provider === "lyria" ? "lyr" : provider === "elevenlabs" ? "elv" : "mmx";
   return `${prefix}_${crypto.randomUUID().replace(/-/g, "")}`;
 }
 
@@ -452,6 +463,153 @@ async function handleLyriaGenerate(req, res, { user, isAdmin, body }) {
   });
 }
 
+async function handleElevenlabsGenerate(req, res, { user, isAdmin, body }) {
+  const apiKey = process.env.ELEVENLABS_API_KEY || "";
+  if (!apiKey) return sendJson(res, 500, { error: "Missing ELEVENLABS_API_KEY on server" });
+
+  if (!isAdmin && !elevenlabsGenerateEnabled()) {
+    return sendJson(res, 403, {
+      error: "ElevenLabs generation is admin-only on this environment.",
+      code: "elevenlabs_admin_only",
+    });
+  }
+
+  if (body?.personaId || body?.hasReference) {
+    return sendJson(res, 400, {
+      error: "ElevenLabs spike does not support persona or reference uploads yet.",
+      code: "elevenlabs_unsupported",
+    });
+  }
+
+  let balanceAfterDebit = null;
+  if (!isAdmin) {
+    const debit = await callRpc("consume_credits", {
+      p_user_id: user.userId,
+      p_amount: FULL_SONG_COST,
+      p_reason: "full_song",
+      p_ref: "elevenlabs",
+    });
+    if (!debit.ok || !debit.data?.ok) {
+      const status = String(debit.data?.status || "");
+      if (status === "insufficient") {
+        return sendJson(res, 402, {
+          error: "Not enough credits",
+          code: "insufficient_credits",
+          balance: Number(debit.data?.balance || 0),
+          needed: FULL_SONG_COST,
+        });
+      }
+      return sendJson(res, 500, { error: "Credit check failed", details: debit.data || debit.error || null });
+    }
+    balanceAfterDebit = Number(debit.data?.balance || 0);
+  }
+
+  const lyrics = String(body?.prompt || "").trim();
+  const stylePrompt = buildMusicPrompt(body);
+  const title = String(body?.title || "").trim();
+  const instrumental = Boolean(body?.instrumental);
+  const taskId = newTaskId("elevenlabs");
+  const audioId = `${taskId}_a`;
+  const model = resolveElevenMusicModel(body?.elevenlabsModel);
+  const musicLengthMs = resolveElevenMusicLengthMs(body?.musicLengthMs);
+
+  queueLogMusicGeneration({
+    userId: user.userId,
+    taskId,
+    kind: body?.watchKind === "photo" ? "photo" : "song",
+    provider: "elevenlabs",
+    prompt: buildPromptLabel(lyrics, stylePrompt, title),
+    status: "pending",
+    creditsUsed: isAdmin ? 0 : FULL_SONG_COST,
+    providerCostUsd: ELEVENLABS_PROVIDER_COST_USD,
+  });
+
+  const elevenPrompt = buildElevenMusicPrompt({
+    stylePrompt,
+    lyrics,
+    title,
+    instrumental,
+  });
+
+  if (!instrumental && !lyrics && !stylePrompt) {
+    return sendJson(res, 400, {
+      error: "Add lyrics, style, or enable instrumental mode for ElevenLabs.",
+      code: "elevenlabs_missing_prompt",
+    });
+  }
+
+  const upstream = await elevenlabsGenerateMusic({
+    apiKey,
+    prompt: elevenPrompt,
+    model,
+    musicLengthMs,
+    instrumental,
+  });
+
+  if (!upstream.ok) {
+    if (!isAdmin) {
+      await refund(user.userId, FULL_SONG_COST, "refund_full_song", "elevenlabs_upstream").catch(() => null);
+    }
+    const msg = upstream.userMessage || "ElevenLabs generation failed — try again.";
+    queueUpdateMusicGenerationByTaskId(taskId, {
+      status: isAdmin ? "failed" : "refunded",
+      error_message: msg,
+    });
+    return sendJson(res, 502, {
+      error: msg,
+      code: upstream.httpStatus,
+      _model: model,
+      details: upstream.data || upstream.text?.slice(0, 400) || null,
+    });
+  }
+
+  const archived = await persistAudioBuffer({
+    userId: user.userId,
+    taskId,
+    buffer: upstream.audio.buffer,
+    contentType: upstream.audio.mimeType || "audio/mpeg",
+  });
+  if (!archived.ok || !archived.url) {
+    return sendJson(res, 502, {
+      error: "ElevenLabs audio upload failed — try again.",
+      details: { upload: archived.error || null },
+    });
+  }
+
+  const audioUrl = archived.url;
+  const statusPayload = buildSunoStatusPayload({
+    taskId,
+    title,
+    lyrics,
+    audioUrl,
+    audioId,
+    provider: "elevenlabs",
+  });
+  const stored = await saveMusicProviderTaskStatus({ userId: user.userId, taskId, statusPayload });
+  if (!stored.ok) {
+    console.warn("[music/generate] task store failed (song audio ok)", stored.error);
+  }
+
+  queueUpdateMusicGenerationByTaskId(taskId, {
+    status: "completed",
+    provider_cost_usd: ELEVENLABS_PROVIDER_COST_USD,
+  });
+
+  return sendJson(res, 200, {
+    code: 200,
+    data: { taskId, audioId, audioUrl, audio_url: audioUrl, status: "SUCCESS" },
+    _provider: "elevenlabs",
+    _model: model,
+    _ready: true,
+    _variantCount: 1,
+    _credits: {
+      spent: isAdmin ? 0 : FULL_SONG_COST,
+      balance: balanceAfterDebit,
+      admin: isAdmin || undefined,
+    },
+  });
+}
+
 module.exports = async function handler(req, res) {
   if (applyCors(req, res)) return;
   try {
@@ -466,6 +624,9 @@ module.exports = async function handler(req, res) {
 
     if (provider === "lyria") {
       return handleLyriaGenerate(req, res, { user, isAdmin, body });
+    }
+    if (provider === "elevenlabs") {
+      return handleElevenlabsGenerate(req, res, { user, isAdmin, body });
     }
     return handleMinimaxGenerate(req, res, { user, isAdmin, body });
   } catch (e) {

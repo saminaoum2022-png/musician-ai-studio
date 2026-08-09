@@ -73,9 +73,11 @@ async function logMusicGeneration({
         ? "minimax"
         : provider === "lyria"
           ? "lyria"
-          : provider === "other"
-            ? "other"
-            : "suno",
+          : provider === "elevenlabs"
+            ? "elevenlabs"
+            : provider === "other"
+              ? "other"
+              : "suno",
     prompt: String(prompt || "").trim().slice(0, 2000),
     status: ["pending", "completed", "failed", "refunded"].includes(status) ? status : "pending",
     credits_used: Number(creditsUsed || 0),

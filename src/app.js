@@ -5285,7 +5285,9 @@ function wireSettingsMusicProviderOnce() {
           ? "MiniMax engine enabled for your next songs."
           : pref === "lyria"
             ? "Lyria engine enabled — Google Gemini music for your next songs."
-            : "Suno engine restored (two variants).";
+            : pref === "elevenlabs"
+              ? "ElevenLabs engine enabled for your next songs."
+              : "Suno engine restored (two variants).";
       showToast(toastMsg, {
         icon: pref === "suno" ? "✓" : "♪",
         durationMs: 3600,
@@ -20306,7 +20308,7 @@ function deepFindTaskIdString(obj, depth = 0) {
 }
 
 const MUSIC_PROVIDER_LS_KEY = "nabadMusicProvider";
-const MUSIC_PROVIDER_PREFS = ["suno", "minimax", "lyria"];
+const MUSIC_PROVIDER_PREFS = ["suno", "minimax", "lyria", "elevenlabs"];
 
 function normalizeMusicProviderPref(raw) {
   const v = String(raw || "").trim().toLowerCase();
@@ -20335,12 +20337,13 @@ function setMusicProviderPref(pref) {
 function musicProviderSubline(pref) {
   if (pref === "minimax") return "MiniMax — English only, one variant (staging)";
   if (pref === "lyria") return "Lyria — Google Gemini, one variant (~$0.08/song)";
+  if (pref === "elevenlabs") return "ElevenLabs — music_v2, one variant (~$0.45/song)";
   return "Suno — two variants per song";
 }
 
 function useAltMusicProvider() {
   const pref = getMusicProviderPref();
-  return creditsState.isAdmin && (pref === "minimax" || pref === "lyria");
+  return creditsState.isAdmin && (pref === "minimax" || pref === "lyria" || pref === "elevenlabs");
 }
 
 function useMinimaxMusicProvider() {
@@ -20351,16 +20354,21 @@ function useLyriaMusicProvider() {
   return creditsState.isAdmin && getMusicProviderPref() === "lyria";
 }
 
+function useElevenlabsMusicProvider() {
+  return creditsState.isAdmin && getMusicProviderPref() === "elevenlabs";
+}
+
 function musicGenerateApiPath() {
   const pref = getMusicProviderPref();
   if (pref === "minimax") return "/api/music/generate?provider=minimax";
   if (pref === "lyria") return "/api/music/generate?provider=lyria";
+  if (pref === "elevenlabs") return "/api/music/generate?provider=elevenlabs";
   return "/api/suno/generate";
 }
 
 function musicStatusApiPath(taskId) {
   const tid = String(taskId || "").trim();
-  if (tid.startsWith("mmx_") || tid.startsWith("lyr_")) {
+  if (tid.startsWith("mmx_") || tid.startsWith("lyr_") || tid.startsWith("elv_")) {
     return `/api/music/status?taskId=${encodeURIComponent(tid)}`;
   }
   return `/api/suno/status?taskId=${encodeURIComponent(tid)}`;
@@ -20368,7 +20376,7 @@ function musicStatusApiPath(taskId) {
 
 function isSingleVariantMusicTask(taskId) {
   const tid = String(taskId || "").trim();
-  return tid.startsWith("mmx_") || tid.startsWith("lyr_");
+  return tid.startsWith("mmx_") || tid.startsWith("lyr_") || tid.startsWith("elv_");
 }
 
 function extractTaskIdLoose(data) {
@@ -53297,7 +53305,12 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
           const authToken = getSupabaseAuthToken();
           if (useAltMusicProvider()) {
             const altProvider = getMusicProviderPref();
-            const providerLabel = altProvider === "lyria" ? "Lyria" : "MiniMax";
+            const providerLabel =
+              altProvider === "lyria"
+                ? "Lyria"
+                : altProvider === "elevenlabs"
+                  ? "ElevenLabs"
+                  : "MiniMax";
             if (personaIdSel || hasReference) {
               setLoading(false);
               setGenerateBtn("Generate song", false, "generate");
@@ -53321,7 +53334,9 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
             setStatus(
               altProvider === "lyria"
                 ? "Lyria is composing your song… usually 2–3 minutes. Keep the app open."
-                : "MiniMax is composing your song… usually 1–2 minutes. Keep the app open.",
+                : altProvider === "elevenlabs"
+                  ? "ElevenLabs is composing your song… usually 1–3 minutes. Keep the app open."
+                  : "MiniMax is composing your song… usually 1–2 minutes. Keep the app open.",
             );
           }
           const r = await fetch(apiUrl(musicGenerateApiPath()), {
@@ -53382,7 +53397,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       const altReadyNow = Boolean(
         isSingleVariantTask &&
         altImmediateUrl &&
-        (data?._ready || data?._provider === "minimax" || data?._provider === "lyria"),
+        (data?._ready || data?._provider === "minimax" || data?._provider === "lyria" || data?._provider === "elevenlabs"),
       );
       savePendingBackendTask(sunoTaskId || "");
       if (sunoTaskId) {

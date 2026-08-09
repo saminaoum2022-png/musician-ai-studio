@@ -6,8 +6,9 @@
  *   MINIMAX_GENERATE_ENABLED=1 (Preview/staging).
  *
  * Env:
- * - MINIMAX_API_KEY
- * - MINIMAX_MUSIC_MODEL (default music-3.0-free)
+ * - MINIMAX_API_KEY — Access key (paygo) or Subscription key (Credits)
+ * - MINIMAX_KEY_KIND — `paygo` (default) or `subscription` / `credits`
+ * - MINIMAX_MUSIC_MODEL — optional override (auto: free for paygo, music-3.0 for Credits)
  * - MINIMAX_GENERATE_ENABLED=1 to allow non-admin signed-in users
  */
 const crypto = require("crypto");
@@ -22,6 +23,8 @@ const {
   minimaxGenerateMusic,
   minimaxUserMessage,
   extractMinimaxAudio,
+  resolveMinimaxMusicModel,
+  minimaxKeyKind,
 } = require("../_lib/minimax-upstream");
 const { saveMinimaxTaskStatus } = require("../_lib/minimax-task-store");
 const { uploadObject } = require("../_lib/supabase-storage");
@@ -194,7 +197,8 @@ module.exports = async function handler(req, res) {
       providerCostUsd: MINIMAX_PROVIDER_COST_USD || null,
     });
 
-    const model = String(body?.minimaxModel || process.env.MINIMAX_MUSIC_MODEL || "music-3.0-free").trim();
+    const model = resolveMinimaxMusicModel(body?.minimaxModel);
+    const keyKind = minimaxKeyKind();
     if (!instrumental && !lyrics) {
       return sendJson(res, 400, {
         error: "Add lyrics or enable instrumental mode for MiniMax.",
@@ -216,7 +220,7 @@ module.exports = async function handler(req, res) {
       if (!isAdmin) {
         await refund(user.userId, FULL_SONG_COST, "refund_full_song", "minimax_upstream").catch(() => null);
       }
-      const msg = minimaxUserMessage(upstream.statusCode, upstream.statusMsg);
+      const msg = minimaxUserMessage(upstream.statusCode, upstream.statusMsg, { model, keyKind });
       queueUpdateMusicGenerationByTaskId(taskId, {
         status: isAdmin ? "failed" : "refunded",
         error_message: msg,
@@ -224,6 +228,8 @@ module.exports = async function handler(req, res) {
       return sendJson(res, 502, {
         error: msg,
         code: upstream.statusCode || upstream.httpStatus,
+        _model: model,
+        _keyKind: keyKind,
         details: upstream.data || upstream.text?.slice(0, 400) || null,
       });
     }
@@ -286,6 +292,8 @@ module.exports = async function handler(req, res) {
       code: 200,
       data: { taskId },
       _provider: "minimax",
+      _model: model,
+      _keyKind: keyKind,
       _variantCount: 1,
       _credits: {
         spent: isAdmin ? 0 : FULL_SONG_COST,

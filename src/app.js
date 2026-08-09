@@ -194,7 +194,7 @@ import { MUSIC_VIDEO_FEATURE_ENABLED } from "./feature-flags.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260809-233200";
+const APP_BUILD = "20260809-234000";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -56330,15 +56330,18 @@ if (els.btnPlayerBecomeFan) {
 if (els.btnUserPublicBack) {
   els.btnUserPublicBack.addEventListener("click", () => {
     haptic("light");
-    const back = String(_userPublicReturnHash || "").trim();
-    if (back) {
-      location.hash = back;
-      return;
-    }
+    // Avatar/link navigation pushes a real history entry (Hub → profile).
+    // Setting location.hash here pushes again (Hub ↔ profile ping-pong).
     if (history.length > 1) {
       history.back();
-    } else {
-      location.hash = "#/discover";
+      return;
+    }
+    const back = String(_userPublicReturnHash || "#/discover").trim() || "#/discover";
+    try {
+      history.replaceState(null, "", back);
+      scheduleApplyRoute();
+    } catch {
+      location.hash = back;
     }
   });
 }
@@ -57805,8 +57808,15 @@ wireLegalLinks();
         showToast(`Blocked ${label}.`);
       } catch {}
       try {
-        location.hash = _userPublicReturnHash || "#/discover";
-      } catch {}
+        if (history.length > 1) history.back();
+        else {
+          const back = String(_userPublicReturnHash || "#/discover").trim() || "#/discover";
+          history.replaceState(null, "", back);
+          scheduleApplyRoute();
+        }
+      } catch {
+        try { location.hash = _userPublicReturnHash || "#/discover"; } catch {}
+      }
     } catch (err) {
       try {
         showToast("Couldn't block. Try again.");

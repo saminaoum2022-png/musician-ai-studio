@@ -23499,6 +23499,7 @@ function refreshActiveFeedAfterAuthRehydrate() {
     if (_profileSongsSegment === "activities") void renderProfileActivities();
     else try { refreshOwnSongsUi({ soft: false }); } catch {}
   }
+  if (route === "messages-thread") catchUpOpenMessagesThread({ reason: "auth-rehydrate" });
 }
 
 function renderAuthStatus() {
@@ -26306,6 +26307,7 @@ async function socialApi(path, opts = {}) {
 
 let _messagesPageBound = false;
 let _messagesRealtimePollTimer = 0;
+let _messagesPresencePollTimer = 0;
 let _messagesUnreadCount = 0;
 let _messagesUnreadLastFetchedAt = 0;
 let _messagesUnreadFetchInFlight = false;
@@ -26319,10 +26321,16 @@ let _messagesLoading = false;
 let _messagesRefreshing = false;
 let _messagesThreadBootToken = 0;
 let _messagesLastFetchedAt = "";
+let _messagesLastFetchedId = "";
+let _messagesPollInFlight = false;
 let _messagesHasMoreOlder = true;
 let _messagesLoadingOlder = false;
 const MESSAGES_THREAD_PAGE_SIZE = 80;
 const MESSAGES_THREAD_LOAD_OLDER_THRESHOLD_PX = 120;
+/** Realtime is primary; slow REST poll heals rare missed inserts. */
+const MESSAGES_THREAD_SAFETY_POLL_MS = 45000;
+/** Partner now-playing line in the thread header (independent of message poll). */
+const MESSAGES_THREAD_PRESENCE_POLL_MS = 5000;
 const _messagesThreadCache = new Map();
 const _chatPartnerStatsCache = new Map();
 let _messagesInboxLoading = false;
@@ -26802,12 +26810,13 @@ function messagesThreadHasCachedMessages(threadId) {
   return Boolean(cached?.loadedOnce);
 }
 
-function saveThreadMessagesCache(threadId, { messages, lastFetchedAt, loadedOnce = true } = {}) {
+function saveThreadMessagesCache(threadId, { messages, lastFetchedAt, lastFetchedId, loadedOnce = true } = {}) {
   const tid = String(threadId || "").trim();
   if (!tid) return;
   _messagesThreadCache.set(tid, {
     messages: Array.isArray(messages) ? messages.map((m) => ({ ...m })) : [],
     lastFetchedAt: String(lastFetchedAt || ""),
+    lastFetchedId: String(lastFetchedId || ""),
     loadedOnce: Boolean(loadedOnce),
   });
 }
@@ -26818,6 +26827,7 @@ function saveActiveThreadToCache() {
   saveThreadMessagesCache(tid, {
     messages: _messagesList,
     lastFetchedAt: _messagesLastFetchedAt,
+    lastFetchedId: _messagesLastFetchedId,
     loadedOnce: true,
   });
 }
@@ -27288,9 +27298,57 @@ function syncMessagesLastFetchedAtFromList() {
   const confirmed = (Array.isArray(_messagesList) ? _messagesList : []).filter(
     (m) => m?.id && !isPendingThreadMessageId(m.id),
   );
-  if (confirmed.length) {
-    _messagesLastFetchedAt = String(confirmed[confirmed.length - 1].created_at || "");
+  if (!confirmed.length) return;
+  const last = confirmed[confirmed.length - 1];
+  _messagesLastFetchedAt = String(last.created_at || "");
+  _messagesLastFetchedId = String(last.id || "");
+}
+
+function buildPollNewMessagesRestPath(threadId) {
+  const tid = String(threadId || "").trim();
+  const cols = "id,sender_id,body,created_at";
+  const since = String(_messagesLastFetchedAt || "").trim();
+  const sinceId = String(_messagesLastFetchedId || "").trim();
+  const base = `dm_messages?select=${cols}&thread_id=eq.${encodeURIComponent(tid)}`;
+  if (!since) {
+    return `${base}&order=created_at.desc&limit=40`;
   }
+  if (sinceId) {
+    const orFilter = `(created_at.gt.${encodeURIComponent(since)},and(created_at.eq.${encodeURIComponent(since)},id.gt.${encodeURIComponent(sinceId)}))`;
+    return `${base}&or=${orFilter}&order=created_at.asc&limit=40`;
+  }
+  return `${base}&created_at=gte.${encodeURIComponent(since)}&order=created_at.asc&limit=40`;
+}
+
+function filterPollRowsAfterCursor(rows) {
+  const list = Array.isArray(rows) ? rows : [];
+  const since = String(_messagesLastFetchedAt || "").trim();
+  const sinceId = String(_messagesLastFetchedId || "").trim();
+  const existingIds = new Set(
+    (Array.isArray(_messagesList) ? _messagesList : [])
+      .map((m) => String(m?.id || ""))
+      .filter((id) => id && !isPendingThreadMessageId(id)),
+  );
+  return list.filter((m) => {
+    const id = String(m?.id || "");
+    if (!id || isPendingThreadMessageId(id) || existingIds.has(id)) return false;
+    if (!since) return true;
+    const createdAt = String(m.created_at || "");
+    if (createdAt > since) return true;
+    if (createdAt < since) return false;
+    if (!sinceId) return id !== sinceId;
+    return id > sinceId;
+  });
+}
+
+function catchUpOpenMessagesThread({ reason = "foreground" } = {}) {
+  if (!MESSAGES_FEATURE_ENABLED) return;
+  if (String(document.body.getAttribute("data-route") || "") !== "messages-thread") return;
+  const tid = String(_conversationId || "").trim();
+  if (!tid || isCoachThreadId(tid)) return;
+  void refreshDmThreadRealtimeAuthOnly();
+  if (isDmPostgresRealtimeEnabled()) void refreshDmThreadRealtimeSubscribe(tid);
+  void pollNewThreadMessages(tid, { bootToken: _messagesThreadBootToken, reason });
 }
 
 function addOptimisticThreadMessage(msg) {
@@ -27400,6 +27458,7 @@ function resetMessagesThreadRouteState() {
   _messagesLoading = false;
   _messagesRefreshing = false;
   _messagesLastFetchedAt = "";
+  _messagesLastFetchedId = "";
   _messagesHasMoreOlder = true;
   _messagesLoadingOlder = false;
 }
@@ -28917,6 +28976,7 @@ async function loadMessagesForConversation(threadId, { bootToken = 0, silent = f
     saveThreadMessagesCache(tid, {
       messages: _messagesList,
       lastFetchedAt: _messagesLastFetchedAt,
+      lastFetchedId: _messagesLastFetchedId,
       loadedOnce: true,
     });
     await markThreadReadQuiet(tid);
@@ -28947,33 +29007,119 @@ async function loadMessagesThread(threadId, { silent = false } = {}) {
   return loadMessagesForConversation(threadId, { silent });
 }
 
-async function pollNewThreadMessages(threadId, { bootToken = 0 } = {}) {
+async function pollNewThreadMessages(threadId, { bootToken = 0, reason = "" } = {}) {
   const tid = String(threadId || _conversationId || "").trim();
   if (!tid) return;
   if (bootToken && bootToken !== _messagesThreadBootToken) return;
   if (String(document.body.getAttribute("data-route") || "") !== "messages-thread") return;
   if (_conversationId !== tid) return;
+  if (_messagesPollInFlight) return;
 
-  const since = String(_messagesLastFetchedAt || "").trim();
-  let path = `dm_messages?select=id,sender_id,body,created_at&thread_id=eq.${encodeURIComponent(tid)}&order=created_at.desc&limit=40`;
-  if (since) path += `&created_at=gt.${encodeURIComponent(since)}`;
+  _messagesPollInFlight = true;
+  try {
+    await prepareApiAuthForFetch();
+    if (bootToken && bootToken !== _messagesThreadBootToken) return;
+    if (_conversationId !== tid) return;
 
-  const r = await supabaseRestWithAuth(path);
-  if (bootToken && bootToken !== _messagesThreadBootToken) return;
-  if (_conversationId !== tid) return;
-  if (!r?.ok) {
-    await loadMessagesForConversation(tid, { silent: true, bootToken });
-    return;
+    const path = buildPollNewMessagesRestPath(tid);
+    const r = await supabaseRestWithAuth(path);
+    if (bootToken && bootToken !== _messagesThreadBootToken) return;
+    if (_conversationId !== tid) return;
+    if (!r?.ok) {
+      await loadMessagesForConversation(tid, { silent: true, bootToken });
+      return;
+    }
+    const rawRows = await r.json().catch(() => []);
+    const rows = filterPollRowsAfterCursor(rawRows);
+    if (!rows.length) return;
+    if (bootToken && bootToken !== _messagesThreadBootToken) return;
+    if (_conversationId !== tid) return;
+    const ordered = path.includes("order=created_at.asc") ? rows : [...rows].reverse();
+    if (mergeThreadMessages(ordered)) {
+      saveActiveThreadToCache();
+      void markThreadReadQuiet(tid);
+      try {
+        console.info("[dm-poll]", { reason: reason || "interval", threadId: tid, added: ordered.length });
+      } catch {}
+    }
+  } catch (e) {
+    console.warn("[dm-poll]", e);
+  } finally {
+    _messagesPollInFlight = false;
   }
-  const rows = await r.json().catch(() => []);
-  if (!Array.isArray(rows) || !rows.length) return;
-  if (bootToken && bootToken !== _messagesThreadBootToken) return;
-  if (_conversationId !== tid) return;
-  const ordered = [...rows].reverse();
-  if (mergeThreadMessages(ordered)) {
-    saveActiveThreadToCache();
-    void markThreadReadQuiet(tid);
+}
+
+let _messagesRealtimeMod = null;
+let _messagesRealtimeModPromise = null;
+
+function isDmPostgresRealtimeEnabled() {
+  if (!MESSAGES_FEATURE_ENABLED) return false;
+  try {
+    if (localStorage.getItem("nabad_dm_realtime:v1") === "0") return false;
+  } catch {}
+  return Boolean(SUPABASE_URL && SUPABASE_ANON_KEY);
+}
+
+async function loadMessagesRealtimeModule() {
+  if (_messagesRealtimeMod) return _messagesRealtimeMod;
+  if (!_messagesRealtimeModPromise) {
+    _messagesRealtimeModPromise = import(`./messages-realtime.js?v=${APP_BUILD}`)
+      .then((mod) => {
+        _messagesRealtimeMod = mod;
+        return mod;
+      })
+      .catch((e) => {
+        _messagesRealtimeModPromise = null;
+        console.warn("[dm-realtime] module load failed", e);
+        return null;
+      });
   }
+  return _messagesRealtimeModPromise;
+}
+
+async function stopDmThreadRealtimeSubscribe() {
+  try {
+    const mod = await loadMessagesRealtimeModule();
+    await mod?.stopDmThreadRealtime?.();
+  } catch {}
+}
+
+async function refreshDmThreadRealtimeAuthOnly() {
+  if (!isDmPostgresRealtimeEnabled()) return;
+  try {
+    const mod = await loadMessagesRealtimeModule();
+    await mod?.refreshDmThreadRealtimeAuth?.(getSupabaseAuthToken());
+  } catch {}
+}
+
+async function refreshDmThreadRealtimeSubscribe(threadId) {
+  const tid = String(threadId || _conversationId || "").trim();
+  if (!tid || isCoachThreadId(tid) || !isDmPostgresRealtimeEnabled()) return;
+  const token = getSupabaseAuthToken();
+  if (!token) return;
+  const mod = await loadMessagesRealtimeModule();
+  if (!mod?.subscribeDmThread) return;
+  if (mod.isDmPostgresRealtimeEnabled && !mod.isDmPostgresRealtimeEnabled()) return;
+  await mod.subscribeDmThread({
+    supabaseUrl: SUPABASE_URL,
+    supabaseAnonKey: SUPABASE_ANON_KEY,
+    accessToken: token,
+    threadId: tid,
+    onInsert: (row) => {
+      if (String(_conversationId || "") !== tid) return;
+      if (String(document.body.getAttribute("data-route") || "") !== "messages-thread") return;
+      if (mergeThreadMessages([row], { scrollToBottom: true })) {
+        saveActiveThreadToCache();
+        void markThreadReadQuiet(tid);
+      }
+    },
+    onStatus: (status) => {
+      const s = String(status || "");
+      if (s === "CHANNEL_ERROR" || s === "TIMED_OUT" || s === "CLOSED") {
+        catchUpOpenMessagesThread({ reason: `realtime-${s}` });
+      }
+    },
+  });
 }
 
 function stopMessagesThreadRealtime() {
@@ -28981,6 +29127,11 @@ function stopMessagesThreadRealtime() {
     window.clearInterval(_messagesRealtimePollTimer);
     _messagesRealtimePollTimer = 0;
   }
+  if (_messagesPresencePollTimer) {
+    window.clearInterval(_messagesPresencePollTimer);
+    _messagesPresencePollTimer = 0;
+  }
+  void stopDmThreadRealtimeSubscribe();
 }
 
 function stopMessagesThreadPoll() {
@@ -28997,9 +29148,19 @@ function startMessagesThreadRealtime(threadId) {
       return;
     }
     if (_conversationId !== tid) return;
-    void pollNewThreadMessages(tid, { bootToken: _messagesThreadBootToken });
+    void pollNewThreadMessages(tid, { bootToken: _messagesThreadBootToken, reason: "safety-poll" });
+  }, MESSAGES_THREAD_SAFETY_POLL_MS);
+  _messagesPresencePollTimer = window.setInterval(() => {
+    if (String(document.body.getAttribute("data-route") || "") !== "messages-thread") {
+      stopMessagesThreadRealtime();
+      return;
+    }
+    if (_conversationId !== tid) return;
     void refreshPartnerPresence();
-  }, 3500);
+  }, MESSAGES_THREAD_PRESENCE_POLL_MS);
+  void refreshDmThreadRealtimeSubscribe(tid);
+  void pollNewThreadMessages(tid, { bootToken: _messagesThreadBootToken, reason: "thread-open" });
+  void refreshPartnerPresence();
 }
 
 function startMessagesThreadPoll(threadId) {
@@ -29088,6 +29249,7 @@ function enterMessagesThreadRoute(threadId, targetUserId = "") {
   if (prevTid && tid && prevTid !== tid) {
     _messagesList = [];
     _messagesLastFetchedAt = "";
+    _messagesLastFetchedId = "";
   }
 
   _messagesThreadNeedsInitialScroll = true;
@@ -29098,10 +29260,13 @@ function enterMessagesThreadRoute(threadId, targetUserId = "") {
   if (threadCache?.loadedOnce) {
     _messagesList = threadCache.messages.map((m) => ({ ...m }));
     _messagesLastFetchedAt = String(threadCache.lastFetchedAt || "");
+    _messagesLastFetchedId = String(threadCache.lastFetchedId || "");
+    if (!_messagesLastFetchedId && _messagesList.length) syncMessagesLastFetchedAtFromList();
     _messagesLoading = false;
   } else {
     _messagesList = [];
     _messagesLastFetchedAt = "";
+    _messagesLastFetchedId = "";
     _messagesLoading = !threadCache?.loadedOnce && Boolean(tid || uid);
   }
   _messagesRefreshing = false;
@@ -29263,6 +29428,7 @@ function enterCoachThread(bootToken) {
   }
   _messagesList = chat.map((m) => ({ ...m }));
   _messagesLastFetchedAt = "";
+  _messagesLastFetchedId = "";
   _messagesLoading = false;
   _messagesRefreshing = false;
   setChatHeaderUser(coachHeaderUser(), { force: true });
@@ -57236,6 +57402,7 @@ if (isCapacitorNativeAuth()) {
           }
           return;
         }
+        catchUpOpenMessagesThread({ reason: "app-resume" });
         void tryRecoverGenerationFromPushNotification();
         kickForegroundGenerationPolls();
         void resumePendingGenerationOnForeground();
@@ -57514,6 +57681,12 @@ async function requestSignOut() {
 
 function logoutCurrentUser() {
   const prevUserId = String(authSession?.user?.id || "");
+  void (async () => {
+    try {
+      const mod = await loadMessagesRealtimeModule();
+      await mod?.disconnectDmRealtime?.();
+    } catch {}
+  })();
   saveAuthSession(null);
   resetRevenueCatSession();
   void clearAuthSessionEverywhere();
@@ -58470,6 +58643,7 @@ try {
     document.addEventListener("visibilitychange", () => {
       setAppActiveState(!document.hidden);
       if (!document.hidden) {
+        catchUpOpenMessagesThread({ reason: "visibility" });
         void tryRecoverGenerationFromPushNotification();
         kickForegroundGenerationPolls();
         void resumePendingGenerationOnForeground();

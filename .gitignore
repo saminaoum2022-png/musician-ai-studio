@@ -5,6 +5,10 @@ www/env.client.js
 
 node_modules/
 
+# Generated Supabase browser bundle (scripts/bundle-supabase.mjs)
+vendor/supabase/
+www/vendor/supabase/
+
 node_modules/ffmpeg-static/ffmpeg
 assets/icons/_debug/
 

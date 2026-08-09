@@ -1,5 +1,5 @@
 {
-  "buildCommand": "node scripts/sync-client-env.mjs",
+  "buildCommand": "node scripts/sync-client-env.mjs && node scripts/bundle-supabase.mjs",
   "outputDirectory": ".",
   "cleanUrls": true,
   "trailingSlash": false,

@@ -8286,44 +8286,52 @@ function syncDeskCoachPanel() {
     });
   }
 }
-function syncCoachFabDesktopAnchor() {
+function syncCoachFabHeaderMount() {
   const fab = document.getElementById("coachFab");
-  if (!fab || isNativeShell()) return;
-  if (!document.documentElement.classList.contains("is-web-shell")) return;
-  const wide = window.matchMedia("(min-width: 721px)").matches;
-  if (!wide) {
-    fab.style.removeProperty("left");
-    fab.style.removeProperty("right");
-    fab.style.removeProperty("bottom");
-    fab.style.removeProperty("display");
-    fab.style.removeProperty("opacity");
-    fab.style.removeProperty("position");
-    return;
-  }
+  const parking = document.getElementById("coachFabParking");
+  if (!fab || !parking) return;
+  const route = String(document.body.getAttribute("data-route") || "");
+  const slotKey =
+    route === "discover"
+      ? "discover"
+      : route === "friends"
+        ? "friends"
+        : route === "challenges" || route === "generate"
+          ? "create"
+          : "";
+  fab.style.removeProperty("left");
+  fab.style.removeProperty("right");
+  fab.style.removeProperty("bottom");
+  fab.style.removeProperty("position");
+  fab.style.removeProperty("display");
+  fab.style.removeProperty("opacity");
+  fab.style.removeProperty("pointer-events");
   if (_deskCoachOpen || document.body.classList.contains("deskCoachOpen")) {
+    fab.classList.remove("coachFab--header");
+    if (fab.parentElement !== parking) parking.appendChild(fab);
     fab.style.setProperty("display", "none", "important");
-    fab.style.setProperty("opacity", "0", "important");
     fab.style.setProperty("pointer-events", "none", "important");
     return;
   }
-  fab.style.removeProperty("pointer-events");
-  const route = String(document.body.getAttribute("data-route") || "");
-  const coachRoute = new Set(["discover", "challenges", "generate", "profile"]).has(route);
-  if (coachRoute) {
-    try { surfaceCoachOrb(); } catch {}
+  if (!slotKey) {
+    fab.classList.remove("coachFab--header");
+    if (fab.parentElement !== parking) parking.appendChild(fab);
+    return;
   }
-  const hubUp = Boolean(document.querySelector(".hubNowPlaying.isVisible"));
-  fab.style.setProperty("position", "fixed", "important");
-  fab.style.setProperty("left", "auto", "important");
-  fab.style.setProperty("right", "24px", "important");
-  fab.style.setProperty("bottom", hubUp ? "108px" : "24px", "important");
-  if (coachRoute) {
-    fab.style.setProperty("display", "flex", "important");
-    fab.style.setProperty("opacity", "1", "important");
-  } else {
-    fab.style.removeProperty("display");
-    fab.style.removeProperty("opacity");
+  const slot = document.querySelector(`[data-coach-fab-slot="${slotKey}"]`);
+  if (!slot) {
+    fab.classList.remove("coachFab--header");
+    if (fab.parentElement !== parking) parking.appendChild(fab);
+    return;
   }
+  fab.classList.add("coachFab--header");
+  if (fab.parentElement !== slot) slot.appendChild(fab);
+  try {
+    surfaceCoachOrb();
+  } catch {}
+}
+function syncCoachFabDesktopAnchor() {
+  syncCoachFabHeaderMount();
 }
 function initDeskCoachPanel() {
   if (!isNativeShell() && document.documentElement.classList.contains("is-web-shell")) {
@@ -54751,6 +54759,7 @@ function resumePriorityJobsIfPending() {
   } catch {}
   const fab = document.getElementById("coachFab");
   if (fab) fab.addEventListener("click", () => openNabadCoach());
+  try { syncCoachFabHeaderMount(); } catch {}
   try { scheduleCoachFabNudge(); } catch {}
   try { syncCoachGenerationStatusFromPending(getGenerationPending()); } catch {}
   try { syncCoachPriorityStatusFromPending(getPriorityPending()); } catch {}

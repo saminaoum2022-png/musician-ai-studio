@@ -3,6 +3,14 @@
   "outputDirectory": ".",
   "cleanUrls": true,
   "trailingSlash": false,
+  "redirects": [
+    {
+      "source": "/:path*",
+      "has": [{ "type": "host", "value": "nabadai.com" }],
+      "destination": "https://www.nabadai.com/:path*",
+      "permanent": true
+    }
+  ],
   "functions": {
     "api/suno/stems.js": {
       "includeFiles": "node_modules/ffmpeg-static/**"
@@ -16,6 +24,12 @@
     },
     "api/songs/archive.js": {
       "maxDuration": 60
+    },
+    "api/music/cover-art.js": {
+      "maxDuration": 60
+    },
+    "api/music/generate.js": {
+      "maxDuration": 300
     }
   },
   "crons": [
@@ -23,7 +37,23 @@
     { "path": "/api/cron/suno-watch-sweep", "schedule": "*/2 * * * *" }
   ],
   "rewrites": [
-    { "source": "/s/:id", "destination": "/api/share?id=:id" }
+    { "source": "/robots.txt", "destination": "/api/robots" },
+    { "source": "/sitemap.xml", "destination": "/api/sitemap" },
+    { "source": "/s/:id", "destination": "/api/share?id=:id" },
+    {
+      "source": "/admin",
+      "destination": "/admin/index.html"
+    },
+    {
+      "source": "/",
+      "has": [{ "type": "host", "value": "admin.nabadai.com" }],
+      "destination": "/admin/index.html"
+    },
+    {
+      "source": "/:path*",
+      "has": [{ "type": "host", "value": "admin.nabadai.com" }],
+      "destination": "/admin/:path*"
+    }
   ],
   "headers": [
     {
@@ -51,6 +81,12 @@
       ]
     },
     {
+      "source": "/assets/icons/splash-logo.mp4",
+      "headers": [
+        { "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }
+      ]
+    },
+    {
       "source": "/privacy",
       "headers": [
         { "key": "Cache-Control", "value": "no-cache, must-revalidate" }
@@ -60,6 +96,38 @@
       "source": "/terms",
       "headers": [
         { "key": "Cache-Control", "value": "no-cache, must-revalidate" }
+      ]
+    },
+    {
+      "source": "/admin/(.*)",
+      "headers": [
+        { "key": "Cache-Control", "value": "no-store, must-revalidate" },
+        { "key": "X-Robots-Tag", "value": "noindex, nofollow, noarchive" }
+      ]
+    },
+    {
+      "source": "/api/(.*)",
+      "headers": [
+        { "key": "X-Robots-Tag", "value": "noindex, nofollow, noarchive" }
+      ]
+    },
+    {
+      "source": "/marketing.css",
+      "headers": [
+        { "key": "Cache-Control", "value": "public, max-age=3600, stale-while-revalidate=86400" }
+      ]
+    },
+    {
+      "source": "/.well-known/apple-app-site-association",
+      "headers": [
+        { "key": "Content-Type", "value": "application/json" },
+        { "key": "Cache-Control", "value": "public, max-age=3600, s-maxage=86400" }
+      ]
+    },
+    {
+      "source": "/assets/marketing/(.*)",
+      "headers": [
+        { "key": "Cache-Control", "value": "public, max-age=86400, stale-while-revalidate=604800" }
       ]
     }
   ]

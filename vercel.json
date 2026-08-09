@@ -27,6 +27,9 @@
     },
     "api/music/cover-art.js": {
       "maxDuration": 60
+    },
+    "api/music/generate.js": {
+      "maxDuration": 300
     }
   },
   "crons": [

@@ -187,7 +187,7 @@
       onload="this.media='all'"
     />
     <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Display:wght@900&family=Inter:wght@900&display=swap" /></noscript>
-    <link rel="stylesheet" href="./styles.css?v=20260809-020550" />
+    <link rel="stylesheet" href="./styles.css?v=20260809-113959" />
 
     <meta name="description" content="Create complete songs from lyrics, a hum, or a photo with NabadAi. Explore AI music tools, Arabic styles, voice personas, and creator sharing." />
     <meta property="og:type" content="website" />
@@ -3705,6 +3705,26 @@
               </div>
             </section>
 
+            <section id="settingsMusicProviderSection" class="settingsSection" hidden aria-labelledby="settingsMusicProviderTitle">
+              <h2 id="settingsMusicProviderTitle" class="settingsSectionLabel">Music engine</h2>
+              <div class="settingsList">
+                <div class="settingsRow settingsThemeRow">
+                  <span class="settingsRowIco" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+                  </span>
+                  <span class="settingsRowBody">
+                    <span class="settingsRowTitle">Generation provider</span>
+                    <span class="settingsRowSub" id="settingsMusicProviderSub">Suno — two variants per song</span>
+                  </span>
+                  <div id="settingsMusicProviderPicker" class="settingsThemePicker" role="radiogroup" aria-label="Music generation provider">
+                    <button type="button" class="settingsThemeOpt" data-music-provider="suno" role="radio" aria-checked="true">Suno</button>
+                    <button type="button" class="settingsThemeOpt" data-music-provider="minimax" role="radio" aria-checked="false">MiniMax</button>
+                  </div>
+                </div>
+                <p class="settingsOrbModeIntro">Admin test only. MiniMax returns one variant; persona and reference uploads stay on Suno.</p>
+              </div>
+            </section>
+
             <section class="settingsSection" aria-labelledby="settingsOrbTitle">
               <h2 id="settingsOrbTitle" class="settingsSectionLabel">NabadAI Orb</h2>
               <div class="settingsList">
@@ -4762,6 +4782,6 @@
     </script>
     <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
     <script src="./env.client.js" onerror="void 0"></script>
-    <script type="module" src="./src/app.js?v=20260809-020550"></script>
+    <script type="module" src="./src/app.js?v=20260809-113959"></script>
   </body>
 </html>

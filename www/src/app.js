@@ -194,7 +194,7 @@ import { MUSIC_VIDEO_FEATURE_ENABLED } from "./feature-flags.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260809-020550";
+const APP_BUILD = "20260809-113959";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -282,6 +282,7 @@ try {
 }
 try {
   initTheme();
+  try { wireSettingsMusicProviderOnce(); } catch {}
 } catch (e) {
   console.warn("[theme] init failed", e);
 }
@@ -4274,6 +4275,7 @@ function applyRoute({ passGen } = {}) {
     try { syncSettingsMemberIdRow(); } catch {}
     try { syncSettingsOrbMode(); } catch {}
     try { syncSettingsThemePicker(); } catch {}
+    try { syncSettingsMusicProviderRow(); } catch {}
     if (!_onesignalAppId) {
       void loadPublicConfig().then(() => {
         try { syncSettingsPushRow(); } catch {}
@@ -5242,6 +5244,50 @@ function syncSettingsPushRow() {
   } else {
     sub.textContent = "Off — tap to enable push alerts";
   }
+}
+
+function syncSettingsMusicProviderRow(pref = getMusicProviderPref()) {
+  const section = document.getElementById("settingsMusicProviderSection");
+  const root = document.getElementById("settingsMusicProviderPicker");
+  const sub = document.getElementById("settingsMusicProviderSub");
+  const isAdmin = Boolean(creditsState.isAdmin);
+  if (section) section.hidden = !isAdmin;
+  if (!isAdmin) return;
+  const p = normalizeMusicProviderPref(pref) || "minimax";
+  if (root) {
+    root.querySelectorAll("[data-music-provider]").forEach((btn) => {
+      const active = String(btn.getAttribute("data-music-provider") || "") === p;
+      btn.classList.toggle("is-active", active);
+      btn.setAttribute("aria-checked", active ? "true" : "false");
+    });
+  }
+  if (sub) sub.textContent = musicProviderSubline(p);
+}
+
+function wireSettingsMusicProviderOnce() {
+  const root = document.getElementById("settingsMusicProviderPicker");
+  if (!root || root.dataset.boundMusicProvider === "1") return;
+  root.dataset.boundMusicProvider = "1";
+  root.addEventListener("click", (ev) => {
+    const btn = ev.target?.closest?.("[data-music-provider]");
+    if (!btn || !root.contains(btn)) return;
+    ev.preventDefault();
+    if (!creditsState.isAdmin) return;
+    const pref = normalizeMusicProviderPref(btn.getAttribute("data-music-provider"));
+    if (!pref || pref === getMusicProviderPref()) return;
+    try {
+      if (typeof haptic === "function") haptic("light");
+    } catch {}
+    setMusicProviderPref(pref);
+    try {
+      showToast(
+        pref === "minimax"
+          ? "MiniMax engine enabled for your next songs."
+          : "Suno engine restored (two variants).",
+        { icon: pref === "minimax" ? "♪" : "✓", durationMs: 3600 },
+      );
+    } catch {}
+  });
 }
 
 function syncSettingsOrbMode(mode = getCoachOrbMode()) {
@@ -20267,6 +20313,54 @@ function deepFindTaskIdString(obj, depth = 0) {
   return "";
 }
 
+const MUSIC_PROVIDER_LS_KEY = "nabadMusicProvider";
+const MUSIC_PROVIDER_PREFS = ["suno", "minimax"];
+
+function normalizeMusicProviderPref(raw) {
+  const v = String(raw || "").trim().toLowerCase();
+  return MUSIC_PROVIDER_PREFS.includes(v) ? v : "";
+}
+
+/** Admin-only: defaults to MiniMax when unset so you can A/B without console hacks. */
+function getMusicProviderPref() {
+  if (!creditsState.isAdmin) return "suno";
+  try {
+    const saved = normalizeMusicProviderPref(localStorage.getItem(MUSIC_PROVIDER_LS_KEY));
+    if (saved) return saved;
+  } catch {}
+  return "minimax";
+}
+
+function setMusicProviderPref(pref) {
+  if (!creditsState.isAdmin) return;
+  const p = normalizeMusicProviderPref(pref) || "suno";
+  try {
+    localStorage.setItem(MUSIC_PROVIDER_LS_KEY, p);
+  } catch {}
+  syncSettingsMusicProviderRow(p);
+}
+
+function musicProviderSubline(pref) {
+  if (pref === "minimax") return "MiniMax — one variant (staging test)";
+  return "Suno — two variants per song";
+}
+
+function useMinimaxMusicProvider() {
+  return creditsState.isAdmin && getMusicProviderPref() === "minimax";
+}
+
+function musicGenerateApiPath() {
+  return useMinimaxMusicProvider() ? "/api/music/generate" : "/api/suno/generate";
+}
+
+function musicStatusApiPath(taskId) {
+  const tid = String(taskId || "").trim();
+  if (tid.startsWith("mmx_")) {
+    return `/api/music/status?taskId=${encodeURIComponent(tid)}`;
+  }
+  return `/api/suno/status?taskId=${encodeURIComponent(tid)}`;
+}
+
 function extractTaskIdLoose(data) {
   const direct =
     data?.data?.taskId ||
@@ -22801,12 +22895,14 @@ async function refreshMyCredits({ silent = false } = {}) {
       els.creditsAdminCard.style.display = creditsState.isAdmin ? "" : "none";
     }
     if (creditsState.isAdmin) await refreshAdminCreditsView();
+    try { syncSettingsMusicProviderRow(); } catch {}
   } catch (e) {
     creditsState.lastError = e?.message || String(e);
     paintCreditsAccountEmail(authSession?.user?.email || activeProfile?.email);
     if (!silent) console.warn("[credits/me]", creditsState.lastError);
   } finally {
     creditsState.inFlight = false;
+    try { syncSettingsMusicProviderRow(); } catch {}
   }
   return creditsState;
 }
@@ -50299,6 +50395,7 @@ function parseSunoGenerationRecordInfo(data) {
 
 function resolveExpectedGenerationVariants(taskId) {
   const tid = String(taskId || "").trim();
+  if (tid.startsWith("mmx_")) return 1;
   const pending = getGenerationPending();
   if (tid && pending?.taskId && String(pending.taskId) === tid) {
     return Math.max(
@@ -52122,7 +52219,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
 
   const fetchGenerationStatus = async () => {
     if (!sunoTaskId) return null;
-    const r = await fetch(apiUrl(`/api/suno/status?taskId=${encodeURIComponent(sunoTaskId)}`));
+    const r = await fetch(apiUrl(musicStatusApiPath(sunoTaskId)));
     const data = await r.json().catch(() => ({}));
     // The Suno proxy returns 200 with the full body when Suno itself
     // responded — even when that body contains a failure. Only treat
@@ -53153,7 +53250,26 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
           }
 
           const authToken = getSupabaseAuthToken();
-          const r = await fetch(apiUrl("/api/suno/generate"), {
+          if (useMinimaxMusicProvider()) {
+            if (personaIdSel || hasReference) {
+              setLoading(false);
+              setGenerateBtn("Generate song", false, "generate");
+              setGenerateFieldsLocked(false);
+              setProgress(0);
+              try {
+                showToast(
+                  "MiniMax test mode doesn't support persona or reference uploads yet.",
+                  { icon: "!", durationMs: 6400 },
+                );
+              } catch {}
+              setStatus("MiniMax test mode: remove persona and reference uploads first.");
+              return;
+            }
+            try {
+              showToast("Using MiniMax engine (staging test).", { icon: "♪", durationMs: 3600 });
+            } catch {}
+          }
+          const r = await fetch(apiUrl(musicGenerateApiPath()), {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
@@ -53207,6 +53323,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
           source: imageMoodAppliedForNextGen ? "photo" : "",
           photoCoverDataUrl: resolvePendingPhotoCoverDataUrl(),
           photoCoverOnly: imageMoodCoverOnlyForNextGen,
+          variantCount: sunoTaskId.startsWith("mmx_") ? 1 : GENERATION_VARIANT_COUNT,
         });
         syncGenerationPendingLibraryUi();
         if (!imageMoodAppliedForNextGen && !resolvePendingPhotoCoverDataUrl() && isPollinationsCoverEligible(lastGenerationMeta)) {
@@ -53221,9 +53338,9 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
         }
         try {
           beginCoachGenerationStatus({
-            variantCount: GENERATION_VARIANT_COUNT,
+            variantCount: sunoTaskId.startsWith("mmx_") ? 1 : GENERATION_VARIANT_COUNT,
             pillText: imageMoodAppliedForNextGen
-              ? coachPhotoMoodPillText(GENERATION_VARIANT_COUNT)
+              ? coachPhotoMoodPillText(sunoTaskId.startsWith("mmx_") ? 1 : GENERATION_VARIANT_COUNT)
               : "",
           });
         } catch {}

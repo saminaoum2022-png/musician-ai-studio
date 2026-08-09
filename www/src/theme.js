@@ -7,7 +7,7 @@ export const THEME_PREFS = ["dark", "light", "system"];
 
 const PALETTE = {
   dark: { bg: "#05070d", text: "#eef4ff", scheme: "dark", statusBar: "black-translucent" },
-  light: { bg: "#F6F7FB", text: "#15171C", scheme: "light", statusBar: "default" },
+  light: { bg: "#F2F2F7", text: "#15171C", scheme: "light", statusBar: "default" },
 };
 
 let systemMq = null;

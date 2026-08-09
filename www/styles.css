@@ -177,12 +177,12 @@
   padding: 0;
 }
 
-/* Light mode — soft canvas, white cards, purple/teal washes (not flat white). */
+/* Light mode — calm gray canvas, white surfaces, accents only on actions/icons. */
 html[data-theme="light"]{
   color-scheme: light;
-  --bg: #F6F7FB;
+  --bg: #F2F2F7;
   --card: #FFFFFF;
-  --card2: #F0F2F7;
+  --card2: #EBEEF3;
   --text: #15171C;
   --muted: #858B98;
   --border: #E1E4EA;
@@ -192,11 +192,15 @@ html[data-theme="light"]{
   --ai-a: rgba(124, 92, 255, 0.16);
   --ai-b: rgba(35, 213, 171, 0.14);
   --ai-c: #F6F7FB;
-  --elev-1: 0 10px 28px rgba(88, 104, 140, 0.14), 0 2px 8px rgba(124, 92, 255, 0.06);
-  --elev-2: 0 18px 44px rgba(88, 104, 140, 0.16), 0 4px 12px rgba(124, 92, 255, 0.08);
-  --elev-glow-primary: 0 0 36px rgba(124, 92, 255, 0.16);
-  --elev-glow-teal: 0 0 32px rgba(35, 213, 171, 0.14);
-  --surface-raised: linear-gradient(168deg, rgba(255, 255, 255, 0.98), rgba(248, 250, 255, 0.94));
+  --elev-1: 0 1px 2px rgba(15, 23, 40, 0.05), 0 6px 18px rgba(15, 23, 40, 0.06);
+  --elev-2: 0 2px 4px rgba(15, 23, 40, 0.04), 0 12px 28px rgba(15, 23, 40, 0.08);
+  --elev-glow-primary: 0 0 24px rgba(124, 92, 255, 0.12);
+  --elev-glow-teal: 0 0 24px rgba(35, 213, 171, 0.12);
+  --surface-raised: #FFFFFF;
+  --accent-teal-soft: rgba(13, 148, 136, 0.12);
+  --accent-violet-soft: rgba(109, 77, 245, 0.10);
+  --accent-teal-border: rgba(13, 148, 136, 0.22);
+  --accent-violet-border: rgba(109, 77, 245, 0.20);
   --surface-border: #E1E4EA;
   --surface-highlight: inset 0 1px 0 rgba(255, 255, 255, 0.95);
   --song-row-title-color: #15171C;
@@ -204,7 +208,7 @@ html[data-theme="light"]{
   --song-row-desc-color: #858B98;
   --song-row-plays-color: #858B98;
   --surface: #FFFFFF;
-  --surface-secondary: #F0F2F7;
+  --surface-secondary: #EBEEF3;
   --text-primary: #15171C;
   --text-secondary: #5F6572;
   --text-muted: #858B98;
@@ -221,8 +225,8 @@ html[data-theme="light"]{
   --tab-active: #15171C;
   --seg-tab-active: var(--primary);
   --seg-tab-inactive-opacity: 1;
-  --link-accent: var(--primary);
-  --link-accent-hover: #5a3ed6;
+  --link-accent: #0d9488;
+  --link-accent-hover: #0f766e;
   --chart-surface: #FFFFFF;
   --chart-surface-border: #D8DCE4;
   --chart-surface-shadow: 0 1px 2px rgba(15, 23, 40, 0.05), 0 6px 18px rgba(15, 23, 40, 0.06);
@@ -246,9 +250,7 @@ html[data-theme="light"]{
 
 html[data-theme="light"] body{
   background:
-    radial-gradient(120% 72% at 50% -30%, rgba(124, 92, 255, 0.14) 0%, transparent 56%),
-    radial-gradient(92% 52% at 100% 2%, rgba(35, 213, 171, 0.10) 0%, transparent 48%),
-    radial-gradient(70% 46% at 0% 18%, rgba(124, 92, 255, 0.08) 0%, transparent 54%),
+    radial-gradient(90% 42% at 50% -8%, rgba(124, 92, 255, 0.05) 0%, transparent 72%),
     var(--bg);
 }
 
@@ -262,23 +264,18 @@ html[data-theme="light"] body[data-route="mentor"]{
 
 html[data-theme="light"] body.booting,
 html[data-theme="light"] body.booting::before{
-  background: #F6F7FB;
+  background: #F2F2F7;
 }
 
 html[data-theme="light"] .card{
-  background:
-    radial-gradient(120% 100% at 8% 0%, rgba(124, 92, 255, 0.10), transparent 58%),
-    radial-gradient(95% 85% at 100% 12%, rgba(35, 213, 171, 0.08), transparent 62%),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(248, 250, 255, 0.94));
-  box-shadow:
-    0 14px 36px rgba(88, 104, 140, 0.12),
-    0 2px 8px rgba(124, 92, 255, 0.06),
-    inset 0 1px 0 rgba(255, 255, 255, 0.95);
+  background: var(--card);
+  border: 1px solid var(--border);
+  box-shadow: var(--chart-surface-shadow);
 }
 
 html[data-theme="light"] .appScreenTitle,
 html[data-theme="light"] .mentorPageTitle{
-  text-shadow: 0 0 36px rgba(124, 92, 255, 0.18);
+  text-shadow: none;
 }
 
 html[data-theme="light"] button.primary,
@@ -355,18 +352,15 @@ html[data-theme="light"] .settingsSwitch:checked{
   background: rgba(35, 213, 171, 0.82);
 }
 html[data-theme="light"] .profilePersonaSignature{
-  border-color: rgba(124, 92, 255, 0.22);
-  background:
-    radial-gradient(120% 120% at 0% 0%, rgba(124, 92, 255, 0.12), transparent 58%),
-    radial-gradient(90% 80% at 100% 100%, rgba(35, 213, 171, 0.08), transparent 55%),
-    linear-gradient(165deg, rgba(255, 255, 255, 0.99), rgba(244, 247, 252, 0.94));
-  box-shadow: 0 16px 40px rgba(88, 104, 140, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.98);
+  border-color: var(--border);
+  background: var(--card);
+  box-shadow: var(--chart-surface-shadow);
 }
 html[data-theme="light"] .profilePersonaSignatureMarkInner{
   background: linear-gradient(160deg, #fff, #f4f7fc);
 }
 html[data-theme="light"] .profilePersonaSignatureMic{
-  color: var(--primary);
+  color: #0d9488;
 }
 html[data-theme="light"] .profilePersonaSignatureKicker{
   color: rgba(18, 140, 118, 0.92);
@@ -550,15 +544,9 @@ html[data-theme="light"] .challengeFeatureCard,
 html[data-theme="light"] .challengeLoopCard,
 html[data-theme="light"] .challengesHeroCopy,
 html[data-theme="light"] .homeDeskEntries{
-  border-color: rgba(15, 23, 40, 0.09);
-  background:
-    radial-gradient(120% 100% at 8% 0%, rgba(124, 92, 255, 0.12), transparent 58%),
-    radial-gradient(95% 85% at 100% 12%, rgba(35, 213, 171, 0.09), transparent 62%),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(244, 247, 252, 0.94));
-  box-shadow:
-    0 12px 32px rgba(88, 104, 140, 0.10),
-    0 2px 6px rgba(124, 92, 255, 0.05),
-    inset 0 1px 0 rgba(255, 255, 255, 0.95);
+  border-color: var(--border);
+  background: var(--card);
+  box-shadow: var(--chart-surface-shadow);
   color: var(--text);
 }
 
@@ -569,9 +557,9 @@ html[data-theme="light"] .challengeMiniCard h3{
 
 html[data-theme="light"] .discoveryQuickIdea small span,
 html[data-theme="light"] .discoveryIdeaTags span{
-  background: rgba(124, 92, 255, 0.08);
-  color: rgba(15, 23, 40, 0.62);
-  border: 1px solid rgba(124, 92, 255, 0.12);
+  background: var(--accent-violet-soft);
+  color: var(--text-secondary);
+  border: 1px solid var(--accent-violet-border);
 }
 
 html[data-theme="light"] .challengeMiniCard p,
@@ -836,9 +824,9 @@ html[data-theme="light"] .profilePersonaAvatarBadge{
 
 /* Light mode — Create, player, sheets, auth (Echo viewer stays cinematic dark). */
 html[data-theme="light"] .createTabs{
-  border-color: rgba(15, 23, 40, 0.08);
-  background: rgba(255, 255, 255, 0.72);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9), 0 6px 18px rgba(88, 104, 140, 0.08);
+  border-color: var(--border);
+  background: var(--card);
+  box-shadow: var(--chart-surface-shadow);
 }
 
 html[data-theme="light"] .createTab{
@@ -851,28 +839,24 @@ html[data-theme="light"] .createTab:hover{
 
 html[data-theme="light"] .createTab.isActive{
   color: var(--text);
-  background: linear-gradient(180deg, rgba(255,255,255,0.98), rgba(244,247,252,0.94));
-  box-shadow:
-    inset 0 0 0 1.5px rgba(15,23,40,0.14),
-    0 6px 18px rgba(88,104,140,0.10);
+  background: var(--surface-secondary);
+  box-shadow: inset 0 0 0 1px rgba(15, 23, 40, 0.08);
 }
 
 html[data-theme="light"] .createPaneCta{
-  border-color: rgba(124, 92, 255, 0.22);
-  background:
-    radial-gradient(120% 100% at 50% 0%, rgba(124, 92, 255, 0.08), transparent 58%),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(244, 247, 252, 0.92));
+  border-color: var(--border);
+  border-style: dashed;
+  background: var(--card);
+  box-shadow: var(--chart-surface-shadow);
   color: var(--text);
 }
 
 html[data-theme="light"] .inputPanel,
 html[data-theme="light"] .resultCard,
 html[data-theme="light"] .personaActiveBanner{
-  border-color: rgba(15, 23, 40, 0.09);
-  background:
-    radial-gradient(120% 100% at 8% 0%, rgba(124, 92, 255, 0.10), transparent 58%),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(244, 247, 252, 0.94));
-  box-shadow: 0 12px 30px rgba(88, 104, 140, 0.10);
+  border-color: var(--border);
+  background: var(--card);
+  box-shadow: var(--chart-surface-shadow);
 }
 
 html[data-theme="light"] .inPanelLabel,
@@ -903,21 +887,28 @@ html[data-theme="light"] .playerSideBtn{
 
 html[data-theme="light"] .playerSideBtn:hover{
   color: var(--text);
-  background: rgba(124, 92, 255, 0.08);
+  background: var(--surface-secondary);
 }
 
 html[data-theme="light"] .playerArtWrap{
-  border-color: rgba(15, 23, 40, 0.09);
-  background:
-    radial-gradient(120% 120% at 20% 10%, rgba(124, 92, 255, 0.10), transparent 60%),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(244, 247, 252, 0.92));
+  border-color: var(--border);
+  background: var(--card);
+  box-shadow: var(--chart-surface-shadow);
 }
 
 html[data-theme="light"] .playerArtWrap.isEmpty{
-  background:
-    radial-gradient(120% 120% at 20% 10%, rgba(124, 92, 255, 0.12), transparent 60%),
-    radial-gradient(120% 120% at 90% 0%, rgba(35, 213, 171, 0.10), transparent 62%),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(244, 247, 252, 0.92));
+  background: var(--surface-secondary);
+}
+
+html[data-theme="light"] .playerMenuBtn{
+  border-color: var(--border);
+  background: rgba(255, 255, 255, 0.88);
+  color: var(--text-secondary);
+}
+html[data-theme="light"] .playerMenuBtn:hover{
+  color: var(--text-primary);
+  border-color: rgba(15, 23, 40, 0.14);
+  background: var(--card);
 }
 
 html[data-theme="light"] .playerTitle{
@@ -925,10 +916,11 @@ html[data-theme="light"] .playerTitle{
 }
 
 html[data-theme="light"] .playerCard.isPlaying .playerTitle{
-  background: linear-gradient(95deg, #4a2fd4 0%, #6d4df5 45%, #12b896 100%);
-  -webkit-background-clip: text;
-  background-clip: text;
-  -webkit-text-fill-color: transparent;
+  color: var(--text-primary);
+  background: none;
+  -webkit-background-clip: unset;
+  background-clip: unset;
+  -webkit-text-fill-color: currentColor;
 }
 
 html[data-theme="light"] .playerCreatorHandle,
@@ -961,15 +953,15 @@ html[data-theme="light"] .photoMoodSheet .imageMoodCard.modalCard{
 
 html[data-theme="light"] .photoMoodBackdrop,
 html[data-theme="light"] .imageMoodSheetBackdrop{
-  background: rgba(236, 240, 247, 0.82);
-  -webkit-backdrop-filter: blur(8px) saturate(110%);
-          backdrop-filter: blur(8px) saturate(110%);
+  background: rgba(242, 242, 247, 0.88);
+  -webkit-backdrop-filter: blur(10px) saturate(110%);
+          backdrop-filter: blur(10px) saturate(110%);
 }
 
 html[data-theme="light"] .photoMoodFoot,
 html[data-theme="light"] .imageMoodFooter{
-  border-top-color: rgba(15, 23, 40, 0.08);
-  background: rgba(248, 250, 255, 0.98);
+  border-top-color: var(--border);
+  background: var(--card);
 }
 
 html[data-theme="light"] .photoMoodSub,
@@ -990,10 +982,9 @@ html[data-theme="light"] .imageMoodPreviewWrap{
 }
 
 html[data-theme="light"] .createChooserBackdrop{
-  background:
-    radial-gradient(70% 55% at 50% 88%, rgba(124, 92, 255, 0.14), transparent 62%),
-    radial-gradient(55% 40% at 20% 75%, rgba(35, 213, 171, 0.10), transparent 55%),
-    rgba(236, 240, 247, 0.78);
+  background: rgba(242, 242, 247, 0.88);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
 }
 
 html[data-theme="light"] .createChooserTitle{
@@ -1006,24 +997,37 @@ html[data-theme="light"] .createChooserPill{
 }
 
 html[data-theme="light"] .createChooserPill::after{
-  background: rgba(255, 255, 255, 0.94);
-  border-color: rgba(15, 23, 40, 0.10);
-  box-shadow: 0 10px 28px rgba(88, 104, 140, 0.12);
+  background: var(--card);
+  border-color: var(--border);
+  box-shadow: var(--chart-surface-shadow);
 }
 
-html[data-theme="light"] .createChooserPillIcon{
-  background: rgba(124, 92, 255, 0.08);
-  border-color: rgba(124, 92, 255, 0.14);
+html[data-theme="light"] .createChooserPill--song .createChooserPillIcon{
+  background: var(--accent-teal-soft);
+  border-color: var(--accent-teal-border);
+  color: #0d9488;
+}
+html[data-theme="light"] .createChooserPill--echo .createChooserPillIcon,
+html[data-theme="light"] .createChooserPill--moment .createChooserPillIcon{
+  background: var(--accent-violet-soft);
+  border-color: var(--accent-violet-border);
+  color: #6d4df5;
+}
+html[data-theme="light"] .createChooserPill--status .createChooserPillIcon{
+  background: var(--surface-secondary);
+  border-color: var(--border);
+  color: var(--text-secondary);
 }
 
 html[data-theme="light"] .loadingBar{
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(244, 247, 252, 0.92));
-  box-shadow: 0 12px 30px rgba(88, 104, 140, 0.10);
+  background: var(--card);
+  border: 1px solid var(--border);
+  box-shadow: var(--chart-surface-shadow);
 }
 
 html[data-theme="light"] .loadingDismiss{
-  background: rgba(124, 92, 255, 0.08);
-  border-color: rgba(15, 23, 40, 0.10);
+  background: var(--surface-secondary);
+  border-color: var(--border);
   color: var(--text);
 }
 
@@ -1038,30 +1042,26 @@ html[data-theme="light"] .spinner{
 }
 
 html[data-theme="light"] .toast{
-  border-color: rgba(15, 23, 40, 0.10);
-  background:
-    radial-gradient(120% 140% at 0% 0%, rgba(124, 92, 255, 0.12), transparent 55%),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(244, 247, 252, 0.96));
+  border-color: var(--border);
+  background: var(--card);
   color: var(--text);
-  box-shadow: 0 14px 36px rgba(88, 104, 140, 0.14);
+  box-shadow: var(--elev-2);
 }
 
 html[data-theme="light"] .toast .toastIcon{
-  color: var(--primary);
+  color: #0d9488;
 }
 
 html[data-theme="light"] .notificationsCenterBackdrop{
-  background:
-    radial-gradient(90% 70% at 50% 100%, rgba(124, 92, 255, 0.08), transparent 64%),
-    rgba(236, 240, 247, 0.82);
+  background: rgba(242, 242, 247, 0.88);
+  -webkit-backdrop-filter: blur(10px) saturate(110%);
+          backdrop-filter: blur(10px) saturate(110%);
 }
 
 html[data-theme="light"] .notificationsCenterCard{
-  border-color: rgba(15, 23, 40, 0.09);
-  background:
-    radial-gradient(110% 72% at 8% 0%, rgba(124, 92, 255, 0.10), transparent 58%),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(244, 247, 252, 0.96));
-  box-shadow: 0 -16px 48px rgba(88, 104, 140, 0.12);
+  border-color: var(--border);
+  background: var(--card);
+  box-shadow: var(--elev-2);
 }
 
 html[data-theme="light"] .notificationsCenterGrab{
@@ -13953,8 +13953,10 @@ button:disabled{ opacity:0.5; cursor:not-allowed; }
   --profile-header-gap: 10px;
   --profile-avatar-size: 96px;
   --profile-stats-max-w: 360px;
-  --profile-pro-banner-inset: 10px;
-  --profile-pro-banner-max-w: 440px;
+  --profile-pro-banner-inset: 0px;
+  --profile-pro-banner-max-w: none;
+  --profile-aura-pad-x: 8px;
+  --profile-songs-block-pad-x: 6px;
   --profile-stat-col-pad-x: 4px;
   position: relative;
   isolation: isolate;
@@ -13964,7 +13966,7 @@ button:disabled{ opacity:0.5; cursor:not-allowed; }
   /* Top chrome is position:fixed; reserve one safe-area pass + row height
      so the avatar clears the credits pill + edit/settings (no second
      safe-area — `.app` top padding is zeroed on this route in mobile). */
-  padding: calc(env(safe-area-inset-top, 0px) + var(--profile-header-pad-top)) 8px 4px;
+  padding: calc(env(safe-area-inset-top, 0px) + var(--profile-header-pad-top)) var(--profile-aura-pad-x, 8px) 4px;
   margin-bottom: 0;
   max-width: 100%;
 }
@@ -15646,7 +15648,10 @@ button.profileMusicStylesLine:hover .profileMusicStylePill{
 .profileAuraStat--link:active{ transform: scale(0.98); }
 
 @media (max-width: 440px){
-  .profileAura{ padding: calc(env(safe-area-inset-top, 0px) + 52px) 6px 4px; }
+  .profileAura{
+    --profile-aura-pad-x: 6px;
+    padding: calc(env(safe-area-inset-top, 0px) + 52px) var(--profile-aura-pad-x, 6px) 4px;
+  }
   .profileAuraIdentity{ padding: 0; }
   .profileAuraHeaderChrome{
     padding: calc(env(safe-area-inset-top, 0px) + 8px) 12px 8px;
@@ -23725,11 +23730,13 @@ html[data-theme="light"] .soundsStudioTempoValue{
   display: flex;
   align-items: center;
   gap: 10px;
-  width: min(
-    calc(100% - (var(--profile-pro-banner-inset, 10px) * 2)),
-    var(--profile-pro-banner-max-w, 440px)
-  );
-  margin: 12px auto 6px;
+  /* Match profileSongsBlock / post card horizontal edges (aura 8px vs feed 6px). */
+  width: calc(100% + ((var(--profile-songs-block-pad-x, 6px) - var(--profile-aura-pad-x, 8px)) * 2));
+  max-width: var(--profile-pro-banner-max-w, none);
+  margin:
+    12px
+    calc(var(--profile-songs-block-pad-x, 6px) - var(--profile-aura-pad-x, 8px))
+    6px;
   padding: 12px 14px 12px 14px;
   border-radius: 16px;
   text-decoration: none;
@@ -23828,14 +23835,19 @@ html[data-theme="light"] .soundsStudioTempoValue{
   box-shadow: 0 4px 14px rgba(35, 213, 171, 0.32);
 }
 html[data-theme="light"] .profileProBanner{
-  border-color: rgba(124, 92, 255, 0.34);
-  background:
-    radial-gradient(130% 120% at 100% 0%, rgba(124, 92, 255, 0.16), transparent 58%),
-    radial-gradient(90% 80% at 0% 100%, rgba(35, 213, 171, 0.1), transparent 55%),
-    linear-gradient(135deg, rgba(124, 92, 255, 0.08), rgba(255, 255, 255, 0.96) 52%, rgba(35, 213, 171, 0.06));
-  box-shadow:
-    0 0 0 1px rgba(124, 92, 255, 0.08) inset,
-    0 8px 22px rgba(124, 92, 255, 0.12);
+  /* Full width of profile feed cards — same horizontal edge as posts below. */
+  width: calc(100% + ((var(--profile-songs-block-pad-x, 6px) - var(--profile-aura-pad-x, 8px)) * 2));
+  max-width: none;
+  margin-left: calc(var(--profile-songs-block-pad-x, 6px) - var(--profile-aura-pad-x, 8px));
+  margin-right: calc(var(--profile-songs-block-pad-x, 6px) - var(--profile-aura-pad-x, 8px));
+  border-color: var(--border);
+  border-left: 3px solid #23d5ab;
+  background: var(--card);
+  box-shadow: var(--chart-surface-shadow);
+}
+html[data-theme="light"] .profileProBanner--active{
+  border-left-color: #23d5ab;
+  background: var(--card);
 }
 html[data-theme="light"] .profileProBannerTitle{
   color: var(--text);
@@ -24010,8 +24022,6 @@ html[data-theme="light"] .nabadVerifyPopoverText{
     margin-top: 9px;
   }
   .profileProBanner{
-    --profile-pro-banner-inset: 8px;
-    --profile-pro-banner-max-w: 100%;
     padding: 11px 12px;
   }
   .profileStatValue{
@@ -39111,6 +39121,25 @@ html[data-theme="light"] #arabicAddressPills .addressPill.isActive{
 html[data-theme="light"] body[data-route="generate"] .addressPill.isActive .addressPillSub{
   color: rgba(15,23,40,0.55);
 }
+html[data-theme="light"] body[data-route="generate"] .lyricsMagicBtn{
+  border-color: var(--border);
+  background: var(--surface-secondary);
+  box-shadow: none;
+  color: var(--text);
+}
+html[data-theme="light"] body[data-route="generate"] .generateOrb,
+html[data-theme="light"] body[data-route="generate"] #btnGenerateOrb,
+html[data-theme="light"] body[data-route="generate"] .aiGenerate{
+  background: linear-gradient(135deg, #23d5ab 0%, #12b896 100%);
+  border: none;
+  color: #fff;
+  box-shadow: 0 10px 28px rgba(35, 213, 171, 0.28);
+}
+html[data-theme="light"] body[data-route="generate"] .stepCard{
+  border-color: var(--border);
+  background: var(--card);
+  box-shadow: var(--chart-surface-shadow);
+}
 /* The ✦ helper buttons (lyrics "Generate", style "Boost") go neutral too. */
 body[data-route="generate"] .lyricsMagicBtn{
   border-color: rgba(255,255,255,0.16);
@@ -44047,29 +44076,45 @@ body.appTourOpen{
 
 /* --- Premium polish: light-mode parity for elevated surfaces --- */
 html[data-theme="light"] .activityDayLabel{
-  color: rgba(109, 77, 245, 0.72);
+  color: var(--text-muted);
+}
+html[data-theme="light"] .activityDayGroup{
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--card);
+  box-shadow: var(--chart-surface-shadow);
+  padding: 6px 12px 4px;
+  overflow: hidden;
 }
 html[data-theme="light"] .activityRow{
   background: transparent;
-  border-bottom-color: rgba(15, 23, 40, 0.08);
+  border-bottom-color: var(--border);
 }
 html[data-theme="light"] .activityRow.isUnread{
-  background: linear-gradient(90deg, rgba(35, 213, 171, 0.1), rgba(35, 213, 171, 0.03));
+  background: var(--accent-teal-soft);
 }
 html[data-theme="light"] .activityRowTitle{
-  color: #0f1728;
+  color: var(--text-primary);
 }
 html[data-theme="light"] .activityRowDesc{
-  color: rgba(15, 23, 40, 0.56);
+  color: var(--text-secondary);
+}
+html[data-theme="light"] .activityStatus{
+  border-color: var(--border);
+  background: var(--card);
+  color: var(--text-secondary);
+  box-shadow: var(--chart-surface-shadow);
+}
+html[data-theme="light"] .activityRowAvatar{
+  background: var(--surface-secondary);
 }
 html[data-theme="light"] .mobileTabbar a.active:not(.tabCreate)::before{
   display: none;
 }
 html[data-theme="light"] .profilePersonaSignature{
-  border-color: rgba(124, 92, 255, 0.28);
-  box-shadow:
-    0 22px 48px rgba(88, 104, 140, 0.14),
-    0 0 40px rgba(124, 92, 255, 0.12);
+  border-color: var(--border);
+  background: var(--card);
+  box-shadow: var(--chart-surface-shadow);
 }
 html[data-theme="light"] .discoverFeedTabs{
   background: transparent;
@@ -48406,9 +48451,9 @@ html[data-theme="light"] .settingsRowLink:active{
   background: rgba(15, 23, 40, 0.06);
 }
 html[data-theme="light"] .settingsThemePicker{
-  background:
-    radial-gradient(120% 140% at 0% 0%, rgba(124, 92, 255, 0.10), transparent 55%),
-    var(--surface);
+  background: var(--card);
+  border: 1px solid var(--border);
+  box-shadow: var(--chart-surface-shadow);
 }
 html[data-theme="light"] .settingsOrbModeTab.isActive{
   color: var(--text-primary);
@@ -48416,60 +48461,69 @@ html[data-theme="light"] .settingsOrbModeTab.isActive{
 html[data-theme="light"] .followActAct:hover{
   background: rgba(15, 23, 40, 0.05);
 }
-/* Create hub — sit directly on the page gradient (no nested white sheet). */
-html[data-theme="light"] .challengesPage.homeDesk,
-html[data-theme="light"] .challengesPage.homeDesk .homeDeskSegPanels,
-html[data-theme="light"] .challengesPage.homeDesk .homeDeskCreatePanel,
-html[data-theme="light"] .challengesPage.homeDesk .homeDeskCreateStack,
-html[data-theme="light"] .challengesPage.homeDesk .homeDeskPrimaryActions,
-html[data-theme="light"] .challengesPage.homeDesk .homeDeskQuickStarts{
-  background: transparent;
-  box-shadow: none;
-}
-html[data-theme="light"] .challengesPage.homeDesk .homeDeskSongPromo,
-html[data-theme="light"] .challengesPage.homeDesk .homeDeskStudioPromo,
-html[data-theme="light"] .challengesPage.homeDesk .homeDeskStudioPromo--featured,
-html[data-theme="light"] .challengesPage.homeDesk .homeDeskPhotoPromo,
-html[data-theme="light"] .challengesPage.homeDesk .homeDeskPersonaPromo,
-html[data-theme="light"] .challengesPage.homeDesk .homeDeskHumTrackPromo,
-html[data-theme="light"] .challengesPage.homeDesk .homeDeskSoundsPromo,
-html[data-theme="light"] .challengesPage.homeDesk .homeDeskMashupPromo,
-html[data-theme="light"] .challengesPage.homeDesk .homeDeskSongPromo.homeDeskPromo--hero{
-  background: transparent;
-  box-shadow: none;
-  border-color: var(--border);
-}
-html[data-theme="light"] .challengesPage.homeDesk .homeDeskPersonaPromo::before{
-  display: none;
-}
+/* Create hub — white cards on gray canvas (Tabby-style contrast). */
 html[data-theme="light"] .challengesPage.homeDesk .homeDeskCreateStack .homeDeskPromoCard,
 html[data-theme="light"] .challengesPage.homeDesk .homeDeskCreateStack .homeDeskSongPromo,
 html[data-theme="light"] .challengesPage.homeDesk .homeDeskCreateStack .homeDeskStudioPromo,
 html[data-theme="light"] .challengesPage.homeDesk .homeDeskCreateStack .homeDeskPhotoPromo,
 html[data-theme="light"] .challengesPage.homeDesk .homeDeskCreateStack .homeDeskHumTrackPromo,
 html[data-theme="light"] .challengesPage.homeDesk .homeDeskCreateStack .homeDeskSoundsPromo,
-html[data-theme="light"] .challengesPage.homeDesk .homeDeskCreateStack .homeDeskPersonaPromo{
-  border: 0;
-  border-radius: 0;
-  background: transparent;
-  box-shadow: none;
+html[data-theme="light"] .challengesPage.homeDesk .homeDeskCreateStack .homeDeskPersonaPromo,
+html[data-theme="light"] .challengesPage.homeDesk .homeDeskPrimaryActions .homeDeskPromoCard{
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--card);
+  box-shadow: var(--chart-surface-shadow);
 }
 html[data-theme="light"] .challengesPage.homeDesk .homeDeskCreateStack .homeDeskPromoCard + .homeDeskPromoCard,
 html[data-theme="light"] .challengesPage.homeDesk .homeDeskPrimaryActions .homeDeskPromoCard + .homeDeskPromoCard{
   border-top: 1px solid var(--border);
+  margin-top: 10px;
 }
 html[data-theme="light"] .challengesPage.homeDesk .homeDeskQuickStarts{
-  border-top: 1px solid var(--border);
-  padding-top: 8px;
+  border-top: 0;
+  padding-top: 4px;
+  gap: 10px;
 }
-html[data-theme="light"] .challengesPage.homeDesk .homeDeskSongTile,
-html[data-theme="light"] .challengesPage.homeDesk .homeDeskStudioTile,
+html[data-theme="light"] .challengesPage.homeDesk .homeDeskSongTile{
+  background: var(--accent-teal-soft);
+  border-color: var(--accent-teal-border);
+}
 html[data-theme="light"] .challengesPage.homeDesk .homeDeskPhotoTile,
+html[data-theme="light"] .challengesPage.homeDesk .homeDeskStudioTile{
+  background: var(--accent-violet-soft);
+  border-color: var(--accent-violet-border);
+}
+html[data-theme="light"] .challengesPage.homeDesk .homeDeskPersonaTile,
 html[data-theme="light"] .challengesPage.homeDesk .homeDeskHumTrackTile,
-html[data-theme="light"] .challengesPage.homeDesk .homeDeskSoundsTile,
-html[data-theme="light"] .challengesPage.homeDesk .homeDeskPersonaTile{
-  background: rgba(15, 23, 40, 0.04);
-  border-color: rgba(15, 23, 40, 0.08);
+html[data-theme="light"] .challengesPage.homeDesk .homeDeskSoundsTile{
+  background: var(--surface-secondary);
+  border-color: var(--border);
+}
+html[data-theme="light"] .challengesPage.homeDesk .homeDeskPhotoIco,
+html[data-theme="light"] .challengesPage.homeDesk .homeDeskStudioIco{
+  color: #6d4df5;
+}
+html[data-theme="light"] .challengesPage.homeDesk .homeDeskSongPenIco{
+  color: #0d9488;
+}
+html[data-theme="light"] .challengesPage.homeDesk .homeDeskPersonaIco{
+  color: #6d4df5;
+}
+/* Profile feed rows — white cards on canvas. */
+html[data-theme="light"] .profileActRow,
+html[data-theme="light"] .friendsPage .followActStack .followAct{
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  box-shadow: var(--chart-surface-shadow);
+  margin-bottom: 10px;
+  border-bottom: 1px solid var(--border);
+}
+html[data-theme="light"] .profileStatsPills{
+  background: var(--card);
+  border: 1px solid var(--border);
+  box-shadow: var(--chart-surface-shadow);
 }
 html[data-theme="light"] .discoveryStudioHead .discoveryStudioH2.appScreenTitle,
 html[data-theme="light"] .appScreenTitle{
@@ -48581,5 +48635,1099 @@ html[data-theme="light"] .mobileTabbar a.tabCreate,
 html[data-theme="light"] .mobileTabbar a.tabCreate .tabIco{
   color: #fff;
   stroke: #fff;
+}
+
+/* Friends / profile feed — X-style posts as white cards on gray canvas. */
+html[data-theme="light"] .friendsPage .followActStack .followAct.followAct--xstyle,
+html[data-theme="light"] .profileActivitiesList.followActStack .followAct.followAct--xstyle,
+html[data-theme="light"] #profileRepostsList.followActStack .followAct.followAct--xstyle,
+html[data-theme="light"] #userPublicRepostsList.followActStack .followAct.followAct--xstyle{
+  --feed-post-divider-color: transparent;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--card);
+  box-shadow: var(--chart-surface-shadow);
+  margin-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+  padding: 12px 14px var(--feed-post-gap-after-actions, 12px);
+}
+html[data-theme="light"] .friendsPage .followActStack .followAct.followAct--xstyle + .followAct.followAct--xstyle,
+html[data-theme="light"] .profileActivitiesList.followActStack .followAct.followAct--xstyle + .followAct.followAct--xstyle,
+html[data-theme="light"] #profileRepostsList.followActStack .followAct.followAct--xstyle + .followAct.followAct--xstyle,
+html[data-theme="light"] #userPublicRepostsList.followActStack .followAct.followAct--xstyle + .followAct.followAct--xstyle{
+  padding-top: 12px;
+  margin-top: 0;
+}
+html[data-theme="light"] .friendsPage .followActStack .followAct.followAct--xstyle:first-child,
+html[data-theme="light"] .profileActivitiesList.followActStack .followAct.followAct--xstyle:first-child{
+  padding-top: 12px;
+}
+html[data-theme="light"] .followActStack .followAct.followAct--xstyle:hover,
+html[data-theme="light"] .followAct--xstyle:hover{
+  background: var(--card);
+}
+
+/* Activity list spacing between day groups. */
+html[data-theme="light"] .activityFeed{
+  gap: 12px;
+}
+
+/* Persona / vocal recorder sheet. */
+html[data-theme="light"] #vocalRecorderModal.personaRecorderModal .personaRecorderBackdrop,
+html[data-theme="light"] #vocalRecorderModal.recorderOverWizard .personaRecorderBackdrop{
+  background: rgba(242, 242, 247, 0.88);
+  -webkit-backdrop-filter: blur(10px) saturate(110%);
+          backdrop-filter: blur(10px) saturate(110%);
+}
+html[data-theme="light"] #vocalRecorderModal.personaRecorderModal .personaRecorderSheet,
+html[data-theme="light"] #vocalRecorderModal.recorderOverWizard .personaRecorderSheet{
+  border-color: var(--border);
+  background: var(--card);
+  box-shadow: var(--elev-2);
+}
+html[data-theme="light"] .personaRecorderKicker{
+  color: #0d9488;
+}
+html[data-theme="light"] .personaRecorderTitle{
+  color: var(--text-primary);
+}
+html[data-theme="light"] .personaRecorderStatus{
+  color: var(--text-secondary);
+}
+html[data-theme="light"] .personaRecorderPhrase{
+  border-color: var(--border);
+  background: var(--surface-secondary);
+  color: var(--text-primary);
+}
+html[data-theme="light"] .personaRecorderUse{
+  background: var(--accent-teal-soft);
+  border-color: var(--accent-teal-border);
+  color: #0d9488;
+}
+
+/* Modal cards — flat white. */
+html[data-theme="light"] .modalCard,
+html[data-theme="light"] .photoMoodSheet .imageMoodCard.modalCard{
+  border-color: var(--border);
+  background: var(--card);
+  box-shadow: var(--elev-2);
+}
+
+/* ========== Light mode — Activity, Settings, sheets & menus ========== */
+
+/* Activity — unread title + actor links + art placeholders */
+html[data-theme="light"] .activityRow.isUnread .activityRowTitle{
+  color: var(--text-primary);
+}
+html[data-theme="light"] .activityRow:active{
+  background: var(--surface-secondary);
+}
+html[data-theme="light"] .activityRow--unavailable .activityRowTitle,
+html[data-theme="light"] .activityRow--unavailable .activityRowDesc{
+  color: var(--text-muted);
+}
+html[data-theme="light"] .activityRowActorLink{
+  color: var(--link-accent);
+}
+html[data-theme="light"] .activityRowCategory{
+  color: #0d9488;
+}
+html[data-theme="light"] .activityRow--chart_rank .activityRowCategory{
+  color: #b45309;
+}
+html[data-theme="light"] .activityRowArt{
+  border-color: var(--border);
+  background: var(--surface-secondary);
+  box-shadow: none;
+}
+html[data-theme="light"] .activityRowArt--placeholder,
+html[data-theme="light"] .activityRowArt.activityAvatarSilhouette{
+  background: var(--surface-secondary);
+  border-color: var(--border);
+  color: var(--text-muted);
+}
+html[data-theme="light"] .activityPage .discoverFeedTabs{
+  margin-bottom: 18px;
+}
+
+/* Settings — white grouped lists on gray canvas */
+html[data-theme="light"] .settingsSection .settingsList{
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--card);
+  box-shadow: var(--chart-surface-shadow);
+  overflow: hidden;
+  padding: 0 12px;
+}
+html[data-theme="light"] .settingsList .settingsRow{
+  padding-left: 0;
+  padding-right: 0;
+}
+html[data-theme="light"] .settingsOrbModeTab.isActive{
+  background: var(--accent-teal-soft);
+  border-color: var(--accent-teal-border);
+  color: var(--text-primary);
+}
+html[data-theme="light"] .settingsVoicesRow{
+  border-color: var(--border);
+  background: var(--card);
+}
+html[data-theme="light"] .settingsVoicesRow.isActive{
+  border-color: var(--accent-teal-border);
+  background: var(--accent-teal-soft);
+}
+html[data-theme="light"] .settingsVoicesRowTitle{
+  color: var(--text-primary);
+}
+html[data-theme="light"] .settingsVoicesRowMeta,
+html[data-theme="light"] .settingsVoicesEmpty,
+html[data-theme="light"] .settingsVoicesLead{
+  color: var(--text-secondary);
+}
+
+/* Music prefs sub-flow (from Settings) */
+html[data-theme="light"] .musicPrefsScreen{
+  background: var(--bg) !important;
+}
+html[data-theme="light"] .musicPrefsInner{
+  background: var(--bg);
+}
+html[data-theme="light"] .musicPrefsTitle{
+  color: var(--text-primary);
+}
+html[data-theme="light"] .musicPrefsSubtitle,
+html[data-theme="light"] .musicPrefsSkip{
+  color: var(--text-secondary);
+}
+html[data-theme="light"] .musicPrefsSkip:hover{
+  color: var(--text-primary);
+}
+html[data-theme="light"] .musicPrefsGenre{
+  border-color: var(--border);
+  background: var(--card);
+  color: var(--text-primary);
+  box-shadow: var(--chart-surface-shadow);
+}
+html[data-theme="light"] .musicPrefsGenre.is-selected{
+  border-color: var(--accent-teal-border);
+  background: var(--accent-teal-soft);
+  box-shadow: none;
+}
+
+/* Shared bottom sheets — comments, analytics, repost, gift, playlists */
+html[data-theme="light"] .feedReplySheetBackdrop{
+  background: rgba(242, 242, 247, 0.88);
+  -webkit-backdrop-filter: blur(10px) saturate(110%);
+          backdrop-filter: blur(10px) saturate(110%);
+}
+html[data-theme="light"] .feedReplySheetCard{
+  background: var(--card);
+  border-color: var(--border);
+  box-shadow: var(--elev-2);
+}
+html[data-theme="light"] .feedReplySheetGrab{
+  background: rgba(15, 23, 40, 0.14);
+}
+html[data-theme="light"] .feedReplySheetHead{
+  border-bottom-color: var(--border);
+}
+html[data-theme="light"] .feedReplySheetClose{
+  border-color: var(--border);
+  background: var(--surface-secondary);
+  color: var(--text-secondary);
+}
+html[data-theme="light"] .feedReplySheetClose:hover{
+  background: var(--card);
+  color: var(--text-primary);
+}
+html[data-theme="light"] .feedReplySheetKicker{
+  color: #0d9488;
+}
+html[data-theme="light"] .feedReplySheetTitle{
+  color: var(--text-primary);
+}
+html[data-theme="light"] .feedReplySheetSub{
+  color: var(--text-secondary);
+}
+html[data-theme="light"] .feedReplyList:empty::before,
+html[data-theme="light"] .userPlaylistPickerList:empty::before{
+  color: var(--text-muted);
+}
+html[data-theme="light"] .feedReplyRow{
+  border-bottom-color: var(--border);
+}
+html[data-theme="light"] .feedReplyMeta,
+html[data-theme="light"] .feedReplyWhen{
+  color: var(--text-muted);
+}
+html[data-theme="light"] .feedReplyName{
+  color: var(--text-primary);
+}
+html[data-theme="light"] .feedReplyBody{
+  color: var(--text-primary);
+}
+html[data-theme="light"] .feedReplyAvatar{
+  border-color: var(--border);
+  background: var(--surface-secondary);
+}
+html[data-theme="light"] .feedReplyAvatarFallback{
+  color: var(--text-muted);
+}
+html[data-theme="light"] .feedReplyMore{
+  color: var(--icon-muted);
+}
+html[data-theme="light"] .feedReplyMore:hover,
+html[data-theme="light"] .feedReplyMore:focus-visible{
+  color: var(--text-primary);
+  background: var(--surface-secondary);
+}
+html[data-theme="light"] .feedReplyForm{
+  background: var(--card);
+  border-top-color: var(--border);
+}
+html[data-theme="light"] .feedReplyInput{
+  background: var(--surface-secondary);
+  border-color: var(--border);
+  color: var(--text-primary);
+}
+html[data-theme="light"] .feedReplyInput:focus{
+  border-color: rgba(13, 148, 136, 0.35);
+  background: var(--card);
+}
+html[data-theme="light"] .feedReplyInput::placeholder{
+  color: var(--text-muted);
+}
+html[data-theme="light"] .feedReplyCount{
+  color: var(--text-muted);
+}
+html[data-theme="light"] .feedReplySubmit{
+  background: #0d9488;
+  color: #fff;
+}
+html[data-theme="light"] .feedReplySkelAvatar,
+html[data-theme="light"] .feedReplySkelLine{
+  background: var(--skeleton-shimmer-soft);
+}
+
+/* Song analytics sheet */
+html[data-theme="light"] .songAnalyticsStat{
+  background: var(--accent-teal-soft);
+  border-color: var(--accent-teal-border);
+}
+html[data-theme="light"] .songAnalyticsStatLabel,
+html[data-theme="light"] .songAnalyticsPlays{
+  color: var(--text-secondary);
+}
+html[data-theme="light"] .songAnalyticsAvatar{
+  background: var(--surface-secondary);
+}
+html[data-theme="light"] .songAnalyticsEmpty{
+  color: var(--text-muted);
+}
+
+/* Gift sheet tiers */
+html[data-theme="light"] .giftSheetSub,
+html[data-theme="light"] .giftSheetBalanceLabel,
+html[data-theme="light"] .giftSheetBalanceCaption{
+  color: var(--text-secondary);
+}
+html[data-theme="light"] .giftSheetTier{
+  border-color: var(--border);
+  background: var(--card);
+  color: var(--text-primary);
+  box-shadow: var(--chart-surface-shadow);
+}
+
+/* Playlist picker rows */
+html[data-theme="light"] .userPlaylistPickerRow{
+  border-bottom-color: var(--border);
+  color: var(--text-primary);
+}
+html[data-theme="light"] .userPlaylistPickerRow:active{
+  background: var(--surface-secondary);
+}
+html[data-theme="light"] .userPlaylistPickerRowIco{
+  background: var(--accent-violet-soft);
+  border-color: var(--accent-violet-border);
+  color: #6d4df5;
+}
+html[data-theme="light"] .userPlaylistPickerRowSub{
+  color: var(--text-secondary);
+}
+html[data-theme="light"] .userPlaylistPickerCreateBtn{
+  border-color: var(--accent-teal-border);
+  background: var(--accent-teal-soft);
+  color: #0d9488;
+}
+
+/* Post 3-dot menus (feed + comments) */
+html[data-theme="light"] .followActMore{
+  color: var(--icon-muted);
+}
+html[data-theme="light"] .followActMore:hover,
+html[data-theme="light"] .followActMore:focus-visible{
+  color: var(--text-primary);
+  background: var(--surface-secondary);
+}
+html[data-theme="light"] .followActMenu,
+html[data-theme="light"] .feedReplyMenu{
+  border-color: var(--border);
+  background: var(--card);
+  box-shadow: var(--elev-2);
+}
+html[data-theme="light"] .followActMenuItem,
+html[data-theme="light"] .feedReplyMenuItem{
+  color: var(--text-primary);
+}
+html[data-theme="light"] .followActMenuItem:hover,
+html[data-theme="light"] .followActMenuItem:active,
+html[data-theme="light"] .feedReplyMenuItem:hover,
+html[data-theme="light"] .feedReplyMenuItem:active{
+  background: var(--surface-secondary);
+}
+
+/* Song details / track info sheet (⋯ menu) */
+html[data-theme="light"] .songDetailsBackdrop{
+  background: rgba(242, 242, 247, 0.88);
+  -webkit-backdrop-filter: blur(10px) saturate(110%);
+          backdrop-filter: blur(10px) saturate(110%);
+}
+html[data-theme="light"] .songDetailsSheet{
+  border-color: var(--border);
+  background: var(--card);
+  box-shadow: var(--elev-2);
+}
+html[data-theme="light"] .songDetailsGrab{
+  background: rgba(15, 23, 40, 0.14);
+}
+html[data-theme="light"] .songDetailsKicker{
+  color: #0d9488;
+}
+html[data-theme="light"] .songDetailsTitle{
+  color: var(--text-primary);
+}
+html[data-theme="light"] .songDetailsClose{
+  border-color: var(--border);
+  background: var(--surface-secondary);
+  color: var(--text-secondary);
+}
+html[data-theme="light"] .songDetailsFlatList{
+  border-color: var(--border);
+  background: var(--surface-secondary);
+}
+html[data-theme="light"] .songDetailsFlatRow{
+  border-bottom-color: var(--border);
+  color: var(--text-primary);
+}
+html[data-theme="light"] .songDetailsFlatRow span{
+  color: var(--text-secondary);
+}
+html[data-theme="light"] .songDetailsCopyRow:hover,
+html[data-theme="light"] .songDetailsCopyRow:active{
+  background: rgba(15, 23, 40, 0.04);
+}
+html[data-theme="light"] .songDetailsSectionTitle,
+html[data-theme="light"] .songDetailsSongTitle{
+  color: var(--text-primary);
+}
+html[data-theme="light"] .songDetailsMetaLine,
+html[data-theme="light"] .songDetailsReleaseNote{
+  color: var(--text-secondary);
+}
+html[data-theme="light"] .songDetailsRemixCard,
+html[data-theme="light"] .songDetailsChallengeCard{
+  border-color: var(--border);
+  background: var(--surface-secondary);
+}
+html[data-theme="light"] .songDetailsLyricsBox{
+  border-color: var(--border);
+  background: var(--surface-secondary);
+  color: var(--text-primary);
+}
+
+/* User action sheet (report / block) */
+html[data-theme="light"] .userActionSheetScrim{
+  background: rgba(242, 242, 247, 0.88);
+}
+html[data-theme="light"] .userActionSheetPanel{
+  border-color: var(--border);
+  background: var(--card);
+  box-shadow: var(--elev-2);
+}
+html[data-theme="light"] .userActionSheetTitle{
+  color: var(--text-muted);
+}
+html[data-theme="light"] .userActionSheetRow{
+  color: var(--text-primary);
+}
+html[data-theme="light"] .userActionSheetRow:active{
+  background: var(--surface-secondary);
+}
+html[data-theme="light"] .userActionSheetCancel{
+  color: var(--text-secondary);
+  background: var(--surface-secondary);
+}
+
+/* Push notifications center (Settings sub-sheet) */
+html[data-theme="light"] .notificationsCenterLead,
+html[data-theme="light"] .notificationsCenterStatus{
+  color: var(--text-secondary);
+}
+html[data-theme="light"] .notificationsCenterClose{
+  border-color: var(--border);
+  background: var(--surface-secondary);
+  color: var(--text-secondary);
+}
+html[data-theme="light"] .notificationsItem + .notificationsItem{
+  border-top-color: var(--border);
+}
+html[data-theme="light"] .notificationsItem.isUnread{
+  background: var(--accent-teal-soft);
+}
+html[data-theme="light"] .notificationsItemTargetTap .activityRowActorLink{
+  color: var(--link-accent);
+}
+html[data-theme="light"] .notificationsItemAvatar{
+  border-color: var(--border);
+  background: var(--surface-secondary);
+}
+
+/* ========== Light mode — Pro, DMs, Discover menus, Search, Mashup ========== */
+
+/* NabadAi Pro paywall */
+html[data-theme="light"] body[data-route="pro"] .app,
+html[data-theme="light"] body[data-route="pro"] main.grid{
+  background: var(--bg);
+}
+html[data-theme="light"] .proHeader{
+  background: linear-gradient(180deg, rgba(242,242,247,0.96) 58%, rgba(242,242,247,0));
+}
+html[data-theme="light"] .proHeroTitle{
+  color: var(--text-primary);
+}
+html[data-theme="light"] .proHeroLead,
+html[data-theme="light"] .proSubscribeSub,
+html[data-theme="light"] .proStatusNote,
+html[data-theme="light"] .proActiveStatusPlan,
+html[data-theme="light"] .proActiveStatusRenew,
+html[data-theme="light"] .proActiveStatusManage{
+  color: var(--text-secondary);
+}
+html[data-theme="light"] .proActiveStatusTitle{
+  color: var(--text-primary);
+}
+html[data-theme="light"] .proActiveStatus{
+  border-color: var(--accent-teal-border);
+  background: var(--accent-teal-soft);
+}
+html[data-theme="light"] .proBottomDock{
+  border-top-color: var(--border);
+  background: rgba(255,255,255,0.92);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+html[data-theme="light"] .proPlanCard{
+  border-color: var(--border);
+  background: var(--card);
+  box-shadow: var(--chart-surface-shadow);
+}
+html[data-theme="light"] .proPlanCard:hover,
+html[data-theme="light"] .proPlanCard--pack:hover{
+  border-color: rgba(15,23,40,0.14);
+  background: var(--card);
+}
+html[data-theme="light"] .proPlanCard.isSelected,
+html[data-theme="light"] .proPlanCard--pack.isSelected{
+  border-color: var(--accent-teal-border);
+  background: var(--accent-teal-soft);
+  box-shadow:
+    inset 0 0 0 1px rgba(13,148,136,0.12),
+    var(--chart-surface-shadow);
+}
+html[data-theme="light"] .proPlanCardLabel,
+html[data-theme="light"] .proPlanCardPrice strong{
+  color: var(--text-primary);
+}
+html[data-theme="light"] .proPlanCardMeta,
+html[data-theme="light"] .proPlanCardPrice span{
+  color: var(--text-secondary);
+}
+html[data-theme="light"] .proPlanCardRadio{
+  border-color: var(--border);
+  background: var(--surface-secondary);
+}
+html[data-theme="light"] .proPlanCard.isSelected .proPlanCardRadio,
+html[data-theme="light"] .proPlanCard--pack.isSelected .proPlanCardRadio{
+  border-color: #0d9488;
+  background: linear-gradient(145deg, #23d5ab, #12b896);
+}
+html[data-theme="light"] .proSeg{
+  border-color: var(--border);
+  background: var(--surface-secondary);
+  box-shadow: none;
+}
+html[data-theme="light"] .proSegThumb{
+  background: var(--card);
+  box-shadow: var(--chart-surface-shadow);
+}
+html[data-theme="light"] .proSegTab{
+  color: var(--text-muted);
+}
+html[data-theme="light"] .proSegTab.isActive{
+  color: var(--text-primary);
+}
+html[data-theme="light"] .proBenefitsTitle,
+html[data-theme="light"] .proBenefitsRow,
+html[data-theme="light"] .proBenefitDetailLabel{
+  color: var(--text-primary);
+}
+html[data-theme="light"] .proBenefitDetailSub,
+html[data-theme="light"] .proBenefitsToggle{
+  color: var(--text-secondary);
+}
+html[data-theme="light"] .proBenefitsList{
+  border-color: var(--border);
+  background: var(--card);
+  box-shadow: var(--chart-surface-shadow);
+}
+html[data-theme="light"] .proBenefitsRow:first-child{
+  border-top-color: var(--border);
+}
+html[data-theme="light"] .creditsCard{
+  border-color: var(--border);
+  background: var(--card);
+  box-shadow: var(--chart-surface-shadow);
+}
+html[data-theme="light"] .creditsCardTitle{
+  color: var(--text-primary);
+}
+html[data-theme="light"] .creditsCardLead,
+html[data-theme="light"] .creditsRules{
+  color: var(--text-secondary);
+}
+html[data-theme="light"] .creditsRedeemInput{
+  border-color: var(--border);
+  background: var(--surface-secondary);
+  color: var(--text-primary);
+}
+
+/* Messages / DMs */
+html[data-theme="light"] .messagesLead,
+html[data-theme="light"] .messagesInboxSectionLabel{
+  color: var(--text-muted);
+}
+html[data-theme="light"] .messagesStatus{
+  border-color: var(--border);
+  background: var(--card);
+  color: var(--text-secondary);
+  box-shadow: var(--chart-surface-shadow);
+}
+html[data-theme="light"] .messagesInboxSectionCount{
+  background: var(--surface-secondary);
+  color: var(--text-secondary);
+}
+html[data-theme="light"] .messagesInboxList,
+html[data-theme="light"] .messagesRequestList,
+html[data-theme="light"] .messagesSentRequestList{
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--card);
+  box-shadow: var(--chart-surface-shadow);
+  overflow: hidden;
+  gap: 0;
+}
+html[data-theme="light"] .messagesRow{
+  border-bottom-color: var(--border);
+}
+html[data-theme="light"] .messagesRow:hover,
+html[data-theme="light"] .messagesRow:focus-visible{
+  background: var(--surface-secondary);
+}
+html[data-theme="light"] .messagesRowHandle{
+  color: var(--text-primary);
+}
+html[data-theme="light"] .messagesRow.is-unread .messagesRowHandle{
+  color: var(--text-primary);
+}
+html[data-theme="light"] .messagesRowWhen,
+html[data-theme="light"] .messagesRowPreview{
+  color: var(--text-secondary);
+}
+html[data-theme="light"] .messagesRow.is-unread .messagesRowPreview{
+  color: var(--text-primary);
+}
+html[data-theme="light"] .messagesRowAvatar,
+html[data-theme="light"] .messagesAvatarFallback{
+  border-color: var(--border);
+  background: var(--surface-secondary);
+}
+html[data-theme="light"] .messagesAvatarFallback{
+  color: var(--text-muted);
+}
+html[data-theme="light"] .messagesRequestRow,
+html[data-theme="light"] .messagesSentRequestRow{
+  border-color: var(--border);
+  background: var(--card);
+  box-shadow: var(--chart-surface-shadow);
+}
+html[data-theme="light"] .messagesRequestLabel{
+  color: #0d9488;
+}
+html[data-theme="light"] .messagesRequestPreview{
+  color: var(--text-secondary);
+}
+html[data-theme="light"] .messagesRequestBtn--decline{
+  border-color: var(--border);
+  color: var(--text-secondary);
+}
+html[data-theme="light"] .messagesEmptyTitle{
+  color: var(--text-primary);
+}
+html[data-theme="light"] .messagesEmptyLead{
+  color: var(--text-secondary);
+}
+html[data-theme="light"] .messagesThreadHead{
+  border-bottom-color: var(--border);
+}
+html[data-theme="light"] .messagesThreadDisplayName{
+  color: var(--text-primary);
+}
+html[data-theme="light"] .messagesThreadHandleSub{
+  color: var(--text-secondary);
+}
+html[data-theme="light"] .messagesThreadRelation{
+  color: #6d4df5;
+}
+html[data-theme="light"] .messagesBubble{
+  background: var(--card);
+  border-color: var(--border);
+  box-shadow: var(--chart-surface-shadow);
+}
+html[data-theme="light"] .messagesBubbleText{
+  color: var(--text-primary);
+}
+html[data-theme="light"] .messagesBubbleWrap.is-mine .messagesBubble{
+  background: linear-gradient(135deg, #0d9488, #12b896);
+  border-color: rgba(13,148,136,0.35);
+  box-shadow: 0 4px 14px rgba(13,148,136,0.22);
+}
+html[data-theme="light"] .messagesBubbleWrap.is-mine .messagesBubbleText,
+html[data-theme="light"] .messagesBubbleWrap.is-mine .messagesBubbleText--coachMd strong{
+  color: #fff;
+}
+html[data-theme="light"] .messagesBubbleTime{
+  color: var(--text-muted);
+}
+html[data-theme="light"] .messagesBubbleWrap.is-mine .messagesBubbleTime{
+  color: rgba(255,255,255,0.72);
+}
+html[data-theme="light"] .messagesDmSongCard{
+  border-color: var(--border);
+  background: var(--card);
+}
+html[data-theme="light"] .messagesBubbleWrap.is-mine .messagesDmSongCard{
+  border-color: rgba(255,255,255,0.28);
+  background: rgba(255,255,255,0.14);
+}
+html[data-theme="light"] .messagesDmSongTitle{
+  color: var(--text-primary);
+}
+html[data-theme="light"] .messagesBubbleWrap.is-mine .messagesDmSongTitle{
+  color: #fff;
+}
+html[data-theme="light"] .messagesDmSongBy{
+  color: var(--text-secondary);
+}
+html[data-theme="light"] .messagesDmSongKind{
+  color: #0d9488;
+}
+html[data-theme="light"] .messagesComposer{
+  border-top-color: var(--border);
+  background: var(--card);
+}
+html[data-theme="light"] .messagesComposerInput{
+  border-color: var(--border);
+  background: var(--surface-secondary);
+  color: var(--text-primary);
+}
+html[data-theme="light"] .messagesComposerInput::placeholder{
+  color: var(--text-muted);
+}
+html[data-theme="light"] .messagesComposerShare{
+  border-color: var(--accent-violet-border);
+  background: var(--accent-violet-soft);
+  color: #6d4df5;
+}
+html[data-theme="light"] .messagesComposerSend{
+  background: linear-gradient(135deg, #0d9488, #12b896);
+}
+html[data-theme="light"] .messagesThreadEmptyTitle{
+  color: var(--text-secondary);
+}
+html[data-theme="light"] .messagesThreadEmptyLead{
+  color: var(--text-muted);
+}
+html[data-theme="light"] .friendsMessagesBadge{
+  box-shadow: 0 0 0 2px var(--card);
+}
+
+/* Discover ⋯ track options sheet */
+html[data-theme="light"] .discoverTrackSheetBackdrop{
+  background: rgba(242,242,247,0.88);
+  -webkit-backdrop-filter: blur(10px) saturate(110%);
+          backdrop-filter: blur(10px) saturate(110%);
+}
+html[data-theme="light"] .discoverTrackSheetCard{
+  border-color: var(--border);
+  background: var(--card);
+  box-shadow: var(--elev-2);
+}
+html[data-theme="light"] .discoverTrackSheetCard::after{
+  background: linear-gradient(90deg, transparent, var(--border), transparent);
+}
+html[data-theme="light"] .discoverTrackSheetGrab{
+  background: rgba(15,23,40,0.14);
+}
+html[data-theme="light"] .discoverTrackSheetClose{
+  border-color: var(--border);
+  background: var(--surface-secondary);
+  color: var(--text-secondary);
+}
+html[data-theme="light"] .discoverTrackSheetTitle{
+  color: var(--text-primary);
+}
+html[data-theme="light"] .discoverTrackSheetSub{
+  color: var(--text-secondary);
+}
+html[data-theme="light"] .discoverTrackSheetArt{
+  border-color: var(--border);
+  background: var(--surface-secondary);
+}
+html[data-theme="light"] .discoverTrackSheetQuickBtn{
+  border-color: var(--border);
+  background: var(--surface-secondary);
+  color: var(--text-primary);
+  box-shadow: none;
+}
+html[data-theme="light"] .discoverTrackSheetQuickBtn--accent{
+  border-color: var(--accent-teal-border);
+  background: var(--accent-teal-soft);
+  color: #0d9488;
+}
+html[data-theme="light"] .discoverTrackSheetRow{
+  color: var(--text-primary);
+}
+html[data-theme="light"] .discoverTrackSheetRow + .discoverTrackSheetRow:not(.discoverTrackSheetRow--danger){
+  border-top-color: var(--border);
+}
+html[data-theme="light"] .discoverTrackSheetRow:active{
+  background: var(--surface-secondary);
+}
+html[data-theme="light"] .discoverTrackSheetRow--danger{
+  border-color: rgba(230,61,92,0.22);
+  background: rgba(230,61,92,0.08);
+  color: var(--danger);
+}
+html[data-theme="light"] .discoverTrackSheetRowDesc{
+  color: var(--text-muted);
+}
+
+/* Search + remix sheet */
+html[data-theme="light"] .searchBarWrap{
+  background: linear-gradient(180deg, rgba(242,242,247,0.96) 70%, rgba(242,242,247,0));
+}
+html[data-theme="light"] .searchBar{
+  border-color: var(--border);
+  background: var(--card);
+  box-shadow: var(--chart-surface-shadow);
+}
+html[data-theme="light"] .searchBar:focus-within{
+  border-color: rgba(13,148,136,0.35);
+  background: var(--card);
+}
+html[data-theme="light"] .searchBarIcon{
+  color: var(--icon-muted);
+}
+html[data-theme="light"] .searchBarInput{
+  color: var(--text-primary);
+  caret-color: #0d9488;
+}
+html[data-theme="light"] .searchRemixBackdrop{
+  background: rgba(242,242,247,0.88);
+}
+html[data-theme="light"] .searchRemixCard{
+  border-color: var(--border);
+  background: var(--card);
+  box-shadow: var(--elev-2);
+}
+html[data-theme="light"] .searchRemixClose{
+  border-color: var(--border);
+  background: var(--surface-secondary);
+  color: var(--text-secondary);
+}
+html[data-theme="light"] .searchRemixTitle,
+html[data-theme="light"] .searchRemixOccasion{
+  color: var(--text-primary);
+}
+html[data-theme="light"] .searchRemixSub,
+html[data-theme="light"] .searchRemixFieldLabel{
+  color: var(--text-secondary);
+}
+html[data-theme="light"] .searchRemixField input{
+  border-color: var(--border);
+  background: var(--surface-secondary);
+  color: var(--text-primary);
+}
+
+/* Mashup flow */
+html[data-theme="light"] .mashupTitle{
+  color: var(--text-primary);
+}
+html[data-theme="light"] .mashupLead{
+  color: var(--text-secondary);
+}
+html[data-theme="light"] .mashupBlendRecap,
+html[data-theme="light"] .mashupBlendLyricsBlock,
+html[data-theme="light"] .mashupSlot{
+  border-color: var(--border);
+  background: var(--card);
+  box-shadow: var(--chart-surface-shadow);
+}
+
+/* Friends "Who to follow" + presence sheet */
+html[data-theme="light"] .friendsWhoToFollow{
+  border-color: var(--border);
+  background: var(--card);
+  box-shadow: var(--chart-surface-shadow);
+}
+html[data-theme="light"] .friendsWtfTitle{
+  color: var(--text-primary);
+}
+html[data-theme="light"] .npPresenceOverlay.is-open{
+  background: rgba(242,242,247,0.72);
+}
+html[data-theme="light"] .npPresenceSheet{
+  border-color: var(--border);
+  background: var(--card);
+  box-shadow: var(--elev-2);
+}
+html[data-theme="light"] .npPresenceGrab{
+  background: rgba(15,23,40,0.14);
+}
+html[data-theme="light"] .npPresenceTitle{
+  color: var(--text-primary);
+}
+html[data-theme="light"] .npPresenceArtist{
+  color: var(--text-secondary);
+}
+html[data-theme="light"] .npPresenceBtn--ghost{
+  border-color: var(--border);
+  background: var(--surface-secondary);
+  color: var(--text-primary);
+}
+html[data-theme="light"] .npPresenceArt{
+  border-color: var(--border);
+  background: var(--surface-secondary);
+}
+
+/* Discover header icon buttons (search refresh etc.) */
+html[data-theme="light"] .discoveryHeadIconBtn.discoveryRefreshBtn{
+  color: var(--text-primary);
+  filter: none;
+}
+html[data-theme="light"] .discoveryHeadIconBtn.discoveryRefreshBtn .discoveryRefreshIco{
+  filter: none;
+}
+
+/* Mashup + search extras */
+html[data-theme="light"] .mashupSlot.isFilled{
+  border-color: rgba(180,130,0,0.28);
+  background: var(--card);
+}
+html[data-theme="light"] .mashupSlotLabel,
+html[data-theme="light"] .mashupPromptLabel{
+  color: var(--text-muted);
+}
+html[data-theme="light"] .mashupSlotTitle{
+  color: var(--text-primary);
+}
+html[data-theme="light"] .mashupSlotArt{
+  border-color: var(--border);
+  background-color: var(--surface-secondary);
+  box-shadow: none;
+}
+html[data-theme="light"] .mashupPromptField input,
+html[data-theme="light"] .mashupPromptField textarea{
+  border-color: var(--border);
+  background: var(--surface-secondary);
+  color: var(--text-primary);
+}
+html[data-theme="light"] .mashupPickerBackdrop{
+  background: rgba(242,242,247,0.88);
+}
+html[data-theme="light"] .mashupPickerCard{
+  border-color: var(--border);
+  background: var(--card);
+  box-shadow: var(--elev-2);
+}
+html[data-theme="light"] .mashupPickerGrab{
+  background: rgba(15,23,40,0.14);
+}
+html[data-theme="light"] .searchEmpty{
+  color: var(--text-secondary);
+}
+html[data-theme="light"] .searchEmptyTitle{
+  color: var(--text-primary);
+}
+html[data-theme="light"] .discoverFeedTemplateMenuBtn{
+  color: var(--icon-muted);
+  text-shadow: none;
+}
+
+/* ========== Light mode — Intro, onboarding, auth, music prefs ========== */
+
+/* Full-screen flow canvases */
+html[data-theme="light"] body.isIntro,
+html[data-theme="light"] body.isIntro .app,
+html[data-theme="light"] body.isOnboarding,
+html[data-theme="light"] body.isOnboarding .app,
+html[data-theme="light"] body.isAuth,
+html[data-theme="light"] body.isAuth .app,
+html[data-theme="light"] body.oauthPending,
+html[data-theme="light"] body.oauthPending .app,
+html[data-theme="light"] body.isMusicPrefs,
+html[data-theme="light"] body.isMusicPrefs .app{
+  background: var(--bg);
+}
+
+/* Splash / intro wordmark screen */
+html[data-theme="light"] body.isIntro .introHero::before{
+  background:
+    radial-gradient(78% 78% at 50% 50%, rgba(109,77,245,0.08), transparent 70%),
+    url("./assets/icons/splash-mark.png") center / contain no-repeat;
+}
+
+/* Welcome screen (Get Started) */
+html[data-theme="light"] .introWelcomeLead{
+  color: var(--text-secondary);
+}
+html[data-theme="light"] .introWelcomeLegal,
+html[data-theme="light"] .introWelcomeLegal a{
+  color: var(--text-muted);
+}
+html[data-theme="light"] .introWelcomeLegal a{
+  color: var(--text-secondary);
+}
+html[data-theme="light"] .introWelcomeTile{
+  box-shadow: var(--chart-surface-shadow);
+}
+
+/* Onboarding slides */
+html[data-theme="light"] .onboardingTitle{
+  color: var(--text-primary);
+}
+html[data-theme="light"] .onboardingLead{
+  color: var(--text-secondary);
+}
+html[data-theme="light"] .onboardingSkip{
+  color: var(--text-muted);
+}
+html[data-theme="light"] .onboardingSkip:hover{
+  color: var(--text-primary);
+}
+html[data-theme="light"] .onboardingDot{
+  background: rgba(15,23,40,0.14);
+}
+html[data-theme="light"] .onboardingDot.is-active{
+  background: var(--text-primary);
+}
+html[data-theme="light"] .onboardingPrimaryBtn{
+  background: #0d9488;
+  color: #fff;
+  box-shadow: 0 10px 28px rgba(13,148,136,0.28);
+}
+html[data-theme="light"] .onboardingMock--create,
+html[data-theme="light"] .onboardingMock--friends,
+html[data-theme="light"] .onboardingMock--persona,
+html[data-theme="light"] .onboardingMock--coach{
+  border-color: var(--border);
+  background: var(--card);
+  box-shadow: var(--chart-surface-shadow);
+}
+html[data-theme="light"] .onboardingMockTabs{
+  color: var(--text-muted);
+}
+html[data-theme="light"] .onboardingMockTabs .is-on{
+  background: var(--surface-secondary);
+  color: var(--text-primary);
+}
+html[data-theme="light"] .onboardingMockField{
+  border-color: var(--border);
+  background: var(--surface-secondary);
+}
+html[data-theme="light"] .onboardingMockFieldLine{
+  background: rgba(15,23,40,0.12);
+}
+html[data-theme="light"] .onboardingFriendLine{
+  background: rgba(15,23,40,0.10);
+}
+html[data-theme="light"] .onboardingEchoTile,
+html[data-theme="light"] .onboardingEchoTile::before{
+  box-shadow: var(--chart-surface-shadow);
+}
+
+/* Auth / sign in / sign up */
+html[data-theme="light"] .authBrandName--plain{
+  color: var(--text-primary);
+  -webkit-text-fill-color: var(--text-primary);
+}
+html[data-theme="light"] .authPrimaryBtn{
+  background: #0d9488;
+  border-color: #0d9488;
+}
+html[data-theme="light"] .authPrimaryBtn:hover{
+  background: #0f766e;
+  border-color: #0f766e;
+}
+html[data-theme="light"] .authEmailBtn{
+  border-color: var(--accent-teal-border);
+  color: #0d9488;
+}
+html[data-theme="light"] .authEmailToggle{
+  color: var(--text-muted);
+}
+html[data-theme="light"] .authEmailToggle:hover{
+  color: var(--text-primary);
+}
+html[data-theme="light"] .loginSettlingOverlay{
+  background: var(--bg);
+}
+html[data-theme="light"] .loginSettlingMsg{
+  color: var(--text-primary);
+}
+html[data-theme="light"] .loginSettlingLabel{
+  color: var(--text-secondary);
+}
+
+/* Music style picker (post-signup + Settings) */
+html[data-theme="light"] .musicPrefsHint{
+  color: var(--text-secondary);
+}
+html[data-theme="light"] .musicPrefsCount{
+  color: #0d9488;
+}
+html[data-theme="light"] .musicPrefsContinueBtn{
+  background: linear-gradient(135deg, #0d9488, #12b896);
+  border-color: transparent;
+  color: #fff;
+  box-shadow: 0 8px 22px rgba(13,148,136,0.24);
+}
+html[data-theme="light"] .musicPrefsContinueBtn:not(:disabled):hover{
+  box-shadow: 0 10px 28px rgba(13,148,136,0.32);
+}
+html[data-theme="light"] .musicPrefsGenreCheck{
+  background: #0d9488;
+  color: #fff;
+  box-shadow: none;
 }
 

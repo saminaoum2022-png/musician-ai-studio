@@ -15,12 +15,12 @@ function minimaxKeyKind() {
 /**
  * Pick model for the configured key type.
  * - paygo Access API key → music-3.0-free ($0/song, needs Balance wallet)
- * - Subscription / Credits key → music-3.0 (~$0.15/song from Credits)
+ * - Subscription / Credits key → music-2.6 (~$0.15/song; music-3.0 needs $20/mo Token Plan)
  */
 function resolveMinimaxMusicModel(explicit) {
   const override = String(explicit || process.env.MINIMAX_MUSIC_MODEL || "").trim();
   if (override) return override;
-  return minimaxKeyKind() === "subscription" ? "music-3.0" : "music-3.0-free";
+  return minimaxKeyKind() === "subscription" ? "music-2.6" : "music-3.0-free";
 }
 
 function safeJson(txt) {
@@ -137,12 +137,18 @@ function minimaxUserMessage(statusCode, statusMsg, ctx = {}) {
   if (code === 1004 || code === 2049) return "MiniMax authentication failed — check MINIMAX_API_KEY.";
   if (code === 1008) {
     if (keyKind === "subscription") {
-      return "MiniMax Credits empty or wrong key — use Subscription key + MINIMAX_KEY_KIND=subscription + music-3.0.";
+      return "MiniMax Credits empty or wrong key — use Subscription key + MINIMAX_KEY_KIND=subscription.";
     }
     if (model.endsWith("-free")) {
-      return "MiniMax pay-as-you-go balance empty — music-3.0-free needs ~$25 Balance, or switch to Credits (music-3.0).";
+      return "MiniMax pay-as-you-go balance empty — music-3.0-free needs ~$25 Balance wallet.";
     }
     return "MiniMax balance is empty — add pay-as-you-go credits or Token Plan Credits.";
+  }
+  if (code === 2061 || /not support model/i.test(msg)) {
+    if (model.startsWith("music-3")) {
+      return "MiniMax Credits don't include music-3.0 — try music-2.6, or subscribe to Token Plan Plus ($20/mo).";
+    }
+    return msg || "MiniMax plan doesn't support this music model — try music-2.6.";
   }
   if (code === 1026) return "MiniMax flagged this content — try different lyrics or style.";
   if (code === 2013) return msg || "MiniMax rejected the request — check lyrics and style length.";

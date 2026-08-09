@@ -16,7 +16,7 @@ const keyKind =
     : "paygo";
 const model =
   String(process.env.MINIMAX_MUSIC_MODEL || "").trim() ||
-  (keyKind === "subscription" ? "music-3.0" : "music-3.0-free");
+  (keyKind === "subscription" ? "music-2.6" : "music-3.0-free");
 
 if (!apiKey) {
   console.error("Set MINIMAX_API_KEY first.");

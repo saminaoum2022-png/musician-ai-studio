@@ -8,7 +8,7 @@
  * Env:
  * - MINIMAX_API_KEY — Access key (paygo) or Subscription key (Credits)
  * - MINIMAX_KEY_KIND — `paygo` (default) or `subscription` / `credits`
- * - MINIMAX_MUSIC_MODEL — optional override (auto: free for paygo, music-3.0 for Credits)
+ * - MINIMAX_MUSIC_MODEL — optional override (auto: free for paygo, music-2.6 for Credits)
  * - MINIMAX_GENERATE_ENABLED=1 to allow non-admin signed-in users
  */
 const crypto = require("crypto");

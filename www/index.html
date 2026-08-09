@@ -2649,6 +2649,7 @@
                 <span class="userPublicAvatarRing profileAuraRing profileAuraRingPulse" aria-hidden="true"></span>
                 <img id="userPublicAvatar" class="userPublicAvatar profileAuraAvatar" alt="avatar" draggable="false" data-empty="true" />
                 <span id="userPublicAvatarFallback" class="userPublicAvatarFallback activityAvatarSilhouette" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="8.4" r="3.7" fill="currentColor"/><path d="M4.4 19.6c.9-3.6 4-5.8 7.6-5.8s6.7 2.2 7.6 5.8c.1.5-.3.9-.8.9H5.2c-.5 0-.9-.4-.8-.9Z" fill="currentColor"/></svg></span>
+                <span id="userPublicProAvatarPill" class="profileProAvatarPill" hidden aria-hidden="true" title="NabadAi Pro">Pro</span>
               </div>
               <div class="userPublicMeta">
                 <div class="userPublicNameStack" id="userPublicNameStack">
@@ -4404,7 +4405,7 @@
     <button id="coachFab" class="coachFab" type="button" aria-label="Ask NabadAi Coach">
       <span class="coachFabPill" aria-hidden="true">Need help? 🎵</span>
       <span class="coachFabIco" aria-hidden="true">
-        <svg viewBox="0 0 100 100" aria-hidden="true">
+        <svg viewBox="0 0 100 100" overflow="visible" aria-hidden="true">
           <defs>
             <linearGradient id="coachOrbFabG" x1="28" y1="22" x2="72" y2="82" gradientUnits="userSpaceOnUse">
               <stop offset="0" stop-color="#5ef0d4"/>
@@ -4424,12 +4425,11 @@
               <feDropShadow dx="0" dy="2.5" stdDeviation="2.2" flood-color="#4f46e5" flood-opacity=".34"/>
             </filter>
           </defs>
+          <g class="coachOrbArcRing">
+            <path class="coachOrbArc" d="M50 12 A38 38 0 0 1 88 50" fill="none" stroke="#36e7c0" stroke-width="3.2" stroke-linecap="round"/>
+            <path class="coachOrbArc coachOrbArc--b" d="M50 88 A38 38 0 0 1 12 50" fill="none" stroke="#36e7c0" stroke-width="3.2" stroke-linecap="round"/>
+          </g>
           <g filter="url(#coachOrbFabDrop)">
-            <g class="coachOrbArcRing">
-              <circle cx="50" cy="50" r="44" fill="none" stroke="rgba(22,38,79,0.62)" stroke-width="2"/>
-              <path class="coachOrbArc" d="M50 12 A38 38 0 0 1 88 50" fill="none" stroke="#2dd4bf" stroke-width="2.8" stroke-linecap="round"/>
-              <path class="coachOrbArc coachOrbArc--b" d="M50 88 A38 38 0 0 1 12 50" fill="none" stroke="#2dd4bf" stroke-width="2.8" stroke-linecap="round"/>
-            </g>
             <circle cx="50" cy="50" r="27.5" fill="url(#coachOrbFabG)"/>
             <circle cx="50" cy="50" r="27.5" fill="url(#coachOrbFabHi)"/>
             <circle cx="50" cy="50" r="27.5" fill="url(#coachOrbFabShade)"/>

@@ -14,6 +14,7 @@ const {
 } = require("./_lib/credits-auth");
 const { queuePrivacySafePush } = require("./_lib/onesignal-push");
 const { processMentions } = require("./_lib/mentions");
+const { fetchProSubscriptionForUser } = require("./_lib/pro-subscription");
 
 const SUPABASE_URL = (process.env.SUPABASE_URL || "").replace(/\/$/, "");
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
@@ -1197,8 +1198,15 @@ async function handleGet(req, res, user) {
       username: url.searchParams.get("username"),
     });
     if (!target?.user_id) return sendJson(res, 404, { ok: false, error: "Profile not found" });
-    const stats = await socialStats(target.user_id, user?.userId || "");
-    return sendJson(res, 200, { ok: true, profile: target, stats });
+    const [stats, pro] = await Promise.all([
+      socialStats(target.user_id, user?.userId || ""),
+      fetchProSubscriptionForUser(target.user_id),
+    ]);
+    return sendJson(res, 200, {
+      ok: true,
+      profile: target,
+      stats: { ...stats, proActive: Boolean(pro?.active) },
+    });
   }
 
   if (type === "me") {

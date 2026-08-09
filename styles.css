@@ -24235,6 +24235,7 @@ html[data-theme="light"] .nabadVerifyPopoverText{
 .profileProAvatarPill[hidden]{ display: none !important; }
 .profileAura.profileAuraEditing .profileProAvatarPill{ display: none !important; }
 .profileAuraTopRow[data-loading="true"] .profileProAvatarPill{ visibility: hidden; }
+.userPublicCard[data-loading="true"] .profileProAvatarPill{ visibility: hidden; }
 html[data-theme="light"] .profileProAvatarPill{
   border-color: #fff;
   box-shadow:

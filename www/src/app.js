@@ -1130,6 +1130,7 @@ const els = {
   userPublicAvatar: document.getElementById("userPublicAvatar"),
   userPublicName: document.getElementById("userPublicName"),
   userPublicVerified: document.getElementById("userPublicVerified"),
+  userPublicProAvatarPill: document.getElementById("userPublicProAvatarPill"),
   userPublicVoice: document.getElementById("userPublicVoice"),
   userPublicBio: document.getElementById("userPublicBio"),
   userPublicBioText: document.getElementById("userPublicBioText"),
@@ -7003,8 +7004,7 @@ function discoverWeeklyChartSkeletonHtml() {
         <span class="discoverSkeletonLine short"></span>
       </span>
     </div>
-    <div class="chartWeekRunners">${runnerSkel}</div>
-    <div class="chartWeekFullBtn discoverSkeletonLine" style="height:42px;border-radius:14px" aria-hidden="true"></div>`;
+    <div class="chartWeekRunners">${runnerSkel}</div>`;
 }
 
 function discoverHubSectionHeadSkeletonHtml() {
@@ -7984,7 +7984,7 @@ function updateChartWeekExpandedUi(wrap) {
   const rest = wrap.querySelector("#chartWeekRest");
   if (rest) rest.hidden = !expanded;
   wrap.querySelectorAll("[data-chart-week-toggle]").forEach((btn) => {
-    btn.textContent = expanded ? "Show less" : (btn.classList.contains("chartWeekFullBtn") ? "View Full Top 10" : "View Top 10");
+    btn.textContent = expanded ? "Show less" : "View Top 10";
     btn.setAttribute("aria-expanded", expanded ? "true" : "false");
   });
 }
@@ -8045,7 +8045,6 @@ function weeklyChartContentHtml(chart) {
     ? `<div class="chartWeekRest" id="chartWeekRest" role="list" aria-label="Top songs ranks 5 through 10" ${expanded ? "" : "hidden"}>${restEntries.map((e) => chartWeekRunnerHtml(e)).join("")}</div>`
     : "";
   const toggleLabel = expanded ? "Show less" : "View Top 10";
-  const fullLabel = expanded ? "Show less" : "View Full Top 10";
   return `
       <header class="discoverFeedSectionHead chartWeekHead">
         <h3 class="discoverFeedSectionTitle">Top This Week</h3>
@@ -8053,8 +8052,7 @@ function weeklyChartContentHtml(chart) {
       </header>
       ${heroHtml}
       ${runnersHtml}
-      ${restHtml}
-      ${showFullChart ? `<button type="button" class="chartWeekFullBtn" data-chart-week-toggle aria-expanded="${expanded ? "true" : "false"}">${escapeHtml(fullLabel)}</button>` : ""}`;
+      ${restHtml}`;
 }
 
 /** Paint chart content (or hide when empty) into the section wrap. */
@@ -29900,6 +29898,7 @@ function renderUserPublicIdentity(prof, handleFallback = "") {
   }
   stack?.classList.toggle("userPublicNameStack--hasDisplayName", Boolean(friendly));
   syncUserPublicVerifiedBadge(prof);
+  syncUserPublicProBadge(currentUserPublicSocialStats);
 }
 
 function setUserPublicLoading(on, username = "") {
@@ -29981,6 +29980,7 @@ async function refreshUserPublicSocial({ username, userId, songCount }) {
   currentUserPublicSocialStats = data?.stats || { followers: 0, following: 0, isFollowing: false, followsViewer: false };
   renderUserPublicSocialStats({ songCount, stats: currentUserPublicSocialStats });
   renderUserPublicFollowButton();
+  syncUserPublicProBadge(currentUserPublicSocialStats);
 }
 
 async function toggleCurrentUserPublicFollow() {
@@ -37384,6 +37384,7 @@ async function renderUserProfilePublicLibraryAsync(username, userId = "", gen = 
       els.userPublicEmpty.style.display = "";
     }
     syncUserPublicVerifiedBadge(null);
+    syncUserPublicProBadge(null);
     setUserPublicLoading(false);
     return;
   }
@@ -37447,6 +37448,7 @@ async function renderUserProfilePublicLibraryAsync(username, userId = "", gen = 
   currentUserPublicSocialStats = resolvedSocialStats || { followers: 0, following: 0, isFollowing: false, followsViewer: false };
   renderUserPublicSocialStats({ songCount: songs.length, stats: currentUserPublicSocialStats });
   renderUserPublicFollowButton();
+  syncUserPublicProBadge(currentUserPublicSocialStats);
   if (!songs.length && !repostItems.length) {
     if (!stillCurrent()) return;
     _userPublicProfileCache = null;
@@ -37464,6 +37466,7 @@ async function renderUserProfilePublicLibraryAsync(username, userId = "", gen = 
       els.userPublicEmpty.style.display = "";
     }
     syncUserPublicVerifiedBadge(prof);
+    syncUserPublicProBadge(currentUserPublicSocialStats);
     renderUserPublicFollowButton();
     setUserPublicLoading(false);
     return;
@@ -37513,6 +37516,7 @@ async function renderUserProfilePublicLibraryAsync(username, userId = "", gen = 
     if (_userPublicProfileCache) renderUserPublicSegmentFromCache();
   });
   syncUserPublicVerifiedBadge(prof);
+  syncUserPublicProBadge(currentUserPublicSocialStats);
   } catch (e) {
     console.warn("[userPublic] profile load failed", e);
     if (stillCurrent()) {
@@ -41000,6 +41004,22 @@ function syncUserPublicVerifiedBadge(prof) {
   const nameRow = document.querySelector(".userPublicNameRow");
   const anchor = friendly && displayEl ? displayEl : nameRow;
   if (anchor && el.parentElement !== anchor) anchor.appendChild(el);
+}
+
+function syncUserPublicProBadge(stats) {
+  const pill = els.userPublicProAvatarPill || document.getElementById("userPublicProAvatarPill");
+  const wrap = document.getElementById("userPublicAvatarWrap");
+  const loading = els.userPublicCard?.getAttribute?.("data-loading") === "true";
+  const show = !loading && Boolean(stats?.proActive);
+  if (pill) {
+    pill.hidden = !show;
+    pill.setAttribute("aria-hidden", show ? "false" : "true");
+    if (show) {
+      pill.textContent = "Pro";
+      pill.title = "NabadAi Pro";
+    }
+  }
+  if (wrap) wrap.classList.toggle("hasPro", show);
 }
 
 function renderProfileNabadCertBadge() {

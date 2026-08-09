@@ -19450,24 +19450,24 @@ input::placeholder, textarea::placeholder{
       transition: none !important;
     }
   }
-  /* Cover-tinted halo behind the card — ties the shell edge to the art. */
+  /* Cover-tinted fill behind the card — blurred art shows through the glass. */
   .hubNowAura{
     position: absolute;
-    inset: -32%;
+    inset: -8%;
     background-position: center;
     background-size: cover;
-    filter: blur(48px) saturate(1.35);
-    opacity: 0.08;
-    transform: scale(1.06);
+    filter: blur(32px) saturate(1.5);
+    opacity: 0.72;
+    transform: scale(1.12);
     pointer-events: none;
     transition: opacity 0.45s ease, filter 0.45s ease;
   }
   .hubNowPlaying.isVisible .hubNowAura{
-    opacity: 0.14;
+    opacity: 0.78;
   }
   .hubNowPlaying.isPlaying .hubNowAura{
-    opacity: 0.18;
-    filter: blur(44px) saturate(1.45);
+    opacity: 0.84;
+    filter: blur(28px) saturate(1.6);
   }
   .hubNowGlass{
     position: relative;
@@ -19475,19 +19475,19 @@ input::placeholder, textarea::placeholder{
     display: flex;
     flex-direction: column;
     border-radius: inherit;
-    border: 1px solid rgba(var(--cover-glow-rgb), 0.20);
+    border: 1px solid rgba(255, 255, 255, 0.12);
     background:
-      linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.02)),
-      rgba(10, 12, 18, 0.96);
-    -webkit-backdrop-filter: blur(28px) saturate(150%);
-    backdrop-filter: blur(28px) saturate(150%);
+      linear-gradient(135deg, rgba(35, 213, 171, 0.08), rgba(124, 92, 255, 0.06)),
+      linear-gradient(180deg, rgba(0, 0, 0, 0.48), rgba(0, 0, 0, 0.62));
+    -webkit-backdrop-filter: blur(20px) saturate(155%);
+    backdrop-filter: blur(20px) saturate(155%);
     color: #f3f6ff;
     box-shadow:
       inset 0 1px 0 rgba(255, 255, 255, 0.08),
-      inset 0 -1px 0 rgba(0, 0, 0, 0.14);
+      inset 0 -1px 0 rgba(0, 0, 0, 0.18);
   }
   .hubNowPlaying.isPlaying .hubNowGlass{
-    border-color: rgba(var(--cover-glow-rgb), 0.28);
+    border-color: rgba(255, 255, 255, 0.16);
   }
   .hubNowRow{
     position: relative;
@@ -48587,81 +48587,81 @@ html[data-theme="light"] .appScreenTitle{
     padding-left: 14px;
     padding-right: 14px;
   }
-  /* Mini player — frosted shell + cover-tinted aura (not flat white). */
+  /* Mini player — light mode: cover blur + frosted veil (lighter than dark mode). */
   html[data-theme="light"] .hubNowPlaying.isVisible .hubNowShell{
     box-shadow:
-      0 12px 32px rgba(88, 104, 140, 0.16),
+      0 10px 28px rgba(88, 104, 140, 0.14),
       0 2px 8px rgba(88, 104, 140, 0.08),
-      0 0 0 1px rgba(var(--cover-glow-rgb), 0.24),
-      0 0 52px -8px rgba(var(--cover-glow-rgb), 0.38);
+      0 0 0 1px rgba(var(--cover-glow-rgb), 0.22),
+      0 0 44px -8px rgba(var(--cover-glow-rgb), 0.36);
   }
   html[data-theme="light"] .hubNowPlaying.isPlaying .hubNowShell{
     box-shadow:
-      0 14px 36px rgba(88, 104, 140, 0.18),
+      0 12px 32px rgba(88, 104, 140, 0.16),
       0 2px 10px rgba(88, 104, 140, 0.10),
-      0 0 0 1px rgba(var(--cover-glow-rgb), 0.32),
-      0 0 60px -6px rgba(var(--cover-glow-rgb), 0.46);
+      0 0 0 1px rgba(var(--cover-glow-rgb), 0.28),
+      0 0 52px -6px rgba(var(--cover-glow-rgb), 0.42);
   }
   html[data-theme="light"] .hubNowAura{
-    opacity: 0.24;
-    filter: blur(52px) saturate(1.7);
+    opacity: 0.86;
+    filter: blur(28px) saturate(1.65);
   }
   html[data-theme="light"] .hubNowPlaying.isVisible .hubNowAura{
-    opacity: 0.34;
+    opacity: 0.90;
   }
   html[data-theme="light"] .hubNowPlaying.isPlaying .hubNowAura{
-    opacity: 0.46;
-    filter: blur(46px) saturate(1.85);
+    opacity: 0.94;
+    filter: blur(24px) saturate(1.75);
   }
   html[data-theme="light"] .hubNowGlass{
-    border-color: rgba(var(--cover-glow-rgb), 0.30);
+    border-color: rgba(255, 255, 255, 0.42);
     background:
-      linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(255, 255, 255, 0.86)),
-      rgba(255, 255, 255, 0.82);
-    -webkit-backdrop-filter: blur(32px) saturate(165%);
-    backdrop-filter: blur(32px) saturate(165%);
-    color: var(--text-primary);
+      linear-gradient(135deg, rgba(35, 213, 171, 0.12), rgba(124, 92, 255, 0.10)),
+      linear-gradient(180deg, rgba(255, 255, 255, 0.34), rgba(255, 255, 255, 0.16)),
+      linear-gradient(180deg, rgba(0, 0, 0, 0.20), rgba(0, 0, 0, 0.32));
+    -webkit-backdrop-filter: blur(22px) saturate(170%);
+    backdrop-filter: blur(22px) saturate(170%);
     box-shadow:
-      inset 0 1px 0 rgba(255, 255, 255, 0.98),
-      inset 0 -1px 0 rgba(15, 23, 40, 0.05);
+      inset 0 1px 0 rgba(255, 255, 255, 0.55),
+      inset 0 -1px 0 rgba(0, 0, 0, 0.08);
   }
   html[data-theme="light"] .hubNowPlaying.isPlaying .hubNowGlass{
-    border-color: rgba(var(--cover-glow-rgb), 0.40);
+    border-color: rgba(255, 255, 255, 0.48);
   }
   html[data-theme="light"] .hubNowCoverWrap{
-    border-color: rgba(var(--cover-glow-rgb), 0.36);
+    border-color: rgba(255, 255, 255, 0.36);
     box-shadow:
-      0 4px 14px rgba(88, 104, 140, 0.12),
-      0 0 34px -4px rgba(var(--cover-glow-rgb), 0.48);
+      0 4px 14px rgba(88, 104, 140, 0.14),
+      0 0 28px -4px rgba(var(--cover-glow-rgb), 0.44);
   }
   html[data-theme="light"] .hubNowTitle{
-    color: var(--text-primary);
+    color: rgba(248, 250, 255, 0.98);
   }
   html[data-theme="light"] .hubNowSubtitle{
-    color: var(--text-secondary);
+    color: rgba(220, 228, 250, 0.62);
   }
   html[data-theme="light"] .hubNowProg{
-    background: rgba(15, 23, 40, 0.08);
+    background: rgba(255, 255, 255, 0.18);
   }
   html[data-theme="light"] .hubNowProgBar{
-    background: rgba(15, 23, 40, 0.20);
+    background: rgba(255, 255, 255, 0.82);
   }
   html[data-theme="light"] .hubNowPlayPause{
-    background: rgba(15, 23, 40, 0.06);
-    color: var(--text-primary);
+    background: rgba(255, 255, 255, 0.10);
+    color: rgba(255, 255, 255, 0.96);
   }
   html[data-theme="light"] .hubNowPlayPause:active{
-    background: rgba(15, 23, 40, 0.10);
+    background: rgba(255, 255, 255, 0.16);
   }
   html[data-theme="light"] .hubNowPlayPause:focus-visible{
-    outline-color: rgba(109, 77, 245, 0.45);
+    outline-color: rgba(255, 255, 255, 0.45);
   }
   html[data-theme="light"] .hubNowClose{
-    color: var(--icon-muted);
+    color: rgba(255, 255, 255, 0.42);
   }
   html[data-theme="light"] .hubNowClose:active{
-    color: var(--text-secondary);
-    background: rgba(15, 23, 40, 0.05);
+    color: rgba(255, 255, 255, 0.62);
+    background: rgba(255, 255, 255, 0.06);
   }
 }
 @media (min-width: 721px){

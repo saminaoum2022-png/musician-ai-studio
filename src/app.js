@@ -27341,6 +27341,8 @@ function catchUpOpenMessagesThread({ reason = "foreground" } = {}) {
   if (String(document.body.getAttribute("data-route") || "") !== "messages-thread") return;
   const tid = String(_conversationId || "").trim();
   if (!tid || isCoachThreadId(tid)) return;
+  void refreshDmThreadRealtimeAuthOnly();
+  if (isDmPostgresRealtimeEnabled()) void refreshDmThreadRealtimeSubscribe(tid);
   void pollNewThreadMessages(tid, { bootToken: _messagesThreadBootToken, reason });
 }
 
@@ -29042,11 +29044,85 @@ async function pollNewThreadMessages(threadId, { bootToken = 0, reason = "" } = 
   }
 }
 
+let _messagesRealtimeMod = null;
+let _messagesRealtimeModPromise = null;
+
+function isDmPostgresRealtimeEnabled() {
+  if (!MESSAGES_FEATURE_ENABLED) return false;
+  try {
+    if (localStorage.getItem("nabad_dm_realtime:v1") === "0") return false;
+  } catch {}
+  return Boolean(SUPABASE_URL && SUPABASE_ANON_KEY);
+}
+
+async function loadMessagesRealtimeModule() {
+  if (_messagesRealtimeMod) return _messagesRealtimeMod;
+  if (!_messagesRealtimeModPromise) {
+    _messagesRealtimeModPromise = import(`./messages-realtime.js?v=${APP_BUILD}`)
+      .then((mod) => {
+        _messagesRealtimeMod = mod;
+        return mod;
+      })
+      .catch((e) => {
+        _messagesRealtimeModPromise = null;
+        console.warn("[dm-realtime] module load failed", e);
+        return null;
+      });
+  }
+  return _messagesRealtimeModPromise;
+}
+
+async function stopDmThreadRealtimeSubscribe() {
+  try {
+    const mod = await loadMessagesRealtimeModule();
+    await mod?.stopDmThreadRealtime?.();
+  } catch {}
+}
+
+async function refreshDmThreadRealtimeAuthOnly() {
+  if (!isDmPostgresRealtimeEnabled()) return;
+  try {
+    const mod = await loadMessagesRealtimeModule();
+    await mod?.refreshDmThreadRealtimeAuth?.(getSupabaseAuthToken());
+  } catch {}
+}
+
+async function refreshDmThreadRealtimeSubscribe(threadId) {
+  const tid = String(threadId || _conversationId || "").trim();
+  if (!tid || isCoachThreadId(tid) || !isDmPostgresRealtimeEnabled()) return;
+  const token = getSupabaseAuthToken();
+  if (!token) return;
+  const mod = await loadMessagesRealtimeModule();
+  if (!mod?.subscribeDmThread) return;
+  if (mod.isDmPostgresRealtimeEnabled && !mod.isDmPostgresRealtimeEnabled()) return;
+  await mod.subscribeDmThread({
+    supabaseUrl: SUPABASE_URL,
+    supabaseAnonKey: SUPABASE_ANON_KEY,
+    accessToken: token,
+    threadId: tid,
+    onInsert: (row) => {
+      if (String(_conversationId || "") !== tid) return;
+      if (String(document.body.getAttribute("data-route") || "") !== "messages-thread") return;
+      if (mergeThreadMessages([row], { scrollToBottom: true })) {
+        saveActiveThreadToCache();
+        void markThreadReadQuiet(tid);
+      }
+    },
+    onStatus: (status) => {
+      const s = String(status || "");
+      if (s === "CHANNEL_ERROR" || s === "TIMED_OUT" || s === "CLOSED") {
+        catchUpOpenMessagesThread({ reason: `realtime-${s}` });
+      }
+    },
+  });
+}
+
 function stopMessagesThreadRealtime() {
   if (_messagesRealtimePollTimer) {
     window.clearInterval(_messagesRealtimePollTimer);
     _messagesRealtimePollTimer = 0;
   }
+  void stopDmThreadRealtimeSubscribe();
 }
 
 function stopMessagesThreadPoll() {
@@ -29066,6 +29142,7 @@ function startMessagesThreadRealtime(threadId) {
     void pollNewThreadMessages(tid, { bootToken: _messagesThreadBootToken });
     void refreshPartnerPresence();
   }, 3500);
+  void refreshDmThreadRealtimeSubscribe(tid);
 }
 
 function startMessagesThreadPoll(threadId) {
@@ -57586,6 +57663,12 @@ async function requestSignOut() {
 
 function logoutCurrentUser() {
   const prevUserId = String(authSession?.user?.id || "");
+  void (async () => {
+    try {
+      const mod = await loadMessagesRealtimeModule();
+      await mod?.disconnectDmRealtime?.();
+    } catch {}
+  })();
   saveAuthSession(null);
   resetRevenueCatSession();
   void clearAuthSessionEverywhere();

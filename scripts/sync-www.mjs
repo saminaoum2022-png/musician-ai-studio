@@ -136,6 +136,15 @@ function copyNativePushVendor() {
   console.log("sync-www: native push vendor → www/vendor/");
 }
 
+function bundleSupabaseVendor() {
+  try {
+    execSync("node scripts/bundle-supabase.mjs", { cwd: root, stdio: "inherit" });
+  } catch (e) {
+    console.warn("sync-www: supabase bundle skipped or failed", e?.message || e);
+  }
+}
+
+bundleSupabaseVendor();
 copyNativePushVendor();
 
 function addJsExtensionsToRelativeImports(code) {

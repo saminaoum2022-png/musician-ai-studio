@@ -52219,7 +52219,11 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
 
   const fetchGenerationStatus = async () => {
     if (!sunoTaskId) return null;
-    const r = await fetch(apiUrl(musicStatusApiPath(sunoTaskId)));
+    const statusTok = getSupabaseAuthToken();
+    const r = await fetch(apiUrl(musicStatusApiPath(sunoTaskId)), {
+      cache: "no-store",
+      headers: statusTok ? { Authorization: `Bearer ${statusTok}` } : undefined,
+    });
     const data = await r.json().catch(() => ({}));
     // The Suno proxy returns 200 with the full body when Suno itself
     // responded — even when that body contains a failure. Only treat

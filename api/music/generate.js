@@ -213,7 +213,6 @@ module.exports = async function handler(req, res) {
       lyrics: instrumental ? "" : lyrics,
       isInstrumental: instrumental,
       lyricsOptimizer: false,
-      outputFormat: "hex",
     });
 
     if (!upstream.ok) {
@@ -234,7 +233,9 @@ module.exports = async function handler(req, res) {
       });
     }
 
-    const parsedAudio = extractMinimaxAudio(upstream.data);
+    const parsedAudio = upstream.audioBuffer
+      ? { kind: "hex", buffer: upstream.audioBuffer }
+      : extractMinimaxAudio(upstream.data);
     let audioUrl = "";
     if (parsedAudio?.kind === "url") {
       const archived = await persistRemoteAudio({

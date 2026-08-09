@@ -26307,6 +26307,7 @@ async function socialApi(path, opts = {}) {
 
 let _messagesPageBound = false;
 let _messagesRealtimePollTimer = 0;
+let _messagesPresencePollTimer = 0;
 let _messagesUnreadCount = 0;
 let _messagesUnreadLastFetchedAt = 0;
 let _messagesUnreadFetchInFlight = false;
@@ -26326,6 +26327,10 @@ let _messagesHasMoreOlder = true;
 let _messagesLoadingOlder = false;
 const MESSAGES_THREAD_PAGE_SIZE = 80;
 const MESSAGES_THREAD_LOAD_OLDER_THRESHOLD_PX = 120;
+/** Realtime is primary; slow REST poll heals rare missed inserts. */
+const MESSAGES_THREAD_SAFETY_POLL_MS = 45000;
+/** Partner now-playing line in the thread header (independent of message poll). */
+const MESSAGES_THREAD_PRESENCE_POLL_MS = 5000;
 const _messagesThreadCache = new Map();
 const _chatPartnerStatsCache = new Map();
 let _messagesInboxLoading = false;
@@ -29122,6 +29127,10 @@ function stopMessagesThreadRealtime() {
     window.clearInterval(_messagesRealtimePollTimer);
     _messagesRealtimePollTimer = 0;
   }
+  if (_messagesPresencePollTimer) {
+    window.clearInterval(_messagesPresencePollTimer);
+    _messagesPresencePollTimer = 0;
+  }
   void stopDmThreadRealtimeSubscribe();
 }
 
@@ -29139,10 +29148,19 @@ function startMessagesThreadRealtime(threadId) {
       return;
     }
     if (_conversationId !== tid) return;
-    void pollNewThreadMessages(tid, { bootToken: _messagesThreadBootToken });
+    void pollNewThreadMessages(tid, { bootToken: _messagesThreadBootToken, reason: "safety-poll" });
+  }, MESSAGES_THREAD_SAFETY_POLL_MS);
+  _messagesPresencePollTimer = window.setInterval(() => {
+    if (String(document.body.getAttribute("data-route") || "") !== "messages-thread") {
+      stopMessagesThreadRealtime();
+      return;
+    }
+    if (_conversationId !== tid) return;
     void refreshPartnerPresence();
-  }, 3500);
+  }, MESSAGES_THREAD_PRESENCE_POLL_MS);
   void refreshDmThreadRealtimeSubscribe(tid);
+  void pollNewThreadMessages(tid, { bootToken: _messagesThreadBootToken, reason: "thread-open" });
+  void refreshPartnerPresence();
 }
 
 function startMessagesThreadPoll(threadId) {

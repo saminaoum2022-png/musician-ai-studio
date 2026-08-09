@@ -69,7 +69,13 @@ async function logMusicGeneration({
     task_id: cleanTaskId(taskId),
     kind: String(kind || "song").trim().slice(0, 40) || "song",
     provider:
-      provider === "minimax" ? "minimax" : provider === "other" ? "other" : "suno",
+      provider === "minimax"
+        ? "minimax"
+        : provider === "lyria"
+          ? "lyria"
+          : provider === "other"
+            ? "other"
+            : "suno",
     prompt: String(prompt || "").trim().slice(0, 2000),
     status: ["pending", "completed", "failed", "refunded"].includes(status) ? status : "pending",
     credits_used: Number(creditsUsed || 0),

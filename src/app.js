@@ -5253,7 +5253,7 @@ function syncSettingsMusicProviderRow(pref = getMusicProviderPref()) {
   const isAdmin = Boolean(creditsState.isAdmin);
   if (section) section.hidden = !isAdmin;
   if (!isAdmin) return;
-  const p = normalizeMusicProviderPref(pref) || "minimax";
+  const p = normalizeMusicProviderPref(pref) || "suno";
   if (root) {
     root.querySelectorAll("[data-music-provider]").forEach((btn) => {
       const active = String(btn.getAttribute("data-music-provider") || "") === p;
@@ -5280,12 +5280,16 @@ function wireSettingsMusicProviderOnce() {
     } catch {}
     setMusicProviderPref(pref);
     try {
-      showToast(
+      const toastMsg =
         pref === "minimax"
           ? "MiniMax engine enabled for your next songs."
-          : "Suno engine restored (two variants).",
-        { icon: pref === "minimax" ? "♪" : "✓", durationMs: 3600 },
-      );
+          : pref === "lyria"
+            ? "Lyria engine enabled — Google Gemini music for your next songs."
+            : "Suno engine restored (two variants).";
+      showToast(toastMsg, {
+        icon: pref === "suno" ? "✓" : "♪",
+        durationMs: 3600,
+      });
     } catch {}
   });
 }
@@ -20314,21 +20318,21 @@ function deepFindTaskIdString(obj, depth = 0) {
 }
 
 const MUSIC_PROVIDER_LS_KEY = "nabadMusicProvider";
-const MUSIC_PROVIDER_PREFS = ["suno", "minimax"];
+const MUSIC_PROVIDER_PREFS = ["suno", "minimax", "lyria"];
 
 function normalizeMusicProviderPref(raw) {
   const v = String(raw || "").trim().toLowerCase();
   return MUSIC_PROVIDER_PREFS.includes(v) ? v : "";
 }
 
-/** Admin-only: defaults to MiniMax when unset so you can A/B without console hacks. */
+/** Admin-only engine picker; defaults to Suno (alt providers for staging A/B). */
 function getMusicProviderPref() {
   if (!creditsState.isAdmin) return "suno";
   try {
     const saved = normalizeMusicProviderPref(localStorage.getItem(MUSIC_PROVIDER_LS_KEY));
     if (saved) return saved;
   } catch {}
-  return "minimax";
+  return "suno";
 }
 
 function setMusicProviderPref(pref) {
@@ -20341,24 +20345,42 @@ function setMusicProviderPref(pref) {
 }
 
 function musicProviderSubline(pref) {
-  if (pref === "minimax") return "MiniMax — one variant (staging test)";
+  if (pref === "minimax") return "MiniMax — English only, one variant (staging)";
+  if (pref === "lyria") return "Lyria — Google Gemini, one variant (~$0.08/song)";
   return "Suno — two variants per song";
+}
+
+function useAltMusicProvider() {
+  const pref = getMusicProviderPref();
+  return creditsState.isAdmin && (pref === "minimax" || pref === "lyria");
 }
 
 function useMinimaxMusicProvider() {
   return creditsState.isAdmin && getMusicProviderPref() === "minimax";
 }
 
+function useLyriaMusicProvider() {
+  return creditsState.isAdmin && getMusicProviderPref() === "lyria";
+}
+
 function musicGenerateApiPath() {
-  return useMinimaxMusicProvider() ? "/api/music/generate" : "/api/suno/generate";
+  const pref = getMusicProviderPref();
+  if (pref === "minimax") return "/api/music/generate?provider=minimax";
+  if (pref === "lyria") return "/api/music/generate?provider=lyria";
+  return "/api/suno/generate";
 }
 
 function musicStatusApiPath(taskId) {
   const tid = String(taskId || "").trim();
-  if (tid.startsWith("mmx_")) {
+  if (tid.startsWith("mmx_") || tid.startsWith("lyr_")) {
     return `/api/music/status?taskId=${encodeURIComponent(tid)}`;
   }
   return `/api/suno/status?taskId=${encodeURIComponent(tid)}`;
+}
+
+function isSingleVariantMusicTask(taskId) {
+  const tid = String(taskId || "").trim();
+  return tid.startsWith("mmx_") || tid.startsWith("lyr_");
 }
 
 function extractTaskIdLoose(data) {
@@ -53254,7 +53276,9 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
           }
 
           const authToken = getSupabaseAuthToken();
-          if (useMinimaxMusicProvider()) {
+          if (useAltMusicProvider()) {
+            const altProvider = getMusicProviderPref();
+            const providerLabel = altProvider === "lyria" ? "Lyria" : "MiniMax";
             if (personaIdSel || hasReference) {
               setLoading(false);
               setGenerateBtn("Generate song", false, "generate");
@@ -53262,20 +53286,24 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
               setProgress(0);
               try {
                 showToast(
-                  "MiniMax test mode doesn't support persona or reference uploads yet.",
+                  `${providerLabel} test mode doesn't support persona or reference uploads yet.`,
                   { icon: "!", durationMs: 6400 },
                 );
               } catch {}
-              setStatus("MiniMax test mode: remove persona and reference uploads first.");
+              setStatus(`${providerLabel} test mode: remove persona and reference uploads first.`);
               return;
             }
             try {
-              showToast("MiniMax composing… keep the app open (about 1–2 min).", {
+              showToast(`${providerLabel} composing… keep the app open (about 1–3 min).`, {
                 icon: "♪",
-                durationMs: 120000,
+                durationMs: 180000,
               });
             } catch {}
-            setStatus("MiniMax is composing your song… usually 1–2 minutes. Keep the app open.");
+            setStatus(
+              altProvider === "lyria"
+                ? "Lyria is composing your song… usually 2–3 minutes. Keep the app open."
+                : "MiniMax is composing your song… usually 1–2 minutes. Keep the app open.",
+            );
           }
           const r = await fetch(apiUrl(musicGenerateApiPath()), {
             method: "POST",
@@ -53323,8 +53351,8 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       );
 
       sunoTaskId = extractTaskIdLoose(data);
-      const isMmxTask = Boolean(sunoTaskId && sunoTaskId.startsWith("mmx_"));
-      const mmxImmediateUrl = isMmxTask
+      const isSingleVariantTask = isSingleVariantMusicTask(sunoTaskId);
+      const altImmediateUrl = isSingleVariantTask
         ? String(
             data?.data?.audioUrl ||
             data?.data?.audio_url ||
@@ -53332,7 +53360,11 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
             "",
           ).trim()
         : "";
-      const mmxReadyNow = Boolean(isMmxTask && mmxImmediateUrl && (data?._ready || data?._provider === "minimax"));
+      const altReadyNow = Boolean(
+        isSingleVariantTask &&
+        altImmediateUrl &&
+        (data?._ready || data?._provider === "minimax" || data?._provider === "lyria"),
+      );
       savePendingBackendTask(sunoTaskId || "");
       if (sunoTaskId) {
         saveRecoverableGenerationTask(sunoTaskId, String(els.sunoTitle?.value || "").trim());
@@ -53342,7 +53374,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
           source: imageMoodAppliedForNextGen ? "photo" : "",
           photoCoverDataUrl: resolvePendingPhotoCoverDataUrl(),
           photoCoverOnly: imageMoodCoverOnlyForNextGen,
-          variantCount: isMmxTask ? 1 : GENERATION_VARIANT_COUNT,
+          variantCount: isSingleVariantTask ? 1 : GENERATION_VARIANT_COUNT,
         });
         syncGenerationPendingLibraryUi();
         if (!imageMoodAppliedForNextGen && !resolvePendingPhotoCoverDataUrl() && isPollinationsCoverEligible(lastGenerationMeta)) {
@@ -53355,12 +53387,12 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
             }),
           );
         }
-        if (!mmxReadyNow) {
+        if (!altReadyNow) {
           try {
             beginCoachGenerationStatus({
-              variantCount: isMmxTask ? 1 : GENERATION_VARIANT_COUNT,
+              variantCount: isSingleVariantTask ? 1 : GENERATION_VARIANT_COUNT,
               pillText: imageMoodAppliedForNextGen
-                ? coachPhotoMoodPillText(isMmxTask ? 1 : GENERATION_VARIANT_COUNT)
+                ? coachPhotoMoodPillText(isSingleVariantTask ? 1 : GENERATION_VARIANT_COUNT)
                 : "",
             });
           } catch {}
@@ -53402,14 +53434,14 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       if (els.btnPlayVocals) els.btnPlayVocals.disabled = true;
       if (els.btnPlayInstrumental) els.btnPlayInstrumental.disabled = true;
 
-      if (mmxReadyNow) {
+      if (altReadyNow) {
         sunoAudioId = String(data?.data?.audioId || data?.data?.audio_id || `${sunoTaskId}_a`).trim() || null;
-        lastSunoFullUrl = mmxImmediateUrl;
-        lastSunoProxyUrl = toAudioProxyUrl(mmxImmediateUrl);
+        lastSunoFullUrl = altImmediateUrl;
+        lastSunoProxyUrl = toAudioProxyUrl(altImmediateUrl);
         lastSunoTitle = String(els.sunoTitle?.value || "").trim() || "Generated song";
-        if (els.sunoFullLink) setLink(els.sunoFullLink, lastSunoProxyUrl || mmxImmediateUrl);
+        if (els.sunoFullLink) setLink(els.sunoFullLink, lastSunoProxyUrl || altImmediateUrl);
         if (els.btnLoadFull) els.btnLoadFull.disabled = false;
-        try { await cacheGeneratedAudio(lastSunoProxyUrl || mmxImmediateUrl); } catch {}
+        try { await cacheGeneratedAudio(lastSunoProxyUrl || altImmediateUrl); } catch {}
         const genMeta = lastGenerationMeta;
         const variantAEntry = addToLibrary({
           title: lastSunoTitle,

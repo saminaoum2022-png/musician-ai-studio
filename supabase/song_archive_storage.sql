@@ -10,7 +10,7 @@ values (
   'song_archive',
   true,
   52428800, -- 50 MB per archived song (only limit at bucket level)
-  array['audio/mpeg', 'audio/mp3', 'audio/mp4', 'audio/x-m4a', 'audio/wav', 'audio/webm', 'audio/ogg', 'application/octet-stream']
+  array['audio/mpeg', 'audio/mp3', 'audio/mp4', 'audio/x-m4a', 'audio/wav', 'audio/webm', 'audio/ogg', 'application/json', 'application/octet-stream']
 )
 on conflict (id) do update set
   public = excluded.public,

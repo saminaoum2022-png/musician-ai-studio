@@ -5,12 +5,12 @@
 const { uploadObject, publicObjectUrl } = require("./supabase-storage");
 
 const BUCKET = "song_archive";
-const PREFIX = "minimax-tasks";
 
 function taskObjectKey(userId, taskId) {
   const uid = String(userId || "").trim();
   const tid = String(taskId || "").trim();
-  return `${PREFIX}/${uid}/${tid}.json`;
+  // Same folder as archived mp3 — song_archive bucket only allows audio/* + octet-stream.
+  return `${uid}/minimax/${tid}.json`;
 }
 
 async function readJsonUrl(url) {
@@ -30,7 +30,8 @@ async function saveMinimaxTaskStatus({ userId, taskId, statusPayload }) {
     bucket: BUCKET,
     key,
     body,
-    contentType: "application/json",
+    // Bucket mime allowlist has no application/json — octet-stream is allowed.
+    contentType: "application/octet-stream",
   });
   if (!up.ok) return { ok: false, error: up.error || "task_store_failed" };
   return { ok: true, url: up.url || publicObjectUrl(BUCKET, key) };

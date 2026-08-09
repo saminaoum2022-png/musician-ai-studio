@@ -460,6 +460,27 @@ html[data-theme="light"] .settingsThemeOpt.is-active{
     stroke: #fff;
     opacity: 1;
   }
+  html[data-theme="light"] .mobileTabbar a.tabCreate::before{
+    box-shadow:
+      0 2px 6px rgba(0, 0, 0, 0.08),
+      inset 0 0 0 1px rgba(255, 255, 255, 0.2);
+  }
+  html[data-theme="light"] .mobileTabbar a.tabCreate.tabIsReady::before,
+  html[data-theme="light"] .mobileTabbar a.tabCreate.tabIsListen::before{
+    animation: tabCreatePulseLight 2400ms ease-in-out infinite;
+  }
+  @keyframes tabCreatePulseLight{
+    0%, 100%{
+      box-shadow:
+        0 2px 6px rgba(0, 0, 0, 0.08),
+        inset 0 0 0 1px rgba(255, 255, 255, 0.2);
+    }
+    50%{
+      box-shadow:
+        0 4px 12px rgba(35, 213, 171, 0.14),
+        inset 0 0 0 1px rgba(255, 255, 255, 0.24);
+    }
+  }
   html[data-theme="light"] .mobileTabbar a.active,
   html[data-theme="light"] .mobileTabbar a.active .tabIco,
   html[data-theme="light"] .mobileTabbar a.friendsTab.active{
@@ -32811,7 +32832,7 @@ section.messagesThreadPage{
   flex: 1 1 auto;
   min-height: 0;
   overflow: hidden;
-  padding: 0 max(12px, env(safe-area-inset-left, 0px), env(safe-area-inset-right, 0px));
+  padding: 0;
   box-sizing: border-box;
   background: var(--bg);
 }
@@ -33875,14 +33896,22 @@ body[data-route="messages-thread"] .messagesComposer{
   position: fixed;
   flex: 0 0 auto;
   z-index: 6;
-  left: 50%;
-  transform: translateX(-50%);
-  max-width: 640px;
-  width: calc(100% - 24px);
+  left: 0;
+  right: 0;
+  width: 100%;
+  max-width: none;
   margin: 0;
   box-sizing: border-box;
   bottom: 0;
   padding-bottom: calc(8px + env(safe-area-inset-bottom, 0px));
+}
+@media (max-width: 720px){
+  /* Break out of the thread slide transform + any page padding. */
+  body[data-route="messages-thread"] .messagesComposer{
+    width: 100vw;
+    left: 50%;
+    transform: translateX(-50%);
+  }
 }
 body[data-route="messages-thread"] .mobileTabbar{
   display: none !important;
@@ -49321,7 +49350,7 @@ html[data-theme="light"] .messagesBubbleText{
 html[data-theme="light"] .messagesBubbleWrap.is-mine .messagesBubble{
   background: linear-gradient(135deg, #0d9488, #12b896);
   border-color: rgba(13,148,136,0.35);
-  box-shadow: 0 4px 14px rgba(13,148,136,0.22);
+  box-shadow: 0 2px 8px rgba(13, 148, 136, 0.18);
 }
 html[data-theme="light"] .messagesBubbleWrap.is-mine .messagesBubbleText,
 html[data-theme="light"] .messagesBubbleWrap.is-mine .messagesBubbleText--coachMd strong{
@@ -49372,6 +49401,7 @@ html[data-theme="light"] .messagesComposerShare{
 }
 html[data-theme="light"] .messagesComposerSend{
   background: linear-gradient(135deg, #0d9488, #12b896);
+  box-shadow: none;
 }
 html[data-theme="light"] .messagesThreadEmptyTitle{
   color: var(--text-secondary);
@@ -49381,6 +49411,104 @@ html[data-theme="light"] .messagesThreadEmptyLead{
 }
 html[data-theme="light"] .friendsMessagesBadge{
   box-shadow: 0 0 0 2px var(--card);
+}
+
+/* DM — Share a song / Send to friend sheets */
+html[data-theme="light"] .shareChooserSheetBackdrop,
+html[data-theme="light"] .sendToFriendSheetBackdrop,
+html[data-theme="light"] .messagesShareSheetBackdrop{
+  background: rgba(242, 242, 247, 0.88);
+  -webkit-backdrop-filter: blur(10px) saturate(110%);
+          backdrop-filter: blur(10px) saturate(110%);
+}
+html[data-theme="light"] .shareChooserSheetCard,
+html[data-theme="light"] .sendToFriendSheetCard,
+html[data-theme="light"] .messagesShareSheetCard{
+  border-color: var(--border);
+  background: var(--card);
+  box-shadow: var(--elev-2);
+}
+html[data-theme="light"] .messagesShareSheetTitle{
+  color: var(--text-primary);
+}
+html[data-theme="light"] .messagesShareSheetClose{
+  border: 1px solid var(--border);
+  background: var(--surface-secondary);
+  color: var(--text-secondary);
+}
+html[data-theme="light"] .messagesShareSheetClose:active{
+  background: var(--surface-secondary);
+  color: var(--text-primary);
+}
+html[data-theme="light"] .messagesShareSheetLead{
+  color: var(--text-secondary);
+}
+html[data-theme="light"] .messagesShareRow:active{
+  background: var(--surface-secondary);
+}
+html[data-theme="light"] .messagesShareRowBody strong{
+  color: var(--text-primary);
+}
+html[data-theme="light"] .messagesShareRowBody span{
+  color: var(--text-muted);
+}
+html[data-theme="light"] .messagesShareEmpty{
+  color: var(--text-muted);
+}
+html[data-theme="light"] .messagesShareConfirmCard{
+  border-color: var(--border);
+  background: var(--surface-secondary);
+}
+html[data-theme="light"] .messagesShareConfirmArt{
+  box-shadow: var(--chart-surface-shadow);
+}
+html[data-theme="light"] .messagesShareConfirmAvatar{
+  background: var(--accent-violet-soft);
+  color: #6d4df5;
+}
+html[data-theme="light"] .messagesShareConfirmTitle{
+  color: var(--text-primary);
+}
+html[data-theme="light"] .messagesShareConfirmSub{
+  color: var(--text-muted);
+}
+html[data-theme="light"] .messagesShareConfirmBack{
+  border-color: var(--border);
+  background: var(--card);
+  color: var(--text-primary);
+}
+html[data-theme="light"] .messagesShareConfirmBack:active{
+  background: var(--surface-secondary);
+}
+html[data-theme="light"] .messagesShareConfirmSend{
+  border-color: rgba(13, 148, 136, 0.35);
+  background: linear-gradient(135deg, #0d9488, #12b896);
+  color: #fff;
+  box-shadow: none;
+}
+html[data-theme="light"] .messagesShareConfirmSend:active{
+  background: linear-gradient(135deg, #0f766e, #0d9488);
+}
+html[data-theme="light"] .shareChooserPrimary{
+  border-color: var(--accent-teal-border);
+  background: var(--accent-teal-soft);
+  color: #0d9488;
+  box-shadow: none;
+}
+html[data-theme="light"] .shareChooserSecondary{
+  border-color: var(--border);
+  background: var(--card);
+  color: var(--text-primary);
+}
+html[data-theme="light"] .sendToFriendPreview{
+  border-color: var(--border);
+  background: var(--surface-secondary);
+}
+html[data-theme="light"] .sendToFriendPreviewBody strong{
+  color: var(--text-primary);
+}
+html[data-theme="light"] .sendToFriendPreviewBody span{
+  color: var(--text-muted);
 }
 
 /* Discover ⋯ track options sheet */
@@ -49741,5 +49869,792 @@ html[data-theme="light"] .musicPrefsGenreCheck{
   background: #0d9488;
   color: #fff;
   box-shadow: none;
+}
+
+/* Create flow — Photo Mood sheet, Hum Track, Lyrics tab (light mode) */
+html[data-theme="light"] .photoMoodKicker,
+html[data-theme="light"] .humTrackFlowKicker{
+  color: var(--text-muted);
+}
+html[data-theme="light"] .photoMoodTitle,
+html[data-theme="light"] .humTrackFlowTitle{
+  color: var(--text-primary);
+}
+html[data-theme="light"] .photoMoodSub,
+html[data-theme="light"] .humTrackFlowSub{
+  color: var(--text-secondary);
+}
+html[data-theme="light"] .photoMoodBackdrop,
+html[data-theme="light"] .imageMoodSheetBackdrop{
+  background: rgba(242, 242, 247, 0.88);
+  -webkit-backdrop-filter: blur(10px) saturate(110%);
+          backdrop-filter: blur(10px) saturate(110%);
+}
+html[data-theme="light"] .photoMoodSheet .imageMoodCard.modalCard,
+html[data-theme="light"] .imageMoodSheet .imageMoodCard.modalCard{
+  border-color: var(--border);
+  background: var(--card);
+  box-shadow: var(--elev-2);
+}
+html[data-theme="light"] .photoMoodFoot,
+html[data-theme="light"] .imageMoodFooter{
+  border-top-color: var(--border);
+  background: var(--card);
+}
+html[data-theme="light"] .photoMoodPickLabel,
+html[data-theme="light"] .imageMoodPickLabel{
+  border-color: var(--border);
+  background: var(--surface-secondary);
+  color: var(--text-primary);
+}
+html[data-theme="light"] .imageMoodPreviewWrap{
+  border-color: var(--border);
+  background: var(--surface-secondary);
+}
+html[data-theme="light"] .imageMoodOutput{
+  border-color: var(--border);
+  background: var(--surface-secondary);
+  color: var(--text-primary);
+}
+html[data-theme="light"] .imageMoodResultRow{
+  border-color: var(--border);
+  background: var(--card);
+}
+html[data-theme="light"] .imageMoodResultRow span{
+  color: var(--text-muted);
+}
+html[data-theme="light"] .imageMoodResultRow p{
+  color: var(--text-primary);
+}
+html[data-theme="light"] .imageMoodEmpty{
+  color: var(--text-muted);
+}
+html[data-theme="light"] .photoMoodToggle,
+html[data-theme="light"] .imageMoodCoverRow{
+  color: var(--text-secondary);
+}
+html[data-theme="light"] .photoMoodPrimary,
+html[data-theme="light"] .imageMoodActions .primary{
+  background: var(--accent-teal-soft);
+  border-color: var(--accent-teal-border);
+  color: #0d9488;
+}
+html[data-theme="light"] .photoMoodPrimary.isReady:not(:disabled),
+html[data-theme="light"] .imageMoodActions .primary.isReady:not(:disabled){
+  color: #fff;
+  background: linear-gradient(135deg, #0d9488, #12b896);
+  border-color: transparent;
+  box-shadow: 0 10px 28px rgba(13, 148, 136, 0.28);
+}
+html[data-theme="light"] .photoMoodSecondary,
+html[data-theme="light"] .imageMoodActions .ghost{
+  border-color: var(--border);
+  background: var(--surface-secondary);
+  color: var(--text-primary);
+}
+
+/* Hum Track inline flow */
+html[data-theme="light"] .humTrackSectionLabel{
+  color: var(--text-muted);
+}
+html[data-theme="light"] .humTrackChip{
+  border-color: var(--border);
+  background: var(--surface-secondary);
+  color: var(--text-primary);
+}
+html[data-theme="light"] .humTrackChip.is-active{
+  border-color: rgba(13, 148, 136, 0.35);
+  background: var(--accent-teal-soft);
+  color: #0d9488;
+}
+html[data-theme="light"] .humTrackRecordPanel{
+  border-color: var(--border);
+  background: var(--surface-secondary);
+}
+html[data-theme="light"] .humTrackRecordBtn{
+  background: var(--card);
+  color: var(--text-primary);
+}
+html[data-theme="light"] .humTrackRecordRing{
+  border-color: var(--border);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.88);
+}
+html[data-theme="light"] .humTrackRecordBtn.isRecording{
+  background: rgba(255, 77, 109, 0.08);
+}
+html[data-theme="light"] .humTrackRecordBtn.isRecording .humTrackRecordRing{
+  border-color: rgba(255, 77, 109, 0.55);
+  box-shadow: 0 0 0 4px rgba(255, 77, 109, 0.12);
+}
+html[data-theme="light"] .humTrackRecordStatus{
+  color: var(--text-secondary);
+}
+html[data-theme="light"] .humTrackRecordMeta{
+  color: var(--text-muted);
+}
+html[data-theme="light"] .humTrackUploadBtn{
+  border-color: var(--border);
+  background: var(--card);
+  color: var(--text-primary);
+}
+html[data-theme="light"] .humTrackSimHint,
+html[data-theme="light"] .humTrackFootnote{
+  color: var(--text-muted);
+}
+html[data-theme="light"] .humTrackGenerateBtn{
+  border-color: var(--border);
+  background: var(--surface-secondary);
+  color: var(--text-primary);
+}
+html[data-theme="light"] .humTrackGenerateBtn:not(:disabled){
+  border-color: rgba(13, 148, 136, 0.35);
+  background: linear-gradient(135deg, #0d9488, #12b896);
+  color: #fff;
+  box-shadow: none;
+}
+
+/* Lyrics tab + photo CTA on Create */
+html[data-theme="light"] .createPaneCtaTitle{
+  color: var(--text-primary);
+}
+html[data-theme="light"] .createPaneCtaSub{
+  color: var(--text-secondary);
+}
+html[data-theme="light"] .createPaneCtaIcon{
+  color: #0d9488;
+  background: var(--accent-teal-soft);
+  border-color: var(--accent-teal-border);
+  box-shadow: none;
+}
+html[data-theme="light"] .createPaneCta:hover{
+  border-color: rgba(13, 148, 136, 0.35);
+  background: var(--card);
+}
+html[data-theme="light"] body[data-route="generate"] .lyricsModeTabs{
+  border-color: var(--border);
+  background: var(--surface-secondary);
+}
+html[data-theme="light"] body[data-route="generate"] .lyricsModeTab{
+  color: var(--text-muted);
+}
+html[data-theme="light"] body[data-route="generate"] .lyricsModeTab.isActive{
+  background: var(--card);
+  color: var(--text-primary);
+  box-shadow:
+    inset 0 0 0 1px rgba(15, 23, 40, 0.08),
+    0 2px 8px rgba(88, 104, 140, 0.08);
+}
+html[data-theme="light"] body[data-route="generate"] .lyricsLangLabel{
+  color: var(--text-muted);
+}
+html[data-theme="light"] body[data-route="generate"] .lyricsMagicMenu{
+  border-color: var(--border);
+  background: var(--card);
+  box-shadow: var(--elev-2);
+}
+html[data-theme="light"] body[data-route="generate"] .lyricsMagicMenu .ghost{
+  color: var(--text-primary);
+}
+html[data-theme="light"] body[data-route="generate"] .styleSuggestPill{
+  border-color: var(--border);
+  background: var(--surface-secondary);
+  color: var(--text-secondary);
+}
+html[data-theme="light"] body[data-route="generate"] .optChip{
+  border-color: var(--border);
+  background: var(--surface-secondary);
+  color: var(--text-secondary);
+}
+html[data-theme="light"] body[data-route="generate"] .lyricsBoxMain textarea{
+  background: rgba(255, 255, 255, 0.92);
+  border-color: rgba(15, 23, 40, 0.12);
+  color: var(--text);
+}
+@media (max-width: 720px){
+  html[data-theme="light"] body[data-route="generate"] .inputPanel{
+    border-color: var(--border);
+    background: var(--card);
+    box-shadow: var(--chart-surface-shadow);
+  }
+  html[data-theme="light"] body[data-route="generate"] input,
+  html[data-theme="light"] body[data-route="generate"] textarea,
+  html[data-theme="light"] body[data-route="generate"] select{
+    background: rgba(255, 255, 255, 0.92);
+    border-color: rgba(15, 23, 40, 0.12);
+    color: var(--text);
+  }
+  html[data-theme="light"] body[data-route="generate"] .label{
+    color: var(--muted);
+  }
+  html[data-theme="light"] body[data-route="generate"] .hint{
+    color: var(--muted);
+  }
+  html[data-theme="light"] body[data-route="generate"] .chip{
+    background: var(--surface-secondary);
+    border-color: var(--border);
+    color: var(--text-secondary);
+  }
+  html[data-theme="light"] body[data-route="generate"] .chip.active{
+    background: var(--accent-teal-soft);
+    border-color: var(--accent-teal-border);
+    color: #0d9488;
+  }
+  html[data-theme="light"] body[data-route="generate"] .stepHead{
+    color: var(--text-primary);
+  }
+  html[data-theme="light"] body[data-route="generate"] .proToggleRow{
+    border-color: var(--border);
+    background: var(--surface-secondary);
+    color: var(--text-primary);
+  }
+}
+
+/* Create flow — remaining invisible copy (labels, pills, toggles, back icons) */
+html[data-theme="light"] body[data-route="generate"] .inPanelLabelHint,
+html[data-theme="light"] .photoMoodSheet .inPanelLabelHint{
+  color: var(--text-muted);
+}
+html[data-theme="light"] body[data-route="generate"] .stepHead,
+html[data-theme="light"] body[data-route="generate"] .createPaneFoot,
+html[data-theme="light"] body[data-route="generate"] .createInlineHint,
+html[data-theme="light"] body[data-route="generate"] .humGuideLead,
+html[data-theme="light"] body[data-route="generate"] .humRecorderStatus{
+  color: var(--text-secondary);
+}
+html[data-theme="light"] body[data-route="generate"] .appScreenTitle,
+html[data-theme="light"] .humTrackFlowTitle,
+html[data-theme="light"] .photoMoodTitle{
+  color: var(--text-primary);
+}
+html[data-theme="light"] body[data-route="generate"] .createPageLead{
+  color: var(--text-secondary);
+}
+html[data-theme="light"] body[data-route="generate"] .addressPill{
+  border-color: var(--border);
+  background: var(--surface-secondary);
+  color: var(--text-primary);
+}
+html[data-theme="light"] body[data-route="generate"] .addressPillSub{
+  color: var(--text-muted);
+}
+html[data-theme="light"] body[data-route="generate"] .proToggleRow,
+html[data-theme="light"] .photoMoodSheet .proToggleRow,
+html[data-theme="light"] .imageMoodSheet .proToggleRow{
+  border-color: var(--border);
+  background: var(--surface-secondary);
+  color: var(--text-primary);
+}
+html[data-theme="light"] body[data-route="generate"] textarea::placeholder,
+html[data-theme="light"] body[data-route="generate"] input::placeholder,
+html[data-theme="light"] .photoMoodSheet input::placeholder{
+  color: var(--text-muted);
+  opacity: 1;
+}
+html[data-theme="light"] .humTrackFlow .nabadBackBtn,
+html[data-theme="light"] .photoMoodSheet .nabadBackBtn,
+html[data-theme="light"] .photoMoodHead .nabadBackBtn{
+  color: var(--text-primary);
+}
+html[data-theme="light"] body[data-route="generate"] .vocalRefActiveStrip{
+  border-color: var(--accent-violet-border);
+  background: var(--accent-violet-soft);
+  box-shadow: none;
+}
+html[data-theme="light"] body[data-route="generate"] .vocalRefActiveStripIco{
+  color: #6d4df5;
+}
+html[data-theme="light"] body[data-route="generate"] .vocalRefActiveStripLabel{
+  color: var(--text-muted);
+}
+html[data-theme="light"] body[data-route="generate"] .vocalRefActiveName{
+  color: var(--text-primary);
+}
+html[data-theme="light"] body[data-route="generate"] .vocalRefActiveMeta{
+  color: var(--text-secondary);
+}
+html[data-theme="light"] body[data-route="generate"] .vocalRefDetails{
+  border-color: var(--border);
+  background: var(--surface-secondary);
+}
+html[data-theme="light"] body[data-route="generate"] .vocalRefDetails > summary{
+  color: var(--text-secondary);
+}
+html[data-theme="light"] body[data-route="generate"] .humInlineRecorder{
+  border-color: var(--border);
+  background: var(--surface-secondary);
+  box-shadow: none;
+}
+html[data-theme="light"] body[data-route="generate"] .humRecorderBtn{
+  border-color: var(--accent-violet-border);
+  background: var(--accent-violet-soft);
+  box-shadow: none;
+}
+html[data-theme="light"] body[data-route="generate"] .humRecorderBtnDot{
+  background: #6d4df5;
+}
+html[data-theme="light"] body[data-route="generate"] .inputPanel--avoid input{
+  border-color: var(--border);
+  background: var(--surface-secondary);
+  color: var(--text-primary);
+}
+html[data-theme="light"] body[data-route="generate"] .inputPanel--avoid input::placeholder{
+  color: var(--text-muted);
+}
+html[data-theme="light"] body[data-route="generate"] .fineTuneDetails > summary,
+html[data-theme="light"] body[data-route="generate"] .advancedHint{
+  color: var(--text-secondary);
+}
+
+/* ID-scoped pills beat generic .addressPill — must restate for light mode */
+html[data-theme="light"] #singerGenderPills .addressPill,
+html[data-theme="light"] #arabicAddressPills .addressPill{
+  border-color: var(--border);
+  background: var(--surface-secondary);
+  color: var(--text-primary);
+}
+html[data-theme="light"] #singerGenderPills .addressPillSub,
+html[data-theme="light"] #arabicAddressPills .addressPillSub{
+  color: var(--text-muted);
+}
+html[data-theme="light"] #singerGenderPills .addressPill.isActive,
+html[data-theme="light"] #arabicAddressPills .addressPill.isActive{
+  border-color: rgba(15, 23, 40, 0.14);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(244, 247, 252, 0.92));
+  color: var(--text-primary);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.88),
+    0 3px 12px rgba(88, 104, 140, 0.10);
+}
+
+/* Create hub quick-start card subtitles */
+html[data-theme="light"] .homeDeskCreateStack .homeDeskPromoCopy .homeDeskPromoDesc,
+html[data-theme="light"] .homeDeskCreateStack .homeDeskPromo--quick .homeDeskPromoCopy .homeDeskPromoDesc,
+html[data-theme="light"] .challengesPage.homeDesk .homeDeskPromoCopy .homeDeskPromoDesc{
+  color: var(--text-secondary);
+}
+html[data-theme="light"] .homeDeskPromoChev{
+  color: var(--text-muted);
+  opacity: 1;
+}
+
+/* Style/tags inactive chips on generate */
+html[data-theme="light"] body[data-route="generate"] .styleSuggestPill:not(.isActive){
+  border-color: var(--border);
+  background: var(--surface-secondary);
+  color: var(--text-secondary);
+}
+
+/* Placeholders + panel labels — mobile/dark rules were winning without html[] prefix */
+html[data-theme="light"] body[data-route="generate"] .inPanelLabel,
+html[data-theme="light"] body[data-route="generate"] .inputPanel .label,
+html[data-theme="light"] .photoMoodSheet .inPanelLabel{
+  color: var(--text-secondary);
+}
+html[data-theme="light"] body[data-route="generate"] textarea::placeholder,
+html[data-theme="light"] body[data-route="generate"] input::placeholder,
+html[data-theme="light"] body[data-route="generate"] .inputPanel input::placeholder,
+html[data-theme="light"] body[data-route="generate"] .inputPanel textarea::placeholder,
+html[data-theme="light"] .photoMoodSheet input::placeholder{
+  color: var(--text-muted);
+  opacity: 1;
+  -webkit-text-fill-color: var(--text-muted);
+}
+html[data-theme="light"] .imageMoodEmpty{
+  color: var(--text-muted);
+}
+html[data-theme="light"] .photoMoodPrimary:disabled,
+html[data-theme="light"] .imageMoodActions .primary:disabled{
+  color: var(--text-muted);
+  opacity: 1;
+}
+html[data-theme="light"] .photoMoodSecondary:disabled,
+html[data-theme="light"] .imageMoodActions .ghost:disabled{
+  color: var(--text-muted);
+  opacity: 1;
+}
+html[data-theme="light"] body[data-route="generate"] .vocalRefActiveStripLabel{
+  color: var(--text-muted);
+}
+html[data-theme="light"] body[data-route="generate"] .vocalRefActiveName{
+  color: var(--text-primary);
+}
+html[data-theme="light"] #singerGenderPills .addressPillMain,
+html[data-theme="light"] #arabicAddressPills .addressPillMain{
+  color: var(--text-primary);
+}
+
+/* Mobile placeholder override (beats nested @media block ~18781) */
+@media (max-width: 720px){
+  html[data-theme="light"] body[data-route="generate"] input::placeholder,
+  html[data-theme="light"] body[data-route="generate"] textarea::placeholder,
+  html[data-theme="light"] body[data-route="generate"] input::-webkit-input-placeholder,
+  html[data-theme="light"] body[data-route="generate"] textarea::-webkit-input-placeholder,
+  html[data-theme="light"] body[data-route="generate"] .inputPanel input::placeholder,
+  html[data-theme="light"] body[data-route="generate"] .inputPanel textarea::placeholder{
+    color: #858B98;
+    opacity: 1;
+    -webkit-text-fill-color: #858B98;
+  }
+  html[data-theme="light"] .imageMoodEmpty{
+    color: #858B98;
+  }
+  html[data-theme="light"] .photoMoodPrimary,
+  html[data-theme="light"] .imageMoodActions .primary{
+    color: #0d9488;
+  }
+  html[data-theme="light"] .photoMoodPrimary:disabled,
+  html[data-theme="light"] .imageMoodActions .primary:disabled{
+    color: #858B98;
+  }
+}
+
+/* Advanced options sheet + Style library (Create) */
+@media (max-width: 720px){
+  html[data-theme="light"] .stepDetails.createOptionsSheet{
+    background: var(--bg);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+}
+html[data-theme="light"] .createOptionsGroupHead{
+  color: var(--text-primary);
+}
+html[data-theme="light"] .createOptionsGroup[open] .createOptionsGroupHead{
+  border-bottom-color: var(--border);
+}
+html[data-theme="light"] .optChipLabel,
+html[data-theme="light"] .createOptionsFieldLabel{
+  color: var(--text-muted);
+}
+html[data-theme="light"] .createOptionsFieldHint{
+  color: var(--text-muted);
+  font-weight: 600;
+  text-transform: none;
+  letter-spacing: 0;
+}
+html[data-theme="light"] .createOptionsClose{
+  border-color: var(--border);
+  background: var(--surface-secondary);
+  color: var(--text-secondary);
+}
+html[data-theme="light"] .createOptionsSummaryChev{
+  color: var(--text-muted);
+}
+html[data-theme="light"] .createOptionsSheet[open] .createOptionsSummaryChev{
+  color: var(--primary);
+}
+html[data-theme="light"] .createOptionsFooter{
+  border-top-color: var(--border);
+}
+html[data-theme="light"] .createOptionsFooterBtn--ghost{
+  border-color: var(--border);
+  background: var(--card);
+  color: var(--text-primary);
+}
+html[data-theme="light"] .createOptionsFooterBtn--done{
+  background: linear-gradient(135deg, #0d9488, #12b896);
+  color: #fff;
+  box-shadow: none;
+}
+html[data-theme="light"] .createOptionsMobileTrigger{
+  border-color: var(--accent-teal-border) !important;
+  background: var(--accent-teal-soft) !important;
+  color: #0d9488 !important;
+}
+html[data-theme="light"] .createOptionsPill.isActive{
+  border-color: rgba(15, 23, 40, 0.14);
+  background: var(--card);
+  color: var(--text-primary);
+  box-shadow: inset 0 0 0 1px rgba(15, 23, 40, 0.08);
+}
+html[data-theme="light"] .createOptionsPanel .vocalModePill .ghost{
+  border-color: var(--border);
+  background: var(--surface-secondary);
+  color: var(--text-secondary);
+}
+html[data-theme="light"] .createOptionsPanel .vocalModePill .ghost.active{
+  border-color: rgba(15, 23, 40, 0.14);
+  background: var(--card);
+  color: var(--text-primary);
+  box-shadow: inset 0 0 0 1px rgba(15, 23, 40, 0.08);
+}
+html[data-theme="light"] .createOptionsField input::placeholder,
+html[data-theme="light"] .createOptionsField input::-webkit-input-placeholder{
+  color: #858B98;
+  opacity: 1;
+  -webkit-text-fill-color: #858B98;
+}
+
+/* Style pills row + selected tags + library sheet */
+html[data-theme="light"] body[data-route="generate"] .stylePanelHead .inPanelLabel,
+html[data-theme="light"] body[data-route="generate"] .inputPanel--style .inPanelLabel{
+  color: var(--text-secondary);
+}
+html[data-theme="light"] body[data-route="generate"] .styleClearBtn{
+  color: var(--text-muted);
+}
+html[data-theme="light"] body[data-route="generate"] .styleClearBtn:hover{
+  color: var(--text-primary);
+}
+html[data-theme="light"] body[data-route="generate"] .styleSuggestPill,
+html[data-theme="light"] body[data-route="generate"] .styleSuggestRow .styleSuggestPill{
+  border-color: var(--border);
+  background: var(--surface-secondary);
+  color: var(--text-primary);
+}
+html[data-theme="light"] body[data-route="generate"] .styleSuggestPill--more{
+  color: var(--text-secondary);
+  border-style: dashed;
+}
+html[data-theme="light"] body[data-route="generate"] .styleSelectedChip{
+  border-color: var(--accent-violet-border);
+  background: var(--accent-violet-soft);
+  color: #6d4df5;
+}
+html[data-theme="light"] body[data-route="generate"] .styleSelectedChipX{
+  background: rgba(109, 77, 245, 0.14);
+  color: #6d4df5;
+}
+html[data-theme="light"] .styleLibraryBackdrop{
+  background: rgba(242, 242, 247, 0.88);
+  -webkit-backdrop-filter: blur(10px) saturate(110%);
+          backdrop-filter: blur(10px) saturate(110%);
+}
+html[data-theme="light"] .styleLibraryCard{
+  border-color: var(--border);
+  background: var(--card);
+  box-shadow: var(--elev-2);
+}
+html[data-theme="light"] .styleLibraryKicker{
+  color: #6d4df5;
+}
+html[data-theme="light"] .styleLibraryHead h3{
+  color: var(--text-primary);
+}
+html[data-theme="light"] .styleLibrarySub{
+  color: var(--text-secondary);
+}
+html[data-theme="light"] .styleLibraryClose{
+  border-color: var(--border);
+  background: var(--surface-secondary);
+  color: var(--text-primary);
+}
+html[data-theme="light"] .styleLibrarySectionLabel{
+  color: var(--text-muted);
+}
+html[data-theme="light"] .styleLibrarySheet .styleSuggestPill{
+  border-color: var(--border);
+  background: var(--surface-secondary);
+  color: var(--text-primary);
+}
+html[data-theme="light"] .styleLibrarySheet .styleSuggestPill.isActive{
+  border-color: rgba(15, 23, 40, 0.14);
+  background: var(--card);
+  color: var(--text-primary);
+  box-shadow: inset 0 0 0 1px rgba(15, 23, 40, 0.08);
+}
+
+/* Persona inline flow (Create → Your voice) */
+html[data-theme="light"] .personaFlow .personaFlowBack,
+html[data-theme="light"] .personaFlow .nabadBackBtn{
+  color: var(--text-primary);
+}
+html[data-theme="light"] .personaFlowKicker{
+  color: var(--text-muted);
+}
+html[data-theme="light"] .personaFlowTitle{
+  color: var(--text-primary);
+}
+html[data-theme="light"] .personaFlowSub{
+  color: var(--text-secondary);
+}
+html[data-theme="light"] .personaFlowSteps{
+  border-bottom-color: var(--border);
+}
+html[data-theme="light"] .personaFlowSectionLabel,
+html[data-theme="light"] .personaFlow .personaFlowSectionLabel{
+  color: var(--text-muted);
+}
+html[data-theme="light"] .personaFlowSectionLead,
+html[data-theme="light"] .personaFlow .personaFlowSectionLead{
+  color: var(--text-secondary);
+}
+html[data-theme="light"] .personaFlowTip{
+  border-color: var(--border);
+  background: var(--surface-secondary);
+  color: var(--text-secondary);
+}
+html[data-theme="light"] .personaFlow .vwStep{
+  color: var(--text-muted);
+}
+html[data-theme="light"] .personaFlow .vwStep i{
+  border-color: var(--border);
+  background: var(--surface-secondary);
+  color: var(--text-secondary);
+}
+html[data-theme="light"] .personaFlow .vwStep.is-active{
+  color: var(--text-primary);
+}
+html[data-theme="light"] .personaFlow .vwStep.is-active i{
+  background: linear-gradient(135deg, #0d9488, #12b896);
+  border-color: transparent;
+  color: #fff;
+  box-shadow: 0 4px 12px rgba(13, 148, 136, 0.24);
+}
+html[data-theme="light"] .personaFlow .vwStep.is-done{
+  color: #0d9488;
+}
+html[data-theme="light"] .personaFlow .vwStep.is-done i{
+  background: var(--accent-teal-soft);
+  border-color: var(--accent-teal-border);
+  color: #0d9488;
+}
+html[data-theme="light"] .personaFlow .vwStepLine{
+  background: var(--border);
+}
+html[data-theme="light"] .personaFlow .voiceWizardPhrase,
+html[data-theme="light"] .personaFlow .vwPhrase{
+  border-color: var(--border);
+  background: var(--surface-secondary);
+  color: var(--text-primary);
+}
+html[data-theme="light"] .personaFlow .vwInput{
+  border-color: var(--border);
+  background: rgba(255, 255, 255, 0.92);
+  color: var(--text);
+}
+html[data-theme="light"] .personaFlow .vwInput::placeholder,
+html[data-theme="light"] .personaFlow .vwInput::-webkit-input-placeholder{
+  color: #858B98;
+  opacity: 1;
+  -webkit-text-fill-color: #858B98;
+}
+html[data-theme="light"] .personaFlow .vwGhostLink{
+  color: #0d9488;
+}
+html[data-theme="light"] .personaFlow .vwPrimary:not(:disabled),
+html[data-theme="light"] .personaFlow button.primary.vwPrimary:not(:disabled){
+  background: linear-gradient(135deg, #0d9488, #12b896);
+  border-color: transparent;
+  color: #fff;
+  box-shadow: 0 10px 28px rgba(13, 148, 136, 0.28);
+}
+html[data-theme="light"] .personaFlow .vwPrimary:disabled,
+html[data-theme="light"] .personaFlow button.primary.vwPrimary:disabled{
+  background: var(--surface-secondary);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  box-shadow: none;
+  opacity: 1;
+}
+html[data-theme="light"] .personaFlow .vwSecondaryBtn{
+  border-color: var(--border);
+  background: var(--surface-secondary);
+  color: var(--text-primary);
+}
+html[data-theme="light"] .personaFlow .optChip{
+  border-color: var(--border);
+  background: var(--surface-secondary);
+  color: var(--text-secondary);
+}
+html[data-theme="light"] .personaFlow .optChip.isActive,
+html[data-theme="light"] .personaFlow .vwSkillChip.isActive{
+  border-color: rgba(15, 23, 40, 0.14);
+  background: var(--card);
+  color: var(--text-primary);
+  box-shadow: inset 0 0 0 1px rgba(15, 23, 40, 0.08);
+}
+html[data-theme="light"] .personaFlow .vwSkillChip span{
+  color: var(--text-muted);
+}
+html[data-theme="light"] .personaFlow .vwSkillChip.isActive span{
+  color: var(--text-secondary);
+}
+html[data-theme="light"] .personaFlow .personaFlowProcessing,
+html[data-theme="light"] .personaFlow .vwProcessing{
+  border-color: var(--border);
+  background: var(--surface-secondary);
+  box-shadow: none;
+}
+html[data-theme="light"] .personaFlow .vwProcessingTitle{
+  color: var(--text-primary);
+}
+html[data-theme="light"] .personaFlow .vwProcessingList li{
+  color: var(--text-muted);
+}
+html[data-theme="light"] .personaFlow .vwProcessingList li.done{
+  color: #0d9488;
+}
+html[data-theme="light"] .personaFlow .vwProcessingList li.active{
+  color: var(--text-primary);
+}
+html[data-theme="light"] .personaFlow .vwBuildCore{
+  color: #6d4df5;
+}
+html[data-theme="light"] .personaFlow .hint,
+html[data-theme="light"] .personaFlow #voiceWizardSampleStatus{
+  color: var(--text-secondary);
+}
+html[data-theme="light"] .personaFlow .vwCard{
+  border-color: var(--border);
+  background: var(--card);
+}
+html[data-theme="light"] .personaFlow .vwCardTitle{
+  color: var(--text-primary);
+}
+html[data-theme="light"] .personaFlow .vwCardSub{
+  color: var(--text-secondary);
+}
+html[data-theme="light"] .personaFlow .vwTip{
+  border-color: var(--border);
+  background: var(--surface-secondary);
+  color: var(--text-secondary);
+}
+
+/* Persona recorder modal — stage + record orb */
+html[data-theme="light"] .personaRecorderStage{
+  border-color: var(--border);
+  background: var(--surface-secondary);
+}
+html[data-theme="light"] .personaRecButton{
+  background: var(--card);
+  box-shadow: inset 0 0 0 1px var(--border);
+}
+html[data-theme="light"] .personaRecButton::before{
+  background: #6d4df5;
+}
+html[data-theme="light"] .personaRecButton.isRecording{
+  background: rgba(255, 77, 109, 0.08);
+  box-shadow: inset 0 0 0 1px rgba(255, 77, 109, 0.45);
+}
+html[data-theme="light"] .personaRecButton.isRecording::before{
+  background: rgba(255, 77, 109, 0.92);
+}
+html[data-theme="light"] .personaRecorderUse:not(:disabled){
+  background: linear-gradient(135deg, #0d9488, #12b896);
+  border-color: transparent;
+  color: #fff;
+  box-shadow: none;
+}
+
+/* Singer persona chips on Create page */
+html[data-theme="light"] body[data-route="generate"] .singerPersonaNote{
+  color: var(--text-muted);
+}
+html[data-theme="light"] body[data-route="generate"] .singerPersonaChip{
+  border-color: var(--border);
+  background: var(--surface-secondary);
+  color: var(--text-primary);
+}
+html[data-theme="light"] body[data-route="generate"] .singerPersonaChip.isActive{
+  border-color: var(--accent-violet-border);
+  background: var(--accent-violet-soft);
+  color: #6d4df5;
+  box-shadow: none;
+}
+html[data-theme="light"] body[data-route="generate"] .singerPersonaChip--create{
+  border-color: var(--border);
+  background: transparent;
+  color: var(--text-secondary);
 }
 

@@ -14908,7 +14908,10 @@ body:not([data-route="profile"]) #profileAuraHeaderChromeRoot{
 .profileAuraNameRow[data-loading="true"] .profileEditPill{
   visibility: hidden;
 }
-#profileAuraNameRow[data-loading="true"] + .profileMusicStylesInline{
+#profileAuraNameRow[data-loading="true"] ~ .profileStatsRow,
+#profileAuraNameRow[data-loading="true"] ~ .profileMusicStylesInline,
+#profileAuraNameRow[data-loading="true"] ~ .profileAuraBio,
+#profileAuraNameRow[data-loading="true"] ~ .profileHeroBio{
   visibility: hidden;
 }
 .profileAuraNameRow > [hidden]{
@@ -19001,6 +19004,7 @@ input::placeholder, textarea::placeholder{
     height: 24px;
     border-radius: var(--nabad-squircle-radius);
     display: none;
+    overflow: visible;
   }
   .tabProfileLink.hasTabAvatar .tabProfileAvatarSlot{
     display: block;
@@ -23749,7 +23753,7 @@ html[data-theme="light"] .soundsStudioTempoValue{
 }
 .profileStatsRow[hidden]{ display: none; }
 
-/* --- Profile Pro upsell (high on page, below stats). --- */
+/* --- Profile Pro upsell (below bio on own profile). --- */
 .profileProBanner{
   position: relative;
   display: flex;
@@ -24152,6 +24156,59 @@ html[data-theme="light"] .nabadVerifyPopoverText{
 }
 .profileAuraAvatarWrapNeon .profileAuraAvatarSkeleton{ z-index: 3; }
 .profileAuraAvatarWrapNeon .profileAuraAvatarHint{ z-index: 4; }
+.profileProAvatarPill{
+  position: absolute;
+  left: 50%;
+  bottom: 0;
+  transform: translate(-50%, 50%);
+  z-index: 6;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  min-width: 34px;
+  padding: 4px 8px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #fff;
+  background: linear-gradient(135deg, #9b7bff, #7c5cff 55%, #5b3fd4);
+  box-shadow: 0 2px 10px rgba(124, 92, 255, 0.45);
+  border: 2px solid rgba(10, 12, 20, 0.94);
+  pointer-events: none;
+  white-space: nowrap;
+  line-height: 1;
+}
+.profileProAvatarPill--tab{
+  left: auto;
+  right: -7px;
+  top: -5px;
+  bottom: auto;
+  transform: none;
+  min-width: 0;
+  padding: 2px 5px;
+  font-size: 7px;
+  letter-spacing: 0.06em;
+  border-width: 1.5px;
+  box-shadow: 0 1px 6px rgba(124, 92, 255, 0.42);
+  z-index: 3;
+}
+.profileAuraAvatarWrapNeon.hasPro .profileProAvatarPill:not([hidden]):not(.profileProAvatarPill--tab){
+  display: inline-flex;
+}
+.tabProfileAvatarSlot.hasPro .profileProAvatarPill--tab:not([hidden]){
+  display: inline-flex;
+}
+.profileProAvatarPill[hidden]{ display: none !important; }
+.profileAura.profileAuraEditing .profileProAvatarPill{ display: none !important; }
+.profileAuraTopRow[data-loading="true"] .profileProAvatarPill{ visibility: hidden; }
+html[data-theme="light"] .profileProAvatarPill{
+  border-color: #fff;
+  box-shadow:
+    0 2px 10px rgba(124, 92, 255, 0.35),
+    0 0 0 1px rgba(124, 92, 255, 0.12);
+}
 .profilePersonaAvatarBadge{
   position: absolute;
   right: -3px;
@@ -49139,13 +49196,26 @@ html[data-theme="light"] .songDetailsFlatRow{
 html[data-theme="light"] .songDetailsFlatRow span{
   color: var(--text-secondary);
 }
+html[data-theme="light"] .songDetailsFlatRow strong,
+html[data-theme="light"] .songDetailsCopyRow strong{
+  color: var(--text-primary);
+}
 html[data-theme="light"] .songDetailsCopyRow:hover,
 html[data-theme="light"] .songDetailsCopyRow:active{
   background: rgba(15, 23, 40, 0.04);
 }
+html[data-theme="light"] .songDetailsTechFold summary{
+  color: var(--text-secondary);
+}
+html[data-theme="light"] .songDetailsTechFold[open] summary{
+  color: var(--text-primary);
+}
 html[data-theme="light"] .songDetailsSectionTitle,
 html[data-theme="light"] .songDetailsSongTitle{
   color: var(--text-primary);
+}
+html[data-theme="light"] .songDetailsPublishLogTitle{
+  color: var(--text-secondary);
 }
 html[data-theme="light"] .songDetailsMetaLine,
 html[data-theme="light"] .songDetailsReleaseNote{
@@ -49156,10 +49226,74 @@ html[data-theme="light"] .songDetailsChallengeCard{
   border-color: var(--border);
   background: var(--surface-secondary);
 }
+html[data-theme="light"] .songDetailsRemixText,
+html[data-theme="light"] .songDetailsChallengeText{
+  color: var(--text-primary);
+}
+html[data-theme="light"] .songDetailsInfoRow span{
+  color: var(--text-secondary);
+}
+html[data-theme="light"] .songDetailsInfoRow strong{
+  color: var(--text-primary);
+}
 html[data-theme="light"] .songDetailsLyricsBox{
   border-color: var(--border);
   background: var(--surface-secondary);
   color: var(--text-primary);
+}
+html[data-theme="light"] .songDetailsLyricsBox.isEmpty{
+  color: var(--text-muted);
+}
+html[data-theme="light"] .songDetailsCopyBtn{
+  border-color: var(--border);
+  background: var(--surface-secondary);
+  color: var(--text-primary);
+}
+
+/* Proof certificate sheet (legacy About flow) — light mode */
+html[data-theme="light"] .proofCertLead{
+  color: var(--text-secondary);
+}
+html[data-theme="light"] .proofCertCard{
+  background: var(--card);
+  border-color: var(--border);
+  box-shadow: var(--elev-1);
+}
+html[data-theme="light"] .proofCertBrandSub,
+html[data-theme="light"] .proofCertTagline{
+  color: var(--text-muted);
+}
+html[data-theme="light"] .proofCertIconWrap{
+  background: var(--accent-violet-soft);
+  border-color: var(--accent-violet-border);
+  color: var(--text-secondary);
+}
+html[data-theme="light"] .proofCertLabel,
+html[data-theme="light"] .proofCertFooter,
+html[data-theme="light"] .proofCertSectionHead,
+html[data-theme="light"] .proofCertSummary{
+  color: var(--text-muted);
+}
+html[data-theme="light"] .proofCertValue,
+html[data-theme="light"] .proofCertMuted{
+  color: var(--text-primary);
+}
+html[data-theme="light"] .proofCertFp{
+  color: var(--text-primary);
+  background: var(--surface-secondary);
+  border-color: var(--border);
+}
+html[data-theme="light"] .proofCertSection{
+  border-top-color: var(--border);
+}
+html[data-theme="light"] .proofCertDetails > summary:hover{
+  color: var(--text-secondary);
+}
+html[data-theme="light"] .proofCertSummaryChev{
+  color: var(--text-muted);
+}
+html[data-theme="light"] .proofCertClose{
+  color: var(--text-secondary);
 }
 
 /* User action sheet (report / block) */

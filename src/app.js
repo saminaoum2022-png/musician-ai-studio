@@ -792,7 +792,7 @@ const els = {
   profileCreditsBalance: document.getElementById("profileCreditsBalance"),
   profileCreditsNote: document.getElementById("profileCreditsNote"),
   profileCreditsLink: document.getElementById("profileCreditsLink"),
-  profileProBanner: document.getElementById("profileProBanner"),
+  profileProAvatarPill: document.getElementById("profileProAvatarPill"),
   profilePersonaRow: document.getElementById("profilePersonaRow"),
   profilePersonaLabel: document.getElementById("profilePersonaLabel"),
   profilePersonaSignatureTitle: document.getElementById("profilePersonaSignatureTitle"),
@@ -22664,10 +22664,35 @@ function formatProRenewShort(iso) {
 }
 
 function syncProSubscriptionUi() {
-  syncProfileProBanner();
+  syncProfileProAvatarPill();
   syncSettingsProRow();
   syncCreditsProUpsell();
   try { refreshProSubscriptionUi(); } catch {}
+}
+
+function syncProfileProAvatarPill() {
+  const pill = els.profileProAvatarPill;
+  const tabPill = document.getElementById("tabProfileProPill");
+  const wrap = document.getElementById("profileAuraAvatarWrap");
+  const tabSlot = document.getElementById("tabProfileAvatarSlot");
+  const show = isAppLoggedIn() && Boolean(creditsState.proActive);
+  if (pill) {
+    pill.hidden = !show;
+    pill.setAttribute("aria-hidden", show ? "false" : "true");
+  }
+  if (tabPill) {
+    tabPill.hidden = !show;
+    tabPill.setAttribute("aria-hidden", show ? "false" : "true");
+  }
+  if (wrap) wrap.classList.toggle("hasPro", show);
+  if (tabSlot) tabSlot.classList.toggle("hasPro", show);
+  if (show) {
+    if (pill) {
+      pill.textContent = "Pro";
+      pill.title = "NabadAi Pro";
+    }
+    if (tabPill) tabPill.title = "NabadAi Pro";
+  }
 }
 
 function syncSettingsProRow() {
@@ -22697,56 +22722,6 @@ function syncCreditsProUpsell() {
   const show = isAppLoggedIn() && !creditsState.proActive;
   card.hidden = !show;
   card.setAttribute("aria-hidden", show ? "false" : "true");
-}
-
-function syncProfileProBanner() {
-  if (!els.profileProBanner) return;
-  const isAuthed = isAppLoggedIn();
-  const cta = document.getElementById("profileProBannerCta");
-  const sub = document.getElementById("profileProBannerSub");
-  if (!isAuthed) {
-    els.profileProBanner.hidden = true;
-    els.profileProBanner.setAttribute("aria-hidden", "true");
-    return;
-  }
-
-  if (creditsState.proActive) {
-    els.profileProBanner.hidden = false;
-    els.profileProBanner.setAttribute("aria-hidden", "false");
-    els.profileProBanner.classList.add("profileProBanner--active");
-    els.profileProBanner.setAttribute("href", "#/pro");
-    els.profileProBanner.setAttribute("data-route-link", "pro");
-    els.profileProBanner.setAttribute(
-      "aria-label",
-      "NabadAi Pro — your subscription is active",
-    );
-    if (cta) {
-      const trialing = String(creditsState.proStatus || "").toLowerCase() === "trialing";
-      cta.textContent = trialing ? "Trial" : "Active";
-      cta.classList.add("profileProBannerCta--status");
-    }
-    if (sub) {
-      const renew = formatProRenewShort(creditsState.proPeriodEnd);
-      const plan = proPlanLabelShort(creditsState.proPlanId);
-      sub.textContent = [plan, renew].filter(Boolean).join(" · ") || "Pro benefits unlocked";
-    }
-    return;
-  }
-
-  els.profileProBanner.classList.remove("profileProBanner--active");
-  els.profileProBanner.setAttribute("href", "#/pro");
-  els.profileProBanner.setAttribute("data-route-link", "pro");
-  els.profileProBanner.setAttribute(
-    "aria-label",
-    "NabadAi Pro — subscribe for Studio, unlimited Coach, and more credits",
-  );
-  els.profileProBanner.hidden = false;
-  els.profileProBanner.setAttribute("aria-hidden", "false");
-  if (cta) {
-    cta.textContent = "Subscribe now";
-    cta.classList.remove("profileProBannerCta--status");
-  }
-  if (sub) sub.textContent = "Studio, unlimited Coach & 1,000+ credits/mo";
 }
 
 /** Live Suno API remaining credits (same pool as `SUNO_API_KEY`). Shown on

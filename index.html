@@ -2695,11 +2695,11 @@
                 <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.7" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.7" fill="currentColor" stroke="none"/><circle cx="19" cy="12" r="1.7" fill="currentColor" stroke="none"/></svg>
               </button>
             </div>
+            <div class="userPublicStats profileStatsRow" id="userPublicStats"></div>
             <div id="userPublicMusicStyles" class="profileMusicStylesInline userPublicMusicStyles" hidden aria-hidden="true">
               <div id="userPublicMusicStylesRow" class="profileMusicStylesLine profileMusicStylesLine--readonly" aria-label="Music styles"></div>
             </div>
             <audio id="userPublicCallingCardAudio" preload="none" playsinline></audio>
-            <div class="userPublicStats profileStatsRow" id="userPublicStats"></div>
             <div class="userPublicBio profileHeroBio" id="userPublicBio" hidden>
               <span class="profileHeroBioQuote" aria-hidden="true">"</span>
               <p id="userPublicBioText" class="profileHeroBioText"></p>
@@ -2778,6 +2778,7 @@
                       <path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" d="M19 11a7 7 0 0 1-14 0"/>
                     </svg>
                   </span>
+                  <span id="profileProAvatarPill" class="profileProAvatarPill" hidden aria-hidden="true" title="NabadAi Pro">Pro</span>
                 </div>
               </div>
 
@@ -2828,9 +2829,6 @@
               </div>
               </div>
               <p id="profileUsernameAvailability" class="profileUsernameAvailability" hidden aria-live="polite"></p>
-              <div id="profileMusicStylesInline" class="profileMusicStylesInline" hidden aria-hidden="true">
-                <button type="button" id="profileMusicStylesBtn" class="profileMusicStylesLine" aria-label="Music styles"></button>
-              </div>
 
               <div class="profileStatsRow" id="profileStatsPills" aria-live="polite" hidden>
                 <div class="profileStatCol" data-stat="posts">
@@ -2847,21 +2845,9 @@
                 </div>
               </div>
 
-              <a
-                href="#/pro"
-                id="profileProBanner"
-                class="profileProBanner"
-                data-route-link="pro"
-                hidden
-                aria-label="NabadAi Pro — subscribe for Studio, unlimited Coach, and more credits"
-              >
-                <span class="profileProBannerBadge" aria-hidden="true">Pro</span>
-                <span class="profileProBannerCopy">
-                  <strong class="profileProBannerTitle">NabadAi Pro</strong>
-                  <span id="profileProBannerSub" class="profileProBannerSub">Studio, unlimited Coach &amp; 1,000+ credits/mo</span>
-                </span>
-                <span id="profileProBannerCta" class="profileProBannerCta">Subscribe now</span>
-              </a>
+              <div id="profileMusicStylesInline" class="profileMusicStylesInline" hidden aria-hidden="true">
+                <button type="button" id="profileMusicStylesBtn" class="profileMusicStylesLine" aria-label="Music styles"></button>
+              </div>
 
               <!-- Voice timbre chip retired — music styles show above instead. -->
               <div class="profileAuraVoiceChipSlot srOnly" id="profileAuraVoiceChipSlot" hidden aria-hidden="true">
@@ -2901,14 +2887,13 @@
                 placeholder="Add a short bio to introduce your music style."
               ></textarea>
 
-              <div id="authLoggedInEmailInline" class="profileAuraEmail hint" style="display:none"></div>
-
-              <!-- Bio quote — sits directly under the name row.
-                   View-mode only; edit mode shows the textarea above. -->
+              <!-- Bio quote — view-mode only; edit mode uses the textarea above. -->
               <div id="profileHeroBio" class="profileHeroBio" hidden>
                 <span class="profileHeroBioQuote" aria-hidden="true">"</span>
                 <p id="profileAboutText" class="profileHeroBioText"></p>
               </div>
+
+              <div id="authLoggedInEmailInline" class="profileAuraEmail hint" style="display:none"></div>
 
               <!-- Legacy nodes kept for DOM stability; genres stay off
                    the hero. Persona chip may show in edit mode when a Suno
@@ -3745,16 +3730,6 @@
             <section class="settingsSection" aria-labelledby="settingsCreditsTitle">
               <h2 id="settingsCreditsTitle" class="settingsSectionLabel">Credits &amp; plan</h2>
               <div class="settingsList">
-                <a class="settingsRow settingsRowLink" href="#/credits">
-                  <span class="settingsRowIco" aria-hidden="true">
-                    <svg viewBox="0 0 24 24"><path d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7H14a3.5 3.5 0 0 1 0 7H6"/></svg>
-                  </span>
-                  <span class="settingsRowBody">
-                    <span class="settingsRowTitle">Credits</span>
-                    <span class="settingsRowSub">Balance, redeem codes, and activity</span>
-                  </span>
-                  <span class="settingsRowChev" aria-hidden="true">›</span>
-                </a>
                 <a class="settingsRow settingsRowLink" href="#/pro" data-route-link="pro">
                   <span class="settingsRowIco" aria-hidden="true">
                     <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 8h10M7 12h6"/></svg>
@@ -3764,6 +3739,16 @@
                     <span id="settingsProSub" class="settingsRowSub">Weekly and monthly plans, benefits</span>
                   </span>
                   <span id="settingsProPill" class="settingsProPill" hidden>Active</span>
+                  <span class="settingsRowChev" aria-hidden="true">›</span>
+                </a>
+                <a class="settingsRow settingsRowLink" href="#/credits">
+                  <span class="settingsRowIco" aria-hidden="true">
+                    <svg viewBox="0 0 24 24"><path d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7H14a3.5 3.5 0 0 1 0 7H6"/></svg>
+                  </span>
+                  <span class="settingsRowBody">
+                    <span class="settingsRowTitle">Credits</span>
+                    <span class="settingsRowSub">Balance, redeem codes, and activity</span>
+                  </span>
                   <span class="settingsRowChev" aria-hidden="true">›</span>
                 </a>
               </div>
@@ -4357,6 +4342,7 @@
             <span class="tabProfileAvatarRing" aria-hidden="true"></span>
             <img class="tabProfileAvatarImg" id="tabProfileAvatarImg" alt="" width="28" height="28" decoding="async" />
             <span class="tabProfileAvatarFallback" id="tabProfileAvatarFallback" aria-hidden="true"></span>
+            <span id="tabProfileProPill" class="profileProAvatarPill profileProAvatarPill--tab" hidden aria-hidden="true" title="NabadAi Pro">Pro</span>
           </span>
           <svg class="tabIco tabIcoProfile tabIcoProfileGuest" viewBox="0 0 24 24" aria-hidden="true">
             <path fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>

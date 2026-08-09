@@ -16834,8 +16834,9 @@ body[data-route="user"] section.card.wide[data-route="user"]{
   margin: 2px 2px 0;
 }
 .userPublicSongs.profileActivitiesList{
-  display: grid;
-  gap: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
   min-width: 0;
 }
 .userPublicSkelBlock{
@@ -16927,8 +16928,9 @@ body[data-route="user"] section.card.wide[data-route="user"]{
   font-variant-numeric: tabular-nums;
 }
 .userPublicSongs{
-  display:grid;
-  gap:10px;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
   min-width: 0;
 }
 .userPublicSongs .discoverFeedSongRow{
@@ -36707,6 +36709,7 @@ section.mentorPage{
 .friendsPage .followActStack .followAct.followAct--xstyle,
 .profileActivitiesList.followActStack .followAct.followAct--xstyle,
 #profileRepostsList.followActStack .followAct.followAct--xstyle,
+#userPublicSongs.followActStack .followAct.followAct--xstyle,
 #userPublicRepostsList.followActStack .followAct.followAct--xstyle{
   display: flex;
   flex-direction: column;
@@ -36725,6 +36728,7 @@ section.mentorPage{
 .friendsPage .followActStack .followAct.followAct--xstyle + .followAct.followAct--xstyle,
 .profileActivitiesList.followActStack .followAct.followAct--xstyle + .followAct.followAct--xstyle,
 #profileRepostsList.followActStack .followAct.followAct--xstyle + .followAct.followAct--xstyle,
+#userPublicSongs.followActStack .followAct.followAct--xstyle + .followAct.followAct--xstyle,
 #userPublicRepostsList.followActStack .followAct.followAct--xstyle + .followAct.followAct--xstyle{
   padding-top: var(--feed-post-gap-before-header, 12px);
 }
@@ -48682,6 +48686,7 @@ html[data-theme="light"] .mobileTabbar a.tabCreate .tabIco{
 html[data-theme="light"] .friendsPage .followActStack .followAct.followAct--xstyle,
 html[data-theme="light"] .profileActivitiesList.followActStack .followAct.followAct--xstyle,
 html[data-theme="light"] #profileRepostsList.followActStack .followAct.followAct--xstyle,
+html[data-theme="light"] #userPublicSongs.followActStack .followAct.followAct--xstyle,
 html[data-theme="light"] #userPublicRepostsList.followActStack .followAct.followAct--xstyle{
   --feed-post-divider-color: transparent;
   border: 1px solid var(--border);
@@ -48695,17 +48700,88 @@ html[data-theme="light"] #userPublicRepostsList.followActStack .followAct.follow
 html[data-theme="light"] .friendsPage .followActStack .followAct.followAct--xstyle + .followAct.followAct--xstyle,
 html[data-theme="light"] .profileActivitiesList.followActStack .followAct.followAct--xstyle + .followAct.followAct--xstyle,
 html[data-theme="light"] #profileRepostsList.followActStack .followAct.followAct--xstyle + .followAct.followAct--xstyle,
+html[data-theme="light"] #userPublicSongs.followActStack .followAct.followAct--xstyle + .followAct.followAct--xstyle,
 html[data-theme="light"] #userPublicRepostsList.followActStack .followAct.followAct--xstyle + .followAct.followAct--xstyle{
   padding-top: 12px;
   margin-top: 0;
 }
 html[data-theme="light"] .friendsPage .followActStack .followAct.followAct--xstyle:first-child,
-html[data-theme="light"] .profileActivitiesList.followActStack .followAct.followAct--xstyle:first-child{
+html[data-theme="light"] .profileActivitiesList.followActStack .followAct.followAct--xstyle:first-child,
+html[data-theme="light"] #userPublicSongs.followActStack .followAct.followAct--xstyle:first-child{
   padding-top: 12px;
 }
 html[data-theme="light"] .followActStack .followAct.followAct--xstyle:hover,
 html[data-theme="light"] .followAct--xstyle:hover{
   background: var(--card);
+}
+
+/* Public profile (#/u/…) — light mode matches own profile + Friends feed. */
+html[data-theme="light"] body[data-route="user"]{
+  background: var(--bg);
+}
+html[data-theme="light"] .userPublicDisplayName,
+html[data-theme="light"] .userPublicDisplayNameText{
+  color: var(--text-primary);
+}
+html[data-theme="light"] .userPublicNameStack--hasDisplayName .userPublicName{
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+html[data-theme="light"] .userPublicNameStack:not(.userPublicNameStack--hasDisplayName) .userPublicName{
+  color: var(--text-primary);
+}
+html[data-theme="light"] .userPublicVoice{
+  color: var(--text-secondary);
+}
+html[data-theme="light"] .userPublicRelationStatus{
+  color: var(--text-muted);
+}
+html[data-theme="light"] .userPublicAvatarWrap{
+  box-shadow:
+    0 10px 28px rgba(88, 104, 140, 0.14),
+    0 0 24px rgba(124, 92, 255, 0.08);
+}
+html[data-theme="light"] .userPublicAvatar{
+  border-color: rgba(255, 255, 255, 0.72);
+  background: var(--surface-secondary);
+}
+html[data-theme="light"] .userPublicAvatarWrap .userPublicAvatarFallback.activityAvatarSilhouette{
+  color: var(--icon-muted);
+  background: var(--surface-secondary);
+}
+html[data-theme="light"] .userPublicFollowBtn[data-following="true"],
+html[data-theme="light"] .userPublicMessageBtn{
+  color: var(--text-primary);
+  background: var(--card);
+  box-shadow: 0 0 0 1px var(--border);
+}
+html[data-theme="light"] .userPublicFollowBtn[data-following="false"]{
+  color: #fff;
+  background: var(--brand-violet);
+  box-shadow:
+    0 6px 18px rgba(109, 77, 245, 0.22),
+    0 0 0 1px rgba(255, 255, 255, 0.12);
+}
+html[data-theme="light"] .userPublicFollowBtn:active,
+html[data-theme="light"] .userPublicMessageBtn:active{
+  transform: scale(0.98);
+}
+html[data-theme="light"] .userPublicEmpty{
+  border-color: var(--border);
+  color: var(--text-secondary);
+  background: rgba(255, 255, 255, 0.72);
+}
+html[data-theme="light"] .userPublicSkelBlock,
+html[data-theme="light"] .userPublic[data-loading="true"] .userPublicAvatar[data-empty="true"],
+html[data-theme="light"] .userPublic[data-loading="true"] .userPublicAvatar[data-empty="true"] + .userPublicAvatarFallback{
+  background: var(--skeleton-shimmer-soft);
+  background-size: 200% 100%;
+}
+html[data-theme="light"] .userPublicSongsTitle{
+  color: var(--text-secondary);
+}
+html[data-theme="light"] .userPublicSongsCount{
+  color: var(--text-muted);
 }
 
 /* Activity list spacing between day groups. */

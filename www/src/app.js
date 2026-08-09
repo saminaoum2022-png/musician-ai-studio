@@ -18475,6 +18475,11 @@ async function fetchAudioForRemix(rawUrl) {
     return r.blob();
   }
 
+  // Same absolute-URL rules as playback — relative `/api/suno/audio?…` saved
+  // in Supabase must hit the deployed API, not capacitor://localhost on iOS.
+  const firstUrl = inlinePlaybackUrl(original) || normalizeAudioUrlForPlayback(original);
+  if (!firstUrl) throw new Error("This post has no audio URL");
+
   const proxyOnce = async (target) => {
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), 25000);
@@ -18513,33 +18518,16 @@ async function fetchAudioForRemix(rawUrl) {
     }
   };
 
-  // Pick a sensible first attempt. If `original` is ALREADY a
-  // `/api/suno/audio?url=…` wrapper, hit it directly (don't double-wrap)
-  // so the server doesn't try to URL-parse a relative path. Otherwise,
-  // wrap into the proxy.
-  let firstUrl;
-  if (original.includes("/api/suno/audio?")) {
-    firstUrl = hubAbsoluteUrl(original);
-  } else if (/^https?:\/\//i.test(original)) {
-    firstUrl = hubAbsoluteUrl(toAudioProxyUrl(original));
-  } else {
-    firstUrl = hubAbsoluteUrl(original);
-  }
-
   try {
     return await proxyOnce(firstUrl);
   } catch (eFirst) {
     console.warn("[remix] proxy fetch failed", { firstUrl, err: eFirst });
-    // Last-ditch: try the raw CDN URL directly. Will only work if the
-    // CDN sets permissive CORS, but it's a free retry — we already
-    // know the proxy didn't deliver. This commonly rescues iOS Safari
-    // when the serverless function timed out on a slow backend.
-    if (/^https?:\/\//i.test(original) && original !== firstUrl) {
+    const inner = unwrapInnermostHttpAudioUrl(original);
+    if (inner && /^https?:\/\//i.test(inner) && inner !== firstUrl && !isArchivedSongStorageUrl(inner)) {
       try {
-        return await proxyOnce(original);
+        return await proxyOnce(inner);
       } catch (eSecond) {
-        console.warn("[remix] direct fetch failed", { original, err: eSecond });
-        // Surface the most informative error.
+        console.warn("[remix] direct fetch failed", { original: inner, err: eSecond });
         const reason =
           eFirst?.message && eFirst.message !== "Failed to fetch"
             ? eFirst.message
@@ -53142,86 +53130,117 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
         hasReference ? "Upload reference song" : "Generate song",
         async () => {
           if (hasReference) {
-            const fd = new FormData();
             const sendFile = resolveVocalReferenceForSubmit();
-            if (!sendFile || !sendFile.size) {
+            const remixSourceRaw = String(
+              currentRemixSource?.originalUrl || currentRemixSource?.url || "",
+            ).trim();
+            const remixServerFetch =
+              vocalRefOrigin === "remix" &&
+              Boolean(remixSourceRaw || unwrapInnermostHttpAudioUrl(remixSourceRaw));
+            if (!remixServerFetch && (!sendFile || !sendFile.size)) {
               throw new Error(
                 "Lost the vocal reference before upload. Tap '+ Audio' or Record again, then Generate."
               );
             }
-            // Fingerprint the EXACT bytes we're about to send. We stamp the
-            // FormData so the server can echo it back into its logs, and we
-            // show the short prefix to the user in the status strip. If two
-            // consecutive generations show the SAME fingerprint, we know the
-            // recorder handed us cached bytes (not a sticky JS variable).
-            const sendFp = await computeBytesFingerprint(sendFile);
-            try {
-              console.info("[voice] upload fingerprint", {
-                size: sendFile.size,
-                type: sendFile.type,
-                name: sendFile.name,
-                fp: sendFp,
-                origin: vocalRefOrigin,
-                referenceInstrumentalOnly,
-              });
-            } catch {}
-            if (sendFp) {
-              const fpShort = sendFp.slice(0, 8);
-              const kb = Math.max(1, Math.round(sendFile.size / 1024));
-              setStatus(`Uploading voice clip · #${fpShort} (${kb} KB)`);
-              // Toast it too — status text gets overwritten by the polling
-              // loop within ~1s, so the toast is the only thing the user
-              // can actually catch. This is the "did my new bytes leave
-              // the phone?" proof point we asked for last round.
-              try {
-                showToast(`Uploading ${kb} KB · #${fpShort}`, {
-                  icon: "↑",
-                  durationMs: 5200,
-                });
-              } catch {}
-            }
-            fd.append("action", "add_instrumental");
-            // Both vocal and instrumental melody references stay on upload-cover.
-            // `vocal_instrumental` asks Suno for a cover-style instrumental,
-            // not underpainting/add-instrumental.
             const stemRefMode = referenceInstrumentalOnly
               ? "vocal_instrumental"
               : hubRemixLocked
               ? "song_remix"
               : "vocal_full";
-            fd.append("referenceMode", stemRefMode);
-            const uploadBaseName = sendFile?.name || "vocal-reference.webm";
-            const uniqueUploadName = `ref-${Date.now()}-${uploadBaseName.replace(/^.*[/\\]/, "")}`;
-            fd.append("file", sendFile, uniqueUploadName);
-            fd.append("fileName", uniqueUploadName);
-            fd.append("fileType", sendFile?.type || "audio/webm");
-            if (sendFp) fd.append("clientFingerprint", sendFp);
-            fd.append("style", String(payload.style || userStyle || "").trim());
-            if (!referenceInstrumentalOnly && finalPrompt) fd.append("prompt", String(finalPrompt));
-            fd.append(
-              "title",
-              String((els.sunoTitle?.value || "").trim() || (referenceInstrumentalOnly ? "Reference instrumental" : "Reference full song"))
-            );
-            fd.append("model", LATEST_SUNO_MODEL);
-            if (referenceInstrumentalOnly) {
-              fd.append("audioWeight", "0.95");
-              fd.append("styleWeight", "0.25");
-            }
-            if (payload?.vocalGender) fd.append("vocalGender", String(payload.vocalGender));
-            if (payload?.voiceTimbre) fd.append("voiceTimbre", String(payload.voiceTimbre));
-            if (payload?.songKey) fd.append("songKey", String(payload.songKey));
-            if (timing) fd.append("timing", String(timing));
-            if (dialect) fd.append("dialect", String(dialect));
-            if (lyricDialectHint) fd.append("dialectHint", String(lyricDialectHint));
-            if (userAvoidTags) fd.append("negativeTags", userAvoidTags);
-            if (payload?.personaId) fd.append("personaId", String(payload.personaId));
+            const stemsPayload = {
+              action: "add_instrumental",
+              referenceMode: stemRefMode,
+              style: String(payload.style || userStyle || "").trim(),
+              title: String(
+                (els.sunoTitle?.value || "").trim() ||
+                  (referenceInstrumentalOnly ? "Reference instrumental" : "Reference full song"),
+              ),
+              model: LATEST_SUNO_MODEL,
+              ...(referenceInstrumentalOnly ? { audioWeight: 0.95, styleWeight: 0.25 } : {}),
+              ...(payload?.vocalGender ? { vocalGender: String(payload.vocalGender) } : {}),
+              ...(payload?.voiceTimbre ? { voiceTimbre: String(payload.voiceTimbre) } : {}),
+              ...(payload?.songKey ? { songKey: String(payload.songKey) } : {}),
+              ...(timing ? { timing: String(timing) } : {}),
+              ...(dialect ? { dialect: String(dialect) } : {}),
+              ...(lyricDialectHint ? { dialectHint: String(lyricDialectHint) } : {}),
+              ...(userAvoidTags ? { negativeTags: userAvoidTags } : {}),
+              ...(payload?.personaId ? { personaId: String(payload.personaId) } : {}),
+              ...(!referenceInstrumentalOnly && finalPrompt ? { prompt: String(finalPrompt) } : {}),
+            };
             const stemsTok = getSupabaseAuthToken();
-            const rr = await fetch(apiUrl("/api/suno/stems"), {
-              method: "POST",
-              headers: stemsTok ? { Authorization: `Bearer ${stemsTok}` } : undefined,
-              body: fd,
-            });
-            const dd = await rr.json().catch(() => ({}));
+            let rr;
+            let dd = {};
+            if (remixServerFetch) {
+              try {
+                showToast("Preparing remix source on server…", { icon: "↑", durationMs: 8000 });
+              } catch {}
+              setStatus("Server is fetching the remix source audio…");
+              stemsPayload.sourceAudioUrl =
+                unwrapInnermostHttpAudioUrl(remixSourceRaw) || remixSourceRaw;
+              rr = await apiFetch("/api/suno/stems", {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  ...(stemsTok ? { Authorization: `Bearer ${stemsTok}` } : {}),
+                },
+                body: JSON.stringify(stemsPayload),
+              });
+              dd = await rr.json().catch(() => ({}));
+            } else {
+              const fd = new FormData();
+              const sendFp = await computeBytesFingerprint(sendFile);
+              try {
+                console.info("[voice] upload fingerprint", {
+                  size: sendFile.size,
+                  type: sendFile.type,
+                  name: sendFile.name,
+                  fp: sendFp,
+                  origin: vocalRefOrigin,
+                  referenceInstrumentalOnly,
+                });
+              } catch {}
+              if (sendFp) {
+                const fpShort = sendFp.slice(0, 8);
+                const kb = Math.max(1, Math.round(sendFile.size / 1024));
+                setStatus(`Uploading voice clip · #${fpShort} (${kb} KB)`);
+                try {
+                  showToast(`Uploading ${kb} KB · #${fpShort}`, {
+                    icon: "↑",
+                    durationMs: 5200,
+                  });
+                } catch {}
+              }
+              const uploadBaseName = sendFile?.name || "vocal-reference.webm";
+              const uniqueUploadName = `ref-${Date.now()}-${uploadBaseName.replace(/^.*[/\\]/, "")}`;
+              fd.append("action", stemsPayload.action);
+              fd.append("referenceMode", stemsPayload.referenceMode);
+              fd.append("file", sendFile, uniqueUploadName);
+              fd.append("fileName", uniqueUploadName);
+              fd.append("fileType", sendFile?.type || "audio/webm");
+              if (sendFp) fd.append("clientFingerprint", sendFp);
+              fd.append("style", stemsPayload.style);
+              if (stemsPayload.prompt) fd.append("prompt", stemsPayload.prompt);
+              fd.append("title", stemsPayload.title);
+              fd.append("model", stemsPayload.model);
+              if (referenceInstrumentalOnly) {
+                fd.append("audioWeight", "0.95");
+                fd.append("styleWeight", "0.25");
+              }
+              if (stemsPayload.vocalGender) fd.append("vocalGender", stemsPayload.vocalGender);
+              if (stemsPayload.voiceTimbre) fd.append("voiceTimbre", stemsPayload.voiceTimbre);
+              if (stemsPayload.songKey) fd.append("songKey", stemsPayload.songKey);
+              if (stemsPayload.timing) fd.append("timing", stemsPayload.timing);
+              if (stemsPayload.dialect) fd.append("dialect", stemsPayload.dialect);
+              if (stemsPayload.dialectHint) fd.append("dialectHint", stemsPayload.dialectHint);
+              if (stemsPayload.negativeTags) fd.append("negativeTags", stemsPayload.negativeTags);
+              if (stemsPayload.personaId) fd.append("personaId", stemsPayload.personaId);
+              rr = await fetch(apiUrl("/api/suno/stems"), {
+                method: "POST",
+                headers: stemsTok ? { Authorization: `Bearer ${stemsTok}` } : undefined,
+                body: fd,
+              });
+              dd = await rr.json().catch(() => ({}));
+            }
             if (rr.status === 402 || dd?.code === "insufficient_credits") {
               const need = Number(dd?.needed ?? 10);
               const have = Number(dd?.balance || 0);

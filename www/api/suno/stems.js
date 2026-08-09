@@ -39,6 +39,8 @@ const {
   isAdminEmail,
 } = require("../_lib/credits-auth");
 const { applyCors } = require("../_lib/cors");
+const { resolveHumTrackPreset } = require("../_lib/hum-track-presets");
+const { queueRegisterSunoWatch } = require("../_lib/suno-generation-watch");
 
 const MAX_UPLOAD_BYTES = 25 * 1024 * 1024;
 // Reference-audio generations (cover / extend / add-instrumental) all
@@ -133,16 +135,41 @@ module.exports = async function handler(req, res) {
 
     if (action === "add_instrumental") {
       let fileBytes = body?.fileBytes || null;
+      let fileName = String(body?.fileName || "vocal-reference.webm").trim();
+      let fileType = String(body?.fileType || "audio/webm").trim();
+
+      const sourceAudioUrl = String(body?.sourceAudioUrl || body?.source_audio_url || "").trim();
+      if (!fileBytes && sourceAudioUrl) {
+        const fetched = await fetchReferenceBytesFromUrl(sourceAudioUrl);
+        if (!fetched.ok) {
+          await refund("source_fetch_failed");
+          return json(res, 502, {
+            error: "Could not fetch remix source audio — try again.",
+            code: "source_fetch_failed",
+            details: fetched.error || null,
+          });
+        }
+        fileBytes = fetched.buffer;
+        fileName = fetched.fileName || fileName || "remix-source.mp3";
+        fileType = fetched.mime || fileType || "audio/mpeg";
+        try {
+          console.log("[suno/stems] fetched remix source server-side", {
+            sourceAudioUrl: sourceAudioUrl.slice(0, 120),
+            bytes: fileBytes?.length || 0,
+            fileName,
+            fileType,
+          });
+        } catch {}
+      }
+
       if (!fileBytes) {
         await refund("missing_file");
-        return json(res, 400, { error: "Missing uploaded file" });
+        return json(res, 400, { error: "Missing uploaded file or sourceAudioUrl" });
       }
       if (Buffer.isBuffer(fileBytes) && fileBytes.length > MAX_UPLOAD_BYTES) {
         await refund("file_too_large");
         return json(res, 413, { error: "Audio reference is too large. Max 25 MB." });
       }
-      let fileName = String(body?.fileName || "vocal-reference.webm").trim();
-      let fileType = String(body?.fileType || "audio/webm").trim();
 
       // Convert webm/opus and other non-standard formats to MP3 so Suno
       // reliably accepts the upload and can analyse pitch/melody.
@@ -164,6 +191,10 @@ module.exports = async function handler(req, res) {
       const dialectHint = String(body?.dialectHint || "").trim();
       const personaId = String(body?.personaId || "").trim();
       const negativeTags = String(body?.negativeTags || "").trim();
+      const instrumentPreset = String(body?.instrumentPreset || "")
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z0-9_]/g, "");
       // Optional weights for backing / mix modes. The client forwards
       // audioWeight=0.95, styleWeight=0.25 for those modes so Suno
       // tracks the uploaded vocal melody instead of letting the style
@@ -229,15 +260,28 @@ module.exports = async function handler(req, res) {
       const coverModes = new Set(["vocal_full", "vocal_cover", "song_remix", "song_cover", "vocal_instrumental"]);
       if (coverModes.has(referenceMode)) {
         const coverInstrumental = referenceMode === "vocal_instrumental";
-        // Enrich style with dialect only — uploaded audio drives melody and voice.
-        const coverStyle = buildCoverStyle({
-          baseStyle: style,
-          dialect,
-          dialectHint,
-          vocalGender,
-          voiceTimbre,
-        });
-        const coverNegative = trimNegativeTags(negativeTags);
+        const humTrackPreset = instrumentPreset ? resolveHumTrackPreset(instrumentPreset) : null;
+        // Hum Track: server-owned solo-instrument tags. Otherwise enrich user style.
+        const coverStyle = humTrackPreset
+          ? humTrackPreset.style
+          : buildCoverStyle({
+              baseStyle: style,
+              dialect,
+              dialectHint,
+              vocalGender,
+              voiceTimbre,
+            });
+        const coverNegative = humTrackPreset
+          ? humTrackPreset.negativeTags
+          : trimNegativeTags(negativeTags);
+        const coverStyleWeight =
+          humTrackPreset && audioWeight === null && styleWeight === null
+            ? 0.22
+            : styleWeight !== null
+            ? styleWeight
+            : 0.5;
+        const coverAudioWeight =
+          humTrackPreset && audioWeight === null && styleWeight === null ? 0.95 : audioWeight;
         const coverPayload = {
           uploadUrl,
           customMode: true,
@@ -246,8 +290,15 @@ module.exports = async function handler(req, res) {
           callBackUrl,
           prompt: coverInstrumental ? "" : (prompt || ""),
           style: coverStyle,
-          title: title || (coverInstrumental ? "Instrumental cover from reference" : "Cover from reference"),
-          styleWeight: 0.5,
+          title:
+            title ||
+            (humTrackPreset
+              ? `Hum Track · ${humTrackPreset.label}`
+              : coverInstrumental
+              ? "Instrumental cover from reference"
+              : "Cover from reference"),
+          styleWeight: coverStyleWeight,
+          ...(coverAudioWeight !== null ? { audioWeight: coverAudioWeight } : {}),
           ...(coverNegative ? { negativeTags: coverNegative } : {}),
           ...(vocalGender === "m" || vocalGender === "f" ? { vocalGender } : {}),
           ...(!coverInstrumental && personaId ? { personaId } : {}),
@@ -299,6 +350,10 @@ module.exports = async function handler(req, res) {
             uploadUrl,
           });
         }
+        registerStemsWatch(user, body, coverData, {
+          kind: instrumentPreset ? "hum_track" : "song",
+          variantCount: 2,
+        });
         return json(res, 200, {
           ...(coverData || { raw: coverText }),
           uploadUrl,
@@ -340,6 +395,7 @@ module.exports = async function handler(req, res) {
             uploadUrl,
           });
         }
+        registerStemsWatch(user, body, extData, { kind: "song", variantCount: 2 });
         return json(res, 200, {
           ...(extData || { raw: extText }),
           uploadUrl,
@@ -449,6 +505,7 @@ module.exports = async function handler(req, res) {
           uploadUrl,
         });
       }
+      registerStemsWatch(user, body, addData, { kind: "song", variantCount: 2 });
       return json(res, 200, {
         ...(addData || { raw: addText }),
         uploadUrl,
@@ -485,6 +542,7 @@ module.exports = async function handler(req, res) {
       await refund(`suno_code_${data.code}`);
       return json(res, 502, { error: "Request was rejected upstream", details: data });
     }
+    registerStemsWatch(user, body, data, { kind: "instrumental", variantCount: 1 });
     return json(res, 200, {
       ...(data || { raw: text }),
       _credits: { spent: isAdmin ? 0 : cost, balance: balanceAfterDebit, admin: isAdmin || undefined },
@@ -495,6 +553,39 @@ module.exports = async function handler(req, res) {
 };
 
 // === helpers ===
+
+function extractSunoTaskId(data) {
+  return String(
+    data?.data?.taskId ||
+      data?.data?.task_id ||
+      data?.taskId ||
+      data?.task_id ||
+      "",
+  ).trim();
+}
+
+function registerStemsWatch(user, body, responseData, { kind, variantCount = 2 } = {}) {
+  const taskId = extractSunoTaskId(responseData);
+  if (!taskId) return;
+  const source = String(body?.source || "").trim();
+  const notifyPush = body?.notifyPush !== false && source !== "studio";
+  const instrumentPreset = String(body?.instrumentPreset || "").trim();
+  const watchKind =
+    kind ||
+    (source === "studio"
+      ? "studio_guide"
+      : instrumentPreset
+        ? "hum_track"
+        : "instrumental");
+  queueRegisterSunoWatch({
+    userId: user.userId,
+    taskId,
+    kind: watchKind,
+    title: String(body?.title || "").trim(),
+    variantCount,
+    notifyPush,
+  });
+}
 
 /** True when the user's style asks for speech / VO instead of sung delivery. */
 function wantsSpokenDelivery(text) {
@@ -840,5 +931,61 @@ function safeJson(txt) {
     return JSON.parse(txt);
   } catch {
     return null;
+  }
+}
+
+function unwrapProxyAudioUrl(raw) {
+  let cur = String(raw || "").trim();
+  if (!cur) return "";
+  const base = (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "https://www.nabadai.com");
+  for (let i = 0; i < 8; i++) {
+    if (!cur.toLowerCase().includes("api/suno/audio")) break;
+    try {
+      const u = /^https?:\/\//i.test(cur) ? new URL(cur) : new URL(cur, base);
+      const inner = u.searchParams.get("url");
+      if (!inner) break;
+      cur = inner.includes("%") ? decodeURIComponent(inner) : inner;
+    } catch {
+      break;
+    }
+  }
+  return cur.trim();
+}
+
+function absoluteFetchUrl(raw) {
+  const s = String(raw || "").trim();
+  if (!s) return "";
+  if (/^https?:\/\//i.test(s)) return s;
+  const base = (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "https://www.nabadai.com");
+  try {
+    return new URL(s, base).toString();
+  } catch {
+    return s;
+  }
+}
+
+async function fetchReferenceBytesFromUrl(rawUrl) {
+  const unwrapped = unwrapProxyAudioUrl(rawUrl);
+  const target = absoluteFetchUrl(unwrapped || rawUrl);
+  if (!target || !/^https?:\/\//i.test(target)) {
+    return { ok: false, error: "invalid_source_url" };
+  }
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 45000);
+  try {
+    const r = await fetch(target, { method: "GET", redirect: "follow", signal: ctrl.signal });
+    if (!r.ok) return { ok: false, error: `upstream_${r.status}` };
+    const ab = await r.arrayBuffer();
+    const buffer = Buffer.from(ab);
+    if (buffer.length < 40 * 1024) return { ok: false, error: "source_too_short" };
+    if (buffer.length > MAX_UPLOAD_BYTES) return { ok: false, error: "source_too_large" };
+    const ct = String(r.headers.get("content-type") || "audio/mpeg").split(";")[0].trim();
+    const mime = ct.includes("audio") ? ct : "audio/mpeg";
+    const ext = mime.includes("wav") ? "wav" : mime.includes("webm") ? "webm" : "mp3";
+    return { ok: true, buffer, mime, fileName: `remix-source.${ext}` };
+  } catch (e) {
+    return { ok: false, error: e?.message || String(e) };
+  } finally {
+    clearTimeout(timer);
   }
 }

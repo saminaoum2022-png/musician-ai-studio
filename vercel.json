@@ -13,7 +13,8 @@
   ],
   "functions": {
     "api/suno/stems.js": {
-      "includeFiles": "node_modules/ffmpeg-static/**"
+      "includeFiles": "node_modules/ffmpeg-static/**",
+      "maxDuration": 300
     },
     "api/suno/upload-audio.js": {
       "includeFiles": "node_modules/ffmpeg-static/**"

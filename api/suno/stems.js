@@ -135,16 +135,41 @@ module.exports = async function handler(req, res) {
 
     if (action === "add_instrumental") {
       let fileBytes = body?.fileBytes || null;
+      let fileName = String(body?.fileName || "vocal-reference.webm").trim();
+      let fileType = String(body?.fileType || "audio/webm").trim();
+
+      const sourceAudioUrl = String(body?.sourceAudioUrl || body?.source_audio_url || "").trim();
+      if (!fileBytes && sourceAudioUrl) {
+        const fetched = await fetchReferenceBytesFromUrl(sourceAudioUrl);
+        if (!fetched.ok) {
+          await refund("source_fetch_failed");
+          return json(res, 502, {
+            error: "Could not fetch remix source audio — try again.",
+            code: "source_fetch_failed",
+            details: fetched.error || null,
+          });
+        }
+        fileBytes = fetched.buffer;
+        fileName = fetched.fileName || fileName || "remix-source.mp3";
+        fileType = fetched.mime || fileType || "audio/mpeg";
+        try {
+          console.log("[suno/stems] fetched remix source server-side", {
+            sourceAudioUrl: sourceAudioUrl.slice(0, 120),
+            bytes: fileBytes?.length || 0,
+            fileName,
+            fileType,
+          });
+        } catch {}
+      }
+
       if (!fileBytes) {
         await refund("missing_file");
-        return json(res, 400, { error: "Missing uploaded file" });
+        return json(res, 400, { error: "Missing uploaded file or sourceAudioUrl" });
       }
       if (Buffer.isBuffer(fileBytes) && fileBytes.length > MAX_UPLOAD_BYTES) {
         await refund("file_too_large");
         return json(res, 413, { error: "Audio reference is too large. Max 25 MB." });
       }
-      let fileName = String(body?.fileName || "vocal-reference.webm").trim();
-      let fileType = String(body?.fileType || "audio/webm").trim();
 
       // Convert webm/opus and other non-standard formats to MP3 so Suno
       // reliably accepts the upload and can analyse pitch/melody.
@@ -906,5 +931,61 @@ function safeJson(txt) {
     return JSON.parse(txt);
   } catch {
     return null;
+  }
+}
+
+function unwrapProxyAudioUrl(raw) {
+  let cur = String(raw || "").trim();
+  if (!cur) return "";
+  const base = (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "https://www.nabadai.com");
+  for (let i = 0; i < 8; i++) {
+    if (!cur.toLowerCase().includes("api/suno/audio")) break;
+    try {
+      const u = /^https?:\/\//i.test(cur) ? new URL(cur) : new URL(cur, base);
+      const inner = u.searchParams.get("url");
+      if (!inner) break;
+      cur = inner.includes("%") ? decodeURIComponent(inner) : inner;
+    } catch {
+      break;
+    }
+  }
+  return cur.trim();
+}
+
+function absoluteFetchUrl(raw) {
+  const s = String(raw || "").trim();
+  if (!s) return "";
+  if (/^https?:\/\//i.test(s)) return s;
+  const base = (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "https://www.nabadai.com");
+  try {
+    return new URL(s, base).toString();
+  } catch {
+    return s;
+  }
+}
+
+async function fetchReferenceBytesFromUrl(rawUrl) {
+  const unwrapped = unwrapProxyAudioUrl(rawUrl);
+  const target = absoluteFetchUrl(unwrapped || rawUrl);
+  if (!target || !/^https?:\/\//i.test(target)) {
+    return { ok: false, error: "invalid_source_url" };
+  }
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 45000);
+  try {
+    const r = await fetch(target, { method: "GET", redirect: "follow", signal: ctrl.signal });
+    if (!r.ok) return { ok: false, error: `upstream_${r.status}` };
+    const ab = await r.arrayBuffer();
+    const buffer = Buffer.from(ab);
+    if (buffer.length < 40 * 1024) return { ok: false, error: "source_too_short" };
+    if (buffer.length > MAX_UPLOAD_BYTES) return { ok: false, error: "source_too_large" };
+    const ct = String(r.headers.get("content-type") || "audio/mpeg").split(";")[0].trim();
+    const mime = ct.includes("audio") ? ct : "audio/mpeg";
+    const ext = mime.includes("wav") ? "wav" : mime.includes("webm") ? "webm" : "mp3";
+    return { ok: true, buffer, mime, fileName: `remix-source.${ext}` };
+  } catch (e) {
+    return { ok: false, error: e?.message || String(e) };
+  } finally {
+    clearTimeout(timer);
   }
 }

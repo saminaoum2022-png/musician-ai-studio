@@ -138,7 +138,7 @@ import {
   coachOrbAllowsContextHints,
   surfaceCoachOrb,
 } from "./coach-orb-prefs.js";
-import { initTheme } from "./theme.js";
+import { initTheme, syncSettingsThemePicker } from "./theme.js";
 import { initPullToRefresh } from "./pull-to-refresh.js";
 import { initSoundsStudioOnce } from "./sounds-studio.js";
 import {
@@ -159,6 +159,9 @@ import {
 import {
   applyUserTextBidi,
   applyUserTextInputDir,
+  applyLyricsInputBidi,
+  insertTextAtInputSelection,
+  normalizePastedUserText,
   userTextHtml,
 } from "./text-bidi.js";
 import { userTextWithMentionsHtml } from "./mentions.js";
@@ -191,7 +194,7 @@ import { MUSIC_VIDEO_FEATURE_ENABLED } from "./feature-flags.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260808-171103";
+const APP_BUILD = "20260809-234000";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -279,6 +282,7 @@ try {
 }
 try {
   initTheme();
+  try { wireSettingsMusicProviderOnce(); } catch {}
 } catch (e) {
   console.warn("[theme] init failed", e);
 }
@@ -788,7 +792,7 @@ const els = {
   profileCreditsBalance: document.getElementById("profileCreditsBalance"),
   profileCreditsNote: document.getElementById("profileCreditsNote"),
   profileCreditsLink: document.getElementById("profileCreditsLink"),
-  profileProBanner: document.getElementById("profileProBanner"),
+  profileProAvatarPill: document.getElementById("profileProAvatarPill"),
   profilePersonaRow: document.getElementById("profilePersonaRow"),
   profilePersonaLabel: document.getElementById("profilePersonaLabel"),
   profilePersonaSignatureTitle: document.getElementById("profilePersonaSignatureTitle"),
@@ -1126,6 +1130,7 @@ const els = {
   userPublicAvatar: document.getElementById("userPublicAvatar"),
   userPublicName: document.getElementById("userPublicName"),
   userPublicVerified: document.getElementById("userPublicVerified"),
+  userPublicProAvatarPill: document.getElementById("userPublicProAvatarPill"),
   userPublicVoice: document.getElementById("userPublicVoice"),
   userPublicBio: document.getElementById("userPublicBio"),
   userPublicBioText: document.getElementById("userPublicBioText"),
@@ -2277,7 +2282,6 @@ function renderHubNowPlaying() {
     return;
   }
 
-  applyCoverGlowRgb(els.hubNowPlaying, hubNowMeta?.art || "");
   const wasVisible = els.hubNowPlaying.classList.contains("isVisible");
   els.hubNowPlaying.style.display = "";
   const syncMiniClasses = () => {
@@ -2297,19 +2301,8 @@ function renderHubNowPlaying() {
   }
 
   if (els.hubNowArt) {
-    if (!els.hubNowArt.dataset.hubAuraBound) {
-      els.hubNowArt.dataset.hubAuraBound = "1";
-      els.hubNowArt.addEventListener("load", () => {
-        try {
-          const loaded = els.hubNowArt.currentSrc || els.hubNowArt.src || "";
-          syncHubNowAuraFromCoverUrl(loaded);
-          applyCoverGlowRgb(els.hubNowPlaying, loaded);
-        } catch {}
-      });
-    }
     const artSrc = hubNowMeta.art || DEFAULT_SONG_COVER_URL;
     assignCoverImageSrc(els.hubNowArt, artSrc, { updateClasses: false, immediate: true });
-    syncHubNowAuraFromCoverUrl(artSrc);
   }
   if (els.hubNowTitle) els.hubNowTitle.textContent = hubNowMeta.title || "Now playing";
   try {
@@ -4270,6 +4263,8 @@ function applyRoute({ passGen } = {}) {
     try { syncSettingsPushRow(); } catch {}
     try { syncSettingsMemberIdRow(); } catch {}
     try { syncSettingsOrbMode(); } catch {}
+    try { syncSettingsThemePicker(); } catch {}
+    try { syncSettingsMusicProviderRow(); } catch {}
     if (!_onesignalAppId) {
       void loadPublicConfig().then(() => {
         try { syncSettingsPushRow(); } catch {}
@@ -5121,7 +5116,8 @@ function refreshSettingsMusicPrefsRow() {
 function syncSettingsPrivacyToggle(isAuthed = Boolean(authSession?.user?.id || getSupabaseAuthToken())) {
   const row = document.getElementById("settingsPrivacyRow");
   const toggle = document.getElementById("settingsProfilePublicToggle");
-  if (row) row.hidden = !isAuthed;
+  // Profile public/private is deferred — see docs/FUTURE_PRODUCT_NOTES.md. Keep hidden until enforced end-to-end.
+  if (row) row.hidden = true;
   try { syncSettingsPresenceToggles(isAuthed); } catch {}
   if (!toggle) return;
   toggle.checked = els.profileIsPublic ? els.profileIsPublic.checked : activeProfile.isPublic !== false;
@@ -5237,6 +5233,56 @@ function syncSettingsPushRow() {
   } else {
     sub.textContent = "Off — tap to enable push alerts";
   }
+}
+
+function syncSettingsMusicProviderRow(pref = getMusicProviderPref()) {
+  const section = document.getElementById("settingsMusicProviderSection");
+  const root = document.getElementById("settingsMusicProviderPicker");
+  const sub = document.getElementById("settingsMusicProviderSub");
+  const isAdmin = Boolean(creditsState.isAdmin);
+  if (section) section.hidden = !isAdmin;
+  if (!isAdmin) return;
+  const p = normalizeMusicProviderPref(pref) || "suno";
+  if (root) {
+    root.querySelectorAll("[data-music-provider]").forEach((btn) => {
+      const active = String(btn.getAttribute("data-music-provider") || "") === p;
+      btn.classList.toggle("is-active", active);
+      btn.setAttribute("aria-checked", active ? "true" : "false");
+    });
+  }
+  if (sub) sub.textContent = musicProviderSubline(p);
+}
+
+function wireSettingsMusicProviderOnce() {
+  const root = document.getElementById("settingsMusicProviderPicker");
+  if (!root || root.dataset.boundMusicProvider === "1") return;
+  root.dataset.boundMusicProvider = "1";
+  root.addEventListener("click", (ev) => {
+    const btn = ev.target?.closest?.("[data-music-provider]");
+    if (!btn || !root.contains(btn)) return;
+    ev.preventDefault();
+    if (!creditsState.isAdmin) return;
+    const pref = normalizeMusicProviderPref(btn.getAttribute("data-music-provider"));
+    if (!pref || pref === getMusicProviderPref()) return;
+    try {
+      if (typeof haptic === "function") haptic("light");
+    } catch {}
+    setMusicProviderPref(pref);
+    try {
+      const toastMsg =
+        pref === "minimax"
+          ? "MiniMax engine enabled for your next songs."
+          : pref === "lyria"
+            ? "Lyria engine enabled — Google Gemini music for your next songs."
+            : pref === "elevenlabs"
+              ? "ElevenLabs engine enabled for your next songs."
+              : "Suno engine restored (two variants).";
+      showToast(toastMsg, {
+        icon: pref === "suno" ? "✓" : "♪",
+        durationMs: 3600,
+      });
+    } catch {}
+  });
 }
 
 function syncSettingsOrbMode(mode = getCoachOrbMode()) {
@@ -6750,6 +6796,11 @@ function homeDeskGreetingName() {
   return email || "there";
 }
 
+function homeDeskGreetingHtml() {
+  const name = escapeHtml(homeDeskGreetingName());
+  return `Hey, <span class="homeDeskGreetingName">${name}</span>`;
+}
+
 /* -------------------------------------------------------------------------- */
 /* Create page — smart contextual greeting                                     */
 /* -------------------------------------------------------------------------- */
@@ -6953,8 +7004,7 @@ function discoverWeeklyChartSkeletonHtml() {
         <span class="discoverSkeletonLine short"></span>
       </span>
     </div>
-    <div class="chartWeekRunners">${runnerSkel}</div>
-    <div class="chartWeekFullBtn discoverSkeletonLine" style="height:42px;border-radius:14px" aria-hidden="true"></div>`;
+    <div class="chartWeekRunners">${runnerSkel}</div>`;
 }
 
 function discoverHubSectionHeadSkeletonHtml() {
@@ -7934,7 +7984,7 @@ function updateChartWeekExpandedUi(wrap) {
   const rest = wrap.querySelector("#chartWeekRest");
   if (rest) rest.hidden = !expanded;
   wrap.querySelectorAll("[data-chart-week-toggle]").forEach((btn) => {
-    btn.textContent = expanded ? "Show less" : (btn.classList.contains("chartWeekFullBtn") ? "View Full Top 10" : "View Top 10");
+    btn.textContent = expanded ? "Show less" : "View Top 10";
     btn.setAttribute("aria-expanded", expanded ? "true" : "false");
   });
 }
@@ -7995,7 +8045,6 @@ function weeklyChartContentHtml(chart) {
     ? `<div class="chartWeekRest" id="chartWeekRest" role="list" aria-label="Top songs ranks 5 through 10" ${expanded ? "" : "hidden"}>${restEntries.map((e) => chartWeekRunnerHtml(e)).join("")}</div>`
     : "";
   const toggleLabel = expanded ? "Show less" : "View Top 10";
-  const fullLabel = expanded ? "Show less" : "View Full Top 10";
   return `
       <header class="discoverFeedSectionHead chartWeekHead">
         <h3 class="discoverFeedSectionTitle">Top This Week</h3>
@@ -8003,8 +8052,7 @@ function weeklyChartContentHtml(chart) {
       </header>
       ${heroHtml}
       ${runnersHtml}
-      ${restHtml}
-      ${showFullChart ? `<button type="button" class="chartWeekFullBtn" data-chart-week-toggle aria-expanded="${expanded ? "true" : "false"}">${escapeHtml(fullLabel)}</button>` : ""}`;
+      ${restHtml}`;
 }
 
 /** Paint chart content (or hide when empty) into the section wrap. */
@@ -8236,44 +8284,52 @@ function syncDeskCoachPanel() {
     });
   }
 }
-function syncCoachFabDesktopAnchor() {
+function syncCoachFabHeaderMount() {
   const fab = document.getElementById("coachFab");
-  if (!fab || isNativeShell()) return;
-  if (!document.documentElement.classList.contains("is-web-shell")) return;
-  const wide = window.matchMedia("(min-width: 721px)").matches;
-  if (!wide) {
-    fab.style.removeProperty("left");
-    fab.style.removeProperty("right");
-    fab.style.removeProperty("bottom");
-    fab.style.removeProperty("display");
-    fab.style.removeProperty("opacity");
-    fab.style.removeProperty("position");
-    return;
-  }
+  const parking = document.getElementById("coachFabParking");
+  if (!fab || !parking) return;
+  const route = String(document.body.getAttribute("data-route") || "");
+  const slotKey =
+    route === "discover"
+      ? "discover"
+      : route === "friends"
+        ? "friends"
+        : route === "challenges" || route === "generate"
+          ? "create"
+          : "";
+  fab.style.removeProperty("left");
+  fab.style.removeProperty("right");
+  fab.style.removeProperty("bottom");
+  fab.style.removeProperty("position");
+  fab.style.removeProperty("display");
+  fab.style.removeProperty("opacity");
+  fab.style.removeProperty("pointer-events");
   if (_deskCoachOpen || document.body.classList.contains("deskCoachOpen")) {
+    fab.classList.remove("coachFab--header");
+    if (fab.parentElement !== parking) parking.appendChild(fab);
     fab.style.setProperty("display", "none", "important");
-    fab.style.setProperty("opacity", "0", "important");
     fab.style.setProperty("pointer-events", "none", "important");
     return;
   }
-  fab.style.removeProperty("pointer-events");
-  const route = String(document.body.getAttribute("data-route") || "");
-  const coachRoute = new Set(["discover", "challenges", "generate", "profile"]).has(route);
-  if (coachRoute) {
-    try { surfaceCoachOrb(); } catch {}
+  if (!slotKey) {
+    fab.classList.remove("coachFab--header");
+    if (fab.parentElement !== parking) parking.appendChild(fab);
+    return;
   }
-  const hubUp = Boolean(document.querySelector(".hubNowPlaying.isVisible"));
-  fab.style.setProperty("position", "fixed", "important");
-  fab.style.setProperty("left", "auto", "important");
-  fab.style.setProperty("right", "24px", "important");
-  fab.style.setProperty("bottom", hubUp ? "108px" : "24px", "important");
-  if (coachRoute) {
-    fab.style.setProperty("display", "flex", "important");
-    fab.style.setProperty("opacity", "1", "important");
-  } else {
-    fab.style.removeProperty("display");
-    fab.style.removeProperty("opacity");
+  const slot = document.querySelector(`[data-coach-fab-slot="${slotKey}"]`);
+  if (!slot) {
+    fab.classList.remove("coachFab--header");
+    if (fab.parentElement !== parking) parking.appendChild(fab);
+    return;
   }
+  fab.classList.add("coachFab--header");
+  if (fab.parentElement !== slot) slot.appendChild(fab);
+  try {
+    surfaceCoachOrb();
+  } catch {}
+}
+function syncCoachFabDesktopAnchor() {
+  syncCoachFabHeaderMount();
 }
 function initDeskCoachPanel() {
   if (!isNativeShell() && document.documentElement.classList.contains("is-web-shell")) {
@@ -9592,16 +9648,7 @@ function discoverFeaturedChallengeKicker(c) {
 }
 
 function discoverFeedChallengeCreationsRailHtml(entries, profMap) {
-  return (entries || []).map((t) => {
-    const art = trackCoverArtForFeed(t);
-    const playAttrs = discoverHubTrackPlayAttrs(t, profMap);
-    const title = String(t.title || "Untitled").trim();
-    return `
-      <button type="button" class="discoverFeedChallengeMini" ${playAttrs} aria-label="Play ${escapeHtml(title)}">
-        <img src="${escapeHtml(art)}" alt="" loading="lazy" decoding="async" />
-        <span class="discoverFeedChallengeMiniPlay" aria-hidden="true">${coverArtPlayStateIconsHtml(12)}</span>
-      </button>`;
-  }).join("");
+  return (entries || []).map((t) => discoverFeedTemplateCardHtml(t, profMap)).join("");
 }
 
 /** For You — immersive featured challenge hero + top creations carousel. */
@@ -10729,7 +10776,7 @@ function renderHomeDesk() {
   _homeSeg = readHomeSeg();
   syncHomeSegUi();
   const greeting = document.getElementById("homeDeskGreeting");
-  if (greeting) greeting.textContent = `Hey, ${homeDeskGreetingName()}`;
+  if (greeting) greeting.innerHTML = homeDeskGreetingHtml();
   renderCampaignBanner();
   bindCampaignUiOnce();
   renderHomeDeskQuickStarts();
@@ -12567,7 +12614,13 @@ function logFriendsFeedPatch(kind, detail) {
   } catch {}
 }
 
-const FOLLOW_ACT_MEDIA_SEL = ".followActQuoteRow, .followActRemixPair, .followActMashup, .followActMediaWrap";
+const FOLLOW_ACT_MEDIA_SEL = ".followActQuoteRow, .followActRemixPair, .followActRemixFlow, .followActMashup, .followActMediaWrap";
+
+/** Top-level post media only — nested `.followActMediaWrap` inside remix/mashup must not patch separately. */
+function followActTopLevelMediaNodes(root) {
+  if (!root?.children) return [];
+  return [...root.children].filter((el) => el.matches(FOLLOW_ACT_MEDIA_SEL));
+}
 
 function profileActMediaSig(t, profMap) {
   const mashupOf = mashupAttributionForTrack(t);
@@ -12577,9 +12630,10 @@ function profileActMediaSig(t, profMap) {
     return `mashup:${String(a.songId || a.url || "")}:${String(b.songId || b.url || "")}`;
   }
   const remixOf = remixAttributionForTrack(t);
-  const orig =
-    remixOf && t._remixOriginal && String(t._remixOriginal.url || "").trim() ? t._remixOriginal : null;
-  if (orig) return `remixpair:${String(orig.songId || orig.url || "")}`;
+  if (remixOf) {
+    const orig = remixOriginalForFeedTrack(t);
+    if (orig) return `remixpair:${String(orig.id || orig.url || remixOf.songId || "")}`;
+  }
   return "quote";
 }
 
@@ -12730,8 +12784,8 @@ function patchFollowActRowMedia(article, track, profMap, idx) {
     contentEl.remove();
   }
 
-  article.querySelectorAll(FOLLOW_ACT_MEDIA_SEL).forEach((n) => n.remove());
-  nextArticle.querySelectorAll(FOLLOW_ACT_MEDIA_SEL).forEach((node) => {
+  followActTopLevelMediaNodes(article).forEach((n) => n.remove());
+  followActTopLevelMediaNodes(nextArticle).forEach((node) => {
     actRow.before(node.cloneNode(true));
   });
   return true;
@@ -14305,9 +14359,98 @@ function followActRealtimeProgressHtml(encUrl, safeTitle) {
           </div>`;
 }
 
-function feedRemixFlowPlayerHtml(t, profMap, orig, main) {
+function feedRemixSquareMediaHtml(main, safeTitle) {
+  const { encUrl, encTitle, encArt, encBy, playData, artSafe } = main;
+  return `
+          <div class="followActMediaWrap followActMediaWrap--remixResult">
+            <button type="button" class="followActMedia followActMedia--remixResult" data-user-lib-play="1" data-user-lib-url="${encUrl}" data-user-lib-title="${encTitle}" data-user-lib-art="${encArt}" data-discovery-by="${encBy}" ${playData} aria-label="Play remix ${safeTitle}">
+              <img class="followActMediaImg" src="${escapeHtml(artSafe)}" alt="" decoding="async" loading="lazy" />
+              <span class="followActMediaScrim" aria-hidden="true"></span>
+              <span class="followActMediaPlayBtn" aria-hidden="true">
+                ${coverArtPlayStateIconsHtml(28)}
+              </span>
+              <span class="followActMediaChip followActMediaChip--remix">${remixPillHtml()}</span>
+              <span class="followActMediaTitle" aria-hidden="true">${safeTitle}</span>
+            </button>
+            ${followActRealtimeProgressHtml(encUrl, safeTitle)}
+          </div>`;
+}
+
+function feedRemixFlowOrigBlockHtml(orig, profMap) {
   const origBy = orig.username ? `@${orig.username}` : "Original";
   const o = followingActivityPlayAttrs(orig, profMap, origBy, { useThumb: true });
+  const hasUrl = String(orig.url || "").trim();
+  const art = escapeHtml(o.artSafe || "./assets/icons/splash-mark.png");
+  const title = escapeHtml(String(orig.title || "Original song").trim() || "Original song");
+  const bodyHtml = `
+          <span class="followActRemixFlowOrigArt">
+            <img src="${art}" alt="" decoding="async" loading="lazy" />
+          </span>
+          <span class="followActRemixFlowOrigBody">
+            <span class="followActRemixFlowOrigChip">Original</span>
+            <span class="followActRemixFlowOrigTitle">${title}</span>
+            <span class="followActRemixFlowOrigBy">${escapeHtml(origBy)}</span>
+          </span>`;
+  if (!hasUrl) {
+    return `
+        <div class="followActRemixFlowOrig followActRemixFlowOrig--static" aria-label="Original ${title}">
+          ${bodyHtml}
+        </div>`;
+  }
+  return `
+        <button type="button" class="followActRemixFlowOrig" data-user-lib-play="1" data-user-lib-url="${o.encUrl}" data-user-lib-title="${o.encTitle}" data-user-lib-art="${o.encArt}" data-discovery-by="${encodeURIComponent(origBy)}" ${o.playData} aria-label="Play original ${title}">
+          ${bodyHtml}
+          <span class="followActRemixFlowOrigPlay" aria-hidden="true">${discoverPlayBtnSvg(14)}</span>
+        </button>`;
+}
+
+function remixOriginalForFeedTrack(track) {
+  const remixOf = remixAttributionForTrack(track);
+  if (!remixOf) return null;
+  if (track._remixOriginal) {
+    const hydrated = track._remixOriginal;
+    if (String(hydrated.url || "").trim()) return hydrated;
+    if (String(hydrated.title || remixOf.title || "").trim()) return hydrated;
+  }
+  const sid = String(remixOf.songId || remixOf.id || "").trim();
+  if (sid) {
+    try {
+      const local = loadLibrary().find(
+        (s) =>
+          String(s?.id || "") === sid ||
+          String(s?.cloudSongId || "") === sid,
+      );
+      if (local) {
+        return {
+          id: sid,
+          title: String(local.title || remixOf.title || "Original song").trim(),
+          artUrl: normalizeSongCoverUrl(
+            String(local.artUrl || local.meta?.artUrl || remixOf.artUrl || remixOf.coverUrl || "").trim(),
+          ),
+          url: String(local.url || "").trim(),
+          userId: String(local.userId || remixOf.ownerUserId || ""),
+          taskId: String(local.taskId || ""),
+          audioId: String(local.audioId || ""),
+          kind: local.kind || "full",
+          username: String(remixOf.creatorUsername || "").trim(),
+          publicOnProfile: Boolean(local.publicOnProfile),
+        };
+      }
+    } catch {}
+  }
+  return {
+    id: sid,
+    title: String(remixOf.title || "Original song").trim(),
+    artUrl: normalizeSongCoverUrl(String(remixOf.artUrl || remixOf.coverUrl || "").trim()),
+    url: "",
+    userId: String(remixOf.ownerUserId || "").trim(),
+    username: String(remixOf.creatorUsername || "").trim(),
+    kind: "full",
+    publicOnProfile: false,
+  };
+}
+
+function feedRemixFlowPlayerHtml(t, profMap, orig, main) {
   const {
     encUrl,
     encTitle,
@@ -14317,43 +14460,38 @@ function feedRemixFlowPlayerHtml(t, profMap, orig, main) {
     artSafe,
     safeTitle,
     subtitle,
+    xstyle = false,
   } = main;
-  const songMenuBtn = discoverSheetMenuBtnHtml(t, profMap, { className: "discoverCardMenuBtn followActQuoteMenuBtn" });
-  const remixHero = feedHeroPlayerCardHtml({
-    track: t,
-    artSafe,
-    encUrl,
-    encTitle,
-    encArt,
-    encBy,
-    playData,
-    safeTitle,
-    subtitle,
-    titleHtml: `<span class="followActQuoteTitle">${safeTitle}</span>`,
-    menuBtnHtml: songMenuBtn,
-    ariaLabel: `Play remix ${String(t?.title || "song")}`,
-    rowExtraClass: "followActQuoteRow--remixHero",
-  });
+  const remixResultHtml = xstyle
+    ? feedRemixSquareMediaHtml(
+        { encUrl, encTitle, encArt, encBy, playData, artSafe },
+        safeTitle,
+      )
+    : feedHeroPlayerCardHtml({
+        track: t,
+        artSafe,
+        encUrl,
+        encTitle,
+        encArt,
+        encBy,
+        playData,
+        safeTitle,
+        subtitle,
+        titleHtml: `<span class="followActQuoteTitle">${safeTitle}</span>`,
+        menuBtnHtml: discoverSheetMenuBtnHtml(t, profMap, { className: "discoverCardMenuBtn followActQuoteMenuBtn" }),
+        ariaLabel: `Play remix ${String(t?.title || "song")}`,
+        rowExtraClass: "followActQuoteRow--remixHero",
+      });
   return `
       <div class="followActRemixFlow" role="group" aria-label="Original to remix">
-        <button type="button" class="followActRemixFlowOrig" data-user-lib-play="1" data-user-lib-url="${o.encUrl}" data-user-lib-title="${o.encTitle}" data-user-lib-art="${o.encArt}" data-discovery-by="${encodeURIComponent(origBy)}" ${o.playData} aria-label="Play original ${escapeHtml(orig.title)}">
-          <span class="followActRemixFlowOrigArt">
-            <img src="${escapeHtml(o.artSafe)}" alt="" decoding="async" loading="lazy" />
-          </span>
-          <span class="followActRemixFlowOrigBody">
-            <span class="followActRemixFlowOrigChip">Original</span>
-            <span class="followActRemixFlowOrigTitle">${escapeHtml(orig.title)}</span>
-            <span class="followActRemixFlowOrigBy">${escapeHtml(origBy)}</span>
-          </span>
-          <span class="followActRemixFlowOrigPlay" aria-hidden="true">${discoverPlayBtnSvg(14)}</span>
-        </button>
+        ${feedRemixFlowOrigBlockHtml(orig, profMap)}
         <div class="followActRemixFlowBridge" aria-hidden="true">
           <span class="followActRemixFlowBridgeLine"></span>
           ${remixIconSvgHtml()}
           <span class="followActRemixFlowBridgeLabel">Remix</span>
           <span class="followActRemixFlowBridgeLine"></span>
         </div>
-        ${remixHero}
+        ${remixResultHtml}
       </div>`;
 }
 
@@ -14404,9 +14542,8 @@ function followingActivityRowHtml(t, profMap, idx, opts = {}) {
     subtitle,
     xstyle,
   });
-  // Remix posts with a playable public original render BOTH songs as two
-  // square tiles side by side — original left, remix right.
-  const orig = !mashupBlockHtml && t._remixOriginal && String(t._remixOriginal.url || "").trim() ? t._remixOriginal : null;
+  // Remix: original reference on top, remix result below (Friends + Profile Posts).
+  const orig = !mashupBlockHtml ? remixOriginalForFeedTrack(t) : null;
   let remixPairHtml = "";
   let showHeadLine = !mashupBlockHtml;
   if (orig) {
@@ -14420,6 +14557,7 @@ function followingActivityRowHtml(t, profMap, idx, opts = {}) {
         artSafe,
         safeTitle,
         subtitle,
+        xstyle: true,
       });
     } else {
       const origBy = orig.username ? `@${orig.username}` : "Original";
@@ -17897,6 +18035,11 @@ async function hydrateRemixOriginalsForTracks(tracks) {
         publicOnProfile: true,
       };
     }
+    for (const t of list) {
+      if (t._remixOriginal && String(t._remixOriginal.url || "").trim()) continue;
+      const stub = remixOriginalForFeedTrack(t);
+      if (stub && String(stub.url || "").trim()) t._remixOriginal = stub;
+    }
   } catch {}
 }
 
@@ -18424,6 +18567,11 @@ async function fetchAudioForRemix(rawUrl) {
     return r.blob();
   }
 
+  // Same absolute-URL rules as playback — relative `/api/suno/audio?…` saved
+  // in Supabase must hit the deployed API, not capacitor://localhost on iOS.
+  const firstUrl = inlinePlaybackUrl(original) || normalizeAudioUrlForPlayback(original);
+  if (!firstUrl) throw new Error("This post has no audio URL");
+
   const proxyOnce = async (target) => {
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), 25000);
@@ -18462,33 +18610,16 @@ async function fetchAudioForRemix(rawUrl) {
     }
   };
 
-  // Pick a sensible first attempt. If `original` is ALREADY a
-  // `/api/suno/audio?url=…` wrapper, hit it directly (don't double-wrap)
-  // so the server doesn't try to URL-parse a relative path. Otherwise,
-  // wrap into the proxy.
-  let firstUrl;
-  if (original.includes("/api/suno/audio?")) {
-    firstUrl = hubAbsoluteUrl(original);
-  } else if (/^https?:\/\//i.test(original)) {
-    firstUrl = hubAbsoluteUrl(toAudioProxyUrl(original));
-  } else {
-    firstUrl = hubAbsoluteUrl(original);
-  }
-
   try {
     return await proxyOnce(firstUrl);
   } catch (eFirst) {
     console.warn("[remix] proxy fetch failed", { firstUrl, err: eFirst });
-    // Last-ditch: try the raw CDN URL directly. Will only work if the
-    // CDN sets permissive CORS, but it's a free retry — we already
-    // know the proxy didn't deliver. This commonly rescues iOS Safari
-    // when the serverless function timed out on a slow backend.
-    if (/^https?:\/\//i.test(original) && original !== firstUrl) {
+    const inner = unwrapInnermostHttpAudioUrl(original);
+    if (inner && /^https?:\/\//i.test(inner) && inner !== firstUrl && !isArchivedSongStorageUrl(inner)) {
       try {
-        return await proxyOnce(original);
+        return await proxyOnce(inner);
       } catch (eSecond) {
-        console.warn("[remix] direct fetch failed", { original, err: eSecond });
-        // Surface the most informative error.
+        console.warn("[remix] direct fetch failed", { original: inner, err: eSecond });
         const reason =
           eFirst?.message && eFirst.message !== "Failed to fetch"
             ? eFirst.message
@@ -20264,6 +20395,78 @@ function deepFindTaskIdString(obj, depth = 0) {
     }
   }
   return "";
+}
+
+const MUSIC_PROVIDER_LS_KEY = "nabadMusicProvider";
+const MUSIC_PROVIDER_PREFS = ["suno", "minimax", "lyria", "elevenlabs"];
+
+function normalizeMusicProviderPref(raw) {
+  const v = String(raw || "").trim().toLowerCase();
+  return MUSIC_PROVIDER_PREFS.includes(v) ? v : "";
+}
+
+/** Admin-only engine picker; defaults to Suno (alt providers for staging A/B). */
+function getMusicProviderPref() {
+  if (!creditsState.isAdmin) return "suno";
+  try {
+    const saved = normalizeMusicProviderPref(localStorage.getItem(MUSIC_PROVIDER_LS_KEY));
+    if (saved) return saved;
+  } catch {}
+  return "suno";
+}
+
+function setMusicProviderPref(pref) {
+  if (!creditsState.isAdmin) return;
+  const p = normalizeMusicProviderPref(pref) || "suno";
+  try {
+    localStorage.setItem(MUSIC_PROVIDER_LS_KEY, p);
+  } catch {}
+  syncSettingsMusicProviderRow(p);
+}
+
+function musicProviderSubline(pref) {
+  if (pref === "minimax") return "MiniMax — English only, one variant (staging)";
+  if (pref === "lyria") return "Lyria — Google Gemini, one variant (~$0.08/song)";
+  if (pref === "elevenlabs") return "ElevenLabs — music_v2, one variant (~$0.45/song)";
+  return "Suno — two variants per song";
+}
+
+function useAltMusicProvider() {
+  const pref = getMusicProviderPref();
+  return creditsState.isAdmin && (pref === "minimax" || pref === "lyria" || pref === "elevenlabs");
+}
+
+function useMinimaxMusicProvider() {
+  return creditsState.isAdmin && getMusicProviderPref() === "minimax";
+}
+
+function useLyriaMusicProvider() {
+  return creditsState.isAdmin && getMusicProviderPref() === "lyria";
+}
+
+function useElevenlabsMusicProvider() {
+  return creditsState.isAdmin && getMusicProviderPref() === "elevenlabs";
+}
+
+function musicGenerateApiPath() {
+  const pref = getMusicProviderPref();
+  if (pref === "minimax") return "/api/music/generate?provider=minimax";
+  if (pref === "lyria") return "/api/music/generate?provider=lyria";
+  if (pref === "elevenlabs") return "/api/music/generate?provider=elevenlabs";
+  return "/api/suno/generate";
+}
+
+function musicStatusApiPath(taskId) {
+  const tid = String(taskId || "").trim();
+  if (tid.startsWith("mmx_") || tid.startsWith("lyr_") || tid.startsWith("elv_")) {
+    return `/api/music/status?taskId=${encodeURIComponent(tid)}`;
+  }
+  return `/api/suno/status?taskId=${encodeURIComponent(tid)}`;
+}
+
+function isSingleVariantMusicTask(taskId) {
+  const tid = String(taskId || "").trim();
+  return tid.startsWith("mmx_") || tid.startsWith("lyr_") || tid.startsWith("elv_");
 }
 
 function extractTaskIdLoose(data) {
@@ -22551,10 +22754,35 @@ function formatProRenewShort(iso) {
 }
 
 function syncProSubscriptionUi() {
-  syncProfileProBanner();
+  syncProfileProAvatarPill();
   syncSettingsProRow();
   syncCreditsProUpsell();
   try { refreshProSubscriptionUi(); } catch {}
+}
+
+function syncProfileProAvatarPill() {
+  const pill = els.profileProAvatarPill;
+  const tabPill = document.getElementById("tabProfileProPill");
+  const wrap = document.getElementById("profileAuraAvatarWrap");
+  const tabSlot = document.getElementById("tabProfileAvatarSlot");
+  const show = isAppLoggedIn() && Boolean(creditsState.proActive);
+  if (pill) {
+    pill.hidden = !show;
+    pill.setAttribute("aria-hidden", show ? "false" : "true");
+  }
+  if (tabPill) {
+    tabPill.hidden = !show;
+    tabPill.setAttribute("aria-hidden", show ? "false" : "true");
+  }
+  if (wrap) wrap.classList.toggle("hasPro", show);
+  if (tabSlot) tabSlot.classList.toggle("hasPro", show);
+  if (show) {
+    if (pill) {
+      pill.textContent = "Pro";
+      pill.title = "NabadAi Pro";
+    }
+    if (tabPill) tabPill.title = "NabadAi Pro";
+  }
 }
 
 function syncSettingsProRow() {
@@ -22584,56 +22812,6 @@ function syncCreditsProUpsell() {
   const show = isAppLoggedIn() && !creditsState.proActive;
   card.hidden = !show;
   card.setAttribute("aria-hidden", show ? "false" : "true");
-}
-
-function syncProfileProBanner() {
-  if (!els.profileProBanner) return;
-  const isAuthed = isAppLoggedIn();
-  const cta = document.getElementById("profileProBannerCta");
-  const sub = document.getElementById("profileProBannerSub");
-  if (!isAuthed) {
-    els.profileProBanner.hidden = true;
-    els.profileProBanner.setAttribute("aria-hidden", "true");
-    return;
-  }
-
-  if (creditsState.proActive) {
-    els.profileProBanner.hidden = false;
-    els.profileProBanner.setAttribute("aria-hidden", "false");
-    els.profileProBanner.classList.add("profileProBanner--active");
-    els.profileProBanner.setAttribute("href", "#/pro");
-    els.profileProBanner.setAttribute("data-route-link", "pro");
-    els.profileProBanner.setAttribute(
-      "aria-label",
-      "NabadAi Pro — your subscription is active",
-    );
-    if (cta) {
-      const trialing = String(creditsState.proStatus || "").toLowerCase() === "trialing";
-      cta.textContent = trialing ? "Trial" : "Active";
-      cta.classList.add("profileProBannerCta--status");
-    }
-    if (sub) {
-      const renew = formatProRenewShort(creditsState.proPeriodEnd);
-      const plan = proPlanLabelShort(creditsState.proPlanId);
-      sub.textContent = [plan, renew].filter(Boolean).join(" · ") || "Pro benefits unlocked";
-    }
-    return;
-  }
-
-  els.profileProBanner.classList.remove("profileProBanner--active");
-  els.profileProBanner.setAttribute("href", "#/pro");
-  els.profileProBanner.setAttribute("data-route-link", "pro");
-  els.profileProBanner.setAttribute(
-    "aria-label",
-    "NabadAi Pro — subscribe for Studio, unlimited Coach, and more credits",
-  );
-  els.profileProBanner.hidden = false;
-  els.profileProBanner.setAttribute("aria-hidden", "false");
-  if (cta) {
-    cta.textContent = "Subscribe now";
-    cta.classList.remove("profileProBannerCta--status");
-  }
-  if (sub) sub.textContent = "Studio, unlimited Coach & 1,000+ credits/mo";
 }
 
 /** Live Suno API remaining credits (same pool as `SUNO_API_KEY`). Shown on
@@ -22800,12 +22978,14 @@ async function refreshMyCredits({ silent = false } = {}) {
       els.creditsAdminCard.style.display = creditsState.isAdmin ? "" : "none";
     }
     if (creditsState.isAdmin) await refreshAdminCreditsView();
+    try { syncSettingsMusicProviderRow(); } catch {}
   } catch (e) {
     creditsState.lastError = e?.message || String(e);
     paintCreditsAccountEmail(authSession?.user?.email || activeProfile?.email);
     if (!silent) console.warn("[credits/me]", creditsState.lastError);
   } finally {
     creditsState.inFlight = false;
+    try { syncSettingsMusicProviderRow(); } catch {}
   }
   return creditsState;
 }
@@ -29718,6 +29898,7 @@ function renderUserPublicIdentity(prof, handleFallback = "") {
   }
   stack?.classList.toggle("userPublicNameStack--hasDisplayName", Boolean(friendly));
   syncUserPublicVerifiedBadge(prof);
+  syncUserPublicProBadge(currentUserPublicSocialStats);
 }
 
 function setUserPublicLoading(on, username = "") {
@@ -29799,6 +29980,7 @@ async function refreshUserPublicSocial({ username, userId, songCount }) {
   currentUserPublicSocialStats = data?.stats || { followers: 0, following: 0, isFollowing: false, followsViewer: false };
   renderUserPublicSocialStats({ songCount, stats: currentUserPublicSocialStats });
   renderUserPublicFollowButton();
+  syncUserPublicProBadge(currentUserPublicSocialStats);
 }
 
 async function toggleCurrentUserPublicFollow() {
@@ -37202,6 +37384,7 @@ async function renderUserProfilePublicLibraryAsync(username, userId = "", gen = 
       els.userPublicEmpty.style.display = "";
     }
     syncUserPublicVerifiedBadge(null);
+    syncUserPublicProBadge(null);
     setUserPublicLoading(false);
     return;
   }
@@ -37265,6 +37448,7 @@ async function renderUserProfilePublicLibraryAsync(username, userId = "", gen = 
   currentUserPublicSocialStats = resolvedSocialStats || { followers: 0, following: 0, isFollowing: false, followsViewer: false };
   renderUserPublicSocialStats({ songCount: songs.length, stats: currentUserPublicSocialStats });
   renderUserPublicFollowButton();
+  syncUserPublicProBadge(currentUserPublicSocialStats);
   if (!songs.length && !repostItems.length) {
     if (!stillCurrent()) return;
     _userPublicProfileCache = null;
@@ -37282,6 +37466,7 @@ async function renderUserProfilePublicLibraryAsync(username, userId = "", gen = 
       els.userPublicEmpty.style.display = "";
     }
     syncUserPublicVerifiedBadge(prof);
+    syncUserPublicProBadge(currentUserPublicSocialStats);
     renderUserPublicFollowButton();
     setUserPublicLoading(false);
     return;
@@ -37331,6 +37516,7 @@ async function renderUserProfilePublicLibraryAsync(username, userId = "", gen = 
     if (_userPublicProfileCache) renderUserPublicSegmentFromCache();
   });
   syncUserPublicVerifiedBadge(prof);
+  syncUserPublicProBadge(currentUserPublicSocialStats);
   } catch (e) {
     console.warn("[userPublic] profile load failed", e);
     if (stillCurrent()) {
@@ -40818,6 +41004,22 @@ function syncUserPublicVerifiedBadge(prof) {
   const nameRow = document.querySelector(".userPublicNameRow");
   const anchor = friendly && displayEl ? displayEl : nameRow;
   if (anchor && el.parentElement !== anchor) anchor.appendChild(el);
+}
+
+function syncUserPublicProBadge(stats) {
+  const pill = els.userPublicProAvatarPill || document.getElementById("userPublicProAvatarPill");
+  const wrap = document.getElementById("userPublicAvatarWrap");
+  const loading = els.userPublicCard?.getAttribute?.("data-loading") === "true";
+  const show = !loading && Boolean(stats?.proActive);
+  if (pill) {
+    pill.hidden = !show;
+    pill.setAttribute("aria-hidden", show ? "false" : "true");
+    if (show) {
+      pill.textContent = "Pro";
+      pill.title = "NabadAi Pro";
+    }
+  }
+  if (wrap) wrap.classList.toggle("hasPro", show);
 }
 
 function renderProfileNabadCertBadge() {
@@ -50298,6 +50500,7 @@ function parseSunoGenerationRecordInfo(data) {
 
 function resolveExpectedGenerationVariants(taskId) {
   const tid = String(taskId || "").trim();
+  if (tid.startsWith("mmx_")) return 1;
   const pending = getGenerationPending();
   if (tid && pending?.taskId && String(pending.taskId) === tid) {
     return Math.max(
@@ -52121,7 +52324,11 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
 
   const fetchGenerationStatus = async () => {
     if (!sunoTaskId) return null;
-    const r = await fetch(apiUrl(`/api/suno/status?taskId=${encodeURIComponent(sunoTaskId)}`));
+    const statusTok = getSupabaseAuthToken();
+    const r = await fetch(apiUrl(musicStatusApiPath(sunoTaskId)), {
+      cache: "no-store",
+      headers: statusTok ? { Authorization: `Bearer ${statusTok}` } : undefined,
+    });
     const data = await r.json().catch(() => ({}));
     // The Suno proxy returns 200 with the full body when Suno itself
     // responded — even when that body contains a failure. Only treat
@@ -53018,86 +53225,117 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
         hasReference ? "Upload reference song" : "Generate song",
         async () => {
           if (hasReference) {
-            const fd = new FormData();
             const sendFile = resolveVocalReferenceForSubmit();
-            if (!sendFile || !sendFile.size) {
+            const remixSourceRaw = String(
+              currentRemixSource?.originalUrl || currentRemixSource?.url || "",
+            ).trim();
+            const remixServerFetch =
+              vocalRefOrigin === "remix" &&
+              Boolean(remixSourceRaw || unwrapInnermostHttpAudioUrl(remixSourceRaw));
+            if (!remixServerFetch && (!sendFile || !sendFile.size)) {
               throw new Error(
                 "Lost the vocal reference before upload. Tap '+ Audio' or Record again, then Generate."
               );
             }
-            // Fingerprint the EXACT bytes we're about to send. We stamp the
-            // FormData so the server can echo it back into its logs, and we
-            // show the short prefix to the user in the status strip. If two
-            // consecutive generations show the SAME fingerprint, we know the
-            // recorder handed us cached bytes (not a sticky JS variable).
-            const sendFp = await computeBytesFingerprint(sendFile);
-            try {
-              console.info("[voice] upload fingerprint", {
-                size: sendFile.size,
-                type: sendFile.type,
-                name: sendFile.name,
-                fp: sendFp,
-                origin: vocalRefOrigin,
-                referenceInstrumentalOnly,
-              });
-            } catch {}
-            if (sendFp) {
-              const fpShort = sendFp.slice(0, 8);
-              const kb = Math.max(1, Math.round(sendFile.size / 1024));
-              setStatus(`Uploading voice clip · #${fpShort} (${kb} KB)`);
-              // Toast it too — status text gets overwritten by the polling
-              // loop within ~1s, so the toast is the only thing the user
-              // can actually catch. This is the "did my new bytes leave
-              // the phone?" proof point we asked for last round.
-              try {
-                showToast(`Uploading ${kb} KB · #${fpShort}`, {
-                  icon: "↑",
-                  durationMs: 5200,
-                });
-              } catch {}
-            }
-            fd.append("action", "add_instrumental");
-            // Both vocal and instrumental melody references stay on upload-cover.
-            // `vocal_instrumental` asks Suno for a cover-style instrumental,
-            // not underpainting/add-instrumental.
             const stemRefMode = referenceInstrumentalOnly
               ? "vocal_instrumental"
               : hubRemixLocked
               ? "song_remix"
               : "vocal_full";
-            fd.append("referenceMode", stemRefMode);
-            const uploadBaseName = sendFile?.name || "vocal-reference.webm";
-            const uniqueUploadName = `ref-${Date.now()}-${uploadBaseName.replace(/^.*[/\\]/, "")}`;
-            fd.append("file", sendFile, uniqueUploadName);
-            fd.append("fileName", uniqueUploadName);
-            fd.append("fileType", sendFile?.type || "audio/webm");
-            if (sendFp) fd.append("clientFingerprint", sendFp);
-            fd.append("style", String(payload.style || userStyle || "").trim());
-            if (!referenceInstrumentalOnly && finalPrompt) fd.append("prompt", String(finalPrompt));
-            fd.append(
-              "title",
-              String((els.sunoTitle?.value || "").trim() || (referenceInstrumentalOnly ? "Reference instrumental" : "Reference full song"))
-            );
-            fd.append("model", LATEST_SUNO_MODEL);
-            if (referenceInstrumentalOnly) {
-              fd.append("audioWeight", "0.95");
-              fd.append("styleWeight", "0.25");
-            }
-            if (payload?.vocalGender) fd.append("vocalGender", String(payload.vocalGender));
-            if (payload?.voiceTimbre) fd.append("voiceTimbre", String(payload.voiceTimbre));
-            if (payload?.songKey) fd.append("songKey", String(payload.songKey));
-            if (timing) fd.append("timing", String(timing));
-            if (dialect) fd.append("dialect", String(dialect));
-            if (lyricDialectHint) fd.append("dialectHint", String(lyricDialectHint));
-            if (userAvoidTags) fd.append("negativeTags", userAvoidTags);
-            if (payload?.personaId) fd.append("personaId", String(payload.personaId));
+            const stemsPayload = {
+              action: "add_instrumental",
+              referenceMode: stemRefMode,
+              style: String(payload.style || userStyle || "").trim(),
+              title: String(
+                (els.sunoTitle?.value || "").trim() ||
+                  (referenceInstrumentalOnly ? "Reference instrumental" : "Reference full song"),
+              ),
+              model: LATEST_SUNO_MODEL,
+              ...(referenceInstrumentalOnly ? { audioWeight: 0.95, styleWeight: 0.25 } : {}),
+              ...(payload?.vocalGender ? { vocalGender: String(payload.vocalGender) } : {}),
+              ...(payload?.voiceTimbre ? { voiceTimbre: String(payload.voiceTimbre) } : {}),
+              ...(payload?.songKey ? { songKey: String(payload.songKey) } : {}),
+              ...(timing ? { timing: String(timing) } : {}),
+              ...(dialect ? { dialect: String(dialect) } : {}),
+              ...(lyricDialectHint ? { dialectHint: String(lyricDialectHint) } : {}),
+              ...(userAvoidTags ? { negativeTags: userAvoidTags } : {}),
+              ...(payload?.personaId ? { personaId: String(payload.personaId) } : {}),
+              ...(!referenceInstrumentalOnly && finalPrompt ? { prompt: String(finalPrompt) } : {}),
+            };
             const stemsTok = getSupabaseAuthToken();
-            const rr = await fetch(apiUrl("/api/suno/stems"), {
-              method: "POST",
-              headers: stemsTok ? { Authorization: `Bearer ${stemsTok}` } : undefined,
-              body: fd,
-            });
-            const dd = await rr.json().catch(() => ({}));
+            let rr;
+            let dd = {};
+            if (remixServerFetch) {
+              try {
+                showToast("Preparing remix source on server…", { icon: "↑", durationMs: 8000 });
+              } catch {}
+              setStatus("Server is fetching the remix source audio…");
+              stemsPayload.sourceAudioUrl =
+                unwrapInnermostHttpAudioUrl(remixSourceRaw) || remixSourceRaw;
+              rr = await apiFetch("/api/suno/stems", {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  ...(stemsTok ? { Authorization: `Bearer ${stemsTok}` } : {}),
+                },
+                body: JSON.stringify(stemsPayload),
+              });
+              dd = await rr.json().catch(() => ({}));
+            } else {
+              const fd = new FormData();
+              const sendFp = await computeBytesFingerprint(sendFile);
+              try {
+                console.info("[voice] upload fingerprint", {
+                  size: sendFile.size,
+                  type: sendFile.type,
+                  name: sendFile.name,
+                  fp: sendFp,
+                  origin: vocalRefOrigin,
+                  referenceInstrumentalOnly,
+                });
+              } catch {}
+              if (sendFp) {
+                const fpShort = sendFp.slice(0, 8);
+                const kb = Math.max(1, Math.round(sendFile.size / 1024));
+                setStatus(`Uploading voice clip · #${fpShort} (${kb} KB)`);
+                try {
+                  showToast(`Uploading ${kb} KB · #${fpShort}`, {
+                    icon: "↑",
+                    durationMs: 5200,
+                  });
+                } catch {}
+              }
+              const uploadBaseName = sendFile?.name || "vocal-reference.webm";
+              const uniqueUploadName = `ref-${Date.now()}-${uploadBaseName.replace(/^.*[/\\]/, "")}`;
+              fd.append("action", stemsPayload.action);
+              fd.append("referenceMode", stemsPayload.referenceMode);
+              fd.append("file", sendFile, uniqueUploadName);
+              fd.append("fileName", uniqueUploadName);
+              fd.append("fileType", sendFile?.type || "audio/webm");
+              if (sendFp) fd.append("clientFingerprint", sendFp);
+              fd.append("style", stemsPayload.style);
+              if (stemsPayload.prompt) fd.append("prompt", stemsPayload.prompt);
+              fd.append("title", stemsPayload.title);
+              fd.append("model", stemsPayload.model);
+              if (referenceInstrumentalOnly) {
+                fd.append("audioWeight", "0.95");
+                fd.append("styleWeight", "0.25");
+              }
+              if (stemsPayload.vocalGender) fd.append("vocalGender", stemsPayload.vocalGender);
+              if (stemsPayload.voiceTimbre) fd.append("voiceTimbre", stemsPayload.voiceTimbre);
+              if (stemsPayload.songKey) fd.append("songKey", stemsPayload.songKey);
+              if (stemsPayload.timing) fd.append("timing", stemsPayload.timing);
+              if (stemsPayload.dialect) fd.append("dialect", stemsPayload.dialect);
+              if (stemsPayload.dialectHint) fd.append("dialectHint", stemsPayload.dialectHint);
+              if (stemsPayload.negativeTags) fd.append("negativeTags", stemsPayload.negativeTags);
+              if (stemsPayload.personaId) fd.append("personaId", stemsPayload.personaId);
+              rr = await fetch(apiUrl("/api/suno/stems"), {
+                method: "POST",
+                headers: stemsTok ? { Authorization: `Bearer ${stemsTok}` } : undefined,
+                body: fd,
+              });
+              dd = await rr.json().catch(() => ({}));
+            }
             if (rr.status === 402 || dd?.code === "insufficient_credits") {
               const need = Number(dd?.needed ?? 10);
               const have = Number(dd?.balance || 0);
@@ -53152,7 +53390,43 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
           }
 
           const authToken = getSupabaseAuthToken();
-          const r = await fetch(apiUrl("/api/suno/generate"), {
+          if (useAltMusicProvider()) {
+            const altProvider = getMusicProviderPref();
+            const providerLabel =
+              altProvider === "lyria"
+                ? "Lyria"
+                : altProvider === "elevenlabs"
+                  ? "ElevenLabs"
+                  : "MiniMax";
+            if (personaIdSel || hasReference) {
+              setLoading(false);
+              setGenerateBtn("Generate song", false, "generate");
+              setGenerateFieldsLocked(false);
+              setProgress(0);
+              try {
+                showToast(
+                  `${providerLabel} test mode doesn't support persona or reference uploads yet.`,
+                  { icon: "!", durationMs: 6400 },
+                );
+              } catch {}
+              setStatus(`${providerLabel} test mode: remove persona and reference uploads first.`);
+              return;
+            }
+            try {
+              showToast(`${providerLabel} composing… keep the app open (about 1–3 min).`, {
+                icon: "♪",
+                durationMs: 180000,
+              });
+            } catch {}
+            setStatus(
+              altProvider === "lyria"
+                ? "Lyria is composing your song… usually 2–3 minutes. Keep the app open."
+                : altProvider === "elevenlabs"
+                  ? "ElevenLabs is composing your song… usually 1–3 minutes. Keep the app open."
+                  : "MiniMax is composing your song… usually 1–2 minutes. Keep the app open.",
+            );
+          }
+          const r = await fetch(apiUrl(musicGenerateApiPath()), {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
@@ -53177,7 +53451,8 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
           }
           if (!r.ok) {
             const more = d?.detailMessage || d?.details?.message || d?.details?.error || "";
-            throw new Error(`${d?.error || "Song generation failed"}${more ? `: ${more}` : ""}`);
+            const modelHint = d?._model ? ` (engine: ${d._model})` : "";
+            throw new Error(`${d?.error || "Song generation failed"}${more ? `: ${more}` : ""}${modelHint}`);
           }
           if (d?._credits && Number.isFinite(Number(d._credits.balance))) {
             setCreditsBalance(Number(d._credits.balance));
@@ -53197,6 +53472,20 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       );
 
       sunoTaskId = extractTaskIdLoose(data);
+      const isSingleVariantTask = isSingleVariantMusicTask(sunoTaskId);
+      const altImmediateUrl = isSingleVariantTask
+        ? String(
+            data?.data?.audioUrl ||
+            data?.data?.audio_url ||
+            deepFindFirstStringByKeys(data, ["audioUrl", "audio_url"]) ||
+            "",
+          ).trim()
+        : "";
+      const altReadyNow = Boolean(
+        isSingleVariantTask &&
+        altImmediateUrl &&
+        (data?._ready || data?._provider === "minimax" || data?._provider === "lyria" || data?._provider === "elevenlabs"),
+      );
       savePendingBackendTask(sunoTaskId || "");
       if (sunoTaskId) {
         saveRecoverableGenerationTask(sunoTaskId, String(els.sunoTitle?.value || "").trim());
@@ -53206,6 +53495,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
           source: imageMoodAppliedForNextGen ? "photo" : "",
           photoCoverDataUrl: resolvePendingPhotoCoverDataUrl(),
           photoCoverOnly: imageMoodCoverOnlyForNextGen,
+          variantCount: isSingleVariantTask ? 1 : GENERATION_VARIANT_COUNT,
         });
         syncGenerationPendingLibraryUi();
         if (!imageMoodAppliedForNextGen && !resolvePendingPhotoCoverDataUrl() && isPollinationsCoverEligible(lastGenerationMeta)) {
@@ -53218,15 +53508,17 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
             }),
           );
         }
-        try {
-          beginCoachGenerationStatus({
-            variantCount: GENERATION_VARIANT_COUNT,
-            pillText: imageMoodAppliedForNextGen
-              ? coachPhotoMoodPillText(GENERATION_VARIANT_COUNT)
-              : "",
-          });
-        } catch {}
-        try { openProfileSongsWhileGenerating(); } catch {}
+        if (!altReadyNow) {
+          try {
+            beginCoachGenerationStatus({
+              variantCount: isSingleVariantTask ? 1 : GENERATION_VARIANT_COUNT,
+              pillText: imageMoodAppliedForNextGen
+                ? coachPhotoMoodPillText(isSingleVariantTask ? 1 : GENERATION_VARIANT_COUNT)
+                : "",
+            });
+          } catch {}
+          try { openProfileSongsWhileGenerating(); } catch {}
+        }
         try { setLoading(false); } catch {}
       }
       sunoAudioId = null;
@@ -53262,6 +53554,45 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       if (els.btnLoadInstrumental) els.btnLoadInstrumental.disabled = true;
       if (els.btnPlayVocals) els.btnPlayVocals.disabled = true;
       if (els.btnPlayInstrumental) els.btnPlayInstrumental.disabled = true;
+
+      if (altReadyNow) {
+        sunoAudioId = String(data?.data?.audioId || data?.data?.audio_id || `${sunoTaskId}_a`).trim() || null;
+        lastSunoFullUrl = altImmediateUrl;
+        lastSunoProxyUrl = toAudioProxyUrl(altImmediateUrl);
+        lastSunoTitle = String(els.sunoTitle?.value || "").trim() || "Generated song";
+        if (els.sunoFullLink) setLink(els.sunoFullLink, lastSunoProxyUrl || altImmediateUrl);
+        if (els.btnLoadFull) els.btnLoadFull.disabled = false;
+        try { await cacheGeneratedAudio(lastSunoProxyUrl || altImmediateUrl); } catch {}
+        const genMeta = lastGenerationMeta;
+        const variantAEntry = addToLibrary({
+          title: lastSunoTitle,
+          artUrl: lastSunoArtUrl,
+          url: lastSunoProxyUrl || lastSunoFullUrl,
+          taskId: sunoTaskId || "",
+          audioId: sunoAudioId || "",
+          kind: "full",
+          meta: { ...genMeta, variant: "A" },
+        });
+        cancelParallelCoverForTask(sunoTaskId || "");
+        clearGenerationPending(sunoTaskId || "");
+        try {
+          pushLocalGenerationReadyActivity([variantAEntry].filter(Boolean), { taskId: sunoTaskId || "" });
+        } catch {}
+        syncGenerationPendingLibraryUi();
+        clearPhotoCoverForGeneration();
+        resetNabadLyricsDraftState();
+        savePendingBackendTask("");
+        setStatus("Song ready.");
+        try { finishCoachGenerationReady({ variantCount: 1 }); } catch {}
+        markGenerationReadyNotice();
+        setGenerateBtn("Regenerate", false, "regenerate");
+        setGenerateFieldsLocked(false);
+        setProgress(100);
+        showResultCard(true);
+        imageMoodAppliedForNextGen = false;
+        void refreshSunoCredits();
+        return;
+      }
 
       if (!sunoTaskId) {
         const providerMsg =
@@ -53338,9 +53669,10 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
           });
         } catch {}
       } else {
-        setStatus(`Generation failed: ${e?.message || String(e)}`);
+        const failMsg = String(e?.message || "Something went wrong — please try again.").trim();
+        setStatus(`Generation failed: ${failMsg}`);
         try {
-          showToast("Something went wrong — please try again.", { icon: "✗", durationMs: 8000 });
+          showToast(failMsg.slice(0, 240), { icon: "✗", durationMs: 9000 });
         } catch {}
         try {
           pushLocalGenerationFailedActivity({
@@ -54447,6 +54779,7 @@ function resumePriorityJobsIfPending() {
   } catch {}
   const fab = document.getElementById("coachFab");
   if (fab) fab.addEventListener("click", () => openNabadCoach());
+  try { syncCoachFabHeaderMount(); } catch {}
   try { scheduleCoachFabNudge(); } catch {}
   try { syncCoachGenerationStatusFromPending(getGenerationPending()); } catch {}
   try { syncCoachPriorityStatusFromPending(getPriorityPending()); } catch {}
@@ -54592,11 +54925,33 @@ function syncGenerateOrbVisibility() {
 function autoResizeLyricsBox() {
   if (!els.sunoPrompt) return;
   const el = els.sunoPrompt;
+  try { applyLyricsInputBidi(el); } catch {}
   el.style.height = "auto";
   const base = 132;
   const max = 340;
   const next = Math.max(base, Math.min(max, el.scrollHeight));
   el.style.height = `${next}px`;
+}
+
+function wireLyricsPromptBidiOnce() {
+  const el = els.sunoPrompt;
+  if (!el || el.dataset.lyricsBidiWired) return;
+  el.dataset.lyricsBidiWired = "1";
+  try { applyLyricsInputBidi(el); } catch {}
+
+  const onPaste = (e) => {
+    const raw = e.clipboardData?.getData("text/plain");
+    if (raw == null) return;
+    e.preventDefault();
+    const text = normalizePastedUserText(raw);
+    insertTextAtInputSelection(el, text);
+    try { applyLyricsInputBidi(el); } catch {}
+    try { syncArabicAddressVisibility(); } catch {}
+    try { autoResizeLyricsBox(); } catch {}
+    el.dispatchEvent(new Event("input", { bubbles: true }));
+  };
+
+  el.addEventListener("paste", onPaste);
 }
 function setGenerateInputFocus(activePanel) {
   const flow = document.getElementById("createFlow");
@@ -55002,6 +55357,7 @@ if (els.brandTitle) {
 }
 els.sunoPrompt?.addEventListener("input", autoResizeLyricsBox);
 els.sunoPrompt?.addEventListener("focus", autoResizeLyricsBox);
+wireLyricsPromptBidiOnce();
 wireCreatePageKeyboardOnce();
 setTimeout(autoResizeLyricsBox, 0);
 // Defer the cold-start Library + Hub renders to after first paint.
@@ -56062,15 +56418,18 @@ if (els.btnPlayerBecomeFan) {
 if (els.btnUserPublicBack) {
   els.btnUserPublicBack.addEventListener("click", () => {
     haptic("light");
-    const back = String(_userPublicReturnHash || "").trim();
-    if (back) {
-      location.hash = back;
-      return;
-    }
+    // Avatar/link navigation pushes a real history entry (Hub → profile).
+    // Setting location.hash here pushes again (Hub ↔ profile ping-pong).
     if (history.length > 1) {
       history.back();
-    } else {
-      location.hash = "#/discover";
+      return;
+    }
+    const back = String(_userPublicReturnHash || "#/discover").trim() || "#/discover";
+    try {
+      history.replaceState(null, "", back);
+      scheduleApplyRoute();
+    } catch {
+      location.hash = back;
     }
   });
 }
@@ -57537,8 +57896,15 @@ wireLegalLinks();
         showToast(`Blocked ${label}.`);
       } catch {}
       try {
-        location.hash = _userPublicReturnHash || "#/discover";
-      } catch {}
+        if (history.length > 1) history.back();
+        else {
+          const back = String(_userPublicReturnHash || "#/discover").trim() || "#/discover";
+          history.replaceState(null, "", back);
+          scheduleApplyRoute();
+        }
+      } catch {
+        try { location.hash = _userPublicReturnHash || "#/discover"; } catch {}
+      }
     } catch (err) {
       try {
         showToast("Couldn't block. Try again.");

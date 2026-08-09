@@ -49,9 +49,8 @@ CREDITS & NABADAI PRO (user-facing screens only — use for subscription/credit 
 
 WHERE TO SEE BALANCE & PLANS:
 - Profile: credits pill (top-left on your profile) shows your balance; tap to open Credits.
-- Profile: NabadAi Pro banner under your stats (Subscribe now) — hidden while you already have Pro.
+- Settings → Credits & plan → NabadAi Pro (full plans screen). Active Pro shows a purple Pro pill on your profile avatar.
 - Settings → Credits & plan → Credits (balance, redeem promo codes, recent activity).
-- Settings → Credits & plan → NabadAi Pro (full plans screen).
 - Credits page also has a NabadAi Pro upsell card with "View plans".
 
 CREDIT BUCKETS (Credits breakdown):
@@ -89,7 +88,7 @@ PURCHASE STATUS:
 COACH BEHAVIOR FOR THESE TOPICS:
 - Explain costs before suggesting an action that spends credits.
 - For "not enough credits": mention redeeming a promo code (Credits page) or subscribing to NabadAi Pro — never ask for payment details.
-- For Pro questions: point to Profile Pro banner, Settings → NabadAi Pro, or Credits → View plans.
+- For Pro questions: point to Settings → NabadAi Pro, the avatar Pro pill when subscribed, or Credits → View plans.
 - You cannot see the user's balance or subscription status — tell them where to check on screen.
 `.trim();
 }

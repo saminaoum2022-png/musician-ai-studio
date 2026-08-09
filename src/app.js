@@ -53294,7 +53294,8 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
           }
           if (!r.ok) {
             const more = d?.detailMessage || d?.details?.message || d?.details?.error || "";
-            throw new Error(`${d?.error || "Song generation failed"}${more ? `: ${more}` : ""}`);
+            const modelHint = d?._model ? ` (engine: ${d._model})` : "";
+            throw new Error(`${d?.error || "Song generation failed"}${more ? `: ${more}` : ""}${modelHint}`);
           }
           if (d?._credits && Number.isFinite(Number(d._credits.balance))) {
             setCreditsBalance(Number(d._credits.balance));

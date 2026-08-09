@@ -17,10 +17,29 @@ function minimaxKeyKind() {
  * - paygo Access API key → music-3.0-free ($0/song, needs Balance wallet)
  * - Subscription / Credits key → music-2.6 (~$0.15/song; music-3.0 needs $20/mo Token Plan)
  */
+function normalizeMinimaxMusicModel(name) {
+  return String(name || "").trim().toLowerCase();
+}
+
 function resolveMinimaxMusicModel(explicit) {
-  const override = String(explicit || process.env.MINIMAX_MUSIC_MODEL || "").trim();
-  if (override) return override;
-  return minimaxKeyKind() === "subscription" ? "music-2.6" : "music-3.0-free";
+  const keyKind = minimaxKeyKind();
+  const explicitModel = normalizeMinimaxMusicModel(explicit);
+  const envModel = normalizeMinimaxMusicModel(process.env.MINIMAX_MUSIC_MODEL);
+
+  if (keyKind === "subscription") {
+    // Credits / Subscription keys cannot call music-3.0* — force 2.6 unless user
+    // explicitly picked another supported paid model (not 3.x, not -free).
+    const candidate = explicitModel || envModel;
+    if (candidate && !candidate.startsWith("music-3") && !candidate.endsWith("-free")) {
+      return candidate;
+    }
+    return "music-2.6";
+  }
+
+  // Pay-as-you-go Access API key — free tier unless explicitly overridden.
+  if (explicitModel) return explicitModel;
+  if (envModel) return envModel;
+  return "music-3.0-free";
 }
 
 function safeJson(txt) {

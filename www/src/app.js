@@ -2281,7 +2281,6 @@ function renderHubNowPlaying() {
     return;
   }
 
-  applyCoverGlowRgb(els.hubNowPlaying, hubNowMeta?.art || "");
   const wasVisible = els.hubNowPlaying.classList.contains("isVisible");
   els.hubNowPlaying.style.display = "";
   const syncMiniClasses = () => {
@@ -2301,19 +2300,8 @@ function renderHubNowPlaying() {
   }
 
   if (els.hubNowArt) {
-    if (!els.hubNowArt.dataset.hubAuraBound) {
-      els.hubNowArt.dataset.hubAuraBound = "1";
-      els.hubNowArt.addEventListener("load", () => {
-        try {
-          const loaded = els.hubNowArt.currentSrc || els.hubNowArt.src || "";
-          syncHubNowAuraFromCoverUrl(loaded);
-          applyCoverGlowRgb(els.hubNowPlaying, loaded);
-        } catch {}
-      });
-    }
     const artSrc = hubNowMeta.art || DEFAULT_SONG_COVER_URL;
     assignCoverImageSrc(els.hubNowArt, artSrc, { updateClasses: false, immediate: true });
-    syncHubNowAuraFromCoverUrl(artSrc);
   }
   if (els.hubNowTitle) els.hubNowTitle.textContent = hubNowMeta.title || "Now playing";
   try {

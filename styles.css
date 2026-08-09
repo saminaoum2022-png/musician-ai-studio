@@ -246,6 +246,8 @@ html[data-theme="light"]{
   --nabad-glass-shadow-hover: 0 10px 26px rgba(88, 104, 140, 0.12);
   --nabad-glass-inset-top: inset 0 1px 0 rgba(255, 255, 255, 0.95);
   --nabad-glass-inset-bottom: inset 0 -1px 0 rgba(15, 23, 40, 0.04);
+  /* Create greeting — teal-forward name gradient (Hey stays neutral). */
+  --greeting-name-gradient: linear-gradient(120deg, #0d9488 0%, #2dd4bf 42%, #7c5cff 100%);
 }
 
 html[data-theme="light"] body{
@@ -32090,6 +32092,7 @@ html[data-theme="light"] .homeDeskTopChrome{
   background-clip: text;
   -webkit-text-fill-color: transparent;
   color: transparent;
+  font-weight: 800;
 }
 .homeDeskSub{
   margin: 10px 0 0;
@@ -48460,6 +48463,15 @@ html[data-theme="light"] .settingsOrbModeTab.isActive{
 }
 html[data-theme="light"] .followActAct:hover{
   background: rgba(15, 23, 40, 0.05);
+}
+/* Create greeting — gradient on username only; Hey stays solid. */
+html[data-theme="light"] .homeDeskGreetingName{
+  background: var(--greeting-name-gradient);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+  font-weight: 800;
 }
 /* Create hub — white cards on gray canvas (Tabby-style contrast). */
 html[data-theme="light"] .challengesPage.homeDesk .homeDeskCreateStack .homeDeskPromoCard,

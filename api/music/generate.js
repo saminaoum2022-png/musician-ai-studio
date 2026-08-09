@@ -18,7 +18,11 @@ const {
 const { userIsAdmin } = require("../_lib/admin-auth");
 const { applyCors } = require("../_lib/cors");
 const { readJson, sendJson } = require("../_lib/suno-upstream");
-const { minimaxGenerateMusic, minimaxUserMessage } = require("../_lib/minimax-upstream");
+const {
+  minimaxGenerateMusic,
+  minimaxUserMessage,
+  extractMinimaxAudio,
+} = require("../_lib/minimax-upstream");
 const { saveMinimaxTaskStatus } = require("../_lib/minimax-task-store");
 const { uploadObject } = require("../_lib/supabase-storage");
 const {
@@ -55,6 +59,22 @@ function buildPromptLabel(prompt, style, title) {
   const bits = [String(title || "").trim(), String(prompt || "").trim(), String(style || "").trim()]
     .filter(Boolean);
   return bits.join(" · ").slice(0, 500);
+}
+
+async function persistAudioBuffer({ userId, taskId, buffer, contentType = "audio/mpeg" }) {
+  if (!buffer || !Buffer.isBuffer(buffer) || buffer.length < 128) {
+    return { ok: false, error: "missing_audio_bytes" };
+  }
+  const ext = String(contentType).includes("wav") ? "wav" : "mp3";
+  const key = `${userId}/minimax/${taskId}.${ext}`;
+  const up = await uploadObject({
+    bucket: BUCKET,
+    key,
+    body: buffer,
+    contentType: String(contentType).includes("audio") ? contentType : "audio/mpeg",
+  });
+  if (!up.ok) return { ok: false, error: up.error || "upload_failed" };
+  return { ok: true, url: up.url };
 }
 
 async function persistRemoteAudio({ userId, taskId, remoteUrl }) {
@@ -175,14 +195,21 @@ module.exports = async function handler(req, res) {
     });
 
     const model = String(body?.minimaxModel || process.env.MINIMAX_MUSIC_MODEL || "music-3.0-free").trim();
+    if (!instrumental && !lyrics) {
+      return sendJson(res, 400, {
+        error: "Add lyrics or enable instrumental mode for MiniMax.",
+        code: "minimax_missing_lyrics",
+      });
+    }
+
     const upstream = await minimaxGenerateMusic({
       apiKey,
       model,
       prompt: instrumental ? stylePrompt || lyrics || "Instrumental track" : stylePrompt || "Modern pop song",
       lyrics: instrumental ? "" : lyrics,
       isInstrumental: instrumental,
-      lyricsOptimizer: !instrumental && !lyrics,
-      outputFormat: "url",
+      lyricsOptimizer: false,
+      outputFormat: "hex",
     });
 
     if (!upstream.ok) {
@@ -201,20 +228,36 @@ module.exports = async function handler(req, res) {
       });
     }
 
-    const remoteAudio =
-      upstream.data?.data?.audio ||
-      upstream.data?.audio ||
-      upstream.data?.data?.audio_url ||
-      upstream.data?.audio_url ||
-      "";
-    let audioUrl = String(remoteAudio || "").trim();
-    if (audioUrl.startsWith("http")) {
-      const archived = await persistRemoteAudio({ userId: user.userId, taskId, remoteUrl: audioUrl });
-      if (archived.ok && archived.url) audioUrl = archived.url;
+    const parsedAudio = extractMinimaxAudio(upstream.data);
+    let audioUrl = "";
+    if (parsedAudio?.kind === "url") {
+      const archived = await persistRemoteAudio({
+        userId: user.userId,
+        taskId,
+        remoteUrl: parsedAudio.url,
+      });
+      audioUrl = archived.ok && archived.url ? archived.url : parsedAudio.url;
+    } else if (parsedAudio?.kind === "hex") {
+      const archived = await persistAudioBuffer({
+        userId: user.userId,
+        taskId,
+        buffer: parsedAudio.buffer,
+      });
+      if (!archived.ok || !archived.url) {
+        return sendJson(res, 502, {
+          error: "MiniMax audio upload failed — try again.",
+          details: { traceId: upstream.data?.trace_id || null, upload: archived.error || null },
+        });
+      }
+      audioUrl = archived.url;
     } else {
       return sendJson(res, 502, {
-        error: "MiniMax returned no playable audio URL — try again.",
-        details: { traceId: upstream.data?.trace_id || null },
+        error: "MiniMax returned no audio — try again in a minute.",
+        details: {
+          traceId: upstream.data?.trace_id || null,
+          status: upstream.data?.data?.status ?? null,
+          baseResp: upstream.data?.base_resp || null,
+        },
       });
     }
 

@@ -53456,9 +53456,10 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
           });
         } catch {}
       } else {
-        setStatus(`Generation failed: ${e?.message || String(e)}`);
+        const failMsg = String(e?.message || "Something went wrong — please try again.").trim();
+        setStatus(`Generation failed: ${failMsg}`);
         try {
-          showToast("Something went wrong — please try again.", { icon: "✗", durationMs: 8000 });
+          showToast(failMsg.slice(0, 240), { icon: "✗", durationMs: 9000 });
         } catch {}
         try {
           pushLocalGenerationFailedActivity({

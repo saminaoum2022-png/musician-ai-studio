@@ -281,7 +281,10 @@ module.exports = async function handler(req, res) {
       statusPayload,
     });
     if (!stored.ok) {
-      console.warn("[music/generate] task store failed", stored.error);
+      return sendJson(res, 502, {
+        error: "MiniMax song saved but task store failed — try again.",
+        details: { upload: stored.error || null, traceId: upstream.data?.trace_id || null },
+      });
     }
 
     queueUpdateMusicGenerationByTaskId(taskId, {
@@ -291,10 +294,17 @@ module.exports = async function handler(req, res) {
 
     return sendJson(res, 200, {
       code: 200,
-      data: { taskId },
+      data: {
+        taskId,
+        audioId,
+        audioUrl,
+        audio_url: audioUrl,
+        status: "SUCCESS",
+      },
       _provider: "minimax",
       _model: model,
       _keyKind: keyKind,
+      _ready: true,
       _variantCount: 1,
       _credits: {
         spent: isAdmin ? 0 : FULL_SONG_COST,

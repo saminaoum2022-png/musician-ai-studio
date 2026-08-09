@@ -53270,8 +53270,12 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
               return;
             }
             try {
-              showToast("Using MiniMax engine (staging test).", { icon: "♪", durationMs: 3600 });
+              showToast("MiniMax composing… keep the app open (about 1–2 min).", {
+                icon: "♪",
+                durationMs: 120000,
+              });
             } catch {}
+            setStatus("MiniMax is composing your song… usually 1–2 minutes. Keep the app open.");
           }
           const r = await fetch(apiUrl(musicGenerateApiPath()), {
             method: "POST",
@@ -53319,6 +53323,16 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       );
 
       sunoTaskId = extractTaskIdLoose(data);
+      const isMmxTask = Boolean(sunoTaskId && sunoTaskId.startsWith("mmx_"));
+      const mmxImmediateUrl = isMmxTask
+        ? String(
+            data?.data?.audioUrl ||
+            data?.data?.audio_url ||
+            deepFindFirstStringByKeys(data, ["audioUrl", "audio_url"]) ||
+            "",
+          ).trim()
+        : "";
+      const mmxReadyNow = Boolean(isMmxTask && mmxImmediateUrl && (data?._ready || data?._provider === "minimax"));
       savePendingBackendTask(sunoTaskId || "");
       if (sunoTaskId) {
         saveRecoverableGenerationTask(sunoTaskId, String(els.sunoTitle?.value || "").trim());
@@ -53328,7 +53342,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
           source: imageMoodAppliedForNextGen ? "photo" : "",
           photoCoverDataUrl: resolvePendingPhotoCoverDataUrl(),
           photoCoverOnly: imageMoodCoverOnlyForNextGen,
-          variantCount: sunoTaskId.startsWith("mmx_") ? 1 : GENERATION_VARIANT_COUNT,
+          variantCount: isMmxTask ? 1 : GENERATION_VARIANT_COUNT,
         });
         syncGenerationPendingLibraryUi();
         if (!imageMoodAppliedForNextGen && !resolvePendingPhotoCoverDataUrl() && isPollinationsCoverEligible(lastGenerationMeta)) {
@@ -53341,15 +53355,17 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
             }),
           );
         }
-        try {
-          beginCoachGenerationStatus({
-            variantCount: sunoTaskId.startsWith("mmx_") ? 1 : GENERATION_VARIANT_COUNT,
-            pillText: imageMoodAppliedForNextGen
-              ? coachPhotoMoodPillText(sunoTaskId.startsWith("mmx_") ? 1 : GENERATION_VARIANT_COUNT)
-              : "",
-          });
-        } catch {}
-        try { openProfileSongsWhileGenerating(); } catch {}
+        if (!mmxReadyNow) {
+          try {
+            beginCoachGenerationStatus({
+              variantCount: isMmxTask ? 1 : GENERATION_VARIANT_COUNT,
+              pillText: imageMoodAppliedForNextGen
+                ? coachPhotoMoodPillText(isMmxTask ? 1 : GENERATION_VARIANT_COUNT)
+                : "",
+            });
+          } catch {}
+          try { openProfileSongsWhileGenerating(); } catch {}
+        }
         try { setLoading(false); } catch {}
       }
       sunoAudioId = null;
@@ -53385,6 +53401,45 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       if (els.btnLoadInstrumental) els.btnLoadInstrumental.disabled = true;
       if (els.btnPlayVocals) els.btnPlayVocals.disabled = true;
       if (els.btnPlayInstrumental) els.btnPlayInstrumental.disabled = true;
+
+      if (mmxReadyNow) {
+        sunoAudioId = String(data?.data?.audioId || data?.data?.audio_id || `${sunoTaskId}_a`).trim() || null;
+        lastSunoFullUrl = mmxImmediateUrl;
+        lastSunoProxyUrl = toAudioProxyUrl(mmxImmediateUrl);
+        lastSunoTitle = String(els.sunoTitle?.value || "").trim() || "Generated song";
+        if (els.sunoFullLink) setLink(els.sunoFullLink, lastSunoProxyUrl || mmxImmediateUrl);
+        if (els.btnLoadFull) els.btnLoadFull.disabled = false;
+        try { await cacheGeneratedAudio(lastSunoProxyUrl || mmxImmediateUrl); } catch {}
+        const genMeta = lastGenerationMeta;
+        const variantAEntry = addToLibrary({
+          title: lastSunoTitle,
+          artUrl: lastSunoArtUrl,
+          url: lastSunoProxyUrl || lastSunoFullUrl,
+          taskId: sunoTaskId || "",
+          audioId: sunoAudioId || "",
+          kind: "full",
+          meta: { ...genMeta, variant: "A" },
+        });
+        cancelParallelCoverForTask(sunoTaskId || "");
+        clearGenerationPending(sunoTaskId || "");
+        try {
+          pushLocalGenerationReadyActivity([variantAEntry].filter(Boolean), { taskId: sunoTaskId || "" });
+        } catch {}
+        syncGenerationPendingLibraryUi();
+        clearPhotoCoverForGeneration();
+        resetNabadLyricsDraftState();
+        savePendingBackendTask("");
+        setStatus("Song ready.");
+        try { finishCoachGenerationReady({ variantCount: 1 }); } catch {}
+        markGenerationReadyNotice();
+        setGenerateBtn("Regenerate", false, "regenerate");
+        setGenerateFieldsLocked(false);
+        setProgress(100);
+        showResultCard(true);
+        imageMoodAppliedForNextGen = false;
+        void refreshSunoCredits();
+        return;
+      }
 
       if (!sunoTaskId) {
         const providerMsg =

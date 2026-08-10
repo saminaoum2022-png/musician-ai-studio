@@ -14359,21 +14359,44 @@ function followActRealtimeProgressHtml(encUrl, safeTitle) {
           </div>`;
 }
 
-function feedRemixSquareMediaHtml(main, safeTitle) {
+function feedResultHeroMediaHtml(main, safeTitle, badgeKind = "") {
   const { encUrl, encTitle, encArt, encBy, playData, artSafe } = main;
+  const wrapExtra =
+    badgeKind === "remix"
+      ? " followActMediaWrap--remixResult"
+      : badgeKind === "mashup"
+        ? " followActMediaWrap--mashupResult"
+        : "";
+  const chipHtml =
+    badgeKind === "remix"
+      ? `<span class="followActMediaChip followActMediaChip--remix">${remixPillHtml()}</span>`
+      : badgeKind === "mashup"
+        ? `<span class="followActMediaChip followActMediaChip--mashup">${mashupPillHtml()}</span>`
+        : "";
+  const mediaExtra = badgeKind ? ` followActMedia--${badgeKind}Result` : "";
+  const playLabel =
+    badgeKind === "mashup"
+      ? `Play mashup ${safeTitle}`
+      : badgeKind === "remix"
+        ? `Play remix ${safeTitle}`
+        : `Play ${safeTitle}`;
   return `
-          <div class="followActMediaWrap followActMediaWrap--remixResult">
-            <button type="button" class="followActMedia followActMedia--remixResult" data-user-lib-play="1" data-user-lib-url="${encUrl}" data-user-lib-title="${encTitle}" data-user-lib-art="${encArt}" data-discovery-by="${encBy}" ${playData} aria-label="Play remix ${safeTitle}">
+          <div class="followActMediaWrap followActMediaWrap--feedResult${wrapExtra}">
+            <button type="button" class="followActMedia${mediaExtra}" data-user-lib-play="1" data-user-lib-url="${encUrl}" data-user-lib-title="${encTitle}" data-user-lib-art="${encArt}" data-discovery-by="${encBy}" ${playData} aria-label="${escapeHtml(playLabel)}">
               <img class="followActMediaImg" src="${escapeHtml(artSafe)}" alt="" decoding="async" loading="lazy" />
               <span class="followActMediaScrim" aria-hidden="true"></span>
               <span class="followActMediaPlayBtn" aria-hidden="true">
                 ${coverArtPlayStateIconsHtml(28)}
               </span>
-              <span class="followActMediaChip followActMediaChip--remix">${remixPillHtml()}</span>
-              <span class="followActMediaTitle" aria-hidden="true">${safeTitle}</span>
+              ${chipHtml}
+              <span class="followActMediaTitle" dir="auto" aria-hidden="true">${safeTitle}</span>
             </button>
             ${followActRealtimeProgressHtml(encUrl, safeTitle)}
           </div>`;
+}
+
+function feedRemixSquareMediaHtml(main, safeTitle) {
+  return feedResultHeroMediaHtml(main, safeTitle, "remix");
 }
 
 function feedRemixFlowOrigBlockHtml(orig, profMap) {
@@ -14383,25 +14406,74 @@ function feedRemixFlowOrigBlockHtml(orig, profMap) {
   const art = escapeHtml(o.artSafe || "./assets/icons/splash-mark.png");
   const title = escapeHtml(String(orig.title || "Original song").trim() || "Original song");
   const bodyHtml = `
-          <span class="followActRemixFlowOrigArt">
+          <span class="feedSourceRowArt followActRemixFlowOrigArt">
             <img src="${art}" alt="" decoding="async" loading="lazy" />
           </span>
-          <span class="followActRemixFlowOrigBody">
-            <span class="followActRemixFlowOrigChip">Original</span>
-            <span class="followActRemixFlowOrigTitle">${title}</span>
-            <span class="followActRemixFlowOrigBy">${escapeHtml(origBy)}</span>
-          </span>`;
+          <span class="feedSourceRowBody followActRemixFlowOrigBody">
+            <span class="feedSourceRowKicker followActRemixFlowOrigChip">Original</span>
+            <span class="feedSourceRowTitle followActRemixFlowOrigTitle" dir="auto">${title}</span>
+            <span class="feedSourceRowSub followActRemixFlowOrigBy">${escapeHtml(origBy)}</span>
+          </span>
+          <span class="feedSourceRowRemixIco" aria-hidden="true">${remixIconSvgHtml()}</span>`;
   if (!hasUrl) {
     return `
-        <div class="followActRemixFlowOrig followActRemixFlowOrig--static" aria-label="Original ${title}">
+        <div class="feedSourceRow feedSourceRow--remix followActRemixFlowOrig followActRemixFlowOrig--static" aria-label="Original ${title}">
           ${bodyHtml}
         </div>`;
   }
   return `
-        <button type="button" class="followActRemixFlowOrig" data-user-lib-play="1" data-user-lib-url="${o.encUrl}" data-user-lib-title="${o.encTitle}" data-user-lib-art="${o.encArt}" data-discovery-by="${encodeURIComponent(origBy)}" ${o.playData} aria-label="Play original ${title}">
+        <button type="button" class="feedSourceRow feedSourceRow--remix followActRemixFlowOrig" data-user-lib-play="1" data-user-lib-url="${o.encUrl}" data-user-lib-title="${o.encTitle}" data-user-lib-art="${o.encArt}" data-discovery-by="${encodeURIComponent(origBy)}" ${o.playData} aria-label="Play original ${title}">
           ${bodyHtml}
-          <span class="followActRemixFlowOrigPlay" aria-hidden="true">${discoverPlayBtnSvg(14)}</span>
         </button>`;
+}
+
+function feedMashupSourceThumbHtml(source, profMap) {
+  const title = String(source?.title || "Track").trim() || "Track";
+  const art = escapeHtml(String(source?.artUrl || "./assets/icons/splash-mark.png"));
+  const url = String(source?.url || "").trim();
+  const handle = String(source?.username || "").trim();
+  const by = handle ? `@${handle}` : "Source";
+  const titleSafe = escapeHtml(title);
+  const imgHtml = `<img class="feedSourceRowThumbImg" src="${art}" alt="" loading="lazy" decoding="async" />`;
+  if (!url) {
+    return `<span class="feedSourceRowThumb feedSourceRowThumb--static" aria-label="${titleSafe}">${imgHtml}</span>`;
+  }
+  const o = followingActivityPlayAttrs(source, profMap, by);
+  return `
+    <button type="button" class="feedSourceRowThumb" data-user-lib-play="1" data-user-lib-url="${o.encUrl}" data-user-lib-title="${o.encTitle}" data-user-lib-art="${o.encArt}" data-discovery-by="${encodeURIComponent(by)}" ${o.playData} aria-label="Play ${titleSafe}">
+      ${imgHtml}
+    </button>`;
+}
+
+function feedMashupSourceTitleLineHtml(source, profMap) {
+  const title = String(source?.title || "Track").trim() || "Track";
+  const titleSafe = escapeHtml(title);
+  const url = String(source?.url || "").trim();
+  const handle = String(source?.username || "").trim();
+  const by = handle ? `@${handle}` : "Source";
+  if (!url) {
+    return `<span class="feedSourceRowMashupTitle feedSourceRowMashupTitle--static" dir="auto">${titleSafe}</span>`;
+  }
+  const o = followingActivityPlayAttrs(source, profMap, by);
+  return `
+    <button type="button" class="feedSourceRowMashupTitle" dir="auto" data-user-lib-play="1" data-user-lib-url="${o.encUrl}" data-user-lib-title="${o.encTitle}" data-user-lib-art="${o.encArt}" data-discovery-by="${encodeURIComponent(by)}" ${o.playData} aria-label="Play ${titleSafe}">
+      ${titleSafe}
+    </button>`;
+}
+
+function feedMashupSourceRowHtml(a, b, profMap) {
+  return `
+    <div class="feedSourceRow feedSourceRow--mashup" role="group" aria-label="Mashup sources">
+      <div class="feedSourceRowMashupCovers">
+        ${feedMashupSourceThumbHtml(a, profMap)}
+        <span class="feedSourceRowMashupPlus" aria-hidden="true">+</span>
+        ${feedMashupSourceThumbHtml(b, profMap)}
+      </div>
+      <div class="feedSourceRowMashupMeta">
+        ${feedMashupSourceTitleLineHtml(a, profMap)}
+        ${feedMashupSourceTitleLineHtml(b, profMap)}
+      </div>
+    </div>`;
 }
 
 function remixOriginalForFeedTrack(track) {
@@ -14463,9 +14535,10 @@ function feedRemixFlowPlayerHtml(t, profMap, orig, main) {
     xstyle = false,
   } = main;
   const remixResultHtml = xstyle
-    ? feedRemixSquareMediaHtml(
+    ? feedResultHeroMediaHtml(
         { encUrl, encTitle, encArt, encBy, playData, artSafe },
         safeTitle,
+        "remix",
       )
     : feedHeroPlayerCardHtml({
         track: t,
@@ -14483,14 +14556,8 @@ function feedRemixFlowPlayerHtml(t, profMap, orig, main) {
         rowExtraClass: "followActQuoteRow--remixHero",
       });
   return `
-      <div class="followActRemixFlow" role="group" aria-label="Original to remix">
+      <div class="followActRemixFlow feedSourceResultFlow" role="group" aria-label="Original to remix">
         ${feedRemixFlowOrigBlockHtml(orig, profMap)}
-        <div class="followActRemixFlowBridge" aria-hidden="true">
-          <span class="followActRemixFlowBridgeLine"></span>
-          ${remixIconSvgHtml()}
-          <span class="followActRemixFlowBridgeLabel">Remix</span>
-          <span class="followActRemixFlowBridgeLine"></span>
-        </div>
         ${remixResultHtml}
       </div>`;
 }
@@ -14620,7 +14687,7 @@ function followingActivityRowHtml(t, profMap, idx, opts = {}) {
   const mediaBlockWithProgressHtml = mediaBlockHtml;
   const topMenuHtml = songMenuBtn ? `<div class="followActTopMenu">${songMenuBtn}</div>` : "";
   if (xstyle) {
-    const badgeHtml = orig ? "" : (followingActivityBadgeHtml("music", type) || "");
+    const badgeHtml = orig || mashupBlockHtml ? "" : (followingActivityBadgeHtml("music", type) || "");
     return `
       <article class="followAct followAct--music followAct--xstyle" data-follow-act="${type}" data-profile-act-song-id="${escapeHtml(String(t.id || ""))}" style="--i:${idx}" data-user-lib-url="${encUrl}" data-user-lib-title="${encTitle}" data-user-lib-art="${encArt}" data-discovery-by="${encBy}" ${playData}>
         ${followActXstyleTopHtml({
@@ -17958,38 +18025,30 @@ function followActMashupBlockHtml(t, profMap, main) {
     subtitle,
     xstyle,
   } = main;
-  const sourcesHtml = `
+  const sourceRowHtml = xstyle
+    ? feedMashupSourceRowHtml(a, b, profMap)
+    : `
     <div class="followActMashupSources" role="group" aria-label="Mashup sources">
       ${mashupSourceTileHtml(a, "A", profMap)}
       <span class="followActMashupX" aria-hidden="true">×</span>
       ${mashupSourceTileHtml(b, "B", profMap)}
     </div>`;
-  if (xstyle) {
-    return `
-      <div class="followActMashup" role="group" aria-label="Mashup sources and result">
-        ${sourcesHtml}
-        <button type="button" class="followActQuoteCard followActQuoteCard--mashup" data-user-lib-play="1" data-user-lib-url="${encUrl}" data-user-lib-title="${encTitle}" data-user-lib-art="${encArt}" data-discovery-by="${encBy}" ${playData} aria-label="Play mashup ${safeTitle}">
-          <span class="followActQuoteArt">
-            <img class="followActQuoteImg" src="${escapeHtml(artSafe)}" alt="" decoding="async" loading="lazy" />
-            ${coverArtPlaybackOverlayHtml({ feedCard: true })}
-          </span>
-          <span class="followActQuoteBody">
-            <span class="followActQuoteChip followActQuoteChip--mashup">${mashupPillHtml()}</span>
-            <span class="followActQuoteTitle">${safeTitle}</span>
-            <span class="followActQuoteSub">${escapeHtml(subtitle)}</span>
-          </span>
-          <span class="libRowEq" aria-hidden="true"><span></span><span></span><span></span></span>
-        </button>
-      </div>`;
-  }
-  return `
-    <div class="followActMashup" role="group" aria-label="Mashup sources and result">
-      ${sourcesHtml}
+  const resultHtml = xstyle
+    ? feedResultHeroMediaHtml(
+        { encUrl, encTitle, encArt, encBy, playData, artSafe },
+        safeTitle,
+        "mashup",
+      )
+    : `
       <button type="button" class="followActMedia followActMedia--mashup" data-user-lib-play="1" data-user-lib-url="${encUrl}" data-user-lib-title="${encTitle}" data-user-lib-art="${encArt}" data-discovery-by="${encBy}" ${playData} aria-label="Play mashup ${safeTitle}">
         <img class="followActMediaImg" src="${escapeHtml(artSafe)}" alt="" decoding="async" loading="lazy" />
         <span class="followActMediaPlay" aria-hidden="true">▶</span>
         <span class="followActMediaChip">${mashupPillHtml()}</span>
-      </button>
+      </button>`;
+  return `
+    <div class="followActMashup feedSourceResultFlow" role="group" aria-label="Mashup sources and result">
+      ${sourceRowHtml}
+      ${resultHtml}
     </div>`;
 }
 

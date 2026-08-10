@@ -37636,59 +37636,75 @@ section.mentorPage{
   word-wrap: break-word;
 }
 
-/* Remix flow: compact original reference → hero remix player (Friends / Profile Posts). */
-.followActRemixFlow{
+/* Source → result feed hierarchy (Remix / Mashup). */
+.feedSourceResultFlow{
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 13px;
   width: 100%;
   min-width: 0;
 }
-.followActRemixFlowOrig{
-  display: grid;
-  grid-template-columns: 52px minmax(0, 1fr) auto;
-  gap: 10px;
+.feedSourceRow{
+  display: flex;
   align-items: center;
+  gap: 12px;
   width: 100%;
   min-width: 0;
-  padding: 8px 10px;
+  min-height: 72px;
+  max-height: 82px;
+  padding: 8px 12px;
   border: 1px solid rgba(255,255,255,0.10);
-  border-radius: 14px;
+  border-radius: 15px;
   background: rgba(255,255,255,0.03);
   color: inherit;
   text-align: left;
+  box-shadow: none;
+}
+.feedSourceRow--remix{
+  display: grid;
+  grid-template-columns: 58px minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+}
+button.feedSourceRow{
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
 }
-.followActRemixFlowOrig:active{
+button.feedSourceRow:active{
   transform: scale(0.985);
 }
+.feedSourceRowArt,
 .followActRemixFlowOrigArt{
-  width: 52px;
-  height: 52px;
-  border-radius: 10px;
+  width: 58px;
+  height: 58px;
+  border-radius: 12px;
   overflow: hidden;
+  flex: 0 0 auto;
   background: rgba(255,255,255,0.04);
 }
+.feedSourceRowArt img,
 .followActRemixFlowOrigArt img{
   width: 100%;
   height: 100%;
   object-fit: cover;
   display: block;
 }
+.feedSourceRowBody,
 .followActRemixFlowOrigBody{
   display: flex;
   flex-direction: column;
   gap: 2px;
   min-width: 0;
 }
+.feedSourceRowKicker,
 .followActRemixFlowOrigChip{
   font-size: 10px;
   font-weight: 800;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
   color: rgba(232,238,247,0.62);
 }
+.feedSourceRowTitle,
 .followActRemixFlowOrigTitle{
   font-size: 13px;
   font-weight: 700;
@@ -37697,6 +37713,7 @@ section.mentorPage{
   overflow: hidden;
   text-overflow: ellipsis;
 }
+.feedSourceRowSub,
 .followActRemixFlowOrigBy{
   font-size: 11px;
   font-weight: 600;
@@ -37705,33 +37722,130 @@ section.mentorPage{
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.followActRemixFlowOrigPlay{
+.feedSourceRowRemixIco{
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
-  height: 28px;
-  border-radius: 999px;
-  background: rgba(8,10,18,0.66);
-  color: #fff;
+  width: 32px;
+  height: 32px;
+  flex: 0 0 auto;
+  color: rgba(167,139,250,0.96);
+}
+.feedSourceRowRemixIco .remixIcon{
+  width: 18px;
+  height: 18px;
+}
+.feedSourceRow--mashup{
+  align-items: center;
+  gap: 12px;
+}
+.feedSourceRowMashupCovers{
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 0 auto;
+}
+.feedSourceRowThumb{
+  width: 56px;
+  height: 56px;
+  padding: 0;
+  border: 0;
+  border-radius: 12px;
+  overflow: hidden;
+  background: rgba(255,255,255,0.04);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.feedSourceRowThumb--static{
+  display: block;
+}
+.feedSourceRowThumb:active{
+  transform: scale(0.97);
+}
+.feedSourceRowThumb--static:active{
+  transform: none;
+}
+.feedSourceRowThumbImg{
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.feedSourceRowMashupPlus{
+  color: rgba(232,238,247,0.58);
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1;
+  flex: 0 0 auto;
+}
+.feedSourceRowMashupMeta{
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+.feedSourceRowMashupTitle,
+button.feedSourceRowMashupTitle{
+  display: block;
+  width: 100%;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: rgba(248,250,255,0.94);
+  font-size: 12.5px;
+  font-weight: 700;
+  line-height: 1.25;
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.feedSourceRowMashupTitle--static{
+  cursor: default;
+}
+button.feedSourceRowMashupTitle:active{
+  opacity: 0.82;
+}
+
+/* Remix flow: compact original reference → hero remix player (Friends / Profile Posts). */
+.followActRemixFlow{
+  display: flex;
+  flex-direction: column;
+  gap: 13px;
+  width: 100%;
+  min-width: 0;
+}
+.followActRemixFlowOrig{
+  display: grid;
+  grid-template-columns: 58px minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  width: 100%;
+  min-width: 0;
+  min-height: 72px;
+  max-height: 82px;
+  padding: 8px 12px;
+  border: 1px solid rgba(255,255,255,0.10);
+  border-radius: 15px;
+  background: rgba(255,255,255,0.03);
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  box-shadow: none;
+}
+.followActRemixFlowOrig:active{
+  transform: scale(0.985);
+}
+.followActRemixFlowOrigPlay{
+  display: none;
 }
 .followActRemixFlowBridge{
-  display: grid;
-  grid-template-columns: 1fr auto auto 1fr;
-  align-items: center;
-  gap: 8px;
-  padding: 0 4px;
-}
-.followActRemixFlowBridgeLine{
-  height: 1px;
-  background: rgba(255,255,255,0.10);
-}
-.followActRemixFlowBridgeLabel{
-  font-size: 10px;
-  font-weight: 800;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: rgba(232,238,247,0.72);
+  display: none;
 }
 .followActRemixFlow .followActQuoteRow--remixHero{
   margin-top: 0;
@@ -37742,12 +37856,16 @@ section.mentorPage{
 .followActRemixFlowOrig--static:active{
   transform: none;
 }
-.followActRemixFlow .followActMediaWrap--remixResult{
+.followActMediaWrap--feedResult,
+.followActRemixFlow .followActMediaWrap--remixResult,
+.followActMashup .followActMediaWrap--mashupResult{
   width: 100%;
   margin-left: 0;
   margin-top: 0;
 }
-.followActRemixFlow .followActMediaWrap--remixResult .followActMedia{
+.followActMediaWrap--feedResult .followActMedia,
+.followActRemixFlow .followActMediaWrap--remixResult .followActMedia,
+.followActMashup .followActMediaWrap--mashupResult .followActMedia{
   width: 100%;
   margin: 0;
   aspect-ratio: 1 / 1;
@@ -37756,13 +37874,16 @@ section.mentorPage{
   border-radius: var(--feed-cover-radius, 19px);
   overflow: hidden;
 }
-.followActRemixFlow .followActMediaWrap--remixResult .followActMediaImg{
+.followActMediaWrap--feedResult .followActMediaImg,
+.followActRemixFlow .followActMediaWrap--remixResult .followActMediaImg,
+.followActMashup .followActMediaWrap--mashupResult .followActMediaImg{
   width: 100%;
   height: 100%;
   object-fit: cover;
   object-position: center top;
 }
-.followActMediaChip--remix .remixAttributionPill{
+.followActMediaChip--remix .remixAttributionPill,
+.followActMediaChip--mashup .mashupAttributionPill{
   height: 20px;
   padding: 0 8px;
   font-size: 10px;
@@ -37868,13 +37989,13 @@ section.mentorPage{
   text-overflow: ellipsis;
 }
 
-/* Mashup: source strip A × B + main playable result card. */
+/* Mashup: compact source row + hero result artwork. */
 .followActMashup{
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 13px;
   width: 100%;
-  margin: 8px 0 0;
+  margin: 0;
 }
 .followActMashupSources{
   display: grid;
@@ -48903,18 +49024,36 @@ html[data-theme="light"] .mashupAttributionLine,
 html[data-theme="light"] .remixAttributionLine{
   color: var(--text-secondary);
 }
-html[data-theme="light"] .followActRemixFlowOrig{
-  border-color: var(--border);
-  background: var(--surface-secondary);
+html[data-theme="light"] .followActRemixFlowOrig,
+html[data-theme="light"] .feedSourceRow{
+  border-color: #E5E7EC;
+  background: #F3F4F7;
+  box-shadow: none;
 }
+html[data-theme="light"] .feedSourceRowKicker,
 html[data-theme="light"] .followActRemixFlowOrigChip{
-  color: var(--text-muted);
+  color: #777B89;
 }
+html[data-theme="light"] .feedSourceRowTitle,
 html[data-theme="light"] .followActRemixFlowOrigTitle{
-  color: var(--text-primary);
+  color: #111318;
 }
+html[data-theme="light"] .feedSourceRowSub,
 html[data-theme="light"] .followActRemixFlowOrigBy{
-  color: var(--text-secondary);
+  color: #777B89;
+}
+html[data-theme="light"] .feedSourceRowRemixIco{
+  color: #6d4df5;
+}
+html[data-theme="light"] .feedSourceRowMashupPlus{
+  color: #777B89;
+}
+html[data-theme="light"] .feedSourceRowMashupTitle,
+html[data-theme="light"] button.feedSourceRowMashupTitle{
+  color: #111318;
+}
+html[data-theme="light"] .feedSourceRowThumb{
+  background: #ECEEF3;
 }
 html[data-theme="light"] .followActRemixFlowBridgeLine{
   background: var(--border);
@@ -48923,10 +49062,11 @@ html[data-theme="light"] .followActRemixFlowBridgeLabel{
   color: var(--text-secondary);
 }
 html[data-theme="light"] .followActRemixFlowOrig--static{
-  border-color: var(--border);
-  background: var(--surface-secondary);
+  border-color: #E5E7EC;
+  background: #F3F4F7;
 }
-html[data-theme="light"] :is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followActRemixFlow .followActMediaWrap--remixResult .followActMedia{
+html[data-theme="light"] :is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followActRemixFlow .followActMediaWrap--remixResult .followActMedia,
+html[data-theme="light"] :is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followActMashup .followActMediaWrap--mashupResult .followActMedia{
   background: var(--surface-secondary);
 }
 

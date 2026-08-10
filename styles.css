@@ -45094,7 +45094,7 @@ body[data-route="friends"] .followAct--xstyle > .followActQuoteRow:has(.feedHero
 .followActMediaTitle{
   display: none;
 }
-:is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle .followActMediaTitle{
+:is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle .followActMediaWrap:not(.followActMediaWrap--friendsDock) .followActMediaTitle{
   display: block;
   position: absolute;
   left: 16px;
@@ -45328,7 +45328,7 @@ body[data-route="friends"] .followAct--xstyle > .followActQuoteRow:has(.feedHero
   position: absolute;
   left: 16px;
   right: 16px;
-  bottom: 34px;
+  bottom: calc(12px + 24px + 10px);
   z-index: 2;
   display: flex;
   flex-direction: column;
@@ -45337,16 +45337,17 @@ body[data-route="friends"] .followAct--xstyle > .followActQuoteRow:has(.feedHero
   pointer-events: none;
   text-align: left;
 }
-.followActMediaWrap--friendsDock .followActMediaTitle{
+:is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followActMediaWrap--friendsDock .followActMediaTitle{
   display: block;
   position: static;
   margin: 0;
-  font-size: 16px;
+  font-family: "Inter Display", "Inter", -apple-system, BlinkMacSystemFont, "SF Pro Display", ui-sans-serif, system-ui, sans-serif;
+  font-size: calc(16px * 1.15);
   font-weight: 800;
   letter-spacing: -0.01em;
   line-height: 1.15;
-  color: #fff;
-  text-shadow: 0 1px 14px rgba(0,0,0,0.65);
+  color: rgba(255, 255, 255, 0.82);
+  text-shadow: none;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;

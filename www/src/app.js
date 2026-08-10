@@ -15081,14 +15081,26 @@ function feedRemixFlowPlayerHtml(t, profMap, orig, main) {
     safeTitle,
     subtitle,
     xstyle = false,
+    friendsFeed = false,
   } = main;
-  const remixResultHtml = xstyle
-    ? feedResultHeroMediaHtml(
-        { encUrl, encTitle, encArt, encBy, playData, artSafe },
+  const remixResultHtml = friendsFeed
+    ? friendsFeedCompactMediaHtml({
+        artSafe,
+        encUrl,
+        encTitle,
+        encArt,
+        encBy,
+        playData,
         safeTitle,
-        "remix",
-      )
-    : feedHeroPlayerCardHtml({
+        track: t,
+      })
+    : xstyle
+      ? feedResultHeroMediaHtml(
+          { encUrl, encTitle, encArt, encBy, playData, artSafe },
+          safeTitle,
+          "remix",
+        )
+      : feedHeroPlayerCardHtml({
         track: t,
         artSafe,
         encUrl,
@@ -15157,6 +15169,7 @@ function followingActivityRowHtml(t, profMap, idx, opts = {}) {
     safeTitle,
     subtitle,
     xstyle,
+    friendsFeed,
   });
   // Remix: original reference on top, remix result below (Friends + Profile Posts).
   const orig = !mashupBlockHtml ? remixOriginalForFeedTrack(t) : null;
@@ -15174,6 +15187,7 @@ function followingActivityRowHtml(t, profMap, idx, opts = {}) {
         safeTitle,
         subtitle,
         xstyle: true,
+        friendsFeed,
       });
     } else {
       const origBy = orig.username ? `@${orig.username}` : "Original";
@@ -18635,6 +18649,7 @@ function followActMashupBlockHtml(t, profMap, main) {
     safeTitle,
     subtitle,
     xstyle,
+    friendsFeed = false,
   } = main;
   const sourceRowHtml = xstyle
     ? feedMashupSourceRowHtml(a, b, profMap)
@@ -18644,13 +18659,24 @@ function followActMashupBlockHtml(t, profMap, main) {
       <span class="followActMashupX" aria-hidden="true">×</span>
       ${mashupSourceTileHtml(b, "B", profMap)}
     </div>`;
-  const resultHtml = xstyle
-    ? feedResultHeroMediaHtml(
-        { encUrl, encTitle, encArt, encBy, playData, artSafe },
+  const resultHtml = friendsFeed
+    ? friendsFeedCompactMediaHtml({
+        artSafe,
+        encUrl,
+        encTitle,
+        encArt,
+        encBy,
+        playData,
         safeTitle,
-        "mashup",
-      )
-    : `
+        track: t,
+      })
+    : xstyle
+      ? feedResultHeroMediaHtml(
+          { encUrl, encTitle, encArt, encBy, playData, artSafe },
+          safeTitle,
+          "mashup",
+        )
+      : `
       <button type="button" class="followActMedia followActMedia--mashup" data-user-lib-play="1" data-user-lib-url="${encUrl}" data-user-lib-title="${encTitle}" data-user-lib-art="${encArt}" data-discovery-by="${encBy}" ${playData} aria-label="Play mashup ${safeTitle}">
         <img class="followActMediaImg" src="${escapeHtml(artSafe)}" alt="" decoding="async" loading="lazy" />
         <span class="followActMediaPlay" aria-hidden="true">▶</span>

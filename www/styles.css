@@ -51166,3 +51166,504 @@ html[data-theme="light"] body[data-route="generate"] .singerPersonaChip--create{
   color: var(--text-secondary);
 }
 
+/* ── Feed vinyl player (light + dark — standard song posts only) ── */
+:is(html[data-theme="light"], html[data-theme="dark"]) .feedVinylWrap{
+  width: 100%;
+  min-width: 0;
+  margin-left: 0;
+  margin-right: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0;
+}
+:is(html[data-theme="light"], html[data-theme="dark"]) .feedVinylStage{
+  position: relative;
+  width: 82%;
+  max-width: 100%;
+  margin: 0 auto;
+  aspect-ratio: 1 / 1;
+  padding-bottom: 8px;
+}
+:is(html[data-theme="light"], html[data-theme="dark"]) .feedVinylShadow{
+  position: absolute;
+  left: 50%;
+  bottom: 0;
+  width: 74%;
+  height: 9%;
+  transform: translateX(-50%);
+  border-radius: 50%;
+  background: radial-gradient(ellipse at center, rgba(17,19,24,0.2) 0%, rgba(17,19,24,0.07) 44%, transparent 72%);
+  filter: blur(9px);
+  pointer-events: none;
+  z-index: 0;
+}
+:is(html[data-theme="light"], html[data-theme="dark"]) .feedVinylDeck{
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  width: 100%;
+  height: 100%;
+}
+:is(html[data-theme="light"], html[data-theme="dark"]) .feedVinylDeck::before{
+  content: "";
+  position: absolute;
+  inset: 2%;
+  border-radius: 50%;
+  background: linear-gradient(155deg, #f0f2f8 0%, #dfe3ec 48%, #cdd3e0 100%);
+  box-shadow:
+    0 10px 28px rgba(17,19,24,0.14),
+    inset 0 1px 0 rgba(255,255,255,0.85),
+    inset 0 -2px 6px rgba(17,19,24,0.06);
+  z-index: 0;
+}
+:is(html[data-theme="light"], html[data-theme="dark"]) .feedVinylPlatter{
+  position: absolute;
+  inset: 8%;
+  border-radius: 50%;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform 160ms ease;
+  z-index: 1;
+  isolation: isolate;
+}
+:is(html[data-theme="light"], html[data-theme="dark"]) .feedVinylPlatter:active{
+  transform: scale(0.985);
+}
+:is(html[data-theme="light"], html[data-theme="dark"]) .feedVinylRotor{
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  transform: rotate3d(0,0,1,0deg);
+  transform-origin: 50% 50%;
+  pointer-events: none;
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
+}
+:is(html[data-theme="light"], html[data-theme="dark"]) .feedVinylRotor.isSpinning{
+  will-change: transform;
+}
+:is(html[data-theme="light"], html[data-theme="dark"]) .feedVinylBase{
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 50% 50%, #242830 0%, #12141a 52%, #08090c 100%);
+  box-shadow:
+    inset 0 0 0 1px rgba(255,255,255,0.06),
+    inset 0 -3px 8px rgba(0,0,0,0.45);
+}
+:is(html[data-theme="light"], html[data-theme="dark"]) .feedVinylGrooveTex{
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  opacity: 0.55;
+  pointer-events: none;
+  background:
+    repeating-radial-gradient(circle at 50% 50%,
+      rgba(255,255,255,0.0) 0px,
+      rgba(255,255,255,0.0) 1px,
+      rgba(255,255,255,0.07) 1.5px,
+      rgba(255,255,255,0.0) 2px,
+      rgba(255,255,255,0.0) 3.5px);
+  -webkit-mask: radial-gradient(circle, transparent 0 22%, #000 26% 99%, #000 100%);
+  mask: radial-gradient(circle, transparent 0 22%, #000 26% 99%, #000 100%);
+}
+:is(html[data-theme="light"], html[data-theme="dark"]) .feedVinylSheen{
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  pointer-events: none;
+  opacity: 0.54;
+  background: repeating-conic-gradient(from 0deg, rgba(255,255,255,0.07) 0deg 0.4deg, transparent 0.4deg 1.1deg);
+  -webkit-mask: radial-gradient(circle, transparent 0 20%, #000 24% 99%, #000 100%);
+  mask: radial-gradient(circle, transparent 0 20%, #000 24% 99%, #000 100%);
+}
+:is(html[data-theme="light"], html[data-theme="dark"]) .feedVinylSpinReflect{
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  pointer-events: none;
+  opacity: 0.34;
+  background:
+    conic-gradient(from 35deg,
+      rgba(255,255,255,0.0) 0deg,
+      rgba(255,255,255,0.32) 18deg,
+      rgba(255,255,255,0.04) 42deg,
+      rgba(255,255,255,0.0) 72deg,
+      rgba(255,255,255,0.22) 118deg,
+      rgba(255,255,255,0.0) 360deg);
+  -webkit-mask: radial-gradient(circle, transparent 0 20%, #000 24% 99%, #000 100%);
+  mask: radial-gradient(circle, transparent 0 20%, #000 24% 99%, #000 100%);
+}
+:is(html[data-theme="light"], html[data-theme="dark"]) .feedVinylWrap.isPlaying .feedVinylSheen{
+  opacity: 0.74;
+}
+:is(html[data-theme="light"], html[data-theme="dark"]) .feedVinylWrap.isPlaying .feedVinylSpinReflect{
+  opacity: 0.5;
+}
+:is(html[data-theme="light"], html[data-theme="dark"]) .feedVinylBlackReflect{
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 3;
+  opacity: 0.88;
+  -webkit-mask: radial-gradient(circle, transparent 0 20%, #000 24% 99%, #000 100%);
+  mask: radial-gradient(circle, transparent 0 20%, #000 24% 99%, #000 100%);
+  background:
+    linear-gradient(128deg, rgba(255,255,255,0.42) 0%, rgba(255,255,255,0.12) 20%, transparent 38%),
+    radial-gradient(circle at 68% 28%, rgba(255,255,255,0.26) 0%, transparent 28%);
+}
+:is(html[data-theme="light"], html[data-theme="dark"]) .feedVinylWrap.isPlaying .feedVinylBlackReflect{
+  opacity: 1;
+  background:
+    linear-gradient(128deg, rgba(255,255,255,0.56) 0%, rgba(255,255,255,0.16) 18%, transparent 36%),
+    radial-gradient(circle at 68% 28%, rgba(255,255,255,0.18) 0%, transparent 26%);
+}
+:is(html[data-theme="light"], html[data-theme="dark"]) .feedVinylLabel{
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 36%;
+  height: 36%;
+  translate: -50% -50%;
+  border-radius: 50%;
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  box-shadow:
+    0 0 0 2px rgba(255,255,255,0.92),
+    0 0 0 3px rgba(210,216,228,0.55),
+    inset 0 2px 6px rgba(255,255,255,0.18),
+    inset 0 -2px 6px rgba(17,19,24,0.22);
+}
+:is(html[data-theme="light"], html[data-theme="dark"]) .feedVinylLabelRing{
+  position: absolute;
+  inset: 8%;
+  border-radius: 50%;
+  border: 0.5px solid rgba(255,255,255,0.35);
+  box-shadow: inset 0 0 8px rgba(255,255,255,0.12);
+  pointer-events: none;
+}
+:is(html[data-theme="light"], html[data-theme="dark"]) .feedVinylGloss{
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 2;
+  background: linear-gradient(125deg, rgba(255,255,255,0.22) 0%, rgba(255,255,255,0.05) 20%, transparent 38%);
+}
+:is(html[data-theme="light"], html[data-theme="dark"]) .feedVinylCenterBtn{
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  z-index: 8;
+  transform: translate(-50%, -50%);
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0;
+  margin: 0;
+  border: 0;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  background: transparent;
+  color: #111318;
+}
+:is(html[data-theme="light"], html[data-theme="dark"]) .feedVinylCenterBtn:active{
+  transform: translate(-50%, -50%) scale(0.96);
+}
+:is(html[data-theme="light"], html[data-theme="dark"]) .feedVinylCenterVis{
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255,255,255,0.62);
+  -webkit-backdrop-filter: blur(12px) saturate(160%);
+  backdrop-filter: blur(12px) saturate(160%);
+  border: 1px solid rgba(255,255,255,0.82);
+  box-shadow:
+    0 2px 8px rgba(17,19,24,0.2),
+    inset 0 1px 0 rgba(255,255,255,0.95),
+    0 0 0 0.5px rgba(17,19,24,0.1);
+}
+:is(html[data-theme="light"], html[data-theme="dark"]) .feedVinylCenterIco{
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  filter: drop-shadow(0 0.5px 1px rgba(255,255,255,0.85)) drop-shadow(0 1px 2px rgba(17,19,24,0.32));
+}
+:is(html[data-theme="light"], html[data-theme="dark"]) .feedVinylTonearm{
+  position: absolute;
+  top: 6%;
+  right: 4%;
+  width: 54%;
+  height: 54%;
+  z-index: 6;
+  pointer-events: none;
+}
+:is(html[data-theme="light"], html[data-theme="dark"]) .feedVinylTonearm *{
+  pointer-events: none;
+}
+:is(html[data-theme="light"], html[data-theme="dark"]) .feedVinylTonearmPivot{
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  z-index: 2;
+}
+:is(html[data-theme="light"], html[data-theme="dark"]) .feedVinylTonearmPivotCore{
+  position: absolute;
+  inset: 3px;
+  border-radius: 50%;
+  background: linear-gradient(145deg, #3a404c, #1e222b);
+  border: 1px solid rgba(255,255,255,0.22);
+  box-shadow: inset 0 1px 2px rgba(255,255,255,0.18);
+}
+:is(html[data-theme="light"], html[data-theme="dark"]) .feedVinylTonearmPivotGlow{
+  position: absolute;
+  inset: -4px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(124,92,255,0.0) 40%, rgba(124,92,255,0.0) 100%);
+  opacity: 0;
+  transition: opacity 320ms ease;
+}
+:is(html[data-theme="light"], html[data-theme="dark"]) .feedVinylWrap.isPlaying .feedVinylTonearmPivotGlow{
+  opacity: 1;
+  background: radial-gradient(circle, rgba(124,92,255,0.35) 0%, rgba(35,213,171,0.18) 42%, transparent 72%);
+}
+:is(html[data-theme="light"], html[data-theme="dark"]) .feedVinylTonearmBody{
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: calc(100% - 8px);
+  height: 20px;
+  transform-origin: 100% 8px;
+  transform: rotate(20deg);
+  transition: transform 520ms cubic-bezier(0.34, 1.15, 0.44, 1);
+}
+:is(html[data-theme="light"], html[data-theme="dark"]) .feedVinylWrap.isPlaying .feedVinylTonearmBody{
+  transform: rotate(-46deg);
+}
+:is(html[data-theme="light"], html[data-theme="dark"]) .feedVinylWrap:not(.isPlaying) .feedVinylTonearmBody{
+  transform: rotate(20deg);
+}
+:is(html[data-theme="light"], html[data-theme="dark"]) .feedVinylTonearmShaft{
+  position: absolute;
+  top: 7px;
+  right: 8px;
+  left: 0;
+  height: 3px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #4a5160 0%, #6a7384 38%, #7c5cff 72%, #23d5ab 100%);
+  box-shadow: 0 1px 3px rgba(17,19,24,0.22);
+}
+:is(html[data-theme="light"], html[data-theme="dark"]) .feedVinylTonearmHead{
+  position: absolute;
+  top: 2px;
+  right: -1px;
+  width: 11px;
+  height: 15px;
+  border-radius: 2px 2px 3px 3px;
+  background: linear-gradient(180deg, #3a404c 0%, #22262f 100%);
+  border: 0.5px solid rgba(255,255,255,0.18);
+  box-shadow: 0 2px 4px rgba(17,19,24,0.28);
+}
+:is(html[data-theme="light"], html[data-theme="dark"]) .feedVinylTonearmNeedle{
+  position: absolute;
+  left: 50%;
+  bottom: -5px;
+  width: 1.5px;
+  height: 7px;
+  transform: translateX(-50%);
+  border-radius: 0 0 1px 1px;
+  background: linear-gradient(180deg, #23d5ab 0%, #7c5cff 100%);
+  box-shadow: 0 0 4px rgba(35,213,171,0.45);
+}
+:is(html[data-theme="light"], html[data-theme="dark"]) .feedVinylWrap.isPlaying .feedVinylTonearmNeedle{
+  box-shadow: 0 0 6px rgba(35,213,171,0.65), 0 0 3px rgba(124,92,255,0.45);
+}
+:is(html[data-theme="light"], html[data-theme="dark"]) .feedVinylWrap.isPlaying .feedVinylCenterIco .coverArtPlayIco--play,
+:is(html[data-theme="light"], html[data-theme="dark"]) .feedVinylWrap.isPlaying .feedVinylCenterIco .coverArtPlayIco--loading{
+  display: none;
+}
+:is(html[data-theme="light"], html[data-theme="dark"]) .feedVinylWrap.isPlaying .feedVinylCenterIco .coverArtPlayIco--pause{
+  display: inline-flex;
+}
+:is(html[data-theme="light"], html[data-theme="dark"]) .feedVinylWrap:not(.isPlaying) .feedVinylCenterIco .coverArtPlayIco--pause{
+  display: none;
+}
+:is(html[data-theme="light"], html[data-theme="dark"]) .feedVinylMeta{
+  margin-top: 18px;
+  padding: 0 2px;
+  text-align: left;
+}
+:is(html[data-theme="light"], html[data-theme="dark"]) .feedVinylTitle{
+  margin: 0;
+  font-size: 16px;
+  font-weight: 800;
+  line-height: 1.3;
+  color: #111318;
+  letter-spacing: -0.01em;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  min-height: calc(2 * 1.3 * 16px);
+  max-height: calc(2 * 1.3 * 16px);
+  word-break: break-word;
+}
+:is(html[data-theme="light"], html[data-theme="dark"]) :is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .feedVinylTimeline.followActRealtimeProgress{
+  position: static !important;
+  left: auto !important;
+  right: auto !important;
+  bottom: auto !important;
+  width: 100% !important;
+  z-index: auto !important;
+  margin-top: 10px;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 10px;
+  padding: 0 2px;
+}
+:is(html[data-theme="light"], html[data-theme="dark"]) .feedVinylTimeline{
+  margin-top: 10px;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 10px;
+  position: static;
+  width: 100%;
+  padding: 0 2px;
+}
+:is(html[data-theme="light"], html[data-theme="dark"]) .feedVinylTimeCur,
+:is(html[data-theme="light"], html[data-theme="dark"]) .feedVinylTimeDur{
+  font-size: 11px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: #777B89;
+  white-space: nowrap;
+  line-height: 1;
+}
+:is(html[data-theme="light"], html[data-theme="dark"]) .feedVinylSeek.followActRealtimeSeek{
+  --feedSeekPct: 0%;
+  width: 100%;
+  min-width: 0;
+  height: 4px;
+  margin: 0;
+  appearance: none;
+  -webkit-appearance: none;
+  background: linear-gradient(90deg, #7c5cff 0%, #23d5ab var(--feedSeekPct, 0%), #E2E4EA var(--feedSeekPct, 0%), #E2E4EA 100%);
+  border-radius: 999px;
+  outline: none;
+}
+:is(html[data-theme="light"], html[data-theme="dark"]) .feedVinylSeek.followActRealtimeSeek::-webkit-slider-thumb{
+  -webkit-appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #fff;
+  border: 2px solid #7c5cff;
+  box-shadow: 0 1px 4px rgba(17,19,24,0.14);
+}
+:is(html[data-theme="light"], html[data-theme="dark"]) .feedVinylSeek.followActRealtimeSeek::-moz-range-thumb{
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #fff;
+  border: 2px solid #7c5cff;
+  box-shadow: 0 1px 4px rgba(17,19,24,0.14);
+}
+:is(html[data-theme="light"], html[data-theme="dark"]) .followAct.discoveryRowLoading .feedVinylCenterIco .coverArtPlayIco--play,
+:is(html[data-theme="light"], html[data-theme="dark"]) .followAct.discoveryRowLoading .feedVinylCenterIco .coverArtPlayIco--pause{
+  display: none;
+}
+:is(html[data-theme="light"], html[data-theme="dark"]) .followAct.discoveryRowLoading .feedVinylCenterIco .coverArtPlayIco--loading{
+  display: inline-flex;
+}
+:is(html[data-theme="light"], html[data-theme="dark"]) :is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle > .feedVinylWrap{
+  margin-top: 20px;
+}
+:is(html[data-theme="light"], html[data-theme="dark"]) :is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle > .followActContent:not(:empty) + .feedVinylWrap{
+  margin-top: 20px;
+}
+:is(html[data-theme="light"], html[data-theme="dark"]) :is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .feedVinylTimeline .feedVinylSeek.followActRealtimeSeek{
+  height: 18px;
+  background: transparent;
+}
+:is(html[data-theme="light"], html[data-theme="dark"]) :is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .feedVinylTimeline .feedVinylSeek.followActRealtimeSeek::-webkit-slider-runnable-track{
+  height: 4px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #7c5cff 0%, #23d5ab var(--feedSeekPct, 0%), #E2E4EA var(--feedSeekPct, 0%), #E2E4EA 100%);
+}
+:is(html[data-theme="light"], html[data-theme="dark"]) :is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .feedVinylTimeline .feedVinylSeek.followActRealtimeSeek::-moz-range-track{
+  height: 4px;
+  border-radius: 999px;
+  background: #E2E4EA;
+}
+:is(html[data-theme="light"], html[data-theme="dark"]) :is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .feedVinylTimeline .feedVinylSeek.followActRealtimeSeek::-moz-range-progress{
+  height: 4px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #7c5cff, #23d5ab);
+}
+
+html[data-theme="dark"] .feedVinylDeck::before{
+  background: linear-gradient(155deg, #2a303c 0%, #1c212b 48%, #12161e 100%);
+  box-shadow:
+    0 10px 28px rgba(0,0,0,0.45),
+    inset 0 1px 0 rgba(255,255,255,0.08),
+    inset 0 -2px 6px rgba(0,0,0,0.35);
+}
+html[data-theme="dark"] .feedVinylShadow{
+  background: radial-gradient(ellipse at center, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0.22) 44%, transparent 72%);
+}
+html[data-theme="dark"] .feedVinylTitle{
+  color: #f4f5f8;
+}
+html[data-theme="dark"] .feedVinylTimeCur,
+html[data-theme="dark"] .feedVinylTimeDur{
+  color: #9aa0b0;
+}
+html[data-theme="dark"] .feedVinylSeek.followActRealtimeSeek{
+  background: linear-gradient(90deg, #7c5cff 0%, #23d5ab var(--feedSeekPct, 0%), #3a404c var(--feedSeekPct, 0%), #3a404c 100%);
+}
+html[data-theme="dark"] :is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .feedVinylTimeline .feedVinylSeek.followActRealtimeSeek::-webkit-slider-runnable-track{
+  background: #3a404c;
+}
+html[data-theme="dark"] :is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .feedVinylTimeline .feedVinylSeek.followActRealtimeSeek::-moz-range-track{
+  background: #3a404c;
+}
+html[data-theme="dark"] .feedVinylCenterBtn{
+  color: #f4f5f8;
+}
+html[data-theme="dark"] .feedVinylCenterVis{
+  background: rgba(30,34,43,0.72);
+  border-color: rgba(255,255,255,0.16);
+  box-shadow:
+    0 2px 8px rgba(0,0,0,0.35),
+    inset 0 1px 0 rgba(255,255,255,0.12),
+    0 0 0 0.5px rgba(255,255,255,0.08);
+}
+html[data-theme="dark"] .feedVinylGloss{
+  background: linear-gradient(125deg, rgba(255,255,255,0.16) 0%, rgba(255,255,255,0.04) 20%, transparent 38%);
+}
+@media (prefers-reduced-motion: reduce){
+  html[data-theme="light"] .feedVinylTonearmBody{
+    transition: none;
+  }
+  html[data-theme="light"] .feedVinylRotor.isSpinning{
+    will-change: auto;
+  }
+}

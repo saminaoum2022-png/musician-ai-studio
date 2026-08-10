@@ -34,6 +34,12 @@ import { initEcho, openEchoFromCreateChooser } from "./echo.js";
 import { initHumTrack, bindHumTrackHomeCard, openHumTrackFlow, humTrackReadyForGenerate, humTrackIsGenerating, triggerHumTrackGenerate, kickHumTrackGenerationPoll } from "./hum-track.js";
 import { createAdaptivePollLoop, stopPollLoop } from "./generation-poll.js";
 import {
+  feedVinylPlayerBlockHtml,
+  feedVinylPlayerUsesLightPrototype,
+  initFeedVinylPlayerSystem,
+  syncFeedVinylPlayers,
+} from "./feed-vinyl-player.js";
+import {
   getInitialBootHash,
   getPostOnboardingHash,
   initOnboarding,
@@ -194,7 +200,7 @@ import { MUSIC_VIDEO_FEATURE_ENABLED } from "./feature-flags.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260809-234000";
+const APP_BUILD = "20260810-154104";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -14672,7 +14678,20 @@ function followingActivityRowHtml(t, profMap, idx, opts = {}) {
     menuBtnHtml: songMenuBtn,
     ariaLabel: `Play ${rawTitle}`,
   });
-  const mediaBlockHtml = `
+  const mediaBlockHtml = feedVinylPlayerUsesLightPrototype(t, type, { xstyle })
+    ? feedVinylPlayerBlockHtml({
+        artSafe: escapeHtml(artSafe),
+        encUrl,
+        encTitle,
+        encArt,
+        encBy,
+        playData,
+        safeTitle,
+        centerPlayIconsHtml: coverArtPlayStateIconsHtml(18),
+        durSec: discoverTrackDurationSec(t),
+        durLabel: escapeHtml(formatTime(discoverTrackDurationSec(t) || 0)),
+      })
+    : `
           <div class="followActMediaWrap">
             <button type="button" class="followActMedia" data-user-lib-play="1" data-user-lib-url="${encUrl}" data-user-lib-title="${encTitle}" data-user-lib-art="${encArt}" data-discovery-by="${encBy}" ${playData} aria-label="Play ${safeTitle}">
               <img class="followActMediaImg" src="${escapeHtml(artSafe)}" alt="" decoding="async" loading="lazy" />
@@ -16705,11 +16724,16 @@ function bindFriendsPageOnce() {
         return;
       }
       if (e.target.closest(".followActAvatar")) return;
-      const pl = e.target.closest("[data-user-lib-play], .followActMedia, .followActQuoteCard, .followActUserLink");
+      const pl = e.target.closest("[data-user-lib-play], .followActMedia, .followActQuoteCard, .feedVinylPlatter");
       if (pl?.classList?.contains?.("followActUserLink")) return;
       if (!pl || !friendsPage.contains(pl)) return;
       e.preventDefault();
-      if (pl.classList.contains("followActMedia") || pl.classList.contains("followActQuoteCard") || pl.hasAttribute("data-user-lib-play")) {
+      if (
+        pl.classList.contains("followActMedia")
+        || pl.classList.contains("followActQuoteCard")
+        || pl.classList.contains("feedVinylPlatter")
+        || pl.hasAttribute("data-user-lib-play")
+      ) {
         playDiscoverTarget(pl);
       }
     });
@@ -34992,8 +35016,8 @@ async function playDiscoverFeedEntry({ raw, title, art, by, playSource, el, opts
     showToast("This song has no playable audio yet.", { durationMs: 3800 });
     return;
   }
-  primeGlobalPlayerInGesture();
   if (!opts.skipToggle && toggleDiscoverFeedPlaybackIfSameUrl(url)) return;
+  primeGlobalPlayerInGesture();
   if (el) primeDiscoverPlaybackPendingFromEl(el);
   const useReel = !opts.skipReel && shouldUseDiscoverReelPlayer() && opts.openPlayer !== false;
   if (useReel) {
@@ -35050,8 +35074,8 @@ function playDmSongFromEl(el) {
   const art = decodeDiscoverDataAttr(el, "data-user-lib-art") || "";
   const by = decodeDiscoverDataAttr(el, "data-discovery-by") || "";
   haptic("light");
-  primeGlobalPlayerInGesture();
   if (toggleDiscoverFeedPlaybackIfSameUrl(raw)) return;
+  primeGlobalPlayerInGesture();
   void playLibraryUrlOnPlayer(raw, title, art, {
     discoverFeed: false,
     openPlayer: true,
@@ -35064,6 +35088,7 @@ function playDiscoverTarget(el, opts = {}) {
   const t = resolveDiscoverPlayTarget(el);
   if (!t) return;
   haptic("light");
+  if (!opts.skipToggle && toggleDiscoverFeedPlaybackIfSameUrl(t.raw)) return;
   void playDiscoverFeedEntry({
     raw: t.raw,
     title: t.title,
@@ -35071,30 +35096,12 @@ function playDiscoverTarget(el, opts = {}) {
     by: t.by,
     playSource: t.playSource,
     el,
-    opts,
+    opts: { ...opts, skipToggle: true },
   });
 }
 
 function togglePublicProfileLibPlaybackIfSameUrl(rawUrl) {
-  const raw = String(rawUrl || "").trim();
-  if (miniSource?.type !== "public_profile_lib") return false;
-  const cur = String(currentPlayerTrackRef?.url || "").trim();
-  if (!raw || !cur || !audioUrlsEquivalent(raw, cur)) return false;
-  const a = ensurePlayer();
-  const dur = getPlayerDuration();
-  const ct = Number.isFinite(a.currentTime) ? a.currentTime : 0;
-  const audible = Boolean(!a.paused && !a.ended && (dur > 0 || ct > 0));
-  if (audible) {
-    try {
-      a.pause();
-    } catch {}
-  } else {
-    void hubAudioPlayWithRetry(a);
-  }
-  try {
-    syncPlayerUI();
-  } catch {}
-  return true;
+  return toggleLoadedPlayerIfSameUrl(rawUrl);
 }
 
 function syncDiscoveryPlayingHighlights() {
@@ -35279,6 +35286,27 @@ function syncFriendsFeedProgressBars() {
       }
     });
   }
+  try {
+    syncFeedVinylPlayers({
+      curRef,
+      cur,
+      dur,
+      audible,
+      getCur: () => {
+        const a = playerEl;
+        return a && Number.isFinite(a.currentTime) ? a.currentTime : 0;
+      },
+      getAudible: () => {
+        const a = playerEl;
+        const d = a ? getPlayerDuration() : 0;
+        const t = a && Number.isFinite(a.currentTime) ? a.currentTime : 0;
+        return Boolean(a && !a.paused && !a.ended && (d > 0 || t > 0));
+      },
+      formatTime,
+      decodeDiscoveryPlayUrl,
+      audioUrlsEquivalent,
+    });
+  } catch {}
 }
 
 function seekFriendsFeedProgress(input) {
@@ -36637,25 +36665,66 @@ function isDiscoverStyleMiniSource() {
   return miniSource?.type === "discover_feed" || miniSource?.type === "discover_playlist";
 }
 
-function toggleDiscoverStylePlaybackIfSameUrl(rawUrl) {
+/** Pause/resume when this URL is already in the global player (feed vinyl, Discover, profile). */
+function toggleLoadedPlayerIfSameUrl(rawUrl) {
   const raw = String(rawUrl || "").trim();
-  if (!isDiscoverStyleMiniSource()) return false;
+  if (!raw) return false;
+  const a = ensurePlayer();
+  if (!a) return false;
   const cur = String(currentPlayerTrackRef?.url || "").trim();
-  if (!raw || !cur || !audioUrlsEquivalent(raw, cur)) return false;
+  const loaded = getActiveAudioSrc(a);
+  const ct = Number.isFinite(a.currentTime) ? a.currentTime : 0;
+  const hasLoadedMedia = Boolean(
+    (loaded && !a.error) ||
+    ct > 0 ||
+    (typeof a.readyState === "number" && a.readyState >= 2),
+  );
+  if (!hasLoadedMedia) return false;
+  const matches =
+    (cur && audioUrlsEquivalent(raw, cur)) ||
+    (loaded && audioUrlsEquivalent(raw, loaded));
+  if (!matches) return false;
+
   const route = document.body.getAttribute("data-route") || "";
   if (route !== "player" && shouldUseDiscoverReelPlayer()) return false;
-  const a = ensurePlayer();
+
   const dur = getPlayerDuration();
-  const ct = Number.isFinite(a.currentTime) ? a.currentTime : 0;
   const audible = Boolean(!a.paused && !a.ended && (dur > 0 || ct > 0));
+  clearPlaybackPending();
   if (audible) {
     try { a.pause(); } catch {}
   } else {
-    void hubAudioPlayWithRetry(a);
+    const loadedNow = getActiveAudioSrc(a);
+    const ctSaved = Number.isFinite(a.currentTime) ? a.currentTime : 0;
+    if (
+      cur &&
+      (loadedNow === HUB_AUDIO_SILENT_SRC || (loadedNow.startsWith("data:") && !cur.startsWith("data:")))
+    ) {
+      try {
+        a.src = normalizeAudioUrlForPlayback(inlinePlaybackUrl(cur) || cur);
+        if (ctSaved > 0) a.currentTime = ctSaved;
+      } catch {}
+    }
+    if (a.ended) {
+      try { a.currentTime = 0; } catch {}
+    }
+    try { a.muted = false; } catch {}
+    try {
+      const p = a.play();
+      if (p && typeof p.then === "function") {
+        p.catch(() => { void hubAudioPlayWithRetry(a); });
+      }
+    } catch {
+      void hubAudioPlayWithRetry(a);
+    }
   }
   try { syncPlayerUI(); } catch {}
-  try { syncDiscoveryPlayingHighlights(); } catch {}
+  try { syncAllPlaybackRowHighlights(); } catch {}
   return true;
+}
+
+function toggleDiscoverStylePlaybackIfSameUrl(rawUrl) {
+  return toggleLoadedPlayerIfSameUrl(rawUrl);
 }
 
 /** Mini player “next” — pick another random song from the current Discover feed. */
@@ -37411,6 +37480,7 @@ async function renamePrivateLibraryTrack(trackId) {
 async function playLibraryUrlOnPlayer(rawUrl, title, artUrl, opts) {
   const raw = String(rawUrl || "").trim();
   if (!raw) return;
+  if (!opts?.forceReload && toggleLoadedPlayerIfSameUrl(raw)) return;
   primeGlobalPlayerInGesture();
   const fromDiscover = Boolean(opts && opts.discoverFeed);
   const fromPlaylist = Boolean(opts && opts.discoverPlaylist);
@@ -41982,7 +42052,7 @@ function bindProfileSongsSegmentOnce() {
         else if (kind === "analytics") void openSongAnalyticsSheet(actBtn);
         return;
       }
-      const pl = e.target.closest("[data-user-lib-play], .followActMedia, .followActQuoteCard");
+      const pl = e.target.closest("[data-user-lib-play], .followActMedia, .followActQuoteCard, .feedVinylPlatter");
       if (!pl || !actList.contains(pl)) return;
       e.preventDefault();
       playDiscoverTarget(pl);
@@ -49606,6 +49676,7 @@ if (typeof document !== "undefined") {
   document.addEventListener("DOMContentLoaded", () => {
     try { initNabadVerificationUi(); } catch {}
     try { initCoverImageFallbackOnce(); } catch {}
+    try { initFeedVinylPlayerSystem(); } catch {}
     if (els.playerConfirmOk) {
       els.playerConfirmOk.addEventListener("click", () => dismissPlayerConfirm(true));
     }

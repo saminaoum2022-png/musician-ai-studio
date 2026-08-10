@@ -456,6 +456,7 @@ async function fetchFeedSocialStats({ songIds, statusIds, echoIds, viewerId }) {
   };
 
   stats.reposts = { song: {} };
+  stats.gifts = { song: {} };
 
   await Promise.all([
     ...Object.entries(idGroups).map(async ([kind, ids]) => {
@@ -467,6 +468,10 @@ async function fetchFeedSocialStats({ songIds, statusIds, echoIds, viewerId }) {
     (async () => {
       if (!idGroups.song.length) return;
       stats.reposts.song = await fetchRepostStatsForSongs(idGroups.song, viewerId);
+    })(),
+    (async () => {
+      if (!idGroups.song.length) return;
+      stats.gifts.song = await fetchGiftStatsForSongs(idGroups.song, viewerId);
     })(),
   ]);
 
@@ -542,6 +547,24 @@ async function fetchRepostStatsForSongs(ids, viewerId) {
     if (!bucket[id]) continue;
     bucket[id].count += 1;
     if (viewer && String(row?.user_id || "") === viewer) bucket[id].reposted = true;
+  }
+  return bucket;
+}
+
+/** Whether the signed-in viewer has already sent a gift on each song post. */
+async function fetchGiftStatsForSongs(ids, viewerId) {
+  const uuidIds = (ids || []).map(cleanTargetId).filter(Boolean).slice(0, 64);
+  const bucket = {};
+  for (const id of uuidIds) bucket[id] = { gifted: false };
+  const viewer = cleanUserId(viewerId) || "";
+  if (!uuidIds.length || !viewer) return bucket;
+  const inList = uuidIds.map((id) => `"${id}"`).join(",");
+  const rows = await svcFetch(
+    `gift_events?select=target_id&target_kind=eq.song&target_id=in.(${inList})&sender_user_id=eq.${encodeURIComponent(viewer)}&limit=10000`,
+  );
+  for (const row of Array.isArray(rows.data) ? rows.data : []) {
+    const id = String(row?.target_id || "");
+    if (bucket[id]) bucket[id].gifted = true;
   }
   return bucket;
 }

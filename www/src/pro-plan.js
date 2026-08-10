@@ -15,7 +15,7 @@ import {
   warmBilling,
 } from "./billing/revenuecat.js";
 
-/** @type {{ showToast?: (msg: string, opts?: object) => void, isLoggedIn?: () => boolean, isNativeIos?: () => boolean, navigateToRoute?: (route: string) => void, getProState?: () => { active?: boolean, planId?: string|null, status?: string|null, periodEnd?: string|null } } | null} */
+/** @type {{ showToast?: (msg: string, opts?: object) => void, isLoggedIn?: () => boolean, isNativeIos?: () => boolean, navigateToRoute?: (route: string) => void, getProState?: () => { active?: boolean, planId?: string|null, status?: string|null, periodEnd?: string|null }, reconcilePro?: () => Promise<void> } | null} */
 let _deps = null;
 
 let _mounted = false;
@@ -135,16 +135,68 @@ function proPlanDisplayName(planId) {
   return "Pro";
 }
 
-function formatProRenewLabel(iso) {
+export function formatProPeriodLabel(status, iso, opts = {}) {
   const raw = String(iso || "").trim();
   if (!raw) return "";
   try {
     const d = new Date(raw);
     if (Number.isNaN(d.getTime())) return "";
-    return `Renews ${d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}`;
+    const short = Boolean(opts.short);
+    const dateStr = d.toLocaleDateString(
+      undefined,
+      short
+        ? { month: "short", day: "numeric" }
+        : { month: "short", day: "numeric", year: "numeric" },
+    );
+    const s = String(status || "").toLowerCase();
+    if (s === "trialing") return `Trial ends ${dateStr}`;
+    if (s === "cancelled") return `Access until ${dateStr}`;
+    if (s === "grace") {
+      return short ? `Retry until ${dateStr}` : `Billing retry · access until ${dateStr}`;
+    }
+    return `Renews ${dateStr}`;
   } catch {
     return "";
   }
+}
+
+const WEEKLY_TRIAL_MS =
+  (Number(PRO_PLANS.find((p) => p.id === "weekly")?.trialDays) || 7) * 24 * 60 * 60 * 1000;
+
+export function weeklyTrialStartFromState(state) {
+  let startMs = Date.parse(String(state?.trialStartedAt || ""));
+  if (!Number.isFinite(startMs)) {
+    const endMs = Date.parse(String(state?.periodEnd || state?.currentPeriodEnd || ""));
+    if (Number.isFinite(endMs)) startMs = endMs - WEEKLY_TRIAL_MS;
+  }
+  return startMs;
+}
+
+export function weeklyInTrialWindow(state) {
+  const startMs = weeklyTrialStartFromState(state);
+  return Number.isFinite(startMs) && Date.now() < startMs + WEEKLY_TRIAL_MS;
+}
+
+/** UI status for weekly — RC sandbox often sends periodType NORMAL during trial renewals. */
+export function weeklyProDisplayStatus(state) {
+  const planId = String(state?.planId || "").trim();
+  const active = Boolean(state?.active);
+  const status = String(state?.status || "").toLowerCase();
+  if (!active || planId !== "weekly") return status || null;
+  if (status === "trialing") return "trialing";
+
+  const pt = String(state?.periodType || "").toUpperCase();
+  if (pt === "TRIAL") return "trialing";
+  if (weeklyInTrialWindow(state)) return "trialing";
+  if (pt !== "NORMAL") return "trialing";
+
+  return "active";
+}
+
+function formatProRenewLabel(iso) {
+  const state = readProState();
+  const displayStatus = weeklyProDisplayStatus(state);
+  return formatProPeriodLabel(displayStatus, iso || state.periodEnd);
 }
 
 function proStatusHeadline(status) {
@@ -188,8 +240,9 @@ function paintSubscribedState() {
   if (active) {
     const planId = String(state.planId || "").trim();
     const planName = proPlanDisplayName(planId);
-    const renew = formatProRenewLabel(state.periodEnd);
-    const headline = proStatusHeadline(state.status);
+    const displayStatus = weeklyProDisplayStatus(state);
+    const renew = formatProPeriodLabel(displayStatus, state.periodEnd);
+    const headline = proStatusHeadline(displayStatus);
     if (statusEl) {
       statusEl.hidden = false;
       statusEl.innerHTML = `
@@ -530,4 +583,7 @@ export function onProPlanRouteActive({ entering = false } = {}) {
     paintBenefitsExpanded();
   }
   paintSubscribedState();
+  void Promise.resolve(_deps?.reconcilePro?.()).then(() => {
+    paintSubscribedState();
+  });
 }

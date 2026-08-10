@@ -2,15 +2,6 @@
  * Custom SVG icons for the post interaction bar.
  */
 
-let _giftGradSeq = 0;
-
-function giftGradientId(scope) {
-  const base = String(scope || "")
-    .replace(/[^a-zA-Z0-9_-]/g, "")
-    .slice(0, 40);
-  return base ? `giftGradient-${base}` : `giftGradient-${++_giftGradSeq}`;
-}
-
 /** Comment — speech bubble (interaction bar). */
 export function feedActIconComment(klass = "followActActIco followActActIco--comment") {
   const cls = String(klass || "followActActIco followActActIco--comment").trim() || "followActActIco followActActIco--comment";
@@ -29,11 +20,10 @@ export function feedActIconPlays(klass = "followActActIco followActActIco--plays
   return `<svg class="${cls}" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M8 6.7 C8 5.6 9.2 4.9 10.15 5.5 L17.25 10 C18.2 10.6 18.2 12 17.25 12.6 L10.15 17.1 C9.2 17.7 8 17 8 15.9 V6.7Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 }
 
-/** Gift — gradient present (interaction bar). Pass scopeId so gradient ids stay unique per post. */
-export function feedActIconGift(klass = "followActActIco followActActIco--gift", scopeId = "") {
+/** Gift — present outline (interaction bar). Tint via CSS when viewer already sent (.isGifted). */
+export function feedActIconGift(klass = "followActActIco followActActIco--gift") {
   const cls = String(klass || "followActActIco followActActIco--gift").trim() || "followActActIco followActActIco--gift";
-  const gradId = giftGradientId(scopeId);
-  return `<svg class="${cls}" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" aria-hidden="true"><defs><linearGradient id="${gradId}" x1="4" y1="4" x2="20" y2="20" gradientUnits="userSpaceOnUse"><stop offset="0%" stop-color="#E7FFD9"/><stop offset="45%" stop-color="#A8F4D8"/><stop offset="100%" stop-color="#63E5C7"/></linearGradient></defs><rect x="5" y="10" width="14" height="9" rx="2.2" stroke="url(#${gradId})" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><rect x="4" y="7.2" width="16" height="3" rx="1.5" stroke="url(#${gradId})" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M12 7.2V19" stroke="url(#${gradId})" stroke-width="1.6" stroke-linecap="round"/><path d="M12 7.2 C11.3 5.6 10.2 4.5 8.9 4.5 C7.9 4.5 7.2 5.2 7.2 6 C7.2 6.8 7.9 7.2 9.3 7.2H12" stroke="url(#${gradId})" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M12 7.2 C12.7 5.6 13.8 4.5 15.1 4.5 C16.1 4.5 16.8 5.2 16.8 6 C16.8 6.8 16.1 7.2 14.7 7.2H12" stroke="url(#${gradId})" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+  return `<svg class="${cls}" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="5" y="10" width="14" height="9" rx="2.2" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><rect x="4" y="7.2" width="16" height="3" rx="1.5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M12 7.2V19" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M12 7.2 C11.3 5.6 10.2 4.5 8.9 4.5 C7.9 4.5 7.2 5.2 7.2 6 C7.2 6.8 7.9 7.2 9.3 7.2H12" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M12 7.2 C12.7 5.6 13.8 4.5 15.1 4.5 C16.1 4.5 16.8 5.2 16.8 6 C16.8 6.8 16.1 7.2 14.7 7.2H12" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 }
 
 /** Repost — circular arrows (interaction bar). */

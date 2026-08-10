@@ -699,7 +699,11 @@ html[data-theme="light"] .echoTile--add .echoTileLabel{
 html[data-theme="light"] .friendsPage .followActStack .followAct,
 html[data-theme="light"] .profileActivitiesList.followActStack .followAct,
 html[data-theme="light"] .profileActRow{
-  border-bottom-color: rgba(15, 23, 40, 0.08);
+  border-bottom-color: transparent;
+}
+html[data-theme="dark"] .friendsPage .followActStack .followAct,
+html[data-theme="dark"] .profileActivitiesList.followActStack .followAct{
+  border-bottom-color: transparent;
 }
 
 html[data-theme="light"] .followActHead,
@@ -6983,6 +6987,10 @@ body.hubJumpingToTop #hubList .hubRow{
 }
 .playerSocialAct[data-friends-act="like"].isLiked{
   color: #FF4D5A;
+}
+.playerSocialAct[data-friends-act="gift"].isGifted,
+.playerSocialAct--gift.isGifted{
+  color: #4FD1B8;
 }
 .playerSocialAct--like{
   gap: 5px;
@@ -17723,18 +17731,15 @@ body.trackSheetOpen .footer{
   right: 10px;
   bottom: calc(10px + env(safe-area-inset-bottom));
   max-height: min(82vh, 720px);
-  overflow:hidden;
+  overflow: hidden;
   isolation: isolate;
+  display: flex;
+  flex-direction: column;
   border-radius: 24px 24px 16px 16px;
-  border: 1px solid rgba(255,255,255,0.115);
-  background:
-    radial-gradient(110% 72% at 8% 0%, rgba(124,92,255,0.045), transparent 58%),
-    linear-gradient(180deg, rgba(10,13,21,0.985), rgba(5,7,13,0.995));
+  border: 1px solid var(--border);
+  background: var(--card);
   padding: 10px 14px calc(18px + env(safe-area-inset-bottom));
-  box-shadow:
-    0 -16px 54px rgba(0, 0, 0, 0.46),
-    inset 0 1px 0 rgba(255,255,255,0.105),
-    inset 0 -1px 0 rgba(0,0,0,0.18);
+  box-shadow: var(--elev-2);
 }
 .songDetailsGrab{
   width: 40px;
@@ -17749,6 +17754,7 @@ body.trackSheetOpen .footer{
   justify-content:space-between;
   gap:12px;
   padding: 0 40px 12px 2px;
+  flex-shrink: 0;
 }
 .songDetailsKicker{
   margin-bottom: 4px;
@@ -17756,7 +17762,7 @@ body.trackSheetOpen .footer{
   font-weight: 850;
   letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: rgba(162,178,205,0.74);
+  color: var(--text-muted);
 }
 .songDetailsTitle{
   margin:0;
@@ -17764,7 +17770,7 @@ body.trackSheetOpen .footer{
   font-weight: 900;
   line-height: 1.2;
   letter-spacing:-0.03em;
-  color: #f6f8ff;
+  color: var(--text-primary);
 }
 .songDetailsClose{
   position: absolute;
@@ -17773,11 +17779,9 @@ body.trackSheetOpen .footer{
   width: 34px;
   height: 34px;
   border-radius: 999px;
-  border: 1px solid rgba(255,255,255,0.11);
-  background:
-    linear-gradient(145deg, rgba(255,255,255,0.065), rgba(255,255,255,0.018)),
-    rgba(5,7,13,0.78);
-  color: #e8eef7;
+  border: 1px solid var(--border);
+  background: var(--surface-secondary);
+  color: var(--text-secondary);
   font-size: 20px;
   line-height: 1;
   display: inline-flex;
@@ -17786,13 +17790,17 @@ body.trackSheetOpen .footer{
   -webkit-tap-highlight-color: transparent;
 }
 .songDetailsContent{
-  max-height: calc(min(82vh, 720px) - 86px);
-  overflow:auto;
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: none;
+  overflow: auto;
   padding: 0 2px 4px;
   display:flex;
   flex-direction: column;
   gap: 14px;
   -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  color: var(--text-primary);
 }
 .songDetailsFlatList{
   display: flex;
@@ -17800,10 +17808,8 @@ body.trackSheetOpen .footer{
   gap: 0;
   padding: 6px;
   border-radius: 20px;
-  background:
-    linear-gradient(145deg, rgba(255,255,255,0.028), rgba(255,255,255,0.008)),
-    rgba(5,7,13,0.42);
-  border: 1px solid rgba(255,255,255,0.07);
+  background: var(--surface-secondary);
+  border: 1px solid var(--border);
 }
 .songDetailsFlatList--tech{
   margin-top: 8px;
@@ -17815,7 +17821,7 @@ body.trackSheetOpen .footer{
   border: 0;
   background: transparent;
   font: inherit;
-  color: inherit;
+  color: var(--text-primary);
   text-align: left;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
@@ -17824,13 +17830,11 @@ body.trackSheetOpen .footer{
 }
 .songDetailsCopyRow:hover,
 .songDetailsCopyRow:active{
-  background: rgba(255,255,255,0.06);
+  background: var(--surface-hover, rgba(255,255,255,0.06));
 }
 .songDetailsCopyRow strong{
   word-break: break-all;
-}
-.songDetailsPublishLogTitle{
-  margin-top: 12px;
+  color: var(--text-primary);
 }
 .songDetailsFlatRow{
   display: flex;
@@ -17840,20 +17844,21 @@ body.trackSheetOpen .footer{
   padding: 11px 8px;
   font-size: 13px;
   line-height: 1.35;
-  border-bottom: 1px solid rgba(255,255,255,0.06);
+  border-bottom: 1px solid var(--border);
+  color: var(--text-primary);
 }
 .songDetailsFlatRow:last-child{
   border-bottom: none;
 }
 .songDetailsFlatRow span{
   flex: 0 0 auto;
-  color: rgba(188,201,222,0.68);
+  color: var(--text-secondary);
   font-weight: 700;
 }
 .songDetailsFlatRow strong{
   min-width: 0;
   text-align: right;
-  color: rgba(239,245,255,0.94);
+  color: var(--text-primary);
   font-weight: 800;
   overflow-wrap: anywhere;
 }
@@ -17871,13 +17876,13 @@ body.trackSheetOpen .footer{
   font-weight: 850;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: rgba(188,201,222,0.72);
+  color: var(--text-secondary);
   padding: 4px 0;
   -webkit-tap-highlight-color: transparent;
 }
 .songDetailsTechFold summary::-webkit-details-marker{ display: none; }
 .songDetailsTechFold[open] summary{
-  color: rgba(220,228,250,0.88);
+  color: var(--text-primary);
   margin-bottom: 2px;
 }
 .songDetailsSection{
@@ -17895,24 +17900,28 @@ body.trackSheetOpen .footer{
   font-size: 18px;
   font-weight: 900;
   letter-spacing:-0.02em;
-  color: rgba(248,250,255,0.96);
+  color: var(--text-primary);
   overflow-wrap:anywhere;
 }
 .songDetailsMetaLine{
   margin-top: 5px;
   font-size: 12px;
-  color: rgba(188,201,222,0.76);
+  color: var(--text-secondary);
 }
 .songDetailsSectionTitle{
   font-size: 12px;
   font-weight: 900;
   letter-spacing:0.08em;
   text-transform: uppercase;
-  color: rgba(210,221,242,0.84);
+  color: var(--text-secondary);
+}
+.songDetailsPublishLogTitle{
+  margin-top: 12px;
+  color: var(--text-secondary);
 }
 .songDetailsReleaseNote{
   margin-top: 9px;
-  color: rgba(240,244,255,0.90);
+  color: var(--text-secondary);
   font-size: 14px;
   font-weight: 650;
   font-style: italic;
@@ -17941,7 +17950,7 @@ body.trackSheetOpen .footer{
 .songDetailsRemixText,
 .songDetailsChallengeText{
   min-width: 0;
-  color: rgba(232,238,247,0.82);
+  color: var(--text-secondary);
   font-size: 12.5px;
   font-weight: 700;
   line-height: 1.35;
@@ -17969,10 +17978,10 @@ body.trackSheetOpen .footer{
   font-size: 12.5px;
 }
 .songDetailsInfoRow span{
-  color: rgba(166,181,205,0.74);
+  color: var(--text-secondary);
 }
 .songDetailsInfoRow strong{
-  color: rgba(239,245,255,0.94);
+  color: var(--text-primary);
   font-weight: 700;
   overflow-wrap:anywhere;
 }
@@ -17986,21 +17995,21 @@ body.trackSheetOpen .footer{
   border-radius: 0;
   background: transparent;
   padding: 0 2px;
-  color: rgba(235,241,252,0.92);
+  color: var(--text-primary);
   font-size: 13px;
   line-height: 1.55;
 }
 .songDetailsLyricsBox.isEmpty{
-  color: rgba(178,190,211,0.72);
+  color: var(--text-muted);
   font-style: italic;
 }
 .songDetailsCopyBtn{
   min-height: 30px;
   padding: 0 12px;
   border-radius: 999px;
-  border: 1px solid rgba(255,255,255,0.12);
-  background: rgba(255,255,255,0.06);
-  color: rgba(236,243,255,0.9);
+  border: 1px solid var(--border);
+  background: var(--surface-secondary);
+  color: var(--text-primary);
   font-size: 12px;
   font-weight: 850;
 }
@@ -19781,27 +19790,28 @@ input::placeholder, textarea::placeholder{
 /* The "Need help?" idle nudge pill that pops to the left of the orb. */
 .coachFabPill{
   position: absolute;
-  right: calc(100% + 10px);
+  right: calc(100% + 8px);
   top: 50%;
   white-space: nowrap;
-  padding: 8px 13px;
+  padding: 5px 10px;
   border-radius: 999px;
   background: linear-gradient(135deg, rgba(124,92,255,0.96), rgba(63,115,240,0.94));
   color: #fff;
-  font-size: 13px;
+  font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.01em;
-  box-shadow: 0 10px 24px rgba(18,10,52,0.5);
+  line-height: 1.2;
+  box-shadow: 0 8px 18px rgba(18,10,52,0.42);
   opacity: 0;
-  transform: translateY(-50%) translateX(10px) scale(0.9);
+  transform: translateY(-50%) translateX(8px) scale(0.92);
   transform-origin: right center;
   pointer-events: none;
   transition: opacity 220ms ease, transform 240ms cubic-bezier(0.34,1.56,0.64,1);
 }
-.coachFab--nudge .coachFabPill{
+.coachFab--nudge:not(.coachFab--hint):not(.coachFab--generating) .coachFabPill{
   opacity: 1;
   transform: translateY(-50%) translateX(0) scale(1);
-  animation: coachFabPillBump 2200ms ease-in-out 260ms 2;
+  animation: coachFabPillBump 1800ms ease-in-out 220ms 1;
 }
 /* Contextual tips are a short sentence. Render them as a clean rounded card
    that sits ABOVE the orb (growing upward, away from the form) with a little
@@ -19842,15 +19852,30 @@ input::placeholder, textarea::placeholder{
   transform: translateY(0) scale(1);
   animation: none;
 }
-.coachFab--header.coachFab--nudge .coachFabPill{
-  opacity: 1;
-  transform: translateY(0) scale(1);
-  animation: coachFabPillBump 2200ms ease-in-out 260ms 2;
+/* Header orb: idle "Need help?" stays on the orb's center line (left of sphere). */
+.coachFab--header.coachFab--nudge:not(.coachFab--hint):not(.coachFab--generating) .coachFabPill{
+  right: calc(100% + 8px);
+  left: auto;
+  top: 50%;
+  bottom: auto;
+  transform: translateY(-50%) translateX(0) scale(1);
+  white-space: nowrap;
+  width: auto;
+  max-width: none;
+  border-radius: 999px;
+  line-height: 1.2;
+  text-align: left;
+  animation: coachFabPillBump 1800ms ease-in-out 220ms 1;
 }
 .coachFab--header.coachFab--generating.coachFab--nudge .coachFabPill{
+  right: 0;
+  left: auto;
+  top: calc(100% + 10px);
+  bottom: auto;
+  white-space: nowrap;
   opacity: 1;
   transform: translateY(0) scale(1);
-  animation: coachGenPillPulse 2600ms ease-in-out infinite;
+  animation: coachGenPillPulseHeader 2600ms ease-in-out infinite;
 }
 /* Song generation — persistent status pill (replaces the loading bar). */
 .coachFab--generating.coachFab--nudge .coachFabPill{
@@ -19863,6 +19888,10 @@ input::placeholder, textarea::placeholder{
 @keyframes coachGenPillPulse{
   0%, 100% { opacity: 1; transform: translateY(-50%) translateX(0) scale(1); }
   50%      { opacity: 0.92; transform: translateY(-50%) translateX(0) scale(1.02); }
+}
+@keyframes coachGenPillPulseHeader{
+  0%, 100% { opacity: 1; transform: translateY(0) scale(1); }
+  50%      { opacity: 0.92; transform: translateY(0) scale(1.02); }
 }
 /* Caret: a small rotated square fused to the card's bottom edge, sitting right
    above the orb's center so the tip clearly belongs to the orb. */
@@ -19880,7 +19909,7 @@ input::placeholder, textarea::placeholder{
 }
 @keyframes coachFabPillBump{
   0%, 100% { transform: translateY(-50%) translateX(0) scale(1); }
-  50%      { transform: translateY(-50%) translateX(-3px) scale(1.04); }
+  50%      { transform: translateY(-50%) translateX(-2px) scale(1.03); }
 }
 /* Respect reduced-motion: no spin/scale/pulse, just a quiet fade-in. */
 @media (prefers-reduced-motion: reduce){
@@ -21766,6 +21795,9 @@ a.vwPrimary,
 }
 .giftSheetCard{
   padding-bottom: calc(20px + env(safe-area-inset-bottom, 0px));
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
 }
 .giftSheetHead{
   padding: 6px 18px 0;
@@ -21778,7 +21810,7 @@ a.vwPrimary,
   margin-top: 6px;
   font-size: 14px;
   font-weight: 600;
-  color: rgba(232, 238, 247, 0.56);
+  color: var(--text-secondary);
   -webkit-line-clamp: 1;
 }
 .giftSheetBalance{
@@ -21786,8 +21818,8 @@ a.vwPrimary,
   flex-direction: column;
   align-items: center;
   text-align: center;
-  padding: 28px 24px 36px;
-  margin: 16px 0 8px;
+  padding: 22px 24px 28px;
+  margin: 12px 0 6px;
 }
 .giftSheetBalanceLabel{
   margin: 0 0 10px;
@@ -21795,7 +21827,7 @@ a.vwPrimary,
   font-weight: 800;
   letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: rgba(232, 238, 247, 0.42);
+  color: var(--text-muted);
 }
 .giftSheetBalanceAmount{
   margin: 0;
@@ -21813,14 +21845,14 @@ a.vwPrimary,
   margin: 12px 0 0;
   font-size: 14px;
   font-weight: 600;
-  color: rgba(232, 238, 247, 0.52);
+  color: var(--text-secondary);
 }
 .giftSheetTiers{
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 10px;
-  padding: 12px 16px 10px;
-  margin-top: 4px;
+  padding: 10px 16px 8px;
+  margin-top: 2px;
 }
 .giftSheetTier{
   appearance: none;
@@ -21829,12 +21861,12 @@ a.vwPrimary,
   align-items: center;
   justify-content: center;
   gap: 7px;
-  min-height: 122px;
-  padding: 14px 8px 12px;
+  min-height: 112px;
+  padding: 12px 8px 10px;
   border-radius: 16px;
-  border: 1px solid rgba(255,255,255,0.10);
-  background: rgba(255,255,255,0.04);
-  color: rgba(255,255,255,0.96);
+  border: 1px solid var(--border);
+  background: var(--surface-secondary, rgba(255,255,255,0.04));
+  color: var(--text-primary);
   font: inherit;
   text-align: center;
   cursor: pointer;
@@ -21879,7 +21911,7 @@ a.vwPrimary,
   background: rgba(242, 244, 248, 0.25);
 }
 .giftSheetTierIcon--mic .giftTierSvg--mic{
-  color: #F2F4F8;
+  color: currentColor;
 }
 .giftSheetTierIcon--pulse .giftSheetTierGlow{
   background:
@@ -21911,17 +21943,17 @@ a.vwPrimary,
   font-weight: 700;
   line-height: 1.15;
   letter-spacing: -0.01em;
-  color: rgba(255,255,255,0.96);
+  color: inherit;
 }
 .giftSheetTierValue{
   font-size: 12px;
   font-weight: 500;
   line-height: 1.2;
-  color: rgba(232,238,247,0.48);
+  color: var(--text-muted);
 }
 .giftSheetTier:hover:not(:disabled){
-  background: rgba(255,255,255,0.07);
-  border-color: rgba(255,255,255,0.16);
+  background: var(--surface-hover, rgba(255,255,255,0.07));
+  border-color: var(--border-strong, rgba(255,255,255,0.16));
 }
 .giftSheetTier:active:not(:disabled),
 .giftSheetTier.isSending{
@@ -21944,11 +21976,11 @@ a.vwPrimary,
   opacity: 0.35;
 }
 .giftSheetPreviewHint{
-  margin: 8px 16px 12px;
+  margin: 6px 16px 14px;
   font-size: 11px;
   line-height: 1.35;
   text-align: center;
-  color: rgba(232, 238, 247, 0.34);
+  color: var(--text-muted);
 }
 
 /* Gift sent — premium center overlay with dim + tier motion */
@@ -26619,16 +26651,17 @@ body[data-profile-songs-seg="reposts"] .profileSongsToolbar{
 .profileRepostsList.profileActivitiesList.followActStack .followAct.followAct--xstyle,
 #profileRepostsList.followActStack .followAct.followAct--xstyle,
 #userPublicRepostsList.followActStack .followAct.followAct--xstyle{
-  padding: 0 14px var(--feed-post-gap-after-actions, 12px);
-  padding-left: 14px;
-  padding-right: 14px;
+  padding: 0 var(--feed-post-pad-x, 14px) var(--feed-post-gap-after-actions, 20px);
+  padding-left: var(--feed-post-pad-x, 14px);
+  padding-right: var(--feed-post-pad-x, 14px);
 }
 .profileRepostsList.profileActivitiesList.followActStack .followAct,
 #profileRepostsList.followActStack .followAct,
 #userPublicRepostsList.followActStack .followAct{
-  padding: 0 14px var(--feed-post-gap-after-actions, 12px);
-  padding-left: 14px;
-  padding-right: 14px;
+  padding: 0 var(--feed-post-pad-x, 14px) var(--feed-post-gap-after-actions, 20px);
+  padding-left: var(--feed-post-pad-x, 14px);
+  padding-right: var(--feed-post-pad-x, 14px);
+  border-bottom: 0;
 }
 .profileSegTab{
   flex: 1 1 0;
@@ -26891,7 +26924,7 @@ body[data-profile-songs-seg="all"] #profileActivitiesLoadMoreWrap{
 }
 .profileActivitiesList.followActStack .followAct{
   padding: 12px 14px 12px 6px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+  border-bottom: 0;
 }
 .profileActivitiesList[hidden]{
   display: none !important;
@@ -27745,7 +27778,7 @@ body.createChooserSheetOpen .footer{
   padding: 12px 14px 12px 6px;
   border-radius: 0;
   border: 0;
-  border-bottom: 1px solid var(--row-divider);
+  border-bottom: 0;
   background: transparent;
   box-shadow: none;
   overflow: visible;
@@ -29820,7 +29853,7 @@ html[data-theme="light"] .discoverySearchBarWrap .searchBar{
   font-size: 13px;
   font-weight: 550;
   line-height: 1.35;
-  color: rgba(232,238,247,0.58);
+  color: var(--text-muted);
   text-align: center;
 }
 
@@ -36789,6 +36822,13 @@ section.mentorPage{
   box-sizing: border-box;
   min-width: 0;
 }
+#friendsPage .followActStack .followAct.followAct--xstyle,
+.profileActivitiesList.followActStack .followAct.followAct--xstyle,
+#profileRepostsList.followActStack .followAct.followAct--xstyle,
+#userPublicSongs.followActStack .followAct.followAct--xstyle,
+#userPublicRepostsList.followActStack .followAct.followAct--xstyle{
+  border-bottom: none;
+}
 .followActStack .followAct.followAct--xstyle:first-child,
 .followAct.followAct--xstyle.followActStack:first-child{
   padding-top: 10px;
@@ -36800,8 +36840,7 @@ section.mentorPage{
 .followAct--xstyle:hover{
   background: rgba(255, 255, 255, 0.02);
 }
-/* Explicit overrides for the two scopes that previously beat us. */
-.friendsPage .followActStack .followAct.followAct--xstyle,
+/* Explicit overrides for profile/public feed scopes — match Friends spacing, no dividers. */
 .profileActivitiesList.followActStack .followAct.followAct--xstyle,
 #profileRepostsList.followActStack .followAct.followAct--xstyle,
 #userPublicSongs.followActStack .followAct.followAct--xstyle,
@@ -36810,39 +36849,48 @@ section.mentorPage{
   flex-direction: column;
   align-items: stretch;
   gap: 0;
-  padding: 0 14px var(--feed-post-gap-after-actions, 12px);
-  padding-left: 14px;
-  padding-right: 14px;
+  --feed-post-gap-before-header: 24px;
+  --feed-post-gap-after-actions: 20px;
+  --feed-post-pad-x: 14px;
+  padding: 0 var(--feed-post-pad-x) var(--feed-post-gap-after-actions, 20px);
+  padding-left: var(--feed-post-pad-x);
+  padding-right: var(--feed-post-pad-x);
   border: 0;
-  border-bottom: 1px solid var(--feed-post-divider-color, rgba(255, 255, 255, 0.063));
+  border-bottom: none;
   background: transparent;
   border-radius: 0;
   box-shadow: none;
   overflow: visible;
 }
-.friendsPage .followActStack .followAct.followAct--xstyle + .followAct.followAct--xstyle,
 .profileActivitiesList.followActStack .followAct.followAct--xstyle + .followAct.followAct--xstyle,
 #profileRepostsList.followActStack .followAct.followAct--xstyle + .followAct.followAct--xstyle,
 #userPublicSongs.followActStack .followAct.followAct--xstyle + .followAct.followAct--xstyle,
 #userPublicRepostsList.followActStack .followAct.followAct--xstyle + .followAct.followAct--xstyle{
-  padding-top: var(--feed-post-gap-before-header, 12px);
-}
-.friendsPage .followActStack .followAct.followAct--xstyle:first-child{
-  padding-top: 10px;
+  padding-top: var(--feed-post-gap-before-header, 24px);
+  border-top: 0;
 }
 .profileActivitiesList.followActStack .followAct.followAct--xstyle:first-child,
 #profileRepostsList.followActStack .followAct.followAct--xstyle:first-child,
 #userPublicSongs.followActStack .followAct.followAct--xstyle:first-child,
 #userPublicRepostsList.followActStack .followAct.followAct--xstyle:first-child{
-  padding-top: 0;
+  padding-top: 8px;
 }
 /* And undo the `.followAct--music/--status` left/right padding override
  * that the friends scope applies, which would otherwise pull the row
  * out of alignment with the new grid edges. */
-.friendsPage .followActStack .followAct.followAct--xstyle.followAct--music,
-.friendsPage .followActStack .followAct.followAct--xstyle.followAct--status{
-  padding-left: 14px;
-  padding-right: 14px;
+.profileActivitiesList.followActStack .followAct.followAct--xstyle.followAct--music,
+.profileActivitiesList.followActStack .followAct.followAct--xstyle.followAct--status,
+#profileRepostsList.followActStack .followAct.followAct--xstyle.followAct--music,
+#profileRepostsList.followActStack .followAct.followAct--xstyle.followAct--status,
+#userPublicSongs.followActStack .followAct.followAct--xstyle.followAct--music,
+#userPublicSongs.followActStack .followAct.followAct--xstyle.followAct--status,
+#userPublicRepostsList.followActStack .followAct.followAct--xstyle.followAct--music,
+#userPublicRepostsList.followActStack .followAct.followAct--xstyle.followAct--status{
+  padding-left: var(--feed-post-pad-x, 14px);
+  padding-right: var(--feed-post-pad-x, 14px);
+}
+.friendsPage .followActStack .followAct.followAct--xstyle:first-child{
+  padding-top: 0;
 }
 .followAct--xstyle .followActTop{
   display: flex;
@@ -37636,59 +37684,75 @@ section.mentorPage{
   word-wrap: break-word;
 }
 
-/* Remix flow: compact original reference → hero remix player (Friends / Profile Posts). */
-.followActRemixFlow{
+/* Source → result feed hierarchy (Remix / Mashup). */
+.feedSourceResultFlow{
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 13px;
   width: 100%;
   min-width: 0;
 }
-.followActRemixFlowOrig{
-  display: grid;
-  grid-template-columns: 52px minmax(0, 1fr) auto;
-  gap: 10px;
+.feedSourceRow{
+  display: flex;
   align-items: center;
+  gap: 12px;
   width: 100%;
   min-width: 0;
-  padding: 8px 10px;
+  min-height: 72px;
+  max-height: 82px;
+  padding: 8px 12px;
   border: 1px solid rgba(255,255,255,0.10);
-  border-radius: 14px;
+  border-radius: 15px;
   background: rgba(255,255,255,0.03);
   color: inherit;
   text-align: left;
+  box-shadow: none;
+}
+.feedSourceRow--remix{
+  display: grid;
+  grid-template-columns: 58px minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+}
+button.feedSourceRow{
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
 }
-.followActRemixFlowOrig:active{
+button.feedSourceRow:active{
   transform: scale(0.985);
 }
+.feedSourceRowArt,
 .followActRemixFlowOrigArt{
-  width: 52px;
-  height: 52px;
-  border-radius: 10px;
+  width: 58px;
+  height: 58px;
+  border-radius: 12px;
   overflow: hidden;
+  flex: 0 0 auto;
   background: rgba(255,255,255,0.04);
 }
+.feedSourceRowArt img,
 .followActRemixFlowOrigArt img{
   width: 100%;
   height: 100%;
   object-fit: cover;
   display: block;
 }
+.feedSourceRowBody,
 .followActRemixFlowOrigBody{
   display: flex;
   flex-direction: column;
   gap: 2px;
   min-width: 0;
 }
+.feedSourceRowKicker,
 .followActRemixFlowOrigChip{
   font-size: 10px;
   font-weight: 800;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
   color: rgba(232,238,247,0.62);
 }
+.feedSourceRowTitle,
 .followActRemixFlowOrigTitle{
   font-size: 13px;
   font-weight: 700;
@@ -37697,6 +37761,7 @@ section.mentorPage{
   overflow: hidden;
   text-overflow: ellipsis;
 }
+.feedSourceRowSub,
 .followActRemixFlowOrigBy{
   font-size: 11px;
   font-weight: 600;
@@ -37705,33 +37770,130 @@ section.mentorPage{
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.followActRemixFlowOrigPlay{
+.feedSourceRowRemixIco{
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
-  height: 28px;
-  border-radius: 999px;
-  background: rgba(8,10,18,0.66);
-  color: #fff;
+  width: 32px;
+  height: 32px;
+  flex: 0 0 auto;
+  color: rgba(167,139,250,0.96);
+}
+.feedSourceRowRemixIco .remixIcon{
+  width: 18px;
+  height: 18px;
+}
+.feedSourceRow--mashup{
+  align-items: center;
+  gap: 12px;
+}
+.feedSourceRowMashupCovers{
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 0 auto;
+}
+.feedSourceRowThumb{
+  width: 56px;
+  height: 56px;
+  padding: 0;
+  border: 0;
+  border-radius: 12px;
+  overflow: hidden;
+  background: rgba(255,255,255,0.04);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.feedSourceRowThumb--static{
+  display: block;
+}
+.feedSourceRowThumb:active{
+  transform: scale(0.97);
+}
+.feedSourceRowThumb--static:active{
+  transform: none;
+}
+.feedSourceRowThumbImg{
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.feedSourceRowMashupPlus{
+  color: rgba(232,238,247,0.58);
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1;
+  flex: 0 0 auto;
+}
+.feedSourceRowMashupMeta{
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+.feedSourceRowMashupTitle,
+button.feedSourceRowMashupTitle{
+  display: block;
+  width: 100%;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: rgba(248,250,255,0.94);
+  font-size: 12.5px;
+  font-weight: 700;
+  line-height: 1.25;
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.feedSourceRowMashupTitle--static{
+  cursor: default;
+}
+button.feedSourceRowMashupTitle:active{
+  opacity: 0.82;
+}
+
+/* Remix flow: compact original reference → hero remix player (Friends / Profile Posts). */
+.followActRemixFlow{
+  display: flex;
+  flex-direction: column;
+  gap: 13px;
+  width: 100%;
+  min-width: 0;
+}
+.followActRemixFlowOrig{
+  display: grid;
+  grid-template-columns: 58px minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  width: 100%;
+  min-width: 0;
+  min-height: 72px;
+  max-height: 82px;
+  padding: 8px 12px;
+  border: 1px solid rgba(255,255,255,0.10);
+  border-radius: 15px;
+  background: rgba(255,255,255,0.03);
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  box-shadow: none;
+}
+.followActRemixFlowOrig:active{
+  transform: scale(0.985);
+}
+.followActRemixFlowOrigPlay{
+  display: none;
 }
 .followActRemixFlowBridge{
-  display: grid;
-  grid-template-columns: 1fr auto auto 1fr;
-  align-items: center;
-  gap: 8px;
-  padding: 0 4px;
-}
-.followActRemixFlowBridgeLine{
-  height: 1px;
-  background: rgba(255,255,255,0.10);
-}
-.followActRemixFlowBridgeLabel{
-  font-size: 10px;
-  font-weight: 800;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: rgba(232,238,247,0.72);
+  display: none;
 }
 .followActRemixFlow .followActQuoteRow--remixHero{
   margin-top: 0;
@@ -37742,12 +37904,16 @@ section.mentorPage{
 .followActRemixFlowOrig--static:active{
   transform: none;
 }
-.followActRemixFlow .followActMediaWrap--remixResult{
+.followActMediaWrap--feedResult,
+.followActRemixFlow .followActMediaWrap--remixResult,
+.followActMashup .followActMediaWrap--mashupResult{
   width: 100%;
   margin-left: 0;
   margin-top: 0;
 }
-.followActRemixFlow .followActMediaWrap--remixResult .followActMedia{
+.followActMediaWrap--feedResult .followActMedia,
+.followActRemixFlow .followActMediaWrap--remixResult .followActMedia,
+.followActMashup .followActMediaWrap--mashupResult .followActMedia{
   width: 100%;
   margin: 0;
   aspect-ratio: 1 / 1;
@@ -37756,13 +37922,16 @@ section.mentorPage{
   border-radius: var(--feed-cover-radius, 19px);
   overflow: hidden;
 }
-.followActRemixFlow .followActMediaWrap--remixResult .followActMediaImg{
+.followActMediaWrap--feedResult .followActMediaImg,
+.followActRemixFlow .followActMediaWrap--remixResult .followActMediaImg,
+.followActMashup .followActMediaWrap--mashupResult .followActMediaImg{
   width: 100%;
   height: 100%;
   object-fit: cover;
   object-position: center top;
 }
-.followActMediaChip--remix .remixAttributionPill{
+.followActMediaChip--remix .remixAttributionPill,
+.followActMediaChip--mashup .mashupAttributionPill{
   height: 20px;
   padding: 0 8px;
   font-size: 10px;
@@ -37868,13 +38037,13 @@ section.mentorPage{
   text-overflow: ellipsis;
 }
 
-/* Mashup: source strip A × B + main playable result card. */
+/* Mashup: compact source row + hero result artwork. */
 .followActMashup{
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 13px;
   width: 100%;
-  margin: 8px 0 0;
+  margin: 0;
 }
 .followActMashupSources{
   display: grid;
@@ -38110,6 +38279,8 @@ section.mentorPage{
   margin-left: auto;
   align-self: flex-start;
   display: flex;
+  flex-shrink: 0;
+  z-index: 2;
 }
 .followAct--xstyle .followActTopMenu .followActQuoteMenuBtn,
 .followActTopMenu .discoverCardMenuBtn{
@@ -38117,16 +38288,23 @@ section.mentorPage{
   top: auto;
   right: auto;
   margin: 0;
-  padding: 0 2px;
+  padding: 0 4px;
   min-width: 32px;
   min-height: 28px;
   font-size: 20px;
   line-height: 1;
-  color: rgba(232,238,247,0.6);
+  color: var(--icon-muted);
   text-shadow: none;
+  opacity: 1;
 }
-.followActTopMenu .discoverCardMenuBtn:active{
-  color: rgba(232,238,247,0.92);
+.followActTopMenu .discoverCardMenuBtn:active,
+.followActTopMenu .followActQuoteMenuBtn:active{
+  color: var(--text-secondary);
+  opacity: 1;
+}
+html[data-theme="light"] body[data-route="friends"] .followAct--xstyle .followActTopMenu .discoverCardMenuBtn,
+html[data-theme="light"] body[data-route="friends"] .followAct--xstyle .followActTopMenu .followActQuoteMenuBtn{
+  color: var(--text-muted);
 }
 
 /* Song analytics — owner-only sheet (who played + how many times). */
@@ -38316,6 +38494,7 @@ section.mentorPage{
 .followActActIco--comment,
 .followActActIco--like,
 .followActActIco--plays,
+.followActActIco--gift,
 .followActActIco--analytics{
   fill: none;
   stroke: currentColor;
@@ -38331,7 +38510,6 @@ section.mentorPage{
 }
 .followActActIco--gift{
   transform: translateY(0);
-  fill: none;
 }
 .followActActIco--plays{
   transform: translateY(1px);
@@ -38399,6 +38577,26 @@ section.mentorPage{
 }
 .followActAct[data-friends-act="like"].isLiked:hover{
   background: rgba(255, 77, 109, 0.12);
+}
+.followActAct--gift.isGifted,
+.followActAct[data-friends-act="gift"].isGifted{
+  color: #4FD1B8;
+}
+.followActAct--gift.isGifted .followActActIco--gift,
+.followActAct[data-friends-act="gift"].isGifted .followActActIco--gift{
+  stroke: currentColor;
+}
+.followActAct--gift.isGifted:hover,
+.followActAct[data-friends-act="gift"].isGifted:hover{
+  background: rgba(79, 209, 184, 0.12);
+}
+html[data-theme="light"] .followActAct--gift.isGifted,
+html[data-theme="light"] .followActAct[data-friends-act="gift"].isGifted{
+  color: #1FA892;
+}
+html[data-theme="light"] body[data-route="friends"] .followAct--xstyle .followActActions .followActAct--gift.isGifted,
+html[data-theme="light"] body[data-route="friends"] .followAct--xstyle .followActActions .followActAct[data-friends-act="gift"].isGifted{
+  color: #1FA892;
 }
 
 /* =====================================================================
@@ -40783,7 +40981,7 @@ body[data-route="generate"] .aiGenerate{
   /* legacy alias — layout lives on .nabadTabsTrack */
 }
 
-/* Discover category tabs only — typography-first, no indicators */
+/* Discover category tabs — typography-first underline strip */
 #discoverFeedTabs.discoverFeedTabs{
   margin: 0 -2px 22px;
   padding: 0 0 6px;
@@ -40798,15 +40996,24 @@ body[data-route="generate"] .aiGenerate{
   gap: 22px;
   padding: 4px 2px 0 8px;
   border-bottom: 1px solid var(--border);
+  overflow-x: auto;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+#discoverFeedTabs .nabadTabsTrack::-webkit-scrollbar{
+  display: none;
 }
 #discoverFeedTabs .nabadTabsTab{
   position: relative;
+  flex: 0 0 auto;
   font-size: 18.5px;
   font-weight: 500;
   letter-spacing: -0.025em;
   line-height: 1.25;
   color: var(--tab-inactive);
   padding: 6px 0 8px;
+  border: 0;
+  border-radius: 0;
   background: transparent;
   box-shadow: none;
   transition: color 180ms ease, opacity 180ms ease, font-weight 180ms ease;
@@ -40819,6 +41026,7 @@ body[data-route="generate"] .aiGenerate{
   font-weight: 700;
   background: transparent;
   box-shadow: none;
+  border-color: transparent;
 }
 #discoverFeedTabs .nabadTabsTab::before{
   content: none;
@@ -40839,6 +41047,59 @@ body[data-route="generate"] .aiGenerate{
   background: currentColor;
   opacity: 0.92;
   z-index: 1;
+}
+
+/* Friends feed filters — pill chips, aligned to Discover tab strip position */
+#friendsFeedTabs.friendsFeedTabs{
+  margin: 0 -2px 22px;
+  padding: 0 0 6px;
+  background: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+#friendsFeedTabs .nabadTabsTrack{
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 2px 0 8px;
+  border: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+#friendsFeedTabs .nabadTabsTrack::-webkit-scrollbar{
+  display: none;
+}
+#friendsFeedTabs .nabadTabsTab{
+  flex: 0 0 auto;
+  padding: 7px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface-1, rgba(255,255,255,0.04));
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  line-height: 1.1;
+  box-shadow: none;
+}
+#friendsFeedTabs .nabadTabsTab:hover:not(.is-active){
+  color: var(--text-primary);
+  border-color: rgba(255,255,255,0.14);
+}
+#friendsFeedTabs .nabadTabsTab.is-active{
+  color: var(--text-primary);
+  font-weight: 700;
+  border-color: transparent;
+  background:
+    linear-gradient(var(--surface-1, rgba(255,255,255,0.04)), var(--surface-1, rgba(255,255,255,0.04))) padding-box,
+    linear-gradient(135deg, rgba(124,92,255,0.85), rgba(45,212,191,0.72)) border-box;
+  border: 1px solid transparent;
+}
+#friendsFeedTabs .nabadTabsTab::before,
+#friendsFeedTabs .nabadTabsTab::after{
+  content: none;
+  display: none;
 }
 
 .discoverFeedMount{
@@ -44323,6 +44584,21 @@ html[data-theme="light"] .discoverFeedTabs .nabadTabsTab.is-active{
   color: var(--text-primary);
   font-weight: 700;
 }
+html[data-theme="light"] #friendsFeedTabs.friendsFeedTabs{
+  background: transparent;
+  border-radius: 0;
+}
+html[data-theme="light"] #friendsFeedTabs .nabadTabsTab{
+  background: rgba(255,255,255,0.92);
+  border-color: rgba(15,23,42,0.10);
+  color: rgba(15,23,42,0.62);
+}
+html[data-theme="light"] #friendsFeedTabs .nabadTabsTab.is-active{
+  color: rgba(15,23,42,0.92);
+  background:
+    linear-gradient(#fff, #fff) padding-box,
+    linear-gradient(135deg, rgba(124,92,255,0.85), rgba(45,212,191,0.72)) border-box;
+}
 html[data-theme="light"] .discoverWeeklyChart--final .chartWeekWinner,
 html[data-theme="light"] .discoverWeeklyChartPageList .chartWeekLeaderRow{
   background: var(--chart-surface);
@@ -44674,17 +44950,28 @@ body[data-route="friends"] .friendsPage{
   gap: 0;
   padding: 0 0 calc(var(--bottomNavClearance, 110px) + 22px);
 }
-.friendsPage .followActStack .followAct.followAct--xstyle{
+:is(#friendsPage .followActStack, #profileActivitiesList.followActStack, #profileRepostsList.followActStack, #userPublicSongs.followActStack, #userPublicRepostsList.followActStack, .profileActivitiesList.followActStack) > .followAct.followAct--xstyle{
+  --feed-post-gap-before-header: 24px;
+  --feed-post-gap-after-actions: 20px;
+  --feed-post-pad-x: 14px;
+  --feed-cover-extra-bleed: 6px;
   margin: 0;
-  padding: 0 20px var(--feed-post-gap-after-actions, 12px);
+  padding: 0 var(--feed-post-pad-x) var(--feed-post-gap-after-actions, 20px);
   border: 0;
+  border-bottom: none;
   border-radius: 0;
   background: transparent;
   box-shadow: none;
-  border-bottom: 1px solid var(--feed-post-divider-color, rgba(255, 255, 255, 0.063));
 }
-.friendsPage .followActStack .followAct.followAct--xstyle + .followAct.followAct--xstyle{
-  padding-top: var(--feed-post-gap-before-header, 12px);
+:is(#friendsPage .followActStack, #profileActivitiesList.followActStack, #profileRepostsList.followActStack, #userPublicSongs.followActStack, #userPublicRepostsList.followActStack, .profileActivitiesList.followActStack) > .followAct.followAct--xstyle + .followAct.followAct--xstyle{
+  padding-top: var(--feed-post-gap-before-header, 24px);
+  border-top: 0;
+}
+:is(#friendsPage .followActStack, #profileActivitiesList.followActStack, #profileRepostsList.followActStack, #userPublicSongs.followActStack, #userPublicRepostsList.followActStack, .profileActivitiesList.followActStack) > .followAct.followAct--xstyle:first-child{
+  padding-top: 8px;
+}
+#friendsPage .followActStack > .followAct.followAct--xstyle:first-child{
+  padding-top: 0;
 }
 body[data-route="friends"] .followAct--xstyle .followActTop{
   gap: 12px;
@@ -44764,7 +45051,7 @@ body[data-route="friends"] .followAct--xstyle.followAct--repost .followActStatus
 body[data-route="friends"] .followAct--xstyle > .followActQuoteRow:has(.feedHeroPlayer){
   margin-top: var(--feed-art-gap, 10px);
 }
-:is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle > .followActMediaWrap{
+:is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle > .followActMediaWrap:not(.followActMediaWrap--friendsDock){
   margin-top: var(--feed-art-gap, 10px);
   width: 100%;
   margin-left: 0;
@@ -44908,7 +45195,7 @@ body[data-route="friends"] .followAct--xstyle > .followActQuoteRow:has(.feedHero
 .followActMediaTitle{
   display: none;
 }
-:is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle .followActMediaTitle{
+:is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle .followActMediaWrap:not(.followActMediaWrap--friendsDock) .followActMediaTitle{
   display: block;
   position: absolute;
   left: 16px;
@@ -44928,7 +45215,7 @@ body[data-route="friends"] .followAct--xstyle > .followActQuoteRow:has(.feedHero
   text-overflow: ellipsis;
   pointer-events: none;
 }
-:is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followActRealtimeProgress{
+:is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followActRealtimeProgress:not(.followActMediaDockWave){
   position: absolute;
   left: 14px;
   right: 14px;
@@ -45011,6 +45298,282 @@ body[data-route="friends"] .followAct--xstyle > .followActQuoteRow:has(.feedHero
 :is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct[data-cover-prog="ready"] .followActRealtimeProgress.isActive .followActRealtimeSeek::-moz-range-thumb{
   box-shadow: 0 0 0 3px rgba(var(--cover-prog-rgb), 0.24), 0 4px 10px rgba(0,0,0,.32);
 }
+
+/* Friends feed — post layout refresh */
+.followAct--friendsFeed .followActMetaSub .followActStyleTag{
+  display: inline-block;
+  max-width: 92px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: bottom;
+  color: var(--text-muted);
+}
+.followAct--friendsFeed .followActReleaseCaption{
+  margin-top: 4px;
+  min-width: 0;
+  max-width: 100%;
+}
+.followAct--friendsFeed .followActReleaseCaption:empty{
+  display: none;
+}
+.followAct--friendsFeed .followActReleaseCaption .followActCaption--friends{
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.4;
+  letter-spacing: -.01em;
+  color: var(--text-primary);
+}
+.followAct--friendsFeed .followActReleaseCaption--clamp .followActCaption--friends{
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.followAct--friendsFeed .followActCaptionMore{
+  appearance: none;
+  border: 0;
+  padding: 0;
+  margin: 2px 0 0;
+  background: transparent;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.followAct--friendsFeed .followActCaptionMore:hover,
+.followAct--friendsFeed .followActCaptionMore:focus-visible{
+  color: var(--text-secondary);
+}
+.followAct.followAct--friendsFeed > .followActMediaWrap.followActMediaWrap--friendsDock,
+.followAct.followAct--friendsFeed > .followActRemixFlow .followActMediaWrap--friendsDock,
+.followAct.followAct--friendsFeed > .followActMashup .followActMediaWrap--friendsDock,
+:is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct.followAct--friendsFeed > .followActMediaWrap.followActMediaWrap--friendsDock,
+:is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct.followAct--friendsFeed > .followActRemixFlow .followActMediaWrap--friendsDock,
+:is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct.followAct--friendsFeed > .followActMashup .followActMediaWrap--friendsDock{
+  margin-top: var(--feed-art-gap, 8px);
+  width: calc(100% + ((var(--feed-post-pad-x, 14px) + var(--feed-cover-extra-bleed, 6px)) * 2));
+  max-width: none;
+  margin-left: calc(-1 * (var(--feed-post-pad-x, 14px) + var(--feed-cover-extra-bleed, 6px)));
+  margin-right: calc(-1 * (var(--feed-post-pad-x, 14px) + var(--feed-cover-extra-bleed, 6px)));
+}
+.followActMediaWrap--friendsDock{
+  position: relative;
+}
+.followActMediaWrap--friendsDock .followActMedia{
+  display: block;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  aspect-ratio: 1 / 1;
+  border-radius: var(--feed-cover-radius, 19px);
+  overflow: hidden;
+  background: rgba(10,14,22,.46);
+  box-shadow: none;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.followActMediaWrap--friendsDock .followActMediaScrim{
+  height: 52%;
+  background: linear-gradient(180deg, rgba(6,9,15,0) 0%, rgba(6,9,15,.12) 40%, rgba(6,9,15,.58) 100%);
+}
+.followActMediaWrap--friendsDock .followActMediaCopy{
+  position: absolute;
+  left: 16px;
+  right: 16px;
+  bottom: calc(12px + 24px + 10px);
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding-bottom: 0;
+  pointer-events: none;
+  text-align: left;
+}
+:is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followActMediaWrap--friendsDock .followActMediaTitle{
+  display: block;
+  position: static;
+  margin: 0;
+  font-family: "Inter Display", "Inter", -apple-system, BlinkMacSystemFont, "SF Pro Display", ui-sans-serif, system-ui, sans-serif;
+  font-size: calc(16px * 1.15);
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  line-height: 1.15;
+  color: rgba(255, 255, 255, 0.82);
+  text-shadow: none;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.followActMediaWrap--friendsDock .followActMediaKicker{
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  line-height: 1.2;
+  color: rgba(255,255,255,0.78);
+  text-shadow: 0 1px 8px rgba(0,0,0,0.4);
+}
+.followActMediaWrap--friendsDock .followActMediaDock{
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: 12px;
+  z-index: 3;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  box-shadow: none;
+  opacity: 1;
+  transform: none;
+}
+.followActMediaWrap--friendsDock .followActMediaDockPlay{
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  border: 0;
+  padding: 0;
+  color: rgba(255, 255, 255, 0.95);
+  background: rgba(255, 255, 255, 0.18);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.followActMediaWrap--friendsDock .followActMediaDockPlay .coverArtPlayIco--play{
+  margin-left: 2px;
+}
+.followActMediaWrap--friendsDock .followActMediaDockPlay .coverArtPlayIco--pause,
+.followActMediaWrap--friendsDock .followActMediaDockPlay .coverArtPlayIco--loading{
+  display: none;
+}
+.followAct--friendsFeed.discoveryRowPlaying .followActMediaDockPlay .coverArtPlayIco--play{
+  display: none;
+}
+.followAct--friendsFeed.discoveryRowPlaying .followActMediaDockPlay .coverArtPlayIco--pause{
+  display: flex;
+}
+.followAct--friendsFeed.discoveryRowLoading .followActMediaDockPlay .coverArtPlayIco--play,
+.followAct--friendsFeed.discoveryRowLoading .followActMediaDockPlay .coverArtPlayIco--pause{
+  display: none !important;
+}
+.followAct--friendsFeed.discoveryRowLoading .followActMediaDockPlay .coverArtPlayIco--loading{
+  display: flex !important;
+}
+.followActMediaWrap--friendsDock .followActMediaDockWave{
+  position: relative;
+  min-width: 0;
+  width: 100%;
+  height: 14px;
+  display: flex;
+  align-items: center;
+  align-self: center;
+}
+.followActMediaWrap--friendsDock .followActMediaDockWave.followActRealtimeProgress{
+  position: relative;
+  left: auto;
+  right: auto;
+  bottom: auto;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  --feedWavePct: 0%;
+}
+.followActMediaWrap--friendsDock .friendsFeedWaveStage{
+  position: relative;
+  flex: 1 1 auto;
+  width: 100%;
+  min-width: 40px;
+  height: 14px;
+}
+.followActMediaWrap--friendsDock .friendsFeedWave{
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1px;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+.followActMediaWrap--friendsDock .friendsFeedWaveBar{
+  flex: 1 1 0;
+  max-width: 2px;
+  min-width: 1px;
+  height: calc(2px + var(--bar-h, 0.42) * 10px);
+  border-radius: 999px;
+  transform-origin: center center;
+}
+.followActMediaWrap--friendsDock .friendsFeedWave--base .friendsFeedWaveBar{
+  background: rgba(255, 255, 255, 0.26);
+}
+.followActMediaWrap--friendsDock .friendsFeedWave--prog{
+  clip-path: inset(0 calc(100% - var(--feedWavePct, 0%)) 0 0);
+}
+.followActMediaWrap--friendsDock .friendsFeedWave--prog .friendsFeedWaveBar{
+  background: rgba(255, 255, 255, 0.78);
+  box-shadow: none;
+  transition: height 48ms linear;
+}
+.followAct--friendsFeed.discoveryRowPlaying .friendsFeedWave--prog .friendsFeedWaveBar{
+  transition: height 38ms linear;
+}
+.followAct--friendsFeed[data-cover-prog="ready"] .friendsFeedWave--prog .friendsFeedWaveBar{
+  background: rgba(var(--cover-prog-rgb, 255, 255, 255), 0.82);
+  box-shadow: none;
+}
+.followActMediaWrap--friendsDock .followActMediaDockWave .followActRealtimeSeek--ghost{
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+.followActMediaWrap--friendsDock .followActMediaDockWave .followActRealtimeSeek--ghost:disabled{
+  cursor: default;
+}
+.followActMediaWrap--friendsDock .followActMediaDockWave .followActRealtimeSeek--ghost::-webkit-slider-thumb{
+  width: 0;
+  height: 0;
+}
+.followActMediaWrap--friendsDock .followActMediaDockWave .followActRealtimeSeek--ghost::-webkit-slider-runnable-track{
+  height: 14px;
+  background: transparent;
+}
+.followActMediaWrap--friendsDock .followActMediaDockDur{
+  flex: 0 0 auto;
+  min-width: 28px;
+  font-size: 10px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.01em;
+  color: rgba(255, 255, 255, 0.86);
+  text-shadow: 0 1px 5px rgba(0, 0, 0, 0.42);
+  text-align: right;
+}
+.followActMediaWrap--friendsDock .followActMediaDockDur:empty{
+  display: none;
+}
+.followAct--friendsFeed .followActHeadStack .followActReleaseCaption + .followActContent{
+  display: none;
+}
+
 body[data-route="friends"] .followAct--xstyle .followActQuoteCard--hero{
   border: 0;
   border-radius: var(--feed-cover-radius, 19px);
@@ -45122,10 +45685,22 @@ body[data-route="friends"] .followAct--xstyle .followActActions .followActAct[da
   color: #FF4D5A;
   text-shadow: 0 0 18px rgba(255, 77, 109, 0.22);
 }
+body[data-route="friends"] .followAct--xstyle .followActActions .followActAct.isGifted,
+body[data-route="friends"] .followAct--xstyle .followActActions .followActAct[data-friends-act="gift"].isGifted{
+  color: #4FD1B8;
+  text-shadow: 0 0 16px rgba(79, 209, 184, 0.2);
+}
+html[data-theme="light"] body[data-route="friends"] .followAct--xstyle .followActActions .followActAct.isGifted,
+html[data-theme="light"] body[data-route="friends"] .followAct--xstyle .followActActions .followActAct[data-friends-act="gift"].isGifted{
+  color: #1FA892;
+  text-shadow: none;
+}
 
 @media (max-width: 430px){
-  .friendsPage .followActStack .followAct.followAct--xstyle{
-    padding-inline: 18px;
+  :is(#friendsPage .followActStack, #profileActivitiesList.followActStack, #profileRepostsList.followActStack, #userPublicSongs.followActStack, #userPublicRepostsList.followActStack, .profileActivitiesList.followActStack) > .followAct.followAct--xstyle{
+    --feed-post-pad-x: 12px;
+    --feed-cover-extra-bleed: 4px;
+    padding-inline: var(--feed-post-pad-x);
   }
   body[data-route="friends"] .followAct--xstyle .feedHeroPlayerStage.followActQuoteArt--hero{
     min-height: 306px;
@@ -48819,37 +49394,19 @@ html[data-theme="light"] .mobileTabbar a.tabCreate .tabIco{
   stroke: #fff;
 }
 
-/* Friends / profile feed — light mode: flat posts with dividers (same layout as dark). */
-html[data-theme="light"] .friendsPage .followActStack .followAct.followAct--xstyle,
-html[data-theme="light"] .profileActivitiesList.followActStack .followAct.followAct--xstyle,
-html[data-theme="light"] #profileRepostsList.followActStack .followAct.followAct--xstyle,
-html[data-theme="light"] #userPublicSongs.followActStack .followAct.followAct--xstyle,
-html[data-theme="light"] #userPublicRepostsList.followActStack .followAct.followAct--xstyle{
-  --feed-post-divider-color: rgba(15, 23, 40, 0.08);
-  border: 0;
-  border-radius: 0;
-  background: transparent;
-  box-shadow: none;
-  margin-bottom: 0;
-  border-bottom: 1px solid var(--feed-post-divider-color);
-  padding: 0 14px var(--feed-post-gap-after-actions, 12px);
+/* Social feeds — light mode: spacing only, no dividers (Friends + profile + public). */
+html[data-theme="light"] :is(#friendsPage .followActStack, #profileActivitiesList.followActStack, #profileRepostsList.followActStack, #userPublicSongs.followActStack, #userPublicRepostsList.followActStack, .profileActivitiesList.followActStack) > .followAct.followAct--xstyle{
+  --feed-post-gap-before-header: 24px;
+  --feed-post-gap-after-actions: 20px;
+  --feed-post-pad-x: 14px;
+  border-bottom: none;
+  padding: 0 var(--feed-post-pad-x) var(--feed-post-gap-after-actions, 20px);
 }
-html[data-theme="light"] .friendsPage .followActStack .followAct.followAct--xstyle + .followAct.followAct--xstyle,
-html[data-theme="light"] .profileActivitiesList.followActStack .followAct.followAct--xstyle + .followAct.followAct--xstyle,
-html[data-theme="light"] #profileRepostsList.followActStack .followAct.followAct--xstyle + .followAct.followAct--xstyle,
-html[data-theme="light"] #userPublicSongs.followActStack .followAct.followAct--xstyle + .followAct.followAct--xstyle,
-html[data-theme="light"] #userPublicRepostsList.followActStack .followAct.followAct--xstyle + .followAct.followAct--xstyle{
-  padding-top: var(--feed-post-gap-before-header, 12px);
-  margin-top: 0;
+html[data-theme="light"] :is(#friendsPage .followActStack, #profileActivitiesList.followActStack, #profileRepostsList.followActStack, #userPublicSongs.followActStack, #userPublicRepostsList.followActStack, .profileActivitiesList.followActStack) > .followAct.followAct--xstyle + .followAct.followAct--xstyle{
+  padding-top: var(--feed-post-gap-before-header, 24px);
 }
-html[data-theme="light"] .friendsPage .followActStack .followAct.followAct--xstyle:first-child{
-  padding-top: 10px;
-}
-html[data-theme="light"] .profileActivitiesList.followActStack .followAct.followAct--xstyle:first-child,
-html[data-theme="light"] #profileRepostsList.followActStack .followAct.followAct--xstyle:first-child,
-html[data-theme="light"] #userPublicSongs.followActStack .followAct.followAct--xstyle:first-child,
-html[data-theme="light"] #userPublicRepostsList.followActStack .followAct.followAct--xstyle:first-child{
-  padding-top: 0;
+html[data-theme="light"] :is(#friendsPage .followActStack, #profileActivitiesList.followActStack, #profileRepostsList.followActStack, #userPublicSongs.followActStack, #userPublicRepostsList.followActStack, .profileActivitiesList.followActStack) > .followAct.followAct--xstyle:first-child{
+  padding-top: 8px;
 }
 html[data-theme="light"] .followActStack .followAct.followAct--xstyle:hover,
 html[data-theme="light"] .followAct--xstyle:hover{
@@ -48903,18 +49460,36 @@ html[data-theme="light"] .mashupAttributionLine,
 html[data-theme="light"] .remixAttributionLine{
   color: var(--text-secondary);
 }
-html[data-theme="light"] .followActRemixFlowOrig{
-  border-color: var(--border);
-  background: var(--surface-secondary);
+html[data-theme="light"] .followActRemixFlowOrig,
+html[data-theme="light"] .feedSourceRow{
+  border-color: #E5E7EC;
+  background: #F3F4F7;
+  box-shadow: none;
 }
+html[data-theme="light"] .feedSourceRowKicker,
 html[data-theme="light"] .followActRemixFlowOrigChip{
-  color: var(--text-muted);
+  color: #777B89;
 }
+html[data-theme="light"] .feedSourceRowTitle,
 html[data-theme="light"] .followActRemixFlowOrigTitle{
-  color: var(--text-primary);
+  color: #111318;
 }
+html[data-theme="light"] .feedSourceRowSub,
 html[data-theme="light"] .followActRemixFlowOrigBy{
-  color: var(--text-secondary);
+  color: #777B89;
+}
+html[data-theme="light"] .feedSourceRowRemixIco{
+  color: #6d4df5;
+}
+html[data-theme="light"] .feedSourceRowMashupPlus{
+  color: #777B89;
+}
+html[data-theme="light"] .feedSourceRowMashupTitle,
+html[data-theme="light"] button.feedSourceRowMashupTitle{
+  color: #111318;
+}
+html[data-theme="light"] .feedSourceRowThumb{
+  background: #ECEEF3;
 }
 html[data-theme="light"] .followActRemixFlowBridgeLine{
   background: var(--border);
@@ -48923,10 +49498,11 @@ html[data-theme="light"] .followActRemixFlowBridgeLabel{
   color: var(--text-secondary);
 }
 html[data-theme="light"] .followActRemixFlowOrig--static{
-  border-color: var(--border);
-  background: var(--surface-secondary);
+  border-color: #E5E7EC;
+  background: #F3F4F7;
 }
-html[data-theme="light"] :is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followActRemixFlow .followActMediaWrap--remixResult .followActMedia{
+html[data-theme="light"] :is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followActRemixFlow .followActMediaWrap--remixResult .followActMedia,
+html[data-theme="light"] :is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followActMashup .followActMediaWrap--mashupResult .followActMedia{
   background: var(--surface-secondary);
 }
 
@@ -49260,14 +49836,51 @@ html[data-theme="light"] .songAnalyticsEmpty{
 /* Gift sheet tiers */
 html[data-theme="light"] .giftSheetSub,
 html[data-theme="light"] .giftSheetBalanceLabel,
-html[data-theme="light"] .giftSheetBalanceCaption{
+html[data-theme="light"] .giftSheetBalanceCaption,
+html[data-theme="light"] .giftSheetPreviewHint{
   color: var(--text-secondary);
+}
+html[data-theme="light"] .giftSheetTierValue{
+  color: var(--text-muted);
 }
 html[data-theme="light"] .giftSheetTier{
   border-color: var(--border);
   background: var(--card);
   color: var(--text-primary);
   box-shadow: var(--chart-surface-shadow);
+}
+html[data-theme="light"] .giftSheetTier:hover:not(:disabled){
+  background: var(--surface-secondary);
+  border-color: rgba(15, 23, 40, 0.12);
+}
+html[data-theme="light"] .giftSheetTierIcon--mic .giftSheetTierGlow{
+  background: rgba(124, 92, 255, 0.14);
+}
+html[data-theme="light"] .giftSheetTierIcon--mic .giftTierSvg--mic{
+  color: var(--text-primary);
+}
+html[data-theme="light"] .giftSheetTier:active:not(:disabled),
+html[data-theme="light"] .giftSheetTier.isSending{
+  background: var(--surface-secondary);
+  border-color: rgba(124, 92, 255, 0.22);
+}
+
+@media (max-height: 740px){
+  .giftSheetBalance{
+    padding: 16px 20px 20px;
+    margin: 8px 0 4px;
+  }
+  .giftSheetBalanceAmount{
+    font-size: clamp(44px, 11vw, 54px);
+  }
+  .giftSheetTier{
+    min-height: 102px;
+    gap: 6px;
+  }
+  .giftSheetTierIcon{
+    width: 46px;
+    height: 46px;
+  }
 }
 
 /* Playlist picker rows */
@@ -49335,77 +49948,17 @@ html[data-theme="light"] .songDetailsGrab{
 html[data-theme="light"] .songDetailsKicker{
   color: #0d9488;
 }
-html[data-theme="light"] .songDetailsTitle{
-  color: var(--text-primary);
-}
-html[data-theme="light"] .songDetailsClose{
-  border-color: var(--border);
-  background: var(--surface-secondary);
-  color: var(--text-secondary);
-}
-html[data-theme="light"] .songDetailsFlatList{
-  border-color: var(--border);
-  background: var(--surface-secondary);
-}
-html[data-theme="light"] .songDetailsFlatRow{
-  border-bottom-color: var(--border);
-  color: var(--text-primary);
-}
-html[data-theme="light"] .songDetailsFlatRow span{
-  color: var(--text-secondary);
-}
-html[data-theme="light"] .songDetailsFlatRow strong,
-html[data-theme="light"] .songDetailsCopyRow strong{
-  color: var(--text-primary);
-}
 html[data-theme="light"] .songDetailsCopyRow:hover,
 html[data-theme="light"] .songDetailsCopyRow:active{
   background: rgba(15, 23, 40, 0.04);
 }
-html[data-theme="light"] .songDetailsTechFold summary{
-  color: var(--text-secondary);
-}
-html[data-theme="light"] .songDetailsTechFold[open] summary{
-  color: var(--text-primary);
-}
-html[data-theme="light"] .songDetailsSectionTitle,
-html[data-theme="light"] .songDetailsSongTitle{
-  color: var(--text-primary);
-}
-html[data-theme="light"] .songDetailsPublishLogTitle{
-  color: var(--text-secondary);
-}
-html[data-theme="light"] .songDetailsMetaLine,
-html[data-theme="light"] .songDetailsReleaseNote{
-  color: var(--text-secondary);
+html[data-theme="light"] .songDetailsLyricsBox{
+  background: transparent;
 }
 html[data-theme="light"] .songDetailsRemixCard,
 html[data-theme="light"] .songDetailsChallengeCard{
   border-color: var(--border);
   background: var(--surface-secondary);
-}
-html[data-theme="light"] .songDetailsRemixText,
-html[data-theme="light"] .songDetailsChallengeText{
-  color: var(--text-primary);
-}
-html[data-theme="light"] .songDetailsInfoRow span{
-  color: var(--text-secondary);
-}
-html[data-theme="light"] .songDetailsInfoRow strong{
-  color: var(--text-primary);
-}
-html[data-theme="light"] .songDetailsLyricsBox{
-  border-color: var(--border);
-  background: var(--surface-secondary);
-  color: var(--text-primary);
-}
-html[data-theme="light"] .songDetailsLyricsBox.isEmpty{
-  color: var(--text-muted);
-}
-html[data-theme="light"] .songDetailsCopyBtn{
-  border-color: var(--border);
-  background: var(--surface-secondary);
-  color: var(--text-primary);
 }
 
 /* Proof certificate sheet (legacy About flow) — light mode */
@@ -51026,3 +51579,516 @@ html[data-theme="light"] body[data-route="generate"] .singerPersonaChip--create{
   color: var(--text-secondary);
 }
 
+/* ── Feed vinyl player (light + dark — standard song posts only) ── */
+:is(html[data-theme="light"], html[data-theme="dark"]) .feedVinylWrap{
+  width: 100%;
+  min-width: 0;
+  margin-left: 0;
+  margin-right: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0;
+}
+:is(html[data-theme="light"], html[data-theme="dark"]) .feedVinylStage{
+  position: relative;
+  width: 82%;
+  max-width: 100%;
+  margin: 0 auto;
+  aspect-ratio: 1 / 1;
+  padding-bottom: 8px;
+}
+:is(html[data-theme="light"], html[data-theme="dark"]) .feedVinylShadow{
+  position: absolute;
+  left: 50%;
+  bottom: 0;
+  width: 74%;
+  height: 9%;
+  transform: translateX(-50%);
+  border-radius: 50%;
+  background: radial-gradient(ellipse at center, rgba(17,19,24,0.2) 0%, rgba(17,19,24,0.07) 44%, transparent 72%);
+  filter: blur(9px);
+  pointer-events: none;
+  z-index: 0;
+}
+:is(html[data-theme="light"], html[data-theme="dark"]) .feedVinylDeck{
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  width: 100%;
+  height: 100%;
+}
+:is(html[data-theme="light"], html[data-theme="dark"]) .feedVinylDeck::before{
+  content: "";
+  position: absolute;
+  inset: 2%;
+  border-radius: 50%;
+  background: linear-gradient(155deg, #f0f2f8 0%, #dfe3ec 48%, #cdd3e0 100%);
+  box-shadow:
+    0 10px 28px rgba(17,19,24,0.14),
+    inset 0 1px 0 rgba(255,255,255,0.85),
+    inset 0 -2px 6px rgba(17,19,24,0.06);
+  z-index: 0;
+}
+:is(html[data-theme="light"], html[data-theme="dark"]) .feedVinylPlatter{
+  position: absolute;
+  inset: 8%;
+  border-radius: 50%;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform 160ms ease;
+  z-index: 1;
+  isolation: isolate;
+}
+:is(html[data-theme="light"], html[data-theme="dark"]) .feedVinylPlatter:active{
+  transform: scale(0.985);
+}
+:is(html[data-theme="light"], html[data-theme="dark"]) .feedVinylRotor{
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  transform: rotate3d(0,0,1,0deg);
+  transform-origin: 50% 50%;
+  pointer-events: none;
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
+}
+:is(html[data-theme="light"], html[data-theme="dark"]) .feedVinylRotor.isSpinning{
+  will-change: transform;
+}
+:is(html[data-theme="light"], html[data-theme="dark"]) .feedVinylBase{
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 50% 50%, #242830 0%, #12141a 52%, #08090c 100%);
+  box-shadow:
+    inset 0 0 0 1px rgba(255,255,255,0.06),
+    inset 0 -3px 8px rgba(0,0,0,0.45);
+}
+:is(html[data-theme="light"], html[data-theme="dark"]) .feedVinylGrooveTex{
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  opacity: 0.55;
+  pointer-events: none;
+  background:
+    repeating-radial-gradient(circle at 50% 50%,
+      rgba(255,255,255,0.0) 0px,
+      rgba(255,255,255,0.0) 1px,
+      rgba(255,255,255,0.07) 1.5px,
+      rgba(255,255,255,0.0) 2px,
+      rgba(255,255,255,0.0) 3.5px);
+  -webkit-mask: radial-gradient(circle, transparent 0 22%, #000 26% 99%, #000 100%);
+  mask: radial-gradient(circle, transparent 0 22%, #000 26% 99%, #000 100%);
+}
+:is(html[data-theme="light"], html[data-theme="dark"]) .feedVinylSheen{
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  pointer-events: none;
+  opacity: 0.54;
+  background: repeating-conic-gradient(from 0deg, rgba(255,255,255,0.07) 0deg 0.4deg, transparent 0.4deg 1.1deg);
+  -webkit-mask: radial-gradient(circle, transparent 0 20%, #000 24% 99%, #000 100%);
+  mask: radial-gradient(circle, transparent 0 20%, #000 24% 99%, #000 100%);
+}
+:is(html[data-theme="light"], html[data-theme="dark"]) .feedVinylSpinReflect{
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  pointer-events: none;
+  opacity: 0.34;
+  background:
+    conic-gradient(from 35deg,
+      rgba(255,255,255,0.0) 0deg,
+      rgba(255,255,255,0.32) 18deg,
+      rgba(255,255,255,0.04) 42deg,
+      rgba(255,255,255,0.0) 72deg,
+      rgba(255,255,255,0.22) 118deg,
+      rgba(255,255,255,0.0) 360deg);
+  -webkit-mask: radial-gradient(circle, transparent 0 20%, #000 24% 99%, #000 100%);
+  mask: radial-gradient(circle, transparent 0 20%, #000 24% 99%, #000 100%);
+}
+:is(html[data-theme="light"], html[data-theme="dark"]) .feedVinylWrap.isPlaying .feedVinylSheen{
+  opacity: 0.74;
+}
+:is(html[data-theme="light"], html[data-theme="dark"]) .feedVinylWrap.isPlaying .feedVinylSpinReflect{
+  opacity: 0.5;
+}
+:is(html[data-theme="light"], html[data-theme="dark"]) .feedVinylBlackReflect{
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 3;
+  opacity: 0.88;
+  -webkit-mask: radial-gradient(circle, transparent 0 20%, #000 24% 99%, #000 100%);
+  mask: radial-gradient(circle, transparent 0 20%, #000 24% 99%, #000 100%);
+  background:
+    linear-gradient(128deg, rgba(255,255,255,0.42) 0%, rgba(255,255,255,0.12) 20%, transparent 38%),
+    radial-gradient(circle at 68% 28%, rgba(255,255,255,0.26) 0%, transparent 28%);
+}
+:is(html[data-theme="light"], html[data-theme="dark"]) .feedVinylWrap.isPlaying .feedVinylBlackReflect{
+  opacity: 1;
+  background:
+    linear-gradient(128deg, rgba(255,255,255,0.56) 0%, rgba(255,255,255,0.16) 18%, transparent 36%),
+    radial-gradient(circle at 68% 28%, rgba(255,255,255,0.18) 0%, transparent 26%);
+}
+:is(html[data-theme="light"], html[data-theme="dark"]) .feedVinylLabel{
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 36%;
+  height: 36%;
+  translate: -50% -50%;
+  border-radius: 50%;
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  box-shadow:
+    0 0 0 2px rgba(255,255,255,0.92),
+    0 0 0 3px rgba(210,216,228,0.55),
+    inset 0 2px 6px rgba(255,255,255,0.18),
+    inset 0 -2px 6px rgba(17,19,24,0.22);
+}
+:is(html[data-theme="light"], html[data-theme="dark"]) .feedVinylLabelRing{
+  position: absolute;
+  inset: 8%;
+  border-radius: 50%;
+  border: 0.5px solid rgba(255,255,255,0.35);
+  box-shadow: inset 0 0 8px rgba(255,255,255,0.12);
+  pointer-events: none;
+}
+:is(html[data-theme="light"], html[data-theme="dark"]) .feedVinylGloss{
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 2;
+  background: linear-gradient(125deg, rgba(255,255,255,0.22) 0%, rgba(255,255,255,0.05) 20%, transparent 38%);
+}
+:is(html[data-theme="light"], html[data-theme="dark"]) .feedVinylCenterBtn{
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  z-index: 8;
+  transform: translate(-50%, -50%);
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0;
+  margin: 0;
+  border: 0;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  background: transparent;
+  color: #111318;
+}
+:is(html[data-theme="light"], html[data-theme="dark"]) .feedVinylCenterBtn:active{
+  transform: translate(-50%, -50%) scale(0.96);
+}
+:is(html[data-theme="light"], html[data-theme="dark"]) .feedVinylCenterVis{
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255,255,255,0.62);
+  -webkit-backdrop-filter: blur(12px) saturate(160%);
+  backdrop-filter: blur(12px) saturate(160%);
+  border: 1px solid rgba(255,255,255,0.82);
+  box-shadow:
+    0 2px 8px rgba(17,19,24,0.2),
+    inset 0 1px 0 rgba(255,255,255,0.95),
+    0 0 0 0.5px rgba(17,19,24,0.1);
+}
+:is(html[data-theme="light"], html[data-theme="dark"]) .feedVinylCenterIco{
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  filter: drop-shadow(0 0.5px 1px rgba(255,255,255,0.85)) drop-shadow(0 1px 2px rgba(17,19,24,0.32));
+}
+:is(html[data-theme="light"], html[data-theme="dark"]) .feedVinylTonearm{
+  position: absolute;
+  top: 6%;
+  right: 4%;
+  width: 54%;
+  height: 54%;
+  z-index: 6;
+  pointer-events: none;
+}
+:is(html[data-theme="light"], html[data-theme="dark"]) .feedVinylTonearm *{
+  pointer-events: none;
+}
+:is(html[data-theme="light"], html[data-theme="dark"]) .feedVinylTonearmPivot{
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  z-index: 2;
+}
+:is(html[data-theme="light"], html[data-theme="dark"]) .feedVinylTonearmPivotCore{
+  position: absolute;
+  inset: 3px;
+  border-radius: 50%;
+  background: linear-gradient(145deg, #3a404c, #1e222b);
+  border: 1px solid rgba(255,255,255,0.22);
+  box-shadow: inset 0 1px 2px rgba(255,255,255,0.18);
+}
+:is(html[data-theme="light"], html[data-theme="dark"]) .feedVinylTonearmPivotGlow{
+  position: absolute;
+  inset: -4px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(124,92,255,0.0) 40%, rgba(124,92,255,0.0) 100%);
+  opacity: 0;
+  transition: opacity 320ms ease;
+}
+:is(html[data-theme="light"], html[data-theme="dark"]) .feedVinylWrap.isPlaying .feedVinylTonearmPivotGlow{
+  opacity: 1;
+  background: radial-gradient(circle, rgba(124,92,255,0.35) 0%, rgba(35,213,171,0.18) 42%, transparent 72%);
+}
+:is(html[data-theme="light"], html[data-theme="dark"]) .feedVinylTonearmBody{
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: calc(100% - 8px);
+  height: 20px;
+  transform-origin: 100% 8px;
+  transform: rotate(20deg);
+  transition: transform 520ms cubic-bezier(0.34, 1.15, 0.44, 1);
+}
+:is(html[data-theme="light"], html[data-theme="dark"]) .feedVinylWrap.isPlaying .feedVinylTonearmBody{
+  transform: rotate(-46deg);
+}
+:is(html[data-theme="light"], html[data-theme="dark"]) .feedVinylWrap:not(.isPlaying) .feedVinylTonearmBody{
+  transform: rotate(20deg);
+}
+:is(html[data-theme="light"], html[data-theme="dark"]) .feedVinylTonearmShaft{
+  position: absolute;
+  top: 7px;
+  right: 8px;
+  left: 0;
+  height: 3px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #4a5160 0%, #6a7384 38%, #7c5cff 72%, #23d5ab 100%);
+  box-shadow: 0 1px 3px rgba(17,19,24,0.22);
+}
+:is(html[data-theme="light"], html[data-theme="dark"]) .feedVinylTonearmHead{
+  position: absolute;
+  top: 2px;
+  right: -1px;
+  width: 11px;
+  height: 15px;
+  border-radius: 2px 2px 3px 3px;
+  background: linear-gradient(180deg, #3a404c 0%, #22262f 100%);
+  border: 0.5px solid rgba(255,255,255,0.18);
+  box-shadow: 0 2px 4px rgba(17,19,24,0.28);
+}
+:is(html[data-theme="light"], html[data-theme="dark"]) .feedVinylTonearmNeedle{
+  position: absolute;
+  left: 50%;
+  bottom: -5px;
+  width: 1.5px;
+  height: 7px;
+  transform: translateX(-50%);
+  border-radius: 0 0 1px 1px;
+  background: linear-gradient(180deg, #23d5ab 0%, #7c5cff 100%);
+  box-shadow: 0 0 4px rgba(35,213,171,0.45);
+}
+:is(html[data-theme="light"], html[data-theme="dark"]) .feedVinylWrap.isPlaying .feedVinylTonearmNeedle{
+  box-shadow: 0 0 6px rgba(35,213,171,0.65), 0 0 3px rgba(124,92,255,0.45);
+}
+:is(html[data-theme="light"], html[data-theme="dark"]) .feedVinylWrap.isPlaying .feedVinylCenterIco .coverArtPlayIco--play,
+:is(html[data-theme="light"], html[data-theme="dark"]) .feedVinylWrap.isPlaying .feedVinylCenterIco .coverArtPlayIco--loading{
+  display: none;
+}
+:is(html[data-theme="light"], html[data-theme="dark"]) .feedVinylWrap.isPlaying .feedVinylCenterIco .coverArtPlayIco--pause{
+  display: inline-flex;
+}
+:is(html[data-theme="light"], html[data-theme="dark"]) .feedVinylWrap:not(.isPlaying) .feedVinylCenterIco .coverArtPlayIco--pause{
+  display: none;
+}
+:is(html[data-theme="light"], html[data-theme="dark"]) .feedVinylMeta{
+  margin-top: 18px;
+  padding: 0 2px;
+  text-align: left;
+}
+:is(html[data-theme="light"], html[data-theme="dark"]) .feedVinylTitle{
+  margin: 0;
+  font-size: 16px;
+  font-weight: 800;
+  line-height: 1.3;
+  color: #111318;
+  letter-spacing: -0.01em;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  min-height: calc(2 * 1.3 * 16px);
+  max-height: calc(2 * 1.3 * 16px);
+  word-break: break-word;
+}
+:is(html[data-theme="light"], html[data-theme="dark"]) :is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .feedVinylTimeline.followActRealtimeProgress{
+  position: static !important;
+  left: auto !important;
+  right: auto !important;
+  bottom: auto !important;
+  width: 100% !important;
+  z-index: auto !important;
+  margin-top: 10px;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 10px;
+  padding: 0 2px;
+}
+:is(html[data-theme="light"], html[data-theme="dark"]) .feedVinylTimeline{
+  margin-top: 10px;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 10px;
+  position: static;
+  width: 100%;
+  padding: 0 2px;
+}
+:is(html[data-theme="light"], html[data-theme="dark"]) .feedVinylTimeCur,
+:is(html[data-theme="light"], html[data-theme="dark"]) .feedVinylTimeDur{
+  font-size: 11px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: #777B89;
+  white-space: nowrap;
+  line-height: 1;
+}
+:is(html[data-theme="light"], html[data-theme="dark"]) .feedVinylSeek.followActRealtimeSeek{
+  --feedSeekPct: 0%;
+  width: 100%;
+  min-width: 0;
+  height: 4px;
+  margin: 0;
+  appearance: none;
+  -webkit-appearance: none;
+  background: linear-gradient(90deg, #7c5cff 0%, #23d5ab var(--feedSeekPct, 0%), #E2E4EA var(--feedSeekPct, 0%), #E2E4EA 100%);
+  border-radius: 999px;
+  outline: none;
+}
+:is(html[data-theme="light"], html[data-theme="dark"]) .feedVinylSeek.followActRealtimeSeek::-webkit-slider-thumb{
+  -webkit-appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #fff;
+  border: 2px solid #7c5cff;
+  box-shadow: 0 1px 4px rgba(17,19,24,0.14);
+}
+:is(html[data-theme="light"], html[data-theme="dark"]) .feedVinylSeek.followActRealtimeSeek::-moz-range-thumb{
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #fff;
+  border: 2px solid #7c5cff;
+  box-shadow: 0 1px 4px rgba(17,19,24,0.14);
+}
+:is(html[data-theme="light"], html[data-theme="dark"]) .followAct.discoveryRowLoading .feedVinylCenterIco .coverArtPlayIco--play,
+:is(html[data-theme="light"], html[data-theme="dark"]) .followAct.discoveryRowLoading .feedVinylCenterIco .coverArtPlayIco--pause{
+  display: none;
+}
+:is(html[data-theme="light"], html[data-theme="dark"]) .followAct.discoveryRowLoading .feedVinylCenterIco .coverArtPlayIco--loading{
+  display: inline-flex;
+}
+:is(html[data-theme="light"], html[data-theme="dark"]) :is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle > .feedVinylWrap{
+  margin-top: 20px;
+}
+:is(html[data-theme="light"], html[data-theme="dark"]) :is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle > .followActContent:not(:empty) + .feedVinylWrap{
+  margin-top: 20px;
+}
+:is(html[data-theme="light"], html[data-theme="dark"]) :is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .feedVinylTimeline .feedVinylSeek.followActRealtimeSeek{
+  height: 18px;
+  background: transparent;
+}
+:is(html[data-theme="light"], html[data-theme="dark"]) :is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .feedVinylTimeline .feedVinylSeek.followActRealtimeSeek::-webkit-slider-runnable-track{
+  height: 4px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #7c5cff 0%, #23d5ab var(--feedSeekPct, 0%), #E2E4EA var(--feedSeekPct, 0%), #E2E4EA 100%);
+}
+:is(html[data-theme="light"], html[data-theme="dark"]) :is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .feedVinylTimeline .feedVinylSeek.followActRealtimeSeek::-moz-range-track{
+  height: 4px;
+  border-radius: 999px;
+  background: #E2E4EA;
+}
+:is(html[data-theme="light"], html[data-theme="dark"]) :is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .feedVinylTimeline .feedVinylSeek.followActRealtimeSeek::-moz-range-progress{
+  height: 4px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #7c5cff, #23d5ab);
+}
+
+html[data-theme="dark"] .feedVinylDeck::before{
+  background: linear-gradient(155deg, #2a303c 0%, #1c212b 48%, #12161e 100%);
+  box-shadow:
+    0 10px 28px rgba(0,0,0,0.45),
+    inset 0 1px 0 rgba(255,255,255,0.08),
+    inset 0 -2px 6px rgba(0,0,0,0.35);
+}
+html[data-theme="dark"] .feedVinylShadow{
+  background: radial-gradient(ellipse at center, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0.22) 44%, transparent 72%);
+}
+html[data-theme="dark"] .feedVinylTitle{
+  color: #f4f5f8;
+}
+html[data-theme="dark"] .feedVinylTimeCur,
+html[data-theme="dark"] .feedVinylTimeDur{
+  color: #9aa0b0;
+}
+html[data-theme="dark"] .feedVinylSeek.followActRealtimeSeek{
+  background: linear-gradient(90deg, #7c5cff 0%, #23d5ab var(--feedSeekPct, 0%), #3a404c var(--feedSeekPct, 0%), #3a404c 100%);
+}
+html[data-theme="dark"] :is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .feedVinylTimeline .feedVinylSeek.followActRealtimeSeek::-webkit-slider-runnable-track{
+  background: #3a404c;
+}
+html[data-theme="dark"] :is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .feedVinylTimeline .feedVinylSeek.followActRealtimeSeek::-moz-range-track{
+  background: #3a404c;
+}
+html[data-theme="dark"] .feedVinylCenterBtn{
+  color: #f4f5f8;
+}
+html[data-theme="dark"] .feedVinylCenterVis{
+  background: rgba(30,34,43,0.72);
+  border-color: rgba(255,255,255,0.16);
+  box-shadow:
+    0 2px 8px rgba(0,0,0,0.35),
+    inset 0 1px 0 rgba(255,255,255,0.12),
+    0 0 0 0.5px rgba(255,255,255,0.08);
+}
+html[data-theme="dark"] .feedVinylGloss{
+  background: linear-gradient(125deg, rgba(255,255,255,0.16) 0%, rgba(255,255,255,0.04) 20%, transparent 38%);
+}
+@media (prefers-reduced-motion: reduce){
+  html[data-theme="light"] .feedVinylTonearmBody{
+    transition: none;
+  }
+  html[data-theme="light"] .feedVinylRotor.isSpinning{
+    will-change: auto;
+  }
+}
+
+/* ============================================================================
+ * Social feeds — final overrides (no dividers): Friends, profile, public.
+ * ============================================================================ */
+:is(#friendsPage .followActStack, #profileActivitiesList.followActStack, #profileRepostsList.followActStack, #userPublicSongs.followActStack, #userPublicRepostsList.followActStack, .profileActivitiesList.followActStack) > .followAct.followAct--xstyle,
+html[data-theme="light"] :is(#friendsPage .followActStack, #profileActivitiesList.followActStack, #profileRepostsList.followActStack, #userPublicSongs.followActStack, #userPublicRepostsList.followActStack, .profileActivitiesList.followActStack) > .followAct.followAct--xstyle,
+html[data-theme="dark"] :is(#friendsPage .followActStack, #profileActivitiesList.followActStack, #profileRepostsList.followActStack, #userPublicSongs.followActStack, #userPublicRepostsList.followActStack, .profileActivitiesList.followActStack) > .followAct.followAct--xstyle{
+  border: 0;
+  border-bottom: none;
+  border-top: none;
+  box-shadow: none;
+}

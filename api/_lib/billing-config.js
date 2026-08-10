@@ -41,23 +41,31 @@ function creditsForPackProductId(productId) {
   return Number.isFinite(n) && n > 0 ? n : 0;
 }
 
-function creditsForSubscriptionGrant({ productId, periodType }) {
+function creditsForSubscriptionGrant({ productId, periodType, eventType, subscriptionStatus }) {
   const plan = planForProductId(productId);
   if (!plan) return 0;
   const period = String(periodType || "").toUpperCase();
-  if (period === "TRIAL" && plan.trialCredits > 0) return plan.trialCredits;
+  const type = String(eventType || "").toUpperCase();
+  const status = String(subscriptionStatus || "").toLowerCase();
+  if (plan.trialCredits > 0 && (period === "TRIAL" || status === "trialing")) {
+    return type === "INITIAL_PURCHASE" ? plan.trialCredits : 0;
+  }
   return plan.creditsPerPeriod;
 }
 
-function statusFromRevenueCatEvent(eventType, periodType, expirationMs) {
+function statusFromRevenueCatEvent(eventType, periodType, expirationMs, productId) {
   const type = String(eventType || "").toUpperCase();
+  const period = String(periodType || "").toUpperCase();
   const expMs = Number(expirationMs || 0);
   const expired = expMs > 0 && expMs <= Date.now();
+  const plan = planForProductId(productId);
 
   if (type === "EXPIRATION" || expired) return "expired";
   if (type === "BILLING_ISSUE") return "grace";
   if (type === "CANCELLATION") return "cancelled";
-  if (String(periodType || "").toUpperCase() === "TRIAL") return "trialing";
+  if (period === "TRIAL") return "trialing";
+  if (plan?.trialCredits > 0 && type === "INITIAL_PURCHASE") return "trialing";
+  if (plan?.trialCredits > 0 && period !== "NORMAL") return "trialing";
   if (type === "INITIAL_PURCHASE" || type === "RENEWAL" || type === "UNCANCELLATION") {
     return "active";
   }

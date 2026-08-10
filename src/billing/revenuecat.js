@@ -2,7 +2,7 @@
  * RevenueCat / App Store billing on iOS (Capacitor).
  */
 
-import { PRO_PRODUCT_IDS } from "../pro-plan-config.js";
+import { PRO_PLANS, PRO_PRODUCT_IDS } from "../pro-plan-config.js";
 
 let _apiKey = "";
 let _configuredFor = "";
@@ -10,6 +10,201 @@ let _offeringsCache = null;
 let _offeringsCacheAt = 0;
 let _warmInFlight = null;
 const OFFERINGS_CACHE_TTL_MS = 5 * 60 * 1000;
+const MS_DAY = 24 * 60 * 60 * 1000;
+
+function planIdForProductId(productId) {
+  const pid = String(productId || "").trim();
+  if (pid === PRO_PRODUCT_IDS.weekly) return "weekly";
+  if (pid === PRO_PRODUCT_IDS.monthly) return "monthly";
+  return null;
+}
+
+function weeklyTrialDays() {
+  const plan = PRO_PLANS.find((p) => p.id === "weekly");
+  return Number(plan?.trialDays) > 0 ? Number(plan.trialDays) : 7;
+}
+
+function trialEndStorageKey(userId) {
+  return `nabad_trial_end_${String(userId || "").trim()}`;
+}
+
+function pinClientTrialEnd(userId, iso, status) {
+  if (String(status || "").toLowerCase() !== "trialing" || !iso) return iso;
+  const key = trialEndStorageKey(userId);
+  try {
+    const prev = localStorage.getItem(key);
+    if (prev) {
+      const prevMs = Date.parse(prev);
+      const nextMs = Date.parse(iso);
+      if (Number.isFinite(prevMs) && Number.isFinite(nextMs) && prevMs <= nextMs) {
+        return prev;
+      }
+    }
+    localStorage.setItem(key, iso);
+  } catch {}
+  return iso;
+}
+
+function clearClientTrialEnd(userId) {
+  try { localStorage.removeItem(trialEndStorageKey(userId)); } catch {}
+}
+
+/** Parse Pro subscription from RevenueCat CustomerInfo (iOS source of truth). */
+export function parseProStateFromCustomerInfo(customerInfo, userId = "") {
+  const info = customerInfo && typeof customerInfo === "object" ? customerInfo : null;
+  if (!info) return null;
+
+  const activeEntitlements = info.entitlements?.active || {};
+  const pro =
+    activeEntitlements.pro ||
+    activeEntitlements.Pro ||
+    Object.values(activeEntitlements).find((e) => e?.isActive) ||
+    null;
+  if (!pro?.isActive) return null;
+
+  const productId = String(pro.productIdentifier || pro.identifier || "").trim();
+  const planId = planIdForProductId(productId);
+  if (!planId) return null;
+
+  const subs = info.subscriptionsByProductIdentifier || {};
+  const sub = subs[productId] || {};
+  const periodType = String(sub.periodType || sub.period_type || "").toUpperCase();
+  const rcExpiration = pro.expirationDate || sub.expiresDate || sub.expirationDate || null;
+  const originalPurchase =
+    sub.originalPurchaseDate ||
+    sub.original_purchase_date ||
+    info.allPurchaseDates?.[productId] ||
+    info.originalPurchaseDate ||
+    null;
+
+  let status = "active";
+  let currentPeriodEnd = rcExpiration ? new Date(rcExpiration).toISOString() : null;
+  let resolvedPeriodType = periodType;
+
+  const originalMs = originalPurchase ? Date.parse(String(originalPurchase)) : NaN;
+  const trialEndMs = Number.isFinite(originalMs) ? originalMs + weeklyTrialDays() * MS_DAY : NaN;
+  const inTrialByPurchase = Number.isFinite(trialEndMs) && Date.now() < trialEndMs;
+  const expMs = currentPeriodEnd ? Date.parse(currentPeriodEnd) : NaN;
+  const inTrialByExpiration =
+    planId === "weekly" &&
+    Number.isFinite(expMs) &&
+    Date.now() < expMs &&
+    Date.now() >= expMs - weeklyTrialDays() * MS_DAY;
+
+  if (periodType === "TRIAL" || inTrialByPurchase || inTrialByExpiration) {
+    status = "trialing";
+    resolvedPeriodType = "TRIAL";
+    if (Number.isFinite(trialEndMs) && inTrialByPurchase) {
+      currentPeriodEnd = new Date(trialEndMs).toISOString();
+    }
+  } else if (planId === "weekly" && periodType !== "NORMAL") {
+    status = "trialing";
+    resolvedPeriodType = periodType || "TRIAL";
+  } else if (planId === "weekly" && periodType === "NORMAL" && inTrialByExpiration) {
+    status = "trialing";
+    resolvedPeriodType = "TRIAL";
+  }
+
+  if (status === "trialing") {
+    currentPeriodEnd = pinClientTrialEnd(userId, currentPeriodEnd, status);
+  } else {
+    clearClientTrialEnd(userId);
+  }
+
+  return {
+    active: true,
+    planId,
+    status,
+    currentPeriodEnd,
+    periodType: resolvedPeriodType,
+    trialStartedAt: originalPurchase ? new Date(originalMs).toISOString() : null,
+  };
+}
+
+export async function readLocalProSubscriptionState(userId) {
+  const uid = String(userId || "").trim();
+  if (!_apiKey || !uid) return null;
+  await ensureRevenueCat(uid);
+  const { Purchases } = await purchasesModule();
+  const { customerInfo } = await Purchases.getCustomerInfo();
+  return parseProStateFromCustomerInfo(customerInfo, uid);
+}
+
+function mergeProSubscriptionState(serverPro, localPro, userId = "") {
+  const server = serverPro && typeof serverPro === "object" ? serverPro : {};
+  const local = localPro && typeof localPro === "object" ? localPro : {};
+  const active = Boolean(server.active || local.active);
+  if (!active) return normalizeProRow(server, userId);
+
+  const planId = local.planId || server.planId || null;
+  let status = local.status || server.status || null;
+  let currentPeriodEnd = local.currentPeriodEnd || server.currentPeriodEnd || null;
+  let periodType = String(
+    local.periodType || local.period_type || server.periodType || server.period_type || "",
+  ).toUpperCase();
+
+  if (local.status === "trialing") {
+    status = "trialing";
+    currentPeriodEnd = local.currentPeriodEnd || currentPeriodEnd;
+    if (local.periodType === "TRIAL") periodType = "TRIAL";
+  } else if (local.status && local.planId) {
+    status = local.status;
+    currentPeriodEnd = local.currentPeriodEnd || currentPeriodEnd;
+  }
+
+  if (planId === "weekly" && periodType === "NORMAL" && status === "trialing") {
+    periodType = "TRIAL";
+  }
+
+  return {
+    active: true,
+    planId,
+    status,
+    currentPeriodEnd,
+    periodType: periodType || null,
+    trialStartedAt: local.trialStartedAt || server.trialStartedAt || null,
+  };
+}
+
+function normalizeProRow(row, userId) {
+  const active = Boolean(row?.active);
+  if (!active) {
+    clearClientTrialEnd(userId);
+    return { active: false, planId: null, status: null, currentPeriodEnd: null };
+  }
+  return {
+    active: true,
+    planId: row.planId || null,
+    status: row.status || null,
+    currentPeriodEnd: row.currentPeriodEnd || null,
+  };
+}
+
+/** Sync server with RevenueCat, then return merged Pro state for UI. */
+export async function reconcileProSubscription(opts = {}) {
+  const uid = String(opts.userId || "").trim();
+  if (!uid || !_apiKey) return null;
+
+  let local = null;
+  try {
+    local = await readLocalProSubscriptionState(uid);
+  } catch (e) {
+    console.warn("[billing] local pro read failed", e?.message || e);
+  }
+
+  let serverPro = null;
+  try {
+    const sync = await syncBillingWithServer(opts);
+    serverPro = sync?.pro || null;
+  } catch (e) {
+    console.warn("[billing] server sync failed", e?.message || e);
+  }
+
+  if (local?.active || serverPro?.active) {
+    return mergeProSubscriptionState(serverPro, local, uid);
+  }
+  return normalizeProRow(serverPro, uid);
+}
 
 export function setRevenueCatApiKey(key) {
   _apiKey = String(key || "").trim();

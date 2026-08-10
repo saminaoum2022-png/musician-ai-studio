@@ -241,6 +241,10 @@ async function sendGift(amount) {
     recipientUserId: _pending.recipientUserId,
     amount,
   };
+  const giftedTarget = {
+    targetKind: _pending.targetKind,
+    targetId: _pending.targetId,
+  };
 
   _sending = true;
   _sendingTier = amount;
@@ -278,6 +282,7 @@ async function sendGift(amount) {
     if (typeof _deps?.refreshCredits === "function") {
       void _deps.refreshCredits({ silent: true });
     }
+    _deps?.markPostGifted?.(giftedTarget.targetKind, giftedTarget.targetId);
   } catch (e) {
     hideGiftSentOverlay();
     _deps?.showToast?.(e?.message || "Gift failed.", { icon: "!", durationMs: 3200 });

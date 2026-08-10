@@ -1502,6 +1502,14 @@
               </button>
             </div>
           </header>
+          <nav class="nabadTabs discoverFeedTabs friendsFeedTabs" id="friendsFeedTabs" aria-label="Friends feed filters">
+            <div class="nabadTabsTrack discoverFeedTabsTrack" role="tablist">
+              <button type="button" class="nabadTabsTab is-active" data-friends-feed-filter="all" role="tab" aria-selected="true"><span class="nabadTabsLabel">All</span></button>
+              <button type="button" class="nabadTabsTab" data-friends-feed-filter="new" role="tab" aria-selected="false"><span class="nabadTabsLabel">New</span></button>
+              <button type="button" class="nabadTabsTab" data-friends-feed-filter="photo-mood" role="tab" aria-selected="false"><span class="nabadTabsLabel">Photo Mood</span></button>
+              <button type="button" class="nabadTabsTab" data-friends-feed-filter="music" role="tab" aria-selected="false"><span class="nabadTabsLabel">Music</span></button>
+            </div>
+          </nav>
           <div id="discoveryFollowingStatus" class="discoveryFeedStatus" role="status" aria-live="polite"></div>
           <div id="discoveryFollowingList" class="followActStack" hidden></div>
         </section>

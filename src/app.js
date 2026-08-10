@@ -5512,6 +5512,7 @@ try {
     refreshCredits: refreshMyCredits,
     showToast,
     haptic,
+    markPostGifted: markFeedPostGifted,
   });
 } catch {}
 try {
@@ -12219,6 +12220,379 @@ function followActMetaSublineHtml(parts) {
     .join("");
 }
 
+const FRIENDS_FEED_NEW_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
+let _friendsFeedFilter = "all";
+let _friendsFeedMergedItems = [];
+let _friendsFeedProfMap = new Map();
+
+function isPhotoMoodTrack(track) {
+  const meta = track?.meta && typeof track.meta === "object" ? track.meta : {};
+  if (meta.photoMode === true || String(meta.photoMode || "").toLowerCase() === "true") return true;
+  const mode = String(meta.mode || "").trim().toLowerCase();
+  return mode.includes("photo");
+}
+
+function trackStyleTagsList(track, max = 3) {
+  const meta = track?.meta && typeof track.meta === "object" ? track.meta : {};
+  const raw = meta.styleTags || meta.styleInput || meta.styleSent || meta.style || "";
+  if (Array.isArray(raw) && raw.length) {
+    return raw.map((s) => String(s || "").trim()).filter(Boolean).slice(0, max);
+  }
+  if (typeof raw === "string" && raw.trim()) {
+    const parts = raw
+      .split(/[,;|·]+/)
+      .map((s) => s.trim())
+      .filter(Boolean);
+    return (parts.length ? parts : [raw.trim()]).slice(0, max);
+  }
+  return [];
+}
+
+function truncateStyleTag(tag, maxLen = 16) {
+  const s = String(tag || "").trim();
+  if (!s) return "";
+  if (s.length <= maxLen) return s;
+  return `${s.slice(0, Math.max(1, maxLen - 1)).trim()}…`;
+}
+
+function friendsFeedStyleTagParts(track) {
+  const tags = trackStyleTagsList(track, 3).map((t) => truncateStyleTag(t, 16));
+  return tags.map((tag) => `<span class="followActStyleTag">${escapeHtml(tag)}</span>`);
+}
+
+function friendsFeedReleaseCaptionHtml(track) {
+  const caption = releaseCaptionForTrack(track);
+  if (!caption) return "";
+  const clamp = caption.length > 96 || caption.split(/\s+/).length > 16;
+  const body = userTextWithMentionsHtml(caption, {
+    tag: "p",
+    className: "followActCaption followActCaption--friends",
+    escapeHtml,
+  });
+  const moreBtn = clamp
+    ? `<button type="button" class="followActCaptionMore" data-friends-caption-more aria-label="Show full release note">more</button>`
+    : "";
+  return `<div class="followActReleaseCaption${clamp ? " followActReleaseCaption--clamp" : ""}">${body}${moreBtn}</div>`;
+}
+
+const FRIENDS_FEED_WAVE_BAR_COUNT = 42;
+const _friendsFeedDockDurByUrl = new Map();
+
+function rememberFriendsFeedDockDuration(url, sec) {
+  const u = String(url || "").trim();
+  const n = normalizeAudioDurationSec(sec);
+  if (!u || !(n > 0)) return;
+  _friendsFeedDockDurByUrl.set(u, n);
+}
+
+function friendsFeedDockDurationForUrl(url, track) {
+  const fromTrack = discoverTrackDurationSec(track);
+  if (fromTrack > 0) return fromTrack;
+  const u = String(url || "").trim();
+  if (!u) return 0;
+  return _friendsFeedDockDurByUrl.get(u) || 0;
+}
+
+function friendsFeedDockDurText({ active, audible, cur, dur, idleDur }) {
+  if (active) {
+    if (audible || cur > 0) return formatTime(cur);
+    if (dur > 0) return formatTime(dur);
+  }
+  const total = idleDur > 0 ? idleDur : dur;
+  return total > 0 ? formatTime(total) : "";
+}
+
+function syncFriendsFeedDockDurations(root, { curRef, cur, dur, audible }) {
+  if (!root) return;
+  root.querySelectorAll(".followActMediaDock [data-friends-dock-dur]").forEach((durEl) => {
+    const dock = durEl.closest(".followActMediaDock");
+    const wrap = dock?.querySelector(".followActMediaDockWave");
+    if (!wrap) return;
+    const trackUrl = decodeDiscoveryPlayUrl(wrap);
+    const active = Boolean(curRef && trackUrl && audioUrlsEquivalent(curRef, trackUrl));
+    if (active && dur > 0) rememberFriendsFeedDockDuration(trackUrl, dur);
+    const idleRaw = Number(durEl.getAttribute("data-friends-dock-idle-dur") || 0);
+    const idleDur = idleRaw > 0 ? idleRaw : friendsFeedDockDurationForUrl(trackUrl);
+    const label = friendsFeedDockDurText({ active, audible, cur, dur, idleDur });
+    durEl.textContent = label;
+    if (idleDur > 0) durEl.setAttribute("data-friends-dock-idle-dur", String(idleDur));
+  });
+}
+
+function friendsFeedWaveformFallbackPeaks() {
+  return Array.from({ length: FRIENDS_FEED_WAVE_BAR_COUNT }, (_, i) => {
+    const t = i / Math.max(1, FRIENDS_FEED_WAVE_BAR_COUNT - 1);
+    const w1 = Math.abs(Math.sin(t * 11.4 + 0.25) * Math.cos(t * 4.3 + 0.6));
+    const w2 = Math.abs(Math.sin(t * 24.1 + 1.2) * 0.42);
+    const w3 = Math.abs(Math.cos(t * 6.8 - 0.4) * Math.sin(t * 18.3) * 0.28);
+    const env = t > 0.08 && t < 0.92 ? 1 : 0.68;
+    return Math.round((0.1 + 0.9 * Math.max(w1, w2, w3) * env) * 1000) / 1000;
+  });
+}
+
+function friendsFeedWaveformSeededPeaks(seed) {
+  let s = Number(seed) || 1;
+  const rnd = () => {
+    s = (s * 1664525 + 1013904223) >>> 0;
+    return s / 4294967296;
+  };
+  const raw = Array.from({ length: FRIENDS_FEED_WAVE_BAR_COUNT }, (_, i) => {
+    const t = i / Math.max(1, FRIENDS_FEED_WAVE_BAR_COUNT - 1);
+    const a = Math.abs(Math.sin(t * 13.5 + rnd() * 3.2) * Math.cos(t * 5.8 + rnd() * 2.1));
+    const b = Math.abs(Math.sin(t * 27.2 + rnd() * 4.5) * 0.35);
+    return 0.12 + 0.88 * Math.max(a, b);
+  });
+  return statusVoiceNormalizePeaks(raw, FRIENDS_FEED_WAVE_BAR_COUNT);
+}
+
+function friendsFeedWaveformPeaksFromTrack(track) {
+  const meta = track?.meta && typeof track.meta === "object" ? track.meta : {};
+  const raw = meta.waveformPeaks || meta.waveform_peaks;
+  if (Array.isArray(raw) && raw.length) {
+    return statusVoiceNormalizePeaks(raw, FRIENDS_FEED_WAVE_BAR_COUNT);
+  }
+  const seedKey = String(track?.id || track?.url || track?.taskId || "").trim();
+  if (seedKey) {
+    let seed = 0;
+    for (let i = 0; i < seedKey.length; i++) seed = (seed * 31 + seedKey.charCodeAt(i)) >>> 0;
+    return friendsFeedWaveformSeededPeaks(seed);
+  }
+  return friendsFeedWaveformFallbackPeaks();
+}
+
+function friendsFeedWaveBarsInnerHtml(peaks) {
+  return statusVoiceNormalizePeaks(peaks, FRIENDS_FEED_WAVE_BAR_COUNT)
+    .map((h, i) => {
+      const ht = Math.max(0.1, Math.min(1, Number(h) || 0.3));
+      return `<span class="friendsFeedWaveBar" data-bar-i="${i}" style="--bar-h:${ht.toFixed(3)}"></span>`;
+    })
+    .join("");
+}
+
+let _friendsFeedWaveRaf = 0;
+let _friendsFeedWaveActiveWrap = null;
+let _friendsFeedWaveBasePeaks = null;
+
+function friendsFeedWavePeaksFromWrap(wrap) {
+  try {
+    const raw = decodeURIComponent(String(wrap?.getAttribute?.("data-friends-wave-peaks") || ""));
+    const parsed = raw ? JSON.parse(raw) : [];
+    return statusVoiceNormalizePeaks(parsed, FRIENDS_FEED_WAVE_BAR_COUNT);
+  } catch {
+    return friendsFeedWaveformFallbackPeaks();
+  }
+}
+
+function friendsFeedWaveApplyHeights(wrap, layer, heights) {
+  const wave = wrap?.querySelector?.(`[data-friends-feed-wave="${layer}"]`);
+  if (!wave) return;
+  wave.querySelectorAll(".friendsFeedWaveBar").forEach((bar, i) => {
+    const h = heights[i] ?? 0.28;
+    bar.style.setProperty("--bar-h", String(Math.max(0.08, Math.min(1, h)).toFixed(3)));
+  });
+}
+
+function friendsFeedWaveMotionHeights(base, t, playing) {
+  if (!playing) return base;
+  return base.map((b, i) => {
+    const phase = t * 11.2 + i * 0.36;
+    const flutter =
+      0.58 +
+      0.42 *
+        (0.45 * Math.abs(Math.sin(phase)) +
+          0.32 * Math.abs(Math.cos(phase * 1.65 + i * 0.09)) +
+          0.23 * Math.abs(Math.sin(phase * 2.45 - t * 2.8)));
+    const beat = 0.76 + 0.24 * Math.pow(Math.abs(Math.sin(t * 1.92)), 0.7);
+    return Math.min(1, Math.max(0.1, b * flutter * beat));
+  });
+}
+
+function friendsFeedWaveResetWrap(wrap) {
+  if (!wrap) return;
+  const peaks = friendsFeedWavePeaksFromWrap(wrap);
+  friendsFeedWaveApplyHeights(wrap, "base", peaks);
+  friendsFeedWaveApplyHeights(wrap, "prog", peaks);
+}
+
+function stopFriendsFeedWaveVisualizer() {
+  if (_friendsFeedWaveRaf) {
+    try {
+      cancelAnimationFrame(_friendsFeedWaveRaf);
+    } catch {}
+    _friendsFeedWaveRaf = 0;
+  }
+  if (_friendsFeedWaveActiveWrap) {
+    friendsFeedWaveResetWrap(_friendsFeedWaveActiveWrap);
+    _friendsFeedWaveActiveWrap = null;
+  }
+  _friendsFeedWaveBasePeaks = null;
+}
+
+function friendsFeedWaveVisualizerTick() {
+  _friendsFeedWaveRaf = 0;
+  const wrap = _friendsFeedWaveActiveWrap;
+  const a = playerEl;
+  if (!wrap || !a || a.paused || a.ended) {
+    stopFriendsFeedWaveVisualizer();
+    return;
+  }
+  const base = _friendsFeedWaveBasePeaks || friendsFeedWavePeaksFromWrap(wrap);
+  const heights = friendsFeedWaveMotionHeights(base, a.currentTime || 0, true);
+  friendsFeedWaveApplyHeights(wrap, "prog", heights);
+  _friendsFeedWaveRaf = requestAnimationFrame(friendsFeedWaveVisualizerTick);
+}
+
+function syncFriendsFeedWaveVisualizer(curRef, audible) {
+  const friendsPage = document.getElementById("friendsPage");
+  if (!friendsPage || !curRef || !audible) {
+    if (_friendsFeedWaveActiveWrap) stopFriendsFeedWaveVisualizer();
+    return;
+  }
+  let wrap = null;
+  friendsPage.querySelectorAll(".followActMediaDockWave").forEach((w) => {
+    const u = decodeDiscoveryPlayUrl(w);
+    if (u && audioUrlsEquivalent(curRef, u)) wrap = w;
+  });
+  if (!wrap) {
+    stopFriendsFeedWaveVisualizer();
+    return;
+  }
+  if (_friendsFeedWaveActiveWrap !== wrap) {
+    if (_friendsFeedWaveActiveWrap) friendsFeedWaveResetWrap(_friendsFeedWaveActiveWrap);
+    _friendsFeedWaveActiveWrap = wrap;
+    _friendsFeedWaveBasePeaks = friendsFeedWavePeaksFromWrap(wrap);
+    friendsFeedWaveApplyHeights(wrap, "base", _friendsFeedWaveBasePeaks);
+    friendsFeedWaveApplyHeights(wrap, "prog", _friendsFeedWaveBasePeaks);
+  }
+  if (!_friendsFeedWaveRaf) friendsFeedWaveVisualizerTick();
+}
+
+function friendsFeedCompactMediaHtml({
+  artSafe,
+  encUrl,
+  encTitle,
+  encArt,
+  encBy,
+  playData,
+  safeTitle,
+  track,
+}) {
+  const durSec = discoverTrackDurationSec(track);
+  const durLabel = durSec > 0 ? escapeHtml(formatTime(durSec)) : "";
+  const kickerHtml = isPhotoMoodTrack(track)
+    ? `<span class="followActMediaKicker">Created with Photo Mood</span>`
+    : "";
+  const wavePeaks = friendsFeedWaveformPeaksFromTrack(track);
+  const wavePeaksEnc = encodeURIComponent(JSON.stringify(wavePeaks));
+  const waveBars = friendsFeedWaveBarsInnerHtml(wavePeaks);
+  return `
+          <div class="followActMediaWrap followActMediaWrap--friendsDock">
+            <button type="button" class="followActMedia" data-user-lib-play="1" data-user-lib-url="${encUrl}" data-user-lib-title="${encTitle}" data-user-lib-art="${encArt}" data-discovery-by="${encBy}" ${playData} aria-label="Play ${safeTitle}">
+              <img class="followActMediaImg" src="${escapeHtml(artSafe)}" alt="" decoding="async" loading="lazy" />
+              <span class="followActMediaScrim" aria-hidden="true"></span>
+              <div class="followActMediaCopy">
+                <span class="followActMediaTitle" dir="auto">${safeTitle}</span>
+                ${kickerHtml}
+              </div>
+            </button>
+            <div class="followActMediaDock">
+              <button type="button" class="followActMediaDockPlay" data-user-lib-play="1" data-user-lib-url="${encUrl}" data-user-lib-title="${encTitle}" data-user-lib-art="${encArt}" data-discovery-by="${encBy}" ${playData} aria-label="Play ${safeTitle}">
+                ${coverArtPlayStateIconsHtml(11)}
+              </button>
+              <div class="followActMediaDockWave followActRealtimeProgress" data-user-lib-url="${encUrl}" data-friends-wave-peaks="${escapeHtml(wavePeaksEnc)}">
+                <div class="friendsFeedWaveStage" aria-hidden="true">
+                  <div class="friendsFeedWave friendsFeedWave--base" data-friends-feed-wave="base">${waveBars}</div>
+                  <div class="friendsFeedWave friendsFeedWave--prog" data-friends-feed-wave="prog">${waveBars}</div>
+                </div>
+                <input class="followActRealtimeSeek followActRealtimeSeek--ghost" type="range" min="0" max="1000" value="0" step="1" aria-label="Seek ${safeTitle}" />
+              </div>
+              <span class="followActMediaDockDur" data-friends-dock-dur data-friends-dock-idle-dur="${durSec > 0 ? durSec : ""}">${durLabel}</span>
+            </div>
+          </div>`;
+}
+
+function friendsFeedItemIsNew(item) {
+  const ts = Number(item?.ts || 0);
+  return ts > 0 && Date.now() - ts <= FRIENDS_FEED_NEW_WINDOW_MS;
+}
+
+function friendsFeedItemMatchesFilter(item, filter = _friendsFeedFilter) {
+  const tab = String(filter || "all").trim() || "all";
+  if (tab === "all") return true;
+  if (tab === "new") return friendsFeedItemIsNew(item);
+  if (item.kind === "status") return false;
+  const track = item.track;
+  if (!track) return false;
+  if (tab === "photo-mood") return isPhotoMoodTrack(track);
+  if (tab === "music") return !isPhotoMoodTrack(track);
+  return true;
+}
+
+function filterFriendsFeedItems(items, filter = _friendsFeedFilter) {
+  return (items || []).filter((item) => friendsFeedItemMatchesFilter(item, filter));
+}
+
+function friendsFeedFilterEmptyCopy(filter) {
+  const tab = String(filter || "all").trim() || "all";
+  if (tab === "new") return "No posts from the last week. Check back soon.";
+  if (tab === "photo-mood") return "Photo Mood songs from people you fan will show up here.";
+  if (tab === "music") return "Music posts from people you fan will show up here.";
+  return "Nothing here yet.";
+}
+
+function paintFriendsFeedTabsActive(filter = _friendsFeedFilter) {
+  const root = document.getElementById("friendsFeedTabs");
+  if (!root) return;
+  setNabadTabsActiveByAttr(root, filter, "data-friends-feed-filter");
+}
+
+function renderFriendsFeedList(listEl, statusEl, items, profMap) {
+  const filtered = filterFriendsFeedItems(items, _friendsFeedFilter);
+  if (!filtered.length) {
+    listEl.classList.remove("isDiscoveryLoading");
+    listEl.hidden = true;
+    listEl.innerHTML = "";
+    renderDiscoveryFollowingEmpty(
+      statusEl,
+      "Nothing here yet",
+      friendsFeedFilterEmptyCopy(_friendsFeedFilter),
+    );
+    return false;
+  }
+  statusEl.hidden = true;
+  statusEl.textContent = "";
+  listEl.hidden = false;
+  listEl.innerHTML = friendsFeedRowsHtml(filtered, profMap);
+  return true;
+}
+
+function bindFriendsFeedFilterTabsOnce() {
+  const root = document.getElementById("friendsFeedTabs");
+  if (!root || root.dataset.boundFriendsFeedTabs === "1") return;
+  root.dataset.boundFriendsFeedTabs = "1";
+  root.addEventListener("click", (e) => {
+    const tabBtn = e.target?.closest?.("[data-friends-feed-filter]");
+    if (!tabBtn || !root.contains(tabBtn)) return;
+    e.preventDefault();
+    const filter = String(tabBtn.getAttribute("data-friends-feed-filter") || "").trim();
+    if (!filter || filter === _friendsFeedFilter) return;
+    haptic("light");
+    _friendsFeedFilter = filter;
+    paintFriendsFeedTabsActive(filter);
+    const listEl = document.getElementById("discoveryFollowingList");
+    const statusEl = document.getElementById("discoveryFollowingStatus");
+    if (!listEl || !statusEl || !_friendsFeedMergedItems.length) return;
+    const rendered = renderFriendsFeedList(listEl, statusEl, _friendsFeedMergedItems, _friendsFeedProfMap);
+    if (rendered) {
+      try {
+        syncDiscoveryPlayingHighlights();
+      } catch {}
+      applyFeedSocialStatsToDom(listEl);
+      void hydrateFeedSocialStatsForFeed(listEl);
+    }
+  });
+}
+
 /** X-style feed header: avatar + username row + subline (time / created / badge) + trailing menu. */
 function followActXstyleTopHtml(opts) {
   const {
@@ -12233,12 +12607,15 @@ function followActXstyleTopHtml(opts) {
     badgeHtml = "",
     trailingHtml = "",
     avatarLabel = "Profile",
+    styleTagParts = [],
+    releaseCaptionHtml = "",
   } = opts;
   const userPrimary = isOwn
     ? whoHtml
     : `<a class="followActUserLink followActUserLink--badge" href="${escapeHtml(profileHref)}" data-route-link="user">${whoHtml}</a>`;
   const subline = followActMetaSublineHtml([
     `<span class="followActWhen">${escapeHtml(when)}</span>`,
+    ...(Array.isArray(styleTagParts) ? styleTagParts : []),
     createdChipHtml,
     badgeHtml,
   ]);
@@ -12253,6 +12630,7 @@ function followActXstyleTopHtml(opts) {
           <div class="followActHeadStack">
             <div class="followActMetaPrimary">${userPrimary}</div>
             ${subline ? `<div class="followActMetaSub">${subline}</div>` : ""}
+            ${releaseCaptionHtml}
           </div>
           ${trailingHtml}
         </div>`;
@@ -12630,7 +13008,8 @@ function profileActivitiesDomMatchesFeed(listEl, feedItems) {
 }
 
 function friendsFeedItemsKey(items) {
-  return (items || [])
+  const filter = String(_friendsFeedFilter || "all");
+  const ids = (items || [])
     .map((item) => {
       if (item?.kind === "status") {
         const id = String(item.post?.id || "").trim();
@@ -12645,6 +13024,7 @@ function friendsFeedItemsKey(items) {
     })
     .filter(Boolean)
     .join("|");
+  return ids ? `${filter}|${ids}` : "";
 }
 
 function logProfilePostsListRender(n) {
@@ -12828,10 +13208,11 @@ function profileSelfProfMap(uid) {
 }
 
 /** Swap quote card / remix pair / mashup block inside an existing row — not the whole article. */
-function patchFollowActRowMedia(article, track, profMap, idx) {
+function patchFollowActRowMedia(article, track, profMap, idx, opts = {}) {
   if (!article || !track) return false;
+  const friendsFeed = Boolean(opts.friendsFeed);
   const wrap = document.createElement("div");
-  wrap.innerHTML = followingActivityRowHtml(track, profMap, idx, { xstyle: true });
+  wrap.innerHTML = followingActivityRowHtml(track, profMap, idx, { xstyle: true, friendsFeed });
   const nextArticle = wrap.firstElementChild;
   if (!nextArticle) return false;
   const headStack = article.querySelector(".followActHeadStack");
@@ -12840,6 +13221,24 @@ function patchFollowActRowMedia(article, track, profMap, idx) {
   const actRow = article.querySelector(".followActActionsBar") || article.querySelector(".followActActions");
   const nextActRow = nextArticle.querySelector(".followActActionsBar") || nextArticle.querySelector(".followActActions");
   if (!actRow || !nextActRow) return false;
+
+  if (friendsFeed) {
+    headStack.querySelector(".followActReleaseCaption")?.remove();
+    const nextSub = nextHeadStack.querySelector(".followActMetaSub");
+    const sub = headStack.querySelector(".followActMetaSub");
+    if (nextSub && sub) sub.innerHTML = nextSub.innerHTML;
+    else if (nextSub) {
+      const primary = headStack.querySelector(".followActMetaPrimary");
+      (primary || headStack).insertAdjacentElement("afterend", nextSub.cloneNode(true));
+    } else if (sub) {
+      sub.remove();
+    }
+    const captionEl = nextHeadStack.querySelector(".followActReleaseCaption");
+    if (captionEl) {
+      const anchor = headStack.querySelector(".followActMetaSub") || headStack.querySelector(".followActMetaPrimary");
+      (anchor || headStack).insertAdjacentElement("afterend", captionEl.cloneNode(true));
+    }
+  }
 
   const contentEl = article.querySelector(":scope > .followActContent") || headStack.querySelector(".followActContent");
   const nextContent = nextArticle.querySelector(":scope > .followActContent") || nextHeadStack.querySelector(".followActContent");
@@ -12859,7 +13258,7 @@ function patchFollowActRowMedia(article, track, profMap, idx) {
   return true;
 }
 
-function patchFollowActMediaRows(listEl, items, profMap, logFn) {
+function patchFollowActMediaRows(listEl, items, profMap, logFn, opts = {}) {
   let patched = 0;
   items.forEach((item, i) => {
     if (item.kind !== "music") return;
@@ -12867,7 +13266,7 @@ function patchFollowActMediaRows(listEl, items, profMap, logFn) {
     if (!sid) return;
     const article = listEl.querySelector(`[data-profile-act-song-id="${sid}"]`);
     if (!article) return;
-    if (patchFollowActRowMedia(article, item.track, profMap, i)) patched += 1;
+    if (patchFollowActRowMedia(article, item.track, profMap, i, opts)) patched += 1;
   });
   if (patched > 0 && logFn) logFn("media", patched);
   return patched;
@@ -12875,7 +13274,7 @@ function patchFollowActMediaRows(listEl, items, profMap, logFn) {
 
 /** Remix/mashup tiles after first paint — patch media blocks only. */
 function patchProfileActivityMediaRows(listEl, feedItems, profMap) {
-  return patchFollowActMediaRows(listEl, feedItems, profMap, logProfilePostsPatch);
+  return patchFollowActMediaRows(listEl, feedItems, profMap, logProfilePostsPatch, { friendsFeed: true });
 }
 
 async function enrichProfileActivitiesAfterPaint(libRows, feedItems, profMap, listEl, enrichGen, opts = {}) {
@@ -13117,7 +13516,7 @@ async function renderProfileActivities(opts = {}) {
     }
     if (!listPainted) {
       listEl.innerHTML = visibleFeedItems
-        .map((item, i) => followingActivityRowHtml(item.track, effectiveProfMap, i, { xstyle: true }))
+        .map((item, i) => followingActivityRowHtml(item.track, effectiveProfMap, i, { xstyle: true, friendsFeed: true }))
         .join("");
       logProfilePostsListRender(visibleFeedItems.length);
     }
@@ -14182,7 +14581,7 @@ function followActActionsRowHtml({ kind, targetId, targetUserId, plays, playsPen
   const giftBlock =
     kind === "music" && !isOwner && myId
       ? `<button type="button" class="followActAct followActAct--gift" data-friends-act="gift" aria-label="Gift credits">
-        ${feedActIconGift(undefined, targetId)}
+        ${feedActIconGift()}
       </button>`
       : "";
   return `
@@ -14218,7 +14617,7 @@ function feedSocialStatsKey(targetKind, targetId) {
   return `${targetKind}:${targetId}`;
 }
 
-const FEED_SOCIAL_STAT_DEFAULT = { likeCount: 0, liked: false, replyCount: 0, repostCount: 0, reposted: false };
+const FEED_SOCIAL_STAT_DEFAULT = { likeCount: 0, liked: false, replyCount: 0, repostCount: 0, reposted: false, gifted: false };
 
 function getFeedSocialStat(targetKind, targetId) {
   return (
@@ -14232,6 +14631,14 @@ function setFeedSocialStat(targetKind, targetId, partial) {
   const prev = _feedSocialStats.get(key) || { ...FEED_SOCIAL_STAT_DEFAULT };
   _feedSocialStats.set(key, { ...prev, ...partial });
   return _feedSocialStats.get(key);
+}
+
+function markFeedPostGifted(targetKind, targetId) {
+  const kind = String(targetKind || "").trim();
+  const id = String(targetId || "").trim();
+  if (!kind || !id) return;
+  setFeedSocialStat(kind, id, { gifted: true });
+  applyFeedSocialStatsToDom(document);
 }
 
 /**
@@ -14251,6 +14658,7 @@ function applyFeedSocialStatsToDom(scope) {
     const replyCount = row.querySelector('[data-friends-act-count="reply"]');
     const repostBtn = row.querySelector('[data-friends-act="repost"]');
     const repostCount = row.querySelector('[data-friends-act-count="repost"]');
+    const giftBtn = row.querySelector('[data-friends-act="gift"]');
     if (likeBtn) {
       likeBtn.classList.toggle("isLiked", Boolean(stat.liked));
       likeBtn.setAttribute("aria-pressed", stat.liked ? "true" : "false");
@@ -14262,6 +14670,11 @@ function applyFeedSocialStatsToDom(scope) {
       repostBtn.setAttribute("aria-pressed", stat.reposted ? "true" : "false");
     }
     if (repostCount) repostCount.textContent = stat.repostCount > 0 ? formatStatCount(stat.repostCount) : "";
+    if (giftBtn) {
+      giftBtn.classList.toggle("isGifted", Boolean(stat.gifted));
+      giftBtn.setAttribute("aria-pressed", stat.gifted ? "true" : "false");
+      giftBtn.setAttribute("aria-label", stat.gifted ? "Gift sent" : "Gift credits");
+    }
   });
 }
 
@@ -14325,6 +14738,15 @@ async function hydrateFeedSocialStatsForFeed(listEl, opts = {}) {
           setFeedSocialStat(kind, id, {
             repostCount: Number(info?.count) || 0,
             reposted: Boolean(info?.reposted),
+          });
+        }
+      }
+    }
+    if (data?.gifts) {
+      for (const [kind, bucket] of Object.entries(data.gifts)) {
+        for (const [id, info] of Object.entries(bucket || {})) {
+          setFeedSocialStat(kind, id, {
+            gifted: Boolean(info?.gifted),
           });
         }
       }
@@ -14690,6 +15112,7 @@ function feedRemixFlowPlayerHtml(t, profMap, orig, main) {
 
 function followingActivityRowHtml(t, profMap, idx, opts = {}) {
   const xstyle = Boolean(opts && opts.xstyle);
+  const friendsFeed = Boolean(opts && opts.friendsFeed);
   const type = followingActivityTypeForTrack(t);
   const prof = resolveProfileForFeedCreator(t.userId, profMap);
   const handle = String(prof?.username || "").trim();
@@ -14811,7 +15234,18 @@ function followingActivityRowHtml(t, profMap, idx, opts = {}) {
         durSec: discoverTrackDurationSec(t),
         durLabel: escapeHtml(formatTime(discoverTrackDurationSec(t) || 0)),
       })
-    : `
+    : friendsFeed
+      ? friendsFeedCompactMediaHtml({
+          artSafe,
+          encUrl,
+          encTitle,
+          encArt,
+          encBy,
+          playData,
+          safeTitle,
+          track: t,
+        })
+      : `
           <div class="followActMediaWrap">
             <button type="button" class="followActMedia" data-user-lib-play="1" data-user-lib-url="${encUrl}" data-user-lib-title="${encTitle}" data-user-lib-art="${encArt}" data-discovery-by="${encBy}" ${playData} aria-label="Play ${safeTitle}">
               <img class="followActMediaImg" src="${escapeHtml(artSafe)}" alt="" decoding="async" loading="lazy" />
@@ -14827,8 +15261,13 @@ function followingActivityRowHtml(t, profMap, idx, opts = {}) {
   const topMenuHtml = songMenuBtn ? `<div class="followActTopMenu">${songMenuBtn}</div>` : "";
   if (xstyle) {
     const badgeHtml = orig || mashupBlockHtml ? "" : (followingActivityBadgeHtml("music", type) || "");
+    const friendsExtraClass = friendsFeed ? " followAct--friendsFeed" : "";
+    const styleTagParts = friendsFeed ? friendsFeedStyleTagParts(t) : [];
+    const releaseCaptionHtml = friendsFeed ? friendsFeedReleaseCaptionHtml(t) : "";
+    const legacyCaptionBlock =
+      !friendsFeed && caption ? `<div class="followActContent">${captionHtml}</div>` : "";
     return `
-      <article class="followAct followAct--music followAct--xstyle" data-follow-act="${type}" data-profile-act-song-id="${escapeHtml(String(t.id || ""))}" style="--i:${idx}" data-user-lib-url="${encUrl}" data-user-lib-title="${encTitle}" data-user-lib-art="${encArt}" data-discovery-by="${encBy}" ${playData}>
+      <article class="followAct followAct--music followAct--xstyle${friendsExtraClass}" data-follow-act="${type}" data-profile-act-song-id="${escapeHtml(String(t.id || ""))}" style="--i:${idx}" data-user-lib-url="${encUrl}" data-user-lib-title="${encTitle}" data-user-lib-art="${encArt}" data-discovery-by="${encBy}" ${playData}>
         ${followActXstyleTopHtml({
           profileHref,
           userId: t.userId,
@@ -14840,8 +15279,10 @@ function followingActivityRowHtml(t, profMap, idx, opts = {}) {
           badgeHtml,
           trailingHtml: topMenuHtml,
           avatarLabel: feedActorProfileLabel(handle, prof),
+          styleTagParts,
+          releaseCaptionHtml,
         })}
-        ${caption ? `<div class="followActContent">${captionHtml}</div>` : ""}
+        ${legacyCaptionBlock}
         ${mashupBlockHtml || remixPairHtml || mediaBlockWithProgressHtml}
         <div class="followActActionsBar">
           ${followActActionsRowHtml({
@@ -15986,7 +16427,7 @@ let _profileActSnapshot = null;
 let _profileActEnrichGen = 0;
 const PROFILE_ACT_SNAPSHOT_MS = 120000;
 const PROFILE_ACT_MIN_FETCH_GAP_MS = 45000;
-const PROFILE_ACT_SNAPSHOT_KEY = "nabad_profile_act_snap_v3";
+const PROFILE_ACT_SNAPSHOT_KEY = "nabad_profile_act_snap_v4";
 let _profileActCloudRefreshLastAt = 0;
 let _profileActCloudRefreshInFlight = false;
 const PROFILE_ACTIVITIES_PAGE_SIZE = 6;
@@ -16222,7 +16663,7 @@ function friendsFeedRowsHtml(mergedItems, profMap) {
     .map((item, i) => {
       if (item.kind === "status") return followingStatusRowHtml(item.post, profMap, i, { xstyle: true });
       if (item.kind === "repost") return followingRepostRowHtml(item, profMap, i);
-      return followingActivityRowHtml(item.track, profMap, i, { xstyle: true });
+      return followingActivityRowHtml(item.track, profMap, i, { xstyle: true, friendsFeed: true });
     })
     .join("");
 }
@@ -16233,7 +16674,7 @@ function friendsFeedRowsHtml(mergedItems, profMap) {
  *  row inside still targets the original song. */
 function followingRepostRowHtml(item, profMap, idx) {
   const rp = item.repost || {};
-  const base = followingActivityRowHtml(item.track, profMap, idx, { xstyle: true });
+  const base = followingActivityRowHtml(item.track, profMap, idx, { xstyle: true, friendsFeed: true });
   const reposterId = String(rp.userId || "");
   const prof = resolveProfileForFeedCreator(reposterId, profMap);
   const handle = String(prof?.username || "").trim();
@@ -16254,8 +16695,8 @@ function followingRepostRowHtml(item, profMap, idx) {
         ${noteHtml}`;
   return base
     .replace(
-      'class="followAct followAct--music followAct--xstyle"',
-      `class="followAct followAct--music followAct--xstyle followAct--repost" data-repost-id="${escapeHtml(String(rp.id || ""))}" data-repost-by="${escapeHtml(reposterId)}"`,
+      /class="followAct followAct--music followAct--xstyle(?: followAct--friendsFeed)?"/,
+      `class="followAct followAct--music followAct--xstyle followAct--repost followAct--friendsFeed" data-repost-id="${escapeHtml(String(rp.id || ""))}" data-repost-by="${escapeHtml(reposterId)}"`,
     )
     .replace('<div class="followActTop">', `${banner}<div class="followActTop">`);
 }
@@ -16269,7 +16710,7 @@ function friendsFeedPlayableMediaSig(tracks, profMap) {
 }
 
 function patchFriendsFeedMediaRows(listEl, mergedItems, profMap) {
-  return patchFollowActMediaRows(listEl, mergedItems, profMap, logFriendsFeedPatch);
+  return patchFollowActMediaRows(listEl, mergedItems, profMap, logFriendsFeedPatch, { friendsFeed: true });
 }
 
 async function enrichFriendsFeedAfterPaint({
@@ -16333,6 +16774,7 @@ async function enrichFriendsFeedAfterPaint({
 
 function enterFriendsRoute() {
   const token = ++_friendsRouteEnterToken;
+  paintFriendsFeedTabsActive();
   paintFriendsFeedSnapshotIfFresh();
   runFriendsRouteRefresh(token);
   if (_friendsStatusComposePending) {
@@ -16604,6 +17046,8 @@ async function refreshDiscoveryFollowingFeed(opts = {}) {
       .filter((row) => row.ts > 0 || row.kind === "status")
       .sort((a, b) => b.ts - a.ts);
     const mergedItems = mergeFriendsOwnPostPin(feedItems).slice(0, 80);
+    _friendsFeedMergedItems = mergedItems;
+    _friendsFeedProfMap = profMap;
 
     listEl.classList.remove("isDiscoveryLoading");
     if (!mergedItems.length) {
@@ -16616,18 +17060,29 @@ async function refreshDiscoveryFollowingFeed(opts = {}) {
       );
       return;
     }
+    const filteredItems = filterFriendsFeedItems(mergedItems, _friendsFeedFilter);
+    if (!filteredItems.length) {
+      listEl.hidden = true;
+      listEl.innerHTML = "";
+      renderDiscoveryFollowingEmpty(
+        statusEl,
+        "Nothing here yet",
+        friendsFeedFilterEmptyCopy(_friendsFeedFilter),
+      );
+      return;
+    }
 
     statusEl.hidden = true;
     statusEl.textContent = "";
     _discoveryFeedTracks = enrichTracks.map((t) => discoveryTrackPlaybackMeta(t, profMap));
     listEl.hidden = false;
-    const desiredKey = friendsFeedItemsKey(mergedItems);
+    const desiredKey = friendsFeedItemsKey(filteredItems);
     const domKey = readFollowActListDomKey(listEl);
     const hasSkeleton = Boolean(listEl.querySelector(".followAct--skel"));
     const skipListRebuild = desiredKey && domKey === desiredKey && !hasSkeleton;
     if (!skipListRebuild) {
-      listEl.innerHTML = friendsFeedRowsHtml(mergedItems, profMap);
-      logFriendsFeedListRender(mergedItems.length);
+      listEl.innerHTML = friendsFeedRowsHtml(filteredItems, profMap);
+      logFriendsFeedListRender(filteredItems.length);
       _friendsFeedSnapshot = {
         at: Date.now(),
         html: listEl.innerHTML,
@@ -16761,6 +17216,7 @@ function bindDiscoveryDiscoverControls() {
 }
 
 function bindFriendsPageOnce() {
+  bindFriendsFeedFilterTabsOnce();
   if (MESSAGES_FEATURE_ENABLED) bindMessagesPageOnce();
   wireUserPublicFeedRowsOnce();
   bindFollowingComposeOnce();
@@ -16792,6 +17248,17 @@ function bindFriendsPageOnce() {
       seekFriendsFeedProgress(seek);
     });
     friendsPage.addEventListener("click", (e) => {
+      const captionMore = e.target.closest("[data-friends-caption-more]");
+      if (captionMore && friendsPage.contains(captionMore)) {
+        e.preventDefault();
+        e.stopPropagation();
+        const wrap = captionMore.closest(".followActReleaseCaption");
+        if (wrap) {
+          wrap.classList.remove("followActReleaseCaption--clamp");
+          captionMore.remove();
+        }
+        return;
+      }
       const sheetBtn = e.target.closest("[data-discovery-open-sheet]");
       if (sheetBtn && friendsPage.contains(sheetBtn)) {
         e.preventDefault();
@@ -25951,6 +26418,13 @@ function mapPublicLibrarySongRows(arr, selectedPublishedAt) {
             ...(String(s.meta_release_caption || "").trim() ? { releaseCaption: String(s.meta_release_caption).trim() } : {}),
             ...(s.meta_challenge ? { challenge: s.meta_challenge } : {}),
             ...(String(s.meta_featured_on_profile || "").toLowerCase() === "true" ? { featuredOnProfile: true } : {}),
+            ...(String(s.meta_style || "").trim() ? { styleInput: String(s.meta_style).trim() } : {}),
+            ...(String(s.meta_style_sent || "").trim() ? { styleSent: String(s.meta_style_sent).trim() } : {}),
+            ...(Array.isArray(s.meta_style_tags) && s.meta_style_tags.length
+              ? { styleTags: s.meta_style_tags.map((t) => String(t || "").trim()).filter(Boolean) }
+              : {}),
+            ...(String(s.meta_mode || "").trim() ? { mode: String(s.meta_mode).trim() } : {}),
+            ...(s.meta_photo_mode === true || s.meta_photo_mode === "true" ? { photoMode: true } : {}),
             ...(String(s.meta_image_url || "").trim() && !String(s.meta_image_url).startsWith("data:")
               ? { imageUrl: String(s.meta_image_url).trim() }
               : {}),
@@ -25968,7 +26442,7 @@ function mapPublicLibrarySongRows(arr, selectedPublishedAt) {
 }
 
 const PUBLIC_LIBRARY_SONG_META_COLS =
-  "meta_remix_of:meta->remixOf,meta_mashup_of:meta->mashupOf,meta_release_caption:meta->>releaseCaption,meta_challenge:meta->challenge,meta_featured_on_profile:meta->>featuredOnProfile,meta_image_url:meta->>imageUrl,meta_image_thumb:meta->>imageThumb";
+  "meta_remix_of:meta->remixOf,meta_mashup_of:meta->mashupOf,meta_release_caption:meta->>releaseCaption,meta_challenge:meta->challenge,meta_featured_on_profile:meta->>featuredOnProfile,meta_style:meta->>styleInput,meta_style_sent:meta->>styleSent,meta_style_tags:meta->styleTags,meta_mode:meta->>mode,meta_photo_mode:meta->photoMode,meta_image_url:meta->>imageUrl,meta_image_thumb:meta->>imageThumb";
 
 async function fetchPublicSongByOwnerTitle(ownerUserId, title) {
   const uid = String(ownerUserId || "").trim();
@@ -26298,7 +26772,7 @@ function paintUserPublicPosts(postItems, profMap, publicHandle) {
     return;
   }
   els.userPublicSongs.innerHTML = postItems
-    .map((item, i) => followingActivityRowHtml(item.track, profMap, i, { xstyle: true }))
+    .map((item, i) => followingActivityRowHtml(item.track, profMap, i, { xstyle: true, friendsFeed: true }))
     .join("");
   _userPublicFeedTracks = postItems
     .map((item) => {
@@ -35542,7 +36016,9 @@ function syncFriendsFeedProgressBars() {
       const max = Number(input.max || 1000) || 1000;
       const value = active && dur > 0 ? Math.max(0, Math.min(max, Math.round((cur / dur) * max))) : 0;
       input.value = String(value);
-      input.style.setProperty("--feedSeekPct", active && dur > 0 ? `${(value / max) * 100}%` : "0%");
+      const pct = active && dur > 0 ? `${(value / max) * 100}%` : "0%";
+      input.style.setProperty("--feedSeekPct", pct);
+      wrap.style.setProperty("--feedWavePct", pct);
       const followAct = wrap.closest(".followAct");
       if (followAct && active) {
         const playBtn = followAct.querySelector("[data-user-lib-play], .feedHeroPlayer, .followActMedia");
@@ -35555,7 +36031,9 @@ function syncFriendsFeedProgressBars() {
         applyCoverGlowRgb(followAct, artHint);
       }
     });
+    syncFriendsFeedDockDurations(root, { curRef, cur, dur, audible });
   }
+  syncFriendsFeedWaveVisualizer(curRef, audible);
   try {
     syncFeedVinylPlayers({
       curRef,
@@ -48809,7 +49287,7 @@ function ensurePlayerSocialRailIcons(scope = "player") {
     let svg = "";
     if (kind === "like") svg = feedActIconLike();
     else if (kind === "reply") svg = feedActIconComment();
-    else if (kind === "gift") svg = feedActIconGift(undefined, gradScope);
+    else if (kind === "gift") svg = feedActIconGift();
     else if (kind === "share") svg = feedActIconShare();
     if (!svg) return;
     slot.innerHTML = svg;
@@ -48843,6 +49321,12 @@ async function hydratePlayerSocialStats(songId) {
       setFeedSocialStat("song", sid, {
         repostCount: Number(info?.count) || 0,
         reposted: Boolean(info?.reposted),
+      });
+    }
+    if (data?.gifts?.song?.[sid]) {
+      const info = data.gifts.song[sid];
+      setFeedSocialStat("song", sid, {
+        gifted: Boolean(info?.gifted),
       });
     }
     applyFeedSocialStatsToDom(document);

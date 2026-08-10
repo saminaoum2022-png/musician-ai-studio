@@ -55618,6 +55618,7 @@ function openNabadCoach() {
 // Never shown while the Coach thread is open.
 let _coachNudgeArmTimer = null;
 let _coachNudgeHideTimer = null;
+let _coachIdleNudgeShowing = false;
 const COACH_NUDGE_DELAY_MS = 150000;     // first idle offer after ~2.5 min
 const COACH_NUDGE_VISIBLE_MS = 6500;     // how long the idle pill stays
 const COACH_HINT_VISIBLE_MS = 9000;      // contextual tips linger a bit longer
@@ -55642,6 +55643,7 @@ function dismissCoachFabNudge() {
   const fab = document.getElementById("coachFab");
   if (fab) fab.classList.remove("coachFab--nudge", "coachFab--hint", "coachFab--generating");
   if (_coachNudgeHideTimer) { clearTimeout(_coachNudgeHideTimer); _coachNudgeHideTimer = null; }
+  _coachIdleNudgeShowing = false;
   try { notifyCoachOrbPillHidden(); } catch {}
 }
 function showCoachFabPill(text, { visibleMs = COACH_NUDGE_VISIBLE_MS, contextual = false } = {}) {
@@ -55651,10 +55653,21 @@ function showCoachFabPill(text, { visibleMs = COACH_NUDGE_VISIBLE_MS, contextual
   if (isCoachThreadId(_conversationId)) return;
   const fab = document.getElementById("coachFab");
   if (!fab) return;
+  const idleDefault = !contextual && String(text || COACH_PILL_DEFAULT) === COACH_PILL_DEFAULT;
+  if (
+    idleDefault
+    && _coachIdleNudgeShowing
+    && fab.classList.contains("coachFab--nudge")
+    && !fab.classList.contains("coachFab--hint")
+    && !fab.classList.contains("coachFab--generating")
+  ) {
+    return;
+  }
   setCoachPillText(text);
   fab.classList.toggle("coachFab--hint", Boolean(contextual));
   fab.classList.add("coachFab--nudge");
   fab.classList.remove("coachFab--generating");
+  _coachIdleNudgeShowing = idleDefault;
   try { syncCoachFabDesktopAnchor(); } catch {}
   try { notifyCoachOrbPillShown({ contextual, priority: false }); } catch {}
   if (_coachNudgeHideTimer) clearTimeout(_coachNudgeHideTimer);
@@ -55662,6 +55675,7 @@ function showCoachFabPill(text, { visibleMs = COACH_NUDGE_VISIBLE_MS, contextual
     if (isCoachStatusActive()) return;
     fab.classList.remove("coachFab--nudge", "coachFab--hint", "coachFab--generating");
     setCoachPillText(COACH_PILL_DEFAULT);
+    _coachIdleNudgeShowing = false;
     try { notifyCoachOrbPillHidden(); } catch {}
   }, visibleMs);
 }
@@ -55676,14 +55690,24 @@ function showCoachFabNudge() {
   if (deskCoachFabDesktopWeb()) return;
   showCoachFabPill(COACH_PILL_DEFAULT, { visibleMs: COACH_NUDGE_VISIBLE_MS });
 }
+function clearCoachNudgeSchedule() {
+  if (_coachNudgeArmTimer) {
+    clearTimeout(_coachNudgeArmTimer);
+    _coachNudgeArmTimer = null;
+  }
+}
 function scheduleCoachFabNudge(delay = COACH_NUDGE_DELAY_MS) {
   if (!coachOrbAllowsIdleNudges()) return;
   if (deskCoachFabDesktopWeb()) return;
-  if (_coachNudgeArmTimer) clearTimeout(_coachNudgeArmTimer);
-  _coachNudgeArmTimer = setTimeout(function tick() {
-    if (!isCoachStatusActive() && coachOrbAllowsIdleNudges()) showCoachFabNudge();
-    _coachNudgeArmTimer = setTimeout(tick, COACH_NUDGE_COOLDOWN_MS);
-  }, delay);
+  clearCoachNudgeSchedule();
+  const arm = (waitMs) => {
+    _coachNudgeArmTimer = setTimeout(() => {
+      _coachNudgeArmTimer = null;
+      if (!isCoachStatusActive() && coachOrbAllowsIdleNudges()) showCoachFabNudge();
+      arm(COACH_NUDGE_COOLDOWN_MS);
+    }, waitMs);
+  };
+  arm(delay);
 }
 
 // ── Contextual micro-hints (on-device only) ──────────────────────────────
@@ -55853,6 +55877,7 @@ function resumePriorityJobsIfPending() {
           clearTimeout(_coachNudgeHideTimer);
           _coachNudgeHideTimer = null;
         }
+        _coachIdleNudgeShowing = false;
       },
     });
   } catch {}

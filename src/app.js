@@ -87,8 +87,8 @@ import { initCoverArtOverlay, syncCoverArtOverlay } from "./cover-art/overlay.js
 import { portrait916CropRect } from "./cover-art/portrait-normalize.js";
 import { feedActIconAnalytics, feedActIconComment, feedActIconGift, feedActIconLike, feedActIconPlays, feedActIconRepost, feedActIconShare } from "./feed-action-icons.js";
 import { initGifts, openGiftSheetForTarget, openGiftSheetFromButton } from "./gifts.js";
-import { configureProPlan, onProPlanRouteActive, refreshProSubscriptionUi, setProReturnRoute } from "./pro-plan.js";
-import { setRevenueCatApiKey, resetRevenueCatSession } from "./billing/revenuecat.js";
+import { configureProPlan, formatProPeriodLabel, onProPlanRouteActive, refreshProSubscriptionUi, setProReturnRoute } from "./pro-plan.js";
+import { setRevenueCatApiKey, resetRevenueCatSession, reconcileProSubscription, isBillingConfigured } from "./billing/revenuecat.js";
 import { augmentCoachApiPayload } from "./coach-knowledge.js";
 import { showGiftReceivedReveal } from "./gift-sent-overlay.js";
 import { giftTierDef } from "./gift-tier-icons.js";
@@ -5522,6 +5522,7 @@ try {
     getAuthToken: getSupabaseAuthToken,
     getApiBase: () => String(_resolvedApiBase || API_BASE || "").trim(),
     refreshCredits: () => refreshMyCredits({ silent: false }),
+    reconcilePro: reconcileProSubscriptionFromDevice,
     isNativeIos: () => {
       try {
         const cap = globalThis.Capacitor;
@@ -22942,23 +22943,27 @@ function applyProSubscriptionState(pro) {
   try { syncProSubscriptionUi(); } catch {}
 }
 
+async function reconcileProSubscriptionFromDevice() {
+  if (!isNativeShell() || !isBillingConfigured()) return;
+  const uid = String(authSession?.user?.id || "").trim();
+  if (!uid || !creditsState.proActive) return;
+  try {
+    const merged = await reconcileProSubscription({
+      userId: uid,
+      getAuthToken: getSupabaseAuthToken,
+      apiBase: _resolvedApiBase || API_BASE || "",
+    });
+    if (merged?.active) applyProSubscriptionState(merged);
+  } catch (e) {
+    console.warn("[pro] reconcile failed", e?.message || e);
+  }
+}
+
 function proPlanLabelShort(planId) {
   const id = String(planId || "").trim();
   if (id === "weekly") return "Weekly plan";
   if (id === "monthly") return "Monthly plan";
   return "Active subscription";
-}
-
-function formatProRenewShort(iso) {
-  const raw = String(iso || "").trim();
-  if (!raw) return "";
-  try {
-    const d = new Date(raw);
-    if (Number.isNaN(d.getTime())) return "";
-    return `Renews ${d.toLocaleDateString(undefined, { month: "short", day: "numeric" })}`;
-  } catch {
-    return "";
-  }
 }
 
 function syncProSubscriptionUi() {
@@ -23005,7 +23010,7 @@ function syncSettingsProRow() {
   }
   if (sub) {
     if (active) {
-      const renew = formatProRenewShort(creditsState.proPeriodEnd);
+      const renew = formatProPeriodLabel(creditsState.proStatus, creditsState.proPeriodEnd, { short: true });
       const bits = [proPlanLabelShort(creditsState.proPlanId), renew].filter(Boolean);
       sub.textContent = bits.join(" · ") || "Your Pro benefits are unlocked";
     } else {
@@ -23169,6 +23174,9 @@ async function refreshMyCredits({ silent = false } = {}) {
     creditsState.ledger = Array.isArray(d?.ledger) ? d.ledger : [];
     creditsState.isAdmin = Boolean(d?.isAdmin);
     applyProSubscriptionState(d?.pro);
+    if (creditsState.proActive) {
+      await reconcileProSubscriptionFromDevice();
+    }
     if (!creditsState.isAdmin) sunoCreditsLive = null;
     creditsState.loaded = true;
     creditsState.lastError = "";

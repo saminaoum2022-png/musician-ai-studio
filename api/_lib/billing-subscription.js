@@ -88,6 +88,55 @@ async function recordBillingEvent({
   });
 }
 
+async function fetchProSubscriptionRow(userId) {
+  const uid = cleanUserId(userId);
+  if (!uid) return null;
+  const res = await selectFromTable(
+    `pro_subscriptions?select=plan_id,status,current_period_end,created_at&user_id=eq.${encodeURIComponent(uid)}&limit=1`,
+  );
+  if (!res.ok) return null;
+  const row = Array.isArray(res.data) && res.data[0] ? res.data[0] : null;
+  return row || null;
+}
+
+const WEEKLY_TRIAL_MS = 7 * 24 * 60 * 60 * 1000;
+
+/** Sandbox weekly trials renew daily — don't flip trialing → active or extend the trial end. */
+async function resolveStatusForUpsert(userId, planId, incomingStatus, periodType) {
+  const period = String(periodType || "").toUpperCase();
+  const inc = String(incomingStatus || "active").toLowerCase();
+  if (period === "TRIAL" || inc === "trialing") return "trialing";
+  if (period === "NORMAL") return inc === "expired" || inc === "cancelled" ? inc : "active";
+
+  const pid = String(planId || "").trim();
+  if (pid !== "weekly") return inc;
+
+  const existing = await fetchProSubscriptionRow(userId);
+  const prev = String(existing?.status || "").toLowerCase();
+  if (prev === "trialing" && inc === "active") return "trialing";
+
+  const createdMs = Date.parse(String(existing?.created_at || ""));
+  if (Number.isFinite(createdMs) && Date.now() < createdMs + WEEKLY_TRIAL_MS && inc === "active") {
+    return "trialing";
+  }
+  return inc;
+}
+
+/** During a free trial, keep the earliest period end — sandbox renewals can push it forward daily. */
+async function resolvePeriodEndForUpsert(userId, status, periodEndIso) {
+  const nextIso = String(periodEndIso || "").trim();
+  if (String(status || "").toLowerCase() !== "trialing" || !nextIso) return nextIso || null;
+  const existing = await fetchProSubscriptionRow(userId);
+  const prevIso = String(existing?.current_period_end || "").trim();
+  if (!prevIso) return nextIso;
+  const prevMs = Date.parse(prevIso);
+  const nextMs = Date.parse(nextIso);
+  if (Number.isFinite(prevMs) && Number.isFinite(nextMs) && prevMs < nextMs) {
+    return prevIso;
+  }
+  return nextIso;
+}
+
 async function upsertProSubscription({
   userId,
   provider,
@@ -98,12 +147,13 @@ async function upsertProSubscription({
 }) {
   const uid = cleanUserId(userId);
   if (!uid || !planId) return { ok: false, error: "invalid_subscription_row" };
+  const resolvedPeriodEnd = await resolvePeriodEndForUpsert(uid, status, periodEndIso);
   const row = {
     user_id: uid,
     provider: String(provider || "revenuecat"),
     plan_id: String(planId),
     status: String(status || "active"),
-    current_period_end: periodEndIso || null,
+    current_period_end: resolvedPeriodEnd || null,
     provider_subscription_id: providerSubscriptionId
       ? String(providerSubscriptionId)
       : null,
@@ -163,8 +213,9 @@ async function grantCreditsOnce({
 }
 
 function periodEndIsoFromMs(ms) {
-  const n = Number(ms || 0);
+  let n = Number(ms || 0);
   if (!Number.isFinite(n) || n <= 0) return null;
+  if (n < 1e12) n *= 1000;
   return new Date(n).toISOString();
 }
 
@@ -224,7 +275,12 @@ async function applyRevenueCatEvent(event) {
     return { ok: true, kind: "expiration", userId, planId: plan.planId };
   }
 
-  const status = statusFromRevenueCatEvent(eventType, periodType, expirationMs);
+  const status = await resolveStatusForUpsert(
+    userId,
+    plan.planId,
+    statusFromRevenueCatEvent(eventType, periodType, expirationMs, productId),
+    periodType,
+  );
   const subRes = await upsertProSubscription({
     userId,
     provider: "revenuecat",
@@ -236,7 +292,12 @@ async function applyRevenueCatEvent(event) {
 
   let grant = { granted: 0, skipped: true };
   if (CREDIT_GRANT_EVENT_TYPES.has(eventType)) {
-    const amount = creditsForSubscriptionGrant({ productId, periodType });
+    const amount = creditsForSubscriptionGrant({
+      productId,
+      periodType,
+      eventType,
+      subscriptionStatus: status,
+    });
     grant = await grantCreditsOnce({
       eventId: transactionId || eventId,
       userId,
@@ -299,15 +360,17 @@ function pickActiveProSubscription(subscriber) {
   const expMs = expires ? Date.parse(String(expires)) : 0;
   const active = !expMs || expMs > Date.now();
   const periodType = String(sub.period_type || sub.periodType || "").toUpperCase();
+  let status = "expired";
+  if (active) {
+    if (periodType === "TRIAL") status = "trialing";
+    else if (plan.trialCredits > 0 && periodType !== "NORMAL") status = "trialing";
+    else status = "active";
+  }
 
   return {
     productId,
     planId: plan.planId,
-    status: active
-      ? periodType === "TRIAL"
-        ? "trialing"
-        : "active"
-      : "expired",
+    status,
     periodEndIso: expMs ? new Date(expMs).toISOString() : null,
     storeTransactionId: String(sub.store_transaction_id || sub.storeTransactionId || "").trim(),
     periodType,
@@ -326,11 +389,13 @@ async function syncRevenueCatSubscriber(userId) {
     return { ok: true, active: false };
   }
 
+  const status = await resolveStatusForUpsert(uid, active.planId, active.status, active.periodType);
+  const pinnedEnd = await resolvePeriodEndForUpsert(uid, status, active.periodEndIso);
   await upsertProSubscription({
     userId: uid,
     provider: "revenuecat",
     planId: active.planId,
-    status: active.status,
+    status,
     periodEndIso: active.periodEndIso,
     providerSubscriptionId: active.storeTransactionId || null,
   });
@@ -339,8 +404,8 @@ async function syncRevenueCatSubscriber(userId) {
     ok: true,
     active: active.active,
     planId: active.planId,
-    status: active.status,
-    currentPeriodEnd: active.periodEndIso,
+    status,
+    currentPeriodEnd: pinnedEnd || active.periodEndIso,
   };
 }
 

@@ -15,7 +15,7 @@ import {
   warmBilling,
 } from "./billing/revenuecat.js";
 
-/** @type {{ showToast?: (msg: string, opts?: object) => void, isLoggedIn?: () => boolean, isNativeIos?: () => boolean, navigateToRoute?: (route: string) => void, getProState?: () => { active?: boolean, planId?: string|null, status?: string|null, periodEnd?: string|null } } | null} */
+/** @type {{ showToast?: (msg: string, opts?: object) => void, isLoggedIn?: () => boolean, isNativeIos?: () => boolean, navigateToRoute?: (route: string) => void, getProState?: () => { active?: boolean, planId?: string|null, status?: string|null, periodEnd?: string|null }, reconcilePro?: () => Promise<void> } | null} */
 let _deps = null;
 
 let _mounted = false;
@@ -135,16 +135,34 @@ function proPlanDisplayName(planId) {
   return "Pro";
 }
 
-function formatProRenewLabel(iso) {
+export function formatProPeriodLabel(status, iso, opts = {}) {
   const raw = String(iso || "").trim();
   if (!raw) return "";
   try {
     const d = new Date(raw);
     if (Number.isNaN(d.getTime())) return "";
-    return `Renews ${d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}`;
+    const short = Boolean(opts.short);
+    const dateStr = d.toLocaleDateString(
+      undefined,
+      short
+        ? { month: "short", day: "numeric" }
+        : { month: "short", day: "numeric", year: "numeric" },
+    );
+    const s = String(status || "").toLowerCase();
+    if (s === "trialing") return `Trial ends ${dateStr}`;
+    if (s === "cancelled") return `Access until ${dateStr}`;
+    if (s === "grace") {
+      return short ? `Retry until ${dateStr}` : `Billing retry · access until ${dateStr}`;
+    }
+    return `Renews ${dateStr}`;
   } catch {
     return "";
   }
+}
+
+function formatProRenewLabel(iso) {
+  const state = readProState();
+  return formatProPeriodLabel(state.status, iso);
 }
 
 function proStatusHeadline(status) {
@@ -530,4 +548,7 @@ export function onProPlanRouteActive({ entering = false } = {}) {
     paintBenefitsExpanded();
   }
   paintSubscribedState();
+  void Promise.resolve(_deps?.reconcilePro?.()).then(() => {
+    paintSubscribedState();
+  });
 }

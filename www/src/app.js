@@ -200,7 +200,7 @@ import { MUSIC_VIDEO_FEATURE_ENABLED } from "./feature-flags.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260810-170809";
+const APP_BUILD = "20260810-172323";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -10439,8 +10439,7 @@ function feedSourceCoverSrcFromTrack(source) {
 function resolveFeedSourceCoverArt(source) {
   const fromTrack = feedSourceCoverSrcFromTrack(source);
   if (fromTrack) return fromTrack;
-  const label = String(source?.title || "Song").trim() || "Song";
-  return discoverRemixPlaceholderArt(label);
+  return DEFAULT_SONG_COVER_URL;
 }
 
 function discoverRemixRowsFromTracks(tracks, profMap) {
@@ -14466,7 +14465,7 @@ function feedRemixFlowOrigBlockHtml(orig, profMap) {
   const origBy = orig.username ? `@${orig.username}` : "Original";
   const o = followingActivityPlayAttrs(orig, profMap, origBy, { useThumb: true });
   const hasUrl = String(orig.url || "").trim();
-  const art = escapeHtml(resolveFeedSourceCoverArt(orig) || o.artSafe || discoverRemixPlaceholderArt(orig.title));
+  const art = escapeHtml(resolveFeedSourceCoverArt(orig) || o.artSafe || DEFAULT_SONG_COVER_URL);
   const title = escapeHtml(String(orig.title || "Original song").trim() || "Original song");
   const bodyHtml = `
           <span class="feedSourceRowArt followActRemixFlowOrigArt">

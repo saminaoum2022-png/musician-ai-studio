@@ -38231,6 +38231,8 @@ button.feedSourceRowMashupTitle:active{
   margin-left: auto;
   align-self: flex-start;
   display: flex;
+  flex-shrink: 0;
+  z-index: 2;
 }
 .followAct--xstyle .followActTopMenu .followActQuoteMenuBtn,
 .followActTopMenu .discoverCardMenuBtn{
@@ -38238,16 +38240,23 @@ button.feedSourceRowMashupTitle:active{
   top: auto;
   right: auto;
   margin: 0;
-  padding: 0 2px;
+  padding: 0 4px;
   min-width: 32px;
   min-height: 28px;
   font-size: 20px;
   line-height: 1;
-  color: rgba(232,238,247,0.6);
+  color: var(--icon-muted);
   text-shadow: none;
+  opacity: 1;
 }
-.followActTopMenu .discoverCardMenuBtn:active{
-  color: rgba(232,238,247,0.92);
+.followActTopMenu .discoverCardMenuBtn:active,
+.followActTopMenu .followActQuoteMenuBtn:active{
+  color: var(--text-secondary);
+  opacity: 1;
+}
+html[data-theme="light"] body[data-route="friends"] .followAct--xstyle .followActTopMenu .discoverCardMenuBtn,
+html[data-theme="light"] body[data-route="friends"] .followAct--xstyle .followActTopMenu .followActQuoteMenuBtn{
+  color: var(--text-muted);
 }
 
 /* Song analytics — owner-only sheet (who played + how many times). */

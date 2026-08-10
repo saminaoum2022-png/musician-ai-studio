@@ -22916,6 +22916,66 @@ async function supabaseAuthedFetch(url, init = {}) {
 const FULL_SONG_CREDIT_COST = 12;
 /** Mirrors Suno pricing for `/api/v1/generate/sounds` (beta). */
 const SOUND_CREDIT_COST = 2.5;
+const WEEKLY_TRIAL_MS = 7 * 24 * 60 * 60 * 1000;
+
+function weeklyTrialStartStorageKey(userId) {
+  return `nabad_weekly_trial_start_${String(userId || "").trim()}`;
+}
+
+/** Weekly sandbox renewals mark users "active" — heal trial label + fixed 7-day end for UI. */
+function healProSubscriptionForUi(row, userId) {
+  const active = Boolean(row?.active);
+  const planId = row?.planId ? String(row.planId) : null;
+  let status = row?.status ? String(row.status) : null;
+  let currentPeriodEnd = row?.currentPeriodEnd ? String(row.currentPeriodEnd) : null;
+  if (!active || planId !== "weekly") {
+    return { active, planId, status, currentPeriodEnd };
+  }
+
+  const uid = String(userId || "").trim();
+  let startMs = Date.parse(String(row?.trialStartedAt || row?.trial_started_at || ""));
+  if (!Number.isFinite(startMs) && uid) {
+    try {
+      const stored = localStorage.getItem(weeklyTrialStartStorageKey(uid));
+      if (stored) startMs = Date.parse(stored);
+    } catch {}
+  }
+  if (!Number.isFinite(startMs) && currentPeriodEnd) {
+    const guess = Date.parse(currentPeriodEnd) - WEEKLY_TRIAL_MS;
+    if (Number.isFinite(guess)) startMs = guess;
+  }
+  if (!Number.isFinite(startMs)) return { active, planId, status, currentPeriodEnd };
+
+  if (uid) {
+    try {
+      const key = weeklyTrialStartStorageKey(uid);
+      const prev = localStorage.getItem(key);
+      if (prev) {
+        const prevMs = Date.parse(prev);
+        if (Number.isFinite(prevMs) && prevMs < startMs) startMs = prevMs;
+      }
+      localStorage.setItem(key, new Date(startMs).toISOString());
+    } catch {}
+  }
+
+  const trialEndMs = startMs + WEEKLY_TRIAL_MS;
+  if (Date.now() < trialEndMs) {
+    status = "trialing";
+    currentPeriodEnd = new Date(trialEndMs).toISOString();
+  }
+  return { active, planId, status, currentPeriodEnd };
+}
+
+function applyProSubscriptionState(pro) {
+  const row = pro && typeof pro === "object" ? pro : {};
+  const healed = healProSubscriptionForUi(row, authSession?.user?.id);
+  creditsState.proActive = Boolean(healed.active);
+  creditsState.proPlanId = healed.planId ? String(healed.planId) : null;
+  creditsState.proStatus = healed.status ? String(healed.status) : null;
+  creditsState.proPeriodEnd = healed.currentPeriodEnd ? String(healed.currentPeriodEnd) : null;
+  try { syncProSubscriptionUi(); } catch {}
+}
+
 const creditsState = {
   balance: 0,
   paidBalance: 0,
@@ -22933,15 +22993,6 @@ const creditsState = {
   inFlight: false,
   lastError: "",
 };
-
-function applyProSubscriptionState(pro) {
-  const row = pro && typeof pro === "object" ? pro : {};
-  creditsState.proActive = Boolean(row.active);
-  creditsState.proPlanId = row.planId ? String(row.planId) : null;
-  creditsState.proStatus = row.status ? String(row.status) : null;
-  creditsState.proPeriodEnd = row.currentPeriodEnd ? String(row.currentPeriodEnd) : null;
-  try { syncProSubscriptionUi(); } catch {}
-}
 
 async function reconcileProSubscriptionFromDevice() {
   if (!isNativeShell() || !isBillingConfigured()) return;

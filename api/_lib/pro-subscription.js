@@ -10,25 +10,38 @@ const WEEKLY_TRIAL_MS = 7 * 24 * 60 * 60 * 1000;
 
 function normalizeProSubscriptionRow(row) {
   if (!row || typeof row !== "object") {
-    return { active: false, planId: null, status: null, currentPeriodEnd: null, provider: null };
+    return {
+      active: false,
+      planId: null,
+      status: null,
+      currentPeriodEnd: null,
+      provider: null,
+      trialStartedAt: null,
+    };
   }
   let status = String(row.status || "").trim().toLowerCase() || null;
   const planId = String(row.plan_id || row.planId || "").trim() || null;
   const provider = String(row.provider || "").trim() || null;
-  const currentPeriodEnd = row.current_period_end || row.currentPeriodEnd || null;
-  const createdAt = row.created_at || row.createdAt || null;
-  if (planId === "weekly" && status === "active" && createdAt) {
-    const createdMs = Date.parse(String(createdAt));
-    if (Number.isFinite(createdMs) && Date.now() < createdMs + WEEKLY_TRIAL_MS) {
-      status = "trialing";
+  const trialStartedAt = row.created_at || row.createdAt || null;
+  let currentPeriodEnd = row.current_period_end || row.currentPeriodEnd || null;
+
+  if (planId === "weekly" && trialStartedAt) {
+    const createdMs = Date.parse(String(trialStartedAt));
+    if (Number.isFinite(createdMs)) {
+      const trialEndMs = createdMs + WEEKLY_TRIAL_MS;
+      if (Date.now() < trialEndMs) {
+        status = "trialing";
+        currentPeriodEnd = new Date(trialEndMs).toISOString();
+      }
     }
   }
+
   let active = ACTIVE_STATUSES.has(status);
   if (active && currentPeriodEnd) {
     const endMs = Date.parse(String(currentPeriodEnd));
     if (Number.isFinite(endMs) && endMs <= Date.now()) active = false;
   }
-  return { active, planId, status, currentPeriodEnd, provider };
+  return { active, planId, status, currentPeriodEnd, provider, trialStartedAt };
 }
 
 async function fetchProSubscriptionForUser(userId) {

@@ -183,11 +183,6 @@ export async function reconcileProSubscription(opts = {}) {
   }
   return normalizeProRow(serverPro, uid);
 }
-let _configuredFor = "";
-let _offeringsCache = null;
-let _offeringsCacheAt = 0;
-let _warmInFlight = null;
-const OFFERINGS_CACHE_TTL_MS = 5 * 60 * 1000;
 
 export function setRevenueCatApiKey(key) {
   _apiKey = String(key || "").trim();

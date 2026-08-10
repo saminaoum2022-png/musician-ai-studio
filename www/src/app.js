@@ -23175,7 +23175,7 @@ async function refreshMyCredits({ silent = false } = {}) {
     creditsState.isAdmin = Boolean(d?.isAdmin);
     applyProSubscriptionState(d?.pro);
     if (creditsState.proActive) {
-      await reconcileProSubscriptionFromDevice();
+      void reconcileProSubscriptionFromDevice();
     }
     if (!creditsState.isAdmin) sunoCreditsLive = null;
     creditsState.loaded = true;

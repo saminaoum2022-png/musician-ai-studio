@@ -200,7 +200,7 @@ import { MUSIC_VIDEO_FEATURE_ENABLED } from "./feature-flags.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260810-154104";
+const APP_BUILD = "20260810-170809";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -10383,14 +10383,64 @@ function discoverRemixReactionCount(track, fallback) {
 }
 
 function discoverRemixOriginalArt(remixOf, tone) {
-  const url = String(remixOf?.artUrl || remixOf?.coverUrl || "").trim();
-  if (url) return url;
-  return "";
+  return durableRemixCoverUrl(remixOf?.artUrl, remixOf?.coverUrl) || "";
 }
 
 function discoverRemixPlaceholderArt(label, tone) {
   const safe = encodeURIComponent(String(label || "Song").slice(0, 1).toUpperCase());
   return `data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="120" height="120"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#7c5cff"/><stop offset="100%" stop-color="#23d5ab"/></linearGradient></defs><rect width="120" height="120" fill="url(#g)"/><text x="50%" y="54%" text-anchor="middle" font-family="system-ui,sans-serif" font-size="42" font-weight="800" fill="rgba(255,255,255,0.92)">${safe}</text></svg>`)}`;
+}
+
+/** Suno/temp upload hosts — URLs rot quickly and should not be used for feed tiles. */
+function isEphemeralCoverUrl(url) {
+  const s = String(url || "").trim().toLowerCase();
+  if (!s || s.startsWith("data:")) return false;
+  return /tempfile\.aiquickdraw\.com/i.test(s) || /tempfile\./i.test(s);
+}
+
+function durableRemixCoverUrl(...candidates) {
+  for (const raw of candidates) {
+    const s = String(raw || "").trim();
+    if (!s || isEphemeralCoverUrl(s) || isLogoCoverUrl(s)) continue;
+    const normalized = hubCoverImgSrc(s);
+    if (!normalized || isDefaultSongCoverUrl(normalized) || isEphemeralCoverUrl(normalized)) continue;
+    return normalized;
+  }
+  return "";
+}
+
+function remixOriginalHasDisplayArt(orig) {
+  return Boolean(
+    durableRemixCoverUrl(orig?.meta?.imageThumb, orig?.meta?.imageUrl, orig?.artUrl),
+  );
+}
+
+function feedSourceCoverSrcFromUrl(raw) {
+  let src = durableRemixCoverUrl(raw);
+  if (!src) return "";
+  if (/_thumb\.(webp|jpg|jpeg|png)/i.test(src.split("?")[0])) {
+    const main = supabaseSongCoverMainFromThumbUrl(src);
+    if (main) {
+      const qs = src.includes("?") ? src.slice(src.indexOf("?")) : "";
+      src = main + qs;
+    }
+  }
+  return src;
+}
+
+function feedSourceCoverSrcFromTrack(source) {
+  if (!source || typeof source !== "object") return "";
+  const m = source.meta || {};
+  return feedSourceCoverSrcFromUrl(
+    durableRemixCoverUrl(m.imageThumb, m.imageUrl, source.artUrl),
+  );
+}
+
+function resolveFeedSourceCoverArt(source) {
+  const fromTrack = feedSourceCoverSrcFromTrack(source);
+  if (fromTrack) return fromTrack;
+  const label = String(source?.title || "Song").trim() || "Song";
+  return discoverRemixPlaceholderArt(label);
 }
 
 function discoverRemixRowsFromTracks(tracks, profMap) {
@@ -12638,7 +12688,14 @@ function profileActMediaSig(t, profMap) {
   const remixOf = remixAttributionForTrack(t);
   if (remixOf) {
     const orig = remixOriginalForFeedTrack(t);
-    if (orig) return `remixpair:${String(orig.id || orig.url || remixOf.songId || "")}`;
+    if (orig) {
+      const artKey = durableRemixCoverUrl(
+        orig.artUrl,
+        orig.meta?.imageUrl,
+        orig.meta?.imageThumb,
+      );
+      return `remixpair:${String(orig.id || remixOf.songId || "")}:${artKey}:${String(orig.url || "")}`;
+    }
   }
   return "quote";
 }
@@ -14409,7 +14466,7 @@ function feedRemixFlowOrigBlockHtml(orig, profMap) {
   const origBy = orig.username ? `@${orig.username}` : "Original";
   const o = followingActivityPlayAttrs(orig, profMap, origBy, { useThumb: true });
   const hasUrl = String(orig.url || "").trim();
-  const art = escapeHtml(o.artSafe || "./assets/icons/splash-mark.png");
+  const art = escapeHtml(resolveFeedSourceCoverArt(orig) || o.artSafe || discoverRemixPlaceholderArt(orig.title));
   const title = escapeHtml(String(orig.title || "Original song").trim() || "Original song");
   const bodyHtml = `
           <span class="feedSourceRowArt followActRemixFlowOrigArt">
@@ -14435,7 +14492,7 @@ function feedRemixFlowOrigBlockHtml(orig, profMap) {
 
 function feedMashupSourceThumbHtml(source, profMap) {
   const title = String(source?.title || "Track").trim() || "Track";
-  const art = escapeHtml(String(source?.artUrl || "./assets/icons/splash-mark.png"));
+  const art = escapeHtml(resolveFeedSourceCoverArt(source));
   const url = String(source?.url || "").trim();
   const handle = String(source?.username || "").trim();
   const by = handle ? `@${handle}` : "Source";
@@ -14482,13 +14539,39 @@ function feedMashupSourceRowHtml(a, b, profMap) {
     </div>`;
 }
 
+function remixOriginalFromPublicTrack(mapped, remixOf) {
+  const artUrl = normalizeSongCoverUrl(String(mapped?.artUrl || "").trim());
+  const meta = mapped?.meta && typeof mapped.meta === "object" ? { ...mapped.meta } : {};
+  if (!meta.imageUrl && artUrl) meta.imageUrl = artUrl;
+  return {
+    id: String(mapped?.id || ""),
+    title: String(mapped?.title || remixOf?.title || "Original song").trim(),
+    artUrl,
+    meta,
+    url: String(mapped?.url || "").trim(),
+    userId: String(mapped?.userId || remixOf?.ownerUserId || ""),
+    taskId: String(mapped?.taskId || ""),
+    audioId: String(mapped?.audioId || ""),
+    kind: mapped?.kind || "full",
+    username: String(remixOf?.creatorUsername || "").trim(),
+    publicOnProfile: Boolean(mapped?.publicOnProfile),
+  };
+}
+
 function remixOriginalForFeedTrack(track) {
   const remixOf = remixAttributionForTrack(track);
   if (!remixOf) return null;
   if (track._remixOriginal) {
     const hydrated = track._remixOriginal;
-    if (String(hydrated.url || "").trim()) return hydrated;
-    if (String(hydrated.title || remixOf.title || "").trim()) return hydrated;
+    if (String(hydrated.url || "").trim()) {
+      return mergeRemixOriginalArt(hydrated, remixOf);
+    }
+    if (remixOriginalHasDisplayArt(hydrated)) {
+      return mergeRemixOriginalArt(hydrated, remixOf);
+    }
+    if (String(hydrated.title || remixOf.title || "").trim()) {
+      return mergeRemixOriginalArt(hydrated, remixOf);
+    }
   }
   const sid = String(remixOf.songId || remixOf.id || "").trim();
   if (sid) {
@@ -14499,33 +14582,65 @@ function remixOriginalForFeedTrack(track) {
           String(s?.cloudSongId || "") === sid,
       );
       if (local) {
-        return {
-          id: sid,
-          title: String(local.title || remixOf.title || "Original song").trim(),
-          artUrl: normalizeSongCoverUrl(
-            String(local.artUrl || local.meta?.artUrl || remixOf.artUrl || remixOf.coverUrl || "").trim(),
-          ),
-          url: String(local.url || "").trim(),
-          userId: String(local.userId || remixOf.ownerUserId || ""),
-          taskId: String(local.taskId || ""),
-          audioId: String(local.audioId || ""),
-          kind: local.kind || "full",
-          username: String(remixOf.creatorUsername || "").trim(),
-          publicOnProfile: Boolean(local.publicOnProfile),
-        };
+        const localArt = durableRemixCoverUrl(
+          local.artUrl,
+          local.meta?.imageUrl,
+          local.meta?.imageThumb,
+          remixOf.artUrl,
+          remixOf.coverUrl,
+        );
+        const localMeta =
+          local.meta && typeof local.meta === "object" ? { ...local.meta } : {};
+        if (!localMeta.imageUrl && localArt) localMeta.imageUrl = localArt;
+        return mergeRemixOriginalArt(
+          {
+            id: sid,
+            title: String(local.title || remixOf.title || "Original song").trim(),
+            artUrl: localArt,
+            meta: localMeta,
+            url: String(local.url || "").trim(),
+            userId: String(local.userId || remixOf.ownerUserId || ""),
+            taskId: String(local.taskId || ""),
+            audioId: String(local.audioId || ""),
+            kind: local.kind || "full",
+            username: String(remixOf.creatorUsername || "").trim(),
+            publicOnProfile: Boolean(local.publicOnProfile),
+          },
+          remixOf,
+        );
       }
     } catch {}
   }
-  return {
-    id: sid,
-    title: String(remixOf.title || "Original song").trim(),
-    artUrl: normalizeSongCoverUrl(String(remixOf.artUrl || remixOf.coverUrl || "").trim()),
-    url: "",
-    userId: String(remixOf.ownerUserId || "").trim(),
-    username: String(remixOf.creatorUsername || "").trim(),
-    kind: "full",
-    publicOnProfile: false,
-  };
+  const stubArt = durableRemixCoverUrl(remixOf.artUrl, remixOf.coverUrl);
+  return mergeRemixOriginalArt(
+    {
+      id: sid,
+      title: String(remixOf.title || "Original song").trim(),
+      artUrl: stubArt,
+      meta: stubArt ? { imageUrl: stubArt } : {},
+      url: "",
+      userId: String(remixOf.ownerUserId || "").trim(),
+      username: String(remixOf.creatorUsername || "").trim(),
+      kind: "full",
+      publicOnProfile: false,
+    },
+    remixOf,
+  );
+}
+
+function mergeRemixOriginalArt(orig, remixOf) {
+  if (!orig) return orig;
+  const durableArt = durableRemixCoverUrl(
+    orig.meta?.imageThumb,
+    orig.meta?.imageUrl,
+    orig.artUrl,
+    remixOf?.artUrl,
+    remixOf?.coverUrl,
+  );
+  if (!durableArt) return orig;
+  const meta = orig.meta && typeof orig.meta === "object" ? { ...orig.meta } : {};
+  if (!meta.imageUrl) meta.imageUrl = durableArt;
+  return { ...orig, artUrl: durableArt, meta };
 }
 
 function feedRemixFlowPlayerHtml(t, profMap, orig, main) {
@@ -18082,46 +18197,57 @@ function followActMashupBlockHtml(t, profMap, main) {
  *  deleted, or missing audio simply keep the existing text credit. */
 async function hydrateRemixOriginalsForTracks(tracks) {
   const list = Array.isArray(tracks) ? tracks : [];
+  const tracksById = new Map();
+  for (const t of list) {
+    const id = String(t?.id || "").trim();
+    if (id) tracksById.set(id, t);
+  }
   const wantedIds = new Set();
   for (const t of list) {
     const remixOf = remixAttributionForTrack(t);
-    const sid = String(remixOf?.songId || "").trim();
-    if (sid && isShareUuid(sid)) wantedIds.add(sid);
+    const sid = String(remixOf?.songId || remixOf?.id || "").trim();
+    if (sid) wantedIds.add(sid);
   }
-  if (!wantedIds.size || !SUPABASE_URL || !SUPABASE_ANON_KEY) return;
+  if (!wantedIds.size && !list.some((t) => remixAttributionForTrack(t))) return;
   try {
-    const inList = [...wantedIds].map((id) => encodeURIComponent(id)).join(",");
-    const r = await nativeSafeFetch(
-      `${SUPABASE_URL}/rest/v1/user_songs?id=in.(${inList})&public_on_profile=eq.true&select=id,title,art_url,song_url,user_id,task_id,audio_id`,
-      { headers: { apikey: SUPABASE_ANON_KEY, Accept: "application/json" }, cache: "no-store" },
-    );
-    if (!r.ok) return;
-    const rows = await r.json().catch(() => []);
-    const byId = new Map();
-    for (const s of Array.isArray(rows) ? rows : []) {
-      if (String(s?.song_url || "").trim()) byId.set(String(s.id), s);
-    }
+    const byId = wantedIds.size ? await fetchPublicSongsByIds([...wantedIds]) : new Map();
+    const titleLookups = new Map();
+    const lookupByTitle = (ownerUserId, title) => {
+      const uid = String(ownerUserId || "").trim();
+      const songTitle = String(title || "").trim();
+      if (!uid || !songTitle) return Promise.resolve(null);
+      const key = `${uid}\0${songTitle}`;
+      if (!titleLookups.has(key)) {
+        titleLookups.set(key, fetchPublicSongByOwnerTitle(uid, songTitle));
+      }
+      return titleLookups.get(key);
+    };
     for (const t of list) {
       const remixOf = remixAttributionForTrack(t);
-      const s = remixOf?.songId ? byId.get(String(remixOf.songId)) : null;
-      if (!s) continue;
-      t._remixOriginal = {
-        id: String(s.id || ""),
-        title: String(s.title || remixOf.title || "Original song").trim(),
-        artUrl: String(s.art_url || ""),
-        url: String(s.song_url || ""),
-        userId: String(s.user_id || remixOf.ownerUserId || ""),
-        taskId: String(s.task_id || ""),
-        audioId: String(s.audio_id || ""),
-        kind: "full",
-        username: String(remixOf.creatorUsername || "").trim(),
-        publicOnProfile: true,
-      };
+      if (!remixOf) continue;
+      const sid = String(remixOf?.songId || remixOf?.id || "").trim();
+      let mapped = sid ? byId.get(sid) || tracksById.get(sid) : null;
+      if (!mapped && remixOf.ownerUserId && remixOf.title) {
+        mapped = await lookupByTitle(remixOf.ownerUserId, remixOf.title);
+      }
+      if (!mapped) continue;
+      const hasPlay = String(mapped.url || "").trim();
+      const hasArt = remixOriginalHasDisplayArt(mapped);
+      if (hasPlay || hasArt) {
+        t._remixOriginal = mergeRemixOriginalArt(
+          remixOriginalFromPublicTrack(mapped, remixOf),
+          remixOf,
+        );
+      }
     }
     for (const t of list) {
-      if (t._remixOriginal && String(t._remixOriginal.url || "").trim()) continue;
+      const cur = t._remixOriginal;
+      if (cur && (String(cur.url || "").trim() || remixOriginalHasDisplayArt(cur))) continue;
       const stub = remixOriginalForFeedTrack(t);
-      if (stub && String(stub.url || "").trim()) t._remixOriginal = stub;
+      if (!stub) continue;
+      if (String(stub.url || "").trim() || remixOriginalHasDisplayArt(stub)) {
+        t._remixOriginal = stub;
+      }
     }
   } catch {}
 }
@@ -25736,6 +25862,43 @@ function mapPublicLibrarySongRows(arr, selectedPublishedAt) {
 
 const PUBLIC_LIBRARY_SONG_META_COLS =
   "meta_remix_of:meta->remixOf,meta_mashup_of:meta->mashupOf,meta_release_caption:meta->>releaseCaption,meta_challenge:meta->challenge,meta_featured_on_profile:meta->>featuredOnProfile,meta_image_url:meta->>imageUrl,meta_image_thumb:meta->>imageThumb";
+
+async function fetchPublicSongByOwnerTitle(ownerUserId, title) {
+  const uid = String(ownerUserId || "").trim();
+  const songTitle = String(title || "").trim();
+  if (!uid || !songTitle || !SUPABASE_URL || !SUPABASE_ANON_KEY) return null;
+  const cols =
+    `user_id,id,created_at,published_at,title,song_url,task_id,audio_id,kind,art_url,${PUBLIC_LIBRARY_SONG_META_COLS}`;
+  const colsLegacy = cols.replace(",published_at", "");
+  const token = getSupabaseAuthToken();
+  const headers = { apikey: SUPABASE_ANON_KEY, ...(token ? { Authorization: `Bearer ${token}` } : {}) };
+  const guard = `&or=${encodeURIComponent("(art_url.is.null,art_url.not.like.data:*)")}`;
+  try {
+    let selectedPublishedAt = true;
+    let r = await nativeSafeFetch(
+      `${SUPABASE_URL}/rest/v1/user_songs?user_id=eq.${encodeURIComponent(uid)}&title=eq.${encodeURIComponent(songTitle)}&public_on_profile=eq.true&select=${cols}${guard}&limit=1`,
+      { headers, cache: "no-store" },
+    );
+    if (!r.ok) {
+      const txt = await r.clone().text().catch(() => "");
+      if (/published_at|42703|column/i.test(txt)) {
+        selectedPublishedAt = false;
+        r = await nativeSafeFetch(
+          `${SUPABASE_URL}/rest/v1/user_songs?user_id=eq.${encodeURIComponent(uid)}&title=eq.${encodeURIComponent(songTitle)}&public_on_profile=eq.true&select=${colsLegacy}${guard}&limit=1`,
+          { headers, cache: "no-store" },
+        );
+      }
+    }
+    if (!r.ok) return null;
+    const rows = await r.json().catch(() => []);
+    const mapped = mapPublicLibrarySongRows(Array.isArray(rows) ? rows : [], selectedPublishedAt)[0];
+    if (!mapped) return null;
+    mapped.userId = uid;
+    return mapped;
+  } catch {
+    return null;
+  }
+}
 
 /** Fetch a set of public songs by id (for repost originals), keyed by song
  *  id. Returns playable track objects with userId attached. Safe if the
@@ -47356,7 +47519,8 @@ const COVER_IMG_RETRY_DELAYS_MS = [2000, 5000];
 function coverImageIsListThumb(img) {
   return Boolean(img?.closest?.(
     ".libRowArt, .discoveryRowArt, .discoverySpotCardArt, .followActMedia, "
-    + ".chartRowArt, .discoveryDiscoverGrid, .discoveryFollowingList, .userPublicSongs"
+    + ".chartRowArt, .discoveryDiscoverGrid, .discoveryFollowingList, .userPublicSongs, "
+    + ".feedSourceRowArt, .feedSourceRowThumb"
   ));
 }
 
@@ -47368,8 +47532,10 @@ function shouldAutoWireCoverImage(img) {
   if (img.closest(
     ".libRowArt, .hubReelCover, .hubCover, .chartRowArt, .discoverySpotCardArt, "
     + ".discoverChallengeSpotArt, .profileFeaturedSongArt, .resultArtWrap, .playerArtWrap, "
-    + ".mashupSlotArt, .searchPosterArt, .hubSearchTemplateArt, .discoveryRowArt, .followActMedia"
+    + ".mashupSlotArt, .searchPosterArt, .hubSearchTemplateArt, .discoveryRowArt, .followActMedia, "
+    + ".feedSourceRowArt, .feedSourceRowThumb"
   )) return true;
+  if (img.matches(".feedSourceRowThumbImg")) return true;
   const src = String(img.getAttribute("src") || img.dataset.coverSrc || "").trim();
   if (!src || isBrokenCoverPlaceholder(src) || /nabadai-logo\.png|splash-mark\.png/i.test(src)) return false;
   return false;

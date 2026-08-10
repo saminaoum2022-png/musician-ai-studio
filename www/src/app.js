@@ -87,7 +87,7 @@ import { initCoverArtOverlay, syncCoverArtOverlay } from "./cover-art/overlay.js
 import { portrait916CropRect } from "./cover-art/portrait-normalize.js";
 import { feedActIconAnalytics, feedActIconComment, feedActIconGift, feedActIconLike, feedActIconPlays, feedActIconRepost, feedActIconShare } from "./feed-action-icons.js";
 import { initGifts, openGiftSheetForTarget, openGiftSheetFromButton } from "./gifts.js";
-import { configureProPlan, formatProPeriodLabel, onProPlanRouteActive, refreshProSubscriptionUi, setProReturnRoute } from "./pro-plan.js";
+import { configureProPlan, formatProPeriodLabel, onProPlanRouteActive, refreshProSubscriptionUi, setProReturnRoute, weeklyProDisplayStatus } from "./pro-plan.js";
 import { setRevenueCatApiKey, resetRevenueCatSession, reconcileProSubscription, isBillingConfigured } from "./billing/revenuecat.js";
 import { augmentCoachApiPayload } from "./coach-knowledge.js";
 import { showGiftReceivedReveal } from "./gift-sent-overlay.js";
@@ -5558,6 +5558,7 @@ try {
         planId: pro.planId,
         status: pro.status,
         periodEnd: pro.currentPeriodEnd,
+        periodType: pro.periodType || creditsState.proPeriodType,
       };
     },
   });
@@ -22926,16 +22927,29 @@ function weeklyTrialStartStorageKey(userId) {
 }
 
 function getHealedProState() {
-  return healProSubscriptionForUi(
-    {
-      active: creditsState.proActive,
-      planId: creditsState.proPlanId,
-      status: creditsState.proStatus,
-      currentPeriodEnd: creditsState.proPeriodEnd,
-      trialStartedAt: creditsState.proTrialStartedAt,
-    },
-    authSession?.user?.id,
-  );
+  const raw = {
+    active: creditsState.proActive,
+    planId: creditsState.proPlanId,
+    status: creditsState.proStatus,
+    currentPeriodEnd: creditsState.proPeriodEnd,
+    trialStartedAt: creditsState.proTrialStartedAt,
+    periodType: creditsState.proPeriodType,
+  };
+  const healed = healProSubscriptionForUi(raw, authSession?.user?.id);
+  const displayStatus = weeklyProDisplayStatus({
+    active: healed.active,
+    planId: healed.planId,
+    status: healed.status,
+    periodEnd: healed.currentPeriodEnd,
+    periodType: healed.periodType || creditsState.proPeriodType,
+  });
+  return {
+    active: healed.active,
+    planId: healed.planId,
+    status: displayStatus,
+    currentPeriodEnd: healed.currentPeriodEnd,
+    periodType: healed.periodType || creditsState.proPeriodType,
+  };
 }
 
 /** Weekly sandbox renewals mark users "active" — heal trial label + fixed 7-day end for UI. */
@@ -22944,43 +22958,30 @@ function healProSubscriptionForUi(row, userId) {
   const planId = row?.planId ? String(row.planId) : null;
   let status = row?.status ? String(row.status) : null;
   let currentPeriodEnd = row?.currentPeriodEnd ? String(row.currentPeriodEnd) : null;
+  const periodType = String(row?.periodType || "").toUpperCase();
   if (!active || planId !== "weekly") {
-    return { active, planId, status, currentPeriodEnd };
+    return { active, planId, status, currentPeriodEnd, periodType: periodType || null };
   }
 
-  const uid = String(userId || "").trim();
-  const apiStartRaw = row?.trialStartedAt || row?.trial_started_at || "";
-  let startMs = Date.parse(String(apiStartRaw || ""));
-
-  if (Number.isFinite(startMs) && uid) {
-    try {
-      localStorage.setItem(weeklyTrialStartStorageKey(uid), new Date(startMs).toISOString());
-    } catch {}
-  } else if (uid) {
-    try {
-      const stored = localStorage.getItem(weeklyTrialStartStorageKey(uid));
-      if (stored) startMs = Date.parse(stored);
-    } catch {}
+  if (periodType === "NORMAL") {
+    return { active, planId, status: status || "active", currentPeriodEnd, periodType };
   }
 
-  if (!Number.isFinite(startMs) && currentPeriodEnd) {
-    const guess = Date.parse(currentPeriodEnd) - WEEKLY_TRIAL_MS;
-    if (Number.isFinite(guess)) startMs = guess;
+  status = "trialing";
+  if (!currentPeriodEnd) {
+    const uid = String(userId || "").trim();
+    let startMs = Date.parse(String(row?.trialStartedAt || row?.trial_started_at || ""));
+    if (!Number.isFinite(startMs) && uid) {
+      try {
+        const stored = localStorage.getItem(weeklyTrialStartStorageKey(uid));
+        if (stored) startMs = Date.parse(stored);
+      } catch {}
+    }
+    if (Number.isFinite(startMs)) {
+      currentPeriodEnd = new Date(startMs + WEEKLY_TRIAL_MS).toISOString();
+    }
   }
-  if (!Number.isFinite(startMs)) return { active, planId, status, currentPeriodEnd };
-
-  if (uid && !apiStartRaw) {
-    try {
-      localStorage.setItem(weeklyTrialStartStorageKey(uid), new Date(startMs).toISOString());
-    } catch {}
-  }
-
-  const trialEndMs = startMs + WEEKLY_TRIAL_MS;
-  if (Date.now() < trialEndMs) {
-    status = "trialing";
-    currentPeriodEnd = new Date(trialEndMs).toISOString();
-  }
-  return { active, planId, status, currentPeriodEnd };
+  return { active, planId, status, currentPeriodEnd, periodType: periodType || "TRIAL" };
 }
 
 function applyProSubscriptionState(pro) {
@@ -22991,6 +22992,7 @@ function applyProSubscriptionState(pro) {
   creditsState.proPlanId = healed.planId ? String(healed.planId) : null;
   creditsState.proStatus = healed.status ? String(healed.status) : null;
   creditsState.proPeriodEnd = healed.currentPeriodEnd ? String(healed.currentPeriodEnd) : null;
+  creditsState.proPeriodType = healed.periodType || row.periodType || null;
   try { syncProSubscriptionUi(); } catch {}
 }
 
@@ -23008,6 +23010,7 @@ const creditsState = {
   proStatus: null,
   proPeriodEnd: null,
   proTrialStartedAt: null,
+  proPeriodType: null,
   loaded: false,
   inFlight: false,
   lastError: "",
@@ -23078,15 +23081,21 @@ function syncSettingsProRow() {
   const sub = document.getElementById("settingsProSub");
   const pro = getHealedProState();
   const active = Boolean(pro.active);
+  const displayStatus = weeklyProDisplayStatus({
+    active: pro.active,
+    planId: pro.planId,
+    status: pro.status,
+    periodType: pro.periodType || creditsState.proPeriodType,
+  });
   if (pill) {
     pill.hidden = !active;
-    const trialing = String(pro.status || "").toLowerCase() === "trialing";
+    const trialing = displayStatus === "trialing";
     pill.textContent = trialing ? "Trial" : "Active";
     pill.classList.toggle("settingsProPill--trial", trialing);
   }
   if (sub) {
     if (active) {
-      const renew = formatProPeriodLabel(pro.status, pro.currentPeriodEnd, { short: true });
+      const renew = formatProPeriodLabel(displayStatus, pro.currentPeriodEnd, { short: true });
       const bits = [proPlanLabelShort(pro.planId), renew].filter(Boolean);
       sub.textContent = bits.join(" · ") || "Your Pro benefits are unlocked";
     } else {

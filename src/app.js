@@ -87,7 +87,7 @@ import { initCoverArtOverlay, syncCoverArtOverlay } from "./cover-art/overlay.js
 import { portrait916CropRect } from "./cover-art/portrait-normalize.js";
 import { feedActIconAnalytics, feedActIconComment, feedActIconGift, feedActIconLike, feedActIconPlays, feedActIconRepost, feedActIconShare } from "./feed-action-icons.js";
 import { initGifts, openGiftSheetForTarget, openGiftSheetFromButton } from "./gifts.js";
-import { configureProPlan, formatProPeriodLabel, onProPlanRouteActive, refreshProSubscriptionUi, setProReturnRoute, weeklyProDisplayStatus } from "./pro-plan.js";
+import { configureProPlan, formatProPeriodLabel, onProPlanRouteActive, refreshProSubscriptionUi, setProReturnRoute, weeklyInTrialWindow, weeklyProDisplayStatus, weeklyTrialStartFromState } from "./pro-plan.js";
 import { setRevenueCatApiKey, resetRevenueCatSession, reconcileProSubscription, isBillingConfigured } from "./billing/revenuecat.js";
 import { augmentCoachApiPayload } from "./coach-knowledge.js";
 import { showGiftReceivedReveal } from "./gift-sent-overlay.js";
@@ -5559,6 +5559,7 @@ try {
         status: pro.status,
         periodEnd: pro.currentPeriodEnd,
         periodType: pro.periodType || creditsState.proPeriodType,
+        trialStartedAt: creditsState.proTrialStartedAt,
       };
     },
   });
@@ -22942,6 +22943,7 @@ function getHealedProState() {
     status: healed.status,
     periodEnd: healed.currentPeriodEnd,
     periodType: healed.periodType || creditsState.proPeriodType,
+    trialStartedAt: creditsState.proTrialStartedAt,
   });
   return {
     active: healed.active,
@@ -22963,36 +22965,47 @@ function healProSubscriptionForUi(row, userId) {
     return { active, planId, status, currentPeriodEnd, periodType: periodType || null };
   }
 
-  if (periodType === "NORMAL") {
-    return { active, planId, status: status || "active", currentPeriodEnd, periodType };
+  const trialState = {
+    planId,
+    active,
+    status,
+    periodEnd: currentPeriodEnd,
+    periodType,
+    trialStartedAt: row?.trialStartedAt || row?.trial_started_at,
+  };
+  if (weeklyInTrialWindow(trialState) || periodType !== "NORMAL") {
+    status = "trialing";
+    if (!currentPeriodEnd) {
+      const startMs = weeklyTrialStartFromState(trialState);
+      if (Number.isFinite(startMs)) {
+        currentPeriodEnd = new Date(startMs + WEEKLY_TRIAL_MS).toISOString();
+      }
+    }
+    return { active, planId, status, currentPeriodEnd, periodType: periodType || "TRIAL" };
   }
 
-  status = "trialing";
-  if (!currentPeriodEnd) {
-    const uid = String(userId || "").trim();
-    let startMs = Date.parse(String(row?.trialStartedAt || row?.trial_started_at || ""));
-    if (!Number.isFinite(startMs) && uid) {
-      try {
-        const stored = localStorage.getItem(weeklyTrialStartStorageKey(uid));
-        if (stored) startMs = Date.parse(stored);
-      } catch {}
-    }
-    if (Number.isFinite(startMs)) {
-      currentPeriodEnd = new Date(startMs + WEEKLY_TRIAL_MS).toISOString();
-    }
-  }
-  return { active, planId, status, currentPeriodEnd, periodType: periodType || "TRIAL" };
+  return { active, planId, status: status || "active", currentPeriodEnd, periodType };
 }
 
 function applyProSubscriptionState(pro) {
   const row = pro && typeof pro === "object" ? pro : {};
-  creditsState.proTrialStartedAt = row.trialStartedAt || row.trial_started_at || null;
+  creditsState.proTrialStartedAt =
+    row.trialStartedAt || row.trial_started_at || creditsState.proTrialStartedAt || null;
   const healed = healProSubscriptionForUi(row, authSession?.user?.id);
+  const displayStatus = weeklyProDisplayStatus({
+    active: healed.active,
+    planId: healed.planId,
+    status: healed.status,
+    periodEnd: healed.currentPeriodEnd,
+    periodType: healed.periodType || row.periodType,
+    trialStartedAt: creditsState.proTrialStartedAt,
+  });
   creditsState.proActive = Boolean(healed.active);
   creditsState.proPlanId = healed.planId ? String(healed.planId) : null;
-  creditsState.proStatus = healed.status ? String(healed.status) : null;
+  creditsState.proStatus = displayStatus ? String(displayStatus) : null;
   creditsState.proPeriodEnd = healed.currentPeriodEnd ? String(healed.currentPeriodEnd) : null;
-  creditsState.proPeriodType = healed.periodType || row.periodType || null;
+  creditsState.proPeriodType =
+    displayStatus === "trialing" ? "TRIAL" : (healed.periodType || row.periodType || null);
   try { syncProSubscriptionUi(); } catch {}
 }
 
@@ -23085,7 +23098,9 @@ function syncSettingsProRow() {
     active: pro.active,
     planId: pro.planId,
     status: pro.status,
+    periodEnd: pro.currentPeriodEnd,
     periodType: pro.periodType || creditsState.proPeriodType,
+    trialStartedAt: creditsState.proTrialStartedAt,
   });
   if (pill) {
     pill.hidden = !active;

@@ -160,15 +160,37 @@ export function formatProPeriodLabel(status, iso, opts = {}) {
   }
 }
 
+const WEEKLY_TRIAL_MS =
+  (Number(PRO_PLANS.find((p) => p.id === "weekly")?.trialDays) || 7) * 24 * 60 * 60 * 1000;
+
+export function weeklyTrialStartFromState(state) {
+  let startMs = Date.parse(String(state?.trialStartedAt || ""));
+  if (!Number.isFinite(startMs)) {
+    const endMs = Date.parse(String(state?.periodEnd || state?.currentPeriodEnd || ""));
+    if (Number.isFinite(endMs)) startMs = endMs - WEEKLY_TRIAL_MS;
+  }
+  return startMs;
+}
+
+export function weeklyInTrialWindow(state) {
+  const startMs = weeklyTrialStartFromState(state);
+  return Number.isFinite(startMs) && Date.now() < startMs + WEEKLY_TRIAL_MS;
+}
+
+/** UI status for weekly — RC sandbox often sends periodType NORMAL during trial renewals. */
 export function weeklyProDisplayStatus(state) {
   const planId = String(state?.planId || "").trim();
   const active = Boolean(state?.active);
   const status = String(state?.status || "").toLowerCase();
   if (!active || planId !== "weekly") return status || null;
   if (status === "trialing") return "trialing";
+
   const pt = String(state?.periodType || "").toUpperCase();
-  if (pt === "NORMAL") return "active";
-  return "trialing";
+  if (pt === "TRIAL") return "trialing";
+  if (weeklyInTrialWindow(state)) return "trialing";
+  if (pt !== "NORMAL") return "trialing";
+
+  return "active";
 }
 
 function formatProRenewLabel(iso) {

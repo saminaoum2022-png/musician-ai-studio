@@ -160,9 +160,21 @@ export function formatProPeriodLabel(status, iso, opts = {}) {
   }
 }
 
+export function weeklyProDisplayStatus(state) {
+  const planId = String(state?.planId || "").trim();
+  const active = Boolean(state?.active);
+  const status = String(state?.status || "").toLowerCase();
+  if (!active || planId !== "weekly") return status || null;
+  if (status === "trialing") return "trialing";
+  const pt = String(state?.periodType || "").toUpperCase();
+  if (pt === "NORMAL") return "active";
+  return "trialing";
+}
+
 function formatProRenewLabel(iso) {
   const state = readProState();
-  return formatProPeriodLabel(state.status, iso);
+  const displayStatus = weeklyProDisplayStatus(state);
+  return formatProPeriodLabel(displayStatus, iso || state.periodEnd);
 }
 
 function proStatusHeadline(status) {
@@ -206,8 +218,9 @@ function paintSubscribedState() {
   if (active) {
     const planId = String(state.planId || "").trim();
     const planName = proPlanDisplayName(planId);
-    const renew = formatProRenewLabel(state.periodEnd);
-    const headline = proStatusHeadline(state.status);
+    const displayStatus = weeklyProDisplayStatus(state);
+    const renew = formatProPeriodLabel(displayStatus, state.periodEnd);
+    const headline = proStatusHeadline(displayStatus);
     if (statusEl) {
       statusEl.hidden = false;
       statusEl.innerHTML = `

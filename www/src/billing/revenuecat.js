@@ -105,6 +105,7 @@ export function parseProStateFromCustomerInfo(customerInfo, userId = "") {
     planId,
     status,
     currentPeriodEnd,
+    periodType,
   };
 }
 
@@ -126,6 +127,9 @@ function mergeProSubscriptionState(serverPro, localPro, userId = "") {
   const planId = local.planId || server.planId || null;
   let status = local.status || server.status || null;
   let currentPeriodEnd = local.currentPeriodEnd || server.currentPeriodEnd || null;
+  const periodType = String(
+    local.periodType || local.period_type || server.periodType || server.period_type || "",
+  ).toUpperCase();
 
   if (local.status === "trialing") {
     status = "trialing";
@@ -141,7 +145,7 @@ function mergeProSubscriptionState(serverPro, localPro, userId = "") {
     clearClientTrialEnd(userId);
   }
 
-  return { active: true, planId, status, currentPeriodEnd };
+  return { active: true, planId, status, currentPeriodEnd, periodType: periodType || null };
 }
 
 function normalizeProRow(row, userId) {

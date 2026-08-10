@@ -79,19 +79,30 @@ export function parseProStateFromCustomerInfo(customerInfo, userId = "") {
 
   let status = "active";
   let currentPeriodEnd = rcExpiration ? new Date(rcExpiration).toISOString() : null;
+  let resolvedPeriodType = periodType;
 
-  if (periodType === "TRIAL") {
+  const originalMs = originalPurchase ? Date.parse(String(originalPurchase)) : NaN;
+  const trialEndMs = Number.isFinite(originalMs) ? originalMs + weeklyTrialDays() * MS_DAY : NaN;
+  const inTrialByPurchase = Number.isFinite(trialEndMs) && Date.now() < trialEndMs;
+  const expMs = currentPeriodEnd ? Date.parse(currentPeriodEnd) : NaN;
+  const inTrialByExpiration =
+    planId === "weekly" &&
+    Number.isFinite(expMs) &&
+    Date.now() < expMs &&
+    Date.now() >= expMs - weeklyTrialDays() * MS_DAY;
+
+  if (periodType === "TRIAL" || inTrialByPurchase || inTrialByExpiration) {
     status = "trialing";
-  } else if (planId === "weekly" && originalPurchase) {
-    const startMs = Date.parse(String(originalPurchase));
-    const trialDays = weeklyTrialDays();
-    const trialEndMs = startMs + trialDays * MS_DAY;
-    if (Number.isFinite(startMs) && Date.now() < trialEndMs && periodType !== "NORMAL") {
-      status = "trialing";
+    resolvedPeriodType = "TRIAL";
+    if (Number.isFinite(trialEndMs) && inTrialByPurchase) {
       currentPeriodEnd = new Date(trialEndMs).toISOString();
     }
   } else if (planId === "weekly" && periodType !== "NORMAL") {
     status = "trialing";
+    resolvedPeriodType = periodType || "TRIAL";
+  } else if (planId === "weekly" && periodType === "NORMAL" && inTrialByExpiration) {
+    status = "trialing";
+    resolvedPeriodType = "TRIAL";
   }
 
   if (status === "trialing") {
@@ -105,7 +116,8 @@ export function parseProStateFromCustomerInfo(customerInfo, userId = "") {
     planId,
     status,
     currentPeriodEnd,
-    periodType,
+    periodType: resolvedPeriodType,
+    trialStartedAt: originalPurchase ? new Date(originalMs).toISOString() : null,
   };
 }
 
@@ -127,25 +139,31 @@ function mergeProSubscriptionState(serverPro, localPro, userId = "") {
   const planId = local.planId || server.planId || null;
   let status = local.status || server.status || null;
   let currentPeriodEnd = local.currentPeriodEnd || server.currentPeriodEnd || null;
-  const periodType = String(
+  let periodType = String(
     local.periodType || local.period_type || server.periodType || server.period_type || "",
   ).toUpperCase();
 
   if (local.status === "trialing") {
     status = "trialing";
     currentPeriodEnd = local.currentPeriodEnd || currentPeriodEnd;
+    if (local.periodType === "TRIAL") periodType = "TRIAL";
   } else if (local.status && local.planId) {
     status = local.status;
     currentPeriodEnd = local.currentPeriodEnd || currentPeriodEnd;
   }
 
-  if (String(status || "").toLowerCase() === "trialing") {
-    currentPeriodEnd = pinClientTrialEnd(userId, currentPeriodEnd, status);
-  } else {
-    clearClientTrialEnd(userId);
+  if (planId === "weekly" && periodType === "NORMAL" && status === "trialing") {
+    periodType = "TRIAL";
   }
 
-  return { active: true, planId, status, currentPeriodEnd, periodType: periodType || null };
+  return {
+    active: true,
+    planId,
+    status,
+    currentPeriodEnd,
+    periodType: periodType || null,
+    trialStartedAt: local.trialStartedAt || server.trialStartedAt || null,
+  };
 }
 
 function normalizeProRow(row, userId) {

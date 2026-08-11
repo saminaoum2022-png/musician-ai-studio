@@ -201,7 +201,7 @@ import { MUSIC_VIDEO_FEATURE_ENABLED } from "./feature-flags.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260812-005055";
+const APP_BUILD = "20260812-005653";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -14583,10 +14583,12 @@ function followActActionsRowHtml({ kind, targetId, targetUserId, plays, playsPen
       : `<span class="followActAct followActAct--stat" aria-hidden="true"></span>`;
   const myId = String(authSession?.user?.id || "").trim();
   const isOwner = !!myId && String(targetUserId || "") === myId;
+  const analyticsLocked = kind === "music" && isOwner && webProFeatureLocked();
   const analyticsBlock =
-    kind === "music" && isOwner && webProFeatureAllowed()
-      ? `<button type="button" class="followActAct followActAct--analytics" data-friends-act="analytics" aria-label="Song analytics">
+    kind === "music" && isOwner
+      ? `<button type="button" class="followActAct followActAct--analytics${analyticsLocked ? " isProLocked" : ""}" data-friends-act="analytics" aria-label="Song analytics">
         ${feedActIconAnalytics()}
+        ${analyticsLocked ? '<span class="webProFeaturePill webProFeaturePill--act" aria-hidden="true">Pro</span>' : ""}
       </button>`
       : "";
   // Repost is only meaningful on someone else's song — never your own.
@@ -23623,59 +23625,105 @@ function promptWebProUpgrade(featureLabel = "This feature") {
   }
 }
 
+function webProFeatureLocked() {
+  return isWebOrDesktopShell() && !Boolean(creditsState.proActive);
+}
+
+/** Inject or remove the small purple Pro pill on a web/desktop feature surface. */
+function setWebProFeaturePill(el, locked, variant = "card") {
+  if (!el) return;
+  el.classList.toggle("isProLocked", Boolean(locked));
+  let pill = el.querySelector(":scope > .webProFeaturePill");
+  if (locked) {
+    if (!pill) {
+      pill = document.createElement("span");
+      pill.className = `webProFeaturePill webProFeaturePill--${variant}`;
+      pill.textContent = "Pro";
+      pill.setAttribute("aria-hidden", "true");
+      el.appendChild(pill);
+    } else {
+      pill.className = `webProFeaturePill webProFeaturePill--${variant}`;
+      pill.hidden = false;
+    }
+  } else if (pill) {
+    pill.hidden = true;
+  }
+}
+
 function syncProGatedWebUi() {
   const gate = isWebOrDesktopShell();
-  const allowed = !gate || Boolean(creditsState.proActive);
-  document.documentElement.classList.toggle("web-pro-gated", gate && !allowed);
-  document.documentElement.classList.toggle("web-pro-unlocked", gate && allowed);
+  const locked = gate && !Boolean(creditsState.proActive);
+  document.documentElement.classList.toggle("web-pro-gated", locked);
+  document.documentElement.classList.toggle("web-pro-unlocked", gate && !locked);
 
-  const hideProOnly = gate && !allowed;
-  const hideSel = (sel) => {
-    document.querySelectorAll(sel).forEach((el) => {
-      el.hidden = hideProOnly;
-      el.setAttribute("aria-hidden", hideProOnly ? "true" : "false");
-    });
-  };
+  document.querySelectorAll('[data-home-card="persona"], [data-home-card="studio"]').forEach((el) => {
+    el.hidden = false;
+    el.setAttribute("aria-hidden", "false");
+    setWebProFeaturePill(el, locked, "card");
+  });
 
-  hideSel('[data-home-card="persona"]');
-  hideSel('[data-home-card="studio"]');
-  hideSel("#singerPersonaPill");
-  hideSel("#personaActiveBanner");
-  hideSel("#btnResultPersona");
-  hideSel("#btnResultPersona2");
-  hideSel('[data-profile-edit-field="persona"]');
-  hideSel(".followActAct--analytics");
-
-  const personaRow = document.getElementById("singerPersonaRow");
-  if (personaRow && hideProOnly) {
-    _singerPersonaDrawerOpen = false;
-    personaRow.hidden = true;
-    personaRow.innerHTML = "";
+  const singerPill = document.getElementById("singerPersonaPill");
+  if (singerPill) {
+    singerPill.hidden = false;
+    singerPill.setAttribute("aria-hidden", "false");
+    setWebProFeaturePill(singerPill, locked, "pill");
   }
 
+  ["#btnResultPersona", "#btnResultPersona2"].forEach((sel) => {
+    const el = document.querySelector(sel);
+    if (!el) return;
+    el.hidden = false;
+    el.setAttribute("aria-hidden", "false");
+    setWebProFeaturePill(el, locked, "inline");
+  });
+
+  document.querySelectorAll('[data-profile-edit-field="persona"]').forEach((el) => {
+    el.hidden = false;
+    el.setAttribute("aria-hidden", "false");
+    setWebProFeaturePill(el, locked, "inline");
+  });
+
+  document.querySelectorAll(".followActAct--analytics").forEach((el) => {
+    el.hidden = false;
+    el.setAttribute("aria-hidden", "false");
+    setWebProFeaturePill(el, locked, "act");
+  });
+
   if (els.profilePersonaRow) {
-    els.profilePersonaRow.hidden = hideProOnly;
-    els.profilePersonaRow.setAttribute("aria-hidden", hideProOnly ? "true" : "false");
+    els.profilePersonaRow.hidden = false;
+    els.profilePersonaRow.setAttribute("aria-hidden", "false");
+    const title = document.getElementById("profilePersonaSignatureTitle");
+    setWebProFeaturePill(title || els.profilePersonaRow, locked, "inline");
   }
 
   const settingsVoicesSection = document.querySelector('[aria-labelledby="settingsVoicesManagerTitle"]');
   if (settingsVoicesSection) {
-    settingsVoicesSection.hidden = hideProOnly;
-    settingsVoicesSection.setAttribute("aria-hidden", hideProOnly ? "true" : "false");
+    settingsVoicesSection.hidden = false;
+    settingsVoicesSection.setAttribute("aria-hidden", "false");
+    const title = document.getElementById("settingsVoicesManagerTitle");
+    setWebProFeaturePill(title, locked, "inline");
   }
 
-  if (hideProOnly && creditsState.loaded) {
+  if (locked && creditsState.loaded) {
     try { clearActiveVoicePersona({ silent: true }); } catch {}
     const route = document.body.getAttribute("data-route") || "";
     if (route === "studio") {
       try { leaveStudioRoot(); } catch {}
       try { location.hash = "#/discover"; } catch {}
     }
+    _singerPersonaDrawerOpen = false;
+    const personaRow = document.getElementById("singerPersonaRow");
+    if (personaRow) {
+      personaRow.hidden = true;
+      personaRow.innerHTML = "";
+    }
   }
 
-  if (!hideProOnly) {
-    try { renderSingerPersonaPill(); } catch {}
-    try { renderSingerPersonaRow(); } catch {}
+  try { renderSingerPersonaPill(); } catch {}
+  try { renderSingerPersonaRow(); } catch {}
+  if (locked) {
+    const pill = document.getElementById("singerPersonaPill");
+    if (pill) setWebProFeaturePill(pill, true, "pill");
   }
 }
 

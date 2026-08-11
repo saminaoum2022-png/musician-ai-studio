@@ -52331,16 +52331,71 @@ html[data-theme="dark"] :is(#friendsPage .followActStack, #profileActivitiesList
   box-shadow: none;
 }
 
-/* Web/desktop: Pro-only features hidden until subscription is active */
-html.web-pro-gated [data-home-card="persona"],
-html.web-pro-gated [data-home-card="studio"],
-html.web-pro-gated #singerPersonaPill,
-html.web-pro-gated #personaActiveBanner,
-html.web-pro-gated #btnResultPersona,
-html.web-pro-gated #btnResultPersona2,
-html.web-pro-gated [data-profile-edit-field="persona"],
-html.web-pro-gated .followActAct--analytics,
-html.web-pro-gated #profilePersonaRow,
-html.web-pro-gated [aria-labelledby="settingsVoicesManagerTitle"] {
-  display: none !important;
+/* Web/desktop: Pro pill on locked Persona, Studio, and analytics surfaces */
+.webProFeaturePill{
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #fff;
+  padding: 3px 7px;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #9b7bff, #7c5cff 55%, #5b3fd4);
+  box-shadow: 0 2px 8px rgba(124, 92, 255, 0.4);
+  pointer-events: none;
+  line-height: 1;
+  flex-shrink: 0;
+}
+.webProFeaturePill[hidden]{ display: none !important; }
+.webProFeaturePill--card{
+  position: absolute;
+  top: 12px;
+  left: 14px;
+  z-index: 3;
+}
+.homeDeskStudioPromo--featured .webProFeaturePill--card{
+  top: 38px;
+  left: auto;
+  right: 14px;
+}
+.homeDeskPromoCard,
+.homeDeskPersonaPromo,
+.homeDeskStudioPromo--featured{
+  position: relative;
+}
+.webProFeaturePill--pill{
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  z-index: 2;
+  font-size: 7px;
+  padding: 2px 5px;
+  letter-spacing: 0.06em;
+}
+.singerPersonaPill{ position: relative; }
+.webProFeaturePill--act{
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  z-index: 2;
+  font-size: 6px;
+  padding: 2px 4px;
+  letter-spacing: 0.05em;
+}
+.followActAct.followActAct--analytics{ position: relative; }
+.webProFeaturePill--inline{
+  margin-left: 8px;
+  vertical-align: middle;
+  font-size: 8px;
+  padding: 2px 6px;
+}
+html.web-pro-gated .isProLocked.homeDeskPromoCard{
+  cursor: pointer;
+}
+html[data-theme="light"] .webProFeaturePill{
+  border: 1px solid rgba(255,255,255,0.85);
+  box-shadow: 0 2px 8px rgba(124, 92, 255, 0.32);
 }

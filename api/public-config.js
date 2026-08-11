@@ -34,6 +34,12 @@ module.exports = async function handler(req, res) {
           String(process.env.STRIPE_PRICE_WEEKLY || "").trim() &&
           String(process.env.STRIPE_PRICE_MONTHLY || "").trim(),
       ),
+      stripeEnvReady: {
+        secret: Boolean(String(process.env.STRIPE_SECRET_KEY || "").trim()),
+        weekly: Boolean(String(process.env.STRIPE_PRICE_WEEKLY || "").trim()),
+        monthly: Boolean(String(process.env.STRIPE_PRICE_MONTHLY || "").trim()),
+      },
+      stripeEnvKeys: Object.keys(process.env).filter((k) => k.startsWith("STRIPE")).sort(),
       billingEnabled: Boolean(
         String(process.env.REVENUECAT_IOS_API_KEY || "").trim() &&
           String(process.env.REVENUECAT_SECRET_API_KEY || "").trim(),

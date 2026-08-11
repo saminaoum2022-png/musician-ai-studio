@@ -201,7 +201,7 @@ import { MUSIC_VIDEO_FEATURE_ENABLED } from "./feature-flags.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260811-231856";
+const APP_BUILD = "20260811-234219";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -55281,6 +55281,11 @@ const STYLE_GENRE_PRESETS = Object.freeze({
       "Levantine dabke, mijwiz, davul and tabla, ktakufti 6/8 dabkeh rhythm, festive line-dance energy, NOT Egyptian shaabi",
     suggestedTempo: "120 BPM",
   }),
+  "Levantine Pop": Object.freeze({
+    prompt:
+      "Levantine Arabic pop, Al Shami shami singer style, emotional pop vocal, Syrian Lebanese melody, 4/4 modern pop production, oud and synth accents, NOT dabke, NOT Egyptian shaabi, NOT classic tarab",
+    suggestedTempo: "Mid Tempo",
+  }),
   Tarab: Object.freeze({
     prompt:
       "Classic Arabic tarab, oud and strings, ornamented vocals, emotional mawwal phrasing, Levantine tarab, NOT dance pop",
@@ -55302,6 +55307,7 @@ const STYLE_LIBRARY = [
     hint: "Pick up to 2 for fusion",
     tags: [
       "Levantine Dabke",
+      "Levantine Pop",
       "Tarab",
       "Arabic Pop",
       "R&B",
@@ -55387,6 +55393,7 @@ function suggestedTempoForActiveGenrePresets() {
   const tags = styleTagsListFromInput();
   if (tags.some((t) => t.toLowerCase() === "levantine dabke")) return "120 BPM";
   if (tags.some((t) => t.toLowerCase() === "tarab")) return "Slow";
+  if (tags.some((t) => t.toLowerCase() === "levantine pop")) return "Mid Tempo";
   return "";
 }
 function applyAutoTempoForGenrePresets({ force = false } = {}) {
@@ -55519,19 +55526,18 @@ function autoSuggestStyles() {
   writeStyleTagsToInput([]);
   _styleAutoTempoTag = "";
   const tags = [];
-  if (hasArabic) tags.push("Arabic Pop");
-  else tags.push("Pop");
   if (/(sad|cry|tears|alone|lonely|miss|broke|hurt|\u062d\u0632\u064a\u0646|\u062f\u0645\u0639\u0629|\u0648\u062d\u064a\u062f|\u0627\u0634\u062a\u0642\u062a|\u0641\u0631\u0627\u0642|\u0628\u0643\u0627\u0621)/.test(text)) {
-    tags.push("Emotional", "Piano", "Slow");
+    tags.push(hasArabic ? "Levantine Pop" : "Pop", "Emotional", "Piano");
   } else if (/(love|heart|habibi|kiss|romance|\u062d\u0628|\u062d\u0628\u064a\u0628\u064a|\u0642\u0644\u0628|\u063a\u0631\u0627\u0645|\u0639\u0634\u0642)/.test(text)) {
-    tags.push("Romantic", "Strings");
+    tags.push(hasArabic ? "Levantine Pop" : "Pop", "Romantic", "Strings");
   } else if (/(party|dance|club|night|celebrate|\u0631\u0642\u0635|\u0633\u0647\u0631\u0629|\u062d\u0641\u0644\u0629|\u0639\u0631\u0633|\u062f\u0628\u0643\u0629)/.test(text)) {
     tags.push("Energetic", "Levantine Dabke");
   } else if (/(tarab|mawwal|\u0637\u0631\u0628|\u0645\u0648\u0627\u0644)/.test(text)) {
-    tags.push("Tarab", "Oud", "Slow");
+    tags.push("Tarab", "Oud");
+  } else if (hasArabic) {
+    tags.push("Levantine Pop", "Emotional", "Piano");
   } else {
-    tags.push("Emotional", "Piano");
-    tags.push(hasArabic ? "Mid Tempo" : "4/4");
+    tags.push("Pop", "Emotional", "Piano", "4/4");
   }
   for (const tag of tags) {
     const cat = styleTagCategory(tag);

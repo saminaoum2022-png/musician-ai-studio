@@ -4570,7 +4570,8 @@ input.userTextBidi--rtl{
 .profileSongsBlock{
   min-width: 0;
   max-width: 100%;
-  overflow: hidden;
+  overflow-x: visible;
+  overflow-y: visible;
 }
 .libraryLead{
   margin: 0;
@@ -13962,10 +13963,9 @@ button:disabled{ opacity:0.5; cursor:not-allowed; }
      `animation: sectionFadeIn` (translateY 8px→0) re-fires when the
      routeEnter class is removed, making the whole panel nudge 8px and
      snap back — the "misplace then settle" glitch. */
-  /* Contain children — keeps the cover shelf, heartbeat, and any long
-     song titles from forcing horizontal scroll on the whole page. */
   max-width: 100%;
-  overflow-x: hidden;
+  overflow-x: visible;
+  overflow-y: visible;
 }
 
 /* =================================================================
@@ -14000,6 +14000,7 @@ button:disabled{ opacity:0.5; cursor:not-allowed; }
   padding: calc(env(safe-area-inset-top, 0px) + var(--profile-header-pad-top)) var(--profile-aura-pad-x, 8px) 4px;
   margin-bottom: 0;
   max-width: 100%;
+  overflow-x: hidden;
 }
 
 /* Top chrome row — fixed to the viewport. Markup lives in
@@ -15780,7 +15781,14 @@ button.profileMusicStylesLine:hover .profileMusicStylePill{
 .profileSongsBlock{
   display: flex;
   flex-direction: column;
-  padding: 0 6px;
+  padding: 0;
+}
+body[data-route="profile"] .profileSongsBlock:has(#profileActivitiesList:not([hidden])),
+body[data-route="profile"] .profileSongsBlock:has(#profileRepostsList:not([hidden])),
+body[data-route="user"] .userPublicSongsBlock.profileSongsBlock:has(#userPublicSongs:not([hidden])),
+body[data-route="user"] .userPublicSongsBlock.profileSongsBlock:has(#userPublicRepostsList:not([hidden])){
+  padding-left: 0;
+  padding-right: 0;
 }
 .profileSongsHeader .libraryCount{
   margin-top: 8px;
@@ -26921,8 +26929,10 @@ body[data-profile-songs-seg="all"] #profileActivitiesLoadMoreWrap{
   flex-direction: column;
   gap: 0;
   min-width: 0;
+  overflow-x: visible;
+  overflow-y: visible;
 }
-.profileActivitiesList.followActStack .followAct{
+.profileActivitiesList.followActStack .followAct:not(.followAct--xstyle){
   padding: 12px 14px 12px 6px;
   border-bottom: 0;
 }
@@ -36852,6 +36862,7 @@ section.mentorPage{
   --feed-post-gap-before-header: 24px;
   --feed-post-gap-after-actions: 20px;
   --feed-post-pad-x: 14px;
+  --feed-cover-radius: 0;
   padding: 0 var(--feed-post-pad-x) var(--feed-post-gap-after-actions, 20px);
   padding-left: var(--feed-post-pad-x);
   padding-right: var(--feed-post-pad-x);
@@ -37911,6 +37922,17 @@ button.feedSourceRowMashupTitle:active{
   margin-left: 0;
   margin-top: 0;
 }
+:is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followActRemixFlow .followActMediaWrap--remixResult,
+:is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followActMashup .followActMediaWrap--mashupResult,
+:is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followActMediaWrap--feedResult{
+  position: relative;
+  left: 50%;
+  right: 50%;
+  width: 100vw;
+  max-width: 100vw;
+  margin-left: -50vw;
+  margin-right: -50vw;
+}
 .followActMediaWrap--feedResult .followActMedia,
 .followActRemixFlow .followActMediaWrap--remixResult .followActMedia,
 .followActMashup .followActMediaWrap--mashupResult .followActMedia{
@@ -37921,6 +37943,11 @@ button.feedSourceRowMashupTitle:active{
   border: 0;
   border-radius: var(--feed-cover-radius, 19px);
   overflow: hidden;
+}
+:is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followActRemixFlow .followActMediaWrap--remixResult .followActMedia,
+:is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followActMashup .followActMediaWrap--mashupResult .followActMedia,
+:is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followActMediaWrap--feedResult .followActMedia{
+  border-radius: 0;
 }
 .followActMediaWrap--feedResult .followActMediaImg,
 .followActRemixFlow .followActMediaWrap--remixResult .followActMediaImg,
@@ -44955,6 +44982,7 @@ body[data-route="friends"] .friendsPage{
   --feed-post-gap-after-actions: 20px;
   --feed-post-pad-x: 14px;
   --feed-cover-extra-bleed: 6px;
+  --feed-cover-radius: 0;
   margin: 0;
   padding: 0 var(--feed-post-pad-x) var(--feed-post-gap-after-actions, 20px);
   border: 0;
@@ -44962,6 +44990,27 @@ body[data-route="friends"] .friendsPage{
   border-radius: 0;
   background: transparent;
   box-shadow: none;
+}
+:is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle .followActMediaWrap .followActMedia,
+:is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle .followActRemixFlow .followActMediaWrap--remixResult .followActMedia,
+:is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle .followActMashup .followActMediaWrap--mashupResult .followActMedia,
+:is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle.followAct--skel .followActSkelHero{
+  border-radius: 0;
+}
+/* Full-bleed feed covers: break out of post padding to the screen edges. */
+:is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle > .followActMediaWrap,
+:is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle .followActRemixFlow .followActMediaWrap--friendsDock,
+:is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle .followActMashup .followActMediaWrap--friendsDock,
+:is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle .followActRemixFlow .followActMediaWrap--remixResult,
+:is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle .followActMashup .followActMediaWrap--mashupResult,
+:is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle .followActMediaWrap--feedResult{
+  position: relative;
+  left: 50%;
+  right: 50%;
+  width: 100vw;
+  max-width: 100vw;
+  margin-left: -50vw;
+  margin-right: -50vw;
 }
 :is(#friendsPage .followActStack, #profileActivitiesList.followActStack, #profileRepostsList.followActStack, #userPublicSongs.followActStack, #userPublicRepostsList.followActStack, .profileActivitiesList.followActStack) > .followAct.followAct--xstyle + .followAct.followAct--xstyle{
   padding-top: var(--feed-post-gap-before-header, 24px);
@@ -45053,9 +45102,6 @@ body[data-route="friends"] .followAct--xstyle > .followActQuoteRow:has(.feedHero
 }
 :is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle > .followActMediaWrap:not(.followActMediaWrap--friendsDock){
   margin-top: var(--feed-art-gap, 10px);
-  width: 100%;
-  margin-left: 0;
-  margin-right: 0;
   padding: 0;
   background: transparent;
   border: 0;
@@ -45063,12 +45109,9 @@ body[data-route="friends"] .followAct--xstyle > .followActQuoteRow:has(.feedHero
 }
 :is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle > .followActRemixFlow{
   margin-top: var(--feed-art-gap, 10px);
-  width: 100%;
-  margin-left: 0;
-  margin-right: 0;
 }
 :is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle .followActRemixFlow .followActMediaWrap--remixResult .followActMedia{
-  border-radius: var(--feed-cover-radius, 19px);
+  border-radius: 0;
   background: rgba(10,14,22,.46);
   box-shadow: none;
 }
@@ -45081,7 +45124,7 @@ body[data-route="friends"] .followAct--xstyle > .followActQuoteRow:has(.feedHero
   aspect-ratio: 1 / 1;
   max-height: none;
   border: 0;
-  border-radius: var(--feed-cover-radius, 19px);
+  border-radius: 0;
   background: rgba(10,14,22,.46);
   box-shadow: none;
   overflow: hidden;
@@ -45099,11 +45142,17 @@ body[data-route="friends"] .followAct--xstyle > .followActQuoteRow:has(.feedHero
    the shimmer baked in. .followActSkelHero has no competing rules anywhere. */
 .followAct--xstyle.followAct--skel .followActSkelHero{
   display: block;
-  width: 100%;
-  margin: 14px 0 0;
   aspect-ratio: 1 / 1;
-  border-radius: var(--feed-cover-radius, 19px);
+  border-radius: 0;
   pointer-events: none;
+}
+:is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle.followAct--skel .followActSkelHero{
+  position: relative;
+  left: 50%;
+  right: 50%;
+  width: 100vw;
+  max-width: 100vw;
+  margin: 14px -50vw 0;
 }
 :is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle .followActMedia .discoverCoverPlay,
 :is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle .followActMediaPlay,
@@ -45354,10 +45403,6 @@ body[data-route="friends"] .followAct--xstyle > .followActQuoteRow:has(.feedHero
 :is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct.followAct--friendsFeed > .followActRemixFlow .followActMediaWrap--friendsDock,
 :is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct.followAct--friendsFeed > .followActMashup .followActMediaWrap--friendsDock{
   margin-top: var(--feed-art-gap, 8px);
-  width: calc(100% + ((var(--feed-post-pad-x, 14px) + var(--feed-cover-extra-bleed, 6px)) * 2));
-  max-width: none;
-  margin-left: calc(-1 * (var(--feed-post-pad-x, 14px) + var(--feed-cover-extra-bleed, 6px)));
-  margin-right: calc(-1 * (var(--feed-post-pad-x, 14px) + var(--feed-cover-extra-bleed, 6px)));
 }
 .followActMediaWrap--friendsDock{
   position: relative;
@@ -45369,7 +45414,7 @@ body[data-route="friends"] .followAct--xstyle > .followActQuoteRow:has(.feedHero
   padding: 0;
   border: 0;
   aspect-ratio: 1 / 1;
-  border-radius: var(--feed-cover-radius, 19px);
+  border-radius: 0;
   overflow: hidden;
   background: rgba(10,14,22,.46);
   box-shadow: none;
@@ -45694,6 +45739,47 @@ html[data-theme="light"] body[data-route="friends"] .followAct--xstyle .followAc
 html[data-theme="light"] body[data-route="friends"] .followAct--xstyle .followActActions .followActAct[data-friends-act="gift"].isGifted{
   color: #1FA892;
   text-shadow: none;
+}
+
+/* Feed covers: full viewport width (wins over generic xstyle width:100% reset). */
+:is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle > .followActMediaWrap,
+:is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle .followActRemixFlow .followActMediaWrap--friendsDock,
+:is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle .followActMashup .followActMediaWrap--friendsDock,
+:is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle .followActRemixFlow .followActMediaWrap--remixResult,
+:is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle .followActMashup .followActMediaWrap--mashupResult,
+:is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle .followActMediaWrap--feedResult{
+  position: relative;
+  left: 50%;
+  right: 50%;
+  width: 100vw;
+  max-width: 100vw;
+  margin-left: -50vw;
+  margin-right: -50vw;
+}
+:is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followActMediaWrap--friendsDock .followActMedia,
+:is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle .followActMediaWrap .followActMedia,
+:is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle .followActRemixFlow .followActMediaWrap--remixResult .followActMedia,
+:is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle .followActMashup .followActMediaWrap--mashupResult .followActMedia,
+:is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle .followActMediaWrap--feedResult .followActMedia{
+  border-radius: 0;
+}
+
+body[data-route="profile"] .profileSongsBlock,
+body[data-route="user"] .userPublicSongsBlock.profileSongsBlock{
+  overflow-x: visible;
+  overflow-y: visible;
+}
+
+body[data-route="profile"] .profileSection,
+body[data-route="profile"] .profileSongsBlock,
+body[data-route="profile"] #profileActivitiesList,
+body[data-route="profile"] #profileRepostsList,
+body[data-route="user"] .userPublic,
+body[data-route="user"] .userPublicSongsBlock,
+body[data-route="user"] #userPublicSongs,
+body[data-route="user"] #userPublicRepostsList{
+  overflow-x: visible;
+  overflow-y: visible;
 }
 
 @media (max-width: 430px){

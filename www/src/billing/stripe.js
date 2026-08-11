@@ -12,6 +12,21 @@ export function isStripeWebBillingConfigured() {
   return _stripeWebEnabled;
 }
 
+/** Stripe Checkout / Portal on native iOS opens in Capacitor Browser, not the WKWebView shell. */
+async function openExternalBillingUrl(url) {
+  const target = String(url || "").trim();
+  if (!target) throw new Error("Missing billing URL.");
+  try {
+    const cap = typeof window !== "undefined" ? window.Capacitor : null;
+    const Browser = cap?.Plugins?.Browser;
+    if (cap?.isNativePlatform?.() && Browser?.open) {
+      await Browser.open({ url: target, presentationStyle: "fullscreen" });
+      return;
+    }
+  } catch {}
+  window.location.href = target;
+}
+
 async function syncBillingWithServer({ getAuthToken, apiBase = "" }) {
   const token = typeof getAuthToken === "function" ? getAuthToken() : "";
   if (!token) return null;
@@ -52,7 +67,7 @@ export async function startStripeCheckout(planId, opts = {}) {
     throw err;
   }
   if (!data?.url) throw new Error("Checkout did not return a payment URL.");
-  window.location.href = data.url;
+  await openExternalBillingUrl(data.url);
   return data;
 }
 
@@ -71,7 +86,7 @@ export async function openStripeBillingPortal(opts = {}) {
     throw new Error(data?.error || `Could not open billing portal (${r.status})`);
   }
   if (!data?.url) throw new Error("Billing portal did not return a URL.");
-  window.location.href = data.url;
+  await openExternalBillingUrl(data.url);
   return data;
 }
 

@@ -45938,6 +45938,59 @@ body[data-route="user"] #userPublicRepostsList{
     margin-inline: auto;
   }
 
+  /* Profile feed posts: stay inside the content column on desktop web.
+     Mobile web + native iOS keep the full-bleed 100vw breakout below. */
+  html.is-web-shell :is(
+    #profileActivitiesList,
+    #profileRepostsList,
+    #userPublicSongs,
+    #userPublicRepostsList
+  ) :is(
+    .followAct--xstyle > .followActMediaWrap,
+    .followAct--xstyle .followActRemixFlow .followActMediaWrap--friendsDock,
+    .followAct--xstyle .followActMashup .followActMediaWrap--friendsDock,
+    .followAct--xstyle .followActRemixFlow .followActMediaWrap--remixResult,
+    .followAct--xstyle .followActMashup .followActMediaWrap--mashupResult,
+    .followAct--xstyle .followActMediaWrap--feedResult,
+    .followActRemixFlow .followActMediaWrap--remixResult,
+    .followActMashup .followActMediaWrap--mashupResult,
+    .followActMediaWrap--feedResult,
+    .followAct--xstyle.followAct--skel .followActSkelHero
+  ){
+    position: relative;
+    left: auto;
+    right: auto;
+    width: 100%;
+    max-width: 100%;
+    margin-left: 0;
+    margin-right: 0;
+  }
+  html.is-web-shell :is(
+    #profileActivitiesList.followActStack,
+    #profileRepostsList.followActStack,
+    #userPublicSongs.followActStack,
+    #userPublicRepostsList.followActStack
+  ) > .followAct.followAct--xstyle{
+    --feed-cover-radius: 14px;
+  }
+  html.is-web-shell :is(
+    #profileActivitiesList,
+    #profileRepostsList,
+    #userPublicSongs,
+    #userPublicRepostsList
+  ) :is(
+    .followAct--xstyle .followActMediaWrap .followActMedia,
+    .followAct--xstyle .followActRemixFlow .followActMediaWrap--remixResult .followActMedia,
+    .followAct--xstyle .followActMashup .followActMediaWrap--mashupResult .followActMedia,
+    .followAct--xstyle .followActMediaWrap--feedResult .followActMedia,
+    .followActRemixFlow .followActMediaWrap--remixResult .followActMedia,
+    .followActMashup .followActMediaWrap--mashupResult .followActMedia,
+    .followActMediaWrap--feedResult .followActMedia,
+    .followAct--xstyle.followAct--skel .followActSkelHero
+  ){
+    border-radius: var(--feed-cover-radius, 14px);
+  }
+
   /* --- Discover as a multi-column grid --- */
   /* `:not([hidden])` so the "View Full Top 10" collapse still works — an
      author display:grid would otherwise override the UA [hidden] rule. */

@@ -508,7 +508,8 @@ async function handleSubscribeClick() {
 }
 
 async function handleManageSubscriptionClick() {
-  if (!isWebStripeBilling()) return;
+  const provider = String(readProState().provider || "").toLowerCase();
+  if (provider !== "stripe") return;
   const loggedIn = typeof _deps?.isLoggedIn === "function" ? _deps.isLoggedIn() : false;
   if (!loggedIn) {
     _deps?.showToast?.("Sign in to manage your subscription.", { durationMs: 2800 });

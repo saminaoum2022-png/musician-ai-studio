@@ -45938,6 +45938,67 @@ body[data-route="user"] #userPublicRepostsList{
     margin-inline: auto;
   }
 
+  /* NabadAi Pro — keep sidebar + right rail; center paywall in the middle column. */
+  html.is-web-shell body[data-route="pro"] > .app{
+    display: grid !important;
+    grid-template-columns: var(--nb-sidebar, 248px) minmax(0, 1fr);
+    column-gap: 34px;
+    align-items: start;
+    padding: 20px 26px 44px !important;
+    max-width: 1200px !important;
+    width: auto !important;
+    margin-inline: auto !important;
+    min-height: 100vh;
+    flex-direction: unset !important;
+  }
+  html.is-web-shell body[data-route="pro"] main.grid{
+    grid-column: 2 !important;
+    flex: unset !important;
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+    justify-content: flex-start !important;
+    min-height: calc(100vh - 88px);
+    margin: 0 !important;
+    max-width: none !important;
+    overflow: visible !important;
+    padding: 4px 0 28px;
+    background: transparent;
+  }
+  html.is-web-shell body[data-route="pro"] main.grid > [data-route="pro"],
+  html.is-web-shell body[data-route="pro"] .proPage{
+    width: 100%;
+    max-width: 520px;
+    margin-inline: auto;
+    flex: 0 1 auto !important;
+    min-height: auto;
+    border-radius: 22px;
+    border: 1px solid rgba(255,255,255,0.08);
+    background:
+      radial-gradient(120% 80% at 50% -10%, rgba(124,92,255,0.14), transparent 58%),
+      #05070d;
+    box-shadow: 0 24px 64px rgba(0,0,0,0.42);
+    overflow: hidden;
+  }
+  html.is-web-shell body[data-route="pro"] .proHeader{
+    position: sticky;
+    top: 0;
+    left: auto;
+    right: auto;
+    padding-top: 12px;
+  }
+  html.is-web-shell body[data-route="pro"] .proHeroCopy{
+    padding-top: 4px;
+  }
+  html.is-web-shell body[data-route="pro"] .proShell{
+    min-height: auto;
+  }
+  html.is-web-shell body[data-route="pro"] .footer{
+    grid-column: 2;
+    left: auto;
+    right: auto;
+  }
+
   /* Profile feed posts: stay inside the content column on desktop web.
      Mobile web + native iOS keep the full-bleed 100vw breakout below. */
   html.is-web-shell :is(
@@ -46866,7 +46927,6 @@ body[data-route="studio"] .deskRail { display: none !important; }
   }
 
   /* Immersive routes — collapse the sidebar grid on web desktop. */
-  html.is-web-shell body[data-route="pro"] > .app,
   html.is-web-shell body[data-route="player"] > .app,
   html.is-web-shell body[data-route="moment"] > .app,
   html.is-web-shell body[data-route="hub"] > .app{
@@ -46878,7 +46938,6 @@ body[data-route="studio"] .deskRail { display: none !important; }
     margin: 0 !important;
     min-height: 100svh;
   }
-  html.is-web-shell body[data-route="pro"] main.grid,
   html.is-web-shell body[data-route="player"] main.grid,
   html.is-web-shell body[data-route="moment"] main.grid,
   html.is-web-shell body[data-route="hub"] main.grid{
@@ -46901,12 +46960,6 @@ body[data-route="studio"] .deskRail { display: none !important; }
   html.is-web-shell body[data-route="hub"] main.grid{
     overflow: hidden;
   }
-  html.is-web-shell body[data-route="pro"] .header,
-  html.is-web-shell body[data-route="pro"] .deskRail,
-  html.is-web-shell body[data-route="pro"] .footer,
-  html.is-web-shell body[data-route="pro"] .coachFab,
-  html.is-web-shell body[data-route="pro"] .generateOrb,
-  html.is-web-shell body[data-route="pro"] .mobileTabbar,
   html.is-web-shell body[data-route="player"] .header,
   html.is-web-shell body[data-route="player"] .deskRail,
   html.is-web-shell body[data-route="player"] .footer,

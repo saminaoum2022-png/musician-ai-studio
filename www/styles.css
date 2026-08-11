@@ -14342,12 +14342,8 @@ body:not([data-route="profile"]) #profileAuraHeaderChromeRoot{
   font-size: 20px;
   font-weight: 700;
   letter-spacing: -0.03em;
+  color: #fff;
   line-height: 1.15;
-  background: var(--greeting-name-gradient);
-  -webkit-background-clip: text;
-  background-clip: text;
-  -webkit-text-fill-color: transparent;
-  color: transparent;
 }
 .profileAuraNameStack:not(.profileAuraNameStack--hasDisplayName) .profileAuraNameAffixes{
   top: 50%;

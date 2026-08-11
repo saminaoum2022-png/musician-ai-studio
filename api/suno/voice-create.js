@@ -4,6 +4,7 @@
 const { verifyUser } = require("../_lib/credits-auth");
 const { applyCors } = require("../_lib/cors");
 const { readJson, sendJson, sunoJsonRequest } = require("../_lib/suno-upstream");
+const { requireProForWebApi } = require("../_lib/pro-web-gate");
 
 const SKILL = new Set(["beginner", "intermediate", "advanced", "professional"]);
 
@@ -17,6 +18,11 @@ module.exports = async function handler(req, res) {
 
     const user = await verifyUser(req);
     if (!user) return sendJson(res, 401, { error: "Sign in to create a custom voice." });
+
+    const proGate = await requireProForWebApi(req, user.userId);
+    if (!proGate.ok) {
+      return sendJson(res, proGate.status, { error: proGate.error, code: proGate.code });
+    }
 
     const body = await readJson(req);
     const taskId = String(body?.taskId || "").trim();

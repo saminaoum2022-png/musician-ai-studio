@@ -23,6 +23,7 @@ const { userIsAdmin } = require("../_lib/admin-auth");
 const { applyCors } = require("../_lib/cors");
 const { queueRegisterSunoWatch } = require("../_lib/suno-generation-watch");
 const { queueLogMusicGeneration } = require("../_lib/music-generation-log");
+const { requireProForWebApi } = require("../_lib/pro-web-gate");
 
 const FULL_SONG_COST = 12;
 
@@ -107,6 +108,10 @@ module.exports = async function handler(req, res) {
     const cleanPersonaId = personaId ? String(personaId).trim() : "";
     let personaModel = "";
     if (cleanPersonaId) {
+      const proGate = await requireProForWebApi(req, user.userId);
+      if (!proGate.ok) {
+        return json(res, proGate.status, { error: proGate.error, code: proGate.code });
+      }
       personaModel = String(requestedPersonaModel || "style_persona").trim();
       if (personaModel !== "style_persona" && personaModel !== "voice_persona") {
         personaModel = "style_persona";

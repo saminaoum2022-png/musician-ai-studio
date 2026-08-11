@@ -22,6 +22,7 @@ const {
   isAdminEmail,
 } = require("../_lib/credits-auth");
 const { applyCors } = require("../_lib/cors");
+const { requireProForWebApi } = require("../_lib/pro-web-gate");
 
 const PERSONA_COST = 5;
 
@@ -36,6 +37,11 @@ module.exports = async function handler(req, res) {
     const user = await verifyUser(req);
     if (!user) {
       return json(res, 401, { error: "Sign in to save a persona." });
+    }
+
+    const proGate = await requireProForWebApi(req, user.userId);
+    if (!proGate.ok) {
+      return json(res, proGate.status, { error: proGate.error, code: proGate.code });
     }
 
     const body = await readJson(req);

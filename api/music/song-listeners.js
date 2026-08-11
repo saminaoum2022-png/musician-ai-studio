@@ -16,6 +16,7 @@
 
 const { applyCors } = require("../_lib/cors");
 const { verifyUser, sendJson, selectFromTable } = require("../_lib/credits-auth");
+const { requireProForWebApi } = require("../_lib/pro-web-gate");
 
 const MAX_PLAY_ROWS = 5000;
 
@@ -32,6 +33,11 @@ module.exports = async function handler(req, res) {
 
     const user = await verifyUser(req);
     if (!user?.userId) return sendJson(res, 401, { error: "Sign in required" });
+
+    const proGate = await requireProForWebApi(req, user.userId);
+    if (!proGate.ok) {
+      return sendJson(res, proGate.status, { error: proGate.error, code: proGate.code });
+    }
 
     // Ownership gate — analytics are private to the song owner.
     const songRes = await selectFromTable(

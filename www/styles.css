@@ -52330,3 +52330,17 @@ html[data-theme="dark"] :is(#friendsPage .followActStack, #profileActivitiesList
   border-top: none;
   box-shadow: none;
 }
+
+/* Web/desktop: Pro-only features hidden until subscription is active */
+html.web-pro-gated [data-home-card="persona"],
+html.web-pro-gated [data-home-card="studio"],
+html.web-pro-gated #singerPersonaPill,
+html.web-pro-gated #personaActiveBanner,
+html.web-pro-gated #btnResultPersona,
+html.web-pro-gated #btnResultPersona2,
+html.web-pro-gated [data-profile-edit-field="persona"],
+html.web-pro-gated .followActAct--analytics,
+html.web-pro-gated #profilePersonaRow,
+html.web-pro-gated [aria-labelledby="settingsVoicesManagerTitle"] {
+  display: none !important;
+}

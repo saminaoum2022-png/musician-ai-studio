@@ -201,7 +201,7 @@ import { MUSIC_VIDEO_FEATURE_ENABLED } from "./feature-flags.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260812-002708";
+const APP_BUILD = "20260812-005055";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -4266,7 +4266,13 @@ function applyRoute({ passGen } = {}) {
     try { leaveStudioRoot(); } catch {}
   }
   if (wanted === "studio") {
-    try { enterStudioRoot(); } catch {}
+    if (isWebOrDesktopShell() && !webProFeatureAllowed()) {
+      promptWebProUpgrade("NabadAi Studio");
+      try { leaveStudioRoot(); } catch {}
+      try { location.hash = "#/discover"; } catch {}
+    } else {
+      try { enterStudioRoot(); } catch {}
+    }
   }
   if (wanted === "settings") {
     renderPersonaSelect();
@@ -4322,14 +4328,19 @@ function applyRoute({ passGen } = {}) {
     const profileHeavy = !shouldSkipRouteHeavy("profile");
     if (profileHeavy) markRouteHeavy("profile");
     if (/persona=1|voices=1/i.test(rawRouteQuery)) {
-      setProfilePersonaExpanded(true);
-      setProfilePersonaVoicesOpen(true);
-      try { renderSettingsVoicesHub(); } catch {}
-      requestAnimationFrame(() => {
-        try {
-          els.profilePersonaRow?.scrollIntoView({ block: "nearest", behavior: "smooth" });
-        } catch {}
-      });
+      if (!webProFeatureAllowed()) {
+        promptWebProUpgrade("Persona");
+        collapseProfilePersonaCard();
+      } else {
+        setProfilePersonaExpanded(true);
+        setProfilePersonaVoicesOpen(true);
+        try { renderSettingsVoicesHub(); } catch {}
+        requestAnimationFrame(() => {
+          try {
+            els.profilePersonaRow?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+          } catch {}
+        });
+      }
     } else {
       collapseProfilePersonaCard();
     }
@@ -10751,6 +10762,7 @@ function bindHomeDeskOnce(page) {
         return;
       }
       if (card === "persona") {
+        if (!requireProForWebFeature("Persona")) return;
         void openVoiceWizard();
         return;
       }
@@ -10789,6 +10801,7 @@ function bindHomeDeskOnce(page) {
           setStatus("Sign in to use the Studio.");
           return;
         }
+        if (!requireProForWebFeature("NabadAi Studio")) return;
         try { openStudioLobby(); } catch { try { location.hash = "#/studio"; } catch {} }
         scheduleApplyRoute();
         return;
@@ -14571,7 +14584,7 @@ function followActActionsRowHtml({ kind, targetId, targetUserId, plays, playsPen
   const myId = String(authSession?.user?.id || "").trim();
   const isOwner = !!myId && String(targetUserId || "") === myId;
   const analyticsBlock =
-    kind === "music" && isOwner
+    kind === "music" && isOwner && webProFeatureAllowed()
       ? `<button type="button" class="followActAct followActAct--analytics" data-friends-act="analytics" aria-label="Song analytics">
         ${feedActIconAnalytics()}
       </button>`
@@ -16074,6 +16087,7 @@ function openSongAnalyticsSheet(btn) {
     location.hash = "#/auth";
     return;
   }
+  if (!requireProForWebFeature("Song analytics")) return;
   const title =
     decodeDiscoverDataAttr(article, "data-user-lib-title") ||
     String(article?.querySelector(".followActUser")?.textContent || "").trim() ||
@@ -16136,15 +16150,17 @@ async function loadSongAnalytics(songId) {
   if (!list) return;
   try {
     const tok = getSupabaseAuthToken();
-    const r = await fetch(
-      apiUrl(`/api/music/song-listeners?songId=${encodeURIComponent(songId)}`),
-      {
-        headers: { ...(tok ? { Authorization: `Bearer ${tok}` } : {}) },
-        cache: "no-store",
-      },
-    );
+    const r = await apiFetch(`/api/music/song-listeners?songId=${encodeURIComponent(songId)}`, {
+      headers: { ...(tok ? { Authorization: `Bearer ${tok}` } : {}) },
+      cache: "no-store",
+    });
     const d = await r.json().catch(() => ({}));
     if (!_songAnalyticsCtx || _songAnalyticsCtx.songId !== songId) return;
+    if (d?.code === "pro_required" || r.status === 403) {
+      closeSongAnalyticsSheet();
+      promptWebProUpgrade("Song analytics");
+      return;
+    }
     if (!r.ok || !d?.ok) {
       throw new Error(d?.error || "Could not load analytics.");
     }
@@ -23572,10 +23588,102 @@ function proPlanLabelShort(planId) {
   return "Active subscription";
 }
 
+/** Browser / desktop shell — not the native iOS/Android Capacitor app. */
+function isWebOrDesktopShell() {
+  try {
+    if (document.documentElement?.classList?.contains("is-web-shell")) return true;
+  } catch {}
+  return !isNativeShell();
+}
+
+function webProFeatureAllowed() {
+  if (!isWebOrDesktopShell()) return true;
+  return Boolean(creditsState.proActive);
+}
+
+/** Returns true when access is allowed; false when blocked (upgrade prompt shown). */
+function requireProForWebFeature(featureLabel = "This feature") {
+  if (webProFeatureAllowed()) return true;
+  promptWebProUpgrade(featureLabel);
+  return false;
+}
+
+function promptWebProUpgrade(featureLabel = "This feature") {
+  const label = String(featureLabel || "This feature").trim() || "This feature";
+  try {
+    showToast(`${label} is included with NabadAi Pro.`, { icon: "★", durationMs: 4200 });
+  } catch {}
+  try { setProReturnRoute(document.body.getAttribute("data-route") || "discover"); } catch {}
+  try {
+    if (location.hash !== "#/pro") location.hash = "#/pro";
+    bumpApplyRouteGeneration();
+    void runApplyRouteOnce();
+  } catch {
+    try { location.hash = "#/pro"; } catch {}
+  }
+}
+
+function syncProGatedWebUi() {
+  const gate = isWebOrDesktopShell();
+  const allowed = !gate || Boolean(creditsState.proActive);
+  document.documentElement.classList.toggle("web-pro-gated", gate && !allowed);
+  document.documentElement.classList.toggle("web-pro-unlocked", gate && allowed);
+
+  const hideProOnly = gate && !allowed;
+  const hideSel = (sel) => {
+    document.querySelectorAll(sel).forEach((el) => {
+      el.hidden = hideProOnly;
+      el.setAttribute("aria-hidden", hideProOnly ? "true" : "false");
+    });
+  };
+
+  hideSel('[data-home-card="persona"]');
+  hideSel('[data-home-card="studio"]');
+  hideSel("#singerPersonaPill");
+  hideSel("#personaActiveBanner");
+  hideSel("#btnResultPersona");
+  hideSel("#btnResultPersona2");
+  hideSel('[data-profile-edit-field="persona"]');
+  hideSel(".followActAct--analytics");
+
+  const personaRow = document.getElementById("singerPersonaRow");
+  if (personaRow && hideProOnly) {
+    _singerPersonaDrawerOpen = false;
+    personaRow.hidden = true;
+    personaRow.innerHTML = "";
+  }
+
+  if (els.profilePersonaRow) {
+    els.profilePersonaRow.hidden = hideProOnly;
+    els.profilePersonaRow.setAttribute("aria-hidden", hideProOnly ? "true" : "false");
+  }
+
+  const settingsVoicesSection = document.querySelector('[aria-labelledby="settingsVoicesManagerTitle"]');
+  if (settingsVoicesSection) {
+    settingsVoicesSection.hidden = hideProOnly;
+    settingsVoicesSection.setAttribute("aria-hidden", hideProOnly ? "true" : "false");
+  }
+
+  if (hideProOnly && creditsState.loaded) {
+    try { clearActiveVoicePersona({ silent: true }); } catch {}
+    const route = document.body.getAttribute("data-route") || "";
+    if (route === "studio") {
+      try { leaveStudioRoot(); } catch {}
+      try { location.hash = "#/discover"; } catch {}
+    }
+  }
+
+  if (!hideProOnly) {
+    try { renderSingerPersonaPill(); } catch {}
+    try { renderSingerPersonaRow(); } catch {}
+  }
+}
+
 function syncProSubscriptionUi() {
   syncProfileProAvatarPill();
   syncSettingsProRow();
   syncCreditsProUpsell();
+  try { syncProGatedWebUi(); } catch {}
   try { refreshProSubscriptionUi(); } catch {}
 }
 
@@ -40169,6 +40277,7 @@ function renamePersona(personaId, nextLabel) {
 }
 
 function selectPersonaForCreate(personaId, opts = {}) {
+  if (!requireProForWebFeature("Persona")) return;
   const id = String(personaId || "").trim();
   if (!id) return;
   savePersonaSelection(id);
@@ -40612,7 +40721,7 @@ async function runVoiceWizardFromSample(startBtn) {
       { label: "Preparing your verification phrase", state: "active" },
     ]);
     const token = getSupabaseAuthToken();
-    const vr = await fetch(apiUrl("/api/suno/voice-validate"), {
+    const vr = await apiFetch("/api/suno/voice-validate", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -40626,6 +40735,13 @@ async function runVoiceWizardFromSample(startBtn) {
       }),
     });
     const vd = await vr.json().catch(() => ({}));
+    if (vd?.code === "pro_required" || vr.status === 403) {
+      promptWebProUpgrade("Persona");
+      if (startBtn) startBtn.disabled = false;
+      renderVoiceWizardStep1Setup();
+      wireVoiceWizardStep1Setup();
+      return;
+    }
     if (!vr.ok) throw new Error(vd?.error || "Validation start failed");
     const validateTaskId = String(vd?.taskId || vd?.data?.taskId || "").trim();
     if (!validateTaskId) throw new Error("Missing validation task id");
@@ -40704,7 +40820,7 @@ function renderVoiceWizardVerifyStep(phrase, token) {
         { label: "Uploading your verification", state: "done" },
         { label: "Creating your custom voice", state: "active" },
       ], "build");
-      const cr = await fetch(apiUrl("/api/suno/voice-create"), {
+      const cr = await apiFetch("/api/suno/voice-create", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -40719,6 +40835,12 @@ function renderVoiceWizardVerifyStep(phrase, token) {
         }),
       });
       const cd = await cr.json().catch(() => ({}));
+      if (cd?.code === "pro_required" || cr.status === 403) {
+        promptWebProUpgrade("Persona");
+        submitBtn.disabled = false;
+        renderVoiceWizardVerifyStep(phrase, token);
+        return;
+      }
       if (!cr.ok) throw new Error(cd?.error || "Voice submit failed");
       const voiceTaskId = String(cd?.taskId || cd?.data?.taskId || "").trim();
       if (!voiceTaskId) throw new Error("Missing voice task id");
@@ -40791,6 +40913,7 @@ async function openVoiceWizard() {
     try { location.hash = "#/auth"; } catch {}
     return;
   }
+  if (!requireProForWebFeature("Persona")) return;
   voiceWizardState = {
     abort: false,
     sampleFile: null,
@@ -40810,6 +40933,7 @@ async function openVoiceWizard() {
 }
 
 function openProfilePersonaPanel() {
+  if (!requireProForWebFeature("Persona")) return;
   setProfilePersonaExpanded(true);
   setProfilePersonaVoicesOpen(true);
   try {
@@ -41109,6 +41233,7 @@ async function createPersonaForSong({
   creator,
   source, // "result" | "library" | "hub" | "options"
 } = {}) {
+  if (!requireProForWebFeature("Persona")) return null;
   const tId = String(taskId || "").trim();
   const aId = String(audioId || "").trim();
   if (!tId || !aId) {
@@ -41163,7 +41288,7 @@ async function createPersonaForSong({
     } catch {}
 
     const personaAuthToken = getSupabaseAuthToken();
-    const r = await fetch(apiUrl("/api/suno/persona"), {
+    const r = await apiFetch("/api/suno/persona", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -41185,6 +41310,10 @@ async function createPersonaForSong({
       throw new Error(
         `Not enough credits to save a persona (you have ${have}, need ${need}). Open Profile → Credits to redeem a code.`
       );
+    }
+    if (d?.code === "pro_required" || r.status === 403) {
+      promptWebProUpgrade("Persona");
+      return null;
     }
     if (!r.ok) {
       try {
@@ -54198,6 +54327,13 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       // generation that depends on the voice — otherwise it silently renders
       // with a generic voice and the credits are gone. Only an explicit
       // "false" blocks; if the check itself fails we don't get in the way.
+      if (personaIdSel && !webProFeatureAllowed()) {
+        setLoading(false);
+        setGenerateBtn("Generate song", false, "generate");
+        setGenerateFieldsLocked(false);
+        promptWebProUpgrade("Persona");
+        return;
+      }
       if (personaIdSel && personaModelSel === "voice_persona" && personaHit?.voiceTaskId) {
         const voiceReady = await checkSunoVoiceAvailability(personaHit.voiceTaskId);
         const stale = personaNeedsRefresh(personaHit);
@@ -54527,7 +54663,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
                   : "MiniMax is composing your song… usually 1–2 minutes. Keep the app open.",
             );
           }
-          const r = await fetch(apiUrl(musicGenerateApiPath()), {
+          const r = await apiFetch(musicGenerateApiPath(), {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
@@ -54536,6 +54672,10 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
             body: JSON.stringify(payload),
           });
           const d = await r.json().catch(() => ({}));
+          if (d?.code === "pro_required" || r.status === 403) {
+            promptWebProUpgrade("Persona");
+            throw new Error(d?.error || "NabadAi Pro is required for Persona on web.");
+          }
           if (r.status === 402 || d?.code === "insufficient_credits") {
             const need = Number(d?.needed ?? FULL_SONG_CREDIT_COST);
             const have = Number(d?.balance || 0);
@@ -60107,6 +60247,7 @@ try {
     showToast: (m, o) => { try { showToast(m, o); } catch {} },
     haptic: (k) => { try { haptic(k === "medium" ? "impact" : "light"); } catch {} },
     navigateBack: () => { try { history.back(); } catch { location.hash = "#/discover"; } },
+    requireProAccess: (label) => requireProForWebFeature(label || "NabadAi Studio"),
     lyricsForTrack: (t) => String(t?.meta?.lyrics || t?.lyrics || t?.meta?.lyricsText || ""),
     coverForTrack: (t) => String(t?.artUrl || t?.art || ""),
     prepareGuide: (t) => studioPrepareGuide(t),
@@ -60475,6 +60616,9 @@ setStatus(
     ? "Ready (Native iOS app)."
     : "Ready (Web mode). Generate a new arrangement or render to WAV."
 );
+try {
+  if (isWebOrDesktopShell()) syncProGatedWebUi();
+} catch {}
 
 function clampInt(n, min, max) {
   return Math.max(min, Math.min(max, Math.round(n)));

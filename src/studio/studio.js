@@ -366,6 +366,9 @@ export function studioHasUnsaved() {
 /** Called from the player ⋯ menu. Stashes the track and routes to the source
  * chooser (load as-is vs separate vocals). */
 export function openStudioForTrack(track) {
+  if (typeof bridge.requireProAccess === "function" && !bridge.requireProAccess("NabadAi Studio")) {
+    return;
+  }
   current = freshContext(track);
   // Register a draft project the moment a song is opened in the Studio.
   try {
@@ -379,6 +382,9 @@ export function openStudioForTrack(track) {
 
 /** Called from the Create page card. Opens the Studio lobby (no song yet). */
 export function openStudioLobby() {
+  if (typeof bridge.requireProAccess === "function" && !bridge.requireProAccess("NabadAi Studio")) {
+    return;
+  }
   current = null;
   screen = "lobby";
   unsaved = false;

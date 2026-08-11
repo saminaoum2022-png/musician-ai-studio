@@ -52357,12 +52357,12 @@ html[data-theme="dark"] :is(#friendsPage .followActStack, #profileActivitiesList
 .webProFeaturePill[hidden]{ display: none !important; }
 .webProFeaturePill--visual{
   position: absolute;
-  top: 6px;
-  right: 6px;
+  top: 8px;
+  right: 8px;
   z-index: 4;
-  font-size: 7px;
-  padding: 2px 5px;
-  letter-spacing: 0.06em;
+  font-size: 10px;
+  padding: 4px 8px;
+  letter-spacing: 0.08em;
 }
 .homeDeskPersonaTileWrap,
 .homeDeskStudioTileWrap{
@@ -52399,7 +52399,11 @@ html[data-theme="dark"] :is(#friendsPage .followActStack, #profileActivitiesList
   position: relative;
 }
 .webProFeaturePill--sheet{
-  margin-left: auto;
+  position: absolute;
+  top: 50%;
+  right: 16px;
+  transform: translateY(-50%);
+  margin-left: 0;
   flex-shrink: 0;
   font-size: 8px;
   padding: 2px 6px;
@@ -52407,8 +52411,7 @@ html[data-theme="dark"] :is(#friendsPage .followActStack, #profileActivitiesList
 .discoverTrackSheetRow.isProLocked{
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 10px;
+  justify-content: center;
 }
 html.web-pro-gated .isProLocked.homeDeskPromoCard{
   cursor: pointer;

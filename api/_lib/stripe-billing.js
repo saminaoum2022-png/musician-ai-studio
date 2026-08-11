@@ -132,9 +132,12 @@ async function applyStripeSubscription(sub, { grantCredits = false, invoiceId = 
         eventType = "RENEWAL";
       }
       if (amount > 0) {
-        const eventId = String(invoiceId || full.latest_invoice || full.id).trim();
+        const eventKey =
+          eventType === "INITIAL_PURCHASE"
+            ? `sub_initial:${full.id}`
+            : String(invoiceId || full.latest_invoice || full.id).trim();
         grant = await grantCreditsOnce({
-          eventId: `stripe:${eventId}`,
+          eventId: `stripe:${eventKey}`,
           userId,
           amount,
           ref: `stripe:pro:${planId}:${eventId}`,
@@ -190,12 +193,13 @@ async function applyStripeInvoicePaid(invoice) {
   });
 
   const billingReason = String(invoice.billing_reason || "").trim();
-  const eventId = String(invoice.id).trim();
   let amount = 0;
   let eventType = "RENEWAL";
+  let grantEventId = String(invoice.id).trim();
 
   if (billingReason === "subscription_create") {
     eventType = "INITIAL_PURCHASE";
+    grantEventId = `sub_initial:${subscriptionId}`;
     if (status === "trialing" && plan.trialCredits > 0) {
       amount = plan.trialCredits;
     } else {
@@ -215,7 +219,7 @@ async function applyStripeInvoicePaid(invoice) {
   }
 
   const grant = await grantCreditsOnce({
-    eventId: `stripe:${eventId}`,
+    eventId: `stripe:${grantEventId}`,
     userId,
     amount,
     ref: `stripe:pro:${planId}:${eventId}`,
@@ -269,7 +273,7 @@ async function applyStripeEvent(event) {
         });
       } catch {}
     }
-    return applyStripeSubscription(sub, { grantCredits: false });
+    return applyStripeSubscription(sub, { grantCredits: true });
   }
 
   return { ok: true, kind: "ignored", type };

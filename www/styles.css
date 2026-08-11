@@ -45998,6 +45998,10 @@ body[data-route="user"] #userPublicRepostsList{
     left: auto;
     right: auto;
   }
+  html.is-web-shell body[data-route="pro"] .coachFab,
+  html.is-web-shell body[data-route="pro"] .generateOrb{
+    display: none !important;
+  }
 
   /* Profile feed posts: stay inside the content column on desktop web.
      Mobile web + native iOS keep the full-bleed 100vw breakout below. */
@@ -46072,6 +46076,10 @@ body[data-route="user"] #userPublicRepostsList{
 @media (min-width: 1200px){
   .app{
     max-width: 1380px;
+    grid-template-columns: var(--nb-sidebar, 248px) minmax(0, 1fr) var(--nb-rail, 320px);
+  }
+  html.is-web-shell body[data-route="pro"] > .app{
+    max-width: 1380px !important;
     grid-template-columns: var(--nb-sidebar, 248px) minmax(0, 1fr) var(--nb-rail, 320px);
   }
   aside.deskRail{

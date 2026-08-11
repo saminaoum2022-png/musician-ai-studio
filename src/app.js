@@ -201,7 +201,7 @@ import { MUSIC_VIDEO_FEATURE_ENABLED } from "./feature-flags.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260811-213243";
+const APP_BUILD = "20260811-231856";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -54121,7 +54121,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
 
       applyMaqamToStyleInput();
       const userPrompt = (els.sunoPrompt?.value || "").trim();
-      const userStyle = (els.sunoStyle?.value || "").trim();
+      const userStyle = resolveStyleInputForGeneration((els.sunoStyle?.value || "").trim());
       const userAvoidTags = trimAvoidTagsForSuno(els.sunoAvoidTags?.value || "");
       const artworkStyle = (els.sunoArtworkStyle?.value || "").trim();
       const dialect = String(els.sunoDialect?.value || "").trim();
@@ -55271,22 +55271,187 @@ function addStyleTags(tags) {
 
 /* =================================================================
  *  Smart Style Assistant (UI only)
- *  Neutral suggestion pills under the Style field that the user picks
- *  freely — tapping a pill just toggles that tag in the Style field,
- *  nothing auto-runs. A swipeable strip shows the selected tags (each
- *  removable) plus a Clear action. "Auto" derives a starter style from
- *  the lyrics with a lightweight client-side heuristic (no backend, no
- *  API, no prompt-construction changes). "More" opens a library bottom
- *  sheet. The Style field stays the single source of truth.
+ *  Curated pills under Style with per-category limits (genres ≤2 fusion,
+ *  moods ≤1, tempo ≤1, instruments unlimited). Genre presets expand to
+ *  full Suno prompts at generation time; short labels stay in the field.
  * ================================================================= */
+const STYLE_GENRE_PRESETS = Object.freeze({
+  "Levantine Dabke": Object.freeze({
+    prompt:
+      "Levantine dabke, mijwiz, davul and tabla, ktakufti 6/8 dabkeh rhythm, festive line-dance energy, NOT Egyptian shaabi",
+    suggestedTempo: "120 BPM",
+  }),
+  Tarab: Object.freeze({
+    prompt:
+      "Classic Arabic tarab, oud and strings, ornamented vocals, emotional mawwal phrasing, Levantine tarab, NOT dance pop",
+    suggestedTempo: "Slow",
+  }),
+});
 const STYLE_BASE_SUGGESTIONS = ["Pop", "Romantic", "Sad", "Arabic Pop"];
+const STYLE_BASE_TAG_CATEGORIES = Object.freeze({
+  Pop: "genres",
+  Romantic: "moods",
+  Sad: "moods",
+  "Arabic Pop": "genres",
+});
 const STYLE_LIBRARY = [
-  { label: "Genres", tags: ["R&B", "Jazz", "Reggaeton", "Afrobeat", "Trap", "House", "Folk", "Classical", "Lo-fi"] },
-  { label: "Moods", tags: ["Romantic", "Sad", "Happy", "Energetic", "Chill", "Dark", "Epic", "Nostalgic", "Dreamy", "Emotional", "Uplifting"] },
-  { label: "Instruments", tags: ["Piano", "Strings", "Oud", "Darbuka", "Guitar", "Synth", "Violin", "Saxophone", "Orchestra", "808", "Drums"] },
-  // Vocal Style now lives in Advanced → Voice; singer gender is on the main screen.
-  { label: "Tempo & Meter", tags: ["Slow", "Mid Tempo", "Fast", "90 BPM", "120 BPM", "128 BPM", "4/4", "6/8", "3/4"] },
+  {
+    id: "genres",
+    label: "Genres",
+    max: 2,
+    hint: "Pick up to 2 for fusion",
+    tags: [
+      "Levantine Dabke",
+      "Tarab",
+      "Arabic Pop",
+      "R&B",
+      "Jazz",
+      "Reggaeton",
+      "Afrobeat",
+      "Trap",
+      "House",
+      "Folk",
+      "Classical",
+      "Lo-fi",
+    ],
+  },
+  {
+    id: "moods",
+    label: "Moods",
+    max: 1,
+    hint: "Pick one mood",
+    tags: ["Romantic", "Sad", "Happy", "Energetic", "Chill", "Dark", "Epic", "Nostalgic", "Dreamy", "Emotional", "Uplifting"],
+  },
+  {
+    id: "instruments",
+    label: "Instruments",
+    max: null,
+    tags: ["Piano", "Strings", "Oud", "Tabla", "Darbuka", "Mijwiz", "Guitar", "Synth", "Violin", "Saxophone", "Orchestra", "808", "Drums"],
+  },
+  {
+    id: "tempo",
+    label: "Tempo & Meter",
+    max: 1,
+    hint: "Pick one tempo or meter",
+    tags: ["Slow", "Mid Tempo", "Fast", "90 BPM", "120 BPM", "128 BPM", "4/4", "6/8", "3/4"],
+  },
 ];
+const _styleTagCategoryMap = (() => {
+  const map = new Map();
+  for (const [tag, cat] of Object.entries(STYLE_BASE_TAG_CATEGORIES)) map.set(tag.toLowerCase(), cat);
+  for (const sec of STYLE_LIBRARY) {
+    for (const tag of sec.tags) map.set(String(tag).toLowerCase(), sec.id);
+  }
+  return map;
+})();
+const _styleCategoryTagsMap = (() => {
+  const map = new Map();
+  for (const sec of STYLE_LIBRARY) {
+    map.set(sec.id, new Set(sec.tags.map((t) => String(t).toLowerCase())));
+  }
+  return map;
+})();
+let _styleAutoTempoTag = "";
+
+function styleTagCategory(tag) {
+  return _styleTagCategoryMap.get(String(tag || "").toLowerCase()) || null;
+}
+function styleCategoryAllTags(categoryId) {
+  return _styleCategoryTagsMap.get(categoryId) || new Set();
+}
+function getStyleTagsInCategory(categoryId) {
+  const bucket = styleCategoryAllTags(categoryId);
+  return styleTagsListFromInput().filter((t) => bucket.has(t.toLowerCase()));
+}
+function styleGenrePresetForTag(tag) {
+  const raw = String(tag || "").trim();
+  if (!raw) return null;
+  if (STYLE_GENRE_PRESETS[raw]) return STYLE_GENRE_PRESETS[raw];
+  const hit = Object.keys(STYLE_GENRE_PRESETS).find((k) => k.toLowerCase() === raw.toLowerCase());
+  return hit ? STYLE_GENRE_PRESETS[hit] : null;
+}
+function resolveStyleTagsForGeneration(tags) {
+  return (tags || []).map((t) => {
+    const preset = styleGenrePresetForTag(t);
+    return preset ? preset.prompt : t;
+  });
+}
+function resolveStyleInputForGeneration(raw) {
+  const tags = String(raw || "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  return resolveStyleTagsForGeneration(tags).join(", ");
+}
+function suggestedTempoForActiveGenrePresets() {
+  const tags = styleTagsListFromInput();
+  if (tags.some((t) => t.toLowerCase() === "levantine dabke")) return "120 BPM";
+  if (tags.some((t) => t.toLowerCase() === "tarab")) return "Slow";
+  return "";
+}
+function applyAutoTempoForGenrePresets({ force = false } = {}) {
+  const suggested = suggestedTempoForActiveGenrePresets();
+  if (!suggested) {
+    if (_styleAutoTempoTag) {
+      removeStyleTags([_styleAutoTempoTag]);
+      _styleAutoTempoTag = "";
+    }
+    return;
+  }
+  const tempoTags = getStyleTagsInCategory("tempo");
+  if (!force) {
+    if (_styleAutoTempoTag === "" && tempoTags.length > 0) return;
+    if (
+      _styleAutoTempoTag &&
+      tempoTags.length > 0 &&
+      !tempoTags.some((t) => t.toLowerCase() === _styleAutoTempoTag.toLowerCase())
+    ) {
+      return;
+    }
+  }
+  const tempoAll = styleCategoryAllTags("tempo");
+  const withoutTempo = styleTagsListFromInput().filter((t) => !tempoAll.has(t.toLowerCase()));
+  withoutTempo.push(suggested);
+  _styleAutoTempoTag = suggested;
+  writeStyleTagsToInput(withoutTempo);
+}
+function shakeStylePill(btn) {
+  if (!btn) return;
+  btn.classList.remove("isShake");
+  void btn.offsetWidth;
+  btn.classList.add("isShake");
+  setTimeout(() => btn.classList.remove("isShake"), 340);
+}
+function toggleStyleTagWithLimits(tag, categoryId, btn) {
+  const label = String(tag || "").trim();
+  if (!label) return false;
+  const cat = categoryId || styleTagCategory(label);
+  const selected = styleTagsSelectedSet();
+  const isOn = selected.has(label.toLowerCase());
+  if (isOn) {
+    haptic("light");
+    removeStyleTags([label]);
+    if (styleGenrePresetForTag(label)) applyAutoTempoForGenrePresets();
+    return true;
+  }
+  if (cat) {
+    const sec = STYLE_LIBRARY.find((s) => s.id === cat);
+    const max = sec?.max;
+    if (max != null) {
+      const current = getStyleTagsInCategory(cat);
+      if (current.length >= max) {
+        haptic("impact");
+        shakeStylePill(btn);
+        return false;
+      }
+    }
+  }
+  haptic("light");
+  addStyleTags([label]);
+  if (styleGenrePresetForTag(label)) applyAutoTempoForGenrePresets({ force: true });
+  else if (cat === "tempo") _styleAutoTempoTag = "";
+  return true;
+}
 
 function styleTagsSelectedSet() {
   return new Set(styleTagsListFromInput().map((t) => t.toLowerCase()));
@@ -55351,26 +55516,32 @@ function autoSuggestStyles() {
   const raw = String(els.sunoPrompt?.value || "");
   const text = raw.toLowerCase();
   const hasArabic = /[\u0600-\u06FF]/.test(raw);
+  writeStyleTagsToInput([]);
+  _styleAutoTempoTag = "";
   const tags = [];
-  if (hasArabic) tags.push("Arabic Pop", "Arabic Lyrics");
+  if (hasArabic) tags.push("Arabic Pop");
   else tags.push("Pop");
   if (/(sad|cry|tears|alone|lonely|miss|broke|hurt|\u062d\u0632\u064a\u0646|\u062f\u0645\u0639\u0629|\u0648\u062d\u064a\u062f|\u0627\u0634\u062a\u0642\u062a|\u0641\u0631\u0627\u0642|\u0628\u0643\u0627\u0621)/.test(text)) {
     tags.push("Emotional", "Piano", "Slow");
   } else if (/(love|heart|habibi|kiss|romance|\u062d\u0628|\u062d\u0628\u064a\u0628\u064a|\u0642\u0644\u0628|\u063a\u0631\u0627\u0645|\u0639\u0634\u0642)/.test(text)) {
-    tags.push("Romantic", "Strings", "Soft Vocal");
+    tags.push("Romantic", "Strings");
   } else if (/(party|dance|club|night|celebrate|\u0631\u0642\u0635|\u0633\u0647\u0631\u0629|\u062d\u0641\u0644\u0629|\u0639\u0631\u0633|\u062f\u0628\u0643\u0629)/.test(text)) {
-    tags.push("Energetic", "Darbuka", "Dabke");
+    tags.push("Energetic", "Levantine Dabke");
+  } else if (/(tarab|mawwal|\u0637\u0631\u0628|\u0645\u0648\u0627\u0644)/.test(text)) {
+    tags.push("Tarab", "Oud", "Slow");
   } else {
     tags.push("Emotional", "Piano");
+    tags.push(hasArabic ? "Mid Tempo" : "4/4");
   }
-  tags.push(hasArabic ? "6/8" : "4/4");
-  const final = [];
-  const seen = new Set();
-  for (const t of tags) {
-    if (!seen.has(t.toLowerCase())) { seen.add(t.toLowerCase()); final.push(t); }
+  for (const tag of tags) {
+    const cat = styleTagCategory(tag);
+    if (cat) {
+      const sec = STYLE_LIBRARY.find((s) => s.id === cat);
+      if (sec?.max != null && getStyleTagsInCategory(cat).length >= sec.max) continue;
+    }
+    addStyleTags([tag]);
   }
-  const picked = final.slice(0, 6);
-  addStyleTags(picked);
+  applyAutoTempoForGenrePresets({ force: true });
   syncStyleUi();
   try { syncGenerateOrbVisibility(); } catch {}
   showToast(
@@ -55385,11 +55556,11 @@ function renderStyleLibrary() {
   const selected = styleTagsSelectedSet();
   scroll.innerHTML = STYLE_LIBRARY.map((sec) => `
     <div class="styleLibrarySection">
-      <p class="styleLibrarySectionLabel">${escapeHtml(sec.label)}</p>
+      <p class="styleLibrarySectionLabel">${escapeHtml(sec.label)}${sec.hint ? `<span class="styleLibrarySectionHint">${escapeHtml(sec.hint)}</span>` : ""}</p>
       <div class="styleLibraryChips">
         ${sec.tags.map((tag) => {
           const on = selected.has(tag.toLowerCase());
-          return `<button type="button" class="styleSuggestPill${on ? " isActive" : ""}" data-style-lib-tag="${escapeHtml(tag)}" aria-pressed="${on ? "true" : "false"}">${escapeHtml(tag)}</button>`;
+          return `<button type="button" class="styleSuggestPill${on ? " isActive" : ""}" data-style-lib-tag="${escapeHtml(tag)}" data-style-lib-cat="${escapeHtml(sec.id)}" aria-pressed="${on ? "true" : "false"}">${escapeHtml(tag)}</button>`;
         }).join("")}
       </div>
     </div>`).join("");
@@ -55415,17 +55586,11 @@ function closeStyleLibrary() {
       const btn = e.target?.closest?.("button");
       if (!btn || !row.contains(btn)) return;
       e.preventDefault();
-      haptic("light");
-      if (btn.hasAttribute("data-style-auto")) { autoSuggestStyles(); return; }
-      if (btn.hasAttribute("data-style-more")) { openStyleLibrary(); return; }
+      if (btn.hasAttribute("data-style-auto")) { haptic("light"); autoSuggestStyles(); return; }
+      if (btn.hasAttribute("data-style-more")) { haptic("light"); openStyleLibrary(); return; }
       const tag = btn.getAttribute("data-style-tag");
       if (!tag) return;
-      if (styleTagsSelectedSet().has(tag.toLowerCase())) {
-        removeStyleTags([tag]);
-      } else {
-        addStyleTags([tag]);
-      }
-      syncStyleUi();
+      toggleStyleTagWithLimits(tag, STYLE_BASE_TAG_CATEGORIES[tag] || styleTagCategory(tag), btn);
       try { syncGenerateOrbVisibility(); } catch {}
     });
   }
@@ -55445,6 +55610,7 @@ function closeStyleLibrary() {
     els.btnClearStyle.dataset.boundClear = "1";
     els.btnClearStyle.addEventListener("click", () => {
       haptic("light");
+      _styleAutoTempoTag = "";
       writeStyleTagsToInput([]);
       try { syncGenerateOrbVisibility(); } catch {}
     });
@@ -55455,15 +55621,11 @@ function closeStyleLibrary() {
     scroll.addEventListener("click", (e) => {
       const btn = e.target?.closest?.("[data-style-lib-tag]");
       if (!btn) return;
-      haptic("light");
+      e.preventDefault();
       const tag = btn.getAttribute("data-style-lib-tag");
-      if (styleTagsSelectedSet().has(tag.toLowerCase())) {
-        removeStyleTags([tag]);
-      } else {
-        addStyleTags([tag]);
-      }
+      const cat = btn.getAttribute("data-style-lib-cat");
+      toggleStyleTagWithLimits(tag, cat, btn);
       renderStyleLibrary();
-      syncStyleUi();
       try { syncGenerateOrbVisibility(); } catch {}
     });
   }
@@ -55483,7 +55645,15 @@ function closeStyleLibrary() {
   }
   document.getElementById("styleLibraryBackdrop")?.addEventListener("click", closeStyleLibrary);
   document.getElementById("btnCloseStyleLibrary")?.addEventListener("click", closeStyleLibrary);
-  els.sunoStyle?.addEventListener("input", syncStyleUi);
+  els.sunoStyle?.addEventListener("input", () => {
+    if (_styleAutoTempoTag) {
+      const tempoTags = getStyleTagsInCategory("tempo");
+      if (!tempoTags.some((t) => t.toLowerCase() === _styleAutoTempoTag.toLowerCase())) {
+        _styleAutoTempoTag = "";
+      }
+    }
+    syncStyleUi();
+  });
   syncStyleUi();
 })();
 
@@ -56538,7 +56708,8 @@ if (els.btnBoostStyle && els.sunoStyle) {
       return;
     }
 
-    const content = String(els.sunoStyle.value || "").trim();
+    const rawContent = String(els.sunoStyle.value || "").trim();
+    const content = resolveStyleInputForGeneration(rawContent);
     if (!content) {
       showToast("Type a few style words first (e.g. dabke pop, wedding energy)");
       try { els.sunoStyle.focus(); } catch {}
@@ -56567,7 +56738,7 @@ if (els.btnBoostStyle && els.sunoStyle) {
       const result = String(d?.result || "").trim();
       if (!r.ok || !result) throw new Error(d?.error || "Style boost failed — try again.");
 
-      boostUndoValue = content;
+      boostUndoValue = rawContent;
       els.sunoStyle.value = result;
       els.btnBoostStyle.textContent = "↩";
       els.btnBoostStyle.title = "Undo style boost";

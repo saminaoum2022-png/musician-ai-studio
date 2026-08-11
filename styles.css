@@ -9399,6 +9399,17 @@ html[data-theme="light"] .remixSourceLyricsPanel{
   transition:background 180ms ease, border-color 180ms ease, color 180ms ease, transform 140ms ease;
 }
 .styleSuggestPill:active{ transform:scale(0.95); }
+.styleSuggestPill.isShake{
+  animation:stylePillShake 320ms ease;
+  border-color:rgba(255,120,120,0.55);
+}
+@keyframes stylePillShake{
+  0%,100%{ transform:translateX(0); }
+  20%{ transform:translateX(-4px); }
+  40%{ transform:translateX(4px); }
+  60%{ transform:translateX(-3px); }
+  80%{ transform:translateX(3px); }
+}
 .styleSuggestPill.isActive{
   /* Unified active-purple pill (shared with .optChip + .addressPill). */
   border-color: rgba(167,139,250,0.55);
@@ -9565,6 +9576,13 @@ html[data-theme="light"] .remixSourceLyricsPanel{
   letter-spacing:0.08em;
   text-transform:uppercase;
   color:rgba(232,238,247,0.5);
+}
+.styleLibrarySectionHint{
+  margin-left:6px;
+  font-weight:600;
+  letter-spacing:0.02em;
+  text-transform:none;
+  color:rgba(232,238,247,0.34);
 }
 .styleLibraryChips{
   display:flex;

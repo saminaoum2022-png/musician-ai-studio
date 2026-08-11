@@ -90,6 +90,13 @@ module.exports = async function handler(req, res) {
       personaModel: requestedPersonaModel,
     } = body || {};
 
+    if (Boolean(instrumental)) {
+      const proGate = await requireProForWebApi(req, user.userId);
+      if (!proGate.ok) {
+        return json(res, proGate.status, { error: proGate.error, code: proGate.code });
+      }
+    }
+
     const { host, proto } = getHostProto(req);
     const callBackUrl = `${proto}://${host}/api/suno/callback`;
 

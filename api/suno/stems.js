@@ -82,6 +82,15 @@ module.exports = async function handler(req, res) {
     }
     const action = String(body?.action || "").trim();
 
+    // Vocal extraction / instrumental stems — Pro on web/desktop only.
+    if (action !== "add_instrumental") {
+      const { requireProForWebApi } = require("../_lib/pro-web-gate");
+      const proGate = await requireProForWebApi(req, user.userId);
+      if (!proGate.ok) {
+        return json(res, proGate.status, { error: proGate.error, code: proGate.code });
+      }
+    }
+
     // Determine cost + ledger reason for this request.
     const isRemixAction = action === "add_instrumental";
     const cost = isRemixAction ? STEMS_REMIX_COST : STEMS_VOCAL_COST;

@@ -201,7 +201,7 @@ import { MUSIC_VIDEO_FEATURE_ENABLED } from "./feature-flags.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260812-010053";
+const APP_BUILD = "20260812-011212";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -4697,6 +4697,7 @@ function setLyricsDialect(dialect) {
 })();
 
 function setCreateSongType(type) {
+  if (type === "instrumental" && !requireProForWebFeature("Instrumental")) return;
   const instrumental = type === "instrumental";
   if (els.vocalInstrumentalOnly) els.vocalInstrumentalOnly.value = instrumental ? "1" : "0";
   if (els.vocalModeFull) {
@@ -23650,6 +23651,42 @@ function setWebProFeaturePill(el, locked, variant = "card") {
   }
 }
 
+function setWebProFeaturePillOnHomeCard(cardEl, locked) {
+  if (!cardEl) return;
+  cardEl.classList.toggle("isProLocked", Boolean(locked));
+  const cardPill = cardEl.querySelector(":scope > .webProFeaturePill");
+  if (cardPill) cardPill.hidden = true;
+  const wrap = cardEl.querySelector(".homeDeskPersonaTileWrap, .homeDeskStudioTileWrap");
+  setWebProFeaturePill(wrap || cardEl, locked, "visual");
+}
+
+function webProFeaturePillInlineHtml() {
+  return webProFeatureLocked()
+    ? '<span class="webProFeaturePill webProFeaturePill--sheet" aria-hidden="true">Pro</span>'
+    : "";
+}
+
+function syncTrackSheetProPills() {
+  const locked = webProFeatureLocked();
+  document.querySelectorAll('[data-track-sheet-action="library_persona"], [data-track-sheet-action="library_inst"]').forEach((el) => {
+    el.classList.toggle("isProLocked", locked);
+    let pill = el.querySelector(".webProFeaturePill");
+    if (locked) {
+      if (!pill) {
+        pill = document.createElement("span");
+        pill.className = "webProFeaturePill webProFeaturePill--sheet";
+        pill.textContent = "Pro";
+        pill.setAttribute("aria-hidden", "true");
+        el.appendChild(pill);
+      } else {
+        pill.hidden = false;
+      }
+    } else if (pill) {
+      pill.hidden = true;
+    }
+  });
+}
+
 function syncProGatedWebUi() {
   const gate = isWebOrDesktopShell();
   const locked = gate && !Boolean(creditsState.proActive);
@@ -23659,7 +23696,7 @@ function syncProGatedWebUi() {
   document.querySelectorAll('[data-home-card="persona"], [data-home-card="studio"]').forEach((el) => {
     el.hidden = false;
     el.setAttribute("aria-hidden", "false");
-    setWebProFeaturePill(el, locked, "card");
+    setWebProFeaturePillOnHomeCard(el, locked);
   });
 
   const singerPill = document.getElementById("singerPersonaPill");
@@ -23688,6 +23725,16 @@ function syncProGatedWebUi() {
     el.setAttribute("aria-hidden", "false");
     setWebProFeaturePill(el, locked, "act");
   });
+
+  if (els.vocalModeInstrumental) {
+    els.vocalModeInstrumental.hidden = false;
+    setWebProFeaturePill(els.vocalModeInstrumental, locked, "pill");
+  }
+  if (els.btnSunoStems) {
+    setWebProFeaturePill(els.btnSunoStems, locked, "inline");
+  }
+
+  syncTrackSheetProPills();
 
   if (els.profilePersonaRow) {
     els.profilePersonaRow.hidden = false;
@@ -34520,11 +34567,11 @@ function renderTrackSheetLibrary(track) {
     <button type="button" class="discoverTrackSheetRow" data-track-sheet-action="library_dl_video">Download video</button>
     ${musicVideoEligible ? `<button type="button" class="discoverTrackSheetRow" data-track-sheet-action="library_music_video">${musicVideoLabel}</button>` : ""}
     ${HUB_FEATURE_ENABLED ? `<button type="button" class="discoverTrackSheetRow" data-track-sheet-action="library_share_hub">Share to Hub</button>` : ""}
-    ${personaEligible ? `<button type="button" class="discoverTrackSheetRow" data-track-sheet-action="library_persona">Save voice as persona</button>` : ""}
+    ${personaEligible ? `<button type="button" class="discoverTrackSheetRow${webProFeatureLocked() ? " isProLocked" : ""}" data-track-sheet-action="library_persona">Save voice as persona${webProFeaturePillInlineHtml()}</button>` : ""}
     ${renameRow}
     <button type="button" class="discoverTrackSheetRow" data-track-sheet-action="library_pubprof" data-track-sheet-pub-to="${pubTo}">${escapeHtml(pubLabel)}</button>
     <button type="button" class="discoverTrackSheetRow" data-track-sheet-action="library_details">About this song</button>
-    ${isInstrumental ? "" : `<button type="button" class="discoverTrackSheetRow" data-track-sheet-action="library_inst">Get instrumental</button>`}
+    ${isInstrumental ? "" : `<button type="button" class="discoverTrackSheetRow${webProFeatureLocked() ? " isProLocked" : ""}" data-track-sheet-action="library_inst">Get instrumental${webProFeaturePillInlineHtml()}</button>`}
   `;
   d.innerHTML = `
     <button type="button" class="discoverTrackSheetRow discoverTrackSheetRow--danger" data-track-sheet-action="library_del">Delete</button>
@@ -34600,6 +34647,7 @@ function openTrackSheetShell(payload) {
   sheet.setAttribute("aria-hidden", "false");
   lockPageForTrackSheet();
   requestAnimationFrame(() => sheet.classList.add("isOpen"));
+  try { syncTrackSheetProPills(); } catch {}
 }
 
 function closeTrackOptionsSheet() {
@@ -34866,6 +34914,7 @@ async function startLibraryRemixForLibraryTrack(t) {
 }
 
 async function runLibraryInstrumentalForTrack(t) {
+  if (!requireProForWebFeature("Instrumental")) return;
   if (!t?.taskId || !t?.audioId) {
     setStatus("This song is missing generation ids for instrumental request.");
     return;
@@ -34876,7 +34925,7 @@ async function runLibraryInstrumentalForTrack(t) {
     setStatus("Getting instrumental for selected song…");
     beginCoachPriorityStatus(coachInstrumentalPillText(title), { generating: true });
     const stemsTok = getSupabaseAuthToken();
-    const r = await fetch(apiUrl("/api/suno/stems"), {
+    const r = await apiFetch("/api/suno/stems", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -34885,6 +34934,10 @@ async function runLibraryInstrumentalForTrack(t) {
       body: JSON.stringify({ taskId: t.taskId, audioId: t.audioId, type: "separate_vocal" }),
     });
     const d = await r.json().catch(() => ({}));
+    if (d?.code === "pro_required" || r.status === 403) {
+      promptWebProUpgrade("Instrumental");
+      return;
+    }
     if (r.status === 402 || d?.code === "insufficient_credits") {
       const need = Number(d?.needed ?? 2);
       const have = Number(d?.balance || 0);
@@ -35306,6 +35359,7 @@ function runTrackSheetAction(action, sourceEl) {
       return;
     }
     if (action === "library_persona") {
+      if (!requireProForWebFeature("Persona")) return;
       shut();
       void createPersonaForSong({
         taskId: t.taskId,
@@ -35351,6 +35405,7 @@ function runTrackSheetAction(action, sourceEl) {
       return;
     }
     if (action === "library_inst") {
+      if (!requireProForWebFeature("Instrumental")) return;
       shut();
       void runLibraryInstrumentalForTrack(t);
       return;
@@ -54320,6 +54375,13 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       let finalPrompt = sanitizeLyricsPrompt(userPrompt);
       const imageOnlyInstrumental = Boolean(imageMoodAppliedForNextGen && !finalPrompt && !hasReference);
       const shouldGenerateInstrumental = Boolean(instrumentalSelected || imageOnlyInstrumental);
+      if (shouldGenerateInstrumental && !webProFeatureAllowed()) {
+        setLoading(false);
+        setGenerateBtn("Generate song", false, "generate");
+        setGenerateFieldsLocked(false);
+        promptWebProUpgrade("Instrumental");
+        return;
+      }
       const voiceClipChallenge = isVoiceClipChallengeId(challengePromptContext()?.id);
       const voiceClipClipOnly = Boolean(voiceClipChallenge && hasReference && !finalPrompt);
       // Auto-draft lyrics with Gemini when the user hasn't typed any.
@@ -55239,6 +55301,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
   }
 
   els.btnSunoStems.addEventListener("click", async () => {
+    if (!requireProForWebFeature("Instrumental")) return;
     if (!sunoTaskId || !sunoAudioId) {
       setStatus("Stems unavailable yet: song id is missing. Wait for full SUCCESS and try Refresh once.");
       return;
@@ -55257,7 +55320,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
         "Instrumental version",
         async () => {
           const stemsTok = getSupabaseAuthToken();
-          const r = await fetch(apiUrl("/api/suno/stems"), {
+          const r = await apiFetch("/api/suno/stems", {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
@@ -55266,6 +55329,10 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
             body: JSON.stringify({ taskId: sunoTaskId, audioId: sunoAudioId, type: "separate_vocal" }),
           });
           const d = await r.json().catch(() => ({}));
+          if (d?.code === "pro_required" || r.status === 403) {
+            promptWebProUpgrade("Instrumental");
+            throw new Error(d?.error || "NabadAi Pro is required for instrumental on web.");
+          }
           if (r.status === 402 || d?.code === "insufficient_credits") {
             const need = Number(d?.needed ?? 2);
             const have = Number(d?.balance || 0);

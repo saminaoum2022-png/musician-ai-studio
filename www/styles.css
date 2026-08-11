@@ -40,6 +40,7 @@
   --brand-violet-muted: rgba(124, 92, 255, 0.14);
   --brand-signature-gradient: linear-gradient(135deg, var(--brand-teal) 0%, var(--brand-teal) 48%, var(--brand-violet) 52%, var(--brand-violet) 100%);
   --brand-signature-gradient-diag: linear-gradient(135deg, var(--brand-teal) 0%, var(--brand-teal) 50%, var(--brand-violet) 50%, var(--brand-violet) 100%);
+  --greeting-name-gradient: linear-gradient(120deg, #0d9488 0%, #2dd4bf 42%, #7c5cff 100%);
   --brand-cta-bg: var(--brand-teal);
   --brand-cta-bg-hover: var(--brand-teal-hover);
   --brand-cta-shadow: 0 10px 28px rgba(35, 213, 171, 0.26);
@@ -14341,8 +14342,12 @@ body:not([data-route="profile"]) #profileAuraHeaderChromeRoot{
   font-size: 20px;
   font-weight: 700;
   letter-spacing: -0.03em;
-  color: #fff;
   line-height: 1.15;
+  background: var(--greeting-name-gradient);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
 }
 .profileAuraNameStack:not(.profileAuraNameStack--hasDisplayName) .profileAuraNameAffixes{
   top: 50%;
@@ -32286,7 +32291,7 @@ html[data-theme="light"] .homeDeskTopChrome{
   letter-spacing: -0.06em;
 }
 .homeDeskGreetingName{
-  background: var(--brand-signature-gradient);
+  background: var(--greeting-name-gradient);
   -webkit-background-clip: text;
   background-clip: text;
   -webkit-text-fill-color: transparent;
@@ -52350,20 +52355,17 @@ html[data-theme="dark"] :is(#friendsPage .followActStack, #profileActivitiesList
   flex-shrink: 0;
 }
 .webProFeaturePill[hidden]{ display: none !important; }
-.webProFeaturePill--card{
+.webProFeaturePill--visual{
   position: absolute;
-  top: 12px;
-  left: 14px;
-  z-index: 3;
+  top: 6px;
+  right: 6px;
+  z-index: 4;
+  font-size: 7px;
+  padding: 2px 5px;
+  letter-spacing: 0.06em;
 }
-.homeDeskStudioPromo--featured .webProFeaturePill--card{
-  top: 38px;
-  left: auto;
-  right: 14px;
-}
-.homeDeskPromoCard,
-.homeDeskPersonaPromo,
-.homeDeskStudioPromo--featured{
+.homeDeskPersonaTileWrap,
+.homeDeskStudioTileWrap{
   position: relative;
 }
 .webProFeaturePill--pill{
@@ -52391,6 +52393,22 @@ html[data-theme="dark"] :is(#friendsPage .followActStack, #profileActivitiesList
   vertical-align: middle;
   font-size: 8px;
   padding: 2px 6px;
+}
+.discoverTrackSheetRow,
+#btnSunoStems{
+  position: relative;
+}
+.webProFeaturePill--sheet{
+  margin-left: auto;
+  flex-shrink: 0;
+  font-size: 8px;
+  padding: 2px 6px;
+}
+.discoverTrackSheetRow.isProLocked{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
 }
 html.web-pro-gated .isProLocked.homeDeskPromoCard{
   cursor: pointer;

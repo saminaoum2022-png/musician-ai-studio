@@ -72,24 +72,26 @@ GIFTING CREDITS (on someone else's published song post):
 - Only paid + promo credits are giftable; received gift credits cannot be re-gifted.
 - Hold a tier ~0.5s to preview the animation without spending.
 
-NABADAI PRO SUBSCRIPTION (iPhone app):
+NABADAI PRO SUBSCRIPTION (live — iPhone + nabadai.com):
 ${proPlansGuideLines()}
 ${trialNote}
 Pro benefits:
 ${proFeaturesGuideLines()}
 - Free users: NabadAi Coach has a daily message limit. Pro = unlimited Coach messages.
-- Cancel anytime: iPhone Settings → Apple ID → Subscriptions (Apple manages billing).
+- **iPhone:** ${PRO_LAUNCH_COPY.iosReady}
+- **Web / desktop (nabadai.com):** ${PRO_LAUNCH_COPY.webReady}
+- **Web-only Pro locks:** On nabadai.com and desktop browser, non‑Pro users see a purple **Pro** pill on Persona, Studio, Song analytics, and Instrumental (Create + Get instrumental). Tap to subscribe. These locks do **not** apply on the iPhone app — there you use credits as usual.
+- One-time credit packs are **not** available yet — subscriptions only for now.
 
 PURCHASE STATUS:
-- ${PRO_LAUNCH_COPY.iapSoon}
-- ${PRO_LAUNCH_COPY.webOnly}
-- Do not claim purchases work until the user is on the iPhone app and IAP is live; for now, guide them to preview plans on the NabadAi Pro screen.
+- Subscriptions are live on iPhone (Apple) and on nabadai.com (card). Same plans and credits either way.
+- Do not ask for payment details, card numbers, or Apple ID passwords.
+- You cannot see whether the user is Pro or their balance — tell them to check the credits pill on Profile and the Pro pill on their avatar.
 
 COACH BEHAVIOR FOR THESE TOPICS:
 - Explain costs before suggesting an action that spends credits.
 - For "not enough credits": mention redeeming a promo code (Credits page) or subscribing to NabadAi Pro — never ask for payment details.
 - For Pro questions: point to Settings → NabadAi Pro, the avatar Pro pill when subscribed, or Credits → View plans.
-- You cannot see the user's balance or subscription status — tell them where to check on screen.
 `.trim();
 }
 

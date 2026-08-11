@@ -201,7 +201,7 @@ import { MUSIC_VIDEO_FEATURE_ENABLED } from "./feature-flags.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260811-154246";
+const APP_BUILD = "20260811-203709";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -2407,7 +2407,7 @@ function apiUrl(p) {
   const base = _resolvedApiBase || defaultNativeApiBase() || "https://www.nabadai.com";
   return `${base.replace(/\/$/, "")}${path}`;
 }
-const PUBLIC_CONFIG_CACHE_KEY = "mas:public-config:v3";
+const PUBLIC_CONFIG_CACHE_KEY = "mas:public-config:v4";
 /** Clears poisoned native caches whenever a new build is installed over the same app. */
 const LAST_SHIPPED_BUILD_KEY = "nabad:last-shipped-build";
 let _nativeNetworkReadyPromise = null;
@@ -2709,7 +2709,7 @@ function updateEnvironmentBadge() {
   if (!els.envBadge) return;
   els.envBadge.textContent = `Build ${APP_BUILD}`;
 }
-function cachePublicConfigPayload(apiBase = "") {
+function cachePublicConfigPayload(apiBase = "", d = {}) {
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return;
   try {
     localStorage.setItem(
@@ -2718,6 +2718,9 @@ function cachePublicConfigPayload(apiBase = "") {
         supabaseUrl: SUPABASE_URL,
         supabaseAnonKey: SUPABASE_ANON_KEY,
         onesignalAppId: _onesignalAppId,
+        revenueCatIosApiKey: String(d?.revenueCatIosApiKey || "").trim(),
+        stripeWebEnabled: Boolean(d?.stripeWebEnabled),
+        billingEnabled: Boolean(d?.billingEnabled),
         nabadCertifiedUserIds: [..._nabadCertifiedUserIds],
         apiBase: String(apiBase || _resolvedApiBase || API_BASE || "").trim(),
       }),
@@ -2739,7 +2742,7 @@ async function fetchPublicConfigOnce(base) {
     if (d?.supabaseUrl && d?.supabaseAnonKey) {
       applyPublicConfigPayload(d);
       setResolvedApiBase(base);
-      cachePublicConfigPayload(base);
+      cachePublicConfigPayload(base, d);
       return true;
     }
     if (r.status === 403) {
@@ -2754,7 +2757,7 @@ async function fetchPublicConfigOnce(base) {
     if (r.ok) {
       applyPublicConfigPayload(d);
       setResolvedApiBase(base);
-      cachePublicConfigPayload(base);
+      cachePublicConfigPayload(base, d);
     }
     return Boolean(SUPABASE_URL && SUPABASE_ANON_KEY);
   } finally {

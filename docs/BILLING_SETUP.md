@@ -77,4 +77,53 @@ iPhone (RevenueCat SDK)
 
 - Pro feature gating (Coach, Studio, WAV, badge)
 - One-time credit packs (`com.nabadai.music.credits.*`)
-- Stripe / web billing
+
+---
+
+## Stripe web billing (nabadai.com)
+
+Web subscriptions use **Stripe Checkout** alongside iOS RevenueCat. Both write to the same `pro_subscriptions` row and grant the same credits.
+
+### 1. Stripe Dashboard
+
+1. Create product **NabadAi Pro** with recurring prices:
+   - **Weekly** — $3.99/week (optional: also set 7-day trial on the price)
+   - **Monthly** — $9.99/month
+2. Copy each **Price ID** (`price_…`).
+3. **Developers → Webhooks** → Add endpoint:
+   - URL: `https://www.nabadai.com/api/billing/stripe-webhook`
+   - Events: `checkout.session.completed`, `customer.subscription.updated`, `customer.subscription.deleted`, `invoice.paid`
+4. Copy **Secret key** and **Webhook signing secret**.
+
+For staging, add a second webhook pointing at your Vercel preview URL.
+
+### 2. Vercel env vars
+
+| Variable | Where |
+|----------|--------|
+| `STRIPE_SECRET_KEY` | Secret — Checkout, Portal, webhooks |
+| `STRIPE_WEBHOOK_SECRET` | Secret — webhook signature verification |
+| `STRIPE_PRICE_WEEKLY` | Price ID for weekly plan |
+| `STRIPE_PRICE_MONTHLY` | Price ID for monthly plan |
+| `NABAD_PUBLIC_ORIGIN` | Optional — `https://www.nabadai.com` (used for Checkout return URLs) |
+
+Redeploy after adding env vars. `/api/public-config` exposes `stripeWebEnabled: true` when all three Stripe vars are set.
+
+### 3. Web flow
+
+```
+Browser (nabadai.com)
+  → POST /api/billing/checkout
+  → Stripe Checkout
+  → Stripe webhook → POST /api/billing/stripe-webhook
+  → upsert pro_subscriptions + grant_paid_credits
+  → app calls POST /api/billing/sync (backup)
+```
+
+Manage/cancel: **Manage subscription** → POST `/api/billing/portal` → Stripe Customer Portal.
+
+### 4. iOS + web together
+
+- iOS keeps using RevenueCat — no changes required.
+- One `pro_subscriptions` row per user. If someone already has Pro via Apple, web checkout returns an error.
+- Credits match iOS: 400/week (incl. trial), 1,200/month.

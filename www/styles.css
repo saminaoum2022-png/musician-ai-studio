@@ -23218,6 +23218,26 @@ main.grid > [data-route="pro"].routeEnter--present{
   color: rgba(232,238,247,0.56);
 }
 
+.proManageLink{
+  appearance: none;
+  border: 0;
+  background: transparent;
+  display: block;
+  margin: 10px auto 0;
+  padding: 2px 6px;
+  font-size: 11px;
+  font-weight: 500;
+  color: rgba(232,238,247,0.44);
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  -webkit-tap-highlight-color: transparent;
+  transition: color 160ms ease;
+}
+.proManageLink:hover{
+  color: rgba(232,238,247,0.66);
+}
+
 @media (prefers-reduced-motion: reduce){
   body[data-route="pro"] main.grid > [data-route="pro"]{
     animation: none !important;

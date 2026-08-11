@@ -29,6 +29,11 @@ module.exports = async function handler(req, res) {
       supabaseAnonKey: process.env.SUPABASE_ANON_KEY || "",
       onesignalAppId: process.env.ONESIGNAL_APP_ID || "",
       revenueCatIosApiKey: process.env.REVENUECAT_IOS_API_KEY || "",
+      stripeWebEnabled: Boolean(
+        String(process.env.STRIPE_SECRET_KEY || "").trim() &&
+          String(process.env.STRIPE_PRICE_WEEKLY || "").trim() &&
+          String(process.env.STRIPE_PRICE_MONTHLY || "").trim(),
+      ),
       billingEnabled: Boolean(
         String(process.env.REVENUECAT_IOS_API_KEY || "").trim() &&
           String(process.env.REVENUECAT_SECRET_API_KEY || "").trim(),

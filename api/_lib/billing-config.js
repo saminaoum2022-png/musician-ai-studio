@@ -53,6 +53,39 @@ function creditsForSubscriptionGrant({ productId, periodType, eventType, subscri
   return plan.creditsPerPeriod;
 }
 
+function stripePriceIds() {
+  return {
+    weekly: String(process.env.STRIPE_PRICE_WEEKLY || "").trim(),
+    monthly: String(process.env.STRIPE_PRICE_MONTHLY || "").trim(),
+  };
+}
+
+function isStripeConfigured() {
+  const ids = stripePriceIds();
+  return Boolean(
+    String(process.env.STRIPE_SECRET_KEY || "").trim() &&
+      ids.weekly &&
+      ids.monthly,
+  );
+}
+
+function planForStripePriceId(priceId) {
+  const pid = String(priceId || "").trim();
+  if (!pid) return null;
+  const ids = stripePriceIds();
+  if (pid === ids.weekly) return PRO_PRODUCTS["com.nabadai.music.pro.weekly"];
+  if (pid === ids.monthly) return PRO_PRODUCTS["com.nabadai.music.pro.monthly"];
+  return null;
+}
+
+function stripePriceIdForPlan(planId) {
+  const id = String(planId || "").trim();
+  const ids = stripePriceIds();
+  if (id === "weekly") return ids.weekly;
+  if (id === "monthly") return ids.monthly;
+  return "";
+}
+
 function statusFromRevenueCatEvent(eventType, periodType, expirationMs, productId) {
   const type = String(eventType || "").toUpperCase();
   const period = String(periodType || "").toUpperCase();
@@ -72,6 +105,22 @@ function statusFromRevenueCatEvent(eventType, periodType, expirationMs, productI
   return "active";
 }
 
+function statusFromStripeSubscription(sub) {
+  const s = String(sub?.status || "").toLowerCase();
+  const endMs = Number(sub?.current_period_end || 0) * 1000;
+  const inPeriod = endMs > Date.now();
+  if (s === "trialing") return "trialing";
+  if (s === "active") return "active";
+  if (s === "past_due") return "grace";
+  if (s === "canceled" || s === "unpaid") {
+    return inPeriod ? "cancelled" : "expired";
+  }
+  if (s === "incomplete" || s === "incomplete_expired" || s === "paused") {
+    return inPeriod ? "cancelled" : "expired";
+  }
+  return inPeriod ? "cancelled" : "expired";
+}
+
 module.exports = {
   PRO_PRODUCTS,
   CREDIT_PACK_PRODUCTS,
@@ -81,4 +130,9 @@ module.exports = {
   creditsForPackProductId,
   creditsForSubscriptionGrant,
   statusFromRevenueCatEvent,
+  stripePriceIds,
+  isStripeConfigured,
+  planForStripePriceId,
+  stripePriceIdForPlan,
+  statusFromStripeSubscription,
 };

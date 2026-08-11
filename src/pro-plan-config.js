@@ -139,6 +139,8 @@ export const PRO_LAUNCH_COPY = Object.freeze({
   ],
   iapSoon: "Connect App Store + RevenueCat to enable purchases.",
   iosReady: "Subscribe with your Apple ID. Cancel anytime in iPhone Settings → Subscriptions.",
+  webReady: "Subscribe with card. Cancel anytime from Manage subscription.",
+  webSoon: "Web checkout is being set up — check back soon.",
   webOnly: "Subscriptions are available in the NabadAi iPhone app.",
 });
 

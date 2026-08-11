@@ -89,6 +89,7 @@ import { feedActIconAnalytics, feedActIconComment, feedActIconGift, feedActIconL
 import { initGifts, openGiftSheetForTarget, openGiftSheetFromButton } from "./gifts.js";
 import { configureProPlan, formatProPeriodLabel, onProPlanRouteActive, refreshProSubscriptionUi, setProReturnRoute, weeklyInTrialWindow, weeklyProDisplayStatus, weeklyTrialStartFromState } from "./pro-plan.js";
 import { setRevenueCatApiKey, resetRevenueCatSession, reconcileProSubscription, isBillingConfigured } from "./billing/revenuecat.js";
+import { setStripeWebBillingEnabled, isStripeWebBillingConfigured, syncStripeBillingWithServer } from "./billing/stripe.js";
 import { augmentCoachApiPayload } from "./coach-knowledge.js";
 import { showGiftReceivedReveal } from "./gift-sent-overlay.js";
 import { giftTierDef } from "./gift-tier-icons.js";
@@ -2574,6 +2575,7 @@ function applyPublicConfigPayload(d) {
   configurePushFromPublicConfig(String(d?.onesignalAppId || "").trim());
   _onesignalAppId = String(d?.onesignalAppId || "").trim();
   setRevenueCatApiKey(String(d?.revenueCatIosApiKey || "").trim());
+  setStripeWebBillingEnabled(Boolean(d?.stripeWebEnabled));
   const ids = Array.isArray(d?.nabadCertifiedUserIds) ? d.nabadCertifiedUserIds : [];
   _nabadCertifiedUserIds = new Set(
     ids.map((x) => String(x || "").trim()).filter(Boolean),
@@ -5561,6 +5563,7 @@ try {
         periodEnd: pro.currentPeriodEnd,
         periodType: pro.periodType || creditsState.proPeriodType,
         trialStartedAt: creditsState.proTrialStartedAt,
+        provider: creditsState.proProvider,
       };
     },
   });
@@ -23499,6 +23502,7 @@ function applyProSubscriptionState(pro) {
   creditsState.proPeriodEnd = healed.currentPeriodEnd ? String(healed.currentPeriodEnd) : null;
   creditsState.proPeriodType =
     displayStatus === "trialing" ? "TRIAL" : (healed.periodType || row.periodType || null);
+  creditsState.proProvider = row.provider ? String(row.provider) : null;
   try { syncProSubscriptionUi(); } catch {}
 }
 
@@ -23517,29 +23521,44 @@ const creditsState = {
   proPeriodEnd: null,
   proTrialStartedAt: null,
   proPeriodType: null,
+  proProvider: null,
   loaded: false,
   inFlight: false,
   lastError: "",
 };
 
 async function reconcileProSubscriptionFromDevice() {
-  if (!isNativeShell() || !isBillingConfigured()) return;
   const uid = String(authSession?.user?.id || "").trim();
-  if (!uid || !creditsState.proActive) return;
-  try {
-    const merged = await reconcileProSubscription({
-      userId: uid,
-      getAuthToken: getSupabaseAuthToken,
-      apiBase: _resolvedApiBase || API_BASE || "",
-    });
-    if (merged?.active) {
-      applyProSubscriptionState({
-        ...merged,
-        trialStartedAt: creditsState.proTrialStartedAt || merged.trialStartedAt,
+  if (!uid) return;
+  if (isNativeShell() && isBillingConfigured()) {
+    if (!creditsState.proActive) return;
+    try {
+      const merged = await reconcileProSubscription({
+        userId: uid,
+        getAuthToken: getSupabaseAuthToken,
+        apiBase: _resolvedApiBase || API_BASE || "",
       });
+      if (merged?.active) {
+        applyProSubscriptionState({
+          ...merged,
+          trialStartedAt: creditsState.proTrialStartedAt || merged.trialStartedAt,
+        });
+      }
+    } catch (e) {
+      console.warn("[pro] reconcile failed", e?.message || e);
     }
-  } catch (e) {
-    console.warn("[pro] reconcile failed", e?.message || e);
+    return;
+  }
+  if (!isNativeShell() && isStripeWebBillingConfigured()) {
+    try {
+      await syncStripeBillingWithServer({
+        getAuthToken: getSupabaseAuthToken,
+        apiBase: _resolvedApiBase || API_BASE || "",
+      });
+      await refreshMyCredits({ silent: true });
+    } catch (e) {
+      console.warn("[pro] stripe sync failed", e?.message || e);
+    }
   }
 }
 

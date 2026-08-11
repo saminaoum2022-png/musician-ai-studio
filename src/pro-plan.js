@@ -1,5 +1,5 @@
 /**
- * NabadAi Pro — subscription UI + iOS billing (RevenueCat).
+ * NabadAi Pro — subscription UI + iOS (RevenueCat) and web (Stripe) billing.
  */
 
 import {
@@ -14,8 +14,16 @@ import {
   restoreProPurchases,
   warmBilling,
 } from "./billing/revenuecat.js";
+import {
+  isStripeWebBillingConfigured,
+  startStripeCheckout,
+  openStripeBillingPortal,
+  syncStripeBillingWithServer,
+  readStripeCheckoutResultFromHash,
+  clearStripeCheckoutQueryFromHash,
+} from "./billing/stripe.js";
 
-/** @type {{ showToast?: (msg: string, opts?: object) => void, isLoggedIn?: () => boolean, isNativeIos?: () => boolean, navigateToRoute?: (route: string) => void, getProState?: () => { active?: boolean, planId?: string|null, status?: string|null, periodEnd?: string|null }, reconcilePro?: () => Promise<void> } | null} */
+/** @type {{ showToast?: (msg: string, opts?: object) => void, isLoggedIn?: () => boolean, isNativeIos?: () => boolean, navigateToRoute?: (route: string) => void, getProState?: () => { active?: boolean, planId?: string|null, status?: string|null, periodEnd?: string|null, provider?: string|null }, reconcilePro?: () => Promise<void> } | null} */
 let _deps = null;
 
 let _mounted = false;
@@ -107,8 +115,14 @@ function selectedPlan() {
   return PRO_PLANS.find((p) => p.id === _selectedPlan) || PRO_PLANS[1];
 }
 
+function isWebStripeBilling() {
+  return !isNativeIos() && isStripeWebBillingConfigured();
+}
+
 function ctaLabel(plan) {
-  if (plan.trialDays > 0 && isNativeIos()) return plan.ctaTrial || plan.ctaSubscribe;
+  if (plan.trialDays > 0 && (isNativeIos() || isWebStripeBilling())) {
+    return plan.ctaTrial || plan.ctaSubscribe;
+  }
   return plan.ctaSubscribe;
 }
 
@@ -245,11 +259,15 @@ function paintSubscribedState() {
     const headline = proStatusHeadline(displayStatus);
     if (statusEl) {
       statusEl.hidden = false;
+      const provider = String(state.provider || "").toLowerCase();
+      const manageCopy = provider === "stripe"
+        ? `<button type="button" class="proManageLink" data-pro-manage>Manage subscription</button>`
+        : `<p class="proActiveStatusManage">Manage or cancel in iPhone Settings → Subscriptions.</p>`;
       statusEl.innerHTML = `
         <p class="proActiveStatusTitle">${esc(headline)}</p>
         <p class="proActiveStatusPlan">NabadAi Pro · ${esc(planName)}</p>
         ${renew ? `<p class="proActiveStatusRenew">${esc(renew)}</p>` : ""}
-        <p class="proActiveStatusManage">Manage or cancel in iPhone Settings → Subscriptions.</p>
+        ${manageCopy}
       `;
     }
     if (btn) {
@@ -275,7 +293,7 @@ function paintSubscribedState() {
     btn.hidden = false;
     btn.disabled = false;
   }
-  if (restoreBtn) restoreBtn.hidden = false;
+  if (restoreBtn) restoreBtn.hidden = isWebStripeBilling();
   if (extras) extras.classList.remove("proDockProExtras--subscribed");
   mount()?.querySelectorAll(".proPlanCard[data-pro-plan]").forEach((card) => {
     card.classList.remove("isCurrentPlan");
@@ -361,9 +379,10 @@ function renderProPlanPage({ preserveTab = true } = {}) {
 
   const plan = selectedPlan();
   const native = isNativeIos();
+  const webStripe = isWebStripeBilling();
   const statusNote = native
     ? (isBillingConfigured() ? PRO_LAUNCH_COPY.iosReady : PRO_LAUNCH_COPY.iapSoon)
-    : PRO_LAUNCH_COPY.webOnly;
+    : (webStripe ? PRO_LAUNCH_COPY.webReady : PRO_LAUNCH_COPY.webSoon);
 
   host.innerHTML = `
     <div class="proShell">
@@ -406,7 +425,7 @@ function renderProPlanPage({ preserveTab = true } = {}) {
             Hide benefits
             <span class="proBenefitsChev" aria-hidden="true">›</span>
           </button>
-          <button type="button" class="proRestoreLink" data-pro-restore>Restore purchases</button>
+          ${webStripe ? "" : `<button type="button" class="proRestoreLink" data-pro-restore>Restore purchases</button>`}
         </div>
         <p class="proStatusNote">${esc(statusNote)}</p>
       </footer>
@@ -433,6 +452,7 @@ function warmBillingIfReady() {
 async function handleSubscribeClick() {
   const plan = selectedPlan();
   const native = isNativeIos();
+  const webStripe = isWebStripeBilling();
   const loggedIn = typeof _deps?.isLoggedIn === "function" ? _deps.isLoggedIn() : false;
   if (!loggedIn) {
     _deps?.showToast?.("Sign in to subscribe to Pro.", { durationMs: 2800 });
@@ -441,11 +461,11 @@ async function handleSubscribeClick() {
     } catch {}
     return;
   }
-  if (!native) {
-    _deps?.showToast?.("Open NabadAi on your iPhone to subscribe.", { durationMs: 3200 });
+  if (!native && !webStripe) {
+    _deps?.showToast?.("Web checkout is not available yet.", { durationMs: 3200 });
     return;
   }
-  if (!isBillingConfigured()) {
+  if (native && !isBillingConfigured()) {
     _deps?.showToast?.("Billing is not configured yet. Finish App Store Connect + RevenueCat setup.", {
       durationMs: 3600,
     });
@@ -456,9 +476,16 @@ async function handleSubscribeClick() {
   const prevLabel = btn?.textContent || "";
   if (btn) {
     btn.disabled = true;
-    btn.textContent = "Opening…";
+    btn.textContent = native ? "Opening…" : "Redirecting…";
   }
   try {
+    if (webStripe) {
+      await startStripeCheckout(plan.id, {
+        getAuthToken: _deps?.getAuthToken,
+        apiBase: _deps?.getApiBase?.() || "",
+      });
+      return;
+    }
     await warmBilling(userId);
     await purchaseProPlan(plan.id, {
       userId,
@@ -477,6 +504,50 @@ async function handleSubscribeClick() {
       btn.disabled = false;
       if (!readProState().active) btn.textContent = prevLabel || ctaLabel(selectedPlan());
     }
+  }
+}
+
+async function handleManageSubscriptionClick() {
+  if (!isWebStripeBilling()) return;
+  const loggedIn = typeof _deps?.isLoggedIn === "function" ? _deps.isLoggedIn() : false;
+  if (!loggedIn) {
+    _deps?.showToast?.("Sign in to manage your subscription.", { durationMs: 2800 });
+    return;
+  }
+  try {
+    await openStripeBillingPortal({
+      getAuthToken: _deps?.getAuthToken,
+      apiBase: _deps?.getApiBase?.() || "",
+    });
+  } catch (err) {
+    _deps?.showToast?.(err?.message || "Could not open billing portal", { durationMs: 3600 });
+  }
+}
+
+async function handleStripeCheckoutReturn() {
+  const result = readStripeCheckoutResultFromHash();
+  if (!result) return;
+  clearStripeCheckoutQueryFromHash();
+  if (result.checkout === "cancelled") {
+    _deps?.showToast?.("Checkout cancelled.", { durationMs: 2600 });
+    return;
+  }
+  if (result.checkout !== "success") return;
+  try {
+    const data = await syncStripeBillingWithServer({
+      getAuthToken: _deps?.getAuthToken,
+      apiBase: _deps?.getApiBase?.() || "",
+    });
+    if (data?.pro) {
+      await _deps?.reconcilePro?.();
+    }
+    await _deps?.refreshCredits?.();
+    _deps?.showToast?.("Welcome to NabadAi Pro!", { durationMs: 3200 });
+    navigateAwayFromPro(_returnRoute);
+  } catch (err) {
+    _deps?.showToast?.(err?.message || "Subscription sync failed — refresh in a moment.", {
+      durationMs: 4200,
+    });
   }
 }
 
@@ -554,6 +625,11 @@ function bindProPlanPageOnce() {
       paintBenefitsExpanded();
       return;
     }
+    if (ev.target?.closest?.("[data-pro-manage]")) {
+      ev.preventDefault();
+      void handleManageSubscriptionClick();
+      return;
+    }
     if (ev.target?.closest?.("[data-pro-restore]")) {
       ev.preventDefault();
       void handleRestoreClick();
@@ -577,6 +653,7 @@ export function onProPlanRouteActive({ entering = false } = {}) {
   bindProBackOnce();
   paintProBackLink();
   warmBillingIfReady();
+  void handleStripeCheckoutReturn();
   if (needsRender || entering) {
     if (entering) _benefitsExpanded = true;
     paintPlanCards();

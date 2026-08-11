@@ -17,6 +17,7 @@ function normalizeProSubscriptionRow(row) {
       currentPeriodEnd: null,
       provider: null,
       trialStartedAt: null,
+      providerSubscriptionId: null,
     };
   }
   let status = String(row.status || "").trim().toLowerCase() || null;
@@ -41,14 +42,14 @@ function normalizeProSubscriptionRow(row) {
     const endMs = Date.parse(String(currentPeriodEnd));
     if (Number.isFinite(endMs) && endMs <= Date.now()) active = false;
   }
-  return { active, planId, status, currentPeriodEnd, provider, trialStartedAt };
+  return { active, planId, status, currentPeriodEnd, provider, trialStartedAt, providerSubscriptionId: row.provider_subscription_id || row.providerSubscriptionId || null };
 }
 
 async function fetchProSubscriptionForUser(userId) {
   const uid = String(userId || "").trim();
   if (!uid) return normalizeProSubscriptionRow(null);
   const res = await selectFromTable(
-    `pro_subscriptions?select=plan_id,status,current_period_end,provider,created_at,updated_at&user_id=eq.${encodeURIComponent(uid)}&limit=1`
+    `pro_subscriptions?select=plan_id,status,current_period_end,provider,provider_subscription_id,created_at,updated_at&user_id=eq.${encodeURIComponent(uid)}&limit=1`
   );
   if (!res.ok) return normalizeProSubscriptionRow(null);
   const row = Array.isArray(res.data) && res.data[0] ? res.data[0] : null;

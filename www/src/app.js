@@ -201,7 +201,7 @@ import { MUSIC_VIDEO_FEATURE_ENABLED } from "./feature-flags.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260811-234219";
+const APP_BUILD = "20260812-002708";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -55283,7 +55283,7 @@ const STYLE_GENRE_PRESETS = Object.freeze({
   }),
   "Levantine Pop": Object.freeze({
     prompt:
-      "Levantine Arabic pop, Al Shami shami singer style, emotional pop vocal, Syrian Lebanese melody, 4/4 modern pop production, oud and synth accents, NOT dabke, NOT Egyptian shaabi, NOT classic tarab",
+      "Levantine Arabic pop, emotional pop vocal, Syrian Lebanese melody, 4/4 modern pop production, oud and synth accents, NOT dabke, NOT Egyptian shaabi, NOT classic tarab",
     suggestedTempo: "Mid Tempo",
   }),
   Tarab: Object.freeze({

@@ -49119,6 +49119,14 @@ function findPlayerLibraryTrackRow() {
   return null;
 }
 
+/** Cover regen / thumb edit only when playback started from All songs (library row). */
+function playerCoverToolsContextAllowed() {
+  if (String(miniSource?.type || "") !== "library") return false;
+  const id = String(miniSource?.id || "").trim();
+  if (!id) return false;
+  return Boolean(loadLibrary().find((x) => String(x.id) === id));
+}
+
 function playerCurrentUserOwnsTrack() {
   const mine = String(authSession?.user?.id || "").trim();
   const myHandle = String(activeProfile?.username || "").trim().toLowerCase();
@@ -49163,6 +49171,10 @@ function resolvePlayerLibraryTrack() {
 }
 
 function openPlayerChangeCoverPicker() {
+  if (!playerCoverToolsContextAllowed()) {
+    showToast("Open this song from your Library to change the cover.", { icon: "!", durationMs: 3200 });
+    return;
+  }
   if (playerSourceIsExternalListenOnly()) {
     showToast("Only your own library songs can change cover.");
     return;
@@ -49189,6 +49201,10 @@ function playerCanEditThumb(track) {
 function syncPlayerCoverToolsRail() {
   const rail = els.playerCoverToolsRail;
   if (!rail) return;
+  if (!playerCoverToolsContextAllowed()) {
+    rail.hidden = true;
+    return;
+  }
   const own = playerCurrentUserOwnsTrack() && !playerSourceIsExternalListenOnly();
   const track = resolvePlayerLibraryTrack();
   if (!own || !track) {
@@ -49233,6 +49249,7 @@ function closeThumbEditSheet() {
 }
 
 async function openThumbEditSheet(track) {
+  if (!playerCoverToolsContextAllowed()) return;
   const trackId = String(track?.id || "").trim();
   if (!trackId) return;
   track = loadLibrary().find((x) => String(x.id) === trackId) || track;
@@ -49323,6 +49340,7 @@ function setPlayerCoverGenerating(active) {
 }
 
 async function regeneratePlayerCover(artworkHint = "", trackId = "") {
+  if (!playerCoverToolsContextAllowed() && !trackId) return;
   const track = trackId
     ? loadLibrary().find((x) => String(x.id) === String(trackId))
     : resolvePlayerLibraryTrack();
@@ -49551,6 +49569,7 @@ function suggestArtworkTextFromTrack(track) {
 }
 
 function openCoverRegenSheet(track) {
+  if (!playerCoverToolsContextAllowed()) return;
   if (!track?.id || !playerCanRegenerateCover(track)) return;
   mountFixedOverlaysToBody();
   _coverRegenTrackId = String(track.id);
@@ -58330,7 +58349,7 @@ if (els.playerCoverUpload) {
   els.playerCoverUpload.addEventListener("change", async () => {
     const f = els.playerCoverUpload?.files?.[0];
     const track = resolvePlayerLibraryTrack() || currentPlayerTrackRef;
-    if (!f || !track?.id) {
+    if (!f || !track?.id || !playerCoverToolsContextAllowed()) {
       try { els.playerCoverUpload.value = ""; } catch {}
       return;
     }

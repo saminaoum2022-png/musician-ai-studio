@@ -47574,6 +47574,20 @@ body[data-route="studio"] .deskRail { display: none !important; }
     overflow: hidden;
     background: #0a0c12;
   }
+  html.is-web-shell body.discoverReelInShell[data-route="player"] .playerArtWrap .playerSocialRail{
+    position: absolute;
+    right: 12px;
+    top: auto;
+    bottom: 56px;
+    transform: none;
+    z-index: 12;
+    max-height: calc(100% - 72px);
+    overflow: visible;
+    pointer-events: auto;
+  }
+  html.is-web-shell body.discoverReelInShell[data-route="player"] .playerSocialActions{
+    gap: 16px;
+  }
   html.is-web-shell body.discoverReelInShell[data-route="player"] .playerArtStage{
     position: absolute;
     inset: 0;
@@ -47624,13 +47638,6 @@ body[data-route="studio"] .deskRail { display: none !important; }
     max-width: none;
     margin-inline: 0;
     padding: 0 4px;
-  }
-  html.is-web-shell body.discoverReelInShell[data-route="player"] .playerSocialRail{
-    position: absolute;
-    right: 10px;
-    bottom: 108px;
-    top: auto;
-    z-index: 12;
   }
   html.is-web-shell body.discoverReelInShell[data-route="player"] .playerCard[data-discover-reel="1"] .playerSocialRail,
   html.is-web-shell body.discoverReelInShell[data-route="player"] .playerCard[data-discover-reel="1"] .playerSocialRail[hidden]{

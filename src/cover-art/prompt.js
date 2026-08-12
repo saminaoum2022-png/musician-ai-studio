@@ -4,7 +4,7 @@
  */
 
 /** Bump when cover prompt policy changes — busts Gemini scene cache on the server. */
-export const COVER_PROMPT_POLICY_VERSION = 13;
+export const COVER_PROMPT_POLICY_VERSION = 14;
 /** Pollinations flux reliably returns ~768×768 square — request square, crop to 9:16 (avoids vertical stretch). */
 export const POLLINATIONS_COVER_WIDTH = 1024;
 export const POLLINATIONS_COVER_HEIGHT = 1024;
@@ -309,6 +309,19 @@ const REGEN_MOOD_HINTS = [
   },
 ];
 
+const WILDLIFE_ARTWORK_RE =
+  /\b(bird|birds|songbird|eagle|owl|hawk|parrot|crow|raven|dove|sparrow|robin|flamingo|peacock|swan|duck|hummingbird|penguin|butterfly|butterflies|dragonfly|fish|koi|whale|dolphin|seal|turtle|horse|wolf|lion|tiger|deer|fox|rabbit|bunny|squirrel|animal|animals|wildlife)\b/i;
+
+function isPetPropHint(text) {
+  return /\b(dog|puppy|cat|kitten|pet)\b/i.test(String(text || ""));
+}
+
+export function isWildlifeArtworkHint(text) {
+  const s = String(text || "");
+  if (isPetPropHint(s)) return false;
+  return WILDLIFE_ARTWORK_RE.test(s);
+}
+
 /** Any explicit regen hint from the user — block song story bleed, not always still life. */
 export function isUserDirectedRegenHint(text) {
   return String(text || "").trim().length >= 2;
@@ -343,8 +356,12 @@ export function isOccasionMoodRegenHint(text) {
 export function shouldUseLiteralSubjectMode(hint, { userArtworkOverride = "" } = {}) {
   const prepared = String(userArtworkOverride || hint || "").trim();
   if (prepared.length < 2 || isSceneEnvironmentHint(prepared)) return false;
-  if (isOccasionMoodRegenHint(prepared)) return true;
+  if (isOccasionMoodRegenHint(prepared) || isWildlifeArtworkHint(prepared)) return true;
   return isConcreteObjectArtworkHint(prepared) || isFoodArtworkHint(prepared);
+}
+
+export function shouldUseConcreteSubjectDna(hint, opts = {}) {
+  return shouldUseLiteralSubjectMode(hint, opts) || isWildlifeArtworkHint(String(opts.userArtworkOverride || hint || "").trim());
 }
 
 function isFoodArtworkHint(text) {
@@ -529,6 +546,9 @@ function enrichUserArtworkHint(raw) {
   if (isFoodArtworkHint(s) && !/still life|focal subject|recognizable|food photography/i.test(s)) {
     s = `${s}, appetizing food still life photograph with the requested food clearly visible and recognizable as the main subject`;
   }
+  if (isWildlifeArtworkHint(s) && !/wildlife|perched|in flight|focal subject|clearly visible|no people/i.test(s)) {
+    s = `${s}, photorealistic wildlife nature photograph, the requested bird or animal clearly visible as the single main focal subject, sharp natural detail, no people`;
+  }
   if (/\b(dog|puppy|cat|pet)\b/i.test(s) && !/still life|leash|bowl|collar|paw print/i.test(s)) {
     s = `${s}, cozy pet leash and water bowl still life, warm soft light, no animals, no people`;
   }
@@ -541,7 +561,10 @@ function enrichUserArtworkHint(raw) {
   return s.replace(/\s+/g, " ").trim().slice(0, 280);
 }
 
-function composeFrameForArtwork(userArtwork, { literalSubject = false } = {}) {
+function composeFrameForArtwork(userArtwork, { literalSubject = false, wildlifeSubject = false } = {}) {
+  if (wildlifeSubject || isWildlifeArtworkHint(userArtwork)) {
+    return "vertical cinematic album art, natural environment, single wildlife subject as clear focal point, atmospheric depth, no people";
+  }
   if (
     literalSubject ||
     isOccasionMoodRegenHint(userArtwork) ||
@@ -669,7 +692,7 @@ function userRegenAvoidTags(userArtwork) {
   if (isSceneEnvironmentHint(hint)) {
     return stillLifeBlock;
   }
-  if (isOccasionMoodRegenHint(hint) || isFoodArtworkHint(hint) || isConcreteObjectArtworkHint(hint)) {
+  if (isOccasionMoodRegenHint(hint) || isFoodArtworkHint(hint) || isConcreteObjectArtworkHint(hint) || isWildlifeArtworkHint(hint)) {
     return landscapeBlock;
   }
   return landscapeBlock;
@@ -1010,20 +1033,26 @@ export function buildAbstractCoverPrompt(input, options = {}) {
         ];
   } else if (userArtwork) {
     const userPalette = paletteForUserArtwork(userArtwork, bucketKey);
-    const useLiteralSubject = shouldUseLiteralSubjectMode(userArtworkOverride || userArtworkRaw);
-    const useSceneLead = !useLiteralSubject && isSceneEnvironmentHint(userArtwork);
-    const useMoodLead = !useLiteralSubject && !useSceneLead && regenMood;
+    const useLiteralSubject = shouldUseLiteralSubjectMode(userArtworkOverride || userArtworkRaw) && !isWildlifeArtworkHint(userArtworkOverride || userArtworkRaw);
+    const useWildlifeLead = isWildlifeArtworkHint(userArtworkOverride || userArtworkRaw);
+    const useSceneLead = !useLiteralSubject && !useWildlifeLead && isSceneEnvironmentHint(userArtwork);
+    const useMoodLead = !useLiteralSubject && !useSceneLead && !useWildlifeLead && regenMood;
     const literalLead = useLiteralSubject
       ? `photorealistic editorial still life photograph, ${userArtwork}, clearly visible and recognizable`
-      : useSceneLead
-        ? `photorealistic cinematic environment photograph, ${userArtwork}, the requested place or architecture clearly visible as the focal subject`
-        : useMoodLead
-          ? `photorealistic symbolic still life photograph expressing ${userArtworkOverride || userArtworkRaw}, ${userArtwork}, clear recognizable props as focal subject`
-          : "";
+      : useWildlifeLead
+        ? `photorealistic wildlife nature photograph, ${userArtwork}, the requested bird or animal clearly visible as the single main focal subject`
+        : useSceneLead
+          ? `photorealistic cinematic environment photograph, ${userArtwork}, the requested place or architecture clearly visible as the focal subject`
+          : useMoodLead
+            ? `photorealistic symbolic still life photograph expressing ${userArtworkOverride || userArtworkRaw}, ${userArtwork}, clear recognizable props as focal subject`
+            : "";
     parts = [
       NO_TEXT_LEAD,
       literalLead,
-      composeFrameForArtwork(userArtwork, { literalSubject: useLiteralSubject }),
+      composeFrameForArtwork(userArtwork, {
+        literalSubject: useLiteralSubject,
+        wildlifeSubject: useWildlifeLead,
+      }),
       userArtwork,
       nabadIdentityPhrases,
       userPalette,

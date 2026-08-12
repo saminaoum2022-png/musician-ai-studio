@@ -74,5 +74,14 @@ assert(/ring|rose|candle|romantic|still life/i.test(loveBuilt.prompt), "love pro
 assert(loveBuilt.bucket === "love", "love regen uses love palette bucket");
 assert(!/not literal props/i.test(loveBuilt.prompt), "love prompt avoids anti-literal haze DNA");
 
+const birdBuilt = promptMod.buildAbstractCoverPrompt(
+  { songId: "regen-bird", title: "Mountain Song", lyrics: "peaks at dawn", artworkHint: "bird" },
+  { regenSalt: "test", userArtworkOverride: "bird", nabadIdentityPhrases: idMod.nabadIdentityPhrases({ songId: "regen-bird", bucketKey: "chill", concreteSubject: true }).text },
+);
+assert(/bird/i.test(birdBuilt.prompt), "bird hint stays in prompt");
+assert(/wildlife|animal|nature photograph/i.test(birdBuilt.prompt), "bird prompt uses wildlife framing");
+assert(!/mountain/i.test(birdBuilt.prompt), "bird prompt does not inject mountain scene");
+assert(!/not literal props/i.test(birdBuilt.prompt), "bird prompt avoids anti-literal haze DNA");
+
 if (failed) process.exit(1);
-console.log("\nAll flower/fries/old-house/birthday/love regen prompt checks passed.");
+console.log("\nAll flower/fries/old-house/birthday/love/bird regen prompt checks passed.");

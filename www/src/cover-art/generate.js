@@ -2,7 +2,7 @@
  * Client-side abstract cover generation via /api/music/cover-art
  */
 import { canRegeneratePollinationsCover, canRegenerateTrackCover, coverArtParamsFromTrack, hasUserPhotoCoverMeta, isPollinationsCoverEligible, shouldUseAbstractCover } from "./params.js";
-import { buildAbstractCoverPrompt, buildPollinationsUrl, classifyVisualBucket, COVER_PROMPT_POLICY_VERSION, resolveStoryTheme, resolveRegenMoodFromHint, shouldUseLiteralSubjectMode } from "./prompt.js";
+import { buildAbstractCoverPrompt, buildPollinationsUrl, classifyVisualBucket, COVER_PROMPT_POLICY_VERSION, resolveStoryTheme, resolveRegenMoodFromHint, shouldUseConcreteSubjectDna } from "./prompt.js";
 import { resolveVisualDirection } from "./visual-director/director.mjs";
 import { nabadIdentityPhrases } from "./visual-director/nabad-identity.mjs";
 import { DEFAULT_SONG_COVER_URL, isDefaultSongCoverUrl } from "./placeholders.js";
@@ -122,7 +122,7 @@ async function resolveRegenPromptBundle(params, regenOpts = {}) {
       };
   const regenMood = hintOverride ? resolveRegenMoodFromHint(hintOverride) : null;
   const identityBucket = regenMood?.bucket || bucketKey;
-  const concreteSubject = Boolean(hintOverride && shouldUseLiteralSubjectMode(hintOverride, { userArtworkOverride: hintOverride }));
+  const concreteSubject = Boolean(hintOverride && shouldUseConcreteSubjectDna(hintOverride, { userArtworkOverride: hintOverride }));
   const identityPhrases = concreteSubject
     ? nabadIdentityPhrases({
         songId: String(params?.songId || "").trim(),

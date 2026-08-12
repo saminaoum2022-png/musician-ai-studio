@@ -55,6 +55,70 @@ async function resolveUserLookup(input) {
   return resolveUserByUsername(lookup.value);
 }
 
+function escapeLike(value) {
+  return String(value || "")
+    .replace(/\\/g, "\\\\")
+    .replace(/%/g, "\\%")
+    .replace(/_/g, "\\_");
+}
+
+function searchNeedle(input) {
+  return String(input || "").trim().toLowerCase().replace(/^@/, "");
+}
+
+function ilikeContainsParam(column, needle) {
+  const n = escapeLike(searchNeedle(needle));
+  if (!n) return null;
+  return `${column}=ilike.*${encodeURIComponent(n)}*`;
+}
+
+async function adminSearchUserIds(query, { authMap = null, limit = 100 } = {}) {
+  const q = String(query || "").trim();
+  if (q.length < 2) return [];
+
+  const idSet = new Set();
+  const lim = Math.min(Math.max(Number(limit) || 100, 1), 200);
+  const lookup = normalizeLookup(q);
+
+  if (lookup.type === "email") {
+    const exact = await resolveUserLookup(q);
+    if (exact?.userId) idSet.add(String(exact.userId));
+  }
+
+  const exactUsername = await resolveUserByUsername(lookup.value);
+  if (exactUsername?.userId) idSet.add(String(exactUsername.userId));
+
+  const filters = [
+    ilikeContainsParam("username", q),
+    ilikeContainsParam("display_name", q),
+    ilikeContainsParam("email", q),
+  ].filter(Boolean);
+
+  for (const filter of filters) {
+    const res = await selectFromTable(
+      `profiles?select=user_id&${filter}&limit=${lim}`,
+    );
+    if (!res.ok) continue;
+    for (const row of Array.isArray(res.data) ? res.data : []) {
+      if (row?.user_id) idSet.add(String(row.user_id));
+    }
+  }
+
+  const hits = await searchUsers(q, { limit: 20 });
+  for (const hit of hits) {
+    if (hit?.userId) idSet.add(String(hit.userId));
+  }
+
+  const needle = searchNeedle(q);
+  if (authMap && needle) {
+    for (const [userId, auth] of authMap) {
+      if (auth.email && auth.email.includes(needle)) idSet.add(String(userId));
+    }
+  }
+
+  return [...idSet].slice(0, lim);
+}
+
 async function searchUsers(query, { limit = 8 } = {}) {
   const lookup = normalizeLookup(query);
   if (!lookup.value || lookup.value.length < 2) return [];
@@ -68,7 +132,7 @@ async function searchUsers(query, { limit = 8 } = {}) {
     return hits;
   }
 
-  const prefix = encodeURIComponent(lookup.value);
+  const prefix = encodeURIComponent(escapeLike(lookup.value));
   const res = await selectFromTable(
     `profiles?select=user_id,username,email,display_name,role&username=ilike.${prefix}*&order=username.asc&limit=${lim}`,
   );
@@ -89,4 +153,7 @@ module.exports = {
   resolveUserLookup,
   resolveUserByUsername,
   searchUsers,
+  adminSearchUserIds,
+  escapeLike,
+  searchNeedle,
 };

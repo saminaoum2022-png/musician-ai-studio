@@ -30,7 +30,7 @@ const { ensureProfileRow } = require("../../_lib/ensure-profile-row");
 const {
   listAssignableRoles,
 } = require("../../_lib/admin-permissions");
-const { searchUsers } = require("../../_lib/admin-user-resolve");
+const { adminSearchUserIds } = require("../../_lib/admin-user-resolve");
 
 const SUPABASE_URL = (process.env.SUPABASE_URL || "").replace(/\/$/, "");
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
@@ -366,35 +366,29 @@ async function fetchProfilesForAdmin(limit, offset) {
 }
 
 async function findUserIdsBySearch(query, authMap) {
-  const q = String(query || "").trim();
-  if (q.length < 2) return [];
-  const needle = q.toLowerCase().replace(/^@/, "");
-  const idSet = new Set();
+  return adminSearchUserIds(query, { authMap, limit: 200 });
+}
 
-  const profRes = await serviceFetch(
-    `profiles?select=user_id&or=(username.ilike.*${encodeURIComponent(needle)}*,display_name.ilike.*${encodeURIComponent(needle)}*)&limit=100`,
-  );
-  for (const row of Array.isArray(profRes.data) ? profRes.data : []) {
-    if (row?.user_id) idSet.add(String(row.user_id));
-  }
-
-  const emailProf = await serviceFetch(
-    `profiles?select=user_id&email=ilike.*${encodeURIComponent(needle)}*&limit=50`,
-  );
-  for (const row of Array.isArray(emailProf.data) ? emailProf.data : []) {
-    if (row?.user_id) idSet.add(String(row.user_id));
-  }
-
-  const hits = await searchUsers(q, { limit: 20 });
-  for (const hit of hits) {
-    if (hit?.userId) idSet.add(String(hit.userId));
-  }
-
-  for (const [userId, auth] of authMap) {
-    if (auth.email && auth.email.includes(needle)) idSet.add(String(userId));
-  }
-
-  return [...idSet];
+function buildOrphanUserFromAuth(userId, auth) {
+  return {
+    userId,
+    name: "—",
+    username: "",
+    email: auth.email || "",
+    signupAt: auth.signupAt || null,
+    role: "user",
+    subscriptionStatus: "none",
+    subscriptionPlan: null,
+    subscriptionPeriodEnd: null,
+    credits: 0,
+    paidCredits: 0,
+    giftCredits: 0,
+    promoCredits: 0,
+    songsGenerated: 0,
+    lastActiveAt: null,
+    signupPlatform: auth.signupPlatform || null,
+    profilePending: true,
+  };
 }
 
 async function hydrateUsersFromProfiles(profiles, authMap, orphanAuthUsers = [], totalOverride) {
@@ -476,7 +470,13 @@ async function getUsers(limit, offset, search = "") {
       if (row?.user_id) profileById.set(String(row.user_id), row);
     }
     const profiles = pageIds.map((id) => profileById.get(String(id))).filter(Boolean);
-    const payload = await hydrateUsersFromProfiles(profiles, authMap, [], total);
+    const orphanFromSearch = pageIds
+      .filter((id) => !profileById.has(String(id)))
+      .map((userId) => {
+        const auth = authMap.get(userId) || authMap.get(String(userId)) || {};
+        return buildOrphanUserFromAuth(userId, auth);
+      });
+    const payload = await hydrateUsersFromProfiles(profiles, authMap, orphanFromSearch, total);
     return { ...payload, search: searchQ };
   }
 
@@ -519,25 +519,7 @@ async function getUsers(limit, offset, search = "") {
     }
     for (const { userId, auth } of orphanEntries) {
       if (profileIdSet.has(userId)) continue;
-      orphanAuthUsers.push({
-        userId,
-        name: "—",
-        username: "",
-        email: auth.email || "",
-        signupAt: auth.signupAt || null,
-        role: "user",
-        subscriptionStatus: "none",
-        subscriptionPlan: null,
-        subscriptionPeriodEnd: null,
-        credits: 0,
-        paidCredits: 0,
-        giftCredits: 0,
-        promoCredits: 0,
-        songsGenerated: 0,
-        lastActiveAt: null,
-        signupPlatform: auth.signupPlatform || null,
-        profilePending: true,
-      });
+      orphanAuthUsers.push(buildOrphanUserFromAuth(userId, auth));
     }
   }
 

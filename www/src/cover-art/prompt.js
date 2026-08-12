@@ -4,7 +4,7 @@
  */
 
 /** Bump when cover prompt policy changes — busts Gemini scene cache on the server. */
-export const COVER_PROMPT_POLICY_VERSION = 12;
+export const COVER_PROMPT_POLICY_VERSION = 13;
 /** Pollinations flux reliably returns ~768×768 square — request square, crop to 9:16 (avoids vertical stretch). */
 export const POLLINATIONS_COVER_WIDTH = 1024;
 export const POLLINATIONS_COVER_HEIGHT = 1024;
@@ -249,6 +249,66 @@ const CONCRETE_OBJECT_RE =
 const SCENE_ENVIRONMENT_RE =
   /\b(old\s+house|abandoned|ruins?|castle|cottages?|cabin|barn|farm|village|mansion|building|buildings|architecture|architectural|house|houses|home|homes|homestead|hut|shack|palace|tower|temple|church|cathedral|mosque|lighthouse|skyline|cityscape|city|street|alley|road|highway|bridge|forest|woods|jungle|desert|beach|coast|ocean|sea|lake|river|waterfall|mountain|mountains|hill|hills|valley|meadow|field|garden|park|sunset|sunrise|twilight|landscape|environment|horizon|countryside|rural|urban|industrial|warehouse|factory|suburb|neighborhood|neighbourhood|rooftop|balcony|porch|path|trail|canyon|cliff|island|harbor|harbour|port|market|square|plaza|downtown|skyscraper|apartment|condo|hotel|motel|inn|shop|storefront|cafe|restaurant|bar|pub|library|museum|school|university|campus|stadium|arena|theater|theatre|cinema|station|airport|runway|dock|pier|marina|grove|orchard|vineyard|winery|cemetery|graveyard|monument|statue|fountain|dam|tunnel|subway|metro|train|railway|railroad|platform|tree|trees|car|cars|boat|boats|plane|planes|bicycle|bike|door|doors|window|windows)\b/i;
 
+/** Mood / occasion regen hints (birthday, love, …) → symbolic still life, not landscape haze. */
+const REGEN_MOOD_HINTS = [
+  {
+    id: "celebration",
+    re: /\b(birthday|bday|happy birthday|party|celebration|celebrate|fiesta|cheers|toast|confetti|festive|anniversary|new year|graduation|prom|عيد ميلاد|احتفال)\b/i,
+    scene:
+      "celebration still life, colorful balloons and soft candle glow on a festive surface, confetti scatter and champagne flute bokeh, warm joyful party mood, no people",
+    bucket: "party",
+  },
+  {
+    id: "romance",
+    re: /\b(love|romantic|romance|valentine|darling|heartfelt|passion|habibi|habibti|حب|عشق|قلبي)\b/i,
+    scene:
+      "romantic still life, intertwined gold rings and soft candlelight on dark surface, rose petals scatter, tender warmth, no people",
+    bucket: "love",
+  },
+  {
+    id: "heartbreak",
+    re: /\b(heartbreak|broken heart|goodbye|farewell|miss you|lonely|alone|sad|melancholy|tears|وداع|وحيد)\b/i,
+    scene:
+      "melancholic still life, wilted rose and rain-streaked window glass, empty teacup on windowsill, quiet emotional weight, no people",
+    bucket: "sad",
+  },
+  {
+    id: "wedding",
+    re: /\b(wedding|bridal|bride|groom|engagement|marriage|زفاف|عرس|عروس)\b/i,
+    scene:
+      "wedding still life, diamond solitaire rings on ivory satin, soft floral bouquet and champagne gold bokeh, elegant ceremony mood, no people",
+    bucket: "wedding",
+  },
+  {
+    id: "christmas",
+    re: /\b(christmas|xmas|noël|noel|holiday season|yuletide|بيت الميلاد)\b/i,
+    scene:
+      "cozy winter still life, miniature evergreen tree with warm golden lights and glowing star, soft snowfall bokeh, festive warmth, no people",
+    bucket: "happy",
+  },
+  {
+    id: "hype",
+    re: /\b(hype|energy|power|beast|anthem|champion|victory|workout|gym|training)\b/i,
+    scene:
+      "athletic still life, kettlebell and running shoes on gym floor, dramatic backlight streaks, kinetic energy mood, no people",
+    bucket: "hype",
+  },
+  {
+    id: "chill",
+    re: /\b(chill|calm|peace|peaceful|relax|ambient|lofi|lo-fi|serene|zen)\b/i,
+    scene:
+      "serene organic still life, botanical props and soft window light on a surface, calm natural mood, no people",
+    bucket: "chill",
+  },
+  {
+    id: "dark",
+    re: /\b(dark|noir|gothic|sinister|brooding|moody|midnight)\b/i,
+    scene:
+      "moody still life, single flickering candle on dark velvet, deep shadows and teal-violet rim light, cinematic tension, no people",
+    bucket: "dark",
+  },
+];
+
 /** Any explicit regen hint from the user — block song story bleed, not always still life. */
 export function isUserDirectedRegenHint(text) {
   return String(text || "").trim().length >= 2;
@@ -258,9 +318,32 @@ export function isSceneEnvironmentHint(text) {
   return SCENE_ENVIRONMENT_RE.test(String(text || ""));
 }
 
+export function resolveRegenMoodFromHint(text) {
+  const s = String(text || "").trim();
+  if (s.length < 2) return null;
+  let best = null;
+  let bestScore = 0;
+  for (const row of REGEN_MOOD_HINTS) {
+    const m = s.match(row.re);
+    if (!m) continue;
+    let score = m[0].length;
+    if (s.length <= m[0].length + 6) score += 12;
+    if (score > bestScore) {
+      bestScore = score;
+      best = row;
+    }
+  }
+  return best;
+}
+
+export function isOccasionMoodRegenHint(text) {
+  return Boolean(resolveRegenMoodFromHint(text));
+}
+
 export function shouldUseLiteralSubjectMode(hint, { userArtworkOverride = "" } = {}) {
   const prepared = String(userArtworkOverride || hint || "").trim();
   if (prepared.length < 2 || isSceneEnvironmentHint(prepared)) return false;
+  if (isOccasionMoodRegenHint(prepared)) return true;
   return isConcreteObjectArtworkHint(prepared) || isFoodArtworkHint(prepared);
 }
 
@@ -403,8 +486,16 @@ export function compositionPhraseForCover(songId, artworkText = "", visualMode =
   if (isSceneEnvironmentHint(artworkText)) {
     return COMPOSITIONS[fnv1a(`${songId}:scene-comp`) % COMPOSITIONS.length];
   }
-  if (isConcreteObjectArtworkHint(artworkText) || isFoodArtworkHint(artworkText) || mode === "still_life") {
-    const key = isConcreteObjectArtworkHint(artworkText) || isFoodArtworkHint(artworkText) ? "obj-comp" : "still-comp";
+  if (
+    isOccasionMoodRegenHint(artworkText) ||
+    isConcreteObjectArtworkHint(artworkText) ||
+    isFoodArtworkHint(artworkText) ||
+    mode === "still_life"
+  ) {
+    const key =
+      isConcreteObjectArtworkHint(artworkText) || isFoodArtworkHint(artworkText) || isOccasionMoodRegenHint(artworkText)
+        ? "obj-comp"
+        : "still-comp";
     return OBJECT_COMPOSITIONS[fnv1a(`${songId}:${key}`) % OBJECT_COMPOSITIONS.length];
   }
   return COMPOSITIONS[fnv1a(`${songId}:composition`) % COMPOSITIONS.length];
@@ -413,8 +504,12 @@ export function compositionPhraseForCover(songId, artworkText = "", visualMode =
 function enrichUserArtworkHint(raw) {
   let s = String(raw || "").trim();
   if (!s) return s;
+  const moodTheme = resolveRegenMoodFromHint(s);
   const hasSceneSubject = isSceneEnvironmentHint(s);
-  const hasObjectSubject = !hasSceneSubject && (isConcreteObjectArtworkHint(s) || isFoodArtworkHint(s));
+  const hasObjectSubject = !hasSceneSubject && (isConcreteObjectArtworkHint(s) || isFoodArtworkHint(s) || Boolean(moodTheme));
+  if (moodTheme && !/still life|focal subject|no people|balloons|rings|candle|confetti|rose petals/i.test(s)) {
+    s = `${s}, ${moodTheme.scene}`;
+  }
   if (hasSceneSubject && !/cinematic|architectural|environment|focal subject|atmospheric|wide composition|no people/i.test(s)) {
     s = `${s}, cinematic architectural environment photograph, the requested place or building clearly visible as the focal subject, atmospheric depth, wide environmental composition, no people`;
   }
@@ -447,7 +542,11 @@ function enrichUserArtworkHint(raw) {
 }
 
 function composeFrameForArtwork(userArtwork, { literalSubject = false } = {}) {
-  if (literalSubject || ((isConcreteObjectArtworkHint(userArtwork) || isFoodArtworkHint(userArtwork)) && !isSceneEnvironmentHint(userArtwork))) {
+  if (
+    literalSubject ||
+    isOccasionMoodRegenHint(userArtwork) ||
+    ((isConcreteObjectArtworkHint(userArtwork) || isFoodArtworkHint(userArtwork)) && !isSceneEnvironmentHint(userArtwork))
+  ) {
     return OBJECT_COMPOSE_FRAME;
   }
   if (isSceneEnvironmentHint(userArtwork) || isSkyOrSpaceHint(userArtwork) || /landscape|ocean|mountain|city|skyline|environment|horizon/i.test(userArtwork)) {
@@ -557,19 +656,23 @@ function moodBucketFallback(bucketKey, energy) {
 
 function userRegenAvoidTags(userArtwork) {
   const hint = String(userArtwork || "").trim();
+  const landscapeBlock =
+    "mountain, mountains, hill, hills, mountain range, alps, peak, peaks, generic landscape, scenic vista, wide landscape, nature panorama, ocean horizon, empty haze, fog only, abstract atmosphere only";
+  const stillLifeBlock =
+    "table still life, props on table, random objects on surface, food on table, macro close-up, unrelated still life, generic props, kitchen counter scene";
   if (!hint) {
-    return "mountain, mountains, hill, hills, generic landscape, scenic vista, table still life";
+    return `${landscapeBlock}, ${stillLifeBlock}`;
   }
   if (/\b(mountain|mountains|peak|peaks|alps|hill|hills|beach|ocean|city|skyline)\b/i.test(hint)) {
-    return "table still life, props on table, random objects on surface, food on table, macro close-up, unrelated still life";
+    return stillLifeBlock;
   }
   if (isSceneEnvironmentHint(hint)) {
-    return "table still life, props on table, random objects on surface, food on table, macro close-up, unrelated still life, generic props, kitchen counter scene";
+    return stillLifeBlock;
   }
-  if (isFoodArtworkHint(hint) || isConcreteObjectArtworkHint(hint)) {
-    return "mountain, mountains, hill, hills, mountain range, alps, peak, peaks, generic landscape, scenic vista, wide landscape, nature panorama, ocean horizon, city skyline";
+  if (isOccasionMoodRegenHint(hint) || isFoodArtworkHint(hint) || isConcreteObjectArtworkHint(hint)) {
+    return landscapeBlock;
   }
-  return "mountain, mountains, generic landscape, table still life";
+  return landscapeBlock;
 }
 
 function landscapeAntiMountainAvoid(storyThemeId, userArtwork = "") {
@@ -683,6 +786,7 @@ const TEXT_TRIGGER_REPLACEMENTS = [
   ["christmas tree", "evergreen tree with warm golden lights and star topper"],
   ["christmas", "evergreen tree with warm golden lights and star"],
   ["xmas", "evergreen tree with warm golden lights"],
+  ["birthday", "celebration balloons and soft candle glow still life"],
   ["happy birthday", "celebration balloons and soft candle glow"],
   ["new year", "midnight fireworks and sparkling lights"],
   ["congratulations", "confetti burst and golden celebration light"],
@@ -820,6 +924,7 @@ export function buildAbstractCoverPrompt(input, options = {}) {
   const userDirectedRegen = isUserDirectedRegenHint(userArtworkOverride);
   const forceMusicFallback = Boolean(options.forceMusicFallback && !userArtworkOverride);
   const userArtworkRaw = userArtworkOverride || (forceMusicFallback ? "" : resolveUserArtworkPrompt(input));
+  const regenMood = userDirectedRegen ? resolveRegenMoodFromHint(userArtworkOverride || userArtworkRaw) : null;
   let userArtwork = userArtworkOverride
     ? prepareDirectUserArtworkHint(userArtworkRaw)
     : sanitizeArtworkPrompt(enrichUserArtworkHint(userArtworkRaw), { title });
@@ -828,7 +933,8 @@ export function buildAbstractCoverPrompt(input, options = {}) {
     ? sanitizeArtworkPrompt(`${userArtwork}, ${sceneOverrideRaw}`, { title })
     : sceneOverrideRaw;
 
-  const { scene, visualMode, storyTheme, bucketKey } = buildSceneFromStory(input);
+  const { scene, visualMode, storyTheme, bucketKey: storyBucketKey } = buildSceneFromStory(input);
+  const bucketKey = regenMood?.bucket || storyBucketKey;
   const directorSceneHint = enforceNoHumansScene(
     sanitizeArtworkPrompt(String(options.directorSceneHint || "").trim(), { title }),
   );
@@ -906,11 +1012,14 @@ export function buildAbstractCoverPrompt(input, options = {}) {
     const userPalette = paletteForUserArtwork(userArtwork, bucketKey);
     const useLiteralSubject = shouldUseLiteralSubjectMode(userArtworkOverride || userArtworkRaw);
     const useSceneLead = !useLiteralSubject && isSceneEnvironmentHint(userArtwork);
+    const useMoodLead = !useLiteralSubject && !useSceneLead && regenMood;
     const literalLead = useLiteralSubject
       ? `photorealistic editorial still life photograph, ${userArtwork}, clearly visible and recognizable`
       : useSceneLead
         ? `photorealistic cinematic environment photograph, ${userArtwork}, the requested place or architecture clearly visible as the focal subject`
-        : "";
+        : useMoodLead
+          ? `photorealistic symbolic still life photograph expressing ${userArtworkOverride || userArtworkRaw}, ${userArtwork}, clear recognizable props as focal subject`
+          : "";
     parts = [
       NO_TEXT_LEAD,
       literalLead,

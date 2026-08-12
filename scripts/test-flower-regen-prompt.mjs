@@ -57,5 +57,22 @@ assert(!/editorial still life photograph/i.test(houseBuilt.prompt), "old house p
 assert(houseBuilt.storyTheme === "user_regen", "old house regen ignores song table story theme");
 assert(/table still life|props on table/i.test(houseBuilt.params.landscapeAntiMountainAvoid || ""), "old house negative blocks random table still life");
 
+const birthdayBuilt = promptMod.buildAbstractCoverPrompt(
+  { songId: "regen-bday", title: "Mountain Climb", lyrics: "peaks and valleys at dawn", artworkHint: "birthday" },
+  { regenSalt: "test", userArtworkOverride: "birthday", nabadIdentityPhrases: idMod.nabadIdentityPhrases({ songId: "regen-bday", bucketKey: "party", concreteSubject: true }).text },
+);
+assert(/balloon|confetti|celebration|still life/i.test(birthdayBuilt.prompt), "birthday prompt uses celebration still life");
+assert(!/mountain/i.test(birthdayBuilt.prompt), "birthday prompt does not inject mountain scene");
+assert(birthdayBuilt.bucket === "party", "birthday regen uses party palette bucket");
+assert(!/not literal props/i.test(birthdayBuilt.prompt), "birthday prompt avoids anti-literal DNA");
+
+const loveBuilt = promptMod.buildAbstractCoverPrompt(
+  { songId: "regen-love", title: "Fog Song", lyrics: "mist and haze", artworkHint: "love" },
+  { regenSalt: "test", userArtworkOverride: "love", nabadIdentityPhrases: idMod.nabadIdentityPhrases({ songId: "regen-love", bucketKey: "love", concreteSubject: true }).text },
+);
+assert(/ring|rose|candle|romantic|still life/i.test(loveBuilt.prompt), "love prompt uses romantic still life props");
+assert(loveBuilt.bucket === "love", "love regen uses love palette bucket");
+assert(!/not literal props/i.test(loveBuilt.prompt), "love prompt avoids anti-literal haze DNA");
+
 if (failed) process.exit(1);
-console.log("\nAll flower/fries/old-house regen prompt checks passed.");
+console.log("\nAll flower/fries/old-house/birthday/love regen prompt checks passed.");

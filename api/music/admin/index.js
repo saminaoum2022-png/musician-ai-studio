@@ -30,6 +30,32 @@ const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
 
 const PRO_PRICES = { weekly: 3.99, monthly: 9.99 };
 
+/** Suno liability vs master bucket — how much to buy upstream. */
+function sunoCoverageMetrics(masterBalance, userOutstanding) {
+  const master = masterBalance != null ? Number(masterBalance) : null;
+  const outstanding = Number(userOutstanding || 0);
+  const headroom = master != null ? master - outstanding : null;
+  const shortfallCredits = master != null && headroom < 0 ? Math.ceil(-headroom) : 0;
+  const shortfallUsd = shortfallCredits > 0
+    ? Math.round(shortfallCredits * SUNO_USD_PER_CREDIT * 100) / 100
+    : 0;
+  const coveragePct = master != null && outstanding > 0
+    ? Math.round((master / outstanding) * 1000) / 10
+    : master != null && outstanding === 0
+      ? 100
+      : null;
+  return {
+    reservedCredits: outstanding,
+    masterBalance: master,
+    headroomEstimate: headroom,
+    shortfallCredits,
+    shortfallUsd,
+    creditsToBuy: shortfallCredits,
+    coveragePct,
+    usdPerCredit: SUNO_USD_PER_CREDIT,
+  };
+}
+
 function startOfTodayUtc() {
   const d = new Date();
   return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate())).toISOString();
@@ -188,16 +214,14 @@ async function getOverview() {
     }
   }
 
-  const sunoHeadroom = masterSuno != null ? masterSuno - outstanding : null;
+  const coverage = sunoCoverageMetrics(masterSuno, outstanding);
 
   return {
     suno: {
-      masterBalance: masterSuno,
+      ...coverage,
       userOutstanding: outstanding,
       userAllocatedTotal: allocated,
       userSpentTotal: spent,
-      headroomEstimate: sunoHeadroom,
-      usdPerCredit: SUNO_USD_PER_CREDIT,
     },
     users: {
       total: profilesCount.total ?? Number(summary.users || 0),
@@ -481,18 +505,19 @@ async function getSunoPanel() {
   }
 
   const dailyBurn = spentLast7d / 7;
+  const coverage = sunoCoverageMetrics(masterSuno, outstanding);
   const runwayDays = masterSuno != null && dailyBurn > 0
     ? Math.floor((masterSuno - outstanding) / dailyBurn)
     : null;
 
   return {
-    masterBalance: masterSuno,
+    ...coverage,
     userOutstanding: outstanding,
     userSpentAllTime: spent,
     burnLast7d: Math.round(spentLast7d * 10) / 10,
     avgDailyBurn: Math.round(dailyBurn * 10) / 10,
     runwayDaysEstimate: runwayDays,
-    note: "Master balance is your Suno API bucket. User credits are liability — generations debit both user balance and your Suno bucket.",
+    note: "Reserved = total Nabad credits users still hold (liability). Each generation debits a user balance and your Suno master bucket (~1 Nabad credit ≈ 1 Suno credit for costing).",
   };
 }
 

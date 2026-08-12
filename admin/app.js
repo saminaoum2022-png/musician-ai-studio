@@ -498,12 +498,43 @@ async function adminFetch(view, { offset = 0, limit = PAGE_SIZE } = {}) {
   return data;
 }
 
-function statCard(label, value, sub = "", highlight = false) {
+function fmtPct(n) {
+  const v = Number(n);
+  if (!Number.isFinite(v)) return "—";
+  return `${v.toLocaleString(undefined, { maximumFractionDigits: 1 })}%`;
+}
+
+function statCard(label, value, sub = "", highlight = false, warn = false) {
   return `
-    <div class="statCard${highlight ? " isHighlight" : ""}">
+    <div class="statCard${highlight ? " isHighlight" : ""}${warn ? " isWarn" : ""}">
       <div class="statLabel">${label}</div>
       <div class="statValue">${value}</div>
       ${sub ? `<div class="statSub">${sub}</div>` : ""}
+    </div>
+  `;
+}
+
+function renderSunoCoverageSection(s, { compact = false } = {}) {
+  const shortfall = Number(s.shortfallCredits || 0);
+  const hasShortfall = shortfall > 0;
+  const buyUsd = s.shortfallUsd != null ? fmtUsd(s.shortfallUsd) : "—";
+  const coverage = s.coveragePct != null ? fmtPct(s.coveragePct) : "—";
+  const title = compact ? "Suno coverage" : "Reserved credits & Suno buy plan";
+  const lead = compact
+    ? "User liability vs your Suno bucket."
+    : "Reserved = credits users still hold. If Suno bucket is lower, buy upstream to cover the gap before they spend it all.";
+  return `
+    <div class="sectionCard${hasShortfall ? " sectionCard--warn" : ""}">
+      <h3 class="sectionTitle">${title}</h3>
+      <p class="sectionNote">${lead}</p>
+      <div class="cardsGrid">
+        ${statCard("Reserved (user liability)", fmtNum(s.reservedCredits ?? s.userOutstanding, 1), "Credits users can still spend")}
+        ${statCard("Suno bucket available", fmtNum(s.masterBalance, 1), "Live from Suno API", true)}
+        ${statCard("Coverage", coverage, "Suno bucket ÷ reserved")}
+        ${statCard("Buy from Suno (credits)", hasShortfall ? fmtNum(s.creditsToBuy, 0) : "0", hasShortfall ? "Shortfall to cover all reserved" : "Bucket covers liability", false, hasShortfall)}
+        ${statCard("Est. buy cost (USD)", hasShortfall ? buyUsd : fmtUsd(0), s.usdPerCredit ? `@ $${Number(s.usdPerCredit).toFixed(5)}/credit` : "")}
+        ${statCard("Headroom", fmtNum(s.headroomEstimate, 1), "Suno bucket − reserved", false, hasShortfall)}
+      </div>
     </div>
   `;
 }
@@ -518,14 +549,14 @@ function renderOverview(data) {
   const rev = o.revenue || {};
 
   els.panels.overview.innerHTML = `
+    ${renderSunoCoverageSection(s)}
     <div class="sectionCard">
       <h3 class="sectionTitle">Suno master bucket</h3>
-      <p class="sectionNote">Your purchased Suno API credits. When users generate, this bucket is consumed alongside their Nabad credit balance.</p>
+      <p class="sectionNote">Historical spend and platform totals. Master balance and reserved liability are in the section above.</p>
       <div class="cardsGrid">
-        ${statCard("Master Suno balance", fmtNum(s.masterBalance, 1), "Live from Suno API", true)}
-        ${statCard("User credits outstanding", fmtNum(s.userOutstanding, 1), "Liability — not yet spent")}
-        ${statCard("Headroom estimate", fmtNum(s.headroomEstimate, 1), "Master − outstanding")}
         ${statCard("All-time user spend", fmtNum(s.userSpentTotal, 1), "Debited from user balances")}
+        ${statCard("Credits issued (all time)", fmtNum(c.issuedTotal, 1), "Grants + subs + promos")}
+        ${statCard("Credits used (all time)", fmtNum(c.usedTotal, 1))}
       </div>
     </div>
     <div class="cardsGrid">
@@ -547,15 +578,14 @@ function renderOverview(data) {
 function renderSuno(data) {
   const s = data?.suno || {};
   els.panels.suno.innerHTML = `
+    ${renderSunoCoverageSection(s, { compact: true })}
     <div class="sectionCard">
-      <h3 class="sectionTitle">Bucket health</h3>
+      <h3 class="sectionTitle">Burn & runway</h3>
       <p class="sectionNote">${s.note || ""}</p>
       <div class="cardsGrid">
-        ${statCard("Master balance", fmtNum(s.masterBalance, 1), "Suno API", true)}
-        ${statCard("User outstanding", fmtNum(s.userOutstanding, 1), "Could still be spent")}
-        ${statCard("7-day burn", fmtNum(s.burnLast7d, 1), "Credits consumed")}
+        ${statCard("7-day burn", fmtNum(s.burnLast7d, 1), "Nabad credits consumed")}
         ${statCard("Avg daily burn", fmtNum(s.avgDailyBurn, 1), "Last 7 days")}
-        ${statCard("Runway estimate", s.runwayDaysEstimate != null ? `${fmtNum(s.runwayDaysEstimate)} days` : "—", "Based on recent burn")}
+        ${statCard("Runway estimate", s.runwayDaysEstimate != null ? `${fmtNum(s.runwayDaysEstimate)} days` : "—", "At recent burn, before reserved runs out")}
         ${statCard("All-time user spend", fmtNum(s.userSpentAllTime, 1))}
       </div>
     </div>

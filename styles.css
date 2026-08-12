@@ -46472,6 +46472,10 @@ body[data-route="user"] #userPublicRepostsList{
     max-width: 1380px !important;
     grid-template-columns: var(--nb-sidebar, 248px) minmax(0, 1fr) var(--nb-rail, 320px);
   }
+  html.is-web-shell body.discoverReelInShell[data-route="player"] > .app{
+    max-width: 1380px !important;
+    grid-template-columns: var(--nb-sidebar, 248px) minmax(0, 1fr) var(--nb-rail, 320px);
+  }
   aside.deskRail{
     grid-column: 3;
     grid-row: 1 / -1;
@@ -47325,7 +47329,7 @@ body[data-route="studio"] .deskRail { display: none !important; }
   }
 
   /* Immersive routes — collapse the sidebar grid on web desktop. */
-  html.is-web-shell body[data-route="player"] > .app,
+  html.is-web-shell body[data-route="player"]:not(.discoverReelInShell) > .app,
   html.is-web-shell body[data-route="moment"] > .app,
   html.is-web-shell body[data-route="hub"] > .app{
     display: flex !important;
@@ -47336,7 +47340,7 @@ body[data-route="studio"] .deskRail { display: none !important; }
     margin: 0 !important;
     min-height: 100svh;
   }
-  html.is-web-shell body[data-route="player"] main.grid,
+  html.is-web-shell body[data-route="player"]:not(.discoverReelInShell) main.grid,
   html.is-web-shell body[data-route="moment"] main.grid,
   html.is-web-shell body[data-route="hub"] main.grid{
     display: flex !important;
@@ -47347,7 +47351,7 @@ body[data-route="studio"] .deskRail { display: none !important; }
     min-height: 0;
     grid-column: unset !important;
   }
-  html.is-web-shell body[data-route="player"] main.grid{
+  html.is-web-shell body[data-route="player"]:not(.discoverReelInShell) main.grid{
     align-items: flex-start;
     justify-content: flex-start;
     overflow-x: hidden;
@@ -47358,17 +47362,17 @@ body[data-route="studio"] .deskRail { display: none !important; }
   html.is-web-shell body[data-route="hub"] main.grid{
     overflow: hidden;
   }
-  html.is-web-shell body[data-route="player"] .header,
-  html.is-web-shell body[data-route="player"] .deskRail,
-  html.is-web-shell body[data-route="player"] .footer,
-  html.is-web-shell body[data-route="player"] .mobileTabbar,
+  html.is-web-shell body[data-route="player"]:not(.discoverReelInShell) .header,
+  html.is-web-shell body[data-route="player"]:not(.discoverReelInShell) .deskRail,
+  html.is-web-shell body[data-route="player"]:not(.discoverReelInShell) .footer,
+  html.is-web-shell body[data-route="player"]:not(.discoverReelInShell) .mobileTabbar,
   html.is-web-shell body[data-route="moment"] .deskRail,
   html.is-web-shell body[data-route="hub"] .deskRail{
     display: none !important;
   }
 
   /* Player — centered card layout on web desktop (no sidebar). */
-  html.is-web-shell body[data-route="player"] .playerCard{
+  html.is-web-shell body[data-route="player"]:not(.discoverReelInShell) .playerCard{
     width: 100%;
     max-width: 920px;
     margin: 0 auto;
@@ -47377,56 +47381,65 @@ body[data-route="studio"] .deskRail { display: none !important; }
     flex-direction: column;
     gap: 8px;
   }
-  html.is-web-shell body[data-route="player"] .playerShell{
+  html.is-web-shell body[data-route="player"]:not(.discoverReelInShell) .playerShell{
     display: grid;
     grid-template-columns: minmax(280px, 360px) minmax(0, 1fr);
     gap: 28px;
     align-items: start;
     width: 100%;
   }
-  html.is-web-shell body[data-route="player"] .playerArtWrap{
+  html.is-web-shell body[data-route="player"]:not(.discoverReelInShell) .playerArtWrap{
     position: relative;
   }
-  html.is-web-shell body[data-route="player"] .playerMeta{
+  html.is-web-shell body[data-route="player"]:not(.discoverReelInShell) .playerMeta{
     position: static;
     align-items: flex-start;
     text-align: left;
     padding-top: 8px;
   }
-  html.is-web-shell body[data-route="player"] .playerTitleRow,
-  html.is-web-shell body[data-route="player"] .playerCreatorRow{
+  html.is-web-shell body[data-route="player"]:not(.discoverReelInShell) .playerTitleRow,
+  html.is-web-shell body[data-route="player"]:not(.discoverReelInShell) .playerCreatorRow{
     justify-content: flex-start;
   }
-  html.is-web-shell body[data-route="player"] .playerTransport{
+  html.is-web-shell body[data-route="player"]:not(.discoverReelInShell) .playerTransport{
     width: 100%;
     max-width: 360px;
     margin-inline: 0;
   }
-  html.is-web-shell body[data-route="player"] .playerSocialRail{
+  html.is-web-shell body[data-route="player"]:not(.discoverReelInShell) .playerSocialRail{
     position: absolute;
     right: 12px;
     bottom: 12px;
     top: auto;
   }
 
-  /* Discover For You reel — in-place in the middle column (desktop web). */
-  html.is-web-shell body.discoverReelOpen[data-route="discover"] main.grid > [data-route="discover"]{
-    display: none !important;
+  /* Discover For You reel — player route inside the 3-column shell. */
+  html.is-web-shell body.discoverReelInShell[data-route="player"] > .app{
+    display: grid !important;
+    grid-template-columns: var(--nb-sidebar, 248px) minmax(0, 1fr);
+    column-gap: 34px;
+    align-items: start;
+    padding: 20px 26px 44px !important;
+    max-width: 1200px !important;
+    width: auto !important;
+    margin-inline: auto !important;
+    min-height: 100vh;
+    flex-direction: unset !important;
   }
-  html.is-web-shell body.discoverReelOpen[data-route="discover"] main.grid > [data-route="player"]{
+  html.is-web-shell body.discoverReelInShell[data-route="player"] main.grid{
+    grid-column: 2 !important;
     display: flex !important;
-    flex-direction: column;
-  }
-  html.is-web-shell body.discoverReelOpen[data-route="discover"] main.grid{
-    display: flex !important;
-    flex-direction: column;
-    align-items: center;
+    flex-direction: column !important;
+    align-items: center !important;
     justify-content: flex-start;
+    flex: unset !important;
+    margin: 0 !important;
+    max-width: none !important;
     min-height: calc(100vh - 88px);
     padding: 4px 0 28px;
     overflow: visible;
   }
-  html.is-web-shell body.discoverReelOpen[data-route="discover"] .playerCard{
+  html.is-web-shell body.discoverReelInShell[data-route="player"] .playerCard{
     display: flex !important;
     flex-direction: column;
     width: min(100%, 420px);
@@ -47443,7 +47456,7 @@ body[data-route="studio"] .deskRail { display: none !important; }
     position: relative;
     flex: 0 1 auto;
   }
-  html.is-web-shell body.discoverReelOpen[data-route="discover"] .playerHeader{
+  html.is-web-shell body.discoverReelInShell[data-route="player"] .playerHeader{
     position: absolute;
     top: 0;
     left: 0;
@@ -47454,8 +47467,8 @@ body[data-route="studio"] .deskRail { display: none !important; }
     background: linear-gradient(180deg, rgba(0,0,0,0.48) 0%, transparent 100%);
     pointer-events: none;
   }
-  html.is-web-shell body.discoverReelOpen[data-route="discover"] .playerHeader .nabadBackBtn,
-  html.is-web-shell body.discoverReelOpen[data-route="discover"] .playerHeader .playerMenuBtn{
+  html.is-web-shell body.discoverReelInShell[data-route="player"] .playerHeader .nabadBackBtn,
+  html.is-web-shell body.discoverReelInShell[data-route="player"] .playerHeader .playerMenuBtn{
     pointer-events: auto;
     border-color: rgba(255,255,255,0.14);
     background: rgba(0,0,0,0.28);
@@ -47463,7 +47476,7 @@ body[data-route="studio"] .deskRail { display: none !important; }
             backdrop-filter: blur(12px);
     color: rgba(255,255,255,0.92);
   }
-  html.is-web-shell body.discoverReelOpen[data-route="discover"] .playerShell{
+  html.is-web-shell body.discoverReelInShell[data-route="player"] .playerShell{
     flex: 1 1 auto;
     display: flex;
     flex-direction: column;
@@ -47473,14 +47486,15 @@ body[data-route="studio"] .deskRail { display: none !important; }
     position: relative;
     overflow: hidden;
     background: #0a0c12;
+    width: 100%;
   }
-  html.is-web-shell body.discoverReelOpen[data-route="discover"] .playerArtCol{
+  html.is-web-shell body.discoverReelInShell[data-route="player"] .playerArtCol{
     flex: 1 1 auto;
     min-height: 360px;
     position: relative;
     width: 100%;
   }
-  html.is-web-shell body.discoverReelOpen[data-route="discover"] .playerArtWrap{
+  html.is-web-shell body.discoverReelInShell[data-route="player"] .playerArtWrap{
     position: absolute;
     inset: 0;
     border: none;
@@ -47491,14 +47505,14 @@ body[data-route="studio"] .deskRail { display: none !important; }
     overflow: hidden;
     background: #0a0c12;
   }
-  html.is-web-shell body.discoverReelOpen[data-route="discover"] .playerArtStage{
+  html.is-web-shell body.discoverReelInShell[data-route="player"] .playerArtStage{
     position: absolute;
     inset: 0;
     width: 100%;
     height: 100%;
     border-radius: 0;
   }
-  html.is-web-shell body.discoverReelOpen[data-route="discover"] .playerArt{
+  html.is-web-shell body.discoverReelInShell[data-route="player"] .playerArt{
     position: absolute;
     inset: 0;
     width: 100%;
@@ -47510,7 +47524,7 @@ body[data-route="studio"] .deskRail { display: none !important; }
     object-position: center top;
     border-radius: 0;
   }
-  html.is-web-shell body.discoverReelOpen[data-route="discover"] .playerMeta{
+  html.is-web-shell body.discoverReelInShell[data-route="player"] .playerMeta{
     position: relative;
     flex: 0 0 auto;
     z-index: 12;
@@ -47519,6 +47533,7 @@ body[data-route="studio"] .deskRail { display: none !important; }
     margin: 0;
     align-items: flex-start;
     text-align: left;
+    color: #eef3ff;
     background: linear-gradient(
       180deg,
       transparent 0%,
@@ -47526,63 +47541,68 @@ body[data-route="studio"] .deskRail { display: none !important; }
       rgba(6, 8, 14, 0.98) 100%
     );
   }
-  html.is-web-shell body.discoverReelOpen[data-route="discover"] .playerTitleRow,
-  html.is-web-shell body.discoverReelOpen[data-route="discover"] .playerCreatorRow{
+  html.is-web-shell body.discoverReelInShell[data-route="player"] .playerTitle,
+  html.is-web-shell body.discoverReelInShell[data-route="player"] .playerCreatorHandle,
+  html.is-web-shell body.discoverReelInShell[data-route="player"] .playerTimeNum{
+    color: rgba(240, 244, 255, 0.94);
+  }
+  html.is-web-shell body.discoverReelInShell[data-route="player"] .playerTitleRow,
+  html.is-web-shell body.discoverReelInShell[data-route="player"] .playerCreatorRow{
     justify-content: flex-start;
   }
-  html.is-web-shell body.discoverReelOpen[data-route="discover"] .playerTransport{
+  html.is-web-shell body.discoverReelInShell[data-route="player"] .playerTransport{
     width: 100%;
     max-width: none;
     margin-inline: 0;
     padding: 0 4px;
   }
-  html.is-web-shell body.discoverReelOpen[data-route="discover"] .playerSocialRail{
+  html.is-web-shell body.discoverReelInShell[data-route="player"] .playerSocialRail{
     position: absolute;
     right: 10px;
     bottom: 108px;
     top: auto;
     z-index: 12;
   }
-  html.is-web-shell body.discoverReelOpen[data-route="discover"] .playerCard[data-discover-reel="1"] .playerSocialRail,
-  html.is-web-shell body.discoverReelOpen[data-route="discover"] .playerCard[data-discover-reel="1"] .playerSocialRail[hidden]{
+  html.is-web-shell body.discoverReelInShell[data-route="player"] .playerCard[data-discover-reel="1"] .playerSocialRail,
+  html.is-web-shell body.discoverReelInShell[data-route="player"] .playerCard[data-discover-reel="1"] .playerSocialRail[hidden]{
     display: flex !important;
     visibility: visible !important;
   }
-  html.is-web-shell body.discoverReelOpen[data-route="discover"] .playerCard[data-discover-reel="1"] .playerSocialRail{
+  html.is-web-shell body.discoverReelInShell[data-route="player"] .playerCard[data-discover-reel="1"] .playerSocialRail{
     opacity: var(--reel-rail-opacity, 1);
     transition: opacity 220ms ease;
   }
-  html.is-web-shell body.discoverReelOpen[data-route="discover"] .playerCard[data-discover-reel="1"].isReelRailFaded .playerSocialRail{
+  html.is-web-shell body.discoverReelInShell[data-route="player"] .playerCard[data-discover-reel="1"].isReelRailFaded .playerSocialRail{
     opacity: 0;
     pointer-events: none;
   }
-  html.is-web-shell body.discoverReelOpen[data-route="discover"] .playerKaraokeFloat{
+  html.is-web-shell body.discoverReelInShell[data-route="player"] .playerKaraokeFloat{
     position: absolute;
     left: 16px;
     right: 56px;
     bottom: 14px;
     z-index: 8;
   }
-  html.is-web-shell body.discoverReelOpen[data-route="discover"] .playerReelAnimLayer{
+  html.is-web-shell body.discoverReelInShell[data-route="player"] .playerReelAnimLayer{
     position: absolute;
     inset: 0;
     z-index: 20;
     border-radius: inherit;
     overflow: hidden;
   }
-  html.is-web-shell body.discoverReelOpen[data-route="discover"] .playerReelAnimCover{
+  html.is-web-shell body.discoverReelInShell[data-route="player"] .playerReelAnimCover{
     position: absolute;
     inset: 0;
     height: auto;
     bottom: 0;
   }
-  html.is-web-shell body.discoverReelOpen[data-route="discover"] .playerReelAnimMeta{
+  html.is-web-shell body.discoverReelInShell[data-route="player"] .playerReelAnimMeta{
     position: absolute;
     left: 16px;
     right: 56px;
     bottom: 108px;
   }
-  html.is-web-shell body.discoverReelOpen[data-route="discover"] .hubNowPlaying{
+  html.is-web-shell body.discoverReelInShell[data-route="player"] .hubNowPlaying{
     display: none !important;
   }
 }

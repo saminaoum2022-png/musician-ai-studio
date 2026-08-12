@@ -3771,6 +3771,15 @@ function syncRoutePanelVisibility(wanted) {
   } else if (route !== "generate" && getCreateFlow()) {
     clearCreateFlow();
   }
+  if (document.body.classList.contains("discoverReelInShell")) {
+    if (_discoverFeedTab !== "for-you") {
+      document.body.classList.remove("discoverReelInShell");
+    } else if (route === "discover" || route === "player") {
+      route = "player";
+    } else {
+      document.body.classList.remove("discoverReelInShell");
+    }
+  }
   if (!route) return;
   if (route !== "generate") clearCreatePageKeyboardInset();
   document.body.setAttribute("data-route", route);
@@ -3805,7 +3814,6 @@ function syncRoutePanelVisibility(wanted) {
   try { syncDeskRailVisibility(); } catch {}
   try { syncDeskCoachPanel(); } catch {}
   try { syncCoachFabDesktopAnchor(); } catch {}
-  try { syncDiscoverReelOverlayPanels(); } catch {}
 }
 
 function routeApplyFallback(err) {
@@ -8291,7 +8299,7 @@ function deskRailActive() {
       "auth", "intro", "onboarding", "music-preferences",
       "pro", "player", "moment", "studio", "hub",
     ]);
-    if (skip.has(route)) return false;
+    if (skip.has(route) && !document.body.classList.contains("discoverReelInShell")) return false;
     return window.matchMedia("(min-width: 1200px)").matches;
   } catch { return false; }
 }
@@ -36666,7 +36674,7 @@ function shouldUseDiscoverReelInPlace() {
 
 function discoverReelInPlaceActive() {
   try {
-    return document.body.classList.contains("discoverReelOpen");
+    return document.body.classList.contains("discoverReelInShell");
   } catch {
     return false;
   }
@@ -36680,43 +36688,31 @@ function resolveDiscoverReelOpenPlayer(opts = {}) {
 
 function openDiscoverReelOverlay() {
   if (!shouldUseDiscoverReelInPlace()) return;
-  document.body.classList.add("discoverReelOpen");
-  syncDiscoverReelOverlayPanels();
+  document.body.classList.add("discoverReelInShell");
+  syncRoutePanelVisibility("player");
+  try {
+    if (!/^#\/discover\b/i.test(String(location.hash || ""))) {
+      history.replaceState(null, "", "#/discover");
+    }
+  } catch {}
   try { syncDeskRailVisibility(); } catch {}
 }
 
 function closeDiscoverReelOverlay(opts = {}) {
   if (!discoverReelInPlaceActive()) return;
-  document.body.classList.remove("discoverReelOpen");
+  document.body.classList.remove("discoverReelInShell");
   const card = document.querySelector(".playerCard");
   if (card) {
     card.dataset.discoverReel = "0";
     card.classList.remove("isReelAnimating", "isReelRailFaded");
     card.style.removeProperty("--reel-rail-opacity");
   }
-  const discover = document.querySelector('[data-route="discover"]');
-  const player = document.querySelector('.playerCard[data-route="player"]');
-  if (discover) discover.style.removeProperty("display");
-  if (player) player.style.removeProperty("display");
   if (opts.pause) {
     try { ensurePlayer()?.pause(); } catch {}
   }
-  try { syncRoutePanelVisibility(document.body.getAttribute("data-route") || "discover"); } catch {}
+  try { syncRoutePanelVisibility("discover"); } catch {}
   try { syncDeskRailVisibility(); } catch {}
   try { syncAllPlaybackRowHighlights(); } catch {}
-}
-
-function syncDiscoverReelOverlayPanels() {
-  if (!discoverReelInPlaceActive()) return;
-  const route = document.body.getAttribute("data-route") || "";
-  if (route !== "discover" || _discoverFeedTab !== "for-you") {
-    closeDiscoverReelOverlay();
-    return;
-  }
-  const discover = document.querySelector('[data-route="discover"]');
-  const player = document.querySelector('.playerCard[data-route="player"]');
-  if (discover) discover.style.removeProperty("display");
-  if (player) player.style.removeProperty("display");
 }
 
 function buildDiscoverReelQueue() {

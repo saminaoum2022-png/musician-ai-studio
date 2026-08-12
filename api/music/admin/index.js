@@ -1,5 +1,5 @@
 /**
- * GET /api/music/admin?view=overview|users|credits|generations|publications|subscriptions|suno
+ * GET /api/music/admin?view=overview|users|credits|promos|generations|publications|subscriptions|suno
  *
  * Admin-only analytics for admin.nabadai.com.
  * Auth: Authorization: Bearer <supabase access_token>
@@ -8,6 +8,7 @@
  *   view       — section (default overview)
  *   limit      — pagination (default 50, max 200)
  *   offset     — pagination offset
+ *   search     — users view only: email, @username, or display name
  */
 
 const {
@@ -29,6 +30,7 @@ const { ensureProfileRow } = require("../../_lib/ensure-profile-row");
 const {
   listAssignableRoles,
 } = require("../../_lib/admin-permissions");
+const { searchUsers } = require("../../_lib/admin-user-resolve");
 
 const SUPABASE_URL = (process.env.SUPABASE_URL || "").replace(/\/$/, "");
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
@@ -363,8 +365,121 @@ async function fetchProfilesForAdmin(limit, offset) {
   return profRes;
 }
 
-async function getUsers(limit, offset) {
+async function findUserIdsBySearch(query, authMap) {
+  const q = String(query || "").trim();
+  if (q.length < 2) return [];
+  const needle = q.toLowerCase().replace(/^@/, "");
+  const idSet = new Set();
+
+  const profRes = await serviceFetch(
+    `profiles?select=user_id&or=(username.ilike.*${encodeURIComponent(needle)}*,display_name.ilike.*${encodeURIComponent(needle)}*)&limit=100`,
+  );
+  for (const row of Array.isArray(profRes.data) ? profRes.data : []) {
+    if (row?.user_id) idSet.add(String(row.user_id));
+  }
+
+  const emailProf = await serviceFetch(
+    `profiles?select=user_id&email=ilike.*${encodeURIComponent(needle)}*&limit=50`,
+  );
+  for (const row of Array.isArray(emailProf.data) ? emailProf.data : []) {
+    if (row?.user_id) idSet.add(String(row.user_id));
+  }
+
+  const hits = await searchUsers(q, { limit: 20 });
+  for (const hit of hits) {
+    if (hit?.userId) idSet.add(String(hit.userId));
+  }
+
+  for (const [userId, auth] of authMap) {
+    if (auth.email && auth.email.includes(needle)) idSet.add(String(userId));
+  }
+
+  return [...idSet];
+}
+
+async function hydrateUsersFromProfiles(profiles, authMap, orphanAuthUsers = [], totalOverride) {
+  const ids = profiles.map((p) => p.user_id).filter(Boolean);
+  if (!ids.length && !orphanAuthUsers.length) {
+    return { users: [], total: totalOverride ?? 0 };
+  }
+
+  const inClause = ids.map((id) => encodeURIComponent(id)).join(",");
+  const [creditsRes, subsRes, songsRes] = ids.length
+    ? await Promise.all([
+        serviceFetch(`user_credits?select=user_id,balance,paid_balance,gift_balance,promo_balance,updated_at&user_id=in.(${inClause})`),
+        serviceFetch(`pro_subscriptions?select=user_id,plan_id,status,current_period_end&user_id=in.(${inClause})`),
+        serviceFetch(`user_songs?select=user_id&user_id=in.(${inClause})&limit=5000`),
+      ])
+    : [{ data: [] }, { data: [] }, { data: [] }];
+
+  const creditsByUser = new Map();
+  for (const row of Array.isArray(creditsRes.data) ? creditsRes.data : []) {
+    creditsByUser.set(row.user_id, row);
+  }
+  const subsByUser = new Map();
+  for (const row of Array.isArray(subsRes.data) ? subsRes.data : []) {
+    subsByUser.set(row.user_id, row);
+  }
+  const songCounts = new Map();
+  for (const row of Array.isArray(songsRes.data) ? songsRes.data : []) {
+    songCounts.set(row.user_id, (songCounts.get(row.user_id) || 0) + 1);
+  }
+
+  const users = profiles.map((p) => {
+    const auth = authMap.get(p.user_id) || {};
+    const cr = creditsByUser.get(p.user_id) || {};
+    const sub = subsByUser.get(p.user_id);
+    const name = String(p.display_name || p.username || "—").trim() || "—";
+    return {
+      userId: p.user_id,
+      name,
+      username: p.username || "",
+      email: auth.email || "",
+      signupAt: auth.signupAt || p.created_at || null,
+      role: p.role || "user",
+      subscriptionStatus: sub?.status || "none",
+      subscriptionPlan: sub?.plan_id || null,
+      subscriptionPeriodEnd: sub?.current_period_end || null,
+      credits: Number(cr.balance || 0),
+      paidCredits: Number(cr.paid_balance || 0),
+      giftCredits: Number(cr.gift_balance || 0),
+      promoCredits: Number(cr.promo_balance || 0),
+      songsGenerated: songCounts.get(p.user_id) || 0,
+      lastActiveAt: p.last_active_at || cr.updated_at || null,
+      signupPlatform: auth.signupPlatform || String(p.signup_platform || "").trim().toLowerCase() || null,
+    };
+  });
+
+  return {
+    users: [...orphanAuthUsers, ...users],
+    total: totalOverride ?? users.length + orphanAuthUsers.length,
+  };
+}
+
+async function getUsers(limit, offset, search = "") {
   const authMap = await fetchAuthUsersMap();
+  const searchQ = String(search || "").trim();
+
+  if (searchQ.length >= 2) {
+    const allIds = await findUserIdsBySearch(searchQ, authMap);
+    const total = allIds.length;
+    const pageIds = allIds.slice(offset, offset + limit);
+    if (!pageIds.length) {
+      return { users: [], total, search: searchQ };
+    }
+    const inClause = pageIds.map((id) => encodeURIComponent(id)).join(",");
+    const profRes = await serviceFetch(
+      `profiles?select=user_id,username,display_name,role,last_active_at,created_at,signup_platform&user_id=in.(${inClause})`,
+    );
+    const profileById = new Map();
+    for (const row of Array.isArray(profRes.data) ? profRes.data : []) {
+      if (row?.user_id) profileById.set(String(row.user_id), row);
+    }
+    const profiles = pageIds.map((id) => profileById.get(String(id))).filter(Boolean);
+    const payload = await hydrateUsersFromProfiles(profiles, authMap, [], total);
+    return { ...payload, search: searchQ };
+  }
+
   let profRes = await fetchProfilesForAdmin(limit, offset);
   let profiles = Array.isArray(profRes.data) ? profRes.data : [];
   if (!profRes.ok && !profiles.length) {
@@ -430,56 +545,31 @@ async function getUsers(limit, offset) {
     return { users: [], total: profRes.total ?? 0 };
   }
 
-  const inClause = ids.map((id) => encodeURIComponent(id)).join(",");
-  const [creditsRes, subsRes, songsRes] = ids.length
-    ? await Promise.all([
-        serviceFetch(`user_credits?select=user_id,balance,paid_balance,gift_balance,promo_balance,updated_at&user_id=in.(${inClause})`),
-        serviceFetch(`pro_subscriptions?select=user_id,plan_id,status,current_period_end&user_id=in.(${inClause})`),
-        serviceFetch(`user_songs?select=user_id&user_id=in.(${inClause})&limit=5000`),
-      ])
-    : [{ data: [] }, { data: [] }, { data: [] }];
+  return hydrateUsersFromProfiles(profiles, authMap, orphanAuthUsers, (profRes.total ?? profiles.length) + orphanAuthUsers.length);
+}
 
-  const creditsByUser = new Map();
-  for (const row of Array.isArray(creditsRes.data) ? creditsRes.data : []) {
-    creditsByUser.set(row.user_id, row);
-  }
-  const subsByUser = new Map();
-  for (const row of Array.isArray(subsRes.data) ? subsRes.data : []) {
-    subsByUser.set(row.user_id, row);
-  }
-  const songCounts = new Map();
-  for (const row of Array.isArray(songsRes.data) ? songsRes.data : []) {
-    songCounts.set(row.user_id, (songCounts.get(row.user_id) || 0) + 1);
-  }
-
-  const users = profiles.map((p) => {
-    const auth = authMap.get(p.user_id) || {};
-    const cr = creditsByUser.get(p.user_id) || {};
-    const sub = subsByUser.get(p.user_id);
-    const name = String(p.display_name || p.username || "—").trim() || "—";
-    return {
-      userId: p.user_id,
-      name,
-      username: p.username || "",
-      email: auth.email || "",
-      signupAt: auth.signupAt || p.created_at || null,
-      role: p.role || "user",
-      subscriptionStatus: sub?.status || "none",
-      subscriptionPlan: sub?.plan_id || null,
-      subscriptionPeriodEnd: sub?.current_period_end || null,
-      credits: Number(cr.balance || 0),
-      paidCredits: Number(cr.paid_balance || 0),
-      giftCredits: Number(cr.gift_balance || 0),
-      promoCredits: Number(cr.promo_balance || 0),
-      songsGenerated: songCounts.get(p.user_id) || 0,
-      lastActiveAt: p.last_active_at || cr.updated_at || null,
-      signupPlatform: auth.signupPlatform || String(p.signup_platform || "").trim().toLowerCase() || null,
-    };
-  });
-
+async function getPromos(limit, offset) {
+  const res = await serviceFetch(
+    `promo_codes?select=code,credits,max_redemptions,redemptions,active,expires_at,created_at&order=created_at.desc&limit=${limit}&offset=${offset}`,
+  );
+  const promos = (Array.isArray(res.data) ? res.data : []).map((row) => ({
+    code: row.code,
+    credits: Number(row.credits || 0),
+    maxRedemptions: Number(row.max_redemptions || 0),
+    redemptions: Number(row.redemptions || 0),
+    active: Boolean(row.active),
+    expiresAt: row.expires_at || null,
+    createdAt: row.created_at || null,
+  }));
+  const summaryRpc = await callRpc("get_credits_summary", {});
+  const summary = (summaryRpc.ok && summaryRpc.data) || {};
   return {
-    users: [...orphanAuthUsers, ...users],
-    total: (profRes.total ?? users.length) + orphanAuthUsers.length,
+    promos,
+    total: res.total ?? promos.length,
+    summary: {
+      codesTotal: Number(summary.codes_total || 0),
+      codesRedeemed: Number(summary.codes_redeemed || 0),
+    },
   };
 }
 
@@ -686,6 +776,7 @@ module.exports = async function handler(req, res) {
   const view = String(url.searchParams.get("view") || "overview").trim().toLowerCase();
   const limit = clampInt(url.searchParams.get("limit"), 1, 200, 50);
   const offset = clampInt(url.searchParams.get("offset"), 0, 100000, 0);
+  const search = String(url.searchParams.get("search") || "").trim();
 
   const admin = await verifyAdmin(req, { view: view === "session" ? null : view });
   if (!admin) {
@@ -726,7 +817,7 @@ module.exports = async function handler(req, res) {
     if (view === "overview") {
       payload.overview = await getOverview();
     } else if (view === "users") {
-      payload = { ...payload, ...(await getUsers(limit, offset)) };
+      payload = { ...payload, ...(await getUsers(limit, offset, search)) };
     } else if (view === "credits") {
       payload = { ...payload, ...(await getCredits(limit, offset)) };
     } else if (view === "generations") {
@@ -735,12 +826,14 @@ module.exports = async function handler(req, res) {
       payload = { ...payload, ...(await getSubscriptions(limit, offset)) };
     } else if (view === "publications") {
       payload = { ...payload, ...(await getPublications(limit, offset)) };
+    } else if (view === "promos") {
+      payload = { ...payload, ...(await getPromos(limit, offset)) };
     } else if (view === "suno") {
       payload.suno = await getSunoPanel();
     } else {
       return sendJson(res, 400, {
         error: "Unknown view",
-        allowed: ["session", "settings", "overview", "users", "credits", "generations", "subscriptions", "publications", "suno"],
+        allowed: ["session", "settings", "overview", "users", "credits", "promos", "generations", "subscriptions", "publications", "suno"],
       });
     }
     return sendJson(res, 200, payload);

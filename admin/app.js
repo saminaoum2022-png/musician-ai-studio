@@ -14,6 +14,7 @@ const state = {
   adminSession: null,
   view: "overview",
   offset: 0,
+  userSearch: "",
   cache: {},
   recoveryTokenHash: "",
 };
@@ -45,6 +46,7 @@ const els = {
     suno: document.getElementById("viewSuno"),
     users: document.getElementById("viewUsers"),
     credits: document.getElementById("viewCredits"),
+    promos: document.getElementById("viewPromos"),
     generations: document.getElementById("viewGenerations"),
     publications: document.getElementById("viewPublications"),
     subscriptions: document.getElementById("viewSubscriptions"),
@@ -58,6 +60,7 @@ const VIEW_META = {
   suno: { title: "Suno bucket", sub: "Master API credits vs user liability" },
   users: { title: "Users", sub: "Signups, activity, balances, and songs" },
   credits: { title: "Credits", sub: "Grant paid credits and view every ledger entry" },
+  promos: { title: "Promo codes", sub: "Create and monitor redemption codes" },
   generations: { title: "Generations", sub: "Song and audio generation requests" },
   publications: { title: "Publications", sub: "Public profile posts — moderation view (not friends-only)" },
   subscriptions: { title: "Subscriptions", sub: "NabadAi Pro status by user" },
@@ -481,11 +484,13 @@ async function refreshSessionIfNeeded() {
   return true;
 }
 
-async function adminFetch(view, { offset = 0, limit = PAGE_SIZE } = {}) {
+async function adminFetch(view, { offset = 0, limit = PAGE_SIZE, search = "" } = {}) {
   await refreshSessionIfNeeded();
   const token = state.session?.access_token;
   if (!token) throw new Error("Not signed in");
   const qs = new URLSearchParams({ view, limit: String(limit), offset: String(offset) });
+  const trimmedSearch = String(search || "").trim();
+  if (trimmedSearch.length >= 2) qs.set("search", trimmedSearch);
   const r = await fetch(`/api/music/admin?${qs}`, {
     headers: { Authorization: `Bearer ${token}` },
   });
@@ -545,8 +550,16 @@ function applyNavPermissions() {
   }
 }
 
+function viewCacheKey() {
+  let key = `${state.view}:${state.offset}`;
+  if (state.view === "users" && state.userSearch.trim().length >= 2) {
+    key += `:${state.userSearch.trim().toLowerCase()}`;
+  }
+  return key;
+}
+
 function firstAllowedView() {
-  const order = ["overview", "suno", "users", "generations", "publications", "credits", "subscriptions", "settings"];
+  const order = ["overview", "suno", "users", "generations", "publications", "credits", "promos", "subscriptions", "settings"];
   for (const view of order) {
     if (canAccessView(view)) return view;
   }
@@ -777,6 +790,7 @@ function pagerHtml(total, offset) {
 function renderUsers(data) {
   const rows = data?.users || [];
   const total = data?.total || rows.length;
+  const searchVal = state.userSearch || "";
   const body = rows.length
     ? rows.map((u) => `
       <tr>
@@ -790,10 +804,25 @@ function renderUsers(data) {
         <td>${fmtDate(u.lastActiveAt)}</td>
       </tr>
     `).join("")
-    : `<tr><td colspan="8" class="loading">No users yet</td></tr>`;
+    : `<tr><td colspan="8" class="loading">${searchVal.trim().length >= 2 ? "No users match your search." : "No users yet"}</td></tr>`;
 
-  els.panels.users.innerHTML = adminPageStack(dataPanel({
-    title: "All users",
+  els.panels.users.innerHTML = adminPageStack(`
+    <section class="sectionCard sectionCard--toolbar">
+      <div class="sectionHead">
+        <h3 class="sectionTitle">Search users</h3>
+        <p class="sectionNote">Email, @username, or display name — min 2 characters.</p>
+      </div>
+      <form id="userSearchForm" class="grantForm userSearchForm">
+        <label class="field grantField userSearchField">
+          <span>Search</span>
+          <input id="userSearchInput" type="search" value="${escapeHtml(searchVal)}" placeholder="sam@example.com or @creator" autocomplete="off" />
+        </label>
+        <button type="submit" class="btnPrimary">Search</button>
+        ${searchVal.trim().length >= 2 ? `<button type="button" class="btnGhost" id="btnUserSearchClear">Clear</button>` : ""}
+      </form>
+    </section>
+    ${dataPanel({
+    title: searchVal.trim().length >= 2 ? "Search results" : "All users",
     note: "Signups, credits, songs saved, and subscription status. Orphan auth accounts show as profile pending.",
     tableHtml: `
     <div class="tableWrap">
@@ -808,7 +837,116 @@ function renderUsers(data) {
       </table>
     </div>`,
     pager: pagerHtml(total, state.offset),
-  }));
+  })}
+  `);
+}
+
+function promoStatusBadge(promo) {
+  if (!promo.active) return `<span class="badge inactive">inactive</span>`;
+  if (promo.expiresAt && new Date(promo.expiresAt).getTime() < Date.now()) {
+    return `<span class="badge expired">expired</span>`;
+  }
+  if (promo.redemptions >= promo.maxRedemptions) {
+    return `<span class="badge exhausted">redeemed</span>`;
+  }
+  return `<span class="badge active">active</span>`;
+}
+
+function renderPromos(data) {
+  const rows = data?.promos || [];
+  const total = data?.total || rows.length;
+  const summary = data?.summary || {};
+  const canManage = Boolean(state.adminSession?.canGrantCredits);
+
+  const body = rows.length
+    ? rows.map((p) => {
+      const remaining = Math.max(0, p.maxRedemptions - p.redemptions);
+      const toggleBtn = canManage
+        ? `<button type="button" class="btnGhost" data-promo-toggle="${escapeHtml(p.code)}" data-promo-active="${p.active ? "1" : "0"}">${p.active ? "Deactivate" : "Activate"}</button>`
+        : "—";
+      return `
+      <tr>
+        <td><code class="promoCode">${escapeHtml(p.code)}</code></td>
+        <td class="num">${fmtNum(p.credits, 1)}</td>
+        <td class="num">${fmtNum(p.redemptions)} / ${fmtNum(p.maxRedemptions)}</td>
+        <td class="num">${fmtNum(remaining)}</td>
+        <td>${promoStatusBadge(p)}</td>
+        <td>${p.expiresAt ? fmtDate(p.expiresAt) : "—"}</td>
+        <td>${fmtDate(p.createdAt)}</td>
+        <td>${toggleBtn}</td>
+      </tr>`;
+    }).join("")
+    : `<tr><td colspan="8" class="loading">No promo codes yet — create one below.</td></tr>`;
+
+  const createForm = canManage ? `
+    <section class="sectionCard">
+      <div class="sectionHead">
+        <h3 class="sectionTitle">Create promo code</h3>
+        <p class="sectionNote">Single code or batch with a shared prefix (e.g. <code>NABADAI-BETA-2026</code> + random suffix). Codes are stored uppercase.</p>
+      </div>
+      <form id="promoCreateForm" class="grantForm">
+        <label class="field grantField">
+          <span>Code (single)</span>
+          <input id="promoCode" type="text" placeholder="NABADAI-WELCOME-30" autocomplete="off" />
+        </label>
+        <label class="field grantField">
+          <span>Or batch prefix</span>
+          <input id="promoPrefix" type="text" placeholder="NABADAI-BETA-2026" autocomplete="off" />
+        </label>
+        <label class="field grantField grantField--amount">
+          <span>Batch count</span>
+          <input id="promoCount" type="number" min="1" max="50" step="1" value="1" inputmode="numeric" />
+        </label>
+        <label class="field grantField grantField--amount">
+          <span>Credits</span>
+          <input id="promoCredits" type="number" min="1" max="5000" step="1" required placeholder="30" inputmode="numeric" />
+        </label>
+        <label class="field grantField grantField--amount">
+          <span>Max uses</span>
+          <input id="promoMaxRedemptions" type="number" min="1" max="10000" step="1" value="1" inputmode="numeric" />
+        </label>
+        <label class="field grantField">
+          <span>Expires (optional)</span>
+          <input id="promoExpires" type="datetime-local" />
+        </label>
+        <button type="submit" class="btnPrimary" id="btnPromoCreate">Create</button>
+      </form>
+      <p id="promoCreateMsg" class="grantMsg" hidden></p>
+    </section>` : `
+    <section class="sectionCard">
+      <p class="sectionNote">Promo creation requires <strong>Support</strong> or <strong>Owner / Admin</strong> grant-credits permission.</p>
+    </section>`;
+
+  els.panels.promos.innerHTML = adminPageStack(`
+    <section class="sectionCard">
+      <div class="sectionHead">
+        <h3 class="sectionTitle">Promo summary</h3>
+        <p class="sectionNote">Platform-wide promo code inventory.</p>
+      </div>
+      <div class="cardsGrid cardsGrid--inSection">
+        ${statCard("Total codes", fmtNum(summary.codesTotal))}
+        ${statCard("Redemptions", fmtNum(summary.codesRedeemed))}
+      </div>
+    </section>
+    ${createForm}
+    ${dataPanel({
+      title: "All promo codes",
+      note: "Newest first. Deactivate a code to block further redemptions.",
+      tableHtml: `
+      <div class="tableWrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Code</th><th>Credits</th><th>Used</th><th>Remaining</th>
+              <th>Status</th><th>Expires</th><th>Created</th><th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>${body}</tbody>
+        </table>
+      </div>`,
+      pager: pagerHtml(total, state.offset),
+    })}
+  `);
 }
 
 function renderCredits(data) {
@@ -1199,6 +1337,7 @@ const RENDERERS = {
   suno: renderSuno,
   users: renderUsers,
   credits: renderCredits,
+  promos: renderPromos,
   generations: renderGenerations,
   publications: renderPublications,
   subscriptions: renderSubscriptions,
@@ -1211,6 +1350,7 @@ function setView(view) {
   }
   state.view = view;
   state.offset = 0;
+  if (view !== "users") state.userSearch = "";
   const meta = VIEW_META[view] || VIEW_META.overview;
   els.pageTitle.textContent = meta.title;
   els.pageSub.textContent = meta.sub;
@@ -1249,6 +1389,46 @@ async function adminGrantPaidCredits({ email = "", amount } = {}) {
   }
   if (!r.ok || !data?.ok) {
     throw new Error(data?.error || `Grant failed (${r.status})`);
+  }
+  return data;
+}
+
+function setPromoCreateMsg(text, kind = "ok") {
+  const el = document.getElementById("promoCreateMsg");
+  if (!el) return;
+  if (!text) {
+    el.hidden = true;
+    el.textContent = "";
+    el.className = "grantMsg";
+    return;
+  }
+  el.hidden = false;
+  el.textContent = text;
+  el.className = `grantMsg is${kind === "ok" ? "Ok" : kind === "warn" ? "Warn" : "Err"}`;
+}
+
+async function adminPromoRequest(method, body = {}) {
+  await refreshSessionIfNeeded();
+  const token = state.session?.access_token;
+  if (!token) throw new Error("Not signed in");
+  const r = await fetch("/api/admin/promos", {
+    method,
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(body),
+  });
+  const data = await r.json().catch(() => ({}));
+  if (r.status === 401) {
+    writeSession(null);
+    throw new Error("Session expired — sign in again");
+  }
+  if (r.status === 403) {
+    throw new Error(data?.error || "You do not have permission to manage promo codes.");
+  }
+  if (!r.ok || !data?.ok) {
+    throw new Error(data?.error || `Request failed (${r.status})`);
   }
   return data;
 }
@@ -1332,9 +1512,15 @@ function clearCreditsCache() {
   }
 }
 
+function clearPromosCache() {
+  for (const key of Object.keys(state.cache)) {
+    if (key.startsWith("promos:")) delete state.cache[key];
+  }
+}
+
 async function loadView({ force = false } = {}) {
   const view = state.view;
-  const cacheKey = `${view}:${state.offset}`;
+  const cacheKey = viewCacheKey();
   const panel = els.panels[view];
   if (!force && state.cache[cacheKey]) {
     panel.classList.remove("isLoading");
@@ -1345,7 +1531,10 @@ async function loadView({ force = false } = {}) {
   panel.innerHTML = `<div class="adminPageStack"><div class="loading">Loading…</div></div>`;
   showError("");
   try {
-    let data = await adminFetch(view, { offset: state.offset });
+    let data = await adminFetch(view, {
+      offset: state.offset,
+      search: view === "users" ? state.userSearch : "",
+    });
     if (view === "settings" && state.adminSession?.canManageTeam) {
       try {
         const team = await teamFetch();
@@ -1576,6 +1765,73 @@ for (const btn of els.navItems) {
 }
 
 document.body.addEventListener("submit", (e) => {
+  const userSearchForm = e.target.closest("#userSearchForm");
+  if (userSearchForm) {
+    e.preventDefault();
+    const input = userSearchForm.querySelector("#userSearchInput");
+    state.userSearch = String(input?.value || "").trim();
+    state.offset = 0;
+    void loadView({ force: true });
+    return;
+  }
+
+  const promoForm = e.target.closest("#promoCreateForm");
+  if (promoForm) {
+    e.preventDefault();
+    void (async () => {
+      const codeInput = promoForm.querySelector("#promoCode");
+      const prefixInput = promoForm.querySelector("#promoPrefix");
+      const countInput = promoForm.querySelector("#promoCount");
+      const creditsInput = promoForm.querySelector("#promoCredits");
+      const maxInput = promoForm.querySelector("#promoMaxRedemptions");
+      const expiresInput = promoForm.querySelector("#promoExpires");
+      const btn = promoForm.querySelector("#btnPromoCreate");
+      const credits = Number(creditsInput?.value);
+      const count = Number(countInput?.value || 1);
+      const maxRedemptions = Number(maxInput?.value || 1);
+      const code = String(codeInput?.value || "").trim();
+      const prefix = String(prefixInput?.value || "").trim();
+      if (!Number.isFinite(credits) || credits <= 0) {
+        setPromoCreateMsg("Enter credits between 1 and 5000.", "warn");
+        return;
+      }
+      if (!code && !prefix) {
+        setPromoCreateMsg("Enter a code or a batch prefix.", "warn");
+        return;
+      }
+      if (btn) btn.disabled = true;
+      setPromoCreateMsg("Creating…", "warn");
+      try {
+        const payload = {
+          credits,
+          maxRedemptions,
+          count: prefix ? count : 1,
+        };
+        if (code) payload.code = code;
+        if (prefix) payload.prefix = prefix;
+        if (expiresInput?.value) payload.expiresAt = expiresInput.value;
+        const data = await adminPromoRequest("POST", payload);
+        if (codeInput) codeInput.value = "";
+        if (prefixInput) prefixInput.value = "";
+        if (countInput) countInput.value = "1";
+        if (creditsInput) creditsInput.value = "";
+        if (expiresInput) expiresInput.value = "";
+        clearPromosCache();
+        if (state.view === "promos") await loadView({ force: true });
+        const codes = Array.isArray(data.codes) ? data.codes : [];
+        setPromoCreateMsg(
+          data.message || (codes.length ? `Created: ${codes.join(", ")}` : "Promo code created."),
+          "ok",
+        );
+      } catch (err) {
+        setPromoCreateMsg(err?.message || "Create failed", "err");
+      } finally {
+        if (btn) btn.disabled = false;
+      }
+    })();
+    return;
+  }
+
   const grantForm = e.target.closest("#grantCreditsForm");
   if (grantForm) {
     e.preventDefault();
@@ -1649,7 +1905,7 @@ document.body.addEventListener("submit", (e) => {
 document.body.addEventListener("click", (e) => {
   const pageBtn = e.target.closest("[data-page]");
   if (pageBtn) {
-    const total = state.cache[`${state.view}:${state.offset}`]?.total || 0;
+    const total = state.cache[viewCacheKey()]?.total || 0;
     if (pageBtn.dataset.page === "prev" && state.offset > 0) {
       state.offset = Math.max(0, state.offset - PAGE_SIZE);
       void loadView();
@@ -1657,6 +1913,35 @@ document.body.addEventListener("click", (e) => {
       state.offset += PAGE_SIZE;
       void loadView();
     }
+    return;
+  }
+
+  const promoToggleBtn = e.target.closest("[data-promo-toggle]");
+  if (promoToggleBtn) {
+    const code = promoToggleBtn.dataset.promoToggle;
+    const currentlyActive = promoToggleBtn.dataset.promoActive === "1";
+    if (!code) return;
+    void (async () => {
+      promoToggleBtn.disabled = true;
+      try {
+        await adminPromoRequest("PATCH", { code, active: !currentlyActive });
+        clearPromosCache();
+        if (state.view === "promos") await loadView({ force: true });
+        showError("");
+      } catch (err) {
+        showError(err?.message || "Could not update promo code");
+      } finally {
+        promoToggleBtn.disabled = false;
+      }
+    })();
+    return;
+  }
+
+  const userSearchClear = e.target.closest("#btnUserSearchClear");
+  if (userSearchClear) {
+    state.userSearch = "";
+    state.offset = 0;
+    void loadView({ force: true });
     return;
   }
 

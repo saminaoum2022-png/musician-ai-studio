@@ -31066,9 +31066,11 @@ section.challengesPage{
   padding: 0 max(18px, env(safe-area-inset-left, 0px), env(safe-area-inset-right, 0px)) 78px;
   box-sizing: border-box;
 }
-body[data-route="challenges"] .app{
-  padding-left: 0;
-  padding-right: 0;
+@media (max-width: 1023px){
+  body[data-route="challenges"] .app{
+    padding-left: 0;
+    padding-right: 0;
+  }
 }
 .challengesAmbient{
   display: none;
@@ -46235,12 +46237,40 @@ body[data-route="user"] #userPublicRepostsList{
 @media (min-width: 1024px){
   /* --- Shell grid: sidebar | content --- */
   .app{
-    max-width: 1200px;
+    --nb-shell-max: 1200px;
+    --nb-shell-pad-x: 26px;
+    --nb-shell-pad-y: 20px;
+    --nb-shell-pad-bottom: 44px;
+    --nb-shell-gap: 34px;
+    max-width: var(--nb-shell-max);
     display: grid;
     grid-template-columns: var(--nb-sidebar, 248px) minmax(0, 1fr);
-    column-gap: 34px;
+    column-gap: var(--nb-shell-gap);
     align-items: start;
-    padding: 20px 26px 44px;
+    padding: var(--nb-shell-pad-y) var(--nb-shell-pad-x) var(--nb-shell-pad-bottom);
+    width: 100%;
+    box-sizing: border-box;
+    margin-inline: auto;
+  }
+
+  /* Keep Discover shell metrics on every main tab (Create zero-padding reset is mobile-only). */
+  html.is-web-shell body[data-route="discover"] > .app,
+  html.is-web-shell body[data-route="friends"] > .app,
+  html.is-web-shell body[data-route="challenges"] > .app,
+  html.is-web-shell body[data-route="generate"] > .app,
+  html.is-web-shell body[data-route="activity"] > .app,
+  html.is-web-shell body[data-route="profile"] > .app,
+  html.is-web-shell body[data-route="user"] > .app,
+  html.is-web-shell body[data-route="settings"] > .app,
+  html.is-web-shell body[data-route="sounds"] > .app,
+  html.is-web-shell body.discoverReelInShell[data-route="player"] > .app{
+    padding:
+      var(--nb-shell-pad-y)
+      var(--nb-shell-pad-x)
+      var(--nb-shell-pad-bottom) !important;
+    width: 100% !important;
+    box-sizing: border-box;
+    margin-inline: auto !important;
   }
 
   /* Header becomes the sticky left rail. */
@@ -46255,11 +46285,18 @@ body[data-route="user"] #userPublicRepostsList{
     align-items: stretch;
     gap: 10px;
     height: calc(100vh - 64px);
-    padding: 6px 18px 6px 6px;
+    max-height: calc(100vh - 64px);
+    overflow-y: auto;
+    overflow-x: hidden;
+    overscroll-behavior: contain;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+    padding: 6px 18px 12px 6px;
     margin: 0;
     border-bottom: 0;
     border-right: 1px solid rgba(255,255,255,0.07);
   }
+  header.header::-webkit-scrollbar{ display: none; }
   .headerMain{
     flex-direction: column;
     align-items: stretch;
@@ -46465,16 +46502,23 @@ body[data-route="user"] #userPublicRepostsList{
 .deskCoachPanel{ display: none; }
 @media (min-width: 1200px){
   .app{
-    max-width: 1380px;
+    --nb-shell-max: 1380px;
+    max-width: var(--nb-shell-max);
     grid-template-columns: var(--nb-sidebar, 248px) minmax(0, 1fr) var(--nb-rail, 320px);
   }
-  html.is-web-shell body[data-route="pro"] > .app{
-    max-width: 1380px !important;
-    grid-template-columns: var(--nb-sidebar, 248px) minmax(0, 1fr) var(--nb-rail, 320px);
-  }
+  html.is-web-shell body[data-route="discover"] > .app,
+  html.is-web-shell body[data-route="friends"] > .app,
+  html.is-web-shell body[data-route="challenges"] > .app,
+  html.is-web-shell body[data-route="generate"] > .app,
+  html.is-web-shell body[data-route="activity"] > .app,
+  html.is-web-shell body[data-route="profile"] > .app,
+  html.is-web-shell body[data-route="user"] > .app,
+  html.is-web-shell body[data-route="settings"] > .app,
+  html.is-web-shell body[data-route="sounds"] > .app,
+  html.is-web-shell body[data-route="pro"] > .app,
   html.is-web-shell body.discoverReelInShell[data-route="player"] > .app{
-    max-width: 1380px !important;
-    grid-template-columns: var(--nb-sidebar, 248px) minmax(0, 1fr) var(--nb-rail, 320px);
+    max-width: var(--nb-shell-max) !important;
+    grid-template-columns: var(--nb-sidebar, 248px) minmax(0, 1fr) var(--nb-rail, 320px) !important;
   }
   aside.deskRail{
     grid-column: 3;
@@ -46482,13 +46526,15 @@ body[data-route="user"] #userPublicRepostsList{
     position: sticky;
     top: 20px;
     align-self: start;
-    max-height: calc(100vh - 64px);
+    max-height: calc(100vh - 40px);
     overflow-y: auto;
     overscroll-behavior: contain;
     scrollbar-width: none;
     display: flex;
     flex-direction: column;
     gap: 16px;
+    padding-bottom: 24px;
+    box-sizing: border-box;
   }
   aside.deskRail::-webkit-scrollbar{ display: none; }
 
@@ -47417,12 +47463,8 @@ body[data-route="studio"] .deskRail { display: none !important; }
   html.is-web-shell body.discoverReelInShell[data-route="player"] > .app{
     display: grid !important;
     grid-template-columns: var(--nb-sidebar, 248px) minmax(0, 1fr);
-    column-gap: 34px;
+    column-gap: var(--nb-shell-gap, 34px);
     align-items: start;
-    padding: 20px 26px 44px !important;
-    max-width: 1200px !important;
-    width: auto !important;
-    margin-inline: auto !important;
     min-height: 100vh;
     flex-direction: unset !important;
   }
@@ -47430,7 +47472,7 @@ body[data-route="studio"] .deskRail { display: none !important; }
     grid-column: 2 !important;
     display: flex !important;
     flex-direction: column !important;
-    align-items: center !important;
+    align-items: stretch !important;
     justify-content: flex-start;
     flex: unset !important;
     margin: 0 !important;
@@ -47442,10 +47484,10 @@ body[data-route="studio"] .deskRail { display: none !important; }
   html.is-web-shell body.discoverReelInShell[data-route="player"] .playerCard{
     display: flex !important;
     flex-direction: column;
-    width: min(100%, 420px);
-    max-width: 420px;
-    min-height: min(calc(100vh - 120px), 780px);
-    max-height: min(calc(100vh - 120px), 780px);
+    width: min(100%, 460px);
+    max-width: 460px;
+    min-height: calc(100vh - 88px);
+    max-height: calc(100vh - 72px);
     margin-inline: auto;
     padding: 0;
     border-radius: 22px;
@@ -47454,7 +47496,7 @@ body[data-route="studio"] .deskRail { display: none !important; }
     background: #0a0c12;
     box-shadow: 0 24px 64px rgba(0,0,0,0.45);
     position: relative;
-    flex: 0 1 auto;
+    flex: 1 1 auto;
   }
   html.is-web-shell body.discoverReelInShell[data-route="player"] .playerHeader{
     position: absolute;
@@ -47490,7 +47532,7 @@ body[data-route="studio"] .deskRail { display: none !important; }
   }
   html.is-web-shell body.discoverReelInShell[data-route="player"] .playerArtCol{
     flex: 1 1 auto;
-    min-height: 360px;
+    min-height: 0;
     position: relative;
     width: 100%;
   }
@@ -47501,7 +47543,7 @@ body[data-route="studio"] .deskRail { display: none !important; }
     border-radius: 0;
     padding: 0;
     box-shadow: none;
-    min-height: 360px;
+    min-height: 0;
     overflow: hidden;
     background: #0a0c12;
   }

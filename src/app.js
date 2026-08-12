@@ -20567,14 +20567,6 @@ function trackCoverArtForFeed(track) {
 function trackCoverArtForDisplay(track) {
   const m = track?.meta || {};
   const listThumb = String(m.imageThumb || "").trim();
-  if (
-    m.thumbFrame &&
-    listThumb &&
-    !listThumb.startsWith("data:") &&
-    !isLogoCoverUrl(listThumb)
-  ) {
-    return listThumb.split("?")[0].split("#")[0];
-  }
   const candidates = [
     String(m.imageUrl || "").trim(),
     String(track?.artUrl || "").trim(),
@@ -20601,6 +20593,31 @@ function trackCoverArtForDisplay(track) {
   if (thumbFallback) return thumbFallback;
   if (listThumb && !listThumb.startsWith("data:") && !isLogoCoverUrl(listThumb)) return listThumb;
   return dataFallback || DEFAULT_SONG_COVER_URL;
+}
+
+/** Full-resolution source for the thumb framing editor — never the baked `_thumb`. */
+function trackCoverArtForThumbEdit(track) {
+  const m = track?.meta || {};
+  const imageUrl = String(m.imageUrl || "").trim();
+  const artUrl = String(track?.artUrl || "").trim();
+  const listThumb = String(m.imageThumb || "").trim();
+
+  if (imageUrl.startsWith("data:") && !isLogoCoverUrl(imageUrl)) return imageUrl;
+  if (artUrl.startsWith("data:") && !isLogoCoverUrl(artUrl)) return artUrl;
+
+  for (const c of [imageUrl, artUrl]) {
+    if (!c || isLogoCoverUrl(c) || isDefaultSongCoverUrl(c)) continue;
+    const base = c.split("?")[0].split("#")[0];
+    if (/_thumb\.(webp|jpg|jpeg|png)$/i.test(base)) continue;
+    if (listThumb && c === listThumb) continue;
+    return c;
+  }
+
+  const mainFromThumb = listThumb ? supabaseSongCoverMainFromThumbUrl(listThumb.split("?")[0]) : "";
+  if (mainFromThumb) return mainFromThumb;
+
+  if (listThumb.startsWith("data:") && !isLogoCoverUrl(listThumb)) return listThumb;
+  return trackCoverArtForDisplay(track);
 }
 
 function isSquareListCoverUrl(url) {
@@ -49165,7 +49182,7 @@ function playerCanRegenerateCover(track) {
 
 function playerCanEditThumb(track) {
   if (!track?.id) return false;
-  const url = trackCoverArtForDisplay(track);
+  const url = trackCoverArtForThumbEdit(track);
   return Boolean(url && url !== DEFAULT_SONG_COVER_URL && !isDefaultSongCoverUrl(url));
 }
 
@@ -49216,10 +49233,13 @@ function closeThumbEditSheet() {
 }
 
 async function openThumbEditSheet(track) {
-  if (!track?.id || !playerCanEditThumb(track)) return;
-  const src = trackCoverArtForDisplay(track);
+  const trackId = String(track?.id || "").trim();
+  if (!trackId) return;
+  track = loadLibrary().find((x) => String(x.id) === trackId) || track;
+  if (!playerCanEditThumb(track)) return;
+  const src = trackCoverArtForThumbEdit(track);
   if (!src) return;
-  _thumbEditTrackId = String(track.id);
+  _thumbEditTrackId = trackId;
   const saved = track?.meta?.thumbFrame;
   _thumbEditFrame = {
     scale: clampNum(Number(saved?.scale) || 1, 1, 2.5),
@@ -49229,12 +49249,13 @@ async function openThumbEditSheet(track) {
   if (els.thumbEditOffset) els.thumbEditOffset.value = String(Math.round(_thumbEditFrame.offsetY * 100));
   try {
     setStatus("Loading cover…");
-    _thumbEditImage = await loadCoverRasterImage(src);
+    _thumbEditImage = await loadCoverRasterImage(src, { bustCache: true });
   } catch (e) {
     setStatus(`Could not load cover: ${e?.message || String(e)}`);
     return;
   }
   if (els.thumbEditSheet) els.thumbEditSheet.hidden = false;
+  readThumbEditControls();
   await paintThumbEditPreviewCanvas(_thumbEditImage, _thumbEditFrame);
   setStatus("");
 }
@@ -49248,9 +49269,8 @@ async function saveThumbEditSheet() {
     return;
   }
   readThumbEditControls();
-  const src = trackCoverArtForDisplay(track);
   setStatus("Saving thumbnail…");
-  const thumb = await buildCoverThumbWithFrame(src, _thumbEditFrame);
+  const thumb = await buildCoverThumbFromRaster(_thumbEditImage, _thumbEditFrame);
   if (!thumb) {
     setStatus("Could not save thumbnail.");
     return;
@@ -50592,9 +50612,14 @@ async function buildCoverThumbDataUrl(src, opts = {}) {
   return buildCoverThumbWithFrame(src, null, opts);
 }
 
-async function loadCoverRasterImage(src) {
-  const s = String(src || "").trim();
+async function loadCoverRasterImage(src, opts = {}) {
+  let s = String(src || "").trim();
   if (!s) throw new Error("Missing image");
+  if (opts.bustCache && s.startsWith("http")) {
+    const base = s.split("#")[0];
+    const noV = base.replace(/([?&])v=\d+/g, "$1").replace(/[?&]$/, "");
+    s = `${noV}${noV.includes("?") ? "&" : "?"}v=${Date.now()}`;
+  }
   if (s.startsWith("data:") || s.startsWith("blob:")) {
     return new Promise((resolve, reject) => {
       const i = new Image();
@@ -50613,30 +50638,34 @@ async function loadCoverRasterImage(src) {
 }
 
 /** Build a square thumb using optional user framing (scale + vertical offset). */
+function buildCoverThumbFromRaster(img, frame, opts = {}) {
+  const w = Number(img?.width || 0);
+  const h = Number(img?.height || 0);
+  if (!w || !h) return "";
+  const out = Math.max(64, Math.round(Number(opts.outPx) || COVER_UPLOAD_THUMB_PX));
+  const quality = Number(opts.quality) || COVER_THUMB_QUALITY;
+  const rect = frame && typeof frame === "object"
+    ? thumbFrameCropRect(w, h, frame)
+    : coverSquareCropRect(w, h);
+  const canvas = document.createElement("canvas");
+  canvas.width = out;
+  canvas.height = out;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return "";
+  ctx.drawImage(img, rect.sx, rect.sy, rect.crop, rect.crop, 0, 0, out, out);
+  try {
+    const webp = canvas.toDataURL("image/webp", quality);
+    if (webp.startsWith("data:image/webp")) return webp;
+  } catch {}
+  return canvas.toDataURL("image/jpeg", quality);
+}
+
 async function buildCoverThumbWithFrame(src, frame, opts = {}) {
   const s = String(src || "").trim();
   if (!s || s.startsWith("./")) return "";
   try {
     const img = await loadCoverRasterImage(s);
-    const w = Number(img.width || 0);
-    const h = Number(img.height || 0);
-    if (!w || !h) return "";
-    const out = Math.max(64, Math.round(Number(opts.outPx) || COVER_UPLOAD_THUMB_PX));
-    const quality = Number(opts.quality) || COVER_THUMB_QUALITY;
-    const rect = frame && typeof frame === "object"
-      ? thumbFrameCropRect(w, h, frame)
-      : coverSquareCropRect(w, h);
-    const canvas = document.createElement("canvas");
-    canvas.width = out;
-    canvas.height = out;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return "";
-    ctx.drawImage(img, rect.sx, rect.sy, rect.crop, rect.crop, 0, 0, out, out);
-    try {
-      const webp = canvas.toDataURL("image/webp", quality);
-      if (webp.startsWith("data:image/webp")) return webp;
-    } catch {}
-    return canvas.toDataURL("image/jpeg", quality);
+    return buildCoverThumbFromRaster(img, frame, opts);
   } catch {
     return "";
   }
@@ -58241,7 +58270,9 @@ if (els.btnPlayerEditThumb) {
     e.preventDefault();
     e.stopPropagation();
     try { haptic("light"); } catch {}
-    void openThumbEditSheet(resolvePlayerLibraryTrack());
+    const id = String(resolvePlayerLibraryTrack()?.id || currentPlayerTrackRef?.id || "").trim();
+    const track = id ? loadLibrary().find((x) => String(x.id) === id) : null;
+    void openThumbEditSheet(track || resolvePlayerLibraryTrack());
   });
 }
 if (els.btnThumbEditClose) {
@@ -58326,6 +58357,7 @@ if (els.playerCoverUpload) {
       setStatus("Cover unchanged.");
       return;
     }
+    closeThumbEditSheet();
     const newMeta = {
       ...(currentPlayerTrackRef.meta || {}),
       imageUrl: url,

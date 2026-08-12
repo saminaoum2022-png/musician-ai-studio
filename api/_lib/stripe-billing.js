@@ -124,23 +124,19 @@ async function applyStripeSubscription(sub, { grantCredits = false, invoiceId = 
     const plan = planForStripePriceId(priceId);
     if (plan) {
       let amount = 0;
-      let eventType = "INITIAL_PURCHASE";
+      const eventType = "INITIAL_PURCHASE";
       if (status === "trialing" && plan.trialCredits > 0) {
         amount = plan.trialCredits;
       } else if (status === "active") {
         amount = plan.creditsPerPeriod;
-        eventType = "RENEWAL";
       }
       if (amount > 0) {
-        const eventKey =
-          eventType === "INITIAL_PURCHASE"
-            ? `sub_initial:${full.id}`
-            : String(invoiceId || full.latest_invoice || full.id).trim();
+        const eventKey = `sub_initial:${full.id}`;
         grant = await grantCreditsOnce({
           eventId: `stripe:${eventKey}`,
           userId,
           amount,
-          ref: `stripe:pro:${planId}:${eventId}`,
+          ref: `stripe:pro:${planId}:${eventKey}`,
           provider: "stripe",
           eventType,
           planId,
@@ -222,7 +218,7 @@ async function applyStripeInvoicePaid(invoice) {
     eventId: `stripe:${grantEventId}`,
     userId,
     amount,
-    ref: `stripe:pro:${planId}:${eventId}`,
+    ref: `stripe:pro:${planId}:${grantEventId}`,
     provider: "stripe",
     eventType,
     planId,
@@ -356,6 +352,40 @@ async function createPortalSession({ userId, origin }) {
   return { ok: true, url: session.url };
 }
 
+async function ensureStripeInitialCreditsGranted(sub) {
+  if (!sub?.id) return { granted: 0, skipped: true };
+  const userId = userIdFromStripeObject(sub);
+  const planId = planIdFromSubscription(sub);
+  const priceId = sub?.items?.data?.[0]?.price?.id || "";
+  const plan = planForStripePriceId(priceId);
+  if (!userId || !planId || !plan) return { granted: 0, skipped: true };
+
+  const status = statusFromStripeSubscription(sub);
+  if (status !== "active" && status !== "trialing") {
+    return { granted: 0, skipped: true };
+  }
+
+  let amount = 0;
+  if (status === "trialing" && plan.trialCredits > 0) {
+    amount = plan.trialCredits;
+  } else if (status === "active") {
+    amount = plan.creditsPerPeriod;
+  }
+  if (amount <= 0) return { granted: 0, skipped: true };
+
+  const eventKey = `sub_initial:${sub.id}`;
+  return grantCreditsOnce({
+    eventId: `stripe:${eventKey}`,
+    userId,
+    amount,
+    ref: `stripe:pro:${planId}:${eventKey}`,
+    provider: "stripe",
+    eventType: "INITIAL_PURCHASE",
+    planId,
+    productId: priceId,
+  });
+}
+
 async function syncStripeSubscriber(userId) {
   const stripe = getStripe();
   const uid = cleanUserId(userId);
@@ -381,17 +411,20 @@ async function syncStripeSubscriber(userId) {
       null;
     if (!activeSub) return { ok: true, active: false };
     const result = await applyStripeSubscription(activeSub, { grantCredits: false });
+    const grant = await ensureStripeInitialCreditsGranted(activeSub);
     return {
       ok: true,
       active: ["active", "trialing", "grace"].includes(result.status),
       planId: result.planId,
       status: result.status,
+      grant,
     };
   }
 
   try {
     const sub = await stripe.subscriptions.retrieve(subId, { expand: ["items.data.price"] });
     const result = await applyStripeSubscription(sub, { grantCredits: false });
+    const grant = await ensureStripeInitialCreditsGranted(sub);
     const active = ["active", "trialing", "grace"].includes(String(result.status));
     return {
       ok: true,
@@ -399,6 +432,7 @@ async function syncStripeSubscriber(userId) {
       planId: result.planId,
       status: result.status,
       currentPeriodEnd: periodEndIsoFromSubscription(sub),
+      grant,
     };
   } catch (e) {
     return { ok: false, error: e?.message || "stripe_sync_failed" };

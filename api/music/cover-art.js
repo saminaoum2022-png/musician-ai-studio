@@ -103,8 +103,8 @@ function coverDataUrlFromBuffer(outBuf, outMime) {
 }
 
 /** Regen only — Gemini image when configured, Pollinations fallback. */
-async function fetchRegenCoverImage({ prompt, seed, avoidTags, storyTheme = "", buildPollinationsUrl }) {
-  const pollUrlOpts = { avoidTags, storyTheme: storyTheme || "" };
+async function fetchRegenCoverImage({ prompt, seed, avoidTags, storyTheme = "", userArtwork = "", buildPollinationsUrl }) {
+  const pollUrlOpts = { avoidTags, storyTheme: storyTheme || "", userArtwork: userArtwork || "" };
   const attemptedProvider = resolveCoverRegenImageProvider();
   if (attemptedProvider === "gemini") {
     const gem = await tryGeminiCoverImage({ prompt });
@@ -273,6 +273,7 @@ module.exports = async function handler(req, res) {
         seed,
         avoidTags: String(body?.clientAvoidTags || effectiveAvoidTags || "").slice(0, MAX_AVOID),
         storyTheme: String(body?.clientStoryTheme || "").trim(),
+        userArtwork: regenUserHint || String(body?.clientParams?.userArtwork || body?.clientParams?.userArtworkRaw || "").trim(),
         buildPollinationsUrl,
       });
       if (!rendered.ok) {
@@ -342,7 +343,11 @@ module.exports = async function handler(req, res) {
       promptOpts,
     );
 
-    const upstreamUrl = buildPollinationsUrl(prompt, seed, { avoidTags: effectiveAvoidTags, storyTheme });
+    const upstreamUrl = buildPollinationsUrl(prompt, seed, {
+      avoidTags: effectiveAvoidTags,
+      storyTheme,
+      userArtwork: params?.userArtwork || params?.userArtworkRaw || artworkHint || "",
+    });
     const polled = await fetchPollinationsCover(upstreamUrl);
     if (!polled.ok) {
       console.warn("[music/cover-art] pollinations failed", polled.error);

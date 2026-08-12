@@ -1,7 +1,7 @@
 /**
  * Rule-based Visual Director — no LLM required.
  */
-import { enforceNoHumansScene, prepareDirectUserArtworkHint, compositionPhraseForCover, isConcreteObjectArtworkHint, isUserDirectedRegenHint } from "../prompt.js";
+import { enforceNoHumansScene, prepareDirectUserArtworkHint, compositionPhraseForCover, isConcreteObjectArtworkHint, isSceneEnvironmentHint, shouldUseLiteralSubjectMode } from "../prompt.js";
 import { humTrackStudioNookPhrase } from "./hum-track-cover.mjs";
 import { nabadIdentityPhrases } from "./nabad-identity.mjs";
 import { validateVisualDirection } from "./schema.mjs";
@@ -131,7 +131,9 @@ export function resolveHeuristicVisualDirection(ctx) {
     energy: ctx.energy,
     visualMode,
     humTrack: ctx.humTrack,
-    concreteSubject: isUserDirectedRegenHint(ctx.artworkHint || ctx.artworkStyle),
+    concreteSubject: shouldUseLiteralSubjectMode(ctx.artworkHint || ctx.artworkStyle, {
+      userArtworkOverride: ctx.artworkHint || ctx.artworkStyle,
+    }),
   });
 
   const raw = {
@@ -147,7 +149,7 @@ export function resolveHeuristicVisualDirection(ctx) {
     lighting: ctx.energy > 0.75
       ? "sharp rim light with controlled kinetic glow"
       : "soft cinematic rim light with teal-violet atmospheric fill",
-    cameraStyle: isConcreteObjectArtworkHint(ctx.artworkHint || ctx.artworkStyle)
+    cameraStyle: isConcreteObjectArtworkHint(ctx.artworkHint || ctx.artworkStyle) && !isSceneEnvironmentHint(ctx.artworkHint || ctx.artworkStyle)
       ? "editorial still life photograph, medium-scale props, pulled-back camera, generous margins, no human subjects"
       : visualMode === "studio_nook_still_life"
         ? "editorial studio nook still life photograph, props only, no instruments, no human subjects"

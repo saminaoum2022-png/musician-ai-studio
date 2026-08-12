@@ -43,5 +43,19 @@ assert(/still life/i.test(friesBuilt.prompt), "fries prompt uses still life fram
 assert(friesBuilt.storyTheme === "user_regen", "fries regen ignores song mountain story theme");
 assert(!/mountain/i.test(friesBuilt.prompt), "fries prompt does not inject mountain scene");
 
+const houseHint = "old house";
+const housePrepared = promptMod.prepareDirectUserArtworkHint(houseHint);
+const houseIdentity = idMod.nabadIdentityPhrases({ songId: "regen-house", bucketKey: "happy", concreteSubject: false });
+const houseBuilt = promptMod.buildAbstractCoverPrompt(
+  { songId: "regen-house", title: "Table Song", lyrics: "coffee cup on the kitchen table", artworkHint: houseHint },
+  { regenSalt: "test", userArtworkOverride: houseHint, nabadIdentityPhrases: houseIdentity.text },
+);
+assert(/old house|house/i.test(housePrepared), "old house hint survives preparation");
+assert(/architectural|environment|cinematic/i.test(housePrepared), "old house gets scene enrichment");
+assert(/environment photograph|cinematic environment|wide atmospheric environment/i.test(houseBuilt.prompt), "old house uses scene framing not table still life");
+assert(!/editorial still life photograph/i.test(houseBuilt.prompt), "old house prompt is not table still life");
+assert(houseBuilt.storyTheme === "user_regen", "old house regen ignores song table story theme");
+assert(/table still life|props on table/i.test(houseBuilt.params.landscapeAntiMountainAvoid || ""), "old house negative blocks random table still life");
+
 if (failed) process.exit(1);
-console.log("\nAll flower/fries regen prompt checks passed.");
+console.log("\nAll flower/fries/old-house regen prompt checks passed.");

@@ -4,7 +4,7 @@
  */
 
 /** Bump when cover prompt policy changes — busts Gemini scene cache on the server. */
-export const COVER_PROMPT_POLICY_VERSION = 11;
+export const COVER_PROMPT_POLICY_VERSION = 12;
 /** Pollinations flux reliably returns ~768×768 square — request square, crop to 9:16 (avoids vertical stretch). */
 export const POLLINATIONS_COVER_WIDTH = 1024;
 export const POLLINATIONS_COVER_HEIGHT = 1024;
@@ -244,17 +244,24 @@ const OBJECT_COMPOSITIONS = [
 ];
 
 const CONCRETE_OBJECT_RE =
-  /\b(balloon|balloons|cake|cupcake|house|home|heart|hearts|ring|rings|flower|flowers|rose|roses|candle|candles|gift|gifts|present|presents|moon|sun|tree|car|clock|book|key|keys|cup|glass|wine|champagne|confetti|diamond|gem|jewel|umbrella|door|window|chair|table|lamp|lantern|snowflake|snowman|pumpkin|cross|anchor|boat|plane|bicycle|bike|camera|phone|shell|feather|butterfly|bear|teddy|toy|box|treasure|coin|medal|trophy|graduation|mortarboard|diploma|wedding|bouquet|chandelier|microphone|guitar|piano|violin|drum|instrument|cookie|cookies|donut|doughnut|ice cream|pizza|fruit|apple|orange|lemon|cherry|cherries|pearl|pearl necklace|necklace|bracelet|watch|shoe|shoes|hat|scarf|envelope|letter|envelope|flag|firework|fireworks|sparkler|sparklers|velvet|satin|ribbon|ribbons|bow|bows|fries|french fries|burger|hamburger|taco|tacos|sushi|ramen|noodles|pasta|sandwich|steak|salad|coffee|espresso|latte|tea|cocktail|beer|food|meal|snack|breakfast|brunch|dinner|lunch|dessert|pastry|bread|toast|cheese|wine glass|milkshake|smoothie|cupcake|croissant)\b/i;
+  /\b(balloon|balloons|cake|cupcake|heart|hearts|ring|rings|flower|flowers|rose|roses|candle|candles|gift|gifts|present|presents|moon|sun|clock|book|key|keys|cup|glass|wine|champagne|confetti|diamond|gem|jewel|umbrella|chair|table|lamp|lantern|snowflake|snowman|pumpkin|cross|anchor|camera|phone|shell|feather|butterfly|bear|teddy|toy|box|treasure|coin|medal|trophy|graduation|mortarboard|diploma|wedding|bouquet|chandelier|microphone|guitar|piano|violin|drum|instrument|cookie|cookies|donut|doughnut|ice cream|pizza|fruit|apple|orange|lemon|cherry|cherries|pearl|pearl necklace|necklace|bracelet|watch|shoe|shoes|hat|scarf|envelope|letter|envelope|flag|firework|fireworks|sparkler|sparklers|velvet|satin|ribbon|ribbons|bow|bows|fries|french fries|burger|hamburger|taco|tacos|sushi|ramen|noodles|pasta|sandwich|steak|salad|coffee|espresso|latte|tea|cocktail|beer|food|meal|snack|breakfast|brunch|dinner|lunch|dessert|pastry|bread|toast|cheese|wine glass|milkshake|smoothie|cupcake|croissant)\b/i;
 
-/** Any explicit regen hint from the user — treat as literal still life, not song story. */
+const SCENE_ENVIRONMENT_RE =
+  /\b(old\s+house|abandoned|ruins?|castle|cottages?|cabin|barn|farm|village|mansion|building|buildings|architecture|architectural|house|houses|home|homes|homestead|hut|shack|palace|tower|temple|church|cathedral|mosque|lighthouse|skyline|cityscape|city|street|alley|road|highway|bridge|forest|woods|jungle|desert|beach|coast|ocean|sea|lake|river|waterfall|mountain|mountains|hill|hills|valley|meadow|field|garden|park|sunset|sunrise|twilight|landscape|environment|horizon|countryside|rural|urban|industrial|warehouse|factory|suburb|neighborhood|neighbourhood|rooftop|balcony|porch|path|trail|canyon|cliff|island|harbor|harbour|port|market|square|plaza|downtown|skyscraper|apartment|condo|hotel|motel|inn|shop|storefront|cafe|restaurant|bar|pub|library|museum|school|university|campus|stadium|arena|theater|theatre|cinema|station|airport|runway|dock|pier|marina|grove|orchard|vineyard|winery|cemetery|graveyard|monument|statue|fountain|dam|tunnel|subway|metro|train|railway|railroad|platform|tree|trees|car|cars|boat|boats|plane|planes|bicycle|bike|door|doors|window|windows)\b/i;
+
+/** Any explicit regen hint from the user — block song story bleed, not always still life. */
 export function isUserDirectedRegenHint(text) {
   return String(text || "").trim().length >= 2;
 }
 
+export function isSceneEnvironmentHint(text) {
+  return SCENE_ENVIRONMENT_RE.test(String(text || ""));
+}
+
 export function shouldUseLiteralSubjectMode(hint, { userArtworkOverride = "" } = {}) {
-  if (String(userArtworkOverride || "").trim()) return true;
-  const prepared = String(hint || "").trim();
-  return prepared.length >= 2 && (isConcreteObjectArtworkHint(prepared) || isFoodArtworkHint(prepared));
+  const prepared = String(userArtworkOverride || hint || "").trim();
+  if (prepared.length < 2 || isSceneEnvironmentHint(prepared)) return false;
+  return isConcreteObjectArtworkHint(prepared) || isFoodArtworkHint(prepared);
 }
 
 function isFoodArtworkHint(text) {
@@ -393,8 +400,11 @@ export function isConcreteObjectArtworkHint(text) {
 
 export function compositionPhraseForCover(songId, artworkText = "", visualMode = "") {
   const mode = String(visualMode || "").toLowerCase();
-  if (isConcreteObjectArtworkHint(artworkText) || mode === "still_life") {
-    const key = isConcreteObjectArtworkHint(artworkText) ? "obj-comp" : "still-comp";
+  if (isSceneEnvironmentHint(artworkText)) {
+    return COMPOSITIONS[fnv1a(`${songId}:scene-comp`) % COMPOSITIONS.length];
+  }
+  if (isConcreteObjectArtworkHint(artworkText) || isFoodArtworkHint(artworkText) || mode === "still_life") {
+    const key = isConcreteObjectArtworkHint(artworkText) || isFoodArtworkHint(artworkText) ? "obj-comp" : "still-comp";
     return OBJECT_COMPOSITIONS[fnv1a(`${songId}:${key}`) % OBJECT_COMPOSITIONS.length];
   }
   return COMPOSITIONS[fnv1a(`${songId}:composition`) % COMPOSITIONS.length];
@@ -403,8 +413,12 @@ export function compositionPhraseForCover(songId, artworkText = "", visualMode =
 function enrichUserArtworkHint(raw) {
   let s = String(raw || "").trim();
   if (!s) return s;
-  const hasObjectSubject = isConcreteObjectArtworkHint(s) || isFoodArtworkHint(s);
-  if (!hasObjectSubject) {
+  const hasSceneSubject = isSceneEnvironmentHint(s);
+  const hasObjectSubject = !hasSceneSubject && (isConcreteObjectArtworkHint(s) || isFoodArtworkHint(s));
+  if (hasSceneSubject && !/cinematic|architectural|environment|focal subject|atmospheric|wide composition|no people/i.test(s)) {
+    s = `${s}, cinematic architectural environment photograph, the requested place or building clearly visible as the focal subject, atmospheric depth, wide environmental composition, no people`;
+  }
+  if (!hasObjectSubject && !hasSceneSubject) {
     if (/\bstar\s*sky\b/i.test(s)) {
       s = s.replace(/\bstar\s*sky\b/gi, "night sky filled with stars and soft cosmic glow");
     } else if (/\bstarry\b/i.test(s) && !/night sky/i.test(s)) {
@@ -433,11 +447,11 @@ function enrichUserArtworkHint(raw) {
 }
 
 function composeFrameForArtwork(userArtwork, { literalSubject = false } = {}) {
-  if (literalSubject || isConcreteObjectArtworkHint(userArtwork) || isFoodArtworkHint(userArtwork)) {
+  if (literalSubject || ((isConcreteObjectArtworkHint(userArtwork) || isFoodArtworkHint(userArtwork)) && !isSceneEnvironmentHint(userArtwork))) {
     return OBJECT_COMPOSE_FRAME;
   }
-  if (isSkyOrSpaceHint(userArtwork) || /landscape|ocean|mountain|city|skyline|environment|horizon/i.test(userArtwork)) {
-    return "vertical cinematic album art, wide atmospheric environment, immersive landscape depth, no people";
+  if (isSceneEnvironmentHint(userArtwork) || isSkyOrSpaceHint(userArtwork) || /landscape|ocean|mountain|city|skyline|environment|horizon/i.test(userArtwork)) {
+    return "vertical cinematic album art, wide atmospheric environment, immersive environmental depth, architectural or landscape focal subject, no people";
   }
   return MUSIC_COVER_FRAME;
 }
@@ -471,7 +485,11 @@ export function buildUserRegenCoverPrompt(hint, { songId = "", regenSalt = "", c
     if (built?.prompt) return built;
   }
   const seed = buildCoverSeed({ songId }, "user_regen", "default", userArtwork, regenSalt);
-  const frame = isConcreteObjectArtworkHint(userArtwork) ? OBJECT_COMPOSE_FRAME : MUSIC_COVER_FRAME;
+  const frame = shouldUseLiteralSubjectMode(hint, { userArtworkOverride: userArtwork })
+    ? OBJECT_COMPOSE_FRAME
+    : isSceneEnvironmentHint(userArtwork)
+      ? "vertical cinematic album art, wide atmospheric environment, immersive environmental depth, architectural or landscape focal subject, no people"
+      : MUSIC_COVER_FRAME;
   const prompt = [
     `album art photograph, ${userArtwork} as the single clear focal subject filling the visual idea`,
     frame,
@@ -537,10 +555,27 @@ function moodBucketFallback(bucketKey, energy) {
   };
 }
 
-function landscapeAntiMountainAvoid(storyThemeId) {
+function userRegenAvoidTags(userArtwork) {
+  const hint = String(userArtwork || "").trim();
+  if (!hint) {
+    return "mountain, mountains, hill, hills, generic landscape, scenic vista, table still life";
+  }
+  if (/\b(mountain|mountains|peak|peaks|alps|hill|hills|beach|ocean|city|skyline)\b/i.test(hint)) {
+    return "table still life, props on table, random objects on surface, food on table, macro close-up, unrelated still life";
+  }
+  if (isSceneEnvironmentHint(hint)) {
+    return "table still life, props on table, random objects on surface, food on table, macro close-up, unrelated still life, generic props, kitchen counter scene";
+  }
+  if (isFoodArtworkHint(hint) || isConcreteObjectArtworkHint(hint)) {
+    return "mountain, mountains, hill, hills, mountain range, alps, peak, peaks, generic landscape, scenic vista, wide landscape, nature panorama, ocean horizon, city skyline";
+  }
+  return "mountain, mountains, generic landscape, table still life";
+}
+
+function landscapeAntiMountainAvoid(storyThemeId, userArtwork = "") {
   const id = String(storyThemeId || "").trim();
   if (id === "user_regen") {
-    return "mountain, mountains, hill, hills, mountain range, alps, peak, peaks, generic landscape, scenic vista, wide landscape, nature panorama, ocean horizon, city skyline";
+    return userRegenAvoidTags(userArtwork);
   }
   if (id === "mountains" || id === "ocean_beach" || id === "city_street" || id === "rain_storm") {
     return "";
@@ -729,9 +764,9 @@ function parseAvoidTagsList(raw) {
     .slice(0, 24);
 }
 
-export function buildCoverNegativePrompt(avoidTags, { storyTheme = "" } = {}) {
+export function buildCoverNegativePrompt(avoidTags, { storyTheme = "", userArtwork = "" } = {}) {
   const extra = parseAvoidTagsList(avoidTags);
-  const antiMountain = landscapeAntiMountainAvoid(storyTheme);
+  const antiMountain = landscapeAntiMountainAvoid(storyTheme, userArtwork);
   if (antiMountain) extra.push(...parseAvoidTagsList(antiMountain));
   if (!extra.length) return NEGATIVE_TEXT_PROMPT;
   return `${NEGATIVE_TEXT_PROMPT}, ${extra.join(", ")}`;
@@ -838,7 +873,7 @@ export function buildAbstractCoverPrompt(input, options = {}) {
     parts = userArtwork
       ? [
           NO_TEXT_LEAD,
-          composeFrameForArtwork(userArtwork, { literalSubject: userDirectedRegen }),
+          composeFrameForArtwork(userArtwork, { literalSubject: shouldUseLiteralSubjectMode(userArtworkOverride || userArtwork) }),
           sceneOverride,
           nabadIdentityPhrases,
           paletteForUserArtwork(userArtwork, bucketKey),
@@ -869,10 +904,13 @@ export function buildAbstractCoverPrompt(input, options = {}) {
         ];
   } else if (userArtwork) {
     const userPalette = paletteForUserArtwork(userArtwork, bucketKey);
-    const useLiteralSubject = userDirectedRegen || isConcreteObjectArtworkHint(userArtwork) || isFoodArtworkHint(userArtwork);
+    const useLiteralSubject = shouldUseLiteralSubjectMode(userArtworkOverride || userArtworkRaw);
+    const useSceneLead = !useLiteralSubject && isSceneEnvironmentHint(userArtwork);
     const literalLead = useLiteralSubject
       ? `photorealistic editorial still life photograph, ${userArtwork}, clearly visible and recognizable`
-      : "";
+      : useSceneLead
+        ? `photorealistic cinematic environment photograph, ${userArtwork}, the requested place or architecture clearly visible as the focal subject`
+        : "";
     parts = [
       NO_TEXT_LEAD,
       literalLead,
@@ -947,7 +985,7 @@ export function buildAbstractCoverPrompt(input, options = {}) {
       coverHeight: POLLINATIONS_COVER_HEIGHT,
       coverAspect: "9:16",
       coverSourceAspect: "1:1",
-      landscapeAntiMountainAvoid: landscapeAntiMountainAvoid(effectiveStoryTheme),
+      landscapeAntiMountainAvoid: landscapeAntiMountainAvoid(effectiveStoryTheme, userArtwork),
     },
   };
 }
@@ -955,9 +993,9 @@ export function buildAbstractCoverPrompt(input, options = {}) {
 export function buildPollinationsUrl(
   prompt,
   seed,
-  { width = POLLINATIONS_COVER_WIDTH, height = POLLINATIONS_COVER_HEIGHT, avoidTags = "", storyTheme = "" } = {},
+  { width = POLLINATIONS_COVER_WIDTH, height = POLLINATIONS_COVER_HEIGHT, avoidTags = "", storyTheme = "", userArtwork = "" } = {},
 ) {
   const encoded = encodeURIComponent(prompt);
-  const negative = encodeURIComponent(buildCoverNegativePrompt(avoidTags, { storyTheme }));
+  const negative = encodeURIComponent(buildCoverNegativePrompt(avoidTags, { storyTheme, userArtwork }));
   return `https://image.pollinations.ai/prompt/${encoded}?width=${width}&height=${height}&seed=${seed}&model=flux&nologo=true&enhance=false&private=true&negative_prompt=${negative}`;
 }

@@ -2,7 +2,7 @@
  * Client-side abstract cover generation via /api/music/cover-art
  */
 import { canRegeneratePollinationsCover, canRegenerateTrackCover, coverArtParamsFromTrack, hasUserPhotoCoverMeta, isPollinationsCoverEligible, shouldUseAbstractCover } from "./params.js";
-import { buildAbstractCoverPrompt, buildPollinationsUrl, classifyVisualBucket, COVER_PROMPT_POLICY_VERSION, resolveStoryTheme, isUserDirectedRegenHint } from "./prompt.js";
+import { buildAbstractCoverPrompt, buildPollinationsUrl, classifyVisualBucket, COVER_PROMPT_POLICY_VERSION, resolveStoryTheme, shouldUseLiteralSubjectMode } from "./prompt.js";
 import { resolveVisualDirection } from "./visual-director/director.mjs";
 import { nabadIdentityPhrases } from "./visual-director/nabad-identity.mjs";
 import { DEFAULT_SONG_COVER_URL, isDefaultSongCoverUrl } from "./placeholders.js";
@@ -120,7 +120,7 @@ async function resolveRegenPromptBundle(params, regenOpts = {}) {
         artworkHint: "",
         regenAutoMusic: true,
       };
-  const concreteSubject = Boolean(hintOverride && isUserDirectedRegenHint(hintOverride));
+  const concreteSubject = Boolean(hintOverride && shouldUseLiteralSubjectMode(hintOverride, { userArtworkOverride: hintOverride }));
   const identityPhrases = concreteSubject
     ? nabadIdentityPhrases({
         songId: String(params?.songId || "").trim(),
@@ -155,6 +155,7 @@ async function fetchRegeneratedCoverArt(params, regenOpts = {}) {
   const upstreamUrl = buildPollinationsUrl(bundle.prompt, bundle.seed, {
     avoidTags: bundle.avoidTags,
     storyTheme: bundle.storyTheme || "",
+    userArtwork: String(bundle.params?.userArtwork || bundle.params?.userArtworkRaw || params?.regenArtworkHint || params?.artworkHint || "").trim(),
   });
 
   const ctrl = new AbortController();

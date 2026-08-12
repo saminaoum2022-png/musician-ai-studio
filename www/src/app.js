@@ -2485,21 +2485,67 @@ function getApiFetchHeaders(extra = {}) {
   return headers;
 }
 
+const NATIVE_HTTP_DEFAULT_CONNECT_MS = 15000;
+const NATIVE_HTTP_DEFAULT_READ_MS = 15000;
+const NATIVE_HTTP_LONG_COMPOSE_CONNECT_MS = 30000;
+const NATIVE_HTTP_LONG_COMPOSE_READ_MS = 300000;
+
+function nativeHttpTimeoutsForApiPath(path) {
+  const p = String(path || "").split("?")[0];
+  if (
+    p === "/api/music/generate" ||
+    p === "/api/suno/generate" ||
+    p === "/api/suno/stems"
+  ) {
+    return {
+      connectTimeout: NATIVE_HTTP_LONG_COMPOSE_CONNECT_MS,
+      readTimeout: NATIVE_HTTP_LONG_COMPOSE_READ_MS,
+    };
+  }
+  return {
+    connectTimeout: NATIVE_HTTP_DEFAULT_CONNECT_MS,
+    readTimeout: NATIVE_HTTP_DEFAULT_READ_MS,
+  };
+}
+
+function isLongRunningNativeApiPath(path) {
+  return nativeHttpTimeoutsForApiPath(path).readTimeout > NATIVE_HTTP_DEFAULT_READ_MS;
+}
+
 function apiFetch(path, opts = {}) {
-  const headers = getApiFetchHeaders(opts.headers || {});
+  const { nativeReadTimeoutMs, nativeConnectTimeoutMs, ...fetchOpts } = opts;
+  const headers = getApiFetchHeaders(fetchOpts.headers || {});
   const url = apiUrl(path);
-  const init = { ...opts, headers };
-  const run = () => fetch(url, init);
-  if (!isNativeShell()) return run();
-  return run().catch(async (err) => {
-    const native = await capacitorHttpFetch(url, init);
-    if (native) return native;
+  const init = { ...fetchOpts, headers };
+  const pathTimeouts = nativeHttpTimeoutsForApiPath(path);
+  const timeouts = {
+    connectTimeout: nativeConnectTimeoutMs ?? pathTimeouts.connectTimeout,
+    readTimeout: nativeReadTimeoutMs ?? pathTimeouts.readTimeout,
+  };
+  if (!isNativeShell()) return fetch(url, init);
+
+  const tryNative = async () => {
+    await ensureNativeNetworkReady();
+    return capacitorHttpFetch(url, init, timeouts);
+  };
+
+  if (isLongRunningNativeApiPath(path)) {
+    return (async () => {
+      const native = await tryNative();
+      if (native && Number(native.status) > 0) return native;
+      return fetch(url, init);
+    })();
+  }
+
+  return fetch(url, init).catch(async (err) => {
+    const native = await tryNative();
+    if (native && Number(native.status) > 0) return native;
     throw err;
   });
 }
 
 /** iOS WKWebView sometimes fails cross-origin fetch — use native URLSession. */
-async function capacitorHttpFetch(url, init = {}) {
+async function capacitorHttpFetch(url, init = {}, timeouts = {}) {
   try {
     const CapHttp = window.Capacitor?.Plugins?.CapacitorHttp;
     if (!CapHttp?.request) return null;
@@ -2515,8 +2561,8 @@ async function capacitorHttpFetch(url, init = {}) {
       headers: hdrs,
       data,
       responseType: "text",
-      connectTimeout: 15000,
-      readTimeout: 15000,
+      connectTimeout: timeouts.connectTimeout ?? NATIVE_HTTP_DEFAULT_CONNECT_MS,
+      readTimeout: timeouts.readTimeout ?? NATIVE_HTTP_DEFAULT_READ_MS,
     });
     const status = Number(resp?.status || 0);
     const rawBody = resp?.data;
@@ -55146,7 +55192,19 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
           });
         } catch {}
       } else {
-        const failMsg = String(e?.message || "Something went wrong — please try again.").trim();
+        let failMsg = String(e?.message || "Something went wrong — please try again.").trim();
+        if (
+          useAltMusicProvider() &&
+          /failed to fetch|load failed|networkerror|network request failed|aborted/i.test(failMsg)
+        ) {
+          const providerLabel =
+            getMusicProviderPref() === "lyria"
+              ? "Lyria"
+              : getMusicProviderPref() === "elevenlabs"
+                ? "ElevenLabs"
+                : "MiniMax";
+          failMsg = `${providerLabel} needs 1–3 minutes to compose. Keep the app open and try again — if this keeps happening, update the app.`;
+        }
         setStatus(`Generation failed: ${failMsg}`);
         try {
           showToast(failMsg.slice(0, 240), { icon: "✗", durationMs: 9000 });

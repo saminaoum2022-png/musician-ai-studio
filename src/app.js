@@ -37743,6 +37743,10 @@ let _discoverReelAdvanceToken = 0;
 let _discoverReelSlideAnimating = false;
 const DISCOVER_REEL_SLIDE_MS = 340;
 const DISCOVER_REEL_DRAG_COMMIT_PX = 84;
+const DISCOVER_REEL_WHEEL_THRESHOLD = 72;
+const DISCOVER_REEL_WHEEL_DEBOUNCE_MS = 140;
+const DISCOVER_REEL_WHEEL_COOLDOWN_MS = 520;
+let _discoverReelWheelCooldownUntil = 0;
 /** User-curated profile playlists (local per account). */
 let _userPlaylistQueue = [];
 let _userPlaylistQueueId = "";
@@ -50927,19 +50931,37 @@ function wirePlayerDiscoverReelSwipeOnce() {
 
   shell.addEventListener("wheel", (e) => {
     if (!discoverReelModeActive() || _discoverReelSlideAnimating) return;
+    if (Date.now() < _discoverReelWheelCooldownUntil) {
+      e.preventDefault();
+      return;
+    }
     if (Math.abs(e.deltaY) < 8) return;
+    e.preventDefault();
     wheelAccum += e.deltaY;
-    if (wheelTimer) return;
+    if (wheelTimer) window.clearTimeout(wheelTimer);
     wheelTimer = window.setTimeout(() => {
       const delta = wheelAccum;
       wheelAccum = 0;
       wheelTimer = 0;
-      if (Math.abs(delta) < 48) return;
+      if (Math.abs(delta) < DISCOVER_REEL_WHEEL_THRESHOLD) return;
+      if (Date.now() < _discoverReelWheelCooldownUntil) return;
+      _discoverReelWheelCooldownUntil = Date.now() + DISCOVER_REEL_WHEEL_COOLDOWN_MS;
       if (delta > 0) void playNextDiscoverReelTrack(currentPlayerTrackRef?.url, { manual: true });
       else void playPrevDiscoverReelTrack({ manual: true });
-    }, 80);
-    e.preventDefault();
+    }, DISCOVER_REEL_WHEEL_DEBOUNCE_MS);
   }, { passive: false });
+
+  document.addEventListener("keydown", (e) => {
+    if (!discoverReelModeActive()) return;
+    if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
+    const target = e.target;
+    if (target instanceof Element && target.closest("input, textarea, select, [contenteditable='true']")) return;
+    e.preventDefault();
+    if (_discoverReelSlideAnimating || Date.now() < _discoverReelWheelCooldownUntil) return;
+    _discoverReelWheelCooldownUntil = Date.now() + DISCOVER_REEL_WHEEL_COOLDOWN_MS;
+    if (e.key === "ArrowDown") void playNextDiscoverReelTrack(currentPlayerTrackRef?.url, { manual: true });
+    else void playPrevDiscoverReelTrack({ manual: true });
+  });
 }
 
 function wirePlayerSocialRailOnce() {

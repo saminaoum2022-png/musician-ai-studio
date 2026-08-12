@@ -46524,16 +46524,17 @@ body[data-route="user"] #userPublicRepostsList{
     grid-column: 3;
     grid-row: 1 / -1;
     position: sticky;
-    top: 20px;
+    top: 24px;
     align-self: start;
-    max-height: calc(100vh - 40px);
+    height: calc(100vh - 48px);
+    max-height: calc(100vh - 48px);
     overflow-y: auto;
     overscroll-behavior: contain;
     scrollbar-width: none;
     display: flex;
     flex-direction: column;
     gap: 16px;
-    padding-bottom: 24px;
+    padding-bottom: 32px;
     box-sizing: border-box;
   }
   aside.deskRail::-webkit-scrollbar{ display: none; }
@@ -47477,17 +47478,17 @@ body[data-route="studio"] .deskRail { display: none !important; }
     flex: unset !important;
     margin: 0 !important;
     max-width: none !important;
-    min-height: calc(100vh - 88px);
-    padding: 4px 0 28px;
+    min-height: calc(100vh - 64px);
+    padding: 0 0 12px;
     overflow: visible;
   }
   html.is-web-shell body.discoverReelInShell[data-route="player"] .playerCard{
     display: flex !important;
     flex-direction: column;
-    width: min(100%, 460px);
-    max-width: 460px;
-    min-height: calc(100vh - 88px);
-    max-height: calc(100vh - 72px);
+    width: min(100%, 480px);
+    max-width: 480px;
+    min-height: calc(100vh - 64px);
+    max-height: calc(100vh - 52px);
     margin-inline: auto;
     padding: 0;
     border-radius: 22px;
@@ -47497,6 +47498,11 @@ body[data-route="studio"] .deskRail { display: none !important; }
     box-shadow: 0 24px 64px rgba(0,0,0,0.45);
     position: relative;
     flex: 1 1 auto;
+  }
+  html.is-web-shell body.discoverReelInShell[data-route="player"] aside.deskRail{
+    top: 24px;
+    height: calc(100vh - 48px);
+    max-height: calc(100vh - 48px);
   }
   html.is-web-shell body.discoverReelInShell[data-route="player"] .playerHeader{
     position: absolute;

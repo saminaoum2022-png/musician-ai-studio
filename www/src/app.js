@@ -201,7 +201,7 @@ import { MUSIC_VIDEO_FEATURE_ENABLED } from "./feature-flags.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260812-180821";
+const APP_BUILD = "20260812-211111";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -19139,16 +19139,31 @@ function feedHookStartFromTrack(track) {
   return 0;
 }
 
+function friendsFeedTracksForHookLookup() {
+  const out = [];
+  for (const item of _friendsFeedMergedItems || []) {
+    if (item?.kind === "music" && item.track) out.push(item.track);
+    else if (item?.kind === "repost" && item.track) out.push(item.track);
+  }
+  return out;
+}
+
 function feedHookStartFromContext(source, trackRef) {
-  const track =
-    trackRef ||
-    publicPlaybackTrackBySource(source, source?.url) ||
+  const candidates = [
+    trackRef,
+    currentPlayerTrackRef,
+    publicPlaybackTrackBySource(source, source?.url),
     findDiscoverFeedTrack({
       songId: source?.songId,
       ownerUserId: source?.ownerUserId,
       url: source?.url,
-    });
-  return feedHookStartFromTrack(track);
+    }),
+  ].filter(Boolean);
+  for (const track of candidates) {
+    const hook = feedHookStartFromTrack(track);
+    if (hook > 0) return hook;
+  }
+  return 0;
 }
 
 function hookStartFromAlignedWords(words) {
@@ -19217,28 +19232,54 @@ function applyFeedHookToAudio(audio, hookSec) {
   const hook = normalizeHookStartSec(hookSec, getAudioDuration(audio));
   if (!audio || hook <= 0) return false;
   try {
-    if (audio.currentTime < hook - 0.05) audio.currentTime = hook;
-    return true;
+    const cur = Number(audio.currentTime || 0);
+    if (Math.abs(cur - hook) < 0.12) return true;
+    audio.currentTime = hook;
+    return Math.abs(Number(audio.currentTime || 0) - hook) < 0.35;
   } catch {
     return false;
   }
 }
 
-async function applyFeedHookAfterPlayStart(audio, source) {
+function feedHookAtTarget(audio, hookSec) {
+  const hook = normalizeHookStartSec(hookSec, getAudioDuration(audio));
+  if (!audio || hook <= 0) return true;
+  return Math.abs(Number(audio.currentTime || 0) - hook) < 0.2;
+}
+
+async function applyFeedHookAfterPlayStart(audio, source, trackRef) {
   if (!audio || !shouldApplyFeedHook(source) || source?.applyFeedHook === false) return;
-  const hook = feedHookStartFromContext(source);
+  const hook = feedHookStartFromContext(source, trackRef);
   if (hook <= 0) return;
-  applyFeedHookToAudio(audio, hook);
-  if (audio.readyState >= 1) return;
+
+  const seekToHook = () => applyFeedHookToAudio(audio, hook);
+
+  seekToHook();
+  if (feedHookAtTarget(audio, hook)) return;
+
   await new Promise((resolve) => {
-    const done = () => {
-      audio.removeEventListener("loadedmetadata", done);
+    let settled = false;
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      audio.removeEventListener("loadedmetadata", onReady);
+      audio.removeEventListener("canplay", onReady);
+      audio.removeEventListener("playing", onReady);
       resolve();
     };
-    audio.addEventListener("loadedmetadata", done, { once: true });
-    window.setTimeout(done, 1200);
+    const onReady = () => {
+      seekToHook();
+      if (feedHookAtTarget(audio, hook)) finish();
+    };
+    audio.addEventListener("loadedmetadata", onReady, { once: true });
+    audio.addEventListener("canplay", onReady, { once: true });
+    if (isNativeShell()) {
+      audio.addEventListener("playing", onReady, { once: true });
+    }
+    window.setTimeout(finish, isNativeShell() ? 2200 : 1400);
   });
-  applyFeedHookToAudio(audio, hook);
+
+  seekToHook();
 }
 
 let _publishHookUi = null;
@@ -19423,7 +19464,7 @@ function findDiscoverFeedTrack({ songId, ownerUserId, url } = {}) {
   const sid = String(songId || "").trim();
   const uid = String(ownerUserId || "").trim();
   const u = String(url || "").trim();
-  const pools = [_discoveryFeedTracks || [], _userPublicFeedTracks || [], _challengeEntryTracks || []];
+  const pools = [_discoveryFeedTracks || [], _userPublicFeedTracks || [], _challengeEntryTracks || [], friendsFeedTracksForHookLookup()];
   for (const pool of pools) {
     const hit = pool.find((t) => {
       const tid = String(t?.id || t?.songId || "").trim();
@@ -19694,7 +19735,7 @@ function publicPlaybackTrackBySource(source, rawUrl = "") {
   const songId = String(source?.songId || "").trim();
   const ownerUserId = String(source?.ownerUserId || "").trim();
   const url = String(rawUrl || "").trim();
-  const pools = [_discoveryFeedTracks || [], _userPublicFeedTracks || [], _challengeEntryTracks || []];
+  const pools = [_discoveryFeedTracks || [], _userPublicFeedTracks || [], _challengeEntryTracks || [], friendsFeedTracksForHookLookup()];
   for (const pool of pools) {
     const hit = pool.find((t) => (
       (songId && String(t.songId || t.id || "") === songId) ||

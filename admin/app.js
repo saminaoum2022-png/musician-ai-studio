@@ -514,27 +514,72 @@ function statCard(label, value, sub = "", highlight = false, warn = false) {
   `;
 }
 
+function renderProSubscriberRows(subscribers) {
+  const rows = Array.isArray(subscribers) ? subscribers : [];
+  if (!rows.length) {
+    return `<p class="sectionNote">No active Pro subscriptions in the database.</p>`;
+  }
+  const body = rows.map((sub) => {
+    const label = sub.username ? `@${sub.username}` : (sub.email || sub.userId || "—");
+    const adminNote = sub.isAdmin ? `<span class="badge admin">admin · no liability</span>` : "";
+    return `
+      <tr>
+        <td>${escapeHtml(label)}${adminNote ? `<br>${adminNote}` : ""}</td>
+        <td>${escapeHtml(sub.planId || "—")}</td>
+        <td><span class="badge ${escapeHtml(sub.status || "none")}">${escapeHtml(sub.status || "—")}</span></td>
+        <td>${escapeHtml(sub.provider || "—")}</td>
+        <td class="num">${fmtNum(sub.balance, 1)}</td>
+        <td class="num">${fmtNum(sub.periodCap, 0)}</td>
+        <td class="num">${fmtNum(sub.reserved, 1)}</td>
+      </tr>`;
+  }).join("");
+  return `
+    <div class="tableWrap proSubTableWrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Pro user</th><th>Plan</th><th>Status</th><th>Provider</th>
+            <th>Balance</th><th>Plan cap</th><th>Reserved</th>
+          </tr>
+        </thead>
+        <tbody>${body}</tbody>
+      </table>
+    </div>`;
+}
+
+function escapeHtml(str) {
+  return String(str || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
 function renderSunoCoverageSection(s, { compact = false } = {}) {
   const shortfall = Number(s.shortfallCredits || 0);
   const hasShortfall = shortfall > 0;
   const buyUsd = s.shortfallUsd != null ? fmtUsd(s.shortfallUsd) : "—";
   const coverage = s.coveragePct != null ? fmtPct(s.coveragePct) : "—";
-  const title = compact ? "Suno coverage" : "Reserved credits & Suno buy plan";
+  const proCount = Number(s.proSubscriberCount || 0);
+  const allOutstanding = Number(s.allUserOutstanding ?? s.userOutstanding ?? 0);
+  const title = compact ? "Suno coverage (Pro subs)" : "Reserved credits & Suno buy plan";
   const lead = compact
-    ? "User liability vs your Suno bucket."
-    : "Reserved = credits users still hold. If Suno bucket is lower, buy upstream to cover the gap before they spend it all.";
+    ? `Active Pro subscribers only (${proCount}). Capped per plan; admin excluded.`
+    : `Reserved = what your ${proCount} active Pro user${proCount === 1 ? "" : "s"} can still spend (capped at plan allowance). TestFlight/promo balances from non‑Pro users are excluded.`;
   return `
     <div class="sectionCard${hasShortfall ? " sectionCard--warn" : ""}">
       <h3 class="sectionTitle">${title}</h3>
       <p class="sectionNote">${lead}</p>
       <div class="cardsGrid">
-        ${statCard("Reserved (user liability)", fmtNum(s.reservedCredits ?? s.userOutstanding, 1), "Credits users can still spend")}
+        ${statCard("Reserved (Pro liability)", fmtNum(s.reservedCredits, 1), `${proCount} active Pro · capped per plan`)}
         ${statCard("Suno bucket available", fmtNum(s.masterBalance, 1), "Live from Suno API", true)}
-        ${statCard("Coverage", coverage, "Suno bucket ÷ reserved")}
-        ${statCard("Buy from Suno (credits)", hasShortfall ? fmtNum(s.creditsToBuy, 0) : "0", hasShortfall ? "Shortfall to cover all reserved" : "Bucket covers liability", false, hasShortfall)}
+        ${statCard("Coverage", coverage, "Suno bucket ÷ Pro reserved")}
+        ${statCard("Buy from Suno (credits)", hasShortfall ? fmtNum(s.creditsToBuy, 0) : "0", hasShortfall ? "Shortfall to cover Pro reserved" : "Bucket covers Pro liability", false, hasShortfall)}
         ${statCard("Est. buy cost (USD)", hasShortfall ? buyUsd : fmtUsd(0), s.usdPerCredit ? `@ $${Number(s.usdPerCredit).toFixed(5)}/credit` : "")}
-        ${statCard("Headroom", fmtNum(s.headroomEstimate, 1), "Suno bucket − reserved", false, hasShortfall)}
+        ${statCard("Headroom", fmtNum(s.headroomEstimate, 1), "Suno bucket − Pro reserved", false, hasShortfall)}
+        ${statCard("All users (incl. test)", fmtNum(allOutstanding, 1), "Not used for buy plan", false, false)}
       </div>
+      ${renderProSubscriberRows(s.proSubscribers)}
     </div>
   `;
 }

@@ -23,7 +23,9 @@ const {
   callRpc,
 } = require("../../_lib/credits-auth");
 const { SUNO_USD_PER_CREDIT } = require("../../_lib/music-generation-log");
+const { creditsForSubscriptionGrant } = require("../../_lib/billing-config");
 const { ensureProfileRow } = require("../../_lib/ensure-profile-row");
+const { isAdminEmail } = require("../../_lib/credits-auth");
 
 const SUPABASE_URL = (process.env.SUPABASE_URL || "").replace(/\/$/, "");
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
@@ -53,6 +55,82 @@ function sunoCoverageMetrics(masterBalance, userOutstanding) {
     creditsToBuy: shortfallCredits,
     coveragePct,
     usdPerCredit: SUNO_USD_PER_CREDIT,
+  };
+}
+
+function periodCreditsForProSub(planId, status) {
+  const productId = String(planId || "").trim() === "monthly"
+    ? "com.nabadai.music.pro.monthly"
+    : "com.nabadai.music.pro.weekly";
+  return creditsForSubscriptionGrant({
+    productId,
+    periodType: String(status || "").toLowerCase() === "trialing" ? "TRIAL" : "NORMAL",
+    eventType: "INITIAL_PURCHASE",
+    subscriptionStatus: status,
+  });
+}
+
+/** Liability from active Pro rows only — excludes promo/test balances from non‑subs. */
+async function fetchProSubscriberLiability() {
+  const subsRes = await serviceFetch(
+    "pro_subscriptions?select=user_id,plan_id,status,provider&status=in.(active,trialing,grace)&limit=500",
+  );
+  const subs = Array.isArray(subsRes.data) ? subsRes.data : [];
+  if (!subs.length) {
+    return { reservedCredits: 0, subscriberCount: 0, subscribers: [] };
+  }
+
+  const userIds = [...new Set(subs.map((s) => String(s.user_id || "").trim()).filter(Boolean))];
+  const inClause = userIds.map((id) => encodeURIComponent(id)).join(",");
+
+  const [creditsRes, profilesRes, authMap] = await Promise.all([
+    serviceFetch(`user_credits?select=user_id,balance&user_id=in.(${inClause})`),
+    serviceFetch(`profiles?select=user_id,role,username&user_id=in.(${inClause})`),
+    fetchAuthUsersMap(),
+  ]);
+
+  const creditsMap = new Map();
+  for (const row of creditsRes.data || []) {
+    creditsMap.set(String(row.user_id), Number(row.balance || 0));
+  }
+  const roleMap = new Map();
+  const usernameMap = new Map();
+  for (const row of profilesRes.data || []) {
+    roleMap.set(String(row.user_id), String(row.role || "user").toLowerCase());
+    usernameMap.set(String(row.user_id), String(row.username || "").trim());
+  }
+
+  let reservedTotal = 0;
+  const subscribers = subs.map((sub) => {
+    const uid = String(sub.user_id || "").trim();
+    const planId = String(sub.plan_id || "").trim();
+    const status = String(sub.status || "active").trim();
+    const balance = creditsMap.get(uid) || 0;
+    const periodCap = periodCreditsForProSub(planId, status);
+    const auth = authMap.get(uid) || {};
+    const isAdmin = roleMap.get(uid) === "admin" || isAdminEmail(auth.email || "");
+    const reserved = isAdmin
+      ? 0
+      : Math.min(balance, periodCap > 0 ? periodCap : balance);
+    reservedTotal += reserved;
+    return {
+      userId: uid,
+      email: auth.email || "",
+      username: usernameMap.get(uid) || "",
+      planId,
+      status,
+      provider: String(sub.provider || "").trim(),
+      balance,
+      periodCap,
+      reserved,
+      isAdmin,
+    };
+  });
+
+  return {
+    reservedCredits: Math.round(reservedTotal * 10) / 10,
+    subscriberCount: subs.length,
+    subscribers,
   };
 }
 
@@ -214,12 +292,16 @@ async function getOverview() {
     }
   }
 
-  const coverage = sunoCoverageMetrics(masterSuno, outstanding);
+  const proLiability = await fetchProSubscriberLiability();
+  const coverage = sunoCoverageMetrics(masterSuno, proLiability.reservedCredits);
 
   return {
     suno: {
       ...coverage,
+      allUserOutstanding: outstanding,
       userOutstanding: outstanding,
+      proSubscriberCount: proLiability.subscriberCount,
+      proSubscribers: proLiability.subscribers,
       userAllocatedTotal: allocated,
       userSpentTotal: spent,
     },
@@ -505,19 +587,23 @@ async function getSunoPanel() {
   }
 
   const dailyBurn = spentLast7d / 7;
-  const coverage = sunoCoverageMetrics(masterSuno, outstanding);
+  const proLiability = await fetchProSubscriberLiability();
+  const coverage = sunoCoverageMetrics(masterSuno, proLiability.reservedCredits);
   const runwayDays = masterSuno != null && dailyBurn > 0
-    ? Math.floor((masterSuno - outstanding) / dailyBurn)
+    ? Math.floor((masterSuno - proLiability.reservedCredits) / dailyBurn)
     : null;
 
   return {
     ...coverage,
+    allUserOutstanding: outstanding,
     userOutstanding: outstanding,
+    proSubscriberCount: proLiability.subscriberCount,
+    proSubscribers: proLiability.subscribers,
     userSpentAllTime: spent,
     burnLast7d: Math.round(spentLast7d * 10) / 10,
     avgDailyBurn: Math.round(dailyBurn * 10) / 10,
     runwayDaysEstimate: runwayDays,
-    note: "Reserved = total Nabad credits users still hold (liability). Each generation debits a user balance and your Suno master bucket (~1 Nabad credit ≈ 1 Suno credit for costing).",
+    note: "Reserved counts active Pro subscribers only (capped per plan). Admin accounts excluded — they don't debit user credits. Test/promo balances from non‑Pro users are in “All users” below.",
   };
 }
 

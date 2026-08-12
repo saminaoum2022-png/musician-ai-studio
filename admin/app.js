@@ -516,6 +516,22 @@ function statCard(label, value, sub = "", highlight = false, warn = false) {
   `;
 }
 
+function adminPageStack(inner) {
+  return `<div class="adminPageStack">${inner}</div>`;
+}
+
+function dataPanel({ title = "", note = "", tableHtml, pager = "" }) {
+  return `
+    <section class="sectionCard sectionCard--data">
+      ${title || note ? `<div class="sectionHead">
+        ${title ? `<h3 class="sectionTitle">${title}</h3>` : ""}
+        ${note ? `<p class="sectionNote">${note}</p>` : ""}
+      </div>` : ""}
+      <div class="sectionCardBody sectionCardBody--flush">${tableHtml}</div>
+      ${pager ? `<div class="sectionCardFoot">${pager}</div>` : ""}
+    </section>`;
+}
+
 function renderProSubscriberRows(subscribers) {
   const rows = Array.isArray(subscribers) ? subscribers : [];
   if (!rows.length) {
@@ -578,11 +594,13 @@ function renderSunoCoverageSection(s, { compact = false } = {}) {
         <strong>Suno bucket covers guaranteed Pro liability.</strong> You have headroom for new subs until guaranteed total grows.
       </div>`;
   return `
-    <div class="sectionCard${hasShortfall ? " sectionCard--warn" : ""}">
-      <h3 class="sectionTitle">${title}</h3>
-      <p class="sectionNote">${lead}</p>
+    <section class="sectionCard${hasShortfall ? " sectionCard--warn" : ""}">
+      <div class="sectionHead">
+        <h3 class="sectionTitle">${title}</h3>
+        <p class="sectionNote">${lead}</p>
+      </div>
       ${topUpAlert}
-      <div class="cardsGrid">
+      <div class="cardsGrid cardsGrid--inSection">
         ${statCard("Guaranteed (Pro commitment)", fmtNum(guaranteed, 0), `${proCount} active Pro · full plan credits owed`, false, hasShortfall)}
         ${statCard("Suno bucket available", fmtNum(s.masterBalance, 1), "Live upstream balance", true)}
         ${statCard("Coverage", coverage, "Suno bucket ÷ guaranteed — aim for 100%+", false, hasShortfall && Number(s.coveragePct) < 100)}
@@ -593,7 +611,7 @@ function renderSunoCoverageSection(s, { compact = false } = {}) {
         ${statCard("All users (incl. test)", fmtNum(allOutstanding, 1), "Not used for guarantee", false, false)}
       </div>
       ${renderProSubscriberRows(s.proSubscribers)}
-    </div>
+    </section>
   `;
 }
 
@@ -606,49 +624,57 @@ function renderOverview(data) {
   const sub = o.subscriptions || {};
   const rev = o.revenue || {};
 
-  els.panels.overview.innerHTML = `
+  els.panels.overview.innerHTML = adminPageStack(`
     ${renderSunoCoverageSection(s)}
-    <div class="sectionCard">
-      <h3 class="sectionTitle">Suno master bucket</h3>
-      <p class="sectionNote">Historical spend and platform totals. Master balance and reserved liability are in the section above.</p>
-      <div class="cardsGrid">
+    <section class="sectionCard">
+      <div class="sectionHead">
+        <h3 class="sectionTitle">Credits &amp; Suno history</h3>
+        <p class="sectionNote">All-time totals across the platform.</p>
+      </div>
+      <div class="cardsGrid cardsGrid--inSection">
         ${statCard("All-time user spend", fmtNum(s.userSpentTotal, 1), "Debited from user balances")}
         ${statCard("Credits issued (all time)", fmtNum(c.issuedTotal, 1), "Grants + subs + promos")}
         ${statCard("Credits used (all time)", fmtNum(c.usedTotal, 1))}
       </div>
-    </div>
-    <div class="cardsGrid">
-      ${statCard("Total users", fmtNum(u.total))}
-      ${statCard("Active today", fmtNum(u.activeToday))}
-      ${statCard("New today", fmtNum(u.newToday))}
-      ${statCard("Pro subscribers", fmtNum(sub.premiumActive))}
-      ${statCard("Credits issued (all time)", fmtNum(c.issuedTotal, 1))}
-      ${statCard("Credits used (all time)", fmtNum(c.usedTotal, 1))}
-      ${statCard("Credits consumed today", fmtNum(c.consumedToday, 1))}
-      ${statCard("Songs saved today", fmtNum(g.songsToday))}
-      ${statCard("Published today", fmtNum(g.publishedToday))}
-      ${statCard("Failed gens today", fmtNum(g.failedToday))}
-      ${statCard("Est. API cost today", fmtUsd(g.apiCostTodayUsd))}
-      ${statCard("Est. revenue MTD", fmtUsd(rev.estimatedMtdUsd), rev.note || "")}
-    </div>
-  `;
+    </section>
+    <section class="sectionCard">
+      <div class="sectionHead">
+        <h3 class="sectionTitle">Platform pulse</h3>
+        <p class="sectionNote">Live counts for users, billing, and creation today.</p>
+      </div>
+      <div class="cardsGrid cardsGrid--inSection">
+        ${statCard("Total users", fmtNum(u.total))}
+        ${statCard("Active today", fmtNum(u.activeToday))}
+        ${statCard("New today", fmtNum(u.newToday))}
+        ${statCard("Pro subscribers", fmtNum(sub.premiumActive))}
+        ${statCard("Credits consumed today", fmtNum(c.consumedToday, 1))}
+        ${statCard("Songs saved today", fmtNum(g.songsToday))}
+        ${statCard("Published today", fmtNum(g.publishedToday))}
+        ${statCard("Failed gens today", fmtNum(g.failedToday))}
+        ${statCard("Est. API cost today", fmtUsd(g.apiCostTodayUsd))}
+        ${statCard("Est. revenue MTD", fmtUsd(rev.estimatedMtdUsd), rev.note || "")}
+      </div>
+    </section>
+  `);
 }
 
 function renderSuno(data) {
   const s = data?.suno || {};
-  els.panels.suno.innerHTML = `
+  els.panels.suno.innerHTML = adminPageStack(`
     ${renderSunoCoverageSection(s, { compact: true })}
-    <div class="sectionCard">
-      <h3 class="sectionTitle">Burn & runway</h3>
-      <p class="sectionNote">${s.note || ""}</p>
-      <div class="cardsGrid">
+    <section class="sectionCard">
+      <div class="sectionHead">
+        <h3 class="sectionTitle">Burn &amp; runway</h3>
+        <p class="sectionNote">${s.note || ""}</p>
+      </div>
+      <div class="cardsGrid cardsGrid--inSection">
         ${statCard("7-day burn", fmtNum(s.burnLast7d, 1), "Nabad credits consumed")}
         ${statCard("Avg daily burn", fmtNum(s.avgDailyBurn, 1), "Last 7 days")}
-        ${statCard("Runway estimate", s.runwayDaysEstimate != null ? `${fmtNum(s.runwayDaysEstimate)} days` : "—", "At recent burn, before reserved runs out")}
+        ${statCard("Runway estimate", s.runwayDaysEstimate != null ? `${fmtNum(s.runwayDaysEstimate)} days` : "—", "At recent burn vs guaranteed liability")}
         ${statCard("All-time user spend", fmtNum(s.userSpentAllTime, 1))}
       </div>
-    </div>
-  `;
+    </section>
+  `);
 }
 
 function pagerHtml(total, offset) {
@@ -683,7 +709,10 @@ function renderUsers(data) {
     `).join("")
     : `<tr><td colspan="8" class="loading">No users yet</td></tr>`;
 
-  els.panels.users.innerHTML = `
+  els.panels.users.innerHTML = adminPageStack(dataPanel({
+    title: "All users",
+    note: "Signups, credits, songs saved, and subscription status. Orphan auth accounts show as profile pending.",
+    tableHtml: `
     <div class="tableWrap">
       <table>
         <thead>
@@ -694,9 +723,9 @@ function renderUsers(data) {
         </thead>
         <tbody>${body}</tbody>
       </table>
-    </div>
-    ${pagerHtml(total, state.offset)}
-  `;
+    </div>`,
+    pager: pagerHtml(total, state.offset),
+  }));
 }
 
 function renderCredits(data) {
@@ -721,10 +750,12 @@ function renderCredits(data) {
     }).join("")
     : `<tr><td colspan="7" class="loading">No transactions yet — run supabase/admin_dashboard.sql</td></tr>`;
 
-  els.panels.credits.innerHTML = `
-    <div class="sectionCard grantCard">
-      <h3 class="sectionTitle">Grant paid credits</h3>
-      <p class="sectionNote">Manual grants for support or testing gifts — separate from NabadAi Pro subscription credits, which are added automatically via billing. Leave email blank to grant to your signed-in account.</p>
+  els.panels.credits.innerHTML = adminPageStack(`
+    <section class="sectionCard">
+      <div class="sectionHead">
+        <h3 class="sectionTitle">Grant paid credits</h3>
+        <p class="sectionNote">Manual grants for support or testing. NabadAi Pro subscription credits are added automatically via billing. Leave email blank to grant to your signed-in account.</p>
+      </div>
       <form id="grantCreditsForm" class="grantForm">
         <label class="field grantField">
           <span>User email</span>
@@ -737,7 +768,11 @@ function renderCredits(data) {
         <button type="submit" class="btnPrimary" id="btnGrantCredits">Grant credits</button>
       </form>
       <p id="grantCreditsMsg" class="grantMsg" hidden></p>
-    </div>
+    </section>
+    ${dataPanel({
+      title: "Credit ledger",
+      note: "Every grant, spend, and refund across the platform.",
+      tableHtml: `
     <div class="tableWrap">
       <table>
         <thead>
@@ -747,9 +782,10 @@ function renderCredits(data) {
         </thead>
         <tbody>${body}</tbody>
       </table>
-    </div>
-    ${pagerHtml(total, state.offset)}
-  `;
+    </div>`,
+      pager: pagerHtml(total, state.offset),
+    })}
+  `);
 }
 
 function renderGenerations(data) {
@@ -770,7 +806,10 @@ function renderGenerations(data) {
     `).join("")
     : `<tr><td colspan="8" class="loading">No generation logs yet</td></tr>`;
 
-  els.panels.generations.innerHTML = `
+  els.panels.generations.innerHTML = adminPageStack(dataPanel({
+    title: "Generation log",
+    note: "Every create attempt — including failures and refunds — with provider cost estimates.",
+    tableHtml: `
     <div class="tableWrap">
       <table>
         <thead>
@@ -781,9 +820,9 @@ function renderGenerations(data) {
         </thead>
         <tbody>${body}</tbody>
       </table>
-    </div>
-    ${pagerHtml(total, state.offset)}
-  `;
+    </div>`,
+    pager: pagerHtml(total, state.offset),
+  }));
 }
 
 function renderPublications(data) {
@@ -815,10 +854,10 @@ function renderPublications(data) {
     }).join("")
     : `<tr><td colspan="7" class="loading">No public posts yet</td></tr>`;
 
-  els.panels.publications.innerHTML = `
-    <div class="sectionCard">
-      <p class="sectionNote">Every row is a song the user chose to publish on their public profile (<code>public_on_profile</code>). Private library songs are not listed here. Use this for moderation and support — you do not need to follow or friend the user.</p>
-    </div>
+  els.panels.publications.innerHTML = adminPageStack(dataPanel({
+    title: "Public posts",
+    note: "Songs published to a public profile (<code>public_on_profile</code>). Private library songs are not listed. Moderation view — no follow required.",
+    tableHtml: `
     <div class="tableWrap">
       <table>
         <thead>
@@ -829,9 +868,9 @@ function renderPublications(data) {
         </thead>
         <tbody>${body}</tbody>
       </table>
-    </div>
-    ${pagerHtml(total, state.offset)}
-  `;
+    </div>`,
+    pager: pagerHtml(total, state.offset),
+  }));
 }
 
 function renderSubscriptions(data) {
@@ -851,7 +890,10 @@ function renderSubscriptions(data) {
     `).join("")
     : `<tr><td colspan="7" class="loading">No subscriptions yet</td></tr>`;
 
-  els.panels.subscriptions.innerHTML = `
+  els.panels.subscriptions.innerHTML = adminPageStack(dataPanel({
+    title: "NabadAi Pro subscriptions",
+    note: "Active, trialing, and grace-period rows from Apple, Stripe, and RevenueCat webhooks.",
+    tableHtml: `
     <div class="tableWrap">
       <table>
         <thead>
@@ -862,9 +904,9 @@ function renderSubscriptions(data) {
         </thead>
         <tbody>${body}</tbody>
       </table>
-    </div>
-    ${pagerHtml(total, state.offset)}
-  `;
+    </div>`,
+    pager: pagerHtml(total, state.offset),
+  }));
 }
 
 const RENDERERS = {
@@ -945,12 +987,14 @@ function clearCreditsCache() {
 async function loadView({ force = false } = {}) {
   const view = state.view;
   const cacheKey = `${view}:${state.offset}`;
+  const panel = els.panels[view];
   if (!force && state.cache[cacheKey]) {
+    panel.classList.remove("isLoading");
     RENDERERS[view](state.cache[cacheKey]);
     return;
   }
-  const panel = els.panels[view];
-  panel.innerHTML = `<div class="loading">Loading…</div>`;
+  panel.classList.add("isLoading");
+  panel.innerHTML = `<div class="adminPageStack"><div class="loading">Loading…</div></div>`;
   showError("");
   try {
     const data = await adminFetch(view, { offset: state.offset });
@@ -969,6 +1013,8 @@ async function loadView({ force = false } = {}) {
       showLogin();
       showLoginError(msg);
     }
+  } finally {
+    panel.classList.remove("isLoading");
   }
 }
 

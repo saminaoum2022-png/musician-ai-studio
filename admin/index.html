@@ -5,10 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="color-scheme" content="dark" />
     <meta name="robots" content="noindex, nofollow" />
-    <title>Nabad AI Admin</title>
+    <title>NabadAi Admin</title>
     <meta name="theme-color" content="#05070d" />
     <link rel="icon" href="/favicon.ico" sizes="any" />
-    <link rel="stylesheet" href="/admin/styles.css" />
+    <link rel="stylesheet" href="/admin/styles.css?v=20260812-nabad-shell" />
     <script>
       (function () {
         try {
@@ -34,8 +34,10 @@
     <div id="loginScreen" class="loginScreen" hidden>
       <div class="loginCard">
         <div class="loginBrand">
-          <div class="loginLogo" aria-hidden="true">N</div>
-          <h1>Nabad AI Admin</h1>
+          <div class="loginLogo" aria-hidden="true">
+            <img src="/assets/icons/splash-mark.png" alt="" width="52" height="52" />
+          </div>
+          <h1>NabadAi Admin</h1>
           <p>Sign in with the same account you use in the app</p>
         </div>
         <div class="loginActions">
@@ -70,7 +72,9 @@
     <div id="resetScreen" class="loginScreen" hidden>
       <div class="loginCard">
         <div class="loginBrand">
-          <div class="loginLogo" aria-hidden="true">N</div>
+          <div class="loginLogo" aria-hidden="true">
+            <img src="/assets/icons/splash-mark.png" alt="" width="52" height="52" />
+          </div>
           <h1>Set admin password</h1>
           <p>Choose a password for your Google account so you can sign in to admin.</p>
         </div>
@@ -92,22 +96,48 @@
     <div id="appShell" class="appShell" hidden>
       <aside class="sidebar">
         <div class="sidebarBrand">
-          <div class="sidebarLogo" aria-hidden="true">N</div>
+          <div class="sidebarLogoWrap" aria-hidden="true">
+            <img src="/assets/icons/splash-mark.png" alt="" width="44" height="44" />
+          </div>
           <div>
-            <div class="sidebarTitle">Nabad AI</div>
-            <div class="sidebarSub">Admin</div>
+            <div class="sidebarTitle">NabadAi</div>
+            <div class="sidebarSub">Admin Console</div>
           </div>
         </div>
         <nav class="sidebarNav" aria-label="Admin sections">
-          <button type="button" class="navItem isActive" data-view="overview">Overview</button>
-          <button type="button" class="navItem" data-view="suno">Suno bucket</button>
-          <button type="button" class="navItem" data-view="users">Users</button>
-          <button type="button" class="navItem" data-view="credits">Credits</button>
-          <button type="button" class="navItem" data-view="generations">Generations</button>
-          <button type="button" class="navItem" data-view="publications">Publications</button>
-          <button type="button" class="navItem" data-view="subscriptions">Subscriptions</button>
+          <div class="navGroup">
+            <div class="navGroupLabel">Platform</div>
+            <button type="button" class="navItem isActive" data-view="overview">
+              <span class="navIcon" aria-hidden="true">◎</span><span>Overview</span>
+            </button>
+            <button type="button" class="navItem" data-view="suno">
+              <span class="navIcon" aria-hidden="true">◈</span><span>Suno bucket</span>
+            </button>
+          </div>
+          <div class="navGroup">
+            <div class="navGroupLabel">People &amp; content</div>
+            <button type="button" class="navItem" data-view="users">
+              <span class="navIcon" aria-hidden="true">◉</span><span>Users</span>
+            </button>
+            <button type="button" class="navItem" data-view="generations">
+              <span class="navIcon" aria-hidden="true">♪</span><span>Generations</span>
+            </button>
+            <button type="button" class="navItem" data-view="publications">
+              <span class="navIcon" aria-hidden="true">↗</span><span>Publications</span>
+            </button>
+          </div>
+          <div class="navGroup">
+            <div class="navGroupLabel">Billing</div>
+            <button type="button" class="navItem" data-view="credits">
+              <span class="navIcon" aria-hidden="true">✦</span><span>Credits</span>
+            </button>
+            <button type="button" class="navItem" data-view="subscriptions">
+              <span class="navIcon" aria-hidden="true">◆</span><span>Subscriptions</span>
+            </button>
+          </div>
         </nav>
         <div class="sidebarFoot">
+          <p class="teamAccessHint">Team access: set <code>profiles.role = admin</code> in Supabase for coworkers you trust.</p>
           <div id="adminUserEmail" class="adminUserEmail">—</div>
           <button type="button" class="btnGhost" id="btnSignOut">Sign out</button>
         </div>
@@ -116,10 +146,13 @@
       <main class="main">
         <header class="topbar">
           <div>
+            <div class="topbarKicker"><span class="topbarKickerDot" aria-hidden="true"></span> NabadAi Admin</div>
             <h2 id="pageTitle" class="pageTitle">Overview</h2>
             <p id="pageSub" class="pageSub">Platform health at a glance</p>
           </div>
-          <button type="button" class="btnGhost" id="btnRefresh">Refresh</button>
+          <div class="topbarActions">
+            <button type="button" class="btnGhost" id="btnRefresh">Refresh</button>
+          </div>
         </header>
 
         <div id="viewOverview" class="viewPanel" data-panel="overview"></div>
@@ -134,6 +167,6 @@
       </main>
     </div>
 
-    <script type="module" src="/admin/app.js?v=20260812-publications"></script>
+    <script type="module" src="/admin/app.js?v=20260812-nabad-shell"></script>
   </body>
 </html>

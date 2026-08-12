@@ -6258,6 +6258,84 @@ input.userTextBidi--rtl{
   flex: 0 0 auto;
   accent-color: #7c5cff;
 }
+.publishReleaseHook{
+  margin: 12px 0 4px;
+  padding: 12px 12px 10px;
+  border-radius: 18px;
+  border: 1px solid rgba(35,213,171,0.18);
+  background:
+    linear-gradient(145deg, rgba(35,213,171,0.08), rgba(124,92,255,0.05)),
+    rgba(5,7,13,0.42);
+}
+.publishReleaseHookSub{
+  margin: 0 0 10px;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--text-secondary, rgba(223,231,251,0.72));
+}
+.publishReleaseHookToggle{
+  margin-bottom: 8px;
+}
+.publishReleaseHookPicker{
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.publishReleaseHookPicker[hidden]{
+  display: none !important;
+}
+.publishReleaseHookTimeRow{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.publishReleaseHookTime{
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  color: var(--text-primary, rgba(244,247,255,0.96));
+  font-variant-numeric: tabular-nums;
+}
+.publishReleaseHookBadge{
+  font-size: 11px;
+  font-weight: 700;
+  color: #8ef5df;
+  border: 1px solid rgba(35,213,171,0.28);
+  background: rgba(35,213,171,0.10);
+  border-radius: 999px;
+  padding: 4px 9px;
+  white-space: nowrap;
+}
+.publishReleaseHookRange{
+  width: 100%;
+  accent-color: #23d5ab;
+}
+.publishReleaseHookActions{
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.publishReleaseHookPreview,
+.publishReleaseHookReset{
+  appearance: none;
+  border: 1px solid rgba(255,255,255,0.12);
+  background: rgba(255,255,255,0.05);
+  color: rgba(244,247,255,0.92);
+  border-radius: 999px;
+  padding: 8px 12px;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+}
+.publishReleaseHookPreview:hover,
+.publishReleaseHookReset:hover{
+  border-color: rgba(35,213,171,0.35);
+  background: rgba(35,213,171,0.10);
+}
+.publishReleaseHookReset[hidden]{
+  display: none !important;
+}
 .publishReleaseMeta[hidden]{
   display: none !important;
 }
@@ -51275,6 +51353,32 @@ html[data-theme="light"] .publishReleasePermit{
 }
 html[data-theme="light"] .publishReleasePermit input{
   accent-color: #6d4df5;
+}
+html[data-theme="light"] .publishReleaseHook{
+  border-color: rgba(13, 148, 136, 0.22);
+  background: rgba(13, 148, 136, 0.06);
+}
+html[data-theme="light"] .publishReleaseHookSub{
+  color: var(--text-secondary);
+}
+html[data-theme="light"] .publishReleaseHookTime{
+  color: var(--text-primary);
+}
+html[data-theme="light"] .publishReleaseHookBadge{
+  color: #0f766e;
+  border-color: rgba(13, 148, 136, 0.28);
+  background: rgba(13, 148, 136, 0.10);
+}
+html[data-theme="light"] .publishReleaseHookPreview,
+html[data-theme="light"] .publishReleaseHookReset{
+  border-color: var(--border);
+  background: var(--card);
+  color: var(--text-primary);
+}
+html[data-theme="light"] .publishReleaseHookPreview:hover,
+html[data-theme="light"] .publishReleaseHookReset:hover{
+  border-color: rgba(13, 148, 136, 0.28);
+  background: rgba(13, 148, 136, 0.08);
 }
 html[data-theme="light"] .publishReleaseMeta span{
   border-color: var(--border);

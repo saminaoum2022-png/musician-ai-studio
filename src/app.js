@@ -19083,10 +19083,15 @@ function publicDiscoverMetaFromTrack(track) {
     "styleInput", "styleSent", "style", "styleTags", "challenge",
     "searchTemplateId", "searchTemplateTitle", "allowRemix", "allowMashup",
     "releaseCaption", "releasedAt", "releaseType", "mode", "dialect",
+    "hookStartSec", "hookSource",
   ];
   for (const k of keys) {
     if (meta[k] == null) continue;
     if (typeof meta[k] === "boolean") {
+      out[k] = meta[k];
+      continue;
+    }
+    if (typeof meta[k] === "number" && Number.isFinite(meta[k])) {
       out[k] = meta[k];
       continue;
     }
@@ -19095,6 +19100,323 @@ function publicDiscoverMetaFromTrack(track) {
   if (out.allowRemix == null) out.allowRemix = true;
   if (out.allowMashup == null) out.allowMashup = true;
   return Object.keys(out).length ? out : { allowRemix: true, allowMashup: true };
+}
+
+function normalizeHookStartSec(raw, durationSec = 0) {
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n < 0) return 0;
+  const dur = Number(durationSec || 0);
+  if (dur > 2) return Math.min(n, Math.max(0, dur - 2));
+  return n;
+}
+
+function defaultHookStartSec(durationSec) {
+  const dur = Number(durationSec || 0);
+  if (dur > 0) return Math.min(15, Math.max(0, dur * 0.22));
+  return 0;
+}
+
+function hookMetaFieldsFromRow(s) {
+  const out = {};
+  const secRaw = s?.meta_hook_start_sec ?? s?.meta_hook_start;
+  const sec = Number(secRaw);
+  if (Number.isFinite(sec) && sec >= 0) out.hookStartSec = sec;
+  const source = String(s?.meta_hook_source || "").trim();
+  if (source) out.hookSource = source;
+  return out;
+}
+
+function shouldApplyFeedHook(source) {
+  const t = String(source?.type || "");
+  return t === "discover_feed" || t === "public_profile_lib" || t === "user_playlist" || t === "discover_playlist";
+}
+
+function feedHookStartFromTrack(track) {
+  const meta = track?.meta && typeof track.meta === "object" ? track.meta : {};
+  if (meta.hookSource === "beginning") return 0;
+  const sec = Number(meta.hookStartSec);
+  if (Number.isFinite(sec) && sec > 0) return sec;
+  return 0;
+}
+
+function feedHookStartFromContext(source, trackRef) {
+  const track =
+    trackRef ||
+    publicPlaybackTrackBySource(source, source?.url) ||
+    findDiscoverFeedTrack({
+      songId: source?.songId,
+      ownerUserId: source?.ownerUserId,
+      url: source?.url,
+    });
+  return feedHookStartFromTrack(track);
+}
+
+function hookStartFromAlignedWords(words) {
+  if (!Array.isArray(words) || !words.length) return null;
+  const lines = groupTimedLyricsIntoLines(words);
+  for (let i = 0; i < lines.length; i += 1) {
+    const line = lines[i];
+    if (!line?.isSection) continue;
+    const label = String(line.text || "").trim();
+    if (!/^(?:Pre-)?Chorus(?:\s+\d+)?$/i.test(label)) continue;
+    for (let j = i + 1; j < lines.length; j += 1) {
+      const next = lines[j];
+      if (next?.isSection) break;
+      if (Number.isFinite(next?.startS) && next.startS >= 0) return next.startS;
+    }
+    if (Number.isFinite(line.startS) && line.startS > 0) return line.startS;
+  }
+  return null;
+}
+
+function hookStartFromLyricsText(lyricsText, durationSec) {
+  const text = String(lyricsText || "");
+  const dur = Number(durationSec || 0);
+  if (!text.trim() || !(dur > 0)) return null;
+  const match = text.match(/\[(?:Pre-)?Chorus(?:\s+\d+)?\]/i);
+  if (!match || match.index == null) return null;
+  const ratio = match.index / Math.max(text.length, 1);
+  return normalizeHookStartSec(Math.max(0, ratio * dur - 0.5), dur);
+}
+
+async function resolveAutoHookForTrack(track, durationSec = 0) {
+  const dur = Number(durationSec || 0);
+  const kind = String(track?.kind || "").trim().toLowerCase();
+  if (kind === "instrumental" || kind === "sound") {
+    return {
+      hookStartSec: normalizeHookStartSec(defaultHookStartSec(dur), dur),
+      hookSource: "default",
+    };
+  }
+  const taskId = String(track?.taskId || track?.meta?.taskId || "").trim();
+  const audioId = String(track?.audioId || track?.meta?.audioId || "").trim();
+  if (taskId && audioId) {
+    try {
+      const words = await fetchTimedLyrics(taskId, audioId);
+      const fromAligned = hookStartFromAlignedWords(words);
+      if (fromAligned != null && fromAligned > 0) {
+        return {
+          hookStartSec: normalizeHookStartSec(fromAligned, dur),
+          hookSource: "chorus_auto",
+        };
+      }
+    } catch {}
+  }
+  const lyrics = songDetailsLyricsForTrack(track);
+  const fromLyrics = hookStartFromLyricsText(lyrics, dur);
+  if (fromLyrics != null && fromLyrics > 0) {
+    return { hookStartSec: fromLyrics, hookSource: "chorus_auto" };
+  }
+  return {
+    hookStartSec: normalizeHookStartSec(defaultHookStartSec(dur), dur),
+    hookSource: "default",
+  };
+}
+
+function applyFeedHookToAudio(audio, hookSec) {
+  const hook = normalizeHookStartSec(hookSec, getAudioDuration(audio));
+  if (!audio || hook <= 0) return false;
+  try {
+    if (audio.currentTime < hook - 0.05) audio.currentTime = hook;
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function applyFeedHookAfterPlayStart(audio, source) {
+  if (!audio || !shouldApplyFeedHook(source) || source?.applyFeedHook === false) return;
+  const hook = feedHookStartFromContext(source);
+  if (hook <= 0) return;
+  applyFeedHookToAudio(audio, hook);
+  if (audio.readyState >= 1) return;
+  await new Promise((resolve) => {
+    const done = () => {
+      audio.removeEventListener("loadedmetadata", done);
+      resolve();
+    };
+    audio.addEventListener("loadedmetadata", done, { once: true });
+    window.setTimeout(done, 1200);
+  });
+  applyFeedHookToAudio(audio, hook);
+}
+
+let _publishHookUi = null;
+
+function teardownPublishHookUi() {
+  const ui = _publishHookUi;
+  _publishHookUi = null;
+  if (!ui) return;
+  try { ui.previewAudio?.pause(); } catch {}
+  if (ui.previewAudio) {
+    try { ui.previewAudio.src = ""; } catch {}
+  }
+  if (ui.previewTimer) window.clearInterval(ui.previewTimer);
+}
+
+function hookSourceLabel(source) {
+  if (source === "chorus_auto") return "Chorus";
+  if (source === "user") return "Custom";
+  if (source === "beginning") return "From start";
+  return "Smart default";
+}
+
+function syncPublishHookRangeUi(ui) {
+  if (!ui?.range || !ui.timeLabel) return;
+  const dur = Number(ui.durationSec || 0);
+  const sec = ui.fromStart
+    ? 0
+    : normalizeHookStartSec(Number(ui.range.value || 0), dur);
+  ui.timeLabel.textContent = formatTime(sec);
+  if (ui.sourceLabel) {
+    ui.sourceLabel.textContent = ui.fromStart
+      ? "Starts at 0:00 in feeds"
+      : `${hookSourceLabel(ui.autoSource)} · ${formatTime(sec)}`;
+  }
+  if (ui.useChorusBtn) {
+    const auto = Number(ui.autoHookSec || 0);
+    ui.useChorusBtn.hidden = ui.fromStart || !auto || Math.abs(sec - auto) < 0.35;
+  }
+}
+
+async function initPublishHookUi(sheet, track) {
+  teardownPublishHookUi();
+  const block = sheet.querySelector("#publishReleaseHookBlock");
+  const picker = sheet.querySelector("#publishReleaseHookPicker");
+  const fromStartToggle = sheet.querySelector("#publishHookFromStart");
+  const range = sheet.querySelector("#publishHookRange");
+  const timeLabel = sheet.querySelector("#publishHookTimeLabel");
+  const sourceLabel = sheet.querySelector("#publishHookSourceLabel");
+  const previewBtn = sheet.querySelector("#publishHookPreview");
+  const useChorusBtn = sheet.querySelector("#publishHookUseChorus");
+  if (!block || !picker || !fromStartToggle || !range) return;
+
+  const kind = String(track?.kind || "").trim().toLowerCase();
+  const isInstrumental = kind === "instrumental" || kind === "sound";
+  block.hidden = isInstrumental;
+  if (isInstrumental) return;
+
+  const existingSec = Number(track?.meta?.hookStartSec);
+  const existingSource = String(track?.meta?.hookSource || "").trim();
+  const fromStart = existingSource === "beginning" || existingSec === 0;
+  fromStartToggle.checked = fromStart;
+  picker.hidden = fromStart;
+  if (sourceLabel) sourceLabel.textContent = "Finding the best hook…";
+
+  const previewAudio = new Audio();
+  previewAudio.preload = "metadata";
+  previewAudio.playsInline = true;
+  try { previewAudio.crossOrigin = "anonymous"; } catch {}
+  const url = normalizeAudioUrlForPlayback(String(track?.url || "").trim());
+  if (url) previewAudio.src = url;
+
+  const ui = {
+    sheet,
+    previewAudio,
+    range,
+    timeLabel,
+    sourceLabel,
+    fromStartToggle,
+    picker,
+    useChorusBtn,
+    previewBtn,
+    durationSec: 0,
+    autoHookSec: 0,
+    autoSource: "default",
+    fromStart,
+    userTouched: false,
+    previewTimer: null,
+  };
+  _publishHookUi = ui;
+
+  const onRangeInput = () => {
+    ui.userTouched = true;
+    syncPublishHookRangeUi(ui);
+  };
+  range.addEventListener("input", onRangeInput);
+
+  fromStartToggle.addEventListener("change", () => {
+    ui.fromStart = fromStartToggle.checked;
+    picker.hidden = ui.fromStart;
+    syncPublishHookRangeUi(ui);
+  });
+
+  if (useChorusBtn) {
+    useChorusBtn.addEventListener("click", () => {
+      ui.userTouched = false;
+      ui.fromStart = false;
+      fromStartToggle.checked = false;
+      picker.hidden = false;
+      if (ui.autoHookSec > 0) range.value = String(ui.autoHookSec);
+      syncPublishHookRangeUi(ui);
+    });
+  }
+
+  if (previewBtn) {
+    previewBtn.addEventListener("click", () => {
+      const sec = ui.fromStart ? 0 : normalizeHookStartSec(Number(range.value || 0), ui.durationSec);
+      try { previewAudio.pause(); } catch {}
+      if (ui.previewTimer) window.clearInterval(ui.previewTimer);
+      previewAudio.currentTime = sec;
+      void previewAudio.play().catch(() => {});
+      ui.previewTimer = window.setTimeout(() => {
+        try { previewAudio.pause(); } catch {}
+      }, 4500);
+    });
+  }
+
+  const waitMeta = new Promise((resolve) => {
+    if (!url) {
+      resolve(0);
+      return;
+    }
+    if (previewAudio.readyState >= 1 && Number.isFinite(previewAudio.duration) && previewAudio.duration > 0) {
+      resolve(previewAudio.duration);
+      return;
+    }
+    const done = () => {
+      previewAudio.removeEventListener("loadedmetadata", done);
+      resolve(Number(previewAudio.duration || 0));
+    };
+    previewAudio.addEventListener("loadedmetadata", done, { once: true });
+    window.setTimeout(() => resolve(Number(previewAudio.duration || 0)), 3500);
+  });
+
+  const durationSec = await waitMeta;
+  if (_publishHookUi !== ui) return;
+  ui.durationSec = durationSec > 0 ? durationSec : 180;
+  range.max = String(Math.max(1, ui.durationSec));
+  range.step = "0.1";
+
+  const auto = await resolveAutoHookForTrack(track, ui.durationSec);
+  if (_publishHookUi !== ui) return;
+  ui.autoHookSec = Number(auto.hookStartSec || 0);
+  ui.autoSource = auto.hookSource || "default";
+
+  let startSec = ui.autoHookSec;
+  if (existingSource === "beginning") startSec = 0;
+  else if (Number.isFinite(existingSec) && existingSec >= 0 && (existingSource === "user" || existingSource === "chorus_auto")) {
+    startSec = existingSec;
+    ui.userTouched = existingSource === "user";
+  }
+  range.value = String(normalizeHookStartSec(startSec, ui.durationSec));
+  syncPublishHookRangeUi(ui);
+}
+
+function readPublishHookPayload(sheet) {
+  const ui = _publishHookUi;
+  const fromStartToggle = sheet?.querySelector("#publishHookFromStart");
+  const range = sheet?.querySelector("#publishHookRange");
+  const fromStart = fromStartToggle?.checked === true;
+  if (fromStart) return { hookStartSec: 0, hookSource: "beginning" };
+  const dur = Number(ui?.durationSec || 0);
+  const autoSec = Number(ui?.autoHookSec || 0);
+  const sec = normalizeHookStartSec(Number(range?.value || autoSec || 0), dur);
+  let hookSource = "default";
+  if (ui?.userTouched) hookSource = "user";
+  else if (autoSec > 0 && Math.abs(sec - autoSec) < 0.35) hookSource = ui?.autoSource || "chorus_auto";
+  else if (sec > 0) hookSource = "user";
+  return { hookStartSec: sec, hookSource };
 }
 
 function findDiscoverFeedTrack({ songId, ownerUserId, url } = {}) {
@@ -26215,6 +26537,25 @@ function ensurePublishReleaseSheet() {
           <span>Allow others to use it in mashups</span>
         </label>
       </div>
+      <div id="publishReleaseHookBlock" class="publishReleaseHook">
+        <div class="publishReleaseLabel">Post start <span>(feed hook)</span></div>
+        <p class="publishReleaseHookSub">In Discover and Friends, listeners hear your song from this moment first. The full track still plays in the player.</p>
+        <label class="publishReleasePermit publishReleaseHookToggle">
+          <input id="publishHookFromStart" type="checkbox" />
+          <span>Start from the beginning</span>
+        </label>
+        <div id="publishReleaseHookPicker" class="publishReleaseHookPicker">
+          <div class="publishReleaseHookTimeRow">
+            <span id="publishHookTimeLabel" class="publishReleaseHookTime">0:00</span>
+            <span id="publishHookSourceLabel" class="publishReleaseHookBadge">Finding hook…</span>
+          </div>
+          <input id="publishHookRange" class="publishReleaseHookRange" type="range" min="0" max="100" step="0.1" value="0" aria-label="Post start time" />
+          <div class="publishReleaseHookActions">
+            <button type="button" class="publishReleaseHookPreview" id="publishHookPreview">Preview hook</button>
+            <button type="button" class="publishReleaseHookReset" id="publishHookUseChorus" hidden>Use chorus</button>
+          </div>
+        </div>
+      </div>
       <div id="publishReleaseMeta" class="publishReleaseMeta" hidden></div>
       <div class="publishReleaseActions">
         <button type="button" class="publishReleaseBtn publishReleaseBtn--cancel" data-publish-release-close="1">Cancel</button>
@@ -26239,8 +26580,14 @@ function ensurePublishReleaseSheet() {
       const caption = String(sheet.querySelector("#publishReleaseCaption")?.value || "").trim();
       const allowRemix = sheet.querySelector("#publishAllowRemix")?.checked !== false;
       const allowMashup = sheet.querySelector("#publishAllowMashup")?.checked !== false;
+      const hookPayload = readPublishHookPayload(sheet);
       closePublishReleaseSheet();
-      void setLibraryTrackPublicOnProfile(id, true, { releaseCaption: caption, allowRemix, allowMashup });
+      void setLibraryTrackPublicOnProfile(id, true, {
+        releaseCaption: caption,
+        allowRemix,
+        allowMashup,
+        ...hookPayload,
+      });
     });
   }
   return sheet;
@@ -26249,6 +26596,7 @@ function ensurePublishReleaseSheet() {
 function closePublishReleaseSheet() {
   const sheet = document.getElementById("publishReleaseSheet");
   if (!sheet) return;
+  teardownPublishHookUi();
   dismissPublishReleaseKeyboard();
   sheet.classList.remove("isOpen");
   setTimeout(() => {
@@ -26308,6 +26656,7 @@ function openPublishReleaseSheet(trackId, opts = {}) {
   }
   sheet.hidden = false;
   requestAnimationFrame(() => sheet.classList.add("isOpen"));
+  void initPublishHookUi(sheet, track);
 }
 
 async function supabaseLoadUserSongs(opts = {}) {
@@ -26950,6 +27299,8 @@ function mapPublicLibrarySongRows(arr, selectedPublishedAt) {
             ...(s.meta_thumb_frame && typeof s.meta_thumb_frame === "object"
               ? { thumbFrame: s.meta_thumb_frame }
               : {}),
+            ...hookMetaFieldsFromRow(s),
+            ...(String(s.meta_lyrics || "").trim() ? { lyricsInput: String(s.meta_lyrics).trim() } : {}),
           },
           publicOnProfile: true,
         },
@@ -26961,7 +27312,7 @@ function mapPublicLibrarySongRows(arr, selectedPublishedAt) {
 }
 
 const PUBLIC_LIBRARY_SONG_META_COLS =
-  "meta_remix_of:meta->remixOf,meta_mashup_of:meta->mashupOf,meta_release_caption:meta->>releaseCaption,meta_challenge:meta->challenge,meta_featured_on_profile:meta->>featuredOnProfile,meta_style:meta->>styleInput,meta_style_sent:meta->>styleSent,meta_style_tags:meta->styleTags,meta_mode:meta->>mode,meta_photo_mode:meta->photoMode,meta_image_url:meta->>imageUrl,meta_image_thumb:meta->>imageThumb,meta_thumb_frame:meta->thumbFrame";
+  "meta_remix_of:meta->remixOf,meta_mashup_of:meta->mashupOf,meta_release_caption:meta->>releaseCaption,meta_challenge:meta->challenge,meta_featured_on_profile:meta->>featuredOnProfile,meta_style:meta->>styleInput,meta_style_sent:meta->>styleSent,meta_style_tags:meta->styleTags,meta_mode:meta->>mode,meta_photo_mode:meta->photoMode,meta_image_url:meta->>imageUrl,meta_image_thumb:meta->>imageThumb,meta_thumb_frame:meta->thumbFrame,meta_hook_start_sec:meta->hookStartSec,meta_hook_source:meta->>hookSource,meta_lyrics:meta->>lyricsInput";
 
 async function fetchPublicSongByOwnerTitle(ownerUserId, title) {
   const uid = String(ownerUserId || "").trim();
@@ -34211,8 +34562,8 @@ async function supabaseFetchDiscoveryPublicSongs(limit) {
     loadPublicConfigFromCache();
   }
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return [];
-  const colsWithPublished = "id,created_at,published_at,title,song_url,task_id,audio_id,kind,art_url,user_id,meta_image_thumb:meta->>imageThumb,meta_remix_of:meta->remixOf,meta_mashup_of:meta->mashupOf,meta_release_caption:meta->>releaseCaption,meta_challenge:meta->challenge,meta_style:meta->>styleInput,meta_style_sent:meta->>styleSent,meta_template_id:meta->>searchTemplateId,meta_template_title:meta->>searchTemplateTitle,meta_dialect:meta->>dialect,meta_lyrics:meta->>lyricsInput,meta_final_prompt:meta->>finalPrompt,meta_nabad_verification:meta->>nabadVerification,meta_tags:meta->tags,meta_allow_remix:meta->allowRemix,meta_allow_mashup:meta->allowMashup,meta_deleted_at:meta->>deletedAt";
-  const colsLegacy = "id,created_at,title,song_url,task_id,audio_id,kind,art_url,user_id,meta_image_thumb:meta->>imageThumb,meta_remix_of:meta->remixOf,meta_mashup_of:meta->mashupOf,meta_release_caption:meta->>releaseCaption,meta_challenge:meta->challenge,meta_style:meta->>styleInput,meta_style_sent:meta->>styleSent,meta_template_id:meta->>searchTemplateId,meta_template_title:meta->>searchTemplateTitle,meta_dialect:meta->>dialect,meta_lyrics:meta->>lyricsInput,meta_final_prompt:meta->>finalPrompt,meta_nabad_verification:meta->>nabadVerification,meta_tags:meta->tags,meta_allow_remix:meta->allowRemix,meta_allow_mashup:meta->allowMashup,meta_deleted_at:meta->>deletedAt";
+  const colsWithPublished = "id,created_at,published_at,title,song_url,task_id,audio_id,kind,art_url,user_id,meta_image_thumb:meta->>imageThumb,meta_remix_of:meta->remixOf,meta_mashup_of:meta->mashupOf,meta_release_caption:meta->>releaseCaption,meta_challenge:meta->challenge,meta_style:meta->>styleInput,meta_style_sent:meta->>styleSent,meta_template_id:meta->>searchTemplateId,meta_template_title:meta->>searchTemplateTitle,meta_dialect:meta->>dialect,meta_lyrics:meta->>lyricsInput,meta_final_prompt:meta->>finalPrompt,meta_nabad_verification:meta->>nabadVerification,meta_tags:meta->tags,meta_allow_remix:meta->allowRemix,meta_allow_mashup:meta->allowMashup,meta_hook_start_sec:meta->hookStartSec,meta_hook_source:meta->>hookSource,meta_deleted_at:meta->>deletedAt";
+  const colsLegacy = "id,created_at,title,song_url,task_id,audio_id,kind,art_url,user_id,meta_image_thumb:meta->>imageThumb,meta_remix_of:meta->remixOf,meta_mashup_of:meta->mashupOf,meta_release_caption:meta->>releaseCaption,meta_challenge:meta->challenge,meta_style:meta->>styleInput,meta_style_sent:meta->>styleSent,meta_template_id:meta->>searchTemplateId,meta_template_title:meta->>searchTemplateTitle,meta_dialect:meta->>dialect,meta_lyrics:meta->>lyricsInput,meta_final_prompt:meta->>finalPrompt,meta_nabad_verification:meta->>nabadVerification,meta_tags:meta->tags,meta_allow_remix:meta->allowRemix,meta_allow_mashup:meta->allowMashup,meta_hook_start_sec:meta->hookStartSec,meta_hook_source:meta->>hookSource,meta_deleted_at:meta->>deletedAt";
   const artUrlGuard = `&or=${encodeURIComponent("(art_url.is.null,art_url.not.like.data:*)")}`;
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), 12000);
@@ -34275,6 +34626,7 @@ async function supabaseFetchDiscoveryPublicSongs(limit) {
               ...(Array.isArray(s.meta_tags) ? { tags: s.meta_tags } : {}),
               ...(s.meta_allow_remix === false ? { allowRemix: false } : {}),
               ...(s.meta_allow_mashup === false ? { allowMashup: false } : {}),
+              ...hookMetaFieldsFromRow(s),
             },
           },
           s,
@@ -38421,6 +38773,8 @@ function resumePendingPublishes() {
           releaseCaption: String(saved.releaseCaption || "").trim(),
           allowRemix: saved.allowRemix !== false,
           allowMashup: saved.allowMashup !== false,
+          hookStartSec: saved.hookStartSec,
+          hookSource: saved.hookSource,
           _background: true,
           _resume: true,
         });
@@ -38459,6 +38813,8 @@ async function setLibraryTrackPublicOnProfile(trackId, wantPublic, opts = {}) {
           releaseCaption: String(opts?.releaseCaption || "").trim(),
           allowRemix: opts?.allowRemix !== false,
           allowMashup: opts?.allowMashup !== false,
+          hookStartSec: Number.isFinite(Number(opts?.hookStartSec)) ? Number(opts.hookStartSec) : undefined,
+          hookSource: String(opts?.hookSource || "").trim() || undefined,
         },
       });
       try { refreshOwnSongsUi(); } catch {}
@@ -38535,6 +38891,18 @@ async function setLibraryTrackPublicOnProfile(trackId, wantPublic, opts = {}) {
   const releaseCaption = String(opts?.releaseCaption || "").trim();
   const allowRemix = opts?.allowRemix !== false;
   const allowMashup = opts?.allowMashup !== false;
+  let hookStartSec = Number.isFinite(Number(opts?.hookStartSec)) ? Number(opts.hookStartSec) : null;
+  let hookSource = String(opts?.hookSource || "").trim();
+  if (willBePublic && hookStartSec == null && !hookSource) {
+    try {
+      const autoHook = await resolveAutoHookForTrack(track);
+      hookStartSec = Number(autoHook?.hookStartSec || 0);
+      hookSource = String(autoHook?.hookSource || "default");
+    } catch {
+      hookStartSec = 0;
+      hookSource = "default";
+    }
+  }
   const pubMeta = {
     ...publicDiscoverMetaFromTrack(track),
     ...(track.meta || {}),
@@ -38542,6 +38910,12 @@ async function setLibraryTrackPublicOnProfile(trackId, wantPublic, opts = {}) {
     allowMashup,
     ...(willBePublic && releaseCaption ? { releaseCaption } : {}),
     ...(willBePublic ? { releasedAt: publishedAt, releaseType: "public_profile" } : {}),
+    ...(willBePublic && hookSource
+      ? {
+          hookStartSec: normalizeHookStartSec(hookStartSec ?? 0),
+          hookSource,
+        }
+      : {}),
   };
   // Keep public Discover rows useful: always sync style + permissions on publish.
   const styleInput = String(track?.meta?.styleInput || track?.meta?.styleSent || "").trim();
@@ -38828,6 +39202,7 @@ async function playLibraryUrlOnPlayer(rawUrl, title, artUrl, opts) {
       url: playableRaw,
       playlistId: String(opts?.playlistId || "").trim(),
       playlistIndex: Number(opts?.playlistIndex) || 0,
+      applyFeedHook: !openPlayer,
     }
     : fromPlaylist
     ? {
@@ -38836,6 +39211,7 @@ async function playLibraryUrlOnPlayer(rawUrl, title, artUrl, opts) {
       url: playableRaw,
       playlistSlug: String(opts?.playlistSlug || "").trim(),
       playlistIndex: Number(opts?.playlistIndex) || 0,
+      applyFeedHook: !openPlayer,
     }
     : fromDiscover
       ? {
@@ -38844,8 +39220,9 @@ async function playLibraryUrlOnPlayer(rawUrl, title, artUrl, opts) {
         url: playableRaw,
         discoverReel: Boolean(opts?.discoverReel),
         reelIndex: Number.isFinite(opts?.reelIndex) ? Number(opts.reelIndex) : 0,
+        applyFeedHook: !openPlayer,
       }
-      : { ...(playSource || {}), type: "public_profile_lib", url: playableRaw };
+      : { ...(playSource || {}), type: "public_profile_lib", url: playableRaw, applyFeedHook: !openPlayer };
   miniSource = publicSource;
   resetPublicPlayTracking(miniSource);
   libraryNowPlayingId = null;
@@ -51628,12 +52005,13 @@ async function playInline(url, label, source) {
     renderHubNowPlaying();
   } catch {}
   // Kick play immediately while the tap gesture may still be valid on iOS.
-  void hubAudioPlayWithRetry(a).then((ok) => {
+  void hubAudioPlayWithRetry(a).then(async (ok) => {
     if (!ok) {
       clearPlaybackPending();
       try { syncAllPlaybackRowHighlights(); } catch {}
       return;
     }
+    await applyFeedHookAfterPlayStart(a, miniSource);
     if (els.btnPlayerPlay) els.btnPlayerPlay.disabled = true;
     if (els.btnPlayerPause) els.btnPlayerPause.disabled = false;
     try {
@@ -51647,6 +52025,7 @@ async function playInline(url, label, source) {
       const ok = await hubAudioPlayWithRetry(a);
       if (!ok) throw new Error("play_failed");
     }
+    await applyFeedHookAfterPlayStart(a, miniSource);
     if (els.btnPlayerPlay) els.btnPlayerPlay.disabled = true;
     if (els.btnPlayerPause) els.btnPlayerPause.disabled = false;
   } catch (e) {

@@ -337,6 +337,33 @@ td.num { font-variant-numeric: tabular-nums; }
 .badge.platformAndroid { background: rgba(74,222,128,0.15); color: var(--ok); }
 .badge.admin { background: rgba(124,92,255,0.15); color: #c4b5fd; }
 .proSubTableWrap { margin-top: 16px; }
+.pubArt {
+  width: 44px;
+  height: 44px;
+  border-radius: 8px;
+  object-fit: cover;
+  display: block;
+  background: rgba(255,255,255,0.06);
+}
+.pubArtFallback {
+  display: inline-flex;
+  width: 44px;
+  height: 44px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  background: rgba(124,92,255,0.15);
+  color: #c4b5fd;
+}
+.pubLinks a {
+  color: #93c5fd;
+  text-decoration: none;
+}
+.pubLinks a:hover { text-decoration: underline; }
+.sectionNote code {
+  font-size: 0.82em;
+  color: #c4b5fd;
+}
 .sunoTopUpAlert {
   margin: 0 0 16px;
   padding: 14px 16px;

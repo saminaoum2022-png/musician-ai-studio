@@ -89,7 +89,7 @@ where user_id = (select id from auth.users where lower(email) = lower('saminaoum
 
 ## API
 
-`GET /api/music/admin?view=overview|suno|users|credits|generations|subscriptions`
+`GET /api/music/admin?view=overview|suno|users|credits|generations|publications|subscriptions`
 
 Requires `Authorization: Bearer <supabase access_token>` and `profiles.role = 'admin'`.
 

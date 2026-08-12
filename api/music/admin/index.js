@@ -1,5 +1,5 @@
 /**
- * GET /api/music/admin?view=overview|users|credits|generations|subscriptions|suno
+ * GET /api/music/admin?view=overview|users|credits|generations|publications|subscriptions|suno
  *
  * Admin-only analytics for admin.nabadai.com.
  * Auth: Authorization: Bearer <supabase access_token>
@@ -250,6 +250,7 @@ async function getOverview() {
     activeToday,
     newToday,
     proSubs,
+    publishedToday,
     songsToday,
     failedToday,
     creditsToday,
@@ -262,6 +263,7 @@ async function getOverview() {
     serviceFetch(`profiles?select=user_id&last_active_at=gte.${encodeURIComponent(today)}&limit=1`),
     serviceFetch(`profiles?select=user_id&created_at=gte.${encodeURIComponent(today)}&limit=1`),
     serviceFetch("pro_subscriptions?select=user_id,plan_id,status&status=in.(active,trialing,grace)&limit=1"),
+    serviceFetch(`user_songs?select=id&public_on_profile=eq.true&published_at=gte.${encodeURIComponent(today)}&limit=1`),
     serviceFetch(`user_songs?select=id&created_at=gte.${encodeURIComponent(today)}&limit=1`),
     serviceFetch(`music_generation_logs?select=id&status=eq.failed&created_at=gte.${encodeURIComponent(today)}&limit=1`),
     serviceFetch(`credits_transactions?select=delta&created_at=gte.${encodeURIComponent(today)}&limit=1000`),
@@ -335,6 +337,7 @@ async function getOverview() {
     },
     generations: {
       songsToday: songsToday.total ?? 0,
+      publishedToday: publishedToday.total ?? 0,
       failedToday: failedToday.total ?? 0,
       apiCostTodayUsd: Math.round(apiCostToday * 100) / 100,
     },
@@ -543,6 +546,55 @@ async function getGenerations(limit, offset) {
   return { generations, total: res.total ?? generations.length };
 }
 
+async function getPublications(limit, offset) {
+  const res = await serviceFetch(
+    `user_songs?select=id,user_id,title,art_url,song_url,task_id,audio_id,kind,meta,public_on_profile,published_at,created_at&public_on_profile=eq.true&order=published_at.desc.nullslast,created_at.desc&limit=${limit}&offset=${offset}`,
+  );
+  const rows = Array.isArray(res.data) ? res.data : [];
+  const ids = [...new Set(rows.map((r) => r.user_id).filter(Boolean))];
+  let profileMap = new Map();
+  const authMap = await fetchAuthUsersMap();
+  if (ids.length) {
+    const inClause = ids.map((id) => encodeURIComponent(id)).join(",");
+    const prof = await serviceFetch(
+      `profiles?select=user_id,username,display_name&user_id=in.(${inClause})`,
+    );
+    for (const p of Array.isArray(prof.data) ? prof.data : []) {
+      profileMap.set(p.user_id, p);
+    }
+  }
+
+  const publications = rows.map((r) => {
+    const p = profileMap.get(r.user_id) || {};
+    const auth = authMap.get(r.user_id) || {};
+    const username = String(p.username || "").trim();
+    const meta = r.meta && typeof r.meta === "object" ? r.meta : {};
+    const releaseCaption = String(meta.releaseCaption || "").trim();
+    const profileUrl = username ? `https://www.nabadai.com/#/u/${encodeURIComponent(username)}` : "";
+    const shareUrl = r.id ? `https://www.nabadai.com/s/${encodeURIComponent(r.id)}` : "";
+    return {
+      id: r.id,
+      userId: r.user_id,
+      userLabel: String(p.display_name || p.username || "—"),
+      username,
+      email: auth.email || "",
+      title: String(r.title || "Untitled").trim() || "Untitled",
+      releaseCaption,
+      kind: String(r.kind || "full").trim(),
+      taskId: String(r.task_id || "").trim(),
+      audioId: String(r.audio_id || "").trim(),
+      artUrl: String(r.art_url || "").trim(),
+      songUrl: String(r.song_url || "").trim(),
+      publishedAt: r.published_at || null,
+      createdAt: r.created_at || null,
+      profileUrl,
+      shareUrl,
+    };
+  });
+
+  return { publications, total: res.total ?? publications.length };
+}
+
 async function getSubscriptions(limit, offset) {
   const res = await serviceFetch(
     `pro_subscriptions?select=user_id,provider,plan_id,status,current_period_end,provider_subscription_id,created_at,updated_at&order=updated_at.desc&limit=${limit}&offset=${offset}`,
@@ -651,10 +703,12 @@ module.exports = async function handler(req, res) {
       payload = { ...payload, ...(await getGenerations(limit, offset)) };
     } else if (view === "subscriptions") {
       payload = { ...payload, ...(await getSubscriptions(limit, offset)) };
+    } else if (view === "publications") {
+      payload = { ...payload, ...(await getPublications(limit, offset)) };
     } else if (view === "suno") {
       payload.suno = await getSunoPanel();
     } else {
-      return sendJson(res, 400, { error: "Unknown view", allowed: ["overview", "users", "credits", "generations", "subscriptions", "suno"] });
+      return sendJson(res, 400, { error: "Unknown view", allowed: ["overview", "users", "credits", "generations", "subscriptions", "publications", "suno"] });
     }
     return sendJson(res, 200, payload);
   } catch (e) {

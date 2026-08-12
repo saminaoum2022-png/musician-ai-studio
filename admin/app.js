@@ -44,6 +44,7 @@ const els = {
     users: document.getElementById("viewUsers"),
     credits: document.getElementById("viewCredits"),
     generations: document.getElementById("viewGenerations"),
+    publications: document.getElementById("viewPublications"),
     subscriptions: document.getElementById("viewSubscriptions"),
   },
   navItems: [...document.querySelectorAll(".navItem")],
@@ -55,6 +56,7 @@ const VIEW_META = {
   users: { title: "Users", sub: "Signups, activity, balances, and songs" },
   credits: { title: "Credits", sub: "Grant paid credits and view every ledger entry" },
   generations: { title: "Generations", sub: "Song and audio generation requests" },
+  publications: { title: "Publications", sub: "Public profile posts — moderation view (not friends-only)" },
   subscriptions: { title: "Subscriptions", sub: "NabadAi Pro status by user" },
 };
 
@@ -624,6 +626,7 @@ function renderOverview(data) {
       ${statCard("Credits used (all time)", fmtNum(c.usedTotal, 1))}
       ${statCard("Credits consumed today", fmtNum(c.consumedToday, 1))}
       ${statCard("Songs saved today", fmtNum(g.songsToday))}
+      ${statCard("Published today", fmtNum(g.publishedToday))}
       ${statCard("Failed gens today", fmtNum(g.failedToday))}
       ${statCard("Est. API cost today", fmtUsd(g.apiCostTodayUsd))}
       ${statCard("Est. revenue MTD", fmtUsd(rev.estimatedMtdUsd), rev.note || "")}
@@ -783,6 +786,54 @@ function renderGenerations(data) {
   `;
 }
 
+function renderPublications(data) {
+  const rows = data?.publications || [];
+  const total = data?.total || rows.length;
+  const body = rows.length
+    ? rows.map((p) => {
+      const caption = p.releaseCaption
+        ? `<br><span style="color:var(--muted);font-size:0.76rem">${escapeHtml(p.releaseCaption)}</span>`
+        : "";
+      const links = [
+        p.shareUrl ? `<a href="${escapeHtml(p.shareUrl)}" target="_blank" rel="noopener noreferrer">Share</a>` : "",
+        p.profileUrl ? `<a href="${escapeHtml(p.profileUrl)}" target="_blank" rel="noopener noreferrer">Profile</a>` : "",
+      ].filter(Boolean).join(" · ");
+      return `
+      <tr>
+        <td>
+          ${p.artUrl ? `<img class="pubArt" src="${escapeHtml(p.artUrl)}" alt="" loading="lazy" />` : `<span class="pubArtFallback">♪</span>`}
+        </td>
+        <td>
+          <strong>${escapeHtml(p.title)}</strong>${caption}
+        </td>
+        <td>${escapeHtml(p.userLabel)}${p.username ? `<br><span style="color:var(--muted);font-size:0.76rem">@${escapeHtml(p.username)}</span>` : ""}</td>
+        <td style="color:var(--muted);font-size:0.78rem">${escapeHtml(p.email || "—")}</td>
+        <td>${fmtDate(p.publishedAt || p.createdAt)}</td>
+        <td>${escapeHtml(p.kind || "—")}</td>
+        <td class="pubLinks">${links || "—"}</td>
+      </tr>`;
+    }).join("")
+    : `<tr><td colspan="7" class="loading">No public posts yet</td></tr>`;
+
+  els.panels.publications.innerHTML = `
+    <div class="sectionCard">
+      <p class="sectionNote">Every row is a song the user chose to publish on their public profile (<code>public_on_profile</code>). Private library songs are not listed here. Use this for moderation and support — you do not need to follow or friend the user.</p>
+    </div>
+    <div class="tableWrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Cover</th><th>Title</th><th>Creator</th><th>Email</th>
+            <th>Published</th><th>Kind</th><th>Links</th>
+          </tr>
+        </thead>
+        <tbody>${body}</tbody>
+      </table>
+    </div>
+    ${pagerHtml(total, state.offset)}
+  `;
+}
+
 function renderSubscriptions(data) {
   const rows = data?.subscriptions || [];
   const total = data?.total || rows.length;
@@ -822,6 +873,7 @@ const RENDERERS = {
   users: renderUsers,
   credits: renderCredits,
   generations: renderGenerations,
+  publications: renderPublications,
   subscriptions: renderSubscriptions,
 };
 

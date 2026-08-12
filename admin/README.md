@@ -12,6 +12,7 @@ Run in the SQL Editor (in order if not already applied):
 2. `supabase/pro_subscriptions.sql`
 3. **`supabase/admin_dashboard.sql`**
 4. **`supabase/admin_team_roles.sql`** — extended dashboard roles + team audit columns
+5. **`supabase/admin_team_audit.sql`** — audit log, pending invites, auto-apply on signup
 
 Then grant yourself admin (only needed once — after that use **Settings → Team & roles** in the dashboard):
 
@@ -107,9 +108,14 @@ where user_id = (select id from auth.users where lower(email) = lower('saminaoum
 
 Team management (Owner / Admin only):
 
-- `GET /api/admin/team` — list teammates
-- `POST /api/admin/team` — `{ "email": "...", "role": "support" }`
-- `DELETE /api/admin/team` — `{ "email": "..." }`
+- `GET /api/admin/team` — list teammates, pending invites, audit log
+- `GET /api/admin/team?search=@username` — user lookup for invite form
+- `POST /api/admin/team` — `{ "lookup": "email or @username", "role": "support", "sendInvite": true }`
+- `DELETE /api/admin/team` — `{ "email": "..." }` or `{ "inviteId": "..." }`
+
+Moderation (Admin + Moderator):
+
+- `POST /api/admin/moderate` — `{ "action": "unpublish", "songId": "uuid", "reason": "..." }`
 
 Requires `Authorization: Bearer <supabase access_token>` and appropriate dashboard role.
 

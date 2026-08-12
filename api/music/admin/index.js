@@ -708,6 +708,7 @@ module.exports = async function handler(req, res) {
         isOwner: admin.isOwner,
         canManageTeam: admin.canManageTeam,
         canGrantCredits: admin.canGrantCredits,
+        canModeratePublications: admin.canModeratePublications,
         allowedViews: admin.allowedViews,
       },
     };

@@ -746,6 +746,55 @@ td.num { font-variant-numeric: tabular-nums; }
 .badge.role-finance { background: rgba(74, 222, 128, 0.15); color: #bbf7d0; }
 .badge.role-viewer { background: rgba(148, 163, 184, 0.15); color: #cbd5e1; }
 
+.teamLookupField { position: relative; }
+
+.teamLookupResults {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc(100% + 6px);
+  z-index: 30;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+
+.teamLookupHit {
+  display: grid;
+  gap: 2px;
+  width: 100%;
+  text-align: left;
+  padding: 10px 12px;
+  border: none;
+  border-bottom: 1px solid var(--border);
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.teamLookupHit:last-child { border-bottom: none; }
+
+.teamLookupHit:hover { background: rgba(255, 255, 255, 0.04); }
+
+.teamLookupHit span {
+  color: var(--muted);
+  font-size: 0.76rem;
+}
+
+.grantField--check { flex: 1 1 100%; }
+
+.checkRow {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 0.84rem;
+}
+
+.checkRow input { width: auto; }
+
 @media (max-width: 1024px) {
   .appShell { grid-template-columns: 1fr; }
   .sidebar {

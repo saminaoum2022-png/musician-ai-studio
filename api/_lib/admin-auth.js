@@ -15,6 +15,7 @@ const {
   canAccessView,
   canGrantCredits,
   canManageTeam,
+  canModeratePublications,
   isDashboardRole,
   normalizeRole,
 } = require("./admin-permissions");
@@ -58,6 +59,7 @@ async function verifyAdmin(req, options = {}) {
   }
   if (options.requireManageTeam && !ctx.canManageTeam) return null;
   if (options.requireGrantCredits && !ctx.canGrantCredits) return null;
+  if (options.requireModeratePublications && !ctx.canModeratePublications) return null;
 
   return ctx;
 }
@@ -151,4 +153,5 @@ module.exports = {
   canAccessView,
   canGrantCredits,
   canManageTeam,
+  canModeratePublications,
 };

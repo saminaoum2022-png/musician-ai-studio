@@ -912,6 +912,7 @@ function renderGenerations(data) {
 function renderPublications(data) {
   const rows = data?.publications || [];
   const total = data?.total || rows.length;
+  const canModerate = Boolean(state.adminSession?.canModeratePublications);
   const body = rows.length
     ? rows.map((p) => {
       const caption = p.releaseCaption
@@ -921,6 +922,9 @@ function renderPublications(data) {
         p.shareUrl ? `<a href="${escapeHtml(p.shareUrl)}" target="_blank" rel="noopener noreferrer">Share</a>` : "",
         p.profileUrl ? `<a href="${escapeHtml(p.profileUrl)}" target="_blank" rel="noopener noreferrer">Profile</a>` : "",
       ].filter(Boolean).join(" · ");
+      const modCell = canModerate
+        ? `<td><button type="button" class="btnGhost btnDangerGhost" data-unpublish-song="${escapeHtml(p.id)}" data-song-title="${escapeHtml(p.title)}">Unpublish</button></td>`
+        : "";
       return `
       <tr>
         <td>
@@ -934,20 +938,23 @@ function renderPublications(data) {
         <td>${fmtDate(p.publishedAt || p.createdAt)}</td>
         <td>${escapeHtml(p.kind || "—")}</td>
         <td class="pubLinks">${links || "—"}</td>
+        ${modCell}
       </tr>`;
     }).join("")
-    : `<tr><td colspan="7" class="loading">No public posts yet</td></tr>`;
+    : `<tr><td colspan="${canModerate ? 8 : 7}" class="loading">No public posts yet</td></tr>`;
 
   els.panels.publications.innerHTML = adminPageStack(dataPanel({
     title: "Public posts",
-    note: "Songs published to a public profile (<code>public_on_profile</code>). Private library songs are not listed. Moderation view — no follow required.",
+    note: canModerate
+      ? "Moderation view — unpublish removes the song from public profile and feed. The creator keeps their private copy."
+      : "Songs published to a public profile (<code>public_on_profile</code>). Read-only for your role.",
     tableHtml: `
     <div class="tableWrap">
       <table>
         <thead>
           <tr>
             <th>Cover</th><th>Title</th><th>Creator</th><th>Email</th>
-            <th>Published</th><th>Kind</th><th>Links</th>
+            <th>Published</th><th>Kind</th><th>Links</th>${canModerate ? "<th>Actions</th>" : ""}
           </tr>
         </thead>
         <tbody>${body}</tbody>
@@ -967,6 +974,7 @@ function renderRoleGuideCards(roles) {
       <p class="roleGuideDesc">${escapeHtml(role.description)}</p>
       <div class="roleGuideMeta">
         ${role.grantCredits ? `<span class="roleTag">Can grant credits</span>` : ""}
+        ${role.moderatePublications ? `<span class="roleTag">Can unpublish posts</span>` : ""}
         ${role.manageTeam ? `<span class="roleTag roleTag--accent">Can manage team</span>` : ""}
         <span class="roleTag">${escapeHtml((role.views || []).join(", "))}</span>
       </div>
@@ -974,9 +982,50 @@ function renderRoleGuideCards(roles) {
   `).join("");
 }
 
+function fmtAuditAction(entry) {
+  const action = String(entry?.action || "");
+  const map = {
+    grant: "Granted access",
+    revoke: "Revoked access",
+    role_change: "Changed role",
+    invite_sent: "Sent signup invite",
+    invite_pending: "Saved pending invite",
+    invite_revoked: "Cancelled invite",
+    unpublish: "Unpublished post",
+  };
+  return map[action] || action.replace(/_/g, " ");
+}
+
+function renderAuditRows(entries) {
+  const rows = Array.isArray(entries) ? entries : [];
+  if (!rows.length) {
+    return `<tr><td colspan="5" class="loading">No audit events yet.</td></tr>`;
+  }
+  return rows.map((e) => {
+    const target = e.targetEmail || e.targetUserId?.slice(0, 8) || "—";
+    const detail = e.action === "unpublish"
+      ? escapeHtml(String(e.metadata?.title || e.metadata?.songId || ""))
+      : e.previousRole && e.newRole
+        ? `${escapeHtml(e.previousRole)} → ${escapeHtml(e.newRole)}`
+        : e.newRole
+          ? escapeHtml(e.newRole)
+          : "—";
+    return `
+      <tr>
+        <td>${fmtDate(e.createdAt)}</td>
+        <td>${escapeHtml(e.actorEmail || "—")}</td>
+        <td>${escapeHtml(fmtAuditAction(e))}</td>
+        <td>${escapeHtml(target)}</td>
+        <td>${detail}</td>
+      </tr>`;
+  }).join("");
+}
+
 function renderSettings(data) {
   const roles = data.teamRoles || data.roles || [];
   const members = Array.isArray(data.members) ? data.members : [];
+  const pendingInvites = Array.isArray(data.pendingInvites) ? data.pendingInvites : [];
+  const audit = Array.isArray(data.audit) ? data.audit : [];
   const teamError = data.teamError || "";
   const canManage = Boolean(state.adminSession?.canManageTeam);
 
@@ -1012,22 +1061,40 @@ function renderSettings(data) {
     }).join("")
     : `<tr><td colspan="6" class="loading">${canManage ? "No teammates yet — invite someone below." : "Team list is Owner / Admin only."}</td></tr>`;
 
+  const pendingRows = pendingInvites.length
+    ? pendingInvites.map((inv) => `
+      <tr>
+        <td>${escapeHtml(inv.email)}</td>
+        <td><span class="${roleBadgeClass(inv.role)}">${escapeHtml(inv.role)}</span></td>
+        <td>${fmtDate(inv.invitedAt)}</td>
+        <td>${escapeHtml(inv.invitedByLabel || "—")}</td>
+        <td><button type="button" class="btnGhost btnDangerGhost" data-invite-revoke="${escapeHtml(inv.id)}">Cancel</button></td>
+      </tr>`).join("")
+    : `<tr><td colspan="5" class="loading">No pending invites.</td></tr>`;
+
   const inviteForm = canManage ? `
     <section class="sectionCard">
       <div class="sectionHead">
         <h3 class="sectionTitle">Invite to dashboard</h3>
-        <p class="sectionNote">They must already have a NabadAi account (signed up in the app or on nabadai.com). You grant dashboard access here — no Supabase login required.</p>
+        <p class="sectionNote">Enter an email or <code>@username</code>. If they don't have a NabadAi account yet, we'll save a pending invite and email them a Supabase signup link (when enabled).</p>
       </div>
       <form id="teamInviteForm" class="grantForm">
-        <label class="field grantField">
-          <span>Teammate email</span>
-          <input id="teamInviteEmail" type="email" required placeholder="teammate@company.com" autocomplete="off" />
+        <label class="field grantField teamLookupField">
+          <span>Email or @username</span>
+          <input id="teamInviteLookup" type="text" required placeholder="teammate@company.com or @creator" autocomplete="off" />
+          <div id="teamLookupResults" class="teamLookupResults" hidden></div>
         </label>
         <label class="field grantField">
           <span>Role</span>
           <select id="teamInviteRole" class="teamRoleSelect" required>
             ${roles.map((r) => `<option value="${escapeHtml(r.id)}">${escapeHtml(r.label)}</option>`).join("")}
           </select>
+        </label>
+        <label class="field grantField grantField--check">
+          <span class="checkRow">
+            <input id="teamInviteSendEmail" type="checkbox" checked />
+            Send signup invite if no account yet
+          </span>
         </label>
         <button type="submit" class="btnPrimary" id="btnTeamInvite">Grant access</button>
       </form>
@@ -1052,6 +1119,32 @@ function renderSettings(data) {
             </tr>
           </thead>
           <tbody>${memberRows}</tbody>
+        </table>
+      </div>`,
+    }) : ""}
+    ${canManage ? dataPanel({
+      title: "Pending invites",
+      note: "Waiting for signup — role applies automatically when they create an account with this email.",
+      tableHtml: `
+      <div class="tableWrap">
+        <table>
+          <thead>
+            <tr><th>Email</th><th>Role</th><th>Invited</th><th>By</th><th>Actions</th></tr>
+          </thead>
+          <tbody>${pendingRows}</tbody>
+        </table>
+      </div>`,
+    }) : ""}
+    ${canManage ? dataPanel({
+      title: "Audit log",
+      note: "Recent team and moderation actions across the dashboard.",
+      tableHtml: `
+      <div class="tableWrap">
+        <table>
+          <thead>
+            <tr><th>When</th><th>Actor</th><th>Action</th><th>Target</th><th>Detail</th></tr>
+          </thead>
+          <tbody>${renderAuditRows(audit)}</tbody>
         </table>
       </div>`,
     }) : ""}
@@ -1160,6 +1253,45 @@ async function adminGrantPaidCredits({ email = "", amount } = {}) {
   return data;
 }
 
+async function adminModerate(action, payload = {}) {
+  await refreshSessionIfNeeded();
+  const token = state.session?.access_token;
+  if (!token) throw new Error("Not signed in");
+  const r = await fetch("/api/admin/moderate", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ action, ...payload }),
+  });
+  const data = await r.json().catch(() => ({}));
+  if (r.status === 401) {
+    writeSession(null);
+    throw new Error("Session expired — sign in again");
+  }
+  if (r.status === 403) {
+    throw new Error(data?.error || "You do not have permission to moderate publications.");
+  }
+  if (!r.ok) {
+    throw new Error(data?.error || `Request failed (${r.status})`);
+  }
+  return data;
+}
+
+async function teamSearch(query) {
+  await refreshSessionIfNeeded();
+  const token = state.session?.access_token;
+  if (!token) return [];
+  const qs = new URLSearchParams({ search: query });
+  const r = await fetch(`/api/admin/team?${qs}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) return [];
+  return Array.isArray(data.results) ? data.results : [];
+}
+
 function setGrantCreditsMsg(text, kind = "ok") {
   const el = document.getElementById("grantCreditsMsg");
   if (!el) return;
@@ -1217,7 +1349,13 @@ async function loadView({ force = false } = {}) {
     if (view === "settings" && state.adminSession?.canManageTeam) {
       try {
         const team = await teamFetch();
-        data = { ...data, members: team.members, teamRoles: team.roles };
+        data = {
+          ...data,
+          members: team.members,
+          teamRoles: team.roles,
+          pendingInvites: team.pendingInvites,
+          audit: team.audit,
+        };
       } catch (e) {
         data.teamError = e?.message || String(e);
         data.teamRoles = data.roles || [];
@@ -1478,26 +1616,28 @@ document.body.addEventListener("submit", (e) => {
   if (!teamForm) return;
   e.preventDefault();
   void (async () => {
-    const emailInput = teamForm.querySelector("#teamInviteEmail");
+    const lookupInput = teamForm.querySelector("#teamInviteLookup");
     const roleInput = teamForm.querySelector("#teamInviteRole");
+    const sendInviteInput = teamForm.querySelector("#teamInviteSendEmail");
     const btn = teamForm.querySelector("#btnTeamInvite");
-    const email = String(emailInput?.value || "").trim();
+    const lookup = String(lookupInput?.value || "").trim();
     const role = String(roleInput?.value || "").trim();
-    if (!email) {
-      setTeamInviteMsg("Enter a teammate email.", "warn");
+    const sendInvite = sendInviteInput ? sendInviteInput.checked : true;
+    if (!lookup) {
+      setTeamInviteMsg("Enter an email or @username.", "warn");
       return;
     }
     if (btn) btn.disabled = true;
     setTeamInviteMsg("Granting access…", "warn");
     try {
-      await teamFetch("", {
+      const r = await teamFetch("", {
         method: "POST",
-        body: JSON.stringify({ email, role }),
+        body: JSON.stringify({ lookup, role, sendInvite }),
       });
-      if (emailInput) emailInput.value = "";
+      if (lookupInput) lookupInput.value = "";
       clearSettingsCache();
       if (state.view === "settings") await loadView({ force: true });
-      setTeamInviteMsg(`Dashboard access granted to ${email} as ${role}.`, "ok");
+      setTeamInviteMsg(r.message || `Dashboard access granted for ${lookup}.`, "ok");
     } catch (err) {
       setTeamInviteMsg(err?.message || "Could not grant access", "err");
     } finally {
@@ -1521,25 +1661,118 @@ document.body.addEventListener("click", (e) => {
   }
 
   const revokeBtn = e.target.closest("[data-team-revoke]");
-  if (!revokeBtn) return;
-  const email = revokeBtn.dataset.teamRevoke;
-  if (!email) return;
-  if (!window.confirm(`Revoke dashboard access for ${email}?`)) return;
-  void (async () => {
-    revokeBtn.disabled = true;
-    try {
-      await teamFetch("", {
-        method: "DELETE",
-        body: JSON.stringify({ email }),
-      });
-      clearSettingsCache();
-      if (state.view === "settings") await loadView({ force: true });
-    } catch (err) {
-      showError(err?.message || "Could not revoke access");
-    } finally {
-      revokeBtn.disabled = false;
+  if (revokeBtn) {
+    const email = revokeBtn.dataset.teamRevoke;
+    if (!email) return;
+    if (!window.confirm(`Revoke dashboard access for ${email}?`)) return;
+    void (async () => {
+      revokeBtn.disabled = true;
+      try {
+        await teamFetch("", {
+          method: "DELETE",
+          body: JSON.stringify({ email }),
+        });
+        clearSettingsCache();
+        if (state.view === "settings") await loadView({ force: true });
+      } catch (err) {
+        showError(err?.message || "Could not revoke access");
+      } finally {
+        revokeBtn.disabled = false;
+      }
+    })();
+    return;
+  }
+
+  const inviteRevokeBtn = e.target.closest("[data-invite-revoke]");
+  if (inviteRevokeBtn) {
+    const inviteId = inviteRevokeBtn.dataset.inviteRevoke;
+    if (!inviteId) return;
+    if (!window.confirm("Cancel this pending invite?")) return;
+    void (async () => {
+      inviteRevokeBtn.disabled = true;
+      try {
+        await teamFetch("", {
+          method: "DELETE",
+          body: JSON.stringify({ inviteId }),
+        });
+        clearSettingsCache();
+        if (state.view === "settings") await loadView({ force: true });
+      } catch (err) {
+        showError(err?.message || "Could not cancel invite");
+      } finally {
+        inviteRevokeBtn.disabled = false;
+      }
+    })();
+    return;
+  }
+
+  const unpublishBtn = e.target.closest("[data-unpublish-song]");
+  if (unpublishBtn) {
+    const songId = unpublishBtn.dataset.unpublishSong;
+    const title = unpublishBtn.dataset.songTitle || "this post";
+    if (!songId) return;
+    const reason = window.prompt(`Reason for unpublishing "${title}" (optional):`, "") ?? "";
+    if (reason === null) return;
+    void (async () => {
+      unpublishBtn.disabled = true;
+      try {
+        await adminModerate("unpublish", { songId, reason });
+        state.cache = {};
+        if (state.view === "publications") await loadView({ force: true });
+        showError("");
+      } catch (err) {
+        showError(err?.message || "Could not unpublish");
+      } finally {
+        unpublishBtn.disabled = false;
+      }
+    })();
+  }
+});
+
+document.body.addEventListener("input", (e) => {
+  const input = e.target.closest("#teamInviteLookup");
+  if (!input) return;
+  const box = document.getElementById("teamLookupResults");
+  if (!box) return;
+  const q = String(input.value || "").trim();
+  if (q.length < 2 || q.includes("@") && q.indexOf("@") > 0) {
+    box.hidden = true;
+    box.innerHTML = "";
+    return;
+  }
+  if (state._teamSearchTimer) clearTimeout(state._teamSearchTimer);
+  state._teamSearchTimer = setTimeout(async () => {
+    const results = await teamSearch(q.startsWith("@") ? q : `@${q.replace(/^@/, "")}`);
+    if (!results.length) {
+      box.hidden = true;
+      box.innerHTML = "";
+      return;
     }
-  })();
+    box.innerHTML = results.map((u) => `
+      <button type="button" class="teamLookupHit" data-lookup-value="${escapeHtml(u.email || `@${u.username}`)}">
+        <strong>${escapeHtml(u.name || u.username || "User")}</strong>
+        <span>@${escapeHtml(u.username || "—")} · ${escapeHtml(u.email || "no email")}</span>
+      </button>`).join("");
+    box.hidden = false;
+  }, 220);
+});
+
+document.body.addEventListener("click", (e) => {
+  const hit = e.target.closest(".teamLookupHit");
+  if (hit) {
+    const input = document.getElementById("teamInviteLookup");
+    const box = document.getElementById("teamLookupResults");
+    if (input) input.value = hit.dataset.lookupValue || "";
+    if (box) {
+      box.hidden = true;
+      box.innerHTML = "";
+    }
+    return;
+  }
+  if (!e.target.closest(".teamLookupField")) {
+    const box = document.getElementById("teamLookupResults");
+    if (box) box.hidden = true;
+  }
 });
 
 document.body.addEventListener("change", (e) => {

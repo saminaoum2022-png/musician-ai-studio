@@ -4,6 +4,7 @@
 import { humTrackAvoidTags } from "./hum-track-cover.mjs";
 import { nabadIdentityAvoid, nabadIdentityPhrases, NABAD_ROOT_PHRASES } from "./nabad-identity.mjs";
 import { buildSceneHintFromDirection } from "./schema.mjs";
+import { isConcreteObjectArtworkHint } from "../prompt.js";
 
 /** @typedef {import("./schema.js").VisualDirection} VisualDirection */
 
@@ -19,7 +20,9 @@ function sanitizeScenePhrase(raw) {
 export function applyVisualDirection(coverInput, direction, opts = {}) {
   const bucketKey = String(opts.bucketKey || direction?.bucketHint || "default").trim();
   const songId = String(coverInput?.songId || coverInput?.id || "").trim();
-  const identity = direction?.nabadIdentity?.roots?.length
+  const userArtwork = sanitizeScenePhrase(String(coverInput?.artworkStyle || coverInput?.artworkHint || "").trim());
+  const concreteSubject = Boolean(userArtwork && isConcreteObjectArtworkHint(userArtwork));
+  const identity = direction?.nabadIdentity?.roots?.length && !concreteSubject
     ? {
         roots: direction.nabadIdentity.roots,
         phraseBundleId: direction.nabadIdentity.phraseBundleId,
@@ -36,10 +39,10 @@ export function applyVisualDirection(coverInput, direction, opts = {}) {
         energy: coverInput?.energy,
         visualMode: direction?.visualMode,
         humTrack: coverInput?.humTrack,
+        concreteSubject,
       });
 
   const sceneHint = buildSceneHintFromDirection(direction);
-  const userArtwork = sanitizeScenePhrase(String(coverInput?.artworkStyle || coverInput?.artworkHint || "").trim());
 
   const humTrack = Boolean(coverInput?.humTrack || direction?.sourcePath === "hum_track");
   const avoidMerged = [

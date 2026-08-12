@@ -46,6 +46,11 @@ const hum = nabadIdentityPhrases({ songId: "hum-1", bucketKey: "default", humTra
 assert(hum.roots.includes("editorial_still"), "hum track includes editorial_still");
 assert(!hum.roots.includes("instrument_sculpture"), "hum track skips instrument_sculpture");
 
+const concrete = nabadIdentityPhrases({ songId: "flower-test", bucketKey: "happy", concreteSubject: true });
+assert(!concrete.roots.includes("symbolic_mood"), "concrete subject skips symbolic_mood");
+assert(concrete.roots.includes("editorial_still"), "concrete subject uses editorial still life DNA");
+assert(!/not literal props/i.test(concrete.text), "concrete DNA avoids anti-literal clause");
+
 const avoid = nabadIdentityAvoid();
 assert(avoid.length >= 3 && avoid.length <= 6, "compact identity avoid list");
 

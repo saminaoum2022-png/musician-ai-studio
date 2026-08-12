@@ -4,7 +4,7 @@
  */
 
 /** Bump when cover prompt policy changes — busts Gemini scene cache on the server. */
-export const COVER_PROMPT_POLICY_VERSION = 9;
+export const COVER_PROMPT_POLICY_VERSION = 10;
 /** Pollinations flux reliably returns ~768×768 square — request square, crop to 9:16 (avoids vertical stretch). */
 export const POLLINATIONS_COVER_WIDTH = 1024;
 export const POLLINATIONS_COVER_HEIGHT = 1024;
@@ -398,6 +398,9 @@ function enrichUserArtworkHint(raw) {
   }
   if (/\bhearts?\b/i.test(s) && !/heart-shaped|heart shape|still life/i.test(s)) {
     s = `${s}, decorative heart-shaped prop as the clear focal subject`;
+  }
+  if (/\b(flowers?|roses?|bouquet|wildflowers?|bloom|blooms)\b/i.test(s) && !/botanical|still life|focal subject|recognizable/i.test(s)) {
+    s = `${s}, beautiful botanical still life with clear recognizable flowers as the focal subject`;
   }
   if (/\b(dog|puppy|cat|pet)\b/i.test(s) && !/still life|leash|bowl|collar|paw print/i.test(s)) {
     s = `${s}, cozy pet leash and water bowl still life, warm soft light, no animals, no people`;
@@ -843,8 +846,13 @@ export function buildAbstractCoverPrompt(input, options = {}) {
         ];
   } else if (userArtwork) {
     const userPalette = paletteForUserArtwork(userArtwork, bucketKey);
+    const concreteUserArt = isConcreteObjectArtworkHint(userArtwork);
+    const literalLead = concreteUserArt
+      ? `photorealistic editorial still life photograph, ${userArtwork}, clearly visible and recognizable`
+      : "";
     parts = [
       NO_TEXT_LEAD,
+      literalLead,
       composeFrameForArtwork(userArtwork),
       userArtwork,
       nabadIdentityPhrases,

@@ -77,7 +77,7 @@ export function nabadIdentityAvoid() {
 
 /**
  * Pick contextual roots beyond the always-on core set.
- * @param {{ energy?: number, visualMode?: string, humTrack?: boolean, bucketKey?: string }} opts
+ * @param {{ energy?: number, visualMode?: string, humTrack?: boolean, bucketKey?: string, concreteSubject?: boolean }} opts
  * @returns {NabadRootId[]}
  */
 function contextualRoots(opts = {}) {
@@ -86,7 +86,17 @@ function contextualRoots(opts = {}) {
   const humTrack = Boolean(opts.humTrack);
   const bucketKey = String(opts.bucketKey || "default").toLowerCase();
   /** @type {NabadRootId[]} */
-  const roots = ["symbolic_mood"];
+  const roots = [];
+
+  if (opts.concreteSubject) {
+    roots.push("editorial_still", "silhouette", "soft_grain", "breathing_room");
+    if (bucketKey === "wedding" || bucketKey === "love" || bucketKey === "happy") {
+      roots.push("accent");
+    }
+    return roots;
+  }
+
+  roots.push("symbolic_mood");
 
   if (humTrack || visualMode === "studio_nook_still_life") {
     roots.push("editorial_still", "soft_grain", "breathing_room");
@@ -108,7 +118,7 @@ function contextualRoots(opts = {}) {
 
 /**
  * Sample 4–6 DNA clauses for one cover. Deterministic per songId.
- * @param {{ songId?: string, bucketKey?: string, energy?: number, visualMode?: string, humTrack?: boolean }} opts
+ * @param {{ songId?: string, bucketKey?: string, energy?: number, visualMode?: string, humTrack?: boolean, concreteSubject?: boolean }} opts
  */
 export function nabadIdentityPhrases(opts = {}) {
   const songId = String(opts.songId || "nabad-song").trim();
@@ -149,7 +159,7 @@ export function nabadIdentityPhrases(opts = {}) {
  * @param {object|null|undefined} visualDirection
  * @param {string} bucketKey
  */
-export function nabadIdentityFromDirection(visualDirection, bucketKey = "default") {
+export function nabadIdentityFromDirection(visualDirection, bucketKey = "default", { concreteSubject = false } = {}) {
   const songId = String(visualDirection?.songId || visualDirection?.id || "nabad-song").trim();
   return nabadIdentityPhrases({
     songId,
@@ -157,5 +167,6 @@ export function nabadIdentityFromDirection(visualDirection, bucketKey = "default
     energy: visualDirection?.energy,
     visualMode: visualDirection?.visualMode,
     humTrack: visualDirection?.humTrack || visualDirection?.sourcePath === "hum_track",
+    concreteSubject,
   });
 }

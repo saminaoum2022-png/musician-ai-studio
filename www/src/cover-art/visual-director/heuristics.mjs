@@ -131,6 +131,7 @@ export function resolveHeuristicVisualDirection(ctx) {
     energy: ctx.energy,
     visualMode,
     humTrack: ctx.humTrack,
+    concreteSubject: isConcreteObjectArtworkHint(ctx.artworkHint || ctx.artworkStyle),
   });
 
   const raw = {

@@ -2,8 +2,9 @@
  * Client-side abstract cover generation via /api/music/cover-art
  */
 import { canRegeneratePollinationsCover, canRegenerateTrackCover, coverArtParamsFromTrack, hasUserPhotoCoverMeta, isPollinationsCoverEligible, shouldUseAbstractCover } from "./params.js";
-import { buildAbstractCoverPrompt, buildPollinationsUrl, classifyVisualBucket, COVER_PROMPT_POLICY_VERSION, resolveStoryTheme } from "./prompt.js";
+import { buildAbstractCoverPrompt, buildPollinationsUrl, classifyVisualBucket, COVER_PROMPT_POLICY_VERSION, resolveStoryTheme, isConcreteObjectArtworkHint } from "./prompt.js";
 import { resolveVisualDirection } from "./visual-director/director.mjs";
+import { nabadIdentityPhrases } from "./visual-director/nabad-identity.mjs";
 import { DEFAULT_SONG_COVER_URL, isDefaultSongCoverUrl } from "./placeholders.js";
 import { stampCoverWithSplashMark } from "./branding.js";
 import { normalizePortraitCoverDataUrl } from "./portrait-normalize.js";
@@ -119,10 +120,21 @@ async function resolveRegenPromptBundle(params, regenOpts = {}) {
         artworkHint: "",
         regenAutoMusic: true,
       };
+  const concreteSubject = Boolean(hintOverride && isConcreteObjectArtworkHint(hintOverride));
+  const identityPhrases = concreteSubject
+    ? nabadIdentityPhrases({
+        songId: String(params?.songId || "").trim(),
+        bucketKey,
+        energy: params?.energy,
+        visualMode: vd.direction?.visualMode,
+        humTrack: params?.humTrack,
+        concreteSubject: true,
+      }).text
+    : (vd.identityPhrases || "");
   const built = buildAbstractCoverPrompt(promptInput, {
     regenSalt,
     directorSceneHint: hintOverride || regenAutoMusic ? "" : (vd.sceneHint || ""),
-    nabadIdentityPhrases: vd.identityPhrases || "",
+    nabadIdentityPhrases: identityPhrases,
     visualDirection: vd.direction || undefined,
     userArtworkOverride: hintOverride || undefined,
     forceMusicFallback: regenAutoMusic,

@@ -21279,7 +21279,7 @@ body.notificationsCenterOpen{
   margin: 10px 0 0;
   font-size: 12px;
   line-height: 1.45;
-  color: rgba(232,238,247,0.62);
+  color: var(--text-secondary);
 }
 .settingsVoicesList{
   display: flex;
@@ -21291,7 +21291,7 @@ body.notificationsCenterOpen{
 .settingsVoicesEmpty{
   margin: 8px 0 0;
   font-size: 13px;
-  color: rgba(232,238,247,0.55);
+  color: var(--text-muted);
 }
 .settingsVoicesRow{
   display: flex;
@@ -21313,14 +21313,14 @@ body.notificationsCenterOpen{
 .settingsVoicesRowTitle{
   font-size: 14px;
   font-weight: 700;
-  color: rgba(232,238,247,0.96);
+  color: var(--text-primary);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 .settingsVoicesRowMeta{
   font-size: 11px;
-  color: rgba(232,238,247,0.52);
+  color: var(--text-muted);
   margin-top: 2px;
 }
 .settingsVoicesRowActions{
@@ -21342,9 +21342,10 @@ body.notificationsCenterOpen{
 }
 .settingsVoicesManagerNote{
   margin: 0 0 4px;
+  padding-top: 2px;
   font-size: 12.5px;
   line-height: 1.4;
-  color: rgba(232,238,247,0.6);
+  color: var(--text-secondary);
 }
 /* Stack each row so the name + badge get the full width and the actions sit on
    their own line — otherwise the badge + 3 buttons squeeze the name to nothing. */
@@ -21409,12 +21410,12 @@ body.notificationsCenterOpen{
 .settingsVoicesFromSongHint{
   margin-top: 10px;
   font-size: 12px;
-  color: rgba(232,238,247,0.62);
+  color: var(--text-secondary);
 }
 .settingsVoicesFromSongHint summary{
   cursor: pointer;
   font-weight: 700;
-  color: rgba(232,238,247,0.78);
+  color: var(--text-primary);
 }
 
 .voiceWizardSheet{
@@ -50210,21 +50211,59 @@ html[data-theme="light"] .settingsOrbModeTab.isActive{
   border-color: var(--accent-teal-border);
   color: var(--text-primary);
 }
+html[data-theme="light"] .settingsVoicesManagerNote{
+  color: var(--text-secondary);
+}
+html[data-theme="light"] .settingsVoicesManager .settingsVoicesList{
+  padding: 6px 0 10px;
+}
 html[data-theme="light"] .settingsVoicesRow{
   border-color: var(--border);
-  background: var(--card);
+  background: var(--surface-secondary);
+  box-shadow: none;
 }
 html[data-theme="light"] .settingsVoicesRow.isActive{
   border-color: var(--accent-teal-border);
   background: var(--accent-teal-soft);
+}
+html[data-theme="light"] .settingsVoicesRow.isStale{
+  border-color: rgba(180, 83, 9, 0.32);
+  background: rgba(254, 243, 199, 0.72);
 }
 html[data-theme="light"] .settingsVoicesRowTitle{
   color: var(--text-primary);
 }
 html[data-theme="light"] .settingsVoicesRowMeta,
 html[data-theme="light"] .settingsVoicesEmpty,
-html[data-theme="light"] .settingsVoicesLead{
+html[data-theme="light"] .settingsVoicesLead,
+html[data-theme="light"] .settingsVoicesFromSongHint{
   color: var(--text-secondary);
+}
+html[data-theme="light"] .settingsVoicesFromSongHint summary{
+  color: var(--text-primary);
+}
+html[data-theme="light"] .voiceExpiryBadge{
+  color: #92400e;
+  background: rgba(251, 191, 36, 0.32);
+  border-color: rgba(180, 83, 9, 0.28);
+}
+html[data-theme="light"] .settingsVoicesManager .settingsVoicesRowActions .ghost{
+  background: var(--card);
+  border-color: var(--border);
+  color: var(--text-primary);
+}
+html[data-theme="light"] .settingsVoicesManager .settingsVoicesRowActions .ghost:hover{
+  border-color: var(--accent-teal-border);
+  background: var(--surface-secondary);
+}
+html[data-theme="light"] .settingsVoicesSecondaryLink{
+  color: #0d9488;
+}
+html[data-theme="light"] .personaManageHint{
+  color: var(--text-secondary);
+}
+html[data-theme="light"] .personaManageHint a{
+  color: #0d9488;
 }
 
 /* Music prefs sub-flow (from Settings) */

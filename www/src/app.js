@@ -201,7 +201,7 @@ import { MUSIC_VIDEO_FEATURE_ENABLED } from "./feature-flags.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260812-211111";
+const APP_BUILD = "20260812-215851";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -1572,6 +1572,91 @@ function boostRgbForProgBar([r, g, b]) {
 }
 
 /** Soft glow / progress accents tied to artwork (not brand purple). */
+function isPlayerTimelineCoverEl(el) {
+  return el?.id === "playerTimeline";
+}
+
+function defaultPlayerSeekFillBackground() {
+  return "linear-gradient(90deg, rgba(255, 255, 255, 0.82), rgba(255, 255, 255, 0.58))";
+}
+
+function playerSeekFillBackgroundFromProgRgb(progRgbStr) {
+  if (!progRgbStr) return defaultPlayerSeekFillBackground();
+  const parts = String(progRgbStr || "")
+    .split(",")
+    .map((s) => parseInt(String(s || "").trim(), 10));
+  if (parts.length !== 3 || parts.some((n) => !Number.isFinite(n))) return defaultPlayerSeekFillBackground();
+  let [r, g, b] = parts;
+  const max = Math.max(r, g, b, 1);
+  if (max < 168) {
+    const scale = 188 / max;
+    r = Math.min(255, Math.round(r * scale));
+    g = Math.min(255, Math.round(g * scale));
+    b = Math.min(255, Math.round(b * scale));
+  }
+  return `linear-gradient(90deg, rgb(${r}, ${g}, ${b}), rgba(${r}, ${g}, ${b}, 0.72))`;
+}
+
+function syncPlayerSeekFillAppearance() {
+  const fill = document.getElementById("playerSeekFill");
+  if (!fill) return;
+  const wrap = fill.closest(".playerSeekWrap");
+  const timeline = document.getElementById("playerTimeline");
+  const progRgb =
+    fill.style.getPropertyValue("--cover-prog-rgb") ||
+    wrap?.style.getPropertyValue("--cover-prog-rgb") ||
+    timeline?.style.getPropertyValue("--cover-prog-rgb") ||
+    "";
+  const useCover =
+    wrap?.classList.contains("playerSeekCoverProg") ||
+    timeline?.getAttribute("data-cover-prog") === "ready";
+  fill.style.background = useCover && progRgb
+    ? playerSeekFillBackgroundFromProgRgb(progRgb)
+    : defaultPlayerSeekFillBackground();
+}
+
+function mirrorPlayerCoverProgFromTimeline(timelineEl, glowRgb, progRgb) {
+  if (!isPlayerTimelineCoverEl(timelineEl)) return;
+  const seek = document.getElementById("playerSeek");
+  if (!seek) return;
+  const wrap = seek.closest(".playerSeekWrap");
+  const fill = document.getElementById("playerSeekFill");
+  const targets = [seek, wrap, fill].filter(Boolean);
+  if (!progRgb) {
+    for (const t of targets) {
+      try {
+        t.style.removeProperty("--cover-glow-rgb");
+        t.style.removeProperty("--cover-prog-rgb");
+      } catch {}
+    }
+    seek.classList.remove("playerSeekCoverProg");
+    wrap?.classList.remove("playerSeekCoverProg");
+    syncPlayerSeekFillAppearance();
+    return;
+  }
+  for (const t of targets) {
+    if (glowRgb) t.style.setProperty("--cover-glow-rgb", glowRgb);
+    t.style.setProperty("--cover-prog-rgb", progRgb);
+  }
+  seek.classList.add("playerSeekCoverProg");
+  wrap?.classList.add("playerSeekCoverProg");
+  syncPlayerSeekFillAppearance();
+}
+
+/** Real DOM fill layer — WKWebView often ignores --playerSeekPct on range pseudo-tracks. */
+function setPlayerSeekProgressPct(pct) {
+  const pctNum = Math.max(0, Math.min(100, Number(pct) || 0));
+  const pctStr = `${pctNum}%`;
+  if (els.playerSeek) els.playerSeek.style.setProperty("--playerSeekPct", pctStr);
+  const timeline = document.getElementById("playerTimeline");
+  if (timeline) timeline.style.setProperty("--playerSeekPct", pctStr);
+  const fill = document.getElementById("playerSeekFill");
+  if (fill) {
+    fill.style.width = pctStr;
+    syncPlayerSeekFillAppearance();
+  }
+}
+
 function applyCoverGlowRgb(el, src) {
   if (!el) return;
   const s = String(src || "").trim();
@@ -1580,6 +1665,7 @@ function applyCoverGlowRgb(el, src) {
       el.style.removeProperty("--cover-glow-rgb");
       el.style.removeProperty("--cover-prog-rgb");
       el.removeAttribute("data-cover-prog");
+      mirrorPlayerCoverProgFromTimeline(el, "", "");
     } catch {}
     return;
   }
@@ -1590,12 +1676,19 @@ function applyCoverGlowRgb(el, src) {
         el.style.removeProperty("--cover-glow-rgb");
         el.style.removeProperty("--cover-prog-rgb");
         el.removeAttribute("data-cover-prog");
+        mirrorPlayerCoverProgFromTimeline(el, "", "");
         return;
       }
-      el.style.setProperty("--cover-glow-rgb", `${rgb[0]}, ${rgb[1]}, ${rgb[2]}`);
+      const glow = `${rgb[0]}, ${rgb[1]}, ${rgb[2]}`;
       const prog = boostRgbForProgBar(rgb);
-      el.style.setProperty("--cover-prog-rgb", `${prog[0]}, ${prog[1]}, ${prog[2]}`);
+      const progStr = `${prog[0]}, ${prog[1]}, ${prog[2]}`;
+      el.style.setProperty("--cover-glow-rgb", glow);
+      el.style.setProperty("--cover-prog-rgb", progStr);
       el.setAttribute("data-cover-prog", "ready");
+      mirrorPlayerCoverProgFromTimeline(el, glow, progStr);
+      if (isPlayerTimelineCoverEl(el)) {
+        try { syncPlayerUI(); } catch {}
+      }
     } catch {}
   });
 }
@@ -2331,6 +2424,7 @@ function renderHubNowPlaying() {
 
   syncHubNowPlayPauseUi(Boolean(miniShowsPause));
   syncLockScreenNowPlaying();
+  try { syncGlobalFeedHookMarkers(); } catch {}
 }
 
 let hubNowPlayingScrollRaf = 0;
@@ -12550,6 +12644,9 @@ function friendsFeedCompactMediaHtml({
 }) {
   const durSec = discoverTrackDurationSec(track);
   const durLabel = durSec > 0 ? escapeHtml(formatTime(durSec)) : "";
+  const hookSec = feedHookStartFromTrack(track);
+  const hookAttr = hookSec > 0 ? ` data-feed-hook-sec="${hookSec}"` : "";
+  const durAttr = durSec > 0 ? ` data-feed-hook-dur="${durSec}"` : "";
   const kickerHtml = isPhotoMoodTrack(track)
     ? `<span class="followActMediaKicker">Created with Photo Mood</span>`
     : "";
@@ -12570,11 +12667,12 @@ function friendsFeedCompactMediaHtml({
               <button type="button" class="followActMediaDockPlay" data-user-lib-play="1" data-user-lib-url="${encUrl}" data-user-lib-title="${encTitle}" data-user-lib-art="${encArt}" data-discovery-by="${encBy}" ${playData} aria-label="Play ${safeTitle}">
                 ${coverArtPlayStateIconsHtml(11)}
               </button>
-              <div class="followActMediaDockWave followActRealtimeProgress" data-user-lib-url="${encUrl}" data-friends-wave-peaks="${escapeHtml(wavePeaksEnc)}">
+              <div class="followActMediaDockWave followActRealtimeProgress" data-user-lib-url="${encUrl}" data-friends-wave-peaks="${escapeHtml(wavePeaksEnc)}"${hookAttr}${durAttr}>
                 <div class="friendsFeedWaveStage" aria-hidden="true">
                   <div class="friendsFeedWave friendsFeedWave--base" data-friends-feed-wave="base">${waveBars}</div>
                   <div class="friendsFeedWave friendsFeedWave--prog" data-friends-feed-wave="prog">${waveBars}</div>
                 </div>
+                <span class="feedHookMarker" aria-hidden="true"></span>
                 <input class="followActRealtimeSeek followActRealtimeSeek--ghost" type="range" min="0" max="1000" value="0" step="1" aria-label="Seek ${safeTitle}" />
               </div>
               <span class="followActMediaDockDur" data-friends-dock-dur data-friends-dock-idle-dur="${durSec > 0 ? durSec : ""}">${durLabel}</span>
@@ -14914,9 +15012,14 @@ function feedHeroPlayerCardHtml(opts) {
           </div>`;
 }
 
-function followActRealtimeProgressHtml(encUrl, safeTitle) {
+function followActRealtimeProgressHtml(encUrl, safeTitle, track = null) {
+  const hookSec = track ? feedHookStartFromTrack(track) : 0;
+  const durSec = track ? discoverTrackDurationSec(track) : 0;
+  const hookAttr = hookSec > 0 ? ` data-feed-hook-sec="${hookSec}"` : "";
+  const durAttr = durSec > 0 ? ` data-feed-hook-dur="${durSec}"` : "";
   return `
-          <div class="followActRealtimeProgress" data-user-lib-url="${encUrl}">
+          <div class="followActRealtimeProgress" data-user-lib-url="${encUrl}"${hookAttr}${durAttr}>
+            <span class="feedHookMarker" aria-hidden="true"></span>
             <input class="followActRealtimeSeek" type="range" min="0" max="1000" value="0" step="1" aria-label="Seek ${safeTitle}" />
           </div>`;
 }
@@ -14953,7 +15056,7 @@ function feedResultHeroMediaHtml(main, safeTitle, badgeKind = "") {
               ${chipHtml}
               <span class="followActMediaTitle" dir="auto" aria-hidden="true">${safeTitle}</span>
             </button>
-            ${followActRealtimeProgressHtml(encUrl, safeTitle)}
+            ${followActRealtimeProgressHtml(encUrl, safeTitle, main?.track || null)}
           </div>`;
 }
 
@@ -15341,7 +15444,7 @@ function followingActivityRowHtml(t, profMap, idx, opts = {}) {
               </span>
               <span class="followActMediaTitle" aria-hidden="true">${safeTitle}</span>
             </button>
-            ${followActRealtimeProgressHtml(encUrl, safeTitle)}
+            ${followActRealtimeProgressHtml(encUrl, safeTitle, t)}
           </div>`;
   const mediaBlockWithProgressHtml = mediaBlockHtml;
   const topMenuHtml = songMenuBtn ? `<div class="followActTopMenu">${songMenuBtn}</div>` : "";
@@ -19252,10 +19355,26 @@ async function applyFeedHookAfterPlayStart(audio, source, trackRef) {
   const hook = feedHookStartFromContext(source, trackRef);
   if (hook <= 0) return;
 
+  const prevVol = Number.isFinite(audio.volume) ? audio.volume : 1;
+  let hookApplied = false;
+  try { audio.volume = 0; } catch {}
+
+  const finishHookStart = async () => {
+    if (hookApplied) return;
+    hookApplied = true;
+    maybeShowFeedHookStartHint(hook, source);
+    await feedHookVolumeFadeIn(audio, FEED_HOOK_FADE_MS, prevVol);
+    try { syncGlobalFeedHookMarkers(); } catch {}
+    try { syncPlayerUI(); } catch {}
+  };
+
   const seekToHook = () => applyFeedHookToAudio(audio, hook);
 
   seekToHook();
-  if (feedHookAtTarget(audio, hook)) return;
+  if (feedHookAtTarget(audio, hook)) {
+    await finishHookStart();
+    return;
+  }
 
   await new Promise((resolve) => {
     let settled = false;
@@ -19280,6 +19399,92 @@ async function applyFeedHookAfterPlayStart(audio, source, trackRef) {
   });
 
   seekToHook();
+  if (feedHookAtTarget(audio, hook)) {
+    await finishHookStart();
+  } else {
+    try { audio.volume = prevVol; } catch {}
+  }
+}
+
+const FEED_HOOK_FADE_MS = 320;
+const FEED_HOOK_HINT_SEEN = new Set();
+
+function feedHookMarkerPct(hookSec, dur) {
+  const d = Number(dur || 0);
+  const h = Number(hookSec || 0);
+  if (!(d > 0) || !(h > 0)) return null;
+  return `${Math.max(0, Math.min(100, (h / d) * 100))}%`;
+}
+
+function syncFeedHookMarkerOnWrap(wrap, hookSec, dur) {
+  if (!wrap) return;
+  const pct = feedHookMarkerPct(hookSec, dur);
+  if (!pct) {
+    wrap.classList.remove("hasFeedHook");
+    wrap.style.removeProperty("--feedHookPct");
+    return;
+  }
+  wrap.classList.add("hasFeedHook");
+  wrap.style.setProperty("--feedHookPct", pct);
+}
+
+function activeFeedHookForPlayback(source, trackRef) {
+  if (!shouldApplyFeedHook(source) || source?.applyFeedHook === false) return 0;
+  return feedHookStartFromContext(source, trackRef || currentPlayerTrackRef);
+}
+
+function syncGlobalFeedHookMarkers() {
+  const hook = activeFeedHookForPlayback(miniSource, currentPlayerTrackRef);
+  const dur = playerEl ? getPlayerDuration() : 0;
+  const timeline = document.getElementById("playerTimeline");
+  const seekWrap = timeline?.querySelector(".playerSeekWrap");
+  syncFeedHookMarkerOnWrap(seekWrap || timeline, hook, dur);
+  const hubProg = els.hubNowPlaying?.querySelector(".hubNowProg");
+  syncFeedHookMarkerOnWrap(hubProg, hook, dur);
+  document.querySelectorAll(".followActRealtimeProgress").forEach((wrap) => {
+    const trackUrl = decodeDiscoveryPlayUrl(wrap);
+    const curRef = String(currentPlayerTrackRef?.url || "").trim();
+    const active = Boolean(curRef && trackUrl && audioUrlsEquivalent(curRef, trackUrl));
+    const rowHook = Number(wrap.getAttribute("data-feed-hook-sec") || 0);
+    const rowDur = Number(wrap.getAttribute("data-feed-hook-dur") || 0) || dur;
+    if (active && hook > 0) syncFeedHookMarkerOnWrap(wrap, hook, dur);
+    else if (rowHook > 0) syncFeedHookMarkerOnWrap(wrap, rowHook, rowDur);
+    else syncFeedHookMarkerOnWrap(wrap, 0, 0);
+  });
+}
+
+function feedHookHintStorageKey(url, hookSec) {
+  return `${String(url || "").trim()}|${Math.round(Number(hookSec || 0) * 10)}`;
+}
+
+function maybeShowFeedHookStartHint(hookSec, source) {
+  if (!(Number(hookSec) > 0)) return;
+  const url = String(source?.url || currentPlayerTrackRef?.url || "").trim();
+  const key = feedHookHintStorageKey(url, hookSec);
+  if (FEED_HOOK_HINT_SEEN.has(key)) return;
+  FEED_HOOK_HINT_SEEN.add(key);
+  try {
+    showToast(`Starts at hook · ${formatTime(hookSec)}`, { icon: "♪", durationMs: 2600 });
+  } catch {}
+}
+
+async function feedHookVolumeFadeIn(audio, ms = FEED_HOOK_FADE_MS, targetVol = 1) {
+  if (!audio || ms <= 0) return;
+  const target = Number.isFinite(targetVol) ? targetVol : 1;
+  if (target <= 0.01) return;
+  try {
+    audio.volume = 0;
+    const steps = Math.max(4, Math.round(ms / 40));
+    const stepMs = ms / steps;
+    for (let i = 1; i <= steps; i += 1) {
+      await new Promise((r) => window.setTimeout(r, stepMs));
+      if (audio.paused || audio.ended) break;
+      audio.volume = Math.min(target, (target * i) / steps);
+    }
+    audio.volume = target;
+  } catch {
+    try { audio.volume = target; } catch {}
+  }
 }
 
 let _publishHookUi = null;
@@ -37009,6 +37214,7 @@ function syncFriendsFeedProgressBars() {
       audioUrlsEquivalent,
     });
   } catch {}
+  try { syncGlobalFeedHookMarkers(); } catch {}
 }
 
 function seekFriendsFeedProgress(input) {
@@ -52257,7 +52463,7 @@ function syncPlayerUI() {
     els.playerSeek.value = dur > 0 ? String(Math.round((cur / dur) * max)) : "0";
     // Drive the gradient fill via a custom property so the slider track
     // can show how far we are without needing a separate element.
-    els.playerSeek.style.setProperty("--playerSeekPct", `${pct}%`);
+    setPlayerSeekProgressPct(pct);
   }
   renderHubNowPlaying();
   syncResultCardsFromPlayer();
@@ -52268,6 +52474,8 @@ function syncPlayerUI() {
   try { renderDeskRailNowPlaying(); } catch {}
   syncPlayerSkipButtons();
   syncPlayerAuxTransport();
+  try { syncGlobalFeedHookMarkers(); } catch {}
+  try { syncPlayerSeekFillAppearance(); } catch {}
 }
 
 function getParams() {
@@ -58930,7 +59138,7 @@ if (els.playerSeek) {
     if (els.playerTime && dur > 0) els.playerTime.textContent = `${formatTime((v / max) * dur)} / ${formatTime(dur)}`;
     if (els.playerTimeCurrent && dur > 0) els.playerTimeCurrent.textContent = formatTime((v / max) * dur);
     const pct = max > 0 ? (v / max) * 100 : 0;
-    els.playerSeek.style.setProperty("--playerSeekPct", `${pct}%`);
+    setPlayerSeekProgressPct(pct);
   });
 }
 if (els.btnLoadFull) {

@@ -7027,6 +7027,103 @@ body.hubJumpingToTop #hubList .hubRow{
   gap: 4px;
   margin-top: 16px;
   width: 100%;
+  --playerSeekPct: 0%;
+}
+.playerSeekWrap{
+  position: relative;
+  width: 100%;
+}
+.playerSeekTrack{
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  height: 4px;
+  border-radius: 999px;
+  background: rgba(232, 238, 247, 0.16);
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 0;
+}
+.playerSeekFill{
+  display: block;
+  height: 100%;
+  width: 0%;
+  max-width: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.82), rgba(255, 255, 255, 0.58));
+  transition: width 120ms linear;
+}
+.playerSeekWrap.playerSeekCoverProg .playerSeekFill,
+.playerTimeline[data-cover-prog="ready"] .playerSeekFill{
+  /* Inline background from syncPlayerSeekFillAppearance(). */
+}
+.feedHookMarker{
+  position: absolute;
+  left: var(--feedHookPct, -999px);
+  transform: translateX(-50%);
+  width: 9px;
+  height: 7px;
+  pointer-events: none;
+  z-index: 3;
+  opacity: 0;
+  transition: opacity 180ms ease;
+}
+.feedHookMarker::before{
+  content: "";
+  display: block;
+  width: 9px;
+  height: 7px;
+  background: rgba(155, 135, 255, 0.96);
+  clip-path: polygon(50% 100%, 0 0, 100% 0);
+  filter: drop-shadow(0 0 5px rgba(124, 92, 255, 0.48));
+}
+.hasFeedHook > .feedHookMarker,
+.hasFeedHook.feedHookMarkerHost > .feedHookMarker{
+  opacity: 1;
+}
+/* Full player — tip aligns with the scrubber aura, not the solid thumb. */
+.playerSeekWrap.hasFeedHook .feedHookMarker{
+  bottom: calc(100% + 2px);
+}
+.hubNowProg.hasFeedHook{
+  margin-top: 7px;
+}
+.hubNowProg.hasFeedHook .feedHookMarker{
+  bottom: calc(100% + 2px);
+  width: 7px;
+  height: 5px;
+}
+.hubNowProg.hasFeedHook .feedHookMarker::before{
+  width: 7px;
+  height: 5px;
+  filter: drop-shadow(0 0 4px rgba(124, 92, 255, 0.42));
+}
+/* Friends feed dock — tip overlaps waveform tops slightly. */
+.followActMediaDockWave.hasFeedHook{
+  overflow: visible;
+}
+.followActMediaDockWave.hasFeedHook .feedHookMarker{
+  top: auto;
+  bottom: calc(100% - 2px);
+  width: 7px;
+  height: 5px;
+  z-index: 4;
+}
+.followActMediaDockWave.hasFeedHook .feedHookMarker::before{
+  width: 7px;
+  height: 5px;
+}
+/* Cover-art overlay scrubber — same sit-on spacing. */
+.followActRealtimeProgress.hasFeedHook:not(.followActMediaDockWave) .feedHookMarker{
+  top: auto;
+  bottom: calc(100% - 2px);
+  z-index: 4;
+}
+html[data-theme="light"] .feedHookMarker::before{
+  background: rgba(98, 72, 220, 0.92);
+  filter: drop-shadow(0 0 4px rgba(98, 72, 220, 0.28));
 }
 .playerTimeRow{
   display:flex;
@@ -7054,6 +7151,8 @@ body.hubJumpingToTop #hubList .hubRow{
  * thumb feels like a small purple node, not a default blue square. */
 #playerSeek{
   --playerSeekPct: 0%;
+  position: relative;
+  z-index: 1;
   width: 100%;
   height: 18px;
   -webkit-appearance: none;
@@ -7071,14 +7170,16 @@ body.hubJumpingToTop #hubList .hubRow{
 #playerSeek::-webkit-slider-runnable-track{
   height: 4px;
   border-radius: 999px;
-  background:
-    linear-gradient(90deg, rgba(255, 255, 255, 0.82), rgba(255, 255, 255, 0.58)) 0 / var(--playerSeekPct) 100% no-repeat,
-    rgba(232, 238, 247, 0.16);
+  background: transparent !important;
+  background-image: none !important;
 }
-.playerTimeline[data-cover-prog="ready"] #playerSeek::-webkit-slider-runnable-track{
-  background:
-    linear-gradient(90deg, rgb(var(--cover-prog-rgb)), rgba(var(--cover-prog-rgb), 0.62)) 0 / var(--playerSeekPct) 100% no-repeat,
-    rgba(232, 238, 247, 0.16);
+#playerSeek::-webkit-slider-container{
+  background: transparent !important;
+}
+.playerTimeline[data-cover-prog="ready"] #playerSeek::-webkit-slider-runnable-track,
+#playerSeek.playerSeekCoverProg::-webkit-slider-runnable-track{
+  background: transparent !important;
+  background-image: none !important;
 }
 #playerSeek::-moz-range-track{
   height: 4px;
@@ -7090,7 +7191,8 @@ body.hubJumpingToTop #hubList .hubRow{
   border-radius: 999px;
   background: linear-gradient(90deg, rgba(255, 255, 255, 0.82), rgba(255, 255, 255, 0.55));
 }
-.playerTimeline[data-cover-prog="ready"] #playerSeek::-moz-range-progress{
+.playerTimeline[data-cover-prog="ready"] #playerSeek::-moz-range-progress,
+#playerSeek.playerSeekCoverProg::-moz-range-progress{
   background: linear-gradient(90deg, rgb(var(--cover-prog-rgb)), rgba(var(--cover-prog-rgb), 0.52));
 }
 #playerSeek::-webkit-slider-thumb{
@@ -19815,13 +19917,14 @@ input::placeholder, textarea::placeholder{
     display: none;
   }
   .hubNowProg{
+    position: relative;
     flex: 0 0 auto;
     width: 100%;
     height: 3px;
     margin-top: auto;
     border-radius: 0;
     background: rgba(124, 92, 255, 0.18);
-    overflow: hidden;
+    overflow: visible;
   }
   .hubNowProgBar{
     display: block;

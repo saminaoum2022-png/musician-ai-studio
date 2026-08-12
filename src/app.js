@@ -36696,11 +36696,12 @@ function closeDiscoverReelOverlay(opts = {}) {
   }
   const discover = document.querySelector('[data-route="discover"]');
   const player = document.querySelector('.playerCard[data-route="player"]');
-  if (discover) discover.style.display = "";
-  if (player) player.style.display = "none";
+  if (discover) discover.style.removeProperty("display");
+  if (player) player.style.removeProperty("display");
   if (opts.pause) {
     try { ensurePlayer()?.pause(); } catch {}
   }
+  try { syncRoutePanelVisibility(document.body.getAttribute("data-route") || "discover"); } catch {}
   try { syncDeskRailVisibility(); } catch {}
   try { syncAllPlaybackRowHighlights(); } catch {}
 }
@@ -36714,8 +36715,8 @@ function syncDiscoverReelOverlayPanels() {
   }
   const discover = document.querySelector('[data-route="discover"]');
   const player = document.querySelector('.playerCard[data-route="player"]');
-  if (discover) discover.style.display = "none";
-  if (player) player.style.display = "flex";
+  if (discover) discover.style.removeProperty("display");
+  if (player) player.style.removeProperty("display");
 }
 
 function buildDiscoverReelQueue() {

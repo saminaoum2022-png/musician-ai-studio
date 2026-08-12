@@ -47410,6 +47410,13 @@ body[data-route="studio"] .deskRail { display: none !important; }
   }
 
   /* Discover For You reel — in-place in the middle column (desktop web). */
+  html.is-web-shell body.discoverReelOpen[data-route="discover"] main.grid > [data-route="discover"]{
+    display: none !important;
+  }
+  html.is-web-shell body.discoverReelOpen[data-route="discover"] main.grid > [data-route="player"]{
+    display: flex !important;
+    flex-direction: column;
+  }
   html.is-web-shell body.discoverReelOpen[data-route="discover"] main.grid{
     display: flex !important;
     flex-direction: column;
@@ -47469,7 +47476,7 @@ body[data-route="studio"] .deskRail { display: none !important; }
   }
   html.is-web-shell body.discoverReelOpen[data-route="discover"] .playerArtCol{
     flex: 1 1 auto;
-    min-height: 0;
+    min-height: 360px;
     position: relative;
     width: 100%;
   }
@@ -47480,7 +47487,7 @@ body[data-route="studio"] .deskRail { display: none !important; }
     border-radius: 0;
     padding: 0;
     box-shadow: none;
-    min-height: 0;
+    min-height: 360px;
     overflow: hidden;
     background: #0a0c12;
   }

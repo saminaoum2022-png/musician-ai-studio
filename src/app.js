@@ -884,6 +884,7 @@ const els = {
   playerNabadBadge: document.getElementById("playerNabadBadge"),
   playerCreatorIdentity: document.getElementById("playerCreatorIdentity"),
   btnPlayerBecomeFan: document.getElementById("btnPlayerBecomeFan"),
+  btnPlayerPublish: document.getElementById("btnPlayerPublish"),
   playerPlaysCount: document.getElementById("playerPlaysCount"),
   playerSubtitle: document.getElementById("playerSubtitle"),
   playerChallengeAttribution: document.getElementById("playerChallengeAttribution"),
@@ -34821,7 +34822,14 @@ function renderTrackSheetLibrary(track) {
   // Instrumentals are great to sing over, so they're eligible too (the Studio
   // source chooser adapts — no "separate vocals" step for an instrumental).
   const recordEligible = !isSound && Boolean(track?.url && String(track.url).trim());
+  const publishRow = profilePublic
+    ? ""
+    : `<button type="button" class="discoverTrackSheetRow discoverTrackSheetRow--publish" data-track-sheet-action="library_pubprof" data-track-sheet-pub-to="public">Publish release</button>`;
+  const unpublishRow = profilePublic
+    ? `<button type="button" class="discoverTrackSheetRow" data-track-sheet-action="library_pubprof" data-track-sheet-pub-to="private">${escapeHtml(pubLabel)}</button>`
+    : "";
   l.innerHTML = `
+    ${publishRow}
     ${recordEligible ? `<button type="button" class="discoverTrackSheetRow discoverTrackSheetRow--studio" data-track-sheet-action="library_record_voice">Open in Studio</button>` : ""}
     ${TRACK_SHEET_ADD_PLAYLIST_ROW}
     ${profilePublic ? "" : `<button type="button" class="discoverTrackSheetRow" data-track-sheet-action="library_change_cover">Change cover</button>`}
@@ -34832,7 +34840,7 @@ function renderTrackSheetLibrary(track) {
     ${HUB_FEATURE_ENABLED ? `<button type="button" class="discoverTrackSheetRow" data-track-sheet-action="library_share_hub">Share to Hub</button>` : ""}
     ${personaEligible ? `<button type="button" class="discoverTrackSheetRow${webProFeatureLocked() ? " isProLocked" : ""}" data-track-sheet-action="library_persona">Save voice as persona${webProFeaturePillInlineHtml()}</button>` : ""}
     ${renameRow}
-    <button type="button" class="discoverTrackSheetRow" data-track-sheet-action="library_pubprof" data-track-sheet-pub-to="${pubTo}">${escapeHtml(pubLabel)}</button>
+    ${unpublishRow}
     <button type="button" class="discoverTrackSheetRow" data-track-sheet-action="library_details">About this song</button>
     ${isInstrumental ? "" : `<button type="button" class="discoverTrackSheetRow${webProFeatureLocked() ? " isProLocked" : ""}" data-track-sheet-action="library_inst">Get instrumental${webProFeaturePillInlineHtml()}</button>`}
   `;
@@ -44824,6 +44832,7 @@ function setTrackPublishState(id, fields) {
   if (idx < 0) return;
   items[idx] = { ...items[idx], ...fields };
   saveLibrary(items);
+  try { updatePlayerSecondaryChrome(); } catch {}
 }
 
 function patchLibraryTrack(id, patch, reason = "library-edit") {
@@ -49756,6 +49765,32 @@ async function handlePlayerBecomeFanClick() {
   }
 }
 
+function syncPlayerPublishCta() {
+  const btn = els.btnPlayerPublish;
+  if (!btn) return;
+  if (!playerCoverToolsContextAllowed()) {
+    btn.hidden = true;
+    return;
+  }
+  const track = resolvePlayerLibraryTrack();
+  if (!track?.id || track.publicOnProfile) {
+    btn.hidden = true;
+    return;
+  }
+  btn.hidden = false;
+  if (track.publishPending) {
+    btn.textContent = "Publishing…";
+    btn.disabled = true;
+    btn.classList.add("isPending");
+    btn.setAttribute("aria-label", "Publishing release");
+  } else {
+    btn.textContent = "Publish";
+    btn.disabled = false;
+    btn.classList.remove("isPending");
+    btn.setAttribute("aria-label", "Publish release");
+  }
+}
+
 function updatePlayerSecondaryChrome() {
   const ro = playerSourceIsExternalListenOnly();
   const card = document.querySelector(".playerCard");
@@ -49765,6 +49800,7 @@ function updatePlayerSecondaryChrome() {
     if (!discoverReelModeActive()) resetDiscoverReelRailFade();
   }
   void syncPlayerCreatorChrome();
+  syncPlayerPublishCta();
   syncPlayerPlaysCount();
   syncPlayerInstrumentalLabel();
   void syncPlayerSocialRail();
@@ -58319,6 +58355,16 @@ if (els.btnPlayerBecomeFan) {
   els.btnPlayerBecomeFan.addEventListener("click", () => {
     haptic("light");
     void handlePlayerBecomeFanClick();
+  });
+}
+if (els.btnPlayerPublish) {
+  els.btnPlayerPublish.addEventListener("click", (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    try { haptic("light"); } catch {}
+    const track = resolvePlayerLibraryTrack();
+    if (!track?.id || track.publicOnProfile || track.publishPending) return;
+    openPublishReleaseSheet(track.id, { source: "player" });
   });
 }
 if (els.btnUserPublicBack) {

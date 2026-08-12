@@ -6770,6 +6770,41 @@ body.hubJumpingToTop #hubList .hubRow{
   height: 14px;
   flex: 0 0 auto;
 }
+/* Publish CTA — teal pill (brand release color, distinct from violet Studio accents) */
+.playerPublishBtn{
+  appearance: none;
+  flex: 0 0 auto;
+  padding: 5px 12px;
+  border-radius: 999px;
+  border: 0;
+  background: var(--brand-cta-bg, #23D5AB);
+  color: #051018;
+  box-shadow: 0 0 0 1px rgba(35, 213, 171, 0.35), 0 4px 14px rgba(35, 213, 171, 0.22);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  line-height: 1.1;
+  white-space: nowrap;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform 140ms ease, filter 180ms ease, opacity 180ms ease;
+}
+.playerPublishBtn[hidden]{
+  display: none !important;
+}
+.playerPublishBtn:active{
+  transform: scale(0.97);
+  filter: brightness(0.94);
+}
+.playerPublishBtn:disabled{
+  opacity: 0.72;
+  cursor: default;
+}
+.playerPublishBtn.isPending{
+  background: rgba(35, 213, 171, 0.18);
+  color: rgba(223, 231, 251, 0.78);
+  box-shadow: 0 0 0 1px rgba(35, 213, 171, 0.28);
+}
 .playerBecomeFanBtn{
   appearance: none;
   flex: 0 0 auto;
@@ -47282,6 +47317,26 @@ body[data-route="studio"] .deskRail { display: none !important; }
 .studioStop:active { transform: scale(0.93); }
 
 .discoverTrackSheetRow--studio { color: var(--brand-violet-hover); font-weight: 700; }
+.discoverTrackSheetRow--publish{
+  margin: 2px 4px 8px;
+  border-radius: 14px;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+  color: #051018;
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.22), rgba(255,255,255,0) 38%),
+    var(--brand-cta-bg);
+  box-shadow: var(--brand-cta-shadow);
+}
+.discoverTrackSheetRow--publish:active{
+  background: var(--brand-cta-bg-hover);
+}
+html[data-theme="light"] .discoverTrackSheetRow--publish{
+  color: #051018;
+}
+html[data-theme="light"] .playerPublishBtn{
+  color: #051018;
+}
 
 /* ---- Review ---- */
 .studioReview { justify-content: flex-start; gap: 16px; }

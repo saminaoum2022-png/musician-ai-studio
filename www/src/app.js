@@ -20776,6 +20776,13 @@ function libraryListCoverSrc(track, opts = {}) {
 
 const _coverUploadInflight = new Map();
 
+/** Song cover upload targets (Supabase song_covers bucket ~2MB cap). */
+const COVER_MAIN_MAX_SIDE = 1920;
+const COVER_MAIN_QUALITY = 0.88;
+const COVER_UPLOAD_THUMB_PX = 1280;
+const COVER_THUMB_QUALITY = 0.88;
+const COVER_STORAGE_MAX_BYTES = 1_900_000;
+
 /** Upload custom data: covers to Supabase Storage and patch library + cloud. */
 async function persistTrackCoverIfNeeded(track) {
   const id = String(track?.id || "").trim();
@@ -20794,8 +20801,8 @@ async function persistTrackCoverIfNeeded(track) {
           : null;
       const mainSrc = fullData.startsWith("data:") ? fullData : thumbData;
       const displayData = await encodeCoverRasterDataUrl(mainSrc, {
-        maxSide: 1280,
-        quality: 0.82,
+        maxSide: COVER_MAIN_MAX_SIDE,
+        quality: COVER_MAIN_QUALITY,
         preferWebp: true,
       });
       const displayBlob = await dataUrlToBlob(displayData);
@@ -20818,8 +20825,8 @@ async function persistTrackCoverIfNeeded(track) {
           const thumbSrc =
             thumbData.startsWith("data:") && thumbData !== mainSrc ? thumbData : mainSrc;
           const thumbDataOut = await encodeCoverRasterDataUrl(thumbSrc, {
-            maxSide: 256,
-            quality: 0.72,
+            maxSide: COVER_UPLOAD_THUMB_PX,
+            quality: COVER_THUMB_QUALITY,
             preferWebp: true,
             squareCrop: true,
           });
@@ -50547,10 +50554,28 @@ async function fileToCoverDataUrl(file) {
   if (!file || !String(file.type || "").startsWith("image/")) {
     throw new Error("Choose an image file.");
   }
-  return prepareMomentCoverDataUrl(await readFileAsDataUrl(file));
+  return prepareSongCoverDataUrl(await readFileAsDataUrl(file));
 }
 
-/** JPEG downscale for image uploads (covers, mood photos; Supabase bucket max 2MB). */
+/** High-quality encode for library / player cover uploads (not mood-photo stubs). */
+async function prepareSongCoverDataUrl(fileOrDataUrl) {
+  let dataUrl = typeof fileOrDataUrl === "string"
+    ? String(fileOrDataUrl || "")
+    : await readFileAsDataUrl(fileOrDataUrl);
+  if (!dataUrl.startsWith("data:image/")) return dataUrl;
+  const steps = [
+    { maxSide: COVER_MAIN_MAX_SIDE, quality: COVER_MAIN_QUALITY },
+    { maxSide: 1536, quality: 0.84 },
+    { maxSide: 1280, quality: 0.82 },
+  ];
+  for (const step of steps) {
+    dataUrl = await encodeCoverRasterDataUrl(dataUrl, { ...step, preferWebp: true });
+    if (dataUrl.length <= COVER_STORAGE_MAX_BYTES) break;
+  }
+  return dataUrl;
+}
+
+/** JPEG downscale for mood-photo stubs and other small inline payloads. */
 async function prepareMomentCoverDataUrl(fileOrDataUrl) {
   let dataUrl = typeof fileOrDataUrl === "string"
     ? String(fileOrDataUrl || "")
@@ -50562,9 +50587,9 @@ async function prepareMomentCoverDataUrl(fileOrDataUrl) {
   return dataUrl;
 }
 
-/** Build a small square (256px) thumbnail — top-biased crop for portrait covers. */
-async function buildCoverThumbDataUrl(src) {
-  return buildCoverThumbWithFrame(src, null);
+/** Build a square list/feed thumb using optional user framing (scale + vertical offset). */
+async function buildCoverThumbDataUrl(src, opts = {}) {
+  return buildCoverThumbWithFrame(src, null, opts);
 }
 
 async function loadCoverRasterImage(src) {
@@ -50587,8 +50612,8 @@ async function loadCoverRasterImage(src) {
   });
 }
 
-/** Build a square list thumb using optional user framing (scale + vertical offset). */
-async function buildCoverThumbWithFrame(src, frame) {
+/** Build a square thumb using optional user framing (scale + vertical offset). */
+async function buildCoverThumbWithFrame(src, frame, opts = {}) {
   const s = String(src || "").trim();
   if (!s || s.startsWith("./")) return "";
   try {
@@ -50596,7 +50621,8 @@ async function buildCoverThumbWithFrame(src, frame) {
     const w = Number(img.width || 0);
     const h = Number(img.height || 0);
     if (!w || !h) return "";
-    const out = 256;
+    const out = Math.max(64, Math.round(Number(opts.outPx) || COVER_UPLOAD_THUMB_PX));
+    const quality = Number(opts.quality) || COVER_THUMB_QUALITY;
     const rect = frame && typeof frame === "object"
       ? thumbFrameCropRect(w, h, frame)
       : coverSquareCropRect(w, h);
@@ -50607,10 +50633,10 @@ async function buildCoverThumbWithFrame(src, frame) {
     if (!ctx) return "";
     ctx.drawImage(img, rect.sx, rect.sy, rect.crop, rect.crop, 0, 0, out, out);
     try {
-      const webp = canvas.toDataURL("image/webp", 0.72);
+      const webp = canvas.toDataURL("image/webp", quality);
       if (webp.startsWith("data:image/webp")) return webp;
     } catch {}
-    return canvas.toDataURL("image/jpeg", 0.7);
+    return canvas.toDataURL("image/jpeg", quality);
   } catch {
     return "";
   }

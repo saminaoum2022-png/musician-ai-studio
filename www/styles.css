@@ -46503,6 +46503,7 @@ body[data-route="user"] #userPublicRepostsList{
 @media (min-width: 1200px){
   .app{
     --nb-shell-max: 1380px;
+    --nb-rail-height: calc(100dvh - var(--nb-shell-pad-y) - var(--nb-shell-pad-bottom));
     max-width: var(--nb-shell-max);
     grid-template-columns: var(--nb-sidebar, 248px) minmax(0, 1fr) var(--nb-rail, 320px);
   }
@@ -46524,20 +46525,34 @@ body[data-route="user"] #userPublicRepostsList{
     grid-column: 3;
     grid-row: 1 / -1;
     position: sticky;
-    top: 24px;
+    top: var(--nb-shell-pad-y, 20px);
     align-self: start;
-    height: calc(100vh - 48px);
-    max-height: calc(100vh - 48px);
-    overflow-y: auto;
+    height: var(--nb-rail-height, calc(100dvh - 64px));
+    max-height: var(--nb-rail-height, calc(100dvh - 64px));
+    overflow: hidden;
     overscroll-behavior: contain;
     scrollbar-width: none;
     display: flex;
     flex-direction: column;
-    gap: 16px;
-    padding-bottom: 32px;
+    gap: 12px;
     box-sizing: border-box;
   }
   aside.deskRail::-webkit-scrollbar{ display: none; }
+
+  .deskRailNpCard,
+  .deskRailCtaCard{
+    flex: 0 0 auto;
+  }
+  .deskRailCard:not(.deskRailNpCard):not(.deskRailCtaCard){
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .deskRailCard:not(.deskRailNpCard):not(.deskRailCtaCard) .deskRailHead{
+    flex: 0 0 auto;
+  }
 
   .deskRailCard{
     background: rgba(255,255,255,0.035);
@@ -46631,7 +46646,18 @@ body[data-route="user"] #userPublicRepostsList{
   .deskRailNpBtn svg{ width: 18px; height: 18px; fill: currentColor; }
 
   /* Trending */
-  .deskRailTrending{ display: flex; flex-direction: column; gap: 4px; }
+  .deskRailTrending{
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+  .deskRailTrending::-webkit-scrollbar{ display: none; }
   .deskRailTrendRow{
     display: flex;
     align-items: center;
@@ -47498,11 +47524,6 @@ body[data-route="studio"] .deskRail { display: none !important; }
     box-shadow: 0 24px 64px rgba(0,0,0,0.45);
     position: relative;
     flex: 1 1 auto;
-  }
-  html.is-web-shell body.discoverReelInShell[data-route="player"] aside.deskRail{
-    top: 24px;
-    height: calc(100vh - 48px);
-    max-height: calc(100vh - 48px);
   }
   html.is-web-shell body.discoverReelInShell[data-route="player"] .playerHeader{
     position: absolute;

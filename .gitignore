@@ -5,6 +5,9 @@ www/env.client.js
 
 node_modules/
 
+# Local Python venv (e.g. openpyxl scripts)
+.venv-xlsx/
+
 # Generated Supabase browser bundle (scripts/bundle-supabase.mjs)
 vendor/supabase/
 www/vendor/supabase/

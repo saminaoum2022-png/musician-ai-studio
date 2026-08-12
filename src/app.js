@@ -290,6 +290,7 @@ try {
 try {
   initTheme();
   try { wireSettingsMusicProviderOnce(); } catch {}
+  try { syncSettingsMusicProviderRow(); } catch {}
 } catch (e) {
   console.warn("[theme] init failed", e);
 }
@@ -5309,9 +5310,12 @@ function syncSettingsMusicProviderRow(pref = getMusicProviderPref()) {
   const section = document.getElementById("settingsMusicProviderSection");
   const root = document.getElementById("settingsMusicProviderPicker");
   const sub = document.getElementById("settingsMusicProviderSub");
-  const isAdmin = Boolean(creditsState.isAdmin);
-  if (section) section.hidden = !isAdmin;
-  if (!isAdmin) return;
+  const show = Boolean(creditsState.isAdmin);
+  if (section) {
+    section.hidden = !show;
+    section.style.display = show ? "" : "none";
+  }
+  if (!show) return;
   const p = normalizeMusicProviderPref(pref) || "suno";
   if (root) {
     root.querySelectorAll("[data-music-provider]").forEach((btn) => {

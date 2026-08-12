@@ -20370,6 +20370,10 @@ body[data-route="settings"] main.grid{
   gap: 0;
   margin-bottom: 24px;
 }
+.settingsSection[hidden],
+#settingsMusicProviderSection[hidden]{
+  display: none !important;
+}
 .settingsSectionLabel{
   margin: 0 0 6px;
   padding: 0 4px;

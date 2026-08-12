@@ -5,7 +5,7 @@ import { appendHumTrackSceneGuards } from "./hum-track-cover.mjs";
 import { NABAD_DNA_VERSION } from "./nabad-identity.mjs";
 
 /** @typedef {"create"|"template"|"spark"|"live"|"hum_track"|"sound"|"mashup"|"instrumental"|"unknown"} CoverSourcePath */
-/** @typedef {"landscape"|"figure"|"abstract"|"instrument_still_life"|"studio_nook_still_life"|"user_directed"} CoverVisualMode */
+/** @typedef {"landscape"|"still_life"|"figure"|"abstract"|"instrument_still_life"|"studio_nook_still_life"|"user_directed"} CoverVisualMode */
 
 /**
  * @typedef {Object} VisualDirection
@@ -117,6 +117,7 @@ export function buildSceneHintFromDirection(direction) {
   if (
     direction.visualMode === "studio_nook_still_life"
     || direction.visualMode === "instrument_still_life"
+    || direction.visualMode === "still_life"
     || direction.sourcePath === "hum_track"
   ) {
     hint = appendHumTrackSceneGuards(hint);

@@ -1,7 +1,7 @@
 /**
  * Client-side abstract cover generation via /api/music/cover-art
  */
-import { canRegeneratePollinationsCover, canRegenerateTrackCover, coverArtParamsFromTrack, isPollinationsCoverEligible, shouldUseAbstractCover } from "./params.js";
+import { canRegeneratePollinationsCover, canRegenerateTrackCover, coverArtParamsFromTrack, hasUserPhotoCoverMeta, isPollinationsCoverEligible, shouldUseAbstractCover } from "./params.js";
 import { buildAbstractCoverPrompt, buildPollinationsUrl, classifyVisualBucket, COVER_PROMPT_POLICY_VERSION, resolveStoryTheme } from "./prompt.js";
 import { resolveVisualDirection } from "./visual-director/director.mjs";
 import { DEFAULT_SONG_COVER_URL, isDefaultSongCoverUrl } from "./placeholders.js";
@@ -65,6 +65,7 @@ function enqueueLibraryPatch(fn) {
 
 function trackNeedsCoverRetry(track) {
   const meta = track?.meta && typeof track.meta === "object" ? track.meta : {};
+  if (hasUserPhotoCoverMeta(meta)) return false;
   if (!meta.pollinationsCoverPending) return false;
   if (meta.photoMode || meta.imageOnlyInstrumental) return false;
   if (String(meta?.coverSource || "") === "pollinations" && meta?.nabadAbstractCover) return false;
@@ -106,7 +107,7 @@ async function resolveRegenPromptBundle(params, regenOpts = {}) {
       bucketKey,
       storyThemeId: storyScore > 0 && theme?.id ? theme.id : undefined,
       storyScene: theme?.scene || "",
-      visualModeHint: theme?.visualMode || "still_life",
+      visualModeHint: theme?.visualMode || "abstract",
     },
   });
 
@@ -141,6 +142,7 @@ async function fetchRegeneratedCoverArt(params, regenOpts = {}) {
   const bundle = await resolveRegenPromptBundle(params, regenOpts);
   const upstreamUrl = buildPollinationsUrl(bundle.prompt, bundle.seed, {
     avoidTags: bundle.avoidTags,
+    storyTheme: bundle.storyTheme || "",
   });
 
   const ctrl = new AbortController();

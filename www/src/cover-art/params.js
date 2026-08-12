@@ -181,9 +181,18 @@ export function coverArtParamsFromTrack(track, opts = {}) {
   };
 }
 
+/** User attached a real photo for cover — never replace with Pollinations. */
+export function hasUserPhotoCoverMeta(meta) {
+  const m = meta && typeof meta === "object" ? meta : {};
+  if (m.photoMode || m.customCoverOnly || m.photoCoverOnly) return true;
+  const img = String(m.imageUrl || m.imageThumb || "").trim();
+  return img.startsWith("data:") && !m.nabadAbstractCover && String(m.coverSource || "") !== "pollinations";
+}
+
 /** Only tracks explicitly marked at add-time get Pollinations — never backfill old library rows. */
 export function shouldUseAbstractCover(track) {
   const meta = track?.meta && typeof track.meta === "object" ? track.meta : {};
+  if (hasUserPhotoCoverMeta(meta)) return false;
   if (!meta.pollinationsCoverPending) return false;
   if (meta.photoMode || meta.imageOnlyInstrumental) return false;
   if (String(meta?.coverSource || "") === "pollinations" && meta?.nabadAbstractCover) return false;
@@ -196,6 +205,7 @@ export function shouldUseAbstractCover(track) {
 
 export function isPollinationsCoverEligible(meta) {
   const m = meta && typeof meta === "object" ? meta : {};
+  if (hasUserPhotoCoverMeta(m)) return false;
   if (m.photoMode || m.imageOnlyInstrumental) return false;
   if (String(m?.coverSource || "") === "pollinations" && m?.nabadAbstractCover) return false;
   return true;

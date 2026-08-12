@@ -103,7 +103,8 @@ function coverDataUrlFromBuffer(outBuf, outMime) {
 }
 
 /** Regen only — Gemini image when configured, Pollinations fallback. */
-async function fetchRegenCoverImage({ prompt, seed, avoidTags, buildPollinationsUrl }) {
+async function fetchRegenCoverImage({ prompt, seed, avoidTags, storyTheme = "", buildPollinationsUrl }) {
+  const pollUrlOpts = { avoidTags, storyTheme: storyTheme || "" };
   const attemptedProvider = resolveCoverRegenImageProvider();
   if (attemptedProvider === "gemini") {
     const gem = await tryGeminiCoverImage({ prompt });
@@ -121,7 +122,7 @@ async function fetchRegenCoverImage({ prompt, seed, avoidTags, buildPollinations
     if (!geminiRegenFallbackEnabled()) {
       return { ok: false, error: gem.error || "gemini_failed", regenAttemptedProvider: "gemini" };
     }
-    const upstreamUrl = buildPollinationsUrl(prompt, seed, { avoidTags });
+    const upstreamUrl = buildPollinationsUrl(prompt, seed, pollUrlOpts);
     const polled = await fetchPollinationsCover(upstreamUrl);
     if (!polled.ok) {
       return {
@@ -142,7 +143,7 @@ async function fetchRegenCoverImage({ prompt, seed, avoidTags, buildPollinations
     };
   }
 
-  const upstreamUrl = buildPollinationsUrl(prompt, seed, { avoidTags });
+  const upstreamUrl = buildPollinationsUrl(prompt, seed, pollUrlOpts);
   const polled = await fetchPollinationsCover(upstreamUrl);
   if (!polled.ok) return { ok: false, error: polled.error || "pollinations_failed", regenAttemptedProvider: "pollinations" };
   return {
@@ -271,6 +272,7 @@ module.exports = async function handler(req, res) {
         prompt: clientPrompt,
         seed,
         avoidTags: String(body?.clientAvoidTags || effectiveAvoidTags || "").slice(0, MAX_AVOID),
+        storyTheme: String(body?.clientStoryTheme || "").trim(),
         buildPollinationsUrl,
       });
       if (!rendered.ok) {
@@ -340,7 +342,7 @@ module.exports = async function handler(req, res) {
       promptOpts,
     );
 
-    const upstreamUrl = buildPollinationsUrl(prompt, seed, { avoidTags: effectiveAvoidTags });
+    const upstreamUrl = buildPollinationsUrl(prompt, seed, { avoidTags: effectiveAvoidTags, storyTheme });
     const polled = await fetchPollinationsCover(upstreamUrl);
     if (!polled.ok) {
       console.warn("[music/cover-art] pollinations failed", polled.error);

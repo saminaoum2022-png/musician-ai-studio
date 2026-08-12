@@ -119,7 +119,7 @@ export function buildCoverDirectorContext(input, hints = {}) {
     bucketKey,
     storyThemeId: String(hints.storyThemeId || input?.storyThemeId || "mood_fallback").trim(),
     storyScene: String(hints.storyScene || input?.storyScene || "").trim(),
-    visualModeHint: String(hints.visualModeHint || input?.visualModeHint || "landscape").trim(),
+    visualModeHint: String(hints.visualModeHint || input?.visualModeHint || "").trim(),
     mashupOf: Array.isArray(input?.mashupOf) ? input.mashupOf : null,
     mashupPrompt: String(input?.mashupPrompt || "").trim(),
   };

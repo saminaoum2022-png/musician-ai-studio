@@ -4,7 +4,7 @@
  */
 
 /** Bump when cover prompt policy changes — busts Gemini scene cache on the server. */
-export const COVER_PROMPT_POLICY_VERSION = 8;
+export const COVER_PROMPT_POLICY_VERSION = 9;
 /** Pollinations flux reliably returns ~768×768 square — request square, crop to 9:16 (avoids vertical stretch). */
 export const POLLINATIONS_COVER_WIDTH = 1024;
 export const POLLINATIONS_COVER_HEIGHT = 1024;
@@ -193,10 +193,10 @@ const STORY_THEMES = [
   },
   {
     id: "nature_calm",
-    re: /forest|garden|flower|meadow|field|tree|river|lake|sunset|sunrise|moon|stars|sky|nature|green|spring|autumn|fall|winter|snow|rose|orchard|غابة|حديقة|زهرة|نهر|غروب|فجر|قمر|نجوم/i,
+    re: /forest|meadow|garden path|flower field|riverbank|lakeside|waterfall|orchard|wildflower|غابة|حديقة|زهرة|نهر|غروب/i,
     scene:
-      "natural landscape atmosphere matching the song mood, soft organic light, serene cinematic framing, no people",
-    visualMode: "landscape",
+      "serene organic still life, botanical props and soft window light on a surface, calm natural mood, no people",
+    visualMode: "still_life",
     bucket: "chill",
   },
   {
@@ -315,6 +315,15 @@ function scoreTheme(theme, blob) {
   return score;
 }
 
+/** Broad landscape themes need a title-area hit — weak lyric matches caused generic hills/mountains. */
+function themeQualifies(theme, storyScore) {
+  if (!theme || storyScore <= 0) return false;
+  if (theme.id === "nature_calm" && storyScore < 3) return false;
+  if (theme.id === "family_home" && storyScore < 2) return false;
+  if (theme.id === "mountains" && storyScore < 2) return false;
+  return true;
+}
+
 export function resolveStoryTheme(input) {
   const blob = buildStoryBlob(input);
   let best = null;
@@ -325,6 +334,9 @@ export function resolveStoryTheme(input) {
       bestScore = score;
       best = theme;
     }
+  }
+  if (best && !themeQualifies(best, bestScore)) {
+    return { theme: null, blob, storyScore: 0 };
   }
   return { theme: best, blob, storyScore: bestScore };
 }
@@ -498,10 +510,18 @@ function moodBucketFallback(bucketKey, energy) {
     };
   }
   return {
-    scene: pickFrom(ABSTRACT_FALLBACKS, bucketKey, "abstract-fallback"),
+    scene: pickFrom(MUSIC_FALLBACK_SCENES, bucketKey, "abstract-fallback"),
     visualMode: "abstract",
     palette,
   };
+}
+
+function landscapeAntiMountainAvoid(storyThemeId) {
+  const id = String(storyThemeId || "").trim();
+  if (id === "mountains" || id === "ocean_beach" || id === "city_street" || id === "rain_storm") {
+    return "";
+  }
+  return "mountain, mountains, hill, hills, mountain range, alps, peak, peaks, generic landscape";
 }
 
 function buildSceneFromStory(input) {
@@ -685,8 +705,10 @@ function parseAvoidTagsList(raw) {
     .slice(0, 24);
 }
 
-export function buildCoverNegativePrompt(avoidTags) {
+export function buildCoverNegativePrompt(avoidTags, { storyTheme = "" } = {}) {
   const extra = parseAvoidTagsList(avoidTags);
+  const antiMountain = landscapeAntiMountainAvoid(storyTheme);
+  if (antiMountain) extra.push(...parseAvoidTagsList(antiMountain));
   if (!extra.length) return NEGATIVE_TEXT_PROMPT;
   return `${NEGATIVE_TEXT_PROMPT}, ${extra.join(", ")}`;
 }
@@ -752,11 +774,14 @@ export function buildAbstractCoverPrompt(input, options = {}) {
   );
   const nabadIdentityPhrases = sanitizeArtworkPrompt(String(options.nabadIdentityPhrases || "").trim(), { title });
   const storyScene = toVisualOnlyPrompt(scene, { title });
+  const preferStoryScene = storyTheme !== "mood_fallback" && Boolean(storyScene);
   let visualScene = forceMusicFallback
     ? pickFrom(MUSIC_FALLBACK_SCENES, songId, String(options.regenSalt || "regen-auto"))
-    : !sceneOverride && !userArtwork && directorSceneHint
-      ? directorSceneHint
-      : storyScene;
+    : preferStoryScene
+      ? storyScene
+      : !sceneOverride && !userArtwork && directorSceneHint
+        ? directorSceneHint
+        : storyScene;
   sceneOverride = sceneOverride ? enforceNoHumansScene(sceneOverride) : "";
   visualScene = enforceNoHumansScene(visualScene);
   userArtwork = userArtwork ? enforceNoHumansScene(userArtwork) : "";
@@ -833,9 +858,15 @@ export function buildAbstractCoverPrompt(input, options = {}) {
       safetySuffix,
     ];
   } else {
+    const autoFrame =
+      visualMode === "still_life"
+        ? OBJECT_COMPOSE_FRAME
+        : visualMode === "abstract"
+          ? MUSIC_COVER_FRAME
+          : MUSIC_COVER_FRAME;
     parts = [
       NO_TEXT_LEAD,
-      MUSIC_COVER_FRAME,
+      autoFrame,
       NO_HUMANS_GUARD,
       SAFETY_PREFIX + styleCore,
       visualScene,
@@ -885,6 +916,7 @@ export function buildAbstractCoverPrompt(input, options = {}) {
       coverHeight: POLLINATIONS_COVER_HEIGHT,
       coverAspect: "9:16",
       coverSourceAspect: "1:1",
+      landscapeAntiMountainAvoid: landscapeAntiMountainAvoid(storyTheme),
     },
   };
 }
@@ -892,9 +924,9 @@ export function buildAbstractCoverPrompt(input, options = {}) {
 export function buildPollinationsUrl(
   prompt,
   seed,
-  { width = POLLINATIONS_COVER_WIDTH, height = POLLINATIONS_COVER_HEIGHT, avoidTags = "" } = {},
+  { width = POLLINATIONS_COVER_WIDTH, height = POLLINATIONS_COVER_HEIGHT, avoidTags = "", storyTheme = "" } = {},
 ) {
   const encoded = encodeURIComponent(prompt);
-  const negative = encodeURIComponent(buildCoverNegativePrompt(avoidTags));
+  const negative = encodeURIComponent(buildCoverNegativePrompt(avoidTags, { storyTheme }));
   return `https://image.pollinations.ai/prompt/${encoded}?width=${width}&height=${height}&seed=${seed}&model=flux&nologo=true&enhance=false&private=true&negative_prompt=${negative}`;
 }

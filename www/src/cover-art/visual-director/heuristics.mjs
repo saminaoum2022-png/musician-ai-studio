@@ -67,9 +67,12 @@ function visualSymbolsFromContext(ctx) {
 
 function visualModeFromContext(ctx) {
   if (ctx.humTrack || ctx.visualModeHint === "studio_nook_still_life") return "studio_nook_still_life";
-  if (ctx.visualModeHint === "figure" || ctx.visualModeHint === "still_life") return "landscape";
+  if (ctx.visualModeHint === "still_life") return "still_life";
+  if (ctx.visualModeHint === "figure") return "still_life";
   if (ctx.visualModeHint === "abstract" || ctx.sourcePath === "instrumental") return "abstract";
-  return "landscape";
+  if (ctx.visualModeHint === "landscape") return "landscape";
+  if (/still life/i.test(ctx.storyScene || "")) return "still_life";
+  return "abstract";
 }
 
 const GLOBAL_HUMAN_AVOID = Object.freeze([

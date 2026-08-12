@@ -75,7 +75,7 @@ import {
   resolveParallelCoverSongId,
   regenerateAbstractCoverForTrack,
 } from "./cover-art/generate.js";
-import { canRegenerateTrackCover, isPollinationsCoverEligible, shouldUseAbstractCover } from "./cover-art/params.js";
+import { canRegenerateTrackCover, hasUserPhotoCoverMeta, isPollinationsCoverEligible, shouldUseAbstractCover } from "./cover-art/params.js";
 import {
   DEFAULT_SONG_COVER_URL,
   isDefaultSongCoverUrl,
@@ -17969,9 +17969,9 @@ function photoCoverMetaForGeneration() {
   const cover = resolvePendingPhotoCoverDataUrl();
   if (!cover) return null;
   if (imageMoodAppliedForNextGen) {
-    return { imageUrl: cover, photoMode: true };
+    return { imageUrl: cover, imageThumb: cover, photoMode: true };
   }
-  return { imageUrl: cover, customCoverOnly: true };
+  return { imageUrl: cover, imageThumb: cover, photoMode: true, customCoverOnly: true };
 }
 let pendingBackendTaskId = "";
 const PENDING_TASK_KEY = "mas:pending_backend_task_v1";
@@ -45028,7 +45028,19 @@ function addToLibrary(track) {
     meta: stampedMeta || null,
     publicOnProfile: false,
   };
-  if (isPollinationsCoverEligible(newTrack.meta)) {
+  if (hasUserPhotoCoverMeta(newTrack.meta)) {
+    const photo = normalizeSongCoverUrl(newTrack.meta.imageUrl || newTrack.meta.imageThumb || newTrack.artUrl);
+    newTrack.artUrl = photo;
+    newTrack.meta = {
+      ...(newTrack.meta || {}),
+      pollinationsCoverPending: false,
+      coverGenAttempted: true,
+      nabadAbstractCover: false,
+      coverSource: "photo_mood",
+      imageUrl: photo,
+      imageThumb: normalizeSongCoverUrl(newTrack.meta.imageThumb || photo),
+    };
+  } else if (isPollinationsCoverEligible(newTrack.meta)) {
     const ph = DEFAULT_SONG_COVER_URL;
     newTrack.artUrl = ph;
     newTrack.meta = {
@@ -55021,7 +55033,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
           variantCount: isSingleVariantTask ? 1 : GENERATION_VARIANT_COUNT,
         });
         syncGenerationPendingLibraryUi();
-        if (!imageMoodAppliedForNextGen && !resolvePendingPhotoCoverDataUrl() && isPollinationsCoverEligible(lastGenerationMeta)) {
+        if (!resolvePendingPhotoCoverDataUrl() && isPollinationsCoverEligible(lastGenerationMeta)) {
           startParallelCoverForTask(
             sunoTaskId,
             buildParallelCoverVariants(sunoTaskId, {

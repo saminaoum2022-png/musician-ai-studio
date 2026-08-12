@@ -817,12 +817,12 @@ html[data-theme="light"] .profileStatPill:not(:last-child)::after{
 }
 
 html[data-theme="light"] .profileSegTab{
-  color: #A9A9A9;
-  opacity: 0.6;
+  color: var(--text-muted);
+  opacity: 1;
 }
 
 html[data-theme="light"] .profileSegTab.is-active{
-  color: #0f1728;
+  color: var(--text-primary);
   opacity: 1;
 }
 
@@ -885,6 +885,41 @@ html[data-theme="light"] .personaActiveBanner{
   border-color: var(--border);
   background: var(--card);
   box-shadow: var(--chart-surface-shadow);
+}
+
+html[data-theme="light"] .resultTitle{
+  color: var(--text-primary);
+  -webkit-text-fill-color: var(--text-primary);
+  background: none;
+}
+
+html[data-theme="light"] .resultMetaLine,
+html[data-theme="light"] .resultTimeLabel{
+  color: var(--text-secondary);
+}
+
+html[data-theme="light"] .resultMoreToggle{
+  color: var(--text-muted);
+}
+
+html[data-theme="light"] .resultMoreToggle:hover,
+html[data-theme="light"] .resultMoreMenu[open] > .resultMoreToggle{
+  color: var(--text-primary);
+  background: rgba(15, 23, 40, 0.06);
+}
+
+html[data-theme="light"] .resultMorePanel{
+  border-color: var(--border);
+  background: var(--card);
+  box-shadow: var(--elev-2);
+}
+
+html[data-theme="light"] .resultMoreLink{
+  color: var(--text-primary);
+}
+
+html[data-theme="light"] .resultProgressTrack{
+  background: rgba(15, 23, 40, 0.08);
 }
 
 html[data-theme="light"] .inPanelLabel,
@@ -49814,6 +49849,84 @@ html[data-theme="light"] .userPublicSongsCount{
   color: var(--text-muted);
 }
 
+/* Profile → All songs list + shared library rows (light mode contrast). */
+html[data-theme="light"] .profileSongsToolbar .libraryCount,
+html[data-theme="light"] .profileSongsHeader .libraryCount,
+html[data-theme="light"] body[data-route="profile"] .libraryCount{
+  color: var(--text-secondary);
+  letter-spacing: 0.02em;
+  text-transform: none;
+}
+
+html[data-theme="light"] .libraryRows .libRowTitle,
+html[data-theme="light"] body[data-route="profile"] .libRowTitle{
+  color: var(--text-primary);
+  -webkit-text-fill-color: var(--text-primary);
+  background: none;
+}
+
+html[data-theme="light"] .libraryRows .libRowSub,
+html[data-theme="light"] .libraryRows .libRowDot,
+html[data-theme="light"] body[data-route="profile"] .libRowSub{
+  color: var(--text-muted);
+}
+
+html[data-theme="light"] .libRowGenerating .libRowTitle{
+  color: var(--text-primary);
+}
+
+html[data-theme="light"] .libRowGenerating .libRowSub{
+  color: var(--text-muted);
+}
+
+html[data-theme="light"] .libRowActive .libRowTitle,
+html[data-theme="light"] .libRowPlaying .libRowTitle{
+  color: var(--text-primary);
+  -webkit-text-fill-color: var(--text-primary);
+}
+
+html[data-theme="light"] .libRow + .libRow::before{
+  background: var(--row-divider);
+}
+
+html[data-theme="light"] .libRow:hover{
+  background: rgba(15, 23, 40, 0.04);
+}
+
+html[data-theme="light"] .libRowActive,
+html[data-theme="light"] .libRowPlaying{
+  background: rgba(15, 23, 40, 0.06);
+}
+
+html[data-theme="light"] .libRowMore{
+  color: var(--text-muted);
+}
+
+html[data-theme="light"] .libRowMore:hover,
+html[data-theme="light"] .libRowMore:focus-visible{
+  color: var(--text-primary);
+}
+
+html[data-theme="light"] .libRowVisIco{
+  opacity: 0.62;
+  color: var(--icon-muted);
+}
+
+html[data-theme="light"] .libRowChipProfileVis--private{
+  color: var(--text-muted);
+}
+
+html[data-theme="light"] .libraryRecoverLink{
+  border-color: rgba(109, 77, 245, 0.28);
+  color: var(--primary);
+  background: rgba(109, 77, 245, 0.06);
+}
+
+html[data-theme="light"] .libraryRecoverLink:hover{
+  color: var(--primary);
+  background: rgba(109, 77, 245, 0.10);
+}
+
 /* Activity list spacing between day groups. */
 html[data-theme="light"] .activityFeed{
   gap: 12px;
@@ -52412,6 +52525,14 @@ html[data-theme="dark"] :is(#friendsPage .followActStack, #profileActivitiesList
 html.web-pro-gated .isProLocked.homeDeskPromoCard{
   cursor: pointer;
 }
+
+html[data-theme="light"] body[data-route="generate"] .optChip--more,
+html[data-theme="light"] .lyricsLangRow .optChip--more,
+html[data-theme="light"] .lyricsDialectRow .optChip--more{
+  color: var(--text-muted);
+  border-color: var(--border);
+}
+
 html[data-theme="light"] .webProFeaturePill{
   border: 1px solid rgba(255,255,255,0.85);
   box-shadow: 0 2px 8px rgba(124, 92, 255, 0.32);

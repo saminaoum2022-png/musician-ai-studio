@@ -50900,6 +50900,92 @@ html[data-theme="light"] .discoverTrackSheetRowDesc{
   color: var(--text-muted);
 }
 
+/* Publish release sheet */
+html[data-theme="light"] .publishReleaseBackdrop{
+  background: rgba(242, 242, 247, 0.88);
+  -webkit-backdrop-filter: blur(10px) saturate(110%);
+          backdrop-filter: blur(10px) saturate(110%);
+}
+html[data-theme="light"] .publishReleaseCard{
+  border-color: var(--border);
+  background: var(--card);
+  box-shadow: var(--elev-2);
+  color: var(--text-primary);
+}
+html[data-theme="light"] .publishReleaseGrab{
+  background: rgba(15, 23, 40, 0.14);
+}
+html[data-theme="light"] .publishReleaseClose{
+  border-color: var(--border);
+  background: var(--surface-secondary);
+  color: var(--text-secondary);
+}
+html[data-theme="light"] .publishReleaseClose:hover{
+  background: var(--card);
+  color: var(--text-primary);
+}
+html[data-theme="light"] .publishReleaseKicker{
+  color: #0d9488;
+}
+html[data-theme="light"] .publishReleaseTitle{
+  color: var(--text-primary);
+}
+html[data-theme="light"] .publishReleaseSub{
+  color: var(--text-secondary);
+}
+html[data-theme="light"] .publishReleaseLabel{
+  color: var(--text-primary);
+}
+html[data-theme="light"] .publishReleaseLabel span{
+  color: var(--text-muted);
+}
+html[data-theme="light"] .publishReleaseCaption{
+  border-color: var(--border);
+  background: var(--surface-secondary);
+  color: var(--text-primary);
+}
+html[data-theme="light"] .publishReleaseCaption::placeholder{
+  color: var(--text-muted);
+}
+html[data-theme="light"] .publishReleaseCaption:focus{
+  border-color: rgba(13, 148, 136, 0.35);
+  background: var(--card);
+  box-shadow: 0 0 0 3px rgba(13, 148, 136, 0.12);
+}
+html[data-theme="light"] .publishReleasePermits{
+  border-color: var(--border);
+  background: var(--surface-secondary);
+}
+html[data-theme="light"] .publishReleasePermit{
+  color: var(--text-primary);
+}
+html[data-theme="light"] .publishReleasePermit input{
+  accent-color: #6d4df5;
+}
+html[data-theme="light"] .publishReleaseMeta span{
+  border-color: var(--border);
+  background: var(--surface-secondary);
+  color: var(--text-secondary);
+}
+html[data-theme="light"] .publishReleaseArt{
+  border-color: var(--border);
+  box-shadow: var(--elev-1);
+}
+html[data-theme="light"] .publishReleaseBtn{
+  border-color: var(--border);
+  background: var(--surface-secondary);
+  color: var(--text-primary);
+  box-shadow: none;
+}
+html[data-theme="light"] .publishReleaseBtn--cancel:hover{
+  border-color: var(--border);
+  background: var(--card);
+}
+html[data-theme="light"] .publishReleaseBtn--publish{
+  border-color: rgba(13, 148, 136, 0.28);
+  color: #051018;
+}
+
 /* Search + remix sheet */
 html[data-theme="light"] .searchBarWrap{
   background: linear-gradient(180deg, rgba(242,242,247,0.96) 70%, rgba(242,242,247,0));

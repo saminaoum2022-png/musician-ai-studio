@@ -17558,6 +17558,14 @@ async function resumePendingGenerationOnForeground() {
       silent: true,
       pushCategory: pending?.source === "photo" ? "photo_ready" : "",
     });
+    if (recovered === "failed") {
+      stopGeneratePoll();
+      setGenerateFieldsLocked(false);
+      setLoading(false);
+      setGenerateBtn("Generate song", false, "generate");
+      try { cancelCoachGenerationStatus(); } catch {}
+      return;
+    }
     if (!recovered) {
       kickForegroundGenerationPolls();
       const title = String(pending?.title || rec?.titleHint || els.sunoTitle?.value || "Your song").trim();
@@ -18009,6 +18017,13 @@ function sunoFailureUserCopy(kind, { isRemix = false } = {}) {
       activityBody: "Wrong mode for this recording — add lyrics or use Add Instrumental.",
     };
   }
+  if (k === "artistReference") {
+    return {
+      toast: "Style tags can't include real artist names — edit Style and try again.",
+      activityTitle: "Generation didn't finish",
+      activityBody: "Remove artist names from Style tags and try again.",
+    };
+  }
   return {
     toast: "Something went wrong — please try again.",
     activityTitle: "Generation didn't finish",
@@ -18019,6 +18034,106 @@ function sunoFailureUserCopy(kind, { isRemix = false } = {}) {
 function isBenignSunoStatusMessage(msg) {
   const m = String(msg || "").trim().toLowerCase();
   return !m || m === "success" || m === "ok" || m === "pending";
+}
+
+/** Prefer server-mapped copy; fall back to client-side Suno classification. */
+function resolveSunoFailureFromApi(dd) {
+  const kind = String(dd?.failureKind || "").trim();
+  const userMessage = String(dd?.userMessage || "").trim();
+  if (kind && userMessage) {
+    return { kind, headline: userMessage, detail: userMessage };
+  }
+  const more = dd?.detailMessage || dd?.details?.message || dd?.details?.error || "";
+  const upstreamPayload = dd?.details && typeof dd.details === "object" ? dd.details : dd;
+  return interpretSunoFailure({
+    ...upstreamPayload,
+    errorMessage:
+      upstreamPayload?.msg
+      || upstreamPayload?.message
+      || upstreamPayload?.error
+      || upstreamPayload?.errorMessage
+      || more,
+    errorCode: upstreamPayload?.code ?? upstreamPayload?.errorCode ?? dd?.errorCode,
+  });
+}
+
+function throwFriendlySunoFailure(intent, fallbackDetail = "Something went wrong — please try again.") {
+  const info = intent?.kind
+    ? intent
+    : { kind: "generic", headline: "Generation failed", detail: fallbackDetail };
+  const e = new Error(info.detail || info.headline || fallbackDetail);
+  e._friendly = info;
+  throw e;
+}
+
+function rejectSunoApiResponse(rr, dd, { creditsMessage } = {}) {
+  if (rr.status === 402 || dd?.code === "insufficient_credits") {
+    const need = Number(dd?.needed ?? 10);
+    const have = Number(dd?.balance || 0);
+    throw new Error(
+      creditsMessage
+      || `Not enough credits for this generation (you have ${have}, need ${need}). Open Profile → Credits to redeem a code.`,
+    );
+  }
+  const intent = resolveSunoFailureFromApi(dd);
+  if (!rr.ok) {
+    throwFriendlySunoFailure(intent, "Something went wrong — please try again.");
+  }
+  if (typeof dd?.code !== "undefined" && Number(dd.code) !== 200) {
+    throwFriendlySunoFailure(intent, "Something went wrong — please try again.");
+  }
+  if (dd?.data && typeof dd.data?.code !== "undefined" && Number(dd.data.code) !== 200) {
+    throwFriendlySunoFailure(
+      interpretSunoFailure(dd.data),
+      "Something went wrong — please try again.",
+    );
+  }
+}
+
+/** Stop polling when Suno rejected the job or we have a classified failure. */
+function shouldStopGenerationPoll(state, failure) {
+  const status = String(state?.status || "").toUpperCase();
+  if (status === "FAILED" || status === "REJECTED" || status === "ERROR") {
+    return {
+      stop: true,
+      failure: failure?.kind ? failure : { kind: "generic", headline: "Generation failed", detail: state?.errorMessage || "" },
+    };
+  }
+  if (state?.hasAudio && state?.hasAllExpectedVariants) return { stop: false };
+  const failFlags = new Set([
+    "CREATE_TASK_FAILED",
+    "GENERATE_AUDIO_FAILED",
+    "CALLBACK_EXCEPTION",
+    "FAILED",
+    "ERROR",
+    "SENSITIVE_WORD_ERROR",
+  ]);
+  if (state?.successFlag && failFlags.has(state.successFlag)) {
+    return {
+      stop: true,
+      failure: failure?.kind ? failure : { kind: "generic", headline: "Generation failed", detail: state?.errorMessage || "" },
+    };
+  }
+  const hardKinds = new Set([
+    "copyright",
+    "sensitive",
+    "audio_verify",
+    "tooLong",
+    "credits",
+    "needsLyricsOrInstrumental",
+    "transient",
+    "artistReference",
+  ]);
+  if (failure?.kind && hardKinds.has(failure.kind)) {
+    return { stop: true, failure };
+  }
+  if (
+    failure?.kind === "generic"
+    && (state?.errorCode || (state?.errorMessage && !isBenignSunoStatusMessage(state.errorMessage)))
+  ) {
+    return { stop: true, failure };
+  }
+  return { stop: false };
 }
 
 /** @returns {{ kind: string|null, headline: string, detail: string }} */
@@ -18117,6 +18232,20 @@ function interpretSunoFailure(raw) {
       kind: "credits",
       headline: "Insufficient credits",
       detail: "Top up credits and try again.",
+    };
+  }
+  const looksArtist =
+    m.includes("artist name")
+    || m.includes("named artist")
+    || m.includes("reference specific artists")
+    || m.includes("specific artists")
+    || m.includes("real artist")
+    || (code === 400 && m.includes("tags contain"));
+  if (looksArtist) {
+    return {
+      kind: "artistReference",
+      headline: "Artist name in style tags",
+      detail: "Style tags can't include real artist names — edit Style and try again.",
     };
   }
   if (
@@ -52139,10 +52268,49 @@ async function recoverSongFromTaskId(taskId, { silent = false, pushCategory = ""
   if (!r.ok) throw new Error(data?.error || "Could not check the generation status.");
 
   const parsed = parseSunoGenerationRecordInfo(data);
+  const inner = data?.data || data || {};
   const st = parsed.status;
+  const failure = interpretSunoFailure({
+    status: st,
+    successFlag: inner.successFlag || data?.successFlag,
+    errorCode: inner.errorCode || data?.errorCode,
+    errorMessage: inner.errorMessage || data?.errorMessage || inner.msg || data?.msg,
+  });
+  const pollStop = shouldStopGenerationPoll(
+    {
+      status: st,
+      successFlag: String(inner.successFlag || data?.successFlag || "").toUpperCase(),
+      errorCode: inner.errorCode || data?.errorCode,
+      errorMessage: inner.errorMessage || data?.errorMessage || inner.msg || data?.msg,
+      hasAudio: parsed.hasAudio,
+      hasAllExpectedVariants: libraryHasAllTaskVariants(tid, expectedVariants),
+    },
+    failure,
+  );
 
-  if (st === "FAILED") {
-    throw new Error("That generation failed upstream.");
+  if (pollStop.stop) {
+    const info = pollStop.failure || failure || { kind: "generic", headline: "Generation failed", detail: "" };
+    clearGenerationPending(tid);
+    syncGenerationPendingLibraryUi();
+    const userCopy = sunoFailureUserCopy(info.kind, { isRemix: false });
+    if (!silent) {
+      try {
+        showToast(userCopy.toast, { icon: "✗", durationMs: 9000 });
+      } catch {}
+      try {
+        setStatus(userCopy.toast);
+      } catch {}
+    }
+    try {
+      const rec = loadRecoverableGenerationTask();
+      pushLocalGenerationFailedActivity({
+        title: String(rec?.titleHint || parsed.first?.title || "Your song").trim(),
+        taskId: tid,
+        failureKind: info.kind || "generic",
+        isRemix: false,
+      });
+    } catch {}
+    return "failed";
   }
 
   if (st !== "SUCCESS" || !parsed.hasAudio) {
@@ -53844,18 +54012,9 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
           // successFlag / errorMessage (esp. for copyright fingerprinting on
           // hummed/uploaded references).
           const failure = interpretSunoFailure(state);
-          const failedByFlag =
-            failure.kind === "copyright"
-            || failure.kind === "sensitive"
-            || failure.kind === "audio_verify"
-            || failure.kind === "tooLong"
-            || failure.kind === "credits"
-            || failure.kind === "needsLyricsOrInstrumental"
-            || failure.kind === "transient"
-            || state.status === "FAILED"
-            || (failure.kind && ["CREATE_TASK_FAILED", "GENERATE_AUDIO_FAILED", "CALLBACK_EXCEPTION", "FAILED", "ERROR", "SENSITIVE_WORD_ERROR"].includes(state.successFlag));
-          if (failedByFlag && !state.hasAudio) {
-            handleGenerationFailure(failure, state);
+          const pollStop = shouldStopGenerationPoll(state, failure);
+          if (pollStop.stop && !state.hasAudio) {
+            handleGenerationFailure(pollStop.failure, state);
             return "stop";
           }
           if (
@@ -53870,6 +54029,12 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
               setGenerateBtn("Check status", false, "resume");
               setStatus("Still waiting on variant B. Tap Check status or open Library.");
               setGenerateFieldsLocked(false);
+              try {
+                showToast("Still waiting on the second variant — tap Check status.", {
+                  icon: "♪",
+                  durationMs: 7200,
+                });
+              } catch {}
               try { bumpCoachGenerationStillWorking(); } catch {}
               stopGeneratePoll();
               return "stop";
@@ -53953,6 +54118,12 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
             setGenerateBtn("Check status", false, "resume");
             setStatus("Still processing in backend. Tap Check status.");
             setGenerateFieldsLocked(false);
+            try {
+              showToast("Still processing — tap Check status or open Library.", {
+                icon: "♪",
+                durationMs: 7200,
+              });
+            } catch {}
             try { bumpCoachGenerationStillWorking(); } catch {}
             return "stop";
           }
@@ -54690,40 +54861,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
                 `Not enough credits for this generation (you have ${have}, need ${need}). Open Profile → Credits to redeem a code.`
               );
             }
-            if (!rr.ok) {
-              const more = dd?.detailMessage || dd?.details?.message || dd?.details?.error || "";
-              const upstreamPayload = dd?.details && typeof dd.details === "object" ? dd.details : dd;
-              const intent = interpretSunoFailure({
-                ...upstreamPayload,
-                errorMessage: upstreamPayload?.msg || upstreamPayload?.message || upstreamPayload?.error || more,
-              });
-              if (intent.kind) {
-                const e = new Error(intent.detail);
-                e._friendly = intent;
-                throw e;
-              }
-              throw new Error(`${dd?.error || "Reference upload failed"}${more ? `: ${more}` : ""}`);
-            }
-            if (typeof dd?.code !== "undefined" && Number(dd.code) !== 200) {
-              const bodyErr = dd?.msg || dd?.message || dd?.error || "Reference upload failed";
-              const intent = interpretSunoFailure(dd);
-              if (intent.kind) {
-                const e = new Error(intent.detail);
-                e._friendly = intent;
-                throw e;
-              }
-              throw new Error(`Reference upload was rejected: ${bodyErr}`);
-            }
-            if (dd?.data && typeof dd.data?.code !== "undefined" && Number(dd.data.code) !== 200) {
-              const nestedErr = dd?.data?.msg || dd?.data?.message || dd?.data?.error || "Reference upload failed";
-              const intent = interpretSunoFailure(dd.data);
-              if (intent.kind) {
-                const e = new Error(intent.detail);
-                e._friendly = intent;
-                throw e;
-              }
-              throw new Error(`Reference upload was rejected: ${nestedErr}`);
-            }
+            rejectSunoApiResponse(rr, dd);
             try {
               if (typeof refreshMyCredits === "function") void refreshMyCredits({ silent: true });
             } catch {}
@@ -54800,22 +54938,10 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
           if (r.status === 401) {
             throw new Error("Please sign in with Google before generating a song.");
           }
-          if (!r.ok) {
-            const more = d?.detailMessage || d?.details?.message || d?.details?.error || "";
-            const modelHint = d?._model ? ` (engine: ${d._model})` : "";
-            throw new Error(`${d?.error || "Song generation failed"}${more ? `: ${more}` : ""}${modelHint}`);
-          }
+          rejectSunoApiResponse(r, d);
           if (d?._credits && Number.isFinite(Number(d._credits.balance))) {
             setCreditsBalance(Number(d._credits.balance));
             creditsState.loaded = true;
-          }
-          if (typeof d?.code !== "undefined" && Number(d.code) !== 200) {
-            const bodyErr = d?.msg || d?.message || d?.error || "Song generation failed";
-            throw new Error(`Request was rejected: ${bodyErr}`);
-          }
-          if (d?.data && typeof d.data?.code !== "undefined" && Number(d.data.code) !== 200) {
-            const nestedErr = d?.data?.msg || d?.data?.message || d?.data?.error || "Song generation failed";
-            throw new Error(`Request was rejected: ${nestedErr}`);
           }
           return d;
         },

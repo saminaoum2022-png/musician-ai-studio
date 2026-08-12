@@ -21,6 +21,7 @@ const {
 } = require("../_lib/credits-auth");
 const { userIsAdmin } = require("../_lib/admin-auth");
 const { applyCors } = require("../_lib/cors");
+const { sanitizeSunoStyleTags, buildSunoErrorBody } = require("../_lib/suno-user-errors");
 const { queueRegisterSunoWatch } = require("../_lib/suno-generation-watch");
 const { queueLogMusicGeneration } = require("../_lib/music-generation-log");
 const { requireProForWebApi } = require("../_lib/pro-web-gate");
@@ -104,7 +105,7 @@ module.exports = async function handler(req, res) {
     if (songKey) styleBits.push(`Key: ${String(songKey).trim()}`);
     if (instruments) styleBits.push(`Instruments: ${String(instruments).trim()}`);
     if (voiceTimbre) styleBits.push(`Voice timbre: ${String(voiceTimbre).trim()}`);
-    const mergedStyle = styleBits.filter(Boolean).join(", ");
+    const mergedStyle = sanitizeSunoStyleTags(styleBits.filter(Boolean).join(", "));
 
     // Persona / model coercion. Per Suno's docs:
     //   - personaId is only honored when customMode is true.
@@ -192,7 +193,7 @@ module.exports = async function handler(req, res) {
         creditsUsed: isAdmin ? 0 : FULL_SONG_COST,
         errorMessage: `suno_http_${r.status}`,
       });
-      return json(res, 502, { error: "Upstream engine error", status: r.status, details: data || text });
+      return json(res, 502, buildSunoErrorBody(data || text, { error: "Upstream engine error" }));
     }
     const sunoCode = data && typeof data === "object" && "code" in data ? Number(data.code) : 200;
     if (Number.isFinite(sunoCode) && sunoCode !== 200) {
@@ -208,7 +209,7 @@ module.exports = async function handler(req, res) {
         creditsUsed: isAdmin ? 0 : FULL_SONG_COST,
         errorMessage: msg,
       });
-      return json(res, 502, { error: msg, details: data });
+      return json(res, 502, buildSunoErrorBody(data, { error: "Request was rejected upstream" }));
     }
 
     const sunoTaskId = extractSunoTaskId(data);

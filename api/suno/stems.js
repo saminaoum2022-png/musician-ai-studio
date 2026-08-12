@@ -41,6 +41,7 @@ const {
 const { applyCors } = require("../_lib/cors");
 const { resolveHumTrackPreset } = require("../_lib/hum-track-presets");
 const { queueRegisterSunoWatch } = require("../_lib/suno-generation-watch");
+const { sanitizeSunoStyleTags, buildSunoErrorBody } = require("../_lib/suno-user-errors");
 
 const MAX_UPLOAD_BYTES = 25 * 1024 * 1024;
 // Reference-audio generations (cover / extend / add-instrumental) all
@@ -187,7 +188,7 @@ module.exports = async function handler(req, res) {
       fileName = norm.name;
       fileType = norm.mime;
 
-      const style = String(body?.style || "").trim();
+      const style = sanitizeSunoStyleTags(String(body?.style || "").trim());
       const prompt = String(body?.prompt || "").trim();
       const referenceMode = String(body?.referenceMode || "").trim().toLowerCase();
       const title = String(body?.title || "").trim();
@@ -353,9 +354,8 @@ module.exports = async function handler(req, res) {
         if (!coverRes.ok || (coverData && "code" in coverData && Number(coverData.code) !== 200)) {
           await refund("suno_cover_failed");
           return json(res, 502, {
-            error: "Upload-cover failed",
+            ...buildSunoErrorBody(coverData || coverText, { error: "Upload-cover failed" }),
             status: coverRes.status || 502,
-            details: coverData || coverText,
             uploadUrl,
           });
         }
@@ -398,9 +398,8 @@ module.exports = async function handler(req, res) {
         if (!extRes.ok || (extData && "code" in extData && Number(extData.code) !== 200)) {
           await refund("suno_extend_failed");
           return json(res, 502, {
-            error: "Upload-extend failed",
+            ...buildSunoErrorBody(extData || extText, { error: "Upload-extend failed" }),
             status: extRes.status || 502,
-            details: extData || extText,
             uploadUrl,
           });
         }
@@ -508,9 +507,8 @@ module.exports = async function handler(req, res) {
       if (!addRes.ok || (addData && "code" in addData && Number(addData.code) !== 200)) {
         await refund("suno_add_inst_failed");
         return json(res, 502, {
-          error: "Add instrumental failed",
+          ...buildSunoErrorBody(addData || addText, { error: "Add instrumental failed" }),
           status: addRes.status || 502,
-          details: addData || addText,
           uploadUrl,
         });
       }
@@ -545,11 +543,11 @@ module.exports = async function handler(req, res) {
     const data = safeJson(text);
     if (!r.ok) {
       await refund(`suno_http_${r.status}`);
-      return json(res, 502, { error: "Upstream engine error", status: r.status, details: data || text });
+      return json(res, 502, buildSunoErrorBody(data || text, { error: "Upstream engine error" }));
     }
     if (data && typeof data === "object" && "code" in data && data.code !== 200) {
       await refund(`suno_code_${data.code}`);
-      return json(res, 502, { error: "Request was rejected upstream", details: data });
+      return json(res, 502, buildSunoErrorBody(data, { error: "Request was rejected upstream" }));
     }
     registerStemsWatch(user, body, data, { kind: "instrumental", variantCount: 1 });
     return json(res, 200, {

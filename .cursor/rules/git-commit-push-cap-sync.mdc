@@ -31,8 +31,13 @@ Once the user approves the simulator preview (e.g. "approved", "push it", "ship 
 3. **`git add`** the relevant paths (including the stamped `index.html`, `src/app.js`, and their `www/` mirrors) and **`git commit -m "…"`** with a short, accurate message (full sentences, no fluff).
 4. **`git push origin main`** — production deploy (Vercel + nabadai.com). Merge from `staging` first unless the user explicitly ships a hotfix on `main`.
 5. **`npm run env:production`** then **`npm run run:ios`** — syncs `www` with **production** API baked in, builds for the connected iPhone, installs, and launches (no Xcode debugger). Do not stop at `npx cap sync ios` unless `run:ios` fails (no device, signing error, etc.); report the failure and what succeeded.
-6. If `run:ios` changes tracked files under `ios/`, commit and push those too in the same pass.
+6. **When the user says TestFlight / ship iOS / push to main and TestFlight** — also archive + upload in the same pass (do NOT tell them to open Xcode manually):
+   - `NABAD_API_ENV=production npm run sync:ios`
+   - `cd ios/App && xcodebuild -scheme App -configuration Release -destination 'generic/platform=iOS' -archivePath build/App.xcarchive archive -allowProvisioningUpdates`
+   - `xcodebuild -exportArchive -archivePath build/App.xcarchive -exportOptionsPlist ExportOptions.plist -exportPath build/export -allowProvisioningUpdates`
+   - Report version/build from the archive (`CFBundleShortVersionString` / `CFBundleVersion`) and that upload succeeded.
+7. If `run:ios` changes tracked files under `ios/`, commit and push those too in the same pass.
 
-7. **After every ship to `main` / TestFlight / production** — merge **`main` → `staging`** in the same pass (no need to ask). Push `staging` so daily dev never falls behind what testers have. Resolve conflicts on `staging`; do not leave staging missing commits that only landed on `main`.
+8. **After every ship to `main` / TestFlight / production** — merge **`main` → `staging`** in the same pass (no need to ask). Push `staging` so daily dev never falls behind what testers have. Resolve conflicts on `staging`; do not leave staging missing commits that only landed on `main`.
 
 If push fails, fix or report and do not claim success. If build/launch fails after a successful push, say so clearly — web deploy may still be live.

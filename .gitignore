@@ -18,3 +18,16 @@ assets/icons/_debug/
 # Generated promo code lists (live, unredeemed codes — keep private)
 codes.sql
 codes-*.sql
+
+# Local simulator screenshots (agent/dev previews — not shipped)
+assets/**/*-sim.png
+assets/staging-sim-verify.png
+
+# Sleeve / player design scratch previews (local HTML + reference PNGs)
+assets/sleeve-*preview*.html
+assets/sleeve-directions-preview.html
+assets/sleeve-exact-preview.html
+assets/sleeve-like-this.html
+assets/sleeve-house-art.png
+assets/sleeve-target-crop.png
+assets/user-sleeve-reference.png

@@ -654,6 +654,98 @@ td.num { font-variant-numeric: tabular-nums; }
   pointer-events: none;
 }
 
+.adminRoleBadge {
+  padding: 8px 12px;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  background: var(--brand-gradient-soft);
+  border: 1px solid rgba(124, 92, 255, 0.28);
+  color: #c4b5fd;
+  text-align: center;
+}
+
+.teamRoleSelect {
+  width: 100%;
+  min-width: 160px;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--bg-elevated);
+  color: var(--text);
+}
+
+.teamActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.btnDangerGhost {
+  color: #fca5a5;
+  border-color: rgba(248, 113, 113, 0.35);
+}
+
+.btnDangerGhost:hover {
+  color: #fecaca;
+  background: rgba(248, 113, 113, 0.12);
+  border-color: rgba(248, 113, 113, 0.45);
+}
+
+.roleGuideGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 14px;
+}
+
+.roleGuideCard {
+  padding: 16px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.roleGuideHead { margin-bottom: 8px; }
+
+.roleGuideDesc {
+  margin: 0 0 12px;
+  color: var(--muted);
+  font-size: 0.84rem;
+  line-height: 1.45;
+}
+
+.roleGuideMeta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.roleTag {
+  display: inline-block;
+  padding: 3px 8px;
+  border-radius: 999px;
+  font-size: 0.68rem;
+  color: var(--muted);
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border);
+}
+
+.roleTag--accent {
+  color: #c4b5fd;
+  border-color: rgba(124, 92, 255, 0.25);
+  background: rgba(124, 92, 255, 0.1);
+}
+
+.badge.role-admin { background: rgba(124, 92, 255, 0.18); color: #ddd6fe; }
+.badge.role-operations { background: rgba(45, 212, 191, 0.15); color: #99f6e4; }
+.badge.role-support { background: rgba(96, 165, 250, 0.15); color: #bfdbfe; }
+.badge.role-moderator { background: rgba(251, 191, 36, 0.15); color: #fde68a; }
+.badge.role-finance { background: rgba(74, 222, 128, 0.15); color: #bbf7d0; }
+.badge.role-viewer { background: rgba(148, 163, 184, 0.15); color: #cbd5e1; }
+
 @media (max-width: 1024px) {
   .appShell { grid-template-columns: 1fr; }
   .sidebar {

@@ -11,6 +11,7 @@ const PAGE_SIZE = 50;
 const state = {
   config: null,
   session: null,
+  adminSession: null,
   view: "overview",
   offset: 0,
   cache: {},
@@ -35,6 +36,7 @@ const els = {
   btnSignOut: document.getElementById("btnSignOut"),
   btnRefresh: document.getElementById("btnRefresh"),
   adminUserEmail: document.getElementById("adminUserEmail"),
+  adminRoleBadge: document.getElementById("adminRoleBadge"),
   pageTitle: document.getElementById("pageTitle"),
   pageSub: document.getElementById("pageSub"),
   globalError: document.getElementById("globalError"),
@@ -46,6 +48,7 @@ const els = {
     generations: document.getElementById("viewGenerations"),
     publications: document.getElementById("viewPublications"),
     subscriptions: document.getElementById("viewSubscriptions"),
+    settings: document.getElementById("viewSettings"),
   },
   navItems: [...document.querySelectorAll(".navItem")],
 };
@@ -58,6 +61,7 @@ const VIEW_META = {
   generations: { title: "Generations", sub: "Song and audio generation requests" },
   publications: { title: "Publications", sub: "Public profile posts — moderation view (not friends-only)" },
   subscriptions: { title: "Subscriptions", sub: "NabadAi Pro status by user" },
+  settings: { title: "Team & roles", sub: "Invite coworkers and control dashboard access" },
 };
 
 function fmtNum(n, digits = 0) {
@@ -492,12 +496,91 @@ async function adminFetch(view, { offset = 0, limit = PAGE_SIZE } = {}) {
   }
   if (r.status === 403) {
     const who = state.session?.email ? ` (${state.session.email})` : "";
-    throw new Error(`This account is not an admin${who}. Use saminaoum2022@gmail.com.`);
+    throw new Error(data?.error || `You do not have access to this section${who}.`);
   }
   if (!r.ok) {
     throw new Error(data?.error || `Request failed (${r.status})`);
   }
   return data;
+}
+
+async function loadAdminSession({ force = false } = {}) {
+  if (!force && state.adminSession) return state.adminSession;
+  const data = await adminFetch("session");
+  state.adminSession = data.session || null;
+  if (Array.isArray(data.roles)) state.adminSession.roles = data.roles;
+  applyNavPermissions();
+  return state.adminSession;
+}
+
+function canAccessView(view) {
+  const allowed = state.adminSession?.allowedViews;
+  if (!Array.isArray(allowed) || !allowed.length) return true;
+  return allowed.includes(view);
+}
+
+function applyNavPermissions() {
+  const session = state.adminSession;
+  const allowed = new Set(Array.isArray(session?.allowedViews) ? session.allowedViews : []);
+  for (const btn of els.navItems) {
+    const view = btn.dataset.view;
+    const ok = !allowed.size || allowed.has(view);
+    btn.hidden = !ok;
+    btn.disabled = !ok;
+  }
+  const settingsGroup = document.querySelector('[data-nav-group="settings"]');
+  if (settingsGroup) {
+    settingsGroup.hidden = !session?.canManageTeam;
+  }
+  if (els.adminRoleBadge) {
+    if (session?.roleLabel) {
+      els.adminRoleBadge.hidden = false;
+      els.adminRoleBadge.textContent = session.isOwner
+        ? `${session.roleLabel} · Owner`
+        : session.roleLabel;
+      els.adminRoleBadge.className = `adminRoleBadge role-${session.role || "admin"}`;
+    } else {
+      els.adminRoleBadge.hidden = true;
+    }
+  }
+}
+
+function firstAllowedView() {
+  const order = ["overview", "suno", "users", "generations", "publications", "credits", "subscriptions", "settings"];
+  for (const view of order) {
+    if (canAccessView(view)) return view;
+  }
+  return "overview";
+}
+
+async function teamFetch(path = "", options = {}) {
+  await refreshSessionIfNeeded();
+  const token = state.session?.access_token;
+  if (!token) throw new Error("Not signed in");
+  const r = await fetch(`/api/admin/team${path}`, {
+    ...options,
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+      ...(options.headers || {}),
+    },
+  });
+  const data = await r.json().catch(() => ({}));
+  if (r.status === 401) {
+    writeSession(null);
+    throw new Error("Session expired — sign in again");
+  }
+  if (r.status === 403) {
+    throw new Error(data?.error || "Only Owner / Admin can manage team access.");
+  }
+  if (!r.ok) {
+    throw new Error(data?.error || `Request failed (${r.status})`);
+  }
+  return data;
+}
+
+function roleBadgeClass(role) {
+  return `badge role-${String(role || "user").replace(/[^a-z0-9_-]/gi, "")}`;
 }
 
 function fmtPct(n) {
@@ -751,6 +834,7 @@ function renderCredits(data) {
     : `<tr><td colspan="7" class="loading">No transactions yet — run supabase/admin_dashboard.sql</td></tr>`;
 
   els.panels.credits.innerHTML = adminPageStack(`
+    ${state.adminSession?.canGrantCredits ? `
     <section class="sectionCard">
       <div class="sectionHead">
         <h3 class="sectionTitle">Grant paid credits</h3>
@@ -768,7 +852,7 @@ function renderCredits(data) {
         <button type="submit" class="btnPrimary" id="btnGrantCredits">Grant credits</button>
       </form>
       <p id="grantCreditsMsg" class="grantMsg" hidden></p>
-    </section>
+    </section>` : ""}
     ${dataPanel({
       title: "Credit ledger",
       note: "Every grant, spend, and refund across the platform.",
@@ -873,6 +957,114 @@ function renderPublications(data) {
   }));
 }
 
+function renderRoleGuideCards(roles) {
+  const list = Array.isArray(roles) ? roles : [];
+  return list.map((role) => `
+    <article class="roleGuideCard">
+      <div class="roleGuideHead">
+        <span class="${roleBadgeClass(role.id)}">${escapeHtml(role.label)}</span>
+      </div>
+      <p class="roleGuideDesc">${escapeHtml(role.description)}</p>
+      <div class="roleGuideMeta">
+        ${role.grantCredits ? `<span class="roleTag">Can grant credits</span>` : ""}
+        ${role.manageTeam ? `<span class="roleTag roleTag--accent">Can manage team</span>` : ""}
+        <span class="roleTag">${escapeHtml((role.views || []).join(", "))}</span>
+      </div>
+    </article>
+  `).join("");
+}
+
+function renderSettings(data) {
+  const roles = data.teamRoles || data.roles || [];
+  const members = Array.isArray(data.members) ? data.members : [];
+  const teamError = data.teamError || "";
+  const canManage = Boolean(state.adminSession?.canManageTeam);
+
+  const memberRows = members.length
+    ? members.map((m) => {
+      const label = m.name || (m.username ? `@${m.username}` : m.email || "—");
+      const ownerNote = m.isOwner ? `<span class="badge admin">Owner</span>` : "";
+      const roleOptions = roles.map((r) =>
+        `<option value="${escapeHtml(r.id)}" ${r.id === m.role ? "selected" : ""}>${escapeHtml(r.label)}</option>`,
+      ).join("");
+      const actions = canManage && !m.isOwner
+        ? `
+          <div class="teamActions">
+            <select class="teamRoleSelect" data-team-email="${escapeHtml(m.email)}" aria-label="Change role for ${escapeHtml(m.email)}">
+              ${roleOptions}
+            </select>
+            <button type="button" class="btnGhost btnDangerGhost" data-team-revoke="${escapeHtml(m.email)}">Revoke</button>
+          </div>`
+        : `<span class="${roleBadgeClass(m.role)}">${escapeHtml(m.role)}</span>`;
+      return `
+        <tr>
+          <td>
+            <strong>${escapeHtml(label)}</strong>
+            ${ownerNote ? `<br>${ownerNote}` : ""}
+            ${m.username ? `<br><span style="color:var(--muted);font-size:0.76rem">@${escapeHtml(m.username)}</span>` : ""}
+          </td>
+          <td>${escapeHtml(m.email || "—")}</td>
+          <td><span class="${roleBadgeClass(m.role)}">${escapeHtml(m.role)}</span></td>
+          <td>${fmtDate(m.grantedAt)}</td>
+          <td>${escapeHtml(m.grantedByLabel || "—")}</td>
+          <td>${actions}</td>
+        </tr>`;
+    }).join("")
+    : `<tr><td colspan="6" class="loading">${canManage ? "No teammates yet — invite someone below." : "Team list is Owner / Admin only."}</td></tr>`;
+
+  const inviteForm = canManage ? `
+    <section class="sectionCard">
+      <div class="sectionHead">
+        <h3 class="sectionTitle">Invite to dashboard</h3>
+        <p class="sectionNote">They must already have a NabadAi account (signed up in the app or on nabadai.com). You grant dashboard access here — no Supabase login required.</p>
+      </div>
+      <form id="teamInviteForm" class="grantForm">
+        <label class="field grantField">
+          <span>Teammate email</span>
+          <input id="teamInviteEmail" type="email" required placeholder="teammate@company.com" autocomplete="off" />
+        </label>
+        <label class="field grantField">
+          <span>Role</span>
+          <select id="teamInviteRole" class="teamRoleSelect" required>
+            ${roles.map((r) => `<option value="${escapeHtml(r.id)}">${escapeHtml(r.label)}</option>`).join("")}
+          </select>
+        </label>
+        <button type="submit" class="btnPrimary" id="btnTeamInvite">Grant access</button>
+      </form>
+      <p id="teamInviteMsg" class="grantMsg" hidden></p>
+      ${teamError ? `<p class="grantMsg isErr">${escapeHtml(teamError)}</p>` : ""}
+    </section>` : `
+    <section class="sectionCard">
+      <p class="sectionNote">Only <strong>Owner / Admin</strong> can invite teammates. Your role is <strong>${escapeHtml(state.adminSession?.roleLabel || "—")}</strong>.</p>
+    </section>`;
+
+  els.panels.settings.innerHTML = adminPageStack(`
+    ${inviteForm}
+    ${canManage ? dataPanel({
+      title: "Current team",
+      note: "Everyone with dashboard access. Owner accounts cannot be revoked or downgraded here.",
+      tableHtml: `
+      <div class="tableWrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Person</th><th>Email</th><th>Role</th><th>Granted</th><th>By</th><th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>${memberRows}</tbody>
+        </table>
+      </div>`,
+    }) : ""}
+    <section class="sectionCard">
+      <div class="sectionHead">
+        <h3 class="sectionTitle">Role guide</h3>
+        <p class="sectionNote">Pick the smallest role that fits — you can always upgrade someone later.</p>
+      </div>
+      <div class="roleGuideGrid">${renderRoleGuideCards(roles)}</div>
+    </section>
+  `);
+}
+
 function renderSubscriptions(data) {
   const rows = data?.subscriptions || [];
   const total = data?.total || rows.length;
@@ -917,9 +1109,13 @@ const RENDERERS = {
   generations: renderGenerations,
   publications: renderPublications,
   subscriptions: renderSubscriptions,
+  settings: renderSettings,
 };
 
 function setView(view) {
+  if (!canAccessView(view)) {
+    view = firstAllowedView();
+  }
   state.view = view;
   state.offset = 0;
   const meta = VIEW_META[view] || VIEW_META.overview;
@@ -978,6 +1174,26 @@ function setGrantCreditsMsg(text, kind = "ok") {
   el.className = `grantMsg is${kind === "ok" ? "Ok" : kind === "warn" ? "Warn" : "Err"}`;
 }
 
+function setTeamInviteMsg(text, kind = "ok") {
+  const el = document.getElementById("teamInviteMsg");
+  if (!el) return;
+  if (!text) {
+    el.hidden = true;
+    el.textContent = "";
+    el.className = "grantMsg";
+    return;
+  }
+  el.hidden = false;
+  el.textContent = text;
+  el.className = `grantMsg is${kind === "ok" ? "Ok" : kind === "warn" ? "Warn" : "Err"}`;
+}
+
+function clearSettingsCache() {
+  for (const key of Object.keys(state.cache)) {
+    if (key.startsWith("settings:")) delete state.cache[key];
+  }
+}
+
 function clearCreditsCache() {
   for (const key of Object.keys(state.cache)) {
     if (key.startsWith("credits:")) delete state.cache[key];
@@ -997,7 +1213,16 @@ async function loadView({ force = false } = {}) {
   panel.innerHTML = `<div class="adminPageStack"><div class="loading">Loading…</div></div>`;
   showError("");
   try {
-    const data = await adminFetch(view, { offset: state.offset });
+    let data = await adminFetch(view, { offset: state.offset });
+    if (view === "settings" && state.adminSession?.canManageTeam) {
+      try {
+        const team = await teamFetch();
+        data = { ...data, members: team.members, teamRoles: team.roles };
+      } catch (e) {
+        data.teamError = e?.message || String(e);
+        data.teamRoles = data.roles || [];
+      }
+    }
     state.cache[cacheKey] = data;
     RENDERERS[view](data);
   } catch (e) {
@@ -1029,6 +1254,24 @@ function showApp() {
   if (els.loginScreen) els.loginScreen.hidden = true;
   if (els.appShell) els.appShell.hidden = false;
   els.adminUserEmail.textContent = state.session?.email || "";
+}
+
+async function openDashboard() {
+  showApp();
+  try {
+    await loadAdminSession({ force: true });
+  } catch (e) {
+    showError(e?.message || "Could not load admin session");
+    if (String(e?.message || "").includes("not an admin") || String(e?.message || "").includes("access")) {
+      writeSession(null);
+      showLogin();
+    }
+    return false;
+  }
+  setView(firstAllowedView());
+  await loadView({ force: true });
+  showError("");
+  return true;
 }
 
 async function boot() {
@@ -1081,9 +1324,8 @@ async function boot() {
         return;
       }
       showLoginError(`Signed in as ${signedInAs}. Opening dashboard…`);
-      showApp();
-      setView("overview");
-      await loadView({ force: true });
+      const opened = await openDashboard();
+      if (!opened) return;
       if (els.loginScreen && !els.loginScreen.hidden) return;
       showLoginError("");
       return;
@@ -1099,9 +1341,8 @@ async function boot() {
 
   if (state.session) {
     try {
-      showApp();
-      setView("overview");
-      await loadView();
+      const opened = await openDashboard();
+      if (!opened) return;
       return;
     } catch (e) {
       writeSession(null);
@@ -1119,9 +1360,8 @@ els.loginForm?.addEventListener("submit", async (e) => {
   els.btnLogin.disabled = true;
   try {
     await signIn(els.loginEmail.value.trim(), els.loginPassword.value);
-    showApp();
-    setView("overview");
-    await loadView({ force: true });
+    const opened = await openDashboard();
+    if (!opened) showLogin();
   } catch (err) {
     showLoginError(err?.message || "Sign in failed");
   } finally {
@@ -1166,9 +1406,8 @@ els.resetForm?.addEventListener("submit", async (e) => {
     state.recoveryTokenHash = "";
     clearOAuthCallbackFromUrl();
     if (els.resetScreen) els.resetScreen.hidden = true;
-    showApp();
-    setView("overview");
-    await loadView({ force: true });
+    const opened = await openDashboard();
+    if (!opened) showLogin();
   } catch (err) {
     showResetError(err?.message || "Could not set password");
   } finally {
@@ -1179,12 +1418,16 @@ els.resetForm?.addEventListener("submit", async (e) => {
 els.btnSignOut?.addEventListener("click", () => {
   writeSession(null);
   state.cache = {};
+  state.adminSession = null;
   showLogin();
 });
 
 els.btnRefresh?.addEventListener("click", () => {
   state.cache = {};
-  void loadView({ force: true });
+  void (async () => {
+    await loadAdminSession({ force: true });
+    await loadView({ force: true });
+  })();
 });
 
 for (const btn of els.navItems) {
@@ -1195,35 +1438,68 @@ for (const btn of els.navItems) {
 }
 
 document.body.addEventListener("submit", (e) => {
-  const form = e.target.closest("#grantCreditsForm");
-  if (!form) return;
+  const grantForm = e.target.closest("#grantCreditsForm");
+  if (grantForm) {
+    e.preventDefault();
+    void (async () => {
+      const emailInput = grantForm.querySelector("#grantCreditsEmail");
+      const amountInput = grantForm.querySelector("#grantCreditsAmount");
+      const btn = grantForm.querySelector("#btnGrantCredits");
+      const amount = Number(amountInput?.value);
+      if (!Number.isFinite(amount) || amount <= 0 || amount > 500) {
+        setGrantCreditsMsg("Enter an amount between 1 and 500.", "warn");
+        return;
+      }
+      if (btn) btn.disabled = true;
+      setGrantCreditsMsg("Granting…", "warn");
+      try {
+        const data = await adminGrantPaidCredits({
+          email: emailInput?.value || "",
+          amount,
+        });
+        const who = data.email || state.session?.email || "user";
+        if (amountInput) amountInput.value = "";
+        clearCreditsCache();
+        if (state.view === "credits") await loadView({ force: true });
+        setGrantCreditsMsg(
+          `Granted ${fmtNum(data.granted, 1)} paid credits to ${who}. New balance: ${fmtNum(data.balance, 1)}.`,
+          "ok",
+        );
+      } catch (err) {
+        setGrantCreditsMsg(err?.message || "Grant failed", "err");
+      } finally {
+        if (btn) btn.disabled = false;
+      }
+    })();
+    return;
+  }
+
+  const teamForm = e.target.closest("#teamInviteForm");
+  if (!teamForm) return;
   e.preventDefault();
   void (async () => {
-    const emailInput = form.querySelector("#grantCreditsEmail");
-    const amountInput = form.querySelector("#grantCreditsAmount");
-    const btn = form.querySelector("#btnGrantCredits");
-    const amount = Number(amountInput?.value);
-    if (!Number.isFinite(amount) || amount <= 0 || amount > 500) {
-      setGrantCreditsMsg("Enter an amount between 1 and 500.", "warn");
+    const emailInput = teamForm.querySelector("#teamInviteEmail");
+    const roleInput = teamForm.querySelector("#teamInviteRole");
+    const btn = teamForm.querySelector("#btnTeamInvite");
+    const email = String(emailInput?.value || "").trim();
+    const role = String(roleInput?.value || "").trim();
+    if (!email) {
+      setTeamInviteMsg("Enter a teammate email.", "warn");
       return;
     }
     if (btn) btn.disabled = true;
-    setGrantCreditsMsg("Granting…", "warn");
+    setTeamInviteMsg("Granting access…", "warn");
     try {
-      const data = await adminGrantPaidCredits({
-        email: emailInput?.value || "",
-        amount,
+      await teamFetch("", {
+        method: "POST",
+        body: JSON.stringify({ email, role }),
       });
-      const who = data.email || state.session?.email || "user";
-      if (amountInput) amountInput.value = "";
-      clearCreditsCache();
-      if (state.view === "credits") await loadView({ force: true });
-      setGrantCreditsMsg(
-        `Granted ${fmtNum(data.granted, 1)} paid credits to ${who}. New balance: ${fmtNum(data.balance, 1)}.`,
-        "ok",
-      );
+      if (emailInput) emailInput.value = "";
+      clearSettingsCache();
+      if (state.view === "settings") await loadView({ force: true });
+      setTeamInviteMsg(`Dashboard access granted to ${email} as ${role}.`, "ok");
     } catch (err) {
-      setGrantCreditsMsg(err?.message || "Grant failed", "err");
+      setTeamInviteMsg(err?.message || "Could not grant access", "err");
     } finally {
       if (btn) btn.disabled = false;
     }
@@ -1232,15 +1508,62 @@ document.body.addEventListener("submit", (e) => {
 
 document.body.addEventListener("click", (e) => {
   const pageBtn = e.target.closest("[data-page]");
-  if (!pageBtn) return;
-  const total = state.cache[`${state.view}:${state.offset}`]?.total || 0;
-  if (pageBtn.dataset.page === "prev" && state.offset > 0) {
-    state.offset = Math.max(0, state.offset - PAGE_SIZE);
-    void loadView();
-  } else if (pageBtn.dataset.page === "next" && state.offset + PAGE_SIZE < total) {
-    state.offset += PAGE_SIZE;
-    void loadView();
+  if (pageBtn) {
+    const total = state.cache[`${state.view}:${state.offset}`]?.total || 0;
+    if (pageBtn.dataset.page === "prev" && state.offset > 0) {
+      state.offset = Math.max(0, state.offset - PAGE_SIZE);
+      void loadView();
+    } else if (pageBtn.dataset.page === "next" && state.offset + PAGE_SIZE < total) {
+      state.offset += PAGE_SIZE;
+      void loadView();
+    }
+    return;
   }
+
+  const revokeBtn = e.target.closest("[data-team-revoke]");
+  if (!revokeBtn) return;
+  const email = revokeBtn.dataset.teamRevoke;
+  if (!email) return;
+  if (!window.confirm(`Revoke dashboard access for ${email}?`)) return;
+  void (async () => {
+    revokeBtn.disabled = true;
+    try {
+      await teamFetch("", {
+        method: "DELETE",
+        body: JSON.stringify({ email }),
+      });
+      clearSettingsCache();
+      if (state.view === "settings") await loadView({ force: true });
+    } catch (err) {
+      showError(err?.message || "Could not revoke access");
+    } finally {
+      revokeBtn.disabled = false;
+    }
+  })();
+});
+
+document.body.addEventListener("change", (e) => {
+  const select = e.target.closest(".teamRoleSelect[data-team-email]");
+  if (!select || select.closest("#teamInviteForm")) return;
+  const email = select.dataset.teamEmail;
+  const role = select.value;
+  if (!email || !role) return;
+  void (async () => {
+    select.disabled = true;
+    try {
+      await teamFetch("", {
+        method: "POST",
+        body: JSON.stringify({ email, role }),
+      });
+      clearSettingsCache();
+      if (state.view === "settings") await loadView({ force: true });
+    } catch (err) {
+      showError(err?.message || "Could not update role");
+      if (state.view === "settings") await loadView({ force: true });
+    } finally {
+      select.disabled = false;
+    }
+  })();
 });
 
 void boot();

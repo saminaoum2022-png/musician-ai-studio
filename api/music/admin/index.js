@@ -21,11 +21,14 @@ const {
   verifyUser,
   selectFromTable,
   callRpc,
+  isAdminEmail,
 } = require("../../_lib/credits-auth");
 const { SUNO_USD_PER_CREDIT } = require("../../_lib/music-generation-log");
 const { creditsForSubscriptionGrant } = require("../../_lib/billing-config");
 const { ensureProfileRow } = require("../../_lib/ensure-profile-row");
-const { isAdminEmail } = require("../../_lib/credits-auth");
+const {
+  listAssignableRoles,
+} = require("../../_lib/admin-permissions");
 
 const SUPABASE_URL = (process.env.SUPABASE_URL || "").replace(/\/$/, "");
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
@@ -679,20 +682,46 @@ module.exports = async function handler(req, res) {
   if (req.method === "OPTIONS") return res.end();
   if (req.method !== "GET") return sendJson(res, 405, { error: "Method not allowed" });
 
-  const admin = await verifyAdmin(req);
-  if (!admin) {
-    const user = await verifyUser(req);
-    if (!user) return adminUnauthorized(res);
-    return adminForbidden(res);
-  }
-
   const url = new URL(req.url || "/", "http://localhost");
   const view = String(url.searchParams.get("view") || "overview").trim().toLowerCase();
   const limit = clampInt(url.searchParams.get("limit"), 1, 200, 50);
   const offset = clampInt(url.searchParams.get("offset"), 0, 100000, 0);
 
+  const admin = await verifyAdmin(req, { view: view === "session" ? null : view });
+  if (!admin) {
+    const user = await verifyUser(req);
+    if (!user) return adminUnauthorized(res);
+    return adminForbidden(res, view === "settings"
+      ? "Only Owner / Admin can open Settings."
+      : "You do not have access to this section.");
+  }
+
   try {
-    let payload = { ok: true, view };
+    let payload = {
+      ok: true,
+      view,
+      session: {
+        email: admin.email,
+        userId: admin.userId,
+        role: admin.role,
+        roleLabel: admin.roleLabel,
+        isOwner: admin.isOwner,
+        canManageTeam: admin.canManageTeam,
+        canGrantCredits: admin.canGrantCredits,
+        allowedViews: admin.allowedViews,
+      },
+    };
+
+    if (view === "session") {
+      payload.roles = listAssignableRoles();
+      return sendJson(res, 200, payload);
+    }
+
+    if (view === "settings") {
+      payload.roles = listAssignableRoles();
+      return sendJson(res, 200, payload);
+    }
+
     if (view === "overview") {
       payload.overview = await getOverview();
     } else if (view === "users") {
@@ -708,7 +737,10 @@ module.exports = async function handler(req, res) {
     } else if (view === "suno") {
       payload.suno = await getSunoPanel();
     } else {
-      return sendJson(res, 400, { error: "Unknown view", allowed: ["overview", "users", "credits", "generations", "subscriptions", "publications", "suno"] });
+      return sendJson(res, 400, {
+        error: "Unknown view",
+        allowed: ["session", "settings", "overview", "users", "credits", "generations", "subscriptions", "publications", "suno"],
+      });
     }
     return sendJson(res, 200, payload);
   } catch (e) {

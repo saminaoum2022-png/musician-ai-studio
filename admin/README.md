@@ -11,8 +11,9 @@ Run in the SQL Editor (in order if not already applied):
 1. `supabase/credits.sql` + `supabase/credits_decimal.sql` + `supabase/gifts.sql`
 2. `supabase/pro_subscriptions.sql`
 3. **`supabase/admin_dashboard.sql`**
+4. **`supabase/admin_team_roles.sql`** — extended dashboard roles + team audit columns
 
-Then grant yourself admin:
+Then grant yourself admin (only needed once — after that use **Settings → Team & roles** in the dashboard):
 
 ```sql
 update public.profiles
@@ -43,7 +44,20 @@ Open **https://admin.nabadai.com** in a desktop browser.
 - **Google accounts** (most NabadAi users): tap **Continue with Google** — your Google password does not go in the email/password form.
 - **Email/password accounts**: use the form below the divider.
 
-Your account must be an admin (`profiles.role = 'admin'` in Supabase, or your email in `ADMIN_EMAILS`).
+Your account must have dashboard access (`profiles.role` is not `user`, or your email is in `ADMIN_EMAILS`).
+
+### Dashboard roles (Settings → Team & roles)
+
+| Role | Best for | Access |
+|------|----------|--------|
+| **Owner / Admin** | You, co-founders | Everything + invite/revoke teammates |
+| **Operations** | Platform ops | Overview, Suno, Users, Generations, Subscriptions |
+| **Support** | Customer support | Users, Credits (grant), Generations, Subscriptions |
+| **Moderator** | Trust & safety | Users, Publications, Generations |
+| **Finance** | Billing / revenue | Overview, Credits, Subscriptions, Users |
+| **Viewer** | Advisors / interns | Read-only across analytics tabs |
+
+Teammates must **already have a NabadAi account** before you grant access. Owner emails in `ADMIN_EMAILS` cannot be revoked from the UI.
 
 ### Supabase redirect URL (required for Google)
 
@@ -89,9 +103,15 @@ where user_id = (select id from auth.users where lower(email) = lower('saminaoum
 
 ## API
 
-`GET /api/music/admin?view=overview|suno|users|credits|generations|publications|subscriptions`
+`GET /api/music/admin?view=overview|suno|users|credits|generations|publications|subscriptions|settings|session`
 
-Requires `Authorization: Bearer <supabase access_token>` and `profiles.role = 'admin'`.
+Team management (Owner / Admin only):
+
+- `GET /api/admin/team` — list teammates
+- `POST /api/admin/team` — `{ "email": "...", "role": "support" }`
+- `DELETE /api/admin/team` — `{ "email": "..." }`
+
+Requires `Authorization: Bearer <supabase access_token>` and appropriate dashboard role.
 
 ### Grant paid credits (portal + in-app)
 

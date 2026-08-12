@@ -24,11 +24,11 @@ module.exports = async function handler(req, res) {
   if (req.method === "OPTIONS") return res.end();
   if (req.method !== "POST") return sendJson(res, 405, { error: "Method not allowed" });
 
-  const admin = await verifyAdmin(req);
+  const admin = await verifyAdmin(req, { requireGrantCredits: true });
   if (!admin) {
     const user = await verifyUser(req);
     if (!user) return adminUnauthorized(res);
-    return adminForbidden(res);
+    return adminForbidden(res, "You do not have permission to grant credits.");
   }
   const user = admin;
 

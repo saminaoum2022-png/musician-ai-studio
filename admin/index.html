@@ -8,7 +8,7 @@
     <title>NabadAi Admin</title>
     <meta name="theme-color" content="#05070d" />
     <link rel="icon" href="/favicon.ico" sizes="any" />
-    <link rel="stylesheet" href="/admin/styles.css?v=20260812-nabad-shell" />
+    <link rel="stylesheet" href="/admin/styles.css?v=20260812-team" />
     <script>
       (function () {
         try {
@@ -135,9 +135,15 @@
               <span class="navIcon" aria-hidden="true">◆</span><span>Subscriptions</span>
             </button>
           </div>
+          <div class="navGroup" data-nav-group="settings">
+            <div class="navGroupLabel">Settings</div>
+            <button type="button" class="navItem" data-view="settings">
+              <span class="navIcon" aria-hidden="true">⚙</span><span>Team &amp; roles</span>
+            </button>
+          </div>
         </nav>
         <div class="sidebarFoot">
-          <p class="teamAccessHint">Team access: set <code>profiles.role = admin</code> in Supabase for coworkers you trust.</p>
+          <div id="adminRoleBadge" class="adminRoleBadge" hidden></div>
           <div id="adminUserEmail" class="adminUserEmail">—</div>
           <button type="button" class="btnGhost" id="btnSignOut">Sign out</button>
         </div>
@@ -162,11 +168,12 @@
         <div id="viewGenerations" class="viewPanel" data-panel="generations" hidden></div>
         <div id="viewPublications" class="viewPanel" data-panel="publications" hidden></div>
         <div id="viewSubscriptions" class="viewPanel" data-panel="subscriptions" hidden></div>
+        <div id="viewSettings" class="viewPanel" data-panel="settings" hidden></div>
 
         <div id="globalError" class="globalError" hidden></div>
       </main>
     </div>
 
-    <script type="module" src="/admin/app.js?v=20260812-nabad-shell"></script>
+    <script type="module" src="/admin/app.js?v=20260812-team"></script>
   </body>
 </html>

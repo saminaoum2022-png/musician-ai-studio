@@ -34855,9 +34855,17 @@ function dismissMiniPlayer({ muteHubAutoplay = true } = {}) {
   }
 
   try {
-    const a = getMiniPlayerAudio();
-    if (a) a.pause();
-    if (playerEl && playerEl !== a) playerEl.pause();
+    if (playerEl) {
+      playerEl.pause();
+      playerEl.currentTime = 0;
+      try {
+        playerEl.removeAttribute("src");
+        playerEl.load();
+      } catch {}
+    } else {
+      const a = getMiniPlayerAudio();
+      if (a) a.pause();
+    }
   } catch {}
 
   hubNowMeta = null;
@@ -34882,6 +34890,9 @@ function dismissMiniPlayer({ muteHubAutoplay = true } = {}) {
   } catch {}
   try {
     syncDiscoveryPlayingHighlights();
+  } catch {}
+  try {
+    syncUserPublicFeedPlayingHighlights();
   } catch {}
   try {
     void clearLockScreenNowPlaying();
@@ -38303,6 +38314,8 @@ function isDiscoverStyleMiniSource() {
 function toggleLoadedPlayerIfSameUrl(rawUrl) {
   const raw = String(rawUrl || "").trim();
   if (!raw) return false;
+  // Mini player was dismissed — force a fresh load (hook + session) instead of resume.
+  if (!miniSource) return false;
   const a = ensurePlayer();
   if (!a) return false;
   const cur = String(currentPlayerTrackRef?.url || "").trim();
@@ -39202,7 +39215,7 @@ async function playLibraryUrlOnPlayer(rawUrl, title, artUrl, opts) {
       url: playableRaw,
       playlistId: String(opts?.playlistId || "").trim(),
       playlistIndex: Number(opts?.playlistIndex) || 0,
-      applyFeedHook: !openPlayer,
+      applyFeedHook: true,
     }
     : fromPlaylist
     ? {
@@ -39211,7 +39224,7 @@ async function playLibraryUrlOnPlayer(rawUrl, title, artUrl, opts) {
       url: playableRaw,
       playlistSlug: String(opts?.playlistSlug || "").trim(),
       playlistIndex: Number(opts?.playlistIndex) || 0,
-      applyFeedHook: !openPlayer,
+      applyFeedHook: true,
     }
     : fromDiscover
       ? {
@@ -39220,9 +39233,9 @@ async function playLibraryUrlOnPlayer(rawUrl, title, artUrl, opts) {
         url: playableRaw,
         discoverReel: Boolean(opts?.discoverReel),
         reelIndex: Number.isFinite(opts?.reelIndex) ? Number(opts.reelIndex) : 0,
-        applyFeedHook: !openPlayer,
+        applyFeedHook: true,
       }
-      : { ...(playSource || {}), type: "public_profile_lib", url: playableRaw, applyFeedHook: !openPlayer };
+      : { ...(playSource || {}), type: "public_profile_lib", url: playableRaw, applyFeedHook: true };
   miniSource = publicSource;
   resetPublicPlayTracking(miniSource);
   libraryNowPlayingId = null;
@@ -51954,6 +51967,7 @@ async function playOnPlayerPage(url, label, meta = null, opts = {}) {
     try {
       const ok = await hubAudioPlayWithRetry(a);
       if (ok) {
+        await applyFeedHookAfterPlayStart(a, miniSource);
         if (els.btnPlayerPlay) els.btnPlayerPlay.disabled = true;
         if (els.btnPlayerPause) els.btnPlayerPause.disabled = false;
       } else if (!opts.reelSwap) {
@@ -51976,6 +51990,7 @@ async function playOnPlayerPage(url, label, meta = null, opts = {}) {
   try {
     const ok = await hubAudioPlayWithRetry(a);
     if (!ok) throw new Error("play_failed");
+    await applyFeedHookAfterPlayStart(a, miniSource);
     if (els.btnPlayerPlay) els.btnPlayerPlay.disabled = true;
     if (els.btnPlayerPause) els.btnPlayerPause.disabled = false;
   } catch (e) {

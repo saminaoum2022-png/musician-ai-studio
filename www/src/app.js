@@ -201,7 +201,7 @@ import { MUSIC_VIDEO_FEATURE_ENABLED } from "./feature-flags.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260812-215851";
+const APP_BUILD = "20260812-232922";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -60681,7 +60681,7 @@ wireLegalLinks();
 
 try {
   const _vsub = document.getElementById("settingsVersionSub");
-  if (_vsub) _vsub.textContent = `Version 1.0.7 · build ${APP_BUILD}`;
+  if (_vsub) _vsub.textContent = `Version 1.0.8 · build ${APP_BUILD}`;
 } catch {}
 
 /** Permanently delete signed-in account (server + device). Guests only clear local data. */

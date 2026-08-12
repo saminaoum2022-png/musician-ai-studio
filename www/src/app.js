@@ -20535,6 +20535,14 @@ function feedMetaThumbUsable(metaThumb, track) {
 function trackCoverArtForFeed(track) {
   const m = track?.meta || {};
   const metaThumb = String(m.imageThumb || "").trim();
+  if (
+    m.thumbFrame &&
+    metaThumb &&
+    !metaThumb.startsWith("data:") &&
+    !isLogoCoverUrl(metaThumb)
+  ) {
+    return metaThumb.split("?")[0].split("#")[0];
+  }
   if (feedMetaThumbUsable(metaThumb, track)) return metaThumb;
 
   for (const c of trackCoverArtCandidates(track)) {
@@ -20773,6 +20781,10 @@ async function persistTrackCoverIfNeeded(track) {
   if (_coverUploadInflight.has(id)) return _coverUploadInflight.get(id);
   const job = (async () => {
     try {
+      const thumbFrame =
+        track?.meta?.thumbFrame && typeof track.meta.thumbFrame === "object"
+          ? track.meta.thumbFrame
+          : null;
       const mainSrc = fullData.startsWith("data:") ? fullData : thumbData;
       const displayData = await encodeCoverRasterDataUrl(mainSrc, {
         maxSide: 1280,
@@ -20783,16 +20795,30 @@ async function persistTrackCoverIfNeeded(track) {
       const imageUrl = await uploadSongCoverBlob(displayBlob, id, "");
       let imageThumb = imageUrl;
       try {
-        const thumbSrc =
-          thumbData.startsWith("data:") && thumbData !== mainSrc ? thumbData : mainSrc;
-        const thumbDataOut = await encodeCoverRasterDataUrl(thumbSrc, {
-          maxSide: 256,
-          quality: 0.72,
-          preferWebp: true,
-          squareCrop: true,
-        });
-        const thumbBlob = await dataUrlToBlob(thumbDataOut);
-        imageThumb = await uploadSongCoverBlob(thumbBlob, id, "thumb");
+        const customThumbData =
+          thumbData.startsWith("data:") && thumbData !== mainSrc ? thumbData : "";
+        if (customThumbData) {
+          const thumbBlob = await dataUrlToBlob(customThumbData);
+          imageThumb = await uploadSongCoverBlob(thumbBlob, id, "thumb");
+        } else if (thumbFrame) {
+          const frameSource = fullData.startsWith("data:") ? displayData : imageUrl;
+          const built = await buildCoverThumbWithFrame(frameSource, thumbFrame);
+          if (built) {
+            const thumbBlob = await dataUrlToBlob(built);
+            imageThumb = await uploadSongCoverBlob(thumbBlob, id, "thumb");
+          }
+        } else {
+          const thumbSrc =
+            thumbData.startsWith("data:") && thumbData !== mainSrc ? thumbData : mainSrc;
+          const thumbDataOut = await encodeCoverRasterDataUrl(thumbSrc, {
+            maxSide: 256,
+            quality: 0.72,
+            preferWebp: true,
+            squareCrop: true,
+          });
+          const thumbBlob = await dataUrlToBlob(thumbDataOut);
+          imageThumb = await uploadSongCoverBlob(thumbBlob, id, "thumb");
+        }
       } catch {
         imageThumb = imageUrl;
       }
@@ -20805,6 +20831,7 @@ async function persistTrackCoverIfNeeded(track) {
         imageUrl,
         imageThumb,
         coverUploadPending: false,
+        ...(thumbFrame ? { thumbFrame } : {}),
         ...(prev.meta?.photoMode || track?.meta?.photoMode ? { photoMode: true } : {}),
       };
       items[idx] = { ...prev, artUrl: imageUrl, meta: nextMeta, ts: Date.now() };
@@ -38378,6 +38405,12 @@ async function setLibraryTrackPublicOnProfile(trackId, wantPublic, opts = {}) {
 
   try {
   if (wantPublic) {
+    if (track?.meta?.thumbFrame && String(track?.meta?.imageThumb || "").startsWith("data:")) {
+      await persistTrackThumbIfNeeded(track);
+      items = loadLibrary();
+      idx = items.findIndex((x) => String(x.id) === id);
+      if (idx >= 0) track = items[idx];
+    }
     await persistTrackCoverIfNeeded(track);
     items = loadLibrary();
     idx = items.findIndex((x) => String(x.id) === id);

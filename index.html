@@ -187,7 +187,7 @@
       onload="this.media='all'"
     />
     <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Display:wght@900&family=Inter:wght@900&display=swap" /></noscript>
-    <link rel="stylesheet" href="./styles.css?v=20260812-160734" />
+    <link rel="stylesheet" href="./styles.css?v=20260812-175830" />
 
     <meta name="description" content="Create complete songs from lyrics, a hum, or a photo with NabadAi. Explore AI music tools, Arabic styles, voice personas, and creator sharing." />
     <meta property="og:type" content="website" />
@@ -334,9 +334,33 @@
             <a href="#/challenges" class="journeyStep" data-route-link="challenges"><span class="journeyIco" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><circle cx="12" cy="12" r="9"/><path d="M12 7v10M7 12h10" stroke-width="2.4" stroke-linecap="round"/></svg></span><span class="journeyLabel">Create</span></a>
             <a href="#/activity" class="journeyStep" data-route-link="activity"><span class="journeyIco" aria-hidden="true"><svg viewBox="0 0 24 24"><polyline fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></span><span class="journeyLabel">Activity</span></a>
             <a href="#/profile" class="journeyStep" data-route-link="profile"><span class="journeyIco" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></span><span class="journeyLabel">Profile</span></a>
-            <a href="#/sounds" class="journeyStep" data-route-link="sounds"><span class="journeyIco" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M6 9v6M10 5v14M14 8v8M18 11v2"/></svg></span><span class="journeyLabel">Sounds</span></a>
+            <div class="journeyStepGroup journeyStepGroup--sounds">
+              <a href="#/sounds" class="journeyStep" data-route-link="sounds"><span class="journeyIco" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M6 9v6M10 5v14M14 8v8M18 11v2"/></svg></span><span class="journeyLabel">Sounds</span></a>
+              <a href="#/pro" id="deskSidebarProLink" class="deskSidebarProLink" data-route-link="pro" hidden aria-hidden="true">
+                <span class="webProFeaturePill deskSidebarProLinkPill" aria-hidden="true">Pro</span>
+                <span class="deskSidebarProLinkCopy">
+                  <span class="deskSidebarProLinkTitle">NabadAi Pro</span>
+                  <span class="deskSidebarProLinkSub">Weekly &amp; monthly plans</span>
+                </span>
+              </a>
+            </div>
           </div>
         </div>
+        <aside id="deskSidebarStorePromo" class="deskSidebarStorePromo" hidden aria-hidden="true" aria-label="Mobile apps coming soon">
+          <p class="deskSidebarStorePromoEyebrow">Coming soon</p>
+          <p class="deskSidebarStorePromoTitle">NabadAi on mobile</p>
+          <p class="deskSidebarStorePromoSub">App Store &amp; Google Play</p>
+          <div class="deskSidebarStoreBadges" aria-hidden="true">
+            <div class="deskSidebarStoreBadge deskSidebarStoreBadge--apple">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M16.365 1.43c0 1.14-.493 2.27-1.177 3.08-.744.89-1.962 1.56-3.127 1.47-.05-1.09.452-2.21 1.113-2.991.827-.96 2.246-1.678 3.191-1.559zM20.79 17.193c-.553 1.265-.824 1.841-1.549 2.966-1.002 1.558-2.415 3.502-4.167 3.519-1.563.015-1.958-1.003-4.066-1.003-2.108 0-2.548 1.012-4.115 1.018-1.766.007-3.115-1.744-4.12-3.3C2.1 18.055 1.04 14.69 2.478 11.66c1.008-1.985 2.798-3.238 4.756-3.268 1.865-.03 2.884 1.277 4.066 1.277 1.182 0 3.402-1.578 5.736-1.345.978.041 2.732.29 4.024 2.188-.105.065-2.403 1.403-2.378 4.18.025 3.332 2.915 4.437 2.955 4.453z"/></svg>
+              <span>App Store</span>
+            </div>
+            <div class="deskSidebarStoreBadge deskSidebarStoreBadge--play">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M3.6 2.4 13.2 12 3.6 21.6V2.4zm2.4 16.2 7.8-6.3-7.8-6.3v12.6zm10.2-14.4 2.4 2.4-3 3 3 3-2.4 2.4-5.4-5.4 5.4-5.4z"/></svg>
+              <span>Google Play</span>
+            </div>
+          </div>
+        </aside>
         <div class="headerRight"></div>
       </header>
 
@@ -4808,6 +4832,6 @@
     </script>
     <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
     <script src="./env.client.js" onerror="void 0"></script>
-    <script type="module" src="./src/app.js?v=20260812-160734"></script>
+    <script type="module" src="./src/app.js?v=20260812-175830"></script>
   </body>
 </html>

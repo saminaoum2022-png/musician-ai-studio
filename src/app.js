@@ -9604,7 +9604,7 @@ function discoverUserLibPlayAttrs(t, profMap, opts = {}) {
     ? String(opts.byLine)
     : (handle ? `@${handle}` : "Creator");
   const rawTitle = String(t.title || "Untitled");
-  const artSafe = trackCoverArtForDisplay(t);
+  const artSafe = trackCoverArtForSquareTile(t) || trackCoverArtForDisplay(t);
   const encUrl = encodeURIComponent(String(t.url || ""));
   const encTitle = encodeURIComponent(rawTitle);
   const encBy = encodeURIComponent(byLine);
@@ -14580,16 +14580,15 @@ function bindFollowingComposeOnce() {
 }
 
 function followingActivityPlayAttrs(t, profMap, byLine, opts = {}) {
-  // Feed post covers are full-width squares — use portrait/full art and crop
-  // in CSS. Small remix tiles keep the list thumb to save bandwidth.
-  const displayArt = trackCoverArtForDisplay(t);
+  // Feed cards are square — use the library thumb (honors user framing), not the raw portrait.
   const thumbArt = trackCoverArtForSquareTile(t);
-  const artSafe = opts.useThumb ? thumbArt : displayArt || thumbArt;
+  const displayArt = trackCoverArtForDisplay(t);
+  const artSafe = opts.useThumb ? thumbArt : (thumbArt || displayArt);
   const rawTitle = String(t.title || "Untitled");
   const encUrl = encodeURIComponent(String(t.url || ""));
   const encTitle = encodeURIComponent(rawTitle);
   const encBy = encodeURIComponent(byLine || "");
-  const encArt = encodeURIComponent(displayArt || artSafe);
+  const encArt = encodeURIComponent(artSafe);
   const encSongId = encodeURIComponent(String(t.id || t.songId || ""));
   const encOwnerId = encodeURIComponent(String(t.userId || ""));
   const encTaskId = encodeURIComponent(String(t.taskId || ""));
@@ -20568,6 +20567,14 @@ function trackCoverArtForFeed(track) {
 function trackCoverArtForDisplay(track) {
   const m = track?.meta || {};
   const listThumb = String(m.imageThumb || "").trim();
+  if (
+    m.thumbFrame &&
+    listThumb &&
+    !listThumb.startsWith("data:") &&
+    !isLogoCoverUrl(listThumb)
+  ) {
+    return listThumb.split("?")[0].split("#")[0];
+  }
   const candidates = [
     String(m.imageUrl || "").trim(),
     String(track?.artUrl || "").trim(),
@@ -20892,6 +20899,32 @@ async function persistTrackCoverIfNeeded(track) {
   } finally {
     _coverUploadInflight.delete(id);
   }
+}
+
+/** Before publish: upload framed thumb + any pending cover blobs so feeds match the library. */
+async function ensureTrackCoverSyncedBeforePublish(trackId) {
+  const id = String(trackId || "").trim();
+  if (!id) return null;
+  let track = loadLibrary().find((x) => String(x.id) === id);
+  if (!track) return null;
+  const frame = track?.meta?.thumbFrame;
+  if (frame && typeof frame === "object") {
+    const thumb = String(track?.meta?.imageThumb || "").trim();
+    if (thumb.startsWith("data:")) {
+      await persistTrackThumbIfNeeded(track);
+    } else if (!thumb) {
+      const src = trackCoverArtForDisplay(track);
+      const built = await buildCoverThumbWithFrame(src, frame);
+      if (built) {
+        patchLibraryTrack(id, { meta: { ...(track.meta || {}), imageThumb: built, thumbFrame: frame } });
+        track = loadLibrary().find((x) => String(x.id) === id) || track;
+        await persistTrackThumbIfNeeded(track);
+      }
+    }
+    track = loadLibrary().find((x) => String(x.id) === id) || track;
+  }
+  await persistTrackCoverIfNeeded(track);
+  return loadLibrary().find((x) => String(x.id) === id) || track;
 }
 
 /** Upload a freshly edited square thumb when the main cover is already on Storage. */
@@ -26040,11 +26073,9 @@ function userSongPublishedAtValue(row) {
   return String(row?.published_at || row?.publishedAt || "").trim();
 }
 
-/** True once a library row has been published (profile / Discover). */
-function libraryTrackIsPublished(track) {
-  if (!track) return false;
-  if (track.publicOnProfile) return true;
-  return Boolean(userSongPublishedAtValue(track));
+/** True when the song is live on Profile / Discover right now. */
+function libraryTrackIsLivePublic(track) {
+  return Boolean(track?.publicOnProfile);
 }
 
 function libraryTrackPublicTs(track) {
@@ -26298,8 +26329,8 @@ async function fetchUserSongsFromNetwork(reason = "unknown") {
   // happens to be a legacy `data:` URL*, same trick we use on `hub_posts`
   // for cover_url / creator_avatar. The cheap `art_url is null` branch
   // covers freshly inserted rows where we deliberately wrote null.
-  const colsWithPublished = "id,created_at,published_at,title,song_url,task_id,audio_id,kind,art_url,public_on_profile,meta_remix_of:meta->remixOf,meta_mashup_of:meta->mashupOf,meta_release_caption:meta->>releaseCaption,meta_challenge:meta->challenge,meta_featured_on_profile:meta->>featuredOnProfile,meta_nabad_verification:meta->>nabadVerification,meta_has_reference:meta->hasReference,meta_vocal_ref:meta->>vocalRefOrigin,meta_mode:meta->>mode,meta_persona_id:meta->>personaId,meta_lyrics_edited:meta->lyricsEditedByUser,meta_lyrics_generated:meta->lyricsGeneratedInNabad,meta_lyrics:meta->>lyricsInput,meta_search_template:meta->>searchTemplateId,meta_deleted_at:meta->>deletedAt,meta_image_url:meta->>imageUrl,meta_image_thumb:meta->>imageThumb,meta_photo_mode:meta->photoMode,meta_nabad_abstract_cover:meta->nabadAbstractCover";
-  const colsLegacy = "id,created_at,title,song_url,task_id,audio_id,kind,art_url,public_on_profile,meta_remix_of:meta->remixOf,meta_mashup_of:meta->mashupOf,meta_release_caption:meta->>releaseCaption,meta_challenge:meta->challenge,meta_featured_on_profile:meta->>featuredOnProfile,meta_nabad_verification:meta->>nabadVerification,meta_has_reference:meta->hasReference,meta_vocal_ref:meta->>vocalRefOrigin,meta_mode:meta->>mode,meta_persona_id:meta->>personaId,meta_lyrics_edited:meta->lyricsEditedByUser,meta_lyrics_generated:meta->lyricsGeneratedInNabad,meta_lyrics:meta->>lyricsInput,meta_search_template:meta->>searchTemplateId,meta_deleted_at:meta->>deletedAt,meta_image_url:meta->>imageUrl,meta_image_thumb:meta->>imageThumb,meta_photo_mode:meta->photoMode,meta_nabad_abstract_cover:meta->nabadAbstractCover";
+  const colsWithPublished = "id,created_at,published_at,title,song_url,task_id,audio_id,kind,art_url,public_on_profile,meta_remix_of:meta->remixOf,meta_mashup_of:meta->mashupOf,meta_release_caption:meta->>releaseCaption,meta_challenge:meta->challenge,meta_featured_on_profile:meta->>featuredOnProfile,meta_nabad_verification:meta->>nabadVerification,meta_has_reference:meta->hasReference,meta_vocal_ref:meta->>vocalRefOrigin,meta_mode:meta->>mode,meta_persona_id:meta->>personaId,meta_lyrics_edited:meta->lyricsEditedByUser,meta_lyrics_generated:meta->lyricsGeneratedInNabad,meta_lyrics:meta->>lyricsInput,meta_search_template:meta->>searchTemplateId,meta_deleted_at:meta->>deletedAt,meta_image_url:meta->>imageUrl,meta_image_thumb:meta->>imageThumb,meta_thumb_frame:meta->thumbFrame,meta_photo_mode:meta->photoMode,meta_nabad_abstract_cover:meta->nabadAbstractCover";
+  const colsLegacy = "id,created_at,title,song_url,task_id,audio_id,kind,art_url,public_on_profile,meta_remix_of:meta->remixOf,meta_mashup_of:meta->mashupOf,meta_release_caption:meta->>releaseCaption,meta_challenge:meta->challenge,meta_featured_on_profile:meta->>featuredOnProfile,meta_nabad_verification:meta->>nabadVerification,meta_has_reference:meta->hasReference,meta_vocal_ref:meta->>vocalRefOrigin,meta_mode:meta->>mode,meta_persona_id:meta->>personaId,meta_lyrics_edited:meta->lyricsEditedByUser,meta_lyrics_generated:meta->lyricsGeneratedInNabad,meta_lyrics:meta->>lyricsInput,meta_search_template:meta->>searchTemplateId,meta_deleted_at:meta->>deletedAt,meta_image_url:meta->>imageUrl,meta_image_thumb:meta->>imageThumb,meta_thumb_frame:meta->thumbFrame,meta_photo_mode:meta->photoMode,meta_nabad_abstract_cover:meta->nabadAbstractCover";
   const artUrlGuard = `&or=${encodeURIComponent("(art_url.is.null,art_url.not.like.data:*)")}`;
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), 12000);
@@ -26383,6 +26414,9 @@ async function fetchUserSongsFromNetwork(reason = "unknown") {
           : {}),
         ...(String(s.meta_image_thumb || "").trim() && !String(s.meta_image_thumb).startsWith("data:")
           ? { imageThumb: String(s.meta_image_thumb).trim() }
+          : {}),
+        ...(s.meta_thumb_frame && typeof s.meta_thumb_frame === "object"
+          ? { thumbFrame: s.meta_thumb_frame }
           : {}),
         ...(s.meta_photo_mode === true || s.meta_photo_mode === "true" ? { photoMode: true } : {}),
         ...(s.meta_nabad_abstract_cover === true || s.meta_nabad_abstract_cover === "true"
@@ -26884,6 +26918,9 @@ function mapPublicLibrarySongRows(arr, selectedPublishedAt) {
             ...(String(s.meta_image_thumb || "").trim() && !String(s.meta_image_thumb).startsWith("data:")
               ? { imageThumb: String(s.meta_image_thumb).trim() }
               : {}),
+            ...(s.meta_thumb_frame && typeof s.meta_thumb_frame === "object"
+              ? { thumbFrame: s.meta_thumb_frame }
+              : {}),
           },
           publicOnProfile: true,
         },
@@ -26895,7 +26932,7 @@ function mapPublicLibrarySongRows(arr, selectedPublishedAt) {
 }
 
 const PUBLIC_LIBRARY_SONG_META_COLS =
-  "meta_remix_of:meta->remixOf,meta_mashup_of:meta->mashupOf,meta_release_caption:meta->>releaseCaption,meta_challenge:meta->challenge,meta_featured_on_profile:meta->>featuredOnProfile,meta_style:meta->>styleInput,meta_style_sent:meta->>styleSent,meta_style_tags:meta->styleTags,meta_mode:meta->>mode,meta_photo_mode:meta->photoMode,meta_image_url:meta->>imageUrl,meta_image_thumb:meta->>imageThumb";
+  "meta_remix_of:meta->remixOf,meta_mashup_of:meta->mashupOf,meta_release_caption:meta->>releaseCaption,meta_challenge:meta->challenge,meta_featured_on_profile:meta->>featuredOnProfile,meta_style:meta->>styleInput,meta_style_sent:meta->>styleSent,meta_style_tags:meta->styleTags,meta_mode:meta->>mode,meta_photo_mode:meta->photoMode,meta_image_url:meta->>imageUrl,meta_image_thumb:meta->>imageThumb,meta_thumb_frame:meta->thumbFrame";
 
 async function fetchPublicSongByOwnerTitle(ownerUserId, title) {
   const uid = String(ownerUserId || "").trim();
@@ -27230,7 +27267,7 @@ function paintUserPublicPosts(postItems, profMap, publicHandle) {
   _userPublicFeedTracks = postItems
     .map((item) => {
       const t = item.track;
-      const artSafe = trackCoverArtForDisplay(t);
+      const artSafe = trackCoverArtForSquareTile(t) || trackCoverArtForDisplay(t);
       return {
         url: String(t.url || "").trim(),
         title: String(t.title || "Untitled"),
@@ -38026,7 +38063,7 @@ function discoverPlaylistLibRowHtml(t, profMap, idx) {
   const encUrl = encodeURIComponent(String(t.url || ""));
   const encTitle = encodeURIComponent(rawTitle);
   const encBy = encodeURIComponent(byLine);
-  const encArt = encodeURIComponent(displayArt || artSafe);
+  const encArt = encodeURIComponent(artSafe || displayArt);
   const encSongId = encodeURIComponent(String(t.id || ""));
   const encOwnerId = encodeURIComponent(String(t.userId || ""));
   const encTaskId = encodeURIComponent(String(t.taskId || ""));
@@ -38405,13 +38442,7 @@ async function setLibraryTrackPublicOnProfile(trackId, wantPublic, opts = {}) {
 
   try {
   if (wantPublic) {
-    if (track?.meta?.thumbFrame && String(track?.meta?.imageThumb || "").startsWith("data:")) {
-      await persistTrackThumbIfNeeded(track);
-      items = loadLibrary();
-      idx = items.findIndex((x) => String(x.id) === id);
-      if (idx >= 0) track = items[idx];
-    }
-    await persistTrackCoverIfNeeded(track);
+    track = (await ensureTrackCoverSyncedBeforePublish(id)) || track;
     items = loadLibrary();
     idx = items.findIndex((x) => String(x.id) === id);
     if (idx >= 0) track = items[idx];
@@ -38511,10 +38542,16 @@ async function setLibraryTrackPublicOnProfile(trackId, wantPublic, opts = {}) {
     return { ok: false };
   }
   await refreshSupabaseSessionIfNeeded();
+  const publishArtUrl = String(track?.artUrl || "").trim();
   const patch = await supabasePatchUserSong(track, {
     publicOnProfile: next.publicOnProfile,
     ...(willBePublic && publishedAt ? { publishedAt } : {}),
-    ...(willBePublic ? { meta: nextMeta } : {}),
+    ...(willBePublic
+      ? {
+          meta: nextMeta,
+          ...(publishArtUrl && !publishArtUrl.startsWith("data:") ? { artUrl: publishArtUrl } : {}),
+        }
+      : {}),
   }, { reason: willBePublic ? "publish" : "unpublish" });
   recordPublishAudit(track.id, {
     phase: "toggle:cloud",
@@ -44785,6 +44822,23 @@ function patchLibraryTrack(id, patch, reason = "library-edit") {
     meta: items[idx].meta,
   }, { reason });
 }
+function refreshCoverChangeSurfaces(track, coverUrl = "") {
+  if (!track?.id) return;
+  const url = String(coverUrl || trackCoverArtForFeed(track) || track?.artUrl || "").trim();
+  try {
+    patchLibraryRowCoverArt(track.id);
+    refreshOwnSongsUi({ soft: false });
+  } catch {}
+  if (libraryTrackIsLivePublic(track) && url) {
+    void syncHubCoverForTrack(track, url);
+  }
+  try {
+    const route = String(document.body.getAttribute("data-route") || "");
+    if (route === "profile" && _profileSongsSegment === "activities") void renderProfileActivities();
+    if (route === "discover") void refreshDiscoverFeed();
+    if (route === "friends") void refreshDiscoveryFollowingFeed();
+  } catch {}
+}
 async function syncHubCoverForTrack(track, coverUrl) {
   const title = String(track?.title || "").trim();
   const url = String(track?.url || "").trim();
@@ -49090,10 +49144,6 @@ function openPlayerChangeCoverPicker() {
     return;
   }
   const track = resolvePlayerLibraryTrack() || currentPlayerTrackRef;
-  if (libraryTrackIsPublished(track)) {
-    showToast("Cover can only be changed before you publish.", { icon: "!", durationMs: 3200 });
-    return;
-  }
   if (!track?.id) {
     setStatus("Open a library song first.");
     return;
@@ -49117,7 +49167,7 @@ function syncPlayerCoverToolsRail() {
   if (!rail) return;
   const own = playerCurrentUserOwnsTrack() && !playerSourceIsExternalListenOnly();
   const track = resolvePlayerLibraryTrack();
-  if (!own || !track || libraryTrackIsPublished(track)) {
+  if (!own || !track) {
     rail.hidden = true;
     return;
   }
@@ -49159,7 +49209,7 @@ function closeThumbEditSheet() {
 }
 
 async function openThumbEditSheet(track) {
-  if (!track?.id || libraryTrackIsPublished(track) || !playerCanEditThumb(track)) return;
+  if (!track?.id || !playerCanEditThumb(track)) return;
   const src = trackCoverArtForDisplay(track);
   if (!src) return;
   _thumbEditTrackId = String(track.id);
@@ -49211,12 +49261,8 @@ async function saveThumbEditSheet() {
   setStatus("");
   void (async () => {
     await persistTrackThumbIfNeeded(fresh);
-    try {
-      const route = String(document.body.getAttribute("data-route") || "");
-      if (route === "profile" && _profileSongsSegment === "activities") void renderProfileActivities();
-      if (route === "discover") void refreshDiscoverFeed();
-      if (route === "friends") void refreshDiscoveryFollowingFeed();
-    } catch {}
+    const latest = loadLibrary().find((x) => String(x.id) === id) || fresh;
+    refreshCoverChangeSurfaces(latest);
   })();
 }
 
@@ -49253,7 +49299,7 @@ async function regeneratePlayerCover(artworkHint = "", trackId = "") {
   const track = trackId
     ? loadLibrary().find((x) => String(x.id) === String(trackId))
     : resolvePlayerLibraryTrack();
-  if (!track?.id || libraryTrackIsPublished(track) || !playerCanRegenerateCover(track)) return;
+  if (!track?.id || !playerCanRegenerateCover(track)) return;
   const hint = String(artworkHint || "").trim().slice(0, 280);
   setPlayerCoverGenerating(true);
   setStatus(hint ? `Generating cover: ${hint}` : "Generating new cover from song…");
@@ -49279,10 +49325,7 @@ async function regeneratePlayerCover(artworkHint = "", trackId = "") {
           setStatus("");
         }
         window.setTimeout(() => setStatus(""), provider ? 4200 : 0);
-        try {
-          patchLibraryRowCoverArt(updated.id);
-          refreshOwnSongsUi({ soft: false });
-        } catch {}
+        refreshCoverChangeSurfaces(updated, artUrl);
       } else {
         setStatus("Cover regeneration failed.");
       }
@@ -49481,7 +49524,7 @@ function suggestArtworkTextFromTrack(track) {
 }
 
 function openCoverRegenSheet(track) {
-  if (!track?.id || libraryTrackIsPublished(track) || !playerCanRegenerateCover(track)) return;
+  if (!track?.id || !playerCanRegenerateCover(track)) return;
   mountFixedOverlaysToBody();
   _coverRegenTrackId = String(track.id);
   _coverRegenDraftHint = "";
@@ -58234,11 +58277,6 @@ if (els.playerCoverUpload) {
       try { els.playerCoverUpload.value = ""; } catch {}
       return;
     }
-    if (libraryTrackIsPublished(track)) {
-      showToast("Cover can only be changed before you publish.", { icon: "!", durationMs: 3200 });
-      try { els.playerCoverUpload.value = ""; } catch {}
-      return;
-    }
     let url = "";
     let thumb = "";
     try {
@@ -58291,14 +58329,8 @@ if (els.playerCoverUpload) {
             artUrl: trackCoverArtForFeed(fresh),
           });
         }
-        try {
-          const route = String(document.body.getAttribute("data-route") || "");
-          if (route === "profile" && _profileSongsSegment === "activities") void renderProfileActivities();
-          if (route === "discover") void refreshDiscoverFeed();
-          if (route === "friends") void refreshDiscoveryFollowingFeed();
-        } catch {}
       }
-      void syncHubCoverForTrack(currentPlayerTrackRef || trackRef, coverForHub);
+      refreshCoverChangeSurfaces(currentPlayerTrackRef || trackRef, coverForHub);
     })();
   });
 }

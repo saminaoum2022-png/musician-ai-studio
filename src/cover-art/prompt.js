@@ -4,7 +4,7 @@
  */
 
 /** Bump when cover prompt policy changes — busts Gemini scene cache on the server. */
-export const COVER_PROMPT_POLICY_VERSION = 10;
+export const COVER_PROMPT_POLICY_VERSION = 11;
 /** Pollinations flux reliably returns ~768×768 square — request square, crop to 9:16 (avoids vertical stretch). */
 export const POLLINATIONS_COVER_WIDTH = 1024;
 export const POLLINATIONS_COVER_HEIGHT = 1024;
@@ -244,7 +244,22 @@ const OBJECT_COMPOSITIONS = [
 ];
 
 const CONCRETE_OBJECT_RE =
-  /\b(balloon|balloons|cake|cupcake|house|home|heart|hearts|ring|rings|flower|flowers|rose|roses|candle|candles|gift|gifts|present|presents|moon|sun|tree|car|clock|book|key|keys|cup|glass|wine|champagne|confetti|diamond|gem|jewel|umbrella|door|window|chair|table|lamp|lantern|snowflake|snowman|pumpkin|cross|anchor|boat|plane|bicycle|bike|camera|phone|shell|feather|butterfly|bear|teddy|toy|box|treasure|coin|medal|trophy|graduation|mortarboard|diploma|wedding|bouquet|chandelier|microphone|guitar|piano|violin|drum|instrument|cookie|cookies|donut|doughnut|ice cream|pizza|fruit|apple|orange|lemon|cherry|cherries|pearl|pearl necklace|necklace|bracelet|watch|shoe|shoes|hat|scarf|envelope|letter|envelope|flag|firework|fireworks|sparkler|sparklers|velvet|satin|ribbon|ribbons|bow|bows)\b/i;
+  /\b(balloon|balloons|cake|cupcake|house|home|heart|hearts|ring|rings|flower|flowers|rose|roses|candle|candles|gift|gifts|present|presents|moon|sun|tree|car|clock|book|key|keys|cup|glass|wine|champagne|confetti|diamond|gem|jewel|umbrella|door|window|chair|table|lamp|lantern|snowflake|snowman|pumpkin|cross|anchor|boat|plane|bicycle|bike|camera|phone|shell|feather|butterfly|bear|teddy|toy|box|treasure|coin|medal|trophy|graduation|mortarboard|diploma|wedding|bouquet|chandelier|microphone|guitar|piano|violin|drum|instrument|cookie|cookies|donut|doughnut|ice cream|pizza|fruit|apple|orange|lemon|cherry|cherries|pearl|pearl necklace|necklace|bracelet|watch|shoe|shoes|hat|scarf|envelope|letter|envelope|flag|firework|fireworks|sparkler|sparklers|velvet|satin|ribbon|ribbons|bow|bows|fries|french fries|burger|hamburger|taco|tacos|sushi|ramen|noodles|pasta|sandwich|steak|salad|coffee|espresso|latte|tea|cocktail|beer|food|meal|snack|breakfast|brunch|dinner|lunch|dessert|pastry|bread|toast|cheese|wine glass|milkshake|smoothie|cupcake|croissant)\b/i;
+
+/** Any explicit regen hint from the user — treat as literal still life, not song story. */
+export function isUserDirectedRegenHint(text) {
+  return String(text || "").trim().length >= 2;
+}
+
+export function shouldUseLiteralSubjectMode(hint, { userArtworkOverride = "" } = {}) {
+  if (String(userArtworkOverride || "").trim()) return true;
+  const prepared = String(hint || "").trim();
+  return prepared.length >= 2 && (isConcreteObjectArtworkHint(prepared) || isFoodArtworkHint(prepared));
+}
+
+function isFoodArtworkHint(text) {
+  return /\b(fries|french fries|burger|hamburger|taco|tacos|sushi|ramen|noodles|pizza|pasta|sandwich|steak|salad|coffee|espresso|latte|tea|cocktail|beer|food|meal|snack|breakfast|brunch|dinner|lunch|dessert|pastry|bread|toast|cheese|milkshake|smoothie|croissant|fried chicken|chicken wings|hot dog|nachos|burrito|dim sum|dumpling|dumplings)\b/i.test(String(text || ""));
+}
 
 function clamp(n, lo, hi) {
   return Math.min(hi, Math.max(lo, n));
@@ -388,7 +403,7 @@ export function compositionPhraseForCover(songId, artworkText = "", visualMode =
 function enrichUserArtworkHint(raw) {
   let s = String(raw || "").trim();
   if (!s) return s;
-  const hasObjectSubject = isConcreteObjectArtworkHint(s);
+  const hasObjectSubject = isConcreteObjectArtworkHint(s) || isFoodArtworkHint(s);
   if (!hasObjectSubject) {
     if (/\bstar\s*sky\b/i.test(s)) {
       s = s.replace(/\bstar\s*sky\b/gi, "night sky filled with stars and soft cosmic glow");
@@ -402,6 +417,9 @@ function enrichUserArtworkHint(raw) {
   if (/\b(flowers?|roses?|bouquet|wildflowers?|bloom|blooms)\b/i.test(s) && !/botanical|still life|focal subject|recognizable/i.test(s)) {
     s = `${s}, beautiful botanical still life with clear recognizable flowers as the focal subject`;
   }
+  if (isFoodArtworkHint(s) && !/still life|focal subject|recognizable|food photography/i.test(s)) {
+    s = `${s}, appetizing food still life photograph with the requested food clearly visible and recognizable as the main subject`;
+  }
   if (/\b(dog|puppy|cat|pet)\b/i.test(s) && !/still life|leash|bowl|collar|paw print/i.test(s)) {
     s = `${s}, cozy pet leash and water bowl still life, warm soft light, no animals, no people`;
   }
@@ -414,8 +432,8 @@ function enrichUserArtworkHint(raw) {
   return s.replace(/\s+/g, " ").trim().slice(0, 280);
 }
 
-function composeFrameForArtwork(userArtwork) {
-  if (isConcreteObjectArtworkHint(userArtwork)) {
+function composeFrameForArtwork(userArtwork, { literalSubject = false } = {}) {
+  if (literalSubject || isConcreteObjectArtworkHint(userArtwork) || isFoodArtworkHint(userArtwork)) {
     return OBJECT_COMPOSE_FRAME;
   }
   if (isSkyOrSpaceHint(userArtwork) || /landscape|ocean|mountain|city|skyline|environment|horizon/i.test(userArtwork)) {
@@ -521,6 +539,9 @@ function moodBucketFallback(bucketKey, energy) {
 
 function landscapeAntiMountainAvoid(storyThemeId) {
   const id = String(storyThemeId || "").trim();
+  if (id === "user_regen") {
+    return "mountain, mountains, hill, hills, mountain range, alps, peak, peaks, generic landscape, scenic vista, wide landscape, nature panorama, ocean horizon, city skyline";
+  }
   if (id === "mountains" || id === "ocean_beach" || id === "city_street" || id === "rain_storm") {
     return "";
   }
@@ -761,6 +782,7 @@ export function buildAbstractCoverPrompt(input, options = {}) {
   const brightness = parseBrightness(input?.brightness);
   const sonicProfile = String(input?.sonicProfile || inferSonicProfile(`${genre} ${styleBlob}`));
   const userArtworkOverride = String(options.userArtworkOverride || "").trim().slice(0, 280);
+  const userDirectedRegen = isUserDirectedRegenHint(userArtworkOverride);
   const forceMusicFallback = Boolean(options.forceMusicFallback && !userArtworkOverride);
   const userArtworkRaw = userArtworkOverride || (forceMusicFallback ? "" : resolveUserArtworkPrompt(input));
   let userArtwork = userArtworkOverride
@@ -792,9 +814,10 @@ export function buildAbstractCoverPrompt(input, options = {}) {
   const composition = compositionPhraseForCover(
     songId,
     userArtwork || userArtworkRaw || sceneOverride || visualScene,
-    sceneOverride || userArtwork ? "user_directed" : visualMode,
+    sceneOverride || userArtwork || userDirectedRegen ? "user_directed" : visualMode,
   );
-  const seed = buildCoverSeed(input, storyTheme, bucketKey, userArtwork, String(options.regenSalt || "").trim());
+  const effectiveStoryTheme = userDirectedRegen ? "user_regen" : storyTheme;
+  const seed = buildCoverSeed(input, effectiveStoryTheme, bucketKey, userArtwork, String(options.regenSalt || "").trim());
   const artworkSource = forceMusicFallback
     ? "regen_music_auto"
     : sceneOverride
@@ -815,7 +838,7 @@ export function buildAbstractCoverPrompt(input, options = {}) {
     parts = userArtwork
       ? [
           NO_TEXT_LEAD,
-          composeFrameForArtwork(userArtwork),
+          composeFrameForArtwork(userArtwork, { literalSubject: userDirectedRegen }),
           sceneOverride,
           nabadIdentityPhrases,
           paletteForUserArtwork(userArtwork, bucketKey),
@@ -846,14 +869,14 @@ export function buildAbstractCoverPrompt(input, options = {}) {
         ];
   } else if (userArtwork) {
     const userPalette = paletteForUserArtwork(userArtwork, bucketKey);
-    const concreteUserArt = isConcreteObjectArtworkHint(userArtwork);
-    const literalLead = concreteUserArt
+    const useLiteralSubject = userDirectedRegen || isConcreteObjectArtworkHint(userArtwork) || isFoodArtworkHint(userArtwork);
+    const literalLead = useLiteralSubject
       ? `photorealistic editorial still life photograph, ${userArtwork}, clearly visible and recognizable`
       : "";
     parts = [
       NO_TEXT_LEAD,
       literalLead,
-      composeFrameForArtwork(userArtwork),
+      composeFrameForArtwork(userArtwork, { literalSubject: useLiteralSubject }),
       userArtwork,
       nabadIdentityPhrases,
       userPalette,
@@ -896,8 +919,8 @@ export function buildAbstractCoverPrompt(input, options = {}) {
     prompt: parts.filter(Boolean).join(", "),
     seed,
     bucket: bucketKey,
-    visualMode: sceneOverride || userArtwork ? "user_directed" : visualMode,
-    storyTheme,
+    visualMode: sceneOverride || userArtwork || userDirectedRegen ? "user_directed" : visualMode,
+    storyTheme: effectiveStoryTheme,
     artworkSource,
     params: {
       songId,
@@ -910,8 +933,8 @@ export function buildAbstractCoverPrompt(input, options = {}) {
       sonicProfile,
       bucket: bucketKey,
       brandPalette: palette,
-      visualMode: sceneOverride || userArtwork ? "user_directed" : visualMode,
-      storyTheme,
+      visualMode: sceneOverride || userArtwork || userDirectedRegen ? "user_directed" : visualMode,
+      storyTheme: effectiveStoryTheme,
       artworkSource,
       userArtwork: userArtwork || undefined,
       userArtworkRaw: userArtworkRaw || undefined,
@@ -924,7 +947,7 @@ export function buildAbstractCoverPrompt(input, options = {}) {
       coverHeight: POLLINATIONS_COVER_HEIGHT,
       coverAspect: "9:16",
       coverSourceAspect: "1:1",
-      landscapeAntiMountainAvoid: landscapeAntiMountainAvoid(storyTheme),
+      landscapeAntiMountainAvoid: landscapeAntiMountainAvoid(effectiveStoryTheme),
     },
   };
 }

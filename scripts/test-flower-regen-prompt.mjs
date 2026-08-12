@@ -33,5 +33,15 @@ assert(/photorealistic editorial still life/i.test(built.prompt), "prompt leads 
 assert(/flower/i.test(built.prompt), "prompt still names flower");
 assert(!/not literal props/i.test(built.prompt), "prompt excludes anti-literal DNA");
 
+const friesIdentity = idMod.nabadIdentityPhrases({ songId: "regen-fries", bucketKey: "happy", concreteSubject: true });
+const friesBuilt = promptMod.buildAbstractCoverPrompt(
+  { songId: "regen-fries", title: "Mountain Song", lyrics: "climbing peaks at dawn", artworkHint: "fries" },
+  { regenSalt: "test", userArtworkOverride: "fries", nabadIdentityPhrases: friesIdentity.text },
+);
+assert(/fries/i.test(friesBuilt.prompt), "fries hint stays in prompt");
+assert(/still life/i.test(friesBuilt.prompt), "fries prompt uses still life framing");
+assert(friesBuilt.storyTheme === "user_regen", "fries regen ignores song mountain story theme");
+assert(!/mountain/i.test(friesBuilt.prompt), "fries prompt does not inject mountain scene");
+
 if (failed) process.exit(1);
-console.log("\nAll flower regen prompt checks passed.");
+console.log("\nAll flower/fries regen prompt checks passed.");

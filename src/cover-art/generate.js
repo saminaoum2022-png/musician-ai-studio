@@ -2,7 +2,7 @@
  * Client-side abstract cover generation via /api/music/cover-art
  */
 import { canRegeneratePollinationsCover, canRegenerateTrackCover, coverArtParamsFromTrack, hasUserPhotoCoverMeta, isPollinationsCoverEligible, shouldUseAbstractCover } from "./params.js";
-import { buildAbstractCoverPrompt, buildPollinationsUrl, classifyVisualBucket, COVER_PROMPT_POLICY_VERSION, resolveStoryTheme, isConcreteObjectArtworkHint } from "./prompt.js";
+import { buildAbstractCoverPrompt, buildPollinationsUrl, classifyVisualBucket, COVER_PROMPT_POLICY_VERSION, resolveStoryTheme, isUserDirectedRegenHint } from "./prompt.js";
 import { resolveVisualDirection } from "./visual-director/director.mjs";
 import { nabadIdentityPhrases } from "./visual-director/nabad-identity.mjs";
 import { DEFAULT_SONG_COVER_URL, isDefaultSongCoverUrl } from "./placeholders.js";
@@ -120,7 +120,7 @@ async function resolveRegenPromptBundle(params, regenOpts = {}) {
         artworkHint: "",
         regenAutoMusic: true,
       };
-  const concreteSubject = Boolean(hintOverride && isConcreteObjectArtworkHint(hintOverride));
+  const concreteSubject = Boolean(hintOverride && isUserDirectedRegenHint(hintOverride));
   const identityPhrases = concreteSubject
     ? nabadIdentityPhrases({
         songId: String(params?.songId || "").trim(),

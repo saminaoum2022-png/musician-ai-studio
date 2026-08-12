@@ -4,7 +4,7 @@
 import { humTrackAvoidTags } from "./hum-track-cover.mjs";
 import { nabadIdentityAvoid, nabadIdentityPhrases, NABAD_ROOT_PHRASES } from "./nabad-identity.mjs";
 import { buildSceneHintFromDirection } from "./schema.mjs";
-import { isConcreteObjectArtworkHint } from "../prompt.js";
+import { isConcreteObjectArtworkHint, isUserDirectedRegenHint } from "../prompt.js";
 
 /** @typedef {import("./schema.js").VisualDirection} VisualDirection */
 
@@ -21,7 +21,7 @@ export function applyVisualDirection(coverInput, direction, opts = {}) {
   const bucketKey = String(opts.bucketKey || direction?.bucketHint || "default").trim();
   const songId = String(coverInput?.songId || coverInput?.id || "").trim();
   const userArtwork = sanitizeScenePhrase(String(coverInput?.artworkStyle || coverInput?.artworkHint || "").trim());
-  const concreteSubject = Boolean(userArtwork && isConcreteObjectArtworkHint(userArtwork));
+  const concreteSubject = Boolean(userArtwork && isUserDirectedRegenHint(userArtwork));
   const identity = direction?.nabadIdentity?.roots?.length && !concreteSubject
     ? {
         roots: direction.nabadIdentity.roots,

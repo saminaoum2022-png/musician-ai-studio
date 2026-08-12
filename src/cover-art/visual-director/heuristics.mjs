@@ -1,7 +1,7 @@
 /**
  * Rule-based Visual Director — no LLM required.
  */
-import { enforceNoHumansScene, prepareDirectUserArtworkHint, compositionPhraseForCover, isConcreteObjectArtworkHint } from "../prompt.js";
+import { enforceNoHumansScene, prepareDirectUserArtworkHint, compositionPhraseForCover, isConcreteObjectArtworkHint, isUserDirectedRegenHint } from "../prompt.js";
 import { humTrackStudioNookPhrase } from "./hum-track-cover.mjs";
 import { nabadIdentityPhrases } from "./nabad-identity.mjs";
 import { validateVisualDirection } from "./schema.mjs";
@@ -131,7 +131,7 @@ export function resolveHeuristicVisualDirection(ctx) {
     energy: ctx.energy,
     visualMode,
     humTrack: ctx.humTrack,
-    concreteSubject: isConcreteObjectArtworkHint(ctx.artworkHint || ctx.artworkStyle),
+    concreteSubject: isUserDirectedRegenHint(ctx.artworkHint || ctx.artworkStyle),
   });
 
   const raw = {

@@ -959,6 +959,28 @@ function hueFromMaqamId(id) {
 }
 
 /** Decorative staff sketch: scale degrees left-to-right with fixed-Do labels (12-TET). */
+function mentorDiagramColors() {
+  const light = document.documentElement.getAttribute("data-theme") === "light";
+  if (light) {
+    return {
+      line: "rgba(15, 23, 40, 0.12)",
+      noteFill: "rgba(109, 77, 245, 0.88)",
+      noteStroke: "rgba(15, 23, 40, 0.14)",
+      stemUp: "rgba(15, 23, 40, 0.28)",
+      stemDown: "rgba(13, 148, 136, 0.55)",
+      label: "rgba(21, 23, 28, 0.72)",
+    };
+  }
+  return {
+    line: "rgba(255,255,255,0.14)",
+    noteFill: "rgba(124,92,255,0.92)",
+    noteStroke: "rgba(255,255,255,0.22)",
+    stemUp: "rgba(255,255,255,0.38)",
+    stemDown: "rgba(35,213,171,0.5)",
+    label: "rgba(210,218,232,0.92)",
+  };
+}
+
 function renderMaqamDiagram(tonicPc, degrees) {
   const el = document.getElementById("mentorMaqamDiagram");
   if (!el) return;
@@ -966,12 +988,13 @@ function renderMaqamDiagram(tonicPc, degrees) {
     el.innerHTML = "";
     return;
   }
+  const c = mentorDiagramColors();
   const W = 280;
   const H = 96;
   const lines = [22, 30, 38, 46, 54];
   let html = `<svg class="mentorStaffSvg" viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg">`;
   for (const y of lines) {
-    html += `<line x1="12" y1="${y}" x2="${W - 6}" y2="${y}" stroke="rgba(255,255,255,0.14)" stroke-width="1.25"/>`;
+    html += `<line x1="12" y1="${y}" x2="${W - 6}" y2="${y}" stroke="${c.line}" stroke-width="1.25"/>`;
   }
   const n = degrees.length;
   const span = n <= 1 ? 0 : W - 44;
@@ -981,15 +1004,15 @@ function renderMaqamDiagram(tonicPc, degrees) {
     const x = n === 1 ? W / 2 : 22 + (i * span) / (n - 1);
     const spread = 54 - (pc * 32) / 11;
     const yn = Math.min(56, Math.max(20, spread));
-    html += `<ellipse cx="${x}" cy="${yn}" rx="6.5" ry="4.8" fill="rgba(124,92,255,0.92)" stroke="rgba(255,255,255,0.22)" stroke-width="1"/>`;
+    html += `<ellipse cx="${x}" cy="${yn}" rx="6.5" ry="4.8" fill="${c.noteFill}" stroke="${c.noteStroke}" stroke-width="1"/>`;
     const stemUp = yn > 38;
     const stemLen = 22;
     if (stemUp) {
-      html += `<line x1="${x + 5.2}" y1="${yn}" x2="${x + 5.2}" y2="${yn - stemLen}" stroke="rgba(255,255,255,0.38)" stroke-width="1.35" stroke-linecap="round"/>`;
+      html += `<line x1="${x + 5.2}" y1="${yn}" x2="${x + 5.2}" y2="${yn - stemLen}" stroke="${c.stemUp}" stroke-width="1.35" stroke-linecap="round"/>`;
     } else {
-      html += `<line x1="${x - 5.2}" y1="${yn}" x2="${x - 5.2}" y2="${yn + stemLen}" stroke="rgba(35,213,171,0.5)" stroke-width="1.35" stroke-linecap="round"/>`;
+      html += `<line x1="${x - 5.2}" y1="${yn}" x2="${x - 5.2}" y2="${yn + stemLen}" stroke="${c.stemDown}" stroke-width="1.35" stroke-linecap="round"/>`;
     }
-    html += `<text x="${x}" y="${H - 8}" text-anchor="middle" fill="rgba(210,218,232,0.92)" font-size="9.5" font-weight="700" font-family="system-ui,sans-serif">${label}</text>`;
+    html += `<text x="${x}" y="${H - 8}" text-anchor="middle" fill="${c.label}" font-size="9.5" font-weight="700" font-family="system-ui,sans-serif">${label}</text>`;
   });
   html += "</svg>";
   el.innerHTML = html;

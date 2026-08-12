@@ -259,9 +259,7 @@ html[data-theme="light"] body{
 
 html[data-theme="light"] body[data-route="mentor"]{
   background:
-    radial-gradient(125% 80% at 50% -28%, rgba(124, 92, 255, 0.12) 0%, transparent 58%),
-    radial-gradient(95% 55% at 92% 8%, rgba(34, 211, 238, 0.08) 0%, transparent 50%),
-    radial-gradient(90% 50% at 8% 22%, rgba(167, 139, 250, 0.08) 0%, transparent 52%),
+    radial-gradient(90% 42% at 50% -8%, rgba(124, 92, 255, 0.05) 0%, transparent 72%),
     var(--bg);
 }
 
@@ -1433,6 +1431,101 @@ html[data-theme="light"] .appScreenLead{
   color: var(--muted);
 }
 
+/* Voice Lab (mentor) */
+html[data-theme="light"] .mentorAmbient{
+  opacity: 0.35;
+  background: radial-gradient(ellipse 120% 90% at 50% -8%, rgba(109, 77, 245, 0.08) 0%, transparent 62%);
+}
+html[data-theme="light"] .mentorGlass{
+  border-color: var(--border);
+  background: var(--card);
+  box-shadow: var(--chart-surface-shadow);
+}
+html[data-theme="light"] .mentorSectionEyebrow,
+html[data-theme="light"] .mentorGuide--tip .mentorGuideSummary{
+  color: #6d4df5;
+}
+html[data-theme="light"] .mentorVoiceCard{
+  border-color: var(--border);
+  background: var(--card);
+  box-shadow: var(--chart-surface-shadow);
+}
+html[data-theme="light"] .mentorVoiceCard.isSelected{
+  border-color: var(--accent-teal-border);
+  background: var(--accent-teal-soft);
+  box-shadow: none;
+}
+html[data-theme="light"] .mentorVoiceCardTitle{
+  color: var(--text-primary);
+}
+html[data-theme="light"] .mentorVoiceCard.isSelected .mentorVoiceCardTitle{
+  color: #0d9488;
+}
+html[data-theme="light"] .mentorVoiceCardSub{
+  color: var(--text-secondary);
+}
+html[data-theme="light"] .mentorOrbBtn{
+  border-color: var(--border);
+  background: radial-gradient(circle at 30% 25%, rgba(255, 255, 255, 0.95), var(--surface-secondary));
+  color: var(--text-primary);
+  box-shadow:
+    0 0 0 1px rgba(109, 77, 245, 0.18),
+    0 12px 32px rgba(109, 77, 245, 0.14);
+}
+html[data-theme="light"] .mentorOrbLabel{
+  color: var(--text-muted);
+}
+html[data-theme="light"] .mentorScanTagline{
+  color: var(--text-primary);
+}
+html[data-theme="light"] .mentorStatus{
+  color: #0d9488;
+}
+html[data-theme="light"] .mentorTimer{
+  color: #0d9488;
+}
+html[data-theme="light"] .mentorBtnStop{
+  border-color: var(--border);
+  background: var(--surface-secondary);
+  color: var(--text-primary);
+}
+html[data-theme="light"] .mentorGuide--tip .mentorGuideList{
+  border-color: var(--border);
+  background: var(--surface-secondary);
+}
+html[data-theme="light"] .mentorGuideList strong{
+  color: #0d9488;
+}
+
+/* Voice Lab — results sheet */
+html[data-theme="light"] .mentorResultHeroGlow{
+  opacity: 0.35;
+}
+html[data-theme="light"] .mentorResultIdentityGradient,
+html[data-theme="light"] .mentorSnapAccent{
+  background: linear-gradient(120deg, #6d4df5 0%, #0d9488 100%);
+  -webkit-background-clip: text;
+          background-clip: text;
+  color: transparent;
+}
+html[data-theme="light"] .mentorNewScanBtn{
+  border-color: var(--border);
+  background: var(--card);
+  color: var(--text-primary);
+  box-shadow: var(--chart-surface-shadow);
+}
+html[data-theme="light"] .mmqConfBar,
+html[data-theme="light"] .mmqAltBar{
+  background: rgba(15, 23, 40, 0.08);
+}
+html[data-theme="light"] .mentorStrengthIcon{
+  text-shadow: none;
+}
+html[data-theme="light"] .mentorFocusCard{
+  border-color: var(--accent-teal-border);
+  box-shadow: none;
+}
+
 /* Light mode — Home promos, Hook Rush, sparks, Templates occasion lab */
 html[data-theme="light"] .homeDeskPersonaTile::before,
 html[data-theme="light"] .onboardingEchoTile::before,
@@ -1659,12 +1752,10 @@ body[data-route="hub"],
 body[data-route="challenges"]{
   background: var(--bg);
 }
-/* Mentor: unify canvas so the in-page glow layer does not “fight” body radials */
+/* Mentor: same canvas as Settings / Credits — subtle accent only */
 body[data-route="mentor"]{
   background:
-    radial-gradient(125% 80% at 50% -28%, rgba(124, 92, 255, 0.11) 0%, transparent 58%),
-    radial-gradient(95% 55% at 92% 8%, rgba(34, 211, 238, 0.06) 0%, transparent 50%),
-    radial-gradient(90% 50% at 8% 22%, rgba(167, 139, 250, 0.06) 0%, transparent 52%),
+    radial-gradient(90% 42% at 50% -8%, rgba(124, 92, 255, 0.05) 0%, transparent 72%),
     var(--bg);
 }
 @media (prefers-reduced-motion: reduce){
@@ -8052,6 +8143,7 @@ h2{ margin:0 0 12px; font-size:16px; letter-spacing:-0.01em; }
 .messagesHeadCopy .appScreenTitle,
 .soundsStudioHeadCopy .appScreenTitle,
 .settingsPageHeadText .appScreenTitle,
+.mentorPageHeadText .appScreenTitle,
 .appScreenHeader .appScreenTitle{
   margin: 0;
 }
@@ -35588,21 +35680,34 @@ section.mentorPage{
   width: 100vw;
   max-width: 100vw;
   top: 0;
-  height: min(420px, 58vh);
+  height: min(320px, 46vh);
   pointer-events: none;
-  /* Single soft veil — avoids a second “hot blob” on top of body[data-route="mentor"] */
-  background: radial-gradient(ellipse 130% 95% at 50% -5%, rgba(124, 92, 255, 0.1) 0%, transparent 62%);
-  opacity: 0.55;
+  background: radial-gradient(ellipse 120% 90% at 50% -8%, rgba(124, 92, 255, 0.08) 0%, transparent 62%);
+  opacity: 0.45;
+}
+.mentorPageHead{
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 0 0 18px;
+  padding: 4px 2px 0;
+  position: relative;
+  z-index: 1;
+}
+.mentorPageBack{
+  flex: 0 0 auto;
+  margin: 2px 0 0 -4px;
+}
+.mentorPageHeadText{
+  flex: 1 1 auto;
+  min-width: 0;
 }
 .mentorGlass{
   border-radius: 22px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  background: linear-gradient(165deg, rgba(22, 26, 38, 0.78) 0%, rgba(14, 17, 26, 0.55) 100%);
-  box-shadow:
-    0 1px 0 rgba(255, 255, 255, 0.06) inset,
-    0 28px 64px rgba(0, 0, 0, 0.45);
-  backdrop-filter: blur(18px);
-  -webkit-backdrop-filter: blur(18px);
+  border: 1px solid var(--border);
+  background: var(--card);
+  box-shadow: var(--elev-1);
   max-width: 100%;
 }
 /* Lab hero title row uses global `.appScreenHeader` (see near `h2`). */
@@ -35704,9 +35809,9 @@ section.mentorPage{
   width: 108px;
   height: 108px;
   border-radius: 50%;
-  border: 2px solid rgba(255, 255, 255, 0.14);
-  background: radial-gradient(circle at 30% 25%, rgba(255, 255, 255, 0.12), rgba(22, 26, 38, 0.95));
-  color: rgba(245, 247, 252, 0.96);
+  border: 2px solid var(--border);
+  background: radial-gradient(circle at 30% 25%, rgba(255, 255, 255, 0.10), var(--card2));
+  color: var(--text-primary);
   cursor: pointer;
   display: flex;
   flex-direction: column;
@@ -35742,13 +35847,13 @@ section.mentorPage{
   font-weight: 800;
   letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: rgba(168, 180, 199, 0.9);
+  color: var(--text-muted);
 }
 .mentorScanTagline{
   margin: 0 0 6px;
   font-size: 15px;
   font-weight: 700;
-  color: rgba(231, 237, 247, 0.96);
+  color: var(--text-primary);
   overflow-wrap: anywhere;
 }
 .mentorStatus{
@@ -35780,6 +35885,14 @@ section.mentorPage{
   padding: 10px 20px;
   border-radius: 999px;
   font-weight: 700;
+  border: 1px solid var(--border);
+  background: var(--surface-secondary);
+  color: var(--text-primary);
+}
+.mentorBtnStop.mentorGlass{
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  box-shadow: none;
 }
 .mentorTimer{
   font-size: 14px;
@@ -35793,7 +35906,7 @@ section.mentorPage{
   font-weight: 800;
   letter-spacing: 0.2em;
   text-transform: uppercase;
-  color: rgba(167, 139, 250, 0.95);
+  color: var(--brand-violet-hover);
   margin-bottom: 10px;
 }
 .mentorAnalyzeBlock{
@@ -35822,22 +35935,22 @@ section.mentorPage{
   text-align: left;
   padding: 14px 14px 16px;
   border-radius: 18px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  background: rgba(18, 21, 30, 0.55);
-  color: inherit;
+  border: 1px solid var(--border);
+  background: var(--surface-secondary);
+  color: var(--text-primary);
   cursor: pointer;
-  transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.15s ease;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.15s ease, background 0.2s ease;
 }
 .mentorVoiceCard:hover{
   transform: translateY(-1px);
-  border-color: rgba(124, 92, 255, 0.35);
+  border-color: rgba(124, 92, 255, 0.28);
 }
 .mentorVoiceCard.isSelected{
-  border-color: rgba(34, 211, 238, 0.55);
+  border-color: rgba(35, 213, 171, 0.42);
   box-shadow:
-    0 0 0 1px rgba(34, 211, 238, 0.25),
-    0 0 32px rgba(34, 211, 238, 0.12);
-  background: linear-gradient(160deg, rgba(34, 211, 238, 0.1) 0%, rgba(22, 26, 38, 0.75) 100%);
+    0 0 0 1px rgba(35, 213, 171, 0.18),
+    var(--elev-glow-teal);
+  background: var(--brand-teal-muted);
 }
 .mentorVoiceCardIcon{
   display: block;
@@ -35850,11 +35963,12 @@ section.mentorPage{
   font-size: 14px;
   font-weight: 800;
   margin-bottom: 4px;
+  color: var(--text-primary);
 }
 .mentorVoiceCardSub{
   display: block;
   font-size: 12px;
-  color: rgba(168, 180, 199, 0.88);
+  color: var(--text-secondary);
   line-height: 1.35;
 }
 .mentorLabMain{
@@ -35880,9 +35994,9 @@ section.mentorPage{
   gap: 7px;
   padding: 8px 14px;
   border-radius: 999px;
-  border: 1px solid rgba(140, 120, 255, 0.32);
-  background: rgba(120, 100, 240, 0.14);
-  color: rgba(226, 224, 255, 0.96);
+  border: 1px solid var(--border);
+  background: var(--surface-secondary);
+  color: var(--text-primary);
   font-size: 13px;
   font-weight: 700;
   cursor: pointer;
@@ -35977,7 +36091,7 @@ section.mentorPage{
   flex: 1 1 200px;
   font-size: 13px;
   line-height: 1.5;
-  color: rgba(210, 218, 232, 0.92);
+  color: var(--text-secondary);
 }
 .mentorGuide--tip{
   flex: 1 1 100%;
@@ -35994,7 +36108,7 @@ section.mentorPage{
   font-weight: 800;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: rgba(167, 139, 250, 0.95);
+  color: var(--brand-violet-hover);
 }
 .mentorGuide--tip .mentorGuideList,
 .mentorGuide--tip .mentorGuideFoot{
@@ -36004,8 +36118,8 @@ section.mentorPage{
   margin-top: 12px;
   padding: 14px 16px;
   border-radius: 14px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(12, 14, 20, 0.55);
+  border: 1px solid var(--border);
+  background: var(--surface-secondary);
 }
 .mentorGuideSummary::-webkit-details-marker{ display: none; }
 .mentorGuideList{
@@ -36013,20 +36127,20 @@ section.mentorPage{
   padding-left: 1.15rem;
   font-size: 13px;
   line-height: 1.55;
-  color: rgba(210, 218, 232, 0.92);
+  color: var(--text-secondary);
 }
 .mentorGuideList strong{
   font-weight: 800;
-  color: rgba(94, 234, 212, 0.95);
+  color: #0d9488;
 }
 .mentorGuideFoot{
   margin: 10px 0 0;
   font-size: 12px;
   line-height: 1.5;
-  color: rgba(168, 180, 199, 0.88);
+  color: var(--text-muted);
 }
 .mentorGuideFoot strong{
-  color: rgba(231, 237, 247, 0.92);
+  color: var(--text-primary);
 }
 .mentorResults{
   position: relative;
@@ -36054,7 +36168,7 @@ section.mentorPage{
   font-weight: 700;
   letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: rgba(167, 139, 250, 0.75);
+  color: var(--brand-violet-hover);
   overflow-wrap: anywhere;
 }
 .mentorResultHero{
@@ -36113,10 +36227,10 @@ section.mentorPage{
   font-weight: 800;
   letter-spacing: 0.18em;
   text-transform: uppercase;
-  color: rgba(168, 180, 199, 0.82);
+  color: var(--text-muted);
 }
 .mentorEyebrow--hero{
-  color: rgba(167, 139, 250, 0.95);
+  color: var(--brand-violet-hover);
 }
 .mentorResultIdentityTitle{
   margin: 0 0 6px;
@@ -36141,13 +36255,13 @@ section.mentorPage{
   margin: 0 0 8px;
   font-size: 14px;
   line-height: 1.55;
-  color: rgba(210, 218, 232, 0.92);
+  color: var(--text-secondary);
   overflow-wrap: anywhere;
 }
 .mentorResultIdentityMeta{
   margin: 0 0 12px;
   font-size: 12px;
-  color: rgba(168, 180, 199, 0.88);
+  color: var(--text-muted);
   overflow-wrap: anywhere;
 }
 .mentorPersonaChips{
@@ -36162,8 +36276,9 @@ section.mentorPage{
   text-transform: uppercase;
   padding: 6px 10px;
   border-radius: 999px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  color: rgba(231, 237, 247, 0.75);
+  border: 1px solid var(--border);
+  background: var(--surface-secondary);
+  color: var(--text-secondary);
 }
 .mentorResultHeroGauge{
   position: relative;
@@ -36227,7 +36342,7 @@ section.mentorPage{
   font-weight: 800;
   letter-spacing: 0.18em;
   text-transform: uppercase;
-  color: rgba(168, 180, 199, 0.72);
+  color: var(--text-muted);
   margin-bottom: 4px;
 }
 .mentorGaugeCaption{
@@ -36236,7 +36351,7 @@ section.mentorPage{
   font-weight: 700;
   letter-spacing: 0.04em;
   font-variant-numeric: tabular-nums;
-  color: rgba(245, 247, 252, 0.98);
+  color: var(--text-primary);
 }
 .mentorGaugeHint{
   display: block;
@@ -36245,7 +36360,7 @@ section.mentorPage{
   font-weight: 650;
   letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: rgba(168, 180, 199, 0.55);
+  color: var(--text-muted);
 }
 .mentorSnapGrid{
   display: grid;
@@ -36273,7 +36388,7 @@ section.mentorPage{
   font-weight: 800;
   letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: rgba(168, 180, 199, 0.78);
+  color: var(--text-muted);
   margin-bottom: 8px;
 }
 .mentorSnapValue{
@@ -36291,7 +36406,7 @@ section.mentorPage{
   margin-top: auto;
   font-size: 12px;
   line-height: 1.45;
-  color: rgba(168, 180, 199, 0.88);
+  color: var(--text-secondary);
 }
 .mentorSnapAccent{
   margin-top: 6px;
@@ -36347,7 +36462,7 @@ section.mentorPage{
 .mentorStrengthsHint{
   font-size: 11px;
   font-weight: 700;
-  color: rgba(168, 180, 199, 0.65);
+  color: var(--text-muted);
 }
 .mentorStrengthsGrid{
   display: grid;
@@ -36361,8 +36476,8 @@ section.mentorPage{
 .mentorStrength{
   padding: 12px 12px 14px;
   border-radius: 16px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(10, 12, 18, 0.45);
+  border: 1px solid var(--border);
+  background: var(--surface-secondary);
   min-width: 0;
 }
 .mentorStrengthIcon{
@@ -36385,7 +36500,7 @@ section.mentorPage{
   margin: 0;
   font-size: 12px;
   line-height: 1.45;
-  color: rgba(210, 218, 232, 0.88);
+  color: var(--text-secondary);
 }
 .mentorMaqamDeck{
   padding: 16px 16px 18px;
@@ -36408,7 +36523,7 @@ section.mentorPage{
   margin: 4px 0 0;
   font-size: 12px;
   line-height: 1.45;
-  color: rgba(168, 180, 199, 0.82);
+  color: var(--text-secondary);
 }
 .mentorMaqamDiagram{
   flex: 1 1 200px;
@@ -36419,14 +36534,14 @@ section.mentorPage{
   margin: 12px 0 10px;
 }
 .mmqPrimary{
-  border: 1px solid rgba(140, 120, 255, 0.28);
-  background: rgba(120, 100, 240, 0.12);
+  border: 1px solid var(--accent-violet-border);
+  background: var(--accent-violet-soft);
   border-radius: 14px;
   padding: 12px 14px;
 }
 .mmqPrimary.mmqUncertain{
-  border-color: rgba(168, 180, 199, 0.24);
-  background: rgba(150, 160, 180, 0.08);
+  border-color: var(--border);
+  background: var(--surface-secondary);
 }
 .mmqPrimaryHead{
   display: flex;
@@ -36439,20 +36554,20 @@ section.mentorPage{
   font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: rgba(190, 178, 255, 0.95);
+  color: var(--brand-violet-hover);
 }
 .mmqPrimary.mmqUncertain .mmqKind{
-  color: rgba(190, 198, 214, 0.9);
+  color: var(--text-muted);
 }
 .mmqName{
   font-size: 20px;
   font-weight: 800;
-  color: rgba(238, 242, 250, 0.98);
+  color: var(--text-primary);
 }
 .mmqNameMuted{
   font-size: 16px;
   font-weight: 700;
-  color: rgba(206, 214, 228, 0.82);
+  color: var(--text-secondary);
 }
 .mmqConfRow{
   display: flex;
@@ -36463,7 +36578,7 @@ section.mentorPage{
 .mmqConfPct{
   font-size: 13px;
   font-weight: 800;
-  color: rgba(238, 242, 250, 0.95);
+  color: var(--text-primary);
   min-width: 40px;
 }
 .mmqConfBar{
@@ -36494,7 +36609,7 @@ section.mentorPage{
   font-weight: 700;
   letter-spacing: 0.05em;
   text-transform: uppercase;
-  color: rgba(168, 180, 199, 0.82);
+  color: var(--text-muted);
   margin-bottom: 6px;
 }
 .mmqAltRow{
@@ -36506,7 +36621,7 @@ section.mentorPage{
 .mmqAltName{
   font-size: 13px;
   font-weight: 600;
-  color: rgba(214, 222, 236, 0.92);
+  color: var(--text-primary);
   min-width: 78px;
 }
 .mmqAltBar{
@@ -36528,7 +36643,7 @@ section.mentorPage{
 .mmqAltConf{
   font-size: 12px;
   font-weight: 700;
-  color: rgba(190, 198, 214, 0.9);
+  color: var(--text-secondary);
   min-width: 36px;
   text-align: right;
 }
@@ -36536,20 +36651,20 @@ section.mentorPage{
   margin: 0 0 8px;
   font-size: 11.5px;
   line-height: 1.5;
-  color: rgba(168, 180, 199, 0.75);
+  color: var(--text-muted);
   font-style: italic;
 }
 .mentorMaqamBody{
   margin: 0 0 8px;
   font-size: 13px;
   line-height: 1.55;
-  color: rgba(210, 218, 232, 0.93);
+  color: var(--text-secondary);
 }
 .mentorMaqamMeta{
   margin: 0;
   font-size: 12px;
   line-height: 1.45;
-  color: rgba(168, 180, 199, 0.88);
+  color: var(--text-muted);
 }
 .mentorStaffSvg{
   display: block;
@@ -36580,9 +36695,9 @@ section.mentorPage{
   border-radius: 999px;
   font-size: 12px;
   font-weight: 700;
-  border: 1px solid rgba(124, 92, 255, 0.28);
-  background: rgba(124, 92, 255, 0.1);
-  color: rgba(231, 237, 247, 0.92);
+  border: 1px solid var(--accent-violet-border);
+  background: var(--accent-violet-soft);
+  color: var(--text-primary);
   text-align: center;
 }
 .mentorGenreFallback{
@@ -36613,20 +36728,20 @@ section.mentorPage{
   margin: 0 0 8px;
   font-size: 13px;
   line-height: 1.5;
-  color: rgba(210, 218, 232, 0.92);
+  color: var(--text-secondary);
 }
 .mentorTileFoot{
   margin: 0;
   font-size: 12px;
   line-height: 1.45;
-  color: rgba(168, 180, 199, 0.88);
+  color: var(--text-muted);
 }
 .mentorInsightKeys{
   margin: 0 0 8px;
   font-size: 15px;
   font-weight: 700;
   line-height: 1.45;
-  color: rgba(94, 234, 212, 0.95);
+  color: #0d9488;
 }
 .mentorFocusCard{
   display: flex;
@@ -36663,21 +36778,21 @@ section.mentorPage{
   margin: 0 0 6px;
   font-size: 14px;
   line-height: 1.5;
-  color: rgba(231, 237, 247, 0.95);
+  color: var(--text-primary);
   overflow-wrap: anywhere;
 }
 .mentorFocusSub{
   margin: 0;
   font-size: 12px;
   line-height: 1.45;
-  color: rgba(168, 180, 199, 0.88);
+  color: var(--text-secondary);
   overflow-wrap: anywhere;
 }
 .mentorDisclaimer{
   margin: 16px 0 0;
   font-size: 12px;
   line-height: 1.5;
-  color: rgba(168, 180, 199, 0.75);
+  color: var(--text-muted);
   overflow-wrap: anywhere;
 }
 
@@ -36732,7 +36847,7 @@ section.mentorPage{
   margin: -6px 0 16px;
   font-size: 13px;
   font-weight: 700;
-  color: rgba(94, 234, 212, 0.92);
+  color: #0d9488;
 }
 .mentorHistory{
   margin-top: 16px;
@@ -36753,15 +36868,15 @@ section.mentorPage{
   margin: 4px 0 0;
   font-size: 12px;
   line-height: 1.45;
-  color: rgba(168, 180, 199, 0.85);
+  color: var(--text-secondary);
 }
 .mentorHistoryClear{
   flex: none;
   padding: 7px 13px;
   border-radius: 999px;
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  background: rgba(255, 255, 255, 0.05);
-  color: rgba(226, 230, 240, 0.9);
+  border: 1px solid var(--border);
+  background: var(--surface-secondary);
+  color: var(--text-primary);
   font-size: 12px;
   font-weight: 700;
   cursor: pointer;
@@ -36781,7 +36896,7 @@ section.mentorPage{
   justify-content: space-between;
   gap: 12px;
   padding: 10px 2px;
-  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  border-top: 1px solid var(--border);
 }
 .mentorHistoryRow:first-child{
   border-top: 0;
@@ -36793,13 +36908,13 @@ section.mentorPage{
   display: block;
   font-size: 15px;
   font-weight: 800;
-  color: rgba(238, 242, 250, 0.97);
+  color: var(--text-primary);
 }
 .mhSub{
   display: block;
   margin-top: 2px;
   font-size: 12px;
-  color: rgba(168, 180, 199, 0.82);
+  color: var(--text-secondary);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -36812,23 +36927,23 @@ section.mentorPage{
   display: block;
   font-size: 15px;
   font-weight: 800;
-  color: rgba(94, 234, 212, 0.95);
+  color: #0d9488;
 }
 .mhQual small{
   font-size: 11px;
   font-weight: 700;
-  color: rgba(168, 180, 199, 0.7);
+  color: var(--text-muted);
 }
 .mhWhen{
   display: block;
   margin-top: 2px;
   font-size: 11px;
-  color: rgba(168, 180, 199, 0.72);
+  color: var(--text-muted);
 }
 .mentorHistoryNote{
   margin: 12px 0 0;
   font-size: 11px;
-  color: rgba(168, 180, 199, 0.6);
+  color: var(--text-muted);
 }
 
 /* Touch: no sticky :hover on thumbnails / song rows (iOS treats tap as hover). */
@@ -48872,6 +48987,18 @@ html[data-theme="light"] .profileEditSheetTextarea{
   border-color: rgba(15, 23, 42, 0.08);
   color: rgba(15, 23, 42, 0.92);
 }
+html[data-theme="light"] .profileEditGenreChip{
+  border-color: var(--border);
+  background: var(--card);
+  color: var(--text-primary);
+  box-shadow: var(--chart-surface-shadow);
+}
+html[data-theme="light"] .profileEditGenreChip.isSelected{
+  border-color: var(--accent-teal-border);
+  background: var(--accent-teal-soft);
+  color: #0d9488;
+  font-weight: 650;
+}
 
 /* ===================================================================
  * Hum Track — quick start card + sheet
@@ -50127,6 +50254,20 @@ html[data-theme="light"] .musicPrefsGenre.is-selected{
   border-color: var(--accent-teal-border);
   background: var(--accent-teal-soft);
   box-shadow: none;
+  color: #0d9488;
+  font-weight: 650;
+}
+html[data-theme="light"] .musicPrefsGrid .profileEditGenreChip{
+  border-color: var(--border);
+  background: var(--card);
+  color: var(--text-primary);
+  box-shadow: var(--chart-surface-shadow);
+}
+html[data-theme="light"] .musicPrefsGrid .profileEditGenreChip.isSelected{
+  border-color: var(--accent-teal-border);
+  background: var(--accent-teal-soft);
+  color: #0d9488;
+  font-weight: 650;
 }
 
 /* Shared bottom sheets — comments, analytics, repost, gift, playlists */
@@ -50578,6 +50719,136 @@ html[data-theme="light"] .creditsRedeemInput{
   border-color: var(--border);
   background: var(--surface-secondary);
   color: var(--text-primary);
+}
+html[data-theme="light"] .creditsTitle{
+  color: var(--text-primary);
+}
+html[data-theme="light"] .creditsHero{
+  border-color: var(--accent-violet-border);
+  background:
+    radial-gradient(120% 100% at 50% -20%, rgba(109, 77, 245, 0.10), transparent 60%),
+    linear-gradient(180deg, rgba(109, 77, 245, 0.06), rgba(13, 148, 136, 0.05));
+  box-shadow: var(--chart-surface-shadow);
+}
+html[data-theme="light"] .creditsHeroLabel{
+  color: var(--text-muted);
+}
+html[data-theme="light"] .creditsHeroValue{
+  background: linear-gradient(180deg, #15171c 8%, #6d4df5 92%);
+  -webkit-background-clip: text;
+          background-clip: text;
+  color: transparent;
+}
+html[data-theme="light"] .creditsHeroSub,
+html[data-theme="light"] .creditsHeroEmail{
+  color: var(--text-secondary);
+}
+html[data-theme="light"] .creditsBreakdown{
+  border-top-color: var(--border);
+}
+html[data-theme="light"] .creditsBreakdownLabel{
+  color: var(--text-secondary);
+}
+html[data-theme="light"] .creditsBreakdownValue{
+  color: var(--text-primary);
+}
+html[data-theme="light"] .creditsBreakdownHint{
+  color: var(--text-muted);
+}
+html[data-theme="light"] .creditsRules li,
+html[data-theme="light"] .creditsRules strong{
+  color: var(--text-secondary);
+}
+html[data-theme="light"] .creditsRules strong{
+  color: var(--text-primary);
+  font-weight: 750;
+}
+html[data-theme="light"] .creditsProUpsell{
+  border-color: var(--accent-violet-border);
+  background:
+    radial-gradient(120% 100% at 100% 0%, rgba(109, 77, 245, 0.08), transparent 55%),
+    linear-gradient(180deg, rgba(109, 77, 245, 0.05), rgba(13, 148, 136, 0.04));
+}
+html[data-theme="light"] .creditsRedeemInput:focus{
+  border-color: rgba(109, 77, 245, 0.35);
+  background: var(--card);
+  box-shadow: 0 0 0 3px rgba(109, 77, 245, 0.12);
+}
+html[data-theme="light"] .creditsRedeemMsg.isOk{
+  background: rgba(13, 148, 136, 0.10);
+  border-color: rgba(13, 148, 136, 0.24);
+  color: #0f766e;
+}
+html[data-theme="light"] .creditsRedeemMsg.isWarn{
+  background: rgba(245, 158, 11, 0.10);
+  border-color: rgba(245, 158, 11, 0.28);
+  color: #b45309;
+}
+html[data-theme="light"] .creditsRedeemMsg.isErr{
+  background: rgba(230, 61, 92, 0.08);
+  border-color: rgba(230, 61, 92, 0.22);
+  color: var(--danger);
+}
+html[data-theme="light"] .creditsLedgerEmpty{
+  color: var(--text-muted);
+}
+html[data-theme="light"] .creditsLedgerRow{
+  border-color: var(--border);
+  background: var(--surface-secondary);
+}
+html[data-theme="light"] .creditsLedgerReason{
+  color: var(--text-primary);
+}
+html[data-theme="light"] .creditsLedgerSub{
+  color: var(--text-muted);
+}
+html[data-theme="light"] .creditsLedgerRow.isPositive .creditsLedgerDelta{
+  color: #0d9488;
+}
+html[data-theme="light"] .creditsLedgerRow.isNegative .creditsLedgerDelta{
+  color: var(--danger);
+}
+html[data-theme="light"] .creditsAdminCard{
+  border-color: rgba(245, 158, 11, 0.32);
+  background:
+    linear-gradient(180deg, rgba(245, 158, 11, 0.07), rgba(255, 255, 255, 0.98));
+}
+html[data-theme="light"] .creditsAdminGrantRow{
+  border-bottom-color: var(--border);
+}
+html[data-theme="light"] .creditsAdminStat{
+  border-color: var(--border);
+  background: var(--surface-secondary);
+}
+html[data-theme="light"] .creditsAdminStatLabel{
+  color: var(--text-muted);
+}
+html[data-theme="light"] .creditsAdminStatValue{
+  color: var(--text-primary);
+}
+html[data-theme="light"] .creditsAdminCodesHead{
+  color: var(--text-primary);
+}
+html[data-theme="light"] .creditsAdminCodesHint{
+  color: var(--text-muted);
+}
+html[data-theme="light"] .creditsAdminCodeRow{
+  border-color: var(--border);
+  background: var(--surface-secondary);
+}
+html[data-theme="light"] .creditsAdminCodeRow.isOpen:hover,
+html[data-theme="light"] .creditsAdminCodeRow.isOpen:focus-visible{
+  border-color: rgba(109, 77, 245, 0.32);
+  background: var(--accent-violet-soft);
+}
+html[data-theme="light"] .creditsAdminCodeText{
+  color: var(--text-primary);
+}
+html[data-theme="light"] .creditsAdminCodeMeta{
+  color: var(--text-muted);
+}
+html[data-theme="light"] .creditsAdminCodeRow.isUsed{
+  opacity: 0.62;
 }
 
 /* Messages / DMs */

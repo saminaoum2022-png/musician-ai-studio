@@ -55,7 +55,7 @@ Your account must have dashboard access (`profiles.role` is not `user`, or your 
 | **Operations** | Platform ops | Overview, Suno, Users, Generations, Subscriptions |
 | **Support** | Customer support | Users, Credits (grant), Generations, Subscriptions |
 | **Moderator** | Trust & safety | Users, Publications, Generations |
-| **Finance** | Billing / revenue | Overview, Credits, Subscriptions, Users |
+| **Finance** | Billing / revenue | Overview, Credits, Subscriptions, **Billing events**, Users |
 | **Viewer** | Advisors / interns | Read-only across analytics tabs |
 
 Teammates must **already have a NabadAi account** before you grant access. Owner emails in `ADMIN_EMAILS` cannot be revoked from the UI.
@@ -104,7 +104,7 @@ where user_id = (select id from auth.users where lower(email) = lower('saminaoum
 
 ## API
 
-`GET /api/music/admin?view=overview|suno|users|credits|generations|publications|subscriptions|settings|session`
+`GET /api/music/admin?view=overview|suno|users|credits|generations|publications|subscriptions|billing|settings|session`
 
 Team management (Owner / Admin only):
 

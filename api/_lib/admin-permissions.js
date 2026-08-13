@@ -21,6 +21,7 @@ const ALL_VIEWS = Object.freeze([
   "generations",
   "publications",
   "subscriptions",
+  "billing",
   "settings",
 ]);
 
@@ -36,7 +37,7 @@ const ROLE_META = Object.freeze({
   operations: {
     label: "Operations",
     description: "Platform health, Suno bucket, users, and subscription monitoring.",
-    views: ["overview", "suno", "users", "generations", "subscriptions"],
+    views: ["overview", "suno", "users", "generations", "subscriptions", "billing"],
     grantCredits: false,
     manageTeam: false,
     moderatePublications: false,
@@ -44,7 +45,7 @@ const ROLE_META = Object.freeze({
   support: {
     label: "Support",
     description: "Help users with credits, account lookups, and generation issues.",
-    views: ["users", "credits", "promos", "generations", "subscriptions"],
+    views: ["users", "credits", "promos", "generations", "subscriptions", "billing"],
     grantCredits: true,
     manageTeam: false,
     moderatePublications: false,
@@ -60,7 +61,7 @@ const ROLE_META = Object.freeze({
   finance: {
     label: "Finance",
     description: "Revenue, subscriptions, and credit ledger visibility.",
-    views: ["overview", "credits", "promos", "subscriptions", "users"],
+    views: ["overview", "credits", "promos", "subscriptions", "billing", "users"],
     grantCredits: false,
     manageTeam: false,
     moderatePublications: false,
@@ -77,6 +78,7 @@ const ROLE_META = Object.freeze({
       "generations",
       "publications",
       "subscriptions",
+      "billing",
     ],
     grantCredits: false,
     manageTeam: false,

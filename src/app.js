@@ -18196,6 +18196,13 @@ function sunoFailureUserCopy(kind, { isRemix = false } = {}) {
       activityBody: "Remove artist names from Style tags and try again.",
     };
   }
+  if (k === "voicePersona") {
+    return {
+      toast: "Your recorded voice wasn't ready — wait a minute after saving, or re-record in Settings → Your voices.",
+      activityTitle: "Generation didn't finish",
+      activityBody: "Recorded voice issue — re-record your voice or try again in a minute.",
+    };
+  }
   return {
     toast: "Something went wrong — please try again.",
     activityTitle: "Generation didn't finish",
@@ -18380,6 +18387,23 @@ function interpretSunoFailure(raw) {
       kind: "audio_verify",
       headline: "Audio not accepted",
       detail: "The engine couldn't verify the reference audio. Try again or use a different source.",
+    };
+  }
+  const looksVoicePersona =
+    m.includes("expired vocal")
+    || m.includes("voice expired")
+    || m.includes("voice is expired")
+    || m.includes("persona not found")
+    || m.includes("invalid persona")
+    || m.includes("invalid voice")
+    || m.includes("voice not available")
+    || m.includes("voice not ready")
+    || (m.includes("persona") && (m.includes("invalid") || m.includes("not found") || m.includes("expired")));
+  if (looksVoicePersona) {
+    return {
+      kind: "voicePersona",
+      headline: "Voice persona issue",
+      detail: "Your recorded voice wasn't accepted — wait a minute after saving, or re-record in Settings → Your voices.",
     };
   }
   const genericSuno413 =

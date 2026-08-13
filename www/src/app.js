@@ -201,7 +201,7 @@ import { MUSIC_VIDEO_FEATURE_ENABLED } from "./feature-flags.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260812-232922";
+const APP_BUILD = "20260813-160857";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -684,6 +684,9 @@ const els = {
   personaActiveBannerLabel: document.getElementById("personaActiveBannerLabel"),
   personaActiveBannerChange: document.getElementById("personaActiveBannerChange"),
   personaActiveBannerClear: document.getElementById("personaActiveBannerClear"),
+  personaVoiceTune: document.getElementById("personaVoiceTune"),
+  sunoPersonaStyleLead: document.getElementById("sunoPersonaStyleLead"),
+  sunoPersonaAdventure: document.getElementById("sunoPersonaAdventure"),
   createChallengeHint: document.getElementById("createChallengeHint"),
   createChallengeHintTitle: document.getElementById("createChallengeHintTitle"),
   createChallengeHintSub: document.getElementById("createChallengeHintSub"),
@@ -18196,6 +18199,13 @@ function sunoFailureUserCopy(kind, { isRemix = false } = {}) {
       activityBody: "Remove artist names from Style tags and try again.",
     };
   }
+  if (k === "voicePersona") {
+    return {
+      toast: "Your recorded voice wasn't ready — wait a minute after saving, or re-record in Settings → Your voices.",
+      activityTitle: "Generation didn't finish",
+      activityBody: "Recorded voice issue — re-record your voice or try again in a minute.",
+    };
+  }
   return {
     toast: "Something went wrong — please try again.",
     activityTitle: "Generation didn't finish",
@@ -18380,6 +18390,23 @@ function interpretSunoFailure(raw) {
       kind: "audio_verify",
       headline: "Audio not accepted",
       detail: "The engine couldn't verify the reference audio. Try again or use a different source.",
+    };
+  }
+  const looksVoicePersona =
+    m.includes("expired vocal")
+    || m.includes("voice expired")
+    || m.includes("voice is expired")
+    || m.includes("persona not found")
+    || m.includes("invalid persona")
+    || m.includes("invalid voice")
+    || m.includes("voice not available")
+    || m.includes("voice not ready")
+    || (m.includes("persona") && (m.includes("invalid") || m.includes("not found") || m.includes("expired")));
+  if (looksVoicePersona) {
+    return {
+      kind: "voicePersona",
+      headline: "Voice persona issue",
+      detail: "Your recorded voice wasn't accepted — wait a minute after saving, or re-record in Settings → Your voices.",
     };
   }
   const genericSuno413 =
@@ -22052,6 +22079,14 @@ function isSingleVariantMusicTask(taskId) {
   return tid.startsWith("mmx_") || tid.startsWith("lyr_") || tid.startsWith("elv_");
 }
 
+/** Karaoke / timestamped lyrics — Suno API only (0.5 cr/fetch); skip alternate providers. */
+function isSunoKaraokeTaskId(taskId) {
+  const tid = String(taskId || "").trim();
+  if (!tid) return false;
+  if (/^(mmx_|lyr_|elv_)/i.test(tid)) return false;
+  return true;
+}
+
 function extractTaskIdLoose(data) {
   const direct =
     data?.data?.taskId ||
@@ -22432,16 +22467,20 @@ function renderActivePersonaBanner() {
     const id = getActivePersonaId();
     if (!id) {
       els.personaActiveBanner.hidden = true;
+      if (els.personaVoiceTune) els.personaVoiceTune.hidden = true;
       return;
     }
     const list = loadPersonas();
     const hit = list.find((x) => String(x.personaId) === id);
     if (!hit) {
       els.personaActiveBanner.hidden = true;
+      if (els.personaVoiceTune) els.personaVoiceTune.hidden = true;
       return;
     }
     const label = String(hit.label || id.slice(0, 12) + "…").trim() || "Persona";
     els.personaActiveBannerLabel.textContent = label;
+    const isRecordedVoice = hit.type === "suno_voice";
+    if (els.personaVoiceTune) els.personaVoiceTune.hidden = !isRecordedVoice;
     // When a vocal reference is attached, escalate the banner copy so the
     // user can't miss that the persona will OVERRIDE the new recording's
     // voice. The persona-singing-over-new-recording surprise was the #1
@@ -41146,12 +41185,16 @@ function normalizePersonaRecord(item) {
     personaModel = type === "suno_voice" ? "voice_persona" : "style_persona";
   }
   const voiceTaskId = String(item.voiceTaskId || item.voice_task_id || "").trim();
+  const genCount = Number(item.genCount || item.gen_count || 0);
+  const lastGenAt = Number(item.lastGenAt || item.last_gen_at || 0);
   return {
     personaId,
     label: String(item.label || "My voice").trim().slice(0, 64) || "My voice",
     type,
     personaModel,
     ...(voiceTaskId ? { voiceTaskId } : {}),
+    ...(genCount > 0 ? { genCount } : {}),
+    ...(lastGenAt > 0 ? { lastGenAt } : {}),
     ts: Number(item.ts || item.updated_at || 0) || Date.now(),
   };
 }
@@ -41177,6 +41220,11 @@ function mergePersonaLists(...lists) {
       const norm = normalizePersonaRecord(item);
       if (!norm) continue;
       const prev = map.get(norm.personaId);
+      if (prev) {
+        if (!norm.voiceTaskId && prev.voiceTaskId) norm.voiceTaskId = prev.voiceTaskId;
+        if (!norm.genCount && prev.genCount) norm.genCount = prev.genCount;
+        if (!norm.lastGenAt && prev.lastGenAt) norm.lastGenAt = prev.lastGenAt;
+      }
       if (!prev || Number(norm.ts || 0) >= Number(prev.ts || 0)) map.set(norm.personaId, norm);
     }
   }
@@ -41215,6 +41263,8 @@ async function supabaseUpsertSavedPersonas(items) {
       type: p.type,
       personaModel: p.personaModel,
       ...(p.voiceTaskId ? { voiceTaskId: p.voiceTaskId } : {}),
+      ...(Number(p.genCount || 0) > 0 ? { genCount: Number(p.genCount) } : {}),
+      ...(Number(p.lastGenAt || 0) > 0 ? { lastGenAt: Number(p.lastGenAt) } : {}),
       ts: p.ts,
     })),
     updated_at: new Date().toISOString(),
@@ -41616,6 +41666,29 @@ async function pollVoiceValidatePhrase(taskId, maxMs = 120000) {
   throw new Error("Timed out waiting for validation phrase");
 }
 
+/** Recorded-voice tuning chips → Suno styleWeight / weirdnessConstraint. */
+const PERSONA_STYLE_LEAD_WEIGHT = Object.freeze({
+  voice_leads: 0.35,
+  balanced: 0.5,
+  style_leads: 0.65,
+});
+const PERSONA_ADVENTURE_WEIGHT = Object.freeze({
+  familiar: 0.3,
+  balanced: 0.45,
+  surprise: 0.65,
+});
+
+function resolvePersonaVoiceTune() {
+  const styleLead = String(els.sunoPersonaStyleLead?.value || "voice_leads").trim() || "voice_leads";
+  const adventure = String(els.sunoPersonaAdventure?.value || "familiar").trim() || "familiar";
+  return {
+    styleLead,
+    adventure,
+    styleWeight: PERSONA_STYLE_LEAD_WEIGHT[styleLead] ?? PERSONA_STYLE_LEAD_WEIGHT.voice_leads,
+    weirdnessConstraint: PERSONA_ADVENTURE_WEIGHT[adventure] ?? PERSONA_ADVENTURE_WEIGHT.familiar,
+  };
+}
+
 /** Suno voice availability (docs: check-voice before generating with a
  *  recorded voice). Returns true/false, or null when the check itself
  *  failed (network etc.) — callers treat null as "don't block". */
@@ -41638,6 +41711,68 @@ async function checkSunoVoiceAvailability(voiceTaskId) {
   } catch {
     return null;
   }
+}
+
+/** Poll Suno check-voice — first generation must not run until isAvailable. */
+async function waitForVoiceAvailable(voiceTaskId, { attempts = 5, delayMs = 10000 } = {}) {
+  const taskId = String(voiceTaskId || "").trim();
+  if (!taskId) return null;
+  for (let i = 0; i < attempts; i++) {
+    const ready = await checkSunoVoiceAvailability(taskId);
+    if (ready === true) return true;
+    if (ready === null) return null;
+    if (i < attempts - 1) await new Promise((r) => setTimeout(r, delayMs));
+  }
+  return false;
+}
+
+/** Gate before generate — Suno may fall back to a generic voice if check-voice is false. */
+async function resolveRecordedVoiceReady(personaHit) {
+  if (!personaHit?.voiceTaskId) return { ready: true, reason: "no_task" };
+  if (Number(personaHit.genCount || 0) > 0) return { ready: true, reason: "prior_success" };
+
+  const stale = personaNeedsRefresh(personaHit);
+  const voiceReady = await waitForVoiceAvailable(personaHit.voiceTaskId, {
+    attempts: 4,
+    delayMs: 8000,
+  });
+
+  if (voiceReady === true) return { ready: true, reason: "check_ok" };
+  if (voiceReady == null) {
+    if (stale) return { ready: false, reason: "stale_unknown" };
+    return { ready: true, reason: "check_failed" };
+  }
+
+  if (stale) return { ready: false, reason: "stale" };
+  return { ready: false, reason: "processing" };
+}
+
+/** Suno voice-create metadata — docs recommend style + description for tuning. */
+function voiceCreateMetadata(name, skill) {
+  const n = String(name || "My voice").trim() || "My voice";
+  const s = String(skill || "intermediate").trim().toLowerCase();
+  const polish =
+    s === "beginner"
+      ? "gentle polish, preserve natural tone"
+      : s === "advanced" || s === "professional"
+      ? "minimal processing, preserve raw timbre"
+      : "balanced clarity, preserve natural delivery";
+  const style = `Natural vocal clone, ${polish}`;
+  return {
+    style,
+    description: `Recorded voice: ${n}. ${style}.`,
+  };
+}
+
+function markPersonaGenerationUsed(personaId) {
+  const id = String(personaId || "").trim();
+  if (!id) return;
+  const items = loadPersonas();
+  const hit = items.find((x) => String(x.personaId) === id);
+  if (!hit) return;
+  hit.genCount = Number(hit.genCount || 0) + 1;
+  hit.lastGenAt = Date.now();
+  savePersonas(items);
 }
 
 async function pollVoiceRecordInfo(taskId, maxMs = 180000) {
@@ -41963,7 +42098,7 @@ function renderVoiceWizardVerifyStep(phrase, token) {
           taskId: validateTaskId,
           verifyUrl,
           voiceName: name,
-          description: `Custom voice: ${name}`,
+          ...voiceCreateMetadata(name, voiceWizardState.skill),
           singerSkillLevel: voiceWizardState.skill || "intermediate",
         }),
       });
@@ -41982,11 +42117,11 @@ function renderVoiceWizardVerifyStep(phrase, token) {
       closeVoiceWizard();
       setProfilePersonaExpanded(true);
       // Per Suno docs, the voice may need a little more processing after
-      // record-info reports success — tell the user the truth either way.
-      const ready = await checkSunoVoiceAvailability(voiceTaskId);
+      // record-info reports success — poll check-voice before first generate.
+      const ready = await waitForVoiceAvailable(voiceTaskId, { attempts: 6, delayMs: 8000 });
       showToast(
         ready === false
-          ? "Voice saved! It's still processing — it'll be ready to sing in a minute."
+          ? "Voice saved! Suno is still processing it — wait 1–2 minutes before your first song."
           : "Your voice is saved and selected for Create",
         { icon: "✓", durationMs: 3600 }
       );
@@ -47910,6 +48045,7 @@ function saveTimedLyricsToStore(audioId, words) {
 }
 
 async function fetchTimedLyrics(taskId, audioId) {
+  if (!isSunoKaraokeTaskId(taskId)) return null;
   if (timedLyricsMemCache.has(audioId)) return timedLyricsMemCache.get(audioId);
   const stored = loadTimedLyricsStore()[audioId];
   if (Array.isArray(stored?.words) && stored.words.length) {
@@ -48006,6 +48142,7 @@ function resolveKaraokeIdsFromTrackRef(t) {
     }
   }
   if (!taskId || !audioId || isInstrumental) return null;
+  if (!isSunoKaraokeTaskId(taskId)) return null;
   return { taskId, audioId, full: full || t };
 }
 
@@ -55601,34 +55738,37 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       }
       setStatus(`Submitting generation… (Mode: ${modeLabel} | Engine: ${engineLabel})`);
 
-      const styleExtras = [
-        resolvedSingerGender ? singerVoiceStyleNote(resolvedSingerGender) : "",
-        dialect ? `Dialect: ${dialect}` : "",
-        dialectHint ? `Hint: ${dialectHint}` : "",
-        arabicAddressNote,
-        ...(hasReference
-          ? []
-          : [
-              timing ? timing : "",
-              groovePace ? (GROOVE_MAP[groovePace] || "") : "",
-              prosodyStrictness ? (PROSODY_MAP[prosodyStrictness] || "") : "",
-              beatStability ? (BEAT_STABILITY_MAP[beatStability] || "") : "",
-              hasReference ? REFERENCE_MELODY_LOCK : "",
-            ]),
-      ]
-        .filter(Boolean)
-        .join(", ");
-
       try { renderPersonaSelect(); } catch {}
       const personaHit = personaIdSel
         ? loadPersonas().find((x) => String(x.personaId) === personaIdSel)
         : null;
       const personaModelSel = personaIdSel ? effectivePersonaModel(personaHit) : "";
+      const isRecordedVoicePersona = personaModelSel === "voice_persona";
+      // Heavy timing/groove tags fight voice_persona clones — keep dialect only.
+      const styleExtras = isRecordedVoicePersona
+        ? [dialect ? `Dialect: ${dialect}` : "", dialectHint ? `Hint: ${dialectHint}` : "", arabicAddressNote]
+            .filter(Boolean)
+            .join(", ")
+        : [
+            resolvedSingerGender ? singerVoiceStyleNote(resolvedSingerGender) : "",
+            dialect ? `Dialect: ${dialect}` : "",
+            dialectHint ? `Hint: ${dialectHint}` : "",
+            arabicAddressNote,
+            ...(hasReference
+              ? []
+              : [
+                  timing ? timing : "",
+                  groovePace ? (GROOVE_MAP[groovePace] || "") : "",
+                  prosodyStrictness ? (PROSODY_MAP[prosodyStrictness] || "") : "",
+                  beatStability ? (BEAT_STABILITY_MAP[beatStability] || "") : "",
+                  hasReference ? REFERENCE_MELODY_LOCK : "",
+                ]),
+          ]
+            .filter(Boolean)
+            .join(", ");
       const modelForRequest = LATEST_SUNO_MODEL;
-      // Recorded voices: Suno's docs say to verify availability before any
-      // generation that depends on the voice — otherwise it silently renders
-      // with a generic voice and the credits are gone. Only an explicit
-      // "false" blocks; if the check itself fails we don't get in the way.
+      // Recorded voices: Suno docs require check-voice isAvailable before generate;
+      // otherwise it can silently fall back to a generic voice.
       if (personaIdSel && !webProFeatureAllowed()) {
         setLoading(false);
         setGenerateBtn("Generate song", false, "generate");
@@ -55637,17 +55777,13 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
         return;
       }
       if (personaIdSel && personaModelSel === "voice_persona" && personaHit?.voiceTaskId) {
-        const voiceReady = await checkSunoVoiceAvailability(personaHit.voiceTaskId);
+        setStatus("Checking your recorded voice is ready…");
+        const voiceGate = await resolveRecordedVoiceReady(personaHit);
         const stale = personaNeedsRefresh(personaHit);
-        // Fresh voice: only an explicit "false" blocks (it's still processing).
-        // Stale voice (≥1 week): block unless Suno positively confirms it's still
-        // available — so an expired voice stops HERE with a clear message instead
-        // of wasting a wait on a generation Suno will reject as "expired vocal".
-        const blocked = voiceReady === false || (stale && voiceReady !== true);
-        if (blocked) {
+        if (!voiceGate.ready) {
           setLoading(false);
           setGenerateBtn("Generate song", false, "generate");
-          if (stale) {
+          if (stale || voiceGate.reason === "stale_unknown") {
             showToast(
               "This voice has expired. Re-record it in Settings → Your voices to keep singing in your voice, or tap your persona chip to switch it off.",
               { icon: "!", durationMs: 6800 }
@@ -55655,8 +55791,8 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
             setStatus("Generation paused: this recorded voice has expired — re-record it to refresh.");
           } else {
             showToast(
-              "Your voice is still processing — try again in a minute, or tap your persona chip to switch it off.",
-              { icon: "!", durationMs: 5600 }
+              "Your voice is still processing on Suno's side — wait 1–2 minutes after recording, then try again.",
+              { icon: "!", durationMs: 6200 }
             );
             setStatus("Generation paused: your recorded voice isn't ready yet.");
           }
@@ -55674,11 +55810,14 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
           );
         } catch {}
       }
+      const personaStyleBase = hasReference
+        ? String(userStyle || "").trim()
+        : isRecordedVoicePersona
+        ? [userStyle, styleExtras, artworkStyle ? `cover art: ${artworkStyle}` : ""].filter(Boolean).join(" | ")
+        : `${userStyle}${userStyle ? " | " : ""}${timingClause}, ${styleExtras}${artworkStyle ? `, cover art: ${artworkStyle}` : ""}`;
       const payload = {
         prompt: finalPrompt,
-        style: hasReference
-          ? String(userStyle || "").trim()
-          : `${userStyle}${userStyle ? " | " : ""}${timingClause}, ${styleExtras}${artworkStyle ? `, cover art: ${artworkStyle}` : ""}`,
+        style: personaStyleBase,
         songKey: mapSolfegeToLetterKey((els.sunoSongKey?.value || "").trim()),
         title: (els.sunoTitle?.value || "").trim(),
         customMode: true,
@@ -55687,6 +55826,12 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
         ...(imageMoodAppliedForNextGen ? { watchKind: "photo" } : {}),
         personaId: personaIdSel || undefined,
         personaModel: personaModelSel || undefined,
+        ...(isRecordedVoicePersona
+          ? (() => {
+              const tune = resolvePersonaVoiceTune();
+              return { styleWeight: tune.styleWeight, weirdnessConstraint: tune.weirdnessConstraint };
+            })()
+          : {}),
       };
       const vp = String(els.sunoVoiceProfile?.value || "").trim();
       // Voice profile / Singer: skip only when a persona owns the voice.
@@ -55970,6 +56115,9 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       );
 
       sunoTaskId = extractTaskIdLoose(data);
+      if (sunoTaskId && personaIdSel) {
+        try { markPersonaGenerationUsed(personaIdSel); } catch {}
+      }
       const isSingleVariantTask = isSingleVariantMusicTask(sunoTaskId);
       const altImmediateUrl = isSingleVariantTask
         ? String(
@@ -56646,6 +56794,8 @@ bindOptionChipRow("grooveChipRow", els.sunoGroovePace);
 bindOptionChipRow("prosodyChipRow", els.sunoProsody);
 bindOptionChipRow("beatChipRow", els.sunoBeatStability);
 bindOptionChipRow("voiceRangeChipRow", els.sunoVoiceProfile);
+bindOptionChipRow("personaStyleLeadChipRow", els.sunoPersonaStyleLead);
+bindOptionChipRow("personaAdventureChipRow", els.sunoPersonaAdventure);
 
 // Mood presets: set the Feel knobs AND seed matching style tags. Tags are
 // append-only into Style/Tags (never overwrite what the user typed) and

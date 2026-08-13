@@ -8714,6 +8714,51 @@ html[data-theme="light"] .remixSourceLyricsPanel{
 .personaActiveBanner.personaActiveBanner--warn .personaActiveBannerIcon{
   background: linear-gradient(135deg, rgba(255, 175, 80, 0.32), rgba(255, 105, 110, 0.26));
 }
+.personaVoiceTune{
+  margin-top: 8px;
+  padding: 10px 12px 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(35, 213, 171, 0.28);
+  background:
+    linear-gradient(135deg, rgba(14, 22, 34, 0.88), rgba(8, 12, 22, 0.82));
+  display: grid;
+  gap: 10px;
+  max-width: 100%;
+}
+.personaVoiceTuneGroup{
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+.personaVoiceTuneHead{
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px 8px;
+}
+.personaVoiceTuneLabel{
+  font-size: 12px;
+  font-weight: 650;
+  letter-spacing: 0.02em;
+  color: rgba(210, 248, 236, 0.95);
+}
+.personaVoiceTuneHint{
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.48);
+}
+.personaVoiceTuneChips{
+  flex-wrap: wrap;
+}
+html[data-theme="light"] .personaVoiceTune{
+  border-color: rgba(35, 213, 171, 0.22);
+  background: linear-gradient(135deg, rgba(248, 252, 255, 0.98), rgba(240, 246, 252, 0.96));
+}
+html[data-theme="light"] .personaVoiceTuneLabel{
+  color: rgba(18, 42, 36, 0.92);
+}
+html[data-theme="light"] .personaVoiceTuneHint{
+  color: rgba(24, 28, 40, 0.52);
+}
 /* Narrow-viewport guards. We progressively shed inessentials so the
    banner never forces its parent past 100% width:
    1) <420px: shrink the Change button.

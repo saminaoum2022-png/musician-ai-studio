@@ -187,7 +187,7 @@
       onload="this.media='all'"
     />
     <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Display:wght@900&family=Inter:wght@900&display=swap" /></noscript>
-    <link rel="stylesheet" href="./styles.css?v=20260812-232922" />
+    <link rel="stylesheet" href="./styles.css?v=20260813-160857" />
 
     <meta name="description" content="Create complete songs from lyrics, a hum, or a photo with NabadAi. Explore AI music tools, Arabic styles, voice personas, and creator sharing." />
     <meta property="og:type" content="website" />
@@ -940,6 +940,40 @@
                   <path fill="currentColor" d="M6.4 5 5 6.4 10.6 12 5 17.6 6.4 19 12 13.4 17.6 19 19 17.6 13.4 12 19 6.4 17.6 5 12 10.6Z"/>
                 </svg>
               </button>
+            </div>
+            <div id="personaVoiceTune" class="personaVoiceTune" hidden aria-label="Recorded voice tuning">
+              <div class="personaVoiceTuneGroup">
+                <div class="personaVoiceTuneHead">
+                  <span class="personaVoiceTuneLabel">Who leads?</span>
+                  <span class="personaVoiceTuneHint">Your voice vs. style tags</span>
+                </div>
+                <select id="sunoPersonaStyleLead" hidden aria-hidden="true" tabindex="-1">
+                  <option value="voice_leads" selected>My voice leads</option>
+                  <option value="balanced">Balanced</option>
+                  <option value="style_leads">Style leads</option>
+                </select>
+                <div id="personaStyleLeadChipRow" class="optChipRow personaVoiceTuneChips" role="group" aria-label="Who leads the song">
+                  <button type="button" class="optChip isActive" data-opt-value="voice_leads" aria-pressed="true">My voice</button>
+                  <button type="button" class="optChip" data-opt-value="balanced" aria-pressed="false">Balanced</button>
+                  <button type="button" class="optChip" data-opt-value="style_leads" aria-pressed="false">Style tags</button>
+                </div>
+              </div>
+              <div class="personaVoiceTuneGroup">
+                <div class="personaVoiceTuneHead">
+                  <span class="personaVoiceTuneLabel">How adventurous?</span>
+                  <span class="personaVoiceTuneHint">Safe vs. experimental</span>
+                </div>
+                <select id="sunoPersonaAdventure" hidden aria-hidden="true" tabindex="-1">
+                  <option value="familiar" selected>Stay familiar</option>
+                  <option value="balanced">Balanced</option>
+                  <option value="surprise">Surprise me</option>
+                </select>
+                <div id="personaAdventureChipRow" class="optChipRow personaVoiceTuneChips" role="group" aria-label="How adventurous">
+                  <button type="button" class="optChip isActive" data-opt-value="familiar" aria-pressed="true">Familiar</button>
+                  <button type="button" class="optChip" data-opt-value="balanced" aria-pressed="false">Balanced</button>
+                  <button type="button" class="optChip" data-opt-value="surprise" aria-pressed="false">Surprise me</button>
+                </div>
+              </div>
             </div>
             <div id="createChallengeHint" class="createChallengeHint" hidden>
               <span class="createChallengeHintBadge" aria-hidden="true">
@@ -4830,6 +4864,6 @@
     </script>
     <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
     <script src="./env.client.js" onerror="void 0"></script>
-    <script type="module" src="./src/app.js?v=20260812-232922"></script>
+    <script type="module" src="./src/app.js?v=20260813-160857"></script>
   </body>
 </html>

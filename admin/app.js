@@ -919,9 +919,15 @@ function renderProviderRows(providers = []) {
     const latency = p.latencyMs != null ? `${fmtNum(p.latencyMs, 0)} ms` : "";
     const healthDetail = [p.detail, latency].filter(Boolean).join(" · ");
     const balanceSub = spend.balanceDetail || spend.usageNote || "";
-    const balanceLink = spend.balanceSource === "dashboard_only"
-      ? `<br><a class="providerExtLink" href="https://aistudio.google.com/billing" target="_blank" rel="noopener noreferrer">Open AI Studio Billing →</a>`
+    const billingUrl = p.id === "gemini" || p.id === "lyria"
+      ? "https://aistudio.google.com/billing"
       : "";
+    const balanceLink = billingUrl && (spend.balanceSource === "dashboard_only" || spend.balanceSource === "snapshot")
+      ? `<br><a class="providerExtLink" href="${billingUrl}" target="_blank" rel="noopener noreferrer">Open AI Studio Billing →</a>`
+      : "";
+    const sharedWalletNote = p.id === "lyria"
+      ? `<br><span class="cellMuted">Same Google wallet as Gemini</span>`
+      : (p.id === "gemini" ? `<br><span class="cellMuted">Shared wallet — Lyria uses this too</span>` : "");
     const usedAll = spend.tracksUsage
       ? fmtUsd(spend.consumedUsdAll)
       : (spend.consumedUsdAll > 0 ? fmtUsd(spend.consumedUsdAll) : "—");
@@ -930,7 +936,7 @@ function renderProviderRows(providers = []) {
       <tr>
         <td>
           <strong>${escapeHtml(p.name)}</strong><br>
-          <span class="cellMuted">${escapeHtml(p.role || "")}</span>
+          <span class="cellMuted">${escapeHtml(p.role || "")}</span>${sharedWalletNote}
         </td>
         <td>
           ${providerStatusBadge(p.status)}<br>
@@ -951,6 +957,34 @@ function renderProviderRows(providers = []) {
   }).join("");
 }
 
+function renderGeminiSyncForm() {
+  if (!canLogProviderTopUp()) return "";
+  return `
+    <section class="sectionCard sectionCard--warn">
+      <div class="sectionHead">
+        <h3 class="sectionTitle">Sync Gemini / Lyria balance</h3>
+        <p class="sectionNote">
+          <strong>Lyria Pro and Gemini use the same API key and one Google prepay wallet.</strong>
+          Google does not expose your dollar balance via API (unlike Suno). Open
+          <a class="providerExtLink" href="https://aistudio.google.com/billing" target="_blank" rel="noopener noreferrer">AI Studio → Billing</a>,
+          copy your current prepay balance, and paste it here. We subtract tracked usage since sync so both rows stay accurate.
+        </p>
+      </div>
+      <form id="geminiSyncForm" class="grantForm">
+        <label class="field grantField grantField--amount">
+          <span>Current AI Studio balance (USD)</span>
+          <input id="geminiSyncUsd" type="number" min="0" step="0.01" placeholder="47.50" required />
+        </label>
+        <label class="field grantField">
+          <span>Note (optional)</span>
+          <input id="geminiSyncNote" type="text" maxlength="500" placeholder="After $50 top-up" />
+        </label>
+        <button type="submit" class="btnPrimary">Sync balance</button>
+      </form>
+      <p id="geminiSyncMsg" class="loginError" hidden></p>
+    </section>`;
+}
+
 function renderProviderTopUpForm() {
   if (!canLogProviderTopUp()) return "";
   return `
@@ -964,9 +998,8 @@ function renderProviderTopUpForm() {
           <span>Provider</span>
           <select id="providerTopUpSelect" required>
             <option value="suno">Suno</option>
-            <option value="lyria">Lyria Pro</option>
             <option value="elevenlabs">ElevenLabs</option>
-            <option value="gemini">Gemini</option>
+            <option value="gemini">Gemini (shared wallet)</option>
             <option value="pollinations">Pollinations</option>
           </select>
         </label>
@@ -994,12 +1027,19 @@ function renderRecentTopUps(rows = []) {
   }
   const body = rows.map((row) => {
     const amounts = [];
-    if (row.amountCredits != null && row.amountCredits > 0) amounts.push(`${fmtNum(row.amountCredits, 0)} cr`);
-    if (row.amountUsd != null && row.amountUsd > 0) amounts.push(fmtUsd(row.amountUsd));
+    if (row.eventType === "balance_snapshot") {
+      amounts.push(`Balance ${fmtUsd(row.amountUsd)}`);
+    } else {
+      if (row.amountCredits != null && row.amountCredits > 0) amounts.push(`${fmtNum(row.amountCredits, 0)} cr`);
+      if (row.amountUsd != null && row.amountUsd > 0) amounts.push(fmtUsd(row.amountUsd));
+    }
+    const providerLabel = row.provider === "gemini" && row.eventType === "balance_snapshot"
+      ? "gemini (+ lyria)"
+      : (row.provider || "—");
     return `
       <tr>
         ${dateCell(row.createdAt)}
-        <td>${escapeHtml(row.provider || "—")}</td>
+        <td>${escapeHtml(providerLabel)}</td>
         <td>${amounts.join(" · ") || "—"}</td>
         <td>${escapeHtml(row.note || "—")}</td>
         <td class="cellMuted">${escapeHtml(row.loggedByEmail || "—")}</td>
@@ -1033,7 +1073,7 @@ function renderProviders(data) {
           Per-provider upstream cost tracking. <strong>Suno guarantee &amp; Pro liability</strong> stay on Overview only.
           Music usage from generation logs; Gemini/Pollinations from API call logs.
           <strong>Suno &amp; ElevenLabs balances are live from their APIs.</strong>
-          Google Gemini has no balance API — use the Billing link on those rows.
+          Gemini/Lyria need a one-time sync from AI Studio Billing (same wallet for both).
           ${cacheNote}.
         </p>
       </div>
@@ -1049,10 +1089,11 @@ function renderProviders(data) {
         </table>
       </div>
     </section>
+    ${renderGeminiSyncForm()}
     ${renderProviderTopUpForm()}
     <section class="sectionCard">
       <div class="sectionHead">
-        <h3 class="sectionTitle">Recent top-ups</h3>
+        <h3 class="sectionTitle">Recent top-ups &amp; syncs</h3>
       </div>
       ${renderRecentTopUps(spend.recentTopUps || [])}
     </section>
@@ -1947,12 +1988,12 @@ function setView(view) {
   }
 }
 
-async function adminLogProviderTopUp({ provider, amountUsd, amountCredits, note } = {}) {
+async function adminLogProviderTopUp({ provider, amountUsd, amountCredits, note, eventType = "top_up" } = {}) {
   await refreshSessionIfNeeded();
   const token = state.session?.access_token;
   if (!token) throw new Error("Not signed in");
-  const body = { provider };
-  if (amountUsd != null && Number.isFinite(Number(amountUsd)) && Number(amountUsd) > 0) {
+  const body = { provider, eventType };
+  if (amountUsd != null && Number.isFinite(Number(amountUsd)) && Number(amountUsd) >= 0) {
     body.amountUsd = Number(amountUsd);
   }
   if (amountCredits != null && Number.isFinite(Number(amountCredits)) && Number(amountCredits) > 0) {
@@ -1979,6 +2020,19 @@ async function adminLogProviderTopUp({ provider, amountUsd, amountCredits, note 
     throw new Error(data?.error || `Top-up failed (${r.status})`);
   }
   return data;
+}
+
+function setGeminiSyncMsg(text, kind = "ok") {
+  const el = document.getElementById("geminiSyncMsg");
+  if (!el) return;
+  if (!text) {
+    el.hidden = true;
+    el.textContent = "";
+    return;
+  }
+  el.hidden = false;
+  el.textContent = text;
+  el.style.color = kind === "err" ? "#fca5a5" : kind === "warn" ? "#fcd34d" : "#86efac";
 }
 
 function setProviderTopUpMsg(text, kind = "ok") {
@@ -2476,6 +2530,38 @@ document.body.addEventListener("submit", (e) => {
         setPromoCreateMsg(err?.message || "Create failed", "err");
       } finally {
         if (btn) btn.disabled = false;
+      }
+    })();
+    return;
+  }
+
+  const geminiSyncForm = e.target.closest("#geminiSyncForm");
+  if (geminiSyncForm) {
+    e.preventDefault();
+    void (async () => {
+      const usdRaw = geminiSyncForm.querySelector("#geminiSyncUsd")?.value;
+      const note = String(geminiSyncForm.querySelector("#geminiSyncNote")?.value || "").trim();
+      const amountUsd = usdRaw !== "" && usdRaw != null ? Number(usdRaw) : null;
+      if (amountUsd == null || !Number.isFinite(amountUsd) || amountUsd < 0) {
+        setGeminiSyncMsg("Enter your current AI Studio prepay balance (USD, ≥ 0).", "warn");
+        return;
+      }
+      setGeminiSyncMsg("Syncing…", "warn");
+      try {
+        await adminLogProviderTopUp({
+          provider: "gemini",
+          eventType: "balance_snapshot",
+          amountUsd,
+          note,
+        });
+        geminiSyncForm.reset();
+        state.cache = {};
+        if (state.view === "providers" || state.view === "suno") {
+          await loadView({ force: true });
+        }
+        setGeminiSyncMsg("Balance synced — Lyria and Gemini rows updated.", "ok");
+      } catch (err) {
+        setGeminiSyncMsg(err?.message || "Sync failed", "err");
       }
     })();
     return;

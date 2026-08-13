@@ -1,7 +1,8 @@
 /**
  * POST /api/admin/provider-wallet — log a vendor top-up or balance adjustment.
  *
- * Body: { provider, amountUsd?, amountCredits?, note? }
+ * Body: { provider, eventType?, amountUsd?, amountCredits?, note? }
+ *   eventType: top_up (default) | adjustment | balance_snapshot (Gemini AI Studio sync)
  * Requires providers view + Owner / Admin / Operations role.
  */
 
@@ -83,8 +84,17 @@ module.exports = async function handler(req, res) {
   }
 
   const provider = String(body.provider || "").trim().toLowerCase();
+  const eventType = String(body.eventType || body.event_type || "top_up").trim().toLowerCase();
   if (!ALLOWED_PROVIDERS.has(provider)) {
     return sendJson(res, 400, { error: "Invalid provider", allowed: [...ALLOWED_PROVIDERS] });
+  }
+  if (!["top_up", "adjustment", "balance_snapshot"].includes(eventType)) {
+    return sendJson(res, 400, { error: "Invalid eventType", allowed: ["top_up", "adjustment", "balance_snapshot"] });
+  }
+
+  const walletProvider = provider === "lyria" ? "gemini" : provider;
+  if (eventType === "balance_snapshot" && walletProvider !== "gemini") {
+    return sendJson(res, 400, { error: "Balance snapshots are only supported for Gemini (shared Lyria + Gemini wallet)." });
   }
 
   const amountUsdRaw = body.amountUsd != null ? Number(body.amountUsd) : null;
@@ -92,18 +102,22 @@ module.exports = async function handler(req, res) {
   const amountUsd = amountUsdRaw != null && Number.isFinite(amountUsdRaw) ? amountUsdRaw : null;
   const amountCredits = amountCreditsRaw != null && Number.isFinite(amountCreditsRaw) ? amountCreditsRaw : null;
 
-  if ((amountUsd == null || amountUsd <= 0) && (amountCredits == null || amountCredits <= 0)) {
+  if (eventType === "balance_snapshot") {
+    if (amountUsd == null || amountUsd < 0) {
+      return sendJson(res, 400, { error: "Enter amountUsd (current AI Studio prepay balance, ≥ 0)." });
+    }
+  } else if ((amountUsd == null || amountUsd <= 0) && (amountCredits == null || amountCredits <= 0)) {
     return sendJson(res, 400, { error: "Enter amountUsd and/or amountCredits (must be > 0)" });
   }
 
   const note = String(body.note || "").trim().slice(0, 500);
 
   const insert = {
-    provider,
-    event_type: "top_up",
+    provider: walletProvider,
+    event_type: eventType,
     amount_usd: amountUsd,
-    amount_credits: amountCredits,
-    note: note || null,
+    amount_credits: eventType === "balance_snapshot" ? null : amountCredits,
+    note: note || (eventType === "balance_snapshot" ? "AI Studio balance sync" : null),
     logged_by: admin.userId,
     logged_by_email: admin.email,
   };

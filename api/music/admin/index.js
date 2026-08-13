@@ -37,6 +37,7 @@ const {
   mergeProviderSpend,
   roundUsd,
 } = require("../../_lib/provider-spend");
+const { computeGeminiSharedWalletBalance } = require("../../_lib/gemini-wallet");
 
 const SUPABASE_URL = (process.env.SUPABASE_URL || "").replace(/\/$/, "");
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
@@ -1152,12 +1153,13 @@ async function getSunoPanel() {
 
 async function getProvidersPanel({ forceHealth = false } = {}) {
   const since = new Date(Date.now() - 86400000).toISOString();
-  const [health, failRes, spendData] = await Promise.all([
+  const [health, failRes, spendData, geminiWallet] = await Promise.all([
     getProviderHealth({ force: forceHealth }),
     serviceFetch(
       `music_generation_logs?select=provider,status&created_at=gte.${encodeURIComponent(since)}&status=eq.failed&limit=1000`,
     ),
     fetchProviderSpendData({ callRpc, serviceFetch }),
+    computeGeminiSharedWalletBalance({ serviceFetch }),
   ]);
 
   const failures24h = {};
@@ -1171,11 +1173,11 @@ async function getProvidersPanel({ forceHealth = false } = {}) {
     const live = p.liveBalance;
     if (live?.source === "api") {
       liveBalances[p.id] = live;
-      continue;
     }
-    if (live?.source === "dashboard_only") {
-      liveBalances[p.id] = live;
-    }
+  }
+  if (geminiWallet) {
+    liveBalances.gemini = geminiWallet;
+    liveBalances.lyria = geminiWallet;
   }
 
   const spendRows = mergeProviderSpend({

@@ -45,8 +45,19 @@ module.exports = async function handler(req, res) {
       });
     }
 
+    const d = upstream.data?.data || upstream.data || {};
+    let isAvailable = null;
+    if (d.isAvailable === true || d.is_available === true) isAvailable = true;
+    else if (d.isAvailable === false || d.is_available === false) isAvailable = false;
+    else {
+      const st = String(d.status || d.voiceStatus || "").trim().toLowerCase();
+      if (st === "success" || st === "available" || st === "ready") isAvailable = true;
+      else if (st.includes("fail") || st === "processing" || st === "pending") isAvailable = false;
+    }
+
     return sendJson(res, 200, {
-      isAvailable: upstream.data?.data?.isAvailable === true,
+      isAvailable,
+      status: String(d.status || d.voiceStatus || "").trim(),
       raw: upstream.data,
     });
   } catch (e) {

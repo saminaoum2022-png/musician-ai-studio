@@ -41154,12 +41154,16 @@ function normalizePersonaRecord(item) {
     personaModel = type === "suno_voice" ? "voice_persona" : "style_persona";
   }
   const voiceTaskId = String(item.voiceTaskId || item.voice_task_id || "").trim();
+  const genCount = Number(item.genCount || item.gen_count || 0);
+  const lastGenAt = Number(item.lastGenAt || item.last_gen_at || 0);
   return {
     personaId,
     label: String(item.label || "My voice").trim().slice(0, 64) || "My voice",
     type,
     personaModel,
     ...(voiceTaskId ? { voiceTaskId } : {}),
+    ...(genCount > 0 ? { genCount } : {}),
+    ...(lastGenAt > 0 ? { lastGenAt } : {}),
     ts: Number(item.ts || item.updated_at || 0) || Date.now(),
   };
 }
@@ -41185,6 +41189,11 @@ function mergePersonaLists(...lists) {
       const norm = normalizePersonaRecord(item);
       if (!norm) continue;
       const prev = map.get(norm.personaId);
+      if (prev) {
+        if (!norm.voiceTaskId && prev.voiceTaskId) norm.voiceTaskId = prev.voiceTaskId;
+        if (!norm.genCount && prev.genCount) norm.genCount = prev.genCount;
+        if (!norm.lastGenAt && prev.lastGenAt) norm.lastGenAt = prev.lastGenAt;
+      }
       if (!prev || Number(norm.ts || 0) >= Number(prev.ts || 0)) map.set(norm.personaId, norm);
     }
   }
@@ -41223,6 +41232,8 @@ async function supabaseUpsertSavedPersonas(items) {
       type: p.type,
       personaModel: p.personaModel,
       ...(p.voiceTaskId ? { voiceTaskId: p.voiceTaskId } : {}),
+      ...(Number(p.genCount || 0) > 0 ? { genCount: Number(p.genCount) } : {}),
+      ...(Number(p.lastGenAt || 0) > 0 ? { lastGenAt: Number(p.lastGenAt) } : {}),
       ts: p.ts,
     })),
     updated_at: new Date().toISOString(),
@@ -41646,6 +41657,69 @@ async function checkSunoVoiceAvailability(voiceTaskId) {
   } catch {
     return null;
   }
+}
+
+async function confirmVoiceReadyViaRecordInfo(voiceTaskId, expectedVoiceId) {
+  const taskId = String(voiceTaskId || "").trim();
+  const voiceId = String(expectedVoiceId || "").trim();
+  if (!taskId || !voiceId) return false;
+  try {
+    const token = getSupabaseAuthToken();
+    const r = await fetch(
+      apiUrl(`/api/suno/voice-record-info?taskId=${encodeURIComponent(taskId)}`),
+      { headers: token ? { Authorization: `Bearer ${token}` } : {} },
+    );
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) return false;
+    const status = String(d?.status || "").toLowerCase();
+    const gotVoiceId = String(d?.voiceId || "").trim();
+    return status === "success" && gotVoiceId === voiceId;
+  } catch {
+    return false;
+  }
+}
+
+/** Gate before generate — check-voice can lag after record-info already succeeded. */
+async function resolveRecordedVoiceReady(personaHit) {
+  if (!personaHit?.voiceTaskId) return { ready: true, reason: "no_task" };
+  if (Number(personaHit.genCount || 0) > 0) return { ready: true, reason: "prior_success" };
+
+  const stale = personaNeedsRefresh(personaHit);
+  let voiceReady = await checkSunoVoiceAvailability(personaHit.voiceTaskId);
+
+  if (voiceReady === true) return { ready: true, reason: "check_ok" };
+
+  if (voiceReady === false) {
+    const viaRecord = await confirmVoiceReadyViaRecordInfo(
+      personaHit.voiceTaskId,
+      personaHit.personaId,
+    );
+    if (viaRecord) {
+      voiceReady = await checkSunoVoiceAvailability(personaHit.voiceTaskId);
+      if (voiceReady !== false) return { ready: true, reason: "record_info_ok" };
+      // Suno accepted this voiceId on record-info — don't block on flaky check-voice.
+      return { ready: true, reason: "record_info_ok" };
+    }
+  }
+
+  if (voiceReady == null) {
+    if (stale) return { ready: false, reason: "stale_unknown" };
+    return { ready: true, reason: "check_failed" };
+  }
+
+  if (stale) return { ready: false, reason: "stale" };
+  return { ready: false, reason: "processing" };
+}
+
+function markPersonaGenerationUsed(personaId) {
+  const id = String(personaId || "").trim();
+  if (!id) return;
+  const items = loadPersonas();
+  const hit = items.find((x) => String(x.personaId) === id);
+  if (!hit) return;
+  hit.genCount = Number(hit.genCount || 0) + 1;
+  hit.lastGenAt = Date.now();
+  savePersonas(items);
 }
 
 async function pollVoiceRecordInfo(taskId, maxMs = 180000) {
@@ -55647,17 +55721,12 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
         return;
       }
       if (personaIdSel && personaModelSel === "voice_persona" && personaHit?.voiceTaskId) {
-        const voiceReady = await checkSunoVoiceAvailability(personaHit.voiceTaskId);
+        const voiceGate = await resolveRecordedVoiceReady(personaHit);
         const stale = personaNeedsRefresh(personaHit);
-        // Fresh voice: only an explicit "false" blocks (it's still processing).
-        // Stale voice (≥1 week): block unless Suno positively confirms it's still
-        // available — so an expired voice stops HERE with a clear message instead
-        // of wasting a wait on a generation Suno will reject as "expired vocal".
-        const blocked = voiceReady === false || (stale && voiceReady !== true);
-        if (blocked) {
+        if (!voiceGate.ready) {
           setLoading(false);
           setGenerateBtn("Generate song", false, "generate");
-          if (stale) {
+          if (stale || voiceGate.reason === "stale_unknown") {
             showToast(
               "This voice has expired. Re-record it in Settings → Your voices to keep singing in your voice, or tap your persona chip to switch it off.",
               { icon: "!", durationMs: 6800 }
@@ -55980,6 +56049,9 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       );
 
       sunoTaskId = extractTaskIdLoose(data);
+      if (sunoTaskId && personaIdSel) {
+        try { markPersonaGenerationUsed(personaIdSel); } catch {}
+      }
       const isSingleVariantTask = isSingleVariantMusicTask(sunoTaskId);
       const altImmediateUrl = isSingleVariantTask
         ? String(

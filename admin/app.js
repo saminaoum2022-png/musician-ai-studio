@@ -887,6 +887,9 @@ function providerExtLinks(p) {
   if (p.docsUrl) {
     links.push(`<a class="providerExtLink" href="${escapeHtml(p.docsUrl)}" target="_blank" rel="noopener noreferrer">Docs</a>`);
   }
+  if (p.lyriaDocsUrl) {
+    links.push(`<a class="providerExtLink" href="${escapeHtml(p.lyriaDocsUrl)}" target="_blank" rel="noopener noreferrer">Lyria docs</a>`);
+  }
   return links.length ? links.join(" · ") : "—";
 }
 
@@ -919,15 +922,10 @@ function renderProviderRows(providers = []) {
     const latency = p.latencyMs != null ? `${fmtNum(p.latencyMs, 0)} ms` : "";
     const healthDetail = [p.detail, latency].filter(Boolean).join(" · ");
     const balanceSub = spend.balanceDetail || spend.usageNote || "";
-    const billingUrl = p.id === "gemini" || p.id === "lyria"
-      ? "https://aistudio.google.com/billing"
-      : "";
+    const billingUrl = p.id === "gemini" ? "https://aistudio.google.com/billing" : "";
     const balanceLink = billingUrl && ["dashboard_only", "snapshot", "ledger"].includes(spend.balanceSource)
       ? `<br><a class="providerExtLink" href="${billingUrl}" target="_blank" rel="noopener noreferrer">Open AI Studio Billing →</a>`
       : "";
-    const sharedWalletNote = p.id === "lyria"
-      ? `<br><span class="cellMuted">Same Google wallet as Gemini</span>`
-      : (p.id === "gemini" ? `<br><span class="cellMuted">Shared wallet — Lyria uses this too</span>` : "");
     const usedAll = spend.tracksUsage
       ? fmtUsd(spend.consumedUsdAll)
       : (spend.consumedUsdAll > 0 ? fmtUsd(spend.consumedUsdAll) : "—");
@@ -936,7 +934,7 @@ function renderProviderRows(providers = []) {
       <tr>
         <td>
           <strong>${escapeHtml(p.name)}</strong><br>
-          <span class="cellMuted">${escapeHtml(p.role || "")}</span>${sharedWalletNote}
+          <span class="cellMuted">${escapeHtml(p.role || "")}</span>
         </td>
         <td>
           ${providerStatusBadge(p.status)}<br>
@@ -965,9 +963,9 @@ function renderProviderTopUpForm() {
         <h3 class="sectionTitle">Log a top-up</h3>
         <p class="sectionNote">
           <strong>Suno &amp; ElevenLabs</strong> balances above are live from their APIs.
-          <strong>Gemini / Lyria</strong> share one Google wallet — Google has no live balance API.
+          <strong>Gemini / Lyria</strong> use one Google wallet — Google has no live balance API.
           Log each payment here and the Balance column updates automatically (top-ups − tracked usage).
-          For Gemini only, choose <em>Set balance from AI Studio</em> once if you want to paste the exact number from Billing instead of adding payments.
+          Optionally choose <em>Set balance from AI Studio</em> to paste the exact number from Billing.
         </p>
       </div>
       <form id="providerTopUpForm" class="grantForm">
@@ -976,7 +974,7 @@ function renderProviderTopUpForm() {
           <select id="providerTopUpSelect" required>
             <option value="suno">Suno</option>
             <option value="elevenlabs">ElevenLabs</option>
-            <option value="gemini">Gemini / Lyria (shared)</option>
+            <option value="gemini">Gemini / Lyria</option>
             <option value="pollinations">Pollinations</option>
           </select>
         </label>
@@ -1017,8 +1015,8 @@ function renderRecentTopUps(rows = []) {
       if (row.amountCredits != null && row.amountCredits > 0) amounts.push(`${fmtNum(row.amountCredits, 0)} cr`);
       if (row.amountUsd != null && row.amountUsd > 0) amounts.push(fmtUsd(row.amountUsd));
     }
-    const providerLabel = row.provider === "gemini" && row.eventType === "balance_snapshot"
-      ? "gemini (+ lyria)"
+    const providerLabel = row.provider === "lyria" || (row.provider === "gemini" && row.eventType === "balance_snapshot")
+      ? "gemini / lyria"
       : (row.provider || "—");
     return `
       <tr>
@@ -1057,7 +1055,7 @@ function renderProviders(data) {
           Per-provider upstream cost tracking. <strong>Suno guarantee &amp; Pro liability</strong> stay on Overview only.
           Music usage from generation logs; Gemini/Pollinations from API call logs.
           <strong>Suno &amp; ElevenLabs:</strong> live API balance.
-          <strong>Gemini &amp; Lyria:</strong> one shared wallet — Balance = your logged top-ups − tracked usage (Google has no live $ API).
+          <strong>Gemini / Lyria:</strong> one Google wallet — Balance = your logged top-ups − tracked usage (Google has no live $ API).
           ${cacheNote}.
         </p>
       </div>
@@ -2568,7 +2566,7 @@ document.body.addEventListener("submit", (e) => {
         }
         setProviderTopUpMsg(
           eventType === "balance_snapshot"
-            ? "Balance set — Gemini and Lyria rows updated."
+            ? "Balance set — Gemini / Lyria row updated."
             : "Top-up saved — Balance column updated.",
           "ok",
         );

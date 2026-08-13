@@ -17,15 +17,16 @@ const PROVIDER_CATALOG = Object.freeze([
     docsUrl: "https://docs.sunoapi.org",
   },
   {
-    id: "lyria",
-    name: "Lyria Pro",
-    vendor: "Google Gemini API",
-    role: "Alternate music generation",
+    id: "gemini",
+    name: "Gemini / Lyria",
+    vendor: "Google",
+    role: "Music (Lyria Pro), cover art, coach, maqam",
     envKeys: ["GEMINI_API_KEY", "GOOGLE_API_KEY"],
     featureFlag: "LYRIA_GENERATE_ENABLED",
     topUpUrl: "https://aistudio.google.com/billing",
     dashboardUrl: "https://aistudio.google.com/billing",
-    docsUrl: "https://ai.google.dev/gemini-api/docs/music-generation",
+    docsUrl: "https://ai.google.dev/gemini-api/docs",
+    lyriaDocsUrl: "https://ai.google.dev/gemini-api/docs/music-generation",
   },
   {
     id: "elevenlabs",
@@ -37,16 +38,6 @@ const PROVIDER_CATALOG = Object.freeze([
     topUpUrl: "https://elevenlabs.io/app/subscription",
     dashboardUrl: "https://elevenlabs.io/app/subscription",
     docsUrl: "https://elevenlabs.io/docs/api-reference/music/compose",
-  },
-  {
-    id: "gemini",
-    name: "Gemini",
-    vendor: "Google",
-    role: "Cover art regen, coach, maqam",
-    envKeys: ["GEMINI_API_KEY", "GOOGLE_API_KEY"],
-    topUpUrl: "https://aistudio.google.com/billing",
-    dashboardUrl: "https://aistudio.google.com/billing",
-    docsUrl: "https://ai.google.dev/gemini-api/docs",
   },
   {
     id: "pollinations",
@@ -189,19 +180,20 @@ async function pingGeminiModels(apiKey) {
   return { status, latencyMs: r.ms, detail, liveBalance };
 }
 
-async function pingLyria() {
+async function pingGeminiLyria() {
   const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || "";
   const configured = Boolean(apiKey);
-  const enabled = featureEnabled("LYRIA_GENERATE_ENABLED");
+  const lyriaEnabled = featureEnabled("LYRIA_GENERATE_ENABLED");
   if (!configured) {
-    return { status: "unconfigured", latencyMs: null, detail: "GEMINI_API_KEY not set", enabled };
+    return { status: "unconfigured", latencyMs: null, detail: "GEMINI_API_KEY not set", enabled: lyriaEnabled };
   }
   const ping = await pingGeminiModels(apiKey);
   const model = String(process.env.LYRIA_MUSIC_MODEL || "lyria-3-pro-preview").trim();
+  const lyriaNote = lyriaEnabled ? `Lyria ${model} live` : "Lyria admin-only";
   return {
     ...ping,
-    detail: enabled ? `${ping.detail} · model ${model}` : `${ping.detail} · admin-only (LYRIA_GENERATE_ENABLED off)`,
-    enabled,
+    detail: `${ping.detail} · ${lyriaNote}`,
+    enabled: lyriaEnabled,
   };
 }
 
@@ -231,16 +223,6 @@ async function pingElevenLabs() {
   return { status, latencyMs: r.ms, detail, enabled, liveBalance };
 }
 
-async function pingGemini() {
-  const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || "";
-  const configured = Boolean(apiKey);
-  if (!configured) {
-    return { status: "unconfigured", latencyMs: null, detail: "GEMINI_API_KEY not set" };
-  }
-  const ping = await pingGeminiModels(apiKey);
-  return ping;
-}
-
 async function pingPollinations() {
   const r = await timedFetch("https://pollinations.ai/", { method: "GET" }, 6000);
   const status = statusFromPing({ ok: r.ok, status: r.status, ms: r.ms, configured: true, error: r.error });
@@ -253,9 +235,8 @@ async function pingPollinations() {
 
 const PINGERS = {
   suno: pingSuno,
-  lyria: pingLyria,
+  gemini: pingGeminiLyria,
   elevenlabs: pingElevenLabs,
-  gemini: pingGemini,
   pollinations: pingPollinations,
 };
 

@@ -35,6 +35,7 @@ const { getProviderHealth } = require("../../_lib/provider-health");
 const {
   fetchProviderSpendData,
   mergeProviderSpend,
+  rollupGeminiLyriaSpendData,
   roundUsd,
 } = require("../../_lib/provider-spend");
 const { computeGeminiSharedWalletBalance } = require("../../_lib/gemini-wallet");
@@ -1160,18 +1161,23 @@ async function getProvidersPanel({ forceHealth = false } = {}) {
     ),
     fetchProviderSpendData({ callRpc, serviceFetch }),
   ]);
-  const geminiToppedUsd =
-    (spendData.topUpsByProvider?.gemini?.toppedUpUsd || 0)
-    + (spendData.topUpsByProvider?.lyria?.toppedUpUsd || 0);
+  const rolledUp = rollupGeminiLyriaSpendData({
+    spendByProvider: spendData.spendByProvider,
+    topUpsByProvider: spendData.topUpsByProvider,
+  });
   const geminiWallet = await computeGeminiSharedWalletBalance({
     serviceFetch,
-    toppedUpUsd: geminiToppedUsd,
+    toppedUpUsd: rolledUp.topUpsByProvider?.gemini?.toppedUpUsd || 0,
   });
 
   const failures24h = {};
   for (const row of Array.isArray(failRes.data) ? failRes.data : []) {
     const p = String(row.provider || "unknown").toLowerCase();
     failures24h[p] = (failures24h[p] || 0) + 1;
+  }
+  if (failures24h.lyria) {
+    failures24h.gemini = (failures24h.gemini || 0) + failures24h.lyria;
+    delete failures24h.lyria;
   }
 
   const liveBalances = {};
@@ -1183,12 +1189,11 @@ async function getProvidersPanel({ forceHealth = false } = {}) {
   }
   if (geminiWallet) {
     liveBalances.gemini = geminiWallet;
-    liveBalances.lyria = geminiWallet;
   }
 
   const spendRows = mergeProviderSpend({
-    spendByProvider: spendData.spendByProvider,
-    topUpsByProvider: spendData.topUpsByProvider,
+    spendByProvider: rolledUp.spendByProvider,
+    topUpsByProvider: rolledUp.topUpsByProvider,
     liveBalances,
   });
   const spendById = Object.fromEntries(spendRows.map((r) => [r.id, r]));

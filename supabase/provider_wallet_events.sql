@@ -17,7 +17,7 @@ create table if not exists public.provider_wallet_events (
     provider in ('suno', 'lyria', 'elevenlabs', 'gemini', 'pollinations', 'minimax', 'other')
   ),
   constraint provider_wallet_events_type_check check (
-    event_type in ('top_up', 'adjustment')
+    event_type in ('top_up', 'adjustment', 'balance_snapshot')
   ),
   constraint provider_wallet_events_amount_check check (
     amount_usd is not null or amount_credits is not null
@@ -141,3 +141,8 @@ as $$
   where event_type in ('top_up', 'adjustment')
   group by 1;
 $$;
+
+-- If table already exists, widen event_type for balance snapshots:
+-- alter table public.provider_wallet_events drop constraint if exists provider_wallet_events_type_check;
+-- alter table public.provider_wallet_events add constraint provider_wallet_events_type_check
+--   check (event_type in ('top_up', 'adjustment', 'balance_snapshot'));

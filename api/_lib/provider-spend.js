@@ -163,6 +163,10 @@ function mergeProviderSpend({ catalogIds = PROVIDER_SPEND_IDS, spendByProvider =
       if (id === "suno" && live.kind === "credits" && Number.isFinite(Number(live.value))) {
         balanceDetail = `${live.detail || "Live from sunoapi.org"} · ≈ ${fmtUsd(Number(live.value) * SUNO_USD_PER_CREDIT)}`;
       }
+    } else if (live?.source === "snapshot" && live.label) {
+      balanceLabel = live.label;
+      balanceDetail = live.detail || "Synced from AI Studio − tracked usage";
+      balanceSource = "snapshot";
     } else if (live?.source === "dashboard_only" && live.label) {
       balanceLabel = live.label;
       balanceDetail = live.detail || "Check vendor billing portal";

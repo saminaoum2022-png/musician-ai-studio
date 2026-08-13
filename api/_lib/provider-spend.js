@@ -6,11 +6,13 @@ const { SUNO_USD_PER_CREDIT } = require("./music-generation-log");
 
 const PROVIDER_SPEND_IDS = Object.freeze([
   "suno",
-  "lyria",
-  "elevenlabs",
   "gemini",
+  "elevenlabs",
   "pollinations",
 ]);
+
+/** Lyria logs/top-ups roll into the shared Gemini wallet row. */
+const GEMINI_WALLET_ROLLUP_IDS = Object.freeze(["lyria"]);
 
 /** Map music_generation_logs provider values onto catalog ids. */
 const LOG_PROVIDER_ALIASES = Object.freeze({
@@ -145,6 +147,41 @@ function mapRpcTopUpRows(rows = []) {
   return byProvider;
 }
 
+function rollupLyriaIntoGeminiSpend(spendByProvider = {}) {
+  const out = { ...spendByProvider };
+  const lyria = out.lyria;
+  if (!lyria) return out;
+  if (!out.gemini) out.gemini = emptySpendRow();
+  const g = out.gemini;
+  g.consumedUsdToday = roundUsd(g.consumedUsdToday + lyria.consumedUsdToday);
+  g.consumedUsd7d = roundUsd(g.consumedUsd7d + lyria.consumedUsd7d);
+  g.consumedUsd30d = roundUsd(g.consumedUsd30d + lyria.consumedUsd30d);
+  g.consumedUsdAll = roundUsd(g.consumedUsdAll + lyria.consumedUsdAll);
+  g.generations30d += lyria.generations30d;
+  delete out.lyria;
+  return out;
+}
+
+function rollupLyriaIntoGeminiTopUps(topUpsByProvider = {}) {
+  const out = { ...topUpsByProvider };
+  const lyria = out.lyria;
+  if (!lyria) return out;
+  if (!out.gemini) out.gemini = emptyTopUpRow();
+  const g = out.gemini;
+  g.toppedUpUsd = roundUsd(g.toppedUpUsd + lyria.toppedUpUsd);
+  g.toppedUpCredits = Math.round((g.toppedUpCredits + lyria.toppedUpCredits) * 10) / 10;
+  g.topUpCount += lyria.topUpCount;
+  delete out.lyria;
+  return out;
+}
+
+function rollupGeminiLyriaSpendData({ spendByProvider = {}, topUpsByProvider = {} } = {}) {
+  return {
+    spendByProvider: rollupLyriaIntoGeminiSpend(spendByProvider),
+    topUpsByProvider: rollupLyriaIntoGeminiTopUps(topUpsByProvider),
+  };
+}
+
 function mergeProviderSpend({ catalogIds = PROVIDER_SPEND_IDS, spendByProvider = {}, topUpsByProvider = {}, liveBalances = {} } = {}) {
   return catalogIds.map((id) => {
     const spend = spendByProvider[id] || emptySpendRow();
@@ -182,7 +219,7 @@ function mergeProviderSpend({ catalogIds = PROVIDER_SPEND_IDS, spendByProvider =
       balanceSource = "manual";
     }
 
-    const tracksUsage = ["suno", "lyria", "elevenlabs", "gemini", "pollinations"].includes(id);
+    const tracksUsage = ["suno", "gemini", "elevenlabs", "pollinations"].includes(id);
     const usageNote = tracksUsage
       ? ""
       : "Usage not logged for this vendor yet.";
@@ -283,9 +320,11 @@ async function fetchProviderSpendData({ callRpc, serviceFetch } = {}) {
 
 module.exports = {
   PROVIDER_SPEND_IDS,
+  GEMINI_WALLET_ROLLUP_IDS,
   aggregateSpendFromLogs,
   mergeUsageIntoSpend,
   fetchProviderSpendData,
   mergeProviderSpend,
+  rollupGeminiLyriaSpendData,
   roundUsd,
 };

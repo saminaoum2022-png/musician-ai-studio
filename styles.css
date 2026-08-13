@@ -8714,6 +8714,9 @@ html[data-theme="light"] .remixSourceLyricsPanel{
 .personaActiveBanner.personaActiveBanner--warn .personaActiveBannerIcon{
   background: linear-gradient(135deg, rgba(255, 175, 80, 0.32), rgba(255, 105, 110, 0.26));
 }
+.personaVoiceTune[hidden]{
+  display: none !important;
+}
 .personaVoiceTune{
   margin-top: 8px;
   padding: 10px 12px 12px;

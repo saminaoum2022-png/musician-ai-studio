@@ -201,7 +201,7 @@ import { MUSIC_VIDEO_FEATURE_ENABLED } from "./feature-flags.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260813-160857";
+const APP_BUILD = "20260813-161812";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -4988,6 +4988,8 @@ function renderSingerPersonaPill() {
 }
 
 let _singerPersonaDrawerOpen = false;
+/** Show voice-tuning chips only after the user picks a recorded voice persona this session. */
+let _personaVoiceTuneVisible = false;
 
 /** Persona chooser drawer under the Singer pills — only rendered/shown when the
  *  user has at least one persona and taps the Persona pill. With none, the pill
@@ -18639,6 +18641,7 @@ function setVocalRefFile(file, label, origin) {
  *  records a fresh vocal so an old persona can't silently re-sing it.
  *  Also exposed via the persona banner's × button. */
 function clearActiveVoicePersona(opts = {}) {
+  _personaVoiceTuneVisible = false;
   let hadActive = false;
   try {
     const prev = (loadPersonaSelection() || "").trim();
@@ -22480,7 +22483,9 @@ function renderActivePersonaBanner() {
     const label = String(hit.label || id.slice(0, 12) + "…").trim() || "Persona";
     els.personaActiveBannerLabel.textContent = label;
     const isRecordedVoice = hit.type === "suno_voice";
-    if (els.personaVoiceTune) els.personaVoiceTune.hidden = !isRecordedVoice;
+    if (els.personaVoiceTune) {
+      els.personaVoiceTune.hidden = !(isRecordedVoice && _personaVoiceTuneVisible);
+    }
     // When a vocal reference is attached, escalate the banner copy so the
     // user can't miss that the persona will OVERRIDE the new recording's
     // voice. The persona-singing-over-new-recording surprise was the #1
@@ -41463,6 +41468,8 @@ function selectPersonaForCreate(personaId, opts = {}) {
   if (!requireProForWebFeature("Persona")) return;
   const id = String(personaId || "").trim();
   if (!id) return;
+  const hit = loadPersonas().find((x) => String(x.personaId) === id);
+  _personaVoiceTuneVisible = hit?.type === "suno_voice";
   savePersonaSelection(id);
   if (els.sunoPersonaId) els.sunoPersonaId.value = id;
   renderPersonaSelect();
@@ -59759,7 +59766,10 @@ if (els.btnOpenAdvancedSheet && els.advancedSheet) {
 }
 if (els.sunoPersonaId) {
   els.sunoPersonaId.addEventListener("change", () => {
-    savePersonaSelection(String(els.sunoPersonaId.value || ""));
+    const id = String(els.sunoPersonaId.value || "").trim();
+    const hit = id ? loadPersonas().find((x) => String(x.personaId) === id) : null;
+    _personaVoiceTuneVisible = hit?.type === "suno_voice";
+    savePersonaSelection(id);
     updateProfilePersonaRow();
     renderActivePersonaBanner();
   });

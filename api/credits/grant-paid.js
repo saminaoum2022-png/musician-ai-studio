@@ -11,6 +11,7 @@ const {
   sendJson,
   setCors,
   readJsonBody,
+  selectFromTable,
 } = require("../_lib/credits-auth");
 const {
   verifyAdmin,
@@ -76,6 +77,35 @@ module.exports = async function handler(req, res) {
   const out = rpc.data || {};
   if (!rpc.ok || out.ok === false) {
     return sendJson(res, 400, { error: out.message || "Grant failed." });
+  }
+
+  const granted = Number(out.granted ?? amount);
+  const balanceAfter = Number(out.balance);
+  const balanceBefore = Number.isFinite(balanceAfter) ? balanceAfter - granted : null;
+  const grantRef = `admin:${user.userId}`;
+
+  if (Number.isFinite(granted) && granted > 0 && Number.isFinite(balanceBefore)) {
+    let ledgerId = null;
+    try {
+      const ledgerLookup = await selectFromTable(
+        `credit_ledger?select=id&user_id=eq.${encodeURIComponent(targetUserId)}&reason=eq.paid_purchase&ref=eq.${encodeURIComponent(grantRef)}&order=created_at.desc&limit=1`,
+      );
+      ledgerId = Array.isArray(ledgerLookup.data) && ledgerLookup.data[0]?.id
+        ? ledgerLookup.data[0].id
+        : null;
+    } catch {
+      ledgerId = null;
+    }
+
+    await callRpc("log_credit_transaction", {
+      p_user_id: targetUserId,
+      p_delta: granted,
+      p_balance_before: balanceBefore,
+      p_balance_after: balanceAfter,
+      p_reason: "paid_purchase",
+      p_ref: grantRef,
+      p_ledger_id: ledgerId,
+    }).catch(() => null);
   }
 
   return sendJson(res, 200, {

@@ -581,11 +581,81 @@ async function getPromos(limit, offset) {
   };
 }
 
-async function getCredits(limit, offset) {
-  const res = await serviceFetch(
-    `credits_transactions?select=id,user_id,delta,balance_before,balance_after,reason,ref,created_at&order=created_at.desc&limit=${limit}&offset=${offset}`,
+async function fetchOrphanCreditLedgerRows({ userId = "", scanLimit = 300 } = {}) {
+  let path = `credit_ledger?select=id,user_id,delta,reason,ref,created_at&order=created_at.desc&limit=${scanLimit}`;
+  if (userId) {
+    path += `&user_id=eq.${encodeURIComponent(userId)}`;
+  }
+  const ledgerRes = await serviceFetch(path);
+  const rows = Array.isArray(ledgerRes.data) ? ledgerRes.data : [];
+  if (!rows.length) return [];
+
+  const ledgerIds = rows.map((r) => r.id).filter(Boolean);
+  const inClause = ledgerIds.map((id) => encodeURIComponent(id)).join(",");
+  const linkedRes = inClause
+    ? await serviceFetch(`credits_transactions?select=ledger_id&ledger_id=in.(${inClause})`)
+    : { data: [] };
+  const linked = new Set(
+    (Array.isArray(linkedRes.data) ? linkedRes.data : []).map((t) => t.ledger_id),
   );
-  const rows = Array.isArray(res.data) ? res.data : [];
+
+  return rows
+    .filter((r) => !linked.has(r.id))
+    .map((r) => ({
+      id: r.id,
+      user_id: r.user_id,
+      delta: Number(r.delta || 0),
+      balance_before: null,
+      balance_after: null,
+      reason: r.reason || "",
+      ref: r.ref || "",
+      created_at: r.created_at,
+      ledger_id: r.id,
+    }));
+}
+
+function hydrateCreditRows(rows, profileMap) {
+  return rows.map((r) => {
+    const p = profileMap.get(r.user_id) || {};
+    return {
+      ...r,
+      delta: Number(r.delta),
+      balanceBefore: r.balance_before != null ? Number(r.balance_before) : null,
+      balanceAfter: r.balance_after != null ? Number(r.balance_after) : null,
+      userLabel: String(p.display_name || p.username || r.user_id?.slice(0, 8) || "—"),
+    };
+  });
+}
+
+async function fetchMergedCreditRows({ userId = "", limit = 50, offset = 0 } = {}) {
+  const scanSize = Math.min(Math.max(offset + limit + 100, limit), 500);
+  const txPath = userId
+    ? `credits_transactions?select=id,user_id,delta,balance_before,balance_after,reason,ref,created_at,ledger_id&user_id=eq.${encodeURIComponent(userId)}&order=created_at.desc&limit=${scanSize}&offset=0`
+    : `credits_transactions?select=id,user_id,delta,balance_before,balance_after,reason,ref,created_at,ledger_id&order=created_at.desc&limit=${scanSize}&offset=0`;
+
+  const [txRes, orphans] = await Promise.all([
+    serviceFetch(txPath),
+    fetchOrphanCreditLedgerRows({ userId, scanLimit: userId ? 120 : 300 }),
+  ]);
+
+  const txRows = Array.isArray(txRes.data) ? txRes.data : [];
+  const seenLedger = new Set(txRows.map((r) => r.ledger_id).filter(Boolean));
+  const merged = [...txRows];
+  for (const row of orphans) {
+    if (!seenLedger.has(row.ledger_id)) merged.push(row);
+  }
+  merged.sort((a, b) => Date.parse(b.created_at || 0) - Date.parse(a.created_at || 0));
+
+  const page = merged.slice(offset, offset + limit);
+  const orphanCount = orphans.length;
+  const txTotal = txRes.total ?? txRows.length;
+  const total = userId ? merged.length : txTotal + orphanCount;
+
+  return { rows: page, total, txTotal, orphanCount };
+}
+
+async function getCredits(limit, offset) {
+  const { rows, total } = await fetchMergedCreditRows({ limit, offset });
   const ids = [...new Set(rows.map((r) => r.user_id).filter(Boolean))];
   let profileMap = new Map();
   if (ids.length) {
@@ -597,17 +667,8 @@ async function getCredits(limit, offset) {
       profileMap.set(p.user_id, p);
     }
   }
-  const transactions = rows.map((r) => {
-    const p = profileMap.get(r.user_id) || {};
-    return {
-      ...r,
-      delta: Number(r.delta),
-      balanceBefore: Number(r.balance_before),
-      balanceAfter: Number(r.balance_after),
-      userLabel: String(p.display_name || p.username || r.user_id?.slice(0, 8) || "—"),
-    };
-  });
-  return { transactions, total: res.total ?? transactions.length };
+  const transactions = hydrateCreditRows(rows, profileMap);
+  return { transactions, total };
 }
 
 async function getGenerations(limit, offset) {
@@ -835,12 +896,12 @@ async function getUserDetail(userIdInput, search = "") {
   const authMap = await fetchAuthUsersMap();
   const auth = authMap.get(uid) || {};
 
-  const [profRes, creditsRes, subRes, billingRes, ledgerRes, gensRes, songsRes] = await Promise.all([
+  const [profRes, creditsRes, subRes, billingRes, ledgerMerged, gensRes, songsRes] = await Promise.all([
     serviceFetch(`profiles?select=user_id,username,display_name,role,last_active_at,created_at,signup_platform&user_id=eq.${enc}&limit=1`),
     serviceFetch(`user_credits?select=balance,paid_balance,gift_balance,promo_balance,updated_at&user_id=eq.${enc}&limit=1`),
     serviceFetch(`pro_subscriptions?select=provider,plan_id,status,current_period_end,provider_subscription_id,created_at,updated_at&user_id=eq.${enc}&limit=1`),
     serviceFetch(`billing_events?select=id,provider,event_type,plan_id,product_id,credits_granted,created_at&user_id=eq.${enc}&order=created_at.desc&limit=50`),
-    serviceFetch(`credits_transactions?select=delta,balance_before,balance_after,reason,ref,created_at&user_id=eq.${enc}&order=created_at.desc&limit=40`),
+    fetchMergedCreditRows({ userId: uid, limit: 40, offset: 0 }),
     serviceFetch(`music_generation_logs?select=id,kind,provider,status,credits_used,error_message,created_at&user_id=eq.${enc}&order=created_at.desc&limit=15`),
     serviceFetch(`user_songs?select=id,title,created_at,public_on_profile&user_id=eq.${enc}&order=created_at.desc&limit=12`),
   ]);
@@ -868,10 +929,10 @@ async function getUserDetail(userIdInput, search = "") {
     createdAt: row.created_at,
   }));
 
-  const ledger = (Array.isArray(ledgerRes.data) ? ledgerRes.data : []).map((row) => ({
+  const ledger = (ledgerMerged.rows || []).map((row) => ({
     delta: Number(row.delta || 0),
-    balanceBefore: Number(row.balance_before || 0),
-    balanceAfter: Number(row.balance_after || 0),
+    balanceBefore: row.balance_before != null ? Number(row.balance_before) : null,
+    balanceAfter: row.balance_after != null ? Number(row.balance_after) : null,
     reason: row.reason || "",
     ref: row.ref || "",
     createdAt: row.created_at,

@@ -16,6 +16,9 @@ const state = {
   offset: 0,
   userSearch: "",
   billingSearch: "",
+  userDetailId: "",
+  returnView: "users",
+  grantPrefillEmail: "",
   cache: {},
   recoveryTokenHash: "",
 };
@@ -46,6 +49,7 @@ const els = {
     overview: document.getElementById("viewOverview"),
     suno: document.getElementById("viewSuno"),
     users: document.getElementById("viewUsers"),
+    user: document.getElementById("viewUser"),
     credits: document.getElementById("viewCredits"),
     promos: document.getElementById("viewPromos"),
     generations: document.getElementById("viewGenerations"),
@@ -61,6 +65,7 @@ const VIEW_META = {
   overview: { title: "Overview", sub: "Platform health at a glance" },
   suno: { title: "Suno bucket", sub: "Master API credits vs user liability" },
   users: { title: "Users", sub: "Signups, activity, balances, and songs" },
+  user: { title: "User detail", sub: "Credits, subscription, billing, and activity" },
   credits: { title: "Credits", sub: "Grant paid credits and view every ledger entry" },
   promos: { title: "Promo codes", sub: "Create and monitor redemption codes" },
   generations: { title: "Generations", sub: "Song and audio generation requests" },
@@ -487,13 +492,15 @@ async function refreshSessionIfNeeded() {
   return true;
 }
 
-async function adminFetch(view, { offset = 0, limit = PAGE_SIZE, search = "" } = {}) {
+async function adminFetch(view, { offset = 0, limit = PAGE_SIZE, search = "", userId = "" } = {}) {
   await refreshSessionIfNeeded();
   const token = state.session?.access_token;
   if (!token) throw new Error("Not signed in");
   const qs = new URLSearchParams({ view, limit: String(limit), offset: String(offset) });
   const trimmedSearch = String(search || "").trim();
   if (trimmedSearch.length >= 2) qs.set("search", trimmedSearch);
+  const trimmedUserId = String(userId || "").trim();
+  if (trimmedUserId) qs.set("userId", trimmedUserId);
   const r = await fetch(`/api/music/admin?${qs}`, {
     headers: { Authorization: `Bearer ${token}` },
   });
@@ -524,7 +531,27 @@ async function loadAdminSession({ force = false } = {}) {
 function canAccessView(view) {
   const allowed = state.adminSession?.allowedViews;
   if (!Array.isArray(allowed) || !allowed.length) return true;
+  if (view === "user") return allowed.includes("user") || allowed.includes("users");
   return allowed.includes(view);
+}
+
+function openUserDetail(userId, returnView = "users") {
+  const uid = String(userId || "").trim();
+  if (!uid) return;
+  state.userDetailId = uid;
+  state.returnView = returnView || "users";
+  state.view = "user";
+  state.offset = 0;
+  const meta = VIEW_META.user;
+  els.pageTitle.textContent = meta.title;
+  els.pageSub.textContent = meta.sub;
+  for (const btn of els.navItems) {
+    btn.classList.toggle("isActive", false);
+  }
+  for (const [key, panel] of Object.entries(els.panels)) {
+    panel.hidden = key !== "user";
+  }
+  void loadView({ force: true });
 }
 
 function applyNavPermissions() {
@@ -560,6 +587,9 @@ function viewCacheKey() {
   }
   if (state.view === "billing" && state.billingSearch.trim().length >= 2) {
     key += `:${state.billingSearch.trim().toLowerCase()}`;
+  }
+  if (state.view === "user" && state.userDetailId) {
+    key += `:uid:${state.userDetailId}`;
   }
   return key;
 }
@@ -794,6 +824,143 @@ function pagerHtml(total, offset) {
   `;
 }
 
+function userViewButton(userId, returnView = "users", label = "View") {
+  const uid = String(userId || "").trim();
+  if (!uid) return "—";
+  return `<button type="button" class="btnGhost btnGhost--sm" data-user-view="${escapeHtml(uid)}" data-return-view="${escapeHtml(returnView)}">${label}</button>`;
+}
+
+function renderUserDetail(data) {
+  const u = data?.user;
+  const panel = els.panels.user;
+  if (!u) {
+    panel.innerHTML = adminPageStack(`
+      <section class="sectionCard">
+        <p class="sectionNote">User not found.</p>
+        <button type="button" class="btnGhost" id="btnUserDetailBack">← Back</button>
+      </section>
+    `);
+    return;
+  }
+
+  const cr = data.credits || {};
+  const sub = data.subscription;
+  const insights = data.insights || {};
+  const sandboxBanner = insights.sandboxLikely
+    ? `<div class="userDetailAlert">Likely <strong>Apple Sandbox</strong> — ${fmtNum(insights.renewalsLast7d)} renewals in the last 7 days. Real weekly subscribers renew about once per week.</div>`
+    : "";
+
+  const subBlock = sub
+    ? `<div class="cardsGrid cardsGrid--inSection">
+        ${statCard("Plan", sub.planId || "—", sub.provider || "")}
+        ${statCard("Status", sub.statusLabel || sub.status || "—", fmtDate(sub.currentPeriodEnd) ? `Period end ${fmtDate(sub.currentPeriodEnd)}` : "")}
+        ${statCard("Provider ID", (sub.providerSubscriptionId || "—").slice(0, 24), sub.provider || "")}
+      </div>`
+    : `<p class="sectionNote">No Pro subscription on file.</p>`;
+
+  const billingRows = data.billingEvents || [];
+  const billingBody = billingRows.length
+    ? billingRows.map((ev) => {
+      const idShort = String(ev.id || "").length > 24 ? `${String(ev.id).slice(0, 12)}…` : (ev.id || "—");
+      return `<tr>
+        <td>${fmtDate(ev.createdAt)}</td>
+        <td>${escapeHtml(ev.eventTypeLabel || ev.eventType || "—")}</td>
+        <td>${escapeHtml(ev.provider || "—")}</td>
+        <td>${escapeHtml(ev.planId || "—")}</td>
+        <td class="num"><strong>${fmtNum(ev.creditsGranted, 0)}</strong></td>
+        <td style="font-size:0.78rem;color:var(--muted)" title="${escapeHtml(ev.id || "")}">${escapeHtml(idShort)}</td>
+      </tr>`;
+    }).join("")
+    : `<tr><td colspan="6" class="loading">No billing events for this user.</td></tr>`;
+
+  const ledgerRows = data.ledger || [];
+  const ledgerBody = ledgerRows.length
+    ? ledgerRows.map((row) => `<tr>
+        <td>${fmtDate(row.createdAt)}</td>
+        <td class="num">${row.delta >= 0 ? "+" : ""}${fmtNum(row.delta, 1)}</td>
+        <td class="num">${fmtNum(row.balanceAfter, 1)}</td>
+        <td>${fmtReason(row.reason)}</td>
+        <td style="font-size:0.78rem;color:var(--muted)">${escapeHtml(String(row.ref || "").slice(0, 48))}</td>
+      </tr>`).join("")
+    : `<tr><td colspan="5" class="loading">No credit transactions yet.</td></tr>`;
+
+  const genRows = data.generations || [];
+  const genBody = genRows.length
+    ? genRows.map((g) => `<tr>
+        <td>${fmtDate(g.createdAt)}</td>
+        <td>${escapeHtml(g.kind || "—")}</td>
+        <td><span class="badge ${escapeHtml(g.status || "")}">${escapeHtml(g.status || "—")}</span></td>
+        <td class="num">${fmtNum(g.creditsUsed, 1)}</td>
+      </tr>`).join("")
+    : `<tr><td colspan="4" class="loading">No generations logged.</td></tr>`;
+
+  const songRows = data.songs || [];
+  const songBody = songRows.length
+    ? songRows.map((s) => `<tr>
+        <td>${escapeHtml(s.title || "Untitled")}</td>
+        <td>${s.publicOnProfile ? `<span class="badge active">public</span>` : "—"}</td>
+        <td>${fmtDate(s.createdAt)}</td>
+      </tr>`).join("")
+    : `<tr><td colspan="3" class="loading">No saved songs.</td></tr>`;
+
+  const grantBtn = state.adminSession?.canGrantCredits && u.email
+    ? `<button type="button" class="btnPrimary" id="btnUserDetailGrant" data-grant-email="${escapeHtml(u.email)}">Grant credits</button>`
+    : "";
+
+  panel.innerHTML = adminPageStack(`
+    <section class="sectionCard sectionCard--toolbar">
+      <div class="userDetailToolbar">
+        <button type="button" class="btnGhost" id="btnUserDetailBack">← Back</button>
+        <div class="userDetailActions">${grantBtn}</div>
+      </div>
+      ${sandboxBanner}
+      <div class="sectionHead" style="margin-top:12px">
+        <h3 class="sectionTitle">${escapeHtml(u.name)} ${u.username ? `<span style="color:var(--muted);font-weight:500">@${escapeHtml(u.username)}</span>` : ""}</h3>
+        <p class="sectionNote">${escapeHtml(u.email || "No email")} · ID <code class="promoCode">${escapeHtml(u.userId)}</code></p>
+      </div>
+      <div class="cardsGrid cardsGrid--inSection">
+        ${statCard("Total credits", fmtNum(cr.balance, 1), `Paid ${fmtNum(cr.paid, 1)} · Promo ${fmtNum(cr.promo, 1)} · Gift ${fmtNum(cr.gift, 1)}`)}
+        ${statCard("Signup", fmtDate(u.signupAt), fmtSignupPlatform(u.signupPlatform))}
+        ${statCard("Last active", fmtDate(u.lastActiveAt), u.role ? `Role ${u.role}` : "")}
+        ${statCard("Songs saved", fmtNum(songRows.length), insights.billingEventCount ? `${fmtNum(insights.billingEventCount)} billing events` : "")}
+      </div>
+    </section>
+    <section class="sectionCard">
+      <div class="sectionHead"><h3 class="sectionTitle">Subscription</h3></div>
+      ${subBlock}
+    </section>
+    ${dataPanel({
+      title: "Billing events",
+      note: "Webhook grants for this user only (newest first).",
+      tableHtml: `<div class="tableWrap"><table><thead><tr>
+        <th>When</th><th>Event</th><th>Provider</th><th>Plan</th><th>Credits</th><th>Txn ID</th>
+      </tr></thead><tbody>${billingBody}</tbody></table></div>`,
+    })}
+    ${dataPanel({
+      title: "Credit ledger",
+      note: "Recent debits and credits.",
+      tableHtml: `<div class="tableWrap"><table><thead><tr>
+        <th>When</th><th>Delta</th><th>Balance</th><th>Reason</th><th>Ref</th>
+      </tr></thead><tbody>${ledgerBody}</tbody></table></div>`,
+    })}
+    ${dataPanel({
+      title: "Recent generations",
+      tableHtml: `<div class="tableWrap"><table><thead><tr>
+        <th>When</th><th>Kind</th><th>Status</th><th>Credits</th>
+      </tr></thead><tbody>${genBody}</tbody></table></div>`,
+    })}
+    ${dataPanel({
+      title: "Saved songs",
+      tableHtml: `<div class="tableWrap"><table><thead><tr>
+        <th>Title</th><th>Public</th><th>Created</th>
+      </tr></thead><tbody>${songBody}</tbody></table></div>`,
+    })}
+  `);
+
+  els.pageTitle.textContent = u.name || "User detail";
+  els.pageSub.textContent = u.email || u.username || VIEW_META.user.sub;
+}
+
 function renderUsers(data) {
   const rows = data?.users || [];
   const total = data?.total || rows.length;
@@ -809,9 +976,10 @@ function renderUsers(data) {
         <td class="num">${fmtNum(u.credits, 1)}</td>
         <td class="num">${fmtNum(u.songsGenerated)}</td>
         <td>${fmtDate(u.lastActiveAt)}</td>
+        <td>${userViewButton(u.userId, "users")}</td>
       </tr>
     `).join("")
-    : `<tr><td colspan="8" class="loading">${searchVal.trim().length >= 2 ? "No users match your search." : "No users yet"}</td></tr>`;
+    : `<tr><td colspan="9" class="loading">${searchVal.trim().length >= 2 ? "No users match your search." : "No users yet"}</td></tr>`;
 
   els.panels.users.innerHTML = adminPageStack(`
     <section class="sectionCard sectionCard--toolbar">
@@ -837,7 +1005,7 @@ function renderUsers(data) {
         <thead>
           <tr>
             <th>User</th><th>Email</th><th>Signup</th><th>Platform</th><th>Subscription</th>
-            <th>Credits</th><th>Songs</th><th>Last active</th>
+            <th>Credits</th><th>Songs</th><th>Last active</th><th></th>
           </tr>
         </thead>
         <tbody>${body}</tbody>
@@ -1015,6 +1183,12 @@ function renderCredits(data) {
       pager: pagerHtml(total, state.offset),
     })}
   `);
+
+  if (state.grantPrefillEmail) {
+    const emailInput = document.getElementById("grantCreditsEmail");
+    if (emailInput) emailInput.value = state.grantPrefillEmail;
+    state.grantPrefillEmail = "";
+  }
 }
 
 function renderGenerations(data) {
@@ -1316,7 +1490,7 @@ function renderBilling(data) {
       return `
       <tr>
         <td>${fmtDate(ev.createdAt)}</td>
-        <td>${ev.userLabel || "—"}<br><span style="color:var(--muted);font-size:0.76rem">${escapeHtml(ev.email || "")}</span></td>
+        <td>${ev.userLabel || "—"}<br><span style="color:var(--muted);font-size:0.76rem">${escapeHtml(ev.email || "")}</span>${ev.userId ? `<br>${userViewButton(ev.userId, "billing", "View user")}` : ""}</td>
         <td><span class="badge">${escapeHtml(ev.eventTypeLabel || ev.eventType || "—")}</span></td>
         <td>${escapeHtml(ev.provider || "—")}</td>
         <td>${escapeHtml(ev.planId || "—")}</td>
@@ -1410,6 +1584,7 @@ const RENDERERS = {
   overview: renderOverview,
   suno: renderSuno,
   users: renderUsers,
+  user: renderUserDetail,
   credits: renderCredits,
   promos: renderPromos,
   generations: renderGenerations,
@@ -1427,6 +1602,7 @@ function setView(view) {
   state.offset = 0;
   if (view !== "users") state.userSearch = "";
   if (view !== "billing") state.billingSearch = "";
+  if (view !== "user") state.userDetailId = "";
   const meta = VIEW_META[view] || VIEW_META.overview;
   els.pageTitle.textContent = meta.title;
   els.pageSub.textContent = meta.sub;
@@ -1614,6 +1790,7 @@ async function loadView({ force = false } = {}) {
         : view === "billing"
           ? state.billingSearch
           : "",
+      userId: view === "user" ? state.userDetailId : "",
     });
     if (view === "settings" && state.adminSession?.canManageTeam) {
       try {
@@ -2039,6 +2216,30 @@ document.body.addEventListener("click", (e) => {
   if (billingSearchClear) {
     state.billingSearch = "";
     state.offset = 0;
+    void loadView({ force: true });
+    return;
+  }
+
+  const userViewBtn = e.target.closest("[data-user-view]");
+  if (userViewBtn) {
+    const uid = userViewBtn.dataset.userView;
+    const returnView = userViewBtn.dataset.returnView || "users";
+    if (uid) openUserDetail(uid, returnView);
+    return;
+  }
+
+  const userDetailBack = e.target.closest("#btnUserDetailBack");
+  if (userDetailBack) {
+    const returnView = state.returnView || "users";
+    setView(returnView);
+    void loadView();
+    return;
+  }
+
+  const userDetailGrant = e.target.closest("#btnUserDetailGrant");
+  if (userDetailGrant) {
+    state.grantPrefillEmail = userDetailGrant.dataset.grantEmail || "";
+    setView("credits");
     void loadView({ force: true });
     return;
   }

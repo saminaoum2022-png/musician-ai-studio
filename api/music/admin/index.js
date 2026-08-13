@@ -1,5 +1,5 @@
 /**
- * GET /api/music/admin?view=overview|users|credits|promos|generations|publications|subscriptions|billing|suno
+ * GET /api/music/admin?view=overview|users|user|...
  *
  * Admin-only analytics for admin.nabadai.com.
  * Auth: Authorization: Bearer <supabase access_token>
@@ -30,7 +30,7 @@ const { ensureProfileRow } = require("../../_lib/ensure-profile-row");
 const {
   listAssignableRoles,
 } = require("../../_lib/admin-permissions");
-const { adminSearchUserIds } = require("../../_lib/admin-user-resolve");
+const { adminSearchUserIds, resolveUserLookup } = require("../../_lib/admin-user-resolve");
 
 const SUPABASE_URL = (process.env.SUPABASE_URL || "").replace(/\/$/, "");
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
@@ -351,6 +351,11 @@ async function getOverview() {
       note: "Estimate from active Pro subs started this month; updates when Apple IAP webhooks land.",
     },
   };
+}
+
+function cleanUserId(v) {
+  const s = String(v || "").trim().toLowerCase();
+  return /^[0-9a-f-]{36}$/.test(s) ? s : "";
 }
 
 async function fetchProfilesForAdmin(limit, offset) {
@@ -795,6 +800,124 @@ async function getBillingEvents(limit, offset, search) {
   };
 }
 
+async function getUserDetail(userIdInput, search = "") {
+  let uid = cleanUserId(userIdInput);
+  if (!uid && String(search || "").trim().length >= 2) {
+    const resolved = await resolveUserLookup(search);
+    uid = cleanUserId(resolved?.userId || "");
+  }
+  if (!uid) {
+    return { user: null, error: "user_not_found" };
+  }
+
+  const enc = encodeURIComponent(uid);
+  const authMap = await fetchAuthUsersMap();
+  const auth = authMap.get(uid) || {};
+
+  const [profRes, creditsRes, subRes, billingRes, ledgerRes, gensRes, songsRes] = await Promise.all([
+    serviceFetch(`profiles?select=user_id,username,display_name,role,last_active_at,created_at,signup_platform&user_id=eq.${enc}&limit=1`),
+    serviceFetch(`user_credits?select=balance,paid_balance,gift_balance,promo_balance,updated_at&user_id=eq.${enc}&limit=1`),
+    serviceFetch(`pro_subscriptions?select=provider,plan_id,status,current_period_end,provider_subscription_id,created_at,updated_at&user_id=eq.${enc}&limit=1`),
+    serviceFetch(`billing_events?select=id,provider,event_type,plan_id,product_id,credits_granted,created_at&user_id=eq.${enc}&order=created_at.desc&limit=50`),
+    serviceFetch(`credits_transactions?select=delta,balance_before,balance_after,reason,ref,created_at&user_id=eq.${enc}&order=created_at.desc&limit=40`),
+    serviceFetch(`music_generation_logs?select=kind,provider,status,credits_used,error_message,created_at&user_id=eq.${enc}&order=created_at.desc&limit=15`),
+    serviceFetch(`user_songs?select=id,title,created_at,public_on_profile&user_id=eq.${enc}&order=created_at.desc&limit=12`),
+  ]);
+
+  const prof = Array.isArray(profRes.data) && profRes.data[0] ? profRes.data[0] : null;
+  const cr = Array.isArray(creditsRes.data) && creditsRes.data[0] ? creditsRes.data[0] : null;
+  const sub = Array.isArray(subRes.data) && subRes.data[0] ? subRes.data[0] : null;
+  const billingRows = Array.isArray(billingRes.data) ? billingRes.data : [];
+
+  const weekAgoMs = Date.now() - 7 * 86400000;
+  const renewalsLast7d = billingRows.filter((row) => {
+    if (String(row.event_type || "").toUpperCase() !== "RENEWAL") return false;
+    const t = Date.parse(String(row.created_at || ""));
+    return Number.isFinite(t) && t >= weekAgoMs;
+  }).length;
+
+  const billingEvents = billingRows.map((row) => ({
+    id: row.id,
+    provider: row.provider || "—",
+    eventType: row.event_type || "",
+    eventTypeLabel: billingEventTypeLabel(row.event_type),
+    planId: row.plan_id || "",
+    productId: row.product_id || "",
+    creditsGranted: Number(row.credits_granted || 0),
+    createdAt: row.created_at,
+  }));
+
+  const ledger = (Array.isArray(ledgerRes.data) ? ledgerRes.data : []).map((row) => ({
+    delta: Number(row.delta || 0),
+    balanceBefore: Number(row.balance_before || 0),
+    balanceAfter: Number(row.balance_after || 0),
+    reason: row.reason || "",
+    ref: row.ref || "",
+    createdAt: row.created_at,
+  }));
+
+  const generations = (Array.isArray(gensRes.data) ? gensRes.data : []).map((row) => ({
+    kind: row.kind || "",
+    provider: row.provider || "",
+    status: row.status || "",
+    creditsUsed: Number(row.credits_used || 0),
+    errorMessage: row.error_message || "",
+    createdAt: row.created_at,
+  }));
+
+  const songs = (Array.isArray(songsRes.data) ? songsRes.data : []).map((row) => ({
+    id: row.id,
+    title: row.title || "Untitled",
+    createdAt: row.created_at,
+    publicOnProfile: Boolean(row.public_on_profile),
+  }));
+
+  const name = String(prof?.display_name || prof?.username || "—").trim() || "—";
+
+  return {
+    user: {
+      userId: uid,
+      name,
+      username: prof?.username || "",
+      email: auth.email || "",
+      signupAt: auth.signupAt || prof?.created_at || null,
+      role: prof?.role || "user",
+      lastActiveAt: prof?.last_active_at || cr?.updated_at || null,
+      signupPlatform: auth.signupPlatform || String(prof?.signup_platform || "").trim().toLowerCase() || null,
+      profilePending: !prof,
+    },
+    credits: {
+      balance: Number(cr?.balance || 0),
+      paid: Number(cr?.paid_balance || 0),
+      gift: Number(cr?.gift_balance || 0),
+      promo: Number(cr?.promo_balance || 0),
+      updatedAt: cr?.updated_at || null,
+    },
+    subscription: sub
+      ? {
+          provider: sub.provider || "—",
+          planId: sub.plan_id || "",
+          status: sub.status || "none",
+          statusLabel: sub.status === "grace" ? "billing_retry" : (sub.status || "none"),
+          currentPeriodEnd: sub.current_period_end || null,
+          providerSubscriptionId: sub.provider_subscription_id || "",
+          createdAt: sub.created_at || null,
+          updatedAt: sub.updated_at || null,
+        }
+      : null,
+    billingEvents,
+    ledger,
+    generations,
+    songs,
+    insights: {
+      renewalsLast7d,
+      sandboxLikely: renewalsLast7d >= 3 && String(sub?.plan_id || "") === "weekly",
+      billingEventCount: billingEvents.length,
+      songsSaved: songs.length,
+    },
+  };
+}
+
 async function getSunoPanel() {
   const [masterSuno, summaryRpc, recentGens] = await Promise.all([
     fetchSunoMasterBalance(),
@@ -847,8 +970,10 @@ module.exports = async function handler(req, res) {
   const limit = clampInt(url.searchParams.get("limit"), 1, 200, 50);
   const offset = clampInt(url.searchParams.get("offset"), 0, 100000, 0);
   const search = String(url.searchParams.get("search") || "").trim();
+  const userId = String(url.searchParams.get("userId") || "").trim();
 
-  const admin = await verifyAdmin(req, { view: view === "session" ? null : view });
+  const adminView = view === "user" ? "user" : view;
+  const admin = await verifyAdmin(req, { view: adminView === "session" ? null : adminView });
   if (!admin) {
     const user = await verifyUser(req);
     if (!user) return adminUnauthorized(res);
@@ -896,6 +1021,8 @@ module.exports = async function handler(req, res) {
       payload = { ...payload, ...(await getSubscriptions(limit, offset)) };
     } else if (view === "billing") {
       payload = { ...payload, ...(await getBillingEvents(limit, offset, search)) };
+    } else if (view === "user") {
+      payload = { ...payload, ...(await getUserDetail(userId, search)) };
     } else if (view === "publications") {
       payload = { ...payload, ...(await getPublications(limit, offset)) };
     } else if (view === "promos") {
@@ -905,7 +1032,7 @@ module.exports = async function handler(req, res) {
     } else {
       return sendJson(res, 400, {
         error: "Unknown view",
-        allowed: ["session", "settings", "overview", "users", "credits", "promos", "generations", "subscriptions", "billing", "publications", "suno"],
+        allowed: ["session", "settings", "overview", "users", "user", "credits", "promos", "generations", "subscriptions", "billing", "publications", "suno"],
       });
     }
     return sendJson(res, 200, payload);

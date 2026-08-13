@@ -1,7 +1,6 @@
 /**
  * Shared Google Gemini API wallet — Lyria + Gemini use the same GEMINI_API_KEY and billing.
- * Google does not expose prepay balance via API; we estimate from AI Studio balance snapshots
- * minus tracked usage since sync.
+ * Google has no live balance API. Balance = top-ups (or AI Studio snapshot) − tracked usage.
  */
 
 const GEMINI_WALLET_ID = "gemini";
@@ -73,12 +72,28 @@ async function fetchGeminiUsageSince(serviceFetch, sinceIso) {
   return roundUsd(total);
 }
 
-function geminiDashboardOnlyBalance() {
+function geminiNeedsSetupBalance() {
   return {
     source: "dashboard_only",
     kind: "usd",
-    label: "Sync from AI Studio",
-    detail: "Lyria + Gemini share one Google wallet — Google has no live balance API. Copy your prepay balance from AI Studio Billing and sync below.",
+    label: "—",
+    detail: "Lyria + Gemini share one Google wallet. Log a top-up below, or set exact balance from AI Studio Billing (Google has no live balance API like Suno).",
+    billingUrl: "https://aistudio.google.com/billing",
+    sharedWallet: true,
+    walletIds: [GEMINI_WALLET_ID, "lyria"],
+  };
+}
+
+function geminiLedgerBalance({ toppedUpUsd, usageAllUsd }) {
+  const remaining = roundUsd(Math.max(0, toppedUpUsd - usageAllUsd));
+  return {
+    source: "ledger",
+    kind: "usd",
+    value: remaining,
+    toppedUpUsd: roundUsd(toppedUpUsd),
+    usageAllUsd,
+    label: fmtUsdLabel(remaining),
+    detail: `${fmtUsdLabel(toppedUpUsd)} topped up − ${fmtUsdLabel(usageAllUsd)} tracked usage · shared wallet`,
     billingUrl: "https://aistudio.google.com/billing",
     sharedWallet: true,
     walletIds: [GEMINI_WALLET_ID, "lyria"],
@@ -87,7 +102,7 @@ function geminiDashboardOnlyBalance() {
 
 function geminiSnapshotBalance({ snapshotUsd, syncedAt, usageSince, syncedBy = "" }) {
   const remaining = roundUsd(Math.max(0, snapshotUsd - usageSince));
-  const syncLabel = fmtSyncDate(syncedAt);
+  const syncLabel = syncedAt ? fmtSyncDate(syncedAt) : "baseline";
   const by = syncedBy ? ` · ${syncedBy}` : "";
   return {
     source: "snapshot",
@@ -97,43 +112,51 @@ function geminiSnapshotBalance({ snapshotUsd, syncedAt, usageSince, syncedBy = "
     usageSinceUsd: usageSince,
     syncedAt,
     label: fmtUsdLabel(remaining),
-    detail: `AI Studio sync ${syncLabel}${by} − ${fmtUsdLabel(usageSince)} tracked since · shared wallet (Lyria + Gemini)`,
+    detail: `Set to ${fmtUsdLabel(snapshotUsd)} (${syncLabel}${by}) − ${fmtUsdLabel(usageSince)} since · shared wallet`,
     billingUrl: "https://aistudio.google.com/billing",
     sharedWallet: true,
     walletIds: [GEMINI_WALLET_ID, "lyria"],
   };
 }
 
-async function computeGeminiSharedWalletBalance({ serviceFetch } = {}) {
-  const envUsd = Number(process.env.GEMINI_PREPAY_BALANCE_USD || "");
-  const snapshot = await fetchLatestGeminiSnapshot(serviceFetch);
+async function computeGeminiSharedWalletBalance({ serviceFetch, toppedUpUsd = 0 } = {}) {
+  const sinceEpoch = "1970-01-01T00:00:00.000Z";
+  const [snapshot, usageAll] = await Promise.all([
+    fetchLatestGeminiSnapshot(serviceFetch),
+    fetchGeminiUsageSince(serviceFetch, sinceEpoch),
+  ]);
 
-  if (!snapshot && Number.isFinite(envUsd) && envUsd >= 0) {
-    const usageAll = await fetchGeminiUsageSince(serviceFetch, "1970-01-01T00:00:00.000Z");
+  const envUsd = Number(process.env.GEMINI_PREPAY_BALANCE_USD || "");
+  const toppedUp = roundUsd(Number(toppedUpUsd || 0));
+
+  if (snapshot) {
+    const usageSince = await fetchGeminiUsageSince(serviceFetch, snapshot.syncedAt);
+    return geminiSnapshotBalance({
+      snapshotUsd: snapshot.amountUsd,
+      syncedAt: snapshot.syncedAt,
+      usageSince,
+      syncedBy: snapshot.syncedBy,
+    });
+  }
+
+  if (toppedUp > 0) {
+    return geminiLedgerBalance({ toppedUpUsd: toppedUp, usageAllUsd: usageAll });
+  }
+
+  if (Number.isFinite(envUsd) && envUsd >= 0) {
     return geminiSnapshotBalance({
       snapshotUsd: envUsd,
       syncedAt: null,
       usageSince: usageAll,
-      syncedBy: "env GEMINI_PREPAY_BALANCE_USD",
+      syncedBy: "env",
     });
   }
 
-  if (!snapshot) {
-    return geminiDashboardOnlyBalance();
-  }
-
-  const usageSince = await fetchGeminiUsageSince(serviceFetch, snapshot.syncedAt);
-  return geminiSnapshotBalance({
-    snapshotUsd: snapshot.amountUsd,
-    syncedAt: snapshot.syncedAt,
-    usageSince,
-    syncedBy: snapshot.syncedBy,
-  });
+  return geminiNeedsSetupBalance();
 }
 
 module.exports = {
   GEMINI_WALLET_ID,
   computeGeminiSharedWalletBalance,
-  geminiDashboardOnlyBalance,
   roundUsd,
 };

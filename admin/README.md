@@ -108,6 +108,8 @@ where user_id = (select id from auth.users where lower(email) = lower('saminaoum
 
 User drill-down: `GET /api/music/admin?view=user&userId=<uuid>` — profile, credits, subscription, billing events, ledger, recent generations, and saved songs. Open from **Users** or **Billing events** via **View**.
 
+Generation drill-down: `GET /api/music/admin?view=generation&generationId=<uuid>` — full prompt, status, credits, related songs, and nearby ledger entries. Open from **Generations** or a user's **Recent generations** table.
+
 Team management (Owner / Admin only):
 
 - `GET /api/admin/team` — list teammates, pending invites, audit log

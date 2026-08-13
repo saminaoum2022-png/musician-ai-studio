@@ -10,7 +10,7 @@
  */
 const { verifyUser } = require("../_lib/credits-auth");
 const { applyCors } = require("../_lib/cors");
-const { readJson, sendJson, sunoJsonRequest } = require("../_lib/suno-upstream");
+const { readJson, sendJson, sunoJsonRequest, isSunoMusicGenerationTaskId } = require("../_lib/suno-upstream");
 const {
   getCachedTimestampedLyrics,
   queueCacheTimestampedLyrics,
@@ -33,6 +33,12 @@ module.exports = async function handler(req, res) {
     const audioId = String(body?.audioId || "").trim();
     if (!taskId || !audioId) {
       return sendJson(res, 400, { error: "Synced lyrics need the song's taskId and audioId." });
+    }
+    if (!isSunoMusicGenerationTaskId(taskId)) {
+      return sendJson(res, 404, {
+        error: "Synced lyrics are only available for Suno-generated songs.",
+        code: "unsupported_provider",
+      });
     }
 
     const cached = await getCachedTimestampedLyrics(audioId);

@@ -22052,6 +22052,14 @@ function isSingleVariantMusicTask(taskId) {
   return tid.startsWith("mmx_") || tid.startsWith("lyr_") || tid.startsWith("elv_");
 }
 
+/** Karaoke / timestamped lyrics — Suno API only (0.5 cr/fetch); skip alternate providers. */
+function isSunoKaraokeTaskId(taskId) {
+  const tid = String(taskId || "").trim();
+  if (!tid) return false;
+  if (/^(mmx_|lyr_|elv_)/i.test(tid)) return false;
+  return true;
+}
+
 function extractTaskIdLoose(data) {
   const direct =
     data?.data?.taskId ||
@@ -47910,6 +47918,7 @@ function saveTimedLyricsToStore(audioId, words) {
 }
 
 async function fetchTimedLyrics(taskId, audioId) {
+  if (!isSunoKaraokeTaskId(taskId)) return null;
   if (timedLyricsMemCache.has(audioId)) return timedLyricsMemCache.get(audioId);
   const stored = loadTimedLyricsStore()[audioId];
   if (Array.isArray(stored?.words) && stored.words.length) {
@@ -48006,6 +48015,7 @@ function resolveKaraokeIdsFromTrackRef(t) {
     }
   }
   if (!taskId || !audioId || isInstrumental) return null;
+  if (!isSunoKaraokeTaskId(taskId)) return null;
   return { taskId, audioId, full: full || t };
 }
 

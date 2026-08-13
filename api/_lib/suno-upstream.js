@@ -54,4 +54,19 @@ async function sunoJsonRequest(path, opts) {
   return { ok: r.ok && code === 200, httpStatus: r.status, code, data, text };
 }
 
-module.exports = { readJson, safeJson, sendJson, sunoJsonRequest, SUNO_BASE };
+/** Suno timestamped lyrics only work for Suno music tasks — not Lyria/MiniMax/ElevenLabs ids. */
+function isSunoMusicGenerationTaskId(taskId) {
+  const tid = String(taskId || "").trim();
+  if (!tid) return false;
+  if (/^(mmx_|lyr_|elv_)/i.test(tid)) return false;
+  return true;
+}
+
+module.exports = {
+  readJson,
+  safeJson,
+  sendJson,
+  sunoJsonRequest,
+  isSunoMusicGenerationTaskId,
+  SUNO_BASE,
+};

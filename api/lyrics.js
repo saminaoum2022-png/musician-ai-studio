@@ -2,9 +2,8 @@
  * POST /api/lyrics
  * Body: { seed?: string, style?: string, mode?: "continue"|"full"|"arrange"|"challenge"|"remix_reply", sourceLyrics?: string, sourceTitle?: string, sourceCreator?: string, lyricsProvider?: "gemini" }
  *
- * Provider:
- * 1) Suno lyrics API, unless lyricsProvider is "gemini"
- * 2) Gemini fallback / repair
+ * Provider: Gemini by default (free — uses GEMINI_API_KEY).
+ * Suno lyrics API only when lyricsProvider is explicitly "suno" (costs Suno credits).
  */
 const { queueLogProviderUsage } = require("./_lib/provider-usage-log");
 
@@ -23,7 +22,7 @@ module.exports = async function handler(req, res) {
     const sourceTitle = String(body?.sourceTitle || "").trim().slice(0, 160);
     const sourceCreator = String(body?.sourceCreator || "").trim().slice(0, 80);
     const lyricsProvider = String(body?.lyricsProvider || body?.providerPreference || "").trim().toLowerCase();
-    const geminiOnly = ["gemini", "gemini-only", "emoni"].includes(lyricsProvider);
+    const sunoLyricsRequested = lyricsProvider === "suno";
     const requestedMode = String(body?.mode || "").trim().toLowerCase();
     if (requestedMode === "remix_reply" && !sourceLyrics) {
       return json(res, 400, {
@@ -49,7 +48,7 @@ module.exports = async function handler(req, res) {
 
     const debug = {};
     const geminiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
-    if (geminiOnly) {
+    if (!sunoLyricsRequested) {
       if (!geminiKey) {
         return json(res, 502, {
           error: "Gemini lyrics provider unavailable: missing GEMINI_API_KEY",

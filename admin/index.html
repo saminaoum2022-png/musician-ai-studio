@@ -8,7 +8,7 @@
     <title>NabadAi Admin</title>
     <meta name="theme-color" content="#05070d" />
     <link rel="icon" href="/favicon.ico" sizes="any" />
-    <link rel="stylesheet" href="/admin/styles.css?v=20260813-admin-plain" />
+    <link rel="stylesheet" href="/admin/styles.css?v=20260813-admin-providers" />
     <script>
       (function () {
         try {
@@ -110,8 +110,8 @@
             <button type="button" class="navItem isActive" data-view="overview">
               <span class="navIcon" aria-hidden="true">◎</span><span>Overview</span>
             </button>
-            <button type="button" class="navItem" data-view="suno">
-              <span class="navIcon" aria-hidden="true">◈</span><span>Suno bucket</span>
+            <button type="button" class="navItem" data-view="providers">
+              <span class="navIcon" aria-hidden="true">◈</span><span>Providers</span>
             </button>
           </div>
           <div class="navGroup">
@@ -168,7 +168,7 @@
         </header>
 
         <div id="viewOverview" class="viewPanel" data-panel="overview"></div>
-        <div id="viewSuno" class="viewPanel" data-panel="suno" hidden></div>
+        <div id="viewProviders" class="viewPanel" data-panel="providers" hidden></div>
         <div id="viewUsers" class="viewPanel" data-panel="users" hidden></div>
         <div id="viewUser" class="viewPanel" data-panel="user" hidden></div>
         <div id="viewCredits" class="viewPanel" data-panel="credits" hidden></div>
@@ -184,6 +184,6 @@
       </main>
     </div>
 
-    <script type="module" src="/admin/app.js?v=20260813-admin-plain"></script>
+    <script type="module" src="/admin/app.js?v=20260813-admin-providers"></script>
   </body>
 </html>

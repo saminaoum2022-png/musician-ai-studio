@@ -386,6 +386,180 @@ button, input { font: inherit; }
   max-width: 1440px;
 }
 
+.adminPageStack--plain {
+  gap: 0;
+}
+
+.listSection {
+  margin-top: 28px;
+}
+
+.listSectionHead {
+  margin-bottom: 10px;
+}
+
+.listSectionTitle {
+  margin: 0 0 4px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.listSectionNote {
+  margin: 0;
+  font-size: 0.82rem;
+  color: var(--muted);
+  opacity: 0.9;
+}
+
+.listSectionFoot {
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+  margin-top: 4px;
+}
+
+.toolbarRow,
+.toolbarBlock {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: flex-end;
+  padding-bottom: 18px;
+  margin-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+}
+
+.toolbarBlock {
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.toolbarBlock .grantForm {
+  width: 100%;
+}
+
+.inlineStats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px 24px;
+  padding-bottom: 16px;
+  margin-bottom: 4px;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.88rem;
+  color: var(--muted);
+}
+
+.inlineStats strong {
+  color: var(--text);
+  font-weight: 700;
+}
+
+.detailHero {
+  padding-bottom: 20px;
+  margin-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+}
+
+.detailHeroMain {
+  margin: 12px 0 16px;
+}
+
+.detailHeroTitle {
+  margin: 0 0 6px;
+  font-size: 1.25rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.detailHeroMuted {
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.detailHeroSub {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.88rem;
+}
+
+.detailMetaBlock {
+  margin-top: 14px;
+  font-size: 0.86rem;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.detailMetaBlock--ids {
+  margin-top: 10px;
+  font-size: 0.78rem;
+}
+
+.cellMuted {
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.cellLink {
+  cursor: pointer;
+}
+
+.cellLink:hover {
+  color: #c4b5fd;
+}
+
+.emailCell {
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+
+.monoCell {
+  font-size: 0.76rem;
+  color: var(--muted);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dateCell {
+  white-space: nowrap;
+  font-size: 0.78rem;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  width: 1%;
+}
+
+.tableWrap--plain {
+  border: none;
+  border-radius: 0;
+  background: transparent;
+}
+
+.table--compact th,
+.table--compact td {
+  padding: 9px 12px;
+}
+
+.rowClickable {
+  cursor: pointer;
+}
+
+.rowClickable:hover td {
+  background: rgba(124, 92, 255, 0.06);
+}
+
+.rowClickable:focus-visible td {
+  outline: 2px solid rgba(124, 92, 255, 0.45);
+  outline-offset: -2px;
+}
+
 /* ── Cards & sections (consistent across tabs) ── */
 .cardsGrid {
   display: grid;

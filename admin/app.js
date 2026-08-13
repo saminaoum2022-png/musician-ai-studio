@@ -108,6 +108,30 @@ function fmtDate(iso) {
   }
 }
 
+/** Compact one-line date for table cells — avoids wide rows. */
+function fmtDateCompact(iso) {
+  if (!iso) return "—";
+  try {
+    const d = new Date(iso);
+    const now = new Date();
+    const sameYear = d.getFullYear() === now.getFullYear();
+    return d.toLocaleString(undefined, {
+      month: "short",
+      day: "numeric",
+      ...(sameYear ? {} : { year: "2-digit" }),
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  } catch {
+    return "—";
+  }
+}
+
+function dateCell(iso) {
+  const label = fmtDateCompact(iso);
+  return `<td class="dateCell" title="${escapeHtml(fmtDate(iso))}">${label}</td>`;
+}
+
 function fmtReason(reason) {
   const map = {
     promo_redeem: "Promo code",
@@ -141,9 +165,9 @@ function signupPlatformBadgeClass(platform) {
 
 function userNameCell(u) {
   const pending = u.profilePending
-    ? `<br><span class="badge pending">Profile pending</span>`
+    ? ` <span class="badge pending">pending</span>`
     : "";
-  return `${u.name || "—"}<br><span style="color:var(--muted);font-size:0.76rem">@${u.username || "—"}</span>${pending}`;
+  return `<strong>${escapeHtml(u.name || "—")}</strong> <span class="cellMuted">@${escapeHtml(u.username || "—")}</span>${pending}`;
 }
 
 function showError(msg) {
@@ -676,8 +700,22 @@ function statCard(label, value, sub = "", highlight = false, warn = false) {
   `;
 }
 
-function adminPageStack(inner) {
-  return `<div class="adminPageStack">${inner}</div>`;
+function adminPageStack(inner, { plain = false } = {}) {
+  return `<div class="adminPageStack${plain ? " adminPageStack--plain" : ""}">${inner}</div>`;
+}
+
+/** Plain table block — no card chrome (list tabs). */
+function listSection({ title = "", note = "", extraHtml = "", tableHtml, pager = "" }) {
+  return `
+    <section class="listSection">
+      ${extraHtml || ""}
+      ${title || note ? `<div class="listSectionHead">
+        ${title ? `<h3 class="listSectionTitle">${title}</h3>` : ""}
+        ${note ? `<p class="listSectionNote">${note}</p>` : ""}
+      </div>` : ""}
+      <div class="listSectionTable">${tableHtml}</div>
+      ${pager ? `<div class="listSectionFoot">${pager}</div>` : ""}
+    </section>`;
 }
 
 function dataPanel({ title = "", note = "", extraHtml = "", tableHtml, pager = "" }) {
@@ -894,24 +932,20 @@ function renderUserDetail(data) {
     : "";
 
   const subBlock = sub
-    ? `<div class="cardsGrid cardsGrid--inSection">
-        ${statCard("Plan", sub.planId || "—", sub.provider || "")}
-        ${statCard("Status", sub.statusLabel || sub.status || "—", fmtDate(sub.currentPeriodEnd) ? `Period end ${fmtDate(sub.currentPeriodEnd)}` : "")}
-        ${statCard("Provider ID", (sub.providerSubscriptionId || "—").slice(0, 24), sub.provider || "")}
-      </div>`
-    : `<p class="sectionNote">No Pro subscription on file.</p>`;
+    ? `${escapeHtml(sub.planId || "—")} · ${escapeHtml(sub.statusLabel || sub.status || "—")}${sub.currentPeriodEnd ? ` · ends ${fmtDateCompact(sub.currentPeriodEnd)}` : ""}`
+    : "No Pro subscription on file.";
 
   const billingRows = data.billingEvents || [];
   const billingBody = billingRows.length
     ? billingRows.map((ev) => {
       const idShort = String(ev.id || "").length > 24 ? `${String(ev.id).slice(0, 12)}…` : (ev.id || "—");
       return `<tr>
-        <td>${fmtDate(ev.createdAt)}</td>
+        ${dateCell(ev.createdAt)}
         <td>${escapeHtml(ev.eventTypeLabel || ev.eventType || "—")}</td>
         <td>${escapeHtml(ev.provider || "—")}</td>
         <td>${escapeHtml(ev.planId || "—")}</td>
         <td class="num"><strong>${fmtNum(ev.creditsGranted, 0)}</strong></td>
-        <td style="font-size:0.78rem;color:var(--muted)" title="${escapeHtml(ev.id || "")}">${escapeHtml(idShort)}</td>
+        <td class="monoCell" title="${escapeHtml(ev.id || "")}">${escapeHtml(idShort)}</td>
       </tr>`;
     }).join("")
     : `<tr><td colspan="6" class="loading">No billing events for this user.</td></tr>`;
@@ -919,31 +953,33 @@ function renderUserDetail(data) {
   const ledgerRows = data.ledger || [];
   const ledgerBody = ledgerRows.length
     ? ledgerRows.map((row) => `<tr>
-        <td>${fmtDate(row.createdAt)}</td>
+        ${dateCell(row.createdAt)}
         <td class="num">${row.delta >= 0 ? "+" : ""}${fmtNum(row.delta, 1)}</td>
         <td class="num">${fmtNum(row.balanceAfter, 1)}</td>
         <td>${fmtReason(row.reason)}</td>
-        <td style="font-size:0.78rem;color:var(--muted)">${escapeHtml(String(row.ref || "").slice(0, 48))}</td>
+        <td class="monoCell">${escapeHtml(String(row.ref || "").slice(0, 48))}</td>
       </tr>`).join("")
     : `<tr><td colspan="5" class="loading">No credit transactions yet.</td></tr>`;
 
   const genRows = data.generations || [];
   const genBody = genRows.length
-    ? genRows.map((g) => `<tr>
-        <td>${fmtDate(g.createdAt)}</td>
+    ? genRows.map((g) => {
+      const gid = escapeHtml(g.id || "");
+      return `<tr class="rowClickable" tabindex="0" role="link" data-generation-view="${gid}" data-return-view="user" aria-label="Open generation">
+        ${dateCell(g.createdAt)}
         <td>${escapeHtml(g.kind || "—")}</td>
         <td><span class="badge ${escapeHtml(g.status || "")}">${escapeHtml(g.status || "—")}</span></td>
         <td class="num">${fmtNum(g.creditsUsed, 1)}</td>
-        <td>${generationViewButton(g.id, "user")}</td>
-      </tr>`).join("")
-    : `<tr><td colspan="5" class="loading">No generations logged.</td></tr>`;
+      </tr>`;
+    }).join("")
+    : `<tr><td colspan="4" class="loading">No generations logged.</td></tr>`;
 
   const songRows = data.songs || [];
   const songBody = songRows.length
     ? songRows.map((s) => `<tr>
         <td>${escapeHtml(s.title || "Untitled")}</td>
         <td>${s.publicOnProfile ? `<span class="badge active">public</span>` : "—"}</td>
-        <td>${fmtDate(s.createdAt)}</td>
+        ${dateCell(s.createdAt)}
       </tr>`).join("")
     : `<tr><td colspan="3" class="loading">No saved songs.</td></tr>`;
 
@@ -952,54 +988,52 @@ function renderUserDetail(data) {
     : "";
 
   panel.innerHTML = adminPageStack(`
-    <section class="sectionCard sectionCard--toolbar">
+    <div class="detailHero">
       <div class="userDetailToolbar">
         <button type="button" class="btnGhost" id="btnUserDetailBack">← Back</button>
         <div class="userDetailActions">${grantBtn}</div>
       </div>
       ${sandboxBanner}
-      <div class="sectionHead" style="margin-top:12px">
-        <h3 class="sectionTitle">${escapeHtml(u.name)} ${u.username ? `<span style="color:var(--muted);font-weight:500">@${escapeHtml(u.username)}</span>` : ""}</h3>
-        <p class="sectionNote">${escapeHtml(u.email || "No email")} · ID <code class="promoCode">${escapeHtml(u.userId)}</code></p>
+      <div class="detailHeroMain">
+        <h3 class="detailHeroTitle">${escapeHtml(u.name)} ${u.username ? `<span class="detailHeroMuted">@${escapeHtml(u.username)}</span>` : ""}</h3>
+        <p class="detailHeroSub">${escapeHtml(u.email || "No email")}</p>
       </div>
       <div class="cardsGrid cardsGrid--inSection">
         ${statCard("Total credits", fmtNum(cr.balance, 1), `Paid ${fmtNum(cr.paid, 1)} · Promo ${fmtNum(cr.promo, 1)} · Gift ${fmtNum(cr.gift, 1)}`)}
-        ${statCard("Signup", fmtDate(u.signupAt), fmtSignupPlatform(u.signupPlatform))}
-        ${statCard("Last active", fmtDate(u.lastActiveAt), u.role ? `Role ${u.role}` : "")}
+        ${statCard("Signup", fmtDateCompact(u.signupAt), fmtSignupPlatform(u.signupPlatform))}
+        ${statCard("Last active", fmtDateCompact(u.lastActiveAt), u.role ? `Role ${u.role}` : "")}
         ${statCard("Songs saved", fmtNum(songRows.length), insights.billingEventCount ? `${fmtNum(insights.billingEventCount)} billing events` : "")}
       </div>
-    </section>
-    <section class="sectionCard">
-      <div class="sectionHead"><h3 class="sectionTitle">Subscription</h3></div>
-      ${subBlock}
-    </section>
-    ${dataPanel({
+      <div class="detailMetaBlock">
+        <strong>Subscription</strong> — ${subBlock}
+      </div>
+    </div>
+    ${listSection({
       title: "Billing events",
-      note: "Webhook grants for this user only (newest first).",
-      tableHtml: `<div class="tableWrap"><table><thead><tr>
-        <th>When</th><th>Event</th><th>Provider</th><th>Plan</th><th>Credits</th><th>Txn ID</th>
+      tableHtml: `<div class="tableWrap tableWrap--plain"><table class="table--compact"><thead><tr>
+        <th>When</th><th>Event</th><th>Provider</th><th>Plan</th><th>Credits</th><th>Txn</th>
       </tr></thead><tbody>${billingBody}</tbody></table></div>`,
     })}
-    ${dataPanel({
+    ${listSection({
       title: "Credit ledger",
-      note: "Recent debits and credits.",
-      tableHtml: `<div class="tableWrap"><table><thead><tr>
+      tableHtml: `<div class="tableWrap tableWrap--plain"><table class="table--compact"><thead><tr>
         <th>When</th><th>Delta</th><th>Balance</th><th>Reason</th><th>Ref</th>
       </tr></thead><tbody>${ledgerBody}</tbody></table></div>`,
     })}
-    ${dataPanel({
+    ${listSection({
       title: "Recent generations",
-      tableHtml: `<div class="tableWrap"><table><thead><tr>
-        <th>When</th><th>Kind</th><th>Status</th><th>Credits</th><th></th>
+      note: "Click a row for full details.",
+      tableHtml: `<div class="tableWrap tableWrap--plain"><table class="table--compact"><thead><tr>
+        <th>When</th><th>Kind</th><th>Status</th><th>Credits</th>
       </tr></thead><tbody>${genBody}</tbody></table></div>`,
     })}
-    ${dataPanel({
+    ${listSection({
       title: "Saved songs",
-      tableHtml: `<div class="tableWrap"><table><thead><tr>
+      tableHtml: `<div class="tableWrap tableWrap--plain"><table class="table--compact"><thead><tr>
         <th>Title</th><th>Public</th><th>Created</th>
       </tr></thead><tbody>${songBody}</tbody></table></div>`,
     })}
-  `);
+  `, { plain: true });
 
   els.pageTitle.textContent = u.name || "User detail";
   els.pageSub.textContent = u.email || u.username || VIEW_META.user.sub;
@@ -1029,11 +1063,11 @@ function renderGenerationDetail(data) {
   const ledgerRows = data.ledger || [];
   const ledgerBody = ledgerRows.length
     ? ledgerRows.map((row) => `<tr>
-        <td>${fmtDate(row.createdAt)}</td>
+        ${dateCell(row.createdAt)}
         <td class="num">${row.delta >= 0 ? "+" : ""}${fmtNum(row.delta, 1)}</td>
         <td class="num">${fmtNum(row.balanceAfter, 1)}</td>
         <td>${fmtReason(row.reason)}</td>
-        <td style="font-size:0.78rem;color:var(--muted)">${escapeHtml(String(row.ref || "").slice(0, 48))}</td>
+        <td class="monoCell">${escapeHtml(String(row.ref || "").slice(0, 48))}</td>
       </tr>`).join("")
     : `<tr><td colspan="5" class="loading">No matching credit transactions in the ±15 minute window.</td></tr>`;
 
@@ -1049,7 +1083,7 @@ function renderGenerationDetail(data) {
         <td>${escapeHtml(s.kind || "—")}</td>
         <td>${s.publicOnProfile ? `<span class="badge active">public</span>` : "—"}</td>
         <td class="pubLinks">${links || "—"}</td>
-        <td>${fmtDate(s.createdAt)}</td>
+        ${dateCell(s.createdAt)}
       </tr>`;
     }).join("")
     : `<tr><td colspan="5" class="loading">${g.taskId ? "No saved songs linked to this task yet." : "No provider task ID on this log."}</td></tr>`;
@@ -1059,58 +1093,45 @@ function renderGenerationDetail(data) {
     : "";
 
   panel.innerHTML = adminPageStack(`
-    <section class="sectionCard sectionCard--toolbar">
+    <div class="detailHero">
       <div class="userDetailToolbar">
         <button type="button" class="btnGhost" id="btnGenerationDetailBack">← Back</button>
         <div class="userDetailActions">${userBtn}</div>
       </div>
       ${errorBlock}
-      <div class="sectionHead" style="margin-top:12px">
-        <h3 class="sectionTitle">
+      <div class="detailHeroMain">
+        <h3 class="detailHeroTitle">
           <span class="badge ${escapeHtml(g.status || "")}">${escapeHtml(g.status || "—")}</span>
           ${escapeHtml(g.kind || "generation")} · ${escapeHtml(g.provider || "—")}
         </h3>
-        <p class="sectionNote">
-          ${escapeHtml(g.userLabel || "—")}${g.username ? ` · @${escapeHtml(g.username)}` : ""}${g.email ? ` · ${escapeHtml(g.email)}` : ""}
-        </p>
+        <p class="detailHeroSub">${escapeHtml(g.userLabel || "—")}${g.username ? ` · @${escapeHtml(g.username)}` : ""}${g.email ? ` · ${escapeHtml(g.email)}` : ""}</p>
       </div>
       <div class="cardsGrid cardsGrid--inSection">
         ${statCard("Credits", fmtNum(g.creditsUsed, 1), g.status === "refunded" ? "Refunded to user" : "")}
-        ${statCard("Provider cost", g.providerCostUsd != null ? fmtUsd(g.providerCostUsd) : "—", "Estimate from Suno rate")}
-        ${statCard("Duration", fmtDurationMs(g.durationMs), g.completedAt ? `Finished ${fmtDate(g.completedAt)}` : "Still pending")}
-        ${statCard("Started", fmtDate(g.createdAt), g.taskId ? `Task ${g.taskId.slice(0, 20)}…` : "No task ID")}
+        ${statCard("Provider cost", g.providerCostUsd != null ? fmtUsd(g.providerCostUsd) : "—", "Estimate")}
+        ${statCard("Duration", fmtDurationMs(g.durationMs), g.completedAt ? fmtDateCompact(g.completedAt) : "Pending")}
+        ${statCard("Started", fmtDateCompact(g.createdAt), g.taskId ? `${g.taskId.slice(0, 18)}…` : "No task")}
       </div>
-    </section>
-    <section class="sectionCard">
-      <div class="sectionHead">
-        <h3 class="sectionTitle">Prompt</h3>
-        <p class="sectionNote">What we stored when the request was logged.</p>
-      </div>
+      <div class="detailMetaBlock"><strong>Prompt</strong></div>
       ${promptBlock}
-    </section>
-    ${dataPanel({
+      <p class="detailMetaBlock detailMetaBlock--ids">
+        <code class="promoCode">${escapeHtml(g.id)}</code>
+        ${g.taskId ? ` · task <code class="promoCode">${escapeHtml(g.taskId)}</code>` : ""}
+      </p>
+    </div>
+    ${listSection({
       title: "Saved songs",
-      note: "Songs in the library linked to the same provider task ID.",
-      tableHtml: `<div class="tableWrap"><table><thead><tr>
+      tableHtml: `<div class="tableWrap tableWrap--plain"><table class="table--compact"><thead><tr>
         <th>Title</th><th>Kind</th><th>Public</th><th>Links</th><th>Created</th>
       </tr></thead><tbody>${songBody}</tbody></table></div>`,
     })}
-    ${dataPanel({
+    ${listSection({
       title: "Credit transactions",
-      note: "Debits and refunds near this generation time.",
-      tableHtml: `<div class="tableWrap"><table><thead><tr>
+      tableHtml: `<div class="tableWrap tableWrap--plain"><table class="table--compact"><thead><tr>
         <th>When</th><th>Delta</th><th>Balance</th><th>Reason</th><th>Ref</th>
       </tr></thead><tbody>${ledgerBody}</tbody></table></div>`,
     })}
-    <section class="sectionCard">
-      <div class="sectionHead"><h3 class="sectionTitle">Identifiers</h3></div>
-      <p class="sectionNote">
-        Log ID <code class="promoCode">${escapeHtml(g.id)}</code><br>
-        User ID <code class="promoCode">${escapeHtml(g.userId || "—")}</code><br>
-        Task ID <code class="promoCode">${escapeHtml(g.taskId || "—")}</code>
-      </p>
-    </section>
-  `);
+  `, { plain: true });
 
   const titleBits = [g.kind, g.status].filter(Boolean).join(" · ");
   els.pageTitle.textContent = titleBits || "Generation detail";
@@ -1122,54 +1143,48 @@ function renderUsers(data) {
   const total = data?.total || rows.length;
   const searchVal = state.userSearch || "";
   const body = rows.length
-    ? rows.map((u) => `
-      <tr>
+    ? rows.map((u) => {
+      const uid = escapeHtml(u.userId || "");
+      return `
+      <tr class="rowClickable" tabindex="0" role="link" data-user-view="${uid}" data-return-view="users" aria-label="Open ${escapeHtml(u.name || u.username || "user")}">
         <td>${userNameCell(u)}</td>
-        <td>${u.email || "—"}</td>
-        <td>${fmtDate(u.signupAt)}</td>
+        <td class="emailCell">${escapeHtml(u.email || "—")}</td>
+        ${dateCell(u.signupAt)}
         <td><span class="badge ${signupPlatformBadgeClass(u.signupPlatform)}">${fmtSignupPlatform(u.signupPlatform)}</span></td>
         <td><span class="badge ${u.subscriptionStatus || "none"}">${u.subscriptionStatus || "none"}</span></td>
         <td class="num">${fmtNum(u.credits, 1)}</td>
         <td class="num">${fmtNum(u.songsGenerated)}</td>
-        <td>${fmtDate(u.lastActiveAt)}</td>
-        <td>${userViewButton(u.userId, "users")}</td>
-      </tr>
-    `).join("")
-    : `<tr><td colspan="9" class="loading">${searchVal.trim().length >= 2 ? "No users match your search." : "No users yet"}</td></tr>`;
+        ${dateCell(u.lastActiveAt)}
+      </tr>`;
+    }).join("")
+    : `<tr><td colspan="8" class="loading">${searchVal.trim().length >= 2 ? "No users match your search." : "No users yet"}</td></tr>`;
 
   els.panels.users.innerHTML = adminPageStack(`
-    <section class="sectionCard sectionCard--toolbar">
-      <div class="sectionHead">
-        <h3 class="sectionTitle">Search users</h3>
-        <p class="sectionNote">Email, @username, or display name — min 2 characters.</p>
-      </div>
-      <form id="userSearchForm" class="grantForm userSearchForm">
-        <label class="field grantField userSearchField">
-          <span>Search</span>
-          <input id="userSearchInput" type="search" value="${escapeHtml(searchVal)}" placeholder="sam@example.com or @creator" autocomplete="off" />
-        </label>
-        <button type="submit" class="btnPrimary">Search</button>
-        ${searchVal.trim().length >= 2 ? `<button type="button" class="btnGhost" id="btnUserSearchClear">Clear</button>` : ""}
-      </form>
-    </section>
-    ${dataPanel({
+    <form id="userSearchForm" class="toolbarRow userSearchForm">
+      <label class="field grantField userSearchField">
+        <span>Search users</span>
+        <input id="userSearchInput" type="search" value="${escapeHtml(searchVal)}" placeholder="email or @username" autocomplete="off" />
+      </label>
+      <button type="submit" class="btnPrimary">Search</button>
+      ${searchVal.trim().length >= 2 ? `<button type="button" class="btnGhost" id="btnUserSearchClear">Clear</button>` : ""}
+    </form>
+    ${listSection({
     title: searchVal.trim().length >= 2 ? "Search results" : "All users",
-    note: "Signups, credits, songs saved, and subscription status. Orphan auth accounts show as profile pending.",
+    note: "Click a row to open the user profile.",
     tableHtml: `
-    <div class="tableWrap">
-      <table>
+    <div class="tableWrap tableWrap--plain">
+      <table class="table--compact">
         <thead>
           <tr>
-            <th>User</th><th>Email</th><th>Signup</th><th>Platform</th><th>Subscription</th>
-            <th>Credits</th><th>Songs</th><th>Last active</th><th></th>
+            <th>User</th><th>Email</th><th>Signup</th><th>Platform</th><th>Sub</th>
+            <th>Credits</th><th>Songs</th><th>Active</th>
           </tr>
         </thead>
         <tbody>${body}</tbody>
       </table>
     </div>`,
     pager: pagerHtml(total, state.offset),
-  })}
-  `);
+  })}`, { plain: true });
 }
 
 function promoStatusBadge(promo) {
@@ -1202,22 +1217,18 @@ function renderPromos(data) {
         <td class="num">${fmtNum(p.redemptions)} / ${fmtNum(p.maxRedemptions)}</td>
         <td class="num">${fmtNum(remaining)}</td>
         <td>${promoStatusBadge(p)}</td>
-        <td>${p.expiresAt ? fmtDate(p.expiresAt) : "—"}</td>
-        <td>${fmtDate(p.createdAt)}</td>
+        <td>${p.expiresAt ? fmtDateCompact(p.expiresAt) : "—"}</td>
+        ${dateCell(p.createdAt)}
         <td>${toggleBtn}</td>
       </tr>`;
     }).join("")
     : `<tr><td colspan="8" class="loading">No promo codes yet — create one below.</td></tr>`;
 
   const createForm = canManage ? `
-    <section class="sectionCard">
-      <div class="sectionHead">
-        <h3 class="sectionTitle">Create promo code</h3>
-        <p class="sectionNote">Single code or batch with a shared prefix (e.g. <code>NABADAI-BETA-2026</code> + random suffix). Codes are stored uppercase.</p>
-      </div>
+    <div class="toolbarBlock">
       <form id="promoCreateForm" class="grantForm">
         <label class="field grantField">
-          <span>Code (single)</span>
+          <span>Create code</span>
           <input id="promoCode" type="text" placeholder="NABADAI-WELCOME-30" autocomplete="off" />
         </label>
         <label class="field grantField">
@@ -1225,7 +1236,7 @@ function renderPromos(data) {
           <input id="promoPrefix" type="text" placeholder="NABADAI-BETA-2026" autocomplete="off" />
         </label>
         <label class="field grantField grantField--amount">
-          <span>Batch count</span>
+          <span>Count</span>
           <input id="promoCount" type="number" min="1" max="50" step="1" value="1" inputmode="numeric" />
         </label>
         <label class="field grantField grantField--amount">
@@ -1237,39 +1248,29 @@ function renderPromos(data) {
           <input id="promoMaxRedemptions" type="number" min="1" max="10000" step="1" value="1" inputmode="numeric" />
         </label>
         <label class="field grantField">
-          <span>Expires (optional)</span>
+          <span>Expires</span>
           <input id="promoExpires" type="datetime-local" />
         </label>
         <button type="submit" class="btnPrimary" id="btnPromoCreate">Create</button>
       </form>
       <p id="promoCreateMsg" class="grantMsg" hidden></p>
-    </section>` : `
-    <section class="sectionCard">
-      <p class="sectionNote">Promo creation requires <strong>Support</strong> or <strong>Owner / Admin</strong> grant-credits permission.</p>
-    </section>`;
+    </div>` : "";
 
   els.panels.promos.innerHTML = adminPageStack(`
-    <section class="sectionCard">
-      <div class="sectionHead">
-        <h3 class="sectionTitle">Promo summary</h3>
-        <p class="sectionNote">Platform-wide promo code inventory.</p>
-      </div>
-      <div class="cardsGrid cardsGrid--inSection">
-        ${statCard("Total codes", fmtNum(summary.codesTotal))}
-        ${statCard("Redemptions", fmtNum(summary.codesRedeemed))}
-      </div>
-    </section>
+    <div class="inlineStats">
+      <span><strong>${fmtNum(summary.codesTotal)}</strong> codes</span>
+      <span><strong>${fmtNum(summary.codesRedeemed)}</strong> redemptions</span>
+    </div>
     ${createForm}
-    ${dataPanel({
-      title: "All promo codes",
-      note: "Newest first. Deactivate a code to block further redemptions.",
+    ${listSection({
+      title: "Promo codes",
       tableHtml: `
-      <div class="tableWrap">
-        <table>
+      <div class="tableWrap tableWrap--plain">
+        <table class="table--compact">
           <thead>
             <tr>
-              <th>Code</th><th>Credits</th><th>Used</th><th>Remaining</th>
-              <th>Status</th><th>Expires</th><th>Created</th><th>Actions</th>
+              <th>Code</th><th>Credits</th><th>Used</th><th>Left</th>
+              <th>Status</th><th>Expires</th><th>Created</th><th></th>
             </tr>
           </thead>
           <tbody>${body}</tbody>
@@ -1277,7 +1278,7 @@ function renderPromos(data) {
       </div>`,
       pager: pagerHtml(total, state.offset),
     })}
-  `);
+  `, { plain: true });
 }
 
 function renderCredits(data) {
@@ -1296,7 +1297,7 @@ function renderCredits(data) {
           <td class="num">${fmtNum(t.balanceAfter, 1)}</td>
           <td>${fmtReason(t.reason)}</td>
           <td style="color:var(--muted);font-size:0.78rem">${t.ref || ""}</td>
-          <td>${fmtDate(t.created_at)}</td>
+          ${dateCell(t.created_at)}
         </tr>
       `;
     }).join("")
@@ -1304,30 +1305,25 @@ function renderCredits(data) {
 
   els.panels.credits.innerHTML = adminPageStack(`
     ${state.adminSession?.canGrantCredits ? `
-    <section class="sectionCard">
-      <div class="sectionHead">
-        <h3 class="sectionTitle">Grant paid credits</h3>
-        <p class="sectionNote">Manual grants for support or testing. NabadAi Pro subscription credits are added automatically via billing. Leave email blank to grant to your signed-in account.</p>
-      </div>
+    <div class="toolbarBlock">
       <form id="grantCreditsForm" class="grantForm">
         <label class="field grantField">
-          <span>User email</span>
+          <span>Grant paid credits</span>
           <input id="grantCreditsEmail" type="email" placeholder="creator@example.com" autocomplete="off" />
         </label>
         <label class="field grantField grantField--amount">
           <span>Amount</span>
           <input id="grantCreditsAmount" type="number" min="1" max="500" step="1" required placeholder="50" inputmode="numeric" />
         </label>
-        <button type="submit" class="btnPrimary" id="btnGrantCredits">Grant credits</button>
+        <button type="submit" class="btnPrimary" id="btnGrantCredits">Grant</button>
       </form>
       <p id="grantCreditsMsg" class="grantMsg" hidden></p>
-    </section>` : ""}
-    ${dataPanel({
+    </div>` : ""}
+    ${listSection({
       title: "Credit ledger",
-      note: "Every grant, spend, and refund across the platform.",
       tableHtml: `
-    <div class="tableWrap">
-      <table>
+    <div class="tableWrap tableWrap--plain">
+      <table class="table--compact">
         <thead>
           <tr>
             <th>User</th><th>Delta</th><th>Before</th><th>After</th><th>Reason</th><th>Ref</th><th>Date</th>
@@ -1338,7 +1334,7 @@ function renderCredits(data) {
     </div>`,
       pager: pagerHtml(total, state.offset),
     })}
-  `);
+  `, { plain: true });
 
   if (state.grantPrefillEmail) {
     const emailInput = document.getElementById("grantCreditsEmail");
@@ -1351,38 +1347,39 @@ function renderGenerations(data) {
   const rows = data?.generations || [];
   const total = data?.total || rows.length;
   const body = rows.length
-    ? rows.map((g) => `
-      <tr>
-        <td>${g.userLabel || "—"}</td>
+    ? rows.map((g) => {
+      const gid = escapeHtml(g.id || "");
+      return `
+      <tr class="rowClickable" tabindex="0" role="link" data-generation-view="${gid}" data-return-view="generations" aria-label="Open generation">
+        <td>${escapeHtml(g.userLabel || "—")}</td>
         <td class="promptCell" title="${(g.prompt || "").replace(/"/g, "&quot;")}">${g.prompt || "—"}</td>
         <td>${g.provider}</td>
         <td>${g.kind}</td>
         <td><span class="badge ${g.status}">${g.status}</span></td>
         <td class="num">${fmtNum(g.creditsUsed, 1)}</td>
         <td class="num">${g.providerCostUsd != null ? fmtUsd(g.providerCostUsd) : "—"}</td>
-        <td>${fmtDate(g.createdAt)}</td>
-        <td>${generationViewButton(g.id, "generations")}</td>
-      </tr>
-    `).join("")
-    : `<tr><td colspan="9" class="loading">No generation logs yet</td></tr>`;
+        ${dateCell(g.createdAt)}
+      </tr>`;
+    }).join("")
+    : `<tr><td colspan="8" class="loading">No generation logs yet</td></tr>`;
 
-  els.panels.generations.innerHTML = adminPageStack(dataPanel({
+  els.panels.generations.innerHTML = adminPageStack(listSection({
     title: "Generation log",
-    note: "Every create attempt — including failures and refunds — with provider cost estimates.",
+    note: "Click a row for prompt, errors, and linked songs.",
     tableHtml: `
-    <div class="tableWrap">
-      <table>
+    <div class="tableWrap tableWrap--plain">
+      <table class="table--compact">
         <thead>
           <tr>
             <th>User</th><th>Prompt</th><th>Provider</th><th>Kind</th>
-            <th>Status</th><th>Credits</th><th>Cost</th><th>Date</th><th></th>
+            <th>Status</th><th>Credits</th><th>Cost</th><th>Date</th>
           </tr>
         </thead>
         <tbody>${body}</tbody>
       </table>
     </div>`,
     pager: pagerHtml(total, state.offset),
-  }));
+  }), { plain: true });
 }
 
 function renderPublications(data) {
@@ -1409,9 +1406,9 @@ function renderPublications(data) {
         <td>
           <strong>${escapeHtml(p.title)}</strong>${caption}
         </td>
-        <td>${escapeHtml(p.userLabel)}${p.username ? `<br><span style="color:var(--muted);font-size:0.76rem">@${escapeHtml(p.username)}</span>` : ""}</td>
-        <td style="color:var(--muted);font-size:0.78rem">${escapeHtml(p.email || "—")}</td>
-        <td>${fmtDate(p.publishedAt || p.createdAt)}</td>
+        <td>${escapeHtml(p.userLabel)}${p.username ? `<br><span class="cellMuted">@${escapeHtml(p.username)}</span>` : ""}</td>
+        <td class="emailCell">${escapeHtml(p.email || "—")}</td>
+        ${dateCell(p.publishedAt || p.createdAt)}
         <td>${escapeHtml(p.kind || "—")}</td>
         <td class="pubLinks">${links || "—"}</td>
         ${modCell}
@@ -1419,25 +1416,23 @@ function renderPublications(data) {
     }).join("")
     : `<tr><td colspan="${canModerate ? 8 : 7}" class="loading">No public posts yet</td></tr>`;
 
-  els.panels.publications.innerHTML = adminPageStack(dataPanel({
+  els.panels.publications.innerHTML = adminPageStack(listSection({
     title: "Public posts",
-    note: canModerate
-      ? "Moderation view — unpublish removes the song from public profile and feed. The creator keeps their private copy."
-      : "Songs published to a public profile (<code>public_on_profile</code>). Read-only for your role.",
+    note: canModerate ? "Unpublish removes the post from profile and feed." : "",
     tableHtml: `
-    <div class="tableWrap">
-      <table>
+    <div class="tableWrap tableWrap--plain">
+      <table class="table--compact">
         <thead>
           <tr>
             <th>Cover</th><th>Title</th><th>Creator</th><th>Email</th>
-            <th>Published</th><th>Kind</th><th>Links</th>${canModerate ? "<th>Actions</th>" : ""}
+            <th>Published</th><th>Kind</th><th>Links</th>${canModerate ? "<th></th>" : ""}
           </tr>
         </thead>
         <tbody>${body}</tbody>
       </table>
     </div>`,
     pager: pagerHtml(total, state.offset),
-  }));
+  }), { plain: true });
 }
 
 function renderRoleGuideCards(roles) {
@@ -1644,61 +1639,57 @@ function renderBilling(data) {
       const idShort = String(ev.id || "").length > 28
         ? `${String(ev.id).slice(0, 14)}…${String(ev.id).slice(-10)}`
         : (ev.id || "—");
+      const userCell = ev.userId
+        ? `<td class="cellLink" data-user-view="${escapeHtml(ev.userId)}" data-return-view="billing">${ev.userLabel || "—"}<br><span class="cellMuted">${escapeHtml(ev.email || "")}</span></td>`
+        : `<td>${ev.userLabel || "—"}</td>`;
       return `
       <tr>
-        <td>${fmtDate(ev.createdAt)}</td>
-        <td>${ev.userLabel || "—"}<br><span style="color:var(--muted);font-size:0.76rem">${escapeHtml(ev.email || "")}</span>${ev.userId ? `<br>${userViewButton(ev.userId, "billing", "View user")}` : ""}</td>
+        ${dateCell(ev.createdAt)}
+        ${userCell}
         <td><span class="badge">${escapeHtml(ev.eventTypeLabel || ev.eventType || "—")}</span></td>
         <td>${escapeHtml(ev.provider || "—")}</td>
         <td>${escapeHtml(ev.planId || "—")}</td>
-        <td><strong>${fmtNum(ev.creditsGranted, 0)}</strong></td>
-        <td style="font-size:0.78rem;color:var(--muted)" title="${escapeHtml(ev.id || "")}">${escapeHtml(idShort)}</td>
-      </tr>
-    `;
+        <td class="num"><strong>${fmtNum(ev.creditsGranted, 0)}</strong></td>
+        <td class="monoCell" title="${escapeHtml(ev.id || "")}">${escapeHtml(idShort)}</td>
+      </tr>`;
     }).join("")
     : `<tr><td colspan="7" class="loading">${searchQ ? `No billing events for “${escapeHtml(searchQ)}”.` : "No billing events yet"}</td></tr>`;
 
-  const summaryCards = `
-    <section class="sectionCard">
-      <div class="sectionHead">
-        <h3 class="sectionTitle">Last 7 days</h3>
-        <p class="sectionNote">Quick audit — many RENEWAL rows for one sandbox user usually means Apple accelerated billing, not a production bug.</p>
-      </div>
-      <div class="cardsGrid cardsGrid--inSection">
-        ${statCard("Webhook grants", fmtNum(summary.eventCount || 0), "Processed events")}
-        ${statCard("Renewals", fmtNum(summary.renewalCount || 0), "In that window")}
-        ${statCard("Credits granted", fmtNum(summary.creditsGranted || 0, 0), "Subscription + packs")}
-      </div>
-    </section>`;
+  const summaryInline = `
+    <div class="inlineStats">
+      <span><strong>${fmtNum(summary.eventCount || 0)}</strong> grants (7d)</span>
+      <span><strong>${fmtNum(summary.renewalCount || 0)}</strong> renewals</span>
+      <span><strong>${fmtNum(summary.creditsGranted || 0, 0)}</strong> credits</span>
+    </div>`;
 
-  els.panels.billing.innerHTML = adminPageStack(
-    `${summaryCards}${dataPanel({
-      title: "Billing event log",
-      note: "Every processed RevenueCat / Stripe webhook that granted credits. Search by email or @username to audit sandbox testers (daily renewals show as RENEWAL rows).",
+  els.panels.billing.innerHTML = adminPageStack(`
+    ${summaryInline}
+    ${listSection({
       extraHtml: `
-      <form id="billingSearchForm" class="grantForm userSearchForm">
+      <form id="billingSearchForm" class="toolbarRow userSearchForm">
         <label class="field grantField userSearchField">
-          <span class="fieldLabel">Find user</span>
+          <span>Find user</span>
           <input id="billingSearchInput" type="search" placeholder="email or @username" autocomplete="off" value="${escapeHtml(searchQ)}" />
         </label>
         <button type="submit" class="btnPrimary">Search</button>
         ${searchQ ? `<button type="button" class="btnGhost" id="billingSearchClear">Clear</button>` : ""}
       </form>`,
+      title: "Billing events",
+      note: "Click a user name to open their profile.",
       tableHtml: `
-    <div class="tableWrap">
-      <table>
+    <div class="tableWrap tableWrap--plain">
+      <table class="table--compact">
         <thead>
           <tr>
             <th>When</th><th>User</th><th>Event</th><th>Provider</th>
-            <th>Plan</th><th>Credits</th><th>Transaction ID</th>
+            <th>Plan</th><th>Credits</th><th>Txn</th>
           </tr>
         </thead>
         <tbody>${body}</tbody>
       </table>
     </div>`,
       pager: pagerHtml(total, state.offset),
-    })}`,
-  );
+    })}`, { plain: true });
 }
 
 function renderSubscriptions(data) {
@@ -1707,23 +1698,22 @@ function renderSubscriptions(data) {
   const body = rows.length
     ? rows.map((s) => `
       <tr>
-        <td>${s.userLabel || "—"}<br><span style="color:var(--muted);font-size:0.76rem">${s.email || ""}</span></td>
+        <td>${s.userLabel || "—"}<br><span class="cellMuted">${s.email || ""}</span></td>
         <td>${s.planId || "—"}</td>
         <td><span class="badge ${s.status}">${s.statusLabel || s.status}</span></td>
         <td>${s.provider}</td>
-        <td>${fmtDate(s.currentPeriodEnd)}</td>
-        <td style="font-size:0.78rem;color:var(--muted)">${s.providerSubscriptionId || "—"}</td>
-        <td>${fmtDate(s.updatedAt)}</td>
+        ${dateCell(s.currentPeriodEnd)}
+        <td class="monoCell">${s.providerSubscriptionId || "—"}</td>
+        ${dateCell(s.updatedAt)}
       </tr>
     `).join("")
     : `<tr><td colspan="7" class="loading">No subscriptions yet</td></tr>`;
 
-  els.panels.subscriptions.innerHTML = adminPageStack(dataPanel({
-    title: "NabadAi Pro subscriptions",
-    note: "Active, trialing, and grace-period rows from Apple, Stripe, and RevenueCat webhooks.",
+  els.panels.subscriptions.innerHTML = adminPageStack(listSection({
+    title: "Pro subscriptions",
     tableHtml: `
-    <div class="tableWrap">
-      <table>
+    <div class="tableWrap tableWrap--plain">
+      <table class="table--compact">
         <thead>
           <tr>
             <th>User</th><th>Plan</th><th>Status</th><th>Provider</th>
@@ -1734,7 +1724,7 @@ function renderSubscriptions(data) {
       </table>
     </div>`,
     pager: pagerHtml(total, state.offset),
-  }));
+  }), { plain: true });
 }
 
 const RENDERERS = {
@@ -2329,6 +2319,15 @@ document.body.addEventListener("submit", (e) => {
   })();
 });
 
+document.body.addEventListener("keydown", (e) => {
+  if (e.key !== "Enter" && e.key !== " ") return;
+  const row = e.target.closest("tr.rowClickable");
+  if (!row) return;
+  e.preventDefault();
+  if (row.dataset.userView) openUserDetail(row.dataset.userView, row.dataset.returnView || "users");
+  else if (row.dataset.generationView) openGenerationDetail(row.dataset.generationView, row.dataset.returnView || "generations");
+});
+
 document.body.addEventListener("click", (e) => {
   const pageBtn = e.target.closest("[data-page]");
   if (pageBtn) {
@@ -2381,7 +2380,9 @@ document.body.addEventListener("click", (e) => {
   }
 
   const userViewBtn = e.target.closest("[data-user-view]");
-  if (userViewBtn) {
+  if (userViewBtn && !e.target.closest("form")) {
+    const isRow = userViewBtn.classList?.contains("rowClickable") || userViewBtn.classList?.contains("cellLink");
+    if (isRow && e.target.closest("a, button, input, select, textarea")) return;
     const uid = userViewBtn.dataset.userView;
     const returnView = userViewBtn.dataset.returnView || "users";
     if (uid) openUserDetail(uid, returnView);
@@ -2405,7 +2406,8 @@ document.body.addEventListener("click", (e) => {
   }
 
   const generationViewBtn = e.target.closest("[data-generation-view]");
-  if (generationViewBtn) {
+  if (generationViewBtn && !e.target.closest("form")) {
+    if (generationViewBtn.classList?.contains("rowClickable") && e.target.closest("a, button, input, select, textarea")) return;
     const gid = generationViewBtn.dataset.generationView;
     const returnView = generationViewBtn.dataset.returnView || "generations";
     if (gid) openGenerationDetail(gid, returnView);

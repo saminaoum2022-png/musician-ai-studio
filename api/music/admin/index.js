@@ -1168,12 +1168,13 @@ async function getProvidersPanel({ forceHealth = false } = {}) {
 
   const liveBalances = {};
   for (const p of health.providers || []) {
-    if (p.id === "suno" && p.balance != null && Number.isFinite(Number(p.balance))) {
-      const credits = Number(p.balance);
-      liveBalances.suno = {
-        credits,
-        usd: roundUsd(credits * SUNO_USD_PER_CREDIT),
-      };
+    const live = p.liveBalance;
+    if (live?.source === "api") {
+      liveBalances[p.id] = live;
+      continue;
+    }
+    if (live?.source === "dashboard_only") {
+      liveBalances[p.id] = live;
     }
   }
 

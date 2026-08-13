@@ -9729,7 +9729,7 @@ function discoverUserLibPlayAttrs(t, profMap, opts = {}) {
   const encTitle = encodeURIComponent(rawTitle);
   const encBy = encodeURIComponent(byLine);
   const encArt = encodeURIComponent(artSafe);
-  const encSongId = encodeURIComponent(String(t.id || t.songId || ""));
+  const encSongId = encodeURIComponent(socialPlaySongId(t) || String(t.songId || ""));
   const encOwnerId = encodeURIComponent(String(t.userId || t.ownerUserId || ""));
   const encTaskId = encodeURIComponent(String(t.taskId || ""));
   const encAudioId = encodeURIComponent(String(t.audioId || ""));
@@ -13477,7 +13477,7 @@ async function enrichProfileActivitiesAfterPaint(libRows, feedItems, profMap, li
   const mediaSigBefore = libRows.map((t) => profileActMediaSig(t, profMap)).join("|");
   try {
     const playCountMap = libRows.length
-      ? await fetchDiscoverSongPlayCounts(libRows.map((t) => t.id))
+      ? await fetchPlayCountsForTracks(libRows)
       : new Map();
     if (enrichGen !== _profileActEnrichGen) return;
     if (
@@ -14716,7 +14716,7 @@ function followingActivityPlayAttrs(t, profMap, byLine, opts = {}) {
   const encTitle = encodeURIComponent(rawTitle);
   const encBy = encodeURIComponent(byLine || "");
   const encArt = encodeURIComponent(artSafe);
-  const encSongId = encodeURIComponent(String(t.id || t.songId || ""));
+  const encSongId = encodeURIComponent(socialPlaySongId(t) || String(t.songId || ""));
   const encOwnerId = encodeURIComponent(String(t.userId || ""));
   const encTaskId = encodeURIComponent(String(t.taskId || ""));
   const encAudioId = encodeURIComponent(String(t.audioId || ""));
@@ -16940,7 +16940,7 @@ async function enrichFriendsFeedAfterPaint({
   try {
     const mediaSigBefore = friendsFeedPlayableMediaSig(playable, profMap);
     const playCountMap = playable.length
-      ? await fetchDiscoverSongPlayCounts(playable.map((t) => t.id))
+      ? await fetchPlayCountsForTracks(playable)
       : new Map();
     if (gen !== _discoveryFollowingGen) return;
     for (const t of playable) {
@@ -31941,6 +31941,30 @@ async function fetchDiscoverSongPlayCounts(songIds) {
   }
 }
 
+/** Fetch play counts for feed/library rows; keys are each track's local `t.id` for DOM patching. */
+async function fetchPlayCountsForTracks(tracks) {
+  const list = Array.isArray(tracks) ? tracks : [];
+  if (!list.length) return new Map();
+  const localIdsByQueryId = new Map();
+  const queryIds = [];
+  for (const t of list) {
+    const localId = String(t?.id || "").trim();
+    const queryId = socialPlaySongId(t);
+    if (!queryId) continue;
+    queryIds.push(queryId);
+    if (!localId) continue;
+    if (!localIdsByQueryId.has(queryId)) localIdsByQueryId.set(queryId, []);
+    localIdsByQueryId.get(queryId).push(localId);
+  }
+  const counts = await fetchDiscoverSongPlayCounts(queryIds);
+  const out = new Map();
+  for (const [queryId, localIds] of localIdsByQueryId) {
+    const n = counts.get(queryId) ?? 0;
+    for (const localId of localIds) out.set(localId, n);
+  }
+  return out;
+}
+
 function notifyPublicSongPublished(track) {
   const songId = String(track?.cloudSongId || track?.id || "").trim();
   if (!songId || !authSession?.user?.id) return;
@@ -39041,7 +39065,7 @@ async function refreshDiscoverFeed() {
     bindCampaignUiOnce();
     if (playable.length) {
       try {
-        const playCountMap = await fetchDiscoverSongPlayCounts(playable.map((t) => t.id));
+        const playCountMap = await fetchPlayCountsForTracks(playable);
         if (gen !== _discoveryFeedGen) return;
         for (const t of playable) {
           t.playCount = playCountMap.get(String(t.id || "")) || 0;
@@ -39871,7 +39895,7 @@ async function renderUserProfilePublicLibraryAsync(username, userId = "", gen = 
   syncUserPublicSegmentUi();
   renderUserPublicSegmentFromCache();
   setUserPublicLoading(false);
-  void fetchDiscoverSongPlayCounts(allTracks.map((t) => t.id)).then((playCountMap) => {
+  void fetchPlayCountsForTracks(allTracks).then((playCountMap) => {
     if (!stillCurrent()) return;
     let changed = false;
     for (const t of allTracks) {
@@ -51823,6 +51847,13 @@ function trackCloudShareId(track) {
     if (isShareUuid(s)) return s;
   }
   return "";
+}
+
+/** Cloud song id for social play counts / record_play (not legacy local library id). */
+function socialPlaySongId(track) {
+  const cloud = trackCloudShareId(track);
+  if (cloud) return cloud;
+  return String(track?.id || "").trim();
 }
 
 /** Deployed https origin for share links — not `capacitor://localhost` in the native shell. */

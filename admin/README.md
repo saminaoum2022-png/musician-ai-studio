@@ -104,7 +104,7 @@ where user_id = (select id from auth.users where lower(email) = lower('saminaoum
 
 ## API
 
-`GET /api/music/admin?view=overview|suno|users|user|credits|generations|publications|subscriptions|billing|settings|session`
+`GET /api/music/admin?view=overview|providers|suno|users|user|credits|generations|publications|subscriptions|billing|settings|session`
 
 User drill-down: `GET /api/music/admin?view=user&userId=<uuid>` — profile, credits, subscription, billing events, ledger, recent generations, and saved songs. Open from **Users** or **Billing events** via **View**.
 

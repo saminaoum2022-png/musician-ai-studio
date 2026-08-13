@@ -48,7 +48,7 @@ const els = {
   globalError: document.getElementById("globalError"),
   panels: {
     overview: document.getElementById("viewOverview"),
-    suno: document.getElementById("viewSuno"),
+    providers: document.getElementById("viewProviders"),
     users: document.getElementById("viewUsers"),
     user: document.getElementById("viewUser"),
     generation: document.getElementById("viewGeneration"),
@@ -65,7 +65,7 @@ const els = {
 
 const VIEW_META = {
   overview: { title: "Overview", sub: "Platform health at a glance" },
-  suno: { title: "Suno bucket", sub: "Master API credits vs user liability" },
+  providers: { title: "Providers", sub: "Suno bucket, API health, and external account links" },
   users: { title: "Users", sub: "Signups, activity, balances, and songs" },
   user: { title: "User detail", sub: "Credits, subscription, billing, and activity" },
   generation: { title: "Generation detail", sub: "Prompt, status, credits, and saved output" },
@@ -519,17 +519,19 @@ async function refreshSessionIfNeeded() {
   return true;
 }
 
-async function adminFetch(view, { offset = 0, limit = PAGE_SIZE, search = "", userId = "", generationId = "" } = {}) {
+async function adminFetch(view, { offset = 0, limit = PAGE_SIZE, search = "", userId = "", generationId = "", healthRefresh = false } = {}) {
   await refreshSessionIfNeeded();
   const token = state.session?.access_token;
   if (!token) throw new Error("Not signed in");
-  const qs = new URLSearchParams({ view, limit: String(limit), offset: String(offset) });
+  const apiView = view === "suno" ? "providers" : view;
+  const qs = new URLSearchParams({ view: apiView, limit: String(limit), offset: String(offset) });
   const trimmedSearch = String(search || "").trim();
   if (trimmedSearch.length >= 2) qs.set("search", trimmedSearch);
   const trimmedUserId = String(userId || "").trim();
   if (trimmedUserId) qs.set("userId", trimmedUserId);
   const trimmedGenerationId = String(generationId || "").trim();
   if (trimmedGenerationId) qs.set("generationId", trimmedGenerationId);
+  if (healthRefresh) qs.set("healthRefresh", "1");
   const r = await fetch(`/api/music/admin?${qs}`, {
     headers: { Authorization: `Bearer ${token}` },
   });
@@ -562,6 +564,7 @@ function canAccessView(view) {
   if (!Array.isArray(allowed) || !allowed.length) return true;
   if (view === "user") return allowed.includes("user") || allowed.includes("users");
   if (view === "generation") return allowed.includes("generation") || allowed.includes("generations");
+  if (view === "providers" || view === "suno") return allowed.includes("providers") || allowed.includes("suno");
   return allowed.includes(view);
 }
 
@@ -647,7 +650,7 @@ function viewCacheKey() {
 }
 
 function firstAllowedView() {
-  const order = ["overview", "suno", "users", "generations", "publications", "credits", "promos", "subscriptions", "billing", "settings"];
+  const order = ["overview", "providers", "users", "generations", "publications", "credits", "promos", "subscriptions", "billing", "settings"];
   for (const view of order) {
     if (canAccessView(view)) return view;
   }
@@ -788,9 +791,11 @@ function renderSunoCoverageSection(s, { compact = false } = {}) {
   const topUpAlert = hasShortfall
     ? `<div class="sunoTopUpAlert" role="alert">
         <strong>Top up Suno now:</strong> buy at least <strong>${fmtNum(s.creditsToBuy, 0)} credits</strong> (~${buyUsd}) to fully back your ${proCount} active Pro subscriber${proCount === 1 ? "" : "s"}.
+        <a class="providerExtLink" href="https://sunoapi.org/billing" target="_blank" rel="noopener noreferrer">Open sunoapi.org/billing →</a>
       </div>`
     : `<div class="sunoTopUpAlert sunoTopUpAlert--ok" role="status">
         <strong>Suno bucket covers guaranteed Pro liability.</strong> You have headroom for new subs until guaranteed total grows.
+        <a class="providerExtLink" href="https://sunoapi.org/billing" target="_blank" rel="noopener noreferrer">Suno billing →</a>
       </div>`;
   return `
     <section class="sectionCard${hasShortfall ? " sectionCard--warn" : ""}">
@@ -857,10 +862,91 @@ function renderOverview(data) {
   `);
 }
 
-function renderSuno(data) {
+function providerStatusBadge(status) {
+  const s = String(status || "unknown").toLowerCase();
+  const labels = {
+    ok: "OK",
+    slow: "Slow",
+    down: "Down",
+    auth: "Auth error",
+    unconfigured: "No key",
+    unknown: "Unknown",
+  };
+  return `<span class="badge providerStatus providerStatus--${s}">${labels[s] || s}</span>`;
+}
+
+function providerExtLinks(p) {
+  const links = [];
+  if (p.topUpUrl) {
+    links.push(`<a class="providerExtLink" href="${escapeHtml(p.topUpUrl)}" target="_blank" rel="noopener noreferrer">Top up</a>`);
+  }
+  if (p.dashboardUrl) {
+    const label = p.id === "suno" ? "sunoapi.org" : "Account";
+    links.push(`<a class="providerExtLink" href="${escapeHtml(p.dashboardUrl)}" target="_blank" rel="noopener noreferrer">${label}</a>`);
+  }
+  if (p.docsUrl) {
+    links.push(`<a class="providerExtLink" href="${escapeHtml(p.docsUrl)}" target="_blank" rel="noopener noreferrer">Docs</a>`);
+  }
+  return links.length ? links.join(" · ") : "—";
+}
+
+function renderProviderHealthSection(health) {
+  const h = health || {};
+  const rows = Array.isArray(h.providers) ? h.providers : [];
+  const cacheNote = h.cached
+    ? `Cached · refreshes in ${fmtNum(h.cacheTtlSec || 0)}s · use Refresh for live ping`
+    : "Live ping just now";
+  const body = rows.length
+    ? rows.map((p) => {
+      const keyLabel = p.envKeys?.length
+        ? (p.configured ? "Yes" : `Missing (${p.envKeys.join(" or ")})`)
+        : "N/A (no key)";
+      const flagNote = p.featureFlag != null
+        ? (p.featureEnabled ? " · enabled for users" : " · admin-only")
+        : "";
+      const latency = p.latencyMs != null ? `${fmtNum(p.latencyMs, 0)} ms` : "—";
+      return `
+        <tr>
+          <td>
+            <strong>${escapeHtml(p.name)}</strong><br>
+            <span class="cellMuted">${escapeHtml(p.role || "")}</span>
+          </td>
+          <td>${providerStatusBadge(p.status)}</td>
+          <td class="monoCell">${latency}</td>
+          <td>${escapeHtml(keyLabel)}${flagNote ? `<br><span class="cellMuted">${escapeHtml(flagNote.trim())}</span>` : ""}</td>
+          <td>${fmtNum(p.failures24h || 0, 0)}</td>
+          <td><span class="cellMuted">${escapeHtml(p.detail || "—")}</span></td>
+          <td class="providerLinksCell">${providerExtLinks(p)}</td>
+        </tr>`;
+    }).join("")
+    : `<tr><td colspan="7" class="loading">No provider data</td></tr>`;
+
+  return `
+    <section class="sectionCard">
+      <div class="sectionHead">
+        <h3 class="sectionTitle">API health</h3>
+        <p class="sectionNote">On-demand ping (5 min cache). External links open the provider’s site — billing to buy credits, account portal for API keys, docs for reference. ${cacheNote}.</p>
+      </div>
+      <div class="tableWrap tableWrap--plain">
+        <table class="table--compact">
+          <thead>
+            <tr>
+              <th>Provider</th><th>Status</th><th>Latency</th><th>Key</th>
+              <th>Failed (24h)</th><th>Detail</th><th>Links</th>
+            </tr>
+          </thead>
+          <tbody>${body}</tbody>
+        </table>
+      </div>
+    </section>`;
+}
+
+function renderProviders(data) {
   const s = data?.suno || {};
-  els.panels.suno.innerHTML = adminPageStack(`
+  const health = data?.health || {};
+  els.panels.providers.innerHTML = adminPageStack(`
     ${renderSunoCoverageSection(s, { compact: true })}
+    ${renderProviderHealthSection(health)}
     <section class="sectionCard">
       <div class="sectionHead">
         <h3 class="sectionTitle">Burn &amp; runway</h3>
@@ -1729,7 +1815,8 @@ function renderSubscriptions(data) {
 
 const RENDERERS = {
   overview: renderOverview,
-  suno: renderSuno,
+  providers: renderProviders,
+  suno: renderProviders,
   users: renderUsers,
   user: renderUserDetail,
   generation: renderGenerationDetail,
@@ -1941,6 +2028,7 @@ async function loadView({ force = false } = {}) {
           : "",
       userId: view === "user" ? state.userDetailId : "",
       generationId: view === "generation" ? state.generationDetailId : "",
+      healthRefresh: force && (view === "providers" || view === "suno"),
     });
     if (view === "settings" && state.adminSession?.canManageTeam) {
       try {

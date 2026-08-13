@@ -31,6 +31,7 @@ const {
   listAssignableRoles,
 } = require("../../_lib/admin-permissions");
 const { adminSearchUserIds, resolveUserLookup } = require("../../_lib/admin-user-resolve");
+const { getProviderHealth } = require("../../_lib/provider-health");
 
 const SUPABASE_URL = (process.env.SUPABASE_URL || "").replace(/\/$/, "");
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
@@ -1144,6 +1145,37 @@ async function getSunoPanel() {
   };
 }
 
+async function getProvidersPanel({ forceHealth = false } = {}) {
+  const since = new Date(Date.now() - 86400000).toISOString();
+  const [suno, health, failRes] = await Promise.all([
+    getSunoPanel(),
+    getProviderHealth({ force: forceHealth }),
+    serviceFetch(
+      `music_generation_logs?select=provider,status&created_at=gte.${encodeURIComponent(since)}&status=eq.failed&limit=1000`,
+    ),
+  ]);
+
+  const failures24h = {};
+  for (const row of Array.isArray(failRes.data) ? failRes.data : []) {
+    const p = String(row.provider || "unknown").toLowerCase();
+    failures24h[p] = (failures24h[p] || 0) + 1;
+  }
+
+  const providers = (health.providers || []).map((p) => ({
+    ...p,
+    failures24h: Number(failures24h[p.id] || 0),
+  }));
+
+  return {
+    suno,
+    health: {
+      ...health,
+      providers,
+    },
+    failures24h,
+  };
+}
+
 module.exports = async function handler(req, res) {
   setCors(res);
   if (req.method === "OPTIONS") return res.end();
@@ -1156,8 +1188,9 @@ module.exports = async function handler(req, res) {
   const search = String(url.searchParams.get("search") || "").trim();
   const userId = String(url.searchParams.get("userId") || "").trim();
   const generationId = String(url.searchParams.get("generationId") || "").trim();
+  const healthRefresh = String(url.searchParams.get("healthRefresh") || "").trim() === "1";
 
-  const adminView = view === "user" ? "user" : view === "generation" ? "generation" : view;
+  const adminView = view === "user" ? "user" : view === "generation" ? "generation" : view === "suno" ? "providers" : view;
   const admin = await verifyAdmin(req, { view: adminView === "session" ? null : adminView });
   if (!admin) {
     const user = await verifyUser(req);
@@ -1214,12 +1247,12 @@ module.exports = async function handler(req, res) {
       payload = { ...payload, ...(await getPublications(limit, offset)) };
     } else if (view === "promos") {
       payload = { ...payload, ...(await getPromos(limit, offset)) };
-    } else if (view === "suno") {
-      payload.suno = await getSunoPanel();
+    } else if (view === "providers" || view === "suno") {
+      payload = { ...payload, ...(await getProvidersPanel({ forceHealth: healthRefresh })) };
     } else {
       return sendJson(res, 400, {
         error: "Unknown view",
-        allowed: ["session", "settings", "overview", "users", "user", "credits", "promos", "generations", "generation", "subscriptions", "billing", "publications", "suno"],
+        allowed: ["session", "settings", "overview", "providers", "users", "user", "credits", "promos", "generations", "generation", "subscriptions", "billing", "publications", "suno"],
       });
     }
     return sendJson(res, 200, payload);

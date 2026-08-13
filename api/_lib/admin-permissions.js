@@ -14,6 +14,7 @@ const DASHBOARD_ROLES = Object.freeze([
 
 const ALL_VIEWS = Object.freeze([
   "overview",
+  "providers",
   "suno",
   "users",
   "user",
@@ -39,7 +40,7 @@ const ROLE_META = Object.freeze({
   operations: {
     label: "Operations",
     description: "Platform health, Suno bucket, users, and subscription monitoring.",
-    views: ["overview", "suno", "users", "user", "generations", "generation", "subscriptions", "billing"],
+    views: ["overview", "providers", "users", "user", "generations", "generation", "subscriptions", "billing"],
     grantCredits: false,
     manageTeam: false,
     moderatePublications: false,
@@ -73,6 +74,7 @@ const ROLE_META = Object.freeze({
     description: "Read-only access across analytics tabs.",
     views: [
       "overview",
+      "providers",
       "suno",
       "users",
       "user",

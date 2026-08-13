@@ -14,6 +14,7 @@ const {
   tryGeminiCoverImage,
 } = require("../_lib/gemini-cover-image");
 const { runVisualDirector } = require("../_lib/visual-director");
+const { queueLogProviderUsage } = require("../_lib/provider-usage-log");
 
 const MAX_FIELD = 160;
 const MAX_STYLE = 980;
@@ -169,8 +170,16 @@ async function sendRegenCoverJson(res, {
   storyTheme = "user_regen",
   artworkSource = "user_artwork",
   params = {},
+  userId = "",
 }) {
   const { outBuf, outMime } = await normalizeCoverResponseBuffer(buf);
+  const imageProvider = provider === "gemini" ? "gemini" : "pollinations";
+  queueLogProviderUsage({
+    provider: imageProvider,
+    kind: "cover_image",
+    userId,
+    ref: String(params?.songId || "cover_regen").slice(0, 120),
+  });
   return sendJson(res, 200, {
     ok: true,
     dataUrl: coverDataUrlFromBuffer(outBuf, outMime),
@@ -292,6 +301,7 @@ module.exports = async function handler(req, res) {
         visualMode: String(body?.clientVisualMode || "still_life"),
         storyTheme: String(body?.clientStoryTheme || "regen"),
         artworkSource: String(body?.clientArtworkSource || "client_regen"),
+        userId: user.userId,
         params: {
           ...(body?.clientParams && typeof body.clientParams === "object" ? body.clientParams : {}),
           ...(regenUserHint ? { regenUserHint } : {}),
@@ -319,6 +329,12 @@ module.exports = async function handler(req, res) {
         if (gem?.ok && gem.scene) {
           geminiScene = sanitizeArtworkPrompt(gem.scene, { title: coverInput.title });
           geminiModel = gem.model || "";
+          queueLogProviderUsage({
+            provider: "gemini",
+            kind: "cover_scene",
+            userId: user.userId,
+            ref: songId,
+          });
         }
       } catch (e) {
         console.warn("[music/cover-art] gemini scene skipped", e?.message || e);
@@ -355,6 +371,13 @@ module.exports = async function handler(req, res) {
     }
 
     const { outBuf, outMime } = await normalizeCoverResponseBuffer(polled.buf);
+
+    queueLogProviderUsage({
+      provider: "pollinations",
+      kind: "cover_image",
+      userId: user.userId,
+      ref: songId,
+    });
 
     return sendJson(res, 200, {
       ok: true,

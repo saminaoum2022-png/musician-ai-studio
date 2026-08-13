@@ -13,6 +13,7 @@
 const { verifyUser } = require("../_lib/credits-auth");
 const { applyCors } = require("../_lib/cors");
 const { readJson, sendJson } = require("../_lib/suno-upstream");
+const { queueLogProviderUsage } = require("../_lib/provider-usage-log");
 
 const COOLDOWN_MS = 1500;
 const lastCallByUser = new Map();
@@ -62,6 +63,7 @@ module.exports = async function handler(req, res) {
     if (!out?.ok) {
       return sendJson(res, 502, { error: out?.error || "Could not verify maqam — try again." });
     }
+    queueLogProviderUsage({ provider: "gemini", kind: "maqam", userId: user.userId });
     return sendJson(res, 200, { ...out.result, provider: `gemini:${out.model || "unknown"}` });
   } catch (e) {
     return sendJson(res, 500, { error: e?.message || String(e) });

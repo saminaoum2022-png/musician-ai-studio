@@ -6,6 +6,8 @@
  * 1) Suno lyrics API, unless lyricsProvider is "gemini"
  * 2) Gemini fallback / repair
  */
+const { queueLogProviderUsage } = require("./_lib/provider-usage-log");
+
 module.exports = async function handler(req, res) {
   setCors(res);
   if (req.method === 'OPTIONS') return res.status(200).end();
@@ -70,6 +72,9 @@ module.exports = async function handler(req, res) {
           geminiKey,
           temperature: geminiTemperature,
         });
+        if (String(repaired.provider || "").includes("gemini")) {
+          queueLogProviderUsage({ provider: "gemini", kind: "lyrics" });
+        }
         return json(res, 200, {
           lyrics: repaired.text,
           provider: repaired.provider || "gemini",
@@ -126,6 +131,9 @@ module.exports = async function handler(req, res) {
           geminiKey,
           temperature: geminiTemperature,
         });
+        if (String(repaired.provider || "").includes("gemini")) {
+          queueLogProviderUsage({ provider: "gemini", kind: "lyrics" });
+        }
         return json(res, 200, {
           lyrics: repaired.text,
           provider: repaired.provider || "gemini",

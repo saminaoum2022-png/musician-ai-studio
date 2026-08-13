@@ -1,3 +1,5 @@
+const { queueLogProviderUsage } = require("./_lib/provider-usage-log");
+
 module.exports = async function handler(req, res) {
   setCors(res);
   if (req.method === "OPTIONS") return res.status(200).end();
@@ -14,6 +16,7 @@ module.exports = async function handler(req, res) {
     if (!gem?.ok) return json(res, 200, fallbackMood(dataUrl, gem?.error || "gemini_failed"));
     const parsed = tryParseGeminiObject(gem.text);
     if (!parsed || typeof parsed !== "object") return json(res, 200, fallbackMood(dataUrl, "parse_failed"));
+    queueLogProviderUsage({ provider: "gemini", kind: "image_mood" });
     return json(res, 200, { ...sanitizeMood(parsed), source: `gemini:${gem.model || "unknown"}` });
   } catch (e) {
     return json(res, 200, fallbackMood("", "server_error"));

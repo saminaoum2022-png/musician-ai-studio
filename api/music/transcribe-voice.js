@@ -10,6 +10,7 @@
 const { verifyUser } = require("../_lib/credits-auth");
 const { applyCors } = require("../_lib/cors");
 const { readJson, sendJson } = require("../_lib/suno-upstream");
+const { queueLogProviderUsage } = require("../_lib/provider-usage-log");
 
 const MAX_AUDIO_CHARS = 3_500_000;
 const COOLDOWN_MS = 2500;
@@ -68,6 +69,8 @@ module.exports = async function handler(req, res) {
     if (!transcript) {
       return sendJson(res, 502, { error: "No words detected in the clip — try singing or humming louder." });
     }
+
+    queueLogProviderUsage({ provider: "gemini", kind: "transcribe", userId: user.userId });
 
     return sendJson(res, 200, {
       transcript,

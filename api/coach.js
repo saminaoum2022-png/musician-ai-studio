@@ -16,6 +16,7 @@
 
 const { verifyUser, sendJson, setCors, readJsonBody } = require("./_lib/credits-auth");
 const { COACH_SYSTEM_PROMPT } = require("./_lib/coach-knowledge");
+const { queueLogProviderUsage } = require("./_lib/provider-usage-log");
 
 const MAX_MESSAGE_CHARS = 2500;
 const MAX_HISTORY_TURNS = 8;
@@ -160,5 +161,6 @@ module.exports = async function handler(req, res) {
   if (!result.ok) {
     return sendJson(res, 502, { ok: false, error: "Coach couldn't respond. Please try again." });
   }
+  queueLogProviderUsage({ provider: "gemini", kind: "coach", userId: user.userId });
   return sendJson(res, 200, { ok: true, reply: result.reply });
 };

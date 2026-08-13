@@ -65,7 +65,7 @@ const els = {
 
 const VIEW_META = {
   overview: { title: "Overview", sub: "Platform health at a glance" },
-  providers: { title: "Providers", sub: "Suno bucket, API health, and external account links" },
+  providers: { title: "Providers", sub: "Vendor spend, API health, and top-up tracking" },
   users: { title: "Users", sub: "Signups, activity, balances, and songs" },
   user: { title: "User detail", sub: "Credits, subscription, billing, and activity" },
   generation: { title: "Generation detail", sub: "Prompt, status, credits, and saved output" },
@@ -890,74 +890,166 @@ function providerExtLinks(p) {
   return links.length ? links.join(" · ") : "—";
 }
 
-function renderProviderHealthSection(health) {
-  const h = health || {};
-  const rows = Array.isArray(h.providers) ? h.providers : [];
-  const cacheNote = h.cached
-    ? `Cached · refreshes in ${fmtNum(h.cacheTtlSec || 0)}s · use Refresh for live ping`
-    : "Live ping just now";
-  const body = rows.length
-    ? rows.map((p) => {
-      const keyLabel = p.envKeys?.length
-        ? (p.configured ? "Yes" : `Missing (${p.envKeys.join(" or ")})`)
-        : "N/A (no key)";
-      const flagNote = p.featureFlag != null
-        ? (p.featureEnabled ? " · enabled for users" : " · admin-only")
-        : "";
-      const latency = p.latencyMs != null ? `${fmtNum(p.latencyMs, 0)} ms` : "—";
-      return `
-        <tr>
-          <td>
-            <strong>${escapeHtml(p.name)}</strong><br>
-            <span class="cellMuted">${escapeHtml(p.role || "")}</span>
-          </td>
-          <td>${providerStatusBadge(p.status)}</td>
-          <td class="monoCell">${latency}</td>
-          <td>${escapeHtml(keyLabel)}${flagNote ? `<br><span class="cellMuted">${escapeHtml(flagNote.trim())}</span>` : ""}</td>
-          <td>${fmtNum(p.failures24h || 0, 0)}</td>
-          <td><span class="cellMuted">${escapeHtml(p.detail || "—")}</span></td>
-          <td class="providerLinksCell">${providerExtLinks(p)}</td>
-        </tr>`;
-    }).join("")
-    : `<tr><td colspan="7" class="loading">No provider data</td></tr>`;
+function canLogProviderTopUp() {
+  const s = state.adminSession;
+  if (!s) return false;
+  if (s.isOwner) return true;
+  return ["admin", "operations"].includes(String(s.role || "").toLowerCase());
+}
 
+function fmtTopUpSummary(spend = {}) {
+  const parts = [];
+  if (Number(spend.toppedUpCredits) > 0) parts.push(`${fmtNum(spend.toppedUpCredits, 0)} cr`);
+  if (Number(spend.toppedUpUsd) > 0) parts.push(fmtUsd(spend.toppedUpUsd));
+  return parts.length ? parts.join(" · ") : "—";
+}
+
+function renderProviderRows(providers = []) {
+  if (!providers.length) {
+    return `<tr><td colspan="9" class="loading">No provider data</td></tr>`;
+  }
+  return providers.map((p) => {
+    const spend = p.spend || {};
+    const keyLabel = p.envKeys?.length
+      ? (p.configured ? "Key set" : `No key (${p.envKeys.join(" or ")})`)
+      : "No key needed";
+    const flagNote = p.featureFlag != null
+      ? (p.featureEnabled ? " · live for users" : " · admin-only")
+      : "";
+    const latency = p.latencyMs != null ? `${fmtNum(p.latencyMs, 0)} ms` : "";
+    const healthDetail = [p.detail, latency].filter(Boolean).join(" · ");
+    const balanceSub = spend.balanceDetail || spend.usageNote || "";
+    const usedAll = spend.tracksUsage
+      ? fmtUsd(spend.consumedUsdAll)
+      : (spend.consumedUsdAll > 0 ? fmtUsd(spend.consumedUsdAll) : "—");
+
+    return `
+      <tr>
+        <td>
+          <strong>${escapeHtml(p.name)}</strong><br>
+          <span class="cellMuted">${escapeHtml(p.role || "")}</span>
+        </td>
+        <td>
+          ${providerStatusBadge(p.status)}<br>
+          <span class="cellMuted">${escapeHtml(healthDetail || keyLabel + flagNote)}</span>
+        </td>
+        <td>
+          <strong>${escapeHtml(spend.balanceLabel || "—")}</strong>
+          ${balanceSub ? `<br><span class="cellMuted">${escapeHtml(balanceSub)}</span>` : ""}
+        </td>
+        <td>${fmtTopUpSummary(spend)}</td>
+        <td>${spend.tracksUsage || spend.consumedUsd7d > 0 ? fmtUsd(spend.consumedUsd7d) : "—"}</td>
+        <td>${spend.tracksUsage || spend.consumedUsd30d > 0 ? fmtUsd(spend.consumedUsd30d) : "—"}</td>
+        <td>${usedAll}</td>
+        <td>${fmtNum(p.failures24h || 0, 0)}</td>
+        <td class="providerLinksCell">${providerExtLinks(p)}</td>
+      </tr>`;
+  }).join("");
+}
+
+function renderProviderTopUpForm() {
+  if (!canLogProviderTopUp()) return "";
   return `
     <section class="sectionCard">
       <div class="sectionHead">
-        <h3 class="sectionTitle">API health</h3>
-        <p class="sectionNote">On-demand ping (5 min cache). External links open the provider’s site — billing to buy credits, account portal for API keys, docs for reference. ${cacheNote}.</p>
+        <h3 class="sectionTitle">Log a top-up</h3>
+        <p class="sectionNote">When you pay a vendor (Suno credits, Gemini billing, ElevenLabs wallet, etc.), record it here so balance = top-ups − usage stays accurate. Suno balance above is live from the API; others are estimated until you log deposits.</p>
+      </div>
+      <form id="providerTopUpForm" class="grantForm">
+        <label class="field grantField">
+          <span>Provider</span>
+          <select id="providerTopUpSelect" required>
+            <option value="suno">Suno</option>
+            <option value="lyria">Lyria Pro</option>
+            <option value="elevenlabs">ElevenLabs</option>
+            <option value="gemini">Gemini</option>
+            <option value="pollinations">Pollinations</option>
+          </select>
+        </label>
+        <label class="field grantField grantField--amount">
+          <span>USD</span>
+          <input id="providerTopUpUsd" type="number" min="0" step="0.01" placeholder="49.00" />
+        </label>
+        <label class="field grantField grantField--amount">
+          <span>Credits</span>
+          <input id="providerTopUpCredits" type="number" min="0" step="1" placeholder="Suno only" />
+        </label>
+        <label class="field grantField">
+          <span>Note (optional)</span>
+          <input id="providerTopUpNote" type="text" maxlength="500" placeholder="Invoice #, date, etc." />
+        </label>
+        <button type="submit" class="btnPrimary">Save top-up</button>
+      </form>
+      <p id="providerTopUpMsg" class="loginError" hidden></p>
+    </section>`;
+}
+
+function renderRecentTopUps(rows = []) {
+  if (!rows.length) {
+    return `<p class="sectionNote">No top-ups logged yet.</p>`;
+  }
+  const body = rows.map((row) => {
+    const amounts = [];
+    if (row.amountCredits != null && row.amountCredits > 0) amounts.push(`${fmtNum(row.amountCredits, 0)} cr`);
+    if (row.amountUsd != null && row.amountUsd > 0) amounts.push(fmtUsd(row.amountUsd));
+    return `
+      <tr>
+        ${dateCell(row.createdAt)}
+        <td>${escapeHtml(row.provider || "—")}</td>
+        <td>${amounts.join(" · ") || "—"}</td>
+        <td>${escapeHtml(row.note || "—")}</td>
+        <td class="cellMuted">${escapeHtml(row.loggedByEmail || "—")}</td>
+      </tr>`;
+  }).join("");
+
+  return `
+    <div class="tableWrap tableWrap--plain">
+      <table class="table--compact">
+        <thead>
+          <tr><th>When</th><th>Provider</th><th>Amount</th><th>Note</th><th>Logged by</th></tr>
+        </thead>
+        <tbody>${body}</tbody>
+      </table>
+    </div>`;
+}
+
+function renderProviders(data) {
+  const health = data?.health || {};
+  const providers = Array.isArray(health.providers) ? health.providers : [];
+  const spend = data?.spend || {};
+  const cacheNote = health.cached
+    ? `Health cached · refreshes in ${fmtNum(health.cacheTtlSec || 0)}s · Refresh forces live ping`
+    : "Health pinged just now";
+
+  els.panels.providers.innerHTML = adminPageStack(`
+    <section class="sectionCard">
+      <div class="sectionHead">
+        <h3 class="sectionTitle">Vendor spend &amp; health</h3>
+        <p class="sectionNote">
+          Per-provider upstream cost tracking. <strong>Suno guarantee &amp; Pro liability</strong> stay on Overview only.
+          Music usage from generation logs; Gemini/Pollinations from API call logs (est. USD via env rates).
+          Log vendor top-ups below so balance stays accurate.
+          ${cacheNote}.
+        </p>
       </div>
       <div class="tableWrap tableWrap--plain">
         <table class="table--compact">
           <thead>
             <tr>
-              <th>Provider</th><th>Status</th><th>Latency</th><th>Key</th>
-              <th>Failed (24h)</th><th>Detail</th><th>Links</th>
+              <th>Provider</th><th>Health</th><th>Balance</th><th>Topped up</th>
+              <th>Used 7d</th><th>Used 30d</th><th>All-time</th><th>Failed 24h</th><th>Links</th>
             </tr>
           </thead>
-          <tbody>${body}</tbody>
+          <tbody>${renderProviderRows(providers)}</tbody>
         </table>
       </div>
-    </section>`;
-}
-
-function renderProviders(data) {
-  const s = data?.suno || {};
-  const health = data?.health || {};
-  els.panels.providers.innerHTML = adminPageStack(`
-    ${renderSunoCoverageSection(s, { compact: true })}
-    ${renderProviderHealthSection(health)}
+    </section>
+    ${renderProviderTopUpForm()}
     <section class="sectionCard">
       <div class="sectionHead">
-        <h3 class="sectionTitle">Burn &amp; runway</h3>
-        <p class="sectionNote">${s.note || ""}</p>
+        <h3 class="sectionTitle">Recent top-ups</h3>
       </div>
-      <div class="cardsGrid cardsGrid--inSection">
-        ${statCard("7-day burn", fmtNum(s.burnLast7d, 1), "Nabad credits consumed")}
-        ${statCard("Avg daily burn", fmtNum(s.avgDailyBurn, 1), "Last 7 days")}
-        ${statCard("Runway estimate", s.runwayDaysEstimate != null ? `${fmtNum(s.runwayDaysEstimate)} days` : "—", "At recent burn vs guaranteed liability")}
-        ${statCard("All-time user spend", fmtNum(s.userSpentAllTime, 1))}
-      </div>
+      ${renderRecentTopUps(spend.recentTopUps || [])}
     </section>
   `);
 }
@@ -1850,6 +1942,53 @@ function setView(view) {
   }
 }
 
+async function adminLogProviderTopUp({ provider, amountUsd, amountCredits, note } = {}) {
+  await refreshSessionIfNeeded();
+  const token = state.session?.access_token;
+  if (!token) throw new Error("Not signed in");
+  const body = { provider };
+  if (amountUsd != null && Number.isFinite(Number(amountUsd)) && Number(amountUsd) > 0) {
+    body.amountUsd = Number(amountUsd);
+  }
+  if (amountCredits != null && Number.isFinite(Number(amountCredits)) && Number(amountCredits) > 0) {
+    body.amountCredits = Number(amountCredits);
+  }
+  if (note) body.note = note;
+  const r = await fetch("/api/admin/provider-wallet", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(body),
+  });
+  const data = await r.json().catch(() => ({}));
+  if (r.status === 401) {
+    writeSession(null);
+    throw new Error("Session expired — sign in again");
+  }
+  if (r.status === 403) {
+    throw new Error(data?.error || "You cannot log provider top-ups.");
+  }
+  if (!r.ok || !data?.ok) {
+    throw new Error(data?.error || `Top-up failed (${r.status})`);
+  }
+  return data;
+}
+
+function setProviderTopUpMsg(text, kind = "ok") {
+  const el = document.getElementById("providerTopUpMsg");
+  if (!el) return;
+  if (!text) {
+    el.hidden = true;
+    el.textContent = "";
+    return;
+  }
+  el.hidden = false;
+  el.textContent = text;
+  el.style.color = kind === "err" ? "#fca5a5" : kind === "warn" ? "#fcd34d" : "#86efac";
+}
+
 async function adminGrantPaidCredits({ email = "", amount } = {}) {
   await refreshSessionIfNeeded();
   const token = state.session?.access_token;
@@ -2332,6 +2471,43 @@ document.body.addEventListener("submit", (e) => {
         setPromoCreateMsg(err?.message || "Create failed", "err");
       } finally {
         if (btn) btn.disabled = false;
+      }
+    })();
+    return;
+  }
+
+  const providerTopUpForm = e.target.closest("#providerTopUpForm");
+  if (providerTopUpForm) {
+    e.preventDefault();
+    void (async () => {
+      const provider = providerTopUpForm.querySelector("#providerTopUpSelect")?.value || "";
+      const usdRaw = providerTopUpForm.querySelector("#providerTopUpUsd")?.value;
+      const creditsRaw = providerTopUpForm.querySelector("#providerTopUpCredits")?.value;
+      const note = String(providerTopUpForm.querySelector("#providerTopUpNote")?.value || "").trim();
+      const amountUsd = usdRaw !== "" && usdRaw != null ? Number(usdRaw) : null;
+      const amountCredits = creditsRaw !== "" && creditsRaw != null ? Number(creditsRaw) : null;
+      const hasUsd = amountUsd != null && Number.isFinite(amountUsd) && amountUsd > 0;
+      const hasCredits = amountCredits != null && Number.isFinite(amountCredits) && amountCredits > 0;
+      if (!hasUsd && !hasCredits) {
+        setProviderTopUpMsg("Enter USD and/or credits (must be > 0).", "warn");
+        return;
+      }
+      setProviderTopUpMsg("Saving…", "warn");
+      try {
+        await adminLogProviderTopUp({
+          provider,
+          amountUsd: hasUsd ? amountUsd : null,
+          amountCredits: hasCredits ? amountCredits : null,
+          note,
+        });
+        providerTopUpForm.reset();
+        state.cache = {};
+        if (state.view === "providers" || state.view === "suno") {
+          await loadView({ force: true });
+        }
+        setProviderTopUpMsg("Top-up saved.", "ok");
+      } catch (err) {
+        setProviderTopUpMsg(err?.message || "Save failed", "err");
       }
     })();
     return;

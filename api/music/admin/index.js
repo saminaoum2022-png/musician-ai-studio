@@ -32,6 +32,11 @@ const {
 } = require("../../_lib/admin-permissions");
 const { adminSearchUserIds, resolveUserLookup } = require("../../_lib/admin-user-resolve");
 const { getProviderHealth } = require("../../_lib/provider-health");
+const {
+  fetchProviderSpendData,
+  mergeProviderSpend,
+  roundUsd,
+} = require("../../_lib/provider-spend");
 
 const SUPABASE_URL = (process.env.SUPABASE_URL || "").replace(/\/$/, "");
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
@@ -1147,12 +1152,12 @@ async function getSunoPanel() {
 
 async function getProvidersPanel({ forceHealth = false } = {}) {
   const since = new Date(Date.now() - 86400000).toISOString();
-  const [suno, health, failRes] = await Promise.all([
-    getSunoPanel(),
+  const [health, failRes, spendData] = await Promise.all([
     getProviderHealth({ force: forceHealth }),
     serviceFetch(
       `music_generation_logs?select=provider,status&created_at=gte.${encodeURIComponent(since)}&status=eq.failed&limit=1000`,
     ),
+    fetchProviderSpendData({ callRpc, serviceFetch }),
   ]);
 
   const failures24h = {};
@@ -1161,16 +1166,39 @@ async function getProvidersPanel({ forceHealth = false } = {}) {
     failures24h[p] = (failures24h[p] || 0) + 1;
   }
 
+  const liveBalances = {};
+  for (const p of health.providers || []) {
+    if (p.id === "suno" && p.balance != null && Number.isFinite(Number(p.balance))) {
+      const credits = Number(p.balance);
+      liveBalances.suno = {
+        credits,
+        usd: roundUsd(credits * SUNO_USD_PER_CREDIT),
+      };
+    }
+  }
+
+  const spendRows = mergeProviderSpend({
+    spendByProvider: spendData.spendByProvider,
+    topUpsByProvider: spendData.topUpsByProvider,
+    liveBalances,
+  });
+  const spendById = Object.fromEntries(spendRows.map((r) => [r.id, r]));
+
   const providers = (health.providers || []).map((p) => ({
     ...p,
     failures24h: Number(failures24h[p.id] || 0),
+    spend: spendById[p.id] || {},
   }));
 
   return {
-    suno,
     health: {
       ...health,
       providers,
+    },
+    spend: {
+      rows: spendRows,
+      recentTopUps: spendData.recentTopUps,
+      source: spendData.spendSource,
     },
     failures24h,
   };

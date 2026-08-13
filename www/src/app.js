@@ -34,6 +34,7 @@ import { initEcho, openEchoFromCreateChooser } from "./echo.js";
 import { initHumTrack, bindHumTrackHomeCard, openHumTrackFlow, humTrackReadyForGenerate, humTrackIsGenerating, triggerHumTrackGenerate, kickHumTrackGenerationPoll } from "./hum-track.js";
 import { createAdaptivePollLoop, stopPollLoop } from "./generation-poll.js";
 import {
+  feedTrackEligibleForVinylPlayer,
   feedVinylPlayerBlockHtml,
   feedVinylPlayerUsesLightPrototype,
   initFeedVinylPlayerSystem,
@@ -17779,7 +17780,11 @@ function wireUserPublicFollowActHostOnce(host) {
       }
       haptic("light");
       if (togglePublicProfileLibPlaybackIfSameUrl(raw)) return;
-      void playLibraryUrlOnPlayer(raw, title, art, { openPlayer: false, playSource: publicPlaySourceFromEl(inline) });
+      void playLibraryUrlOnPlayer(raw, title, art, {
+        openPlayer: false,
+        playSource: publicPlaySourceFromEl(inline),
+        feedHookSec: feedHookSecFromDomEl(inline) || undefined,
+      });
       return;
     }
     const pl = e.target.closest(
@@ -17799,7 +17804,11 @@ function wireUserPublicFollowActHostOnce(host) {
     }
     haptic("light");
     if (togglePublicProfileLibPlaybackIfSameUrl(raw)) return;
-    void playLibraryUrlOnPlayer(raw, title, art, { openPlayer: false, playSource: publicPlaySourceFromEl(pl) });
+    void playLibraryUrlOnPlayer(raw, title, art, {
+      openPlayer: false,
+      playSource: publicPlaySourceFromEl(pl),
+      feedHookSec: feedHookSecFromDomEl(pl) || undefined,
+    });
   });
 }
 
@@ -19430,7 +19439,7 @@ function publicDiscoverMetaFromTrack(track) {
     "styleInput", "styleSent", "style", "styleTags", "challenge",
     "searchTemplateId", "searchTemplateTitle", "allowRemix", "allowMashup",
     "releaseCaption", "releasedAt", "releaseType", "mode", "dialect",
-    "hookStartSec", "hookSource",
+    "hookStartSec", "hookSource", "postMediaLayout",
   ];
   for (const k of keys) {
     if (meta[k] == null) continue;
@@ -19473,6 +19482,120 @@ function hookMetaFieldsFromRow(s) {
   return out;
 }
 
+function postMediaLayoutMetaFromRow(s) {
+  const layout = String(s?.meta_post_media_layout || "").trim().toLowerCase();
+  if (layout === "cover" || layout === "vinyl") return { postMediaLayout: layout };
+  return {};
+}
+
+const POST_MEDIA_LAYOUT_VINYL = "vinyl";
+const POST_MEDIA_LAYOUT_COVER = "cover";
+
+function normalizePostMediaLayout(raw) {
+  const v = String(raw || "").trim().toLowerCase();
+  return v === POST_MEDIA_LAYOUT_COVER ? POST_MEDIA_LAYOUT_COVER : POST_MEDIA_LAYOUT_VINYL;
+}
+
+function defaultPostMediaLayoutForTrack(track) {
+  const type = followingActivityTypeForTrack(track);
+  return feedTrackEligibleForVinylPlayer(track, type) ? POST_MEDIA_LAYOUT_VINYL : POST_MEDIA_LAYOUT_COVER;
+}
+
+function publishReleaseDesignWaveBarsHtml() {
+  const peaks = friendsFeedWaveformFallbackPeaks().slice(0, 18);
+  return peaks
+    .map((h) => `<span class="publishReleaseDesignWaveBar" style="--bar-h:${Number(h).toFixed(3)}"></span>`)
+    .join("");
+}
+
+function publishReleaseDesignPreviewInnerHtml(layout, artSafe) {
+  if (layout === POST_MEDIA_LAYOUT_VINYL) {
+    return `<span class="publishReleaseDesignPreview publishReleaseDesignPreview--vinyl" aria-hidden="true">
+      <span class="publishReleaseDesignVinylDeck">
+        <span class="publishReleaseDesignVinylDisc">
+          <span class="publishReleaseDesignVinylLabel" style="background-image:url('${artSafe}')"></span>
+        </span>
+        <span class="publishReleaseDesignVinylArm"></span>
+      </span>
+    </span>`;
+  }
+  return `<div class="publishReleaseDesignPreview publishReleaseDesignPreview--cover" aria-hidden="true">
+    <img class="publishReleaseDesignCoverArt" src="${artSafe}" alt="" decoding="async" />
+    <div class="publishReleaseDesignCoverDock">
+      <span class="publishReleaseDesignCoverWave" aria-hidden="true">${publishReleaseDesignWaveBarsHtml()}</span>
+    </div>
+  </div>`;
+}
+
+function renderPublishReleasePostDesign(sheet, track, artUrl) {
+  const section = sheet.querySelector("#publishReleasePostDesign");
+  const row = sheet.querySelector("#publishReleasePostDesignRow");
+  const hint = section?.querySelector(".publishReleasePostDesignHint");
+  if (!section || !row) return;
+  const type = followingActivityTypeForTrack(track);
+  const canVinyl = feedTrackEligibleForVinylPlayer(track, type);
+  const artSafe = escapeHtml(String(artUrl || "./assets/icons/splash-mark.png").trim());
+  const saved = String(track?.meta?.postMediaLayout || "").trim().toLowerCase();
+  let selected = saved === POST_MEDIA_LAYOUT_COVER ? POST_MEDIA_LAYOUT_COVER : POST_MEDIA_LAYOUT_VINYL;
+  if (!canVinyl) selected = POST_MEDIA_LAYOUT_COVER;
+  sheet._publishPostMediaLayout = selected;
+  section.hidden = false;
+  row.classList.toggle("publishReleasePostDesignRow--coverOnly", !canVinyl);
+  if (hint) {
+    hint.textContent = canVinyl
+      ? "How your release looks in Friends and on your profile."
+      : "Photo Mood and custom covers use the full cover layout.";
+  }
+  if (!canVinyl) {
+    row.innerHTML = `
+      <div class="publishReleaseDesignPick publishReleaseDesignPick--static is-selected" aria-hidden="true">
+        ${publishReleaseDesignPreviewInnerHtml(POST_MEDIA_LAYOUT_COVER, artSafe)}
+        <span class="publishReleaseDesignCopy">
+          <span class="publishReleaseDesignName">Cover</span>
+          <span class="publishReleaseDesignSub">Edge-to-edge art + waveform</span>
+        </span>
+      </div>`;
+    return;
+  }
+  row.innerHTML = [POST_MEDIA_LAYOUT_VINYL, POST_MEDIA_LAYOUT_COVER]
+    .map((layout) => {
+      const on = layout === selected;
+      const label = layout === POST_MEDIA_LAYOUT_VINYL ? "Vinyl" : "Cover";
+      const sub = layout === POST_MEDIA_LAYOUT_VINYL ? "Classic spinning disc" : "Edge-to-edge art + waveform";
+      return `<button type="button" class="publishReleaseDesignPick${on ? " is-selected" : ""}" data-post-design="${layout}" aria-pressed="${on ? "true" : "false"}">
+        ${publishReleaseDesignPreviewInnerHtml(layout, artSafe)}
+        <span class="publishReleaseDesignCopy">
+          <span class="publishReleaseDesignName">${escapeHtml(label)}</span>
+          <span class="publishReleaseDesignSub">${escapeHtml(sub)}</span>
+        </span>
+      </button>`;
+    })
+    .join("");
+}
+
+function readPublishReleasePostDesign(sheet) {
+  return normalizePostMediaLayout(sheet?._publishPostMediaLayout);
+}
+
+function bindPublishReleasePostDesignOnce(sheet) {
+  const row = sheet.querySelector("#publishReleasePostDesignRow");
+  if (!row || row.dataset.boundPublishDesign === "1") return;
+  row.dataset.boundPublishDesign = "1";
+  row.addEventListener("click", (e) => {
+    const btn = e.target?.closest?.("[data-post-design]");
+    if (!btn || !row.contains(btn) || btn.disabled) return;
+    e.preventDefault();
+    const layout = normalizePostMediaLayout(btn.getAttribute("data-post-design"));
+    sheet._publishPostMediaLayout = layout;
+    row.querySelectorAll("[data-post-design]").forEach((pick) => {
+      const on = pick.getAttribute("data-post-design") === layout;
+      pick.classList.toggle("is-selected", on);
+      pick.setAttribute("aria-pressed", on ? "true" : "false");
+    });
+    haptic("light");
+  });
+}
+
 function shouldApplyFeedHook(source) {
   const t = String(source?.type || "");
   return t === "discover_feed" || t === "public_profile_lib" || t === "user_playlist" || t === "discover_playlist";
@@ -19495,7 +19618,20 @@ function friendsFeedTracksForHookLookup() {
   return out;
 }
 
+function feedHookSecFromDomEl(el) {
+  if (!el) return 0;
+  let wrap = el.closest(".followActRealtimeProgress");
+  if (!wrap) {
+    const row = el.closest(".followAct--music, .followAct, article.followAct");
+    wrap = row?.querySelector(".followActRealtimeProgress[data-feed-hook-sec]");
+  }
+  const sec = Number(wrap?.getAttribute("data-feed-hook-sec") || 0);
+  return Number.isFinite(sec) && sec > 0 ? sec : 0;
+}
+
 function feedHookStartFromContext(source, trackRef) {
+  const pinned = Number(source?.feedHookSec);
+  if (Number.isFinite(pinned) && pinned > 0) return pinned;
   const candidates = [
     trackRef,
     currentPlayerTrackRef,
@@ -19511,6 +19647,19 @@ function feedHookStartFromContext(source, trackRef) {
     if (hook > 0) return hook;
   }
   return 0;
+}
+
+function playbackDurationForHookMarkers(fallbackDur = 0) {
+  const fromPlayer = playerEl ? getPlayerDuration() : 0;
+  const hinted = normalizeAudioDurationSec(audioDurationHint.sec);
+  const hintedOk =
+    hinted > 0 &&
+    playerEl &&
+    audioDurationHint.url &&
+    audioUrlsEquivalent(getActiveAudioSrc(playerEl), audioDurationHint.url)
+      ? hinted
+      : 0;
+  return Math.max(fromPlayer, fallbackDur, hintedOk);
 }
 
 function hookStartFromAlignedWords(words) {
@@ -19679,7 +19828,7 @@ function activeFeedHookForPlayback(source, trackRef) {
 
 function syncGlobalFeedHookMarkers() {
   const hook = activeFeedHookForPlayback(miniSource, currentPlayerTrackRef);
-  const dur = playerEl ? getPlayerDuration() : 0;
+  const dur = playbackDurationForHookMarkers();
   const timeline = document.getElementById("playerTimeline");
   const seekWrap = timeline?.querySelector(".playerSeekWrap");
   syncFeedHookMarkerOnWrap(seekWrap || timeline, hook, dur);
@@ -19690,10 +19839,14 @@ function syncGlobalFeedHookMarkers() {
     const curRef = String(currentPlayerTrackRef?.url || "").trim();
     const active = Boolean(curRef && trackUrl && audioUrlsEquivalent(curRef, trackUrl));
     const rowHook = Number(wrap.getAttribute("data-feed-hook-sec") || 0);
-    const rowDur = Number(wrap.getAttribute("data-feed-hook-dur") || 0) || dur;
-    if (active && hook > 0) syncFeedHookMarkerOnWrap(wrap, hook, dur);
-    else if (rowHook > 0) syncFeedHookMarkerOnWrap(wrap, rowHook, rowDur);
-    else syncFeedHookMarkerOnWrap(wrap, 0, 0);
+    const rowDur = Number(wrap.getAttribute("data-feed-hook-dur") || 0);
+    if (active && hook > 0) {
+      syncFeedHookMarkerOnWrap(wrap, hook, playbackDurationForHookMarkers(rowDur));
+    } else if (rowHook > 0) {
+      syncFeedHookMarkerOnWrap(wrap, rowHook, rowDur > 0 ? rowDur : dur);
+    } else {
+      syncFeedHookMarkerOnWrap(wrap, 0, 0);
+    }
   });
 }
 
@@ -27062,6 +27215,11 @@ function ensurePublishReleaseSheet() {
         <p class="publishReleaseTagsHint">Tap to include or remove — they appear exactly like this on your release.</p>
         <div id="publishReleaseTagsRow" class="followActStylePills publishReleaseTagsRow" role="group" aria-label="Style tags to publish"></div>
       </div>
+      <div id="publishReleasePostDesign" class="publishReleasePostDesign" hidden>
+        <div class="publishReleaseLabel">Post design</div>
+        <p class="publishReleasePostDesignHint">How your release looks in Friends and on your profile.</p>
+        <div id="publishReleasePostDesignRow" class="publishReleasePostDesignRow" role="radiogroup" aria-label="Post design"></div>
+      </div>
       <div id="publishReleaseHookBlock" class="publishReleaseHook">
         <div class="publishReleaseLabel">Post start <span>(feed hook)</span></div>
         <p class="publishReleaseHookSub">In Discover and Friends, listeners hear your song from this moment first. The full track still plays in the player.</p>
@@ -27097,6 +27255,7 @@ function ensurePublishReleaseSheet() {
   });
   bindPublishReleaseKeyboardInput(sheet.querySelector("#publishReleaseCaption"));
   bindPublishReleaseTagsOnce(sheet);
+  bindPublishReleasePostDesignOnce(sheet);
   wireBottomSheetKeyboardOnce();
   const confirm = sheet.querySelector("#publishReleaseConfirm");
   if (confirm) {
@@ -27107,6 +27266,7 @@ function ensurePublishReleaseSheet() {
       const allowRemix = sheet.querySelector("#publishAllowRemix")?.checked !== false;
       const allowMashup = sheet.querySelector("#publishAllowMashup")?.checked !== false;
       const styleTags = readPublishReleaseSelectedTags(sheet);
+      const postMediaLayout = readPublishReleasePostDesign(sheet);
       const hookPayload = readPublishHookPayload(sheet);
       closePublishReleaseSheet();
       void setLibraryTrackPublicOnProfile(id, true, {
@@ -27114,6 +27274,7 @@ function ensurePublishReleaseSheet() {
         allowRemix,
         allowMashup,
         styleTags,
+        postMediaLayout,
         ...hookPayload,
       });
     });
@@ -27174,6 +27335,7 @@ function openPublishReleaseSheet(trackId, opts = {}) {
   if (remixToggle) remixToggle.checked = trackAllowsRemix(track);
   if (mashupToggle) mashupToggle.checked = trackAllowsMashup(track);
   renderPublishReleaseTags(sheet, track);
+  renderPublishReleasePostDesign(sheet, track, art);
   if (metaEl) {
     if (remixOf) {
       metaEl.hidden = false;
@@ -27829,6 +27991,7 @@ function mapPublicLibrarySongRows(arr, selectedPublishedAt) {
               ? { thumbFrame: s.meta_thumb_frame }
               : {}),
             ...hookMetaFieldsFromRow(s),
+            ...postMediaLayoutMetaFromRow(s),
             ...(String(s.meta_lyrics || "").trim() ? { lyricsInput: String(s.meta_lyrics).trim() } : {}),
           },
           publicOnProfile: true,
@@ -27841,7 +28004,7 @@ function mapPublicLibrarySongRows(arr, selectedPublishedAt) {
 }
 
 const PUBLIC_LIBRARY_SONG_META_COLS =
-  "meta_remix_of:meta->remixOf,meta_mashup_of:meta->mashupOf,meta_release_caption:meta->>releaseCaption,meta_challenge:meta->challenge,meta_featured_on_profile:meta->>featuredOnProfile,meta_style:meta->>styleInput,meta_style_sent:meta->>styleSent,meta_style_tags:meta->styleTags,meta_mode:meta->>mode,meta_photo_mode:meta->photoMode,meta_image_url:meta->>imageUrl,meta_image_thumb:meta->>imageThumb,meta_thumb_frame:meta->thumbFrame,meta_hook_start_sec:meta->hookStartSec,meta_hook_source:meta->>hookSource,meta_lyrics:meta->>lyricsInput";
+  "meta_remix_of:meta->remixOf,meta_mashup_of:meta->mashupOf,meta_release_caption:meta->>releaseCaption,meta_challenge:meta->challenge,meta_featured_on_profile:meta->>featuredOnProfile,meta_style:meta->>styleInput,meta_style_sent:meta->>styleSent,meta_style_tags:meta->styleTags,meta_mode:meta->>mode,meta_photo_mode:meta->photoMode,meta_image_url:meta->>imageUrl,meta_image_thumb:meta->>imageThumb,meta_thumb_frame:meta->thumbFrame,meta_hook_start_sec:meta->hookStartSec,meta_hook_source:meta->>hookSource,meta_post_media_layout:meta->>postMediaLayout,meta_lyrics:meta->>lyricsInput";
 
 async function fetchPublicSongByOwnerTitle(ownerUserId, title) {
   const uid = String(ownerUserId || "").trim();
@@ -35115,8 +35278,8 @@ async function supabaseFetchDiscoveryPublicSongs(limit) {
     loadPublicConfigFromCache();
   }
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return [];
-  const colsWithPublished = "id,created_at,published_at,title,song_url,task_id,audio_id,kind,art_url,user_id,meta_image_thumb:meta->>imageThumb,meta_remix_of:meta->remixOf,meta_mashup_of:meta->mashupOf,meta_release_caption:meta->>releaseCaption,meta_challenge:meta->challenge,meta_style:meta->>styleInput,meta_style_sent:meta->>styleSent,meta_template_id:meta->>searchTemplateId,meta_template_title:meta->>searchTemplateTitle,meta_dialect:meta->>dialect,meta_lyrics:meta->>lyricsInput,meta_final_prompt:meta->>finalPrompt,meta_nabad_verification:meta->>nabadVerification,meta_tags:meta->tags,meta_allow_remix:meta->allowRemix,meta_allow_mashup:meta->allowMashup,meta_hook_start_sec:meta->hookStartSec,meta_hook_source:meta->>hookSource,meta_deleted_at:meta->>deletedAt";
-  const colsLegacy = "id,created_at,title,song_url,task_id,audio_id,kind,art_url,user_id,meta_image_thumb:meta->>imageThumb,meta_remix_of:meta->remixOf,meta_mashup_of:meta->mashupOf,meta_release_caption:meta->>releaseCaption,meta_challenge:meta->challenge,meta_style:meta->>styleInput,meta_style_sent:meta->>styleSent,meta_template_id:meta->>searchTemplateId,meta_template_title:meta->>searchTemplateTitle,meta_dialect:meta->>dialect,meta_lyrics:meta->>lyricsInput,meta_final_prompt:meta->>finalPrompt,meta_nabad_verification:meta->>nabadVerification,meta_tags:meta->tags,meta_allow_remix:meta->allowRemix,meta_allow_mashup:meta->allowMashup,meta_hook_start_sec:meta->hookStartSec,meta_hook_source:meta->>hookSource,meta_deleted_at:meta->>deletedAt";
+  const colsWithPublished = "id,created_at,published_at,title,song_url,task_id,audio_id,kind,art_url,user_id,meta_image_thumb:meta->>imageThumb,meta_remix_of:meta->remixOf,meta_mashup_of:meta->mashupOf,meta_release_caption:meta->>releaseCaption,meta_challenge:meta->challenge,meta_style:meta->>styleInput,meta_style_sent:meta->>styleSent,meta_template_id:meta->>searchTemplateId,meta_template_title:meta->>searchTemplateTitle,meta_dialect:meta->>dialect,meta_lyrics:meta->>lyricsInput,meta_final_prompt:meta->>finalPrompt,meta_nabad_verification:meta->>nabadVerification,meta_tags:meta->tags,meta_allow_remix:meta->allowRemix,meta_allow_mashup:meta->allowMashup,meta_hook_start_sec:meta->hookStartSec,meta_hook_source:meta->>hookSource,meta_post_media_layout:meta->>postMediaLayout,meta_deleted_at:meta->>deletedAt";
+  const colsLegacy = "id,created_at,title,song_url,task_id,audio_id,kind,art_url,user_id,meta_image_thumb:meta->>imageThumb,meta_remix_of:meta->remixOf,meta_mashup_of:meta->mashupOf,meta_release_caption:meta->>releaseCaption,meta_challenge:meta->challenge,meta_style:meta->>styleInput,meta_style_sent:meta->>styleSent,meta_template_id:meta->>searchTemplateId,meta_template_title:meta->>searchTemplateTitle,meta_dialect:meta->>dialect,meta_lyrics:meta->>lyricsInput,meta_final_prompt:meta->>finalPrompt,meta_nabad_verification:meta->>nabadVerification,meta_tags:meta->tags,meta_allow_remix:meta->allowRemix,meta_allow_mashup:meta->allowMashup,meta_hook_start_sec:meta->hookStartSec,meta_hook_source:meta->>hookSource,meta_post_media_layout:meta->>postMediaLayout,meta_deleted_at:meta->>deletedAt";
   const artUrlGuard = `&or=${encodeURIComponent("(art_url.is.null,art_url.not.like.data:*)")}`;
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), 12000);
@@ -35180,6 +35343,7 @@ async function supabaseFetchDiscoveryPublicSongs(limit) {
               ...(s.meta_allow_remix === false ? { allowRemix: false } : {}),
               ...(s.meta_allow_mashup === false ? { allowMashup: false } : {}),
               ...hookMetaFieldsFromRow(s),
+              ...postMediaLayoutMetaFromRow(s),
             },
           },
           s,
@@ -37227,6 +37391,7 @@ async function playDiscoverReelAt(index, opts = {}) {
     playSource: pick.songId && pick.ownerUserId
       ? { type: "public_song", songId: pick.songId, ownerUserId: pick.ownerUserId, taskId: pick.taskId, audioId: pick.audioId }
       : null,
+    feedHookSec: feedHookStartFromTrack(pick) || undefined,
   });
 }
 
@@ -37317,6 +37482,7 @@ async function playDiscoverFeedEntry({ raw, title, art, by, playSource, el, opts
     openPlayer: opts.openPlayer === true,
     discoverBy: by,
     playSource,
+    feedHookSec: feedHookSecFromDomEl(el) || undefined,
   });
 }
 
@@ -39418,6 +39584,7 @@ function resumePendingPublishes() {
           allowRemix: saved.allowRemix !== false,
           allowMashup: saved.allowMashup !== false,
           styleTags: Array.isArray(saved.styleTags) ? saved.styleTags : undefined,
+          postMediaLayout: saved.postMediaLayout ? normalizePostMediaLayout(saved.postMediaLayout) : undefined,
           hookStartSec: saved.hookStartSec,
           hookSource: saved.hookSource,
           _background: true,
@@ -39459,6 +39626,7 @@ async function setLibraryTrackPublicOnProfile(trackId, wantPublic, opts = {}) {
           allowRemix: opts?.allowRemix !== false,
           allowMashup: opts?.allowMashup !== false,
           styleTags: Array.isArray(opts?.styleTags) ? opts.styleTags : undefined,
+          postMediaLayout: opts?.postMediaLayout ? normalizePostMediaLayout(opts.postMediaLayout) : undefined,
           hookStartSec: Number.isFinite(Number(opts?.hookStartSec)) ? Number(opts.hookStartSec) : undefined,
           hookSource: String(opts?.hookSource || "").trim() || undefined,
         },
@@ -39576,6 +39744,14 @@ async function setLibraryTrackPublicOnProfile(trackId, wantPublic, opts = {}) {
       : trackStyleTagsList(track, 6);
   if (styleTags.length) pubMeta.styleTags = styleTags.slice(0, 6);
   else delete pubMeta.styleTags;
+  const layoutPick = normalizePostMediaLayout(
+    opts?.postMediaLayout || track?.meta?.postMediaLayout || defaultPostMediaLayoutForTrack(track),
+  );
+  if (willBePublic) {
+    pubMeta.postMediaLayout = feedTrackEligibleForVinylPlayer(track, followingActivityTypeForTrack(track))
+      ? layoutPick
+      : POST_MEDIA_LAYOUT_COVER;
+  }
   // Publishing is explicit "keep this" intent. Clear any stale soft-delete
   // marker so the re-published row isn't read as deleted, and drop this
   // device's delete tombstone so reconcile won't re-delete (un-publish) it.
@@ -39876,6 +40052,10 @@ async function playLibraryUrlOnPlayer(rawUrl, title, artUrl, opts) {
         applyFeedHook: true,
       }
       : { ...(playSource || {}), type: "public_profile_lib", url: playableRaw, applyFeedHook: true };
+  const pinnedHook = Number(opts?.feedHookSec) > 0
+    ? Number(opts.feedHookSec)
+    : feedHookStartFromTrack(publicTrackMeta || { meta: currentPlayerTrackRef.meta, url: playableRaw });
+  if (pinnedHook > 0) publicSource.feedHookSec = pinnedHook;
   miniSource = publicSource;
   resetPublicPlayTracking(miniSource);
   libraryNowPlayingId = null;
@@ -52791,7 +52971,6 @@ async function playInline(url, label, source) {
       try { syncAllPlaybackRowHighlights(); } catch {}
       return;
     }
-    await applyFeedHookAfterPlayStart(a, miniSource);
     if (els.btnPlayerPlay) els.btnPlayerPlay.disabled = true;
     if (els.btnPlayerPause) els.btnPlayerPause.disabled = false;
     try {

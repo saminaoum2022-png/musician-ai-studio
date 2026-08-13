@@ -6316,6 +6316,188 @@ input.userTextBidi--rtl{
   color: rgba(191, 219, 254, 0.96);
   opacity: 1;
 }
+.publishReleasePostDesign{
+  margin: 12px 0 4px;
+  padding: 12px 12px 10px;
+  border-radius: 18px;
+  border: 1px solid rgba(255,255,255,0.08);
+  background:
+    linear-gradient(145deg, rgba(255,255,255,0.03), rgba(255,255,255,0.008)),
+    rgba(5,7,13,0.38);
+}
+.publishReleasePostDesign[hidden]{
+  display: none !important;
+}
+.publishReleasePostDesignHint{
+  margin: 0 0 10px;
+  padding: 0 2px;
+  font-size: 12px;
+  line-height: 1.45;
+  color: rgba(223,231,251,0.58);
+}
+.publishReleasePostDesignNote{
+  margin: 0 0 8px;
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: rgba(223,231,251,0.52);
+}
+.publishReleasePostDesignRow{
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  align-items: start;
+}
+.publishReleasePostDesignRow--coverOnly{
+  grid-template-columns: minmax(0, 1fr);
+}
+.publishReleaseDesignPick{
+  appearance: none;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+  margin: 0;
+  padding: 8px 8px 10px;
+  border-radius: 14px;
+  border: 1px solid rgba(255,255,255,0.10);
+  background: rgba(255,255,255,0.03);
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  align-self: start;
+  transition: border-color 0.16s ease, background 0.16s ease, box-shadow 0.16s ease;
+}
+.publishReleaseDesignPick--static{
+  cursor: default;
+  flex-direction: row;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+}
+.publishReleaseDesignPick--static .publishReleaseDesignPreview{
+  width: 72px;
+  flex: 0 0 72px;
+}
+.publishReleaseDesignPick.is-selected{
+  border-color: rgba(147, 197, 253, 0.34);
+  background: rgba(147, 197, 253, 0.08);
+  box-shadow: 0 0 0 1px rgba(147, 197, 253, 0.10) inset;
+}
+.publishReleaseDesignPick:focus-visible{
+  outline: 2px solid rgba(147, 197, 253, 0.45);
+  outline-offset: 2px;
+}
+.publishReleaseDesignCopy{
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.publishReleaseDesignName{
+  font-size: 12px;
+  font-weight: 750;
+  color: rgba(244,247,255,0.94);
+}
+.publishReleaseDesignSub{
+  font-size: 10.5px;
+  line-height: 1.35;
+  color: rgba(223,231,251,0.52);
+}
+.publishReleaseDesignPreview{
+  display: block;
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  border-radius: 10px;
+  overflow: hidden;
+  background: rgba(0,0,0,0.35);
+  flex-shrink: 0;
+}
+.publishReleaseDesignPreview--vinyl{
+  background:
+    radial-gradient(circle at 50% 42%, rgba(255,255,255,0.08), transparent 58%),
+    linear-gradient(180deg, rgba(18,22,34,0.95), rgba(8,10,16,0.98));
+}
+.publishReleaseDesignVinylDeck{
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+}
+.publishReleaseDesignVinylDisc{
+  width: 62%;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 50% 50%, rgba(255,255,255,0.06) 0 18%, transparent 19%),
+    repeating-radial-gradient(circle at 50% 50%, rgba(255,255,255,0.05) 0 1px, transparent 1px 3px),
+    linear-gradient(145deg, #101218, #050608);
+  box-shadow: 0 8px 18px rgba(0,0,0,0.45);
+  position: relative;
+}
+.publishReleaseDesignVinylLabel{
+  position: absolute;
+  inset: 28%;
+  border-radius: 50%;
+  background-size: cover;
+  background-position: center;
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,0.08);
+}
+.publishReleaseDesignVinylArm{
+  position: absolute;
+  top: 18%;
+  right: 16%;
+  width: 34%;
+  height: 3px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, rgba(210,214,224,0.85), rgba(120,126,140,0.75));
+  transform-origin: 88% 50%;
+  transform: rotate(24deg);
+}
+.publishReleaseDesignPreview--cover{
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding: 0;
+  background: transparent;
+}
+.publishReleaseDesignCoverArt{
+  display: block;
+  width: 100%;
+  flex: 1 1 auto;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  object-fit: cover;
+  object-position: center;
+}
+.publishReleaseDesignCoverDock{
+  flex: 0 0 24%;
+  min-height: 20px;
+  display: flex;
+  align-items: center;
+  box-sizing: border-box;
+  padding: 5px 7px 6px;
+  background: rgba(14, 18, 26, 0.94);
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+.publishReleaseDesignCoverWave{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1px;
+  width: 100%;
+  height: 12px;
+}
+.publishReleaseDesignWaveBar{
+  flex: 1 1 0;
+  max-width: 2px;
+  min-width: 1px;
+  height: calc(2px + var(--bar-h, 0.42) * 10px);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.58);
+}
 .publishReleaseHook{
   margin: 12px 0 4px;
   padding: 12px 12px 10px;
@@ -52257,6 +52439,47 @@ html[data-theme="light"] .publishReleaseTagsRow .publishReleaseTagPill.is-select
   border-color: rgba(37, 99, 235, 0.22);
   background: rgba(37, 99, 235, 0.08);
   color: rgb(37, 99, 235);
+}
+html[data-theme="light"] .publishReleasePostDesign{
+  border-color: var(--border);
+  background: var(--surface-secondary);
+}
+html[data-theme="light"] .publishReleasePostDesignHint,
+html[data-theme="light"] .publishReleasePostDesignNote{
+  color: var(--text-secondary);
+}
+html[data-theme="light"] .publishReleaseDesignPick{
+  border-color: rgba(15, 23, 40, 0.10);
+  background: rgba(255,255,255,0.72);
+}
+html[data-theme="light"] .publishReleaseDesignPick.is-selected{
+  border-color: rgba(37, 99, 235, 0.28);
+  background: rgba(37, 99, 235, 0.07);
+  box-shadow: 0 0 0 1px rgba(37, 99, 235, 0.08) inset;
+}
+html[data-theme="light"] .publishReleaseDesignName{
+  color: var(--text-primary);
+}
+html[data-theme="light"] .publishReleaseDesignSub{
+  color: var(--text-secondary);
+}
+html[data-theme="light"] .publishReleaseDesignPreview--vinyl{
+  background:
+    radial-gradient(circle at 50% 42%, rgba(255,255,255,0.35), transparent 58%),
+    linear-gradient(180deg, rgba(241,245,249,0.96), rgba(226,232,240,0.98));
+}
+html[data-theme="light"] .publishReleaseDesignVinylDisc{
+  background:
+    radial-gradient(circle at 50% 50%, rgba(255,255,255,0.16) 0 18%, transparent 19%),
+    repeating-radial-gradient(circle at 50% 50%, rgba(15,23,42,0.08) 0 1px, transparent 1px 3px),
+    linear-gradient(145deg, #1f2937, #0f172a);
+}
+html[data-theme="light"] .publishReleaseDesignCoverDock{
+  background: rgba(241, 245, 249, 0.98);
+  border-top-color: rgba(15, 23, 42, 0.08);
+}
+html[data-theme="light"] .publishReleaseDesignWaveBar{
+  background: rgba(15, 23, 42, 0.32);
 }
 html[data-theme="light"] .publishReleaseHook{
   border-color: rgba(13, 148, 136, 0.22);

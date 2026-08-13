@@ -23,15 +23,28 @@ export function feedTrackEligibleForVinylPlayer(track, activityType) {
   if (String(activityType || "") !== "release") return false;
   if (typeof track !== "object" || !track) return false;
   const meta = track.meta && typeof track.meta === "object" ? track.meta : {};
-  if (meta.photoMode || meta.customCoverOnly || meta.imageUrl || meta.imageThumb) return false;
+  if (meta.photoMode || meta.customCoverOnly) return false;
   const mode = String(meta.mode || "").trim().toLowerCase();
   if (mode.includes("photo") || mode.includes("video") || mode.includes("image")) return false;
   if (String(track.kind || "").trim().toLowerCase() === "music_video") return false;
   return true;
 }
 
+export function feedPostMediaLayoutForTrack(track) {
+  const meta = track?.meta && typeof track.meta === "object" ? track.meta : {};
+  const layout = String(meta.postMediaLayout || "").trim().toLowerCase();
+  if (layout === "cover") return "cover";
+  if (layout === "vinyl") return "vinyl";
+  return "";
+}
+
 export function feedVinylPlayerUsesLightPrototype(track, activityType, { xstyle = false } = {}) {
-  return Boolean(xstyle && feedTrackEligibleForVinylPlayer(track, activityType));
+  if (!xstyle) return false;
+  const layout = feedPostMediaLayoutForTrack(track);
+  if (layout === "cover") return false;
+  if (layout === "vinyl") return feedTrackEligibleForVinylPlayer(track, activityType);
+  // Legacy posts without postMediaLayout: keep cover layout. Vinyl is opt-in at publish only.
+  return false;
 }
 
 /** @param {{ artSafe: string, encUrl: string, encTitle: string, encArt: string, encBy: string, playData: string, safeTitle: string, centerPlayIconsHtml: string, durLabel?: string, durSec?: number }} opts */

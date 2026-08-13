@@ -153,15 +153,25 @@ function mergeProviderSpend({ catalogIds = PROVIDER_SPEND_IDS, spendByProvider =
 
     let balanceLabel = "—";
     let balanceDetail = "";
+    let balanceSource = "none";
     let estimatedRemainingUsd = null;
 
-    if (id === "suno" && live?.credits != null) {
-      balanceLabel = `${live.credits} cr`;
-      balanceDetail = live.usd != null ? `≈ ${live.usd}` : "";
+    if (live?.source === "api" && live.label) {
+      balanceLabel = live.label;
+      balanceDetail = live.detail || "Live from vendor API";
+      balanceSource = "api";
+      if (id === "suno" && live.kind === "credits" && Number.isFinite(Number(live.value))) {
+        balanceDetail = `${live.detail || "Live from sunoapi.org"} · ≈ ${fmtUsd(Number(live.value) * SUNO_USD_PER_CREDIT)}`;
+      }
+    } else if (live?.source === "dashboard_only" && live.label) {
+      balanceLabel = live.label;
+      balanceDetail = live.detail || "Check vendor billing portal";
+      balanceSource = "dashboard_only";
     } else if (topUps.toppedUpUsd > 0 || topUps.toppedUpCredits > 0) {
       estimatedRemainingUsd = roundUsd(topUps.toppedUpUsd - spend.consumedUsdAll);
       balanceLabel = fmtUsd(estimatedRemainingUsd);
-      balanceDetail = "est. (top-ups − usage)";
+      balanceDetail = "est. (manual top-ups − usage)";
+      balanceSource = "manual";
     }
 
     const tracksUsage = ["suno", "lyria", "elevenlabs", "gemini", "pollinations"].includes(id);
@@ -175,6 +185,7 @@ function mergeProviderSpend({ catalogIds = PROVIDER_SPEND_IDS, spendByProvider =
       ...topUps,
       balanceLabel,
       balanceDetail,
+      balanceSource,
       estimatedRemainingUsd,
       usageNote,
       tracksUsage,

@@ -919,6 +919,9 @@ function renderProviderRows(providers = []) {
     const latency = p.latencyMs != null ? `${fmtNum(p.latencyMs, 0)} ms` : "";
     const healthDetail = [p.detail, latency].filter(Boolean).join(" · ");
     const balanceSub = spend.balanceDetail || spend.usageNote || "";
+    const balanceLink = spend.balanceSource === "dashboard_only"
+      ? `<br><a class="providerExtLink" href="https://aistudio.google.com/billing" target="_blank" rel="noopener noreferrer">Open AI Studio Billing →</a>`
+      : "";
     const usedAll = spend.tracksUsage
       ? fmtUsd(spend.consumedUsdAll)
       : (spend.consumedUsdAll > 0 ? fmtUsd(spend.consumedUsdAll) : "—");
@@ -936,6 +939,7 @@ function renderProviderRows(providers = []) {
         <td>
           <strong>${escapeHtml(spend.balanceLabel || "—")}</strong>
           ${balanceSub ? `<br><span class="cellMuted">${escapeHtml(balanceSub)}</span>` : ""}
+          ${balanceLink}
         </td>
         <td>${fmtTopUpSummary(spend)}</td>
         <td>${spend.tracksUsage || spend.consumedUsd7d > 0 ? fmtUsd(spend.consumedUsd7d) : "—"}</td>
@@ -953,7 +957,7 @@ function renderProviderTopUpForm() {
     <section class="sectionCard">
       <div class="sectionHead">
         <h3 class="sectionTitle">Log a top-up</h3>
-        <p class="sectionNote">When you pay a vendor (Suno credits, Gemini billing, ElevenLabs wallet, etc.), record it here so balance = top-ups − usage stays accurate. Suno balance above is live from the API; others are estimated until you log deposits.</p>
+        <p class="sectionNote">When you pay a vendor outside what the API reports (e.g. Gemini prepay), record it here for your own ledger. Suno and ElevenLabs balances above are fetched automatically.</p>
       </div>
       <form id="providerTopUpForm" class="grantForm">
         <label class="field grantField">
@@ -1027,8 +1031,9 @@ function renderProviders(data) {
         <h3 class="sectionTitle">Vendor spend &amp; health</h3>
         <p class="sectionNote">
           Per-provider upstream cost tracking. <strong>Suno guarantee &amp; Pro liability</strong> stay on Overview only.
-          Music usage from generation logs; Gemini/Pollinations from API call logs (est. USD via env rates).
-          Log vendor top-ups below so balance stays accurate.
+          Music usage from generation logs; Gemini/Pollinations from API call logs.
+          <strong>Suno &amp; ElevenLabs balances are live from their APIs.</strong>
+          Google Gemini has no balance API — use the Billing link on those rows.
           ${cacheNote}.
         </p>
       </div>

@@ -23,7 +23,8 @@ const PROVIDER_CATALOG = Object.freeze([
     role: "Alternate music generation",
     envKeys: ["GEMINI_API_KEY", "GOOGLE_API_KEY"],
     featureFlag: "LYRIA_GENERATE_ENABLED",
-    dashboardUrl: "https://aistudio.google.com/apikey",
+    topUpUrl: "https://aistudio.google.com/billing",
+    dashboardUrl: "https://aistudio.google.com/billing",
     docsUrl: "https://ai.google.dev/gemini-api/docs/music-generation",
   },
   {
@@ -33,7 +34,8 @@ const PROVIDER_CATALOG = Object.freeze([
     role: "Alternate music generation",
     envKeys: ["ELEVENLABS_API_KEY"],
     featureFlag: "ELEVENLABS_GENERATE_ENABLED",
-    dashboardUrl: "https://elevenlabs.io/app/settings/api-keys",
+    topUpUrl: "https://elevenlabs.io/app/subscription",
+    dashboardUrl: "https://elevenlabs.io/app/subscription",
     docsUrl: "https://elevenlabs.io/docs/api-reference/music/compose",
   },
   {
@@ -42,7 +44,8 @@ const PROVIDER_CATALOG = Object.freeze([
     vendor: "Google",
     role: "Cover art regen, coach, maqam",
     envKeys: ["GEMINI_API_KEY", "GOOGLE_API_KEY"],
-    dashboardUrl: "https://aistudio.google.com/apikey",
+    topUpUrl: "https://aistudio.google.com/billing",
+    dashboardUrl: "https://aistudio.google.com/billing",
     docsUrl: "https://ai.google.dev/gemini-api/docs",
   },
   {
@@ -103,6 +106,55 @@ function statusFromPing({ ok, status, ms, configured, error }) {
   return "ok";
 }
 
+function fmtInt(n) {
+  const v = Number(n);
+  if (!Number.isFinite(v)) return "—";
+  return Math.round(v).toLocaleString("en-US");
+}
+
+function sunoLiveBalance(credits) {
+  const cr = Number(credits);
+  if (!Number.isFinite(cr)) return null;
+  return {
+    source: "api",
+    kind: "credits",
+    value: cr,
+    label: `${fmtInt(cr)} cr`,
+    detail: "Live from sunoapi.org",
+  };
+}
+
+function geminiDashboardBalance() {
+  return {
+    source: "dashboard_only",
+    kind: "usd",
+    label: "AI Studio Billing",
+    detail: "Google has no balance API for API keys — open Billing to see prepay balance",
+    billingUrl: "https://aistudio.google.com/billing",
+  };
+}
+
+function parseElevenLabsLiveBalance(data) {
+  const sub = data?.subscription && typeof data.subscription === "object"
+    ? data.subscription
+    : data;
+  const used = Number(sub?.character_count);
+  const limit = Number(sub?.character_limit);
+  if (!Number.isFinite(used) || !Number.isFinite(limit) || limit <= 0) return null;
+  const remaining = Math.max(0, limit - used);
+  const tier = String(sub?.tier || sub?.status || "plan").trim();
+  const pct = limit > 0 ? Math.round((remaining / limit) * 100) : 0;
+  return {
+    source: "api",
+    kind: "characters",
+    value: remaining,
+    used,
+    limit,
+    label: `${fmtInt(remaining)} chars`,
+    detail: `${tier} · ${fmtInt(used)} / ${fmtInt(limit)} used (${pct}% left)`,
+  };
+}
+
 async function pingSuno() {
   const apiKey = process.env.SUNO_API_KEY;
   const configured = Boolean(apiKey);
@@ -123,7 +175,8 @@ async function pingSuno() {
   const detail = r.ok
     ? (balance != null ? `${balance} credits` : "API reachable")
     : (r.error || `HTTP ${r.status || "error"}`);
-  return { status, latencyMs: r.ms, detail, balance };
+  const liveBalance = balance != null ? sunoLiveBalance(balance) : null;
+  return { status, latencyMs: r.ms, detail, balance, liveBalance };
 }
 
 async function pingGeminiModels(apiKey) {
@@ -132,7 +185,8 @@ async function pingGeminiModels(apiKey) {
   const status = statusFromPing({ ok: r.ok, status: r.status, ms: r.ms, configured: true, error: r.error });
   let detail = r.ok ? "Models API OK" : (r.error || `HTTP ${r.status}`);
   if (r.status === 401 || r.status === 403) detail = "Invalid API key";
-  return { status, latencyMs: r.ms, detail };
+  const liveBalance = r.ok ? geminiDashboardBalance() : null;
+  return { status, latencyMs: r.ms, detail, liveBalance };
 }
 
 async function pingLyria() {
@@ -161,11 +215,20 @@ async function pingElevenLabs() {
   const r = await timedFetch("https://api.elevenlabs.io/v1/user", {
     headers: { "xi-api-key": apiKey },
   });
+  let liveBalance = null;
+  if (r.ok) {
+    try {
+      const data = JSON.parse(r.text);
+      liveBalance = parseElevenLabsLiveBalance(data);
+    } catch {}
+  }
   const status = statusFromPing({ ok: r.ok, status: r.status, ms: r.ms, configured: true, error: r.error });
-  let detail = r.ok ? "Account API OK" : (r.error || `HTTP ${r.status}`);
+  let detail = r.ok
+    ? (liveBalance ? liveBalance.detail : "Account API OK")
+    : (r.error || `HTTP ${r.status}`);
   if (r.status === 401) detail = "Invalid API key";
   if (!enabled) detail += " · admin-only (ELEVENLABS_GENERATE_ENABLED off)";
-  return { status, latencyMs: r.ms, detail, enabled };
+  return { status, latencyMs: r.ms, detail, enabled, liveBalance };
 }
 
 async function pingGemini() {
@@ -174,7 +237,8 @@ async function pingGemini() {
   if (!configured) {
     return { status: "unconfigured", latencyMs: null, detail: "GEMINI_API_KEY not set" };
   }
-  return pingGeminiModels(apiKey);
+  const ping = await pingGeminiModels(apiKey);
+  return ping;
 }
 
 async function pingPollinations() {
@@ -208,6 +272,7 @@ async function runProviderHealthChecks() {
         latencyMs: ping.latencyMs,
         detail: ping.detail || "",
         balance: ping.balance ?? null,
+        liveBalance: ping.liveBalance ?? null,
       };
     }),
   );

@@ -1153,14 +1153,20 @@ async function getSunoPanel() {
 
 async function getProvidersPanel({ forceHealth = false } = {}) {
   const since = new Date(Date.now() - 86400000).toISOString();
-  const [health, failRes, spendData, geminiWallet] = await Promise.all([
+  const [health, failRes, spendData] = await Promise.all([
     getProviderHealth({ force: forceHealth }),
     serviceFetch(
       `music_generation_logs?select=provider,status&created_at=gte.${encodeURIComponent(since)}&status=eq.failed&limit=1000`,
     ),
     fetchProviderSpendData({ callRpc, serviceFetch }),
-    computeGeminiSharedWalletBalance({ serviceFetch }),
   ]);
+  const geminiToppedUsd =
+    (spendData.topUpsByProvider?.gemini?.toppedUpUsd || 0)
+    + (spendData.topUpsByProvider?.lyria?.toppedUpUsd || 0);
+  const geminiWallet = await computeGeminiSharedWalletBalance({
+    serviceFetch,
+    toppedUpUsd: geminiToppedUsd,
+  });
 
   const failures24h = {};
   for (const row of Array.isArray(failRes.data) ? failRes.data : []) {

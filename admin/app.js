@@ -922,7 +922,7 @@ function renderProviderRows(providers = []) {
     const billingUrl = p.id === "gemini" || p.id === "lyria"
       ? "https://aistudio.google.com/billing"
       : "";
-    const balanceLink = billingUrl && (spend.balanceSource === "dashboard_only" || spend.balanceSource === "snapshot")
+    const balanceLink = billingUrl && ["dashboard_only", "snapshot", "ledger"].includes(spend.balanceSource)
       ? `<br><a class="providerExtLink" href="${billingUrl}" target="_blank" rel="noopener noreferrer">Open AI Studio Billing →</a>`
       : "";
     const sharedWalletNote = p.id === "lyria"
@@ -957,41 +957,18 @@ function renderProviderRows(providers = []) {
   }).join("");
 }
 
-function renderGeminiSyncForm() {
-  if (!canLogProviderTopUp()) return "";
-  return `
-    <section class="sectionCard sectionCard--warn">
-      <div class="sectionHead">
-        <h3 class="sectionTitle">Sync Gemini / Lyria balance</h3>
-        <p class="sectionNote">
-          <strong>Lyria Pro and Gemini use the same API key and one Google prepay wallet.</strong>
-          Google does not expose your dollar balance via API (unlike Suno). Open
-          <a class="providerExtLink" href="https://aistudio.google.com/billing" target="_blank" rel="noopener noreferrer">AI Studio → Billing</a>,
-          copy your current prepay balance, and paste it here. We subtract tracked usage since sync so both rows stay accurate.
-        </p>
-      </div>
-      <form id="geminiSyncForm" class="grantForm">
-        <label class="field grantField grantField--amount">
-          <span>Current AI Studio balance (USD)</span>
-          <input id="geminiSyncUsd" type="number" min="0" step="0.01" placeholder="47.50" required />
-        </label>
-        <label class="field grantField">
-          <span>Note (optional)</span>
-          <input id="geminiSyncNote" type="text" maxlength="500" placeholder="After $50 top-up" />
-        </label>
-        <button type="submit" class="btnPrimary">Sync balance</button>
-      </form>
-      <p id="geminiSyncMsg" class="loginError" hidden></p>
-    </section>`;
-}
-
 function renderProviderTopUpForm() {
   if (!canLogProviderTopUp()) return "";
   return `
     <section class="sectionCard">
       <div class="sectionHead">
         <h3 class="sectionTitle">Log a top-up</h3>
-        <p class="sectionNote">When you pay a vendor outside what the API reports (e.g. Gemini prepay), record it here for your own ledger. Suno and ElevenLabs balances above are fetched automatically.</p>
+        <p class="sectionNote">
+          <strong>Suno &amp; ElevenLabs</strong> balances above are live from their APIs.
+          <strong>Gemini / Lyria</strong> share one Google wallet — Google has no live balance API.
+          Log each payment here and the Balance column updates automatically (top-ups − tracked usage).
+          For Gemini only, choose <em>Set balance from AI Studio</em> once if you want to paste the exact number from Billing instead of adding payments.
+        </p>
       </div>
       <form id="providerTopUpForm" class="grantForm">
         <label class="field grantField">
@@ -999,15 +976,22 @@ function renderProviderTopUpForm() {
           <select id="providerTopUpSelect" required>
             <option value="suno">Suno</option>
             <option value="elevenlabs">ElevenLabs</option>
-            <option value="gemini">Gemini (shared wallet)</option>
+            <option value="gemini">Gemini / Lyria (shared)</option>
             <option value="pollinations">Pollinations</option>
           </select>
         </label>
-        <label class="field grantField grantField--amount">
-          <span>USD</span>
-          <input id="providerTopUpUsd" type="number" min="0" step="0.01" placeholder="49.00" />
+        <label class="field grantField" id="providerTopUpActionWrap" hidden>
+          <span>Gemini entry type</span>
+          <select id="providerTopUpAction">
+            <option value="top_up">Add payment (top-up)</option>
+            <option value="balance_snapshot">Set balance from AI Studio</option>
+          </select>
         </label>
         <label class="field grantField grantField--amount">
+          <span id="providerTopUpUsdLabel">USD</span>
+          <input id="providerTopUpUsd" type="number" min="0" step="0.01" placeholder="49.00" />
+        </label>
+        <label class="field grantField grantField--amount" id="providerTopUpCreditsWrap">
           <span>Credits</span>
           <input id="providerTopUpCredits" type="number" min="0" step="1" placeholder="Suno only" />
         </label>
@@ -1015,7 +999,7 @@ function renderProviderTopUpForm() {
           <span>Note (optional)</span>
           <input id="providerTopUpNote" type="text" maxlength="500" placeholder="Invoice #, date, etc." />
         </label>
-        <button type="submit" class="btnPrimary">Save top-up</button>
+        <button type="submit" class="btnPrimary" id="providerTopUpSubmit">Save</button>
       </form>
       <p id="providerTopUpMsg" class="loginError" hidden></p>
     </section>`;
@@ -1072,8 +1056,8 @@ function renderProviders(data) {
         <p class="sectionNote">
           Per-provider upstream cost tracking. <strong>Suno guarantee &amp; Pro liability</strong> stay on Overview only.
           Music usage from generation logs; Gemini/Pollinations from API call logs.
-          <strong>Suno &amp; ElevenLabs balances are live from their APIs.</strong>
-          Gemini/Lyria need a one-time sync from AI Studio Billing (same wallet for both).
+          <strong>Suno &amp; ElevenLabs:</strong> live API balance.
+          <strong>Gemini &amp; Lyria:</strong> one shared wallet — Balance = your logged top-ups − tracked usage (Google has no live $ API).
           ${cacheNote}.
         </p>
       </div>
@@ -1089,7 +1073,6 @@ function renderProviders(data) {
         </table>
       </div>
     </section>
-    ${renderGeminiSyncForm()}
     ${renderProviderTopUpForm()}
     <section class="sectionCard">
       <div class="sectionHead">
@@ -1098,6 +1081,7 @@ function renderProviders(data) {
       ${renderRecentTopUps(spend.recentTopUps || [])}
     </section>
   `);
+  syncProviderTopUpFormUi();
 }
 
 function pagerHtml(total, offset) {
@@ -2022,17 +2006,25 @@ async function adminLogProviderTopUp({ provider, amountUsd, amountCredits, note,
   return data;
 }
 
-function setGeminiSyncMsg(text, kind = "ok") {
-  const el = document.getElementById("geminiSyncMsg");
-  if (!el) return;
-  if (!text) {
-    el.hidden = true;
-    el.textContent = "";
-    return;
+function syncProviderTopUpFormUi(form = document.getElementById("providerTopUpForm")) {
+  if (!form) return;
+  const provider = form.querySelector("#providerTopUpSelect")?.value || "";
+  const action = form.querySelector("#providerTopUpAction")?.value || "top_up";
+  const isGemini = provider === "gemini";
+  const actionWrap = form.querySelector("#providerTopUpActionWrap");
+  const creditsWrap = form.querySelector("#providerTopUpCreditsWrap");
+  const usdLabel = form.querySelector("#providerTopUpUsdLabel");
+  const submit = form.querySelector("#providerTopUpSubmit");
+  if (actionWrap) actionWrap.hidden = !isGemini;
+  if (creditsWrap) creditsWrap.hidden = isGemini;
+  if (usdLabel) {
+    usdLabel.textContent = isGemini && action === "balance_snapshot"
+      ? "Current AI Studio balance (USD)"
+      : "USD";
   }
-  el.hidden = false;
-  el.textContent = text;
-  el.style.color = kind === "err" ? "#fca5a5" : kind === "warn" ? "#fcd34d" : "#86efac";
+  if (submit) {
+    submit.textContent = isGemini && action === "balance_snapshot" ? "Set balance" : "Save top-up";
+  }
 }
 
 function setProviderTopUpMsg(text, kind = "ok") {
@@ -2535,51 +2527,27 @@ document.body.addEventListener("submit", (e) => {
     return;
   }
 
-  const geminiSyncForm = e.target.closest("#geminiSyncForm");
-  if (geminiSyncForm) {
-    e.preventDefault();
-    void (async () => {
-      const usdRaw = geminiSyncForm.querySelector("#geminiSyncUsd")?.value;
-      const note = String(geminiSyncForm.querySelector("#geminiSyncNote")?.value || "").trim();
-      const amountUsd = usdRaw !== "" && usdRaw != null ? Number(usdRaw) : null;
-      if (amountUsd == null || !Number.isFinite(amountUsd) || amountUsd < 0) {
-        setGeminiSyncMsg("Enter your current AI Studio prepay balance (USD, ≥ 0).", "warn");
-        return;
-      }
-      setGeminiSyncMsg("Syncing…", "warn");
-      try {
-        await adminLogProviderTopUp({
-          provider: "gemini",
-          eventType: "balance_snapshot",
-          amountUsd,
-          note,
-        });
-        geminiSyncForm.reset();
-        state.cache = {};
-        if (state.view === "providers" || state.view === "suno") {
-          await loadView({ force: true });
-        }
-        setGeminiSyncMsg("Balance synced — Lyria and Gemini rows updated.", "ok");
-      } catch (err) {
-        setGeminiSyncMsg(err?.message || "Sync failed", "err");
-      }
-    })();
-    return;
-  }
-
   const providerTopUpForm = e.target.closest("#providerTopUpForm");
   if (providerTopUpForm) {
     e.preventDefault();
     void (async () => {
       const provider = providerTopUpForm.querySelector("#providerTopUpSelect")?.value || "";
+      const action = providerTopUpForm.querySelector("#providerTopUpAction")?.value || "top_up";
+      const eventType = provider === "gemini" ? action : "top_up";
       const usdRaw = providerTopUpForm.querySelector("#providerTopUpUsd")?.value;
       const creditsRaw = providerTopUpForm.querySelector("#providerTopUpCredits")?.value;
       const note = String(providerTopUpForm.querySelector("#providerTopUpNote")?.value || "").trim();
       const amountUsd = usdRaw !== "" && usdRaw != null ? Number(usdRaw) : null;
       const amountCredits = creditsRaw !== "" && creditsRaw != null ? Number(creditsRaw) : null;
-      const hasUsd = amountUsd != null && Number.isFinite(amountUsd) && amountUsd > 0;
+      const hasUsd = amountUsd != null && Number.isFinite(amountUsd)
+        && (eventType === "balance_snapshot" ? amountUsd >= 0 : amountUsd > 0);
       const hasCredits = amountCredits != null && Number.isFinite(amountCredits) && amountCredits > 0;
-      if (!hasUsd && !hasCredits) {
+      if (eventType === "balance_snapshot") {
+        if (!hasUsd) {
+          setProviderTopUpMsg("Enter your current AI Studio prepay balance (USD, ≥ 0).", "warn");
+          return;
+        }
+      } else if (!hasUsd && !hasCredits) {
         setProviderTopUpMsg("Enter USD and/or credits (must be > 0).", "warn");
         return;
       }
@@ -2587,16 +2555,23 @@ document.body.addEventListener("submit", (e) => {
       try {
         await adminLogProviderTopUp({
           provider,
+          eventType,
           amountUsd: hasUsd ? amountUsd : null,
           amountCredits: hasCredits ? amountCredits : null,
           note,
         });
         providerTopUpForm.reset();
+        syncProviderTopUpFormUi(providerTopUpForm);
         state.cache = {};
         if (state.view === "providers" || state.view === "suno") {
           await loadView({ force: true });
         }
-        setProviderTopUpMsg("Top-up saved.", "ok");
+        setProviderTopUpMsg(
+          eventType === "balance_snapshot"
+            ? "Balance set — Gemini and Lyria rows updated."
+            : "Top-up saved — Balance column updated.",
+          "ok",
+        );
       } catch (err) {
         setProviderTopUpMsg(err?.message || "Save failed", "err");
       }
@@ -2893,6 +2868,10 @@ document.body.addEventListener("click", (e) => {
 });
 
 document.body.addEventListener("change", (e) => {
+  if (e.target.id === "providerTopUpSelect" || e.target.id === "providerTopUpAction") {
+    syncProviderTopUpFormUi();
+    return;
+  }
   const select = e.target.closest(".teamRoleSelect[data-team-email]");
   if (!select || select.closest("#teamInviteForm")) return;
   const email = select.dataset.teamEmail;

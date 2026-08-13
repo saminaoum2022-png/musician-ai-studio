@@ -165,8 +165,12 @@ function mergeProviderSpend({ catalogIds = PROVIDER_SPEND_IDS, spendByProvider =
       }
     } else if (live?.source === "snapshot" && live.label) {
       balanceLabel = live.label;
-      balanceDetail = live.detail || "Synced from AI Studio − tracked usage";
+      balanceDetail = live.detail || "Set from AI Studio − tracked usage since";
       balanceSource = "snapshot";
+    } else if (live?.source === "ledger" && live.label) {
+      balanceLabel = live.label;
+      balanceDetail = live.detail || "Top-ups − tracked usage";
+      balanceSource = "ledger";
     } else if (live?.source === "dashboard_only" && live.label) {
       balanceLabel = live.label;
       balanceDetail = live.detail || "Check vendor billing portal";

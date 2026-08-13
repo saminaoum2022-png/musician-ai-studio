@@ -459,6 +459,21 @@ button, input { font: inherit; }
   line-height: 1.45;
 }
 
+.genDetailPrompt {
+  margin: 0;
+  padding: 14px 16px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: rgba(0, 0, 0, 0.22);
+  color: var(--text);
+  font-size: 0.84rem;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 280px;
+  overflow: auto;
+}
+
 .sectionCard--data .sectionHead {
   padding: 20px 22px 0;
 }

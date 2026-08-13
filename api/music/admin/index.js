@@ -358,6 +358,27 @@ function cleanUserId(v) {
   return /^[0-9a-f-]{36}$/.test(s) ? s : "";
 }
 
+function cleanGenerationId(v) {
+  return cleanUserId(v);
+}
+
+function kindCreditReasons(kind) {
+  const k = String(kind || "").toLowerCase();
+  const map = {
+    song: ["full_song", "refund_full_song"],
+    photo: ["full_song", "refund_full_song"],
+    hum_track: ["full_song", "refund_full_song"],
+    instrumental: ["full_song", "refund_full_song"],
+    music_video: ["full_song", "refund_full_song"],
+    studio_guide: ["full_song", "refund_full_song"],
+    stems: ["stems", "refund_stems"],
+    persona: ["persona", "refund_persona"],
+    sound: ["sound", "refund_sound"],
+    mashup: ["mashup", "refund_mashup"],
+  };
+  return map[k] || [k, `refund_${k}`];
+}
+
 async function fetchProfilesForAdmin(limit, offset) {
   const baseSelect = "user_id,username,display_name,role,last_active_at,created_at";
   const order = `order=created_at.desc&limit=${limit}&offset=${offset}`;
@@ -820,7 +841,7 @@ async function getUserDetail(userIdInput, search = "") {
     serviceFetch(`pro_subscriptions?select=provider,plan_id,status,current_period_end,provider_subscription_id,created_at,updated_at&user_id=eq.${enc}&limit=1`),
     serviceFetch(`billing_events?select=id,provider,event_type,plan_id,product_id,credits_granted,created_at&user_id=eq.${enc}&order=created_at.desc&limit=50`),
     serviceFetch(`credits_transactions?select=delta,balance_before,balance_after,reason,ref,created_at&user_id=eq.${enc}&order=created_at.desc&limit=40`),
-    serviceFetch(`music_generation_logs?select=kind,provider,status,credits_used,error_message,created_at&user_id=eq.${enc}&order=created_at.desc&limit=15`),
+    serviceFetch(`music_generation_logs?select=id,kind,provider,status,credits_used,error_message,created_at&user_id=eq.${enc}&order=created_at.desc&limit=15`),
     serviceFetch(`user_songs?select=id,title,created_at,public_on_profile&user_id=eq.${enc}&order=created_at.desc&limit=12`),
   ]);
 
@@ -857,6 +878,7 @@ async function getUserDetail(userIdInput, search = "") {
   }));
 
   const generations = (Array.isArray(gensRes.data) ? gensRes.data : []).map((row) => ({
+    id: row.id,
     kind: row.kind || "",
     provider: row.provider || "",
     status: row.status || "",
@@ -918,6 +940,107 @@ async function getUserDetail(userIdInput, search = "") {
   };
 }
 
+async function getGenerationDetail(generationIdInput) {
+  const gid = cleanGenerationId(generationIdInput);
+  if (!gid) {
+    return { generation: null, error: "generation_not_found" };
+  }
+
+  const enc = encodeURIComponent(gid);
+  const logRes = await serviceFetch(
+    `music_generation_logs?select=id,user_id,task_id,kind,provider,prompt,status,credits_used,provider_cost_usd,error_message,created_at,completed_at&id=eq.${enc}&limit=1`,
+  );
+  const row = Array.isArray(logRes.data) && logRes.data[0] ? logRes.data[0] : null;
+  if (!row) {
+    return { generation: null, error: "generation_not_found" };
+  }
+
+  const uid = row.user_id;
+  const taskId = String(row.task_id || "").trim();
+  const createdMs = Date.parse(String(row.created_at || ""));
+  const completedMs = Date.parse(String(row.completed_at || ""));
+  const anchorMs = Number.isFinite(completedMs) ? completedMs : (Number.isFinite(createdMs) ? createdMs : Date.now());
+  const windowStart = new Date(anchorMs - 15 * 60000).toISOString();
+  const windowEnd = new Date(anchorMs + 15 * 60000).toISOString();
+  const uidEnc = encodeURIComponent(uid);
+  const allowedReasons = new Set(kindCreditReasons(row.kind));
+
+  const [authMap, profRes, ledgerRes, songsRes] = await Promise.all([
+    fetchAuthUsersMap(),
+    serviceFetch(`profiles?select=user_id,username,display_name&user_id=eq.${uidEnc}&limit=1`),
+    serviceFetch(
+      `credits_transactions?select=delta,balance_before,balance_after,reason,ref,created_at&user_id=eq.${uidEnc}&created_at=gte.${encodeURIComponent(windowStart)}&created_at=lte.${encodeURIComponent(windowEnd)}&order=created_at.desc&limit=30`,
+    ),
+    taskId
+      ? serviceFetch(
+          `user_songs?select=id,title,song_url,art_url,task_id,audio_id,kind,public_on_profile,created_at&task_id=eq.${encodeURIComponent(taskId)}&order=created_at.desc&limit=6`,
+        )
+      : Promise.resolve({ data: [] }),
+  ]);
+
+  const prof = Array.isArray(profRes.data) && profRes.data[0] ? profRes.data[0] : null;
+  const auth = authMap.get(uid) || {};
+  const name = String(prof?.display_name || prof?.username || "—").trim() || "—";
+
+  const ledgerAll = (Array.isArray(ledgerRes.data) ? ledgerRes.data : []).map((tx) => ({
+    delta: Number(tx.delta || 0),
+    balanceBefore: Number(tx.balance_before || 0),
+    balanceAfter: Number(tx.balance_after || 0),
+    reason: tx.reason || "",
+    ref: tx.ref || "",
+    createdAt: tx.created_at,
+  }));
+
+  const ledger = ledgerAll.filter((tx) => {
+    if (allowedReasons.has(tx.reason)) return true;
+    if (taskId && tx.ref && String(tx.ref).includes(taskId)) return true;
+    return false;
+  });
+
+  const songs = (Array.isArray(songsRes.data) ? songsRes.data : []).map((s) => {
+    const songId = s.id;
+    return {
+      id: songId,
+      title: String(s.title || "Untitled").trim() || "Untitled",
+      songUrl: String(s.song_url || "").trim(),
+      artUrl: String(s.art_url || "").trim(),
+      taskId: String(s.task_id || "").trim(),
+      audioId: String(s.audio_id || "").trim(),
+      kind: String(s.kind || "").trim(),
+      publicOnProfile: Boolean(s.public_on_profile),
+      createdAt: s.created_at,
+      shareUrl: songId ? `https://www.nabadai.com/s/${encodeURIComponent(songId)}` : "",
+    };
+  });
+
+  const durationMs = Number.isFinite(completedMs) && Number.isFinite(createdMs)
+    ? completedMs - createdMs
+    : null;
+
+  return {
+    generation: {
+      id: row.id,
+      userId: uid,
+      userLabel: name,
+      username: prof?.username || "",
+      email: auth.email || "",
+      taskId,
+      kind: row.kind || "",
+      provider: row.provider || "",
+      prompt: row.prompt || "",
+      status: row.status || "",
+      creditsUsed: Number(row.credits_used || 0),
+      providerCostUsd: row.provider_cost_usd != null ? Number(row.provider_cost_usd) : null,
+      errorMessage: row.error_message || "",
+      createdAt: row.created_at,
+      completedAt: row.completed_at,
+      durationMs,
+    },
+    ledger,
+    songs,
+  };
+}
+
 async function getSunoPanel() {
   const [masterSuno, summaryRpc, recentGens] = await Promise.all([
     fetchSunoMasterBalance(),
@@ -971,8 +1094,9 @@ module.exports = async function handler(req, res) {
   const offset = clampInt(url.searchParams.get("offset"), 0, 100000, 0);
   const search = String(url.searchParams.get("search") || "").trim();
   const userId = String(url.searchParams.get("userId") || "").trim();
+  const generationId = String(url.searchParams.get("generationId") || "").trim();
 
-  const adminView = view === "user" ? "user" : view;
+  const adminView = view === "user" ? "user" : view === "generation" ? "generation" : view;
   const admin = await verifyAdmin(req, { view: adminView === "session" ? null : adminView });
   if (!admin) {
     const user = await verifyUser(req);
@@ -1023,6 +1147,8 @@ module.exports = async function handler(req, res) {
       payload = { ...payload, ...(await getBillingEvents(limit, offset, search)) };
     } else if (view === "user") {
       payload = { ...payload, ...(await getUserDetail(userId, search)) };
+    } else if (view === "generation") {
+      payload = { ...payload, ...(await getGenerationDetail(generationId)) };
     } else if (view === "publications") {
       payload = { ...payload, ...(await getPublications(limit, offset)) };
     } else if (view === "promos") {
@@ -1032,7 +1158,7 @@ module.exports = async function handler(req, res) {
     } else {
       return sendJson(res, 400, {
         error: "Unknown view",
-        allowed: ["session", "settings", "overview", "users", "user", "credits", "promos", "generations", "subscriptions", "billing", "publications", "suno"],
+        allowed: ["session", "settings", "overview", "users", "user", "credits", "promos", "generations", "generation", "subscriptions", "billing", "publications", "suno"],
       });
     }
     return sendJson(res, 200, payload);

@@ -17,6 +17,7 @@ const state = {
   userSearch: "",
   billingSearch: "",
   userDetailId: "",
+  generationDetailId: "",
   returnView: "users",
   grantPrefillEmail: "",
   cache: {},
@@ -50,6 +51,7 @@ const els = {
     suno: document.getElementById("viewSuno"),
     users: document.getElementById("viewUsers"),
     user: document.getElementById("viewUser"),
+    generation: document.getElementById("viewGeneration"),
     credits: document.getElementById("viewCredits"),
     promos: document.getElementById("viewPromos"),
     generations: document.getElementById("viewGenerations"),
@@ -66,6 +68,7 @@ const VIEW_META = {
   suno: { title: "Suno bucket", sub: "Master API credits vs user liability" },
   users: { title: "Users", sub: "Signups, activity, balances, and songs" },
   user: { title: "User detail", sub: "Credits, subscription, billing, and activity" },
+  generation: { title: "Generation detail", sub: "Prompt, status, credits, and saved output" },
   credits: { title: "Credits", sub: "Grant paid credits and view every ledger entry" },
   promos: { title: "Promo codes", sub: "Create and monitor redemption codes" },
   generations: { title: "Generations", sub: "Song and audio generation requests" },
@@ -492,7 +495,7 @@ async function refreshSessionIfNeeded() {
   return true;
 }
 
-async function adminFetch(view, { offset = 0, limit = PAGE_SIZE, search = "", userId = "" } = {}) {
+async function adminFetch(view, { offset = 0, limit = PAGE_SIZE, search = "", userId = "", generationId = "" } = {}) {
   await refreshSessionIfNeeded();
   const token = state.session?.access_token;
   if (!token) throw new Error("Not signed in");
@@ -501,6 +504,8 @@ async function adminFetch(view, { offset = 0, limit = PAGE_SIZE, search = "", us
   if (trimmedSearch.length >= 2) qs.set("search", trimmedSearch);
   const trimmedUserId = String(userId || "").trim();
   if (trimmedUserId) qs.set("userId", trimmedUserId);
+  const trimmedGenerationId = String(generationId || "").trim();
+  if (trimmedGenerationId) qs.set("generationId", trimmedGenerationId);
   const r = await fetch(`/api/music/admin?${qs}`, {
     headers: { Authorization: `Bearer ${token}` },
   });
@@ -532,6 +537,7 @@ function canAccessView(view) {
   const allowed = state.adminSession?.allowedViews;
   if (!Array.isArray(allowed) || !allowed.length) return true;
   if (view === "user") return allowed.includes("user") || allowed.includes("users");
+  if (view === "generation") return allowed.includes("generation") || allowed.includes("generations");
   return allowed.includes(view);
 }
 
@@ -550,6 +556,25 @@ function openUserDetail(userId, returnView = "users") {
   }
   for (const [key, panel] of Object.entries(els.panels)) {
     panel.hidden = key !== "user";
+  }
+  void loadView({ force: true });
+}
+
+function openGenerationDetail(generationId, returnView = "generations") {
+  const gid = String(generationId || "").trim();
+  if (!gid) return;
+  state.generationDetailId = gid;
+  state.returnView = returnView || "generations";
+  state.view = "generation";
+  state.offset = 0;
+  const meta = VIEW_META.generation;
+  els.pageTitle.textContent = meta.title;
+  els.pageSub.textContent = meta.sub;
+  for (const btn of els.navItems) {
+    btn.classList.toggle("isActive", false);
+  }
+  for (const [key, panel] of Object.entries(els.panels)) {
+    panel.hidden = key !== "generation";
   }
   void loadView({ force: true });
 }
@@ -590,6 +615,9 @@ function viewCacheKey() {
   }
   if (state.view === "user" && state.userDetailId) {
     key += `:uid:${state.userDetailId}`;
+  }
+  if (state.view === "generation" && state.generationDetailId) {
+    key += `:gid:${state.generationDetailId}`;
   }
   return key;
 }
@@ -824,10 +852,25 @@ function pagerHtml(total, offset) {
   `;
 }
 
+function fmtDurationMs(ms) {
+  const v = Number(ms);
+  if (!Number.isFinite(v) || v < 0) return "—";
+  if (v < 60000) return `${Math.round(v / 1000)}s`;
+  const m = Math.floor(v / 60000);
+  const s = Math.round((v % 60000) / 1000);
+  return `${m}m ${s}s`;
+}
+
 function userViewButton(userId, returnView = "users", label = "View") {
   const uid = String(userId || "").trim();
   if (!uid) return "—";
   return `<button type="button" class="btnGhost btnGhost--sm" data-user-view="${escapeHtml(uid)}" data-return-view="${escapeHtml(returnView)}">${label}</button>`;
+}
+
+function generationViewButton(generationId, returnView = "generations", label = "View") {
+  const gid = String(generationId || "").trim();
+  if (!gid) return "—";
+  return `<button type="button" class="btnGhost btnGhost--sm" data-generation-view="${escapeHtml(gid)}" data-return-view="${escapeHtml(returnView)}">${label}</button>`;
 }
 
 function renderUserDetail(data) {
@@ -891,8 +934,9 @@ function renderUserDetail(data) {
         <td>${escapeHtml(g.kind || "—")}</td>
         <td><span class="badge ${escapeHtml(g.status || "")}">${escapeHtml(g.status || "—")}</span></td>
         <td class="num">${fmtNum(g.creditsUsed, 1)}</td>
+        <td>${generationViewButton(g.id, "user")}</td>
       </tr>`).join("")
-    : `<tr><td colspan="4" class="loading">No generations logged.</td></tr>`;
+    : `<tr><td colspan="5" class="loading">No generations logged.</td></tr>`;
 
   const songRows = data.songs || [];
   const songBody = songRows.length
@@ -946,7 +990,7 @@ function renderUserDetail(data) {
     ${dataPanel({
       title: "Recent generations",
       tableHtml: `<div class="tableWrap"><table><thead><tr>
-        <th>When</th><th>Kind</th><th>Status</th><th>Credits</th>
+        <th>When</th><th>Kind</th><th>Status</th><th>Credits</th><th></th>
       </tr></thead><tbody>${genBody}</tbody></table></div>`,
     })}
     ${dataPanel({
@@ -959,6 +1003,118 @@ function renderUserDetail(data) {
 
   els.pageTitle.textContent = u.name || "User detail";
   els.pageSub.textContent = u.email || u.username || VIEW_META.user.sub;
+}
+
+function renderGenerationDetail(data) {
+  const g = data?.generation;
+  const panel = els.panels.generation;
+  if (!g) {
+    panel.innerHTML = adminPageStack(`
+      <section class="sectionCard">
+        <p class="sectionNote">Generation not found.</p>
+        <button type="button" class="btnGhost" id="btnGenerationDetailBack">← Back</button>
+      </section>
+    `);
+    return;
+  }
+
+  const errorBlock = g.errorMessage
+    ? `<div class="userDetailAlert">${escapeHtml(g.errorMessage)}</div>`
+    : "";
+
+  const promptBlock = g.prompt
+    ? `<pre class="genDetailPrompt">${escapeHtml(g.prompt)}</pre>`
+    : `<p class="sectionNote">No prompt stored for this log entry.</p>`;
+
+  const ledgerRows = data.ledger || [];
+  const ledgerBody = ledgerRows.length
+    ? ledgerRows.map((row) => `<tr>
+        <td>${fmtDate(row.createdAt)}</td>
+        <td class="num">${row.delta >= 0 ? "+" : ""}${fmtNum(row.delta, 1)}</td>
+        <td class="num">${fmtNum(row.balanceAfter, 1)}</td>
+        <td>${fmtReason(row.reason)}</td>
+        <td style="font-size:0.78rem;color:var(--muted)">${escapeHtml(String(row.ref || "").slice(0, 48))}</td>
+      </tr>`).join("")
+    : `<tr><td colspan="5" class="loading">No matching credit transactions in the ±15 minute window.</td></tr>`;
+
+  const songRows = data.songs || [];
+  const songBody = songRows.length
+    ? songRows.map((s) => {
+      const links = [
+        s.songUrl ? `<a href="${escapeHtml(s.songUrl)}" target="_blank" rel="noopener noreferrer">Audio</a>` : "",
+        s.shareUrl ? `<a href="${escapeHtml(s.shareUrl)}" target="_blank" rel="noopener noreferrer">Share</a>` : "",
+      ].filter(Boolean).join(" · ");
+      return `<tr>
+        <td>${escapeHtml(s.title || "Untitled")}</td>
+        <td>${escapeHtml(s.kind || "—")}</td>
+        <td>${s.publicOnProfile ? `<span class="badge active">public</span>` : "—"}</td>
+        <td class="pubLinks">${links || "—"}</td>
+        <td>${fmtDate(s.createdAt)}</td>
+      </tr>`;
+    }).join("")
+    : `<tr><td colspan="5" class="loading">${g.taskId ? "No saved songs linked to this task yet." : "No provider task ID on this log."}</td></tr>`;
+
+  const userBtn = g.userId
+    ? `<button type="button" class="btnGhost" id="btnGenerationDetailViewUser" data-user-view="${escapeHtml(g.userId)}" data-return-view="generation">View user</button>`
+    : "";
+
+  panel.innerHTML = adminPageStack(`
+    <section class="sectionCard sectionCard--toolbar">
+      <div class="userDetailToolbar">
+        <button type="button" class="btnGhost" id="btnGenerationDetailBack">← Back</button>
+        <div class="userDetailActions">${userBtn}</div>
+      </div>
+      ${errorBlock}
+      <div class="sectionHead" style="margin-top:12px">
+        <h3 class="sectionTitle">
+          <span class="badge ${escapeHtml(g.status || "")}">${escapeHtml(g.status || "—")}</span>
+          ${escapeHtml(g.kind || "generation")} · ${escapeHtml(g.provider || "—")}
+        </h3>
+        <p class="sectionNote">
+          ${escapeHtml(g.userLabel || "—")}${g.username ? ` · @${escapeHtml(g.username)}` : ""}${g.email ? ` · ${escapeHtml(g.email)}` : ""}
+        </p>
+      </div>
+      <div class="cardsGrid cardsGrid--inSection">
+        ${statCard("Credits", fmtNum(g.creditsUsed, 1), g.status === "refunded" ? "Refunded to user" : "")}
+        ${statCard("Provider cost", g.providerCostUsd != null ? fmtUsd(g.providerCostUsd) : "—", "Estimate from Suno rate")}
+        ${statCard("Duration", fmtDurationMs(g.durationMs), g.completedAt ? `Finished ${fmtDate(g.completedAt)}` : "Still pending")}
+        ${statCard("Started", fmtDate(g.createdAt), g.taskId ? `Task ${g.taskId.slice(0, 20)}…` : "No task ID")}
+      </div>
+    </section>
+    <section class="sectionCard">
+      <div class="sectionHead">
+        <h3 class="sectionTitle">Prompt</h3>
+        <p class="sectionNote">What we stored when the request was logged.</p>
+      </div>
+      ${promptBlock}
+    </section>
+    ${dataPanel({
+      title: "Saved songs",
+      note: "Songs in the library linked to the same provider task ID.",
+      tableHtml: `<div class="tableWrap"><table><thead><tr>
+        <th>Title</th><th>Kind</th><th>Public</th><th>Links</th><th>Created</th>
+      </tr></thead><tbody>${songBody}</tbody></table></div>`,
+    })}
+    ${dataPanel({
+      title: "Credit transactions",
+      note: "Debits and refunds near this generation time.",
+      tableHtml: `<div class="tableWrap"><table><thead><tr>
+        <th>When</th><th>Delta</th><th>Balance</th><th>Reason</th><th>Ref</th>
+      </tr></thead><tbody>${ledgerBody}</tbody></table></div>`,
+    })}
+    <section class="sectionCard">
+      <div class="sectionHead"><h3 class="sectionTitle">Identifiers</h3></div>
+      <p class="sectionNote">
+        Log ID <code class="promoCode">${escapeHtml(g.id)}</code><br>
+        User ID <code class="promoCode">${escapeHtml(g.userId || "—")}</code><br>
+        Task ID <code class="promoCode">${escapeHtml(g.taskId || "—")}</code>
+      </p>
+    </section>
+  `);
+
+  const titleBits = [g.kind, g.status].filter(Boolean).join(" · ");
+  els.pageTitle.textContent = titleBits || "Generation detail";
+  els.pageSub.textContent = g.userLabel || g.email || VIEW_META.generation.sub;
 }
 
 function renderUsers(data) {
@@ -1205,9 +1361,10 @@ function renderGenerations(data) {
         <td class="num">${fmtNum(g.creditsUsed, 1)}</td>
         <td class="num">${g.providerCostUsd != null ? fmtUsd(g.providerCostUsd) : "—"}</td>
         <td>${fmtDate(g.createdAt)}</td>
+        <td>${generationViewButton(g.id, "generations")}</td>
       </tr>
     `).join("")
-    : `<tr><td colspan="8" class="loading">No generation logs yet</td></tr>`;
+    : `<tr><td colspan="9" class="loading">No generation logs yet</td></tr>`;
 
   els.panels.generations.innerHTML = adminPageStack(dataPanel({
     title: "Generation log",
@@ -1218,7 +1375,7 @@ function renderGenerations(data) {
         <thead>
           <tr>
             <th>User</th><th>Prompt</th><th>Provider</th><th>Kind</th>
-            <th>Status</th><th>Credits</th><th>Cost</th><th>Date</th>
+            <th>Status</th><th>Credits</th><th>Cost</th><th>Date</th><th></th>
           </tr>
         </thead>
         <tbody>${body}</tbody>
@@ -1585,6 +1742,7 @@ const RENDERERS = {
   suno: renderSuno,
   users: renderUsers,
   user: renderUserDetail,
+  generation: renderGenerationDetail,
   credits: renderCredits,
   promos: renderPromos,
   generations: renderGenerations,
@@ -1603,6 +1761,7 @@ function setView(view) {
   if (view !== "users") state.userSearch = "";
   if (view !== "billing") state.billingSearch = "";
   if (view !== "user") state.userDetailId = "";
+  if (view !== "generation") state.generationDetailId = "";
   const meta = VIEW_META[view] || VIEW_META.overview;
   els.pageTitle.textContent = meta.title;
   els.pageSub.textContent = meta.sub;
@@ -1791,6 +1950,7 @@ async function loadView({ force = false } = {}) {
           ? state.billingSearch
           : "",
       userId: view === "user" ? state.userDetailId : "",
+      generationId: view === "generation" ? state.generationDetailId : "",
     });
     if (view === "settings" && state.adminSession?.canManageTeam) {
       try {
@@ -2241,6 +2401,22 @@ document.body.addEventListener("click", (e) => {
     state.grantPrefillEmail = userDetailGrant.dataset.grantEmail || "";
     setView("credits");
     void loadView({ force: true });
+    return;
+  }
+
+  const generationViewBtn = e.target.closest("[data-generation-view]");
+  if (generationViewBtn) {
+    const gid = generationViewBtn.dataset.generationView;
+    const returnView = generationViewBtn.dataset.returnView || "generations";
+    if (gid) openGenerationDetail(gid, returnView);
+    return;
+  }
+
+  const generationDetailBack = e.target.closest("#btnGenerationDetailBack");
+  if (generationDetailBack) {
+    const returnView = state.returnView || "generations";
+    setView(returnView);
+    void loadView();
     return;
   }
 

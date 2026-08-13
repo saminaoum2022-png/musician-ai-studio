@@ -137,6 +137,9 @@
             <button type="button" class="navItem" data-view="subscriptions">
               <span class="navIcon" aria-hidden="true">◆</span><span>Subscriptions</span>
             </button>
+            <button type="button" class="navItem" data-view="billing">
+              <span class="navIcon" aria-hidden="true">⟳</span><span>Billing events</span>
+            </button>
           </div>
           <div class="navGroup" data-nav-group="settings">
             <div class="navGroupLabel">Settings</div>
@@ -172,12 +175,13 @@
         <div id="viewGenerations" class="viewPanel" data-panel="generations" hidden></div>
         <div id="viewPublications" class="viewPanel" data-panel="publications" hidden></div>
         <div id="viewSubscriptions" class="viewPanel" data-panel="subscriptions" hidden></div>
+        <div id="viewBilling" class="viewPanel" data-panel="billing" hidden></div>
         <div id="viewSettings" class="viewPanel" data-panel="settings" hidden></div>
 
         <div id="globalError" class="globalError" hidden></div>
       </main>
     </div>
 
-    <script type="module" src="/admin/app.js?v=20260813-user-search-fix"></script>
+    <script type="module" src="/admin/app.js?v=20260813-billing-events"></script>
   </body>
 </html>

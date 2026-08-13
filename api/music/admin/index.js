@@ -1,5 +1,5 @@
 /**
- * GET /api/music/admin?view=overview|users|credits|promos|generations|publications|subscriptions|suno
+ * GET /api/music/admin?view=overview|users|credits|promos|generations|publications|subscriptions|billing|suno
  *
  * Admin-only analytics for admin.nabadai.com.
  * Auth: Authorization: Bearer <supabase access_token>
@@ -8,7 +8,7 @@
  *   view       — section (default overview)
  *   limit      — pagination (default 50, max 200)
  *   offset     — pagination offset
- *   search     — users view only: email, @username, or display name
+ *   search     — users / billing views: email, @username, or display name
  */
 
 const {
@@ -707,6 +707,94 @@ async function getSubscriptions(limit, offset) {
   return { subscriptions, total: res.total ?? subscriptions.length };
 }
 
+function billingEventTypeLabel(eventType) {
+  const t = String(eventType || "").trim().toUpperCase();
+  const map = {
+    INITIAL_PURCHASE: "Initial purchase",
+    RENEWAL: "Renewal",
+    PRODUCT_CHANGE: "Plan change",
+    UNCANCELLATION: "Reactivated",
+  };
+  return map[t] || (t || "—");
+}
+
+async function getBillingSummary() {
+  const weekAgo = new Date(Date.now() - 7 * 86400000).toISOString();
+  const res = await serviceFetch(
+    `billing_events?select=credits_granted,event_type,created_at&created_at=gte.${encodeURIComponent(weekAgo)}&order=created_at.desc&limit=1000`,
+  );
+  const rows = Array.isArray(res.data) ? res.data : [];
+  let creditsGranted = 0;
+  let eventCount = rows.length;
+  let renewalCount = 0;
+  for (const row of rows) {
+    creditsGranted += Number(row.credits_granted || 0);
+    if (String(row.event_type || "").toUpperCase() === "RENEWAL") renewalCount += 1;
+  }
+  return {
+    windowDays: 7,
+    eventCount,
+    renewalCount,
+    creditsGranted: Math.round(creditsGranted * 10) / 10,
+  };
+}
+
+async function getBillingEvents(limit, offset, search) {
+  const authMap = await fetchAuthUsersMap();
+  const summary = await getBillingSummary();
+  const q = String(search || "").trim();
+  let path = `billing_events?select=id,user_id,provider,event_type,plan_id,product_id,credits_granted,created_at&order=created_at.desc&limit=${limit}&offset=${offset}`;
+
+  if (q.length >= 2) {
+    const ids = await adminSearchUserIds(q, { authMap, limit: 100 });
+    if (!ids.length) {
+      return { billingEvents: [], total: 0, search: q, summary };
+    }
+    const inClause = ids.map((id) => encodeURIComponent(id)).join(",");
+    path = `billing_events?select=id,user_id,provider,event_type,plan_id,product_id,credits_granted,created_at&user_id=in.(${inClause})&order=created_at.desc&limit=${limit}&offset=${offset}`;
+  }
+
+  const res = await serviceFetch(path);
+  const rows = Array.isArray(res.data) ? res.data : [];
+  const ids = rows.map((r) => r.user_id).filter(Boolean);
+  let profileMap = new Map();
+  if (ids.length) {
+    const inClause = ids.map((id) => encodeURIComponent(id)).join(",");
+    const prof = await serviceFetch(
+      `profiles?select=user_id,username,display_name&user_id=in.(${inClause})`,
+    );
+    for (const p of Array.isArray(prof.data) ? prof.data : []) {
+      profileMap.set(p.user_id, p);
+    }
+  }
+
+  const billingEvents = rows.map((r) => {
+    const p = profileMap.get(r.user_id) || {};
+    const auth = authMap.get(r.user_id) || {};
+    const eventType = String(r.event_type || "").trim();
+    return {
+      id: r.id,
+      userId: r.user_id,
+      userLabel: String(p.display_name || p.username || "—"),
+      email: auth.email || "",
+      provider: r.provider || "—",
+      eventType,
+      eventTypeLabel: billingEventTypeLabel(eventType),
+      planId: r.plan_id || "",
+      productId: r.product_id || "",
+      creditsGranted: Number(r.credits_granted || 0),
+      createdAt: r.created_at,
+    };
+  });
+
+  return {
+    billingEvents,
+    total: res.total ?? billingEvents.length,
+    search: q.length >= 2 ? q : "",
+    summary,
+  };
+}
+
 async function getSunoPanel() {
   const [masterSuno, summaryRpc, recentGens] = await Promise.all([
     fetchSunoMasterBalance(),
@@ -806,6 +894,8 @@ module.exports = async function handler(req, res) {
       payload = { ...payload, ...(await getGenerations(limit, offset)) };
     } else if (view === "subscriptions") {
       payload = { ...payload, ...(await getSubscriptions(limit, offset)) };
+    } else if (view === "billing") {
+      payload = { ...payload, ...(await getBillingEvents(limit, offset, search)) };
     } else if (view === "publications") {
       payload = { ...payload, ...(await getPublications(limit, offset)) };
     } else if (view === "promos") {
@@ -815,7 +905,7 @@ module.exports = async function handler(req, res) {
     } else {
       return sendJson(res, 400, {
         error: "Unknown view",
-        allowed: ["session", "settings", "overview", "users", "credits", "promos", "generations", "subscriptions", "publications", "suno"],
+        allowed: ["session", "settings", "overview", "users", "credits", "promos", "generations", "subscriptions", "billing", "publications", "suno"],
       });
     }
     return sendJson(res, 200, payload);

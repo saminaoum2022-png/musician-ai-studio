@@ -15,6 +15,7 @@ const state = {
   view: "overview",
   offset: 0,
   userSearch: "",
+  billingSearch: "",
   cache: {},
   recoveryTokenHash: "",
 };
@@ -50,6 +51,7 @@ const els = {
     generations: document.getElementById("viewGenerations"),
     publications: document.getElementById("viewPublications"),
     subscriptions: document.getElementById("viewSubscriptions"),
+    billing: document.getElementById("viewBilling"),
     settings: document.getElementById("viewSettings"),
   },
   navItems: [...document.querySelectorAll(".navItem")],
@@ -64,6 +66,7 @@ const VIEW_META = {
   generations: { title: "Generations", sub: "Song and audio generation requests" },
   publications: { title: "Publications", sub: "Public profile posts — moderation view (not friends-only)" },
   subscriptions: { title: "Subscriptions", sub: "NabadAi Pro status by user" },
+  billing: { title: "Billing events", sub: "Subscription and IAP credit grants from webhooks" },
   settings: { title: "Team & roles", sub: "Invite coworkers and control dashboard access" },
 };
 
@@ -555,11 +558,14 @@ function viewCacheKey() {
   if (state.view === "users" && state.userSearch.trim().length >= 2) {
     key += `:${state.userSearch.trim().toLowerCase()}`;
   }
+  if (state.view === "billing" && state.billingSearch.trim().length >= 2) {
+    key += `:${state.billingSearch.trim().toLowerCase()}`;
+  }
   return key;
 }
 
 function firstAllowedView() {
-  const order = ["overview", "suno", "users", "generations", "publications", "credits", "promos", "subscriptions", "settings"];
+  const order = ["overview", "suno", "users", "generations", "publications", "credits", "promos", "subscriptions", "billing", "settings"];
   for (const view of order) {
     if (canAccessView(view)) return view;
   }
@@ -616,13 +622,14 @@ function adminPageStack(inner) {
   return `<div class="adminPageStack">${inner}</div>`;
 }
 
-function dataPanel({ title = "", note = "", tableHtml, pager = "" }) {
+function dataPanel({ title = "", note = "", extraHtml = "", tableHtml, pager = "" }) {
   return `
     <section class="sectionCard sectionCard--data">
       ${title || note ? `<div class="sectionHead">
         ${title ? `<h3 class="sectionTitle">${title}</h3>` : ""}
         ${note ? `<p class="sectionNote">${note}</p>` : ""}
       </div>` : ""}
+      ${extraHtml || ""}
       <div class="sectionCardBody sectionCardBody--flush">${tableHtml}</div>
       ${pager ? `<div class="sectionCardFoot">${pager}</div>` : ""}
     </section>`;
@@ -1296,6 +1303,73 @@ function renderSettings(data) {
   `);
 }
 
+function renderBilling(data) {
+  const rows = data?.billingEvents || [];
+  const total = data?.total || rows.length;
+  const summary = data?.summary || {};
+  const searchQ = String(data?.search || state.billingSearch || "").trim();
+  const body = rows.length
+    ? rows.map((ev) => {
+      const idShort = String(ev.id || "").length > 28
+        ? `${String(ev.id).slice(0, 14)}…${String(ev.id).slice(-10)}`
+        : (ev.id || "—");
+      return `
+      <tr>
+        <td>${fmtDate(ev.createdAt)}</td>
+        <td>${ev.userLabel || "—"}<br><span style="color:var(--muted);font-size:0.76rem">${escapeHtml(ev.email || "")}</span></td>
+        <td><span class="badge">${escapeHtml(ev.eventTypeLabel || ev.eventType || "—")}</span></td>
+        <td>${escapeHtml(ev.provider || "—")}</td>
+        <td>${escapeHtml(ev.planId || "—")}</td>
+        <td><strong>${fmtNum(ev.creditsGranted, 0)}</strong></td>
+        <td style="font-size:0.78rem;color:var(--muted)" title="${escapeHtml(ev.id || "")}">${escapeHtml(idShort)}</td>
+      </tr>
+    `;
+    }).join("")
+    : `<tr><td colspan="7" class="loading">${searchQ ? `No billing events for “${escapeHtml(searchQ)}”.` : "No billing events yet"}</td></tr>`;
+
+  const summaryCards = `
+    <section class="sectionCard">
+      <div class="sectionHead">
+        <h3 class="sectionTitle">Last 7 days</h3>
+        <p class="sectionNote">Quick audit — many RENEWAL rows for one sandbox user usually means Apple accelerated billing, not a production bug.</p>
+      </div>
+      <div class="cardsGrid cardsGrid--inSection">
+        ${statCard("Webhook grants", fmtNum(summary.eventCount || 0), "Processed events")}
+        ${statCard("Renewals", fmtNum(summary.renewalCount || 0), "In that window")}
+        ${statCard("Credits granted", fmtNum(summary.creditsGranted || 0, 0), "Subscription + packs")}
+      </div>
+    </section>`;
+
+  els.panels.billing.innerHTML = adminPageStack(
+    `${summaryCards}${dataPanel({
+      title: "Billing event log",
+      note: "Every processed RevenueCat / Stripe webhook that granted credits. Search by email or @username to audit sandbox testers (daily renewals show as RENEWAL rows).",
+      extraHtml: `
+      <form id="billingSearchForm" class="grantForm userSearchForm">
+        <label class="field grantField userSearchField">
+          <span class="fieldLabel">Find user</span>
+          <input id="billingSearchInput" type="search" placeholder="email or @username" autocomplete="off" value="${escapeHtml(searchQ)}" />
+        </label>
+        <button type="submit" class="btnPrimary">Search</button>
+        ${searchQ ? `<button type="button" class="btnGhost" id="billingSearchClear">Clear</button>` : ""}
+      </form>`,
+      tableHtml: `
+    <div class="tableWrap">
+      <table>
+        <thead>
+          <tr>
+            <th>When</th><th>User</th><th>Event</th><th>Provider</th>
+            <th>Plan</th><th>Credits</th><th>Transaction ID</th>
+          </tr>
+        </thead>
+        <tbody>${body}</tbody>
+      </table>
+    </div>`,
+      pager: pagerHtml(total, state.offset),
+    })}`,
+  );
+}
+
 function renderSubscriptions(data) {
   const rows = data?.subscriptions || [];
   const total = data?.total || rows.length;
@@ -1341,6 +1415,7 @@ const RENDERERS = {
   generations: renderGenerations,
   publications: renderPublications,
   subscriptions: renderSubscriptions,
+  billing: renderBilling,
   settings: renderSettings,
 };
 
@@ -1351,6 +1426,7 @@ function setView(view) {
   state.view = view;
   state.offset = 0;
   if (view !== "users") state.userSearch = "";
+  if (view !== "billing") state.billingSearch = "";
   const meta = VIEW_META[view] || VIEW_META.overview;
   els.pageTitle.textContent = meta.title;
   els.pageSub.textContent = meta.sub;
@@ -1533,7 +1609,11 @@ async function loadView({ force = false } = {}) {
   try {
     let data = await adminFetch(view, {
       offset: state.offset,
-      search: view === "users" ? state.userSearch : "",
+      search: view === "users"
+        ? state.userSearch
+        : view === "billing"
+          ? state.billingSearch
+          : "",
     });
     if (view === "settings" && state.adminSession?.canManageTeam) {
       try {
@@ -1775,6 +1855,16 @@ document.body.addEventListener("submit", (e) => {
     return;
   }
 
+  const billingSearchForm = e.target.closest("#billingSearchForm");
+  if (billingSearchForm) {
+    e.preventDefault();
+    const input = billingSearchForm.querySelector("#billingSearchInput");
+    state.billingSearch = String(input?.value || "").trim();
+    state.offset = 0;
+    void loadView({ force: true });
+    return;
+  }
+
   const promoForm = e.target.closest("#promoCreateForm");
   if (promoForm) {
     e.preventDefault();
@@ -1940,6 +2030,14 @@ document.body.addEventListener("click", (e) => {
   const userSearchClear = e.target.closest("#btnUserSearchClear");
   if (userSearchClear) {
     state.userSearch = "";
+    state.offset = 0;
+    void loadView({ force: true });
+    return;
+  }
+
+  const billingSearchClear = e.target.closest("#billingSearchClear");
+  if (billingSearchClear) {
+    state.billingSearch = "";
     state.offset = 0;
     void loadView({ force: true });
     return;

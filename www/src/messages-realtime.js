@@ -1,6 +1,7 @@
 /**
- * DM thread live updates via Supabase Realtime (postgres_changes on dm_messages).
- * Loaded lazily when opening a conversation; polling remains the safety fallback.
+ * DM live updates via Supabase Realtime (postgres_changes on dm_messages).
+ * Thread channel: one conversation. Inbox channel: all participant threads (RLS-filtered).
+ * Polling remains the safety fallback when Realtime is unavailable.
  */
 
 import { createClient } from "../vendor/supabase/bundle.mjs";
@@ -8,22 +9,30 @@ import { createClient } from "../vendor/supabase/bundle.mjs";
 const DM_REALTIME_FLAG_KEY = "nabad_dm_realtime:v1";
 
 let _client = null;
-let _channel = null;
+let _threadChannel = null;
+let _inboxChannel = null;
 let _activeThreadId = "";
-let _channelReady = false;
+let _activeInboxUserId = "";
+let _threadChannelReady = false;
+let _inboxChannelReady = false;
 let _onTypingHandler = null;
-let _onInsertHandler = null;
+let _onThreadInsertHandler = null;
 let _onReadUpdateHandler = null;
+let _onInboxInsertHandler = null;
 
 export function isDmThreadChannelReady() {
-  return Boolean(_channelReady && _channel && _activeThreadId);
+  return Boolean(_threadChannelReady && _threadChannel && _activeThreadId);
+}
+
+export function isDmInboxChannelReady() {
+  return Boolean(_inboxChannelReady && _inboxChannel && _activeInboxUserId);
 }
 
 export async function sendDmThreadTypingBroadcast({ userId } = {}) {
   const uid = String(userId || "").trim();
-  if (!_channel || !_activeThreadId || !uid || !_channelReady) return false;
+  if (!_threadChannel || !_activeThreadId || !uid || !_threadChannelReady) return false;
   try {
-    const status = await _channel.send({
+    const status = await _threadChannel.send({
       type: "broadcast",
       event: "dm_typing",
       payload: { userId: uid, at: Date.now() },
@@ -34,6 +43,7 @@ export async function sendDmThreadTypingBroadcast({ userId } = {}) {
     return false;
   }
 }
+
 export function isDmPostgresRealtimeEnabled() {
   try {
     if (localStorage.getItem(DM_REALTIME_FLAG_KEY) === "0") return false;
@@ -47,6 +57,7 @@ function normalizeRow(raw) {
   if (!id) return null;
   return {
     id,
+    thread_id: String(raw.thread_id || ""),
     sender_id: String(raw.sender_id || ""),
     body: String(raw.body || ""),
     created_at: String(raw.created_at || ""),
@@ -77,18 +88,33 @@ export async function refreshDmThreadRealtimeAuth(accessToken) {
 
 export async function stopDmThreadRealtime() {
   const client = _client;
-  const channel = _channel;
-  _channel = null;
+  const channel = _threadChannel;
+  _threadChannel = null;
   _activeThreadId = "";
-  _channelReady = false;
+  _threadChannelReady = false;
   _onTypingHandler = null;
-  _onInsertHandler = null;
+  _onThreadInsertHandler = null;
   _onReadUpdateHandler = null;
   if (!client || !channel) return;
   try {
     await client.removeChannel(channel);
   } catch (e) {
-    console.warn("[dm-realtime] unsubscribe failed", e);
+    console.warn("[dm-realtime] thread unsubscribe failed", e);
+  }
+}
+
+export async function stopDmInboxRealtime() {
+  const client = _client;
+  const channel = _inboxChannel;
+  _inboxChannel = null;
+  _activeInboxUserId = "";
+  _inboxChannelReady = false;
+  _onInboxInsertHandler = null;
+  if (!client || !channel) return;
+  try {
+    await client.removeChannel(channel);
+  } catch (e) {
+    console.warn("[dm-realtime] inbox unsubscribe failed", e);
   }
 }
 
@@ -111,9 +137,9 @@ export async function subscribeDmThread({
   const client = getOrCreateClient(supabaseUrl, supabaseAnonKey);
   if (!client) return false;
 
-  if (_activeThreadId === tid && _channel) {
+  if (_activeThreadId === tid && _threadChannel) {
     _onTypingHandler = onTyping;
-    _onInsertHandler = onInsert;
+    _onThreadInsertHandler = onInsert;
     _onReadUpdateHandler = onReadUpdate;
     await refreshDmThreadRealtimeAuth(token);
     return true;
@@ -121,7 +147,7 @@ export async function subscribeDmThread({
 
   await stopDmThreadRealtime();
   _onTypingHandler = onTyping;
-  _onInsertHandler = onInsert;
+  _onThreadInsertHandler = onInsert;
   _onReadUpdateHandler = onReadUpdate;
 
   try {
@@ -155,7 +181,7 @@ export async function subscribeDmThread({
       (payload) => {
         const row = normalizeRow(payload?.new);
         if (row) {
-          try { _onInsertHandler?.(row); } catch (e) { console.warn("[dm-realtime] onInsert", e); }
+          try { _onThreadInsertHandler?.(row); } catch (e) { console.warn("[dm-realtime] onInsert", e); }
         }
       },
     )
@@ -178,7 +204,7 @@ export async function subscribeDmThread({
       },
     )
     .subscribe((status, err) => {
-      _channelReady = status === "SUBSCRIBED";
+      _threadChannelReady = status === "SUBSCRIBED";
       try {
         onStatus?.(status, err);
       } catch {}
@@ -187,13 +213,79 @@ export async function subscribeDmThread({
       } catch {}
     });
 
-  _channel = channel;
+  _threadChannel = channel;
   _activeThreadId = tid;
+  return true;
+}
+
+/** Inbox: all dm_messages INSERT visible to this user (RLS on dm_messages). */
+export async function subscribeDmInbox({
+  supabaseUrl,
+  supabaseAnonKey,
+  accessToken,
+  userId,
+  onInsert,
+  onStatus,
+} = {}) {
+  const uid = String(userId || "").trim();
+  const token = String(accessToken || "").trim();
+  if (!uid || !token || !isDmPostgresRealtimeEnabled()) return false;
+
+  const client = getOrCreateClient(supabaseUrl, supabaseAnonKey);
+  if (!client) return false;
+
+  if (_activeInboxUserId === uid && _inboxChannel) {
+    _onInboxInsertHandler = onInsert;
+    await refreshDmThreadRealtimeAuth(token);
+    return true;
+  }
+
+  await stopDmInboxRealtime();
+  _onInboxInsertHandler = onInsert;
+
+  try {
+    client.realtime.setAuth(token);
+  } catch (e) {
+    console.warn("[dm-realtime] setAuth failed", e);
+    return false;
+  }
+
+  const channel = client
+    .channel(`dm-inbox:${uid}`, {
+      config: { broadcast: { self: false } },
+    })
+    .on(
+      "postgres_changes",
+      {
+        event: "INSERT",
+        schema: "public",
+        table: "dm_messages",
+      },
+      (payload) => {
+        const row = normalizeRow(payload?.new);
+        if (row) {
+          try { _onInboxInsertHandler?.(row); } catch (e) { console.warn("[dm-realtime] inbox onInsert", e); }
+        }
+      },
+    )
+    .subscribe((status, err) => {
+      _inboxChannelReady = status === "SUBSCRIBED";
+      try {
+        onStatus?.(status, err);
+      } catch {}
+      try {
+        console.info("[dm-realtime]", { inbox: uid, status, error: err?.message || "" });
+      } catch {}
+    });
+
+  _inboxChannel = channel;
+  _activeInboxUserId = uid;
   return true;
 }
 
 export async function disconnectDmRealtime() {
   await stopDmThreadRealtime();
+  await stopDmInboxRealtime();
   if (_client) {
     try {
       _client.realtime.disconnect();

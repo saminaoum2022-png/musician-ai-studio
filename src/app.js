@@ -4328,6 +4328,7 @@ function applyRoute({ passGen } = {}) {
   }
   if (prevRoute === "messages" && wanted !== "messages") {
     stopMessagesInboxPoll();
+    stopMessagesInboxRealtime();
   }
   if (wanted === "challenges" && hasActiveCreateSession() && !_createHubExitBypassSessionPin && !isOnCreateHubRoute()) {
     if (createSessionIsGenerating()) {
@@ -28849,6 +28850,8 @@ const MESSAGES_THREAD_LOAD_OLDER_THRESHOLD_PX = 120;
 /** Realtime is primary; slow REST poll heals rare missed inserts. */
 /** Safety poll when Realtime misses an insert (was 45s — too slow for chat). */
 const MESSAGES_THREAD_SAFETY_POLL_MS = 8000;
+/** Slower safety poll when Realtime is connected. */
+const MESSAGES_THREAD_SAFETY_POLL_LIVE_MS = 45000;
 /** Faster poll while Realtime channel is still connecting. */
 const MESSAGES_THREAD_CONNECT_POLL_MS = 3000;
 /** Partner now-playing line in the thread header (independent of message poll). */
@@ -28856,6 +28859,8 @@ const MESSAGES_THREAD_PRESENCE_POLL_MS = 5000;
 /** Partner read cursor for outbound ✓ / ✓✓ receipts. */
 const MESSAGES_THREAD_READ_POLL_MS = 5000;
 const MESSAGES_INBOX_POLL_MS = 15000;
+/** Slower inbox poll when Realtime is connected. */
+const MESSAGES_INBOX_POLL_LIVE_MS = 60000;
 /** Partner typing indicator — broadcast while composing. */
 const DM_TYPING_SEND_MS = 2500;
 const DM_TYPING_LINGER_MS = 4500;
@@ -28868,6 +28873,9 @@ let _messagesInboxFetchInFlight = null;
 let _messagesInboxScrollY = 0;
 let _messagesInboxFilter = "all";
 let _messagesInboxPollTimer = 0;
+let _messagesInboxRealtimeReady = false;
+let _messagesThreadRealtimeReady = false;
+const _inboxSeenMessageIds = new Set();
 let _partnerTypingUntil = 0;
 let _lastTypingSentAt = 0;
 let _partnerTypingTimer = 0;
@@ -29578,6 +29586,113 @@ function markInboxThreadReadLocally(threadId) {
   return changed;
 }
 
+function rememberInboxMessageId(messageId) {
+  const id = String(messageId || "").trim();
+  if (!id || id.startsWith("pending:")) return false;
+  if (_inboxSeenMessageIds.has(id)) return false;
+  _inboxSeenMessageIds.add(id);
+  if (_inboxSeenMessageIds.size > 240) {
+    const drop = _inboxSeenMessageIds.size - 200;
+    let n = 0;
+    for (const key of _inboxSeenMessageIds) {
+      _inboxSeenMessageIds.delete(key);
+      if (++n >= drop) break;
+    }
+  }
+  return true;
+}
+
+function isActiveMessagesThreadRoute(threadId) {
+  const tid = String(threadId || "").trim();
+  if (!tid) return false;
+  return (
+    String(document.body.getAttribute("data-route") || "") === "messages-thread"
+    && String(_conversationId || "") === tid
+  );
+}
+
+function patchInboxThreadRow({
+  threadId,
+  lastMessage,
+  lastMessageAt,
+  senderId = "",
+  messageId = "",
+  bumpToTop = true,
+} = {}) {
+  const tid = String(threadId || "").trim();
+  if (!tid) return false;
+  if (messageId && !rememberInboxMessageId(messageId)) return false;
+
+  const myId = String(authSession?.user?.id || "");
+  const isMine = senderId ? String(senderId) === myId : false;
+  const inThread = isActiveMessagesThreadRoute(tid);
+  let threads = [...(Array.isArray(_messagesInboxState.threads) ? _messagesInboxState.threads : [])];
+  let idx = threads.findIndex((t) => String(t?.threadId || "") === tid);
+  if (idx < 0) {
+    void loadMessagesInbox({ silent: true });
+    return false;
+  }
+
+  const prev = threads[idx];
+  const at = String(lastMessageAt || prev.lastMessageAt || new Date().toISOString());
+  const preview = lastMessage != null ? String(lastMessage) : String(prev.lastMessage || "");
+  let unread = false;
+  let unreadCount = 0;
+  if (inThread || isMine) {
+    unread = false;
+    unreadCount = 0;
+  } else {
+    unread = true;
+    unreadCount = Math.min(99, Math.max(1, Number(prev.unreadCount || 0) + 1));
+  }
+
+  const next = {
+    ...prev,
+    lastMessage: preview,
+    lastMessageAt: at,
+    unread,
+    unreadCount,
+  };
+  threads.splice(idx, 1);
+  if (bumpToTop) threads.unshift(next);
+  else threads.splice(idx, 0, next);
+  _messagesInboxState.threads = threads;
+  saveMessagesInboxToStorage();
+
+  const route = String(document.body.getAttribute("data-route") || "");
+  if (route === "messages" || route === "friends") renderMessagesInbox();
+  void refreshMessagesUnreadBadge({ force: true });
+  return true;
+}
+
+function patchInboxFromDmMessageRow(row) {
+  const tid = String(row?.thread_id || "").trim();
+  if (!tid || isCoachThreadId(tid)) return false;
+  return patchInboxThreadRow({
+    threadId: tid,
+    lastMessage: row?.body || "",
+    lastMessageAt: row?.created_at || new Date().toISOString(),
+    senderId: row?.sender_id || "",
+    messageId: row?.id || "",
+    bumpToTop: true,
+  });
+}
+
+function patchInboxFromOutgoingMessage({ threadId, body, createdAt, messageId = "" } = {}) {
+  const tid = String(threadId || _conversationId || "").trim();
+  const text = String(body || "").trim();
+  if (!tid || !text) return false;
+  const myId = String(authSession?.user?.id || "");
+  return patchInboxThreadRow({
+    threadId: tid,
+    lastMessage: text,
+    lastMessageAt: createdAt || new Date().toISOString(),
+    senderId: myId,
+    messageId,
+    bumpToTop: true,
+  });
+}
+
 function navigateToMessagesThread({
   threadId,
   headerUser,
@@ -30002,6 +30117,12 @@ function confirmOptimisticThreadMessage(clientMessageId, serverMsg) {
   syncMessagesLastFetchedAtFromList();
   renderMessagesMount({ scrollToBottom: true, forceScroll: shouldAutoScrollMessagesMount() });
   scheduleMessagesThreadScrollToBottom({ force: shouldAutoScrollMessagesMount() });
+  patchInboxFromOutgoingMessage({
+    threadId: _conversationId,
+    body: next.body,
+    createdAt: next.created_at,
+    messageId: next.id,
+  });
 }
 
 function markOptimisticThreadMessageFailed(clientMessageId, err) {
@@ -31819,11 +31940,77 @@ async function loadMessagesRealtimeModule() {
   return _messagesRealtimeModPromise;
 }
 
+async function stopDmInboxRealtimeSubscribe() {
+  try {
+    const mod = await loadMessagesRealtimeModule();
+    await mod?.stopDmInboxRealtime?.();
+  } catch {}
+  _messagesInboxRealtimeReady = false;
+}
+
+function restartMessagesInboxPoll() {
+  stopMessagesInboxPoll();
+  if (String(document.body.getAttribute("data-route") || "") !== "messages") return;
+  const interval = _messagesInboxRealtimeReady ? MESSAGES_INBOX_POLL_LIVE_MS : MESSAGES_INBOX_POLL_MS;
+  _messagesInboxPollTimer = window.setInterval(() => {
+    if (String(document.body.getAttribute("data-route") || "") !== "messages") {
+      stopMessagesInboxPoll();
+      return;
+    }
+    void loadMessagesInbox({ silent: true });
+  }, interval);
+}
+
+async function refreshDmInboxRealtimeSubscribe() {
+  if (!isDmPostgresRealtimeEnabled()) return;
+  const uid = String(authSession?.user?.id || "").trim();
+  const token = getSupabaseAuthToken();
+  if (!uid || !token) return;
+  if (String(document.body.getAttribute("data-route") || "") !== "messages") return;
+  const mod = await loadMessagesRealtimeModule();
+  if (!mod?.subscribeDmInbox) return;
+  await mod.subscribeDmInbox({
+    supabaseUrl: SUPABASE_URL,
+    supabaseAnonKey: SUPABASE_ANON_KEY,
+    accessToken: token,
+    userId: uid,
+    onInsert: (row) => {
+      if (String(document.body.getAttribute("data-route") || "") !== "messages") return;
+      if (patchInboxFromDmMessageRow(row)) {
+        try { console.info("[dm-inbox-live]", { threadId: row.thread_id, messageId: row.id }); } catch {}
+      }
+    },
+    onStatus: (status) => {
+      const s = String(status || "");
+      const ready = s === "SUBSCRIBED";
+      if (ready !== _messagesInboxRealtimeReady) {
+        _messagesInboxRealtimeReady = ready;
+        restartMessagesInboxPoll();
+      }
+      if (s === "CHANNEL_ERROR" || s === "TIMED_OUT" || s === "CLOSED") {
+        _messagesInboxRealtimeReady = false;
+        restartMessagesInboxPoll();
+        void loadMessagesInbox({ silent: true });
+      }
+    },
+  });
+}
+
+function startMessagesInboxRealtime() {
+  void refreshDmInboxRealtimeSubscribe();
+}
+
+function stopMessagesInboxRealtime() {
+  _messagesInboxRealtimeReady = false;
+  void stopDmInboxRealtimeSubscribe();
+}
+
 async function stopDmThreadRealtimeSubscribe() {
   try {
     const mod = await loadMessagesRealtimeModule();
     await mod?.stopDmThreadRealtime?.();
   } catch {}
+  _messagesThreadRealtimeReady = false;
 }
 
 async function refreshDmThreadRealtimeAuthOnly() {
@@ -31859,6 +32046,7 @@ async function refreshDmThreadRealtimeSubscribe(threadId) {
         saveActiveThreadToCache();
         void markThreadReadQuiet(tid);
       }
+      patchInboxFromDmMessageRow(row);
     },
     onReadUpdate: ({ lastReadAt } = {}) => {
       if (String(_conversationId || "") !== tid) return;
@@ -31873,12 +32061,21 @@ async function refreshDmThreadRealtimeSubscribe(threadId) {
     },
     onStatus: (status) => {
       const s = String(status || "");
+      const ready = s === "SUBSCRIBED";
+      if (ready !== _messagesThreadRealtimeReady) {
+        _messagesThreadRealtimeReady = ready;
+        restartThreadSafetyPoll(tid);
+        restartThreadReadPoll(tid);
+      }
       if (s === "SUBSCRIBED") {
         stopMessagesConnectPoll();
         void maybeSendDmTypingPulse();
         void pollNewThreadMessages(tid, { bootToken: _messagesThreadBootToken, reason: "realtime-subscribed" });
       }
       if (s === "CHANNEL_ERROR" || s === "TIMED_OUT" || s === "CLOSED") {
+        _messagesThreadRealtimeReady = false;
+        restartThreadSafetyPoll(tid);
+        restartThreadReadPoll(tid);
         startMessagesConnectPoll(tid);
         catchUpOpenMessagesThread({ reason: `realtime-${s}` });
       }
@@ -31928,7 +32125,46 @@ function stopMessagesThreadRealtime() {
   }
   stopMessagesConnectPoll();
   clearPartnerTypingState();
+  _messagesThreadRealtimeReady = false;
   void stopDmThreadRealtimeSubscribe();
+}
+
+function restartThreadSafetyPoll(threadId) {
+  if (_messagesRealtimePollTimer) {
+    window.clearInterval(_messagesRealtimePollTimer);
+    _messagesRealtimePollTimer = 0;
+  }
+  const tid = String(threadId || _conversationId || "").trim();
+  if (!tid) return;
+  const interval = _messagesThreadRealtimeReady
+    ? MESSAGES_THREAD_SAFETY_POLL_LIVE_MS
+    : MESSAGES_THREAD_SAFETY_POLL_MS;
+  _messagesRealtimePollTimer = window.setInterval(() => {
+    if (String(document.body.getAttribute("data-route") || "") !== "messages-thread") {
+      stopMessagesThreadRealtime();
+      return;
+    }
+    if (_conversationId !== tid) return;
+    void pollNewThreadMessages(tid, { bootToken: _messagesThreadBootToken, reason: "safety-poll" });
+  }, interval);
+}
+
+function restartThreadReadPoll(threadId) {
+  if (_messagesReadPollTimer) {
+    window.clearInterval(_messagesReadPollTimer);
+    _messagesReadPollTimer = 0;
+  }
+  if (_messagesThreadRealtimeReady) return;
+  const tid = String(threadId || _conversationId || "").trim();
+  if (!tid) return;
+  _messagesReadPollTimer = window.setInterval(() => {
+    if (String(document.body.getAttribute("data-route") || "") !== "messages-thread") {
+      stopMessagesThreadRealtime();
+      return;
+    }
+    if (_conversationId !== tid) return;
+    void pollPartnerThreadRead(tid, { bootToken: _messagesThreadBootToken });
+  }, MESSAGES_THREAD_READ_POLL_MS);
 }
 
 function stopMessagesThreadPoll() {
@@ -31939,14 +32175,7 @@ function startMessagesThreadRealtime(threadId) {
   stopMessagesThreadRealtime();
   const tid = String(threadId || _conversationId || "").trim();
   if (!tid) return;
-  _messagesRealtimePollTimer = window.setInterval(() => {
-    if (String(document.body.getAttribute("data-route") || "") !== "messages-thread") {
-      stopMessagesThreadRealtime();
-      return;
-    }
-    if (_conversationId !== tid) return;
-    void pollNewThreadMessages(tid, { bootToken: _messagesThreadBootToken, reason: "safety-poll" });
-  }, MESSAGES_THREAD_SAFETY_POLL_MS);
+  restartThreadSafetyPoll(tid);
   _messagesPresencePollTimer = window.setInterval(() => {
     if (String(document.body.getAttribute("data-route") || "") !== "messages-thread") {
       stopMessagesThreadRealtime();
@@ -31955,14 +32184,7 @@ function startMessagesThreadRealtime(threadId) {
     if (_conversationId !== tid) return;
     void refreshPartnerPresence();
   }, MESSAGES_THREAD_PRESENCE_POLL_MS);
-  _messagesReadPollTimer = window.setInterval(() => {
-    if (String(document.body.getAttribute("data-route") || "") !== "messages-thread") {
-      stopMessagesThreadRealtime();
-      return;
-    }
-    if (_conversationId !== tid) return;
-    void pollPartnerThreadRead(tid, { bootToken: _messagesThreadBootToken });
-  }, MESSAGES_THREAD_READ_POLL_MS);
+  restartThreadReadPoll(tid);
   void refreshDmThreadRealtimeSubscribe(tid);
   startMessagesConnectPoll(tid);
   void pollNewThreadMessages(tid, { bootToken: _messagesThreadBootToken, reason: "thread-open" });
@@ -32365,6 +32587,11 @@ function sendCurrentThreadMessage() {
   applyUserTextInputDir(input);
   syncMessagesComposerInputHeight(input);
   addOptimisticThreadMessage(optimistic);
+  patchInboxFromOutgoingMessage({
+    threadId,
+    body: text,
+    createdAt: optimistic.created_at,
+  });
   updateMessagesComposerReserve();
   try { input.focus({ preventScroll: true }); } catch { try { input.focus(); } catch {} }
 
@@ -32451,14 +32678,7 @@ function stopMessagesInboxPoll() {
 }
 
 function startMessagesInboxPoll() {
-  stopMessagesInboxPoll();
-  _messagesInboxPollTimer = window.setInterval(() => {
-    if (String(document.body.getAttribute("data-route") || "") !== "messages") {
-      stopMessagesInboxPoll();
-      return;
-    }
-    void loadMessagesInbox({ silent: true });
-  }, MESSAGES_INBOX_POLL_MS);
+  restartMessagesInboxPoll();
 }
 
 function enterMessagesRoute({ fromThread = false, inboxFilter = "" } = {}) {
@@ -32470,6 +32690,7 @@ function enterMessagesRoute({ fromThread = false, inboxFilter = "" } = {}) {
     _messagesInboxFilter = "all";
   }
   startMessagesInboxPoll();
+  startMessagesInboxRealtime();
   loadMessagesInboxFromStorage();
   const hasCache = messagesInboxHasCachedData();
   if (hasCache) {

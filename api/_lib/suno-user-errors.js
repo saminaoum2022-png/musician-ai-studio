@@ -133,6 +133,9 @@ function mapSunoUpstreamFailure(raw) {
     m.includes("expired vocal")
     || m.includes("voice expired")
     || m.includes("voice is expired")
+    || m.includes("voice has expired")
+    || m.includes("record new")
+    || m.includes("re-record")
     || m.includes("persona not found")
     || m.includes("invalid persona")
     || m.includes("invalid voice")
@@ -141,10 +144,13 @@ function mapSunoUpstreamFailure(raw) {
     || m.includes("custom voice")
     || (m.includes("persona") && (m.includes("invalid") || m.includes("not found") || m.includes("expired")));
   if (looksVoicePersona) {
+    const expired = m.includes("expir") || m.includes("record new") || m.includes("re-record");
     return {
       failureKind: "voicePersona",
-      userMessage: "Your recorded voice wasn't accepted — wait a minute after saving, or re-record in Settings → Your voices.",
-      headline: "Voice persona issue",
+      userMessage: expired
+        ? "This voice has expired. Re-record it in Settings → Your voices."
+        : "Your recorded voice wasn't ready — wait a minute after saving, or re-record in Settings → Your voices.",
+      headline: expired ? "Voice expired" : "Voice persona issue",
     };
   }
 

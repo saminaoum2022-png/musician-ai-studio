@@ -18502,9 +18502,9 @@ function sunoFailureUserCopy(kind, { isRemix = false } = {}) {
   }
   if (k === "voicePersona") {
     return {
-      toast: "Your recorded voice wasn't ready — wait a minute after saving, or re-record in Settings → Your voices.",
-      activityTitle: "Generation didn't finish",
-      activityBody: "Recorded voice issue — re-record your voice or try again in a minute.",
+      toast: "This voice has expired or isn't available. Re-record it in Settings → Your voices.",
+      activityTitle: "Voice expired",
+      activityBody: "Your recorded voice expired — tap Settings → Your voices → Re-record, then try again.",
     };
   }
   return {
@@ -18697,6 +18697,9 @@ function interpretSunoFailure(raw) {
     m.includes("expired vocal")
     || m.includes("voice expired")
     || m.includes("voice is expired")
+    || m.includes("voice has expired")
+    || m.includes("record new")
+    || m.includes("re-record")
     || m.includes("persona not found")
     || m.includes("invalid persona")
     || m.includes("invalid voice")
@@ -18704,10 +18707,13 @@ function interpretSunoFailure(raw) {
     || m.includes("voice not ready")
     || (m.includes("persona") && (m.includes("invalid") || m.includes("not found") || m.includes("expired")));
   if (looksVoicePersona) {
+    const expired = m.includes("expir") || m.includes("record new") || m.includes("re-record");
     return {
       kind: "voicePersona",
-      headline: "Voice persona issue",
-      detail: "Your recorded voice wasn't accepted — wait a minute after saving, or re-record in Settings → Your voices.",
+      headline: expired ? "Voice expired" : "Voice persona issue",
+      detail: expired
+        ? "This voice has expired. Re-record it in Settings → Your voices, then try again."
+        : "Your recorded voice wasn't ready — wait a minute after saving, or re-record in Settings → Your voices.",
     };
   }
   const genericSuno413 =
@@ -22736,15 +22742,17 @@ function savePersonaSelection(id) {
     else localStorage.removeItem(k);
   } catch {}
 }
-/** Active persona for Create — select DOM value with saved localStorage fallback.
- *  Banner/profile UI already used both; generate must too or a cold resume
- *  can show "My voice" while submitting with no personaId. */
+/** Active persona for Create — saved chip/settings selection is source of truth;
+ *  the hidden select can lag behind and previously sent a stale old voice id. */
 function getActivePersonaId() {
-  const fromSelect = String(els.sunoPersonaId?.value || "").trim();
   const saved = loadPersonaSelection().trim();
-  const id = fromSelect || saved;
+  const fromSelect = String(els.sunoPersonaId?.value || "").trim();
+  const id = saved || fromSelect;
   if (!id) return "";
   const hit = loadPersonas().find((x) => String(x.personaId) === id);
+  if (hit && els.sunoPersonaId && fromSelect !== id) {
+    try { els.sunoPersonaId.value = id; } catch {}
+  }
   return hit ? id : "";
 }
 /** Suno treats song-derived personas (generate-persona) and recorded voices
@@ -22926,7 +22934,10 @@ function renderActivePersonaBanner() {
       return;
     }
     const label = String(hit.label || id.slice(0, 12) + "…").trim() || "Persona";
-    els.personaActiveBannerLabel.textContent = label;
+    const typeNote = hit.type === "suno_voice" ? "Recorded voice" : "From song";
+    const ageNote =
+      hit.type === "suno_voice" && hit.ts ? ` · ${relativeTime(Number(hit.ts))}` : "";
+    els.personaActiveBannerLabel.textContent = `${label} (${typeNote}${ageNote})`;
     const isRecordedVoice = hit.type === "suno_voice";
     if (els.personaVoiceTune) {
       els.personaVoiceTune.hidden = !(isRecordedVoice && _personaVoiceTuneVisible);
@@ -22941,7 +22952,9 @@ function renderActivePersonaBanner() {
       if (subEl) {
         subEl.textContent = refAttached
           ? "Heads up: this persona will replace your new recording's voice. Tap × to use the recording's voice instead."
-          : "Your next song will use this voice. Tap Change to swap or clear it.";
+          : hit.type === "suno_voice"
+          ? "Your next song uses this recorded voice clone — not a song saved from your library."
+          : "Your next song uses vocal style from a saved song — not a mic recording. For your real voice, record one in Settings → Your voices.";
       }
       els.personaActiveBanner.classList.toggle("personaActiveBanner--warn", refAttached);
     } catch {}
@@ -42174,8 +42187,8 @@ function renderPersonaSelect() {
   const saved = loadPersonaSelection().trim();
   const domCurrent = String(els.sunoPersonaId.value || "").trim();
   const current =
-    (domCurrent && list.some((x) => String(x.personaId) === domCurrent) && domCurrent) ||
     (saved && list.some((x) => String(x.personaId) === saved) && saved) ||
+    (domCurrent && list.some((x) => String(x.personaId) === domCurrent) && domCurrent) ||
     "";
   const opts = ['<option value="">None (default voice)</option>']
     .concat(
@@ -42403,6 +42416,7 @@ function abandonPersonaFlow() {
     sampleFile: null,
     verifyFile: null,
     verifyPhrase: "",
+    replacingPersonaId: "",
     name: "My voice",
     language: "en",
     skill: "intermediate",
@@ -42419,7 +42433,13 @@ function closeVoiceWizard() {
   scheduleApplyRoute();
 }
 
-let voiceWizardState = { abort: false, sampleFile: null, verifyFile: null, verifyPhrase: "" };
+let voiceWizardState = {
+  abort: false,
+  sampleFile: null,
+  verifyFile: null,
+  verifyPhrase: "",
+  replacingPersonaId: "",
+};
 
 async function measureMediaFileDurationSec(file) {
   if (!file) return null;
@@ -42575,25 +42595,27 @@ async function waitForVoiceAvailable(voiceTaskId, { attempts = 5, delayMs = 1000
   return false;
 }
 
-/** Gate before generate — Suno may fall back to a generic voice if check-voice is false. */
+/** Gate before generate — always check-voice for recorded personas; Suno voices expire. */
 async function resolveRecordedVoiceReady(personaHit) {
   if (!personaHit?.voiceTaskId) return { ready: true, reason: "no_task" };
-  if (Number(personaHit.genCount || 0) > 0) return { ready: true, reason: "prior_success" };
 
+  const hadPriorGen = Number(personaHit.genCount || 0) > 0;
   const stale = personaNeedsRefresh(personaHit);
-  const voiceReady = await waitForVoiceAvailable(personaHit.voiceTaskId, {
-    attempts: 4,
-    delayMs: 8000,
-  });
+
+  const voiceReady = hadPriorGen
+    ? await checkSunoVoiceAvailability(personaHit.voiceTaskId)
+    : await waitForVoiceAvailable(personaHit.voiceTaskId, { attempts: 4, delayMs: 8000 });
 
   if (voiceReady === true) return { ready: true, reason: "check_ok" };
+  if (voiceReady === false) {
+    return { ready: false, reason: hadPriorGen || stale ? "expired" : "processing" };
+  }
   if (voiceReady == null) {
     if (stale) return { ready: false, reason: "stale_unknown" };
     return { ready: true, reason: "check_failed" };
   }
 
-  if (stale) return { ready: false, reason: "stale" };
-  return { ready: false, reason: "processing" };
+  return { ready: false, reason: hadPriorGen ? "expired" : "processing" };
 }
 
 /** Suno voice-create metadata — docs recommend style + description for tuning. */
@@ -42777,13 +42799,20 @@ function wireVoiceWizardStep1Sample() {
       syncContinue();
     };
   }
+  const nameInput = document.getElementById("voiceWizardName");
+  if (nameInput) {
+    nameInput.addEventListener("input", () => {
+      voiceWizardState.name =
+        String(nameInput.value || "").trim() || "My voice";
+    });
+  }
   if (continueBtn) {
     continueBtn.onclick = () => {
       if (!voiceWizardState.sampleFile) {
         showToast("Record or upload a sample first", { icon: "!", durationMs: 2800 });
         return;
       }
-      voiceWizardState.name = String(document.getElementById("voiceWizardName")?.value || "My voice").trim() || "My voice";
+      voiceWizardState.name = String(nameInput?.value || voiceWizardState.name || "My voice").trim() || "My voice";
       renderVoiceWizardStep1Setup();
       wireVoiceWizardStep1Setup();
     };
@@ -42807,7 +42836,9 @@ function wireVoiceWizardStep1Setup() {
 }
 
 async function runVoiceWizardFromSample(startBtn) {
-  const name = String(document.getElementById("voiceWizardName")?.value || "My voice").trim();
+  const name =
+    String(voiceWizardState.name || document.getElementById("voiceWizardName")?.value || "My voice").trim()
+    || "My voice";
   const file = voiceWizardState.sampleFile;
   const language = String(document.getElementById("voiceWizardLang")?.value || "en").trim();
   // Captured now because the create call happens on the verify step,
@@ -42962,6 +42993,10 @@ function renderVoiceWizardVerifyStep(phrase, token) {
       const voiceTaskId = String(cd?.taskId || cd?.data?.taskId || "").trim();
       if (!voiceTaskId) throw new Error("Missing voice task id");
       const voiceId = await pollVoiceRecordInfo(voiceTaskId);
+      const replaceId = String(voiceWizardState.replacingPersonaId || "").trim();
+      if (replaceId && replaceId !== voiceId) {
+        try { removePersona(replaceId); } catch {}
+      }
       addPersona(voiceId, name, { type: "suno_voice", personaModel: "voice_persona", voiceTaskId });
       closeVoiceWizard();
       setProfilePersonaExpanded(true);
@@ -43012,7 +43047,11 @@ function renderVoiceWizardStep1Sample() {
 
 function renderVoiceWizardStep1Setup() {
   setVoiceWizardStage(1);
+  const voiceName = String(voiceWizardState.name || "My voice").trim() || "My voice";
   renderVoiceWizardStep(`
+    <section class="personaFlowSection personaFlowSection--compact">
+      <p class="personaFlowSectionLead">Voice name: <strong>${escapeHtml(voiceName)}</strong></p>
+    </section>
     ${voiceWizardLangSkillHtml()}
     <div class="voiceWizardActions voiceWizardActions--split">
       <button type="button" class="vwSecondaryBtn" id="voiceWizardSetupBackBtn">Back</button>
@@ -43036,6 +43075,7 @@ async function openVoiceWizard() {
     sampleFile: null,
     verifyFile: null,
     verifyPhrase: "",
+    replacingPersonaId: String(voiceWizardState.replacingPersonaId || "").trim(),
     name: "My voice",
     language: "en",
     skill: "intermediate",
@@ -55706,7 +55746,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
         return;
       }
       if (refBtn) {
-        // Expired/old voice → send them straight into a fresh recording.
+        voiceWizardState.replacingPersonaId = id;
         void openVoiceWizard();
         return;
       }
@@ -56634,14 +56674,17 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       if (personaIdSel && personaModelSel === "voice_persona" && personaHit?.voiceTaskId) {
         setStatus("Checking your recorded voice is ready…");
         const voiceGate = await resolveRecordedVoiceReady(personaHit);
-        const stale = personaNeedsRefresh(personaHit);
         if (!voiceGate.ready) {
           setLoading(false);
           setGenerateBtn("Generate song", false, "generate");
-          if (stale || voiceGate.reason === "stale_unknown") {
+          if (
+            voiceGate.reason === "expired"
+            || voiceGate.reason === "stale"
+            || voiceGate.reason === "stale_unknown"
+          ) {
             showToast(
-              "This voice has expired. Re-record it in Settings → Your voices to keep singing in your voice, or tap your persona chip to switch it off.",
-              { icon: "!", durationMs: 6800 }
+              "This voice has expired. Open Settings → Your voices and tap Re-record to refresh it, or clear the persona chip to use the default singer.",
+              { icon: "!", durationMs: 7200 }
             );
             setStatus("Generation paused: this recorded voice has expired — re-record it to refresh.");
           } else {
@@ -56659,8 +56702,8 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
           const isRecordedVoice = personaHit?.type === "suno_voice";
           showToast(
             isRecordedVoice
-              ? "Using your recorded voice on this song."
-              : "Using voice style from your saved song persona.",
+              ? `Using your recorded voice: ${personaHit?.label || "My voice"}.`
+              : `Using song persona: ${personaHit?.label || "Persona"} — not your mic recording.`,
             { icon: "♪", durationMs: 4200 }
           );
         } catch {}

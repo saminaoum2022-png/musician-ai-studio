@@ -210,7 +210,7 @@ import { MUSIC_VIDEO_FEATURE_ENABLED } from "./feature-flags.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260814-172023";
+const APP_BUILD = "20260814-173622";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -4097,6 +4097,7 @@ function applyRoute({ passGen } = {}) {
   let pendingDiscoverPlaylistSlug = "";
   let pendingMessagesThreadId = "";
   let pendingMessagesThreadUserId = "";
+  let pendingMessagesInboxFilter = "";
   const playlistRouteMatch = route.match(/^discover\/playlist\/([a-z0-9_-]+)/i);
   if (playlistRouteMatch) {
     pendingDiscoverPlaylistSlug = decodeURIComponent(String(playlistRouteMatch[1] || "")).trim();
@@ -4145,6 +4146,15 @@ function applyRoute({ passGen } = {}) {
     } catch {
       pendingMessagesThreadId = "";
       pendingMessagesThreadUserId = "";
+    }
+  }
+  if (route === "messages") {
+    try {
+      const inboxQs = new URLSearchParams(rawRouteQuery);
+      const f = String(inboxQs.get("filter") || "").trim().toLowerCase();
+      if (["all", "requests", "chats"].includes(f)) pendingMessagesInboxFilter = f;
+    } catch {
+      pendingMessagesInboxFilter = "";
     }
   }
   const allowedRoutes = new Set([
@@ -4313,6 +4323,9 @@ function applyRoute({ passGen } = {}) {
     resetMessagesThreadRouteState();
     clearMessagesThreadComposerInset();
     document.body.classList.remove("messagesThreadEntering", "messagesThreadLeaving");
+  }
+  if (prevRoute === "messages" && wanted !== "messages") {
+    stopMessagesInboxPoll();
   }
   if (wanted === "challenges" && hasActiveCreateSession() && !_createHubExitBypassSessionPin && !isOnCreateHubRoute()) {
     if (createSessionIsGenerating()) {
@@ -4632,7 +4645,10 @@ function applyRoute({ passGen } = {}) {
   }
   if (MESSAGES_FEATURE_ENABLED && wanted === "messages") {
     bindMessagesPageOnce();
-    enterMessagesRoute({ fromThread: prevRoute === "messages-thread" });
+    enterMessagesRoute({
+      fromThread: prevRoute === "messages-thread",
+      inboxFilter: pendingMessagesInboxFilter,
+    });
   }
   if (MESSAGES_FEATURE_ENABLED && wanted === "messages-thread") {
     bindMessagesPageOnce();
@@ -28815,6 +28831,7 @@ const MESSAGES_THREAD_SAFETY_POLL_MS = 45000;
 const MESSAGES_THREAD_PRESENCE_POLL_MS = 5000;
 /** Partner read cursor for outbound ✓ / ✓✓ receipts. */
 const MESSAGES_THREAD_READ_POLL_MS = 5000;
+const MESSAGES_INBOX_POLL_MS = 15000;
 const _messagesThreadCache = new Map();
 const _chatPartnerStatsCache = new Map();
 let _messagesInboxLoading = false;
@@ -28823,6 +28840,7 @@ let _messagesInboxHasLoadedOnce = false;
 let _messagesInboxFetchInFlight = null;
 let _messagesInboxScrollY = 0;
 let _messagesInboxFilter = "all";
+let _messagesInboxPollTimer = 0;
 let _messagesRequestTargetUserId = "";
 let _messagesThreadLeaving = false;
 let _messagesThreadNeedsInitialScroll = false;
@@ -29439,9 +29457,9 @@ function markInboxThreadReadLocally(threadId) {
   let changed = false;
   _messagesInboxState.threads = (_messagesInboxState.threads || []).map((t) => {
     if (String(t?.threadId || "") !== tid) return t;
-    if (!t?.unread) return t;
+    if (!t?.unread && !(Number(t?.unreadCount) > 0)) return t;
     changed = true;
-    return { ...t, unread: false };
+    return { ...t, unread: false, unreadCount: 0 };
   });
   if (changed) {
     const route = String(document.body.getAttribute("data-route") || "");
@@ -31073,10 +31091,8 @@ function updateMessagesUnreadBadge(count) {
   }
   try {
     els.friendsTabLink?.classList?.toggle?.("hasNotice", hasUnread);
-    // `n` is the number of unread DM conversations (one per thread), not the
-    // total unread messages — the API counts threads, not message rows.
     const friendsLabel = hasUnread
-      ? `Friends, ${n} unread ${n === 1 ? "conversation" : "conversations"}`
+      ? `Friends, ${n} unread ${n === 1 ? "message" : "messages"}`
       : "Friends";
     els.friendsTabLink?.setAttribute?.("aria-label", friendsLabel);
     if (els.friendsTabBadge) {
@@ -31085,13 +31101,11 @@ function updateMessagesUnreadBadge(count) {
         els.friendsTabBadge.classList.remove("friendsTabDmBadge--dots");
         els.friendsTabBadge.textContent = "";
       } else if (n === 1) {
-        // Exactly one unread conversation: chat bubble with three dots, no number.
         els.friendsTabBadge.hidden = false;
         els.friendsTabBadge.classList.add("friendsTabDmBadge--dots");
         els.friendsTabBadge.innerHTML =
           '<span class="dmDots"><span class="dmDot"></span><span class="dmDot"></span><span class="dmDot"></span></span>';
       } else {
-        // Two or more unread conversations: chat bubble with the count (9+ for 10+).
         els.friendsTabBadge.hidden = false;
         els.friendsTabBadge.classList.remove("friendsTabDmBadge--dots");
         els.friendsTabBadge.textContent = n > 9 ? "9+" : String(n);
@@ -31116,7 +31130,8 @@ async function refreshMessagesUnreadBadge({ force = false } = {}) {
   _messagesUnreadFetchInFlight = true;
   try {
     const data = await messagesApi("/api/messages?type=unread_count");
-    updateMessagesUnreadBadge(data?.count || 0);
+    const messageCount = Number(data?.messageCount ?? data?.count) || 0;
+    updateMessagesUnreadBadge(messageCount);
     _messagesUnreadLastFetchedAt = now;
   } catch (e) {
     console.warn("[messages/badge]", e);
@@ -31141,7 +31156,8 @@ function messagesInboxThreadRowHtml(t) {
   const threadId = String(t?.threadId || "").trim();
   const preview = formatDmInboxPreview(t?.lastMessage || "");
   const when = t?.lastMessageAt ? relativeTime(new Date(t.lastMessageAt).getTime()) : "";
-  const unread = Boolean(t?.unread);
+  const unreadN = Math.max(0, Number(t?.unreadCount) || (t?.unread ? 1 : 0));
+  const unread = unreadN > 0;
   return `
     <button type="button" class="messagesRow${unread ? " is-unread" : ""}" data-messages-thread="${escapeHtml(threadId)}">
       ${messagesAvatarHtml(t?.partnerAvatar, handle)}
@@ -31152,14 +31168,14 @@ function messagesInboxThreadRowHtml(t) {
         </span>
         ${userTextHtml(preview || "No messages yet", { tag: "span", className: "messagesRowPreview", escapeHtml })}
       </span>
-      ${unread ? `<span class="messagesRowUnread" aria-label="Unread">1</span>` : ""}
+      ${unread ? `<span class="messagesRowUnread" aria-label="${unreadN} unread">${unreadN > 99 ? "99+" : String(unreadN)}</span>` : ""}
     </button>`;
 }
 
 function messagesInboxRequestRowHtml(req) {
   const handle = String(req?.fromUsername || "").trim();
   const requestId = String(req?.requestId || "").trim();
-  const preview = String(req?.body || "").trim();
+  const preview = formatDmInboxPreview(req?.body || "");
   const when = req?.createdAt ? relativeTime(new Date(req.createdAt).getTime()) : "";
   return `
     <article class="messagesRequestRow" data-messages-request="${escapeHtml(requestId)}">
@@ -31181,7 +31197,7 @@ function messagesInboxRequestRowHtml(req) {
 
 function messagesInboxSentRequestRowHtml(req) {
   const handle = String(req?.toUsername || "").trim();
-  const preview = String(req?.body || "").trim();
+  const preview = formatDmInboxPreview(req?.body || "");
   const when = req?.createdAt ? relativeTime(new Date(req.createdAt).getTime()) : "";
   return `
     <article class="messagesSentRequestRow">
@@ -32186,8 +32202,33 @@ async function loadMessagesInbox({ silent = false } = {}) {
   }
 }
 
-function enterMessagesRoute({ fromThread = false } = {}) {
+function stopMessagesInboxPoll() {
+  if (_messagesInboxPollTimer) {
+    window.clearInterval(_messagesInboxPollTimer);
+    _messagesInboxPollTimer = 0;
+  }
+}
+
+function startMessagesInboxPoll() {
+  stopMessagesInboxPoll();
+  _messagesInboxPollTimer = window.setInterval(() => {
+    if (String(document.body.getAttribute("data-route") || "") !== "messages") {
+      stopMessagesInboxPoll();
+      return;
+    }
+    void loadMessagesInbox({ silent: true });
+  }, MESSAGES_INBOX_POLL_MS);
+}
+
+function enterMessagesRoute({ fromThread = false, inboxFilter = "" } = {}) {
   syncFriendsMessagesBtn();
+  const filter = String(inboxFilter || "").trim().toLowerCase();
+  if (["all", "requests", "chats"].includes(filter)) {
+    _messagesInboxFilter = filter;
+  } else if (!fromThread) {
+    _messagesInboxFilter = "all";
+  }
+  startMessagesInboxPoll();
   const hasCache = messagesInboxHasCachedData();
   if (hasCache) {
     renderMessagesInbox();
@@ -32415,6 +32456,8 @@ function bindMessagesPageOnce() {
       if (!["all", "requests", "chats"].includes(next)) return;
       _messagesInboxFilter = next;
       try { haptic("light"); } catch {}
+      const hashPath = next === "all" ? "#/messages" : `#/messages?filter=${encodeURIComponent(next)}`;
+      try { history.replaceState(null, "", hashPath); } catch {}
       renderMessagesInbox();
     });
   }

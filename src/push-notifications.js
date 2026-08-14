@@ -93,6 +93,9 @@ export function resolvePushHashPath(payload = {}) {
   const entityId = String(payload?.entityId || payload?.nabad_entity_id || "").trim();
   const route = String(payload?.route || payload?.nabad_route || "").trim().replace(/^\/+/, "");
 
+  if (category === "dm_request") {
+    return "messages?filter=requests";
+  }
   if (category === "dm_message" && entityId) {
     return `messages-thread?thread=${encodeURIComponent(entityId)}`;
   }

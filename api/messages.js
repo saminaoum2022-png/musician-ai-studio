@@ -212,18 +212,34 @@ async function lastMessageForThread(threadId) {
   return Array.isArray(r.data) && r.data[0] ? r.data[0] : null;
 }
 
+async function unreadMessagesInThread(threadId, viewerId, lastReadAt) {
+  const tid = String(threadId || "").trim();
+  const uid = cleanUserId(viewerId);
+  if (!tid || !uid) return 0;
+  let path =
+    `dm_messages?select=id&thread_id=eq.${encodeURIComponent(tid)}&sender_id=neq.${encodeURIComponent(uid)}`;
+  const lastRead = String(lastReadAt || "").trim();
+  if (lastRead) {
+    path += `&created_at=gt.${encodeURIComponent(lastRead)}`;
+  }
+  path += "&limit=100";
+  const r = await svcFetch(path);
+  return Array.isArray(r.data) ? r.data.length : 0;
+}
+
 async function unreadCountForUser(userId) {
   const uid = cleanUserId(userId);
-  if (!uid) return 0;
+  if (!uid) return { count: 0, messageCount: 0, threadCount: 0 };
   const threads = await svcFetch(
     `dm_threads?select=id,last_message_at&or=(user_a.eq.${encodeURIComponent(uid)},user_b.eq.${encodeURIComponent(uid)})&order=last_message_at.desc&limit=100`,
   );
   const rows = Array.isArray(threads.data) ? threads.data : [];
+  const pending = await svcFetch(
+    `dm_message_requests?select=id&to_user_id=eq.${encodeURIComponent(uid)}&status=eq.pending&limit=50`,
+  );
+  const pendingCount = Array.isArray(pending.data) ? pending.data.length : 0;
   if (!rows.length) {
-    const pending = await svcFetch(
-      `dm_message_requests?select=id&to_user_id=eq.${encodeURIComponent(uid)}&status=eq.pending&limit=50`,
-    );
-    return Array.isArray(pending.data) ? pending.data.length : 0;
+    return { count: pendingCount, messageCount: pendingCount, threadCount: pendingCount };
   }
   const reads = await svcFetch(
     `dm_thread_reads?select=thread_id,last_read_at&user_id=eq.${encodeURIComponent(uid)}`,
@@ -231,17 +247,21 @@ async function unreadCountForUser(userId) {
   const readMap = new Map(
     (Array.isArray(reads.data) ? reads.data : []).map((r) => [String(r.thread_id), r.last_read_at]),
   );
-  let unread = 0;
-  for (const t of rows) {
-    const tid = String(t.id || "");
-    const lastRead = readMap.get(tid);
-    if (!lastRead || new Date(t.last_message_at) > new Date(lastRead)) unread += 1;
-  }
-  const pending = await svcFetch(
-    `dm_message_requests?select=id&to_user_id=eq.${encodeURIComponent(uid)}&status=eq.pending&limit=50`,
+  let threadCount = 0;
+  let messageCount = 0;
+  await Promise.all(
+    rows.map(async (t) => {
+      const tid = String(t.id || "");
+      const lastRead = readMap.get(tid);
+      if (!lastRead || new Date(t.last_message_at) > new Date(lastRead)) {
+        threadCount += 1;
+        messageCount += await unreadMessagesInThread(tid, uid, lastRead);
+      }
+    }),
   );
-  unread += Array.isArray(pending.data) ? pending.data.length : 0;
-  return unread;
+  messageCount += pendingCount;
+  threadCount += pendingCount;
+  return { count: messageCount, messageCount, threadCount };
 }
 
 async function partnerLastReadAtForThread(thread, viewerId) {
@@ -261,8 +281,11 @@ async function enrichThreadRow(thread, viewerId) {
     `dm_thread_reads?select=last_read_at&thread_id=eq.${encodeURIComponent(thread.id)}&user_id=eq.${encodeURIComponent(viewerId)}&limit=1`,
   );
   const lastRead = Array.isArray(reads.data) && reads.data[0] ? reads.data[0].last_read_at : null;
-  const unread = last && String(last.sender_id) !== String(viewerId)
+  const hasUnread = last && String(last.sender_id) !== String(viewerId)
     && (!lastRead || new Date(last.created_at) > new Date(lastRead));
+  const unreadCount = hasUnread
+    ? await unreadMessagesInThread(thread.id, viewerId, lastRead)
+    : 0;
   return {
     threadId: thread.id,
     partnerUserId: partnerId,
@@ -270,7 +293,8 @@ async function enrichThreadRow(thread, viewerId) {
     partnerAvatar: prof?.avatar || "",
     lastMessage: last?.body || "",
     lastMessageAt: last?.created_at || thread.last_message_at,
-    unread: Boolean(unread),
+    unread: Boolean(hasUnread),
+    unreadCount,
   };
 }
 
@@ -280,8 +304,13 @@ async function handleGet(req, res, user) {
   const type = String(url.searchParams.get("type") || "inbox");
 
   if (type === "unread_count") {
-    const count = await unreadCountForUser(user.userId);
-    return sendJson(res, 200, { ok: true, count });
+    const stats = await unreadCountForUser(user.userId);
+    return sendJson(res, 200, {
+      ok: true,
+      count: stats.messageCount,
+      messageCount: stats.messageCount,
+      threadCount: stats.threadCount,
+    });
   }
 
   if (type === "blocks") {
@@ -590,7 +619,7 @@ async function handlePost(req, res, user) {
     const senderProfile = await profileByUserId(user.userId);
     queuePrivacySafePush({
       userId: targetUserId,
-      type: "dm_message",
+      type: "dm_request",
       actorDisplayName: senderProfile?.username || "Someone",
     });
     return sendJson(res, 200, {

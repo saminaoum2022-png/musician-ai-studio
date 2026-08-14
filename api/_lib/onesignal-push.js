@@ -22,6 +22,7 @@ const PUSH_TEMPLATES = {
   social_repost: { route: "activity" },
   chart_rank: { route: "activity" },
   dm_message: { route: "friends" },
+  dm_request: { route: "messages" },
   challenge_update: { route: "challenges" },
   remix: { route: "activity" },
   song_feedback: { route: "activity" },
@@ -71,6 +72,11 @@ function composePushCopy({ type, actorDisplayName, metadata }) {
   if (type === "dm_message") {
     return {
       body: `New message from ${actor || "someone"}`,
+    };
+  }
+  if (type === "dm_request") {
+    return {
+      body: `${actor || "Someone"} sent a message request`,
     };
   }
   if (actor) {

@@ -210,7 +210,7 @@ import { MUSIC_VIDEO_FEATURE_ENABLED } from "./feature-flags.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260814-175257";
+const APP_BUILD = "20260814-180107";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -31771,6 +31771,9 @@ async function refreshDmThreadRealtimeSubscribe(threadId) {
     },
     onStatus: (status) => {
       const s = String(status || "");
+      if (s === "SUBSCRIBED") {
+        void maybeSendDmTypingPulse();
+      }
       if (s === "CHANNEL_ERROR" || s === "TIMED_OUT" || s === "CLOSED") {
         catchUpOpenMessagesThread({ reason: `realtime-${s}` });
       }

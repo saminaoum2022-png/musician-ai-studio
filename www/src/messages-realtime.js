@@ -10,10 +10,12 @@ const DM_REALTIME_FLAG_KEY = "nabad_dm_realtime:v1";
 let _client = null;
 let _channel = null;
 let _activeThreadId = "";
+let _channelReady = false;
+let _onTypingHandler = null;
 
 export async function sendDmThreadTypingBroadcast({ userId } = {}) {
   const uid = String(userId || "").trim();
-  if (!_channel || !_activeThreadId || !uid) return false;
+  if (!_channel || !_activeThreadId || !uid || !_channelReady) return false;
   try {
     const status = await _channel.send({
       type: "broadcast",
@@ -72,6 +74,8 @@ export async function stopDmThreadRealtime() {
   const channel = _channel;
   _channel = null;
   _activeThreadId = "";
+  _channelReady = false;
+  _onTypingHandler = null;
   if (!client || !channel) return;
   try {
     await client.removeChannel(channel);
@@ -100,11 +104,13 @@ export async function subscribeDmThread({
   if (!client) return false;
 
   if (_activeThreadId === tid && _channel) {
+    _onTypingHandler = onTyping;
     await refreshDmThreadRealtimeAuth(token);
     return true;
   }
 
   await stopDmThreadRealtime();
+  _onTypingHandler = onTyping;
 
   try {
     client.realtime.setAuth(token);
@@ -123,7 +129,7 @@ export async function subscribeDmThread({
       (payload) => {
         const userId = String(payload?.payload?.userId || "").trim();
         if (!userId) return;
-        try { onTyping?.({ userId, at: payload?.payload?.at }); } catch (e) { console.warn("[dm-realtime] onTyping", e); }
+        try { _onTypingHandler?.({ userId, at: payload?.payload?.at }); } catch (e) { console.warn("[dm-realtime] onTyping", e); }
       },
     )
     .on(
@@ -160,6 +166,7 @@ export async function subscribeDmThread({
       },
     )
     .subscribe((status, err) => {
+      _channelReady = status === "SUBSCRIBED";
       try {
         onStatus?.(status, err);
       } catch {}

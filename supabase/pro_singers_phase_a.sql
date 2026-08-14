@@ -32,4 +32,7 @@ set singer_assignment_status = 'pending'
 where singer_id is not null
   and coalesce(singer_assignment_status, '') = '';
 
+-- Reload PostgREST schema cache so API sees new columns immediately.
+notify pgrst, 'reload schema';
+
 commit;

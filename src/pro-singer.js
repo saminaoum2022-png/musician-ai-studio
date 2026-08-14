@@ -30,6 +30,12 @@ export const PRO_SINGER_SPECIFIC_ADDON_USD = 20;
 
 let _deps = null;
 let _requestCtx = null;
+let _requestDraft = {
+  brief: "",
+  singerNotes: "",
+  occasion: "",
+  contactInstagram: "",
+};
 let _requestStep = 0;
 let _roster = [];
 let _singerChoice = "best_match";
@@ -160,6 +166,17 @@ function requestSteps() {
   return ["mode", "brief", "singer", "package", "review"];
 }
 
+function restoreRequestDraftToForm() {
+  const occ = el("proSingerOccasion");
+  if (occ && _requestDraft.occasion) occ.value = _requestDraft.occasion;
+  const brief = el("proSingerBrief");
+  if (brief) brief.value = _requestDraft.brief || "";
+  const notes = el("proSingerSingerNotes");
+  if (notes) notes.value = _requestDraft.singerNotes || "";
+  const ig = el("proSingerContactIg");
+  if (ig) ig.value = _requestDraft.contactInstagram || "";
+}
+
 function paintRequestSteps() {
   const mount = el("proSingerRequestSteps");
   const dots = el("proSingerRequestDots");
@@ -189,6 +206,7 @@ function paintRequestSteps() {
           <option value="other">Other</option>
         </select>
       </label>`;
+    restoreRequestDraftToForm();
     return;
   }
 
@@ -224,6 +242,7 @@ function paintRequestSteps() {
         <span>Your Instagram (optional)</span>
         <input id="proSingerContactIg" type="text" inputmode="text" autocomplete="off" placeholder="@you" />
       </label>`;
+    restoreRequestDraftToForm();
     return;
   }
 
@@ -291,12 +310,46 @@ function paintRequestSteps() {
   }
 }
 
+function resetRequestDraft() {
+  _requestDraft = {
+    brief: "",
+    singerNotes: "",
+    occasion: "",
+    contactInstagram: "",
+  };
+}
+
+function captureRequestStepFields(stepKey) {
+  if (stepKey === "mode") {
+    _requestDraft.occasion = String(el("proSingerOccasion")?.value || "").trim();
+  }
+  if (stepKey === "brief") {
+    _requestDraft.brief = String(el("proSingerBrief")?.value || "").trim();
+    _requestDraft.singerNotes = String(el("proSingerSingerNotes")?.value || "").trim();
+    const occ = String(el("proSingerOccasion")?.value || "").trim();
+    if (occ) _requestDraft.occasion = occ;
+    _requestDraft.contactInstagram = String(el("proSingerContactIg")?.value || "").trim();
+  }
+}
+
+function libraryTrackSongRef(track) {
+  if (!track) return { songId: "", title: "", artUrl: "" };
+  const songId = String(
+    track.cloudSongId || track.songId || track.id || track.localId || "",
+  ).trim();
+  const title = String(track.title || track.name || "Untitled").trim();
+  const artUrl = String(
+    track.artUrl || track.imageUrl || track.cover || track.imageThumb || "",
+  ).trim();
+  return { songId, title, artUrl };
+}
+
 function collectRequestPayload() {
   const song = _requestCtx || {};
-  const brief = String(el("proSingerBrief")?.value || "").trim();
-  const singerNotes = String(el("proSingerSingerNotes")?.value || "").trim();
-  const occasion = String(el("proSingerOccasion")?.value || song.occasion || "").trim();
-  const contactInstagram = String(el("proSingerContactIg")?.value || "").trim();
+  const brief = String(el("proSingerBrief")?.value || _requestDraft.brief || "").trim();
+  const singerNotes = String(el("proSingerSingerNotes")?.value || _requestDraft.singerNotes || "").trim();
+  const occasion = String(el("proSingerOccasion")?.value || _requestDraft.occasion || song.occasion || "").trim();
+  const contactInstagram = String(el("proSingerContactIg")?.value || _requestDraft.contactInstagram || "").trim();
   const bestMatch = _singerChoice === "best_match";
   return {
     packageTier: _selectedPackage,
@@ -328,13 +381,11 @@ export async function openProSingerRequestSheet(track = null) {
   }
   _requestStep = 0;
   _singerChoice = "best_match";
-  _selectedPackage = track?.id || track?.localId ? "re_vocal" : "occasion";
+  resetRequestDraft();
+  const songRef = libraryTrackSongRef(track);
+  _selectedPackage = songRef.songId ? "re_vocal" : "occasion";
   _requestCtx = track
-    ? {
-      songId: String(track.cloudSongId || track.songId || track.id || track.localId || "").trim(),
-      title: String(track.title || track.name || "Untitled").trim(),
-      artUrl: String(track.artUrl || track.imageUrl || track.cover || track.imageThumb || "").trim(),
-    }
+    ? songRef
     : { songId: "", title: "", artUrl: "" };
   await loadRoster();
   paintRequestSteps();
@@ -357,13 +408,15 @@ export function closeProSingerRequestSheet() {
   _requestCtx = null;
   _requestStep = 0;
   _submitting = false;
+  resetRequestDraft();
 }
 
 async function advanceRequestStep() {
   const steps = requestSteps();
   const stepKey = steps[_requestStep];
   if (stepKey === "brief") {
-    const brief = String(el("proSingerBrief")?.value || "").trim();
+    captureRequestStepFields("brief");
+    const brief = _requestDraft.brief;
     if (!brief && !_requestCtx?.songId) {
       _deps?.showToast?.("Tell us about the occasion or story.");
       return;
@@ -373,6 +426,9 @@ async function advanceRequestStep() {
       return;
     }
   }
+  if (stepKey === "mode") {
+    captureRequestStepFields("mode");
+  }
   if (stepKey === "package") {
     const pkg = packageByTier(_selectedPackage);
     if (pkg.requiresSong && !_requestCtx?.songId) {
@@ -381,6 +437,7 @@ async function advanceRequestStep() {
     }
   }
   if (_requestStep >= steps.length - 1) return;
+  captureRequestStepFields(stepKey);
   _requestStep += 1;
   paintRequestSteps();
   updateRequestNav();
@@ -399,8 +456,17 @@ async function submitProSingerRequest() {
   const submitBtn = el("btnProSingerSubmit");
   if (submitBtn) submitBtn.disabled = true;
   try {
-    const data = await apiPost("/api/music/pro-singer-requests", collectRequestPayload());
+    const steps = requestSteps();
+    const stepKey = steps[_requestStep];
+    if (stepKey) captureRequestStepFields(stepKey);
+    const payload = collectRequestPayload();
+    if (_selectedPackage === "re_vocal" && !payload.brief) {
+      _deps?.showToast?.("Add a short brief for the singer.");
+      return;
+    }
+    const data = await apiPost("/api/music/pro-singer-requests", payload);
     closeProSingerRequestSheet();
+    syncSettingsProSingerRows();
     _deps?.showToast?.(data.message || "Request submitted — we'll contact you soon.");
   } catch (err) {
     const msg = String(err?.message || "");

@@ -1503,6 +1503,14 @@ function requestStatusBadge(status) {
   return `<span class="badge pending">${escapeHtml(s)}</span>`;
 }
 
+function singerAssignmentBadge(status) {
+  const s = String(status || "").trim().toLowerCase();
+  if (s === "accepted") return `<span class="badge active">accepted</span>`;
+  if (s === "declined") return `<span class="badge exhausted">declined</span>`;
+  if (s === "pending") return `<span class="badge pending">awaiting singer</span>`;
+  return `<span class="badge">—</span>`;
+}
+
 function renderSingers(data) {
   const apps = data?.applications || [];
   const roster = data?.roster || [];
@@ -1571,13 +1579,14 @@ function renderSingers(data) {
         <td>${escapeHtml(r.packageTier || "—")} · ${fmtUsd(r.priceUsd)}</td>
         <td style="max-width:10rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(r.songTitle || r.occasion || "—")}</td>
         <td>${requestStatusBadge(r.status)}</td>
+        <td>${singerAssignmentBadge(r.singerAssignmentStatus)}</td>
         <td>${paySelect}</td>
         <td>${singerSelect}</td>
         <td>${statusSelect}</td>
         <td><button type="button" class="btnGhost" data-request-save="${escapeHtml(r.id)}">Save</button></td>
       </tr>`;
     }).join("")
-    : `<tr><td colspan="9" class="loading">No performance requests yet.</td></tr>`;
+    : `<tr><td colspan="10" class="loading">No performance requests yet.</td></tr>`;
 
   els.panels.singers.innerHTML = adminPageStack(`
     ${listSection({
@@ -1612,7 +1621,7 @@ function renderSingers(data) {
     <div class="tableWrap tableWrap--plain">
       <table class="table--compact">
         <thead>
-          <tr><th>ID</th><th>User</th><th>Package</th><th>Song / occasion</th><th>Status</th><th>Payment</th><th>Singer</th><th>Update status</th><th></th></tr>
+          <tr><th>ID</th><th>User</th><th>Package</th><th>Song / occasion</th><th>Status</th><th>Singer response</th><th>Payment</th><th>Singer</th><th>Update status</th><th></th></tr>
         </thead>
         <tbody>${reqBody}</tbody>
       </table>

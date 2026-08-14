@@ -28788,6 +28788,7 @@ async function socialApi(path, opts = {}) {
 let _messagesPageBound = false;
 let _messagesRealtimePollTimer = 0;
 let _messagesPresencePollTimer = 0;
+let _messagesReadPollTimer = 0;
 let _messagesUnreadCount = 0;
 let _messagesUnreadLastFetchedAt = 0;
 let _messagesUnreadFetchInFlight = false;
@@ -28802,6 +28803,7 @@ let _messagesRefreshing = false;
 let _messagesThreadBootToken = 0;
 let _messagesLastFetchedAt = "";
 let _messagesLastFetchedId = "";
+let _messagesPartnerLastReadAt = "";
 let _messagesPollInFlight = false;
 let _messagesHasMoreOlder = true;
 let _messagesLoadingOlder = false;
@@ -28811,6 +28813,8 @@ const MESSAGES_THREAD_LOAD_OLDER_THRESHOLD_PX = 120;
 const MESSAGES_THREAD_SAFETY_POLL_MS = 45000;
 /** Partner now-playing line in the thread header (independent of message poll). */
 const MESSAGES_THREAD_PRESENCE_POLL_MS = 5000;
+/** Partner read cursor for outbound ✓ / ✓✓ receipts. */
+const MESSAGES_THREAD_READ_POLL_MS = 5000;
 const _messagesThreadCache = new Map();
 const _chatPartnerStatsCache = new Map();
 let _messagesInboxLoading = false;
@@ -29631,7 +29635,7 @@ function mergeThreadMessages(incoming, { scrollToBottom = true } = {}) {
       list[optIdx] = {
         ...m,
         client_message_id: list[optIdx].client_message_id || m.client_message_id || "",
-        sendStatus: "delivered",
+        sendStatus: "sent",
       };
       changed = true;
       continue;
@@ -29641,11 +29645,11 @@ function mergeThreadMessages(incoming, { scrollToBottom = true } = {}) {
     if (existingIdx >= 0) {
       const prev = list[existingIdx];
       if (prev.body !== m.body || prev.created_at !== m.created_at) {
-        list[existingIdx] = { ...prev, ...m, sendStatus: prev.sendStatus || "delivered" };
+        list[existingIdx] = { ...prev, ...m, sendStatus: prev.sendStatus || "sent" };
         changed = true;
       }
     } else {
-      list.push({ ...m, sendStatus: m.sendStatus || "delivered" });
+      list.push({ ...m, sendStatus: m.sendStatus || "sent" });
       changed = true;
     }
   }
@@ -29671,7 +29675,7 @@ function prependThreadMessages(newMsgs) {
   for (const m of rows) {
     const serverId = String(m?.id || "");
     if (!serverId || isPendingThreadMessageId(serverId) || existingIds.has(serverId)) continue;
-    list.push({ ...m, sendStatus: m.sendStatus || "delivered" });
+    list.push({ ...m, sendStatus: m.sendStatus || "sent" });
     existingIds.add(serverId);
     added += 1;
   }
@@ -29829,6 +29833,7 @@ function catchUpOpenMessagesThread({ reason = "foreground" } = {}) {
   void refreshDmThreadRealtimeAuthOnly();
   if (isDmPostgresRealtimeEnabled()) void refreshDmThreadRealtimeSubscribe(tid);
   void pollNewThreadMessages(tid, { bootToken: _messagesThreadBootToken, reason });
+  void pollPartnerThreadRead(tid, { bootToken: _messagesThreadBootToken });
 }
 
 function addOptimisticThreadMessage(msg) {
@@ -29844,7 +29849,7 @@ function confirmOptimisticThreadMessage(clientMessageId, serverMsg) {
   const next = {
     ...serverMsg,
     client_message_id: cid || String(serverMsg?.client_message_id || ""),
-    sendStatus: "delivered",
+    sendStatus: "sent",
   };
   if (idx >= 0) {
     const list = [..._messagesList];
@@ -29905,7 +29910,7 @@ async function sendThreadMessageInBackground({ clientMessageId, threadId, body }
     if (msg) {
       confirmOptimisticThreadMessage(cid, { ...msg, client_message_id: cid });
     } else {
-      updateOptimisticMessageStatus(cid, "delivered");
+      updateOptimisticMessageStatus(cid, "sent");
     }
     void refreshMessagesUnreadBadge({ force: true });
   } catch (e) {
@@ -29939,6 +29944,7 @@ function resetMessagesThreadRouteState() {
   _messagesRefreshing = false;
   _messagesLastFetchedAt = "";
   _messagesLastFetchedId = "";
+  _messagesPartnerLastReadAt = "";
   _messagesHasMoreOlder = true;
   _messagesLoadingOlder = false;
 }
@@ -31298,8 +31304,45 @@ function renderMessagesInbox() {
   if (statusEl) statusEl.hidden = true;
 }
 
+function resolveOutboundMessageStatus(msg) {
+  const explicit = String(msg?.sendStatus || "").trim();
+  if (explicit === "sending" || explicit === "failed") return explicit;
+  const createdAt = msg?.created_at ? new Date(msg.created_at).getTime() : 0;
+  const partnerRead = _messagesPartnerLastReadAt ? new Date(_messagesPartnerLastReadAt).getTime() : 0;
+  if (partnerRead && createdAt && createdAt <= partnerRead) return "read";
+  if (explicit === "read") return "read";
+  if (explicit === "delivered") return "sent";
+  return "sent";
+}
+
+function applyPartnerLastReadAt(lastReadAt) {
+  const next = String(lastReadAt || "").trim();
+  if (!next) return false;
+  if (_messagesPartnerLastReadAt === next) return false;
+  _messagesPartnerLastReadAt = next;
+  return true;
+}
+
+async function pollPartnerThreadRead(threadId, { bootToken = 0 } = {}) {
+  const tid = String(threadId || _conversationId || "").trim();
+  if (!tid || isCoachThreadId(tid)) return;
+  if (bootToken && bootToken !== _messagesThreadBootToken) return;
+  if (String(document.body.getAttribute("data-route") || "") !== "messages-thread") return;
+  if (_conversationId !== tid) return;
+  try {
+    const data = await messagesApi(`/api/messages?type=thread_read&threadId=${encodeURIComponent(tid)}`);
+    if (bootToken && bootToken !== _messagesThreadBootToken) return;
+    if (_conversationId !== tid) return;
+    if (applyPartnerLastReadAt(data?.partnerLastReadAt)) {
+      renderMessagesMount({ scrollToBottom: false });
+    }
+  } catch (e) {
+    console.warn("[dm-read]", e);
+  }
+}
+
 function messagesBubbleStatusHtml(msg) {
-  const status = String(msg?.sendStatus || "").trim();
+  const status = resolveOutboundMessageStatus(msg);
   if (status === "sending") {
     return `<span class="messagesBubbleStatus messagesBubbleStatus--sending" aria-label="Sending">Sending</span>`;
   }
@@ -31307,8 +31350,11 @@ function messagesBubbleStatusHtml(msg) {
     const cid = escapeHtml(String(msg?.client_message_id || ""));
     return `<button type="button" class="messagesBubbleStatus messagesBubbleStatus--failed" data-retry-client-msg="${cid}">Not sent · Retry</button>`;
   }
-  if (status === "delivered") {
-    return `<span class="messagesBubbleStatus messagesBubbleStatus--delivered" aria-label="Delivered">✓</span>`;
+  if (status === "read") {
+    return `<span class="messagesBubbleStatus messagesBubbleStatus--read" aria-label="Read"><span class="msgTicks msgTicks--double">✓✓</span></span>`;
+  }
+  if (status === "sent") {
+    return `<span class="messagesBubbleStatus messagesBubbleStatus--sent" aria-label="Sent"><span class="msgTicks">✓</span></span>`;
   }
   return "";
 }
@@ -31383,6 +31429,8 @@ function messagesBubbleHtml(msg, viewerId, opts) {
   const when = showTime && msg?.created_at ? relativeTime(new Date(msg.created_at).getTime()) : "";
   const pendingCls = mine && msg?.sendStatus === "sending" ? " is-pending" : "";
   const failedCls = mine && msg?.sendStatus === "failed" ? " is-failed" : "";
+  const outboundStatus = mine ? resolveOutboundMessageStatus(msg) : "";
+  const readByPartnerCls = mine && outboundStatus === "read" ? " is-read-by-partner" : "";
   const statusHtml = mine ? messagesBubbleStatusHtml(msg) : "";
   const timeHtml = when ? `<span class="messagesBubbleTime">${escapeHtml(when)}</span>` : "";
   const metaHtml =
@@ -31391,7 +31439,7 @@ function messagesBubbleHtml(msg, viewerId, opts) {
       : "";
   if (parsed.type === "song") {
     return `
-      <div class="messagesBubbleWrap messagesBubbleWrap--song${mine ? " is-mine" : ""}${pendingCls}${failedCls}" data-msg-id="${escapeHtml(String(msg?.id || ""))}" data-client-msg-id="${escapeHtml(String(msg?.client_message_id || ""))}">
+      <div class="messagesBubbleWrap messagesBubbleWrap--song${mine ? " is-mine" : ""}${pendingCls}${failedCls}${readByPartnerCls}" data-msg-id="${escapeHtml(String(msg?.id || ""))}" data-client-msg-id="${escapeHtml(String(msg?.client_message_id || ""))}">
         <div class="messagesBubble messagesBubble--song">
           ${messagesDmSongCardHtml(parsed, { mine })}
           ${metaHtml}
@@ -31404,7 +31452,7 @@ function messagesBubbleHtml(msg, viewerId, opts) {
     ? `<div class="messagesBubbleText messagesBubbleText--coachMd">${renderCoachMarkdown(body)}</div>`
     : userTextHtml(body, { tag: "p", className: "messagesBubbleText", escapeHtml });
   return `
-    <div class="messagesBubbleWrap${mine ? " is-mine" : ""}${pendingCls}${failedCls}" data-msg-id="${escapeHtml(String(msg?.id || ""))}" data-client-msg-id="${escapeHtml(String(msg?.client_message_id || ""))}">
+    <div class="messagesBubbleWrap${mine ? " is-mine" : ""}${pendingCls}${failedCls}${readByPartnerCls}" data-msg-id="${escapeHtml(String(msg?.id || ""))}" data-client-msg-id="${escapeHtml(String(msg?.client_message_id || ""))}">
       <div class="messagesBubble">
         ${textHtml}
         ${metaHtml}
@@ -31441,9 +31489,10 @@ async function loadMessagesForConversation(threadId, { bootToken = 0, silent = f
       });
     }
     _conversationId = tid;
+    applyPartnerLastReadAt(data?.partnerLastReadAt);
     const incoming = Array.isArray(data?.messages) ? data.messages : [];
     if (replace) {
-      _messagesList = incoming.map((m) => ({ ...m, sendStatus: m.sendStatus || "delivered" }));
+      _messagesList = incoming.map((m) => ({ ...m, sendStatus: m.sendStatus || "sent" }));
       syncMessagesLastFetchedAtFromList();
       _messagesHasMoreOlder = incoming.length >= MESSAGES_THREAD_PAGE_SIZE;
     } else if (silent || hasCache || (Array.isArray(_messagesList) && _messagesList.length)) {
@@ -31585,12 +31634,19 @@ async function refreshDmThreadRealtimeSubscribe(threadId) {
     supabaseAnonKey: SUPABASE_ANON_KEY,
     accessToken: token,
     threadId: tid,
+    partnerUserId: String(_chatHeaderUser?.userId || "").trim(),
     onInsert: (row) => {
       if (String(_conversationId || "") !== tid) return;
       if (String(document.body.getAttribute("data-route") || "") !== "messages-thread") return;
       if (mergeThreadMessages([row], { scrollToBottom: true })) {
         saveActiveThreadToCache();
         void markThreadReadQuiet(tid);
+      }
+    },
+    onReadUpdate: ({ lastReadAt } = {}) => {
+      if (String(_conversationId || "") !== tid) return;
+      if (applyPartnerLastReadAt(lastReadAt)) {
+        renderMessagesMount({ scrollToBottom: false });
       }
     },
     onStatus: (status) => {
@@ -31610,6 +31666,10 @@ function stopMessagesThreadRealtime() {
   if (_messagesPresencePollTimer) {
     window.clearInterval(_messagesPresencePollTimer);
     _messagesPresencePollTimer = 0;
+  }
+  if (_messagesReadPollTimer) {
+    window.clearInterval(_messagesReadPollTimer);
+    _messagesReadPollTimer = 0;
   }
   void stopDmThreadRealtimeSubscribe();
 }
@@ -31638,8 +31698,17 @@ function startMessagesThreadRealtime(threadId) {
     if (_conversationId !== tid) return;
     void refreshPartnerPresence();
   }, MESSAGES_THREAD_PRESENCE_POLL_MS);
+  _messagesReadPollTimer = window.setInterval(() => {
+    if (String(document.body.getAttribute("data-route") || "") !== "messages-thread") {
+      stopMessagesThreadRealtime();
+      return;
+    }
+    if (_conversationId !== tid) return;
+    void pollPartnerThreadRead(tid, { bootToken: _messagesThreadBootToken });
+  }, MESSAGES_THREAD_READ_POLL_MS);
   void refreshDmThreadRealtimeSubscribe(tid);
   void pollNewThreadMessages(tid, { bootToken: _messagesThreadBootToken, reason: "thread-open" });
+  void pollPartnerThreadRead(tid, { bootToken: _messagesThreadBootToken });
   void refreshPartnerPresence();
 }
 
@@ -31693,9 +31762,10 @@ async function bootstrapMessagesThread({ bootToken, threadId, targetUserId }) {
       history.replaceState(null, "", `#/messages-thread?thread=${encodeURIComponent(tid)}`);
     } catch {}
   }
-  startMessagesThreadRealtime(tid);
   const silent = messagesThreadHasCachedMessages(tid) || (Array.isArray(_messagesList) && _messagesList.length > 0);
   await loadMessagesForConversation(tid, { bootToken, silent, replace: true });
+  if (bootToken !== _messagesThreadBootToken) return;
+  startMessagesThreadRealtime(tid);
   syncMessagesThreadComposerReady();
   if (bootToken === _messagesThreadBootToken) {
     scheduleMessagesThreadScrollToBottom({ force: true });
@@ -31730,6 +31800,7 @@ function enterMessagesThreadRoute(threadId, targetUserId = "") {
     _messagesList = [];
     _messagesLastFetchedAt = "";
     _messagesLastFetchedId = "";
+    _messagesPartnerLastReadAt = "";
   }
 
   _messagesThreadNeedsInitialScroll = true;
@@ -31854,7 +31925,7 @@ function coachWelcomeMessage() {
     sender_id: COACH_SENDER_ID,
     body: "Hey! I'm **NabadAi Coach** 🎵 your guide to making music here.\n\nAsk me anything — writing a song, **feedback on your lyrics** (syllables, rhythm, Arabic وزن/أوف), picking a style, publishing, credits, **NabadAi Pro**, and more.\n\nPaste lyrics and ask what works or what sounds maksour when sung. I can't see your balance or account details, but I can explain costs and where to subscribe. Please don't share passwords. 🎧",
     created_at: new Date().toISOString(),
-    sendStatus: "delivered",
+    sendStatus: "sent",
   };
 }
 function coachHeaderUser() {
@@ -31944,7 +32015,7 @@ async function sendCoachMessage(text, input) {
     sender_id: String(authSession?.user?.id || "me"),
     body: text,
     created_at: new Date().toISOString(),
-    sendStatus: "delivered",
+    sendStatus: "sent",
   };
   if (input) {
     input.value = "";
@@ -31985,7 +32056,7 @@ async function sendCoachMessage(text, input) {
       sender_id: COACH_SENDER_ID,
       body: replyText || errorText || "Sorry, I couldn't answer that. Please try again.",
       created_at: new Date().toISOString(),
-      sendStatus: "delivered",
+      sendStatus: "sent",
     };
     _messagesList = [...base, botMsg];
     saveCoachChat(_messagesList);

@@ -34739,6 +34739,13 @@ body.messagesThreadKeyboardOpen[data-route="messages-thread"] .messagesThreadPag
   background: linear-gradient(135deg, rgba(124,92,255,0.95), rgba(167,139,250,0.88));
   border-color: rgba(167,139,250,0.28);
   box-shadow: 0 8px 24px rgba(124,92,255,0.22);
+  transition: background 0.28s ease, box-shadow 0.28s ease, border-color 0.28s ease, opacity 0.28s ease;
+}
+/* Read by partner — softer bubble; full color while still waiting on a read. */
+.messagesBubbleWrap.is-mine.is-read-by-partner .messagesBubble{
+  background: linear-gradient(135deg, rgba(124,92,255,0.48), rgba(167,139,250,0.38));
+  border-color: rgba(167,139,250,0.16);
+  box-shadow: none;
 }
 .messagesBubble--song{
   padding: 6px;
@@ -34835,10 +34842,25 @@ body.messagesThreadKeyboardOpen[data-route="messages-thread"] .messagesThreadPag
   color: rgba(223,231,251,0.44);
   letter-spacing: 0.01em;
 }
-.messagesBubbleStatus--delivered{
+.messagesBubbleStatus--sent,
+.messagesBubbleStatus--read{
   font-size: 11px;
-  color: rgba(223,231,251,0.56);
   line-height: 1;
+}
+.messagesBubbleStatus--sent{
+  color: rgba(255,255,255,0.78);
+}
+.messagesBubbleStatus--read{
+  color: rgba(255,255,255,0.52);
+}
+.msgTicks{
+  display: inline-block;
+}
+.msgTicks--double{
+  letter-spacing: -0.14em;
+}
+.messagesBubbleWrap.is-mine.is-read-by-partner .messagesBubbleStatus--read{
+  color: rgba(255,255,255,0.46);
 }
 .messagesBubbleStatus--failed{
   font-size: 10px;
@@ -34884,6 +34906,12 @@ body.messagesThreadKeyboardOpen[data-route="messages-thread"] .messagesThreadPag
 .messagesBubbleWrap.is-mine .messagesDmSongCard{
   border-color: rgba(167,139,250,0.30);
   background: linear-gradient(135deg, rgba(124,92,255,0.20), rgba(124,92,255,0.07));
+  transition: background 0.28s ease, border-color 0.28s ease, opacity 0.28s ease;
+}
+.messagesBubbleWrap.is-mine.is-read-by-partner .messagesDmSongCard{
+  border-color: rgba(167,139,250,0.14);
+  background: linear-gradient(135deg, rgba(124,92,255,0.10), rgba(124,92,255,0.04));
+  opacity: 0.72;
 }
 .messagesDmSongCard--static{
   cursor: default;
@@ -52128,6 +52156,12 @@ html[data-theme="light"] .messagesBubbleWrap.is-mine .messagesBubble{
   background: linear-gradient(135deg, #0d9488, #12b896);
   border-color: rgba(13,148,136,0.35);
   box-shadow: 0 2px 8px rgba(13, 148, 136, 0.18);
+  transition: background 0.28s ease, box-shadow 0.28s ease, border-color 0.28s ease, opacity 0.28s ease;
+}
+html[data-theme="light"] .messagesBubbleWrap.is-mine.is-read-by-partner .messagesBubble{
+  background: linear-gradient(135deg, rgba(13,148,136,0.42), rgba(18,184,150,0.34));
+  border-color: rgba(13,148,136,0.18);
+  box-shadow: none;
 }
 html[data-theme="light"] .messagesBubbleWrap.is-mine .messagesBubbleText,
 html[data-theme="light"] .messagesBubbleWrap.is-mine .messagesBubbleText--coachMd strong{
@@ -52139,13 +52173,22 @@ html[data-theme="light"] .messagesBubbleTime{
 html[data-theme="light"] .messagesBubbleWrap.is-mine .messagesBubbleTime{
   color: rgba(255,255,255,0.72);
 }
-html[data-theme="light"] .messagesDmSongCard{
-  border-color: var(--border);
-  background: var(--card);
+html[data-theme="light"] .messagesBubbleWrap.is-mine.is-read-by-partner .messagesBubbleTime{
+  color: rgba(255,255,255,0.58);
 }
 html[data-theme="light"] .messagesBubbleWrap.is-mine .messagesDmSongCard{
   border-color: rgba(255,255,255,0.28);
   background: rgba(255,255,255,0.14);
+  transition: background 0.28s ease, border-color 0.28s ease, opacity 0.28s ease;
+}
+html[data-theme="light"] .messagesBubbleWrap.is-mine.is-read-by-partner .messagesDmSongCard{
+  border-color: rgba(255,255,255,0.16);
+  background: rgba(255,255,255,0.08);
+  opacity: 0.72;
+}
+html[data-theme="light"] .messagesDmSongCard{
+  border-color: var(--border);
+  background: var(--card);
 }
 html[data-theme="light"] .messagesDmSongTitle{
   color: var(--text-primary);

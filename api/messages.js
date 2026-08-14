@@ -244,6 +244,15 @@ async function unreadCountForUser(userId) {
   return unread;
 }
 
+async function partnerLastReadAtForThread(thread, viewerId) {
+  const partnerId = threadPartnerId(thread, viewerId);
+  if (!partnerId || !thread?.id) return null;
+  const reads = await svcFetch(
+    `dm_thread_reads?select=last_read_at&thread_id=eq.${encodeURIComponent(thread.id)}&user_id=eq.${encodeURIComponent(partnerId)}&limit=1`,
+  );
+  return Array.isArray(reads.data) && reads.data[0] ? reads.data[0].last_read_at : null;
+}
+
 async function enrichThreadRow(thread, viewerId) {
   const partnerId = threadPartnerId(thread, viewerId);
   const prof = partnerId ? await profileByUserId(partnerId) : null;
@@ -301,6 +310,18 @@ async function handleGet(req, res, user) {
     return sendJson(res, 200, { ok: true, presence });
   }
 
+  if (type === "thread_read") {
+    const threadId = String(url.searchParams.get("threadId") || "").trim();
+    if (!threadId) return sendJson(res, 400, { ok: false, error: "Missing threadId" });
+    const tr = await svcFetch(
+      `dm_threads?select=id,user_a,user_b&or=(and(id.eq.${encodeURIComponent(threadId)},user_a.eq.${encodeURIComponent(user.userId)}),and(id.eq.${encodeURIComponent(threadId)},user_b.eq.${encodeURIComponent(user.userId)}))&limit=1`,
+    );
+    const thread = Array.isArray(tr.data) && tr.data[0] ? tr.data[0] : null;
+    if (!thread) return sendJson(res, 404, { ok: false, error: "Thread not found" });
+    const partnerLastReadAt = await partnerLastReadAtForThread(thread, user.userId);
+    return sendJson(res, 200, { ok: true, partnerLastReadAt: partnerLastReadAt || null });
+  }
+
   if (type === "thread") {
     const threadId = String(url.searchParams.get("threadId") || "").trim();
     if (!threadId) return sendJson(res, 400, { ok: false, error: "Missing threadId" });
@@ -318,6 +339,7 @@ async function handleGet(req, res, user) {
     const rows = Array.isArray(msgs.data) ? [...msgs.data].reverse() : [];
     const partnerId = threadPartnerId(thread, user.userId);
     const prof = partnerId ? await profileByUserId(partnerId) : null;
+    const partnerLastReadAt = await partnerLastReadAtForThread(thread, user.userId);
     return sendJson(res, 200, {
       ok: true,
       thread: {
@@ -326,6 +348,7 @@ async function handleGet(req, res, user) {
         partnerUsername: prof?.username || "",
         partnerAvatar: prof?.avatar || "",
       },
+      partnerLastReadAt: partnerLastReadAt || null,
       messages: rows,
     });
   }

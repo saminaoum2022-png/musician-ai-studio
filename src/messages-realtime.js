@@ -70,10 +70,13 @@ export async function subscribeDmThread({
   supabaseAnonKey,
   accessToken,
   threadId,
+  partnerUserId = "",
   onInsert,
+  onReadUpdate,
   onStatus,
 } = {}) {
   const tid = String(threadId || "").trim();
+  const partnerId = String(partnerUserId || "").trim();
   const token = String(accessToken || "").trim();
   if (!tid || !token || !isDmPostgresRealtimeEnabled()) return false;
 
@@ -109,6 +112,24 @@ export async function subscribeDmThread({
         if (row) {
           try { onInsert?.(row); } catch (e) { console.warn("[dm-realtime] onInsert", e); }
         }
+      },
+    )
+    .on(
+      "postgres_changes",
+      {
+        event: "*",
+        schema: "public",
+        table: "dm_thread_reads",
+        filter: `thread_id=eq.${tid}`,
+      },
+      (payload) => {
+        const row = payload?.new;
+        if (!row || typeof row !== "object") return;
+        const readUserId = String(row.user_id || "").trim();
+        if (partnerId && readUserId !== partnerId) return;
+        const lastReadAt = String(row.last_read_at || "").trim();
+        if (!lastReadAt) return;
+        try { onReadUpdate?.({ userId: readUserId, lastReadAt }); } catch (e) { console.warn("[dm-realtime] onReadUpdate", e); }
       },
     )
     .subscribe((status, err) => {

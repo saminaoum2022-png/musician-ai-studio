@@ -2271,7 +2271,8 @@ async function adminSingersRequest(body = {}) {
     throw new Error(data?.error || "You do not have permission to manage singers.");
   }
   if (!r.ok || !data?.ok) {
-    throw new Error(data?.error || `Request failed (${r.status})`);
+    const err = data?.error;
+    throw new Error(typeof err === "string" ? err : `Request failed (${r.status})`);
   }
   return data;
 }

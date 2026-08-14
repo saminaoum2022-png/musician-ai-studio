@@ -54,6 +54,7 @@ const els = {
     generation: document.getElementById("viewGeneration"),
     credits: document.getElementById("viewCredits"),
     promos: document.getElementById("viewPromos"),
+    singers: document.getElementById("viewSingers"),
     generations: document.getElementById("viewGenerations"),
     publications: document.getElementById("viewPublications"),
     subscriptions: document.getElementById("viewSubscriptions"),
@@ -71,6 +72,7 @@ const VIEW_META = {
   generation: { title: "Generation detail", sub: "Prompt, status, credits, and saved output" },
   credits: { title: "Credits", sub: "Grant paid credits and view every ledger entry" },
   promos: { title: "Promo codes", sub: "Create and monitor redemption codes" },
+  singers: { title: "Pro singers", sub: "Singer applications, roster, and performance requests" },
   generations: { title: "Generations", sub: "Song and audio generation requests" },
   publications: { title: "Publications", sub: "Public profile posts — moderation view (not friends-only)" },
   subscriptions: { title: "Subscriptions", sub: "NabadAi Pro status by user" },
@@ -650,7 +652,7 @@ function viewCacheKey() {
 }
 
 function firstAllowedView() {
-  const order = ["overview", "providers", "users", "generations", "publications", "credits", "promos", "subscriptions", "billing", "settings"];
+  const order = ["overview", "providers", "users", "generations", "publications", "credits", "promos", "singers", "subscriptions", "billing", "settings"];
   for (const view of order) {
     if (canAccessView(view)) return view;
   }
@@ -1487,6 +1489,144 @@ function renderPromos(data) {
   `, { plain: true });
 }
 
+function singerAppStatusBadge(status) {
+  const s = String(status || "").toLowerCase();
+  if (s === "approved") return `<span class="badge active">approved</span>`;
+  if (s === "rejected") return `<span class="badge exhausted">rejected</span>`;
+  return `<span class="badge pending">pending</span>`;
+}
+
+function requestStatusBadge(status) {
+  const s = String(status || "").toLowerCase();
+  if (s === "delivered" || s === "closed") return `<span class="badge active">${escapeHtml(s)}</span>`;
+  if (s === "cancelled") return `<span class="badge exhausted">cancelled</span>`;
+  return `<span class="badge pending">${escapeHtml(s)}</span>`;
+}
+
+function renderSingers(data) {
+  const apps = data?.applications || [];
+  const roster = data?.roster || [];
+  const requests = data?.requests || [];
+  const appsTotal = data?.applicationsTotal || apps.length;
+  const reqTotal = data?.requestsTotal || requests.length;
+
+  const appBody = apps.length
+    ? apps.map((a) => {
+      const actions = a.status === "pending"
+        ? `<button type="button" class="btnGhost" data-singer-approve="${escapeHtml(a.id)}">Approve</button>
+           <button type="button" class="btnGhost" data-singer-reject="${escapeHtml(a.id)}">Reject</button>`
+        : "—";
+      return `
+      <tr>
+        <td>${escapeHtml(a.userLabel || "—")}</td>
+        <td>${escapeHtml(a.displayName || "—")}</td>
+        <td>@${escapeHtml(a.instagram || "—")}</td>
+        <td style="max-width:12rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(a.languages || "—")}</td>
+        <td>${singerAppStatusBadge(a.status)}</td>
+        ${dateCell(a.createdAt)}
+        <td>${actions}</td>
+      </tr>`;
+    }).join("")
+    : `<tr><td colspan="7" class="loading">No applications yet.</td></tr>`;
+
+  const rosterBody = roster.length
+    ? roster.map((s) => {
+      const toggleBtn = `<button type="button" class="btnGhost" data-singer-toggle="${escapeHtml(s.userId)}" data-singer-active="${s.active ? "1" : "0"}">${s.active ? "Deactivate" : "Activate"}</button>`;
+      return `
+      <tr>
+        <td>${escapeHtml(s.userLabel || "—")}</td>
+        <td>${escapeHtml(s.displayName || "—")}</td>
+        <td>@${escapeHtml(s.instagram || "—")}</td>
+        <td>${s.active ? `<span class="badge active">active</span>` : `<span class="badge exhausted">inactive</span>`}</td>
+        ${dateCell(s.approvedAt)}
+        <td>${toggleBtn}</td>
+      </tr>`;
+    }).join("")
+    : `<tr><td colspan="6" class="loading">No approved singers yet.</td></tr>`;
+
+  const rosterOptions = roster.filter((s) => s.active).map((s) =>
+    `<option value="${escapeHtml(s.userId)}">${escapeHtml(s.displayName || s.userLabel)}</option>`,
+  ).join("");
+
+  const reqBody = requests.length
+    ? requests.map((r) => {
+      const singerSelect = `<select class="inputCompact" data-request-singer="${escapeHtml(r.id)}">
+        <option value="">Best match</option>
+        ${rosterOptions}
+      </select>`;
+      const statusSelect = `<select class="inputCompact" data-request-status="${escapeHtml(r.id)}">
+        ${["submitted", "confirmed", "in_progress", "review", "delivered", "closed", "cancelled"].map((st) =>
+          `<option value="${st}"${st === r.status ? " selected" : ""}>${st}</option>`,
+        ).join("")}
+      </select>`;
+      const paySelect = `<select class="inputCompact" data-request-payment="${escapeHtml(r.id)}">
+        ${["pending", "paid", "refunded"].map((st) =>
+          `<option value="${st}"${st === r.paymentStatus ? " selected" : ""}>${st}</option>`,
+        ).join("")}
+      </select>`;
+      return `
+      <tr>
+        <td style="font-size:0.78rem">${escapeHtml(r.id?.slice(0, 8) || "—")}</td>
+        <td>${escapeHtml(r.requesterLabel || "—")}</td>
+        <td>${escapeHtml(r.packageTier || "—")} · ${fmtUsd(r.priceUsd)}</td>
+        <td style="max-width:10rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(r.songTitle || r.occasion || "—")}</td>
+        <td>${requestStatusBadge(r.status)}</td>
+        <td>${paySelect}</td>
+        <td>${singerSelect}</td>
+        <td>${statusSelect}</td>
+        <td><button type="button" class="btnGhost" data-request-save="${escapeHtml(r.id)}">Save</button></td>
+      </tr>`;
+    }).join("")
+    : `<tr><td colspan="9" class="loading">No performance requests yet.</td></tr>`;
+
+  els.panels.singers.innerHTML = adminPageStack(`
+    ${listSection({
+      title: "Pending applications",
+      tableHtml: `
+    <div class="tableWrap tableWrap--plain">
+      <table class="table--compact">
+        <thead>
+          <tr><th>User</th><th>Name</th><th>Instagram</th><th>Languages</th><th>Status</th><th>Applied</th><th></th></tr>
+        </thead>
+        <tbody>${appBody}</tbody>
+      </table>
+    </div>`,
+      pager: pagerHtml(appsTotal, state.offset),
+    })}
+    ${listSection({
+      title: "Active roster",
+      tableHtml: `
+    <div class="tableWrap tableWrap--plain">
+      <table class="table--compact">
+        <thead>
+          <tr><th>User</th><th>Stage name</th><th>Instagram</th><th>Status</th><th>Approved</th><th></th></tr>
+        </thead>
+        <tbody>${rosterBody}</tbody>
+      </table>
+    </div>`,
+    })}
+    ${listSection({
+      title: "Performance requests",
+      tableHtml: `
+    <p class="pageSub" style="margin:0 0 0.75rem">After submit, send the user a Stripe payment link by email or Instagram. Mark paid when received.</p>
+    <div class="tableWrap tableWrap--plain">
+      <table class="table--compact">
+        <thead>
+          <tr><th>ID</th><th>User</th><th>Package</th><th>Song / occasion</th><th>Status</th><th>Payment</th><th>Singer</th><th>Update status</th><th></th></tr>
+        </thead>
+        <tbody>${reqBody}</tbody>
+      </table>
+    </div>`,
+      pager: pagerHtml(reqTotal, state.offset),
+    })}
+  `, { plain: true });
+
+  requests.forEach((r) => {
+    const singerEl = document.querySelector(`[data-request-singer="${r.id}"]`);
+    if (singerEl && r.singerId) singerEl.value = r.singerId;
+  });
+}
+
 function renderCredits(data) {
   const rows = data?.transactions || [];
   const total = data?.total || rows.length;
@@ -1942,6 +2082,7 @@ const RENDERERS = {
   generation: renderGenerationDetail,
   credits: renderCredits,
   promos: renderPromos,
+  singers: renderSingers,
   generations: renderGenerations,
   publications: renderPublications,
   subscriptions: renderSubscriptions,
@@ -2102,6 +2243,32 @@ async function adminPromoRequest(method, body = {}) {
   }
   if (r.status === 403) {
     throw new Error(data?.error || "You do not have permission to manage promo codes.");
+  }
+  if (!r.ok || !data?.ok) {
+    throw new Error(data?.error || `Request failed (${r.status})`);
+  }
+  return data;
+}
+
+async function adminSingersRequest(body = {}) {
+  await refreshSessionIfNeeded();
+  const token = state.session?.access_token;
+  if (!token) throw new Error("Not signed in");
+  const r = await fetch("/api/admin/singers", {
+    method: "PATCH",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(body),
+  });
+  const data = await r.json().catch(() => ({}));
+  if (r.status === 401) {
+    writeSession(null);
+    throw new Error("Session expired — sign in again");
+  }
+  if (r.status === 403) {
+    throw new Error(data?.error || "You do not have permission to manage singers.");
   }
   if (!r.ok || !data?.ok) {
     throw new Error(data?.error || `Request failed (${r.status})`);
@@ -2686,6 +2853,93 @@ document.body.addEventListener("click", (e) => {
         showError(err?.message || "Could not update promo code");
       } finally {
         promoToggleBtn.disabled = false;
+      }
+    })();
+    return;
+  }
+
+  const singerApproveBtn = e.target.closest("[data-singer-approve]");
+  if (singerApproveBtn) {
+    const applicationId = singerApproveBtn.dataset.singerApprove;
+    if (!applicationId) return;
+    void (async () => {
+      singerApproveBtn.disabled = true;
+      try {
+        await adminSingersRequest({ action: "approve_application", applicationId });
+        if (state.view === "singers") await loadView({ force: true });
+        showError("");
+      } catch (err) {
+        showError(err?.message || "Could not approve application");
+      } finally {
+        singerApproveBtn.disabled = false;
+      }
+    })();
+    return;
+  }
+
+  const singerRejectBtn = e.target.closest("[data-singer-reject]");
+  if (singerRejectBtn) {
+    const applicationId = singerRejectBtn.dataset.singerReject;
+    if (!applicationId) return;
+    const adminNotes = window.prompt("Optional note for the applicant (shown in app):") || "";
+    void (async () => {
+      singerRejectBtn.disabled = true;
+      try {
+        await adminSingersRequest({ action: "reject_application", applicationId, adminNotes });
+        if (state.view === "singers") await loadView({ force: true });
+        showError("");
+      } catch (err) {
+        showError(err?.message || "Could not reject application");
+      } finally {
+        singerRejectBtn.disabled = false;
+      }
+    })();
+    return;
+  }
+
+  const singerToggleBtn = e.target.closest("[data-singer-toggle]");
+  if (singerToggleBtn) {
+    const userId = singerToggleBtn.dataset.singerToggle;
+    const currentlyActive = singerToggleBtn.dataset.singerActive === "1";
+    if (!userId) return;
+    void (async () => {
+      singerToggleBtn.disabled = true;
+      try {
+        await adminSingersRequest({ action: "toggle_singer", userId, active: !currentlyActive });
+        if (state.view === "singers") await loadView({ force: true });
+        showError("");
+      } catch (err) {
+        showError(err?.message || "Could not update singer");
+      } finally {
+        singerToggleBtn.disabled = false;
+      }
+    })();
+    return;
+  }
+
+  const requestSaveBtn = e.target.closest("[data-request-save]");
+  if (requestSaveBtn) {
+    const requestId = requestSaveBtn.dataset.requestSave;
+    if (!requestId) return;
+    void (async () => {
+      requestSaveBtn.disabled = true;
+      try {
+        const status = document.querySelector(`[data-request-status="${requestId}"]`)?.value || "";
+        const paymentStatus = document.querySelector(`[data-request-payment="${requestId}"]`)?.value || "";
+        const singerId = document.querySelector(`[data-request-singer="${requestId}"]`)?.value || "";
+        await adminSingersRequest({
+          action: "update_request",
+          requestId,
+          status,
+          paymentStatus,
+          singerId: singerId || null,
+        });
+        if (state.view === "singers") await loadView({ force: true });
+        showError("");
+      } catch (err) {
+        showError(err?.message || "Could not save request");
+      } finally {
+        requestSaveBtn.disabled = false;
       }
     })();
     return;

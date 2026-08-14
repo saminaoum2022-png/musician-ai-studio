@@ -393,6 +393,11 @@ async function submitProSingerRequest() {
   }
 }
 
+function setApplySubmitVisible(visible) {
+  const foot = el("proSingerApplySheet")?.querySelector(".proSingerFoot");
+  if (foot) foot.hidden = !visible;
+}
+
 function paintApplicationForm() {
   const mount = el("proSingerApplyForm");
   const status = el("proSingerApplyStatus");
@@ -401,13 +406,16 @@ function paintApplicationForm() {
   if (_applicationState?.isApprovedSinger) {
     if (status) status.textContent = "You're an approved NabadAi Singer — thank you!";
     mount.innerHTML = `<p class="proSingerMuted">Gigs are assigned manually for now. We'll reach out on Instagram when a request matches you.</p>`;
+    setApplySubmitVisible(false);
     return;
   }
   if (app?.status === "pending") {
     if (status) status.textContent = "Application under review — we'll reply within a few days.";
     mount.innerHTML = `<p class="proSingerMuted">Applied as @${escapeHtml(app.instagram)}. You can close this sheet.</p>`;
+    setApplySubmitVisible(false);
     return;
   }
+  setApplySubmitVisible(true);
   if (app?.status === "rejected") {
     if (status) status.textContent = app.adminNotes || "Not accepted this round — you may re-apply below.";
   } else if (status) {
@@ -465,6 +473,9 @@ export function closeSingerApplicationSheet() {
 }
 
 async function submitSingerApplication() {
+  if (_applicationState?.isApprovedSinger || _applicationState?.application?.status === "pending") {
+    return;
+  }
   const btn = el("btnProSingerApplySubmit");
   if (btn) btn.disabled = true;
   try {

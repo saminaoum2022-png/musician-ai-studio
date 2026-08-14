@@ -54558,11 +54558,115 @@ html[data-theme="light"] .webProFeaturePill{
 html[data-theme="light"] .proSingerField input,
 html[data-theme="light"] .proSingerField select,
 html[data-theme="light"] .proSingerField textarea{
-  background: rgba(255,255,255,0.82);
-  border-color: rgba(20,24,36,0.12);
-  color: rgba(20,24,36,0.92);
+  background: var(--surface-secondary);
+  border-color: var(--border);
+  color: var(--text-primary);
+}
+html[data-theme="light"] .proSingerField input::placeholder,
+html[data-theme="light"] .proSingerField textarea::placeholder{
+  color: var(--text-muted);
+}
+html[data-theme="light"] .proSingerField{
+  color: var(--text-secondary);
 }
 html[data-theme="light"] .proSingerLead,
-html[data-theme="light"] .proSingerMuted{
-  color: rgba(72,82,104,0.82);
+html[data-theme="light"] .proSingerMuted,
+html[data-theme="light"] .proSingerAddonNote{
+  color: var(--text-secondary);
+}
+html[data-theme="light"] .proSingerFoot{
+  border-top-color: var(--border);
+  background: var(--card);
+}
+html[data-theme="light"] .proSingerDot{
+  background: rgba(15, 23, 40, 0.14);
+}
+html[data-theme="light"] .proSingerDot.isActive{
+  background: rgba(124, 92, 255, 0.88);
+}
+html[data-theme="light"] .proSingerDot.isDone{
+  background: rgba(124, 92, 255, 0.42);
+}
+html[data-theme="light"] .proSingerSongCard{
+  background: var(--surface-secondary);
+  border-color: var(--border);
+}
+html[data-theme="light"] .proSingerSongTitle{
+  color: var(--text-primary);
+}
+html[data-theme="light"] .proSingerSongSub{
+  color: var(--text-muted);
+}
+html[data-theme="light"] .proSingerPick{
+  background: var(--surface-secondary);
+  border-color: var(--border);
+  color: var(--text-primary);
+}
+html[data-theme="light"] .proSingerPick.isSelected{
+  border-color: rgba(124, 92, 255, 0.55);
+  background: rgba(124, 92, 255, 0.08);
+}
+html[data-theme="light"] .proSingerPickIco{
+  background: rgba(124, 92, 255, 0.12);
+  color: #6d28d9;
+}
+html[data-theme="light"] .proSingerPickName{
+  color: var(--text-primary);
+}
+html[data-theme="light"] .proSingerPickMeta{
+  color: var(--text-muted);
+}
+html[data-theme="light"] .proSingerPkg{
+  background: var(--surface-secondary);
+  border-color: var(--border);
+  color: var(--text-primary);
+}
+html[data-theme="light"] .proSingerPkg.isSelected{
+  border-color: rgba(124, 92, 255, 0.55);
+  background: rgba(124, 92, 255, 0.08);
+}
+html[data-theme="light"] .proSingerPkgPrice{
+  color: #6d28d9;
+}
+html[data-theme="light"] .proSingerPkgLabel{
+  color: var(--text-primary);
+}
+html[data-theme="light"] .proSingerPkgBlurb{
+  color: var(--text-secondary);
+}
+html[data-theme="light"] .proSingerReviewCard{
+  background: var(--surface-secondary);
+  border-color: var(--border);
+}
+html[data-theme="light"] .proSingerReviewRow{
+  color: var(--text-secondary);
+}
+html[data-theme="light"] .proSingerReviewRow strong{
+  color: var(--text-primary);
+}
+html[data-theme="light"] .proSingerReviewTotal{
+  border-top-color: var(--border);
+  color: var(--text-primary);
+}
+html[data-theme="light"] .proSingerReqRow{
+  background: var(--surface-secondary);
+  border-color: var(--border);
+}
+html[data-theme="light"] .proSingerReqHead strong{
+  color: var(--text-primary);
+}
+html[data-theme="light"] .proSingerReqBadge{
+  background: rgba(124, 92, 255, 0.12);
+  color: #6d28d9;
+}
+html[data-theme="light"] .proSingerReqMeta,
+html[data-theme="light"] .proSingerReqDate{
+  color: var(--text-muted);
+}
+html[data-theme="light"] .proSingerSteps,
+html[data-theme="light"] .proSingerRequestsList{
+  color: var(--text-primary);
+}
+html[data-theme="light"] .proSingerSheetCard{
+  background: var(--card);
 }

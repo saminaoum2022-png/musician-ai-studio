@@ -80,7 +80,7 @@ module.exports = async function handler(req, res) {
   const user = await verifyUser(req);
   if (!user) return adminUnauthorized(res);
   const admin = await verifyAdmin(req, { view: "singers" });
-  if (!admin.ok) return adminForbidden(res, admin);
+  if (!admin) return adminForbidden(res);
 
   let body = {};
   try {

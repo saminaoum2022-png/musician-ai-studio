@@ -210,7 +210,7 @@ import { MUSIC_VIDEO_FEATURE_ENABLED } from "./feature-flags.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260814-161515";
+const APP_BUILD = "20260814-172023";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -31474,6 +31474,7 @@ async function loadMessagesForConversation(threadId, { bootToken = 0, silent = f
   } else {
     _messagesRefreshing = true;
   }
+  let readCursorChanged = false;
   try {
     const data = await messagesApi(`/api/messages?type=thread&threadId=${encodeURIComponent(tid)}&limit=${MESSAGES_THREAD_PAGE_SIZE}`);
     if (bootToken && bootToken !== _messagesThreadBootToken) return false;
@@ -31489,7 +31490,7 @@ async function loadMessagesForConversation(threadId, { bootToken = 0, silent = f
       });
     }
     _conversationId = tid;
-    applyPartnerLastReadAt(data?.partnerLastReadAt);
+    readCursorChanged = applyPartnerLastReadAt(data?.partnerLastReadAt);
     const incoming = Array.isArray(data?.messages) ? data.messages : [];
     if (replace) {
       _messagesList = incoming.map((m) => ({ ...m, sendStatus: m.sendStatus || "sent" }));
@@ -31524,6 +31525,8 @@ async function loadMessagesForConversation(threadId, { bootToken = 0, silent = f
     _messagesRefreshing = false;
     if (!silent) {
       renderMessagesMount({ scrollToBottom: true, forceScroll: true });
+    } else if (readCursorChanged) {
+      renderMessagesMount({ scrollToBottom: false });
     } else if (_messagesThreadNeedsInitialScroll) {
       scheduleMessagesThreadScrollToBottom({ force: true });
     }

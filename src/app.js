@@ -2456,16 +2456,27 @@ function nativeApiBaseCandidates() {
   const out = [];
   const custom = String(window.__API_BASE__ || "").trim().replace(/\/$/, "");
   if (custom) out.push(custom);
+  const baked = String(window.__NABAD_CLIENT_ENV__?.apiBase || "").trim().replace(/\/$/, "");
+  if (baked) out.push(baked);
   for (const u of NATIVE_API_BASE_CANDIDATES) out.push(u.replace(/\/$/, ""));
   return [...new Set(out.filter(Boolean))];
 }
 /** Default Vercel host for native /api/* — never leave this empty on iOS. */
 function defaultNativeApiBase() {
+  const baked = String(window.__NABAD_CLIENT_ENV__?.apiBase || "").trim().replace(/\/$/, "");
+  if (baked) return baked;
   if (API_BASE) return API_BASE;
   if (isNativeShell()) {
     return nativeApiBaseCandidates()[0] || "https://www.nabadai.com";
   }
   return "";
+}
+function isStagingNativeBuild() {
+  try {
+    return String(window.__NABAD_CLIENT_ENV__?.environment || "").trim().toLowerCase() === "staging";
+  } catch {
+    return false;
+  }
 }
 const API_BASE = (() => {
   try {
@@ -2921,6 +2932,15 @@ async function fetchPublicConfigOnce(base) {
 /** Native needs the same Vercel host for /api/social as for public-config (Discover uses Supabase only). */
 async function ensureNativeApiBaseResolved() {
   if (!isNativeShell()) return true;
+  const baked = String(window.__NABAD_CLIENT_ENV__?.apiBase || "").trim().replace(/\/$/, "");
+  const stagingOnly = isStagingNativeBuild() && baked;
+  if (stagingOnly) {
+    try {
+      if (await fetchPublicConfigOnce(baked)) return true;
+    } catch {}
+    forceNativeApiBase(baked);
+    return Boolean(_resolvedApiBase);
+  }
   if (_resolvedApiBase) {
     try {
       if (await fetchPublicConfigOnce(_resolvedApiBase)) return true;
@@ -5704,6 +5724,7 @@ try {
   initProSinger({
     apiUrl,
     apiFetch,
+    ensureNativeNetworkReady,
     getAuthToken: getSupabaseAuthToken,
     showToast,
   });

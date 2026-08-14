@@ -57,6 +57,7 @@ function setSheetOpen(id, open) {
 }
 
 async function apiGet(path) {
+  if (_deps?.ensureNativeNetworkReady) await _deps.ensureNativeNetworkReady();
   const token = _deps?.getAuthToken?.();
   if (!token) throw new Error("Sign in to continue.");
   const url = _deps?.apiUrl ? _deps.apiUrl(path) : path;
@@ -65,11 +66,18 @@ async function apiGet(path) {
     headers: { Authorization: `Bearer ${token}` },
   });
   const data = await r.json().catch(() => ({}));
-  if (!r.ok) throw new Error(data?.error || `Request failed (${r.status})`);
+  if (!r.ok) {
+    const msg = String(data?.error || "");
+    if (r.status === 404) {
+      throw new Error("Pro singer API not found — make sure you are on the staging app build.");
+    }
+    throw new Error(msg || `Request failed (${r.status})`);
+  }
   return data;
 }
 
 async function apiPost(path, body) {
+  if (_deps?.ensureNativeNetworkReady) await _deps.ensureNativeNetworkReady();
   const token = _deps?.getAuthToken?.();
   if (!token) throw new Error("Sign in to continue.");
   const url = _deps?.apiUrl ? _deps.apiUrl(path) : path;
@@ -85,8 +93,11 @@ async function apiPost(path, body) {
   const data = await r.json().catch(() => ({}));
   if (!r.ok) {
     const msg = String(data?.error || "");
+    if (r.status === 404) {
+      throw new Error("Pro singer API not found — make sure you are on the staging app build.");
+    }
     if (msg.includes("not set up yet") || msg.includes("pro_singer") || msg.includes("singer_applications")) {
-      throw new Error("Pro singer backend is not ready yet — ask the team to run the database setup.");
+      throw new Error("Pro singer backend is not ready yet — run supabase/pro_singers.sql in Supabase.");
     }
     throw new Error(msg || `Request failed (${r.status})`);
   }

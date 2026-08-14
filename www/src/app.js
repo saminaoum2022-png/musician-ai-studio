@@ -34,7 +34,7 @@ import { initEcho, openEchoFromCreateChooser } from "./echo.js";
 import { initHumTrack, bindHumTrackHomeCard, openHumTrackFlow, humTrackReadyForGenerate, humTrackIsGenerating, triggerHumTrackGenerate, kickHumTrackGenerationPoll } from "./hum-track.js";
 import { createAdaptivePollLoop, stopPollLoop } from "./generation-poll.js";
 import {
-  feedTrackEligibleForVinylPlayer,
+  publishTrackEligibleForVinylChoice,
   feedVinylPlayerBlockHtml,
   feedVinylPlayerUsesLightPrototype,
   initFeedVinylPlayerSystem,
@@ -19570,8 +19570,7 @@ function normalizePostMediaLayout(raw) {
 }
 
 function defaultPostMediaLayoutForTrack(track) {
-  const type = followingActivityTypeForTrack(track);
-  return feedTrackEligibleForVinylPlayer(track, type) ? POST_MEDIA_LAYOUT_VINYL : POST_MEDIA_LAYOUT_COVER;
+  return publishTrackEligibleForVinylChoice(track) ? POST_MEDIA_LAYOUT_VINYL : POST_MEDIA_LAYOUT_COVER;
 }
 
 function publishReleaseDesignWaveBarsHtml() {
@@ -19605,8 +19604,7 @@ function renderPublishReleasePostDesign(sheet, track, artUrl) {
   const row = sheet.querySelector("#publishReleasePostDesignRow");
   const hint = section?.querySelector(".publishReleasePostDesignHint");
   if (!section || !row) return;
-  const type = followingActivityTypeForTrack(track);
-  const canVinyl = feedTrackEligibleForVinylPlayer(track, type);
+  const canVinyl = publishTrackEligibleForVinylChoice(track);
   const artSafe = escapeHtml(String(artUrl || "./assets/icons/splash-mark.png").trim());
   const saved = String(track?.meta?.postMediaLayout || "").trim().toLowerCase();
   let selected = saved === POST_MEDIA_LAYOUT_COVER ? POST_MEDIA_LAYOUT_COVER : POST_MEDIA_LAYOUT_VINYL;
@@ -19615,13 +19613,9 @@ function renderPublishReleasePostDesign(sheet, track, artUrl) {
   section.hidden = false;
   row.classList.toggle("publishReleasePostDesignRow--coverOnly", !canVinyl);
   if (hint) {
-    if (canVinyl) {
-      hint.textContent = "How your release looks in Friends and on your profile.";
-    } else if (type !== "release") {
-      hint.textContent = "Remixes, mashups, and challenges use the full cover layout.";
-    } else {
-      hint.textContent = "Photo Mood and custom covers use the full cover layout.";
-    }
+    hint.textContent = canVinyl
+      ? "How your release looks in Friends and on your profile."
+      : "Photo Mood and custom photo covers use the full cover layout.";
   }
   if (!canVinyl) {
     row.innerHTML = `
@@ -39867,7 +39861,7 @@ async function setLibraryTrackPublicOnProfile(trackId, wantPublic, opts = {}) {
     opts?.postMediaLayout || track?.meta?.postMediaLayout || defaultPostMediaLayoutForTrack(track),
   );
   if (willBePublic) {
-    pubMeta.postMediaLayout = feedTrackEligibleForVinylPlayer(track, followingActivityTypeForTrack(track))
+    pubMeta.postMediaLayout = publishTrackEligibleForVinylChoice(track)
       ? layoutPick
       : POST_MEDIA_LAYOUT_COVER;
   }

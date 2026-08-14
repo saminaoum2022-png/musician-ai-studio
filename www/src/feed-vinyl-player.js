@@ -3,7 +3,7 @@
  * Reuses existing playback attributes and seek sliders — no separate audio element.
  */
 
-import { hasUserPhotoCoverMeta, metaFlagIsTrue } from "./cover-art/params.js";
+import { metaFlagIsTrue } from "./cover-art/params.js";
 
 const FEED_VINYL_REV_SEC = 10;
 const FEED_VINYL_DEG_PER_SEC = 360 / FEED_VINYL_REV_SEC;
@@ -29,16 +29,21 @@ function trackModeBlocksVinylLayout(modeRaw) {
   return mode.includes("photo mood") || mode.includes("photo_mood");
 }
 
-export function feedTrackEligibleForVinylPlayer(track, activityType) {
-  if (String(activityType || "") !== "release") return false;
+/** Publish picker + explicit postMediaLayout:vinyl — user chooses; no N-mark or activity-type gate. */
+export function publishTrackEligibleForVinylChoice(track) {
   if (typeof track !== "object" || !track) return false;
   const meta = track.meta && typeof track.meta === "object" ? track.meta : {};
-  // Album art lives in imageUrl/imageThumb for every song — only real photo/custom covers block vinyl.
-  if (hasUserPhotoCoverMeta(meta)) return false;
-  if (metaFlagIsTrue(meta.imageOnlyInstrumental)) return false;
+  if (metaFlagIsTrue(meta.photoMode)) return false;
+  if (metaFlagIsTrue(meta.customCoverOnly) || metaFlagIsTrue(meta.photoCoverOnly)) return false;
   if (trackModeBlocksVinylLayout(meta.mode)) return false;
   if (String(track.kind || "").trim().toLowerCase() === "music_video") return false;
   return true;
+}
+
+/** @deprecated Legacy auto-vinyl gate — prefer publishTrackEligibleForVinylChoice at publish time. */
+export function feedTrackEligibleForVinylPlayer(track, activityType) {
+  if (String(activityType || "") !== "release") return false;
+  return publishTrackEligibleForVinylChoice(track);
 }
 
 export function feedPostMediaLayoutForTrack(track) {
@@ -53,7 +58,7 @@ export function feedVinylPlayerUsesLightPrototype(track, activityType, { xstyle 
   if (!xstyle) return false;
   const layout = feedPostMediaLayoutForTrack(track);
   if (layout === "cover") return false;
-  if (layout === "vinyl") return feedTrackEligibleForVinylPlayer(track, activityType);
+  if (layout === "vinyl") return publishTrackEligibleForVinylChoice(track);
   // Legacy posts without postMediaLayout: keep cover layout. Vinyl is opt-in at publish only.
   return false;
 }

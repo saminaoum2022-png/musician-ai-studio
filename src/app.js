@@ -209,7 +209,7 @@ import { MUSIC_VIDEO_FEATURE_ENABLED } from "./feature-flags.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260813-182955";
+const APP_BUILD = "20260814-140714";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -2534,7 +2534,9 @@ function setResolvedApiBase(base) {
 }
 /** Web always hits same-origin `/api/*`. Native uses resolved Vercel host (env.client.js). */
 function apiUrl(p) {
-  const path = String(p || "").startsWith("/") ? p : `/${p}`;
+  const raw = String(p || "").trim();
+  if (/^https?:\/\//i.test(raw)) return raw;
+  const path = raw.startsWith("/") ? raw : `/${raw}`;
   if (!isNativeShell()) return path;
   const base = _resolvedApiBase || resolveNativeApiBase() || "https://www.nabadai.com";
   return `${base.replace(/\/$/, "")}${path}`;

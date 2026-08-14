@@ -209,7 +209,7 @@ import { MUSIC_VIDEO_FEATURE_ENABLED } from "./feature-flags.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260813-182955";
+const APP_BUILD = "20260814-140714";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -2456,16 +2456,41 @@ function nativeApiBaseCandidates() {
   const out = [];
   const custom = String(window.__API_BASE__ || "").trim().replace(/\/$/, "");
   if (custom) out.push(custom);
+  const baked = String(window.__NABAD_CLIENT_ENV__?.apiBase || "").trim().replace(/\/$/, "");
+  if (baked) out.push(baked);
   for (const u of NATIVE_API_BASE_CANDIDATES) out.push(u.replace(/\/$/, ""));
   return [...new Set(out.filter(Boolean))];
 }
 /** Default Vercel host for native /api/* — never leave this empty on iOS. */
 function defaultNativeApiBase() {
+  const baked = String(window.__NABAD_CLIENT_ENV__?.apiBase || "").trim().replace(/\/$/, "");
+  if (baked) return baked;
   if (API_BASE) return API_BASE;
   if (isNativeShell()) {
     return nativeApiBaseCandidates()[0] || "https://www.nabadai.com";
   }
   return "";
+}
+function isStagingNativeBuild() {
+  try {
+    return String(window.__NABAD_CLIENT_ENV__?.environment || "").trim().toLowerCase() === "staging";
+  } catch {
+    return false;
+  }
+}
+function bakedNativeApiBase() {
+  try {
+    return String(window.__NABAD_CLIENT_ENV__?.apiBase || "").trim().replace(/\/$/, "");
+  } catch {
+    return "";
+  }
+}
+function resolveNativeApiBase(preferred = "") {
+  const staging = bakedNativeApiBase();
+  if (isStagingNativeBuild() && staging) return staging;
+  const pick = String(preferred || "").trim().replace(/\/$/, "");
+  if (pick) return pick;
+  return defaultNativeApiBase();
 }
 const API_BASE = (() => {
   try {
@@ -2509,9 +2534,11 @@ function setResolvedApiBase(base) {
 }
 /** Web always hits same-origin `/api/*`. Native uses resolved Vercel host (env.client.js). */
 function apiUrl(p) {
-  const path = String(p || "").startsWith("/") ? p : `/${p}`;
+  const raw = String(p || "").trim();
+  if (/^https?:\/\//i.test(raw)) return raw;
+  const path = raw.startsWith("/") ? raw : `/${raw}`;
   if (!isNativeShell()) return path;
-  const base = _resolvedApiBase || defaultNativeApiBase() || "https://www.nabadai.com";
+  const base = _resolvedApiBase || resolveNativeApiBase() || "https://www.nabadai.com";
   return `${base.replace(/\/$/, "")}${path}`;
 }
 const PUBLIC_CONFIG_CACHE_KEY = "mas:public-config:v4";
@@ -2742,7 +2769,7 @@ function loadPublicConfigFromCache() {
     if (!raw) return false;
     const parsed = JSON.parse(raw);
     applyPublicConfigPayload(parsed);
-    if (isNativeShell()) setResolvedApiBase(parsed?.apiBase || defaultNativeApiBase());
+    if (isNativeShell()) setResolvedApiBase(resolveNativeApiBase(parsed?.apiBase));
     else _resolvedApiBase = "";
     return Boolean(SUPABASE_URL && SUPABASE_ANON_KEY);
   } catch {
@@ -2789,7 +2816,7 @@ function applyClientEnvBootstrap() {
       } catch {}
     }
     if (isNativeShell()) {
-      forceNativeApiBase(env.apiBase || defaultNativeApiBase());
+      forceNativeApiBase(resolveNativeApiBase(env.apiBase || defaultNativeApiBase()));
     } else {
       _resolvedApiBase = "";
       try { globalThis.__nabadApiBase = ""; } catch {}
@@ -2875,7 +2902,7 @@ function cachePublicConfigPayload(apiBase = "", d = {}) {
         stripeWebEnabled: Boolean(d?.stripeWebEnabled),
         billingEnabled: Boolean(d?.billingEnabled),
         nabadCertifiedUserIds: [..._nabadCertifiedUserIds],
-        apiBase: String(apiBase || _resolvedApiBase || API_BASE || "").trim(),
+        apiBase: resolveNativeApiBase(apiBase || _resolvedApiBase || API_BASE || ""),
       }),
     );
   } catch {}
@@ -2894,7 +2921,7 @@ async function fetchPublicConfigOnce(base) {
     const d = await r.json().catch(() => ({}));
     if (d?.supabaseUrl && d?.supabaseAnonKey) {
       applyPublicConfigPayload(d);
-      setResolvedApiBase(base);
+      setResolvedApiBase(resolveNativeApiBase(base));
       cachePublicConfigPayload(base, d);
       return true;
     }
@@ -2909,7 +2936,7 @@ async function fetchPublicConfigOnce(base) {
     }
     if (r.ok) {
       applyPublicConfigPayload(d);
-      setResolvedApiBase(base);
+      setResolvedApiBase(resolveNativeApiBase(base));
       cachePublicConfigPayload(base, d);
     }
     return Boolean(SUPABASE_URL && SUPABASE_ANON_KEY);
@@ -2921,6 +2948,15 @@ async function fetchPublicConfigOnce(base) {
 /** Native needs the same Vercel host for /api/social as for public-config (Discover uses Supabase only). */
 async function ensureNativeApiBaseResolved() {
   if (!isNativeShell()) return true;
+  const baked = bakedNativeApiBase();
+  const stagingOnly = isStagingNativeBuild() && baked;
+  if (stagingOnly) {
+    forceNativeApiBase(baked);
+    try {
+      if (await fetchPublicConfigOnce(baked)) return true;
+    } catch {}
+    return Boolean(_resolvedApiBase);
+  }
   if (_resolvedApiBase) {
     try {
       if (await fetchPublicConfigOnce(_resolvedApiBase)) return true;
@@ -5704,6 +5740,8 @@ try {
   initProSinger({
     apiUrl,
     apiFetch,
+    getApiFetchHeaders,
+    ensureNativeNetworkReady,
     getAuthToken: getSupabaseAuthToken,
     showToast,
   });
@@ -61839,10 +61877,13 @@ try {
 } catch {}
 migrateCachesOnBuildChange();
 if (isNativeShell() && window.__NABAD_CLIENT_ENV__?.apiBase) {
-  forceNativeApiBase(window.__NABAD_CLIENT_ENV__.apiBase);
+  forceNativeApiBase(resolveNativeApiBase(window.__NABAD_CLIENT_ENV__.apiBase));
 }
 applyClientEnvBootstrap();
 loadPublicConfigFromCache();
+if (isNativeShell() && isStagingNativeBuild() && bakedNativeApiBase()) {
+  forceNativeApiBase(bakedNativeApiBase());
+}
 void refreshSunoCredits();
 renderCreditsHistory();
 loadAuthSession();

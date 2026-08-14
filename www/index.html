@@ -2382,6 +2382,63 @@
           </div>
         </div>
 
+        <div id="proSingerRequestSheet" class="feedReplySheet proSingerSheet" aria-hidden="true" hidden>
+          <div class="feedReplySheetBackdrop" data-pro-singer-dismiss="1"></div>
+          <div class="feedReplySheetCard proSingerSheetCard" role="dialog" aria-modal="true" aria-labelledby="proSingerRequestTitle">
+            <div class="feedReplySheetGrab" aria-hidden="true"></div>
+            <header class="feedReplySheetHead">
+              <button type="button" class="feedReplySheetClose" data-pro-singer-dismiss="1" aria-label="Close">
+                <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M6.4 5 5 6.4 10.6 12 5 17.6 6.4 19 12 13.4 17.6 19 19 17.6 13.4 12 19 6.4 17.6 5 12 10.6Z"/></svg>
+              </button>
+              <h2 class="feedReplySheetTitle" id="proSingerRequestTitle">Request real singer</h2>
+              <p class="feedReplySheetSub">Your song, performed by a pro — worldwide roster.</p>
+              <div id="proSingerRequestDots" class="proSingerDots" aria-hidden="true"></div>
+            </header>
+            <div id="proSingerRequestSteps" class="proSingerSteps"></div>
+            <footer class="proSingerFoot">
+              <button type="button" class="btnGhost" id="btnProSingerBack" hidden>Back</button>
+              <button type="button" class="btnPrimary" id="btnProSingerNext">Continue</button>
+              <button type="button" class="btnPrimary" id="btnProSingerSubmit" hidden>Submit request</button>
+            </footer>
+          </div>
+        </div>
+
+        <div id="proSingerApplySheet" class="feedReplySheet proSingerSheet" aria-hidden="true" hidden>
+          <div class="feedReplySheetBackdrop" data-pro-singer-dismiss="1"></div>
+          <div class="feedReplySheetCard proSingerSheetCard" role="dialog" aria-modal="true" aria-labelledby="proSingerApplyTitle">
+            <div class="feedReplySheetGrab" aria-hidden="true"></div>
+            <header class="feedReplySheetHead">
+              <button type="button" class="feedReplySheetClose" data-pro-singer-dismiss="1" aria-label="Close">
+                <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M6.4 5 5 6.4 10.6 12 5 17.6 6.4 19 12 13.4 17.6 19 19 17.6 13.4 12 19 6.4 17.6 5 12 10.6Z"/></svg>
+              </button>
+              <h2 class="feedReplySheetTitle" id="proSingerApplyTitle">Become a NabadAi Singer</h2>
+              <p class="feedReplySheetSub" id="proSingerApplyStatus">Join the NabadAi Singers community.</p>
+            </header>
+            <div id="proSingerApplyForm" class="proSingerSteps"></div>
+            <footer class="proSingerFoot">
+              <button type="button" class="btnPrimary" id="btnProSingerApplySubmit">Submit application</button>
+            </footer>
+          </div>
+        </div>
+
+        <div id="proSingerRequestsSheet" class="feedReplySheet proSingerSheet" aria-hidden="true" hidden>
+          <div class="feedReplySheetBackdrop" data-pro-singer-dismiss="1"></div>
+          <div class="feedReplySheetCard proSingerSheetCard" role="dialog" aria-modal="true" aria-labelledby="proSingerRequestsTitle">
+            <div class="feedReplySheetGrab" aria-hidden="true"></div>
+            <header class="feedReplySheetHead">
+              <button type="button" class="feedReplySheetClose" data-pro-singer-dismiss="1" aria-label="Close">
+                <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M6.4 5 5 6.4 10.6 12 5 17.6 6.4 19 12 13.4 17.6 19 19 17.6 13.4 12 19 6.4 17.6 5 12 10.6Z"/></svg>
+              </button>
+              <h2 class="feedReplySheetTitle" id="proSingerRequestsTitle">My singer requests</h2>
+              <p class="feedReplySheetSub">Payment links are sent by email or Instagram within 24 hours.</p>
+            </header>
+            <div id="proSingerRequestsList" class="proSingerRequestsList"></div>
+            <footer class="proSingerFoot">
+              <button type="button" class="btnPrimary" id="btnProSingerNewRequest">New request</button>
+            </footer>
+          </div>
+        </div>
+
         <div id="friendsComposeSheet" class="friendsComposeSheet" aria-hidden="true" hidden>
           <div class="friendsComposeSheetBackdrop" data-friends-compose-dismiss="1"></div>
           <div class="friendsComposeSheetCard" role="dialog" aria-modal="true" aria-labelledby="followComposePrompt">
@@ -3849,6 +3906,26 @@
                   </span>
                   <span class="settingsRowChev" aria-hidden="true">›</span>
                 </a>
+                <button type="button" class="settingsRow settingsRowLink" id="btnSettingsProSingerApply">
+                  <span class="settingsRowIco" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><path d="M12 14a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v5a3 3 0 0 0 3 3Z" fill="currentColor" stroke="none"/><path d="M19 11a7 7 0 0 1-14 0" stroke-linecap="round"/><path d="M12 18v3" stroke-linecap="round"/></svg>
+                  </span>
+                  <span class="settingsRowBody">
+                    <span class="settingsRowTitle">Become a NabadAi Singer</span>
+                    <span class="settingsRowSub" id="settingsProSingerApplySub">Perform for creators worldwide</span>
+                  </span>
+                  <span class="settingsRowChev" aria-hidden="true">›</span>
+                </button>
+                <button type="button" class="settingsRow settingsRowLink" id="btnSettingsProSingerRequests">
+                  <span class="settingsRowIco" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><path d="M9 18V5l12-2v13" stroke-linecap="round" stroke-linejoin="round"/><circle cx="6" cy="18" r="3" fill="currentColor" stroke="none"/><circle cx="18" cy="16" r="3" fill="currentColor" stroke="none"/></svg>
+                  </span>
+                  <span class="settingsRowBody">
+                    <span class="settingsRowTitle">My singer requests</span>
+                    <span class="settingsRowSub" id="settingsProSingerRequestsSub">Track your pro singer orders</span>
+                  </span>
+                  <span class="settingsRowChev" aria-hidden="true">›</span>
+                </button>
               </div>
             </section>
 

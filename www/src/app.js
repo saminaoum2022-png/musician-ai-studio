@@ -18379,7 +18379,7 @@ function photoCoverMetaForGeneration() {
   if (imageMoodAppliedForNextGen) {
     return { imageUrl: cover, imageThumb: cover, photoMode: true };
   }
-  return { imageUrl: cover, imageThumb: cover, photoMode: true, customCoverOnly: true };
+  return { imageUrl: cover, imageThumb: cover, photoCoverOnly: true, customCoverOnly: true };
 }
 let pendingBackendTaskId = "";
 const PENDING_TASK_KEY = "mas:pending_backend_task_v1";
@@ -19615,9 +19615,13 @@ function renderPublishReleasePostDesign(sheet, track, artUrl) {
   section.hidden = false;
   row.classList.toggle("publishReleasePostDesignRow--coverOnly", !canVinyl);
   if (hint) {
-    hint.textContent = canVinyl
-      ? "How your release looks in Friends and on your profile."
-      : "Photo Mood and custom covers use the full cover layout.";
+    if (canVinyl) {
+      hint.textContent = "How your release looks in Friends and on your profile.";
+    } else if (type !== "release") {
+      hint.textContent = "Remixes, mashups, and challenges use the full cover layout.";
+    } else {
+      hint.textContent = "Photo Mood and custom covers use the full cover layout.";
+    }
   }
   if (!canVinyl) {
     row.innerHTML = `

@@ -181,10 +181,18 @@ export function coverArtParamsFromTrack(track, opts = {}) {
   };
 }
 
+/** JSON/meta flags — treat only real booleans and "true" strings as on (not "false"). */
+export function metaFlagIsTrue(val) {
+  if (val === true) return true;
+  if (val === false || val == null) return false;
+  const s = String(val).trim().toLowerCase();
+  return s === "true" || s === "1" || s === "yes";
+}
+
 /** User attached a real photo for cover — never replace with Pollinations. */
 export function hasUserPhotoCoverMeta(meta) {
   const m = meta && typeof meta === "object" ? meta : {};
-  if (m.photoMode || m.customCoverOnly || m.photoCoverOnly) return true;
+  if (metaFlagIsTrue(m.photoMode) || metaFlagIsTrue(m.customCoverOnly) || metaFlagIsTrue(m.photoCoverOnly)) return true;
   const img = String(m.imageUrl || m.imageThumb || "").trim();
   return img.startsWith("data:") && !m.nabadAbstractCover && String(m.coverSource || "") !== "pollinations";
 }

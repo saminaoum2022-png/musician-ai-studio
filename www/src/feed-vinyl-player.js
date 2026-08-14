@@ -3,6 +3,8 @@
  * Reuses existing playback attributes and seek sliders — no separate audio element.
  */
 
+import { hasUserPhotoCoverMeta, metaFlagIsTrue } from "./cover-art/params.js";
+
 const FEED_VINYL_REV_SEC = 10;
 const FEED_VINYL_DEG_PER_SEC = 360 / FEED_VINYL_REV_SEC;
 const FEED_VINYL_ROOTS = [
@@ -19,13 +21,22 @@ let _feedVinylSpinRaf = 0;
 let _feedVinylGetCur = () => 0;
 let _feedVinylGetAudible = () => false;
 
+function trackModeBlocksVinylLayout(modeRaw) {
+  const mode = String(modeRaw || "").trim().toLowerCase();
+  if (!mode) return false;
+  if (/\bphoto\b/.test(mode) || /\bvideo\b/.test(mode)) return true;
+  if (/\bimage[- ]/.test(mode) || mode.startsWith("image")) return true;
+  return mode.includes("photo mood") || mode.includes("photo_mood");
+}
+
 export function feedTrackEligibleForVinylPlayer(track, activityType) {
   if (String(activityType || "") !== "release") return false;
   if (typeof track !== "object" || !track) return false;
   const meta = track.meta && typeof track.meta === "object" ? track.meta : {};
-  if (meta.photoMode || meta.customCoverOnly) return false;
-  const mode = String(meta.mode || "").trim().toLowerCase();
-  if (mode.includes("photo") || mode.includes("video") || mode.includes("image")) return false;
+  // Album art lives in imageUrl/imageThumb for every song — only real photo/custom covers block vinyl.
+  if (hasUserPhotoCoverMeta(meta)) return false;
+  if (metaFlagIsTrue(meta.imageOnlyInstrumental)) return false;
+  if (trackModeBlocksVinylLayout(meta.mode)) return false;
   if (String(track.kind || "").trim().toLowerCase() === "music_video") return false;
   return true;
 }

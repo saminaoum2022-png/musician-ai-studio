@@ -58,7 +58,7 @@ function mapGig(row) {
 
 async function servicePatchRequest(requestId, body) {
   if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
-    return { ok: false, status: 500, data: null };
+    return { ok: false, status: 500, data: null, text: "Missing Supabase service role" };
   }
   try {
     const r = await fetch(
@@ -77,10 +77,67 @@ async function servicePatchRequest(requestId, body) {
     const text = await r.text().catch(() => "");
     let data = null;
     try { data = text ? JSON.parse(text) : null; } catch { data = text; }
-    return { ok: r.ok, status: r.status, data };
-  } catch {
-    return { ok: false, status: 500, data: null };
+    return { ok: r.ok, status: r.status, data, text };
+  } catch (e) {
+    return { ok: false, status: 500, data: null, text: String(e?.message || e) };
   }
+}
+
+function formatPatchError(patch) {
+  const raw = patch?.data ?? patch?.text ?? "";
+  const msg = typeof raw === "string"
+    ? raw
+    : String(raw?.message || raw?.error || raw?.hint || "Could not update gig.");
+  if (/singer_assignment_status|singer_decline_reason|schema cache|PGRST204/i.test(msg)) {
+    return "Run supabase/pro_singers_phase_a.sql in Supabase, then try again.";
+  }
+  return msg.slice(0, 220) || "Could not update gig.";
+}
+
+async function handleGigResponse(req, res, user, body) {
+  const requestId = String(body.requestId || body.request_id || "").trim();
+  const action = String(body.action || "").trim().toLowerCase();
+  if (!requestId) return sendJson(res, 400, { error: "Missing requestId." });
+  if (action !== "accept" && action !== "decline") {
+    return sendJson(res, 400, { error: "action must be accept or decline." });
+  }
+
+  const reqRes = await selectFromTable(
+    `pro_singer_requests?select=*&id=eq.${encodeURIComponent(requestId)}&limit=1`,
+  );
+  const row = Array.isArray(reqRes.data) ? reqRes.data[0] : null;
+  if (!row?.id) return sendJson(res, 404, { error: "Gig not found." });
+  if (String(row.singer_id || "") !== String(user.userId)) {
+    return sendJson(res, 403, { error: "This gig is not assigned to you." });
+  }
+
+  const currentAssignment = String(row.singer_assignment_status || "").trim() || "pending";
+  if (currentAssignment !== "pending") {
+    return sendJson(res, 400, { error: "You already responded to this gig." });
+  }
+
+  const patchBody = action === "accept"
+    ? { singer_assignment_status: "accepted", singer_decline_reason: "" }
+    : {
+      singer_assignment_status: "declined",
+      singer_decline_reason: String(body.declineReason || body.decline_reason || "Not available.").trim().slice(0, 500),
+    };
+
+  const patch = await servicePatchRequest(requestId, patchBody);
+  if (!patch.ok) {
+    return sendJson(res, patch.status || 500, { error: formatPatchError(patch) });
+  }
+
+  const updated = Array.isArray(patch.data) ? patch.data[0] : patch.data;
+  if (!updated?.id) {
+    return sendJson(res, 500, { error: "Gig updated but response was empty — run pro_singers_phase_a.sql in Supabase." });
+  }
+
+  return sendJson(res, 200, {
+    ok: true,
+    gig: mapGig(updated),
+    message: action === "accept" ? "Gig accepted — we'll follow up with details." : "Gig declined.",
+  });
 }
 
 async function assertApprovedSinger(userId) {
@@ -120,7 +177,9 @@ module.exports = async function handler(req, res) {
     return sendJson(res, 200, { gigs, pendingCount });
   }
 
-  if (req.method !== "PATCH") return sendJson(res, 405, { error: "Method not allowed" });
+  if (req.method !== "PATCH" && req.method !== "POST") {
+    return sendJson(res, 405, { error: "Method not allowed" });
+  }
 
   let body = {};
   try {
@@ -129,41 +188,5 @@ module.exports = async function handler(req, res) {
     return sendJson(res, 400, { error: "Invalid JSON body." });
   }
 
-  const requestId = String(body.requestId || body.request_id || "").trim();
-  const action = String(body.action || "").trim().toLowerCase();
-  if (!requestId) return sendJson(res, 400, { error: "Missing requestId." });
-  if (action !== "accept" && action !== "decline") {
-    return sendJson(res, 400, { error: "action must be accept or decline." });
-  }
-
-  const reqRes = await selectFromTable(
-    `pro_singer_requests?select=*&id=eq.${encodeURIComponent(requestId)}&limit=1`,
-  );
-  const row = Array.isArray(reqRes.data) ? reqRes.data[0] : null;
-  if (!row?.id) return sendJson(res, 404, { error: "Gig not found." });
-  if (String(row.singer_id || "") !== String(user.userId)) {
-    return sendJson(res, 403, { error: "This gig is not assigned to you." });
-  }
-
-  const currentAssignment = String(row.singer_assignment_status || "").trim() || "pending";
-  if (currentAssignment !== "pending") {
-    return sendJson(res, 400, { error: "You already responded to this gig." });
-  }
-
-  const patchBody = action === "accept"
-    ? { singer_assignment_status: "accepted", singer_decline_reason: "" }
-    : {
-      singer_assignment_status: "declined",
-      singer_decline_reason: String(body.declineReason || body.decline_reason || "Not available.").trim().slice(0, 500),
-    };
-
-  const patch = await servicePatchRequest(requestId, patchBody);
-  if (!patch.ok) return sendJson(res, patch.status || 500, { error: "Could not update gig." });
-
-  const updated = Array.isArray(patch.data) ? patch.data[0] : patch.data;
-  return sendJson(res, 200, {
-    ok: true,
-    gig: mapGig(updated),
-    message: action === "accept" ? "Gig accepted — we'll follow up with details." : "Gig declined.",
-  });
+  return handleGigResponse(req, res, user, body);
 };

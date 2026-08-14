@@ -26,4 +26,10 @@ alter table public.pro_singer_requests
 create index if not exists pro_singer_requests_singer_assignment_idx
   on public.pro_singer_requests (singer_id, singer_assignment_status, created_at desc);
 
+-- Existing admin assignments before Phase A: mark as pending response.
+update public.pro_singer_requests
+set singer_assignment_status = 'pending'
+where singer_id is not null
+  and coalesce(singer_assignment_status, '') = '';
+
 commit;

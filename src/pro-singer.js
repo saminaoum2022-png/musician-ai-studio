@@ -47,7 +47,7 @@ async function apiPatch(path, body) {
   const url = resolveProSingerApiUrl(path);
   const doFetch = _deps?.apiFetch || fetch;
   const r = await doFetch(url, {
-    method: "PATCH",
+    method: "POST",
     headers: proSingerFetchHeaders({
       Authorization: `Bearer ${token}`,
       "Content-Type": "application/json",

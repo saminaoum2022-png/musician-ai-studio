@@ -20,6 +20,7 @@ const {
   adminForbidden,
   adminUnauthorized,
 } = require("../_lib/admin-auth");
+const { insertAppNotification } = require("../_lib/app-notifications");
 
 const SUPABASE_URL = (process.env.SUPABASE_URL || "").replace(/\/$/, "");
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
@@ -128,6 +129,7 @@ module.exports = async function handler(req, res) {
           languages: app.languages || "",
           genres: app.genres || "",
           bio: app.bio || "",
+          photo_url: app.photo_url || "",
           active: true,
           approved_at: now,
         }),
@@ -137,6 +139,13 @@ module.exports = async function handler(req, res) {
       return sendJson(res, 500, { error: "Application approved but roster insert failed." });
     }
 
+    void insertAppNotification({
+      userId: app.user_id,
+      type: "singer_approved",
+      entityId: app.id,
+      metadata: { display_name: app.display_name || "" },
+    });
+
     return sendJson(res, 200, { ok: true, status: "approved" });
   }
 
@@ -144,12 +153,27 @@ module.exports = async function handler(req, res) {
     const applicationId = String(body.applicationId || body.application_id || "").trim();
     if (!applicationId) return sendJson(res, 400, { error: "Missing applicationId." });
     const adminNotes = String(body.adminNotes || body.admin_notes || "Not accepted at this time.").trim().slice(0, 1000);
+    const appRes = await selectFromTable(
+      `singer_applications?select=*&id=eq.${encodeURIComponent(applicationId)}&limit=1`,
+    );
+    const appRow = Array.isArray(appRes.data) ? appRes.data[0] : null;
+
     const patchApp = await servicePatch(
       "singer_applications",
       `id=eq.${encodeURIComponent(applicationId)}`,
       { status: "rejected", admin_notes: adminNotes, reviewed_at: now },
     );
     if (!patchApp.ok) return sendJson(res, patchApp.status || 500, { error: "Could not reject application." });
+
+    if (appRow?.user_id) {
+      void insertAppNotification({
+        userId: appRow.user_id,
+        type: "singer_rejected",
+        entityId: applicationId,
+        metadata: { message: adminNotes },
+      });
+    }
+
     return sendJson(res, 200, { ok: true, status: "rejected" });
   }
 
@@ -170,6 +194,12 @@ module.exports = async function handler(req, res) {
     const requestId = String(body.requestId || body.request_id || "").trim();
     if (!requestId) return sendJson(res, 400, { error: "Missing requestId." });
 
+    const prevRes = await selectFromTable(
+      `pro_singer_requests?select=*&id=eq.${encodeURIComponent(requestId)}&limit=1`,
+    );
+    const prevRow = Array.isArray(prevRes.data) ? prevRes.data[0] : null;
+    if (!prevRow?.id) return sendJson(res, 404, { error: "Request not found." });
+
     const patchBody = {};
     if (body.status) patchBody.status = String(body.status).trim();
     if (body.paymentStatus || body.payment_status) {
@@ -178,6 +208,14 @@ module.exports = async function handler(req, res) {
     if (body.singerId !== undefined || body.singer_id !== undefined) {
       const sid = String(body.singerId ?? body.singer_id ?? "").trim();
       patchBody.singer_id = sid || null;
+      const prevSinger = String(prevRow.singer_id || "").trim();
+      if (sid && sid !== prevSinger) {
+        patchBody.singer_assignment_status = "pending";
+        patchBody.singer_decline_reason = "";
+      } else if (!sid) {
+        patchBody.singer_assignment_status = "";
+        patchBody.singer_decline_reason = "";
+      }
     }
     if (body.adminNotes !== undefined || body.admin_notes !== undefined) {
       patchBody.admin_notes = String(body.adminNotes ?? body.admin_notes ?? "").trim().slice(0, 2000);
@@ -196,6 +234,22 @@ module.exports = async function handler(req, res) {
     );
     if (!patch.ok) return sendJson(res, patch.status || 500, { error: "Could not update request." });
     const row = Array.isArray(patch.data) ? patch.data[0] : patch.data;
+
+    const newSingerId = String(row?.singer_id || "").trim();
+    const prevSingerId = String(prevRow.singer_id || "").trim();
+    if (newSingerId && newSingerId !== prevSingerId) {
+      void insertAppNotification({
+        userId: newSingerId,
+        type: "singer_assigned",
+        entityId: requestId,
+        metadata: {
+          song_title: row.song_title || row.occasion || "Performance request",
+          song_art_url: row.song_art_url || "",
+          package_tier: row.package_tier || "",
+        },
+      });
+    }
+
     return sendJson(res, 200, { ok: true, request: row });
   }
 

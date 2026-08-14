@@ -669,6 +669,7 @@ async function getSingers(limit, offset) {
       brief: r.brief || "",
       singerId: r.singer_id || null,
       singerLabel: r.singer_id ? labelFor(r.singer_id) : "Best match",
+      singerAssignmentStatus: r.singer_assignment_status || "",
       status: r.status,
       paymentStatus: r.payment_status,
       contactEmail: r.contact_email || "",

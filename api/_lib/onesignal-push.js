@@ -34,6 +34,9 @@ const PUSH_TEMPLATES = {
   sound_ready: { route: "challenges" },
   music_video_ready: { route: "profile" },
   instrumental_ready: { route: "profile" },
+  singer_approved: { route: "singer-studio" },
+  singer_rejected: { route: "activity" },
+  singer_assigned: { route: "singer-studio" },
 };
 
 function pushEnabled() {
@@ -86,6 +89,17 @@ function composePushCopy({ type, actorDisplayName, metadata }) {
   }
   if (type === "chart_rank") return { body: "Top 10 update" };
   if (type === "dm_message") return { body: "New message from someone" };
+  if (type === "singer_approved") {
+    return { body: "You're approved as a NabadAi Singer — open Singer Studio" };
+  }
+  if (type === "singer_rejected") {
+    const note = String(metadata?.message || "").trim();
+    return { body: note ? note.slice(0, 160) : "Your singer application was updated" };
+  }
+  if (type === "singer_assigned") {
+    const title = String(metadata?.song_title || "a new song").trim();
+    return { body: `New gig assigned: ${title}`.slice(0, 160) };
+  }
   return { body: "New activity" };
 }
 

@@ -34252,6 +34252,14 @@ body[data-route="messages"]{
 .messagesBubble--coachTyping{
   padding: 12px 14px;
 }
+.messagesBubble--partnerTyping{
+  padding: 12px 14px;
+  background: rgba(255,255,255,0.08);
+}
+.dmPresenceTxt--typing{
+  color: rgba(196,182,255,0.95);
+  font-style: italic;
+}
 .coachTypingDots{
   display: inline-flex;
   align-items: center;

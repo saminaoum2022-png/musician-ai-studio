@@ -11,6 +11,21 @@ let _client = null;
 let _channel = null;
 let _activeThreadId = "";
 
+export async function sendDmThreadTypingBroadcast({ userId } = {}) {
+  const uid = String(userId || "").trim();
+  if (!_channel || !_activeThreadId || !uid) return false;
+  try {
+    const status = await _channel.send({
+      type: "broadcast",
+      event: "dm_typing",
+      payload: { userId: uid, at: Date.now() },
+    });
+    return status === "ok";
+  } catch (e) {
+    console.warn("[dm-realtime] typing broadcast failed", e);
+    return false;
+  }
+}
 export function isDmPostgresRealtimeEnabled() {
   try {
     if (localStorage.getItem(DM_REALTIME_FLAG_KEY) === "0") return false;
@@ -73,6 +88,7 @@ export async function subscribeDmThread({
   partnerUserId = "",
   onInsert,
   onReadUpdate,
+  onTyping,
   onStatus,
 } = {}) {
   const tid = String(threadId || "").trim();
@@ -98,7 +114,18 @@ export async function subscribeDmThread({
   }
 
   const channel = client
-    .channel(`dm-thread:${tid}`)
+    .channel(`dm-thread:${tid}`, {
+      config: { broadcast: { self: false } },
+    })
+    .on(
+      "broadcast",
+      { event: "dm_typing" },
+      (payload) => {
+        const userId = String(payload?.payload?.userId || "").trim();
+        if (!userId) return;
+        try { onTyping?.({ userId, at: payload?.payload?.at }); } catch (e) { console.warn("[dm-realtime] onTyping", e); }
+      },
+    )
     .on(
       "postgres_changes",
       {

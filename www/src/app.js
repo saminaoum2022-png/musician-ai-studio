@@ -210,7 +210,7 @@ import { MUSIC_VIDEO_FEATURE_ENABLED } from "./feature-flags.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260814-173622";
+const APP_BUILD = "20260814-175257";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -28832,6 +28832,9 @@ const MESSAGES_THREAD_PRESENCE_POLL_MS = 5000;
 /** Partner read cursor for outbound ✓ / ✓✓ receipts. */
 const MESSAGES_THREAD_READ_POLL_MS = 5000;
 const MESSAGES_INBOX_POLL_MS = 15000;
+/** Partner typing indicator — broadcast while composing. */
+const DM_TYPING_SEND_MS = 2500;
+const DM_TYPING_LINGER_MS = 4500;
 const _messagesThreadCache = new Map();
 const _chatPartnerStatsCache = new Map();
 let _messagesInboxLoading = false;
@@ -28841,6 +28844,9 @@ let _messagesInboxFetchInFlight = null;
 let _messagesInboxScrollY = 0;
 let _messagesInboxFilter = "all";
 let _messagesInboxPollTimer = 0;
+let _partnerTypingUntil = 0;
+let _lastTypingSentAt = 0;
+let _partnerTypingTimer = 0;
 let _messagesRequestTargetUserId = "";
 let _messagesThreadLeaving = false;
 let _messagesThreadNeedsInitialScroll = false;
@@ -29600,18 +29606,25 @@ function renderMessagesMount({ scrollToBottom = true, forceScroll = false } = {}
   const viewerId = authSession?.user?.id || "";
   if (!mount) return;
   const msgs = Array.isArray(_messagesList) ? _messagesList : [];
+  const typingActive = isPartnerTypingActive() && !isCoachThreadId(_conversationId);
+  const typingBubble = typingActive ? partnerTypingBubbleHtml() : "";
   if (_messagesLoading && !msgs.length) {
     mount.innerHTML = `<div class="messagesBubbleStack messagesBubbleStack--loading" aria-busy="true" aria-label="Loading messages">${messagesThreadSkeletonHtml()}</div><div class="messagesThreadScrollAnchor" aria-hidden="true"></div>`;
     scrollMessagesMountToBottom({ force: true });
     return;
   }
-  if (!msgs.length) {
+  if (!msgs.length && !typingActive) {
     mount.innerHTML = `
       <div class="messagesThreadEmpty">
         <p class="messagesThreadEmptyTitle">Start a conversation 🎵</p>
         <p class="messagesThreadEmptyLead">Share songs, remixes and ideas.</p>
       </div>
       <div class="messagesThreadScrollAnchor" aria-hidden="true"></div>`;
+    return;
+  }
+  if (!msgs.length && typingActive) {
+    mount.innerHTML = `<div class="messagesBubbleStack">${typingBubble}</div><div class="messagesThreadScrollAnchor" aria-hidden="true"></div>`;
+    scrollMessagesMountToBottom({ force: true });
     return;
   }
   const stickToBottom = scrollToBottom && (forceScroll || _messagesThreadNeedsInitialScroll || shouldAutoScrollMessagesMount());
@@ -29633,7 +29646,7 @@ function renderMessagesMount({ scrollToBottom = true, forceScroll = false } = {}
       }
       return messagesBubbleHtml(m, viewerId, { showTime });
     })
-    .join("")}</div><div class="messagesThreadScrollAnchor" aria-hidden="true"></div>`;
+    .join("")}${typingBubble}</div><div class="messagesThreadScrollAnchor" aria-hidden="true"></div>`;
   if (stickToBottom) {
     scrollMessagesMountToBottom({ force: true });
   }
@@ -29672,6 +29685,11 @@ function mergeThreadMessages(incoming, { scrollToBottom = true } = {}) {
     }
   }
   if (!changed) return false;
+  const partnerId = String(_chatHeaderUser?.userId || "").trim();
+  const myId = String(authSession?.user?.id || "").trim();
+  if (partnerId && rows.some((m) => String(m?.sender_id || "") === partnerId && String(m?.sender_id || "") !== myId)) {
+    clearPartnerTypingState();
+  }
   _messagesList = list.sort(
     (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
   );
@@ -30746,9 +30764,83 @@ function presenceLineFromState(p) {
   return null;
 }
 
+function isPartnerTypingActive() {
+  return Date.now() < _partnerTypingUntil;
+}
+
+function clearPartnerTypingState() {
+  _partnerTypingUntil = 0;
+  _lastTypingSentAt = 0;
+  if (_partnerTypingTimer) {
+    window.clearTimeout(_partnerTypingTimer);
+    _partnerTypingTimer = 0;
+  }
+}
+
+function notePartnerTyping(userId) {
+  const uid = String(userId || "").trim();
+  const myId = String(authSession?.user?.id || "").trim();
+  if (!uid || (myId && uid === myId)) return;
+  const partnerId = String(_chatHeaderUser?.userId || "").trim();
+  if (partnerId && uid !== partnerId) return;
+  _partnerTypingUntil = Date.now() + DM_TYPING_LINGER_MS;
+  if (_partnerTypingTimer) window.clearTimeout(_partnerTypingTimer);
+  _partnerTypingTimer = window.setTimeout(() => {
+    _partnerTypingTimer = 0;
+    renderChatHeaderPresence();
+    renderMessagesMount({ scrollToBottom: true });
+  }, DM_TYPING_LINGER_MS + 60);
+  renderChatHeaderPresence();
+  renderMessagesMount({ scrollToBottom: true });
+}
+
+async function maybeSendDmTypingPulse() {
+  if (isCoachThreadId(_conversationId)) return;
+  if (String(document.body.getAttribute("data-route") || "") !== "messages-thread") return;
+  const input = document.getElementById("messagesComposerInput");
+  const text = String(input?.value || "").trim();
+  if (!text) return;
+  const now = Date.now();
+  if (now - _lastTypingSentAt < DM_TYPING_SEND_MS) return;
+  _lastTypingSentAt = now;
+  const uid = String(authSession?.user?.id || "").trim();
+  if (!uid) return;
+  try {
+    const mod = await loadMessagesRealtimeModule();
+    await mod?.sendDmThreadTypingBroadcast?.({ userId: uid });
+  } catch {}
+}
+
+function partnerTypingBubbleHtml() {
+  return `
+    <div class="messagesBubbleWrap">
+      <div class="messagesBubble messagesBubble--partnerTyping" aria-label="Typing">
+        <span class="coachTypingDots"><span></span><span></span><span></span></span>
+      </div>
+    </div>`;
+}
+
 function renderChatHeaderPresence() {
   const relationEl = document.getElementById("messagesThreadRelation");
   if (!relationEl) return;
+  if (isPartnerTypingActive() && !isCoachThreadId(_conversationId)) {
+    const handle = String(_chatHeaderUser?.username || _chatHeaderUser?.displayName || "creator").replace(/^@/, "");
+    const nextSig = `typing|${handle}`;
+    const nextHtml = `<span class="dmPresenceTxt dmPresenceTxt--typing">@${escapeHtml(handle || "creator")} is typing\u2026</span>`;
+    relationEl.classList.remove("messagesThreadRelation--presence", "messagesThreadRelation--np");
+    delete relationEl.dataset.presenceStatus;
+    relationEl.removeAttribute("role");
+    relationEl.removeAttribute("tabindex");
+    if (nextSig === _chatPresenceSig && relationEl.innerHTML === nextHtml) {
+      relationEl.hidden = false;
+      return;
+    }
+    _chatPresenceSig = nextSig;
+    relationEl.innerHTML = nextHtml;
+    relationEl.hidden = false;
+    relationEl.classList.remove("dmPresenceFadeOut");
+    return;
+  }
   const line = presenceLineFromState(_chatPartnerPresence);
   let nextSig;
   let nextHtml;
@@ -31657,6 +31749,10 @@ async function refreshDmThreadRealtimeSubscribe(threadId) {
     onInsert: (row) => {
       if (String(_conversationId || "") !== tid) return;
       if (String(document.body.getAttribute("data-route") || "") !== "messages-thread") return;
+      const partnerId = String(_chatHeaderUser?.userId || "").trim();
+      if (partnerId && String(row?.sender_id || "") === partnerId) {
+        clearPartnerTypingState();
+      }
       if (mergeThreadMessages([row], { scrollToBottom: true })) {
         saveActiveThreadToCache();
         void markThreadReadQuiet(tid);
@@ -31667,6 +31763,11 @@ async function refreshDmThreadRealtimeSubscribe(threadId) {
       if (applyPartnerLastReadAt(lastReadAt)) {
         renderMessagesMount({ scrollToBottom: false });
       }
+    },
+    onTyping: ({ userId } = {}) => {
+      if (String(_conversationId || "") !== tid) return;
+      if (String(document.body.getAttribute("data-route") || "") !== "messages-thread") return;
+      notePartnerTyping(userId);
     },
     onStatus: (status) => {
       const s = String(status || "");
@@ -31690,6 +31791,7 @@ function stopMessagesThreadRealtime() {
     window.clearInterval(_messagesReadPollTimer);
     _messagesReadPollTimer = 0;
   }
+  clearPartnerTypingState();
   void stopDmThreadRealtimeSubscribe();
 }
 
@@ -32122,6 +32224,7 @@ function sendCurrentThreadMessage() {
   };
 
   input.value = "";
+  _lastTypingSentAt = 0;
   applyUserTextInputDir(input);
   syncMessagesComposerInputHeight(input);
   addOptimisticThreadMessage(optimistic);
@@ -32413,6 +32516,7 @@ function bindMessagesPageOnce() {
       syncMessagesComposerInputHeight(composer);
       updateMessagesComposerReserve();
       scrollMessagesMountToBottom({ force: true });
+      void maybeSendDmTypingPulse();
     });
     composer.addEventListener("focus", () => {
       syncMessagesComposerInputHeight(composer);

@@ -14567,6 +14567,9 @@ async function finishPostAuthNavigation() {
   setGuestModeEnabled(false);
   loadAuthSession();
   ensureAuthSessionUserFromToken();
+  if (authSession?.user?.id) {
+    await bootstrapPostLoginCredits();
+  }
   endLoginSettling({ minimum: true });
   const postAuthUid = String(authSession?.user?.id || "").trim();
   if (postAuthUid && shouldShowOnboardingForUser(postAuthUid)) {
@@ -22931,6 +22934,7 @@ const AUTH_NATIVE_FS_PATH = "NabadAi/auth/session.json";
 const CAP_FS_DIRECTORY_DATA = "DATA";
 let _authBootPromise = null;
 let _authBootDone = false;
+let _postLoginCreditsBootstrappedFor = "";
 const ROUTE_HEAVY_TTL_MS = 45000;
 const _routeHeavyAt = { profile: 0, discover: 0, friends: 0, activity: 0, user: 0, messages: 0 };
 const _routeScrollY = {};
@@ -23430,7 +23434,7 @@ function ensureAuthBoot({ force = false, fast = false } = {}) {
         if (shouldShowProfileHeaderSkeleton()) setProfileHeaderLoading(true);
         else setProfileHeaderLoading(false);
         try { refreshProfileHandleFromActiveProfile(); } catch {}
-        void recordSignupPlatformIfNeeded();
+        void bootstrapPostLoginCredits();
       }
       renderAuthStatus();
       _authBootDone = true;
@@ -25731,6 +25735,22 @@ async function recordSignupPlatformIfNeeded() {
     }
   } catch {}
 }
+
+/** Grant welcome credits + last-active as soon as we have a session — not only on Credits page. */
+async function bootstrapPostLoginCredits() {
+  const token = getSupabaseAuthToken();
+  const uid = String(authSession?.user?.id || "").trim();
+  if (!token || !uid) return;
+  if (_postLoginCreditsBootstrappedFor === uid) return;
+  try {
+    await recordSignupPlatformIfNeeded();
+  } catch {}
+  try {
+    await refreshMyCredits({ silent: true });
+    _postLoginCreditsBootstrappedFor = uid;
+  } catch {}
+}
+
 async function refreshSupabaseSessionIfNeeded({ force = false } = {}) {
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return false;
   if (!authSession?.refresh_token) return Boolean(getSupabaseAuthToken());
@@ -60936,6 +60956,7 @@ async function requestSignOut() {
 
 function logoutCurrentUser() {
   const prevUserId = String(authSession?.user?.id || "");
+  _postLoginCreditsBootstrappedFor = "";
   void (async () => {
     try {
       const mod = await loadMessagesRealtimeModule();

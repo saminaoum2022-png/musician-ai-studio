@@ -29744,6 +29744,13 @@ function renderChatHeaderSkeleton() {
     avatarEl.dataset.chatAvKey = "skel";
     avatarEl.innerHTML = `<span class="messagesThreadAvatarSkel" aria-hidden="true"></span>`;
   }
+  const metaEl = document.getElementById("messagesThreadHeadMeta");
+  if (metaEl) {
+    metaEl.classList.remove("messagesThreadHeadMeta--profile");
+    metaEl.removeAttribute("role");
+    metaEl.removeAttribute("tabindex");
+    metaEl.removeAttribute("aria-label");
+  }
   updateMessagesThreadHeadReserve();
 }
 
@@ -29776,6 +29783,16 @@ function renderChatHeader() {
   if (avatarEl && avatarEl.dataset.chatAvKey !== avKey) {
     avatarEl.dataset.chatAvKey = avKey;
     avatarEl.innerHTML = messagesAvatarHtml(u.avatarUrl, u.username, "messagesThreadAvatarImg");
+  }
+  const metaEl = document.getElementById("messagesThreadHeadMeta");
+  if (metaEl) {
+    metaEl.classList.add("messagesThreadHeadMeta--profile");
+    metaEl.setAttribute("role", "button");
+    metaEl.setAttribute("tabindex", "0");
+    metaEl.setAttribute(
+      "aria-label",
+      `View ${u.displayName.replace(/^@/, "") || u.username || "profile"}'s profile`,
+    );
   }
   updateChatHeaderRelationOnly();
   updateMessagesThreadHeadReserve();
@@ -31010,10 +31027,8 @@ function notePartnerTyping(userId) {
   if (_partnerTypingTimer) window.clearTimeout(_partnerTypingTimer);
   _partnerTypingTimer = window.setTimeout(() => {
     _partnerTypingTimer = 0;
-    renderChatHeaderPresence();
     renderMessagesMount({ scrollToBottom: true });
   }, DM_TYPING_LINGER_MS + 60);
-  renderChatHeaderPresence();
   renderMessagesMount({ scrollToBottom: true });
 }
 
@@ -31043,27 +31058,24 @@ function partnerTypingBubbleHtml() {
     </div>`;
 }
 
+function openChatPartnerProfile() {
+  const u = _chatHeaderUser;
+  if (!u || u.userId === COACH_SENDER_ID) return;
+  const username = String(u.username || u.displayName || "").replace(/^@/, "").trim();
+  const userId = String(u.userId || "").trim();
+  if (!username && !userId) return;
+  try { haptic("light"); } catch {}
+  if (username) {
+    const qs = userId ? `?uid=${encodeURIComponent(userId)}` : "";
+    try { location.hash = `#/u/${encodeURIComponent(username)}${qs}`; } catch {}
+    return;
+  }
+  try { showToast("Profile unavailable", { icon: "!", durationMs: 2200 }); } catch {}
+}
+
 function renderChatHeaderPresence() {
   const relationEl = document.getElementById("messagesThreadRelation");
   if (!relationEl) return;
-  if (isPartnerTypingActive() && !isCoachThreadId(_conversationId)) {
-    const handle = String(_chatHeaderUser?.username || _chatHeaderUser?.displayName || "creator").replace(/^@/, "");
-    const nextSig = `typing|${handle}`;
-    const nextHtml = `<span class="dmPresenceTxt dmPresenceTxt--typing">@${escapeHtml(handle || "creator")} is typing\u2026</span>`;
-    relationEl.classList.remove("messagesThreadRelation--presence", "messagesThreadRelation--np");
-    delete relationEl.dataset.presenceStatus;
-    relationEl.removeAttribute("role");
-    relationEl.removeAttribute("tabindex");
-    if (nextSig === _chatPresenceSig && relationEl.innerHTML === nextHtml) {
-      relationEl.hidden = false;
-      return;
-    }
-    _chatPresenceSig = nextSig;
-    relationEl.innerHTML = nextHtml;
-    relationEl.hidden = false;
-    relationEl.classList.remove("dmPresenceFadeOut");
-    return;
-  }
   const line = presenceLineFromState(_chatPartnerPresence);
   let nextSig;
   let nextHtml;
@@ -32446,6 +32458,13 @@ function renderCoachChatHeader() {
     avatarEl.dataset.chatAvKey = "coach";
     avatarEl.innerHTML = coachAvatarHtml("messagesThreadAvatarImg");
   }
+  const metaEl = document.getElementById("messagesThreadHeadMeta");
+  if (metaEl) {
+    metaEl.classList.remove("messagesThreadHeadMeta--profile");
+    metaEl.removeAttribute("role");
+    metaEl.removeAttribute("tabindex");
+    metaEl.removeAttribute("aria-label");
+  }
   updateMessagesThreadHeadReserve();
 }
 
@@ -32764,6 +32783,12 @@ function bindMessagesPageOnce() {
       });
       return;
     }
+    const headMeta = e.target.closest(".messagesThreadHeadMeta.messagesThreadHeadMeta--profile");
+    if (headMeta && !e.target.closest("#messagesThreadRelation.messagesThreadRelation--np")) {
+      e.preventDefault();
+      openChatPartnerProfile();
+      return;
+    }
     const threadRow = e.target.closest("[data-messages-thread]");
     if (threadRow && !e.target.closest("[data-messages-request-accept],[data-messages-request-decline]")) {
       e.preventDefault();
@@ -32848,6 +32873,14 @@ function bindMessagesPageOnce() {
         playDmSongFromEl(pl);
       }
     }
+  });
+
+  document.addEventListener("keydown", (e) => {
+    if (e.key !== "Enter" && e.key !== " ") return;
+    const headMeta = e.target.closest?.(".messagesThreadHeadMeta.messagesThreadHeadMeta--profile");
+    if (!headMeta || e.target.closest?.("#messagesThreadRelation.messagesThreadRelation--np")) return;
+    e.preventDefault();
+    openChatPartnerProfile();
   });
 
   // iOS single-tap Send: tapping the Send button used to steal focus from the

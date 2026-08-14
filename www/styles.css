@@ -34420,6 +34420,14 @@ body[data-route="messages"]{
   min-width: 0;
   padding-top: 0;
 }
+.messagesThreadHeadMeta--profile{
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  border-radius: 10px;
+}
+.messagesThreadHeadMeta--profile:active{
+  opacity: 0.88;
+}
 .messagesThreadHeadCopy{
   flex: 1 1 auto;
   min-width: 0;

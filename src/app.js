@@ -88,6 +88,13 @@ import { initCoverArtOverlay, syncCoverArtOverlay } from "./cover-art/overlay.js
 import { portrait916CropRect } from "./cover-art/portrait-normalize.js";
 import { feedActIconAnalytics, feedActIconComment, feedActIconGift, feedActIconLike, feedActIconPlays, feedActIconRepost, feedActIconShare } from "./feed-action-icons.js";
 import { initGifts, openGiftSheetForTarget, openGiftSheetFromButton } from "./gifts.js";
+import {
+  initProSinger,
+  openProSingerRequestSheet,
+  openSingerApplicationSheet,
+  openMySingerRequestsSheet,
+  syncSettingsProSingerRows,
+} from "./pro-singer.js";
 import { configureProPlan, formatProPeriodLabel, onProPlanRouteActive, refreshProSubscriptionUi, setProReturnRoute, weeklyInTrialWindow, weeklyProDisplayStatus, weeklyTrialStartFromState } from "./pro-plan.js";
 import { setRevenueCatApiKey, resetRevenueCatSession, reconcileProSubscription, isBillingConfigured } from "./billing/revenuecat.js";
 import { setStripeWebBillingEnabled, isStripeWebBillingConfigured, syncStripeBillingWithServer } from "./billing/stripe.js";
@@ -4437,6 +4444,7 @@ function applyRoute({ passGen } = {}) {
     try { syncSettingsOrbMode(); } catch {}
     try { syncSettingsThemePicker(); } catch {}
     try { syncSettingsMusicProviderRow(); } catch {}
+    try { syncSettingsProSingerRows(); } catch {}
     if (!_onesignalAppId) {
       void loadPublicConfig().then(() => {
         try { syncSettingsPushRow(); } catch {}
@@ -5690,6 +5698,20 @@ try {
     showToast,
     haptic,
     markPostGifted: markFeedPostGifted,
+  });
+} catch {}
+try {
+  initProSinger({
+    apiUrl,
+    apiFetch,
+    getAuthToken: getSupabaseAuthToken,
+    showToast,
+  });
+  document.getElementById("btnSettingsProSingerApply")?.addEventListener("click", () => {
+    void openSingerApplicationSheet();
+  });
+  document.getElementById("btnSettingsProSingerRequests")?.addEventListener("click", () => {
+    void openMySingerRequestsSheet();
   });
 } catch {}
 try {
@@ -35915,6 +35937,7 @@ function renderTrackSheetLibrary(track) {
   l.innerHTML = `
     ${publishRow}
     ${recordEligible ? `<button type="button" class="discoverTrackSheetRow discoverTrackSheetRow--studio" data-track-sheet-action="library_record_voice">Open in Studio</button>` : ""}
+    ${!isSound && recordEligible ? `<button type="button" class="discoverTrackSheetRow discoverTrackSheetRow--proSinger" data-track-sheet-action="library_pro_singer">Request real singer</button>` : ""}
     ${TRACK_SHEET_ADD_PLAYLIST_ROW}
     ${profilePublic ? "" : `<button type="button" class="discoverTrackSheetRow" data-track-sheet-action="library_change_cover">Change cover</button>`}
     <button type="button" class="discoverTrackSheetRow" data-track-sheet-action="library_pin">${escapeHtml(pinLabel)}</button>
@@ -36768,6 +36791,17 @@ function runTrackSheetAction(action, sourceEl) {
     if (action === "library_record_voice") {
       shut();
       try { openStudioForTrack(t); } catch {}
+      return;
+    }
+    if (action === "library_pro_singer") {
+      if (!authSession?.user?.id) {
+        showToast("Sign in to request a pro singer.", { icon: "!", durationMs: 3800 });
+        shut();
+        try { location.hash = "#/auth"; } catch {}
+        return;
+      }
+      shut();
+      void openProSingerRequestSheet(t);
       return;
     }
     if (action === "library_del") {

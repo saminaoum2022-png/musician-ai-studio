@@ -589,6 +589,98 @@ async function getPromos(limit, offset) {
   };
 }
 
+async function getSingers(limit, offset) {
+  const appRes = await serviceFetch(
+    `singer_applications?select=*&order=created_at.desc&limit=${limit}&offset=${offset}`,
+  );
+  const reqRes = await serviceFetch(
+    `pro_singer_requests?select=*&order=created_at.desc&limit=${limit}&offset=${offset}`,
+  );
+  const rosterRes = await serviceFetch(
+    "pro_singers?select=*&order=featured.desc,sort_order.asc,approved_at.desc&limit=200",
+  );
+
+  const applications = Array.isArray(appRes.data) ? appRes.data : [];
+  const requests = Array.isArray(reqRes.data) ? reqRes.data : [];
+  const roster = Array.isArray(rosterRes.data) ? rosterRes.data : [];
+
+  const userIds = new Set();
+  applications.forEach((a) => a.user_id && userIds.add(a.user_id));
+  requests.forEach((r) => {
+    if (r.requester_id) userIds.add(r.requester_id);
+    if (r.singer_id) userIds.add(r.singer_id);
+  });
+  roster.forEach((s) => s.user_id && userIds.add(s.user_id));
+
+  let profileMap = new Map();
+  const ids = [...userIds];
+  if (ids.length) {
+    const inList = ids.map((id) => encodeURIComponent(id)).join(",");
+    const profRes = await serviceFetch(
+      `profiles?select=user_id,username,display_name,email,avatar&user_id=in.(${inList})`,
+    );
+    (Array.isArray(profRes.data) ? profRes.data : []).forEach((p) => {
+      profileMap.set(p.user_id, p);
+    });
+  }
+
+  const labelFor = (uid) => {
+    const p = profileMap.get(uid) || {};
+    return String(p.display_name || p.username || p.email || uid?.slice(0, 8) || "—");
+  };
+
+  return {
+    applications: applications.map((a) => ({
+      id: a.id,
+      userId: a.user_id,
+      userLabel: labelFor(a.user_id),
+      displayName: a.display_name || "",
+      instagram: a.instagram || "",
+      languages: a.languages || "",
+      genres: a.genres || "",
+      demoUrl: a.demo_url || "",
+      bio: a.bio || "",
+      status: a.status,
+      adminNotes: a.admin_notes || "",
+      createdAt: a.created_at || null,
+      reviewedAt: a.reviewed_at || null,
+    })),
+    applicationsTotal: appRes.total ?? applications.length,
+    roster: roster.map((s) => ({
+      userId: s.user_id,
+      userLabel: labelFor(s.user_id),
+      displayName: s.display_name || "",
+      instagram: s.instagram || "",
+      languages: s.languages || "",
+      genres: s.genres || "",
+      active: Boolean(s.active),
+      featured: Boolean(s.featured),
+      approvedAt: s.approved_at || null,
+    })),
+    requests: requests.map((r) => ({
+      id: r.id,
+      requesterId: r.requester_id,
+      requesterLabel: labelFor(r.requester_id),
+      requestType: r.request_type,
+      packageTier: r.package_tier,
+      priceUsd: Number(r.price_usd || 0),
+      songTitle: r.song_title || "",
+      occasion: r.occasion || "",
+      brief: r.brief || "",
+      singerId: r.singer_id || null,
+      singerLabel: r.singer_id ? labelFor(r.singer_id) : "Best match",
+      status: r.status,
+      paymentStatus: r.payment_status,
+      contactEmail: r.contact_email || "",
+      contactInstagram: r.contact_instagram || "",
+      adminNotes: r.admin_notes || "",
+      deliveredSongId: r.delivered_song_id || "",
+      createdAt: r.created_at || null,
+    })),
+    requestsTotal: reqRes.total ?? requests.length,
+  };
+}
+
 async function fetchOrphanCreditLedgerRows({ userId = "", scanLimit = 300 } = {}) {
   let path = `credit_ledger?select=id,user_id,delta,reason,ref,created_at&order=created_at.desc&limit=${scanLimit}`;
   if (userId) {
@@ -1289,12 +1381,14 @@ module.exports = async function handler(req, res) {
       payload = { ...payload, ...(await getPublications(limit, offset)) };
     } else if (view === "promos") {
       payload = { ...payload, ...(await getPromos(limit, offset)) };
+    } else if (view === "singers") {
+      payload = { ...payload, ...(await getSingers(limit, offset)) };
     } else if (view === "providers" || view === "suno") {
       payload = { ...payload, ...(await getProvidersPanel({ forceHealth: healthRefresh })) };
     } else {
       return sendJson(res, 400, {
         error: "Unknown view",
-        allowed: ["session", "settings", "overview", "providers", "users", "user", "credits", "promos", "generations", "generation", "subscriptions", "billing", "publications", "suno"],
+        allowed: ["session", "settings", "overview", "providers", "users", "user", "credits", "promos", "singers", "generations", "generation", "subscriptions", "billing", "publications", "suno"],
       });
     }
     return sendJson(res, 200, payload);

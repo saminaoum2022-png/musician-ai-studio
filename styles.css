@@ -54354,3 +54354,215 @@ html[data-theme="light"] .webProFeaturePill{
     color: rgba(28,32,44,0.88);
   }
 }
+
+/* Pro Singer — request / apply sheets */
+.proSingerSheetCard{
+  max-height: min(92vh, 720px);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+.proSingerSteps{
+  flex: 1;
+  overflow-y: auto;
+  padding: 0 18px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.proSingerFoot{
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  padding: 12px 18px calc(12px + env(safe-area-inset-bottom));
+  border-top: 1px solid rgba(255,255,255,0.08);
+}
+.proSingerDots{
+  display: flex;
+  gap: 6px;
+  justify-content: center;
+  margin-top: 8px;
+}
+.proSingerDot{
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.18);
+}
+.proSingerDot.isActive{ background: rgba(124,92,255,0.95); }
+.proSingerDot.isDone{ background: rgba(124,92,255,0.45); }
+.proSingerLead{
+  margin: 0;
+  font-size: 0.88rem;
+  line-height: 1.45;
+  color: rgba(236,240,252,0.72);
+}
+.proSingerMuted{
+  margin: 0;
+  font-size: 0.82rem;
+  line-height: 1.4;
+  color: rgba(236,240,252,0.55);
+}
+.proSingerField{
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 0.82rem;
+  color: rgba(236,240,252,0.72);
+}
+.proSingerField input,
+.proSingerField select,
+.proSingerField textarea{
+  width: 100%;
+  border-radius: 12px;
+  border: 1px solid rgba(255,255,255,0.12);
+  background: rgba(0,0,0,0.22);
+  color: inherit;
+  padding: 10px 12px;
+  font: inherit;
+}
+.proSingerSongCard{
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  padding: 10px;
+  border-radius: 14px;
+  border: 1px solid rgba(255,255,255,0.1);
+  background: rgba(0,0,0,0.18);
+}
+.proSingerSongArt{
+  width: 52px;
+  height: 52px;
+  border-radius: 10px;
+  object-fit: cover;
+}
+.proSingerSongTitle{ font-weight: 700; font-size: 0.95rem; }
+.proSingerSongSub{ font-size: 0.78rem; color: rgba(236,240,252,0.55); }
+.proSingerPick{
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  width: 100%;
+  text-align: left;
+  padding: 10px 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(255,255,255,0.1);
+  background: rgba(0,0,0,0.16);
+  color: inherit;
+}
+.proSingerPick.isSelected{
+  border-color: rgba(124,92,255,0.65);
+  background: rgba(124,92,255,0.12);
+}
+.proSingerPickArt{
+  width: 44px;
+  height: 44px;
+  border-radius: 999px;
+  object-fit: cover;
+}
+.proSingerPickIco{
+  width: 44px;
+  height: 44px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  background: rgba(124,92,255,0.2);
+  font-size: 1.1rem;
+}
+.proSingerPickName{ display: block; font-weight: 700; font-size: 0.92rem; }
+.proSingerPickMeta{ display: block; font-size: 0.78rem; color: rgba(236,240,252,0.58); }
+.proSingerAddonNote{ font-size: 0.78rem; color: rgba(236,240,252,0.55); margin: 0; }
+.proSingerPkgGrid{
+  display: grid;
+  gap: 10px;
+}
+.proSingerPkg{
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px solid rgba(255,255,255,0.1);
+  background: rgba(0,0,0,0.16);
+  color: inherit;
+  text-align: left;
+}
+.proSingerPkg.isSelected{
+  border-color: rgba(124,92,255,0.65);
+  background: rgba(124,92,255,0.12);
+}
+.proSingerPkg.isDisabled{ opacity: 0.45; }
+.proSingerPkgPrice{ font-size: 1.15rem; font-weight: 800; color: rgba(196,181,253,0.95); }
+.proSingerPkgLabel{ font-weight: 700; }
+.proSingerPkgBlurb{ font-size: 0.78rem; color: rgba(236,240,252,0.58); }
+.proSingerReviewCard{
+  border-radius: 14px;
+  border: 1px solid rgba(255,255,255,0.1);
+  background: rgba(0,0,0,0.18);
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.proSingerReviewRow{
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 0.86rem;
+  color: rgba(236,240,252,0.72);
+}
+.proSingerReviewTotal{
+  padding-top: 8px;
+  border-top: 1px solid rgba(255,255,255,0.08);
+  font-size: 0.95rem;
+}
+.discoverTrackSheetRow--proSinger{
+  color: rgba(196,181,253,0.95);
+}
+.proSingerRequestsList{
+  flex: 1;
+  overflow-y: auto;
+  padding: 0 18px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.proSingerReqRow{
+  border-radius: 14px;
+  border: 1px solid rgba(255,255,255,0.1);
+  background: rgba(0,0,0,0.16);
+  padding: 12px 14px;
+}
+.proSingerReqHead{
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: flex-start;
+}
+.proSingerReqBadge{
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: rgba(124,92,255,0.18);
+  color: rgba(196,181,253,0.95);
+  white-space: nowrap;
+}
+.proSingerReqMeta,
+.proSingerReqDate{
+  margin: 6px 0 0;
+  font-size: 0.78rem;
+  color: rgba(236,240,252,0.58);
+}
+html[data-theme="light"] .proSingerField input,
+html[data-theme="light"] .proSingerField select,
+html[data-theme="light"] .proSingerField textarea{
+  background: rgba(255,255,255,0.82);
+  border-color: rgba(20,24,36,0.12);
+  color: rgba(20,24,36,0.92);
+}
+html[data-theme="light"] .proSingerLead,
+html[data-theme="light"] .proSingerMuted{
+  color: rgba(72,82,104,0.82);
+}

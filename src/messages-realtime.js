@@ -12,6 +12,12 @@ let _channel = null;
 let _activeThreadId = "";
 let _channelReady = false;
 let _onTypingHandler = null;
+let _onInsertHandler = null;
+let _onReadUpdateHandler = null;
+
+export function isDmThreadChannelReady() {
+  return Boolean(_channelReady && _channel && _activeThreadId);
+}
 
 export async function sendDmThreadTypingBroadcast({ userId } = {}) {
   const uid = String(userId || "").trim();
@@ -76,6 +82,8 @@ export async function stopDmThreadRealtime() {
   _activeThreadId = "";
   _channelReady = false;
   _onTypingHandler = null;
+  _onInsertHandler = null;
+  _onReadUpdateHandler = null;
   if (!client || !channel) return;
   try {
     await client.removeChannel(channel);
@@ -105,12 +113,16 @@ export async function subscribeDmThread({
 
   if (_activeThreadId === tid && _channel) {
     _onTypingHandler = onTyping;
+    _onInsertHandler = onInsert;
+    _onReadUpdateHandler = onReadUpdate;
     await refreshDmThreadRealtimeAuth(token);
     return true;
   }
 
   await stopDmThreadRealtime();
   _onTypingHandler = onTyping;
+  _onInsertHandler = onInsert;
+  _onReadUpdateHandler = onReadUpdate;
 
   try {
     client.realtime.setAuth(token);
@@ -143,7 +155,7 @@ export async function subscribeDmThread({
       (payload) => {
         const row = normalizeRow(payload?.new);
         if (row) {
-          try { onInsert?.(row); } catch (e) { console.warn("[dm-realtime] onInsert", e); }
+          try { _onInsertHandler?.(row); } catch (e) { console.warn("[dm-realtime] onInsert", e); }
         }
       },
     )
@@ -162,7 +174,7 @@ export async function subscribeDmThread({
         if (partnerId && readUserId !== partnerId) return;
         const lastReadAt = String(row.last_read_at || "").trim();
         if (!lastReadAt) return;
-        try { onReadUpdate?.({ userId: readUserId, lastReadAt }); } catch (e) { console.warn("[dm-realtime] onReadUpdate", e); }
+        try { _onReadUpdateHandler?.({ userId: readUserId, lastReadAt }); } catch (e) { console.warn("[dm-realtime] onReadUpdate", e); }
       },
     )
     .subscribe((status, err) => {

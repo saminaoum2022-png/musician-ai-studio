@@ -210,7 +210,7 @@ import { MUSIC_VIDEO_FEATURE_ENABLED } from "./feature-flags.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260814-180107";
+const APP_BUILD = "20260814-181052";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -28803,6 +28803,7 @@ async function socialApi(path, opts = {}) {
 
 let _messagesPageBound = false;
 let _messagesRealtimePollTimer = 0;
+let _messagesConnectPollTimer = 0;
 let _messagesPresencePollTimer = 0;
 let _messagesReadPollTimer = 0;
 let _messagesUnreadCount = 0;
@@ -28826,7 +28827,10 @@ let _messagesLoadingOlder = false;
 const MESSAGES_THREAD_PAGE_SIZE = 80;
 const MESSAGES_THREAD_LOAD_OLDER_THRESHOLD_PX = 120;
 /** Realtime is primary; slow REST poll heals rare missed inserts. */
-const MESSAGES_THREAD_SAFETY_POLL_MS = 45000;
+/** Safety poll when Realtime misses an insert (was 45s — too slow for chat). */
+const MESSAGES_THREAD_SAFETY_POLL_MS = 8000;
+/** Faster poll while Realtime channel is still connecting. */
+const MESSAGES_THREAD_CONNECT_POLL_MS = 3000;
 /** Partner now-playing line in the thread header (independent of message poll). */
 const MESSAGES_THREAD_PRESENCE_POLL_MS = 5000;
 /** Partner read cursor for outbound ✓ / ✓✓ receipts. */
@@ -31772,13 +31776,43 @@ async function refreshDmThreadRealtimeSubscribe(threadId) {
     onStatus: (status) => {
       const s = String(status || "");
       if (s === "SUBSCRIBED") {
+        stopMessagesConnectPoll();
         void maybeSendDmTypingPulse();
+        void pollNewThreadMessages(tid, { bootToken: _messagesThreadBootToken, reason: "realtime-subscribed" });
       }
       if (s === "CHANNEL_ERROR" || s === "TIMED_OUT" || s === "CLOSED") {
+        startMessagesConnectPoll(tid);
         catchUpOpenMessagesThread({ reason: `realtime-${s}` });
       }
     },
   });
+}
+
+function stopMessagesConnectPoll() {
+  if (_messagesConnectPollTimer) {
+    window.clearInterval(_messagesConnectPollTimer);
+    _messagesConnectPollTimer = 0;
+  }
+}
+
+function startMessagesConnectPoll(threadId) {
+  stopMessagesConnectPoll();
+  const tid = String(threadId || _conversationId || "").trim();
+  if (!tid || isCoachThreadId(tid)) return;
+  _messagesConnectPollTimer = window.setInterval(() => {
+    if (String(document.body.getAttribute("data-route") || "") !== "messages-thread") {
+      stopMessagesConnectPoll();
+      return;
+    }
+    if (_conversationId !== tid) return;
+    void loadMessagesRealtimeModule().then((mod) => {
+      if (mod?.isDmThreadChannelReady?.()) {
+        stopMessagesConnectPoll();
+        return;
+      }
+      void pollNewThreadMessages(tid, { bootToken: _messagesThreadBootToken, reason: "connect-poll" });
+    });
+  }, MESSAGES_THREAD_CONNECT_POLL_MS);
 }
 
 function stopMessagesThreadRealtime() {
@@ -31794,6 +31828,7 @@ function stopMessagesThreadRealtime() {
     window.clearInterval(_messagesReadPollTimer);
     _messagesReadPollTimer = 0;
   }
+  stopMessagesConnectPoll();
   clearPartnerTypingState();
   void stopDmThreadRealtimeSubscribe();
 }
@@ -31831,6 +31866,7 @@ function startMessagesThreadRealtime(threadId) {
     void pollPartnerThreadRead(tid, { bootToken: _messagesThreadBootToken });
   }, MESSAGES_THREAD_READ_POLL_MS);
   void refreshDmThreadRealtimeSubscribe(tid);
+  startMessagesConnectPoll(tid);
   void pollNewThreadMessages(tid, { bootToken: _messagesThreadBootToken, reason: "thread-open" });
   void pollPartnerThreadRead(tid, { bootToken: _messagesThreadBootToken });
   void refreshPartnerPresence();

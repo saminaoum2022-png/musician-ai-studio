@@ -92,6 +92,7 @@ import {
   initProSinger,
   openProSingerRequestSheet,
   openSingerApplicationSheet,
+  openSingerStudioSheet,
   openMySingerRequestsSheet,
   syncSettingsProSingerRows,
 } from "./pro-singer.js";
@@ -4150,7 +4151,7 @@ function applyRoute({ passGen } = {}) {
     "intro", "onboarding", "music-preferences", "start", "auth", "generate",
     ...(HUB_FEATURE_ENABLED ? ["hub"] : []),
     ...(MESSAGES_FEATURE_ENABLED ? ["messages", "messages-thread"] : []),
-    "settings", "profile", "profile-edit", "player", "discover", "discover-playlist", "friends", "challenges", "activity", "mashup", "mentor", "vocal", "stems", "studio", "advanced", "user", "credits", "pro", "sounds",
+    "settings", "profile", "profile-edit", "player", "discover", "discover-playlist", "friends", "challenges", "activity", "mashup", "mentor", "vocal", "stems", "studio", "advanced", "user", "credits", "pro", "sounds", "singer-studio",
   ]);
   const onboardingParsed = parseOnboardingRoute(route);
   let normalized = pendingPublicUsername ? "user" : (route === "start" ? "auth" : route);
@@ -4186,6 +4187,11 @@ function applyRoute({ passGen } = {}) {
     normalized = "activity";
   }
   if (normalized === "more") {
+    try { history.replaceState(null, "", "#/settings"); } catch {}
+    normalized = "settings";
+  }
+  const openSingerStudioAfterRoute = normalized === "singer-studio";
+  if (openSingerStudioAfterRoute) {
     try { history.replaceState(null, "", "#/settings"); } catch {}
     normalized = "settings";
   }
@@ -4481,6 +4487,9 @@ function applyRoute({ passGen } = {}) {
     try { syncSettingsThemePicker(); } catch {}
     try { syncSettingsMusicProviderRow(); } catch {}
     try { syncSettingsProSingerRows(); } catch {}
+    if (openSingerStudioAfterRoute) {
+      window.setTimeout(() => { try { void openSingerStudioSheet(); } catch {} }, 120);
+    }
     if (!_onesignalAppId) {
       void loadPublicConfig().then(() => {
         try { syncSettingsPushRow(); } catch {}
@@ -5744,9 +5753,13 @@ try {
     ensureNativeNetworkReady,
     getAuthToken: getSupabaseAuthToken,
     showToast,
+    compressAvatarFile,
   });
   document.getElementById("btnSettingsProSingerApply")?.addEventListener("click", () => {
     void openSingerApplicationSheet();
+  });
+  document.getElementById("btnSettingsProSingerStudio")?.addEventListener("click", () => {
+    void openSingerStudioSheet();
   });
   document.getElementById("btnSettingsProSingerRequests")?.addEventListener("click", () => {
     void openMySingerRequestsSheet();
@@ -32704,6 +32717,8 @@ function notificationIconForType(type) {
   if (t === "song_live") return "♪";
   if (t === "generation_ready") return "✓";
   if (t === "generation_failed") return "✗";
+  if (t === "singer_approved" || t === "singer_assigned") return "🎤";
+  if (t === "singer_rejected") return "✗";
   if (t === "sound_ready" || t === "music_video_ready" || t === "instrumental_ready") return "✓";
   return "•";
 }
@@ -32787,6 +32802,29 @@ function notificationMessage(n) {
       title: username ? `@${username} remixed your song` : "Someone remixed your song",
       body: `${remix} · from ${original}`,
       action: username ? "View creator" : "",
+    };
+  }
+  if (n?.type === "singer_approved") {
+    return {
+      title: "You're an approved NabadAi Singer",
+      body: "Open Singer Studio to view and respond to gigs.",
+      action: "Open Singer Studio",
+    };
+  }
+  if (n?.type === "singer_rejected") {
+    const note = String(n?.metadata?.message || n?.metadata?.admin_notes || "").trim();
+    return {
+      title: "Singer application update",
+      body: note || "Your application was not accepted this round.",
+      action: "",
+    };
+  }
+  if (n?.type === "singer_assigned") {
+    const title = String(n?.metadata?.song_title || "Performance request").trim();
+    return {
+      title: `New gig: ${title}`,
+      body: "Accept or decline in Singer Studio.",
+      action: "Open Singer Studio",
     };
   }
   if (n?.type === "song_feedback") {
@@ -33443,6 +33481,7 @@ function notificationActivityHref(n) {
   if (t === "sound_ready" || t === "music_video_ready" || t === "instrumental_ready") {
     return "#/profile?seg=all";
   }
+  if (t === "singer_approved" || t === "singer_assigned") return "#/singer-studio";
   if (t === "song_feedback" && songId) return `#/player?track=${encodeURIComponent(songId)}`;
   if (t === "remix") {
     const remixSongId = String(meta.remix_song_id || meta.song_id || "").trim();
@@ -33609,6 +33648,10 @@ async function openActivityNotificationTarget(n) {
     try { sessionStorage.setItem(PROFILE_SONGS_SEGMENT_KEY, "all"); } catch {}
     _profileSongsSegment = "all";
     location.hash = "#/profile?seg=all";
+    return;
+  }
+  if (t === "singer_approved" || t === "singer_assigned") {
+    location.hash = "#/singer-studio";
     return;
   }
   if (t === "sound_ready" || t === "music_video_ready" || t === "instrumental_ready") {

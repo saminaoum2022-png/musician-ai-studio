@@ -2439,6 +2439,21 @@
           </div>
         </div>
 
+        <div id="proSingerStudioSheet" class="feedReplySheet proSingerSheet" aria-hidden="true" hidden>
+          <div class="feedReplySheetBackdrop" data-pro-singer-dismiss="1"></div>
+          <div class="feedReplySheetCard proSingerSheetCard" role="dialog" aria-modal="true" aria-labelledby="proSingerStudioTitle">
+            <div class="feedReplySheetGrab" aria-hidden="true"></div>
+            <header class="feedReplySheetHead">
+              <button type="button" class="feedReplySheetClose" data-pro-singer-dismiss="1" aria-label="Close">
+                <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M6.4 5 5 6.4 10.6 12 5 17.6 6.4 19 12 13.4 17.6 19 19 17.6 13.4 12 19 6.4 17.6 5 12 10.6Z"/></svg>
+              </button>
+              <h2 class="feedReplySheetTitle" id="proSingerStudioTitle">NabadAi Singer Studio</h2>
+              <p class="feedReplySheetSub" id="proSingerStudioSub">Your assigned performance requests</p>
+            </header>
+            <div id="proSingerStudioList" class="proSingerRequestsList proSingerStudioList"></div>
+          </div>
+        </div>
+
         <div id="friendsComposeSheet" class="friendsComposeSheet" aria-hidden="true" hidden>
           <div class="friendsComposeSheetBackdrop" data-friends-compose-dismiss="1"></div>
           <div class="friendsComposeSheetCard" role="dialog" aria-modal="true" aria-labelledby="followComposePrompt">
@@ -3913,6 +3928,16 @@
                   <span class="settingsRowBody">
                     <span class="settingsRowTitle">Become a NabadAi Singer</span>
                     <span class="settingsRowSub" id="settingsProSingerApplySub">Perform for creators worldwide</span>
+                  </span>
+                  <span class="settingsRowChev" aria-hidden="true">›</span>
+                </button>
+                <button type="button" class="settingsRow settingsRowLink" id="btnSettingsProSingerStudio" hidden>
+                  <span class="settingsRowIco" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><path d="M4 19V5a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v14" stroke-linecap="round"/><path d="M8 17v-6l4-2 4 2v6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                  </span>
+                  <span class="settingsRowBody">
+                    <span class="settingsRowTitle">NabadAi Singer Studio</span>
+                    <span class="settingsRowSub" id="settingsProSingerStudioSub">View assigned gigs</span>
                   </span>
                   <span class="settingsRowChev" aria-hidden="true">›</span>
                 </button>

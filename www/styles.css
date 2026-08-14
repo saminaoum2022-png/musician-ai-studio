@@ -54670,3 +54670,76 @@ html[data-theme="light"] .proSingerRequestsList{
 html[data-theme="light"] .proSingerSheetCard{
   background: var(--card);
 }
+.proSingerPhotoRow{
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.proSingerPhotoPreview{
+  width: 72px;
+  height: 72px;
+  border-radius: 999px;
+  object-fit: cover;
+  border: 1px solid rgba(255,255,255,0.12);
+  background: rgba(0,0,0,0.2);
+}
+.proSingerPhotoBtn{
+  flex: 1;
+}
+.proSingerGigRow{
+  border-radius: 14px;
+  border: 1px solid rgba(255,255,255,0.1);
+  background: rgba(0,0,0,0.16);
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.proSingerGigBrief,
+.proSingerGigNotes{
+  margin: 0;
+  font-size: 0.82rem;
+  color: rgba(236,240,252,0.72);
+  line-height: 1.45;
+}
+.proSingerGigActions{
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+.proSingerReqBadge--pending{
+  background: rgba(245,158,11,0.18);
+  color: rgba(252,211,77,0.98);
+}
+.proSingerReqBadge--accepted{
+  background: rgba(34,197,94,0.18);
+  color: rgba(134,239,172,0.98);
+}
+.proSingerReqBadge--declined{
+  background: rgba(239,68,68,0.16);
+  color: rgba(252,165,165,0.98);
+}
+html[data-theme="light"] .proSingerPhotoPreview{
+  border-color: var(--border);
+  background: var(--surface-secondary);
+}
+html[data-theme="light"] .proSingerGigRow{
+  background: var(--surface-secondary);
+  border-color: var(--border);
+}
+html[data-theme="light"] .proSingerGigBrief,
+html[data-theme="light"] .proSingerGigNotes{
+  color: var(--text-secondary);
+}
+html[data-theme="light"] .proSingerReqBadge--pending{
+  background: rgba(245,158,11,0.14);
+  color: #b45309;
+}
+html[data-theme="light"] .proSingerReqBadge--accepted{
+  background: rgba(34,197,94,0.12);
+  color: #15803d;
+}
+html[data-theme="light"] .proSingerReqBadge--declined{
+  background: rgba(239,68,68,0.12);
+  color: #b91c1c;
+}

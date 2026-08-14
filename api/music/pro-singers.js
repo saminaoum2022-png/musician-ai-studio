@@ -17,7 +17,7 @@ function mapSinger(row, profile) {
     languages: row.languages || "",
     genres: row.genres || "",
     bio: row.bio || "",
-    avatar: profile?.avatar || "",
+    avatar: row.photo_url || profile?.avatar || "",
     username: profile?.username || "",
     featured: Boolean(row.featured),
   };

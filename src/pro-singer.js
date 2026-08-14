@@ -36,6 +36,28 @@ let _singerChoice = "best_match";
 let _selectedPackage = "re_vocal";
 let _submitting = false;
 let _applicationState = null;
+let _applyPhotoUrl = "";
+let _singerGigs = [];
+let _gigResponding = false;
+
+async function apiPatch(path, body) {
+  if (_deps?.ensureNativeNetworkReady) await _deps.ensureNativeNetworkReady();
+  const token = _deps?.getAuthToken?.();
+  if (!token) throw new Error("Sign in to continue.");
+  const url = resolveProSingerApiUrl(path);
+  const doFetch = _deps?.apiFetch || fetch;
+  const r = await doFetch(url, {
+    method: "PATCH",
+    headers: proSingerFetchHeaders({
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    }),
+    body: JSON.stringify(body || {}),
+  });
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(String(data?.error || `Request failed (${r.status})`));
+  return data;
+}
 
 function el(id) {
   return document.getElementById(id);
@@ -405,7 +427,7 @@ function paintApplicationForm() {
   const app = _applicationState?.application;
   if (_applicationState?.isApprovedSinger) {
     if (status) status.textContent = "You're an approved NabadAi Singer — thank you!";
-    mount.innerHTML = `<p class="proSingerMuted">Gigs are assigned manually for now. We'll reach out on Instagram when a request matches you.</p>`;
+    mount.innerHTML = `<p class="proSingerMuted">Open <strong>NabadAi Singer Studio</strong> from Settings to view and respond to gigs.</p>`;
     setApplySubmitVisible(false);
     return;
   }
@@ -422,6 +444,14 @@ function paintApplicationForm() {
     status.textContent = "Join the NabadAi Singers community — perform for creators worldwide.";
   }
   mount.innerHTML = `
+    <label class="proSingerField proSingerPhotoField">
+      <span>Profile photo</span>
+      <div class="proSingerPhotoRow">
+        <img id="proSingerApplyPhotoPreview" class="proSingerPhotoPreview" src="${escapeHtml(_applyPhotoUrl || app?.photoUrl || "./assets/icons/splash-mark.png")}" alt="" />
+        <button type="button" class="btnGhost proSingerPhotoBtn" id="btnProSingerApplyPhoto">Upload photo</button>
+        <input id="proSingerApplyPhotoInput" type="file" accept="image/*" hidden />
+      </div>
+    </label>
     <label class="proSingerField">
       <span>Stage name</span>
       <input id="proSingerApplyName" type="text" maxlength="80" value="${escapeHtml(app?.displayName || "")}" />
@@ -446,6 +476,26 @@ function paintApplicationForm() {
       <span>Short bio</span>
       <textarea id="proSingerApplyBio" rows="3" maxlength="1000" placeholder="Tell us about your voice and experience…">${escapeHtml(app?.bio || "")}</textarea>
     </label>`;
+  _applyPhotoUrl = String(app?.photoUrl || _applyPhotoUrl || "").trim();
+  el("btnProSingerApplyPhoto")?.addEventListener("click", () => el("proSingerApplyPhotoInput")?.click());
+  el("proSingerApplyPhotoInput")?.addEventListener("change", async (ev) => {
+    const file = ev.target?.files?.[0];
+    if (!file) return;
+    try {
+      const dataUrl = _deps?.compressAvatarFile
+        ? await _deps.compressAvatarFile(file, { maxSize: 480, quality: 0.85 })
+        : "";
+      if (!dataUrl) {
+        _deps?.showToast?.("Could not read photo.");
+        return;
+      }
+      _applyPhotoUrl = dataUrl;
+      const img = el("proSingerApplyPhotoPreview");
+      if (img) img.src = dataUrl;
+    } catch {
+      _deps?.showToast?.("Could not process photo.");
+    }
+  });
 }
 
 export async function openSingerApplicationSheet() {
@@ -455,6 +505,7 @@ export async function openSingerApplicationSheet() {
   }
   try {
     _applicationState = await apiGet("/api/music/singer-applications");
+    _applyPhotoUrl = String(_applicationState?.application?.photoUrl || "").trim();
   } catch (err) {
     const msg = String(err?.message || "");
     if (/load failed|failed to fetch|network/i.test(msg)) {
@@ -476,6 +527,10 @@ async function submitSingerApplication() {
   if (_applicationState?.isApprovedSinger || _applicationState?.application?.status === "pending") {
     return;
   }
+  if (!_applyPhotoUrl) {
+    _deps?.showToast?.("Profile photo is required.");
+    return;
+  }
   const btn = el("btnProSingerApplySubmit");
   if (btn) btn.disabled = true;
   try {
@@ -486,6 +541,7 @@ async function submitSingerApplication() {
       genres: String(el("proSingerApplyGenres")?.value || "").trim(),
       demoUrl: String(el("proSingerApplyDemo")?.value || "").trim(),
       bio: String(el("proSingerApplyBio")?.value || "").trim(),
+      photoUrl: _applyPhotoUrl,
     });
     _applicationState = { application: data.application, isApprovedSinger: false };
     paintApplicationForm();
@@ -543,21 +599,141 @@ export function closeMySingerRequestsSheet() {
   setSheetOpen("proSingerRequestsSheet", false);
 }
 
+function assignmentBadgeClass(status) {
+  if (status === "pending") return "proSingerReqBadge proSingerReqBadge--pending";
+  if (status === "accepted") return "proSingerReqBadge proSingerReqBadge--accepted";
+  if (status === "declined") return "proSingerReqBadge proSingerReqBadge--declined";
+  return "proSingerReqBadge";
+}
+
+function paintSingerStudioList() {
+  const mount = el("proSingerStudioList");
+  if (!mount) return;
+  if (!_singerGigs.length) {
+    mount.innerHTML = `<p class="proSingerMuted">No gigs assigned yet. When admin matches you to a request, it will appear here.</p>`;
+    return;
+  }
+  mount.innerHTML = _singerGigs.map((g) => {
+    const art = g.songArtUrl || "./assets/icons/splash-mark.png";
+    const title = g.songTitle || g.occasion || "Performance request";
+    const pending = g.assignmentStatus === "pending";
+    const actions = pending
+      ? `<div class="proSingerGigActions">
+          <button type="button" class="btnPrimary" data-gig-action="accept" data-gig-id="${escapeHtml(g.id)}">Accept</button>
+          <button type="button" class="btnGhost" data-gig-action="decline" data-gig-id="${escapeHtml(g.id)}">Decline</button>
+        </div>`
+      : "";
+    return `
+      <article class="proSingerGigRow" data-gig-id="${escapeHtml(g.id)}">
+        <div class="proSingerSongCard">
+          <img src="${escapeHtml(art)}" alt="" class="proSingerSongArt" />
+          <div>
+            <div class="proSingerSongTitle">${escapeHtml(title)}</div>
+            <div class="proSingerSongSub">${escapeHtml(g.packageTier || "")} · ${escapeHtml(g.statusLabel || g.status || "")}</div>
+          </div>
+          <span class="${assignmentBadgeClass(g.assignmentStatus)}">${escapeHtml(g.assignmentLabel || g.assignmentStatus || "")}</span>
+        </div>
+        ${g.brief ? `<p class="proSingerGigBrief">${escapeHtml(g.brief)}</p>` : ""}
+        ${g.singerNotes ? `<p class="proSingerGigNotes"><strong>Singer notes:</strong> ${escapeHtml(g.singerNotes)}</p>` : ""}
+        ${actions}
+      </article>`;
+  }).join("");
+}
+
+export async function openSingerStudioSheet() {
+  if (!_deps?.getAuthToken?.()) {
+    _deps?.showToast?.("Sign in to open Singer Studio.");
+    return;
+  }
+  const mount = el("proSingerStudioList");
+  const sub = el("proSingerStudioSub");
+  if (mount) mount.innerHTML = `<p class="proSingerMuted">Loading gigs…</p>`;
+  setSheetOpen("proSingerStudioSheet", true);
+  try {
+    const data = await apiGet("/api/music/pro-singer-gigs");
+    _singerGigs = Array.isArray(data.gigs) ? data.gigs : [];
+    if (sub) {
+      const pending = Number(data.pendingCount || 0);
+      sub.textContent = pending
+        ? `${pending} gig${pending === 1 ? "" : "s"} awaiting your response`
+        : "Your assigned performance requests";
+    }
+    paintSingerStudioList();
+  } catch (err) {
+    const msg = String(err?.message || "");
+    if (/403|approved/i.test(msg)) {
+      if (mount) mount.innerHTML = `<p class="proSingerMuted">Singer Studio opens after you're approved as a NabadAi Singer.</p>`;
+    } else if (mount) {
+      mount.innerHTML = `<p class="proSingerMuted">${escapeHtml(msg || "Could not load gigs.")}</p>`;
+    }
+  }
+}
+
+export function closeSingerStudioSheet() {
+  setSheetOpen("proSingerStudioSheet", false);
+}
+
+async function respondToGig(requestId, action) {
+  if (_gigResponding || !requestId) return;
+  let declineReason = "";
+  if (action === "decline") {
+    declineReason = String(window.prompt("Optional: why are you declining this gig?", "") || "").trim();
+  }
+  _gigResponding = true;
+  try {
+    const data = await apiPatch("/api/music/pro-singer-gigs", {
+      requestId,
+      action,
+      declineReason,
+    });
+    _deps?.showToast?.(data.message || (action === "accept" ? "Gig accepted." : "Gig declined."));
+    await openSingerStudioSheet();
+    syncSettingsProSingerRows();
+  } catch (err) {
+    _deps?.showToast?.(err?.message || "Could not update gig.");
+  } finally {
+    _gigResponding = false;
+  }
+}
+
 export function syncSettingsProSingerRows() {
+  const applyRow = el("btnSettingsProSingerApply");
+  const applyTitle = applyRow?.querySelector(".settingsRowTitle");
   const applySub = el("settingsProSingerApplySub");
+  const studioRow = el("btnSettingsProSingerStudio");
+  const studioSub = el("settingsProSingerStudioSub");
   const reqSub = el("settingsProSingerRequestsSub");
-  if (!applySub && !reqSub) return;
+  if (!applySub && !reqSub && !studioRow) return;
   if (!_deps?.getAuthToken?.()) {
     if (applySub) applySub.textContent = "Sign in to apply";
+    if (studioSub) studioSub.textContent = "For approved singers";
+    if (studioRow) studioRow.hidden = true;
     if (reqSub) reqSub.textContent = "Sign in to view requests";
     return;
   }
   void apiGet("/api/music/singer-applications")
     .then((data) => {
+      _applicationState = data;
+      const approved = Boolean(data.isApprovedSinger);
+      if (studioRow) studioRow.hidden = !approved;
+      if (approved && applyTitle) applyTitle.textContent = "NabadAi Singer application";
+      else if (applyTitle) applyTitle.textContent = "Become a NabadAi Singer";
       if (applySub) {
-        if (data.isApprovedSinger) applySub.textContent = "Approved NabadAi Singer";
+        if (approved) applySub.textContent = "Approved — open Singer Studio for gigs";
         else if (data.application?.status === "pending") applySub.textContent = "Application pending";
         else applySub.textContent = "Perform for creators worldwide";
+      }
+      if (approved && studioSub) {
+        void apiGet("/api/music/pro-singer-gigs")
+          .then((gigData) => {
+            const pending = Number(gigData.pendingCount || 0);
+            studioSub.textContent = pending
+              ? `${pending} new gig${pending === 1 ? "" : "s"} · Open Singer Studio`
+              : "View assigned gigs";
+          })
+          .catch(() => {
+            studioSub.textContent = "View assigned gigs";
+          });
       }
     })
     .catch(() => {
@@ -613,6 +789,20 @@ function bindProSingerSheetsOnce() {
     el("btnProSingerNewRequest")?.addEventListener("click", () => {
       closeMySingerRequestsSheet();
       void openProSingerRequestSheet(null);
+    });
+  }
+
+  const studioSheet = el("proSingerStudioSheet");
+  if (studioSheet && studioSheet.dataset.bound !== "1") {
+    studioSheet.dataset.bound = "1";
+    studioSheet.addEventListener("click", (e) => {
+      if (e.target.closest("[data-pro-singer-dismiss]")) closeSingerStudioSheet();
+      const btn = e.target.closest("[data-gig-action]");
+      if (btn) {
+        const action = btn.getAttribute("data-gig-action") || "";
+        const gigId = btn.getAttribute("data-gig-id") || "";
+        if (action === "accept" || action === "decline") void respondToGig(gigId, action);
+      }
     });
   }
 }

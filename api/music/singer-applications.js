@@ -50,6 +50,14 @@ async function serviceUpsertApplication(row) {
   }
 }
 
+function normalizePhotoUrl(raw) {
+  const s = String(raw || "").trim();
+  if (!s) return "";
+  if (!s.startsWith("data:image/")) return "";
+  if (s.length > 400000) return "";
+  return s;
+}
+
 function mapApplication(row) {
   if (!row) return null;
   return {
@@ -61,6 +69,7 @@ function mapApplication(row) {
     genres: row.genres || "",
     demoUrl: row.demo_url || "",
     bio: row.bio || "",
+    photoUrl: row.photo_url || "",
     adminNotes: row.admin_notes || "",
     reviewedAt: row.reviewed_at || null,
     createdAt: row.created_at || null,
@@ -105,12 +114,16 @@ module.exports = async function handler(req, res) {
   const genres = String(body.genres || "").trim().slice(0, 200);
   const demoUrl = String(body.demoUrl || body.demo_url || "").trim().slice(0, 500);
   const bio = String(body.bio || "").trim().slice(0, 1000);
+  const photoUrl = normalizePhotoUrl(body.photoUrl || body.photo_url);
 
   if (!instagram || instagram.length < 2) {
     return sendJson(res, 400, { error: "Instagram handle is required." });
   }
   if (!displayName) {
     return sendJson(res, 400, { error: "Display name is required." });
+  }
+  if (!photoUrl) {
+    return sendJson(res, 400, { error: "Profile photo is required." });
   }
 
   const existing = await selectFromTable(
@@ -133,6 +146,7 @@ module.exports = async function handler(req, res) {
     genres,
     demo_url: demoUrl,
     bio,
+    photo_url: photoUrl,
     status: "pending",
     admin_notes: prev?.status === "rejected" ? "" : (prev?.admin_notes || ""),
     reviewed_at: null,

@@ -651,6 +651,7 @@ const els = {
   sunoProsody: document.getElementById("sunoProsody"),
   sunoBeatStability: document.getElementById("sunoBeatStability"),
   sunoSongKey: document.getElementById("sunoSongKey"),
+  sunoSongDuration: document.getElementById("sunoSongDuration"),
   sunoKeyHint: document.getElementById("sunoKeyHint"),
   sunoModel: document.getElementById("sunoModel"),
   sunoEngine: document.getElementById("sunoEngine"),
@@ -696,6 +697,7 @@ const els = {
   personaVoiceTune: document.getElementById("personaVoiceTune"),
   sunoPersonaStyleLead: document.getElementById("sunoPersonaStyleLead"),
   sunoPersonaAdventure: document.getElementById("sunoPersonaAdventure"),
+  sunoPersonaAudioInfluence: document.getElementById("sunoPersonaAudioInfluence"),
   createChallengeHint: document.getElementById("createChallengeHint"),
   createChallengeHintTitle: document.getElementById("createChallengeHintTitle"),
   createChallengeHintSub: document.getElementById("createChallengeHintSub"),
@@ -5104,6 +5106,7 @@ function resetAdvancedOptionsToDefaults() {
   if (els.sunoProMode) els.sunoProMode.checked = false;
   if (els.sunoTiming) els.sunoTiming.value = "";
   if (els.sunoSongKey) els.sunoSongKey.value = "";
+  if (els.sunoSongDuration) els.sunoSongDuration.value = "";
   if (els.sunoMaqam) els.sunoMaqam.value = "";
   if (els.sunoVoiceProfile) els.sunoVoiceProfile.value = "";
   if (els.sunoSingerGender) els.sunoSingerGender.value = "";
@@ -20795,14 +20798,14 @@ function openVocalRecorderModal() {
   const isVerify = forWizard && vocalRecorderContext?.step === "verify";
   if (els.vocalRecorderKicker) {
     els.vocalRecorderKicker.textContent = forWizard
-      ? (isVerify ? "Verify" : "Sample")
+        ? (isVerify ? "Read verification" : "Sample")
       : "Vocal reference";
   }
   if (els.vocalRecorderModalTitle) {
     els.vocalRecorderModalTitle.textContent =
       vocalRecorderContext?.title ||
       (forWizard
-        ? (isVerify ? "Record verification" : "Record voice sample")
+        ? (isVerify ? "Read verification phrase" : "Record voice sample")
         : "Record vocal reference");
   }
   if (els.btnRecorderUse) {
@@ -20817,7 +20820,7 @@ function openVocalRecorderModal() {
   if (forWizard) {
     setVocalRecorderStatusAll(
       isVerify
-        ? "Sing the phrase above, then tap ● to record"
+        ? "Read the phrase above aloud, then tap ● to record"
         : "Tap ● to record 15–30 seconds of singing"
     );
   }
@@ -20855,7 +20858,7 @@ async function startVoiceWizardRecording() {
   const isVerify = vocalRecorderContext?.step === "verify";
   setVocalRecorderStatusAll(
     isVerify
-      ? "Recording… sing the phrase above, tap ● to stop"
+      ? "Recording… read the phrase clearly, tap ● to stop"
       : "Recording… tap ● to stop"
   );
 }
@@ -20867,11 +20870,15 @@ async function openVoiceWizardRecorder(step, onFile, opts = {}) {
     type: "voice_wizard",
     step,
     onFile,
-    title: step === "verify" ? "Record verification phrase" : "Record voice sample",
+    title: step === "verify" ? "Read verification phrase" : "Record voice sample",
   };
   openVocalRecorderModal();
   if (!autoStart) {
-    setVocalRecorderStatusAll("Tap ● to record. Sing clearly for 15–30 seconds.");
+    setVocalRecorderStatusAll(
+      step === "verify"
+        ? "Tap ● to record. Read the phrase aloud in your normal speaking voice."
+        : "Tap ● to record. Sing clearly for 15–30 seconds."
+    );
     return;
   }
   try {
@@ -42483,7 +42490,7 @@ async function pollVoiceValidatePhrase(taskId, maxMs = 120000) {
   throw new Error("Timed out waiting for validation phrase");
 }
 
-/** Recorded-voice tuning chips → Suno styleWeight / weirdnessConstraint. */
+/** Recorded-voice tuning chips → Suno styleWeight / weirdnessConstraint / audioWeight. */
 const PERSONA_STYLE_LEAD_WEIGHT = Object.freeze({
   voice_leads: 0.35,
   balanced: 0.5,
@@ -42494,15 +42501,40 @@ const PERSONA_ADVENTURE_WEIGHT = Object.freeze({
   balanced: 0.45,
   surprise: 0.65,
 });
+const PERSONA_AUDIO_INFLUENCE_WEIGHT = Object.freeze({
+  medium: 0.7,
+  strong: 0.85,
+  max: 0.95,
+});
+
+/** V5_5 optional target length — omit when Auto (empty preset). */
+const SONG_DURATION_PRESET_SEC = Object.freeze({
+  short: 60,
+  standard: 120,
+  long: 180,
+  extended: 300,
+});
+
+function resolveSongDurationForGeneration() {
+  const preset = String(els.sunoSongDuration?.value || "").trim();
+  if (!preset) return undefined;
+  const sec = SONG_DURATION_PRESET_SEC[preset];
+  if (!Number.isFinite(sec)) return undefined;
+  return Math.max(10, Math.min(360, Math.round(sec)));
+}
 
 function resolvePersonaVoiceTune() {
   const styleLead = String(els.sunoPersonaStyleLead?.value || "voice_leads").trim() || "voice_leads";
   const adventure = String(els.sunoPersonaAdventure?.value || "familiar").trim() || "familiar";
+  const audioInfluence = String(els.sunoPersonaAudioInfluence?.value || "strong").trim() || "strong";
   return {
     styleLead,
     adventure,
+    audioInfluence,
     styleWeight: PERSONA_STYLE_LEAD_WEIGHT[styleLead] ?? PERSONA_STYLE_LEAD_WEIGHT.voice_leads,
     weirdnessConstraint: PERSONA_ADVENTURE_WEIGHT[adventure] ?? PERSONA_ADVENTURE_WEIGHT.familiar,
+    audioWeight:
+      PERSONA_AUDIO_INFLUENCE_WEIGHT[audioInfluence] ?? PERSONA_AUDIO_INFLUENCE_WEIGHT.strong,
   };
 }
 
@@ -42847,12 +42879,12 @@ function renderVoiceWizardVerifyStep(phrase, token) {
   voiceWizardState.verifyPhrase = String(phrase || "").trim();
   renderVoiceWizardStep(`
     <section class="personaFlowSection">
-      <h3 class="personaFlowSectionLabel">Sing this phrase</h3>
-      <p class="personaFlowSectionLead">Clearly, in a singing voice — about 10–20 seconds. This proves the voice is really yours.</p>
+      <h3 class="personaFlowSectionLabel">Read this phrase aloud</h3>
+      <p class="personaFlowSectionLead">Speak clearly in your normal voice — don’t sing it. This spoken recording is compared to your singing sample to confirm the voice is yours.</p>
       <div class="voiceWizardPhrase vwPhrase" id="voiceWizardPhrase">${escapeHtml(phrase)}</div>
       <div class="recorderCenter voiceWizardRecPrompt">
         <button type="button" class="recButton" id="voiceWizardRecordVerify" aria-label="Record verification">●</button>
-        <div id="voiceWizardVerifyStatus" class="hint">Tap ● to sing the phrase</div>
+        <div id="voiceWizardVerifyStatus" class="hint">Tap ● to read the phrase aloud</div>
       </div>
       <button type="button" class="vwGhostLink" id="voiceWizardPickVerify">Upload verification file instead</button>
       <input type="file" id="voiceWizardVerifyFile" hidden accept="audio/*,video/*,.mp4,.m4a,.mov" />
@@ -42867,7 +42899,7 @@ function renderVoiceWizardVerifyStep(phrase, token) {
     if (statusEl) {
       statusEl.textContent = f
         ? `Verification ready (${Math.max(1, Math.round(f.size / 1024))} KB)`
-        : "Tap ● to sing the phrase";
+        : "Tap ● to read the phrase aloud";
     }
     if (submitBtn) submitBtn.disabled = !f;
   };
@@ -42938,7 +42970,7 @@ function renderVoiceWizardVerifyStep(phrase, token) {
       const ready = await waitForVoiceAvailable(voiceTaskId, { attempts: 6, delayMs: 8000 });
       showToast(
         ready === false
-          ? "Voice saved! Suno is still processing it — wait 1–2 minutes before your first song."
+          ? "Voice saved! Still processing — wait 1–2 minutes before your first song."
           : "Your voice is saved and selected for Create",
         { icon: "✓", durationMs: 3600 }
       );
@@ -56614,7 +56646,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
             setStatus("Generation paused: this recorded voice has expired — re-record it to refresh.");
           } else {
             showToast(
-              "Your voice is still processing on Suno's side — wait 1–2 minutes after recording, then try again.",
+              "Your voice is still processing — wait 1–2 minutes after recording, then try again.",
               { icon: "!", durationMs: 6200 }
             );
             setStatus("Generation paused: your recorded voice isn't ready yet.");
@@ -56638,6 +56670,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
         : isRecordedVoicePersona
         ? [userStyle, styleExtras, artworkStyle ? `cover art: ${artworkStyle}` : ""].filter(Boolean).join(" | ")
         : `${userStyle}${userStyle ? " | " : ""}${timingClause}, ${styleExtras}${artworkStyle ? `, cover art: ${artworkStyle}` : ""}`;
+      const songDurationSec = resolveSongDurationForGeneration();
       const payload = {
         prompt: finalPrompt,
         style: personaStyleBase,
@@ -56649,10 +56682,15 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
         ...(imageMoodAppliedForNextGen ? { watchKind: "photo" } : {}),
         personaId: personaIdSel || undefined,
         personaModel: personaModelSel || undefined,
+        ...(songDurationSec != null ? { duration: songDurationSec } : {}),
         ...(isRecordedVoicePersona
           ? (() => {
               const tune = resolvePersonaVoiceTune();
-              return { styleWeight: tune.styleWeight, weirdnessConstraint: tune.weirdnessConstraint };
+              return {
+                styleWeight: tune.styleWeight,
+                weirdnessConstraint: tune.weirdnessConstraint,
+                audioWeight: tune.audioWeight,
+              };
             })()
           : {}),
       };
@@ -56701,6 +56739,8 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
         prosodyStrictness,
         beatStability,
         songKey: (els.sunoSongKey?.value || "").trim(),
+        songDurationPreset: String(els.sunoSongDuration?.value || "").trim() || undefined,
+        songDurationSec,
         maqam: (els.sunoMaqam?.value || "").trim(),
         voiceProfile: (els.sunoVoiceProfile?.value || "").trim(),
         singerGender: (els.sunoSingerGender?.value || "").trim(),
@@ -57618,8 +57658,10 @@ bindOptionChipRow("grooveChipRow", els.sunoGroovePace);
 bindOptionChipRow("prosodyChipRow", els.sunoProsody);
 bindOptionChipRow("beatChipRow", els.sunoBeatStability);
 bindOptionChipRow("voiceRangeChipRow", els.sunoVoiceProfile);
+bindOptionChipRow("songDurationChipRow", els.sunoSongDuration);
 bindOptionChipRow("personaStyleLeadChipRow", els.sunoPersonaStyleLead);
 bindOptionChipRow("personaAdventureChipRow", els.sunoPersonaAdventure);
+bindOptionChipRow("personaAudioInfluenceChipRow", els.sunoPersonaAudioInfluence);
 
 // Mood presets: set the Feel knobs AND seed matching style tags. Tags are
 // append-only into Style/Tags (never overwrite what the user typed) and

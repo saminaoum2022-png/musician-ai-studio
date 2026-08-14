@@ -979,6 +979,22 @@
                   <button type="button" class="optChip" data-opt-value="surprise" aria-pressed="false">Surprise me</button>
                 </div>
               </div>
+              <div class="personaVoiceTuneGroup">
+                <div class="personaVoiceTuneHead">
+                  <span class="personaVoiceTuneLabel">Voice strength</span>
+                  <span class="personaVoiceTuneHint">Audio influence — how much you sound like you</span>
+                </div>
+                <select id="sunoPersonaAudioInfluence" hidden aria-hidden="true" tabindex="-1">
+                  <option value="medium">Medium</option>
+                  <option value="strong" selected>Strong</option>
+                  <option value="max">Max</option>
+                </select>
+                <div id="personaAudioInfluenceChipRow" class="optChipRow personaVoiceTuneChips" role="group" aria-label="Voice strength">
+                  <button type="button" class="optChip" data-opt-value="medium" aria-pressed="false">Medium</button>
+                  <button type="button" class="optChip isActive" data-opt-value="strong" aria-pressed="true">Strong</button>
+                  <button type="button" class="optChip" data-opt-value="max" aria-pressed="false">Max</button>
+                </div>
+              </div>
             </div>
             <div id="createChallengeHint" class="createChallengeHint" hidden>
               <span class="createChallengeHintBadge" aria-hidden="true">
@@ -1233,6 +1249,29 @@
                 <select id="sunoPersonaId" hidden aria-hidden="true" tabindex="-1">
                   <option value="">Default voice</option>
                 </select>
+              </div>
+            </details>
+
+            <details class="createOptionsGroup">
+              <summary class="createOptionsGroupHead">Length</summary>
+              <div class="createOptionsStack">
+                <div class="optChipGroup">
+                  <span class="optChipLabel">Song length <span class="createOptionsFieldHint">optional target</span></span>
+                  <select id="sunoSongDuration" hidden aria-hidden="true" tabindex="-1">
+                    <option value="" selected>Auto</option>
+                    <option value="short">Short (~1 min)</option>
+                    <option value="standard">Standard (~2 min)</option>
+                    <option value="long">Long (~3 min)</option>
+                    <option value="extended">Extended (~5 min)</option>
+                  </select>
+                  <div id="songDurationChipRow" class="optChipRow" role="group" aria-label="Song length">
+                    <button type="button" class="optChip isActive" data-opt-value="" aria-pressed="true">Auto</button>
+                    <button type="button" class="optChip" data-opt-value="short" aria-pressed="false">~1 min</button>
+                    <button type="button" class="optChip" data-opt-value="standard" aria-pressed="false">~2 min</button>
+                    <button type="button" class="optChip" data-opt-value="long" aria-pressed="false">~3 min</button>
+                    <button type="button" class="optChip" data-opt-value="extended" aria-pressed="false">~5 min</button>
+                  </div>
+                </div>
               </div>
             </details>
 
@@ -4178,7 +4217,7 @@
             </div>
           </header>
           <div id="vocalRecorderPhraseWrap" class="vocalRecorderPhraseWrap personaRecorderPhraseWrap" hidden>
-            <p class="vocalRecorderPhraseLabel personaFlowSectionLabel">Sing this phrase</p>
+            <p class="vocalRecorderPhraseLabel personaFlowSectionLabel">Read this phrase aloud</p>
             <div id="vocalRecorderPhrasePrompt" class="vocalRecorderPhrasePrompt personaRecorderPhrase" aria-live="polite"></div>
           </div>
           <div class="recorderCenter personaRecorderStage">

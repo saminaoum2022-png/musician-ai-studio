@@ -87,6 +87,8 @@ module.exports = async function handler(req, res) {
       vocalGender,
       styleWeight,
       weirdnessConstraint,
+      audioWeight,
+      duration,
       personaId,
       personaModel: requestedPersonaModel,
     } = body || {};
@@ -147,6 +149,13 @@ module.exports = async function handler(req, res) {
       ...(Number.isFinite(Number(weirdnessConstraint))
         ? { weirdnessConstraint: clamp01(Number(weirdnessConstraint)) }
         : {}),
+      ...(Number.isFinite(Number(audioWeight)) ? { audioWeight: clamp01(Number(audioWeight)) } : {}),
+      ...(chosenModel === "V5_5" && Number.isFinite(Number(duration))
+        ? (() => {
+            const sec = Math.round(Number(duration));
+            return sec >= 10 && sec <= 360 ? { duration: sec } : {};
+          })()
+        : {}),
     };
 
     try {
@@ -155,6 +164,10 @@ module.exports = async function handler(req, res) {
         personaId: payload.personaId || null,
         personaModel: payload.personaModel || null,
         vocalGender: payload.vocalGender || null,
+        styleWeight: payload.styleWeight ?? null,
+        weirdnessConstraint: payload.weirdnessConstraint ?? null,
+        audioWeight: payload.audioWeight ?? null,
+        duration: payload.duration ?? null,
         customMode: payload.customMode,
         instrumental: payload.instrumental,
         promptLen: payload.prompt?.length || 0,

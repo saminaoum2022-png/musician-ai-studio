@@ -56,20 +56,37 @@ function setSheetOpen(id, open) {
   sheet.setAttribute("aria-hidden", open ? "false" : "true");
 }
 
+function resolveProSingerApiUrl(path) {
+  const p = String(path || "").startsWith("/") ? path : `/${path}`;
+  try {
+    const baked = String(window.__NABAD_CLIENT_ENV__?.apiBase || "").trim().replace(/\/$/, "");
+    if (baked) return `${baked}${p}`;
+  } catch {}
+  return _deps?.apiUrl ? _deps.apiUrl(path) : p;
+}
+
+function proSingerFetchHeaders(extra = {}) {
+  const headers = { ...(extra || {}) };
+  if (typeof _deps?.getApiFetchHeaders === "function") {
+    return _deps.getApiFetchHeaders(headers);
+  }
+  return headers;
+}
+
 async function apiGet(path) {
   if (_deps?.ensureNativeNetworkReady) await _deps.ensureNativeNetworkReady();
   const token = _deps?.getAuthToken?.();
   if (!token) throw new Error("Sign in to continue.");
-  const url = _deps?.apiUrl ? _deps.apiUrl(path) : path;
+  const url = resolveProSingerApiUrl(path);
   const doFetch = _deps?.apiFetch || fetch;
   const r = await doFetch(url, {
-    headers: { Authorization: `Bearer ${token}` },
+    headers: proSingerFetchHeaders({ Authorization: `Bearer ${token}` }),
   });
   const data = await r.json().catch(() => ({}));
   if (!r.ok) {
     const msg = String(data?.error || "");
     if (r.status === 404) {
-      throw new Error("Pro singer API not found — make sure you are on the staging app build.");
+      throw new Error("Pro singer API not found. Close the app fully and reopen — staging API should be used.");
     }
     throw new Error(msg || `Request failed (${r.status})`);
   }
@@ -80,21 +97,21 @@ async function apiPost(path, body) {
   if (_deps?.ensureNativeNetworkReady) await _deps.ensureNativeNetworkReady();
   const token = _deps?.getAuthToken?.();
   if (!token) throw new Error("Sign in to continue.");
-  const url = _deps?.apiUrl ? _deps.apiUrl(path) : path;
+  const url = resolveProSingerApiUrl(path);
   const doFetch = _deps?.apiFetch || fetch;
   const r = await doFetch(url, {
     method: "POST",
-    headers: {
+    headers: proSingerFetchHeaders({
       Authorization: `Bearer ${token}`,
       "Content-Type": "application/json",
-    },
+    }),
     body: JSON.stringify(body || {}),
   });
   const data = await r.json().catch(() => ({}));
   if (!r.ok) {
     const msg = String(data?.error || "");
     if (r.status === 404) {
-      throw new Error("Pro singer API not found — make sure you are on the staging app build.");
+      throw new Error("Pro singer API not found. Close the app fully and reopen — staging API should be used.");
     }
     if (msg.includes("not set up yet") || msg.includes("pro_singer") || msg.includes("singer_applications")) {
       throw new Error("Pro singer backend is not ready yet — run supabase/pro_singers.sql in Supabase.");

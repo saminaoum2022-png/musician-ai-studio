@@ -2814,7 +2814,7 @@ function applyClientEnvBootstrap() {
       } catch {}
     }
     if (isNativeShell()) {
-      forceNativeApiBase(env.apiBase || defaultNativeApiBase());
+      forceNativeApiBase(resolveNativeApiBase(env.apiBase || defaultNativeApiBase()));
     } else {
       _resolvedApiBase = "";
       try { globalThis.__nabadApiBase = ""; } catch {}
@@ -5738,6 +5738,7 @@ try {
   initProSinger({
     apiUrl,
     apiFetch,
+    getApiFetchHeaders,
     ensureNativeNetworkReady,
     getAuthToken: getSupabaseAuthToken,
     showToast,

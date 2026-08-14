@@ -28864,6 +28864,7 @@ const MESSAGES_INBOX_POLL_LIVE_MS = 60000;
 /** Partner typing indicator — broadcast while composing. */
 const DM_TYPING_SEND_MS = 2500;
 const DM_TYPING_LINGER_MS = 4500;
+const _messagesBubbleEnterKeys = new Set();
 const _messagesThreadCache = new Map();
 const _chatPartnerStatsCache = new Map();
 let _messagesInboxLoading = false;
@@ -29835,6 +29836,38 @@ function scrollMessagesMountToBottom({ force = false } = {}) {
   try { syncDiscoveryPlayingHighlights(); } catch {}
 }
 
+function messageBubbleAnimKey(msg) {
+  const cid = String(msg?.client_message_id || "").trim();
+  const id = String(msg?.id || "").trim();
+  return cid || id || "";
+}
+
+function markMessageBubbleEnter(msg) {
+  const key = messageBubbleAnimKey(msg);
+  if (key) _messagesBubbleEnterKeys.add(key);
+}
+
+function bubbleEnterWrapClass(msg, mine) {
+  const key = messageBubbleAnimKey(msg);
+  if (!key || !_messagesBubbleEnterKeys.has(key)) return "";
+  _messagesBubbleEnterKeys.delete(key);
+  return mine
+    ? " messagesBubbleWrap--enter messagesBubbleWrap--enterMine"
+    : " messagesBubbleWrap--enter messagesBubbleWrap--enterTheirs";
+}
+
+function pulseMessagesComposerSend() {
+  if (typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches) {
+    return;
+  }
+  const btn = document.getElementById("messagesComposerSend");
+  if (!btn) return;
+  btn.classList.remove("messagesComposerSend--pulse");
+  void btn.offsetWidth;
+  btn.classList.add("messagesComposerSend--pulse");
+  window.setTimeout(() => btn.classList.remove("messagesComposerSend--pulse"), 420);
+}
+
 function renderMessagesMount({ scrollToBottom = true, forceScroll = false } = {}) {
   const mount = document.getElementById("messagesThreadMount");
   const viewerId = authSession?.user?.id || "";
@@ -29915,6 +29948,7 @@ function mergeThreadMessages(incoming, { scrollToBottom = true } = {}) {
       }
     } else {
       list.push({ ...m, sendStatus: m.sendStatus || "sent" });
+      markMessageBubbleEnter(m);
       changed = true;
     }
   }
@@ -30107,6 +30141,7 @@ function catchUpOpenMessagesThread({ reason = "foreground" } = {}) {
 }
 
 function addOptimisticThreadMessage(msg) {
+  markMessageBubbleEnter(msg);
   _messagesList = [...(Array.isArray(_messagesList) ? _messagesList : []), msg];
   renderMessagesMount({ scrollToBottom: true, forceScroll: true });
   updateMessagesComposerReserve();
@@ -30209,6 +30244,7 @@ async function retryFailedThreadMessage(clientMessageId) {
 
 function resetMessagesThreadRouteState() {
   _messagesComposerAutofocusToken += 1;
+  _messagesBubbleEnterKeys.clear();
   saveActiveThreadToCache();
   _messagesThreadNeedsInitialScroll = false;
   _chatHeaderUser = null;
@@ -31774,6 +31810,7 @@ function messagesBubbleHtml(msg, viewerId, opts) {
   const failedCls = mine && msg?.sendStatus === "failed" ? " is-failed" : "";
   const outboundStatus = mine ? resolveOutboundMessageStatus(msg) : "";
   const readByPartnerCls = mine && outboundStatus === "read" ? " is-read-by-partner" : "";
+  const enterCls = bubbleEnterWrapClass(msg, mine);
   const statusHtml = mine ? messagesBubbleStatusHtml(msg) : "";
   const timeHtml = when ? `<span class="messagesBubbleTime">${escapeHtml(when)}</span>` : "";
   const metaHtml =
@@ -31782,7 +31819,7 @@ function messagesBubbleHtml(msg, viewerId, opts) {
       : "";
   if (parsed.type === "song") {
     return `
-      <div class="messagesBubbleWrap messagesBubbleWrap--song${mine ? " is-mine" : ""}${pendingCls}${failedCls}${readByPartnerCls}" data-msg-id="${escapeHtml(String(msg?.id || ""))}" data-client-msg-id="${escapeHtml(String(msg?.client_message_id || ""))}">
+      <div class="messagesBubbleWrap messagesBubbleWrap--song${mine ? " is-mine" : ""}${pendingCls}${failedCls}${readByPartnerCls}${enterCls}" data-msg-id="${escapeHtml(String(msg?.id || ""))}" data-client-msg-id="${escapeHtml(String(msg?.client_message_id || ""))}">
         <div class="messagesBubble messagesBubble--song">
           ${messagesDmSongCardHtml(parsed, { mine })}
           ${metaHtml}
@@ -31795,7 +31832,7 @@ function messagesBubbleHtml(msg, viewerId, opts) {
     ? `<div class="messagesBubbleText messagesBubbleText--coachMd">${renderCoachMarkdown(body)}</div>`
     : userTextHtml(body, { tag: "p", className: "messagesBubbleText", escapeHtml });
   return `
-    <div class="messagesBubbleWrap${mine ? " is-mine" : ""}${pendingCls}${failedCls}${readByPartnerCls}" data-msg-id="${escapeHtml(String(msg?.id || ""))}" data-client-msg-id="${escapeHtml(String(msg?.client_message_id || ""))}">
+    <div class="messagesBubbleWrap${mine ? " is-mine" : ""}${pendingCls}${failedCls}${readByPartnerCls}${enterCls}" data-msg-id="${escapeHtml(String(msg?.id || ""))}" data-client-msg-id="${escapeHtml(String(msg?.client_message_id || ""))}">
       <div class="messagesBubble">
         ${textHtml}
         ${metaHtml}
@@ -32611,6 +32648,7 @@ function sendCurrentThreadMessage() {
     body: text,
     createdAt: optimistic.created_at,
   });
+  pulseMessagesComposerSend();
   updateMessagesComposerReserve();
   try { input.focus({ preventScroll: true }); } catch { try { input.focus(); } catch {} }
 

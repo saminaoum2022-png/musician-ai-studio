@@ -34743,6 +34743,27 @@ body.messagesThreadKeyboardOpen[data-route="messages-thread"] .messagesThreadPag
 .messagesBubbleWrap--song.is-mine{
   justify-content: flex-end;
 }
+@media (prefers-reduced-motion: no-preference){
+  .messagesBubbleWrap--enter{
+    animation: messagesBubbleEnter 0.38s cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+  .messagesBubbleWrap--enterTheirs{
+    --bubble-enter-x: -8px;
+  }
+  .messagesBubbleWrap--enterMine{
+    --bubble-enter-x: 8px;
+  }
+}
+@keyframes messagesBubbleEnter{
+  from{
+    opacity: 0;
+    transform: translateY(7px) translateX(var(--bubble-enter-x, 0)) scale(0.97);
+  }
+  to{
+    opacity: 1;
+    transform: translateY(0) translateX(0) scale(1);
+  }
+}
 .messagesBubble{
   max-width: min(82%, 320px);
   padding: 10px 12px 8px;
@@ -35083,6 +35104,17 @@ html.is-web-shell body.messagesThreadViewportSized[data-route="messages-thread"]
   cursor: pointer;
   box-shadow: 0 8px 22px rgba(124,92,255,0.35);
   -webkit-tap-highlight-color: transparent;
+  transition: transform 0.18s ease, opacity 0.18s ease;
+}
+@media (prefers-reduced-motion: no-preference){
+  .messagesComposerSend--pulse{
+    animation: messagesComposerSendPulse 0.36s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+}
+@keyframes messagesComposerSendPulse{
+  0%{ transform: scale(1); }
+  45%{ transform: scale(0.86); }
+  100%{ transform: scale(1); }
 }
 .messagesComposerSend:disabled{
   opacity: 0.45;

@@ -28875,6 +28875,10 @@ let _messagesRequestTargetUserId = "";
 let _messagesThreadLeaving = false;
 let _messagesThreadNeedsInitialScroll = false;
 const MESSAGES_NAV_PREF_KEY = "mas:messagesNavPrefetch:v1";
+const MESSAGES_INBOX_CACHE_KEY = "mas:messagesInboxCache:v1";
+const MESSAGES_THREAD_CACHE_STORAGE_KEY = "mas:messagesThreadCache:v1";
+const MESSAGES_INBOX_CACHE_TTL_MS = 30 * 60 * 1000;
+const MESSAGES_THREAD_CACHE_MAX_THREADS = 12;
 
 function syncMessagesThreadComposerReady() {
   const input = document.getElementById("messagesComposerInput");
@@ -29331,9 +29335,39 @@ function getCachedChatPartnerStats(userId) {
   return _chatPartnerStatsCache.get(uid) || null;
 }
 
+function readMessagesThreadCacheStorage() {
+  try {
+    const raw = sessionStorage.getItem(MESSAGES_THREAD_CACHE_STORAGE_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch {
+    return {};
+  }
+}
+
+function writeMessagesThreadCacheStorage(store) {
+  try {
+    sessionStorage.setItem(MESSAGES_THREAD_CACHE_STORAGE_KEY, JSON.stringify(store || {}));
+  } catch {}
+}
+
+function hydrateThreadMessagesCacheFromStorage(threadId) {
+  const tid = String(threadId || "").trim();
+  if (!tid || _messagesThreadCache.has(tid)) return;
+  const store = readMessagesThreadCacheStorage();
+  const entry = store[tid];
+  if (!entry?.loadedOnce) return;
+  _messagesThreadCache.set(tid, {
+    messages: Array.isArray(entry.messages) ? entry.messages.map((m) => ({ ...m })) : [],
+    lastFetchedAt: String(entry.lastFetchedAt || ""),
+    lastFetchedId: String(entry.lastFetchedId || ""),
+    loadedOnce: true,
+  });
+}
+
 function getThreadMessagesCache(threadId) {
   const tid = String(threadId || "").trim();
   if (!tid) return null;
+  if (!_messagesThreadCache.has(tid)) hydrateThreadMessagesCacheFromStorage(tid);
   return _messagesThreadCache.get(tid) || null;
 }
 
@@ -29345,12 +29379,25 @@ function messagesThreadHasCachedMessages(threadId) {
 function saveThreadMessagesCache(threadId, { messages, lastFetchedAt, lastFetchedId, loadedOnce = true } = {}) {
   const tid = String(threadId || "").trim();
   if (!tid) return;
-  _messagesThreadCache.set(tid, {
+  const entry = {
     messages: Array.isArray(messages) ? messages.map((m) => ({ ...m })) : [],
     lastFetchedAt: String(lastFetchedAt || ""),
     lastFetchedId: String(lastFetchedId || ""),
     loadedOnce: Boolean(loadedOnce),
-  });
+    savedAt: Date.now(),
+  };
+  _messagesThreadCache.set(tid, entry);
+  try {
+    const store = readMessagesThreadCacheStorage();
+    store[tid] = entry;
+    const keys = Object.keys(store).sort(
+      (a, b) => Number(store[b]?.savedAt || 0) - Number(store[a]?.savedAt || 0),
+    );
+    while (keys.length > MESSAGES_THREAD_CACHE_MAX_THREADS) {
+      delete store[keys.pop()];
+    }
+    writeMessagesThreadCacheStorage(store);
+  } catch {}
 }
 
 function saveActiveThreadToCache() {
@@ -29458,6 +29505,37 @@ function messagesInboxHasCachedData() {
     || (Array.isArray(s.requests) && s.requests.length > 0)
     || (Array.isArray(s.sentRequests) && s.sentRequests.length > 0)
   );
+}
+
+function loadMessagesInboxFromStorage() {
+  if (messagesInboxHasCachedData()) return false;
+  try {
+    const raw = sessionStorage.getItem(MESSAGES_INBOX_CACHE_KEY);
+    if (!raw) return false;
+    const parsed = JSON.parse(raw);
+    const savedAt = Number(parsed?.savedAt || 0);
+    if (!savedAt || Date.now() - savedAt > MESSAGES_INBOX_CACHE_TTL_MS) return false;
+    _messagesInboxState = {
+      threads: Array.isArray(parsed.threads) ? parsed.threads : [],
+      requests: Array.isArray(parsed.requests) ? parsed.requests : [],
+      sentRequests: Array.isArray(parsed.sentRequests) ? parsed.sentRequests : [],
+    };
+    _messagesInboxHasLoadedOnce = true;
+    return messagesInboxHasCachedData();
+  } catch {
+    return false;
+  }
+}
+
+function saveMessagesInboxToStorage() {
+  try {
+    sessionStorage.setItem(MESSAGES_INBOX_CACHE_KEY, JSON.stringify({
+      savedAt: Date.now(),
+      threads: _messagesInboxState.threads || [],
+      requests: _messagesInboxState.requests || [],
+      sentRequests: _messagesInboxState.sentRequests || [],
+    }));
+  } catch {}
 }
 
 function captureMessagesInboxScroll() {
@@ -31942,8 +32020,8 @@ async function bootstrapMessagesThread({ bootToken, threadId, targetUserId }) {
       history.replaceState(null, "", `#/messages-thread?thread=${encodeURIComponent(tid)}`);
     } catch {}
   }
-  const silent = messagesThreadHasCachedMessages(tid) || (Array.isArray(_messagesList) && _messagesList.length > 0);
-  await loadMessagesForConversation(tid, { bootToken, silent, replace: true });
+  const hasCache = messagesThreadHasCachedMessages(tid) || (Array.isArray(_messagesList) && _messagesList.length > 0);
+  await loadMessagesForConversation(tid, { bootToken, silent: hasCache, replace: !hasCache });
   if (bootToken !== _messagesThreadBootToken) return;
   startMessagesThreadRealtime(tid);
   syncMessagesThreadComposerReady();
@@ -32331,6 +32409,7 @@ async function loadMessagesInbox({ silent = false } = {}) {
         sentRequests: Array.isArray(data?.sentRequests) ? data.sentRequests : [],
       };
       _messagesInboxHasLoadedOnce = true;
+      saveMessagesInboxToStorage();
       markRouteHeavy("messages");
       return true;
     } catch (e) {
@@ -32391,6 +32470,7 @@ function enterMessagesRoute({ fromThread = false, inboxFilter = "" } = {}) {
     _messagesInboxFilter = "all";
   }
   startMessagesInboxPoll();
+  loadMessagesInboxFromStorage();
   const hasCache = messagesInboxHasCachedData();
   if (hasCache) {
     renderMessagesInbox();

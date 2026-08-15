@@ -1,5 +1,5 @@
 /**
- * Hydrate marketing homepage from /api/marketing/content (CMS with HTML fallbacks).
+ * Hydrate marketing pages from /api/marketing/content (CMS with HTML fallbacks).
  */
 (function () {
   var PAGE = document.documentElement.getAttribute("data-marketing-page") || "home";
@@ -32,9 +32,18 @@
     if (el) el.setAttribute("content", content);
   }
 
-  function applyContent(c) {
-    if (!c || typeof c !== "object") return;
+  function applyRelated(related) {
+    if (!related) return;
+    setText("[data-mk='related.title']", related.title);
+    var nav = document.querySelector("[data-mk-related-links]");
+    if (!nav || !Array.isArray(related.links)) return;
+    nav.innerHTML = related.links.map(function (link) {
+      if (!link || !link.label || !link.href) return "";
+      return '<a href="' + link.href.replace(/"/g, "&quot;") + '">' + link.label + "</a>";
+    }).join("");
+  }
 
+  function applyCore(c) {
     if (c.seo) {
       if (c.seo.title) document.title = c.seo.title;
       setMeta("description", c.seo.description, false);
@@ -68,34 +77,14 @@
           var p = node.querySelector("[data-mk='feature.body']");
           if (h && card.title) h.textContent = card.title;
           if (p && card.body) p.textContent = card.body;
+          var linksWrap = node.querySelector("[data-mk-feature-links]");
+          if (linksWrap && Array.isArray(card.links) && card.links.length) {
+            linksWrap.innerHTML = card.links.map(function (link) {
+              if (!link || !link.label || !link.href) return "";
+              return '<a class="featureCardLink" href="' + link.href.replace(/"/g, "&quot;") + '">' + link.label + "</a>";
+            }).join("");
+          }
         });
-      }
-    }
-
-    if (c.discover) {
-      setText("[data-mk='discover.eyebrow']", c.discover.eyebrow);
-      setText("[data-mk='discover.title']", c.discover.title);
-      setText("[data-mk='discover.lead']", c.discover.lead);
-      setText("[data-mk='discover.cta']", c.discover.ctaLabel);
-      setAttr("[data-mk='discover.cta']", "href", c.discover.ctaHref);
-    }
-
-    if (c.pricing) {
-      setText("[data-mk='pricing.eyebrow']", c.pricing.eyebrow);
-      setText("[data-mk='pricing.title']", c.pricing.title);
-      if (c.pricing.free) {
-        setText("[data-mk='pricing.free.title']", c.pricing.free.title);
-        setText("[data-mk='pricing.free.price']", c.pricing.free.price);
-        setText("[data-mk='pricing.free.body']", c.pricing.free.body);
-        setText("[data-mk='pricing.free.cta']", c.pricing.free.ctaLabel);
-        setAttr("[data-mk='pricing.free.cta']", "href", c.pricing.free.ctaHref);
-      }
-      if (c.pricing.pro) {
-        setText("[data-mk='pricing.pro.title']", c.pricing.pro.title);
-        setText("[data-mk='pricing.pro.price']", c.pricing.pro.price);
-        setText("[data-mk='pricing.pro.body']", c.pricing.pro.body);
-        setText("[data-mk='pricing.pro.cta']", c.pricing.pro.ctaLabel);
-        setAttr("[data-mk='pricing.pro.cta']", "href", c.pricing.pro.ctaHref);
       }
     }
 
@@ -120,6 +109,36 @@
       setText("[data-mk='final.cta']", c.finalCta.ctaLabel);
       setAttr("[data-mk='final.cta']", "href", c.finalCta.ctaHref);
     }
+
+    applyRelated(c.related);
+  }
+
+  function applyHomeExtras(c) {
+    if (c.discover) {
+      setText("[data-mk='discover.eyebrow']", c.discover.eyebrow);
+      setText("[data-mk='discover.title']", c.discover.title);
+      setText("[data-mk='discover.lead']", c.discover.lead);
+      setText("[data-mk='discover.cta']", c.discover.ctaLabel);
+      setAttr("[data-mk='discover.cta']", "href", c.discover.ctaHref);
+    }
+    if (c.pricing) {
+      setText("[data-mk='pricing.eyebrow']", c.pricing.eyebrow);
+      setText("[data-mk='pricing.title']", c.pricing.title);
+      if (c.pricing.free) {
+        setText("[data-mk='pricing.free.title']", c.pricing.free.title);
+        setText("[data-mk='pricing.free.price']", c.pricing.free.price);
+        setText("[data-mk='pricing.free.body']", c.pricing.free.body);
+        setText("[data-mk='pricing.free.cta']", c.pricing.free.ctaLabel);
+        setAttr("[data-mk='pricing.free.cta']", "href", c.pricing.free.ctaHref);
+      }
+      if (c.pricing.pro) {
+        setText("[data-mk='pricing.pro.title']", c.pricing.pro.title);
+        setText("[data-mk='pricing.pro.price']", c.pricing.pro.price);
+        setText("[data-mk='pricing.pro.body']", c.pricing.pro.body);
+        setText("[data-mk='pricing.pro.cta']", c.pricing.pro.ctaLabel);
+        setAttr("[data-mk='pricing.pro.cta']", "href", c.pricing.pro.ctaHref);
+      }
+    }
   }
 
   fetch("/api/marketing/content?page=" + encodeURIComponent(PAGE) + "&locale=" + encodeURIComponent(LOCALE), {
@@ -127,7 +146,9 @@
   })
     .then(function (r) { return r.json(); })
     .then(function (data) {
-      if (data && data.ok && data.content) applyContent(data.content);
+      if (!data || !data.ok || !data.content) return;
+      applyCore(data.content);
+      if (PAGE === "home") applyHomeExtras(data.content);
     })
     .catch(function () { /* keep static HTML fallbacks */ });
 })();

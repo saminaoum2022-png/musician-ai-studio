@@ -2,8 +2,22 @@
  * Marketing CMS — default homepage content, validation, and merge helpers.
  */
 
-const PAGE_KEYS = Object.freeze(["home"]);
+const { SEO_PAGE_KEYS, defaultSeoContent } = require("./marketing-seo-defaults");
+
 const LOCALES = Object.freeze(["en", "ar"]);
+const PAGE_CATALOG = Object.freeze([
+  { key: "home", label: "Homepage", preview: { en: "/", ar: "/ar" } },
+  { key: "ai-music-generator", label: "AI Music Generator", preview: { en: "/ai-music-generator", ar: "/ar/ai-music-generator" } },
+  { key: "hum-to-song", label: "Hum to Song", preview: { en: "/hum-to-song", ar: "/ar/hum-to-song" } },
+  { key: "lyrics-to-song", label: "Lyrics to Song", preview: { en: "/lyrics-to-song", ar: "/ar/lyrics-to-song" } },
+  { key: "photo-to-song", label: "Photo to Song", preview: { en: "/photo-to-song", ar: "/ar/photo-to-song" } },
+  { key: "arabic-ai-music-generator", label: "Arabic AI Music", preview: { en: "/arabic-ai-music-generator", ar: "/ar/arabic-ai-music-generator" } },
+]);
+const PAGE_KEYS = Object.freeze(["home", ...SEO_PAGE_KEYS]);
+
+function isSeoPage(pageKey) {
+  return SEO_PAGE_KEYS.includes(String(pageKey || "").trim().toLowerCase());
+}
 
 function defaultHomeContentEn() {
   return {
@@ -32,6 +46,11 @@ function defaultHomeContentEn() {
         {
           title: "Photo, hum, or lyrics",
           body: "Start with a picture mood, record a melody guide, or write lyrics — then shape genre, voice, and style.",
+          links: [
+            { label: "Hum to song", href: "/hum-to-song" },
+            { label: "Lyrics to song", href: "/lyrics-to-song" },
+            { label: "Photo to song", href: "/photo-to-song" },
+          ],
         },
         {
           title: "Your voice, every song",
@@ -93,6 +112,16 @@ function defaultHomeContentEn() {
       body: "Bring lyrics, melody, images, and voice into one focused creative space.",
       ctaLabel: "Try free",
       ctaHref: "/app/#/intro",
+    },
+    related: {
+      title: "Explore more ways to create",
+      links: [
+        { label: "AI Music Generator", href: "/ai-music-generator" },
+        { label: "Hum to Song", href: "/hum-to-song" },
+        { label: "Lyrics to Song", href: "/lyrics-to-song" },
+        { label: "Photo to Song", href: "/photo-to-song" },
+        { label: "Arabic AI Music", href: "/arabic-ai-music-generator" },
+      ],
     },
   };
 }
@@ -171,7 +200,8 @@ function defaultContent(pageKey, locale) {
   const loc = String(locale || "en").trim().toLowerCase();
   if (page === "home" && loc === "ar") return defaultHomeContentAr();
   if (page === "home") return defaultHomeContentEn();
-  return {};
+  const seo = defaultSeoContent(page, loc);
+  return seo || {};
 }
 
 function clip(str, max) {
@@ -211,18 +241,86 @@ function sanitizeAnswerHtml(html) {
   return s.slice(0, 2000);
 }
 
-function normalizeFeatureCards(cards, defaults) {
+function normalizeFeatureCards(cards, defaults, { withLinks = false } = {}) {
   const src = Array.isArray(cards) ? cards : [];
   const out = [];
   for (let i = 0; i < 3; i += 1) {
     const d = defaults[i] || { title: "", body: "" };
     const c = src[i] || {};
-    out.push({
+    const item = {
       title: clip(c.title, 120) || d.title,
       body: clip(c.body, 500) || d.body,
-    });
+    };
+    if (withLinks) {
+      item.links = normalizeRelatedLinks(c.links, d.links || []).slice(0, 4);
+    }
+    out.push(item);
   }
   return out;
+}
+
+function normalizeRelatedLinks(links, defaults) {
+  const src = Array.isArray(links) ? links : [];
+  const out = [];
+  const max = Math.max(src.length, defaults.length, 0);
+  for (let i = 0; i < Math.min(max, 8); i += 1) {
+    const d = defaults[i] || { label: "", href: "/" };
+    const it = src[i] || {};
+    const label = clip(it.label, 80) || d.label;
+    const href = sanitizeHref(it.href, d.href);
+    if (!label) continue;
+    out.push({ label, href });
+  }
+  return out.length ? out : defaults;
+}
+
+function normalizeHeroBlock(heroIn, defaults) {
+  return {
+    eyebrow: clip(heroIn.eyebrow, 80) || defaults.eyebrow,
+    title: clip(heroIn.title, 200) || defaults.title,
+    lead: clip(heroIn.lead, 600) || defaults.lead,
+    ctaLabel: clip(heroIn.ctaLabel, 60) || defaults.ctaLabel,
+    ctaHref: sanitizeHref(heroIn.ctaHref, defaults.ctaHref),
+    secondaryLabel: clip(heroIn.secondaryLabel, 60) || defaults.secondaryLabel,
+    secondaryHref: sanitizeHref(heroIn.secondaryHref, defaults.secondaryHref),
+    heroImageUrl: sanitizeImageUrl(heroIn.heroImageUrl, defaults.heroImageUrl),
+    heroImageAlt: clip(heroIn.heroImageAlt, 200) || defaults.heroImageAlt,
+  };
+}
+
+function normalizeSeoLikeContent(input, defaults) {
+  const seoIn = input.seo && typeof input.seo === "object" ? input.seo : {};
+  const heroIn = input.hero && typeof input.hero === "object" ? input.hero : {};
+  const featuresIn = input.features && typeof input.features === "object" ? input.features : {};
+  const faqIn = input.faq && typeof input.faq === "object" ? input.faq : {};
+  const finalIn = input.finalCta && typeof input.finalCta === "object" ? input.finalCta : {};
+  const relatedIn = input.related && typeof input.related === "object" ? input.related : {};
+  return {
+    seo: {
+      title: clip(seoIn.title, 160) || defaults.seo?.title || "",
+      description: clip(seoIn.description, 320) || defaults.seo?.description || "",
+    },
+    hero: normalizeHeroBlock(heroIn, defaults.hero || {}),
+    features: {
+      eyebrow: clip(featuresIn.eyebrow, 80) || defaults.features?.eyebrow || "",
+      title: clip(featuresIn.title, 160) || defaults.features?.title || "",
+      cards: normalizeFeatureCards(featuresIn.cards, defaults.features?.cards || []),
+    },
+    faq: {
+      title: clip(faqIn.title, 160) || defaults.faq?.title || "Frequently asked questions",
+      items: normalizeFaqItems(faqIn.items, defaults.faq?.items || []),
+    },
+    related: {
+      title: clip(relatedIn.title, 160) || defaults.related?.title || "Explore more ways to create",
+      links: normalizeRelatedLinks(relatedIn.links, defaults.related?.links || []),
+    },
+    finalCta: {
+      title: clip(finalIn.title, 160) || defaults.finalCta?.title || "",
+      body: clip(finalIn.body, 400) || defaults.finalCta?.body || "",
+      ctaLabel: clip(finalIn.ctaLabel, 60) || defaults.finalCta?.ctaLabel || "",
+      ctaHref: sanitizeHref(finalIn.ctaHref, defaults.finalCta?.ctaHref || "/app/#/intro"),
+    },
+  };
 }
 
 function normalizeFaqItems(items, defaults) {
@@ -294,7 +392,7 @@ function normalizeContent(pageKey, locale, raw) {
         features: {
           eyebrow: clip(featuresIn.eyebrow, 80) || defaults.features.eyebrow,
           title: clip(featuresIn.title, 160) || defaults.features.title,
-          cards: normalizeFeatureCards(featuresIn.cards, defaults.features.cards),
+          cards: normalizeFeatureCards(featuresIn.cards, defaults.features.cards, { withLinks: true }),
         },
         discover: {
           eyebrow: clip(discoverIn.eyebrow, 80) || defaults.discover.eyebrow,
@@ -319,8 +417,16 @@ function normalizeContent(pageKey, locale, raw) {
           ctaLabel: clip(finalIn.ctaLabel, 60) || defaults.finalCta.ctaLabel,
           ctaHref: sanitizeHref(finalIn.ctaHref, defaults.finalCta.ctaHref),
         },
+        related: {
+          title: clip((input.related || {}).title, 160) || defaults.related?.title || "",
+          links: normalizeRelatedLinks((input.related || {}).links, defaults.related?.links || []),
+        },
       },
     };
+  }
+
+  if (isSeoPage(page)) {
+    return { content: normalizeSeoLikeContent(input, defaults) };
   }
 
   return { error: "Unsupported page." };
@@ -348,7 +454,9 @@ function mergeWithDefaults(pageKey, locale, stored) {
 
 module.exports = {
   PAGE_KEYS,
+  PAGE_CATALOG,
   LOCALES,
+  isSeoPage,
   defaultContent,
   normalizeContent,
   mergeWithDefaults,

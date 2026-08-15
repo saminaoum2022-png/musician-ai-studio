@@ -378,6 +378,29 @@ h1 {
 
 .featureCard p, .faqItem p { margin: 0; }
 
+.featureCardLinks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.featureCardLink {
+  padding: 7px 12px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--muted);
+  font-size: 0.88rem;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.featureCardLink:hover {
+  color: var(--text);
+  border-color: rgba(35, 213, 171, 0.35);
+  background: rgba(35, 213, 171, 0.08);
+}
+
 .faqList { display: grid; gap: 12px; }
 
 .relatedLinks { display: flex; flex-wrap: wrap; gap: 10px; }

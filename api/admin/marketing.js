@@ -12,7 +12,7 @@ const {
   adminForbidden,
   adminUnauthorized,
 } = require("../_lib/admin-auth");
-const { LOCALES, PAGE_KEYS } = require("../_lib/marketing-content");
+const { LOCALES, PAGE_KEYS, PAGE_CATALOG } = require("../_lib/marketing-content");
 const { loadMarketingContent, saveMarketingContent } = require("../_lib/marketing-store");
 const { uploadObject } = require("../_lib/supabase-storage");
 
@@ -59,7 +59,8 @@ module.exports = async function handler(req, res) {
       content: data.content,
       source: data.source,
       updatedAt: data.updatedAt,
-      pages: PAGE_KEYS,
+      pages: PAGE_CATALOG,
+      pageKeys: PAGE_KEYS,
       locales: LOCALES,
     });
   }

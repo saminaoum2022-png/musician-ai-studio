@@ -16,8 +16,11 @@
   --radius-sm: 12px;
   --shadow: 0 20px 52px rgba(0, 0, 0, 0.44), 0 4px 14px rgba(0, 0, 0, 0.28);
   --surface-raised: linear-gradient(168deg, rgba(20, 26, 40, 0.94), rgba(8, 11, 20, 0.88));
-  --brand-gradient: linear-gradient(135deg, var(--accent-2) 0%, var(--accent-2) 48%, var(--accent) 52%, var(--accent) 100%);
-  --brand-gradient-soft: linear-gradient(135deg, rgba(35, 213, 171, 0.22), rgba(124, 92, 255, 0.18));
+  --brand-cta-bg: #23d5ab;
+  --brand-cta-bg-hover: #2eebbc;
+  --brand-cta-text: #051018;
+  --brand-surface-teal: rgba(35, 213, 171, 0.14);
+  --brand-surface-violet: rgba(124, 92, 255, 0.14);
   --sidebar-w: 252px;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
 }
@@ -65,7 +68,7 @@ button, input { font: inherit; }
   display: grid;
   place-items: center;
   overflow: hidden;
-  background: var(--brand-gradient-soft);
+  background: var(--brand-surface-teal);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12), 0 8px 24px rgba(0, 0, 0, 0.28);
 }
 
@@ -145,12 +148,14 @@ button, input { font: inherit; }
   transition: background 160ms ease, border-color 160ms ease, transform 120ms ease;
 }
 .btnPrimary {
-  background: var(--brand-gradient);
-  color: #fff;
-  font-weight: 600;
-  box-shadow: 0 10px 28px rgba(35, 213, 171, 0.2);
+  background: var(--brand-cta-bg);
+  color: var(--brand-cta-text);
+  font-weight: 700;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.28),
+    0 4px 14px rgba(35, 213, 171, 0.2);
 }
-.btnPrimary:hover { filter: brightness(1.06); }
+.btnPrimary:hover { background: var(--brand-cta-bg-hover); }
 .btnGhost {
   background: rgba(255, 255, 255, 0.04);
   color: var(--muted);
@@ -210,10 +215,7 @@ button, input { font: inherit; }
   font-weight: 700;
   font-size: 1.02rem;
   letter-spacing: -0.02em;
-  background: linear-gradient(120deg, #2dd4bf 0%, #7c5cff 100%);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
+  color: var(--accent-2);
 }
 
 .sidebarSub {
@@ -275,16 +277,16 @@ button, input { font: inherit; }
 }
 
 .navItem.isActive {
-  background: linear-gradient(135deg, rgba(35, 213, 171, 0.12), rgba(124, 92, 255, 0.14));
-  border-color: rgba(124, 92, 255, 0.28);
+  background: var(--brand-surface-teal);
+  border-color: rgba(35, 213, 171, 0.32);
   color: var(--text);
   font-weight: 600;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
 }
 
 .navItem.isActive .navIcon {
-  background: var(--brand-gradient-soft);
-  border-color: rgba(124, 92, 255, 0.25);
+  background: rgba(35, 213, 171, 0.18);
+  border-color: rgba(35, 213, 171, 0.35);
 }
 
 .sidebarFoot {
@@ -351,8 +353,8 @@ button, input { font: inherit; }
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: var(--brand-gradient);
-  box-shadow: 0 0 10px rgba(35, 213, 171, 0.55);
+  background: var(--brand-cta-bg);
+  box-shadow: 0 0 10px rgba(35, 213, 171, 0.45);
 }
 
 .pageTitle {
@@ -923,7 +925,7 @@ td.num { font-variant-numeric: tabular-nums; }
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.06em;
-  background: var(--brand-gradient-soft);
+  background: var(--brand-surface-violet);
   border: 1px solid rgba(124, 92, 255, 0.28);
   color: #c4b5fd;
   text-align: center;
@@ -1127,4 +1129,26 @@ td.num { font-variant-numeric: tabular-nums; }
   flex-wrap: wrap;
   gap: 10px;
   align-items: center;
+}
+
+.marketingPagePicker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.marketingPagePicker .btnGhost.isActivePage,
+.marketingPagePicker .btnGhost:disabled {
+  background: var(--brand-surface-teal);
+  border-color: rgba(35, 213, 171, 0.32);
+  color: var(--text);
+  opacity: 1;
+  cursor: default;
+}
+
+.marketingBlock--inline {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
 }

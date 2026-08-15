@@ -21,6 +21,7 @@ const state = {
   returnView: "users",
   grantPrefillEmail: "",
   marketingLocale: "en",
+  marketingPage: "home",
   marketingDraft: null,
   cache: {},
   recoveryTokenHash: "",
@@ -74,7 +75,7 @@ const VIEW_META = {
   user: { title: "User detail", sub: "Credits, subscription, billing, and activity" },
   generation: { title: "Generation detail", sub: "Prompt, status, credits, and saved output" },
   credits: { title: "Credits", sub: "Grant paid credits and view every ledger entry" },
-  marketing: { title: "Marketing", sub: "Edit homepage copy, FAQ, pricing blurbs, and hero image" },
+  marketing: { title: "Marketing", sub: "Edit homepage and SEO landing pages (English + Arabic)" },
   promos: { title: "Promo codes", sub: "Create and monitor redemption codes" },
   singers: { title: "Pro singers", sub: "Singer applications, roster, and performance requests" },
   generations: { title: "Generations", sub: "Song and audio generation requests" },
@@ -718,7 +719,7 @@ function viewCacheKey() {
     key += `:gid:${state.generationDetailId}`;
   }
   if (state.view === "marketing") {
-    key += `:loc:${state.marketingLocale || "en"}`;
+    key += `:pg:${state.marketingPage || "home"}:loc:${state.marketingLocale || "en"}`;
   }
   return key;
 }
@@ -2166,17 +2167,35 @@ function marketingField(label, id, value, { multiline = false, hint = "" } = {})
   </label>`;
 }
 
-function readMarketingFormContent() {
+function readMarketingRelatedLinks(prefix = "mkRelated") {
   const val = (id) => document.getElementById(id)?.value ?? "";
-  const cards = [0, 1, 2].map((i) => ({
-    title: val(`mkFeatureTitle${i}`),
-    body: val(`mkFeatureBody${i}`),
-  }));
+  return [0, 1, 2, 3, 4, 5, 6, 7].map((i) => ({
+    label: val(`${prefix}Label${i}`),
+    href: val(`${prefix}Href${i}`),
+  })).filter((it) => it.label.trim());
+}
+
+function readMarketingFormContent(pageKey = "home") {
+  const val = (id) => document.getElementById(id)?.value ?? "";
+  const cards = [0, 1, 2].map((i) => {
+    const card = {
+      title: val(`mkFeatureTitle${i}`),
+      body: val(`mkFeatureBody${i}`),
+    };
+    if (pageKey === "home" && i === 0) {
+      const links = [0, 1, 2].map((j) => ({
+        label: val(`mkFeatureLinkLabel${j}`),
+        href: val(`mkFeatureLinkHref${j}`),
+      })).filter((it) => it.label.trim());
+      if (links.length) card.links = links;
+    }
+    return card;
+  });
   const faqItems = [0, 1, 2].map((i) => ({
     question: val(`mkFaqQ${i}`),
     answerHtml: val(`mkFaqA${i}`),
   })).filter((it) => it.question.trim());
-  return {
+  const content = {
     seo: {
       title: val("mkSeoTitle"),
       description: val("mkSeoDescription"),
@@ -2197,14 +2216,30 @@ function readMarketingFormContent() {
       title: val("mkFeaturesTitle"),
       cards,
     },
-    discover: {
+    faq: {
+      title: val("mkFaqTitle"),
+      items: faqItems,
+    },
+    finalCta: {
+      title: val("mkFinalTitle"),
+      body: val("mkFinalBody"),
+      ctaLabel: val("mkFinalCtaLabel"),
+      ctaHref: val("mkFinalCtaHref"),
+    },
+    related: {
+      title: val("mkRelatedTitle"),
+      links: readMarketingRelatedLinks(),
+    },
+  };
+  if (pageKey === "home") {
+    content.discover = {
       eyebrow: val("mkDiscoverEyebrow"),
       title: val("mkDiscoverTitle"),
       lead: val("mkDiscoverLead"),
       ctaLabel: val("mkDiscoverCtaLabel"),
       ctaHref: val("mkDiscoverCtaHref"),
-    },
-    pricing: {
+    };
+    content.pricing = {
       eyebrow: val("mkPricingEyebrow"),
       title: val("mkPricingTitle"),
       free: {
@@ -2221,18 +2256,9 @@ function readMarketingFormContent() {
         ctaLabel: val("mkPricingProCtaLabel"),
         ctaHref: val("mkPricingProCtaHref"),
       },
-    },
-    faq: {
-      title: val("mkFaqTitle"),
-      items: faqItems,
-    },
-    finalCta: {
-      title: val("mkFinalTitle"),
-      body: val("mkFinalBody"),
-      ctaLabel: val("mkFinalCtaLabel"),
-      ctaHref: val("mkFinalCtaHref"),
-    },
-  };
+    };
+  }
+  return content;
 }
 
 function renderMarketing(data) {
@@ -2248,9 +2274,27 @@ function renderMarketing(data) {
   const faq = c.faq || {};
   const faqItems = Array.isArray(faq.items) ? faq.items : [];
   const finalCta = c.finalCta || {};
+  const related = c.related || {};
+  const relatedLinks = Array.isArray(related.links) ? related.links : [];
   const locale = state.marketingLocale || "en";
+  const pageKey = state.marketingPage || data?.page || "home";
+  const isHome = pageKey === "home";
+  const pageCatalog = Array.isArray(data?.pages) ? data.pages : [];
+  const pageMeta = pageCatalog.find((p) => p.key === pageKey) || { label: pageKey, preview: { en: "/", ar: "/ar" } };
+  const previewPath = pageMeta.preview?.[locale] || "/";
   const updated = data?.updatedAt ? fmtDate(data.updatedAt) : "Using defaults (not saved yet)";
   const source = data?.source === "database" ? "Published in database" : "Defaults only — save to publish";
+
+  const pagePicker = (pageCatalog.length ? pageCatalog : [
+    { key: "home", label: "Homepage" },
+    { key: "ai-music-generator", label: "AI Music Generator" },
+    { key: "hum-to-song", label: "Hum to Song" },
+    { key: "lyrics-to-song", label: "Lyrics to Song" },
+    { key: "photo-to-song", label: "Photo to Song" },
+    { key: "arabic-ai-music-generator", label: "Arabic AI Music" },
+  ]).map((p) => (
+    `<button type="button" class="btnGhost${p.key === pageKey ? " isActivePage" : ""}" data-marketing-page="${escapeHtml(p.key)}"${p.key === pageKey ? " disabled" : ""}>${escapeHtml(p.label)}</button>`
+  )).join("");
 
   const faqFields = [0, 1, 2].map((i) => {
     const it = faqItems[i] || {};
@@ -2260,17 +2304,68 @@ function renderMarketing(data) {
     </div>`;
   }).join("");
 
+  const relatedFields = [0, 1, 2, 3, 4, 5, 6, 7].map((i) => {
+    const link = relatedLinks[i] || {};
+    return `<div class="marketingBlock marketingBlock--inline">
+      ${marketingField(`Link ${i + 1} label`, `mkRelatedLabel${i}`, link.label || "")}
+      ${marketingField(`Link ${i + 1} URL`, `mkRelatedHref${i}`, link.href || "", { hint: "e.g. /hum-to-song" })}
+    </div>`;
+  }).join("");
+
+  const card0Links = cards[0]?.links || [];
+  const featureLinkFields = isHome ? [0, 1, 2].map((i) => {
+    const link = card0Links[i] || {};
+    return `<div class="marketingBlock marketingBlock--inline">
+      ${marketingField(`Feature card link ${i + 1} label`, `mkFeatureLinkLabel${i}`, link.label || "")}
+      ${marketingField(`Feature card link ${i + 1} URL`, `mkFeatureLinkHref${i}`, link.href || "", { hint: "Shown under the first feature card on homepage." })}
+    </div>`;
+  }).join("") : "";
+
+  const homeOnlySections = isHome ? `
+      <section class="detailCard">
+        <h3 class="detailCardTitle">Discover teaser</h3>
+        ${marketingField("Eyebrow", "mkDiscoverEyebrow", discover.eyebrow || "")}
+        ${marketingField("Title", "mkDiscoverTitle", discover.title || "")}
+        ${marketingField("Lead", "mkDiscoverLead", discover.lead || "", { multiline: 2 })}
+        ${marketingField("CTA label", "mkDiscoverCtaLabel", discover.ctaLabel || "")}
+        ${marketingField("CTA link", "mkDiscoverCtaHref", discover.ctaHref || "")}
+      </section>
+
+      <section class="detailCard">
+        <h3 class="detailCardTitle">Pricing</h3>
+        ${marketingField("Section eyebrow", "mkPricingEyebrow", pricing.eyebrow || "")}
+        ${marketingField("Section title", "mkPricingTitle", pricing.title || "")}
+        <div class="marketingBlock">
+          <h4>Free tier</h4>
+          ${marketingField("Title", "mkPricingFreeTitle", free.title || "")}
+          ${marketingField("Price label", "mkPricingFreePrice", free.price || "")}
+          ${marketingField("Body", "mkPricingFreeBody", free.body || "", { multiline: 3 })}
+          ${marketingField("CTA label", "mkPricingFreeCtaLabel", free.ctaLabel || "")}
+          ${marketingField("CTA link", "mkPricingFreeCtaHref", free.ctaHref || "")}
+        </div>
+        <div class="marketingBlock">
+          <h4>Pro tier</h4>
+          ${marketingField("Title", "mkPricingProTitle", pro.title || "")}
+          ${marketingField("Price label", "mkPricingProPrice", pro.price || "")}
+          ${marketingField("Body", "mkPricingProBody", pro.body || "", { multiline: 3 })}
+          ${marketingField("CTA label", "mkPricingProCtaLabel", pro.ctaLabel || "")}
+          ${marketingField("CTA link", "mkPricingProCtaHref", pro.ctaHref || "")}
+        </div>
+      </section>` : "";
+
   els.panels.marketing.innerHTML = adminPageStack(`
     <div class="toolbarBlock marketingToolbar">
       <div class="inlineStats">
+        <span>Page: <strong>${escapeHtml(pageMeta.label || pageKey)}</strong></span>
         <span>Locale: <strong>${locale === "ar" ? "Arabic" : "English"}</strong></span>
         <span>${escapeHtml(source)}</span>
         <span>Updated: ${escapeHtml(updated)}</span>
       </div>
+      <div class="marketingPagePicker">${pagePicker}</div>
       <div class="heroActions" style="margin-top:12px">
         <button type="button" class="btnGhost" data-marketing-locale="en" ${locale === "en" ? "disabled" : ""}>English</button>
         <button type="button" class="btnGhost" data-marketing-locale="ar" ${locale === "ar" ? "disabled" : ""}>Arabic</button>
-        <a class="btnGhost" href="/" target="_blank" rel="noopener">Preview homepage ↗</a>
+        <a class="btnGhost" href="${escapeHtml(previewPath)}" target="_blank" rel="noopener">Preview page ↗</a>
         <button type="button" class="btnPrimary" id="btnMarketingSave">Save &amp; publish</button>
       </div>
       <p id="marketingSaveMsg" class="grantMsg" hidden></p>
@@ -2310,44 +2405,22 @@ function renderMarketing(data) {
           <div class="marketingBlock">
             ${marketingField(`Card ${i + 1} title`, `mkFeatureTitle${i}`, cards[i]?.title || "")}
             ${marketingField(`Card ${i + 1} body`, `mkFeatureBody${i}`, cards[i]?.body || "", { multiline: 3 })}
+            ${i === 0 ? featureLinkFields : ""}
           </div>`).join("")}
       </section>
 
-      <section class="detailCard">
-        <h3 class="detailCardTitle">Discover teaser</h3>
-        ${marketingField("Eyebrow", "mkDiscoverEyebrow", discover.eyebrow || "")}
-        ${marketingField("Title", "mkDiscoverTitle", discover.title || "")}
-        ${marketingField("Lead", "mkDiscoverLead", discover.lead || "", { multiline: 2 })}
-        ${marketingField("CTA label", "mkDiscoverCtaLabel", discover.ctaLabel || "")}
-        ${marketingField("CTA link", "mkDiscoverCtaHref", discover.ctaHref || "")}
-      </section>
-
-      <section class="detailCard">
-        <h3 class="detailCardTitle">Pricing</h3>
-        ${marketingField("Section eyebrow", "mkPricingEyebrow", pricing.eyebrow || "")}
-        ${marketingField("Section title", "mkPricingTitle", pricing.title || "")}
-        <div class="marketingBlock">
-          <h4>Free tier</h4>
-          ${marketingField("Title", "mkPricingFreeTitle", free.title || "")}
-          ${marketingField("Price label", "mkPricingFreePrice", free.price || "")}
-          ${marketingField("Body", "mkPricingFreeBody", free.body || "", { multiline: 3 })}
-          ${marketingField("CTA label", "mkPricingFreeCtaLabel", free.ctaLabel || "")}
-          ${marketingField("CTA link", "mkPricingFreeCtaHref", free.ctaHref || "")}
-        </div>
-        <div class="marketingBlock">
-          <h4>Pro tier</h4>
-          ${marketingField("Title", "mkPricingProTitle", pro.title || "")}
-          ${marketingField("Price label", "mkPricingProPrice", pro.price || "")}
-          ${marketingField("Body", "mkPricingProBody", pro.body || "", { multiline: 3 })}
-          ${marketingField("CTA label", "mkPricingProCtaLabel", pro.ctaLabel || "")}
-          ${marketingField("CTA link", "mkPricingProCtaHref", pro.ctaHref || "")}
-        </div>
-      </section>
+      ${homeOnlySections}
 
       <section class="detailCard">
         <h3 class="detailCardTitle">FAQ</h3>
         ${marketingField("Section title", "mkFaqTitle", faq.title || "")}
         ${faqFields}
+      </section>
+
+      <section class="detailCard">
+        <h3 class="detailCardTitle">Related pages</h3>
+        ${marketingField("Section title", "mkRelatedTitle", related.title || "")}
+        ${relatedFields}
       </section>
 
       <section class="detailCard">
@@ -2666,7 +2739,8 @@ async function loadView({ force = false } = {}) {
   try {
     let data;
     if (view === "marketing") {
-      data = await marketingAdminFetch("home", state.marketingLocale || "en");
+      data = await marketingAdminFetch(state.marketingPage || "home", state.marketingLocale || "en");
+      data.page = state.marketingPage || "home";
     } else {
       data = await adminFetch(view, {
         offset: state.offset,
@@ -3132,6 +3206,16 @@ document.body.addEventListener("click", (e) => {
     return;
   }
 
+  const marketingPageBtn = e.target.closest("[data-marketing-page]");
+  if (marketingPageBtn) {
+    const page = marketingPageBtn.dataset.marketingPage;
+    if (page && page !== state.marketingPage) {
+      state.marketingPage = page;
+      void loadView({ force: true });
+    }
+    return;
+  }
+
   const marketingLocaleBtn = e.target.closest("[data-marketing-locale]");
   if (marketingLocaleBtn) {
     const loc = marketingLocaleBtn.dataset.marketingLocale;
@@ -3153,15 +3237,15 @@ document.body.addEventListener("click", (e) => {
         msg.className = "grantMsg warn";
       }
       try {
-        const content = readMarketingFormContent();
+        const content = readMarketingFormContent(state.marketingPage || "home");
         await marketingAdminSave({
-          page: "home",
+          page: state.marketingPage || "home",
           locale: state.marketingLocale || "en",
           content,
         });
         delete state.cache[viewCacheKey()];
         if (msg) {
-          msg.textContent = "Saved — homepage updates within a minute.";
+          msg.textContent = "Saved — page updates within a minute.";
           msg.className = "grantMsg ok";
         }
         showError("");

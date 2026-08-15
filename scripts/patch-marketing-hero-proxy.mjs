@@ -47,7 +47,7 @@ for (const { file, page, locale, preload } of targets) {
   }
 
   html = html.replace(
-    /(<img(?:\s+data-mk="hero\.image")?\s+[^>]*\ssrc=")[^"]+(")/,
+    /(<img\b[^>]*\ssrc=")[^"]+(")/,
     `$1${proxy}$2`,
   );
 

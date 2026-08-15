@@ -1179,7 +1179,7 @@ td.num { font-variant-numeric: tabular-nums; }
 
 .marketingDraftHero {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(140px, 220px);
+  grid-template-columns: minmax(0, 0.88fr) minmax(140px, 1.12fr);
   gap: 16px;
   align-items: center;
 }

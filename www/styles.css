@@ -19085,6 +19085,8 @@ body.trackSheetOpen .footer{
   body[data-route="player"]{
     --player-chrome-safe: env(safe-area-inset-bottom, 0px);
     --player-social-rail-bottom: calc(var(--player-chrome-safe) + 172px);
+    /* Synced lyrics — vertical center of cover (tune with --player-karaoke-v-center). */
+    --player-karaoke-v-center: 46%;
     --player-karaoke-bottom: calc(var(--player-chrome-safe) + 258px);
     /* Full-bleed cover behind fixed chrome (title, lyrics, transport). */
     --player-cover-bottom: 0px;
@@ -19301,23 +19303,28 @@ body.trackSheetOpen .footer{
   }
   body[data-route="player"] .playerArtWrap .playerKaraokeFloat{
     position: fixed;
-    left: 24px;
-    right: 64px;
-    bottom: var(--player-karaoke-bottom);
+    top: var(--player-karaoke-v-center);
+    bottom: auto;
+    left: 28px;
+    right: 28px;
+    transform: translateY(-50%);
     z-index: 10;
-    gap: 5px;
+    gap: 6px;
     padding: 0;
     background: none;
     backdrop-filter: none;
     -webkit-backdrop-filter: none;
     box-shadow: none;
     border: none;
+    max-width: min(520px, calc(100vw - 56px));
+    margin-inline: auto;
+    box-sizing: border-box;
   }
-  /* Unpublished / private songs hide the social rail — center lyrics on full width. */
+  /* Unpublished / private songs hide the social rail — same centered width. */
   body[data-route="player"] .playerArtWrap.playerArtWrap--noSocialRail .playerKaraokeFloat,
   body[data-route="player"] .playerArtWrap:has(.playerSocialRail[hidden]) .playerKaraokeFloat{
-    left: 24px;
-    right: 24px;
+    left: 28px;
+    right: 28px;
   }
   body[data-route="player"] .playerArtWrap .playerKaraokeLine--prev,
   body[data-route="player"] .playerArtWrap .playerKaraokeLine--next{
@@ -19328,8 +19335,14 @@ body.trackSheetOpen .footer{
   }
   body[data-route="player"] .playerArtWrap .playerKaraokeLine--current{
     color: rgba(240, 244, 255, 0.96);
-    font-size: 19.5px;
-    min-height: 28px;
+    font-size: 21px;
+    min-height: 30px;
+    white-space: normal;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    text-overflow: ellipsis;
     text-shadow: 0 1px 16px rgba(0, 0, 0, 0.58);
     filter: none;
     -webkit-text-fill-color: currentColor;
@@ -19346,7 +19359,9 @@ body.trackSheetOpen .footer{
     position: fixed;
     left: 0;
     right: 0;
-    bottom: calc(var(--player-karaoke-bottom) - 6px);
+    top: var(--player-karaoke-v-center);
+    bottom: auto;
+    transform: translateY(calc(-50% + 42px));
     z-index: 10;
   }
   body[data-route="player"] .playerTransport{
@@ -19451,7 +19466,7 @@ body.trackSheetOpen .footer{
     --cover-glow-rgb: 100, 108, 128;
   }
   body[data-route="player"] .playerCard[data-discover-reel="1"] .playerArtWrap .playerKaraokeFloat{
-    right: 64px;
+    right: 28px;
   }
   body[data-route="player"] .playerChallengeAttribution,
   body[data-route="player"] .playerTemplateAttribution{

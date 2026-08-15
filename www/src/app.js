@@ -38295,6 +38295,7 @@ function playDmSongFromEl(el) {
   if (toggleDiscoverFeedPlaybackIfSameUrl(raw)) return;
   primeGlobalPlayerInGesture();
   void playLibraryUrlOnPlayer(raw, title, art, {
+    dmSong: true,
     discoverFeed: false,
     openPlayer: true,
     discoverBy: by,
@@ -40761,10 +40762,11 @@ async function playLibraryUrlOnPlayer(rawUrl, title, artUrl, opts) {
   const fromDiscover = Boolean(opts && opts.discoverFeed);
   const fromPlaylist = Boolean(opts && opts.discoverPlaylist);
   const fromUserPlaylist = Boolean(opts && opts.userPlaylist);
+  const fromDm = Boolean(opts && opts.dmSong);
   let openPlayer = true;
   if (opts?.openPlayer === false) openPlayer = false;
   else if (opts?.openPlayer === true) openPlayer = true;
-  const byLine = fromDiscover || fromUserPlaylist ? String(opts?.discoverBy || "").trim() : "";
+  const byLine = fromDiscover || fromUserPlaylist || fromDm ? String(opts?.discoverBy || "").trim() : "";
   const playSource = opts?.playSource && opts.playSource.songId ? opts.playSource : null;
   const publicTrackMeta = playSource ? publicPlaybackTrackBySource(playSource, raw) : null;
   const releaseCaption =
@@ -40836,7 +40838,9 @@ async function playLibraryUrlOnPlayer(rawUrl, title, artUrl, opts) {
         reelIndex: Number.isFinite(opts?.reelIndex) ? Number(opts.reelIndex) : 0,
         applyFeedHook: true,
       }
-      : { ...(playSource || {}), type: "public_profile_lib", url: playableRaw, applyFeedHook: true };
+      : fromDm
+        ? { ...(playSource || {}), type: "dm_song", url: playableRaw, applyFeedHook: true }
+        : { ...(playSource || {}), type: "public_profile_lib", url: playableRaw, applyFeedHook: true };
   const pinnedHook = Number(opts?.feedHookSec) > 0
     ? Number(opts.feedHookSec)
     : feedHookStartFromTrack(publicTrackMeta || { meta: currentPlayerTrackRef.meta, url: playableRaw });
@@ -40881,9 +40885,11 @@ async function playLibraryUrlOnPlayer(rawUrl, title, artUrl, opts) {
       ? `${byLine || "Saved"} · ${userPlTitle}`
       : fromPlaylist
       ? `${byLine || "Discover"} · ${getDiscoverPlaylistDef(opts?.playlistSlug)?.title || "Playlist"}`
-      : fromDiscover
-        ? byLine || "Discover feed"
-        : "Public profile",
+      : fromDm
+        ? byLine || "Shared in chat"
+        : fromDiscover
+          ? byLine || "Discover feed"
+          : "Public profile",
     artUrl: resolvedArt,
     releaseCaption,
     remixOf,
@@ -51330,7 +51336,7 @@ function playerCurrentUserOwnsTrack() {
 function playerSourceIsExternalListenOnly() {
   if (playerCurrentUserOwnsTrack()) return false;
   const ms = String(miniSource?.type || "");
-  if (ms === "discover_feed" || ms === "discover_playlist" || ms === "public_profile_lib" || ms === "profile_hub") return true;
+  if (ms === "discover_feed" || ms === "discover_playlist" || ms === "public_profile_lib" || ms === "profile_hub" || ms === "dm_song") return true;
   const id = String(currentPlayerTrackRef?.id || "");
   if (id.startsWith("public_")) return true;
   return false;
@@ -51833,6 +51839,32 @@ async function syncPlayerCreatorChrome(subtitle = "") {
     return;
   }
 
+  // DM / shared listen: sender handle is on the card but ownerUserId is often missing.
+  if (handle) {
+    const displayHandle = screenshotHandle(handle);
+    let prof = null;
+    try {
+      prof = ownerId
+        ? await fetchPublicProfileRowByUserId(ownerId)
+        : await fetchPublicProfileRowByUsername(displayHandle);
+    } catch {}
+    const badge = usernameVerifiedBadgeHtml(prof || { username: displayHandle }, {
+      className: "profileNabadCertCheck profileNabadCertCheck--inline playerCreatorVerified",
+      label: "Verified creator",
+    });
+    identity.innerHTML = displayHandle
+      ? `<span class="playerCreatorHandle">@${escapeHtml(displayHandle)}</span>${badge}`
+      : `<span class="playerCreatorMeta">${escapeHtml(screenshotSanitizeCopy(subtitle || "Creator"))}</span>`;
+    const resolvedOwner = String(prof?.user_id || ownerId || "").trim();
+    const showFan = Boolean(mine && resolvedOwner && resolvedOwner !== mine);
+    if (fanBtn) {
+      fanBtn.hidden = !showFan;
+      if (showFan) void refreshPlayerFanBtn(resolvedOwner, displayHandle);
+    }
+    void syncPlayerSocialCreatorAvatar();
+    return;
+  }
+
   const myHandle = screenshotHandle(String(activeProfile?.username || "").trim());
   if (myHandle && mine) {
     const prof = {
@@ -51874,6 +51906,10 @@ async function syncPlayerSocialCreatorAvatar() {
       avatarUrl = String(prof?.avatar || "").trim();
       handle = handle || String(prof?.username || "").trim();
     }
+  } else if (handle) {
+    const prof = await fetchPublicProfileRowByUsername(handle.replace(/^@/, ""));
+    avatarUrl = String(prof?.avatar || "").trim();
+    handle = handle || String(prof?.username || "").trim();
   } else if (mine) {
     avatarUrl = String(activeProfile?.avatar || "").trim();
     handle = handle || String(activeProfile?.username || "").trim();

@@ -14591,6 +14591,7 @@ async function finishPostAuthNavigation() {
     await bootstrapPostLoginCredits();
   }
   endLoginSettling({ minimum: true });
+  maybePromptTermsUpdate();
   const postAuthUid = String(authSession?.user?.id || "").trim();
   if (postAuthUid && shouldShowOnboardingForUser(postAuthUid)) {
     try { sessionStorage.setItem(ONBOARDING_ACTIVE_KEY, "1"); } catch {}
@@ -23474,6 +23475,7 @@ function ensureAuthBoot({ force = false, fast = false } = {}) {
         void bootstrapPostLoginCredits();
       }
       renderAuthStatus();
+      if (authSession?.user?.id) maybePromptTermsUpdate();
       _authBootDone = true;
     })();
   }
@@ -26055,6 +26057,76 @@ function resetProfileUiToGuest() {
 let _authEmailMode = "signin";
 let _authEmailSubmitInFlight = false;
 
+const TERMS_ACCEPTED_LS_KEY = "nabad_terms_accepted_v1";
+const TERMS_VERSION_LS_KEY = "nabad_terms_version_v1";
+/** Bump when Terms/Privacy change materially — triggers a one-time re-accept prompt. */
+const CURRENT_TERMS_VERSION = "2026-08-15";
+let _termsUpdatePromptShown = false;
+
+function isTermsAccepted() {
+  try {
+    return localStorage.getItem(TERMS_ACCEPTED_LS_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function setTermsAccepted() {
+  try {
+    localStorage.setItem(TERMS_ACCEPTED_LS_KEY, "1");
+    localStorage.setItem(TERMS_VERSION_LS_KEY, CURRENT_TERMS_VERSION);
+  } catch {}
+}
+
+function authTermsCheckboxChecked() {
+  return Boolean(document.getElementById("authTermsCheck")?.checked);
+}
+
+function syncAuthTermsCheckbox() {
+  const el = document.getElementById("authTermsCheck");
+  if (el && isTermsAccepted()) el.checked = true;
+}
+
+function requireAuthTermsAccepted({ forSignup = true } = {}) {
+  if (authTermsCheckboxChecked()) {
+    setTermsAccepted();
+    return true;
+  }
+  if (!forSignup && isTermsAccepted()) return true;
+  showToast("Agree to the Terms and Privacy Policy to continue", {
+    icon: "!",
+    durationMs: 3200,
+  });
+  try {
+    document.getElementById("authTermsCheck")?.focus?.();
+  } catch {}
+  return false;
+}
+
+function maybePromptTermsUpdate() {
+  if (_termsUpdatePromptShown || !authSession?.user?.id) return;
+  if (!isTermsAccepted()) return;
+  let acceptedVersion = "";
+  try {
+    acceptedVersion = String(localStorage.getItem(TERMS_VERSION_LS_KEY) || "").trim();
+  } catch {}
+  if (!acceptedVersion || acceptedVersion === CURRENT_TERMS_VERSION) return;
+  _termsUpdatePromptShown = true;
+  let ok = false;
+  try {
+    ok = window.confirm(
+      "We updated our Terms and Privacy Policy. Tap OK to accept and keep using NabadAi, or Cancel to review the Terms first.",
+    );
+  } catch {
+    ok = true;
+  }
+  if (ok) {
+    setTermsAccepted();
+    return;
+  }
+  void openLegalPage("terms");
+}
+
 function setAuthEmailMode(mode) {
   _authEmailMode = mode === "signup" ? "signup" : "signin";
   if (els.btnAuthEmailSubmit) {
@@ -26308,6 +26380,9 @@ async function runEmailPasswordAuth() {
       try { els.authPasswordConfirmInput?.focus?.(); } catch {}
       return;
     }
+    if (!requireAuthTermsAccepted({ forSignup: true })) return;
+  } else if (!requireAuthTermsAccepted({ forSignup: false })) {
+    return;
   }
 
   setAuthEmailSubmitting(true);
@@ -61561,6 +61636,10 @@ function setOAuthGateBusy(provider, busy) {
 
 async function runOAuthLogin(provider) {
   const label = oauthProviderLabel(provider);
+  if (!requireAuthTermsAccepted({ forSignup: true })) {
+    resetAuthGateButtons();
+    return;
+  }
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
     await loadPublicConfig();
   }
@@ -61631,6 +61710,10 @@ async function runNativeAppleLogin() {
 }
 
 async function runAppleLogin() {
+  if (!requireAuthTermsAccepted({ forSignup: true })) {
+    resetAuthGateButtons();
+    return;
+  }
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
     await loadPublicConfig();
   }
@@ -61892,12 +61975,14 @@ function wireLegalLinks() {
   document.querySelectorAll("[data-legal-link]").forEach((el) => {
     el.addEventListener("click", (e) => {
       e.preventDefault();
+      e.stopPropagation();
       const kind = el.getAttribute("data-legal-link") || "privacy";
       void openLegalPage(kind);
     });
   });
 }
 wireLegalLinks();
+syncAuthTermsCheckbox();
 
 /** In-app Help & FAQ overlay (Settings → Support). */
 (function wireHelpFaq() {

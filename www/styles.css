@@ -1188,8 +1188,22 @@ html[data-theme="light"] .authEmailToggle{
   color: rgba(15, 23, 40, 0.55);
 }
 html[data-theme="light"] .authSub,
-html[data-theme="light"] .authLegal{
-  color: var(--muted);
+html[data-theme="light"] .rightsCheck{
+  color: rgba(15, 23, 40, 0.48);
+}
+html[data-theme="light"] .rightsCheck input[type="checkbox"]{
+  border-color: rgba(15, 23, 40, 0.22);
+}
+html[data-theme="light"] .rightsCheck input[type="checkbox"]:checked{
+  border-color: rgba(124, 92, 255, 0.45);
+  background: rgba(124, 92, 255, 0.1);
+}
+html[data-theme="light"] .rightsCheck input[type="checkbox"]:checked::after{
+  border-color: rgba(124, 92, 255, 0.85);
+}
+html[data-theme="light"] .rightsCheck a{
+  color: rgba(15, 23, 40, 0.62);
+  border-bottom-color: rgba(15, 23, 40, 0.14);
 }
 
 html[data-theme="light"] .profileCreditsPill:not(.profileCreditsPill--toolbar){
@@ -3479,21 +3493,65 @@ body.isOnboarding .generateOrb{ display:none !important; }
   border-color: #6b4de6;
   background: #6b4de6;
 }
-.authLegal{
-  margin: 22px 0 0;
-  font-size: 11.5px;
-  letter-spacing: 0.01em;
-  color: rgba(223, 231, 251, 0.38);
+.rightsCheck{
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 18px 0 0;
+  font-size: 11px;
+  font-weight: 400;
   line-height: 1.5;
+  letter-spacing: 0.01em;
+  color: rgba(223, 231, 251, 0.36);
+  cursor: pointer;
+  user-select: none;
 }
-.authLegal a{
-  color: rgba(223, 231, 251, 0.62);
+.rightsCheck > span{
+  flex: 1;
+  min-width: 0;
+  font-weight: 400;
+}
+.rightsCheck input[type="checkbox"]{
+  appearance: none;
+  -webkit-appearance: none;
+  width: 13px;
+  height: 13px;
+  margin: 0.18em 0 0;
+  flex: 0 0 13px;
+  border: 1px solid rgba(223, 231, 251, 0.24);
+  border-radius: 3px;
+  background: transparent;
+  cursor: pointer;
+  position: relative;
+  vertical-align: top;
+}
+.rightsCheck input[type="checkbox"]:checked{
+  border-color: rgba(124, 92, 255, 0.55);
+  background: rgba(124, 92, 255, 0.16);
+}
+.rightsCheck input[type="checkbox"]:checked::after{
+  content: "";
+  position: absolute;
+  left: 3.5px;
+  top: 1px;
+  width: 3.5px;
+  height: 6.5px;
+  border: solid rgba(255,255,255,0.88);
+  border-width: 0 1px 1px 0;
+  transform: rotate(45deg);
+}
+.rightsCheck a{
+  color: rgba(223, 231, 251, 0.52);
+  font-weight: 400;
   text-decoration: none;
-  border-bottom: 1px dashed rgba(223,231,251,0.20);
+  border-bottom: 1px dashed rgba(223,231,251,0.16);
 }
-.authLegal a:hover{
-  color: #fff;
-  border-bottom-color: rgba(255,255,255,0.40);
+.rightsCheck a:hover{
+  color: rgba(255,255,255,0.82);
+  border-bottom-color: rgba(255,255,255,0.28);
+}
+.authTermsCheck{
+  margin-top: 22px;
 }
 
 body.isAuth{
@@ -3712,7 +3770,7 @@ body.oauthPending .app{
   background: rgba(255,255,255,0.78);
 }
 body.loginSettling .authActions,
-body.loginSettling .authLegal{
+body.loginSettling .authTermsCheck{
   visibility: hidden;
   pointer-events: none;
 }

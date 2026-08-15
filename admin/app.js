@@ -2167,6 +2167,13 @@ function marketingField(label, id, value, { multiline = false, hint = "" } = {})
   </label>`;
 }
 
+function updateMarketingHeroPreview(url) {
+  if (url && document.getElementById("mkHeroImageUrl")) {
+    document.getElementById("mkHeroImageUrl").value = url;
+  }
+  updateMarketingDraftSitePreview();
+}
+
 function readMarketingRelatedLinks(prefix = "mkRelated") {
   const val = (id) => document.getElementById(id)?.value ?? "";
   return [0, 1, 2, 3, 4, 5, 6, 7].map((i) => ({
@@ -2259,6 +2266,64 @@ function readMarketingFormContent(pageKey = "home") {
     };
   }
   return content;
+}
+
+function updateMarketingDraftSitePreview() {
+  const eyebrow = document.getElementById("mkDraftHeroEyebrow");
+  const title = document.getElementById("mkDraftHeroTitle");
+  const lead = document.getElementById("mkDraftHeroLead");
+  const image = document.getElementById("mkDraftHeroImage");
+  if (!eyebrow || !title || !lead || !image) return;
+  eyebrow.textContent = document.getElementById("mkHeroEyebrow")?.value || "";
+  title.textContent = document.getElementById("mkHeroTitle")?.value || "";
+  lead.textContent = document.getElementById("mkHeroLead")?.value || "";
+  const url = String(document.getElementById("mkHeroImageUrl")?.value || "").trim();
+  if (url) {
+    image.hidden = false;
+    image.src = url;
+    image.alt = document.getElementById("mkHeroImageAlt")?.value || "";
+  } else {
+    image.hidden = true;
+    image.removeAttribute("src");
+  }
+}
+
+function storeMarketingDraftPreview() {
+  const pageKey = state.marketingPage || "home";
+  const locale = state.marketingLocale || "en";
+  const content = readMarketingFormContent(pageKey);
+  const payload = {
+    page: pageKey,
+    locale,
+    content,
+    savedAt: Date.now(),
+  };
+  sessionStorage.setItem(`nabad_marketing_draft:${pageKey}:${locale}`, JSON.stringify(payload));
+  return payload;
+}
+
+function openMarketingDraftPreview(previewPath) {
+  storeMarketingDraftPreview();
+  const path = String(previewPath || "/").split("?")[0];
+  const url = `${path}?preview=draft`;
+  window.open(url, "_blank", "noopener,noreferrer");
+}
+
+function bindMarketingDraftPreviewListeners() {
+  const ids = [
+    "mkHeroEyebrow",
+    "mkHeroTitle",
+    "mkHeroLead",
+    "mkHeroImageUrl",
+    "mkHeroImageAlt",
+  ];
+  for (const id of ids) {
+    const el = document.getElementById(id);
+    if (!el || el.dataset.mkDraftBound === "1") continue;
+    el.dataset.mkDraftBound = "1";
+    el.addEventListener("input", updateMarketingDraftSitePreview);
+  }
+  updateMarketingDraftSitePreview();
 }
 
 function renderMarketing(data) {
@@ -2365,9 +2430,11 @@ function renderMarketing(data) {
       <div class="heroActions" style="margin-top:12px">
         <button type="button" class="btnGhost" data-marketing-locale="en" ${locale === "en" ? "disabled" : ""}>English</button>
         <button type="button" class="btnGhost" data-marketing-locale="ar" ${locale === "ar" ? "disabled" : ""}>Arabic</button>
-        <a class="btnGhost" href="${escapeHtml(previewPath)}" target="_blank" rel="noopener">Preview page ↗</a>
+        <button type="button" class="btnGhost" id="btnMarketingDraftPreview" data-preview-path="${escapeHtml(previewPath)}">Preview draft ↗</button>
+        <a class="btnGhost" id="btnMarketingPreview" href="${escapeHtml(previewPath)}" target="_blank" rel="noopener">Preview live page ↗</a>
         <button type="button" class="btnPrimary" id="btnMarketingSave">Save &amp; publish</button>
       </div>
+      <p class="cellMuted marketingToolbarNote">Upload and edits stay private until you click Save &amp; publish. Preview draft shows your current form on the real site layout.</p>
       <p id="marketingSaveMsg" class="grantMsg" hidden></p>
     </div>
 
@@ -2391,10 +2458,20 @@ function renderMarketing(data) {
         <label class="field marketingField">
           <span>Upload new hero image</span>
           <input id="mkHeroImageFile" type="file" accept="image/jpeg,image/png,image/webp" />
-          <span class="cellMuted">JPEG/PNG/WebP up to 8 MB. Saves URL into the field above.</span>
+          <span class="cellMuted">JPEG/PNG/WebP up to 8 MB. Updates the draft preview below — not live until Save &amp; publish.</span>
         </label>
         ${marketingField("Hero image alt text", "mkHeroImageAlt", hero.heroImageAlt || "")}
-        ${hero.heroImageUrl ? `<img src="${escapeHtml(hero.heroImageUrl)}" alt="" class="marketingHeroPreview" />` : ""}
+        <div class="marketingDraftSitePreview" id="mkDraftSitePreview">
+          <p class="marketingDraftSitePreviewLabel">Draft hero preview</p>
+          <div class="marketingDraftHero">
+            <div class="marketingDraftHeroCopy">
+              <p class="eyebrow" id="mkDraftHeroEyebrow">${escapeHtml(hero.eyebrow || "")}</p>
+              <h2 id="mkDraftHeroTitle">${escapeHtml(hero.title || "")}</h2>
+              <p id="mkDraftHeroLead">${escapeHtml(hero.lead || "")}</p>
+            </div>
+            <img id="mkDraftHeroImage" class="marketingDraftHeroImage" src="${escapeHtml(hero.heroImageUrl || "")}" alt="" ${hero.heroImageUrl ? "" : "hidden"} />
+          </div>
+        </div>
       </section>
 
       <section class="detailCard">
@@ -2432,6 +2509,7 @@ function renderMarketing(data) {
       </section>
     </div>
   `, { plain: true });
+  bindMarketingDraftPreviewListeners();
 }
 
 const RENDERERS = {
@@ -3226,6 +3304,12 @@ document.body.addEventListener("click", (e) => {
     return;
   }
 
+  const marketingDraftPreviewBtn = e.target.closest("#btnMarketingDraftPreview");
+  if (marketingDraftPreviewBtn) {
+    openMarketingDraftPreview(marketingDraftPreviewBtn.dataset.previewPath || "/");
+    return;
+  }
+
   const marketingSaveBtn = e.target.closest("#btnMarketingSave");
   if (marketingSaveBtn) {
     void (async () => {
@@ -3588,8 +3672,9 @@ document.body.addEventListener("change", (e) => {
       const data = await marketingAdminUploadImage(file);
       const urlInput = document.getElementById("mkHeroImageUrl");
       if (urlInput && data.url) urlInput.value = data.url;
+      updateMarketingDraftSitePreview();
       if (msg) {
-        msg.textContent = "Image uploaded — click Save & publish to go live.";
+        msg.textContent = "Image added to draft. Check the preview below or open Preview draft ↗ — nothing is live until Save & publish.";
         msg.className = "grantMsg ok";
       }
       fileInput.value = "";

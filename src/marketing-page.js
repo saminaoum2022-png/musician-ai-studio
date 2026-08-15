@@ -4,6 +4,7 @@
 (function () {
   var PAGE = document.documentElement.getAttribute("data-marketing-page") || "home";
   var LOCALE = document.documentElement.lang || "en";
+  var DRAFT_KEY = "nabad_marketing_draft:" + PAGE + ":" + LOCALE;
 
   function setText(sel, value) {
     var el = document.querySelector(sel);
@@ -30,6 +31,15 @@
       : 'meta[name="' + name + '"]';
     var el = document.querySelector(sel);
     if (el) el.setAttribute("content", content);
+  }
+
+  function showDraftBanner() {
+    if (document.getElementById("nabadMarketingDraftBanner")) return;
+    var bar = document.createElement("div");
+    bar.id = "nabadMarketingDraftBanner";
+    bar.className = "marketingDraftBanner";
+    bar.textContent = "Draft preview — not visible to visitors until you Save & publish in admin.";
+    document.body.appendChild(bar);
   }
 
   function applyRelated(related) {
@@ -140,6 +150,27 @@
       }
     }
   }
+
+  function applyDraftFromSession() {
+    var params = new URLSearchParams(window.location.search || "");
+    if (params.get("preview") !== "draft") return false;
+    showDraftBanner();
+    try {
+      var raw = sessionStorage.getItem(DRAFT_KEY);
+      if (!raw) return true;
+      var draft = JSON.parse(raw);
+      if (!draft || !draft.content) return true;
+      if (draft.page && draft.page !== PAGE) return true;
+      if (draft.locale && draft.locale !== LOCALE) return true;
+      applyCore(draft.content);
+      if (PAGE === "home") applyHomeExtras(draft.content);
+      return true;
+    } catch (e) {
+      return true;
+    }
+  }
+
+  if (applyDraftFromSession()) return;
 
   fetch("/api/marketing/content?page=" + encodeURIComponent(PAGE) + "&locale=" + encodeURIComponent(LOCALE), {
     credentials: "omit",

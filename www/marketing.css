@@ -419,14 +419,27 @@ img { display: block; max-width: 100%; height: auto; }
 .heroStoreSoonBadges {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   opacity: 0.62;
+  flex-shrink: 0;
 }
 
 .heroStoreSoonBadges img {
   display: block;
+  height: 20px;
   width: auto;
-  height: 28px;
+  max-height: 20px;
+  max-width: 68px;
+  object-fit: contain;
+  flex: 0 0 auto;
+}
+
+@media (min-width: 761px) {
+  .heroStoreSoonBadges img {
+    height: 22px;
+    max-height: 22px;
+    max-width: 74px;
+  }
 }
 
 .heroCopy h1 {

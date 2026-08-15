@@ -19,6 +19,7 @@ const copies = [
   ["support.html", "support.html"],
   ["legal.css", "legal.css"],
   ["marketing.css", "marketing.css"],
+  ["home.html", "home.html"],
   ["ai-music-generator.html", "ai-music-generator.html"],
   ["hum-to-song.html", "hum-to-song.html"],
   ["lyrics-to-song.html", "lyrics-to-song.html"],

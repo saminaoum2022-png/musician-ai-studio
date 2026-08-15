@@ -101,6 +101,108 @@ img { display: block; max-width: 100%; height: auto; }
 .marketingNavLinks a { text-decoration: none; }
 .marketingNavLinks a:hover { color: var(--text); }
 
+.marketingNavLinks--wide {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.marketingNavText {
+  display: none;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--muted);
+  padding: 8px 4px;
+}
+
+@media (min-width: 900px) {
+  .marketingNavText { display: inline-flex; }
+}
+
+.marketingCta--ghost {
+  background: transparent;
+  border: 1px solid var(--border);
+  box-shadow: none;
+  color: var(--text);
+}
+
+.marketingCta--ghost:hover {
+  border-color: rgba(255, 255, 255, 0.22);
+  filter: none;
+}
+
+.heroStoreNote {
+  margin: 20px 0 0;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.sectionLead {
+  margin: 12px 0 0;
+  max-width: 560px;
+  color: var(--muted);
+  font-size: 17px;
+}
+
+.marketingDiscoverTeaser {
+  text-align: center;
+}
+
+.marketingDiscoverTeaser .sectionHead,
+.marketingDiscoverTeaser .heroActions {
+  justify-content: center;
+}
+
+.pricingGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.pricingCard {
+  padding: 28px 24px;
+  border: 1px solid var(--border);
+  border-radius: 22px;
+  background: var(--surface-raised);
+}
+
+.pricingCard--pro {
+  border-color: rgba(124, 92, 255, 0.35);
+  background: linear-gradient(160deg, rgba(124, 92, 255, 0.12), rgba(8, 11, 20, 0.92));
+}
+
+.pricingCard h3 {
+  margin: 0 0 8px;
+  font-size: 20px;
+}
+
+.pricingPrice {
+  margin: 0 0 12px;
+  font-size: 28px;
+  font-weight: 900;
+  letter-spacing: -0.04em;
+}
+
+.pricingCard p {
+  margin: 0 0 20px;
+  color: var(--muted);
+  font-size: 15px;
+}
+
+.pricingCard .marketingCta {
+  min-height: 42px;
+  padding: 0 18px;
+  font-size: 14px;
+}
+
+.marketingFooter--rich nav {
+  gap: 14px 18px;
+}
+
+@media (max-width: 760px) {
+  .pricingGrid { grid-template-columns: 1fr; }
+  .marketingNavLinks--wide .marketingNavText { display: none; }
+}
+
 .marketingLangSwitch {
   display: inline-flex;
   align-items: center;

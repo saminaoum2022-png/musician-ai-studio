@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="color-scheme" content="dark">
+  <meta name="theme-color" content="#05070d">
+  <script>
+    (function () {
+      var search = location.search || "";
+      var hash = location.hash || "";
+      var sp = new URLSearchParams(search);
+      if (
+        sp.get("code") ||
+        sp.get("error") ||
+        sp.get("type") === "recovery" ||
+        (hash && hash.indexOf("access_token=") !== -1)
+      ) {
+        location.replace("/app/" + search + hash);
+        return;
+      }
+      if (hash.indexOf("#/") === 0) {
+        location.replace("/app" + hash + search);
+      }
+    })();
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Display:wght@800;900&family=Inter:wght@400;600;700;800&display=swap">
+  <title>NabadAi Music — AI songs from your voice, lyrics, or a hum</title>
+  <meta name="description" content="Create full AI songs from lyrics, a hum, or a photo. Save your voice as a Persona, share on Discover, and export proof of creation. Free to start on web and iOS.">
+  <meta name="robots" content="index,follow,max-image-preview:large">
+  <link rel="canonical" href="https://www.nabadai.com/">
+  <link rel="alternate" hreflang="en" href="https://www.nabadai.com/">
+  <link rel="alternate" hreflang="ar" href="https://www.nabadai.com/ar">
+  <link rel="alternate" hreflang="x-default" href="https://www.nabadai.com/">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="NabadAi">
+  <meta property="og:locale" content="en_US">
+  <meta property="og:url" content="https://www.nabadai.com/">
+  <meta property="og:title" content="NabadAi Music — AI songs from your voice, lyrics, or a hum">
+  <meta property="og:description" content="Create full AI songs from lyrics, a hum, or a photo. Save your voice as a Persona, share on Discover, and export proof of creation.">
+  <meta property="og:image" content="https://www.nabadai.com/assets/marketing/nabadai-social-card.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="NabadAi Music — AI songs from your voice">
+  <meta name="twitter:description" content="Turn a hum, lyric, or mood into a full song. Try free on web or iOS.">
+  <meta name="twitter:image" content="https://www.nabadai.com/assets/marketing/nabadai-social-card.png">
+  <link rel="icon" href="/favicon.ico" sizes="any">
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+  <link rel="stylesheet" href="/marketing.css">
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"WebSite","name":"NabadAi Music","url":"https://www.nabadai.com/"}</script>
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"SoftwareApplication","name":"NabadAi Music","applicationCategory":"MultimediaApplication","operatingSystem":"Web, iOS","url":"https://www.nabadai.com/app","description":"Create full AI songs from lyrics, a hum, or a photo."}</script>
+</head>
+<body>
+  <div class="marketingShell">
+    <nav class="marketingNav" aria-label="Primary">
+      <a class="marketingBrand" href="/" aria-label="NabadAi">
+        <span class="marketingBrandMark" aria-hidden="true"></span>
+        <span class="marketingBrandName">NabadAi</span>
+      </a>
+      <div class="marketingNavLinks marketingNavLinks--wide">
+        <a class="marketingNavText" href="#features">Features</a>
+        <a class="marketingNavText" href="#pricing">Pricing</a>
+        <a class="marketingNavText" href="#faq">FAQ</a>
+        <a class="marketingLangSwitch" href="/ar" lang="ar" hreflang="ar">العربية</a>
+        <a class="marketingNavText" href="/app/#/auth">Sign in</a>
+        <a class="marketingCta" href="/app/#/intro">Try free</a>
+      </div>
+    </nav>
+    <main>
+      <section class="hero">
+        <div class="heroCopy">
+          <p class="eyebrow">AI music studio</p>
+          <h1>Music from a hum. Share what you make.</h1>
+          <p class="heroLead">Turn lyrics, a melody you hum, or a photo mood into a full song. Save your voice as a Persona, publish to Discover, and connect with other creators.</p>
+          <div class="heroActions">
+            <a class="marketingCta" href="/app/#/intro">Try free</a>
+            <a class="textLink" href="#features">See how it works</a>
+          </div>
+          <p class="heroStoreNote">Also on <a class="textLink" href="https://apps.apple.com/app/nabadai-music/id6748647945" rel="noopener">iPhone</a> · Android coming soon</p>
+        </div>
+        <div class="marketingHeroArt"><img src="/assets/marketing/seo-hero-device.png" width="2560" height="1440" alt="NabadAi app — create songs from lyrics, hums, and photos"></div>
+      </section>
+
+      <section class="section" id="features">
+        <header class="sectionHead">
+          <p class="eyebrow">Create your way</p>
+          <h2>From idea to finished song</h2>
+        </header>
+        <div class="featureGrid">
+          <article class="featureCard">
+            <h3>Photo, hum, or lyrics</h3>
+            <p>Start with a picture mood, record a melody guide, or write lyrics — then shape genre, voice, and style.</p>
+          </article>
+          <article class="featureCard">
+            <h3>Your voice, every song</h3>
+            <p>Record a Persona once and reuse your vocal identity across new tracks and remixes.</p>
+          </article>
+          <article class="featureCard">
+            <h3>Create &amp; connect</h3>
+            <p>Keep drafts private, publish to your profile, climb Discover charts, and share with friends.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="section marketingDiscoverTeaser">
+        <header class="sectionHead">
+          <p class="eyebrow">Discover</p>
+          <h2>Hear what creators are making</h2>
+          <p class="sectionLead">Charts, remixes, and community picks — updated inside the app.</p>
+        </header>
+        <div class="heroActions">
+          <a class="marketingCta marketingCta--ghost" href="/app/#/discover">Explore Discover</a>
+        </div>
+      </section>
+
+      <section class="section" id="pricing">
+        <header class="sectionHead">
+          <p class="eyebrow">Pricing</p>
+          <h2>Free to start. Pro when you’re ready.</h2>
+        </header>
+        <div class="pricingGrid">
+          <article class="pricingCard">
+            <h3>Free</h3>
+            <p class="pricingPrice">$0</p>
+            <p>Start with free credits. Create songs, save drafts, and explore the community.</p>
+            <a class="marketingCta marketingCta--ghost" href="/app/#/intro">Get started</a>
+          </article>
+          <article class="pricingCard pricingCard--pro">
+            <h3>NabadAi Pro</h3>
+            <p class="pricingPrice">Weekly or monthly</p>
+            <p>More credits, Persona voice, priority features, and the full creator toolkit on iOS and web.</p>
+            <a class="marketingCta" href="/app/#/intro">Try free first</a>
+          </article>
+        </div>
+      </section>
+
+      <section class="section" id="faq">
+        <header class="sectionHead"><h2>Frequently asked questions</h2></header>
+        <div class="faqList">
+          <article class="faqItem"><h3>Do I need to download an app?</h3><p>You can try NabadAi in your browser at <a href="/app">nabadai.com/app</a> or install the iOS app for the best experience.</p></article>
+          <article class="faqItem"><h3>Can I use my own lyrics and voice?</h3><p>Yes. Write or generate lyrics, upload a melody reference, or create a Persona from your own voice sample.</p></article>
+          <article class="faqItem"><h3>Is it free?</h3><p>New accounts include free credits. Pro subscriptions add more credits and premium features.</p></article>
+        </div>
+      </section>
+
+      <section class="section">
+        <header class="sectionHead"><h2>Explore more ways to create</h2></header>
+        <nav class="relatedLinks" aria-label="SEO create pages">
+          <a href="/ai-music-generator">AI Music Generator</a>
+          <a href="/hum-to-song">Hum to Song</a>
+          <a href="/lyrics-to-song">Lyrics to Song</a>
+          <a href="/photo-to-song">Photo to Song</a>
+          <a href="/arabic-ai-music-generator">Arabic AI Music</a>
+        </nav>
+      </section>
+
+      <section class="finalCta">
+        <h2>Start your next song</h2>
+        <p>Bring lyrics, melody, images, and voice into one focused creative space.</p>
+        <a class="marketingCta" href="/app/#/intro">Try free</a>
+      </section>
+    </main>
+    <footer class="marketingFooter marketingFooter--rich">
+      <span>© 2026 NabadAi</span>
+      <nav aria-label="Legal and support">
+        <a href="/terms">Terms</a>
+        <a href="/privacy">Privacy</a>
+        <a href="/support">Help</a>
+        <a href="mailto:help@nabadai.com">Contact</a>
+      </nav>
+    </footer>
+  </div>
+</body>
+</html>

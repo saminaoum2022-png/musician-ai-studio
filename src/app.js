@@ -26176,10 +26176,10 @@ function getAuthEmailRedirectTo() {
   try {
     const o = String(location.origin || "").replace(/\/$/, "");
     if (/^https?:\/\//i.test(o) && !/localhost|127\.0\.0\.1|capacitor/i.test(o)) {
-      return `${o}/`;
+      return `${o}/app/`;
     }
   } catch {}
-  return "https://www.nabadai.com/";
+  return "https://www.nabadai.com/app/";
 }
 
 /** Sign-up with confirm-email may return `user` nested or flat `{ id, email }`. */

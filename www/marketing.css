@@ -64,7 +64,7 @@ img { display: block; max-width: 100%; height: auto; }
   text-rendering: optimizeLegibility;
 }
 
-.marketingShell { width: min(1180px, calc(100% - 36px)); margin: 0 auto; }
+.marketingShell { width: min(1240px, calc(100% - 36px)); margin: 0 auto; }
 
 .marketingNav {
   min-height: 74px;
@@ -270,12 +270,23 @@ img { display: block; max-width: 100%; height: auto; }
 .marketingCta:active { transform: translateY(1px) scale(0.985); }
 
 .hero {
-  min-height: 610px;
+  min-height: clamp(520px, 72vh, 680px);
   display: grid;
-  grid-template-columns: minmax(0, 0.88fr) minmax(340px, 1.12fr);
-  gap: clamp(28px, 4vw, 64px);
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: clamp(20px, 3vw, 48px);
   align-items: center;
-  padding: 62px 0 88px;
+  padding: 56px 0 80px;
+}
+
+.heroCopy h1 {
+  max-width: none;
+  font-size: clamp(36px, 4.8vw, 64px);
+}
+
+.hero .heroLead {
+  max-width: none;
+  margin: 20px 0 26px;
+  font-size: clamp(16px, 1.8vw, 19px);
 }
 
 .eyebrow {
@@ -316,25 +327,33 @@ h1 {
 .textLink:hover { color: var(--text); }
 
 .marketingHeroArt {
+  position: relative;
   width: 100%;
-  max-width: none;
   justify-self: stretch;
+  align-self: center;
+}
+
+.marketingHeroArt::before {
+  content: "";
+  position: absolute;
+  inset: 4% 2% 4% 8%;
+  border-radius: 28px;
+  background:
+    radial-gradient(ellipse 80% 70% at 55% 45%, rgba(35, 213, 171, 0.14), transparent 68%),
+    radial-gradient(ellipse 60% 55% at 30% 60%, rgba(124, 92, 255, 0.1), transparent 72%);
+  pointer-events: none;
+  z-index: 0;
 }
 
 .marketingHeroArt img {
+  position: relative;
+  z-index: 1;
   display: block;
   width: 100%;
   height: auto;
-  border-radius: 18px;
+  border-radius: 20px;
   object-fit: contain;
-  filter: drop-shadow(0 32px 64px rgba(0, 0, 0, 0.5));
-}
-
-@media (min-width: 1024px) {
-  .marketingHeroArt {
-    justify-self: end;
-    width: min(100%, 680px);
-  }
+  filter: drop-shadow(0 28px 56px rgba(0, 0, 0, 0.55));
 }
 
 /* App screenshot — no fake bezel; PNG is already a device capture. */
@@ -501,7 +520,7 @@ body:has(.marketingDraftBanner) .marketingShell {
   .hero { min-height: auto; grid-template-columns: 1fr; padding: 52px 0 66px; }
   .heroCopy { text-align: start; }
   .phoneShot { width: min(68vw, 272px); }
-  .marketingHeroArt { width: min(92vw, 520px); justify-self: center; }
+  .marketingHeroArt { width: min(94vw, 560px); justify-self: center; }
   .featureGrid { grid-template-columns: 1fr; }
   .section { padding: 58px 0; }
   .finalCta { padding: 34px 22px; }

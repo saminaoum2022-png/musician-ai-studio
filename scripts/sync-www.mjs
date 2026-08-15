@@ -11,6 +11,8 @@ import { fileURLToPath } from "url";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.join(__dirname, "..");
 
+execSync("node scripts/inject-marketing-shell.mjs", { cwd: root, stdio: "inherit" });
+
 const copies = [
   ["index.html", "index.html"],
   ["styles.css", "styles.css"],
@@ -18,8 +20,8 @@ const copies = [
   ["terms.html", "terms.html"],
   ["support.html", "support.html"],
   ["legal.css", "legal.css"],
-  ["marketing.css", "marketing.css"],
   ["home.html", "home.html"],
+  ["marketing.css", "marketing.css"],
   ["ai-music-generator.html", "ai-music-generator.html"],
   ["hum-to-song.html", "hum-to-song.html"],
   ["lyrics-to-song.html", "lyrics-to-song.html"],

@@ -27,6 +27,7 @@ const ALL_VIEWS = Object.freeze([
   "subscriptions",
   "billing",
   "settings",
+  "marketing",
 ]);
 
 const ROLE_META = Object.freeze({
@@ -37,6 +38,7 @@ const ROLE_META = Object.freeze({
     grantCredits: true,
     manageTeam: true,
     moderatePublications: true,
+    manageMarketing: true,
   },
   operations: {
     label: "Operations",
@@ -45,6 +47,7 @@ const ROLE_META = Object.freeze({
     grantCredits: false,
     manageTeam: false,
     moderatePublications: false,
+    manageMarketing: false,
   },
   support: {
     label: "Support",
@@ -53,6 +56,7 @@ const ROLE_META = Object.freeze({
     grantCredits: true,
     manageTeam: false,
     moderatePublications: false,
+    manageMarketing: false,
   },
   moderator: {
     label: "Moderator",
@@ -61,6 +65,7 @@ const ROLE_META = Object.freeze({
     grantCredits: false,
     manageTeam: false,
     moderatePublications: true,
+    manageMarketing: false,
   },
   finance: {
     label: "Finance",
@@ -69,6 +74,7 @@ const ROLE_META = Object.freeze({
     grantCredits: false,
     manageTeam: false,
     moderatePublications: false,
+    manageMarketing: false,
   },
   viewer: {
     label: "Viewer",
@@ -90,6 +96,7 @@ const ROLE_META = Object.freeze({
     grantCredits: false,
     manageTeam: false,
     moderatePublications: false,
+    manageMarketing: false,
   },
 });
 
@@ -134,6 +141,12 @@ function canModeratePublications(role, { isOwner = false } = {}) {
   return Boolean(meta?.moderatePublications);
 }
 
+function canManageMarketing(role, { isOwner = false } = {}) {
+  if (isOwner) return true;
+  const meta = ROLE_META[normalizeRole(role)];
+  return Boolean(meta?.manageMarketing);
+}
+
 function listAssignableRoles() {
   return DASHBOARD_ROLES.map((id) => ({
     id,
@@ -143,6 +156,7 @@ function listAssignableRoles() {
     grantCredits: ROLE_META[id].grantCredits,
     manageTeam: ROLE_META[id].manageTeam,
     moderatePublications: ROLE_META[id].moderatePublications,
+    manageMarketing: ROLE_META[id].manageMarketing,
   }));
 }
 
@@ -162,6 +176,7 @@ function buildAdminContext(user, profileRole, { isOwner = false } = {}) {
     canManageTeam: canManageTeam(effectiveRole, { isOwner }),
     canGrantCredits: canGrantCredits(effectiveRole, { isOwner }),
     canModeratePublications: canModeratePublications(effectiveRole, { isOwner }),
+    canManageMarketing: canManageMarketing(effectiveRole, { isOwner }),
   };
 }
 
@@ -176,6 +191,7 @@ module.exports = {
   canGrantCredits,
   canManageTeam,
   canModeratePublications,
+  canManageMarketing,
   listAssignableRoles,
   buildAdminContext,
 };

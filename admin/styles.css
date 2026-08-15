@@ -1079,3 +1079,52 @@ td.num { font-variant-numeric: tabular-nums; }
   .sidebarNav { grid-template-columns: 1fr; }
   .cardsGrid { grid-template-columns: 1fr; }
 }
+
+.marketingEditor {
+  display: grid;
+  gap: 16px;
+  max-width: 920px;
+}
+
+.marketingFieldInput {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text);
+  font: inherit;
+}
+
+.marketingField textarea.marketingFieldInput {
+  min-height: 88px;
+  resize: vertical;
+}
+
+.marketingBlock {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
+
+.marketingBlock h4 {
+  margin: 0 0 10px;
+  font-size: 0.92rem;
+  color: var(--muted);
+}
+
+.marketingHeroPreview {
+  display: block;
+  width: min(100%, 420px);
+  margin-top: 12px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+}
+
+.marketingToolbar .heroActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}

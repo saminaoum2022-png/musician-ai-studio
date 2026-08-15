@@ -60,6 +60,7 @@ async function verifyAdmin(req, options = {}) {
   if (options.requireManageTeam && !ctx.canManageTeam) return null;
   if (options.requireGrantCredits && !ctx.canGrantCredits) return null;
   if (options.requireModeratePublications && !ctx.canModeratePublications) return null;
+  if (options.requireManageMarketing && !ctx.canManageMarketing) return null;
 
   return ctx;
 }

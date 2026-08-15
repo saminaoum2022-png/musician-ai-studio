@@ -20,6 +20,8 @@ const state = {
   generationDetailId: "",
   returnView: "users",
   grantPrefillEmail: "",
+  marketingLocale: "en",
+  marketingDraft: null,
   cache: {},
   recoveryTokenHash: "",
 };
@@ -53,6 +55,7 @@ const els = {
     user: document.getElementById("viewUser"),
     generation: document.getElementById("viewGeneration"),
     credits: document.getElementById("viewCredits"),
+    marketing: document.getElementById("viewMarketing"),
     promos: document.getElementById("viewPromos"),
     singers: document.getElementById("viewSingers"),
     generations: document.getElementById("viewGenerations"),
@@ -71,6 +74,7 @@ const VIEW_META = {
   user: { title: "User detail", sub: "Credits, subscription, billing, and activity" },
   generation: { title: "Generation detail", sub: "Prompt, status, credits, and saved output" },
   credits: { title: "Credits", sub: "Grant paid credits and view every ledger entry" },
+  marketing: { title: "Marketing", sub: "Edit homepage copy, FAQ, pricing blurbs, and hero image" },
   promos: { title: "Promo codes", sub: "Create and monitor redemption codes" },
   singers: { title: "Pro singers", sub: "Singer applications, roster, and performance requests" },
   generations: { title: "Generations", sub: "Song and audio generation requests" },
@@ -552,6 +556,71 @@ async function adminFetch(view, { offset = 0, limit = PAGE_SIZE, search = "", us
   return data;
 }
 
+async function marketingAdminFetch(page = "home", locale = "en") {
+  await refreshSessionIfNeeded();
+  const token = state.session?.access_token;
+  if (!token) throw new Error("Not signed in");
+  const qs = new URLSearchParams({ page, locale });
+  const r = await fetch(`/api/admin/marketing?${qs}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  const data = await r.json().catch(() => ({}));
+  if (r.status === 401) {
+    writeSession(null);
+    throw new Error("Session expired — sign in again");
+  }
+  if (r.status === 403) throw new Error(data?.error || "You cannot edit marketing content.");
+  if (!r.ok) throw new Error(data?.error || `Request failed (${r.status})`);
+  return data;
+}
+
+async function marketingAdminSave({ page, locale, content }) {
+  await refreshSessionIfNeeded();
+  const token = state.session?.access_token;
+  if (!token) throw new Error("Not signed in");
+  const r = await fetch("/api/admin/marketing", {
+    method: "PUT",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ page, locale, content }),
+  });
+  const data = await r.json().catch(() => ({}));
+  if (r.status === 401) {
+    writeSession(null);
+    throw new Error("Session expired — sign in again");
+  }
+  if (!r.ok) throw new Error(data?.error || `Save failed (${r.status})`);
+  return data;
+}
+
+async function marketingAdminUploadImage(file) {
+  await refreshSessionIfNeeded();
+  const token = state.session?.access_token;
+  if (!token) throw new Error("Not signed in");
+  const buf = await file.arrayBuffer();
+  const bytes = new Uint8Array(buf);
+  let binary = "";
+  for (let i = 0; i < bytes.length; i += 1) binary += String.fromCharCode(bytes[i]);
+  const dataBase64 = btoa(binary);
+  const r = await fetch("/api/admin/marketing", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      filename: file.name || "hero",
+      contentType: file.type || "image/jpeg",
+      dataBase64,
+    }),
+  });
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(data?.error || `Upload failed (${r.status})`);
+  return data;
+}
+
 async function loadAdminSession({ force = false } = {}) {
   if (!force && state.adminSession) return state.adminSession;
   const data = await adminFetch("session");
@@ -648,11 +717,14 @@ function viewCacheKey() {
   if (state.view === "generation" && state.generationDetailId) {
     key += `:gid:${state.generationDetailId}`;
   }
+  if (state.view === "marketing") {
+    key += `:loc:${state.marketingLocale || "en"}`;
+  }
   return key;
 }
 
 function firstAllowedView() {
-  const order = ["overview", "providers", "users", "generations", "publications", "credits", "promos", "singers", "subscriptions", "billing", "settings"];
+  const order = ["overview", "providers", "users", "generations", "publications", "marketing", "credits", "promos", "singers", "subscriptions", "billing", "settings"];
   for (const view of order) {
     if (canAccessView(view)) return view;
   }
@@ -2082,6 +2154,213 @@ function renderSubscriptions(data) {
   }), { plain: true });
 }
 
+function marketingField(label, id, value, { multiline = false, hint = "" } = {}) {
+  const safe = escapeHtml(String(value ?? ""));
+  const input = multiline
+    ? `<textarea id="${id}" rows="${multiline === true ? 3 : multiline}" class="marketingFieldInput">${safe}</textarea>`
+    : `<input id="${id}" type="text" class="marketingFieldInput" value="${safe}" />`;
+  return `<label class="field marketingField">
+    <span>${escapeHtml(label)}</span>
+    ${input}
+    ${hint ? `<span class="cellMuted">${escapeHtml(hint)}</span>` : ""}
+  </label>`;
+}
+
+function readMarketingFormContent() {
+  const val = (id) => document.getElementById(id)?.value ?? "";
+  const cards = [0, 1, 2].map((i) => ({
+    title: val(`mkFeatureTitle${i}`),
+    body: val(`mkFeatureBody${i}`),
+  }));
+  const faqItems = [0, 1, 2].map((i) => ({
+    question: val(`mkFaqQ${i}`),
+    answerHtml: val(`mkFaqA${i}`),
+  })).filter((it) => it.question.trim());
+  return {
+    seo: {
+      title: val("mkSeoTitle"),
+      description: val("mkSeoDescription"),
+    },
+    hero: {
+      eyebrow: val("mkHeroEyebrow"),
+      title: val("mkHeroTitle"),
+      lead: val("mkHeroLead"),
+      ctaLabel: val("mkHeroCtaLabel"),
+      ctaHref: val("mkHeroCtaHref"),
+      secondaryLabel: val("mkHeroSecondaryLabel"),
+      secondaryHref: val("mkHeroSecondaryHref"),
+      heroImageUrl: val("mkHeroImageUrl"),
+      heroImageAlt: val("mkHeroImageAlt"),
+    },
+    features: {
+      eyebrow: val("mkFeaturesEyebrow"),
+      title: val("mkFeaturesTitle"),
+      cards,
+    },
+    discover: {
+      eyebrow: val("mkDiscoverEyebrow"),
+      title: val("mkDiscoverTitle"),
+      lead: val("mkDiscoverLead"),
+      ctaLabel: val("mkDiscoverCtaLabel"),
+      ctaHref: val("mkDiscoverCtaHref"),
+    },
+    pricing: {
+      eyebrow: val("mkPricingEyebrow"),
+      title: val("mkPricingTitle"),
+      free: {
+        title: val("mkPricingFreeTitle"),
+        price: val("mkPricingFreePrice"),
+        body: val("mkPricingFreeBody"),
+        ctaLabel: val("mkPricingFreeCtaLabel"),
+        ctaHref: val("mkPricingFreeCtaHref"),
+      },
+      pro: {
+        title: val("mkPricingProTitle"),
+        price: val("mkPricingProPrice"),
+        body: val("mkPricingProBody"),
+        ctaLabel: val("mkPricingProCtaLabel"),
+        ctaHref: val("mkPricingProCtaHref"),
+      },
+    },
+    faq: {
+      title: val("mkFaqTitle"),
+      items: faqItems,
+    },
+    finalCta: {
+      title: val("mkFinalTitle"),
+      body: val("mkFinalBody"),
+      ctaLabel: val("mkFinalCtaLabel"),
+      ctaHref: val("mkFinalCtaHref"),
+    },
+  };
+}
+
+function renderMarketing(data) {
+  const c = data?.content || {};
+  const seo = c.seo || {};
+  const hero = c.hero || {};
+  const features = c.features || {};
+  const cards = Array.isArray(features.cards) ? features.cards : [{}, {}, {}];
+  const discover = c.discover || {};
+  const pricing = c.pricing || {};
+  const free = pricing.free || {};
+  const pro = pricing.pro || {};
+  const faq = c.faq || {};
+  const faqItems = Array.isArray(faq.items) ? faq.items : [];
+  const finalCta = c.finalCta || {};
+  const locale = state.marketingLocale || "en";
+  const updated = data?.updatedAt ? fmtDate(data.updatedAt) : "Using defaults (not saved yet)";
+  const source = data?.source === "database" ? "Published in database" : "Defaults only — save to publish";
+
+  const faqFields = [0, 1, 2].map((i) => {
+    const it = faqItems[i] || {};
+    return `<div class="marketingBlock">
+      ${marketingField(`FAQ ${i + 1} question`, `mkFaqQ${i}`, it.question || "")}
+      ${marketingField(`FAQ ${i + 1} answer`, `mkFaqA${i}`, it.answerHtml || "", { multiline: 3, hint: "Simple HTML allowed for links." })}
+    </div>`;
+  }).join("");
+
+  els.panels.marketing.innerHTML = adminPageStack(`
+    <div class="toolbarBlock marketingToolbar">
+      <div class="inlineStats">
+        <span>Locale: <strong>${locale === "ar" ? "Arabic" : "English"}</strong></span>
+        <span>${escapeHtml(source)}</span>
+        <span>Updated: ${escapeHtml(updated)}</span>
+      </div>
+      <div class="heroActions" style="margin-top:12px">
+        <button type="button" class="btnGhost" data-marketing-locale="en" ${locale === "en" ? "disabled" : ""}>English</button>
+        <button type="button" class="btnGhost" data-marketing-locale="ar" ${locale === "ar" ? "disabled" : ""}>Arabic</button>
+        <a class="btnGhost" href="/" target="_blank" rel="noopener">Preview homepage ↗</a>
+        <button type="button" class="btnPrimary" id="btnMarketingSave">Save &amp; publish</button>
+      </div>
+      <p id="marketingSaveMsg" class="grantMsg" hidden></p>
+    </div>
+
+    <div class="marketingEditor">
+      <section class="detailCard">
+        <h3 class="detailCardTitle">SEO</h3>
+        ${marketingField("Page title", "mkSeoTitle", seo.title || "")}
+        ${marketingField("Meta description", "mkSeoDescription", seo.description || "", { multiline: 3 })}
+      </section>
+
+      <section class="detailCard">
+        <h3 class="detailCardTitle">Hero</h3>
+        ${marketingField("Eyebrow", "mkHeroEyebrow", hero.eyebrow || "")}
+        ${marketingField("Headline", "mkHeroTitle", hero.title || "")}
+        ${marketingField("Lead paragraph", "mkHeroLead", hero.lead || "", { multiline: 4 })}
+        ${marketingField("Primary CTA label", "mkHeroCtaLabel", hero.ctaLabel || "")}
+        ${marketingField("Primary CTA link", "mkHeroCtaHref", hero.ctaHref || "", { hint: "e.g. /app/#/intro" })}
+        ${marketingField("Secondary link label", "mkHeroSecondaryLabel", hero.secondaryLabel || "")}
+        ${marketingField("Secondary link URL", "mkHeroSecondaryHref", hero.secondaryHref || "")}
+        ${marketingField("Hero image URL", "mkHeroImageUrl", hero.heroImageUrl || "")}
+        <label class="field marketingField">
+          <span>Upload new hero image</span>
+          <input id="mkHeroImageFile" type="file" accept="image/jpeg,image/png,image/webp" />
+          <span class="cellMuted">JPEG/PNG/WebP up to 8 MB. Saves URL into the field above.</span>
+        </label>
+        ${marketingField("Hero image alt text", "mkHeroImageAlt", hero.heroImageAlt || "")}
+        ${hero.heroImageUrl ? `<img src="${escapeHtml(hero.heroImageUrl)}" alt="" class="marketingHeroPreview" />` : ""}
+      </section>
+
+      <section class="detailCard">
+        <h3 class="detailCardTitle">Features</h3>
+        ${marketingField("Section eyebrow", "mkFeaturesEyebrow", features.eyebrow || "")}
+        ${marketingField("Section title", "mkFeaturesTitle", features.title || "")}
+        ${[0, 1, 2].map((i) => `
+          <div class="marketingBlock">
+            ${marketingField(`Card ${i + 1} title`, `mkFeatureTitle${i}`, cards[i]?.title || "")}
+            ${marketingField(`Card ${i + 1} body`, `mkFeatureBody${i}`, cards[i]?.body || "", { multiline: 3 })}
+          </div>`).join("")}
+      </section>
+
+      <section class="detailCard">
+        <h3 class="detailCardTitle">Discover teaser</h3>
+        ${marketingField("Eyebrow", "mkDiscoverEyebrow", discover.eyebrow || "")}
+        ${marketingField("Title", "mkDiscoverTitle", discover.title || "")}
+        ${marketingField("Lead", "mkDiscoverLead", discover.lead || "", { multiline: 2 })}
+        ${marketingField("CTA label", "mkDiscoverCtaLabel", discover.ctaLabel || "")}
+        ${marketingField("CTA link", "mkDiscoverCtaHref", discover.ctaHref || "")}
+      </section>
+
+      <section class="detailCard">
+        <h3 class="detailCardTitle">Pricing</h3>
+        ${marketingField("Section eyebrow", "mkPricingEyebrow", pricing.eyebrow || "")}
+        ${marketingField("Section title", "mkPricingTitle", pricing.title || "")}
+        <div class="marketingBlock">
+          <h4>Free tier</h4>
+          ${marketingField("Title", "mkPricingFreeTitle", free.title || "")}
+          ${marketingField("Price label", "mkPricingFreePrice", free.price || "")}
+          ${marketingField("Body", "mkPricingFreeBody", free.body || "", { multiline: 3 })}
+          ${marketingField("CTA label", "mkPricingFreeCtaLabel", free.ctaLabel || "")}
+          ${marketingField("CTA link", "mkPricingFreeCtaHref", free.ctaHref || "")}
+        </div>
+        <div class="marketingBlock">
+          <h4>Pro tier</h4>
+          ${marketingField("Title", "mkPricingProTitle", pro.title || "")}
+          ${marketingField("Price label", "mkPricingProPrice", pro.price || "")}
+          ${marketingField("Body", "mkPricingProBody", pro.body || "", { multiline: 3 })}
+          ${marketingField("CTA label", "mkPricingProCtaLabel", pro.ctaLabel || "")}
+          ${marketingField("CTA link", "mkPricingProCtaHref", pro.ctaHref || "")}
+        </div>
+      </section>
+
+      <section class="detailCard">
+        <h3 class="detailCardTitle">FAQ</h3>
+        ${marketingField("Section title", "mkFaqTitle", faq.title || "")}
+        ${faqFields}
+      </section>
+
+      <section class="detailCard">
+        <h3 class="detailCardTitle">Final CTA band</h3>
+        ${marketingField("Title", "mkFinalTitle", finalCta.title || "")}
+        ${marketingField("Body", "mkFinalBody", finalCta.body || "", { multiline: 3 })}
+        ${marketingField("CTA label", "mkFinalCtaLabel", finalCta.ctaLabel || "")}
+        ${marketingField("CTA link", "mkFinalCtaHref", finalCta.ctaHref || "")}
+      </section>
+    </div>
+  `, { plain: true });
+}
+
 const RENDERERS = {
   overview: renderOverview,
   providers: renderProviders,
@@ -2090,6 +2369,7 @@ const RENDERERS = {
   user: renderUserDetail,
   generation: renderGenerationDetail,
   credits: renderCredits,
+  marketing: renderMarketing,
   promos: renderPromos,
   singers: renderSingers,
   generations: renderGenerations,
@@ -2384,17 +2664,22 @@ async function loadView({ force = false } = {}) {
   panel.innerHTML = `<div class="adminPageStack"><div class="loading">Loading…</div></div>`;
   showError("");
   try {
-    let data = await adminFetch(view, {
-      offset: state.offset,
-      search: view === "users"
-        ? state.userSearch
-        : view === "billing"
-          ? state.billingSearch
-          : "",
-      userId: view === "user" ? state.userDetailId : "",
-      generationId: view === "generation" ? state.generationDetailId : "",
-      healthRefresh: force && (view === "providers" || view === "suno"),
-    });
+    let data;
+    if (view === "marketing") {
+      data = await marketingAdminFetch("home", state.marketingLocale || "en");
+    } else {
+      data = await adminFetch(view, {
+        offset: state.offset,
+        search: view === "users"
+          ? state.userSearch
+          : view === "billing"
+            ? state.billingSearch
+            : "",
+        userId: view === "user" ? state.userDetailId : "",
+        generationId: view === "generation" ? state.generationDetailId : "",
+        healthRefresh: force && (view === "providers" || view === "suno"),
+      });
+    }
     if (view === "settings" && state.adminSession?.canManageTeam) {
       try {
         const team = await teamFetch();
@@ -2847,6 +3132,53 @@ document.body.addEventListener("click", (e) => {
     return;
   }
 
+  const marketingLocaleBtn = e.target.closest("[data-marketing-locale]");
+  if (marketingLocaleBtn) {
+    const loc = marketingLocaleBtn.dataset.marketingLocale;
+    if (loc && loc !== state.marketingLocale) {
+      state.marketingLocale = loc;
+      void loadView({ force: true });
+    }
+    return;
+  }
+
+  const marketingSaveBtn = e.target.closest("#btnMarketingSave");
+  if (marketingSaveBtn) {
+    void (async () => {
+      const msg = document.getElementById("marketingSaveMsg");
+      marketingSaveBtn.disabled = true;
+      if (msg) {
+        msg.hidden = false;
+        msg.textContent = "Saving…";
+        msg.className = "grantMsg warn";
+      }
+      try {
+        const content = readMarketingFormContent();
+        await marketingAdminSave({
+          page: "home",
+          locale: state.marketingLocale || "en",
+          content,
+        });
+        delete state.cache[viewCacheKey()];
+        if (msg) {
+          msg.textContent = "Saved — homepage updates within a minute.";
+          msg.className = "grantMsg ok";
+        }
+        showError("");
+        await loadView({ force: true });
+      } catch (err) {
+        if (msg) {
+          msg.textContent = err?.message || "Save failed";
+          msg.className = "grantMsg err";
+        }
+        showError(err?.message || "Save failed");
+      } finally {
+        marketingSaveBtn.disabled = false;
+      }
+    })();
+    return;
+  }
+
   const promoToggleBtn = e.target.closest("[data-promo-toggle]");
   if (promoToggleBtn) {
     const code = promoToggleBtn.dataset.promoToggle;
@@ -3153,6 +3485,36 @@ document.body.addEventListener("change", (e) => {
       if (state.view === "settings") await loadView({ force: true });
     } finally {
       select.disabled = false;
+    }
+  })();
+});
+
+document.body.addEventListener("change", (e) => {
+  const fileInput = e.target.closest("#mkHeroImageFile");
+  if (!fileInput?.files?.[0]) return;
+  const file = fileInput.files[0];
+  void (async () => {
+    const msg = document.getElementById("marketingSaveMsg");
+    if (msg) {
+      msg.hidden = false;
+      msg.textContent = "Uploading image…";
+      msg.className = "grantMsg warn";
+    }
+    try {
+      const data = await marketingAdminUploadImage(file);
+      const urlInput = document.getElementById("mkHeroImageUrl");
+      if (urlInput && data.url) urlInput.value = data.url;
+      if (msg) {
+        msg.textContent = "Image uploaded — click Save & publish to go live.";
+        msg.className = "grantMsg ok";
+      }
+      fileInput.value = "";
+    } catch (err) {
+      if (msg) {
+        msg.textContent = err?.message || "Upload failed";
+        msg.className = "grantMsg err";
+      }
+      showError(err?.message || "Upload failed");
     }
   })();
 });

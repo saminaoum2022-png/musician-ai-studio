@@ -24,6 +24,15 @@
     el.setAttribute(attr, value);
   }
 
+  function setImageSrc(sel, value) {
+    var el = document.querySelector(sel);
+    if (!el || value == null || value === "") return;
+    var next = String(value).trim();
+    var cur = String(el.getAttribute("src") || "").trim();
+    if (cur === next) return;
+    el.setAttribute("src", next);
+  }
+
   function setMeta(name, content, isProperty) {
     if (!content) return;
     var sel = isProperty
@@ -77,7 +86,7 @@
       setAttr("[data-mk='hero.cta']", "href", c.hero.ctaHref);
       setText("[data-mk='hero.secondary']", c.hero.secondaryLabel);
       setAttr("[data-mk='hero.secondary']", "href", c.hero.secondaryHref);
-      setAttr("[data-mk='hero.image']", "src", c.hero.heroImageUrl);
+      setImageSrc("[data-mk='hero.image']", c.hero.heroImageUrl);
       setAttr("[data-mk='hero.image']", "alt", c.hero.heroImageAlt);
     }
 
@@ -225,7 +234,7 @@
     var heroImg = params.get("heroImg");
     var heroAlt = params.get("heroAlt");
     if (heroImg) {
-      setAttr("[data-mk='hero.image']", "src", heroImg);
+      setImageSrc("[data-mk='hero.image']", heroImg);
       if (heroAlt) setAttr("[data-mk='hero.image']", "alt", heroAlt);
     }
   }

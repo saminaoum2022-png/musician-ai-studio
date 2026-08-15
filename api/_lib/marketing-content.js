@@ -36,7 +36,7 @@ function defaultHomeContentEn() {
       secondaryLabel: "See how it works",
       secondaryHref: "#features",
       storeNote: "Also on iPhone · Android coming soon",
-      heroImageUrl: "/assets/marketing/seo-hero-device.png",
+      heroImageUrl: "https://msqpcvkstuotpoqwdvwe.supabase.co/storage/v1/object/public/marketing_assets/uploads/1786819058889-nabadai-homepage-ai-music-creator-hero.png.png",
       heroImageAlt: "NabadAi app — create songs from lyrics, hums, and photos",
     },
     features: {

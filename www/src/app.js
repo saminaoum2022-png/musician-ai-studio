@@ -42894,10 +42894,33 @@ const PERSONA_ADVENTURE_WEIGHT = Object.freeze({
   surprise: 0.65,
 });
 const PERSONA_AUDIO_INFLUENCE_WEIGHT = Object.freeze({
+  light: 0.45,
   medium: 0.7,
   strong: 0.85,
   max: 0.95,
 });
+
+/** Drop vocal-production / challenge prose from style when persona owns the voice (remix/cover). */
+function stripPersonaConflictingStyleTags(raw) {
+  let s = String(raw || "").trim();
+  if (!s) return s;
+  s = s.replace(/\bChallenge brief:[^.]*(\.\s*)?/gi, "");
+  s = s.replace(/\bDedicated to [^.]*(\.\s*)?/gi, "");
+  s = s.replace(/\bKeep the lyrics personal[^.]*(\.\s*)?/gi, "");
+  s = s.replace(/\bpersonalized for [^,.]*[,.]?\s*/gi, "");
+  s = s.replace(/\bstudio vocal\b,?\s*/gi, "");
+  s = s.replace(/\bpolished mix\b,?\s*/gi, "");
+  s = s.replace(/\bno crowd sfx or stadium ambience\b,?\s*/gi, "");
+  s = s.replace(/\bclose vocal\b,?\s*/gi, "");
+  s = s.replace(/\bpolished studio vocal\b,?\s*/gi, "");
+  s = s.replace(/,\s*polished\s*(?=,|$)/gi, "");
+  s = s.replace(/^polished\s*,\s*/i, "");
+  return s
+    .replace(/,\s*,+/g, ",")
+    .replace(/^\s*,\s*|\s*,\s*$/g, "")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+}
 
 /** V5_5 optional target length — omit when Auto (empty preset). */
 const SONG_DURATION_PRESET_SEC = Object.freeze({
@@ -57072,7 +57095,9 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
         } catch {}
       }
       const personaStyleBase = hasReference
-        ? String(userStyle || "").trim()
+        ? isRecordedVoicePersona && personaIdSel
+          ? stripPersonaConflictingStyleTags(String(userStyle || "").trim())
+          : String(userStyle || "").trim()
         : isRecordedVoicePersona
         ? [userStyle, styleExtras, artworkStyle ? `cover art: ${artworkStyle}` : ""].filter(Boolean).join(" | ")
         : `${userStyle}${userStyle ? " | " : ""}${timingClause}, ${styleExtras}${artworkStyle ? `, cover art: ${artworkStyle}` : ""}`;
@@ -57213,7 +57238,21 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
               ...(dialect ? { dialect: String(dialect) } : {}),
               ...(lyricDialectHint ? { dialectHint: String(lyricDialectHint) } : {}),
               ...(userAvoidTags ? { negativeTags: userAvoidTags } : {}),
-              ...(payload?.personaId ? { personaId: String(payload.personaId) } : {}),
+              ...(payload?.personaId
+                ? {
+                    personaId: String(payload.personaId),
+                    ...(payload.personaModel ? { personaModel: String(payload.personaModel) } : {}),
+                  }
+                : {}),
+              ...(payload?.personaId &&
+              payload.personaModel === "voice_persona" &&
+              !referenceInstrumentalOnly
+                ? {
+                    styleWeight: payload.styleWeight,
+                    weirdnessConstraint: payload.weirdnessConstraint,
+                    audioWeight: payload.audioWeight,
+                  }
+                : {}),
               ...(!referenceInstrumentalOnly && finalPrompt ? { prompt: String(finalPrompt) } : {}),
             };
             const stemsTok = getSupabaseAuthToken();
@@ -57274,6 +57313,17 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
               if (referenceInstrumentalOnly) {
                 fd.append("audioWeight", "0.95");
                 fd.append("styleWeight", "0.25");
+              } else if (
+                stemsPayload.personaModel === "voice_persona" &&
+                stemsPayload.audioWeight != null
+              ) {
+                fd.append("audioWeight", String(stemsPayload.audioWeight));
+                if (stemsPayload.styleWeight != null) {
+                  fd.append("styleWeight", String(stemsPayload.styleWeight));
+                }
+                if (stemsPayload.weirdnessConstraint != null) {
+                  fd.append("weirdnessConstraint", String(stemsPayload.weirdnessConstraint));
+                }
               }
               if (stemsPayload.vocalGender) fd.append("vocalGender", stemsPayload.vocalGender);
               if (stemsPayload.voiceTimbre) fd.append("voiceTimbre", stemsPayload.voiceTimbre);
@@ -57283,6 +57333,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
               if (stemsPayload.dialectHint) fd.append("dialectHint", stemsPayload.dialectHint);
               if (stemsPayload.negativeTags) fd.append("negativeTags", stemsPayload.negativeTags);
               if (stemsPayload.personaId) fd.append("personaId", stemsPayload.personaId);
+              if (stemsPayload.personaModel) fd.append("personaModel", stemsPayload.personaModel);
               rr = await fetch(apiUrl("/api/suno/stems"), {
                 method: "POST",
                 headers: stemsTok ? { Authorization: `Bearer ${stemsTok}` } : undefined,

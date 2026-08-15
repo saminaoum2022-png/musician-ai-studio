@@ -200,6 +200,8 @@ module.exports = async function handler(req, res) {
       const dialect = String(body?.dialect || "").trim();
       const dialectHint = String(body?.dialectHint || "").trim();
       const personaId = String(body?.personaId || "").trim();
+      let personaModel = String(body?.personaModel || "").trim();
+      if (personaModel !== "voice_persona" && personaModel !== "style_persona") personaModel = "";
       const negativeTags = String(body?.negativeTags || "").trim();
       const instrumentPreset = String(body?.instrumentPreset || "")
         .trim()
@@ -218,6 +220,7 @@ module.exports = async function handler(req, res) {
       };
       const audioWeight = clamp01(body?.audioWeight);
       const styleWeight = clamp01(body?.styleWeight);
+      const weirdnessConstraint = clamp01(body?.weirdnessConstraint);
 
       // 1) Upload file to Suno temporary file store (3-day URL)
       const up = new FormData();
@@ -309,9 +312,11 @@ module.exports = async function handler(req, res) {
               : "Cover from reference"),
           styleWeight: coverStyleWeight,
           ...(coverAudioWeight !== null ? { audioWeight: coverAudioWeight } : {}),
+          ...(weirdnessConstraint !== null ? { weirdnessConstraint } : {}),
           ...(coverNegative ? { negativeTags: coverNegative } : {}),
           ...(vocalGender === "m" || vocalGender === "f" ? { vocalGender } : {}),
           ...(!coverInstrumental && personaId ? { personaId } : {}),
+          ...(!coverInstrumental && personaId && personaModel ? { personaModel } : {}),
         };
         try {
           console.log("[suno/stems] upload-cover payload", {
@@ -325,6 +330,10 @@ module.exports = async function handler(req, res) {
             model: coverPayload.model,
             vocalGender: coverPayload.vocalGender ?? null,
             personaId: coverPayload.personaId ?? null,
+            personaModel: coverPayload.personaModel ?? null,
+            styleWeight: coverPayload.styleWeight ?? null,
+            audioWeight: coverPayload.audioWeight ?? null,
+            weirdnessConstraint: coverPayload.weirdnessConstraint ?? null,
             uploadUrlHost: (() => { try { return new URL(uploadUrl).host; } catch { return null; } })(),
             clientFingerprint: String(body?.clientFingerprint || "").slice(0, 16) || null,
           });

@@ -985,11 +985,13 @@
                   <span class="personaVoiceTuneHint">Audio influence — how much you sound like you</span>
                 </div>
                 <select id="sunoPersonaAudioInfluence" hidden aria-hidden="true" tabindex="-1">
+                  <option value="light">Light</option>
                   <option value="medium">Medium</option>
                   <option value="strong" selected>Strong</option>
                   <option value="max">Max</option>
                 </select>
                 <div id="personaAudioInfluenceChipRow" class="optChipRow personaVoiceTuneChips" role="group" aria-label="Voice strength">
+                  <button type="button" class="optChip" data-opt-value="light" aria-pressed="false">Light</button>
                   <button type="button" class="optChip" data-opt-value="medium" aria-pressed="false">Medium</button>
                   <button type="button" class="optChip isActive" data-opt-value="strong" aria-pressed="true">Strong</button>
                   <button type="button" class="optChip" data-opt-value="max" aria-pressed="false">Max</button>

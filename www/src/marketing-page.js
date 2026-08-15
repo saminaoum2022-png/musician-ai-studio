@@ -33,6 +33,11 @@
     el.setAttribute("src", next);
   }
 
+  function usesHeroImageProxy(el) {
+    if (!el) return false;
+    return String(el.getAttribute("src") || "").indexOf("/api/marketing/hero-image") === 0;
+  }
+
   function setMeta(name, content, isProperty) {
     if (!content) return;
     var sel = isProperty
@@ -86,7 +91,10 @@
       setAttr("[data-mk='hero.cta']", "href", c.hero.ctaHref);
       setText("[data-mk='hero.secondary']", c.hero.secondaryLabel);
       setAttr("[data-mk='hero.secondary']", "href", c.hero.secondaryHref);
-      setImageSrc("[data-mk='hero.image']", c.hero.heroImageUrl);
+      var heroEl = document.querySelector("[data-mk='hero.image']");
+      if (heroEl && c.hero.heroImageUrl && !usesHeroImageProxy(heroEl)) {
+        setImageSrc("[data-mk='hero.image']", c.hero.heroImageUrl);
+      }
       setAttr("[data-mk='hero.image']", "alt", c.hero.heroImageAlt);
     }
 

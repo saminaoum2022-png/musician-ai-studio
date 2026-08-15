@@ -2553,7 +2553,7 @@ function renderMarketing(data) {
         <a class="btnGhost" id="btnMarketingPreview" href="${escapeHtml(previewPath)}" target="_blank" rel="noopener">Preview live page ↗</a>
         <button type="button" class="btnPrimary" id="btnMarketingSave">Save &amp; publish</button>
       </div>
-      <p class="cellMuted marketingToolbarNote">Upload and edits stay private until you click Save &amp; publish. Preview draft shows your current form on the real site layout.</p>
+      <p class="cellMuted marketingToolbarNote">Upload and edits stay private until you click Save &amp; publish. Hero images go live immediately after save — no redeploy needed.</p>
       <p id="marketingSaveMsg" class="grantMsg" hidden></p>
     </div>
 
@@ -3481,14 +3481,16 @@ document.body.addEventListener("click", (e) => {
       }
       try {
         const content = readMarketingFormContent(state.marketingPage || "home");
-        await marketingAdminSave({
+        const saved = await marketingAdminSave({
           page: state.marketingPage || "home",
           locale: state.marketingLocale || "en",
           content,
         });
         delete state.cache[viewCacheKey()];
         if (msg) {
-          msg.textContent = "Saved — page updates within a minute.";
+          msg.textContent = saved?.heroImageApiPath
+            ? "Saved — hero image and page copy are live now."
+            : "Saved — page updates within a minute.";
           msg.className = "grantMsg ok";
         }
         showError("");

@@ -6,9 +6,12 @@ import { fileURLToPath } from "node:url";
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const origin = "https://www.nabadai.com";
 const image = `${origin}/assets/marketing/nabadai-social-card.png`;
-const heroDevice = "/assets/marketing/seo-hero-device.png";
 const heroDeviceWidth = 2560;
 const heroDeviceHeight = 1440;
+
+function heroImageSrc(slug, locale = "en") {
+  return `/api/marketing/hero-image?page=${encodeURIComponent(slug)}&locale=${encodeURIComponent(locale)}`;
+}
 
 const pages = [
   {
@@ -336,7 +339,7 @@ function renderPage(page, lang) {
             <a class="textLink" href="#features">${isAr ? "تعرّف إلى الأدوات" : "See how it works"}</a>
           </div>
         </div>
-        <div class="marketingHeroArt"><img src="${heroDevice}" width="${heroDeviceWidth}" height="${heroDeviceHeight}" alt="${isAr ? "واجهة NabadAi لإنشاء الموسيقى" : "NabadAi app on iPhone — create songs, hum melodies, and more"}"></div>
+        <div class="marketingHeroArt"><img src="${heroImageSrc(page.slug, isAr ? "ar" : "en")}" width="${heroDeviceWidth}" height="${heroDeviceHeight}" alt="${isAr ? "واجهة NabadAi لإنشاء الموسيقى" : "NabadAi app on iPhone — create songs, hum melodies, and more"}"></div>
       </section>
       <section class="section" id="features">
         <header class="sectionHead"><p class="eyebrow">${navLabel}</p><h2>${featuresLabel}</h2></header>

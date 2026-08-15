@@ -12,9 +12,10 @@ const {
   adminForbidden,
   adminUnauthorized,
 } = require("../_lib/admin-auth");
-const { LOCALES, PAGE_KEYS, PAGE_CATALOG } = require("../_lib/marketing-content");
+const { LOCALES, PAGE_KEYS, PAGE_CATALOG, isSeoPage } = require("../_lib/marketing-content");
 const { loadMarketingContent, saveMarketingContent } = require("../_lib/marketing-store");
 const { uploadObject } = require("../_lib/supabase-storage");
+const { marketingHeroImageApiPath } = require("../_lib/marketing-hero-image");
 
 const MARKETING_BUCKET = "marketing_assets";
 
@@ -98,6 +99,10 @@ module.exports = async function handler(req, res) {
       locale: saved.locale,
       content: saved.content,
       updatedAt: saved.updatedAt,
+      heroImageApiPath:
+        saved.page === "home" || isSeoPage(saved.page)
+          ? marketingHeroImageApiPath(saved.page, saved.locale)
+          : null,
     });
   }
 

@@ -2202,16 +2202,35 @@ function renderSubscriptions(data) {
   }), { plain: true });
 }
 
-function marketingField(label, id, value, { multiline = false, hint = "" } = {}) {
+function marketingField(label, id, value, { multiline = false, hint = "", highlight = false } = {}) {
   const safe = escapeHtml(String(value ?? ""));
   const input = multiline
     ? `<textarea id="${id}" rows="${multiline === true ? 3 : multiline}" class="marketingFieldInput">${safe}</textarea>`
     : `<input id="${id}" type="text" class="marketingFieldInput" value="${safe}" />`;
-  return `<label class="field marketingField">
+  return `<label class="field marketingField${highlight ? " marketingField--highlight" : ""}">
     <span>${escapeHtml(label)}</span>
     ${input}
     ${hint ? `<span class="cellMuted">${escapeHtml(hint)}</span>` : ""}
   </label>`;
+}
+
+function marketingSubsection(title, html, { description = "" } = {}) {
+  return `<div class="marketingSubsection">
+    <h4 class="marketingSubsectionTitle">${escapeHtml(title)}</h4>
+    ${description ? `<p class="marketingSubsectionDesc">${escapeHtml(description)}</p>` : ""}
+    <div class="marketingSubsectionFields">${html}</div>
+  </div>`;
+}
+
+function marketingDetailCard(title, html, { description = "", badge = "" } = {}) {
+  return `<section class="detailCard">
+    <div class="detailCardHead">
+      <h3 class="detailCardTitle">${escapeHtml(title)}</h3>
+      ${badge ? `<span class="detailCardBadge">${escapeHtml(badge)}</span>` : ""}
+    </div>
+    ${description ? `<p class="detailCardDesc">${escapeHtml(description)}</p>` : ""}
+    ${html}
+  </section>`;
 }
 
 function updateMarketingHeroPreview(url) {
@@ -2235,8 +2254,6 @@ function readMarketingFormContent(pageKey = "home") {
     const card = {
       title: val(`mkFeatureTitle${i}`),
       body: val(`mkFeatureBody${i}`),
-      imageUrl: val(`mkFeatureImageUrl${i}`),
-      imageAlt: val(`mkFeatureImageAlt${i}`),
     };
     if (pageKey === "home" && i === 0) {
       const links = [0, 1, 2].map((j) => ({
@@ -2308,8 +2325,6 @@ function readMarketingFormContent(pageKey = "home") {
         body: val("mkPricingFreeBody"),
         ctaLabel: val("mkPricingFreeCtaLabel"),
         ctaHref: val("mkPricingFreeCtaHref"),
-        imageUrl: val("mkPricingFreeImageUrl"),
-        imageAlt: val("mkPricingFreeImageAlt"),
       },
       pro: {
         title: val("mkPricingProTitle"),
@@ -2317,8 +2332,6 @@ function readMarketingFormContent(pageKey = "home") {
         body: val("mkPricingProBody"),
         ctaLabel: val("mkPricingProCtaLabel"),
         ctaHref: val("mkPricingProCtaHref"),
-        imageUrl: val("mkPricingProImageUrl"),
-        imageAlt: val("mkPricingProImageAlt"),
       },
     };
     content.footer = {
@@ -2464,10 +2477,10 @@ function renderMarketing(data) {
 
   const faqFields = [0, 1, 2].map((i) => {
     const it = faqItems[i] || {};
-    return `<div class="marketingBlock">
-      ${marketingField(`FAQ ${i + 1} question`, `mkFaqQ${i}`, it.question || "")}
-      ${marketingField(`FAQ ${i + 1} answer`, `mkFaqA${i}`, it.answerHtml || "", { multiline: 3, hint: "Simple HTML allowed for links." })}
-    </div>`;
+    return marketingSubsection(`Question ${i + 1}`, `
+      ${marketingField("Question", `mkFaqQ${i}`, it.question || "")}
+      ${marketingField("Answer", `mkFaqA${i}`, it.answerHtml || "", { multiline: 3, hint: "Simple HTML allowed for links." })}
+    `);
   }).join("");
 
   const relatedFields = [0, 1, 2, 3, 4, 5, 6, 7].map((i) => {
@@ -2488,54 +2501,49 @@ function renderMarketing(data) {
   }).join("") : "";
 
   const homeOnlySections = isHome ? `
-      <section class="detailCard">
-        <h3 class="detailCardTitle">Discover teaser</h3>
-        ${marketingField("Eyebrow", "mkDiscoverEyebrow", discover.eyebrow || "")}
-        ${marketingField("Title", "mkDiscoverTitle", discover.title || "")}
-        ${marketingField("Lead", "mkDiscoverLead", discover.lead || "", { multiline: 2 })}
-        ${marketingField("CTA label", "mkDiscoverCtaLabel", discover.ctaLabel || "")}
-        ${marketingField("CTA link", "mkDiscoverCtaHref", discover.ctaHref || "")}
-        ${marketingField("Featured Discover song IDs", "mkDiscoverFeaturedIds", (discover.featuredSongIds || []).join("\\n"), { multiline: 4, hint: "One public song UUID per line. Order = carousel order. Pick from recent publications below." })}
-        <div id="mkDiscoverPicker" class="marketingDiscoverPicker"></div>
-      </section>
+      ${marketingDetailCard("Discover teaser", `
+        ${marketingSubsection("Section copy", `
+          ${marketingField("Eyebrow", "mkDiscoverEyebrow", discover.eyebrow || "")}
+          ${marketingField("Title", "mkDiscoverTitle", discover.title || "")}
+          ${marketingField("Lead", "mkDiscoverLead", discover.lead || "", { multiline: 2 })}
+          ${marketingField("CTA label", "mkDiscoverCtaLabel", discover.ctaLabel || "")}
+          ${marketingField("CTA link", "mkDiscoverCtaHref", discover.ctaHref || "")}
+        `)}
+        ${marketingSubsection("Featured songs", `
+          ${marketingField("Song IDs", "mkDiscoverFeaturedIds", (discover.featuredSongIds || []).join("\\n"), { multiline: 4, hint: "One public song UUID per line. Order = carousel order." })}
+          <div id="mkDiscoverPicker" class="marketingDiscoverPicker"></div>
+        `, { description: "Pick from recent publications below, or paste UUIDs manually." })}
+      `, { badge: "Homepage", description: "Carousel on the homepage — hidden until at least one song is selected." })}
 
-      <section class="detailCard">
-        <h3 class="detailCardTitle">Pricing</h3>
+      ${marketingDetailCard("Pricing", `
         ${marketingField("Section eyebrow", "mkPricingEyebrow", pricing.eyebrow || "")}
         ${marketingField("Section title", "mkPricingTitle", pricing.title || "")}
-        <div class="marketingBlock">
-          <h4>Free tier</h4>
-          ${marketingField("Image URL", "mkPricingFreeImageUrl", free.imageUrl || "", { hint: "App screenshot or uploaded marketing asset." })}
-          ${marketingField("Image alt", "mkPricingFreeImageAlt", free.imageAlt || "")}
+        ${marketingSubsection("Free tier", `
           ${marketingField("Title", "mkPricingFreeTitle", free.title || "")}
           ${marketingField("Price label", "mkPricingFreePrice", free.price || "")}
           ${marketingField("Body", "mkPricingFreeBody", free.body || "", { multiline: 3 })}
           ${marketingField("CTA label", "mkPricingFreeCtaLabel", free.ctaLabel || "")}
           ${marketingField("CTA link", "mkPricingFreeCtaHref", free.ctaHref || "")}
-        </div>
-        <div class="marketingBlock">
-          <h4>Pro tier</h4>
-          ${marketingField("Image URL", "mkPricingProImageUrl", pro.imageUrl || "", { hint: "Pro screenshot or marketing asset." })}
-          ${marketingField("Image alt", "mkPricingProImageAlt", pro.imageAlt || "")}
+        `)}
+        ${marketingSubsection("Pro tier", `
           ${marketingField("Title", "mkPricingProTitle", pro.title || "")}
           ${marketingField("Price label", "mkPricingProPrice", pro.price || "")}
           ${marketingField("Body", "mkPricingProBody", pro.body || "", { multiline: 3 })}
           ${marketingField("CTA label", "mkPricingProCtaLabel", pro.ctaLabel || "")}
           ${marketingField("CTA link", "mkPricingProCtaHref", pro.ctaHref || "")}
-        </div>
-      </section>
+        `)}
+      `, { badge: "Homepage" })}
 
-      <section class="detailCard">
-        <h3 class="detailCardTitle">Footer social links</h3>
-        <p class="cellMuted">Icons appear on the homepage footer. Leave URL empty to show a muted placeholder until you add the link.</p>
+      ${marketingDetailCard("Footer social links", `
+        <p class="cellMuted marketingInlineNote">Icons appear on the homepage footer. Leave URL empty to show a muted placeholder.</p>
         ${["instagram", "facebook", "tiktok", "youtube", "discord"].map((platform) => {
           const row = footerSocial.find((it) => it.platform === platform) || { platform, href: "", label: platform };
-          return `<div class="marketingBlock marketingBlock--inline">
-            ${marketingField(`${platform} URL`, `mkSocialHref${platform}`, row.href || "", { hint: "Full https:// link" })}
-            ${marketingField(`${platform} label`, `mkSocialLabel${platform}`, row.label || platform, { hint: "Accessibility label" })}
-          </div>`;
+          return marketingSubsection(platform.charAt(0).toUpperCase() + platform.slice(1), `
+            ${marketingField("URL", `mkSocialHref${platform}`, row.href || "", { hint: "Full https:// link" })}
+            ${marketingField("Accessibility label", `mkSocialLabel${platform}`, row.label || platform, { hint: "Screen reader label" })}
+          `);
         }).join("")}
-      </section>` : "";
+      `, { badge: "Homepage" })}` : "";
 
   els.panels.marketing.innerHTML = adminPageStack(`
     <div class="toolbarBlock marketingToolbar">
@@ -2558,76 +2566,76 @@ function renderMarketing(data) {
     </div>
 
     <div class="marketingEditor">
-      <section class="detailCard">
-        <h3 class="detailCardTitle">SEO</h3>
-        ${marketingField("Page title", "mkSeoTitle", seo.title || "")}
-        ${marketingField("Meta description", "mkSeoDescription", seo.description || "", { multiline: 3 })}
-      </section>
-
-      <section class="detailCard">
-        <h3 class="detailCardTitle">Hero</h3>
-        ${marketingField("Eyebrow", "mkHeroEyebrow", hero.eyebrow || "")}
-        ${marketingField("Headline", "mkHeroTitle", hero.title || "")}
-        ${marketingField("Lead paragraph", "mkHeroLead", hero.lead || "", { multiline: 4 })}
-        ${marketingField("Primary CTA label", "mkHeroCtaLabel", hero.ctaLabel || "")}
-        ${marketingField("Primary CTA link", "mkHeroCtaHref", hero.ctaHref || "", { hint: "e.g. /app/#/intro" })}
-        ${marketingField("Secondary link label", "mkHeroSecondaryLabel", hero.secondaryLabel || "")}
-        ${marketingField("Secondary link URL", "mkHeroSecondaryHref", hero.secondaryHref || "")}
-        ${marketingField("Hero image URL", "mkHeroImageUrl", hero.heroImageUrl || "")}
-        <label class="field marketingField">
-          <span>Upload new hero image</span>
-          <input id="mkHeroImageFile" type="file" accept="image/jpeg,image/png,image/webp" />
-          <span class="cellMuted">JPEG/PNG/WebP up to 8 MB. Updates the draft preview below — not live until Save &amp; publish.</span>
-        </label>
-        ${marketingField("Hero image alt text", "mkHeroImageAlt", hero.heroImageAlt || "")}
+      ${marketingDetailCard("Hero", `
+        ${marketingSubsection("Headline & copy", `
+          ${marketingField("Eyebrow", "mkHeroEyebrow", hero.eyebrow || "")}
+          ${marketingField("Headline", "mkHeroTitle", hero.title || "")}
+          ${marketingField("Lead paragraph", "mkHeroLead", hero.lead || "", { multiline: 4 })}
+        `)}
+        ${marketingSubsection("Call to action", `
+          ${marketingField("Primary button label", "mkHeroCtaLabel", hero.ctaLabel || "")}
+          ${marketingField("Primary button link", "mkHeroCtaHref", hero.ctaHref || "", { hint: "e.g. /app/#/intro" })}
+          ${marketingField("Secondary link label", "mkHeroSecondaryLabel", hero.secondaryLabel || "")}
+          ${marketingField("Secondary link URL", "mkHeroSecondaryHref", hero.secondaryHref || "")}
+        `)}
+        ${marketingSubsection("Hero photo", `
+          ${marketingField("Image URL", "mkHeroImageUrl", hero.heroImageUrl || "", { hint: "Paste a URL or upload below. Goes live after Save & publish." })}
+          <label class="field marketingField">
+            <span>Upload new image</span>
+            <input id="mkHeroImageFile" type="file" accept="image/jpeg,image/png,image/webp" />
+            <span class="cellMuted">JPEG, PNG, or WebP up to 8 MB.</span>
+          </label>
+          ${marketingField("Alt text", "mkHeroImageAlt", hero.heroImageAlt || "", {
+            highlight: true,
+            hint: "Short description of the photo for screen readers and SEO. Live after Save & publish.",
+          })}
+        `, { description: "The large photo beside the headline on the live page." })}
         <div class="marketingDraftSitePreview" id="mkDraftSitePreview">
-          <p class="marketingDraftSitePreviewLabel">Draft hero preview</p>
+          <p class="marketingDraftSitePreviewLabel">Draft preview</p>
           <div class="marketingDraftHero">
             <div class="marketingDraftHeroCopy">
               <p class="eyebrow" id="mkDraftHeroEyebrow">${escapeHtml(hero.eyebrow || "")}</p>
               <h2 id="mkDraftHeroTitle">${escapeHtml(hero.title || "")}</h2>
               <p id="mkDraftHeroLead">${escapeHtml(hero.lead || "")}</p>
             </div>
-            <img id="mkDraftHeroImage" class="marketingDraftHeroImage" src="${escapeHtml(hero.heroImageUrl || "")}" alt="" ${hero.heroImageUrl ? "" : "hidden"} />
+            <img id="mkDraftHeroImage" class="marketingDraftHeroImage" src="${escapeHtml(hero.heroImageUrl || "")}" alt="${escapeHtml(hero.heroImageAlt || "")}" ${hero.heroImageUrl ? "" : "hidden"} />
           </div>
         </div>
-      </section>
+      `, { description: "Top of the page — headline, buttons, and hero image." })}
 
-      <section class="detailCard">
-        <h3 class="detailCardTitle">Features</h3>
+      ${marketingDetailCard("Features", `
         ${marketingField("Section eyebrow", "mkFeaturesEyebrow", features.eyebrow || "")}
         ${marketingField("Section title", "mkFeaturesTitle", features.title || "")}
-        ${[0, 1, 2].map((i) => `
-          <div class="marketingBlock">
-            ${marketingField(`Card ${i + 1} title`, `mkFeatureTitle${i}`, cards[i]?.title || "")}
-            ${marketingField(`Card ${i + 1} body`, `mkFeatureBody${i}`, cards[i]?.body || "", { multiline: 3 })}
-            ${marketingField(`Card ${i + 1} image URL`, `mkFeatureImageUrl${i}`, cards[i]?.imageUrl || "", { hint: "Use /assets/marketing/… or upload via Hero image tool and paste URL." })}
-            ${marketingField(`Card ${i + 1} image alt`, `mkFeatureImageAlt${i}`, cards[i]?.imageAlt || "")}
-            ${i === 0 ? featureLinkFields : ""}
-          </div>`).join("")}
-      </section>
+        ${[0, 1, 2].map((i) => marketingSubsection(`Card ${i + 1}`, `
+          ${marketingField("Title", `mkFeatureTitle${i}`, cards[i]?.title || "")}
+          ${marketingField("Body", `mkFeatureBody${i}`, cards[i]?.body || "", { multiline: 3 })}
+          ${i === 0 ? featureLinkFields : ""}
+        `)).join("")}
+      `, { description: "Three text cards below the hero." })}
 
       ${homeOnlySections}
 
-      <section class="detailCard">
-        <h3 class="detailCardTitle">FAQ</h3>
+      ${marketingDetailCard("FAQ", `
         ${marketingField("Section title", "mkFaqTitle", faq.title || "")}
         ${faqFields}
-      </section>
+      `)}
 
-      <section class="detailCard">
-        <h3 class="detailCardTitle">Related pages</h3>
+      ${marketingDetailCard("Related pages", `
         ${marketingField("Section title", "mkRelatedTitle", related.title || "")}
-        ${relatedFields}
-      </section>
+        ${marketingSubsection("Links", relatedFields, { description: "Up to eight related landing pages." })}
+      `)}
 
-      <section class="detailCard">
-        <h3 class="detailCardTitle">Final CTA band</h3>
+      ${marketingDetailCard("Final CTA band", `
         ${marketingField("Title", "mkFinalTitle", finalCta.title || "")}
         ${marketingField("Body", "mkFinalBody", finalCta.body || "", { multiline: 3 })}
-        ${marketingField("CTA label", "mkFinalCtaLabel", finalCta.ctaLabel || "")}
-        ${marketingField("CTA link", "mkFinalCtaHref", finalCta.ctaHref || "")}
-      </section>
+        ${marketingField("Button label", "mkFinalCtaLabel", finalCta.ctaLabel || "")}
+        ${marketingField("Button link", "mkFinalCtaHref", finalCta.ctaHref || "")}
+      `, { description: "Closing call-to-action strip at the bottom of the page." })}
+
+      ${marketingDetailCard("SEO", `
+        ${marketingField("Page title", "mkSeoTitle", seo.title || "")}
+        ${marketingField("Meta description", "mkSeoDescription", seo.description || "", { multiline: 3, hint: "Shown in Google results and social previews." })}
+      `, { description: "Browser tab title and search snippet — set once per page." })}
     </div>
   `, { plain: true });
   bindMarketingDraftPreviewListeners();

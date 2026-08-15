@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="ar" dir="rtl">
+<html lang="ar" dir="rtl" data-marketing-page="home">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
@@ -62,7 +62,7 @@
           </div>
         </div>
         <div class="marketingHeroArt">
-          <img src="/api/marketing/hero-image?page=home&locale=ar" width="2560" height="1440" alt="واجهة NabadAi لإنشاء الموسيقى">
+          <img data-mk="hero.image" src="/api/marketing/hero-image?page=home&locale=ar" width="2560" height="1440" alt="تطبيق NabadAi — إنشاء أغاني من كلمات ودندنات وصور">
           <div class="heroStoreSoon" aria-label="App Store وGoogle Play — قريباً">
             <span class="heroStoreSoonLabel">قريباً</span>
             <span class="heroStoreSoonBadges" aria-hidden="true">
@@ -97,5 +97,6 @@
       </nav>
     </footer>
   </div>
+  <script src="/src/marketing-page.js" defer></script>
 </body>
 </html>

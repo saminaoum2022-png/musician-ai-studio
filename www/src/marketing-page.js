@@ -38,6 +38,25 @@
     return String(el.getAttribute("src") || "").indexOf("/api/marketing/hero-image") === 0;
   }
 
+  function applyHeroAlt(alt) {
+    if (alt == null || alt === "") return;
+    setAttr("[data-mk='hero.image']", "alt", alt);
+    setMeta("og:image:alt", alt, true);
+  }
+
+  function fetchHeroMeta() {
+    var heroEl = document.querySelector("[data-mk='hero.image']");
+    if (!heroEl) return;
+    fetch("/api/marketing/hero-meta?page=" + encodeURIComponent(PAGE) + "&locale=" + encodeURIComponent(LOCALE), {
+      credentials: "omit",
+    })
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        if (data && data.ok && data.alt) applyHeroAlt(data.alt);
+      })
+      .catch(function () { /* keep static HTML alt */ });
+  }
+
   function setMeta(name, content, isProperty) {
     if (!content) return;
     var sel = isProperty
@@ -95,7 +114,7 @@
       if (heroEl && c.hero.heroImageUrl && !usesHeroImageProxy(heroEl)) {
         setImageSrc("[data-mk='hero.image']", c.hero.heroImageUrl);
       }
-      setAttr("[data-mk='hero.image']", "alt", c.hero.heroImageAlt);
+      applyHeroAlt(c.hero.heroImageAlt);
     }
 
     if (c.features) {
@@ -243,7 +262,7 @@
     var heroAlt = params.get("heroAlt");
     if (heroImg) {
       setImageSrc("[data-mk='hero.image']", heroImg);
-      if (heroAlt) setAttr("[data-mk='hero.image']", "alt", heroAlt);
+      if (heroAlt) applyHeroAlt(heroAlt);
     }
   }
 
@@ -295,6 +314,8 @@
   }
 
   if (applyDraftFromSession()) return;
+
+  fetchHeroMeta();
 
   fetch("/api/marketing/content?page=" + encodeURIComponent(PAGE) + "&locale=" + encodeURIComponent(LOCALE), {
     credentials: "omit",

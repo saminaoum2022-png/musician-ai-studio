@@ -10,6 +10,12 @@ function marketingHeroImageApiPath(page, locale) {
   return `/api/marketing/hero-image?page=${encodeURIComponent(p)}&locale=${encodeURIComponent(l)}`;
 }
 
+function marketingHeroMetaApiPath(page, locale) {
+  const p = String(page || "home").trim().toLowerCase();
+  const l = String(locale || "en").trim().toLowerCase();
+  return `/api/marketing/hero-meta?page=${encodeURIComponent(p)}&locale=${encodeURIComponent(l)}`;
+}
+
 function toAbsoluteRedirectUrl(heroImageUrl, req) {
   const url = String(heroImageUrl || "").trim();
   if (!url) return null;
@@ -39,5 +45,6 @@ async function resolveMarketingHeroRedirect(page, locale, req) {
 
 module.exports = {
   marketingHeroImageApiPath,
+  marketingHeroMetaApiPath,
   resolveMarketingHeroRedirect,
 };

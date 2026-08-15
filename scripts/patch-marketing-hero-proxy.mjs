@@ -51,6 +51,13 @@ for (const { file, page, locale, preload } of targets) {
     `$1${proxy}$2`,
   );
 
+  if (!html.includes('data-mk="hero.image"')) {
+    html = html.replace(
+      /(<img\b)(?=[^>]*\ssrc="[^"]*\/api\/marketing\/hero-image)/,
+      '$1 data-mk="hero.image"',
+    );
+  }
+
   fs.writeFileSync(abs, html);
   console.log(`patched ${file} → ${proxy}`);
 }

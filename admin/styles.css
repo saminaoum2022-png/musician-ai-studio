@@ -1084,8 +1084,105 @@ td.num { font-variant-numeric: tabular-nums; }
 
 .marketingEditor {
   display: grid;
-  gap: 16px;
+  gap: 28px;
   max-width: 920px;
+}
+
+.detailCard {
+  padding: 22px 24px;
+  border-radius: 16px;
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.detailCardHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 12px;
+  margin-bottom: 8px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--border);
+}
+
+.detailCardTitle {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.detailCardBadge {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: rgba(45, 212, 191, 0.92);
+  border: 1px solid rgba(35, 213, 171, 0.28);
+  background: rgba(35, 213, 171, 0.08);
+}
+
+.detailCardDesc {
+  margin: 0 0 18px;
+  font-size: 0.84rem;
+  line-height: 1.45;
+  color: var(--muted);
+}
+
+.marketingSubsection {
+  margin-top: 18px;
+  padding: 16px 18px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  background: rgba(0, 0, 0, 0.18);
+}
+
+.marketingSubsection:first-child {
+  margin-top: 0;
+}
+
+.marketingSubsectionTitle {
+  margin: 0 0 4px;
+  font-size: 0.86rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.marketingSubsectionDesc {
+  margin: 0 0 14px;
+  font-size: 0.8rem;
+  line-height: 1.4;
+  color: var(--muted);
+}
+
+.marketingSubsectionFields {
+  display: grid;
+  gap: 14px;
+}
+
+.marketingField {
+  gap: 8px;
+}
+
+.marketingField--highlight {
+  padding: 14px 16px;
+  border-radius: 12px;
+  border: 1px dashed rgba(35, 213, 171, 0.38);
+  background: rgba(35, 213, 171, 0.07);
+}
+
+.marketingField--highlight > span:first-child {
+  color: rgba(45, 212, 191, 0.95);
+  font-weight: 600;
+}
+
+.marketingInlineNote {
+  margin: 0 0 14px;
+  font-size: 0.84rem;
 }
 
 .marketingFieldInput {
@@ -1211,8 +1308,8 @@ td.num { font-variant-numeric: tabular-nums; }
 }
 
 .marketingDraftSitePreview {
-  margin-top: 16px;
-  padding: 16px;
+  margin-top: 22px;
+  padding: 18px;
   border-radius: 14px;
   border: 1px solid rgba(35, 213, 171, 0.22);
   background:

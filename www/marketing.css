@@ -45,10 +45,7 @@ body {
   font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji", sans-serif;
   color: var(--text);
   line-height: 1.65;
-  background:
-    radial-gradient(ellipse 90% 50% at 50% -10%, rgba(124, 92, 255, 0.08), transparent 55%),
-    radial-gradient(ellipse 70% 40% at 80% 0%, rgba(35, 213, 171, 0.05), transparent 50%),
-    var(--bg);
+  background: var(--bg);
   overflow-x: clip;
 }
 
@@ -405,8 +402,15 @@ img { display: block; max-width: 100%; height: auto; }
   display: inline-flex;
   align-items: center;
   gap: 10px;
+}
+
+.heroStoreSoon--inline {
   padding-inline-start: 14px;
   border-inline-start: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.heroStoreSoon--below {
+  display: none;
 }
 
 .heroStoreSoonLabel {
@@ -484,18 +488,6 @@ h1 {
   width: 100%;
   justify-self: stretch;
   align-self: center;
-}
-
-.marketingHeroArt::before {
-  content: "";
-  position: absolute;
-  inset: 4% 2% 4% 8%;
-  border-radius: 28px;
-  background:
-    radial-gradient(ellipse 80% 70% at 55% 45%, rgba(35, 213, 171, 0.14), transparent 68%),
-    radial-gradient(ellipse 60% 55% at 30% 60%, rgba(124, 92, 255, 0.1), transparent 72%);
-  pointer-events: none;
-  z-index: 0;
 }
 
 .marketingHeroArt img {
@@ -695,11 +687,12 @@ body:has(.marketingDraftBanner) .marketingShell {
   }
   .heroCopy { text-align: start; }
   .marketingHeroArt { width: min(94vw, 560px); justify-self: center; }
-  .heroStoreSoon {
+  .heroStoreSoon--inline { display: none; }
+  .heroStoreSoon--below {
+    display: inline-flex;
+    justify-content: center;
     width: 100%;
-    padding-inline-start: 0;
-    border-inline-start: 0;
-    padding-top: 4px;
+    margin-top: 18px;
   }
   .featureGrid { grid-template-columns: 1fr; }
   .section { padding: 58px 0; }

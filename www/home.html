@@ -66,7 +66,6 @@
         <a class="marketingNavText" href="#faq">FAQ</a>
         <a class="marketingLangSwitch" href="/ar" lang="ar" hreflang="ar">العربية</a>
         <a class="marketingNavText" href="/app/#/auth">Sign in</a>
-        <a class="marketingCta" href="/app/#/intro">Try free</a>
       </div>
     </nav>
     <main>
@@ -78,8 +77,14 @@
           <div class="heroActions">
             <a class="marketingCta" data-mk="hero.cta" href="/app/#/intro">Try free</a>
             <a class="textLink" data-mk="hero.secondary" href="#features">See how it works</a>
+            <span class="heroStoreSoon" aria-label="App Store and Google Play — coming soon">
+              <span class="heroStoreSoonLabel">Coming soon</span>
+              <span class="heroStoreSoonBadges" aria-hidden="true">
+                <img src="/assets/marketing/badge-app-store.svg" width="84" height="28" alt="">
+                <img src="/assets/marketing/badge-google-play.svg" width="94" height="28" alt="">
+              </span>
+            </span>
           </div>
-          <p class="heroStoreNote">Also on <a class="textLink" href="https://apps.apple.com/app/nabadai-music/id6748647945" rel="noopener">iPhone</a> · Android coming soon</p>
         </div>
         <div class="marketingHeroArt"><img data-mk="hero.image" src="/assets/marketing/seo-hero-device.png" width="2560" height="1440" alt="NabadAi app — create songs from lyrics, hums, and photos"></div>
       </section>
@@ -116,6 +121,9 @@
           <h2 data-mk="discover.title">Hear what creators are making</h2>
           <p class="sectionLead" data-mk="discover.lead">Charts, remixes, and community picks — updated inside the app.</p>
         </header>
+        <div class="marketingDiscoverCarouselWrap" data-mk-discover-carousel-wrap hidden>
+          <div class="marketingDiscoverCarousel" data-mk-discover-carousel aria-label="Featured songs from Discover"></div>
+        </div>
         <div class="heroActions">
           <a class="marketingCta marketingCta--ghost" data-mk="discover.cta" href="/app/#/discover">Explore Discover</a>
         </div>
@@ -170,6 +178,7 @@
     </main>
     <footer class="marketingFooter marketingFooter--rich">
       <span>© 2026 NabadAi</span>
+      <nav class="marketingFooterSocial" data-mk-footer-social aria-label="Social media"></nav>
       <nav aria-label="Legal and support">
         <a href="/terms">Terms</a>
         <a href="/privacy">Privacy</a>

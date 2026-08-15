@@ -66,9 +66,14 @@ const seoMarketingFiles = [
   "seo-hero-device-source.jpg",
   "seo-hero-player.png",
   "seo-hero-create-flow.png",
+  "app-store-screenshots/01-discover.png",
   "app-store-screenshots/02-create-hub.png",
+  "app-store-screenshots/06-sounds.png",
   "app-store-screenshots/08-generate-song.png",
   "app-store-screenshots/10-song-player.png",
+  "nabadai-pro-review-screenshot.png",
+  "badge-app-store.svg",
+  "badge-google-play.svg",
 ];
 for (const rel of seoMarketingFiles) {
   const src = path.join(root, "assets", "marketing", rel);
@@ -77,6 +82,13 @@ for (const rel of seoMarketingFiles) {
   fs.mkdirSync(path.dirname(dest), { recursive: true });
   fs.copyFileSync(src, dest);
   console.log(`sync-www: assets/marketing/${rel} → www/assets/marketing/${rel}`);
+}
+
+const socialDir = path.join(root, "assets/marketing/social");
+if (fs.existsSync(socialDir)) {
+  fs.mkdirSync(path.join(root, "www/assets/marketing/social"), { recursive: true });
+  execSync("rsync -a assets/marketing/social/ www/assets/marketing/social/", { cwd: root, stdio: "inherit" });
+  console.log("sync-www: assets/marketing/social/ → www/assets/marketing/social/");
 }
 
 for (const worker of ["OneSignalSDKWorker.js", "OneSignalSDKUpdaterWorker.js"]) {

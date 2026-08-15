@@ -5,6 +5,7 @@
 
 const { setCors, sendJson } = require("../_lib/credits-auth");
 const { loadMarketingContent } = require("../_lib/marketing-store");
+const { resolveFeaturedDiscoverSongs } = require("../_lib/marketing-featured-songs");
 
 module.exports = async function handler(req, res) {
   setCors(res);
@@ -17,6 +18,11 @@ module.exports = async function handler(req, res) {
 
   const data = await loadMarketingContent(page, locale);
   if (!data.ok) return sendJson(res, data.status || 500, { error: data.error || "Failed to load content" });
+
+  if (page === "home" && data.content?.discover?.featuredSongIds?.length) {
+    const featuredSongs = await resolveFeaturedDiscoverSongs(data.content.discover.featuredSongIds);
+    data.content.discover = { ...data.content.discover, featuredSongs };
+  }
 
   res.setHeader("Cache-Control", "public, max-age=60, stale-while-revalidate=300");
   return sendJson(res, 200, {

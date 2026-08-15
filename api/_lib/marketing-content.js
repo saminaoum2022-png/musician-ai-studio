@@ -46,6 +46,8 @@ function defaultHomeContentEn() {
         {
           title: "Photo, hum, or lyrics",
           body: "Start with a picture mood, record a melody guide, or write lyrics — then shape genre, voice, and style.",
+          imageUrl: "",
+          imageAlt: "Create with photo, hum, or lyrics",
           links: [
             { label: "Hum to song", href: "/hum-to-song" },
             { label: "Lyrics to song", href: "/lyrics-to-song" },
@@ -55,10 +57,14 @@ function defaultHomeContentEn() {
         {
           title: "Your voice, every song",
           body: "Record a Persona once and reuse your vocal identity across new tracks and remixes.",
+          imageUrl: "",
+          imageAlt: "NabadAi Persona — your voice on every track",
         },
         {
           title: "Create & connect",
           body: "Keep drafts private, publish to your profile, climb Discover charts, and share with friends.",
+          imageUrl: "",
+          imageAlt: "NabadAi Discover — hear and share what creators make",
         },
       ],
     },
@@ -68,6 +74,7 @@ function defaultHomeContentEn() {
       lead: "Charts, remixes, and community picks — updated inside the app.",
       ctaLabel: "Explore Discover",
       ctaHref: "/app/#/discover",
+      featuredSongIds: [],
     },
     pricing: {
       eyebrow: "Pricing",
@@ -78,6 +85,8 @@ function defaultHomeContentEn() {
         body: "Start with free credits. Create songs, save drafts, and explore the community.",
         ctaLabel: "Get started",
         ctaHref: "/app/#/intro",
+        imageUrl: "",
+        imageAlt: "Generate songs with NabadAi free credits",
       },
       pro: {
         title: "NabadAi Pro",
@@ -85,6 +94,8 @@ function defaultHomeContentEn() {
         body: "More credits, Persona voice, priority features, and the full creator toolkit on iOS and web.",
         ctaLabel: "Try free first",
         ctaHref: "/app/#/intro",
+        imageUrl: "",
+        imageAlt: "NabadAi Pro subscription features",
       },
     },
     faq: {
@@ -121,6 +132,15 @@ function defaultHomeContentEn() {
         { label: "Lyrics to Song", href: "/lyrics-to-song" },
         { label: "Photo to Song", href: "/photo-to-song" },
         { label: "Arabic AI Music", href: "/arabic-ai-music-generator" },
+      ],
+    },
+    footer: {
+      social: [
+        { platform: "instagram", href: "", label: "Instagram" },
+        { platform: "facebook", href: "", label: "Facebook" },
+        { platform: "tiktok", href: "", label: "TikTok" },
+        { platform: "youtube", href: "", label: "YouTube" },
+        { platform: "discord", href: "", label: "Discord" },
       ],
     },
   };
@@ -250,6 +270,8 @@ function normalizeFeatureCards(cards, defaults, { withLinks = false } = {}) {
     const item = {
       title: clip(c.title, 120) || d.title,
       body: clip(c.body, 500) || d.body,
+      imageUrl: sanitizeImageUrl(c.imageUrl, d.imageUrl || ""),
+      imageAlt: clip(c.imageAlt, 200) || d.imageAlt || d.title || "",
     };
     if (withLinks) {
       item.links = normalizeRelatedLinks(c.links, d.links || []).slice(0, 4);
@@ -346,7 +368,34 @@ function normalizePricingTier(tier, defaults) {
     body: clip(t.body, 500) || defaults.body,
     ctaLabel: clip(t.ctaLabel, 60) || defaults.ctaLabel,
     ctaHref: sanitizeHref(t.ctaHref, defaults.ctaHref),
+    imageUrl: sanitizeImageUrl(t.imageUrl, defaults.imageUrl || ""),
+    imageAlt: clip(t.imageAlt, 200) || defaults.imageAlt || defaults.title || "",
   };
+}
+
+const SOCIAL_PLATFORMS = Object.freeze(["instagram", "facebook", "tiktok", "youtube", "discord"]);
+
+function normalizeFooterSocial(links, defaults) {
+  const src = Array.isArray(links) ? links : [];
+  const out = [];
+  for (let i = 0; i < SOCIAL_PLATFORMS.length; i += 1) {
+    const platform = SOCIAL_PLATFORMS[i];
+    const d = (defaults || []).find((it) => it.platform === platform) || { platform, href: "", label: platform };
+    const it = src.find((row) => String(row?.platform || "").toLowerCase() === platform) || src[i] || {};
+    out.push({
+      platform,
+      href: sanitizeHref(it.href, d.href || ""),
+      label: clip(it.label, 60) || d.label || platform,
+    });
+  }
+  return out;
+}
+
+function normalizeFeaturedSongIds(ids, defaults) {
+  const { normalizeSongIds } = require("./marketing-featured-songs");
+  const normalized = normalizeSongIds(Array.isArray(ids) ? ids : []);
+  if (normalized.length) return normalized;
+  return normalizeSongIds(Array.isArray(defaults) ? defaults : []);
 }
 
 function normalizeContent(pageKey, locale, raw) {
@@ -400,6 +449,10 @@ function normalizeContent(pageKey, locale, raw) {
           lead: clip(discoverIn.lead, 400) || defaults.discover.lead,
           ctaLabel: clip(discoverIn.ctaLabel, 60) || defaults.discover.ctaLabel,
           ctaHref: sanitizeHref(discoverIn.ctaHref, defaults.discover.ctaHref),
+          featuredSongIds: normalizeFeaturedSongIds(
+            discoverIn.featuredSongIds,
+            defaults.discover.featuredSongIds || [],
+          ),
         },
         pricing: {
           eyebrow: clip(pricingIn.eyebrow, 80) || defaults.pricing.eyebrow,
@@ -420,6 +473,12 @@ function normalizeContent(pageKey, locale, raw) {
         related: {
           title: clip((input.related || {}).title, 160) || defaults.related?.title || "",
           links: normalizeRelatedLinks((input.related || {}).links, defaults.related?.links || []),
+        },
+        footer: {
+          social: normalizeFooterSocial(
+            (input.footer || {}).social,
+            defaults.footer?.social || [],
+          ),
         },
       },
     };

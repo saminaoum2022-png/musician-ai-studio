@@ -129,6 +129,62 @@
     applyRelated(c.related);
   }
 
+  var SOCIAL_ICON_BASE = "/assets/marketing/social/";
+
+  function applyFooter(footer) {
+    if (!footer || !Array.isArray(footer.social)) return;
+    var nav = document.querySelector("[data-mk-footer-social]");
+    if (!nav) return;
+    nav.innerHTML = footer.social.map(function (item) {
+      if (!item || !item.platform) return "";
+      var label = item.label || item.platform;
+      var icon = SOCIAL_ICON_BASE + item.platform + ".svg";
+      var inner = '<img src="' + icon + '" width="20" height="20" alt="">';
+      if (item.href) {
+        return '<a href="' + item.href.replace(/"/g, "&quot;") + '" target="_blank" rel="noopener noreferrer" aria-label="' + label.replace(/"/g, "&quot;") + '">' + inner + "</a>";
+      }
+      return '<span class="marketingFooterSocialIcon marketingFooterSocialIcon--idle" aria-label="' + label.replace(/"/g, "&quot;") + '">' + inner + "</span>";
+    }).join("");
+  }
+
+  function renderDiscoverCarousel(songs) {
+    var wrap = document.querySelector("[data-mk-discover-carousel-wrap]");
+    var root = document.querySelector("[data-mk-discover-carousel]");
+    if (!wrap || !root) return;
+    if (!Array.isArray(songs) || !songs.length) {
+      wrap.hidden = true;
+      root.innerHTML = "";
+      return;
+    }
+    wrap.hidden = false;
+    root.innerHTML = songs.map(function (song) {
+      if (!song || !song.id) return "";
+      var href = song.shareUrl || ("/s/" + encodeURIComponent(song.id));
+      var art = song.artUrl || "/assets/marketing/nabadai-social-card.png";
+      var title = song.title || "Untitled";
+      var by = song.username ? "@" + song.username : (song.byLine || "");
+      return (
+        '<a class="discoverCarouselCard" href="' + href.replace(/"/g, "&quot;") + '">' +
+          '<span class="discoverCarouselArt"><img src="' + art.replace(/"/g, "&quot;") + '" alt="" loading="lazy"></span>' +
+          '<span class="discoverCarouselMeta">' +
+            '<span class="discoverCarouselTitle">' + title.replace(/</g, "&lt;") + "</span>" +
+            (by ? '<span class="discoverCarouselBy">' + by.replace(/</g, "&lt;") + "</span>" : "") +
+          "</span>" +
+        "</a>"
+      );
+    }).join("");
+  }
+
+  function fetchFeaturedDiscoverSongs(ids) {
+    if (!Array.isArray(ids) || !ids.length) return Promise.resolve([]);
+    return fetch("/api/marketing/featured-discover?ids=" + encodeURIComponent(ids.join(",")), {
+      credentials: "omit",
+    })
+      .then(function (r) { return r.json(); })
+      .then(function (data) { return (data && data.ok && Array.isArray(data.songs)) ? data.songs : []; })
+      .catch(function () { return []; });
+  }
+
   function applyHomeExtras(c) {
     if (c.discover) {
       setText("[data-mk='discover.eyebrow']", c.discover.eyebrow);
@@ -136,6 +192,13 @@
       setText("[data-mk='discover.lead']", c.discover.lead);
       setText("[data-mk='discover.cta']", c.discover.ctaLabel);
       setAttr("[data-mk='discover.cta']", "href", c.discover.ctaHref);
+      if (Array.isArray(c.discover.featuredSongs) && c.discover.featuredSongs.length) {
+        renderDiscoverCarousel(c.discover.featuredSongs);
+      } else if (Array.isArray(c.discover.featuredSongIds) && c.discover.featuredSongIds.length) {
+        fetchFeaturedDiscoverSongs(c.discover.featuredSongIds).then(renderDiscoverCarousel);
+      } else {
+        renderDiscoverCarousel([]);
+      }
     }
     if (c.pricing) {
       setText("[data-mk='pricing.eyebrow']", c.pricing.eyebrow);
@@ -155,6 +218,7 @@
         setAttr("[data-mk='pricing.pro.cta']", "href", c.pricing.pro.ctaHref);
       }
     }
+    applyFooter(c.footer);
   }
 
   function applyDraftQueryParams(params) {

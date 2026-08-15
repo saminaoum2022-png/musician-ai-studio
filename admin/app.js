@@ -2235,6 +2235,8 @@ function readMarketingFormContent(pageKey = "home") {
     const card = {
       title: val(`mkFeatureTitle${i}`),
       body: val(`mkFeatureBody${i}`),
+      imageUrl: val(`mkFeatureImageUrl${i}`),
+      imageAlt: val(`mkFeatureImageAlt${i}`),
     };
     if (pageKey === "home" && i === 0) {
       const links = [0, 1, 2].map((j) => ({
@@ -2292,6 +2294,10 @@ function readMarketingFormContent(pageKey = "home") {
       lead: val("mkDiscoverLead"),
       ctaLabel: val("mkDiscoverCtaLabel"),
       ctaHref: val("mkDiscoverCtaHref"),
+      featuredSongIds: val("mkDiscoverFeaturedIds")
+        .split(/[\s,]+/g)
+        .map((id) => id.trim())
+        .filter(Boolean),
     };
     content.pricing = {
       eyebrow: val("mkPricingEyebrow"),
@@ -2302,6 +2308,8 @@ function readMarketingFormContent(pageKey = "home") {
         body: val("mkPricingFreeBody"),
         ctaLabel: val("mkPricingFreeCtaLabel"),
         ctaHref: val("mkPricingFreeCtaHref"),
+        imageUrl: val("mkPricingFreeImageUrl"),
+        imageAlt: val("mkPricingFreeImageAlt"),
       },
       pro: {
         title: val("mkPricingProTitle"),
@@ -2309,7 +2317,16 @@ function readMarketingFormContent(pageKey = "home") {
         body: val("mkPricingProBody"),
         ctaLabel: val("mkPricingProCtaLabel"),
         ctaHref: val("mkPricingProCtaHref"),
+        imageUrl: val("mkPricingProImageUrl"),
+        imageAlt: val("mkPricingProImageAlt"),
       },
+    };
+    content.footer = {
+      social: ["instagram", "facebook", "tiktok", "youtube", "discord"].map((platform) => ({
+        platform,
+        href: val(`mkSocialHref${platform}`),
+        label: val(`mkSocialLabel${platform}`) || platform,
+      })),
     };
   }
   return content;
@@ -2416,6 +2433,8 @@ function renderMarketing(data) {
   const cards = Array.isArray(features.cards) ? features.cards : [{}, {}, {}];
   const discover = c.discover || {};
   const pricing = c.pricing || {};
+  const footer = c.footer || {};
+  const footerSocial = Array.isArray(footer.social) ? footer.social : [];
   const free = pricing.free || {};
   const pro = pricing.pro || {};
   const faq = c.faq || {};
@@ -2476,6 +2495,8 @@ function renderMarketing(data) {
         ${marketingField("Lead", "mkDiscoverLead", discover.lead || "", { multiline: 2 })}
         ${marketingField("CTA label", "mkDiscoverCtaLabel", discover.ctaLabel || "")}
         ${marketingField("CTA link", "mkDiscoverCtaHref", discover.ctaHref || "")}
+        ${marketingField("Featured Discover song IDs", "mkDiscoverFeaturedIds", (discover.featuredSongIds || []).join("\\n"), { multiline: 4, hint: "One public song UUID per line. Order = carousel order. Pick from recent publications below." })}
+        <div id="mkDiscoverPicker" class="marketingDiscoverPicker"></div>
       </section>
 
       <section class="detailCard">
@@ -2484,6 +2505,8 @@ function renderMarketing(data) {
         ${marketingField("Section title", "mkPricingTitle", pricing.title || "")}
         <div class="marketingBlock">
           <h4>Free tier</h4>
+          ${marketingField("Image URL", "mkPricingFreeImageUrl", free.imageUrl || "", { hint: "App screenshot or uploaded marketing asset." })}
+          ${marketingField("Image alt", "mkPricingFreeImageAlt", free.imageAlt || "")}
           ${marketingField("Title", "mkPricingFreeTitle", free.title || "")}
           ${marketingField("Price label", "mkPricingFreePrice", free.price || "")}
           ${marketingField("Body", "mkPricingFreeBody", free.body || "", { multiline: 3 })}
@@ -2492,12 +2515,26 @@ function renderMarketing(data) {
         </div>
         <div class="marketingBlock">
           <h4>Pro tier</h4>
+          ${marketingField("Image URL", "mkPricingProImageUrl", pro.imageUrl || "", { hint: "Pro screenshot or marketing asset." })}
+          ${marketingField("Image alt", "mkPricingProImageAlt", pro.imageAlt || "")}
           ${marketingField("Title", "mkPricingProTitle", pro.title || "")}
           ${marketingField("Price label", "mkPricingProPrice", pro.price || "")}
           ${marketingField("Body", "mkPricingProBody", pro.body || "", { multiline: 3 })}
           ${marketingField("CTA label", "mkPricingProCtaLabel", pro.ctaLabel || "")}
           ${marketingField("CTA link", "mkPricingProCtaHref", pro.ctaHref || "")}
         </div>
+      </section>
+
+      <section class="detailCard">
+        <h3 class="detailCardTitle">Footer social links</h3>
+        <p class="cellMuted">Icons appear on the homepage footer. Leave URL empty to show a muted placeholder until you add the link.</p>
+        ${["instagram", "facebook", "tiktok", "youtube", "discord"].map((platform) => {
+          const row = footerSocial.find((it) => it.platform === platform) || { platform, href: "", label: platform };
+          return `<div class="marketingBlock marketingBlock--inline">
+            ${marketingField(`${platform} URL`, `mkSocialHref${platform}`, row.href || "", { hint: "Full https:// link" })}
+            ${marketingField(`${platform} label`, `mkSocialLabel${platform}`, row.label || platform, { hint: "Accessibility label" })}
+          </div>`;
+        }).join("")}
       </section>` : "";
 
   els.panels.marketing.innerHTML = adminPageStack(`
@@ -2564,6 +2601,8 @@ function renderMarketing(data) {
           <div class="marketingBlock">
             ${marketingField(`Card ${i + 1} title`, `mkFeatureTitle${i}`, cards[i]?.title || "")}
             ${marketingField(`Card ${i + 1} body`, `mkFeatureBody${i}`, cards[i]?.body || "", { multiline: 3 })}
+            ${marketingField(`Card ${i + 1} image URL`, `mkFeatureImageUrl${i}`, cards[i]?.imageUrl || "", { hint: "Use /assets/marketing/… or upload via Hero image tool and paste URL." })}
+            ${marketingField(`Card ${i + 1} image alt`, `mkFeatureImageAlt${i}`, cards[i]?.imageAlt || "")}
             ${i === 0 ? featureLinkFields : ""}
           </div>`).join("")}
       </section>
@@ -2592,6 +2631,33 @@ function renderMarketing(data) {
     </div>
   `, { plain: true });
   bindMarketingDraftPreviewListeners();
+  if (isHome) void bindMarketingDiscoverPicker();
+}
+
+async function bindMarketingDiscoverPicker() {
+  const root = document.getElementById("mkDiscoverPicker");
+  const field = document.getElementById("mkDiscoverFeaturedIds");
+  if (!root || !field) return;
+  root.innerHTML = `<p class="cellMuted">Loading recent publications…</p>`;
+  try {
+    const data = await adminFetch("publications", { limit: 24, offset: 0 });
+    const rows = data?.publications || [];
+    if (!rows.length) {
+      root.innerHTML = `<p class="cellMuted">No public Discover posts yet. Publish songs first, then pick them here.</p>`;
+      return;
+    }
+    root.innerHTML = `
+      <p class="marketingDiscoverPickerLabel">Pick from recent public posts</p>
+      <div class="marketingDiscoverPickerGrid">
+        ${rows.map((p) => `
+          <button type="button" class="marketingDiscoverPick" data-add-discover-song="${escapeHtml(p.id)}" title="${escapeHtml(p.title)}">
+            ${p.artUrl ? `<img src="${escapeHtml(p.artUrl)}" alt="" loading="lazy">` : `<span class="pubArtFallback">♪</span>`}
+            <span>${escapeHtml(p.title)}</span>
+          </button>`).join("")}
+      </div>`;
+  } catch (e) {
+    root.innerHTML = `<p class="cellMuted">Could not load publications: ${escapeHtml(e?.message || String(e))}</p>`;
+  }
 }
 
 const RENDERERS = {
@@ -3389,6 +3455,17 @@ document.body.addEventListener("click", (e) => {
   const marketingDraftPreviewBtn = e.target.closest("#btnMarketingDraftPreview");
   if (marketingDraftPreviewBtn) {
     openMarketingDraftPreview(marketingDraftPreviewBtn.dataset.previewPath || "/");
+    return;
+  }
+
+  const discoverPickBtn = e.target.closest("[data-add-discover-song]");
+  if (discoverPickBtn) {
+    const songId = String(discoverPickBtn.dataset.addDiscoverSong || "").trim();
+    const field = document.getElementById("mkDiscoverFeaturedIds");
+    if (!songId || !field) return;
+    const ids = field.value.split(/[\s,]+/g).map((id) => id.trim()).filter(Boolean);
+    if (!ids.includes(songId)) ids.push(songId);
+    field.value = ids.join("\n");
     return;
   }
 

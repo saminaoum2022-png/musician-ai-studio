@@ -399,18 +399,12 @@ img { display: block; max-width: 100%; height: auto; }
 .marketingHeroArt { grid-area: auto; }
 
 .heroStoreSoon {
-  display: inline-flex;
+  display: flex;
   align-items: center;
+  justify-content: center;
   gap: 10px;
-}
-
-.heroStoreSoon--inline {
-  padding-inline-start: 14px;
-  border-inline-start: 1px solid rgba(255, 255, 255, 0.1);
-}
-
-.heroStoreSoon--below {
-  display: none;
+  width: 100%;
+  margin-top: 18px;
 }
 
 .heroStoreSoonLabel {
@@ -485,6 +479,9 @@ h1 {
 
 .marketingHeroArt {
   position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
   width: 100%;
   justify-self: stretch;
   align-self: center;
@@ -687,13 +684,6 @@ body:has(.marketingDraftBanner) .marketingShell {
   }
   .heroCopy { text-align: start; }
   .marketingHeroArt { width: min(94vw, 560px); justify-self: center; }
-  .heroStoreSoon--inline { display: none; }
-  .heroStoreSoon--below {
-    display: inline-flex;
-    justify-content: center;
-    width: 100%;
-    margin-top: 18px;
-  }
   .featureGrid { grid-template-columns: 1fr; }
   .section { padding: 58px 0; }
   .finalCta { padding: 34px 22px; }

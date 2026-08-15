@@ -33,6 +33,12 @@
     if (el) el.setAttribute("content", content);
   }
 
+  function applyDraftContent(content) {
+    if (!content) return;
+    applyCore(content);
+    if (PAGE === "home") applyHomeExtras(content);
+  }
+
   function showDraftBanner() {
     if (document.getElementById("nabadMarketingDraftBanner")) return;
     var bar = document.createElement("div");
@@ -155,19 +161,40 @@
     var params = new URLSearchParams(window.location.search || "");
     if (params.get("preview") !== "draft") return false;
     showDraftBanner();
+    var applied = false;
     try {
       var raw = sessionStorage.getItem(DRAFT_KEY);
-      if (!raw) return true;
-      var draft = JSON.parse(raw);
-      if (!draft || !draft.content) return true;
-      if (draft.page && draft.page !== PAGE) return true;
-      if (draft.locale && draft.locale !== LOCALE) return true;
-      applyCore(draft.content);
-      if (PAGE === "home") applyHomeExtras(draft.content);
-      return true;
-    } catch (e) {
-      return true;
+      if (raw) {
+        var draft = JSON.parse(raw);
+        if (
+          draft
+          && draft.content
+          && (!draft.page || draft.page === PAGE)
+          && (!draft.locale || draft.locale === LOCALE)
+        ) {
+          applyDraftContent(draft.content);
+          applied = true;
+        }
+      }
+    } catch (e) { /* ignore */ }
+
+    window.addEventListener("message", function (e) {
+      var allowed = ["https://www.nabadai.com", window.location.origin];
+      if (allowed.indexOf(e.origin) === -1) return;
+      if (e.data && e.data.type === "nabad-marketing-draft" && e.data.payload && e.data.payload.content) {
+        var payload = e.data.payload;
+        if (payload.page && payload.page !== PAGE) return;
+        if (payload.locale && payload.locale !== LOCALE) return;
+        applyDraftContent(payload.content);
+      }
+    });
+
+    if (window.opener) {
+      try {
+        window.opener.postMessage({ type: "nabad-marketing-preview-ready" }, "*");
+      } catch (e) { /* ignore */ }
     }
+    return true;
   }
 
   if (applyDraftFromSession()) return;

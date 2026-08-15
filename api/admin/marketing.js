@@ -32,6 +32,19 @@ function extForMime(mime) {
   return "jpg";
 }
 
+function sniffImageMime(buf) {
+  if (!buf || buf.length < 12) return null;
+  if (buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff) return "image/jpeg";
+  if (buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4e && buf[3] === 0x47) return "image/png";
+  if (
+    buf[0] === 0x52 && buf[1] === 0x49 && buf[2] === 0x46 && buf[3] === 0x46
+    && buf[8] === 0x57 && buf[9] === 0x45 && buf[10] === 0x42 && buf[11] === 0x50
+  ) {
+    return "image/webp";
+  }
+  return null;
+}
+
 module.exports = async function handler(req, res) {
   setCors(res);
   if (req.method === "OPTIONS") return res.end();
@@ -104,10 +117,10 @@ module.exports = async function handler(req, res) {
       return sendJson(res, 400, { error: "Image must be under 8 MB." });
     }
 
-    const contentType = String(body?.contentType || "image/jpeg").toLowerCase();
-    if (!/^image\/(jpeg|png|webp)$/.test(contentType)) {
-      return sendJson(res, 400, { error: "Use JPEG, PNG, or WebP." });
-    }
+    const contentTypeRaw = String(body?.contentType || "image/jpeg").toLowerCase();
+    let contentType = /^image\/(jpeg|png|webp)$/.test(contentTypeRaw) ? contentTypeRaw : null;
+    if (!contentType) contentType = sniffImageMime(buf);
+    if (!contentType) return sendJson(res, 400, { error: "Use JPEG, PNG, or WebP." });
 
     const baseName = String(body?.filename || "hero")
       .replace(/[^a-zA-Z0-9._-]+/g, "-")

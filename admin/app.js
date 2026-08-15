@@ -6,6 +6,7 @@ const PENDING_COOKIE = "nabad_admin_oauth_pending";
 /** OAuth callback — must stay on www so PKCE storage matches after Google redirect. */
 const ADMIN_OAUTH_REDIRECT = "https://www.nabadai.com/admin/";
 const ADMIN_PAGE_PATH = "/admin/";
+const MARKETING_SITE_ORIGIN = "https://www.nabadai.com";
 const PAGE_SIZE = 50;
 
 const state = {
@@ -23,6 +24,10 @@ const state = {
   marketingLocale: "en",
   marketingPage: "home",
   marketingDraft: null,
+  marketingHeroBlobUrl: "",
+  marketingHeroUploading: false,
+  marketingDraftPreviewWindow: null,
+  marketingDraftPreviewPayload: null,
   cache: {},
   recoveryTokenHash: "",
 };
@@ -600,11 +605,13 @@ async function marketingAdminUploadImage(file) {
   await refreshSessionIfNeeded();
   const token = state.session?.access_token;
   if (!token) throw new Error("Not signed in");
-  const buf = await file.arrayBuffer();
-  const bytes = new Uint8Array(buf);
-  let binary = "";
-  for (let i = 0; i < bytes.length; i += 1) binary += String.fromCharCode(bytes[i]);
-  const dataBase64 = btoa(binary);
+  const dataBase64 = await new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.onerror = () => reject(new Error("Could not read image file."));
+    reader.readAsDataURL(file);
+  });
+  const contentType = inferMarketingImageContentType(file);
   const r = await fetch("/api/admin/marketing", {
     method: "POST",
     headers: {
@@ -613,13 +620,53 @@ async function marketingAdminUploadImage(file) {
     },
     body: JSON.stringify({
       filename: file.name || "hero",
-      contentType: file.type || "image/jpeg",
+      contentType,
       dataBase64,
     }),
   });
   const data = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error(data?.error || `Upload failed (${r.status})`);
+  if (!data.url) throw new Error("Upload succeeded but no image URL was returned.");
   return data;
+}
+
+function inferMarketingImageContentType(file) {
+  const type = String(file?.type || "").toLowerCase();
+  if (/^image\/(jpeg|png|webp)$/.test(type)) return type;
+  const name = String(file?.name || "").toLowerCase();
+  if (name.includes(".webp")) return "image/webp";
+  if (name.endsWith(".png")) return "image/png";
+  if (name.endsWith(".jpg") || name.endsWith(".jpeg")) return "image/jpeg";
+  return "image/jpeg";
+}
+
+function revokeMarketingHeroBlobUrl() {
+  if (state.marketingHeroBlobUrl) {
+    try { URL.revokeObjectURL(state.marketingHeroBlobUrl); } catch { /* ignore */ }
+    state.marketingHeroBlobUrl = "";
+  }
+}
+
+function getMarketingHeroDraftUrl() {
+  const field = String(document.getElementById("mkHeroImageUrl")?.value || "").trim();
+  if (field && !field.startsWith("blob:")) return field;
+  return "";
+}
+
+function getMarketingHeroPreviewUrl() {
+  const draft = getMarketingHeroDraftUrl();
+  if (draft) return draft;
+  return state.marketingHeroBlobUrl || "";
+}
+
+function sendMarketingDraftToPreviewWindow(win, payload) {
+  if (!win || win.closed || !payload) return false;
+  try {
+    win.postMessage({ type: "nabad-marketing-draft", payload }, MARKETING_SITE_ORIGIN);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 async function loadAdminSession({ force = false } = {}) {
@@ -2215,7 +2262,7 @@ function readMarketingFormContent(pageKey = "home") {
       ctaHref: val("mkHeroCtaHref"),
       secondaryLabel: val("mkHeroSecondaryLabel"),
       secondaryHref: val("mkHeroSecondaryHref"),
-      heroImageUrl: val("mkHeroImageUrl"),
+      heroImageUrl: getMarketingHeroDraftUrl() || getMarketingHeroPreviewUrl(),
       heroImageAlt: val("mkHeroImageAlt"),
     },
     features: {
@@ -2277,7 +2324,7 @@ function updateMarketingDraftSitePreview() {
   eyebrow.textContent = document.getElementById("mkHeroEyebrow")?.value || "";
   title.textContent = document.getElementById("mkHeroTitle")?.value || "";
   lead.textContent = document.getElementById("mkHeroLead")?.value || "";
-  const url = String(document.getElementById("mkHeroImageUrl")?.value || "").trim();
+  const url = getMarketingHeroPreviewUrl();
   if (url) {
     image.hidden = false;
     image.src = url;
@@ -2303,10 +2350,37 @@ function storeMarketingDraftPreview() {
 }
 
 function openMarketingDraftPreview(previewPath) {
-  storeMarketingDraftPreview();
+  if (state.marketingHeroUploading) {
+    showError("Image is still uploading — wait for the success message, then try Preview draft again.");
+    return;
+  }
+  const publicUrl = String(document.getElementById("mkHeroImageUrl")?.value || "").trim();
+  if (state.marketingHeroBlobUrl && !publicUrl) {
+    showError("Image upload has not finished yet. Wait for Upload complete in the message above.");
+    return;
+  }
+  const payload = storeMarketingDraftPreview();
   const path = String(previewPath || "/").split("?")[0];
   const url = `${path}?preview=draft`;
-  window.open(url, "_blank", "noopener,noreferrer");
+  const win = window.open(url, "_blank", "noopener,noreferrer");
+  if (!win) {
+    showError("Pop-up blocked — allow pop-ups for this site to preview drafts.");
+    return;
+  }
+  state.marketingDraftPreviewWindow = win;
+  state.marketingDraftPreviewPayload = payload;
+  let attempts = 0;
+  const timer = window.setInterval(() => {
+    attempts += 1;
+    if (win.closed || attempts > 40) {
+      window.clearInterval(timer);
+      state.marketingDraftPreviewWindow = null;
+      return;
+    }
+    if (sendMarketingDraftToPreviewWindow(win, payload)) {
+      window.clearInterval(timer);
+    }
+  }, 150);
 }
 
 function bindMarketingDraftPreviewListeners() {
@@ -3663,6 +3737,10 @@ document.body.addEventListener("change", (e) => {
   const file = fileInput.files[0];
   void (async () => {
     const msg = document.getElementById("marketingSaveMsg");
+    revokeMarketingHeroBlobUrl();
+    state.marketingHeroBlobUrl = URL.createObjectURL(file);
+    state.marketingHeroUploading = true;
+    updateMarketingDraftSitePreview();
     if (msg) {
       msg.hidden = false;
       msg.textContent = "Uploading image…";
@@ -3671,21 +3749,36 @@ document.body.addEventListener("change", (e) => {
     try {
       const data = await marketingAdminUploadImage(file);
       const urlInput = document.getElementById("mkHeroImageUrl");
-      if (urlInput && data.url) urlInput.value = data.url;
+      if (urlInput && data.url) {
+        urlInput.value = data.url;
+        urlInput.dispatchEvent(new Event("input", { bubbles: true }));
+      }
+      revokeMarketingHeroBlobUrl();
       updateMarketingDraftSitePreview();
       if (msg) {
-        msg.textContent = "Image added to draft. Check the preview below or open Preview draft ↗ — nothing is live until Save & publish.";
+        msg.textContent = "Upload complete — image is in your draft. Open Preview draft ↗ to see it on the site. Save & publish when ready.";
         msg.className = "grantMsg ok";
       }
       fileInput.value = "";
     } catch (err) {
+      revokeMarketingHeroBlobUrl();
+      updateMarketingDraftSitePreview();
       if (msg) {
         msg.textContent = err?.message || "Upload failed";
         msg.className = "grantMsg err";
       }
       showError(err?.message || "Upload failed");
+    } finally {
+      state.marketingHeroUploading = false;
     }
   })();
+});
+
+window.addEventListener("message", (e) => {
+  if (e.origin !== MARKETING_SITE_ORIGIN && e.origin !== window.location.origin) return;
+  if (e.data?.type !== "nabad-marketing-preview-ready") return;
+  if (!state.marketingDraftPreviewPayload || e.source !== state.marketingDraftPreviewWindow) return;
+  sendMarketingDraftToPreviewWindow(e.source, state.marketingDraftPreviewPayload);
 });
 
 void boot();

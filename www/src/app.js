@@ -38004,6 +38004,40 @@ function paintDiscoverReelAnimPanel(panel, pick) {
   if (creatorEl) creatorEl.textContent = String(pick.byLine || "Creator");
 }
 
+/** Decode incoming reel cover before slide so crop matches the live player art. */
+async function ensureDiscoverReelAnimArtReady(panel, pick) {
+  paintDiscoverReelAnimPanel(panel, pick);
+  const img = panel?.querySelector(".playerReelAnimArt");
+  if (!img) return;
+  if (!img.complete || !img.naturalWidth) {
+    await new Promise((resolve) => {
+      if (img.complete) {
+        resolve();
+        return;
+      }
+      img.addEventListener("load", resolve, { once: true });
+      img.addEventListener("error", resolve, { once: true });
+    });
+  }
+  try {
+    if (typeof img.decode === "function") await img.decode();
+  } catch {}
+}
+
+/** Keep title/creator in the fixed player chrome during reel slides (no duplicate meta strip). */
+function previewDiscoverReelMeta(pick) {
+  if (!pick) return;
+  const title = String(pick.title || "Untitled").trim() || "Untitled";
+  if (els.playerTitle) els.playerTitle.textContent = title;
+  const byRaw = String(pick.byLine || "").trim();
+  const handle = byRaw.replace(/^@/, "").trim();
+  if (els.playerCreatorIdentity) {
+    els.playerCreatorIdentity.innerHTML = handle
+      ? `<span class="playerCreatorHandle">@${escapeHtml(handle)}</span>`
+      : "";
+  }
+}
+
 function setDiscoverReelAnimLayerActive(active) {
   const card = document.querySelector(".playerCard");
   if (card) card.classList.toggle("isReelAnimating", Boolean(active));
@@ -38084,12 +38118,13 @@ async function peelDiscoverReelAnimToPlayer(inPanel, pick) {
 async function finishDiscoverReelSlideSwap(layer, outPanel, inPanel, targetIdx, target) {
   hidePlayerKaraokeStrip();
   if (outPanel) outPanel.style.visibility = "hidden";
+  await peelDiscoverReelAnimToPlayer(inPanel, target);
   await playDiscoverReelAt(targetIdx, {
     openPlayer: resolveDiscoverReelOpenPlayer({ openPlayer: true }),
     silent: true,
     skipSlide: true,
+    skipCoverPaint: true,
   });
-  await peelDiscoverReelAnimToPlayer(inPanel, target);
   await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
   layer.hidden = true;
   layer.setAttribute("aria-hidden", "true");
@@ -38128,7 +38163,8 @@ async function runDiscoverReelSlideTransition(direction, targetIdx, opts = {}) {
 
   const dir = direction > 0 ? 1 : -1;
   paintDiscoverReelAnimPanel(outPanel, captureCurrentDiscoverReelPick());
-  paintDiscoverReelAnimPanel(inPanel, target);
+  await ensureDiscoverReelAnimArtReady(inPanel, target);
+  previewDiscoverReelMeta(target);
 
   _discoverReelSlideAnimating = true;
   const outOff = dir > 0 ? "-100%" : "100%";
@@ -38173,6 +38209,7 @@ async function playDiscoverReelAt(index, opts = {}) {
     reelIndex: idx,
     openPlayer: resolveDiscoverReelOpenPlayer(opts),
     discoverBy: pick.byLine,
+    skipCoverPaint: Boolean(opts.skipCoverPaint),
     playSource: pick.songId && pick.ownerUserId
       ? { type: "public_song", songId: pick.songId, ownerUserId: pick.ownerUserId, taskId: pick.taskId, audioId: pick.audioId }
       : null,
@@ -40898,7 +40935,10 @@ async function playLibraryUrlOnPlayer(rawUrl, title, artUrl, opts) {
     ownerUserId: currentPlayerTrackRef.ownerUserId,
   };
   if (!openPlayer) {
-    setPlayerMeta(meta, { trackRef: currentPlayerTrackRef, coverImmediate: Boolean(opts.reelSwap) });
+    setPlayerMeta(meta, {
+      trackRef: currentPlayerTrackRef,
+      coverImmediate: Boolean(opts.reelSwap),
+    });
     try {
       syncDiscoveryPlayingHighlights();
     } catch {}
@@ -40909,6 +40949,7 @@ async function playLibraryUrlOnPlayer(rawUrl, title, artUrl, opts) {
   } else {
     await playOnPlayerPage(prox, title || "Song", meta, {
       reelSwap: Boolean(opts.discoverReel),
+      skipCoverPaint: Boolean(opts.skipCoverPaint),
       trackRef: currentPlayerTrackRef,
     });
   }
@@ -51182,7 +51223,7 @@ function setPlayerMeta({ title, subtitle, artUrl, releaseCaption, remixOf, chall
   if (els.playerTitle) els.playerTitle.textContent = title || "Now Playing";
   if (els.playerSubtitle) els.playerSubtitle.textContent = screenshotSanitizeCopy(subtitle || "");
   void syncPlayerCreatorChrome(subtitle);
-  if (els.playerArt) {
+  if (els.playerArt && !opts.skipCoverPaint) {
     if (hasTrack) {
       const quickArt = !opts.coverImmediate ? resolvePlayerCoverQuickArt(track) : "";
       if (quickArt) {
@@ -52257,6 +52298,7 @@ function wirePlayerDiscoverReelSwipeOnce() {
       setDiscoverReelAnimLayerActive(false);
       resetDiscoverReelRailFade();
     }
+    previewDiscoverReelMeta(captureCurrentDiscoverReelPick());
   }
 
   function paintDiscoverReelDragPreview(dir, targetIdx, dyPx) {
@@ -52266,6 +52308,7 @@ function wirePlayerDiscoverReelSwipeOnce() {
     const h = window.innerHeight || layer.clientHeight || 800;
     paintDiscoverReelAnimPanel(outPanel, captureCurrentDiscoverReelPick());
     paintDiscoverReelAnimPanel(inPanel, target);
+    previewDiscoverReelMeta(target);
     resetDiscoverReelAnimPanels(outPanel, inPanel);
     outPanel.style.transform = `translateY(${dyPx}px)`;
     inPanel.style.transform = `translateY(${dyPx + (dir > 0 ? h : -h)}px)`;
@@ -53774,6 +53817,7 @@ async function playOnPlayerPage(url, label, meta = null, opts = {}) {
   if (!url) return;
   const metaOpts = {
     coverImmediate: Boolean(opts.reelSwap || opts.coverImmediate),
+    skipCoverPaint: Boolean(opts.skipCoverPaint),
     trackRef: opts.trackRef || null,
   };
   if (meta && (meta.title || meta.subtitle || meta.artUrl)) {

@@ -1,5 +1,5 @@
 {
-  "buildCommand": "node scripts/sync-client-env.mjs && node scripts/bundle-supabase.mjs",
+  "buildCommand": "node scripts/vercel-prepare-web.mjs && node scripts/sync-client-env.mjs && node scripts/bundle-supabase.mjs",
   "outputDirectory": ".",
   "cleanUrls": true,
   "trailingSlash": false,
@@ -41,8 +41,6 @@
     { "source": "/robots.txt", "destination": "/api/robots" },
     { "source": "/sitemap.xml", "destination": "/api/sitemap" },
     { "source": "/s/:id", "destination": "/api/share?id=:id" },
-    { "source": "/app", "destination": "/index.html" },
-    { "source": "/app/", "destination": "/index.html" },
     {
       "source": "/admin",
       "destination": "/admin/index.html"
@@ -51,10 +49,6 @@
       "source": "/",
       "has": [{ "type": "host", "value": "admin.nabadai.com" }],
       "destination": "/admin/index.html"
-    },
-    {
-      "source": "/",
-      "destination": "/home.html"
     },
     {
       "source": "/:path*",

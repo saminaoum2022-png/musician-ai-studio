@@ -157,11 +157,29 @@
     }
   }
 
+  function applyDraftQueryParams(params) {
+    var heroImg = params.get("heroImg");
+    var heroAlt = params.get("heroAlt");
+    if (heroImg) {
+      setAttr("[data-mk='hero.image']", "src", heroImg);
+      if (heroAlt) setAttr("[data-mk='hero.image']", "alt", heroAlt);
+    }
+  }
+
+  function isAllowedDraftOrigin(origin) {
+    return [
+      "https://www.nabadai.com",
+      "https://admin.nabadai.com",
+      "https://nabadai.com",
+      window.location.origin,
+    ].indexOf(origin) !== -1;
+  }
+
   function applyDraftFromSession() {
     var params = new URLSearchParams(window.location.search || "");
     if (params.get("preview") !== "draft") return false;
     showDraftBanner();
-    var applied = false;
+    applyDraftQueryParams(params);
     try {
       var raw = sessionStorage.getItem(DRAFT_KEY);
       if (raw) {
@@ -173,14 +191,12 @@
           && (!draft.locale || draft.locale === LOCALE)
         ) {
           applyDraftContent(draft.content);
-          applied = true;
         }
       }
     } catch (e) { /* ignore */ }
 
     window.addEventListener("message", function (e) {
-      var allowed = ["https://www.nabadai.com", window.location.origin];
-      if (allowed.indexOf(e.origin) === -1) return;
+      if (!isAllowedDraftOrigin(e.origin)) return;
       if (e.data && e.data.type === "nabad-marketing-draft" && e.data.payload && e.data.payload.content) {
         var payload = e.data.payload;
         if (payload.page && payload.page !== PAGE) return;

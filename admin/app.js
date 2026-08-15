@@ -2349,6 +2349,16 @@ function storeMarketingDraftPreview() {
   return payload;
 }
 
+function buildMarketingDraftPreviewUrl(previewPath, payload) {
+  const path = String(previewPath || "/").split("?")[0];
+  const qs = new URLSearchParams({ preview: "draft" });
+  const heroUrl = String(payload?.content?.hero?.heroImageUrl || "").trim();
+  if (heroUrl) qs.set("heroImg", heroUrl);
+  const heroAlt = String(payload?.content?.hero?.heroImageAlt || "").trim();
+  if (heroAlt) qs.set("heroAlt", heroAlt);
+  return `${path}?${qs.toString()}`;
+}
+
 function openMarketingDraftPreview(previewPath) {
   if (state.marketingHeroUploading) {
     showError("Image is still uploading — wait for the success message, then try Preview draft again.");
@@ -2360,27 +2370,25 @@ function openMarketingDraftPreview(previewPath) {
     return;
   }
   const payload = storeMarketingDraftPreview();
-  const path = String(previewPath || "/").split("?")[0];
-  const url = `${path}?preview=draft`;
-  const win = window.open(url, "_blank", "noopener,noreferrer");
+  const url = buildMarketingDraftPreviewUrl(previewPath, payload);
+  const win = window.open(url, "_blank");
   if (!win) {
     showError("Pop-up blocked — allow pop-ups for this site to preview drafts.");
     return;
   }
   state.marketingDraftPreviewWindow = win;
   state.marketingDraftPreviewPayload = payload;
+  sendMarketingDraftToPreviewWindow(win, payload);
   let attempts = 0;
   const timer = window.setInterval(() => {
     attempts += 1;
-    if (win.closed || attempts > 40) {
+    if (win.closed || attempts > 60) {
       window.clearInterval(timer);
       state.marketingDraftPreviewWindow = null;
       return;
     }
-    if (sendMarketingDraftToPreviewWindow(win, payload)) {
-      window.clearInterval(timer);
-    }
-  }, 150);
+    sendMarketingDraftToPreviewWindow(win, payload);
+  }, 200);
 }
 
 function bindMarketingDraftPreviewListeners() {
@@ -3775,9 +3783,11 @@ document.body.addEventListener("change", (e) => {
 });
 
 window.addEventListener("message", (e) => {
-  if (e.origin !== MARKETING_SITE_ORIGIN && e.origin !== window.location.origin) return;
+  const allowed = [MARKETING_SITE_ORIGIN, "https://admin.nabadai.com", window.location.origin];
+  if (!allowed.includes(e.origin)) return;
   if (e.data?.type !== "nabad-marketing-preview-ready") return;
-  if (!state.marketingDraftPreviewPayload || e.source !== state.marketingDraftPreviewWindow) return;
+  if (!state.marketingDraftPreviewPayload) return;
+  if (state.marketingDraftPreviewWindow && e.source !== state.marketingDraftPreviewWindow) return;
   sendMarketingDraftToPreviewWindow(e.source, state.marketingDraftPreviewPayload);
 });
 

@@ -42990,21 +42990,13 @@ async function resolveRecordedVoiceReady(personaHit) {
   return { ready: false, reason: hadPriorGen ? "expired" : "processing" };
 }
 
-/** Suno voice-create metadata — docs recommend style + description for tuning. */
-function voiceCreateMetadata(name, skill) {
-  const n = String(name || "My voice").trim() || "My voice";
-  const s = String(skill || "intermediate").trim().toLowerCase();
-  const polish =
-    s === "beginner"
-      ? "gentle polish, preserve natural tone"
-      : s === "advanced" || s === "professional"
-      ? "minimal processing, preserve raw timbre"
-      : "balanced clarity, preserve natural delivery";
-  const style = `Natural vocal clone, ${polish}`;
-  return {
-    style,
-    description: `Recorded voice: ${n}. ${style}.`,
-  };
+/** Suno singerSkillLevel enum — send only these words upstream, no extra voice tags. */
+function normalizeSunoSingerSkillLevel(raw) {
+  const s = String(raw || "intermediate").trim().toLowerCase();
+  if (s === "beginner" || s === "intermediate" || s === "advanced" || s === "professional") {
+    return s;
+  }
+  return "intermediate";
 }
 
 function markPersonaGenerationUsed(personaId) {
@@ -43126,14 +43118,14 @@ function voiceWizardLangSkillHtml() {
       </div>
     </section>
     <section class="personaFlowSection">
-      <h3 class="personaFlowSectionLabel">Your singing level</h3>
-      <p class="personaFlowSectionLead">Be honest — this tells the AI how much to polish versus preserve your natural voice.</p>
+      <h3 class="personaFlowSectionLabel">Singer skill level</h3>
+      <p class="personaFlowSectionLead">This maps directly to Suno’s skill level — no extra voice style or description is sent.</p>
       <input type="hidden" id="voiceWizardSkill" value="${escapeHtml(skill)}" />
       <div class="vwChipRow vwChipRow--stack" id="voiceWizardSkillRow">
-        ${skillChip("beginner", "Casual", "I sing for fun")}
-        ${skillChip("intermediate", "Confident", "I can hold a tune")}
-        ${skillChip("advanced", "Trained", "I sing seriously")}
-        ${skillChip("professional", "Professional", "Singing is my craft")}
+        ${skillChip("beginner", "Beginner", "")}
+        ${skillChip("intermediate", "Intermediate", "")}
+        ${skillChip("advanced", "Advanced", "")}
+        ${skillChip("professional", "Professional", "")}
       </div>
     </section>`;
 }
@@ -43350,8 +43342,7 @@ function renderVoiceWizardVerifyStep(phrase, token) {
           taskId: validateTaskId,
           verifyUrl,
           voiceName: name,
-          ...voiceCreateMetadata(name, voiceWizardState.skill),
-          singerSkillLevel: voiceWizardState.skill || "intermediate",
+          singerSkillLevel: normalizeSunoSingerSkillLevel(voiceWizardState.skill),
         }),
       });
       const cd = await cr.json().catch(() => ({}));

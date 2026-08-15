@@ -30,6 +30,7 @@ module.exports = async function handler(req, res) {
     if (!taskId) return sendJson(res, 400, { error: "Missing taskId" });
     if (!verifyUrl) return sendJson(res, 400, { error: "Missing verifyUrl" });
 
+    // Only forward optional voice metadata when the client explicitly sends it.
     const upstream = await sunoJsonRequest("/api/v1/voice/generate", {
       method: "POST",
       apiKey,
@@ -37,9 +38,9 @@ module.exports = async function handler(req, res) {
         taskId,
         verifyUrl,
         voiceName,
-        description: description || `Custom voice for ${voiceName}`,
-        ...(style ? { style } : {}),
         singerSkillLevel,
+        ...(description ? { description } : {}),
+        ...(style ? { style } : {}),
       },
     });
 

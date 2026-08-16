@@ -79,6 +79,13 @@ export function screenshotDisplayName(raw) {
   return DEMO_DISPLAY_NAMES[hashIndex(name, DEMO_DISPLAY_NAMES.length)];
 }
 
+/** Home Create greeting — neutral demo label in screenshot mode. */
+export function screenshotGreetingName(raw) {
+  const name = String(raw || "").trim();
+  if (!enabled) return name;
+  return "musician";
+}
+
 export function disableScreenshotMode() {
   try {
     localStorage.removeItem(STORAGE_KEY);

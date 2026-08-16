@@ -130,11 +130,17 @@
           if (h && card.title) h.textContent = card.title;
           if (p && card.body) p.textContent = card.body;
           var linksWrap = node.querySelector("[data-mk-feature-links]");
-          if (linksWrap && Array.isArray(card.links) && card.links.length) {
-            linksWrap.innerHTML = card.links.map(function (link) {
-              if (!link || !link.label || !link.href) return "";
-              return '<a class="featureCardLink" href="' + link.href.replace(/"/g, "&quot;") + '">' + link.label + "</a>";
-            }).join("");
+          if (linksWrap) {
+            if (Array.isArray(card.links) && card.links.length) {
+              linksWrap.innerHTML = card.links.map(function (link) {
+                if (!link || !link.label || !link.href) return "";
+                return '<a class="featureCardLink" href="' + link.href.replace(/"/g, "&quot;") + '">' + link.label + "</a>";
+              }).join("");
+              linksWrap.hidden = false;
+            } else {
+              linksWrap.innerHTML = "";
+              linksWrap.hidden = true;
+            }
           }
         });
       }
@@ -222,7 +228,63 @@
       .catch(function () { return []; });
   }
 
+  function applyTemplates(t) {
+    if (!t) return;
+    setText("[data-mk='templates.eyebrow']", t.eyebrow);
+    setText("[data-mk='templates.title']", t.title);
+    setText("[data-mk='templates.lead']", t.lead);
+    setText("[data-mk='templates.cta']", t.ctaLabel);
+    setAttr("[data-mk='templates.cta']", "href", t.ctaHref);
+    if (t.imageUrl) setImageSrc("[data-mk='templates.image']", t.imageUrl);
+    if (t.imageAlt) setAttr("[data-mk='templates.image']", "alt", t.imageAlt);
+    var cards = document.querySelectorAll("[data-mk-template-card]");
+    var tones = ["birthday", "wedding", "love", "apology", "thanks", "arabic"];
+    if (Array.isArray(t.cards)) {
+      t.cards.forEach(function (card, i) {
+        var node = cards[i];
+        if (!node || !card) return;
+        tones.forEach(function (tone) {
+          node.classList.remove("marketingOccasionCard--" + tone);
+        });
+        if (card.tone) node.classList.add("marketingOccasionCard--" + card.tone);
+        if (card.href) node.setAttribute("href", card.href);
+        var img = node.querySelector("[data-mk='template.image']");
+        var h = node.querySelector("[data-mk='template.title']");
+        var p = node.querySelector("[data-mk='template.body']");
+        if (img && card.imageUrl) img.setAttribute("src", card.imageUrl);
+        if (h && card.title) h.textContent = card.title;
+        if (p && card.body) p.textContent = card.body;
+      });
+    }
+  }
+
+  function applyCollab(c) {
+    if (!c) return;
+    setText("[data-mk='collab.eyebrow']", c.eyebrow);
+    setText("[data-mk='collab.title']", c.title);
+    setText("[data-mk='collab.lead']", c.lead);
+    setText("[data-mk='collab.ctaPrimary']", c.ctaPrimaryLabel);
+    setAttr("[data-mk='collab.ctaPrimary']", "href", c.ctaPrimaryHref);
+    setText("[data-mk='collab.ctaSecondary']", c.ctaSecondaryLabel);
+    setAttr("[data-mk='collab.ctaSecondary']", "href", c.ctaSecondaryHref);
+    if (c.imageUrl) setImageSrc("[data-mk='collab.image']", c.imageUrl);
+    if (c.imageAlt) setAttr("[data-mk='collab.image']", "alt", c.imageAlt);
+    var points = document.querySelectorAll("[data-mk-collab-item]");
+    if (Array.isArray(c.points)) {
+      c.points.forEach(function (point, i) {
+        var node = points[i];
+        if (!node || !point) return;
+        var h = node.querySelector("[data-mk='collab.point.title']");
+        var p = node.querySelector("[data-mk='collab.point.body']");
+        if (h && point.title) h.textContent = point.title;
+        if (p && point.body) p.textContent = point.body;
+      });
+    }
+  }
+
   function applyHomeExtras(c) {
+    if (c.templates) applyTemplates(c.templates);
+    if (c.collab) applyCollab(c.collab);
     if (c.discover) {
       setText("[data-mk='discover.eyebrow']", c.discover.eyebrow);
       setText("[data-mk='discover.title']", c.discover.title);
@@ -361,6 +423,24 @@
 
     root.querySelectorAll(".discoverCarouselCard").forEach(function (el, i) {
       markScrollReveal(el, "up", Math.min(i, 6) * 80);
+    });
+
+    root.querySelectorAll(".marketingOccasionCard").forEach(function (el, i) {
+      var col = i % 3;
+      var variant = col === 0 ? "from-start" : col === 1 ? "up" : "from-end";
+      markScrollReveal(el, variant, col * 75);
+    });
+
+    root.querySelectorAll(".marketingSplitCopy").forEach(function (el) {
+      markScrollReveal(el, "from-start", 0);
+    });
+
+    root.querySelectorAll(".marketingSplitMedia").forEach(function (el) {
+      markScrollReveal(el, "from-end", 100);
+    });
+
+    root.querySelectorAll(".marketingCollabItem").forEach(function (el, i) {
+      markScrollReveal(el, "up", i * 90);
     });
   }
 

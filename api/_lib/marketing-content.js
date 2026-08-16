@@ -48,11 +48,7 @@ function defaultHomeContentEn() {
           body: "Start with a picture mood, record a melody guide, or write lyrics — then shape genre, voice, and style.",
           imageUrl: "",
           imageAlt: "Create with photo, hum, or lyrics",
-          links: [
-            { label: "Hum to song", href: "/hum-to-song" },
-            { label: "Lyrics to song", href: "/lyrics-to-song" },
-            { label: "Photo to song", href: "/photo-to-song" },
-          ],
+          links: [],
         },
         {
           title: "Your voice, every song",
@@ -75,6 +71,82 @@ function defaultHomeContentEn() {
       ctaLabel: "Explore Discover",
       ctaHref: "/app/#/discover",
       featuredSongIds: [],
+    },
+    templates: {
+      eyebrow: "Song templates",
+      title: "A song for the moment",
+      lead:
+        "Pick an occasion — NabadAi guides lyrics and style so you don't start from a blank page. Perfect for gifts, events, and surprises.",
+      ctaLabel: "Browse templates",
+      ctaHref: "/app/#/challenges",
+      imageUrl: "",
+      imageAlt: "",
+      cards: [
+        {
+          tone: "birthday",
+          title: "Birthday",
+          body: "Warm, personal, and ready to gift.",
+          href: "/app/#/challenges",
+          imageUrl: "/assets/marketing/occasion-templates/birthday.png",
+        },
+        {
+          tone: "wedding",
+          title: "Wedding & dabke",
+          body: "Celebration energy for the dance floor.",
+          href: "/app/#/challenges",
+          imageUrl: "/assets/marketing/occasion-templates/wedding.png",
+        },
+        {
+          tone: "love",
+          title: "Love song",
+          body: "Romantic lyrics with your own twist.",
+          href: "/app/#/challenges",
+          imageUrl: "/assets/marketing/occasion-templates/love.png",
+        },
+        {
+          tone: "apology",
+          title: "Apology",
+          body: "Say it sincerely in a song.",
+          href: "/app/#/challenges",
+          imageUrl: "/assets/marketing/occasion-templates/apology.png",
+        },
+        {
+          tone: "thanks",
+          title: "Thank you",
+          body: "Gratitude that feels personal.",
+          href: "/app/#/challenges",
+          imageUrl: "/assets/marketing/occasion-templates/thanks.png",
+        },
+        {
+          tone: "arabic",
+          title: "Arabic occasion",
+          body: "Dialect-friendly templates for regional style.",
+          href: "/app/#/challenges",
+          imageUrl: "/assets/marketing/occasion-templates/arabic.png",
+        },
+      ],
+    },
+    collab: {
+      eyebrow: "Creators & voices",
+      title: "AI first. Real people when it matters.",
+      lead:
+        "Generate in minutes, then go further — publish on Discover, remix with friends, or request a pro singer for weddings and special releases.",
+      ctaPrimaryLabel: "Try free",
+      ctaPrimaryHref: "/app/#/intro",
+      ctaSecondaryLabel: "Explore Discover",
+      ctaSecondaryHref: "/app/#/discover",
+      imageUrl: "/assets/marketing/collab-ai-human.png",
+      imageAlt: "Singer and AI collaborating in a neon music studio",
+      points: [
+        {
+          title: "Pro Singers",
+          body: "Request a real vocalist on your track — re-vocals, occasion songs, and premium delivery when AI isn't enough.",
+        },
+        {
+          title: "Discover & remix",
+          body: "Publish to your profile, climb charts, and connect with musicians who remix and respond to your songs.",
+        },
+      ],
     },
     pricing: {
       eyebrow: "Pricing",
@@ -205,6 +277,82 @@ function defaultHomeContentAr() {
       title: "استمع لما يصنعه المبدعون",
       lead: "قوائم وريمكسات واختيارات المجتمع — محدّثة داخل التطبيق.",
       ctaLabel: "استكشف Discover",
+    },
+    templates: {
+      eyebrow: "قوالب الأغاني",
+      title: "أغنية للمناسبة",
+      lead:
+        "اختر مناسبة — NabadAi يوجّه الكلمات والأسلوب حتى لا تبدأ من صفحة فارغة. مثالي للهدايا والأعراس والمفاجآت.",
+      ctaLabel: "تصفّح القوالب",
+      ctaHref: "/app/#/challenges",
+      imageUrl: "",
+      imageAlt: "",
+      cards: [
+        {
+          tone: "birthday",
+          title: "عيد ميلاد",
+          body: "دافئة وشخصية — جاهزة للإهداء.",
+          href: "/app/#/challenges",
+          imageUrl: "/assets/marketing/occasion-templates/birthday.png",
+        },
+        {
+          tone: "wedding",
+          title: "عرس ودبكة",
+          body: "طاقة احتفال للرقصة والفرح.",
+          href: "/app/#/challenges",
+          imageUrl: "/assets/marketing/occasion-templates/wedding.png",
+        },
+        {
+          tone: "love",
+          title: "أغنية حب",
+          body: "كلمات رومانسية بلمستك.",
+          href: "/app/#/challenges",
+          imageUrl: "/assets/marketing/occasion-templates/love.png",
+        },
+        {
+          tone: "apology",
+          title: "اعتذار",
+          body: "عبّر بصدق في أغنية.",
+          href: "/app/#/challenges",
+          imageUrl: "/assets/marketing/occasion-templates/apology.png",
+        },
+        {
+          tone: "thanks",
+          title: "شكر",
+          body: "امتنان يبدو شخصياً.",
+          href: "/app/#/challenges",
+          imageUrl: "/assets/marketing/occasion-templates/thanks.png",
+        },
+        {
+          tone: "arabic",
+          title: "مناسبة عربية",
+          body: "قوالب مع لهجة وأسلوب إقليمي.",
+          href: "/app/#/challenges",
+          imageUrl: "/assets/marketing/occasion-templates/arabic.png",
+        },
+      ],
+    },
+    collab: {
+      eyebrow: "مبدعون وأصوات",
+      title: "ذكاء اصطناعي أولاً. أشخاص حقيقيون عندما يهم الأمر.",
+      lead:
+        "أنشئ في دقائق، ثم تابع — انشر على Discover، ريمكس مع الأصدقاء، أو اطلب مغنياً محترفاً للأعراس والمناسبات.",
+      ctaPrimaryLabel: "جرّب مجاناً",
+      ctaPrimaryHref: "/app/#/intro",
+      ctaSecondaryLabel: "استكشف Discover",
+      ctaSecondaryHref: "/app/#/discover",
+      imageUrl: "/assets/marketing/collab-ai-human.png",
+      imageAlt: "مغنية وذكاء اصطناعي يتعاونان في استوديو موسيقى نيون",
+      points: [
+        {
+          title: "Pro Singers",
+          body: "اطلب صوتاً حقيقياً على مقطعك — إعادة غناء، أغاني مناسبات، وتسليم premium عندما لا يكفي الذكاء الاصطناعي.",
+        },
+        {
+          title: "Discover وريمكس",
+          body: "انشر على ملفك، تصدر القوائم، وتواصل مع موسيقيين يريمكسون ويردون على أغانيك.",
+        },
+      ],
     },
     pricing: {
       eyebrow: "الأسعار",
@@ -461,6 +609,38 @@ function normalizeFeaturedSongIds(ids, defaults) {
   return normalizeSongIds(Array.isArray(defaults) ? defaults : []);
 }
 
+function normalizeTemplateCards(cards, defaults) {
+  const src = Array.isArray(cards) ? cards : [];
+  const out = [];
+  for (let i = 0; i < 6; i += 1) {
+    const d = defaults[i] || { tone: "birthday", title: "", body: "", href: "/app/#/challenges" };
+    const c = src[i] || {};
+    const tone = clip(c.tone, 24) || d.tone || "birthday";
+    out.push({
+      tone,
+      title: clip(c.title, 80) || d.title,
+      body: clip(c.body, 200) || d.body,
+      href: sanitizeHref(c.href, d.href || "/app/#/challenges"),
+      imageUrl: sanitizeImageUrl(c.imageUrl, d.imageUrl || ""),
+    });
+  }
+  return out;
+}
+
+function normalizeCollabPoints(points, defaults) {
+  const src = Array.isArray(points) ? points : [];
+  const out = [];
+  for (let i = 0; i < 2; i += 1) {
+    const d = defaults[i] || { title: "", body: "" };
+    const p = src[i] || {};
+    out.push({
+      title: clip(p.title, 120) || d.title,
+      body: clip(p.body, 400) || d.body,
+    });
+  }
+  return out;
+}
+
 function normalizeContent(pageKey, locale, raw) {
   const page = String(pageKey || "").trim().toLowerCase();
   const loc = String(locale || "en").trim().toLowerCase();
@@ -479,6 +659,8 @@ function normalizeContent(pageKey, locale, raw) {
     const heroIn = input.hero && typeof input.hero === "object" ? input.hero : {};
     const featuresIn = input.features && typeof input.features === "object" ? input.features : {};
     const discoverIn = input.discover && typeof input.discover === "object" ? input.discover : {};
+    const templatesIn = input.templates && typeof input.templates === "object" ? input.templates : {};
+    const collabIn = input.collab && typeof input.collab === "object" ? input.collab : {};
     const pricingIn = input.pricing && typeof input.pricing === "object" ? input.pricing : {};
     const faqIn = input.faq && typeof input.faq === "object" ? input.faq : {};
     const finalIn = input.finalCta && typeof input.finalCta === "object" ? input.finalCta : {};
@@ -516,6 +698,28 @@ function normalizeContent(pageKey, locale, raw) {
             discoverIn.featuredSongIds,
             defaults.discover.featuredSongIds || [],
           ),
+        },
+        templates: {
+          eyebrow: clip(templatesIn.eyebrow, 80) || defaults.templates.eyebrow,
+          title: clip(templatesIn.title, 160) || defaults.templates.title,
+          lead: clip(templatesIn.lead, 400) || defaults.templates.lead,
+          ctaLabel: clip(templatesIn.ctaLabel, 60) || defaults.templates.ctaLabel,
+          ctaHref: sanitizeHref(templatesIn.ctaHref, defaults.templates.ctaHref),
+          imageUrl: sanitizeImageUrl(templatesIn.imageUrl, defaults.templates.imageUrl),
+          imageAlt: clip(templatesIn.imageAlt, 200) || defaults.templates.imageAlt,
+          cards: normalizeTemplateCards(templatesIn.cards, defaults.templates.cards),
+        },
+        collab: {
+          eyebrow: clip(collabIn.eyebrow, 80) || defaults.collab.eyebrow,
+          title: clip(collabIn.title, 160) || defaults.collab.title,
+          lead: clip(collabIn.lead, 400) || defaults.collab.lead,
+          ctaPrimaryLabel: clip(collabIn.ctaPrimaryLabel, 60) || defaults.collab.ctaPrimaryLabel,
+          ctaPrimaryHref: sanitizeHref(collabIn.ctaPrimaryHref, defaults.collab.ctaPrimaryHref),
+          ctaSecondaryLabel: clip(collabIn.ctaSecondaryLabel, 60) || defaults.collab.ctaSecondaryLabel,
+          ctaSecondaryHref: sanitizeHref(collabIn.ctaSecondaryHref, defaults.collab.ctaSecondaryHref),
+          imageUrl: sanitizeImageUrl(collabIn.imageUrl, defaults.collab.imageUrl),
+          imageAlt: clip(collabIn.imageAlt, 200) || defaults.collab.imageAlt,
+          points: normalizeCollabPoints(collabIn.points, defaults.collab.points),
         },
         pricing: {
           eyebrow: clip(pricingIn.eyebrow, 80) || defaults.pricing.eyebrow,

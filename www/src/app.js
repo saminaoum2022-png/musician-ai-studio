@@ -202,6 +202,7 @@ import {
   applyScreenshotModeFromDeepLink,
   initScreenshotMode,
   screenshotDisplayName,
+  screenshotGreetingName,
   screenshotHandle,
   screenshotProf,
   screenshotSanitizeCopy,
@@ -7086,9 +7087,13 @@ function syncHomeMakeSegUi() {
 
 function homeDeskGreetingName() {
   const u = String(activeProfile?.username || "").trim();
-  if (u && !isPlaceholderUsername(u)) return u.replace(/^@/, "");
+  if (u && !isPlaceholderUsername(u)) {
+    const name = u.replace(/^@/, "");
+    return screenshotGreetingName(name);
+  }
   const email = String(authSession?.user?.email || "").split("@")[0].trim();
-  return email || "there";
+  const fallback = email || "there";
+  return screenshotGreetingName(fallback);
 }
 
 function homeDeskGreetingHtml() {

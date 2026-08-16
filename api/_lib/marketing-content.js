@@ -116,6 +116,31 @@ function defaultHomeContentEn() {
           answerHtml:
             "New accounts include free credits. Pro subscriptions add more credits and premium features.",
         },
+        {
+          question: "What can I create with NabadAi?",
+          answerHtml:
+            'Turn lyrics, a hum, or a photo mood into a full song — plus covers, remixes, instrumentals, and occasion templates. Explore <a href="/ai-music-generator">AI music generator</a>, <a href="/hum-to-song">hum to song</a>, and <a href="/photo-to-song">photo to song</a>.',
+        },
+        {
+          question: "Does NabadAi support Arabic music, dabke, and dialects?",
+          answerHtml:
+            'Yes. Write Arabic lyrics, guide Lebanese and other dialects where supported, and shape dabke, khaleeji, tarab, and regional styles. See our <a href="/arabic-ai-music-generator">Arabic AI music</a> page.',
+        },
+        {
+          question: "Can I publish songs on Discover?",
+          answerHtml:
+            "Yes. Keep drafts private, then publish to your profile and share on Discover when you're ready.",
+        },
+        {
+          question: "Are there templates for birthdays, weddings, and occasions?",
+          answerHtml:
+            "Yes. In the app, pick an occasion or dedication template to get lyrics and style direction faster — useful for gifts and events.",
+        },
+        {
+          question: "Do I need music production experience?",
+          answerHtml:
+            "No. NabadAi is built for people who start with an idea, not a DAW. You guide mood, lyrics, and style; the studio handles generation.",
+        },
       ],
     },
     finalCta: {
@@ -201,10 +226,48 @@ function defaultHomeContentAr() {
     },
     faq: {
       title: "أسئلة شائعة",
-      items: en.faq.items.map((item, i) => ({
-        question: ["هل أحتاج تحميل تطبيق؟", "هل يمكنني استخدام كلماتي وصوتي؟", "هل هو مجاني؟"][i] || item.question,
-        answerHtml: item.answerHtml,
-      })),
+      items: [
+        {
+          question: "هل أحتاج تحميل تطبيق؟",
+          answerHtml:
+            'يمكنك تجربة NabadAi في المتصفح على <a href="/app">nabadai.com/app</a> أو تثبيت تطبيق iOS لتجربة أفضل.',
+        },
+        {
+          question: "هل يمكنني استخدام كلماتي وصوتي؟",
+          answerHtml:
+            "نعم. اكتب أو ولّد كلمات، ارفع مرجعاً للحن، أو أنشئ Persona من عينة صوتك.",
+        },
+        {
+          question: "هل الخدمة مجانية؟",
+          answerHtml:
+            "الحسابات الجديدة تتضمن رصيداً مجانياً. اشتراك Pro يضيف المزيد من الرصيد والميزات المتقدمة.",
+        },
+        {
+          question: "ماذا يمكنني إنشاؤه مع NabadAi؟",
+          answerHtml:
+            'حوّل الكلمات أو الهمهمة أو مزاج صورة إلى أغنية كاملة — مع أغلفة وريمكسات وموسيقى instrumental وقوالب للمناسبات. اكتشف <a href="/ar/ai-music-generator">مولد الموسيقى</a> و<a href="/ar/hum-to-song">الهمهمة إلى أغنية</a> و<a href="/ar/photo-to-song">الصورة إلى أغنية</a>.',
+        },
+        {
+          question: "هل يدعم NabadAi الموسيقى العربية والدبكة واللهجات؟",
+          answerHtml:
+            'نعم. اكتب كلماتاً عربية، وجّه اللهجة اللبنانية وغيرها حيث تتوفر، واختر اتجاهات مثل الدبكة والخليجي والطرب. المزيد في صفحة <a href="/ar/arabic-ai-music-generator">الموسيقى العربية</a>.',
+        },
+        {
+          question: "هل يمكنني نشر أغانيي على Discover؟",
+          answerHtml:
+            "نعم. احتفظ بالمسودات خاصة، ثم انشر على ملفك الشخصي وشارك على Discover عندما تكون جاهزاً.",
+        },
+        {
+          question: "هل توجد قوالب لأعياد الميلاد والأعراس والمناسبات؟",
+          answerHtml:
+            "نعم. داخل التطبيق، اختر قالب مناسبة أو إهداء للحصول على كلمات واتجاه أسلوب أسرع — مفيد للهدايا والمناسبات.",
+        },
+        {
+          question: "هل أحتاج خبرة في الإنتاج الموسيقي؟",
+          answerHtml:
+            "لا. NabadAi مُصمَّم للمبدعين الذين يبدأون بفكرة، لا ببرنامج DAW. أنت توجّه المزاج والكلمات والأسلوب؛ والاستوديو يتولى التوليد.",
+        },
+      ],
     },
     finalCta: {
       title: "ابدأ أغنيتك التالية",

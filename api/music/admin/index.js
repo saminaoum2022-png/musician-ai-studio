@@ -375,13 +375,16 @@ function kindCreditReasons(kind) {
   const map = {
     song: ["full_song", "refund_full_song"],
     photo: ["full_song", "refund_full_song"],
-    hum_track: ["full_song", "refund_full_song"],
-    instrumental: ["full_song", "refund_full_song"],
+    hum_track: ["stems_remix", "refund_stems_remix", "full_song", "refund_full_song"],
+    instrumental: ["stems_remix", "refund_stems_remix", "full_song", "refund_full_song"],
+    cover: ["stems_remix", "refund_stems_remix"],
+    remix: ["stems_remix", "refund_stems_remix"],
+    extend: ["stems_remix", "refund_stems_remix"],
     music_video: ["full_song", "refund_full_song"],
-    studio_guide: ["full_song", "refund_full_song"],
-    stems: ["stems", "refund_stems"],
+    studio_guide: ["stems_remix", "refund_stems_remix"],
+    stems: ["stems_vocal_removal", "refund_stems_vocal_removal", "stems", "refund_stems"],
     persona: ["persona", "refund_persona"],
-    sound: ["sound", "refund_sound"],
+    sound: ["sound_generate", "refund_sound_generate"],
     mashup: ["mashup", "refund_mashup"],
   };
   return map[k] || [k, `refund_${k}`];
@@ -772,10 +775,20 @@ async function getCredits(limit, offset) {
   return { transactions, total };
 }
 
-async function getGenerations(limit, offset) {
-  const res = await serviceFetch(
-    `music_generation_logs?select=id,user_id,task_id,kind,provider,prompt,status,credits_used,provider_cost_usd,error_message,created_at,completed_at&order=created_at.desc&limit=${limit}&offset=${offset}`,
-  );
+async function getGenerations(limit, offset, filters = {}) {
+  const parts = [
+    "music_generation_logs?select=id,user_id,task_id,kind,provider,prompt,request_detail,status,credits_used,provider_cost_usd,error_message,created_at,completed_at",
+  ];
+  const dateFrom = String(filters.dateFrom || "").trim();
+  const dateTo = String(filters.dateTo || "").trim();
+  const kind = String(filters.kind || "").trim().toLowerCase();
+  const provider = String(filters.provider || "").trim().toLowerCase();
+  if (dateFrom) parts.push(`created_at=gte.${encodeURIComponent(`${dateFrom}T00:00:00.000Z`)}`);
+  if (dateTo) parts.push(`created_at=lte.${encodeURIComponent(`${dateTo}T23:59:59.999Z`)}`);
+  if (kind) parts.push(`kind=eq.${encodeURIComponent(kind)}`);
+  if (provider) parts.push(`provider=eq.${encodeURIComponent(provider)}`);
+  parts.push(`order=created_at.desc&limit=${limit}&offset=${offset}`);
+  const res = await serviceFetch(parts.join("&"));
   const rows = Array.isArray(res.data) ? res.data : [];
   const ids = [...new Set(rows.map((r) => r.user_id).filter(Boolean))];
   let profileMap = new Map();
@@ -798,6 +811,7 @@ async function getGenerations(limit, offset) {
       kind: r.kind,
       provider: r.provider,
       prompt: r.prompt || "",
+      requestDetail: r.request_detail || "",
       status: r.status,
       creditsUsed: Number(r.credits_used || 0),
       providerCostUsd: r.provider_cost_usd != null ? Number(r.provider_cost_usd) : null,
@@ -806,7 +820,7 @@ async function getGenerations(limit, offset) {
       completedAt: r.completed_at,
     };
   });
-  return { generations, total: res.total ?? generations.length };
+  return { generations, total: res.total ?? generations.length, filters: { dateFrom, dateTo, kind, provider } };
 }
 
 async function getPublications(limit, offset) {
@@ -1110,7 +1124,7 @@ async function getGenerationDetail(generationIdInput) {
 
   const enc = encodeURIComponent(gid);
   const logRes = await serviceFetch(
-    `music_generation_logs?select=id,user_id,task_id,kind,provider,prompt,status,credits_used,provider_cost_usd,error_message,created_at,completed_at&id=eq.${enc}&limit=1`,
+    `music_generation_logs?select=id,user_id,task_id,kind,provider,prompt,request_detail,status,credits_used,provider_cost_usd,error_message,created_at,completed_at&id=eq.${enc}&limit=1`,
   );
   const row = Array.isArray(logRes.data) && logRes.data[0] ? logRes.data[0] : null;
   if (!row) {
@@ -1190,6 +1204,7 @@ async function getGenerationDetail(generationIdInput) {
       kind: row.kind || "",
       provider: row.provider || "",
       prompt: row.prompt || "",
+      requestDetail: row.request_detail || "",
       status: row.status || "",
       creditsUsed: Number(row.credits_used || 0),
       providerCostUsd: row.provider_cost_usd != null ? Number(row.provider_cost_usd) : null,
@@ -1323,6 +1338,10 @@ module.exports = async function handler(req, res) {
   const search = String(url.searchParams.get("search") || "").trim();
   const userId = String(url.searchParams.get("userId") || "").trim();
   const generationId = String(url.searchParams.get("generationId") || "").trim();
+  const genDateFrom = String(url.searchParams.get("dateFrom") || "").trim();
+  const genDateTo = String(url.searchParams.get("dateTo") || "").trim();
+  const genKind = String(url.searchParams.get("kind") || "").trim().toLowerCase();
+  const genProvider = String(url.searchParams.get("provider") || "").trim().toLowerCase();
   const healthRefresh = String(url.searchParams.get("healthRefresh") || "").trim() === "1";
 
   const adminView = view === "user" ? "user" : view === "generation" ? "generation" : view === "suno" ? "providers" : view;
@@ -1369,7 +1388,15 @@ module.exports = async function handler(req, res) {
     } else if (view === "credits") {
       payload = { ...payload, ...(await getCredits(limit, offset)) };
     } else if (view === "generations") {
-      payload = { ...payload, ...(await getGenerations(limit, offset)) };
+      payload = {
+        ...payload,
+        ...(await getGenerations(limit, offset, {
+          dateFrom: genDateFrom,
+          dateTo: genDateTo,
+          kind: genKind,
+          provider: genProvider,
+        })),
+      };
     } else if (view === "subscriptions") {
       payload = { ...payload, ...(await getSubscriptions(limit, offset)) };
     } else if (view === "billing") {

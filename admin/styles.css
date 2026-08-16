@@ -1185,6 +1185,24 @@ td.num { font-variant-numeric: tabular-nums; }
   font-size: 0.84rem;
 }
 
+.generationFilterBar {
+  margin-bottom: 4px;
+}
+
+.generationFilterGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 12px 16px;
+  width: 100%;
+}
+
+.genDetailPrompt--payload {
+  max-height: 420px;
+  overflow: auto;
+  font-size: 0.78rem;
+  line-height: 1.45;
+}
+
 .marketingFieldInput {
   width: 100%;
   box-sizing: border-box;

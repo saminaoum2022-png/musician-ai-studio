@@ -15,6 +15,7 @@ const {
 } = require("../_lib/credits-auth");
 const { applyCors } = require("../_lib/cors");
 const { queueRegisterSunoWatch } = require("../_lib/suno-generation-watch");
+const { queueLogSunoGeneration, sunoErrorMessage } = require("../_lib/suno-admin-log");
 
 const SOUND_COST = 2.5;
 
@@ -104,6 +105,17 @@ module.exports = async function handler(req, res) {
       if (!isAdmin) {
         await refund(user.userId, SOUND_COST, "refund_sound_generate", "suno_http_error").catch(() => null);
       }
+      queueLogSunoGeneration({
+        userId: user.userId,
+        kind: "sound",
+        endpoint: "sounds",
+        prompt,
+        requestPayload: payload,
+        status: isAdmin ? "failed" : "refunded",
+        creditsUsed: isAdmin ? 0 : SOUND_COST,
+        errorMessage: sunoErrorMessage(data, text, r.status),
+        isAdmin,
+      });
       return json(res, 502, { error: "Upstream engine error", status: r.status, details: data || text });
     }
     const sunoCode = data && typeof data === "object" && "code" in data ? Number(data.code) : 200;
@@ -112,10 +124,32 @@ module.exports = async function handler(req, res) {
         await refund(user.userId, SOUND_COST, "refund_sound_generate", `suno_code_${sunoCode}`).catch(() => null);
       }
       const msg = data?.msg || data?.message || data?.error || "Request was rejected upstream";
+      queueLogSunoGeneration({
+        userId: user.userId,
+        kind: "sound",
+        endpoint: "sounds",
+        prompt,
+        requestPayload: payload,
+        status: isAdmin ? "failed" : "refunded",
+        creditsUsed: isAdmin ? 0 : SOUND_COST,
+        errorMessage: msg,
+        isAdmin,
+      });
       return json(res, 502, { error: msg, details: data });
     }
 
     const soundTaskId = extractSunoTaskId(data);
+    queueLogSunoGeneration({
+      userId: user.userId,
+      taskId: soundTaskId,
+      kind: "sound",
+      endpoint: "sounds",
+      prompt,
+      requestPayload: payload,
+      status: "pending",
+      creditsUsed: isAdmin ? 0 : SOUND_COST,
+      isAdmin,
+    });
     if (soundTaskId) {
       queueRegisterSunoWatch({
         userId: user.userId,

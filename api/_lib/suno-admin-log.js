@@ -1,0 +1,129 @@
+/**
+ * Admin generation logs for all Suno API calls (generate, cover, extend, stems, sounds).
+ */
+
+const { queueLogMusicGeneration } = require("./music-generation-log");
+
+const GENERATION_KINDS = Object.freeze([
+  "song",
+  "photo",
+  "sound",
+  "hum_track",
+  "instrumental",
+  "music_video",
+  "studio_guide",
+  "stems",
+  "persona",
+  "mashup",
+  "cover",
+  "extend",
+  "remix",
+  "other",
+]);
+
+function summarizeSunoPayload(payload) {
+  if (!payload || typeof payload !== "object") return "";
+  const copy = { ...payload };
+  if (copy.uploadUrl) {
+    try {
+      const u = new URL(String(copy.uploadUrl));
+      copy.uploadUrl = `[upload:${u.host}${u.pathname.slice(0, 40)}…]`;
+    } catch {
+      copy.uploadUrl = "[upload]";
+    }
+  }
+  if (copy.fileBytes) copy.fileBytes = `[${Buffer.isBuffer(copy.fileBytes) ? copy.fileBytes.length : "bytes"}]`;
+  try {
+    return JSON.stringify(copy, null, 2).slice(0, 3800);
+  } catch {
+    return String(copy).slice(0, 3800);
+  }
+}
+
+function sunoErrorMessage(data, rawText, httpStatus) {
+  const msg = data?.msg || data?.message || data?.error;
+  if (msg) return String(msg).slice(0, 500);
+  if (httpStatus) return `suno_http_${httpStatus}`;
+  const text = String(rawText || "").trim();
+  if (text && text.length < 500) return text;
+  return text ? `${text.slice(0, 497)}…` : "Suno request failed";
+}
+
+function resolveStemsLogKind(body, isRemixAction, stemType) {
+  if (!isRemixAction) {
+    return stemType === "split_stem" ? "stems" : "stems";
+  }
+  const mode = String(body?.referenceMode || "").trim().toLowerCase();
+  const instrumentPreset = String(body?.instrumentPreset || "").trim();
+  const source = String(body?.source || "").trim();
+  if (instrumentPreset) return "hum_track";
+  if (["vocal_full", "vocal_cover", "song_cover", "vocal_instrumental"].includes(mode)) return "cover";
+  if (mode === "song_remix") return "remix";
+  if (["vocal_extend", "song_extend"].includes(mode)) return "extend";
+  if (source === "studio") return "studio_guide";
+  if (["humming_music", "humming_backing"].includes(mode)) return "hum_track";
+  return "instrumental";
+}
+
+function buildStemsPromptLabel(body, sunoPayload) {
+  const title = String(body?.title || sunoPayload?.title || "").trim();
+  const prompt = String(body?.prompt || sunoPayload?.prompt || "").trim();
+  const style = String(body?.style || sunoPayload?.style || sunoPayload?.tags || "").trim();
+  const mode = String(body?.referenceMode || "").trim();
+  const bits = [
+    mode ? `[${mode}]` : "",
+    title,
+    prompt,
+    style,
+  ].filter(Boolean);
+  return bits.join(" · ").slice(0, 500);
+}
+
+function formatRequestDetail(endpoint, payload) {
+  const parts = [];
+  if (endpoint) parts.push(`Suno endpoint: ${endpoint}`);
+  const body = summarizeSunoPayload(payload);
+  if (body) parts.push(body);
+  return parts.join("\n\n").slice(0, 4000);
+}
+
+function normalizeLogKind(kind) {
+  const k = String(kind || "song").trim().toLowerCase();
+  return GENERATION_KINDS.includes(k) ? k : "other";
+}
+
+function queueLogSunoGeneration({
+  userId,
+  taskId = "",
+  kind = "song",
+  endpoint = "",
+  prompt = "",
+  requestPayload = null,
+  status = "pending",
+  creditsUsed = 0,
+  errorMessage = "",
+  isAdmin = false,
+} = {}) {
+  const resolvedStatus = status === "refunded" && isAdmin ? "failed" : status;
+  queueLogMusicGeneration({
+    userId,
+    taskId,
+    kind: normalizeLogKind(kind),
+    provider: "suno",
+    prompt: String(prompt || "").slice(0, 2000),
+    requestDetail: formatRequestDetail(endpoint, requestPayload),
+    status: resolvedStatus,
+    creditsUsed: Number(creditsUsed || 0),
+    errorMessage: String(errorMessage || "").slice(0, 500),
+  });
+}
+
+module.exports = {
+  GENERATION_KINDS,
+  summarizeSunoPayload,
+  sunoErrorMessage,
+  resolveStemsLogKind,
+  buildStemsPromptLabel,
+  formatRequestDetail,
+  queueLogSunoGeneration,
+};

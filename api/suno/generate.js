@@ -23,6 +23,7 @@ const { userIsAdmin } = require("../_lib/admin-auth");
 const { applyCors } = require("../_lib/cors");
 const { sanitizeSunoStyleTags, buildSunoErrorBody } = require("../_lib/suno-user-errors");
 const { queueRegisterSunoWatch } = require("../_lib/suno-generation-watch");
+const { formatRequestDetail, sunoErrorMessage } = require("../_lib/suno-admin-log");
 const { queueLogMusicGeneration } = require("../_lib/music-generation-log");
 const { requireProForWebApi } = require("../_lib/pro-web-gate");
 
@@ -202,9 +203,10 @@ module.exports = async function handler(req, res) {
         userId: user.userId,
         kind: watchKindForBody(body),
         prompt: buildPromptLabel(prompt, mergedStyle, title),
+        requestDetail: formatRequestDetail("generate", payload),
         status: isAdmin ? "failed" : "refunded",
         creditsUsed: isAdmin ? 0 : FULL_SONG_COST,
-        errorMessage: `suno_http_${r.status}`,
+        errorMessage: sunoErrorMessage(data, text, r.status),
       });
       return json(res, 502, buildSunoErrorBody(data || text, { error: "Upstream engine error" }));
     }
@@ -218,6 +220,7 @@ module.exports = async function handler(req, res) {
         userId: user.userId,
         kind: watchKindForBody(body),
         prompt: buildPromptLabel(prompt, mergedStyle, title),
+        requestDetail: formatRequestDetail("generate", payload),
         status: isAdmin ? "failed" : "refunded",
         creditsUsed: isAdmin ? 0 : FULL_SONG_COST,
         errorMessage: msg,
@@ -232,6 +235,7 @@ module.exports = async function handler(req, res) {
       taskId: sunoTaskId,
       kind: watchKind,
       prompt: buildPromptLabel(prompt, mergedStyle, title),
+      requestDetail: formatRequestDetail("generate", payload),
       status: "pending",
       creditsUsed: isAdmin ? 0 : FULL_SONG_COST,
     });

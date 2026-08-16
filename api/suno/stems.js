@@ -42,6 +42,12 @@ const { applyCors } = require("../_lib/cors");
 const { resolveHumTrackPreset } = require("../_lib/hum-track-presets");
 const { queueRegisterSunoWatch } = require("../_lib/suno-generation-watch");
 const { sanitizeSunoStyleTags, buildSunoErrorBody } = require("../_lib/suno-user-errors");
+const {
+  queueLogSunoGeneration,
+  sunoErrorMessage,
+  resolveStemsLogKind,
+  buildStemsPromptLabel,
+} = require("../_lib/suno-admin-log");
 
 const MAX_UPLOAD_BYTES = 25 * 1024 * 1024;
 // Reference-audio generations (cover / extend / add-instrumental) all
@@ -362,6 +368,20 @@ module.exports = async function handler(req, res) {
         } catch {}
         if (!coverRes.ok || (coverData && "code" in coverData && Number(coverData.code) !== 200)) {
           await refund("suno_cover_failed");
+          logStemsOp({
+            user,
+            body,
+            isAdmin,
+            cost,
+            isRemixAction: true,
+            endpoint: "upload-cover",
+            payload: coverPayload,
+            data: coverData,
+            text: coverText,
+            httpStatus: coverRes.status,
+            httpOk: coverRes.ok,
+            status: isAdmin ? "failed" : "refunded",
+          });
           return json(res, 502, {
             ...buildSunoErrorBody(coverData || coverText, { error: "Upload-cover failed" }),
             status: coverRes.status || 502,
@@ -371,6 +391,19 @@ module.exports = async function handler(req, res) {
         registerStemsWatch(user, body, coverData, {
           kind: instrumentPreset ? "hum_track" : "song",
           variantCount: 2,
+        });
+        logStemsOp({
+          user,
+          body,
+          isAdmin,
+          cost,
+          isRemixAction: true,
+          endpoint: "upload-cover",
+          payload: coverPayload,
+          data: coverData,
+          httpStatus: coverRes.status,
+          httpOk: true,
+          status: "pending",
         });
         return json(res, 200, {
           ...(coverData || { raw: coverText }),
@@ -406,6 +439,20 @@ module.exports = async function handler(req, res) {
         const extData = safeJson(extText);
         if (!extRes.ok || (extData && "code" in extData && Number(extData.code) !== 200)) {
           await refund("suno_extend_failed");
+          logStemsOp({
+            user,
+            body,
+            isAdmin,
+            cost,
+            isRemixAction: true,
+            endpoint: "upload-extend",
+            payload: extPayload,
+            data: extData,
+            text: extText,
+            httpStatus: extRes.status,
+            httpOk: extRes.ok,
+            status: isAdmin ? "failed" : "refunded",
+          });
           return json(res, 502, {
             ...buildSunoErrorBody(extData || extText, { error: "Upload-extend failed" }),
             status: extRes.status || 502,
@@ -413,6 +460,19 @@ module.exports = async function handler(req, res) {
           });
         }
         registerStemsWatch(user, body, extData, { kind: "song", variantCount: 2 });
+        logStemsOp({
+          user,
+          body,
+          isAdmin,
+          cost,
+          isRemixAction: true,
+          endpoint: "upload-extend",
+          payload: extPayload,
+          data: extData,
+          httpStatus: extRes.status,
+          httpOk: true,
+          status: "pending",
+        });
         return json(res, 200, {
           ...(extData || { raw: extText }),
           uploadUrl,
@@ -515,6 +575,20 @@ module.exports = async function handler(req, res) {
       } catch {}
       if (!addRes.ok || (addData && "code" in addData && Number(addData.code) !== 200)) {
         await refund("suno_add_inst_failed");
+        logStemsOp({
+          user,
+          body,
+          isAdmin,
+          cost,
+          isRemixAction: true,
+          endpoint: "add-instrumental",
+          payload: addPayload,
+          data: addData,
+          text: addText,
+          httpStatus: addRes.status,
+          httpOk: addRes.ok,
+          status: isAdmin ? "failed" : "refunded",
+        });
         return json(res, 502, {
           ...buildSunoErrorBody(addData || addText, { error: "Add instrumental failed" }),
           status: addRes.status || 502,
@@ -522,6 +596,19 @@ module.exports = async function handler(req, res) {
         });
       }
       registerStemsWatch(user, body, addData, { kind: "song", variantCount: 2 });
+      logStemsOp({
+        user,
+        body,
+        isAdmin,
+        cost,
+        isRemixAction: true,
+        endpoint: "add-instrumental",
+        payload: addPayload,
+        data: addData,
+        httpStatus: addRes.status,
+        httpOk: true,
+        status: "pending",
+      });
       return json(res, 200, {
         ...(addData || { raw: addText }),
         uploadUrl,
@@ -552,13 +639,57 @@ module.exports = async function handler(req, res) {
     const data = safeJson(text);
     if (!r.ok) {
       await refund(`suno_http_${r.status}`);
+      logStemsOp({
+        user,
+        body,
+        isAdmin,
+        cost,
+        isRemixAction: false,
+        stemType: type,
+        endpoint: "vocal-removal",
+        payload,
+        data,
+        text,
+        httpStatus: r.status,
+        httpOk: false,
+        status: isAdmin ? "failed" : "refunded",
+      });
       return json(res, 502, buildSunoErrorBody(data || text, { error: "Upstream engine error" }));
     }
     if (data && typeof data === "object" && "code" in data && data.code !== 200) {
       await refund(`suno_code_${data.code}`);
+      logStemsOp({
+        user,
+        body,
+        isAdmin,
+        cost,
+        isRemixAction: false,
+        stemType: type,
+        endpoint: "vocal-removal",
+        payload,
+        data,
+        text,
+        httpStatus: r.status,
+        httpOk: false,
+        status: isAdmin ? "failed" : "refunded",
+      });
       return json(res, 502, buildSunoErrorBody(data, { error: "Request was rejected upstream" }));
     }
     registerStemsWatch(user, body, data, { kind: "instrumental", variantCount: 1 });
+    logStemsOp({
+      user,
+      body,
+      isAdmin,
+      cost,
+      isRemixAction: false,
+      stemType: type,
+      endpoint: "vocal-removal",
+      payload,
+      data,
+      httpStatus: r.status,
+      httpOk: true,
+      status: "pending",
+    });
     return json(res, 200, {
       ...(data || { raw: text }),
       _credits: { spent: isAdmin ? 0 : cost, balance: balanceAfterDebit, admin: isAdmin || undefined },
@@ -578,6 +709,42 @@ function extractSunoTaskId(data) {
       data?.task_id ||
       "",
   ).trim();
+}
+
+function logStemsOp({
+  user,
+  body,
+  isAdmin,
+  cost,
+  isRemixAction,
+  stemType = "",
+  endpoint,
+  payload = null,
+  data = null,
+  text = "",
+  httpStatus = 0,
+  httpOk = false,
+  status = "",
+  errorMessage = "",
+}) {
+  const upstreamOk = httpOk && (!data || !("code" in data) || Number(data.code) === 200);
+  const resolvedStatus = status || (upstreamOk ? "pending" : (isAdmin ? "failed" : "refunded"));
+  queueLogSunoGeneration({
+    userId: user.userId,
+    taskId: extractSunoTaskId(data),
+    kind: resolveStemsLogKind(body, isRemixAction, stemType),
+    endpoint,
+    prompt: buildStemsPromptLabel(body, payload || {}),
+    requestPayload: {
+      referenceMode: body?.referenceMode || null,
+      action: isRemixAction ? "add_instrumental" : "stems",
+      ...(payload && typeof payload === "object" ? payload : {}),
+    },
+    status: resolvedStatus,
+    creditsUsed: isAdmin ? 0 : cost,
+    errorMessage: errorMessage || (resolvedStatus !== "pending" ? sunoErrorMessage(data, text, httpStatus) : ""),
+    isAdmin,
+  });
 }
 
 function registerStemsWatch(user, body, responseData, { kind, variantCount = 2 } = {}) {

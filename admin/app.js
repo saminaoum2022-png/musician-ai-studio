@@ -17,6 +17,7 @@ const state = {
   offset: 0,
   userSearch: "",
   billingSearch: "",
+  generationFilters: { dateFrom: "", dateTo: "", kind: "", provider: "" },
   userDetailId: "",
   generationDetailId: "",
   returnView: "users",
@@ -531,7 +532,15 @@ async function refreshSessionIfNeeded() {
   return true;
 }
 
-async function adminFetch(view, { offset = 0, limit = PAGE_SIZE, search = "", userId = "", generationId = "", healthRefresh = false } = {}) {
+async function adminFetch(view, {
+  offset = 0,
+  limit = PAGE_SIZE,
+  search = "",
+  userId = "",
+  generationId = "",
+  generationFilters = null,
+  healthRefresh = false,
+} = {}) {
   await refreshSessionIfNeeded();
   const token = state.session?.access_token;
   if (!token) throw new Error("Not signed in");
@@ -543,6 +552,11 @@ async function adminFetch(view, { offset = 0, limit = PAGE_SIZE, search = "", us
   if (trimmedUserId) qs.set("userId", trimmedUserId);
   const trimmedGenerationId = String(generationId || "").trim();
   if (trimmedGenerationId) qs.set("generationId", trimmedGenerationId);
+  const gf = generationFilters || {};
+  if (gf.dateFrom) qs.set("dateFrom", gf.dateFrom);
+  if (gf.dateTo) qs.set("dateTo", gf.dateTo);
+  if (gf.kind) qs.set("kind", gf.kind);
+  if (gf.provider) qs.set("provider", gf.provider);
   if (healthRefresh) qs.set("healthRefresh", "1");
   const r = await fetch(`/api/music/admin?${qs}`, {
     headers: { Authorization: `Bearer ${token}` },
@@ -758,6 +772,10 @@ function viewCacheKey() {
   }
   if (state.view === "billing" && state.billingSearch.trim().length >= 2) {
     key += `:${state.billingSearch.trim().toLowerCase()}`;
+  }
+  if (state.view === "generations") {
+    const gf = state.generationFilters || {};
+    key += `:gf:${gf.dateFrom || ""}:${gf.dateTo || ""}:${gf.kind || ""}:${gf.provider || ""}`;
   }
   if (state.view === "user" && state.userDetailId) {
     key += `:uid:${state.userDetailId}`;
@@ -1386,7 +1404,12 @@ function renderGenerationDetail(data) {
 
   const promptBlock = g.prompt
     ? `<pre class="genDetailPrompt">${escapeHtml(g.prompt)}</pre>`
-    : `<p class="sectionNote">No prompt stored for this log entry.</p>`;
+    : `<p class="sectionNote">No prompt summary stored for this log entry.</p>`;
+
+  const requestBlock = g.requestDetail
+    ? `<div class="detailMetaBlock"><strong>Suno request</strong></div>
+       <pre class="genDetailPrompt genDetailPrompt--payload">${escapeHtml(g.requestDetail)}</pre>`
+    : "";
 
   const ledgerRows = data.ledger || [];
   const ledgerBody = ledgerRows.length
@@ -1440,8 +1463,9 @@ function renderGenerationDetail(data) {
         ${statCard("Duration", fmtDurationMs(g.durationMs), g.completedAt ? fmtDateCompact(g.completedAt) : "Pending")}
         ${statCard("Started", fmtDateCompact(g.createdAt), g.taskId ? `${g.taskId.slice(0, 18)}…` : "No task")}
       </div>
-      <div class="detailMetaBlock"><strong>Prompt</strong></div>
+      <div class="detailMetaBlock"><strong>Prompt summary</strong></div>
       ${promptBlock}
+      ${requestBlock}
       <p class="detailMetaBlock detailMetaBlock--ids">
         <code class="promoCode">${escapeHtml(g.id)}</code>
         ${g.taskId ? ` · task <code class="promoCode">${escapeHtml(g.taskId)}</code>` : ""}
@@ -1821,6 +1845,38 @@ function renderCredits(data) {
 function renderGenerations(data) {
   const rows = data?.generations || [];
   const total = data?.total || rows.length;
+  const filters = data?.filters || state.generationFilters || {};
+  const kindOptions = [
+    ["", "All types"],
+    ["song", "Full song"],
+    ["cover", "Cover"],
+    ["remix", "Remix"],
+    ["extend", "Extend"],
+    ["hum_track", "Hum track"],
+    ["instrumental", "Add instrumental"],
+    ["stems", "Stem / vocal split"],
+    ["sound", "Sound"],
+    ["photo", "Photo song"],
+    ["persona", "Persona"],
+    ["music_video", "Music video"],
+    ["studio_guide", "Studio guide"],
+    ["mashup", "Mashup"],
+    ["other", "Other"],
+  ];
+  const providerOptions = [
+    ["", "All providers"],
+    ["suno", "Suno"],
+    ["minimax", "MiniMax"],
+    ["lyria", "Lyria"],
+    ["elevenlabs", "ElevenLabs"],
+    ["other", "Other"],
+  ];
+  const kindSelect = kindOptions.map(([val, label]) =>
+    `<option value="${escapeHtml(val)}"${filters.kind === val ? " selected" : ""}>${escapeHtml(label)}</option>`,
+  ).join("");
+  const providerSelect = providerOptions.map(([val, label]) =>
+    `<option value="${escapeHtml(val)}"${filters.provider === val ? " selected" : ""}>${escapeHtml(label)}</option>`,
+  ).join("");
   const body = rows.length
     ? rows.map((g) => {
       const gid = escapeHtml(g.id || "");
@@ -1838,10 +1894,35 @@ function renderGenerations(data) {
     }).join("")
     : `<tr><td colspan="8" class="loading">No generation logs yet</td></tr>`;
 
-  els.panels.generations.innerHTML = adminPageStack(listSection({
-    title: "Generation log",
-    note: "Click a row for prompt, errors, and linked songs.",
-    tableHtml: `
+  els.panels.generations.innerHTML = adminPageStack(`
+    <form id="generationFilterForm" class="toolbarBlock generationFilterBar">
+      <div class="generationFilterGrid">
+        <label class="field marketingField">
+          <span>From date</span>
+          <input id="genFilterDateFrom" type="date" class="marketingFieldInput" value="${escapeHtml(filters.dateFrom || "")}" />
+        </label>
+        <label class="field marketingField">
+          <span>To date</span>
+          <input id="genFilterDateTo" type="date" class="marketingFieldInput" value="${escapeHtml(filters.dateTo || "")}" />
+        </label>
+        <label class="field marketingField">
+          <span>Type</span>
+          <select id="genFilterKind" class="marketingFieldInput">${kindSelect}</select>
+        </label>
+        <label class="field marketingField">
+          <span>Provider</span>
+          <select id="genFilterProvider" class="marketingFieldInput">${providerSelect}</select>
+        </label>
+      </div>
+      <div class="heroActions">
+        <button type="submit" class="btnPrimary">Apply filters</button>
+        <button type="button" class="btnGhost" id="genFilterClear">Clear</button>
+      </div>
+    </form>
+    ${listSection({
+      title: "Generation log",
+      note: "Covers, remixes, stems, sounds, and full songs. Click a row for the Suno payload and errors.",
+      tableHtml: `
     <div class="tableWrap tableWrap--plain">
       <table class="table--compact">
         <thead>
@@ -1853,8 +1934,9 @@ function renderGenerations(data) {
         <tbody>${body}</tbody>
       </table>
     </div>`,
-    pager: pagerHtml(total, state.offset),
-  }), { plain: true });
+      pager: pagerHtml(total, state.offset),
+    })}
+  `, { plain: true });
 }
 
 function renderPublications(data) {
@@ -2985,6 +3067,7 @@ async function loadView({ force = false } = {}) {
             : "",
         userId: view === "user" ? state.userDetailId : "",
         generationId: view === "generation" ? state.generationDetailId : "",
+        generationFilters: view === "generations" ? state.generationFilters : null,
         healthRefresh: force && (view === "providers" || view === "suno"),
       });
     }
@@ -3233,6 +3316,20 @@ document.body.addEventListener("submit", (e) => {
     e.preventDefault();
     const input = billingSearchForm.querySelector("#billingSearchInput");
     state.billingSearch = String(input?.value || "").trim();
+    state.offset = 0;
+    void loadView({ force: true });
+    return;
+  }
+
+  const generationFilterForm = e.target.closest("#generationFilterForm");
+  if (generationFilterForm) {
+    e.preventDefault();
+    state.generationFilters = {
+      dateFrom: String(document.getElementById("genFilterDateFrom")?.value || "").trim(),
+      dateTo: String(document.getElementById("genFilterDateTo")?.value || "").trim(),
+      kind: String(document.getElementById("genFilterKind")?.value || "").trim(),
+      provider: String(document.getElementById("genFilterProvider")?.value || "").trim(),
+    };
     state.offset = 0;
     void loadView({ force: true });
     return;
@@ -3635,6 +3732,14 @@ document.body.addEventListener("click", (e) => {
   const billingSearchClear = e.target.closest("#billingSearchClear");
   if (billingSearchClear) {
     state.billingSearch = "";
+    state.offset = 0;
+    void loadView({ force: true });
+    return;
+  }
+
+  const genFilterClear = e.target.closest("#genFilterClear");
+  if (genFilterClear) {
+    state.generationFilters = { dateFrom: "", dateTo: "", kind: "", provider: "" };
     state.offset = 0;
     void loadView({ force: true });
     return;

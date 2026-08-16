@@ -24,11 +24,13 @@ const state = {
   grantPrefillEmail: "",
   marketingLocale: "en",
   marketingPage: "home",
+  marketingPanel: "content",
   marketingDraft: null,
   marketingHeroBlobUrl: "",
   marketingHeroUploading: false,
   marketingDraftPreviewWindow: null,
   marketingDraftPreviewPayload: null,
+  marketingLoadedContent: null,
   cache: {},
   recoveryTokenHash: "",
 };
@@ -784,7 +786,7 @@ function viewCacheKey() {
     key += `:gid:${state.generationDetailId}`;
   }
   if (state.view === "marketing") {
-    key += `:pg:${state.marketingPage || "home"}:loc:${state.marketingLocale || "en"}`;
+    key += `:pg:${state.marketingPage || "home"}:loc:${state.marketingLocale || "en"}:pn:${state.marketingPanel || "content"}`;
   }
   return key;
 }
@@ -2296,12 +2298,12 @@ function marketingField(label, id, value, { multiline = false, hint = "", highli
   </label>`;
 }
 
-function marketingSubsection(title, html, { description = "" } = {}) {
-  return `<div class="marketingSubsection">
-    <h4 class="marketingSubsectionTitle">${escapeHtml(title)}</h4>
+function marketingSubsection(title, html, { description = "", open = false } = {}) {
+  return `<details class="marketingSubsection"${open ? " open" : ""}>
+    <summary class="marketingSubsectionTitle">${escapeHtml(title)}</summary>
     ${description ? `<p class="marketingSubsectionDesc">${escapeHtml(description)}</p>` : ""}
     <div class="marketingSubsectionFields">${html}</div>
-  </div>`;
+  </details>`;
 }
 
 function marketingDetailCard(title, html, { description = "", badge = "" } = {}) {
@@ -2311,8 +2313,31 @@ function marketingDetailCard(title, html, { description = "", badge = "" } = {})
       ${badge ? `<span class="detailCardBadge">${escapeHtml(badge)}</span>` : ""}
     </div>
     ${description ? `<p class="detailCardDesc">${escapeHtml(description)}</p>` : ""}
-    ${html}
+    <div class="detailCardBody">${html}</div>
   </section>`;
+}
+
+function marketingSelectField(label, id, value, options, { hint = "" } = {}) {
+  const opts = options.map((o) => (
+    `<option value="${escapeHtml(o.value)}"${o.value === value ? " selected" : ""}>${escapeHtml(o.label)}</option>`
+  )).join("");
+  return `<label class="field marketingField">
+    <span>${escapeHtml(label)}</span>
+    <select id="${id}" class="marketingFieldInput">${opts}</select>
+    ${hint ? `<span class="cellMuted">${escapeHtml(hint)}</span>` : ""}
+  </label>`;
+}
+
+function marketingColorField(label, id, value, { hint = "" } = {}) {
+  const safe = String(value || "#23d5ab");
+  return `<label class="field marketingField">
+    <span>${escapeHtml(label)}</span>
+    <div class="marketingBrandSwatch">
+      <input id="${id}" type="color" value="${escapeHtml(safe)}" aria-label="${escapeHtml(label)}" />
+      <input type="text" class="marketingFieldInput marketingColorHex" id="${id}Hex" data-sync-color="${id}" value="${escapeHtml(safe)}" />
+    </div>
+    ${hint ? `<span class="cellMuted">${escapeHtml(hint)}</span>` : ""}
+  </label>`;
 }
 
 function updateMarketingHeroPreview(url) {
@@ -2455,8 +2480,21 @@ function readMarketingFormContent(pageKey = "home") {
         label: val(`mkSocialLabel${platform}`) || platform,
       })),
     };
+    if (document.getElementById("mkBrandCtaColor")) {
+      content.brand = readMarketingBrandForm();
+    }
   }
   return content;
+}
+
+function readMarketingBrandForm() {
+  return {
+    ctaColor: document.getElementById("mkBrandCtaColor")?.value || "#23d5ab",
+    ctaTextColor: document.getElementById("mkBrandCtaTextColor")?.value || "#051018",
+    headingFont: document.getElementById("mkBrandHeadingFont")?.value || "inter-display",
+    bodyFont: document.getElementById("mkBrandBodyFont")?.value || "inter",
+    accentViolet: document.getElementById("mkBrandAccentViolet")?.value || "#7c5cff",
+  };
 }
 
 function updateMarketingDraftSitePreview() {
@@ -2552,8 +2590,34 @@ function bindMarketingDraftPreviewListeners() {
   updateMarketingDraftSitePreview();
 }
 
+function renderMarketingBrandPanel(brand = {}) {
+  const b = brand || {};
+  const fontOptions = [
+    { value: "inter-display", label: "Inter Display (marketing default)" },
+    { value: "inter", label: "Inter" },
+    { value: "system", label: "System UI" },
+  ];
+  return marketingDetailCard("Brand palette", `
+    <p class="marketingBrandGuide">
+      <strong>What belongs here:</strong> site-wide look for nabadai.com — primary button color, text on buttons, heading/body fonts, and violet accent for gradients. Homepage hero copy and section text stay under <em>Pages</em>.
+    </p>
+    ${marketingSubsection("Buttons", `
+      ${marketingColorField("Primary CTA color", "mkBrandCtaColor", b.ctaColor || "#23d5ab", { hint: "Try free, Get started, Apply now pills" })}
+      ${marketingColorField("CTA text color", "mkBrandCtaTextColor", b.ctaTextColor || "#051018", { hint: "Label color on teal/violet buttons" })}
+    `, { open: true })}
+    ${marketingSubsection("Typography", `
+      ${marketingSelectField("Heading font", "mkBrandHeadingFont", b.headingFont || "inter-display", fontOptions, { hint: "Hero headline, section titles, NabadAi lockup" })}
+      ${marketingSelectField("Body font", "mkBrandBodyFont", b.bodyFont || "inter", fontOptions, { hint: "Paragraphs, FAQ, nav links" })}
+    `)}
+    ${marketingSubsection("Accent", `
+      ${marketingColorField("Violet accent", "mkBrandAccentViolet", b.accentViolet || "#7c5cff", { hint: "Gradients, Pro badges, secondary highlights" })}
+    `)}
+  `, { description: "Global theme tokens — saved with the English homepage." });
+}
+
 function renderMarketing(data) {
   const c = data?.content || {};
+  state.marketingLoadedContent = c;
   const seo = c.seo || {};
   const hero = c.hero || {};
   const features = c.features || {};
@@ -2582,15 +2646,17 @@ function renderMarketing(data) {
   const updated = data?.updatedAt ? fmtDate(data.updatedAt) : "Using defaults (not saved yet)";
   const source = data?.source === "database" ? "Published in database" : "Defaults only — save to publish";
 
-  const pagePicker = (pageCatalog.length ? pageCatalog : [
+  const panel = state.marketingPanel || "content";
+  const catalog = pageCatalog.length ? pageCatalog : [
     { key: "home", label: "Homepage" },
     { key: "ai-music-generator", label: "AI Music Generator" },
     { key: "hum-to-song", label: "Hum to Song" },
     { key: "lyrics-to-song", label: "Lyrics to Song" },
     { key: "photo-to-song", label: "Photo to Song" },
     { key: "arabic-ai-music-generator", label: "Arabic AI Music" },
-  ]).map((p) => (
-    `<button type="button" class="btnGhost${p.key === pageKey ? " isActivePage" : ""}" data-marketing-page="${escapeHtml(p.key)}"${p.key === pageKey ? " disabled" : ""}>${escapeHtml(p.label)}</button>`
+  ];
+  const pageOptions = catalog.map((p) => (
+    `<option value="${escapeHtml(p.key)}"${p.key === pageKey ? " selected" : ""}>${escapeHtml(p.label)}</option>`
   )).join("");
 
   const faqCount = isHome ? 8 : 3;
@@ -2709,32 +2775,52 @@ function renderMarketing(data) {
       `, { badge: "Homepage" })}` : "";
 
   els.panels.marketing.innerHTML = adminPageStack(`
-    <div class="toolbarBlock marketingToolbar">
-      <div class="inlineStats">
-        <span>Page: <strong>${escapeHtml(pageMeta.label || pageKey)}</strong></span>
-        <span>Locale: <strong>${locale === "ar" ? "Arabic" : "English"}</strong></span>
-        <span>${escapeHtml(source)}</span>
-        <span>Updated: ${escapeHtml(updated)}</span>
-      </div>
-      <div class="marketingPagePicker">${pagePicker}</div>
-      <div class="heroActions" style="margin-top:12px">
-        <button type="button" class="btnGhost" data-marketing-locale="en" ${locale === "en" ? "disabled" : ""}>English</button>
-        <button type="button" class="btnGhost" data-marketing-locale="ar" ${locale === "ar" ? "disabled" : ""}>Arabic</button>
-        <button type="button" class="btnGhost" id="btnMarketingDraftPreview" data-preview-path="${escapeHtml(previewPath)}">Preview draft ↗</button>
-        <a class="btnGhost" id="btnMarketingPreview" href="${escapeHtml(previewPath)}" target="_blank" rel="noopener">Preview live page ↗</a>
-        <button type="button" class="btnPrimary" id="btnMarketingSave">Save &amp; publish</button>
-      </div>
-      <p class="cellMuted marketingToolbarNote">Upload and edits stay private until you click Save &amp; publish. Hero images go live immediately after save — no redeploy needed.</p>
-      <p id="marketingSaveMsg" class="grantMsg" hidden></p>
-    </div>
+    <div class="marketingShell">
+      <aside class="marketingSideNav" aria-label="Marketing sections">
+        <div class="marketingSideGroup">
+          <p class="marketingSideGroupLabel">Pages</p>
+          <select id="mkPageSelect" class="marketingSideSelect" aria-label="Choose page to edit"${panel === "brand" ? " disabled" : ""}>
+            ${pageOptions}
+          </select>
+          <div class="marketingSideLocale">
+            <button type="button" class="btnGhost" data-marketing-locale="en" ${locale === "en" ? "disabled" : ""}>English</button>
+            <button type="button" class="btnGhost" data-marketing-locale="ar" ${locale === "ar" ? "disabled" : ""}>Arabic</button>
+          </div>
+          <p class="marketingSideHint">Pick the live page, then edit sections on the right.</p>
+        </div>
+        <div class="marketingSideGroup">
+          <p class="marketingSideGroupLabel">Theme</p>
+          <button type="button" class="marketingSideLink${panel === "brand" ? " isActive" : ""}" data-marketing-panel="brand">Brand palette</button>
+          <button type="button" class="marketingSideLink${panel === "content" ? " isActive" : ""}" data-marketing-panel="content">Page content</button>
+          <p class="marketingSideHint">Fonts and button colors apply site-wide (saved on homepage).</p>
+        </div>
+      </aside>
 
-    <div class="marketingEditor">
+      <div class="marketingMain">
+        <div class="toolbarBlock marketingToolbar">
+          <div class="inlineStats">
+            <span>${panel === "brand" ? "Brand palette" : `Page: <strong>${escapeHtml(pageMeta.label || pageKey)}</strong>`}</span>
+            <span>Locale: <strong>${locale === "ar" ? "Arabic" : "English"}</strong></span>
+            <span>${escapeHtml(source)}</span>
+            <span>Updated: ${escapeHtml(updated)}</span>
+          </div>
+          <div class="heroActions">
+            ${panel === "content" ? `<button type="button" class="btnGhost" id="btnMarketingDraftPreview" data-preview-path="${escapeHtml(previewPath)}">Preview draft ↗</button>
+            <a class="btnGhost" id="btnMarketingPreview" href="${escapeHtml(previewPath)}" target="_blank" rel="noopener">Preview live ↗</a>` : ""}
+            <button type="button" class="btnPrimary" id="btnMarketingSave">Save &amp; publish</button>
+          </div>
+          <p class="cellMuted marketingToolbarNote">Changes stay private until Save &amp; publish.</p>
+          <p id="marketingSaveMsg" class="grantMsg" hidden></p>
+        </div>
+
+        <div class="marketingEditor">
+          ${panel === "brand" ? renderMarketingBrandPanel(c.brand) : `
       ${marketingDetailCard("Hero", `
         ${marketingSubsection("Headline & copy", `
           ${marketingField("Eyebrow", "mkHeroEyebrow", hero.eyebrow || "")}
           ${marketingField("Headline", "mkHeroTitle", hero.title || "")}
           ${marketingField("Lead paragraph", "mkHeroLead", hero.lead || "", { multiline: 4 })}
-        `)}
+        `, { open: true })}
         ${marketingSubsection("Call to action", `
           ${marketingField("Primary button label", "mkHeroCtaLabel", hero.ctaLabel || "")}
           ${marketingField("Primary button link", "mkHeroCtaHref", hero.ctaHref || "", { hint: "e.g. /app/#/intro" })}
@@ -2742,7 +2828,7 @@ function renderMarketing(data) {
           ${marketingField("Secondary link URL", "mkHeroSecondaryHref", hero.secondaryHref || "")}
         `)}
         ${marketingSubsection("Hero photo", `
-          ${marketingField("Image URL", "mkHeroImageUrl", hero.heroImageUrl || "", { hint: "Paste a URL or upload below. Goes live after Save & publish." })}
+          ${marketingField("Image URL", "mkHeroImageUrl", hero.heroImageUrl || "", { hint: "Paste a URL or upload below." })}
           <label class="field marketingField">
             <span>Upload new image</span>
             <input id="mkHeroImageFile" type="file" accept="image/jpeg,image/png,image/webp" />
@@ -2750,9 +2836,9 @@ function renderMarketing(data) {
           </label>
           ${marketingField("Alt text", "mkHeroImageAlt", hero.heroImageAlt || "", {
             highlight: true,
-            hint: "Short description of the photo for screen readers and SEO. Live after Save & publish.",
+            hint: "Screen readers and SEO.",
           })}
-        `, { description: "The large photo beside the headline on the live page." })}
+        `, { description: "Large photo beside the headline." })}
         <div class="marketingDraftSitePreview" id="mkDraftSitePreview">
           <p class="marketingDraftSitePreviewLabel">Draft preview</p>
           <div class="marketingDraftHero">
@@ -2798,12 +2884,29 @@ function renderMarketing(data) {
 
       ${marketingDetailCard("SEO", `
         ${marketingField("Page title", "mkSeoTitle", seo.title || "")}
-        ${marketingField("Meta description", "mkSeoDescription", seo.description || "", { multiline: 3, hint: "Shown in Google results and social previews." })}
-      `, { description: "Browser tab title and search snippet — set once per page." })}
+        ${marketingField("Meta description", "mkSeoDescription", seo.description || "", { multiline: 3, hint: "Google results and social previews." })}
+      `, { description: "Browser tab title and search snippet." })}
+          `}
+        </div>
+      </div>
     </div>
   `, { plain: true });
   bindMarketingDraftPreviewListeners();
+  bindMarketingColorFields();
   if (isHome) void bindMarketingDiscoverPicker();
+}
+
+function bindMarketingColorFields() {
+  for (const colorInput of document.querySelectorAll('input[type="color"][id^="mkBrand"]')) {
+    const hex = document.querySelector(`[data-sync-color="${colorInput.id}"]`);
+    if (!hex || colorInput.dataset.mkColorBound === "1") continue;
+    colorInput.dataset.mkColorBound = "1";
+    colorInput.addEventListener("input", () => { hex.value = colorInput.value; });
+    hex.addEventListener("change", () => {
+      const v = String(hex.value || "").trim();
+      if (/^#[0-9a-fA-F]{6}$/.test(v)) colorInput.value = v;
+    });
+  }
 }
 
 async function bindMarketingDiscoverPicker() {
@@ -3137,8 +3240,13 @@ async function loadView({ force = false } = {}) {
   try {
     let data;
     if (view === "marketing") {
-      data = await marketingAdminFetch(state.marketingPage || "home", state.marketingLocale || "en");
-      data.page = state.marketingPage || "home";
+      if (state.marketingPanel === "brand") {
+        data = await marketingAdminFetch("home", "en");
+        data.page = "home";
+      } else {
+        data = await marketingAdminFetch(state.marketingPage || "home", state.marketingLocale || "en");
+        data.page = state.marketingPage || "home";
+      }
     } else {
       data = await adminFetch(view, {
         offset: state.offset,
@@ -3624,6 +3732,18 @@ document.body.addEventListener("click", (e) => {
     const page = marketingPageBtn.dataset.marketingPage;
     if (page && page !== state.marketingPage) {
       state.marketingPage = page;
+      state.marketingPanel = "content";
+      void loadView({ force: true });
+    }
+    return;
+  }
+
+  const marketingPanelBtn = e.target.closest("[data-marketing-panel]");
+  if (marketingPanelBtn) {
+    const panel = marketingPanelBtn.dataset.marketingPanel;
+    if (panel && panel !== state.marketingPanel) {
+      state.marketingPanel = panel;
+      if (panel === "brand") state.marketingPage = "home";
       void loadView({ force: true });
     }
     return;
@@ -3667,10 +3787,20 @@ document.body.addEventListener("click", (e) => {
         msg.className = "grantMsg warn";
       }
       try {
-        const content = readMarketingFormContent(state.marketingPage || "home");
+        const savePage = state.marketingPanel === "brand" ? "home" : (state.marketingPage || "home");
+        const saveLocale = state.marketingPanel === "brand" ? "en" : (state.marketingLocale || "en");
+        let content;
+        if (state.marketingPanel === "brand") {
+          content = { ...(state.marketingLoadedContent || {}), brand: readMarketingBrandForm() };
+        } else {
+          content = readMarketingFormContent(savePage);
+          if (savePage === "home" && state.marketingLoadedContent?.brand && !content.brand) {
+            content.brand = state.marketingLoadedContent.brand;
+          }
+        }
         const saved = await marketingAdminSave({
-          page: state.marketingPage || "home",
-          locale: state.marketingLocale || "en",
+          page: savePage,
+          locale: saveLocale,
           content,
         });
         delete state.cache[viewCacheKey()];
@@ -3986,6 +4116,12 @@ document.body.addEventListener("click", (e) => {
 });
 
 document.body.addEventListener("change", (e) => {
+  if (e.target.id === "mkPageSelect") {
+    state.marketingPage = e.target.value || "home";
+    state.marketingPanel = "content";
+    void loadView({ force: true });
+    return;
+  }
   if (e.target.id === "providerTopUpSelect" || e.target.id === "providerTopUpAction") {
     syncProviderTopUpFormUi();
     return;

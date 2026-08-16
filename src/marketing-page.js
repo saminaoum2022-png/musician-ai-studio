@@ -109,7 +109,67 @@
     }).join("");
   }
 
+  function hexToRgb(hex) {
+    var h = String(hex || "").replace("#", "");
+    if (h.length === 3) h = h[0] + h[0] + h[1] + h[1] + h[2] + h[2];
+    var n = parseInt(h, 16);
+    if (isNaN(n)) return null;
+    return { r: (n >> 16) & 255, g: (n >> 8) & 255, b: n & 255 };
+  }
+
+  function lightenHex(hex, amount) {
+    var rgb = hexToRgb(hex);
+    if (!rgb) return hex;
+    function mix(c) { return Math.min(255, Math.round(c + (255 - c) * amount)); }
+    return "#" + [mix(rgb.r), mix(rgb.g), mix(rgb.b)].map(function (c) {
+      return c.toString(16).padStart(2, "0");
+    }).join("");
+  }
+
+  var FONT_STACKS = {
+    "inter-display": '"Inter Display", "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
+    inter: 'Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
+    system: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
+  };
+
+  function applyBrand(brand) {
+    if (!brand) return;
+    var cta = brand.ctaColor || "#23d5ab";
+    var ctaText = brand.ctaTextColor || "#051018";
+    var violet = brand.accentViolet || "#7c5cff";
+    var ctaHover = lightenHex(cta, 0.12);
+    var violetHover = lightenHex(violet, 0.12);
+    var heading = FONT_STACKS[brand.headingFont] || FONT_STACKS["inter-display"];
+    var body = FONT_STACKS[brand.bodyFont] || FONT_STACKS.inter;
+    var root = document.documentElement;
+
+    root.style.setProperty("--brand-teal", cta);
+    root.style.setProperty("--brand-teal-hover", ctaHover);
+    root.style.setProperty("--brand-violet", violet);
+    root.style.setProperty("--brand-violet-hover", violetHover);
+    root.style.setProperty("--brand-cta-bg", cta);
+    root.style.setProperty("--brand-cta-bg-hover", ctaHover);
+    root.style.setProperty("--brand-cta-text", ctaText);
+    var ctaRgb = hexToRgb(cta) || { r: 35, g: 213, b: 171 };
+    var violetRgb = hexToRgb(violet) || { r: 124, g: 92, b: 255 };
+    root.style.setProperty("--brand-teal-muted", "rgba(" + ctaRgb.r + ", " + ctaRgb.g + ", " + ctaRgb.b + ", 0.14)");
+    root.style.setProperty("--brand-violet-muted", "rgba(" + violetRgb.r + ", " + violetRgb.g + ", " + violetRgb.b + ", 0.14)");
+
+    var styleId = "nabadMarketingBrandOverrides";
+    var el = document.getElementById(styleId);
+    if (!el) {
+      el = document.createElement("style");
+      el.id = styleId;
+      document.head.appendChild(el);
+    }
+    el.textContent = [
+      "body { font-family: " + body + "; }",
+      ".marketingHeroTitle, .marketingSectionTitle, .marketingNavBrand, .marketingFinalTitle, h1, h2 { font-family: " + heading + "; }",
+    ].join("\n");
+  }
+
   function applyCore(c) {
+    if (c.brand) applyBrand(c.brand);
     if (c.seo) {
       if (c.seo.title) document.title = c.seo.title;
       setMeta("description", c.seo.description, false);

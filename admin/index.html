@@ -8,7 +8,7 @@
     <title>NabadAi Admin</title>
     <meta name="theme-color" content="#05070d" />
     <link rel="icon" href="/favicon.ico" sizes="any" />
-    <link rel="stylesheet" href="/admin/styles.css?v=20260813-admin-gemini-sync" />
+    <link rel="stylesheet" href="/admin/styles.css?v=20260817-admin-editor" />
     <script>
       (function () {
         try {
@@ -34,10 +34,11 @@
     <div id="loginScreen" class="loginScreen" hidden>
       <div class="loginCard">
         <div class="loginBrand">
-          <div class="loginLogo" aria-hidden="true">
-            <img src="/assets/icons/splash-mark.png" alt="" width="52" height="52" />
+          <div class="adminBrandLockup adminBrandLockup--login" aria-label="NabadAi">
+            <span class="adminBrandMark" aria-hidden="true"></span>
+            <span class="adminBrandText">abadAi</span>
           </div>
-          <h1>NabadAi Admin</h1>
+          <p class="loginBrandSub">Admin Console</p>
           <p>Sign in with the same account you use in the app</p>
         </div>
         <div class="loginActions">
@@ -72,10 +73,11 @@
     <div id="resetScreen" class="loginScreen" hidden>
       <div class="loginCard">
         <div class="loginBrand">
-          <div class="loginLogo" aria-hidden="true">
-            <img src="/assets/icons/splash-mark.png" alt="" width="52" height="52" />
+          <div class="adminBrandLockup adminBrandLockup--login" aria-label="NabadAi">
+            <span class="adminBrandMark" aria-hidden="true"></span>
+            <span class="adminBrandText">abadAi</span>
           </div>
-          <h1>Set admin password</h1>
+          <p class="loginBrandSub">Admin Console</p>
           <p>Choose a password for your Google account so you can sign in to admin.</p>
         </div>
         <form id="resetForm" class="loginForm">
@@ -96,65 +98,39 @@
     <div id="appShell" class="appShell" hidden>
       <aside class="sidebar">
         <div class="sidebarBrand">
-          <div class="sidebarLogoWrap" aria-hidden="true">
-            <img src="/assets/icons/splash-mark.png" alt="" width="44" height="44" />
+          <div class="adminBrandLockup adminBrandLockup--sidebar" aria-label="NabadAi Admin">
+            <span class="adminBrandMark" aria-hidden="true"></span>
+            <span class="adminBrandText">abadAi</span>
           </div>
-          <div>
-            <div class="sidebarTitle">NabadAi</div>
-            <div class="sidebarSub">Admin Console</div>
-          </div>
+          <div class="sidebarSub">Admin Console</div>
         </div>
         <nav class="sidebarNav" aria-label="Admin sections">
           <div class="navGroup">
             <div class="navGroupLabel">Platform</div>
-            <button type="button" class="navItem isActive" data-view="overview">
-              <span class="navIcon" aria-hidden="true">◎</span><span>Overview</span>
-            </button>
-            <button type="button" class="navItem" data-view="providers">
-              <span class="navIcon" aria-hidden="true">◈</span><span>Providers</span>
-            </button>
+            <button type="button" class="navItem isActive" data-view="overview">Overview</button>
+            <button type="button" class="navItem" data-view="providers">Providers</button>
           </div>
           <div class="navGroup">
             <div class="navGroupLabel">People &amp; content</div>
-            <button type="button" class="navItem" data-view="users">
-              <span class="navIcon" aria-hidden="true">◉</span><span>Users</span>
-            </button>
-            <button type="button" class="navItem" data-view="generations">
-              <span class="navIcon" aria-hidden="true">♪</span><span>Generations</span>
-            </button>
-            <button type="button" class="navItem" data-view="publications">
-              <span class="navIcon" aria-hidden="true">↗</span><span>Publications</span>
-            </button>
+            <button type="button" class="navItem" data-view="users">Users</button>
+            <button type="button" class="navItem" data-view="generations">Generations</button>
+            <button type="button" class="navItem" data-view="publications">Publications</button>
           </div>
           <div class="navGroup">
             <div class="navGroupLabel">Website</div>
-            <button type="button" class="navItem" data-view="marketing">
-              <span class="navIcon" aria-hidden="true">⌂</span><span>Marketing</span>
-            </button>
+            <button type="button" class="navItem" data-view="marketing">Marketing</button>
           </div>
           <div class="navGroup">
             <div class="navGroupLabel">Billing</div>
-            <button type="button" class="navItem" data-view="credits">
-              <span class="navIcon" aria-hidden="true">✦</span><span>Credits</span>
-            </button>
-            <button type="button" class="navItem" data-view="promos">
-              <span class="navIcon" aria-hidden="true">⌁</span><span>Promo codes</span>
-            </button>
-            <button type="button" class="navItem" data-view="singers">
-              <span class="navIcon" aria-hidden="true">♫</span><span>Pro singers</span>
-            </button>
-            <button type="button" class="navItem" data-view="subscriptions">
-              <span class="navIcon" aria-hidden="true">◆</span><span>Subscriptions</span>
-            </button>
-            <button type="button" class="navItem" data-view="billing">
-              <span class="navIcon" aria-hidden="true">⟳</span><span>Billing events</span>
-            </button>
+            <button type="button" class="navItem" data-view="credits">Credits</button>
+            <button type="button" class="navItem" data-view="promos">Promo codes</button>
+            <button type="button" class="navItem" data-view="singers">Pro singers</button>
+            <button type="button" class="navItem" data-view="subscriptions">Subscriptions</button>
+            <button type="button" class="navItem" data-view="billing">Billing events</button>
           </div>
           <div class="navGroup" data-nav-group="settings">
             <div class="navGroupLabel">Settings</div>
-            <button type="button" class="navItem" data-view="settings">
-              <span class="navIcon" aria-hidden="true">⚙</span><span>Team &amp; roles</span>
-            </button>
+            <button type="button" class="navItem" data-view="settings">Team &amp; roles</button>
           </div>
         </nav>
         <div class="sidebarFoot">
@@ -195,6 +171,6 @@
       </main>
     </div>
 
-    <script type="module" src="/admin/app.js?v=20260815-marketing-draft-preview-2"></script>
+    <script type="module" src="/admin/app.js?v=20260817-admin-editor"></script>
   </body>
 </html>

@@ -254,6 +254,43 @@ function defaultHomeContentEn() {
         { platform: "discord", href: "", label: "Discord" },
       ],
     },
+    brand: defaultBrand(),
+  };
+}
+
+const BRAND_FONTS = Object.freeze(["inter-display", "inter", "system"]);
+
+function defaultBrand() {
+  return {
+    ctaColor: "#23d5ab",
+    ctaTextColor: "#051018",
+    headingFont: "inter-display",
+    bodyFont: "inter",
+    accentViolet: "#7c5cff",
+  };
+}
+
+function sanitizeHexColor(hex, fallback) {
+  const h = String(hex || "").trim();
+  if (/^#[0-9a-fA-F]{6}$/.test(h)) return h.toLowerCase();
+  if (/^#[0-9a-fA-F]{3}$/.test(h)) {
+    const r = h[1];
+    const g = h[2];
+    const b = h[3];
+    return `#${r}${r}${g}${g}${b}${b}`.toLowerCase();
+  }
+  return fallback;
+}
+
+function normalizeBrand(raw, defaults) {
+  const d = defaults || defaultBrand();
+  const b = raw && typeof raw === "object" ? raw : {};
+  return {
+    ctaColor: sanitizeHexColor(b.ctaColor, d.ctaColor),
+    ctaTextColor: sanitizeHexColor(b.ctaTextColor, d.ctaTextColor),
+    headingFont: BRAND_FONTS.includes(b.headingFont) ? b.headingFont : d.headingFont,
+    bodyFont: BRAND_FONTS.includes(b.bodyFont) ? b.bodyFont : d.bodyFont,
+    accentViolet: sanitizeHexColor(b.accentViolet, d.accentViolet),
   };
 }
 
@@ -795,6 +832,7 @@ function normalizeContent(pageKey, locale, raw) {
             defaults.footer?.social || [],
           ),
         },
+        brand: normalizeBrand(input.brand, defaults.brand),
       },
     };
   }
@@ -832,6 +870,7 @@ module.exports = {
   LOCALES,
   isSeoPage,
   defaultContent,
+  defaultBrand,
   normalizeContent,
   mergeWithDefaults,
 };

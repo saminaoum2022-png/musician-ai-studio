@@ -78,24 +78,36 @@ async function loadMarketingContent(pageKey, locale, { includeUnpublished = fals
     };
   }
   const row = result.row;
+  let content;
+  let source;
+  let updatedAt;
   if (!row || (!includeUnpublished && row.published === false)) {
-    return {
-      ok: true,
-      page,
-      locale: loc,
-      content: mergeWithDefaults(page, loc, null),
-      source: "defaults",
-      updatedAt: null,
-    };
+    content = mergeWithDefaults(page, loc, null);
+    source = "defaults";
+    updatedAt = null;
+  } else {
+    content = mergeWithDefaults(page, loc, row.content);
+    source = "database";
+    updatedAt = row.updated_at || null;
   }
+
+  // Site-wide brand tokens are stored on the English homepage.
+  if (page !== "home" || loc !== "en") {
+    const homeEn = await fetchMarketingRow("home", "en");
+    const homeContent = mergeWithDefaults("home", "en", homeEn.row?.content ?? null);
+    if (homeContent.brand) {
+      content = { ...content, brand: homeContent.brand };
+    }
+  }
+
   return {
     ok: true,
     page,
     locale: loc,
-    content: mergeWithDefaults(page, loc, row.content),
-    source: "database",
-    updatedAt: row.updated_at || null,
-    published: row.published !== false,
+    content,
+    source,
+    updatedAt,
+    published: row?.published !== false,
   };
 }
 

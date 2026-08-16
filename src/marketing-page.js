@@ -181,7 +181,7 @@
       if (!item || !item.platform) return "";
       var label = item.label || item.platform;
       var icon = SOCIAL_ICON_BASE + item.platform + ".svg";
-      var inner = '<img src="' + icon + '" width="20" height="20" alt="">';
+      var inner = '<img class="marketingFooterSocialImg marketingFooterSocialImg--' + item.platform + '" src="' + icon + '" width="18" height="18" alt="">';
       if (item.href) {
         return '<a href="' + item.href.replace(/"/g, "&quot;") + '" target="_blank" rel="noopener noreferrer" aria-label="' + label.replace(/"/g, "&quot;") + '">' + inner + "</a>";
       }

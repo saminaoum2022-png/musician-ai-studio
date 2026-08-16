@@ -578,9 +578,10 @@ img { display: block; max-width: 100%; height: auto; }
 
 .marketingFooterSocial img {
   display: block;
-  width: 20px;
-  height: 20px;
-  opacity: 0.88;
+  width: 18px;
+  height: 18px;
+  opacity: 0.92;
+  object-fit: contain;
 }
 
 .marketingFooterSocial a:hover img {

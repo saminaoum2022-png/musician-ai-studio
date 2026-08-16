@@ -6,6 +6,23 @@
   var LOCALE = document.documentElement.lang || "en";
   var DRAFT_KEY = "nabad_marketing_draft:" + PAGE + ":" + LOCALE;
 
+  function formatHeroTitleHtml(text) {
+    var t = String(text || "").trim();
+    if (!t) return "";
+    if (LOCALE.indexOf("ar") === 0) return t;
+    return t
+      .replace(/\b(hum\.?)\b/i, '<span class="heroAccent">$1</span>')
+      .replace(/\.\s+Share/i, ".<br>Share");
+  }
+
+  function applyHeroTitle(value) {
+    var el = document.querySelector("[data-mk='hero.title']");
+    if (!el || value == null || value === "") return;
+    var html = formatHeroTitleHtml(value);
+    if (html.indexOf("<") !== -1) el.innerHTML = html;
+    else el.textContent = value;
+  }
+
   function setText(sel, value) {
     var el = document.querySelector(sel);
     if (!el || value == null || value === "") return;
@@ -104,7 +121,7 @@
 
     if (c.hero) {
       setText("[data-mk='hero.eyebrow']", c.hero.eyebrow);
-      setText("[data-mk='hero.title']", c.hero.title);
+      applyHeroTitle(c.hero.title);
       setText("[data-mk='hero.lead']", c.hero.lead);
       setText("[data-mk='hero.cta']", c.hero.ctaLabel);
       setAttr("[data-mk='hero.cta']", "href", c.hero.ctaHref);

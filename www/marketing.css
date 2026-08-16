@@ -342,8 +342,9 @@ img { display: block; max-width: 100%; height: auto; }
 
 .marketingOccasionCard h3 {
   margin: 0;
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   font-size: 15px;
-  font-weight: 700;
+  font-weight: 600;
   letter-spacing: -0.02em;
 }
 
@@ -410,8 +411,9 @@ img { display: block; max-width: 100%; height: auto; }
 
 .marketingCollabItem h3 {
   margin: 0 0 6px;
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   font-size: 17px;
-  font-weight: 700;
+  font-weight: 600;
   color: rgba(45, 212, 191, 0.92);
 }
 
@@ -448,7 +450,10 @@ img { display: block; max-width: 100%; height: auto; }
 
 .pricingCard h3 {
   margin: 0 0 8px;
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   font-size: 20px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
 }
 
 .pricingPrice {
@@ -668,53 +673,21 @@ img { display: block; max-width: 100%; height: auto; }
 .heroCopy { grid-area: auto; }
 .marketingHeroArt { grid-area: auto; }
 
-.heroStoreSoon {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-  width: 100%;
-  margin-top: 18px;
-}
-
-.heroStoreSoonLabel {
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.38);
-  white-space: nowrap;
-}
-
-.heroStoreSoonBadges {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  opacity: 0.62;
-  flex-shrink: 0;
-}
-
-.heroStoreSoonBadges img {
-  display: block;
-  height: 20px;
-  width: auto;
-  max-height: 20px;
-  max-width: 68px;
-  object-fit: contain;
-  flex: 0 0 auto;
-}
-
-@media (min-width: 761px) {
-  .heroStoreSoonBadges img {
-    height: 22px;
-    max-height: 22px;
-    max-width: 74px;
-  }
-}
-
 .heroCopy h1 {
   max-width: none;
-  font-size: clamp(36px, 4.8vw, 64px);
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  font-size: clamp(42px, 6vw, 74px);
+  font-weight: 500;
+  line-height: 0.98;
+  letter-spacing: -0.05em;
+}
+
+.heroCopy h1 .heroAccent {
+  font-family: Georgia, "Times New Roman", serif;
+  font-style: italic;
+  font-weight: 500;
+  color: var(--brand-teal);
+  letter-spacing: -0.02em;
 }
 
 .hero .heroLead {
@@ -814,11 +787,11 @@ h1 {
 
 .section h2 {
   margin: 0 0 10px;
-  font-family: "Inter Display", "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-  font-size: clamp(28px, 3.6vw, 42px);
-  font-weight: 800;
-  line-height: 1.1;
-  letter-spacing: -0.04em;
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  font-size: clamp(32px, 4.2vw, 47px);
+  font-weight: 500;
+  line-height: 1.08;
+  letter-spacing: -0.045em;
 }
 
 .sectionHead p, .featureCard p, .faqItem p { color: var(--muted); }
@@ -842,9 +815,10 @@ h1 {
 
 .featureCard h3, .faqItem h3 {
   margin: 0 0 9px;
-  font-size: 19px;
-  font-weight: 700;
-  letter-spacing: -0.02em;
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  font-size: clamp(18px, 2vw, 22px);
+  font-weight: 600;
+  letter-spacing: -0.025em;
 }
 
 .featureCard p, .faqItem p { margin: 0; }
@@ -922,7 +896,11 @@ body:has(.marketingDraftBanner) .marketingShell {
 
 .finalCta h2 {
   margin: 0 0 12px;
-  font-size: clamp(30px, 5vw, 48px);
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  font-size: clamp(34px, 4.8vw, 44px);
+  font-weight: 500;
+  line-height: 1.08;
+  letter-spacing: -0.04em;
 }
 
 .finalCta p { margin: 0 auto 24px; max-width: 650px; color: var(--muted); }

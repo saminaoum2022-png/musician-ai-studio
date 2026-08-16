@@ -2029,24 +2029,38 @@ h1{ margin:0; font-weight:800; letter-spacing:-0.03em; font-size:28px; }
   -moz-osx-font-smoothing:grayscale;
   text-rendering:optimizeLegibility;
 }
+.brandLockup--header{
+  align-items:baseline;
+  gap:0.018em;
+  line-height:1;
+}
 .brandLockup--header .brandLockupMark{
-  width:32px;
-  height:32px;
-  margin-inline-end:-4px;
-  transform:translateY(0.5px);
+  width:0.93em;
+  height:0.93em;
+  margin:0;
+  align-self:baseline;
+  transform:translateY(0.1em);
 }
 .brandLockup--header .brandLockupText{
-  font-size:inherit;
+  font-size:1em;
+  line-height:1;
   color:rgba(247,250,255,0.94);
 }
+.brandLockup--intro{
+  align-items:baseline;
+  gap:0.018em;
+  line-height:1;
+}
 .brandLockup--intro .brandLockupMark{
-  width:1.1em;
-  height:1.1em;
-  margin-inline-end:-0.05em;
-  transform:translateY(0.04em);
+  width:0.93em;
+  height:0.93em;
+  margin:0;
+  align-self:baseline;
+  transform:translateY(0.1em);
 }
 .brandLockup--intro .brandLockupText{
   font-size:1em;
+  line-height:1;
 }
 .brandPrimary{
   /* Inter Display is drawn for large sizes — heavier + cleaner than UI Inter at 900,
@@ -2071,10 +2085,6 @@ h1{ margin:0; font-weight:800; letter-spacing:-0.03em; font-size:28px; }
 @media (min-width: 721px){
   body[data-route="hub"] .brandTitle{
     font-size: 32px;
-  }
-  .brandTitle .brandLockup--header .brandLockupMark{
-    width:34px;
-    height:34px;
   }
 }
 .subtitle{ margin:6px 0 0; color:var(--muted); max-width:740px; line-height:1.35; }
@@ -47304,9 +47314,19 @@ body[data-route="user"] #userPublicRepostsList{
     display: none !important;
   }
 
-  /* Profile feed posts: stay inside the content column on desktop web.
+  /* Friends + Profile feed posts: stay inside the content column on desktop web.
      Mobile web + native iOS keep the full-bleed 100vw breakout below. */
+  html.is-web-shell #friendsPage{
+    width: 100%;
+    min-width: 0;
+    overflow-x: clip;
+  }
+  html.is-web-shell #friendsFeedTabs .nabadTabsTrack{
+    flex-wrap: wrap;
+    overflow-x: visible;
+  }
   html.is-web-shell :is(
+    #friendsPage,
     #profileActivitiesList,
     #profileRepostsList,
     #userPublicSongs,
@@ -47321,6 +47341,9 @@ body[data-route="user"] #userPublicRepostsList{
     .followActRemixFlow .followActMediaWrap--remixResult,
     .followActMashup .followActMediaWrap--mashupResult,
     .followActMediaWrap--feedResult,
+    .followAct--xstyle > .followActReleaseCaption,
+    .followAct--xstyle > .followActContent.followActContent--release,
+    .followAct--xstyle > .followActStylePills,
     .followAct--xstyle.followAct--skel .followActSkelHero
   ){
     position: relative;
@@ -47332,6 +47355,7 @@ body[data-route="user"] #userPublicRepostsList{
     margin-right: 0;
   }
   html.is-web-shell :is(
+    #friendsPage .followActStack,
     #profileActivitiesList.followActStack,
     #profileRepostsList.followActStack,
     #userPublicSongs.followActStack,
@@ -47339,7 +47363,13 @@ body[data-route="user"] #userPublicRepostsList{
   ) > .followAct.followAct--xstyle{
     --feed-cover-radius: 14px;
   }
+  html.is-web-shell #friendsPage .followAct--xstyle > .followActStylePills{
+    flex-wrap: wrap;
+    overflow-x: visible;
+    row-gap: 4px;
+  }
   html.is-web-shell :is(
+    #friendsPage,
     #profileActivitiesList,
     #profileRepostsList,
     #userPublicSongs,

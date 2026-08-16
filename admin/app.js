@@ -2346,7 +2346,8 @@ function readMarketingFormContent(pageKey = "home") {
     }
     return card;
   });
-  const faqItems = [0, 1, 2].map((i) => ({
+  const faqCount = pageKey === "home" ? 8 : 3;
+  const faqItems = Array.from({ length: faqCount }, (_, i) => ({
     question: val(`mkFaqQ${i}`),
     answerHtml: val(`mkFaqA${i}`),
   })).filter((it) => it.question.trim());
@@ -2373,6 +2374,7 @@ function readMarketingFormContent(pageKey = "home") {
     },
     faq: {
       title: val("mkFaqTitle"),
+      lead: val("mkFaqLead"),
       items: faqItems,
     },
     finalCta: {
@@ -2387,6 +2389,36 @@ function readMarketingFormContent(pageKey = "home") {
     },
   };
   if (pageKey === "home") {
+    content.templates = {
+      eyebrow: val("mkTemplatesEyebrow"),
+      title: val("mkTemplatesTitle"),
+      lead: val("mkTemplatesLead"),
+      ctaLabel: val("mkTemplatesCtaLabel"),
+      ctaHref: val("mkTemplatesCtaHref"),
+      imageUrl: val("mkTemplatesImageUrl"),
+      imageAlt: val("mkTemplatesImageAlt"),
+      cards: [0, 1, 2, 3, 4, 5].map((i) => ({
+        title: val(`mkTemplateCardTitle${i}`),
+        body: val(`mkTemplateCardBody${i}`),
+        href: val(`mkTemplateCardHref${i}`),
+        imageUrl: val(`mkTemplateCardImage${i}`),
+      })).filter((it) => it.title.trim()),
+    };
+    content.collab = {
+      eyebrow: val("mkCollabEyebrow"),
+      title: val("mkCollabTitle"),
+      lead: val("mkCollabLead"),
+      ctaPrimaryLabel: val("mkCollabCtaPrimaryLabel"),
+      ctaPrimaryHref: val("mkCollabCtaPrimaryHref"),
+      ctaSecondaryLabel: val("mkCollabCtaSecondaryLabel"),
+      ctaSecondaryHref: val("mkCollabCtaSecondaryHref"),
+      imageUrl: val("mkCollabImageUrl"),
+      imageAlt: val("mkCollabImageAlt"),
+      points: [0, 1].map((i) => ({
+        title: val(`mkCollabPointTitle${i}`),
+        body: val(`mkCollabPointBody${i}`),
+      })).filter((it) => it.title.trim()),
+    };
     content.discover = {
       eyebrow: val("mkDiscoverEyebrow"),
       title: val("mkDiscoverTitle"),
@@ -2526,6 +2558,10 @@ function renderMarketing(data) {
   const hero = c.hero || {};
   const features = c.features || {};
   const cards = Array.isArray(features.cards) ? features.cards : [{}, {}, {}];
+  const templates = c.templates || {};
+  const templateCards = Array.isArray(templates.cards) ? templates.cards : [];
+  const collab = c.collab || {};
+  const collabPoints = Array.isArray(collab.points) ? collab.points : [];
   const discover = c.discover || {};
   const pricing = c.pricing || {};
   const footer = c.footer || {};
@@ -2557,7 +2593,8 @@ function renderMarketing(data) {
     `<button type="button" class="btnGhost${p.key === pageKey ? " isActivePage" : ""}" data-marketing-page="${escapeHtml(p.key)}"${p.key === pageKey ? " disabled" : ""}>${escapeHtml(p.label)}</button>`
   )).join("");
 
-  const faqFields = [0, 1, 2].map((i) => {
+  const faqCount = isHome ? 8 : 3;
+  const faqFields = Array.from({ length: faqCount }, (_, i) => {
     const it = faqItems[i] || {};
     return marketingSubsection(`Question ${i + 1}`, `
       ${marketingField("Question", `mkFaqQ${i}`, it.question || "")}
@@ -2583,6 +2620,50 @@ function renderMarketing(data) {
   }).join("") : "";
 
   const homeOnlySections = isHome ? `
+      ${marketingDetailCard("Song templates", `
+        ${marketingSubsection("Section copy", `
+          ${marketingField("Eyebrow", "mkTemplatesEyebrow", templates.eyebrow || "")}
+          ${marketingField("Title", "mkTemplatesTitle", templates.title || "")}
+          ${marketingField("Lead", "mkTemplatesLead", templates.lead || "", { multiline: 2 })}
+          ${marketingField("CTA label", "mkTemplatesCtaLabel", templates.ctaLabel || "")}
+          ${marketingField("CTA link", "mkTemplatesCtaHref", templates.ctaHref || "")}
+        `)}
+        ${[0, 1, 2, 3, 4, 5].map((i) => {
+          const card = templateCards[i] || {};
+          return marketingSubsection(`Template card ${i + 1}`, `
+            ${marketingField("Title", `mkTemplateCardTitle${i}`, card.title || "")}
+            ${marketingField("Body", `mkTemplateCardBody${i}`, card.body || "", { multiline: 2 })}
+            ${marketingField("Link", `mkTemplateCardHref${i}`, card.href || "", { hint: "e.g. /app/#/challenges" })}
+            ${marketingField("Image URL", `mkTemplateCardImage${i}`, card.imageUrl || "", { hint: "Optional override; defaults to bundled art." })}
+          `);
+        }).join("")}
+      `, { badge: "Homepage", description: "Occasion template grid on the homepage." })}
+
+      ${marketingDetailCard("Creators & voices", `
+        ${marketingSubsection("Section copy", `
+          ${marketingField("Eyebrow", "mkCollabEyebrow", collab.eyebrow || "")}
+          ${marketingField("Title", "mkCollabTitle", collab.title || "")}
+          ${marketingField("Lead", "mkCollabLead", collab.lead || "", { multiline: 3 })}
+        `)}
+        ${marketingSubsection("Call to action", `
+          ${marketingField("Primary button label", "mkCollabCtaPrimaryLabel", collab.ctaPrimaryLabel || "")}
+          ${marketingField("Primary button link", "mkCollabCtaPrimaryHref", collab.ctaPrimaryHref || "")}
+          ${marketingField("Secondary button label", "mkCollabCtaSecondaryLabel", collab.ctaSecondaryLabel || "")}
+          ${marketingField("Secondary button link", "mkCollabCtaSecondaryHref", collab.ctaSecondaryHref || "")}
+        `)}
+        ${[0, 1].map((i) => {
+          const point = collabPoints[i] || {};
+          return marketingSubsection(`Bullet ${i + 1}`, `
+            ${marketingField("Title", `mkCollabPointTitle${i}`, point.title || "")}
+            ${marketingField("Body", `mkCollabPointBody${i}`, point.body || "", { multiline: 2 })}
+          `);
+        }).join("")}
+        ${marketingSubsection("Side image", `
+          ${marketingField("Image URL", "mkCollabImageUrl", collab.imageUrl || "")}
+          ${marketingField("Alt text", "mkCollabImageAlt", collab.imageAlt || "")}
+        `)}
+      `, { badge: "Homepage", description: "Collab section with Apply now and Request a vocalist CTAs." })}
+
       ${marketingDetailCard("Discover teaser", `
         ${marketingSubsection("Section copy", `
           ${marketingField("Eyebrow", "mkDiscoverEyebrow", discover.eyebrow || "")}
@@ -2699,6 +2780,7 @@ function renderMarketing(data) {
 
       ${marketingDetailCard("FAQ", `
         ${marketingField("Section title", "mkFaqTitle", faq.title || "")}
+        ${marketingField("Section subtitle", "mkFaqLead", faq.lead || "", { multiline: 2, hint: "Centered line under the FAQ heading." })}
         ${faqFields}
       `)}
 

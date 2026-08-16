@@ -46,10 +46,10 @@
       </a>
       <div class="marketingNavLinks marketingNavLinks--wide">
         <a class="marketingNavText" href="#features">الميزات</a>
-        <a class="marketingNavText" href="/#pricing">الأسعار</a>
+        <a class="marketingNavText" href="#pricing">الأسعار</a>
         <a class="marketingNavText" href="/#faq">الأسئلة</a>
         <a class="marketingLangSwitch" href="/" lang="en" hreflang="en">English</a>
-        <a class="marketingNavText" href="/app/#/auth">تسجيل الدخول</a>
+        <a class="marketingNavSignIn" href="/app/#/auth">تسجيل الدخول</a>
       </div>
     </nav>
     <main>
@@ -59,8 +59,8 @@
           <h1>حوّل فكرتك إلى أغنية كاملة</h1>
           <p class="heroLead">NabadAi استوديو موسيقي بالذكاء الاصطناعي يرافقك من الفكرة الأولى إلى الأغنية: ابدأ بكلمات أو همهمة أو صورة، ثم وجّه الأسلوب والصوت وشارك ما تصنعه.</p>
           <div class="heroActions">
-            <a class="marketingCta" href="/app/#/intro">افتح NabadAi</a>
-            <a class="textLink" href="#features">تعرّف إلى الأدوات</a>
+            <a class="marketingCta" data-mk="hero.cta" href="/app/#/intro">افتح NabadAi</a>
+            <a class="textLink" data-mk="hero.secondary" href="#features">تعرّف إلى الأدوات</a>
           </div>
         </div>
         <div class="marketingHeroArt">
@@ -125,7 +125,7 @@
           </div>
         </div>
         <div class="heroActions">
-          <a class="marketingCta" data-mk="templates.cta" href="/app/#/challenges">تصفّح القوالب</a>
+          <a class="marketingCta marketingCta--ghost" data-mk="templates.cta" href="/app/#/challenges">تصفّح القوالب</a>
         </div>
       </section>
 
@@ -146,8 +146,8 @@
               </li>
             </ul>
             <div class="heroActions">
-              <a class="marketingCta" data-mk="collab.ctaPrimary" href="/app/#/intro">جرّب مجاناً</a>
-              <a class="marketingCta marketingCta--ghost" data-mk="collab.ctaSecondary" href="/app/#/discover">استكشف Discover</a>
+              <a class="marketingCta marketingCta--violet" data-mk="collab.ctaPrimary" href="/app/#/settings?singer=apply">قدّم الآن</a>
+              <a class="marketingCta marketingCta--ghost" data-mk="collab.ctaSecondary" href="/app/#/settings?proSinger=request">اطلب مغنياً</a>
             </div>
           </div>
           <figure class="marketingCollabArt">
@@ -156,24 +156,69 @@
         </div>
       </section>
 
-      <section class="section" id="faq">
-        <header class="sectionHead"><h2 data-mk="faq.title">أسئلة شائعة</h2></header>
-        <div class="faqList">
-          <article class="faqItem" data-mk-faq-item><h3 data-mk="faq.q">هل أحتاج تحميل تطبيق؟</h3><p data-mk="faq.a">يمكنك تجربة NabadAi في المتصفح على <a href="/app">nabadai.com/app</a> أو تثبيت تطبيق iOS لتجربة أفضل.</p></article>
-          <article class="faqItem" data-mk-faq-item><h3 data-mk="faq.q">هل يمكنني استخدام كلماتي وصوتي؟</h3><p data-mk="faq.a">نعم. اكتب أو ولّد كلمات، ارفع مرجعاً للحن، أو أنشئ Persona من عينة صوتك.</p></article>
-          <article class="faqItem" data-mk-faq-item><h3 data-mk="faq.q">هل الخدمة مجانية؟</h3><p data-mk="faq.a">الحسابات الجديدة تتضمن رصيداً مجانياً. اشتراك Pro يضيف المزيد من الرصيد والميزات المتقدمة.</p></article>
-          <article class="faqItem" data-mk-faq-item><h3 data-mk="faq.q">ماذا يمكنني إنشاؤه مع NabadAi؟</h3><p data-mk="faq.a">حوّل الكلمات أو الهمهمة أو مزاج صورة إلى أغنية كاملة — مع أغلفة وريمكسات وموسيقى instrumental وقوالب للمناسبات. اكتشف <a href="/ar/ai-music-generator">مولد الموسيقى</a> و<a href="/ar/hum-to-song">الهمهمة إلى أغنية</a> و<a href="/ar/photo-to-song">الصورة إلى أغنية</a>.</p></article>
-          <article class="faqItem" data-mk-faq-item><h3 data-mk="faq.q">هل يدعم NabadAi الموسيقى العربية والدبكة واللهجات؟</h3><p data-mk="faq.a">نعم. اكتب كلماتاً عربية، وجّه اللهجة اللبنانية وغيرها حيث تتوفر، واختر اتجاهات مثل الدبكة والخليجي والطرب. المزيد في صفحة <a href="/ar/arabic-ai-music-generator">الموسيقى العربية</a>.</p></article>
-          <article class="faqItem" data-mk-faq-item><h3 data-mk="faq.q">هل يمكنني نشر أغانيي على Discover؟</h3><p data-mk="faq.a">نعم. احتفظ بالمسودات خاصة، ثم انشر على ملفك الشخصي وشارك على Discover عندما تكون جاهزاً.</p></article>
-          <article class="faqItem" data-mk-faq-item><h3 data-mk="faq.q">هل توجد قوالب لأعياد الميلاد والأعراس والمناسبات؟</h3><p data-mk="faq.a">نعم. داخل التطبيق، اختر قالب مناسبة أو إهداء للحصول على كلمات واتجاه أسلوب أسرع — مفيد للهدايا والمناسبات.</p></article>
-          <article class="faqItem" data-mk-faq-item><h3 data-mk="faq.q">هل أحتاج خبرة في الإنتاج الموسيقي؟</h3><p data-mk="faq.a">لا. NabadAi مُصمَّم للمبدعين الذين يبدأون بفكرة، لا ببرنامج DAW. أنت توجّه المزاج والكلمات والأسلوب؛ والاستوديو يتولى التوليد.</p></article>
+      <section class="section" id="pricing">
+        <header class="sectionHead">
+          <p class="eyebrow" data-mk="pricing.eyebrow">الأسعار</p>
+          <h2 data-mk="pricing.title">ابدأ مجاناً. Pro عندما تكون جاهزاً.</h2>
+        </header>
+        <div class="pricingGrid">
+          <article class="pricingCard pricingCard--compact">
+            <div class="pricingCardTop">
+              <h3 data-mk="pricing.free.title">مجاني</h3>
+              <p class="pricingPrice" data-mk="pricing.free.price">$0</p>
+            </div>
+            <p class="pricingTagline" data-mk="pricing.free.body">رصيد للبداية لإنشاء أغاني — بدون بطاقة.</p>
+            <ul class="pricingFeatures" data-mk-pricing-features="free">
+              <li class="pricingFeature">رصيد البداية · 12 رصيد = أغنية (نسختان)</li>
+              <li class="pricingFeature">كلمات، دندنة، صورة والنشر على Discover</li>
+              <li class="pricingFeature">مساعدة الكلمات و✦ Boost style</li>
+              <li class="pricingFeature">NabadAi Coach · حد يومي</li>
+            </ul>
+            <a class="marketingCta marketingCta--ghost pricingCardCta" data-mk="pricing.free.cta" href="/app/#/intro">ابدأ</a>
+          </article>
+          <article class="pricingCard pricingCard--compact pricingCard--pro">
+            <div class="pricingCardTop">
+              <h3 data-mk="pricing.pro.title">NabadAi Pro</h3>
+              <p class="pricingPrice pricingPrice--from">من $3.99</p>
+            </div>
+            <div class="pricingPlanChips" aria-label="خطط Pro">
+              <span class="pricingPlanChip">أسبوعي · $3.99 · تجربة 7 أيام · 400 رصيد</span>
+              <span class="pricingPlanChip pricingPlanChip--monthly">شهري · $9.99 · 1,200 رصيد <span class="pricingPlanSave">وفّر ~17%</span></span>
+            </div>
+            <p class="pricingTagline" data-mk="pricing.pro.body">Studio، WAV، Coach غير محدود، وتحليلات الأغاني.</p>
+            <ul class="pricingFeatures pricingFeatures--pro" data-mk-pricing-features="pro">
+              <li class="pricingFeature">رصيد أسبوعي أو شهري · قابل للإهداء</li>
+              <li class="pricingFeature">NabadAi Coach غير محدود</li>
+              <li class="pricingFeature">NabadAi Studio وتصدير WAV</li>
+              <li class="pricingFeature">تحليلات الأغاني وشارة Pro</li>
+            </ul>
+            <a class="marketingCta pricingCardCta pricingCardCta--pro" data-mk="pricing.pro.cta" href="/app/#/pro">عرض الخطط</a>
+          </article>
+        </div>
+        <p class="pricingSectionNote" data-mk="pricing.pro.finePrint">أغنية كاملة = 12 رصيد (نسختان). إلغاء في أي وقت من الإعدادات.</p>
+      </section>
+
+      <section class="section faqSection" id="faq">
+        <header class="sectionHead sectionHead--center">
+          <h2 data-mk="faq.title">أسئلة شائعة</h2>
+          <p class="sectionLead" data-mk="faq.lead">كل ما تحتاج معرفته عن الإنشاء مع NabadAi.</p>
+        </header>
+        <div class="faqList faqList--accordion">
+          <details class="faqItem" data-mk-faq-item><summary><span class="faqQuestionText" data-mk="faq.q">هل أحتاج تحميل تطبيق؟</span><span class="faqToggle" aria-hidden="true"></span></summary><div class="faqAnswer"><p data-mk="faq.a">يمكنك تجربة NabadAi في المتصفح على <a href="/app">nabadai.com/app</a> أو تثبيت تطبيق iOS لتجربة أفضل.</p></div></details>
+          <details class="faqItem" data-mk-faq-item><summary><span class="faqQuestionText" data-mk="faq.q">هل يمكنني استخدام كلماتي وصوتي؟</span><span class="faqToggle" aria-hidden="true"></span></summary><div class="faqAnswer"><p data-mk="faq.a">نعم. اكتب أو ولّد كلمات، ارفع مرجعاً للحن، أو أنشئ Persona من عينة صوتك.</p></div></details>
+          <details class="faqItem" data-mk-faq-item><summary><span class="faqQuestionText" data-mk="faq.q">هل الخدمة مجانية؟</span><span class="faqToggle" aria-hidden="true"></span></summary><div class="faqAnswer"><p data-mk="faq.a">الحسابات الجديدة تتضمن رصيداً مجانياً. اشتراك Pro يضيف المزيد من الرصيد والميزات المتقدمة.</p></div></details>
+          <details class="faqItem" data-mk-faq-item><summary><span class="faqQuestionText" data-mk="faq.q">ماذا يمكنني إنشاؤه مع NabadAi؟</span><span class="faqToggle" aria-hidden="true"></span></summary><div class="faqAnswer"><p data-mk="faq.a">حوّل الكلمات أو الهمهمة أو مزاج صورة إلى أغنية كاملة — مع أغلفة وريمكسات وموسيقى instrumental وقوالب للمناسبات. اكتشف <a href="/ar/ai-music-generator">مولد الموسيقى</a> و<a href="/ar/hum-to-song">الهمهمة إلى أغنية</a> و<a href="/ar/photo-to-song">الصورة إلى أغنية</a>.</p></div></details>
+          <details class="faqItem" data-mk-faq-item><summary><span class="faqQuestionText" data-mk="faq.q">هل يدعم NabadAi الموسيقى العربية والدبكة واللهجات؟</span><span class="faqToggle" aria-hidden="true"></span></summary><div class="faqAnswer"><p data-mk="faq.a">نعم. اكتب كلماتاً عربية، وجّه اللهجة اللبنانية وغيرها حيث تتوفر، واختر اتجاهات مثل الدبكة والخليجي والطرب. المزيد في صفحة <a href="/ar/arabic-ai-music-generator">الموسيقى العربية</a>.</p></div></details>
+          <details class="faqItem" data-mk-faq-item><summary><span class="faqQuestionText" data-mk="faq.q">هل يمكنني نشر أغانيي على Discover؟</span><span class="faqToggle" aria-hidden="true"></span></summary><div class="faqAnswer"><p data-mk="faq.a">نعم. احتفظ بالمسودات خاصة، ثم انشر على ملفك الشخصي وشارك على Discover عندما تكون جاهزاً.</p></div></details>
+          <details class="faqItem" data-mk-faq-item><summary><span class="faqQuestionText" data-mk="faq.q">هل توجد قوالب لأعياد الميلاد والأعراس والمناسبات؟</span><span class="faqToggle" aria-hidden="true"></span></summary><div class="faqAnswer"><p data-mk="faq.a">نعم. داخل التطبيق، اختر قالب مناسبة أو إهداء للحصول على كلمات واتجاه أسلوب أسرع — مفيد للهدايا والمناسبات.</p></div></details>
+          <details class="faqItem" data-mk-faq-item><summary><span class="faqQuestionText" data-mk="faq.q">هل أحتاج خبرة في الإنتاج الموسيقي؟</span><span class="faqToggle" aria-hidden="true"></span></summary><div class="faqAnswer"><p data-mk="faq.a">لا. NabadAi مُصمَّم للمبدعين الذين يبدأون بفكرة، لا ببرنامج DAW. أنت توجّه المزاج والكلمات والأسلوب؛ والاستوديو يتولى التوليد.</p></div></details>
         </div>
       </section>
       <section class="section">
         <header class="sectionHead"><h2>اكتشف أدوات أخرى</h2></header>
         <nav class="relatedLinks" aria-label="اكتشف أدوات أخرى"><a href="/ar/hum-to-song">الهمهمة إلى أغنية</a><a href="/ar/lyrics-to-song">الكلمات إلى أغنية</a><a href="/ar/photo-to-song">الصورة إلى أغنية</a><a href="/ar/arabic-ai-music-generator">أغاني عربية</a></nav>
       </section>
-      <section class="finalCta"><h2>ابدأ أغنيتك التالية</h2><p>اجمع الكلمات واللحن والصورة والصوت في مساحة إبداعية واحدة.</p><a class="marketingCta" href="/app/#/intro">افتح NabadAi</a></section>
+      <section class="finalCta"><h2 data-mk="final.title">ابدأ أغنيتك التالية</h2><p data-mk="final.body">اجمع الكلمات واللحن والصورة والصوت في مساحة إبداعية واحدة.</p><a class="marketingCta" data-mk="final.cta" href="/app/#/intro">افتح NabadAi</a></section>
     </main>
     <footer class="marketingFooter marketingFooter--site">
       <div class="marketingFooterTop">

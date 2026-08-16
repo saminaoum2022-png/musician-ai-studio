@@ -69,7 +69,7 @@
         <a class="marketingNavText" href="#pricing">Pricing</a>
         <a class="marketingNavText" href="#faq">FAQ</a>
         <a class="marketingLangSwitch" href="/ar" lang="ar" hreflang="ar">العربية</a>
-        <a class="marketingNavText" href="/app/#/auth">Sign in</a>
+        <a class="marketingNavSignIn" href="/app/#/auth">Sign in</a>
       </div>
     </nav>
     <main>
@@ -162,7 +162,7 @@
           </div>
         </div>
         <div class="heroActions">
-          <a class="marketingCta" data-mk="templates.cta" href="/app/#/challenges">Browse templates</a>
+          <a class="marketingCta marketingCta--ghost" data-mk="templates.cta" href="/app/#/challenges">Browse templates</a>
         </div>
       </section>
 
@@ -197,8 +197,8 @@
               </li>
             </ul>
             <div class="heroActions">
-              <a class="marketingCta" data-mk="collab.ctaPrimary" href="/app/#/intro">Try free</a>
-              <a class="marketingCta marketingCta--ghost" data-mk="collab.ctaSecondary" href="/app/#/discover">Explore Discover</a>
+              <a class="marketingCta marketingCta--violet" data-mk="collab.ctaPrimary" href="/app/#/settings?singer=apply">Apply now</a>
+              <a class="marketingCta marketingCta--ghost" data-mk="collab.ctaSecondary" href="/app/#/settings?proSinger=request">Request a vocalist</a>
             </div>
           </div>
           <figure class="marketingCollabArt">
@@ -213,32 +213,56 @@
           <h2 data-mk="pricing.title">Free to start. Pro when you’re ready.</h2>
         </header>
         <div class="pricingGrid">
-          <article class="pricingCard">
-            <h3 data-mk="pricing.free.title">Free</h3>
-            <p class="pricingPrice" data-mk="pricing.free.price">$0</p>
-            <p data-mk="pricing.free.body">Start with free credits. Create songs, save drafts, and explore the community.</p>
-            <a class="marketingCta marketingCta--ghost" data-mk="pricing.free.cta" href="/app/#/intro">Get started</a>
+          <article class="pricingCard pricingCard--compact">
+            <div class="pricingCardTop">
+              <h3 data-mk="pricing.free.title">Free</h3>
+              <p class="pricingPrice" data-mk="pricing.free.price">$0</p>
+            </div>
+            <p class="pricingTagline" data-mk="pricing.free.body">Starter credits to create songs — no card needed.</p>
+            <ul class="pricingFeatures" data-mk-pricing-features="free">
+              <li class="pricingFeature">Starter credits · 12 credits = 1 song (2 versions)</li>
+              <li class="pricingFeature">Lyrics, hum, photo &amp; publish to Discover</li>
+              <li class="pricingFeature">AI lyrics help &amp; ✦ Boost style</li>
+              <li class="pricingFeature">NabadAi Coach · daily limit</li>
+            </ul>
+            <a class="marketingCta marketingCta--ghost pricingCardCta" data-mk="pricing.free.cta" href="/app/#/intro">Get started</a>
           </article>
-          <article class="pricingCard pricingCard--pro">
-            <h3 data-mk="pricing.pro.title">NabadAi Pro</h3>
-            <p class="pricingPrice" data-mk="pricing.pro.price">Weekly or monthly</p>
-            <p data-mk="pricing.pro.body">More credits, Persona voice, priority features, and the full creator toolkit on iOS and web.</p>
-            <a class="marketingCta" data-mk="pricing.pro.cta" href="/app/#/intro">Try free first</a>
+          <article class="pricingCard pricingCard--compact pricingCard--pro">
+            <div class="pricingCardTop">
+              <h3 data-mk="pricing.pro.title">NabadAi Pro</h3>
+              <p class="pricingPrice pricingPrice--from">From $3.99</p>
+            </div>
+            <div class="pricingPlanChips" aria-label="Pro plans">
+              <span class="pricingPlanChip">Weekly · $3.99/wk · 7-day trial · 400 cr</span>
+              <span class="pricingPlanChip pricingPlanChip--monthly">Monthly · $9.99/mo · 1,200 cr <span class="pricingPlanSave">Save ~17%</span></span>
+            </div>
+            <p class="pricingTagline" data-mk="pricing.pro.body">Studio, WAV export, unlimited Coach, and song analytics.</p>
+            <ul class="pricingFeatures pricingFeatures--pro" data-mk-pricing-features="pro">
+              <li class="pricingFeature">Credits each week or month · giftable</li>
+              <li class="pricingFeature">Unlimited NabadAi Coach</li>
+              <li class="pricingFeature">NabadAi Studio &amp; WAV export</li>
+              <li class="pricingFeature">Song analytics &amp; Pro badge</li>
+            </ul>
+            <a class="marketingCta pricingCardCta pricingCardCta--pro" data-mk="pricing.pro.cta" href="/app/#/pro">View plans</a>
           </article>
         </div>
+        <p class="pricingSectionNote" data-mk="pricing.pro.finePrint">1 full song = 12 credits (2 versions). Cancel anytime in Settings.</p>
       </section>
 
-      <section class="section" id="faq">
-        <header class="sectionHead"><h2 data-mk="faq.title">Frequently asked questions</h2></header>
-        <div class="faqList">
-          <article class="faqItem" data-mk-faq-item><h3 data-mk="faq.q">Do I need to download an app?</h3><p data-mk="faq.a">You can try NabadAi in your browser at <a href="/app">nabadai.com/app</a> or install the iOS app for the best experience.</p></article>
-          <article class="faqItem" data-mk-faq-item><h3 data-mk="faq.q">Can I use my own lyrics and voice?</h3><p data-mk="faq.a">Yes. Write or generate lyrics, upload a melody reference, or create a Persona from your own voice sample.</p></article>
-          <article class="faqItem" data-mk-faq-item><h3 data-mk="faq.q">Is it free?</h3><p data-mk="faq.a">New accounts include free credits. Pro subscriptions add more credits and premium features.</p></article>
-          <article class="faqItem" data-mk-faq-item><h3 data-mk="faq.q">What can I create with NabadAi?</h3><p data-mk="faq.a">Turn lyrics, a hum, or a photo mood into a full song — plus covers, remixes, instrumentals, and occasion templates. Explore <a href="/ai-music-generator">AI music generator</a>, <a href="/hum-to-song">hum to song</a>, and <a href="/photo-to-song">photo to song</a>.</p></article>
-          <article class="faqItem" data-mk-faq-item><h3 data-mk="faq.q">Does NabadAi support Arabic music, dabke, and dialects?</h3><p data-mk="faq.a">Yes. Write Arabic lyrics, guide Lebanese and other dialects where supported, and shape dabke, khaleeji, tarab, and regional styles. See our <a href="/arabic-ai-music-generator">Arabic AI music</a> page.</p></article>
-          <article class="faqItem" data-mk-faq-item><h3 data-mk="faq.q">Can I publish songs on Discover?</h3><p data-mk="faq.a">Yes. Keep drafts private, then publish to your profile and share on Discover when you're ready.</p></article>
-          <article class="faqItem" data-mk-faq-item><h3 data-mk="faq.q">Are there templates for birthdays, weddings, and occasions?</h3><p data-mk="faq.a">Yes. In the app, pick an occasion or dedication template to get lyrics and style direction faster — useful for gifts and events.</p></article>
-          <article class="faqItem" data-mk-faq-item><h3 data-mk="faq.q">Do I need music production experience?</h3><p data-mk="faq.a">No. NabadAi is built for people who start with an idea, not a DAW. You guide mood, lyrics, and style; the studio handles generation.</p></article>
+      <section class="section faqSection" id="faq">
+        <header class="sectionHead sectionHead--center">
+          <h2 data-mk="faq.title">Frequently asked questions</h2>
+          <p class="sectionLead" data-mk="faq.lead">Everything you need to know about creating with NabadAi.</p>
+        </header>
+        <div class="faqList faqList--accordion">
+          <details class="faqItem" data-mk-faq-item><summary><span class="faqQuestionText" data-mk="faq.q">Do I need to download an app?</span><span class="faqToggle" aria-hidden="true"></span></summary><div class="faqAnswer"><p data-mk="faq.a">You can try NabadAi in your browser at <a href="/app">nabadai.com/app</a> or install the iOS app for the best experience.</p></div></details>
+          <details class="faqItem" data-mk-faq-item><summary><span class="faqQuestionText" data-mk="faq.q">Can I use my own lyrics and voice?</span><span class="faqToggle" aria-hidden="true"></span></summary><div class="faqAnswer"><p data-mk="faq.a">Yes. Write or generate lyrics, upload a melody reference, or create a Persona from your own voice sample.</p></div></details>
+          <details class="faqItem" data-mk-faq-item><summary><span class="faqQuestionText" data-mk="faq.q">Is it free?</span><span class="faqToggle" aria-hidden="true"></span></summary><div class="faqAnswer"><p data-mk="faq.a">New accounts include free credits. Pro subscriptions add more credits and premium features.</p></div></details>
+          <details class="faqItem" data-mk-faq-item><summary><span class="faqQuestionText" data-mk="faq.q">What can I create with NabadAi?</span><span class="faqToggle" aria-hidden="true"></span></summary><div class="faqAnswer"><p data-mk="faq.a">Turn lyrics, a hum, or a photo mood into a full song — plus covers, remixes, instrumentals, and occasion templates. Explore <a href="/ai-music-generator">AI music generator</a>, <a href="/hum-to-song">hum to song</a>, and <a href="/photo-to-song">photo to song</a>.</p></div></details>
+          <details class="faqItem" data-mk-faq-item><summary><span class="faqQuestionText" data-mk="faq.q">Does NabadAi support Arabic music, dabke, and dialects?</span><span class="faqToggle" aria-hidden="true"></span></summary><div class="faqAnswer"><p data-mk="faq.a">Yes. Write Arabic lyrics, guide Lebanese and other dialects where supported, and shape dabke, khaleeji, tarab, and regional styles. See our <a href="/arabic-ai-music-generator">Arabic AI music</a> page.</p></div></details>
+          <details class="faqItem" data-mk-faq-item><summary><span class="faqQuestionText" data-mk="faq.q">Can I publish songs on Discover?</span><span class="faqToggle" aria-hidden="true"></span></summary><div class="faqAnswer"><p data-mk="faq.a">Yes. Keep drafts private, then publish to your profile and share on Discover when you're ready.</p></div></details>
+          <details class="faqItem" data-mk-faq-item><summary><span class="faqQuestionText" data-mk="faq.q">Are there templates for birthdays, weddings, and occasions?</span><span class="faqToggle" aria-hidden="true"></span></summary><div class="faqAnswer"><p data-mk="faq.a">Yes. In the app, pick an occasion or dedication template to get lyrics and style direction faster — useful for gifts and events.</p></div></details>
+          <details class="faqItem" data-mk-faq-item><summary><span class="faqQuestionText" data-mk="faq.q">Do I need music production experience?</span><span class="faqToggle" aria-hidden="true"></span></summary><div class="faqAnswer"><p data-mk="faq.a">No. NabadAi is built for people who start with an idea, not a DAW. You guide mood, lyrics, and style; the studio handles generation.</p></div></details>
         </div>
       </section>
 

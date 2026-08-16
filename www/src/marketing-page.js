@@ -165,6 +165,7 @@
 
     if (c.faq) {
       setText("[data-mk='faq.title']", c.faq.title);
+      setText("[data-mk='faq.lead']", c.faq.lead);
       var faqNodes = document.querySelectorAll("[data-mk-faq-item]");
       if (Array.isArray(c.faq.items)) {
         c.faq.items.forEach(function (item, i) {
@@ -299,6 +300,32 @@
     }
   }
 
+  function renderPricingFeatures(tierKey, features) {
+    if (!Array.isArray(features) || !features.length) return;
+    var list = document.querySelector('[data-mk-pricing-features="' + tierKey + '"]');
+    if (!list) return;
+    list.innerHTML = "";
+    features.forEach(function (f) {
+      var li = document.createElement("li");
+      li.className = "pricingFeature";
+      var text = f.label || "";
+      if (f.sub) text = text ? text + " · " + f.sub : f.sub;
+      li.textContent = text;
+      list.appendChild(li);
+    });
+  }
+
+  function applyPricingTier(tierKey, tier) {
+    if (!tier) return;
+    setText("[data-mk='pricing." + tierKey + ".title']", tier.title);
+    setText("[data-mk='pricing." + tierKey + ".price']", tier.price);
+    setText("[data-mk='pricing." + tierKey + ".body']", tier.body);
+    setText("[data-mk='pricing." + tierKey + ".cta']", tier.ctaLabel);
+    setAttr("[data-mk='pricing." + tierKey + ".cta']", "href", tier.ctaHref);
+    if (tierKey === "pro") setText("[data-mk='pricing.pro.finePrint']", tier.finePrint);
+    renderPricingFeatures(tierKey, tier.features);
+  }
+
   function applyHomeExtras(c) {
     if (c.templates) applyTemplates(c.templates);
     if (c.collab) applyCollab(c.collab);
@@ -319,20 +346,8 @@
     if (c.pricing) {
       setText("[data-mk='pricing.eyebrow']", c.pricing.eyebrow);
       setText("[data-mk='pricing.title']", c.pricing.title);
-      if (c.pricing.free) {
-        setText("[data-mk='pricing.free.title']", c.pricing.free.title);
-        setText("[data-mk='pricing.free.price']", c.pricing.free.price);
-        setText("[data-mk='pricing.free.body']", c.pricing.free.body);
-        setText("[data-mk='pricing.free.cta']", c.pricing.free.ctaLabel);
-        setAttr("[data-mk='pricing.free.cta']", "href", c.pricing.free.ctaHref);
-      }
-      if (c.pricing.pro) {
-        setText("[data-mk='pricing.pro.title']", c.pricing.pro.title);
-        setText("[data-mk='pricing.pro.price']", c.pricing.pro.price);
-        setText("[data-mk='pricing.pro.body']", c.pricing.pro.body);
-        setText("[data-mk='pricing.pro.cta']", c.pricing.pro.ctaLabel);
-        setAttr("[data-mk='pricing.pro.cta']", "href", c.pricing.pro.ctaHref);
-      }
+      if (c.pricing.free) applyPricingTier("free", c.pricing.free);
+      if (c.pricing.pro) applyPricingTier("pro", c.pricing.pro);
     }
     applyFooter(c.footer);
   }

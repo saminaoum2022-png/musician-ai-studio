@@ -211,7 +211,7 @@ import { MUSIC_VIDEO_FEATURE_ENABLED } from "./feature-flags.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260816-224931";
+const APP_BUILD = "20260817-002448";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -4507,6 +4507,14 @@ function applyRoute({ passGen } = {}) {
     if (openSingerStudioAfterRoute) {
       window.setTimeout(() => { try { void openSingerStudioSheet(); } catch {} }, 120);
     }
+    try {
+      const sq = new URLSearchParams(String(rawRouteQuery || ""));
+      if (sq.get("singer") === "apply") {
+        window.setTimeout(() => { try { void openSingerApplicationSheet(); } catch {} }, 120);
+      } else if (sq.get("proSinger") === "request") {
+        window.setTimeout(() => { try { void openProSingerRequestSheet(null); } catch {} }, 120);
+      }
+    } catch {}
     if (!_onesignalAppId) {
       void loadPublicConfig().then(() => {
         try { syncSettingsPushRow(); } catch {}

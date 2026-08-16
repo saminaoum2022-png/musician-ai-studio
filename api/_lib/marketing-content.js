@@ -131,10 +131,10 @@ function defaultHomeContentEn() {
       title: "AI first. Real people when it matters.",
       lead:
         "Generate in minutes, then go further — publish on Discover, remix with friends, or request a pro singer for weddings and special releases.",
-      ctaPrimaryLabel: "Try free",
-      ctaPrimaryHref: "/app/#/intro",
-      ctaSecondaryLabel: "Explore Discover",
-      ctaSecondaryHref: "/app/#/discover",
+      ctaPrimaryLabel: "Apply now",
+      ctaPrimaryHref: "/app/#/settings?singer=apply",
+      ctaSecondaryLabel: "Request a vocalist",
+      ctaSecondaryHref: "/app/#/settings?proSinger=request",
       imageUrl: "/assets/marketing/collab-ai-human.png",
       imageAlt: "Singer and AI collaborating in a neon music studio",
       points: [
@@ -154,7 +154,13 @@ function defaultHomeContentEn() {
       free: {
         title: "Free",
         price: "$0",
-        body: "Start with free credits. Create songs, save drafts, and explore the community.",
+        body: "Starter credits to create songs — no card needed.",
+        features: [
+          { label: "Starter credits · 12 credits = 1 song (2 versions)" },
+          { label: "Lyrics, hum, photo & publish to Discover" },
+          { label: "AI lyrics help & ✦ Boost style" },
+          { label: "NabadAi Coach · daily limit" },
+        ],
         ctaLabel: "Get started",
         ctaHref: "/app/#/intro",
         imageUrl: "",
@@ -162,16 +168,24 @@ function defaultHomeContentEn() {
       },
       pro: {
         title: "NabadAi Pro",
-        price: "Weekly or monthly",
-        body: "More credits, Persona voice, priority features, and the full creator toolkit on iOS and web.",
-        ctaLabel: "Try free first",
-        ctaHref: "/app/#/intro",
+        price: "",
+        body: "Studio, WAV export, unlimited Coach, and song analytics.",
+        features: [
+          { label: "Credits each week or month · giftable" },
+          { label: "Unlimited NabadAi Coach" },
+          { label: "NabadAi Studio & WAV export" },
+          { label: "Song analytics & Pro badge" },
+        ],
+        finePrint: "1 full song = 12 credits (2 versions). Cancel anytime in Settings.",
+        ctaLabel: "View plans",
+        ctaHref: "/app/#/pro",
         imageUrl: "",
         imageAlt: "NabadAi Pro subscription features",
       },
     },
     faq: {
       title: "Frequently asked questions",
+      lead: "Everything you need to know about creating with NabadAi.",
       items: [
         {
           question: "Do I need to download an app?",
@@ -337,10 +351,10 @@ function defaultHomeContentAr() {
       title: "ذكاء اصطناعي أولاً. أشخاص حقيقيون عندما يهم الأمر.",
       lead:
         "أنشئ في دقائق، ثم تابع — انشر على Discover، ريمكس مع الأصدقاء، أو اطلب مغنياً محترفاً للأعراس والمناسبات.",
-      ctaPrimaryLabel: "جرّب مجاناً",
-      ctaPrimaryHref: "/app/#/intro",
-      ctaSecondaryLabel: "استكشف Discover",
-      ctaSecondaryHref: "/app/#/discover",
+      ctaPrimaryLabel: "قدّم الآن",
+      ctaPrimaryHref: "/app/#/settings?singer=apply",
+      ctaSecondaryLabel: "اطلب مغنياً",
+      ctaSecondaryHref: "/app/#/settings?proSinger=request",
       imageUrl: "/assets/marketing/collab-ai-human.png",
       imageAlt: "مغنية وذكاء اصطناعي يتعاونان في استوديو موسيقى نيون",
       points: [
@@ -360,20 +374,34 @@ function defaultHomeContentAr() {
       free: {
         title: "مجاني",
         price: "$0",
-        body: "ابدأ برصيد مجاني. أنشئ أغاني، احفظ مسودات، واستكشف المجتمع.",
+        body: "رصيد للبداية لإنشاء أغاني — بدون بطاقة.",
+        features: [
+          { label: "رصيد البداية · 12 رصيد = أغنية (نسختان)" },
+          { label: "كلمات، دندنة، صورة والنشر على Discover" },
+          { label: "مساعدة الكلمات و✦ Boost style" },
+          { label: "NabadAi Coach · حد يومي" },
+        ],
         ctaLabel: "ابدأ",
         ctaHref: "/app/#/intro",
       },
       pro: {
         title: "NabadAi Pro",
-        price: "أسبوعي أو شهري",
-        body: "المزيد من الرصيد، صوت Persona، ميزات أولوية، ومجموعة المبدع الكاملة.",
-        ctaLabel: "جرّب مجاناً أولاً",
-        ctaHref: "/app/#/intro",
+        price: "",
+        body: "Studio، WAV، Coach غير محدود، وتحليلات الأغاني.",
+        features: [
+          { label: "رصيد أسبوعي أو شهري · قابل للإهداء" },
+          { label: "NabadAi Coach غير محدود" },
+          { label: "NabadAi Studio وتصدير WAV" },
+          { label: "تحليلات الأغاني وشارة Pro" },
+        ],
+        finePrint: "أغنية كاملة = 12 رصيد (نسختان). إلغاء في أي وقت من الإعدادات.",
+        ctaLabel: "عرض الخطط",
+        ctaHref: "/app/#/pro",
       },
     },
     faq: {
       title: "أسئلة شائعة",
+      lead: "كل ما تحتاج معرفته عن الإنشاء مع NabadAi.",
       items: [
         {
           question: "هل أحتاج تحميل تطبيق؟",
@@ -541,6 +569,7 @@ function normalizeSeoLikeContent(input, defaults) {
     },
     faq: {
       title: clip(faqIn.title, 160) || defaults.faq?.title || "Frequently asked questions",
+      lead: clip(faqIn.lead, 240) || defaults.faq?.lead || "",
       items: normalizeFaqItems(faqIn.items, defaults.faq?.items || []),
     },
     related: {
@@ -571,12 +600,30 @@ function normalizeFaqItems(items, defaults) {
   return out.length ? out : defaults;
 }
 
+function normalizePricingFeatures(items, defaults) {
+  const src = Array.isArray(items) ? items : [];
+  const out = [];
+  const max = Math.max(src.length, defaults.length, 1);
+  for (let i = 0; i < Math.min(max, 12); i += 1) {
+    const d = defaults[i] || { label: "" };
+    const it = src[i] || {};
+    const label = clip(it.label, 200) || d.label;
+    const sub = clip(it.sub, 300) || d.sub || "";
+    if (!label) continue;
+    out.push(sub ? { label, sub } : { label });
+  }
+  return out.length ? out : defaults;
+}
+
 function normalizePricingTier(tier, defaults) {
   const t = tier && typeof tier === "object" ? tier : {};
   return {
     title: clip(t.title, 80) || defaults.title,
-    price: clip(t.price, 40) || defaults.price,
+    price: clip(t.price, 40) || defaults.price || "",
     body: clip(t.body, 500) || defaults.body,
+    featuresTitle: clip(t.featuresTitle, 80) || defaults.featuresTitle || "",
+    features: normalizePricingFeatures(t.features, defaults.features || []),
+    finePrint: clip(t.finePrint, 300) || defaults.finePrint || "",
     ctaLabel: clip(t.ctaLabel, 60) || defaults.ctaLabel,
     ctaHref: sanitizeHref(t.ctaHref, defaults.ctaHref),
     imageUrl: sanitizeImageUrl(t.imageUrl, defaults.imageUrl || ""),
@@ -729,6 +776,7 @@ function normalizeContent(pageKey, locale, raw) {
         },
         faq: {
           title: clip(faqIn.title, 160) || defaults.faq.title,
+          lead: clip(faqIn.lead, 240) || defaults.faq.lead || "",
           items: normalizeFaqItems(faqIn.items, defaults.faq.items),
         },
         finalCta: {

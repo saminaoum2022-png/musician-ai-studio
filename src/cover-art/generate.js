@@ -140,6 +140,7 @@ async function resolveRegenPromptBundle(params, regenOpts = {}) {
     visualDirection: vd.direction || undefined,
     userArtworkOverride: hintOverride || undefined,
     forceMusicFallback: regenAutoMusic,
+    ...(hintOverride ? { imageProvider: "gemini", geminiImage: true } : {}),
   });
 
   const avoidTags = [params.avoidTagsInput || "", vd.avoidMerged || ""].filter(Boolean).join(", ");
@@ -329,7 +330,10 @@ async function runCoverJobForTrack(track, id, opts = {}) {
     }
     try {
       const result = await fetchAbstractCoverArt(params, opts);
-      const normalizedUrl = await normalizePortraitCoverDataUrl(result.dataUrl);
+      const preferCenter =
+        String(result.provider || result.params?.imageProvider || "").toLowerCase() === "gemini" ||
+        Boolean(params.artworkStyle || params.artworkHint || hint);
+      const normalizedUrl = await normalizePortraitCoverDataUrl(result.dataUrl, { preferCenter });
       const stampedUrl = await stampCoverWithSplashMark(normalizedUrl);
       let thumbUrl = "";
       try {
@@ -583,7 +587,10 @@ async function runParallelCoverJob(track, songId) {
     }
     try {
       const result = await fetchAbstractCoverArt(params);
-      const normalizedUrl = await normalizePortraitCoverDataUrl(result.dataUrl);
+      const preferCenter =
+        String(result.provider || result.params?.imageProvider || "").toLowerCase() === "gemini" ||
+        Boolean(params.artworkStyle || params.artworkHint);
+      const normalizedUrl = await normalizePortraitCoverDataUrl(result.dataUrl, { preferCenter });
       const stampedUrl = await stampCoverWithSplashMark(normalizedUrl);
       const patch = {
         dataUrl: stampedUrl,

@@ -4,7 +4,7 @@
  */
 
 /** Bump when cover prompt policy changes — busts Gemini scene cache on the server. */
-export const COVER_PROMPT_POLICY_VERSION = 14;
+export const COVER_PROMPT_POLICY_VERSION = 15;
 /** Pollinations flux reliably returns ~768×768 square — request square, crop to 9:16 (avoids vertical stretch). */
 export const POLLINATIONS_COVER_WIDTH = 1024;
 export const POLLINATIONS_COVER_HEIGHT = 1024;
@@ -12,6 +12,14 @@ export const POLLINATIONS_COVER_HEIGHT = 1024;
 /** Square canvas keeps object proportions natural; we vertical-crop to 9:16 for the reel. */
 const OBJECT_COMPOSE_FRAME =
   "square still life album art composition, medium-sized props at natural scale occupying roughly 25-35% of frame, camera pulled back with wide breathing room, atmospheric background and generous margins for vertical reel crop, objects grouped on rule of thirds not dead center, not macro close-up, not oversized hero prop filling frame, natural proportions, no vertical stretch, no elongated props, no people";
+
+/** Native 9:16 Gemini — hero centered with safe margins so nothing clips in the reel editor. */
+const GEMINI_REEL_COMPOSE_FRAME =
+  "vertical 9:16 portrait album cover photograph, single hero subject centered in frame, generous safe margins on all four edges, subject scaled to fit fully inside the vertical reel viewport, nothing cropped off at frame edges, balanced centered composition, subject occupies roughly 40-55% of frame height, ample breathing room above and below, no elements touching or crossing the frame boundary";
+
+/** Music-leaning Gemini reel frame — environment still centered and fully in view. */
+const GEMINI_REEL_ENV_FRAME =
+  "vertical 9:16 portrait cinematic album cover, environment and focal subject centered with safe margins, full scene visible inside the vertical reel frame, no clipping at top or bottom edges, balanced centered composition, no people unless explicitly requested in the art direction";
 
 /** @deprecated alias — use OBJECT_COMPOSE_FRAME */
 const STILL_LIFE_COMPOSE_FRAME = OBJECT_COMPOSE_FRAME;
@@ -55,6 +63,9 @@ const SAFETY_SUFFIX =
 
 const HUM_TRACK_SAFETY_SUFFIX =
   "absolutely no text, no words, no letters, no numbers, no captions, no subtitles, no typography, no writing, no logo text, no song name, no watermark, no readable signage, no people, no faces, no hands, no human figures, fine art photography quality";
+
+const GEMINI_USER_SAFETY_SUFFIX =
+  "absolutely no text, no words, no letters, no numbers, no captions, no subtitles, no typography, no writing, no logo text, no song name, no watermark, no readable signage, no speech bubbles, no banners, no posters, fine art photography quality";
 
 const NO_TEXT_REINFORCE =
   "completely wordless photograph, zero readable characters in the entire frame, blank signs, empty screens, no labels";
@@ -241,6 +252,13 @@ const OBJECT_COMPOSITIONS = [
   "modest-sized symbolic objects on rule-of-thirds placement, wide environmental context, pulled-back camera distance",
   "editorial still life with small-to-medium props, natural viewing distance, atmospheric background clearly visible",
   "grouped objects at moderate scale in lower or upper third, ample empty space around edges for reel framing",
+];
+
+const GEMINI_REEL_COMPOSITIONS = [
+  "hero subject dead-center with equal negative space on left and right, scaled to fit entirely inside the 9:16 frame",
+  "centered focal subject with wide safe margins above and below, nothing clipped at the top or bottom of the reel",
+  "symmetrical centered composition, subject fully visible inside vertical portrait safe zone, moderate scale not edge-to-edge",
+  "single dominant subject centered on the vertical midline, generous padding on all sides for reel crop safety",
 ];
 
 const CONCRETE_OBJECT_RE =
@@ -498,8 +516,11 @@ export function isConcreteObjectArtworkHint(text) {
   return CONCRETE_OBJECT_RE.test(String(text || ""));
 }
 
-export function compositionPhraseForCover(songId, artworkText = "", visualMode = "") {
+export function compositionPhraseForCover(songId, artworkText = "", visualMode = "", { geminiReel = false } = {}) {
   const mode = String(visualMode || "").toLowerCase();
+  if (geminiReel) {
+    return GEMINI_REEL_COMPOSITIONS[fnv1a(`${songId}:gemini-reel`) % GEMINI_REEL_COMPOSITIONS.length];
+  }
   if (isSceneEnvironmentHint(artworkText)) {
     return COMPOSITIONS[fnv1a(`${songId}:scene-comp`) % COMPOSITIONS.length];
   }
@@ -561,7 +582,16 @@ function enrichUserArtworkHint(raw) {
   return s.replace(/\s+/g, " ").trim().slice(0, 280);
 }
 
-function composeFrameForArtwork(userArtwork, { literalSubject = false, wildlifeSubject = false } = {}) {
+function composeFrameForArtwork(userArtwork, { literalSubject = false, wildlifeSubject = false, geminiReel = false } = {}) {
+  if (geminiReel) {
+    if (wildlifeSubject || isWildlifeArtworkHint(userArtwork)) {
+      return `${GEMINI_REEL_COMPOSE_FRAME}, natural environment, single wildlife subject as clear centered focal point`;
+    }
+    if (isSceneEnvironmentHint(userArtwork) || isSkyOrSpaceHint(userArtwork) || /landscape|ocean|mountain|city|skyline|environment|horizon/i.test(userArtwork)) {
+      return GEMINI_REEL_ENV_FRAME;
+    }
+    return GEMINI_REEL_COMPOSE_FRAME;
+  }
   if (wildlifeSubject || isWildlifeArtworkHint(userArtwork)) {
     return "vertical cinematic album art, natural environment, single wildlife subject as clear focal point, atmospheric depth, no people";
   }
@@ -586,10 +616,10 @@ function paletteForUserArtwork(userArtwork, bucketKey) {
   return moodPaletteForBucket(bucketKey);
 }
 
-function prepareDirectUserArtworkHint(raw) {
+function prepareDirectUserArtworkHint(raw, { allowHumans = false } = {}) {
   let s = toVisualOnlyPrompt(String(raw || "").trim(), { title: "" });
   s = enrichUserArtworkHint(s);
-  s = enforceNoHumansScene(s);
+  if (!allowHumans) s = enforceNoHumansScene(s);
   return s.replace(/\s+/g, " ").trim().slice(0, 280);
 }
 
@@ -943,13 +973,15 @@ export function buildAbstractCoverPrompt(input, options = {}) {
   const energy = parseEnergy(input?.energy);
   const brightness = parseBrightness(input?.brightness);
   const sonicProfile = String(input?.sonicProfile || inferSonicProfile(`${genre} ${styleBlob}`));
+  const geminiImage = options.imageProvider === "gemini" || Boolean(options.geminiImage);
+  const allowHumans = geminiImage;
   const userArtworkOverride = String(options.userArtworkOverride || "").trim().slice(0, 280);
   const userDirectedRegen = isUserDirectedRegenHint(userArtworkOverride);
   const forceMusicFallback = Boolean(options.forceMusicFallback && !userArtworkOverride);
   const userArtworkRaw = userArtworkOverride || (forceMusicFallback ? "" : resolveUserArtworkPrompt(input));
   const regenMood = userDirectedRegen ? resolveRegenMoodFromHint(userArtworkOverride || userArtworkRaw) : null;
   let userArtwork = userArtworkOverride
-    ? prepareDirectUserArtworkHint(userArtworkRaw)
+    ? prepareDirectUserArtworkHint(userArtworkRaw, { allowHumans })
     : sanitizeArtworkPrompt(enrichUserArtworkHint(userArtworkRaw), { title });
   const sceneOverrideRaw = sanitizeArtworkPrompt(String(options.sceneOverride || "").trim(), { title });
   let sceneOverride = sceneOverrideRaw && userArtwork
@@ -958,9 +990,8 @@ export function buildAbstractCoverPrompt(input, options = {}) {
 
   const { scene, visualMode, storyTheme, bucketKey: storyBucketKey } = buildSceneFromStory(input);
   const bucketKey = regenMood?.bucket || storyBucketKey;
-  const directorSceneHint = enforceNoHumansScene(
-    sanitizeArtworkPrompt(String(options.directorSceneHint || "").trim(), { title }),
-  );
+  const directorSceneHintRaw = sanitizeArtworkPrompt(String(options.directorSceneHint || "").trim(), { title });
+  const directorSceneHint = allowHumans ? directorSceneHintRaw : enforceNoHumansScene(directorSceneHintRaw);
   const nabadIdentityPhrases = sanitizeArtworkPrompt(String(options.nabadIdentityPhrases || "").trim(), { title });
   const storyScene = toVisualOnlyPrompt(scene, { title });
   const preferStoryScene = storyTheme !== "mood_fallback" && Boolean(storyScene);
@@ -971,14 +1002,17 @@ export function buildAbstractCoverPrompt(input, options = {}) {
       : !sceneOverride && !userArtwork && directorSceneHint
         ? directorSceneHint
         : storyScene;
-  sceneOverride = sceneOverride ? enforceNoHumansScene(sceneOverride) : "";
-  visualScene = enforceNoHumansScene(visualScene);
-  userArtwork = userArtwork ? enforceNoHumansScene(userArtwork) : "";
+  if (!allowHumans) {
+    sceneOverride = sceneOverride ? enforceNoHumansScene(sceneOverride) : "";
+    visualScene = enforceNoHumansScene(visualScene);
+    userArtwork = userArtwork ? enforceNoHumansScene(userArtwork) : "";
+  }
   const palette = moodPaletteForBucket(bucketKey);
   const composition = compositionPhraseForCover(
     songId,
     userArtwork || userArtworkRaw || sceneOverride || visualScene,
     sceneOverride || userArtwork || userDirectedRegen ? "user_directed" : visualMode,
+    { geminiReel: geminiImage && Boolean(userArtwork || userArtworkOverride) },
   );
   const effectiveStoryTheme = userDirectedRegen ? "user_regen" : storyTheme;
   const seed = buildCoverSeed(input, effectiveStoryTheme, bucketKey, userArtwork, String(options.regenSalt || "").trim());
@@ -996,13 +1030,20 @@ export function buildAbstractCoverPrompt(input, options = {}) {
   const styleCore = isHumTrack ? HUM_TRACK_STYLE_CORE : STYLE_CORE;
   const safetySuffix = isHumTrack ? HUM_TRACK_SAFETY_SUFFIX : SAFETY_SUFFIX;
   const humGuard = isHumTrack ? HUM_TRACK_SCENE_GUARD : "";
+  const humansGuard = allowHumans ? "" : NO_HUMANS_GUARD;
+  const geminiReelFrame = geminiImage && Boolean(userArtwork || userArtworkOverride);
+  const effectiveSafetySuffix =
+    allowHumans && (userArtwork || userArtworkOverride) ? GEMINI_USER_SAFETY_SUFFIX : safetySuffix;
 
   let parts;
   if (sceneOverride) {
     parts = userArtwork
       ? [
           NO_TEXT_LEAD,
-          composeFrameForArtwork(userArtwork, { literalSubject: shouldUseLiteralSubjectMode(userArtworkOverride || userArtwork) }),
+          composeFrameForArtwork(userArtwork, {
+            literalSubject: shouldUseLiteralSubjectMode(userArtworkOverride || userArtwork),
+            geminiReel: geminiReelFrame,
+          }),
           sceneOverride,
           nabadIdentityPhrases,
           paletteForUserArtwork(userArtwork, bucketKey),
@@ -1010,8 +1051,8 @@ export function buildAbstractCoverPrompt(input, options = {}) {
           SAFETY_PREFIX + USER_STYLE_CORE,
           composition,
           NO_TEXT_REINFORCE,
-          NO_HUMANS_GUARD,
-          safetySuffix,
+          humansGuard,
+          effectiveSafetySuffix,
         ]
       : [
           NO_TEXT_LEAD,
@@ -1028,8 +1069,8 @@ export function buildAbstractCoverPrompt(input, options = {}) {
           brightnessPhrase(brightness),
           sonicPhrase(sonicProfile),
           NO_TEXT_REINFORCE,
-          NO_HUMANS_GUARD,
-          safetySuffix,
+          humansGuard,
+          effectiveSafetySuffix,
         ];
   } else if (userArtwork) {
     const userPalette = paletteForUserArtwork(userArtwork, bucketKey);
@@ -1052,6 +1093,7 @@ export function buildAbstractCoverPrompt(input, options = {}) {
       composeFrameForArtwork(userArtwork, {
         literalSubject: useLiteralSubject,
         wildlifeSubject: useWildlifeLead,
+        geminiReel: geminiReelFrame,
       }),
       userArtwork,
       nabadIdentityPhrases,
@@ -1061,8 +1103,8 @@ export function buildAbstractCoverPrompt(input, options = {}) {
       SAFETY_PREFIX + USER_STYLE_CORE,
       composition,
       NO_TEXT_REINFORCE,
-      NO_HUMANS_GUARD,
-      safetySuffix,
+      humansGuard,
+      effectiveSafetySuffix,
     ];
   } else {
     const autoFrame =
@@ -1074,7 +1116,7 @@ export function buildAbstractCoverPrompt(input, options = {}) {
     parts = [
       NO_TEXT_LEAD,
       autoFrame,
-      NO_HUMANS_GUARD,
+      humansGuard,
       SAFETY_PREFIX + styleCore,
       visualScene,
       nabadIdentityPhrases,
@@ -1086,8 +1128,8 @@ export function buildAbstractCoverPrompt(input, options = {}) {
       tempoPhrase(tempo),
       brightnessPhrase(brightness),
       NO_TEXT_REINFORCE,
-      NO_HUMANS_GUARD,
-      safetySuffix,
+      humansGuard,
+      effectiveSafetySuffix,
     ];
   }
 
@@ -1119,10 +1161,11 @@ export function buildAbstractCoverPrompt(input, options = {}) {
       directorSceneHint: directorSceneHint || undefined,
       nabadIdentityPhrases: nabadIdentityPhrases || undefined,
       visualDirection: options.visualDirection || undefined,
-      coverWidth: POLLINATIONS_COVER_WIDTH,
-      coverHeight: POLLINATIONS_COVER_HEIGHT,
+      coverWidth: geminiImage ? 720 : POLLINATIONS_COVER_WIDTH,
+      coverHeight: geminiImage ? 1280 : POLLINATIONS_COVER_HEIGHT,
       coverAspect: "9:16",
-      coverSourceAspect: "1:1",
+      coverSourceAspect: geminiImage ? "9:16" : "1:1",
+      imageProvider: geminiImage ? "gemini" : "pollinations",
       landscapeAntiMountainAvoid: landscapeAntiMountainAvoid(effectiveStoryTheme, userArtwork),
     },
   };

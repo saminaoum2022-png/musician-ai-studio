@@ -80,9 +80,7 @@ import {
   canRegenerateTrackCover,
   hasUserPhotoCoverMeta,
   isPollinationsCoverEligible,
-  isSunoCoverEligible,
   shouldUseAbstractCover,
-  shouldProcessSunoCover,
 } from "./cover-art/params.js";
 import {
   DEFAULT_SONG_COVER_URL,
@@ -218,7 +216,7 @@ import { MUSIC_VIDEO_FEATURE_ENABLED } from "./feature-flags.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260817-025441";
+const APP_BUILD = "20260817-035048";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -22120,60 +22118,6 @@ configureCoverArt({
   remixAttributionForTrack,
 });
 
-let _sunoCoverModPromise = null;
-function sunoCoverDeps() {
-  return {
-    apiUrl,
-    getSupabaseAuthToken,
-    loadLibrary,
-    saveLibrary,
-    refreshOwnSongsUi,
-    patchLibraryRowCoverArt,
-    persistTrackCoverIfNeeded,
-    get currentPlayerTrackRef() {
-      return currentPlayerTrackRef;
-    },
-    get libraryNowPlayingId() {
-      return libraryNowPlayingId;
-    },
-    setPlayerMeta,
-    releaseCaptionForTrack,
-    remixAttributionForTrack,
-  };
-}
-function loadSunoCoverModule() {
-  if (!_sunoCoverModPromise) {
-    _sunoCoverModPromise = import(`./cover-art/suno-cover.js?v=${APP_BUILD}`)
-      .then((mod) => {
-        mod.configureSunoCoverArt(sunoCoverDeps());
-        return mod;
-      })
-      .catch((e) => {
-        _sunoCoverModPromise = null;
-        try {
-          console.warn("[suno-cover] module load failed", e?.message || e);
-        } catch {}
-        throw e;
-      });
-  }
-  return _sunoCoverModPromise;
-}
-function resolveSunoCoverSourceUrl(track) {
-  const meta = track?.meta && typeof track.meta === "object" ? track.meta : {};
-  const url = String(meta.sourceImageUrl || track?.artUrl || "").trim();
-  return /^https?:\/\//i.test(url) ? url : "";
-}
-function processSunoCoverForTrack(track) {
-  void loadSunoCoverModule()
-    .then((mod) => mod.processSunoCoverForTrack(track))
-    .catch(() => {});
-}
-function backfillPendingSunoCovers(items) {
-  void loadSunoCoverModule()
-    .then((mod) => mod.backfillPendingSunoCovers(items))
-    .catch(() => {});
-}
-
 /** Retry cover uploads that never reached the cloud (offline at
  *  generation time, app killed mid-upload, transient storage error).
  *  Without this the custom cover lives only in this device's
@@ -25729,7 +25673,7 @@ function startSoundGenerationPolling(meta) {
           const finalTitle = shortenSoundTitle(candidate || "Sound");
           addToLibrary({
             title: finalTitle,
-            artUrl: clip.imageUrl || "./assets/icons/splash-mark.png",
+            artUrl: "./assets/icons/splash-mark.png",
             url,
             taskId: soundTaskId || "",
             audioId: String(clip.audioId || ""),
@@ -35750,7 +35694,7 @@ async function pollMashupTask(taskId, metaBase) {
         if (parsed.first?.audioUrl) {
           saved.push(addToLibrary({
             title: mashupTitle,
-            artUrl: parsed.first.imageUrl || mashupCoverForTrack(_mashupState.slotA),
+            artUrl: mashupCoverForTrack(_mashupState.slotA),
             url: toAudioProxyUrl(parsed.first.audioUrl) || parsed.first.audioUrl,
             taskId: tid,
             audioId: parsed.first.audioId || "",
@@ -35761,7 +35705,7 @@ async function pollMashupTask(taskId, metaBase) {
         if (parsed.second?.audioUrl) {
           saved.push(addToLibrary({
             title: `${mashupTitle} B`.slice(0, 100),
-            artUrl: parsed.second.imageUrl || mashupCoverForTrack(_mashupState.slotB),
+            artUrl: mashupCoverForTrack(_mashupState.slotB),
             url: toAudioProxyUrl(parsed.second.audioUrl) || parsed.second.audioUrl,
             taskId: tid,
             audioId: parsed.second.audioId || "",
@@ -40483,12 +40427,11 @@ async function refreshDiscoverFeed() {
   }
 }
 
-/** Defer cover backfill so boot + Discover feed paint stay responsive. */
+/** Defer Pollinations cover backfill so boot + Discover stay responsive. */
 function scheduleDeferredCoverBackfill(items) {
   const list = Array.isArray(items) ? items : [];
   if (!list.length) return;
   const run = () => {
-    try { backfillPendingSunoCovers(list); } catch {}
     try { backfillPendingAbstractCovers(list); } catch {}
     try { watchPendingCoverArt(); } catch {}
   };
@@ -47502,6 +47445,20 @@ async function reconcileLibraryFromCloud({ force = false } = {}) {
   }
 }
 
+function resolveLibraryEntryArtUrl(track) {
+  const pendingPhotoCover = String(track?.pendingPhotoCover || "").trim();
+  if (pendingPhotoCover) return pendingPhotoCover;
+  return "";
+}
+
+function generationPhotoArtUrl(variant = "a") {
+  if (!lastGenerationMeta?.photoMode) return "";
+  if (String(variant || "a").toLowerCase() === "b") {
+    return lastSunoArtUrl2 || lastSunoArtUrl || "";
+  }
+  return lastSunoArtUrl || "";
+}
+
 function addToLibrary(track) {
   const items = loadLibrary();
   const url = String(track.url || "").trim();
@@ -47555,28 +47512,14 @@ function addToLibrary(track) {
       imageUrl: photo,
       imageThumb: normalizeSongCoverUrl(newTrack.meta.imageThumb || photo),
     };
-  } else if (newTrack.meta?.humTrack && isPollinationsCoverEligible(newTrack.meta)) {
+  } else if (isPollinationsCoverEligible(newTrack.meta)) {
     const ph = DEFAULT_SONG_COVER_URL;
     newTrack.artUrl = ph;
     newTrack.meta = {
       ...(newTrack.meta || {}),
       pollinationsCoverPending: true,
-      sunoCoverPending: false,
       imageUrl: ph,
       imageThumb: ph,
-    };
-  } else if (isSunoCoverEligible(newTrack.meta)) {
-    const sunoUrl = resolveSunoCoverSourceUrl(newTrack) || normalizeSongCoverUrl(newTrack.artUrl);
-    const hasHttpCover = /^https?:\/\//i.test(String(sunoUrl || ""));
-    newTrack.artUrl = hasHttpCover ? sunoUrl : DEFAULT_SONG_COVER_URL;
-    newTrack.meta = {
-      ...(newTrack.meta || {}),
-      pollinationsCoverPending: false,
-      sunoCoverPending: true,
-      coverSource: "suno",
-      sourceImageUrl: hasHttpCover ? sunoUrl : "",
-      imageUrl: newTrack.artUrl,
-      imageThumb: newTrack.artUrl,
     };
   } else {
     newTrack.artUrl = normalizeSongCoverUrl(newTrack.artUrl);
@@ -47601,17 +47544,10 @@ function addToLibrary(track) {
     // one exists, since PATCH matches nothing).
     await persistTrackCoverIfNeeded(newTrack);
     queueArchiveLibraryTrack(newTrack);
-    if (shouldProcessSunoCover(newTrack)) {
-      void processSunoCoverForTrack(newTrack);
-    } else {
-      const parallelApplied = newTrack.meta?.humTrack
-        ? await applyParallelCoverForTrack(newTrack)
-        : false;
-      if (!parallelApplied && shouldUseAbstractCover(newTrack)) {
-        void ensureAbstractCoverForTrack(newTrack);
-      }
+    const parallelApplied = await applyParallelCoverForTrack(newTrack);
+    if (!parallelApplied && shouldUseAbstractCover(newTrack)) {
+      void ensureAbstractCoverForTrack(newTrack);
     }
-    try { backfillPendingSunoCovers(loadLibrary()); } catch {}
     try { backfillPendingAbstractCovers(loadLibrary()); } catch {}
     try { watchPendingCoverArt(); } catch {}
   })();
@@ -48625,7 +48561,7 @@ async function pollLibraryStemsUntilDone(taskId, kind, opts = {}) {
         if (els.btnLoadInstrumental) els.btnLoadInstrumental.disabled = !lastSunoInstUrl;
         if (els.btnPlayInstrumental) els.btnPlayInstrumental.disabled = !lastSunoInstUrl;
         setStatus("Instrumental version is ready.");
-        const artBase = sourceArtUrl || lastSunoArtUrl || "";
+        const artBase = sourceArtUrl || generationPhotoArtUrl("a") || "";
         if (lastSunoInstUrl) {
           addToLibrary({
             title: `${titleBase} • Instrumental`,
@@ -51407,8 +51343,7 @@ async function applyPlayerCoverReveal(url, opts = {}) {
     const track = resolvePlayerLibraryTrack() || currentPlayerTrackRef;
     const abstractLive =
       Boolean(track?.meta?.nabadAbstractCover) ||
-      String(track?.meta?.coverSource || "") === "pollinations" ||
-      String(track?.meta?.coverSource || "") === "suno";
+      String(track?.meta?.coverSource || "") === "pollinations";
     syncCoverArtOverlay(
       Boolean(track?.id) &&
         abstractLive &&
@@ -51478,8 +51413,7 @@ function setPlayerMeta({ title, subtitle, artUrl, releaseCaption, remixOf, chall
     const track = resolvePlayerLibraryTrack() || currentPlayerTrackRef;
     const abstractLive =
       Boolean(track?.meta?.nabadAbstractCover) ||
-      String(track?.meta?.coverSource || "") === "pollinations" ||
-      String(track?.meta?.coverSource || "") === "suno";
+      String(track?.meta?.coverSource || "") === "pollinations";
     syncCoverArtOverlay(
       hasTrack &&
         abstractLive &&
@@ -54034,7 +53968,7 @@ async function playOnPlayerPage(url, label, meta = null, opts = {}) {
     setPlayerMeta({
       title: lastSunoTitle || "Generated song",
       subtitle: label ? `Generated • ${label}` : "Generated",
-      artUrl: lastSunoArtUrl,
+      artUrl: "",
     }, metaOpts);
   }
   setPlayerSource(url, label);
@@ -54752,7 +54686,7 @@ function addMissingSunoClipsToLibrary(taskId, parsed, { metaBase = {}, kind = "f
       : "";
     const entry = addToLibrary({
       title: String(clip.title || "").trim() || titleFallback,
-      artUrl: pendingPhotoCover || clip.imageUrl || "",
+      artUrl: resolveLibraryEntryArtUrl({ pendingPhotoCover }),
       url: prox,
       taskId: tid,
       audioId: clip.audioId || "",
@@ -54928,56 +54862,20 @@ function patchLibraryRowWithRefreshedUrl(trackId, proxiedUrlForLibrary, rawRemot
   );
 }
 
-/** Patch empty library art from a Suno CDN image URL (recovery path). */
-function patchLibraryTrackSunoArt(trackId, imageUrl) {
-  const id = String(trackId || "").trim();
-  const url = String(imageUrl || "").trim();
-  if (!id || !url) return null;
-  const items = loadLibrary().slice();
-  const idx = items.findIndex((x) => String(x?.id || "") === id);
-  if (idx < 0) return null;
-  const prev = items[idx];
-  if (String(prev?.artUrl || "").trim() && !isDefaultSongCoverUrl(prev.artUrl)) return prev;
-  if (prev?.meta?.photoMode || prev?.meta?.customCoverOnly) return prev;
-  const next = {
-    ...prev,
-    artUrl: url,
-    meta: { ...(prev.meta || {}), imageUrl: url },
-    ts: Date.now(),
-  };
-  items[idx] = next;
-  saveLibrary(items);
-  try {
-    refreshOwnSongsUi({ soft: true });
-  } catch {
-    refreshOwnSongsUi();
-  }
-  return next;
-}
-
 async function backfillRecoveredGenerationCovers(taskId, entries) {
   const rows = (Array.isArray(entries) ? entries : libraryEntriesForTaskId(taskId)).filter(Boolean);
   for (const row of rows) {
     if (row?.meta?.photoMode || row?.meta?.customCoverOnly) continue;
     let track = row;
-    if (shouldProcessSunoCover(track)) {
-      void processSunoCoverForTrack(track);
-      continue;
-    }
-    if (track?.meta?.humTrack) {
-      const patched = await applyParallelCoverForTrack(track);
-      if (patched) {
-        const refreshed = loadLibrary().find((x) => String(x?.id || "") === String(track.id || ""));
-        if (refreshed) track = refreshed;
-      }
+    const patched = await applyParallelCoverForTrack(track);
+    if (patched) {
+      const refreshed = loadLibrary().find((x) => String(x?.id || "") === String(track.id || ""));
+      if (refreshed) track = refreshed;
     }
     if (shouldUseAbstractCover(track)) {
       void ensureAbstractCoverForTrack(track);
     }
   }
-  try {
-    backfillPendingSunoCovers(loadLibrary());
-  } catch {}
   try {
     backfillPendingAbstractCovers(loadLibrary());
   } catch {}
@@ -55102,12 +55000,6 @@ async function recoverSongFromTaskId(taskId, { silent = false, pushCategory = ""
     baseTitle: rec?.titleHint || parsed.first?.title || "Recovered song",
   });
 
-  for (const entry of savedEntries) {
-    if (!entry) continue;
-    if (entry?.meta?.photoMode || entry?.meta?.customCoverOnly) continue;
-    const clip = entry?.meta?.variant === "B" ? parsed.second : parsed.first;
-    if (clip?.imageUrl) patchLibraryTrackSunoArt(entry.id, clip.imageUrl);
-  }
   void backfillRecoveredGenerationCovers(tid, savedEntries);
 
   if (!savedEntries.length && !libraryHasAllTaskVariants(tid, expectedVariants)) {
@@ -55227,7 +55119,7 @@ async function recoverSoundFromTaskId(taskId, { silent = true, pushCategory = "s
   const finalTitle = shortenSoundTitle(String(clip.title || "Sound").trim() || "Sound");
   addToLibrary({
     title: finalTitle,
-    artUrl: clip.imageUrl || "./assets/icons/splash-mark.png",
+    artUrl: "./assets/icons/splash-mark.png",
     url,
     taskId: tid,
     audioId: String(clip.audioId || ""),
@@ -56495,7 +56387,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
     if (els.resultArt) {
       const resultArtSrc =
         resolvePendingPhotoCoverDataUrl() ||
-        lastSunoArtUrl ||
+        (lastGenerationMeta?.photoMode ? lastSunoArtUrl : "") ||
         placeholderCoverDataUrl();
       setCoverImageSrc(els.resultArt, resultArtSrc || brokenCoverPlaceholderUrl());
       els.resultArt.alt = lastSunoTitle ? `Cover: ${lastSunoTitle}` : "Song cover";
@@ -56524,8 +56416,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
     if (els.resultArt2) {
       const resultArt2Src =
         resolvePendingPhotoCoverDataUrl() ||
-        lastSunoArtUrl2 ||
-        lastSunoArtUrl ||
+        (lastGenerationMeta?.photoMode ? (lastSunoArtUrl2 || lastSunoArtUrl) : "") ||
         placeholderCoverDataUrl();
       setCoverImageSrc(els.resultArt2, resultArt2Src || brokenCoverPlaceholderUrl());
       els.resultArt2.alt = lastSunoTitle2 ? `Cover: ${lastSunoTitle2}` : "Song cover B";
@@ -56623,7 +56514,6 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
     if (audioUrl) {
       lastSunoFullUrl = audioUrl;
       lastSunoProxyUrl = toAudioProxyUrl(audioUrl);
-      lastSunoArtUrl = imageUrl || lastSunoArtUrl;
       {
         const photoCover = resolvePendingPhotoCoverDataUrl();
         if (photoCover) lastSunoArtUrl = photoCover;
@@ -56662,7 +56552,6 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
     if (audioUrl2) {
       lastSunoFullUrl2 = audioUrl2;
       lastSunoProxyUrl2 = toAudioProxyUrl(audioUrl2);
-      lastSunoArtUrl2 = imageUrl2 || "";
       {
         const photoCover = resolvePendingPhotoCoverDataUrl();
         if (photoCover) lastSunoArtUrl2 = photoCover;
@@ -56791,7 +56680,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
             }
             const variantAEntry = addToLibrary({
               title: lastSunoTitle,
-              artUrl: lastSunoArtUrl,
+              artUrl: "",
               url: lastSunoProxyUrl || lastSunoFullUrl,
               taskId: sunoTaskId || "",
               audioId: sunoAudioId || "",
@@ -56802,7 +56691,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
             if (lastSunoProxyUrl2 || lastSunoFullUrl2) {
               savedEntries.push(addToLibrary({
                 title: lastSunoTitle2 || "Generated song B",
-                artUrl: lastSunoArtUrl2 || lastSunoArtUrl || "",
+                artUrl: generationPhotoArtUrl("b"),
                 url: lastSunoProxyUrl2 || lastSunoFullUrl2,
                 taskId: sunoTaskId || "",
                 audioId: lastSunoAudioId2 || "",
@@ -56945,7 +56834,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
           if (lastSunoInstUrl) {
             addToLibrary({
               title: `${lastSunoTitle || "Generated song"} • Instrumental`,
-              artUrl: lastSunoArtUrl || "",
+              artUrl: generationPhotoArtUrl("a"),
               url: lastSunoInstProxyUrl || lastSunoInstUrl,
               kind: "instrumental",
             });
@@ -57763,6 +57652,16 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
           variantCount: isSingleVariantTask ? 1 : GENERATION_VARIANT_COUNT,
         });
         syncGenerationPendingLibraryUi();
+        if (!resolvePendingPhotoCoverDataUrl() && isPollinationsCoverEligible(lastGenerationMeta)) {
+          startParallelCoverForTask(
+            sunoTaskId,
+            buildParallelCoverVariants(sunoTaskId, {
+              title: String(els.sunoTitle?.value || "").trim() || "Generated song",
+              meta: lastGenerationMeta,
+              variantCount: GENERATION_VARIANT_COUNT,
+            }),
+          );
+        }
         if (!altReadyNow) {
           try {
             beginCoachGenerationStatus({
@@ -57821,7 +57720,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
         const genMeta = lastGenerationMeta;
         const variantAEntry = addToLibrary({
           title: lastSunoTitle,
-          artUrl: lastSunoArtUrl,
+          artUrl: "",
           url: lastSunoProxyUrl || lastSunoFullUrl,
           taskId: sunoTaskId || "",
           audioId: sunoAudioId || "",
@@ -57990,7 +57889,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       setPlayerMeta({
         title: lastSunoTitle || "Generated song",
         subtitle: "Generated • Version A",
-        artUrl: lastSunoArtUrl,
+        artUrl: "",
       });
       await playInline(url && url !== "#" ? url : "", "Full song", { type: "generateResult", variant: "a" });
     });
@@ -58019,7 +57918,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       setPlayerMeta({
         title: lastSunoTitle2 || "Generated song B",
         subtitle: "Generated • Version B",
-        artUrl: lastSunoArtUrl2 || lastSunoArtUrl,
+        artUrl: generationPhotoArtUrl("b"),
       });
       await playInline(url && url !== "#" ? url : "", "Full song B", {
         type: "generateResult",
@@ -58165,7 +58064,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       await playOnPlayerPage(url, "Full song B", {
         title: lastSunoTitle2 || "Generated song B",
         subtitle: "Generated • Version B",
-        artUrl: lastSunoArtUrl2 || lastSunoArtUrl,
+        artUrl: generationPhotoArtUrl("b"),
       });
       return;
     }
@@ -58173,7 +58072,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
     await playOnPlayerPage(url, "Full song", {
       title: lastSunoTitle || "Generated song",
       subtitle: "Generated • Version A",
-      artUrl: lastSunoArtUrl,
+      artUrl: "",
     });
   };
   const isInteractive = (target) =>
@@ -61030,7 +60929,7 @@ if (els.btnLoadFull) {
       (els.sunoFullLink?.classList.contains("disabled") ? "" : els.sunoFullLink?.href);
     if (url && url !== "#") {
       setPlayerSource(url, "Full song");
-      setPlayerMeta({ title: lastSunoTitle || "Generated song", subtitle: "Generated • Full song", artUrl: lastSunoArtUrl });
+      setPlayerMeta({ title: lastSunoTitle || "Generated song", subtitle: "Generated • Full song", artUrl: generationPhotoArtUrl("a") });
       location.hash = "#/player";
     }
   });
@@ -61040,7 +60939,7 @@ if (els.btnLoadVocals) {
     const url = lastSunoVocalUrl || (els.sunoVocalLink?.classList.contains("disabled") ? "" : els.sunoVocalLink?.href);
     if (url && url !== "#") {
       setPlayerSource(url, "Vocals");
-      setPlayerMeta({ title: lastSunoTitle || "Generated song", subtitle: "Nabad • Vocals", artUrl: lastSunoArtUrl });
+      setPlayerMeta({ title: lastSunoTitle || "Generated song", subtitle: "Nabad • Vocals", artUrl: generationPhotoArtUrl("a") });
       location.hash = "#/player";
     }
   });
@@ -61050,7 +60949,7 @@ if (els.btnLoadInstrumental) {
     const url = lastSunoInstUrl || (els.sunoInstLink?.classList.contains("disabled") ? "" : els.sunoInstLink?.href);
     if (url && url !== "#") {
       setPlayerSource(url, "Instrumental");
-      setPlayerMeta({ title: lastSunoTitle || "Generated song", subtitle: "Nabad • Instrumental", artUrl: lastSunoArtUrl });
+      setPlayerMeta({ title: lastSunoTitle || "Generated song", subtitle: "Nabad • Instrumental", artUrl: generationPhotoArtUrl("a") });
       location.hash = "#/player";
     }
   });

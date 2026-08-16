@@ -8,7 +8,7 @@ const TARGET_W = 720;
 const TARGET_H = 1280;
 const TARGET_AR = TARGET_W / TARGET_H;
 
-function cropRectForPortrait916(w, h) {
+function cropRectForPortrait916(w, h, { preferCenter = false } = {}) {
   const iw = Number(w) || 0;
   const ih = Number(h) || 0;
   if (!iw || !ih) return { left: 0, top: 0, width: iw, height: ih };
@@ -20,12 +20,14 @@ function cropRectForPortrait916(w, h) {
   }
   const cropW = iw;
   const cropH = Math.min(ih, Math.max(1, Math.floor(cropW / TARGET_AR)));
-  const top = ih > iw * 1.08 ? 0 : Math.max(0, Math.floor((ih - cropH) / 2));
+  const top = preferCenter || ih <= iw * 1.08
+    ? Math.max(0, Math.floor((ih - cropH) / 2))
+    : 0;
   return { left: 0, top, width: cropW, height: cropH };
 }
 
 /** @returns {Promise<{ buf: Buffer, mime: string, width: number, height: number }>} */
-async function normalizeCoverPortraitBuffer(inputBuf) {
+async function normalizeCoverPortraitBuffer(inputBuf, { preferCenter = false } = {}) {
   const src = Buffer.from(inputBuf || []);
   if (!src.length) {
     return { buf: src, mime: "image/jpeg", width: 0, height: 0 };
@@ -39,7 +41,7 @@ async function normalizeCoverPortraitBuffer(inputBuf) {
     return { buf: src, mime: "image/jpeg", width: w, height: h };
   }
 
-  const crop = cropRectForPortrait916(w, h);
+  const crop = cropRectForPortrait916(w, h, { preferCenter });
   const out = await img
     .extract(crop)
     .resize(TARGET_W, TARGET_H, { fit: "fill", withoutEnlargement: false })

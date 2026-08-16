@@ -96,16 +96,19 @@ function geminiFailureReason(payload, httpStatus, rawText) {
   return String(rawText || "unknown").slice(0, 220);
 }
 
-function buildGeminiCoverImagePrompt(prompt) {
+function buildGeminiCoverImagePrompt(prompt, { allowHumans = false } = {}) {
   const core = String(prompt || "").replace(/\s+/g, " ").trim().slice(0, 3800);
-  return [
-    "Create one vertical album cover photograph (9:16 portrait).",
+  const lines = [
+    "Create one vertical album cover photograph in strict 9:16 portrait aspect ratio.",
+    "Compose the main subject dead-center with generous safe margins on all four edges — the entire subject must fit fully inside the frame with nothing clipped at the top, bottom, or sides.",
+    "Scale the hero element moderately (roughly 40-55% of frame height) so it stays inside the vertical reel safe zone with breathing room above and below.",
     "Wordless image only — absolutely no text, letters, numbers, logos, captions, watermarks, or readable signage.",
-    "Absolutely no people, faces, hands, bodies, or silhouettes — objects and environments only.",
-    core,
-  ]
-    .filter(Boolean)
-    .join(" ");
+  ];
+  if (!allowHumans) {
+    lines.push("Absolutely no people, faces, hands, bodies, or silhouettes — objects and environments only.");
+  }
+  lines.push(core);
+  return lines.filter(Boolean).join(" ");
 }
 
 function buildGeminiImageRequestVariants(prompt, aspectRatio, imageSize) {
@@ -160,7 +163,8 @@ async function tryGeminiCoverImage(opts = {}) {
   const geminiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || "";
   if (!geminiKey) return { ok: false, error: "no_gemini_key" };
 
-  const prompt = buildGeminiCoverImagePrompt(opts.prompt);
+  const allowHumans = Boolean(opts.allowHumans);
+  const prompt = buildGeminiCoverImagePrompt(opts.prompt, { allowHumans });
   if (!prompt) return { ok: false, error: "empty_prompt" };
 
   const aspectRatio = String(opts.aspectRatio || process.env.COVER_REGEN_GEMINI_ASPECT || "9:16").trim();

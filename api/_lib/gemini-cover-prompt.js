@@ -5,7 +5,7 @@
 const CACHE_TTL_MS = 60 * 60 * 1000;
 const CACHE_MAX = 400;
 /** Keep in sync with src/cover-art/prompt.js COVER_PROMPT_POLICY_VERSION */
-const COVER_PROMPT_POLICY_VERSION = 14;
+const COVER_PROMPT_POLICY_VERSION = 15;
 const sceneCache = new Map();
 
 const PREFERRED_MODELS = ["gemini-2.0-flash-lite", "gemini-2.0-flash", "gemini-2.5-flash", "gemini-1.5-flash"];

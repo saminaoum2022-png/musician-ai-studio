@@ -4,7 +4,7 @@ export const COVER_PORTRAIT_W = 720;
 export const COVER_PORTRAIT_H = 1280;
 const TARGET_AR = COVER_PORTRAIT_W / COVER_PORTRAIT_H;
 
-export function portrait916CropRect(w, h) {
+export function portrait916CropRect(w, h, { preferCenter = false } = {}) {
   const iw = Number(w) || 0;
   const ih = Number(h) || 0;
   if (!iw || !ih) return { sx: 0, sy: 0, sw: iw, sh: ih };
@@ -16,24 +16,26 @@ export function portrait916CropRect(w, h) {
   }
   const sw = iw;
   const sh = Math.min(ih, Math.max(1, Math.floor(sw / TARGET_AR)));
-  const sy = ih > iw * 1.08 ? 0 : Math.max(0, Math.floor((ih - sh) / 2));
+  const sy = preferCenter || ih <= iw * 1.08
+    ? Math.max(0, Math.floor((ih - sh) / 2))
+    : 0;
   return { sx: 0, sy, sw, sh };
 }
 
 /** Draw source crop into dest using cover scaling — never non-uniform stretch. */
-function drawCoverPortrait916(ctx, img, sx, sy, sw, sh) {
+function drawCoverPortrait916(ctx, img, sx, sy, sw, sh, { preferCenter = false } = {}) {
   const tw = COVER_PORTRAIT_W;
   const th = COVER_PORTRAIT_H;
   const scale = Math.max(tw / sw, th / sh);
   const dw = Math.round(sw * scale);
   const dh = Math.round(sh * scale);
   const dx = Math.round((tw - dw) / 2);
-  const dy = 0;
+  const dy = preferCenter ? Math.round((th - dh) / 2) : 0;
   ctx.drawImage(img, sx, sy, sw, sh, dx, dy, dw, dh);
 }
 
 /** Crop to 9:16 (never stretch) and resize to 720×1280. */
-export async function normalizePortraitCoverDataUrl(dataUrl) {
+export async function normalizePortraitCoverDataUrl(dataUrl, { preferCenter = false } = {}) {
   const src = String(dataUrl || "").trim();
   if (!src.startsWith("data:image/")) return src;
   const img = await new Promise((resolve, reject) => {
@@ -45,13 +47,13 @@ export async function normalizePortraitCoverDataUrl(dataUrl) {
   const w = Number(img.width || 0);
   const h = Number(img.height || 0);
   if (!w || !h) return src;
-  const { sx, sy, sw, sh } = portrait916CropRect(w, h);
+  const { sx, sy, sw, sh } = portrait916CropRect(w, h, { preferCenter });
   const canvas = document.createElement("canvas");
   canvas.width = COVER_PORTRAIT_W;
   canvas.height = COVER_PORTRAIT_H;
   const ctx = canvas.getContext("2d");
   if (!ctx) return src;
-  drawCoverPortrait916(ctx, img, sx, sy, sw, sh);
+  drawCoverPortrait916(ctx, img, sx, sy, sw, sh, { preferCenter });
   try {
     const webp = canvas.toDataURL("image/webp", 0.82);
     if (webp.startsWith("data:image/webp")) return webp;

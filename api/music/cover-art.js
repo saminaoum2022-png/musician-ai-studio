@@ -1,6 +1,6 @@
 /**
  * POST /api/music/cover-art
- * Generates a deterministic mood-rich abstract cover via Pollinations.
+ * Default abstract covers via Pollinations; user artwork-style covers via Gemini native image.
  */
 const path = require("path");
 const { pathToFileURL } = require("url");
@@ -86,11 +86,11 @@ async function fetchPollinationsCover(upstreamUrl, { attempts = 2, timeoutMs = 2
   return { ok: false, error: lastError };
 }
 
-async function normalizeCoverResponseBuffer(buf) {
+async function normalizeCoverResponseBuffer(buf, { preferCenter = false } = {}) {
   let outBuf = buf;
   let outMime = "image/jpeg";
   try {
-    const normalized = await normalizeCoverPortraitBuffer(buf);
+    const normalized = await normalizeCoverPortraitBuffer(buf, { preferCenter });
     outBuf = normalized.buf;
     outMime = normalized.mime || "image/jpeg";
   } catch (e) {
@@ -103,12 +103,13 @@ function coverDataUrlFromBuffer(outBuf, outMime) {
   return `data:${outMime || "image/jpeg"};base64,${outBuf.toString("base64")}`;
 }
 
-/** Regen only — Gemini image when configured, Pollinations fallback. */
-async function fetchRegenCoverImage({ prompt, seed, avoidTags, storyTheme = "", userArtwork = "", buildPollinationsUrl }) {
+/** Regen — Gemini when user artwork hint or configured provider; Pollinations fallback optional. */
+async function fetchRegenCoverImage({ prompt, seed, avoidTags, storyTheme = "", userArtwork = "", buildPollinationsUrl, allowHumans = false }) {
   const pollUrlOpts = { avoidTags, storyTheme: storyTheme || "", userArtwork: userArtwork || "" };
-  const attemptedProvider = resolveCoverRegenImageProvider();
+  const forceGemini = allowHumans || Boolean(String(userArtwork || "").trim());
+  const attemptedProvider = forceGemini ? "gemini" : resolveCoverRegenImageProvider();
   if (attemptedProvider === "gemini") {
-    const gem = await tryGeminiCoverImage({ prompt });
+    const gem = await tryGeminiCoverImage({ prompt, allowHumans: allowHumans || forceGemini });
     if (gem.ok) {
       return {
         ok: true,
@@ -171,8 +172,9 @@ async function sendRegenCoverJson(res, {
   artworkSource = "user_artwork",
   params = {},
   userId = "",
+  preferCenter = false,
 }) {
-  const { outBuf, outMime } = await normalizeCoverResponseBuffer(buf);
+  const { outBuf, outMime } = await normalizeCoverResponseBuffer(buf, { preferCenter });
   const imageProvider = provider === "gemini" ? "gemini" : "pollinations";
   queueLogProviderUsage({
     provider: imageProvider,
@@ -258,6 +260,7 @@ module.exports = async function handler(req, res) {
     const bucketKey = classifyVisualBucket(coverInput);
     const brandPalette = moodPaletteForBucket(bucketKey);
     const artworkHint = String(coverInput.artworkHint || coverInput.artworkStyle || "").trim();
+    const userDirectedArtwork = Boolean(artworkHint);
     const { theme, storyScore } = resolveStoryTheme(coverInput);
 
     const vd = await runVisualDirector(coverInput, {
@@ -277,13 +280,15 @@ module.exports = async function handler(req, res) {
       const seed = Number.isFinite(clientSeedRaw) && clientSeedRaw > 0
         ? Math.floor(clientSeedRaw) % 2147483646
         : Math.floor(Math.random() * 2147483645) + 1;
+      const regenUserArt = regenUserHint || String(body?.clientParams?.userArtwork || body?.clientParams?.userArtworkRaw || "").trim();
       const rendered = await fetchRegenCoverImage({
         prompt: clientPrompt,
         seed,
         avoidTags: String(body?.clientAvoidTags || effectiveAvoidTags || "").slice(0, MAX_AVOID),
         storyTheme: String(body?.clientStoryTheme || "").trim(),
-        userArtwork: regenUserHint || String(body?.clientParams?.userArtwork || body?.clientParams?.userArtworkRaw || "").trim(),
+        userArtwork: regenUserArt,
         buildPollinationsUrl,
+        allowHumans: Boolean(regenUserArt),
       });
       if (!rendered.ok) {
         console.warn("[music/cover-art] regen failed (client prompt)", rendered.error);
@@ -302,6 +307,7 @@ module.exports = async function handler(req, res) {
         storyTheme: String(body?.clientStoryTheme || "regen"),
         artworkSource: String(body?.clientArtworkSource || "client_regen"),
         userId: user.userId,
+        preferCenter: rendered.provider === "gemini",
         params: {
           ...(body?.clientParams && typeof body.clientParams === "object" ? body.clientParams : {}),
           ...(regenUserHint ? { regenUserHint } : {}),
@@ -316,7 +322,7 @@ module.exports = async function handler(req, res) {
 
     let geminiScene = "";
     let geminiModel = "";
-    if (!coverInput.skipGeminiScene) {
+    if (!coverInput.skipGeminiScene && !userDirectedArtwork) {
       try {
         const gem = await tryGeminiCoverScene(promptInput, {
           bucketKey,
@@ -352,12 +358,47 @@ module.exports = async function handler(req, res) {
         ? { nabadIdentityPhrases: vdApplied.identityPhrases }
         : {}),
       ...(vd.mode === "apply" && vd.direction ? { visualDirection: vd.direction } : {}),
+      ...(userDirectedArtwork ? { imageProvider: "gemini", geminiImage: true } : {}),
     };
 
     const { prompt, seed, bucket, visualMode, storyTheme, artworkSource, params } = buildAbstractCoverPrompt(
       promptInput,
       promptOpts,
     );
+
+    if (userDirectedArtwork) {
+      const gemImg = await tryGeminiCoverImage({ prompt, allowHumans: true });
+      if (!gemImg.ok) {
+        console.warn("[music/cover-art] gemini user-artwork failed", gemImg.error);
+        return sendJson(res, 502, { error: "Cover image generation failed upstream." });
+      }
+      const { outBuf, outMime } = await normalizeCoverResponseBuffer(gemImg.buf, { preferCenter: true });
+      queueLogProviderUsage({
+        provider: "gemini",
+        kind: "cover_image",
+        userId: user.userId,
+        ref: songId,
+      });
+      return sendJson(res, 200, {
+        ok: true,
+        dataUrl: coverDataUrlFromBuffer(outBuf, outMime),
+        seed,
+        bucket,
+        visualMode,
+        storyTheme,
+        artworkSource,
+        params: {
+          ...params,
+          visualDirectorMode: vd.mode,
+          ...(vd.direction ? { visualDirection: vd.direction } : {}),
+          geminiImageModel: gemImg.model || "",
+        },
+        coverWidth: COVER_PORTRAIT_W,
+        coverHeight: COVER_PORTRAIT_H,
+        provider: "gemini",
+        abstract: true,
+      });
+    }
 
     const upstreamUrl = buildPollinationsUrl(prompt, seed, {
       avoidTags: effectiveAvoidTags,

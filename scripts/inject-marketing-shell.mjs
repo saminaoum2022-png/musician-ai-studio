@@ -26,6 +26,8 @@ const LANG_EN_SUB = `<a class="marketingLangSwitch" href="{{EN_HREF}}" lang="en"
 const pages = [
   { file: "home.html", nav: navEnHome, footer: footerEn },
   { file: "support.html", nav: navEnSub.replace("{{LANG_AR}}", LANG_AR_SUB.replace("{{AR_HREF}}", "/ar")), footer: footerEn },
+  { file: "about.html", nav: navEnSub.replace("{{LANG_AR}}", LANG_AR_SUB.replace("{{AR_HREF}}", "/ar/about")), footer: footerEn },
+  { file: "blog.html", nav: navEnSub.replace("{{LANG_AR}}", LANG_AR_SUB.replace("{{AR_HREF}}", "/ar/blog")), footer: footerEn },
   { file: "ai-music-generator.html", nav: navEnSub.replace("{{LANG_AR}}", LANG_AR_SUB.replace("{{AR_HREF}}", "/ar/ai-music-generator")), footer: footerEn },
   { file: "hum-to-song.html", nav: navEnSub.replace("{{LANG_AR}}", LANG_AR_SUB.replace("{{AR_HREF}}", "/ar/hum-to-song")), footer: footerEn },
   { file: "lyrics-to-song.html", nav: navEnSub.replace("{{LANG_AR}}", LANG_AR_SUB.replace("{{AR_HREF}}", "/ar/lyrics-to-song")), footer: footerEn },
@@ -36,6 +38,8 @@ const pages = [
     footer: footerEn,
   },
   { file: "ar/index.html", nav: navArHome, footer: footerAr },
+  { file: "ar/about.html", nav: navArSub.replace("{{LANG_EN}}", LANG_EN_SUB.replace("{{EN_HREF}}", "/about")), footer: footerAr },
+  { file: "ar/blog.html", nav: navArSub.replace("{{LANG_EN}}", LANG_EN_SUB.replace("{{EN_HREF}}", "/blog")), footer: footerAr },
   { file: "ar/ai-music-generator.html", nav: navArSub.replace("{{LANG_EN}}", LANG_EN_SUB.replace("{{EN_HREF}}", "/ai-music-generator")), footer: footerAr },
   { file: "ar/hum-to-song.html", nav: navArSub.replace("{{LANG_EN}}", LANG_EN_SUB.replace("{{EN_HREF}}", "/hum-to-song")), footer: footerAr },
   { file: "ar/lyrics-to-song.html", nav: navArSub.replace("{{LANG_EN}}", LANG_EN_SUB.replace("{{EN_HREF}}", "/lyrics-to-song")), footer: footerAr },

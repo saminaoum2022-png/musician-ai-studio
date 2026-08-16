@@ -293,6 +293,76 @@ img { display: block; max-width: 100%; height: auto; }
   gap: 16px 24px;
 }
 
+.marketingFooter--site {
+  display: block;
+  padding-top: 40px;
+  padding-bottom: 32px;
+}
+
+.marketingFooterTop {
+  display: grid;
+  grid-template-columns: minmax(200px, 280px) minmax(0, 1fr);
+  gap: 32px 40px;
+  align-items: start;
+}
+
+.marketingFooterBrandName {
+  display: block;
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  color: var(--text);
+  margin-bottom: 8px;
+}
+
+.marketingFooterTagline {
+  margin: 0 0 16px;
+  max-width: 26ch;
+  line-height: 1.45;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.marketingFooterColumns {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(128px, 1fr));
+  gap: 24px 20px;
+}
+
+.marketingFooterCol h4 {
+  margin: 0 0 10px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(45, 212, 191, 0.88);
+}
+
+.marketingFooterCol a {
+  display: block;
+  margin: 0 0 8px;
+  color: var(--muted);
+  font-size: 13px;
+  text-decoration: none;
+  transition: color 140ms ease;
+}
+
+.marketingFooterCol a:hover {
+  color: var(--text);
+}
+
+.marketingFooterBottom {
+  margin-top: 28px;
+  padding-top: 18px;
+  border-top: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.marketingFooter--site .marketingFooterSocial {
+  margin-top: 4px;
+}
+
 .marketingFooterSocial {
   display: inline-flex;
   align-items: center;
@@ -700,4 +770,6 @@ body:has(.marketingDraftBanner) .marketingShell {
   .featureGrid { grid-template-columns: 1fr; }
   .section { padding: 58px 0; }
   .finalCta { padding: 34px 22px; }
+  .marketingFooterTop { grid-template-columns: 1fr; }
+  .marketingFooterColumns { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }

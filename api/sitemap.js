@@ -18,6 +18,10 @@ const STATIC_PATHS = [
   { path: "/privacy", lastmod: LEGAL_LASTMOD },
   { path: "/terms", lastmod: LEGAL_LASTMOD },
   "/support",
+  "/about",
+  "/blog",
+  "/ar/about",
+  "/ar/blog",
 ];
 
 function requestHost(req) {

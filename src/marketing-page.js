@@ -209,6 +209,7 @@
         "</a>"
       );
     }).join("");
+    setupScrollReveal(root);
   }
 
   function fetchFeaturedDiscoverSongs(ids) {
@@ -315,7 +316,71 @@
 
   if (applyDraftFromSession()) return;
 
+  var scrollRevealObserver = null;
+
+  function prefersReducedMotion() {
+    return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  }
+
+  function markScrollReveal(el, variant, delayMs) {
+    if (!el || el.classList.contains("mkReveal") || !scrollRevealObserver) return;
+    el.classList.add("mkReveal", "mkReveal--" + variant);
+    if (delayMs) el.style.setProperty("--mk-reveal-delay", delayMs + "ms");
+    scrollRevealObserver.observe(el);
+  }
+
+  function setupScrollReveal(root) {
+    if (!scrollRevealObserver) return;
+    root = root || document;
+
+    root.querySelectorAll(".section .sectionHead").forEach(function (el) {
+      markScrollReveal(el, "up", 0);
+    });
+
+    root.querySelectorAll(".featureGrid .featureCard").forEach(function (el, i) {
+      var col = i % 3;
+      var variant = col === 0 ? "from-start" : col === 1 ? "up" : "from-end";
+      markScrollReveal(el, variant, col * 90);
+    });
+
+    root.querySelectorAll(".faqList .faqItem").forEach(function (el, i) {
+      markScrollReveal(el, "up", Math.min(i, 5) * 70);
+    });
+
+    root.querySelectorAll(".pricingGrid .pricingCard").forEach(function (el, i) {
+      markScrollReveal(el, i === 0 ? "from-start" : "from-end", i * 100);
+    });
+
+    root.querySelectorAll(".finalCta").forEach(function (el) {
+      markScrollReveal(el, "up", 0);
+    });
+
+    root.querySelectorAll(".relatedLinks a").forEach(function (el, i) {
+      markScrollReveal(el, "up", Math.min(i, 4) * 60);
+    });
+
+    root.querySelectorAll(".discoverCarouselCard").forEach(function (el, i) {
+      markScrollReveal(el, "up", Math.min(i, 6) * 80);
+    });
+  }
+
+  function initScrollReveal() {
+    if (prefersReducedMotion()) return;
+    scrollRevealObserver = new IntersectionObserver(
+      function (entries) {
+        entries.forEach(function (entry) {
+          if (!entry.isIntersecting) return;
+          entry.target.classList.add("is-visible");
+          scrollRevealObserver.unobserve(entry.target);
+        });
+      },
+      { threshold: 0.14, rootMargin: "0px 0px -6% 0px" },
+    );
+    setupScrollReveal(document);
+  }
+
   fetchHeroMeta();
+  initScrollReveal();
 
   fetch("/api/marketing/content?page=" + encodeURIComponent(PAGE) + "&locale=" + encodeURIComponent(LOCALE), {
     credentials: "omit",

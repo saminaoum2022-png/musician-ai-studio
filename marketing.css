@@ -811,3 +811,44 @@ body:has(.marketingDraftBanner) .marketingShell {
   .marketingFooterColumns { gap: 20px 14px; }
   .marketingFooterSocial { flex-wrap: wrap; }
 }
+
+/* Scroll-reveal (marketing pages) — disabled when user prefers reduced motion */
+.mkReveal {
+  opacity: 0;
+  transform: translate3d(0, 28px, 0);
+  transition:
+    opacity 0.72s cubic-bezier(0.22, 1, 0.36, 1),
+    transform 0.88s cubic-bezier(0.22, 1, 0.36, 1);
+  transition-delay: var(--mk-reveal-delay, 0ms);
+  will-change: opacity, transform;
+}
+
+.mkReveal--from-start {
+  transform: translate3d(-36px, 16px, 0);
+}
+
+.mkReveal--from-end {
+  transform: translate3d(36px, 16px, 0);
+}
+
+[dir="rtl"] .mkReveal--from-start {
+  transform: translate3d(36px, 16px, 0);
+}
+
+[dir="rtl"] .mkReveal--from-end {
+  transform: translate3d(-36px, 16px, 0);
+}
+
+.mkReveal.is-visible {
+  opacity: 1;
+  transform: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mkReveal {
+    opacity: 1;
+    transform: none;
+    transition: none;
+    will-change: auto;
+  }
+}

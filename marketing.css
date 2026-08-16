@@ -294,7 +294,6 @@ img { display: block; max-width: 100%; height: auto; }
 }
 
 .marketingFooter--site {
-  display: block;
   padding-top: 40px;
   padding-bottom: 32px;
 }
@@ -304,6 +303,7 @@ img { display: block; max-width: 100%; height: auto; }
   grid-template-columns: minmax(200px, 280px) minmax(0, 1fr);
   gap: 32px 40px;
   align-items: start;
+  width: 100%;
 }
 
 .marketingFooterBrandName {
@@ -325,8 +325,9 @@ img { display: block; max-width: 100%; height: auto; }
 
 .marketingFooterColumns {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(128px, 1fr));
-  gap: 24px 20px;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 20px 24px;
+  align-items: start;
 }
 
 .marketingFooterCol h4 {
@@ -391,7 +392,9 @@ img { display: block; max-width: 100%; height: auto; }
 }
 
 .marketingFooterSocialIcon--idle {
-  opacity: 0.55;
+  opacity: 0.82;
+  color: rgba(255, 255, 255, 0.88);
+  border-color: rgba(255, 255, 255, 0.16);
 }
 
 .marketingFooter--rich nav {
@@ -740,6 +743,22 @@ body:has(.marketingDraftBanner) .marketingShell {
 
 .marketingFooter nav { display: flex; gap: 16px; flex-wrap: wrap; }
 
+.marketingFooter.marketingFooter--site {
+  display: block;
+  width: 100%;
+}
+
+.marketingFooter--site .marketingFooterBottom {
+  display: flex;
+  justify-content: flex-start;
+}
+
+@media (max-width: 1024px) {
+  .marketingFooterColumns {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
 [dir="rtl"] body {
   font-family: Tahoma, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Arial, sans-serif;
 }
@@ -770,6 +789,25 @@ body:has(.marketingDraftBanner) .marketingShell {
   .featureGrid { grid-template-columns: 1fr; }
   .section { padding: 58px 0; }
   .finalCta { padding: 34px 22px; }
-  .marketingFooterTop { grid-template-columns: 1fr; }
-  .marketingFooterColumns { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .marketingShell { width: min(1120px, calc(100% - 32px)); }
+  .marketingFooter--site { padding-top: 32px; padding-bottom: 28px; }
+  .marketingFooterTop { grid-template-columns: 1fr; gap: 28px; }
+  .marketingFooterBrand { padding-bottom: 4px; }
+  .marketingFooterTagline { max-width: none; }
+  .marketingFooterColumns {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 22px 18px;
+  }
+  .marketingFooterCol a {
+    font-size: 12px;
+    line-height: 1.35;
+    margin-bottom: 7px;
+  }
+  .marketingFooterBottom { margin-top: 22px; padding-top: 16px; }
+}
+
+@media (max-width: 420px) {
+  .marketingShell { width: min(1120px, calc(100% - 24px)); }
+  .marketingFooterColumns { gap: 20px 14px; }
+  .marketingFooterSocial { flex-wrap: wrap; }
 }

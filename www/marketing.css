@@ -78,26 +78,49 @@ img { display: block; max-width: 100%; height: auto; }
 .marketingBrand {
   display: inline-flex;
   align-items: center;
-  gap: 10px;
   text-decoration: none;
   flex-shrink: 0;
 }
 
-.marketingBrandMark {
+.brandLockup {
+  display: inline-flex;
+  align-items: center;
+  line-height: 1;
+}
+
+.brandLockupMark {
   display: block;
-  width: 34px;
-  height: 34px;
   flex-shrink: 0;
   background: url("/assets/icons/splash-mark.png") center / contain no-repeat;
 }
 
-.marketingBrandName {
+.brandLockupText {
   font-family: "Inter Display", "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-  font-size: 21px;
   font-weight: 900;
-  line-height: 1;
   letter-spacing: -0.052em;
   color: rgba(247, 250, 255, 0.94);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+.brandLockup--marketing {
+  align-items: baseline;
+  gap: 0.018em;
+  font-size: 23px;
+  line-height: 1;
+}
+
+.brandLockup--marketing .brandLockupMark {
+  width: 0.93em;
+  height: 0.93em;
+  margin: 0;
+  align-self: baseline;
+  transform: translateY(0.1em);
+}
+
+.brandLockup--marketing .brandLockupText {
+  font-size: 1em;
+  line-height: 1;
 }
 
 .marketingNavLinks {
@@ -929,8 +952,14 @@ body:has(.marketingDraftBanner) .marketingShell {
 
 @media (max-width: 760px) {
   .marketingNav { min-height: 64px; gap: 12px; }
-  .marketingBrandMark { width: 30px; height: 30px; }
-  .marketingBrandName { font-size: 19px; }
+  .brandLockup--marketing { font-size: 21px; }
+  .brandLockup--marketing .brandLockupMark {
+    width: 0.72em;
+    height: 0.92em;
+    background-size: 128% auto;
+    background-position: 6% 50%;
+    transform: translateY(0.095em);
+  }
   .marketingNavLinks { gap: 8px; }
   .marketingLangSwitch {
     min-height: 36px;

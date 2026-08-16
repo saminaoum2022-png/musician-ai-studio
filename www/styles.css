@@ -1988,6 +1988,8 @@ h1{ margin:0; font-weight:800; letter-spacing:-0.03em; font-size:28px; }
 .brandTitle.isPlaying{
   animation: brandPulsePlay 1.1s ease-in-out infinite;
 }
+.brandTitle.isGenerating .brandLockupText,
+.brandTitle.isPlaying .brandLockupText,
 .brandTitle.isGenerating .brandPrimary,
 .brandTitle.isPlaying .brandPrimary{
   text-shadow: 0 0 18px rgba(124,92,255,0.36), 0 0 28px rgba(35,213,171,0.24);
@@ -2006,6 +2008,45 @@ h1{ margin:0; font-weight:800; letter-spacing:-0.03em; font-size:28px; }
   width:32px;
   height:32px;
   background:url("./assets/icons/splash-mark.png") center / contain no-repeat;
+}
+.brandLockup{
+  display:inline-flex;
+  align-items:center;
+  line-height:1;
+  flex-shrink:0;
+}
+.brandLockupMark{
+  display:block;
+  flex-shrink:0;
+  background:url("./assets/icons/splash-mark.png") center / contain no-repeat;
+}
+.brandLockupText{
+  font-family:"Inter Display", "Inter", ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+  font-weight:900;
+  letter-spacing:-0.052em;
+  font-stretch:100%;
+  -webkit-font-smoothing:antialiased;
+  -moz-osx-font-smoothing:grayscale;
+  text-rendering:optimizeLegibility;
+}
+.brandLockup--header .brandLockupMark{
+  width:32px;
+  height:32px;
+  margin-inline-end:-4px;
+  transform:translateY(0.5px);
+}
+.brandLockup--header .brandLockupText{
+  font-size:inherit;
+  color:rgba(247,250,255,0.94);
+}
+.brandLockup--intro .brandLockupMark{
+  width:1.1em;
+  height:1.1em;
+  margin-inline-end:-0.05em;
+  transform:translateY(0.04em);
+}
+.brandLockup--intro .brandLockupText{
+  font-size:1em;
 }
 .brandPrimary{
   /* Inter Display is drawn for large sizes — heavier + cleaner than UI Inter at 900,
@@ -2031,7 +2072,7 @@ h1{ margin:0; font-weight:800; letter-spacing:-0.03em; font-size:28px; }
   body[data-route="hub"] .brandTitle{
     font-size: 32px;
   }
-  .brandTitle .brandMark{
+  .brandTitle .brandLockup--header .brandLockupMark{
     width:34px;
     height:34px;
   }

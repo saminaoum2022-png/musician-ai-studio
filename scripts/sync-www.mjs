@@ -18,6 +18,7 @@ const copies = [
   ["styles.css", "styles.css"],
   ["privacy.html", "privacy.html"],
   ["terms.html", "terms.html"],
+  ["legal.html", "legal.html"],
   ["support.html", "support.html"],
   ["about.html", "about.html"],
   ["blog.html", "blog.html"],

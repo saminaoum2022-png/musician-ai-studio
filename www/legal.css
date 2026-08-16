@@ -1,108 +1,84 @@
-:root {
-  --bg: #05070d;
-  --text: #eef4ff;
-  --muted: #97a5ba;
-  --primary: #7c5cff;
-  --border: rgba(255, 255, 255, 0.1);
-}
-
-* {
-  box-sizing: border-box;
-}
+/* Legal / policy pages — extends marketing.css (always dark, matches site mood). */
 
 html {
-  color-scheme: dark;
-  background: var(--bg);
+  color-scheme: dark only;
+  background: #05070d;
 }
 
 body {
-  margin: 0;
-  font-family: Inter, system-ui, -apple-system, sans-serif;
-  font-size: 15px;
-  line-height: 1.55;
-  color: var(--text);
-  background:
-    radial-gradient(120% 72% at 50% -20%, rgba(124, 92, 255, 0.14), transparent 55%),
-    var(--bg);
+  background: #05070d;
+  color: #eef4ff;
 }
 
-.legalWrap {
+.legalPage {
+  padding: 36px 0 56px;
+}
+
+.legalPageHead {
   max-width: 720px;
-  margin: 0 auto;
-  padding: 24px 20px 48px;
-}
-
-.legalTop {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
   margin-bottom: 28px;
 }
 
-.legalBrand {
-  font-size: 13px;
-  font-weight: 800;
-  letter-spacing: -0.02em;
-}
-
-.legalBrand strong {
-  color: #fff;
-}
-
-.legalBack {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 14px;
-  border-radius: 999px;
-  border: 1px solid var(--border);
-  background: rgba(255, 255, 255, 0.05);
-  color: var(--text);
-  font-size: 13px;
-  font-weight: 700;
-  text-decoration: none;
-}
-
-.legalBack:hover {
-  border-color: rgba(124, 92, 255, 0.35);
-}
-
+.legalPageHead h1,
 .legalTitle {
-  margin: 0 0 8px;
-  font-size: 28px;
-  font-weight: 900;
+  margin: 0 0 10px;
+  font-family: "Inter Display", "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  font-size: clamp(32px, 4.2vw, 44px);
+  font-weight: 800;
+  line-height: 1.08;
   letter-spacing: -0.04em;
-  line-height: 1.1;
+  color: #eef4ff;
 }
 
 .legalMeta {
-  margin: 0 0 24px;
-  font-size: 13px;
-  color: var(--muted);
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.55;
+  color: #97a5ba;
+}
+
+.legalMeta a {
+  color: #23d5ab;
+  text-decoration: none;
+}
+
+.legalMeta a:hover {
+  color: #2eebbc;
+}
+
+.legalPageBody {
+  max-width: 720px;
+  display: grid;
+  gap: 12px;
 }
 
 .legalCard {
-  padding: 18px 18px 16px;
-  margin-bottom: 14px;
-  border-radius: 18px;
-  border: 1px solid rgba(124, 92, 255, 0.18);
-  background:
-    radial-gradient(120% 100% at 0% 0%, rgba(124, 92, 255, 0.1), transparent 58%),
-    rgba(16, 20, 32, 0.88);
+  border: 1px solid rgba(255, 255, 255, 0.115);
+  border-radius: 22px;
+  background: linear-gradient(168deg, rgba(20, 26, 40, 0.94), rgba(8, 11, 20, 0.88));
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.38), 0 2px 8px rgba(0, 0, 0, 0.24), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  padding: 22px 24px;
 }
 
 .legalCard h2 {
   margin: 0 0 10px;
-  font-size: 16px;
-  font-weight: 850;
-  color: rgba(183, 168, 255, 0.95);
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: #eef4ff;
 }
 
 .legalCard p,
 .legalCard li {
   margin: 0 0 10px;
-  color: rgba(223, 231, 251, 0.88);
+  color: #97a5ba;
+  font-size: 15px;
+  line-height: 1.62;
+}
+
+.legalCard p:last-child,
+.legalCard li:last-child {
+  margin-bottom: 0;
 }
 
 .legalCard ul {
@@ -115,38 +91,52 @@ body {
 }
 
 .legalCard a {
-  color: rgba(94, 234, 212, 0.95);
+  color: #23d5ab;
+  text-decoration: none;
+}
+
+.legalCard a:hover {
+  color: #2eebbc;
+}
+
+.legalCard h3 {
+  margin: 18px 0 8px;
+  font-size: 1rem;
+  font-weight: 700;
+  color: #eef4ff;
+}
+
+.legalCard strong {
+  color: rgba(238, 244, 255, 0.92);
 }
 
 .legalNote {
-  margin-top: 20px;
-  padding: 14px 16px;
-  border-radius: 14px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(255, 255, 255, 0.04);
+  margin: 16px 0 0;
+  padding: 16px 18px;
+  border-radius: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.115);
+  background: rgba(255, 255, 255, 0.03);
   font-size: 13px;
-  color: var(--muted);
+  line-height: 1.55;
+  color: #97a5ba;
 }
 
-@media (prefers-color-scheme: light) {
-  :root {
-    --bg: #ecf0f7;
-    --text: #0f1728;
-    --muted: #47586e;
-    --border: rgba(15, 23, 40, 0.12);
+.legalNote a {
+  color: #23d5ab;
+  text-decoration: none;
+}
+
+[dir="rtl"] .legalCard ul {
+  padding-right: 20px;
+  padding-left: 0;
+}
+
+@media (max-width: 760px) {
+  .legalPage {
+    padding: 28px 0 48px;
   }
-  html {
-    color-scheme: light;
-  }
-  body {
-    background: var(--bg);
-  }
+
   .legalCard {
-    background: #fff;
-    border-color: rgba(124, 92, 255, 0.16);
-  }
-  .legalCard p,
-  .legalCard li {
-    color: var(--text);
+    padding: 18px 18px;
   }
 }

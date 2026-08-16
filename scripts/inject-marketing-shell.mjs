@@ -37,6 +37,9 @@ const pages = [
     nav: navEnSub.replace("{{LANG_AR}}", LANG_AR_SUB.replace("{{AR_HREF}}", "/ar/arabic-ai-music-generator")),
     footer: footerEn,
   },
+  { file: "legal.html", nav: navEnSub.replace("{{LANG_AR}}", LANG_AR_SUB.replace("{{AR_HREF}}", "/ar/legal")), footer: footerEn },
+  { file: "terms.html", nav: navEnSub.replace("{{LANG_AR}}", LANG_AR_SUB.replace("{{AR_HREF}}", "/ar")), footer: footerEn },
+  { file: "privacy.html", nav: navEnSub.replace("{{LANG_AR}}", LANG_AR_SUB.replace("{{AR_HREF}}", "/ar")), footer: footerEn },
   { file: "ar/index.html", nav: navArHome, footer: footerAr },
   { file: "ar/about.html", nav: navArSub.replace("{{LANG_EN}}", LANG_EN_SUB.replace("{{EN_HREF}}", "/about")), footer: footerAr },
   { file: "ar/blog.html", nav: navArSub.replace("{{LANG_EN}}", LANG_EN_SUB.replace("{{EN_HREF}}", "/blog")), footer: footerAr },
@@ -49,6 +52,7 @@ const pages = [
     nav: navArSub.replace("{{LANG_EN}}", LANG_EN_SUB.replace("{{EN_HREF}}", "/arabic-ai-music-generator")),
     footer: footerAr,
   },
+  { file: "ar/legal.html", nav: navArSub.replace("{{LANG_EN}}", LANG_EN_SUB.replace("{{EN_HREF}}", "/legal")), footer: footerAr },
 ];
 
 const NAV_RE = /    <nav class="marketingNav"[\s\S]*?<\/nav>\s*\n/;

@@ -576,6 +576,18 @@ img { display: block; max-width: 100%; height: auto; }
   transform: translateY(-1px);
 }
 
+.marketingFooterSocial img {
+  display: block;
+  width: 20px;
+  height: 20px;
+  opacity: 0.84;
+  filter: brightness(0) invert(1);
+}
+
+.marketingFooterSocial a:hover img {
+  opacity: 1;
+}
+
 .marketingFooterSocialIcon--idle {
   opacity: 0.82;
   color: rgba(255, 255, 255, 0.88);
@@ -1047,4 +1059,62 @@ body:has(.marketingDraftBanner) .marketingShell {
     transition: none;
     will-change: auto;
   }
+}
+
+/* Legal / policy docs — same dark FAQ cards as Support (always dark). */
+.legalDoc .faqItem h2,
+.legalDoc .faqItem h3 {
+  margin: 0 0 9px;
+  font-size: 19px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--text);
+}
+
+.legalDoc .faqItem p,
+.legalDoc .faqItem li {
+  color: var(--muted);
+}
+
+.legalDoc .faqItem ul {
+  margin: 0;
+  padding-left: 20px;
+}
+
+.legalDoc .faqItem li {
+  margin-bottom: 6px;
+}
+
+.legalDoc .faqItem a {
+  color: var(--brand-teal);
+  text-decoration: none;
+}
+
+.legalDoc .faqItem a:hover {
+  color: var(--brand-teal-hover);
+}
+
+.legalDoc .faqItem strong {
+  color: rgba(238, 244, 255, 0.92);
+}
+
+.legalDocNote {
+  margin-top: 12px;
+  padding: 16px 18px;
+  border-radius: 18px;
+  border: 1px solid var(--surface-border);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.legalDocNote a {
+  color: var(--brand-teal);
+  text-decoration: none;
+}
+
+[dir="rtl"] .legalDoc .faqItem ul {
+  padding-right: 20px;
+  padding-left: 0;
 }

@@ -29,6 +29,9 @@
     "api/music/cover-art.js": {
       "maxDuration": 60
     },
+    "api/music/suno-cover.js": {
+      "maxDuration": 30
+    },
     "api/music/generate.js": {
       "maxDuration": 300
     }

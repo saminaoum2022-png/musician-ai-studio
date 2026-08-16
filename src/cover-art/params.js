@@ -3,6 +3,7 @@
  */
 import { classifyVisualBucket, resolveUserArtworkPrompt } from "./prompt.js";
 import { humTrackAvoidTags } from "./visual-director/hum-track-cover.mjs";
+import { isDefaultSongCoverUrl } from "./placeholders.js";
 
 const MOOD_TAG_MAP = {
   chill: "Chill",
@@ -211,6 +212,30 @@ export function shouldUseAbstractCover(track) {
   return true;
 }
 
+/** Default cover path for new standard songs — Suno upstream + Nabad brand grade. */
+export function isSunoCoverEligible(meta) {
+  const m = meta && typeof meta === "object" ? meta : {};
+  if (hasUserPhotoCoverMeta(m)) return false;
+  if (m.humTrack) return false;
+  if (m.photoMode || m.imageOnlyInstrumental) return false;
+  if (String(m?.coverSource || "") === "pollinations" && m?.nabadAbstractCover) return false;
+  return true;
+}
+
+export function shouldProcessSunoCover(track) {
+  const meta = track?.meta && typeof track.meta === "object" ? track.meta : {};
+  if (hasUserPhotoCoverMeta(meta)) return false;
+  if (meta.humTrack) return false;
+  if (meta.photoMode || meta.imageOnlyInstrumental) return false;
+  if (!meta.sunoCoverPending) return false;
+  if (meta.coverGenAttempted && String(track?.artUrl || meta?.imageUrl || "").startsWith("data:")) {
+    return false;
+  }
+  const url = String(meta.sourceImageUrl || track?.artUrl || "").trim();
+  return /^https?:\/\//i.test(url);
+}
+
+/** Legacy Pollinations backfill — rows still marked pending from before Suno-default switch. */
 export function isPollinationsCoverEligible(meta) {
   const m = meta && typeof meta === "object" ? meta : {};
   if (hasUserPhotoCoverMeta(m)) return false;
@@ -226,11 +251,12 @@ export function canRegeneratePollinationsCover(track) {
   return String(meta?.coverSource || "") === "pollinations" && Boolean(meta?.nabadAbstractCover);
 }
 
-/** Player cover magic-wand — includes Photo Mood rows still on an uploaded photo. */
+/** Player cover magic-wand — Pollinations abstract, Suno-branded, or Photo Mood photo. */
 export function canRegenerateTrackCover(track) {
   if (canRegeneratePollinationsCover(track)) return true;
   const meta = track?.meta && typeof track.meta === "object" ? track.meta : {};
-  return Boolean(meta.photoMode);
+  if (Boolean(meta.photoMode)) return true;
+  return String(meta?.coverSource || "") === "suno" && Boolean(meta?.coverNabadMark);
 }
 
 export { MOOD_TAG_MAP };

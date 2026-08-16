@@ -69,14 +69,21 @@ import {
   ensureAbstractCoverForTrack,
   backfillPendingAbstractCovers,
   watchPendingCoverArt,
-  startParallelCoverForTask,
   cancelParallelCoverForTask,
+  resolveParallelCoverSongId,
+  startParallelCoverForTask,
   buildParallelCoverVariants,
   applyParallelCoverForTrack,
-  resolveParallelCoverSongId,
   regenerateAbstractCoverForTrack,
 } from "./cover-art/generate.js";
-import { canRegenerateTrackCover, hasUserPhotoCoverMeta, isPollinationsCoverEligible, shouldUseAbstractCover } from "./cover-art/params.js";
+import {
+  canRegenerateTrackCover,
+  hasUserPhotoCoverMeta,
+  isPollinationsCoverEligible,
+  isSunoCoverEligible,
+  shouldUseAbstractCover,
+  shouldProcessSunoCover,
+} from "./cover-art/params.js";
 import {
   DEFAULT_SONG_COVER_URL,
   isDefaultSongCoverUrl,
@@ -211,7 +218,7 @@ import { MUSIC_VIDEO_FEATURE_ENABLED } from "./feature-flags.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260817-010338";
+const APP_BUILD = "20260817-025441";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -4383,6 +4390,9 @@ function applyRoute({ passGen } = {}) {
     _skipGenerateRouteEnter ||
     (prevRoute === "challenges" && wanted === "generate" && Boolean(getCreateFlow()));
   syncRoutePanelVisibility(wanted);
+  if (wanted === "discover") {
+    kickDiscoverFeedRoute();
+  }
   animateRouteEnter(wanted, skipEnterAnim ? "none" : navDir);
   if (_skipGenerateRouteEnter) _skipGenerateRouteEnter = false;
   if (wanted === "auth" && prevRoute !== "auth") {
@@ -4665,18 +4675,6 @@ function applyRoute({ passGen } = {}) {
   if (MESSAGES_FEATURE_ENABLED && wanted === "messages-thread") {
     bindMessagesPageOnce();
     enterMessagesThreadRoute(pendingMessagesThreadId, pendingMessagesThreadUserId);
-  }
-  if (wanted === "discover") {
-    bindDiscoveryDiscoverControls();
-    bindDiscoverPlaylistScreenOnce();
-    bindDiscoverWeeklyChartSectionOnce();
-    if (shouldSkipRouteHeavy("discover") && _discoveryFeedTracks.length) {
-      restoreRouteScroll("discover");
-      markRouteHeavy("discover");
-    } else {
-      markRouteHeavy("discover");
-      void refreshDiscoverFeed();
-    }
   }
   if (wanted === "discover-playlist") {
     bindDiscoveryDiscoverControls();
@@ -8326,6 +8324,29 @@ function bindDiscoverWeeklyChartSectionOnce() {
     e.stopPropagation();
     toggleChartWeekExpanded(document.getElementById("discoverWeeklyChart"));
   });
+}
+
+/** Paint + fetch Discover feed as soon as the route panel is visible — must
+ *  not wait until the end of applyRoute (a superseded pass would leave the
+ *  mount blank while tabs/header already show). */
+function kickDiscoverFeedRoute() {
+  bindDiscoveryDiscoverControls();
+  bindDiscoverPlaylistScreenOnce();
+  bindDiscoverWeeklyChartSectionOnce();
+  const discoverMount = document.getElementById("discoverFeedMount");
+  const discoverMountEmpty = !discoverMount?.innerHTML?.trim();
+  const canSkipDiscoverNetwork =
+    shouldSkipRouteHeavy("discover") &&
+    _discoveryFeedTracksRaw.length > 0 &&
+    !discoverMountEmpty;
+  if (canSkipDiscoverNetwork) {
+    restoreRouteScroll("discover");
+    markRouteHeavy("discover");
+    return;
+  }
+  if (discoverMountEmpty) paintDiscoverTopSectionsLoading();
+  markRouteHeavy("discover");
+  void refreshDiscoverFeed();
 }
 
 function paintDiscoverWeeklyChartLoading(wrap) {
@@ -22098,6 +22119,60 @@ configureCoverArt({
   releaseCaptionForTrack,
   remixAttributionForTrack,
 });
+
+let _sunoCoverModPromise = null;
+function sunoCoverDeps() {
+  return {
+    apiUrl,
+    getSupabaseAuthToken,
+    loadLibrary,
+    saveLibrary,
+    refreshOwnSongsUi,
+    patchLibraryRowCoverArt,
+    persistTrackCoverIfNeeded,
+    get currentPlayerTrackRef() {
+      return currentPlayerTrackRef;
+    },
+    get libraryNowPlayingId() {
+      return libraryNowPlayingId;
+    },
+    setPlayerMeta,
+    releaseCaptionForTrack,
+    remixAttributionForTrack,
+  };
+}
+function loadSunoCoverModule() {
+  if (!_sunoCoverModPromise) {
+    _sunoCoverModPromise = import(`./cover-art/suno-cover.js?v=${APP_BUILD}`)
+      .then((mod) => {
+        mod.configureSunoCoverArt(sunoCoverDeps());
+        return mod;
+      })
+      .catch((e) => {
+        _sunoCoverModPromise = null;
+        try {
+          console.warn("[suno-cover] module load failed", e?.message || e);
+        } catch {}
+        throw e;
+      });
+  }
+  return _sunoCoverModPromise;
+}
+function resolveSunoCoverSourceUrl(track) {
+  const meta = track?.meta && typeof track.meta === "object" ? track.meta : {};
+  const url = String(meta.sourceImageUrl || track?.artUrl || "").trim();
+  return /^https?:\/\//i.test(url) ? url : "";
+}
+function processSunoCoverForTrack(track) {
+  void loadSunoCoverModule()
+    .then((mod) => mod.processSunoCoverForTrack(track))
+    .catch(() => {});
+}
+function backfillPendingSunoCovers(items) {
+  void loadSunoCoverModule()
+    .then((mod) => mod.backfillPendingSunoCovers(items))
+    .catch(() => {});
+}
 
 /** Retry cover uploads that never reached the cloud (offline at
  *  generation time, app killed mid-upload, transient storage error).
@@ -40309,17 +40384,14 @@ async function refreshDiscoverFeed() {
   _discoverFeedRefreshInFlight = true;
   _routeRefreshGate.discover.begin();
   const gen = ++_discoveryFeedGen;
-  void ensurePersonalizedUsernameSyncedToCloud();
   const statusEl = document.getElementById("discoveryFeedStatus");
   const listEl = document.getElementById("discoveryFeedList");
+  const mount = document.getElementById("discoverFeedMount");
   if (!statusEl) {
     _discoverFeedRefreshInFlight = false;
     _routeRefreshGate.discover.end();
     return;
   }
-  bindDiscoverHubV1Once();
-  bindDiscoverFeedTabsOnce();
-  const mount = document.getElementById("discoverFeedMount");
   const hasCachedMount =
     mount &&
     !mount.classList.contains("isLoading") &&
@@ -40328,6 +40400,10 @@ async function refreshDiscoverFeed() {
   if (!hasCachedMount) {
     paintDiscoverTopSectionsLoading();
   }
+  try {
+  void ensurePersonalizedUsernameSyncedToCloud();
+  bindDiscoverHubV1Once();
+  bindDiscoverFeedTabsOnce();
   statusEl.textContent = "";
   statusEl.hidden = true;
   if (listEl) {
@@ -40395,9 +40471,31 @@ async function refreshDiscoverFeed() {
       });
     }
     console.warn("[discover] feed refresh failed", err);
+  }
+  } catch (err) {
+    console.warn("[discover] feed refresh setup failed", err);
+    if (gen === _discoveryFeedGen && mount && !mount.innerHTML.trim()) {
+      try { renderDiscoverFeed([], new Map()); } catch {}
+    }
   } finally {
     _discoverFeedRefreshInFlight = false;
     _routeRefreshGate.discover.end();
+  }
+}
+
+/** Defer cover backfill so boot + Discover feed paint stay responsive. */
+function scheduleDeferredCoverBackfill(items) {
+  const list = Array.isArray(items) ? items : [];
+  if (!list.length) return;
+  const run = () => {
+    try { backfillPendingSunoCovers(list); } catch {}
+    try { backfillPendingAbstractCovers(list); } catch {}
+    try { watchPendingCoverArt(); } catch {}
+  };
+  if (typeof requestIdleCallback === "function") {
+    requestIdleCallback(run, { timeout: 6000 });
+  } else {
+    setTimeout(run, 2000);
   }
 }
 
@@ -47332,8 +47430,7 @@ async function ensureUserLibraryHydrated(prefetchedCloud, opts = {}) {
   clearTimeout(safetyTimer);
   saveLibrary(mergedDeduped);
   backfillNabadVerificationInLibrary();
-  try { backfillPendingAbstractCovers(mergedDeduped); } catch {}
-  try { watchPendingCoverArt(); } catch {}
+  scheduleDeferredCoverBackfill(mergedDeduped);
   void backfillPendingCoverUploads(mergedDeduped);
   refreshOwnSongsUi();
   try { resumePendingPublishes(); } catch {}
@@ -47458,14 +47555,28 @@ function addToLibrary(track) {
       imageUrl: photo,
       imageThumb: normalizeSongCoverUrl(newTrack.meta.imageThumb || photo),
     };
-  } else if (isPollinationsCoverEligible(newTrack.meta)) {
+  } else if (newTrack.meta?.humTrack && isPollinationsCoverEligible(newTrack.meta)) {
     const ph = DEFAULT_SONG_COVER_URL;
     newTrack.artUrl = ph;
     newTrack.meta = {
       ...(newTrack.meta || {}),
       pollinationsCoverPending: true,
+      sunoCoverPending: false,
       imageUrl: ph,
       imageThumb: ph,
+    };
+  } else if (isSunoCoverEligible(newTrack.meta)) {
+    const sunoUrl = resolveSunoCoverSourceUrl(newTrack) || normalizeSongCoverUrl(newTrack.artUrl);
+    const hasHttpCover = /^https?:\/\//i.test(String(sunoUrl || ""));
+    newTrack.artUrl = hasHttpCover ? sunoUrl : DEFAULT_SONG_COVER_URL;
+    newTrack.meta = {
+      ...(newTrack.meta || {}),
+      pollinationsCoverPending: false,
+      sunoCoverPending: true,
+      coverSource: "suno",
+      sourceImageUrl: hasHttpCover ? sunoUrl : "",
+      imageUrl: newTrack.artUrl,
+      imageThumb: newTrack.artUrl,
     };
   } else {
     newTrack.artUrl = normalizeSongCoverUrl(newTrack.artUrl);
@@ -47490,10 +47601,17 @@ function addToLibrary(track) {
     // one exists, since PATCH matches nothing).
     await persistTrackCoverIfNeeded(newTrack);
     queueArchiveLibraryTrack(newTrack);
-    const parallelApplied = await applyParallelCoverForTrack(newTrack);
-    if (!parallelApplied && shouldUseAbstractCover(newTrack)) {
-      void ensureAbstractCoverForTrack(newTrack);
+    if (shouldProcessSunoCover(newTrack)) {
+      void processSunoCoverForTrack(newTrack);
+    } else {
+      const parallelApplied = newTrack.meta?.humTrack
+        ? await applyParallelCoverForTrack(newTrack)
+        : false;
+      if (!parallelApplied && shouldUseAbstractCover(newTrack)) {
+        void ensureAbstractCoverForTrack(newTrack);
+      }
     }
+    try { backfillPendingSunoCovers(loadLibrary()); } catch {}
     try { backfillPendingAbstractCovers(loadLibrary()); } catch {}
     try { watchPendingCoverArt(); } catch {}
   })();
@@ -51289,7 +51407,8 @@ async function applyPlayerCoverReveal(url, opts = {}) {
     const track = resolvePlayerLibraryTrack() || currentPlayerTrackRef;
     const abstractLive =
       Boolean(track?.meta?.nabadAbstractCover) ||
-      String(track?.meta?.coverSource || "") === "pollinations";
+      String(track?.meta?.coverSource || "") === "pollinations" ||
+      String(track?.meta?.coverSource || "") === "suno";
     syncCoverArtOverlay(
       Boolean(track?.id) &&
         abstractLive &&
@@ -51359,7 +51478,8 @@ function setPlayerMeta({ title, subtitle, artUrl, releaseCaption, remixOf, chall
     const track = resolvePlayerLibraryTrack() || currentPlayerTrackRef;
     const abstractLive =
       Boolean(track?.meta?.nabadAbstractCover) ||
-      String(track?.meta?.coverSource || "") === "pollinations";
+      String(track?.meta?.coverSource || "") === "pollinations" ||
+      String(track?.meta?.coverSource || "") === "suno";
     syncCoverArtOverlay(
       hasTrack &&
         abstractLive &&
@@ -54840,15 +54960,24 @@ async function backfillRecoveredGenerationCovers(taskId, entries) {
   for (const row of rows) {
     if (row?.meta?.photoMode || row?.meta?.customCoverOnly) continue;
     let track = row;
-    const patched = await applyParallelCoverForTrack(track);
-    if (patched) {
-      const refreshed = loadLibrary().find((x) => String(x?.id || "") === String(track.id || ""));
-      if (refreshed) track = refreshed;
+    if (shouldProcessSunoCover(track)) {
+      void processSunoCoverForTrack(track);
+      continue;
+    }
+    if (track?.meta?.humTrack) {
+      const patched = await applyParallelCoverForTrack(track);
+      if (patched) {
+        const refreshed = loadLibrary().find((x) => String(x?.id || "") === String(track.id || ""));
+        if (refreshed) track = refreshed;
+      }
     }
     if (shouldUseAbstractCover(track)) {
       void ensureAbstractCoverForTrack(track);
     }
   }
+  try {
+    backfillPendingSunoCovers(loadLibrary());
+  } catch {}
   try {
     backfillPendingAbstractCovers(loadLibrary());
   } catch {}
@@ -56366,7 +56495,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
     if (els.resultArt) {
       const resultArtSrc =
         resolvePendingPhotoCoverDataUrl() ||
-        (lastGenerationMeta?.photoMode ? lastSunoArtUrl : "") ||
+        lastSunoArtUrl ||
         placeholderCoverDataUrl();
       setCoverImageSrc(els.resultArt, resultArtSrc || brokenCoverPlaceholderUrl());
       els.resultArt.alt = lastSunoTitle ? `Cover: ${lastSunoTitle}` : "Song cover";
@@ -56395,7 +56524,8 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
     if (els.resultArt2) {
       const resultArt2Src =
         resolvePendingPhotoCoverDataUrl() ||
-        (lastGenerationMeta?.photoMode ? (lastSunoArtUrl2 || lastSunoArtUrl) : "") ||
+        lastSunoArtUrl2 ||
+        lastSunoArtUrl ||
         placeholderCoverDataUrl();
       setCoverImageSrc(els.resultArt2, resultArt2Src || brokenCoverPlaceholderUrl());
       els.resultArt2.alt = lastSunoTitle2 ? `Cover: ${lastSunoTitle2}` : "Song cover B";
@@ -57633,16 +57763,6 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
           variantCount: isSingleVariantTask ? 1 : GENERATION_VARIANT_COUNT,
         });
         syncGenerationPendingLibraryUi();
-        if (!resolvePendingPhotoCoverDataUrl() && isPollinationsCoverEligible(lastGenerationMeta)) {
-          startParallelCoverForTask(
-            sunoTaskId,
-            buildParallelCoverVariants(sunoTaskId, {
-              title: String(els.sunoTitle?.value || "").trim() || "Generated song",
-              meta: lastGenerationMeta,
-              variantCount: GENERATION_VARIANT_COUNT,
-            }),
-          );
-        }
         if (!altReadyNow) {
           try {
             beginCoachGenerationStatus({
@@ -62895,7 +63015,7 @@ renderAuthStatus();
 const _bootOAuthCodePending = hasOAuthCodeInUrl();
 if (_bootOAuthCodePending) {
   try { beginLoginSettling("Finishing sign in…"); } catch {}
-} else if (!isCapacitorNativeAuth() && !isNativeShell()) {
+} else {
   safeApplyRoute();
 }
 // `ensureAuthBoot()` (Preferences / native restore) runs before each route apply.

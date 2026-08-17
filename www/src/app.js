@@ -57606,7 +57606,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
               altProvider === "lyria"
                 ? "Lyria is composing your song… usually 2–3 minutes. You can browse the app — we'll update when it's ready."
                 : altProvider === "elevenlabs"
-                  ? "ElevenLabs is composing your song… usually 1–3 minutes. Keep the app open."
+                  ? "ElevenLabs is composing your song… usually 1–3 minutes. You can browse the app — we'll update when it's ready."
                   : "MiniMax is composing your song… usually 1–2 minutes. Keep the app open.",
             );
           }
@@ -57669,7 +57669,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       const altReadyNow = Boolean(
         isSingleVariantTask &&
         altImmediateUrl &&
-        (data?._ready || data?._provider === "minimax" || data?._provider === "lyria" || data?._provider === "elevenlabs"),
+        data?._ready === true,
       );
       savePendingBackendTask(sunoTaskId || "");
       if (sunoTaskId) {

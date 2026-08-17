@@ -266,6 +266,85 @@ async function runLyriaGenerationJob({
   }
 }
 
+async function runElevenlabsGenerationJob({
+  userId,
+  isAdmin,
+  taskId,
+  audioId,
+  apiKey,
+  model,
+  musicLengthMs,
+  instrumental,
+  finetuneId,
+  elevenPrompt,
+  title,
+  lyrics,
+}) {
+  const fail = async (msg) => {
+    if (!isAdmin) {
+      await refund(userId, FULL_SONG_COST, "refund_full_song", "elevenlabs_upstream").catch(() => null);
+    }
+    const statusPayload = buildFailedStatusPayload({
+      taskId,
+      provider: "elevenlabs",
+      errorMessage: msg,
+    });
+    await saveMusicProviderTaskStatus({ userId, taskId, statusPayload }).catch(() => null);
+    queueUpdateMusicGenerationByTaskId(taskId, {
+      status: isAdmin ? "failed" : "refunded",
+      error_message: msg,
+    });
+  };
+
+  try {
+    const upstream = await elevenlabsGenerateMusic({
+      apiKey,
+      prompt: elevenPrompt,
+      model,
+      musicLengthMs,
+      instrumental,
+      finetuneId,
+    });
+    if (!upstream.ok) {
+      await fail(upstream.userMessage || "ElevenLabs generation failed — try again.");
+      return;
+    }
+    const archived = await persistAudioBuffer({
+      userId,
+      taskId,
+      buffer: upstream.audio.buffer,
+      contentType: upstream.audio.mimeType || "audio/mpeg",
+    });
+    if (!archived.ok || !archived.url) {
+      await fail("ElevenLabs audio upload failed — try again.");
+      return;
+    }
+    const statusPayload = buildSunoStatusPayload({
+      taskId,
+      title,
+      lyrics,
+      audioUrl: archived.url,
+      audioId,
+      provider: "elevenlabs",
+    });
+    if (finetuneId) {
+      statusPayload._finetuneId = finetuneId;
+      statusPayload._finetuneApplied = true;
+    }
+    const stored = await saveMusicProviderTaskStatus({ userId, taskId, statusPayload });
+    if (!stored.ok) {
+      console.warn("[music/generate] elevenlabs task store failed (song audio ok)", stored.error);
+    }
+    queueUpdateMusicGenerationByTaskId(taskId, {
+      status: "completed",
+      provider_cost_usd: ELEVENLABS_PROVIDER_COST_USD,
+    });
+  } catch (e) {
+    console.error("[music/generate] elevenlabs background job failed", taskId, e);
+    await fail(e?.message || "ElevenLabs generation failed — try again.");
+  }
+}
+
 async function refund(userId, amount, reason, ref) {
   if (!userId || !amount) return;
   try {
@@ -648,72 +727,51 @@ async function handleElevenlabsGenerate(req, res, { user, isAdmin, body }) {
     });
   }
 
-  const upstream = await elevenlabsGenerateMusic({
-    apiKey,
-    prompt: elevenPrompt,
-    model,
-    musicLengthMs,
-    instrumental,
-    finetuneId,
-  });
-
-  if (!upstream.ok) {
-    if (!isAdmin) {
-      await refund(user.userId, FULL_SONG_COST, "refund_full_song", "elevenlabs_upstream").catch(() => null);
-    }
-    const msg = upstream.userMessage || "ElevenLabs generation failed — try again.";
-    queueUpdateMusicGenerationByTaskId(taskId, {
-      status: isAdmin ? "failed" : "refunded",
-      error_message: msg,
-    });
-    return sendJson(res, 502, {
-      error: msg,
-      code: upstream.httpStatus,
-      _model: model,
-      details: upstream.data || upstream.text?.slice(0, 400) || null,
-    });
+  const pendingPayload = buildPendingStatusPayload({ taskId, provider: "elevenlabs" });
+  if (finetuneId) {
+    pendingPayload._finetuneId = finetuneId;
+    pendingPayload._finetuneApplied = true;
   }
-
-  const archived = await persistAudioBuffer({
+  const pendingStored = await saveMusicProviderTaskStatus({
     userId: user.userId,
     taskId,
-    buffer: upstream.audio.buffer,
-    contentType: upstream.audio.mimeType || "audio/mpeg",
+    statusPayload: pendingPayload,
   });
-  if (!archived.ok || !archived.url) {
-    return sendJson(res, 502, {
-      error: "ElevenLabs audio upload failed — try again.",
-      details: { upload: archived.error || null },
+  if (!pendingStored.ok) {
+    if (!isAdmin) {
+      await refund(user.userId, FULL_SONG_COST, "refund_full_song", "elevenlabs_task_store").catch(() => null);
+    }
+    return sendJson(res, 500, {
+      error: "Could not start ElevenLabs generation — try again.",
+      details: pendingStored.error || null,
     });
   }
 
-  const audioUrl = archived.url;
-  const statusPayload = buildSunoStatusPayload({
-    taskId,
-    title,
-    lyrics,
-    audioUrl,
-    audioId,
-    provider: "elevenlabs",
-  });
-  const stored = await saveMusicProviderTaskStatus({ userId: user.userId, taskId, statusPayload });
-  if (!stored.ok) {
-    console.warn("[music/generate] task store failed (song audio ok)", stored.error);
-  }
-
-  queueUpdateMusicGenerationByTaskId(taskId, {
-    status: "completed",
-    provider_cost_usd: ELEVENLABS_PROVIDER_COST_USD,
-  });
+  scheduleBackgroundWork(
+    runElevenlabsGenerationJob({
+      userId: user.userId,
+      isAdmin,
+      taskId,
+      audioId,
+      apiKey,
+      model,
+      musicLengthMs,
+      instrumental,
+      finetuneId,
+      elevenPrompt,
+      title,
+      lyrics,
+    }),
+  );
 
   return sendJson(res, 200, {
     code: 200,
-    data: { taskId, audioId, audioUrl, audio_url: audioUrl, status: "SUCCESS" },
+    data: { taskId, audioId, status: "PENDING" },
     _provider: "elevenlabs",
     _model: model,
     _finetuneId: finetuneId || undefined,
     _finetuneApplied: Boolean(finetuneId),
-    _ready: true,
+    _ready: false,
     _variantCount: 1,
     _credits: {
       spent: isAdmin ? 0 : FULL_SONG_COST,

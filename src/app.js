@@ -25192,24 +25192,20 @@ function syncProfileProAvatarPill() {
   const tabPill = document.getElementById("tabProfileProPill");
   const wrap = document.getElementById("profileAuraAvatarWrap");
   const tabSlot = document.getElementById("tabProfileAvatarSlot");
-  const show = isAppLoggedIn() && Boolean(creditsState.proActive);
+  const showTab = isAppLoggedIn() && Boolean(creditsState.proActive);
+  // Own profile hero: skip Pro on the large avatar (Persona mic uses that corner).
+  // Pro still shows on the tab avatar, Settings, and other users' public profiles.
   if (pill) {
-    pill.hidden = !show;
-    pill.setAttribute("aria-hidden", show ? "false" : "true");
+    pill.hidden = true;
+    pill.setAttribute("aria-hidden", "true");
   }
+  if (wrap) wrap.classList.remove("hasPro");
   if (tabPill) {
-    tabPill.hidden = !show;
-    tabPill.setAttribute("aria-hidden", show ? "false" : "true");
+    tabPill.hidden = !showTab;
+    tabPill.setAttribute("aria-hidden", showTab ? "false" : "true");
+    if (showTab) tabPill.title = "NabadAi Pro";
   }
-  if (wrap) wrap.classList.toggle("hasPro", show);
-  if (tabSlot) tabSlot.classList.toggle("hasPro", show);
-  if (show) {
-    if (pill) {
-      pill.textContent = "Pro";
-      pill.title = "NabadAi Pro";
-    }
-    if (tabPill) tabPill.title = "NabadAi Pro";
-  }
+  if (tabSlot) tabSlot.classList.toggle("hasPro", showTab);
 }
 
 function syncSettingsProRow() {

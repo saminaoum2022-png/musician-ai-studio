@@ -1819,8 +1819,100 @@ td.num { font-variant-numeric: tabular-nums; }
 
 .mkEditorLayout {
   display: grid;
-  grid-template-columns: 168px minmax(300px, 34%) minmax(0, 1fr);
+  grid-template-columns: 196px minmax(380px, 40%) minmax(520px, 1fr);
   min-height: calc(100vh - 190px);
+}
+
+.mkSectionNavLabel {
+  margin: 0 8px 10px;
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(151, 165, 186, 0.65);
+}
+
+.mkEditorFormHint {
+  margin: 0 0 12px;
+  font-size: 0.82rem;
+  color: rgba(151, 165, 186, 0.88);
+  line-height: 1.45;
+}
+
+.mkActiveSectionTitle {
+  margin: 0 0 16px;
+  font-size: 1.35rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: #f2f5ff;
+}
+
+.mkSectionPanel {
+  display: none;
+}
+
+.mkSectionPanel.isActive {
+  display: block;
+}
+
+.mkSectionPanel.isActive .mkSectionPanelTitle {
+  display: none;
+}
+
+.mkSectionPanel.isActive .mkSectionPanelHead {
+  margin-bottom: 12px;
+}
+
+.mkSectionPanelTitle {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #f2f5ff;
+}
+
+.mkSectionPanelDesc,
+.mkSectionPanelNote {
+  margin: 8px 0 0;
+  font-size: 0.84rem;
+  color: rgba(151, 165, 186, 0.88);
+  line-height: 1.45;
+}
+
+.mkSectionPanelBody {
+  display: grid;
+  gap: 18px;
+}
+
+.mkFieldGroup {
+  padding: 16px 18px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.mkFieldGroupTitle {
+  margin: 0 0 12px;
+  font-size: 0.88rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: rgba(196, 181, 253, 0.95);
+}
+
+.mkFieldGroupHint {
+  margin: -6px 0 12px;
+  font-size: 0.8rem;
+}
+
+.mkFieldGroupFields {
+  display: grid;
+  gap: 14px;
+}
+
+.mkEditorForm {
+  padding: 16px 20px 32px;
+  overflow: auto;
+  border-right: 1px solid var(--border);
+  max-height: calc(100vh - 190px);
 }
 
 .mkSectionNav {
@@ -1867,13 +1959,6 @@ td.num { font-variant-numeric: tabular-nums; }
 .mkSectionNavItem.isActive {
   background: rgba(124, 92, 255, 0.16);
   color: #f2f5ff;
-}
-
-.mkEditorForm {
-  padding: 14px 16px 28px;
-  overflow: auto;
-  border-right: 1px solid var(--border);
-  max-height: calc(100vh - 190px);
 }
 
 .mkPreviewCol {

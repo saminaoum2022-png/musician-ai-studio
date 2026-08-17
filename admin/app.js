@@ -24,8 +24,8 @@ const state = {
   grantPrefillEmail: "",
   marketingLocale: "en",
   marketingPage: "home",
-  marketingPanel: "content",
   marketingScreen: "hub",
+  marketingSection: "hero",
   marketingPreviewDevice: "desktop",
   marketingDraft: null,
   marketingHeroBlobUrl: "",
@@ -806,7 +806,7 @@ function viewCacheKey() {
     key += `:gid:${state.generationDetailId}`;
   }
   if (state.view === "marketing") {
-    key += `:scr:${state.marketingScreen || "hub"}:pg:${state.marketingPage || "home"}:loc:${state.marketingLocale || "en"}:pn:${state.marketingPanel || "content"}`;
+    key += `:scr:${state.marketingScreen || "hub"}:pg:${state.marketingPage || "home"}:loc:${state.marketingLocale || "en"}:sec:${state.marketingSection || "hero"}`;
   }
   return key;
 }
@@ -2318,7 +2318,67 @@ function marketingField(label, id, value, { multiline = false, hint = "", highli
   </label>`;
 }
 
-function marketingSubsection(title, html, { description = "", open = false } = {}) {
+function marketingFieldGroup(title, html, { hint = "" } = {}) {
+  return `<div class="mkFieldGroup">
+    <h4 class="mkFieldGroupTitle">${escapeHtml(title)}</h4>
+    ${hint ? `<p class="cellMuted mkFieldGroupHint">${escapeHtml(hint)}</p>` : ""}
+    <div class="mkFieldGroupFields">${html}</div>
+  </div>`;
+}
+
+function marketingSectionPanel(id, title, description, html, { active = false } = {}) {
+  return `<div class="mkSectionPanel${active ? " isActive" : ""}" data-section-panel="${escapeHtml(id)}" id="mkSection-${escapeHtml(id)}">
+    <header class="mkSectionPanelHead">
+      <h2 class="mkSectionPanelTitle">${escapeHtml(title)}</h2>
+      ${description ? `<p class="mkSectionPanelDesc">${escapeHtml(description)}</p>` : ""}
+    </header>
+    <div class="mkSectionPanelBody">${html}</div>
+  </div>`;
+}
+
+function marketingSectionsForPage(isHome) {
+  const sections = [
+    { id: "hero", label: "Hero" },
+    { id: "features", label: "Features" },
+  ];
+  if (isHome) {
+    sections.push(
+      { id: "templates", label: "Song templates" },
+      { id: "collab", label: "Creators & voices" },
+      { id: "discover", label: "Discover teaser" },
+      { id: "pricing", label: "Pricing" },
+      { id: "footer", label: "Footer social" },
+    );
+  }
+  sections.push(
+    { id: "faq", label: "FAQ" },
+    { id: "related", label: "Related pages" },
+    { id: "final", label: "Final CTA" },
+    { id: "seo", label: "SEO" },
+    { id: "brand", label: "Theme · Brand" },
+  );
+  return sections;
+}
+
+function showMarketingSection(sectionId) {
+  const id = String(sectionId || "hero").trim() || "hero";
+  state.marketingSection = id;
+  for (const panel of document.querySelectorAll("[data-section-panel]")) {
+    panel.classList.toggle("isActive", panel.dataset.sectionPanel === id);
+  }
+  for (const btn of document.querySelectorAll("[data-marketing-section]")) {
+    btn.classList.toggle("isActive", btn.dataset.marketingSection === id);
+  }
+  const activePanel = document.getElementById(`mkSection-${id}`);
+  const titleEl = document.getElementById("mkActiveSectionTitle");
+  if (titleEl && activePanel) {
+    titleEl.textContent = activePanel.querySelector(".mkSectionPanelTitle")?.textContent || id;
+  }
+  pushMarketingPreviewToIframe();
+  if (id === "discover") void bindMarketingDiscoverPicker();
+}
+
+function marketingSubsection(title, html, { description = "", open = true } = {}) {
   return `<details class="marketingSubsection"${open ? " open" : ""}>
     <summary class="marketingSubsectionTitle">${escapeHtml(title)}</summary>
     ${description ? `<p class="marketingSubsectionDesc">${escapeHtml(description)}</p>` : ""}
@@ -2518,10 +2578,10 @@ function readMarketingBrandForm() {
 }
 
 function getMarketingPreviewPayload() {
-  const pageKey = state.marketingPanel === "brand" ? "home" : (state.marketingPage || "home");
-  const locale = state.marketingPanel === "brand" ? "en" : (state.marketingLocale || "en");
+  const pageKey = state.marketingSection === "brand" ? "home" : (state.marketingPage || "home");
+  const locale = state.marketingSection === "brand" ? "en" : (state.marketingLocale || "en");
   let content;
-  if (state.marketingPanel === "brand") {
+  if (state.marketingSection === "brand") {
     content = { ...(state.marketingLoadedContent || {}), brand: readMarketingBrandForm() };
   } else {
     content = readMarketingFormContent(pageKey);
@@ -2719,29 +2779,208 @@ function renderMarketingHub(data) {
   bindMarketingHubPreviews(hasDraft);
 }
 
-function renderMarketingBrandPanel(brand = {}) {
+function renderMarketingBrandFields(brand = {}) {
   const b = brand || {};
   const fontOptions = [
     { value: "inter-display", label: "Inter Display (marketing default)" },
     { value: "inter", label: "Inter" },
     { value: "system", label: "System UI" },
   ];
-  return marketingDetailCard("Brand palette", `
-    <p class="marketingBrandGuide">
-      <strong>What belongs here:</strong> site-wide look for nabadai.com — primary button color, text on buttons, heading/body fonts, and violet accent for gradients. Homepage hero copy and section text stay under <em>Pages</em>.
-    </p>
-    ${marketingSubsection("Buttons", `
+  return `
+    <p class="mkSectionPanelNote">Site-wide button colors and fonts — saved on the English homepage.</p>
+    ${marketingFieldGroup("Buttons", `
       ${marketingColorField("Primary CTA color", "mkBrandCtaColor", b.ctaColor || "#23d5ab", { hint: "Try free, Get started, Apply now pills" })}
       ${marketingColorField("CTA text color", "mkBrandCtaTextColor", b.ctaTextColor || "#051018", { hint: "Label color on teal/violet buttons" })}
-    `, { open: true })}
-    ${marketingSubsection("Typography", `
+    `)}
+    ${marketingFieldGroup("Typography", `
       ${marketingSelectField("Heading font", "mkBrandHeadingFont", b.headingFont || "inter-display", fontOptions, { hint: "Hero headline, section titles, NabadAi lockup" })}
       ${marketingSelectField("Body font", "mkBrandBodyFont", b.bodyFont || "inter", fontOptions, { hint: "Paragraphs, FAQ, nav links" })}
     `)}
-    ${marketingSubsection("Accent", `
+    ${marketingFieldGroup("Accent", `
       ${marketingColorField("Violet accent", "mkBrandAccentViolet", b.accentViolet || "#7c5cff", { hint: "Gradients, Pro badges, secondary highlights" })}
     `)}
-  `, { description: "Global theme tokens — saved with the English homepage." });
+  `;
+}
+
+function renderMarketingBrandPanel(brand = {}) {
+  return marketingDetailCard("Brand palette", renderMarketingBrandFields(brand), {
+    description: "Global theme tokens — saved with the English homepage.",
+  });
+}
+
+function buildMarketingEditorSections(ctx) {
+  const { activeSection, isHome } = ctx;
+  const on = (id) => activeSection === id;
+
+  const heroPanel = marketingSectionPanel(
+    "hero",
+    "Hero",
+    "Headline, buttons, and hero image at the top of the page.",
+    `
+      ${marketingFieldGroup("Headline & copy", `
+        ${marketingField("Eyebrow", "mkHeroEyebrow", ctx.hero.eyebrow || "")}
+        ${marketingField("Headline", "mkHeroTitle", ctx.hero.title || "")}
+        ${marketingField("Lead paragraph", "mkHeroLead", ctx.hero.lead || "", { multiline: 4 })}
+      `)}
+      ${marketingFieldGroup("Call to action", `
+        ${marketingField("Primary button label", "mkHeroCtaLabel", ctx.hero.ctaLabel || "")}
+        ${marketingField("Primary button link", "mkHeroCtaHref", ctx.hero.ctaHref || "", { hint: "e.g. /app/#/intro" })}
+        ${marketingField("Secondary link label", "mkHeroSecondaryLabel", ctx.hero.secondaryLabel || "")}
+        ${marketingField("Secondary link URL", "mkHeroSecondaryHref", ctx.hero.secondaryHref || "")}
+      `)}
+      ${marketingFieldGroup("Hero photo", `
+        ${marketingField("Image URL", "mkHeroImageUrl", ctx.hero.heroImageUrl || "", { hint: "Paste a URL or upload below." })}
+        <label class="field marketingField">
+          <span>Upload new image</span>
+          <input id="mkHeroImageFile" type="file" accept="image/jpeg,image/png,image/webp" />
+          <span class="cellMuted">JPEG, PNG, or WebP up to 8 MB.</span>
+        </label>
+        ${marketingField("Alt text", "mkHeroImageAlt", ctx.hero.heroImageAlt || "", {
+          highlight: true,
+          hint: "Screen readers and SEO.",
+        })}
+      `, { hint: "Large photo beside the headline." })}
+    `,
+    { active: on("hero") },
+  );
+
+  const featuresPanel = marketingSectionPanel(
+    "features",
+    "Features",
+    "Three text cards below the hero.",
+    `
+      ${marketingField("Section eyebrow", "mkFeaturesEyebrow", ctx.features.eyebrow || "")}
+      ${marketingField("Section title", "mkFeaturesTitle", ctx.features.title || "")}
+      ${[0, 1, 2].map((i) => marketingFieldGroup(`Card ${i + 1}`, `
+        ${marketingField("Title", `mkFeatureTitle${i}`, ctx.cards[i]?.title || "")}
+        ${marketingField("Body", `mkFeatureBody${i}`, ctx.cards[i]?.body || "", { multiline: 3 })}
+        ${i === 0 ? ctx.featureLinkFields : ""}
+      `)).join("")}
+    `,
+    { active: on("features") },
+  );
+
+  const homePanels = isHome ? [
+    marketingSectionPanel("templates", "Song templates", "Occasion template grid on the homepage.", `
+      ${marketingFieldGroup("Section copy", `
+        ${marketingField("Eyebrow", "mkTemplatesEyebrow", ctx.templates.eyebrow || "")}
+        ${marketingField("Title", "mkTemplatesTitle", ctx.templates.title || "")}
+        ${marketingField("Lead", "mkTemplatesLead", ctx.templates.lead || "", { multiline: 2 })}
+        ${marketingField("CTA label", "mkTemplatesCtaLabel", ctx.templates.ctaLabel || "")}
+        ${marketingField("CTA link", "mkTemplatesCtaHref", ctx.templates.ctaHref || "")}
+      `)}
+      ${[0, 1, 2, 3, 4, 5].map((i) => {
+        const card = ctx.templateCards[i] || {};
+        return marketingFieldGroup(`Template card ${i + 1}`, `
+          ${marketingField("Title", `mkTemplateCardTitle${i}`, card.title || "")}
+          ${marketingField("Body", `mkTemplateCardBody${i}`, card.body || "", { multiline: 2 })}
+          ${marketingField("Link", `mkTemplateCardHref${i}`, card.href || "", { hint: "e.g. /app/#/challenges" })}
+          ${marketingField("Image URL", `mkTemplateCardImage${i}`, card.imageUrl || "", { hint: "Optional override; defaults to bundled art." })}
+        `);
+      }).join("")}
+    `, { active: on("templates") }),
+    marketingSectionPanel("collab", "Creators & voices", "Collab section with Apply now and Request a vocalist CTAs.", `
+      ${marketingFieldGroup("Section copy", `
+        ${marketingField("Eyebrow", "mkCollabEyebrow", ctx.collab.eyebrow || "")}
+        ${marketingField("Title", "mkCollabTitle", ctx.collab.title || "")}
+        ${marketingField("Lead", "mkCollabLead", ctx.collab.lead || "", { multiline: 3 })}
+      `)}
+      ${marketingFieldGroup("Call to action", `
+        ${marketingField("Primary button label", "mkCollabCtaPrimaryLabel", ctx.collab.ctaPrimaryLabel || "")}
+        ${marketingField("Primary button link", "mkCollabCtaPrimaryHref", ctx.collab.ctaPrimaryHref || "")}
+        ${marketingField("Secondary button label", "mkCollabCtaSecondaryLabel", ctx.collab.ctaSecondaryLabel || "")}
+        ${marketingField("Secondary button link", "mkCollabCtaSecondaryHref", ctx.collab.ctaSecondaryHref || "")}
+      `)}
+      ${[0, 1].map((i) => {
+        const point = ctx.collabPoints[i] || {};
+        return marketingFieldGroup(`Bullet ${i + 1}`, `
+          ${marketingField("Title", `mkCollabPointTitle${i}`, point.title || "")}
+          ${marketingField("Body", `mkCollabPointBody${i}`, point.body || "", { multiline: 2 })}
+        `);
+      }).join("")}
+      ${marketingFieldGroup("Side image", `
+        ${marketingField("Image URL", "mkCollabImageUrl", ctx.collab.imageUrl || "")}
+        ${marketingField("Alt text", "mkCollabImageAlt", ctx.collab.imageAlt || "")}
+      `)}
+    `, { active: on("collab") }),
+    marketingSectionPanel("discover", "Discover teaser", "Carousel on the homepage — hidden until at least one song is selected.", `
+      ${marketingFieldGroup("Section copy", `
+        ${marketingField("Eyebrow", "mkDiscoverEyebrow", ctx.discover.eyebrow || "")}
+        ${marketingField("Title", "mkDiscoverTitle", ctx.discover.title || "")}
+        ${marketingField("Lead", "mkDiscoverLead", ctx.discover.lead || "", { multiline: 2 })}
+        ${marketingField("CTA label", "mkDiscoverCtaLabel", ctx.discover.ctaLabel || "")}
+        ${marketingField("CTA link", "mkDiscoverCtaHref", ctx.discover.ctaHref || "")}
+      `)}
+      ${marketingFieldGroup("Featured songs", `
+        ${marketingField("Song IDs", "mkDiscoverFeaturedIds", (ctx.discover.featuredSongIds || []).join("\\n"), { multiline: 4, hint: "One public song UUID per line. Order = carousel order." })}
+        <div id="mkDiscoverPicker" class="marketingDiscoverPicker"></div>
+      `, { hint: "Pick from recent publications below, or paste UUIDs manually." })}
+    `, { active: on("discover") }),
+    marketingSectionPanel("pricing", "Pricing", "Free and Pro tier cards on the homepage.", `
+      ${marketingField("Section eyebrow", "mkPricingEyebrow", ctx.pricing.eyebrow || "")}
+      ${marketingField("Section title", "mkPricingTitle", ctx.pricing.title || "")}
+      ${marketingFieldGroup("Free tier", `
+        ${marketingField("Title", "mkPricingFreeTitle", ctx.free.title || "")}
+        ${marketingField("Price label", "mkPricingFreePrice", ctx.free.price || "")}
+        ${marketingField("Body", "mkPricingFreeBody", ctx.free.body || "", { multiline: 3 })}
+        ${marketingField("CTA label", "mkPricingFreeCtaLabel", ctx.free.ctaLabel || "")}
+        ${marketingField("CTA link", "mkPricingFreeCtaHref", ctx.free.ctaHref || "")}
+      `)}
+      ${marketingFieldGroup("Pro tier", `
+        ${marketingField("Title", "mkPricingProTitle", ctx.pro.title || "")}
+        ${marketingField("Price label", "mkPricingProPrice", ctx.pro.price || "")}
+        ${marketingField("Body", "mkPricingProBody", ctx.pro.body || "", { multiline: 3 })}
+        ${marketingField("CTA label", "mkPricingProCtaLabel", ctx.pro.ctaLabel || "")}
+        ${marketingField("CTA link", "mkPricingProCtaHref", ctx.pro.ctaHref || "")}
+      `)}
+    `, { active: on("pricing") }),
+    marketingSectionPanel("footer", "Footer social links", "Icons on the homepage footer.", `
+      <p class="cellMuted mkSectionPanelNote">Leave URL empty to show a muted placeholder.</p>
+      ${["instagram", "facebook", "tiktok", "youtube", "discord"].map((platform) => {
+        const row = ctx.footerSocial.find((it) => it.platform === platform) || { platform, href: "", label: platform };
+        return marketingFieldGroup(platform.charAt(0).toUpperCase() + platform.slice(1), `
+          ${marketingField("URL", `mkSocialHref${platform}`, row.href || "", { hint: "Full https:// link" })}
+          ${marketingField("Accessibility label", `mkSocialLabel${platform}`, row.label || platform, { hint: "Screen reader label" })}
+        `);
+      }).join("")}
+    `, { active: on("footer") }),
+  ].join("") : "";
+
+  const tailPanels = [
+    marketingSectionPanel("faq", "FAQ", "Questions and answers on the page.", `
+      ${marketingField("Section title", "mkFaqTitle", ctx.faq.title || "")}
+      ${marketingField("Section subtitle", "mkFaqLead", ctx.faq.lead || "", { multiline: 2, hint: "Centered line under the FAQ heading." })}
+      ${ctx.faqFields}
+    `, { active: on("faq") }),
+    marketingSectionPanel("related", "Related pages", "Links to other landing pages.", `
+      ${marketingField("Section title", "mkRelatedTitle", ctx.related.title || "")}
+      ${marketingFieldGroup("Links", ctx.relatedFields, { hint: "Up to eight related landing pages." })}
+    `, { active: on("related") }),
+    marketingSectionPanel("final", "Final CTA", "Closing call-to-action strip at the bottom.", `
+      ${marketingField("Title", "mkFinalTitle", ctx.finalCta.title || "")}
+      ${marketingField("Body", "mkFinalBody", ctx.finalCta.body || "", { multiline: 3 })}
+      ${marketingField("Button label", "mkFinalCtaLabel", ctx.finalCta.ctaLabel || "")}
+      ${marketingField("Button link", "mkFinalCtaHref", ctx.finalCta.ctaHref || "")}
+    `, { active: on("final") }),
+    marketingSectionPanel("seo", "SEO", "Browser tab title and Google search snippet.", `
+      ${marketingField("Page title", "mkSeoTitle", ctx.seo.title || "")}
+      ${marketingField("Meta description", "mkSeoDescription", ctx.seo.description || "", { multiline: 3, hint: "Google results and social previews." })}
+    `, { active: on("seo") }),
+    marketingSectionPanel("brand", "Theme · Brand", "Site-wide colors and fonts for every page.", renderMarketingBrandFields(ctx.brand), { active: on("brand") }),
+  ].join("");
+
+  const sections = marketingSectionsForPage(isHome);
+  const nav = sections.map((s) => (
+    `<button type="button" class="mkSectionNavItem${on(s.id) ? " isActive" : ""}" data-marketing-section="${escapeHtml(s.id)}">${escapeHtml(s.label)}</button>`
+  )).join("");
+
+  const activeMeta = sections.find((s) => s.id === activeSection) || sections[0];
+
+  return {
+    nav,
+    panels: heroPanel + featuresPanel + homePanels + tailPanels,
+    activeLabel: activeMeta?.label || "Hero",
+  };
 }
 
 function renderMarketing(data) {
@@ -2779,7 +3018,7 @@ function renderMarketing(data) {
       : "Using defaults (not saved yet)";
   const liveUpdated = data?.publishedAt ? fmtDate(data.publishedAt) : "—";
 
-  const panel = state.marketingPanel || "content";
+  const activeSection = state.marketingSection || "hero";
   const catalog = pageCatalog.length ? pageCatalog : [
     { key: "home", label: "Homepage" },
     { key: "ai-music-generator", label: "AI Music Generator" },
@@ -2798,7 +3037,7 @@ function renderMarketing(data) {
   const faqCount = isHome ? 8 : 3;
   const faqFields = Array.from({ length: faqCount }, (_, i) => {
     const it = faqItems[i] || {};
-    return marketingSubsection(`Question ${i + 1}`, `
+    return marketingFieldGroup(`Question ${i + 1}`, `
       ${marketingField("Question", `mkFaqQ${i}`, it.question || "")}
       ${marketingField("Answer", `mkFaqA${i}`, it.answerHtml || "", { multiline: 3, hint: "Simple HTML allowed for links." })}
     `);
@@ -2821,94 +3060,31 @@ function renderMarketing(data) {
     </div>`;
   }).join("") : "";
 
-  const homeOnlySections = isHome ? `
-      ${marketingDetailCard("Song templates", `
-        ${marketingSubsection("Section copy", `
-          ${marketingField("Eyebrow", "mkTemplatesEyebrow", templates.eyebrow || "")}
-          ${marketingField("Title", "mkTemplatesTitle", templates.title || "")}
-          ${marketingField("Lead", "mkTemplatesLead", templates.lead || "", { multiline: 2 })}
-          ${marketingField("CTA label", "mkTemplatesCtaLabel", templates.ctaLabel || "")}
-          ${marketingField("CTA link", "mkTemplatesCtaHref", templates.ctaHref || "")}
-        `)}
-        ${[0, 1, 2, 3, 4, 5].map((i) => {
-          const card = templateCards[i] || {};
-          return marketingSubsection(`Template card ${i + 1}`, `
-            ${marketingField("Title", `mkTemplateCardTitle${i}`, card.title || "")}
-            ${marketingField("Body", `mkTemplateCardBody${i}`, card.body || "", { multiline: 2 })}
-            ${marketingField("Link", `mkTemplateCardHref${i}`, card.href || "", { hint: "e.g. /app/#/challenges" })}
-            ${marketingField("Image URL", `mkTemplateCardImage${i}`, card.imageUrl || "", { hint: "Optional override; defaults to bundled art." })}
-          `);
-        }).join("")}
-      `, { badge: "Homepage", description: "Occasion template grid on the homepage.", sectionId: "templates" })}
-
-      ${marketingDetailCard("Creators & voices", `
-        ${marketingSubsection("Section copy", `
-          ${marketingField("Eyebrow", "mkCollabEyebrow", collab.eyebrow || "")}
-          ${marketingField("Title", "mkCollabTitle", collab.title || "")}
-          ${marketingField("Lead", "mkCollabLead", collab.lead || "", { multiline: 3 })}
-        `)}
-        ${marketingSubsection("Call to action", `
-          ${marketingField("Primary button label", "mkCollabCtaPrimaryLabel", collab.ctaPrimaryLabel || "")}
-          ${marketingField("Primary button link", "mkCollabCtaPrimaryHref", collab.ctaPrimaryHref || "")}
-          ${marketingField("Secondary button label", "mkCollabCtaSecondaryLabel", collab.ctaSecondaryLabel || "")}
-          ${marketingField("Secondary button link", "mkCollabCtaSecondaryHref", collab.ctaSecondaryHref || "")}
-        `)}
-        ${[0, 1].map((i) => {
-          const point = collabPoints[i] || {};
-          return marketingSubsection(`Bullet ${i + 1}`, `
-            ${marketingField("Title", `mkCollabPointTitle${i}`, point.title || "")}
-            ${marketingField("Body", `mkCollabPointBody${i}`, point.body || "", { multiline: 2 })}
-          `);
-        }).join("")}
-        ${marketingSubsection("Side image", `
-          ${marketingField("Image URL", "mkCollabImageUrl", collab.imageUrl || "")}
-          ${marketingField("Alt text", "mkCollabImageAlt", collab.imageAlt || "")}
-        `)}
-      `, { badge: "Homepage", description: "Collab section with Apply now and Request a vocalist CTAs.", sectionId: "collab" })}
-
-      ${marketingDetailCard("Discover teaser", `
-        ${marketingSubsection("Section copy", `
-          ${marketingField("Eyebrow", "mkDiscoverEyebrow", discover.eyebrow || "")}
-          ${marketingField("Title", "mkDiscoverTitle", discover.title || "")}
-          ${marketingField("Lead", "mkDiscoverLead", discover.lead || "", { multiline: 2 })}
-          ${marketingField("CTA label", "mkDiscoverCtaLabel", discover.ctaLabel || "")}
-          ${marketingField("CTA link", "mkDiscoverCtaHref", discover.ctaHref || "")}
-        `)}
-        ${marketingSubsection("Featured songs", `
-          ${marketingField("Song IDs", "mkDiscoverFeaturedIds", (discover.featuredSongIds || []).join("\\n"), { multiline: 4, hint: "One public song UUID per line. Order = carousel order." })}
-          <div id="mkDiscoverPicker" class="marketingDiscoverPicker"></div>
-        `, { description: "Pick from recent publications below, or paste UUIDs manually." })}
-      `, { badge: "Homepage", description: "Carousel on the homepage — hidden until at least one song is selected.", sectionId: "discover" })}
-
-      ${marketingDetailCard("Pricing", `
-        ${marketingField("Section eyebrow", "mkPricingEyebrow", pricing.eyebrow || "")}
-        ${marketingField("Section title", "mkPricingTitle", pricing.title || "")}
-        ${marketingSubsection("Free tier", `
-          ${marketingField("Title", "mkPricingFreeTitle", free.title || "")}
-          ${marketingField("Price label", "mkPricingFreePrice", free.price || "")}
-          ${marketingField("Body", "mkPricingFreeBody", free.body || "", { multiline: 3 })}
-          ${marketingField("CTA label", "mkPricingFreeCtaLabel", free.ctaLabel || "")}
-          ${marketingField("CTA link", "mkPricingFreeCtaHref", free.ctaHref || "")}
-        `)}
-        ${marketingSubsection("Pro tier", `
-          ${marketingField("Title", "mkPricingProTitle", pro.title || "")}
-          ${marketingField("Price label", "mkPricingProPrice", pro.price || "")}
-          ${marketingField("Body", "mkPricingProBody", pro.body || "", { multiline: 3 })}
-          ${marketingField("CTA label", "mkPricingProCtaLabel", pro.ctaLabel || "")}
-          ${marketingField("CTA link", "mkPricingProCtaHref", pro.ctaHref || "")}
-        `)}
-      `, { badge: "Homepage", sectionId: "pricing" })}
-
-      ${marketingDetailCard("Footer social links", `
-        <p class="cellMuted marketingInlineNote">Icons appear on the homepage footer. Leave URL empty to show a muted placeholder.</p>
-        ${["instagram", "facebook", "tiktok", "youtube", "discord"].map((platform) => {
-          const row = footerSocial.find((it) => it.platform === platform) || { platform, href: "", label: platform };
-          return marketingSubsection(platform.charAt(0).toUpperCase() + platform.slice(1), `
-            ${marketingField("URL", `mkSocialHref${platform}`, row.href || "", { hint: "Full https:// link" })}
-            ${marketingField("Accessibility label", `mkSocialLabel${platform}`, row.label || platform, { hint: "Screen reader label" })}
-          `);
-        }).join("")}
-      `, { badge: "Homepage", sectionId: "footer" })}` : "";
+  const editorSections = buildMarketingEditorSections({
+    activeSection,
+    isHome,
+    hero,
+    features,
+    cards,
+    templates,
+    templateCards,
+    collab,
+    collabPoints,
+    discover,
+    pricing,
+    free,
+    pro,
+    footer,
+    footerSocial,
+    faq,
+    related,
+    relatedFields,
+    finalCta,
+    seo,
+    faqFields,
+    featureLinkFields,
+    brand: c.brand || {},
+  });
 
   els.panels.marketing.innerHTML = adminPageStack(`
     <div class="mkEditorRoot">
@@ -2918,7 +3094,7 @@ function renderMarketing(data) {
           <span class="mkEditorModeBadge">Draft</span>
           <label class="mkEditorPagePick">
             <span class="srOnly">Page</span>
-            <select id="mkPageSelect" class="mkEditorPageSelect"${panel === "brand" ? " disabled" : ""}>${pageNavItems}</select>
+            <select id="mkPageSelect" class="mkEditorPageSelect">${pageNavItems}</select>
           </label>
           <div class="mkEditorLocaleToggle">
             <button type="button" class="btnGhost btnSm" data-marketing-locale="en"${locale === "en" ? " disabled" : ""}>EN</button>
@@ -2937,87 +3113,14 @@ function renderMarketing(data) {
 
       <div class="mkEditorLayout">
         <nav class="mkSectionNav" aria-label="Page sections">
-          <button type="button" class="mkSectionNavItem${panel === "brand" ? " isActive" : ""}" data-marketing-panel="brand">Brand</button>
-          <button type="button" class="mkSectionNavItem${panel === "content" ? " isActive" : ""}" data-marketing-panel="content">Content</button>
-          ${panel === "content" ? `
-          <div class="mkSectionNavGroup">Sections</div>
-          <button type="button" class="mkSectionNavItem mkSectionNavItem--sub" data-scroll-section="hero">Hero</button>
-          <button type="button" class="mkSectionNavItem mkSectionNavItem--sub" data-scroll-section="features">Features</button>
-          ${isHome ? `
-          <button type="button" class="mkSectionNavItem mkSectionNavItem--sub" data-scroll-section="templates">Templates</button>
-          <button type="button" class="mkSectionNavItem mkSectionNavItem--sub" data-scroll-section="collab">Creators</button>
-          <button type="button" class="mkSectionNavItem mkSectionNavItem--sub" data-scroll-section="discover">Discover</button>
-          <button type="button" class="mkSectionNavItem mkSectionNavItem--sub" data-scroll-section="pricing">Pricing</button>
-          <button type="button" class="mkSectionNavItem mkSectionNavItem--sub" data-scroll-section="footer">Footer</button>` : ""}
-          <button type="button" class="mkSectionNavItem mkSectionNavItem--sub" data-scroll-section="faq">FAQ</button>
-          <button type="button" class="mkSectionNavItem mkSectionNavItem--sub" data-scroll-section="related">Related</button>
-          <button type="button" class="mkSectionNavItem mkSectionNavItem--sub" data-scroll-section="final">Final CTA</button>
-          <button type="button" class="mkSectionNavItem mkSectionNavItem--sub" data-scroll-section="seo">SEO</button>` : ""}
+          <p class="mkSectionNavLabel">Sections on this page</p>
+          ${editorSections.nav}
         </nav>
 
         <div class="mkEditorForm marketingEditor">
-          ${panel === "brand" ? renderMarketingBrandPanel(c.brand) : `
-      ${marketingDetailCard("Hero", `
-        ${marketingSubsection("Headline & copy", `
-          ${marketingField("Eyebrow", "mkHeroEyebrow", hero.eyebrow || "")}
-          ${marketingField("Headline", "mkHeroTitle", hero.title || "")}
-          ${marketingField("Lead paragraph", "mkHeroLead", hero.lead || "", { multiline: 4 })}
-        `, { open: true })}
-        ${marketingSubsection("Call to action", `
-          ${marketingField("Primary button label", "mkHeroCtaLabel", hero.ctaLabel || "")}
-          ${marketingField("Primary button link", "mkHeroCtaHref", hero.ctaHref || "", { hint: "e.g. /app/#/intro" })}
-          ${marketingField("Secondary link label", "mkHeroSecondaryLabel", hero.secondaryLabel || "")}
-          ${marketingField("Secondary link URL", "mkHeroSecondaryHref", hero.secondaryHref || "")}
-        `)}
-        ${marketingSubsection("Hero photo", `
-          ${marketingField("Image URL", "mkHeroImageUrl", hero.heroImageUrl || "", { hint: "Paste a URL or upload below." })}
-          <label class="field marketingField">
-            <span>Upload new image</span>
-            <input id="mkHeroImageFile" type="file" accept="image/jpeg,image/png,image/webp" />
-            <span class="cellMuted">JPEG, PNG, or WebP up to 8 MB.</span>
-          </label>
-          ${marketingField("Alt text", "mkHeroImageAlt", hero.heroImageAlt || "", {
-            highlight: true,
-            hint: "Screen readers and SEO.",
-          })}
-        `, { description: "Large photo beside the headline." })}
-      `, { description: "Top of the page — headline, buttons, and hero image.", sectionId: "hero" })}
-
-      ${marketingDetailCard("Features", `
-        ${marketingField("Section eyebrow", "mkFeaturesEyebrow", features.eyebrow || "")}
-        ${marketingField("Section title", "mkFeaturesTitle", features.title || "")}
-        ${[0, 1, 2].map((i) => marketingSubsection(`Card ${i + 1}`, `
-          ${marketingField("Title", `mkFeatureTitle${i}`, cards[i]?.title || "")}
-          ${marketingField("Body", `mkFeatureBody${i}`, cards[i]?.body || "", { multiline: 3 })}
-          ${i === 0 ? featureLinkFields : ""}
-        `)).join("")}
-      `, { description: "Three text cards below the hero.", sectionId: "features" })}
-
-      ${homeOnlySections}
-
-      ${marketingDetailCard("FAQ", `
-        ${marketingField("Section title", "mkFaqTitle", faq.title || "")}
-        ${marketingField("Section subtitle", "mkFaqLead", faq.lead || "", { multiline: 2, hint: "Centered line under the FAQ heading." })}
-        ${faqFields}
-      `, { sectionId: "faq" })}
-
-      ${marketingDetailCard("Related pages", `
-        ${marketingField("Section title", "mkRelatedTitle", related.title || "")}
-        ${marketingSubsection("Links", relatedFields, { description: "Up to eight related landing pages." })}
-      `, { sectionId: "related" })}
-
-      ${marketingDetailCard("Final CTA band", `
-        ${marketingField("Title", "mkFinalTitle", finalCta.title || "")}
-        ${marketingField("Body", "mkFinalBody", finalCta.body || "", { multiline: 3 })}
-        ${marketingField("Button label", "mkFinalCtaLabel", finalCta.ctaLabel || "")}
-        ${marketingField("Button link", "mkFinalCtaHref", finalCta.ctaHref || "")}
-      `, { description: "Closing call-to-action strip at the bottom of the page.", sectionId: "final" })}
-
-      ${marketingDetailCard("SEO", `
-        ${marketingField("Page title", "mkSeoTitle", seo.title || "")}
-        ${marketingField("Meta description", "mkSeoDescription", seo.description || "", { multiline: 3, hint: "Google results and social previews." })}
-      `, { description: "Browser tab title and search snippet.", sectionId: "seo" })}
-          `}
+          <p class="mkEditorFormHint">Click a section on the left — its fields appear here. The right preview updates as you type.</p>
+          <h2 id="mkActiveSectionTitle" class="mkActiveSectionTitle">${escapeHtml(editorSections.activeLabel)}</h2>
+          ${editorSections.panels}
         </div>
 
         <div class="mkPreviewCol">
@@ -3044,7 +3147,7 @@ function renderMarketing(data) {
   `, { plain: true });
   bindMarketingDraftPreviewListeners();
   bindMarketingColorFields();
-  if (isHome) void bindMarketingDiscoverPicker();
+  if (activeSection === "discover") void bindMarketingDiscoverPicker();
 }
 
 function bindMarketingColorFields() {
@@ -3447,9 +3550,6 @@ async function loadView({ force = false } = {}) {
     if (view === "marketing") {
       if (state.marketingScreen === "hub") {
         data = await marketingAdminFetchOverview();
-      } else if (state.marketingPanel === "brand") {
-        data = await marketingAdminFetch("home", "en");
-        data.page = "home";
       } else {
         data = await marketingAdminFetch(state.marketingPage || "home", state.marketingLocale || "en");
         data.page = state.marketingPage || "home";
@@ -3944,7 +4044,7 @@ document.body.addEventListener("click", (e) => {
   const marketingEditDraftBtn = e.target.closest("[data-marketing-edit-draft]");
   if (marketingEditDraftBtn) {
     state.marketingScreen = "editor";
-    state.marketingPanel = "content";
+    state.marketingSection = "hero";
     void loadView({ force: true });
     return;
   }
@@ -3955,7 +4055,7 @@ document.body.addEventListener("click", (e) => {
     if (page) {
       state.marketingScreen = "editor";
       state.marketingPage = page;
-      state.marketingPanel = "content";
+      state.marketingSection = "hero";
       void loadView({ force: true });
     }
     return;
@@ -3987,11 +4087,9 @@ document.body.addEventListener("click", (e) => {
     return;
   }
 
-  const marketingScrollBtn = e.target.closest("[data-scroll-section]");
-  if (marketingScrollBtn) {
-    const section = marketingScrollBtn.dataset.scrollSection;
-    const el = document.getElementById(`mkSection-${section}`);
-    if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+  const marketingSectionBtn = e.target.closest("[data-marketing-section]");
+  if (marketingSectionBtn) {
+    showMarketingSection(marketingSectionBtn.dataset.marketingSection);
     return;
   }
 
@@ -4000,18 +4098,7 @@ document.body.addEventListener("click", (e) => {
     const page = marketingPageBtn.dataset.marketingPage;
     if (page && page !== state.marketingPage) {
       state.marketingPage = page;
-      state.marketingPanel = "content";
-      void loadView({ force: true });
-    }
-    return;
-  }
-
-  const marketingPanelBtn = e.target.closest("[data-marketing-panel]");
-  if (marketingPanelBtn) {
-    const panel = marketingPanelBtn.dataset.marketingPanel;
-    if (panel && panel !== state.marketingPanel) {
-      state.marketingPanel = panel;
-      if (panel === "brand") state.marketingPage = "home";
+      state.marketingSection = "hero";
       void loadView({ force: true });
     }
     return;
@@ -4061,11 +4148,11 @@ document.body.addEventListener("click", (e) => {
         msg.className = "grantMsg warn";
       }
       try {
-        const savePage = state.marketingPanel === "brand" ? "home" : (state.marketingPage || "home");
-        const saveLocale = state.marketingPanel === "brand" ? "en" : (state.marketingLocale || "en");
+        const savePage = state.marketingSection === "brand" ? "home" : (state.marketingPage || "home");
+        const saveLocale = state.marketingSection === "brand" ? "en" : (state.marketingLocale || "en");
         let content = null;
         if (action !== "discard") {
-          if (state.marketingPanel === "brand") {
+          if (state.marketingSection === "brand") {
             content = { ...(state.marketingLoadedContent || {}), brand: readMarketingBrandForm() };
           } else {
             content = readMarketingFormContent(savePage);
@@ -4115,10 +4202,10 @@ document.body.addEventListener("click", (e) => {
         msg.className = "grantMsg warn";
       }
       try {
-        const savePage = state.marketingPanel === "brand" ? "home" : (state.marketingPage || "home");
-        const saveLocale = state.marketingPanel === "brand" ? "en" : (state.marketingLocale || "en");
+        const savePage = state.marketingSection === "brand" ? "home" : (state.marketingPage || "home");
+        const saveLocale = state.marketingSection === "brand" ? "en" : (state.marketingLocale || "en");
         let content;
-        if (state.marketingPanel === "brand") {
+        if (state.marketingSection === "brand") {
           content = { ...(state.marketingLoadedContent || {}), brand: readMarketingBrandForm() };
         } else {
           content = readMarketingFormContent(savePage);
@@ -4445,7 +4532,7 @@ document.body.addEventListener("click", (e) => {
 document.body.addEventListener("change", (e) => {
   if (e.target.id === "mkPageSelect") {
     state.marketingPage = e.target.value || "home";
-    state.marketingPanel = "content";
+    state.marketingSection = "hero";
     void loadView({ force: true });
     return;
   }

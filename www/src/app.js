@@ -216,7 +216,7 @@ import { MUSIC_VIDEO_FEATURE_ENABLED } from "./feature-flags.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260817-035048";
+const APP_BUILD = "20260817-103205";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -41440,7 +41440,7 @@ function buildProofComposition(post) {
   }
 
   let inspiration = "";
-  if (mode === "photo" || meta.imageUrl || meta.photoMode) {
+  if (trackUsedPhotoMood({ meta, kind: post?.kind })) {
     inspiration = "From a user photo";
   } else if (mode === "hum") {
     inspiration = "From a hummed melody";
@@ -41468,19 +41468,41 @@ function buildProofComposition(post) {
   };
 }
 
-/** Tag the engine row with friendly NabadAi-first wording. We hide
- *  the raw Suno model code (e.g. `chirp-v3-5`) behind a neutral
- *  label so the certificate reads as a NabadAi product, not a
- *  passthrough. The exact model is still in `meta.proof.model` if
- *  someone needs it for support. */
-function buildProofEngineLabel(post) {
-  const raw = String(post?.proof?.model || LATEST_SUNO_MODEL || "").trim();
-  if (!raw) return "NabadAi";
-  const upper = raw.toUpperCase();
-  if (/^V?\d/.test(upper) || upper.startsWith("CHIRP")) {
-    return `NabadAi · ${upper.replace(/^CHIRP-/, "Chirp ")}`;
-  }
-  return `NabadAi · ${raw}`;
+function trackUsedPhotoMood(track) {
+  return isPhotoMoodTrack(track);
+}
+
+/** Public: NabadAI. Admin: provider + model (+ lyrics engine when relevant). */
+function buildProofEngineLabel(post, { admin = false } = {}) {
+  if (!admin) return "NabadAI";
+  const meta = post?.meta && typeof post.meta === "object" ? post.meta : {};
+  const provider = String(
+    meta.musicProvider || meta.provider || post?.proof?.musicProvider || getMusicProviderPref() || "suno",
+  )
+    .trim()
+    .toLowerCase();
+  const model = String(meta.model || post?.proof?.model || LATEST_SUNO_MODEL || "").trim();
+  const lyricsEngine = String(meta.engine || "").trim();
+
+  const providerLabel =
+    provider === "lyria"
+      ? "Lyria"
+      : provider === "elevenlabs"
+        ? "ElevenLabs"
+        : provider === "minimax"
+          ? "MiniMax"
+          : provider === "suno"
+            ? "Suno"
+            : provider.charAt(0).toUpperCase() + provider.slice(1);
+
+  const modelSuffix =
+    model && (!provider || provider === "suno")
+      ? ` ${model.replace(/^CHIRP-/i, "Chirp ").replace(/^v/i, "V")}`
+      : "";
+  let label = `NabadAI · ${providerLabel}${modelSuffix}`;
+  if (lyricsEngine === "gemini_drafted") label += " · Gemini lyrics";
+  else if (lyricsEngine === "voice_clip") label += " · Voice clip";
+  return label;
 }
 
 function openProofModal(post) {
@@ -41528,7 +41550,7 @@ function openProofModal(post) {
 
   // Technical / fingerprint — owner-only, collapsed by default so a
   // screenshot for IG looks clean unless the creator opens it.
-  setTxt("proofValEngine", buildProofEngineLabel(p));
+  setTxt("proofValEngine", buildProofEngineLabel(p, { admin: creditsState.isAdmin }));
   setTxt("proofValMode", String(p?.proof?.mode || p?.kind || "full"));
   const fp = String(p?.proof?.promptHash || "").trim();
   setTxt("proofValFingerprint", fp ? `#${fp}` : "—");
@@ -41722,6 +41744,7 @@ async function shareToHub(track) {
     createdAt: Date.now(),
     mode: track?.meta?.mode || track?.kind || "full",
     model: track?.meta?.model || LATEST_SUNO_MODEL,
+    musicProvider: String(track?.meta?.musicProvider || "suno").trim().toLowerCase(),
     promptHash: btoa(unescape(encodeURIComponent(String(track?.meta?.finalPrompt || track?.meta?.lyricsInput || track?.title || ""))))
       .slice(0, 16),
   };
@@ -49943,13 +49966,13 @@ function renderAboutThisSong({ track, title, subtitle, lyrics, owner = false } =
   // voice/melody reference, photo signals for image-inspired, else NabadAI.
   const usedReference = Boolean(meta.hasReference);
   const refOrigin = String(meta.vocalRefOrigin || "").toLowerCase();
-  const usedPhoto = Boolean(meta.photoMode || meta.imageUrl || meta.imageOnlyInstrumental) || mode.includes("photo") || mode.includes("image");
+  const usedPhotoMood = track ? trackUsedPhotoMood(track) : false;
   let composition;
   if (usedReference) {
     if (refOrigin === "upload") composition = "Built on your uploaded audio";
     else if (refOrigin === "remix") composition = "Remixed from another song";
     else composition = "From your voice reference"; // recorded / hummed melody
-  } else if (usedPhoto) {
+  } else if (usedPhotoMood) {
     composition = "Composed by NabadAI · inspired by your photo";
   } else {
     composition = "Composed by NabadAI";
@@ -49979,7 +50002,7 @@ function renderAboutThisSong({ track, title, subtitle, lyrics, owner = false } =
         track?.publicOnProfile ? songDetailsFlatRow("Mashup allowed", trackAllowsMashup(track) ? "Yes" : "No") : "",
         remixSummary ? songDetailsFlatRow("Remix source", remixSummary) : "",
         releaseCaption ? songDetailsFlatRow("Release note", releaseCaption) : "",
-        songDetailsFlatRow("Engine", buildProofEngineLabel(postLike)),
+        songDetailsFlatRow("Engine", buildProofEngineLabel(postLike, { admin: creditsState.isAdmin })),
       ].filter(Boolean).join("")
     : (remixSummary ? songDetailsFlatRow("Remix source", remixSummary) : "");
 
@@ -57363,6 +57386,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
         voiceProfile: (els.sunoVoiceProfile?.value || "").trim(),
         singerGender: (els.sunoSingerGender?.value || "").trim(),
         model: payload.model,
+        musicProvider: getMusicProviderPref(),
         imageOnlyInstrumental,
         instrumentalSelected,
         referenceInstrumentalOnly,
@@ -57623,6 +57647,12 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       );
 
       sunoTaskId = extractTaskIdLoose(data);
+      if (lastGenerationMeta && data?._provider) {
+        lastGenerationMeta = {
+          ...lastGenerationMeta,
+          musicProvider: String(data._provider).trim().toLowerCase(),
+        };
+      }
       if (sunoTaskId && personaIdSel) {
         try { markPersonaGenerationUsed(personaIdSel); } catch {}
       }
@@ -60539,7 +60569,7 @@ if (els.btnDownloadProof) {
     const ts = currentProofPost?.ts ? new Date(currentProofPost.ts) : new Date();
     const fp = proofFingerprintText(currentProofPost) || "—";
     const comp = buildProofComposition(currentProofPost);
-    const engine = buildProofEngineLabel(currentProofPost);
+    const engine = buildProofEngineLabel(currentProofPost, { admin: creditsState.isAdmin });
     const mode = String(currentProofPost?.proof?.mode || currentProofPost?.kind || "full");
     const compRow = (label, value) => value
       ? `<p style="margin:10px 0"><strong style="color:rgba(232,238,247,0.46);font-size:11px;text-transform:uppercase;letter-spacing:0.08em;">${escapeHtml(label)}</strong><br/><span style="font-size:14px;">${escapeHtml(value)}</span></p>`

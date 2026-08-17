@@ -8,7 +8,7 @@
  * Env:
  * - MINIMAX_API_KEY, MINIMAX_KEY_KIND, MINIMAX_MUSIC_MODEL, MINIMAX_GENERATE_ENABLED
  * - GEMINI_API_KEY / GOOGLE_API_KEY, LYRIA_MUSIC_MODEL, LYRIA_GENERATE_ENABLED
- * - ELEVENLABS_API_KEY, ELEVENLABS_MUSIC_MODEL, ELEVENLABS_MUSIC_LENGTH_MS, ELEVENLABS_GENERATE_ENABLED
+ * - ELEVENLABS_API_KEY, ELEVENLABS_MUSIC_MODEL, ELEVENLABS_MUSIC_LENGTH_MS, ELEVENLABS_FINETUNE_ID, ELEVENLABS_GENERATE_ENABLED
  */
 const crypto = require("crypto");
 const {
@@ -37,6 +37,7 @@ const {
   elevenlabsGenerateMusic,
   resolveElevenMusicLengthMs,
   resolveElevenMusicModel,
+  resolveElevenFinetuneId,
 } = require("../_lib/elevenlabs-music-upstream");
 const {
   saveMusicProviderTaskStatus,
@@ -593,6 +594,7 @@ async function handleElevenlabsGenerate(req, res, { user, isAdmin, body }) {
   const audioId = `${taskId}_a`;
   const model = resolveElevenMusicModel(body?.elevenlabsModel);
   const musicLengthMs = resolveElevenMusicLengthMs(body?.musicLengthMs);
+  const finetuneId = resolveElevenFinetuneId(body?.elevenlabsFinetuneId);
 
   queueLogMusicGeneration({
     userId: user.userId,
@@ -625,6 +627,7 @@ async function handleElevenlabsGenerate(req, res, { user, isAdmin, body }) {
     model,
     musicLengthMs,
     instrumental,
+    finetuneId,
   });
 
   if (!upstream.ok) {
@@ -681,6 +684,7 @@ async function handleElevenlabsGenerate(req, res, { user, isAdmin, body }) {
     data: { taskId, audioId, audioUrl, audio_url: audioUrl, status: "SUCCESS" },
     _provider: "elevenlabs",
     _model: model,
+    _finetuneId: finetuneId || undefined,
     _ready: true,
     _variantCount: 1,
     _credits: {

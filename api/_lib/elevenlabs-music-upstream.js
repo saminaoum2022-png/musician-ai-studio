@@ -30,6 +30,13 @@ function resolveElevenMusicLengthMs(explicit) {
   return Math.max(3000, Math.min(600000, Math.round(n)));
 }
 
+/** Music finetune id (ftn_…) — e.g. ElevenLabs "NabadAi DNA" voice model. */
+function resolveElevenFinetuneId(explicit) {
+  const env = String(process.env.ELEVENLABS_FINETUNE_ID || "").trim();
+  const id = String(explicit || env || "").trim();
+  return id || null;
+}
+
 function splitLyricLines(text) {
   return String(text || "")
     .split(/\r?\n/)
@@ -81,17 +88,26 @@ function elevenUserMessage(httpStatus, payload, rawText) {
 }
 
 /**
- * @param {{ apiKey: string, prompt: string, model?: string, musicLengthMs?: number, instrumental?: boolean }} opts
+ * @param {{ apiKey: string, prompt: string, model?: string, musicLengthMs?: number, instrumental?: boolean, finetuneId?: string }} opts
  */
-async function elevenlabsGenerateMusic({ apiKey, prompt, model, musicLengthMs, instrumental = false }) {
+async function elevenlabsGenerateMusic({
+  apiKey,
+  prompt,
+  model,
+  musicLengthMs,
+  instrumental = false,
+  finetuneId,
+}) {
   const resolvedModel = resolveElevenMusicModel(model);
   const lengthMs = resolveElevenMusicLengthMs(musicLengthMs);
+  const resolvedFinetuneId = resolveElevenFinetuneId(finetuneId);
   const url = `${ELEVEN_MUSIC_URL}?output_format=mp3_48000_192`;
   const body = {
     prompt: String(prompt || "").trim(),
     model_id: resolvedModel,
     music_length_ms: lengthMs,
     ...(instrumental ? { force_instrumental: true } : {}),
+    ...(resolvedFinetuneId ? { finetune_id: resolvedFinetuneId } : {}),
   };
 
   const r = await fetch(url, {
@@ -114,6 +130,7 @@ async function elevenlabsGenerateMusic({ apiKey, prompt, model, musicLengthMs, i
       audio: { buffer, mimeType: "audio/mpeg" },
       model: resolvedModel,
       musicLengthMs: lengthMs,
+      finetuneId: resolvedFinetuneId || undefined,
       userMessage: buffer.length >= 128 ? "" : "ElevenLabs returned empty audio.",
     };
   }
@@ -127,6 +144,7 @@ async function elevenlabsGenerateMusic({ apiKey, prompt, model, musicLengthMs, i
     text,
     model: resolvedModel,
     musicLengthMs: lengthMs,
+    finetuneId: resolvedFinetuneId || undefined,
     userMessage: elevenUserMessage(r.status, data, text),
   };
 }
@@ -138,4 +156,5 @@ module.exports = {
   elevenUserMessage,
   resolveElevenMusicLengthMs,
   resolveElevenMusicModel,
+  resolveElevenFinetuneId,
 };

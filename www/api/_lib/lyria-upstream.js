@@ -119,6 +119,9 @@ async function lyriaGenerateMusic({ apiKey, model, prompt }) {
     },
     body: JSON.stringify({
       contents: [{ role: "user", parts: [{ text: String(prompt || "").trim() }] }],
+      generationConfig: {
+        responseModalities: ["AUDIO", "TEXT"],
+      },
     }),
   });
   const text = await r.text().catch(() => "");

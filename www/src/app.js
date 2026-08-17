@@ -2676,7 +2676,11 @@ function apiFetch(path, opts = {}) {
     return (async () => {
       const native = await tryNative();
       if (native && Number(native.status) > 0) return native;
-      return fetch(url, init);
+      throw new Error(
+        native == null
+          ? "Connection lost while the server was composing — try again on Wi‑Fi with the app open."
+          : "Generation request failed — try again.",
+      );
     })();
   }
 
@@ -18565,7 +18569,8 @@ function resolveSunoFailureFromApi(dd) {
   return interpretSunoFailure({
     ...upstreamPayload,
     errorMessage:
-      upstreamPayload?.msg
+      dd?.error
+      || upstreamPayload?.msg
       || upstreamPayload?.message
       || upstreamPayload?.error
       || upstreamPayload?.errorMessage
@@ -57852,7 +57857,9 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
         let failMsg = String(e?.message || "Something went wrong — please try again.").trim();
         if (
           useAltMusicProvider() &&
-          /failed to fetch|load failed|networkerror|network request failed|aborted/i.test(failMsg)
+          /failed to fetch|load failed|networkerror|network request failed|aborted|connection lost|timed out|timeout/i.test(
+            failMsg,
+          )
         ) {
           const providerLabel =
             getMusicProviderPref() === "lyria"
@@ -57860,7 +57867,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
               : getMusicProviderPref() === "elevenlabs"
                 ? "ElevenLabs"
                 : "MiniMax";
-          failMsg = `${providerLabel} needs 1–3 minutes to compose. Keep the app open and try again — if this keeps happening, update the app.`;
+          failMsg = `${providerLabel} lost connection while composing (often 2–3 min). Stay on this screen on Wi‑Fi and try again.`;
         }
         setStatus(`Generation failed: ${failMsg}`);
         try {

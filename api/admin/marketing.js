@@ -1,6 +1,7 @@
 /**
- * GET  /api/admin/marketing?page=home&locale=en — load editable content
- * PUT  /api/admin/marketing — save { page, locale, content }
+ * GET  /api/admin/marketing?overview=1 — site-wide live/draft status
+ * GET  /api/admin/marketing?page=home&locale=en — load editable draft (or live)
+ * PUT  /api/admin/marketing — save draft { action: "draft" | "publish" | "discard" | "publish_all" }
  * POST /api/admin/marketing — upload hero image { filename, contentType, dataBase64 }
  *
  * Requires admin dashboard access (marketing view — Owner / Admin only).
@@ -13,7 +14,14 @@ const {
   adminUnauthorized,
 } = require("../_lib/admin-auth");
 const { LOCALES, PAGE_KEYS, PAGE_CATALOG, isSeoPage } = require("../_lib/marketing-content");
-const { loadMarketingContent, saveMarketingContent } = require("../_lib/marketing-store");
+const {
+  loadMarketingAdminContent,
+  getMarketingSiteOverview,
+  saveMarketingDraft,
+  publishMarketingContent,
+  publishAllMarketingDrafts,
+  discardMarketingDraft,
+} = require("../_lib/marketing-store");
 const { uploadObject } = require("../_lib/supabase-storage");
 const { marketingHeroImageApiPath } = require("../_lib/marketing-hero-image");
 
@@ -59,11 +67,18 @@ module.exports = async function handler(req, res) {
   }
 
   if (req.method === "GET") {
+    const url = new URL(req.url || "/", "http://localhost");
+    if (url.searchParams.get("overview") === "1") {
+      const overview = await getMarketingSiteOverview();
+      if (!overview.ok) return sendJson(res, overview.status || 500, { error: overview.error });
+      return sendJson(res, 200, { ok: true, ...overview });
+    }
+
     const { page, locale } = parsePageLocale({}, req.url);
     if (!PAGE_KEYS.includes(page)) return sendJson(res, 400, { error: "Unsupported page." });
     if (!LOCALES.includes(locale)) return sendJson(res, 400, { error: "Unsupported locale." });
 
-    const data = await loadMarketingContent(page, locale, { includeUnpublished: true });
+    const data = await loadMarketingAdminContent(page, locale);
     if (!data.ok) return sendJson(res, data.status || 500, { error: data.error });
 
     return sendJson(res, 200, {
@@ -71,8 +86,12 @@ module.exports = async function handler(req, res) {
       page: data.page,
       locale: data.locale,
       content: data.content,
+      liveContent: data.liveContent,
+      hasDraftChanges: data.hasDraftChanges,
       source: data.source,
       updatedAt: data.updatedAt,
+      draftUpdatedAt: data.draftUpdatedAt,
+      publishedAt: data.publishedAt,
       pages: PAGE_CATALOG,
       pageKeys: PAGE_KEYS,
       locales: LOCALES,
@@ -81,11 +100,60 @@ module.exports = async function handler(req, res) {
 
   if (req.method === "PUT") {
     const body = await readJsonBody(req);
+    const action = String(body?.action || "draft").trim().toLowerCase();
     const { page, locale } = parsePageLocale(body || {}, req.url);
+
+    if (action === "publish_all") {
+      const result = await publishAllMarketingDrafts({ userId: admin.userId });
+      if (!result.ok) return sendJson(res, result.status || 500, { error: result.error });
+      return sendJson(res, 200, {
+        ok: true,
+        action: "publish_all",
+        publishedCount: result.publishedCount,
+        pages: result.pages,
+      });
+    }
+
     if (!PAGE_KEYS.includes(page)) return sendJson(res, 400, { error: "Unsupported page." });
     if (!LOCALES.includes(locale)) return sendJson(res, 400, { error: "Unsupported locale." });
 
-    const saved = await saveMarketingContent({
+    if (action === "discard") {
+      const result = await discardMarketingDraft({ pageKey: page, locale, userId: admin.userId });
+      if (!result.ok) return sendJson(res, result.status || 500, { error: result.error });
+      return sendJson(res, 200, {
+        ok: true,
+        action: "discard",
+        page: result.page,
+        locale: result.locale,
+        content: result.content,
+        hasDraftChanges: false,
+      });
+    }
+
+    if (action === "publish") {
+      const result = await publishMarketingContent({
+        pageKey: page,
+        locale,
+        userId: admin.userId,
+        content: body?.content ?? null,
+      });
+      if (!result.ok) return sendJson(res, result.status || 500, { error: result.error });
+      return sendJson(res, 200, {
+        ok: true,
+        action: "publish",
+        page: result.page,
+        locale: result.locale,
+        content: result.content,
+        publishedAt: result.publishedAt,
+        hasDraftChanges: false,
+        heroImageApiPath:
+          result.page === "home" || isSeoPage(result.page)
+            ? marketingHeroImageApiPath(result.page, result.locale)
+            : null,
+      });
+    }
+
+    const saved = await saveMarketingDraft({
       pageKey: page,
       locale,
       content: body?.content,
@@ -95,14 +163,12 @@ module.exports = async function handler(req, res) {
 
     return sendJson(res, 200, {
       ok: true,
+      action: "draft",
       page: saved.page,
       locale: saved.locale,
       content: saved.content,
-      updatedAt: saved.updatedAt,
-      heroImageApiPath:
-        saved.page === "home" || isSeoPage(saved.page)
-          ? marketingHeroImageApiPath(saved.page, saved.locale)
-          : null,
+      draftUpdatedAt: saved.draftUpdatedAt,
+      hasDraftChanges: saved.hasDraftChanges,
     });
   }
 

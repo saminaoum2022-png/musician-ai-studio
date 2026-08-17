@@ -94,7 +94,7 @@
     var bar = document.createElement("div");
     bar.id = "nabadMarketingDraftBanner";
     bar.className = "marketingDraftBanner";
-    bar.textContent = "Draft preview — not visible to visitors until you Save & publish in admin.";
+    bar.textContent = "Draft preview — not visible to visitors until you Publish to live in admin.";
     document.body.appendChild(bar);
   }
 

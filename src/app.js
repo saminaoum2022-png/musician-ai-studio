@@ -56478,7 +56478,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
   const fetchGenerationStatus = async () => {
     if (!sunoTaskId) return null;
     const statusTok = getSupabaseAuthToken();
-    const r = await fetch(apiUrl(musicStatusApiPath(sunoTaskId)), {
+    const r = await apiFetch(musicStatusApiPath(sunoTaskId), {
       cache: "no-store",
       headers: statusTok ? { Authorization: `Bearer ${statusTok}` } : undefined,
     });
@@ -57604,7 +57604,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
             } catch {}
             setStatus(
               altProvider === "lyria"
-                ? "Lyria is composing your song… usually 2–3 minutes. Keep the app open."
+                ? "Lyria is composing your song… usually 2–3 minutes. You can browse the app — we'll update when it's ready."
                 : altProvider === "elevenlabs"
                   ? "ElevenLabs is composing your song… usually 1–3 minutes. Keep the app open."
                   : "MiniMax is composing your song… usually 1–2 minutes. Keep the app open.",

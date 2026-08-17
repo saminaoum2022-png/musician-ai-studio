@@ -162,6 +162,108 @@ function buildSunoStatusPayload({ taskId, title, lyrics, audioUrl, audioId, prov
   };
 }
 
+function buildPendingStatusPayload({ taskId, provider }) {
+  return {
+    code: 200,
+    data: {
+      taskId,
+      status: "PENDING",
+      response: { sunoData: [], suno_data: [] },
+    },
+    _provider: provider,
+  };
+}
+
+function buildFailedStatusPayload({ taskId, provider, errorMessage }) {
+  return {
+    code: 200,
+    data: {
+      taskId,
+      status: "FAILED",
+      errorMessage: String(errorMessage || "Generation failed").slice(0, 500),
+      response: { sunoData: [], suno_data: [] },
+    },
+    _provider: provider,
+  };
+}
+
+function scheduleBackgroundWork(promise) {
+  let waitUntilFn = null;
+  try {
+    waitUntilFn = require("@vercel/functions").waitUntil;
+  } catch {}
+  if (typeof waitUntilFn === "function") {
+    waitUntilFn(promise);
+    return;
+  }
+  void promise;
+}
+
+async function runLyriaGenerationJob({
+  userId,
+  isAdmin,
+  taskId,
+  audioId,
+  apiKey,
+  model,
+  lyriaPrompt,
+  title,
+  lyrics,
+}) {
+  const fail = async (msg) => {
+    if (!isAdmin) {
+      await refund(userId, FULL_SONG_COST, "refund_full_song", "lyria_upstream").catch(() => null);
+    }
+    const statusPayload = buildFailedStatusPayload({
+      taskId,
+      provider: "lyria",
+      errorMessage: msg,
+    });
+    await saveMusicProviderTaskStatus({ userId, taskId, statusPayload }).catch(() => null);
+    queueUpdateMusicGenerationByTaskId(taskId, {
+      status: isAdmin ? "failed" : "refunded",
+      error_message: msg,
+    });
+  };
+
+  try {
+    const upstream = await lyriaGenerateMusic({ apiKey, model, prompt: lyriaPrompt });
+    if (!upstream.ok) {
+      await fail(upstream.userMessage || "Lyria generation failed — try again.");
+      return;
+    }
+    const archived = await persistAudioBuffer({
+      userId,
+      taskId,
+      buffer: upstream.audio.buffer,
+      contentType: upstream.audio.mimeType || "audio/mpeg",
+    });
+    if (!archived.ok || !archived.url) {
+      await fail("Lyria audio upload failed — try again.");
+      return;
+    }
+    const statusPayload = buildSunoStatusPayload({
+      taskId,
+      title,
+      lyrics,
+      audioUrl: archived.url,
+      audioId,
+      provider: "lyria",
+    });
+    const stored = await saveMusicProviderTaskStatus({ userId, taskId, statusPayload });
+    if (!stored.ok) {
+      console.warn("[music/generate] lyria task store failed (song audio ok)", stored.error);
+    }
+    queueUpdateMusicGenerationByTaskId(taskId, {
+      status: "completed",
+      provider_cost_usd: LYRIA_PROVIDER_COST_USD,
+    });
+  } catch (e) {
+    console.error("[music/generate] lyria background job failed", taskId, e);
+    await fail(e?.message || "Lyria generation failed — try again.");
+  }
+}
+
 async function refund(userId, amount, reason, ref) {
   if (!userId || !amount) return;
   try {
@@ -397,63 +499,42 @@ async function handleLyriaGenerate(req, res, { user, isAdmin, body }) {
     instrumental,
   });
 
-  const upstream = await lyriaGenerateMusic({ apiKey, model, prompt: lyriaPrompt });
-
-  if (!upstream.ok) {
-    if (!isAdmin) {
-      await refund(user.userId, FULL_SONG_COST, "refund_full_song", "lyria_upstream").catch(() => null);
-    }
-    const msg = upstream.userMessage || "Lyria generation failed — try again.";
-    queueUpdateMusicGenerationByTaskId(taskId, {
-      status: isAdmin ? "failed" : "refunded",
-      error_message: msg,
-    });
-    return sendJson(res, 502, {
-      error: msg,
-      code: upstream.httpStatus,
-      _model: model,
-      details: upstream.data || upstream.text?.slice(0, 400) || null,
-    });
-  }
-
-  const archived = await persistAudioBuffer({
+  const pendingPayload = buildPendingStatusPayload({ taskId, provider: "lyria" });
+  const pendingStored = await saveMusicProviderTaskStatus({
     userId: user.userId,
     taskId,
-    buffer: upstream.audio.buffer,
-    contentType: upstream.audio.mimeType || "audio/mpeg",
+    statusPayload: pendingPayload,
   });
-  if (!archived.ok || !archived.url) {
-    return sendJson(res, 502, {
-      error: "Lyria audio upload failed — try again.",
-      details: { upload: archived.error || null },
+  if (!pendingStored.ok) {
+    if (!isAdmin) {
+      await refund(user.userId, FULL_SONG_COST, "refund_full_song", "lyria_task_store").catch(() => null);
+    }
+    return sendJson(res, 500, {
+      error: "Could not start Lyria generation — try again.",
+      details: pendingStored.error || null,
     });
   }
 
-  const audioUrl = archived.url;
-  const statusPayload = buildSunoStatusPayload({
-    taskId,
-    title,
-    lyrics,
-    audioUrl,
-    audioId,
-    provider: "lyria",
-  });
-  const stored = await saveMusicProviderTaskStatus({ userId: user.userId, taskId, statusPayload });
-  if (!stored.ok) {
-    console.warn("[music/generate] task store failed (song audio ok)", stored.error);
-  }
-
-  queueUpdateMusicGenerationByTaskId(taskId, {
-    status: "completed",
-    provider_cost_usd: LYRIA_PROVIDER_COST_USD,
-  });
+  scheduleBackgroundWork(
+    runLyriaGenerationJob({
+      userId: user.userId,
+      isAdmin,
+      taskId,
+      audioId,
+      apiKey,
+      model,
+      lyriaPrompt,
+      title,
+      lyrics,
+    }),
+  );
 
   return sendJson(res, 200, {
     code: 200,
-    data: { taskId, audioId, audioUrl, audio_url: audioUrl, status: "SUCCESS" },
+    data: { taskId, audioId, status: "PENDING" },
     _provider: "lyria",
     _model: model,
-    _ready: true,
+    _ready: false,
     _variantCount: 1,
     _credits: {
       spent: isAdmin ? 0 : FULL_SONG_COST,

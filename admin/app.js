@@ -25,6 +25,8 @@ const state = {
   marketingLocale: "en",
   marketingPage: "home",
   marketingPanel: "content",
+  marketingScreen: "hub",
+  marketingPreviewDevice: "desktop",
   marketingDraft: null,
   marketingHeroBlobUrl: "",
   marketingHeroUploading: false,
@@ -83,7 +85,7 @@ const VIEW_META = {
   user: { title: "User detail", sub: "Credits, subscription, billing, and activity" },
   generation: { title: "Generation detail", sub: "Prompt, status, credits, and saved output" },
   credits: { title: "Credits", sub: "Grant paid credits and view every ledger entry" },
-  marketing: { title: "Marketing", sub: "Edit homepage and SEO landing pages (English + Arabic)" },
+  marketing: { title: "Online store", sub: "Edit the marketing website — draft changes, preview, then publish to live" },
   promos: { title: "Promo codes", sub: "Create and monitor redemption codes" },
   singers: { title: "Pro singers", sub: "Singer applications, roster, and performance requests" },
   generations: { title: "Generations", sub: "Song and audio generation requests" },
@@ -596,24 +598,42 @@ async function marketingAdminFetch(page = "home", locale = "en") {
   return data;
 }
 
-async function marketingAdminSave({ page, locale, content }) {
+async function marketingAdminFetchOverview() {
   await refreshSessionIfNeeded();
   const token = state.session?.access_token;
   if (!token) throw new Error("Not signed in");
-  const r = await fetch("/api/admin/marketing", {
-    method: "PUT",
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ page, locale, content }),
+  const r = await fetch("/api/admin/marketing?overview=1", {
+    headers: { Authorization: `Bearer ${token}` },
   });
   const data = await r.json().catch(() => ({}));
   if (r.status === 401) {
     writeSession(null);
     throw new Error("Session expired — sign in again");
   }
-  if (!r.ok) throw new Error(data?.error || `Save failed (${r.status})`);
+  if (r.status === 403) throw new Error(data?.error || "You cannot edit marketing content.");
+  if (!r.ok) throw new Error(data?.error || `Request failed (${r.status})`);
+  return data;
+}
+
+async function marketingAdminAction({ action = "draft", page, locale, content }) {
+  await refreshSessionIfNeeded();
+  const token = state.session?.access_token;
+  if (!token) throw new Error("Not signed in");
+  const body = { action, page, locale, content };
+  const r = await fetch("/api/admin/marketing", {
+    method: "PUT",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(body),
+  });
+  const data = await r.json().catch(() => ({}));
+  if (r.status === 401) {
+    writeSession(null);
+    throw new Error("Session expired — sign in again");
+  }
+  if (!r.ok) throw new Error(data?.error || `Request failed (${r.status})`);
   return data;
 }
 
@@ -786,7 +806,7 @@ function viewCacheKey() {
     key += `:gid:${state.generationDetailId}`;
   }
   if (state.view === "marketing") {
-    key += `:pg:${state.marketingPage || "home"}:loc:${state.marketingLocale || "en"}:pn:${state.marketingPanel || "content"}`;
+    key += `:scr:${state.marketingScreen || "hub"}:pg:${state.marketingPage || "home"}:loc:${state.marketingLocale || "en"}:pn:${state.marketingPanel || "content"}`;
   }
   return key;
 }
@@ -2306,8 +2326,8 @@ function marketingSubsection(title, html, { description = "", open = false } = {
   </details>`;
 }
 
-function marketingDetailCard(title, html, { description = "", badge = "" } = {}) {
-  return `<section class="detailCard">
+function marketingDetailCard(title, html, { description = "", badge = "", sectionId = "" } = {}) {
+  return `<section class="detailCard"${sectionId ? ` id="mkSection-${escapeHtml(sectionId)}"` : ""}>
     <div class="detailCardHead">
       <h3 class="detailCardTitle">${escapeHtml(title)}</h3>
       ${badge ? `<span class="detailCardBadge">${escapeHtml(badge)}</span>` : ""}
@@ -2497,24 +2517,47 @@ function readMarketingBrandForm() {
   };
 }
 
+function getMarketingPreviewPayload() {
+  const pageKey = state.marketingPanel === "brand" ? "home" : (state.marketingPage || "home");
+  const locale = state.marketingPanel === "brand" ? "en" : (state.marketingLocale || "en");
+  let content;
+  if (state.marketingPanel === "brand") {
+    content = { ...(state.marketingLoadedContent || {}), brand: readMarketingBrandForm() };
+  } else {
+    content = readMarketingFormContent(pageKey);
+    if (pageKey === "home" && state.marketingLoadedContent?.brand && !content.brand) {
+      content.brand = state.marketingLoadedContent.brand;
+    }
+  }
+  return { page: pageKey, locale, content, savedAt: Date.now() };
+}
+
+function pushMarketingPreviewToIframe() {
+  const iframe = document.getElementById("mkLivePreviewFrame");
+  if (!iframe?.contentWindow) return;
+  sendMarketingDraftToPreviewWindow(iframe.contentWindow, getMarketingPreviewPayload());
+}
+
 function updateMarketingDraftSitePreview() {
   const eyebrow = document.getElementById("mkDraftHeroEyebrow");
   const title = document.getElementById("mkDraftHeroTitle");
   const lead = document.getElementById("mkDraftHeroLead");
   const image = document.getElementById("mkDraftHeroImage");
-  if (!eyebrow || !title || !lead || !image) return;
-  eyebrow.textContent = document.getElementById("mkHeroEyebrow")?.value || "";
-  title.textContent = document.getElementById("mkHeroTitle")?.value || "";
-  lead.textContent = document.getElementById("mkHeroLead")?.value || "";
-  const url = getMarketingHeroPreviewUrl();
-  if (url) {
-    image.hidden = false;
-    image.src = url;
-    image.alt = document.getElementById("mkHeroImageAlt")?.value || "";
-  } else {
-    image.hidden = true;
-    image.removeAttribute("src");
+  if (eyebrow && title && lead && image) {
+    eyebrow.textContent = document.getElementById("mkHeroEyebrow")?.value || "";
+    title.textContent = document.getElementById("mkHeroTitle")?.value || "";
+    lead.textContent = document.getElementById("mkHeroLead")?.value || "";
+    const url = getMarketingHeroPreviewUrl();
+    if (url) {
+      image.hidden = false;
+      image.src = url;
+      image.alt = document.getElementById("mkHeroImageAlt")?.value || "";
+    } else {
+      image.hidden = true;
+      image.removeAttribute("src");
+    }
   }
+  pushMarketingPreviewToIframe();
 }
 
 function storeMarketingDraftPreview() {
@@ -2587,7 +2630,123 @@ function bindMarketingDraftPreviewListeners() {
     el.dataset.mkDraftBound = "1";
     el.addEventListener("input", updateMarketingDraftSitePreview);
   }
+  const editor = document.querySelector(".marketingEditor");
+  if (editor && editor.dataset.mkPreviewBound !== "1") {
+    editor.dataset.mkPreviewBound = "1";
+    let timer;
+    editor.addEventListener("input", () => {
+      window.clearTimeout(timer);
+      timer = window.setTimeout(updateMarketingDraftSitePreview, 120);
+    });
+    editor.addEventListener("change", updateMarketingDraftSitePreview);
+  }
+  const iframe = document.getElementById("mkLivePreviewFrame");
+  if (iframe && iframe.dataset.mkPreviewBound !== "1") {
+    iframe.dataset.mkPreviewBound = "1";
+    iframe.addEventListener("load", () => {
+      pushMarketingPreviewToIframe();
+      let attempts = 0;
+      const timer = window.setInterval(() => {
+        attempts += 1;
+        pushMarketingPreviewToIframe();
+        if (attempts >= 8) window.clearInterval(timer);
+      }, 250);
+    });
+  }
   updateMarketingDraftSitePreview();
+}
+
+function renderMarketingHub(data) {
+  const lastLive = data?.lastPublishedAt ? fmtDate(data.lastPublishedAt) : "Not published yet";
+  const lastDraft = data?.lastDraftUpdatedAt ? fmtDate(data.lastDraftUpdatedAt) : "No draft saved";
+  const draftCount = Number(data?.draftPageCount || 0);
+  const hasDraft = Boolean(data?.hasDraftChanges);
+  const pages = Array.isArray(data?.pages) ? data.pages : [];
+  const enPages = pages.filter((p) => p.locale === "en");
+
+  const pageRows = enPages.map((p) => {
+    const arTwin = pages.find((x) => x.key === p.key && x.locale === "ar");
+    const status = p.hasDraftChanges || arTwin?.hasDraftChanges
+      ? `<span class="mkStatusPill mkStatusPill--draft">Draft changes</span>`
+      : p.hasLiveContent
+        ? `<span class="mkStatusPill mkStatusPill--live">Live</span>`
+        : `<span class="mkStatusPill">Defaults</span>`;
+    return `<tr class="rowClickable" data-marketing-open-page="${escapeHtml(p.key)}">
+      <td><strong>${escapeHtml(p.label)}</strong><div class="cellMuted mkPagePath">${escapeHtml(p.path)}</div></td>
+      <td>${status}</td>
+      <td class="dateCell" title="${escapeHtml(fmtDate(p.publishedAt))}">${escapeHtml(fmtDateCompact(p.publishedAt))}</td>
+      <td><button type="button" class="btnGhost btnSm" data-marketing-open-page="${escapeHtml(p.key)}">Edit</button></td>
+    </tr>`;
+  }).join("");
+
+  els.panels.marketing.innerHTML = adminPageStack(`
+    <div class="mkStoreHub">
+      <div class="mkStoreHubHead">
+        <div>
+          <h3 class="mkStoreHubTitle">Online store</h3>
+          <p class="cellMuted">Visitors see the <strong>live</strong> site. Edit in <strong>draft</strong>, preview your changes, then publish when ready.</p>
+        </div>
+        <a class="btnGhost" href="https://www.nabadai.com/" target="_blank" rel="noopener">View store ↗</a>
+      </div>
+
+      <div class="mkThemeGrid">
+        <section class="mkThemeCard mkThemeCard--live">
+          <div class="mkThemeCardTop">
+            <span class="mkThemeBadge mkThemeBadge--live">Active · Live</span>
+          </div>
+          <div class="mkThemeThumb mkThemeThumb--live" aria-hidden="true">
+            <div class="mkThemeThumbNav"></div>
+            <div class="mkThemeThumbHero"></div>
+          </div>
+          <div class="mkThemeCardBody">
+            <h4 class="mkThemeCardName">nabadai.com</h4>
+            <p class="cellMuted">Last published: ${escapeHtml(lastLive)}</p>
+            <div class="mkThemeCardActions">
+              <a class="btnGhost" href="https://www.nabadai.com/" target="_blank" rel="noopener">View live ↗</a>
+            </div>
+          </div>
+        </section>
+
+        <section class="mkThemeCard mkThemeCard--draft">
+          <div class="mkThemeCardTop">
+            <span class="mkThemeBadge${hasDraft ? " mkThemeBadge--draft" : ""}">${hasDraft ? "Draft · Unpublished" : "Draft workspace"}</span>
+          </div>
+          <div class="mkThemeThumb mkThemeThumb--draft" aria-hidden="true">
+            <div class="mkThemeThumbNav"></div>
+            <div class="mkThemeThumbHero"></div>
+          </div>
+          <div class="mkThemeCardBody">
+            <h4 class="mkThemeCardName">${hasDraft ? `${draftCount} page${draftCount === 1 ? "" : "s"} with changes` : "No unpublished changes"}</h4>
+            <p class="cellMuted">Last draft save: ${escapeHtml(lastDraft)}</p>
+            <div class="mkThemeCardActions">
+              <button type="button" class="btnPrimary" data-marketing-edit-draft>Edit draft</button>
+              ${hasDraft ? `<button type="button" class="btnGhost" data-marketing-publish-all>Publish to live</button>` : ""}
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <section class="mkPagesSection">
+        <div class="mkPagesSectionHead">
+          <h3 class="mkPagesSectionTitle">Pages</h3>
+          <p class="cellMuted">Each landing page has English and Arabic versions — pick a page to edit the draft.</p>
+        </div>
+        <div class="tableWrap">
+          <table class="dataTable mkPagesTable">
+            <thead>
+              <tr>
+                <th>Page</th>
+                <th>Status</th>
+                <th>Last published</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>${pageRows}</tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+  `, { plain: true });
 }
 
 function renderMarketingBrandPanel(brand = {}) {
@@ -2643,8 +2802,15 @@ function renderMarketing(data) {
   const pageCatalog = Array.isArray(data?.pages) ? data.pages : [];
   const pageMeta = pageCatalog.find((p) => p.key === pageKey) || { label: pageKey, preview: { en: "/", ar: "/ar" } };
   const previewPath = pageMeta.preview?.[locale] || "/";
-  const updated = data?.updatedAt ? fmtDate(data.updatedAt) : "Using defaults (not saved yet)";
-  const source = data?.source === "database" ? "Published in database" : "Defaults only — save to publish";
+  const updated = data?.draftUpdatedAt
+    ? `Draft saved ${fmtDate(data.draftUpdatedAt)}`
+    : data?.updatedAt
+      ? `Live saved ${fmtDate(data.updatedAt)}`
+      : "Using defaults (not saved yet)";
+  const draftStatus = data?.hasDraftChanges
+    ? `<span class="mkStatusPill mkStatusPill--draft">Unpublished draft</span>`
+    : `<span class="mkStatusPill mkStatusPill--live">Matches live</span>`;
+  const liveUpdated = data?.publishedAt ? fmtDate(data.publishedAt) : "—";
 
   const panel = state.marketingPanel || "content";
   const catalog = pageCatalog.length ? pageCatalog : [
@@ -2658,6 +2824,18 @@ function renderMarketing(data) {
   const pageOptions = catalog.map((p) => (
     `<option value="${escapeHtml(p.key)}"${p.key === pageKey ? " selected" : ""}>${escapeHtml(p.label)}</option>`
   )).join("");
+
+  const pageNavItems = catalog.map((p) => {
+    const path = p.preview?.[locale] || "/";
+    const active = p.key === pageKey && panel === "content";
+    return `<button type="button" class="marketingPageNavItem${active ? " isActive" : ""}" data-marketing-page="${escapeHtml(p.key)}" title="${escapeHtml(path)}">
+      <span class="marketingPageNavLabel">${escapeHtml(p.label)}</span>
+      <span class="marketingPageNavPath">${escapeHtml(path)}</span>
+    </button>`;
+  }).join("");
+
+  const previewDevice = state.marketingPreviewDevice || "desktop";
+  const previewUrl = `${MARKETING_SITE_ORIGIN}${buildMarketingDraftPreviewUrl(previewPath, { content: c, page: pageKey, locale })}`;
 
   const faqCount = isHome ? 8 : 3;
   const faqFields = Array.from({ length: faqCount }, (_, i) => {
@@ -2703,7 +2881,7 @@ function renderMarketing(data) {
             ${marketingField("Image URL", `mkTemplateCardImage${i}`, card.imageUrl || "", { hint: "Optional override; defaults to bundled art." })}
           `);
         }).join("")}
-      `, { badge: "Homepage", description: "Occasion template grid on the homepage." })}
+      `, { badge: "Homepage", description: "Occasion template grid on the homepage.", sectionId: "templates" })}
 
       ${marketingDetailCard("Creators & voices", `
         ${marketingSubsection("Section copy", `
@@ -2728,7 +2906,7 @@ function renderMarketing(data) {
           ${marketingField("Image URL", "mkCollabImageUrl", collab.imageUrl || "")}
           ${marketingField("Alt text", "mkCollabImageAlt", collab.imageAlt || "")}
         `)}
-      `, { badge: "Homepage", description: "Collab section with Apply now and Request a vocalist CTAs." })}
+      `, { badge: "Homepage", description: "Collab section with Apply now and Request a vocalist CTAs.", sectionId: "collab" })}
 
       ${marketingDetailCard("Discover teaser", `
         ${marketingSubsection("Section copy", `
@@ -2742,7 +2920,7 @@ function renderMarketing(data) {
           ${marketingField("Song IDs", "mkDiscoverFeaturedIds", (discover.featuredSongIds || []).join("\\n"), { multiline: 4, hint: "One public song UUID per line. Order = carousel order." })}
           <div id="mkDiscoverPicker" class="marketingDiscoverPicker"></div>
         `, { description: "Pick from recent publications below, or paste UUIDs manually." })}
-      `, { badge: "Homepage", description: "Carousel on the homepage — hidden until at least one song is selected." })}
+      `, { badge: "Homepage", description: "Carousel on the homepage — hidden until at least one song is selected.", sectionId: "discover" })}
 
       ${marketingDetailCard("Pricing", `
         ${marketingField("Section eyebrow", "mkPricingEyebrow", pricing.eyebrow || "")}
@@ -2761,7 +2939,7 @@ function renderMarketing(data) {
           ${marketingField("CTA label", "mkPricingProCtaLabel", pro.ctaLabel || "")}
           ${marketingField("CTA link", "mkPricingProCtaHref", pro.ctaHref || "")}
         `)}
-      `, { badge: "Homepage" })}
+      `, { badge: "Homepage", sectionId: "pricing" })}
 
       ${marketingDetailCard("Footer social links", `
         <p class="cellMuted marketingInlineNote">Icons appear on the homepage footer. Leave URL empty to show a muted placeholder.</p>
@@ -2772,47 +2950,76 @@ function renderMarketing(data) {
             ${marketingField("Accessibility label", `mkSocialLabel${platform}`, row.label || platform, { hint: "Screen reader label" })}
           `);
         }).join("")}
-      `, { badge: "Homepage" })}` : "";
+      `, { badge: "Homepage", sectionId: "footer" })}` : "";
 
   els.panels.marketing.innerHTML = adminPageStack(`
-    <div class="marketingShell">
+    <div class="marketingEditorShell">
+      <div class="marketingEditorTopbar">
+        <button type="button" class="btnGhost btnSm" data-marketing-back-hub>← Online store</button>
+        <div class="marketingEditorTopbarMeta">
+          ${draftStatus}
+          <span class="cellMuted">Live published: ${escapeHtml(liveUpdated)}</span>
+        </div>
+        <div class="marketingEditorTopbarActions">
+          <button type="button" class="btnGhost" id="btnMarketingDiscard"${data?.hasDraftChanges ? "" : " disabled"}>Discard draft</button>
+          <button type="button" class="btnGhost" id="btnMarketingSaveDraft">Save draft</button>
+          <button type="button" class="btnPrimary" id="btnMarketingPublish">Publish to live</button>
+        </div>
+      </div>
+      <p id="marketingSaveMsg" class="grantMsg marketingEditorMsg" hidden></p>
+
+      <div class="marketingShell marketingShell--editor">
       <aside class="marketingSideNav" aria-label="Marketing sections">
         <div class="marketingSideGroup">
           <p class="marketingSideGroupLabel">Pages</p>
-          <select id="mkPageSelect" class="marketingSideSelect" aria-label="Choose page to edit"${panel === "brand" ? " disabled" : ""}>
-            ${pageOptions}
-          </select>
+          <div class="marketingPageNav">${pageNavItems}</div>
           <div class="marketingSideLocale">
             <button type="button" class="btnGhost" data-marketing-locale="en" ${locale === "en" ? "disabled" : ""}>English</button>
             <button type="button" class="btnGhost" data-marketing-locale="ar" ${locale === "ar" ? "disabled" : ""}>Arabic</button>
           </div>
-          <p class="marketingSideHint">Pick the live page, then edit sections on the right.</p>
         </div>
         <div class="marketingSideGroup">
           <p class="marketingSideGroupLabel">Theme</p>
           <button type="button" class="marketingSideLink${panel === "brand" ? " isActive" : ""}" data-marketing-panel="brand">Brand palette</button>
           <button type="button" class="marketingSideLink${panel === "content" ? " isActive" : ""}" data-marketing-panel="content">Page content</button>
-          <p class="marketingSideHint">Fonts and button colors apply site-wide (saved on homepage).</p>
+          <p class="marketingSideHint">Brand colors/fonts apply site-wide.</p>
+        </div>
+        <div class="marketingSideGroup">
+          <p class="marketingSideGroupLabel">Sections</p>
+          ${panel === "content" ? `
+          <button type="button" class="marketingSideLink marketingSideLink--section" data-scroll-section="hero">Hero</button>
+          <button type="button" class="marketingSideLink marketingSideLink--section" data-scroll-section="features">Features</button>
+          ${isHome ? `
+          <button type="button" class="marketingSideLink marketingSideLink--section" data-scroll-section="templates">Song templates</button>
+          <button type="button" class="marketingSideLink marketingSideLink--section" data-scroll-section="collab">Creators</button>
+          <button type="button" class="marketingSideLink marketingSideLink--section" data-scroll-section="discover">Discover</button>
+          <button type="button" class="marketingSideLink marketingSideLink--section" data-scroll-section="pricing">Pricing</button>
+          <button type="button" class="marketingSideLink marketingSideLink--section" data-scroll-section="footer">Footer social</button>` : ""}
+          <button type="button" class="marketingSideLink marketingSideLink--section" data-scroll-section="faq">FAQ</button>
+          <button type="button" class="marketingSideLink marketingSideLink--section" data-scroll-section="related">Related pages</button>
+          <button type="button" class="marketingSideLink marketingSideLink--section" data-scroll-section="final">Final CTA</button>
+          <button type="button" class="marketingSideLink marketingSideLink--section" data-scroll-section="seo">SEO</button>` : `<p class="marketingSideHint">Fonts and button colors for all pages.</p>`}
         </div>
       </aside>
 
       <div class="marketingMain">
-        <div class="toolbarBlock marketingToolbar">
+        <div class="toolbarBlock marketingToolbar marketingToolbar--compact">
           <div class="inlineStats">
-            <span>${panel === "brand" ? "Brand palette" : `Page: <strong>${escapeHtml(pageMeta.label || pageKey)}</strong>`}</span>
-            <span>Locale: <strong>${locale === "ar" ? "Arabic" : "English"}</strong></span>
-            <span>${escapeHtml(source)}</span>
-            <span>Updated: ${escapeHtml(updated)}</span>
+            <span>${panel === "brand" ? "Brand palette" : `<strong>${escapeHtml(pageMeta.label || pageKey)}</strong>`}</span>
+            <span>${locale === "ar" ? "Arabic" : "English"} · ${escapeHtml(previewPath)}</span>
+            <span>${updated}</span>
           </div>
           <div class="heroActions">
-            ${panel === "content" ? `<button type="button" class="btnGhost" id="btnMarketingDraftPreview" data-preview-path="${escapeHtml(previewPath)}">Preview draft ↗</button>
-            <a class="btnGhost" id="btnMarketingPreview" href="${escapeHtml(previewPath)}" target="_blank" rel="noopener">Preview live ↗</a>` : ""}
-            <button type="button" class="btnPrimary" id="btnMarketingSave">Save &amp; publish</button>
+            <div class="mkPreviewDeviceToggle" role="group" aria-label="Preview device">
+              <button type="button" class="btnGhost btnSm${previewDevice === "desktop" ? " isActive" : ""}" data-marketing-preview-device="desktop">Desktop</button>
+              <button type="button" class="btnGhost btnSm${previewDevice === "mobile" ? " isActive" : ""}" data-marketing-preview-device="mobile">Mobile</button>
+            </div>
+            <button type="button" class="btnGhost btnSm" id="btnMarketingDraftPreview" data-preview-path="${escapeHtml(previewPath)}">Open preview ↗</button>
+            <a class="btnGhost btnSm" href="${escapeHtml(previewPath)}" target="_blank" rel="noopener">View live ↗</a>
           </div>
-          <p class="cellMuted marketingToolbarNote">Changes stay private until Save &amp; publish.</p>
-          <p id="marketingSaveMsg" class="grantMsg" hidden></p>
         </div>
 
+        <div class="marketingSplit">
         <div class="marketingEditor">
           ${panel === "brand" ? renderMarketingBrandPanel(c.brand) : `
       ${marketingDetailCard("Hero", `
@@ -2850,7 +3057,7 @@ function renderMarketing(data) {
             <img id="mkDraftHeroImage" class="marketingDraftHeroImage" src="${escapeHtml(hero.heroImageUrl || "")}" alt="${escapeHtml(hero.heroImageAlt || "")}" ${hero.heroImageUrl ? "" : "hidden"} />
           </div>
         </div>
-      `, { description: "Top of the page — headline, buttons, and hero image." })}
+      `, { description: "Top of the page — headline, buttons, and hero image.", sectionId: "hero" })}
 
       ${marketingDetailCard("Features", `
         ${marketingField("Section eyebrow", "mkFeaturesEyebrow", features.eyebrow || "")}
@@ -2860,7 +3067,7 @@ function renderMarketing(data) {
           ${marketingField("Body", `mkFeatureBody${i}`, cards[i]?.body || "", { multiline: 3 })}
           ${i === 0 ? featureLinkFields : ""}
         `)).join("")}
-      `, { description: "Three text cards below the hero." })}
+      `, { description: "Three text cards below the hero.", sectionId: "features" })}
 
       ${homeOnlySections}
 
@@ -2868,27 +3075,39 @@ function renderMarketing(data) {
         ${marketingField("Section title", "mkFaqTitle", faq.title || "")}
         ${marketingField("Section subtitle", "mkFaqLead", faq.lead || "", { multiline: 2, hint: "Centered line under the FAQ heading." })}
         ${faqFields}
-      `)}
+      `, { sectionId: "faq" })}
 
       ${marketingDetailCard("Related pages", `
         ${marketingField("Section title", "mkRelatedTitle", related.title || "")}
         ${marketingSubsection("Links", relatedFields, { description: "Up to eight related landing pages." })}
-      `)}
+      `, { sectionId: "related" })}
 
       ${marketingDetailCard("Final CTA band", `
         ${marketingField("Title", "mkFinalTitle", finalCta.title || "")}
         ${marketingField("Body", "mkFinalBody", finalCta.body || "", { multiline: 3 })}
         ${marketingField("Button label", "mkFinalCtaLabel", finalCta.ctaLabel || "")}
         ${marketingField("Button link", "mkFinalCtaHref", finalCta.ctaHref || "")}
-      `, { description: "Closing call-to-action strip at the bottom of the page." })}
+      `, { description: "Closing call-to-action strip at the bottom of the page.", sectionId: "final" })}
 
       ${marketingDetailCard("SEO", `
         ${marketingField("Page title", "mkSeoTitle", seo.title || "")}
         ${marketingField("Meta description", "mkSeoDescription", seo.description || "", { multiline: 3, hint: "Google results and social previews." })}
-      `, { description: "Browser tab title and search snippet." })}
+      `, { description: "Browser tab title and search snippet.", sectionId: "seo" })}
           `}
         </div>
+
+        <aside class="marketingPreviewPane" aria-label="Draft preview">
+          <div class="marketingPreviewPaneHead">
+            <span class="marketingPreviewPaneLabel">Draft preview</span>
+            <span class="cellMuted">Updates as you type — not visible to visitors</span>
+          </div>
+          <div class="marketingPreviewFrameWrap marketingPreviewFrameWrap--${previewDevice}">
+            <iframe id="mkLivePreviewFrame" class="marketingPreviewFrame" title="Draft page preview" src="${escapeHtml(previewUrl)}"></iframe>
+          </div>
+        </aside>
+        </div>
       </div>
+    </div>
     </div>
   `, { plain: true });
   bindMarketingDraftPreviewListeners();
@@ -2935,6 +3154,11 @@ async function bindMarketingDiscoverPicker() {
   }
 }
 
+function renderMarketingView(data) {
+  if (state.marketingScreen === "hub") renderMarketingHub(data);
+  else renderMarketing(data);
+}
+
 const RENDERERS = {
   overview: renderOverview,
   providers: renderProviders,
@@ -2943,7 +3167,7 @@ const RENDERERS = {
   user: renderUserDetail,
   generation: renderGenerationDetail,
   credits: renderCredits,
-  marketing: renderMarketing,
+  marketing: renderMarketingView,
   promos: renderPromos,
   singers: renderSingers,
   generations: renderGenerations,
@@ -2956,6 +3180,9 @@ const RENDERERS = {
 function setView(view) {
   if (!canAccessView(view)) {
     view = firstAllowedView();
+  }
+  if (view === "marketing" && state.view !== "marketing") {
+    state.marketingScreen = "hub";
   }
   state.view = view;
   state.offset = 0;
@@ -3240,7 +3467,9 @@ async function loadView({ force = false } = {}) {
   try {
     let data;
     if (view === "marketing") {
-      if (state.marketingPanel === "brand") {
+      if (state.marketingScreen === "hub") {
+        data = await marketingAdminFetchOverview();
+      } else if (state.marketingPanel === "brand") {
         data = await marketingAdminFetch("home", "en");
         data.page = "home";
       } else {
@@ -3727,6 +3956,67 @@ document.body.addEventListener("click", (e) => {
     return;
   }
 
+  const marketingBackHubBtn = e.target.closest("[data-marketing-back-hub]");
+  if (marketingBackHubBtn) {
+    state.marketingScreen = "hub";
+    void loadView({ force: true });
+    return;
+  }
+
+  const marketingEditDraftBtn = e.target.closest("[data-marketing-edit-draft]");
+  if (marketingEditDraftBtn) {
+    state.marketingScreen = "editor";
+    state.marketingPanel = "content";
+    void loadView({ force: true });
+    return;
+  }
+
+  const marketingOpenPageBtn = e.target.closest("[data-marketing-open-page]");
+  if (marketingOpenPageBtn) {
+    const page = marketingOpenPageBtn.dataset.marketingOpenPage;
+    if (page) {
+      state.marketingScreen = "editor";
+      state.marketingPage = page;
+      state.marketingPanel = "content";
+      void loadView({ force: true });
+    }
+    return;
+  }
+
+  const marketingPublishAllBtn = e.target.closest("[data-marketing-publish-all]");
+  if (marketingPublishAllBtn) {
+    if (!window.confirm("Publish all draft changes to the live website? Visitors will see updates within about a minute.")) return;
+    void (async () => {
+      marketingPublishAllBtn.disabled = true;
+      try {
+        const result = await marketingAdminAction({ action: "publish_all" });
+        showError("");
+        delete state.cache[viewCacheKey()];
+        await loadView({ force: true });
+      } catch (err) {
+        showError(err?.message || "Publish failed");
+      } finally {
+        marketingPublishAllBtn.disabled = false;
+      }
+    })();
+    return;
+  }
+
+  const marketingPreviewDeviceBtn = e.target.closest("[data-marketing-preview-device]");
+  if (marketingPreviewDeviceBtn) {
+    state.marketingPreviewDevice = marketingPreviewDeviceBtn.dataset.marketingPreviewDevice || "desktop";
+    void loadView({ force: true });
+    return;
+  }
+
+  const marketingScrollBtn = e.target.closest("[data-scroll-section]");
+  if (marketingScrollBtn) {
+    const section = marketingScrollBtn.dataset.scrollSection;
+    const el = document.getElementById(`mkSection-${section}`);
+    if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+    return;
+  }
+
   const marketingPageBtn = e.target.closest("[data-marketing-page]");
   if (marketingPageBtn) {
     const page = marketingPageBtn.dataset.marketingPage;
@@ -3776,6 +4066,66 @@ document.body.addEventListener("click", (e) => {
     return;
   }
 
+  const marketingSaveDraftBtn = e.target.closest("#btnMarketingSaveDraft");
+  const marketingPublishBtn = e.target.closest("#btnMarketingPublish");
+  const marketingDiscardBtn = e.target.closest("#btnMarketingDiscard");
+  const marketingActionBtn = marketingSaveDraftBtn || marketingPublishBtn || marketingDiscardBtn;
+  if (marketingActionBtn) {
+    void (async () => {
+      const msg = document.getElementById("marketingSaveMsg");
+      const action = marketingPublishBtn ? "publish" : marketingDiscardBtn ? "discard" : "draft";
+      if (action === "discard" && !window.confirm("Discard unpublished draft for this page and revert to the live version?")) return;
+      if (action === "publish" && !window.confirm("Publish this page to the live website? Visitors will see changes within about a minute.")) return;
+      marketingActionBtn.disabled = true;
+      if (msg) {
+        msg.hidden = false;
+        msg.textContent = action === "publish" ? "Publishing…" : action === "discard" ? "Discarding…" : "Saving draft…";
+        msg.className = "grantMsg warn";
+      }
+      try {
+        const savePage = state.marketingPanel === "brand" ? "home" : (state.marketingPage || "home");
+        const saveLocale = state.marketingPanel === "brand" ? "en" : (state.marketingLocale || "en");
+        let content = null;
+        if (action !== "discard") {
+          if (state.marketingPanel === "brand") {
+            content = { ...(state.marketingLoadedContent || {}), brand: readMarketingBrandForm() };
+          } else {
+            content = readMarketingFormContent(savePage);
+            if (savePage === "home" && state.marketingLoadedContent?.brand && !content.brand) {
+              content.brand = state.marketingLoadedContent.brand;
+            }
+          }
+        }
+        const saved = await marketingAdminAction({
+          action,
+          page: savePage,
+          locale: saveLocale,
+          content,
+        });
+        delete state.cache[viewCacheKey()];
+        if (msg) {
+          msg.textContent = action === "publish"
+            ? (saved?.heroImageApiPath ? "Published — hero image and copy are live now." : "Published — live site updates within a minute.")
+            : action === "discard"
+              ? "Draft discarded — showing live content."
+              : "Draft saved — preview updates on the right.";
+          msg.className = "grantMsg ok";
+        }
+        showError("");
+        await loadView({ force: true });
+      } catch (err) {
+        if (msg) {
+          msg.textContent = err?.message || "Request failed";
+          msg.className = "grantMsg err";
+        }
+        showError(err?.message || "Request failed");
+      } finally {
+        marketingActionBtn.disabled = false;
+      }
+    })();
+    return;
+  }
+
   const marketingSaveBtn = e.target.closest("#btnMarketingSave");
   if (marketingSaveBtn) {
     void (async () => {
@@ -3798,16 +4148,15 @@ document.body.addEventListener("click", (e) => {
             content.brand = state.marketingLoadedContent.brand;
           }
         }
-        const saved = await marketingAdminSave({
+        const saved = await marketingAdminAction({
+          action: "draft",
           page: savePage,
           locale: saveLocale,
           content,
         });
         delete state.cache[viewCacheKey()];
         if (msg) {
-          msg.textContent = saved?.heroImageApiPath
-            ? "Saved — hero image and page copy are live now."
-            : "Saved — page updates within a minute.";
+          msg.textContent = "Draft saved.";
           msg.className = "grantMsg ok";
         }
         showError("");
@@ -4174,7 +4523,7 @@ document.body.addEventListener("change", (e) => {
       revokeMarketingHeroBlobUrl();
       updateMarketingDraftSitePreview();
       if (msg) {
-        msg.textContent = "Upload complete — image is in your draft. Open Preview draft ↗ to see it on the site. Save & publish when ready.";
+        msg.textContent = "Upload complete — image is in your draft. Save draft to keep it, then publish when ready.";
         msg.className = "grantMsg ok";
       }
       fileInput.value = "";

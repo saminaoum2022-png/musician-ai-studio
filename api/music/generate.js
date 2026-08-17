@@ -33,8 +33,11 @@ const {
 } = require("../_lib/lyria-upstream");
 const {
   buildElevenMusicPrompt,
+  buildElevenReferenceCompositionPlan,
+  decodeReferenceAudioPayload,
   elevenlabsGenerateEnabled,
   elevenlabsGenerateMusicDetailed,
+  elevenlabsUploadMusic,
   resolveElevenMusicLengthMs,
   resolveElevenMusicModel,
   resolveElevenFinetuneId,
@@ -287,8 +290,10 @@ async function runElevenlabsGenerationJob({
   instrumental,
   finetuneId,
   elevenPrompt,
+  compositionPlan,
   title,
   lyrics,
+  referenceSongId,
 }) {
   const fail = async (msg) => {
     if (!isAdmin) {
@@ -309,7 +314,8 @@ async function runElevenlabsGenerationJob({
   try {
     const upstream = await elevenlabsGenerateMusicDetailed({
       apiKey,
-      prompt: elevenPrompt,
+      prompt: compositionPlan ? undefined : elevenPrompt,
+      compositionPlan: compositionPlan || undefined,
       model,
       musicLengthMs,
       instrumental,
@@ -349,6 +355,10 @@ async function runElevenlabsGenerationJob({
     if (finetuneId) {
       statusPayload._finetuneId = finetuneId;
       statusPayload._finetuneApplied = true;
+    }
+    if (referenceSongId) {
+      statusPayload._referenceSongId = referenceSongId;
+      statusPayload._referenceApplied = true;
     }
     const stored = await saveMusicProviderTaskStatus({ userId, taskId, statusPayload });
     if (!stored.ok) {
@@ -656,10 +666,18 @@ async function handleElevenlabsGenerate(req, res, { user, isAdmin, body }) {
     });
   }
 
-  if (body?.personaId || body?.hasReference) {
+  if (body?.personaId) {
     return sendJson(res, 400, {
-      error: "ElevenLabs spike does not support persona or reference uploads yet.",
+      error: "ElevenLabs spike does not support persona yet — use a vocal reference or finetune.",
       code: "elevenlabs_unsupported",
+    });
+  }
+
+  const hasReference = Boolean(body?.hasReference || body?.referenceAudio);
+  if (hasReference && Boolean(body?.instrumental) && Boolean(body?.referenceInstrumentalOnly)) {
+    return sendJson(res, 400, {
+      error: "ElevenLabs reference mode supports vocal hum/sing references — disable instrumental-from-melody for now.",
+      code: "elevenlabs_reference_instrumental_unsupported",
     });
   }
 
@@ -740,7 +758,48 @@ async function handleElevenlabsGenerate(req, res, { user, isAdmin, body }) {
     instrumental,
   });
 
-  if (!instrumental && !lyrics && !stylePrompt) {
+  let referenceSongId = null;
+  let compositionPlan = null;
+  if (hasReference) {
+    const refAudio = decodeReferenceAudioPayload(body?.referenceAudio);
+    if (!refAudio?.buffer?.length) {
+      return sendJson(res, 400, {
+        error: "Missing or invalid vocal reference audio — record or upload again.",
+        code: "elevenlabs_reference_invalid",
+      });
+    }
+    if (refAudio.buffer.length > 15 * 1024 * 1024) {
+      return sendJson(res, 400, {
+        error: "Reference audio is too large (max 15 MB). Try a shorter hum or clip.",
+        code: "elevenlabs_reference_too_large",
+      });
+    }
+    const upload = await elevenlabsUploadMusic({
+      apiKey,
+      buffer: refAudio.buffer,
+      mimeType: refAudio.mimeType,
+    });
+    if (!upload.ok || !upload.songId) {
+      return sendJson(res, upload.httpStatus && upload.httpStatus >= 400 && upload.httpStatus < 500 ? upload.httpStatus : 502, {
+        error: upload.userMessage || "ElevenLabs could not store your vocal reference — try again.",
+        code: "elevenlabs_reference_upload_failed",
+      });
+    }
+    referenceSongId = upload.songId;
+    compositionPlan = buildElevenReferenceCompositionPlan({
+      lyrics,
+      stylePrompt,
+      title,
+      musicLengthMs,
+      instrumental,
+      referenceSongId,
+      referenceRangeMs: body?.referenceDurationMs,
+      conditionStrength: body?.referenceConditionStrength || "xhigh",
+    });
+    console.log("[music/generate] elevenlabs reference uploaded", referenceSongId.slice(0, 12));
+  }
+
+  if (!instrumental && !lyrics && !stylePrompt && !compositionPlan) {
     return sendJson(res, 400, {
       error: "Add lyrics, style, or enable instrumental mode for ElevenLabs.",
       code: "elevenlabs_missing_prompt",
@@ -751,6 +810,10 @@ async function handleElevenlabsGenerate(req, res, { user, isAdmin, body }) {
   if (finetuneId) {
     pendingPayload._finetuneId = finetuneId;
     pendingPayload._finetuneApplied = true;
+  }
+  if (referenceSongId) {
+    pendingPayload._referenceSongId = referenceSongId;
+    pendingPayload._referenceApplied = true;
   }
   const pendingStored = await saveMusicProviderTaskStatus({
     userId: user.userId,
@@ -779,8 +842,10 @@ async function handleElevenlabsGenerate(req, res, { user, isAdmin, body }) {
       instrumental,
       finetuneId,
       elevenPrompt,
+      compositionPlan,
       title,
       lyrics,
+      referenceSongId,
     }),
   );
 
@@ -791,6 +856,8 @@ async function handleElevenlabsGenerate(req, res, { user, isAdmin, body }) {
     _model: model,
     _finetuneId: finetuneId || undefined,
     _finetuneApplied: Boolean(finetuneId),
+    _referenceApplied: Boolean(referenceSongId),
+    _referenceSongId: referenceSongId || undefined,
     _ready: false,
     _variantCount: 1,
     _credits: {

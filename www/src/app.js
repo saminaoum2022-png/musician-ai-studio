@@ -20978,6 +20978,19 @@ function isSafariLikeRecorderEnv() {
   }
 }
 
+function blobToDataUrl(blob) {
+  return new Promise((resolve, reject) => {
+    if (!blob) {
+      reject(new Error("missing blob"));
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.onerror = () => reject(reader.error || new Error("read failed"));
+    reader.readAsDataURL(blob);
+  });
+}
+
 function vocalReferenceFilenameForMime(mime) {
   const t = String(mime || "").toLowerCase();
   if (t.includes("mp4") || t.includes("aac") || t.includes("mpeg")) return "vocal-reference.m4a";
@@ -57415,7 +57428,9 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       const data = await trackCreditsAround(
         hasReference ? "Upload reference song" : "Generate song",
         async () => {
-          if (hasReference) {
+          const elevenReferenceGenerate =
+            hasReference && useAltMusicProvider() && getMusicProviderPref() === "elevenlabs";
+          if (hasReference && !elevenReferenceGenerate) {
             const sendFile = resolveVocalReferenceForSubmit();
             const remixSourceRaw = String(
               currentRemixSource?.originalUrl || currentRemixSource?.url || "",
@@ -57582,19 +57597,59 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
                 : altProvider === "elevenlabs"
                   ? "ElevenLabs"
                   : "MiniMax";
-            if (personaIdSel || hasReference) {
+            if (personaIdSel) {
               setLoading(false);
               setGenerateBtn("Generate song", false, "generate");
               setGenerateFieldsLocked(false);
               setProgress(0);
               try {
                 showToast(
-                  `${providerLabel} test mode doesn't support persona or reference uploads yet.`,
+                  `${providerLabel} test mode doesn't support persona yet — clear the persona chip first.`,
                   { icon: "!", durationMs: 6400 },
                 );
               } catch {}
-              setStatus(`${providerLabel} test mode: remove persona and reference uploads first.`);
+              setStatus(`${providerLabel} test mode: remove persona first.`);
               return;
+            }
+            if (hasReference && altProvider !== "elevenlabs") {
+              setLoading(false);
+              setGenerateBtn("Generate song", false, "generate");
+              setGenerateFieldsLocked(false);
+              setProgress(0);
+              try {
+                showToast(
+                  `${providerLabel} test mode doesn't support vocal reference uploads yet.`,
+                  { icon: "!", durationMs: 6400 },
+                );
+              } catch {}
+              setStatus(`${providerLabel} test mode: remove vocal reference or switch back to Suno.`);
+              return;
+            }
+            if (hasReference && altProvider === "elevenlabs") {
+              if (referenceInstrumentalOnly) {
+                setLoading(false);
+                setGenerateBtn("Generate song", false, "generate");
+                setGenerateFieldsLocked(false);
+                setProgress(0);
+                try {
+                  showToast(
+                    "ElevenLabs reference mode uses your hum/voice — switch off instrumental-from-melody.",
+                    { icon: "!", durationMs: 6400 },
+                  );
+                } catch {}
+                setStatus("ElevenLabs: vocal reference needs lyrics + voice mode (not instrumental-from-melody).");
+                return;
+              }
+              const sendFile = resolveVocalReferenceForSubmit();
+              if (!sendFile?.size) {
+                throw new Error(
+                  "Lost the vocal reference before upload. Tap '+ Audio' or Record again, then Generate.",
+                );
+              }
+              setStatus("Uploading vocal reference to ElevenLabs…");
+              payload.hasReference = true;
+              payload.referenceAudio = await blobToDataUrl(sendFile);
+              payload.referenceConditionStrength = "xhigh";
             }
             try {
               showToast(`${providerLabel} composing… keep the app open (about 1–3 min).`, {
@@ -57606,7 +57661,9 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
               altProvider === "lyria"
                 ? "Lyria is composing your song… usually 2–3 minutes. You can browse the app — we'll update when it's ready."
                 : altProvider === "elevenlabs"
-                  ? "ElevenLabs is composing your song… usually 1–3 minutes. You can browse the app — we'll update when it's ready."
+                  ? hasReference
+                    ? "ElevenLabs is matching your hum/voice + finetune… usually 1–3 minutes."
+                    : "ElevenLabs is composing your song… usually 1–3 minutes. You can browse the app — we'll update when it's ready."
                   : "MiniMax is composing your song… usually 1–2 minutes. Keep the app open.",
             );
           }
@@ -57641,6 +57698,11 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
           if (d?._credits && Number.isFinite(Number(d._credits.balance))) {
             setCreditsBalance(Number(d._credits.balance));
             creditsState.loaded = true;
+          }
+          if (useAltMusicProvider() && getMusicProviderPref() === "elevenlabs" && hasReference && r.ok) {
+            try {
+              clearVocalReferenceSelection();
+            } catch {}
           }
           return d;
         },
@@ -57771,11 +57833,14 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
         if (data?._provider === "elevenlabs" && creditsState.isAdmin) {
           try {
             const ft = String(data?._finetuneId || "").trim();
+            const ref = Boolean(data?._referenceApplied);
             showToast(
-              ft
-                ? `ElevenLabs · finetune ${ft.slice(0, 12)}… applied`
-                : "ElevenLabs · no finetune_id (generic voice) — set ELEVENLABS_FINETUNE_ID on server",
-              { icon: ft ? "♪" : "!", durationMs: 9000 },
+              ref
+                ? `ElevenLabs · vocal reference +${ft ? ` finetune ${ft.slice(0, 12)}…` : " finetune (none)"} applied`
+                : ft
+                  ? `ElevenLabs · finetune ${ft.slice(0, 12)}… applied`
+                  : "ElevenLabs · no finetune_id (generic voice) — set ELEVENLABS_FINETUNE_ID on server",
+              { icon: ft || ref ? "♪" : "!", durationMs: 9000 },
             );
           } catch {}
         }

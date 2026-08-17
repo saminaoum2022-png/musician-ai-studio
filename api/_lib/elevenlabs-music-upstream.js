@@ -83,6 +83,130 @@ function splitLyricLines(text) {
     .map((l) => l.slice(0, 200));
 }
 
+function splitElevenStyleTags(stylePrompt) {
+  return String(stylePrompt || "")
+    .split(/[,|]/)
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .slice(0, 20);
+}
+
+/** Decode data URL or raw base64 reference audio from the client. */
+function decodeReferenceAudioPayload(raw) {
+  const s = String(raw || "").trim();
+  if (!s) return null;
+  const m = /^data:([^;]+);base64,(.+)$/i.exec(s);
+  try {
+    if (m) {
+      const buffer = Buffer.from(m[2], "base64");
+      if (!buffer.length) return null;
+      return { buffer, mimeType: m[1].split(";")[0].trim() || "audio/mpeg" };
+    }
+    const buffer = Buffer.from(s, "base64");
+    if (!buffer.length) return null;
+    return { buffer, mimeType: "audio/mpeg" };
+  } catch {
+    return null;
+  }
+}
+
+function referenceFilenameForMime(mime) {
+  const t = String(mime || "").toLowerCase();
+  if (t.includes("mp4") || t.includes("aac") || t.includes("mpeg")) return "vocal-reference.m4a";
+  if (t.includes("webm")) return "vocal-reference.webm";
+  if (t.includes("ogg")) return "vocal-reference.ogg";
+  if (t.includes("wav")) return "vocal-reference.wav";
+  return "vocal-reference.mp3";
+}
+
+/**
+ * Upload hum / vocal reference for conditioning_ref in a composition plan.
+ * @see https://elevenlabs.io/docs/api-reference/music/upload
+ */
+async function elevenlabsUploadMusic({ apiKey, buffer, mimeType, filename }) {
+  const fileBuffer = Buffer.isBuffer(buffer) ? buffer : Buffer.from(buffer || []);
+  if (fileBuffer.length < 128) {
+    return { ok: false, userMessage: "Reference audio is empty — record or upload again." };
+  }
+  const form = new FormData();
+  const blob = new Blob([fileBuffer], { type: mimeType || "audio/mpeg" });
+  form.append("file", blob, filename || referenceFilenameForMime(mimeType));
+  try {
+    const r = await fetch("https://api.elevenlabs.io/v1/music/upload", {
+      method: "POST",
+      headers: { "xi-api-key": String(apiKey || "").trim() },
+      body: form,
+    });
+    const text = await r.text().catch(() => "");
+    const data = safeJson(text);
+    const songId = String(data?.song_id || data?.songId || "").trim();
+    if (!r.ok || !songId) {
+      return {
+        ok: false,
+        httpStatus: r.status,
+        data,
+        userMessage: elevenUserMessage(r.status, data, text),
+      };
+    }
+    return { ok: true, httpStatus: r.status, songId, data };
+  } catch (e) {
+    return { ok: false, userMessage: e?.message || "ElevenLabs reference upload failed." };
+  }
+}
+
+/**
+ * music_v2 composition plan — conditioning_ref on the first chunk + finetune_id at compose time.
+ */
+function buildElevenReferenceCompositionPlan({
+  lyrics = "",
+  stylePrompt = "",
+  title = "",
+  musicLengthMs,
+  instrumental = false,
+  referenceSongId,
+  referenceRangeMs = 30000,
+  conditionStrength = "xhigh",
+} = {}) {
+  const lengthMs = resolveElevenMusicLengthMs(musicLengthMs);
+  const styles = splitElevenStyleTags(stylePrompt);
+  if (!styles.length) styles.push("professional studio production", "clear vocals");
+  styles.push("match reference vocal timbre and melody");
+
+  const lyricText = String(lyrics || "").trim();
+  let text = "";
+  if (instrumental) {
+    text = "[Intro]\n{instrumental — follow reference melody, no vocals}";
+  } else if (lyricText) {
+    text = lyricText.includes("[") ? lyricText : `[Verse]\n${lyricText}`;
+  } else {
+    text = "[Verse]\n{perform matching the reference vocal tone, pitch, and melodic shape}";
+  }
+  const songTitle = String(title || "").trim();
+  if (songTitle) text = `[Title: ${songTitle}]\n${text}`;
+
+  const refEnd = Math.max(3000, Math.min(30000, Math.round(Number(referenceRangeMs) || 30000)));
+  const strength = ["low", "medium", "high", "xhigh"].includes(String(conditionStrength))
+    ? String(conditionStrength)
+    : "xhigh";
+
+  return {
+    chunks: [
+      {
+        text: text.slice(0, 4000),
+        duration_ms: lengthMs,
+        positive_styles: styles,
+        negative_styles: [],
+        context_adherence: "high",
+        conditioning_ref: {
+          song_id: String(referenceSongId || "").trim(),
+          range: { start_ms: 0, end_ms: refEnd },
+        },
+        condition_strength: strength,
+      },
+    ],
+  };
+}
+
 /**
  * Build a single prompt for Eleven Music v2 (prompt mode).
  */
@@ -245,11 +369,12 @@ async function elevenlabsGenerateMusic({
 
 /**
  * Detailed compose — returns audio + optional word timestamps (karaoke).
- * @param {{ apiKey: string, prompt: string, model?: string, musicLengthMs?: number, instrumental?: boolean, finetuneId?: string, withTimestamps?: boolean }} opts
+ * @param {{ apiKey: string, prompt?: string, compositionPlan?: object, model?: string, musicLengthMs?: number, instrumental?: boolean, finetuneId?: string, withTimestamps?: boolean }} opts
  */
 async function elevenlabsGenerateMusicDetailed({
   apiKey,
   prompt,
+  compositionPlan,
   model,
   musicLengthMs,
   instrumental = false,
@@ -261,14 +386,22 @@ async function elevenlabsGenerateMusicDetailed({
   const resolvedFinetuneId = resolveElevenFinetuneId(finetuneId);
   const wantTimestamps = withTimestamps && !instrumental;
   const url = `${ELEVEN_MUSIC_DETAILED_URL}?output_format=mp3_48000_192`;
-  const body = {
-    prompt: String(prompt || "").trim(),
-    model_id: resolvedModel,
-    music_length_ms: lengthMs,
-    ...(instrumental ? { force_instrumental: true } : {}),
-    ...(resolvedFinetuneId ? { finetune_id: resolvedFinetuneId } : {}),
-    ...(wantTimestamps ? { with_timestamps: true } : {}),
-  };
+  const plan = compositionPlan && typeof compositionPlan === "object" ? compositionPlan : null;
+  const body = plan
+    ? {
+        composition_plan: plan,
+        model_id: resolvedModel,
+        ...(resolvedFinetuneId ? { finetune_id: resolvedFinetuneId } : {}),
+        ...(wantTimestamps ? { with_timestamps: true } : {}),
+      }
+    : {
+        prompt: String(prompt || "").trim(),
+        model_id: resolvedModel,
+        music_length_ms: lengthMs,
+        ...(instrumental ? { force_instrumental: true } : {}),
+        ...(resolvedFinetuneId ? { finetune_id: resolvedFinetuneId } : {}),
+        ...(wantTimestamps ? { with_timestamps: true } : {}),
+      };
 
   const r = await fetch(url, {
     method: "POST",
@@ -317,9 +450,12 @@ async function elevenlabsGenerateMusicDetailed({
 
 module.exports = {
   buildElevenMusicPrompt,
+  buildElevenReferenceCompositionPlan,
+  decodeReferenceAudioPayload,
   elevenlabsGenerateEnabled,
   elevenlabsGenerateMusic,
   elevenlabsGenerateMusicDetailed,
+  elevenlabsUploadMusic,
   elevenUserMessage,
   normalizeElevenWordsTimestamps,
   resolveElevenMusicLengthMs,

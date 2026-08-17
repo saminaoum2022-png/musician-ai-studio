@@ -48,7 +48,7 @@ async function resolveFeaturedDiscoverSongs(songIds) {
 
   const inClause = ids.map((id) => encodeURIComponent(id)).join(",");
   const rows = await supaRows(
-    `user_songs?select=id,user_id,title,art_url,public_on_profile&id=in.(${inClause})&public_on_profile=eq.true`,
+    `user_songs?select=id,user_id,title,art_url,song_url,meta,public_on_profile&id=in.(${inClause})&public_on_profile=eq.true`,
   );
   const byId = new Map(rows.map((r) => [String(r.id), r]));
   const userIds = [...new Set(rows.map((r) => r.user_id).filter(Boolean))];
@@ -67,6 +67,11 @@ async function resolveFeaturedDiscoverSongs(songIds) {
       if (!row) return null;
       const prof = profileMap.get(String(row.user_id)) || {};
       const username = String(prof.username || "").trim();
+      const songUrl = String(row.song_url || "").trim();
+      const meta = row.meta && typeof row.meta === "object" ? row.meta : {};
+      const hookRaw = Number(meta.hookStartSec ?? meta.hook_start_sec);
+      const hookStartSec = Number.isFinite(hookRaw) && hookRaw >= 0 ? hookRaw : 0;
+      const previewUrl = /^https?:\/\//i.test(songUrl) ? songUrl : "";
       return {
         id: row.id,
         title: String(row.title || "Untitled").trim() || "Untitled",
@@ -74,6 +79,8 @@ async function resolveFeaturedDiscoverSongs(songIds) {
         username,
         byLine: String(prof.display_name || prof.username || "").trim(),
         shareUrl: `/s/${encodeURIComponent(row.id)}`,
+        previewUrl,
+        hookStartSec,
       };
     })
     .filter(Boolean);

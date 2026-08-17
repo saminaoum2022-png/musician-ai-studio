@@ -267,10 +267,126 @@
     }).join("");
   }
 
+  var CAROUSEL_PREVIEW_SEC = 30;
+  var CAROUSEL_SIGNUP_HREF = "/app/#/intro";
+  var carouselPreviewAudio = null;
+  var carouselPreviewCardId = null;
+  var carouselPreviewStopTimer = null;
+
+  var CAROUSEL_PLAY_SVG =
+    '<svg class="discoverCarouselPlayIco" viewBox="0 0 24 24" aria-hidden="true" focusable="false">' +
+      '<path fill="currentColor" d="M8 5v14l11-7z"/>' +
+    "</svg>";
+  var CAROUSEL_PAUSE_SVG =
+    '<svg class="discoverCarouselPlayIco" viewBox="0 0 24 24" aria-hidden="true" focusable="false">' +
+      '<path fill="currentColor" d="M6 5h4v14H6V5zm8 0h4v14h-4V5z"/>' +
+    "</svg>";
+
+  function stopCarouselPreview() {
+    if (carouselPreviewStopTimer) {
+      clearTimeout(carouselPreviewStopTimer);
+      carouselPreviewStopTimer = null;
+    }
+    if (carouselPreviewAudio) {
+      try { carouselPreviewAudio.pause(); } catch (e) {}
+      carouselPreviewAudio.removeAttribute("src");
+      carouselPreviewAudio.load();
+      carouselPreviewAudio = null;
+    }
+    if (carouselPreviewCardId) {
+      var prev = document.querySelector(
+        '.discoverCarouselCard[data-song-id="' + carouselPreviewCardId + '"]',
+      );
+      if (prev) {
+        prev.classList.remove("isPreviewPlaying");
+        var btn = prev.querySelector(".discoverCarouselPlay");
+        if (btn) {
+          btn.innerHTML = CAROUSEL_PLAY_SVG;
+          btn.setAttribute("aria-label", "Preview song");
+        }
+      }
+      carouselPreviewCardId = null;
+    }
+  }
+
+  function startCarouselPreview(card, previewUrl, hookStartSec) {
+    if (!card || !previewUrl) return;
+    var songId = card.getAttribute("data-song-id") || "";
+    if (carouselPreviewCardId === songId && carouselPreviewAudio && !carouselPreviewAudio.paused) {
+      stopCarouselPreview();
+      return;
+    }
+    stopCarouselPreview();
+    carouselPreviewCardId = songId;
+    carouselPreviewAudio = new Audio(previewUrl);
+    carouselPreviewAudio.preload = "metadata";
+    var startAt = Number(hookStartSec);
+    if (!Number.isFinite(startAt) || startAt < 0) startAt = 0;
+    card.classList.add("isPreviewPlaying");
+    var playBtn = card.querySelector(".discoverCarouselPlay");
+    if (playBtn) {
+      playBtn.innerHTML = CAROUSEL_PAUSE_SVG;
+      playBtn.setAttribute("aria-label", "Stop preview");
+    }
+    carouselPreviewAudio.addEventListener(
+      "loadedmetadata",
+      function () {
+        try {
+          carouselPreviewAudio.currentTime = Math.min(startAt, Math.max(0, (carouselPreviewAudio.duration || 0) - 1));
+        } catch (e) {}
+      },
+      { once: true },
+    );
+    carouselPreviewAudio.play().catch(function () {
+      stopCarouselPreview();
+    });
+    carouselPreviewStopTimer = setTimeout(stopCarouselPreview, CAROUSEL_PREVIEW_SEC * 1000);
+    carouselPreviewAudio.addEventListener(
+      "ended",
+      function () { stopCarouselPreview(); },
+      { once: true },
+    );
+  }
+
+  function wireDiscoverCarouselPreviews(root) {
+    if (!root) return;
+    var cards = root.querySelectorAll(".discoverCarouselCard");
+    cards.forEach(function (card) {
+      var previewUrl = card.getAttribute("data-preview-url") || "";
+      var hookStartSec = Number(card.getAttribute("data-hook-start") || "0");
+      var playBtn = card.querySelector(".discoverCarouselPlay");
+
+      card.addEventListener("click", function (e) {
+        if (e.target.closest(".discoverCarouselPlay")) return;
+        stopCarouselPreview();
+        window.location.href = CAROUSEL_SIGNUP_HREF;
+      });
+      card.addEventListener("keydown", function (e) {
+        if (e.key === "Enter" && !e.target.closest(".discoverCarouselPlay")) {
+          e.preventDefault();
+          stopCarouselPreview();
+          window.location.href = CAROUSEL_SIGNUP_HREF;
+        }
+      });
+
+      if (!playBtn || !previewUrl) {
+        if (playBtn) playBtn.hidden = true;
+        return;
+      }
+
+      playBtn.addEventListener("click", function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        startCarouselPreview(card, previewUrl, hookStartSec);
+      });
+    });
+  }
+
   function renderDiscoverCarousel(songs) {
     var wrap = document.querySelector("[data-mk-discover-carousel-wrap]");
     var root = document.querySelector("[data-mk-discover-carousel]");
     if (!wrap || !root) return;
+    stopCarouselPreview();
     if (!Array.isArray(songs) || !songs.length) {
       wrap.hidden = true;
       root.innerHTML = "";
@@ -279,20 +395,30 @@
     wrap.hidden = false;
     root.innerHTML = songs.map(function (song) {
       if (!song || !song.id) return "";
-      var href = song.shareUrl || ("/s/" + encodeURIComponent(song.id));
       var art = song.artUrl || "/assets/marketing/nabadai-social-card.png";
       var title = song.title || "Untitled";
       var by = song.username ? "@" + song.username : (song.byLine || "");
+      var previewUrl = String(song.previewUrl || "").trim();
+      var hookStart = Number(song.hookStartSec);
+      if (!Number.isFinite(hookStart) || hookStart < 0) hookStart = 0;
       return (
-        '<a class="discoverCarouselCard" href="' + href.replace(/"/g, "&quot;") + '">' +
-          '<span class="discoverCarouselArt"><img src="' + art.replace(/"/g, "&quot;") + '" alt="" loading="lazy"></span>' +
+        '<article class="discoverCarouselCard" tabindex="0" role="button" data-song-id="' +
+          String(song.id).replace(/"/g, "&quot;") + '" data-preview-url="' +
+          previewUrl.replace(/"/g, "&quot;") + '" data-hook-start="' + hookStart + '">' +
+          '<span class="discoverCarouselArt">' +
+            '<img src="' + art.replace(/"/g, "&quot;") + '" alt="" loading="lazy">' +
+            '<button type="button" class="discoverCarouselPlay" aria-label="Preview song">' +
+              CAROUSEL_PLAY_SVG +
+            "</button>" +
+          "</span>" +
           '<span class="discoverCarouselMeta">' +
             '<span class="discoverCarouselTitle">' + title.replace(/</g, "&lt;") + "</span>" +
             (by ? '<span class="discoverCarouselBy">' + by.replace(/</g, "&lt;") + "</span>" : "") +
           "</span>" +
-        "</a>"
+        "</article>"
       );
     }).join("");
+    wireDiscoverCarouselPreviews(root);
     setupScrollReveal(root);
   }
 
@@ -553,6 +679,9 @@
 
   fetchHeroMeta();
   initScrollReveal();
+  document.addEventListener("visibilitychange", function () {
+    if (document.hidden) stopCarouselPreview();
+  });
 
   fetch("/api/marketing/content?page=" + encodeURIComponent(PAGE) + "&locale=" + encodeURIComponent(LOCALE), {
     credentials: "omit",

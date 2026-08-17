@@ -2539,24 +2539,6 @@ function pushMarketingPreviewToIframe() {
 }
 
 function updateMarketingDraftSitePreview() {
-  const eyebrow = document.getElementById("mkDraftHeroEyebrow");
-  const title = document.getElementById("mkDraftHeroTitle");
-  const lead = document.getElementById("mkDraftHeroLead");
-  const image = document.getElementById("mkDraftHeroImage");
-  if (eyebrow && title && lead && image) {
-    eyebrow.textContent = document.getElementById("mkHeroEyebrow")?.value || "";
-    title.textContent = document.getElementById("mkHeroTitle")?.value || "";
-    lead.textContent = document.getElementById("mkHeroLead")?.value || "";
-    const url = getMarketingHeroPreviewUrl();
-    if (url) {
-      image.hidden = false;
-      image.src = url;
-      image.alt = document.getElementById("mkHeroImageAlt")?.value || "";
-    } else {
-      image.hidden = true;
-      image.removeAttribute("src");
-    }
-  }
   pushMarketingPreviewToIframe();
 }
 
@@ -2682,71 +2664,59 @@ function renderMarketingHub(data) {
   els.panels.marketing.innerHTML = adminPageStack(`
     <div class="mkStoreHub">
       <div class="mkStoreHubHead">
-        <div>
-          <h3 class="mkStoreHubTitle">Online store</h3>
-          <p class="cellMuted">Visitors see the <strong>live</strong> site. Edit in <strong>draft</strong>, preview your changes, then publish when ready.</p>
-        </div>
-        <a class="btnGhost" href="https://www.nabadai.com/" target="_blank" rel="noopener">View store ↗</a>
+        <p class="cellMuted mkStoreHubLead">Visitors see <strong>Live</strong> on nabadai.com. You edit <strong>Draft</strong> here, then publish when ready.</p>
+        <a class="btnGhost btnSm" href="https://www.nabadai.com/" target="_blank" rel="noopener">View store ↗</a>
       </div>
 
       <div class="mkThemeGrid">
-        <section class="mkThemeCard mkThemeCard--live">
-          <div class="mkThemeCardTop">
-            <span class="mkThemeBadge mkThemeBadge--live">Active · Live</span>
+        <article class="mkThemePreview mkThemePreview--live">
+          <div class="mkThemePreviewHead">
+            <span class="mkThemeBadge mkThemeBadge--live">Live</span>
+            <span class="mkThemePreviewUrl">nabadai.com</span>
           </div>
-          <div class="mkThemeThumb mkThemeThumb--live" aria-hidden="true">
-            <div class="mkThemeThumbNav"></div>
-            <div class="mkThemeThumbHero"></div>
+          <iframe id="mkHubLivePreview" class="mkThemePreviewFrame" title="Live website preview" loading="lazy" src="${MARKETING_SITE_ORIGIN}/"></iframe>
+          <div class="mkThemePreviewFoot">
+            <span class="cellMuted">Published ${escapeHtml(lastLive)}</span>
+            <a class="btnGhost btnSm" href="https://www.nabadai.com/" target="_blank" rel="noopener">Open live ↗</a>
           </div>
-          <div class="mkThemeCardBody">
-            <h4 class="mkThemeCardName">nabadai.com</h4>
-            <p class="cellMuted">Last published: ${escapeHtml(lastLive)}</p>
-            <div class="mkThemeCardActions">
-              <a class="btnGhost" href="https://www.nabadai.com/" target="_blank" rel="noopener">View live ↗</a>
-            </div>
-          </div>
-        </section>
+        </article>
 
-        <section class="mkThemeCard mkThemeCard--draft">
-          <div class="mkThemeCardTop">
-            <span class="mkThemeBadge${hasDraft ? " mkThemeBadge--draft" : ""}">${hasDraft ? "Draft · Unpublished" : "Draft workspace"}</span>
+        <article class="mkThemePreview mkThemePreview--draft">
+          <div class="mkThemePreviewHead">
+            <span class="mkThemeBadge${hasDraft ? " mkThemeBadge--draft" : ""}">Draft</span>
+            <span class="mkThemePreviewUrl">${hasDraft ? `${draftCount} unpublished page${draftCount === 1 ? "" : "s"}` : "Same as live until you edit"}</span>
           </div>
-          <div class="mkThemeThumb mkThemeThumb--draft" aria-hidden="true">
-            <div class="mkThemeThumbNav"></div>
-            <div class="mkThemeThumbHero"></div>
-          </div>
-          <div class="mkThemeCardBody">
-            <h4 class="mkThemeCardName">${hasDraft ? `${draftCount} page${draftCount === 1 ? "" : "s"} with changes` : "No unpublished changes"}</h4>
-            <p class="cellMuted">Last draft save: ${escapeHtml(lastDraft)}</p>
-            <div class="mkThemeCardActions">
-              <button type="button" class="btnPrimary" data-marketing-edit-draft>Edit draft</button>
-              ${hasDraft ? `<button type="button" class="btnGhost" data-marketing-publish-all>Publish to live</button>` : ""}
+          <iframe id="mkHubDraftPreview" class="mkThemePreviewFrame" title="Draft website preview" loading="lazy"></iframe>
+          <div class="mkThemePreviewFoot">
+            <span class="cellMuted">Draft saved ${escapeHtml(lastDraft)}</span>
+            <div class="mkThemePreviewActions">
+              <button type="button" class="btnPrimary btnSm" data-marketing-edit-draft>Edit draft</button>
+              ${hasDraft ? `<button type="button" class="btnGhost btnSm" data-marketing-publish-all>Publish all</button>` : ""}
             </div>
           </div>
-        </section>
+        </article>
       </div>
 
-      <section class="mkPagesSection">
-        <div class="mkPagesSectionHead">
-          <h3 class="mkPagesSectionTitle">Pages</h3>
-          <p class="cellMuted">Each landing page has English and Arabic versions — pick a page to edit the draft.</p>
-        </div>
-        <div class="tableWrap">
-          <table class="dataTable mkPagesTable">
-            <thead>
-              <tr>
-                <th>Page</th>
-                <th>Status</th>
-                <th>Last published</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>${pageRows}</tbody>
-          </table>
-        </div>
-      </section>
+      <div class="listSectionHead">
+        <h3 class="listSectionTitle">Pages</h3>
+        <p class="listSectionNote">Open a page in the draft editor — English and Arabic are switched inside the editor.</p>
+      </div>
+      <div class="tableWrap">
+        <table class="dataTable mkPagesTable">
+          <thead>
+            <tr>
+              <th>Page</th>
+              <th>Status</th>
+              <th>Last published</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>${pageRows}</tbody>
+        </table>
+      </div>
     </div>
   `, { plain: true });
+  bindMarketingHubPreviews(hasDraft);
 }
 
 function renderMarketingBrandPanel(brand = {}) {
@@ -2807,9 +2777,6 @@ function renderMarketing(data) {
     : data?.updatedAt
       ? `Live saved ${fmtDate(data.updatedAt)}`
       : "Using defaults (not saved yet)";
-  const draftStatus = data?.hasDraftChanges
-    ? `<span class="mkStatusPill mkStatusPill--draft">Unpublished draft</span>`
-    : `<span class="mkStatusPill mkStatusPill--live">Matches live</span>`;
   const liveUpdated = data?.publishedAt ? fmtDate(data.publishedAt) : "—";
 
   const panel = state.marketingPanel || "content";
@@ -2821,18 +2788,9 @@ function renderMarketing(data) {
     { key: "photo-to-song", label: "Photo to Song" },
     { key: "arabic-ai-music-generator", label: "Arabic AI Music" },
   ];
-  const pageOptions = catalog.map((p) => (
+  const pageNavItems = catalog.map((p) => (
     `<option value="${escapeHtml(p.key)}"${p.key === pageKey ? " selected" : ""}>${escapeHtml(p.label)}</option>`
   )).join("");
-
-  const pageNavItems = catalog.map((p) => {
-    const path = p.preview?.[locale] || "/";
-    const active = p.key === pageKey && panel === "content";
-    return `<button type="button" class="marketingPageNavItem${active ? " isActive" : ""}" data-marketing-page="${escapeHtml(p.key)}" title="${escapeHtml(path)}">
-      <span class="marketingPageNavLabel">${escapeHtml(p.label)}</span>
-      <span class="marketingPageNavPath">${escapeHtml(path)}</span>
-    </button>`;
-  }).join("");
 
   const previewDevice = state.marketingPreviewDevice || "desktop";
   const previewUrl = `${MARKETING_SITE_ORIGIN}${buildMarketingDraftPreviewUrl(previewPath, { content: c, page: pageKey, locale })}`;
@@ -2953,74 +2911,51 @@ function renderMarketing(data) {
       `, { badge: "Homepage", sectionId: "footer" })}` : "";
 
   els.panels.marketing.innerHTML = adminPageStack(`
-    <div class="marketingEditorShell">
-      <div class="marketingEditorTopbar">
-        <button type="button" class="btnGhost btnSm" data-marketing-back-hub>← Online store</button>
-        <div class="marketingEditorTopbarMeta">
-          ${draftStatus}
-          <span class="cellMuted">Live published: ${escapeHtml(liveUpdated)}</span>
-        </div>
-        <div class="marketingEditorTopbarActions">
-          <button type="button" class="btnGhost" id="btnMarketingDiscard"${data?.hasDraftChanges ? "" : " disabled"}>Discard draft</button>
-          <button type="button" class="btnGhost" id="btnMarketingSaveDraft">Save draft</button>
-          <button type="button" class="btnPrimary" id="btnMarketingPublish">Publish to live</button>
-        </div>
-      </div>
-      <p id="marketingSaveMsg" class="grantMsg marketingEditorMsg" hidden></p>
-
-      <div class="marketingShell marketingShell--editor">
-      <aside class="marketingSideNav" aria-label="Marketing sections">
-        <div class="marketingSideGroup">
-          <p class="marketingSideGroupLabel">Pages</p>
-          <div class="marketingPageNav">${pageNavItems}</div>
-          <div class="marketingSideLocale">
-            <button type="button" class="btnGhost" data-marketing-locale="en" ${locale === "en" ? "disabled" : ""}>English</button>
-            <button type="button" class="btnGhost" data-marketing-locale="ar" ${locale === "ar" ? "disabled" : ""}>Arabic</button>
+    <div class="mkEditorRoot">
+      <header class="mkEditorChrome mkEditorChrome--draft">
+        <div class="mkEditorChromeMain">
+          <button type="button" class="btnGhost btnSm" data-marketing-back-hub>← Online store</button>
+          <span class="mkEditorModeBadge">Draft</span>
+          <label class="mkEditorPagePick">
+            <span class="srOnly">Page</span>
+            <select id="mkPageSelect" class="mkEditorPageSelect"${panel === "brand" ? " disabled" : ""}>${pageNavItems}</select>
+          </label>
+          <div class="mkEditorLocaleToggle">
+            <button type="button" class="btnGhost btnSm" data-marketing-locale="en"${locale === "en" ? " disabled" : ""}>EN</button>
+            <button type="button" class="btnGhost btnSm" data-marketing-locale="ar"${locale === "ar" ? " disabled" : ""}>AR</button>
           </div>
+          <span class="mkEditorPath">${escapeHtml(previewPath)}</span>
+          ${data?.hasDraftChanges ? `<span class="mkStatusPill mkStatusPill--draft">Unpublished changes</span>` : `<span class="mkStatusPill mkStatusPill--live">Matches live</span>`}
         </div>
-        <div class="marketingSideGroup">
-          <p class="marketingSideGroupLabel">Theme</p>
-          <button type="button" class="marketingSideLink${panel === "brand" ? " isActive" : ""}" data-marketing-panel="brand">Brand palette</button>
-          <button type="button" class="marketingSideLink${panel === "content" ? " isActive" : ""}" data-marketing-panel="content">Page content</button>
-          <p class="marketingSideHint">Brand colors/fonts apply site-wide.</p>
+        <div class="mkEditorChromeActions">
+          <button type="button" class="btnGhost btnSm" id="btnMarketingDiscard"${data?.hasDraftChanges ? "" : " disabled"}>Discard</button>
+          <button type="button" class="btnGhost btnSm" id="btnMarketingSaveDraft">Save draft</button>
+          <button type="button" class="btnPrimary btnSm" id="btnMarketingPublish">Publish</button>
         </div>
-        <div class="marketingSideGroup">
-          <p class="marketingSideGroupLabel">Sections</p>
+      </header>
+      <p id="marketingSaveMsg" class="grantMsg mkEditorMsg" hidden></p>
+
+      <div class="mkEditorLayout">
+        <nav class="mkSectionNav" aria-label="Page sections">
+          <button type="button" class="mkSectionNavItem${panel === "brand" ? " isActive" : ""}" data-marketing-panel="brand">Brand</button>
+          <button type="button" class="mkSectionNavItem${panel === "content" ? " isActive" : ""}" data-marketing-panel="content">Content</button>
           ${panel === "content" ? `
-          <button type="button" class="marketingSideLink marketingSideLink--section" data-scroll-section="hero">Hero</button>
-          <button type="button" class="marketingSideLink marketingSideLink--section" data-scroll-section="features">Features</button>
+          <div class="mkSectionNavGroup">Sections</div>
+          <button type="button" class="mkSectionNavItem mkSectionNavItem--sub" data-scroll-section="hero">Hero</button>
+          <button type="button" class="mkSectionNavItem mkSectionNavItem--sub" data-scroll-section="features">Features</button>
           ${isHome ? `
-          <button type="button" class="marketingSideLink marketingSideLink--section" data-scroll-section="templates">Song templates</button>
-          <button type="button" class="marketingSideLink marketingSideLink--section" data-scroll-section="collab">Creators</button>
-          <button type="button" class="marketingSideLink marketingSideLink--section" data-scroll-section="discover">Discover</button>
-          <button type="button" class="marketingSideLink marketingSideLink--section" data-scroll-section="pricing">Pricing</button>
-          <button type="button" class="marketingSideLink marketingSideLink--section" data-scroll-section="footer">Footer social</button>` : ""}
-          <button type="button" class="marketingSideLink marketingSideLink--section" data-scroll-section="faq">FAQ</button>
-          <button type="button" class="marketingSideLink marketingSideLink--section" data-scroll-section="related">Related pages</button>
-          <button type="button" class="marketingSideLink marketingSideLink--section" data-scroll-section="final">Final CTA</button>
-          <button type="button" class="marketingSideLink marketingSideLink--section" data-scroll-section="seo">SEO</button>` : `<p class="marketingSideHint">Fonts and button colors for all pages.</p>`}
-        </div>
-      </aside>
+          <button type="button" class="mkSectionNavItem mkSectionNavItem--sub" data-scroll-section="templates">Templates</button>
+          <button type="button" class="mkSectionNavItem mkSectionNavItem--sub" data-scroll-section="collab">Creators</button>
+          <button type="button" class="mkSectionNavItem mkSectionNavItem--sub" data-scroll-section="discover">Discover</button>
+          <button type="button" class="mkSectionNavItem mkSectionNavItem--sub" data-scroll-section="pricing">Pricing</button>
+          <button type="button" class="mkSectionNavItem mkSectionNavItem--sub" data-scroll-section="footer">Footer</button>` : ""}
+          <button type="button" class="mkSectionNavItem mkSectionNavItem--sub" data-scroll-section="faq">FAQ</button>
+          <button type="button" class="mkSectionNavItem mkSectionNavItem--sub" data-scroll-section="related">Related</button>
+          <button type="button" class="mkSectionNavItem mkSectionNavItem--sub" data-scroll-section="final">Final CTA</button>
+          <button type="button" class="mkSectionNavItem mkSectionNavItem--sub" data-scroll-section="seo">SEO</button>` : ""}
+        </nav>
 
-      <div class="marketingMain">
-        <div class="toolbarBlock marketingToolbar marketingToolbar--compact">
-          <div class="inlineStats">
-            <span>${panel === "brand" ? "Brand palette" : `<strong>${escapeHtml(pageMeta.label || pageKey)}</strong>`}</span>
-            <span>${locale === "ar" ? "Arabic" : "English"} · ${escapeHtml(previewPath)}</span>
-            <span>${updated}</span>
-          </div>
-          <div class="heroActions">
-            <div class="mkPreviewDeviceToggle" role="group" aria-label="Preview device">
-              <button type="button" class="btnGhost btnSm${previewDevice === "desktop" ? " isActive" : ""}" data-marketing-preview-device="desktop">Desktop</button>
-              <button type="button" class="btnGhost btnSm${previewDevice === "mobile" ? " isActive" : ""}" data-marketing-preview-device="mobile">Mobile</button>
-            </div>
-            <button type="button" class="btnGhost btnSm" id="btnMarketingDraftPreview" data-preview-path="${escapeHtml(previewPath)}">Open preview ↗</button>
-            <a class="btnGhost btnSm" href="${escapeHtml(previewPath)}" target="_blank" rel="noopener">View live ↗</a>
-          </div>
-        </div>
-
-        <div class="marketingSplit">
-        <div class="marketingEditor">
+        <div class="mkEditorForm marketingEditor">
           ${panel === "brand" ? renderMarketingBrandPanel(c.brand) : `
       ${marketingDetailCard("Hero", `
         ${marketingSubsection("Headline & copy", `
@@ -3046,17 +2981,6 @@ function renderMarketing(data) {
             hint: "Screen readers and SEO.",
           })}
         `, { description: "Large photo beside the headline." })}
-        <div class="marketingDraftSitePreview" id="mkDraftSitePreview">
-          <p class="marketingDraftSitePreviewLabel">Draft preview</p>
-          <div class="marketingDraftHero">
-            <div class="marketingDraftHeroCopy">
-              <p class="eyebrow" id="mkDraftHeroEyebrow">${escapeHtml(hero.eyebrow || "")}</p>
-              <h2 id="mkDraftHeroTitle">${escapeHtml(hero.title || "")}</h2>
-              <p id="mkDraftHeroLead">${escapeHtml(hero.lead || "")}</p>
-            </div>
-            <img id="mkDraftHeroImage" class="marketingDraftHeroImage" src="${escapeHtml(hero.heroImageUrl || "")}" alt="${escapeHtml(hero.heroImageAlt || "")}" ${hero.heroImageUrl ? "" : "hidden"} />
-          </div>
-        </div>
       `, { description: "Top of the page — headline, buttons, and hero image.", sectionId: "hero" })}
 
       ${marketingDetailCard("Features", `
@@ -3096,18 +3020,26 @@ function renderMarketing(data) {
           `}
         </div>
 
-        <aside class="marketingPreviewPane" aria-label="Draft preview">
-          <div class="marketingPreviewPaneHead">
-            <span class="marketingPreviewPaneLabel">Draft preview</span>
-            <span class="cellMuted">Updates as you type — not visible to visitors</span>
+        <div class="mkPreviewCol">
+          <header class="mkPreviewChrome mkPreviewChrome--draft">
+            <div class="mkPreviewChromeMain">
+              <span class="mkPreviewModeBadge">Draft preview</span>
+              <span class="mkPreviewChromeNote">Not live — visitors still see <a href="${escapeHtml(`${MARKETING_SITE_ORIGIN}${previewPath}`)}" target="_blank" rel="noopener">published page ↗</a></span>
+            </div>
+            <div class="mkPreviewChromeTools">
+              <div class="mkPreviewDeviceToggle" role="group" aria-label="Preview device">
+                <button type="button" class="btnGhost btnSm${previewDevice === "desktop" ? " isActive" : ""}" data-marketing-preview-device="desktop">Desktop</button>
+                <button type="button" class="btnGhost btnSm${previewDevice === "mobile" ? " isActive" : ""}" data-marketing-preview-device="mobile">Mobile</button>
+              </div>
+              <button type="button" class="btnGhost btnSm" id="btnMarketingDraftPreview" data-preview-path="${escapeHtml(previewPath)}">Open ↗</button>
+            </div>
+          </header>
+          <div class="mkPreviewFrameWrap mkPreviewFrameWrap--${previewDevice}">
+            <iframe id="mkLivePreviewFrame" class="mkPreviewFrame" title="Draft preview (not live)" src="${escapeHtml(previewUrl)}"></iframe>
           </div>
-          <div class="marketingPreviewFrameWrap marketingPreviewFrameWrap--${previewDevice}">
-            <iframe id="mkLivePreviewFrame" class="marketingPreviewFrame" title="Draft page preview" src="${escapeHtml(previewUrl)}"></iframe>
-          </div>
-        </aside>
+          <p class="cellMuted mkPreviewFoot">${escapeHtml(updated)} · Live published ${escapeHtml(liveUpdated)}</p>
         </div>
       </div>
-    </div>
     </div>
   `, { plain: true });
   bindMarketingDraftPreviewListeners();
@@ -3155,8 +3087,54 @@ async function bindMarketingDiscoverPicker() {
 }
 
 function renderMarketingView(data) {
-  if (state.marketingScreen === "hub") renderMarketingHub(data);
-  else renderMarketing(data);
+  if (state.marketingScreen === "hub") {
+    els.pageTitle.textContent = VIEW_META.marketing.title;
+    els.pageSub.textContent = VIEW_META.marketing.sub;
+    renderMarketingHub(data);
+    return;
+  }
+  const catalog = Array.isArray(data?.pages) ? data.pages : [];
+  const pageKey = state.marketingPage || data?.page || "home";
+  const pageMeta = catalog.find((p) => p.key === pageKey) || { label: pageKey };
+  const locale = state.marketingLocale || "en";
+  els.pageTitle.textContent = "Online store";
+  els.pageSub.textContent = `${pageMeta.label || pageKey} · ${locale === "ar" ? "Arabic" : "English"} · Draft editor`;
+  renderMarketing(data);
+}
+
+function bindMarketingHubPreviews(hasDraft) {
+  const liveFrame = document.getElementById("mkHubLivePreview");
+  const draftFrame = document.getElementById("mkHubDraftPreview");
+  if (liveFrame && !liveFrame.src) {
+    liveFrame.src = `${MARKETING_SITE_ORIGIN}/`;
+  }
+  if (!draftFrame) return;
+  const draftPath = `${MARKETING_SITE_ORIGIN}/?preview=draft`;
+  draftFrame.src = draftPath;
+  if (!hasDraft) return;
+  void (async () => {
+    try {
+      const data = await marketingAdminFetch("home", "en");
+      const payload = {
+        page: "home",
+        locale: "en",
+        content: data?.content || {},
+        savedAt: Date.now(),
+      };
+      const push = () => sendMarketingDraftToPreviewWindow(draftFrame.contentWindow, payload);
+      draftFrame.addEventListener("load", () => {
+        push();
+        let attempts = 0;
+        const timer = window.setInterval(() => {
+          attempts += 1;
+          push();
+          if (attempts >= 10) window.clearInterval(timer);
+        }, 250);
+      });
+    } catch {
+      /* hub still shows live-looking preview */
+    }
+  })();
 }
 
 const RENDERERS = {

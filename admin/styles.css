@@ -1584,6 +1584,18 @@ td.num { font-variant-numeric: tabular-nums; }
 
 /* ——— Online store hub (Shopify-style live / draft) ——— */
 
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 .btnSm {
   padding: 7px 12px !important;
   font-size: 0.82rem !important;
@@ -1591,49 +1603,84 @@ td.num { font-variant-numeric: tabular-nums; }
 
 .mkStoreHub {
   display: grid;
-  gap: 28px;
-  max-width: 1080px;
+  gap: 22px;
 }
 
 .mkStoreHubHead {
   display: flex;
   flex-wrap: wrap;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
-  gap: 16px;
+  gap: 12px;
 }
 
-.mkStoreHubTitle {
-  margin: 0 0 6px;
-  font-size: 1.35rem;
-  font-weight: 700;
-  letter-spacing: -0.02em;
+.mkStoreHubLead {
+  margin: 0;
+  max-width: 52rem;
 }
 
 .mkThemeGrid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-  gap: 18px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
 }
 
-.mkThemeCard {
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 16px;
-  background: rgba(16, 20, 31, 0.92);
+.mkThemePreview {
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  min-height: 360px;
+  border-radius: 12px;
   overflow: hidden;
-  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(8, 10, 16, 0.55);
 }
 
-.mkThemeCard--live {
-  border-color: rgba(35, 213, 171, 0.22);
+.mkThemePreview--live {
+  border-color: rgba(35, 213, 171, 0.28);
 }
 
-.mkThemeCard--draft {
-  border-color: rgba(124, 92, 255, 0.22);
+.mkThemePreview--draft {
+  border-color: rgba(124, 92, 255, 0.28);
 }
 
-.mkThemeCardTop {
-  padding: 12px 14px 0;
+.mkThemePreviewHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.mkThemePreviewUrl {
+  font-size: 0.78rem;
+  color: rgba(151, 165, 186, 0.88);
+}
+
+.mkThemePreviewFrame {
+  width: 100%;
+  height: 100%;
+  min-height: 260px;
+  border: 0;
+  background: #0a0c12;
+  pointer-events: none;
+}
+
+.mkThemePreviewFoot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  font-size: 0.8rem;
+}
+
+.mkThemePreviewActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 .mkThemeBadge {
@@ -1660,77 +1707,6 @@ td.num { font-variant-numeric: tabular-nums; }
   color: rgba(196, 181, 253, 0.95);
   border-color: rgba(124, 92, 255, 0.32);
   background: rgba(124, 92, 255, 0.12);
-}
-
-.mkThemeThumb {
-  margin: 12px 14px 0;
-  height: 140px;
-  border-radius: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.02));
-  display: grid;
-  grid-template-rows: 18px 1fr;
-  gap: 8px;
-  padding: 10px;
-}
-
-.mkThemeThumb--live {
-  background:
-    linear-gradient(180deg, rgba(35, 213, 171, 0.08), transparent),
-    rgba(255, 255, 255, 0.03);
-}
-
-.mkThemeThumb--draft {
-  background:
-    linear-gradient(180deg, rgba(124, 92, 255, 0.1), transparent),
-    rgba(255, 255, 255, 0.03);
-}
-
-.mkThemeThumbNav {
-  height: 8px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.12);
-  width: 40%;
-}
-
-.mkThemeThumbHero {
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.06);
-}
-
-.mkThemeCardBody {
-  padding: 14px 16px 16px;
-  display: grid;
-  gap: 8px;
-}
-
-.mkThemeCardName {
-  margin: 0;
-  font-size: 1rem;
-  font-weight: 700;
-}
-
-.mkThemeCardActions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 6px;
-}
-
-.mkPagesSection {
-  display: grid;
-  gap: 12px;
-}
-
-.mkPagesSectionTitle {
-  margin: 0;
-  font-size: 1.05rem;
-  font-weight: 700;
-}
-
-.mkPagesSectionHead {
-  display: grid;
-  gap: 4px;
 }
 
 .mkPagePath {
@@ -1764,211 +1740,286 @@ td.num { font-variant-numeric: tabular-nums; }
   background: rgba(124, 92, 255, 0.1);
 }
 
-/* ——— Theme editor (split preview) ——— */
+/* ——— Draft editor ——— */
 
-.marketingEditorShell {
+.mkEditorRoot {
   display: grid;
-  gap: 0;
-  min-height: calc(100vh - 120px);
-  border-top: 1px solid var(--border);
+  min-height: calc(100vh - 140px);
 }
 
-.marketingEditorTopbar {
+.mkEditorChrome {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  padding: 12px 18px;
+  gap: 10px 16px;
+  padding: 10px 14px;
   border-bottom: 1px solid var(--border);
-  background: rgba(8, 10, 16, 0.82);
 }
 
-.marketingEditorTopbarMeta {
+.mkEditorChrome--draft {
+  background: linear-gradient(90deg, rgba(124, 92, 255, 0.14), rgba(8, 10, 16, 0.92) 42%);
+  border-bottom-color: rgba(124, 92, 255, 0.28);
+}
+
+.mkEditorChromeMain {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 10px;
-  font-size: 0.82rem;
+  gap: 8px 10px;
+  min-width: 0;
 }
 
-.marketingEditorTopbarActions {
+.mkEditorChromeActions {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
 }
 
-.marketingEditorMsg {
+.mkEditorModeBadge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #ede9fe;
+  background: rgba(124, 92, 255, 0.35);
+  border: 1px solid rgba(196, 181, 253, 0.35);
+}
+
+.mkEditorPageSelect {
+  min-width: 160px;
+  padding: 7px 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(5, 7, 13, 0.65);
+  color: var(--text);
+  font: inherit;
+  font-size: 0.86rem;
+}
+
+.mkEditorLocaleToggle {
+  display: inline-flex;
+  gap: 4px;
+}
+
+.mkEditorPath {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.76rem;
+  color: rgba(151, 165, 186, 0.82);
+}
+
+.mkEditorMsg {
   margin: 0;
-  padding: 8px 18px;
+  padding: 6px 14px;
 }
 
-.marketingShell--editor {
-  min-height: auto;
-  grid-template-columns: minmax(200px, 220px) minmax(0, 1fr);
-}
-
-.marketingPageNav {
+.mkEditorLayout {
   display: grid;
-  gap: 6px;
+  grid-template-columns: 168px minmax(300px, 34%) minmax(0, 1fr);
+  min-height: calc(100vh - 190px);
 }
 
-.marketingPageNavItem {
-  display: grid;
-  gap: 2px;
+.mkSectionNav {
+  padding: 12px 10px;
+  border-right: 1px solid var(--border);
+  overflow: auto;
+}
+
+.mkSectionNavGroup {
+  margin: 14px 8px 6px;
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(151, 165, 186, 0.65);
+}
+
+.mkSectionNavItem {
+  display: block;
   width: 100%;
   text-align: left;
-  padding: 10px 12px;
-  border-radius: 10px;
-  border: 1px solid transparent;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 8px;
   background: transparent;
   color: var(--muted);
   font: inherit;
+  font-size: 0.84rem;
+  font-weight: 600;
   cursor: pointer;
 }
 
-.marketingPageNavItem:hover {
+.mkSectionNavItem--sub {
+  padding-left: 16px;
+  font-size: 0.8rem;
+  font-weight: 500;
+}
+
+.mkSectionNavItem:hover {
   background: rgba(255, 255, 255, 0.04);
   color: var(--text);
 }
 
-.marketingPageNavItem.isActive {
-  background: rgba(35, 213, 171, 0.1);
-  border-color: rgba(35, 213, 171, 0.28);
+.mkSectionNavItem.isActive {
+  background: rgba(124, 92, 255, 0.16);
   color: #f2f5ff;
 }
 
-.marketingPageNavLabel {
-  font-size: 0.86rem;
-  font-weight: 700;
-}
-
-.marketingPageNavPath {
-  font-size: 0.72rem;
-  color: rgba(151, 165, 186, 0.78);
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-}
-
-.marketingSideLink--section {
-  font-size: 0.82rem;
-  font-weight: 500;
-  padding-left: 18px;
-}
-
-.marketingToolbar--compact {
-  margin-bottom: 0;
-}
-
-.marketingSplit {
-  display: grid;
-  grid-template-columns: minmax(280px, 420px) minmax(0, 1fr);
-  gap: 0;
-  min-height: calc(100vh - 220px);
-  border-top: 1px solid var(--border);
-}
-
-.marketingSplit .marketingEditor {
-  max-width: none;
-  padding: 16px 18px 40px;
+.mkEditorForm {
+  padding: 14px 16px 28px;
   overflow: auto;
-  max-height: calc(100vh - 220px);
   border-right: 1px solid var(--border);
+  max-height: calc(100vh - 190px);
 }
 
-.marketingPreviewPane {
+.mkPreviewCol {
   display: grid;
-  grid-template-rows: auto 1fr;
+  grid-template-rows: auto 1fr auto;
   min-width: 0;
-  background: rgba(5, 7, 13, 0.55);
+  background: rgba(5, 7, 13, 0.35);
 }
 
-.marketingPreviewPaneHead {
-  display: grid;
-  gap: 2px;
-  padding: 12px 16px;
-  border-bottom: 1px solid var(--border);
+.mkPreviewChrome {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+  padding: 10px 12px;
+  border-bottom: 1px solid rgba(124, 92, 255, 0.22);
+  background: rgba(124, 92, 255, 0.08);
 }
 
-.marketingPreviewPaneLabel {
-  font-size: 0.78rem;
-  font-weight: 700;
+.mkPreviewChromeMain {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 10px;
+  min-width: 0;
+}
+
+.mkPreviewModeBadge {
+  display: inline-flex;
+  padding: 4px 9px;
+  border-radius: 999px;
+  font-size: 0.66rem;
+  font-weight: 800;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: rgba(196, 181, 253, 0.92);
+  color: #ede9fe;
+  background: rgba(124, 92, 255, 0.32);
+  border: 1px solid rgba(196, 181, 253, 0.28);
 }
 
-.marketingPreviewFrameWrap {
-  padding: 16px;
-  overflow: auto;
+.mkPreviewChromeNote {
+  font-size: 0.78rem;
+  color: rgba(196, 181, 253, 0.88);
+}
+
+.mkPreviewChromeNote a {
+  color: rgba(45, 212, 191, 0.95);
+}
+
+.mkPreviewChromeTools {
   display: flex;
-  justify-content: center;
-  align-items: flex-start;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
 }
 
-.marketingPreviewFrameWrap--desktop .marketingPreviewFrame {
+.mkPreviewFrameWrap {
+  padding: 10px;
+  overflow: auto;
+  min-height: 0;
+}
+
+.mkPreviewFrameWrap--desktop .mkPreviewFrame {
   width: 100%;
-  max-width: 100%;
-  height: calc(100vh - 280px);
+  height: calc(100vh - 250px);
   min-height: 520px;
 }
 
-.marketingPreviewFrameWrap--mobile .marketingPreviewFrame {
+.mkPreviewFrameWrap--mobile .mkPreviewFrame {
   width: 390px;
   max-width: 100%;
-  height: calc(100vh - 280px);
-  min-height: 680px;
-  border-radius: 24px;
-  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.12), 0 24px 48px rgba(0, 0, 0, 0.45);
+  height: calc(100vh - 250px);
+  min-height: 640px;
+  margin: 0 auto;
+  display: block;
+  border-radius: 20px;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.12), 0 20px 40px rgba(0, 0, 0, 0.45);
 }
 
-.marketingPreviewFrame {
+.mkPreviewFrame {
   border: 0;
-  border-radius: 12px;
+  border-radius: 10px;
   background: #fff;
+}
+
+.mkPreviewFoot {
+  margin: 0;
+  padding: 8px 12px 12px;
+  font-size: 0.76rem;
 }
 
 .mkPreviewDeviceToggle {
   display: inline-flex;
   gap: 4px;
   padding: 3px;
-  border-radius: 10px;
+  border-radius: 8px;
   border: 1px solid rgba(255, 255, 255, 0.1);
   background: rgba(255, 255, 255, 0.03);
 }
 
 .mkPreviewDeviceToggle .btnGhost.isActive {
-  background: rgba(124, 92, 255, 0.18);
+  background: rgba(124, 92, 255, 0.22);
   border-color: rgba(124, 92, 255, 0.32);
   color: #f2f5ff;
   opacity: 1;
 }
 
 @media (max-width: 1100px) {
-  .marketingSplit {
+  .mkThemeGrid {
     grid-template-columns: 1fr;
   }
 
-  .marketingSplit .marketingEditor {
+  .mkEditorLayout {
+    grid-template-columns: 1fr;
+  }
+
+  .mkSectionNav {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    border-right: 0;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .mkSectionNavGroup {
+    width: 100%;
+    margin: 4px 0 0;
+  }
+
+  .mkEditorForm {
     max-height: none;
     border-right: 0;
     border-bottom: 1px solid var(--border);
   }
 
-  .marketingPreviewPane {
-    min-height: 480px;
+  .mkPreviewFrameWrap--desktop .mkPreviewFrame,
+  .mkPreviewFrameWrap--mobile .mkPreviewFrame {
+    min-height: 420px;
+    height: 62vh;
   }
 }
 
 @media (max-width: 900px) {
-  .marketingShell--editor {
-    grid-template-columns: 1fr;
-  }
-
-  .marketingSideNav {
-    position: static;
-    max-height: none;
-    border-right: 0;
-    border-bottom: 1px solid var(--border);
+  .mkEditorChromeMain {
+    width: 100%;
   }
 }
 

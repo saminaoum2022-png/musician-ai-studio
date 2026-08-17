@@ -1,8 +1,10 @@
 /**
  * ElevenLabs Music API (music_v2).
  * @see https://elevenlabs.io/docs/api-reference/music/compose
+ * @see https://elevenlabs.io/docs/api-reference/music/compose-detailed
  */
 const ELEVEN_MUSIC_URL = "https://api.elevenlabs.io/v1/music";
+const ELEVEN_MUSIC_DETAILED_URL = "https://api.elevenlabs.io/v1/music/detailed";
 
 function safeJson(txt) {
   try {
@@ -122,6 +124,63 @@ function elevenUserMessage(httpStatus, payload, rawText) {
   return snippet || "ElevenLabs generation failed — try again.";
 }
 
+/** Parse multipart/mixed from compose_detailed (JSON metadata + binary audio). */
+function parseMultipartMixed(rawBuffer, contentType) {
+  const m = /boundary=(?:"([^"]+)"|([^\s;]+))/i.exec(String(contentType || ""));
+  const boundary = m?.[1] || m?.[2];
+  if (!boundary) return { json: null, audio: null };
+
+  const raw = Buffer.isBuffer(rawBuffer) ? rawBuffer : Buffer.from(rawBuffer);
+  const delim = Buffer.from(`--${boundary}`);
+  const parts = [];
+  let start = raw.indexOf(delim);
+  while (start !== -1) {
+    start += delim.length;
+    if (raw[start] === 45 && raw[start + 1] === 45) break;
+    if (raw[start] === 13 && raw[start + 1] === 10) start += 2;
+    else if (raw[start] === 10) start += 1;
+    const next = raw.indexOf(delim, start);
+    parts.push(next === -1 ? raw.subarray(start) : raw.subarray(start, next));
+    start = next;
+  }
+
+  let json = null;
+  let audio = null;
+  for (const part of parts) {
+    const sep = part.indexOf("\r\n\r\n");
+    const headerEnd = sep !== -1 ? sep : part.indexOf("\n\n");
+    if (headerEnd === -1) continue;
+    const headers = part.subarray(0, headerEnd).toString("utf8").toLowerCase();
+    const bodyStart = sep !== -1 ? headerEnd + 4 : headerEnd + 2;
+    let body = part.subarray(bodyStart);
+    if (body.length >= 2 && body[body.length - 2] === 13 && body[body.length - 1] === 10) {
+      body = body.subarray(0, body.length - 2);
+    } else if (body.length >= 1 && body[body.length - 1] === 10) {
+      body = body.subarray(0, body.length - 1);
+    }
+    if (headers.includes("application/json")) {
+      json = safeJson(body.toString("utf8"));
+    } else if (headers.includes("audio/")) {
+      const ct = headers.match(/content-type:\s*([^\r\n]+)/)?.[1]?.trim() || "audio/mpeg";
+      audio = { buffer: body, mimeType: ct };
+    }
+  }
+  return { json, audio };
+}
+
+/** ElevenLabs words_timestamps → Suno-compatible alignedWords (seconds). */
+function normalizeElevenWordsTimestamps(words) {
+  if (!Array.isArray(words)) return [];
+  return words
+    .map((w) => ({
+      word: String(w?.word ?? ""),
+      startS: Number(w?.start_ms ?? w?.startMs ?? 0) / 1000,
+      endS: Number(w?.end_ms ?? w?.endMs ?? 0) / 1000,
+      success: true,
+    }))
+    .filter((w) => w.word !== "");
+}
+
 /**
  * @param {{ apiKey: string, prompt: string, model?: string, musicLengthMs?: number, instrumental?: boolean, finetuneId?: string }} opts
  */
@@ -184,11 +243,85 @@ async function elevenlabsGenerateMusic({
   };
 }
 
+/**
+ * Detailed compose — returns audio + optional word timestamps (karaoke).
+ * @param {{ apiKey: string, prompt: string, model?: string, musicLengthMs?: number, instrumental?: boolean, finetuneId?: string, withTimestamps?: boolean }} opts
+ */
+async function elevenlabsGenerateMusicDetailed({
+  apiKey,
+  prompt,
+  model,
+  musicLengthMs,
+  instrumental = false,
+  finetuneId,
+  withTimestamps = true,
+}) {
+  const resolvedModel = resolveElevenMusicModel(model);
+  const lengthMs = resolveElevenMusicLengthMs(musicLengthMs);
+  const resolvedFinetuneId = resolveElevenFinetuneId(finetuneId);
+  const wantTimestamps = withTimestamps && !instrumental;
+  const url = `${ELEVEN_MUSIC_DETAILED_URL}?output_format=mp3_48000_192`;
+  const body = {
+    prompt: String(prompt || "").trim(),
+    model_id: resolvedModel,
+    music_length_ms: lengthMs,
+    ...(instrumental ? { force_instrumental: true } : {}),
+    ...(resolvedFinetuneId ? { finetune_id: resolvedFinetuneId } : {}),
+    ...(wantTimestamps ? { with_timestamps: true } : {}),
+  };
+
+  const r = await fetch(url, {
+    method: "POST",
+    headers: {
+      "xi-api-key": String(apiKey || "").trim(),
+      "Content-Type": "application/json",
+      Accept: "multipart/mixed",
+    },
+    body: JSON.stringify(body),
+  });
+
+  const ct = String(r.headers.get("content-type") || "").toLowerCase();
+  if (r.ok && ct.includes("multipart")) {
+    const ab = await r.arrayBuffer();
+    const { json, audio } = parseMultipartMixed(Buffer.from(ab), ct);
+    const buffer = audio?.buffer;
+    const rawWords = json?.words_timestamps ?? json?.wordsTimestamps ?? [];
+    const alignedWords = normalizeElevenWordsTimestamps(rawWords);
+    return {
+      ok: buffer && buffer.length >= 128,
+      httpStatus: r.status,
+      audio: buffer ? { buffer, mimeType: audio.mimeType || "audio/mpeg" } : null,
+      alignedWords,
+      model: resolvedModel,
+      musicLengthMs: lengthMs,
+      finetuneId: resolvedFinetuneId || undefined,
+      userMessage:
+        buffer && buffer.length >= 128 ? "" : "ElevenLabs returned empty audio.",
+    };
+  }
+
+  const text = await r.text().catch(() => "");
+  const data = safeJson(text);
+  return {
+    ok: false,
+    httpStatus: r.status,
+    data,
+    text,
+    alignedWords: [],
+    model: resolvedModel,
+    musicLengthMs: lengthMs,
+    finetuneId: resolvedFinetuneId || undefined,
+    userMessage: elevenUserMessage(r.status, data, text),
+  };
+}
+
 module.exports = {
   buildElevenMusicPrompt,
   elevenlabsGenerateEnabled,
   elevenlabsGenerateMusic,
+  elevenlabsGenerateMusicDetailed,
   elevenUserMessage,
+  normalizeElevenWordsTimestamps,
   resolveElevenMusicLengthMs,
   resolveElevenMusicModel,
   resolveElevenFinetuneId,

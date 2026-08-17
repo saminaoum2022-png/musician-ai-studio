@@ -91,6 +91,145 @@ function extractLyriaAudio(payload) {
   return null;
 }
 
+/** Collect all text parts from a Lyria generateContent response. */
+function extractLyriaTextParts(payload) {
+  const parts = payload?.candidates?.[0]?.content?.parts;
+  if (!Array.isArray(parts)) return [];
+  return parts
+    .map((p) => String(p?.text || "").trim())
+    .filter(Boolean);
+}
+
+/** Duration from the music-analysis text part (duration_secs: 150.5). */
+function extractLyriaDurationSecs(payload) {
+  for (const text of extractLyriaTextParts(payload)) {
+    const m = /duration_secs:\s*([\d.]+)/i.exec(text);
+    if (m) {
+      const n = Number(m[1]);
+      if (Number.isFinite(n) && n > 0) return n;
+    }
+  }
+  return null;
+}
+
+/** Pick the lyrics part (section markers + [sec:] timestamps), not the analysis blob. */
+function pickLyriaLyricsPart(textParts) {
+  for (const t of textParts) {
+    if (/\[\[[A-D]\d+\]\]/.test(t) || /\[\d+(?:\.\d+)?:\]/.test(t)) return t;
+  }
+  const nonAnalysis = textParts.filter((t) => !/^mosic:/i.test(t) && !/^bpm:/i.test(t));
+  if (nonAnalysis.length) {
+    return nonAnalysis.sort((a, b) => a.length - b.length)[0];
+  }
+  return textParts[0] || "";
+}
+
+function lyriaSectionToTag(line) {
+  const m = /^\[\[([A-D])(\d+)\]\]$/.exec(String(line || "").trim());
+  if (!m) return String(line || "").trim();
+  const map = { A: "Intro", B: "Verse", C: "Chorus", D: "Outro" };
+  return `[${map[m[1]] || "Section"}]`;
+}
+
+/**
+ * Lyria lyrics use line timestamps like [10.9:] and continuations [:].
+ * Split each timed line into evenly-spaced words for karaoke display.
+ */
+function parseLyriaLyricsToAlignedWords(lyricsText, totalDurationS = 0) {
+  const segments = [];
+  let currentStart = 0;
+  let currentText = "";
+
+  const flushLyric = () => {
+    const text = currentText.trim();
+    if (text) segments.push({ text, startS: currentStart, isSection: false });
+    currentText = "";
+  };
+
+  for (const raw of String(lyricsText || "").split(/\r?\n/)) {
+    const line = raw.trim();
+    if (!line) continue;
+
+    if (/^\[\[[A-D]\d+\]\]$/.test(line)) {
+      flushLyric();
+      segments.push({ text: lyriaSectionToTag(line), startS: currentStart, isSection: true });
+      continue;
+    }
+
+    const abs = line.match(/^\[(\d+(?:\.\d+)?):\]\s*(.*)$/);
+    if (abs) {
+      flushLyric();
+      currentStart = Number(abs[1]) || 0;
+      currentText = abs[2] || "";
+      continue;
+    }
+
+    const cont = line.match(/^\[:\]\s*(.*)$/);
+    if (cont) {
+      currentText += (currentText ? " " : "") + (cont[1] || "");
+      continue;
+    }
+
+    flushLyric();
+    currentText = line;
+  }
+  flushLyric();
+
+  // Section markers precede their lyric block — inherit the next line's start time.
+  for (let i = 0; i < segments.length; i++) {
+    if (!segments[i].isSection) continue;
+    const next = segments.slice(i + 1).find((s) => !s.isSection);
+    if (next) segments[i].startS = next.startS;
+  }
+
+  const lyricSegs = segments.filter((s) => !s.isSection && s.text);
+  if (!lyricSegs.length) return [];
+
+  const duration =
+    Number(totalDurationS) > 0
+      ? Number(totalDurationS)
+      : lyricSegs[lyricSegs.length - 1].startS + 8;
+
+  const alignedWords = [];
+  for (let i = 0; i < segments.length; i++) {
+    const seg = segments[i];
+    if (seg.isSection) {
+      const nextStart =
+        segments.slice(i + 1).find((s) => !s.isSection)?.startS ?? seg.startS;
+      alignedWords.push({
+        word: seg.text,
+        startS: seg.startS,
+        endS: Math.max(seg.startS + 0.05, nextStart),
+        success: true,
+      });
+      continue;
+    }
+    const nextLyric = segments.slice(i + 1).find((s) => !s.isSection);
+    const endS = nextLyric ? nextLyric.startS : duration;
+    const words = seg.text.split(/\s+/).filter(Boolean);
+    if (!words.length) continue;
+    const span = Math.max(0.05, endS - seg.startS);
+    const perWord = span / words.length;
+    words.forEach((w, wi) => {
+      alignedWords.push({
+        word: w,
+        startS: seg.startS + wi * perWord,
+        endS: seg.startS + (wi + 1) * perWord,
+        success: true,
+      });
+    });
+  }
+  return alignedWords;
+}
+
+function extractLyriaAlignedWords(payload) {
+  const textParts = extractLyriaTextParts(payload);
+  const lyricsPart = pickLyriaLyricsPart(textParts);
+  if (!lyricsPart) return [];
+  const duration = extractLyriaDurationSecs(payload);
+  return parseLyriaLyricsToAlignedWords(lyricsPart, duration || 0);
+}
+
 function lyriaUserMessage(httpStatus, payload, rawText) {
   const err = payload?.error?.message || payload?.error;
   if (err) return String(err).slice(0, 280);
@@ -127,12 +266,14 @@ async function lyriaGenerateMusic({ apiKey, model, prompt }) {
   const text = await r.text().catch(() => "");
   const data = safeJson(text);
   const audio = extractLyriaAudio(data);
+  const alignedWords = extractLyriaAlignedWords(data);
   return {
     ok: r.ok && Boolean(audio?.buffer?.length),
     httpStatus: r.status,
     data,
     text,
     audio,
+    alignedWords,
     model: resolvedModel,
     userMessage: lyriaUserMessage(r.status, data, text),
   };
@@ -140,9 +281,14 @@ async function lyriaGenerateMusic({ apiKey, model, prompt }) {
 
 module.exports = {
   buildLyriaPrompt,
+  extractLyriaAlignedWords,
   extractLyriaAudio,
+  extractLyriaDurationSecs,
+  extractLyriaTextParts,
   lyriaGenerateEnabled,
   lyriaGenerateMusic,
   lyriaUserMessage,
+  parseLyriaLyricsToAlignedWords,
+  pickLyriaLyricsPart,
   resolveLyriaModel,
 };

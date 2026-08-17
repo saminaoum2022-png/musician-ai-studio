@@ -34,7 +34,7 @@ const {
 const {
   buildElevenMusicPrompt,
   elevenlabsGenerateEnabled,
-  elevenlabsGenerateMusic,
+  elevenlabsGenerateMusicDetailed,
   resolveElevenMusicLengthMs,
   resolveElevenMusicModel,
   resolveElevenFinetuneId,
@@ -45,6 +45,7 @@ const {
   providerFolder,
 } = require("../_lib/music-provider-task-store");
 const { uploadObject } = require("../_lib/supabase-storage");
+const { queueCacheTimestampedLyrics } = require("../_lib/music-timestamped-lyrics-cache");
 const {
   queueLogMusicGeneration,
   queueUpdateMusicGenerationByTaskId,
@@ -211,6 +212,7 @@ async function runLyriaGenerationJob({
   lyriaPrompt,
   title,
   lyrics,
+  instrumental = false,
 }) {
   const fail = async (msg) => {
     if (!isAdmin) {
@@ -243,6 +245,14 @@ async function runLyriaGenerationJob({
     if (!archived.ok || !archived.url) {
       await fail("Lyria audio upload failed — try again.");
       return;
+    }
+    if (!instrumental && Array.isArray(upstream.alignedWords) && upstream.alignedWords.length) {
+      queueCacheTimestampedLyrics({
+        audioId,
+        taskId,
+        provider: "lyria",
+        alignedWords: upstream.alignedWords,
+      });
     }
     const statusPayload = buildSunoStatusPayload({
       taskId,
@@ -297,13 +307,14 @@ async function runElevenlabsGenerationJob({
   };
 
   try {
-    const upstream = await elevenlabsGenerateMusic({
+    const upstream = await elevenlabsGenerateMusicDetailed({
       apiKey,
       prompt: elevenPrompt,
       model,
       musicLengthMs,
       instrumental,
       finetuneId,
+      withTimestamps: !instrumental,
     });
     if (!upstream.ok) {
       await fail(upstream.userMessage || "ElevenLabs generation failed — try again.");
@@ -318,6 +329,14 @@ async function runElevenlabsGenerationJob({
     if (!archived.ok || !archived.url) {
       await fail("ElevenLabs audio upload failed — try again.");
       return;
+    }
+    if (!instrumental && Array.isArray(upstream.alignedWords) && upstream.alignedWords.length) {
+      queueCacheTimestampedLyrics({
+        audioId,
+        taskId,
+        provider: "elevenlabs",
+        alignedWords: upstream.alignedWords,
+      });
     }
     const statusPayload = buildSunoStatusPayload({
       taskId,
@@ -607,6 +626,7 @@ async function handleLyriaGenerate(req, res, { user, isAdmin, body }) {
       lyriaPrompt,
       title,
       lyrics,
+      instrumental,
     }),
   );
 

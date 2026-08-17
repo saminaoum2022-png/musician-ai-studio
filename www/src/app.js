@@ -22572,11 +22572,11 @@ function isSingleVariantMusicTask(taskId) {
   return tid.startsWith("mmx_") || tid.startsWith("lyr_") || tid.startsWith("elv_");
 }
 
-/** Karaoke / timestamped lyrics — Suno API only (0.5 cr/fetch); skip alternate providers. */
+/** Karaoke / timestamped lyrics — Suno, Lyria, ElevenLabs; skip MiniMax. */
 function isSunoKaraokeTaskId(taskId) {
   const tid = String(taskId || "").trim();
   if (!tid) return false;
-  if (/^(mmx_|lyr_|elv_)/i.test(tid)) return false;
+  if (/^mmx_/i.test(tid)) return false;
   return true;
 }
 

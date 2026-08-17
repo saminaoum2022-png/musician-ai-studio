@@ -38,6 +38,7 @@ const {
   resolveElevenMusicLengthMs,
   resolveElevenMusicModel,
   resolveElevenFinetuneId,
+  verifyElevenFinetuneAccess,
 } = require("../_lib/elevenlabs-music-upstream");
 const {
   saveMusicProviderTaskStatus,
@@ -596,6 +597,32 @@ async function handleElevenlabsGenerate(req, res, { user, isAdmin, body }) {
   const musicLengthMs = resolveElevenMusicLengthMs(body?.musicLengthMs);
   const finetuneId = resolveElevenFinetuneId(body?.elevenlabsFinetuneId);
 
+  if (finetuneId) {
+    const finetuneCheck = await verifyElevenFinetuneAccess({ apiKey, finetuneId });
+    if (!finetuneCheck.ok) {
+      const msg =
+        finetuneCheck.error === "finetune_not_found"
+          ? "ElevenLabs finetune not found — check ELEVENLABS_FINETUNE_ID matches NabadAi DNA and ELEVENLABS_API_KEY is the same ElevenLabs account."
+          : finetuneCheck.error === "finetune_not_ready"
+            ? `ElevenLabs finetune "${finetuneCheck.name || finetuneId}" is not ready yet (${finetuneCheck.status || "pending"}).`
+            : "ElevenLabs finetune check failed — verify ELEVENLABS_API_KEY and finetune id.";
+      console.warn("[music/generate] elevenlabs finetune verify failed", finetuneId, finetuneCheck);
+      return sendJson(res, 502, {
+        error: msg,
+        code: finetuneCheck.error || "elevenlabs_finetune_invalid",
+        _finetuneId: finetuneId,
+        details: finetuneCheck.detail || finetuneCheck.status || null,
+      });
+    }
+    console.log(
+      "[music/generate] elevenlabs finetune",
+      finetuneId,
+      finetuneCheck.finetune?.name || "NabadAi DNA",
+    );
+  } else {
+    console.warn("[music/generate] elevenlabs generate without finetune_id — set ELEVENLABS_FINETUNE_ID");
+  }
+
   queueLogMusicGeneration({
     userId: user.userId,
     taskId,
@@ -685,6 +712,7 @@ async function handleElevenlabsGenerate(req, res, { user, isAdmin, body }) {
     _provider: "elevenlabs",
     _model: model,
     _finetuneId: finetuneId || undefined,
+    _finetuneApplied: Boolean(finetuneId),
     _ready: true,
     _variantCount: 1,
     _credits: {

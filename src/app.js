@@ -57768,6 +57768,17 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
         resetNabadLyricsDraftState();
         savePendingBackendTask("");
         setStatus("Song ready.");
+        if (data?._provider === "elevenlabs" && creditsState.isAdmin) {
+          try {
+            const ft = String(data?._finetuneId || "").trim();
+            showToast(
+              ft
+                ? `ElevenLabs · finetune ${ft.slice(0, 12)}… applied`
+                : "ElevenLabs · no finetune_id (generic voice) — set ELEVENLABS_FINETUNE_ID on server",
+              { icon: ft ? "♪" : "!", durationMs: 9000 },
+            );
+          } catch {}
+        }
         try { finishCoachGenerationReady({ variantCount: 1 }); } catch {}
         markGenerationReadyNotice();
         setGenerateBtn("Regenerate", false, "regenerate");

@@ -30,11 +30,46 @@ function resolveElevenMusicLengthMs(explicit) {
   return Math.max(3000, Math.min(600000, Math.round(n)));
 }
 
-/** Music finetune id (ftn_…) — e.g. ElevenLabs "NabadAi DNA" voice model. */
+/** Music finetune id — e.g. ElevenLabs "NabadAi DNA" (URL ?selected=… or API list id). */
 function resolveElevenFinetuneId(explicit) {
   const env = String(process.env.ELEVENLABS_FINETUNE_ID || "").trim();
   const id = String(explicit || env || "").trim();
   return id || null;
+}
+
+/** Confirm the server API key can see this finetune (same ElevenLabs account). */
+async function verifyElevenFinetuneAccess({ apiKey, finetuneId }) {
+  const id = String(finetuneId || "").trim();
+  if (!id) return { ok: false, error: "missing_finetune_id" };
+  const url = `https://api.elevenlabs.io/v1/music/finetunes/${encodeURIComponent(id)}`;
+  try {
+    const r = await fetch(url, {
+      method: "GET",
+      headers: { "xi-api-key": String(apiKey || "").trim() },
+    });
+    const text = await r.text().catch(() => "");
+    const data = safeJson(text);
+    if (!r.ok) {
+      return {
+        ok: false,
+        httpStatus: r.status,
+        error: r.status === 404 ? "finetune_not_found" : "finetune_lookup_failed",
+        detail: data?.detail?.message || data?.detail || text.slice(0, 200) || null,
+      };
+    }
+    const status = String(data?.status || "").trim().toLowerCase();
+    if (status && status !== "completed") {
+      return {
+        ok: false,
+        error: "finetune_not_ready",
+        status,
+        name: data?.name || null,
+      };
+    }
+    return { ok: true, finetune: data };
+  } catch (e) {
+    return { ok: false, error: "finetune_lookup_failed", detail: e?.message || String(e) };
+  }
 }
 
 function splitLyricLines(text) {
@@ -157,4 +192,5 @@ module.exports = {
   resolveElevenMusicLengthMs,
   resolveElevenMusicModel,
   resolveElevenFinetuneId,
+  verifyElevenFinetuneAccess,
 };

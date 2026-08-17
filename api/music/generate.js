@@ -38,6 +38,7 @@ const {
   elevenlabsGenerateEnabled,
   elevenlabsGenerateMusicDetailed,
   elevenlabsUploadMusic,
+  estimateReferenceDurationMs,
   resolveElevenMusicLengthMs,
   resolveElevenMusicModel,
   resolveElevenFinetuneId,
@@ -323,6 +324,7 @@ async function runElevenlabsGenerationJob({
       withTimestamps: !instrumental,
     });
     if (!upstream.ok) {
+      console.warn("[music/generate] elevenlabs compose failed", taskId, upstream.httpStatus, upstream.userMessage, upstream.text?.slice?.(0, 240));
       await fail(upstream.userMessage || "ElevenLabs generation failed — try again.");
       return;
     }
@@ -786,6 +788,9 @@ async function handleElevenlabsGenerate(req, res, { user, isAdmin, body }) {
       });
     }
     referenceSongId = upload.songId;
+    const refDurationMs = Number(body?.referenceDurationMs) > 0
+      ? Number(body.referenceDurationMs)
+      : estimateReferenceDurationMs(refAudio.buffer);
     compositionPlan = buildElevenReferenceCompositionPlan({
       lyrics,
       stylePrompt,
@@ -793,10 +798,15 @@ async function handleElevenlabsGenerate(req, res, { user, isAdmin, body }) {
       musicLengthMs,
       instrumental,
       referenceSongId,
-      referenceRangeMs: body?.referenceDurationMs,
-      conditionStrength: body?.referenceConditionStrength || "xhigh",
+      referenceRangeMs: refDurationMs,
+      conditionStrength: body?.referenceConditionStrength || "high",
     });
-    console.log("[music/generate] elevenlabs reference uploaded", referenceSongId.slice(0, 12));
+    console.log(
+      "[music/generate] elevenlabs reference uploaded",
+      referenceSongId.slice(0, 12),
+      "rangeMs",
+      refDurationMs,
+    );
   }
 
   if (!instrumental && !lyrics && !stylePrompt && !compositionPlan) {

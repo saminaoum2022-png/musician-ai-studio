@@ -84,11 +84,32 @@ function splitLyricLines(text) {
 }
 
 function splitElevenStyleTags(stylePrompt) {
-  return String(stylePrompt || "")
+  const tags = String(stylePrompt || "")
     .split(/[,|]/)
     .map((s) => s.trim())
     .filter(Boolean)
     .slice(0, 20);
+  const pad = [
+    "professional studio production",
+    "clear vocals",
+    "warm mix",
+    "steady rhythm",
+    "polished arrangement",
+    "radio-ready",
+  ];
+  for (const p of pad) {
+    if (tags.length >= 6) break;
+    if (!tags.some((t) => t.toLowerCase() === p)) tags.push(p);
+  }
+  return tags;
+}
+
+/** Rough duration for clamping conditioning_ref range (hum clips are short). */
+function estimateReferenceDurationMs(buffer) {
+  const bytes = Buffer.isBuffer(buffer) ? buffer.length : Buffer.byteLength(buffer || "");
+  if (bytes < 128) return 5000;
+  const ms = Math.round((bytes * 8) / 20);
+  return Math.max(3000, Math.min(30000, ms));
 }
 
 /** Decode data URL or raw base64 reference audio from the client. */
@@ -165,11 +186,10 @@ function buildElevenReferenceCompositionPlan({
   instrumental = false,
   referenceSongId,
   referenceRangeMs = 30000,
-  conditionStrength = "xhigh",
+  conditionStrength = "high",
 } = {}) {
-  const lengthMs = resolveElevenMusicLengthMs(musicLengthMs);
+  const lengthMs = Math.min(120000, resolveElevenMusicLengthMs(musicLengthMs));
   const styles = splitElevenStyleTags(stylePrompt);
-  if (!styles.length) styles.push("professional studio production", "clear vocals");
   styles.push("match reference vocal timbre and melody");
 
   const lyricText = String(lyrics || "").trim();
@@ -179,23 +199,27 @@ function buildElevenReferenceCompositionPlan({
   } else if (lyricText) {
     text = lyricText.includes("[") ? lyricText : `[Verse]\n${lyricText}`;
   } else {
-    text = "[Verse]\n{perform matching the reference vocal tone, pitch, and melodic shape}";
+    text = "[Verse]\nSing naturally, matching the reference vocal tone and melodic shape.";
   }
   const songTitle = String(title || "").trim();
-  if (songTitle) text = `[Title: ${songTitle}]\n${text}`;
+  if (songTitle && !text.includes(songTitle)) {
+    text = `[Verse]\n${text.replace(/^\[Verse\]\n?/, "")}`;
+  }
 
-  const refEnd = Math.max(3000, Math.min(30000, Math.round(Number(referenceRangeMs) || 30000)));
+  const refEnd = Math.max(
+    3000,
+    Math.min(30000, Math.round(Number(referenceRangeMs) || 30000)),
+  );
   const strength = ["low", "medium", "high", "xhigh"].includes(String(conditionStrength))
     ? String(conditionStrength)
-    : "xhigh";
+    : "high";
 
   return {
     chunks: [
       {
         text: text.slice(0, 4000),
         duration_ms: lengthMs,
-        positive_styles: styles,
-        negative_styles: [],
+        positive_styles: styles.slice(0, 20),
         context_adherence: "high",
         conditioning_ref: {
           song_id: String(referenceSongId || "").trim(),
@@ -233,6 +257,7 @@ function buildElevenMusicPrompt({ stylePrompt = "", lyrics = "", title = "", ins
 function elevenUserMessage(httpStatus, payload, rawText) {
   const err =
     payload?.detail?.message ||
+    (Array.isArray(payload?.detail) ? payload.detail.map((d) => d?.msg || d?.message).filter(Boolean).join("; ") : null) ||
     payload?.detail ||
     payload?.message ||
     payload?.error;
@@ -452,6 +477,7 @@ module.exports = {
   buildElevenMusicPrompt,
   buildElevenReferenceCompositionPlan,
   decodeReferenceAudioPayload,
+  estimateReferenceDurationMs,
   elevenlabsGenerateEnabled,
   elevenlabsGenerateMusic,
   elevenlabsGenerateMusicDetailed,

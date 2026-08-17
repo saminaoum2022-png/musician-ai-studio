@@ -18552,6 +18552,22 @@ function sunoFailureUserCopy(kind, { isRemix = false } = {}) {
   };
 }
 
+function providerFailureToast(info, rawState, taskId) {
+  const userCopy = sunoFailureUserCopy(info?.kind, {
+    isRemix: Boolean(currentRemixSource?.originalUrl || currentRemixSource?.url || vocalRefOrigin === "remix"),
+  });
+  const upstream = String(
+    rawState?.errorMessage || info?.detail || info?.headline || "",
+  ).trim();
+  if (isSingleVariantMusicTask(taskId) && upstream && upstream !== "Something went wrong. Please try again.") {
+    return upstream.slice(0, 240);
+  }
+  if (info?.kind && info.kind !== "generic" && info?.detail) {
+    return String(info.detail).slice(0, 240);
+  }
+  return userCopy.toast;
+}
+
 function isBenignSunoStatusMessage(msg) {
   const m = String(msg || "").trim().toLowerCase();
   return !m || m === "success" || m === "ok" || m === "pending";
@@ -18815,7 +18831,7 @@ function interpretSunoFailure(raw) {
     return {
       kind: "generic",
       headline: "Generation failed",
-      detail: "Something went wrong. Please try again.",
+      detail: msg || "Something went wrong. Please try again.",
     };
   }
   return { kind: null, headline: "", detail: "" };
@@ -20989,6 +21005,21 @@ function blobToDataUrl(blob) {
     reader.onerror = () => reject(reader.error || new Error("read failed"));
     reader.readAsDataURL(blob);
   });
+}
+
+async function estimateBlobDurationMs(blob) {
+  if (!blob || blob.size < 128) return null;
+  try {
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    if (!AudioCtx) return null;
+    const ac = new AudioCtx();
+    const buf = await blob.arrayBuffer();
+    const audio = await ac.decodeAudioData(buf.slice(0));
+    await ac.close();
+    const ms = Math.round(Number(audio.duration || 0) * 1000);
+    if (ms >= 3000 && ms <= 300000) return ms;
+  } catch {}
+  return null;
 }
 
 function vocalReferenceFilenameForMime(mime) {
@@ -56627,6 +56658,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
     setProgress(0);
     const info = failureInfo || { kind: "generic", headline: "Generation failed", detail: "" };
     const isRemix = Boolean(currentRemixSource?.originalUrl || currentRemixSource?.url || vocalRefOrigin === "remix");
+    const toastText = providerFailureToast(info, rawState, sunoTaskId || loadPendingBackendTask() || "");
     const userCopy = sunoFailureUserCopy(info.kind, { isRemix });
     try {
       console.warn("[generate] failure", {
@@ -56640,9 +56672,9 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
         isRemix,
       });
     } catch {}
-    setStatus(userCopy.toast);
+    setStatus(toastText);
     try {
-      showToast(userCopy.toast, {
+      showToast(toastText, {
         icon: info.kind === "copyright" || info.kind === "sensitive" ? "!" : "✗",
         durationMs: 9000,
       });
@@ -57649,7 +57681,9 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
               setStatus("Uploading vocal reference to ElevenLabs…");
               payload.hasReference = true;
               payload.referenceAudio = await blobToDataUrl(sendFile);
-              payload.referenceConditionStrength = "xhigh";
+              payload.referenceConditionStrength = "high";
+              const refMs = await estimateBlobDurationMs(sendFile);
+              if (refMs) payload.referenceDurationMs = refMs;
             }
             try {
               showToast(`${providerLabel} composing… keep the app open (about 1–3 min).`, {

@@ -472,7 +472,7 @@ async function handleGet(req, res, user) {
     const limit = Math.min(80, Math.max(1, Number(url.searchParams.get("limit")) || 80));
     const before = String(url.searchParams.get("before") || "").trim();
     let msgPath =
-      `dm_messages?select=id,sender_id,body,created_at&thread_id=eq.${encodeURIComponent(threadId)}&order=created_at.desc&limit=${limit}`;
+      `dm_messages?select=id,sender_id,body,created_at,delivered_at&thread_id=eq.${encodeURIComponent(threadId)}&order=created_at.desc&limit=${limit}`;
     if (before) msgPath += `&created_at=lt.${encodeURIComponent(before)}`;
     const msgs = await svcFetch(msgPath);
     const rows = Array.isArray(msgs.data) ? [...msgs.data].reverse() : [];
@@ -636,6 +636,38 @@ async function handlePost(req, res, user) {
       }),
     });
     return sendJson(res, 200, { ok: true });
+  }
+
+  if (action === "mark_delivered") {
+    const threadId = String(body?.threadId || "").trim();
+    const messageIds = (Array.isArray(body?.messageIds) ? body.messageIds : [])
+      .map((id) => String(id || "").trim())
+      .filter(Boolean)
+      .slice(0, 48);
+    if (!threadId || !messageIds.length) {
+      return sendJson(res, 400, { ok: false, error: "Missing threadId or messageIds" });
+    }
+    const tr = await svcFetch(
+      `dm_threads?select=id,user_a,user_b&or=(and(id.eq.${encodeURIComponent(threadId)},user_a.eq.${encodeURIComponent(user.userId)}),and(id.eq.${encodeURIComponent(threadId)},user_b.eq.${encodeURIComponent(user.userId)}))&limit=1`,
+    );
+    const thread = Array.isArray(tr.data) && tr.data[0] ? tr.data[0] : null;
+    if (!thread) return sendJson(res, 404, { ok: false, error: "Thread not found" });
+    const now = new Date().toISOString();
+    const inClause = messageIds.map((id) => encodeURIComponent(id)).join(",");
+    const r = await svcFetch(
+      `dm_messages?id=in.(${inClause})&thread_id=eq.${encodeURIComponent(threadId)}&sender_id=neq.${encodeURIComponent(user.userId)}&delivered_at=is.null`,
+      {
+        method: "PATCH",
+        headers: { Prefer: "return=minimal" },
+        body: JSON.stringify({ delivered_at: now }),
+      },
+    );
+    if (!r.ok) {
+      const missingCol = /delivered_at|column|42703/i.test(String(r.text || ""));
+      if (missingCol) return sendJson(res, 200, { ok: true, skipped: true });
+      return sendJson(res, 500, { ok: false, error: "Delivery ack failed" });
+    }
+    return sendJson(res, 200, { ok: true, deliveredAt: now });
   }
 
   if (action === "block") {

@@ -35097,6 +35097,7 @@ body.messagesThreadKeyboardOpen[data-route="messages-thread"] .messagesThreadPag
   letter-spacing: 0.01em;
 }
 .messagesBubbleStatus--sent,
+.messagesBubbleStatus--delivered,
 .messagesBubbleStatus--read{
   font-size: 11px;
   line-height: 1;
@@ -35104,17 +35105,38 @@ body.messagesThreadKeyboardOpen[data-route="messages-thread"] .messagesThreadPag
 .messagesBubbleStatus--sent{
   color: rgba(255,255,255,0.78);
 }
+.messagesBubbleStatus--delivered{
+  color: rgba(255,255,255,0.84);
+}
 .messagesBubbleStatus--read{
   color: rgba(255,255,255,0.52);
 }
-.msgTicks{
-  display: inline-block;
+.msgBbmTick{
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  vertical-align: middle;
+  color: inherit;
+  flex: 0 0 auto;
 }
-.msgTicks--double{
-  letter-spacing: -0.14em;
+.msgBbmTickSvg{
+  display: block;
+  overflow: visible;
+}
+.msgBbmTickLetter{
+  fill: currentColor;
+  font-family: Inter, system-ui, -apple-system, sans-serif;
+  font-size: 7px;
+  font-weight: 900;
+  letter-spacing: -0.08em;
 }
 .messagesBubbleWrap.is-mine.is-read-by-partner .messagesBubbleStatus--read{
   color: rgba(255,255,255,0.46);
+}
+.messagesBubbleWrap.is-mine.is-delivered-to-partner:not(.is-read-by-partner) .messagesBubbleStatus--delivered{
+  color: rgba(255,255,255,0.88);
 }
 .messagesBubbleStatus--failed{
   font-size: 10px;
@@ -52615,6 +52637,17 @@ html[data-theme="light"] .messagesBubbleTime{
 }
 html[data-theme="light"] .messagesBubbleWrap.is-mine .messagesBubbleTime{
   color: rgba(255,255,255,0.72);
+}
+html[data-theme="light"] .messagesBubbleWrap.is-mine .messagesBubbleStatus--sent,
+html[data-theme="light"] .messagesBubbleWrap.is-mine .messagesBubbleStatus--delivered,
+html[data-theme="light"] .messagesBubbleWrap.is-mine .messagesBubbleStatus--read{
+  color: rgba(255,255,255,0.88);
+}
+html[data-theme="light"] .messagesBubbleWrap.is-mine.is-read-by-partner .messagesBubbleStatus--read{
+  color: rgba(255,255,255,0.58);
+}
+html[data-theme="light"] .messagesBubbleWrap.is-mine.is-delivered-to-partner:not(.is-read-by-partner) .messagesBubbleStatus--delivered{
+  color: rgba(255,255,255,0.82);
 }
 html[data-theme="light"] .messagesBubbleWrap.is-mine.is-read-by-partner .messagesBubbleTime{
   color: rgba(255,255,255,0.58);

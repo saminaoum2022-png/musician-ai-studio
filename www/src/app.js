@@ -216,7 +216,7 @@ import { MUSIC_VIDEO_FEATURE_ENABLED } from "./feature-flags.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260819-012826";
+const APP_BUILD = "20260819-020928";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -30528,6 +30528,7 @@ function patchOutboundReadStateInMount() {
     if (!msg) return;
     const status = resolveOutboundMessageStatus(msg);
     wrap.classList.toggle("is-read-by-partner", status === "read");
+    wrap.classList.toggle("is-delivered-to-partner", status === "delivered");
     wrap.classList.toggle("is-pending", status === "sending");
     wrap.classList.toggle("is-failed", status === "failed");
     const meta = wrap.querySelector(".messagesBubbleMeta");
@@ -30675,8 +30676,16 @@ function mergeThreadMessages(incoming, { scrollToBottom = true } = {}) {
     const existingIdx = list.findIndex((x) => String(x.id) === serverId);
     if (existingIdx >= 0) {
       const prev = list[existingIdx];
-      if (prev.body !== m.body || prev.created_at !== m.created_at) {
-        list[existingIdx] = { ...prev, ...m, sendStatus: prev.sendStatus || "sent" };
+      if (
+        prev.body !== m.body
+        || prev.created_at !== m.created_at
+        || String(prev.delivered_at || "") !== String(m.delivered_at || "")
+      ) {
+        list[existingIdx] = {
+          ...prev,
+          ...m,
+          sendStatus: m.delivered_at ? "delivered" : (prev.sendStatus || "sent"),
+        };
         changed = true;
       }
     } else {
@@ -30688,8 +30697,14 @@ function mergeThreadMessages(incoming, { scrollToBottom = true } = {}) {
   if (!changed) return false;
   const partnerId = String(_chatHeaderUser?.userId || "").trim();
   const myId = String(authSession?.user?.id || "").trim();
-  if (partnerId && rows.some((m) => String(m?.sender_id || "") === partnerId && String(m?.sender_id || "") !== myId)) {
+  const partnerRows = rows.filter((m) => partnerId && String(m?.sender_id || "") === partnerId);
+  if (partnerRows.length) {
     clearPartnerTypingState();
+    const latestPartnerAt = Math.max(
+      ...partnerRows.map((m) => (m?.created_at ? new Date(m.created_at).getTime() : 0)),
+    );
+    promoteOutboundToDelivered({ beforeTime: latestPartnerAt || 0 });
+    void ackPartnerMessagesDelivered(partnerRows);
   }
   _messagesList = list.sort(
     (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
@@ -30827,7 +30842,7 @@ function syncMessagesLastFetchedAtFromList() {
 
 function buildPollNewMessagesRestPath(threadId) {
   const tid = String(threadId || "").trim();
-  const cols = "id,sender_id,body,created_at";
+  const cols = "id,sender_id,body,created_at,delivered_at";
   const since = String(_messagesLastFetchedAt || "").trim();
   const sinceId = String(_messagesLastFetchedId || "").trim();
   const base = `dm_messages?select=${cols}&thread_id=eq.${encodeURIComponent(tid)}`;
@@ -30992,6 +31007,7 @@ function resetMessagesThreadRouteState() {
   _messagesLastFetchedAt = "";
   _messagesLastFetchedId = "";
   _messagesPartnerLastReadAt = "";
+  _messagesDeliveredAckedIds.clear();
   _messagesHasMoreOlder = true;
   _messagesLoadingOlder = false;
 }
@@ -31031,6 +31047,11 @@ async function markThreadReadQuiet(threadId) {
   const tid = String(threadId || _conversationId || "").trim();
   if (!tid) return;
   markInboxThreadReadLocally(tid);
+  const partnerMsgs = (Array.isArray(_messagesList) ? _messagesList : []).filter((m) => {
+    const myId = String(authSession?.user?.id || "");
+    return String(m?.sender_id || "") !== myId;
+  });
+  void ackPartnerMessagesDelivered(partnerMsgs);
   try {
     await messagesApi("/api/messages", {
       method: "POST",
@@ -31864,6 +31885,7 @@ function notePartnerTyping(userId) {
   const partnerId = String(_chatHeaderUser?.userId || "").trim();
   if (partnerId && uid !== partnerId) return;
   _partnerTypingUntil = Date.now() + DM_TYPING_LINGER_MS;
+  promoteOutboundToDelivered();
   if (_partnerTypingTimer) window.clearTimeout(_partnerTypingTimer);
   _partnerTypingTimer = window.setTimeout(() => {
     _partnerTypingTimer = 0;
@@ -32510,8 +32532,128 @@ function resolveOutboundMessageStatus(msg) {
   const partnerRead = _messagesPartnerLastReadAt ? new Date(_messagesPartnerLastReadAt).getTime() : 0;
   if (partnerRead && createdAt && createdAt <= partnerRead) return "read";
   if (explicit === "read") return "read";
-  if (explicit === "delivered") return "sent";
+  if (String(msg?.delivered_at || "").trim()) return "delivered";
+  if (explicit === "delivered") return "delivered";
+  if (partnerRepliedAfterOutboundMessage(msg)) return "delivered";
+  if (isPartnerTypingActive() && isRecentOutboundMessage(msg)) return "delivered";
   return "sent";
+}
+
+function isRecentOutboundMessage(msg) {
+  const createdAt = msg?.created_at ? new Date(msg.created_at).getTime() : 0;
+  if (!createdAt) return false;
+  return Date.now() - createdAt < 24 * 60 * 60 * 1000;
+}
+
+function partnerRepliedAfterOutboundMessage(msg) {
+  const myId = String(authSession?.user?.id || "");
+  const partnerId = String(_chatHeaderUser?.userId || "").trim();
+  const createdAt = msg?.created_at ? new Date(msg.created_at).getTime() : 0;
+  if (!myId || !partnerId || !createdAt) return false;
+  if (String(msg?.sender_id || "") !== myId) return false;
+  return (Array.isArray(_messagesList) ? _messagesList : []).some((row) => {
+    if (String(row?.sender_id || "") !== partnerId) return false;
+    const t = row?.created_at ? new Date(row.created_at).getTime() : 0;
+    return t > createdAt;
+  });
+}
+
+function messagesBbmTickHtml(status) {
+  const letter = status === "read" ? "R" : status === "delivered" ? "D" : "";
+  const cls = status === "read"
+    ? "msgBbmTick--read"
+    : status === "delivered"
+      ? "msgBbmTick--delivered"
+      : "msgBbmTick--sent";
+  const letterSvg = letter
+    ? `<text class="msgBbmTickLetter" x="4.88" y="3.85" dominant-baseline="middle" text-anchor="middle">${letter}</text>`
+    : "";
+  return `<span class="msgBbmTick ${cls}" aria-hidden="true"><svg class="msgBbmTickSvg" viewBox="0 0 14 14" width="16" height="16" aria-hidden="true"><path class="msgBbmTickStroke" d="M2.55 7.35 5.5 10.15 11.35 4.05" fill="none" stroke="currentColor" stroke-width="1.95" stroke-linecap="round" stroke-linejoin="round"/>${letterSvg}</svg></span>`;
+}
+
+function promoteOutboundToDelivered({ beforeTime = 0 } = {}) {
+  const myId = String(authSession?.user?.id || "");
+  if (!myId) return false;
+  const cutoff = Number(beforeTime || 0) || 0;
+  let changed = false;
+  _messagesList = (Array.isArray(_messagesList) ? _messagesList : []).map((m) => {
+    if (String(m?.sender_id || "") !== myId) return m;
+    if (resolveOutboundMessageStatus(m) === "read") return m;
+    if (String(m?.delivered_at || "").trim()) return m;
+    const t = m?.created_at ? new Date(m.created_at).getTime() : 0;
+    if (cutoff && t > cutoff) return m;
+    const status = String(m?.sendStatus || "").trim();
+    if (status !== "sent" && status !== "delivered") return m;
+    changed = true;
+    return { ...m, sendStatus: "delivered" };
+  });
+  if (changed) patchOutboundReadStateInMount();
+  return changed;
+}
+
+let _messagesDeliveredAckInFlight = false;
+const _messagesDeliveredAckedIds = new Set();
+
+async function ackPartnerMessagesDelivered(messages) {
+  if (isCoachThreadId(_conversationId)) return;
+  const tid = String(_conversationId || "").trim();
+  const myId = String(authSession?.user?.id || "").trim();
+  if (!tid || !myId || _messagesDeliveredAckInFlight) return;
+  const ids = (Array.isArray(messages) ? messages : [])
+    .filter((m) => {
+      const id = String(m?.id || "").trim();
+      if (!id || isPendingThreadMessageId(id)) return false;
+      if (String(m?.sender_id || "") === myId) return false;
+      if (String(m?.delivered_at || "").trim()) return false;
+      if (_messagesDeliveredAckedIds.has(id)) return false;
+      return true;
+    })
+    .map((m) => String(m.id))
+    .slice(0, 48);
+  if (!ids.length) return;
+  ids.forEach((id) => _messagesDeliveredAckedIds.add(id));
+  _messagesDeliveredAckInFlight = true;
+  try {
+    await messagesApi("/api/messages", {
+      method: "POST",
+      body: JSON.stringify({ action: "mark_delivered", threadId: tid, messageIds: ids }),
+    });
+  } catch {
+    ids.forEach((id) => _messagesDeliveredAckedIds.delete(id));
+  } finally {
+    _messagesDeliveredAckInFlight = false;
+  }
+}
+
+async function pollOutboundDeliveryState(threadId, { bootToken = 0 } = {}) {
+  const tid = String(threadId || _conversationId || "").trim();
+  const myId = String(authSession?.user?.id || "").trim();
+  if (!tid || !myId || isCoachThreadId(tid)) return;
+  if (bootToken && bootToken !== _messagesThreadBootToken) return;
+  if (_conversationId !== tid) return;
+  try {
+    await prepareApiAuthForFetch();
+    const path =
+      `dm_messages?select=id,delivered_at&thread_id=eq.${encodeURIComponent(tid)}&sender_id=eq.${encodeURIComponent(myId)}&delivered_at=not.is.null&order=created_at.desc&limit=40`;
+    const r = await supabaseRestWithAuth(path);
+    if (!r?.ok) return;
+    const rows = await r.json().catch(() => []);
+    if (!Array.isArray(rows) || !rows.length) return;
+    if (bootToken && bootToken !== _messagesThreadBootToken) return;
+    if (_conversationId !== tid) return;
+    let changed = false;
+    const byId = new Map(rows.map((row) => [String(row?.id || ""), String(row?.delivered_at || "")]));
+    _messagesList = (Array.isArray(_messagesList) ? _messagesList : []).map((m) => {
+      const id = String(m?.id || "");
+      const deliveredAt = byId.get(id);
+      if (!deliveredAt || String(m?.delivered_at || "") === deliveredAt) return m;
+      changed = true;
+      return { ...m, delivered_at: deliveredAt, sendStatus: "delivered" };
+    });
+    if (changed) patchOutboundReadStateInMount();
+  } catch (e) {
+    console.warn("[dm-delivered]", e);
+  }
 }
 
 function applyPartnerLastReadAt(lastReadAt) {
@@ -32548,6 +32690,7 @@ async function pollPartnerThreadRead(threadId, { bootToken = 0 } = {}) {
     if (applyPartnerLastReadAt(data?.partnerLastReadAt)) {
       patchOutboundReadStateInMount();
     }
+    void pollOutboundDeliveryState(tid, { bootToken });
   } catch (e) {
     console.warn("[dm-read]", e);
   }
@@ -32563,10 +32706,13 @@ function messagesBubbleStatusHtml(msg) {
     return `<button type="button" class="messagesBubbleStatus messagesBubbleStatus--failed" data-retry-client-msg="${cid}">Not sent · Retry</button>`;
   }
   if (status === "read") {
-    return `<span class="messagesBubbleStatus messagesBubbleStatus--read" aria-label="Read"><span class="msgTicks msgTicks--double">✓✓</span></span>`;
+    return `<span class="messagesBubbleStatus messagesBubbleStatus--read" aria-label="Read">${messagesBbmTickHtml("read")}</span>`;
+  }
+  if (status === "delivered") {
+    return `<span class="messagesBubbleStatus messagesBubbleStatus--delivered" aria-label="Delivered">${messagesBbmTickHtml("delivered")}</span>`;
   }
   if (status === "sent") {
-    return `<span class="messagesBubbleStatus messagesBubbleStatus--sent" aria-label="Sent"><span class="msgTicks">✓</span></span>`;
+    return `<span class="messagesBubbleStatus messagesBubbleStatus--sent" aria-label="Sent">${messagesBbmTickHtml("sent")}</span>`;
   }
   return "";
 }
@@ -32643,6 +32789,7 @@ function messagesBubbleHtml(msg, viewerId, opts) {
   const failedCls = mine && msg?.sendStatus === "failed" ? " is-failed" : "";
   const outboundStatus = mine ? resolveOutboundMessageStatus(msg) : "";
   const readByPartnerCls = mine && outboundStatus === "read" ? " is-read-by-partner" : "";
+  const deliveredToPartnerCls = mine && outboundStatus === "delivered" ? " is-delivered-to-partner" : "";
   const enterCls = bubbleEnterWrapClass(msg, mine);
   const revealAttrs = opts?.threadReveal
     ? threadRevealWrapAttrs(opts.threadRevealIndex, opts.threadRevealTotal, mine)
@@ -32655,7 +32802,7 @@ function messagesBubbleHtml(msg, viewerId, opts) {
       : "";
   if (parsed.type === "song") {
     return `
-      <div class="messagesBubbleWrap messagesBubbleWrap--song${mine ? " is-mine" : ""}${pendingCls}${failedCls}${readByPartnerCls}${enterCls}${revealAttrs.cls}"${revealAttrs.style} data-msg-id="${escapeHtml(String(msg?.id || ""))}" data-client-msg-id="${escapeHtml(String(msg?.client_message_id || ""))}">
+      <div class="messagesBubbleWrap messagesBubbleWrap--song${mine ? " is-mine" : ""}${pendingCls}${failedCls}${readByPartnerCls}${deliveredToPartnerCls}${enterCls}${revealAttrs.cls}"${revealAttrs.style} data-msg-id="${escapeHtml(String(msg?.id || ""))}" data-client-msg-id="${escapeHtml(String(msg?.client_message_id || ""))}">
         <div class="messagesBubble messagesBubble--song">
           ${messagesDmSongCardHtml(parsed, { mine })}
           ${metaHtml}
@@ -32668,7 +32815,7 @@ function messagesBubbleHtml(msg, viewerId, opts) {
     ? `<div class="messagesBubbleText messagesBubbleText--coachMd">${renderCoachMarkdown(body)}</div>`
     : userTextHtml(body, { tag: "p", className: "messagesBubbleText", escapeHtml });
   return `
-    <div class="messagesBubbleWrap${mine ? " is-mine" : ""}${pendingCls}${failedCls}${readByPartnerCls}${enterCls}${revealAttrs.cls}"${revealAttrs.style} data-msg-id="${escapeHtml(String(msg?.id || ""))}" data-client-msg-id="${escapeHtml(String(msg?.client_message_id || ""))}">
+    <div class="messagesBubbleWrap${mine ? " is-mine" : ""}${pendingCls}${failedCls}${readByPartnerCls}${deliveredToPartnerCls}${enterCls}${revealAttrs.cls}"${revealAttrs.style} data-msg-id="${escapeHtml(String(msg?.id || ""))}" data-client-msg-id="${escapeHtml(String(msg?.client_message_id || ""))}">
       <div class="messagesBubble">
         ${textHtml}
         ${metaHtml}
@@ -32727,6 +32874,8 @@ async function loadMessagesForConversation(threadId, { bootToken = 0, silent = f
       loadedOnce: true,
     });
     await markThreadReadQuiet(tid);
+    void ackPartnerMessagesDelivered(incoming);
+    void pollOutboundDeliveryState(tid, { bootToken });
     return true;
   } catch (e) {
     if (!silent && !(Array.isArray(_messagesList) && _messagesList.length)) {

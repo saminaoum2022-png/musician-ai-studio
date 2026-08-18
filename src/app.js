@@ -3326,16 +3326,96 @@ function exitAltCreateFlowToHub() {
   flushTabRouteNavigation("challenges", "#/challenges");
 }
 
+const MOBILE_TAB_LIGHTWEIGHT = new Set(["discover", "friends", "challenges", "activity", "profile"]);
+
+function leaveRouteForTabSwitch(prevRoute, nextRoute) {
+  const prev = String(prevRoute || "").trim();
+  const next = String(nextRoute || "").trim();
+  if (prev === "messages-thread" && next !== "messages-thread") {
+    stopMessagesThreadRealtime();
+    resetMessagesThreadRouteState();
+    clearMessagesThreadComposerInset();
+    document.body.classList.remove("messagesThreadEntering", "messagesThreadLeaving");
+  }
+  if (prev === "messages" && next !== "messages") {
+    stopMessagesInboxPoll();
+    stopMessagesInboxRealtime();
+  }
+  if (prev === "hub" && next !== "hub") {
+    try { pauseHubForRouteChange(); } catch {}
+  }
+  if ((prev === "discover" || prev === "discover-playlist") && next !== "discover" && next !== "discover-playlist") {
+    try { onLeaveSearchRoute(); } catch {}
+  }
+  if (prev && prev !== next) captureRouteScroll(prev);
+}
+
+/** Bottom-tab switches: panel is already visible — run route hooks only, never full applyRoute. */
+function finishTabRouteEnter(route, prevRoute) {
+  const wanted = String(route || "").trim();
+  const prev = String(prevRoute || "").trim();
+  leaveRouteForTabSwitch(prev, wanted);
+  markRouteHeavy(wanted);
+
+  if (wanted === "discover") {
+    kickDiscoverFeedRoute({ deferFetch: true });
+  } else if (wanted === "friends") {
+    bindFriendsPageOnce();
+    wireFriendsComposeFabOnce();
+    syncFollowingComposeUi();
+    hydrateFriendsFeedSnapshotFromStorage();
+    if (MESSAGES_FEATURE_ENABLED) syncFriendsMessagesBtn();
+    paintFriendsFeedSnapshotIfFresh();
+    deferRouteIdle(() => enterFriendsRoute());
+  } else if (wanted === "activity") {
+    bindActivityPageOnce();
+    const hasActivityCache = _activityFeedState.items.length > 0 || paintActivityFeedSnapshotIfFresh();
+    if (shouldSkipRouteHeavy("activity") && hasActivityCache) {
+      if (!paintActivityFeedSnapshotIfFresh() && _activityFeedState.items.length) {
+        renderActivityFeedFromState();
+      }
+      deferRouteIdle(() => void refreshActivityFeedHead());
+      restoreRouteScroll("activity");
+    } else {
+      deferRouteIdle(() => void enterActivityRoute({ reset: !hasActivityCache }));
+    }
+  } else if (wanted === "challenges") {
+    bindChallengesPageOnce();
+    renderHomeDesk();
+    void loadAppTourModule().then((m) => m.scheduleHomeTourIfNeeded());
+  } else if (wanted === "profile") {
+    deferRouteIdle(() => {
+      void refreshMyCredits({ silent: true });
+      scheduleProfileSongsRender();
+    });
+  }
+
+  deferRouteIdle(() => {
+    if (!authSession?.user?.id) return;
+    wireNotificationsLiveRefreshOnce();
+    void refreshNotificationsUnreadBadge({ force: wanted === "friends" || wanted === "activity" });
+    if (MESSAGES_FEATURE_ENABLED) {
+      prefetchMessagesInboxQuiet();
+      void refreshMessagesUnreadBadge({ force: wanted === "friends" });
+    }
+  }, 180);
+
+  try { syncCoachOrbAfterRouteChange(); } catch {}
+  try { _appTourMod?.notifyAppRouteChanged?.(wanted); } catch {}
+  try { dismissBootSplash(); } catch {}
+}
+
 function flushTabRouteNavigation(route, targetHash) {
-  const prev = tabBarRouteKey(document.body.getAttribute("data-route") || "");
-  const gen = bumpApplyRouteGeneration();
-  _tabNavExplicit = { route, gen };
+  const prevBodyRoute = String(document.body.getAttribute("data-route") || "").trim();
+  const prev = tabBarRouteKey(prevBodyRoute);
+  bumpApplyRouteGeneration();
   if (prev !== route) invalidateInFlightRouteFeedWork(prev);
-  if (prev === "generate" && route !== "generate") {
+  if (prevBodyRoute === "generate" && route !== "generate") {
     leaveGenerateRouteCleanup();
   }
   if (route === "discover") {
     try { document.body.classList.remove("discoverReelInShell"); } catch {}
+    try { sessionStorage.setItem(DISCOVERY_SEGMENT_KEY, "for-you"); } catch {}
   }
   _tabNavFromClick = true;
   if (location.hash !== targetHash) {
@@ -3349,6 +3429,10 @@ function flushTabRouteNavigation(route, targetHash) {
   if (_applyRouteRaf) {
     cancelAnimationFrame(_applyRouteRaf);
     _applyRouteRaf = 0;
+  }
+  if (MOBILE_TAB_LIGHTWEIGHT.has(route)) {
+    finishTabRouteEnter(route, prevBodyRoute);
+    return;
   }
   if (_applyRouteInFlight) {
     _applyRouteQueued = true;
@@ -3380,6 +3464,70 @@ function createTabMorphTapPending(tabLink) {
   return generating || (hasInput && !hasResult);
 }
 
+function resolveMobileTabTap(a) {
+  const linkRoute = tabBarRouteKey(a.getAttribute("data-route-link") || "");
+  if (!TAB_REFRESH_ACTIONS[linkRoute]) return null;
+  const href = String(a.getAttribute("href") || `#/${linkRoute}`).trim();
+  let targetHash = href.startsWith("#") ? href : `#/${href.replace(/^#?\/?/, "")}`;
+  let route = linkRoute;
+
+  if (linkRoute === "challenges" && !isOnCreateHubRoute()) {
+    const createNav = resolveCreateTabNavigation();
+    if (createNav.route === "generate") {
+      route = "generate";
+      targetHash = createNav.hash;
+    }
+  }
+  return { linkRoute, route, targetHash };
+}
+
+function handleMobileTabTap(a, e) {
+  if (e?.button != null && e.button !== 0) return false;
+  if (document.body.classList.contains("echoComposeOpen")) return false;
+
+  const resolved = resolveMobileTabTap(a);
+  if (!resolved) return false;
+  const { linkRoute, route, targetHash } = resolved;
+  const bodyRoute = String(document.body.getAttribute("data-route") || "").trim();
+  const current = tabBarRouteKey(bodyRoute);
+
+  const onGenerateForm =
+    bodyRoute === "generate" &&
+    /^#\/generate\b/i.test(String(location.hash || ""));
+
+  if (linkRoute === "challenges" && isPersonaFlowActive()) {
+    exitAltCreateFlowToHub();
+    return true;
+  }
+
+  if (route === "generate" && onGenerateForm) {
+    if (isPersonaFlowActive()) {
+      exitAltCreateFlowToHub();
+      return true;
+    }
+    if (getCreateFlow() && !createTabMorphTapPending(a)) {
+      clearCreateFlow();
+      flushTabRouteNavigation("challenges", "#/challenges");
+      return true;
+    }
+    restoreCreatePageOnRouteEnter();
+    return true;
+  }
+
+  const onSameTab =
+    bodyRoute === route &&
+    tabBarRouteKey(bodyRoute) === linkRoute &&
+    String(location.hash || "") === targetHash;
+
+  if (onSameTab) {
+    void triggerTabRefresh(linkRoute);
+    return true;
+  }
+
+  flushTabRouteNavigation(route, targetHash);
+  return true;
+}
+
 function attachTabRefresh() {
   const tabs = document.querySelectorAll(".mobileTabbar a[data-route-link]");
   tabs.forEach((a) => {
@@ -3387,79 +3535,17 @@ function attachTabRefresh() {
     a.dataset.tabNavBound = "1";
     a.addEventListener(
       "pointerdown",
-      () => {
-        if (document.body.classList.contains("echoComposeOpen")) return;
+      (e) => {
         if (createTabMorphTapPending(a)) return;
+        if (!handleMobileTabTap(a, e)) return;
+        e.preventDefault();
         haptic("light");
       },
-      { passive: true },
+      { passive: false },
     );
     a.addEventListener("click", (e) => {
-      const linkRoute = tabBarRouteKey(a.getAttribute("data-route-link") || "");
-      if (!TAB_REFRESH_ACTIONS[linkRoute]) return;
-      const current = tabBarRouteKey(document.body.getAttribute("data-route") || "");
-      const hashRoute = hashRouteKey();
-      const href = String(a.getAttribute("href") || `#/${linkRoute}`).trim();
-      let targetHash = href.startsWith("#") ? href : `#/${href.replace(/^#?\/?/, "")}`;
-      let route = linkRoute;
-
-      // Resume in-progress generation or an unfinished draft — but not when
-      // already on the Create hub (+ should refresh the desk, not jump to Lyrics).
-      if (linkRoute === "challenges" && !isOnCreateHubRoute()) {
-        const createNav = resolveCreateTabNavigation();
-        if (createNav.route === "generate") {
-          route = "generate";
-          targetHash = createNav.hash;
-        }
-      }
-
-      const onGenerateForm =
-        document.body.getAttribute("data-route") === "generate" &&
-        /^#\/generate\b/i.test(String(location.hash || ""));
-
-      if (linkRoute === "challenges" && isPersonaFlowActive()) {
-        e.preventDefault();
-        e.stopPropagation();
-        exitAltCreateFlowToHub();
-        return;
-      }
-
-      if (route === "generate" && onGenerateForm) {
-        e.preventDefault();
-        e.stopPropagation();
-        if (isPersonaFlowActive()) {
-          exitAltCreateFlowToHub();
-          return;
-        }
-        if (getCreateFlow() && !createTabMorphTapPending(a)) {
-          clearCreateFlow();
-          flushTabRouteNavigation("challenges", "#/challenges");
-          return;
-        }
-        restoreCreatePageOnRouteEnter();
-        return;
-      }
-
-      const bodyRoute = String(document.body.getAttribute("data-route") || "").trim();
-      const viewingSameTabPanel =
-        bodyRoute === route
-        || (linkRoute === "challenges" && (bodyRoute === "challenges" || (bodyRoute === "generate" && route === "generate")))
-        || (linkRoute === "discover" && (bodyRoute === "discover" || bodyRoute === "discover-playlist"))
-        || (linkRoute === "friends" && bodyRoute === "friends");
-
-      if (viewingSameTabPanel && route === current && hashRoute === linkRoute && location.hash === targetHash) {
-        e.preventDefault();
-        e.stopPropagation();
-        void triggerTabRefresh(linkRoute);
-        return;
-      }
-
       e.preventDefault();
       e.stopPropagation();
-      if (linkRoute === "discover") {
-        try { sessionStorage.setItem(DISCOVERY_SEGMENT_KEY, "for-you"); } catch {}
-      }
-      flushTabRouteNavigation(route, targetHash);
     });
   });
 }

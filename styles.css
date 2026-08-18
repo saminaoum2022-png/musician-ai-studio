@@ -19999,6 +19999,9 @@ input::placeholder, textarea::placeholder{
     border-radius: 14px;
     padding: 5px 2px 4px;
     min-height: 52px;
+    touch-action: manipulation;
+    -webkit-user-select: none;
+    user-select: none;
     transition:
       color 180ms ease,
       opacity 180ms ease;

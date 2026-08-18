@@ -1,16 +1,16 @@
 /**
- * Timestamped (karaoke) lyrics proxy — provider-neutral path, currently
- * backed by Suno's generate/get-timestamped-lyrics.
+ * Timestamped (karaoke) lyrics — provider-neutral path.
+ * Suno: proxied from get-timestamped-lyrics (0.5 credits, cached after first fetch).
+ * ElevenLabs: cached at generation time from compose_detailed with_timestamps.
+ * Lyria: cached at generation time from generateContent lyrics [sec:] markers.
  *
  * POST /api/music/timestamped-lyrics   { taskId, audioId }
  *   <- { alignedWords: [{ word, startS, endS, success }], hootCer }
- *
- * Server caches per audioId in Supabase after the first Suno fetch (0.5 credits).
- * Clients also cache locally; repeat plays/devices hit the server cache only.
  */
 const { verifyUser } = require("../_lib/credits-auth");
 const { applyCors } = require("../_lib/cors");
-const { readJson, sendJson, sunoJsonRequest } = require("../_lib/suno-upstream");
+const { readJson, sendJson, sunoJsonRequest, isSunoMusicGenerationTaskId } = require("../_lib/suno-upstream");
+const { isElevenlabsTaskId, isLyriaTaskId } = require("../_lib/music-provider-task-store");
 const {
   getCachedTimestampedLyrics,
   queueCacheTimestampedLyrics,
@@ -21,9 +21,6 @@ module.exports = async function handler(req, res) {
   if (applyCors(req, res)) return;
   try {
     if (req.method !== "POST") return sendJson(res, 405, { error: "Method not allowed" });
-
-    const apiKey = process.env.SUNO_API_KEY;
-    if (!apiKey) return sendJson(res, 500, { error: "Missing SUNO_API_KEY on server" });
 
     const user = await verifyUser(req);
     if (!user) return sendJson(res, 401, { error: "Sign in to view synced lyrics." });
@@ -39,6 +36,30 @@ module.exports = async function handler(req, res) {
     if (cached?.alignedWords?.length) {
       return sendJson(res, 200, cached);
     }
+
+    if (isElevenlabsTaskId(taskId)) {
+      return sendJson(res, 404, {
+        error: "No synced lyrics for this ElevenLabs track — regenerate with vocals to enable karaoke.",
+        code: "elevenlabs_timestamps_missing",
+      });
+    }
+
+    if (isLyriaTaskId(taskId)) {
+      return sendJson(res, 404, {
+        error: "No synced lyrics for this Lyria track — regenerate with vocals to enable karaoke.",
+        code: "lyria_timestamps_missing",
+      });
+    }
+
+    if (!isSunoMusicGenerationTaskId(taskId)) {
+      return sendJson(res, 404, {
+        error: "Synced lyrics are not available for this provider.",
+        code: "unsupported_provider",
+      });
+    }
+
+    const apiKey = process.env.SUNO_API_KEY;
+    if (!apiKey) return sendJson(res, 500, { error: "Missing SUNO_API_KEY on server" });
 
     const upstream = await sunoJsonRequest("/api/v1/generate/get-timestamped-lyrics", {
       method: "POST",

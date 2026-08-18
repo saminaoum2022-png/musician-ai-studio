@@ -84,7 +84,7 @@ async function cacheTimestampedLyrics({
     method: "POST",
     body: {
       audio_id: aid,
-      provider: provider === "other" ? "other" : "suno",
+      provider: provider === "lyria" ? "lyria" : provider === "elevenlabs" ? "elevenlabs" : provider === "other" ? "other" : "suno",
       provider_task_id: cleanTaskId(taskId),
       aligned_words: words,
       hoot_cer: Number.isFinite(Number(hootCer)) ? Number(hootCer) : null,

@@ -2676,7 +2676,11 @@ function apiFetch(path, opts = {}) {
     return (async () => {
       const native = await tryNative();
       if (native && Number(native.status) > 0) return native;
-      return fetch(url, init);
+      throw new Error(
+        native == null
+          ? "Connection lost while the server was composing — try again on Wi‑Fi with the app open."
+          : "Generation request failed — try again.",
+      );
     })();
   }
 
@@ -18548,6 +18552,22 @@ function sunoFailureUserCopy(kind, { isRemix = false } = {}) {
   };
 }
 
+function providerFailureToast(info, rawState, taskId) {
+  const userCopy = sunoFailureUserCopy(info?.kind, {
+    isRemix: Boolean(currentRemixSource?.originalUrl || currentRemixSource?.url || vocalRefOrigin === "remix"),
+  });
+  const upstream = String(
+    rawState?.errorMessage || info?.detail || info?.headline || "",
+  ).trim();
+  if (isSingleVariantMusicTask(taskId) && upstream && upstream !== "Something went wrong. Please try again.") {
+    return upstream.slice(0, 240);
+  }
+  if (info?.kind && info.kind !== "generic" && info?.detail) {
+    return String(info.detail).slice(0, 240);
+  }
+  return userCopy.toast;
+}
+
 function isBenignSunoStatusMessage(msg) {
   const m = String(msg || "").trim().toLowerCase();
   return !m || m === "success" || m === "ok" || m === "pending";
@@ -18565,7 +18585,8 @@ function resolveSunoFailureFromApi(dd) {
   return interpretSunoFailure({
     ...upstreamPayload,
     errorMessage:
-      upstreamPayload?.msg
+      dd?.error
+      || upstreamPayload?.msg
       || upstreamPayload?.message
       || upstreamPayload?.error
       || upstreamPayload?.errorMessage
@@ -18810,7 +18831,7 @@ function interpretSunoFailure(raw) {
     return {
       kind: "generic",
       headline: "Generation failed",
-      detail: "Something went wrong. Please try again.",
+      detail: msg || "Something went wrong. Please try again.",
     };
   }
   return { kind: null, headline: "", detail: "" };
@@ -20973,6 +20994,34 @@ function isSafariLikeRecorderEnv() {
   }
 }
 
+function blobToDataUrl(blob) {
+  return new Promise((resolve, reject) => {
+    if (!blob) {
+      reject(new Error("missing blob"));
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.onerror = () => reject(reader.error || new Error("read failed"));
+    reader.readAsDataURL(blob);
+  });
+}
+
+async function estimateBlobDurationMs(blob) {
+  if (!blob || blob.size < 128) return null;
+  try {
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    if (!AudioCtx) return null;
+    const ac = new AudioCtx();
+    const buf = await blob.arrayBuffer();
+    const audio = await ac.decodeAudioData(buf.slice(0));
+    await ac.close();
+    const ms = Math.round(Number(audio.duration || 0) * 1000);
+    if (ms >= 3000 && ms <= 300000) return ms;
+  } catch {}
+  return null;
+}
+
 function vocalReferenceFilenameForMime(mime) {
   const t = String(mime || "").toLowerCase();
   if (t.includes("mp4") || t.includes("aac") || t.includes("mpeg")) return "vocal-reference.m4a";
@@ -22567,11 +22616,11 @@ function isSingleVariantMusicTask(taskId) {
   return tid.startsWith("mmx_") || tid.startsWith("lyr_") || tid.startsWith("elv_");
 }
 
-/** Karaoke / timestamped lyrics — Suno API only (0.5 cr/fetch); skip alternate providers. */
+/** Karaoke / timestamped lyrics — Suno, Lyria, ElevenLabs; skip MiniMax. */
 function isSunoKaraokeTaskId(taskId) {
   const tid = String(taskId || "").trim();
   if (!tid) return false;
-  if (/^(mmx_|lyr_|elv_)/i.test(tid)) return false;
+  if (/^mmx_/i.test(tid)) return false;
   return true;
 }
 
@@ -25192,24 +25241,20 @@ function syncProfileProAvatarPill() {
   const tabPill = document.getElementById("tabProfileProPill");
   const wrap = document.getElementById("profileAuraAvatarWrap");
   const tabSlot = document.getElementById("tabProfileAvatarSlot");
-  const show = isAppLoggedIn() && Boolean(creditsState.proActive);
+  const showTab = isAppLoggedIn() && Boolean(creditsState.proActive);
+  // Own profile hero: skip Pro on the large avatar (Persona mic uses that corner).
+  // Pro still shows on the tab avatar, Settings, and other users' public profiles.
   if (pill) {
-    pill.hidden = !show;
-    pill.setAttribute("aria-hidden", show ? "false" : "true");
+    pill.hidden = true;
+    pill.setAttribute("aria-hidden", "true");
   }
+  if (wrap) wrap.classList.remove("hasPro");
   if (tabPill) {
-    tabPill.hidden = !show;
-    tabPill.setAttribute("aria-hidden", show ? "false" : "true");
+    tabPill.hidden = !showTab;
+    tabPill.setAttribute("aria-hidden", showTab ? "false" : "true");
+    if (showTab) tabPill.title = "NabadAi Pro";
   }
-  if (wrap) wrap.classList.toggle("hasPro", show);
-  if (tabSlot) tabSlot.classList.toggle("hasPro", show);
-  if (show) {
-    if (pill) {
-      pill.textContent = "Pro";
-      pill.title = "NabadAi Pro";
-    }
-    if (tabPill) tabPill.title = "NabadAi Pro";
-  }
+  if (tabSlot) tabSlot.classList.toggle("hasPro", showTab);
 }
 
 function syncSettingsProRow() {
@@ -56477,7 +56522,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
   const fetchGenerationStatus = async () => {
     if (!sunoTaskId) return null;
     const statusTok = getSupabaseAuthToken();
-    const r = await fetch(apiUrl(musicStatusApiPath(sunoTaskId)), {
+    const r = await apiFetch(musicStatusApiPath(sunoTaskId), {
       cache: "no-store",
       headers: statusTok ? { Authorization: `Bearer ${statusTok}` } : undefined,
     });
@@ -56613,6 +56658,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
     setProgress(0);
     const info = failureInfo || { kind: "generic", headline: "Generation failed", detail: "" };
     const isRemix = Boolean(currentRemixSource?.originalUrl || currentRemixSource?.url || vocalRefOrigin === "remix");
+    const toastText = providerFailureToast(info, rawState, sunoTaskId || loadPendingBackendTask() || "");
     const userCopy = sunoFailureUserCopy(info.kind, { isRemix });
     try {
       console.warn("[generate] failure", {
@@ -56626,9 +56672,9 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
         isRemix,
       });
     } catch {}
-    setStatus(userCopy.toast);
+    setStatus(toastText);
     try {
-      showToast(userCopy.toast, {
+      showToast(toastText, {
         icon: info.kind === "copyright" || info.kind === "sensitive" ? "!" : "✗",
         durationMs: 9000,
       });
@@ -57414,7 +57460,9 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       const data = await trackCreditsAround(
         hasReference ? "Upload reference song" : "Generate song",
         async () => {
-          if (hasReference) {
+          const elevenReferenceGenerate =
+            hasReference && useAltMusicProvider() && getMusicProviderPref() === "elevenlabs";
+          if (hasReference && !elevenReferenceGenerate) {
             const sendFile = resolveVocalReferenceForSubmit();
             const remixSourceRaw = String(
               currentRemixSource?.originalUrl || currentRemixSource?.url || "",
@@ -57581,19 +57629,61 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
                 : altProvider === "elevenlabs"
                   ? "ElevenLabs"
                   : "MiniMax";
-            if (personaIdSel || hasReference) {
+            if (personaIdSel) {
               setLoading(false);
               setGenerateBtn("Generate song", false, "generate");
               setGenerateFieldsLocked(false);
               setProgress(0);
               try {
                 showToast(
-                  `${providerLabel} test mode doesn't support persona or reference uploads yet.`,
+                  `${providerLabel} test mode doesn't support persona yet — clear the persona chip first.`,
                   { icon: "!", durationMs: 6400 },
                 );
               } catch {}
-              setStatus(`${providerLabel} test mode: remove persona and reference uploads first.`);
+              setStatus(`${providerLabel} test mode: remove persona first.`);
               return;
+            }
+            if (hasReference && altProvider !== "elevenlabs") {
+              setLoading(false);
+              setGenerateBtn("Generate song", false, "generate");
+              setGenerateFieldsLocked(false);
+              setProgress(0);
+              try {
+                showToast(
+                  `${providerLabel} test mode doesn't support vocal reference uploads yet.`,
+                  { icon: "!", durationMs: 6400 },
+                );
+              } catch {}
+              setStatus(`${providerLabel} test mode: remove vocal reference or switch back to Suno.`);
+              return;
+            }
+            if (hasReference && altProvider === "elevenlabs") {
+              if (referenceInstrumentalOnly) {
+                setLoading(false);
+                setGenerateBtn("Generate song", false, "generate");
+                setGenerateFieldsLocked(false);
+                setProgress(0);
+                try {
+                  showToast(
+                    "ElevenLabs reference mode uses your hum/voice — switch off instrumental-from-melody.",
+                    { icon: "!", durationMs: 6400 },
+                  );
+                } catch {}
+                setStatus("ElevenLabs: vocal reference needs lyrics + voice mode (not instrumental-from-melody).");
+                return;
+              }
+              const sendFile = resolveVocalReferenceForSubmit();
+              if (!sendFile?.size) {
+                throw new Error(
+                  "Lost the vocal reference before upload. Tap '+ Audio' or Record again, then Generate.",
+                );
+              }
+              setStatus("Uploading vocal reference to ElevenLabs…");
+              payload.hasReference = true;
+              payload.referenceAudio = await blobToDataUrl(sendFile);
+              payload.referenceConditionStrength = "high";
+              const refMs = await estimateBlobDurationMs(sendFile);
+              if (refMs) payload.referenceDurationMs = refMs;
             }
             try {
               showToast(`${providerLabel} composing… keep the app open (about 1–3 min).`, {
@@ -57603,9 +57693,11 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
             } catch {}
             setStatus(
               altProvider === "lyria"
-                ? "Lyria is composing your song… usually 2–3 minutes. Keep the app open."
+                ? "Lyria is composing your song… usually 2–3 minutes. You can browse the app — we'll update when it's ready."
                 : altProvider === "elevenlabs"
-                  ? "ElevenLabs is composing your song… usually 1–3 minutes. Keep the app open."
+                  ? hasReference
+                    ? "ElevenLabs is matching your hum/voice + finetune… usually 1–3 minutes."
+                    : "ElevenLabs is composing your song… usually 1–3 minutes. You can browse the app — we'll update when it's ready."
                   : "MiniMax is composing your song… usually 1–2 minutes. Keep the app open.",
             );
           }
@@ -57641,6 +57733,11 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
             setCreditsBalance(Number(d._credits.balance));
             creditsState.loaded = true;
           }
+          if (useAltMusicProvider() && getMusicProviderPref() === "elevenlabs" && hasReference && r.ok) {
+            try {
+              clearVocalReferenceSelection();
+            } catch {}
+          }
           return d;
         },
         payload?.model ? `model=${payload.model}` : ""
@@ -57668,7 +57765,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       const altReadyNow = Boolean(
         isSingleVariantTask &&
         altImmediateUrl &&
-        (data?._ready || data?._provider === "minimax" || data?._provider === "lyria" || data?._provider === "elevenlabs"),
+        data?._ready === true,
       );
       savePendingBackendTask(sunoTaskId || "");
       if (sunoTaskId) {
@@ -57767,6 +57864,20 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
         resetNabadLyricsDraftState();
         savePendingBackendTask("");
         setStatus("Song ready.");
+        if (data?._provider === "elevenlabs" && creditsState.isAdmin) {
+          try {
+            const ft = String(data?._finetuneId || "").trim();
+            const ref = Boolean(data?._referenceApplied);
+            showToast(
+              ref
+                ? `ElevenLabs · vocal reference +${ft ? ` finetune ${ft.slice(0, 12)}…` : " finetune (none)"} applied`
+                : ft
+                  ? `ElevenLabs · finetune ${ft.slice(0, 12)}… applied`
+                  : "ElevenLabs · no finetune_id (generic voice) — set ELEVENLABS_FINETUNE_ID on server",
+              { icon: ft || ref ? "♪" : "!", durationMs: 9000 },
+            );
+          } catch {}
+        }
         try { finishCoachGenerationReady({ variantCount: 1 }); } catch {}
         markGenerationReadyNotice();
         setGenerateBtn("Regenerate", false, "regenerate");
@@ -57856,7 +57967,9 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
         let failMsg = String(e?.message || "Something went wrong — please try again.").trim();
         if (
           useAltMusicProvider() &&
-          /failed to fetch|load failed|networkerror|network request failed|aborted/i.test(failMsg)
+          /failed to fetch|load failed|networkerror|network request failed|aborted|connection lost|timed out|timeout/i.test(
+            failMsg,
+          )
         ) {
           const providerLabel =
             getMusicProviderPref() === "lyria"
@@ -57864,7 +57977,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
               : getMusicProviderPref() === "elevenlabs"
                 ? "ElevenLabs"
                 : "MiniMax";
-          failMsg = `${providerLabel} needs 1–3 minutes to compose. Keep the app open and try again — if this keeps happening, update the app.`;
+          failMsg = `${providerLabel} lost connection while composing (often 2–3 min). Stay on this screen on Wi‑Fi and try again.`;
         }
         setStatus(`Generation failed: ${failMsg}`);
         try {

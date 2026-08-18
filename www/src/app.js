@@ -216,7 +216,7 @@ import { MUSIC_VIDEO_FEATURE_ENABLED } from "./feature-flags.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260818-211319";
+const APP_BUILD = "20260818-213457";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -323,6 +323,7 @@ const _bootSplashStartedAt = Date.now();
 let _bootSplashAnimEnded = false;
 let _bootSplashCanDismiss = false;
 let _bootSplashMinTimer = 0;
+let _bootSplashPermanentlyDismissed = false;
 
 // iOS WKWebView cold-launch quirk: the first layout can happen at a wider
 // default logical width (before the real frame size / safe-area insets resolve),
@@ -352,6 +353,8 @@ function reassertViewportScale() {
 
 function finishBootSplash() {
   try {
+    if (_bootSplashPermanentlyDismissed) return;
+    _bootSplashPermanentlyDismissed = true;
     if (_bootSplashMinTimer) clearTimeout(_bootSplashMinTimer);
     _bootSplashMinTimer = 0;
     const splash = document.getElementById("bootSplash");
@@ -366,6 +369,7 @@ function finishBootSplash() {
       splash.style.transition = "none";
       splash.style.opacity = "0";
       splash.style.display = "none";
+      splash.classList.add("bootSplash--gone");
     }
     document.body.classList.remove("booting");
     // Force a correct device-width layout the instant the app is shown.
@@ -3327,6 +3331,10 @@ function exitAltCreateFlowToHub() {
 }
 
 const MOBILE_TAB_LIGHTWEIGHT = new Set(["discover", "friends", "challenges", "activity", "profile"]);
+/** Sub-screens opened from profile chrome — instant swap, no full applyRoute replay. */
+const SECONDARY_ROUTE_LIGHTWEIGHT = new Set(["settings", "credits", "profile-edit"]);
+let _secondaryNavFromClick = false;
+let _profileChromeNavBound = false;
 
 function leaveRouteForTabSwitch(prevRoute, nextRoute) {
   const prev = String(prevRoute || "").trim();
@@ -3374,6 +3382,7 @@ function restoreProfileSongsSegmentFromStorage() {
 
 /** Profile tab-bar entry — bind segment UI + play handlers (skipped when lightweight tabs bypass applyRoute). */
 function enterProfileRouteHooks({ skipHeavy = false } = {}) {
+  wireProfileChromeNavOnce();
   try { syncOwnProfileSocialStatsUi(); } catch {}
   restoreProfileSongsSegmentFromStorage();
   bindProfileSongsSegmentOnce();
@@ -3404,6 +3413,126 @@ function enterProfileRouteHooks({ skipHeavy = false } = {}) {
       });
     }, 0);
   }
+}
+
+function syncProfileAuraHeaderChrome(route) {
+  try {
+    const profileChrome = document.getElementById("profileAuraHeaderChromeRoot");
+    if (profileChrome) {
+      profileChrome.setAttribute("aria-hidden", route === "profile" ? "false" : "true");
+    }
+  } catch {}
+}
+
+function finishSecondaryRouteEnter(route, prevRoute) {
+  const wanted = String(route || "").trim();
+  const prev = String(prevRoute || "").trim();
+  if (prev && prev !== wanted) captureRouteScroll(prev);
+  syncProfileAuraHeaderChrome(wanted);
+  if (wanted === "settings") {
+    try { renderPersonaSelect(); } catch {}
+    try { refreshSettingsMusicPrefsRow(); } catch {}
+    try { syncSettingsPushRow(); } catch {}
+    try { syncSettingsMemberIdRow(); } catch {}
+    try { syncSettingsOrbMode(); } catch {}
+    try { syncSettingsThemePicker(); } catch {}
+    try { syncSettingsMusicProviderRow(); } catch {}
+    try { syncSettingsProSingerRows(); } catch {}
+    if (!_onesignalAppId) {
+      void loadPublicConfig().then(() => {
+        try { syncSettingsPushRow(); } catch {}
+      });
+    }
+  } else if (wanted === "profile-edit") {
+    try { setProfileEditing(false); } catch {}
+    try { onProfileEditRouteActive(); } catch {}
+  } else if (wanted === "credits") {
+    void refreshMyCredits({ silent: true });
+  }
+  if (authSession?.user?.id) {
+    wireNotificationsLiveRefreshOnce();
+    void refreshNotificationsUnreadBadge({ force: wanted === "settings" });
+  }
+  try { syncCoachOrbAfterRouteChange(); } catch {}
+  try { _appTourMod?.notifyAppRouteChanged?.(wanted); } catch {}
+}
+
+function flushSecondaryRouteNavigation(route, targetHash) {
+  const wanted = String(route || "").trim();
+  const target = String(targetHash || `#/${wanted}`).trim();
+  const hash = target.startsWith("#") ? target : `#/${target.replace(/^#?\/?/, "")}`;
+  const prevBodyRoute = String(document.body.getAttribute("data-route") || "").trim();
+  if (prevBodyRoute === wanted && String(location.hash || "") === hash) return;
+  bumpApplyRouteGeneration();
+  if (prevBodyRoute && prevBodyRoute !== wanted) invalidateInFlightRouteFeedWork(prevBodyRoute);
+  _secondaryNavFromClick = true;
+  if (location.hash !== hash) {
+    try {
+      location.hash = hash.startsWith("#") ? hash.slice(1) : hash;
+    } catch {
+      location.hash = hash;
+    }
+  }
+  syncRoutePanelVisibility(wanted);
+  if (_applyRouteRaf) {
+    cancelAnimationFrame(_applyRouteRaf);
+    _applyRouteRaf = 0;
+  }
+  if (SECONDARY_ROUTE_LIGHTWEIGHT.has(wanted)) {
+    finishSecondaryRouteEnter(wanted, prevBodyRoute);
+    return;
+  }
+  if (_applyRouteInFlight) {
+    _applyRouteQueued = true;
+  } else {
+    void runApplyRouteOnce();
+  }
+}
+
+function wireProfileChromeNavOnce() {
+  if (_profileChromeNavBound) return;
+  _profileChromeNavBound = true;
+  const bindSecondary = (selector, route, hash) => {
+    const el = document.querySelector(selector);
+    if (!el || el.dataset.chromeNavBound === "1") return;
+    el.dataset.chromeNavBound = "1";
+    el.addEventListener(
+      "pointerdown",
+      (e) => {
+        e.preventDefault();
+        try { haptic("light"); } catch {}
+        flushSecondaryRouteNavigation(route, hash);
+      },
+      { passive: false },
+    );
+    el.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+    });
+  };
+  const bindProfileTab = (selector) => {
+    const el = document.querySelector(selector);
+    if (!el || el.dataset.chromeNavBound === "1") return;
+    el.dataset.chromeNavBound = "1";
+    el.addEventListener(
+      "pointerdown",
+      (e) => {
+        e.preventDefault();
+        try { haptic("light"); } catch {}
+        flushTabRouteNavigation("profile", "#/profile");
+      },
+      { passive: false },
+    );
+    el.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+    });
+  };
+  bindSecondary("#btnProfileSettingsGear", "settings", "#/settings");
+  bindSecondary("#profileCreditsLink", "credits", "#/credits");
+  bindProfileTab("a.settingsBack[href=\"#/profile\"]");
+  bindProfileTab("a.creditsBack[href=\"#/profile\"]");
+  bindProfileTab("a.profileEditBack[href=\"#/profile\"]");
 }
 
 /** Bottom-tab switches: panel is already visible — run route hooks only, never full applyRoute. */
@@ -4101,7 +4230,7 @@ function tabBarRouteKey(route = "") {
 const NAV_TAB_ROOTS = new Set(["discover", "friends", "challenges", "activity", "profile"]);
 // Screens that run their own bespoke transition or appear at boot/auth and
 // should not get the generic slide/fade.
-const NAV_ANIM_SKIP = new Set(["messages-thread", "auth", "intro", "onboarding", "music-preferences", "pro"]);
+const NAV_ANIM_SKIP = new Set(["messages-thread", "auth", "intro", "onboarding", "music-preferences", "pro", "settings", "credits", "profile-edit"]);
 let _navStack = [];
 
 function navPrefersReducedMotion() {
@@ -4609,10 +4738,7 @@ function applyRoute({ passGen } = {}) {
   }
 
   try {
-    const profileChrome = document.getElementById("profileAuraHeaderChromeRoot");
-    if (profileChrome) {
-      profileChrome.setAttribute("aria-hidden", wanted === "profile" ? "false" : "true");
-    }
+    syncProfileAuraHeaderChrome(wanted);
   } catch {}
   if (isLoggedIn) {
     wireNotificationsLiveRefreshOnce();
@@ -4766,6 +4892,7 @@ function applyRoute({ passGen } = {}) {
     }
     bindProfileSongsSegmentOnce();
     bindUserPlaylistPickerOnce();
+    wireProfileChromeNavOnce();
     syncProfileSongsSegmentUi();
     const profileHeavy = !shouldSkipRouteHeavy("profile");
     if (profileHeavy) markRouteHeavy("profile");
@@ -5472,11 +5599,13 @@ function resetCreateDraft() {
 
 window.addEventListener("hashchange", () => {
   const tabNavHandled = _tabNavFromClick;
-  if (!tabNavHandled) bumpApplyRouteGeneration();
+  const secondaryNavHandled = _secondaryNavFromClick;
+  if (!tabNavHandled && !secondaryNavHandled) bumpApplyRouteGeneration();
   _tabNavFromClick = false;
+  _secondaryNavFromClick = false;
   closeCreateChooserSheet({ immediate: true });
-  // flushTabRouteNavigation already ran applyRoute for tab-bar navigations.
-  if (tabNavHandled) return;
+  // flushTabRouteNavigation / flushSecondaryRouteNavigation already applied the route.
+  if (tabNavHandled || secondaryNavHandled) return;
   scheduleApplyRoute();
 });
 /** Do not set #/auth before Keychain/native session restore — that was kicking users off Home. */
@@ -63719,6 +63848,7 @@ setProfileEditing(false);
 // click time, so it stays correct across hash changes without needing
 // a rebind.
 try { attachTabRefresh(); } catch (e) { console.warn("[tabRefresh] init", e); }
+try { wireProfileChromeNavOnce(); } catch (e) { console.warn("[profileChromeNav] init", e); }
 try {
   initPullToRefresh({
     triggerTabRefresh,

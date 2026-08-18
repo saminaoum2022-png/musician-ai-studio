@@ -1811,6 +1811,9 @@ body.booting .hubNowPlaying{
   opacity: 1;
   transition: opacity 220ms ease;
 }
+.bootSplash--gone{
+  display: none !important;
+}
 body.booting .bootSplash{
   display: flex;
 }

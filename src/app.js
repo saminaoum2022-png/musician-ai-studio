@@ -225,7 +225,7 @@ import { MUSIC_VIDEO_FEATURE_ENABLED } from "./feature-flags.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260819-025127";
+const APP_BUILD = "20260819-025913";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -6103,6 +6103,8 @@ try {
     nativeSafeFetch,
     pickRecorderMimeType,
     formatMsAsVoiceTime,
+    toAudioProxyUrl,
+    normalizeAudioUrlForPlayback,
     haptic,
     showToast,
     messagesApi,
@@ -31753,6 +31755,17 @@ function parseDmMessageBody(raw) {
   if (body.startsWith("{")) {
     try {
       const data = JSON.parse(body);
+      // Voice drops first — same nabad_dm key namespace as songs.
+      if (String(data?.nabad_dm || "") === "voice") {
+        const storageKey = String(data.k || "").trim();
+        const directUrl = String(data.u || data.url || "").trim();
+        return {
+          type: "voice",
+          url: directUrl || dmVoicePublicUrl(storageKey),
+          durationSec: Math.max(0, Number(data.d ?? data.duration) || 0),
+          peaks: Array.isArray(data.p) ? data.p : [],
+        };
+      }
       if (data?.[DM_SONG_MARKER] === "song" || data?.nabad_dm === "song") {
         return {
           type: "song",
@@ -31762,16 +31775,6 @@ function parseDmMessageBody(raw) {
           art: String(data.a || data.art || "").trim(),
           by: String(data.b || data.by || "").trim(),
           kind: String(data.k || data.kind || "song").trim(),
-        };
-      }
-      if (data?.nabad_dm === DM_VOICE_MARKER || data?.nabad_dm === "voice") {
-        const storageKey = String(data.k || "").trim();
-        const directUrl = String(data.u || data.url || "").trim();
-        return {
-          type: "voice",
-          url: directUrl || dmVoicePublicUrl(storageKey),
-          durationSec: Math.max(0, Number(data.d ?? data.duration) || 0),
-          peaks: Array.isArray(data.p) ? data.p : [],
         };
       }
     } catch {}

@@ -224,15 +224,39 @@ function resetRecording() {
 export function buildDmVoicePayload({ url, key, durationSec, peaks } = {}) {
   const sec = Math.max(1, Math.min(120, Math.round(Number(durationSec) || 0)));
   const p = normalizeVoicePeaks(peaks, DM_VOICE_ARC_BARS).map((n) => Math.round(n * 100) / 100);
+  const storageKey = String(key || "").trim();
+  const directUrl = String(url || "").trim();
   const payload = {
     nabad_dm: DM_VOICE_MARKER,
     d: sec,
     p,
   };
-  const storageKey = String(key || "").trim();
   if (storageKey) payload.k = storageKey;
-  else payload.u = String(url || "").trim();
+  if (directUrl) payload.u = directUrl;
   return JSON.stringify(payload);
+}
+
+function resolveVoiceDropPlayUrl(stored) {
+  let url = String(stored || "").trim();
+  if (!url) return "";
+  if (url.startsWith("blob:") || url.startsWith("data:")) return url;
+  if (!/^https?:\/\//i.test(url)) {
+    const base = String(d().SUPABASE_URL || "").replace(/\/$/, "");
+    if (base) {
+      const enc = url.split("/").map((s) => encodeURIComponent(s)).join("/");
+      url = `${base}/storage/v1/object/public/dm_voice/${enc}`;
+    }
+  }
+  const proxied = d().toAudioProxyUrl?.(url) || url;
+  return d().normalizeAudioUrlForPlayback?.(proxied) || proxied || url;
+}
+
+function createVoiceDropAudio(playUrl) {
+  const audio = new Audio(playUrl);
+  audio.preload = "auto";
+  audio.crossOrigin = "anonymous";
+  try { audio.setAttribute("playsinline", ""); } catch {}
+  return audio;
 }
 
 function blobToDataUrl(blob) {
@@ -281,7 +305,7 @@ async function togglePreviewPlayback() {
     return;
   }
   stopPreviewPlayback();
-  const audio = new Audio(_blobUrl);
+  const audio = createVoiceDropAudio(_blobUrl);
   _playingAudio = audio;
   _playingId = "preview";
   const orb = document.getElementById("voiceDropOrb");
@@ -456,7 +480,12 @@ export async function toggleVoiceDropPlayback(card) {
     return;
   }
   stopPreviewPlayback();
-  const audio = new Audio(url);
+  const playUrl = resolveVoiceDropPlayUrl(url);
+  if (!playUrl) {
+    d().showToast?.("Voice drop file missing.", { durationMs: 2600 });
+    return;
+  }
+  const audio = createVoiceDropAudio(playUrl);
   _playingAudio = audio;
   _playingId = id;
   card.classList.add("is-playing");

@@ -221,44 +221,44 @@ function resetRecording() {
   syncVoiceDropUi();
 }
 
-export function buildDmVoicePayload({ url, durationSec, peaks } = {}) {
-  const u = String(url || "").trim();
+export function buildDmVoicePayload({ url, key, durationSec, peaks } = {}) {
   const sec = Math.max(1, Math.min(120, Math.round(Number(durationSec) || 0)));
   const p = normalizeVoicePeaks(peaks, DM_VOICE_ARC_BARS).map((n) => Math.round(n * 100) / 100);
-  return JSON.stringify({
+  const payload = {
     nabad_dm: DM_VOICE_MARKER,
-    u,
     d: sec,
     p,
+  };
+  const storageKey = String(key || "").trim();
+  if (storageKey) payload.k = storageKey;
+  else payload.u = String(url || "").trim();
+  return JSON.stringify(payload);
+}
+
+function blobToDataUrl(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.onerror = () => reject(new Error("Could not read recording"));
+    reader.readAsDataURL(blob);
   });
 }
 
 export async function uploadDmVoiceBlob(blob) {
-  const token = d().getSupabaseAuthToken?.();
-  const uid = d().getAuthSession?.()?.user?.id;
-  const base = String(d().SUPABASE_URL || "").trim();
-  const anon = String(d().SUPABASE_ANON_KEY || "").trim();
-  if (!token || !uid || !base) throw new Error("Login required");
-  const contentType = contentTypeForBlob(blob);
-  const ext = extFromMime(contentType);
-  const key = `${uid}/${Date.now()}.${ext}`;
-  const fetchFn = d().nativeSafeFetch || fetch;
-  const r = await fetchFn(`${base}/storage/v1/object/dm_voice/${key}`, {
+  const dataUrl = await blobToDataUrl(blob);
+  const data = await d().messagesApi("/api/messages", {
     method: "POST",
-    headers: {
-      apikey: anon,
-      Authorization: `Bearer ${token}`,
-      "Content-Type": contentType,
-      "x-upsert": "true",
-      "Cache-Control": "public, max-age=31536000",
-    },
-    body: blob,
+    timeoutMs: 90000,
+    body: JSON.stringify({
+      action: "upload_voice_drop",
+      contentType: contentTypeForBlob(blob),
+      dataBase64: dataUrl,
+    }),
   });
-  if (!r.ok) {
-    const t = await r.text().catch(() => "");
-    throw new Error(`Voice drop upload failed (${r.status}): ${t.slice(0, 120)}`);
+  if (!data?.ok || !data?.url) {
+    throw new Error(String(data?.error || "Voice upload failed"));
   }
-  return { url: `${base}/storage/v1/object/public/dm_voice/${key}?v=${Date.now()}` };
+  return { url: String(data.url), key: String(data.key || "") };
 }
 
 function stopPreviewPlayback() {
@@ -500,26 +500,38 @@ export function closeDmVoiceDropSheet() {
 
 async function sendVoiceDrop() {
   const threadId = String(d().getThreadId?.() || "").trim();
-  if (!threadId || !_blob?.size) return;
   const sendBtn = document.getElementById("voiceDropSend");
+  if (!threadId) {
+    d().showToast?.("Open a chat first.", { durationMs: 2600 });
+    return;
+  }
+  if (!_blob?.size) {
+    d().showToast?.("Record a voice drop first.", { durationMs: 2600 });
+    return;
+  }
   if (sendBtn?.getAttribute("aria-busy") === "true") return;
   sendBtn?.setAttribute("aria-busy", "true");
   if (sendBtn) sendBtn.textContent = "Sending…";
   try {
-    const { url } = await uploadDmVoiceBlob(_blob);
+    const { url, key } = await uploadDmVoiceBlob(_blob);
     const body = buildDmVoicePayload({
       url,
+      key,
       durationSec: Math.round(_durationMs / 1000),
       peaks: _peaks,
     });
-    if (body.length > 500) {
+    if (body.length > 2000) {
       throw new Error("Voice drop metadata too large.");
     }
     d().feedbackMessagesComposerSend?.();
     const data = await d().messagesApi("/api/messages", {
       method: "POST",
+      timeoutMs: 30000,
       body: JSON.stringify({ action: "send_message", threadId, body }),
     });
+    if (!data?.ok) {
+      throw new Error(String(data?.error || "Send failed"));
+    }
     const msg = data?.message;
     closeDmVoiceDropSheet();
     d().closeMessagesComposerSheet?.();
@@ -537,7 +549,8 @@ async function sendVoiceDrop() {
     try { d().haptic?.("success"); } catch {}
     await d().refreshMessagesUnreadBadge?.({ force: true });
   } catch (e) {
-    d().showToast?.(String(e?.message || "Could not send voice drop"), { durationMs: 2800 });
+    d().showToast?.(String(e?.message || "Could not send voice drop"), { durationMs: 3200 });
+  } finally {
     sendBtn?.removeAttribute("aria-busy");
     if (sendBtn) sendBtn.textContent = "Send drop";
   }

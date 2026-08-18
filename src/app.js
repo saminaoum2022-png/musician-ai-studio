@@ -225,7 +225,7 @@ import { MUSIC_VIDEO_FEATURE_ENABLED } from "./feature-flags.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260819-024640";
+const APP_BUILD = "20260819-025127";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -31737,6 +31737,16 @@ function wireInAppShareSheetsOnce() {
   });
 }
 
+function dmVoicePublicUrl(keyOrUrl) {
+  const raw = String(keyOrUrl || "").trim();
+  if (!raw) return "";
+  if (/^https?:\/\//i.test(raw)) return raw;
+  const base = String(SUPABASE_URL || "").replace(/\/$/, "");
+  if (!base) return "";
+  const enc = raw.split("/").map((s) => encodeURIComponent(s)).join("/");
+  return `${base}/storage/v1/object/public/dm_voice/${enc}`;
+}
+
 function parseDmMessageBody(raw) {
   const body = String(raw || "").trim();
   if (!body) return { type: "text", text: "" };
@@ -31755,9 +31765,11 @@ function parseDmMessageBody(raw) {
         };
       }
       if (data?.nabad_dm === DM_VOICE_MARKER || data?.nabad_dm === "voice") {
+        const storageKey = String(data.k || "").trim();
+        const directUrl = String(data.u || data.url || "").trim();
         return {
           type: "voice",
-          url: String(data.u || data.url || "").trim(),
+          url: directUrl || dmVoicePublicUrl(storageKey),
           durationSec: Math.max(0, Number(data.d ?? data.duration) || 0),
           peaks: Array.isArray(data.p) ? data.p : [],
         };

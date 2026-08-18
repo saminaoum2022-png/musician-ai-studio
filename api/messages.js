@@ -11,11 +11,14 @@ const {
   callRpc,
 } = require("./_lib/credits-auth");
 const { queuePrivacySafePush } = require("./_lib/onesignal-push");
+const { uploadObject } = require("./_lib/supabase-storage");
 
 const SUPABASE_URL = (process.env.SUPABASE_URL || "").replace(/\/$/, "");
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
-const SVC_FETCH_TIMEOUT_MS = 8000;
-const MAX_BODY = 500;
+const SVC_FETCH_TIMEOUT_MS = 80000;
+const MAX_BODY = 2000;
+const DM_VOICE_BUCKET = "dm_voice";
+const DM_VOICE_MAX_BYTES = 512 * 1024;
 
 function svcHeaders(extra) {
   return {
@@ -63,6 +66,50 @@ function cleanUserId(v) {
 function cleanBody(v) {
   const s = String(v || "").trim().slice(0, MAX_BODY);
   return s.length ? s : "";
+}
+
+function extFromAudioContentType(contentType) {
+  const ct = String(contentType || "").toLowerCase();
+  if (ct.includes("mp4") || ct.includes("m4a") || ct.includes("aac")) return "m4a";
+  if (ct.includes("mpeg") || ct.includes("mp3")) return "mp3";
+  if (ct.includes("ogg")) return "ogg";
+  if (ct.includes("wav")) return "wav";
+  return "webm";
+}
+
+async function uploadVoiceDropForUser(userId, { dataBase64 = "", contentType = "audio/webm" } = {}) {
+  const uid = cleanUserId(userId);
+  if (!uid) return { ok: false, error: "Not signed in" };
+  const raw = String(dataBase64 || "").trim();
+  if (!raw) return { ok: false, error: "Missing audio" };
+  const match = raw.match(/^data:([^;]+);base64,(.+)$/i);
+  const ct = match ? match[1] : String(contentType || "audio/webm");
+  const b64 = match ? match[2] : raw;
+  let buf;
+  try {
+    buf = Buffer.from(b64, "base64");
+  } catch {
+    return { ok: false, error: "Invalid audio data" };
+  }
+  if (!buf.length) return { ok: false, error: "Empty recording" };
+  if (buf.length > DM_VOICE_MAX_BYTES) {
+    return { ok: false, error: "Recording too large — keep it under 30 seconds." };
+  }
+  const ext = extFromAudioContentType(ct);
+  const key = `${uid}/${Date.now()}.${ext}`;
+  const up = await uploadObject({
+    bucket: DM_VOICE_BUCKET,
+    key,
+    body: buf,
+    contentType: ct.split(";")[0].trim() || "audio/webm",
+  });
+  if (!up.ok) {
+    const hint = /bucket|not found|404/i.test(String(up.error || ""))
+      ? " Run supabase/dm_voice_storage.sql in Supabase."
+      : "";
+    return { ok: false, error: `Voice upload failed.${hint}` };
+  }
+  return { ok: true, url: up.url, key };
 }
 
 function orderedPair(a, b) {
@@ -609,6 +656,21 @@ async function handlePost(req, res, user) {
   const body = await readJsonBody(req);
   const action = String(body?.action || "").trim();
   const targetUserId = cleanUserId(body?.targetUserId);
+
+  if (action === "upload_voice_drop") {
+    const uploaded = await uploadVoiceDropForUser(user.userId, {
+      dataBase64: body?.dataBase64 || body?.audioBase64,
+      contentType: body?.contentType,
+    });
+    if (!uploaded.ok) {
+      return sendJson(res, 400, { ok: false, error: uploaded.error || "Upload failed" });
+    }
+    return sendJson(res, 200, {
+      ok: true,
+      url: uploaded.url,
+      key: uploaded.key,
+    });
+  }
 
   if (action === "set_presence") {
     const allowed = new Set(["idle", "now_playing", "creating", "recording"]);

@@ -76,6 +76,8 @@ const els = {
     settings: document.getElementById("viewSettings"),
   },
   navItems: [...document.querySelectorAll(".navItem")],
+  topbar: document.querySelector(".topbar"),
+  sidebar: document.querySelector(".sidebar"),
 };
 
 const VIEW_META = {
@@ -2336,6 +2338,38 @@ function marketingSectionPanel(id, title, description, html, { active = false } 
   </div>`;
 }
 
+function mkIcon(name) {
+  const icons = {
+    back: '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M15.41 7.41 14 6l-6 6 6 6 1.41-1.41L10.83 12z"/></svg>',
+    desktop: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>',
+    mobile: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="7" y="2" width="10" height="20" rx="2"/><path d="M12 18h.01"/></svg>',
+    external: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>',
+    eye: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>',
+    eyeOff: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>',
+    grip: '<svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><circle cx="9" cy="6" r="1.4" fill="currentColor"/><circle cx="15" cy="6" r="1.4" fill="currentColor"/><circle cx="9" cy="12" r="1.4" fill="currentColor"/><circle cx="15" cy="12" r="1.4" fill="currentColor"/><circle cx="9" cy="18" r="1.4" fill="currentColor"/><circle cx="15" cy="18" r="1.4" fill="currentColor"/></svg>',
+  };
+  return icons[name] || "";
+}
+
+function syncMarketingShellLayout() {
+  const isEditor = state.view === "marketing" && state.marketingScreen === "editor";
+  els.appShell?.classList.toggle("appShell--mkEditor", isEditor);
+  if (els.topbar) els.topbar.hidden = isEditor;
+}
+
+function revokeMarketingEditorLocalDraft() {
+  revokeMarketingHeroBlobUrl();
+  state.marketingHeroUploading = false;
+  state.marketingDraftPreviewPayload = null;
+  try {
+    const page = state.marketingPage || "home";
+    const locale = state.marketingLocale || "en";
+    sessionStorage.removeItem(`nabad_marketing_draft:${page}:${locale}`);
+  } catch {
+    /* ignore */
+  }
+}
+
 const MARKETING_SECTION_CATALOG = Object.freeze({
   hero: { label: "Hero" },
   features: { label: "Features" },
@@ -2397,31 +2431,44 @@ function readMarketingSectionsFromDom(isHome) {
   return rows.length ? rows : defaultMarketingPageSections(isHome);
 }
 
-function refreshComposerMoveButtons() {
+function bindMarketingComposerDrag() {
   const root = document.getElementById("mkSectionComposer");
-  if (!root) return;
-  const rows = [...root.querySelectorAll("[data-composer-row]")];
-  rows.forEach((row, index) => {
-    const up = row.querySelector('[data-composer-move="up"]');
-    const down = row.querySelector('[data-composer-move="down"]');
-    const isHero = row.dataset.sectionType === "hero";
-    if (up) up.disabled = isHero || index === 0;
-    if (down) down.disabled = isHero || index === rows.length - 1;
-  });
-}
+  if (!root || root.dataset.dragBound === "1") return;
+  root.dataset.dragBound = "1";
+  let dragRow = null;
 
-function moveComposerSection(sectionId, direction) {
-  const root = document.getElementById("mkSectionComposer");
-  if (!root) return;
-  const rows = [...root.querySelectorAll("[data-composer-row]")];
-  const idx = rows.findIndex((row) => row.dataset.sectionId === sectionId);
-  if (idx < 0) return;
-  const swapWith = direction === "up" ? idx - 1 : idx + 1;
-  if (swapWith < 0 || swapWith >= rows.length) return;
-  if (rows[idx].dataset.sectionType === "hero" || rows[swapWith].dataset.sectionType === "hero") return;
-  if (direction === "up") root.insertBefore(rows[idx], rows[swapWith]);
-  else root.insertBefore(rows[swapWith], rows[idx]);
-  refreshComposerMoveButtons();
+  root.addEventListener("dragstart", (event) => {
+    const handle = event.target.closest(".mkComposerDrag");
+    const row = handle?.closest("[data-composer-row]") || event.target.closest("[data-composer-row]");
+    if (!row || row.dataset.sectionType === "hero") {
+      event.preventDefault();
+      return;
+    }
+    dragRow = row;
+    row.classList.add("isDragging");
+    event.dataTransfer.effectAllowed = "move";
+    try {
+      event.dataTransfer.setData("text/plain", row.dataset.sectionId || "");
+    } catch {
+      /* Safari */
+    }
+  });
+
+  root.addEventListener("dragend", () => {
+    if (dragRow) dragRow.classList.remove("isDragging");
+    dragRow = null;
+    updateMarketingDraftSitePreview();
+  });
+
+  root.addEventListener("dragover", (event) => {
+    if (!dragRow) return;
+    event.preventDefault();
+    const row = event.target.closest("[data-composer-row]");
+    if (!row || row === dragRow || row.dataset.sectionType === "hero") return;
+    const rect = row.getBoundingClientRect();
+    const after = event.clientY > rect.top + rect.height / 2;
+    root.insertBefore(dragRow, after ? row.nextSibling : row);
+  });
 }
 
 function toggleComposerSection(sectionId) {
@@ -2433,10 +2480,10 @@ function toggleComposerSection(sectionId) {
   row.querySelector(".mkComposerPick")?.classList.toggle("isMuted", willHide);
   const toggleBtn = row.querySelector("[data-composer-toggle]");
   if (toggleBtn) {
-    toggleBtn.textContent = willHide ? "Show" : "Hide";
+    toggleBtn.innerHTML = willHide ? mkIcon("eyeOff") : mkIcon("eye");
     toggleBtn.setAttribute("aria-pressed", willHide ? "false" : "true");
+    toggleBtn.title = willHide ? "Show section on page" : "Hide section on page";
   }
-  refreshComposerMoveButtons();
   updateAddSectionControls();
 }
 
@@ -2450,12 +2497,12 @@ function enableComposerSection(type) {
   row.querySelector(".mkComposerPick")?.classList.remove("isMuted");
   const toggleBtn = row.querySelector("[data-composer-toggle]");
   if (toggleBtn) {
-    toggleBtn.textContent = "Hide";
+    toggleBtn.innerHTML = mkIcon("eye");
     toggleBtn.setAttribute("aria-pressed", "true");
+    toggleBtn.title = "Hide section on page";
   }
   const finalRow = root.querySelector('[data-composer-row][data-section-type="finalCta"]');
   if (finalRow && row !== finalRow) root.insertBefore(row, finalRow);
-  refreshComposerMoveButtons();
   updateAddSectionControls();
   showMarketingSection(row.dataset.sectionId);
 }
@@ -2468,19 +2515,14 @@ function updateAddSectionControls() {
 }
 
 function buildMarketingSectionComposerNav(pageSections, activeSection, isHome) {
-  const pageRows = pageSections.map((row, index) => {
+  const pageRows = pageSections.map((row) => {
     const editorId = row.id || marketingSectionEditorId(row.type);
     const hidden = row.enabled === false;
     const isHero = row.type === "hero";
-    return `<div class="mkComposerRow${hidden ? " isHidden" : ""}" data-composer-row data-section-type="${escapeHtml(row.type)}" data-section-id="${escapeHtml(editorId)}" data-section-enabled="${hidden ? "0" : "1"}">
-      <div class="mkComposerRowMain">
-        <div class="mkComposerRowMoves">
-          <button type="button" class="mkComposerMove btnGhost btnSm" data-composer-move="up" data-section-id="${escapeHtml(editorId)}"${index === 0 || isHero ? " disabled" : ""} aria-label="Move up">↑</button>
-          <button type="button" class="mkComposerMove btnGhost btnSm" data-composer-move="down" data-section-id="${escapeHtml(editorId)}"${index === pageSections.length - 1 || isHero ? " disabled" : ""} aria-label="Move down">↓</button>
-        </div>
-        <button type="button" class="mkSectionNavItem mkComposerPick${activeSection === editorId ? " isActive" : ""}${hidden ? " isMuted" : ""}" data-marketing-section="${escapeHtml(editorId)}">${escapeHtml(row.label)}</button>
-      </div>
-      <button type="button" class="mkComposerToggle btnGhost btnSm" data-composer-toggle="${escapeHtml(editorId)}" aria-pressed="${hidden ? "false" : "true"}" aria-label="${hidden ? "Show section on page" : "Hide section on page"}"${isHero ? " disabled title=\"Hero is always visible\"" : ""}>${hidden ? "Show" : "Hide"}</button>
+    return `<div class="mkComposerRow${hidden ? " isHidden" : ""}" data-composer-row data-section-type="${escapeHtml(row.type)}" data-section-id="${escapeHtml(editorId)}" data-section-enabled="${hidden ? "0" : "1"}"${isHero ? "" : ' draggable="true"'}>
+      <span class="mkComposerDrag" title="${isHero ? "Hero stays at top" : "Drag to reorder"}"${isHero ? ' aria-hidden="true"' : ""}>${isHero ? "" : mkIcon("grip")}</span>
+      <button type="button" class="mkSectionNavItem mkComposerPick${activeSection === editorId ? " isActive" : ""}${hidden ? " isMuted" : ""}" data-marketing-section="${escapeHtml(editorId)}">${escapeHtml(row.label)}</button>
+      <button type="button" class="mkComposerToggle mkIconBtn" data-composer-toggle="${escapeHtml(editorId)}" aria-pressed="${hidden ? "false" : "true"}" title="${hidden ? "Show section on page" : "Hide section on page"}"${isHero ? " disabled" : ""}>${hidden ? mkIcon("eyeOff") : mkIcon("eye")}</button>
     </div>`;
   }).join("");
 
@@ -2504,7 +2546,7 @@ function buildMarketingSectionComposerNav(pageSections, activeSection, isHome) {
       `<button type="button" class="mkSectionNavItem mkSectionNavItem--meta${activeSection === panel.id ? " isActive" : ""}" data-marketing-section="${escapeHtml(panel.id)}">${escapeHtml(panel.label)}</button>`
     )).join("");
 
-  return `<div id="mkSectionComposer" class="mkSectionComposer">${pageRows}${addMenu}</div>
+  return `<p class="mkSectionNavLabel">Sections</p><div id="mkSectionComposer" class="mkSectionComposer">${pageRows}${addMenu}</div>
     <div class="mkSectionNavMeta">${metaNav}</div>`;
 }
 
@@ -2532,7 +2574,6 @@ function showMarketingSection(sectionId) {
   }
   pushMarketingPreviewToIframe();
   if (id === "discover") void bindMarketingDiscoverPicker();
-  refreshComposerMoveButtons();
 }
 
 function marketingSubsection(title, html, { description = "", open = true } = {}) {
@@ -3244,26 +3285,29 @@ function renderMarketing(data) {
     brand: c.brand || {},
   });
 
+  const pageLabel = pageMeta.label || pageKey;
+  const statusLabel = data?.hasDraftChanges ? "Unpublished draft" : "Live";
+  const statusClass = data?.hasDraftChanges ? "mkEditorStatus--draft" : "mkEditorStatus--live";
+
   els.panels.marketing.innerHTML = adminPageStack(`
     <div class="mkEditorRoot">
-      <header class="mkEditorChrome mkEditorChrome--draft">
-        <div class="mkEditorChromeMain">
-          <button type="button" class="btnGhost btnSm" data-marketing-back-hub>← Online store</button>
-          <span class="mkEditorModeBadge">Draft</span>
+      <header class="mkEditorChrome">
+        <div class="mkEditorChromeLeft">
+          <button type="button" class="mkIconBtn" data-marketing-back-hub aria-label="Back to Online store">${mkIcon("back")}</button>
           <label class="mkEditorPagePick">
             <span class="srOnly">Page</span>
-            <select id="mkPageSelect" class="mkEditorPageSelect">${pageNavItems}</select>
+            <select id="mkPageSelect" class="mkEditorPageSelect mkEditorPageSelect--compact">${pageNavItems}</select>
           </label>
-          <div class="mkEditorLocaleToggle">
-            <button type="button" class="btnGhost btnSm" data-marketing-locale="en"${locale === "en" ? " disabled" : ""}>EN</button>
-            <button type="button" class="btnGhost btnSm" data-marketing-locale="ar"${locale === "ar" ? " disabled" : ""}>AR</button>
+          <span class="mkEditorLocaleSep">·</span>
+          <div class="mkEditorLocaleLinks">
+            <button type="button" class="mkLocaleLink${locale === "en" ? " isActive" : ""}" data-marketing-locale="en">EN</button>
+            <button type="button" class="mkLocaleLink${locale === "ar" ? " isActive" : ""}" data-marketing-locale="ar">AR</button>
           </div>
-          <span class="mkEditorPath">${escapeHtml(previewPath)}</span>
-          ${data?.hasDraftChanges ? `<span class="mkStatusPill mkStatusPill--draft">Unpublished changes</span>` : `<span class="mkStatusPill mkStatusPill--live">Matches live</span>`}
+          <span class="mkEditorStatus ${statusClass}">${escapeHtml(statusLabel)}</span>
         </div>
         <div class="mkEditorChromeActions">
-          <button type="button" class="btnGhost btnSm" id="btnMarketingDiscard"${data?.hasDraftChanges ? "" : " disabled"}>Discard</button>
-          <button type="button" class="btnGhost btnSm" id="btnMarketingSaveDraft">Save draft</button>
+          <button type="button" class="btnGhost btnSm" id="btnMarketingDiscard">Discard</button>
+          <button type="button" class="btnGhost btnSm" id="btnMarketingSaveDraft">Save</button>
           <button type="button" class="btnPrimary btnSm" id="btnMarketingPublish">Publish</button>
         </div>
       </header>
@@ -3271,42 +3315,32 @@ function renderMarketing(data) {
 
       <div class="mkEditorLayout">
         <nav class="mkSectionNav" aria-label="Page sections">
-          <p class="mkSectionNavLabel">Page layout</p>
           ${editorSections.nav}
         </nav>
 
         <div class="mkEditorForm marketingEditor">
-          <p class="mkEditorFormHint">Reorder or hide sections on the left, click one to edit its fields, then save draft. Preview updates on the right.</p>
           <h2 id="mkActiveSectionTitle" class="mkActiveSectionTitle">${escapeHtml(editorSections.activeLabel)}</h2>
           ${editorSections.panels}
         </div>
 
         <div class="mkPreviewCol">
-          <header class="mkPreviewChrome mkPreviewChrome--draft">
-            <div class="mkPreviewChromeMain">
-              <span class="mkPreviewModeBadge">Draft preview</span>
-              <span class="mkPreviewChromeNote">Not live — visitors still see <a href="${escapeHtml(`${MARKETING_SITE_ORIGIN}${previewPath}`)}" target="_blank" rel="noopener">published page ↗</a></span>
-            </div>
-            <div class="mkPreviewChromeTools">
-              <div class="mkPreviewDeviceToggle" role="group" aria-label="Preview device">
-                <button type="button" class="btnGhost btnSm${previewDevice === "desktop" ? " isActive" : ""}" data-marketing-preview-device="desktop">Desktop</button>
-                <button type="button" class="btnGhost btnSm${previewDevice === "mobile" ? " isActive" : ""}" data-marketing-preview-device="mobile">Mobile</button>
-              </div>
-              <button type="button" class="btnGhost btnSm" id="btnMarketingDraftPreview" data-preview-path="${escapeHtml(previewPath)}">Open ↗</button>
-            </div>
-          </header>
+          <div class="mkPreviewToolbar" role="toolbar" aria-label="Preview">
+            <button type="button" class="mkIconBtn${previewDevice === "desktop" ? " isActive" : ""}" data-marketing-preview-device="desktop" title="Desktop preview">${mkIcon("desktop")}</button>
+            <button type="button" class="mkIconBtn${previewDevice === "mobile" ? " isActive" : ""}" data-marketing-preview-device="mobile" title="Mobile preview">${mkIcon("mobile")}</button>
+            <button type="button" class="mkIconBtn" id="btnMarketingDraftPreview" data-preview-path="${escapeHtml(previewPath)}" title="Open preview in new tab">${mkIcon("external")}</button>
+          </div>
           <div class="mkPreviewFrameWrap mkPreviewFrameWrap--${previewDevice}">
             <iframe id="mkLivePreviewFrame" class="mkPreviewFrame" title="Draft preview (not live)" src="${escapeHtml(previewUrl)}"></iframe>
           </div>
-          <p class="cellMuted mkPreviewFoot">${escapeHtml(updated)} · Live published ${escapeHtml(liveUpdated)}</p>
         </div>
       </div>
     </div>
   `, { plain: true });
   bindMarketingDraftPreviewListeners();
   bindMarketingColorFields();
-  refreshComposerMoveButtons();
+  bindMarketingComposerDrag();
   updateAddSectionControls();
+  syncMarketingShellLayout();
   if (activeSection === "discover") void bindMarketingDiscoverPicker();
 }
 
@@ -3351,6 +3385,7 @@ async function bindMarketingDiscoverPicker() {
 
 function renderMarketingView(data) {
   if (state.marketingScreen === "hub") {
+    syncMarketingShellLayout();
     els.pageTitle.textContent = VIEW_META.marketing.title;
     els.pageSub.textContent = VIEW_META.marketing.sub;
     renderMarketingHub(data);
@@ -3359,9 +3394,8 @@ function renderMarketingView(data) {
   const catalog = Array.isArray(data?.pages) ? data.pages : [];
   const pageKey = state.marketingPage || data?.page || "home";
   const pageMeta = catalog.find((p) => p.key === pageKey) || { label: pageKey };
-  const locale = state.marketingLocale || "en";
-  els.pageTitle.textContent = "Online store";
-  els.pageSub.textContent = `${pageMeta.label || pageKey} · ${locale === "ar" ? "Arabic" : "English"} · Draft editor`;
+  syncMarketingShellLayout();
+  document.title = `${pageMeta.label || pageKey} · NabadAi Admin`;
   renderMarketing(data);
 }
 
@@ -3439,6 +3473,9 @@ function setView(view) {
   }
   for (const [key, panel] of Object.entries(els.panels)) {
     panel.hidden = key !== view;
+  }
+  if (view !== "marketing" || state.marketingScreen === "hub") {
+    syncMarketingShellLayout();
   }
 }
 
@@ -4253,13 +4290,6 @@ document.body.addEventListener("click", (e) => {
     return;
   }
 
-  const composerMoveBtn = e.target.closest("[data-composer-move]");
-  if (composerMoveBtn && !composerMoveBtn.disabled) {
-    moveComposerSection(composerMoveBtn.dataset.sectionId, composerMoveBtn.dataset.composerMove);
-    updateMarketingDraftSitePreview();
-    return;
-  }
-
   const composerToggleBtn = e.target.closest("[data-composer-toggle]");
   if (composerToggleBtn && !composerToggleBtn.disabled) {
     toggleComposerSection(composerToggleBtn.dataset.composerToggle);
@@ -4322,19 +4352,27 @@ document.body.addEventListener("click", (e) => {
     void (async () => {
       const msg = document.getElementById("marketingSaveMsg");
       const action = marketingPublishBtn ? "publish" : marketingDiscardBtn ? "discard" : "draft";
-      if (action === "discard" && !window.confirm("Discard unpublished draft for this page and revert to the live version?")) return;
+      if (action === "discard" && !window.confirm("Discard changes and revert to the last published version for this page?")) return;
       if (action === "publish" && !window.confirm("Publish this page to the live website? Visitors will see changes within about a minute.")) return;
       marketingActionBtn.disabled = true;
       if (msg) {
         msg.hidden = false;
-        msg.textContent = action === "publish" ? "Publishing…" : action === "discard" ? "Discarding…" : "Saving draft…";
+        msg.textContent = action === "publish" ? "Publishing…" : action === "discard" ? "Discarding…" : "Saving…";
         msg.className = "grantMsg warn";
       }
       try {
         const savePage = state.marketingSection === "brand" ? "home" : (state.marketingPage || "home");
         const saveLocale = state.marketingSection === "brand" ? "en" : (state.marketingLocale || "en");
         let content = null;
-        if (action !== "discard") {
+        if (action === "discard") {
+          revokeMarketingEditorLocalDraft();
+          await marketingAdminAction({
+            action: "discard",
+            page: savePage,
+            locale: saveLocale,
+            content: null,
+          });
+        } else {
           if (state.marketingSection === "brand") {
             content = { ...(state.marketingLoadedContent || {}), brand: readMarketingBrandForm() };
           } else {
@@ -4343,20 +4381,20 @@ document.body.addEventListener("click", (e) => {
               content.brand = state.marketingLoadedContent.brand;
             }
           }
+          await marketingAdminAction({
+            action,
+            page: savePage,
+            locale: saveLocale,
+            content,
+          });
         }
-        const saved = await marketingAdminAction({
-          action,
-          page: savePage,
-          locale: saveLocale,
-          content,
-        });
         delete state.cache[viewCacheKey()];
         if (msg) {
           msg.textContent = action === "publish"
-            ? (saved?.heroImageApiPath ? "Published — hero image and copy are live now." : "Published — live site updates within a minute.")
+            ? "Published — live site updates within a minute."
             : action === "discard"
-              ? "Draft discarded — showing live content."
-              : "Draft saved — preview updates on the right.";
+              ? "Reverted to published version."
+              : "Draft saved.";
           msg.className = "grantMsg ok";
         }
         showError("");

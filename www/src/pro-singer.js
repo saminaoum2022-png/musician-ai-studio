@@ -82,6 +82,16 @@ function setSheetOpen(id, open) {
   if (!sheet) return;
   sheet.hidden = !open;
   sheet.setAttribute("aria-hidden", open ? "false" : "true");
+  if (open) {
+    try { _deps?.wireFeedReplySheetKeyboard?.(); } catch {}
+    try { _deps?.applyFeedReplyKeyboardInset?.(0); } catch {}
+  } else {
+    try { _deps?.applyFeedReplyKeyboardInset?.(0); } catch {}
+  }
+}
+
+function bindProSingerFormKeyboard(root) {
+  try { _deps?.bindFeedReplySheetKeyboardInputs?.(root); } catch {}
 }
 
 function resolveProSingerApiUrl(path) {
@@ -207,6 +217,7 @@ function paintRequestSteps() {
         </select>
       </label>`;
     restoreRequestDraftToForm();
+    bindProSingerFormKeyboard(mount);
     return;
   }
 
@@ -243,6 +254,7 @@ function paintRequestSteps() {
         <input id="proSingerContactIg" type="text" inputmode="text" autocomplete="off" placeholder="@you" />
       </label>`;
     restoreRequestDraftToForm();
+    bindProSingerFormKeyboard(mount);
     return;
   }
 
@@ -291,6 +303,7 @@ function paintRequestSteps() {
     mount.innerHTML = `
       <p class="proSingerLead">Fixed packages — payment link sent after you submit.</p>
       <div class="proSingerPkgGrid">${cards}</div>`;
+    bindProSingerFormKeyboard(mount);
     return;
   }
 
@@ -307,6 +320,7 @@ function paintRequestSteps() {
         <div class="proSingerReviewRow proSingerReviewTotal"><span>Total</span><strong>$${computePriceUsd()}</strong></div>
       </div>
       <p class="proSingerMuted">We'll contact you within 24 hours with a Stripe payment link. Turnaround is usually 5–7 days (2–3 for Premium).</p>`;
+    bindProSingerFormKeyboard(mount);
   }
 }
 
@@ -542,6 +556,7 @@ function paintApplicationForm() {
       <span>Short bio</span>
       <textarea id="proSingerApplyBio" rows="3" maxlength="1000" placeholder="Tell us about your voice and experience…">${escapeHtml(app?.bio || "")}</textarea>
     </label>`;
+  bindProSingerFormKeyboard(mount);
   _applyPhotoUrl = String(app?.photoUrl || _applyPhotoUrl || "").trim();
   el("btnProSingerApplyPhoto")?.addEventListener("click", () => el("proSingerApplyPhotoInput")?.click());
   el("proSingerApplyPhotoInput")?.addEventListener("change", async (ev) => {

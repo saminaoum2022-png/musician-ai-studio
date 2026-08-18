@@ -216,7 +216,7 @@ import { MUSIC_VIDEO_FEATURE_ENABLED } from "./feature-flags.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260818-213457";
+const APP_BUILD = "20260818-223737";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -6111,6 +6111,9 @@ try {
     getAuthToken: getSupabaseAuthToken,
     showToast,
     compressAvatarFile,
+    wireFeedReplySheetKeyboard: wireFeedReplySheetKeyboardOnce,
+    bindFeedReplySheetKeyboardInputs,
+    applyFeedReplyKeyboardInset,
   });
   document.getElementById("btnSettingsProSingerApply")?.addEventListener("click", () => {
     void openSingerApplicationSheet();
@@ -16595,23 +16598,59 @@ async function submitRepost() {
  * Feed Reply sheet (X-style thread modal)
  * ------------------------------------------------------------------- */
 
+const FEED_REPLY_KEYBOARD_SHEET_IDS = [
+  "feedReplySheet",
+  "repostComposeSheet",
+  "proSingerRequestSheet",
+  "proSingerApplySheet",
+];
+
 function getOpenFeedReplyKeyboardSheet() {
-  for (const id of ["feedReplySheet", "repostComposeSheet"]) {
+  for (const id of FEED_REPLY_KEYBOARD_SHEET_IDS) {
     const sheet = document.getElementById(id);
     if (sheet && !sheet.hidden && sheet.getAttribute("aria-hidden") === "false") return sheet;
   }
   return null;
 }
 
+function isInsideOpenFeedReplyKeyboardSheet(node) {
+  const sheet = getOpenFeedReplyKeyboardSheet();
+  if (!sheet || !node) return false;
+  return sheet.contains(node);
+}
+
+function scrollFeedReplySheetFieldIntoView(input) {
+  if (!input) return;
+  const scrollRoot = input.closest(".proSingerSteps, .feedReplyCompose, .feedReplyList, .feedReplyForm");
+  if (!scrollRoot) {
+    try { input.scrollIntoView({ block: "center", behavior: "smooth" }); } catch {}
+    return;
+  }
+  try {
+    const rootRect = scrollRoot.getBoundingClientRect();
+    const inputRect = input.getBoundingClientRect();
+    const padding = 20;
+    if (inputRect.bottom > rootRect.bottom - padding) {
+      scrollRoot.scrollTop += inputRect.bottom - rootRect.bottom + padding;
+    } else if (inputRect.top < rootRect.top + padding) {
+      scrollRoot.scrollTop -= rootRect.top + padding - inputRect.top;
+    }
+  } catch {}
+}
+
 function applyFeedReplyKeyboardInset(rawInset) {
   const openSheet = getOpenFeedReplyKeyboardSheet();
   const inset = Math.max(0, Math.round(Number(rawInset) || 0));
-  for (const id of ["feedReplySheet", "repostComposeSheet"]) {
+  for (const id of FEED_REPLY_KEYBOARD_SHEET_IDS) {
     const el = document.getElementById(id);
     if (!el) continue;
     el.style.setProperty("--feed-reply-keyboard-inset", openSheet === el ? `${inset}px` : "0px");
   }
   document.body.classList.toggle("feedReplyKeyboardOpen", Boolean(openSheet) && inset > 0);
+  if (openSheet && inset > 0) {
+    const active = document.activeElement;
+    if (active && openSheet.contains(active)) scrollFeedReplySheetFieldIntoView(active);
+  }
 }
 
 function syncFeedReplySheetKeyboardInset() {
@@ -16669,15 +16708,28 @@ function wireFeedReplySheetKeyboardOnce() {
 function bindFeedReplyKeyboardInput(input) {
   if (!input || input.dataset.feedReplyKbInput === "1") return;
   input.dataset.feedReplyKbInput = "1";
-  input.addEventListener("focus", () => scheduleFeedReplyKeyboardInsetSync());
+  input.addEventListener("focus", () => {
+    wireFeedReplySheetKeyboardOnce();
+    scheduleFeedReplyKeyboardInsetSync();
+    window.setTimeout(() => scrollFeedReplySheetFieldIntoView(input), 80);
+    window.setTimeout(() => scrollFeedReplySheetFieldIntoView(input), 220);
+  });
   input.addEventListener("blur", () => {
     window.setTimeout(() => {
       const sheet = getOpenFeedReplyKeyboardSheet();
       const active = document.activeElement;
-      const stillTyping = active?.classList?.contains?.("feedReplyInput");
+      const stillTyping =
+        isInsideOpenFeedReplyKeyboardSheet(active)
+        && (active?.matches?.("input, textarea, select") || active?.classList?.contains?.("feedReplyInput"));
       if (!sheet || !stillTyping) applyFeedReplyKeyboardInset(0);
     }, 80);
   });
+}
+
+function bindFeedReplySheetKeyboardInputs(root) {
+  if (!root) return;
+  wireFeedReplySheetKeyboardOnce();
+  root.querySelectorAll("input, textarea, select").forEach((el) => bindFeedReplyKeyboardInput(el));
 }
 
 function syncFeedReplyInputHeight(input = document.getElementById("feedReplyInput")) {

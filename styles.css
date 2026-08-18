@@ -54615,25 +54615,36 @@ html[data-theme="light"] .webProFeaturePill{
 
 /* Pro Singer — request / apply sheets */
 .proSingerSheetCard{
-  max-height: min(92vh, 720px);
+  max-height: min(
+    92vh,
+    calc(100dvh - var(--feed-reply-keyboard-inset, 0px) - 12px - env(safe-area-inset-top, 0px)),
+    720px
+  );
   overflow: hidden;
   display: flex;
   flex-direction: column;
 }
 .proSingerSteps{
   flex: 1;
+  min-height: 0;
   overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
   padding: 0 18px 12px;
   display: flex;
   flex-direction: column;
   gap: 12px;
 }
 .proSingerFoot{
+  flex-shrink: 0;
   display: flex;
   gap: 10px;
   justify-content: flex-end;
   padding: 12px 18px calc(12px + env(safe-area-inset-bottom));
   border-top: 1px solid rgba(255,255,255,0.08);
+}
+.proSingerSheetCard .feedReplySheetHead{
+  flex-shrink: 0;
 }
 .proSingerDots{
   display: flex;

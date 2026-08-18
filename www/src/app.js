@@ -216,7 +216,7 @@ import { MUSIC_VIDEO_FEATURE_ENABLED } from "./feature-flags.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260818-230542";
+const APP_BUILD = "20260819-010029";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -34164,46 +34164,54 @@ function notificationIconForType(type) {
 
 function activityTypeBadgeSvg(type) {
   const t = String(type || "").trim();
-  if (t === "chart_rank") {
-    return `<svg viewBox="0 0 24 24" width="11" height="11" aria-hidden="true"><path fill="currentColor" d="M12 2.5 14.8 8l6.2.9-4.5 4.4 1.1 6.1L12 16.8 6.4 19.4l1.1-6.1L3 8.9 9.2 8 12 2.5Z"/></svg>`;
-  }
+  const svg = (inner) =>
+    `<svg class="activityRowBadgeIcon" viewBox="0 0 24 24" aria-hidden="true">${inner}</svg>`;
   if (t === "social_like") {
-    return `<svg viewBox="0 0 24 24" width="11" height="11" aria-hidden="true"><path fill="currentColor" d="M12 21s-7.2-4.35-9.6-8.55C.6 9.15 2.1 5.7 5.4 5.1c1.8-.3 3.45.45 4.35 1.95.9-1.5 2.55-2.25 4.35-1.95 3.3.6 4.8 4.05 3 7.35C19.2 16.65 12 21 12 21Z"/></svg>`;
-  }
-  if (t === "remix") {
-    return `<svg viewBox="0 0 24 24" width="11" height="11" aria-hidden="true"><path fill="currentColor" d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3" fill="currentColor"/><circle cx="18" cy="16" r="3" fill="currentColor"/></svg>`;
-  }
-  if (t === "follow") {
-    return `<svg viewBox="0 0 24 24" width="11" height="11" aria-hidden="true"><circle cx="12" cy="8" r="3.5" fill="currentColor"/><path fill="currentColor" d="M4 20c.8-3.8 3.6-6 8-6s7.2 2.2 8 6H4Z"/></svg>`;
-  }
-  if (t === "play_milestone") {
-    return `<svg viewBox="0 0 24 24" width="11" height="11" aria-hidden="true"><path fill="currentColor" d="M20 12v5H4v-5H2v7h20v-7h-2Zm-6 .5-7-4v8l7-4ZM4 9h16V4H4v5Z"/></svg>`;
+    return svg('<path fill="currentColor" d="M16.697 5.5c-1.222-.06-2.679.51-3.89 2.16-.98-1.31-2.043-2.22-3.807-2.22-2.548 0-4.634 2.117-4.634 4.745 0 3.378 3.4 6.056 8.037 10.043C14.036 18.088 22 13.514 22 10.11 22 7.032 19.523 5.5 16.697 5.5Z"/>');
   }
   if (t === "social_reply") {
-    return `<svg viewBox="0 0 24 24" width="11" height="11" aria-hidden="true"><path fill="currentColor" d="M10 9V5l-7 7 7 7v-4.1c5 0 8.5 1.6 11 5.1-1-5.4-4-10.9-11-11Z"/></svg>`;
+    return svg('<path fill="currentColor" d="M20 2H4a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h3v4l4.25-4H20a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2Zm-1 11H5V5h14v8Z"/>');
   }
   if (t === "social_mention") {
-    return `<svg viewBox="0 0 24 24" width="11" height="11" aria-hidden="true"><path fill="currentColor" d="M12 2a7 7 0 0 1 7 7c0 2.4-1.2 4.5-3 5.7V18a2 2 0 0 1-2 2h-4a2 2 0 0 1-2-2v-3.3A7 7 0 0 1 12 2Zm0 2a5 5 0 0 0-5 5c0 2.2 1.4 4.1 3.4 4.8V18h3.2v-4.2A5 5 0 0 0 12 4Z"/></svg>`;
+    return svg('<path fill="currentColor" d="M12 2a7 7 0 0 1 7 7c0 2.4-1.2 4.5-3 5.74V18a2 2 0 0 1-2 2h-4a2 2 0 0 1-2-2v-3.26A7 7 0 0 1 12 2Zm0 2a5 5 0 0 0-5 5c0 2.2 1.4 4.08 3.4 4.8V18h3.2v-4.2A5 5 0 0 0 12 4Z"/>');
   }
   if (t === "social_repost") {
-    return `<svg viewBox="0 0 24 24" width="11" height="11" aria-hidden="true"><path fill="currentColor" d="M17 1l4 4-4 4V6H9a4 4 0 0 0-4 4v1H3v-1a6 6 0 0 1 6-6h8V1ZM7 23l-4-4 4-4v3h8a4 4 0 0 0 4-4v-1h2v1a6 6 0 0 1-6 6H7v3Z"/></svg>`;
+    return svg('<path fill="currentColor" d="M17 2l5 4-5 4V6H9a5 5 0 0 0-5 5h2a3 3 0 0 1 3-3h8V2ZM7 22l-5-4 5-4v3h8a5 5 0 0 0 5-5h-2a3 3 0 0 1-3 3H7v3Z"/>');
+  }
+  if (t === "follow") {
+    return svg('<path fill="currentColor" d="M12 12a4.5 4.5 0 1 0-4.5-4.5A4.5 4.5 0 0 0 12 12Zm0 2c-3.31 0-6 1.79-6 4v1h12v-1c0-2.21-2.69-4-6-4Zm7-6v-2h-2V6h-2v2h-2v2h2v2h2v-2h2Z"/>');
   }
   if (t === "gift_received") {
-    return `<svg viewBox="0 0 24 24" width="11" height="11" aria-hidden="true"><path fill="currentColor" d="M20 7h-2.18A3 3 0 0 0 19 5a3 3 0 0 0-5.2-2.1A3 3 0 0 0 11 5a3 3 0 0 0 1.18 2H10a2 2 0 0 0-2 2v1H6v2h2v8a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2v-8h2v-2h-2V9a2 2 0 0 0-2-2Zm-7-2a1 1 0 0 1 1.73-.73l.27.27.27-.27A1 1 0 0 1 17 5a1 1 0 0 1-1 1h-3Zm-2 0a1 1 0 0 1 1.73-.73L13 4.54l.27-.27A1 1 0 0 1 15 5a1 1 0 0 1-1 1h-3ZM8 10h8v8H8v-8Z"/></svg>`;
+    return svg(
+      '<path fill="currentColor" d="M5 10h14v9a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1v-9Z"/>'
+      + '<path fill="currentColor" d="M11.25 10h1.5v10h-1.5V10Z"/>'
+      + '<path fill="currentColor" d="M4 10h16v2H4v-2Z"/>'
+      + '<path fill="currentColor" d="M9.5 4.5a2 2 0 1 0 .01 4 2 2 0 0 0-.01-4Z"/>'
+      + '<path fill="currentColor" d="M14.5 4.5a2 2 0 1 0 .01 4 2 2 0 0 0-.01-4Z"/>',
+    );
   }
-  if (t === "song_live") {
-    return `<svg viewBox="0 0 24 24" width="11" height="11" aria-hidden="true"><path fill="currentColor" d="M12 3v10.55A4 4 0 1 0 14 17V7h4V3h-6Z"/></svg>`;
+  if (t === "remix") {
+    return svg('<path fill="currentColor" d="M9 18V6l10-2v10"/><circle cx="6" cy="18" r="2.5" fill="currentColor"/><circle cx="17" cy="16" r="2.5" fill="currentColor"/>');
   }
-  if (t === "generation_ready") {
-    return `<svg viewBox="0 0 24 24" width="11" height="11" aria-hidden="true"><path fill="currentColor" d="M9 16.2 4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4L9 16.2Z"/></svg>`;
+  if (t === "chart_rank") {
+    return svg('<path fill="currentColor" d="M12 2.25l2.72 5.78 6.28.91-4.54 4.43 1.07 6.25L12 16.9l-5.53 2.72 1.07-6.25-4.54-4.43 6.28-.91L12 2.25Z"/>');
   }
-  if (t === "generation_failed") {
-    return `<svg viewBox="0 0 24 24" width="11" height="11" aria-hidden="true"><path fill="currentColor" d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Zm1 14h-2v-2h2v2Zm0-4h-2V7h2v5Z"/></svg>`;
+  if (t === "play_milestone") {
+    return svg('<path fill="currentColor" d="M8 5v14l11-7L8 5Z"/>');
   }
-  if (t === "sound_ready" || t === "music_video_ready" || t === "instrumental_ready") {
-    return `<svg viewBox="0 0 24 24" width="11" height="11" aria-hidden="true"><path fill="currentColor" d="M9 16.2 4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4L9 16.2Z"/></svg>`;
+  if (t === "public_song" || t === "song_live") {
+    return svg('<path fill="currentColor" d="M12 3v10.55A4 4 0 1 0 14 17V7h4V3h-6Z"/>');
   }
-  return `<svg viewBox="0 0 24 24" width="11" height="11" aria-hidden="true"><path fill="currentColor" d="M20 12v5H4v-5H2v7h20v-7h-2Zm-6 .5-7-4v8l7-4ZM4 9h16V4H4v5Z"/></svg>`;
+  if (t === "song_feedback") {
+    return svg('<path fill="currentColor" d="M20 2H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h4l3.5 3.5L17 18h3a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2Zm-2 10H6v-2h12v2Zm0-3H6V7h12v2Z"/>');
+  }
+  if (t === "generation_ready" || t === "sound_ready" || t === "music_video_ready" || t === "instrumental_ready") {
+    return svg('<path fill="currentColor" d="M9.55 16.2 4.8 11.45l1.4-1.4L9.55 13.4 17.8 5.15l1.4 1.4-9.65 9.65Z"/>');
+  }
+  if (t === "generation_failed" || t === "singer_rejected") {
+    return svg('<path fill="currentColor" d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Zm1 14h-2v-2h2v2Zm0-4h-2V8h2v4Z"/>');
+  }
+  return svg('<path fill="currentColor" d="M12 3v10.55A4 4 0 1 0 14 17V7h4V3h-6Z"/>');
 }
 
 function activityTypeBadgeHtml(type) {
@@ -34603,18 +34611,70 @@ function activityNotificationMatchesFilter(n, tab = _activityFilterTab) {
 function paintActivityFilterTabsActive(tab = _activityFilterTab) {
   const root = document.getElementById("activityFilterTabs");
   if (!root) return;
-  setNabadTabsActiveByAttr(root, tab, "data-activity-filter");
+  root.querySelectorAll("[data-activity-filter]").forEach((btn) => {
+    const on = String(btn.getAttribute("data-activity-filter") || "") === tab;
+    btn.classList.toggle("is-active", on);
+    btn.setAttribute("aria-selected", on ? "true" : "false");
+  });
 }
 
-/** Avatar for an activity/notification row. Real photo when the actor has
- *  one; otherwise a neutral person silhouette — never the app logo (that
- *  read as "NabadAi did this" and looked like a placeholder bug). */
+/** Avatar for an activity/notification row — real photo when available, blank circle otherwise. */
 function activityActorAvatarHtml(n, cls) {
   const raw = String(n?.metadata?.actor_avatar || "").trim();
-  if (raw) {
-    return `<img class="${cls}" src="${escapeHtml(normalizeProfileAvatarForImg(raw))}" alt="" loading="lazy" decoding="async" />`;
+  if (isRealUserAvatarUrl(raw)) {
+    return `<img class="${cls}" src="${escapeHtml(normalizeProfileAvatarForImg(raw))}" alt="" loading="lazy" decoding="async" data-activity-avatar="1" />`;
   }
-  return `<span class="${cls} activityAvatarSilhouette" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="8.4" r="3.7" fill="currentColor"/><path d="M4.4 19.6c.9-3.6 4-5.8 7.6-5.8s6.7 2.2 7.6 5.8c.1.5-.3.9-.8.9H5.2c-.5 0-.9-.4-.8-.9Z" fill="currentColor"/></svg></span>`;
+  return `<span class="${cls} activityRowAvatar--blank" aria-hidden="true"></span>`;
+}
+
+const ACTIVITY_ACTOR_TYPES = new Set([
+  "follow",
+  "social_like",
+  "social_reply",
+  "social_repost",
+  "social_mention",
+  "gift_received",
+  "public_song",
+  "remix",
+  "song_feedback",
+]);
+
+function activityNotificationHasActor(n) {
+  const t = String(n?.type || "").trim();
+  if (!ACTIVITY_ACTOR_TYPES.has(t)) return false;
+  return Boolean(String(n?.metadata?.actor_username || "").trim() || n?.actor_user_id);
+}
+
+function activityNotificationShowTypeBadge(n) {
+  if (activityNotificationHasActor(n)) return true;
+  return activityNotificationIsSongSelfRow(n);
+}
+
+function activityNotificationIsSelfRow(n) {
+  return !activityNotificationHasActor(n);
+}
+
+const ACTIVITY_SONG_SELF_TYPES = new Set([
+  "chart_rank",
+  "play_milestone",
+  "song_live",
+  "generation_ready",
+  "generation_failed",
+  "sound_ready",
+  "music_video_ready",
+  "instrumental_ready",
+]);
+
+function activityNotificationIsSongSelfRow(n) {
+  return ACTIVITY_SONG_SELF_TYPES.has(String(n?.type || "").trim());
+}
+
+/** Right-side song thumb — skip when the same art already leads the row on the left. */
+function activityNotificationShowRightThumb(n) {
+  if (activityNotificationIsSelfRow(n) && activityNotificationIsSongSelfRow(n)) {
+    return false;
+  }
+  return activityNotificationHasSongCover(n);
 }
 
 /** Milestone rows are about your songs — lead with cover art, not a blank silhouette. */
@@ -34624,7 +34684,6 @@ function activityRowUsesSongLeadVisual(n) {
 }
 
 function activityNotificationShowRightCover(n) {
-  if (activityRowUsesSongLeadVisual(n)) return false;
   return activityNotificationHasSongCover(n);
 }
 
@@ -34641,17 +34700,17 @@ function activityRowLeadVisualHtml(n, cls) {
 
 /** Skeleton rows for the initial Activity load (replaces the old floating
  *  spinner — the bottom infinite-scroll spinner stays for paging only). */
-function activitySkeletonHtml(count = 4) {
+function activitySkeletonHtml(count = 6) {
   return Array.from({ length: count }, () => `
     <div class="activityRow activityRowSkel" aria-hidden="true">
-      <span class="activityRowArtWrap activitySkelBlock">
-        <span class="activityRowArt activitySkelBlock"></span>
+      <span class="activityRowAvatarWrap activitySkelBlock">
+        <span class="activityRowAvatar activitySkelBlock"></span>
       </span>
       <div class="activityRowBody">
-        <span class="activitySkelLine activitySkelLine--cat"></span>
         <span class="activitySkelLine"></span>
-        <span class="activitySkelLine short"></span>
+        <span class="activitySkelLine activitySkelLine--time"></span>
       </div>
+      <span class="activityRowThumb activitySkelBlock"><span class="activityRowCover activitySkelBlock"></span></span>
     </div>`).join("");
 }
 
@@ -34799,7 +34858,7 @@ function activitySongCoverUrl(n) {
 }
 
 function activitySongCoverHtml(n) {
-  if (!activityNotificationShowRightCover(n)) return "";
+  if (!activityNotificationShowRightThumb(n)) return "";
   const url = activitySongCoverUrl(n);
   if (url) {
     return `<img class="activityRowCover" src="${escapeHtml(url)}" alt="" loading="lazy" decoding="async" />`;
@@ -35206,8 +35265,8 @@ function activityItemDisplayParts(n, msg) {
     const title = String(meta.song_title || "Your song").trim();
     return {
       category: "Top Songs",
-      title,
-      description: rank ? `Reached #${rank} on Top Songs this week` : "Charted on Top Songs this week",
+      title: rank ? `${title} hit #${rank} on Top Songs this week` : `${title} charted on Top Songs this week`,
+      description: "",
     };
   }
   if (t === "play_milestone") {
@@ -35215,16 +35274,16 @@ function activityItemDisplayParts(n, msg) {
     const title = String(meta.song_title || "Your song").trim();
     return {
       category: "Milestone",
-      title,
-      description: count ? `${formatStatCount(count)} plays and counting` : "Your song is picking up steam",
+      title: count ? `${title} reached ${formatStatCount(count)} plays` : `${title} is picking up plays`,
+      description: "",
     };
   }
   if (t === "song_live") {
     const title = String(meta.song_title || "Your song").trim();
     return {
       category: "Published",
-      title: `${title} is live`,
-      description: "Saved permanently and published — listeners can find and play it on Discover.",
+      title: `${title} is live on Discover`,
+      description: "",
     };
   }
   if (t === "generation_ready") {
@@ -35280,7 +35339,7 @@ function activityItemDisplayParts(n, msg) {
     return {
       category: "New Like",
       title: username ? `${username} liked your song` : "Someone liked your song",
-      description: songTitle || "Open to see what they enjoyed",
+      description: "",
     };
   }
   if (t === "social_reply") {
@@ -35315,7 +35374,7 @@ function activityItemDisplayParts(n, msg) {
     return {
       category: "Repost",
       title: username ? `${username} reposted your song` : "Someone reposted your song",
-      description: songTitle || FAN_COPY.reachedTheirFans,
+      description: "",
     };
   }
   if (t === "gift_received") {
@@ -35332,7 +35391,7 @@ function activityItemDisplayParts(n, msg) {
     return {
       category: FAN_COPY.activityCategory,
       title: username ? `${username} became your fan` : "Someone became your fan",
-      description: "They can see your public songs in their feed",
+      description: "",
     };
   }
   if (t === "remix") {
@@ -35358,7 +35417,7 @@ function activityItemDisplayParts(n, msg) {
     return {
       category: "New Song",
       title: username ? `${username} published a song` : "A creator published a song",
-      description: songTitle,
+      description: songTitle && !activityNotificationShowRightThumb(n) ? songTitle : "",
     };
   }
   if (t === "song_feedback") {
@@ -35375,6 +35434,42 @@ function activityItemDisplayParts(n, msg) {
     title: String(msg?.title || "Update").trim(),
     description: String(msg?.body || "").trim(),
   };
+}
+
+function activityRowSelfLeadHtml(n) {
+  const t = String(n?.type || "").trim();
+  const url = activitySongCoverUrl(n);
+  if (url) {
+    return `<img class="activityRowSongTile" src="${escapeHtml(url)}" alt="" loading="lazy" decoding="async" />`;
+  }
+  if (activityNotificationIsSongSelfRow(n) || activityNotificationHasSongCover(n)) {
+    return `<span class="activityRowSongTile activityRowSongTile--placeholder" aria-hidden="true">♪</span>`;
+  }
+  return `<span class="activityRowSongTile activityRowSongTile--icon activityRowSongTile--${escapeHtml(t || "default")}" aria-hidden="true">${activityTypeBadgeSvg(t)}</span>`;
+}
+
+function activityRowLeadWrapClass(n) {
+  return activityNotificationIsSelfRow(n) ? "activityRowSongWrap" : "activityRowAvatarWrap";
+}
+
+function activityRowLeadHtml(n) {
+  if (activityNotificationHasActor(n)) {
+    return activityActorAvatarHtml(n, "activityRowAvatar");
+  }
+  return activityRowSelfLeadHtml(n);
+}
+
+function activityRowSecondaryForIg(n, parts) {
+  const t = String(n?.type || "").trim();
+  const desc = String(parts?.description || "").trim();
+  if (!desc) return "";
+  if (activityNotificationShowRightThumb(n)) {
+    if (t === "social_reply" || t === "social_mention" || t === "song_feedback") return desc;
+    if (t === "gift_received") return desc;
+    if ((t === "social_repost" || t === "social_like") && Number(n?._groupCount || 0) > 1) return desc;
+    return "";
+  }
+  return desc;
 }
 
 function activityItemHtml(n) {
@@ -35408,25 +35503,33 @@ function activityItemHtml(n) {
   const profileHref = splitTap ? notificationActorProfileHref(n) : "";
   const notifType = String(n?.type || "").trim() || "default";
   const notifId = String(n?.id || "").trim();
-  const titleHtml = activityRowTitleHtml(n, parts.title, { splitTap });
-  const descHtml = parts.description
-    ? userTextHtml(parts.description, { tag: "p", className: "activityRowDesc", escapeHtml })
+  const secondary = activityRowSecondaryForIg(n, parts);
+  const titleHtml = splitTap
+    ? activityRowTitleHtml(n, parts.title, { splitTap: true })
+    : escapeHtml(parts.title);
+  const secondaryHtml = secondary
+    ? userTextHtml(secondary, { tag: "p", className: "activityRowSub", escapeHtml })
     : "";
+  const thumbInner = unavailable ? "" : activitySongCoverHtml(n);
+  const thumbWrap = thumbInner ? `<div class="activityRowThumb" aria-hidden="true">${thumbInner}</div>` : "";
+  const unreadDot = unread ? `<span class="activityRowUnreadDot" aria-label="Unread"></span>` : "";
+  const isSelfRow = activityNotificationIsSelfRow(n);
+  const leadWrapClass = activityRowLeadWrapClass(n);
+  const leadInner = `${activityRowLeadHtml(n)}${activityNotificationShowTypeBadge(n) ? activityTypeBadgeHtml(notifType) : ""}`;
+  const rowSelfClass = isSelfRow ? " activityRow--self" : "";
   if (splitTap && href) {
     return `
-    <article class="activityRow activityRow--${escapeHtml(notifType)} activityRow--split${unread ? " isUnread" : ""}" data-activity-href="${escapeHtml(href)}"${notifId ? ` data-activity-id="${escapeHtml(notifId)}"` : ""}>
-      <button type="button" class="activityRowArtWrap activityRowProfileTap" data-activity-profile-href="${escapeHtml(profileHref)}" aria-label="View profile">
-        ${activityRowArtworkHtml(n)}
-        ${activityTypeBadgeHtml(notifType)}
+    <article class="activityRow activityRow--${escapeHtml(notifType)} activityRow--split${unread ? " isUnread" : ""}${rowSelfClass}" data-activity-href="${escapeHtml(href)}"${notifId ? ` data-activity-id="${escapeHtml(notifId)}"` : ""}>
+      <button type="button" class="${leadWrapClass} activityRowProfileTap" data-activity-profile-href="${escapeHtml(profileHref)}" aria-label="View profile">
+        ${leadInner}
       </button>
       <div class="activityRowBody activityRowTargetTap" role="button" tabindex="0" aria-label="Open song">
-        <div class="activityRowMetaTop">
-          <span class="activityRowCategory">${escapeHtml(parts.category)}</span>
-          <span class="activityRowTime">${escapeHtml(time)}</span>
-        </div>
-        <strong class="activityRowTitle">${titleHtml}</strong>
-        ${descHtml}
+        <p class="activityRowText">${titleHtml}</p>
+        ${secondaryHtml}
+        <span class="activityRowTime">${escapeHtml(time)}</span>
       </div>
+      ${thumbWrap}
+      ${unreadDot}
     </article>`;
   }
   const tag = href ? "button" : "article";
@@ -35434,20 +35537,23 @@ function activityItemHtml(n) {
   const dataHref = href
     ? ` data-activity-href="${escapeHtml(href)}"${notifId ? ` data-activity-id="${escapeHtml(notifId)}"` : ""}`
     : "";
+  const avatarWrapTag = profileHref && !splitTap ? "button" : "div";
+  const avatarWrapType = profileHref && !splitTap ? ' type="button"' : "";
+  const avatarWrapExtra = profileHref && !splitTap
+    ? ` class="${leadWrapClass} activityRowProfileTap" data-activity-profile-href="${escapeHtml(profileHref)}" aria-label="View profile"`
+    : ` class="${leadWrapClass}"`;
   return `
-    <${tag} class="activityRow activityRow--${escapeHtml(notifType)}${unread ? " isUnread" : ""}${unavailable ? " activityRow--unavailable" : ""}"${typeAttr}${dataHref}>
-      <div class="activityRowArtWrap">
-        ${activityRowArtworkHtml(n)}
-        ${activityTypeBadgeHtml(notifType)}
-      </div>
+    <${tag} class="activityRow activityRow--${escapeHtml(notifType)}${unread ? " isUnread" : ""}${unavailable ? " activityRow--unavailable" : ""}${rowSelfClass}"${typeAttr}${dataHref}>
+      <${avatarWrapTag}${avatarWrapExtra}${avatarWrapType}>
+        ${leadInner}
+      </${avatarWrapTag}>
       <div class="activityRowBody">
-        <div class="activityRowMetaTop">
-          <span class="activityRowCategory">${escapeHtml(parts.category)}</span>
-          <span class="activityRowTime">${escapeHtml(time)}</span>
-        </div>
-        <strong class="activityRowTitle">${escapeHtml(parts.title)}</strong>
-        ${descHtml}
+        <p class="activityRowText">${titleHtml}</p>
+        ${secondaryHtml}
+        <span class="activityRowTime">${escapeHtml(time)}</span>
       </div>
+      ${thumbWrap}
+      ${unreadDot}
     </${tag}>`;
 }
 
@@ -35455,24 +35561,21 @@ function activityEmptyHtml(filter = _activityFilterTab) {
   if (filter === "social") {
     return `
       <div class="activityEmpty">
-        <div class="activityEmptyIcon" aria-hidden="true"><svg viewBox="0 0 24 24" width="24" height="24"><path fill="currentColor" d="M12 21s-7.2-4.35-9.6-8.55C.6 9.15 2.1 5.7 5.4 5.1c1.8-.3 3.45.45 4.35 1.95.9-1.5 2.55-2.25 4.35-1.95 3.3.6 4.8 4.05 3 7.35C19.2 16.65 12 21 12 21Z"/></svg></div>
-        <strong>No social activity yet</strong>
-        <span>Likes, fans, remixes, and replies will show up here.</span>
+        <p class="activityEmptyTitle">No social activity yet</p>
+        <p class="activityEmptyHint">Likes, fans, remixes, and replies will show up here.</p>
       </div>`;
   }
   if (filter === "achievements") {
     return `
       <div class="activityEmpty">
-        <div class="activityEmptyIcon" aria-hidden="true"><svg viewBox="0 0 24 24" width="24" height="24"><path fill="currentColor" d="M12 2.5 14.8 8l6.2.9-4.5 4.4 1.1 6.1L12 16.8 6.4 19.4l1.1-6.1L3 8.9 9.2 8 12 2.5Z"/></svg></div>
-        <strong>No achievements yet</strong>
-        <span>Chart rankings and play milestones will appear here.</span>
+        <p class="activityEmptyTitle">No achievements yet</p>
+        <p class="activityEmptyHint">Chart rankings and play milestones will appear here.</p>
       </div>`;
   }
   return `
     <div class="activityEmpty">
-      <div class="activityEmptyIcon" aria-hidden="true"><svg viewBox="0 0 24 24" width="24" height="24"><path fill="currentColor" d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg></div>
-      <strong>No activity yet</strong>
-      <span>Your likes, rankings, fans and remix activity will appear here.</span>
+      <p class="activityEmptyTitle">No activity yet</p>
+      <p class="activityEmptyHint">When someone likes your song or you hit the chart, it shows up here.</p>
     </div>`;
 }
 
@@ -35494,12 +35597,8 @@ function renderActivityFeedFromState() {
     grouped[activityDayBucket(new Date(n?.created_at || 0).getTime())].push(n);
   });
   feed.innerHTML = buckets.filter((b) => grouped[b].length).map((b) => `
-    <section class="activityDayGroup" aria-label="${activityDayLabel(b)}">
-      <h3 class="activityDayLabel">${activityDayLabel(b)}</h3>
-      <div class="activityDayRows">
-        ${collapseActivityRows(grouped[b]).map((n) => activityItemHtml(n)).join("")}
-      </div>
-    </section>`).join("");
+    <h3 class="activitySectionLabel">${activityDayLabel(b)}</h3>
+    ${collapseActivityRows(grouped[b]).map((n) => activityItemHtml(n)).join("")}`).join("");
   persistActivityFeedSnapshot(feed.innerHTML);
 }
 
@@ -35705,6 +35804,14 @@ function bindActivityPageOnce() {
       renderActivityFeedFromState();
     });
   }
+  els.activityFeed?.addEventListener("error", (ev) => {
+    const img = ev.target;
+    if (!(img instanceof HTMLImageElement) || !img.dataset.activityAvatar) return;
+    const blank = document.createElement("span");
+    blank.className = "activityRowAvatar activityRowAvatar--blank";
+    blank.setAttribute("aria-hidden", "true");
+    img.replaceWith(blank);
+  }, true);
   els.activityFeed?.addEventListener("click", (ev) => {
     const profileTap = ev.target.closest("[data-activity-profile-href]");
     if (profileTap && els.activityFeed.contains(profileTap)) {

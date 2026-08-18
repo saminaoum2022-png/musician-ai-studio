@@ -196,7 +196,7 @@
       onload="this.media='all'"
     />
     <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Display:wght@900&family=Inter:wght@900&display=swap" /></noscript>
-    <link rel="stylesheet" href="./styles.css?v=20260818-230542" />
+    <link rel="stylesheet" href="./styles.css?v=20260819-010029" />
 
     <meta name="description" content="Create complete songs from lyrics, a hum, or a photo with NabadAi. Explore AI music tools, Arabic styles, voice personas, and creator sharing." />
     <meta property="og:type" content="website" />
@@ -1505,17 +1505,13 @@
         </section>
 
         <section class="activityPage wide" data-route="activity" id="activityPage">
-          <header class="discoveryStudioHead">
-            <div class="discoveryStudioTitles">
-              <h2 class="discoveryStudioH2 appScreenTitle" id="activityTitle">Activity</h2>
-            </div>
+          <header class="activityHead">
+            <h2 class="activityTitle appScreenTitle" id="activityTitle">Activity</h2>
           </header>
-          <nav id="activityFilterTabs" class="nabadTabs discoverFeedTabs" aria-label="Activity filters">
-              <div class="nabadTabsTrack discoverFeedTabsTrack" role="tablist">
-                <button type="button" class="nabadTabsTab is-active" role="tab" aria-selected="true" data-activity-filter="all"><span class="nabadTabsLabel">All</span></button>
-                <button type="button" class="nabadTabsTab" role="tab" aria-selected="false" data-activity-filter="social"><span class="nabadTabsLabel">Social</span></button>
-                <button type="button" class="nabadTabsTab" role="tab" aria-selected="false" data-activity-filter="achievements"><span class="nabadTabsLabel">Achievements</span></button>
-              </div>
+          <nav id="activityFilterTabs" class="activityFilterBar" role="tablist" aria-label="Activity filters">
+            <button type="button" class="activityFilterBtn is-active" role="tab" aria-selected="true" data-activity-filter="all">All</button>
+            <button type="button" class="activityFilterBtn" role="tab" aria-selected="false" data-activity-filter="social">Social</button>
+            <button type="button" class="activityFilterBtn" role="tab" aria-selected="false" data-activity-filter="achievements">Achievements</button>
           </nav>
           <div id="activityStatus" class="activityStatus" role="status" aria-live="polite" hidden></div>
           <div id="activityFeed" class="activityFeed" aria-label="Activity feed"></div>
@@ -5026,6 +5022,6 @@
     </script>
     <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
     <script src="./env.client.js" onerror="void 0"></script>
-    <script type="module" src="./src/app.js?v=20260818-230542"></script>
+    <script type="module" src="./src/app.js?v=20260819-010029"></script>
   </body>
 </html>

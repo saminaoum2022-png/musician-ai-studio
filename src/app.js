@@ -31,6 +31,15 @@ import {
   setUserPublicSegActive,
 } from "./profile-seg-tabs.js";
 import { initEcho, openEchoFromCreateChooser } from "./echo.js";
+import {
+  initDmVoiceDrop,
+  openDmVoiceDropSheet,
+  closeDmVoiceDropSheet,
+  messagesVoiceDropBubbleHtml,
+  formatDmVoiceInboxPreview,
+  handleVoiceDropBubbleClick,
+  DM_VOICE_MARKER,
+} from "./dm-voice-drop.js";
 import { initHumTrack, bindHumTrackHomeCard, openHumTrackFlow, humTrackReadyForGenerate, humTrackIsGenerating, triggerHumTrackGenerate, kickHumTrackGenerationPoll } from "./hum-track.js";
 import { createAdaptivePollLoop, stopPollLoop } from "./generation-poll.js";
 import {
@@ -216,7 +225,7 @@ import { MUSIC_VIDEO_FEATURE_ENABLED } from "./feature-flags.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260819-023022";
+const APP_BUILD = "20260819-024640";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -6083,6 +6092,27 @@ try {
     toAudioProxyUrl,
     normalizeAudioUrlForPlayback,
     primeAudioElementInGesture,
+  });
+} catch {}
+try {
+  initDmVoiceDrop({
+    getAuthSession: () => authSession,
+    getSupabaseAuthToken,
+    SUPABASE_URL,
+    SUPABASE_ANON_KEY,
+    nativeSafeFetch,
+    pickRecorderMimeType,
+    formatMsAsVoiceTime,
+    haptic,
+    showToast,
+    messagesApi,
+    getThreadId: () => String(_conversationId || "").trim(),
+    appendThreadMessages,
+    pollNewThreadMessages,
+    patchInboxFromOutgoingMessage,
+    closeMessagesComposerSheet,
+    feedbackMessagesComposerSend,
+    refreshMessagesUnreadBadge,
   });
 } catch {}
 try {
@@ -31724,6 +31754,14 @@ function parseDmMessageBody(raw) {
           kind: String(data.k || data.kind || "song").trim(),
         };
       }
+      if (data?.nabad_dm === DM_VOICE_MARKER || data?.nabad_dm === "voice") {
+        return {
+          type: "voice",
+          url: String(data.u || data.url || "").trim(),
+          durationSec: Math.max(0, Number(data.d ?? data.duration) || 0),
+          peaks: Array.isArray(data.p) ? data.p : [],
+        };
+      }
     } catch {}
   }
   return { type: "text", text: body };
@@ -31735,6 +31773,7 @@ function formatDmInboxPreview(raw) {
     const kindLabel = parsed.kind === "mashup" ? "Mashup" : parsed.kind === "remix" ? "Remix" : "Song";
     return `${kindLabel} · ${parsed.title}`;
   }
+  if (parsed.type === "voice") return formatDmVoiceInboxPreview(parsed);
   return String(raw || "").trim();
 }
 
@@ -32855,6 +32894,15 @@ function messagesBubbleHtml(msg, viewerId, opts) {
       <div class="messagesBubbleWrap messagesBubbleWrap--song${mine ? " is-mine" : ""}${pendingCls}${failedCls}${readByPartnerCls}${deliveredToPartnerCls}${enterCls}${revealAttrs.cls}"${revealAttrs.style} data-msg-id="${escapeHtml(String(msg?.id || ""))}" data-client-msg-id="${escapeHtml(String(msg?.client_message_id || ""))}">
         <div class="messagesBubble messagesBubble--song">
           ${messagesDmSongCardHtml(parsed, { mine })}
+          ${metaHtml}
+        </div>
+      </div>`;
+  }
+  if (parsed.type === "voice") {
+    return `
+      <div class="messagesBubbleWrap messagesBubbleWrap--voice${mine ? " is-mine" : ""}${pendingCls}${failedCls}${readByPartnerCls}${deliveredToPartnerCls}${enterCls}${revealAttrs.cls}"${revealAttrs.style} data-msg-id="${escapeHtml(String(msg?.id || ""))}" data-client-msg-id="${escapeHtml(String(msg?.client_message_id || ""))}">
+        <div class="messagesBubble messagesBubble--voice">
+          ${messagesVoiceDropBubbleHtml(parsed, { mine, msgId: msg?.id })}
           ${metaHtml}
         </div>
       </div>`;
@@ -33983,6 +34031,12 @@ function bindMessagesPageOnce() {
         closeMessagesComposerSheet();
         void openMessagesShareSheet();
       }
+      if (action === "voice" && !composerAction.disabled) {
+        if (isCoachThreadId(_conversationId)) return;
+        try { haptic("light"); } catch {}
+        closeMessagesComposerSheet();
+        openDmVoiceDropSheet();
+      }
       return;
     }
     const sharePick = e.target.closest("[data-messages-share-id]");
@@ -34016,6 +34070,7 @@ function bindMessagesPageOnce() {
     }
     const threadMount = document.getElementById("messagesThreadMount");
     if (threadMount) {
+      if (handleVoiceDropBubbleClick(e.target)) return;
       const pl = e.target.closest("[data-user-lib-play]");
       if (pl && threadMount.contains(pl)) {
         e.preventDefault();

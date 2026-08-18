@@ -196,7 +196,7 @@
       onload="this.media='all'"
     />
     <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Display:wght@900&family=Inter:wght@900&display=swap" /></noscript>
-    <link rel="stylesheet" href="./styles.css?v=20260819-023022" />
+    <link rel="stylesheet" href="./styles.css?v=20260819-024640" />
 
     <meta name="description" content="Create complete songs from lyrics, a hum, or a photo with NabadAi. Explore AI music tools, Arabic styles, voice personas, and creator sharing." />
     <meta property="og:type" content="website" />
@@ -4806,15 +4806,44 @@
               <span>Pick from your Library</span>
             </span>
           </button>
-          <button type="button" class="messagesComposerSheetRow messagesComposerSheetRow--soon" data-messages-composer-action="voice" role="menuitem" disabled aria-disabled="true">
+          <button type="button" class="messagesComposerSheetRow" data-messages-composer-action="voice" role="menuitem">
             <span class="messagesComposerSheetIcon messagesComposerSheetIcon--voice" aria-hidden="true">
               <svg viewBox="0 0 24 24" width="22" height="22"><path fill="currentColor" d="M12 14a3 3 0 0 0 3-3V6a3 3 0 1 0-6 0v5a3 3 0 0 0 3 3Z"/><path fill="currentColor" d="M19 11a1 1 0 1 0-2 0 5 5 0 0 1-10 0 1 1 0 1 0-2 0 7 7 0 0 0 6 6.92V21H9a1 1 0 1 0 0 2h6a1 1 0 1 0 0-2h-2v-3.08A7 7 0 0 0 19 11Z"/></svg>
             </span>
             <span class="messagesComposerSheetCopy">
-              <strong>Voice note</strong>
-              <span>Coming soon</span>
+              <strong>Voice drop</strong>
+              <span>30s max · compressed</span>
             </span>
           </button>
+        </div>
+      </section>
+    </div>
+
+    <div id="messagesVoiceDropSheet" class="messagesVoiceDropSheet messagesShareSheet" hidden aria-hidden="true">
+      <div class="messagesShareSheetBackdrop" id="messagesVoiceDropBackdrop"></div>
+      <section class="messagesVoiceDropCard messagesShareSheetCard" role="dialog" aria-modal="true" aria-labelledby="messagesVoiceDropTitle">
+        <header class="messagesShareSheetHead">
+          <h2 id="messagesVoiceDropTitle" class="messagesShareSheetTitle">Voice drop</h2>
+          <button type="button" class="messagesShareSheetClose" id="messagesVoiceDropClose" aria-label="Close">×</button>
+        </header>
+        <p class="messagesVoiceDropLead">Say it, hum it, drop it — not another chat voice note.</p>
+        <div class="voiceDropStage" aria-live="polite">
+          <svg class="voiceDropProgressSvg" viewBox="0 0 120 120" aria-hidden="true">
+            <circle class="voiceDropProgressTrack" cx="60" cy="60" r="52" fill="none" stroke-width="3"/>
+            <circle class="voiceDropProgressRing" id="voiceDropProgressRing" cx="60" cy="60" r="52" fill="none" stroke-width="3" stroke-linecap="round" transform="rotate(-90 60 60)"/>
+          </svg>
+          <div class="voiceDropBloom" id="voiceDropBloom" aria-hidden="true"></div>
+          <button type="button" class="voiceDropOrb" id="voiceDropOrb" aria-label="Start voice drop">
+            <span class="voiceDropOrbGlow" aria-hidden="true"></span>
+            <span class="voiceDropOrbCore" aria-hidden="true">
+              <svg viewBox="0 0 24 24" width="28" height="28"><path fill="currentColor" d="M12 14a3 3 0 0 0 3-3V6a3 3 0 1 0-6 0v5a3 3 0 0 0 3 3Z"/><path fill="currentColor" d="M19 11a1 1 0 1 0-2 0 5 5 0 0 1-10 0 1 1 0 1 0-2 0 7 7 0 0 0 6 6.92V21H9a1 1 0 1 0 0 2h6a1 1 0 1 0 0-2h-2v-3.08A7 7 0 0 0 19 11Z"/></svg>
+            </span>
+          </button>
+        </div>
+        <p class="voiceDropStatus" id="voiceDropStatus">Tap the orb to capture your drop</p>
+        <div class="voiceDropActions" id="voiceDropActions" hidden>
+          <button type="button" class="voiceDropBtn voiceDropBtn--ghost" id="voiceDropDiscard">Re-drop</button>
+          <button type="button" class="voiceDropBtn voiceDropBtn--send" id="voiceDropSend">Send drop</button>
         </div>
       </section>
     </div>
@@ -5059,6 +5088,6 @@
     </script>
     <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
     <script src="./env.client.js" onerror="void 0"></script>
-    <script type="module" src="./src/app.js?v=20260819-023022"></script>
+    <script type="module" src="./src/app.js?v=20260819-024640"></script>
   </body>
 </html>

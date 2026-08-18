@@ -176,6 +176,51 @@ function requestSteps() {
   return ["mode", "brief", "singer", "package", "review"];
 }
 
+function paintRequestLoading() {
+  const mount = el("proSingerRequestSteps");
+  const dots = el("proSingerRequestDots");
+  if (dots) dots.innerHTML = "";
+  if (!mount) return;
+  mount.innerHTML = `
+    <div class="proSingerLoading" aria-busy="true" aria-label="Loading request form">
+      <div class="proSingerLoadingLine proSingerLoadingLine--wide"></div>
+      <div class="proSingerLoadingBlock"></div>
+      <div class="proSingerLoadingLine"></div>
+      <div class="proSingerLoadingLine proSingerLoadingLine--short"></div>
+    </div>`;
+}
+
+function paintApplyLoading() {
+  const mount = el("proSingerApplyForm");
+  const status = el("proSingerApplyStatus");
+  if (status) status.textContent = "Loading application…";
+  setApplySubmitVisible(false);
+  if (!mount) return;
+  mount.innerHTML = `
+    <div class="proSingerLoading" aria-busy="true" aria-label="Loading application form">
+      <div class="proSingerLoadingLine proSingerLoadingLine--wide"></div>
+      <div class="proSingerLoadingBlock"></div>
+      <div class="proSingerLoadingLine"></div>
+      <div class="proSingerLoadingLine proSingerLoadingLine--short"></div>
+    </div>`;
+}
+
+function setRequestSheetBusy(busy) {
+  const foot = el("proSingerRequestSheet")?.querySelector(".proSingerFoot");
+  const back = el("btnProSingerBack");
+  const next = el("btnProSingerNext");
+  const submit = el("btnProSingerSubmit");
+  if (next) next.disabled = Boolean(busy);
+  if (submit) submit.disabled = Boolean(busy);
+  if (back) back.disabled = Boolean(busy);
+  if (foot) foot.classList.toggle("proSingerFoot--loading", Boolean(busy));
+}
+
+function setApplySheetBusy(busy) {
+  const submit = el("btnProSingerApplySubmit");
+  if (submit) submit.disabled = Boolean(busy);
+}
+
 function restoreRequestDraftToForm() {
   const occ = el("proSingerOccasion");
   if (occ && _requestDraft.occasion) occ.value = _requestDraft.occasion;
@@ -401,10 +446,23 @@ export async function openProSingerRequestSheet(track = null) {
   _requestCtx = track
     ? songRef
     : { songId: "", title: "", artUrl: "" };
-  await loadRoster();
-  paintRequestSteps();
-  updateRequestNav();
   setSheetOpen("proSingerRequestSheet", true);
+  paintRequestLoading();
+  setRequestSheetBusy(true);
+  _deps?.showToast?.("Preparing your request…", { icon: "✦", durationMs: 3200 });
+  try {
+    await loadRoster();
+    paintRequestSteps();
+    updateRequestNav();
+    setRequestSheetBusy(false);
+  } catch {
+    paintRequestSteps();
+    updateRequestNav();
+    setRequestSheetBusy(false);
+    _deps?.showToast?.("Could not load singer roster — you can still continue with Best match.");
+  } finally {
+    try { _deps?.hideToast?.(); } catch {}
+  }
 }
 
 function updateRequestNav() {
@@ -412,9 +470,13 @@ function updateRequestNav() {
   const back = el("btnProSingerBack");
   const next = el("btnProSingerNext");
   const submit = el("btnProSingerSubmit");
+  const foot = el("proSingerRequestSheet")?.querySelector(".proSingerFoot");
   if (back) back.hidden = _requestStep <= 0;
   if (next) next.hidden = _requestStep >= steps.length - 1;
   if (submit) submit.hidden = _requestStep < steps.length - 1;
+  if (foot) foot.classList.toggle("proSingerFoot--solo", _requestStep <= 0);
+  if (next && !next.hidden) next.disabled = false;
+  if (submit && !submit.hidden) submit.disabled = _submitting;
 }
 
 export function closeProSingerRequestSheet() {
@@ -584,9 +646,14 @@ export async function openSingerApplicationSheet() {
     _deps?.showToast?.("Sign in to apply.");
     return;
   }
+  setSheetOpen("proSingerApplySheet", true);
+  paintApplyLoading();
+  setApplySheetBusy(true);
+  _deps?.showToast?.("Loading application…", { icon: "✦", durationMs: 3200 });
   try {
     _applicationState = await apiGet("/api/music/singer-applications");
     _applyPhotoUrl = String(_applicationState?.application?.photoUrl || "").trim();
+    paintApplicationForm();
   } catch (err) {
     const msg = String(err?.message || "");
     if (/load failed|failed to fetch|network/i.test(msg)) {
@@ -594,10 +661,12 @@ export async function openSingerApplicationSheet() {
     } else {
       _deps?.showToast?.(msg || "Could not load application.");
     }
+    closeSingerApplicationSheet();
     return;
+  } finally {
+    setApplySheetBusy(false);
+    try { _deps?.hideToast?.(); } catch {}
   }
-  paintApplicationForm();
-  setSheetOpen("proSingerApplySheet", true);
 }
 
 export function closeSingerApplicationSheet() {

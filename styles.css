@@ -54623,6 +54623,19 @@ html[data-theme="light"] .webProFeaturePill{
   overflow: hidden;
   display: flex;
   flex-direction: column;
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.03) 0%, transparent 18%),
+    linear-gradient(180deg, var(--card), var(--bg));
+}
+.proSingerSheetCard .feedReplySheetTitle{
+  font-size: 20px;
+  font-weight: 750;
+  letter-spacing: -0.03em;
+}
+.proSingerSheetCard .feedReplySheetSub{
+  font-size: 13px;
+  line-height: 1.4;
+  color: rgba(236,240,252,0.52);
 }
 .proSingerSteps{
   flex: 1;
@@ -54639,9 +54652,90 @@ html[data-theme="light"] .webProFeaturePill{
   flex-shrink: 0;
   display: flex;
   gap: 10px;
-  justify-content: flex-end;
-  padding: 12px 18px calc(12px + env(safe-area-inset-bottom));
+  align-items: stretch;
+  padding: 14px 18px calc(14px + env(safe-area-inset-bottom));
   border-top: 1px solid rgba(255,255,255,0.08);
+  background: rgba(0,0,0,0.14);
+}
+.proSingerFoot--solo .proSingerBtn--primary{
+  flex: 1;
+  width: 100%;
+}
+.proSingerFoot--loading .proSingerBtn--primary{
+  opacity: 0.55;
+}
+.proSingerBtn{
+  appearance: none;
+  border: 0;
+  margin: 0;
+  font: inherit;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  border-radius: 14px;
+  min-height: 52px;
+  padding: 0 20px;
+  font-size: 16px;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+  transition: transform 120ms ease, opacity 120ms ease, background 160ms ease, border-color 160ms ease;
+}
+.proSingerBtn:active:not(:disabled){
+  transform: scale(0.985);
+}
+.proSingerBtn:disabled{
+  opacity: 0.42;
+  cursor: not-allowed;
+}
+.proSingerBtn--primary{
+  flex: 1;
+  color: rgba(248,250,255,0.96);
+  background: rgba(255,255,255,0.11);
+  border: 1px solid rgba(255,255,255,0.14);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.07),
+    0 10px 28px -16px rgba(0,0,0,0.65);
+}
+.proSingerBtn--primary:hover:not(:disabled){
+  background: rgba(255,255,255,0.15);
+  border-color: rgba(255,255,255,0.2);
+}
+.proSingerBtn--back{
+  flex-shrink: 0;
+  min-width: 72px;
+  color: rgba(236,240,252,0.58);
+  background: transparent;
+  border: 1px solid rgba(255,255,255,0.08);
+  font-weight: 600;
+  font-size: 15px;
+}
+.proSingerBtn--back:hover:not(:disabled){
+  color: rgba(248,250,255,0.88);
+  border-color: rgba(255,255,255,0.14);
+  background: rgba(255,255,255,0.04);
+}
+.proSingerLoading{
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 8px 0 4px;
+}
+.proSingerLoadingLine,
+.proSingerLoadingBlock{
+  border-radius: 12px;
+  background: var(--skeleton-fill);
+  border: 1px solid var(--skeleton-stroke);
+  animation: hubSkelShimmer 1.15s ease-in-out infinite;
+}
+.proSingerLoadingLine{
+  height: 14px;
+  width: 72%;
+}
+.proSingerLoadingLine--wide{ width: 92%; height: 16px; }
+.proSingerLoadingLine--short{ width: 48%; }
+.proSingerLoadingBlock{
+  height: 88px;
+  width: 100%;
+  border-radius: 14px;
 }
 .proSingerSheetCard .feedReplySheetHead{
   flex-shrink: 0;
@@ -54650,16 +54744,20 @@ html[data-theme="light"] .webProFeaturePill{
   display: flex;
   gap: 6px;
   justify-content: center;
-  margin-top: 8px;
+  margin-top: 10px;
 }
 .proSingerDot{
-  width: 7px;
-  height: 7px;
+  width: 6px;
+  height: 6px;
   border-radius: 999px;
-  background: rgba(255,255,255,0.18);
+  background: rgba(255,255,255,0.16);
+  transition: background 180ms ease, transform 180ms ease;
 }
-.proSingerDot.isActive{ background: rgba(124,92,255,0.95); }
-.proSingerDot.isDone{ background: rgba(124,92,255,0.45); }
+.proSingerDot.isActive{
+  background: rgba(248,250,255,0.92);
+  transform: scale(1.15);
+}
+.proSingerDot.isDone{ background: rgba(255,255,255,0.38); }
 .proSingerLead{
   margin: 0;
   font-size: 0.88rem;
@@ -54683,12 +54781,21 @@ html[data-theme="light"] .webProFeaturePill{
 .proSingerField select,
 .proSingerField textarea{
   width: 100%;
-  border-radius: 12px;
-  border: 1px solid rgba(255,255,255,0.12);
-  background: rgba(0,0,0,0.22);
+  border-radius: 14px;
+  border: 1px solid rgba(255,255,255,0.1);
+  background: rgba(255,255,255,0.04);
   color: inherit;
-  padding: 10px 12px;
+  padding: 12px 14px;
   font: inherit;
+  transition: border-color 160ms ease, box-shadow 160ms ease, background 160ms ease;
+}
+.proSingerField input:focus,
+.proSingerField select:focus,
+.proSingerField textarea:focus{
+  outline: none;
+  border-color: rgba(255,255,255,0.24);
+  background: rgba(255,255,255,0.06);
+  box-shadow: 0 0 0 3px rgba(255,255,255,0.05);
 }
 .proSingerSongCard{
   display: flex;
@@ -54720,8 +54827,9 @@ html[data-theme="light"] .webProFeaturePill{
   color: inherit;
 }
 .proSingerPick.isSelected{
-  border-color: rgba(124,92,255,0.65);
-  background: rgba(124,92,255,0.12);
+  border-color: rgba(255,255,255,0.34);
+  background: rgba(255,255,255,0.08);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.06);
 }
 .proSingerPickArt{
   width: 44px;
@@ -54735,8 +54843,10 @@ html[data-theme="light"] .webProFeaturePill{
   border-radius: 999px;
   display: grid;
   place-items: center;
-  background: rgba(124,92,255,0.2);
+  background: rgba(255,255,255,0.08);
+  border: 1px solid rgba(255,255,255,0.1);
   font-size: 1.1rem;
+  color: rgba(248,250,255,0.88);
 }
 .proSingerPickName{ display: block; font-weight: 700; font-size: 0.92rem; }
 .proSingerPickMeta{ display: block; font-size: 0.78rem; color: rgba(236,240,252,0.58); }
@@ -54758,11 +54868,12 @@ html[data-theme="light"] .webProFeaturePill{
   text-align: left;
 }
 .proSingerPkg.isSelected{
-  border-color: rgba(124,92,255,0.65);
-  background: rgba(124,92,255,0.12);
+  border-color: rgba(255,255,255,0.34);
+  background: rgba(255,255,255,0.08);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.06);
 }
 .proSingerPkg.isDisabled{ opacity: 0.45; }
-.proSingerPkgPrice{ font-size: 1.15rem; font-weight: 800; color: rgba(196,181,253,0.95); }
+.proSingerPkgPrice{ font-size: 1.15rem; font-weight: 800; color: rgba(248,250,255,0.94); }
 .proSingerPkgLabel{ font-weight: 700; }
 .proSingerPkgBlurb{ font-size: 0.78rem; color: rgba(236,240,252,0.58); }
 .proSingerReviewCard{
@@ -54787,7 +54898,7 @@ html[data-theme="light"] .webProFeaturePill{
   font-size: 0.95rem;
 }
 .discoverTrackSheetRow--proSinger{
-  color: rgba(196,181,253,0.95);
+  color: rgba(248,250,255,0.88);
 }
 .proSingerRequestsList{
   flex: 1;
@@ -54835,6 +54946,12 @@ html[data-theme="light"] .proSingerField input::placeholder,
 html[data-theme="light"] .proSingerField textarea::placeholder{
   color: var(--text-muted);
 }
+html[data-theme="light"] .proSingerField input:focus,
+html[data-theme="light"] .proSingerField select:focus,
+html[data-theme="light"] .proSingerField textarea:focus{
+  border-color: rgba(15, 23, 40, 0.22);
+  box-shadow: 0 0 0 3px rgba(15, 23, 40, 0.06);
+}
 html[data-theme="light"] .proSingerField{
   color: var(--text-secondary);
 }
@@ -54845,16 +54962,34 @@ html[data-theme="light"] .proSingerAddonNote{
 }
 html[data-theme="light"] .proSingerFoot{
   border-top-color: var(--border);
-  background: var(--card);
+  background: rgba(255,255,255,0.94);
+}
+html[data-theme="light"] .proSingerBtn--primary{
+  color: #fff;
+  background: #17181c;
+  border-color: rgba(15, 23, 40, 0.08);
+  box-shadow: 0 12px 28px -16px rgba(15, 23, 40, 0.42);
+}
+html[data-theme="light"] .proSingerBtn--primary:hover:not(:disabled){
+  background: #23252b;
+}
+html[data-theme="light"] .proSingerBtn--back{
+  color: var(--text-secondary);
+  border-color: var(--border);
+  background: var(--surface-secondary);
+}
+html[data-theme="light"] .proSingerBtn--back:hover:not(:disabled){
+  color: var(--text-primary);
+  border-color: rgba(15, 23, 40, 0.14);
 }
 html[data-theme="light"] .proSingerDot{
-  background: rgba(15, 23, 40, 0.14);
+  background: rgba(15, 23, 40, 0.12);
 }
 html[data-theme="light"] .proSingerDot.isActive{
-  background: rgba(124, 92, 255, 0.88);
+  background: rgba(15, 23, 40, 0.88);
 }
 html[data-theme="light"] .proSingerDot.isDone{
-  background: rgba(124, 92, 255, 0.42);
+  background: rgba(15, 23, 40, 0.34);
 }
 html[data-theme="light"] .proSingerSongCard{
   background: var(--surface-secondary);
@@ -54872,12 +55007,14 @@ html[data-theme="light"] .proSingerPick{
   color: var(--text-primary);
 }
 html[data-theme="light"] .proSingerPick.isSelected{
-  border-color: rgba(124, 92, 255, 0.55);
-  background: rgba(124, 92, 255, 0.08);
+  border-color: rgba(15, 23, 40, 0.22);
+  background: rgba(15, 23, 40, 0.04);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.7);
 }
 html[data-theme="light"] .proSingerPickIco{
-  background: rgba(124, 92, 255, 0.12);
-  color: #6d28d9;
+  background: rgba(15, 23, 40, 0.06);
+  border-color: var(--border);
+  color: var(--text-primary);
 }
 html[data-theme="light"] .proSingerPickName{
   color: var(--text-primary);
@@ -54891,11 +55028,12 @@ html[data-theme="light"] .proSingerPkg{
   color: var(--text-primary);
 }
 html[data-theme="light"] .proSingerPkg.isSelected{
-  border-color: rgba(124, 92, 255, 0.55);
-  background: rgba(124, 92, 255, 0.08);
+  border-color: rgba(15, 23, 40, 0.22);
+  background: rgba(15, 23, 40, 0.04);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.7);
 }
 html[data-theme="light"] .proSingerPkgPrice{
-  color: #6d28d9;
+  color: var(--text-primary);
 }
 html[data-theme="light"] .proSingerPkgLabel{
   color: var(--text-primary);

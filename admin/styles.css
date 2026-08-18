@@ -1819,7 +1819,7 @@ td.num { font-variant-numeric: tabular-nums; }
 
 .mkEditorLayout {
   display: grid;
-  grid-template-columns: 196px minmax(380px, 40%) minmax(520px, 1fr);
+  grid-template-columns: 228px minmax(380px, 40%) minmax(520px, 1fr);
   min-height: calc(100vh - 190px);
 }
 
@@ -1959,6 +1959,102 @@ td.num { font-variant-numeric: tabular-nums; }
 .mkSectionNavItem.isActive {
   background: rgba(124, 92, 255, 0.16);
   color: #f2f5ff;
+}
+
+.mkSectionComposer {
+  display: grid;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.mkComposerRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 4px;
+  align-items: center;
+}
+
+.mkComposerRow.isHidden .mkComposerPick {
+  opacity: 0.55;
+}
+
+.mkComposerRowMain {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 4px;
+  align-items: stretch;
+  min-width: 0;
+}
+
+.mkComposerRowMoves {
+  display: grid;
+  gap: 2px;
+}
+
+.mkComposerMove {
+  min-width: 28px;
+  padding: 2px 0;
+  font-size: 0.72rem;
+  line-height: 1;
+}
+
+.mkComposerPick {
+  flex: 1;
+  min-width: 0;
+}
+
+.mkComposerPick.isMuted {
+  color: rgba(151, 165, 186, 0.72);
+}
+
+.mkComposerToggle {
+  font-size: 0.68rem;
+  padding: 4px 6px;
+  white-space: nowrap;
+}
+
+.mkComposerAdd {
+  display: grid;
+  gap: 8px;
+  margin: 10px 4px 0;
+  padding-top: 10px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.mkComposerAddLabel {
+  display: grid;
+  gap: 4px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: rgba(151, 165, 186, 0.88);
+}
+
+.mkComposerAddSelect {
+  width: 100%;
+  padding: 7px 8px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(5, 7, 13, 0.65);
+  color: var(--text);
+  font: inherit;
+  font-size: 0.8rem;
+}
+
+.mkComposerAddDone {
+  margin: 10px 8px 0;
+  font-size: 0.76rem;
+}
+
+.mkSectionNavMeta {
+  display: grid;
+  gap: 4px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.mkSectionNavItem--meta {
+  font-size: 0.8rem;
 }
 
 .mkPreviewCol {

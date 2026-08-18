@@ -2336,28 +2336,184 @@ function marketingSectionPanel(id, title, description, html, { active = false } 
   </div>`;
 }
 
-function marketingSectionsForPage(isHome) {
-  const sections = [
-    { id: "hero", label: "Hero" },
-    { id: "features", label: "Features" },
-  ];
-  if (isHome) {
-    sections.push(
-      { id: "templates", label: "Song templates" },
-      { id: "collab", label: "Creators & voices" },
-      { id: "discover", label: "Discover teaser" },
-      { id: "pricing", label: "Pricing" },
-      { id: "footer", label: "Footer social" },
-    );
+const MARKETING_SECTION_CATALOG = Object.freeze({
+  hero: { label: "Hero" },
+  features: { label: "Features" },
+  templates: { label: "Song templates", homeOnly: true },
+  discover: { label: "Discover teaser", homeOnly: true },
+  collab: { label: "Creators & voices", homeOnly: true },
+  pricing: { label: "Pricing", homeOnly: true },
+  faq: { label: "FAQ" },
+  related: { label: "Related pages" },
+  finalCta: { label: "Final CTA", editorId: "final" },
+});
+
+const MARKETING_EDITOR_META_PANELS = Object.freeze([
+  { id: "footer", label: "Footer social", homeOnly: true },
+  { id: "seo", label: "SEO" },
+  { id: "brand", label: "Theme · Brand" },
+]);
+
+function marketingSectionEditorId(type) {
+  return MARKETING_SECTION_CATALOG[type]?.editorId || type;
+}
+
+function defaultMarketingPageSections(isHome) {
+  const order = isHome
+    ? ["hero", "features", "templates", "discover", "collab", "pricing", "faq", "related", "finalCta"]
+    : ["hero", "features", "faq", "related", "finalCta"];
+  return order.map((type) => ({
+    type,
+    id: marketingSectionEditorId(type),
+    enabled: true,
+  }));
+}
+
+function resolveMarketingPageSections(content, isHome) {
+  const fallback = defaultMarketingPageSections(isHome);
+  const source = Array.isArray(content?.sections) && content.sections.length ? content.sections : fallback;
+  return source
+    .filter((row) => {
+      if (!row?.type || !MARKETING_SECTION_CATALOG[row.type]) return false;
+      if (MARKETING_SECTION_CATALOG[row.type].homeOnly && !isHome) return false;
+      return true;
+    })
+    .map((row) => ({
+      type: row.type,
+      id: row.id || marketingSectionEditorId(row.type),
+      enabled: row.type === "hero" ? true : row.enabled !== false,
+      label: MARKETING_SECTION_CATALOG[row.type].label,
+    }));
+}
+
+function readMarketingSectionsFromDom(isHome) {
+  const root = document.getElementById("mkSectionComposer");
+  if (!root) return defaultMarketingPageSections(isHome);
+  const rows = [...root.querySelectorAll("[data-composer-row]")].map((rowEl) => ({
+    type: rowEl.dataset.sectionType,
+    id: rowEl.dataset.sectionId,
+    enabled: rowEl.dataset.sectionEnabled !== "0",
+  }));
+  return rows.length ? rows : defaultMarketingPageSections(isHome);
+}
+
+function refreshComposerMoveButtons() {
+  const root = document.getElementById("mkSectionComposer");
+  if (!root) return;
+  const rows = [...root.querySelectorAll("[data-composer-row]")];
+  rows.forEach((row, index) => {
+    const up = row.querySelector('[data-composer-move="up"]');
+    const down = row.querySelector('[data-composer-move="down"]');
+    const isHero = row.dataset.sectionType === "hero";
+    if (up) up.disabled = isHero || index === 0;
+    if (down) down.disabled = isHero || index === rows.length - 1;
+  });
+}
+
+function moveComposerSection(sectionId, direction) {
+  const root = document.getElementById("mkSectionComposer");
+  if (!root) return;
+  const rows = [...root.querySelectorAll("[data-composer-row]")];
+  const idx = rows.findIndex((row) => row.dataset.sectionId === sectionId);
+  if (idx < 0) return;
+  const swapWith = direction === "up" ? idx - 1 : idx + 1;
+  if (swapWith < 0 || swapWith >= rows.length) return;
+  if (rows[idx].dataset.sectionType === "hero" || rows[swapWith].dataset.sectionType === "hero") return;
+  if (direction === "up") root.insertBefore(rows[idx], rows[swapWith]);
+  else root.insertBefore(rows[swapWith], rows[idx]);
+  refreshComposerMoveButtons();
+}
+
+function toggleComposerSection(sectionId) {
+  const row = document.querySelector(`[data-composer-row][data-section-id="${CSS.escape(sectionId)}"]`);
+  if (!row || row.dataset.sectionType === "hero") return;
+  const willHide = row.dataset.sectionEnabled !== "0";
+  row.dataset.sectionEnabled = willHide ? "0" : "1";
+  row.classList.toggle("isHidden", willHide);
+  row.querySelector(".mkComposerPick")?.classList.toggle("isMuted", willHide);
+  const toggleBtn = row.querySelector("[data-composer-toggle]");
+  if (toggleBtn) {
+    toggleBtn.textContent = willHide ? "Show" : "Hide";
+    toggleBtn.setAttribute("aria-pressed", willHide ? "false" : "true");
   }
-  sections.push(
-    { id: "faq", label: "FAQ" },
-    { id: "related", label: "Related pages" },
-    { id: "final", label: "Final CTA" },
-    { id: "seo", label: "SEO" },
-    { id: "brand", label: "Theme · Brand" },
-  );
-  return sections;
+  refreshComposerMoveButtons();
+  updateAddSectionControls();
+}
+
+function enableComposerSection(type) {
+  const root = document.getElementById("mkSectionComposer");
+  if (!root) return;
+  const row = root.querySelector(`[data-composer-row][data-section-type="${CSS.escape(type)}"]`);
+  if (!row) return;
+  row.dataset.sectionEnabled = "1";
+  row.classList.remove("isHidden");
+  row.querySelector(".mkComposerPick")?.classList.remove("isMuted");
+  const toggleBtn = row.querySelector("[data-composer-toggle]");
+  if (toggleBtn) {
+    toggleBtn.textContent = "Hide";
+    toggleBtn.setAttribute("aria-pressed", "true");
+  }
+  const finalRow = root.querySelector('[data-composer-row][data-section-type="finalCta"]');
+  if (finalRow && row !== finalRow) root.insertBefore(row, finalRow);
+  refreshComposerMoveButtons();
+  updateAddSectionControls();
+  showMarketingSection(row.dataset.sectionId);
+}
+
+function updateAddSectionControls() {
+  const select = document.getElementById("mkAddSectionSelect");
+  const btn = document.getElementById("btnMkAddSection");
+  if (!select || !btn) return;
+  btn.disabled = !select.value;
+}
+
+function buildMarketingSectionComposerNav(pageSections, activeSection, isHome) {
+  const pageRows = pageSections.map((row, index) => {
+    const editorId = row.id || marketingSectionEditorId(row.type);
+    const hidden = row.enabled === false;
+    const isHero = row.type === "hero";
+    return `<div class="mkComposerRow${hidden ? " isHidden" : ""}" data-composer-row data-section-type="${escapeHtml(row.type)}" data-section-id="${escapeHtml(editorId)}" data-section-enabled="${hidden ? "0" : "1"}">
+      <div class="mkComposerRowMain">
+        <div class="mkComposerRowMoves">
+          <button type="button" class="mkComposerMove btnGhost btnSm" data-composer-move="up" data-section-id="${escapeHtml(editorId)}"${index === 0 || isHero ? " disabled" : ""} aria-label="Move up">↑</button>
+          <button type="button" class="mkComposerMove btnGhost btnSm" data-composer-move="down" data-section-id="${escapeHtml(editorId)}"${index === pageSections.length - 1 || isHero ? " disabled" : ""} aria-label="Move down">↓</button>
+        </div>
+        <button type="button" class="mkSectionNavItem mkComposerPick${activeSection === editorId ? " isActive" : ""}${hidden ? " isMuted" : ""}" data-marketing-section="${escapeHtml(editorId)}">${escapeHtml(row.label)}</button>
+      </div>
+      <button type="button" class="mkComposerToggle btnGhost btnSm" data-composer-toggle="${escapeHtml(editorId)}" aria-pressed="${hidden ? "false" : "true"}" aria-label="${hidden ? "Show section on page" : "Hide section on page"}"${isHero ? " disabled title=\"Hero is always visible\"" : ""}>${hidden ? "Show" : "Hide"}</button>
+    </div>`;
+  }).join("");
+
+  const addable = pageSections.filter((row) => row.enabled === false);
+  const addMenu = addable.length
+    ? `<div class="mkComposerAdd">
+        <label class="mkComposerAddLabel">
+          <span>Add section</span>
+          <select id="mkAddSectionSelect" class="mkComposerAddSelect">
+            <option value="">Choose…</option>
+            ${addable.map((row) => `<option value="${escapeHtml(row.type)}">${escapeHtml(row.label)}</option>`).join("")}
+          </select>
+        </label>
+        <button type="button" class="btnGhost btnSm" id="btnMkAddSection" disabled>Add</button>
+      </div>`
+    : `<p class="cellMuted mkComposerAddDone">All page sections are visible.</p>`;
+
+  const metaNav = MARKETING_EDITOR_META_PANELS
+    .filter((panel) => !panel.homeOnly || isHome)
+    .map((panel) => (
+      `<button type="button" class="mkSectionNavItem mkSectionNavItem--meta${activeSection === panel.id ? " isActive" : ""}" data-marketing-section="${escapeHtml(panel.id)}">${escapeHtml(panel.label)}</button>`
+    )).join("");
+
+  return `<div id="mkSectionComposer" class="mkSectionComposer">${pageRows}${addMenu}</div>
+    <div class="mkSectionNavMeta">${metaNav}</div>`;
+}
+
+function marketingSectionsForPage(isHome, content = null) {
+  const pageSections = resolveMarketingPageSections(content || {}, isHome);
+  const meta = MARKETING_EDITOR_META_PANELS
+    .filter((panel) => !panel.homeOnly || isHome)
+    .map((panel) => ({ id: panel.id, label: panel.label }));
+  return [...pageSections.map((row) => ({ id: row.id, label: row.label })), ...meta];
 }
 
 function showMarketingSection(sectionId) {
@@ -2376,6 +2532,7 @@ function showMarketingSection(sectionId) {
   }
   pushMarketingPreviewToIframe();
   if (id === "discover") void bindMarketingDiscoverPicker();
+  refreshComposerMoveButtons();
 }
 
 function marketingSubsection(title, html, { description = "", open = true } = {}) {
@@ -2564,6 +2721,7 @@ function readMarketingFormContent(pageKey = "home") {
       content.brand = readMarketingBrandForm();
     }
   }
+  content.sections = readMarketingSectionsFromDom(pageKey === "home");
   return content;
 }
 
@@ -2809,8 +2967,9 @@ function renderMarketingBrandPanel(brand = {}) {
 }
 
 function buildMarketingEditorSections(ctx) {
-  const { activeSection, isHome } = ctx;
+  const { activeSection, isHome, content } = ctx;
   const on = (id) => activeSection === id;
+  const pageSections = resolveMarketingPageSections(content, isHome);
 
   const heroPanel = marketingSectionPanel(
     "hero",
@@ -2969,12 +3128,10 @@ function buildMarketingEditorSections(ctx) {
     marketingSectionPanel("brand", "Theme · Brand", "Site-wide colors and fonts for every page.", renderMarketingBrandFields(ctx.brand), { active: on("brand") }),
   ].join("");
 
-  const sections = marketingSectionsForPage(isHome);
-  const nav = sections.map((s) => (
-    `<button type="button" class="mkSectionNavItem${on(s.id) ? " isActive" : ""}" data-marketing-section="${escapeHtml(s.id)}">${escapeHtml(s.label)}</button>`
-  )).join("");
+  const nav = buildMarketingSectionComposerNav(pageSections, activeSection, isHome);
 
-  const activeMeta = sections.find((s) => s.id === activeSection) || sections[0];
+  const allNavItems = marketingSectionsForPage(isHome, content);
+  const activeMeta = allNavItems.find((s) => s.id === activeSection) || allNavItems[0];
 
   return {
     nav,
@@ -3063,6 +3220,7 @@ function renderMarketing(data) {
   const editorSections = buildMarketingEditorSections({
     activeSection,
     isHome,
+    content: c,
     hero,
     features,
     cards,
@@ -3113,12 +3271,12 @@ function renderMarketing(data) {
 
       <div class="mkEditorLayout">
         <nav class="mkSectionNav" aria-label="Page sections">
-          <p class="mkSectionNavLabel">Sections on this page</p>
+          <p class="mkSectionNavLabel">Page layout</p>
           ${editorSections.nav}
         </nav>
 
         <div class="mkEditorForm marketingEditor">
-          <p class="mkEditorFormHint">Click a section on the left — its fields appear here. The right preview updates as you type.</p>
+          <p class="mkEditorFormHint">Reorder or hide sections on the left, click one to edit its fields, then save draft. Preview updates on the right.</p>
           <h2 id="mkActiveSectionTitle" class="mkActiveSectionTitle">${escapeHtml(editorSections.activeLabel)}</h2>
           ${editorSections.panels}
         </div>
@@ -3147,6 +3305,8 @@ function renderMarketing(data) {
   `, { plain: true });
   bindMarketingDraftPreviewListeners();
   bindMarketingColorFields();
+  refreshComposerMoveButtons();
+  updateAddSectionControls();
   if (activeSection === "discover") void bindMarketingDiscoverPicker();
 }
 
@@ -4093,6 +4253,29 @@ document.body.addEventListener("click", (e) => {
     return;
   }
 
+  const composerMoveBtn = e.target.closest("[data-composer-move]");
+  if (composerMoveBtn && !composerMoveBtn.disabled) {
+    moveComposerSection(composerMoveBtn.dataset.sectionId, composerMoveBtn.dataset.composerMove);
+    updateMarketingDraftSitePreview();
+    return;
+  }
+
+  const composerToggleBtn = e.target.closest("[data-composer-toggle]");
+  if (composerToggleBtn && !composerToggleBtn.disabled) {
+    toggleComposerSection(composerToggleBtn.dataset.composerToggle);
+    updateMarketingDraftSitePreview();
+    return;
+  }
+
+  if (e.target.id === "btnMkAddSection") {
+    const select = document.getElementById("mkAddSectionSelect");
+    if (select?.value) {
+      enableComposerSection(select.value);
+      updateMarketingDraftSitePreview();
+    }
+    return;
+  }
+
   const marketingPageBtn = e.target.closest("[data-marketing-page]");
   if (marketingPageBtn) {
     const page = marketingPageBtn.dataset.marketingPage;
@@ -4534,6 +4717,10 @@ document.body.addEventListener("change", (e) => {
     state.marketingPage = e.target.value || "home";
     state.marketingSection = "hero";
     void loadView({ force: true });
+    return;
+  }
+  if (e.target.id === "mkAddSectionSelect") {
+    updateAddSectionControls();
     return;
   }
   if (e.target.id === "providerTopUpSelect" || e.target.id === "providerTopUpAction") {

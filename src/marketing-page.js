@@ -87,6 +87,39 @@
     if (!content) return;
     applyCore(content);
     if (PAGE === "home") applyHomeExtras(content);
+    applySectionLayout(content);
+  }
+
+  function applySectionLayout(content) {
+    if (!content || !Array.isArray(content.sections) || !content.sections.length) return;
+    var main = document.querySelector("main");
+    if (!main) return;
+
+    var ordered = content.sections.slice();
+    var heroIdx = -1;
+    for (var h = 0; h < ordered.length; h += 1) {
+      if (ordered[h] && ordered[h].type === "hero") {
+        heroIdx = h;
+        break;
+      }
+    }
+    if (heroIdx > 0) {
+      var heroRow = ordered.splice(heroIdx, 1)[0];
+      ordered.unshift(heroRow);
+    }
+
+    for (var i = 0; i < ordered.length; i += 1) {
+      var row = ordered[i];
+      if (!row || !row.id) continue;
+      var el = document.querySelector('[data-mk-section="' + row.id + '"]');
+      if (!el) continue;
+      if (row.enabled === false) {
+        el.setAttribute("hidden", "");
+      } else {
+        el.removeAttribute("hidden");
+        main.appendChild(el);
+      }
+    }
   }
 
   function showDraftBanner() {

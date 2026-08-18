@@ -725,6 +725,107 @@ function normalizeCollabPoints(points, defaults) {
   return out;
 }
 
+const HOME_SECTION_TYPES = Object.freeze([
+  "hero",
+  "features",
+  "templates",
+  "discover",
+  "collab",
+  "pricing",
+  "faq",
+  "related",
+  "finalCta",
+]);
+
+const SEO_SECTION_TYPES = Object.freeze([
+  "hero",
+  "features",
+  "faq",
+  "related",
+  "finalCta",
+]);
+
+const SECTION_TYPE_TO_ID = Object.freeze({
+  hero: "hero",
+  features: "features",
+  templates: "templates",
+  discover: "discover",
+  collab: "collab",
+  pricing: "pricing",
+  faq: "faq",
+  related: "related",
+  finalCta: "final",
+});
+
+const SECTION_CATALOG = Object.freeze({
+  hero: { label: "Hero", home: true, seo: true },
+  features: { label: "Features", home: true, seo: true },
+  templates: { label: "Song templates", home: true, seo: false },
+  discover: { label: "Discover teaser", home: true, seo: false },
+  collab: { label: "Creators & voices", home: true, seo: false },
+  pricing: { label: "Pricing", home: true, seo: false },
+  faq: { label: "FAQ", home: true, seo: true },
+  related: { label: "Related pages", home: true, seo: true },
+  finalCta: { label: "Final CTA", home: true, seo: true },
+});
+
+function defaultSections(pageKey) {
+  const types = pageKey === "home" ? HOME_SECTION_TYPES : SEO_SECTION_TYPES;
+  return types.map((type) => ({
+    type,
+    id: SECTION_TYPE_TO_ID[type] || type,
+    enabled: true,
+  }));
+}
+
+function normalizeSections(pageKey, rawSections) {
+  const page = String(pageKey || "").trim().toLowerCase();
+  const defaults = defaultSections(page);
+  if (!Array.isArray(rawSections) || rawSections.length === 0) {
+    return defaults;
+  }
+
+  const allowed = new Set(page === "home" ? HOME_SECTION_TYPES : SEO_SECTION_TYPES);
+  const defaultByType = Object.fromEntries(defaults.map((s) => [s.type, s]));
+  const out = [];
+  const seenTypes = new Set();
+
+  for (const row of rawSections) {
+    if (!row || typeof row !== "object") continue;
+    const type = String(row.type || "").trim();
+    if (!allowed.has(type) || seenTypes.has(type)) continue;
+    seenTypes.add(type);
+    const def = defaultByType[type];
+    const id = clip(String(row.id || def?.id || type), 40) || def?.id || type;
+    out.push({
+      type,
+      id,
+      enabled: type === "hero" ? true : row.enabled !== false,
+    });
+  }
+
+  for (const def of defaults) {
+    if (!seenTypes.has(def.type)) {
+      out.push({ ...def, enabled: false });
+    }
+  }
+
+  const heroIdx = out.findIndex((s) => s.type === "hero");
+  if (heroIdx > 0) {
+    const [heroRow] = out.splice(heroIdx, 1);
+    out.unshift(heroRow);
+  }
+
+  return out.length ? out : defaults;
+}
+
+function attachSections(content, pageKey, rawSections) {
+  return {
+    ...content,
+    sections: normalizeSections(pageKey, rawSections ?? content?.sections),
+  };
+}
+
 function normalizeContent(pageKey, locale, raw) {
   const page = String(pageKey || "").trim().toLowerCase();
   const loc = String(locale || "en").trim().toLowerCase();
@@ -749,8 +850,7 @@ function normalizeContent(pageKey, locale, raw) {
     const faqIn = input.faq && typeof input.faq === "object" ? input.faq : {};
     const finalIn = input.finalCta && typeof input.finalCta === "object" ? input.finalCta : {};
 
-    return {
-      content: {
+    const homeContent = {
         seo: {
           title: clip(seoIn.title, 160) || defaults.seo.title,
           description: clip(seoIn.description, 320) || defaults.seo.description,
@@ -833,12 +933,17 @@ function normalizeContent(pageKey, locale, raw) {
           ),
         },
         brand: normalizeBrand(input.brand, defaults.brand),
-      },
+    };
+    return {
+      content: attachSections(homeContent, page, input.sections),
     };
   }
 
   if (isSeoPage(page)) {
-    return { content: normalizeSeoLikeContent(input, defaults) };
+    const seoContent = normalizeSeoLikeContent(input, defaults);
+    return {
+      content: attachSections(seoContent, page, input.sections),
+    };
   }
 
   return { error: "Unsupported page." };
@@ -871,6 +976,10 @@ module.exports = {
   isSeoPage,
   defaultContent,
   defaultBrand,
+  defaultSections,
+  normalizeSections,
+  SECTION_CATALOG,
+  SECTION_TYPE_TO_ID,
   normalizeContent,
   mergeWithDefaults,
 };

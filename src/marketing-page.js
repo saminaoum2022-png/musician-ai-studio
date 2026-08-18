@@ -87,7 +87,160 @@
     if (!content) return;
     applyCore(content);
     if (PAGE === "home") applyHomeExtras(content);
+    applyMarketingBlocks(content);
     applySectionLayout(content);
+  }
+
+  var cmsCarouselTimers = {};
+
+  function clearCmsCarouselTimers() {
+    Object.keys(cmsCarouselTimers).forEach(function (key) {
+      clearInterval(cmsCarouselTimers[key]);
+      delete cmsCarouselTimers[key];
+    });
+  }
+
+  function escHtml(text) {
+    return String(text || "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/"/g, "&quot;");
+  }
+
+  function renderTestimonialsBlock(el, block) {
+    var items = Array.isArray(block.items) ? block.items : [];
+    el.className = "section marketingCmsBlock marketingTestimonials";
+    el.innerHTML =
+      '<header class="sectionHead sectionHead--center">' +
+        (block.eyebrow ? '<p class="eyebrow">' + escHtml(block.eyebrow) + "</p>" : "") +
+        (block.title ? "<h2>" + escHtml(block.title) + "</h2>" : "") +
+      "</header>" +
+      '<div class="marketingTestimonialGrid">' +
+        items.map(function (it) {
+          return (
+            '<blockquote class="marketingTestimonialCard">' +
+              '<p class="marketingTestimonialQuote">“' + escHtml(it.quote) + "”</p>" +
+              '<footer><strong>' + escHtml(it.name) + "</strong>" +
+              (it.role ? '<span class="cellMuted">' + escHtml(it.role) + "</span>" : "") +
+              "</footer></blockquote>"
+          );
+        }).join("") +
+      "</div>";
+  }
+
+  function renderLogoStripBlock(el, block) {
+    var logos = Array.isArray(block.logos) ? block.logos : [];
+    el.className = "section marketingCmsBlock marketingLogoStrip";
+    el.innerHTML =
+      (block.title ? '<p class="marketingLogoStripTitle">' + escHtml(block.title) + "</p>" : "") +
+      '<div class="marketingLogoStripRow">' +
+        logos.map(function (logo) {
+          var inner = logo.imageUrl
+            ? '<img src="' + escHtml(logo.imageUrl) + '" alt="' + escHtml(logo.label || "") + '" loading="lazy">'
+            : '<span class="marketingLogoPlaceholder">' + escHtml(logo.label || "Logo") + "</span>";
+          if (logo.href) {
+            return '<a class="marketingLogoItem" href="' + escHtml(logo.href) + '" target="_blank" rel="noopener">' + inner + "</a>";
+          }
+          return '<span class="marketingLogoItem">' + inner + "</span>";
+        }).join("") +
+      "</div>";
+  }
+
+  function renderMediaBlock(el, block) {
+    var imageLeft = block.imagePosition === "left";
+    el.className = "section marketingCmsBlock marketingMediaBlock" + (imageLeft ? " marketingMediaBlock--imageLeft" : "");
+    var imageHtml = block.imageUrl
+      ? '<figure class="marketingMediaBlockArt"><img src="' + escHtml(block.imageUrl) + '" alt="' + escHtml(block.imageAlt || "") + '" loading="lazy"></figure>'
+      : "";
+    var copyHtml =
+      '<div class="marketingMediaBlockCopy">' +
+        (block.eyebrow ? '<p class="eyebrow">' + escHtml(block.eyebrow) + "</p>" : "") +
+        (block.title ? "<h2>" + escHtml(block.title) + "</h2>" : "") +
+        (block.body ? '<p class="sectionLead">' + escHtml(block.body) + "</p>" : "") +
+      "</div>";
+    el.innerHTML = imageLeft ? imageHtml + copyHtml : copyHtml + imageHtml;
+  }
+
+  function initContentCarousel(root, block) {
+    if (!root || !block) return;
+    var track = root.querySelector(".marketingContentCarouselTrack");
+    if (!track) return;
+    var slides = track.querySelectorAll(".marketingContentCarouselSlide");
+    if (!slides.length) return;
+    var visible = Math.min(Number(block.visibleCount) || 3, slides.length);
+    var idx = 0;
+    function apply() {
+      var slideWidth = 100 / visible;
+      track.style.width = (slides.length * slideWidth) + "%";
+      slides.forEach(function (slide) {
+        slide.style.flex = "0 0 " + slideWidth + "%";
+      });
+      track.style.transform = "translateX(-" + (idx * slideWidth) + "%)";
+    }
+    apply();
+    if (cmsCarouselTimers[block.id]) {
+      clearInterval(cmsCarouselTimers[block.id]);
+      delete cmsCarouselTimers[block.id];
+    }
+    if (block.autoSlide !== false && slides.length > visible) {
+      cmsCarouselTimers[block.id] = setInterval(function () {
+        idx = (idx + 1) % (slides.length - visible + 1);
+        apply();
+      }, Math.max(2000, Number(block.intervalMs) || 5000));
+    }
+  }
+
+  function renderContentCarouselBlock(el, block) {
+    var items = Array.isArray(block.items) ? block.items : [];
+    var sizeClass = block.size === "large" ? " marketingContentCarousel--large" : "";
+    el.className = "section marketingCmsBlock marketingContentCarousel" + sizeClass;
+    el.innerHTML =
+      '<header class="sectionHead sectionHead--center">' +
+        (block.eyebrow ? '<p class="eyebrow">' + escHtml(block.eyebrow) + "</p>" : "") +
+        (block.title ? "<h2>" + escHtml(block.title) + "</h2>" : "") +
+        (block.lead ? '<p class="sectionLead">' + escHtml(block.lead) + "</p>" : "") +
+      "</header>" +
+      '<div class="marketingContentCarouselViewport" data-visible="' + escHtml(String(block.visibleCount || 3)) + '">' +
+        '<div class="marketingContentCarouselTrack">' +
+          items.map(function (item) {
+            var body = item.body ? '<p>' + escHtml(item.body) + "</p>" : "";
+            var img = item.imageUrl
+              ? '<img src="' + escHtml(item.imageUrl) + '" alt="' + escHtml(item.title || "") + '" loading="lazy">'
+              : '<span class="marketingContentCarouselFallback">' + escHtml(item.title || "Slide") + "</span>";
+            var inner = '<div class="marketingContentCarouselSlideInner">' + img + "<h3>" + escHtml(item.title) + "</h3>" + body + "</div>";
+            if (item.href) {
+              return '<a class="marketingContentCarouselSlide" href="' + escHtml(item.href) + '">' + inner + "</a>";
+            }
+            return '<article class="marketingContentCarouselSlide">' + inner + "</article>";
+          }).join("") +
+        "</div></div>";
+    initContentCarousel(el, block);
+  }
+
+  function applyMarketingBlocks(content) {
+    if (PAGE !== "home" || !content) return;
+    clearCmsCarouselTimers();
+    var blocks = content.blocks && typeof content.blocks === "object" ? content.blocks : {};
+    var sections = Array.isArray(content.sections) ? content.sections : [];
+    var main = document.querySelector("main");
+    if (!main) return;
+
+    sections.forEach(function (row) {
+      if (!row || !row.id || row.enabled === false) return;
+      var block = blocks[row.id];
+      if (!block) return;
+      var el = document.querySelector('[data-mk-section="' + row.id + '"]');
+      if (!el) {
+        el = document.createElement("section");
+        el.setAttribute("data-mk-section", row.id);
+        el.setAttribute("data-mk-block-type", row.type);
+        main.appendChild(el);
+      }
+      if (row.type === "testimonials") renderTestimonialsBlock(el, block);
+      else if (row.type === "logoStrip") renderLogoStripBlock(el, block);
+      else if (row.type === "mediaBlock") renderMediaBlock(el, block);
+      else if (row.type === "contentCarousel") renderContentCarouselBlock(el, block);
+    });
   }
 
   function applySectionLayout(content) {

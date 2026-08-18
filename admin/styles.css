@@ -2044,11 +2044,22 @@ td.num { font-variant-numeric: tabular-nums; }
 
 .mkComposerRow {
   display: grid;
-  grid-template-columns: 18px minmax(0, 1fr) 34px;
+  grid-template-columns: 18px minmax(0, 1fr) auto;
   gap: 4px;
   align-items: center;
   padding: 2px 0;
   border-radius: 8px;
+}
+
+.mkComposerRowActions {
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.mkComposerDuplicate {
+  width: 30px;
+  height: 30px;
 }
 
 .mkComposerRow.isDragging {

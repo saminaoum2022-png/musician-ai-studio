@@ -1477,3 +1477,133 @@ body:has(.marketingDraftBanner) .marketingShell {
   padding-right: 20px;
   padding-left: 0;
 }
+
+/* CMS optional blocks */
+.marketingTestimonialGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 16px;
+}
+
+.marketingTestimonialCard {
+  margin: 0;
+  padding: 20px;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.marketingTestimonialQuote {
+  margin: 0 0 14px;
+  font-size: 1rem;
+  line-height: 1.55;
+}
+
+.marketingLogoStrip {
+  text-align: center;
+}
+
+.marketingLogoStripTitle {
+  margin: 0 0 16px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.marketingLogoStripRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 20px 28px;
+}
+
+.marketingLogoItem img {
+  max-height: 36px;
+  width: auto;
+  opacity: 0.85;
+}
+
+.marketingLogoPlaceholder {
+  display: inline-flex;
+  padding: 10px 16px;
+  border-radius: 10px;
+  border: 1px dashed rgba(255, 255, 255, 0.16);
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.marketingMediaBlock {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 28px;
+  align-items: center;
+}
+
+.marketingMediaBlock--imageLeft .marketingMediaBlockArt {
+  order: -1;
+}
+
+.marketingMediaBlockArt img {
+  width: 100%;
+  border-radius: 16px;
+}
+
+.marketingContentCarouselViewport {
+  overflow: hidden;
+  margin-top: 8px;
+}
+
+.marketingContentCarouselTrack {
+  display: flex;
+  transition: transform 0.45s ease;
+}
+
+.marketingContentCarouselSlide {
+  box-sizing: border-box;
+  padding: 0 8px;
+  text-decoration: none;
+  color: inherit;
+}
+
+.marketingContentCarouselSlideInner {
+  height: 100%;
+  padding: 14px;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.marketingContentCarouselSlideInner img {
+  width: 100%;
+  aspect-ratio: 16 / 10;
+  object-fit: cover;
+  border-radius: 12px;
+  margin-bottom: 10px;
+}
+
+.marketingContentCarousel--large .marketingContentCarouselSlideInner img {
+  aspect-ratio: 4 / 3;
+}
+
+.marketingContentCarouselFallback {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 140px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--muted);
+  margin-bottom: 10px;
+}
+
+@media (max-width: 900px) {
+  .marketingMediaBlock {
+    grid-template-columns: 1fr;
+  }
+  .marketingMediaBlock--imageLeft .marketingMediaBlockArt {
+    order: 0;
+  }
+}

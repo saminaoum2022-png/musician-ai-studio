@@ -2347,6 +2347,7 @@ function mkIcon(name) {
     eye: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>',
     eyeOff: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>',
     grip: '<svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><circle cx="9" cy="6" r="1.4" fill="currentColor"/><circle cx="15" cy="6" r="1.4" fill="currentColor"/><circle cx="9" cy="12" r="1.4" fill="currentColor"/><circle cx="15" cy="12" r="1.4" fill="currentColor"/><circle cx="9" cy="18" r="1.4" fill="currentColor"/><circle cx="15" cy="18" r="1.4" fill="currentColor"/></svg>',
+    duplicate: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>',
   };
   return icons[name] || "";
 }
@@ -2380,7 +2381,73 @@ const MARKETING_SECTION_CATALOG = Object.freeze({
   faq: { label: "FAQ" },
   related: { label: "Related pages" },
   finalCta: { label: "Final CTA", editorId: "final" },
+  testimonials: { label: "Testimonials", homeOnly: true, optional: true, duplicatable: true },
+  logoStrip: { label: "Logo strip", homeOnly: true, optional: true, duplicatable: true },
+  mediaBlock: { label: "Photo & copy", homeOnly: true, optional: true, duplicatable: true },
+  contentCarousel: { label: "Image carousel", homeOnly: true, optional: true, duplicatable: true },
 });
+
+const MARKETING_OPTIONAL_SECTION_TYPES = Object.freeze([
+  "testimonials",
+  "logoStrip",
+  "mediaBlock",
+  "contentCarousel",
+]);
+
+function isMarketingBlockType(type) {
+  return MARKETING_OPTIONAL_SECTION_TYPES.includes(type);
+}
+
+function blockFieldId(blockId, field) {
+  return `mkB_${String(blockId || "").replace(/[^a-zA-Z0-9_]/g, "_")}_${field}`;
+}
+
+function defaultBlockContentClient(type, id) {
+  const defaults = {
+    testimonials: {
+      type: "testimonials", id, eyebrow: "Community", title: "What creators are saying",
+      items: [
+        { quote: "I hummed a melody and had a full song in minutes.", name: "Creator name", role: "NabadAi user" },
+        { quote: "Publishing to Discover changed how I share music.", name: "Creator name", role: "Pro member" },
+        { quote: "Arabic lyrics and dabke style just worked.", name: "Creator name", role: "NabadAi user" },
+      ],
+    },
+    logoStrip: {
+      type: "logoStrip", id, title: "As featured in",
+      logos: [
+        { label: "Partner 1", imageUrl: "", href: "" },
+        { label: "Partner 2", imageUrl: "", href: "" },
+        { label: "Partner 3", imageUrl: "", href: "" },
+      ],
+    },
+    mediaBlock: {
+      type: "mediaBlock", id, eyebrow: "", title: "Section title",
+      body: "Supporting copy for this photo block.", imageUrl: "", imageAlt: "", imagePosition: "right",
+    },
+    contentCarousel: {
+      type: "contentCarousel", id, eyebrow: "", title: "Carousel", lead: "",
+      size: "normal", visibleCount: 3, autoSlide: true, intervalMs: 5000,
+      items: [
+        { title: "Slide 1", body: "", imageUrl: "", href: "" },
+        { title: "Slide 2", body: "", imageUrl: "", href: "" },
+        { title: "Slide 3", body: "", imageUrl: "", href: "" },
+      ],
+    },
+  };
+  return JSON.parse(JSON.stringify(defaults[type] || null));
+}
+
+function sectionLabelForRow(row) {
+  const base = MARKETING_SECTION_CATALOG[row.type]?.label || row.type;
+  if (!isMarketingBlockType(row.type)) return base;
+  const shortId = String(row.id || "").split("-").pop();
+  return shortId ? `${base} · ${shortId}` : base;
+}
+
+function newMarketingBlockId(type) {
+  const prefix = type.replace(/([A-Z])/g, (m) => m.toLowerCase()).replace(/block|strip|carousel|s$/gi, "").slice(0, 12) || "block";
+  return `${type}-${Date.now().toString(36).slice(-6)}`;
+}
 
 const MARKETING_EDITOR_META_PANELS = Object.freeze([
   { id: "footer", label: "Footer social", homeOnly: true },
@@ -2416,7 +2483,8 @@ function resolveMarketingPageSections(content, isHome) {
       type: row.type,
       id: row.id || marketingSectionEditorId(row.type),
       enabled: row.type === "hero" ? true : row.enabled !== false,
-      label: MARKETING_SECTION_CATALOG[row.type].label,
+      label: sectionLabelForRow(row),
+      duplicatable: Boolean(MARKETING_SECTION_CATALOG[row.type]?.duplicatable),
     }));
 }
 
@@ -2514,6 +2582,209 @@ function updateAddSectionControls() {
   btn.disabled = !select.value;
 }
 
+function buildBlockEditorPanel(row, block, activeSection) {
+  const id = row.id;
+  const type = row.type;
+  const b = block || defaultBlockContentClient(type, id) || {};
+  const editorId = id;
+  const on = activeSection === editorId;
+  const F = (field, value, opts = {}) => marketingField(field, blockFieldId(id, field), value, opts);
+
+  if (type === "testimonials") {
+    const items = Array.isArray(b.items) ? b.items : [];
+    return marketingSectionPanel(editorId, "Testimonials", "Quotes from creators or users.", `
+      ${F("Eyebrow", b.eyebrow || "")}
+      ${F("Section title", b.title || "")}
+      ${[0, 1, 2, 3, 4, 5].map((i) => {
+        const it = items[i] || {};
+        return marketingFieldGroup(`Quote ${i + 1}`, `
+          ${F(`q${i}_quote`, it.quote || "", { multiline: 3 })}
+          ${F(`q${i}_name`, it.name || "")}
+          ${F(`q${i}_role`, it.role || "", { hint: "e.g. Pro member" })}
+        `);
+      }).join("")}
+    `, { active: on });
+  }
+
+  if (type === "logoStrip") {
+    const logos = Array.isArray(b.logos) ? b.logos : [];
+    return marketingSectionPanel(editorId, "Logo strip", "Partner or press logos in a row.", `
+      ${F("Section label", b.title || "", { hint: "e.g. As featured in" })}
+      ${[0, 1, 2, 3, 4, 5].map((i) => {
+        const logo = logos[i] || {};
+        return marketingFieldGroup(`Logo ${i + 1}`, `
+          ${F(`logo${i}_label`, logo.label || "")}
+          ${F(`logo${i}_image`, logo.imageUrl || "", { hint: "PNG/SVG URL" })}
+          ${F(`logo${i}_href`, logo.href || "", { hint: "Optional link" })}
+        `);
+      }).join("")}
+    `, { active: on });
+  }
+
+  if (type === "mediaBlock") {
+    return marketingSectionPanel(editorId, "Photo & copy", "Image with title and body.", `
+      ${F("Eyebrow", b.eyebrow || "")}
+      ${F("Title", b.title || "")}
+      ${F("Body", b.body || "", { multiline: 4 })}
+      ${F("Image URL", b.imageUrl || "")}
+      ${F("Alt text", b.imageAlt || "")}
+      <label class="field marketingField">
+        <span>Image position</span>
+        <select id="${blockFieldId(id, "imagePosition")}" class="marketingFieldInput">
+          <option value="right"${b.imagePosition !== "left" ? " selected" : ""}>Photo on right</option>
+          <option value="left"${b.imagePosition === "left" ? " selected" : ""}>Photo on left</option>
+        </select>
+      </label>
+    `, { active: on });
+  }
+
+  if (type === "contentCarousel") {
+    const items = Array.isArray(b.items) ? b.items : [];
+    return marketingSectionPanel(editorId, "Image carousel", "Slides with optional auto-advance.", `
+      ${F("Eyebrow", b.eyebrow || "")}
+      ${F("Title", b.title || "")}
+      ${F("Lead", b.lead || "", { multiline: 2 })}
+      ${marketingFieldGroup("Carousel behavior", `
+        <label class="field marketingField">
+          <span>Size</span>
+          <select id="${blockFieldId(id, "size")}" class="marketingFieldInput">
+            <option value="normal"${b.size !== "large" ? " selected" : ""}>Normal</option>
+            <option value="large"${b.size === "large" ? " selected" : ""}>Large slides</option>
+          </select>
+        </label>
+        ${F("Slides visible", String(b.visibleCount ?? 3), { hint: "1–6 visible at once (large = fewer, bigger slides)" })}
+        <label class="field marketingField">
+          <span>Auto slide</span>
+          <select id="${blockFieldId(id, "autoSlide")}" class="marketingFieldInput">
+            <option value="1"${b.autoSlide !== false ? " selected" : ""}>On</option>
+            <option value="0"${b.autoSlide === false ? " selected" : ""}>Off</option>
+          </select>
+        </label>
+        ${F("Timer (ms)", String(b.intervalMs ?? 5000), { hint: "2000–15000 between slides" })}
+      `)}
+      ${[0, 1, 2, 3, 4, 5, 6, 7].map((i) => {
+        const slide = items[i] || {};
+        return marketingFieldGroup(`Slide ${i + 1}`, `
+          ${F(`slide${i}_title`, slide.title || "")}
+          ${F(`slide${i}_body`, slide.body || "", { multiline: 2 })}
+          ${F(`slide${i}_image`, slide.imageUrl || "")}
+          ${F(`slide${i}_href`, slide.href || "", { hint: "Optional link" })}
+        `);
+      }).join("")}
+    `, { active: on });
+  }
+
+  return "";
+}
+
+function readMarketingBlocksFromDom(sections) {
+  const blocks = {};
+  const val = (blockId, field) => document.getElementById(blockFieldId(blockId, field))?.value ?? "";
+  for (const row of sections) {
+    if (!row?.id || !isMarketingBlockType(row.type)) continue;
+    const id = row.id;
+    if (row.type === "testimonials") {
+      const items = [0, 1, 2, 3, 4, 5].map((i) => ({
+        quote: val(id, `q${i}_quote`),
+        name: val(id, `q${i}_name`),
+        role: val(id, `q${i}_role`),
+      })).filter((it) => it.quote.trim());
+      blocks[id] = {
+        type: "testimonials", id,
+        eyebrow: val(id, "Eyebrow"),
+        title: val(id, "Section title"),
+        items,
+      };
+    } else if (row.type === "logoStrip") {
+      blocks[id] = {
+        type: "logoStrip", id,
+        title: val(id, "Section label"),
+        logos: [0, 1, 2, 3, 4, 5].map((i) => ({
+          label: val(id, `logo${i}_label`),
+          imageUrl: val(id, `logo${i}_image`),
+          href: val(id, `logo${i}_href`),
+        })),
+      };
+    } else if (row.type === "mediaBlock") {
+      blocks[id] = {
+        type: "mediaBlock", id,
+        eyebrow: val(id, "Eyebrow"),
+        title: val(id, "Title"),
+        body: val(id, "Body"),
+        imageUrl: val(id, "Image URL"),
+        imageAlt: val(id, "Alt text"),
+        imagePosition: val(id, "imagePosition") || "right",
+      };
+    } else if (row.type === "contentCarousel") {
+      blocks[id] = {
+        type: "contentCarousel", id,
+        eyebrow: val(id, "Eyebrow"),
+        title: val(id, "Title"),
+        lead: val(id, "Lead"),
+        size: val(id, "size") || "normal",
+        visibleCount: Number(val(id, "Slides visible")) || 3,
+        autoSlide: val(id, "autoSlide") !== "0",
+        intervalMs: Number(val(id, "Timer (ms)")) || 5000,
+        items: [0, 1, 2, 3, 4, 5, 6, 7].map((i) => ({
+          title: val(id, `slide${i}_title`),
+          body: val(id, `slide${i}_body`),
+          imageUrl: val(id, `slide${i}_image`),
+          href: val(id, `slide${i}_href`),
+        })).filter((it) => it.title.trim() || it.imageUrl.trim()),
+      };
+    }
+  }
+  return blocks;
+}
+
+function insertSectionBeforeFinal(sections, entry) {
+  const list = [...sections];
+  const finalIdx = list.findIndex((s) => s.type === "finalCta");
+  list.splice(finalIdx >= 0 ? finalIdx : list.length, 0, entry);
+  return list;
+}
+
+function rerenderMarketingEditor(content) {
+  const data = state.cache[viewCacheKey()] || {};
+  renderMarketing({ ...data, content, page: state.marketingPage || "home" });
+}
+
+function addMarketingBlockSection(type) {
+  if (!isMarketingBlockType(type)) return;
+  const pageKey = state.marketingPage || "home";
+  if (pageKey !== "home") return;
+  const id = newMarketingBlockId(type);
+  const content = readMarketingFormContent(pageKey);
+  content.sections = readMarketingSectionsFromDom(true);
+  content.sections = insertSectionBeforeFinal(content.sections, { type, id, enabled: true });
+  content.blocks = { ...(content.blocks || {}), ...readMarketingBlocksFromDom(content.sections) };
+  content.blocks[id] = defaultBlockContentClient(type, id);
+  state.marketingSection = id;
+  state.marketingLoadedContent = content;
+  rerenderMarketingEditor(content);
+  updateMarketingDraftSitePreview();
+}
+
+function duplicateMarketingBlockSection(sectionId) {
+  const pageKey = state.marketingPage || "home";
+  const content = readMarketingFormContent(pageKey);
+  content.sections = readMarketingSectionsFromDom(pageKey === "home");
+  const idx = content.sections.findIndex((s) => s.id === sectionId);
+  if (idx < 0) return;
+  const src = content.sections[idx];
+  if (!isMarketingBlockType(src.type)) return;
+  content.blocks = { ...(content.blocks || {}), ...readMarketingBlocksFromDom(content.sections) };
+  const newId = newMarketingBlockId(src.type);
+  const clone = JSON.parse(JSON.stringify(content.blocks[sectionId] || defaultBlockContentClient(src.type, newId)));
+  clone.id = newId;
+  content.blocks[newId] = clone;
+  content.sections.splice(idx + 1, 0, { type: src.type, id: newId, enabled: true });
+  state.marketingSection = newId;
+  state.marketingLoadedContent = content;
+  rerenderMarketingEditor(content);
+  updateMarketingDraftSitePreview();
+}
+
 function buildMarketingSectionComposerNav(pageSections, activeSection, isHome) {
   const pageRows = pageSections.map((row) => {
     const editorId = row.id || marketingSectionEditorId(row.type);
@@ -2522,23 +2793,34 @@ function buildMarketingSectionComposerNav(pageSections, activeSection, isHome) {
     return `<div class="mkComposerRow${hidden ? " isHidden" : ""}" data-composer-row data-section-type="${escapeHtml(row.type)}" data-section-id="${escapeHtml(editorId)}" data-section-enabled="${hidden ? "0" : "1"}"${isHero ? "" : ' draggable="true"'}>
       <span class="mkComposerDrag" title="${isHero ? "Hero stays at top" : "Drag to reorder"}"${isHero ? ' aria-hidden="true"' : ""}>${isHero ? "" : mkIcon("grip")}</span>
       <button type="button" class="mkSectionNavItem mkComposerPick${activeSection === editorId ? " isActive" : ""}${hidden ? " isMuted" : ""}" data-marketing-section="${escapeHtml(editorId)}">${escapeHtml(row.label)}</button>
-      <button type="button" class="mkComposerToggle mkIconBtn" data-composer-toggle="${escapeHtml(editorId)}" aria-pressed="${hidden ? "false" : "true"}" title="${hidden ? "Show section on page" : "Hide section on page"}"${isHero ? " disabled" : ""}>${hidden ? mkIcon("eyeOff") : mkIcon("eye")}</button>
+      <div class="mkComposerRowActions">
+        ${row.duplicatable ? `<button type="button" class="mkIconBtn mkComposerDuplicate" data-composer-duplicate="${escapeHtml(editorId)}" title="Duplicate section">${mkIcon("duplicate")}</button>` : ""}
+        <button type="button" class="mkComposerToggle mkIconBtn" data-composer-toggle="${escapeHtml(editorId)}" aria-pressed="${hidden ? "false" : "true"}" title="${hidden ? "Show section on page" : "Hide section on page"}"${isHero ? " disabled" : ""}>${hidden ? mkIcon("eyeOff") : mkIcon("eye")}</button>
+      </div>
     </div>`;
   }).join("");
 
-  const addable = pageSections.filter((row) => row.enabled === false);
-  const addMenu = addable.length
-    ? `<div class="mkComposerAdd">
-        <label class="mkComposerAddLabel">
-          <span>Add section</span>
-          <select id="mkAddSectionSelect" class="mkComposerAddSelect">
-            <option value="">Choose…</option>
-            ${addable.map((row) => `<option value="${escapeHtml(row.type)}">${escapeHtml(row.label)}</option>`).join("")}
-          </select>
-        </label>
-        <button type="button" class="btnGhost btnSm" id="btnMkAddSection" disabled>Add</button>
-      </div>`
-    : `<p class="cellMuted mkComposerAddDone">All page sections are visible.</p>`;
+  const hiddenCore = pageSections.filter((row) => !isMarketingBlockType(row.type) && row.enabled === false);
+  const catalogOptions = [
+    ...(isHome ? MARKETING_OPTIONAL_SECTION_TYPES.map((type) => ({
+      value: type,
+      label: MARKETING_SECTION_CATALOG[type].label,
+    })) : []),
+    ...hiddenCore.map((row) => ({
+      value: row.type,
+      label: `Show ${row.label}`,
+    })),
+  ];
+  const addMenu = `<div class="mkComposerAdd">
+      <label class="mkComposerAddLabel">
+        <span>Add section</span>
+        <select id="mkAddSectionSelect" class="mkComposerAddSelect">
+          <option value="">Choose section…</option>
+          ${catalogOptions.map((opt) => `<option value="${escapeHtml(opt.value)}">${escapeHtml(opt.label)}</option>`).join("")}
+        </select>
+      </label>
+      <button type="button" class="btnGhost btnSm" id="btnMkAddSection" disabled>Add</button>
+    </div>`;
 
   const metaNav = MARKETING_EDITOR_META_PANELS
     .filter((panel) => !panel.homeOnly || isHome)
@@ -2763,6 +3045,9 @@ function readMarketingFormContent(pageKey = "home") {
     }
   }
   content.sections = readMarketingSectionsFromDom(pageKey === "home");
+  if (pageKey === "home") {
+    content.blocks = readMarketingBlocksFromDom(content.sections);
+  }
   return content;
 }
 
@@ -3171,12 +3456,18 @@ function buildMarketingEditorSections(ctx) {
 
   const nav = buildMarketingSectionComposerNav(pageSections, activeSection, isHome);
 
+  const blocks = content?.blocks || {};
+  const blockPanels = pageSections
+    .filter((row) => isMarketingBlockType(row.type))
+    .map((row) => buildBlockEditorPanel(row, blocks[row.id], activeSection))
+    .join("");
+
   const allNavItems = marketingSectionsForPage(isHome, content);
   const activeMeta = allNavItems.find((s) => s.id === activeSection) || allNavItems[0];
 
   return {
     nav,
-    panels: heroPanel + featuresPanel + homePanels + tailPanels,
+    panels: heroPanel + featuresPanel + homePanels + blockPanels + tailPanels,
     activeLabel: activeMeta?.label || "Hero",
   };
 }
@@ -4300,9 +4591,19 @@ document.body.addEventListener("click", (e) => {
   if (e.target.id === "btnMkAddSection") {
     const select = document.getElementById("mkAddSectionSelect");
     if (select?.value) {
-      enableComposerSection(select.value);
-      updateMarketingDraftSitePreview();
+      if (MARKETING_OPTIONAL_SECTION_TYPES.includes(select.value)) {
+        addMarketingBlockSection(select.value);
+      } else {
+        enableComposerSection(select.value);
+        updateMarketingDraftSitePreview();
+      }
     }
+    return;
+  }
+
+  const composerDuplicateBtn = e.target.closest("[data-composer-duplicate]");
+  if (composerDuplicateBtn) {
+    duplicateMarketingBlockSection(composerDuplicateBtn.dataset.composerDuplicate);
     return;
   }
 

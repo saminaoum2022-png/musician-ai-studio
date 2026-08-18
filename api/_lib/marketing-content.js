@@ -757,6 +757,15 @@ const SECTION_TYPE_TO_ID = Object.freeze({
   finalCta: "final",
 });
 
+const OPTIONAL_BLOCK_TYPES = Object.freeze([
+  "testimonials",
+  "logoStrip",
+  "mediaBlock",
+  "contentCarousel",
+]);
+
+const BLOCK_TYPES = new Set(OPTIONAL_BLOCK_TYPES);
+
 const SECTION_CATALOG = Object.freeze({
   hero: { label: "Hero", home: true, seo: true },
   features: { label: "Features", home: true, seo: true },
@@ -767,7 +776,207 @@ const SECTION_CATALOG = Object.freeze({
   faq: { label: "FAQ", home: true, seo: true },
   related: { label: "Related pages", home: true, seo: true },
   finalCta: { label: "Final CTA", home: true, seo: true },
+  testimonials: { label: "Testimonials", home: true, seo: false, optional: true, duplicatable: true },
+  logoStrip: { label: "Logo strip", home: true, seo: false, optional: true, duplicatable: true },
+  mediaBlock: { label: "Photo & copy", home: true, seo: false, optional: true, duplicatable: true },
+  contentCarousel: { label: "Image carousel", home: true, seo: false, optional: true, duplicatable: true },
 });
+
+function isBlockSectionType(type) {
+  return BLOCK_TYPES.has(String(type || "").trim());
+}
+
+function defaultBlockContent(type) {
+  const t = String(type || "").trim();
+  if (t === "testimonials") {
+    return {
+      type: t,
+      eyebrow: "Community",
+      title: "What creators are saying",
+      items: [
+        { quote: "I hummed a melody and had a full song in minutes.", name: "Creator name", role: "NabadAi user" },
+        { quote: "Publishing to Discover changed how I share music.", name: "Creator name", role: "Pro member" },
+        { quote: "Arabic lyrics and dabke style just worked.", name: "Creator name", role: "NabadAi user" },
+      ],
+    };
+  }
+  if (t === "logoStrip") {
+    return {
+      type: t,
+      title: "As featured in",
+      logos: [
+        { label: "Partner 1", imageUrl: "", href: "" },
+        { label: "Partner 2", imageUrl: "", href: "" },
+        { label: "Partner 3", imageUrl: "", href: "" },
+      ],
+    };
+  }
+  if (t === "mediaBlock") {
+    return {
+      type: t,
+      eyebrow: "",
+      title: "Section title",
+      body: "Supporting copy for this photo block.",
+      imageUrl: "",
+      imageAlt: "",
+      imagePosition: "right",
+    };
+  }
+  if (t === "contentCarousel") {
+    return {
+      type: t,
+      eyebrow: "",
+      title: "Carousel",
+      lead: "",
+      size: "normal",
+      visibleCount: 3,
+      autoSlide: true,
+      intervalMs: 5000,
+      items: [
+        { title: "Slide 1", body: "", imageUrl: "", href: "" },
+        { title: "Slide 2", body: "", imageUrl: "", href: "" },
+        { title: "Slide 3", body: "", imageUrl: "", href: "" },
+      ],
+    };
+  }
+  return null;
+}
+
+function newBlockSectionId(type) {
+  const base = String(type || "block").replace(/[^a-z0-9]/gi, "").slice(0, 12) || "block";
+  return `${base}-${Date.now().toString(36)}`;
+}
+
+function normalizeTestimonialItems(items, defaults) {
+  const src = Array.isArray(items) ? items : [];
+  const out = [];
+  for (let i = 0; i < Math.max(src.length, defaults.length, 1); i += 1) {
+    if (i >= 6) break;
+    const d = defaults[i] || { quote: "", name: "", role: "" };
+    const it = src[i] || {};
+    const quote = clip(it.quote, 400) || d.quote;
+    const name = clip(it.name, 80) || d.name;
+    const role = clip(it.role, 120) || d.role;
+    if (!quote.trim()) continue;
+    out.push({ quote, name, role });
+  }
+  return out.length ? out : defaults;
+}
+
+function normalizeLogoItems(items, defaults) {
+  const src = Array.isArray(items) ? items : [];
+  const out = [];
+  for (let i = 0; i < Math.max(src.length, defaults.length, 1); i += 1) {
+    if (i >= 12) break;
+    const d = defaults[i] || { label: "", imageUrl: "", href: "" };
+    const it = src[i] || {};
+    out.push({
+      label: clip(it.label, 80) || d.label,
+      imageUrl: sanitizeImageUrl(it.imageUrl, d.imageUrl || ""),
+      href: sanitizeHref(it.href, d.href || ""),
+    });
+  }
+  return out.length ? out : defaults;
+}
+
+function normalizeCarouselItems(items, defaults) {
+  const src = Array.isArray(items) ? items : [];
+  const out = [];
+  for (let i = 0; i < Math.max(src.length, defaults.length, 1); i += 1) {
+    if (i >= 12) break;
+    const d = defaults[i] || { title: "", body: "", imageUrl: "", href: "" };
+    const it = src[i] || {};
+    const title = clip(it.title, 120) || d.title;
+    if (!title.trim() && !sanitizeImageUrl(it.imageUrl, "")) continue;
+    out.push({
+      title,
+      body: clip(it.body, 300) || d.body || "",
+      imageUrl: sanitizeImageUrl(it.imageUrl, d.imageUrl || ""),
+      href: sanitizeHref(it.href, d.href || ""),
+    });
+  }
+  return out.length ? out : defaults;
+}
+
+function normalizeBlockEntry(type, raw, id) {
+  const defaults = defaultBlockContent(type);
+  if (!defaults) return null;
+  const input = raw && typeof raw === "object" ? raw : {};
+  if (type === "testimonials") {
+    return {
+      type,
+      id,
+      eyebrow: clip(input.eyebrow, 80) || defaults.eyebrow,
+      title: clip(input.title, 160) || defaults.title,
+      items: normalizeTestimonialItems(input.items, defaults.items),
+    };
+  }
+  if (type === "logoStrip") {
+    return {
+      type,
+      id,
+      title: clip(input.title, 160) || defaults.title,
+      logos: normalizeLogoItems(input.logos, defaults.logos),
+    };
+  }
+  if (type === "mediaBlock") {
+    const pos = String(input.imagePosition || defaults.imagePosition).toLowerCase();
+    return {
+      type,
+      id,
+      eyebrow: clip(input.eyebrow, 80) || defaults.eyebrow,
+      title: clip(input.title, 160) || defaults.title,
+      body: clip(input.body, 600) || defaults.body,
+      imageUrl: sanitizeImageUrl(input.imageUrl, defaults.imageUrl),
+      imageAlt: clip(input.imageAlt, 200) || defaults.imageAlt,
+      imagePosition: pos === "left" ? "left" : "right",
+    };
+  }
+  if (type === "contentCarousel") {
+    const size = String(input.size || defaults.size).toLowerCase() === "large" ? "large" : "normal";
+    let visibleCount = Number(input.visibleCount);
+    if (!Number.isFinite(visibleCount)) visibleCount = defaults.visibleCount;
+    visibleCount = Math.min(6, Math.max(1, Math.round(visibleCount)));
+    let intervalMs = Number(input.intervalMs);
+    if (!Number.isFinite(intervalMs)) intervalMs = defaults.intervalMs;
+    intervalMs = Math.min(15000, Math.max(2000, Math.round(intervalMs)));
+    return {
+      type,
+      id,
+      eyebrow: clip(input.eyebrow, 80) || defaults.eyebrow,
+      title: clip(input.title, 160) || defaults.title,
+      lead: clip(input.lead, 400) || defaults.lead,
+      size,
+      visibleCount,
+      autoSlide: input.autoSlide !== false,
+      intervalMs,
+      items: normalizeCarouselItems(input.items, defaults.items),
+    };
+  }
+  return null;
+}
+
+function normalizeBlocks(pageKey, sections, rawBlocks) {
+  if (pageKey !== "home") return {};
+  const blocks = {};
+  const input = rawBlocks && typeof rawBlocks === "object" ? rawBlocks : {};
+  const sectionList = Array.isArray(sections) ? sections : [];
+  for (const row of sectionList) {
+    if (!row || !isBlockSectionType(row.type)) continue;
+    const id = clip(String(row.id || ""), 40) || newBlockSectionId(row.type);
+    const raw = input[id] || input[row.id] || {};
+    const normalized = normalizeBlockEntry(row.type, { ...raw, type: row.type }, id);
+    if (normalized) blocks[id] = normalized;
+  }
+  return blocks;
+}
+
+function attachBlocks(content, pageKey, sections, rawBlocks) {
+  return {
+    ...content,
+    blocks: normalizeBlocks(pageKey, sections, rawBlocks ?? content?.blocks),
+  };
+}
 
 function defaultSections(pageKey) {
   const types = pageKey === "home" ? HOME_SECTION_TYPES : SEO_SECTION_TYPES;
@@ -785,18 +994,23 @@ function normalizeSections(pageKey, rawSections) {
     return defaults;
   }
 
-  const allowed = new Set(page === "home" ? HOME_SECTION_TYPES : SEO_SECTION_TYPES);
+  const coreAllowed = new Set(page === "home" ? HOME_SECTION_TYPES : SEO_SECTION_TYPES);
   const defaultByType = Object.fromEntries(defaults.map((s) => [s.type, s]));
   const out = [];
-  const seenTypes = new Set();
+  const seenCoreTypes = new Set();
+  const seenIds = new Set();
 
   for (const row of rawSections) {
     if (!row || typeof row !== "object") continue;
     const type = String(row.type || "").trim();
-    if (!allowed.has(type) || seenTypes.has(type)) continue;
-    seenTypes.add(type);
+    const isBlock = isBlockSectionType(type);
+    if (!coreAllowed.has(type) && !(page === "home" && isBlock)) continue;
+    if (!isBlock && seenCoreTypes.has(type)) continue;
     const def = defaultByType[type];
-    const id = clip(String(row.id || def?.id || type), 40) || def?.id || type;
+    const id = clip(String(row.id || def?.id || newBlockSectionId(type)), 40) || def?.id || type;
+    if (seenIds.has(id)) continue;
+    seenIds.add(id);
+    if (!isBlock) seenCoreTypes.add(type);
     out.push({
       type,
       id,
@@ -805,7 +1019,7 @@ function normalizeSections(pageKey, rawSections) {
   }
 
   for (const def of defaults) {
-    if (!seenTypes.has(def.type)) {
+    if (!seenCoreTypes.has(def.type)) {
       out.push({ ...def, enabled: false });
     }
   }
@@ -819,11 +1033,9 @@ function normalizeSections(pageKey, rawSections) {
   return out.length ? out : defaults;
 }
 
-function attachSections(content, pageKey, rawSections) {
-  return {
-    ...content,
-    sections: normalizeSections(pageKey, rawSections ?? content?.sections),
-  };
+function attachSectionsAndBlocks(content, pageKey, rawSections, rawBlocks) {
+  const sections = normalizeSections(pageKey, rawSections ?? content?.sections);
+  return attachBlocks({ ...content, sections }, pageKey, sections, rawBlocks);
 }
 
 function normalizeContent(pageKey, locale, raw) {
@@ -935,14 +1147,14 @@ function normalizeContent(pageKey, locale, raw) {
         brand: normalizeBrand(input.brand, defaults.brand),
     };
     return {
-      content: attachSections(homeContent, page, input.sections),
+      content: attachSectionsAndBlocks(homeContent, page, input.sections, input.blocks),
     };
   }
 
   if (isSeoPage(page)) {
     const seoContent = normalizeSeoLikeContent(input, defaults);
     return {
-      content: attachSections(seoContent, page, input.sections),
+      content: attachSectionsAndBlocks(seoContent, page, input.sections, input.blocks),
     };
   }
 
@@ -980,6 +1192,11 @@ module.exports = {
   normalizeSections,
   SECTION_CATALOG,
   SECTION_TYPE_TO_ID,
+  OPTIONAL_BLOCK_TYPES,
+  BLOCK_TYPES,
+  defaultBlockContent,
+  newBlockSectionId,
+  isBlockSectionType,
   normalizeContent,
   mergeWithDefaults,
 };

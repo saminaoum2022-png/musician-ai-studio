@@ -216,7 +216,7 @@ import { MUSIC_VIDEO_FEATURE_ENABLED } from "./feature-flags.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260819-022213";
+const APP_BUILD = "20260819-023022";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -30215,6 +30215,25 @@ function markInboxThreadReadLocally(threadId) {
   return changed;
 }
 
+function patchInboxPartnerLastReadAt(threadId, lastReadAt) {
+  const tid = String(threadId || "").trim();
+  const next = String(lastReadAt || "").trim();
+  if (!tid || !next) return false;
+  let changed = false;
+  _messagesInboxState.threads = (_messagesInboxState.threads || []).map((t) => {
+    if (String(t?.threadId || "") !== tid) return t;
+    if (String(t?.partnerLastReadAt || "") === next) return t;
+    changed = true;
+    return { ...t, partnerLastReadAt: next };
+  });
+  if (changed) {
+    saveMessagesInboxToStorage();
+    const route = String(document.body.getAttribute("data-route") || "");
+    if (route === "messages" || route === "friends") renderMessagesInbox();
+  }
+  return changed;
+}
+
 function rememberInboxMessageId(messageId) {
   const id = String(messageId || "").trim();
   if (!id || id.startsWith("pending:")) return false;
@@ -30279,6 +30298,7 @@ function patchInboxThreadRow({
     ...prev,
     lastMessage: preview,
     lastMessageAt: at,
+    lastMessageSenderId: senderId ? String(senderId) : String(prev.lastMessageSenderId || ""),
     unread,
     unreadCount,
   };
@@ -32357,6 +32377,22 @@ function messagesInboxSkeletonHtml() {
     </div>`).join("");
 }
 
+function resolveInboxLastOutboundStatus(thread) {
+  const myId = String(authSession?.user?.id || "");
+  const lastSender = String(thread?.lastMessageSenderId || "").trim();
+  if (!lastSender || lastSender !== myId) return null;
+  const createdAt = thread?.lastMessageAt ? new Date(thread.lastMessageAt).getTime() : 0;
+  const partnerRead = thread?.partnerLastReadAt ? new Date(thread.partnerLastReadAt).getTime() : 0;
+  if (partnerRead && createdAt && createdAt <= partnerRead) return "read";
+  return "delivered";
+}
+
+function messagesInboxPreviewStatusHtml(status) {
+  if (status !== "read" && status !== "delivered") return "";
+  const label = status === "read" ? "Read" : "Delivered";
+  return `<span class="messagesRowPreviewTick messagesRowPreviewTick--${status}" aria-label="${label}">${messagesBbmTickHtml(status)}</span>`;
+}
+
 function messagesInboxThreadRowHtml(t) {
   const handle = String(t?.partnerUsername || "").trim();
   const threadId = String(t?.threadId || "").trim();
@@ -32364,6 +32400,9 @@ function messagesInboxThreadRowHtml(t) {
   const when = t?.lastMessageAt ? relativeTime(new Date(t.lastMessageAt).getTime()) : "";
   const unreadN = Math.max(0, Number(t?.unreadCount) || (t?.unread ? 1 : 0));
   const unread = unreadN > 0;
+  const previewText = preview || "No messages yet";
+  const statusTick = messagesInboxPreviewStatusHtml(resolveInboxLastOutboundStatus(t));
+  const previewHtml = `<span class="messagesRowPreviewLine">${statusTick}${userTextHtml(previewText, { tag: "span", className: "messagesRowPreview", escapeHtml })}</span>`;
   return `
     <button type="button" class="messagesRow${unread ? " is-unread" : ""}" data-messages-thread="${escapeHtml(threadId)}">
       ${messagesAvatarHtml(t?.partnerAvatar, handle)}
@@ -32372,7 +32411,7 @@ function messagesInboxThreadRowHtml(t) {
           <strong class="messagesRowHandle">${escapeHtml(handle ? `@${handle.replace(/^@/, "")}` : "creator")}</strong>
           ${when ? `<span class="messagesRowWhen">${escapeHtml(when)}</span>` : ""}
         </span>
-        ${userTextHtml(preview || "No messages yet", { tag: "span", className: "messagesRowPreview", escapeHtml })}
+        ${previewHtml}
       </span>
       ${unread ? `<span class="messagesRowUnread" aria-label="${unreadN} unread">${unreadN > 99 ? "99+" : String(unreadN)}</span>` : ""}
     </button>`;
@@ -32673,6 +32712,7 @@ function applyPartnerLastReadAt(lastReadAt) {
   _messagesPartnerLastReadAt = next;
   const tid = String(_conversationId || "").trim();
   if (tid) {
+    patchInboxPartnerLastReadAt(tid, next);
     const cached = getThreadMessagesCache(tid);
     if (cached?.loadedOnce) {
       saveThreadMessagesCache(tid, {

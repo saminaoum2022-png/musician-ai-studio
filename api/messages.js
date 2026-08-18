@@ -124,6 +124,30 @@ async function readsForUserThreads(userId, threadIds) {
   return map;
 }
 
+async function partnerReadsForThreads(viewerId, threadRows) {
+  const uid = cleanUserId(viewerId);
+  const map = new Map();
+  if (!uid || !threadRows.length) return map;
+  const threadIds = threadRows.map((t) => String(t.id || "")).filter(Boolean);
+  for (const chunk of chunkIds(threadIds)) {
+    const inClause = chunk.map(encodeURIComponent).join(",");
+    const r = await svcFetch(
+      `dm_thread_reads?select=thread_id,user_id,last_read_at&thread_id=in.(${inClause})`,
+    );
+    for (const row of Array.isArray(r.data) ? r.data : []) {
+      const tid = String(row.thread_id || "");
+      if (!tid || map.has(tid)) continue;
+      const thread = threadRows.find((t) => String(t.id || "") === tid);
+      if (!thread) continue;
+      const partnerId = threadPartnerId(thread, uid);
+      if (partnerId && String(row.user_id || "") === String(partnerId)) {
+        map.set(tid, row.last_read_at);
+      }
+    }
+  }
+  return map;
+}
+
 async function lastMessagesForThreads(threadIds) {
   const map = new Map();
   const tids = [...new Set((threadIds || []).map((id) => String(id || "").trim()).filter(Boolean))];
@@ -184,10 +208,11 @@ async function enrichInboxThreads(threadRows, viewerId) {
   if (!uid || !threadRows.length) return [];
   const threadIds = threadRows.map((t) => String(t.id || "")).filter(Boolean);
   const partnerIds = threadRows.map((t) => threadPartnerId(t, uid)).filter(Boolean);
-  const [profileMap, readMap, lastMsgMap] = await Promise.all([
+  const [profileMap, readMap, lastMsgMap, partnerReadMap] = await Promise.all([
     profilesByUserIds(partnerIds),
     readsForUserThreads(uid, threadIds),
     lastMessagesForThreads(threadIds),
+    partnerReadsForThreads(uid, threadRows),
   ]);
   const unreadCandidates = [];
   for (const thread of threadRows) {
@@ -217,6 +242,8 @@ async function enrichInboxThreads(threadRows, viewerId) {
       partnerAvatar: prof?.avatar || "",
       lastMessage: last?.body || "",
       lastMessageAt: last?.created_at || thread.last_message_at,
+      lastMessageSenderId: last?.sender_id ? String(last.sender_id) : "",
+      partnerLastReadAt: partnerReadMap.get(tid) || null,
       unread: Boolean(hasUnread),
       unreadCount,
     };

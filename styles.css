@@ -34512,6 +34512,42 @@ body[data-route="messages"]{
   overflow: hidden;
   text-overflow: ellipsis;
 }
+.messagesRowPreviewLine{
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+.messagesRowPreviewLine .messagesRowPreview{
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.messagesRowPreviewTick{
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  color: rgba(223,231,251,0.46);
+}
+.messagesRowPreviewTick--delivered{
+  color: rgba(223,231,251,0.62);
+}
+.messagesRowPreviewTick--read{
+  color: rgba(223,231,251,0.46);
+}
+.messagesRowPreviewTick .msgBbmTick{
+  width: 14px;
+  height: 14px;
+}
+.messagesRowPreviewTick .msgBbmTickSvg{
+  width: 14px;
+  height: 14px;
+}
+.messagesRow.is-unread .messagesRowPreviewTick{
+  color: rgba(223,231,251,0.56);
+}
+.messagesRow.is-unread .messagesRowPreviewTick--delivered{
+  color: rgba(223,231,251,0.72);
+}
 .messagesRowUnread{
   flex: 0 0 auto;
   min-width: 20px;
@@ -52553,6 +52589,15 @@ html[data-theme="light"] .messagesRowPreview{
   color: var(--text-secondary);
 }
 html[data-theme="light"] .messagesRow.is-unread .messagesRowPreview{
+  color: var(--text-primary);
+}
+html[data-theme="light"] .messagesRowPreviewTick{
+  color: var(--text-secondary);
+}
+html[data-theme="light"] .messagesRowPreviewTick--delivered{
+  color: var(--text-primary);
+}
+html[data-theme="light"] .messagesRow.is-unread .messagesRowPreviewTick--delivered{
   color: var(--text-primary);
 }
 html[data-theme="light"] .messagesRowAvatar,

@@ -216,7 +216,7 @@ import { MUSIC_VIDEO_FEATURE_ENABLED } from "./feature-flags.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260818-192651";
+const APP_BUILD = "20260818-211319";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -3350,6 +3350,62 @@ function leaveRouteForTabSwitch(prevRoute, nextRoute) {
   if (prev && prev !== next) captureRouteScroll(prev);
 }
 
+function restoreProfileSongsSegmentFromStorage() {
+  try {
+    const hashQs = String(String(location.hash || "").split("?")[1] || "");
+    const pq = new URLSearchParams(hashQs);
+    const segQ = pq.get("seg");
+    if (segQ === "all" || segQ === "activities" || segQ === "playlist" || segQ === "public" || segQ === "vocals" || segQ === "reposts") {
+      _profileSongsSegment = segQ === "public" ? "activities" : segQ;
+      sessionStorage.setItem(PROFILE_SONGS_SEGMENT_KEY, _profileSongsSegment);
+      return;
+    }
+    const stored = sessionStorage.getItem(PROFILE_SONGS_SEGMENT_KEY);
+    _profileSongsSegment =
+      stored === "public"
+        ? "activities"
+        : stored === "all" || stored === "activities" || stored === "playlist" || stored === "vocals" || stored === "reposts"
+          ? stored
+          : _profileSongsSegment || "activities";
+  } catch {
+    _profileSongsSegment = _profileSongsSegment || "activities";
+  }
+}
+
+/** Profile tab-bar entry — bind segment UI + play handlers (skipped when lightweight tabs bypass applyRoute). */
+function enterProfileRouteHooks({ skipHeavy = false } = {}) {
+  try { syncOwnProfileSocialStatsUi(); } catch {}
+  restoreProfileSongsSegmentFromStorage();
+  bindProfileSongsSegmentOnce();
+  bindUserPlaylistPickerOnce();
+  syncProfileSongsSegmentUi();
+  try { syncMobileTabbarProfileAvatar(); } catch {}
+  try { setProfileEditing(false); } catch {}
+  scheduleProfileSongsRender();
+  if (skipHeavy || shouldSkipRouteHeavy("profile")) {
+    try { setProfileHeaderLoading(false); } catch {}
+    try { renderProfilePreviewFromInputs(); } catch {}
+    restoreRouteScroll("profile");
+    return;
+  }
+  markRouteHeavy("profile");
+  try { collapseProfilePersonaCard(); } catch {}
+  markLibraryTabDot(false);
+  void refreshMyCredits({ silent: true });
+  void refreshMyHubPostsFast();
+  void (async () => {
+    if (isNativeShell()) await ensureNativeApiBaseResolved();
+    await refreshOwnProfileSocialStats();
+  })();
+  if (authSession?.user?.id) {
+    deferRouteIdle(() => {
+      void mergeCloudSongsIntoLocalLibrary({ reason: "tabRoute:profile-idle" }).then((publicChanged) => {
+        if (publicChanged) try { refreshOwnSongsUi({ soft: false }); } catch {}
+      });
+    }, 0);
+  }
+}
+
 /** Bottom-tab switches: panel is already visible — run route hooks only, never full applyRoute. */
 function finishTabRouteEnter(route, prevRoute) {
   const wanted = String(route || "").trim();
@@ -3384,10 +3440,7 @@ function finishTabRouteEnter(route, prevRoute) {
     renderHomeDesk();
     void loadAppTourModule().then((m) => m.scheduleHomeTourIfNeeded());
   } else if (wanted === "profile") {
-    deferRouteIdle(() => {
-      void refreshMyCredits({ silent: true });
-      scheduleProfileSongsRender();
-    });
+    enterProfileRouteHooks({ skipHeavy: shouldSkipRouteHeavy("profile") });
   }
 
   deferRouteIdle(() => {

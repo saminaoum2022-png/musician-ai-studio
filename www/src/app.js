@@ -3328,10 +3328,14 @@ function exitAltCreateFlowToHub() {
 
 function flushTabRouteNavigation(route, targetHash) {
   const prev = tabBarRouteKey(document.body.getAttribute("data-route") || "");
-  bumpApplyRouteGeneration();
+  const gen = bumpApplyRouteGeneration();
+  _tabNavExplicit = { route, gen };
   if (prev !== route) invalidateInFlightRouteFeedWork(prev);
   if (prev === "generate" && route !== "generate") {
     leaveGenerateRouteCleanup();
+  }
+  if (route === "discover") {
+    try { document.body.classList.remove("discoverReelInShell"); } catch {}
   }
   _tabNavFromClick = true;
   if (location.hash !== targetHash) {
@@ -3342,12 +3346,6 @@ function flushTabRouteNavigation(route, targetHash) {
     }
   }
   syncRoutePanelVisibility(route);
-  try {
-    _tabNavEnterAnimated = true;
-    animateRouteEnter(route, navDirectionFor(route));
-  } catch {
-    _tabNavEnterAnimated = false;
-  }
   if (_applyRouteRaf) {
     cancelAnimationFrame(_applyRouteRaf);
     _applyRouteRaf = 0;
@@ -3908,8 +3906,27 @@ let _applyRouteQueued = false;
 let _applyRouteAfterLoginSettle = false;
 let _applyRouteGen = 0;
 let _tabNavFromClick = false;
-/** Tab fast-path already ran enter animation — skip duplicate in applyRoute. */
-let _tabNavEnterAnimated = false;
+/** Tab click target — applyRoute uses this so a slow in-flight pass cannot revert the panel. */
+let _tabNavExplicit = null;
+
+function takeTabNavExplicitRoute(gate) {
+  const hit = _tabNavExplicit;
+  if (!hit || hit.gen !== gate) return "";
+  _tabNavExplicit = null;
+  return String(hit.route || "").trim();
+}
+
+function deferRouteIdle(fn, timeoutMs = 120) {
+  if (typeof requestIdleCallback === "function") {
+    requestIdleCallback(() => {
+      try { fn(); } catch (e) { console.warn("[route/defer]", e); }
+    }, { timeout: timeoutMs });
+  } else {
+    window.setTimeout(() => {
+      try { fn(); } catch (e) { console.warn("[route/defer]", e); }
+    }, 0);
+  }
+}
 
 function bumpApplyRouteGeneration() {
   _applyRouteGen += 1;
@@ -4088,11 +4105,12 @@ function scheduleApplyRoute() {
 async function runApplyRouteOnce() {
   if (_applyRouteInFlight) return;
   const passGen = _applyRouteGen;
+  const tabNavPending = Boolean(_tabNavExplicit && _tabNavExplicit.gen === passGen);
   _applyRouteInFlight = true;
   try {
     loadAuthSession();
     ensureAuthSessionUserFromToken();
-    if (!_authBootDone) {
+    if (!_authBootDone && !tabNavPending) {
       const hasToken = Boolean(getSupabaseAuthToken() || authSession?.access_token);
       if (hasToken) {
         void ensureAuthBoot({ fast: true });
@@ -4113,13 +4131,17 @@ async function runApplyRouteOnce() {
     _applyRouteInFlight = false;
     if (_applyRouteQueued) {
       _applyRouteQueued = false;
-      scheduleApplyRoute();
+      if (_tabNavExplicit) void runApplyRouteOnce();
+      else scheduleApplyRoute();
     }
   }
 }
 
 function applyRoute({ passGen } = {}) {
   const gate = passGen ?? _applyRouteGen;
+  if (routeApplyStale(gate)) return;
+  const tabForcedRoute = takeTabNavExplicitRoute(gate);
+  const isTabSwitch = Boolean(tabForcedRoute);
   const hash = String(location.hash || "");
   const rawRoute = hash.startsWith("#/") ? hash.slice(2) : resolveEmptyHashRoute();
   let route = rawRoute.split(/[?#&]/)[0].trim();
@@ -4196,7 +4218,9 @@ function applyRoute({ passGen } = {}) {
   const onboardingParsed = parseOnboardingRoute(route);
   let normalized = pendingPublicUsername ? "user" : (route === "start" ? "auth" : route);
   if (onboardingParsed) normalized = "onboarding";
-  if (normalized === "discover") {
+  if (tabForcedRoute) {
+    normalized = tabForcedRoute;
+  } else if (normalized === "discover") {
     try {
       if (sessionStorage.getItem(DISCOVERY_SEGMENT_KEY) === "following") {
         history.replaceState(null, "", "#/friends");
@@ -4408,14 +4432,14 @@ function applyRoute({ passGen } = {}) {
   const navDir = navDirectionFor(wanted);
   const skipEnterAnim =
     _skipGenerateRouteEnter ||
-    _tabNavEnterAnimated ||
+    navDir === "tab" ||
+    isTabSwitch ||
     (prevRoute === "challenges" && wanted === "generate" && Boolean(getCreateFlow()));
   syncRoutePanelVisibility(wanted);
   if (wanted === "discover") {
-    kickDiscoverFeedRoute();
+    kickDiscoverFeedRoute({ deferFetch: isTabSwitch });
   }
   animateRouteEnter(wanted, skipEnterAnim ? "none" : navDir);
-  if (_tabNavEnterAnimated) _tabNavEnterAnimated = false;
   if (_skipGenerateRouteEnter) _skipGenerateRouteEnter = false;
   if (wanted === "auth" && prevRoute !== "auth") {
     try { resetAuthEmailPanel(); } catch {}
@@ -4453,12 +4477,23 @@ function applyRoute({ passGen } = {}) {
   } catch {}
   if (isLoggedIn) {
     wireNotificationsLiveRefreshOnce();
-    void refreshNotificationsUnreadBadge({ force: wanted === "friends" || wanted === "settings" || wanted === "activity" });
-    if (MESSAGES_FEATURE_ENABLED) {
-      if (wanted === "friends" || wanted === "discover" || wanted === "activity") {
-        prefetchMessagesInboxQuiet();
+    const deferSocialHead = isTabSwitch;
+    if (deferSocialHead) {
+      deferRouteIdle(() => {
+        void refreshNotificationsUnreadBadge({ force: wanted === "friends" || wanted === "settings" || wanted === "activity" });
+        if (MESSAGES_FEATURE_ENABLED) {
+          prefetchMessagesInboxQuiet();
+          void refreshMessagesUnreadBadge({ force: wanted === "friends" || wanted === "messages" || wanted === "messages-thread" });
+        }
+      });
+    } else {
+      void refreshNotificationsUnreadBadge({ force: wanted === "friends" || wanted === "settings" || wanted === "activity" });
+      if (MESSAGES_FEATURE_ENABLED) {
+        if (wanted === "friends" || wanted === "discover" || wanted === "activity") {
+          prefetchMessagesInboxQuiet();
+        }
+        void refreshMessagesUnreadBadge({ force: wanted === "friends" || wanted === "messages" || wanted === "messages-thread" });
       }
-      void refreshMessagesUnreadBadge({ force: wanted === "friends" || wanted === "messages" || wanted === "messages-thread" });
     }
   } else {
     updateNotificationsEntryBadges(0);
@@ -4681,9 +4716,11 @@ function applyRoute({ passGen } = {}) {
     syncFollowingComposeUi();
     hydrateFriendsFeedSnapshotFromStorage();
     if (MESSAGES_FEATURE_ENABLED) syncFriendsMessagesBtn();
+    if (isTabSwitch) paintFriendsFeedSnapshotIfFresh();
     if (!shouldSkipRouteHeavy("friends")) {
       markRouteHeavy("friends");
-      enterFriendsRoute();
+      if (isTabSwitch) deferRouteIdle(() => enterFriendsRoute());
+      else enterFriendsRoute();
     } else {
       paintFriendsFeedSnapshotIfFresh();
       restoreRouteScroll("friends");
@@ -8354,7 +8391,7 @@ function bindDiscoverWeeklyChartSectionOnce() {
 /** Paint + fetch Discover feed as soon as the route panel is visible — must
  *  not wait until the end of applyRoute (a superseded pass would leave the
  *  mount blank while tabs/header already show). */
-function kickDiscoverFeedRoute() {
+function kickDiscoverFeedRoute({ deferFetch = false } = {}) {
   bindDiscoveryDiscoverControls();
   bindDiscoverPlaylistScreenOnce();
   bindDiscoverWeeklyChartSectionOnce();
@@ -8371,7 +8408,8 @@ function kickDiscoverFeedRoute() {
   }
   if (discoverMountEmpty) paintDiscoverTopSectionsLoading();
   markRouteHeavy("discover");
-  void refreshDiscoverFeed();
+  if (deferFetch) deferRouteIdle(() => void refreshDiscoverFeed());
+  else void refreshDiscoverFeed();
 }
 
 function paintDiscoverWeeklyChartLoading(wrap) {

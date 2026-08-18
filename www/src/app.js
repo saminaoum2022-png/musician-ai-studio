@@ -216,7 +216,7 @@ import { MUSIC_VIDEO_FEATURE_ENABLED } from "./feature-flags.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260819-020928";
+const APP_BUILD = "20260819-022213";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -30667,7 +30667,7 @@ function mergeThreadMessages(incoming, { scrollToBottom = true } = {}) {
       list[optIdx] = {
         ...m,
         client_message_id: list[optIdx].client_message_id || m.client_message_id || "",
-        sendStatus: "sent",
+        sendStatus: "delivered",
       };
       changed = true;
       continue;
@@ -30886,6 +30886,7 @@ function catchUpOpenMessagesThread({ reason = "foreground" } = {}) {
   if (isDmPostgresRealtimeEnabled()) void refreshDmThreadRealtimeSubscribe(tid);
   void pollNewThreadMessages(tid, { bootToken: _messagesThreadBootToken, reason });
   void pollPartnerThreadRead(tid, { bootToken: _messagesThreadBootToken });
+  void pollOutboundDeliveryState(tid, { bootToken: _messagesThreadBootToken });
 }
 
 function addOptimisticThreadMessage(msg) {
@@ -30902,7 +30903,7 @@ function confirmOptimisticThreadMessage(clientMessageId, serverMsg) {
   const next = {
     ...serverMsg,
     client_message_id: cid || String(serverMsg?.client_message_id || ""),
-    sendStatus: "sent",
+    sendStatus: "delivered",
   };
   if (idx >= 0) {
     const list = [..._messagesList];
@@ -32525,13 +32526,22 @@ function renderMessagesInbox() {
   if (statusEl) statusEl.hidden = true;
 }
 
+function isOutboundMessageConfirmed(msg) {
+  const id = String(msg?.id || "").trim();
+  return Boolean(id && !isPendingThreadMessageId(id));
+}
+
 function resolveOutboundMessageStatus(msg) {
   const explicit = String(msg?.sendStatus || "").trim();
   if (explicit === "sending" || explicit === "failed") return explicit;
   const createdAt = msg?.created_at ? new Date(msg.created_at).getTime() : 0;
   const partnerRead = _messagesPartnerLastReadAt ? new Date(_messagesPartnerLastReadAt).getTime() : 0;
-  if (partnerRead && createdAt && createdAt <= partnerRead) return "read";
-  if (explicit === "read") return "read";
+  const readByPartner = Boolean(partnerRead && createdAt && createdAt <= partnerRead)
+    || explicit === "read";
+  if (readByPartner) return "read";
+  // BBM-style: once the server has the message and the partner has not read it yet,
+  // show ✓D (not a lone ✓). Lone ✓ is only while the optimistic send is in flight.
+  if (isOutboundMessageConfirmed(msg)) return "delivered";
   if (String(msg?.delivered_at || "").trim()) return "delivered";
   if (explicit === "delivered") return "delivered";
   if (partnerRepliedAfterOutboundMessage(msg)) return "delivered";

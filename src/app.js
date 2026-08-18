@@ -33094,6 +33094,7 @@ function enterMessagesThreadRoute(threadId, targetUserId = "") {
       syncMessagesComposerInputHeight(input);
     }
   }
+  syncMessagesComposerForThread();
   rememberMessagesViewportBaseBottom({ force: true });
   wireMessagesThreadKeyboardOnce();
   wireMessagesNativeKeyboardOnce();
@@ -33151,6 +33152,8 @@ function enterMessagesThreadRoute(threadId, targetUserId = "") {
 const COACH_THREAD_ID = "nabad-coach";
 const COACH_SENDER_ID = "nabad-coach";
 const COACH_CHAT_MAX = 60;
+const COACH_MESSAGE_MAX = 2000;
+const DM_MESSAGE_MAX = 500;
 const COACH_TYPING_ID = "coach:typing";
 // Nabad Coach mark — a glassy gradient orb inside a dual ring (teal orbit arcs
 // over a navy ring), designed to complement the "n" logo. Rendered as SVG so it
@@ -33200,11 +33203,19 @@ function coachAvatarHtml(cls = "messagesRowAvatar") {
 function coachHistoryForApi(messages) {
   return (Array.isArray(messages) ? messages : [])
     .filter((m) => m && !m.coachTyping && m.id !== "coach:welcome" && String(m.body || "").trim())
-    .slice(-12)
+    .slice(-16)
     .map((m) => ({
       role: String(m.sender_id) === COACH_SENDER_ID ? "assistant" : "user",
       text: String(m.body || ""),
     }));
+}
+
+function syncMessagesComposerForThread() {
+  const input = document.getElementById("messagesComposerInput");
+  if (!input) return;
+  const coach = isCoachThreadId(_conversationId);
+  input.maxLength = coach ? COACH_MESSAGE_MAX : DM_MESSAGE_MAX;
+  input.placeholder = coach ? "Ask NabadAi Coach…" : "Write a message…";
 }
 
 function renderCoachChatHeader() {
@@ -33258,6 +33269,7 @@ function enterCoachThread(bootToken) {
   _chatPresenceSig = "";
   const input = document.getElementById("messagesComposerInput");
   if (input) input.value = "";
+  syncMessagesComposerForThread();
   rememberMessagesViewportBaseBottom({ force: true });
   wireMessagesThreadKeyboardOnce();
   wireMessagesNativeKeyboardOnce();
@@ -33276,7 +33288,10 @@ function enterCoachThread(bootToken) {
 }
 
 async function sendCoachMessage(text, input) {
-  if (_coachReplyInFlight) return;
+  if (_coachReplyInFlight) {
+    try { showToast("Coach is still replying — one moment…", { icon: "🎧", durationMs: 2200 }); } catch {}
+    return;
+  }
   const prior = Array.isArray(_messagesList) ? _messagesList.filter((m) => !m.coachTyping) : [];
   const history = coachHistoryForApi(prior);
   const now = Date.now();
@@ -33306,18 +33321,29 @@ async function sendCoachMessage(text, input) {
 
   let replyText = "";
   let errorText = "";
-  try {
+  const fetchCoachReply = async () => {
     const payload = augmentCoachApiPayload({ message: text, history });
-    const data = await messagesApi("/api/coach", {
+    return messagesApi("/api/coach", {
       method: "POST",
-      timeoutMs: 22000,
+      timeoutMs: 38000,
       body: JSON.stringify(payload),
     });
-    replyText = String(data?.reply || "").trim();
+  };
+  try {
+    let data = await fetchCoachReply();
+    if (!data?.ok) {
+      await new Promise((r) => window.setTimeout(r, 900));
+      data = await fetchCoachReply();
+    }
+    if (!data?.ok) {
+      errorText = String(data?.error || "I'm having trouble right now. Please try again in a moment.");
+    } else {
+      replyText = String(data?.reply || "").trim();
+    }
   } catch (e) {
     errorText = e?.status === 429
-      ? String(e?.message || "You've reached the Coach limit for now. Please try again later.")
-      : "I'm having trouble right now. Please try again in a moment.";
+      ? String(e?.message || "You've reached the Coach limit for now. NabadAi Pro includes unlimited Coach messages — or try again in a bit.")
+      : String(e?.message || "I'm having trouble right now. Please try again in a moment.");
   } finally {
     _coachReplyInFlight = false;
     const base = (Array.isArray(_messagesList) ? _messagesList : []).filter((m) => m.id !== COACH_TYPING_ID);

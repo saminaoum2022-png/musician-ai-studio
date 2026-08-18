@@ -1,7 +1,7 @@
 /**
  * POST /api/coach
- * Body: { message: string, history?: [{ role: "user"|"assistant", text: string }] }
- * Returns: { ok: true, reply: string }
+ * Body: { message: string, history?: [...], contextAppendix?: string }
+ * Returns: { ok: true, reply: string, truncated?: boolean }
  *
  * Nabad Coach — an in-app guide assistant. PRIVACY BY DESIGN:
  * - The model (Gemini) is stateless and has NO database access.
@@ -16,23 +16,26 @@
 
 const { verifyUser, sendJson, setCors, readJsonBody } = require("./_lib/credits-auth");
 const { COACH_SYSTEM_PROMPT } = require("./_lib/coach-knowledge");
+const { fetchProSubscriptionForUser } = require("./_lib/pro-subscription");
 const { queueLogProviderUsage } = require("./_lib/provider-usage-log");
 
 const MAX_MESSAGE_CHARS = 2500;
-const MAX_HISTORY_TURNS = 8;
-const MAX_HISTORY_CHARS = 1200;
+const MAX_HISTORY_TURNS = 12;
+const MAX_HISTORY_CHARS = 2000;
+const MAX_CONTEXT_APPENDIX_CHARS = 14000;
 
 // Best-effort per-user rate limit. Serverless instances are not shared, so this
 // caps abuse within a warm instance; combined with auth + input caps it keeps
 // Gemini cost bounded. Harden with a DB counter later if needed.
 const RATE_WINDOW_MS = 60 * 60 * 1000; // 1 hour
-const RATE_MAX = 30;
+const RATE_MAX_FREE = 50;
 const _rate = new Map(); // userId -> number[] (timestamps)
 
-function rateLimited(userId) {
+function rateLimited(userId, { proActive = false } = {}) {
+  if (proActive) return false;
   const now = Date.now();
   const arr = (_rate.get(userId) || []).filter((t) => now - t < RATE_WINDOW_MS);
-  if (arr.length >= RATE_MAX) {
+  if (arr.length >= RATE_MAX_FREE) {
     _rate.set(userId, arr);
     return true;
   }
@@ -87,36 +90,95 @@ async function listGeminiGenerateModels(geminiKey) {
   }
 }
 
-async function askGemini({ geminiKey, history, message }) {
+function cleanContextAppendix(v) {
+  return redactSensitive(String(v || "").trim().slice(0, MAX_CONTEXT_APPENDIX_CHARS)).trim();
+}
+
+function buildCoachSystemPrompt(contextAppendix) {
+  const extra = String(contextAppendix || "").trim();
+  if (!extra) return COACH_SYSTEM_PROMPT;
+  return `${COACH_SYSTEM_PROMPT}
+
+LIVE PRODUCT UPDATES (prefer over older guide text if they conflict — do not paste verbatim):
+${extra}`.trim();
+}
+
+async function generateGeminiOnce({ geminiKey, model, systemPrompt, contents }) {
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(geminiKey)}`;
+  const r = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      systemInstruction: { role: "system", parts: [{ text: systemPrompt }] },
+      contents,
+      generationConfig: { temperature: 0.45, maxOutputTokens: 2048 },
+    }),
+  });
+  const text = await r.text().catch(() => "");
+  const data = safeJson(text) || {};
+  if (!r.ok) {
+    return { ok: false, error: data?.error?.message || text || `HTTP ${r.status}` };
+  }
+  const candidate = data?.candidates?.[0] || null;
+  const finishReason = String(candidate?.finishReason || "").trim();
+  const out = extractGeminiText(data).trim();
+  if (!out) {
+    if (finishReason === "SAFETY" || finishReason === "RECITATION") {
+      return { ok: false, error: "blocked", blocked: true };
+    }
+    return { ok: false, error: "empty response" };
+  }
+  return { ok: true, reply: out, model, finishReason };
+}
+
+async function askGemini({ geminiKey, history, message, systemPrompt }) {
   const discovered = await listGeminiGenerateModels(geminiKey);
   const preferred = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-2.0-flash-lite", "gemini-1.5-flash"];
   const models = [...preferred, ...discovered].filter(Boolean).filter((v, i, a) => a.indexOf(v) === i);
-  const contents = [
+  const baseContents = [
     ...history.map((h) => ({ role: h.role, parts: [{ text: h.text }] })),
     { role: "user", parts: [{ text: message }] },
   ];
   let lastError = discovered.length ? "unknown" : "no generateContent models discovered";
   for (const model of models) {
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(geminiKey)}`;
     try {
-      const r = await fetch(url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          systemInstruction: { role: "system", parts: [{ text: COACH_SYSTEM_PROMPT }] },
-          contents,
-          generationConfig: { temperature: 0.4, maxOutputTokens: 900 },
-        }),
+      let result = await generateGeminiOnce({
+        geminiKey,
+        model,
+        systemPrompt,
+        contents: baseContents,
       });
-      const text = await r.text().catch(() => "");
-      const data = safeJson(text) || {};
-      if (!r.ok) {
-        lastError = data?.error?.message || text || `HTTP ${r.status}`;
+      if (!result.ok) {
+        lastError = result.error || lastError;
         continue;
       }
-      const out = extractGeminiText(data).trim();
-      if (out) return { ok: true, reply: out, model };
-      lastError = "empty response";
+      if (result.finishReason === "MAX_TOKENS") {
+        const contContents = [
+          ...baseContents,
+          { role: "model", parts: [{ text: result.reply }] },
+          {
+            role: "user",
+            parts: [{
+              text: "Continue your previous reply from exactly where you stopped. Do not repeat what you already said — pick up mid-sentence if needed and finish the answer.",
+            }],
+          },
+        ];
+        const cont = await generateGeminiOnce({ geminiKey, model, systemPrompt, contents: contContents });
+        if (cont.ok && cont.reply) {
+          result = {
+            ...result,
+            reply: `${result.reply}${cont.reply}`,
+            continued: true,
+            finishReason: cont.finishReason,
+          };
+        }
+      }
+      const truncated = result.finishReason === "MAX_TOKENS";
+      let reply = result.reply;
+      if (truncated) {
+        reply += "\n\n*(I had to stop there — ask me to continue if you need the rest.)*";
+      }
+      return { ok: true, reply, model: result.model, truncated };
     } catch (e) {
       lastError = String(e?.message || e);
     }
@@ -148,19 +210,31 @@ module.exports = async function handler(req, res) {
   const geminiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || "";
   if (!geminiKey) return sendJson(res, 503, { ok: false, error: "Coach is unavailable right now." });
 
-  if (rateLimited(user.userId)) {
-    return sendJson(res, 429, { ok: false, error: "You've reached the Coach limit for now. Please try again later." });
+  const pro = await fetchProSubscriptionForUser(user.userId);
+  if (rateLimited(user.userId, { proActive: Boolean(pro?.active) })) {
+    return sendJson(res, 429, {
+      ok: false,
+      error: "You've reached the Coach limit for now. NabadAi Pro includes unlimited Coach messages — or try again in a bit.",
+    });
   }
 
   const body = await readJsonBody(req);
   const message = cleanMessage(body?.message);
   if (!message) return sendJson(res, 400, { ok: false, error: "Message required" });
   const history = normalizeHistory(body?.history);
+  const contextAppendix = cleanContextAppendix(body?.contextAppendix);
+  const systemPrompt = buildCoachSystemPrompt(contextAppendix);
 
-  const result = await askGemini({ geminiKey, history, message });
+  const result = await askGemini({ geminiKey, history, message, systemPrompt });
   if (!result.ok) {
-    return sendJson(res, 502, { ok: false, error: "Coach couldn't respond. Please try again." });
+    const blocked = Boolean(result.blocked);
+    return sendJson(res, 502, {
+      ok: false,
+      error: blocked
+        ? "I can't help with that message. Try rephrasing or ask about using NabadAi or your lyrics."
+        : "Coach couldn't respond. Please try again.",
+    });
   }
   queueLogProviderUsage({ provider: "gemini", kind: "coach", userId: user.userId });
-  return sendJson(res, 200, { ok: true, reply: result.reply });
+  return sendJson(res, 200, { ok: true, reply: result.reply, truncated: Boolean(result.truncated) });
 };

@@ -95,11 +95,13 @@ COACH BEHAVIOR FOR THESE TOPICS:
 `.trim();
 }
 
-const COACH_KNOWLEDGE_ACK =
-  "Understood — I'll use the credits and NabadAi Pro guide for those questions.";
-
-const COACH_LYRICS_ACK =
-  "Understood — I'll review lyrics and coach on syllables, rhythm, and Arabic prosody when asked.";
+/** Combined live product appendix for the Coach API (not stored in chat history). */
+export function buildCoachContextAppendix() {
+  return [
+    buildCoachCreditsProGuide(),
+    buildCoachLyricsWritingGuide(),
+  ].join("\n\n---\n\n");
+}
 
 /** Static guide for lyric craft — injected so Coach can review pasted lyrics. */
 export function buildCoachLyricsWritingGuide() {
@@ -127,31 +129,14 @@ Do not paste this block to the user. Reply in their language (Arabic if they wri
 
 /**
  * Augment a Coach API payload with frontend-only product knowledge.
- * Chat history stays unchanged; only the outbound API call gets the appendix.
+ * Chat history stays unchanged; pricing/lyrics guides ride in contextAppendix.
  */
 export function augmentCoachApiPayload({ message, history }) {
-  const creditsGuide = buildCoachCreditsProGuide();
-  const lyricsGuide = buildCoachLyricsWritingGuide();
   const prior = Array.isArray(history) ? history : [];
   const userMessage = String(message || "").trim();
   return {
     message: userMessage,
-    history: [
-      {
-        role: "user",
-        text:
-          "[AUTHORITATIVE PRODUCT UPDATE — credits & NabadAi Pro pricing. Prefer this over any older guide text that says subscriptions are \"Coming soon\". Do not paste this block verbatim to the user.]\n"
-          + creditsGuide,
-      },
-      { role: "assistant", text: COACH_KNOWLEDGE_ACK },
-      {
-        role: "user",
-        text:
-          "[AUTHORITATIVE — lyrics writing & review coach. Use when user pastes lyrics or asks about rhythm, syllables, Arabic prosody (عروض/أوف), or maksour delivery. Do not paste this block verbatim.]\n"
-          + lyricsGuide,
-      },
-      { role: "assistant", text: COACH_LYRICS_ACK },
-      ...prior,
-    ],
+    history: prior,
+    contextAppendix: buildCoachContextAppendix(),
   };
 }

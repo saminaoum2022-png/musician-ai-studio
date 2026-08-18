@@ -34916,7 +34916,7 @@ body.messagesThreadKeyboardOpen[data-route="messages-thread"] .messagesThreadPag
 }
 .messagesComposerInput:disabled,
 .messagesComposerSend:disabled,
-.messagesComposerShare:disabled{
+.messagesComposerAttach:disabled{
   opacity: 0.45;
 }
 .messagesThreadEmptyTitle{
@@ -35275,7 +35275,7 @@ body[data-route="messages-thread"] .footer{
 html.is-web-shell body.messagesThreadViewportSized[data-route="messages-thread"] .messagesThreadPage{
   overflow: hidden;
 }
-.messagesComposerShare{
+.messagesComposerAttach{
   flex: 0 0 auto;
   width: 44px;
   height: 44px;
@@ -35288,6 +35288,74 @@ html.is-web-shell body.messagesThreadViewportSized[data-route="messages-thread"]
   justify-content: center;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
+  transition: transform 0.16s ease, background 0.16s ease;
+}
+.messagesComposerAttach:active:not(:disabled){
+  transform: scale(0.94);
+  background: rgba(124,92,255,0.2);
+}
+.messagesComposerSheetList{
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 4px 0 8px;
+}
+.messagesComposerSheetRow{
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  min-height: 58px;
+  padding: 10px 14px;
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 16px;
+  background: rgba(255,255,255,0.04);
+  color: #f8faff;
+  text-align: left;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: background 0.16s ease, transform 0.16s ease;
+}
+.messagesComposerSheetRow:active:not(:disabled){
+  transform: scale(0.985);
+  background: rgba(255,255,255,0.08);
+}
+.messagesComposerSheetRow--soon{
+  opacity: 0.52;
+  cursor: default;
+}
+.messagesComposerSheetIcon{
+  flex: 0 0 auto;
+  width: 44px;
+  height: 44px;
+  border-radius: 13px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.messagesComposerSheetIcon--song{
+  background: rgba(124,92,255,0.18);
+  color: rgba(215,198,255,0.98);
+}
+.messagesComposerSheetIcon--voice{
+  background: rgba(13,148,136,0.18);
+  color: rgba(134,239,220,0.98);
+}
+.messagesComposerSheetCopy{
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.messagesComposerSheetCopy strong{
+  font-size: 15px;
+  font-weight: 650;
+  line-height: 1.2;
+}
+.messagesComposerSheetCopy span{
+  font-size: 13px;
+  line-height: 1.25;
+  color: rgba(223,231,251,0.58);
 }
 .messagesComposerInput{
   flex: 1 1 auto;
@@ -35400,6 +35468,62 @@ html.is-web-shell body.messagesThreadViewportSized[data-route="messages-thread"]
   margin: 0 0 10px;
   color: rgba(223,231,251,0.58);
   font-size: 13px;
+}
+.messagesShareSearchWrap{
+  flex: 0 0 auto;
+  margin: 0 0 10px;
+}
+.messagesShareSearchWrap[hidden]{
+  display: none;
+}
+.messagesShareSearch{
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 42px;
+  padding: 0 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(124,92,255,0.18);
+  background: rgba(255,255,255,0.05);
+}
+.messagesShareSearch:focus-within{
+  border-color: rgba(124,92,255,0.36);
+  background: rgba(255,255,255,0.07);
+}
+.messagesShareSearchIcon{
+  flex: 0 0 auto;
+  color: rgba(223,231,251,0.52);
+}
+.messagesShareSearchInput{
+  flex: 1 1 auto;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: #f8faff;
+  font: inherit;
+  font-size: 15px;
+}
+.messagesShareSearchInput::placeholder{
+  color: rgba(223,231,251,0.38);
+}
+.messagesShareSearchInput:focus{
+  box-shadow: none;
+}
+.messagesShareSearchClear{
+  flex: 0 0 auto;
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.08);
+  color: rgba(223,231,251,0.72);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+}
+.messagesShareSearchClear[hidden]{
+  display: none !important;
 }
 .messagesShareList{
   overflow-y: auto;
@@ -47795,7 +47919,7 @@ body[data-route="user"] #userPublicRepostsList{
     transform: none;
     border-radius: 0 0 20px 20px;
   }
-  html.is-web-shell body.deskCoachOpen .messagesComposerShare{
+  html.is-web-shell body.deskCoachOpen .messagesComposerAttach{
     display: none;
   }
   html.is-web-shell body.deskCoachOpen .coachFab{
@@ -52533,10 +52657,26 @@ html[data-theme="light"] .messagesComposerInput{
 html[data-theme="light"] .messagesComposerInput::placeholder{
   color: var(--text-muted);
 }
-html[data-theme="light"] .messagesComposerShare{
+html[data-theme="light"] .messagesComposerAttach{
   border-color: var(--accent-violet-border);
   background: var(--accent-violet-soft);
   color: #6d4df5;
+}
+html[data-theme="light"] .messagesComposerSheetRow{
+  border-color: var(--border);
+  background: var(--surface-secondary);
+  color: var(--text-primary);
+}
+html[data-theme="light"] .messagesComposerSheetCopy span{
+  color: var(--text-muted);
+}
+html[data-theme="light"] .messagesComposerSheetIcon--song{
+  background: var(--accent-violet-soft);
+  color: #6d4df5;
+}
+html[data-theme="light"] .messagesComposerSheetIcon--voice{
+  background: rgba(13,148,136,0.12);
+  color: #0d9488;
 }
 html[data-theme="light"] .messagesComposerSend{
   background: linear-gradient(135deg, #0d9488, #12b896);
@@ -52580,6 +52720,27 @@ html[data-theme="light"] .messagesShareSheetClose:active{
   color: var(--text-primary);
 }
 html[data-theme="light"] .messagesShareSheetLead{
+  color: var(--text-secondary);
+}
+html[data-theme="light"] .messagesShareSearch{
+  border-color: var(--border);
+  background: var(--surface-secondary);
+}
+html[data-theme="light"] .messagesShareSearch:focus-within{
+  border-color: var(--accent-violet-border);
+  background: var(--surface-secondary);
+}
+html[data-theme="light"] .messagesShareSearchIcon{
+  color: var(--text-muted);
+}
+html[data-theme="light"] .messagesShareSearchInput{
+  color: var(--text-primary);
+}
+html[data-theme="light"] .messagesShareSearchInput::placeholder{
+  color: var(--text-muted);
+}
+html[data-theme="light"] .messagesShareSearchClear{
+  background: rgba(15,23,42,0.06);
   color: var(--text-secondary);
 }
 html[data-theme="light"] .messagesShareRow:active{

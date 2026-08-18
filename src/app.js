@@ -216,7 +216,7 @@ import { MUSIC_VIDEO_FEATURE_ENABLED } from "./feature-flags.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260819-010029";
+const APP_BUILD = "20260819-012826";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -29462,11 +29462,11 @@ const MESSAGES_THREAD_CACHE_MAX_THREADS = 12;
 function syncMessagesThreadComposerReady() {
   const input = document.getElementById("messagesComposerInput");
   const sendBtn = document.getElementById("messagesComposerSend");
-  const shareBtn = document.getElementById("messagesComposerShare");
+  const attachBtn = document.getElementById("messagesComposerAttach");
   const ready = Boolean(String(_conversationId || "").trim());
   if (input) input.disabled = !ready;
   if (sendBtn) sendBtn.disabled = !ready;
-  if (shareBtn) shareBtn.disabled = !ready;
+  if (attachBtn) attachBtn.disabled = !ready;
 }
 
 let _messagesThreadKeyboardOpen = false;
@@ -30539,6 +30539,51 @@ function patchOutboundReadStateInMount() {
   });
 }
 
+const MESSAGES_SEND_SOUND_PREF_KEY = "mas:messagesSendSound:v1";
+let _messagesSendAudioCtx = null;
+
+function messagesSendSoundEnabled() {
+  try {
+    const v = localStorage.getItem(MESSAGES_SEND_SOUND_PREF_KEY);
+    if (v === "0" || v === "false") return false;
+    return true;
+  } catch {
+    return true;
+  }
+}
+
+function playMessagesSendSound() {
+  if (!messagesSendSoundEnabled()) return;
+  try {
+    const Ctx = window.AudioContext || window.webkitAudioContext;
+    if (!Ctx) return;
+    if (!_messagesSendAudioCtx || _messagesSendAudioCtx.state === "closed") {
+      _messagesSendAudioCtx = new Ctx();
+    }
+    const ctx = _messagesSendAudioCtx;
+    void ctx.resume().catch(() => {});
+    const t0 = ctx.currentTime;
+    const gain = ctx.createGain();
+    gain.connect(ctx.destination);
+    gain.gain.setValueAtTime(0.0001, t0);
+    gain.gain.exponentialRampToValueAtTime(0.045, t0 + 0.012);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.1);
+    const osc = ctx.createOscillator();
+    osc.type = "sine";
+    osc.frequency.setValueAtTime(920, t0);
+    osc.frequency.exponentialRampToValueAtTime(640, t0 + 0.07);
+    osc.connect(gain);
+    osc.start(t0);
+    osc.stop(t0 + 0.11);
+  } catch {}
+}
+
+function feedbackMessagesComposerSend() {
+  pulseMessagesComposerSend();
+  try { haptic("light"); } catch {}
+  playMessagesSendSound();
+}
+
 function pulseMessagesComposerSend() {
   if (typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches) {
     return;
@@ -31131,11 +31176,80 @@ function dmShareEligibleTracks() {
       const ref = mashupRefFromLibraryTrack(t);
       if (!ref) return null;
       ref.shareKind = dmShareKindFromTrack(t);
-      ref.ts = Number(t?.ts || 0);
+      ref.ts = Number(t?.ts || (t?.created_at ? new Date(t.created_at).getTime() : 0) || 0);
       return ref;
     })
     .filter(Boolean)
-    .sort((a, b) => Number(b?.ts || 0) - Number(a?.ts || 0));
+    .sort((a, b) => {
+      const tsDiff = Number(b?.ts || 0) - Number(a?.ts || 0);
+      if (tsDiff) return tsDiff;
+      return String(b?.id || "").localeCompare(String(a?.id || ""));
+    });
+}
+
+function dmShareTrackSearchHaystack(track) {
+  const title = String(track?.title || "").trim().toLowerCase();
+  const kind = String(dmShareKindLabel(track?.shareKind || "") || "").toLowerCase();
+  let source = "";
+  try { source = String(mashupSlotSourceLabel(track) || "").toLowerCase(); } catch {}
+  return `${title} ${kind} ${source}`.trim();
+}
+
+function filterDmShareTracks(tracks, query) {
+  const q = String(query || "").trim().toLowerCase();
+  if (!q) return Array.isArray(tracks) ? tracks : [];
+  return (Array.isArray(tracks) ? tracks : []).filter((t) => dmShareTrackSearchHaystack(t).includes(q));
+}
+
+function syncMessagesShareSearchClear() {
+  const input = document.getElementById("messagesShareSearchInput");
+  const clearBtn = document.getElementById("messagesShareSearchClear");
+  const hasValue = Boolean(String(input?.value || "").trim());
+  if (clearBtn) clearBtn.hidden = !hasValue;
+}
+
+function renderMessagesShareList(query = "") {
+  const list = document.getElementById("messagesShareList");
+  if (!list) return;
+  _messagesShareSearchQuery = String(query || "");
+  const tracks = filterDmShareTracks(_messagesShareAllTracks, _messagesShareSearchQuery);
+  _messagesShareCandidates = tracks;
+  syncMessagesShareSearchClear();
+  if (!_messagesShareAllTracks.length) {
+    list.innerHTML = `<div class="messagesShareEmpty">No songs in your Library yet. Create one first, then share it here.</div>`;
+    return;
+  }
+  if (!tracks.length) {
+    const q = escapeHtml(_messagesShareSearchQuery);
+    list.innerHTML = `<div class="messagesShareEmpty">No songs match “${q}”. Try another title or type.</div>`;
+    return;
+  }
+  list.innerHTML = tracks.map((t) => {
+    const trackId = escapeHtml(String(t.id || "").trim());
+    const title = escapeHtml(String(t.title || "Song").trim() || "Song");
+    const sub = escapeHtml(`${dmShareKindLabel(t.shareKind)} · ${mashupSlotSourceLabel(t)}`);
+    const art = escapeHtml(mashupCoverForTrack(t));
+    return `
+      <button type="button" class="messagesShareRow" data-messages-share-id="${trackId}" role="option">
+        <img class="messagesShareRowArt" src="${art}" alt="" loading="lazy" decoding="async" />
+        <span class="messagesShareRowBody">
+          <strong>${title}</strong>
+          <span>${sub}</span>
+        </span>
+      </button>`;
+  }).join("");
+}
+
+function resetMessagesShareSearch() {
+  _messagesShareSearchQuery = "";
+  const input = document.getElementById("messagesShareSearchInput");
+  const searchWrap = document.getElementById("messagesShareSearchWrap");
+  if (input) input.value = "";
+  if (searchWrap) {
+    searchWrap.hidden = false;
+    searchWrap.setAttribute("aria-hidden", "false");
+  }
+  syncMessagesShareSearchClear();
 }
 
 function dmSongPayloadFromShareRef(ref) {
@@ -31978,6 +32092,22 @@ async function loadMessagesThreadPartnerMeta(partnerUserId) {
   }
 }
 
+function closeMessagesComposerSheet() {
+  const sheet = document.getElementById("messagesComposerSheet");
+  if (!sheet) return;
+  sheet.hidden = true;
+  sheet.setAttribute("aria-hidden", "true");
+  document.body.classList.remove("messagesComposerSheetOpen");
+}
+
+function openMessagesComposerSheet() {
+  const sheet = document.getElementById("messagesComposerSheet");
+  if (!sheet) return;
+  sheet.hidden = false;
+  sheet.setAttribute("aria-hidden", "false");
+  document.body.classList.add("messagesComposerSheetOpen");
+}
+
 function closeMessagesShareSheet() {
   const sheet = document.getElementById("messagesShareSheet");
   if (!sheet) return;
@@ -31985,6 +32115,9 @@ function closeMessagesShareSheet() {
   sheet.setAttribute("aria-hidden", "true");
   document.body.classList.remove("messagesShareSheetOpen");
   hideMessagesShareConfirm();
+  resetMessagesShareSearch();
+  _messagesShareAllTracks = [];
+  _messagesShareCandidates = [];
 }
 
 const MESSAGES_SHARE_LEAD_DEFAULT = "Pick a song, remix, or mashup from your Library.";
@@ -32016,6 +32149,11 @@ function showMessagesShareConfirm(track) {
       <button type="button" class="messagesShareConfirmSend" data-share-confirm-send>Send</button>
     </div>`;
   if (list) list.hidden = true;
+  const searchWrap = document.getElementById("messagesShareSearchWrap");
+  if (searchWrap) {
+    searchWrap.hidden = true;
+    searchWrap.setAttribute("aria-hidden", "true");
+  }
   confirm.hidden = false;
   confirm.setAttribute("aria-hidden", "false");
   // Pre-warm archiving so the permanent URL is usually ready by the time the
@@ -32036,7 +32174,13 @@ function hideMessagesShareConfirm() {
     confirm.innerHTML = "";
   }
   if (list) list.hidden = false;
+  const searchWrap = document.getElementById("messagesShareSearchWrap");
+  if (searchWrap) {
+    searchWrap.hidden = false;
+    searchWrap.setAttribute("aria-hidden", "false");
+  }
   if (lead) lead.textContent = MESSAGES_SHARE_LEAD_DEFAULT;
+  renderMessagesShareList(_messagesShareSearchQuery);
 }
 
 async function openMessagesShareSheet() {
@@ -32047,29 +32191,15 @@ async function openMessagesShareSheet() {
   sheet.setAttribute("aria-hidden", "false");
   document.body.classList.add("messagesShareSheetOpen");
   hideMessagesShareConfirm();
+  resetMessagesShareSearch();
   list.innerHTML = `<div class="messagesShareEmpty">Loading your Library…</div>`;
   await ensureUserLibraryHydrated();
-  const tracks = dmShareEligibleTracks();
-  if (!tracks.length) {
-    list.innerHTML = `<div class="messagesShareEmpty">No songs in your Library yet. Create one first, then share it here.</div>`;
-    return;
-  }
-  list.innerHTML = tracks.map((t, idx) => {
-    const title = escapeHtml(String(t.title || "Song").trim() || "Song");
-    const sub = escapeHtml(`${dmShareKindLabel(t.shareKind)} · ${mashupSlotSourceLabel(t)}`);
-    const art = escapeHtml(mashupCoverForTrack(t));
-    return `
-      <button type="button" class="messagesShareRow" data-messages-share-idx="${idx}" role="option">
-        <img class="messagesShareRowArt" src="${art}" alt="" loading="lazy" decoding="async" />
-        <span class="messagesShareRowBody">
-          <strong>${title}</strong>
-          <span>${sub}</span>
-        </span>
-      </button>`;
-  }).join("");
-  _messagesShareCandidates = tracks;
+  _messagesShareAllTracks = dmShareEligibleTracks();
+  renderMessagesShareList("");
 }
 
+let _messagesShareAllTracks = [];
+let _messagesShareSearchQuery = "";
 let _messagesShareCandidates = [];
 
 async function sendDmSongShare(track) {
@@ -33310,6 +33440,7 @@ async function sendCoachMessage(text, input) {
   saveCoachChat(_messagesList);
   renderMessagesMount({ scrollToBottom: true, forceScroll: true });
   updateMessagesComposerReserve();
+  feedbackMessagesComposerSend();
   try { input?.focus({ preventScroll: true }); } catch {}
 
   _coachReplyInFlight = true;
@@ -33408,7 +33539,7 @@ function sendCurrentThreadMessage() {
     body: text,
     createdAt: optimistic.created_at,
   });
-  pulseMessagesComposerSend();
+  feedbackMessagesComposerSend();
   updateMessagesComposerReserve();
   try { input.focus({ preventScroll: true }); } catch { try { input.focus(); } catch {} }
 
@@ -33637,18 +33768,30 @@ function bindMessagesPageOnce() {
       void retryFailedThreadMessage(retryBtn.getAttribute("data-retry-client-msg"));
       return;
     }
-    const shareBtn = e.target.closest("#messagesComposerShare");
-    if (shareBtn) {
+    const attachBtn = e.target.closest("#messagesComposerAttach");
+    if (attachBtn) {
       e.preventDefault();
       try { haptic("light"); } catch {}
-      void openMessagesShareSheet();
+      openMessagesComposerSheet();
       return;
     }
-    const sharePick = e.target.closest("[data-messages-share-idx]");
+    const composerAction = e.target.closest("[data-messages-composer-action]");
+    if (composerAction) {
+      e.preventDefault();
+      const action = String(composerAction.getAttribute("data-messages-composer-action") || "").trim();
+      if (action === "song" && !composerAction.disabled) {
+        try { haptic("light"); } catch {}
+        closeMessagesComposerSheet();
+        void openMessagesShareSheet();
+      }
+      return;
+    }
+    const sharePick = e.target.closest("[data-messages-share-id]");
     if (sharePick) {
       e.preventDefault();
-      const idx = Number(sharePick.getAttribute("data-messages-share-idx"));
-      const track = _messagesShareCandidates[idx];
+      const trackId = String(sharePick.getAttribute("data-messages-share-id") || "").trim();
+      const track = _messagesShareCandidates.find((t) => String(t?.id || "") === trackId)
+        || _messagesShareAllTracks.find((t) => String(t?.id || "") === trackId);
       if (track) showMessagesShareConfirm(track);
       return;
     }
@@ -33663,7 +33806,7 @@ function bindMessagesPageOnce() {
     if (shareSend) {
       e.preventDefault();
       if (shareSend.getAttribute("aria-busy") === "true") return;
-      try { haptic("light"); } catch {}
+      feedbackMessagesComposerSend();
       const track = _messagesShareConfirmTrack;
       if (track) {
         shareSend.setAttribute("aria-busy", "true");
@@ -33770,6 +33913,22 @@ function bindMessagesPageOnce() {
     document.documentElement.dataset.messagesShareSheetWired = "1";
     document.getElementById("messagesShareSheetClose")?.addEventListener("click", closeMessagesShareSheet);
     document.getElementById("messagesShareSheetBackdrop")?.addEventListener("click", closeMessagesShareSheet);
+    document.getElementById("messagesComposerSheetClose")?.addEventListener("click", closeMessagesComposerSheet);
+    document.getElementById("messagesComposerSheetBackdrop")?.addEventListener("click", closeMessagesComposerSheet);
+    const shareSearchInput = document.getElementById("messagesShareSearchInput");
+    if (shareSearchInput && !shareSearchInput.dataset.boundMessagesShareSearch) {
+      shareSearchInput.dataset.boundMessagesShareSearch = "1";
+      shareSearchInput.addEventListener("input", () => {
+        renderMessagesShareList(shareSearchInput.value);
+      });
+    }
+    document.getElementById("messagesShareSearchClear")?.addEventListener("click", () => {
+      const input = document.getElementById("messagesShareSearchInput");
+      if (!input) return;
+      input.value = "";
+      renderMessagesShareList("");
+      try { input.focus({ preventScroll: true }); } catch { try { input.focus(); } catch {} }
+    });
   }
 }
 

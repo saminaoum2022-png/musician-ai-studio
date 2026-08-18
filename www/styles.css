@@ -8574,7 +8574,7 @@ main.grid > [data-route].routeEnter--pop{
   animation: navPopIn 230ms cubic-bezier(0.32, 0.72, 0, 1) both;
 }
 main.grid > [data-route].routeEnter--fade{
-  animation: navFadeIn 190ms cubic-bezier(0.32, 0.72, 0, 1) both;
+  animation: navFadeIn 140ms cubic-bezier(0.32, 0.72, 0, 1) both;
 }
 /* Full-screen player presents up from the bottom (native now-playing feel). */
 main.grid > [data-route].routeEnter--present{
@@ -8605,9 +8605,9 @@ main.grid > .card.wide[data-route="player"]{
   from{ transform: translate3d(-8%, 0, 0); }
   to{ transform: translate3d(0, 0, 0); }
 }
-/* Tab switch — gentle fade that never goes fully blank. */
+/* Tab switch — quick fade that never goes fully blank. */
 @keyframes navFadeIn{
-  from{ opacity: 0.55; }
+  from{ opacity: 0.82; }
   to{ opacity: 1; }
 }
 @keyframes navPresentIn{

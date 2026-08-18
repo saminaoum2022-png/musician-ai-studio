@@ -3333,8 +3333,8 @@ function flushTabRouteNavigation(route, targetHash) {
   if (prev === "generate" && route !== "generate") {
     leaveGenerateRouteCleanup();
   }
+  _tabNavFromClick = true;
   if (location.hash !== targetHash) {
-    _tabNavFromClick = true;
     try {
       location.hash = targetHash.startsWith("#") ? targetHash.slice(1) : targetHash;
     } catch {
@@ -3342,6 +3342,12 @@ function flushTabRouteNavigation(route, targetHash) {
     }
   }
   syncRoutePanelVisibility(route);
+  try {
+    _tabNavEnterAnimated = true;
+    animateRouteEnter(route, navDirectionFor(route));
+  } catch {
+    _tabNavEnterAnimated = false;
+  }
   if (_applyRouteRaf) {
     cancelAnimationFrame(_applyRouteRaf);
     _applyRouteRaf = 0;
@@ -3436,7 +3442,14 @@ function attachTabRefresh() {
         return;
       }
 
-      if (route === current && hashRoute === linkRoute && location.hash === targetHash) {
+      const bodyRoute = String(document.body.getAttribute("data-route") || "").trim();
+      const viewingSameTabPanel =
+        bodyRoute === route
+        || (linkRoute === "challenges" && (bodyRoute === "challenges" || (bodyRoute === "generate" && route === "generate")))
+        || (linkRoute === "discover" && (bodyRoute === "discover" || bodyRoute === "discover-playlist"))
+        || (linkRoute === "friends" && bodyRoute === "friends");
+
+      if (viewingSameTabPanel && route === current && hashRoute === linkRoute && location.hash === targetHash) {
         e.preventDefault();
         e.stopPropagation();
         void triggerTabRefresh(linkRoute);
@@ -3445,6 +3458,9 @@ function attachTabRefresh() {
 
       e.preventDefault();
       e.stopPropagation();
+      if (linkRoute === "discover") {
+        try { sessionStorage.setItem(DISCOVERY_SEGMENT_KEY, "for-you"); } catch {}
+      }
       flushTabRouteNavigation(route, targetHash);
     });
   });
@@ -3892,6 +3908,8 @@ let _applyRouteQueued = false;
 let _applyRouteAfterLoginSettle = false;
 let _applyRouteGen = 0;
 let _tabNavFromClick = false;
+/** Tab fast-path already ran enter animation — skip duplicate in applyRoute. */
+let _tabNavEnterAnimated = false;
 
 function bumpApplyRouteGeneration() {
   _applyRouteGen += 1;
@@ -4020,7 +4038,7 @@ function animateRouteEnter(wanted, direction) {
       el.removeEventListener("animationend", done);
     };
     el.addEventListener("animationend", done);
-    window.setTimeout(done, 420);
+    window.setTimeout(done, 180);
   });
 }
 
@@ -4390,12 +4408,14 @@ function applyRoute({ passGen } = {}) {
   const navDir = navDirectionFor(wanted);
   const skipEnterAnim =
     _skipGenerateRouteEnter ||
+    _tabNavEnterAnimated ||
     (prevRoute === "challenges" && wanted === "generate" && Boolean(getCreateFlow()));
   syncRoutePanelVisibility(wanted);
   if (wanted === "discover") {
     kickDiscoverFeedRoute();
   }
   animateRouteEnter(wanted, skipEnterAnim ? "none" : navDir);
+  if (_tabNavEnterAnimated) _tabNavEnterAnimated = false;
   if (_skipGenerateRouteEnter) _skipGenerateRouteEnter = false;
   if (wanted === "auth" && prevRoute !== "auth") {
     try { resetAuthEmailPanel(); } catch {}
@@ -4435,6 +4455,9 @@ function applyRoute({ passGen } = {}) {
     wireNotificationsLiveRefreshOnce();
     void refreshNotificationsUnreadBadge({ force: wanted === "friends" || wanted === "settings" || wanted === "activity" });
     if (MESSAGES_FEATURE_ENABLED) {
+      if (wanted === "friends" || wanted === "discover" || wanted === "activity") {
+        prefetchMessagesInboxQuiet();
+      }
       void refreshMessagesUnreadBadge({ force: wanted === "friends" || wanted === "messages" || wanted === "messages-thread" });
     }
   } else {
@@ -14162,7 +14185,31 @@ async function fetchFollowingListViaSupabase() {
   });
 }
 
+function hydrateFollowingListFromStorage() {
+  if (_followingListCache && Date.now() - _followingListCacheAt < FOLLOWING_LIST_CACHE_MS) return;
+  try {
+    const raw = sessionStorage.getItem(FOLLOWING_LIST_STORAGE_KEY);
+    if (!raw) return;
+    const parsed = JSON.parse(raw);
+    const savedAt = Number(parsed?.at || 0);
+    const list = Array.isArray(parsed?.list) ? parsed.list : [];
+    if (!savedAt || !list.length || Date.now() - savedAt > FOLLOWING_LIST_CACHE_MS) return;
+    _followingListCache = list;
+    _followingListCacheAt = savedAt;
+  } catch {}
+}
+
+function persistFollowingListToStorage(list) {
+  try {
+    sessionStorage.setItem(FOLLOWING_LIST_STORAGE_KEY, JSON.stringify({
+      at: Date.now(),
+      list: Array.isArray(list) ? list : [],
+    }));
+  } catch {}
+}
+
 async function fetchFollowingListForFeed() {
+  hydrateFollowingListFromStorage();
   if (_followingListCache && Date.now() - _followingListCacheAt < FOLLOWING_LIST_CACHE_MS) {
     return _followingListCache;
   }
@@ -14170,12 +14217,14 @@ async function fetchFollowingListForFeed() {
   if (direct !== null) {
     _followingListCache = direct;
     _followingListCacheAt = Date.now();
+    persistFollowingListToStorage(direct);
     return direct;
   }
   const data = await socialApi("/api/social?type=me");
   const list = Array.isArray(data?.following) ? data.following : [];
   _followingListCache = list;
   _followingListCacheAt = Date.now();
+  persistFollowingListToStorage(list);
   return list;
 }
 
@@ -14193,6 +14242,7 @@ async function fetchFollowingUserIdsViaSupabase() {
 }
 
 async function fetchFollowingUserIdsForFeed() {
+  hydrateFollowingListFromStorage();
   if (_followingListCache && Date.now() - _followingListCacheAt < FOLLOWING_LIST_CACHE_MS) {
     return _followingListCache
       .map((f) => String(f?.userId || f?.user_id || f?.following_user_id || "").trim())
@@ -14209,6 +14259,7 @@ async function fetchFollowingUserIdsForFeed() {
 function invalidateFollowingListCache() {
   _followingListCache = null;
   _followingListCacheAt = 0;
+  try { sessionStorage.removeItem(FOLLOWING_LIST_STORAGE_KEY); } catch {}
 }
 
 async function fetchFollowingStatusPostsFromSupabase(limit = 40, followingIn = null) {
@@ -16967,6 +17018,7 @@ const FOLLOWING_LIST_CACHE_MS = 45000;
 const FRIENDS_FEED_SNAPSHOT_MS = 90000;
 const FRIENDS_MIN_FETCH_GAP_MS = 30000;
 const FRIENDS_FEED_SNAPSHOT_KEY = "nabad_friends_feed_snap_v3";
+const FOLLOWING_LIST_STORAGE_KEY = "nabad_following_list_v1";
 
 let _profileActSnapshot = null;
 let _profileActEnrichGen = 0;
@@ -23554,6 +23606,9 @@ function ensureAuthBoot({ force = false, fast = false } = {}) {
         else setProfileHeaderLoading(false);
         try { refreshProfileHandleFromActiveProfile(); } catch {}
         void bootstrapPostLoginCredits();
+        prefetchMessagesInboxQuiet();
+        hydrateFriendsFeedSnapshotFromStorage();
+        hydrateFollowingListFromStorage();
       }
       renderAuthStatus();
       if (authSession?.user?.id) maybePromptTermsUpdate();
@@ -29686,6 +29741,16 @@ function loadMessagesInboxFromStorage() {
   } catch {
     return false;
   }
+}
+
+/** Warm inbox cache in the background so Messages opens on cached rows, not shimmer. */
+function prefetchMessagesInboxQuiet() {
+  if (!MESSAGES_FEATURE_ENABLED || !authSession?.user?.id) return;
+  loadMessagesInboxFromStorage();
+  if (_messagesInboxFetchInFlight) return;
+  const route = String(document.body.getAttribute("data-route") || "");
+  if (route === "messages" || route === "messages-thread") return;
+  void loadMessagesInbox({ silent: true });
 }
 
 function saveMessagesInboxToStorage() {

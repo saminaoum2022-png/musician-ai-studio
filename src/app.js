@@ -216,7 +216,7 @@ import { MUSIC_VIDEO_FEATURE_ENABLED } from "./feature-flags.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260817-110030";
+const APP_BUILD = "20260818-192651";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -29196,6 +29196,10 @@ const MESSAGES_INBOX_POLL_LIVE_MS = 60000;
 const DM_TYPING_SEND_MS = 2500;
 const DM_TYPING_LINGER_MS = 4500;
 const _messagesBubbleEnterKeys = new Set();
+let _messagesThreadOpenReveal = false;
+let _messagesThreadReadTransitionsLive = false;
+const _threadPrefetchInFlight = new Map();
+const MESSAGES_THREAD_PREFETCH_TOP = 4;
 const _messagesThreadCache = new Map();
 const _chatPartnerStatsCache = new Map();
 let _messagesInboxLoading = false;
@@ -29700,6 +29704,7 @@ function hydrateThreadMessagesCacheFromStorage(threadId) {
     messages: Array.isArray(entry.messages) ? entry.messages.map((m) => ({ ...m })) : [],
     lastFetchedAt: String(entry.lastFetchedAt || ""),
     lastFetchedId: String(entry.lastFetchedId || ""),
+    partnerLastReadAt: String(entry.partnerLastReadAt || ""),
     loadedOnce: true,
   });
 }
@@ -29716,13 +29721,15 @@ function messagesThreadHasCachedMessages(threadId) {
   return Boolean(cached?.loadedOnce);
 }
 
-function saveThreadMessagesCache(threadId, { messages, lastFetchedAt, lastFetchedId, loadedOnce = true } = {}) {
+function saveThreadMessagesCache(threadId, { messages, lastFetchedAt, lastFetchedId, partnerLastReadAt, loadedOnce = true } = {}) {
   const tid = String(threadId || "").trim();
   if (!tid) return;
+  const prev = _messagesThreadCache.get(tid);
   const entry = {
     messages: Array.isArray(messages) ? messages.map((m) => ({ ...m })) : [],
     lastFetchedAt: String(lastFetchedAt || ""),
     lastFetchedId: String(lastFetchedId || ""),
+    partnerLastReadAt: String(partnerLastReadAt ?? prev?.partnerLastReadAt ?? ""),
     loadedOnce: Boolean(loadedOnce),
     savedAt: Date.now(),
   };
@@ -29747,8 +29754,53 @@ function saveActiveThreadToCache() {
     messages: _messagesList,
     lastFetchedAt: _messagesLastFetchedAt,
     lastFetchedId: _messagesLastFetchedId,
+    partnerLastReadAt: _messagesPartnerLastReadAt,
     loadedOnce: true,
   });
+}
+
+async function prefetchThreadMessagesQuiet(threadId) {
+  const tid = String(threadId || "").trim();
+  if (!tid || isCoachThreadId(tid) || !authSession?.user?.id) return false;
+  if (messagesThreadHasCachedMessages(tid)) return true;
+  if (_threadPrefetchInFlight.has(tid)) {
+    try { return await _threadPrefetchInFlight.get(tid); } catch { return false; }
+  }
+  const run = (async () => {
+    try {
+      const data = await messagesApi(
+        `/api/messages?type=thread&threadId=${encodeURIComponent(tid)}&limit=${MESSAGES_THREAD_PAGE_SIZE}`,
+      );
+      const incoming = Array.isArray(data?.messages) ? data.messages : [];
+      const last = incoming[incoming.length - 1];
+      saveThreadMessagesCache(tid, {
+        messages: incoming.map((m) => ({ ...m, sendStatus: m.sendStatus || "sent" })),
+        lastFetchedAt: String(last?.created_at || ""),
+        lastFetchedId: String(last?.id || ""),
+        partnerLastReadAt: String(data?.partnerLastReadAt || ""),
+        loadedOnce: true,
+      });
+      return true;
+    } catch (e) {
+      console.warn("[messages/thread-prefetch]", tid, e);
+      return false;
+    }
+  })();
+  _threadPrefetchInFlight.set(tid, run);
+  try {
+    return await run;
+  } finally {
+    if (_threadPrefetchInFlight.get(tid) === run) _threadPrefetchInFlight.delete(tid);
+  }
+}
+
+function prefetchTopInboxThreadsQuiet(max = MESSAGES_THREAD_PREFETCH_TOP) {
+  if (!MESSAGES_FEATURE_ENABLED || !authSession?.user?.id) return;
+  const threads = (_messagesInboxState.threads || []).slice(0, Math.max(1, Number(max) || MESSAGES_THREAD_PREFETCH_TOP));
+  for (const t of threads) {
+    const tid = String(t?.threadId || "").trim();
+    if (tid && !isCoachThreadId(tid)) void prefetchThreadMessagesQuiet(tid);
+  }
 }
 
 function resolveChatHeaderPartnerStats({ prefStats, targetUserId, headerUserId } = {}) {
@@ -30048,6 +30100,7 @@ function navigateToMessagesThread({
     headerUser: normalizeChatHeaderUser(headerUser),
     targetUserId: String(targetUserId || headerUser?.userId || "").trim(),
     partnerStats: normalizePartnerStats(partnerStats),
+    partnerLastReadAt: String(getThreadMessagesCache(String(threadId || "").trim())?.partnerLastReadAt || ""),
     composerDraft: String(composerDraft || "").trim(),
     composerAutofocus: Boolean(composerAutofocus),
   });
@@ -30148,8 +30201,8 @@ function updateChatHeaderRelationOnly() {
 }
 
 function messagesThreadSkeletonHtml() {
-  return Array.from({ length: 6 }, (_, i) => `
-    <div class="messagesBubbleWrap messagesBubbleWrap--skel${i % 2 ? " is-mine" : ""}" style="--skelDelay:${(i * 0.06).toFixed(2)}s" aria-hidden="true">
+  return Array.from({ length: 3 }, (_, i) => `
+    <div class="messagesBubbleWrap messagesBubbleWrap--skel${i % 2 ? " is-mine" : ""}" style="--skelDelay:${(i * 0.05).toFixed(2)}s" aria-hidden="true">
       <div class="messagesBubble messagesBubble--skel"></div>
     </div>`).join("");
 }
@@ -30197,6 +30250,60 @@ function bubbleEnterWrapClass(msg, mine) {
     : " messagesBubbleWrap--enter messagesBubbleWrap--enterTheirs";
 }
 
+function threadRevealWrapAttrs(index, total, mine) {
+  if (!_messagesThreadOpenReveal) return { cls: "", style: "" };
+  const revealCount = 12;
+  const start = Math.max(0, total - revealCount);
+  if (index < start) return { cls: "", style: "" };
+  const delay = (index - start) * 0.024;
+  const side = mine ? "Mine" : "Theirs";
+  return {
+    cls: ` messagesBubbleWrap--threadReveal messagesBubbleWrap--threadReveal${side}`,
+    style: ` style="--bubbleRevealDelay:${delay.toFixed(3)}s"`,
+  };
+}
+
+function scheduleMessagesThreadReadTransitionsLive() {
+  if (_messagesThreadReadTransitionsLive) return;
+  if (typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches) {
+    _messagesThreadReadTransitionsLive = true;
+    return;
+  }
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      const stack = document.querySelector("#messagesThreadMount .messagesBubbleStack");
+      if (stack) stack.classList.add("messagesBubbleStack--live");
+      _messagesThreadReadTransitionsLive = true;
+    });
+  });
+}
+
+function patchOutboundReadStateInMount() {
+  const mount = document.getElementById("messagesThreadMount");
+  const viewerId = authSession?.user?.id || "";
+  if (!mount || !viewerId) return;
+  const msgs = Array.isArray(_messagesList) ? _messagesList : [];
+  mount.querySelectorAll(".messagesBubbleWrap.is-mine").forEach((wrap) => {
+    const msgId = wrap.getAttribute("data-msg-id");
+    const cid = wrap.getAttribute("data-client-msg-id");
+    const msg = msgs.find((m) => {
+      if (msgId && String(m?.id || "") === msgId) return true;
+      return cid && String(m?.client_message_id || "") === cid;
+    });
+    if (!msg) return;
+    const status = resolveOutboundMessageStatus(msg);
+    wrap.classList.toggle("is-read-by-partner", status === "read");
+    wrap.classList.toggle("is-pending", status === "sending");
+    wrap.classList.toggle("is-failed", status === "failed");
+    const meta = wrap.querySelector(".messagesBubbleMeta");
+    if (meta) {
+      const timeEl = meta.querySelector(".messagesBubbleTime");
+      const timeHtml = timeEl ? timeEl.outerHTML : "";
+      meta.innerHTML = `${timeHtml}${messagesBubbleStatusHtml(msg)}`;
+    }
+  });
+}
+
 function pulseMessagesComposerSend() {
   if (typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches) {
     return;
@@ -30239,10 +30346,13 @@ function renderMessagesMount({ scrollToBottom = true, forceScroll = false } = {}
   const olderLoader = _messagesLoadingOlder
     ? `<div class="messagesThreadOlderLoader" aria-busy="true" aria-label="Loading older messages"><span class="ptrSpinnerRing"></span></div>`
     : "";
+  const threadReveal = _messagesThreadOpenReveal;
+  if (threadReveal) _messagesThreadOpenReveal = false;
+  const stackLiveCls = _messagesThreadReadTransitionsLive ? " messagesBubbleStack--live" : "";
   // Show a timestamp only at the end of a cluster (sender change or a gap),
   // instead of stamping every bubble — quieter, more like a native chat.
   const MSG_GROUP_GAP_MS = 5 * 60 * 1000;
-  mount.innerHTML = `${olderLoader}<div class="messagesBubbleStack">${msgs
+  mount.innerHTML = `${olderLoader}<div class="messagesBubbleStack${stackLiveCls}${threadReveal ? " messagesBubbleStack--revealing" : ""}">${msgs
     .map((m, i) => {
       const next = msgs[i + 1];
       let showTime = true;
@@ -30252,12 +30362,14 @@ function renderMessagesMount({ scrollToBottom = true, forceScroll = false } = {}
         const t2 = next?.created_at ? new Date(next.created_at).getTime() : 0;
         showTime = !sameSender || Math.abs(t2 - t1) > MSG_GROUP_GAP_MS;
       }
-      return messagesBubbleHtml(m, viewerId, { showTime });
+      return messagesBubbleHtml(m, viewerId, { showTime, threadReveal, threadRevealIndex: i, threadRevealTotal: msgs.length });
     })
     .join("")}${typingBubble}</div><div class="messagesThreadScrollAnchor" aria-hidden="true"></div>`;
   if (stickToBottom) {
     scrollMessagesMountToBottom({ force: true });
   }
+  if (!threadReveal) scheduleMessagesThreadReadTransitionsLive();
+  else window.setTimeout(() => scheduleMessagesThreadReadTransitionsLive(), 420);
 }
 
 function mergeThreadMessages(incoming, { scrollToBottom = true } = {}) {
@@ -30586,6 +30698,8 @@ async function retryFailedThreadMessage(clientMessageId) {
 function resetMessagesThreadRouteState() {
   _messagesComposerAutofocusToken += 1;
   _messagesBubbleEnterKeys.clear();
+  _messagesThreadOpenReveal = false;
+  _messagesThreadReadTransitionsLive = false;
   saveActiveThreadToCache();
   _messagesThreadNeedsInitialScroll = false;
   _chatHeaderUser = null;
@@ -32040,6 +32154,19 @@ function applyPartnerLastReadAt(lastReadAt) {
   if (!next) return false;
   if (_messagesPartnerLastReadAt === next) return false;
   _messagesPartnerLastReadAt = next;
+  const tid = String(_conversationId || "").trim();
+  if (tid) {
+    const cached = getThreadMessagesCache(tid);
+    if (cached?.loadedOnce) {
+      saveThreadMessagesCache(tid, {
+        messages: cached.messages,
+        lastFetchedAt: cached.lastFetchedAt,
+        lastFetchedId: cached.lastFetchedId,
+        partnerLastReadAt: next,
+        loadedOnce: true,
+      });
+    }
+  }
   return true;
 }
 
@@ -32054,7 +32181,7 @@ async function pollPartnerThreadRead(threadId, { bootToken = 0 } = {}) {
     if (bootToken && bootToken !== _messagesThreadBootToken) return;
     if (_conversationId !== tid) return;
     if (applyPartnerLastReadAt(data?.partnerLastReadAt)) {
-      renderMessagesMount({ scrollToBottom: false });
+      patchOutboundReadStateInMount();
     }
   } catch (e) {
     console.warn("[dm-read]", e);
@@ -32152,6 +32279,9 @@ function messagesBubbleHtml(msg, viewerId, opts) {
   const outboundStatus = mine ? resolveOutboundMessageStatus(msg) : "";
   const readByPartnerCls = mine && outboundStatus === "read" ? " is-read-by-partner" : "";
   const enterCls = bubbleEnterWrapClass(msg, mine);
+  const revealAttrs = opts?.threadReveal
+    ? threadRevealWrapAttrs(opts.threadRevealIndex, opts.threadRevealTotal, mine)
+    : { cls: "", style: "" };
   const statusHtml = mine ? messagesBubbleStatusHtml(msg) : "";
   const timeHtml = when ? `<span class="messagesBubbleTime">${escapeHtml(when)}</span>` : "";
   const metaHtml =
@@ -32160,7 +32290,7 @@ function messagesBubbleHtml(msg, viewerId, opts) {
       : "";
   if (parsed.type === "song") {
     return `
-      <div class="messagesBubbleWrap messagesBubbleWrap--song${mine ? " is-mine" : ""}${pendingCls}${failedCls}${readByPartnerCls}${enterCls}" data-msg-id="${escapeHtml(String(msg?.id || ""))}" data-client-msg-id="${escapeHtml(String(msg?.client_message_id || ""))}">
+      <div class="messagesBubbleWrap messagesBubbleWrap--song${mine ? " is-mine" : ""}${pendingCls}${failedCls}${readByPartnerCls}${enterCls}${revealAttrs.cls}"${revealAttrs.style} data-msg-id="${escapeHtml(String(msg?.id || ""))}" data-client-msg-id="${escapeHtml(String(msg?.client_message_id || ""))}">
         <div class="messagesBubble messagesBubble--song">
           ${messagesDmSongCardHtml(parsed, { mine })}
           ${metaHtml}
@@ -32173,7 +32303,7 @@ function messagesBubbleHtml(msg, viewerId, opts) {
     ? `<div class="messagesBubbleText messagesBubbleText--coachMd">${renderCoachMarkdown(body)}</div>`
     : userTextHtml(body, { tag: "p", className: "messagesBubbleText", escapeHtml });
   return `
-    <div class="messagesBubbleWrap${mine ? " is-mine" : ""}${pendingCls}${failedCls}${readByPartnerCls}${enterCls}" data-msg-id="${escapeHtml(String(msg?.id || ""))}" data-client-msg-id="${escapeHtml(String(msg?.client_message_id || ""))}">
+    <div class="messagesBubbleWrap${mine ? " is-mine" : ""}${pendingCls}${failedCls}${readByPartnerCls}${enterCls}${revealAttrs.cls}"${revealAttrs.style} data-msg-id="${escapeHtml(String(msg?.id || ""))}" data-client-msg-id="${escapeHtml(String(msg?.client_message_id || ""))}">
       <div class="messagesBubble">
         ${textHtml}
         ${metaHtml}
@@ -32228,6 +32358,7 @@ async function loadMessagesForConversation(threadId, { bootToken = 0, silent = f
       messages: _messagesList,
       lastFetchedAt: _messagesLastFetchedAt,
       lastFetchedId: _messagesLastFetchedId,
+      partnerLastReadAt: _messagesPartnerLastReadAt,
       loadedOnce: true,
     });
     await markThreadReadQuiet(tid);
@@ -32247,7 +32378,7 @@ async function loadMessagesForConversation(threadId, { bootToken = 0, silent = f
     if (!silent) {
       renderMessagesMount({ scrollToBottom: true, forceScroll: true });
     } else if (readCursorChanged) {
-      renderMessagesMount({ scrollToBottom: false });
+      patchOutboundReadStateInMount();
     } else if (_messagesThreadNeedsInitialScroll) {
       scheduleMessagesThreadScrollToBottom({ force: true });
     }
@@ -32441,7 +32572,7 @@ async function refreshDmThreadRealtimeSubscribe(threadId) {
     onReadUpdate: ({ lastReadAt } = {}) => {
       if (String(_conversationId || "") !== tid) return;
       if (applyPartnerLastReadAt(lastReadAt)) {
-        renderMessagesMount({ scrollToBottom: false });
+        patchOutboundReadStateInMount();
       }
     },
     onTyping: ({ userId } = {}) => {
@@ -32671,6 +32802,8 @@ function enterMessagesThreadRoute(threadId, targetUserId = "") {
     _messagesLastFetchedAt = "";
     _messagesLastFetchedId = "";
     _messagesPartnerLastReadAt = "";
+    _messagesThreadOpenReveal = false;
+    _messagesThreadReadTransitionsLive = false;
   }
 
   _messagesThreadNeedsInitialScroll = true;
@@ -32682,13 +32815,19 @@ function enterMessagesThreadRoute(threadId, targetUserId = "") {
     _messagesList = threadCache.messages.map((m) => ({ ...m }));
     _messagesLastFetchedAt = String(threadCache.lastFetchedAt || "");
     _messagesLastFetchedId = String(threadCache.lastFetchedId || "");
+    _messagesPartnerLastReadAt = String(threadCache.partnerLastReadAt || "");
     if (!_messagesLastFetchedId && _messagesList.length) syncMessagesLastFetchedAtFromList();
     _messagesLoading = false;
+    _messagesThreadOpenReveal = true;
   } else {
     _messagesList = [];
     _messagesLastFetchedAt = "";
     _messagesLastFetchedId = "";
-    _messagesLoading = !threadCache?.loadedOnce && Boolean(tid || uid);
+    _messagesLoading = Boolean(tid || uid);
+  }
+  const prefPartnerRead = String(pref?.partnerLastReadAt || "").trim();
+  if (prefPartnerRead && !_messagesPartnerLastReadAt) {
+    _messagesPartnerLastReadAt = prefPartnerRead;
   }
   _messagesRefreshing = false;
 
@@ -32743,6 +32882,25 @@ function enterMessagesThreadRoute(threadId, targetUserId = "") {
     void refreshPartnerPresence();
   }
   void bootstrapMessagesThread({ bootToken, threadId: tid, targetUserId: uid });
+  if (tid && !messagesThreadHasCachedMessages(tid)) {
+    void (async () => {
+      await prefetchThreadMessagesQuiet(tid);
+      if (bootToken !== _messagesThreadBootToken) return;
+      if (String(_conversationId || "") !== tid) return;
+      if (Array.isArray(_messagesList) && _messagesList.length) return;
+      const cached = getThreadMessagesCache(tid);
+      if (!cached?.loadedOnce) return;
+      _messagesList = cached.messages.map((m) => ({ ...m }));
+      _messagesLastFetchedAt = String(cached.lastFetchedAt || "");
+      _messagesLastFetchedId = String(cached.lastFetchedId || "");
+      _messagesPartnerLastReadAt = String(cached.partnerLastReadAt || "");
+      if (!_messagesLastFetchedId && _messagesList.length) syncMessagesLastFetchedAtFromList();
+      _messagesLoading = false;
+      _messagesThreadOpenReveal = true;
+      renderMessagesMount({ scrollToBottom: true, forceScroll: true });
+      scheduleMessagesThreadScrollToBottom({ force: true });
+    })();
+  }
   if (composerDraft && pref?.composerAutofocus) {
     scheduleMessagesComposerAutofocus({ bootToken, delayMs: 280 });
   }
@@ -33036,6 +33194,7 @@ async function loadMessagesInbox({ silent = false } = {}) {
       _messagesInboxHasLoadedOnce = true;
       saveMessagesInboxToStorage();
       markRouteHeavy("messages");
+      prefetchTopInboxThreadsQuiet();
       return true;
     } catch (e) {
       if (!hasCache) {
@@ -33094,6 +33253,7 @@ function enterMessagesRoute({ fromThread = false, inboxFilter = "" } = {}) {
   if (hasCache) {
     renderMessagesInbox();
     restoreMessagesInboxScroll();
+    prefetchTopInboxThreadsQuiet();
     if (fromThread || !shouldSkipRouteHeavy("messages")) {
       void loadMessagesInbox({ silent: true });
     }
@@ -33133,6 +33293,13 @@ function bindMessagesPageOnce() {
   wireInAppShareSheetsOnce();
   if (_messagesPageBound) return;
   _messagesPageBound = true;
+
+  document.addEventListener("pointerdown", (e) => {
+    const threadRow = e.target.closest("[data-messages-thread]");
+    if (!threadRow || e.target.closest("[data-messages-request-accept],[data-messages-request-decline]")) return;
+    const tid = String(threadRow.getAttribute("data-messages-thread") || "").trim();
+    if (tid && !isCoachThreadId(tid)) void prefetchThreadMessagesQuiet(tid);
+  }, { passive: true });
 
   document.addEventListener("click", (e) => {
     const friendsBtn = e.target.closest("#friendsMessagesBtn");

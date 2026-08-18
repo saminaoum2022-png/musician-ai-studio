@@ -34883,6 +34883,16 @@ body.messagesThreadKeyboardOpen[data-route="messages-thread"] .messagesThreadPag
   .messagesBubbleWrap--enterMine{
     --bubble-enter-x: 8px;
   }
+  .messagesBubbleWrap--threadReveal{
+    animation: messagesBubbleEnter 0.3s cubic-bezier(0.22, 1, 0.36, 1) both;
+    animation-delay: var(--bubbleRevealDelay, 0s);
+  }
+  .messagesBubbleWrap--threadRevealTheirs{
+    --bubble-enter-x: -6px;
+  }
+  .messagesBubbleWrap--threadRevealMine{
+    --bubble-enter-x: 6px;
+  }
 }
 @keyframes messagesBubbleEnter{
   from{
@@ -34907,6 +34917,10 @@ body.messagesThreadKeyboardOpen[data-route="messages-thread"] .messagesThreadPag
   border-color: rgba(167,139,250,0.28);
   box-shadow: 0 8px 24px rgba(124,92,255,0.22);
   transition: background 0.28s ease, box-shadow 0.28s ease, border-color 0.28s ease, opacity 0.28s ease;
+}
+/* Skip read-state color transitions on first paint — avoids a "laggy fade" flash. */
+.messagesBubbleStack:not(.messagesBubbleStack--live) .messagesBubbleWrap.is-mine .messagesBubble{
+  transition: none;
 }
 /* Read by partner — softer bubble; full color while still waiting on a read. */
 .messagesBubbleWrap.is-mine.is-read-by-partner .messagesBubble{

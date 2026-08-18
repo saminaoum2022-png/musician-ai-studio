@@ -1607,3 +1607,72 @@ body:has(.marketingDraftBanner) .marketingShell {
     order: 0;
   }
 }
+
+/* Draft editor placeholders + section inspector (Shopify-style) */
+.nabad-draft-editor [data-mk-section] {
+  position: relative;
+  cursor: pointer;
+}
+
+.nabad-draft-editor [data-mk-section].mkInspectorHover {
+  outline: 2px solid rgba(59, 130, 246, 0.45);
+  outline-offset: 6px;
+}
+
+.nabad-draft-editor [data-mk-section].mkInspectorActive {
+  outline: 2px solid #3b82f6;
+  outline-offset: 6px;
+  box-shadow: 0 0 0 6px rgba(59, 130, 246, 0.12);
+}
+
+.nabad-draft-editor [data-mk-section].mkInspectorActive::before {
+  content: attr(data-mk-section-label);
+  position: absolute;
+  top: -10px;
+  left: 12px;
+  z-index: 2;
+  padding: 2px 10px;
+  border-radius: 6px;
+  background: #3b82f6;
+  color: #fff;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  pointer-events: none;
+}
+
+.marketingImagePlaceholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 180px;
+  border-radius: 14px;
+  border: 1px dashed rgba(255, 255, 255, 0.22);
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(255, 255, 255, 0.45);
+}
+
+.marketingContentCarousel--large .marketingImagePlaceholder {
+  min-height: 220px;
+}
+
+.marketingImagePlaceholderLabel {
+  font-size: 0.82rem;
+}
+
+.marketingMediaBlockArt--placeholder {
+  margin: 0;
+}
+
+.marketingPlaceholderLine {
+  opacity: 0.55;
+}
+
+.marketingTestimonialCard--placeholder,
+.marketingContentCarouselSlideInner--placeholder {
+  border-style: dashed;
+  opacity: 0.92;
+}

@@ -1358,6 +1358,10 @@ td.num { font-variant-numeric: tabular-nums; }
   color: rgba(45, 212, 191, 0.95);
 }
 
+.marketingField--upload input[type="file"] {
+  font-size: 0.82rem;
+}
+
 .marketingInlineNote {
   margin: 0 0 14px;
   font-size: 0.84rem;

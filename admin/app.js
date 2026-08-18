@@ -30,6 +30,8 @@ const state = {
   marketingDraft: null,
   marketingHeroBlobUrl: "",
   marketingHeroUploading: false,
+  marketingBlockBlobUrls: {},
+  marketingBlockUploading: {},
   marketingDraftPreviewWindow: null,
   marketingDraftPreviewPayload: null,
   marketingLoadedContent: null,
@@ -2320,6 +2322,29 @@ function marketingField(label, id, value, { multiline = false, hint = "", highli
   </label>`;
 }
 
+function marketingImageField(label, id, value, { hint = "" } = {}) {
+  return `${marketingField(label, id, value, { hint: hint || "Paste a URL or upload below." })}
+    <label class="field marketingField marketingField--upload">
+      <span>Upload image</span>
+      <input type="file" accept="image/jpeg,image/png,image/webp" data-mk-block-upload="${escapeHtml(id)}" />
+    </label>`;
+}
+
+function revokeMarketingBlockBlobUrl(fieldId) {
+  const key = String(fieldId || "").trim();
+  if (!key || !state.marketingBlockBlobUrls[key]) return;
+  try { URL.revokeObjectURL(state.marketingBlockBlobUrls[key]); } catch { /* ignore */ }
+  delete state.marketingBlockBlobUrls[key];
+}
+
+function getBlockImagePreviewUrl(fieldId) {
+  const key = String(fieldId || "").trim();
+  if (key && state.marketingBlockBlobUrls[key]) return state.marketingBlockBlobUrls[key];
+  const val = String(document.getElementById(key)?.value || "").trim();
+  if (val && !val.startsWith("blob:")) return val;
+  return "";
+}
+
 function marketingFieldGroup(title, html, { hint = "" } = {}) {
   return `<div class="mkFieldGroup">
     <h4 class="mkFieldGroupTitle">${escapeHtml(title)}</h4>
@@ -2614,7 +2639,7 @@ function buildBlockEditorPanel(row, block, activeSection) {
         const logo = logos[i] || {};
         return marketingFieldGroup(`Logo ${i + 1}`, `
           ${F(`logo${i}_label`, logo.label || "")}
-          ${F(`logo${i}_image`, logo.imageUrl || "", { hint: "PNG/SVG URL" })}
+          ${marketingImageField(`Logo ${i + 1} image`, blockFieldId(id, `logo${i}_image`), logo.imageUrl || "", { hint: "PNG/SVG URL" })}
           ${F(`logo${i}_href`, logo.href || "", { hint: "Optional link" })}
         `);
       }).join("")}
@@ -2626,7 +2651,7 @@ function buildBlockEditorPanel(row, block, activeSection) {
       ${F("Eyebrow", b.eyebrow || "")}
       ${F("Title", b.title || "")}
       ${F("Body", b.body || "", { multiline: 4 })}
-      ${F("Image URL", b.imageUrl || "")}
+      ${marketingImageField("Image", blockFieldId(id, "Image URL"), b.imageUrl || "")}
       ${F("Alt text", b.imageAlt || "")}
       <label class="field marketingField">
         <span>Image position</span>
@@ -2667,7 +2692,7 @@ function buildBlockEditorPanel(row, block, activeSection) {
         return marketingFieldGroup(`Slide ${i + 1}`, `
           ${F(`slide${i}_title`, slide.title || "")}
           ${F(`slide${i}_body`, slide.body || "", { multiline: 2 })}
-          ${F(`slide${i}_image`, slide.imageUrl || "")}
+          ${marketingImageField(`Slide ${i + 1} image`, blockFieldId(id, `slide${i}_image`), slide.imageUrl || "")}
           ${F(`slide${i}_href`, slide.href || "", { hint: "Optional link" })}
         `);
       }).join("")}
@@ -2677,9 +2702,10 @@ function buildBlockEditorPanel(row, block, activeSection) {
   return "";
 }
 
-function readMarketingBlocksFromDom(sections) {
+function readMarketingBlocksFromDom(sections, { forPreview = false } = {}) {
   const blocks = {};
   const val = (blockId, field) => document.getElementById(blockFieldId(blockId, field))?.value ?? "";
+  const imgVal = (blockId, field) => getBlockImagePreviewUrl(blockFieldId(blockId, field)) || val(blockId, field);
   for (const row of sections) {
     if (!row?.id || !isMarketingBlockType(row.type)) continue;
     const id = row.id;
@@ -2688,7 +2714,7 @@ function readMarketingBlocksFromDom(sections) {
         quote: val(id, `q${i}_quote`),
         name: val(id, `q${i}_name`),
         role: val(id, `q${i}_role`),
-      })).filter((it) => it.quote.trim());
+      })).filter((it) => forPreview || it.quote.trim());
       blocks[id] = {
         type: "testimonials", id,
         eyebrow: val(id, "Eyebrow"),
@@ -2701,7 +2727,7 @@ function readMarketingBlocksFromDom(sections) {
         title: val(id, "Section label"),
         logos: [0, 1, 2, 3, 4, 5].map((i) => ({
           label: val(id, `logo${i}_label`),
-          imageUrl: val(id, `logo${i}_image`),
+          imageUrl: imgVal(id, `logo${i}_image`),
           href: val(id, `logo${i}_href`),
         })),
       };
@@ -2711,7 +2737,7 @@ function readMarketingBlocksFromDom(sections) {
         eyebrow: val(id, "Eyebrow"),
         title: val(id, "Title"),
         body: val(id, "Body"),
-        imageUrl: val(id, "Image URL"),
+        imageUrl: imgVal(id, "Image URL"),
         imageAlt: val(id, "Alt text"),
         imagePosition: val(id, "imagePosition") || "right",
       };
@@ -2728,9 +2754,9 @@ function readMarketingBlocksFromDom(sections) {
         items: [0, 1, 2, 3, 4, 5, 6, 7].map((i) => ({
           title: val(id, `slide${i}_title`),
           body: val(id, `slide${i}_body`),
-          imageUrl: val(id, `slide${i}_image`),
+          imageUrl: imgVal(id, `slide${i}_image`),
           href: val(id, `slide${i}_href`),
-        })).filter((it) => it.title.trim() || it.imageUrl.trim()),
+        })).filter((it) => forPreview || it.title.trim() || it.imageUrl.trim()),
       };
     }
   }
@@ -2855,7 +2881,19 @@ function showMarketingSection(sectionId) {
     titleEl.textContent = activePanel.querySelector(".mkSectionPanelTitle")?.textContent || id;
   }
   pushMarketingPreviewToIframe();
+  scrollPreviewToSection(id);
   if (id === "discover") void bindMarketingDiscoverPicker();
+}
+
+function scrollPreviewToSection(sectionId) {
+  const iframe = document.getElementById("mkLivePreviewFrame");
+  if (!iframe?.contentWindow) return;
+  try {
+    iframe.contentWindow.postMessage(
+      { type: "nabad-marketing-scroll-section", sectionId: String(sectionId || "") },
+      MARKETING_SITE_ORIGIN,
+    );
+  } catch { /* ignore */ }
 }
 
 function marketingSubsection(title, html, { description = "", open = true } = {}) {
@@ -3069,11 +3107,22 @@ function getMarketingPreviewPayload() {
     content = { ...(state.marketingLoadedContent || {}), brand: readMarketingBrandForm() };
   } else {
     content = readMarketingFormContent(pageKey);
+    if (pageKey === "home") {
+      content.sections = readMarketingSectionsFromDom(true);
+      content.blocks = readMarketingBlocksFromDom(content.sections, { forPreview: true });
+    }
     if (pageKey === "home" && state.marketingLoadedContent?.brand && !content.brand) {
       content.brand = state.marketingLoadedContent.brand;
     }
   }
-  return { page: pageKey, locale, content, savedAt: Date.now() };
+  return {
+    page: pageKey,
+    locale,
+    content,
+    activeSection: state.marketingSection || "hero",
+    editorMode: true,
+    savedAt: Date.now(),
+  };
 }
 
 function pushMarketingPreviewToIframe() {
@@ -5090,6 +5139,50 @@ document.body.addEventListener("change", (e) => {
 });
 
 document.body.addEventListener("change", (e) => {
+  const blockUpload = e.target.closest("[data-mk-block-upload]");
+  if (blockUpload?.files?.[0]) {
+    const fieldId = blockUpload.dataset.mkBlockUpload;
+    const file = blockUpload.files[0];
+    void (async () => {
+      const msg = document.getElementById("marketingSaveMsg");
+      revokeMarketingBlockBlobUrl(fieldId);
+      state.marketingBlockBlobUrls[fieldId] = URL.createObjectURL(file);
+      state.marketingBlockUploading[fieldId] = true;
+      updateMarketingDraftSitePreview();
+      if (msg) {
+        msg.hidden = false;
+        msg.textContent = "Uploading image…";
+        msg.className = "grantMsg warn";
+      }
+      try {
+        const data = await marketingAdminUploadImage(file);
+        const urlInput = document.getElementById(fieldId);
+        if (urlInput && data.url) {
+          urlInput.value = data.url;
+          urlInput.dispatchEvent(new Event("input", { bubbles: true }));
+        }
+        revokeMarketingBlockBlobUrl(fieldId);
+        updateMarketingDraftSitePreview();
+        if (msg) {
+          msg.textContent = "Upload complete — image is in your draft. Save draft to keep it.";
+          msg.className = "grantMsg ok";
+        }
+        blockUpload.value = "";
+      } catch (err) {
+        revokeMarketingBlockBlobUrl(fieldId);
+        updateMarketingDraftSitePreview();
+        if (msg) {
+          msg.textContent = err?.message || "Upload failed";
+          msg.className = "grantMsg err";
+        }
+        showError(err?.message || "Upload failed");
+      } finally {
+        delete state.marketingBlockUploading[fieldId];
+      }
+    })();
+    return;
+  }
+
   const fileInput = e.target.closest("#mkHeroImageFile");
   if (!fileInput?.files?.[0]) return;
   const file = fileInput.files[0];
@@ -5135,6 +5228,10 @@ document.body.addEventListener("change", (e) => {
 window.addEventListener("message", (e) => {
   const allowed = [MARKETING_SITE_ORIGIN, "https://admin.nabadai.com", window.location.origin];
   if (!allowed.includes(e.origin)) return;
+  if (e.data?.type === "nabad-marketing-section-select" && e.data.sectionId) {
+    showMarketingSection(e.data.sectionId);
+    return;
+  }
   if (e.data?.type !== "nabad-marketing-preview-ready") return;
   if (!state.marketingDraftPreviewPayload) return;
   if (state.marketingDraftPreviewWindow && e.source !== state.marketingDraftPreviewWindow) return;

@@ -87,8 +87,56 @@
     if (!content) return;
     applyCore(content);
     if (PAGE === "home") applyHomeExtras(content);
-    applyMarketingBlocks(content);
+    applyMarketingBlocks(content, { draftEditor: true });
     applySectionLayout(content);
+  }
+
+  var draftEditorMode = false;
+  var inspectorHoverSection = null;
+  var inspectorActiveSection = null;
+
+  var MK_SECTION_LABELS = {
+    hero: "Hero",
+    features: "Features",
+    templates: "Song templates",
+    discover: "Discover teaser",
+    collab: "Creators & voices",
+    pricing: "Pricing",
+    faq: "FAQ",
+    related: "Related pages",
+    final: "Final CTA",
+    finalCta: "Final CTA",
+    testimonials: "Testimonials",
+    logoStrip: "Logo strip",
+    mediaBlock: "Photo & copy",
+    contentCarousel: "Image carousel",
+  };
+
+  function enableDraftEditorMode() {
+    if (draftEditorMode) return;
+    draftEditorMode = true;
+    document.documentElement.classList.add("nabad-draft-editor");
+    setupDraftSectionInspector();
+  }
+
+  function sectionLabelFor(row, block) {
+    if (block && block.title) return String(block.title).trim();
+    if (row && row.type && MK_SECTION_LABELS[row.type]) return MK_SECTION_LABELS[row.type];
+    if (row && row.id && MK_SECTION_LABELS[row.id]) return MK_SECTION_LABELS[row.id];
+    return row && row.id ? row.id : "Section";
+  }
+
+  function imagePlaceholderHtml(label) {
+    return (
+      '<span class="marketingImagePlaceholder" aria-hidden="true">' +
+        '<svg viewBox="0 0 24 24" width="40" height="40" fill="none" stroke="currentColor" stroke-width="1.5">' +
+          '<rect x="3" y="5" width="18" height="14" rx="2"/>' +
+          '<circle cx="8.5" cy="10" r="1.5"/>' +
+          '<path d="M21 16l-5.5-5.5L9 17"/>' +
+        "</svg>" +
+        '<span class="marketingImagePlaceholderLabel">' + escHtml(label || "Add image") + "</span>" +
+      "</span>"
+    );
   }
 
   var cmsCarouselTimers = {};
@@ -107,38 +155,55 @@
       .replace(/"/g, "&quot;");
   }
 
-  function renderTestimonialsBlock(el, block) {
-    var items = Array.isArray(block.items) ? block.items : [];
+  function renderTestimonialsBlock(el, block, opts) {
+    opts = opts || {};
+    var draftEditor = opts.draftEditor === true;
+    var items = Array.isArray(block.items) ? block.items.slice() : [];
+    if (draftEditor && items.length < 3) {
+      while (items.length < 3) {
+        items.push({ quote: "", name: "Creator name", role: "Role", _placeholder: true });
+      }
+    }
     el.className = "section marketingCmsBlock marketingTestimonials";
     el.innerHTML =
       '<header class="sectionHead sectionHead--center">' +
-        (block.eyebrow ? '<p class="eyebrow">' + escHtml(block.eyebrow) + "</p>" : "") +
-        (block.title ? "<h2>" + escHtml(block.title) + "</h2>" : "") +
+        (block.eyebrow ? '<p class="eyebrow">' + escHtml(block.eyebrow) + "</p>" : (draftEditor ? '<p class="eyebrow marketingPlaceholderLine">Eyebrow</p>' : "")) +
+        (block.title ? "<h2>" + escHtml(block.title) + "</h2>" : (draftEditor ? '<h2 class="marketingPlaceholderLine">Section title</h2>' : "")) +
       "</header>" +
       '<div class="marketingTestimonialGrid">' +
         items.map(function (it) {
+          var quote = it.quote || (draftEditor ? "Quote text will appear here." : "");
+          if (!quote && !draftEditor) return "";
+          var cardClass = "marketingTestimonialCard" + (it._placeholder ? " marketingTestimonialCard--placeholder" : "");
           return (
-            '<blockquote class="marketingTestimonialCard">' +
-              '<p class="marketingTestimonialQuote">“' + escHtml(it.quote) + "”</p>" +
-              '<footer><strong>' + escHtml(it.name) + "</strong>" +
-              (it.role ? '<span class="cellMuted">' + escHtml(it.role) + "</span>" : "") +
+            '<blockquote class="' + cardClass + '">' +
+              '<p class="marketingTestimonialQuote">“' + escHtml(quote) + "”</p>" +
+              '<footer><strong>' + escHtml(it.name || "Name") + "</strong>" +
+              (it.role || draftEditor ? '<span class="cellMuted">' + escHtml(it.role || "Role") + "</span>" : "") +
               "</footer></blockquote>"
           );
         }).join("") +
       "</div>";
   }
 
-  function renderLogoStripBlock(el, block) {
+  function renderLogoStripBlock(el, block, opts) {
+    opts = opts || {};
+    var draftEditor = opts.draftEditor === true;
     var logos = Array.isArray(block.logos) ? block.logos : [];
+    if (draftEditor && logos.length < 3) {
+      while (logos.length < 3) logos.push({ label: "Logo", imageUrl: "", href: "" });
+    }
     el.className = "section marketingCmsBlock marketingLogoStrip";
     el.innerHTML =
-      (block.title ? '<p class="marketingLogoStripTitle">' + escHtml(block.title) + "</p>" : "") +
+      (block.title ? '<p class="marketingLogoStripTitle">' + escHtml(block.title) + "</p>" : (draftEditor ? '<p class="marketingLogoStripTitle marketingPlaceholderLine">Section label</p>' : "")) +
       '<div class="marketingLogoStripRow">' +
         logos.map(function (logo) {
           var inner = logo.imageUrl
             ? '<img src="' + escHtml(logo.imageUrl) + '" alt="' + escHtml(logo.label || "") + '" loading="lazy">'
-            : '<span class="marketingLogoPlaceholder">' + escHtml(logo.label || "Logo") + "</span>";
-          if (logo.href) {
+            : (draftEditor
+              ? imagePlaceholderHtml(logo.label || "Logo")
+              : '<span class="marketingLogoPlaceholder">' + escHtml(logo.label || "Logo") + "</span>");
+          if (logo.href && !draftEditor) {
             return '<a class="marketingLogoItem" href="' + escHtml(logo.href) + '" target="_blank" rel="noopener">' + inner + "</a>";
           }
           return '<span class="marketingLogoItem">' + inner + "</span>";
@@ -146,17 +211,19 @@
       "</div>";
   }
 
-  function renderMediaBlock(el, block) {
+  function renderMediaBlock(el, block, opts) {
+    opts = opts || {};
+    var draftEditor = opts.draftEditor === true;
     var imageLeft = block.imagePosition === "left";
     el.className = "section marketingCmsBlock marketingMediaBlock" + (imageLeft ? " marketingMediaBlock--imageLeft" : "");
     var imageHtml = block.imageUrl
       ? '<figure class="marketingMediaBlockArt"><img src="' + escHtml(block.imageUrl) + '" alt="' + escHtml(block.imageAlt || "") + '" loading="lazy"></figure>'
-      : "";
+      : (draftEditor ? '<figure class="marketingMediaBlockArt marketingMediaBlockArt--placeholder">' + imagePlaceholderHtml("Upload photo") + "</figure>" : "");
     var copyHtml =
       '<div class="marketingMediaBlockCopy">' +
-        (block.eyebrow ? '<p class="eyebrow">' + escHtml(block.eyebrow) + "</p>" : "") +
-        (block.title ? "<h2>" + escHtml(block.title) + "</h2>" : "") +
-        (block.body ? '<p class="sectionLead">' + escHtml(block.body) + "</p>" : "") +
+        (block.eyebrow ? '<p class="eyebrow">' + escHtml(block.eyebrow) + "</p>" : (draftEditor ? '<p class="eyebrow marketingPlaceholderLine">Eyebrow</p>' : "")) +
+        (block.title ? "<h2>" + escHtml(block.title) + "</h2>" : (draftEditor ? '<h2 class="marketingPlaceholderLine">Section title</h2>' : "")) +
+        (block.body ? '<p class="sectionLead">' + escHtml(block.body) + "</p>" : (draftEditor ? '<p class="sectionLead marketingPlaceholderLine">Supporting copy for this block.</p>' : "")) +
       "</div>";
     el.innerHTML = imageLeft ? imageHtml + copyHtml : copyHtml + imageHtml;
   }
@@ -190,25 +257,34 @@
     }
   }
 
-  function renderContentCarouselBlock(el, block) {
-    var items = Array.isArray(block.items) ? block.items : [];
+  function renderContentCarouselBlock(el, block, opts) {
+    opts = opts || {};
+    var draftEditor = opts.draftEditor === true;
+    var items = Array.isArray(block.items) ? block.items.slice() : [];
+    var visible = Math.min(Math.max(Number(block.visibleCount) || 3, 1), 6);
+    if (draftEditor) {
+      while (items.length < visible) {
+        items.push({ title: "Slide " + (items.length + 1), body: "", imageUrl: "", href: "", _placeholder: true });
+      }
+    }
     var sizeClass = block.size === "large" ? " marketingContentCarousel--large" : "";
     el.className = "section marketingCmsBlock marketingContentCarousel" + sizeClass;
     el.innerHTML =
       '<header class="sectionHead sectionHead--center">' +
-        (block.eyebrow ? '<p class="eyebrow">' + escHtml(block.eyebrow) + "</p>" : "") +
-        (block.title ? "<h2>" + escHtml(block.title) + "</h2>" : "") +
-        (block.lead ? '<p class="sectionLead">' + escHtml(block.lead) + "</p>" : "") +
+        (block.eyebrow ? '<p class="eyebrow">' + escHtml(block.eyebrow) + "</p>" : (draftEditor ? '<p class="eyebrow marketingPlaceholderLine">Eyebrow</p>' : "")) +
+        (block.title ? "<h2>" + escHtml(block.title) + "</h2>" : (draftEditor ? '<h2 class="marketingPlaceholderLine">Carousel title</h2>' : "")) +
+        (block.lead ? '<p class="sectionLead">' + escHtml(block.lead) + "</p>" : (draftEditor ? '<p class="sectionLead marketingPlaceholderLine">Optional lead text</p>' : "")) +
       "</header>" +
       '<div class="marketingContentCarouselViewport" data-visible="' + escHtml(String(block.visibleCount || 3)) + '">' +
         '<div class="marketingContentCarouselTrack">' +
           items.map(function (item) {
-            var body = item.body ? '<p>' + escHtml(item.body) + "</p>" : "";
+            var body = item.body ? '<p>' + escHtml(item.body) + "</p>" : (draftEditor && item._placeholder ? '<p class="marketingPlaceholderLine">Slide copy</p>' : "");
             var img = item.imageUrl
               ? '<img src="' + escHtml(item.imageUrl) + '" alt="' + escHtml(item.title || "") + '" loading="lazy">'
-              : '<span class="marketingContentCarouselFallback">' + escHtml(item.title || "Slide") + "</span>";
-            var inner = '<div class="marketingContentCarouselSlideInner">' + img + "<h3>" + escHtml(item.title) + "</h3>" + body + "</div>";
-            if (item.href) {
+              : (draftEditor ? imagePlaceholderHtml(item.title || "Slide") : '<span class="marketingContentCarouselFallback">' + escHtml(item.title || "Slide") + "</span>");
+            var slideClass = "marketingContentCarouselSlideInner" + (item._placeholder ? " marketingContentCarouselSlideInner--placeholder" : "");
+            var inner = '<div class="' + slideClass + '">' + img + "<h3>" + escHtml(item.title || "Slide") + "</h3>" + body + "</div>";
+            if (item.href && !draftEditor) {
               return '<a class="marketingContentCarouselSlide" href="' + escHtml(item.href) + '">' + inner + "</a>";
             }
             return '<article class="marketingContentCarouselSlide">' + inner + "</article>";
@@ -217,7 +293,9 @@
     initContentCarousel(el, block);
   }
 
-  function applyMarketingBlocks(content) {
+  function applyMarketingBlocks(content, opts) {
+    opts = opts || {};
+    var draftEditor = opts.draftEditor === true || draftEditorMode;
     if (PAGE !== "home" || !content) return;
     clearCmsCarouselTimers();
     var blocks = content.blocks && typeof content.blocks === "object" ? content.blocks : {};
@@ -236,10 +314,12 @@
         el.setAttribute("data-mk-block-type", row.type);
         main.appendChild(el);
       }
-      if (row.type === "testimonials") renderTestimonialsBlock(el, block);
-      else if (row.type === "logoStrip") renderLogoStripBlock(el, block);
-      else if (row.type === "mediaBlock") renderMediaBlock(el, block);
-      else if (row.type === "contentCarousel") renderContentCarouselBlock(el, block);
+      var renderOpts = { draftEditor: draftEditor };
+      if (row.type === "testimonials") renderTestimonialsBlock(el, block, renderOpts);
+      else if (row.type === "logoStrip") renderLogoStripBlock(el, block, renderOpts);
+      else if (row.type === "mediaBlock") renderMediaBlock(el, block, renderOpts);
+      else if (row.type === "contentCarousel") renderContentCarouselBlock(el, block, renderOpts);
+      el.setAttribute("data-mk-section-label", sectionLabelFor(row, block));
     });
   }
 
@@ -247,6 +327,7 @@
     if (!content || !Array.isArray(content.sections) || !content.sections.length) return;
     var main = document.querySelector("main");
     if (!main) return;
+    var blocks = content.blocks && typeof content.blocks === "object" ? content.blocks : {};
 
     var ordered = content.sections.slice();
     var heroIdx = -1;
@@ -266,6 +347,7 @@
       if (!row || !row.id) continue;
       var el = document.querySelector('[data-mk-section="' + row.id + '"]');
       if (!el) continue;
+      el.setAttribute("data-mk-section-label", sectionLabelFor(row, blocks[row.id]));
       if (row.enabled === false) {
         el.setAttribute("hidden", "");
       } else {
@@ -273,6 +355,64 @@
         main.appendChild(el);
       }
     }
+    applyInspectorActiveSection(inspectorActiveSection);
+  }
+
+  function postToEditorParent(message) {
+    try {
+      if (window.parent && window.parent !== window) {
+        window.parent.postMessage(message, "*");
+      }
+      if (window.opener) {
+        window.opener.postMessage(message, "*");
+      }
+    } catch (e) { /* ignore */ }
+  }
+
+  function applyInspectorActiveSection(sectionId) {
+    inspectorActiveSection = sectionId || null;
+    document.querySelectorAll("[data-mk-section]").forEach(function (el) {
+      var on = sectionId && el.getAttribute("data-mk-section") === sectionId;
+      el.classList.toggle("mkInspectorActive", Boolean(on));
+    });
+  }
+
+  function setupDraftSectionInspector() {
+    if (document.body.dataset.mkInspectorBound === "1") return;
+    document.body.dataset.mkInspectorBound = "1";
+
+    document.addEventListener("mouseover", function (e) {
+      if (!draftEditorMode) return;
+      var section = e.target.closest("[data-mk-section]:not([hidden])");
+      if (inspectorHoverSection && inspectorHoverSection !== section) {
+        inspectorHoverSection.classList.remove("mkInspectorHover");
+      }
+      inspectorHoverSection = section;
+      if (section && !section.classList.contains("mkInspectorActive")) {
+        section.classList.add("mkInspectorHover");
+      }
+    }, true);
+
+    document.addEventListener("mouseout", function (e) {
+      if (!draftEditorMode) return;
+      var section = e.target.closest("[data-mk-section]");
+      if (!section) return;
+      var related = e.relatedTarget && e.relatedTarget.closest ? e.relatedTarget.closest("[data-mk-section]") : null;
+      if (related === section) return;
+      section.classList.remove("mkInspectorHover");
+      if (inspectorHoverSection === section) inspectorHoverSection = null;
+    }, true);
+
+    document.addEventListener("click", function (e) {
+      if (!draftEditorMode) return;
+      var section = e.target.closest("[data-mk-section]:not([hidden])");
+      if (!section) return;
+      e.preventDefault();
+      e.stopPropagation();
+      var sectionId = section.getAttribute("data-mk-section");
+      applyInspectorActiveSection(sectionId);
+      postToEditorParent({ type: "nabad-marketing-section-select", sectionId: sectionId });
+    }, true);
   }
 
   function showDraftBanner() {
@@ -746,6 +886,7 @@
     var params = new URLSearchParams(window.location.search || "");
     if (params.get("preview") !== "draft") return false;
     showDraftBanner();
+    enableDraftEditorMode();
     applyDraftQueryParams(params);
     try {
       var raw = sessionStorage.getItem(DRAFT_KEY);
@@ -764,11 +905,21 @@
 
     window.addEventListener("message", function (e) {
       if (!isAllowedDraftOrigin(e.origin)) return;
+      if (e.data && e.data.type === "nabad-marketing-scroll-section" && e.data.sectionId) {
+        var target = document.querySelector('[data-mk-section="' + e.data.sectionId + '"]');
+        if (target) {
+          applyInspectorActiveSection(e.data.sectionId);
+          target.scrollIntoView({ behavior: "smooth", block: "center" });
+        }
+        return;
+      }
       if (e.data && e.data.type === "nabad-marketing-draft" && e.data.payload && e.data.payload.content) {
         var payload = e.data.payload;
         if (payload.page && payload.page !== PAGE) return;
         if (payload.locale && payload.locale !== LOCALE) return;
+        if (payload.editorMode) enableDraftEditorMode();
         applyDraftContent(payload.content);
+        if (payload.activeSection) applyInspectorActiveSection(payload.activeSection);
       }
     });
 
@@ -876,7 +1027,11 @@
     .then(function (data) {
       if (!data || !data.ok || !data.content) return;
       applyCore(data.content);
-      if (PAGE === "home") applyHomeExtras(data.content);
+      if (PAGE === "home") {
+        applyHomeExtras(data.content);
+        applyMarketingBlocks(data.content, { draftEditor: false });
+        applySectionLayout(data.content);
+      }
     })
     .catch(function () { /* keep static HTML fallbacks */ });
 })();

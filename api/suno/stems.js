@@ -50,10 +50,9 @@ const {
 } = require("../_lib/suno-admin-log");
 
 const MAX_UPLOAD_BYTES = 25 * 1024 * 1024;
-// Reference-audio generations (cover / extend / add-instrumental) all
-// produce a full song's worth of audio on Suno's side, so they cost
-// the same as a normal generation.
-const STEMS_REMIX_COST = 10;
+// Reference-audio generations (remix / cover / hum / extend) produce full
+// song output (2 variants) — same credit cost as a normal generation.
+const STEMS_REMIX_COST = 12;
 // Vocal isolation / stem split on Suno is much cheaper than generation.
 const STEMS_VOCAL_COST = 2;
 

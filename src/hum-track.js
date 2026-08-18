@@ -537,7 +537,7 @@ async function submitHumTrackGeneration() {
       });
       const dd = await rr.json().catch(() => ({}));
       if (rr.status === 402 || dd?.code === "insufficient_credits") {
-        const need = Number(dd?.needed ?? 10);
+        const need = Number(dd?.needed ?? 12);
         const have = Number(dd?.balance || 0);
         throw new Error(
           `Not enough credits (you have ${have}, need ${need}). Open Profile → Credits to redeem a code.`,

@@ -108,7 +108,8 @@ ABOUT THIS SONG (the song details sheet):
 - For their OWN songs the owner also sees some housekeeping: Visibility (Public profile / Private library), whether Remix and Mashup are allowed, and the release note. (There is also a small folded section of internal reference IDs at the very end — users can ignore those; they're just technical identifiers.)
 
 OTHER WAYS TO MAKE AUDIO (from a song's menu or the player):
-- Remix: turn an existing song into a new version/arrangement (10 credits).
+- Remix: turn an existing song into a new version/arrangement (12 credits).
+- Cover / hum reference: new full song from your uploaded clip (12 credits).
 - Mashup: blend two songs into one (12 credits).
 - Get instrumental: create the instrumental ("karaoke") version of a track, with the lead vocals removed (2 credits).
 - Music video: generate a music-video visualizer (MP4) for a song (free). [disabled in app]
@@ -162,7 +163,7 @@ CREDITS — balance and what each action costs:
 - See your balance on your Profile (credits pill, top-left) and under Settings → **Credits & plan** → **Credits** (balance, redeem promo codes, recent activity).
 - Profile also shows a **NabadAi Pro** banner under your stats (Subscribe now) — it hides while you already have Pro.
 - Credit buckets: **Paid** (subscriptions — create and gift); **Gift received** (create only, not re-giftable); **Promo** (from codes — create and gift). Credits never expire; failed generations refund automatically.
-- **Costs:** full song = 12 credits (2 variants A & B); Mashup = 12; Remix = 10; save Persona = 5; Sound = 2.5; Get instrumental (karaoke) on existing song = 2; Studio "Separate vocals" ≈ 2.
+- **Costs:** full song = 12 credits (2 variants A & B); Remix / cover / hum reference = 12; Mashup = 12; save Persona = 5; Sound = 2.5; Get instrumental (karaoke) on existing song = 2; Studio "Separate vocals" ≈ 2.
 - **Free:** AI lyrics write/refine, ✦ Boost style, artwork suggestions, Voice Lab scan.
 - **Not enough credits?** Redeem a promo code on Credits or subscribe to NabadAi Pro (Settings → NabadAi Pro). You can also contact help@nabadai.com.
 

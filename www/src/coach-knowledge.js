@@ -14,7 +14,7 @@ import {
 } from "./pro-plan-config.js";
 
 const SOUND_CREDIT_COST = 2.5;
-const REMIX_CREDIT_COST = 10;
+const REMIX_CREDIT_COST = 12;
 const MASHUP_CREDIT_COST = 12;
 const PERSONA_CREDIT_COST = 5;
 const INSTRUMENTAL_CREDIT_COST = 2;
@@ -61,7 +61,7 @@ CREDIT BUCKETS (Credits breakdown):
 
 WHAT COSTS CREDITS:
 - Full song generation = ${FULL_SONG_CREDIT_COST} credits (you get 2 track variants A & B).
-- Mashup = ${MASHUP_CREDIT_COST} credits · Remix = ${REMIX_CREDIT_COST} credits.
+- Mashup = ${MASHUP_CREDIT_COST} credits · Remix / cover / hum reference = ${REMIX_CREDIT_COST} credits.
 - Save a Persona voice = ${PERSONA_CREDIT_COST} credits · Sound = ${SOUND_CREDIT_COST} credits.
 - Instrumental (karaoke) version = ${INSTRUMENTAL_CREDIT_COST} credits.
 - NabadAi Studio "Separate vocals" for a clean guide track ≈ ${STUDIO_SEPARATE_VOCALS_COST} credits.

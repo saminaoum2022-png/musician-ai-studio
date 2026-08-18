@@ -32,10 +32,10 @@ function resolveElevenMusicLengthMs(explicit) {
   return Math.max(3000, Math.min(600000, Math.round(n)));
 }
 
-/** Music finetune id — ElevenLabs music finetune (dashboard URL ?selected=… or API id). */
-const DEFAULT_ELEVEN_MUSIC_FINETUNE_ID = "trxfjjiiornsrkpjb4ne";
+/** Music finetune id — original ElevenLabs music finetune (first NabadAi model). */
+const DEFAULT_ELEVEN_MUSIC_FINETUNE_ID = "sj8dpdiqccqdoovlxuyx";
 /** Retired finetunes — ignore if still set in ELEVENLABS_FINETUNE_ID on Vercel. */
-const LEGACY_ELEVEN_MUSIC_FINETUNE_IDS = new Set(["sj8dpdiqccqdoovlxuyx"]);
+const LEGACY_ELEVEN_MUSIC_FINETUNE_IDS = new Set(["trxfjjiiornsrkpjb4ne"]);
 
 function resolveElevenFinetuneId(explicit) {
   const fromRequest = String(explicit || "").trim();

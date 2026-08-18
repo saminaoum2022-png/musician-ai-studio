@@ -32,11 +32,17 @@ function resolveElevenMusicLengthMs(explicit) {
   return Math.max(3000, Math.min(600000, Math.round(n)));
 }
 
-/** Music finetune id — e.g. ElevenLabs "NabadAi DNA" (URL ?selected=… or API list id). */
+/** Music finetune id — original ElevenLabs music finetune (first NabadAi model). */
+const DEFAULT_ELEVEN_MUSIC_FINETUNE_ID = "sj8dpdiqccqdoovlxuyx";
+/** Retired finetunes — ignore if still set in ELEVENLABS_FINETUNE_ID on Vercel. */
+const LEGACY_ELEVEN_MUSIC_FINETUNE_IDS = new Set(["trxfjjiiornsrkpjb4ne"]);
+
 function resolveElevenFinetuneId(explicit) {
+  const fromRequest = String(explicit || "").trim();
+  if (fromRequest) return fromRequest;
   const env = String(process.env.ELEVENLABS_FINETUNE_ID || "").trim();
-  const id = String(explicit || env || "").trim();
-  return id || null;
+  if (env && !LEGACY_ELEVEN_MUSIC_FINETUNE_IDS.has(env)) return env;
+  return DEFAULT_ELEVEN_MUSIC_FINETUNE_ID || null;
 }
 
 /** Confirm the server API key can see this finetune (same ElevenLabs account). */

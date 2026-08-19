@@ -30750,7 +30750,7 @@ function mergeThreadMessages(incoming, { scrollToBottom = true } = {}) {
       list[optIdx] = {
         ...m,
         client_message_id: list[optIdx].client_message_id || m.client_message_id || "",
-        sendStatus: "delivered",
+        sendStatus: m.delivered_at ? "delivered" : "sent",
       };
       changed = true;
       continue;
@@ -30767,12 +30767,12 @@ function mergeThreadMessages(incoming, { scrollToBottom = true } = {}) {
         list[existingIdx] = {
           ...prev,
           ...m,
-          sendStatus: m.delivered_at ? "delivered" : (prev.sendStatus || "sent"),
+          sendStatus: m.delivered_at ? "delivered" : "sent",
         };
         changed = true;
       }
     } else {
-      list.push({ ...m, sendStatus: m.sendStatus || "sent" });
+      list.push({ ...m, sendStatus: m.delivered_at ? "delivered" : "sent" });
       markMessageBubbleEnter(m);
       changed = true;
     }
@@ -30783,10 +30783,6 @@ function mergeThreadMessages(incoming, { scrollToBottom = true } = {}) {
   const partnerRows = rows.filter((m) => partnerId && String(m?.sender_id || "") === partnerId);
   if (partnerRows.length) {
     clearPartnerTypingState();
-    const latestPartnerAt = Math.max(
-      ...partnerRows.map((m) => (m?.created_at ? new Date(m.created_at).getTime() : 0)),
-    );
-    promoteOutboundToDelivered({ beforeTime: latestPartnerAt || 0 });
     void ackPartnerMessagesDelivered(partnerRows);
   }
   _messagesList = list.sort(
@@ -30986,7 +30982,7 @@ function confirmOptimisticThreadMessage(clientMessageId, serverMsg) {
   const next = {
     ...serverMsg,
     client_message_id: cid || String(serverMsg?.client_message_id || ""),
-    sendStatus: "delivered",
+    sendStatus: serverMsg?.delivered_at ? "delivered" : "sent",
   };
   if (idx >= 0) {
     const list = [..._messagesList];
@@ -31007,6 +31003,7 @@ function confirmOptimisticThreadMessage(clientMessageId, serverMsg) {
     createdAt: next.created_at,
     messageId: next.id,
   });
+  void pollOutboundDeliveryState(_conversationId, { bootToken: _messagesThreadBootToken });
 }
 
 function markOptimisticThreadMessageFailed(clientMessageId, err) {
@@ -32005,7 +32002,6 @@ function notePartnerTyping(userId) {
   const partnerId = String(_chatHeaderUser?.userId || "").trim();
   if (partnerId && uid !== partnerId) return;
   _partnerTypingUntil = Date.now() + DM_TYPING_LINGER_MS;
-  promoteOutboundToDelivered();
   if (_partnerTypingTimer) window.clearTimeout(_partnerTypingTimer);
   _partnerTypingTimer = window.setTimeout(() => {
     _partnerTypingTimer = 0;
@@ -32483,12 +32479,13 @@ function resolveInboxLastOutboundStatus(thread) {
   const createdAt = thread?.lastMessageAt ? new Date(thread.lastMessageAt).getTime() : 0;
   const partnerRead = thread?.partnerLastReadAt ? new Date(thread.partnerLastReadAt).getTime() : 0;
   if (partnerRead && createdAt && createdAt <= partnerRead) return "read";
-  return "delivered";
+  if (String(thread?.lastMessageDeliveredAt || "").trim()) return "delivered";
+  return "sent";
 }
 
 function messagesInboxPreviewStatusHtml(status) {
-  if (status !== "read" && status !== "delivered") return "";
-  const label = status === "read" ? "Read" : "Delivered";
+  if (status !== "read" && status !== "delivered" && status !== "sent") return "";
+  const label = status === "read" ? "Read" : status === "delivered" ? "Delivered" : "Sent";
   return `<span class="messagesRowPreviewTick messagesRowPreviewTick--${status}" aria-label="${label}">${messagesBbmTickHtml(status)}</span>`;
 }
 
@@ -32677,33 +32674,10 @@ function resolveOutboundMessageStatus(msg) {
   const readByPartner = Boolean(partnerRead && createdAt && createdAt <= partnerRead)
     || explicit === "read";
   if (readByPartner) return "read";
-  // BBM-style: once the server has the message and the partner has not read it yet,
-  // show ✓D (not a lone ✓). Lone ✓ is only while the optimistic send is in flight.
-  if (isOutboundMessageConfirmed(msg)) return "delivered";
   if (String(msg?.delivered_at || "").trim()) return "delivered";
-  if (explicit === "delivered") return "delivered";
-  if (partnerRepliedAfterOutboundMessage(msg)) return "delivered";
-  if (isPartnerTypingActive() && isRecentOutboundMessage(msg)) return "delivered";
+  if (isPendingThreadMessageId(msg?.id)) return "sending";
+  if (isOutboundMessageConfirmed(msg)) return "sent";
   return "sent";
-}
-
-function isRecentOutboundMessage(msg) {
-  const createdAt = msg?.created_at ? new Date(msg.created_at).getTime() : 0;
-  if (!createdAt) return false;
-  return Date.now() - createdAt < 24 * 60 * 60 * 1000;
-}
-
-function partnerRepliedAfterOutboundMessage(msg) {
-  const myId = String(authSession?.user?.id || "");
-  const partnerId = String(_chatHeaderUser?.userId || "").trim();
-  const createdAt = msg?.created_at ? new Date(msg.created_at).getTime() : 0;
-  if (!myId || !partnerId || !createdAt) return false;
-  if (String(msg?.sender_id || "") !== myId) return false;
-  return (Array.isArray(_messagesList) ? _messagesList : []).some((row) => {
-    if (String(row?.sender_id || "") !== partnerId) return false;
-    const t = row?.created_at ? new Date(row.created_at).getTime() : 0;
-    return t > createdAt;
-  });
 }
 
 function messagesBbmTickHtml(status) {
@@ -32717,26 +32691,6 @@ function messagesBbmTickHtml(status) {
     ? `<text class="msgBbmTickLetter" x="4.88" y="3.85" dominant-baseline="middle" text-anchor="middle">${letter}</text>`
     : "";
   return `<span class="msgBbmTick ${cls}" aria-hidden="true"><svg class="msgBbmTickSvg" viewBox="0 0 14 14" width="16" height="16" aria-hidden="true"><path class="msgBbmTickStroke" d="M2.55 7.35 5.5 10.15 11.35 4.05" fill="none" stroke="currentColor" stroke-width="1.95" stroke-linecap="round" stroke-linejoin="round"/>${letterSvg}</svg></span>`;
-}
-
-function promoteOutboundToDelivered({ beforeTime = 0 } = {}) {
-  const myId = String(authSession?.user?.id || "");
-  if (!myId) return false;
-  const cutoff = Number(beforeTime || 0) || 0;
-  let changed = false;
-  _messagesList = (Array.isArray(_messagesList) ? _messagesList : []).map((m) => {
-    if (String(m?.sender_id || "") !== myId) return m;
-    if (resolveOutboundMessageStatus(m) === "read") return m;
-    if (String(m?.delivered_at || "").trim()) return m;
-    const t = m?.created_at ? new Date(m.created_at).getTime() : 0;
-    if (cutoff && t > cutoff) return m;
-    const status = String(m?.sendStatus || "").trim();
-    if (status !== "sent" && status !== "delivered") return m;
-    changed = true;
-    return { ...m, sendStatus: "delivered" };
-  });
-  if (changed) patchOutboundReadStateInMount();
-  return changed;
 }
 
 let _messagesDeliveredAckInFlight = false;
@@ -33014,13 +32968,13 @@ async function loadMessagesForConversation(threadId, { bootToken = 0, silent = f
     readCursorChanged = applyPartnerLastReadAt(data?.partnerLastReadAt);
     const incoming = Array.isArray(data?.messages) ? data.messages : [];
     if (replace) {
-      _messagesList = incoming.map((m) => ({ ...m, sendStatus: m.sendStatus || "sent" }));
+      _messagesList = incoming.map((m) => ({ ...m, sendStatus: m.delivered_at ? "delivered" : "sent" }));
       syncMessagesLastFetchedAtFromList();
       _messagesHasMoreOlder = incoming.length >= MESSAGES_THREAD_PAGE_SIZE;
     } else if (silent || hasCache || (Array.isArray(_messagesList) && _messagesList.length)) {
       if (incoming.length) mergeThreadMessages(incoming, { scrollToBottom: false });
     } else {
-      _messagesList = incoming;
+      _messagesList = incoming.map((m) => ({ ...m, sendStatus: m.delivered_at ? "delivered" : "sent" }));
       syncMessagesLastFetchedAtFromList();
       _messagesHasMoreOlder = incoming.length >= MESSAGES_THREAD_PAGE_SIZE;
     }

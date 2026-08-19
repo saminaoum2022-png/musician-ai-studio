@@ -207,7 +207,7 @@ async function lastMessagesForThreads(threadIds) {
     const inClause = chunk.map(encodeURIComponent).join(",");
     const limit = Math.min(500, chunk.length * 8);
     const r = await svcFetch(
-      `dm_messages?select=thread_id,body,sender_id,created_at&thread_id=in.(${inClause})&order=created_at.desc&limit=${limit}`,
+      `dm_messages?select=thread_id,body,sender_id,created_at,delivered_at&thread_id=in.(${inClause})&order=created_at.desc&limit=${limit}`,
     );
     for (const row of Array.isArray(r.data) ? r.data : []) {
       const tid = String(row.thread_id || "");
@@ -294,6 +294,7 @@ async function enrichInboxThreads(threadRows, viewerId) {
       lastMessage: last?.body || "",
       lastMessageAt: last?.created_at || thread.last_message_at,
       lastMessageSenderId: last?.sender_id ? String(last.sender_id) : "",
+      lastMessageDeliveredAt: last?.delivered_at || null,
       partnerLastReadAt: partnerReadMap.get(tid) || null,
       unread: Boolean(hasUnread),
       unreadCount,
@@ -428,7 +429,7 @@ async function lastMessageForThread(threadId) {
   const tid = String(threadId || "").trim();
   if (!tid) return null;
   const r = await svcFetch(
-    `dm_messages?select=id,body,sender_id,created_at&thread_id=eq.${encodeURIComponent(tid)}&order=created_at.desc&limit=1`,
+    `dm_messages?select=id,body,sender_id,created_at,delivered_at&thread_id=eq.${encodeURIComponent(tid)}&order=created_at.desc&limit=1`,
   );
   return Array.isArray(r.data) && r.data[0] ? r.data[0] : null;
 }

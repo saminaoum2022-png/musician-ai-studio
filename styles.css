@@ -34528,6 +34528,9 @@ body[data-route="messages"]{
   align-items: center;
   color: rgba(223,231,251,0.46);
 }
+.messagesRowPreviewTick--sent{
+  color: rgba(223,231,251,0.52);
+}
 .messagesRowPreviewTick--delivered{
   color: rgba(223,231,251,0.62);
 }

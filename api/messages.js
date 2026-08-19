@@ -600,35 +600,41 @@ async function markUndeliveredPartnerMessages(thread, viewerId) {
   return markMessagesDelivered(ids, { threadId: tid });
 }
 
-/** Sender-side ✓D: if partner replied or opened the thread, their side received our messages. */
+/** Sender-side ✓D: delivered if partner replied after our message or opened/read the thread. */
 async function reconcileOutboundDeliveryForSender(thread, senderId) {
   const sid = cleanUserId(senderId);
   const partnerId = threadPartnerId(thread, sid);
   const tid = String(thread?.id || "").trim();
   if (!sid || !partnerId || !tid) return;
-  const [partnerLatestR, partnerReadAt] = await Promise.all([
+
+  const [pendingR, partnerMsgsR, partnerReadAt] = await Promise.all([
     svcFetch(
-      `dm_messages?select=created_at&thread_id=eq.${encodeURIComponent(tid)}&sender_id=eq.${encodeURIComponent(partnerId)}&order=created_at.desc&limit=1`,
+      `dm_messages?select=id,created_at&thread_id=eq.${encodeURIComponent(tid)}&sender_id=eq.${encodeURIComponent(sid)}&delivered_at=is.null&order=created_at.asc&limit=48`,
+    ),
+    svcFetch(
+      `dm_messages?select=created_at&thread_id=eq.${encodeURIComponent(tid)}&sender_id=eq.${encodeURIComponent(partnerId)}&order=created_at.asc&limit=200`,
     ),
     partnerLastReadAtForThread(thread, sid),
   ]);
-  const partnerLatestAt = Array.isArray(partnerLatestR.data) && partnerLatestR.data[0]
-    ? String(partnerLatestR.data[0].created_at || "").trim()
-    : "";
-  const readAt = partnerReadAt ? String(partnerReadAt).trim() : "";
-  let cutoff = "";
-  if (partnerLatestAt && readAt) {
-    cutoff = new Date(partnerLatestAt) > new Date(readAt) ? partnerLatestAt : readAt;
-  } else {
-    cutoff = partnerLatestAt || readAt;
-  }
-  if (!cutoff) return;
-  const pendingR = await svcFetch(
-    `dm_messages?select=id&thread_id=eq.${encodeURIComponent(tid)}&sender_id=eq.${encodeURIComponent(sid)}&delivered_at=is.null&created_at=lte.${encodeURIComponent(cutoff)}&order=created_at.desc&limit=48`,
-  );
-  const ids = (Array.isArray(pendingR.data) ? pendingR.data : [])
+
+  const pending = Array.isArray(pendingR.data) ? pendingR.data : [];
+  if (!pending.length) return;
+
+  const partnerTimes = (Array.isArray(partnerMsgsR.data) ? partnerMsgsR.data : [])
+    .map((row) => new Date(row?.created_at || "").getTime())
+    .filter((ms) => Number.isFinite(ms));
+  const readMs = partnerReadAt ? new Date(partnerReadAt).getTime() : NaN;
+
+  const ids = pending
+    .filter((row) => {
+      const sentMs = new Date(row?.created_at || "").getTime();
+      if (!Number.isFinite(sentMs)) return false;
+      if (Number.isFinite(readMs) && sentMs <= readMs) return true;
+      return partnerTimes.some((pt) => pt > sentMs);
+    })
     .map((row) => String(row?.id || "").trim())
     .filter(Boolean);
+
   if (ids.length) await markMessagesDelivered(ids, { threadId: tid });
 }
 

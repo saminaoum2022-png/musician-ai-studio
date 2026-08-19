@@ -32892,6 +32892,34 @@ function applyOutboundDeliveryRows(rows, { threadId = "", bootToken = 0 } = {}) 
   return changed;
 }
 
+function markOutboundDeliveredFromPartnerHistory() {
+  const myId = String(authSession?.user?.id || "").trim();
+  const partnerId = String(_chatHeaderUser?.userId || "").trim();
+  if (!myId || !partnerId) return false;
+  const partnerTimes = (Array.isArray(_messagesList) ? _messagesList : [])
+    .filter((m) => String(m?.sender_id || "") === partnerId && m?.created_at)
+    .map((m) => new Date(m.created_at).getTime())
+    .filter((ms) => Number.isFinite(ms));
+  if (!partnerTimes.length) return false;
+  const readMs = _messagesPartnerLastReadAt ? new Date(_messagesPartnerLastReadAt).getTime() : NaN;
+  let changed = false;
+  _messagesList = (Array.isArray(_messagesList) ? _messagesList : []).map((m) => {
+    if (String(m?.sender_id || "") !== myId) return m;
+    if (isPendingThreadMessageId(m?.id)) return m;
+    if (String(m?.delivered_at || "").trim()) return m;
+    const sentMs = m?.created_at ? new Date(m.created_at).getTime() : 0;
+    if (!sentMs) return m;
+    const delivered =
+      (Number.isFinite(readMs) && sentMs <= readMs)
+      || partnerTimes.some((pt) => pt > sentMs);
+    if (!delivered) return m;
+    changed = true;
+    const stamp = partnerTimes.find((pt) => pt > sentMs) || readMs || sentMs;
+    return { ...m, delivered_at: new Date(stamp).toISOString() };
+  });
+  return changed;
+}
+
 function markOutboundDeliveredBeforePartnerMessage(partnerMsg) {
   const myId = String(authSession?.user?.id || "").trim();
   const partnerAt = partnerMsg?.created_at ? new Date(partnerMsg.created_at).getTime() : 0;
@@ -32904,7 +32932,7 @@ function markOutboundDeliveredBeforePartnerMessage(partnerMsg) {
     if (isPendingThreadMessageId(m?.id)) return m;
     if (String(m?.delivered_at || "").trim()) return m;
     const createdAt = m?.created_at ? new Date(m.created_at).getTime() : 0;
-    if (!createdAt || createdAt > partnerAt) return m;
+    if (!createdAt || createdAt >= partnerAt) return m;
     changed = true;
     return { ...m, delivered_at: deliveredAt };
   });

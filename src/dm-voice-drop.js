@@ -352,7 +352,7 @@ function createVoiceDropAudio(playUrl) {
 
 function minBytesForVoiceDrop(durationMs, blobSize = 0) {
   const sec = Math.max(1, Math.round(Number(durationMs) / 1000) || 1);
-  return Math.max(2000, sec * 650, Math.min(Number(blobSize) || 0, 500));
+  return Math.min(DM_VOICE_MAX_BYTES, Math.max(800, sec * 400));
 }
 
 function blobToDataUrl(blob) {
@@ -383,7 +383,7 @@ export async function uploadDmVoiceBlob(blob, { durationMs = 0 } = {}) {
     throw new Error(String(data?.error || "Voice upload failed"));
   }
   const storedBytes = Number(data.bytes) || 0;
-  if (storedBytes < 500) {
+  if (storedBytes < 800) {
     throw new Error(`Upload corrupted (${storedBytes} bytes) — try again.`);
   }
   return { url: String(data.url), key: String(data.key || ""), bytes: storedBytes };
@@ -458,6 +458,7 @@ async function finishNativeRecording() {
       syncVoiceDropUi();
     });
     try { d().haptic?.("success"); } catch {}
+    d().showToast?.(`Drop ready · ${Math.round(blob.size / 1024)} KB`, { durationMs: 1800 });
   } catch (e) {
     _recState = "idle";
     syncVoiceDropUi();
@@ -741,8 +742,8 @@ async function sendVoiceDrop() {
     d().showToast?.("Open a chat first.", { durationMs: 2600 });
     return;
   }
-  if (!_blob?.size || _blob.size < minBytesForVoiceDrop(_durationMs, _blob.size)) {
-    d().showToast?.("Record a voice drop first.", { durationMs: 2600 });
+  if (!_blob?.size || _blob.size < 800) {
+    d().showToast?.("Record a voice drop first (preview it before sending).", { durationMs: 2800 });
     return;
   }
   if (sendBtn?.getAttribute("aria-busy") === "true") return;

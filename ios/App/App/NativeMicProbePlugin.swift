@@ -13,6 +13,7 @@ public class NativeMicProbePlugin: CAPPlugin, CAPBridgedPlugin {
         CAPPluginMethod(name: "startVoiceDropRecording", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "stopVoiceDropRecording", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "cancelVoiceDropRecording", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "voiceDropNativeReady", returnType: CAPPluginReturnPromise),
     ]
 
     private let probeQueue = DispatchQueue(label: "com.nabadai.music.nativeMicProbe")
@@ -26,6 +27,7 @@ public class NativeMicProbePlugin: CAPPlugin, CAPBridgedPlugin {
     private var voiceDropRecording = false
     private var voiceDropRecorder: AVAudioRecorder?
     private var voiceDropFileURL: URL?
+    private var voiceDropStartedAt: TimeInterval = 0
 
     // MARK: - Session info (read-only)
 
@@ -73,36 +75,46 @@ public class NativeMicProbePlugin: CAPPlugin, CAPBridgedPlugin {
 
     /// Start DM voice drop capture via AVAudioEngine (WKWebView MediaRecorder is broken on iOS).
     @objc func startVoiceDropRecording(_ call: CAPPluginCall) {
-        probeQueue.async { [weak self] in
+        DispatchQueue.main.async { [weak self] in
             guard let self = self else { return }
-            do {
-                try self.startVoiceDropEngine()
-                call.resolve(["ok": true])
-            } catch {
-                self.cancelVoiceDropEngine()
-                call.reject("startVoiceDropRecording failed: \(error.localizedDescription)")
+            self.ensureRecordPermission { err in
+                if let err = err {
+                    call.reject(err.localizedDescription)
+                    return
+                }
+                do {
+                    try self.startVoiceDropEngine()
+                    call.resolve(["ok": true])
+                } catch {
+                    self.cancelVoiceDropEngine()
+                    call.reject("startVoiceDropRecording failed: \(error.localizedDescription)")
+                }
             }
         }
     }
 
     @objc func stopVoiceDropRecording(_ call: CAPPluginCall) {
-        probeQueue.async { [weak self] in
+        DispatchQueue.main.async { [weak self] in
             guard let self = self else { return }
             do {
                 let result = try self.finishVoiceDropEngine()
                 call.resolve(result)
-            } catch {
+            } catch let err {
                 self.cancelVoiceDropEngine()
-                call.reject("stopVoiceDropRecording failed: \(error.localizedDescription)")
+                call.reject(err.localizedDescription)
             }
         }
     }
 
     @objc func cancelVoiceDropRecording(_ call: CAPPluginCall) {
-        probeQueue.async { [weak self] in
+        DispatchQueue.main.async { [weak self] in
             self?.cancelVoiceDropEngine()
             call.resolve(["ok": true])
         }
+    }
+
+    @objc func voiceDropNativeReady(_ call: CAPPluginCall) {
+        call.resolve(["ok": true, "nativeRecorder": true])
     }
 
     // MARK: - AVAudioEngine probe
@@ -182,24 +194,29 @@ public class NativeMicProbePlugin: CAPPlugin, CAPBridgedPlugin {
 
     private func startVoiceDropEngine() throws {
         cancelVoiceDropEngine()
-        try ensureRecordPermission()
         _ = try Self.configureRecordingSession()
 
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent("nabad-voice-drop-\(Int(Date().timeIntervalSince1970)).m4a")
         voiceDropFileURL = url
+        try? FileManager.default.removeItem(at: url)
 
         let settings: [String: Any] = [
             AVFormatIDKey: Int(kAudioFormatMPEG4AAC),
-            AVSampleRateKey: 22050,
+            AVSampleRateKey: 44100,
             AVNumberOfChannelsKey: 1,
-            AVEncoderAudioQualityKey: AVAudioQuality.medium.rawValue,
-            AVEncoderBitRateKey: 64000,
+            AVEncoderAudioQualityKey: AVAudioQuality.high.rawValue,
         ]
 
         let recorder = try AVAudioRecorder(url: url, settings: settings)
         recorder.isMeteringEnabled = true
-        recorder.prepareToRecord()
+        guard recorder.prepareToRecord() else {
+            throw NSError(
+                domain: "VoiceDrop",
+                code: 2,
+                userInfo: [NSLocalizedDescriptionKey: "Could not prepare native recorder"]
+            )
+        }
         guard recorder.record() else {
             throw NSError(
                 domain: "VoiceDrop",
@@ -209,6 +226,7 @@ public class NativeMicProbePlugin: CAPPlugin, CAPBridgedPlugin {
         }
         voiceDropRecorder = recorder
         voiceDropRecording = true
+        voiceDropStartedAt = Date().timeIntervalSince1970
     }
 
     private func finishVoiceDropEngine() throws -> [String: Any] {
@@ -221,7 +239,7 @@ public class NativeMicProbePlugin: CAPPlugin, CAPBridgedPlugin {
             )
         }
         recorder.stop()
-        let durationSec = recorder.currentTime
+        let durationSec = max(recorder.currentTime, Date().timeIntervalSince1970 - voiceDropStartedAt)
         voiceDropRecorder = nil
 
         guard let url = voiceDropFileURL else {
@@ -235,12 +253,12 @@ public class NativeMicProbePlugin: CAPPlugin, CAPBridgedPlugin {
 
         let data = try Data(contentsOf: url)
         let bytes = data.count
-        guard durationSec >= 0.35, bytes >= 500 else {
+        guard durationSec >= 0.35, bytes >= 800 else {
             try? FileManager.default.removeItem(at: url)
             throw NSError(
                 domain: "VoiceDrop",
                 code: 1,
-                userInfo: [NSLocalizedDescriptionKey: "Recording too short — try again."]
+                userInfo: [NSLocalizedDescriptionKey: "Recording too short (\(bytes) bytes) — try again."]
             )
         }
         let audioBase64 = data.base64EncodedString()
@@ -255,34 +273,33 @@ public class NativeMicProbePlugin: CAPPlugin, CAPBridgedPlugin {
         ]
     }
 
-    private func ensureRecordPermission() throws {
+    private func ensureRecordPermission(completion: @escaping (Error?) -> Void) {
         let session = AVAudioSession.sharedInstance()
         switch session.recordPermission {
         case .granted:
-            return
+            completion(nil)
         case .denied:
-            throw NSError(
+            completion(NSError(
                 domain: "VoiceDrop",
                 code: 10,
                 userInfo: [NSLocalizedDescriptionKey: "Microphone permission denied — enable in Settings → NabadAi Music."]
-            )
+            ))
         case .undetermined:
-            var granted = false
-            let sem = DispatchSemaphore(value: 0)
             session.requestRecordPermission { ok in
-                granted = ok
-                sem.signal()
-            }
-            sem.wait()
-            if !granted {
-                throw NSError(
-                    domain: "VoiceDrop",
-                    code: 11,
-                    userInfo: [NSLocalizedDescriptionKey: "Microphone permission needed."]
-                )
+                DispatchQueue.main.async {
+                    if ok {
+                        completion(nil)
+                    } else {
+                        completion(NSError(
+                            domain: "VoiceDrop",
+                            code: 11,
+                            userInfo: [NSLocalizedDescriptionKey: "Microphone permission needed."]
+                        ))
+                    }
+                }
             }
         @unknown default:
-            return
+            completion(nil)
         }
     }
 

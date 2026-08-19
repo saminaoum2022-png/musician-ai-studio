@@ -85,7 +85,7 @@ export async function runNativeMicProbe(durationSec = 5) {
 }
 
 export function isNativeVoiceDropRecordingAvailable() {
-  return isNativeIosStudio() && !!plugin()?.startVoiceDropRecording;
+  return isNativeIosStudio();
 }
 
 export async function startNativeVoiceDropRecording() {

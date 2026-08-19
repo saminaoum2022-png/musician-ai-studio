@@ -84,6 +84,28 @@ export async function runNativeMicProbe(durationSec = 5) {
   return p.recordProbe({ durationSec, configureSession: true });
 }
 
+export function isNativeVoiceDropRecordingAvailable() {
+  return isNativeIosStudio() && !!plugin()?.startVoiceDropRecording;
+}
+
+export async function startNativeVoiceDropRecording() {
+  const p = plugin();
+  if (!p?.startVoiceDropRecording) throw new Error("Native voice recording not available");
+  return p.startVoiceDropRecording();
+}
+
+export async function stopNativeVoiceDropRecording() {
+  const p = plugin();
+  if (!p?.stopVoiceDropRecording) throw new Error("Native voice recording not available");
+  return p.stopVoiceDropRecording();
+}
+
+export async function cancelNativeVoiceDropRecording() {
+  const p = plugin();
+  if (!p?.cancelVoiceDropRecording) return null;
+  return p.cancelVoiceDropRecording();
+}
+
 export function formatNativeSessionSummary(info) {
   if (!info) return "—";
   const cat = info.category || "?";

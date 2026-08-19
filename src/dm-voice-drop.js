@@ -3,6 +3,13 @@
  * Not a WhatsApp/IG waveform bar; Nabad-native voice drops for musician DMs.
  */
 
+import {
+  isNativeVoiceDropRecordingAvailable,
+  startNativeVoiceDropRecording,
+  stopNativeVoiceDropRecording,
+  cancelNativeVoiceDropRecording,
+} from "./studio/native-mic-probe.js";
+
 export const DM_VOICE_MARKER = "voice";
 export const DM_VOICE_MAX_MS = 30000;
 export const DM_VOICE_MAX_BYTES = 512 * 1024;
@@ -27,6 +34,7 @@ let _playingAudio = null;
 let _playingId = "";
 let _playingRaf = 0;
 const _voicePlayBlobCache = new Map();
+let _nativeRec = false;
 
 function d() {
   return _deps;
@@ -119,6 +127,14 @@ async function computePeaksFromBlob(blob, barCount = 52) {
 }
 
 function liveBloomHeights() {
+  if (_nativeRec && _recState === "recording") {
+    const t = performance.now() / 180;
+    const raw = Array.from({ length: DM_VOICE_BLOOM_BARS }, (_, i) => {
+      const w = 0.28 + Math.abs(Math.sin(t + i * 0.85)) * 0.62;
+      return w;
+    });
+    return normalizeVoicePeaks(raw, DM_VOICE_BLOOM_BARS);
+  }
   if (!_composeAnalyser || _recState !== "recording") {
     return normalizeVoicePeaks(_peaks, DM_VOICE_BLOOM_BARS);
   }
@@ -210,7 +226,24 @@ async function attachAnalyser(stream) {
   } catch {}
 }
 
+function capacitorLocalUrl(path) {
+  const raw = String(path || "").trim();
+  if (!raw) return "";
+  try {
+    const cap = window.Capacitor;
+    if (cap?.convertFileSrc) {
+      const filePath = raw.replace(/^file:\/\//, "");
+      return cap.convertFileSrc(filePath);
+    }
+  } catch {}
+  return raw;
+}
+
 function resetRecording() {
+  if (_nativeRec) {
+    void cancelNativeVoiceDropRecording().catch(() => {});
+    _nativeRec = false;
+  }
   if (_recState === "recording") {
     try { _recorder?.stop?.(); } catch {}
   }
@@ -367,13 +400,85 @@ async function togglePreviewPlayback() {
   } catch {}
 }
 
+async function finishNativeRecording() {
+  if (_recState !== "recording" || !_nativeRec) return;
+  if (_autostopTimer) {
+    clearTimeout(_autostopTimer);
+    _autostopTimer = 0;
+  }
+  stopVisualizer();
+  try {
+    const result = await stopNativeVoiceDropRecording();
+    const playUrl = capacitorLocalUrl(result?.wavPath);
+    if (!playUrl) throw new Error("Native recording missing file");
+    const resp = await fetch(playUrl);
+    if (!resp.ok) throw new Error(`Could not read recording (${resp.status})`);
+    const blob = await resp.blob();
+    const recordedMs = Math.min(
+      DM_VOICE_MAX_MS,
+      Math.max(400, Math.round(Number(result?.durationSec || 0) * 1000) || (performance.now() - _startedAt)),
+    );
+    const minBytes = minBytesForVoiceDrop(recordedMs, blob.size);
+    if (!blob.size || blob.size < minBytes) {
+      throw new Error(`Recording too short (${blob.size || 0} bytes) — try again.`);
+    }
+    if (blob.size > DM_VOICE_MAX_BYTES) {
+      throw new Error("Drop too large — keep it under 30s.");
+    }
+    _blob = blob;
+    _durationMs = recordedMs;
+    if (_blobUrl) {
+      try { URL.revokeObjectURL(_blobUrl); } catch {}
+    }
+    _blobUrl = URL.createObjectURL(blob);
+    _recState = "ready";
+    syncVoiceDropUi();
+    void computePeaksFromBlob(blob).then((peaks) => {
+      _peaks = peaks;
+      syncVoiceDropUi();
+    });
+    try { d().haptic?.("success"); } catch {}
+  } catch (e) {
+    _recState = "idle";
+    syncVoiceDropUi();
+    d().showToast?.(String(e?.message || "Recording failed — try again."), { durationMs: 3200 });
+  } finally {
+    _nativeRec = false;
+  }
+}
+
 async function startRecording() {
   if (_recState === "recording") return;
   stopPreviewPlayback();
   resetRecording();
-  try {
-    await d().prepareNativeRecordingSession?.();
-  } catch {}
+
+  if (isNativeVoiceDropRecordingAvailable()) {
+    try {
+      await d().prepareNativeRecordingSession?.();
+      await startNativeVoiceDropRecording();
+      _nativeRec = true;
+      _startedAt = performance.now();
+      _recState = "recording";
+      syncVoiceDropUi();
+      try { d().haptic?.("medium"); } catch {}
+      const tick = () => {
+        if (_recState !== "recording") return;
+        renderBloom({ live: true });
+        syncVoiceDropUi();
+        if (performance.now() - _startedAt < DM_VOICE_MAX_MS) {
+          _tickRaf = requestAnimationFrame(tick);
+        }
+      };
+      _tickRaf = requestAnimationFrame(tick);
+      _autostopTimer = setTimeout(() => {
+        if (_recState === "recording") void finishNativeRecording();
+      }, DM_VOICE_MAX_MS + 40);
+      return;
+    } catch {
+      _nativeRec = false;
+    }
+  }
+
   let stream;
   try {
     stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
@@ -472,6 +577,10 @@ async function startRecording() {
 }
 
 function stopRecording() {
+  if (_nativeRec) {
+    void finishNativeRecording();
+    return;
+  }
   if (_recState !== "recording" || !_recorder) return;
   try {
     if (typeof _recorder.requestData === "function") _recorder.requestData();

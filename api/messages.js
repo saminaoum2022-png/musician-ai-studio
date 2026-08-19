@@ -600,6 +600,38 @@ async function markUndeliveredPartnerMessages(thread, viewerId) {
   return markMessagesDelivered(ids, { threadId: tid });
 }
 
+/** Sender-side ✓D: if partner replied or opened the thread, their side received our messages. */
+async function reconcileOutboundDeliveryForSender(thread, senderId) {
+  const sid = cleanUserId(senderId);
+  const partnerId = threadPartnerId(thread, sid);
+  const tid = String(thread?.id || "").trim();
+  if (!sid || !partnerId || !tid) return;
+  const [partnerLatestR, partnerReadAt] = await Promise.all([
+    svcFetch(
+      `dm_messages?select=created_at&thread_id=eq.${encodeURIComponent(tid)}&sender_id=eq.${encodeURIComponent(partnerId)}&order=created_at.desc&limit=1`,
+    ),
+    partnerLastReadAtForThread(thread, sid),
+  ]);
+  const partnerLatestAt = Array.isArray(partnerLatestR.data) && partnerLatestR.data[0]
+    ? String(partnerLatestR.data[0].created_at || "").trim()
+    : "";
+  const readAt = partnerReadAt ? String(partnerReadAt).trim() : "";
+  let cutoff = "";
+  if (partnerLatestAt && readAt) {
+    cutoff = new Date(partnerLatestAt) > new Date(readAt) ? partnerLatestAt : readAt;
+  } else {
+    cutoff = partnerLatestAt || readAt;
+  }
+  if (!cutoff) return;
+  const pendingR = await svcFetch(
+    `dm_messages?select=id&thread_id=eq.${encodeURIComponent(tid)}&sender_id=eq.${encodeURIComponent(sid)}&delivered_at=is.null&created_at=lte.${encodeURIComponent(cutoff)}&order=created_at.desc&limit=48`,
+  );
+  const ids = (Array.isArray(pendingR.data) ? pendingR.data : [])
+    .map((row) => String(row?.id || "").trim())
+    .filter(Boolean);
+  if (ids.length) await markMessagesDelivered(ids, { threadId: tid });
+}
+
 async function partnerLastReadAtForThread(thread, viewerId) {
   const partnerId = threadPartnerId(thread, viewerId);
   if (!partnerId || !thread?.id) return null;
@@ -667,6 +699,7 @@ async function handleGet(req, res, user) {
     );
     const thread = Array.isArray(tr.data) && tr.data[0] ? tr.data[0] : null;
     if (!thread) return sendJson(res, 404, { ok: false, error: "Thread not found" });
+    await reconcileOutboundDeliveryForSender(thread, user.userId);
     const [partnerLastReadAt, outboundR] = await Promise.all([
       partnerLastReadAtForThread(thread, user.userId),
       svcFetch(
@@ -695,6 +728,7 @@ async function handleGet(req, res, user) {
     const thread = Array.isArray(tr.data) && tr.data[0] ? tr.data[0] : null;
     if (!thread) return sendJson(res, 404, { ok: false, error: "Thread not found" });
     await markUndeliveredPartnerMessages(thread, user.userId);
+    await reconcileOutboundDeliveryForSender(thread, user.userId);
     const limit = Math.min(80, Math.max(1, Number(url.searchParams.get("limit")) || 80));
     const before = String(url.searchParams.get("before") || "").trim();
     let msgPath =
@@ -1090,6 +1124,8 @@ async function handlePost(req, res, user) {
     });
     if (!sent.ok) return sendJson(res, 500, { ok: false, error: sent.error || "Send failed" });
     const recipientId = threadPartnerId(thread, user.userId);
+    await reconcileOutboundDeliveryForSender(thread, user.userId);
+    if (recipientId) await reconcileOutboundDeliveryForSender(thread, recipientId);
     if (recipientId) {
       const senderProfile = await profileByUserId(user.userId);
       queuePrivacySafePush({

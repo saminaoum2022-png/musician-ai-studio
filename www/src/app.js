@@ -32892,6 +32892,25 @@ function applyOutboundDeliveryRows(rows, { threadId = "", bootToken = 0 } = {}) 
   return changed;
 }
 
+function markOutboundDeliveredBeforePartnerMessage(partnerMsg) {
+  const myId = String(authSession?.user?.id || "").trim();
+  const partnerAt = partnerMsg?.created_at ? new Date(partnerMsg.created_at).getTime() : 0;
+  if (!myId || !partnerAt) return false;
+  const deliveredAt = String(partnerMsg.created_at || "").trim();
+  if (!deliveredAt) return false;
+  let changed = false;
+  _messagesList = (Array.isArray(_messagesList) ? _messagesList : []).map((m) => {
+    if (String(m?.sender_id || "") !== myId) return m;
+    if (isPendingThreadMessageId(m?.id)) return m;
+    if (String(m?.delivered_at || "").trim()) return m;
+    const createdAt = m?.created_at ? new Date(m.created_at).getTime() : 0;
+    if (!createdAt || createdAt > partnerAt) return m;
+    changed = true;
+    return { ...m, delivered_at: deliveredAt };
+  });
+  return changed;
+}
+
 async function refreshOutboundReceipts(threadId, { bootToken = 0 } = {}) {
   const tid = String(threadId || _conversationId || "").trim();
   if (!tid || isCoachThreadId(tid)) return;
@@ -33351,11 +33370,14 @@ async function refreshDmThreadRealtimeSubscribe(threadId) {
       if (mergeThreadMessages([row], { scrollToBottom: true })) {
         saveActiveThreadToCache();
         if (isPartner) {
+          if (markOutboundDeliveredBeforePartnerMessage(row)) {
+            patchOutboundReadStateInMount();
+          }
+          void refreshOutboundReceipts(tid, { bootToken: _messagesThreadBootToken });
           void (async () => {
             await ackPartnerMessagesDelivered([row]);
             await markThreadReadQuiet(tid, { skipDeliveryAck: true, readDelayMs: DM_READ_MARK_DELAY_MS });
-            void pollPartnerThreadRead(tid, { bootToken: _messagesThreadBootToken });
-            void pollOutboundDeliveryState(tid, { bootToken: _messagesThreadBootToken });
+            void refreshOutboundReceipts(tid, { bootToken: _messagesThreadBootToken });
           })();
         } else {
           void markThreadReadQuiet(tid, { readDelayMs: DM_READ_MARK_DELAY_MS });

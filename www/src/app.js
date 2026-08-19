@@ -226,7 +226,7 @@ import { MUSIC_VIDEO_FEATURE_ENABLED } from "./feature-flags.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260820-001720";
+const APP_BUILD = "20260820-010415";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -32873,8 +32873,7 @@ function applyOutboundDeliveryRows(rows, { threadId = "", bootToken = 0 } = {}) 
     if (!id || isPendingThreadMessageId(id) || !byId.has(id)) return m;
     const deliveredAt = byId.get(id) || "";
     const prevDelivered = String(m?.delivered_at || "").trim();
-    const nextStatus = deliveredAt ? "delivered" : "sent";
-    if (prevDelivered === deliveredAt && String(m?.sendStatus || "") === nextStatus) return m;
+    if (prevDelivered === deliveredAt) return m;
     changed = true;
     return {
       ...m,

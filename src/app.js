@@ -33176,6 +33176,7 @@ async function loadMessagesForConversation(threadId, { bootToken = 0, silent = f
       syncMessagesLastFetchedAtFromList();
       _messagesHasMoreOlder = incoming.length >= MESSAGES_THREAD_PAGE_SIZE;
     }
+    if (markOutboundDeliveredFromPartnerHistory()) readCursorChanged = true;
     saveThreadMessagesCache(tid, {
       messages: _messagesList,
       lastFetchedAt: _messagesLastFetchedAt,

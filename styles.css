@@ -34545,6 +34545,9 @@ body[data-route="messages"]{
   width: 14px;
   height: 14px;
 }
+.messagesRowPreviewTick .msgBbmTickLetter{
+  font-size: 6px;
+}
 .messagesRow.is-unread .messagesRowPreviewTick{
   color: rgba(223,231,251,0.56);
 }
@@ -35151,11 +35154,10 @@ body.messagesThreadKeyboardOpen[data-route="messages-thread"] .messagesThreadPag
   color: rgba(255,255,255,0.52);
 }
 .msgBbmTick{
-  position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 18px;
+  width: 16px;
   height: 16px;
   vertical-align: middle;
   color: inherit;
@@ -35165,23 +35167,14 @@ body.messagesThreadKeyboardOpen[data-route="messages-thread"] .messagesThreadPag
   display: block;
   overflow: visible;
 }
-.msgBbmTickBadge{
-  position: absolute;
-  right: -2px;
-  bottom: -3px;
-  min-width: 8px;
-  height: 8px;
-  padding: 0 1px;
-  font-family: Inter, system-ui, -apple-system, sans-serif;
-  font-size: 8px;
-  font-weight: 900;
-  line-height: 8px;
-  letter-spacing: -0.04em;
-  text-align: center;
-  color: currentColor;
-  pointer-events: none;
-}
 .msgBbmTickLetter{
+  fill: currentColor;
+  font-family: Inter, system-ui, -apple-system, sans-serif;
+  font-size: 7px;
+  font-weight: 900;
+  letter-spacing: -0.08em;
+}
+.msgBbmTickBadge{
   display: none;
 }
 .messagesBubbleWrap.is-mine.is-read-by-partner .messagesBubbleStatus--read{

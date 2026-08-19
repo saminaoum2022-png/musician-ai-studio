@@ -226,7 +226,7 @@ import { MUSIC_VIDEO_FEATURE_ENABLED } from "./feature-flags.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260819-190844";
+const APP_BUILD = "20260819-220512";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -30072,7 +30072,7 @@ async function prefetchThreadMessagesQuiet(threadId) {
       const incoming = Array.isArray(data?.messages) ? data.messages : [];
       const last = incoming[incoming.length - 1];
       saveThreadMessagesCache(tid, {
-        messages: incoming.map((m) => ({ ...m, sendStatus: m.sendStatus || "sent" })),
+        messages: incoming.map((m) => ({ ...m, ...deliveryFieldsFromServer(m) })),
         lastFetchedAt: String(last?.created_at || ""),
         lastFetchedId: String(last?.id || ""),
         partnerLastReadAt: String(data?.partnerLastReadAt || ""),
@@ -30278,6 +30278,27 @@ function markInboxThreadReadLocally(threadId) {
   return changed;
 }
 
+function patchInboxLastOutboundDelivered(threadId, deliveredAt) {
+  const tid = String(threadId || "").trim();
+  const at = String(deliveredAt || "").trim();
+  if (!tid || !at) return false;
+  const myId = String(authSession?.user?.id || "");
+  let changed = false;
+  _messagesInboxState.threads = (_messagesInboxState.threads || []).map((t) => {
+    if (String(t?.threadId || "") !== tid) return t;
+    if (String(t?.lastMessageSenderId || "") !== myId) return t;
+    if (String(t?.lastMessageDeliveredAt || "") === at) return t;
+    changed = true;
+    return { ...t, lastMessageDeliveredAt: at };
+  });
+  if (changed) {
+    saveMessagesInboxToStorage();
+    const route = String(document.body.getAttribute("data-route") || "");
+    if (route === "messages" || route === "friends") renderMessagesInbox();
+  }
+  return changed;
+}
+
 function patchInboxPartnerLastReadAt(threadId, lastReadAt) {
   const tid = String(threadId || "").trim();
   const next = String(lastReadAt || "").trim();
@@ -30377,9 +30398,39 @@ function patchInboxThreadRow({
   return true;
 }
 
+function appendDmRowToThreadCache(row) {
+  const tid = String(row?.thread_id || "").trim();
+  const id = String(row?.id || "").trim();
+  if (!tid || !id || isPendingThreadMessageId(id)) return false;
+  const cached = getThreadMessagesCache(tid);
+  if (!cached?.loadedOnce) return false;
+  if ((cached.messages || []).some((m) => String(m?.id || "") === id)) return false;
+  const msg = {
+    id,
+    thread_id: tid,
+    sender_id: String(row?.sender_id || ""),
+    body: String(row?.body || ""),
+    created_at: String(row?.created_at || new Date().toISOString()),
+    ...deliveryFieldsFromServer(row),
+  };
+  const messages = [...cached.messages, msg].sort(
+    (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
+  );
+  const last = messages[messages.length - 1];
+  saveThreadMessagesCache(tid, {
+    messages,
+    lastFetchedAt: String(last?.created_at || cached.lastFetchedAt || ""),
+    lastFetchedId: String(last?.id || cached.lastFetchedId || ""),
+    partnerLastReadAt: cached.partnerLastReadAt,
+    loadedOnce: true,
+  });
+  return true;
+}
+
 function patchInboxFromDmMessageRow(row) {
   const tid = String(row?.thread_id || "").trim();
   if (!tid || isCoachThreadId(tid)) return false;
+  appendDmRowToThreadCache(row);
   return patchInboxThreadRow({
     threadId: tid,
     lastMessage: row?.body || "",
@@ -30395,7 +30446,7 @@ function patchInboxFromOutgoingMessage({ threadId, body, createdAt, messageId = 
   const text = String(body || "").trim();
   if (!tid || !text) return false;
   const myId = String(authSession?.user?.id || "");
-  return patchInboxThreadRow({
+  const ok = patchInboxThreadRow({
     threadId: tid,
     lastMessage: text,
     lastMessageAt: createdAt || new Date().toISOString(),
@@ -30403,6 +30454,16 @@ function patchInboxFromOutgoingMessage({ threadId, body, createdAt, messageId = 
     messageId,
     bumpToTop: true,
   });
+  if (ok) {
+    const threads = _messagesInboxState.threads || [];
+    _messagesInboxState.threads = threads.map((t) => {
+      if (String(t?.threadId || "") !== tid) return t;
+      if (String(t?.lastMessageSenderId || "") !== myId) return t;
+      return { ...t, lastMessageDeliveredAt: null };
+    });
+    saveMessagesInboxToStorage();
+  }
+  return ok;
 }
 
 function navigateToMessagesThread({
@@ -32494,8 +32555,11 @@ function resolveInboxLastOutboundStatus(thread) {
   if (!lastSender || lastSender !== myId) return null;
   const createdAt = thread?.lastMessageAt ? new Date(thread.lastMessageAt).getTime() : 0;
   const partnerRead = thread?.partnerLastReadAt ? new Date(thread.partnerLastReadAt).getTime() : 0;
-  if (partnerRead && createdAt && createdAt <= partnerRead) return "read";
-  if (String(thread?.lastMessageDeliveredAt || "").trim()) return "delivered";
+  const deliveredAt = String(thread?.lastMessageDeliveredAt || "").trim();
+  if (deliveredAt) {
+    if (partnerRead && createdAt && createdAt <= partnerRead) return "read";
+    return "delivered";
+  }
   return "sent";
 }
 
@@ -32711,10 +32775,10 @@ function messagesBbmTickHtml(status) {
     : status === "delivered"
       ? "msgBbmTick--delivered"
       : "msgBbmTick--sent";
-  const letterBadge = letter
-    ? `<span class="msgBbmTickBadge" aria-hidden="true">${letter}</span>`
+  const letterSvg = letter
+    ? `<text class="msgBbmTickLetter" x="4.1" y="3.0" dominant-baseline="middle" text-anchor="middle">${letter}</text>`
     : "";
-  return `<span class="msgBbmTick ${cls}" aria-hidden="true"><svg class="msgBbmTickSvg" viewBox="0 0 14 14" width="16" height="16" aria-hidden="true"><path class="msgBbmTickStroke" d="M2.55 7.35 5.5 10.15 11.35 4.05" fill="none" stroke="currentColor" stroke-width="1.95" stroke-linecap="round" stroke-linejoin="round"/></svg>${letterBadge}</span>`;
+  return `<span class="msgBbmTick ${cls}" aria-hidden="true"><svg class="msgBbmTickSvg" viewBox="0 0 14 14" width="16" height="16" aria-hidden="true"><path class="msgBbmTickStroke" d="M2.55 7.35 5.5 10.15 11.35 4.05" fill="none" stroke="currentColor" stroke-width="1.95" stroke-linecap="round" stroke-linejoin="round"/>${letterSvg}</svg></span>`;
 }
 
 let _messagesDeliveredAckInFlight = false;
@@ -32793,6 +32857,14 @@ async function pollOutboundDeliveryState(threadId, { bootToken = 0 } = {}) {
       };
     });
     if (changed) patchOutboundReadStateInMount();
+    if (changed) {
+      const latestDelivered = _messagesList
+        .filter((m) => String(m?.sender_id || "") === myId && String(m?.delivered_at || "").trim())
+        .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0];
+      if (latestDelivered?.delivered_at) {
+        patchInboxLastOutboundDelivered(tid, latestDelivered.delivered_at);
+      }
+    }
   } catch (e) {
     console.warn("[dm-delivered]", e);
   }
@@ -33027,9 +33099,9 @@ async function loadMessagesForConversation(threadId, { bootToken = 0, silent = f
     });
     const myId = String(authSession?.user?.id || "");
     const partnerIncoming = incoming.filter((m) => String(m?.sender_id || "") !== myId);
-    await ackPartnerMessagesDelivered(partnerIncoming);
+    void ackPartnerMessagesDelivered(partnerIncoming);
     void pollOutboundDeliveryState(tid, { bootToken });
-    await markThreadReadQuiet(tid, { skipDeliveryAck: true, readDelayMs: DM_READ_MARK_DELAY_MS });
+    void markThreadReadQuiet(tid, { skipDeliveryAck: true, readDelayMs: DM_READ_MARK_DELAY_MS });
     return true;
   } catch (e) {
     if (!silent && !(Array.isArray(_messagesList) && _messagesList.length)) {
@@ -33257,6 +33329,9 @@ async function refreshDmThreadRealtimeSubscribe(threadId) {
       if (mergeThreadMessages([row], { scrollToBottom: false })) {
         saveActiveThreadToCache();
         patchOutboundReadStateInMount();
+        if (String(row?.delivered_at || "").trim()) {
+          patchInboxLastOutboundDelivered(tid, row.delivered_at);
+        }
       }
     },
     onReadUpdate: ({ lastReadAt } = {}) => {
@@ -34006,6 +34081,21 @@ async function respondMessageRequest(requestId, decision) {
   }
 }
 
+async function openMessagesThreadFromInbox(threadId) {
+  const tid = String(threadId || "").trim();
+  if (!tid) return;
+  if (!isCoachThreadId(tid)) {
+    try { await prefetchThreadMessagesQuiet(tid); } catch {}
+  }
+  const cachedThread = findInboxThreadById(tid);
+  const partnerUserId = String(cachedThread?.partnerUserId || "").trim();
+  navigateToMessagesThread({
+    threadId: tid,
+    headerUser: cachedThread ? chatHeaderUserFromInboxThread(cachedThread) : null,
+    partnerStats: getCachedChatPartnerStats(partnerUserId),
+  });
+}
+
 function bindMessagesPageOnce() {
   syncFriendsMessagesBtn();
   wireInAppShareSheetsOnce();
@@ -34018,6 +34108,13 @@ function bindMessagesPageOnce() {
     const tid = String(threadRow.getAttribute("data-messages-thread") || "").trim();
     if (tid && !isCoachThreadId(tid)) void prefetchThreadMessagesQuiet(tid);
   }, { passive: true });
+
+  document.addEventListener("mouseenter", (e) => {
+    const threadRow = e.target.closest?.("[data-messages-thread]");
+    if (!threadRow) return;
+    const tid = String(threadRow.getAttribute("data-messages-thread") || "").trim();
+    if (tid && !isCoachThreadId(tid)) void prefetchThreadMessagesQuiet(tid);
+  }, { passive: true, capture: true });
 
   document.addEventListener("click", (e) => {
     const friendsBtn = e.target.closest("#friendsMessagesBtn");
@@ -34060,13 +34157,7 @@ function bindMessagesPageOnce() {
       if (tid) {
         try { haptic("light"); } catch {}
         markInboxThreadReadLocally(tid);
-        const cachedThread = findInboxThreadById(tid);
-        const partnerUserId = String(cachedThread?.partnerUserId || "").trim();
-        navigateToMessagesThread({
-          threadId: tid,
-          headerUser: cachedThread ? chatHeaderUserFromInboxThread(cachedThread) : null,
-          partnerStats: getCachedChatPartnerStats(partnerUserId),
-        });
+        void openMessagesThreadFromInbox(tid);
       }
       return;
     }

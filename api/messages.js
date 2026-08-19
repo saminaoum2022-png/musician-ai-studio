@@ -93,6 +93,9 @@ async function uploadVoiceDropForUser(userId, { dataBase64 = "", contentType = "
     return { ok: false, error: "Invalid audio data" };
   }
   if (!buf.length) return { ok: false, error: "Empty recording" };
+  if (buf.length < 500) {
+    return { ok: false, error: "Recording too short — try again." };
+  }
   if (buf.length > DM_VOICE_MAX_BYTES) {
     return { ok: false, error: "Recording too large — keep it under 30 seconds." };
   }

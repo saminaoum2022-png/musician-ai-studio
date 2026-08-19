@@ -259,25 +259,20 @@ function voiceDropKeyFromUrl(url) {
   }
 }
 
-function resolveVoiceDropPlayUrl(stored, storageKey = "") {
-  let key = String(storageKey || "").trim();
-  if (!key) key = voiceDropKeyFromUrl(stored);
-  if (key && d().apiUrl) {
-    const stream = d().apiUrl(`/api/messages?type=voice_drop&key=${encodeURIComponent(key)}`);
-    return d().normalizeAudioUrlForPlayback?.(stream) || stream;
-  }
-  let url = String(stored || "").trim();
-  if (!url) return "";
-  if (url.startsWith("blob:") || url.startsWith("data:")) return url;
-  if (!/^https?:\/\//i.test(url)) {
+function publicVoiceDropPlayUrl(url, key) {
+  let pubUrl = String(url || "").trim();
+  const k = String(key || "").trim() || voiceDropKeyFromUrl(pubUrl);
+  if ((!pubUrl || !/^https?:\/\//i.test(pubUrl)) && k) {
     const base = String(d().SUPABASE_URL || "").replace(/\/$/, "");
-    if (base) {
-      const enc = url.split("/").map((s) => encodeURIComponent(s)).join("/");
-      url = `${base}/storage/v1/object/public/dm_voice/${enc}`;
-    }
+    if (!base) return "";
+    const enc = k.split("/").map((s) => encodeURIComponent(s)).join("/");
+    pubUrl = `${base}/storage/v1/object/public/dm_voice/${enc}`;
   }
-  const proxied = d().toAudioProxyUrl?.(url) || url;
-  return d().normalizeAudioUrlForPlayback?.(proxied) || proxied || url;
+  if (!pubUrl) return "";
+  if (pubUrl.startsWith("blob:") || pubUrl.startsWith("data:")) return pubUrl;
+  if (!/^https?:\/\//i.test(pubUrl)) return "";
+  const proxied = d().toAudioProxyUrl?.(pubUrl) || pubUrl;
+  return d().normalizeAudioUrlForPlayback?.(proxied) || proxied;
 }
 
 async function loadVoiceDropPlayUrl(url, key) {
@@ -285,32 +280,10 @@ async function loadVoiceDropPlayUrl(url, key) {
   if (cacheKey && _voicePlayBlobCache.has(cacheKey)) {
     return _voicePlayBlobCache.get(cacheKey);
   }
-  const k = String(key || "").trim() || voiceDropKeyFromUrl(url);
-  const streamUrl = resolveVoiceDropPlayUrl(url, k);
-  if (streamUrl && k && d().apiUrl) {
-    const token = d().getSupabaseAuthToken?.();
-    const fetchFn = d().nativeSafeFetch || fetch;
-    try {
-      const r = await fetchFn(streamUrl, {
-        method: "GET",
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-      });
-      if (r.ok) {
-        const blob = await r.blob();
-        if (blob?.size) {
-          const blobUrl = URL.createObjectURL(blob);
-          if (cacheKey) _voicePlayBlobCache.set(cacheKey, blobUrl);
-          return blobUrl;
-        }
-      }
-    } catch {}
-  }
-  if (!streamUrl) return "";
-  if (/^https?:\/\//i.test(streamUrl) && d().toAudioProxyUrl && !streamUrl.includes("voice_drop")) {
-    const proxied = d().normalizeAudioUrlForPlayback?.(d().toAudioProxyUrl(streamUrl)) || streamUrl;
-    return proxied;
-  }
-  return streamUrl;
+  // Same path as status voice feed: public storage URL → /api/suno/audio proxy.
+  // Audio elements cannot send Authorization headers, so do not pass voice_drop API URLs here.
+  const pub = publicVoiceDropPlayUrl(url, key);
+  return pub || "";
 }
 
 function createVoiceDropAudio(playUrl) {
@@ -321,30 +294,51 @@ function createVoiceDropAudio(playUrl) {
   return audio;
 }
 
-function blobToDataUrl(blob) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result || ""));
-    reader.onerror = () => reject(new Error("Could not read recording"));
-    reader.readAsDataURL(blob);
-  });
+function extensionForVoiceBlob(blob, contentType) {
+  const ct = String(contentType || blob?.type || "").toLowerCase();
+  if (ct.includes("webm")) return "webm";
+  if (ct.includes("mpeg") || ct.includes("mp3")) return "mp3";
+  if (ct.includes("ogg")) return "ogg";
+  if (ct.includes("wav")) return "wav";
+  return "m4a";
 }
 
 export async function uploadDmVoiceBlob(blob) {
-  const dataUrl = await blobToDataUrl(blob);
-  const data = await d().messagesApi("/api/messages", {
-    method: "POST",
-    timeoutMs: 90000,
-    body: JSON.stringify({
-      action: "upload_voice_drop",
-      contentType: contentTypeForBlob(blob),
-      dataBase64: dataUrl,
-    }),
-  });
-  if (!data?.ok || !data?.url) {
-    throw new Error(String(data?.error || "Voice upload failed"));
+  const token = d().getSupabaseAuthToken?.();
+  const uid = String(d().getAuthSession?.()?.user?.id || "").trim();
+  const base = String(d().SUPABASE_URL || "").replace(/\/$/, "");
+  const anon = String(d().SUPABASE_ANON_KEY || "").trim();
+  if (!token || !uid || !base || !anon) throw new Error("Login required");
+  if (!blob?.size || blob.size < 500) {
+    throw new Error("Recording too short — try again.");
   }
-  return { url: String(data.url), key: String(data.key || "") };
+  const contentType = contentTypeForBlob(blob);
+  const ext = extensionForVoiceBlob(blob, contentType);
+  const key = `${uid}/${Date.now()}.${ext}`;
+  const encKey = key.split("/").map((s) => encodeURIComponent(s)).join("/");
+  const fetchFn = d().nativeSafeFetch || fetch;
+  const r = await fetchFn(`${base}/storage/v1/object/dm_voice/${encKey}`, {
+    method: "POST",
+    headers: {
+      apikey: anon,
+      Authorization: `Bearer ${token}`,
+      "Content-Type": contentType,
+      "x-upsert": "true",
+      "Cache-Control": "public, max-age=31536000, immutable",
+    },
+    body: blob,
+  });
+  if (!r.ok) {
+    const t = await r.text().catch(() => "");
+    const hint = /bucket|not found|404|policy/i.test(t)
+      ? " Run supabase/dm_voice_storage.sql in Supabase."
+      : "";
+    throw new Error(`Voice upload failed (${r.status}): ${t.slice(0, 120)}${hint}`);
+  }
+  return {
+    url: `${base}/storage/v1/object/public/dm_voice/${encKey}`,
+    key,
+  };
 }
 
 function stopPreviewPlayback() {
@@ -615,7 +609,7 @@ async function sendVoiceDrop() {
     d().showToast?.("Open a chat first.", { durationMs: 2600 });
     return;
   }
-  if (!_blob?.size) {
+  if (!_blob?.size || _blob.size < 500) {
     d().showToast?.("Record a voice drop first.", { durationMs: 2600 });
     return;
   }

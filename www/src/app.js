@@ -32775,10 +32775,7 @@ function renderMessagesInbox() {
 
 function deliveryFieldsFromServer(row) {
   const deliveredAt = String(row?.delivered_at || "").trim();
-  return {
-    delivered_at: deliveredAt || null,
-    sendStatus: deliveredAt ? "delivered" : "sent",
-  };
+  return { delivered_at: deliveredAt || null };
 }
 
 function isOutboundMessageConfirmed(msg) {
@@ -32786,6 +32783,7 @@ function isOutboundMessageConfirmed(msg) {
   return Boolean(id && !isPendingThreadMessageId(id));
 }
 
+/** ✓ sent → ✓D delivered (delivered_at) → ✓R read (partnerLastReadAt). */
 function resolveOutboundMessageStatus(msg) {
   const explicit = String(msg?.sendStatus || "").trim();
   if (explicit === "sending" || explicit === "failed") return explicit;
@@ -32822,7 +32820,7 @@ async function ackPartnerMessagesDelivered(messages, { threadId = "" } = {}) {
   const tid = String(threadId || _conversationId || "").trim();
   if (!tid || isCoachThreadId(tid)) return;
   const route = String(document.body.getAttribute("data-route") || "");
-  if (!threadId && route !== "messages-thread") return;
+  if (!threadId && route !== "messages-thread" && route !== "messages") return;
   if (!threadId && String(_conversationId || "") !== tid) return;
   const myId = String(authSession?.user?.id || "").trim();
   if (!myId || _messagesDeliveredAckInFlight) return;
@@ -32856,51 +32854,74 @@ async function ackPartnerMessagesDelivered(messages, { threadId = "" } = {}) {
   }
 }
 
-async function pollOutboundDeliveryState(threadId, { bootToken = 0 } = {}) {
+function applyOutboundDeliveryRows(rows, { threadId = "", bootToken = 0 } = {}) {
   const tid = String(threadId || _conversationId || "").trim();
   const myId = String(authSession?.user?.id || "").trim();
-  if (!tid || !myId || isCoachThreadId(tid)) return;
+  if (!tid || !myId || !Array.isArray(rows) || !rows.length) return false;
+  if (bootToken && bootToken !== _messagesThreadBootToken) return false;
+  if (_conversationId !== tid) return false;
+  let changed = false;
+  const byId = new Map(
+    rows.map((row) => [
+      String(row?.id || ""),
+      String(row?.delivered_at || row?.deliveredAt || "").trim(),
+    ]),
+  );
+  _messagesList = (Array.isArray(_messagesList) ? _messagesList : []).map((m) => {
+    if (String(m?.sender_id || "") !== myId) return m;
+    const id = String(m?.id || "");
+    if (!id || isPendingThreadMessageId(id) || !byId.has(id)) return m;
+    const deliveredAt = byId.get(id) || "";
+    const prevDelivered = String(m?.delivered_at || "").trim();
+    const nextStatus = deliveredAt ? "delivered" : "sent";
+    if (prevDelivered === deliveredAt && String(m?.sendStatus || "") === nextStatus) return m;
+    changed = true;
+    return {
+      ...m,
+      delivered_at: deliveredAt || null,
+    };
+  });
+  if (changed) patchOutboundReadStateInMount();
+  if (changed) {
+    const latestDelivered = _messagesList
+      .filter((m) => String(m?.sender_id || "") === myId && String(m?.delivered_at || "").trim())
+      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0];
+    if (latestDelivered?.delivered_at) {
+      patchInboxLastOutboundDelivered(tid, latestDelivered.delivered_at);
+    }
+  }
+  return changed;
+}
+
+async function refreshOutboundReceipts(threadId, { bootToken = 0 } = {}) {
+  const tid = String(threadId || _conversationId || "").trim();
+  if (!tid || isCoachThreadId(tid)) return;
   if (bootToken && bootToken !== _messagesThreadBootToken) return;
   if (_conversationId !== tid) return;
   try {
-    await prepareApiAuthForFetch();
-    const path =
-      `dm_messages?select=id,delivered_at&thread_id=eq.${encodeURIComponent(tid)}&sender_id=eq.${encodeURIComponent(myId)}&order=created_at.desc&limit=40`;
-    const r = await supabaseRestWithAuth(path);
-    if (!r?.ok) return;
-    const rows = await r.json().catch(() => []);
-    if (!Array.isArray(rows) || !rows.length) return;
+    const data = await messagesApi(`/api/messages?type=thread_read&threadId=${encodeURIComponent(tid)}`);
     if (bootToken && bootToken !== _messagesThreadBootToken) return;
     if (_conversationId !== tid) return;
     let changed = false;
-    const byId = new Map(rows.map((row) => [String(row?.id || ""), String(row?.delivered_at || "").trim()]));
-    _messagesList = (Array.isArray(_messagesList) ? _messagesList : []).map((m) => {
-      if (String(m?.sender_id || "") !== myId) return m;
-      const id = String(m?.id || "");
-      if (!id || isPendingThreadMessageId(id) || !byId.has(id)) return m;
-      const deliveredAt = byId.get(id) || "";
-      const prevDelivered = String(m?.delivered_at || "").trim();
-      const nextStatus = deliveredAt ? "delivered" : "sent";
-      if (prevDelivered === deliveredAt && String(m?.sendStatus || "") === nextStatus) return m;
-      changed = true;
-      return {
-        ...m,
-        delivered_at: deliveredAt || null,
-        sendStatus: nextStatus,
-      };
-    });
-    if (changed) patchOutboundReadStateInMount();
-    if (changed) {
-      const latestDelivered = _messagesList
-        .filter((m) => String(m?.sender_id || "") === myId && String(m?.delivered_at || "").trim())
-        .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0];
-      if (latestDelivered?.delivered_at) {
-        patchInboxLastOutboundDelivered(tid, latestDelivered.delivered_at);
-      }
+    if (applyPartnerLastReadAt(data?.partnerLastReadAt)) changed = true;
+    if (Array.isArray(data?.outboundDelivery) && data.outboundDelivery.length) {
+      if (applyOutboundDeliveryRows(
+        data.outboundDelivery.map((row) => ({ id: row.id, delivered_at: row.deliveredAt })),
+        { threadId: tid, bootToken },
+      )) changed = true;
     }
+    if (changed) patchOutboundReadStateInMount();
   } catch (e) {
-    console.warn("[dm-delivered]", e);
+    console.warn("[dm-receipts]", e);
   }
+}
+
+async function pollOutboundDeliveryState(threadId, opts = {}) {
+  return refreshOutboundReceipts(threadId, opts);
+}
+
+async function pollPartnerThreadRead(threadId, opts = {}) {
+  return refreshOutboundReceipts(threadId, opts);
 }
 
 function applyPartnerLastReadAt(lastReadAt, { userId = "" } = {}) {
@@ -32928,25 +32949,6 @@ function applyPartnerLastReadAt(lastReadAt, { userId = "" } = {}) {
     }
   }
   return true;
-}
-
-async function pollPartnerThreadRead(threadId, { bootToken = 0 } = {}) {
-  const tid = String(threadId || _conversationId || "").trim();
-  if (!tid || isCoachThreadId(tid)) return;
-  if (bootToken && bootToken !== _messagesThreadBootToken) return;
-  if (String(document.body.getAttribute("data-route") || "") !== "messages-thread") return;
-  if (_conversationId !== tid) return;
-  try {
-    const data = await messagesApi(`/api/messages?type=thread_read&threadId=${encodeURIComponent(tid)}`);
-    if (bootToken && bootToken !== _messagesThreadBootToken) return;
-    if (_conversationId !== tid) return;
-    if (applyPartnerLastReadAt(data?.partnerLastReadAt)) {
-      patchOutboundReadStateInMount();
-    }
-    void pollOutboundDeliveryState(tid, { bootToken });
-  } catch (e) {
-    console.warn("[dm-read]", e);
-  }
 }
 
 function messagesBubbleStatusHtml(msg) {
@@ -33353,6 +33355,8 @@ async function refreshDmThreadRealtimeSubscribe(threadId) {
           void (async () => {
             await ackPartnerMessagesDelivered([row]);
             await markThreadReadQuiet(tid, { skipDeliveryAck: true, readDelayMs: DM_READ_MARK_DELAY_MS });
+            void pollPartnerThreadRead(tid, { bootToken: _messagesThreadBootToken });
+            void pollOutboundDeliveryState(tid, { bootToken: _messagesThreadBootToken });
           })();
         } else {
           void markThreadReadQuiet(tid, { readDelayMs: DM_READ_MARK_DELAY_MS });
@@ -33494,7 +33498,7 @@ function restartThreadReadPoll(threadId) {
     }
     if (_conversationId !== tid) return;
     void pollPartnerThreadRead(tid, { bootToken: _messagesThreadBootToken });
-    void pollOutboundDeliveryState(tid, { bootToken: _messagesThreadBootToken });
+    void refreshOutboundReceipts(tid, { bootToken: _messagesThreadBootToken });
   }, interval);
 }
 

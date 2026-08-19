@@ -667,8 +667,23 @@ async function handleGet(req, res, user) {
     );
     const thread = Array.isArray(tr.data) && tr.data[0] ? tr.data[0] : null;
     if (!thread) return sendJson(res, 404, { ok: false, error: "Thread not found" });
-    const partnerLastReadAt = await partnerLastReadAtForThread(thread, user.userId);
-    return sendJson(res, 200, { ok: true, partnerLastReadAt: partnerLastReadAt || null });
+    const [partnerLastReadAt, outboundR] = await Promise.all([
+      partnerLastReadAtForThread(thread, user.userId),
+      svcFetch(
+        `dm_messages?select=id,delivered_at&thread_id=eq.${encodeURIComponent(threadId)}&sender_id=eq.${encodeURIComponent(user.userId)}&order=created_at.desc&limit=40`,
+      ),
+    ]);
+    const outboundDelivery = Array.isArray(outboundR.data)
+      ? outboundR.data.map((row) => ({
+          id: String(row?.id || ""),
+          deliveredAt: row?.delivered_at || null,
+        })).filter((row) => row.id)
+      : [];
+    return sendJson(res, 200, {
+      ok: true,
+      partnerLastReadAt: partnerLastReadAt || null,
+      outboundDelivery,
+    });
   }
 
   if (type === "thread") {
@@ -888,6 +903,8 @@ async function handlePost(req, res, user) {
     );
     const thread = Array.isArray(tr.data) && tr.data[0] ? tr.data[0] : null;
     if (!thread) return sendJson(res, 404, { ok: false, error: "Thread not found" });
+    // Mark every pending inbound message from the partner (✓ → ✓D on their side).
+    await markUndeliveredPartnerMessages(thread, user.userId);
     const partnerId = threadPartnerId(thread, user.userId);
     const filteredIds = [];
     for (const id of messageIds) {
@@ -1061,6 +1078,9 @@ async function handlePost(req, res, user) {
     } else {
       return sendJson(res, 400, { ok: false, error: "Missing threadId or targetUserId" });
     }
+
+    // Replying in-thread proves the partner's prior messages reached this device.
+    await markUndeliveredPartnerMessages(thread, user.userId);
 
     const sent = await insertMessage({
       threadId: thread.id,

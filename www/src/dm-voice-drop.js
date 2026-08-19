@@ -35,6 +35,7 @@ let _playingId = "";
 let _playingRaf = 0;
 const _voicePlayBlobCache = new Map();
 let _nativeRec = false;
+let _sendInFlight = false;
 
 function d() {
   return _deps;
@@ -194,7 +195,7 @@ function syncVoiceDropUi() {
     if (recording) {
       status.textContent = `Capturing… ${fmt(performance.now() - _startedAt)} · ${fmt(DM_VOICE_MAX_MS)}`;
     } else if (hasBlob) {
-      status.textContent = `Drop ready · ${fmt(_durationMs)}`;
+      status.textContent = `Ready · ${fmt(_durationMs)} — tap Send drop`;
     } else {
       status.textContent = "Tap the orb to capture your drop";
     }
@@ -725,14 +726,97 @@ export function openDmVoiceDropSheet() {
   syncVoiceDropUi();
 }
 
-export function closeDmVoiceDropSheet() {
+export function closeDmVoiceDropSheet({ skipReset = false, animate = false } = {}) {
   stopPreviewPlayback();
-  resetRecording();
+  if (!skipReset) resetRecording();
   const sheet = document.getElementById("messagesVoiceDropSheet");
   if (!sheet) return;
-  sheet.hidden = true;
-  sheet.setAttribute("aria-hidden", "true");
-  document.body.classList.remove("messagesVoiceDropOpen");
+  const finish = () => {
+    sheet.hidden = true;
+    sheet.setAttribute("aria-hidden", "true");
+    sheet.classList.remove("is-closing");
+    document.body.classList.remove("messagesVoiceDropOpen");
+  };
+  if (animate && !sheet.hidden) {
+    sheet.classList.add("is-closing");
+    window.setTimeout(finish, 220);
+    return;
+  }
+  finish();
+}
+
+function clearVoiceDropAfterSend(localPlayUrl) {
+  if (_nativeRec) {
+    void cancelNativeVoiceDropRecording().catch(() => {});
+    _nativeRec = false;
+  }
+  if (_autostopTimer) {
+    clearTimeout(_autostopTimer);
+    _autostopTimer = 0;
+  }
+  stopVisualizer();
+  try { _stream?.getTracks?.().forEach((t) => t.stop()); } catch {}
+  _stream = null;
+  _recorder = null;
+  _chunks = [];
+  _blob = null;
+  _durationMs = 0;
+  _peaks = [];
+  _recState = "idle";
+  if (_blobUrl && _blobUrl !== localPlayUrl) {
+    try { URL.revokeObjectURL(_blobUrl); } catch {}
+  }
+  _blobUrl = localPlayUrl || "";
+  syncVoiceDropUi();
+  if (localPlayUrl) {
+    window.setTimeout(() => {
+      if (_blobUrl === localPlayUrl) {
+        try { URL.revokeObjectURL(localPlayUrl); } catch {}
+        if (_blobUrl === localPlayUrl) _blobUrl = "";
+      }
+    }, 120000);
+  }
+}
+
+async function sendVoiceDropInBackground({ clientMessageId, threadId, blob, durationMs, peaks }) {
+  const cid = String(clientMessageId || "").trim();
+  try {
+    const { url, key } = await uploadDmVoiceBlob(blob, { durationMs });
+    const body = buildDmVoicePayload({
+      url,
+      key,
+      durationSec: Math.round(durationMs / 1000),
+      peaks,
+    });
+    if (body.length > 2000) {
+      throw new Error("Voice drop metadata too large.");
+    }
+    const data = await d().messagesApi("/api/messages", {
+      method: "POST",
+      timeoutMs: 30000,
+      body: JSON.stringify({
+        action: "send_message",
+        threadId,
+        body,
+        clientMessageId: cid,
+      }),
+    });
+    if (!data?.ok) {
+      throw new Error(String(data?.error || "Send failed"));
+    }
+    const msg = data?.message;
+    if (msg) {
+      d().confirmOptimisticThreadMessage?.(cid, { ...msg, client_message_id: cid });
+    } else {
+      d().updateOptimisticMessageStatus?.(cid, "sent");
+      await d().pollNewThreadMessages?.(threadId);
+    }
+    await d().refreshMessagesUnreadBadge?.({ force: true });
+  } catch (e) {
+    d().markOptimisticThreadMessageFailed?.(cid, e);
+  } finally {
+    _sendInFlight = false;
+  }
 }
 
 async function sendVoiceDrop() {
@@ -746,51 +830,54 @@ async function sendVoiceDrop() {
     d().showToast?.("Record a voice drop first (preview it before sending).", { durationMs: 2800 });
     return;
   }
-  if (sendBtn?.getAttribute("aria-busy") === "true") return;
+  if (_sendInFlight || sendBtn?.getAttribute("aria-busy") === "true") return;
+
+  const blob = _blob;
+  const durationMs = _durationMs;
+  const peaks = Array.isArray(_peaks) ? [..._peaks] : [];
+  const localPlayUrl = _blobUrl;
+  const clientMessageId = String(d().newClientMessageId?.() || `cm_${Date.now()}`);
+  const viewerId = String(d().getViewerId?.() || d().getAuthSession?.()?.user?.id || "");
+  const optimisticBody = buildDmVoicePayload({
+    url: localPlayUrl,
+    durationSec: Math.round(durationMs / 1000),
+    peaks,
+  });
+  const optimistic = {
+    id: `pending:${clientMessageId}`,
+    client_message_id: clientMessageId,
+    sender_id: viewerId,
+    body: optimisticBody,
+    created_at: new Date().toISOString(),
+    sendStatus: "sending",
+  };
+
+  _sendInFlight = true;
   sendBtn?.setAttribute("aria-busy", "true");
   if (sendBtn) sendBtn.textContent = "Sending…";
-  try {
-    const { url, key } = await uploadDmVoiceBlob(_blob, { durationMs: _durationMs });
-    const body = buildDmVoicePayload({
-      url,
-      key,
-      durationSec: Math.round(_durationMs / 1000),
-      peaks: _peaks,
-    });
-    if (body.length > 2000) {
-      throw new Error("Voice drop metadata too large.");
-    }
-    d().feedbackMessagesComposerSend?.();
-    const data = await d().messagesApi("/api/messages", {
-      method: "POST",
-      timeoutMs: 30000,
-      body: JSON.stringify({ action: "send_message", threadId, body }),
-    });
-    if (!data?.ok) {
-      throw new Error(String(data?.error || "Send failed"));
-    }
-    const msg = data?.message;
-    closeDmVoiceDropSheet();
-    d().closeMessagesComposerSheet?.();
-    if (msg) {
-      d().appendThreadMessages?.([msg]);
-    } else {
-      await d().pollNewThreadMessages?.(threadId);
-    }
-    d().patchInboxFromOutgoingMessage?.({
-      threadId,
-      body,
-      createdAt: msg?.created_at || new Date().toISOString(),
-      messageId: msg?.id || "",
-    });
-    try { d().haptic?.("success"); } catch {}
-    await d().refreshMessagesUnreadBadge?.({ force: true });
-  } catch (e) {
-    d().showToast?.(String(e?.message || "Could not send voice drop"), { durationMs: 3200 });
-  } finally {
-    sendBtn?.removeAttribute("aria-busy");
-    if (sendBtn) sendBtn.textContent = "Send drop";
-  }
+
+  d().feedbackMessagesComposerSend?.();
+  d().addOptimisticThreadMessage?.(optimistic);
+  d().patchInboxFromOutgoingMessage?.({
+    threadId,
+    body: optimisticBody,
+    createdAt: optimistic.created_at,
+  });
+
+  clearVoiceDropAfterSend(localPlayUrl);
+  closeDmVoiceDropSheet({ skipReset: true, animate: true });
+  d().closeMessagesComposerSheet?.();
+
+  void sendVoiceDropInBackground({
+    clientMessageId,
+    threadId,
+    blob,
+    durationMs,
+    peaks,
+  });
+
+  sendBtn?.removeAttribute("aria-busy");
+  if (sendBtn) sendBtn.textContent = "Send drop";
 }
 
 export function initDmVoiceDrop(deps = {}) {

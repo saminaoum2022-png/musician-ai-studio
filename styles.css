@@ -35729,6 +35729,19 @@ html.is-web-shell body.messagesThreadViewportSized[data-route="messages-thread"]
 .messagesShareSheet[hidden]{
   display: none !important;
 }
+.messagesVoiceDropSheet.is-closing .messagesShareSheetBackdrop{
+  opacity: 0;
+  transition: opacity 0.22s ease;
+}
+.messagesVoiceDropSheet.is-closing .messagesVoiceDropCard{
+  opacity: 0;
+  transform: translateY(12px) scale(0.98);
+  transition: opacity 0.22s ease, transform 0.22s ease;
+}
+.messagesVoiceDropSheet:not(.is-closing) .messagesShareSheetBackdrop,
+.messagesVoiceDropSheet:not(.is-closing) .messagesVoiceDropCard{
+  transition: opacity 0.22s ease, transform 0.22s ease;
+}
 .shareChooserSheetBackdrop,
 .sendToFriendSheetBackdrop,
 .messagesShareSheetBackdrop{

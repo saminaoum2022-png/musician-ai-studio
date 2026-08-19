@@ -6096,11 +6096,12 @@ try {
 } catch {}
 try {
   initDmVoiceDrop({
+    apiUrl,
     getAuthSession: () => authSession,
     getSupabaseAuthToken,
+    nativeSafeFetch,
     SUPABASE_URL,
     SUPABASE_ANON_KEY,
-    nativeSafeFetch,
     pickRecorderMimeType,
     formatMsAsVoiceTime,
     toAudioProxyUrl,
@@ -31749,23 +31750,37 @@ function dmVoicePublicUrl(keyOrUrl) {
   return `${base}/storage/v1/object/public/dm_voice/${enc}`;
 }
 
+function parseDmVoicePayload(data) {
+  if (String(data?.nabad_dm || "") !== "voice") return null;
+  const storageKey = String(data.k || "").trim();
+  const directUrl = String(data.u || data.url || "").trim();
+  return {
+    type: "voice",
+    url: directUrl || dmVoicePublicUrl(storageKey),
+    storageKey,
+    durationSec: Math.max(0, Number(data.d ?? data.duration) || 0),
+    peaks: Array.isArray(data.p) ? data.p : [],
+  };
+}
+
 function parseDmMessageBody(raw) {
-  const body = String(raw || "").trim();
+  const body = String(raw || "").replace(/^\uFEFF/, "").trim();
   if (!body) return { type: "text", text: "" };
+  if (body.includes('"nabad_dm"') && body.includes('"voice"')) {
+    const start = body.indexOf("{");
+    const end = body.lastIndexOf("}");
+    if (start >= 0 && end > start) {
+      try {
+        const voice = parseDmVoicePayload(JSON.parse(body.slice(start, end + 1)));
+        if (voice) return voice;
+      } catch {}
+    }
+  }
   if (body.startsWith("{")) {
     try {
       const data = JSON.parse(body);
-      // Voice drops first — same nabad_dm key namespace as songs.
-      if (String(data?.nabad_dm || "") === "voice") {
-        const storageKey = String(data.k || "").trim();
-        const directUrl = String(data.u || data.url || "").trim();
-        return {
-          type: "voice",
-          url: directUrl || dmVoicePublicUrl(storageKey),
-          durationSec: Math.max(0, Number(data.d ?? data.duration) || 0),
-          peaks: Array.isArray(data.p) ? data.p : [],
-        };
-      }
+      const voice = parseDmVoicePayload(data);
+      if (voice) return voice;
       if (data?.[DM_SONG_MARKER] === "song" || data?.nabad_dm === "song") {
         return {
           type: "song",

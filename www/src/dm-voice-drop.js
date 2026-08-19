@@ -26,6 +26,7 @@ let _composeAnalyser = null;
 let _playingAudio = null;
 let _playingId = "";
 let _playingRaf = 0;
+const _voicePlayBlobCache = new Map();
 
 function d() {
   return _deps;
@@ -48,6 +49,18 @@ function contentTypeForBlob(blob) {
   if (raw.includes("wav")) return "audio/wav";
   if (raw.includes("webm")) return "audio/webm";
   return "audio/mp4";
+}
+
+function isSafariLikeRecorderEnv() {
+  try {
+    if (window?.Capacitor?.isNativePlatform?.()) return true;
+    const ua = navigator.userAgent || "";
+    if (/iPhone|iPad|iPod/i.test(ua)) return true;
+    if (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1) return true;
+    return /^((?!chrome|android).)*safari/i.test(ua);
+  } catch {
+    return false;
+  }
 }
 
 function fallbackPeaks(count) {
@@ -236,7 +249,23 @@ export function buildDmVoicePayload({ url, key, durationSec, peaks } = {}) {
   return JSON.stringify(payload);
 }
 
-function resolveVoiceDropPlayUrl(stored) {
+function voiceDropKeyFromUrl(url) {
+  const m = String(url || "").match(/\/dm_voice\/([^?]+)/i);
+  if (!m) return "";
+  try {
+    return decodeURIComponent(m[1]);
+  } catch {
+    return m[1];
+  }
+}
+
+function resolveVoiceDropPlayUrl(stored, storageKey = "") {
+  let key = String(storageKey || "").trim();
+  if (!key) key = voiceDropKeyFromUrl(stored);
+  if (key && d().apiUrl) {
+    const stream = d().apiUrl(`/api/messages?type=voice_drop&key=${encodeURIComponent(key)}`);
+    return d().normalizeAudioUrlForPlayback?.(stream) || stream;
+  }
   let url = String(stored || "").trim();
   if (!url) return "";
   if (url.startsWith("blob:") || url.startsWith("data:")) return url;
@@ -249,6 +278,39 @@ function resolveVoiceDropPlayUrl(stored) {
   }
   const proxied = d().toAudioProxyUrl?.(url) || url;
   return d().normalizeAudioUrlForPlayback?.(proxied) || proxied || url;
+}
+
+async function loadVoiceDropPlayUrl(url, key) {
+  const cacheKey = String(key || "").trim() || voiceDropKeyFromUrl(url) || url;
+  if (cacheKey && _voicePlayBlobCache.has(cacheKey)) {
+    return _voicePlayBlobCache.get(cacheKey);
+  }
+  const k = String(key || "").trim() || voiceDropKeyFromUrl(url);
+  const streamUrl = resolveVoiceDropPlayUrl(url, k);
+  if (streamUrl && k && d().apiUrl) {
+    const token = d().getSupabaseAuthToken?.();
+    const fetchFn = d().nativeSafeFetch || fetch;
+    try {
+      const r = await fetchFn(streamUrl, {
+        method: "GET",
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (r.ok) {
+        const blob = await r.blob();
+        if (blob?.size) {
+          const blobUrl = URL.createObjectURL(blob);
+          if (cacheKey) _voicePlayBlobCache.set(cacheKey, blobUrl);
+          return blobUrl;
+        }
+      }
+    } catch {}
+  }
+  if (!streamUrl) return "";
+  if (/^https?:\/\//i.test(streamUrl) && d().toAudioProxyUrl && !streamUrl.includes("voice_drop")) {
+    const proxied = d().normalizeAudioUrlForPlayback?.(d().toAudioProxyUrl(streamUrl)) || streamUrl;
+    return proxied;
+  }
+  return streamUrl;
 }
 
 function createVoiceDropAudio(playUrl) {
@@ -354,10 +416,17 @@ async function startRecording() {
       _autostopTimer = 0;
     }
     const blob = new Blob(_chunks, { type: rec.mimeType || mimeType || "audio/webm" });
+    const recordedMs = Math.min(DM_VOICE_MAX_MS, Math.max(400, Math.round(performance.now() - _startedAt)));
     if (!blob.size) {
       _recState = "idle";
       syncVoiceDropUi();
       d().showToast?.("Empty drop — try again.", { durationMs: 2400 });
+      return;
+    }
+    if (recordedMs > 1000 && blob.size < 1000) {
+      _recState = "idle";
+      syncVoiceDropUi();
+      d().showToast?.("Recording failed on this device — try again.", { durationMs: 2800 });
       return;
     }
     if (blob.size > DM_VOICE_MAX_BYTES) {
@@ -367,7 +436,7 @@ async function startRecording() {
       return;
     }
     _blob = blob;
-    _durationMs = Math.min(DM_VOICE_MAX_MS, Math.max(400, Math.round(performance.now() - _startedAt)));
+    _durationMs = recordedMs;
     _blobUrl = URL.createObjectURL(blob);
     _recState = "ready";
     syncVoiceDropUi();
@@ -380,12 +449,19 @@ async function startRecording() {
   _stream = stream;
   _recorder = rec;
   void attachAnalyser(stream);
+  const safariLike = isSafariLikeRecorderEnv();
   try {
-    rec.start();
+    // iOS WKWebView often delivers tiny/empty blobs unless we use a timeslice.
+    if (safariLike) rec.start(250);
+    else rec.start();
   } catch {
-    try { stream.getTracks().forEach((t) => t.stop()); } catch {}
-    d().showToast?.("Could not start recording.", { durationMs: 2600 });
-    return;
+    try {
+      rec.start();
+    } catch {
+      try { stream.getTracks().forEach((t) => t.stop()); } catch {}
+      d().showToast?.("Could not start recording.", { durationMs: 2600 });
+      return;
+    }
   }
   _startedAt = performance.now();
   _recState = "recording";
@@ -407,6 +483,9 @@ async function startRecording() {
 
 function stopRecording() {
   if (_recState !== "recording" || !_recorder) return;
+  try {
+    if (typeof _recorder.requestData === "function") _recorder.requestData();
+  } catch {}
   try { _recorder.stop(); } catch {}
 }
 
@@ -421,12 +500,13 @@ function arcBarsHtml(peaks, { playing = false } = {}) {
 
 export function messagesVoiceDropBubbleHtml(parsed, { mine = false, msgId = "" } = {}) {
   const url = escapeAttr(parsed?.url || "");
+  const storageKey = escapeAttr(parsed?.storageKey || voiceDropKeyFromUrl(parsed?.url) || "");
   const dur = Math.max(0, Number(parsed?.durationSec) || 0);
   const durLabel = formatDurationSec(dur);
   const peaksJson = escapeAttr(JSON.stringify(normalizeVoicePeaks(parsed?.peaks, DM_VOICE_ARC_BARS)));
   const id = escapeAttr(String(msgId || ""));
   return `
-    <div class="messagesVoiceDrop${mine ? " is-mine" : ""}" data-voice-drop="${id}" data-voice-url="${url}" data-voice-peaks="${peaksJson}" data-voice-dur="${dur}">
+    <div class="messagesVoiceDrop${mine ? " is-mine" : ""}" data-voice-drop="${id}" data-voice-url="${url}" data-voice-key="${storageKey}" data-voice-peaks="${peaksJson}" data-voice-dur="${dur}">
       <button type="button" class="messagesVoiceDropPlay" aria-label="Play voice drop">
         <span class="messagesVoiceDropPlayHex" aria-hidden="true">
           <svg class="messagesVoiceDropPlayIco messagesVoiceDropPlayIco--play" viewBox="0 0 24 24" width="18" height="18"><path fill="currentColor" d="M9 7.5v9l7.5-4.5z"/></svg>
@@ -473,14 +553,15 @@ function animatePlayingBars(card) {
 export async function toggleVoiceDropPlayback(card) {
   if (!card) return;
   const url = String(card.getAttribute("data-voice-url") || "").trim();
-  if (!url) return;
-  const id = String(card.getAttribute("data-voice-drop") || url);
+  const key = String(card.getAttribute("data-voice-key") || "").trim();
+  if (!url && !key) return;
+  const id = String(card.getAttribute("data-voice-drop") || key || url);
   if (_playingId === id && _playingAudio && !_playingAudio.paused) {
     stopPreviewPlayback();
     return;
   }
   stopPreviewPlayback();
-  const playUrl = resolveVoiceDropPlayUrl(url);
+  const playUrl = await loadVoiceDropPlayUrl(url, key);
   if (!playUrl) {
     d().showToast?.("Voice drop file missing.", { durationMs: 2600 });
     return;

@@ -226,7 +226,7 @@ import { MUSIC_VIDEO_FEATURE_ENABLED } from "./feature-flags.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260819-221046";
+const APP_BUILD = "20260819-230335";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -29487,6 +29487,8 @@ const MESSAGES_THREAD_CONNECT_POLL_MS = 3000;
 const MESSAGES_THREAD_PRESENCE_POLL_MS = 5000;
 /** Partner read cursor for outbound ✓ / ✓✓ receipts. */
 const MESSAGES_THREAD_READ_POLL_MS = 2500;
+/** Backup receipt poll while Realtime is connected (UPDATE events are flaky on web). */
+const MESSAGES_THREAD_RECEIPT_POLL_LIVE_MS = 5000;
 const MESSAGES_INBOX_POLL_MS = 15000;
 /** Slower inbox poll when Realtime is connected. */
 const MESSAGES_INBOX_POLL_LIVE_MS = 60000;
@@ -31030,6 +31032,18 @@ function catchUpOpenMessagesThread({ reason = "foreground" } = {}) {
   void pollOutboundDeliveryState(tid, { bootToken: _messagesThreadBootToken });
 }
 
+function catchUpMessagesReceipts({ reason = "foreground" } = {}) {
+  if (!MESSAGES_FEATURE_ENABLED) return;
+  const route = String(document.body.getAttribute("data-route") || "");
+  if (route === "messages-thread") {
+    catchUpOpenMessagesThread({ reason });
+    return;
+  }
+  if (route === "messages" || route === "friends") {
+    void loadMessagesInbox({ silent: true });
+  }
+}
+
 function addOptimisticThreadMessage(msg) {
   markMessageBubbleEnter(msg);
   _messagesList = [...(Array.isArray(_messagesList) ? _messagesList : []), msg];
@@ -31065,10 +31079,16 @@ function confirmOptimisticThreadMessage(clientMessageId, serverMsg) {
     createdAt: next.created_at,
     messageId: next.id,
   });
+  if (String(next.delivered_at || "").trim()) {
+    patchInboxLastOutboundDelivered(_conversationId, next.delivered_at);
+  }
   void pollOutboundDeliveryState(_conversationId, { bootToken: _messagesThreadBootToken });
   window.setTimeout(() => {
     void pollOutboundDeliveryState(_conversationId, { bootToken: _messagesThreadBootToken });
   }, 1500);
+  window.setTimeout(() => {
+    void pollOutboundDeliveryState(_conversationId, { bootToken: _messagesThreadBootToken });
+  }, 5000);
 }
 
 function markOptimisticThreadMessageFailed(clientMessageId, err) {
@@ -33432,6 +33452,7 @@ function restartThreadSafetyPoll(threadId) {
     }
     if (_conversationId !== tid) return;
     void pollNewThreadMessages(tid, { bootToken: _messagesThreadBootToken, reason: "safety-poll" });
+    void pollPartnerThreadRead(tid, { bootToken: _messagesThreadBootToken });
   }, interval);
 }
 
@@ -33440,9 +33461,11 @@ function restartThreadReadPoll(threadId) {
     window.clearInterval(_messagesReadPollTimer);
     _messagesReadPollTimer = 0;
   }
-  if (_messagesThreadRealtimeReady) return;
   const tid = String(threadId || _conversationId || "").trim();
   if (!tid) return;
+  const interval = _messagesThreadRealtimeReady
+    ? MESSAGES_THREAD_RECEIPT_POLL_LIVE_MS
+    : MESSAGES_THREAD_READ_POLL_MS;
   _messagesReadPollTimer = window.setInterval(() => {
     if (String(document.body.getAttribute("data-route") || "") !== "messages-thread") {
       stopMessagesThreadRealtime();
@@ -64325,7 +64348,7 @@ try {
     document.addEventListener("visibilitychange", () => {
       setAppActiveState(!document.hidden);
       if (!document.hidden) {
-        catchUpOpenMessagesThread({ reason: "visibility" });
+        catchUpMessagesReceipts({ reason: "visibility" });
         void tryRecoverGenerationFromPushNotification();
         kickForegroundGenerationPolls();
         void resumePendingGenerationOnForeground();

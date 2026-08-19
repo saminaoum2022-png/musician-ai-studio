@@ -586,6 +586,20 @@ async function streamVoiceDropObject(res, key) {
   return true;
 }
 
+async function markUndeliveredPartnerMessages(thread, viewerId) {
+  const partnerId = threadPartnerId(thread, viewerId);
+  const tid = String(thread?.id || "").trim();
+  if (!partnerId || !tid) return { ok: true, deliveredAt: null, updatedIds: [] };
+  const pending = await svcFetch(
+    `dm_messages?select=id&thread_id=eq.${encodeURIComponent(tid)}&sender_id=eq.${encodeURIComponent(partnerId)}&delivered_at=is.null&order=created_at.desc&limit=48`,
+  );
+  const ids = (Array.isArray(pending.data) ? pending.data : [])
+    .map((row) => String(row?.id || "").trim())
+    .filter(Boolean);
+  if (!ids.length) return { ok: true, deliveredAt: null, updatedIds: [] };
+  return markMessagesDelivered(ids, { threadId: tid });
+}
+
 async function partnerLastReadAtForThread(thread, viewerId) {
   const partnerId = threadPartnerId(thread, viewerId);
   if (!partnerId || !thread?.id) return null;
@@ -665,6 +679,7 @@ async function handleGet(req, res, user) {
     );
     const thread = Array.isArray(tr.data) && tr.data[0] ? tr.data[0] : null;
     if (!thread) return sendJson(res, 404, { ok: false, error: "Thread not found" });
+    await markUndeliveredPartnerMessages(thread, user.userId);
     const limit = Math.min(80, Math.max(1, Number(url.searchParams.get("limit")) || 80));
     const before = String(url.searchParams.get("before") || "").trim();
     let msgPath =
@@ -837,6 +852,12 @@ async function handlePost(req, res, user) {
   if (action === "mark_read") {
     const threadId = String(body?.threadId || "").trim();
     if (!threadId) return sendJson(res, 400, { ok: false, error: "Missing threadId" });
+    const tr = await svcFetch(
+      `dm_threads?select=id,user_a,user_b&or=(and(id.eq.${encodeURIComponent(threadId)},user_a.eq.${encodeURIComponent(user.userId)}),and(id.eq.${encodeURIComponent(threadId)},user_b.eq.${encodeURIComponent(user.userId)}))&limit=1`,
+    );
+    const thread = Array.isArray(tr.data) && tr.data[0] ? tr.data[0] : null;
+    if (!thread) return sendJson(res, 404, { ok: false, error: "Thread not found" });
+    await markUndeliveredPartnerMessages(thread, user.userId);
     const now = new Date().toISOString();
     await svcFetch("dm_thread_reads", {
       method: "POST",

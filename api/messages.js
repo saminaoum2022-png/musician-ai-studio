@@ -716,6 +716,9 @@ async function handleGet(req, res, user) {
       ),
     ]);
     const threadRows = Array.isArray(threadsR.data) ? threadsR.data : [];
+    await Promise.all(
+      threadRows.slice(0, 50).map((thread) => markUndeliveredPartnerMessages(thread, user.userId)),
+    );
     const pendingRaw = Array.isArray(pendingR.data) ? pendingR.data : [];
     const sentRaw = Array.isArray(sentR.data) ? sentR.data : [];
     const requestUserIds = [
@@ -1067,15 +1070,6 @@ async function handlePost(req, res, user) {
     });
     if (!sent.ok) return sendJson(res, 500, { ok: false, error: sent.error || "Send failed" });
     const recipientId = threadPartnerId(thread, user.userId);
-    if (recipientId && sent.message?.id) {
-      const online = await partnerPresenceActive(recipientId);
-      if (online) {
-        const marked = await markMessagesDelivered([String(sent.message.id)], { threadId: thread.id });
-        if (marked.ok && marked.deliveredAt) {
-          sent.message.delivered_at = marked.deliveredAt;
-        }
-      }
-    }
     if (recipientId) {
       const senderProfile = await profileByUserId(user.userId);
       queuePrivacySafePush({

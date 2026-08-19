@@ -29489,6 +29489,7 @@ const MESSAGES_THREAD_PRESENCE_POLL_MS = 5000;
 const MESSAGES_THREAD_READ_POLL_MS = 2500;
 /** Backup receipt poll while Realtime is connected (UPDATE events are flaky on web). */
 const MESSAGES_THREAD_RECEIPT_POLL_LIVE_MS = 5000;
+const DM_RECEIPT_HEARTBEAT_MS = 4000;
 const MESSAGES_INBOX_POLL_MS = 15000;
 /** Slower inbox poll when Realtime is connected. */
 const MESSAGES_INBOX_POLL_LIVE_MS = 60000;
@@ -29509,6 +29510,7 @@ let _messagesInboxFetchInFlight = null;
 let _messagesInboxScrollY = 0;
 let _messagesInboxFilter = "all";
 let _messagesInboxPollTimer = 0;
+let _dmReceiptHeartbeatTimer = 0;
 let _messagesInboxRealtimeReady = false;
 let _messagesThreadRealtimeReady = false;
 const _inboxSeenMessageIds = new Set();
@@ -30222,6 +30224,7 @@ function loadMessagesInboxFromStorage() {
 /** Warm inbox cache in the background so Messages opens on cached rows, not shimmer. */
 function prefetchMessagesInboxQuiet() {
   if (!MESSAGES_FEATURE_ENABLED || !authSession?.user?.id) return;
+  ensureDmReceiptHeartbeat();
   loadMessagesInboxFromStorage();
   if (_messagesInboxFetchInFlight) return;
   const route = String(document.body.getAttribute("data-route") || "");
@@ -30673,8 +30676,8 @@ function patchOutboundReadStateInMount() {
     });
     if (!msg) return;
     const status = resolveOutboundMessageStatus(msg);
-    wrap.classList.toggle("is-read-by-partner", status === "read");
-    wrap.classList.toggle("is-delivered-to-partner", status === "delivered");
+    wrap.classList.toggle("is-read-by-partner", false);
+    wrap.classList.toggle("is-delivered-to-partner", false);
     wrap.classList.toggle("is-pending", status === "sending");
     wrap.classList.toggle("is-failed", status === "failed");
     const meta = wrap.querySelector(".messagesBubbleMeta");
@@ -31042,6 +31045,14 @@ function catchUpMessagesReceipts({ reason = "foreground" } = {}) {
   if (route === "messages" || route === "friends") {
     void loadMessagesInbox({ silent: true });
   }
+}
+
+function ensureDmReceiptHeartbeat() {
+  if (_dmReceiptHeartbeatTimer) return;
+  _dmReceiptHeartbeatTimer = window.setInterval(() => {
+    if (document.hidden || !authSession?.user?.id || !MESSAGES_FEATURE_ENABLED) return;
+    catchUpMessagesReceipts({ reason: "heartbeat" });
+  }, DM_RECEIPT_HEARTBEAT_MS);
 }
 
 function addOptimisticThreadMessage(msg) {
@@ -32576,8 +32587,9 @@ function resolveInboxLastOutboundStatus(thread) {
   const createdAt = thread?.lastMessageAt ? new Date(thread.lastMessageAt).getTime() : 0;
   const partnerRead = thread?.partnerLastReadAt ? new Date(thread.partnerLastReadAt).getTime() : 0;
   const deliveredAt = String(thread?.lastMessageDeliveredAt || "").trim();
-  if (deliveredAt) {
-    if (partnerRead && createdAt && createdAt <= partnerRead) return "read";
+  const deliveredMs = deliveredAt ? new Date(deliveredAt).getTime() : 0;
+  if (deliveredMs) {
+    if (partnerRead && createdAt && partnerRead >= deliveredMs && createdAt <= partnerRead) return "read";
     return "delivered";
   }
   return "sent";
@@ -32781,8 +32793,9 @@ function resolveOutboundMessageStatus(msg) {
   const createdAt = msg?.created_at ? new Date(msg.created_at).getTime() : 0;
   const partnerRead = _messagesPartnerLastReadAt ? new Date(_messagesPartnerLastReadAt).getTime() : 0;
   const deliveredAt = String(msg?.delivered_at || "").trim();
-  if (deliveredAt) {
-    if (partnerRead && createdAt && createdAt <= partnerRead) return "read";
+  const deliveredMs = deliveredAt ? new Date(deliveredAt).getTime() : 0;
+  if (deliveredMs) {
+    if (partnerRead && createdAt && partnerRead >= deliveredMs && createdAt <= partnerRead) return "read";
     return "delivered";
   }
   return "sent";
@@ -32890,9 +32903,14 @@ async function pollOutboundDeliveryState(threadId, { bootToken = 0 } = {}) {
   }
 }
 
-function applyPartnerLastReadAt(lastReadAt) {
+function applyPartnerLastReadAt(lastReadAt, { userId = "" } = {}) {
   const next = String(lastReadAt || "").trim();
   if (!next) return false;
+  const partnerId = String(_chatHeaderUser?.userId || "").trim();
+  const fromId = String(userId || "").trim();
+  const myId = String(authSession?.user?.id || "").trim();
+  if (fromId && myId && fromId === myId) return false;
+  if (partnerId && fromId && fromId !== partnerId) return false;
   if (_messagesPartnerLastReadAt === next) return false;
   _messagesPartnerLastReadAt = next;
   const tid = String(_conversationId || "").trim();
@@ -33023,8 +33041,8 @@ function messagesBubbleHtml(msg, viewerId, opts) {
   const pendingCls = mine && msg?.sendStatus === "sending" ? " is-pending" : "";
   const failedCls = mine && msg?.sendStatus === "failed" ? " is-failed" : "";
   const outboundStatus = mine ? resolveOutboundMessageStatus(msg) : "";
-  const readByPartnerCls = mine && outboundStatus === "read" ? " is-read-by-partner" : "";
-  const deliveredToPartnerCls = mine && outboundStatus === "delivered" ? " is-delivered-to-partner" : "";
+  const readByPartnerCls = "";
+  const deliveredToPartnerCls = "";
   const enterCls = bubbleEnterWrapClass(msg, mine);
   const revealAttrs = opts?.threadReveal
     ? threadRevealWrapAttrs(opts.threadRevealIndex, opts.threadRevealTotal, mine)
@@ -33354,9 +33372,12 @@ async function refreshDmThreadRealtimeSubscribe(threadId) {
         }
       }
     },
-    onReadUpdate: ({ lastReadAt } = {}) => {
+    onReadUpdate: ({ userId, lastReadAt } = {}) => {
       if (String(_conversationId || "") !== tid) return;
-      if (applyPartnerLastReadAt(lastReadAt)) {
+      const partnerId = String(_chatHeaderUser?.userId || "").trim();
+      const readUserId = String(userId || "").trim();
+      if (!partnerId || !readUserId || readUserId !== partnerId) return;
+      if (applyPartnerLastReadAt(lastReadAt, { userId: readUserId })) {
         patchOutboundReadStateInMount();
       }
     },
@@ -33473,7 +33494,8 @@ function restartThreadReadPoll(threadId) {
     }
     if (_conversationId !== tid) return;
     void pollPartnerThreadRead(tid, { bootToken: _messagesThreadBootToken });
-  }, MESSAGES_THREAD_READ_POLL_MS);
+    void pollOutboundDeliveryState(tid, { bootToken: _messagesThreadBootToken });
+  }, interval);
 }
 
 function stopMessagesThreadPoll() {
@@ -34122,6 +34144,7 @@ async function openMessagesThreadFromInbox(threadId) {
 function bindMessagesPageOnce() {
   syncFriendsMessagesBtn();
   wireInAppShareSheetsOnce();
+  ensureDmReceiptHeartbeat();
   if (_messagesPageBound) return;
   _messagesPageBound = true;
 

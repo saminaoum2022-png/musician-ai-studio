@@ -12,6 +12,7 @@ let _client = null;
 let _threadChannel = null;
 let _inboxChannel = null;
 let _activeThreadId = "";
+let _activeThreadPartnerId = "";
 let _activeInboxUserId = "";
 let _threadChannelReady = false;
 let _inboxChannelReady = false;
@@ -94,6 +95,7 @@ export async function stopDmThreadRealtime() {
   const channel = _threadChannel;
   _threadChannel = null;
   _activeThreadId = "";
+  _activeThreadPartnerId = "";
   _threadChannelReady = false;
   _onTypingHandler = null;
   _onThreadInsertHandler = null;
@@ -143,6 +145,7 @@ export async function subscribeDmThread({
   if (!client) return false;
 
   if (_activeThreadId === tid && _threadChannel) {
+    _activeThreadPartnerId = partnerId;
     _onTypingHandler = onTyping;
     _onThreadInsertHandler = onInsert;
     _onThreadUpdateHandler = onMessageUpdate;
@@ -152,6 +155,7 @@ export async function subscribeDmThread({
   }
 
   await stopDmThreadRealtime();
+  _activeThreadPartnerId = partnerId;
   _onTypingHandler = onTyping;
   _onThreadInsertHandler = onInsert;
   _onThreadUpdateHandler = onMessageUpdate;
@@ -219,7 +223,8 @@ export async function subscribeDmThread({
         const row = payload?.new;
         if (!row || typeof row !== "object") return;
         const readUserId = String(row.user_id || "").trim();
-        if (partnerId && readUserId !== partnerId) return;
+        const activePartnerId = String(_activeThreadPartnerId || "").trim();
+        if (!activePartnerId || readUserId !== activePartnerId) return;
         const lastReadAt = String(row.last_read_at || "").trim();
         if (!lastReadAt) return;
         try { _onReadUpdateHandler?.({ userId: readUserId, lastReadAt }); } catch (e) { console.warn("[dm-realtime] onReadUpdate", e); }

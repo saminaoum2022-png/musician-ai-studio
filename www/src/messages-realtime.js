@@ -55,12 +55,14 @@ function normalizeRow(raw) {
   if (!raw || typeof raw !== "object") return null;
   const id = String(raw.id || "").trim();
   if (!id) return null;
+  const deliveredAt = String(raw.delivered_at || "").trim();
   return {
     id,
     thread_id: String(raw.thread_id || ""),
     sender_id: String(raw.sender_id || ""),
     body: String(raw.body || ""),
     created_at: String(raw.created_at || ""),
+    delivered_at: deliveredAt || null,
   };
 }
 

@@ -30748,9 +30748,10 @@ function mergeThreadMessages(incoming, { scrollToBottom = true } = {}) {
     const optIdx = findOptimisticMessageIndex({ clientMessageId: m.client_message_id, serverMsg: m });
     if (optIdx >= 0) {
       list[optIdx] = {
+        ...list[optIdx],
         ...m,
         client_message_id: list[optIdx].client_message_id || m.client_message_id || "",
-        sendStatus: m.delivered_at ? "delivered" : "sent",
+        ...deliveryFieldsFromServer(m),
       };
       changed = true;
       continue;
@@ -30767,12 +30768,12 @@ function mergeThreadMessages(incoming, { scrollToBottom = true } = {}) {
         list[existingIdx] = {
           ...prev,
           ...m,
-          sendStatus: m.delivered_at ? "delivered" : "sent",
+          ...deliveryFieldsFromServer(m),
         };
         changed = true;
       }
     } else {
-      list.push({ ...m, sendStatus: m.delivered_at ? "delivered" : "sent" });
+      list.push({ ...m, ...deliveryFieldsFromServer(m) });
       markMessageBubbleEnter(m);
       changed = true;
     }
@@ -30806,7 +30807,7 @@ function prependThreadMessages(newMsgs) {
   for (const m of rows) {
     const serverId = String(m?.id || "");
     if (!serverId || isPendingThreadMessageId(serverId) || existingIds.has(serverId)) continue;
-    list.push({ ...m, sendStatus: m.sendStatus || "sent" });
+    list.push({ ...m, ...deliveryFieldsFromServer(m) });
     existingIds.add(serverId);
     added += 1;
   }
@@ -30982,7 +30983,7 @@ function confirmOptimisticThreadMessage(clientMessageId, serverMsg) {
   const next = {
     ...serverMsg,
     client_message_id: cid || String(serverMsg?.client_message_id || ""),
-    sendStatus: serverMsg?.delivered_at ? "delivered" : "sent",
+    ...deliveryFieldsFromServer(serverMsg),
   };
   if (idx >= 0) {
     const list = [..._messagesList];
@@ -32661,6 +32662,14 @@ function renderMessagesInbox() {
   if (statusEl) statusEl.hidden = true;
 }
 
+function deliveryFieldsFromServer(row) {
+  const deliveredAt = String(row?.delivered_at || "").trim();
+  return {
+    delivered_at: deliveredAt || null,
+    sendStatus: deliveredAt ? "delivered" : "sent",
+  };
+}
+
 function isOutboundMessageConfirmed(msg) {
   const id = String(msg?.id || "").trim();
   return Boolean(id && !isPendingThreadMessageId(id));
@@ -32671,12 +32680,10 @@ function resolveOutboundMessageStatus(msg) {
   if (explicit === "sending" || explicit === "failed") return explicit;
   const createdAt = msg?.created_at ? new Date(msg.created_at).getTime() : 0;
   const partnerRead = _messagesPartnerLastReadAt ? new Date(_messagesPartnerLastReadAt).getTime() : 0;
-  const readByPartner = Boolean(partnerRead && createdAt && createdAt <= partnerRead)
-    || explicit === "read";
-  if (readByPartner) return "read";
+  if (partnerRead && createdAt && createdAt <= partnerRead) return "read";
+  if (explicit === "read") return "read";
   if (String(msg?.delivered_at || "").trim()) return "delivered";
   if (isPendingThreadMessageId(msg?.id)) return "sending";
-  if (isOutboundMessageConfirmed(msg)) return "sent";
   return "sent";
 }
 
@@ -32698,6 +32705,11 @@ const _messagesDeliveredAckedIds = new Set();
 
 async function ackPartnerMessagesDelivered(messages) {
   if (isCoachThreadId(_conversationId)) return;
+  if (String(document.body.getAttribute("data-route") || "") !== "messages-thread") return;
+  if (typeof navigator !== "undefined" && navigator.onLine === false) return;
+  try {
+    if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
+  } catch {}
   const tid = String(_conversationId || "").trim();
   const myId = String(authSession?.user?.id || "").trim();
   if (!tid || !myId || _messagesDeliveredAckInFlight) return;
@@ -32736,7 +32748,7 @@ async function pollOutboundDeliveryState(threadId, { bootToken = 0 } = {}) {
   try {
     await prepareApiAuthForFetch();
     const path =
-      `dm_messages?select=id,delivered_at&thread_id=eq.${encodeURIComponent(tid)}&sender_id=eq.${encodeURIComponent(myId)}&delivered_at=not.is.null&order=created_at.desc&limit=40`;
+      `dm_messages?select=id,delivered_at&thread_id=eq.${encodeURIComponent(tid)}&sender_id=eq.${encodeURIComponent(myId)}&order=created_at.desc&limit=40`;
     const r = await supabaseRestWithAuth(path);
     if (!r?.ok) return;
     const rows = await r.json().catch(() => []);
@@ -32744,13 +32756,21 @@ async function pollOutboundDeliveryState(threadId, { bootToken = 0 } = {}) {
     if (bootToken && bootToken !== _messagesThreadBootToken) return;
     if (_conversationId !== tid) return;
     let changed = false;
-    const byId = new Map(rows.map((row) => [String(row?.id || ""), String(row?.delivered_at || "")]));
+    const byId = new Map(rows.map((row) => [String(row?.id || ""), String(row?.delivered_at || "").trim()]));
     _messagesList = (Array.isArray(_messagesList) ? _messagesList : []).map((m) => {
+      if (String(m?.sender_id || "") !== myId) return m;
       const id = String(m?.id || "");
-      const deliveredAt = byId.get(id);
-      if (!deliveredAt || String(m?.delivered_at || "") === deliveredAt) return m;
+      if (!id || isPendingThreadMessageId(id) || !byId.has(id)) return m;
+      const deliveredAt = byId.get(id) || "";
+      const prevDelivered = String(m?.delivered_at || "").trim();
+      const nextStatus = deliveredAt ? "delivered" : "sent";
+      if (prevDelivered === deliveredAt && String(m?.sendStatus || "") === nextStatus) return m;
       changed = true;
-      return { ...m, delivered_at: deliveredAt, sendStatus: "delivered" };
+      return {
+        ...m,
+        delivered_at: deliveredAt || null,
+        sendStatus: nextStatus,
+      };
     });
     if (changed) patchOutboundReadStateInMount();
   } catch (e) {
@@ -32968,13 +32988,13 @@ async function loadMessagesForConversation(threadId, { bootToken = 0, silent = f
     readCursorChanged = applyPartnerLastReadAt(data?.partnerLastReadAt);
     const incoming = Array.isArray(data?.messages) ? data.messages : [];
     if (replace) {
-      _messagesList = incoming.map((m) => ({ ...m, sendStatus: m.delivered_at ? "delivered" : "sent" }));
+      _messagesList = incoming.map((m) => ({ ...m, ...deliveryFieldsFromServer(m) }));
       syncMessagesLastFetchedAtFromList();
       _messagesHasMoreOlder = incoming.length >= MESSAGES_THREAD_PAGE_SIZE;
     } else if (silent || hasCache || (Array.isArray(_messagesList) && _messagesList.length)) {
       if (incoming.length) mergeThreadMessages(incoming, { scrollToBottom: false });
     } else {
-      _messagesList = incoming.map((m) => ({ ...m, sendStatus: m.delivered_at ? "delivered" : "sent" }));
+      _messagesList = incoming.map((m) => ({ ...m, ...deliveryFieldsFromServer(m) }));
       syncMessagesLastFetchedAtFromList();
       _messagesHasMoreOlder = incoming.length >= MESSAGES_THREAD_PAGE_SIZE;
     }

@@ -113,7 +113,7 @@ async function uploadVoiceDropForUser(userId, { dataBase64 = "", contentType = "
       : "";
     return { ok: false, error: `Voice upload failed.${hint}` };
   }
-  return { ok: true, url: up.url, key };
+  return { ok: true, url: up.url, key, bytes: buf.length };
 }
 
 function orderedPair(a, b) {
@@ -750,6 +750,7 @@ async function handlePost(req, res, user) {
       ok: true,
       url: uploaded.url,
       key: uploaded.key,
+      bytes: uploaded.bytes,
     });
   }
 

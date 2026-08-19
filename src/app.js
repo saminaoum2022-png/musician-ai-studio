@@ -40,6 +40,7 @@ import {
   handleVoiceDropBubbleClick,
   DM_VOICE_MARKER,
 } from "./dm-voice-drop.js";
+import { prepareNativeRecordingSession } from "./studio/native-mic-probe.js";
 import { initHumTrack, bindHumTrackHomeCard, openHumTrackFlow, humTrackReadyForGenerate, humTrackIsGenerating, triggerHumTrackGenerate, kickHumTrackGenerationPoll } from "./hum-track.js";
 import { createAdaptivePollLoop, stopPollLoop } from "./generation-poll.js";
 import {
@@ -2704,6 +2705,28 @@ function apiFetch(path, opts = {}) {
   });
 }
 
+/** Encode Blob/ArrayBuffer bodies for CapacitorHttp (String(blob) → "[object Blob]" garbage). */
+async function bodyForCapacitorHttp(body) {
+  if (body == null || body === "") return undefined;
+  if (typeof body === "string") return body;
+  if (typeof Blob !== "undefined" && body instanceof Blob) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const s = String(reader.result || "");
+        resolve(s.includes(",") ? s.split(",")[1] : s);
+      };
+      reader.onerror = () => reject(new Error("Could not read request body"));
+      reader.readAsDataURL(body);
+    });
+  }
+  if (body instanceof ArrayBuffer) {
+    return bodyForCapacitorHttp(new Blob([body]));
+  }
+  if (typeof body === "object") return JSON.stringify(body);
+  return String(body);
+}
+
 /** iOS WKWebView sometimes fails cross-origin fetch — use native URLSession. */
 async function capacitorHttpFetch(url, init = {}, timeouts = {}) {
   try {
@@ -2713,7 +2736,7 @@ async function capacitorHttpFetch(url, init = {}, timeouts = {}) {
     const hdrs = { ...(init.headers || {}) };
     let data;
     if (init.body != null && init.body !== "") {
-      data = typeof init.body === "string" ? init.body : String(init.body);
+      data = await bodyForCapacitorHttp(init.body);
     }
     const resp = await CapHttp.request({
       url: String(url),
@@ -6100,6 +6123,7 @@ try {
     getAuthSession: () => authSession,
     getSupabaseAuthToken,
     nativeSafeFetch,
+    prepareNativeRecordingSession,
     SUPABASE_URL,
     SUPABASE_ANON_KEY,
     pickRecorderMimeType,

@@ -294,51 +294,43 @@ function createVoiceDropAudio(playUrl) {
   return audio;
 }
 
-function extensionForVoiceBlob(blob, contentType) {
-  const ct = String(contentType || blob?.type || "").toLowerCase();
-  if (ct.includes("webm")) return "webm";
-  if (ct.includes("mpeg") || ct.includes("mp3")) return "mp3";
-  if (ct.includes("ogg")) return "ogg";
-  if (ct.includes("wav")) return "wav";
-  return "m4a";
+function minBytesForVoiceDrop(durationMs, blobSize = 0) {
+  const sec = Math.max(1, Math.round(Number(durationMs) / 1000) || 1);
+  return Math.max(2000, sec * 650, Math.min(Number(blobSize) || 0, 500));
 }
 
-export async function uploadDmVoiceBlob(blob) {
-  const token = d().getSupabaseAuthToken?.();
-  const uid = String(d().getAuthSession?.()?.user?.id || "").trim();
-  const base = String(d().SUPABASE_URL || "").replace(/\/$/, "");
-  const anon = String(d().SUPABASE_ANON_KEY || "").trim();
-  if (!token || !uid || !base || !anon) throw new Error("Login required");
-  if (!blob?.size || blob.size < 500) {
-    throw new Error("Recording too short — try again.");
-  }
-  const contentType = contentTypeForBlob(blob);
-  const ext = extensionForVoiceBlob(blob, contentType);
-  const key = `${uid}/${Date.now()}.${ext}`;
-  const encKey = key.split("/").map((s) => encodeURIComponent(s)).join("/");
-  const fetchFn = d().nativeSafeFetch || fetch;
-  const r = await fetchFn(`${base}/storage/v1/object/dm_voice/${encKey}`, {
-    method: "POST",
-    headers: {
-      apikey: anon,
-      Authorization: `Bearer ${token}`,
-      "Content-Type": contentType,
-      "x-upsert": "true",
-      "Cache-Control": "public, max-age=31536000, immutable",
-    },
-    body: blob,
+function blobToDataUrl(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.onerror = () => reject(new Error("Could not read recording"));
+    reader.readAsDataURL(blob);
   });
-  if (!r.ok) {
-    const t = await r.text().catch(() => "");
-    const hint = /bucket|not found|404|policy/i.test(t)
-      ? " Run supabase/dm_voice_storage.sql in Supabase."
-      : "";
-    throw new Error(`Voice upload failed (${r.status}): ${t.slice(0, 120)}${hint}`);
+}
+
+export async function uploadDmVoiceBlob(blob, { durationMs = 0 } = {}) {
+  const minBytes = minBytesForVoiceDrop(durationMs, blob?.size || 0);
+  if (!blob?.size || blob.size < minBytes) {
+    throw new Error(`Recording too short (${blob?.size || 0} bytes) — try again.`);
   }
-  return {
-    url: `${base}/storage/v1/object/public/dm_voice/${encKey}`,
-    key,
-  };
+  const dataUrl = await blobToDataUrl(blob);
+  const data = await d().messagesApi("/api/messages", {
+    method: "POST",
+    timeoutMs: 90000,
+    body: JSON.stringify({
+      action: "upload_voice_drop",
+      contentType: contentTypeForBlob(blob),
+      dataBase64: dataUrl,
+    }),
+  });
+  if (!data?.ok || !data?.url) {
+    throw new Error(String(data?.error || "Voice upload failed"));
+  }
+  const storedBytes = Number(data.bytes) || 0;
+  if (storedBytes < 500) {
+    throw new Error(`Upload corrupted (${storedBytes} bytes) — try again.`);
+  }
+  return { url: String(data.url), key: String(data.key || ""), bytes: storedBytes };
 }
 
 function stopPreviewPlayback() {
@@ -379,6 +371,9 @@ async function startRecording() {
   if (_recState === "recording") return;
   stopPreviewPlayback();
   resetRecording();
+  try {
+    await d().prepareNativeRecordingSession?.();
+  } catch {}
   let stream;
   try {
     stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
@@ -411,16 +406,17 @@ async function startRecording() {
     }
     const blob = new Blob(_chunks, { type: rec.mimeType || mimeType || "audio/webm" });
     const recordedMs = Math.min(DM_VOICE_MAX_MS, Math.max(400, Math.round(performance.now() - _startedAt)));
+    const minBytes = minBytesForVoiceDrop(recordedMs, blob.size);
     if (!blob.size) {
       _recState = "idle";
       syncVoiceDropUi();
       d().showToast?.("Empty drop — try again.", { durationMs: 2400 });
       return;
     }
-    if (recordedMs > 1000 && blob.size < 1000) {
+    if (blob.size < minBytes) {
       _recState = "idle";
       syncVoiceDropUi();
-      d().showToast?.("Recording failed on this device — try again.", { durationMs: 2800 });
+      d().showToast?.(`Recording failed (${blob.size} bytes) — try again.`, { durationMs: 3200 });
       return;
     }
     if (blob.size > DM_VOICE_MAX_BYTES) {
@@ -609,7 +605,7 @@ async function sendVoiceDrop() {
     d().showToast?.("Open a chat first.", { durationMs: 2600 });
     return;
   }
-  if (!_blob?.size || _blob.size < 500) {
+  if (!_blob?.size || _blob.size < minBytesForVoiceDrop(_durationMs, _blob.size)) {
     d().showToast?.("Record a voice drop first.", { durationMs: 2600 });
     return;
   }
@@ -617,7 +613,7 @@ async function sendVoiceDrop() {
   sendBtn?.setAttribute("aria-busy", "true");
   if (sendBtn) sendBtn.textContent = "Sending…";
   try {
-    const { url, key } = await uploadDmVoiceBlob(_blob);
+    const { url, key } = await uploadDmVoiceBlob(_blob, { durationMs: _durationMs });
     const body = buildDmVoicePayload({
       url,
       key,

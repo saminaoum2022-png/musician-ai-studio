@@ -624,13 +624,15 @@ async function reconcileOutboundDeliveryForSender(thread, senderId) {
     .map((row) => new Date(row?.created_at || "").getTime())
     .filter((ms) => Number.isFinite(ms));
   const readMs = partnerReadAt ? new Date(partnerReadAt).getTime() : NaN;
+  const latestPartnerMs = partnerTimes.length ? Math.max(...partnerTimes) : NaN;
 
   const ids = pending
     .filter((row) => {
       const sentMs = new Date(row?.created_at || "").getTime();
       if (!Number.isFinite(sentMs)) return false;
       if (Number.isFinite(readMs) && sentMs <= readMs) return true;
-      return partnerTimes.some((pt) => pt > sentMs);
+      if (Number.isFinite(latestPartnerMs) && sentMs <= latestPartnerMs) return true;
+      return false;
     })
     .map((row) => String(row?.id || "").trim())
     .filter(Boolean);

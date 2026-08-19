@@ -226,7 +226,7 @@ import { MUSIC_VIDEO_FEATURE_ENABLED } from "./feature-flags.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260820-014136";
+const APP_BUILD = "20260820-014644";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -32902,6 +32902,7 @@ function markOutboundDeliveredFromPartnerHistory() {
     .filter((ms) => Number.isFinite(ms));
   if (!partnerTimes.length) return false;
   const readMs = _messagesPartnerLastReadAt ? new Date(_messagesPartnerLastReadAt).getTime() : NaN;
+  const latestPartnerMs = partnerTimes.length ? Math.max(...partnerTimes) : NaN;
   let changed = false;
   _messagesList = (Array.isArray(_messagesList) ? _messagesList : []).map((m) => {
     if (String(m?.sender_id || "") !== myId) return m;
@@ -32911,7 +32912,7 @@ function markOutboundDeliveredFromPartnerHistory() {
     if (!sentMs) return m;
     const delivered =
       (Number.isFinite(readMs) && sentMs <= readMs)
-      || partnerTimes.some((pt) => pt > sentMs);
+      || (Number.isFinite(latestPartnerMs) && sentMs <= latestPartnerMs);
     if (!delivered) return m;
     changed = true;
     const stamp = partnerTimes.find((pt) => pt > sentMs) || readMs || sentMs;

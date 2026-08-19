@@ -11,7 +11,7 @@ const {
   readJsonBody,
   callRpc,
 } = require("./_lib/credits-auth");
-const { queuePrivacySafePush } = require("./_lib/onesignal-push");
+const { queuePrivacySafePush, sendPrivacySafePush } = require("./_lib/onesignal-push");
 const { uploadObject } = require("./_lib/supabase-storage");
 
 const SUPABASE_URL = (process.env.SUPABASE_URL || "").replace(/\/$/, "");
@@ -699,6 +699,15 @@ async function handleGet(req, res, user) {
     return;
   }
 
+  if (type === "ack_delivery") {
+    const threadsR = await svcFetch(
+      `dm_threads?select=id,user_a,user_b&or=(user_a.eq.${encodeURIComponent(user.userId)},user_b.eq.${encodeURIComponent(user.userId)})&order=last_message_at.desc&limit=50`,
+    );
+    const threadRows = Array.isArray(threadsR.data) ? threadsR.data : [];
+    await Promise.all(threadRows.map((thread) => markUndeliveredPartnerMessages(thread, user.userId)));
+    return sendJson(res, 200, { ok: true });
+  }
+
   if (type === "thread_read") {
     const threadId = String(url.searchParams.get("threadId") || "").trim();
     if (!threadId) return sendJson(res, 400, { ok: false, error: "Missing threadId" });
@@ -906,6 +915,18 @@ async function handlePost(req, res, user) {
       body: JSON.stringify(patch),
     });
     if (!r.ok) return sendJson(res, 500, { ok: false, error: "Presence prefs update failed" });
+    return sendJson(res, 200, { ok: true });
+  }
+
+  if (action === "mark_thread_delivered") {
+    const threadId = String(body?.threadId || "").trim();
+    if (!threadId) return sendJson(res, 400, { ok: false, error: "Missing threadId" });
+    const tr = await svcFetch(
+      `dm_threads?select=id,user_a,user_b&or=(and(id.eq.${encodeURIComponent(threadId)},user_a.eq.${encodeURIComponent(user.userId)}),and(id.eq.${encodeURIComponent(threadId)},user_b.eq.${encodeURIComponent(user.userId)}))&limit=1`,
+    );
+    const thread = Array.isArray(tr.data) && tr.data[0] ? tr.data[0] : null;
+    if (!thread) return sendJson(res, 404, { ok: false, error: "Thread not found" });
+    await markUndeliveredPartnerMessages(thread, user.userId);
     return sendJson(res, 200, { ok: true });
   }
 
@@ -1134,14 +1155,20 @@ async function handlePost(req, res, user) {
     const recipientId = threadPartnerId(thread, user.userId);
     await reconcileOutboundDeliveryForSender(thread, user.userId);
     if (recipientId) await reconcileOutboundDeliveryForSender(thread, recipientId);
-    if (recipientId) {
+    if (recipientId && sent.message?.id) {
       const senderProfile = await profileByUserId(user.userId);
-      queuePrivacySafePush({
+      const msgId = String(sent.message.id);
+      const pushThreadId = thread.id;
+      void sendPrivacySafePush({
         userId: recipientId,
         type: "dm_message",
-        entityId: thread.id,
+        entityId: pushThreadId,
         actorDisplayName: senderProfile?.username || "Someone",
-      });
+      }).then(async (r) => {
+        if (r?.ok) {
+          await markMessagesDelivered([msgId], { threadId: pushThreadId });
+        }
+      }).catch(() => {});
     }
     return sendJson(res, 200, { ok: true, threadId: thread.id, message: sent.message });
   }

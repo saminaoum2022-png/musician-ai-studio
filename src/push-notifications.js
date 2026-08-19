@@ -127,11 +127,41 @@ function shouldSuppressForegroundGenerationPush(raw) {
   return isGenerationPushCategory(category);
 }
 
+function ackDmThreadDeliveredFromPush(threadId) {
+  const tid = String(threadId || "").trim();
+  if (!tid) return Promise.resolve();
+  const hook = globalThis.__nabadAckDmThreadDelivered;
+  if (typeof hook === "function") return hook(tid);
+  const token = globalThis.__nabadGetAuthToken?.() || "";
+  if (!token) return Promise.resolve();
+  const headers = {
+    "Content-Type": "application/json",
+    Authorization: `Bearer ${token}`,
+  };
+  const bypass = globalThis.__VERCEL_PROTECTION_BYPASS__;
+  if (bypass) headers["x-vercel-protection-bypass"] = bypass;
+  const base = String(globalThis.__nabadApiBase || "").replace(/\/$/, "");
+  const url = base ? `${base}/api/messages` : "/api/messages";
+  return fetch(url, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({ action: "mark_thread_delivered", threadId: tid }),
+  }).catch(() => {});
+}
+
+function maybeAckDmDeliveryFromPush(raw) {
+  const payload = normalizePushPayload(raw);
+  if (payload.category !== "dm_message") return;
+  const tid = String(payload.entityId || "").trim();
+  if (tid) void ackDmThreadDeliveredFromPush(tid);
+}
+
 function attachForegroundGenerationPushFilter(OneSignal) {
   if (!OneSignal?.Notifications?.addEventListener) return;
   OneSignal.Notifications.addEventListener("foregroundWillDisplay", (event) => {
     try {
       const notif = event?.notification || event?.getNotification?.() || event;
+      maybeAckDmDeliveryFromPush(notif);
       if (!shouldSuppressForegroundGenerationPush(notif)) return;
       if (typeof event.preventDefault === "function") event.preventDefault();
     } catch {}
@@ -217,6 +247,7 @@ async function refreshNativePushState() {
 }
 
 function navigateFromPushData(raw) {
+  maybeAckDmDeliveryFromPush(raw);
   const hashPath = stashPendingPushPayload(raw);
   if (!hashPath) return;
   const hash = `#/${hashPath.replace(/^\/+/, "")}`;

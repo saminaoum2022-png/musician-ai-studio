@@ -226,7 +226,7 @@ import { MUSIC_VIDEO_FEATURE_ENABLED } from "./feature-flags.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260820-014644";
+const APP_BUILD = "20260820-015847";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -30222,9 +30222,17 @@ function loadMessagesInboxFromStorage() {
 }
 
 /** Warm inbox cache in the background so Messages opens on cached rows, not shimmer. */
+function ackAllPendingDeliveriesQuiet() {
+  if (!MESSAGES_FEATURE_ENABLED || !authSession?.user?.id) return;
+  if (typeof navigator !== "undefined" && navigator.onLine === false) return;
+  void messagesApi("/api/messages?type=ack_delivery").catch(() => {});
+}
+
 function prefetchMessagesInboxQuiet() {
   if (!MESSAGES_FEATURE_ENABLED || !authSession?.user?.id) return;
   ensureDmReceiptHeartbeat();
+  ensureGlobalDmDeliveryListener();
+  ackAllPendingDeliveriesQuiet();
   loadMessagesInboxFromStorage();
   if (_messagesInboxFetchInFlight) return;
   const route = String(document.body.getAttribute("data-route") || "");
@@ -32819,9 +32827,11 @@ async function ackPartnerMessagesDelivered(messages, { threadId = "" } = {}) {
   if (typeof navigator !== "undefined" && navigator.onLine === false) return;
   const tid = String(threadId || _conversationId || "").trim();
   if (!tid || isCoachThreadId(tid)) return;
-  const route = String(document.body.getAttribute("data-route") || "");
-  if (!threadId && route !== "messages-thread" && route !== "messages") return;
-  if (!threadId && String(_conversationId || "") !== tid) return;
+  if (!threadId) {
+    const route = String(document.body.getAttribute("data-route") || "");
+    if (route !== "messages-thread" && route !== "messages") return;
+    if (String(_conversationId || "") !== tid) return;
+  }
   const myId = String(authSession?.user?.id || "").trim();
   if (!myId || _messagesDeliveredAckInFlight) return;
   const ids = (Array.isArray(messages) ? messages : [])
@@ -33315,8 +33325,6 @@ async function refreshDmInboxRealtimeSubscribe() {
   const uid = String(authSession?.user?.id || "").trim();
   const token = getSupabaseAuthToken();
   if (!uid || !token) return;
-  const route = String(document.body.getAttribute("data-route") || "");
-  if (route !== "messages" && route !== "messages-thread") return;
   const mod = await loadMessagesRealtimeModule();
   if (!mod?.subscribeDmInbox) return;
   await mod.subscribeDmInbox({
@@ -33331,24 +33339,37 @@ async function refreshDmInboxRealtimeSubscribe() {
       if (senderId && myId && senderId !== myId && tid) {
         void ackPartnerMessagesDelivered([row], { threadId: tid });
       }
-      if (route === "messages" && patchInboxFromDmMessageRow(row)) {
+      const onMessagesRoute = String(document.body.getAttribute("data-route") || "") === "messages";
+      if (onMessagesRoute && patchInboxFromDmMessageRow(row)) {
         try { console.info("[dm-inbox-live]", { threadId: row.thread_id, messageId: row.id }); } catch {}
       }
     },
     onStatus: (status) => {
       const s = String(status || "");
       const ready = s === "SUBSCRIBED";
+      const liveRoute = String(document.body.getAttribute("data-route") || "");
       if (ready !== _messagesInboxRealtimeReady) {
         _messagesInboxRealtimeReady = ready;
-        restartMessagesInboxPoll();
+        if (liveRoute === "messages") restartMessagesInboxPoll();
       }
       if (s === "CHANNEL_ERROR" || s === "TIMED_OUT" || s === "CLOSED") {
         _messagesInboxRealtimeReady = false;
-        restartMessagesInboxPoll();
-        void loadMessagesInbox({ silent: true });
+        if (liveRoute === "messages") {
+          restartMessagesInboxPoll();
+          void loadMessagesInbox({ silent: true });
+        }
       }
     },
   });
+}
+
+let _globalDmDeliveryListenerStarted = false;
+
+function ensureGlobalDmDeliveryListener() {
+  if (!MESSAGES_FEATURE_ENABLED || !authSession?.user?.id) return;
+  void refreshDmInboxRealtimeSubscribe();
+  if (_globalDmDeliveryListenerStarted) return;
+  _globalDmDeliveryListenerStarted = true;
 }
 
 function startMessagesInboxRealtime() {
@@ -64421,12 +64442,22 @@ try {
   };
   globalThis.__nabadShowToast = (msg, opts) => showToast(msg, opts);
   globalThis.__nabadApiBase = _resolvedApiBase || "";
+  globalThis.__nabadAckDmThreadDelivered = (threadId) => {
+    const tid = String(threadId || "").trim();
+    if (!tid || !authSession?.user?.id) return Promise.resolve();
+    return messagesApi("/api/messages", {
+      method: "POST",
+      body: JSON.stringify({ action: "mark_thread_delivered", threadId: tid }),
+    }).catch(() => {});
+  };
   try {
     setAppActiveState(!document.hidden);
     document.addEventListener("visibilitychange", () => {
       setAppActiveState(!document.hidden);
       if (!document.hidden) {
         catchUpMessagesReceipts({ reason: "visibility" });
+        ackAllPendingDeliveriesQuiet();
+        ensureGlobalDmDeliveryListener();
         void tryRecoverGenerationFromPushNotification();
         kickForegroundGenerationPolls();
         void resumePendingGenerationOnForeground();

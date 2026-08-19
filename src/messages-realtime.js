@@ -17,6 +17,7 @@ let _threadChannelReady = false;
 let _inboxChannelReady = false;
 let _onTypingHandler = null;
 let _onThreadInsertHandler = null;
+let _onThreadUpdateHandler = null;
 let _onReadUpdateHandler = null;
 let _onInboxInsertHandler = null;
 
@@ -96,6 +97,7 @@ export async function stopDmThreadRealtime() {
   _threadChannelReady = false;
   _onTypingHandler = null;
   _onThreadInsertHandler = null;
+  _onThreadUpdateHandler = null;
   _onReadUpdateHandler = null;
   if (!client || !channel) return;
   try {
@@ -127,6 +129,7 @@ export async function subscribeDmThread({
   threadId,
   partnerUserId = "",
   onInsert,
+  onMessageUpdate,
   onReadUpdate,
   onTyping,
   onStatus,
@@ -142,6 +145,7 @@ export async function subscribeDmThread({
   if (_activeThreadId === tid && _threadChannel) {
     _onTypingHandler = onTyping;
     _onThreadInsertHandler = onInsert;
+    _onThreadUpdateHandler = onMessageUpdate;
     _onReadUpdateHandler = onReadUpdate;
     await refreshDmThreadRealtimeAuth(token);
     return true;
@@ -150,6 +154,7 @@ export async function subscribeDmThread({
   await stopDmThreadRealtime();
   _onTypingHandler = onTyping;
   _onThreadInsertHandler = onInsert;
+  _onThreadUpdateHandler = onMessageUpdate;
   _onReadUpdateHandler = onReadUpdate;
 
   try {
@@ -184,6 +189,21 @@ export async function subscribeDmThread({
         const row = normalizeRow(payload?.new);
         if (row) {
           try { _onThreadInsertHandler?.(row); } catch (e) { console.warn("[dm-realtime] onInsert", e); }
+        }
+      },
+    )
+    .on(
+      "postgres_changes",
+      {
+        event: "UPDATE",
+        schema: "public",
+        table: "dm_messages",
+        filter: `thread_id=eq.${tid}`,
+      },
+      (payload) => {
+        const row = normalizeRow(payload?.new);
+        if (row) {
+          try { _onThreadUpdateHandler?.(row); } catch (e) { console.warn("[dm-realtime] onMessageUpdate", e); }
         }
       },
     )

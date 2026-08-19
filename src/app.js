@@ -31005,6 +31005,9 @@ function confirmOptimisticThreadMessage(clientMessageId, serverMsg) {
     messageId: next.id,
   });
   void pollOutboundDeliveryState(_conversationId, { bootToken: _messagesThreadBootToken });
+  window.setTimeout(() => {
+    void pollOutboundDeliveryState(_conversationId, { bootToken: _messagesThreadBootToken });
+  }, 1500);
 }
 
 function markOptimisticThreadMessageFailed(clientMessageId, err) {
@@ -31125,22 +31128,34 @@ function leaveMessagesThreadRoute(callback) {
   }, 260);
 }
 
-async function markThreadReadQuiet(threadId) {
+const DM_READ_MARK_DELAY_MS = 2000;
+
+async function markThreadReadQuiet(threadId, { skipDeliveryAck = false, readDelayMs = 0 } = {}) {
   const tid = String(threadId || _conversationId || "").trim();
   if (!tid) return;
   markInboxThreadReadLocally(tid);
-  const partnerMsgs = (Array.isArray(_messagesList) ? _messagesList : []).filter((m) => {
-    const myId = String(authSession?.user?.id || "");
-    return String(m?.sender_id || "") !== myId;
-  });
-  void ackPartnerMessagesDelivered(partnerMsgs);
-  try {
-    await messagesApi("/api/messages", {
-      method: "POST",
-      body: JSON.stringify({ action: "mark_read", threadId: tid }),
+  if (!skipDeliveryAck) {
+    const partnerMsgs = (Array.isArray(_messagesList) ? _messagesList : []).filter((m) => {
+      const myId = String(authSession?.user?.id || "");
+      return String(m?.sender_id || "") !== myId;
     });
-    void refreshMessagesUnreadBadge({ force: true });
-  } catch {}
+    await ackPartnerMessagesDelivered(partnerMsgs);
+  }
+  const doMarkRead = async () => {
+    try {
+      await messagesApi("/api/messages", {
+        method: "POST",
+        body: JSON.stringify({ action: "mark_read", threadId: tid }),
+      });
+      void refreshMessagesUnreadBadge({ force: true });
+    } catch {}
+  };
+  const delay = Math.max(0, Number(readDelayMs) || 0);
+  if (delay > 0) {
+    window.setTimeout(() => void doMarkRead(), delay);
+  } else {
+    await doMarkRead();
+  }
 }
 
 function closeMessagesRequestSheet() {
@@ -32707,9 +32722,6 @@ async function ackPartnerMessagesDelivered(messages) {
   if (isCoachThreadId(_conversationId)) return;
   if (String(document.body.getAttribute("data-route") || "") !== "messages-thread") return;
   if (typeof navigator !== "undefined" && navigator.onLine === false) return;
-  try {
-    if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
-  } catch {}
   const tid = String(_conversationId || "").trim();
   const myId = String(authSession?.user?.id || "").trim();
   if (!tid || !myId || _messagesDeliveredAckInFlight) return;
@@ -33005,9 +33017,11 @@ async function loadMessagesForConversation(threadId, { bootToken = 0, silent = f
       partnerLastReadAt: _messagesPartnerLastReadAt,
       loadedOnce: true,
     });
-    await markThreadReadQuiet(tid);
-    void ackPartnerMessagesDelivered(incoming);
+    const myId = String(authSession?.user?.id || "");
+    const partnerIncoming = incoming.filter((m) => String(m?.sender_id || "") !== myId);
+    await ackPartnerMessagesDelivered(partnerIncoming);
     void pollOutboundDeliveryState(tid, { bootToken });
+    await markThreadReadQuiet(tid, { skipDeliveryAck: true, readDelayMs: DM_READ_MARK_DELAY_MS });
     return true;
   } catch (e) {
     if (!silent && !(Array.isArray(_messagesList) && _messagesList.length)) {
@@ -33206,14 +33220,30 @@ async function refreshDmThreadRealtimeSubscribe(threadId) {
       if (String(_conversationId || "") !== tid) return;
       if (String(document.body.getAttribute("data-route") || "") !== "messages-thread") return;
       const partnerId = String(_chatHeaderUser?.userId || "").trim();
-      if (partnerId && String(row?.sender_id || "") === partnerId) {
-        clearPartnerTypingState();
-      }
+      const myId = String(authSession?.user?.id || "");
+      const isPartner = partnerId && String(row?.sender_id || "") === partnerId;
+      if (isPartner) clearPartnerTypingState();
       if (mergeThreadMessages([row], { scrollToBottom: true })) {
         saveActiveThreadToCache();
-        void markThreadReadQuiet(tid);
+        if (isPartner) {
+          void (async () => {
+            await ackPartnerMessagesDelivered([row]);
+            await markThreadReadQuiet(tid, { skipDeliveryAck: true, readDelayMs: DM_READ_MARK_DELAY_MS });
+          })();
+        } else {
+          void markThreadReadQuiet(tid);
+        }
       }
       patchInboxFromDmMessageRow(row);
+    },
+    onMessageUpdate: (row) => {
+      if (String(_conversationId || "") !== tid) return;
+      const myId = String(authSession?.user?.id || "");
+      if (String(row?.sender_id || "") !== myId) return;
+      if (mergeThreadMessages([row], { scrollToBottom: false })) {
+        saveActiveThreadToCache();
+        patchOutboundReadStateInMount();
+      }
     },
     onReadUpdate: ({ lastReadAt } = {}) => {
       if (String(_conversationId || "") !== tid) return;

@@ -21,6 +21,7 @@ let _onThreadInsertHandler = null;
 let _onThreadUpdateHandler = null;
 let _onReadUpdateHandler = null;
 let _onInboxInsertHandler = null;
+let _onInboxUpdateHandler = null;
 
 export function isDmThreadChannelReady() {
   return Boolean(_threadChannelReady && _threadChannel && _activeThreadId);
@@ -116,6 +117,7 @@ export async function stopDmInboxRealtime() {
   _activeInboxUserId = "";
   _inboxChannelReady = false;
   _onInboxInsertHandler = null;
+  _onInboxUpdateHandler = null;
   if (!client || !channel) return;
   try {
     await client.removeChannel(channel);
@@ -252,6 +254,7 @@ export async function subscribeDmInbox({
   accessToken,
   userId,
   onInsert,
+  onUpdate,
   onStatus,
 } = {}) {
   const uid = String(userId || "").trim();
@@ -263,12 +266,14 @@ export async function subscribeDmInbox({
 
   if (_activeInboxUserId === uid && _inboxChannel) {
     _onInboxInsertHandler = onInsert;
+    _onInboxUpdateHandler = onUpdate;
     await refreshDmThreadRealtimeAuth(token);
     return true;
   }
 
   await stopDmInboxRealtime();
   _onInboxInsertHandler = onInsert;
+  _onInboxUpdateHandler = onUpdate;
 
   try {
     client.realtime.setAuth(token);
@@ -292,6 +297,20 @@ export async function subscribeDmInbox({
         const row = normalizeRow(payload?.new);
         if (row) {
           try { _onInboxInsertHandler?.(row); } catch (e) { console.warn("[dm-realtime] inbox onInsert", e); }
+        }
+      },
+    )
+    .on(
+      "postgres_changes",
+      {
+        event: "UPDATE",
+        schema: "public",
+        table: "dm_messages",
+      },
+      (payload) => {
+        const row = normalizeRow(payload?.new);
+        if (row) {
+          try { _onInboxUpdateHandler?.(row); } catch (e) { console.warn("[dm-realtime] inbox onUpdate", e); }
         }
       },
     )

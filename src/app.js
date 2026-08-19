@@ -226,7 +226,7 @@ import { MUSIC_VIDEO_FEATURE_ENABLED } from "./feature-flags.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260820-015847";
+const APP_BUILD = "20260820-020623";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -31059,6 +31059,7 @@ function ensureDmReceiptHeartbeat() {
   if (_dmReceiptHeartbeatTimer) return;
   _dmReceiptHeartbeatTimer = window.setInterval(() => {
     if (document.hidden || !authSession?.user?.id || !MESSAGES_FEATURE_ENABLED) return;
+    ackAllPendingDeliveriesQuiet();
     catchUpMessagesReceipts({ reason: "heartbeat" });
   }, DM_RECEIPT_HEARTBEAT_MS);
 }
@@ -33342,6 +33343,19 @@ async function refreshDmInboxRealtimeSubscribe() {
       const onMessagesRoute = String(document.body.getAttribute("data-route") || "") === "messages";
       if (onMessagesRoute && patchInboxFromDmMessageRow(row)) {
         try { console.info("[dm-inbox-live]", { threadId: row.thread_id, messageId: row.id }); } catch {}
+      }
+    },
+    onUpdate: (row) => {
+      const myId = String(authSession?.user?.id || "").trim();
+      const senderId = String(row?.sender_id || "").trim();
+      const tid = String(row?.thread_id || "").trim();
+      const deliveredAt = String(row?.delivered_at || "").trim();
+      if (!myId || !tid || senderId !== myId || !deliveredAt) return;
+      patchInboxLastOutboundDelivered(tid, deliveredAt);
+      if (String(_conversationId || "") === tid) {
+        if (applyOutboundDeliveryRows([row], { threadId: tid })) {
+          patchOutboundReadStateInMount();
+        }
       }
     },
     onStatus: (status) => {

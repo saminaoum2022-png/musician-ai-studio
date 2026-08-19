@@ -1159,16 +1159,25 @@ async function handlePost(req, res, user) {
       const senderProfile = await profileByUserId(user.userId);
       const msgId = String(sent.message.id);
       const pushThreadId = thread.id;
-      void sendPrivacySafePush({
+      const pushDeliverWork = sendPrivacySafePush({
         userId: recipientId,
         type: "dm_message",
         entityId: pushThreadId,
         actorDisplayName: senderProfile?.username || "Someone",
-      }).then(async (r) => {
-        if (r?.ok) {
-          await markMessagesDelivered([msgId], { threadId: pushThreadId });
-        }
-      }).catch(() => {});
+      })
+        .then(async (r) => {
+          if (r?.ok) await markMessagesDelivered([msgId], { threadId: pushThreadId });
+        })
+        .catch(() => {});
+      let waitUntilFn = null;
+      try {
+        waitUntilFn = require("@vercel/functions").waitUntil;
+      } catch {}
+      if (typeof waitUntilFn === "function") {
+        waitUntilFn(pushDeliverWork);
+      } else {
+        await pushDeliverWork;
+      }
     }
     return sendJson(res, 200, { ok: true, threadId: thread.id, message: sent.message });
   }

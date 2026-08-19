@@ -182,6 +182,7 @@ public class NativeMicProbePlugin: CAPPlugin, CAPBridgedPlugin {
 
     private func startVoiceDropEngine() throws {
         cancelVoiceDropEngine()
+        try ensureRecordPermission()
         _ = try Self.configureRecordingSession()
 
         let url = FileManager.default.temporaryDirectory
@@ -232,7 +233,8 @@ public class NativeMicProbePlugin: CAPPlugin, CAPBridgedPlugin {
         }
         voiceDropFileURL = nil
 
-        let bytes = (try? Data(contentsOf: url))?.count ?? 0
+        let data = try Data(contentsOf: url)
+        let bytes = data.count
         guard durationSec >= 0.35, bytes >= 500 else {
             try? FileManager.default.removeItem(at: url)
             throw NSError(
@@ -241,13 +243,47 @@ public class NativeMicProbePlugin: CAPPlugin, CAPBridgedPlugin {
                 userInfo: [NSLocalizedDescriptionKey: "Recording too short — try again."]
             )
         }
+        let audioBase64 = data.base64EncodedString()
+        try? FileManager.default.removeItem(at: url)
 
         return [
             "wavPath": url.absoluteString,
+            "audioBase64": audioBase64,
             "bytes": bytes,
             "durationSec": durationSec,
             "contentType": "audio/mp4",
         ]
+    }
+
+    private func ensureRecordPermission() throws {
+        let session = AVAudioSession.sharedInstance()
+        switch session.recordPermission {
+        case .granted:
+            return
+        case .denied:
+            throw NSError(
+                domain: "VoiceDrop",
+                code: 10,
+                userInfo: [NSLocalizedDescriptionKey: "Microphone permission denied — enable in Settings → NabadAi Music."]
+            )
+        case .undetermined:
+            var granted = false
+            let sem = DispatchSemaphore(value: 0)
+            session.requestRecordPermission { ok in
+                granted = ok
+                sem.signal()
+            }
+            sem.wait()
+            if !granted {
+                throw NSError(
+                    domain: "VoiceDrop",
+                    code: 11,
+                    userInfo: [NSLocalizedDescriptionKey: "Microphone permission needed."]
+                )
+            }
+        @unknown default:
+            return
+        }
     }
 
     private func cancelVoiceDropEngine() {

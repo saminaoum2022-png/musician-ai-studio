@@ -239,6 +239,29 @@ function capacitorLocalUrl(path) {
   return raw;
 }
 
+function base64ToBlob(b64, contentType = "audio/mp4") {
+  const raw = String(b64 || "").trim();
+  if (!raw) return null;
+  const bin = atob(raw);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return new Blob([bytes], { type: contentType });
+}
+
+async function blobFromNativeVoiceResult(result) {
+  const ct = String(result?.contentType || "audio/mp4").trim() || "audio/mp4";
+  const b64 = String(result?.audioBase64 || "").trim();
+  if (b64) {
+    const blob = base64ToBlob(b64, ct);
+    if (blob?.size) return blob;
+  }
+  const playUrl = capacitorLocalUrl(result?.wavPath);
+  if (!playUrl) return null;
+  const resp = await fetch(playUrl);
+  if (!resp.ok) return null;
+  return resp.blob();
+}
+
 function resetRecording() {
   if (_nativeRec) {
     void cancelNativeVoiceDropRecording().catch(() => {});
@@ -409,11 +432,8 @@ async function finishNativeRecording() {
   stopVisualizer();
   try {
     const result = await stopNativeVoiceDropRecording();
-    const playUrl = capacitorLocalUrl(result?.wavPath);
-    if (!playUrl) throw new Error("Native recording missing file");
-    const resp = await fetch(playUrl);
-    if (!resp.ok) throw new Error(`Could not read recording (${resp.status})`);
-    const blob = await resp.blob();
+    const blob = await blobFromNativeVoiceResult(result);
+    if (!blob?.size) throw new Error("Native recording missing audio data");
     const recordedMs = Math.min(
       DM_VOICE_MAX_MS,
       Math.max(400, Math.round(Number(result?.durationSec || 0) * 1000) || (performance.now() - _startedAt)),
@@ -474,9 +494,16 @@ async function startRecording() {
         if (_recState === "recording") void finishNativeRecording();
       }, DM_VOICE_MAX_MS + 40);
       return;
-    } catch {
+    } catch (e) {
       _nativeRec = false;
+      d().showToast?.(String(e?.message || "Native recorder failed — try again."), { durationMs: 3200 });
+      return;
     }
+  }
+
+  if (isSafariLikeRecorderEnv()) {
+    d().showToast?.("Voice drop needs the latest app build — reinstall from Xcode.", { durationMs: 3600 });
+    return;
   }
 
   let stream;

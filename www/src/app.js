@@ -226,7 +226,7 @@ import { MUSIC_VIDEO_FEATURE_ENABLED } from "./feature-flags.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260819-182149";
+const APP_BUILD = "20260819-190100";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -29486,7 +29486,7 @@ const MESSAGES_THREAD_CONNECT_POLL_MS = 3000;
 /** Partner now-playing line in the thread header (independent of message poll). */
 const MESSAGES_THREAD_PRESENCE_POLL_MS = 5000;
 /** Partner read cursor for outbound ✓ / ✓✓ receipts. */
-const MESSAGES_THREAD_READ_POLL_MS = 5000;
+const MESSAGES_THREAD_READ_POLL_MS = 2500;
 const MESSAGES_INBOX_POLL_MS = 15000;
 /** Slower inbox poll when Realtime is connected. */
 const MESSAGES_INBOX_POLL_LIVE_MS = 60000;
@@ -31128,7 +31128,7 @@ function leaveMessagesThreadRoute(callback) {
   }, 260);
 }
 
-const DM_READ_MARK_DELAY_MS = 2000;
+const DM_READ_MARK_DELAY_MS = 2500;
 
 async function markThreadReadQuiet(threadId, { skipDeliveryAck = false, readDelayMs = 0 } = {}) {
   const tid = String(threadId || _conversationId || "").trim();
@@ -32693,12 +32693,14 @@ function isOutboundMessageConfirmed(msg) {
 function resolveOutboundMessageStatus(msg) {
   const explicit = String(msg?.sendStatus || "").trim();
   if (explicit === "sending" || explicit === "failed") return explicit;
+  if (isPendingThreadMessageId(msg?.id)) return "sending";
   const createdAt = msg?.created_at ? new Date(msg.created_at).getTime() : 0;
   const partnerRead = _messagesPartnerLastReadAt ? new Date(_messagesPartnerLastReadAt).getTime() : 0;
-  if (partnerRead && createdAt && createdAt <= partnerRead) return "read";
-  if (explicit === "read") return "read";
-  if (String(msg?.delivered_at || "").trim()) return "delivered";
-  if (isPendingThreadMessageId(msg?.id)) return "sending";
+  const deliveredAt = String(msg?.delivered_at || "").trim();
+  if (deliveredAt) {
+    if (partnerRead && createdAt && createdAt <= partnerRead) return "read";
+    return "delivered";
+  }
   return "sent";
 }
 
@@ -32709,22 +32711,24 @@ function messagesBbmTickHtml(status) {
     : status === "delivered"
       ? "msgBbmTick--delivered"
       : "msgBbmTick--sent";
-  const letterSvg = letter
-    ? `<text class="msgBbmTickLetter" x="4.88" y="3.85" dominant-baseline="middle" text-anchor="middle">${letter}</text>`
+  const letterBadge = letter
+    ? `<span class="msgBbmTickBadge" aria-hidden="true">${letter}</span>`
     : "";
-  return `<span class="msgBbmTick ${cls}" aria-hidden="true"><svg class="msgBbmTickSvg" viewBox="0 0 14 14" width="16" height="16" aria-hidden="true"><path class="msgBbmTickStroke" d="M2.55 7.35 5.5 10.15 11.35 4.05" fill="none" stroke="currentColor" stroke-width="1.95" stroke-linecap="round" stroke-linejoin="round"/>${letterSvg}</svg></span>`;
+  return `<span class="msgBbmTick ${cls}" aria-hidden="true"><svg class="msgBbmTickSvg" viewBox="0 0 14 14" width="16" height="16" aria-hidden="true"><path class="msgBbmTickStroke" d="M2.55 7.35 5.5 10.15 11.35 4.05" fill="none" stroke="currentColor" stroke-width="1.95" stroke-linecap="round" stroke-linejoin="round"/></svg>${letterBadge}</span>`;
 }
 
 let _messagesDeliveredAckInFlight = false;
 const _messagesDeliveredAckedIds = new Set();
 
-async function ackPartnerMessagesDelivered(messages) {
-  if (isCoachThreadId(_conversationId)) return;
-  if (String(document.body.getAttribute("data-route") || "") !== "messages-thread") return;
+async function ackPartnerMessagesDelivered(messages, { threadId = "" } = {}) {
   if (typeof navigator !== "undefined" && navigator.onLine === false) return;
-  const tid = String(_conversationId || "").trim();
+  const tid = String(threadId || _conversationId || "").trim();
+  if (!tid || isCoachThreadId(tid)) return;
+  const route = String(document.body.getAttribute("data-route") || "");
+  if (!threadId && route !== "messages-thread") return;
+  if (!threadId && String(_conversationId || "") !== tid) return;
   const myId = String(authSession?.user?.id || "").trim();
-  if (!tid || !myId || _messagesDeliveredAckInFlight) return;
+  if (!myId || _messagesDeliveredAckInFlight) return;
   const ids = (Array.isArray(messages) ? messages : [])
     .filter((m) => {
       const id = String(m?.id || "").trim();
@@ -32740,10 +32744,14 @@ async function ackPartnerMessagesDelivered(messages) {
   ids.forEach((id) => _messagesDeliveredAckedIds.add(id));
   _messagesDeliveredAckInFlight = true;
   try {
-    await messagesApi("/api/messages", {
+    const data = await messagesApi("/api/messages", {
       method: "POST",
       body: JSON.stringify({ action: "mark_delivered", threadId: tid, messageIds: ids }),
     });
+    if (data?.skipped) {
+      console.warn("[dm-delivered] column missing — run supabase/dm_messages_delivered.sql");
+      ids.forEach((id) => _messagesDeliveredAckedIds.delete(id));
+    }
   } catch {
     ids.forEach((id) => _messagesDeliveredAckedIds.delete(id));
   } finally {
@@ -33081,7 +33089,7 @@ async function pollNewThreadMessages(threadId, { bootToken = 0, reason = "" } = 
     const ordered = path.includes("order=created_at.asc") ? rows : [...rows].reverse();
     if (mergeThreadMessages(ordered)) {
       saveActiveThreadToCache();
-      void markThreadReadQuiet(tid);
+      void markThreadReadQuiet(tid, { readDelayMs: DM_READ_MARK_DELAY_MS });
       try {
         console.info("[dm-poll]", { reason: reason || "interval", threadId: tid, added: ordered.length });
       } catch {}
@@ -33147,7 +33155,8 @@ async function refreshDmInboxRealtimeSubscribe() {
   const uid = String(authSession?.user?.id || "").trim();
   const token = getSupabaseAuthToken();
   if (!uid || !token) return;
-  if (String(document.body.getAttribute("data-route") || "") !== "messages") return;
+  const route = String(document.body.getAttribute("data-route") || "");
+  if (route !== "messages" && route !== "messages-thread") return;
   const mod = await loadMessagesRealtimeModule();
   if (!mod?.subscribeDmInbox) return;
   await mod.subscribeDmInbox({
@@ -33156,8 +33165,13 @@ async function refreshDmInboxRealtimeSubscribe() {
     accessToken: token,
     userId: uid,
     onInsert: (row) => {
-      if (String(document.body.getAttribute("data-route") || "") !== "messages") return;
-      if (patchInboxFromDmMessageRow(row)) {
+      const myId = String(authSession?.user?.id || "").trim();
+      const senderId = String(row?.sender_id || "").trim();
+      const tid = String(row?.thread_id || "").trim();
+      if (senderId && myId && senderId !== myId && tid) {
+        void ackPartnerMessagesDelivered([row], { threadId: tid });
+      }
+      if (route === "messages" && patchInboxFromDmMessageRow(row)) {
         try { console.info("[dm-inbox-live]", { threadId: row.thread_id, messageId: row.id }); } catch {}
       }
     },
@@ -33231,7 +33245,7 @@ async function refreshDmThreadRealtimeSubscribe(threadId) {
             await markThreadReadQuiet(tid, { skipDeliveryAck: true, readDelayMs: DM_READ_MARK_DELAY_MS });
           })();
         } else {
-          void markThreadReadQuiet(tid);
+          void markThreadReadQuiet(tid, { readDelayMs: DM_READ_MARK_DELAY_MS });
         }
       }
       patchInboxFromDmMessageRow(row);
@@ -33551,7 +33565,8 @@ function enterMessagesThreadRoute(threadId, targetUserId = "") {
   syncMessagesThreadViewportLayout();
   scheduleMessagesThreadScrollToBottom({ force: true });
   beginMessagesThreadEnterTransition();
-  if (tid) void markThreadReadQuiet(tid);
+  if (tid) void markThreadReadQuiet(tid, { readDelayMs: DM_READ_MARK_DELAY_MS });
+  startMessagesInboxRealtime();
   _chatPartnerPresence = { status: "idle" };
   _chatPresenceSig = "";
   if (_chatHeaderUser?.userId) {

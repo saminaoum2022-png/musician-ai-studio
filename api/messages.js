@@ -391,6 +391,46 @@ async function presenceForViewer(viewerId, partnerId) {
   return out;
 }
 
+async function partnerPresenceActive(partnerId) {
+  const partner = cleanUserId(partnerId);
+  if (!partner) return false;
+  const r = await svcFetch(
+    `user_presence?user_id=eq.${encodeURIComponent(partner)}&select=status,expires_at&limit=1`,
+  );
+  const row = Array.isArray(r.data) && r.data[0] ? r.data[0] : null;
+  if (!row) return false;
+  const status = String(row.status || "idle");
+  if (status === "idle") return false;
+  if (row.expires_at && new Date(row.expires_at) < new Date()) return false;
+  return true;
+}
+
+async function markMessagesDelivered(messageIds, { threadId = "" } = {}) {
+  const ids = [...new Set((messageIds || []).map((id) => String(id || "").trim()).filter(Boolean))].slice(0, 48);
+  if (!ids.length) return { ok: true, updated: [], deliveredAt: null };
+  const now = new Date().toISOString();
+  const inClause = ids.map((id) => encodeURIComponent(id)).join(",");
+  const tid = String(threadId || "").trim();
+  const threadFilter = tid ? `&thread_id=eq.${encodeURIComponent(tid)}` : "";
+  const r = await svcFetch(
+    `dm_messages?id=in.(${inClause})${threadFilter}&delivered_at=is.null`,
+    {
+      method: "PATCH",
+      headers: { Prefer: "return=representation" },
+      body: JSON.stringify({ delivered_at: now }),
+    },
+  );
+  if (!r.ok) {
+    const missingCol = /delivered_at|column|42703/i.test(String(r.text || ""));
+    if (missingCol) {
+      return { ok: false, missingColumn: true, error: "Run supabase/dm_messages_delivered.sql in Supabase." };
+    }
+    return { ok: false, error: String(r.text || "Delivery update failed") };
+  }
+  const updated = Array.isArray(r.data) ? r.data : [];
+  return { ok: true, updated, deliveredAt: now };
+}
+
 async function getThreadForUsers(userA, userB) {
   const pair = orderedPair(userA, userB);
   if (!pair) return null;
@@ -824,22 +864,30 @@ async function handlePost(req, res, user) {
     );
     const thread = Array.isArray(tr.data) && tr.data[0] ? tr.data[0] : null;
     if (!thread) return sendJson(res, 404, { ok: false, error: "Thread not found" });
-    const now = new Date().toISOString();
-    const inClause = messageIds.map((id) => encodeURIComponent(id)).join(",");
-    const r = await svcFetch(
-      `dm_messages?id=in.(${inClause})&thread_id=eq.${encodeURIComponent(threadId)}&sender_id=neq.${encodeURIComponent(user.userId)}&delivered_at=is.null`,
-      {
-        method: "PATCH",
-        headers: { Prefer: "return=minimal" },
-        body: JSON.stringify({ delivered_at: now }),
-      },
-    );
-    if (!r.ok) {
-      const missingCol = /delivered_at|column|42703/i.test(String(r.text || ""));
-      if (missingCol) return sendJson(res, 200, { ok: true, skipped: true });
-      return sendJson(res, 500, { ok: false, error: "Delivery ack failed" });
+    const partnerId = threadPartnerId(thread, user.userId);
+    const filteredIds = [];
+    for (const id of messageIds) {
+      const msgR = await svcFetch(
+        `dm_messages?select=id,sender_id&id=eq.${encodeURIComponent(id)}&thread_id=eq.${encodeURIComponent(threadId)}&limit=1`,
+      );
+      const msg = Array.isArray(msgR.data) && msgR.data[0] ? msgR.data[0] : null;
+      if (msg && String(msg.sender_id || "") === String(partnerId || "")) filteredIds.push(id);
     }
-    return sendJson(res, 200, { ok: true, deliveredAt: now });
+    if (!filteredIds.length) {
+      return sendJson(res, 200, { ok: true, deliveredAt: null, updatedIds: [] });
+    }
+    const marked = await markMessagesDelivered(filteredIds, { threadId });
+    if (!marked.ok) {
+      if (marked.missingColumn) {
+        return sendJson(res, 503, { ok: false, error: marked.error, skipped: true });
+      }
+      return sendJson(res, 500, { ok: false, error: marked.error || "Delivery ack failed" });
+    }
+    return sendJson(res, 200, {
+      ok: true,
+      deliveredAt: marked.deliveredAt,
+      updatedIds: marked.updated.map((row) => String(row?.id || "")).filter(Boolean),
+    });
   }
 
   if (action === "block") {
@@ -998,6 +1046,15 @@ async function handlePost(req, res, user) {
     });
     if (!sent.ok) return sendJson(res, 500, { ok: false, error: sent.error || "Send failed" });
     const recipientId = threadPartnerId(thread, user.userId);
+    if (recipientId && sent.message?.id) {
+      const online = await partnerPresenceActive(recipientId);
+      if (online) {
+        const marked = await markMessagesDelivered([String(sent.message.id)], { threadId: thread.id });
+        if (marked.ok && marked.deliveredAt) {
+          sent.message.delivered_at = marked.deliveredAt;
+        }
+      }
+    }
     if (recipientId) {
       const senderProfile = await profileByUserId(user.userId);
       queuePrivacySafePush({

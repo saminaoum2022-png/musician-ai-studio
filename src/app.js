@@ -226,7 +226,7 @@ import { MUSIC_VIDEO_FEATURE_ENABLED } from "./feature-flags.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260820-020623";
+const APP_BUILD = "20260820-021140";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -30964,6 +30964,17 @@ function isPendingThreadMessageId(id) {
   return String(id || "").startsWith("pending:");
 }
 
+/** Voice optimistic bubbles use a blob URL; server rows use storage — match by duration + peaks. */
+function voiceDropOptimisticFingerprint(body) {
+  const parsed = parseDmMessageBody(body);
+  if (parsed.type !== "voice") return "";
+  const peaks = (Array.isArray(parsed.peaks) ? parsed.peaks : [])
+    .slice(0, 32)
+    .map((n) => Math.round(Number(n) * 100) / 100)
+    .join(",");
+  return `voice:${parsed.durationSec}:${peaks}`;
+}
+
 function findOptimisticMessageIndex({ clientMessageId, serverMsg } = {}) {
   const cid = String(clientMessageId || serverMsg?.client_message_id || "").trim();
   if (cid) {
@@ -30976,7 +30987,18 @@ function findOptimisticMessageIndex({ clientMessageId, serverMsg } = {}) {
   const viewerId = String(authSession?.user?.id || "");
   if (String(serverMsg.sender_id || "") !== viewerId) return -1;
   const body = String(serverMsg.body || "");
-  return (Array.isArray(_messagesList) ? _messagesList : []).findIndex(
+  const list = Array.isArray(_messagesList) ? _messagesList : [];
+  const voiceFp = voiceDropOptimisticFingerprint(body);
+  if (voiceFp) {
+    const voiceIdx = list.findIndex(
+      (m) => isPendingThreadMessageId(m?.id)
+        && String(m.sender_id || "") === viewerId
+        && (m.sendStatus === "sending" || m.sendStatus === "failed")
+        && voiceDropOptimisticFingerprint(String(m.body || "")) === voiceFp,
+    );
+    if (voiceIdx >= 0) return voiceIdx;
+  }
+  return list.findIndex(
     (m) => isPendingThreadMessageId(m?.id)
       && String(m.sender_id || "") === viewerId
       && String(m.body || "") === body

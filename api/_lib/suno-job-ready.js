@@ -253,9 +253,10 @@ async function verifySunoWatchReady(taskId, kind, { variantCount = 1 } = {}) {
 
   const k = String(kind || "song").trim();
   if (k === "music_video") return verifyMusicVideoReady(tid, apiKey);
-  if (k === "instrumental") return verifyInstrumentalReady(tid, apiKey);
+  // Vocal split / instrumental removal jobs use the vocal-removal record-info API.
+  if (k === "instrumental" || k === "stems") return verifyInstrumentalReady(tid, apiKey);
   if (k === "studio_guide") return { ready: false, reason: "skipped" };
-  // song, photo, sound, hum_track
+  // song, photo, sound, hum_track, cover, remix, extend
   return verifyGenerationAudioReady(tid, apiKey, { variantCount });
 }
 

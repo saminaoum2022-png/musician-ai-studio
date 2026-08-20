@@ -17,7 +17,7 @@ const state = {
   offset: 0,
   userSearch: "",
   billingSearch: "",
-  generationFilters: { dateFrom: "", dateTo: "", kind: "", provider: "" },
+  generationFilters: { dateFrom: "", dateTo: "", kind: "", provider: "", status: "" },
   userDetailId: "",
   generationDetailId: "",
   returnView: "users",
@@ -565,6 +565,7 @@ async function adminFetch(view, {
   if (gf.dateTo) qs.set("dateTo", gf.dateTo);
   if (gf.kind) qs.set("kind", gf.kind);
   if (gf.provider) qs.set("provider", gf.provider);
+  if (gf.status) qs.set("status", gf.status);
   if (healthRefresh) qs.set("healthRefresh", "1");
   const r = await fetch(`/api/music/admin?${qs}`, {
     headers: { Authorization: `Bearer ${token}` },
@@ -801,7 +802,7 @@ function viewCacheKey() {
   }
   if (state.view === "generations") {
     const gf = state.generationFilters || {};
-    key += `:gf:${gf.dateFrom || ""}:${gf.dateTo || ""}:${gf.kind || ""}:${gf.provider || ""}`;
+    key += `:gf:${gf.dateFrom || ""}:${gf.dateTo || ""}:${gf.kind || ""}:${gf.provider || ""}:${gf.status || ""}`;
   }
   if (state.view === "user" && state.userDetailId) {
     key += `:uid:${state.userDetailId}`;
@@ -1337,14 +1338,19 @@ function renderUserDetail(data) {
   const genBody = genRows.length
     ? genRows.map((g) => {
       const gid = escapeHtml(g.id || "");
+      const reason = String(g.errorMessage || "").trim();
+      const reasonShort = reason
+        ? (reason.length > 48 ? `${reason.slice(0, 45)}…` : reason)
+        : "—";
       return `<tr class="rowClickable" tabindex="0" role="link" data-generation-view="${gid}" data-return-view="user" aria-label="Open generation">
         ${dateCell(g.createdAt)}
         <td>${escapeHtml(g.kind || "—")}</td>
         <td><span class="badge ${escapeHtml(g.status || "")}">${escapeHtml(g.status || "—")}</span></td>
+        <td class="promptCell" title="${reason.replace(/"/g, "&quot;")}">${escapeHtml(reasonShort)}</td>
         <td class="num">${fmtNum(g.creditsUsed, 1)}</td>
       </tr>`;
     }).join("")
-    : `<tr><td colspan="4" class="loading">No generations logged.</td></tr>`;
+    : `<tr><td colspan="5" class="loading">No generations logged.</td></tr>`;
 
   const songRows = data.songs || [];
   const songBody = songRows.length
@@ -1396,7 +1402,7 @@ function renderUserDetail(data) {
       title: "Recent generations",
       note: "Click a row for full details.",
       tableHtml: `<div class="tableWrap tableWrap--plain"><table class="table--compact"><thead><tr>
-        <th>When</th><th>Kind</th><th>Status</th><th>Credits</th>
+        <th>When</th><th>Kind</th><th>Status</th><th>Reason</th><th>Credits</th>
       </tr></thead><tbody>${genBody}</tbody></table></div>`,
     })}
     ${listSection({
@@ -1897,28 +1903,43 @@ function renderGenerations(data) {
     ["elevenlabs", "ElevenLabs"],
     ["other", "Other"],
   ];
+  const statusOptions = [
+    ["", "All statuses"],
+    ["pending", "Pending"],
+    ["completed", "Completed"],
+    ["failed", "Failed"],
+    ["refunded", "Refunded"],
+  ];
   const kindSelect = kindOptions.map(([val, label]) =>
     `<option value="${escapeHtml(val)}"${filters.kind === val ? " selected" : ""}>${escapeHtml(label)}</option>`,
   ).join("");
   const providerSelect = providerOptions.map(([val, label]) =>
     `<option value="${escapeHtml(val)}"${filters.provider === val ? " selected" : ""}>${escapeHtml(label)}</option>`,
   ).join("");
+  const statusSelect = statusOptions.map(([val, label]) =>
+    `<option value="${escapeHtml(val)}"${filters.status === val ? " selected" : ""}>${escapeHtml(label)}</option>`,
+  ).join("");
   const body = rows.length
     ? rows.map((g) => {
       const gid = escapeHtml(g.id || "");
+      const reason = String(g.errorMessage || "").trim();
+      const reasonShort = reason
+        ? (reason.length > 72 ? `${reason.slice(0, 69)}…` : reason)
+        : (g.status === "pending" ? "Waiting on Suno…" : "—");
       return `
       <tr class="rowClickable" tabindex="0" role="link" data-generation-view="${gid}" data-return-view="generations" aria-label="Open generation">
         <td>${escapeHtml(g.userLabel || "—")}</td>
         <td class="promptCell" title="${(g.prompt || "").replace(/"/g, "&quot;")}">${g.prompt || "—"}</td>
-        <td>${g.provider}</td>
-        <td>${g.kind}</td>
-        <td><span class="badge ${g.status}">${g.status}</span></td>
+        <td>${escapeHtml(g.provider || "—")}</td>
+        <td>${escapeHtml(g.kind || "—")}</td>
+        <td><span class="badge ${escapeHtml(g.status || "")}">${escapeHtml(g.status || "—")}</span></td>
+        <td class="promptCell" title="${reason.replace(/"/g, "&quot;")}">${escapeHtml(reasonShort)}</td>
         <td class="num">${fmtNum(g.creditsUsed, 1)}</td>
         <td class="num">${g.providerCostUsd != null ? fmtUsd(g.providerCostUsd) : "—"}</td>
         ${dateCell(g.createdAt)}
       </tr>`;
     }).join("")
-    : `<tr><td colspan="8" class="loading">No generation logs yet</td></tr>`;
+    : `<tr><td colspan="9" class="loading">No generation logs yet</td></tr>`;
 
   els.panels.generations.innerHTML = adminPageStack(`
     <form id="generationFilterForm" class="toolbarBlock generationFilterBar">
@@ -1939,6 +1960,10 @@ function renderGenerations(data) {
           <span>Provider</span>
           <select id="genFilterProvider" class="marketingFieldInput">${providerSelect}</select>
         </label>
+        <label class="field marketingField">
+          <span>Status</span>
+          <select id="genFilterStatus" class="marketingFieldInput">${statusSelect}</select>
+        </label>
       </div>
       <div class="heroActions">
         <button type="submit" class="btnPrimary">Apply filters</button>
@@ -1947,14 +1972,14 @@ function renderGenerations(data) {
     </form>
     ${listSection({
       title: "Generation log",
-      note: "Covers, remixes, stems, sounds, and full songs. Click a row for the Suno payload and errors.",
+      note: "Covers, remixes, stems, sounds, and full songs. Kind comes from the request type. Reason shows Suno reject/fail text when available. Click a row for the full payload.",
       tableHtml: `
     <div class="tableWrap tableWrap--plain">
       <table class="table--compact">
         <thead>
           <tr>
             <th>User</th><th>Prompt</th><th>Provider</th><th>Kind</th>
-            <th>Status</th><th>Credits</th><th>Cost</th><th>Date</th>
+            <th>Status</th><th>Reason</th><th>Credits</th><th>Cost</th><th>Date</th>
           </tr>
         </thead>
         <tbody>${body}</tbody>
@@ -4363,6 +4388,7 @@ document.body.addEventListener("submit", (e) => {
       dateTo: String(document.getElementById("genFilterDateTo")?.value || "").trim(),
       kind: String(document.getElementById("genFilterKind")?.value || "").trim(),
       provider: String(document.getElementById("genFilterProvider")?.value || "").trim(),
+      status: String(document.getElementById("genFilterStatus")?.value || "").trim(),
     };
     state.offset = 0;
     void loadView({ force: true });
@@ -4936,7 +4962,7 @@ document.body.addEventListener("click", (e) => {
 
   const genFilterClear = e.target.closest("#genFilterClear");
   if (genFilterClear) {
-    state.generationFilters = { dateFrom: "", dateTo: "", kind: "", provider: "" };
+    state.generationFilters = { dateFrom: "", dateTo: "", kind: "", provider: "", status: "" };
     state.offset = 0;
     void loadView({ force: true });
     return;

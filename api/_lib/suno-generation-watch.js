@@ -17,7 +17,7 @@ const MIN_WATCH_AGE_MS = 45000;
 
 function defaultVariantCountForKind(kind) {
   const k = String(kind || "song").trim();
-  if (k === "sound" || k === "music_video" || k === "instrumental" || k === "studio_guide") {
+  if (k === "sound" || k === "music_video" || k === "instrumental" || k === "stems" || k === "studio_guide") {
     return 1;
   }
   return 2;
@@ -80,9 +80,10 @@ function pushKindForWatchKind(kind) {
   const k = String(kind || "").trim();
   if (k === "sound") return "sound_ready";
   if (k === "music_video") return "music_video_ready";
-  if (k === "instrumental") return "instrumental_ready";
+  if (k === "instrumental" || k === "stems") return "instrumental_ready";
   if (k === "hum_track") return "hum_track_ready";
   if (k === "photo") return "photo_ready";
+  if (k === "cover" || k === "remix" || k === "extend") return "generation_ready";
   return "generation_ready";
 }
 
@@ -121,6 +122,25 @@ async function rest(path, { method = "GET", body, prefer = "" } = {}) {
   return { ok: r.ok, status: r.status, data };
 }
 
+const WATCH_KIND_ALLOWED = new Set([
+  "song",
+  "photo",
+  "sound",
+  "hum_track",
+  "instrumental",
+  "music_video",
+  "studio_guide",
+]);
+
+/** Coerce log kinds (cover/remix/stems) into watch-table kinds until SQL expands the check. */
+function coerceWatchKind(kind) {
+  const k = String(kind || "song").trim();
+  if (WATCH_KIND_ALLOWED.has(k)) return k;
+  if (k === "stems") return "instrumental";
+  if (k === "cover" || k === "remix" || k === "extend") return "song";
+  return "song";
+}
+
 async function registerSunoWatch({
   userId,
   taskId,
@@ -131,7 +151,7 @@ async function registerSunoWatch({
 } = {}) {
   const uid = cleanUserId(userId);
   const tid = cleanTaskId(taskId);
-  const k = String(kind || "").trim();
+  const k = coerceWatchKind(kind);
   if (!uid || !tid || !k) return { ok: false, reason: "invalid_args" };
   const desiredVariantCount = Math.max(
     1,
@@ -255,7 +275,21 @@ function scheduleBackgroundWork(promise) {
 }
 
 function watchFailureMessage(verified, fallback = "verify_failed") {
-  return String(verified?.failureKind || verified?.errorMessage || fallback).trim().slice(0, 500);
+  const kind = String(verified?.failureKind || "").trim();
+  const raw = String(verified?.errorMessage || "").trim();
+  const friendly = {
+    copyright: "Copyright / fingerprint rejected",
+    sensitive: "Content policy blocked",
+    audio_verify: "Audio could not be verified",
+    tooLong: "Lyrics or style too long",
+    artistReference: "Artist name in style tags",
+    credits: "Upstream credits error",
+    voicePersona: "Voice persona invalid or expired",
+  };
+  if (kind && friendly[kind]) {
+    return raw ? `${friendly[kind]} — ${raw}`.slice(0, 500) : friendly[kind];
+  }
+  return String(kind || raw || fallback).trim().slice(0, 500);
 }
 
 /**
@@ -365,6 +399,7 @@ function callbackLooksFailed(body) {
   return (
     flag === "FAILED"
     || flag === "ERROR"
+    || flag === "REJECTED"
     || flag === "CREATE_TASK_FAILED"
     || flag === "GENERATE_AUDIO_FAILED"
     || flag === "CALLBACK_EXCEPTION"
@@ -460,14 +495,82 @@ function queueRegisterSunoWatch(opts) {
 }
 
 /**
+ * Heal admin logs stuck on pending when the watch never registered (kind
+ * constraint) or callbacks were missed. Calls Suno record-info and writes
+ * completed / failed|refunded + error_message onto music_generation_logs.
+ */
+async function reconcilePendingGenerationLogs({ limit = 20, sinceHours = 48 } = {}) {
+  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+    return { ok: false, reason: "no_supabase", checked: 0, results: [] };
+  }
+  const hours = Math.max(1, Math.min(168, Number(sinceHours) || 48));
+  const since = new Date(Date.now() - hours * 60 * 60 * 1000).toISOString();
+  const max = Math.max(1, Math.min(40, Number(limit) || 20));
+  const r = await rest(
+    `music_generation_logs?status=eq.pending&task_id=not.is.null&task_id=neq.&created_at=gte.${encodeURIComponent(since)}&select=id,user_id,task_id,kind,status,credits_used,created_at&order=created_at.asc&limit=${max}`,
+  );
+  if (!r.ok || !Array.isArray(r.data)) {
+    return { ok: false, reason: "query_failed", checked: 0, results: [] };
+  }
+
+  const results = [];
+  for (const log of r.data) {
+    const taskId = cleanTaskId(log?.task_id);
+    const userId = cleanUserId(log?.user_id);
+    if (!taskId || !userId) {
+      results.push({ taskId: log?.task_id || "", ok: false, reason: "invalid_row" });
+      continue;
+    }
+    // Skip brand-new rows — Suno often needs a minute before terminal status.
+    const createdMs = new Date(log.created_at || 0).getTime();
+    if (Number.isFinite(createdMs) && Date.now() - createdMs < MIN_WATCH_AGE_MS) {
+      results.push({ taskId, ok: false, reason: "too_young" });
+      continue;
+    }
+
+    const kind = String(log.kind || "song").trim() || "song";
+    const verified = await verifySunoWatchReady(taskId, kind, {
+      variantCount: defaultVariantCountForKind(kind),
+    });
+    if (verified.failed) {
+      const msg = watchFailureMessage(verified, "reconcile_failed");
+      await refundFailedSunoWatch(
+        { user_id: userId, task_id: taskId, kind },
+        msg,
+      );
+      await markWatchStatus(taskId, "failed");
+      results.push({ taskId, ok: false, reason: "failed", errorMessage: msg });
+      continue;
+    }
+    if (verified.ready) {
+      queueUpdateMusicGenerationByTaskId(taskId, { status: "completed" });
+      const watch = await fetchWatchByTaskId(taskId);
+      if (watch && watch.status === "pending") {
+        await markWatchStatus(taskId, "complete");
+      }
+      results.push({ taskId, ok: true, reason: "completed" });
+      continue;
+    }
+    results.push({
+      taskId,
+      ok: false,
+      reason: "not_ready",
+      status: verified.status || "",
+    });
+  }
+
+  return { ok: true, checked: results.length, results };
+}
+
+/**
  * Backstop when Suno callbacks or waitUntil retries miss a completion.
- * Re-checks pending watches and premature notifies from the last few hours.
+ * Re-checks pending watches and premature notifies, then heals orphan pending logs.
  */
 async function sweepSunoGenerationWatches({ limit = 30 } = {}) {
   if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
     return { ok: false, reason: "no_supabase" };
   }
-  const since = new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString();
+  const since = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
   const max = Math.max(1, Math.min(50, Number(limit) || 30));
   const [pendingRes, notifiedRes] = await Promise.all([
     rest(
@@ -510,7 +613,13 @@ async function sweepSunoGenerationWatches({ limit = 30 } = {}) {
     results.push({ taskId, ...notifyResult });
   }
 
-  return { ok: true, checked: seen.size, results };
+  const orphan = await reconcilePendingGenerationLogs({ limit: Math.min(20, max) });
+  return {
+    ok: true,
+    checked: seen.size,
+    results,
+    orphanLogs: orphan,
+  };
 }
 
 module.exports = {
@@ -519,6 +628,7 @@ module.exports = {
   handleSunoCallback,
   notifyJobReadyFromClient,
   sweepSunoGenerationWatches,
+  reconcilePendingGenerationLogs,
   pushBodyForWatch,
   wasLikelyPrematureNotify,
   MIN_WATCH_AGE_MS,

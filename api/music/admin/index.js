@@ -775,6 +775,22 @@ async function getCredits(limit, offset) {
   return { transactions, total };
 }
 
+function inferGenerationKind(kind, requestDetail = "", prompt = "") {
+  const k = String(kind || "").trim().toLowerCase();
+  if (k && k !== "song" && k !== "other") return k;
+  const blob = `${requestDetail}\n${prompt}`.toLowerCase();
+  if (/\b(vocal_cover|song_cover|vocal_full|vocal_instrumental)\b/.test(blob)) return "cover";
+  if (/\bsong_remix\b/.test(blob)) return "remix";
+  if (/\b(vocal_extend|song_extend)\b/.test(blob)) return "extend";
+  if (/\b(split_stem|vocal.?remov|stem)\b/.test(blob) || /\/api\/v1\/vocal-removal\b/.test(blob)) {
+    return "stems";
+  }
+  if (/\b(humming_music|humming_backing|underpainting|add.?instrumental)\b/.test(blob)) {
+    return "instrumental";
+  }
+  return k || "song";
+}
+
 async function getGenerations(limit, offset, filters = {}) {
   const parts = [
     "music_generation_logs?select=id,user_id,task_id,kind,provider,prompt,request_detail,status,credits_used,provider_cost_usd,error_message,created_at,completed_at",
@@ -783,10 +799,15 @@ async function getGenerations(limit, offset, filters = {}) {
   const dateTo = String(filters.dateTo || "").trim();
   const kind = String(filters.kind || "").trim().toLowerCase();
   const provider = String(filters.provider || "").trim().toLowerCase();
+  const status = String(filters.status || "").trim().toLowerCase();
   if (dateFrom) parts.push(`created_at=gte.${encodeURIComponent(`${dateFrom}T00:00:00.000Z`)}`);
   if (dateTo) parts.push(`created_at=lte.${encodeURIComponent(`${dateTo}T23:59:59.999Z`)}`);
+  // Kind filter uses stored kind; older cover/remix rows may still be "song".
   if (kind) parts.push(`kind=eq.${encodeURIComponent(kind)}`);
   if (provider) parts.push(`provider=eq.${encodeURIComponent(provider)}`);
+  if (status && ["pending", "completed", "failed", "refunded"].includes(status)) {
+    parts.push(`status=eq.${encodeURIComponent(status)}`);
+  }
   parts.push(`order=created_at.desc&limit=${limit}&offset=${offset}`);
   const res = await serviceFetch(parts.join("&"));
   const rows = Array.isArray(res.data) ? res.data : [];
@@ -808,7 +829,8 @@ async function getGenerations(limit, offset, filters = {}) {
       userId: r.user_id,
       userLabel: String(p.display_name || p.username || "—"),
       taskId: r.task_id || "",
-      kind: r.kind,
+      kind: inferGenerationKind(r.kind, r.request_detail, r.prompt),
+      storedKind: r.kind,
       provider: r.provider,
       prompt: r.prompt || "",
       requestDetail: r.request_detail || "",
@@ -820,7 +842,7 @@ async function getGenerations(limit, offset, filters = {}) {
       completedAt: r.completed_at,
     };
   });
-  return { generations, total: res.total ?? generations.length, filters: { dateFrom, dateTo, kind, provider } };
+  return { generations, total: res.total ?? generations.length, filters: { dateFrom, dateTo, kind, provider, status } };
 }
 
 async function getPublications(limit, offset) {
@@ -1017,7 +1039,7 @@ async function getUserDetail(userIdInput, search = "") {
     serviceFetch(`pro_subscriptions?select=provider,plan_id,status,current_period_end,provider_subscription_id,created_at,updated_at&user_id=eq.${enc}&limit=1`),
     serviceFetch(`billing_events?select=id,provider,event_type,plan_id,product_id,credits_granted,created_at&user_id=eq.${enc}&order=created_at.desc&limit=50`),
     fetchMergedCreditRows({ userId: uid, limit: 40, offset: 0 }),
-    serviceFetch(`music_generation_logs?select=id,kind,provider,status,credits_used,error_message,created_at&user_id=eq.${enc}&order=created_at.desc&limit=15`),
+    serviceFetch(`music_generation_logs?select=id,kind,provider,status,credits_used,error_message,prompt,request_detail,created_at&user_id=eq.${enc}&order=created_at.desc&limit=15`),
     serviceFetch(`user_songs?select=id,title,created_at,public_on_profile&user_id=eq.${enc}&order=created_at.desc&limit=12`),
   ]);
 
@@ -1055,7 +1077,7 @@ async function getUserDetail(userIdInput, search = "") {
 
   const generations = (Array.isArray(gensRes.data) ? gensRes.data : []).map((row) => ({
     id: row.id,
-    kind: row.kind || "",
+    kind: inferGenerationKind(row.kind, row.request_detail, row.prompt),
     provider: row.provider || "",
     status: row.status || "",
     creditsUsed: Number(row.credits_used || 0),
@@ -1201,7 +1223,7 @@ async function getGenerationDetail(generationIdInput) {
       username: prof?.username || "",
       email: auth.email || "",
       taskId,
-      kind: row.kind || "",
+      kind: inferGenerationKind(row.kind, row.request_detail, row.prompt),
       provider: row.provider || "",
       prompt: row.prompt || "",
       requestDetail: row.request_detail || "",
@@ -1342,6 +1364,7 @@ module.exports = async function handler(req, res) {
   const genDateTo = String(url.searchParams.get("dateTo") || "").trim();
   const genKind = String(url.searchParams.get("kind") || "").trim().toLowerCase();
   const genProvider = String(url.searchParams.get("provider") || "").trim().toLowerCase();
+  const genStatus = String(url.searchParams.get("status") || "").trim().toLowerCase();
   const healthRefresh = String(url.searchParams.get("healthRefresh") || "").trim() === "1";
 
   const adminView = view === "user" ? "user" : view === "generation" ? "generation" : view === "suno" ? "providers" : view;
@@ -1395,6 +1418,7 @@ module.exports = async function handler(req, res) {
           dateTo: genDateTo,
           kind: genKind,
           provider: genProvider,
+          status: genStatus,
         })),
       };
     } else if (view === "subscriptions") {

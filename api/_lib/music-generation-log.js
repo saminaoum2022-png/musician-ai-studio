@@ -89,11 +89,31 @@ async function logMusicGeneration({
       ? { completed_at: new Date().toISOString() }
       : {}),
   };
-  const r = await rest("music_generation_logs", {
+  let r = await rest("music_generation_logs", {
     method: "POST",
     body: row,
     prefer: "return=representation",
   });
+  // Older DBs may lack cover/remix/extend/stems in the kind check — fall back so the row still lands.
+  if (!r.ok && ["cover", "remix", "extend", "stems"].includes(row.kind)) {
+    const fallbackKind = row.kind === "stems" ? "instrumental" : "song";
+    const retry = { ...row, kind: fallbackKind };
+    r = await rest("music_generation_logs", {
+      method: "POST",
+      body: retry,
+      prefer: "return=representation",
+    });
+    if (r.ok) {
+      try {
+        console.warn("[music-generation-log] kind fallback", row.kind, "→", fallbackKind, row.task_id);
+      } catch {}
+    }
+  }
+  if (!r.ok) {
+    try {
+      console.warn("[music-generation-log] insert failed", r.status, row.kind, row.task_id, row.status, r.data);
+    } catch {}
+  }
   const id = Array.isArray(r.data) && r.data[0]?.id ? r.data[0].id : null;
   return { ok: r.ok, id };
 }

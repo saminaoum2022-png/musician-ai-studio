@@ -388,7 +388,7 @@ module.exports = async function handler(req, res) {
           });
         }
         registerStemsWatch(user, body, coverData, {
-          kind: instrumentPreset ? "hum_track" : "song",
+          kind: resolveStemsLogKind(body, true, ""),
           variantCount: 2,
         });
         logStemsOp({
@@ -458,7 +458,10 @@ module.exports = async function handler(req, res) {
             uploadUrl,
           });
         }
-        registerStemsWatch(user, body, extData, { kind: "song", variantCount: 2 });
+        registerStemsWatch(user, body, extData, {
+          kind: resolveStemsLogKind(body, true, ""),
+          variantCount: 2,
+        });
         logStemsOp({
           user,
           body,
@@ -594,7 +597,10 @@ module.exports = async function handler(req, res) {
           uploadUrl,
         });
       }
-      registerStemsWatch(user, body, addData, { kind: "song", variantCount: 2 });
+      registerStemsWatch(user, body, addData, {
+        kind: resolveStemsLogKind(body, true, ""),
+        variantCount: 2,
+      });
       logStemsOp({
         user,
         body,
@@ -674,7 +680,10 @@ module.exports = async function handler(req, res) {
       });
       return json(res, 502, buildSunoErrorBody(data, { error: "Request was rejected upstream" }));
     }
-    registerStemsWatch(user, body, data, { kind: "instrumental", variantCount: 1 });
+    registerStemsWatch(user, body, data, {
+      kind: resolveStemsLogKind(body, false, stemType),
+      variantCount: 1,
+    });
     logStemsOp({
       user,
       body,

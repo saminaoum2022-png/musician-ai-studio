@@ -1338,11 +1338,15 @@ function renderUserDetail(data) {
   const genBody = genRows.length
     ? genRows.map((g) => {
       const gid = escapeHtml(g.id || "");
+      const synthetic = String(g.id || "").startsWith("ledger-stems-remix-");
       const reason = String(g.errorMessage || "").trim();
       const reasonShort = reason
         ? (reason.length > 48 ? `${reason.slice(0, 45)}…` : reason)
-        : "—";
-      return `<tr class="rowClickable" tabindex="0" role="link" data-generation-view="${gid}" data-return-view="user" aria-label="Open generation">
+        : (synthetic ? "Recovered from ledger" : "—");
+      const rowAttrs = synthetic
+        ? `class="rowMuted" title="Remix charged credits but generation log was missing"`
+        : `class="rowClickable" tabindex="0" role="link" data-generation-view="${gid}" data-return-view="user" aria-label="Open generation"`;
+      return `<tr ${rowAttrs}>
         ${dateCell(g.createdAt)}
         <td>${escapeHtml(g.kind || "—")}</td>
         <td><span class="badge ${escapeHtml(g.status || "")}">${escapeHtml(g.status || "—")}</span></td>
@@ -1922,12 +1926,16 @@ function renderGenerations(data) {
   const body = rows.length
     ? rows.map((g) => {
       const gid = escapeHtml(g.id || "");
+      const synthetic = String(g.id || "").startsWith("ledger-stems-remix-");
       const reason = String(g.errorMessage || "").trim();
       const reasonShort = reason
         ? (reason.length > 72 ? `${reason.slice(0, 69)}…` : reason)
-        : (g.status === "pending" ? "Waiting on Suno…" : "—");
+        : (g.status === "pending" ? "Waiting on Suno…" : (synthetic ? "Recovered from credit ledger" : "—"));
+      const rowAttrs = synthetic
+        ? `class="rowMuted" title="Remix charged credits but generation log was missing"`
+        : `class="rowClickable" tabindex="0" role="link" data-generation-view="${gid}" data-return-view="generations" aria-label="Open generation"`;
       return `
-      <tr class="rowClickable" tabindex="0" role="link" data-generation-view="${gid}" data-return-view="generations" aria-label="Open generation">
+      <tr ${rowAttrs}>
         <td>${escapeHtml(g.userLabel || "—")}</td>
         <td class="promptCell" title="${(g.prompt || "").replace(/"/g, "&quot;")}">${g.prompt || "—"}</td>
         <td>${escapeHtml(g.provider || "—")}</td>

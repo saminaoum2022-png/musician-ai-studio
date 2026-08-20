@@ -43,7 +43,7 @@ const { resolveHumTrackPreset } = require("../_lib/hum-track-presets");
 const { queueRegisterSunoWatch } = require("../_lib/suno-generation-watch");
 const { sanitizeSunoStyleTags, buildSunoErrorBody } = require("../_lib/suno-user-errors");
 const {
-  queueLogSunoGeneration,
+  logSunoGeneration,
   sunoErrorMessage,
   resolveStemsLogKind,
   buildStemsPromptLabel,
@@ -374,7 +374,7 @@ module.exports = async function handler(req, res) {
         } catch {}
         if (!coverRes.ok || (coverData && "code" in coverData && Number(coverData.code) !== 200)) {
           await refund("suno_cover_failed");
-          logStemsOp({
+          await logStemsOp({
             user,
             body,
             isAdmin,
@@ -398,7 +398,7 @@ module.exports = async function handler(req, res) {
           kind: resolveStemsLogKind(body, true, ""),
           variantCount: 2,
         });
-        logStemsOp({
+        await logStemsOp({
           user,
           body,
           isAdmin,
@@ -445,7 +445,7 @@ module.exports = async function handler(req, res) {
         const extData = safeJson(extText);
         if (!extRes.ok || (extData && "code" in extData && Number(extData.code) !== 200)) {
           await refund("suno_extend_failed");
-          logStemsOp({
+          await logStemsOp({
             user,
             body,
             isAdmin,
@@ -469,7 +469,7 @@ module.exports = async function handler(req, res) {
           kind: resolveStemsLogKind(body, true, ""),
           variantCount: 2,
         });
-        logStemsOp({
+        await logStemsOp({
           user,
           body,
           isAdmin,
@@ -584,7 +584,7 @@ module.exports = async function handler(req, res) {
       } catch {}
       if (!addRes.ok || (addData && "code" in addData && Number(addData.code) !== 200)) {
         await refund("suno_add_inst_failed");
-        logStemsOp({
+        await logStemsOp({
           user,
           body,
           isAdmin,
@@ -608,7 +608,7 @@ module.exports = async function handler(req, res) {
         kind: resolveStemsLogKind(body, true, ""),
         variantCount: 2,
       });
-      logStemsOp({
+      await logStemsOp({
         user,
         body,
         isAdmin,
@@ -651,7 +651,7 @@ module.exports = async function handler(req, res) {
     const data = safeJson(text);
     if (!r.ok) {
       await refund(`suno_http_${r.status}`);
-      logStemsOp({
+      await logStemsOp({
         user,
         body,
         isAdmin,
@@ -670,7 +670,7 @@ module.exports = async function handler(req, res) {
     }
     if (data && typeof data === "object" && "code" in data && data.code !== 200) {
       await refund(`suno_code_${data.code}`);
-      logStemsOp({
+      await logStemsOp({
         user,
         body,
         isAdmin,
@@ -691,7 +691,7 @@ module.exports = async function handler(req, res) {
       kind: resolveStemsLogKind(body, false, stemType),
       variantCount: 1,
     });
-    logStemsOp({
+    await logStemsOp({
       user,
       body,
       isAdmin,
@@ -726,7 +726,7 @@ function extractSunoTaskId(data) {
   ).trim();
 }
 
-function logStemsOp({
+async function logStemsOp({
   user,
   body,
   isAdmin,
@@ -744,24 +744,30 @@ function logStemsOp({
 }) {
   const upstreamOk = httpOk && (!data || !("code" in data) || Number(data.code) === 200);
   const resolvedStatus = status || (upstreamOk ? "pending" : (isAdmin ? "failed" : "refunded"));
-  queueLogSunoGeneration({
-    userId: user.userId,
-    taskId: extractSunoTaskId(data),
-    kind: resolveStemsLogKind(body, isRemixAction, stemType),
-    endpoint,
-    prompt: buildStemsPromptLabel(body, payload || {}),
-    requestPayload: {
-      referenceMode: body?.referenceMode || null,
-      sourceAudioUrl: body?.sourceAudioUrl || body?.source_audio_url || null,
-      fileName: body?.fileName || null,
-      action: isRemixAction ? "add_instrumental" : "stems",
-      ...(payload && typeof payload === "object" ? payload : {}),
-    },
-    status: resolvedStatus,
-    creditsUsed: isAdmin ? 0 : cost,
-    errorMessage: errorMessage || (resolvedStatus !== "pending" ? sunoErrorMessage(data, text, httpStatus) : ""),
-    isAdmin,
-  });
+  try {
+    await logSunoGeneration({
+      userId: user.userId,
+      taskId: extractSunoTaskId(data),
+      kind: resolveStemsLogKind(body, isRemixAction, stemType),
+      endpoint,
+      prompt: buildStemsPromptLabel(body, payload || {}),
+      requestPayload: {
+        referenceMode: body?.referenceMode || null,
+        sourceAudioUrl: body?.sourceAudioUrl || body?.source_audio_url || null,
+        fileName: body?.fileName || null,
+        action: isRemixAction ? "add_instrumental" : "stems",
+        ...(payload && typeof payload === "object" ? payload : {}),
+      },
+      status: resolvedStatus,
+      creditsUsed: isAdmin ? 0 : cost,
+      errorMessage: errorMessage || (resolvedStatus !== "pending" ? sunoErrorMessage(data, text, httpStatus) : ""),
+      isAdmin,
+    });
+  } catch (e) {
+    try {
+      console.warn("[suno/stems] generation log failed", e?.message || e);
+    } catch {}
+  }
 }
 
 function registerStemsWatch(user, body, responseData, { kind, variantCount = 2 } = {}) {

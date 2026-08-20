@@ -2,7 +2,7 @@
  * Admin generation logs for all Suno API calls (generate, cover, extend, stems, sounds).
  */
 
-const { queueLogMusicGeneration } = require("./music-generation-log");
+const { queueLogMusicGeneration, logMusicGeneration } = require("./music-generation-log");
 
 const GENERATION_KINDS = Object.freeze([
   "song",
@@ -129,6 +129,22 @@ function queueLogSunoGeneration({
   });
 }
 
+/** Prefer this in request handlers so the log lands before the lambda freezes. */
+async function logSunoGeneration(opts) {
+  const resolvedStatus = opts?.status === "refunded" && opts?.isAdmin ? "failed" : opts?.status;
+  return logMusicGeneration({
+    userId: opts?.userId,
+    taskId: opts?.taskId,
+    kind: normalizeLogKind(opts?.kind),
+    provider: "suno",
+    prompt: String(opts?.prompt || "").slice(0, 2000),
+    requestDetail: formatRequestDetail(opts?.endpoint, opts?.requestPayload),
+    status: resolvedStatus,
+    creditsUsed: Number(opts?.creditsUsed || 0),
+    errorMessage: String(opts?.errorMessage || "").slice(0, 500),
+  });
+}
+
 module.exports = {
   GENERATION_KINDS,
   summarizeSunoPayload,
@@ -137,4 +153,5 @@ module.exports = {
   buildStemsPromptLabel,
   formatRequestDetail,
   queueLogSunoGeneration,
+  logSunoGeneration,
 };

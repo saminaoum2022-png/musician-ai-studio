@@ -109,6 +109,20 @@ async function logMusicGeneration({
       } catch {}
     }
   }
+  // Column may be missing until generation_logs_request_detail.sql is applied.
+  if (!r.ok && Object.prototype.hasOwnProperty.call(row, "request_detail")) {
+    const { request_detail: _drop, ...withoutDetail } = row;
+    r = await rest("music_generation_logs", {
+      method: "POST",
+      body: withoutDetail,
+      prefer: "return=representation",
+    });
+    if (r.ok) {
+      try {
+        console.warn("[music-generation-log] request_detail omitted", row.task_id);
+      } catch {}
+    }
+  }
   if (!r.ok) {
     try {
       console.warn("[music-generation-log] insert failed", r.status, row.kind, row.task_id, row.status, r.data);
@@ -131,12 +145,24 @@ async function updateMusicGenerationByTaskId(taskId, patch = {}) {
   });
 }
 
+function scheduleBackgroundWork(promise) {
+  let waitUntilFn = null;
+  try {
+    waitUntilFn = require("@vercel/functions").waitUntil;
+  } catch {}
+  if (typeof waitUntilFn === "function") {
+    waitUntilFn(promise);
+    return;
+  }
+  void promise;
+}
+
 function queueLogMusicGeneration(opts) {
-  void logMusicGeneration(opts).catch(() => null);
+  scheduleBackgroundWork(logMusicGeneration(opts).catch(() => null));
 }
 
 function queueUpdateMusicGenerationByTaskId(taskId, patch) {
-  void updateMusicGenerationByTaskId(taskId, patch).catch(() => null);
+  scheduleBackgroundWork(updateMusicGenerationByTaskId(taskId, patch).catch(() => null));
 }
 
 module.exports = {

@@ -3074,6 +3074,8 @@ function readMarketingFormContent(pageKey = "home") {
       ctaLabel: val("mkDiscoverCtaLabel"),
       ctaHref: val("mkDiscoverCtaHref"),
       featuredSongIds: val("mkDiscoverFeaturedIds")
+        // Recover from older admin bug that stored literal "\n" between IDs.
+        .replace(/\\n/g, "\n")
         .split(/[\s,]+/g)
         .map((id) => id.trim())
         .filter(Boolean),
@@ -3471,7 +3473,7 @@ function buildMarketingEditorSections(ctx) {
         ${marketingField("CTA link", "mkDiscoverCtaHref", ctx.discover.ctaHref || "")}
       `)}
       ${marketingFieldGroup("Featured songs", `
-        ${marketingField("Song IDs", "mkDiscoverFeaturedIds", (ctx.discover.featuredSongIds || []).join("\\n"), { multiline: 4, hint: "One public song UUID per line. Order = carousel order." })}
+        ${marketingField("Song IDs", "mkDiscoverFeaturedIds", (ctx.discover.featuredSongIds || []).join("\n"), { multiline: 4, hint: "One public song UUID per line. Order = carousel order." })}
         <div id="mkDiscoverPicker" class="marketingDiscoverPicker"></div>
       `, { hint: "Pick from recent publications below, or paste UUIDs manually." })}
     `, { active: on("discover") }),

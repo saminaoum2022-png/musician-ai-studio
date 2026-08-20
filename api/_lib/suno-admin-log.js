@@ -56,9 +56,18 @@ function resolveStemsLogKind(body, isRemixAction, stemType) {
   const mode = String(body?.referenceMode || "").trim().toLowerCase();
   const instrumentPreset = String(body?.instrumentPreset || "").trim();
   const source = String(body?.source || "").trim();
+  const sourceAudioUrl = String(body?.sourceAudioUrl || body?.source_audio_url || "").trim();
+  const fileName = String(body?.fileName || "").trim().toLowerCase();
   if (instrumentPreset) return "hum_track";
+  // Hub remix: prefer remix even if an older client sent vocal_full by mistake.
+  if (
+    mode === "song_remix" ||
+    sourceAudioUrl ||
+    /^remix-source\./i.test(fileName)
+  ) {
+    return "remix";
+  }
   if (["vocal_full", "vocal_cover", "song_cover", "vocal_instrumental"].includes(mode)) return "cover";
-  if (mode === "song_remix") return "remix";
   if (["vocal_extend", "song_extend"].includes(mode)) return "extend";
   if (source === "studio") return "studio_guide";
   if (["humming_music", "humming_backing"].includes(mode)) return "hum_track";

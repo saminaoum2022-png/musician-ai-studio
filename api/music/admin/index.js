@@ -779,8 +779,16 @@ function inferGenerationKind(kind, requestDetail = "", prompt = "") {
   const k = String(kind || "").trim().toLowerCase();
   if (k && k !== "song" && k !== "other") return k;
   const blob = `${requestDetail}\n${prompt}`.toLowerCase();
+  // Remix before cover: older hub remixes sometimes logged as vocal_full.
+  if (
+    /\bsong_remix\b/.test(blob) ||
+    /\bremix-source\./.test(blob) ||
+    /"referencemode"\s*:\s*"song_remix"/.test(blob) ||
+    (/upload-cover/.test(blob) && /\bsourceaudiourl\b/.test(blob))
+  ) {
+    return "remix";
+  }
   if (/\b(vocal_cover|song_cover|vocal_full|vocal_instrumental)\b/.test(blob)) return "cover";
-  if (/\bsong_remix\b/.test(blob)) return "remix";
   if (/\b(vocal_extend|song_extend)\b/.test(blob)) return "extend";
   if (/\b(split_stem|vocal.?remov|stem)\b/.test(blob) || /\/api\/v1\/vocal-removal\b/.test(blob)) {
     return "stems";

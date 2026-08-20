@@ -195,7 +195,14 @@ module.exports = async function handler(req, res) {
 
       const style = sanitizeSunoStyleTags(String(body?.style || "").trim());
       const prompt = String(body?.prompt || "").trim();
-      const referenceMode = String(body?.referenceMode || "").trim().toLowerCase();
+      let referenceMode = String(body?.referenceMode || "").trim().toLowerCase();
+      // Server-fetched hub remix source ⇒ always tag as song_remix for logs + kind.
+      if (sourceAudioUrl && referenceMode !== "vocal_instrumental" && referenceMode !== "song_cover") {
+        referenceMode = "song_remix";
+        try {
+          body.referenceMode = "song_remix";
+        } catch {}
+      }
       const title = String(body?.title || "").trim();
       const model = String(body?.model || "V5_5").trim();
       const vocalGender = String(body?.vocalGender || "").trim().toLowerCase();

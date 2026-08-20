@@ -88,7 +88,7 @@ const VIEW_META = {
   users: { title: "Users", sub: "Signups, activity, balances, and songs" },
   user: { title: "User detail", sub: "Credits, subscription, billing, and activity" },
   generation: { title: "Generation detail", sub: "Prompt, status, credits, and saved output" },
-  credits: { title: "Credits", sub: "Grant paid credits and view every ledger entry" },
+  credits: { title: "Credits", sub: "Grant, remove, or adjust paid credits · full ledger" },
   marketing: { title: "Online store", sub: "Edit the marketing website — draft changes, preview, then publish to live" },
   promos: { title: "Promo codes", sub: "Create and monitor redemption codes" },
   singers: { title: "Pro singers", sub: "Singer applications, roster, and performance requests" },
@@ -159,8 +159,12 @@ function fmtReason(reason) {
     signup_welcome: "Welcome bonus",
     full_song: "Song generation",
     paid_purchase: "Paid / admin grant",
+    admin_adjust: "Admin adjust",
+    admin_remove: "Admin remove",
     refund_full_song: "Refund",
     stems: "Stems",
+    stems_remix: "Stems remix",
+    refund_stems_remix: "Refund stems remix",
     persona: "Persona",
     sound: "Sound",
   };
@@ -1366,7 +1370,8 @@ function renderUserDetail(data) {
     : `<tr><td colspan="3" class="loading">No saved songs.</td></tr>`;
 
   const grantBtn = state.adminSession?.canGrantCredits && u.email
-    ? `<button type="button" class="btnPrimary" id="btnUserDetailGrant" data-grant-email="${escapeHtml(u.email)}">Grant credits</button>`
+    ? `<button type="button" class="btnPrimary" id="btnUserDetailGrant" data-grant-email="${escapeHtml(u.email)}">Grant credits</button>
+       <button type="button" class="btnGhost" id="btnUserDetailAdjust" data-grant-email="${escapeHtml(u.email)}">Adjust credits</button>`
     : "";
 
   panel.innerHTML = adminPageStack(`
@@ -1853,6 +1858,29 @@ function renderCredits(data) {
         <button type="submit" class="btnPrimary" id="btnGrantCredits">Grant</button>
       </form>
       <p id="grantCreditsMsg" class="grantMsg" hidden></p>
+      <form id="adjustCreditsForm" class="grantForm" style="margin-top:14px">
+        <label class="field grantField">
+          <span>Remove / adjust paid credits</span>
+          <input id="adjustCreditsEmail" type="email" placeholder="creator@example.com" autocomplete="off" required />
+        </label>
+        <label class="field grantField grantField--amount">
+          <span>Amount</span>
+          <input id="adjustCreditsAmount" type="number" min="1" max="10000" step="1" required placeholder="400" inputmode="numeric" />
+        </label>
+        <label class="field grantField">
+          <span>Action</span>
+          <select id="adjustCreditsAction" class="marketingFieldInput">
+            <option value="remove" selected>Remove</option>
+            <option value="add">Add (adjust up)</option>
+          </select>
+        </label>
+        <label class="field grantField">
+          <span>Reason</span>
+          <input id="adjustCreditsReason" type="text" maxlength="80" placeholder="TestFlight sandbox cleanup" required />
+        </label>
+        <button type="submit" class="btnGhost" id="btnAdjustCredits">Apply</button>
+      </form>
+      <p id="adjustCreditsMsg" class="grantMsg" hidden></p>
     </div>` : ""}
     ${listSection({
       title: "Credit ledger",
@@ -1874,6 +1902,8 @@ function renderCredits(data) {
   if (state.grantPrefillEmail) {
     const emailInput = document.getElementById("grantCreditsEmail");
     if (emailInput) emailInput.value = state.grantPrefillEmail;
+    const adjustEmail = document.getElementById("adjustCreditsEmail");
+    if (adjustEmail) adjustEmail.value = state.grantPrefillEmail;
     state.grantPrefillEmail = "";
   }
 }
@@ -3953,6 +3983,41 @@ async function adminGrantPaidCredits({ email = "", amount } = {}) {
   return data;
 }
 
+async function adminAdjustPaidCredits({ email = "", amount, action = "remove", reason = "" } = {}) {
+  await refreshSessionIfNeeded();
+  const token = state.session?.access_token;
+  if (!token) throw new Error("Not signed in");
+
+  const body = {
+    amount: Number(amount),
+    action: String(action || "remove"),
+    reason: String(reason || "").trim(),
+  };
+  const trimmedEmail = String(email || "").trim().toLowerCase();
+  if (trimmedEmail) body.email = trimmedEmail;
+
+  const r = await fetch("/api/credits/adjust-paid", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(body),
+  });
+  const data = await r.json().catch(() => ({}));
+  if (r.status === 401) {
+    writeSession(null);
+    throw new Error("Session expired — sign in again");
+  }
+  if (r.status === 403) {
+    throw new Error("You do not have permission to adjust credits.");
+  }
+  if (!r.ok || !data?.ok) {
+    throw new Error(data?.error || `Adjust failed (${r.status})`);
+  }
+  return data;
+}
+
 function setPromoCreateMsg(text, kind = "ok") {
   const el = document.getElementById("promoCreateMsg");
   if (!el) return;
@@ -4061,6 +4126,20 @@ async function teamSearch(query) {
 
 function setGrantCreditsMsg(text, kind = "ok") {
   const el = document.getElementById("grantCreditsMsg");
+  if (!el) return;
+  if (!text) {
+    el.hidden = true;
+    el.textContent = "";
+    el.className = "grantMsg";
+    return;
+  }
+  el.hidden = false;
+  el.textContent = text;
+  el.className = `grantMsg is${kind === "ok" ? "Ok" : kind === "warn" ? "Warn" : "Err"}`;
+}
+
+function setAdjustCreditsMsg(text, kind = "ok") {
+  const el = document.getElementById("adjustCreditsMsg");
   if (!el) return;
   if (!text) {
     el.hidden = true;
@@ -4550,6 +4629,53 @@ document.body.addEventListener("submit", (e) => {
     return;
   }
 
+  const adjustForm = e.target.closest("#adjustCreditsForm");
+  if (adjustForm) {
+    e.preventDefault();
+    void (async () => {
+      const emailInput = adjustForm.querySelector("#adjustCreditsEmail");
+      const amountInput = adjustForm.querySelector("#adjustCreditsAmount");
+      const actionInput = adjustForm.querySelector("#adjustCreditsAction");
+      const reasonInput = adjustForm.querySelector("#adjustCreditsReason");
+      const btn = adjustForm.querySelector("#btnAdjustCredits");
+      const email = String(emailInput?.value || "").trim();
+      const amount = Number(amountInput?.value);
+      const action = String(actionInput?.value || "remove");
+      const reason = String(reasonInput?.value || "").trim();
+      if (!email) {
+        setAdjustCreditsMsg("Enter the user email.", "warn");
+        return;
+      }
+      if (!Number.isFinite(amount) || amount <= 0 || amount > 10000) {
+        setAdjustCreditsMsg("Enter an amount between 1 and 10000.", "warn");
+        return;
+      }
+      if (action === "remove" && reason.length < 3) {
+        setAdjustCreditsMsg("Add a short reason (e.g. TestFlight sandbox cleanup).", "warn");
+        return;
+      }
+      const verb = action === "add" ? "Add" : "Remove";
+      if (!window.confirm(`${verb} ${amount} paid credits for ${email}?`)) return;
+      if (btn) btn.disabled = true;
+      setAdjustCreditsMsg(action === "add" ? "Adding…" : "Removing…", "warn");
+      try {
+        const data = await adminAdjustPaidCredits({ email, amount, action, reason });
+        const delta = Number(data.delta || 0);
+        clearCreditsCache();
+        if (state.view === "credits") await loadView({ force: true });
+        setAdjustCreditsMsg(
+          `${delta >= 0 ? "Added" : "Removed"} ${fmtNum(Math.abs(delta), 1)} paid credits for ${data.email || email}. New balance: ${fmtNum(data.balance, 1)} (paid ${fmtNum(data.paidBalance, 1)}).`,
+          "ok",
+        );
+      } catch (err) {
+        setAdjustCreditsMsg(err?.message || "Adjust failed", "err");
+      } finally {
+        if (btn) btn.disabled = false;
+      }
+    })();
+    return;
+  }
+
   const teamForm = e.target.closest("#teamInviteForm");
   if (!teamForm) return;
   e.preventDefault();
@@ -5001,6 +5127,19 @@ document.body.addEventListener("click", (e) => {
     state.grantPrefillEmail = userDetailGrant.dataset.grantEmail || "";
     setView("credits");
     void loadView({ force: true });
+    return;
+  }
+
+  const userDetailAdjust = e.target.closest("#btnUserDetailAdjust");
+  if (userDetailAdjust) {
+    state.grantPrefillEmail = userDetailAdjust.dataset.grantEmail || "";
+    setView("credits");
+    void loadView({ force: true }).then(() => {
+      const reason = document.getElementById("adjustCreditsReason");
+      if (reason && !reason.value) reason.value = "TestFlight / support cleanup";
+      const amount = document.getElementById("adjustCreditsAmount");
+      if (amount) amount.focus();
+    });
     return;
   }
 

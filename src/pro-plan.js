@@ -196,13 +196,30 @@ export function weeklyProDisplayStatus(state) {
   const planId = String(state?.planId || "").trim();
   const active = Boolean(state?.active);
   const status = String(state?.status || "").toLowerCase();
+  const provider = String(state?.provider || "").toLowerCase();
   if (!active || planId !== "weekly") return status || null;
+
+  // Stripe writes real trialing/active — trust it (don't infer trial from period window).
+  if (provider === "stripe") {
+    if (status === "trialing") return "trialing";
+    if (status === "grace") return "grace";
+    if (status === "cancelled") return "cancelled";
+    return status === "active" ? "active" : (status || "active");
+  }
+
   if (status === "trialing") return "trialing";
+  if (status === "active") {
+    const pt = String(state?.periodType || "").toUpperCase();
+    // Explicit paid period — never show Trial.
+    if (pt === "NORMAL") return "active";
+    // Missing periodType with active status: treat as paid (Stripe/web sync).
+    if (!pt) return "active";
+  }
 
   const pt = String(state?.periodType || "").toUpperCase();
   if (pt === "TRIAL") return "trialing";
   if (weeklyInTrialWindow(state)) return "trialing";
-  if (pt !== "NORMAL") return "trialing";
+  if (pt && pt !== "NORMAL") return "trialing";
 
   return "active";
 }

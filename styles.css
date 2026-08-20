@@ -10671,6 +10671,9 @@ html[data-theme="light"] .personaVoiceTuneChips .optChip.isActive{
   font-weight:700;
   color:rgba(186,210,255,0.9);
 }
+#lyricsFieldPanel[data-lyrics-mode="generate"] #btnLyricsDiacritics{
+  display:none !important;
+}
 #lyricsFieldPanel[data-lyrics-mode="write"] .lyricsDiacriticsBtn{
   width:auto;
 }

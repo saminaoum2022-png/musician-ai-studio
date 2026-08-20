@@ -22,11 +22,19 @@ function normalizeProSubscriptionRow(row) {
   }
   let status = String(row.status || "").trim().toLowerCase() || null;
   const planId = String(row.plan_id || row.planId || "").trim() || null;
-  const provider = String(row.provider || "").trim() || null;
+  const provider = String(row.provider || "").trim().toLowerCase() || null;
   const trialStartedAt = row.created_at || row.createdAt || null;
   let currentPeriodEnd = row.current_period_end || row.currentPeriodEnd || null;
 
-  if (planId === "weekly" && trialStartedAt) {
+  // Apple/RC sandbox often reports weekly as "active" during the free trial.
+  // Only heal that case — never override Stripe (or an explicit paid "active")
+  // just because we're still within 7 days of created_at.
+  if (
+    planId === "weekly"
+    && trialStartedAt
+    && status === "active"
+    && provider !== "stripe"
+  ) {
     const createdMs = Date.parse(String(trialStartedAt));
     if (Number.isFinite(createdMs)) {
       const trialEndMs = createdMs + WEEKLY_TRIAL_MS;

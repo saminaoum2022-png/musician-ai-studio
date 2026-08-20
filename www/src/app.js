@@ -226,7 +226,7 @@ import { MUSIC_VIDEO_FEATURE_ENABLED } from "./feature-flags.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260820-121029";
+const APP_BUILD = "20260820-175008";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -6352,7 +6352,7 @@ try {
         periodEnd: pro.currentPeriodEnd,
         periodType: pro.periodType || creditsState.proPeriodType,
         trialStartedAt: creditsState.proTrialStartedAt,
-        provider: creditsState.proProvider,
+        provider: pro.provider || creditsState.proProvider,
       };
     },
   });
@@ -25494,6 +25494,7 @@ function getHealedProState() {
     periodEnd: healed.currentPeriodEnd,
     periodType: healed.periodType || creditsState.proPeriodType,
     trialStartedAt: creditsState.proTrialStartedAt,
+    provider: healed.provider || creditsState.proProvider,
   });
   return {
     active: healed.active,
@@ -25501,6 +25502,7 @@ function getHealedProState() {
     status: displayStatus,
     currentPeriodEnd: healed.currentPeriodEnd,
     periodType: healed.periodType || creditsState.proPeriodType,
+    provider: healed.provider || creditsState.proProvider,
   };
 }
 
@@ -25511,8 +25513,36 @@ function healProSubscriptionForUi(row, userId) {
   let status = row?.status ? String(row.status) : null;
   let currentPeriodEnd = row?.currentPeriodEnd ? String(row.currentPeriodEnd) : null;
   const periodType = String(row?.periodType || "").toUpperCase();
+  const provider = String(row?.provider || "").toLowerCase();
   if (!active || planId !== "weekly") {
-    return { active, planId, status, currentPeriodEnd, periodType: periodType || null };
+    return { active, planId, status, currentPeriodEnd, periodType: periodType || null, provider: provider || null };
+  }
+
+  // Stripe writes real trialing/active — trust server; don't force Trial from period heuristics.
+  if (provider === "stripe") {
+    const resolvedPt =
+      periodType
+      || (status === "trialing" ? "TRIAL" : status === "active" ? "NORMAL" : null);
+    return {
+      active,
+      planId,
+      status: status || "active",
+      currentPeriodEnd,
+      periodType: resolvedPt,
+      provider: provider || null,
+    };
+  }
+
+  // Already a clear paid weekly period from RC — never show Trial.
+  if (status === "active" && periodType === "NORMAL") {
+    return {
+      active,
+      planId,
+      status: "active",
+      currentPeriodEnd,
+      periodType: "NORMAL",
+      provider: provider || null,
+    };
   }
 
   const trialState = {
@@ -25522,8 +25552,9 @@ function healProSubscriptionForUi(row, userId) {
     periodEnd: currentPeriodEnd,
     periodType,
     trialStartedAt: row?.trialStartedAt || row?.trial_started_at,
+    provider,
   };
-  if (weeklyInTrialWindow(trialState) || periodType !== "NORMAL") {
+  if (periodType === "TRIAL" || weeklyInTrialWindow(trialState)) {
     status = "trialing";
     if (!currentPeriodEnd) {
       const startMs = weeklyTrialStartFromState(trialState);
@@ -25531,10 +25562,24 @@ function healProSubscriptionForUi(row, userId) {
         currentPeriodEnd = new Date(startMs + WEEKLY_TRIAL_MS).toISOString();
       }
     }
-    return { active, planId, status, currentPeriodEnd, periodType: periodType || "TRIAL" };
+    return {
+      active,
+      planId,
+      status,
+      currentPeriodEnd,
+      periodType: periodType || "TRIAL",
+      provider: provider || null,
+    };
   }
 
-  return { active, planId, status: status || "active", currentPeriodEnd, periodType };
+  return {
+    active,
+    planId,
+    status: status || "active",
+    currentPeriodEnd,
+    periodType: periodType || "NORMAL",
+    provider: provider || null,
+  };
 }
 
 function applyProSubscriptionState(pro) {
@@ -25549,13 +25594,14 @@ function applyProSubscriptionState(pro) {
     periodEnd: healed.currentPeriodEnd,
     periodType: healed.periodType || row.periodType,
     trialStartedAt: creditsState.proTrialStartedAt,
+    provider: row.provider || creditsState.proProvider,
   });
   creditsState.proActive = Boolean(healed.active);
   creditsState.proPlanId = healed.planId ? String(healed.planId) : null;
   creditsState.proStatus = displayStatus ? String(displayStatus) : null;
   creditsState.proPeriodEnd = healed.currentPeriodEnd ? String(healed.currentPeriodEnd) : null;
   creditsState.proPeriodType =
-    displayStatus === "trialing" ? "TRIAL" : (healed.periodType || row.periodType || null);
+    displayStatus === "trialing" ? "TRIAL" : (healed.periodType || row.periodType || "NORMAL");
   creditsState.proProvider = row.provider ? String(row.provider) : null;
   try { syncProSubscriptionUi(); } catch {}
 }
@@ -25863,11 +25909,12 @@ function syncSettingsProRow() {
     periodEnd: pro.currentPeriodEnd,
     periodType: pro.periodType || creditsState.proPeriodType,
     trialStartedAt: creditsState.proTrialStartedAt,
+    provider: pro.provider || creditsState.proProvider,
   });
   if (pill) {
     pill.hidden = !active;
     const trialing = displayStatus === "trialing";
-    pill.textContent = trialing ? "Trial" : "Active";
+    pill.textContent = trialing ? "Trial" : "Pro";
     pill.classList.toggle("settingsProPill--trial", trialing);
   }
   if (sub) {

@@ -343,30 +343,6 @@ const REMIX_REPLY_GUARDRAILS = [
   "Echo specific feelings, names, or images from the original song so the reply clearly connects.",
 ];
 
-function isLebaneseDialect(dialect, dialectHint) {
-  const blob = `${dialect || ""}\n${dialectHint || ""}`.toLowerCase();
-  return /lebanese|lebanon|لبناني|لبنان|libanais|beyrouth|beirut/.test(blob);
-}
-
-/** Lebanese colloquial singing pronunciation for Gemini (write + tashkeel). */
-const LEBANESE_SINGING_PRONUNCIATION_RULES = [
-  "Lebanese singing pronunciation (REQUIRED):",
-  "Use Lebanese colloquial pronunciation, NOT Classical Arabic grammar.",
-  "1) Do NOT apply fusHa case endings. Final letters are usually silent/sukoon in Lebanese:",
-  "   قِلْتْ not قِلْتَ · كِنْتْ not كِنْتَ · حَبِيبَكْ not حَبِيبُكَ · بَعِيدْ not بَعِيدًا",
-  "2) ق is usually a glottal stop / ء in Lebanese pop — spell it that way for singing:",
-  "   قلبي → أَلْبِي · قلبك → أَلْبَكْ · قلت → أِلْتْ · بقدر → بَأْدَرْ",
-  "   Avoid strong ق unless the user specifically asks for it.",
-  "3) ذ is usually ز: ذكرى → زِكْرَى · بتذكر → بِتْزَكَّرْ · هيدا → هَيْدَا / هَيْدِي",
-  "4) ث → Lebanese speech: ثلاثة → تْلَاتِه · أكثر → أَكْتَر · ثاني → تَانِي",
-  "5) Keep lines conversational and singable — no over-formal MSA structures.",
-  "   Prefer: شو عْمِلِت فِيِّي الْأَيَّام · مَا أِدِرْت إِنْسَى ضَحْكْتَك",
-  "6) Respect addressee gender from the dialect/address hint:",
-  "   To a male: إِنَّك بَعْدَكْ بِتْحِنّ · عَيْنَكْ · أَلْبَكْ",
-  "   To a female: إِنِّك بَعْدِكْ بِتْحِنِّي · عَيْنِكْ · أَلْبِكْ",
-  "7) Diacritics guide MUSIC ENGINE pronunciation, not schoolbook إعراب. Goal: natural Lebanese singing.",
-];
-
 function buildPrompt({ seed, style, mode, nonce, dialect, dialectHint, sourceLyrics, sourceTitle, sourceCreator }) {
   const dialectLines = [
     dialect ? `Target dialect/accent: ${dialect}` : "",
@@ -374,8 +350,6 @@ function buildPrompt({ seed, style, mode, nonce, dialect, dialectHint, sourceLyr
   ]
     .filter(Boolean)
     .join("\n");
-  const lebanese = isLebaneseDialect(dialect, dialectHint);
-  const lebaneseRules = lebanese ? LEBANESE_SINGING_PRONUNCIATION_RULES : [];
   if (mode === "diacritics") {
     const dialectLower = String(dialect || "").toLowerCase();
     const isMsa = /\bmsa\b|modern standard|فصحى|fus[hḥ]a/.test(dialectLower);
@@ -385,19 +359,14 @@ function buildPrompt({ seed, style, mode, nonce, dialect, dialectHint, sourceLyr
     );
     return [
       "Add Arabic vowel marks (tashkeel / تشكيل / harakat) to the lyrics below for clearer AI singing.",
-      lebanese
-        ? "Keep the same structure, line breaks, and section tags like [Verse] / [Chorus]. For Lebanese, you MAY respell consonants for spoken singing (ق→ء، ذ→ز، ث→ت) as in the rules below; do not invent new lines or change the story."
-        : "Keep the SAME lyrics: same words, same line breaks, same section tags like [Verse] / [Chorus].",
-      "Do NOT rewrite into a different song, translate, summarize, or add commentary — output lyrics only.",
+      "Keep the SAME lyrics: same words, same line breaks, same section tags like [Verse] / [Chorus].",
+      "Do NOT rewrite, translate, summarize, or add commentary — output lyrics only.",
       "Do NOT remove dialect vocabulary (مش، هيدا، شو، إيش، …).",
       isMsa
         ? "Dialect is Modern Standard Arabic: fuller classical tashkeel is OK where it helps pronunciation."
-        : lebanese
-          ? "Dialect is Lebanese: mark for colloquial singing pronunciation (see rules)."
-          : isColloquial
-            ? "Dialect is colloquial (e.g. Levantine/Egyptian): prefer singing vowels that clarify ambiguous letters. Avoid heavy fusHa إعراب that fights spoken singing. Light, natural marks only."
-            : "If dialect is unclear, use light singing-oriented marks (not heavy schoolbook إعراب).",
-      ...lebaneseRules,
+        : isColloquial
+          ? "Dialect is colloquial (e.g. Lebanese/Levantine/Egyptian): prefer singing vowels that clarify ambiguous letters. Avoid heavy fusHa إعراب that fights spoken singing. Light, natural marks only."
+          : "If dialect is unclear, use light singing-oriented marks (not heavy schoolbook إعراب).",
       "Honor any Arabic address / addressee gender hints in the dialect hint (masculine/feminine/plural forms).",
       "Preserve existing diacritics when already correct; fill missing ones.",
       `Variation token: ${nonce}`,
@@ -432,7 +401,6 @@ function buildPrompt({ seed, style, mode, nonce, dialect, dialectHint, sourceLyr
       "[Outro]",
       "Verse 1 may acknowledge what the original said; chorus should feel like the direct answer or counter-voice.",
       ...POP_RHYME_METER_LINES,
-      ...lebaneseRules,
       `Variation token: ${nonce}`,
       ...(dialectLines ? [dialectLines] : []),
       style ? `Style/Tags: ${style}` : "Style/Tags: none",
@@ -449,9 +417,7 @@ function buildPrompt({ seed, style, mode, nonce, dialect, dialectHint, sourceLyr
     return [
       "You are arranging user-provided lyrics for AI singing.",
       "Do NOT change theme or language. Do NOT invent a new story.",
-      lebanese
-        ? "Keep meaning; lightly polish toward Lebanese singing pronunciation (see rules) without inventing a new story."
-        : "Keep original lines as much as possible; only reorganize and lightly polish for flow.",
+      "Keep original lines as much as possible; only reorganize and lightly polish for flow.",
       "Output lyrics only with section tags.",
       "Use structure:",
       "[Verse 1]",
@@ -463,7 +429,6 @@ function buildPrompt({ seed, style, mode, nonce, dialect, dialectHint, sourceLyr
       "[Outro]",
       "In [Outro], include a clear musical ending phrase.",
       ...POP_RHYME_METER_LINES_LIGHT,
-      ...lebaneseRules,
       `Variation token: ${nonce}`,
       ...(dialectLines ? [dialectLines] : []),
       style ? `Style/Tags: ${style}` : "Style/Tags: none",
@@ -478,7 +443,6 @@ function buildPrompt({ seed, style, mode, nonce, dialect, dialectHint, sourceLyr
       "Do not rewrite existing lines.",
       "Output lyrics only.",
       ...POP_RHYME_METER_LINES_CONTINUE,
-      ...lebaneseRules,
       ...(dialectLines ? [dialectLines] : []),
       style ? `Style/Tags: ${style}` : "Style/Tags: none",
       "",
@@ -497,7 +461,6 @@ function buildPrompt({ seed, style, mode, nonce, dialect, dialectHint, sourceLyr
       "[Chorus] — 4 lines max, with one repeatable hook",
       "Total output: 12 lines maximum. Keep lines short and singable.",
       ...POP_RHYME_METER_LINES,
-      ...lebaneseRules,
       "Do not explain the challenge. Do not repeat the instruction text.",
       "Do not include metadata, notes, or descriptions.",
       `Variation token: ${nonce}`,
@@ -523,7 +486,6 @@ function buildPrompt({ seed, style, mode, nonce, dialect, dialectHint, sourceLyr
     "[Outro]",
     "Make the [Outro] contain a clear ending phrase so the song can finish naturally.",
     ...POP_RHYME_METER_LINES,
-    ...lebaneseRules,
     `Variation token: ${nonce}`,
     ...(dialectLines ? [dialectLines] : []),
     style ? `Style/Tags: ${style}` : "Style/Tags: none",

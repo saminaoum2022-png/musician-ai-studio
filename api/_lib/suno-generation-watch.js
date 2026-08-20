@@ -5,6 +5,7 @@
 const { sendPrivacySafePush } = require("./onesignal-push");
 const { verifySunoWatchReady, minClipLagForVariants } = require("./suno-job-ready");
 const { queueUpdateMusicGenerationByTaskId } = require("./music-generation-log");
+const { refundFailedSunoWatch } = require("./suno-watch-refund");
 
 const SUPABASE_URL = (process.env.SUPABASE_URL || "").replace(/\/$/, "");
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
@@ -253,14 +254,31 @@ function scheduleBackgroundWork(promise) {
   void promise;
 }
 
+function watchFailureMessage(verified, fallback = "verify_failed") {
+  return String(verified?.failureKind || verified?.errorMessage || fallback).trim().slice(0, 500);
+}
+
+/**
+ * Confirm failure for billing, then mark the watch failed.
+ * If the refund RPC itself fails, leave the watch pending so sweep can retry.
+ */
+async function failSunoWatch(row, errorMessage = "") {
+  const taskId = cleanTaskId(row?.task_id);
+  if (!taskId) return { ok: false, reason: "invalid_args" };
+  const result = await refundFailedSunoWatch(row, errorMessage);
+  if (result?.reason === "already_completed") return result;
+  if (result?.reason === "refund_rpc_failed") return result;
+  await markWatchStatus(taskId, "failed");
+  return result;
+}
+
 async function maybeNotifyWatchRow(row, { forceRenotify = false } = {}) {
   const taskId = cleanTaskId(row?.task_id);
   if (!taskId) return { ok: false, reason: "invalid_args" };
 
   const verified = await verifyWatchRowReady(row);
   if (verified.failed) {
-    await markWatchStatus(taskId, "failed");
-    queueUpdateMusicGenerationByTaskId(taskId, { status: "failed", error_message: "verify_failed" });
+    await failSunoWatch(row, watchFailureMessage(verified));
     return { ok: false, reason: "failed" };
   }
   if (!verified.ready) {
@@ -306,8 +324,7 @@ async function retrySunoWatchReadyAndNotify(row, { attempts = 36, delayMs = 5000
 
     const verified = await verifyWatchRowReady(current);
     if (verified.failed) {
-      await markWatchStatus(taskId, "failed");
-      queueUpdateMusicGenerationByTaskId(taskId, { status: "failed", error_message: "verify_failed" });
+      await failSunoWatch(current, watchFailureMessage(verified));
       return { ok: false, reason: "failed" };
     }
 
@@ -364,8 +381,7 @@ async function handleSunoCallback(body) {
   if (callbackLooksFailed(body)) {
     const verified = await verifyWatchRowReady(row);
     if (verified.failed) {
-      await markWatchStatus(taskId, "failed");
-      queueUpdateMusicGenerationByTaskId(taskId, { status: "failed", error_message: "callback_failed" });
+      await failSunoWatch(row, watchFailureMessage(verified, "callback_failed"));
       return { ok: false, reason: "failed" };
     }
     // Interim failure-shaped callback — keep watching via retry.
@@ -373,8 +389,7 @@ async function handleSunoCallback(body) {
 
   const verified = await verifyWatchRowReady(row);
   if (verified.failed) {
-    await markWatchStatus(taskId, "failed");
-    queueUpdateMusicGenerationByTaskId(taskId, { status: "failed", error_message: "verify_failed" });
+    await failSunoWatch(row, watchFailureMessage(verified));
     return { ok: false, reason: "failed" };
   }
   if (!verified.ready) {
@@ -421,7 +436,7 @@ async function notifyJobReadyFromClient({ userId, taskId, kind, title = "" } = {
   const merged = { ...row, title: title || row.title };
   const verified = await verifyWatchRowReady(merged);
   if (verified.failed) {
-    await markWatchStatus(tid, "failed");
+    await failSunoWatch(merged, watchFailureMessage(verified));
     return { ok: false, reason: "failed" };
   }
   if (!verified.ready) {
@@ -481,8 +496,7 @@ async function sweepSunoGenerationWatches({ limit = 30 } = {}) {
 
     const verified = await verifyWatchRowReady(row);
     if (verified.failed) {
-      await markWatchStatus(taskId, "failed");
-      queueUpdateMusicGenerationByTaskId(taskId, { status: "failed", error_message: "sweep_verify_failed" });
+      await failSunoWatch(row, watchFailureMessage(verified, "sweep_verify_failed"));
       results.push({ taskId, ok: false, reason: "failed" });
       continue;
     }

@@ -9,9 +9,8 @@
  * Credit handling:
  *  - Debits FULL_SONG_COST (12 credits) BEFORE calling Suno.
  *  - Refunds the full amount if Suno rejects the request synchronously.
- *  - Per-task callback failures are NOT auto-refunded here (the response
- *    from Suno was 200 — the song could still arrive). We rely on the
- *    /api/suno/callback path or admin tooling to refund those.
+ *  - Async failures (copyright, content policy, verify_failed) are refunded
+ *    by suno-generation-watch via suno-watch-refund when the task is confirmed failed.
  */
 
 const {

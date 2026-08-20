@@ -4,6 +4,7 @@
  */
 
 const { sunoJsonRequest } = require("./suno-upstream");
+const { mapSunoUpstreamFailure } = require("./suno-user-errors");
 
 function pickClipAudio(first) {
   if (!first || typeof first !== "object") return "";
@@ -39,19 +40,47 @@ function parseGenerationRecordInfo(data, { variantCount = 1 } = {}) {
   const inner = data?.data && typeof data.data === "object" ? data.data : data || {};
   const status = String(inner.status || data?.status || "").toUpperCase();
   const successFlag = String(inner.successFlag || data?.successFlag || "").toUpperCase();
+  const errorMessage = String(
+    inner.errorMessage
+    || inner.msg
+    || data?.errorMessage
+    || data?.msg
+    || "",
+  ).trim();
+  const mappedFailure = mapSunoUpstreamFailure({
+    ...inner,
+    status,
+    successFlag,
+    msg: errorMessage,
+    errorMessage,
+  });
+  const hardRejectKinds = new Set([
+    "copyright",
+    "sensitive",
+    "audio_verify",
+    "tooLong",
+    "artistReference",
+    "credits",
+    "voicePersona",
+  ]);
   const genData = inner.response?.sunoData || inner.response?.suno_data || [];
   const arr = Array.isArray(genData) ? genData : [];
   const playableClips = arr.filter((clip) => clipLooksPlayable(clip));
   const audioClipCount = playableClips.length;
   const expectedVariants = Math.max(1, Math.min(2, Number(variantCount) || 1));
   const hasAudio = audioClipCount > 0;
-  const failed =
+  const failed = Boolean(
     status === "FAILED"
     || status === "ERROR"
+    || status === "REJECTED"
     || successFlag === "FAILED"
     || successFlag === "ERROR"
     || successFlag === "CREATE_TASK_FAILED"
-    || successFlag === "GENERATE_AUDIO_FAILED";
+    || successFlag === "GENERATE_AUDIO_FAILED"
+    || successFlag === "SENSITIVE_WORD_ERROR"
+    || successFlag === "CALLBACK_EXCEPTION"
+    || (mappedFailure && hardRejectKinds.has(mappedFailure.failureKind)),
+  );
   const statusSucceeded = status === "SUCCESS" || successFlag === "SUCCESS";
   const taskCreateMs = Number(inner.createTime || inner.create_time || data?.createTime || 0);
   const clipCreateMs = playableClips
@@ -71,6 +100,8 @@ function parseGenerationRecordInfo(data, { variantCount = 1 } = {}) {
   return {
     status,
     successFlag,
+    errorMessage,
+    failureKind: mappedFailure?.failureKind || "",
     hasAudio,
     audioClipCount,
     expectedVariants,
@@ -123,19 +154,55 @@ async function verifyInstrumentalReady(taskId, apiKey) {
     return { ready: false, reason: "upstream_error" };
   }
   const data = upstream.data;
+  const inner = data?.data && typeof data.data === "object" ? data.data : data || {};
   const flag = String(
-    data?.data?.successFlag ||
-      data?.data?.status ||
+    inner.successFlag ||
+      inner.status ||
       data?.successFlag ||
       data?.status ||
       "",
   ).toUpperCase();
-  const resp = data?.data?.response || data?.response || data?.data || data || {};
+  const errorMessage = String(
+    inner.errorMessage || inner.msg || data?.errorMessage || data?.msg || "",
+  ).trim();
+  const mappedFailure = mapSunoUpstreamFailure({
+    ...inner,
+    status: flag,
+    successFlag: flag,
+    msg: errorMessage,
+    errorMessage,
+  });
+  const hardRejectKinds = new Set([
+    "copyright",
+    "sensitive",
+    "audio_verify",
+    "tooLong",
+    "artistReference",
+    "credits",
+    "voicePersona",
+  ]);
+  const resp = inner.response || data?.response || inner || data || {};
   const instrumentalUrl =
     deepFindFirstStringByKeys(resp, ["instrumentalUrl", "instrumental_url", "accompanimentUrl"]) ||
     deepFindFirstStringByKeys(data, ["instrumentalUrl", "instrumental_url", "accompanimentUrl"]);
-  if (flag === "FAILED" || flag === "ERROR" || flag === "CREATE_TASK_FAILED") {
-    return { ready: false, failed: true, reason: "failed", status: flag };
+  const failed = Boolean(
+    flag === "FAILED"
+    || flag === "ERROR"
+    || flag === "REJECTED"
+    || flag === "CREATE_TASK_FAILED"
+    || flag === "CALLBACK_EXCEPTION"
+    || flag === "SENSITIVE_WORD_ERROR"
+    || (mappedFailure && hardRejectKinds.has(mappedFailure.failureKind)),
+  );
+  if (failed) {
+    return {
+      ready: false,
+      failed: true,
+      reason: "failed",
+      status: flag,
+      errorMessage,
+      failureKind: mappedFailure?.failureKind || "",
+    };
   }
   if ((flag === "SUCCESS" || flag === "COMPLETE") && instrumentalUrl) {
     return { ready: true, status: flag };
@@ -153,16 +220,19 @@ async function verifyMusicVideoReady(taskId, apiKey) {
   }
   const d = upstream.data?.data || upstream.data || {};
   const status = String(d.successFlag || d.status || "PENDING").toUpperCase();
+  const errorMessage = String(d.errorMessage || d.msg || "").trim();
   const videoUrl = String(d?.response?.videoUrl || d?.response?.video_url || "").trim();
   const failedFlags = new Set([
     "FAILED",
     "ERROR",
+    "REJECTED",
     "CREATE_TASK_FAILED",
     "GENERATE_MP4_FAILED",
     "CALLBACK_EXCEPTION",
+    "SENSITIVE_WORD_ERROR",
   ]);
   if (failedFlags.has(status)) {
-    return { ready: false, failed: true, reason: "failed", status };
+    return { ready: false, failed: true, reason: "failed", status, errorMessage };
   }
   if (status === "SUCCESS" && videoUrl) {
     return { ready: true, status };

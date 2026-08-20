@@ -407,11 +407,12 @@ async function partnerPresenceActive(partnerId) {
 
 async function markMessagesDelivered(messageIds, { threadId = "" } = {}) {
   const ids = [...new Set((messageIds || []).map((id) => String(id || "").trim()).filter(Boolean))].slice(0, 48);
-  if (!ids.length) return { ok: true, updated: [], deliveredAt: null };
+  if (!ids.length) return { ok: true, updated: [], deliveredAt: null, skipped: true };
   const now = new Date().toISOString();
   const inClause = ids.map((id) => encodeURIComponent(id)).join(",");
   const tid = String(threadId || "").trim();
   const threadFilter = tid ? `&thread_id=eq.${encodeURIComponent(tid)}` : "";
+  // Idempotent: only rows still missing delivered_at are patched.
   const r = await svcFetch(
     `dm_messages?id=in.(${inClause})${threadFilter}&delivered_at=is.null`,
     {
@@ -428,7 +429,67 @@ async function markMessagesDelivered(messageIds, { threadId = "" } = {}) {
     return { ok: false, error: String(r.text || "Delivery update failed") };
   }
   const updated = Array.isArray(r.data) ? r.data : [];
-  return { ok: true, updated, deliveredAt: now };
+  return { ok: true, updated, deliveredAt: updated.length ? now : null, skipped: !updated.length };
+}
+
+async function getOwnThreadReadAt(threadId, userId) {
+  const tid = String(threadId || "").trim();
+  const uid = cleanUserId(userId);
+  if (!tid || !uid) return null;
+  const r = await svcFetch(
+    `dm_thread_reads?select=last_read_at&thread_id=eq.${encodeURIComponent(tid)}&user_id=eq.${encodeURIComponent(uid)}&limit=1`,
+  );
+  return Array.isArray(r.data) && r.data[0] ? r.data[0].last_read_at : null;
+}
+
+/**
+ * Advance last_read_at only when it moves forward past the latest message.
+ * Skips writes when the cursor already covers the thread (idempotent read).
+ */
+async function advanceThreadReadIfNeeded(threadId, userId) {
+  const tid = String(threadId || "").trim();
+  const uid = cleanUserId(userId);
+  if (!tid || !uid) return { ok: false, skipped: true, reason: "invalid_args" };
+
+  const [existingAt, latestR] = await Promise.all([
+    getOwnThreadReadAt(tid, uid),
+    svcFetch(
+      `dm_messages?select=created_at&thread_id=eq.${encodeURIComponent(tid)}&order=created_at.desc&limit=1`,
+    ),
+  ]);
+  const latestAt = Array.isArray(latestR.data) && latestR.data[0]
+    ? String(latestR.data[0].created_at || "").trim()
+    : "";
+  const existingMs = existingAt ? new Date(existingAt).getTime() : NaN;
+  const latestMs = latestAt ? new Date(latestAt).getTime() : NaN;
+
+  // No messages yet — one-time seed is enough; skip if a cursor already exists.
+  if (!Number.isFinite(latestMs)) {
+    if (Number.isFinite(existingMs)) {
+      return { ok: true, skipped: true, reason: "already_read", lastReadAt: existingAt };
+    }
+  } else if (Number.isFinite(existingMs) && existingMs >= latestMs) {
+    return { ok: true, skipped: true, reason: "already_read", lastReadAt: existingAt };
+  }
+
+  const now = new Date().toISOString();
+  const nowMs = Date.parse(now);
+  // Never move the cursor backwards.
+  if (Number.isFinite(existingMs) && Number.isFinite(nowMs) && existingMs >= nowMs) {
+    return { ok: true, skipped: true, reason: "already_read", lastReadAt: existingAt };
+  }
+
+  const r = await svcFetch("dm_thread_reads", {
+    method: "POST",
+    headers: { Prefer: "resolution=merge-duplicates,return=minimal" },
+    body: JSON.stringify({
+      thread_id: tid,
+      user_id: uid,
+      last_read_at: now,
+    }),
+  });
+  if (!r.ok) return { ok: false, skipped: false, error: String(r.text || "Read update failed") };
+  return { ok: true, skipped: false, lastReadAt: now };
 }
 
 async function getThreadForUsers(userA, userB) {
@@ -607,18 +668,19 @@ async function reconcileOutboundDeliveryForSender(thread, senderId) {
   const tid = String(thread?.id || "").trim();
   if (!sid || !partnerId || !tid) return;
 
-  const [pendingR, partnerMsgsR, partnerReadAt] = await Promise.all([
-    svcFetch(
-      `dm_messages?select=id,created_at&thread_id=eq.${encodeURIComponent(tid)}&sender_id=eq.${encodeURIComponent(sid)}&delivered_at=is.null&order=created_at.asc&limit=48`,
-    ),
+  // Cheap exit: no undelivered outbound → skip partner/history queries.
+  const pendingR = await svcFetch(
+    `dm_messages?select=id,created_at&thread_id=eq.${encodeURIComponent(tid)}&sender_id=eq.${encodeURIComponent(sid)}&delivered_at=is.null&order=created_at.asc&limit=48`,
+  );
+  const pending = Array.isArray(pendingR.data) ? pendingR.data : [];
+  if (!pending.length) return;
+
+  const [partnerMsgsR, partnerReadAt] = await Promise.all([
     svcFetch(
       `dm_messages?select=created_at&thread_id=eq.${encodeURIComponent(tid)}&sender_id=eq.${encodeURIComponent(partnerId)}&order=created_at.asc&limit=200`,
     ),
     partnerLastReadAtForThread(thread, sid),
   ]);
-
-  const pending = Array.isArray(pendingR.data) ? pendingR.data : [];
-  if (!pending.length) return;
 
   const partnerTimes = (Array.isArray(partnerMsgsR.data) ? partnerMsgsR.data : [])
     .map((row) => new Date(row?.created_at || "").getTime())
@@ -938,18 +1000,17 @@ async function handlePost(req, res, user) {
     );
     const thread = Array.isArray(tr.data) && tr.data[0] ? tr.data[0] : null;
     if (!thread) return sendJson(res, 404, { ok: false, error: "Thread not found" });
+    // Delivered ack is independent and already idempotent (delivered_at IS NULL only).
     await markUndeliveredPartnerMessages(thread, user.userId);
-    const now = new Date().toISOString();
-    await svcFetch("dm_thread_reads", {
-      method: "POST",
-      headers: { Prefer: "resolution=merge-duplicates,return=minimal" },
-      body: JSON.stringify({
-        thread_id: threadId,
-        user_id: user.userId,
-        last_read_at: now,
-      }),
+    const advanced = await advanceThreadReadIfNeeded(threadId, user.userId);
+    if (!advanced.ok) {
+      return sendJson(res, 500, { ok: false, error: advanced.error || "Read update failed" });
+    }
+    return sendJson(res, 200, {
+      ok: true,
+      skipped: Boolean(advanced.skipped),
+      lastReadAt: advanced.lastReadAt || null,
     });
-    return sendJson(res, 200, { ok: true });
   }
 
   if (action === "mark_delivered") {
@@ -966,19 +1027,20 @@ async function handlePost(req, res, user) {
     );
     const thread = Array.isArray(tr.data) && tr.data[0] ? tr.data[0] : null;
     if (!thread) return sendJson(res, 404, { ok: false, error: "Thread not found" });
-    // Mark every pending inbound message from the partner (✓ → ✓D on their side).
-    await markUndeliveredPartnerMessages(thread, user.userId);
     const partnerId = threadPartnerId(thread, user.userId);
-    const filteredIds = [];
-    for (const id of messageIds) {
-      const msgR = await svcFetch(
-        `dm_messages?select=id,sender_id&id=eq.${encodeURIComponent(id)}&thread_id=eq.${encodeURIComponent(threadId)}&limit=1`,
-      );
-      const msg = Array.isArray(msgR.data) && msgR.data[0] ? msgR.data[0] : null;
-      if (msg && String(msg.sender_id || "") === String(partnerId || "")) filteredIds.push(id);
+    if (!partnerId) {
+      return sendJson(res, 200, { ok: true, deliveredAt: null, updatedIds: [], skipped: true });
     }
+    // One query: only partner rows that are still undelivered (idempotent).
+    const inClause = messageIds.map((id) => encodeURIComponent(id)).join(",");
+    const pendingR = await svcFetch(
+      `dm_messages?select=id&id=in.(${inClause})&thread_id=eq.${encodeURIComponent(threadId)}&sender_id=eq.${encodeURIComponent(partnerId)}&delivered_at=is.null&limit=48`,
+    );
+    const filteredIds = (Array.isArray(pendingR.data) ? pendingR.data : [])
+      .map((row) => String(row?.id || "").trim())
+      .filter(Boolean);
     if (!filteredIds.length) {
-      return sendJson(res, 200, { ok: true, deliveredAt: null, updatedIds: [] });
+      return sendJson(res, 200, { ok: true, deliveredAt: null, updatedIds: [], skipped: true });
     }
     const marked = await markMessagesDelivered(filteredIds, { threadId });
     if (!marked.ok) {
@@ -989,6 +1051,7 @@ async function handlePost(req, res, user) {
     }
     return sendJson(res, 200, {
       ok: true,
+      skipped: Boolean(marked.skipped),
       deliveredAt: marked.deliveredAt,
       updatedIds: marked.updated.map((row) => String(row?.id || "")).filter(Boolean),
     });

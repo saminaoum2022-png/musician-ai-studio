@@ -226,7 +226,7 @@ import { MUSIC_VIDEO_FEATURE_ENABLED } from "./feature-flags.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260820-021308";
+const APP_BUILD = "20260820-121029";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -5297,10 +5297,17 @@ function syncArabicGenerateGate() {
       : "Generate lyrics with AI";
   }
   if (els.btnLyricsDiacritics) {
-    els.btnLyricsDiacritics.classList.toggle("isArabicGateBlocked", blocked);
+    const diacriticsOnlyInWrite = String(lyricsInputMode || "write") === "write";
+    const diacriticsBlocked = blocked || !diacriticsOnlyInWrite || els.btnLyricsDiacritics.hidden;
+    els.btnLyricsDiacritics.classList.toggle("isArabicGateBlocked", diacriticsBlocked);
     if (!generating) {
-      els.btnLyricsDiacritics.disabled = instrumentalOnly || blocked || els.btnLyricsDiacritics.hidden;
+      els.btnLyricsDiacritics.disabled = instrumentalOnly || diacriticsBlocked;
     }
+    els.btnLyricsDiacritics.title = !diacriticsOnlyInWrite
+      ? "Switch to Write to add vowel marks"
+      : blocked
+        ? arabicLyricChoicesBlockReason()
+        : "Add Arabic vowel marks for clearer singing";
   }
   if (els.btnGenerateOrb && !generating) {
     // Only enforce when Arabic controls are showing; otherwise leave orb alone.
@@ -5473,8 +5480,14 @@ function syncArabicAddressVisibility() {
 function syncLyricsDiacriticsVisibility() {
   const btn = els.btnLyricsDiacritics || document.getElementById("btnLyricsDiacritics");
   if (!btn) return;
-  const show = shouldShowLyricsDiacritics();
+  // Vowel marks only in Write — Generate tab keeps ✦ Generate as the only assist action.
+  const inWriteTab = String(lyricsInputMode || "write") === "write";
+  const show = inWriteTab && shouldShowLyricsDiacritics();
   btn.hidden = !show;
+  if (!show) {
+    btn.disabled = true;
+    btn.classList.add("isArabicGateBlocked");
+  }
 }
 
 /** Mirror the hidden #sunoSingerGender input onto the Singer pills, and dim
@@ -29592,8 +29605,10 @@ const MESSAGES_THREAD_PRESENCE_POLL_MS = 5000;
 /** Partner read cursor for outbound ✓ / ✓✓ receipts. */
 const MESSAGES_THREAD_READ_POLL_MS = 2500;
 /** Backup receipt poll while Realtime is connected (UPDATE events are flaky on web). */
-const MESSAGES_THREAD_RECEIPT_POLL_LIVE_MS = 5000;
-const DM_RECEIPT_HEARTBEAT_MS = 4000;
+const MESSAGES_THREAD_RECEIPT_POLL_LIVE_MS = 15000;
+/** Global delivery heartbeat — ack undelivered inbound without thrashing receipts. */
+const DM_RECEIPT_HEARTBEAT_MS = 20000;
+const DM_RECEIPT_POLL_MIN_GAP_MS = 2500;
 const MESSAGES_INBOX_POLL_MS = 15000;
 /** Slower inbox poll when Realtime is connected. */
 const MESSAGES_INBOX_POLL_LIVE_MS = 60000;
@@ -29615,6 +29630,10 @@ let _messagesInboxScrollY = 0;
 let _messagesInboxFilter = "all";
 let _messagesInboxPollTimer = 0;
 let _dmReceiptHeartbeatTimer = 0;
+let _messagesMarkReadTimer = 0;
+let _messagesMarkReadCursorKey = "";
+let _messagesReceiptPollInFlight = false;
+let _messagesReceiptPollLastAt = 0;
 let _messagesInboxRealtimeReady = false;
 let _messagesThreadRealtimeReady = false;
 const _inboxSeenMessageIds = new Set();
@@ -31165,14 +31184,16 @@ function catchUpOpenMessagesThread({ reason = "foreground" } = {}) {
   void refreshDmThreadRealtimeAuthOnly();
   if (isDmPostgresRealtimeEnabled()) void refreshDmThreadRealtimeSubscribe(tid);
   void pollNewThreadMessages(tid, { bootToken: _messagesThreadBootToken, reason });
-  void pollPartnerThreadRead(tid, { bootToken: _messagesThreadBootToken });
-  void pollOutboundDeliveryState(tid, { bootToken: _messagesThreadBootToken });
+  // One receipts fetch (pollPartnerThreadRead === refreshOutboundReceipts).
+  void refreshOutboundReceipts(tid, { bootToken: _messagesThreadBootToken });
 }
 
 function catchUpMessagesReceipts({ reason = "foreground" } = {}) {
   if (!MESSAGES_FEATURE_ENABLED) return;
   const route = String(document.body.getAttribute("data-route") || "");
   if (route === "messages-thread") {
+    // Realtime already drives ticks while live — skip noisy heartbeat catch-up.
+    if (reason === "heartbeat" && _messagesThreadRealtimeReady) return;
     catchUpOpenMessagesThread({ reason });
     return;
   }
@@ -31228,13 +31249,10 @@ function confirmOptimisticThreadMessage(clientMessageId, serverMsg) {
   if (String(next.delivered_at || "").trim()) {
     patchInboxLastOutboundDelivered(_conversationId, next.delivered_at);
   }
-  void pollOutboundDeliveryState(_conversationId, { bootToken: _messagesThreadBootToken });
+  void pollOutboundDeliveryState(_conversationId, { bootToken: _messagesThreadBootToken, force: true });
   window.setTimeout(() => {
     void pollOutboundDeliveryState(_conversationId, { bootToken: _messagesThreadBootToken });
-  }, 1500);
-  window.setTimeout(() => {
-    void pollOutboundDeliveryState(_conversationId, { bootToken: _messagesThreadBootToken });
-  }, 5000);
+  }, 4000);
 }
 
 function markOptimisticThreadMessageFailed(clientMessageId, err) {
@@ -31320,6 +31338,11 @@ function resetMessagesThreadRouteState() {
   _messagesLastFetchedId = "";
   _messagesPartnerLastReadAt = "";
   _messagesDeliveredAckedIds.clear();
+  _messagesMarkReadCursorKey = "";
+  if (_messagesMarkReadTimer) {
+    window.clearTimeout(_messagesMarkReadTimer);
+    _messagesMarkReadTimer = 0;
+  }
   _messagesHasMoreOlder = true;
   _messagesLoadingOlder = false;
 }
@@ -31357,9 +31380,26 @@ function leaveMessagesThreadRoute(callback) {
 
 const DM_READ_MARK_DELAY_MS = 2500;
 
+function latestPartnerMessageCursorKey(threadId) {
+  const tid = String(threadId || "").trim();
+  const myId = String(authSession?.user?.id || "").trim();
+  const partnerMsgs = (Array.isArray(_messagesList) ? _messagesList : [])
+    .filter((m) => {
+      const id = String(m?.id || "").trim();
+      if (!id || isPendingThreadMessageId(id)) return false;
+      if (myId && String(m?.sender_id || "") === myId) return false;
+      return true;
+    })
+    .sort((a, b) => new Date(a.created_at || 0).getTime() - new Date(b.created_at || 0).getTime());
+  const last = partnerMsgs[partnerMsgs.length - 1];
+  const lastId = String(last?.id || "").trim();
+  // Empty partner history still needs one seed mark_read for the thread open.
+  return `${tid}:${lastId || "empty"}`;
+}
+
 async function markThreadReadQuiet(threadId, { skipDeliveryAck = false, readDelayMs = 0 } = {}) {
   const tid = String(threadId || _conversationId || "").trim();
-  if (!tid) return;
+  if (!tid || isCoachThreadId(tid)) return;
   markInboxThreadReadLocally(tid);
   if (!skipDeliveryAck) {
     const partnerMsgs = (Array.isArray(_messagesList) ? _messagesList : []).filter((m) => {
@@ -31368,18 +31408,34 @@ async function markThreadReadQuiet(threadId, { skipDeliveryAck = false, readDela
     });
     await ackPartnerMessagesDelivered(partnerMsgs);
   }
+  const cursorKey = latestPartnerMessageCursorKey(tid);
+  // Already marked read for this partner-message cursor — skip repeat POSTs.
+  if (_messagesMarkReadCursorKey === cursorKey) return;
+
   const doMarkRead = async () => {
+    _messagesMarkReadTimer = 0;
+    if (String(_conversationId || "") !== tid) return;
+    if (String(document.body.getAttribute("data-route") || "") !== "messages-thread") return;
+    const keyNow = latestPartnerMessageCursorKey(tid);
+    if (_messagesMarkReadCursorKey === keyNow) return;
     try {
-      await messagesApi("/api/messages", {
+      const data = await messagesApi("/api/messages", {
         method: "POST",
         body: JSON.stringify({ action: "mark_read", threadId: tid }),
       });
-      void refreshMessagesUnreadBadge({ force: true });
+      if (String(_conversationId || "") !== tid) return;
+      _messagesMarkReadCursorKey = keyNow;
+      if (!data?.skipped) void refreshMessagesUnreadBadge({ force: true });
     } catch {}
   };
+
+  if (_messagesMarkReadTimer) {
+    window.clearTimeout(_messagesMarkReadTimer);
+    _messagesMarkReadTimer = 0;
+  }
   const delay = Math.max(0, Number(readDelayMs) || 0);
   if (delay > 0) {
-    window.setTimeout(() => void doMarkRead(), delay);
+    _messagesMarkReadTimer = window.setTimeout(() => void doMarkRead(), delay);
   } else {
     await doMarkRead();
   }
@@ -33010,11 +33066,13 @@ function applyOutboundDeliveryRows(rows, { threadId = "", bootToken = 0 } = {}) 
     if (!id || isPendingThreadMessageId(id) || !byId.has(id)) return m;
     const deliveredAt = byId.get(id) || "";
     const prevDelivered = String(m?.delivered_at || "").trim();
-    if (prevDelivered === deliveredAt) return m;
+    // Never downgrade or re-stamp an already-delivered message.
+    if (prevDelivered) return m;
+    if (!deliveredAt) return m;
     changed = true;
     return {
       ...m,
-      delivered_at: deliveredAt || null,
+      delivered_at: deliveredAt,
     };
   });
   if (changed) patchOutboundReadStateInMount();
@@ -33077,11 +33135,18 @@ function markOutboundDeliveredBeforePartnerMessage(partnerMsg) {
   return changed;
 }
 
-async function refreshOutboundReceipts(threadId, { bootToken = 0 } = {}) {
+async function refreshOutboundReceipts(threadId, { bootToken = 0, force = false } = {}) {
   const tid = String(threadId || _conversationId || "").trim();
   if (!tid || isCoachThreadId(tid)) return;
   if (bootToken && bootToken !== _messagesThreadBootToken) return;
   if (_conversationId !== tid) return;
+  const now = Date.now();
+  if (!force) {
+    if (_messagesReceiptPollInFlight) return;
+    if (now - _messagesReceiptPollLastAt < DM_RECEIPT_POLL_MIN_GAP_MS) return;
+  }
+  _messagesReceiptPollInFlight = true;
+  _messagesReceiptPollLastAt = now;
   try {
     const data = await messagesApi(`/api/messages?type=thread_read&threadId=${encodeURIComponent(tid)}`);
     if (bootToken && bootToken !== _messagesThreadBootToken) return;
@@ -33097,6 +33162,8 @@ async function refreshOutboundReceipts(threadId, { bootToken = 0 } = {}) {
     if (changed) patchOutboundReadStateInMount();
   } catch (e) {
     console.warn("[dm-receipts]", e);
+  } finally {
+    _messagesReceiptPollInFlight = false;
   }
 }
 
@@ -33117,6 +33184,10 @@ function applyPartnerLastReadAt(lastReadAt, { userId = "" } = {}) {
   if (fromId && myId && fromId === myId) return false;
   if (partnerId && fromId && fromId !== partnerId) return false;
   if (_messagesPartnerLastReadAt === next) return false;
+  const prevMs = _messagesPartnerLastReadAt ? new Date(_messagesPartnerLastReadAt).getTime() : NaN;
+  const nextMs = new Date(next).getTime();
+  // Only advance the read cursor — never move it backwards on stale realtime/polls.
+  if (Number.isFinite(prevMs) && Number.isFinite(nextMs) && nextMs < prevMs) return false;
   _messagesPartnerLastReadAt = next;
   const tid = String(_conversationId || "").trim();
   if (tid) {
@@ -33564,15 +33635,12 @@ async function refreshDmThreadRealtimeSubscribe(threadId) {
           if (markOutboundDeliveredBeforePartnerMessage(row)) {
             patchOutboundReadStateInMount();
           }
-          void refreshOutboundReceipts(tid, { bootToken: _messagesThreadBootToken });
           void (async () => {
             await ackPartnerMessagesDelivered([row]);
             await markThreadReadQuiet(tid, { skipDeliveryAck: true, readDelayMs: DM_READ_MARK_DELAY_MS });
-            void refreshOutboundReceipts(tid, { bootToken: _messagesThreadBootToken });
           })();
-        } else {
-          void markThreadReadQuiet(tid, { readDelayMs: DM_READ_MARK_DELAY_MS });
         }
+        // Own outbound inserts: do not re-POST mark_read (cursor unchanged for partner msgs).
       }
       patchInboxFromDmMessageRow(row);
     },
@@ -33666,9 +33734,14 @@ function stopMessagesThreadRealtime() {
     window.clearInterval(_messagesReadPollTimer);
     _messagesReadPollTimer = 0;
   }
+  if (_messagesMarkReadTimer) {
+    window.clearTimeout(_messagesMarkReadTimer);
+    _messagesMarkReadTimer = 0;
+  }
   stopMessagesConnectPoll();
   clearPartnerTypingState();
   _messagesThreadRealtimeReady = false;
+  _messagesReceiptPollInFlight = false;
   void stopDmThreadRealtimeSubscribe();
 }
 
@@ -33689,7 +33762,7 @@ function restartThreadSafetyPoll(threadId) {
     }
     if (_conversationId !== tid) return;
     void pollNewThreadMessages(tid, { bootToken: _messagesThreadBootToken, reason: "safety-poll" });
-    void pollPartnerThreadRead(tid, { bootToken: _messagesThreadBootToken });
+    // Receipts covered by restartThreadReadPoll — avoid double thread_read hits.
   }, interval);
 }
 
@@ -33709,7 +33782,6 @@ function restartThreadReadPoll(threadId) {
       return;
     }
     if (_conversationId !== tid) return;
-    void pollPartnerThreadRead(tid, { bootToken: _messagesThreadBootToken });
     void refreshOutboundReceipts(tid, { bootToken: _messagesThreadBootToken });
   }, interval);
 }
@@ -57549,6 +57621,10 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
 
   const addArabicVowelMarksToLyrics = async () => {
     if (!els.sunoPrompt) return;
+    if (String(lyricsInputMode || "write") !== "write") {
+      showToast("Switch to Write to add vowel marks.", { icon: "!", durationMs: 2800 });
+      return;
+    }
     if (!arabicLyricChoicesReady()) {
       const reason = arabicLyricChoicesBlockReason();
       showToast(reason, { icon: "!", durationMs: 3600 });

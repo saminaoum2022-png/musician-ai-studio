@@ -16837,6 +16837,9 @@ body[data-route="user"] .userPublicSongsBlock.profileSongsBlock:has(#userPublicR
   justify-content: center;
   margin: 14px 0 4px;
 }
+.friendsFeedLoadMoreRow{
+  margin: 10px 0 18px;
+}
 .profileReleasesLoadMore{
   display: inline-flex;
   align-items: center;

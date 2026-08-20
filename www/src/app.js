@@ -13067,6 +13067,10 @@ const FRIENDS_FEED_NEW_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
 let _friendsFeedFilter = "all";
 let _friendsFeedMergedItems = [];
 let _friendsFeedProfMap = new Map();
+/** First paint shows this many posts; scroll / Load more reveals the rest. */
+const FRIENDS_FEED_PAGE_SIZE = 10;
+let _friendsFeedShown = FRIENDS_FEED_PAGE_SIZE;
+let _friendsFeedLoadMoreObserver = null;
 
 function isPhotoMoodTrack(track) {
   const meta = track?.meta && typeof track.meta === "object" ? track.meta : {};
@@ -13516,6 +13520,108 @@ function filterFriendsFeedItems(items, filter = _friendsFeedFilter) {
   return (items || []).filter((item) => friendsFeedItemMatchesFilter(item, filter));
 }
 
+function resetFriendsFeedPagination() {
+  _friendsFeedShown = FRIENDS_FEED_PAGE_SIZE;
+}
+
+function friendsFeedPageSlice(items, filter = _friendsFeedFilter) {
+  const filtered = filterFriendsFeedItems(items, filter);
+  if (!filtered.length) {
+    return { filtered, visible: [], remaining: 0 };
+  }
+  if (!Number.isFinite(_friendsFeedShown) || _friendsFeedShown < 1) {
+    _friendsFeedShown = FRIENDS_FEED_PAGE_SIZE;
+  }
+  _friendsFeedShown = Math.min(_friendsFeedShown, filtered.length);
+  const visible = filtered.slice(0, _friendsFeedShown);
+  return {
+    filtered,
+    visible,
+    remaining: Math.max(0, filtered.length - visible.length),
+  };
+}
+
+function friendsFeedLoadMoreHtml(remaining) {
+  if (remaining <= 0) return "";
+  return `<div class="profileReleasesLoadMoreRow friendsFeedLoadMoreRow" data-friends-feed-loadmore-sentinel>
+    <button type="button" class="profileReleasesLoadMore" id="friendsFeedLoadMore" aria-label="Load more posts">
+      Load more<span class="profileReleasesLoadMoreCount">${remaining}</span>
+    </button>
+  </div>`;
+}
+
+function disconnectFriendsFeedLoadMoreObserver() {
+  if (_friendsFeedLoadMoreObserver) {
+    try { _friendsFeedLoadMoreObserver.disconnect(); } catch {}
+    _friendsFeedLoadMoreObserver = null;
+  }
+}
+
+function observeFriendsFeedLoadMore(listEl) {
+  disconnectFriendsFeedLoadMoreObserver();
+  const sentinel = listEl?.querySelector?.("[data-friends-feed-loadmore-sentinel]");
+  if (!sentinel || typeof IntersectionObserver !== "function") return;
+  _friendsFeedLoadMoreObserver = new IntersectionObserver(
+    (entries) => {
+      if (!entries.some((e) => e.isIntersecting)) return;
+      if (String(document.body.getAttribute("data-route") || "") !== "friends") return;
+      extendFriendsFeedPage();
+    },
+    { root: null, rootMargin: "240px 0px", threshold: 0.01 },
+  );
+  _friendsFeedLoadMoreObserver.observe(sentinel);
+}
+
+function wireFriendsFeedLoadMoreOnce() {
+  if (document.documentElement.dataset.friendsFeedLoadMoreWired) return;
+  document.documentElement.dataset.friendsFeedLoadMoreWired = "1";
+  document.addEventListener("click", (e) => {
+    const btn = e.target?.closest?.("#friendsFeedLoadMore");
+    if (!btn) return;
+    if (String(document.body.getAttribute("data-route") || "") !== "friends") return;
+    e.preventDefault();
+    haptic("light");
+    extendFriendsFeedPage();
+  });
+}
+
+function friendsFeedHasMoreVisible() {
+  const filtered = filterFriendsFeedItems(_friendsFeedMergedItems, _friendsFeedFilter);
+  return _friendsFeedShown < filtered.length;
+}
+
+function extendFriendsFeedPage() {
+  const listEl = document.getElementById("discoveryFollowingList");
+  if (!listEl || listEl.hidden) return;
+  const filtered = filterFriendsFeedItems(_friendsFeedMergedItems, _friendsFeedFilter);
+  if (_friendsFeedShown >= filtered.length) return;
+  const prevShown = _friendsFeedShown;
+  _friendsFeedShown = Math.min(filtered.length, _friendsFeedShown + FRIENDS_FEED_PAGE_SIZE);
+  const nextItems = filtered.slice(prevShown, _friendsFeedShown);
+  if (!nextItems.length) return;
+  listEl.querySelector("[data-friends-feed-loadmore-sentinel]")?.remove();
+  listEl.querySelector(".friendsWhoToFollow")?.remove();
+  const remaining = filtered.length - _friendsFeedShown;
+  listEl.insertAdjacentHTML(
+    "beforeend",
+    friendsFeedRowsHtml(nextItems, _friendsFeedProfMap) + friendsFeedLoadMoreHtml(remaining),
+  );
+  observeFriendsFeedLoadMore(listEl);
+  try {
+    syncDiscoveryPlayingHighlights();
+  } catch {}
+  applyFeedSocialStatsToDom(listEl);
+  void hydrateFeedSocialStatsForFeed(listEl);
+  _friendsFeedSnapshot = {
+    at: Date.now(),
+    html: listEl.innerHTML,
+    tracks: _discoveryFeedTracks,
+    shown: _friendsFeedShown,
+  };
+  persistFriendsFeedSnapshot();
+  logFriendsFeedListRender(_friendsFeedShown);
+}
+
 function friendsFeedFilterEmptyCopy(filter) {
   const tab = String(filter || "all").trim() || "all";
   if (tab === "new") return "No posts from the last week. Check back soon.";
@@ -13530,9 +13636,11 @@ function paintFriendsFeedTabsActive(filter = _friendsFeedFilter) {
   setNabadTabsActiveByAttr(root, filter, "data-friends-feed-filter");
 }
 
-function renderFriendsFeedList(listEl, statusEl, items, profMap) {
-  const filtered = filterFriendsFeedItems(items, _friendsFeedFilter);
+function renderFriendsFeedList(listEl, statusEl, items, profMap, { resetPage = true } = {}) {
+  if (resetPage) resetFriendsFeedPagination();
+  const { filtered, visible, remaining } = friendsFeedPageSlice(items, _friendsFeedFilter);
   if (!filtered.length) {
+    disconnectFriendsFeedLoadMoreObserver();
     listEl.classList.remove("isDiscoveryLoading");
     listEl.hidden = true;
     listEl.innerHTML = "";
@@ -13546,12 +13654,15 @@ function renderFriendsFeedList(listEl, statusEl, items, profMap) {
   statusEl.hidden = true;
   statusEl.textContent = "";
   listEl.hidden = false;
-  listEl.innerHTML = friendsFeedRowsHtml(filtered, profMap);
+  listEl.innerHTML = friendsFeedRowsHtml(visible, profMap) + friendsFeedLoadMoreHtml(remaining);
+  wireFriendsFeedLoadMoreOnce();
+  observeFriendsFeedLoadMore(listEl);
   return true;
 }
 
 function bindFriendsFeedFilterTabsOnce() {
   bindFeedStyleTagBrowseOnce();
+  wireFriendsFeedLoadMoreOnce();
   const root = document.getElementById("friendsFeedTabs");
   if (!root || root.dataset.boundFriendsFeedTabs === "1") return;
   root.dataset.boundFriendsFeedTabs = "1";
@@ -13567,13 +13678,20 @@ function bindFriendsFeedFilterTabsOnce() {
     const listEl = document.getElementById("discoveryFollowingList");
     const statusEl = document.getElementById("discoveryFollowingStatus");
     if (!listEl || !statusEl || !_friendsFeedMergedItems.length) return;
-    const rendered = renderFriendsFeedList(listEl, statusEl, _friendsFeedMergedItems, _friendsFeedProfMap);
+    const rendered = renderFriendsFeedList(listEl, statusEl, _friendsFeedMergedItems, _friendsFeedProfMap, { resetPage: true });
     if (rendered) {
       try {
         syncDiscoveryPlayingHighlights();
       } catch {}
       applyFeedSocialStatsToDom(listEl);
       void hydrateFeedSocialStatsForFeed(listEl);
+      _friendsFeedSnapshot = {
+        at: Date.now(),
+        html: listEl.innerHTML,
+        tracks: _discoveryFeedTracks,
+        shown: _friendsFeedShown,
+      };
+      persistFriendsFeedSnapshot();
     }
   });
 }
@@ -17556,7 +17674,7 @@ let _friendsFeedSnapshot = null;
 const FOLLOWING_LIST_CACHE_MS = 45000;
 const FRIENDS_FEED_SNAPSHOT_MS = 90000;
 const FRIENDS_MIN_FETCH_GAP_MS = 30000;
-const FRIENDS_FEED_SNAPSHOT_KEY = "nabad_friends_feed_snap_v3";
+const FRIENDS_FEED_SNAPSHOT_KEY = "nabad_friends_feed_snap_v4";
 const FOLLOWING_LIST_STORAGE_KEY = "nabad_following_list_v1";
 
 let _profileActSnapshot = null;
@@ -17686,6 +17804,8 @@ function clearSignedInUiCaches() {
   invalidateProfileActivitiesCache();
   invalidateOwnerPublicPostsCache();
   _friendsFeedSnapshot = null;
+  resetFriendsFeedPagination();
+  disconnectFriendsFeedLoadMoreObserver();
   try {
     sessionStorage.removeItem(FRIENDS_FEED_SNAPSHOT_KEY);
   } catch {}
@@ -17739,6 +17859,7 @@ const FRIENDS_FEED_LIBRARY_SONG_LIMIT = 24;
 function hydrateFriendsFeedSnapshotFromStorage() {
   if (_friendsFeedSnapshot) return;
   try {
+    sessionStorage.removeItem("nabad_friends_feed_snap_v3");
     sessionStorage.removeItem("nabad_friends_feed_snap_v2");
     sessionStorage.removeItem("nabad_friends_feed_snap_v1");
   } catch {}
@@ -17746,7 +17867,7 @@ function hydrateFriendsFeedSnapshotFromStorage() {
     const raw = sessionStorage.getItem(FRIENDS_FEED_SNAPSHOT_KEY);
     if (!raw) return;
     const parsed = JSON.parse(raw);
-    if (parsed?.at && Date.now() - parsed.at < FRIENDS_FEED_SNAPSHOT_MS && !parsed.html?.includes("followAct--status")) {
+    if (parsed?.at && Date.now() - parsed.at < FRIENDS_FEED_SNAPSHOT_MS && !parsed.html?.includes("followAct--skel")) {
       _friendsFeedSnapshot = parsed;
     }
   } catch {}
@@ -17778,6 +17899,11 @@ function paintFriendsFeedSnapshotIfFresh() {
   statusEl.hidden = true;
   statusEl.textContent = "";
   if (Array.isArray(snap.tracks)) _discoveryFeedTracks = snap.tracks;
+  if (Number.isFinite(Number(snap.shown)) && Number(snap.shown) > 0) {
+    _friendsFeedShown = Math.max(FRIENDS_FEED_PAGE_SIZE, Number(snap.shown));
+  }
+  wireFriendsFeedLoadMoreOnce();
+  observeFriendsFeedLoadMore(listEl);
   try {
     syncDiscoveryPlayingHighlights();
   } catch {}
@@ -17886,16 +18012,20 @@ async function enrichFriendsFeedAfterPaint({
 
     const loadWhoToFollow = () => {
       void (async () => {
+        if (friendsFeedHasMoreVisible()) return;
         const suggestList = await fetchFollowingEmptySuggestCreators(3, followedIds);
         if (gen !== _discoveryFollowingGen) return;
         const wtfHtml = whoToFollowSectionHtml(suggestList);
         if (!wtfHtml) return;
         if (String(document.body.getAttribute("data-route") || "") !== "friends") return;
+        if (friendsFeedHasMoreVisible()) return;
+        if (listEl.querySelector(".friendsWhoToFollow")) return;
         listEl.insertAdjacentHTML("beforeend", wtfHtml);
         _friendsFeedSnapshot = {
           at: Date.now(),
           html: listEl.innerHTML,
           tracks: _discoveryFeedTracks,
+          shown: _friendsFeedShown,
         };
         persistFriendsFeedSnapshot();
       })();
@@ -18184,9 +18314,12 @@ async function refreshDiscoveryFollowingFeed(opts = {}) {
     const mergedItems = mergeFriendsOwnPostPin(feedItems).slice(0, 80);
     _friendsFeedMergedItems = mergedItems;
     _friendsFeedProfMap = profMap;
+    const hadRealRows = Boolean(listEl.querySelector(".followAct:not(.followAct--skel)"));
+    if (force || !hadRealRows) resetFriendsFeedPagination();
 
     listEl.classList.remove("isDiscoveryLoading");
     if (!mergedItems.length) {
+      disconnectFriendsFeedLoadMoreObserver();
       listEl.hidden = true;
       listEl.innerHTML = "";
       renderDiscoveryFollowingEmpty(
@@ -18196,8 +18329,12 @@ async function refreshDiscoveryFollowingFeed(opts = {}) {
       );
       return;
     }
-    const filteredItems = filterFriendsFeedItems(mergedItems, _friendsFeedFilter);
+    const { filtered: filteredItems, visible: visibleItems, remaining } = friendsFeedPageSlice(
+      mergedItems,
+      _friendsFeedFilter,
+    );
     if (!filteredItems.length) {
+      disconnectFriendsFeedLoadMoreObserver();
       listEl.hidden = true;
       listEl.innerHTML = "";
       renderDiscoveryFollowingEmpty(
@@ -18212,24 +18349,34 @@ async function refreshDiscoveryFollowingFeed(opts = {}) {
     statusEl.textContent = "";
     _discoveryFeedTracks = enrichTracks.map((t) => discoveryTrackPlaybackMeta(t, profMap));
     listEl.hidden = false;
-    const desiredKey = friendsFeedItemsKey(filteredItems);
+    const desiredKey = friendsFeedItemsKey(visibleItems);
     const domKey = readFollowActListDomKey(listEl);
     const hasSkeleton = Boolean(listEl.querySelector(".followAct--skel"));
-    const skipListRebuild = desiredKey && domKey === desiredKey && !hasSkeleton;
+    const hasPager = Boolean(listEl.querySelector("[data-friends-feed-loadmore-sentinel]"));
+    const skipListRebuild =
+      desiredKey &&
+      domKey === desiredKey &&
+      !hasSkeleton &&
+      ((remaining > 0) === hasPager);
     if (!skipListRebuild) {
-      listEl.innerHTML = friendsFeedRowsHtml(filteredItems, profMap);
-      logFriendsFeedListRender(filteredItems.length);
+      listEl.innerHTML = friendsFeedRowsHtml(visibleItems, profMap) + friendsFeedLoadMoreHtml(remaining);
+      wireFriendsFeedLoadMoreOnce();
+      observeFriendsFeedLoadMore(listEl);
+      logFriendsFeedListRender(visibleItems.length);
       _friendsFeedSnapshot = {
         at: Date.now(),
         html: listEl.innerHTML,
         tracks: _discoveryFeedTracks,
+        shown: _friendsFeedShown,
       };
       persistFriendsFeedSnapshot();
     } else {
+      observeFriendsFeedLoadMore(listEl);
       _friendsFeedSnapshot = {
         at: Date.now(),
         html: listEl.innerHTML,
         tracks: _discoveryFeedTracks,
+        shown: _friendsFeedShown,
       };
       persistFriendsFeedSnapshot();
       try {

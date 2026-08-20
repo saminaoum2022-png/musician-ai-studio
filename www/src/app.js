@@ -680,7 +680,10 @@ const els = {
   lyricsLangRow: document.getElementById("lyricsLangRow"),
   lyricsDialectGroup: document.getElementById("lyricsDialectGroup"),
   lyricsDialectRow: document.getElementById("lyricsDialectRow"),
+  lyricsAddressGroup: document.getElementById("lyricsAddressGroup"),
+  lyricsAddressRow: document.getElementById("lyricsAddressRow"),
   sunoArabicAddress: document.getElementById("sunoArabicAddress"),
+  btnLyricsDiacritics: document.getElementById("btnLyricsDiacritics"),
   sunoSingerGender: document.getElementById("sunoSingerGender"),
   singerPersonaRow: document.getElementById("singerPersonaRow"),
   sunoVoiceProfile: document.getElementById("sunoVoiceProfile"),
@@ -5170,6 +5173,7 @@ function setLyricsInputMode(mode, opts = {}) {
     els.lyricsModeGenerate.setAttribute("aria-selected", on ? "true" : "false");
   }
   syncLyricsPlaceholder();
+  try { syncArabicLyricsControlsVisibility(); } catch {}
   // Brief cross-fade of the textarea so the intent change feels smooth.
   if (!opts.silent && els.lyricsFieldPanel && els.sunoPrompt) {
     els.lyricsFieldPanel.classList.add("lyricsModeSwitching");
@@ -5188,7 +5192,8 @@ function setLyricsInputMode(mode, opts = {}) {
    language hint the /api/lyrics prompt already honors) so no backend changes
    are needed and style stays fully independent (e.g. English + Dabke). */
 let lyricsLanguage = "auto";
-let lyricsDialect = "auto";
+/** Empty until the user picks a real dialect (no Auto). */
+let lyricsDialect = "";
 const LYRICS_LANGUAGE_VALUE = {
   english: "English",
   french: "French",
@@ -5198,7 +5203,6 @@ const LYRICS_LANGUAGE_VALUE = {
   german: "German",
 };
 const LYRICS_ARABIC_DIALECT_VALUE = {
-  auto: "Arabic",
   lebanese: "Levantine Arabic",
   egyptian: "Egyptian Arabic",
   iraqi: "Iraqi Arabic",
@@ -5214,9 +5218,11 @@ const LYRICS_ARABIC_DIALECT_VALUE = {
 function applyLyricsLanguageToDialect() {
   let val = "";
   if (lyricsLanguage === "arabic") {
-    val = LYRICS_ARABIC_DIALECT_VALUE[lyricsDialect] || "Arabic";
+    val = LYRICS_ARABIC_DIALECT_VALUE[lyricsDialect] || "";
   } else if (lyricsLanguage !== "auto") {
     val = LYRICS_LANGUAGE_VALUE[lyricsLanguage] || "";
+  } else if (textHasArabicScript(els.sunoPrompt?.value) && lyricsDialect) {
+    val = LYRICS_ARABIC_DIALECT_VALUE[lyricsDialect] || "";
   }
   if (els.sunoDialect) els.sunoDialect.value = val;
 }
@@ -5236,22 +5242,101 @@ function syncLyricsLangPills() {
       b.setAttribute("aria-pressed", on ? "true" : "false");
     });
   }
-  if (els.lyricsDialectGroup) els.lyricsDialectGroup.hidden = lyricsLanguage !== "arabic";
+  syncArabicLyricsControlsVisibility();
+}
+
+/** Arabic dialect / address / vowel-marks when language is Arabic, or Auto detects Arabic script. */
+function shouldShowArabicDialectRow() {
+  if (typeof lyricsLanguage !== "undefined" && lyricsLanguage === "arabic") return true;
+  if (typeof lyricsLanguage !== "undefined" && lyricsLanguage === "auto" && textHasArabicScript(els.sunoPrompt?.value)) {
+    return true;
+  }
+  return false;
+}
+
+function shouldShowLyricsDiacritics() {
+  if (typeof lyricsLanguage !== "undefined" && lyricsLanguage === "arabic") return true;
+  if (typeof lyricsLanguage !== "undefined" && lyricsLanguage === "auto" && textHasArabicScript(els.sunoPrompt?.value)) {
+    return true;
+  }
+  return false;
+}
+
+/** True when Arabic flow is active and dialect + address are both chosen. */
+function arabicLyricChoicesReady() {
+  const instrumentalOnly = String(els.vocalInstrumentalOnly?.value || "0") === "1";
+  if (instrumentalOnly) return true;
+  if (!shouldShowArabicDialectRow() && !shouldShowArabicAddress()) return true;
+  const dialectOk = Boolean(lyricsDialect && lyricsDialect !== "auto" && LYRICS_ARABIC_DIALECT_VALUE[lyricsDialect]);
+  const address = String(els.sunoArabicAddress?.value || "").trim();
+  const addressOk = address === "male" || address === "female" || address === "group";
+  return dialectOk && addressOk;
+}
+
+function arabicLyricChoicesBlockReason() {
+  if (arabicLyricChoicesReady()) return "";
+  const dialectOk = Boolean(lyricsDialect && lyricsDialect !== "auto" && LYRICS_ARABIC_DIALECT_VALUE[lyricsDialect]);
+  const address = String(els.sunoArabicAddress?.value || "").trim();
+  const addressOk = address === "male" || address === "female" || address === "group";
+  if (!dialectOk && !addressOk) return "Choose an Arabic dialect and who the lyrics talk to.";
+  if (!dialectOk) return "Choose an Arabic dialect first.";
+  return "Choose who the lyrics talk to (إنتَ / إنتِ / إنتو).";
+}
+
+function syncArabicGenerateGate() {
+  const blocked = !arabicLyricChoicesReady();
+  const instrumentalOnly = String(els.vocalInstrumentalOnly?.value || "0") === "1";
+  const generating = Boolean(document.body.classList.contains("generateLocked"));
+  if (els.btnLyricsMagic) {
+    els.btnLyricsMagic.classList.toggle("isArabicGateBlocked", blocked);
+    if (!generating) {
+      els.btnLyricsMagic.disabled = instrumentalOnly || blocked;
+    }
+    els.btnLyricsMagic.title = blocked
+      ? arabicLyricChoicesBlockReason()
+      : "Generate lyrics with AI";
+  }
+  if (els.btnLyricsDiacritics) {
+    els.btnLyricsDiacritics.classList.toggle("isArabicGateBlocked", blocked);
+    if (!generating) {
+      els.btnLyricsDiacritics.disabled = instrumentalOnly || blocked || els.btnLyricsDiacritics.hidden;
+    }
+  }
+  if (els.btnGenerateOrb && !generating) {
+    // Only enforce when Arabic controls are showing; otherwise leave orb alone.
+    if (shouldShowArabicDialectRow() || shouldShowArabicAddress()) {
+      els.btnGenerateOrb.disabled = blocked;
+      els.btnGenerateOrb.title = blocked ? arabicLyricChoicesBlockReason() : "";
+    }
+  }
+}
+
+function syncArabicLyricsControlsVisibility() {
+  const showDialect = shouldShowArabicDialectRow();
+  if (els.lyricsDialectGroup) els.lyricsDialectGroup.hidden = !showDialect;
+  try { syncArabicAddressVisibility(); } catch {}
+  try { syncLyricsDiacriticsVisibility(); } catch {}
+  if (els.lyricsFieldPanel) {
+    const showPanelExtras = shouldShowArabicAddress() || showDialect || shouldShowLyricsDiacritics();
+    els.lyricsFieldPanel.classList.toggle("showArabicLyricControls", showPanelExtras);
+  }
+  try { syncArabicGenerateGate(); } catch {}
 }
 
 function setLyricsLanguage(lang) {
   lyricsLanguage = lang || "auto";
-  if (lyricsLanguage !== "arabic") lyricsDialect = "auto";
+  if (lyricsLanguage !== "arabic") {
+    lyricsDialect = "";
+  }
   syncLyricsLangPills();
   applyLyricsLanguageToDialect();
-  try { syncArabicAddressVisibility(); } catch {}
 }
 
 function setLyricsDialect(dialect) {
-  lyricsDialect = dialect || "auto";
+  const next = String(dialect || "").trim();
+  lyricsDialect = next === "auto" ? "" : next;
   syncLyricsLangPills();
   applyLyricsLanguageToDialect();
-  try { syncArabicAddressVisibility(); } catch {}
 }
 
 (function bindLyricsLanguagePills() {
@@ -5309,6 +5394,8 @@ function setCreateSongType(type) {
   if (els.lyricsFieldPanel) els.lyricsFieldPanel.classList.toggle("lyricsModeLocked", instrumental);
   syncLyricsPlaceholder();
   if (els.btnLyricsMagic) els.btnLyricsMagic.disabled = instrumental;
+  if (els.btnLyricsDiacritics) els.btnLyricsDiacritics.disabled = instrumental;
+  try { syncArabicGenerateGate(); } catch {}
 }
 
 function setGenerateFieldsLocked(locked) {
@@ -5323,6 +5410,7 @@ function setGenerateFieldsLocked(locked) {
   if (els.sunoReferenceMode) els.sunoReferenceMode.disabled = locked;
   if (els.sunoVocalUpload) els.sunoVocalUpload.disabled = locked;
   if (els.btnLyricsMagic) els.btnLyricsMagic.disabled = locked || instrumentalOnly;
+  if (els.btnLyricsDiacritics) els.btnLyricsDiacritics.disabled = locked || instrumentalOnly;
   if (els.btnMagicUploadVocal) els.btnMagicUploadVocal.disabled = locked;
   if (els.btnMagicRecordVocal) els.btnMagicRecordVocal.disabled = locked;
   if (els.vocalModeFull) els.vocalModeFull.disabled = locked;
@@ -5333,12 +5421,17 @@ function setGenerateFieldsLocked(locked) {
   if (els.btnOpenAdvancedSheet) els.btnOpenAdvancedSheet.disabled = locked;
   if (els.btnGenerateOrb) els.btnGenerateOrb.disabled = locked;
   document.body.classList.toggle("generateLocked", Boolean(locked));
+  if (!locked) {
+    try { syncArabicGenerateGate(); } catch {}
+  }
 }
 
-/** Mirror the hidden #sunoArabicAddress select onto the visible pills. */
+/** Mirror the hidden #sunoArabicAddress select onto the dialect-style chips. */
 function syncArabicAddressPills() {
   const v = String(els.sunoArabicAddress?.value || "").trim();
-  document.querySelectorAll("#arabicAddressPills .addressPill").forEach((b) => {
+  const row = els.lyricsAddressRow || document.getElementById("lyricsAddressRow");
+  if (!row) return;
+  row.querySelectorAll("[data-address-value]").forEach((b) => {
     const on = String(b.getAttribute("data-address-value") || "") === v;
     b.classList.toggle("isActive", on);
     b.setAttribute("aria-pressed", on ? "true" : "false");
@@ -5355,6 +5448,9 @@ function textHasArabicScript(t) {
  *  Arabic text in the lyrics, style, or title. Keeps the form minimal otherwise. */
 function shouldShowArabicAddress() {
   if (typeof lyricsLanguage !== "undefined" && lyricsLanguage === "arabic") return true;
+  if (typeof lyricsLanguage !== "undefined" && lyricsLanguage === "auto" && textHasArabicScript(els.sunoPrompt?.value)) {
+    return true;
+  }
   if (textHasArabicScript(els.sunoPrompt?.value)) return true;
   if (textHasArabicScript(els.sunoStyle?.value)) return true;
   if (textHasArabicScript(els.sunoTitle?.value)) return true;
@@ -5362,16 +5458,23 @@ function shouldShowArabicAddress() {
 }
 
 function syncArabicAddressVisibility() {
-  const panel = document.getElementById("arabicAddressPanel");
-  if (!panel) return;
+  const group = els.lyricsAddressGroup || document.getElementById("lyricsAddressGroup");
+  if (!group) return;
   const show = shouldShowArabicAddress();
-  panel.hidden = !show;
-  // When hidden, snap the choice back to Auto so a stale gendered address can
-  // never leak into non-Arabic lyrics.
+  group.hidden = !show;
+  // When hidden, clear address so a stale gendered choice never leaks into
+  // non-Arabic lyrics.
   if (!show && els.sunoArabicAddress && els.sunoArabicAddress.value) {
     els.sunoArabicAddress.value = "";
     try { syncArabicAddressPills(); } catch {}
   }
+}
+
+function syncLyricsDiacriticsVisibility() {
+  const btn = els.btnLyricsDiacritics || document.getElementById("btnLyricsDiacritics");
+  if (!btn) return;
+  const show = shouldShowLyricsDiacritics();
+  btn.hidden = !show;
 }
 
 /** Mirror the hidden #sunoSingerGender input onto the Singer pills, and dim
@@ -5482,12 +5585,13 @@ function resetAdvancedOptionsToDefaults() {
   if (els.sunoDialect) els.sunoDialect.value = "";
   if (els.sunoDialectHint) els.sunoDialectHint.value = "";
   lyricsLanguage = "auto";
-  lyricsDialect = "auto";
+  lyricsDialect = "";
   try { syncLyricsLangPills(); } catch {}
   if (els.lyricsLangRow) els.lyricsLangRow.classList.remove("showMore");
   if (els.lyricsDialectRow) els.lyricsDialectRow.classList.remove("showMore");
   if (els.sunoArabicAddress) els.sunoArabicAddress.value = "";
   try { syncArabicAddressPills(); } catch {}
+  try { syncArabicGenerateGate(); } catch {}
   if (els.sunoPersonaId) els.sunoPersonaId.value = "";
   savePersonaSelection("");
   document.body.classList.remove("proMode");
@@ -57343,6 +57447,12 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
 
   const generateLyricsWithMagic = async () => {
     if (!els.sunoPrompt) return;
+    if (!arabicLyricChoicesReady()) {
+      const reason = arabicLyricChoicesBlockReason();
+      showToast(reason, { icon: "!", durationMs: 3600 });
+      setStatus(reason);
+      return;
+    }
     const lyricsBoxEl = els.sunoPrompt.closest(".lyricsBox");
     const seed = String(els.sunoPrompt.value || "").trim();
     const challenge = challengePromptContext();
@@ -57378,8 +57488,9 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
         els.btnLyricsMagic.disabled = true;
         const icoEl = els.btnLyricsMagic.querySelector(".lyricsMagicIco");
         if (icoEl) icoEl.textContent = "…";
-        else els.btnLyricsMagic.textContent = "…";
+        else els.btnLyricsMagic.textContent = "✦";
       }
+      if (els.btnLyricsDiacritics) els.btnLyricsDiacritics.disabled = true;
       if (lyricsBoxEl) lyricsBoxEl.classList.add("generating");
       if (els.sunoPrompt) els.sunoPrompt.disabled = true;
       if (els.sunoStyle) els.sunoStyle.disabled = true;
@@ -57419,6 +57530,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       const providerNote = provider === "fallback" ? " (fallback mode)" : provider ? ` (${provider})` : "";
       const debugNote = debugSuno || debugGemini ? ` [engine:${debugSuno || "-"} gemini:${debugGemini || "-"}]` : "";
       setStatus(`Lyrics ready${providerNote}${debugNote}. Review and then generate song.`);
+      try { syncArabicLyricsControlsVisibility(); } catch {}
     } catch (e) {
       setStatus(`Lyrics assist failed: ${e?.message || String(e)}`);
     } finally {
@@ -57431,6 +57543,80 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
         if (icoEl) icoEl.textContent = "✦";
         else els.btnLyricsMagic.textContent = "✦";
       }
+      if (els.btnLyricsDiacritics) els.btnLyricsDiacritics.disabled = false;
+    }
+  };
+
+  const addArabicVowelMarksToLyrics = async () => {
+    if (!els.sunoPrompt) return;
+    if (!arabicLyricChoicesReady()) {
+      const reason = arabicLyricChoicesBlockReason();
+      showToast(reason, { icon: "!", durationMs: 3600 });
+      setStatus(reason);
+      return;
+    }
+    const seed = String(els.sunoPrompt.value || "").trim();
+    if (!seed) {
+      showToast("Write Arabic lyrics first, then add vowel marks.", { icon: "!", durationMs: 3200 });
+      return;
+    }
+    if (!textHasArabicScript(seed)) {
+      showToast("Vowel marks are for Arabic lyrics.", { icon: "!", durationMs: 2800 });
+      return;
+    }
+    const lyricsBoxEl = els.sunoPrompt.closest(".lyricsBox");
+    const style = String(els.sunoStyle?.value || "").trim();
+    const dialect = String(els.sunoDialect?.value || "").trim();
+    const dialectHint = String(els.sunoDialectHint?.value || "").trim();
+    const addressNote = arabicAddressPronunciationNote(
+      els.sunoArabicAddress?.value,
+      resolveSingerGenderForGeneration({ hasReference: Boolean(getVocalReferenceFile()) })
+    );
+    const lyricDialectHint = [dialectHint, addressNote].filter(Boolean).join(" ");
+    const labelEl = els.btnLyricsDiacritics?.querySelector(".lyricsDiacriticsLabel");
+    const labelArEl = els.btnLyricsDiacritics?.querySelector(".lyricsDiacriticsLabelAr");
+    const prevLabel = labelEl?.textContent || "Add vowel marks";
+    const prevLabelAr = labelArEl?.textContent || "تشكيل";
+    try {
+      if (els.btnLyricsDiacritics) els.btnLyricsDiacritics.disabled = true;
+      if (els.btnLyricsMagic) els.btnLyricsMagic.disabled = true;
+      if (labelEl) labelEl.textContent = "Adding…";
+      if (labelArEl) labelArEl.textContent = "…";
+      if (lyricsBoxEl) lyricsBoxEl.classList.add("generating");
+      if (els.sunoPrompt) els.sunoPrompt.disabled = true;
+      setStatus("Adding Arabic vowel marks for clearer singing…");
+      const r = await fetch(apiUrl("/api/lyrics"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          seed,
+          style,
+          mode: "diacritics",
+          dialect,
+          dialectHint: lyricDialectHint,
+          lyricsProvider: "gemini",
+        }),
+      });
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(data?.error || "Could not add vowel marks");
+      const nextLyrics = String(data?.lyrics || "").trim();
+      if (!nextLyrics) throw new Error("No lyrics returned");
+      els.sunoPrompt.value = nextLyrics;
+      try { autoResizeLyricsBox(); } catch {}
+      try { syncArabicLyricsControlsVisibility(); } catch {}
+      snapshotNabadAiLyricsDraft(nextLyrics);
+      setStatus("Vowel marks added — review then Generate song.");
+      showToast("Vowel marks added — review then Generate song.", { icon: "✦", durationMs: 3600 });
+    } catch (e) {
+      setStatus(`Vowel marks failed: ${e?.message || String(e)}`);
+      showToast(e?.message || "Could not add vowel marks", { icon: "!", durationMs: 3600 });
+    } finally {
+      if (els.sunoPrompt) els.sunoPrompt.disabled = false;
+      if (lyricsBoxEl) lyricsBoxEl.classList.remove("generating");
+      if (els.btnLyricsDiacritics) els.btnLyricsDiacritics.disabled = false;
+      if (els.btnLyricsMagic) els.btnLyricsMagic.disabled = false;
+      if (labelEl) labelEl.textContent = prevLabel;
+      if (labelArEl) labelArEl.textContent = prevLabelAr;
     }
   };
 
@@ -57621,6 +57807,11 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       if (!t) return;
       if (t === els.btnLyricsMagic || t.closest?.("#lyricsMagicMenu")) return;
       closeMagicMenu();
+    });
+  }
+  if (els.btnLyricsDiacritics) {
+    els.btnLyricsDiacritics.addEventListener("click", () => {
+      void addArabicVowelMarksToLyrics();
     });
   }
   if (els.lyricsModeWrite) {
@@ -58486,11 +58677,10 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
     sel.addEventListener("change", () => syncDefaultSelectVisual(sel));
   });
 
-  // Arabic address pills — the visible control; the hidden
-  // #sunoArabicAddress select stays the single source of truth so every
-  // existing reader/reset keeps working unchanged.
+  // Arabic address chips — same optChip design as dialect; hidden select
+  // #sunoArabicAddress stays the source of truth.
   {
-    const wrap = document.getElementById("arabicAddressPills");
+    const wrap = els.lyricsAddressRow || document.getElementById("lyricsAddressRow");
     if (wrap && els.sunoArabicAddress) {
       wrap.addEventListener("click", (e) => {
         const btn = e.target?.closest?.("[data-address-value]");
@@ -58498,8 +58688,12 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
         haptic("light");
         els.sunoArabicAddress.value = String(btn.getAttribute("data-address-value") || "");
         els.sunoArabicAddress.dispatchEvent(new Event("change", { bubbles: true }));
+        try { syncArabicGenerateGate(); } catch {}
       });
-      els.sunoArabicAddress.addEventListener("change", syncArabicAddressPills);
+      els.sunoArabicAddress.addEventListener("change", () => {
+        syncArabicAddressPills();
+        try { syncArabicGenerateGate(); } catch {}
+      });
       syncArabicAddressPills();
     }
   }
@@ -58630,6 +58824,12 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       try { syncCoachPriorityStatusFromPending(getPriorityPending()); } catch {}
       try { openProfileSongsWhileGenerating(); } catch {}
       hideCreateResultCards();
+      return;
+    }
+    if (!arabicLyricChoicesReady()) {
+      const reason = arabicLyricChoicesBlockReason();
+      showToast(reason, { icon: "!", durationMs: 3600 });
+      setStatus(reason);
       return;
     }
     const promptText = String(els.sunoPrompt?.value || "").trim();
@@ -60641,11 +60841,14 @@ function evaluateCreateHints({ ignoreFocus = false } = {}) {
     if (showCoachContextHint("أضِف التشكيل (الحركات) للهجة أوضح 🎵", "ar-harakat")) return;
   }
 
-  // 2) Arabic lyrics but Dialect still on Auto → suggest a dialect for an
+  // 2) Arabic lyrics but no dialect chosen → suggest a dialect for an
   //    authentic accent. Only when the dialect picker is actually available.
   const dialectPickerOpen = !!els.lyricsDialectGroup && !els.lyricsDialectGroup.hidden;
-  if (hasArabic && arabicLetters >= 6 && dialectPickerOpen && lyricsDialect === "auto") {
+  if (hasArabic && arabicLetters >= 6 && dialectPickerOpen && !lyricsDialect) {
     if (showCoachContextHint("اختر لهجة (لبناني، مصري، خليجي…) لنطق أوضح 🎤", "ar-dialect")) return;
+  }
+  if (hasArabic && arabicLetters >= 6 && shouldShowArabicAddress() && !String(els.sunoArabicAddress?.value || "").trim()) {
+    if (showCoachContextHint("اختر لمن الأغنية: إنتَ / إنتِ / إنتو 🎤", "ar-address")) return;
   }
 
   // 3) Style tags: empty (with lyrics written) → Boost; only one tag → add more.
@@ -60902,7 +61105,7 @@ function syncGenerateOrbVisibility() {
     const visible = route === "generate" && hasInput && !generating && !hasResult;
     els.btnGenerateOrb.style.display = visible ? "inline-flex" : "none";
   }
-  try { syncArabicAddressVisibility(); } catch {}
+  try { syncArabicLyricsControlsVisibility(); } catch {}
   syncCreateTabMorph();
 }
 
@@ -60930,7 +61133,7 @@ function wireLyricsPromptBidiOnce() {
     const text = normalizePastedUserText(raw);
     insertTextAtInputSelection(el, text);
     try { applyLyricsInputBidi(el); } catch {}
-    try { syncArabicAddressVisibility(); } catch {}
+    try { syncArabicLyricsControlsVisibility(); } catch {}
     try { autoResizeLyricsBox(); } catch {}
     el.dispatchEvent(new Event("input", { bubbles: true }));
   };
@@ -61448,6 +61651,7 @@ els.sunoPrompt?.addEventListener("input", () => {
   if (lyricsBoxEl?.classList.contains("wandGenerated")) {
     lyricsBoxEl.classList.remove("wandGenerated");
   }
+  try { syncArabicLyricsControlsVisibility(); } catch {}
 });
 void (async () => {
   await loadPublicConfig();

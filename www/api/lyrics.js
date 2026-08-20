@@ -1,11 +1,13 @@
 /**
  * POST /api/lyrics
- * Body: { seed?: string, style?: string, mode?: "continue"|"full"|"arrange"|"challenge"|"remix_reply", sourceLyrics?: string, sourceTitle?: string, sourceCreator?: string, lyricsProvider?: "gemini" }
+ * Body: { seed?: string, style?: string, mode?: "continue"|"full"|"arrange"|"challenge"|"remix_reply"|"diacritics", sourceLyrics?: string, sourceTitle?: string, sourceCreator?: string, lyricsProvider?: "gemini" }
  *
- * Provider:
- * 1) Suno lyrics API, unless lyricsProvider is "gemini"
- * 2) Gemini fallback / repair
+ * Provider: Gemini by default (free — uses GEMINI_API_KEY).
+ * Suno lyrics API only when lyricsProvider is explicitly "suno" (costs Suno credits).
+ * mode=diacritics is Gemini-only (adds Arabic vowel marks / tashkeel).
  */
+const { queueLogProviderUsage } = require("./_lib/provider-usage-log");
+
 module.exports = async function handler(req, res) {
   setCors(res);
   if (req.method === 'OPTIONS') return res.status(200).end();
@@ -16,13 +18,20 @@ module.exports = async function handler(req, res) {
     const seed = String(body?.seed || "").trim().slice(0, 3500);
     const style = String(body?.style || "").trim().slice(0, 700);
     const dialect = String(body?.dialect || "").trim().slice(0, 120);
-    const dialectHint = String(body?.dialectHint || "").trim().slice(0, 220);
+    const dialectHint = String(body?.dialectHint || "").trim().slice(0, 500);
     const sourceLyrics = String(body?.sourceLyrics || "").trim().slice(0, 3500);
     const sourceTitle = String(body?.sourceTitle || "").trim().slice(0, 160);
     const sourceCreator = String(body?.sourceCreator || "").trim().slice(0, 80);
     const lyricsProvider = String(body?.lyricsProvider || body?.providerPreference || "").trim().toLowerCase();
-    const geminiOnly = ["gemini", "gemini-only", "emoni"].includes(lyricsProvider);
     const requestedMode = String(body?.mode || "").trim().toLowerCase();
+    const sunoLyricsRequested = lyricsProvider === "suno" && requestedMode !== "diacritics";
+    if (requestedMode === "diacritics" && !seed) {
+      return json(res, 400, {
+        error: "Add vowel marks needs existing Arabic lyrics in the box.",
+        provider: "none",
+        debug: { mode: "diacritics", seed: "missing" },
+      });
+    }
     if (requestedMode === "remix_reply" && !sourceLyrics) {
       return json(res, 400, {
         error: "Remix reply needs the original song lyrics. Wait for them to load, then try again.",
@@ -32,7 +41,9 @@ module.exports = async function handler(req, res) {
     }
     const mode = requestedMode === "remix_reply" && sourceLyrics
       ? "remix_reply"
-      : detectModeFromSeed(seed, body?.mode);
+      : requestedMode === "diacritics"
+        ? "diacritics"
+        : detectModeFromSeed(seed, body?.mode);
     const nonce = Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 8);
     const prompt = buildPrompt({ seed, style, mode, nonce, dialect, dialectHint, sourceLyrics, sourceTitle, sourceCreator });
     const sunoPrompt = buildSunoPrompt({ seed, style, mode, dialect, dialectHint });
@@ -41,13 +52,15 @@ module.exports = async function handler(req, res) {
         ...extractComplianceTerms({ seed: sourceLyrics, style }),
         ...extractComplianceTerms({ seed, style }),
       ])]
-      : extractComplianceTerms({ seed, style });
-    const geminiTemperature = mode === "remix_reply" ? 0.72 : 0.9;
+      : mode === "diacritics"
+        ? []
+        : extractComplianceTerms({ seed, style });
+    const geminiTemperature = mode === "remix_reply" ? 0.72 : mode === "diacritics" ? 0.35 : 0.9;
     const sunoKey = process.env.SUNO_API_KEY || "";
 
     const debug = {};
     const geminiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
-    if (geminiOnly) {
+    if (!sunoLyricsRequested) {
       if (!geminiKey) {
         return json(res, 502, {
           error: "Gemini lyrics provider unavailable: missing GEMINI_API_KEY",
@@ -70,6 +83,9 @@ module.exports = async function handler(req, res) {
           geminiKey,
           temperature: geminiTemperature,
         });
+        if (String(repaired.provider || "").includes("gemini")) {
+          queueLogProviderUsage({ provider: "gemini", kind: "lyrics" });
+        }
         return json(res, 200, {
           lyrics: repaired.text,
           provider: repaired.provider || "gemini",
@@ -126,6 +142,9 @@ module.exports = async function handler(req, res) {
           geminiKey,
           temperature: geminiTemperature,
         });
+        if (String(repaired.provider || "").includes("gemini")) {
+          queueLogProviderUsage({ provider: "gemini", kind: "lyrics" });
+        }
         return json(res, 200, {
           lyrics: repaired.text,
           provider: repaired.provider || "gemini",
@@ -331,6 +350,33 @@ function buildPrompt({ seed, style, mode, nonce, dialect, dialectHint, sourceLyr
   ]
     .filter(Boolean)
     .join("\n");
+  if (mode === "diacritics") {
+    const dialectLower = String(dialect || "").toLowerCase();
+    const isMsa = /\bmsa\b|modern standard|فصحى|fus[hḥ]a/.test(dialectLower);
+    const isColloquial = !isMsa && Boolean(
+      dialectLower
+      && /levantine|lebanese|egyptian|iraqi|gulf|maghrebi|moroccan|syrian|palestinian|tunisian|sudanese|arabic/.test(dialectLower),
+    );
+    return [
+      "Add Arabic vowel marks (tashkeel / تشكيل / harakat) to the lyrics below for clearer AI singing.",
+      "Keep the SAME lyrics: same words, same line breaks, same section tags like [Verse] / [Chorus].",
+      "Do NOT rewrite, translate, summarize, or add commentary — output lyrics only.",
+      "Do NOT remove dialect vocabulary (مش، هيدا، شو، إيش، …).",
+      isMsa
+        ? "Dialect is Modern Standard Arabic: fuller classical tashkeel is OK where it helps pronunciation."
+        : isColloquial
+          ? "Dialect is colloquial (e.g. Lebanese/Levantine/Egyptian): prefer singing vowels that clarify ambiguous letters. Avoid heavy fusHa إعراب that fights spoken singing. Light, natural marks only."
+          : "If dialect is unclear, use light singing-oriented marks (not heavy schoolbook إعراب).",
+      "Honor any Arabic address / addressee gender hints in the dialect hint (masculine/feminine/plural forms).",
+      "Preserve existing diacritics when already correct; fill missing ones.",
+      `Variation token: ${nonce}`,
+      ...(dialectLines ? [dialectLines] : []),
+      style ? `Style/Tags (context only): ${style}` : "",
+      "",
+      "Lyrics to mark:",
+      seed,
+    ].filter(Boolean).join("\n");
+  }
   if (mode === "remix_reply") {
     const creatorLine = sourceCreator ? `Original voice: @${sourceCreator.replace(/^@+/, "")}` : "";
     const angle = seed
@@ -448,7 +494,9 @@ function buildPrompt({ seed, style, mode, nonce, dialect, dialectHint, sourceLyr
 }
 
 function buildSunoPrompt({ seed, style, mode, dialect, dialectHint }) {
-  const intent = mode === "arrange"
+  const intent = mode === "diacritics"
+    ? "Add Arabic vowel marks to these lyrics for singing; keep words unchanged."
+    : mode === "arrange"
     ? "Arrange user lyrics into a singable song with section tags."
     : mode === "continue"
       ? "Continue these lyrics in the same mood and language."
@@ -668,7 +716,14 @@ function pickVariantSeed(text) {
 }
 
 function detectModeFromSeed(seed, requestedMode) {
-  if (requestedMode === "arrange" || requestedMode === "continue" || requestedMode === "full" || requestedMode === "challenge" || requestedMode === "remix_reply") {
+  if (
+    requestedMode === "arrange"
+    || requestedMode === "continue"
+    || requestedMode === "full"
+    || requestedMode === "challenge"
+    || requestedMode === "remix_reply"
+    || requestedMode === "diacritics"
+  ) {
     return requestedMode;
   }
   const s = String(seed || "");

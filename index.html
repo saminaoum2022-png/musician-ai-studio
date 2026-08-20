@@ -1091,7 +1091,6 @@
                     <div id="lyricsDialectGroup" class="lyricsLangGroup lyricsDialectGroup" hidden>
                       <span class="lyricsLangLabel">Arabic dialect</span>
                       <div id="lyricsDialectRow" class="optChipRow lyricsDialectRow" role="group" aria-label="Arabic dialect">
-                        <button type="button" class="optChip isActive" data-lyrics-dialect="auto" aria-pressed="true">Auto</button>
                         <button type="button" class="optChip" data-lyrics-dialect="lebanese" aria-pressed="false">Lebanese</button>
                         <button type="button" class="optChip" data-lyrics-dialect="egyptian" aria-pressed="false">Egyptian</button>
                         <button type="button" class="optChip" data-lyrics-dialect="iraqi" aria-pressed="false">Iraqi</button>
@@ -1105,12 +1104,28 @@
                         <button type="button" class="optChip optChip--more" data-lyrics-dialect-more="1">More</button>
                       </div>
                     </div>
+                    <div id="lyricsAddressGroup" class="lyricsLangGroup lyricsAddressGroup" hidden>
+                      <span class="lyricsLangLabel">Arabic address <span class="lyricsLangLabelHint">who lyrics talk to</span></span>
+                      <!-- Hidden select is the form state; chips are the visible control. -->
+                      <select id="sunoArabicAddress" hidden aria-hidden="true" tabindex="-1">
+                        <option value="" selected disabled>Choose address</option>
+                        <option value="male">إنتَ · حبيبي</option>
+                        <option value="female">إنتِ · حبيبتي</option>
+                        <option value="group">إنتو · حبايبي</option>
+                      </select>
+                      <div id="lyricsAddressRow" class="optChipRow lyricsAddressRow" role="group" aria-label="Arabic address">
+                        <button type="button" class="optChip" data-address-value="male" lang="ar" dir="rtl" aria-pressed="false">إنتَ · حبيبي</button>
+                        <button type="button" class="optChip" data-address-value="female" lang="ar" dir="rtl" aria-pressed="false">إنتِ · حبيبتي</button>
+                        <button type="button" class="optChip" data-address-value="group" lang="ar" dir="rtl" aria-pressed="false">إنتو · حبايبي</button>
+                      </div>
+                    </div>
                   </div>
                   <div class="lyricsBox">
                     <div class="lyricsBoxMain">
                       <textarea id="sunoPrompt" dir="auto" rows="4" placeholder="Write your lyrics…"></textarea>
                     </div>
                     <div class="lyricsAssistBar" role="toolbar" aria-label="Lyrics assist">
+                      <button id="btnLyricsDiacritics" class="lyricsDiacriticsBtn" type="button" hidden title="Add Arabic vowel marks for clearer singing" aria-label="Add Arabic vowel marks"><span class="lyricsDiacriticsLabel">Add vowel marks</span><span class="lyricsDiacriticsLabelAr" lang="ar" dir="rtl">تشكيل</span></button>
                       <button id="btnLyricsMagic" class="lyricsMagicBtn" type="button" title="Generate lyrics with AI" aria-label="Generate lyrics with AI"><span class="lyricsMagicIco" aria-hidden="true">✦</span><span class="lyricsMagicLabel">Generate</span></button>
                     </div>
                   </div>
@@ -1161,35 +1176,6 @@
               </div>
               <div id="singerPersonaRow" class="singerPersonaRow" hidden></div>
             </div>
-            <div class="field grow inputPanel inputPanel--style" id="arabicAddressPanel" hidden>
-                <div class="label inPanelLabel">Arabic address <span class="singerPersonaNote">who lyrics talk to</span></div>
-                <!-- Hidden select keeps the existing form state/JS contract;
-                     the pills below are the visible control. -->
-                <select id="sunoArabicAddress" hidden aria-hidden="true" tabindex="-1">
-                  <option value="" selected>Auto</option>
-                  <option value="male">To a man · إنتَ / حبيبي</option>
-                  <option value="female">To a woman · إنتِ / حبيبتي</option>
-                  <option value="group">To a group · إنتو / حبايبي</option>
-                </select>
-                <div id="arabicAddressPills" class="addressPills" role="group" aria-label="Arabic address">
-                  <button type="button" class="addressPill isActive" data-address-value="" aria-pressed="true">
-                    <span class="addressPillMain">Auto</span>
-                    <span class="addressPillSub">match the lyrics</span>
-                  </button>
-                  <button type="button" class="addressPill" data-address-value="male" aria-pressed="false">
-                    <span class="addressPillMain">To a man</span>
-                    <span class="addressPillSub">إنتَ · حبيبي</span>
-                  </button>
-                  <button type="button" class="addressPill" data-address-value="female" aria-pressed="false">
-                    <span class="addressPillMain">To a woman</span>
-                    <span class="addressPillSub">إنتِ · حبيبتي</span>
-                  </button>
-                  <button type="button" class="addressPill" data-address-value="group" aria-pressed="false">
-                    <span class="addressPillMain">To a group</span>
-                    <span class="addressPillSub">إنتو · حبايبي</span>
-                  </button>
-                </div>
-              </div>
               <label class="field grow inputPanel inputPanel--style">
                 <div class="label inPanelLabel stylePanelHead">
                   <span>Artwork style</span>

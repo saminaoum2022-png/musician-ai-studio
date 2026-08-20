@@ -10553,6 +10553,12 @@ html[data-theme="light"] .personaVoiceTuneChips .optChip.isActive{
 #lyricsFieldPanel[data-lyrics-mode="write"] .lyricsAssistBar{
   display:none;
 }
+#lyricsFieldPanel[data-lyrics-mode="write"].showArabicLyricControls .lyricsAssistBar{
+  display:flex;
+}
+#lyricsFieldPanel[data-lyrics-mode="write"].showArabicLyricControls #btnLyricsMagic{
+  display:none;
+}
 #lyricsFieldPanel[data-lyrics-mode="generate"] #btnLyricsMagic{
   width:auto;
   height:32px;
@@ -10565,7 +10571,8 @@ html[data-theme="light"] .personaVoiceTuneChips .optChip.isActive{
   display:inline;
 }
 
-/* Lyrics language / dialect — only in Generate mode, above the textarea. */
+/* Lyrics language / dialect / address — Generate mode by default; Write mode
+   when Arabic language is selected or Arabic script is detected. */
 .lyricsLangBlock{
   display:flex;
   flex-direction:column;
@@ -10573,6 +10580,9 @@ html[data-theme="light"] .personaVoiceTuneChips .optChip.isActive{
   margin:2px 0 12px;
 }
 #lyricsFieldPanel[data-lyrics-mode="write"] .lyricsLangBlock{ display:none; }
+#lyricsFieldPanel[data-lyrics-mode="write"].showArabicLyricControls .lyricsLangBlock{
+  display:flex;
+}
 .lyricsLangGroup{
   display:flex;
   flex-direction:column;
@@ -10585,8 +10595,16 @@ html[data-theme="light"] .personaVoiceTuneChips .optChip.isActive{
   text-transform:uppercase;
   color:rgba(232,238,247,0.5);
 }
+.lyricsLangLabelHint{
+  font-weight:600;
+  letter-spacing:0;
+  text-transform:none;
+  color:rgba(232,238,247,0.34);
+  margin-inline-start:6px;
+}
 .lyricsLangRow,
-.lyricsDialectRow{
+.lyricsDialectRow,
+.lyricsAddressRow{
   display:flex;
   flex-wrap:nowrap;
   gap:7px;
@@ -10596,13 +10614,25 @@ html[data-theme="light"] .personaVoiceTuneChips .optChip.isActive{
   padding-bottom:2px;
 }
 .lyricsLangRow::-webkit-scrollbar,
-.lyricsDialectRow::-webkit-scrollbar{ display:none; }
+.lyricsDialectRow::-webkit-scrollbar,
+.lyricsAddressRow::-webkit-scrollbar{ display:none; }
 .lyricsLangRow .optChip,
-.lyricsDialectRow .optChip{
+.lyricsDialectRow .optChip,
+.lyricsAddressRow .optChip{
   flex:0 0 auto;
   white-space:nowrap;
 }
-.lyricsDialectGroup[hidden]{ display:none; }
+.lyricsAddressRow .optChip[lang="ar"]{
+  font-weight:700;
+  letter-spacing:0;
+}
+.lyricsDialectGroup[hidden],
+.lyricsAddressGroup[hidden]{ display:none; }
+.lyricsMagicBtn.isArabicGateBlocked,
+.lyricsDiacriticsBtn.isArabicGateBlocked{
+  opacity:0.42;
+  cursor:not-allowed;
+}
 /* "More" reveals the extra options inline. */
 .lyricsLangRow .optChip--extra,
 .lyricsDialectRow .optChip--extra{ display:none; }
@@ -10611,6 +10641,38 @@ html[data-theme="light"] .personaVoiceTuneChips .optChip.isActive{
 .optChip--more{
   color:rgba(232,238,247,0.6);
   border-style:dashed;
+}
+
+.lyricsDiacriticsBtn{
+  -webkit-appearance:none;
+  appearance:none;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  gap:6px;
+  height:32px;
+  padding:0 12px;
+  border-radius:999px;
+  border:1px solid rgba(255,255,255,0.14);
+  background:rgba(255,255,255,0.04);
+  color:rgba(232,238,247,0.88);
+  font-size:12.5px;
+  font-weight:650;
+  cursor:pointer;
+  white-space:nowrap;
+}
+.lyricsDiacriticsBtn[hidden]{ display:none !important; }
+.lyricsDiacriticsBtn:disabled{
+  opacity:0.55;
+  cursor:default;
+}
+.lyricsDiacriticsLabelAr{
+  font-size:12px;
+  font-weight:700;
+  color:rgba(186,210,255,0.9);
+}
+#lyricsFieldPanel[data-lyrics-mode="write"] .lyricsDiacriticsBtn{
+  width:auto;
 }
 
 /* Artwork suggestion pills reuse the Style pill row styling. */
@@ -10677,12 +10739,6 @@ html[data-theme="light"] .personaVoiceTuneChips .optChip.isActive{
 }
 #singerGenderPills .singerPillIco{
   display: none;
-}
-
-/* Arabic address only shows for Arabic lyrics — keep it fully out of layout
-   when hidden (some .inputPanel rules would otherwise force it visible). */
-#arabicAddressPanel[hidden]{
-  display: none !important;
 }
 
 /* Smooth cross-fade of the textarea when toggling modes. */

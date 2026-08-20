@@ -27,7 +27,9 @@ function summarizeSunoPayload(payload) {
   if (copy.uploadUrl) {
     try {
       const u = new URL(String(copy.uploadUrl));
-      copy.uploadUrl = `[upload:${u.host}${u.pathname.slice(0, 40)}…]`;
+      const base = u.pathname.split("/").filter(Boolean).pop() || "";
+      // Keep the filename so admin can tell remix-source.mp3 from vocal clips.
+      copy.uploadUrl = `[upload:${u.host}/…/${base}]`;
     } catch {
       copy.uploadUrl = "[upload]";
     }

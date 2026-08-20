@@ -752,6 +752,8 @@ function logStemsOp({
     prompt: buildStemsPromptLabel(body, payload || {}),
     requestPayload: {
       referenceMode: body?.referenceMode || null,
+      sourceAudioUrl: body?.sourceAudioUrl || body?.source_audio_url || null,
+      fileName: body?.fileName || null,
       action: isRemixAction ? "add_instrumental" : "stems",
       ...(payload && typeof payload === "object" ? payload : {}),
     },

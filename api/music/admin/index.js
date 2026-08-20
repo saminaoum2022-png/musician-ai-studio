@@ -779,12 +779,13 @@ function inferGenerationKind(kind, requestDetail = "", prompt = "") {
   const k = String(kind || "").trim().toLowerCase();
   if (k && k !== "song" && k !== "other") return k;
   const blob = `${requestDetail}\n${prompt}`.toLowerCase();
-  // Remix before cover: older hub remixes sometimes logged as vocal_full.
+  // Remix before cover: older hub remixes sometimes logged as vocal_full / bare song.
   if (
     /\bsong_remix\b/.test(blob) ||
-    /\bremix-source\./.test(blob) ||
+    /\bremix-source\b/.test(blob) ||
     /"referencemode"\s*:\s*"song_remix"/.test(blob) ||
-    (/upload-cover/.test(blob) && /\bsourceaudiourl\b/.test(blob))
+    (/upload-cover/.test(blob) && /\bsourceaudiourl\b/.test(blob)) ||
+    (/upload-cover/.test(blob) && /\bremix\b/.test(String(prompt || "").toLowerCase()))
   ) {
     return "remix";
   }
@@ -797,6 +798,33 @@ function inferGenerationKind(kind, requestDetail = "", prompt = "") {
     return "instrumental";
   }
   return k || "song";
+}
+
+/** Hub remixes stamp meta.remixOf on the saved song — use that to relabel older logs. */
+function songMetaLooksLikeRemix(meta) {
+  if (!meta || typeof meta !== "object") return false;
+  const remixOf = meta.remixOf || meta.remix_of;
+  if (!remixOf || typeof remixOf !== "object") return false;
+  return Boolean(
+    String(remixOf.songId || remixOf.id || remixOf.title || remixOf.audioUrl || remixOf.creatorUsername || "").trim(),
+  );
+}
+
+async function remixTaskIdSet(taskIds) {
+  const ids = [...new Set((taskIds || []).map((id) => String(id || "").trim()).filter(Boolean))];
+  const out = new Set();
+  if (!ids.length) return out;
+  // Cap to keep the admin list query cheap.
+  const batch = ids.slice(0, 80);
+  const inClause = batch.map((id) => encodeURIComponent(id)).join(",");
+  const res = await serviceFetch(
+    `user_songs?select=task_id,meta&task_id=in.(${inClause})&limit=200`,
+  );
+  for (const row of Array.isArray(res.data) ? res.data : []) {
+    const tid = String(row?.task_id || "").trim();
+    if (tid && songMetaLooksLikeRemix(row.meta)) out.add(tid);
+  }
+  return out;
 }
 
 async function getGenerations(limit, offset, filters = {}) {
@@ -830,26 +858,39 @@ async function getGenerations(limit, offset, filters = {}) {
       profileMap.set(p.user_id, p);
     }
   }
-  const generations = rows.map((r) => {
-    const p = profileMap.get(r.user_id) || {};
-    return {
-      id: r.id,
-      userId: r.user_id,
-      userLabel: String(p.display_name || p.username || "—"),
-      taskId: r.task_id || "",
-      kind: inferGenerationKind(r.kind, r.request_detail, r.prompt),
-      storedKind: r.kind,
-      provider: r.provider,
-      prompt: r.prompt || "",
-      requestDetail: r.request_detail || "",
-      status: r.status,
-      creditsUsed: Number(r.credits_used || 0),
-      providerCostUsd: r.provider_cost_usd != null ? Number(r.provider_cost_usd) : null,
-      errorMessage: r.error_message || "",
-      createdAt: r.created_at,
-      completedAt: r.completed_at,
-    };
-  });
+  const generations = await (async () => {
+    const mapped = rows.map((r) => {
+      const p = profileMap.get(r.user_id) || {};
+      return {
+        id: r.id,
+        userId: r.user_id,
+        userLabel: String(p.display_name || p.username || "—"),
+        taskId: r.task_id || "",
+        kind: inferGenerationKind(r.kind, r.request_detail, r.prompt),
+        storedKind: r.kind,
+        provider: r.provider,
+        prompt: r.prompt || "",
+        requestDetail: r.request_detail || "",
+        status: r.status,
+        creditsUsed: Number(r.credits_used || 0),
+        providerCostUsd: r.provider_cost_usd != null ? Number(r.provider_cost_usd) : null,
+        errorMessage: r.error_message || "",
+        createdAt: r.created_at,
+        completedAt: r.completed_at,
+      };
+    });
+    const needsSongLookup = mapped.filter((g) => g.kind === "song" || g.kind === "cover" || g.kind === "other");
+    if (!needsSongLookup.length) return mapped;
+    const remixTasks = await remixTaskIdSet(needsSongLookup.map((g) => g.taskId));
+    if (!remixTasks.size) return mapped;
+    return mapped.map((g) => {
+      const tid = String(g.taskId || "").trim();
+      if (tid && remixTasks.has(tid) && (g.kind === "song" || g.kind === "cover" || g.kind === "other")) {
+        return { ...g, kind: "remix" };
+      }
+      return g;
+    });
+  })();
   return { generations, total: res.total ?? generations.length, filters: { dateFrom, dateTo, kind, provider, status } };
 }
 
@@ -1179,7 +1220,7 @@ async function getGenerationDetail(generationIdInput) {
     ),
     taskId
       ? serviceFetch(
-          `user_songs?select=id,title,song_url,art_url,task_id,audio_id,kind,public_on_profile,created_at&task_id=eq.${encodeURIComponent(taskId)}&order=created_at.desc&limit=6`,
+          `user_songs?select=id,title,song_url,art_url,task_id,audio_id,kind,meta,public_on_profile,created_at&task_id=eq.${encodeURIComponent(taskId)}&order=created_at.desc&limit=6`,
         )
       : Promise.resolve({ data: [] }),
   ]);
@@ -1203,7 +1244,8 @@ async function getGenerationDetail(generationIdInput) {
     return false;
   });
 
-  const songs = (Array.isArray(songsRes.data) ? songsRes.data : []).map((s) => {
+  const songRows = Array.isArray(songsRes.data) ? songsRes.data : [];
+  const songs = songRows.map((s) => {
     const songId = s.id;
     return {
       id: songId,
@@ -1218,6 +1260,13 @@ async function getGenerationDetail(generationIdInput) {
       shareUrl: songId ? `https://www.nabadai.com/s/${encodeURIComponent(songId)}` : "",
     };
   });
+  let inferredKind = inferGenerationKind(row.kind, row.request_detail, row.prompt);
+  if (
+    (inferredKind === "song" || inferredKind === "cover" || inferredKind === "other") &&
+    songRows.some((s) => songMetaLooksLikeRemix(s.meta))
+  ) {
+    inferredKind = "remix";
+  }
 
   const durationMs = Number.isFinite(completedMs) && Number.isFinite(createdMs)
     ? completedMs - createdMs
@@ -1231,7 +1280,7 @@ async function getGenerationDetail(generationIdInput) {
       username: prof?.username || "",
       email: auth.email || "",
       taskId,
-      kind: inferGenerationKind(row.kind, row.request_detail, row.prompt),
+      kind: inferredKind,
       provider: row.provider || "",
       prompt: row.prompt || "",
       requestDetail: row.request_detail || "",

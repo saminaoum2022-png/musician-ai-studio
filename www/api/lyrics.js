@@ -351,24 +351,47 @@ function buildPrompt({ seed, style, mode, nonce, dialect, dialectHint, sourceLyr
     .filter(Boolean)
     .join("\n");
   if (mode === "diacritics") {
-    const dialectLower = String(dialect || "").toLowerCase();
+    const dialectRaw = String(dialect || "").trim();
+    const dialectLower = dialectRaw.toLowerCase();
     const isMsa = /\bmsa\b|modern standard|فصحى|fus[hḥ]a/.test(dialectLower);
-    const isColloquial = !isMsa && Boolean(
-      dialectLower
-      && /levantine|lebanese|egyptian|iraqi|gulf|maghrebi|moroccan|syrian|palestinian|tunisian|sudanese|arabic/.test(dialectLower),
-    );
+    // Friendly names match Create chips so Gemini gets the same simple ask
+    // that works in Coach — short + dialect-named, not a soft essay.
+    const dialectSpeak =
+      /levantine|lebanese/.test(dialectLower) ? "Lebanese / Levantine (لبنانية محكية)"
+      : /egyptian/.test(dialectLower) ? "Egyptian (مصرية محكية)"
+      : /iraqi/.test(dialectLower) ? "Iraqi (عراقية محكية)"
+      : /gulf|khaleeji|خليج/.test(dialectLower) ? "Gulf / Khaleeji (خليجية محكية)"
+      : /maghrebi|moroccan|دارجة/.test(dialectLower) ? "Moroccan / Maghrebi (دارجة محكية)"
+      : /syrian/.test(dialectLower) ? "Syrian (سورية محكية)"
+      : /palestinian/.test(dialectLower) ? "Palestinian (فلسطينية محكية)"
+      : /tunisian/.test(dialectLower) ? "Tunisian (تونسية محكية)"
+      : /sudanese/.test(dialectLower) ? "Sudanese (سودانية محكية)"
+      : isMsa ? "Modern Standard Arabic / فصحى"
+      : dialectRaw || "colloquial sung Arabic (محكية للغناء)";
+    const dialectAr =
+      /levantine|lebanese/.test(dialectLower) ? "اللهجة اللبنانية المحكية"
+      : /egyptian/.test(dialectLower) ? "اللهجة المصرية المحكية"
+      : /iraqi/.test(dialectLower) ? "اللهجة العراقية المحكية"
+      : /gulf|khaleeji|خليج/.test(dialectLower) ? "اللهجة الخليجية المحكية"
+      : /maghrebi|moroccan|دارجة/.test(dialectLower) ? "الدارجة المغاربية المحكية"
+      : /syrian/.test(dialectLower) ? "اللهجة السورية المحكية"
+      : /palestinian/.test(dialectLower) ? "اللهجة الفلسطينية المحكية"
+      : /tunisian/.test(dialectLower) ? "اللهجة التونسية المحكية"
+      : /sudanese/.test(dialectLower) ? "اللهجة السودانية المحكية"
+      : isMsa ? "الفصحى"
+      : "اللهجة العربية المحكية للغناء";
     return [
-      "Add Arabic vowel marks (tashkeel / تشكيل / harakat) to the lyrics below for clearer AI singing.",
-      "Keep the SAME lyrics: same words, same line breaks, same section tags like [Verse] / [Chorus].",
-      "Do NOT rewrite, translate, summarize, or add commentary — output lyrics only.",
-      "Do NOT remove dialect vocabulary (مش، هيدا، شو، إيش، …).",
+      `أضف التشكيل (الحركات) على كلمات هذه الأغنية بأسلوب ${dialectAr} حتى يكون الغناء أوضح.`,
+      "حافظ على نفس الكلمات ونفس الأسطر ونفس الوسوم مثل [Verse] و [Chorus]. لا تعِد الكتابة ولا تترجم. أخرج الكلمات فقط.",
       isMsa
-        ? "Dialect is Modern Standard Arabic: fuller classical tashkeel is OK where it helps pronunciation."
-        : isColloquial
-          ? "Dialect is colloquial (e.g. Lebanese/Levantine/Egyptian): prefer singing vowels that clarify ambiguous letters. Avoid heavy fusHa إعراب that fights spoken singing. Light, natural marks only."
-          : "If dialect is unclear, use light singing-oriented marks (not heavy schoolbook إعراب).",
+        ? "الفصحى: تشكيل أوضح للنطق مقبول."
+        : "لا تستخدم إعراب الفصحى ولا التنوين النحوي في أواخر الكلمات — تشكيل غناء محكي خفيف فقط لتوضيح الحروف الغامضة.",
+      `Add tashkeel (Arabic vowel marks) to these lyrics for clearer singing in ${dialectSpeak}.`,
+      "Keep the SAME words, line breaks, and section tags. Output lyrics only — no commentary.",
+      isMsa
+        ? "MSA: fuller classical tashkeel is OK where it helps pronunciation."
+        : "Do NOT use formal fusHa / nahwi case endings or grammatical tanween. Light sung dialect marks only.",
       "Honor any Arabic address / addressee gender hints in the dialect hint (masculine/feminine/plural forms).",
-      "Preserve existing diacritics when already correct; fill missing ones.",
       `Variation token: ${nonce}`,
       ...(dialectLines ? [dialectLines] : []),
       style ? `Style/Tags (context only): ${style}` : "",
@@ -495,7 +518,7 @@ function buildPrompt({ seed, style, mode, nonce, dialect, dialectHint, sourceLyr
 
 function buildSunoPrompt({ seed, style, mode, dialect, dialectHint }) {
   const intent = mode === "diacritics"
-    ? "Add Arabic vowel marks to these lyrics for singing; keep words unchanged."
+    ? `Add Arabic tashkeel for clearer singing in ${dialect || "the selected"} dialect; keep words unchanged; no fusHa nahwi endings.`
     : mode === "arrange"
     ? "Arrange user lyrics into a singable song with section tags."
     : mode === "continue"

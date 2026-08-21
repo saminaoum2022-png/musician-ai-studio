@@ -35434,14 +35434,14 @@ function notificationMessage(n) {
     if (count > 1) {
       return {
         title: "Your songs are ready",
-        body: `${titles.slice(0, 2).join(" · ") || "Both variants"} — saved to your Library.`,
+        body: `${titles.slice(0, 2).join(" · ") || "Both variants"} — drafts in Songs. Publish or Download to keep.`,
         action: "View songs",
       };
     }
     const title = String(n?.metadata?.song_title || titles[0] || "Your song").trim();
     return {
       title: `"${title}" is ready`,
-      body: "Saved to your Library — tap to listen.",
+      body: "Draft ready in Songs · Publish or Download to keep",
       action: "Play",
     };
   }
@@ -36404,14 +36404,16 @@ function activityItemDisplayParts(n, msg) {
       return {
         category: "Ready",
         title: "Your 2 songs are ready",
-        description: titles.slice(0, 2).join(" · ") || "Both variants saved to your songs",
+        description: titles.slice(0, 2).join(" · ")
+          ? `${titles.slice(0, 2).join(" · ")} — drafts · Publish or Download to keep`
+          : "Drafts in Songs · Publish or Download to keep",
       };
     }
     const title = String(meta.song_title || titles[0] || "Your song").trim();
     return {
       category: "Ready",
       title,
-      description: "Saved to your songs — tap to open",
+      description: "Draft ready in Songs · Publish or Download to keep",
     };
   }
   if (t === "sound_ready") {
@@ -47505,7 +47507,7 @@ function getProfileLibraryDisplayItems() {
 }
 
 function formatProfileLibraryCountLabel(n) {
-  const word = n === 1 ? "song" : "songs";
+  const word = n === 1 ? "song draft" : "song drafts";
   return `${n} ${word}`;
 }
 

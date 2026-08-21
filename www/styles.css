@@ -27947,6 +27947,19 @@ body[data-profile-songs-seg="activities"] .profileSongsToolbarActions{
   text-transform: none;
   font-size: 13px;
 }
+.profileSongsKeepHint{
+  display: none;
+  margin: -2px 0 12px;
+  padding: 0 2px;
+  color: rgba(232, 238, 247, 0.48);
+  font-size: 12px;
+  font-weight: 550;
+  letter-spacing: 0.01em;
+  line-height: 1.35;
+}
+body[data-route="profile"][data-profile-songs-seg="all"] .profileSongsKeepHint{
+  display: block;
+}
 /* Multi-select mode for the Songs list (Select → tap rows → Delete (n)) */
 .librarySelectControls{
   margin-left: auto;
@@ -52016,6 +52029,9 @@ html[data-theme="light"] body[data-route="profile"] .libraryCount{
   color: var(--text-secondary);
   letter-spacing: 0.02em;
   text-transform: none;
+}
+html[data-theme="light"] .profileSongsKeepHint{
+  color: var(--text-muted);
 }
 
 html[data-theme="light"] .libraryRows .libRowTitle,

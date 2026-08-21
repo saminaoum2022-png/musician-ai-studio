@@ -104,9 +104,13 @@ function pushBodyForWatch(row) {
     return "Your Hum Track is ready";
   }
   if (kind === "photo") {
-    return Number(row?.variant_count || 1) > 1 ? "Your Photo Mood songs are ready" : "Your Photo Mood song is ready";
+    return Number(row?.variant_count || 1) > 1
+      ? "Your Photo Mood songs are ready — drafts · Publish or Download to keep"
+      : "Draft ready in Songs · Publish or Download to keep";
   }
-  return Number(row?.variant_count || 1) > 1 ? "Your songs are ready" : "Your song is ready";
+  return Number(row?.variant_count || 1) > 1
+    ? "Your songs are ready — drafts · Publish or Download to keep"
+    : "Draft ready in Songs · Publish or Download to keep";
 }
 
 async function rest(path, { method = "GET", body, prefer = "" } = {}) {

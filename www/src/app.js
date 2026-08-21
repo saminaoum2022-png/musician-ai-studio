@@ -47511,6 +47511,14 @@ function formatProfileLibraryCountLabel(n) {
   return `${n} ${word}`;
 }
 
+/** Show the drafts keep-hint only when Profile → Songs has at least one draft. */
+function syncProfileSongsKeepHint(draftCount) {
+  const hint = document.getElementById("profileSongsKeepHint");
+  if (!hint) return;
+  const n = Math.max(0, Number(draftCount) || 0);
+  hint.hidden = n < 1;
+}
+
 function bindProfileSongsSegmentOnce() {
   if (_profileSongsSegmentBound) return;
   _profileSongsSegmentBound = true;
@@ -51047,6 +51055,8 @@ function renderLibrary() {
       countEl.hidden = false;
     }
   }
+  if (onProfileAll) syncProfileSongsKeepHint(totalCount);
+  else syncProfileSongsKeepHint(0);
   // Selection can't outlive the rows it points at.
   if (!totalCount && _librarySelectMode) {
     _librarySelectMode = false;
@@ -51085,12 +51095,10 @@ function renderLibrary() {
       els.libraryList.innerHTML = getLibraryHydratingSkeletonHtml();
       return;
     }
-    // Hydrate finished but result is empty. Three sub-cases:
-    //  (a) fetch errored → show "Couldn't reach cloud" + Retry
-    //  (b) authed user with 0 cloud rows → show migration hint
-    //      (their old browser localStorage hasn't been pushed yet —
-    //      common when first opening the standalone PWA)
-    //  (c) guest / never logged in → original "Nothing here yet" CTA
+    // Hydrate finished but result is empty.
+    //  (a) fetch errored → show retry
+    //  (b) authed user with an empty vault → calm first-run CTA (not a sync failure)
+    //  (c) guest → same calm CTA
     if (isLoggedIn && _lastUserSongsLoadStatus !== "ok") {
       els.libraryList.innerHTML = `
         <div class="emptyState">
@@ -51111,23 +51119,26 @@ function renderLibrary() {
       const failLine = _lastUserSongInsertFailure
         ? `<p class="emptyStateHint" style="margin-top:10px;font-size:12px;line-height:1.45;opacity:0.88">Last cloud save error: ${escapeHtml(_lastUserSongInsertFailure)}</p>`
         : "";
+      // Only surface real device storage problems — generic save_failed on an
+      // empty vault looks broken to brand-new accounts before any generation.
       const persistLine = _lastLibraryPersistError === "quota"
         ? `<p class="emptyStateHint" style="margin-top:10px;font-size:12px;line-height:1.45;opacity:0.88">Device storage is full. Tap Free up space to clear cached covers and song lists, then retry.</p>`
-        : (_lastLibraryPersistError
-          ? `<p class="emptyStateHint" style="margin-top:10px;font-size:12px;line-height:1.45;opacity:0.88">Local device save: ${escapeHtml(_lastLibraryPersistError)}</p>`
-          : "");
+        : "";
       const freeBtn = _lastLibraryPersistError === "quota"
         ? `<button type="button" class="emptyStateCta" id="libraryEmptyFreeSpace" style="margin-top:10px;border:none;cursor:pointer;font:inherit">Free up space &amp; retry</button>`
+        : "";
+      const syncBtn = _lastUserSongInsertFailure
+        ? `<button type="button" class="emptyStateCta" id="libraryEmptyUploadAgain" style="margin-top:10px;border:none;cursor:pointer;font:inherit">Try sync from this device</button>`
         : "";
       els.libraryList.innerHTML = `
         <div class="emptyState">
           <div class="emptyStateIcon" aria-hidden="true">♪</div>
-          <p class="emptyStateTitle">No songs synced yet</p>
-          <p class="emptyStateHint">The cloud has no songs stored for your account yet. Create one here while logged in — it should appear after generation. If you used Safari before adding this app to your Home Screen, open the site in Safari once so older local songs can upload.</p>
+          <p class="emptyStateTitle">Nothing here yet</p>
+          <p class="emptyStateHint">Create a song — it lands here as a private draft. Publish or Download when you want to keep it.</p>
           ${failLine}
           ${persistLine}
           ${freeBtn}
-          <button type="button" class="emptyStateCta" id="libraryEmptyUploadAgain" style="margin-top:10px;border:none;cursor:pointer;font:inherit">Try sync from this device</button>
+          ${syncBtn}
           <a href="#/generate" class="emptyStateCta" data-route-link="generate" style="margin-top:8px;display:inline-flex">Create a song</a>
         </div>
       `;
@@ -51152,8 +51163,8 @@ function renderLibrary() {
       <div class="emptyState">
         <div class="emptyStateIcon" aria-hidden="true">♪</div>
         <p class="emptyStateTitle">Nothing here yet</p>
-        <p class="emptyStateHint">Create a song — it lands here automatically so you can replay or share it anytime.</p>
-        <a href="#/generate" class="emptyStateCta" data-route-link="generate">Go to Create</a>
+        <p class="emptyStateHint">Create a song — it lands here as a private draft. Publish or Download when you want to keep it.</p>
+        <a href="#/generate" class="emptyStateCta" data-route-link="generate">Create a song</a>
       </div>
     `;
     return;

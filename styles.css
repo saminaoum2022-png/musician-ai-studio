@@ -27957,7 +27957,10 @@ body[data-profile-songs-seg="activities"] .profileSongsToolbarActions{
   letter-spacing: 0.01em;
   line-height: 1.35;
 }
-body[data-route="profile"][data-profile-songs-seg="all"] .profileSongsKeepHint{
+.profileSongsKeepHint[hidden]{
+  display: none !important;
+}
+body[data-route="profile"][data-profile-songs-seg="all"] .profileSongsKeepHint:not([hidden]){
   display: block;
 }
 /* Multi-select mode for the Songs list (Select → tap rows → Delete (n)) */

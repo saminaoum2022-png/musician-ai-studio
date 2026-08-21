@@ -226,7 +226,7 @@ import { MUSIC_VIDEO_FEATURE_ENABLED } from "./feature-flags.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260820-175008";
+const APP_BUILD = "20260821-163546";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -59127,7 +59127,11 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
     }
     try {
       const referenceInstrumentalOnly = Boolean(hasReference && instrumentalSelected);
-      const hubRemixLocked = Boolean(currentRemixSource?.originalUrl || currentRemixSource?.url);
+      const hubRemixLocked = Boolean(
+        currentRemixSource?.originalUrl ||
+          currentRemixSource?.url ||
+          vocalRefOrigin === "remix",
+      );
       const modeLabel = referenceInstrumentalOnly
         ? "Instrumental from melody"
         : instrumentalSelected

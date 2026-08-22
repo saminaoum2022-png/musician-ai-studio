@@ -423,6 +423,7 @@ function freshContext(track) {
     monitor: readMonitorPref(),
     timedLines: null, // synced karaoke lines once fetched
     timedFetched: false,
+    lyricsFetched: false,
   };
 }
 
@@ -458,9 +459,42 @@ export function enterStudioRoot() {
 
 /* Fetch the song's word-level karaoke timing (once) and, if we're still on
  * Home, swap the plain lyrics for the synced view. */
+/* Fetch plain lyrics if the slim track ref omitted them, then optionally fetch
+ * synced timing for English karaoke. Arabic skips sync and uses scrollable plain text. */
+async function ensureStudioLyrics(root) {
+  if (!current || current.lyricsFetched) return;
+  if (String(current.lyrics || "").trim()) {
+    current.lyricsFetched = true;
+    return;
+  }
+  current.lyricsFetched = true;
+  try {
+    const text = await Promise.resolve(bridge.resolveLyricsForTrack?.(current.track));
+    const resolved = String(text || "").trim();
+    if (resolved && current) {
+      current.lyrics = resolved;
+      if (screen === "home") updateHomeLyrics(root);
+    }
+  } catch {}
+}
+
 async function ensureTimedLyrics(root) {
   if (!current || current.timedFetched) return;
   current.timedFetched = true;
+  await ensureStudioLyrics(root);
+  if (studioPreferPlainLyrics()) {
+    // Arabic: only fetch timing when we still need a plain-text fallback.
+    if (!String(studioDisplayLyricsText() || "").trim()) {
+      try {
+        const lines = await Promise.resolve(bridge.timedLyricsForTrack?.(current.track));
+        if (Array.isArray(lines) && lines.length && current) {
+          current.timedLines = lines;
+          if (screen === "home") updateHomeLyrics(root);
+        }
+      } catch {}
+    }
+    return;
+  }
   try {
     const lines = await Promise.resolve(bridge.timedLyricsForTrack?.(current.track));
     if (Array.isArray(lines) && lines.length) {
@@ -472,10 +506,16 @@ async function ensureTimedLyrics(root) {
 
 /** Cleanup when leaving the Studio route. */
 export function leaveStudioRoot() {
-  try { engine?.stopMix(); } catch {}
+  stopStudioPlayback();
   try { if (engine?.isRecording) void engine.stopRecording(); } catch {}
   try { stopRecPlayback(); } catch {}
   void persistProject();
+}
+
+/** Stop Studio mix preview and any app-wide player so audio never stacks. */
+function stopStudioPlayback() {
+  try { engine?.stopMix(); } catch {}
+  try { bridge.pauseAppPlayback?.(); } catch {}
 }
 
 /* -------------------------------------------------------------------------- */
@@ -1103,7 +1143,7 @@ function renderHome(root) {
         <span class="studioToggle${current.monitor ? " isOn" : ""}" aria-hidden="true"><span class="studioToggleKnob"></span></span>
       </button>
 
-      <div class="studioLyricsWrap" data-studio-home-lyrics>${homeLyricsHtml()}</div>
+      <div class="studioLyricsWrap${studioPreferPlainLyrics() ? " studioLyricsWrap--scroll" : ""}" data-studio-home-lyrics>${homeLyricsHtml()}</div>
 
       <div class="studioFooter">
         <button type="button" class="studioPrimary" data-studio-start disabled>
@@ -1120,11 +1160,17 @@ function bindHome(root) {
   bindHeader(root);
   root.querySelector("[data-studio-start]")?.addEventListener("click", () => {
     bridge.haptic?.("medium");
+    stopStudioPlayback();
     renderRecording(root);
   });
   root.querySelector("[data-studio-preview]")?.addEventListener("click", async () => {
     bridge.haptic?.("light");
     if (!current.guideUrl) { bridge.showToast?.("Guide isn’t ready yet."); return; }
+    if (engine?.isPlaying) {
+      stopStudioPlayback();
+      return;
+    }
+    stopStudioPlayback();
     try {
       await engine.loadGuide(current.guideUrl);
       await engine.playMix({ musicVol: guideVol(root), voiceVol: 0, reverb: 0 });
@@ -1186,7 +1232,76 @@ function guideVol(root) {
   return Math.max(0, Math.min(1, v / 100));
 }
 
+function lyricsLooksArabic(text) {
+  const t = String(text || "").trim();
+  if (!t) return false;
+  const ar = (t.match(/[\u0600-\u06FF\u0750-\u077F]/g) || []).length;
+  const lat = (t.match(/[A-Za-z]/g) || []).length;
+  return ar > lat;
+}
+
+function stripArabicTashkeel(text) {
+  return String(text || "")
+    .replace(/[\u064B-\u065F\u0670\u06D6-\u06ED]/g, "")
+    .replace(/\u0640/g, "");
+}
+
+function studioArabicLyricsContext() {
+  const track = current?.track;
+  const saved = String(current?.lyrics || "").trim();
+  const dialect = String(track?.meta?.dialect || track?.dialect || "").toLowerCase();
+  const dialectArabic = /arab|levant|leban|syri|egypt|iraqi|gulf|khaleeji|maghrebi|darija|msa|فصحى|عرب/.test(dialect);
+  const timed = current?.timedLines;
+  const timedSample = Array.isArray(timed) ? timed.map((l) => l.text).join(" ").slice(0, 500) : "";
+  const isArabic =
+    lyricsLooksArabic(saved) ||
+    lyricsLooksArabic(track?.title) ||
+    lyricsLooksArabic(timedSample) ||
+    dialectArabic;
+  if (!isArabic) return { isArabic: false, text: saved };
+  let text = saved ? stripArabicTashkeel(saved) : "";
+  if (!text && Array.isArray(timed) && timed.length) {
+    text = timed
+      .map((l) => (l.isSection ? `[${l.text}]` : stripArabicTashkeel(l.text)))
+      .join("\n");
+  }
+  return { isArabic: true, text };
+}
+
+/** Arabic Studio: plain saved lyrics + manual scroll (timestamped lines carry heavy tashkeel). */
+function studioPreferPlainLyrics() {
+  return studioArabicLyricsContext().isArabic;
+}
+
+function studioDisplayLyricsText() {
+  const ctx = studioArabicLyricsContext();
+  if (ctx.isArabic) return ctx.text;
+  return String(current?.lyrics || "").trim();
+}
+
+function plainLyricsBlocksHtml(text, { lineClass = "" } = {}) {
+  const lines = String(text || "").split(/\n+/);
+  if (!lines.some((l) => String(l || "").trim())) {
+    return `<div class="studioLyrics studioLyricsEmpty"><p>No lyrics for this song — sing freely.</p></div>`;
+  }
+  return lines
+    .map((raw) => {
+      const line = String(raw || "");
+      const trimmed = line.trim();
+      if (!trimmed) return `<p class="studioLyricSpacer" aria-hidden="true">&nbsp;</p>`;
+      if (/^\[[^\]]+\]$/.test(trimmed)) {
+        return `<p class="studioLyricSection">${esc(trimmed.replace(/^\[|\]$/g, ""))}</p>`;
+      }
+      const cls = lineClass ? ` class="${lineClass}"` : "";
+      return `<p${cls} dir="auto">${esc(line)}</p>`;
+    })
+    .join("");
+}
+
 function homeLyricsHtml() {
+  if (studioPreferPlainLyrics()) {
+    return `<div class="studioLyrics studioLyrics--plain">${plainLyricsBlocksHtml(studioDisplayLyricsText())}</div>`;
+  }
   const timed = current.timedLines;
   if (Array.isArray(timed) && timed.length) {
     return `
@@ -1239,12 +1354,23 @@ function renderRecording(root) {
 
       <div class="studioRecControls">
         <button type="button" class="studioStop" data-studio-stop aria-label="Stop recording">
-          <span aria-hidden="true">■</span>
+          <span class="studioStopIcon" aria-hidden="true"></span>
         </button>
       </div>
     </div>`;
 
   bindRecording(root);
+  void (async () => {
+    await ensureStudioLyrics(root);
+    if (screen !== "recording" || memo) return;
+    if (!studioPreferPlainLyrics()) return;
+    const block = root.querySelector("[data-studio-lyriclist], [data-studio-lyric]");
+    if (!block) return;
+    const tmp = document.createElement("div");
+    tmp.innerHTML = recLyricsHtml();
+    const next = tmp.firstElementChild;
+    if (next) block.replaceWith(next);
+  })();
   void startTake(root);
 }
 
@@ -1298,6 +1424,7 @@ async function startTake(root) {
   const timerEl = root.querySelector("[data-studio-timer]");
   const voiceWave = root.querySelector("[data-studio-voicewave]");
   if (current) current._recSec = 0;
+  stopStudioPlayback();
   try {
     await engine.ensureReady();
     if (!memo && !engine.guideBuffer && current.guideUrl) await engine.loadGuide(current.guideUrl);
@@ -1333,6 +1460,9 @@ async function startTake(root) {
 }
 
 function recLyricsHtml() {
+  if (studioPreferPlainLyrics()) {
+    return `<div class="studioRecLyrics studioRecLyrics--plain" data-studio-lyriclist>${plainLyricsBlocksHtml(studioDisplayLyricsText(), { lineClass: "studioRecLyricPlainLine" })}</div>`;
+  }
   const timed = current.timedLines;
   if (Array.isArray(timed) && timed.length) {
     return `<div class="studioRecLyrics" data-studio-lyriclist>${timed
@@ -1349,6 +1479,7 @@ function recLyricsHtml() {
 // Highlight the karaoke line for the current guide position (guide time aligns
 // to the song's own lyric timestamps). Mirrors the player overlay behaviour.
 function highlightTimedLine(root, sec) {
+  if (studioPreferPlainLyrics()) return;
   const list = root.querySelector("[data-studio-lyriclist]");
   const lines = current.timedLines;
   if (!list || !Array.isArray(lines)) return;
@@ -1673,14 +1804,14 @@ function bindPreviewMix(root, take, aiRec) {
       await engine.playMix(
         { ...mixParams(take?.id), fromSec },
         {
-          onTick: (s) => {
-            const g = fromSec + s;
+          onTick: (g) => {
             mixState.lastGuideSec = g;
             if (posEl) posEl.textContent = fmtTime(Math.min(g, dur));
             if (dur) setReviewProgress(root, Math.min(1, g / dur));
           },
           onEnded: () => {
             setPlayingUi(false);
+            mixState.lastGuideSec = 0;
             setReviewProgress(root, 0);
             if (posEl) posEl.textContent = "0:00";
           },
@@ -1695,13 +1826,19 @@ function bindPreviewMix(root, take, aiRec) {
 
   btn?.addEventListener("click", () => {
     bridge.haptic?.("light");
-    if (engine?.isPlaying) { engine.stopMix(); setPlayingUi(false); return; }
+    if (engine?.isPlaying) {
+      mixState.lastGuideSec = engine.getMixGuidePosition?.() || mixState.lastGuideSec || 0;
+      engine.stopMix();
+      setPlayingUi(false);
+      return;
+    }
     void playFrom(mixState.lastGuideSec || 0);
   });
 
   const dur = contentDur();
   if (wave && dur > 0) {
     let seeking = false;
+    let wasPlayingBeforeScrub = false;
     const fracFromEvent = (ev) => {
       const r = wave.getBoundingClientRect();
       const x = (ev.clientX ?? ev.touches?.[0]?.clientX ?? 0) - r.left;
@@ -1709,6 +1846,13 @@ function bindPreviewMix(root, take, aiRec) {
     };
     wave.addEventListener("pointerdown", (e) => {
       seeking = true;
+      wasPlayingBeforeScrub = !!engine?.isPlaying;
+      if (wasPlayingBeforeScrub) {
+        mixState.lastGuideSec = engine.getMixGuidePosition?.() || mixState.lastGuideSec || 0;
+        engine.stopMix();
+        setPlayingUi(false);
+      }
+      wave.classList.add("is-scrubbing");
       try { wave.setPointerCapture(e.pointerId); } catch {}
       const f = fracFromEvent(e);
       setReviewProgress(root, f);
@@ -1723,11 +1867,21 @@ function bindPreviewMix(root, take, aiRec) {
     const release = (e) => {
       if (!seeking) return;
       seeking = false;
+      wave.classList.remove("is-scrubbing");
       bridge.haptic?.("light");
-      void playFrom(fracFromEvent(e) * dur);
+      const sec = fracFromEvent(e) * dur;
+      mixState.lastGuideSec = sec;
+      if (wasPlayingBeforeScrub) {
+        void playFrom(sec);
+      } else if (posEl) {
+        posEl.textContent = fmtTime(sec);
+      }
     };
     wave.addEventListener("pointerup", release);
-    wave.addEventListener("pointercancel", () => { seeking = false; });
+    wave.addEventListener("pointercancel", () => {
+      seeking = false;
+      wave.classList.remove("is-scrubbing");
+    });
   }
 
   root.querySelectorAll("[data-take-id]").forEach((tab) => {
@@ -2039,10 +2193,13 @@ function bindEditTake(root, take) {
       playGuideSec = Math.max(0, fromGuideSec || 0);
       setPlayingUi(true);
       setPlayhead(playGuideSec);
-      await engine.playMix(editParams(), {
-        onTick: (s) => setPlayhead(playGuideSec + s),
-        onEnded: () => { setPlayingUi(false); setPlayhead(0); playGuideSec = 0; },
-      });
+      await engine.playMix(
+        { ...editParams(), fromSec: playGuideSec },
+        {
+          onTick: (g) => setPlayhead(g),
+          onEnded: () => { setPlayingUi(false); setPlayhead(0); playGuideSec = 0; },
+        },
+      );
     } catch {
       setPlayingUi(false);
       bridge.showToast?.("Couldn’t play here.");

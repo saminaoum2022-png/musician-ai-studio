@@ -65315,8 +65315,12 @@ try {
     showToast: (m, o) => { try { showToast(m, o); } catch {} },
     haptic: (k) => { try { haptic(k === "medium" ? "impact" : "light"); } catch {} },
     navigateBack: () => { try { history.back(); } catch { location.hash = "#/discover"; } },
+    pauseAppPlayback: () => {
+      try { ensurePlayer()?.pause(); } catch {}
+    },
     requireProAccess: (label) => requireProForWebFeature(label || "NabadAi Studio"),
-    lyricsForTrack: (t) => String(t?.meta?.lyrics || t?.lyrics || t?.meta?.lyricsText || ""),
+    lyricsForTrack: (t) => songDetailsLyricsForTrack(t),
+    resolveLyricsForTrack: (t) => resolveLyricsForTrackRef(t),
     coverForTrack: (t) => String(t?.artUrl || t?.art || ""),
     prepareGuide: (t) => studioPrepareGuide(t),
     timedLyricsForTrack: (t) => studioTimedLyrics(t),

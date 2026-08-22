@@ -49325,6 +49325,24 @@ body[data-route="studio"] .deskRail { display: none !important; }
 .studioLyrics { font-size: 15px; line-height: 1.7; color: rgba(231, 238, 255, 0.78); }
 .studioLyrics p { margin: 0 0 4px; }
 .studioLyricsEmpty { color: var(--muted); font-style: italic; }
+.studioLyricsWrap--scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: min(40vh, 340px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
+  padding-right: 2px;
+}
+.studioLyrics--plain {
+  text-align: start;
+  color: var(--text);
+}
+.studioLyrics--plain .studioLyricSpacer {
+  height: 6px;
+  margin: 0;
+}
 
 .studioFooter { margin-top: auto; display: flex; flex-direction: column; gap: 10px; padding-top: 8px; }
 .studioPrimary {
@@ -49402,6 +49420,23 @@ body[data-route="studio"] .deskRail { display: none !important; }
           mask-image: linear-gradient(180deg, transparent 0, #000 16%, #000 78%, transparent 100%);
 }
 .studioRecLyrics::-webkit-scrollbar { display: none; }
+.studioRecLyrics--plain {
+  text-align: start;
+  gap: 6px;
+  -webkit-mask-image: none;
+          mask-image: none;
+  touch-action: pan-y;
+}
+.studioRecLyricPlainLine {
+  font-size: 17px;
+  font-weight: 650;
+  line-height: 1.5;
+  color: rgba(231, 238, 255, 0.88);
+  text-align: start;
+}
+.studioRecLyrics--plain .studioLyricSection {
+  text-align: start;
+}
 .studioRecLyricLine {
   font-size: 19px; font-weight: 700; line-height: 1.3;
   color: rgba(255,255,255,0.32);
@@ -49419,9 +49454,15 @@ body[data-route="studio"] .deskRail { display: none !important; }
 .studioRecControls { margin-top: auto; display: flex; justify-content: center; padding-bottom: 8px; }
 .studioStop {
   width: 76px; height: 76px; border-radius: 999px;
-  border: 0; background: var(--danger); color: #fff; font-size: 22px;
+  border: 0; background: var(--danger); color: #fff;
   box-shadow: 0 10px 30px rgba(255,77,109,0.34);
   transition: transform 120ms ease;
+  display: inline-flex; align-items: center; justify-content: center;
+  padding: 0;
+}
+.studioStopIcon {
+  width: 24px; height: 24px; border-radius: 5px;
+  background: currentColor; flex-shrink: 0;
 }
 .studioStop:active { transform: scale(0.93); }
 
@@ -50366,13 +50407,16 @@ html[data-theme="light"] .playerPublishBtn{
 
 /* Review waveform scrubbing */
 .studioWave--review { position: relative; cursor: pointer; touch-action: none; overflow: hidden; }
+.studioWave--review .studioPeakBar { pointer-events: none; user-select: none; }
 .studioWaveFill {
-  position: absolute; left: 0; top: 0; bottom: 0; width: 0%;
+  position: absolute; left: 0; top: 0; bottom: 0; width: 0%; z-index: 2;
   background: linear-gradient(90deg, rgba(124,92,255,0.28), rgba(35,213,171,0.28));
   border-radius: 12px; pointer-events: none; transition: width 60ms linear;
 }
+.studioWave--review.is-scrubbing .studioWaveFill { transition: none; }
 .studioWaveHandle {
-  position: absolute; top: -3px; bottom: -3px; left: 0%; width: 3px; border-radius: 3px;
+  position: absolute; top: -3px; bottom: -3px; left: 0%; width: 3px; z-index: 3;
+  border-radius: 3px;
   background: #fff; box-shadow: 0 0 8px rgba(124,92,255,0.7); transform: translateX(-50%);
   pointer-events: none;
 }
@@ -50412,6 +50456,9 @@ html[data-theme="light"] .studioTakeBadge{
 }
 
 html[data-theme="light"] .studioLyrics{
+  color: var(--text);
+}
+html[data-theme="light"] .studioRecLyricPlainLine{
   color: var(--text);
 }
 html[data-theme="light"] .studioLyricSection,
@@ -50586,6 +50633,70 @@ html[data-theme="light"] .studioAiCard{
 }
 html[data-theme="light"] .studioAiCard::before{
   background: radial-gradient(120% 80% at 0% 0%, rgba(109, 77, 245, 0.10), transparent 55%);
+}
+html[data-theme="light"] .studioAiCardSub{
+  color: var(--text-secondary);
+}
+html[data-theme="light"] .studioAiChip{
+  color: var(--text-secondary);
+  background: rgba(15, 23, 40, 0.05);
+  border-color: var(--border);
+}
+html[data-theme="light"] .studioAiCard.isApplied .studioAiApply{
+  color: var(--brand-violet-hover);
+  background: var(--accent-violet-soft);
+  border-color: rgba(109, 77, 245, 0.22);
+}
+
+html[data-theme="light"] .studioStyleTab{
+  color: var(--text-secondary);
+  background: var(--card);
+  border-color: var(--border);
+}
+html[data-theme="light"] .studioStyleTab.isActive{
+  color: var(--brand-violet-hover);
+  background: var(--accent-violet-soft);
+  border-color: rgba(109, 77, 245, 0.28);
+}
+html[data-theme="light"] .studioStyleTab[data-style-tab="melodylock"].isActive{
+  color: var(--brand-teal-hover, #0d9488);
+  background: rgba(18, 184, 150, 0.12);
+  border-color: rgba(18, 184, 150, 0.28);
+}
+html[data-theme="light"] .studioStyleTab[data-style-tab="custom"].isActive{
+  color: var(--brand-violet-hover);
+  background: var(--accent-violet-soft);
+  border-color: rgba(109, 77, 245, 0.28);
+}
+
+html[data-theme="light"] .studioMixTabs{
+  background: var(--surface-secondary);
+  border-color: var(--border);
+}
+html[data-theme="light"] .studioMixTab{
+  color: var(--muted);
+}
+html[data-theme="light"] .studioMixTab.isActive{
+  background: var(--card);
+  color: var(--text);
+  box-shadow: var(--chart-surface-shadow);
+}
+
+html[data-theme="light"] .studioFinishSection{
+  background: var(--card);
+  border-color: var(--border);
+  box-shadow: var(--chart-surface-shadow);
+}
+html[data-theme="light"] .studioFooter--finish{
+  background: linear-gradient(180deg, transparent, var(--bg) 24%);
+}
+
+html[data-theme="light"] .studioSegBtn{
+  color: var(--text-secondary);
+}
+html[data-theme="light"] .studioSegBtn.isActive{
+  background: var(--accent-violet-soft);
+  color: var(--brand-violet-hover);
 }
 
 html[data-theme="light"] .studioVocalsEmpty,

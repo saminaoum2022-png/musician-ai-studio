@@ -50382,6 +50382,220 @@ html[data-theme="light"] .playerPublishBtn{
   .studioWaveFill { transition: none; }
 }
 
+/* ---------- Studio — light theme (match app settings / Create flow) ---------- */
+html[data-theme="light"] body[data-route="studio"]{
+  background:
+    radial-gradient(90% 42% at 50% -8%, rgba(124, 92, 255, 0.05) 0%, transparent 72%),
+    var(--bg);
+}
+
+html[data-theme="light"] .studioHeaderTitle{
+  color: rgba(71, 88, 110, 0.62);
+}
+
+html[data-theme="light"] .studioCover,
+html[data-theme="light"] .studioCoverPlaceholder,
+html[data-theme="light"] .studioPublishArt,
+html[data-theme="light"] .studioDetailsArt{
+  background: var(--surface-secondary);
+}
+html[data-theme="light"] .studioCoverPlaceholder,
+html[data-theme="light"] .studioPublishArt.isEmpty,
+html[data-theme="light"] .studioDetailsArt.isEmpty{
+  color: var(--icon-muted);
+}
+
+html[data-theme="light"] .studioGuideTag,
+html[data-theme="light"] .studioLyricsBadge,
+html[data-theme="light"] .studioTakeBadge{
+  color: var(--brand-violet-hover);
+}
+
+html[data-theme="light"] .studioLyrics{
+  color: var(--text);
+}
+html[data-theme="light"] .studioLyricSection,
+html[data-theme="light"] .studioRecLyricSection{
+  color: var(--text-secondary);
+}
+
+html[data-theme="light"] .studioRecLyricLine{
+  color: rgba(21, 23, 28, 0.38);
+}
+html[data-theme="light"] .studioRecLyricLine.isPast{
+  color: var(--muted);
+}
+html[data-theme="light"] .studioRecLyricLine.isActive{
+  color: var(--brand-violet-hover);
+  text-shadow: 0 0 18px rgba(109, 77, 245, 0.18);
+}
+html[data-theme="light"] .studioRecLyric--memo{
+  color: var(--text-secondary);
+}
+
+html[data-theme="light"] .studioWave span,
+html[data-theme="light"] .studioRecWave span{
+  background: rgba(15, 23, 40, 0.12);
+}
+html[data-theme="light"] .studioRecWave--voice span{
+  background: rgba(109, 77, 245, 0.42);
+}
+
+html[data-theme="light"] .studioMonitorRow,
+html[data-theme="light"] .studioChoice,
+html[data-theme="light"] .studioMiniRow,
+html[data-theme="light"] .studioPickRow,
+html[data-theme="light"] .studioRecItem,
+html[data-theme="light"] .studioFeedbackCard,
+html[data-theme="light"] .studioPlayPill,
+html[data-theme="light"] .studioReviewLanesWrap,
+html[data-theme="light"] .studioReviewActionBar,
+html[data-theme="light"] .studioEditLanes,
+html[data-theme="light"] .studioPitchField,
+html[data-theme="light"] .studioSeg,
+html[data-theme="light"] .studioQuickTake--alt{
+  border-color: var(--border);
+  background: var(--card);
+  box-shadow: var(--chart-surface-shadow);
+}
+html[data-theme="light"] .studioQuickTake--alt{
+  box-shadow: none;
+}
+html[data-theme="light"] .studioMonitorRow.isOn{
+  border-color: rgba(109, 77, 245, 0.28);
+  background: var(--accent-violet-soft);
+}
+html[data-theme="light"] .studioMonitorRow .studioToggle{
+  background: rgba(15, 23, 40, 0.12);
+}
+
+html[data-theme="light"] .studioChoice--accent{
+  border-color: rgba(109, 77, 245, 0.28);
+  background: linear-gradient(160deg, rgba(109, 77, 245, 0.06), rgba(255, 255, 255, 0.98));
+}
+html[data-theme="light"] .studioChoiceIco,
+html[data-theme="light"] .studioMiniIco,
+html[data-theme="light"] .studioPickArt{
+  background: var(--surface-secondary);
+  color: var(--icon-muted);
+}
+html[data-theme="light"] .studioChoice--accent .studioChoiceIco{
+  background: linear-gradient(135deg, rgba(109, 77, 245, 0.16), rgba(18, 184, 150, 0.12));
+  color: var(--brand-violet-hover);
+}
+
+html[data-theme="light"] .studioChoiceSub,
+html[data-theme="light"] .studioChoiceSub b,
+html[data-theme="light"] .studioChoiceChev,
+html[data-theme="light"] .studioLobbyKicker,
+html[data-theme="light"] .studioLobbyEmpty,
+html[data-theme="light"] .studioLobbyEmpty b,
+html[data-theme="light"] .studioMiniMeta,
+html[data-theme="light"] .studioMiniDel,
+html[data-theme="light"] .studioRecItemMeta,
+html[data-theme="light"] .studioRecDel,
+html[data-theme="light"] .studioQuickTake--alt .studioQuickSub,
+html[data-theme="light"] .studioQuickTake--alt .studioChoiceChev,
+html[data-theme="light"] .studioQuickIco--alt,
+html[data-theme="light"] .studioScrubHint,
+html[data-theme="light"] .studioSoonNoteCenter,
+html[data-theme="light"] .studioSyncScale,
+html[data-theme="light"] .studioSyncHint,
+html[data-theme="light"] .studioEditRuler,
+html[data-theme="light"] .studioSoonPill{
+  color: var(--muted);
+}
+html[data-theme="light"] .studioLobbyEmpty b,
+html[data-theme="light"] .studioChoiceSub b{
+  color: var(--text-secondary);
+}
+
+html[data-theme="light"] .studioSliderLabel,
+html[data-theme="light"] .studioMixLabel,
+html[data-theme="light"] .studioPubPct,
+html[data-theme="light"] .studioPreviewPlay,
+html[data-theme="light"] .studioPreviewPlayIco,
+html[data-theme="light"] .studioAiCardBrand,
+html[data-theme="light"] .studioPitchApplied,
+html[data-theme="light"] .studioPitchHint strong,
+html[data-theme="light"] .studioNabadScoreLbl,
+html[data-theme="light"] .studioNabadScoreDetail,
+html[data-theme="light"] .studioEditTool{
+  color: var(--text);
+}
+html[data-theme="light"] .studioPreviewPlayIco{
+  background: var(--surface-secondary);
+}
+html[data-theme="light"] .studioPreviewPlay.isPlaying{
+  background: var(--accent-violet-soft);
+}
+html[data-theme="light"] .studioPreviewPlay.isPlaying .studioPreviewPlayIco{
+  background: rgba(109, 77, 245, 0.14);
+}
+
+html[data-theme="light"] .studioSegBtn.isActive,
+html[data-theme="light"] .studioTakeTab.isActive,
+html[data-theme="light"] .studioEditTool--play.isPlaying{
+  color: var(--brand-violet-hover);
+}
+html[data-theme="light"] .studioTakeTab,
+html[data-theme="light"] .studioEditTool{
+  border-color: var(--border);
+  background: var(--card);
+}
+
+html[data-theme="light"] .studioEditTrack,
+html[data-theme="light"] .studioReviewLaneTrack{
+  background: rgba(15, 23, 40, 0.04);
+}
+html[data-theme="light"] .studioEditPlayhead,
+html[data-theme="light"] .studioReviewPlayhead,
+html[data-theme="light"] .studioWaveHandle{
+  background: var(--brand-violet-hover);
+  box-shadow: 0 0 8px rgba(109, 77, 245, 0.28);
+}
+html[data-theme="light"] .studioPeakBar--empty{
+  background: rgba(15, 23, 40, 0.10) !important;
+}
+
+html[data-theme="light"] .studioPubBar{
+  background: rgba(15, 23, 40, 0.08);
+}
+html[data-theme="light"] .studioSyncSlider{
+  background: linear-gradient(90deg, rgba(15, 23, 40, 0.08), rgba(109, 77, 245, 0.35) 50%, rgba(15, 23, 40, 0.08));
+}
+
+html[data-theme="light"] .studioDetailsInput{
+  border-color: var(--border);
+  background: var(--card);
+}
+
+html[data-theme="light"] .studioLevelsBackdrop{
+  background: rgba(15, 23, 40, 0.28);
+}
+html[data-theme="light"] .studioLevelsPanel{
+  background: var(--card);
+  border-color: var(--border);
+  box-shadow: var(--elev-2);
+}
+
+html[data-theme="light"] .studioAiCard{
+  background: linear-gradient(155deg, rgba(109, 77, 245, 0.08), rgba(18, 184, 150, 0.06) 52%, rgba(255, 255, 255, 0.98));
+  border-color: rgba(109, 77, 245, 0.18);
+  box-shadow: var(--chart-surface-shadow);
+}
+html[data-theme="light"] .studioAiCard::before{
+  background: radial-gradient(120% 80% at 0% 0%, rgba(109, 77, 245, 0.10), transparent 55%);
+}
+
+html[data-theme="light"] .studioVocalsEmpty,
+html[data-theme="light"] .studioVocalsEmpty h3{
+  color: var(--text);
+}
+html[data-theme="light"] .studioVocalsEmpty{
+  color: var(--muted);
+}
+
 /* -------------------------------------------------------------------------- */
 /* My Vocals — local Studio songs in Profile                                   */
 /* -------------------------------------------------------------------------- */

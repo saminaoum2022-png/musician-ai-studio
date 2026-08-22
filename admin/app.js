@@ -37,6 +37,8 @@ const state = {
   marketingLoadedContent: null,
   cache: {},
   recoveryTokenHash: "",
+  activityWindow: 28,
+  activityDaily: [],
 };
 
 const els = {
@@ -990,6 +992,153 @@ function renderSunoCoverageSection(s, { compact = false } = {}) {
   `;
 }
 
+function renderActivityTrendLabel(pct) {
+  if (pct == null || !Number.isFinite(pct)) return "—";
+  if (pct > 0) return `<span class="activityTrend activityTrend--up">↑ ${pct}% vs prior week</span>`;
+  if (pct < 0) return `<span class="activityTrend activityTrend--down">↓ ${Math.abs(pct)}% vs prior week</span>`;
+  return `<span class="activityTrend activityTrend--flat">→ flat vs prior week</span>`;
+}
+
+function activityTrendPct(daily, key, window = 7) {
+  if (!Array.isArray(daily) || daily.length < window * 2) return null;
+  const recent = daily.slice(-window);
+  const prev = daily.slice(-window * 2, -window);
+  const avg = (rows) => rows.reduce((sum, row) => sum + Number(row?.[key] || 0), 0) / rows.length;
+  const a = avg(recent);
+  const b = avg(prev);
+  if (!b) return a > 0 ? 100 : 0;
+  return Math.round(((a - b) / b) * 100);
+}
+
+const ACTIVITY_SERIES = [
+  { key: "engagedUsers", label: "Engaged users", color: "#8b7cf6" },
+  { key: "generations", label: "Generations", color: "#23d5ab" },
+  { key: "signups", label: "Signups", color: "#60a5fa" },
+];
+
+function buildActivityChartSvg(daily = [], { width = 760, height = 240 } = {}) {
+  if (!daily.length) {
+    return `<div class="activityChartEmpty">No activity data yet.</div>`;
+  }
+  const pad = { top: 18, right: 14, bottom: 30, left: 40 };
+  const innerW = width - pad.left - pad.right;
+  const innerH = height - pad.top - pad.bottom;
+  const maxVal = Math.max(
+    1,
+    ...daily.flatMap((row) => ACTIVITY_SERIES.map((s) => Number(row?.[s.key] || 0))),
+  );
+  const xAt = (index) => (
+    pad.left + (daily.length <= 1 ? innerW / 2 : (index / (daily.length - 1)) * innerW)
+  );
+  const yAt = (value) => pad.top + innerH - (Number(value || 0) / maxVal) * innerH;
+
+  const gridLines = [0, 0.5, 1].map((frac) => {
+    const y = pad.top + innerH * (1 - frac);
+    const label = Math.round(maxVal * frac);
+    return `
+      <line class="activityChartGrid" x1="${pad.left}" y1="${y.toFixed(1)}" x2="${(pad.left + innerW).toFixed(1)}" y2="${y.toFixed(1)}"></line>
+      <text class="activityChartAxis" x="${(pad.left - 8)}" y="${(y + 4).toFixed(1)}" text-anchor="end">${label}</text>
+    `;
+  }).join("");
+
+  const labelIdx = daily.length <= 3
+    ? daily.map((_, i) => i)
+    : [0, Math.floor((daily.length - 1) / 2), daily.length - 1];
+  const xLabels = labelIdx.map((i) => {
+    const day = String(daily[i]?.day || "").slice(5);
+    return `<text class="activityChartAxis" x="${xAt(i).toFixed(1)}" y="${(height - 8).toFixed(1)}" text-anchor="middle">${escapeHtml(day || "—")}</text>`;
+  }).join("");
+
+  const seriesLines = ACTIVITY_SERIES.map((series) => {
+    const points = daily.map((row, i) => `${xAt(i).toFixed(1)},${yAt(row?.[series.key]).toFixed(1)}`).join(" ");
+    return `<polyline class="activityChartLine" fill="none" stroke="${series.color}" stroke-width="2.25" stroke-linejoin="round" stroke-linecap="round" points="${points}"></polyline>`;
+  }).join("");
+
+  const dots = ACTIVITY_SERIES.map((series) => daily.map((row, i) => {
+    const x = xAt(i);
+    const y = yAt(row?.[series.key]);
+    return `<circle class="activityChartDot" cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="2.6" fill="${series.color}"></circle>`;
+  }).join("")).join("");
+
+  return `
+    <svg class="activityChartSvg" viewBox="0 0 ${width} ${height}" role="img" aria-label="Activity trend chart">
+      ${gridLines}
+      ${seriesLines}
+      ${dots}
+      ${xLabels}
+    </svg>
+  `;
+}
+
+function sliceActivityDaily(daily, windowDays) {
+  const days = Math.max(7, Math.min(90, Number(windowDays) || 28));
+  if (!Array.isArray(daily) || !daily.length) return [];
+  return daily.slice(-days);
+}
+
+function updateActivityChartDom() {
+  const wrap = document.querySelector("[data-activity-chart]");
+  if (!wrap) return;
+  const daily = sliceActivityDaily(state.activityDaily, state.activityWindow);
+  wrap.innerHTML = buildActivityChartSvg(daily);
+  for (const btn of document.querySelectorAll("[data-activity-window]")) {
+    const win = Number(btn.getAttribute("data-activity-window") || 0);
+    btn.classList.toggle("isActive", win === state.activityWindow);
+  }
+  const trendEl = document.querySelector("[data-activity-trend]");
+  if (trendEl) {
+    trendEl.innerHTML = renderActivityTrendLabel(activityTrendPct(daily, "engagedUsers", 7));
+  }
+}
+
+function renderActivitySection(activity = {}) {
+  const liveMin = Number(activity.liveWindowMinutes || 15);
+  const sourceNote = activity.source === "rpc"
+    ? "Live from Supabase RPC"
+    : "Fallback counts — run supabase/admin_activity_analytics.sql for full accuracy";
+  state.activityDaily = Array.isArray(activity.daily) ? activity.daily : [];
+  const windowDays = state.activityWindow || 28;
+  const daily = sliceActivityDaily(state.activityDaily, windowDays);
+  const engagedTrend = renderActivityTrendLabel(activityTrendPct(daily, "engagedUsers", 7));
+  const legend = ACTIVITY_SERIES.map((series) => `
+    <span class="activityLegendItem">
+      <span class="activityLegendSwatch" style="background:${series.color}"></span>
+      ${escapeHtml(series.label)}
+    </span>
+  `).join("");
+
+  return `
+    <section class="sectionCard sectionCard--data" data-activity-section>
+      <div class="sectionHead activitySectionHead">
+        <div>
+          <h3 class="sectionTitle">User activity</h3>
+          <p class="sectionNote">${escapeHtml(activity.note || "Engaged users = distinct accounts with a generation that day.")} ${escapeHtml(sourceNote)}.</p>
+        </div>
+        <div class="activityHeadActions">
+          <div class="activityLivePill" title="Profiles with activity in the last ${liveMin} minutes">
+            <span class="activityLiveDot" aria-hidden="true"></span>
+            <strong>${fmtNum(activity.activeNow)}</strong>
+            <span>online now</span>
+          </div>
+          <div class="activityWindowToggle" role="group" aria-label="Chart range">
+            <button type="button" class="activityWindowBtn${windowDays === 7 ? " isActive" : ""}" data-activity-window="7">7d</button>
+            <button type="button" class="activityWindowBtn${windowDays === 28 ? " isActive" : ""}" data-activity-window="28">28d</button>
+          </div>
+        </div>
+      </div>
+      <div class="cardsGrid cardsGrid--inSection activityStatRow">
+        ${statCard("Online now", fmtNum(activity.activeNow), `Last ${liveMin} min`)}
+        ${statCard("Active today", fmtNum(activity.activeToday), "Any activity today (UTC)")}
+        ${statCard("Engaged (7d avg)", fmtNum(Math.round(daily.slice(-7).reduce((s, r) => s + Number(r.engagedUsers || 0), 0) / Math.max(1, Math.min(7, daily.length)))), `<span data-activity-trend>${engagedTrend}</span>`)}
+      </div>
+      <div class="activityChartLegend">${legend}</div>
+      <div class="activityChartWrap" data-activity-chart>
+        ${buildActivityChartSvg(daily)}
+      </div>
+    </section>
+  `;
+}
+
 function renderCoachUsageSection(coach = {}) {
   const daily = Array.isArray(coach.daily) ? coach.daily : [];
   const sourceNote = coach.source === "rpc"
@@ -1045,8 +1194,10 @@ function renderOverview(data) {
   const sub = o.subscriptions || {};
   const rev = o.revenue || {};
   const coach = o.coach || {};
+  const activity = o.activity || {};
 
   els.panels.overview.innerHTML = adminPageStack(`
+    ${renderActivitySection(activity)}
     ${renderSunoCoverageSection(s)}
     <section class="sectionCard">
       <div class="sectionHead">
@@ -4768,6 +4919,16 @@ document.body.addEventListener("keydown", (e) => {
 });
 
 document.body.addEventListener("click", (e) => {
+  const activityWinBtn = e.target.closest("[data-activity-window]");
+  if (activityWinBtn) {
+    const next = Number(activityWinBtn.getAttribute("data-activity-window") || 0);
+    if (next === 7 || next === 28) {
+      state.activityWindow = next;
+      updateActivityChartDom();
+    }
+    return;
+  }
+
   const pageBtn = e.target.closest("[data-page]");
   if (pageBtn) {
     const total = state.cache[viewCacheKey()]?.total || 0;

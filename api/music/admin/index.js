@@ -332,6 +332,143 @@ function bucketCoachDailyRows(rows = []) {
     .sort((a, b) => (a.day < b.day ? 1 : -1));
 }
 
+const ACTIVITY_LIVE_WINDOW_MIN = 15;
+
+function emptyActivitySummary(source = "unknown") {
+  return {
+    activeNow: 0,
+    activeToday: 0,
+    days: 28,
+    daily: [],
+    source,
+    liveWindowMinutes: ACTIVITY_LIVE_WINDOW_MIN,
+    note: "Engaged users = distinct accounts with a generation that day.",
+  };
+}
+
+function normalizeActivitySummary(raw, source = "rpc") {
+  if (!raw || typeof raw !== "object") return emptyActivitySummary(source);
+  const daily = Array.isArray(raw.daily)
+    ? raw.daily.map((row) => ({
+      day: String(row?.day || "").slice(0, 10),
+      signups: Number(row?.signups || 0),
+      generations: Number(row?.generations || 0),
+      engagedUsers: Number(row?.engagedUsers ?? row?.engaged_users ?? 0),
+      published: Number(row?.published || 0),
+    })).filter((row) => row.day)
+    : [];
+  return {
+    activeNow: Number(raw.activeNow ?? raw.active_now ?? 0),
+    activeToday: Number(raw.activeToday ?? raw.active_today ?? 0),
+    days: Number(raw.days || daily.length || 28),
+    daily,
+    source: String(raw.source || source),
+    liveWindowMinutes: ACTIVITY_LIVE_WINDOW_MIN,
+    note: String(raw.note || emptyActivitySummary().note),
+  };
+}
+
+function buildActivityDaySeries(days = 28) {
+  const count = Math.max(7, Math.min(90, Number(days) || 28));
+  const out = [];
+  const today = new Date();
+  today.setUTCHours(0, 0, 0, 0);
+  for (let i = count - 1; i >= 0; i -= 1) {
+    const d = new Date(today);
+    d.setUTCDate(d.getUTCDate() - i);
+    out.push(d.toISOString().slice(0, 10));
+  }
+  return out;
+}
+
+function bucketActivityDailyRows({
+  daySeries = [],
+  profiles = [],
+  generations = [],
+  publishedSongs = [],
+} = {}) {
+  const byDay = new Map(daySeries.map((day) => [day, {
+    day,
+    signups: 0,
+    generations: 0,
+    engagedUsers: 0,
+    published: 0,
+    userIds: new Set(),
+  }]));
+
+  for (const row of profiles) {
+    const day = String(row?.created_at || "").slice(0, 10);
+    const bucket = byDay.get(day);
+    if (bucket) bucket.signups += 1;
+  }
+
+  for (const row of generations) {
+    const day = String(row?.created_at || "").slice(0, 10);
+    const bucket = byDay.get(day);
+    if (!bucket) continue;
+    bucket.generations += 1;
+    const uid = cleanUserId(row?.user_id);
+    if (uid) bucket.userIds.add(uid);
+  }
+
+  for (const row of publishedSongs) {
+    const day = String(row?.published_at || row?.created_at || "").slice(0, 10);
+    const bucket = byDay.get(day);
+    if (bucket) bucket.published += 1;
+  }
+
+  return [...byDay.values()].map((b) => ({
+    day: b.day,
+    signups: b.signups,
+    generations: b.generations,
+    engagedUsers: b.userIds.size,
+    published: b.published,
+  }));
+}
+
+async function fetchActivitySummary({ days = 28 } = {}) {
+  const dayCount = Math.max(7, Math.min(90, Number(days) || 28));
+  const rpc = await callRpc("get_admin_activity_summary", { p_days: dayCount });
+  if (rpc.ok && rpc.data && typeof rpc.data === "object") {
+    return normalizeActivitySummary(rpc.data, "rpc");
+  }
+
+  const since = new Date(Date.now() - (dayCount - 1) * 86400000);
+  since.setUTCHours(0, 0, 0, 0);
+  const sinceIso = since.toISOString();
+  const liveSince = new Date(Date.now() - ACTIVITY_LIVE_WINDOW_MIN * 60 * 1000).toISOString();
+  const today = startOfTodayUtc();
+  const daySeries = buildActivityDaySeries(dayCount);
+  const rowLimit = 12000;
+
+  const [
+    activeNowRes,
+    activeTodayRes,
+    profilesRes,
+    gensRes,
+    publishedRes,
+  ] = await Promise.all([
+    serviceFetch(`profiles?select=user_id&last_active_at=gte.${encodeURIComponent(liveSince)}&limit=1`),
+    serviceFetch(`profiles?select=user_id&last_active_at=gte.${encodeURIComponent(today)}&limit=1`),
+    serviceFetch(`profiles?select=created_at&created_at=gte.${encodeURIComponent(sinceIso)}&order=created_at.asc&limit=${rowLimit}`),
+    serviceFetch(`music_generation_logs?select=user_id,created_at&created_at=gte.${encodeURIComponent(sinceIso)}&order=created_at.asc&limit=${rowLimit}`),
+    serviceFetch(`user_songs?select=published_at,created_at&public_on_profile=eq.true&published_at=gte.${encodeURIComponent(sinceIso)}&order=published_at.asc&limit=${rowLimit}`),
+  ]);
+
+  return normalizeActivitySummary({
+    activeNow: activeNowRes.total ?? 0,
+    activeToday: activeTodayRes.total ?? 0,
+    days: dayCount,
+    daily: bucketActivityDailyRows({
+      daySeries,
+      profiles: Array.isArray(profilesRes.data) ? profilesRes.data : [],
+      generations: Array.isArray(gensRes.data) ? gensRes.data : [],
+      publishedSongs: Array.isArray(publishedRes.data) ? publishedRes.data : [],
+    }),
+    source: "fallback",
+  }, "fallback");
+}
+
 async function fetchCoachUsageSummary() {
   const rpc = await callRpc("get_coach_usage_summary", {});
   if (rpc.ok && rpc.data && typeof rpc.data === "object") {
@@ -415,6 +552,7 @@ async function getOverview() {
     gensToday,
     revenueSubs,
     coachUsage,
+    activitySummary,
   ] = await Promise.all([
     callRpc("get_credits_summary", {}),
     fetchSunoMasterBalance(),
@@ -429,6 +567,7 @@ async function getOverview() {
     serviceFetch(`music_generation_logs?select=credits_used,provider_cost_usd&created_at=gte.${encodeURIComponent(today)}&limit=1000`),
     serviceFetch(`pro_subscriptions?select=plan_id,status,created_at&status=in.(active,trialing,grace)&created_at=gte.${encodeURIComponent(monthStart)}&limit=500`),
     fetchCoachUsageSummary(),
+    fetchActivitySummary({ days: 28 }),
   ]);
 
   const summary = (summaryRpc.ok && summaryRpc.data) || {};
@@ -506,6 +645,7 @@ async function getOverview() {
       note: "Estimate from active Pro subs started this month; updates when Apple IAP webhooks land.",
     },
     coach: coachUsage || emptyCoachUsageSummary(),
+    activity: activitySummary || emptyActivitySummary(),
   };
 }
 

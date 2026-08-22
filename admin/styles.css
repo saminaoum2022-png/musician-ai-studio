@@ -738,6 +738,148 @@ button, input { font: inherit; }
   color: var(--muted);
 }
 
+/* Activity chart (Overview) */
+.activitySectionHead {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.activityHeadActions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.activityLivePill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 999px;
+  background: rgba(35, 213, 171, 0.12);
+  border: 1px solid rgba(35, 213, 171, 0.28);
+  color: #d9fff4;
+  font-size: 0.86rem;
+}
+
+.activityLivePill strong {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: #fff;
+}
+
+.activityLiveDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: #23d5ab;
+  box-shadow: 0 0 0 0 rgba(35, 213, 171, 0.55);
+  animation: activityLivePulse 1.8s ease-out infinite;
+}
+
+@keyframes activityLivePulse {
+  0% { box-shadow: 0 0 0 0 rgba(35, 213, 171, 0.55); }
+  70% { box-shadow: 0 0 0 8px rgba(35, 213, 171, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(35, 213, 171, 0); }
+}
+
+.activityWindowToggle {
+  display: inline-flex;
+  padding: 3px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border);
+}
+
+.activityWindowBtn {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 600;
+  padding: 6px 12px;
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.activityWindowBtn.isActive {
+  background: rgba(139, 124, 246, 0.22);
+  color: #fff;
+}
+
+.activityStatRow {
+  margin-top: 4px;
+}
+
+.activityChartLegend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px 18px;
+  margin: 14px 0 10px;
+  padding: 0 4px;
+}
+
+.activityLegendItem {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+
+.activityLegendSwatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  flex: 0 0 auto;
+}
+
+.activityChartWrap {
+  width: 100%;
+  overflow-x: auto;
+  padding: 4px 2px 8px;
+}
+
+.activityChartSvg {
+  display: block;
+  width: 100%;
+  min-width: 520px;
+  height: auto;
+}
+
+.activityChartGrid {
+  stroke: rgba(255, 255, 255, 0.08);
+  stroke-width: 1;
+}
+
+.activityChartAxis {
+  fill: rgba(226, 231, 247, 0.55);
+  font-size: 11px;
+}
+
+.activityChartEmpty {
+  padding: 48px 16px;
+  text-align: center;
+  color: var(--muted);
+  border: 1px dashed var(--border);
+  border-radius: 12px;
+}
+
+.activityTrend {
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.activityTrend--up { color: #6ee7b7; }
+.activityTrend--down { color: #fca5a5; }
+.activityTrend--flat { color: var(--muted); }
+
 .sunoTopUpAlert {
   margin: 0 0 16px;
   padding: 14px 16px;

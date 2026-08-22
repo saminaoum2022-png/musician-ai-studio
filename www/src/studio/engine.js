@@ -29,6 +29,10 @@ const pcmWorkletLoaded = new WeakMap();
 
 // AI guides are mastered loud; slight trim so Music % feels honest vs raw voice.
 const GUIDE_MIX_TRIM = 0.88;
+/** Max music level reduction when vocal is loud (sidechain duck). */
+const SIDECHAIN_DUCK_MAX = 0.26;
+const SIDECHAIN_OPEN = 0.012;
+const SIDECHAIN_RANGE = 0.14;
 // Voice / Vocal gain sliders: 50% = previous 100% level (2× each); 100% = 3× each for headroom.
 const VOCAL_SLIDER_CENTER = 0.5;
 const VOCAL_SLIDER_CENTER_GAIN = 2;
@@ -134,14 +138,24 @@ export const EFFECT_REGISTRY = {
     id: "deesser",
     label: "De-esser",
     isPlaceholder: false,
+    /** Split-band: compress sibilance (5–9 kHz) and subtract from dry. */
     create(ctx, params = {}) {
       return createParallelFx(ctx, params, (c, wetIn, wetOut) => {
-        const cut = c.createBiquadFilter();
-        cut.type = "peaking";
-        cut.frequency.value = 6200;
-        cut.Q.value = 1.2;
-        cut.gain.value = -4.5;
-        wetIn.connect(cut).connect(wetOut);
+        const hp = c.createBiquadFilter();
+        hp.type = "highpass";
+        hp.frequency.value = 5200;
+        hp.Q.value = 0.7;
+        const comp = c.createDynamicsCompressor();
+        try {
+          comp.threshold.value = -26;
+          comp.knee.value = 6;
+          comp.ratio.value = 10;
+          comp.attack.value = 0.002;
+          comp.release.value = 0.045;
+        } catch {}
+        const inv = c.createGain();
+        inv.gain.value = -1.15;
+        wetIn.connect(hp).connect(comp).connect(inv).connect(wetOut);
       });
     },
   },
@@ -751,26 +765,41 @@ export class StudioEngine {
     const take = this._resolveTake(params);
     const solo = params.solo || ""; // "" | "voice" | "music"
 
-    const master = this.ctx.createGain();
+    const finishId = FINISH_PRESETS[params.finish] ? params.finish : "balanced";
+    const mixBus = this.ctx.createGain();
+    const finish = this._buildMasterChain(this.ctx, finishId);
+    const previewGain = this.ctx.createGain();
+    previewGain.gain.value = previewLoudnessGainForFinish(finishId);
     const limiter = this._makeLimiter(this.ctx);
-    master.connect(limiter).connect(this.ctx.destination);
+    mixBus.connect(finish.input);
+    finish.output.connect(previewGain).connect(limiter).connect(this.ctx.destination);
     const startAt = this.ctx.currentTime + 0.08;
     const fromSec = Math.max(0, Number(params.fromSec) || 0);
-    this._nodes = [master, limiter];
+    this._nodes = [mixBus, finish.input, finish.output, previewGain, limiter];
 
     // Live-adjustable handles so the Mix sliders change gains/reverb in real
     // time (no restart). Cleared on stopMix.
-    this._mix = { musicGain: null, voiceGain: null, voiceChain: null };
+    this._mix = {
+      musicGain: null,
+      voiceGain: null,
+      voiceChain: null,
+      voiceAnalyser: null,
+      musicBaseGain: 0,
+      sidechainEnv: 0,
+      mixParams: params,
+    };
 
-    // Music (guide)
+    // Music (guide) — sidechain duck applied in rAF loop from vocal level.
     const guideSrc = this.ctx.createBufferSource();
     guideSrc.buffer = this.guideBuffer;
     const musicGain = this.ctx.createGain();
-    musicGain.gain.value = solo === "voice" ? 0 : musicOutputGain(params);
-    guideSrc.connect(musicGain).connect(master);
+    const baseMusic = solo === "voice" ? 0 : musicOutputGain(params);
+    musicGain.gain.value = baseMusic;
+    guideSrc.connect(musicGain).connect(mixBus);
     guideSrc.start(startAt, fromSec);
     this._nodes.push(guideSrc, musicGain);
     this._mix.musicGain = musicGain;
+    this._mix.musicBaseGain = baseMusic;
 
     // Voice (take) through the effect chain, centred across both ears.
     if (take && take.buffer && solo !== "music") {
@@ -783,12 +812,16 @@ export class StudioEngine {
         const voiceSrc = this.ctx.createBufferSource();
         voiceSrc.buffer = params.voiceBufferOverride || this._getTakePlaybackBuffer(take, params);
         const chain = this._buildVoiceChain(this.ctx, params);
+        const voiceAnalyser = this.ctx.createAnalyser();
+        voiceAnalyser.fftSize = 512;
+        voiceAnalyser.smoothingTimeConstant = 0.35;
         const voiceGain = this.ctx.createGain();
         voiceGain.gain.value = this._voiceMixGain(params, take);
         const center = this._centerNode(this.ctx);
         voiceSrc.connect(chain.input);
-        chain.output.connect(voiceGain).connect(center.input);
-        center.output.connect(master);
+        chain.output.connect(voiceAnalyser);
+        voiceAnalyser.connect(voiceGain).connect(center.input);
+        center.output.connect(mixBus);
         const off = this._takeBufferOffset(take) + voiceGuideStart;
         const voiceDelay = Math.max(0, voiceGuideStart - fromSec);
         voiceSrc.start(
@@ -796,9 +829,12 @@ export class StudioEngine {
           Math.min(off, Math.max(0, voiceSrc.buffer.duration - 0.01)),
           voiceDur,
         );
-        this._nodes.push(voiceSrc, chain.input, chain.output, voiceGain, center.input, center.output);
+        this._nodes.push(
+          voiceSrc, chain.input, chain.output, voiceAnalyser, voiceGain, center.input, center.output,
+        );
         this._mix.voiceGain = voiceGain;
         this._mix.voiceChain = chain;
+        this._mix.voiceAnalyser = voiceAnalyser;
         this._mix.voiceSrc = voiceSrc;
         this._mix.take = take;
         this._mix.startAt = startAt;
@@ -809,15 +845,50 @@ export class StudioEngine {
     }
 
     this._mix.guideSrc = guideSrc;
+    this._mix.mixParams = params;
+    this._mix.solo = solo;
 
     this._playing = true;
     guideSrc.onended = () => { this._playing = false; if (typeof cb.onEnded === "function") cb.onEnded(); };
+
+    const sidechainByte = this._mix.voiceAnalyser ? new Uint8Array(this._mix.voiceAnalyser.fftSize) : null;
+    const tickSidechain = () => {
+      if (!this._playing || !this._mix?.musicGain) return;
+      const p = this._mix.mixParams || params;
+      const soloNow = this._mix.solo || "";
+      const base = soloNow === "voice" ? 0 : musicOutputGain(p);
+      this._mix.musicBaseGain = base;
+      let duck = 0;
+      if (this._mix.voiceAnalyser && sidechainByte) {
+        this._mix.voiceAnalyser.getByteTimeDomainData(sidechainByte);
+        let peak = 0;
+        for (let i = 0; i < sidechainByte.length; i++) {
+          const v = Math.abs(sidechainByte[i] - 128) / 128;
+          if (v > peak) peak = v;
+        }
+        this._mix.sidechainEnv = peak;
+        duck = sidechainDuckAmount(peak);
+      }
+      try {
+        this._mix.musicGain.gain.setTargetAtTime(base * (1 - duck), this.ctx.currentTime, 0.04);
+      } catch {
+        this._mix.musicGain.gain.value = base * (1 - duck);
+      }
+    };
 
     if (typeof cb.onTick === "function") {
       const t0 = startAt;
       const loop = () => {
         if (!this._playing) return;
+        tickSidechain();
         cb.onTick(Math.max(0, this.ctx.currentTime - t0 + fromSec));
+        this._raf = requestAnimationFrame(loop);
+      };
+      this._raf = requestAnimationFrame(loop);
+    } else {
+      const loop = () => {
+        if (!this._playing) return;
+        tickSidechain();
         this._raf = requestAnimationFrame(loop);
       };
       this._raf = requestAnimationFrame(loop);
@@ -828,8 +899,12 @@ export class StudioEngine {
   updateMix(params = {}) {
     const mix = this._mix;
     if (!mix) return;
-    const solo = params.solo || "";
-    if (mix.musicGain) mix.musicGain.gain.value = solo === "voice" ? 0 : musicOutputGain(params);
+    mix.mixParams = params;
+    const solo = params.solo || mix.solo || "";
+    mix.solo = solo;
+    if (mix.musicGain) {
+      mix.musicBaseGain = solo === "voice" ? 0 : musicOutputGain(params);
+    }
     if (mix.voiceGain) {
       const take = this._resolveTake(params);
       mix.voiceGain.gain.value = solo === "music" ? 0 : this._voiceMixGain(params, take);
@@ -883,7 +958,7 @@ export class StudioEngine {
 
   /**
    * Render guide + active take + mix + finish master to a stereo WAV Blob.
-   * Finish (EQ, glue, LUFS) applies here only — live preview stays un-mastered.
+   * Uses the same finish bus as live preview, then LUFS-normalizes for export.
    */
   async renderMix(params = {}) {
     if (!this.guideBuffer) throw new Error("no guide");
@@ -903,7 +978,15 @@ export class StudioEngine {
     const guideSrc = off.createBufferSource();
     guideSrc.buffer = this.guideBuffer;
     const musicGain = off.createGain();
-    musicGain.gain.value = musicOutputGain(params);
+    const baseMusic = musicOutputGain(params);
+    scheduleSidechainGuideGain(
+      musicGain,
+      take,
+      this._takePlayOffsetSec(take),
+      this.guideBuffer.duration,
+      sr,
+      baseMusic,
+    );
     guideSrc.connect(musicGain).connect(mixBus);
     guideSrc.start(0);
 
@@ -1289,6 +1372,148 @@ export function vocalGainSliderPctFromMultiplier(mult) {
 
 function musicOutputGain(params = {}) {
   return clamp01(params.musicVol ?? 0.7) * GUIDE_MIX_TRIM;
+}
+
+/** Sidechain duck factor 0..SIDECHAIN_DUCK_MAX from vocal envelope peak. */
+function sidechainDuckAmount(vocalPeak) {
+  return clamp01((vocalPeak - SIDECHAIN_OPEN) / SIDECHAIN_RANGE) * SIDECHAIN_DUCK_MAX;
+}
+
+/** Approximate export LUFS step so preview level matches Save. */
+function previewLoudnessGainForFinish(finishId) {
+  const preset = FINISH_PRESETS[finishId] || FINISH_PRESETS.balanced;
+  const preMasterDb = -17.2;
+  return clampNum(Math.pow(10, (preset.targetLufs - preMasterDb) / 20), 0.75, 1.35);
+}
+
+/** Per-sample sidechain multipliers for guide (1 = no duck). */
+function computeSidechainMultipliers(vocalBuffer, takeOffsetSec, guideDurationSec, sampleRate) {
+  const frames = Math.max(1, Math.ceil(guideDurationSec * sampleRate));
+  const mult = new Float32Array(frames);
+  if (!vocalBuffer) {
+    mult.fill(1);
+    return mult;
+  }
+  const ch = vocalBuffer.getChannelData(0);
+  const off = Math.max(0, Math.floor(takeOffsetSec * sampleRate));
+  let env = 0;
+  const atk = Math.exp(-1 / (0.008 * sampleRate));
+  const rel = Math.exp(-1 / (0.11 * sampleRate));
+  for (let i = 0; i < frames; i++) {
+    const vi = off + i;
+    const lvl = vi < ch.length ? Math.abs(ch[vi]) : 0;
+    env = lvl > env ? lvl + atk * (env - lvl) : lvl + rel * (env - lvl);
+    mult[i] = 1 - sidechainDuckAmount(env);
+  }
+  return mult;
+}
+
+/** Schedule block-wise guide gain ducking for offline render. */
+function scheduleSidechainGuideGain(musicGain, take, takeOffsetSec, guideDurationSec, sampleRate, baseGain) {
+  if (!take?.buffer || baseGain <= 0) {
+    musicGain.gain.value = baseGain;
+    return;
+  }
+  const mult = computeSidechainMultipliers(take.buffer, takeOffsetSec, guideDurationSec, sampleRate);
+  const blockSec = 0.04;
+  const nBlocks = Math.ceil(guideDurationSec / blockSec);
+  for (let b = 0; b < nBlocks; b++) {
+    const t = b * blockSec;
+    const idx = Math.min(mult.length - 1, Math.floor(t * sampleRate));
+    musicGain.gain.setValueAtTime(baseGain * mult[idx], t);
+  }
+}
+
+/** RMS of buffer between startSec and endSec (exclusive end optional). */
+export function measureBufferRms(buffer, startSec = 0, endSec = null) {
+  if (!buffer) return 0;
+  const ch = buffer.getChannelData(0);
+  const sr = buffer.sampleRate;
+  const a = Math.max(0, Math.floor(startSec * sr));
+  const b = endSec != null ? Math.min(ch.length, Math.floor(endSec * sr)) : ch.length;
+  if (b <= a) return 0;
+  let sum = 0;
+  const step = Math.max(1, Math.floor((b - a) / 4000));
+  let n = 0;
+  for (let i = a; i < b; i += step) {
+    const v = ch[i];
+    sum += v * v;
+    n++;
+  }
+  return Math.sqrt(sum / Math.max(1, n));
+}
+
+/** Stats from a vocal take for smarter preset / FX picks. */
+export function analyzeTakeBuffer(buffer) {
+  if (!buffer) return null;
+  const ch = buffer.getChannelData(0);
+  const sr = buffer.sampleRate;
+  const step = Math.max(1, Math.floor(ch.length / 8000));
+  let peak = 0;
+  let sum = 0;
+  let n = 0;
+  let sibSum = 0;
+  let sibN = 0;
+  for (let i = 0; i < ch.length; i += step) {
+    const v = Math.abs(ch[i]);
+    sum += v * v;
+    peak = Math.max(peak, v);
+    n++;
+    if (i > 1) {
+      const deriv = Math.abs(ch[i] - ch[i - 1]) * sr;
+      if (deriv > 900 && v > 0.018) {
+        sibSum += v;
+        sibN++;
+      }
+    }
+  }
+  const rms = Math.sqrt(sum / Math.max(1, n));
+  const win = Math.max(1, Math.floor(0.04 * sr));
+  const levels = [];
+  for (let i = 0; i < ch.length; i += win) {
+    let p = 0;
+    const end = Math.min(ch.length, i + win);
+    for (let j = i; j < end; j++) p = Math.max(p, Math.abs(ch[j]));
+    levels.push(p);
+  }
+  levels.sort((a, b) => a - b);
+  const noiseFloor = levels[Math.floor(levels.length * 0.14)] || 0;
+  const sibilance = sibN > 0 ? (sibSum / sibN) / Math.max(rms, 0.001) : 0;
+  return {
+    rms,
+    peak,
+    crest: peak / Math.max(rms, 0.001),
+    noiseFloor,
+    sibilance,
+    clipped: peak > 0.96,
+  };
+}
+
+/**
+ * Suggest voice / music slider values (0–100) so vocal sits above the guide bed.
+ * @param {AudioBuffer} guideBuffer
+ * @param {AudioBuffer} vocalBuffer
+ * @param {number} takeOffsetSec — guide-time alignment into vocal buffer
+ */
+export function suggestMixLevels(guideBuffer, vocalBuffer, takeOffsetSec = 0) {
+  const guideRms = measureBufferRms(guideBuffer, 0, guideBuffer?.duration);
+  const vEnd = vocalBuffer
+    ? Math.min(vocalBuffer.duration, takeOffsetSec + (guideBuffer?.duration || vocalBuffer.duration))
+    : 0;
+  const vocalRms = measureBufferRms(vocalBuffer, takeOffsetSec, vEnd);
+  const musicVol = 70;
+  const musicGain = (musicVol / 100) * GUIDE_MIX_TRIM;
+  const targetRatio = Math.pow(10, 5 / 20);
+  const vocalGainPct = 50;
+  const halfMult = vocalSliderGain(vocalGainPct / 100);
+  const needed = targetRatio * Math.max(guideRms, 0.0004) * musicGain / Math.max(vocalRms, 0.0003);
+  const voiceMult = clampNum(needed / Math.max(halfMult, 0.01), 0.65, VOCAL_SLIDER_MAX_GAIN);
+  const voiceVolPct = clampNum(vocalGainSliderPctFromMultiplier(voiceMult), 32, 100);
+  return {
+    voiceVol: Math.round(voiceVolPct),
+    vocalGain: vocalGainPct,
+    musicVol,
+  };
 }
 
 function normalizeTakeBuffer(buffer, targetPeak = 0.68) {

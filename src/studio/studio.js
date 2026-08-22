@@ -13,7 +13,7 @@
  * No neon-everything.
  */
 
-import { StudioEngine, FINISH_PRESETS, FINISH_IDS } from "./engine.js";
+import { StudioEngine, FINISH_PRESETS, FINISH_IDS, analyzeTakeBuffer, suggestMixLevels } from "./engine.js";
 import {
   listProjects,
   upsertProject,
@@ -195,7 +195,19 @@ function scoreAiStyleTabs(track, take) {
   return scores;
 }
 
-function aiRecommendReason(styleTab, track) {
+function aiRecommendReason(styleTab, track, analysis) {
+  if (analysis?.noiseFloor > 0.014) {
+    return "Room noise detected — gate and cleanup tuned for your take";
+  }
+  if (analysis?.clipped) {
+    return "Hot input — easing gain so the vocal sits clean";
+  }
+  if (analysis?.sibilance > 1) {
+    return "Bright vocal — de-ess and balance adjusted";
+  }
+  if (analysis?.rms != null && analysis.rms < 0.035) {
+    return "Quiet take — vocal level boosted to match the track";
+  }
   const hay = trackStyleHaystack(track);
   if (/\b(pop|k-?pop|radio|hook)\b/.test(hay) && styleTab === "pop") {
     return "Pop vocal — tighter gate, compression, de-ess, and reverb";
@@ -225,9 +237,43 @@ function buildAiMixRecommendation(take, track) {
     }
   }
   const tab = STYLE_TABS[styleTab];
-  let match = 76 + Math.min(18, Math.round(best * 2.8));
-  match = Math.min(99, Math.max(72, match));
-  const reason = aiRecommendReason(styleTab, track);
+  const mix = { ...tab.mix };
+  const analysis = take?.buffer ? analyzeTakeBuffer(take.buffer) : null;
+
+  if (analysis) {
+    if (analysis.noiseFloor > 0.011) {
+      mix.fxDenoise = Math.min(100, mixFxValue(mix, "fxDenoise") + Math.round(analysis.noiseFloor * 2000));
+    }
+    if (analysis.crest > 5.5) {
+      mix.fxCompress = Math.min(100, mixFxValue(mix, "fxCompress") + Math.round((analysis.crest - 4) * 4));
+    }
+    if (analysis.sibilance > 0.85) {
+      mix.fxDeesser = Math.min(100, mixFxValue(mix, "fxDeesser") + Math.round((analysis.sibilance - 0.7) * 22));
+    }
+    if (analysis.rms < 0.038) {
+      mix.vocalGain = Math.min(100, mixFxValue(mix, "vocalGain") + 14);
+    }
+    if (analysis.clipped) {
+      mix.vocalGain = Math.max(28, mixFxValue(mix, "vocalGain") - 18);
+      mix.voiceVol = Math.max(32, mixFxValue(mix, "voiceVol") - 10);
+    }
+  }
+
+  if (take?.buffer && engine?.guideBuffer) {
+    const offset = engine.takePlayStartSec?.(take) ?? 0;
+    const levels = suggestMixLevels(engine.guideBuffer, take.buffer, offset);
+    mix.voiceVol = levels.voiceVol;
+    mix.musicVol = levels.musicVol;
+    mix.vocalGain = levels.vocalGain;
+  }
+
+  let match = 74 + Math.min(22, Math.round(best * 2.5));
+  if (analysis) {
+    if (analysis.rms > 0.03 && analysis.rms < 0.22 && !analysis.clipped) match += 4;
+    if (analysis.noiseFloor < 0.01) match += 2;
+  }
+  match = Math.min(99, Math.max(70, match));
+  const reason = aiRecommendReason(styleTab, track, analysis);
   return {
     styleTab,
     finish: tab.finish,
@@ -235,6 +281,8 @@ function buildAiMixRecommendation(take, track) {
     finishLabel: FINISH_LABELS[tab.finish] || tab.finish,
     reason,
     matchPct: match,
+    mix,
+    analysis,
   };
 }
 
@@ -1645,23 +1693,33 @@ function applyStyleTab(root, take, tabId, state) {
   const tab = STYLE_TABS[tabId];
   if (!tab?.mix) return;
   m.styleTab = tabId;
-  for (const k of ["voiceVol", "vocalGain", "musicVol", "fxDenoise", "fxCompress", "fxDeesser", "reverb"]) {
+  for (const k of ["voiceVol", "vocalGain", "musicVol", "fxDenoise", "fxCompress", "fxDeesser", "fxEq", "reverb"]) {
     if (tab.mix[k] != null) m[k] = tab.mix[k];
   }
-  m.finish = tab.finish;
-  m.finishUserPick = true;
+  if (state?.fromAi && state.aiRec?.mix) {
+    for (const k of ["voiceVol", "vocalGain", "musicVol", "fxDenoise", "fxCompress", "fxDeesser", "fxEq", "reverb"]) {
+      if (state.aiRec.mix[k] != null) m[k] = state.aiRec.mix[k];
+    }
+    if (state.aiRec.finish) m.finish = state.aiRec.finish;
+  } else {
+    m.finish = tab.finish;
+  }
+  m.finishUserPick = !!state?.fromAi;
   updateStyleTabUi(root, tabId);
   refreshMixSlidersUi(root, m);
+  root.querySelectorAll("[data-studio-finish] .studioSegBtn").forEach((btn) => {
+    btn.classList.toggle("isActive", btn.getAttribute("data-finish") === m.finish);
+  });
   if (engine?.isPlaying) {
     try { engine.updateMix(mixParams()); } catch {}
   }
   updateAiApplyUi(root, m, state?.aiRec);
   if (state?.fromAi) {
     bridge.showToast?.("AI mix applied — playing preview…");
-  }
-  if (state?.playFrom && tabId !== "custom") {
+    if (state.playFrom) void state.playFrom(state.lastGuideSec || 0);
+  } else if (state?.playFrom && tabId !== "custom") {
     void state.playFrom(state.lastGuideSec || 0);
-  } else if (state?.fromAi && engine?.isPlaying) {
+  } else if (engine?.isPlaying) {
     void restartMixPreview(root);
   }
 }
@@ -1708,7 +1766,7 @@ function renderPreviewMix(root, take) {
       <div class="studioPresetBlock">
         <span class="studioMixLabel">Style preset</span>
         ${stylePresetTabsHtml(m.styleTab)}
-        <p class="studioSyncHint studioPresetHint">Mix applies to your <strong>recorded take</strong> when you play preview — not live while recording. Pick a preset, then tap Play.</p>
+        <p class="studioSyncHint studioPresetHint">Preview includes your finish style and vocal ducking. <strong>Save</strong> writes the final file.</p>
       </div>
 
       <div class="studioMixTabs" role="tablist" aria-label="Mix controls">
@@ -1907,7 +1965,7 @@ function bindPreviewMix(root, take, aiRec) {
 
   root.querySelector("[data-studio-ai-apply]")?.addEventListener("click", () => {
     bridge.haptic?.("medium");
-    void applyStyleTab(root, take, aiRec?.styleTab || "studio", { ...mixState, fromAi: true });
+    void applyStyleTab(root, take, aiRec?.styleTab || "studio", { ...mixState, fromAi: true, aiRec });
   });
 
   root.querySelectorAll("[data-mix-panel]").forEach((tabBtn) => {
@@ -1971,6 +2029,7 @@ function bindPreviewMix(root, take, aiRec) {
     root.querySelectorAll("[data-studio-finish] .studioSegBtn").forEach((x) => {
       x.classList.toggle("isActive", x === b);
     });
+    if (engine?.isPlaying) void restartMixPreview(root);
   });
 
   root.querySelector("[data-studio-save-vocal]")?.addEventListener("click", () => {

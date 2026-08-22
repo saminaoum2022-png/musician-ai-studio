@@ -990,6 +990,52 @@ function renderSunoCoverageSection(s, { compact = false } = {}) {
   `;
 }
 
+function renderCoachUsageSection(coach = {}) {
+  const daily = Array.isArray(coach.daily) ? coach.daily : [];
+  const sourceNote = coach.source === "rpc"
+    ? "Live from Supabase RPC"
+    : "Fallback counts (run supabase/coach_usage_analytics.sql for full accuracy)";
+  const dailyRows = daily.length
+    ? daily.map((row) => `
+        <tr>
+          <td>${escapeHtml(row.day || "—")}</td>
+          <td>${fmtNum(row.messages)}</td>
+          <td>${fmtNum(row.users)}</td>
+        </tr>
+      `).join("")
+    : `<tr><td colspan="3" class="loading">No Coach messages in the last 14 days</td></tr>`;
+
+  return `
+    <section class="sectionCard">
+      <div class="sectionHead">
+        <h3 class="sectionTitle">NabadAi Coach traffic</h3>
+        <p class="sectionNote">${escapeHtml(coach.privacyNote || "Counts only — message content is never stored.")} ${escapeHtml(sourceNote)}.</p>
+      </div>
+      <div class="cardsGrid cardsGrid--inSection">
+        ${statCard("Messages today", fmtNum(coach.messagesToday), `${fmtNum(coach.uniqueUsersToday)} unique users`)}
+        ${statCard("Messages (7d)", fmtNum(coach.messages7d), `${fmtNum(coach.uniqueUsers7d)} unique users`)}
+        ${statCard("Messages (30d)", fmtNum(coach.messages30d), `${fmtNum(coach.uniqueUsers30d)} unique users`)}
+        ${statCard("All-time messages", fmtNum(coach.messagesAll), `${fmtNum(coach.uniqueUsersAll)} unique users ever`)}
+        ${statCard("Est. Gemini cost (30d)", fmtUsd(coach.estCostUsd30d), "From logged provider_usage_events")}
+      </div>
+      <div class="sectionCardBody--flush" style="margin-top: 16px">
+        <div class="tableWrap tableWrap--plain">
+          <table class="table--compact">
+            <thead>
+              <tr>
+                <th>Day (UTC)</th>
+                <th>Messages</th>
+                <th>Unique users</th>
+              </tr>
+            </thead>
+            <tbody>${dailyRows}</tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+  `;
+}
+
 function renderOverview(data) {
   const o = data?.overview || {};
   const s = o.suno || {};
@@ -998,6 +1044,7 @@ function renderOverview(data) {
   const g = o.generations || {};
   const sub = o.subscriptions || {};
   const rev = o.revenue || {};
+  const coach = o.coach || {};
 
   els.panels.overview.innerHTML = adminPageStack(`
     ${renderSunoCoverageSection(s)}
@@ -1030,6 +1077,7 @@ function renderOverview(data) {
         ${statCard("Est. revenue MTD", fmtUsd(rev.estimatedMtdUsd), rev.note || "")}
       </div>
     </section>
+    ${renderCoachUsageSection(coach)}
   `);
 }
 

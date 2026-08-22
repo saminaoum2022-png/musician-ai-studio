@@ -252,6 +252,151 @@ async function fetchAuthUsersMap() {
   return map;
 }
 
+const COACH_USD_PER_MESSAGE = Number(process.env.GEMINI_USD_COACH || process.env.GEMINI_USD_PER_REQUEST || "0.002");
+
+function emptyCoachUsageSummary(source = "unknown") {
+  return {
+    messagesToday: 0,
+    messages7d: 0,
+    messages30d: 0,
+    messagesAll: 0,
+    uniqueUsersToday: 0,
+    uniqueUsers7d: 0,
+    uniqueUsers30d: 0,
+    uniqueUsersAll: 0,
+    estCostUsd30d: 0,
+    daily: [],
+    source,
+    privacyNote: "Counts only — Coach message content is never stored.",
+  };
+}
+
+function normalizeCoachUsageSummary(raw, source = "rpc") {
+  if (!raw || typeof raw !== "object") return emptyCoachUsageSummary(source);
+  const daily = Array.isArray(raw.daily)
+    ? raw.daily.map((row) => ({
+      day: String(row?.day || "").slice(0, 10),
+      messages: Number(row?.messages || 0),
+      users: Number(row?.users || 0),
+    })).filter((row) => row.day)
+    : [];
+  return {
+    messagesToday: Number(raw.messagesToday || 0),
+    messages7d: Number(raw.messages7d || 0),
+    messages30d: Number(raw.messages30d || 0),
+    messagesAll: Number(raw.messagesAll || 0),
+    uniqueUsersToday: Number(raw.uniqueUsersToday || 0),
+    uniqueUsers7d: Number(raw.uniqueUsers7d || 0),
+    uniqueUsers30d: Number(raw.uniqueUsers30d || 0),
+    uniqueUsersAll: Number(raw.uniqueUsersAll || 0),
+    estCostUsd30d: roundUsd(Number(raw.estCostUsd30d || 0)),
+    daily,
+    source: String(raw.source || source),
+    privacyNote: String(raw.privacyNote || emptyCoachUsageSummary().privacyNote),
+  };
+}
+
+async function countCoachMessagesSince(iso) {
+  let path = "provider_usage_events?select=id&kind=eq.coach&status=eq.completed&limit=1";
+  if (iso) path += `&created_at=gte.${encodeURIComponent(iso)}`;
+  const res = await serviceFetch(path);
+  return Number.isFinite(res.total) ? res.total : 0;
+}
+
+async function fetchCoachUniqueUsersSince(iso, { maxRows = 8000 } = {}) {
+  let path = `provider_usage_events?select=user_id&kind=eq.coach&status=eq.completed&user_id=not.is.null&order=created_at.desc&limit=${maxRows}`;
+  if (iso) path += `&created_at=gte.${encodeURIComponent(iso)}`;
+  const res = await serviceFetch(path);
+  const rows = Array.isArray(res.data) ? res.data : [];
+  const ids = new Set();
+  for (const row of rows) {
+    const uid = cleanUserId(row?.user_id);
+    if (uid) ids.add(uid);
+  }
+  return ids.size;
+}
+
+function bucketCoachDailyRows(rows = []) {
+  const byDay = new Map();
+  for (const row of rows) {
+    const day = String(row?.created_at || "").slice(0, 10);
+    const uid = cleanUserId(row?.user_id);
+    if (!day) continue;
+    if (!byDay.has(day)) byDay.set(day, { day, messages: 0, userIds: new Set() });
+    const bucket = byDay.get(day);
+    bucket.messages += 1;
+    if (uid) bucket.userIds.add(uid);
+  }
+  return [...byDay.values()]
+    .map((b) => ({ day: b.day, messages: b.messages, users: b.userIds.size }))
+    .sort((a, b) => (a.day < b.day ? 1 : -1));
+}
+
+async function fetchCoachUsageSummary() {
+  const rpc = await callRpc("get_coach_usage_summary", {});
+  if (rpc.ok && rpc.data && typeof rpc.data === "object") {
+    return normalizeCoachUsageSummary(rpc.data, "rpc");
+  }
+
+  const today = startOfTodayUtc();
+  const d7 = new Date(Date.now() - 7 * 86400000).toISOString();
+  const d30 = new Date(Date.now() - 30 * 86400000).toISOString();
+  const d14 = new Date(Date.now() - 14 * 86400000).toISOString();
+
+  const [
+    messagesToday,
+    messages7d,
+    messages30d,
+    messagesAll,
+    uniqueUsersToday,
+    uniqueUsers7d,
+    uniqueUsers30d,
+    uniqueUsersAll,
+    dailyRes,
+    costRes,
+  ] = await Promise.all([
+    countCoachMessagesSince(today),
+    countCoachMessagesSince(d7),
+    countCoachMessagesSince(d30),
+    countCoachMessagesSince(null),
+    fetchCoachUniqueUsersSince(today),
+    fetchCoachUniqueUsersSince(d7),
+    fetchCoachUniqueUsersSince(d30),
+    fetchCoachUniqueUsersSince(null),
+    serviceFetch(
+      `provider_usage_events?select=user_id,created_at&kind=eq.coach&status=eq.completed&created_at=gte.${encodeURIComponent(d14)}&order=created_at.desc&limit=8000`,
+    ),
+    serviceFetch(
+      `provider_usage_events?select=amount_usd&kind=eq.coach&status=eq.completed&created_at=gte.${encodeURIComponent(d30)}&limit=8000`,
+    ),
+  ]);
+
+  let estCostUsd30d = 0;
+  if (Array.isArray(costRes.data)) {
+    for (const row of costRes.data) {
+      const usd = Number(row?.amount_usd || 0);
+      if (Number.isFinite(usd)) estCostUsd30d += usd;
+    }
+  } else {
+    estCostUsd30d = messages30d * COACH_USD_PER_MESSAGE;
+  }
+
+  return normalizeCoachUsageSummary({
+    messagesToday,
+    messages7d,
+    messages30d,
+    messagesAll,
+    uniqueUsersToday,
+    uniqueUsers7d,
+    uniqueUsers30d,
+    uniqueUsersAll,
+    estCostUsd30d,
+    daily: bucketCoachDailyRows(Array.isArray(dailyRes.data) ? dailyRes.data : []),
+    source: "fallback",
+    privacyNote: "Counts only — Coach message content is never stored.",
+  }, "fallback");
+}
+
 async function getOverview() {
   const today = startOfTodayUtc();
   const monthStart = startOfMonthUtc();
@@ -269,6 +414,7 @@ async function getOverview() {
     creditsToday,
     gensToday,
     revenueSubs,
+    coachUsage,
   ] = await Promise.all([
     callRpc("get_credits_summary", {}),
     fetchSunoMasterBalance(),
@@ -282,6 +428,7 @@ async function getOverview() {
     serviceFetch(`credits_transactions?select=delta&created_at=gte.${encodeURIComponent(today)}&limit=1000`),
     serviceFetch(`music_generation_logs?select=credits_used,provider_cost_usd&created_at=gte.${encodeURIComponent(today)}&limit=1000`),
     serviceFetch(`pro_subscriptions?select=plan_id,status,created_at&status=in.(active,trialing,grace)&created_at=gte.${encodeURIComponent(monthStart)}&limit=500`),
+    fetchCoachUsageSummary(),
   ]);
 
   const summary = (summaryRpc.ok && summaryRpc.data) || {};
@@ -358,6 +505,7 @@ async function getOverview() {
       estimatedMtdUsd: Math.round(revenueMtd * 100) / 100,
       note: "Estimate from active Pro subs started this month; updates when Apple IAP webhooks land.",
     },
+    coach: coachUsage || emptyCoachUsageSummary(),
   };
 }
 

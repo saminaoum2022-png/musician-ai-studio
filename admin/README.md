@@ -13,6 +13,7 @@ Run in the SQL Editor (in order if not already applied):
 3. **`supabase/admin_dashboard.sql`**
 4. **`supabase/admin_team_roles.sql`** — extended dashboard roles + team audit columns
 5. **`supabase/admin_team_audit.sql`** — audit log, pending invites, auto-apply on signup
+6. **`supabase/coach_usage_analytics.sql`** — Coach traffic counts (no message content) for Overview
 
 Then grant yourself admin (only needed once — after that use **Settings → Team & roles** in the dashboard):
 

@@ -386,11 +386,23 @@ function buildPrompt({ seed, style, mode, nonce, dialect, dialectHint, sourceLyr
       isMsa
         ? "الفصحى: تشكيل أوضح للنطق مقبول."
         : "لا تستخدم إعراب الفصحى ولا التنوين النحوي في أواخر الكلمات — تشكيل غناء محكي خفيف فقط لتوضيح الحروف الغامضة.",
+      !isMsa
+        ? "مهم — حرف ق (qaf): في اللهجة المحكية يُنطق همزة (2) وليس /q/ ولا /k/ فصيح. مثل: قلب → albi، قلت → 2elt، قال → 2al. شكّل ق للنطق المحكي (همزة) لا للفصحى."
+        : "",
+      !isMsa
+        ? "حرف ك (kaf): يبقى كاف عادي /k/ — شكّله كالعادة ولا تخلطه مع ق."
+        : "",
       `Add tashkeel (Arabic vowel marks) to these lyrics for clearer singing in ${dialectSpeak}.`,
       "Keep the SAME words, line breaks, and section tags. Output lyrics only — no commentary.",
       isMsa
         ? "MSA: fuller classical tashkeel is OK where it helps pronunciation."
         : "Do NOT use formal fusHa / nahwi case endings or grammatical tanween. Light sung dialect marks only.",
+      !isMsa
+        ? "Important — ق (qaf): in this colloquial dialect, ق is spoken as hamza (glottal 2), NOT classical /q/ or /k/. Examples: قلب → albi, قلت → 2elt, قال → 2al. Vowelize ق for dialect hamza, not fusHa qaf."
+        : "",
+      !isMsa
+        ? "Keep ك (kaf) as normal /k/ — vowelize kaf as usual; do not confuse ك with ق."
+        : "",
       "Honor any Arabic address / addressee gender hints in the dialect hint (masculine/feminine/plural forms).",
       `Variation token: ${nonce}`,
       ...(dialectLines ? [dialectLines] : []),

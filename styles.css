@@ -15067,6 +15067,19 @@ body:not([data-route="profile"]) #profileAuraHeaderChromeRoot{
   pointer-events: auto;
 }
 
+/* Desktop web shell: credits were fixed top-left and sat on the sidebar
+ * brand mark. Keep mobile as-is (credits left / gear right); on desktop
+ * pin the whole chrome cluster to the top-right next to Settings. */
+@media (min-width: 1024px){
+  html.is-web-shell body[data-route="profile"] #profileAuraHeaderChromeRoot.profileAuraHeaderChrome{
+    justify-content: flex-end;
+    gap: 8px;
+  }
+  html.is-web-shell body[data-route="profile"] #profileAuraHeaderChromeRoot .profileAuraToolbar{
+    margin-left: 0;
+  }
+}
+
 /* Toolbar — icon cluster on the right of the floating chrome.
  * Tight gap so Edit + Settings feel like one cluster, not two
  * scattered controls. */

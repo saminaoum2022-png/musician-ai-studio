@@ -688,7 +688,7 @@ module.exports = async function handler(req, res) {
       return json(res, 502, buildSunoErrorBody(data, { error: "Request was rejected upstream" }));
     }
     registerStemsWatch(user, body, data, {
-      kind: resolveStemsLogKind(body, false, stemType),
+      kind: resolveStemsLogKind(body, false, type),
       variantCount: 1,
     });
     await logStemsOp({

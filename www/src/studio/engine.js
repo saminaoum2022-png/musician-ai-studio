@@ -29,10 +29,6 @@ const pcmWorkletLoaded = new WeakMap();
 
 // AI guides are mastered loud; slight trim so Music % feels honest vs raw voice.
 const GUIDE_MIX_TRIM = 0.88;
-/** Max music level reduction when vocal is loud (sidechain duck). */
-const SIDECHAIN_DUCK_MAX = 0.26;
-const SIDECHAIN_OPEN = 0.012;
-const SIDECHAIN_RANGE = 0.14;
 // Voice / Vocal gain sliders: 50% = previous 100% level (2× each); 100% = 3× each for headroom.
 const VOCAL_SLIDER_CENTER = 0.5;
 const VOCAL_SLIDER_CENTER_GAIN = 2;
@@ -93,14 +89,14 @@ export const EFFECT_REGISTRY = {
       return createParallelFx(ctx, params, (c, wetIn, wetOut) => {
         const comp = c.createDynamicsCompressor();
         try {
-          comp.threshold.value = -20;
-          comp.knee.value = 14;
-          comp.ratio.value = 1.75;
-          comp.attack.value = 0.014;
-          comp.release.value = 0.3;
+          comp.threshold.value = -22;
+          comp.knee.value = 18;
+          comp.ratio.value = 1.45;
+          comp.attack.value = 0.018;
+          comp.release.value = 0.34;
         } catch {}
         const makeup = c.createGain();
-        makeup.gain.value = 1.25;
+        makeup.gain.value = 1.08;
         wetIn.connect(comp).connect(makeup).connect(wetOut);
       });
     },
@@ -124,11 +120,11 @@ export const EFFECT_REGISTRY = {
         presence.type = "peaking";
         presence.frequency.value = 2800;
         presence.Q.value = 0.85;
-        presence.gain.value = 0.4;
+        presence.gain.value = 0.25;
         const airCut = c.createBiquadFilter();
         airCut.type = "highshelf";
-        airCut.frequency.value = 6500;
-        airCut.gain.value = -2.8;
+        airCut.frequency.value = 6200;
+        airCut.gain.value = -3.2;
         wetIn.connect(hp).connect(warmth).connect(presence).connect(airCut).connect(wetOut);
       });
     },
@@ -138,24 +134,19 @@ export const EFFECT_REGISTRY = {
     id: "deesser",
     label: "De-esser",
     isPlaceholder: false,
-    /** Split-band: compress sibilance (5–9 kHz) and subtract from dry. */
+    /** Tame harsh “crispy” highs without thinning the whole vocal. */
     create(ctx, params = {}) {
       return createParallelFx(ctx, params, (c, wetIn, wetOut) => {
-        const hp = c.createBiquadFilter();
-        hp.type = "highpass";
-        hp.frequency.value = 5200;
-        hp.Q.value = 0.7;
-        const comp = c.createDynamicsCompressor();
-        try {
-          comp.threshold.value = -26;
-          comp.knee.value = 6;
-          comp.ratio.value = 10;
-          comp.attack.value = 0.002;
-          comp.release.value = 0.045;
-        } catch {}
-        const inv = c.createGain();
-        inv.gain.value = -1.15;
-        wetIn.connect(hp).connect(comp).connect(inv).connect(wetOut);
+        const shelf = c.createBiquadFilter();
+        shelf.type = "highshelf";
+        shelf.frequency.value = 5600;
+        shelf.gain.value = -2.8;
+        const peak = c.createBiquadFilter();
+        peak.type = "peaking";
+        peak.frequency.value = 6600;
+        peak.Q.value = 0.75;
+        peak.gain.value = -2.2;
+        wetIn.connect(shelf).connect(peak).connect(wetOut);
       });
     },
   },
@@ -738,16 +729,23 @@ export class StudioEngine {
     return voiceOutputGain(params);
   }
 
-  /** Raw buffer, or denoise blended by fxDenoise amount (0..1). */
+  /** Playback buffer — vocal enhancer and/or legacy noise gate blend. */
   _getTakePlaybackBuffer(take, params = {}) {
     if (!take?.buffer) return null;
-    const amt = fxAmount01(params.fxDenoise);
-    if (amt <= 0.001) return take.buffer;
-    const stepped = Math.round(amt * 100);
-    const cacheKey = `${take.id}_${take.buffer.length}_dn${stepped}`;
-    if (take._fxDenoiseBuf && take._fxCacheKey === cacheKey) return take._fxDenoiseBuf;
-    const blended = blendDenoiseBuffer(this.ctx, take.buffer, amt);
-    take._fxDenoiseBuf = blended;
+    const enhanceAmt = fxAmount01(params.fxVocalEnhance);
+    const denoiseAmt = fxAmount01(params.fxDenoise);
+    const useEnhance = enhanceAmt > 0.001;
+    const useDenoise = !useEnhance && denoiseAmt > 0.001;
+    if (!useEnhance && !useDenoise) return take.buffer;
+    const stepped = useEnhance
+      ? Math.round(enhanceAmt * 100)
+      : Math.round(denoiseAmt * 100);
+    const cacheKey = `${take.id}_${take.buffer.length}_${useEnhance ? "ve" : "dn"}${stepped}`;
+    if (take._fxPlaybackBuf && take._fxCacheKey === cacheKey) return take._fxPlaybackBuf;
+    const blended = useEnhance
+      ? blendVocalEnhanceBuffer(this.ctx, take.buffer, enhanceAmt)
+      : blendDenoiseBuffer(this.ctx, take.buffer, denoiseAmt);
+    take._fxPlaybackBuf = blended;
     take._fxCacheKey = cacheKey;
     return blended;
   }
@@ -765,43 +763,23 @@ export class StudioEngine {
     const take = this._resolveTake(params);
     const solo = params.solo || ""; // "" | "voice" | "music"
 
-    const finishId = FINISH_PRESETS[params.finish] ? params.finish : "balanced";
-    const mixBus = this.ctx.createGain();
-    const finish = this._buildMasterChain(this.ctx, finishId);
-    const previewGain = this.ctx.createGain();
-    previewGain.gain.value = previewLoudnessGainForFinish(finishId);
+    const master = this.ctx.createGain();
     const limiter = this._makeLimiter(this.ctx);
-    mixBus.connect(finish.input);
-    finish.output.connect(previewGain).connect(limiter).connect(this.ctx.destination);
+    master.connect(limiter).connect(this.ctx.destination);
     const startAt = this.ctx.currentTime + 0.08;
     const fromSec = Math.max(0, Number(params.fromSec) || 0);
-    this._nodes = [mixBus, finish.input, finish.output, previewGain, limiter];
+    this._nodes = [master, limiter];
+    this._mix = { musicGain: null, voiceGain: null, voiceChain: null, mixParams: params };
 
-    // Live-adjustable handles so the Mix sliders change gains/reverb in real
-    // time (no restart). Cleared on stopMix.
-    this._mix = {
-      musicGain: null,
-      voiceGain: null,
-      voiceChain: null,
-      voiceAnalyser: null,
-      musicBaseGain: 0,
-      sidechainEnv: 0,
-      mixParams: params,
-    };
-
-    // Music (guide) — sidechain duck applied in rAF loop from vocal level.
     const guideSrc = this.ctx.createBufferSource();
     guideSrc.buffer = this.guideBuffer;
     const musicGain = this.ctx.createGain();
-    const baseMusic = solo === "voice" ? 0 : musicOutputGain(params);
-    musicGain.gain.value = baseMusic;
-    guideSrc.connect(musicGain).connect(mixBus);
+    musicGain.gain.value = solo === "voice" ? 0 : musicOutputGain(params);
+    guideSrc.connect(musicGain).connect(master);
     guideSrc.start(startAt, fromSec);
     this._nodes.push(guideSrc, musicGain);
     this._mix.musicGain = musicGain;
-    this._mix.musicBaseGain = baseMusic;
 
-    // Voice (take) through the effect chain, centred across both ears.
     if (take && take.buffer && solo !== "music") {
       const clipStart = Math.max(0, Number(params.voiceClipStart) || 0);
       const clipEnd = params.voiceClipEnd != null ? Number(params.voiceClipEnd) : null;
@@ -812,16 +790,12 @@ export class StudioEngine {
         const voiceSrc = this.ctx.createBufferSource();
         voiceSrc.buffer = params.voiceBufferOverride || this._getTakePlaybackBuffer(take, params);
         const chain = this._buildVoiceChain(this.ctx, params);
-        const voiceAnalyser = this.ctx.createAnalyser();
-        voiceAnalyser.fftSize = 512;
-        voiceAnalyser.smoothingTimeConstant = 0.35;
         const voiceGain = this.ctx.createGain();
         voiceGain.gain.value = this._voiceMixGain(params, take);
         const center = this._centerNode(this.ctx);
         voiceSrc.connect(chain.input);
-        chain.output.connect(voiceAnalyser);
-        voiceAnalyser.connect(voiceGain).connect(center.input);
-        center.output.connect(mixBus);
+        chain.output.connect(voiceGain).connect(center.input);
+        center.output.connect(master);
         const off = this._takeBufferOffset(take) + voiceGuideStart;
         const voiceDelay = Math.max(0, voiceGuideStart - fromSec);
         voiceSrc.start(
@@ -829,12 +803,9 @@ export class StudioEngine {
           Math.min(off, Math.max(0, voiceSrc.buffer.duration - 0.01)),
           voiceDur,
         );
-        this._nodes.push(
-          voiceSrc, chain.input, chain.output, voiceAnalyser, voiceGain, center.input, center.output,
-        );
+        this._nodes.push(voiceSrc, chain.input, chain.output, voiceGain, center.input, center.output);
         this._mix.voiceGain = voiceGain;
         this._mix.voiceChain = chain;
-        this._mix.voiceAnalyser = voiceAnalyser;
         this._mix.voiceSrc = voiceSrc;
         this._mix.take = take;
         this._mix.startAt = startAt;
@@ -845,50 +816,14 @@ export class StudioEngine {
     }
 
     this._mix.guideSrc = guideSrc;
-    this._mix.mixParams = params;
-    this._mix.solo = solo;
-
     this._playing = true;
     guideSrc.onended = () => { this._playing = false; if (typeof cb.onEnded === "function") cb.onEnded(); };
-
-    const sidechainByte = this._mix.voiceAnalyser ? new Uint8Array(this._mix.voiceAnalyser.fftSize) : null;
-    const tickSidechain = () => {
-      if (!this._playing || !this._mix?.musicGain) return;
-      const p = this._mix.mixParams || params;
-      const soloNow = this._mix.solo || "";
-      const base = soloNow === "voice" ? 0 : musicOutputGain(p);
-      this._mix.musicBaseGain = base;
-      let duck = 0;
-      if (this._mix.voiceAnalyser && sidechainByte) {
-        this._mix.voiceAnalyser.getByteTimeDomainData(sidechainByte);
-        let peak = 0;
-        for (let i = 0; i < sidechainByte.length; i++) {
-          const v = Math.abs(sidechainByte[i] - 128) / 128;
-          if (v > peak) peak = v;
-        }
-        this._mix.sidechainEnv = peak;
-        duck = sidechainDuckAmount(peak);
-      }
-      try {
-        this._mix.musicGain.gain.setTargetAtTime(base * (1 - duck), this.ctx.currentTime, 0.04);
-      } catch {
-        this._mix.musicGain.gain.value = base * (1 - duck);
-      }
-    };
 
     if (typeof cb.onTick === "function") {
       const t0 = startAt;
       const loop = () => {
         if (!this._playing) return;
-        tickSidechain();
         cb.onTick(Math.max(0, this.ctx.currentTime - t0 + fromSec));
-        this._raf = requestAnimationFrame(loop);
-      };
-      this._raf = requestAnimationFrame(loop);
-    } else {
-      const loop = () => {
-        if (!this._playing) return;
-        tickSidechain();
         this._raf = requestAnimationFrame(loop);
       };
       this._raf = requestAnimationFrame(loop);
@@ -900,10 +835,9 @@ export class StudioEngine {
     const mix = this._mix;
     if (!mix) return;
     mix.mixParams = params;
-    const solo = params.solo || mix.solo || "";
-    mix.solo = solo;
+    const solo = params.solo || "";
     if (mix.musicGain) {
-      mix.musicBaseGain = solo === "voice" ? 0 : musicOutputGain(params);
+      mix.musicGain.gain.value = solo === "voice" ? 0 : musicOutputGain(params);
     }
     if (mix.voiceGain) {
       const take = this._resolveTake(params);
@@ -978,15 +912,7 @@ export class StudioEngine {
     const guideSrc = off.createBufferSource();
     guideSrc.buffer = this.guideBuffer;
     const musicGain = off.createGain();
-    const baseMusic = musicOutputGain(params);
-    scheduleSidechainGuideGain(
-      musicGain,
-      take,
-      this._takePlayOffsetSec(take),
-      this.guideBuffer.duration,
-      sr,
-      baseMusic,
-    );
+    musicGain.gain.value = musicOutputGain(params);
     guideSrc.connect(musicGain).connect(mixBus);
     guideSrc.start(0);
 
@@ -1221,7 +1147,7 @@ function blendDenoiseBuffer(ctx, buffer, amount) {
   if (!buffer || amount <= 0.001) return buffer;
   const denoised = cloneAudioBuffer(ctx, buffer);
   if (!denoised) return buffer;
-  denoiseAndGateBuffer(denoised);
+  denoiseAndGateBuffer(denoised, { gentle: true });
   if (amount >= 0.999) return denoised;
   const out = cloneAudioBuffer(ctx, buffer);
   if (!out) return denoised;
@@ -1233,6 +1159,132 @@ function blendDenoiseBuffer(ctx, buffer, amount) {
     for (let i = 0; i < dst.length; i++) dst[i] = src[i] * (1 - a) + dn[i] * a;
   }
   return out;
+}
+
+/** Vocal enhancer — noise softening, warmth/body, tame crispy highs, light glue. */
+function blendVocalEnhanceBuffer(ctx, buffer, amount) {
+  if (!buffer || amount <= 0.001) return buffer;
+  const enhanced = enhanceVocalBufferCopy(ctx, buffer, amount);
+  if (!enhanced) return buffer;
+  if (amount >= 0.999) return enhanced;
+  const out = cloneAudioBuffer(ctx, buffer);
+  if (!out) return enhanced;
+  const a = clamp01(amount);
+  for (let ch = 0; ch < buffer.numberOfChannels; ch++) {
+    const src = buffer.getChannelData(ch);
+    const enh = enhanced.getChannelData(ch);
+    const dst = out.getChannelData(ch);
+    for (let i = 0; i < dst.length; i++) dst[i] = src[i] * (1 - a) + enh[i] * a;
+  }
+  return out;
+}
+
+function enhanceVocalBufferCopy(ctx, buffer, amount) {
+  if (!buffer) return null;
+  const out = ctx ? cloneAudioBuffer(ctx, buffer) : buffer;
+  if (!out) return null;
+  const amt = clamp01(amount);
+  softenRoomNoise(out, amt);
+  applyVocalWarmth(out, amt);
+  tameVocalHarshness(out, amt);
+  if (amt > 0.25) gentleVocalLevelRide(out, amt);
+  return out;
+}
+
+/** Softer gate + noise-floor dip — less “gated”, keeps breath between lines. */
+function softenRoomNoise(buffer, amount) {
+  denoiseAndGateBuffer(buffer, { gentle: true, amount });
+  const floor = estimateNoiseFloor(buffer);
+  if (floor < 0.0008) return buffer;
+  const strength = clamp01(amount) * 0.55;
+  for (let ch = 0; ch < buffer.numberOfChannels; ch++) {
+    const data = buffer.getChannelData(ch);
+    for (let i = 0; i < data.length; i++) {
+      const v = data[i];
+      const mag = Math.abs(v);
+      if (mag > floor * 2.2) continue;
+      const cut = floor * strength;
+      data[i] = v > 0 ? Math.max(0, v - cut) : Math.min(0, v + cut);
+    }
+  }
+  return buffer;
+}
+
+function estimateNoiseFloor(buffer) {
+  const ch0 = buffer.getChannelData(0);
+  const win = Math.max(1, Math.floor(0.04 * buffer.sampleRate));
+  const levels = [];
+  for (let i = 0; i < ch0.length; i += win) {
+    let p = 0;
+    const end = Math.min(ch0.length, i + win);
+    for (let j = i; j < end; j++) p = Math.max(p, Math.abs(ch0[j]));
+    levels.push(p);
+  }
+  levels.sort((a, b) => a - b);
+  return levels[Math.floor(levels.length * 0.12)] || 0.004;
+}
+
+/** Low-mid body so phone-mic vocals feel fuller, not thin/on top. */
+function applyVocalWarmth(buffer, amount) {
+  const amt = clamp01(amount);
+  const bodyMix = 0.1 + amt * 0.16;
+  const lpCoef = 0.035;
+  for (let ch = 0; ch < buffer.numberOfChannels; ch++) {
+    const data = buffer.getChannelData(ch);
+    let body = 0;
+    for (let i = 0; i < data.length; i++) {
+      body += lpCoef * (data[i] - body);
+      data[i] = data[i] + bodyMix * body;
+    }
+  }
+  return buffer;
+}
+
+/** Roll off brittle top end (phone mic “crispy” edge). */
+function tameVocalHarshness(buffer, amount) {
+  const amt = clamp01(amount);
+  const mix = 0.08 + amt * 0.2;
+  const smooth = 0.42;
+  for (let ch = 0; ch < buffer.numberOfChannels; ch++) {
+    const data = buffer.getChannelData(ch);
+    let lp = 0;
+    for (let i = 0; i < data.length; i++) {
+      const x = data[i];
+      lp += smooth * (x - lp);
+      data[i] = x * (1 - mix) + lp * mix;
+    }
+  }
+  return buffer;
+}
+
+function gentleVocalLevelRide(buffer, amount) {
+  const ch0 = buffer.getChannelData(0);
+  const sr = buffer.sampleRate;
+  const nCh = buffer.numberOfChannels;
+  const win = Math.max(1, Math.floor(0.055 * sr));
+  const nWin = Math.ceil(ch0.length / win);
+  const gains = new Float32Array(nWin);
+  const target = 0.068;
+  const amt = clamp01(amount);
+  for (let w = 0; w < nWin; w++) {
+    let sum = 0;
+    const start = w * win;
+    const end = Math.min(ch0.length, start + win);
+    for (let i = start; i < end; i++) sum += ch0[i] * ch0[i];
+    const rms = Math.sqrt(sum / Math.max(1, end - start));
+    if (rms > target) gains[w] = clampNum(target / rms, 0.82, 1.0);
+    else if (rms > target * 0.45 && amt > 0.5) gains[w] = clampNum(Math.min(1.12, target * 0.85 / rms), 1.0, 1.12);
+    else gains[w] = 1;
+  }
+  for (let w = 1; w < nWin; w++) gains[w] = gains[w] * 0.22 + gains[w - 1] * 0.78;
+  for (let ch = 0; ch < nCh; ch++) {
+    const data = buffer.getChannelData(ch);
+    for (let i = 0; i < data.length; i++) {
+      const w = Math.min(nWin - 1, Math.floor(i / win));
+      data[i] *= gains[w];
+    }
+  }
+  return buffer;
 }
 
 /** Decaying-noise impulse response so we don't ship an IR file. */
@@ -1372,56 +1424,6 @@ export function vocalGainSliderPctFromMultiplier(mult) {
 
 function musicOutputGain(params = {}) {
   return clamp01(params.musicVol ?? 0.7) * GUIDE_MIX_TRIM;
-}
-
-/** Sidechain duck factor 0..SIDECHAIN_DUCK_MAX from vocal envelope peak. */
-function sidechainDuckAmount(vocalPeak) {
-  return clamp01((vocalPeak - SIDECHAIN_OPEN) / SIDECHAIN_RANGE) * SIDECHAIN_DUCK_MAX;
-}
-
-/** Approximate export LUFS step so preview level matches Save. */
-function previewLoudnessGainForFinish(finishId) {
-  const preset = FINISH_PRESETS[finishId] || FINISH_PRESETS.balanced;
-  const preMasterDb = -17.2;
-  return clampNum(Math.pow(10, (preset.targetLufs - preMasterDb) / 20), 0.75, 1.35);
-}
-
-/** Per-sample sidechain multipliers for guide (1 = no duck). */
-function computeSidechainMultipliers(vocalBuffer, takeOffsetSec, guideDurationSec, sampleRate) {
-  const frames = Math.max(1, Math.ceil(guideDurationSec * sampleRate));
-  const mult = new Float32Array(frames);
-  if (!vocalBuffer) {
-    mult.fill(1);
-    return mult;
-  }
-  const ch = vocalBuffer.getChannelData(0);
-  const off = Math.max(0, Math.floor(takeOffsetSec * sampleRate));
-  let env = 0;
-  const atk = Math.exp(-1 / (0.008 * sampleRate));
-  const rel = Math.exp(-1 / (0.11 * sampleRate));
-  for (let i = 0; i < frames; i++) {
-    const vi = off + i;
-    const lvl = vi < ch.length ? Math.abs(ch[vi]) : 0;
-    env = lvl > env ? lvl + atk * (env - lvl) : lvl + rel * (env - lvl);
-    mult[i] = 1 - sidechainDuckAmount(env);
-  }
-  return mult;
-}
-
-/** Schedule block-wise guide gain ducking for offline render. */
-function scheduleSidechainGuideGain(musicGain, take, takeOffsetSec, guideDurationSec, sampleRate, baseGain) {
-  if (!take?.buffer || baseGain <= 0) {
-    musicGain.gain.value = baseGain;
-    return;
-  }
-  const mult = computeSidechainMultipliers(take.buffer, takeOffsetSec, guideDurationSec, sampleRate);
-  const blockSec = 0.04;
-  const nBlocks = Math.ceil(guideDurationSec / blockSec);
-  for (let b = 0; b < nBlocks; b++) {
-    const t = b * blockSec;
-    const idx = Math.min(mult.length - 1, Math.floor(t * sampleRate));
-    musicGain.gain.setValueAtTime(baseGain * mult[idx], t);
-  }
 }
 
 /** RMS of buffer between startSec and endSec (exclusive end optional). */
@@ -1573,8 +1575,10 @@ function spliceBuffer(ctx, buffer, startSec, endSec) {
 }
 
 /** Adaptive expander gate — lookahead + hysteresis so sentence starts stay intact. */
-function denoiseAndGateBuffer(buffer) {
+function denoiseAndGateBuffer(buffer, opts = {}) {
   if (!buffer) return buffer;
+  const gentle = !!opts.gentle;
+  const amt = clamp01(opts.amount ?? 1);
   const ch0 = buffer.getChannelData(0);
   const sr = buffer.sampleRate;
   const nCh = buffer.numberOfChannels;
@@ -1588,9 +1592,9 @@ function denoiseAndGateBuffer(buffer) {
   }
   levels.sort((a, b) => a - b);
   const floor = levels[Math.floor(levels.length * 0.12)] || 0.004;
-  const openTh = clampNum(floor * 1.55, 0.005, 0.02);
-  const closeTh = openTh * 0.32;
-  const minGain = 0.17;
+  const openTh = clampNum(floor * (gentle ? 1.35 : 1.55), 0.005, gentle ? 0.018 : 0.02);
+  const closeTh = openTh * (gentle ? 0.42 : 0.32);
+  const minGain = gentle ? 0.48 + (1 - amt) * 0.12 : 0.17;
   const look = Math.max(1, Math.floor(0.007 * sr));
   const envArr = new Float32Array(ch0.length);
   let env = 0;
@@ -1653,12 +1657,11 @@ function stabilizeLevelBuffer(buffer) {
   return buffer;
 }
 
-/** Post-record polish: gate room noise, tame peaks, light normalize. */
+/** Post-record polish: light vocal enhancer so preview isn’t raw phone mic. */
 function finishTakeBuffer(buffer) {
   if (!buffer) return buffer;
-  denoiseAndGateBuffer(buffer);
-  stabilizeLevelBuffer(buffer);
-  return normalizeTakeBuffer(buffer, 0.68);
+  enhanceVocalBufferCopy(null, buffer, 0.38);
+  return normalizeTakeBuffer(buffer, 0.62);
 }
 
 function bufferToWavBlob(buffer) {

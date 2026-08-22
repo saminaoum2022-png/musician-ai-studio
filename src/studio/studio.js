@@ -13,7 +13,7 @@
  * No neon-everything.
  */
 
-import { StudioEngine, FINISH_PRESETS, FINISH_IDS, analyzeTakeBuffer, suggestMixLevels } from "./engine.js";
+import { StudioEngine, FINISH_PRESETS, FINISH_IDS, analyzeTakeBuffer } from "./engine.js";
 import {
   listProjects,
   upsertProject,
@@ -44,12 +44,13 @@ const DEFAULT_MIX = Object.freeze({
   syncMs: 0,
   finish: "balanced",
   fxDenoise: 0,
+  fxVocalEnhance: 0,
   fxCompress: 0,
   fxEq: 0,
   fxDeesser: 0,
 });
 
-/** Applied after each new take — opens on Preview with Original (raw vocal). */
+/** Applied after each new take — light vocal enhancer on by default. */
 const POST_RECORD_MIX = Object.freeze({
   styleTab: "original",
   mixPanel: "basic",
@@ -63,6 +64,7 @@ const POST_RECORD_MIX = Object.freeze({
   finishSuggested: "balanced",
   _finishReady: true,
   fxDenoise: 0,
+  fxVocalEnhance: 50,
   fxCompress: 0,
   fxEq: 0,
   fxDeesser: 0,
@@ -87,22 +89,22 @@ const STYLE_TABS = Object.freeze({
   original: {
     label: "Original",
     finish: "balanced",
-    mix: { voiceVol: 50, vocalGain: 50, musicVol: 70, fxDenoise: 0, fxCompress: 0, fxDeesser: 0, reverb: 0 },
+    mix: { voiceVol: 50, vocalGain: 50, musicVol: 70, fxVocalEnhance: 0, fxDenoise: 0, fxCompress: 0, fxDeesser: 0, reverb: 0 },
   },
   natural: {
     label: "Natural",
     finish: "warm",
-    mix: { voiceVol: 68, vocalGain: 54, musicVol: 74, fxDenoise: 30, fxCompress: 8, fxDeesser: 6, reverb: 8 },
+    mix: { voiceVol: 52, vocalGain: 50, musicVol: 70, fxVocalEnhance: 58, fxDenoise: 0, fxCompress: 6, fxDeesser: 12, reverb: 10 },
   },
   studio: {
     label: "Studio",
     finish: "balanced",
-    mix: { voiceVol: 72, vocalGain: 59, musicVol: 70, fxDenoise: 50, fxCompress: 14, fxDeesser: 11, reverb: 14 },
+    mix: { voiceVol: 54, vocalGain: 52, musicVol: 68, fxVocalEnhance: 68, fxDenoise: 0, fxCompress: 10, fxDeesser: 16, reverb: 12 },
   },
   pop: {
     label: "Pop",
     finish: "bright",
-    mix: { voiceVol: 74, vocalGain: 62, musicVol: 68, fxDenoise: 45, fxCompress: 45, fxDeesser: 12, reverb: 16 },
+    mix: { voiceVol: 56, vocalGain: 54, musicVol: 66, fxVocalEnhance: 62, fxDenoise: 0, fxCompress: 18, fxDeesser: 18, reverb: 14 },
   },
   custom: { label: "Custom", finish: null, mix: null },
 });
@@ -197,16 +199,16 @@ function scoreAiStyleTabs(track, take) {
 
 function aiRecommendReason(styleTab, track, analysis) {
   if (analysis?.noiseFloor > 0.014) {
-    return "Room noise detected — gate and cleanup tuned for your take";
+    return "Cleaning room noise and adding warmth to your vocal";
   }
   if (analysis?.clipped) {
-    return "Hot input — easing gain so the vocal sits clean";
+    return "Taming a hot take — softer level, less harsh edge";
   }
-  if (analysis?.sibilance > 1) {
-    return "Bright vocal — de-ess and balance adjusted";
+  if (analysis?.sibilance > 1 || analysis?.crest > 6) {
+    return "Smoothing crispy highs so the vocal sits in the track";
   }
   if (analysis?.rms != null && analysis.rms < 0.035) {
-    return "Quiet take — vocal level boosted to match the track";
+    return "Boosting a quiet take with gentle vocal enhancer";
   }
   const hay = trackStyleHaystack(track);
   if (/\b(pop|k-?pop|radio|hook)\b/.test(hay) && styleTab === "pop") {
@@ -241,30 +243,25 @@ function buildAiMixRecommendation(take, track) {
   const analysis = take?.buffer ? analyzeTakeBuffer(take.buffer) : null;
 
   if (analysis) {
+    mix.fxVocalEnhance = Math.min(100, Math.max(45, mixFxValue(mix, "fxVocalEnhance") || 55));
     if (analysis.noiseFloor > 0.011) {
-      mix.fxDenoise = Math.min(100, mixFxValue(mix, "fxDenoise") + Math.round(analysis.noiseFloor * 2000));
+      mix.fxVocalEnhance = Math.min(100, mixFxValue(mix, "fxVocalEnhance") + 12);
     }
     if (analysis.crest > 5.5) {
-      mix.fxCompress = Math.min(100, mixFxValue(mix, "fxCompress") + Math.round((analysis.crest - 4) * 4));
+      mix.fxDeesser = Math.min(100, mixFxValue(mix, "fxDeesser") + Math.round((analysis.crest - 4) * 3));
+      mix.fxCompress = Math.min(100, mixFxValue(mix, "fxCompress") + 6);
     }
     if (analysis.sibilance > 0.85) {
-      mix.fxDeesser = Math.min(100, mixFxValue(mix, "fxDeesser") + Math.round((analysis.sibilance - 0.7) * 22));
+      mix.fxDeesser = Math.min(100, mixFxValue(mix, "fxDeesser") + Math.round((analysis.sibilance - 0.7) * 18));
     }
     if (analysis.rms < 0.038) {
-      mix.vocalGain = Math.min(100, mixFxValue(mix, "vocalGain") + 14);
+      mix.vocalGain = Math.min(100, mixFxValue(mix, "vocalGain") + 8);
+      mix.fxVocalEnhance = Math.min(100, mixFxValue(mix, "fxVocalEnhance") + 8);
     }
     if (analysis.clipped) {
-      mix.vocalGain = Math.max(28, mixFxValue(mix, "vocalGain") - 18);
-      mix.voiceVol = Math.max(32, mixFxValue(mix, "voiceVol") - 10);
+      mix.vocalGain = Math.max(28, mixFxValue(mix, "vocalGain") - 14);
+      mix.fxVocalEnhance = Math.max(35, mixFxValue(mix, "fxVocalEnhance") - 10);
     }
-  }
-
-  if (take?.buffer && engine?.guideBuffer) {
-    const offset = engine.takePlayStartSec?.(take) ?? 0;
-    const levels = suggestMixLevels(engine.guideBuffer, take.buffer, offset);
-    mix.voiceVol = levels.voiceVol;
-    mix.musicVol = levels.musicVol;
-    mix.vocalGain = levels.vocalGain;
   }
 
   let match = 74 + Math.min(22, Math.round(best * 2.5));
@@ -294,7 +291,7 @@ function mixFxValue(m, key) {
 }
 
 function ensureMixFx(m) {
-  for (const k of ["fxDenoise", "fxCompress", "fxEq", "fxDeesser"]) {
+  for (const k of ["fxDenoise", "fxVocalEnhance", "fxCompress", "fxEq", "fxDeesser"]) {
     m[k] = mixFxValue(m, k);
   }
 }
@@ -1693,11 +1690,11 @@ function applyStyleTab(root, take, tabId, state) {
   const tab = STYLE_TABS[tabId];
   if (!tab?.mix) return;
   m.styleTab = tabId;
-  for (const k of ["voiceVol", "vocalGain", "musicVol", "fxDenoise", "fxCompress", "fxDeesser", "fxEq", "reverb"]) {
+  for (const k of ["voiceVol", "vocalGain", "musicVol", "fxVocalEnhance", "fxDenoise", "fxCompress", "fxDeesser", "fxEq", "reverb"]) {
     if (tab.mix[k] != null) m[k] = tab.mix[k];
   }
   if (state?.fromAi && state.aiRec?.mix) {
-    for (const k of ["voiceVol", "vocalGain", "musicVol", "fxDenoise", "fxCompress", "fxDeesser", "fxEq", "reverb"]) {
+    for (const k of ["voiceVol", "vocalGain", "musicVol", "fxVocalEnhance", "fxDenoise", "fxCompress", "fxDeesser", "fxEq", "reverb"]) {
       if (state.aiRec.mix[k] != null) m[k] = state.aiRec.mix[k];
     }
     if (state.aiRec.finish) m.finish = state.aiRec.finish;
@@ -1766,7 +1763,7 @@ function renderPreviewMix(root, take) {
       <div class="studioPresetBlock">
         <span class="studioMixLabel">Style preset</span>
         ${stylePresetTabsHtml(m.styleTab)}
-        <p class="studioSyncHint studioPresetHint">Preview includes your finish style and vocal ducking. <strong>Save</strong> writes the final file.</p>
+        <p class="studioSyncHint studioPresetHint">Use <strong>Vocal enhancer</strong> in Advanced, or tap <strong>Apply AI Mix</strong>. Music stays as-is — we only polish your voice.</p>
       </div>
 
       <div class="studioMixTabs" role="tablist" aria-label="Mix controls">
@@ -1784,11 +1781,11 @@ function renderPreviewMix(root, take) {
 
       <div class="studioMixPanel" data-mix-panel-advanced ${mixPanel === "advanced" ? "" : "hidden"}>
         <div class="studioSliders studioSliders--compact">
-          ${sliderRow("fxDenoise", "Noise gate", m.fxDenoise, "gate")}
+          ${sliderRow("fxVocalEnhance", "Vocal enhancer", m.fxVocalEnhance ?? 0, "voice")}
+          ${sliderRow("fxDeesser", "Smooth highs", m.fxDeesser, "deess")}
           ${sliderRow("fxCompress", "Compressor", m.fxCompress, "compress")}
-          ${sliderRow("fxEq", "Warm EQ", m.fxEq, "eq")}
-          ${sliderRow("fxDeesser", "De-esser", m.fxDeesser, "deess")}
           ${sliderRow("reverb", "Reverb", m.reverb, "reverb")}
+          ${sliderRow("fxDenoise", "Noise gate", m.fxDenoise, "gate")}
         </div>
         <div class="studioMixField studioMixField--sync">
           <div class="studioMixFieldTop">
@@ -1994,7 +1991,7 @@ function bindPreviewMix(root, take, aiRec) {
       const out = root.querySelector(`[data-mix-val="${k}"]`);
       if (out) out.textContent = String(m[k]);
       if (engine?.isPlaying) {
-        if (k === "fxDenoise") restartMixPreview(root);
+        if (k === "fxDenoise" || k === "fxVocalEnhance") restartMixPreview(root);
         else { try { engine.updateMix(mixParams()); } catch {} }
       }
     });
@@ -2479,6 +2476,7 @@ function mixParams(takeId) {
     musicVol: (Number(m.musicVol) || 0) / 100,
     reverb: (Number(m.reverb) || 0) / 100,
     fxDenoise: mixFxValue(m, "fxDenoise"),
+    fxVocalEnhance: mixFxValue(m, "fxVocalEnhance"),
     fxCompress: mixFxValue(m, "fxCompress"),
     fxEq: mixFxValue(m, "fxEq"),
     fxDeesser: mixFxValue(m, "fxDeesser"),

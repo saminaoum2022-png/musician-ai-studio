@@ -27015,9 +27015,11 @@ function setAuthEmailMode(mode) {
   const showConfirm = _authEmailMode === "signup";
   if (els.authConfirmField) {
     els.authConfirmField.hidden = !showConfirm;
+    els.authConfirmField.setAttribute("aria-hidden", showConfirm ? "false" : "true");
   }
   if (els.authPasswordConfirmInput) {
     els.authPasswordConfirmInput.disabled = !showConfirm;
+    els.authPasswordConfirmInput.tabIndex = showConfirm ? 0 : -1;
     if (!showConfirm) els.authPasswordConfirmInput.value = "";
   }
 }

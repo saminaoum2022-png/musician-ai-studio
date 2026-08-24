@@ -4159,6 +4159,7 @@ function syncRoutePanelVisibility(wanted) {
   }
   if (!route) return;
   if (route !== "generate") clearCreatePageKeyboardInset();
+  if (route !== "auth") clearAuthKeyboardInset();
   document.body.setAttribute("data-route", route);
   try { document.body.dataset.route = route; } catch {}
   document.body.classList.toggle("isIntro", route === "intro");
@@ -27214,6 +27215,140 @@ function setAuthEmailPanelOpen(open) {
 function resetAuthEmailPanel() {
   setAuthEmailPanelOpen(false);
   setAuthEmailMessage("");
+}
+
+let _authFocusedField = null;
+let _authKeyboardHeight = 0;
+let _authKeyboardScrollTimer = 0;
+
+function isAuthFormField(el) {
+  if (!el || !els.authEmailForm || els.authEmailForm.hidden) return false;
+  if (!els.authEmailForm.contains(el)) return false;
+  const id = String(el.id || "");
+  return id === "authEmailInput" || id === "authPasswordInput" || id === "authPasswordConfirmInput";
+}
+
+function measureAuthViewportKeyboardInset() {
+  const vv = window.visualViewport;
+  if (!vv) return 0;
+  return Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop));
+}
+
+function scrollAuthFieldAboveKeyboard(field) {
+  const target = field?.closest?.(".authField") || field;
+  if (!target) return;
+  const kb = Math.max(
+    _authKeyboardHeight,
+    parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--auth-keyboard-inset")) || 0,
+    measureAuthViewportKeyboardInset(),
+  );
+  if (kb > 0) {
+    target.style.scrollMarginBottom = `${Math.round(kb + 28)}px`;
+  }
+  try {
+    target.scrollIntoView({ block: "center", inline: "nearest", behavior: "auto" });
+  } catch {}
+}
+
+function applyAuthKeyboardOpen(height) {
+  const kb = Math.max(0, Math.round(Number(height) || 0));
+  if (!kb || !document.body.classList.contains("isAuth")) return;
+  _authKeyboardHeight = kb;
+  document.body.classList.add("authKeyboardOpen");
+  try {
+    document.documentElement.style.setProperty("--auth-keyboard-inset", `${kb}px`);
+  } catch {}
+  if (_authFocusedField) scrollAuthFieldAboveKeyboard(_authFocusedField);
+}
+
+function scheduleAuthKeyboardScroll() {
+  if (_authKeyboardScrollTimer) clearTimeout(_authKeyboardScrollTimer);
+  _authKeyboardScrollTimer = window.setTimeout(() => {
+    _authKeyboardScrollTimer = 0;
+    if (_authFocusedField) scrollAuthFieldAboveKeyboard(_authFocusedField);
+  }, 120);
+}
+
+function clearAuthKeyboardInset() {
+  _authFocusedField = null;
+  _authKeyboardHeight = 0;
+  if (_authKeyboardScrollTimer) {
+    clearTimeout(_authKeyboardScrollTimer);
+    _authKeyboardScrollTimer = 0;
+  }
+  document.body.classList.remove("authKeyboardOpen");
+  try {
+    document.documentElement.style.setProperty("--auth-keyboard-inset", "0px");
+  } catch {}
+  els.authEmailForm?.querySelectorAll(".authField").forEach((row) => {
+    row.style.removeProperty("scroll-margin-bottom");
+  });
+}
+
+function handleAuthFieldFocus(target) {
+  if (!isAuthFormField(target)) return;
+  _authFocusedField = target;
+  if (document.body.classList.contains("authKeyboardOpen") && _authKeyboardHeight > 0) {
+    scheduleAuthKeyboardScroll();
+  }
+}
+
+function wireAuthKeyboardOnce() {
+  if (document.documentElement.dataset.authKbWired) return;
+  document.documentElement.dataset.authKbWired = "1";
+
+  const Keyboard = getNativeKeyboardPlugin();
+  if (Keyboard?.addListener) {
+    Keyboard.addListener("keyboardWillShow", (info) => {
+      if (!document.body.classList.contains("isAuth") || !_authFocusedField) return;
+      applyAuthKeyboardOpen(info?.keyboardHeight ?? measureAuthViewportKeyboardInset());
+    });
+    Keyboard.addListener("keyboardDidShow", (info) => {
+      if (!document.body.classList.contains("isAuth") || !_authFocusedField) return;
+      applyAuthKeyboardOpen(info?.keyboardHeight ?? measureAuthViewportKeyboardInset());
+    });
+    Keyboard.addListener("keyboardWillHide", () => {
+      if (!document.body.classList.contains("isAuth")) return;
+      clearAuthKeyboardInset();
+    });
+    Keyboard.addListener("keyboardDidHide", () => {
+      if (!document.body.classList.contains("isAuth")) return;
+      clearAuthKeyboardInset();
+    });
+  } else {
+    const vv = window.visualViewport;
+    const onViewportChange = () => {
+      if (!document.body.classList.contains("isAuth") || !_authFocusedField) return;
+      const kb = measureAuthViewportKeyboardInset();
+      if (kb > 0) applyAuthKeyboardOpen(kb);
+      else if (!isAuthFormField(document.activeElement)) clearAuthKeyboardInset();
+    };
+    if (vv) {
+      vv.addEventListener("resize", onViewportChange);
+      vv.addEventListener("scroll", onViewportChange);
+    }
+  }
+
+  if (els.authEmailForm) {
+    els.authEmailForm.addEventListener("focusin", (e) => {
+      if (!document.body.classList.contains("isAuth")) return;
+      handleAuthFieldFocus(e.target);
+      const kb = measureAuthViewportKeyboardInset();
+      if (kb > 0) applyAuthKeyboardOpen(kb);
+      else scheduleAuthKeyboardScroll();
+    });
+    els.authEmailForm.addEventListener("focusout", () => {
+      window.setTimeout(() => {
+        const active = document.activeElement;
+        if (isAuthFormField(active)) {
+          _authFocusedField = active;
+          return;
+        }
+        if (!document.body.classList.contains("isAuth")) return;
+        if (measureAuthViewportKeyboardInset() <= 0) clearAuthKeyboardInset();
+      }, 80);
+    });
+  }
 }
 
 async function runEmailPasswordAuth() {
@@ -63916,6 +64051,7 @@ if (els.btnAuthGateGuest) {
 }
 setAuthEmailMode("signup");
 setAuthEmailPanelOpen(false);
+wireAuthKeyboardOnce();
 if (els.btnAuthEmailReveal) {
   els.btnAuthEmailReveal.addEventListener("click", () => {
     setAuthEmailPanelOpen(true);

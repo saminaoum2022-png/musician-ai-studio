@@ -48574,12 +48574,10 @@ body.isAuth:not(.booting) .authGateChoices:not([hidden]){
   .mobileTabbar a:active{ transform: none; }
 }
 
-/* --- 5. Auth form keyboard accommodation (CSS-only, safe) -------------- */
-/* The auth card is vertically centered. When an input is focused (keyboard */
-/* up on mobile) the lower submit button can sit under the keyboard. While   */
-/* focus is inside the form, tighten the top brand spacing and let the inner */
-/* scroll so the whole form — including the submit — stays reachable. No JS, */
-/* no keyboard-plugin dependency, so it degrades gracefully everywhere.      */
+/* --- 5. Auth form keyboard accommodation -------------------------------- */
+/* On phone, the auth hero is vertically centered; the keyboard covers the   */
+/* password row. JS sets body.authKeyboardOpen + --auth-keyboard-inset; we  */
+/* collapse the hero, enable scroll, and pad above the keyboard.             */
 @media (max-width: 720px){
   .authScreen{
     align-items: flex-start;
@@ -48593,6 +48591,42 @@ body.isAuth:not(.booting) .authGateChoices:not([hidden]){
   body.isAuth:has(.authEmailForm:not([hidden])) .authBrand{
     margin-bottom: 22px;
     transition: margin-bottom 220ms cubic-bezier(0.32, 0.72, 0, 1);
+  }
+  .authBrand,
+  .authTagline,
+  .authSub{
+    transition:
+      max-height 220ms cubic-bezier(0.32, 0.72, 0, 1),
+      opacity 180ms ease,
+      margin 220ms cubic-bezier(0.32, 0.72, 0, 1);
+  }
+  body.isAuth.authKeyboardOpen main.grid{
+    align-items: flex-start;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  body.isAuth.authKeyboardOpen .authScreen{
+    align-items: flex-start;
+    overflow-y: auto;
+    padding-bottom: calc(var(--auth-keyboard-inset, 0px) + env(safe-area-inset-bottom, 0px) + 16px);
+  }
+  body.isAuth.authKeyboardOpen .authInner{
+    margin-top: max(8px, env(safe-area-inset-top));
+    margin-bottom: 0;
+    padding-top: max(10px, env(safe-area-inset-top));
+  }
+  body.isAuth.authKeyboardOpen .authBrand,
+  body.isAuth.authKeyboardOpen .authTagline,
+  body.isAuth.authKeyboardOpen .authSub{
+    max-height: 0;
+    margin-top: 0;
+    margin-bottom: 0;
+    opacity: 0;
+    overflow: hidden;
+    pointer-events: none;
+  }
+  body.isAuth.authKeyboardOpen .authTermsCheck{
+    margin-top: 12px;
   }
   .authFieldInput,
   .authEmailBtn{

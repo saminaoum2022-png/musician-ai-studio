@@ -218,16 +218,6 @@ module.exports = async function handler(req, res) {
         return sendJson(res, created.status || 502, { error: created.error, code: created.code });
       }
 
-      const polled = await pollPreviewMaster(created.masteringTaskId);
-      if (!polled.ok) {
-        return sendJson(res, polled.status || 502, {
-          error: polled.error,
-          code: polled.code,
-          masteringTaskId: created.masteringTaskId,
-          pending: Boolean(polled.pending),
-        });
-      }
-
       const exp = Date.now() + 2 * 60 * 60 * 1000;
       const jobToken = signJobToken({
         userId: user.userId,
@@ -236,15 +226,18 @@ module.exports = async function handler(req, res) {
         exp,
       });
 
+      // Return immediately — client polls poll-preview (avoids 30s+ blocking on mobile).
+      const polled = await pollPreviewMaster(created.masteringTaskId, { attempts: 1, delayMs: 0 });
       return sendJson(res, 200, {
         ok: true,
         masteringTaskId: created.masteringTaskId,
-        previewUrl: polled.downloadUrl,
-        previewStartTime: polled.previewStartTime,
+        previewUrl: polled.ok ? polled.downloadUrl : "",
+        previewStartTime: polled.ok ? polled.previewStartTime : undefined,
         finish,
         jobToken,
         priceUsd: 3.99,
         productId: STUDIO_PRO_MASTER_PRODUCT_ID,
+        pending: !polled.ok,
       });
     }
 

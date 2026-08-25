@@ -2654,6 +2654,7 @@ function nativeHttpTimeoutsForApiPath(path) {
   const p = String(path || "").split("?")[0];
   if (
     p === "/api/music/generate" ||
+    p === "/api/music/studio-master" ||
     p === "/api/suno/generate" ||
     p === "/api/suno/stems"
   ) {
@@ -65695,15 +65696,28 @@ async function studioSeparateVocals(track, onPhase) {
 async function studioProMasterApi(body) {
   const tok = getSupabaseAuthToken();
   if (!tok) throw new Error("Sign in to use Pro Master.");
-  const r = await fetch(apiUrl("/api/music/studio-master"), {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${tok}`,
-      ...(isNativeShell() ? {} : { "X-Nabad-Client-Shell": "web" }),
-    },
-    body: JSON.stringify(body || {}),
-  });
+  let r;
+  try {
+    r = await apiFetch("/api/music/studio-master", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${tok}`,
+        ...(isNativeShell() ? {} : { "X-Nabad-Client-Shell": "web" }),
+      },
+      body: JSON.stringify(body || {}),
+    });
+  } catch (e) {
+    const msg = String(e?.message || "");
+    if (/load failed|failed to fetch|network/i.test(msg)) {
+      throw new Error(
+        isNativeShell()
+          ? "Couldn’t reach Pro Master — check Wi‑Fi or cellular and try again."
+          : "Couldn’t reach Pro Master — check your connection and try again.",
+      );
+    }
+    throw e;
+  }
   const d = await r.json().catch(() => ({}));
   if (!r.ok) {
     const err = new Error(String(d?.error || "Pro Master request failed."));
@@ -65731,26 +65745,23 @@ async function putMixBlobToRoexSignedUrl(signedUrl, blob) {
   const type = blob?.type || "audio/wav";
   if (!url) throw new Error("Missing upload URL.");
   if (isNativeShell()) {
-    try {
-      const { CapacitorHttp } = await import("../vendor/capacitor-core/index.js");
+    const CapHttp = window.Capacitor?.Plugins?.CapacitorHttp;
+    if (CapHttp?.request) {
       const data = await blob.arrayBuffer();
-      const r = await CapacitorHttp.request({
+      const r = await CapHttp.request({
         method: "PUT",
         url,
         headers: { "Content-Type": type },
         data,
+        responseType: "text",
+        connectTimeout: NATIVE_HTTP_LONG_COMPOSE_CONNECT_MS,
+        readTimeout: NATIVE_HTTP_LONG_COMPOSE_READ_MS,
       });
       const status = Number(r?.status || 0);
       if (status < 200 || status >= 300) {
         throw new Error(`Upload failed (${status || "network"}).`);
       }
       return;
-    } catch (e) {
-      if (!/Upload failed/i.test(String(e?.message || ""))) {
-        console.warn("[studio] CapacitorHttp upload fallback:", e?.message || e);
-      } else {
-        throw e;
-      }
     }
   }
   const put = await fetch(url, {
@@ -65791,7 +65802,7 @@ async function studioProMasterPreview({ blob, finish = "balanced" }) {
     finish,
   });
   if (!preview.previewUrl && preview.masteringTaskId) {
-    for (let i = 0; i < 8; i++) {
+    for (let i = 0; i < 16; i++) {
       await new Promise((res) => setTimeout(res, 2500));
       preview = await studioProMasterApi({
         action: "poll-preview",

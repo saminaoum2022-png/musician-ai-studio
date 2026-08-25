@@ -70,6 +70,12 @@ function verifyJobToken(token, expected) {
 }
 
 async function requireStudioPro(user, req) {
+  const stagingTester =
+    isAdminEmail(user.email) &&
+    (String(process.env.STUDIO_MASTER_ADMIN_BYPASS || "").trim() === "1" ||
+      String(process.env.STUDIO_MASTER_DEV_SKIP_PAYMENT || "").trim() === "1");
+  if (stagingTester) return { ok: true };
+
   const proGate = await requireProForWebApi(req, user.userId);
   if (!proGate.ok) return proGate;
   const pro = await fetchProSubscriptionForUser(user.userId);

@@ -2570,7 +2570,7 @@ async function saveVocalFromPreview(root) {
     if (m.proMaster && typeof bridge.proMasterPreview === "function") {
       setPhase("Creating your Pro Master preview…");
       const preview = await bridge.proMasterPreview({
-        blob: rendered,
+        blob: rendered.blob,
         finish: FINISH_PRESETS[m.finish] ? m.finish : "balanced",
       });
       current._proMaster = {

@@ -65730,14 +65730,18 @@ async function studioProMasterApi(body) {
 }
 
 async function blobToBase64(blob) {
-  const buf = await blob.arrayBuffer();
-  let binary = "";
-  const bytes = new Uint8Array(buf);
-  const chunk = 0x8000;
-  for (let i = 0; i < bytes.length; i += chunk) {
-    binary += String.fromCharCode(...bytes.subarray(i, i + chunk));
+  return blobToBase64Payload(blob);
+}
+
+async function blobToArrayBuffer(blob) {
+  if (blob && typeof blob.arrayBuffer === "function") {
+    return blob.arrayBuffer();
   }
-  return btoa(binary);
+  const b64 = await blobToBase64Payload(blob);
+  const bin = atob(b64);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return bytes.buffer;
 }
 
 async function putMixBlobToRoexSignedUrl(signedUrl, blob) {
@@ -65747,7 +65751,7 @@ async function putMixBlobToRoexSignedUrl(signedUrl, blob) {
   if (isNativeShell()) {
     const CapHttp = window.Capacitor?.Plugins?.CapacitorHttp;
     if (CapHttp?.request) {
-      const data = await blob.arrayBuffer();
+      const data = await blobToArrayBuffer(blob);
       const r = await CapHttp.request({
         method: "PUT",
         url,
@@ -65794,7 +65798,9 @@ async function studioProMasterUploadMix(blob) {
 }
 
 async function studioProMasterPreview({ blob, finish = "balanced" }) {
-  const trackUrl = await studioProMasterUploadMix(blob);
+  const mixBlob = blob instanceof Blob ? blob : blob?.blob;
+  if (!(mixBlob instanceof Blob)) throw new Error("Missing mix audio.");
+  const trackUrl = await studioProMasterUploadMix(mixBlob);
 
   let preview = await studioProMasterApi({
     action: "preview",

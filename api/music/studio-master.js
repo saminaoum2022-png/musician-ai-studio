@@ -32,6 +32,7 @@ const {
   uploadBufferToRoex,
   createMasteringPreview,
   pollPreviewMaster,
+  retrievePreviewMaster,
   retrieveFinalMaster,
   downloadRoexAudio,
 } = require("../_lib/roex-upstream");
@@ -284,6 +285,34 @@ module.exports = async function handler(req, res) {
         masteringTaskId,
         previewUrl: polled.downloadUrl,
         previewStartTime: polled.previewStartTime,
+      });
+    }
+
+    if (action === "preview-audio") {
+      const masteringTaskId = String(body?.masteringTaskId || "").trim();
+      if (!masteringTaskId) {
+        return sendJson(res, 400, { error: "Missing mastering task id.", code: "missing_task_id" });
+      }
+      const remote = String(body?.previewUrl || "").trim();
+      let downloadUrl = remote;
+      if (!downloadUrl) {
+        const polled = await retrievePreviewMaster(masteringTaskId);
+        if (!polled.ok) {
+          return sendJson(res, polled.status || 502, {
+            error: polled.error,
+            code: polled.code,
+            pending: Boolean(polled.pending),
+          });
+        }
+        downloadUrl = polled.downloadUrl;
+      }
+      const dl = await downloadRoexAudio(downloadUrl);
+      if (!dl.ok) return sendJson(res, dl.status || 502, { error: dl.error, code: "preview_download_failed" });
+      return sendJson(res, 200, {
+        ok: true,
+        masteringTaskId,
+        audioBase64: dl.buffer.toString("base64"),
+        contentType: dl.contentType || "audio/wav",
       });
     }
 

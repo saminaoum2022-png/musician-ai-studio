@@ -65696,7 +65696,7 @@ async function studioProMasterApi(body) {
   const tok = getSupabaseAuthToken();
   if (!tok) throw new Error("Sign in to use Pro Master.");
   const action = String(body?.action || "").trim().toLowerCase();
-  const longActions = new Set(["finalize"]);
+  const longActions = new Set(["finalize", "preview-audio"]);
   const timeoutOpts = longActions.has(action)
     ? { nativeReadTimeoutMs: 120000, nativeConnectTimeoutMs: 30000 }
     : {};
@@ -65834,6 +65834,48 @@ async function studioProMasterUploadMix(blob) {
   return up.readableUrl;
 }
 
+async function base64ToBlob(b64, contentType = "audio/wav") {
+  const raw = String(b64 || "").trim();
+  if (!raw) throw new Error("Missing audio data.");
+  const bin = atob(raw);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return new Blob([bytes], { type: contentType || "audio/wav" });
+}
+
+async function studioProMasterResolvePlayback(preview) {
+  const taskId = String(preview?.masteringTaskId || "").trim();
+  const remote = String(preview?.previewUrl || "").trim();
+  if (!taskId && !remote) throw new Error("Missing preview audio.");
+
+  // RoEx CDN URLs often fail in WKWebView <audio> — proxy via our API on native.
+  if (isNativeShell() || !remote) {
+    const d = await studioProMasterApi({
+      action: "preview-audio",
+      masteringTaskId: taskId,
+      previewUrl: remote,
+    });
+    const blob = await base64ToBlob(d?.audioBase64, d?.contentType || "audio/wav");
+    return URL.createObjectURL(blob);
+  }
+
+  try {
+    const r = await fetch(remote);
+    if (r.ok) {
+      const blob = await r.blob();
+      if (blob.size > 512) return URL.createObjectURL(blob);
+    }
+  } catch {}
+
+  const d = await studioProMasterApi({
+    action: "preview-audio",
+    masteringTaskId: taskId,
+    previewUrl: remote,
+  });
+  const blob = await base64ToBlob(d?.audioBase64, d?.contentType || "audio/wav");
+  return URL.createObjectURL(blob);
+}
+
 async function studioProMasterPreview({ blob, finish = "balanced" }) {
   const mixBlob = blob instanceof Blob ? blob : blob?.blob;
   if (!(mixBlob instanceof Blob)) throw new Error("Missing mix audio.");
@@ -65855,6 +65897,7 @@ async function studioProMasterPreview({ blob, finish = "balanced" }) {
     }
   }
   if (!preview.previewUrl) throw new Error("Pro Master preview isn’t ready yet — try again.");
+  preview.playbackUrl = await studioProMasterResolvePlayback(preview);
   return preview;
 }
 
@@ -65866,12 +65909,7 @@ async function studioProMasterFinalize({ masteringTaskId, jobToken, stripeSessio
     stripeSessionId,
     iapTransactionId,
   });
-  const b64 = String(d?.audioBase64 || "").trim();
-  if (!b64) throw new Error("Missing mastered audio.");
-  const bin = atob(b64);
-  const bytes = new Uint8Array(bin.length);
-  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-  return new Blob([bytes], { type: d.contentType || "audio/wav" });
+  return base64ToBlob(d?.audioBase64, d?.contentType || "audio/wav");
 }
 
 async function studioCheckoutProMaster({ masteringTaskId, jobToken }) {

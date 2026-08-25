@@ -2576,6 +2576,7 @@ async function saveVocalFromPreview(root) {
       current._proMaster = {
         ...preview,
         localRendered: rendered,
+        durationSec: rendered.durationSec,
         title: defaultVocalTitle(),
         sourceTitle: srcTitle,
         cover,
@@ -2641,6 +2642,7 @@ function persistProMasterSession(pm) {
     sessionStorage.setItem(PRO_MASTER_SESSION_KEY, JSON.stringify({
       masteringTaskId: pm.masteringTaskId,
       previewUrl: pm.previewUrl,
+      playbackUrl: pm.playbackUrl,
       jobToken: pm.jobToken,
       finish: pm.finish,
       title: pm.title,
@@ -2693,7 +2695,7 @@ function renderProMasterUnlock(root) {
         <h2 class="studioProMasterTitle">Hear your Pro Master</h2>
         <p class="studioProMasterSub">30-second preview · ${esc(PRO_MASTER.priceDisplay)} to save the full release master</p>
       </div>
-      <audio class="studioProMasterAudio" controls preload="metadata" src="${esc(pm.previewUrl || "")}"></audio>
+      <audio class="studioProMasterAudio" controls preload="metadata" src="${esc(pm.playbackUrl || pm.previewUrl || "")}"></audio>
       <div class="studioFooter studioFooter--finish">
         <button type="button" class="studioPrimary studioPrimary--continue" data-pro-master-unlock>Unlock & save · ${esc(PRO_MASTER.priceDisplay)}</button>
         <button type="button" class="studioGhost" data-pro-master-local>Save with local finish instead</button>
@@ -2730,11 +2732,21 @@ async function unlockProMasterAndSave(root) {
   bridge.haptic?.("medium");
   try {
     if (typeof bridge.purchaseProMaster === "function") {
-      const purchase = await bridge.purchaseProMaster();
-      await finalizeProMasterSave(root, {
-        iapTransactionId: purchase?.transactionId,
-        jobToken: pm.jobToken,
-      });
+      try {
+        const purchase = await bridge.purchaseProMaster();
+        await finalizeProMasterSave(root, {
+          iapTransactionId: purchase?.transactionId,
+          jobToken: pm.jobToken,
+        });
+      } catch (e) {
+        if (e?.userCancelled) return;
+        // Staging server can skip payment — try finalize without IAP (RevenueCat not set up yet).
+        if (/app store|not configured|isn.t in/i.test(String(e?.message || ""))) {
+          await finalizeProMasterSave(root, { jobToken: pm.jobToken });
+          return;
+        }
+        throw e;
+      }
       return;
     }
     if (typeof bridge.checkoutProMaster === "function") {
@@ -2772,7 +2784,10 @@ async function finalizeProMasterSave(root, { stripeSessionId = "", iapTransactio
       iapTransactionId,
     });
     current._pendingSave = {
-      rendered: finalBlob,
+      rendered: {
+        blob: finalBlob,
+        durationSec: Number(pm.durationSec || pm.localRendered?.durationSec || 0),
+      },
       title: pm.title || defaultVocalTitle(),
       sourceTitle: pm.sourceTitle || "",
       cover: pm.cover || "",

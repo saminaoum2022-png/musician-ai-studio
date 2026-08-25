@@ -14,6 +14,7 @@
  */
 
 import { StudioEngine, FINISH_PRESETS, FINISH_IDS, analyzeTakeBuffer } from "./engine.js";
+import { PRO_MASTER } from "../pro-plan-config.js";
 import {
   listProjects,
   upsertProject,
@@ -473,6 +474,7 @@ function freshContext(track) {
 }
 
 const MONITOR_PREF_KEY = "nabad.studio.monitor.v1";
+const PRO_MASTER_SESSION_KEY = "nabad.studio.pro_master.v1";
 function readMonitorPref() {
   try { return localStorage.getItem(MONITOR_PREF_KEY) !== "0"; } catch { return true; }
 }
@@ -496,7 +498,9 @@ export function enterStudioRoot() {
   if (screen === "source") { renderSource(root); return; }
   if (screen === "recording") { renderRecording(root); return; }
   if (screen === "review" || screen === "mix") { renderPreviewMix(root, engine?.getActiveTake?.()); return; }
+  if (screen === "pro_master") { renderProMasterUnlock(root); return; }
   if (screen === "edit") { renderEditTake(root, engine?.getActiveTake?.()); return; }
+  void resumeStudioMasterCheckoutIfNeeded(root);
   renderHome(root);
   void ensureGuide(root);
   void ensureTimedLyrics(root);
@@ -1803,6 +1807,13 @@ function renderPreviewMix(root, take) {
             `<button type="button" class="studioSegBtn${m.finish === id ? " isActive" : ""}" data-finish="${id}">${esc(FINISH_LABELS[id] || id)}</button>`,
           ).join("")}
         </div>
+        <label class="studioProMasterToggle">
+          <input type="checkbox" data-studio-pro-master ${m.proMaster ? "checked" : ""} aria-describedby="studioProMasterDesc" />
+          <span class="studioProMasterCopy">
+            <strong class="studioProMasterTitle">Pro Master ✨</strong>
+            <span class="studioProMasterDesc" id="studioProMasterDesc">Free 30s preview · ${esc(PRO_MASTER.priceDisplay)} to save full master</span>
+          </span>
+        </label>
       </section>
 
       <div class="studioFooter studioFooter--finish">
@@ -2027,6 +2038,11 @@ function bindPreviewMix(root, take, aiRec) {
       x.classList.toggle("isActive", x === b);
     });
     if (engine?.isPlaying) void restartMixPreview(root);
+  });
+
+  root.querySelector("[data-studio-pro-master]")?.addEventListener("change", (e) => {
+    m.proMaster = Boolean(e.target.checked);
+    bridge.haptic?.("light");
   });
 
   root.querySelector("[data-studio-save-vocal]")?.addEventListener("click", () => {
@@ -2530,9 +2546,11 @@ async function saveVocalFromPreview(root) {
 
   renderNabadProcessing(root, {
     screen: "finalizing",
-    title: "Finalizing your mix",
-    phase: "Enhancing vocal tone…",
-    hint: `Applying ${scoreCopy.finishLabel} finish before you name your song.`,
+    title: m.proMaster ? "Preparing Pro Master" : "Finalizing your mix",
+    phase: m.proMaster ? "Rendering your mix…" : "Enhancing vocal tone…",
+    hint: m.proMaster
+      ? "You'll hear a free 30-second preview before paying to save."
+      : `Applying ${scoreCopy.finishLabel} finish before you name your song.`,
     cover,
     score: scoreCopy.score,
     scoreLabel: "Nabad Score",
@@ -2544,10 +2562,33 @@ async function saveVocalFromPreview(root) {
 
   try {
     await yieldToUi();
-    setPhase(`Applying ${scoreCopy.finishLabel} finish…`);
+    setPhase(m.proMaster ? "Rendering your mix…" : `Applying ${scoreCopy.finishLabel} finish…`);
     await yieldToUi();
-    setPhase("Rendering your release…");
+    setPhase(m.proMaster ? "Sending to Pro Master…" : "Rendering your release…");
     const rendered = await engine.renderMix(mixParams());
+
+    if (m.proMaster && typeof bridge.proMasterPreview === "function") {
+      setPhase("Creating your Pro Master preview…");
+      setPhase("Verifying Pro Master preview…");
+      const preview = await bridge.proMasterPreview({
+        blob: rendered.blob,
+        finish: FINISH_PRESETS[m.finish] ? m.finish : "balanced",
+      });
+      current._proMaster = {
+        ...preview,
+        playbackUrl: typeof bridge.proMasterPlaybackUrl === "function" ? bridge.proMasterPlaybackUrl(preview) : "",
+        localRendered: rendered,
+        durationSec: rendered.durationSec,
+        title: defaultVocalTitle(),
+        sourceTitle: srcTitle,
+        cover,
+      };
+      persistProMasterSession(current._proMaster);
+      screen = "pro_master";
+      renderProMasterUnlock(root);
+      return;
+    }
+
     setPhase("Preparing song details…");
     await yieldToUi();
     current._pendingSave = {
@@ -2559,8 +2600,318 @@ async function saveVocalFromPreview(root) {
     renderSaveDetails(root);
   } catch (e) {
     console.warn("[studio] finalize failed:", e);
-    bridge.showToast?.("Couldn't finalize — your take is still here.");
+    bridge.showToast?.(
+      m.proMaster
+        ? `Pro Master failed: ${String(e?.message || "try again or turn it off.")}`
+        : "Couldn't finalize — your take is still here.",
+      { durationMs: 5200 },
+    );
     renderPreviewMix(root, take);
+  }
+}
+
+function parseStudioMasterReturnParams() {
+  try {
+    const hash = String(location.hash || "");
+    const qIdx = hash.indexOf("?");
+    if (qIdx < 0) return null;
+    const qs = new URLSearchParams(hash.slice(qIdx + 1));
+    if (qs.get("studio_master") !== "success") return null;
+    const masteringTaskId = String(qs.get("task_id") || "").trim();
+    const stripeSessionId = String(qs.get("session_id") || "").trim();
+    const jobToken = String(qs.get("job_token") || "").trim();
+    if (!masteringTaskId || !stripeSessionId) return null;
+    return { masteringTaskId, stripeSessionId, jobToken };
+  } catch {
+    return null;
+  }
+}
+
+function clearStudioMasterReturnParams() {
+  try {
+    const hash = String(location.hash || "");
+    const base = hash.split("?")[0] || "#/studio";
+    if (location.hash !== base) location.hash = base;
+  } catch {}
+}
+
+function persistProMasterSession(pm) {
+  try {
+    if (!pm) {
+      sessionStorage.removeItem(PRO_MASTER_SESSION_KEY);
+      return;
+    }
+    sessionStorage.setItem(PRO_MASTER_SESSION_KEY, JSON.stringify({
+      masteringTaskId: pm.masteringTaskId,
+      previewUrl: pm.previewUrl,
+      playbackUrl: pm.playbackUrl?.startsWith?.("blob:") ? "" : pm.playbackUrl,
+      jobToken: pm.jobToken,
+      finish: pm.finish,
+      title: pm.title,
+      sourceTitle: pm.sourceTitle,
+      cover: pm.cover,
+    }));
+  } catch {}
+}
+
+function restoreProMasterSession() {
+  try {
+    const raw = sessionStorage.getItem(PRO_MASTER_SESSION_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+
+async function resumeStudioMasterCheckoutIfNeeded(root) {
+  const params = parseStudioMasterReturnParams();
+  if (!params) return;
+  if (!current?._proMaster) {
+    const saved = restoreProMasterSession();
+    if (saved) current._proMaster = { ...saved, localRendered: null };
+  }
+  if (!current?._proMaster) return;
+  if (String(current._proMaster.masteringTaskId || "") !== params.masteringTaskId) return;
+  clearStudioMasterReturnParams();
+  screen = "pro_master";
+  renderProMasterUnlock(root);
+  await finalizeProMasterSave(root, {
+    stripeSessionId: params.stripeSessionId,
+    jobToken: params.jobToken || current._proMaster.jobToken,
+  });
+}
+
+function proMasterPreviewHint(pm) {
+  const bytes = Number(pm?.previewBytes || 0);
+  if (bytes > 512) {
+    return `Preview ready (${Math.max(1, Math.round(bytes / 1024))} KB) — tap play to hear your 30-second clip.`;
+  }
+  return "Tap play to hear your 30-second preview.";
+}
+
+function renderProMasterUnlock(root) {
+  const pm = current?._proMaster;
+  if (!pm) {
+    renderPreviewMix(root, engine?.getActiveTake?.());
+    return;
+  }
+  const cover = pm.cover || trackCoverUrl();
+  root.innerHTML = `
+    <div class="studio studioProMaster" data-studio-screen="pro_master">
+      ${headerHtml("PRO MASTER")}
+      <div class="studioProMasterHero">
+        ${cover ? `<img class="studioProMasterArt" src="${esc(cover)}" alt="" />` : ""}
+        <h2 class="studioProMasterTitle">Hear your Pro Master</h2>
+        <p class="studioProMasterSub">30-second preview · ${esc(PRO_MASTER.priceDisplay)} to save the full release master</p>
+      </div>
+      <p class="studioProMasterAudioHint" data-pro-master-audio-hint>${proMasterPreviewHint(pm)}</p>
+      <button type="button" class="studioPrimary studioProMasterPlay" data-pro-master-play>▶ Play 30s preview</button>
+      <div class="studioFooter studioFooter--finish">
+        <button type="button" class="studioPrimary studioPrimary--continue" data-pro-master-unlock>Unlock & save · ${esc(PRO_MASTER.priceDisplay)}</button>
+        <button type="button" class="studioGhost" data-pro-master-local>Save with local finish instead</button>
+      </div>
+    </div>`;
+
+  bindHeader(root, () => {
+    screen = "mix";
+    renderPreviewMix(root, engine?.getActiveTake?.());
+  });
+
+  root.querySelector("[data-pro-master-local]")?.addEventListener("click", () => {
+    bridge.haptic?.("light");
+    current._pendingSave = {
+      rendered: pm.localRendered,
+      title: pm.title || defaultVocalTitle(),
+      sourceTitle: pm.sourceTitle || "",
+      cover: pm.cover || "",
+    };
+    current._proMaster = null;
+    persistProMasterSession(null);
+    screen = "mix";
+    renderSaveDetails(root);
+  });
+
+  root.querySelector("[data-pro-master-unlock]")?.addEventListener("click", () => {
+    void unlockProMasterAndSave(root);
+  });
+
+  root.querySelector("[data-pro-master-play]")?.addEventListener("click", () => {
+    void playProMasterPreview(root, pm);
+  });
+
+  startProMasterPlaybackPrefetch(root, pm);
+}
+
+function startProMasterPlaybackPrefetch(root, pm) {
+  if (!pm?.masteringTaskId) return;
+  if (typeof bridge.proMasterPlaybackUrl === "function") {
+    const url = String(bridge.proMasterPlaybackUrl(pm) || "").trim();
+    if (url) {
+      pm.playbackUrl = url;
+      persistProMasterSession(pm);
+    }
+  }
+}
+
+async function playProMasterPreview(root, pm) {
+  const btn = root.querySelector("[data-pro-master-play]");
+  const hint = root.querySelector("[data-pro-master-audio-hint]");
+  if (!pm?.masteringTaskId) return;
+  bridge.primePlayerInGesture?.();
+  bridge.haptic?.("light");
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = "Loading preview…";
+  }
+  if (hint) hint.textContent = "Loading preview audio…";
+  try {
+    let url = "";
+    if (typeof bridge.proMasterPlaybackUrl === "function") {
+      url = String(bridge.proMasterPlaybackUrl(pm) || "").trim();
+    }
+    if (!url && typeof bridge.proMasterLoadPlayback === "function") {
+      url = await bridge.proMasterLoadPlayback(pm);
+    }
+    if (url) {
+      pm.playbackUrl = url;
+      persistProMasterSession(pm);
+    }
+    if (!url) throw new Error("Preview audio missing.");
+    if (typeof bridge.playProMasterPreviewAudio === "function") {
+      await bridge.playProMasterPreviewAudio(url, pm.masteringTaskId);
+      if (hint) hint.textContent = "Playing your 30-second Pro Master preview.";
+      if (btn) btn.textContent = "▶ Play 30s preview";
+      return;
+    }
+    if (typeof bridge.playInlineUrl === "function") {
+      const played = await bridge.playInlineUrl(
+        url,
+        "Pro Master preview",
+        { type: "studio_pro_master", id: pm.masteringTaskId },
+        { throwOnError: true, canPlayTimeoutMs: 20000 },
+      );
+      if (!played) throw new Error("Preview couldn't play — tap Play again.");
+      if (hint) hint.textContent = "Playing your 30-second Pro Master preview.";
+      if (btn) btn.textContent = "▶ Play 30s preview";
+      return;
+    }
+    const audio = new Audio(url);
+    audio.preload = "auto";
+    try { audio.setAttribute("playsinline", ""); } catch {}
+    await audio.play();
+    if (hint) hint.textContent = "Playing your 30-second Pro Master preview.";
+    if (btn) btn.textContent = "▶ Play 30s preview";
+  } catch (e) {
+    console.warn("[studio] pro master play failed:", e?.message || e);
+    let msg = String(e?.message || "Preview couldn’t load — try again.");
+    if (typeof bridge.proMasterDiagnosePreview === "function") {
+      try {
+        const d = await bridge.proMasterDiagnosePreview(pm);
+        if (!d?.downloadOk) {
+          msg = String(d?.error || msg);
+          if (d?.pending) {
+            msg = "RoEx is still mastering your preview — wait 30s and tap Play again.";
+          } else if (d?.retrieveOk && !d?.downloadOk) {
+            msg = "RoEx returned a preview link but no audio yet — wait and tap Play again.";
+          }
+        }
+      } catch {}
+    }
+    const friendly =
+      /preview_load_failed:4|src_not_supported/i.test(msg)
+        ? "Preview format not supported on this device — try Save with local finish."
+        : /preview_load_failed:2|network/i.test(msg)
+          ? "Couldn't stream preview — check connection and tap Play again."
+          : /play_failed|preview_load_failed/i.test(msg)
+            ? "Preview loaded but couldn’t play — tap Play again."
+            : /timed out/i.test(msg)
+              ? "Preview still processing — wait 30s and tap Play again."
+              : msg;
+    if (hint) hint.textContent = friendly;
+    bridge.showToast?.(friendly, { durationMs: 5200 });
+    if (btn) btn.textContent = "▶ Play 30s preview";
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
+async function unlockProMasterAndSave(root) {
+  const pm = current?._proMaster;
+  if (!pm?.masteringTaskId) return;
+  bridge.haptic?.("medium");
+  try {
+    if (typeof bridge.purchaseProMaster === "function") {
+      try {
+        const purchase = await bridge.purchaseProMaster();
+        await finalizeProMasterSave(root, {
+          iapTransactionId: purchase?.transactionId,
+          jobToken: pm.jobToken,
+        });
+      } catch (e) {
+        if (e?.userCancelled) return;
+        // Staging server can skip payment — try finalize without IAP (RevenueCat not set up yet).
+        if (/app store|not configured|isn.t in/i.test(String(e?.message || ""))) {
+          await finalizeProMasterSave(root, { jobToken: pm.jobToken });
+          return;
+        }
+        throw e;
+      }
+      return;
+    }
+    if (typeof bridge.checkoutProMaster === "function") {
+      persistProMasterSession(pm);
+      await bridge.checkoutProMaster({
+        masteringTaskId: pm.masteringTaskId,
+        jobToken: pm.jobToken,
+      });
+      return;
+    }
+    bridge.showToast?.("Checkout is not available on this device yet.");
+  } catch (e) {
+    if (e?.userCancelled) return;
+    bridge.showToast?.(String(e?.message || "Purchase failed."));
+  }
+}
+
+async function finalizeProMasterSave(root, { stripeSessionId = "", iapTransactionId = "", jobToken = "" } = {}) {
+  const pm = current?._proMaster;
+  if (!pm?.masteringTaskId || typeof bridge.proMasterFinalize !== "function") return;
+
+  renderNabadProcessing(root, {
+    screen: "finalizing",
+    title: "Saving Pro Master",
+    phase: "Retrieving your full master…",
+    hint: "Almost there — this takes up to a minute.",
+    cover: pm.cover || "",
+  });
+
+  try {
+    const finalBlob = await bridge.proMasterFinalize({
+      masteringTaskId: pm.masteringTaskId,
+      jobToken: jobToken || pm.jobToken,
+      stripeSessionId,
+      iapTransactionId,
+    });
+    current._pendingSave = {
+      rendered: {
+        blob: finalBlob,
+        durationSec: Number(pm.durationSec || pm.localRendered?.durationSec || 0),
+      },
+      title: pm.title || defaultVocalTitle(),
+      sourceTitle: pm.sourceTitle || "",
+      cover: pm.cover || "",
+      proMaster: true,
+    };
+    current._proMaster = null;
+    persistProMasterSession(null);
+    screen = "mix";
+    renderSaveDetails(root);
+  } catch (e) {
+    console.warn("[studio] pro master finalize failed:", e);
+    bridge.showToast?.(String(e?.message || "Couldn't save Pro Master."));
+    screen = "pro_master";
+    renderProMasterUnlock(root);
   }
 }
 

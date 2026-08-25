@@ -2569,12 +2569,14 @@ async function saveVocalFromPreview(root) {
 
     if (m.proMaster && typeof bridge.proMasterPreview === "function") {
       setPhase("Creating your Pro Master preview…");
+      setPhase("Verifying Pro Master preview…");
       const preview = await bridge.proMasterPreview({
         blob: rendered.blob,
         finish: FINISH_PRESETS[m.finish] ? m.finish : "balanced",
       });
       current._proMaster = {
         ...preview,
+        playbackUrl: typeof bridge.proMasterPlaybackUrl === "function" ? bridge.proMasterPlaybackUrl(preview) : "",
         localRendered: rendered,
         durationSec: rendered.durationSec,
         title: defaultVocalTitle(),
@@ -2680,6 +2682,14 @@ async function resumeStudioMasterCheckoutIfNeeded(root) {
   });
 }
 
+function proMasterPreviewHint(pm) {
+  const bytes = Number(pm?.previewBytes || 0);
+  if (bytes > 512) {
+    return `Preview ready (${Math.max(1, Math.round(bytes / 1024))} KB) — tap play to hear your 30-second clip.`;
+  }
+  return "Tap play to hear your 30-second preview.";
+}
+
 function renderProMasterUnlock(root) {
   const pm = current?._proMaster;
   if (!pm) {
@@ -2695,7 +2705,7 @@ function renderProMasterUnlock(root) {
         <h2 class="studioProMasterTitle">Hear your Pro Master</h2>
         <p class="studioProMasterSub">30-second preview · ${esc(PRO_MASTER.priceDisplay)} to save the full release master</p>
       </div>
-      <p class="studioProMasterAudioHint" data-pro-master-audio-hint>Tap play to hear your 30-second preview.</p>
+      <p class="studioProMasterAudioHint" data-pro-master-audio-hint>${proMasterPreviewHint(pm)}</p>
       <button type="button" class="studioPrimary studioProMasterPlay" data-pro-master-play>▶ Play 30s preview</button>
       <div class="studioFooter studioFooter--finish">
         <button type="button" class="studioPrimary studioPrimary--continue" data-pro-master-unlock>Unlock & save · ${esc(PRO_MASTER.priceDisplay)}</button>
@@ -2729,12 +2739,26 @@ function renderProMasterUnlock(root) {
   root.querySelector("[data-pro-master-play]")?.addEventListener("click", () => {
     void playProMasterPreview(root, pm);
   });
+
+  startProMasterPlaybackPrefetch(root, pm);
+}
+
+function startProMasterPlaybackPrefetch(root, pm) {
+  if (!pm?.masteringTaskId) return;
+  if (typeof bridge.proMasterPlaybackUrl === "function") {
+    const url = String(bridge.proMasterPlaybackUrl(pm) || "").trim();
+    if (url) {
+      pm.playbackUrl = url;
+      persistProMasterSession(pm);
+    }
+  }
 }
 
 async function playProMasterPreview(root, pm) {
   const btn = root.querySelector("[data-pro-master-play]");
   const hint = root.querySelector("[data-pro-master-audio-hint]");
   if (!pm?.masteringTaskId) return;
+  bridge.primePlayerInGesture?.();
   bridge.haptic?.("light");
   if (btn) {
     btn.disabled = true;
@@ -2742,22 +2766,32 @@ async function playProMasterPreview(root, pm) {
   }
   if (hint) hint.textContent = "Loading preview audio…";
   try {
-    let url = String(pm.playbackUrl || "").trim();
-    const isNativeFile =
-      /_capacitor_file_/i.test(url) ||
-      url.startsWith("capacitor://") ||
-      url.startsWith("file://");
-    if (!url || url.startsWith("blob:") || (/^https?:\/\//i.test(url) && !isNativeFile)) {
-      if (typeof bridge.proMasterLoadPlayback !== "function") {
-        throw new Error("Preview player unavailable.");
-      }
+    let url = "";
+    if (typeof bridge.proMasterPlaybackUrl === "function") {
+      url = String(bridge.proMasterPlaybackUrl(pm) || "").trim();
+    }
+    if (!url && typeof bridge.proMasterLoadPlayback === "function") {
       url = await bridge.proMasterLoadPlayback(pm);
+    }
+    if (url) {
       pm.playbackUrl = url;
       persistProMasterSession(pm);
     }
     if (!url) throw new Error("Preview audio missing.");
+    if (typeof bridge.playProMasterPreviewAudio === "function") {
+      await bridge.playProMasterPreviewAudio(url, pm.masteringTaskId);
+      if (hint) hint.textContent = "Playing your 30-second Pro Master preview.";
+      if (btn) btn.textContent = "▶ Play 30s preview";
+      return;
+    }
     if (typeof bridge.playInlineUrl === "function") {
-      await bridge.playInlineUrl(url, "Pro Master preview", { type: "studio_pro_master", id: pm.masteringTaskId });
+      const played = await bridge.playInlineUrl(
+        url,
+        "Pro Master preview",
+        { type: "studio_pro_master", id: pm.masteringTaskId },
+        { throwOnError: true, canPlayTimeoutMs: 20000 },
+      );
+      if (!played) throw new Error("Preview couldn't play — tap Play again.");
       if (hint) hint.textContent = "Playing your 30-second Pro Master preview.";
       if (btn) btn.textContent = "▶ Play 30s preview";
       return;
@@ -2770,9 +2804,32 @@ async function playProMasterPreview(root, pm) {
     if (btn) btn.textContent = "▶ Play 30s preview";
   } catch (e) {
     console.warn("[studio] pro master play failed:", e?.message || e);
-    const msg = String(e?.message || "Preview couldn’t load — try again.");
-    if (hint) hint.textContent = /timed out/i.test(msg) ? "Preview still processing — wait 30s and tap Play again." : msg;
-    bridge.showToast?.(/timed out/i.test(msg) ? "Preview still processing — try Play again in a moment." : msg, { durationMs: 4800 });
+    let msg = String(e?.message || "Preview couldn’t load — try again.");
+    if (typeof bridge.proMasterDiagnosePreview === "function") {
+      try {
+        const d = await bridge.proMasterDiagnosePreview(pm);
+        if (!d?.downloadOk) {
+          msg = String(d?.error || msg);
+          if (d?.pending) {
+            msg = "RoEx is still mastering your preview — wait 30s and tap Play again.";
+          } else if (d?.retrieveOk && !d?.downloadOk) {
+            msg = "RoEx returned a preview link but no audio yet — wait and tap Play again.";
+          }
+        }
+      } catch {}
+    }
+    const friendly =
+      /preview_load_failed:4|src_not_supported/i.test(msg)
+        ? "Preview format not supported on this device — try Save with local finish."
+        : /preview_load_failed:2|network/i.test(msg)
+          ? "Couldn't stream preview — check connection and tap Play again."
+          : /play_failed|preview_load_failed/i.test(msg)
+            ? "Preview loaded but couldn’t play — tap Play again."
+            : /timed out/i.test(msg)
+              ? "Preview still processing — wait 30s and tap Play again."
+              : msg;
+    if (hint) hint.textContent = friendly;
+    bridge.showToast?.(friendly, { durationMs: 5200 });
     if (btn) btn.textContent = "▶ Play 30s preview";
   } finally {
     if (btn) btn.disabled = false;

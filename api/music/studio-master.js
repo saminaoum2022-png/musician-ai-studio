@@ -247,6 +247,41 @@ module.exports = async function handler(req, res) {
       });
     }
 
+    if (action === "diagnose-preview") {
+      const masteringTaskId = String(body?.masteringTaskId || "").trim();
+      const previewUrl = String(body?.previewUrl || "").trim();
+      let meta = null;
+      if (previewUrl) {
+        meta = { ok: true, downloadUrl: previewUrl, previewStartTime: body?.previewStartTime };
+      } else if (masteringTaskId) {
+        meta = await retrievePreviewMaster(masteringTaskId);
+      } else {
+        return sendJson(res, 400, { error: "Missing mastering task id.", code: "missing_task_id" });
+      }
+      if (!meta.ok) {
+        return sendJson(res, 200, {
+          ok: false,
+          retrieveOk: false,
+          pending: Boolean(meta.pending),
+          error: meta.error || "Preview not ready yet.",
+          code: meta.code || "preview_pending",
+        });
+      }
+      const dl = await downloadRoexAudio(meta.downloadUrl, { retries: 4, delayMs: 1500 });
+      return sendJson(res, 200, {
+        ok: Boolean(dl.ok),
+        retrieveOk: true,
+        masteringTaskId: masteringTaskId || undefined,
+        previewUrl: meta.downloadUrl,
+        previewStartTime: meta.previewStartTime,
+        downloadOk: Boolean(dl.ok),
+        bytes: dl.ok ? dl.buffer.length : 0,
+        contentType: dl.ok ? dl.contentType || "audio/mpeg" : "",
+        error: dl.ok ? "" : dl.error || "Preview download failed.",
+        code: dl.ok ? "ready" : "preview_download_failed",
+      });
+    }
+
     if (action === "poll-preview") {
       const masteringTaskId = String(body?.masteringTaskId || "").trim();
       if (!masteringTaskId) {

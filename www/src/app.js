@@ -54754,7 +54754,7 @@ function setPlayerSource(url, label) {
   }
   try {
     const u = String(playUrl || "");
-    if (!u || u.startsWith("blob:")) {
+    if (!u || u.startsWith("blob:") || u.startsWith("capacitor:") || /_capacitor_file_/i.test(u)) {
       a.crossOrigin = "anonymous";
     } else {
       const parsed = new URL(u, location.href);
@@ -56075,8 +56075,10 @@ async function playOnPlayerPage(url, label, meta = null, opts = {}) {
   }
 }
 
-async function playInline(url, label, source) {
-  if (!url) return;
+async function playInline(url, label, source, opts = {}) {
+  if (!url) return false;
+  const throwOnError = opts?.throwOnError === true;
+  const canPlayMs = Number(opts?.canPlayTimeoutMs) > 0 ? Number(opts.canPlayTimeoutMs) : 8000;
   if (String(source?.type || "") !== "studio_vocal") {
     try { stopVocalsPlayback(); } catch {}
   }
@@ -56104,8 +56106,9 @@ async function playInline(url, label, source) {
       renderHubNowPlaying();
     } catch {}
   });
-  await waitForAudioCanPlay(a, 8000);
+  const canPlay = await waitForAudioCanPlay(a, canPlayMs);
   try {
+    if (!canPlay) throw new Error("preview_load_failed");
     if (a.paused && !a.ended) {
       const ok = await hubAudioPlayWithRetry(a);
       if (!ok) throw new Error("play_failed");
@@ -56115,6 +56118,7 @@ async function playInline(url, label, source) {
     if (els.btnPlayerPause) els.btnPlayerPause.disabled = false;
   } catch (e) {
     clearPlaybackPending();
+    if (throwOnError) throw e;
     setStatus(`In-app playback failed (${e?.name || "error"}). Tap Open Direct.`);
     // Don't fail silently on inline taps — the usual cause is an expired link.
     try {
@@ -56123,11 +56127,17 @@ async function playInline(url, label, source) {
         durationMs: 4200,
       });
     } catch {}
+    try {
+      syncAllPlaybackRowHighlights();
+      renderHubNowPlaying();
+    } catch {}
+    return false;
   }
   try {
     syncAllPlaybackRowHighlights();
     renderHubNowPlaying();
   } catch {}
+  return true;
 }
 
 function formatTime(sec) {
@@ -65479,6 +65489,17 @@ try {
         renderProfileSongs();
       } catch {}
     },
+    proMasterPreview: (opts) => studioProMasterPreview(opts),
+    proMasterStreamUrl: (preview) => studioProMasterStreamUrl(preview),
+    proMasterPlaybackUrl: (preview) => studioProMasterPlaybackUrl(preview),
+    proMasterDiagnosePreview: (preview) => studioProMasterDiagnosePreview(preview),
+    proMasterLoadPlayback: (preview) => studioProMasterResolvePlayback(preview),
+    primePlayerInGesture: () => primeGlobalPlayerInGesture(),
+    playProMasterPreviewAudio: (url, taskId) => playProMasterPreviewAudio(url, taskId),
+    playInlineUrl: (url, label, source, opts) => playInline(url, label, source, opts),
+    proMasterFinalize: (opts) => studioProMasterFinalize(opts),
+    checkoutProMaster: isNativeShell() ? undefined : (opts) => studioCheckoutProMaster(opts),
+    purchaseProMaster: isNativeShell() ? () => studioPurchaseProMaster() : undefined,
     latestTrack: () => {
       try {
         return loadLibrary().find(
@@ -65686,6 +65707,837 @@ async function studioSeparateVocals(track, onPhase) {
     }
   }
   throw new Error("Separation is taking longer than expected — try again in a moment.");
+}
+
+async function studioProMasterApi(body, { readTimeoutMs } = {}) {
+  const tok = getSupabaseAuthToken();
+  if (!tok) throw new Error("Sign in to use Pro Master.");
+  const action = String(body?.action || "").trim().toLowerCase();
+  const longActions = new Set([
+    "finalize",
+    "preview-audio",
+    "upload-mix",
+    "preview",
+    "poll-preview",
+    "diagnose-preview",
+  ]);
+  const timeoutMs =
+    readTimeoutMs ?? (longActions.has(action) ? 180000 : 90000);
+
+  if (isNativeShell()) {
+    await ensureNativeNetworkReady();
+    await ensureNativeApiBaseResolved();
+  }
+  await prepareApiAuthForFetch();
+
+  const run = async (signal) => {
+    const token = getSupabaseAuthToken();
+    if (!token) throw new Error("Sign in to use Pro Master.");
+    const r = await apiFetch("/api/music/studio-master", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(body || {}),
+      cache: "no-store",
+      signal,
+      nativeReadTimeoutMs: timeoutMs,
+      nativeConnectTimeoutMs: 30000,
+    });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) {
+      const err = new Error(String(d?.error || `Pro Master request failed (${r.status}).`));
+      err.code = d?.code;
+      err.status = r.status;
+      err.payload = d;
+      if (/download http 404|preview_download/i.test(String(d?.error || ""))) {
+        err.message = "Pro Master preview isn’t ready yet — try Save again.";
+      }
+      throw err;
+    }
+    return d;
+  };
+
+  const ctrl = new AbortController();
+  const timer = window.setTimeout(() => ctrl.abort(), timeoutMs);
+  try {
+    return await run(ctrl.signal);
+  } catch (e) {
+    if (e?.name === "AbortError") {
+      throw new Error("Pro Master timed out — try again on Wi‑Fi.");
+    }
+    if (isNativeShell() && (isNativeApiNetworkError(e) || !_resolvedApiBase)) {
+      const retried = await retryNativeApiFetch(run, timeoutMs);
+      if (retried != null) return retried;
+      await ensureNativeApiBaseResolved();
+    }
+    const msg = String(e?.message || "");
+    if (
+      !isStagingNativeBuild() &&
+      /load failed|failed to fetch|network|capacitorurlrequest|capacitor\.capacitor|abort/i.test(msg)
+    ) {
+      throw new Error(
+        isNativeShell()
+          ? "Couldn’t reach Pro Master — check Wi‑Fi or cellular and try again."
+          : "Couldn’t reach Pro Master — check your connection and try again.",
+      );
+    }
+    throw e;
+  } finally {
+    window.clearTimeout(timer);
+  }
+}
+
+/** Multipart upload — same fetch pattern as /api/suno/upload-audio (proven on iPhone). */
+async function uploadStudioProMasterMixMultipart(blob) {
+  const token = getSupabaseAuthToken();
+  if (!token) throw new Error("Sign in to use Pro Master.");
+  if (isNativeShell()) {
+    await ensureNativeNetworkReady();
+    await ensureNativeApiBaseResolved();
+  }
+  await prepareApiAuthForFetch();
+  const file =
+    blob instanceof File
+      ? blob
+      : new File([blob], "studio-mix.wav", { type: blob?.type || "audio/wav" });
+  const fd = new FormData();
+  fd.append("file", file, "studio-mix.wav");
+  const url = apiUrl("/api/music/studio-master");
+  const headers = { Authorization: `Bearer ${getSupabaseAuthToken()}` };
+  const bypass = getVercelProtectionBypass();
+  if (bypass) headers["x-vercel-protection-bypass"] = bypass;
+
+  let r;
+  try {
+    r = await fetch(url, { method: "POST", headers, body: fd, cache: "no-store" });
+  } catch (e) {
+    throw new Error(`Mix upload failed: ${String(e?.message || "network error")}`);
+  }
+
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok) {
+    throw new Error(String(d?.error || `Mix upload failed (${r.status || 0}).`));
+  }
+  const readableUrl = String(d?.readableUrl || "").trim();
+  if (!readableUrl) throw new Error("Mix upload succeeded but URL was missing.");
+  return readableUrl;
+}
+
+/** Last-resort public URL via Suno temp store (same path as voice persona uploads). */
+async function uploadStudioProMasterMixViaSuno(blob) {
+  const file = new File([blob], "studio-mix.wav", { type: blob?.type || "audio/wav" });
+  return uploadAudioFileForSuno(file);
+}
+
+async function blobToBase64(blob) {
+  return blobToBase64Payload(blob);
+}
+
+/** Downsample long Studio WAVs so iPhone can upload via our server (RoEx still masters fine). */
+async function resampleWavBlobToMono(blob, targetSampleRate = 22050) {
+  const { encodeWav16 } = await import("./wav.js");
+  const ab = await blob.arrayBuffer();
+  const ctx = new AudioContext();
+  let audioBuf;
+  try {
+    audioBuf = await ctx.decodeAudioData(ab.slice(0));
+  } finally {
+    try { await ctx.close(); } catch {}
+  }
+  const frames = Math.max(1, Math.ceil(audioBuf.duration * targetSampleRate));
+  const off = new OfflineAudioContext(1, frames, targetSampleRate);
+  const monoSrc = off.createBuffer(1, audioBuf.length, audioBuf.sampleRate);
+  const out = monoSrc.getChannelData(0);
+  const l = audioBuf.getChannelData(0);
+  const r = audioBuf.numberOfChannels > 1 ? audioBuf.getChannelData(1) : l;
+  for (let i = 0; i < audioBuf.length; i++) out[i] = (l[i] + r[i]) * 0.5;
+  const src = off.createBufferSource();
+  src.buffer = monoSrc;
+  src.connect(off.destination);
+  src.start(0);
+  const rendered = await off.startRendering();
+  return encodeWav16([rendered.getChannelData(0)], targetSampleRate);
+}
+
+async function prepareMixBlobForProMasterUpload(blob, maxBytes = 2.8 * 1024 * 1024) {
+  const cap = isNativeShell() ? Math.min(maxBytes, 1.4 * 1024 * 1024) : maxBytes;
+  if (!blob || blob.size <= cap) return blob;
+  for (const sr of [22050, 16000, 12000]) {
+    const shrunk = await resampleWavBlobToMono(blob, sr);
+    if (shrunk.size <= cap) return shrunk;
+  }
+  return resampleWavBlobToMono(blob, 12000);
+}
+
+async function putBlobViaHttpPut(url, blob, contentType) {
+  const type = contentType || blob?.type || "audio/wav";
+  const send = () =>
+    new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open("PUT", url);
+      xhr.setRequestHeader("Content-Type", type);
+      xhr.onload = () => {
+        if (xhr.status >= 200 && xhr.status < 300) resolve();
+        else reject(new Error(`Couldn’t upload your mix (${xhr.status}).`));
+      };
+      xhr.onerror = () => reject(new Error("Couldn’t upload your mix — check your connection."));
+      xhr.send(blob);
+    });
+
+  try {
+    await send();
+    return;
+  } catch (e) {
+    if (!isNativeShell()) throw e;
+  }
+
+  const put = await fetch(url, {
+    method: "PUT",
+    headers: { "Content-Type": type },
+    body: blob,
+  });
+  if (put.ok) return;
+  throw new Error(`Couldn’t upload your mix (${put.status}).`);
+}
+
+async function putMixBlobToRoexSignedUrl(signedUrl, blob) {
+  const url = String(signedUrl || "").trim();
+  const type = blob?.type || "audio/wav";
+  if (!url) throw new Error("Missing upload URL.");
+
+  try {
+    await putBlobViaHttpPut(url, blob, type);
+  } catch (e) {
+    const msg = String(e?.message || "");
+    if (/load failed|failed to fetch|network/i.test(msg)) {
+      throw new Error("Couldn’t upload your mix — check your connection and try again.");
+    }
+    throw e;
+  }
+}
+
+async function nativeHttpDownloadBlobUrl(remoteUrl, contentType = "audio/wav") {
+  const url = String(remoteUrl || "").trim();
+  if (!url) throw new Error("Missing preview URL.");
+
+  if (isNativeShell()) {
+    const CapHttp = window.Capacitor?.Plugins?.CapacitorHttp;
+    if (CapHttp?.request) {
+      const resp = await CapHttp.request({
+        url,
+        method: "GET",
+        responseType: "arraybuffer",
+        connectTimeout: 30000,
+        readTimeout: 120000,
+      });
+      const status = Number(resp?.status || 0);
+      const raw = resp?.data;
+      if (status >= 200 && status < 300 && raw != null && raw !== "") {
+        const b64 = String(raw);
+        const payload = b64.includes(",") ? b64.slice(b64.indexOf(",") + 1) : b64;
+        const blob = await base64ToBlob(payload, contentType);
+        if (blob.size > 512) return URL.createObjectURL(blob);
+      }
+    }
+  }
+
+  const r = await fetch(url);
+  if (!r.ok) throw new Error(`Preview download failed (${r.status}).`);
+  const blob = await r.blob();
+  if (blob.size <= 512) throw new Error("Preview audio empty.");
+  return URL.createObjectURL(blob);
+}
+
+async function nativeSafeFetchLong(url, init = {}, timeouts = {}) {
+  const t = {
+    connectTimeout: timeouts.connectTimeout ?? 30000,
+    readTimeout: timeouts.readTimeout ?? 180000,
+  };
+  if (!isNativeShell()) return fetch(url, init);
+  await ensureNativeNetworkReady();
+  try {
+    const r = await fetch(url, init);
+    if (r && Number(r.status) !== 0) return r;
+  } catch {}
+  const native = await capacitorHttpFetch(url, init, t);
+  if (native && Number(native.status) > 0) return native;
+  throw new TypeError("Failed to fetch");
+}
+
+async function uploadStudioProMasterMixToSupabase(blob) {
+  const token = getSupabaseAuthToken();
+  const uid = String(authSession?.user?.id || "").trim();
+  if (!token || !uid) throw new Error("Sign in to use Pro Master.");
+  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) throw new Error("Supabase not configured");
+  const key = `${uid}/studio-master/${Date.now()}.wav`;
+  const r = await nativeSafeFetchLong(`${SUPABASE_URL}/storage/v1/object/song_archive/${key}`, {
+    method: "POST",
+    headers: {
+      apikey: SUPABASE_ANON_KEY,
+      Authorization: `Bearer ${token}`,
+      "Content-Type": blob.type || "audio/wav",
+      "x-upsert": "true",
+      "Cache-Control": "max-age=3600",
+    },
+    body: blob,
+  });
+  if (!r.ok) {
+    const t = await r.text().catch(() => "");
+    throw new Error(`Mix upload failed (${r.status})${t ? `: ${t.slice(0, 100)}` : ""}`);
+  }
+  return `${SUPABASE_URL}/storage/v1/object/public/song_archive/${key}?v=${Date.now()}`;
+}
+
+async function studioProMasterUploadMixNative(blob) {
+  const prepared = await prepareMixBlobForProMasterUpload(blob);
+  const contentType = prepared.type || "audio/wav";
+  let lastErr = null;
+
+  try {
+    return await uploadStudioProMasterMixMultipart(prepared);
+  } catch (e) {
+    lastErr = e;
+    console.warn("[studio] multipart Pro Master upload failed:", e?.message || e);
+  }
+
+  try {
+    return await uploadStudioProMasterMixViaSuno(prepared);
+  } catch (e) {
+    lastErr = e;
+    console.warn("[studio] Suno temp Pro Master upload failed:", e?.message || e);
+  }
+
+  try {
+    const up = await studioProMasterApi({
+      action: "upload-url",
+      filename: "studio-mix.wav",
+      contentType,
+    });
+    await putMixBlobToRoexSignedUrl(up.signedUrl, prepared);
+    return up.readableUrl;
+  } catch (e) {
+    lastErr = e;
+    console.warn("[studio] direct RoEx upload failed:", e?.message || e);
+  }
+
+  if (prepared.size <= 1.2 * 1024 * 1024) {
+    try {
+      const audioBase64 = await blobToBase64(prepared);
+      const up = await studioProMasterApi({
+        action: "upload-mix",
+        audioBase64,
+        contentType,
+        filename: "studio-mix.wav",
+      });
+      return up.readableUrl;
+    } catch (e) {
+      lastErr = e;
+      console.warn("[studio] server Pro Master upload failed:", e?.message || e);
+    }
+  }
+
+  throw lastErr instanceof Error
+    ? lastErr
+    : new Error("Couldn’t upload your mix — try again on Wi‑Fi.");
+}
+
+async function studioProMasterUploadMix(blob) {
+  if (isNativeShell()) return studioProMasterUploadMixNative(blob);
+
+  const prepared = await prepareMixBlobForProMasterUpload(blob);
+  const maxServerBytes = 2.8 * 1024 * 1024;
+  if (prepared.size <= maxServerBytes) {
+    const audioBase64 = await blobToBase64(prepared);
+    const up = await studioProMasterApi({
+      action: "upload-mix",
+      audioBase64,
+      contentType: prepared.type || "audio/wav",
+      filename: "studio-mix.wav",
+    });
+    return up.readableUrl;
+  }
+  const up = await studioProMasterApi({
+    action: "upload-url",
+    filename: "studio-mix.wav",
+    contentType: prepared.type || "audio/wav",
+  });
+  await putMixBlobToRoexSignedUrl(up.signedUrl, prepared);
+  return up.readableUrl;
+}
+
+async function base64ToBlob(b64, contentType = "audio/wav") {
+  const raw = String(b64 || "").trim();
+  if (!raw) throw new Error("Missing audio data.");
+  const bin = atob(raw);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return new Blob([bytes], { type: contentType || "audio/wav" });
+}
+
+/** Sniff mp3/wav from the first few base64 chars — safe tiny atob only. */
+function sniffAudioExtFromBase64Head(b64Payload) {
+  const raw = String(b64Payload || "").trim();
+  const data = raw.includes(",") ? raw.slice(raw.indexOf(",") + 1) : raw;
+  if (data.length < 8) return "";
+  try {
+    const head = atob(data.slice(0, 24));
+    if (head.startsWith("ID3") || (head.charCodeAt(0) === 0xff && (head.charCodeAt(1) & 0xe0) === 0xe0)) {
+      return "mp3";
+    }
+    if (head.startsWith("RIFF")) return "wav";
+  } catch {}
+  return "";
+}
+
+function audioExtFromContentType(contentType, b64Payload = "") {
+  const ct = String(contentType || "").toLowerCase();
+  if (ct.includes("mpeg") || ct.includes("mp3")) return "mp3";
+  if (ct.includes("wav")) return "wav";
+  const sniffed = sniffAudioExtFromBase64Head(b64Payload);
+  if (sniffed) return sniffed;
+  return "mp3";
+}
+
+function mimeFromAudioExt(ext) {
+  const e = String(ext || "").toLowerCase();
+  if (e === "wav") return "audio/wav";
+  return "audio/mpeg";
+}
+
+async function capacitorCachedFileToBlobUrl(filePath, contentType = "audio/wav") {
+  const cap = window.Capacitor;
+  const rawPath = String(filePath || "").trim();
+  if (!rawPath) throw new Error("Missing cached preview path.");
+  const candidates = [];
+  if (cap?.convertFileSrc) {
+    candidates.push(cap.convertFileSrc(rawPath.replace(/^file:\/\//, "")));
+    if (/^file:\/\//i.test(rawPath)) candidates.push(cap.convertFileSrc(rawPath));
+  }
+  candidates.push(rawPath);
+  let lastErr = null;
+  for (const localUrl of candidates) {
+    if (!localUrl) continue;
+    try {
+      const resp = await fetch(localUrl);
+      if (!resp.ok) continue;
+      const blob = await resp.blob();
+      if (blob.size <= 512) continue;
+      const ct = String(contentType || blob.type || "audio/mpeg").split(";")[0].trim() || "audio/mpeg";
+      const typed = blob.type && blob.type !== "application/octet-stream"
+        ? blob
+        : new Blob([blob], { type: ct });
+      return URL.createObjectURL(typed);
+    } catch (e) {
+      lastErr = e;
+    }
+  }
+  throw lastErr instanceof Error ? lastErr : new Error("Could not read cached preview.");
+}
+
+function studioProMasterStreamUrl(preview) {
+  const taskId = String(preview?.masteringTaskId || "").trim();
+  const token = String(preview?.jobToken || "").trim();
+  if (!taskId || !token) return "";
+  const qs = new URLSearchParams({ task: taskId, token });
+  const previewUrl = String(preview?.previewUrl || "").trim();
+  if (previewUrl) qs.set("url", previewUrl);
+  return apiUrl(`/api/music/studio-master-stream?${qs.toString()}`);
+}
+
+async function studioProMasterNativeCachePlaybackUrl(b64Payload, contentType = "audio/wav") {
+  const raw = String(b64Payload || "").trim();
+  const data = raw.includes(",") ? raw.slice(raw.indexOf(",") + 1) : raw;
+  if (!data || data.length < 800) throw new Error("Preview audio empty.");
+
+  const ct = String(contentType || "audio/wav").split(";")[0].trim() || "audio/wav";
+  if (!isNativeShell()) {
+    const blob = await base64ToBlob(data, ct);
+    if (blob.size <= 512) throw new Error("Preview audio empty.");
+    return URL.createObjectURL(blob);
+  }
+
+  const fs = getCapFilesystemPlugin();
+  if (!fs?.writeFile) {
+    throw new Error("Native preview storage unavailable.");
+  }
+
+  const ext = audioExtFromContentType(ct, data);
+  const rel = `NabadAi/pro-master/preview-${Date.now()}.${ext}`;
+  await fs.writeFile({
+    path: rel,
+    data,
+    directory: "CACHE",
+    recursive: true,
+  });
+
+  let filePath = "";
+  try {
+    if (fs.getUri) {
+      const u = await fs.getUri({ path: rel, directory: "CACHE" });
+      filePath = String(u?.uri || "").trim();
+    }
+    if (!filePath && fs.stat) {
+      const st = await fs.stat({ path: rel, directory: "CACHE" });
+      filePath = String(st?.uri || "").trim();
+    }
+  } catch {}
+
+  if (!filePath) throw new Error("Could not prepare preview for playback.");
+  return capacitorCachedFileToBlobUrl(filePath, mimeFromAudioExt(ext));
+}
+
+async function studioProMasterBytesToPlaybackUrl(result) {
+  if (result?.nativeBase64) {
+    return studioProMasterNativeCachePlaybackUrl(result.nativeBase64, result.contentType);
+  }
+  return studioProMasterMaterializeNativePlayback(result.blob, result.contentType);
+}
+
+async function studioProMasterHttpGetBytes(url, { readTimeoutMs = 300000 } = {}) {
+  const target = String(url || "").trim();
+  if (!target) throw new Error("Missing download URL.");
+  if (isNativeShell()) {
+    await ensureNativeNetworkReady();
+    const CapHttp = window.Capacitor?.Plugins?.CapacitorHttp;
+    if (CapHttp?.request) {
+      const resp = await CapHttp.request({
+        url: target,
+        method: "GET",
+        headers: getApiFetchHeaders(),
+        responseType: "arraybuffer",
+        connectTimeout: 30000,
+        readTimeout: readTimeoutMs,
+      });
+      const status = Number(resp?.status || 0);
+      const raw = resp?.data;
+      if (status >= 200 && status < 300 && raw != null && raw !== "") {
+        const hdrs = resp?.headers || {};
+        const ct = String(hdrs["Content-Type"] || hdrs["content-type"] || "audio/wav").split(";")[0].trim() || "audio/wav";
+        if (/json/i.test(ct)) {
+          let errMsg = "Preview download failed.";
+          try {
+            const parsed = typeof raw === "string" ? JSON.parse(raw) : raw;
+            if (parsed?.error) errMsg = String(parsed.error);
+            if (parsed?.pending) errMsg = "Preview not ready yet.";
+          } catch {}
+          const err = new Error(errMsg);
+          err.pending = status === 202 || /not ready/i.test(errMsg);
+          throw err;
+        }
+        const b64 = String(raw);
+        const payload = b64.includes(",") ? b64.slice(b64.indexOf(",") + 1) : b64;
+        if (payload.length > 800) {
+          return { nativeBase64: payload, contentType: ct };
+        }
+      }
+      if (status >= 400) {
+        let errMsg = `Preview download failed (${status}).`;
+        try {
+          const parsed = typeof raw === "string" ? JSON.parse(raw) : raw;
+          if (parsed?.error) errMsg = String(parsed.error);
+          if (parsed?.pending) errMsg = "Preview not ready yet.";
+        } catch {}
+        const err = new Error(errMsg);
+        err.pending = status === 202 || /not ready/i.test(errMsg);
+        throw err;
+      }
+    }
+  }
+  const r = await nativeSafeFetchLong(target, { cache: "no-store", headers: getApiFetchHeaders() });
+  if (!r.ok) {
+    const d = await r.json().catch(() => ({}));
+    const err = new Error(String(d?.error || `Preview download failed (${r.status}).`));
+    err.pending = r.status === 202 || Boolean(d?.pending);
+    throw err;
+  }
+  const blob = await r.blob();
+  return { blob, contentType: r.headers.get("content-type") || blob.type || "audio/wav" };
+}
+
+async function studioProMasterDownloadFromPreviewUrl(preview) {
+  const remote = String(preview?.previewUrl || "").trim();
+  if (!remote) throw new Error("Missing preview URL.");
+  const proxyUrl = normalizeAudioUrlForPlayback(toAudioProxyUrl(remote));
+  const bytes = await studioProMasterHttpGetBytes(proxyUrl);
+  return studioProMasterBytesToPlaybackUrl(bytes);
+}
+
+async function studioProMasterMaterializeNativePlayback(blob, contentType = "audio/wav") {
+  if (!(blob instanceof Blob) || blob.size <= 512) {
+    throw new Error("Preview audio empty.");
+  }
+  const ct = String(contentType || blob.type || "audio/mpeg").split(";")[0].trim() || "audio/mpeg";
+  const typed = blob.type ? blob : new Blob([blob], { type: ct });
+  return URL.createObjectURL(typed);
+}
+
+async function studioProMasterDownloadStreamBytes(preview) {
+  const url = studioProMasterStreamUrl(preview);
+  if (!url) throw new Error("Missing preview stream URL.");
+  const bytes = await studioProMasterHttpGetBytes(url);
+  return studioProMasterBytesToPlaybackUrl(bytes);
+}
+
+function studioProMasterPlaybackUrl(preview) {
+  const remote = String(preview?.previewUrl || "").trim();
+  if (remote && /^https?:\/\//i.test(remote)) {
+    return normalizeAudioUrlForPlayback(toAudioProxyUrl(remote));
+  }
+  if (isNativeShell()) {
+    const stream = studioProMasterStreamUrl(preview);
+    if (stream) return stream;
+  }
+  const blobLike = String(preview?.playbackUrl || "").trim();
+  if (blobLike.startsWith("blob:") || blobLike.startsWith("data:")) return blobLike;
+  if (!remote) return blobLike;
+  if (remote.startsWith("blob:") || remote.startsWith("data:")) return remote;
+  return normalizeAudioUrlForPlayback(toAudioProxyUrl(remote) || remote);
+}
+
+async function studioProMasterDiagnosePreview(preview) {
+  const masteringTaskId = String(preview?.masteringTaskId || "").trim();
+  if (!masteringTaskId) throw new Error("Missing preview task.");
+  return studioProMasterApi({
+    action: "diagnose-preview",
+    masteringTaskId,
+    previewUrl: String(preview?.previewUrl || "").trim(),
+    previewStartTime: preview?.previewStartTime,
+  });
+}
+
+async function studioProMasterVerifyPreviewReady(preview, { maxWaitMs = 180000 } = {}) {
+  const started = Date.now();
+  let last = null;
+  while (Date.now() - started < maxWaitMs) {
+    last = await studioProMasterDiagnosePreview(preview);
+    if (last?.downloadOk && Number(last?.bytes) > 512) {
+      return {
+        ...preview,
+        previewUrl: String(last.previewUrl || preview?.previewUrl || "").trim(),
+        previewBytes: Number(last.bytes) || 0,
+        previewContentType: String(last.contentType || "").trim(),
+      };
+    }
+    if (last?.retrieveOk && !last?.pending && !last?.downloadOk) {
+      throw new Error(String(last.error || "RoEx preview URL exists but audio download failed."));
+    }
+    await new Promise((r) => setTimeout(r, 3000));
+  }
+  throw new Error(
+    String(last?.error || "Pro Master preview isn’t ready at RoEx yet — wait a minute and try Save again."),
+  );
+}
+
+async function studioProMasterFetchPlaybackBlob(preview, { maxWaitMs = 90000 } = {}) {
+  const taskId = String(preview?.masteringTaskId || "").trim();
+  if (!taskId) throw new Error("Missing preview task.");
+  const started = Date.now();
+  let lastErr = null;
+
+  while (Date.now() - started < maxWaitMs) {
+    try {
+      if (String(preview?.previewUrl || "").trim()) {
+        return await studioProMasterDownloadFromPreviewUrl(preview);
+      }
+    } catch (e) {
+      lastErr = e;
+      if (!e?.pending && !/pending|not ready|404|timeout|502|503|202/i.test(String(e?.message || ""))) throw e;
+    }
+
+    try {
+      return await studioProMasterDownloadStreamBytes(preview);
+    } catch (e) {
+      lastErr = e;
+      const msg = String(e?.message || "");
+      if (!e?.pending && !/pending|not ready|404|timeout|502|503|202|stream failed|download failed/i.test(msg)) {
+        throw e;
+      }
+    }
+
+    try {
+      const d = await studioProMasterApi(
+        { action: "preview-audio", masteringTaskId: taskId },
+        { readTimeoutMs: 90000 },
+      );
+      if (d?.pending) {
+        await new Promise((r) => setTimeout(r, 2500));
+        continue;
+      }
+      if (d?.audioBase64) {
+        return studioProMasterNativeCachePlaybackUrl(d.audioBase64, d?.contentType || "audio/wav");
+      }
+    } catch (e) {
+      lastErr = e;
+      const msg = String(e?.message || "");
+      if (!/pending|not ready|404|timeout|502|202/i.test(msg)) throw e;
+    }
+
+    await new Promise((r) => setTimeout(r, 2500));
+  }
+  throw lastErr instanceof Error
+    ? lastErr
+    : new Error("Preview audio isn’t ready yet — try again.");
+}
+
+let _proMasterPreviewAudio = null;
+
+function stopProMasterPreviewPlayback() {
+  if (_proMasterPreviewAudio) {
+    try { _proMasterPreviewAudio.pause(); } catch {}
+    _proMasterPreviewAudio = null;
+  }
+}
+
+async function playProMasterPreviewAudio(url, taskId) {
+  const playUrl = normalizeAudioUrlForPlayback(String(url || "").trim());
+  if (!playUrl) throw new Error("Preview audio missing.");
+
+  stopProMasterPreviewPlayback();
+  try { ensurePlayer()?.pause(); } catch {}
+  try { stopHubPlayback(); } catch {}
+  try { stopVocalsPlayback(); } catch {}
+
+  const audio = new Audio();
+  audio.preload = "auto";
+  try { audio.setAttribute("playsinline", ""); } catch {}
+  try { audio.setAttribute("webkit-playsinline", ""); } catch {}
+  if (/^https?:\/\//i.test(playUrl) || playUrl.startsWith("blob:")) {
+    audio.crossOrigin = "anonymous";
+  }
+  audio.src = playUrl;
+  _proMasterPreviewAudio = audio;
+
+  if (isCapacitorNativeAuth()) {
+    try { audio.load(); } catch {}
+  }
+
+  await new Promise((resolve, reject) => {
+    let settled = false;
+    const finish = (err) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      audio.removeEventListener("canplaythrough", onOk);
+      audio.removeEventListener("canplay", onOk);
+      audio.removeEventListener("loadedmetadata", onOk);
+      audio.removeEventListener("error", onErr);
+      if (err) reject(err);
+      else resolve();
+    };
+    const onOk = () => {
+      if (audio.readyState >= 2 || readAudioElementDurationSec(audio) > 0) finish(null);
+    };
+    const onErr = () => {
+      const code = Number(audio.error?.code || 0);
+      finish(new Error(code ? `preview_load_failed:${code}` : "preview_load_failed"));
+    };
+    const timer = setTimeout(() => finish(new Error("preview_load_failed:timeout")), 45000);
+    if (audio.readyState >= 2) return finish(null);
+    audio.addEventListener("canplaythrough", onOk);
+    audio.addEventListener("canplay", onOk);
+    audio.addEventListener("loadedmetadata", onOk);
+    audio.addEventListener("error", onErr, { once: true });
+  });
+
+  try {
+    await audio.play();
+  } catch {
+    throw new Error("play_failed");
+  }
+  void taskId;
+  return true;
+}
+
+async function studioProMasterResolvePlayback(preview) {
+  if (isNativeShell()) {
+    const stream = studioProMasterStreamUrl(preview);
+    if (stream) return stream;
+  }
+  const blobLike = String(preview?.playbackUrl || "").trim();
+  if (blobLike.startsWith("blob:") || blobLike.startsWith("data:")) return blobLike;
+
+  const taskId = String(preview?.masteringTaskId || "").trim();
+  if (!taskId) throw new Error("Missing preview audio.");
+  return studioProMasterFetchPlaybackBlob(preview);
+}
+
+async function studioProMasterPreview({ blob, finish = "balanced" }) {
+  const mixBlob = blob instanceof Blob ? blob : blob?.blob;
+  if (!(mixBlob instanceof Blob)) throw new Error("Missing mix audio.");
+
+  if (isStagingNativeBuild()) {
+    const ping = await studioProMasterApi({ action: "ping" });
+    if (!ping?.roexConfigured) {
+      throw new Error("Pro Master isn’t configured on staging (ROEX_API_KEY missing on Preview).");
+    }
+  }
+
+  const trackUrl = await studioProMasterUploadMix(mixBlob);
+
+  let preview = await studioProMasterApi({
+    action: "preview",
+    trackUrl,
+    finish,
+  });
+  if (!preview.previewUrl && preview.masteringTaskId) {
+    for (let i = 0; i < 40; i++) {
+      await new Promise((res) => setTimeout(res, 3000));
+      const polled = await studioProMasterApi({
+        action: "poll-preview",
+        masteringTaskId: preview.masteringTaskId,
+      });
+      if (polled.previewUrl) {
+        preview = { ...preview, ...polled };
+        break;
+      }
+      if (!polled.pending) break;
+    }
+  }
+  if (!preview.previewUrl) {
+    throw new Error("Pro Master preview isn’t ready yet — try again.");
+  }
+  return studioProMasterVerifyPreviewReady(preview);
+}
+
+async function studioProMasterFinalize({ masteringTaskId, jobToken, stripeSessionId = "", iapTransactionId = "" }) {
+  const d = await studioProMasterApi({
+    action: "finalize",
+    masteringTaskId,
+    jobToken,
+    stripeSessionId,
+    iapTransactionId,
+  });
+  return base64ToBlob(d?.audioBase64, d?.contentType || "audio/wav");
+}
+
+async function studioCheckoutProMaster({ masteringTaskId, jobToken }) {
+  const tok = getSupabaseAuthToken();
+  if (!tok) throw new Error("Sign in first.");
+  const r = await fetch(apiUrl("/api/billing/studio-master-checkout"), {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${tok}`,
+      "X-Nabad-Client-Shell": "web",
+    },
+    body: JSON.stringify({ masteringTaskId, jobToken }),
+  });
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(d?.error || "Couldn’t start checkout.");
+  if (d?.url) {
+    location.href = d.url;
+    return d;
+  }
+  throw new Error("Checkout URL missing.");
+}
+
+async function studioPurchaseProMaster() {
+  const { purchaseStudioProMaster } = await import("./billing/revenuecat.js");
+  const uid = String(authSession?.user?.id || "").trim();
+  const purchase = await purchaseStudioProMaster({ userId: uid });
+  return purchase;
 }
 
 // Hum → melody (MVP)

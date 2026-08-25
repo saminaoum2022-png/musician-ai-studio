@@ -2,7 +2,7 @@
  * RevenueCat / App Store billing on iOS (Capacitor).
  */
 
-import { PRO_PLANS, PRO_PRODUCT_IDS } from "../pro-plan-config.js";
+import { PRO_PLANS, PRO_PRODUCT_IDS, PRO_MASTER } from "../pro-plan-config.js";
 
 let _apiKey = "";
 let _configuredFor = "";
@@ -297,6 +297,33 @@ export async function purchaseProPlan(planId, opts = {}) {
   }
 
   return syncBillingWithServer(opts);
+}
+
+export async function purchaseStudioProMaster(opts = {}) {
+  const productId = PRO_MASTER.productId;
+  await ensureRevenueCat(opts.userId);
+  const { Purchases } = await purchasesModule();
+  let transactionId = "";
+  try {
+    const offerings = await loadOfferings();
+    const pkg = findPackageForProduct(offerings, productId);
+    let result;
+    if (pkg) {
+      result = await Purchases.purchasePackage({ aPackage: pkg });
+    } else {
+      const { products } = await Purchases.getProducts({ productIdentifiers: [productId] });
+      const product = Array.isArray(products) ? products[0] : null;
+      if (!product) {
+        throw new Error("Pro Master isn’t in the App Store yet — set up the product in App Store Connect.");
+      }
+      result = await Purchases.purchaseStoreProduct({ product });
+    }
+    transactionId =
+      String(result?.transaction?.transactionIdentifier || result?.transaction?.transactionId || "").trim();
+  } catch (err) {
+    throw purchaseError(err);
+  }
+  return { productId, transactionId };
 }
 
 export async function restoreProPurchases(opts = {}) {

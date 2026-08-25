@@ -167,6 +167,51 @@ async function pollPreviewMaster(masteringTaskId, { attempts = 12, delayMs = 250
   return { ok: false, status: 504, error: "Preview timed out — try again.", code: "preview_timeout", pending: true };
 }
 
+/** Poll until RoEx returns a preview URL *and* the audio file downloads (CDN can 404 briefly). */
+async function pollPreviewMasterReady(masteringTaskId, { attempts = 40, delayMs = 3000 } = {}) {
+  const id = String(masteringTaskId || "").trim();
+  if (!id) return { ok: false, status: 400, error: "Missing mastering task id", code: "missing_task_id" };
+
+  for (let i = 0; i < attempts; i++) {
+    const meta = await retrievePreviewMaster(id);
+    if (!meta.ok) {
+      if (meta.pending) {
+        await new Promise((r) => setTimeout(r, delayMs));
+        continue;
+      }
+      return meta;
+    }
+    const dl = await downloadRoexAudio(meta.downloadUrl, { retries: 3, delayMs: 1500 });
+    if (dl.ok) {
+      return {
+        ok: true,
+        downloadUrl: meta.downloadUrl,
+        previewStartTime: meta.previewStartTime,
+        bytes: dl.buffer.length,
+        contentType: dl.contentType,
+      };
+    }
+    if (dl.status === 404 || dl.status === 403) {
+      await new Promise((r) => setTimeout(r, delayMs));
+      continue;
+    }
+    return {
+      ok: false,
+      status: dl.status || 502,
+      error: dl.error || "Preview download failed.",
+      code: "preview_download_failed",
+      pending: dl.status === 404,
+    };
+  }
+  return {
+    ok: false,
+    status: 504,
+    error: "RoEx is still mastering your preview — wait a minute and try Save again.",
+    code: "preview_timeout",
+    pending: true,
+  };
+}
+
 async function retrieveFinalMaster(masteringTaskId) {
   const id = String(masteringTaskId || "").trim();
   if (!id) return { ok: false, status: 400, error: "Missing mastering task id", code: "missing_task_id" };
@@ -316,6 +361,7 @@ module.exports = {
   createMasteringPreview,
   retrievePreviewMaster,
   pollPreviewMaster,
+  pollPreviewMasterReady,
   retrieveFinalMaster,
   downloadRoexAudio,
   fetchPreviewAudioBuffer,

@@ -66337,7 +66337,7 @@ async function studioProMasterDiagnosePreview(preview) {
   };
 }
 
-async function studioProMasterVerifyPreviewReady(preview, { maxWaitMs = 180000 } = {}) {
+async function studioProMasterVerifyPreviewReady(preview, { maxWaitMs = 300000 } = {}) {
   const started = Date.now();
   let last = null;
   while (Date.now() - started < maxWaitMs) {
@@ -66350,14 +66350,34 @@ async function studioProMasterVerifyPreviewReady(preview, { maxWaitMs = 180000 }
         previewContentType: String(last.contentType || "").trim(),
       };
     }
-    if (last?.retrieveOk && !last?.pending && !last?.downloadOk) {
-      throw new Error(String(last.error || "RoEx preview URL exists but audio download failed."));
+    const errText = String(last?.error || "");
+    const stillPending =
+      last?.pending ||
+      /404|403|not ready|pending|download http/i.test(errText);
+    if (last?.retrieveOk && !last?.downloadOk && !stillPending) {
+      throw new Error(errText || "RoEx preview URL exists but audio download failed.");
     }
     await new Promise((r) => setTimeout(r, 3000));
   }
   throw new Error(
-    String(last?.error || "Pro Master preview isn’t ready at RoEx yet — wait a minute and try Save again."),
+    studioProMasterFriendlyError(
+      last?.error || "Pro Master preview isn’t ready at RoEx yet — wait a minute and try Save again.",
+    ),
   );
+}
+
+function studioProMasterFriendlyError(msg) {
+  const s = String(msg || "").trim();
+  if (/download http 404/i.test(s)) {
+    return "RoEx is still hosting your preview — wait 30–60s and tap Save again.";
+  }
+  if (/roex http 404/i.test(s)) {
+    return "RoEx is still mastering — wait 30–60s and try Save again.";
+  }
+  if (/\b404\b/.test(s)) {
+    return "Pro Master preview isn’t ready at RoEx yet — wait and try Save again.";
+  }
+  return s || "Pro Master preview failed — try again.";
 }
 
 async function studioProMasterFetchPlaybackBlob(preview, { maxWaitMs = 90000 } = {}) {
@@ -66517,8 +66537,13 @@ async function studioProMasterPreview({ blob, finish = "balanced" }) {
       const polled = await studioProMasterApi({
         action: "poll-preview",
         masteringTaskId: preview.masteringTaskId,
+        readyOnly: true,
       });
-      if (polled.previewUrl) {
+      if (polled.previewUrl && Number(polled.previewBytes) > 512) {
+        preview = { ...preview, ...polled };
+        break;
+      }
+      if (polled.previewUrl && !polled.previewBytes) {
         preview = { ...preview, ...polled };
         break;
       }
@@ -66526,8 +66551,9 @@ async function studioProMasterPreview({ blob, finish = "balanced" }) {
     }
   }
   if (!preview.previewUrl) {
-    throw new Error("Pro Master preview isn’t ready yet — try again.");
+    throw new Error(studioProMasterFriendlyError("Pro Master preview isn’t ready yet — try again."));
   }
+  if (Number(preview.previewBytes) > 512) return preview;
   return studioProMasterVerifyPreviewReady(preview);
 }
 

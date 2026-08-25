@@ -31,6 +31,7 @@ const {
   uploadBufferToRoex,
   createMasteringPreview,
   pollPreviewMaster,
+  pollPreviewMasterReady,
   retrievePreviewMaster,
   retrieveFinalMaster,
   downloadRoexAudio,
@@ -221,7 +222,14 @@ module.exports = async function handler(req, res) {
       const finish = String(body?.finish || "balanced").trim();
       const created = await createMasteringPreview({ trackUrl, finishId: finish });
       if (!created.ok) {
-        return sendJson(res, created.status || 502, { error: created.error, code: created.code });
+        const err =
+          created.status === 404
+            ? "RoEx couldn’t fetch your mix — try Save again."
+            : created.error;
+        return sendJson(res, created.status === 404 ? 502 : created.status || 502, {
+          error: err,
+          code: created.code || "roex_preview_failed",
+        });
       }
 
       const exp = Date.now() + 2 * 60 * 60 * 1000;
@@ -268,9 +276,11 @@ module.exports = async function handler(req, res) {
         });
       }
       const dl = await downloadRoexAudio(meta.downloadUrl, { retries: 4, delayMs: 1500 });
+      const dlPending = !dl.ok && (dl.status === 404 || dl.status === 403);
       return sendJson(res, 200, {
         ok: Boolean(dl.ok),
         retrieveOk: true,
+        pending: dlPending,
         masteringTaskId: masteringTaskId || undefined,
         previewUrl: meta.downloadUrl,
         previewStartTime: meta.previewStartTime,
@@ -278,7 +288,7 @@ module.exports = async function handler(req, res) {
         bytes: dl.ok ? dl.buffer.length : 0,
         contentType: dl.ok ? dl.contentType || "audio/mpeg" : "",
         error: dl.ok ? "" : dl.error || "Preview download failed.",
-        code: dl.ok ? "ready" : "preview_download_failed",
+        code: dl.ok ? "ready" : dlPending ? "preview_pending" : "preview_download_failed",
       });
     }
 
@@ -287,7 +297,10 @@ module.exports = async function handler(req, res) {
       if (!masteringTaskId) {
         return sendJson(res, 400, { error: "Missing mastering task id.", code: "missing_task_id" });
       }
-      const polled = await pollPreviewMaster(masteringTaskId, { attempts: 6, delayMs: 2500 });
+      const readyOnly = body?.readyOnly === true || body?.readyOnly === 1;
+      const polled = readyOnly
+        ? await pollPreviewMasterReady(masteringTaskId, { attempts: 10, delayMs: 2500 })
+        : await pollPreviewMaster(masteringTaskId, { attempts: 6, delayMs: 2500 });
       if (!polled.ok) {
         if (polled.pending) {
           return sendJson(res, 200, {
@@ -303,11 +316,38 @@ module.exports = async function handler(req, res) {
           pending: false,
         });
       }
+      if (readyOnly) {
+        return sendJson(res, 200, {
+          ok: true,
+          masteringTaskId,
+          previewUrl: polled.downloadUrl,
+          previewStartTime: polled.previewStartTime,
+          previewBytes: polled.bytes || 0,
+          pending: false,
+        });
+      }
+      const dl = await downloadRoexAudio(polled.downloadUrl, { retries: 3, delayMs: 1500 });
+      if (!dl.ok) {
+        if (dl.status === 404 || dl.status === 403) {
+          return sendJson(res, 200, {
+            ok: true,
+            masteringTaskId,
+            previewUrl: "",
+            pending: true,
+          });
+        }
+        return sendJson(res, dl.status || 502, {
+          error: dl.error || "Preview download failed.",
+          code: "preview_download_failed",
+          pending: false,
+        });
+      }
       return sendJson(res, 200, {
         ok: true,
         masteringTaskId,
         previewUrl: polled.downloadUrl,
         previewStartTime: polled.previewStartTime,
+        previewBytes: dl.buffer.length,
         pending: false,
       });
     }

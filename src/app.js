@@ -65729,6 +65729,9 @@ async function studioProMasterApi(body) {
     err.code = d?.code;
     err.status = r.status;
     err.payload = d;
+    if (/download http 404|preview_download/i.test(String(d?.error || ""))) {
+      err.message = "Pro Master preview isn’t ready yet — try Save again.";
+    }
     throw err;
   }
   return d;
@@ -65743,40 +65746,14 @@ async function putMixBlobToRoexSignedUrl(signedUrl, blob) {
   const type = blob?.type || "audio/wav";
   if (!url) throw new Error("Missing upload URL.");
 
-  try {
-    const put = await fetch(url, {
-      method: "PUT",
-      headers: { "Content-Type": type },
-      body: blob,
-    });
-    if (put.ok) return;
-    if (!isNativeShell()) {
-      throw new Error(`Couldn’t upload your mix (${put.status}).`);
-    }
-  } catch (e) {
-    if (!isNativeShell()) throw e;
+  const put = await fetch(url, {
+    method: "PUT",
+    headers: { "Content-Type": type },
+    body: blob,
+  });
+  if (!put.ok) {
+    throw new Error(`Couldn’t upload your mix (${put.status}).`);
   }
-
-  if (isNativeShell()) {
-    const CapHttp = window.Capacitor?.Plugins?.CapacitorHttp;
-    if (CapHttp?.request) {
-      const data = await bodyForCapacitorHttp(blob);
-      const r = await CapHttp.request({
-        method: "PUT",
-        url,
-        headers: { "Content-Type": type },
-        data,
-        responseType: "text",
-        connectTimeout: NATIVE_HTTP_LONG_COMPOSE_CONNECT_MS,
-        readTimeout: NATIVE_HTTP_LONG_COMPOSE_READ_MS,
-      });
-      const status = Number(r?.status || 0);
-      if (status >= 200 && status < 300) return;
-      throw new Error(`Upload failed (${status || "network"}).`);
-    }
-  }
-
-  throw new Error("Couldn’t upload your mix — try again on Wi‑Fi.");
 }
 
 async function studioProMasterUploadMixMultipart(blob) {
@@ -65797,18 +65774,19 @@ async function studioProMasterUploadMixMultipart(blob) {
 }
 
 async function studioProMasterUploadMixNative(blob) {
+  // Server multipart keeps WAV bytes intact — direct iOS PUT often corrupts the file.
   try {
-    const up = await studioProMasterApi({
-      action: "upload-url",
-      filename: "studio-mix.wav",
-      contentType: blob.type || "audio/wav",
-    });
-    await putMixBlobToRoexSignedUrl(up.signedUrl, blob);
-    return up.readableUrl;
+    return await studioProMasterUploadMixMultipart(blob);
   } catch (e) {
-    console.warn("[studio] direct RoEx upload failed, trying server:", e?.message || e);
-    return studioProMasterUploadMixMultipart(blob);
+    console.warn("[studio] server upload failed, trying direct RoEx:", e?.message || e);
   }
+  const up = await studioProMasterApi({
+    action: "upload-url",
+    filename: "studio-mix.wav",
+    contentType: blob.type || "audio/wav",
+  });
+  await putMixBlobToRoexSignedUrl(up.signedUrl, blob);
+  return up.readableUrl;
 }
 
 async function studioProMasterUploadMix(blob) {
@@ -65853,7 +65831,6 @@ async function studioProMasterResolvePlayback(preview) {
     const d = await studioProMasterApi({
       action: "preview-audio",
       masteringTaskId: taskId,
-      previewUrl: remote,
     });
     const blob = await base64ToBlob(d?.audioBase64, d?.contentType || "audio/wav");
     return URL.createObjectURL(blob);
@@ -65870,7 +65847,6 @@ async function studioProMasterResolvePlayback(preview) {
   const d = await studioProMasterApi({
     action: "preview-audio",
     masteringTaskId: taskId,
-    previewUrl: remote,
   });
   const blob = await base64ToBlob(d?.audioBase64, d?.contentType || "audio/wav");
   return URL.createObjectURL(blob);

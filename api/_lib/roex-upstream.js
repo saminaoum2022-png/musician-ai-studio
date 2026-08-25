@@ -129,17 +129,31 @@ async function retrievePreviewMaster(masteringTaskId) {
   const res = await roexJson("/retrievepreviewmaster", {
     body: { masteringData: { masteringTaskId: id } },
   });
-  if (!res.ok) return res;
+  if (!res.ok) {
+    const pending = res.status === 202 || res.status === 404;
+    return {
+      ok: false,
+      status: res.status || 502,
+      error: res.error || "Preview not ready yet",
+      code: res.status === 404 ? "preview_pending" : res.code || "preview_pending",
+      pending,
+    };
+  }
 
-  const preview = res.data?.previewMasterTaskResults || {};
-  const downloadUrl = String(preview.download_url_mastered_preview || "").trim();
+  const preview = res.data?.previewMasterTaskResults || res.data?.preview_master_task_results || {};
+  const downloadUrl = String(
+    preview.download_url_mastered_preview ||
+      preview.downloadUrlMasteredPreview ||
+      preview.download_url ||
+      "",
+  ).trim();
   if (!downloadUrl) {
     return { ok: false, status: 202, error: "Preview not ready yet", code: "preview_pending", pending: true };
   }
   return {
     ok: true,
     downloadUrl,
-    previewStartTime: Number(preview.preview_start_time),
+    previewStartTime: Number(preview.preview_start_time ?? preview.previewStartTime),
   };
 }
 
@@ -169,19 +183,85 @@ async function retrieveFinalMaster(masteringTaskId) {
   return { ok: true, downloadUrl };
 }
 
-async function downloadRoexAudio(url) {
+async function downloadRoexAudio(url, { retries = 3, delayMs = 2000 } = {}) {
   const u = String(url || "").trim();
   if (!u) return { ok: false, status: 400, error: "Missing download URL" };
-  let r;
-  try {
-    r = await fetch(u);
-  } catch (e) {
-    return { ok: false, status: 502, error: e?.message || "Download failed" };
+
+  const key = roexApiKey();
+  const candidates = [u];
+  if (key && /tonn\.roexaudio\.com/i.test(u) && !/[?&]key=/.test(u)) {
+    candidates.push(`${u}${u.includes("?") ? "&" : "?"}key=${encodeURIComponent(key)}`);
   }
-  if (!r.ok) return { ok: false, status: 502, error: `Download HTTP ${r.status}` };
-  const buf = Buffer.from(await r.arrayBuffer());
-  const contentType = String(r.headers.get("content-type") || "audio/wav").split(";")[0].trim();
-  return { ok: true, buffer: buf, contentType };
+
+  let lastStatus = 0;
+  for (const tryUrl of candidates) {
+    for (let attempt = 0; attempt < retries; attempt++) {
+      let r;
+      try {
+        r = await fetch(tryUrl);
+      } catch (e) {
+        if (attempt >= retries - 1 && tryUrl === candidates[candidates.length - 1]) {
+          return { ok: false, status: 502, error: e?.message || "Download failed" };
+        }
+        await new Promise((res) => setTimeout(res, delayMs));
+        continue;
+      }
+      lastStatus = r.status;
+      if (r.ok) {
+        const buf = Buffer.from(await r.arrayBuffer());
+        if (buf.length < 512) {
+          lastStatus = 502;
+          break;
+        }
+        const contentType = String(r.headers.get("content-type") || "audio/wav").split(";")[0].trim();
+        return { ok: true, buffer: buf, contentType };
+      }
+      if (r.status === 404 && attempt < retries - 1) {
+        await new Promise((res) => setTimeout(res, delayMs));
+        continue;
+      }
+      break;
+    }
+  }
+  return { ok: false, status: lastStatus || 502, error: `Download HTTP ${lastStatus || "failed"}` };
+}
+
+async function fetchPreviewAudioBuffer(masteringTaskId, { attempts = 12, delayMs = 2500 } = {}) {
+  const id = String(masteringTaskId || "").trim();
+  if (!id) return { ok: false, status: 400, error: "Missing mastering task id", code: "missing_task_id" };
+
+  for (let i = 0; i < attempts; i++) {
+    const meta = await retrievePreviewMaster(id);
+    if (!meta.ok) {
+      if (meta.pending) {
+        await new Promise((r) => setTimeout(r, delayMs));
+        continue;
+      }
+      return meta;
+    }
+    const dl = await downloadRoexAudio(meta.downloadUrl, { retries: 2, delayMs: 1500 });
+    if (dl.ok) {
+      return {
+        ok: true,
+        buffer: dl.buffer,
+        contentType: dl.contentType,
+        previewStartTime: meta.previewStartTime,
+        downloadUrl: meta.downloadUrl,
+      };
+    }
+    if (dl.status === 404) {
+      await new Promise((r) => setTimeout(r, delayMs));
+      continue;
+    }
+    return dl;
+  }
+  return {
+    ok: false,
+    status: 504,
+    error: "Preview audio isn’t ready yet — try again.",
+    code: "preview_download_timeout",
+    pending: true,
+  };
 }
 
 module.exports = {
@@ -194,4 +274,5 @@ module.exports = {
   pollPreviewMaster,
   retrieveFinalMaster,
   downloadRoexAudio,
+  fetchPreviewAudioBuffer,
 };

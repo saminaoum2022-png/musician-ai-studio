@@ -65752,6 +65752,41 @@ async function blobToBase64(blob) {
   return blobToBase64Payload(blob);
 }
 
+/** Downsample long Studio WAVs so iPhone can upload via our server (RoEx still masters fine). */
+async function resampleWavBlobToMono(blob, targetSampleRate = 22050) {
+  const { encodeWav16 } = await import("./wav.js");
+  const ab = await blob.arrayBuffer();
+  const ctx = new AudioContext();
+  let audioBuf;
+  try {
+    audioBuf = await ctx.decodeAudioData(ab.slice(0));
+  } finally {
+    try { await ctx.close(); } catch {}
+  }
+  const frames = Math.max(1, Math.ceil(audioBuf.duration * targetSampleRate));
+  const off = new OfflineAudioContext(1, frames, targetSampleRate);
+  const monoSrc = off.createBuffer(1, audioBuf.length, audioBuf.sampleRate);
+  const out = monoSrc.getChannelData(0);
+  const l = audioBuf.getChannelData(0);
+  const r = audioBuf.numberOfChannels > 1 ? audioBuf.getChannelData(1) : l;
+  for (let i = 0; i < audioBuf.length; i++) out[i] = (l[i] + r[i]) * 0.5;
+  const src = off.createBufferSource();
+  src.buffer = monoSrc;
+  src.connect(off.destination);
+  src.start(0);
+  const rendered = await off.startRendering();
+  return encodeWav16([rendered.getChannelData(0)], targetSampleRate);
+}
+
+async function prepareMixBlobForProMasterUpload(blob, maxBytes = 2.8 * 1024 * 1024) {
+  if (!blob || blob.size <= maxBytes) return blob;
+  for (const sr of [22050, 16000]) {
+    const shrunk = await resampleWavBlobToMono(blob, sr);
+    if (shrunk.size <= maxBytes) return shrunk;
+  }
+  return resampleWavBlobToMono(blob, 16000);
+}
+
 async function putBlobViaHttpPut(url, blob, contentType) {
   const type = contentType || blob?.type || "audio/wav";
   const send = () =>
@@ -65832,47 +65867,50 @@ async function nativeHttpDownloadBlobUrl(remoteUrl, contentType = "audio/wav") {
 }
 
 async function studioProMasterUploadMixNative(blob) {
-  const contentType = blob.type || "audio/wav";
+  const prepared = await prepareMixBlobForProMasterUpload(blob);
+  const contentType = prepared.type || "audio/wav";
 
-  // Direct RoEx upload — required for typical 20–40s takes (~4–8 MB WAV).
+  // Server relay via native HTTP — most reliable on iPhone.
+  try {
+    const audioBase64 = await blobToBase64(prepared);
+    const up = await studioProMasterApi({
+      action: "upload-mix",
+      audioBase64,
+      contentType,
+      filename: "studio-mix.wav",
+    });
+    return up.readableUrl;
+  } catch (e) {
+    console.warn("[studio] server Pro Master upload failed:", e?.message || e);
+  }
+
+  // Direct RoEx fallback (short/small mixes).
   try {
     const up = await studioProMasterApi({
       action: "upload-url",
       filename: "studio-mix.wav",
       contentType,
     });
-    await putMixBlobToRoexSignedUrl(up.signedUrl, blob);
+    await putMixBlobToRoexSignedUrl(up.signedUrl, prepared);
     return up.readableUrl;
   } catch (e) {
     console.warn("[studio] direct RoEx upload failed:", e?.message || e);
   }
 
-  // Server relay fallback for short takes only (Vercel body limit ~3 MB raw).
-  const maxServerBytes = 3 * 1024 * 1024;
-  if (blob.size <= maxServerBytes) {
-    const audioBase64 = await blobToBase64(blob);
-    const up = await studioProMasterApi({
-      action: "upload-mix",
-      audioBase64,
-      contentType,
-      filename: "studio-mix.wav",
-    });
-    return up.readableUrl;
-  }
-
-  throw new Error("Couldn’t upload your mix — try again on Wi‑Fi with a stable connection.");
+  throw new Error("Couldn’t upload your mix — try again on Wi‑Fi.");
 }
 
 async function studioProMasterUploadMix(blob) {
   if (isNativeShell()) return studioProMasterUploadMixNative(blob);
 
-  const maxServerBytes = 3 * 1024 * 1024;
-  if (blob.size <= maxServerBytes) {
-    const audioBase64 = await blobToBase64(blob);
+  const prepared = await prepareMixBlobForProMasterUpload(blob);
+  const maxServerBytes = 2.8 * 1024 * 1024;
+  if (prepared.size <= maxServerBytes) {
+    const audioBase64 = await blobToBase64(prepared);
     const up = await studioProMasterApi({
       action: "upload-mix",
       audioBase64,
-      contentType: blob.type || "audio/wav",
+      contentType: prepared.type || "audio/wav",
       filename: "studio-mix.wav",
     });
     return up.readableUrl;
@@ -65880,9 +65918,9 @@ async function studioProMasterUploadMix(blob) {
   const up = await studioProMasterApi({
     action: "upload-url",
     filename: "studio-mix.wav",
-    contentType: blob.type || "audio/wav",
+    contentType: prepared.type || "audio/wav",
   });
-  await putMixBlobToRoexSignedUrl(up.signedUrl, blob);
+  await putMixBlobToRoexSignedUrl(up.signedUrl, prepared);
   return up.readableUrl;
 }
 

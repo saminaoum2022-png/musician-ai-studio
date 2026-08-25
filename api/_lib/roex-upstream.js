@@ -74,6 +74,25 @@ async function getUploadUrls({ filename, contentType }) {
   return { ok: true, signedUrl: signed, readableUrl: readable };
 }
 
+async function uploadBufferToRoex({ buffer, filename = "studio-mix.wav", contentType = "audio/wav" }) {
+  const up = await getUploadUrls({ filename, contentType });
+  if (!up.ok) return up;
+  let put;
+  try {
+    put = await fetch(up.signedUrl, {
+      method: "PUT",
+      headers: { "Content-Type": contentType },
+      body: buffer,
+    });
+  } catch (e) {
+    return { ok: false, status: 502, error: e?.message || "RoEx upload failed", code: "roex_upload_network" };
+  }
+  if (!put.ok) {
+    return { ok: false, status: 502, error: `RoEx upload failed (HTTP ${put.status})`, code: "roex_upload_http" };
+  }
+  return { ok: true, readableUrl: up.readableUrl };
+}
+
 function roexParamsForFinish(finishId) {
   const id = FINISH_TO_ROEX[finishId] ? finishId : "balanced";
   return { finishId: id, ...FINISH_TO_ROEX[id] };
@@ -169,6 +188,7 @@ module.exports = {
   roexConfigured,
   roexParamsForFinish,
   getUploadUrls,
+  uploadBufferToRoex,
   createMasteringPreview,
   retrievePreviewMaster,
   pollPreviewMaster,

@@ -1808,10 +1808,10 @@ function renderPreviewMix(root, take) {
           ).join("")}
         </div>
         <label class="studioProMasterToggle">
-          <input type="checkbox" data-studio-pro-master ${m.proMaster ? "checked" : ""} />
+          <input type="checkbox" data-studio-pro-master ${m.proMaster ? "checked" : ""} aria-describedby="studioProMasterDesc" />
           <span class="studioProMasterCopy">
-            <strong>Pro Master ✨</strong>
-            <span>AI release master · ${esc(PRO_MASTER.priceDisplay)} to save · 30s preview free</span>
+            <strong class="studioProMasterTitle">Pro Master ✨</strong>
+            <span class="studioProMasterDesc" id="studioProMasterDesc">Free 30s preview · ${esc(PRO_MASTER.priceDisplay)} to save full master</span>
           </span>
         </label>
       </section>
@@ -2597,7 +2597,12 @@ async function saveVocalFromPreview(root) {
     renderSaveDetails(root);
   } catch (e) {
     console.warn("[studio] finalize failed:", e);
-    bridge.showToast?.(m.proMaster ? "Pro Master failed — try again or turn it off." : "Couldn't finalize — your take is still here.");
+    bridge.showToast?.(
+      m.proMaster
+        ? `Pro Master failed: ${String(e?.message || "try again or turn it off.")}`
+        : "Couldn't finalize — your take is still here.",
+      { durationMs: 5200 },
+    );
     renderPreviewMix(root, take);
   }
 }

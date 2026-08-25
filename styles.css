@@ -50268,19 +50268,39 @@ html[data-theme="light"] .playerPublishBtn{
   display: flex; flex-direction: column; gap: 10px;
   margin-top: 4px; padding: 14px 12px 12px; border-radius: 16px;
   background: rgba(255, 255, 255, 0.03); border: 1px solid var(--nabad-glass-border);
+  width: 100%; max-width: 100%; box-sizing: border-box; overflow: hidden;
 }
 .studioFinishSection .studioMixLabel { font-size: 13px; }
 .studioSeg--finish .studioSegBtn { font-size: 12px; min-height: 38px; }
 
 .studioProMasterToggle {
-  display: flex; align-items: flex-start; gap: 10px;
-  margin-top: 4px; padding: 10px 10px; border-radius: 12px;
-  background: rgba(124, 92, 255, 0.08); border: 1px solid rgba(124, 92, 255, 0.22);
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+  width: 100%; max-width: 100%;
+  margin-top: 6px; padding: 12px;
+  border-radius: 12px;
+  background: rgba(124, 92, 255, 0.08);
+  border: 1px solid rgba(124, 92, 255, 0.22);
   cursor: pointer;
+  box-sizing: border-box;
 }
-.studioProMasterToggle input { margin-top: 3px; accent-color: var(--brand-violet-hover); }
-.studioProMasterCopy { display: flex; flex-direction: column; gap: 2px; font-size: 12px; color: var(--muted); }
-.studioProMasterCopy strong { font-size: 13px; color: rgba(231, 238, 255, 0.95); }
+.studioProMasterToggle input {
+  width: 18px; height: 18px; margin: 2px 0 0;
+  accent-color: var(--brand-violet-hover);
+}
+.studioProMasterCopy {
+  display: flex; flex-direction: column; gap: 4px;
+  min-width: 0; max-width: 100%;
+  font-size: 12px; line-height: 1.4; color: var(--muted);
+}
+.studioProMasterCopy .studioProMasterTitle {
+  font-size: 13px; font-weight: 800; color: rgba(231, 238, 255, 0.95);
+}
+.studioProMasterCopy .studioProMasterDesc {
+  overflow-wrap: anywhere; word-break: break-word;
+}
 
 .studioProMaster { padding-bottom: 24px; }
 .studioProMasterHero { text-align: center; padding: 8px 12px 16px; }
@@ -50295,7 +50315,7 @@ html[data-theme="light"] .playerPublishBtn{
 html[data-theme="light"] .studioProMasterToggle {
   background: rgba(124, 92, 255, 0.06); border-color: rgba(124, 92, 255, 0.18);
 }
-html[data-theme="light"] .studioProMasterCopy strong { color: #1a1f2e; }
+html[data-theme="light"] .studioProMasterCopy .studioProMasterTitle { color: #1a1f2e; }
 
 .studioMixTabs {
   display: flex; gap: 4px; padding: 3px; border-radius: 12px;

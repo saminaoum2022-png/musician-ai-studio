@@ -28,6 +28,7 @@ const {
 const {
   roexConfigured,
   getUploadUrls,
+  uploadBufferToRoex,
   createMasteringPreview,
   pollPreviewMaster,
   retrieveFinalMaster,
@@ -179,6 +180,28 @@ module.exports = async function handler(req, res) {
         signedUrl: up.signedUrl,
         readableUrl: up.readableUrl,
       });
+    }
+
+    if (action === "upload-mix") {
+      const b64 = String(body?.audioBase64 || "").trim();
+      if (!b64) return sendJson(res, 400, { error: "Missing audio data.", code: "missing_audio" });
+      const buf = Buffer.from(b64, "base64");
+      const maxBytes = 3.5 * 1024 * 1024;
+      if (!buf.length) return sendJson(res, 400, { error: "Empty audio upload.", code: "empty_audio" });
+      if (buf.length > maxBytes) {
+        return sendJson(res, 413, {
+          error: "Mix is too large for Pro Master right now — try a shorter take or use local finish.",
+          code: "audio_too_large",
+        });
+      }
+      const contentType = String(body?.contentType || "audio/wav").trim() || "audio/wav";
+      const up = await uploadBufferToRoex({
+        buffer: buf,
+        filename: body?.filename || "studio-mix.wav",
+        contentType,
+      });
+      if (!up.ok) return sendJson(res, up.status || 502, { error: up.error, code: up.code });
+      return sendJson(res, 200, { ok: true, readableUrl: up.readableUrl });
     }
 
     if (action === "preview") {

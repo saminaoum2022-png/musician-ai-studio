@@ -65715,22 +65715,79 @@ async function studioProMasterApi(body) {
   return d;
 }
 
-async function studioProMasterPreview({ blob, finish = "balanced" }) {
+async function blobToBase64(blob) {
+  const buf = await blob.arrayBuffer();
+  let binary = "";
+  const bytes = new Uint8Array(buf);
+  const chunk = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunk) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + chunk));
+  }
+  return btoa(binary);
+}
+
+async function putMixBlobToRoexSignedUrl(signedUrl, blob) {
+  const url = String(signedUrl || "").trim();
+  const type = blob?.type || "audio/wav";
+  if (!url) throw new Error("Missing upload URL.");
+  if (isNativeShell()) {
+    try {
+      const { CapacitorHttp } = await import("../vendor/capacitor-core/index.js");
+      const data = await blob.arrayBuffer();
+      const r = await CapacitorHttp.request({
+        method: "PUT",
+        url,
+        headers: { "Content-Type": type },
+        data,
+      });
+      const status = Number(r?.status || 0);
+      if (status < 200 || status >= 300) {
+        throw new Error(`Upload failed (${status || "network"}).`);
+      }
+      return;
+    } catch (e) {
+      if (!/Upload failed/i.test(String(e?.message || ""))) {
+        console.warn("[studio] CapacitorHttp upload fallback:", e?.message || e);
+      } else {
+        throw e;
+      }
+    }
+  }
+  const put = await fetch(url, {
+    method: "PUT",
+    headers: { "Content-Type": type },
+    body: blob,
+  });
+  if (!put.ok) throw new Error(`Couldn’t upload your mix (${put.status}).`);
+}
+
+async function studioProMasterUploadMix(blob) {
+  const maxServerBytes = 3 * 1024 * 1024;
+  if (blob.size <= maxServerBytes) {
+    const audioBase64 = await blobToBase64(blob);
+    const up = await studioProMasterApi({
+      action: "upload-mix",
+      audioBase64,
+      contentType: blob.type || "audio/wav",
+      filename: "studio-mix.wav",
+    });
+    return up.readableUrl;
+  }
   const up = await studioProMasterApi({
     action: "upload-url",
     filename: "studio-mix.wav",
-    contentType: "audio/wav",
+    contentType: blob.type || "audio/wav",
   });
-  const put = await fetch(up.signedUrl, {
-    method: "PUT",
-    headers: { "Content-Type": "audio/wav" },
-    body: blob,
-  });
-  if (!put.ok) throw new Error("Couldn’t upload your mix for mastering.");
+  await putMixBlobToRoexSignedUrl(up.signedUrl, blob);
+  return up.readableUrl;
+}
+
+async function studioProMasterPreview({ blob, finish = "balanced" }) {
+  const trackUrl = await studioProMasterUploadMix(blob);
 
   let preview = await studioProMasterApi({
     action: "preview",
-    trackUrl: up.readableUrl,
+    trackUrl,
     finish,
   });
   if (!preview.previewUrl && preview.masteringTaskId) {

@@ -13,6 +13,8 @@ const {
   statusFromRevenueCatEvent,
   CREDIT_GRANT_EVENT_TYPES,
   ENTITLEMENT_PRO,
+  STUDIO_PRO_MASTER_PRODUCT_ID,
+  STUDIO_PRO_MASTER_EVENT,
 } = require("./billing-config");
 
 const SUPABASE_URL = (process.env.SUPABASE_URL || "").replace(/\/$/, "");
@@ -241,6 +243,16 @@ async function applyRevenueCatEvent(event) {
   }
 
   const packCredits = creditsForPackProductId(productId);
+  if (productId === STUDIO_PRO_MASTER_PRODUCT_ID && (eventType === "NON_RENEWING_PURCHASE" || eventType === "INITIAL_PURCHASE")) {
+    const { recordStudioMasterPayment } = require("./studio-master-billing");
+    await recordStudioMasterPayment({
+      userId,
+      masteringTaskId: String(ev.subscriber_attributes?.mastering_task_id?.value || ev.mastering_task_id || "").trim(),
+      provider: "revenuecat",
+      externalId: transactionId || eventId,
+    });
+    return { ok: true, kind: "studio_pro_master_iap", userId, productId };
+  }
   if (packCredits > 0 && CREDIT_GRANT_EVENT_TYPES.has(eventType)) {
     const grant = await grantCreditsOnce({
       eventId: transactionId || eventId,

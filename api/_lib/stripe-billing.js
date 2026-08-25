@@ -258,6 +258,23 @@ async function applyStripeEvent(event) {
 
   if (type === "checkout.session.completed") {
     const session = ev.data?.object;
+    const mode = String(session?.mode || "").trim();
+    if (mode === "payment" && String(session?.metadata?.product || "") === "studio_pro_master") {
+      const userId = userIdFromStripeObject(session);
+      const masteringTaskId = String(session?.metadata?.mastering_task_id || "").trim();
+      const sessionId = String(session?.id || "").trim();
+      if (userId && masteringTaskId && sessionId) {
+        const { recordStudioMasterPayment } = require("./studio-master-billing");
+        await recordStudioMasterPayment({
+          userId,
+          masteringTaskId,
+          provider: "stripe",
+          externalId: sessionId,
+        });
+      }
+      return { ok: true, kind: "studio_pro_master", userId, masteringTaskId };
+    }
+
     const subId = String(session?.subscription || "").trim();
     if (!subId) return { ok: true, kind: "checkout_no_subscription" };
     const stripe = getStripe();
@@ -319,6 +336,42 @@ async function createCheckoutSession({ userId, email, planId, origin }) {
     metadata: { user_id: uid, plan_id: pid },
     success_url: proRouteUrl(origin, "checkout=success&session_id={CHECKOUT_SESSION_ID}"),
     cancel_url: proRouteUrl(origin, "checkout=cancelled"),
+    allow_promotion_codes: false,
+  });
+
+  return { ok: true, url: session.url, sessionId: session.id };
+}
+
+async function createStudioMasterCheckoutSession({ userId, email, origin, masteringTaskId, jobToken }) {
+  const stripe = getStripe();
+  const uid = cleanUserId(userId);
+  const taskId = String(masteringTaskId || "").trim();
+  const priceId = String(process.env.STRIPE_PRICE_STUDIO_MASTER || "").trim();
+  if (!stripe || !uid || !taskId || !priceId) {
+    return { ok: false, error: "billing_not_configured" };
+  }
+
+  const customerId = await ensureStripeCustomer(uid, email);
+  const base = String(origin || "").replace(/\/$/, "");
+  const q = new URLSearchParams({
+    studio_master: "success",
+    task_id: taskId,
+    session_id: "{CHECKOUT_SESSION_ID}",
+  });
+  if (jobToken) q.set("job_token", jobToken);
+
+  const session = await stripe.checkout.sessions.create({
+    mode: "payment",
+    customer: customerId,
+    client_reference_id: uid,
+    line_items: [{ price: priceId, quantity: 1 }],
+    metadata: {
+      user_id: uid,
+      product: "studio_pro_master",
+      mastering_task_id: taskId,
+    },
+    success_url: `${base}/#/studio?${q.toString()}`,
+    cancel_url: `${base}/#/studio?studio_master=cancelled&task_id=${encodeURIComponent(taskId)}`,
     allow_promotion_codes: false,
   });
 
@@ -466,6 +519,7 @@ module.exports = {
   isStripeConfigured,
   publicOriginFromRequest,
   createCheckoutSession,
+  createStudioMasterCheckoutSession,
   createPortalSession,
   syncStripeSubscriber,
   applyStripeEvent,

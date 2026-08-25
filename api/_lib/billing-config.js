@@ -21,6 +21,11 @@ const CREDIT_PACK_PRODUCTS = Object.freeze({
   "com.nabadai.music.credits.120": 1400,
 });
 
+/** One-time Studio Pro Master (RoEx) — $3.99 consumable, not a credit pack. */
+const STUDIO_PRO_MASTER_PRODUCT_ID = "com.nabadai.music.studio_pro_master";
+const STUDIO_PRO_MASTER_EVENT = "STUDIO_PRO_MASTER";
+const STUDIO_PRO_MASTER_REDEEMED_EVENT = "STUDIO_PRO_MASTER_REDEEMED";
+
 const ENTITLEMENT_PRO = "pro";
 
 const CREDIT_GRANT_EVENT_TYPES = new Set([
@@ -124,6 +129,9 @@ function statusFromStripeSubscription(sub) {
 module.exports = {
   PRO_PRODUCTS,
   CREDIT_PACK_PRODUCTS,
+  STUDIO_PRO_MASTER_PRODUCT_ID,
+  STUDIO_PRO_MASTER_EVENT,
+  STUDIO_PRO_MASTER_REDEEMED_EVENT,
   ENTITLEMENT_PRO,
   CREDIT_GRANT_EVENT_TYPES,
   planForProductId,

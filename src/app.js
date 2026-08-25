@@ -65479,6 +65479,10 @@ try {
         renderProfileSongs();
       } catch {}
     },
+    proMasterPreview: (opts) => studioProMasterPreview(opts),
+    proMasterFinalize: (opts) => studioProMasterFinalize(opts),
+    checkoutProMaster: isNativeShell() ? undefined : (opts) => studioCheckoutProMaster(opts),
+    purchaseProMaster: isNativeShell() ? () => studioPurchaseProMaster() : undefined,
     latestTrack: () => {
       try {
         return loadLibrary().find(
@@ -65686,6 +65690,105 @@ async function studioSeparateVocals(track, onPhase) {
     }
   }
   throw new Error("Separation is taking longer than expected — try again in a moment.");
+}
+
+async function studioProMasterApi(body) {
+  const tok = getSupabaseAuthToken();
+  if (!tok) throw new Error("Sign in to use Pro Master.");
+  const r = await fetch(apiUrl("/api/music/studio-master"), {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${tok}`,
+      ...(isNativeShell() ? {} : { "X-Nabad-Client-Shell": "web" }),
+    },
+    body: JSON.stringify(body || {}),
+  });
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok) {
+    const err = new Error(String(d?.error || "Pro Master request failed."));
+    err.code = d?.code;
+    err.status = r.status;
+    err.payload = d;
+    throw err;
+  }
+  return d;
+}
+
+async function studioProMasterPreview({ blob, finish = "balanced" }) {
+  const up = await studioProMasterApi({
+    action: "upload-url",
+    filename: "studio-mix.wav",
+    contentType: "audio/wav",
+  });
+  const put = await fetch(up.signedUrl, {
+    method: "PUT",
+    headers: { "Content-Type": "audio/wav" },
+    body: blob,
+  });
+  if (!put.ok) throw new Error("Couldn’t upload your mix for mastering.");
+
+  let preview = await studioProMasterApi({
+    action: "preview",
+    trackUrl: up.readableUrl,
+    finish,
+  });
+  if (!preview.previewUrl && preview.masteringTaskId) {
+    for (let i = 0; i < 8; i++) {
+      await new Promise((res) => setTimeout(res, 2500));
+      preview = await studioProMasterApi({
+        action: "poll-preview",
+        masteringTaskId: preview.masteringTaskId,
+      });
+      if (preview.previewUrl) break;
+    }
+  }
+  if (!preview.previewUrl) throw new Error("Pro Master preview isn’t ready yet — try again.");
+  return preview;
+}
+
+async function studioProMasterFinalize({ masteringTaskId, jobToken, stripeSessionId = "", iapTransactionId = "" }) {
+  const d = await studioProMasterApi({
+    action: "finalize",
+    masteringTaskId,
+    jobToken,
+    stripeSessionId,
+    iapTransactionId,
+  });
+  const b64 = String(d?.audioBase64 || "").trim();
+  if (!b64) throw new Error("Missing mastered audio.");
+  const bin = atob(b64);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return new Blob([bytes], { type: d.contentType || "audio/wav" });
+}
+
+async function studioCheckoutProMaster({ masteringTaskId, jobToken }) {
+  const tok = getSupabaseAuthToken();
+  if (!tok) throw new Error("Sign in first.");
+  const r = await fetch(apiUrl("/api/billing/studio-master-checkout"), {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${tok}`,
+      "X-Nabad-Client-Shell": "web",
+    },
+    body: JSON.stringify({ masteringTaskId, jobToken }),
+  });
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(d?.error || "Couldn’t start checkout.");
+  if (d?.url) {
+    location.href = d.url;
+    return d;
+  }
+  throw new Error("Checkout URL missing.");
+}
+
+async function studioPurchaseProMaster() {
+  const { purchaseStudioProMaster } = await import("./billing/revenuecat.js");
+  const uid = String(authSession?.user?.id || "").trim();
+  const purchase = await purchaseStudioProMaster({ userId: uid });
+  return purchase;
 }
 
 // Hum → melody (MVP)

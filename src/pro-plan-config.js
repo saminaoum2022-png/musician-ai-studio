@@ -49,6 +49,14 @@ export const PRO_PLANS = Object.freeze([
 /** Shown on trial start (weekly path). Match first paid week unless you change it. */
 export const PRO_TRIAL_CREDITS = 400;
 
+export const PRO_MASTER = Object.freeze({
+  productId: "com.nabadai.music.studio_pro_master",
+  priceUsd: 3.99,
+  priceDisplay: "$3.99",
+  label: "Pro Master",
+  subtitle: "AI mastering by RoEx — preview free, pay only if you save",
+});
+
 export const PRO_FEATURES = Object.freeze([
   { key: "credits", label: "Monthly or weekly credits", sub: "Paid credits each renewal — create songs or gift Mic / Pulse / Star" },
   { key: "coach", label: "Unlimited NabadAi Coach", sub: "Free users get a daily message limit" },

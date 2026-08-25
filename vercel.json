@@ -29,6 +29,9 @@
     "api/music/studio-master.js": {
       "maxDuration": 120
     },
+    "api/music/studio-master-stream.js": {
+      "maxDuration": 120
+    },
     "api/music/cover-art.js": {
       "maxDuration": 60
     },

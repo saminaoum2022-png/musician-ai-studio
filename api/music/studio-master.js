@@ -9,7 +9,6 @@
  *
  * Pro subscribers only. Preview is free; final retrieve costs RoEx credits after payment.
  */
-const crypto = require("crypto");
 const Busboy = require("busboy");
 const { verifyUser, sendJson, readJsonBody, isAdminEmail } = require("../_lib/credits-auth");
 const { applyCors } = require("../_lib/cors");
@@ -37,40 +36,7 @@ const {
   downloadRoexAudio,
   fetchPreviewAudioBuffer,
 } = require("../_lib/roex-upstream");
-
-function signingSecret() {
-  return String(process.env.STUDIO_MASTER_SIGNING_SECRET || process.env.SUPABASE_SERVICE_ROLE_KEY || "").trim();
-}
-
-function signJobToken(payload) {
-  const secret = signingSecret();
-  if (!secret) return "";
-  const body = Buffer.from(JSON.stringify(payload)).toString("base64url");
-  const sig = crypto.createHmac("sha256", secret).update(body).digest("base64url");
-  return `${body}.${sig}`;
-}
-
-function verifyJobToken(token, expected) {
-  const secret = signingSecret();
-  const raw = String(token || "").trim();
-  if (!secret || !raw) return null;
-  const dot = raw.lastIndexOf(".");
-  if (dot <= 0) return null;
-  const body = raw.slice(0, dot);
-  const sig = raw.slice(dot + 1);
-  const expectedSig = crypto.createHmac("sha256", secret).update(body).digest("base64url");
-  if (sig.length !== expectedSig.length) return null;
-  if (!crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expectedSig))) return null;
-  try {
-    const payload = JSON.parse(Buffer.from(body, "base64url").toString("utf8"));
-    if (expected?.userId && payload.userId !== expected.userId) return null;
-    if (expected?.masteringTaskId && payload.masteringTaskId !== expected.masteringTaskId) return null;
-    if (payload.exp && Date.now() > Number(payload.exp)) return null;
-    return payload;
-  } catch {
-    return null;
-  }
-}
+const { signJobToken, verifyJobToken } = require("../_lib/studio-master-job");
 
 async function requireStudioPro(user, req) {
   if (String(process.env.STUDIO_MASTER_DEV_SKIP_PAYMENT || "").trim() === "1") {
@@ -318,6 +284,15 @@ module.exports = async function handler(req, res) {
       }
       const fetched = await fetchPreviewAudioBuffer(masteringTaskId, { attempts: 24, delayMs: 3000 });
       if (!fetched.ok) {
+        if (fetched.pending) {
+          return sendJson(res, 200, {
+            ok: true,
+            pending: true,
+            masteringTaskId,
+            error: fetched.error,
+            code: fetched.code,
+          });
+        }
         return sendJson(res, fetched.status || 502, {
           error: fetched.error,
           code: fetched.code,

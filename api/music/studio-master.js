@@ -205,6 +205,14 @@ module.exports = async function handler(req, res) {
   const action = String(body?.action || "").trim().toLowerCase();
 
   try {
+    if (action === "ping") {
+      return sendJson(res, 200, {
+        ok: true,
+        roexConfigured: roexConfigured(),
+        devSkipPayment: String(process.env.STUDIO_MASTER_DEV_SKIP_PAYMENT || "").trim() === "1",
+      });
+    }
+
     if (action === "upload-url") {
       const up = await getUploadUrls({
         filename: body?.filename,

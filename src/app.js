@@ -65866,11 +65866,59 @@ async function nativeHttpDownloadBlobUrl(remoteUrl, contentType = "audio/wav") {
   return URL.createObjectURL(blob);
 }
 
+async function nativeSafeFetchLong(url, init = {}, timeouts = {}) {
+  const t = {
+    connectTimeout: timeouts.connectTimeout ?? 30000,
+    readTimeout: timeouts.readTimeout ?? 180000,
+  };
+  if (!isNativeShell()) return fetch(url, init);
+  await ensureNativeNetworkReady();
+  try {
+    const r = await fetch(url, init);
+    if (r && Number(r.status) !== 0) return r;
+  } catch {}
+  const native = await capacitorHttpFetch(url, init, t);
+  if (native && Number(native.status) > 0) return native;
+  throw new TypeError("Failed to fetch");
+}
+
+async function uploadStudioProMasterMixToSupabase(blob) {
+  const token = getSupabaseAuthToken();
+  const uid = String(authSession?.user?.id || "").trim();
+  if (!token || !uid) throw new Error("Sign in to use Pro Master.");
+  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) throw new Error("Supabase not configured");
+  const key = `${uid}/studio-master/${Date.now()}.wav`;
+  const r = await nativeSafeFetchLong(`${SUPABASE_URL}/storage/v1/object/song_archive/${key}`, {
+    method: "POST",
+    headers: {
+      apikey: SUPABASE_ANON_KEY,
+      Authorization: `Bearer ${token}`,
+      "Content-Type": blob.type || "audio/wav",
+      "x-upsert": "true",
+      "Cache-Control": "max-age=3600",
+    },
+    body: blob,
+  });
+  if (!r.ok) {
+    const t = await r.text().catch(() => "");
+    throw new Error(`Mix upload failed (${r.status})${t ? `: ${t.slice(0, 100)}` : ""}`);
+  }
+  return `${SUPABASE_URL}/storage/v1/object/public/song_archive/${key}?v=${Date.now()}`;
+}
+
 async function studioProMasterUploadMixNative(blob) {
   const prepared = await prepareMixBlobForProMasterUpload(blob);
   const contentType = prepared.type || "audio/wav";
+  let lastErr = null;
 
-  // Server relay via native HTTP — most reliable on iPhone.
+  // Same path as voice/status uploads — reliable on iPhone (native HTTP + raw blob).
+  try {
+    return await uploadStudioProMasterMixToSupabase(prepared);
+  } catch (e) {
+    lastErr = e;
+    console.warn("[studio] Supabase Pro Master upload failed:", e?.message || e);
+  }
+
   try {
     const audioBase64 = await blobToBase64(prepared);
     const up = await studioProMasterApi({
@@ -65881,10 +65929,10 @@ async function studioProMasterUploadMixNative(blob) {
     });
     return up.readableUrl;
   } catch (e) {
+    lastErr = e;
     console.warn("[studio] server Pro Master upload failed:", e?.message || e);
   }
 
-  // Direct RoEx fallback (short/small mixes).
   try {
     const up = await studioProMasterApi({
       action: "upload-url",
@@ -65894,10 +65942,13 @@ async function studioProMasterUploadMixNative(blob) {
     await putMixBlobToRoexSignedUrl(up.signedUrl, prepared);
     return up.readableUrl;
   } catch (e) {
+    lastErr = e;
     console.warn("[studio] direct RoEx upload failed:", e?.message || e);
   }
 
-  throw new Error("Couldn’t upload your mix — try again on Wi‑Fi.");
+  throw lastErr instanceof Error
+    ? lastErr
+    : new Error("Couldn’t upload your mix — try again on Wi‑Fi.");
 }
 
 async function studioProMasterUploadMix(blob) {

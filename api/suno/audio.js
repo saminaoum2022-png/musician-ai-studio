@@ -24,7 +24,13 @@ module.exports = async function handler(req, res) {
     }
     if (!/^https?:$/.test(target.protocol)) return json(res, 400, { error: "Invalid protocol" });
 
-    const upstream = await fetch(target.toString(), { method: "GET", redirect: "follow" });
+    let fetchUrl = target.toString();
+    const roexKey = String(process.env.ROEX_API_KEY || process.env.TONN_API_KEY || "").trim();
+    if (roexKey && /tonn\.roexaudio\.com/i.test(fetchUrl) && !/[?&]key=/.test(fetchUrl)) {
+      fetchUrl += `${fetchUrl.includes("?") ? "&" : "?"}key=${encodeURIComponent(roexKey)}`;
+    }
+
+    const upstream = await fetch(fetchUrl, { method: "GET", redirect: "follow" });
     if (!upstream.ok || !upstream.body) {
       const txt = await upstream.text().catch(() => "");
       return json(res, 502, { error: "Upstream audio fetch failed", status: upstream.status, details: txt.slice(0, 300) });

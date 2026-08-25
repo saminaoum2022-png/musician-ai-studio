@@ -2687,6 +2687,10 @@ function renderProMasterUnlock(root) {
     return;
   }
   const cover = pm.cover || trackCoverUrl();
+  const initialAudioSrc =
+    pm.playbackUrl ||
+    bridge.proMasterPlaybackUrl?.(pm) ||
+    "";
   root.innerHTML = `
     <div class="studio studioProMaster" data-studio-screen="pro_master">
       ${headerHtml("PRO MASTER")}
@@ -2695,7 +2699,8 @@ function renderProMasterUnlock(root) {
         <h2 class="studioProMasterTitle">Hear your Pro Master</h2>
         <p class="studioProMasterSub">30-second preview · ${esc(PRO_MASTER.priceDisplay)} to save the full release master</p>
       </div>
-      <audio class="studioProMasterAudio" controls preload="metadata" src="${esc(pm.playbackUrl || pm.previewUrl || "")}"></audio>
+      <p class="studioProMasterAudioHint" data-pro-master-audio-hint ${initialAudioSrc ? "hidden" : ""}>Loading preview audio…</p>
+      <audio class="studioProMasterAudio" controls preload="metadata"${initialAudioSrc ? ` src="${esc(initialAudioSrc)}"` : ""}></audio>
       <div class="studioFooter studioFooter--finish">
         <button type="button" class="studioPrimary studioPrimary--continue" data-pro-master-unlock>Unlock & save · ${esc(PRO_MASTER.priceDisplay)}</button>
         <button type="button" class="studioGhost" data-pro-master-local>Save with local finish instead</button>
@@ -2728,21 +2733,61 @@ function renderProMasterUnlock(root) {
   void ensureProMasterPlayback(root, pm);
 }
 
-async function ensureProMasterPlayback(root, pm) {
+async function ensureProMasterPlayback(root, pm, { forceBlob = false } = {}) {
   const audio = root.querySelector(".studioProMasterAudio");
-  if (!audio || pm.playbackUrl) return;
-  if (typeof bridge.proMasterLoadPlayback !== "function") return;
-  try {
-    const playbackUrl = await bridge.proMasterLoadPlayback(pm);
-    if (!playbackUrl) return;
-    pm.playbackUrl = playbackUrl;
-    persistProMasterSession(pm);
-    audio.src = playbackUrl;
+  const hint = root.querySelector("[data-pro-master-audio-hint]");
+  if (!audio) return;
+
+  const proxied =
+    !forceBlob && (pm.playbackUrl || bridge.proMasterPlaybackUrl?.(pm) || "");
+  if (proxied && !forceBlob) {
+    if (audio.src !== proxied) {
+      audio.src = proxied;
+      try {
+        audio.load();
+      } catch {}
+    }
+  }
+
+  const hideHint = () => {
+    if (hint) hint.hidden = true;
+  };
+  const showHint = (txt) => {
+    if (hint) {
+      hint.hidden = false;
+      hint.textContent = txt;
+    }
+  };
+
+  audio.oncanplay = hideHint;
+  audio.onerror = () => {
+    if (audio.dataset.proMasterBlobRetry === "1") {
+      showHint("Preview couldn’t load — try again in a moment.");
+      return;
+    }
+    if (!forceBlob && typeof bridge.proMasterLoadPlayback === "function") {
+      audio.dataset.proMasterBlobRetry = "1";
+      void ensureProMasterPlayback(root, pm, { forceBlob: true });
+      return;
+    }
+    showHint("Preview couldn’t load — tap play to retry.");
+  };
+
+  if (forceBlob && typeof bridge.proMasterLoadPlayback === "function") {
+    showHint("Loading preview audio…");
     try {
-      audio.load();
-    } catch {}
-  } catch (e) {
-    console.warn("[studio] pro master playback load failed:", e?.message || e);
+      const playbackUrl = await bridge.proMasterLoadPlayback(pm);
+      if (!playbackUrl) return;
+      pm.playbackUrl = playbackUrl;
+      persistProMasterSession(pm);
+      audio.src = playbackUrl;
+      try {
+        audio.load();
+      } catch {}
+    } catch (e) {
+      console.warn("[studio] pro master playback load failed:", e?.message || e);
+      showHint("Preview couldn’t load — try again in a moment.");
+    }
   }
 }
 

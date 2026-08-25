@@ -65480,6 +65480,7 @@ try {
       } catch {}
     },
     proMasterPreview: (opts) => studioProMasterPreview(opts),
+    proMasterPlaybackUrl: (preview) => studioProMasterPlaybackUrl(preview),
     proMasterLoadPlayback: (preview) => studioProMasterResolvePlayback(preview),
     proMasterFinalize: (opts) => studioProMasterFinalize(opts),
     checkoutProMaster: isNativeShell() ? undefined : (opts) => studioCheckoutProMaster(opts),
@@ -66053,7 +66054,19 @@ async function base64ToBlob(b64, contentType = "audio/wav") {
   return new Blob([bytes], { type: contentType || "audio/wav" });
 }
 
+function studioProMasterPlaybackUrl(preview) {
+  const blobLike = String(preview?.playbackUrl || "").trim();
+  if (blobLike.startsWith("blob:") || blobLike.startsWith("data:")) return blobLike;
+  const remote = String(preview?.previewUrl || "").trim();
+  if (!remote) return blobLike;
+  if (remote.startsWith("blob:") || remote.startsWith("data:")) return remote;
+  return normalizeAudioUrlForPlayback(toAudioProxyUrl(remote) || remote);
+}
+
 async function studioProMasterResolvePlayback(preview) {
+  const proxied = studioProMasterPlaybackUrl(preview);
+  if (proxied && !/^https?:\/\//i.test(proxied)) return proxied;
+
   const taskId = String(preview?.masteringTaskId || "").trim();
   const remote = String(preview?.previewUrl || "").trim();
   if (!taskId && !remote) throw new Error("Missing preview audio.");
@@ -66130,10 +66143,13 @@ async function studioProMasterPreview({ blob, finish = "balanced" }) {
   if (!preview.previewUrl) {
     throw new Error("Pro Master preview isn’t ready yet — try again.");
   }
-  try {
-    preview.playbackUrl = await studioProMasterResolvePlayback(preview);
-  } catch (e) {
-    console.warn("[studio] preview playback resolve failed:", e?.message || e);
+  preview.playbackUrl = studioProMasterPlaybackUrl(preview);
+  if (!preview.playbackUrl) {
+    try {
+      preview.playbackUrl = await studioProMasterResolvePlayback(preview);
+    } catch (e) {
+      console.warn("[studio] preview playback resolve failed:", e?.message || e);
+    }
   }
   return preview;
 }

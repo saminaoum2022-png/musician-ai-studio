@@ -2747,11 +2747,10 @@ async function playProMasterPreview(root, pm) {
       /_capacitor_file_/i.test(url) ||
       url.startsWith("capacitor://") ||
       url.startsWith("file://");
-    const needsFetch =
-      !url ||
-      url.startsWith("blob:") ||
-      (/^https?:\/\//i.test(url) && !isNativeFile);
-    if (needsFetch && typeof bridge.proMasterLoadPlayback === "function") {
+    if (!url || url.startsWith("blob:") || (/^https?:\/\//i.test(url) && !isNativeFile)) {
+      if (typeof bridge.proMasterLoadPlayback !== "function") {
+        throw new Error("Preview player unavailable.");
+      }
       url = await bridge.proMasterLoadPlayback(pm);
       pm.playbackUrl = url;
       persistProMasterSession(pm);
@@ -2771,8 +2770,9 @@ async function playProMasterPreview(root, pm) {
     if (btn) btn.textContent = "▶ Play 30s preview";
   } catch (e) {
     console.warn("[studio] pro master play failed:", e?.message || e);
-    if (hint) hint.textContent = String(e?.message || "Preview couldn’t load — try again.");
-    bridge.showToast?.("Preview couldn’t load — try Save again.", { durationMs: 4200 });
+    const msg = String(e?.message || "Preview couldn’t load — try again.");
+    if (hint) hint.textContent = /timed out/i.test(msg) ? "Preview still processing — wait 30s and tap Play again." : msg;
+    bridge.showToast?.(/timed out/i.test(msg) ? "Preview still processing — try Play again in a moment." : msg, { durationMs: 4800 });
     if (btn) btn.textContent = "▶ Play 30s preview";
   } finally {
     if (btn) btn.disabled = false;

@@ -264,6 +264,50 @@ async function fetchPreviewAudioBuffer(masteringTaskId, { attempts = 24, delayMs
   };
 }
 
+async function fetchPreviewAudioBufferQuick(masteringTaskId, { attempts = 6, delayMs = 2000 } = {}) {
+  const id = String(masteringTaskId || "").trim();
+  if (!id) return { ok: false, status: 400, error: "Missing mastering task id", code: "missing_task_id" };
+
+  for (let i = 0; i < attempts; i++) {
+    const meta = await retrievePreviewMaster(id);
+    if (!meta.ok) {
+      if (meta.pending) {
+        await new Promise((r) => setTimeout(r, delayMs));
+        continue;
+      }
+      return meta;
+    }
+    const dl = await downloadRoexAudio(meta.downloadUrl, { retries: 4, delayMs: 1500 });
+    if (dl.ok) {
+      return {
+        ok: true,
+        buffer: dl.buffer,
+        contentType: dl.contentType,
+        previewStartTime: meta.previewStartTime,
+        downloadUrl: meta.downloadUrl,
+      };
+    }
+    if (dl.status === 404) {
+      await new Promise((r) => setTimeout(r, delayMs));
+      continue;
+    }
+    return dl;
+  }
+  return {
+    ok: false,
+    status: 202,
+    error: "Preview not ready yet.",
+    code: "preview_pending",
+    pending: true,
+  };
+}
+
+async function downloadRoexPreviewUrl(remoteUrl) {
+  const url = String(remoteUrl || "").trim();
+  if (!url) return { ok: false, status: 400, error: "Missing preview URL" };
+  return downloadRoexAudio(url, { retries: 5, delayMs: 2000 });
+}
+
 module.exports = {
   roexConfigured,
   roexParamsForFinish,
@@ -275,4 +319,6 @@ module.exports = {
   retrieveFinalMaster,
   downloadRoexAudio,
   fetchPreviewAudioBuffer,
+  fetchPreviewAudioBufferQuick,
+  downloadRoexPreviewUrl,
 };

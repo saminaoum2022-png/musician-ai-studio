@@ -5,7 +5,7 @@
 const { applyCors } = require("../_lib/cors");
 const { sendJson } = require("../_lib/credits-auth");
 const { verifyJobToken } = require("../_lib/studio-master-job");
-const { fetchPreviewAudioBuffer } = require("../_lib/roex-upstream");
+const { fetchPreviewAudioBuffer, fetchPreviewAudioBufferQuick, downloadRoexPreviewUrl } = require("../_lib/roex-upstream");
 
 module.exports = async function handler(req, res) {
   if (applyCors(req, res)) return;
@@ -24,7 +24,23 @@ module.exports = async function handler(req, res) {
       return sendJson(res, 403, { error: "Invalid or expired Pro Master preview.", code: "invalid_job_token" });
     }
 
-    const fetched = await fetchPreviewAudioBuffer(masteringTaskId, { attempts: 20, delayMs: 2500 });
+    const previewUrl = String(urlObj.searchParams.get("url") || tokenOk.previewUrl || "").trim();
+    let fetched = null;
+    if (previewUrl) {
+      const dl = await downloadRoexPreviewUrl(previewUrl);
+      if (dl.ok) {
+        fetched = {
+          ok: true,
+          buffer: dl.buffer,
+          contentType: dl.contentType,
+        };
+      } else if (dl.status && dl.status !== 404) {
+        fetched = dl;
+      }
+    }
+    if (!fetched?.ok) {
+      fetched = await fetchPreviewAudioBufferQuick(masteringTaskId, { attempts: 6, delayMs: 2000 });
+    }
     if (!fetched.ok) {
       return sendJson(res, fetched.pending ? 202 : fetched.status || 502, {
         error: fetched.error || "Preview not ready yet.",

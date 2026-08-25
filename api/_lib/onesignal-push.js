@@ -210,9 +210,6 @@ function buildNotificationPayload({ uid, tpl, data, subscriptionIds, copy }) {
     headings: { en: PUSH_APP_TITLE },
     contents: { en: copy.body },
     data,
-    // Without these, iOS shows the alert but never updates the home-screen icon badge.
-    ios_badgeType: "Increase",
-    ios_badgeCount: 1,
   };
   if (subscriptionIds?.length) {
     return { ...base, include_subscription_ids: subscriptionIds.slice(0, 20) };

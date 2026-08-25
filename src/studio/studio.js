@@ -612,26 +612,24 @@ function renderSource(root) {
     <div class="studio studioSource" data-studio-screen="source">
       ${headerHtml("NABADAI STUDIO")}
 
-      <div class="studioSourceBody">
-        <div class="studioSourceHero">
-          <div class="studioCover studioCover--source">${cover ? `<img src="${esc(cover)}" alt="" />` : `<div class="studioCoverPlaceholder">♪</div>`}</div>
-          <div class="studioHeroMeta studioSourceMeta">
-            <h1 class="studioTitle">${esc(title)}</h1>
-            <p class="studioArtist">${isInstrumental ? "This is already an instrumental" : "How do you want the music?"}</p>
-          </div>
+      <div class="studioHero">
+        <div class="studioCover">${cover ? `<img src="${esc(cover)}" alt="" />` : `<div class="studioCoverPlaceholder">♪</div>`}</div>
+        <div class="studioHeroMeta">
+          <h1 class="studioTitle">${esc(title)}</h1>
+          <p class="studioArtist">${isInstrumental ? "This is already an instrumental" : "How do you want the music?"}</p>
         </div>
+      </div>
 
-        <div class="studioChoices">
-          <button type="button" class="studioChoice" data-source="asis">
-            <span class="studioChoiceIco" aria-hidden="true">♫</span>
-            <span class="studioChoiceBody">
-              <span class="studioChoiceTitle">${isInstrumental ? "Sing over this instrumental" : "Sing over the song"}</span>
-              <span class="studioChoiceSub">${isInstrumental ? "It’s vocal-free already — load it and record." : "Load it as it is — the full track guides you."}</span>
-            </span>
-            <span class="studioChoiceChev" aria-hidden="true">→</span>
-          </button>
-          ${separateChoice}
-        </div>
+      <div class="studioChoices">
+        <button type="button" class="studioChoice" data-source="asis">
+          <span class="studioChoiceIco" aria-hidden="true">♫</span>
+          <span class="studioChoiceBody">
+            <span class="studioChoiceTitle">${isInstrumental ? "Sing over this instrumental" : "Sing over the song"}</span>
+            <span class="studioChoiceSub">${isInstrumental ? "It’s vocal-free already — load it and record." : "Load it as it is — the full track guides you."}</span>
+          </span>
+          <span class="studioChoiceChev" aria-hidden="true">→</span>
+        </button>
+        ${separateChoice}
       </div>
     </div>`;
 

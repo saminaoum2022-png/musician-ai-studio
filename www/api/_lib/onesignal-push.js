@@ -18,26 +18,13 @@ const PUSH_TEMPLATES = {
   follow: { route: "activity" },
   social_like: { route: "activity" },
   social_reply: { route: "activity" },
-  social_mention: { route: "activity" },
-  social_repost: { route: "activity" },
   chart_rank: { route: "activity" },
   dm_message: { route: "friends" },
-  dm_request: { route: "messages" },
   challenge_update: { route: "challenges" },
   remix: { route: "activity" },
   song_feedback: { route: "activity" },
   play_milestone: { route: "activity" },
   public_song: { route: "activity" },
-  gift_received: { route: "activity" },
-  generation_ready: { route: "challenges" },
-  photo_ready: { route: "challenges" },
-  hum_track_ready: { route: "challenges" },
-  sound_ready: { route: "challenges" },
-  music_video_ready: { route: "profile" },
-  instrumental_ready: { route: "profile" },
-  singer_approved: { route: "singer-studio" },
-  singer_rejected: { route: "activity" },
-  singer_assigned: { route: "singer-studio" },
 };
 
 function pushEnabled() {
@@ -54,58 +41,22 @@ function cleanDisplayName(v) {
   return s.slice(0, 40);
 }
 
-function composePushCopy({ type, actorDisplayName, metadata }) {
+function composePushCopy({ type, actorDisplayName }) {
   const actor = cleanDisplayName(actorDisplayName);
-  const t = String(type || "").trim();
-  const customBody = String(actorDisplayName || "").trim();
-  if (
-    customBody &&
-    (t === "generation_ready" ||
-      t === "photo_ready" ||
-      t === "hum_track_ready" ||
-      t === "sound_ready" ||
-      t === "music_video_ready" ||
-      t === "instrumental_ready")
-  ) {
-    return { body: customBody.slice(0, 180) };
-  }
   if (type === "dm_message") {
     return {
       body: `New message from ${actor || "someone"}`,
-    };
-  }
-  if (type === "dm_request") {
-    return {
-      body: `${actor || "Someone"} sent a message request`,
     };
   }
   if (actor) {
     if (type === "follow") return { body: `${actor} followed you` };
     if (type === "social_like" || type === "song_feedback") return { body: `${actor} liked your song` };
     if (type === "social_reply") return { body: `${actor} commented on your song` };
-    if (type === "social_mention") return { body: `${actor} mentioned you` };
-    if (type === "social_repost") return { body: `${actor} reposted your song` };
     if (type === "remix") return { body: `${actor} remixed your song` };
-    if (type === "gift_received") {
-      const amt = Number(metadata?.amount);
-      const suffix = Number.isFinite(amt) && amt > 0 ? ` · ${amt} credit${amt === 1 ? "" : "s"}` : "";
-      return { body: `${actor} sent you a gift${suffix}` };
-    }
     if (type === "challenge_update") return { body: `${actor} joined your challenge` };
   }
   if (type === "chart_rank") return { body: "Top 10 update" };
   if (type === "dm_message") return { body: "New message from someone" };
-  if (type === "singer_approved") {
-    return { body: "You're approved as a NabadAi Singer — open Singer Studio" };
-  }
-  if (type === "singer_rejected") {
-    const note = String(metadata?.message || "").trim();
-    return { body: note ? note.slice(0, 160) : "Your singer application was updated" };
-  }
-  if (type === "singer_assigned") {
-    const title = String(metadata?.song_title || "a new song").trim();
-    return { body: `New gig assigned: ${title}`.slice(0, 160) };
-  }
   return { body: "New activity" };
 }
 
@@ -210,9 +161,6 @@ function buildNotificationPayload({ uid, tpl, data, subscriptionIds, copy }) {
     headings: { en: PUSH_APP_TITLE },
     contents: { en: copy.body },
     data,
-    // Without these, iOS shows the alert but never updates the home-screen icon badge.
-    ios_badgeType: "Increase",
-    ios_badgeCount: 1,
   };
   if (subscriptionIds?.length) {
     return { ...base, include_subscription_ids: subscriptionIds.slice(0, 20) };
@@ -244,16 +192,12 @@ async function postOneSignalNotification(payload) {
  * Send a generic push alert. Fire-and-forget from API handlers.
  * @param {{ userId: string, type: string, entityId?: string|null, actorDisplayName?: string }} opts
  */
-async function sendPrivacySafePush({ userId, type, entityId = null, actorDisplayName = "", metadata = null }) {
+async function sendPrivacySafePush({ userId, type, entityId = null, actorDisplayName = "" }) {
   if (!pushEnabled()) return { ok: false, skipped: true, reason: "push_not_configured" };
   const uid = cleanUserId(userId);
   const tpl = templateForType(type);
   if (!uid || !tpl) return { ok: false, skipped: true, reason: "unsupported_type" };
-  const copy = composePushCopy({
-    type: String(type || "").trim(),
-    actorDisplayName,
-    metadata: metadata && typeof metadata === "object" ? metadata : null,
-  });
+  const copy = composePushCopy({ type: String(type || "").trim(), actorDisplayName });
 
   const data = {
     nabad_route: tpl.route,

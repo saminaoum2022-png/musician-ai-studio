@@ -14,7 +14,7 @@
  */
 
 import { StudioEngine, FINISH_PRESETS, FINISH_IDS, analyzeTakeBuffer } from "./engine.js";
-import { PRO_MASTER, STUDIO_PRO_MASTER_ENABLED } from "../pro-plan-config.js";
+import { PRO_MASTER } from "../pro-plan-config.js";
 import {
   listProjects,
   upsertProject,
@@ -475,15 +475,6 @@ function freshContext(track) {
 
 const MONITOR_PREF_KEY = "nabad.studio.monitor.v1";
 const PRO_MASTER_SESSION_KEY = "nabad.studio.pro_master.v1";
-
-function studioProMasterEnabled() {
-  return STUDIO_PRO_MASTER_ENABLED === true;
-}
-
-function clearProMasterSession() {
-  try { sessionStorage.removeItem(PRO_MASTER_SESSION_KEY); } catch {}
-  if (current) current._proMaster = null;
-}
 function readMonitorPref() {
   try { return localStorage.getItem(MONITOR_PREF_KEY) !== "0"; } catch { return true; }
 }
@@ -504,14 +495,10 @@ export function enterStudioRoot() {
     renderLobby(root);
     return;
   }
-  if (!studioProMasterEnabled()) {
-    clearProMasterSession();
-    if (screen === "pro_master") screen = "mix";
-  }
   if (screen === "source") { renderSource(root); return; }
   if (screen === "recording") { renderRecording(root); return; }
   if (screen === "review" || screen === "mix") { renderPreviewMix(root, engine?.getActiveTake?.()); return; }
-  if (studioProMasterEnabled() && screen === "pro_master") { renderProMasterUnlock(root); return; }
+  if (screen === "pro_master") { renderProMasterUnlock(root); return; }
   if (screen === "edit") { renderEditTake(root, engine?.getActiveTake?.()); return; }
   void resumeStudioMasterCheckoutIfNeeded(root);
   renderHome(root);
@@ -612,26 +599,24 @@ function renderSource(root) {
     <div class="studio studioSource" data-studio-screen="source">
       ${headerHtml("NABADAI STUDIO")}
 
-      <div class="studioSourceBody">
-        <div class="studioSourceHero">
-          <div class="studioCover studioCover--source">${cover ? `<img src="${esc(cover)}" alt="" />` : `<div class="studioCoverPlaceholder">♪</div>`}</div>
-          <div class="studioHeroMeta studioSourceMeta">
-            <h1 class="studioTitle">${esc(title)}</h1>
-            <p class="studioArtist">${isInstrumental ? "This is already an instrumental" : "How do you want the music?"}</p>
-          </div>
+      <div class="studioHero">
+        <div class="studioCover">${cover ? `<img src="${esc(cover)}" alt="" />` : `<div class="studioCoverPlaceholder">♪</div>`}</div>
+        <div class="studioHeroMeta">
+          <h1 class="studioTitle">${esc(title)}</h1>
+          <p class="studioArtist">${isInstrumental ? "This is already an instrumental" : "How do you want the music?"}</p>
         </div>
+      </div>
 
-        <div class="studioChoices">
-          <button type="button" class="studioChoice" data-source="asis">
-            <span class="studioChoiceIco" aria-hidden="true">♫</span>
-            <span class="studioChoiceBody">
-              <span class="studioChoiceTitle">${isInstrumental ? "Sing over this instrumental" : "Sing over the song"}</span>
-              <span class="studioChoiceSub">${isInstrumental ? "It’s vocal-free already — load it and record." : "Load it as it is — the full track guides you."}</span>
-            </span>
-            <span class="studioChoiceChev" aria-hidden="true">→</span>
-          </button>
-          ${separateChoice}
-        </div>
+      <div class="studioChoices">
+        <button type="button" class="studioChoice" data-source="asis">
+          <span class="studioChoiceIco" aria-hidden="true">♫</span>
+          <span class="studioChoiceBody">
+            <span class="studioChoiceTitle">${isInstrumental ? "Sing over this instrumental" : "Sing over the song"}</span>
+            <span class="studioChoiceSub">${isInstrumental ? "It’s vocal-free already — load it and record." : "Load it as it is — the full track guides you."}</span>
+          </span>
+          <span class="studioChoiceChev" aria-hidden="true">→</span>
+        </button>
+        ${separateChoice}
       </div>
     </div>`;
 
@@ -1822,14 +1807,13 @@ function renderPreviewMix(root, take) {
             `<button type="button" class="studioSegBtn${m.finish === id ? " isActive" : ""}" data-finish="${id}">${esc(FINISH_LABELS[id] || id)}</button>`,
           ).join("")}
         </div>
-        ${studioProMasterEnabled() ? `
         <label class="studioProMasterToggle">
           <input type="checkbox" data-studio-pro-master ${m.proMaster ? "checked" : ""} aria-describedby="studioProMasterDesc" />
           <span class="studioProMasterCopy">
             <strong class="studioProMasterTitle">Pro Master ✨</strong>
             <span class="studioProMasterDesc" id="studioProMasterDesc">Free 30s preview · ${esc(PRO_MASTER.priceDisplay)} to save full master</span>
           </span>
-        </label>` : ""}
+        </label>
       </section>
 
       <div class="studioFooter studioFooter--finish">
@@ -2556,7 +2540,6 @@ async function saveVocalFromPreview(root) {
 
   const take = engine?.getActiveTake?.();
   const m = current.mix || DEFAULT_MIX;
-  if (!studioProMasterEnabled()) m.proMaster = false;
   const scoreCopy = buildNabadScoreCopy(take, current?.track, m);
   const cover = trackCoverUrl();
   const srcTitle = String(current?.track?.title || "").trim();
@@ -2584,7 +2567,7 @@ async function saveVocalFromPreview(root) {
     setPhase(m.proMaster ? "Sending to Pro Master…" : "Rendering your release…");
     const rendered = await engine.renderMix(mixParams());
 
-    if (studioProMasterEnabled() && m.proMaster && typeof bridge.proMasterPreview === "function") {
+    if (m.proMaster && typeof bridge.proMasterPreview === "function") {
       setPhase("Creating your Pro Master preview…");
       setPhase("Verifying Pro Master preview…");
       const preview = await bridge.proMasterPreview({
@@ -2687,7 +2670,6 @@ function restoreProMasterSession() {
 }
 
 async function resumeStudioMasterCheckoutIfNeeded(root) {
-  if (!studioProMasterEnabled()) return;
   const params = parseStudioMasterReturnParams();
   if (!params) return;
   if (!current?._proMaster) {

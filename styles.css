@@ -50310,7 +50310,8 @@ html[data-theme="light"] .playerPublishBtn{
 }
 .studioProMasterTitle { margin: 0 0 6px; font-size: 20px; font-weight: 800; }
 .studioProMasterSub { margin: 0; font-size: 13px; color: var(--muted); line-height: 1.45; }
-.studioProMasterAudioHint { margin: 0 0 8px; font-size: 13px; color: var(--muted); text-align: center; }
+.studioProMasterAudioHint { margin: 0 0 12px; font-size: 13px; color: var(--muted); text-align: center; }
+.studioProMasterPlay { width: 100%; margin: 0 0 20px; min-height: 48px; font-size: 16px; font-weight: 700; }
 .studioProMasterAudio { width: 100%; margin: 8px 0 16px; }
 
 html[data-theme="light"] .studioProMasterToggle {

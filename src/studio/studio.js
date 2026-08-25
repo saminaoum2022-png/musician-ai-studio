@@ -2642,7 +2642,7 @@ function persistProMasterSession(pm) {
     sessionStorage.setItem(PRO_MASTER_SESSION_KEY, JSON.stringify({
       masteringTaskId: pm.masteringTaskId,
       previewUrl: pm.previewUrl,
-      playbackUrl: pm.playbackUrl,
+      playbackUrl: pm.playbackUrl?.startsWith?.("blob:") ? "" : pm.playbackUrl,
       jobToken: pm.jobToken,
       finish: pm.finish,
       title: pm.title,
@@ -2687,11 +2687,6 @@ function renderProMasterUnlock(root) {
     return;
   }
   const cover = pm.cover || trackCoverUrl();
-  const initialAudioSrc = String(pm.playbackUrl || "").trim();
-  const canPlaySrc =
-    initialAudioSrc.startsWith("blob:") ||
-    initialAudioSrc.startsWith("data:") ||
-    /^https?:\/\//i.test(initialAudioSrc);
   root.innerHTML = `
     <div class="studio studioProMaster" data-studio-screen="pro_master">
       ${headerHtml("PRO MASTER")}
@@ -2700,8 +2695,8 @@ function renderProMasterUnlock(root) {
         <h2 class="studioProMasterTitle">Hear your Pro Master</h2>
         <p class="studioProMasterSub">30-second preview · ${esc(PRO_MASTER.priceDisplay)} to save the full release master</p>
       </div>
-      <p class="studioProMasterAudioHint" data-pro-master-audio-hint ${canPlaySrc ? "hidden" : ""}>Loading preview audio…</p>
-      <audio class="studioProMasterAudio" controls preload="auto"${canPlaySrc ? ` src="${esc(initialAudioSrc)}"` : ""}></audio>
+      <p class="studioProMasterAudioHint" data-pro-master-audio-hint>Tap play to hear your 30-second preview.</p>
+      <button type="button" class="studioPrimary studioProMasterPlay" data-pro-master-play>▶ Play 30s preview</button>
       <div class="studioFooter studioFooter--finish">
         <button type="button" class="studioPrimary studioPrimary--continue" data-pro-master-unlock>Unlock & save · ${esc(PRO_MASTER.priceDisplay)}</button>
         <button type="button" class="studioGhost" data-pro-master-local>Save with local finish instead</button>
@@ -2731,65 +2726,56 @@ function renderProMasterUnlock(root) {
     void unlockProMasterAndSave(root);
   });
 
-  void ensureProMasterPlayback(root, pm);
+  root.querySelector("[data-pro-master-play]")?.addEventListener("click", () => {
+    void playProMasterPreview(root, pm);
+  });
 }
 
-async function ensureProMasterPlayback(root, pm) {
-  const audio = root.querySelector(".studioProMasterAudio");
+async function playProMasterPreview(root, pm) {
+  const btn = root.querySelector("[data-pro-master-play]");
   const hint = root.querySelector("[data-pro-master-audio-hint]");
-  if (!audio) return;
-
-  const hideHint = () => {
-    if (hint) hint.hidden = true;
-  };
-  const showHint = (txt) => {
-    if (hint) {
-      hint.hidden = false;
-      hint.textContent = txt;
+  if (!pm?.masteringTaskId) return;
+  bridge.haptic?.("light");
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = "Loading preview…";
+  }
+  if (hint) hint.textContent = "Loading preview audio…";
+  try {
+    let url = String(pm.playbackUrl || "").trim();
+    const isNativeFile =
+      /_capacitor_file_/i.test(url) ||
+      url.startsWith("capacitor://") ||
+      url.startsWith("file://");
+    const needsFetch =
+      !url ||
+      url.startsWith("blob:") ||
+      (/^https?:\/\//i.test(url) && !isNativeFile);
+    if (needsFetch && typeof bridge.proMasterLoadPlayback === "function") {
+      url = await bridge.proMasterLoadPlayback(pm);
+      pm.playbackUrl = url;
+      persistProMasterSession(pm);
     }
-  };
-
-  audio.oncanplay = hideHint;
-  audio.onplaying = hideHint;
-  audio.onerror = async () => {
-    if (audio.dataset.proMasterRetry === "1") {
-      showHint("Preview couldn’t load — try Save again.");
+    if (!url) throw new Error("Preview audio missing.");
+    if (typeof bridge.playInlineUrl === "function") {
+      await bridge.playInlineUrl(url, "Pro Master preview", { type: "studio_pro_master", id: pm.masteringTaskId });
+      if (hint) hint.textContent = "Playing your 30-second Pro Master preview.";
+      if (btn) btn.textContent = "▶ Play 30s preview";
       return;
     }
-    audio.dataset.proMasterRetry = "1";
-    showHint("Loading preview audio…");
-    try {
-      if (typeof bridge.proMasterLoadPlayback === "function") {
-        const blobUrl = await bridge.proMasterLoadPlayback(pm);
-        if (blobUrl) {
-          pm.playbackUrl = blobUrl;
-          persistProMasterSession(pm);
-          audio.src = blobUrl;
-          audio.load();
-          return;
-        }
-      }
-      const stream = bridge.proMasterStreamUrl?.(pm) || bridge.proMasterPlaybackUrl?.(pm) || "";
-      if (stream && audio.src !== stream) {
-        audio.src = stream;
-        audio.load();
-        return;
-      }
-    } catch (e) {
-      console.warn("[studio] pro master playback retry failed:", e?.message || e);
-    }
-    showHint("Preview couldn’t load — try Save again.");
-  };
-
-  const src = String(pm.playbackUrl || bridge.proMasterPlaybackUrl?.(pm) || "").trim();
-  if (src && audio.src !== src) {
-    audio.src = src;
-    try {
-      audio.load();
-    } catch {}
-  } else if (!src) {
-    showHint("Loading preview audio…");
-    audio.onerror();
+    const audio = new Audio(url);
+    audio.preload = "auto";
+    try { audio.setAttribute("playsinline", ""); } catch {}
+    await audio.play();
+    if (hint) hint.textContent = "Playing your 30-second Pro Master preview.";
+    if (btn) btn.textContent = "▶ Play 30s preview";
+  } catch (e) {
+    console.warn("[studio] pro master play failed:", e?.message || e);
+    if (hint) hint.textContent = String(e?.message || "Preview couldn’t load — try again.");
+    bridge.showToast?.("Preview couldn’t load — try Save again.", { durationMs: 4200 });
+    if (btn) btn.textContent = "▶ Play 30s preview";
+  } finally {
+    if (btn) btn.disabled = false;
   }
 }
 

@@ -2724,6 +2724,26 @@ function renderProMasterUnlock(root) {
   root.querySelector("[data-pro-master-unlock]")?.addEventListener("click", () => {
     void unlockProMasterAndSave(root);
   });
+
+  void ensureProMasterPlayback(root, pm);
+}
+
+async function ensureProMasterPlayback(root, pm) {
+  const audio = root.querySelector(".studioProMasterAudio");
+  if (!audio || pm.playbackUrl) return;
+  if (typeof bridge.proMasterLoadPlayback !== "function") return;
+  try {
+    const playbackUrl = await bridge.proMasterLoadPlayback(pm);
+    if (!playbackUrl) return;
+    pm.playbackUrl = playbackUrl;
+    persistProMasterSession(pm);
+    audio.src = playbackUrl;
+    try {
+      audio.load();
+    } catch {}
+  } catch (e) {
+    console.warn("[studio] pro master playback load failed:", e?.message || e);
+  }
 }
 
 async function unlockProMasterAndSave(root) {

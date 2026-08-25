@@ -283,12 +283,23 @@ module.exports = async function handler(req, res) {
 
     if (action === "poll-preview") {
       const masteringTaskId = String(body?.masteringTaskId || "").trim();
-      const polled = await pollPreviewMaster(masteringTaskId, { attempts: 1, delayMs: 0 });
+      if (!masteringTaskId) {
+        return sendJson(res, 400, { error: "Missing mastering task id.", code: "missing_task_id" });
+      }
+      const polled = await pollPreviewMaster(masteringTaskId, { attempts: 6, delayMs: 2500 });
       if (!polled.ok) {
+        if (polled.pending) {
+          return sendJson(res, 200, {
+            ok: true,
+            masteringTaskId,
+            previewUrl: "",
+            pending: true,
+          });
+        }
         return sendJson(res, polled.status || 502, {
           error: polled.error,
           code: polled.code,
-          pending: Boolean(polled.pending),
+          pending: false,
         });
       }
       return sendJson(res, 200, {
@@ -296,6 +307,7 @@ module.exports = async function handler(req, res) {
         masteringTaskId,
         previewUrl: polled.downloadUrl,
         previewStartTime: polled.previewStartTime,
+        pending: false,
       });
     }
 
@@ -304,7 +316,7 @@ module.exports = async function handler(req, res) {
       if (!masteringTaskId) {
         return sendJson(res, 400, { error: "Missing mastering task id.", code: "missing_task_id" });
       }
-      const fetched = await fetchPreviewAudioBuffer(masteringTaskId);
+      const fetched = await fetchPreviewAudioBuffer(masteringTaskId, { attempts: 24, delayMs: 3000 });
       if (!fetched.ok) {
         return sendJson(res, fetched.status || 502, {
           error: fetched.error,

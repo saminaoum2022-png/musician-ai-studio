@@ -65480,6 +65480,7 @@ try {
       } catch {}
     },
     proMasterPreview: (opts) => studioProMasterPreview(opts),
+    proMasterLoadPlayback: (preview) => studioProMasterResolvePlayback(preview),
     proMasterFinalize: (opts) => studioProMasterFinalize(opts),
     checkoutProMaster: isNativeShell() ? undefined : (opts) => studioCheckoutProMaster(opts),
     purchaseProMaster: isNativeShell() ? () => studioPurchaseProMaster() : undefined,
@@ -66065,15 +66066,33 @@ async function studioProMasterResolvePlayback(preview) {
     }
   }
 
-  const d = await studioProMasterApi({ action: "preview-audio", masteringTaskId: taskId });
-  if (d?.audioBase64) {
-    const blob = await base64ToBlob(d.audioBase64, d?.contentType || "audio/wav");
-    return URL.createObjectURL(blob);
+  let lastErr = null;
+  for (let attempt = 0; attempt < 10; attempt++) {
+    try {
+      const d = await studioProMasterApi(
+        { action: "preview-audio", masteringTaskId: taskId },
+        { readTimeoutMs: 120000 },
+      );
+      if (d?.audioBase64) {
+        const blob = await base64ToBlob(d.audioBase64, d?.contentType || "audio/wav");
+        return URL.createObjectURL(blob);
+      }
+      if (d?.previewUrl) {
+        return nativeHttpDownloadBlobUrl(d.previewUrl, d?.contentType || "audio/wav");
+      }
+    } catch (e) {
+      lastErr = e;
+      const msg = String(e?.message || "");
+      if (attempt < 9 && /pending|not ready|404|timeout/i.test(msg)) {
+        await new Promise((r) => setTimeout(r, 3000));
+        continue;
+      }
+      throw e;
+    }
   }
-  if (d?.previewUrl) {
-    return nativeHttpDownloadBlobUrl(d.previewUrl, d?.contentType || "audio/wav");
-  }
-  throw new Error("Pro Master preview isn’t ready yet — try again.");
+  throw lastErr instanceof Error
+    ? lastErr
+    : new Error("Preview audio isn’t ready yet — try again.");
 }
 
 async function studioProMasterPreview({ blob, finish = "balanced" }) {
@@ -66095,17 +66114,27 @@ async function studioProMasterPreview({ blob, finish = "balanced" }) {
     finish,
   });
   if (!preview.previewUrl && preview.masteringTaskId) {
-    for (let i = 0; i < 16; i++) {
-      await new Promise((res) => setTimeout(res, 2500));
-      preview = await studioProMasterApi({
+    for (let i = 0; i < 40; i++) {
+      await new Promise((res) => setTimeout(res, 3000));
+      const polled = await studioProMasterApi({
         action: "poll-preview",
         masteringTaskId: preview.masteringTaskId,
       });
-      if (preview.previewUrl) break;
+      if (polled.previewUrl) {
+        preview = { ...preview, ...polled };
+        break;
+      }
+      if (!polled.pending) break;
     }
   }
-  if (!preview.previewUrl) throw new Error("Pro Master preview isn’t ready yet — try again.");
-  preview.playbackUrl = await studioProMasterResolvePlayback(preview);
+  if (!preview.previewUrl) {
+    throw new Error("Pro Master preview isn’t ready yet — try again.");
+  }
+  try {
+    preview.playbackUrl = await studioProMasterResolvePlayback(preview);
+  } catch (e) {
+    console.warn("[studio] preview playback resolve failed:", e?.message || e);
+  }
   return preview;
 }
 

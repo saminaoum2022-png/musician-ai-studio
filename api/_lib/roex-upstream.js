@@ -226,7 +226,7 @@ async function downloadRoexAudio(url, { retries = 3, delayMs = 2000 } = {}) {
   return { ok: false, status: lastStatus || 502, error: `Download HTTP ${lastStatus || "failed"}` };
 }
 
-async function fetchPreviewAudioBuffer(masteringTaskId, { attempts = 12, delayMs = 2500 } = {}) {
+async function fetchPreviewAudioBuffer(masteringTaskId, { attempts = 24, delayMs = 3000 } = {}) {
   const id = String(masteringTaskId || "").trim();
   if (!id) return { ok: false, status: 400, error: "Missing mastering task id", code: "missing_task_id" };
 

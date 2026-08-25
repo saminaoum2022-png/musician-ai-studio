@@ -534,6 +534,167 @@ async function fetchCoachUsageSummary() {
   }, "fallback");
 }
 
+function emptyGrowthSummary(source = "unknown") {
+  return {
+    signups: 0,
+    proTotal: 0,
+    generatedAtLeast1: 0,
+    activationPct: 0,
+    proConversionPct: 0,
+    buckets: [
+      { id: "0", label: "0 gens", min: 0, max: 0, users: 0, pro: 0 },
+      { id: "1", label: "1 gen", min: 1, max: 1, users: 0, pro: 0 },
+      { id: "2-5", label: "2–5 gens", min: 2, max: 5, users: 0, pro: 0 },
+      { id: "6-10", label: "6–10 gens", min: 6, max: 10, users: 0, pro: 0 },
+      { id: "11+", label: "11+ gens", min: 11, max: null, users: 0, pro: 0 },
+    ],
+    source,
+    note: "Buckets count generation requests (any status) per account. Pro = active / trialing / grace.",
+  };
+}
+
+function growthBucketId(gens) {
+  const n = Math.max(0, Number(gens) || 0);
+  if (n <= 0) return "0";
+  if (n === 1) return "1";
+  if (n <= 5) return "2-5";
+  if (n <= 10) return "6-10";
+  return "11+";
+}
+
+function normalizeGrowthSummary(raw, source = "rpc") {
+  const base = emptyGrowthSummary(source);
+  if (!raw || typeof raw !== "object") return base;
+  const signups = Math.max(0, Number(raw.signups ?? raw.totalUsers ?? 0) || 0);
+  const proTotal = Math.max(0, Number(raw.proTotal ?? raw.pro_total ?? 0) || 0);
+  let generatedAtLeast1 = Number(raw.generatedAtLeast1 ?? raw.generated_at_least_1);
+  if (!Number.isFinite(generatedAtLeast1)) generatedAtLeast1 = 0;
+  generatedAtLeast1 = Math.max(0, Math.min(signups, Math.floor(generatedAtLeast1)));
+
+  const byId = new Map(base.buckets.map((b) => [b.id, { ...b }]));
+  const incoming = Array.isArray(raw.buckets) ? raw.buckets : [];
+  for (const row of incoming) {
+    const id = String(row?.id || "").trim();
+    if (!byId.has(id)) continue;
+    const cur = byId.get(id);
+    cur.users = Math.max(0, Number(row?.users ?? 0) || 0);
+    cur.pro = Math.max(0, Number(row?.pro ?? 0) || 0);
+  }
+  const buckets = [...byId.values()];
+  if (!Number.isFinite(Number(raw.generatedAtLeast1 ?? raw.generated_at_least_1))) {
+    generatedAtLeast1 = buckets
+      .filter((b) => b.id !== "0")
+      .reduce((sum, b) => sum + Number(b.users || 0), 0);
+  }
+
+  const activationPct = signups > 0
+    ? Math.round((generatedAtLeast1 / signups) * 1000) / 10
+    : 0;
+  const proConversionPct = signups > 0
+    ? Math.round((proTotal / signups) * 1000) / 10
+    : 0;
+
+  return {
+    ...base,
+    signups,
+    proTotal,
+    generatedAtLeast1,
+    activationPct,
+    proConversionPct,
+    buckets,
+    source,
+    note: String(raw.note || base.note),
+  };
+}
+
+async function fetchAllProfileUserIds() {
+  const ids = [];
+  const pageSize = 1000;
+  for (let offset = 0; offset < 50000; offset += pageSize) {
+    const res = await serviceFetch(
+      `profiles?select=user_id&order=created_at.asc&limit=${pageSize}&offset=${offset}`,
+    );
+    const rows = Array.isArray(res.data) ? res.data : [];
+    for (const row of rows) {
+      const uid = cleanUserId(row?.user_id);
+      if (uid) ids.push(uid);
+    }
+    if (rows.length < pageSize) break;
+  }
+  return ids;
+}
+
+async function fetchGenerationCountsByUser() {
+  const counts = new Map();
+  const pageSize = 1000;
+  for (let offset = 0; offset < 100000; offset += pageSize) {
+    const res = await serviceFetch(
+      `music_generation_logs?select=user_id&order=created_at.asc&limit=${pageSize}&offset=${offset}`,
+    );
+    const rows = Array.isArray(res.data) ? res.data : [];
+    for (const row of rows) {
+      const uid = cleanUserId(row?.user_id);
+      if (!uid) continue;
+      counts.set(uid, (counts.get(uid) || 0) + 1);
+    }
+    if (rows.length < pageSize) break;
+  }
+  return counts;
+}
+
+async function fetchProUserIdSet() {
+  const set = new Set();
+  const res = await serviceFetch(
+    "pro_subscriptions?select=user_id&status=in.(active,trialing,grace)&limit=2000",
+  );
+  const rows = Array.isArray(res.data) ? res.data : [];
+  for (const row of rows) {
+    const uid = cleanUserId(row?.user_id);
+    if (uid) set.add(uid);
+  }
+  return set;
+}
+
+async function fetchGrowthSummaryFallback() {
+  const [profileIds, genCounts, proIds] = await Promise.all([
+    fetchAllProfileUserIds(),
+    fetchGenerationCountsByUser(),
+    fetchProUserIdSet(),
+  ]);
+
+  const buckets = emptyGrowthSummary("fallback").buckets.map((b) => ({ ...b }));
+  const byId = new Map(buckets.map((b) => [b.id, b]));
+  let proTotal = 0;
+  let generatedAtLeast1 = 0;
+
+  for (const uid of profileIds) {
+    const gens = genCounts.get(uid) || 0;
+    const isPro = proIds.has(uid);
+    if (isPro) proTotal += 1;
+    if (gens >= 1) generatedAtLeast1 += 1;
+    const bucket = byId.get(growthBucketId(gens));
+    if (!bucket) continue;
+    bucket.users += 1;
+    if (isPro) bucket.pro += 1;
+  }
+
+  return normalizeGrowthSummary({
+    signups: profileIds.length,
+    proTotal,
+    generatedAtLeast1,
+    buckets,
+    note: "Buckets count generation requests (any status) per account. Pro = active / trialing / grace.",
+  }, "fallback");
+}
+
+async function fetchGrowthSummary() {
+  const rpc = await callRpc("get_admin_growth_summary", {});
+  if (rpc.ok && rpc.data && typeof rpc.data === "object") {
+    return normalizeGrowthSummary(rpc.data, "rpc");
+  }
+  return fetchGrowthSummaryFallback();
+}
+
 async function getOverview() {
   const today = startOfTodayUtc();
   const monthStart = startOfMonthUtc();
@@ -553,6 +714,7 @@ async function getOverview() {
     revenueSubs,
     coachUsage,
     activitySummary,
+    growthSummary,
   ] = await Promise.all([
     callRpc("get_credits_summary", {}),
     fetchSunoMasterBalance(),
@@ -568,6 +730,7 @@ async function getOverview() {
     serviceFetch(`pro_subscriptions?select=plan_id,status,created_at&status=in.(active,trialing,grace)&created_at=gte.${encodeURIComponent(monthStart)}&limit=500`),
     fetchCoachUsageSummary(),
     fetchActivitySummary({ days: 28 }),
+    fetchGrowthSummary(),
   ]);
 
   const summary = (summaryRpc.ok && summaryRpc.data) || {};
@@ -646,6 +809,7 @@ async function getOverview() {
     },
     coach: coachUsage || emptyCoachUsageSummary(),
     activity: activitySummary || emptyActivitySummary(),
+    growth: growthSummary || emptyGrowthSummary(),
   };
 }
 

@@ -1139,6 +1139,76 @@ function renderActivitySection(activity = {}) {
   `;
 }
 
+function renderGrowthSection(growth = {}) {
+  const sourceNote = growth.source === "rpc"
+    ? "Live from Supabase RPC"
+    : "Fallback counts — run supabase/admin_growth_analytics.sql for full accuracy";
+  const signups = Number(growth.signups || 0);
+  const activated = Number(growth.generatedAtLeast1 || 0);
+  const activationPct = Number(growth.activationPct || 0);
+  const proTotal = Number(growth.proTotal || 0);
+  const proConversionPct = Number(growth.proConversionPct || 0);
+  const buckets = Array.isArray(growth.buckets) ? growth.buckets : [];
+  const maxUsers = Math.max(1, ...buckets.map((b) => Number(b.users || 0)));
+
+  const bucketRows = buckets.length
+    ? buckets.map((b) => {
+      const users = Number(b.users || 0);
+      const pro = Number(b.pro || 0);
+      const sharePct = signups > 0 ? Math.round((users / signups) * 1000) / 10 : 0;
+      const proPct = users > 0 ? Math.round((pro / users) * 1000) / 10 : 0;
+      const barPct = Math.max(2, Math.round((users / maxUsers) * 100));
+      return `
+        <tr>
+          <td>
+            <div class="growthBucketLabel">${escapeHtml(b.label || b.id || "—")}</div>
+            <div class="growthBarTrack" aria-hidden="true">
+              <span class="growthBarFill" style="width:${barPct}%"></span>
+            </div>
+          </td>
+          <td class="num">${fmtNum(users)}</td>
+          <td class="num">${fmtNum(sharePct, 1)}%</td>
+          <td class="num">${fmtNum(pro)}</td>
+          <td class="num">${fmtNum(proPct, 1)}%</td>
+        </tr>
+      `;
+    }).join("")
+    : `<tr><td colspan="5" class="loading">No growth data yet</td></tr>`;
+
+  return `
+    <section class="sectionCard sectionCard--data" data-growth-section>
+      <div class="sectionHead">
+        <div>
+          <h3 class="sectionTitle">Growth &amp; activation</h3>
+          <p class="sectionNote">${escapeHtml(growth.note || "Where signups drop before Pro.")} ${escapeHtml(sourceNote)}.</p>
+        </div>
+      </div>
+      <div class="cardsGrid cardsGrid--inSection">
+        ${statCard("Signups", fmtNum(signups), "All profiles")}
+        ${statCard("Generated ≥1", fmtNum(activated), `${fmtNum(activationPct, 1)}% activation`)}
+        ${statCard("Still at 0 gens", fmtNum(Math.max(0, signups - activated)), "Signed up, never generated")}
+        ${statCard("Pro subscribers", fmtNum(proTotal), `${fmtNum(proConversionPct, 1)}% of signups`)}
+      </div>
+      <div class="sectionCardBody--flush" style="margin-top: 16px">
+        <div class="tableWrap tableWrap--plain">
+          <table class="table--compact growthBucketTable">
+            <thead>
+              <tr>
+                <th>Generation depth</th>
+                <th class="num">Users</th>
+                <th class="num">% of signups</th>
+                <th class="num">Pro</th>
+                <th class="num">Pro rate</th>
+              </tr>
+            </thead>
+            <tbody>${bucketRows}</tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+  `;
+}
+
 function renderCoachUsageSection(coach = {}) {
   const daily = Array.isArray(coach.daily) ? coach.daily : [];
   const sourceNote = coach.source === "rpc"
@@ -1195,9 +1265,11 @@ function renderOverview(data) {
   const rev = o.revenue || {};
   const coach = o.coach || {};
   const activity = o.activity || {};
+  const growth = o.growth || {};
 
   els.panels.overview.innerHTML = adminPageStack(`
     ${renderActivitySection(activity)}
+    ${renderGrowthSection(growth)}
     ${renderSunoCoverageSection(s)}
     <section class="sectionCard">
       <div class="sectionHead">

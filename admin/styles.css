@@ -880,6 +880,32 @@ button, input { font: inherit; }
 .activityTrend--down { color: #fca5a5; }
 .activityTrend--flat { color: var(--muted); }
 
+/* Growth / activation (Overview) */
+.growthBucketTable td.num,
+.growthBucketTable th.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.growthBucketLabel {
+  font-weight: 650;
+  color: var(--text);
+  margin-bottom: 6px;
+}
+.growthBarTrack {
+  width: min(100%, 220px);
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+.growthBarFill {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #23d5ab 0%, #7c5cff 100%);
+}
+
 .sunoTopUpAlert {
   margin: 0 0 16px;
   padding: 14px 16px;

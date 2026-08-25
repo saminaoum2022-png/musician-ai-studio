@@ -57,6 +57,9 @@ export const PRO_MASTER = Object.freeze({
   subtitle: "AI mastering by RoEx — preview free, pay only if you save",
 });
 
+/** Studio UI + save flow. Off until external mastering is reliable in production. */
+export const STUDIO_PRO_MASTER_ENABLED = false;
+
 export const PRO_FEATURES = Object.freeze([
   { key: "credits", label: "Monthly or weekly credits", sub: "Paid credits each renewal — create songs or gift Mic / Pulse / Star" },
   { key: "coach", label: "Unlimited NabadAi Coach", sub: "Free users get a daily message limit" },

@@ -2600,9 +2600,14 @@ async function saveVocalFromPreview(root) {
     renderSaveDetails(root);
   } catch (e) {
     console.warn("[studio] finalize failed:", e);
+    const raw = String(e?.message || "try again or turn it off.");
+    const friendly =
+      /404|not ready|still mastering|still hosting/i.test(raw)
+        ? raw
+        : raw;
     bridge.showToast?.(
       m.proMaster
-        ? `Pro Master failed: ${String(e?.message || "try again or turn it off.")}`
+        ? `Pro Master failed: ${friendly}`
         : "Couldn't finalize — your take is still here.",
       { durationMs: 5200 },
     );

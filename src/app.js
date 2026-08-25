@@ -65692,26 +65692,37 @@ async function studioSeparateVocals(track, onPhase) {
   throw new Error("Separation is taking longer than expected — try again in a moment.");
 }
 
-async function studioProMasterApi(body) {
+async function studioProMasterApi(body, { readTimeoutMs } = {}) {
   const tok = getSupabaseAuthToken();
   if (!tok) throw new Error("Sign in to use Pro Master.");
   const action = String(body?.action || "").trim().toLowerCase();
-  const longActions = new Set(["finalize", "preview-audio"]);
-  const timeoutOpts = longActions.has(action)
-    ? { nativeReadTimeoutMs: 120000, nativeConnectTimeoutMs: 30000 }
-    : {};
+  const longActions = new Set(["finalize", "preview-audio", "upload-mix"]);
+  const timeoutMs =
+    readTimeoutMs ?? (longActions.has(action) ? 180000 : NATIVE_HTTP_DEFAULT_READ_MS);
+  const url = apiUrl("/api/music/studio-master");
+  const headers = getApiFetchHeaders({
+    "Content-Type": "application/json",
+    Authorization: `Bearer ${tok}`,
+    ...(isNativeShell() ? {} : { "X-Nabad-Client-Shell": "web" }),
+  });
+  const init = {
+    method: "POST",
+    headers,
+    body: JSON.stringify(body || {}),
+  };
+  const timeouts = { connectTimeout: 30000, readTimeout: timeoutMs };
+
   let r;
   try {
-    r = await apiFetch("/api/music/studio-master", {
-      ...timeoutOpts,
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${tok}`,
-        ...(isNativeShell() ? {} : { "X-Nabad-Client-Shell": "web" }),
-      },
-      body: JSON.stringify(body || {}),
-    });
+    if (isNativeShell()) {
+      await ensureNativeNetworkReady();
+      r = await capacitorHttpFetch(url, init, timeouts);
+      if (!r || Number(r.status) <= 0) {
+        throw new Error("Couldn’t reach Pro Master — check Wi‑Fi or cellular and try again.");
+      }
+    } else {
+      r = await fetch(url, init);
+    }
   } catch (e) {
     const msg = String(e?.message || "");
     if (/load failed|failed to fetch|network|capacitorurlrequest|capacitor\.capacitor/i.test(msg)) {
@@ -65746,47 +65757,83 @@ async function putMixBlobToRoexSignedUrl(signedUrl, blob) {
   const type = blob?.type || "audio/wav";
   if (!url) throw new Error("Missing upload URL.");
 
-  const put = await fetch(url, {
-    method: "PUT",
-    headers: { "Content-Type": type },
-    body: blob,
-  });
-  if (!put.ok) {
+  try {
+    const put = await fetch(url, {
+      method: "PUT",
+      headers: { "Content-Type": type },
+      body: blob,
+    });
+    if (put.ok) return;
     throw new Error(`Couldn’t upload your mix (${put.status}).`);
+  } catch (e) {
+    const msg = String(e?.message || "");
+    if (/load failed|failed to fetch|network/i.test(msg)) {
+      throw new Error("Couldn’t upload your mix — check your connection and try again.");
+    }
+    throw e;
   }
 }
 
-async function studioProMasterUploadMixMultipart(blob) {
-  const tok = getSupabaseAuthToken();
-  if (!tok) throw new Error("Sign in to use Pro Master.");
-  const fd = new FormData();
-  fd.append("file", blob, "studio-mix.wav");
-  const r = await apiFetch("/api/music/studio-master", {
-    method: "POST",
-    headers: { Authorization: `Bearer ${tok}` },
-    body: fd,
-    nativeReadTimeoutMs: 120000,
-    nativeConnectTimeoutMs: 30000,
-  });
-  const d = await r.json().catch(() => ({}));
-  if (!r.ok) throw new Error(String(d?.error || "Upload failed."));
-  return d.readableUrl;
+async function nativeHttpDownloadBlobUrl(remoteUrl, contentType = "audio/wav") {
+  const url = String(remoteUrl || "").trim();
+  if (!url) throw new Error("Missing preview URL.");
+
+  if (isNativeShell()) {
+    const CapHttp = window.Capacitor?.Plugins?.CapacitorHttp;
+    if (CapHttp?.request) {
+      const resp = await CapHttp.request({
+        url,
+        method: "GET",
+        responseType: "arraybuffer",
+        connectTimeout: 30000,
+        readTimeout: 120000,
+      });
+      const status = Number(resp?.status || 0);
+      const raw = resp?.data;
+      if (status >= 200 && status < 300 && raw != null && raw !== "") {
+        const b64 = String(raw);
+        const payload = b64.includes(",") ? b64.slice(b64.indexOf(",") + 1) : b64;
+        const blob = await base64ToBlob(payload, contentType);
+        if (blob.size > 512) return URL.createObjectURL(blob);
+      }
+    }
+  }
+
+  const r = await fetch(url);
+  if (!r.ok) throw new Error(`Preview download failed (${r.status}).`);
+  const blob = await r.blob();
+  if (blob.size <= 512) throw new Error("Preview audio empty.");
+  return URL.createObjectURL(blob);
 }
 
 async function studioProMasterUploadMixNative(blob) {
-  // Server multipart keeps WAV bytes intact — direct iOS PUT often corrupts the file.
+  const contentType = blob.type || "audio/wav";
+  const maxServerBytes = 2.5 * 1024 * 1024;
+
   try {
-    return await studioProMasterUploadMixMultipart(blob);
+    const up = await studioProMasterApi({
+      action: "upload-url",
+      filename: "studio-mix.wav",
+      contentType,
+    });
+    await putMixBlobToRoexSignedUrl(up.signedUrl, blob);
+    return up.readableUrl;
   } catch (e) {
-    console.warn("[studio] server upload failed, trying direct RoEx:", e?.message || e);
+    console.warn("[studio] direct RoEx upload failed:", e?.message || e);
   }
-  const up = await studioProMasterApi({
-    action: "upload-url",
-    filename: "studio-mix.wav",
-    contentType: blob.type || "audio/wav",
-  });
-  await putMixBlobToRoexSignedUrl(up.signedUrl, blob);
-  return up.readableUrl;
+
+  if (blob.size <= maxServerBytes) {
+    const audioBase64 = await blobToBase64(blob);
+    const up = await studioProMasterApi({
+      action: "upload-mix",
+      audioBase64,
+      contentType,
+      filename: "studio-mix.wav",
+    });
+    return up.readableUrl;
+  }
+
+  throw new Error("Mix is too large for Pro Master — try a shorter take.");
 }
 
 async function studioProMasterUploadMix(blob) {
@@ -65826,30 +65873,23 @@ async function studioProMasterResolvePlayback(preview) {
   const remote = String(preview?.previewUrl || "").trim();
   if (!taskId && !remote) throw new Error("Missing preview audio.");
 
-  // RoEx CDN URLs often fail in WKWebView <audio> — proxy via our API on native.
-  if (isNativeShell() || !remote) {
-    const d = await studioProMasterApi({
-      action: "preview-audio",
-      masteringTaskId: taskId,
-    });
-    const blob = await base64ToBlob(d?.audioBase64, d?.contentType || "audio/wav");
-    return URL.createObjectURL(blob);
+  if (remote) {
+    try {
+      return await nativeHttpDownloadBlobUrl(remote, "audio/wav");
+    } catch (e) {
+      console.warn("[studio] direct preview download failed:", e?.message || e);
+    }
   }
 
-  try {
-    const r = await fetch(remote);
-    if (r.ok) {
-      const blob = await r.blob();
-      if (blob.size > 512) return URL.createObjectURL(blob);
-    }
-  } catch {}
-
-  const d = await studioProMasterApi({
-    action: "preview-audio",
-    masteringTaskId: taskId,
-  });
-  const blob = await base64ToBlob(d?.audioBase64, d?.contentType || "audio/wav");
-  return URL.createObjectURL(blob);
+  const d = await studioProMasterApi({ action: "preview-audio", masteringTaskId: taskId });
+  if (d?.audioBase64) {
+    const blob = await base64ToBlob(d.audioBase64, d?.contentType || "audio/wav");
+    return URL.createObjectURL(blob);
+  }
+  if (d?.previewUrl) {
+    return nativeHttpDownloadBlobUrl(d.previewUrl, d?.contentType || "audio/wav");
+  }
+  throw new Error("Pro Master preview isn’t ready yet — try again.");
 }
 
 async function studioProMasterPreview({ blob, finish = "balanced" }) {

@@ -327,13 +327,35 @@ try {
 
 const IS_NATIVE_SHELL = typeof location !== "undefined" && location.protocol === "capacitor:";
 /** Boot splash: static N mark only (see #bootSplash in index.html). */
-const BOOT_SPLASH_MIN_MS = 1400;
-const BOOT_SPLASH_MAX_MS = 2800;
+const BOOT_SPLASH_MIN_MS = IS_NATIVE_SHELL ? 1800 : 1400;
+const BOOT_SPLASH_MAX_MS = IS_NATIVE_SHELL ? 3200 : 2800;
 const _bootSplashStartedAt = Date.now();
 let _bootSplashAnimEnded = false;
 let _bootSplashCanDismiss = false;
 let _bootSplashMinTimer = 0;
+let _bootSplashFinishTimer = 0;
 let _bootSplashPermanentlyDismissed = false;
+
+function bootSplashRemainingMinMs() {
+  return Math.max(0, BOOT_SPLASH_MIN_MS - (Date.now() - _bootSplashStartedAt));
+}
+
+/** Always honor BOOT_SPLASH_MIN_MS — never flash the logo away on a fast error/rejection. */
+function scheduleBootSplashFinish() {
+  if (_bootSplashPermanentlyDismissed) return;
+  _bootSplashCanDismiss = true;
+  _bootSplashAnimEnded = true;
+  const wait = bootSplashRemainingMinMs();
+  if (wait > 0) {
+    if (_bootSplashFinishTimer) return;
+    _bootSplashFinishTimer = window.setTimeout(() => {
+      _bootSplashFinishTimer = 0;
+      finishBootSplash();
+    }, wait);
+    return;
+  }
+  finishBootSplash();
+}
 
 // iOS WKWebView cold-launch quirk: the first layout can happen at a wider
 // default logical width (before the real frame size / safe-area insets resolve),
@@ -367,6 +389,8 @@ function finishBootSplash() {
     _bootSplashPermanentlyDismissed = true;
     if (_bootSplashMinTimer) clearTimeout(_bootSplashMinTimer);
     _bootSplashMinTimer = 0;
+    if (_bootSplashFinishTimer) clearTimeout(_bootSplashFinishTimer);
+    _bootSplashFinishTimer = 0;
     const splash = document.getElementById("bootSplash");
     // Reveal instantly — NO opacity crossfade. The boot splash logo is screen-
     // centered, but the route it reveals (intro/auth) has its own logo at a
@@ -407,13 +431,10 @@ function dismissBootSplash() {
   tryDismissBootSplash();
 }
 try {
-  const forceBootSplashEnd = () => {
-    _bootSplashCanDismiss = true;
-    finishBootSplash();
-  };
-  window.addEventListener("error", forceBootSplashEnd);
-  window.addEventListener("unhandledrejection", forceBootSplashEnd);
-  setTimeout(forceBootSplashEnd, BOOT_SPLASH_MAX_MS);
+  // Do not listen for unhandledrejection — benign async failures were dismissing
+  // the splash instantly and the N mark flashed for <1s on iPhone.
+  window.addEventListener("error", () => scheduleBootSplashFinish());
+  setTimeout(() => scheduleBootSplashFinish(), BOOT_SPLASH_MAX_MS);
 } catch {}
 
 _bootSplashMinTimer = window.setTimeout(() => {
@@ -4196,10 +4217,10 @@ function syncRoutePanelVisibility(wanted) {
 
 function routeApplyFallback(err) {
   console.error("[route] applyRoute failed", err);
-  try { dismissBootSplash(); } catch {}
+  try { scheduleBootSplashFinish(); } catch {}
   const fb = authSession?.user?.id ? "discover" : "auth";
   syncRoutePanelVisibility(fb);
-  document.body.classList.remove("pageTransitioning", "booting");
+  document.body.classList.remove("pageTransitioning");
   const main = document.querySelector("main.grid");
   if (main) main.classList.remove("routeSwap");
 }
@@ -66299,15 +66320,45 @@ function studioProMasterPlaybackUrl(preview) {
 async function studioProMasterDiagnosePreview(preview) {
   const masteringTaskId = String(preview?.masteringTaskId || "").trim();
   if (!masteringTaskId) throw new Error("Missing preview task.");
-  return studioProMasterApi({
-    action: "diagnose-preview",
-    masteringTaskId,
-    previewUrl: String(preview?.previewUrl || "").trim(),
-    previewStartTime: preview?.previewStartTime,
-  });
+  const previewUrl = String(preview?.previewUrl || "").trim();
+  try {
+    return await studioProMasterApi({
+      action: "diagnose-preview",
+      masteringTaskId,
+      previewUrl,
+      previewStartTime: preview?.previewStartTime,
+    });
+  } catch (e) {
+    const msg = String(e?.message || "");
+    if (!/unknown action|404/i.test(msg)) throw e;
+  }
+  const d = await studioProMasterApi(
+    { action: "preview-audio", masteringTaskId },
+    { readTimeoutMs: 180000 },
+  );
+  if (d?.pending) {
+    return {
+      ok: false,
+      retrieveOk: true,
+      pending: true,
+      downloadOk: false,
+      error: "Preview not ready yet.",
+    };
+  }
+  const b64 = String(d?.audioBase64 || "");
+  return {
+    ok: b64.length > 800,
+    retrieveOk: true,
+    pending: false,
+    downloadOk: b64.length > 800,
+    bytes: b64.length,
+    previewUrl: String(d?.previewUrl || previewUrl),
+    contentType: String(d?.contentType || "audio/mpeg"),
+    error: b64.length > 800 ? "" : "Preview audio empty.",
+  };
 }
 
-async function studioProMasterVerifyPreviewReady(preview, { maxWaitMs = 180000 } = {}) {
+async function studioProMasterVerifyPreviewReady(preview, { maxWaitMs = 300000 } = {}) {
   const started = Date.now();
   let last = null;
   while (Date.now() - started < maxWaitMs) {
@@ -66320,14 +66371,34 @@ async function studioProMasterVerifyPreviewReady(preview, { maxWaitMs = 180000 }
         previewContentType: String(last.contentType || "").trim(),
       };
     }
-    if (last?.retrieveOk && !last?.pending && !last?.downloadOk) {
-      throw new Error(String(last.error || "RoEx preview URL exists but audio download failed."));
+    const errText = String(last?.error || "");
+    const stillPending =
+      last?.pending ||
+      /404|403|not ready|pending|download http/i.test(errText);
+    if (last?.retrieveOk && !last?.downloadOk && !stillPending) {
+      throw new Error(errText || "RoEx preview URL exists but audio download failed.");
     }
     await new Promise((r) => setTimeout(r, 3000));
   }
   throw new Error(
-    String(last?.error || "Pro Master preview isn’t ready at RoEx yet — wait a minute and try Save again."),
+    studioProMasterFriendlyError(
+      last?.error || "Pro Master preview isn’t ready at RoEx yet — wait a minute and try Save again.",
+    ),
   );
+}
+
+function studioProMasterFriendlyError(msg) {
+  const s = String(msg || "").trim();
+  if (/download http 404/i.test(s)) {
+    return "RoEx is still hosting your preview — wait 30–60s and tap Save again.";
+  }
+  if (/roex http 404/i.test(s)) {
+    return "RoEx is still mastering — wait 30–60s and try Save again.";
+  }
+  if (/\b404\b/.test(s)) {
+    return "Pro Master preview isn’t ready at RoEx yet — wait and try Save again.";
+  }
+  return s || "Pro Master preview failed — try again.";
 }
 
 async function studioProMasterFetchPlaybackBlob(preview, { maxWaitMs = 90000 } = {}) {
@@ -66487,8 +66558,13 @@ async function studioProMasterPreview({ blob, finish = "balanced" }) {
       const polled = await studioProMasterApi({
         action: "poll-preview",
         masteringTaskId: preview.masteringTaskId,
+        readyOnly: true,
       });
-      if (polled.previewUrl) {
+      if (polled.previewUrl && Number(polled.previewBytes) > 512) {
+        preview = { ...preview, ...polled };
+        break;
+      }
+      if (polled.previewUrl && !polled.previewBytes) {
         preview = { ...preview, ...polled };
         break;
       }
@@ -66496,8 +66572,9 @@ async function studioProMasterPreview({ blob, finish = "balanced" }) {
     }
   }
   if (!preview.previewUrl) {
-    throw new Error("Pro Master preview isn’t ready yet — try again.");
+    throw new Error(studioProMasterFriendlyError("Pro Master preview isn’t ready yet — try again."));
   }
+  if (Number(preview.previewBytes) > 512) return preview;
   return studioProMasterVerifyPreviewReady(preview);
 }
 

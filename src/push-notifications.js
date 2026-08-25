@@ -186,8 +186,28 @@ export function peekPendingPushRoute() {
   }
 }
 
-export function configurePushFromPublicConfig(appId) {
-  _appId = String(appId || "").trim();
+let _appBadgePlugin = null;
+
+async function getAppBadgePlugin() {
+  if (_appBadgePlugin) return _appBadgePlugin;
+  if (!isNativeAppShell()) return null;
+  try {
+    const { registerPlugin } = await import("../vendor/capacitor-core/index.js");
+    _appBadgePlugin = registerPlugin("AppBadge");
+  } catch {}
+  return _appBadgePlugin;
+}
+
+/** Sync the iOS/Android home-screen icon badge (native only). */
+export async function syncAppIconBadge(count) {
+  if (!isNativeAppShell()) return;
+  const n = Math.max(0, Math.min(999, Number(count || 0) | 0));
+  try {
+    const plugin = await getAppBadgePlugin();
+    await plugin?.set?.({ count: n });
+  } catch (e) {
+    console.warn("[push] app icon badge sync failed", e);
+  }
 }
 
 function pushConfigured() {

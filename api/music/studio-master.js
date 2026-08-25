@@ -10,6 +10,7 @@
  * Pro subscribers only. Preview is free; final retrieve costs RoEx credits after payment.
  */
 const crypto = require("crypto");
+const Busboy = require("busboy");
 const { verifyUser, sendJson, readJsonBody, isAdminEmail } = require("../_lib/credits-auth");
 const { applyCors } = require("../_lib/cors");
 const { fetchProSubscriptionForUser } = require("../_lib/pro-subscription");
@@ -171,6 +172,33 @@ module.exports = async function handler(req, res) {
     });
   }
 
+  const contentType = String(req.headers["content-type"] || "").toLowerCase();
+  if (contentType.includes("multipart/form-data")) {
+    try {
+      const parsed = await readStudioMasterMultipart(req);
+      const maxBytes = 3.5 * 1024 * 1024;
+      if (!parsed.fileBytes?.length) {
+        return sendJson(res, 400, { error: "Missing audio file.", code: "missing_audio" });
+      }
+      if (parsed.fileBytes.length > maxBytes) {
+        return sendJson(res, 413, {
+          error: "Mix is too large for Pro Master right now — try a shorter take or use local finish.",
+          code: "audio_too_large",
+        });
+      }
+      const up = await uploadBufferToRoex({
+        buffer: parsed.fileBytes,
+        filename: parsed.fileName || "studio-mix.wav",
+        contentType: parsed.mime || "audio/wav",
+      });
+      if (!up.ok) return sendJson(res, up.status || 502, { error: up.error, code: up.code });
+      return sendJson(res, 200, { ok: true, readableUrl: up.readableUrl });
+    } catch (e) {
+      console.warn("[music/studio-master] multipart upload", e?.message || e);
+      return sendJson(res, 400, { error: e?.message || "Upload failed.", code: "upload_failed" });
+    }
+  }
+
   const body = await readJsonBody(req);
   const action = String(body?.action || "").trim().toLowerCase();
 
@@ -313,3 +341,29 @@ module.exports = async function handler(req, res) {
     return sendJson(res, 500, { error: e?.message || "Pro Master failed" });
   }
 };
+
+function readStudioMasterMultipart(req) {
+  const maxBytes = 3.5 * 1024 * 1024;
+  return new Promise((resolve, reject) => {
+    const bb = Busboy({ headers: req.headers, limits: { fileSize: maxBytes } });
+    const out = { fileBytes: null, fileName: "studio-mix.wav", mime: "audio/wav" };
+    const chunks = [];
+    let truncated = false;
+    bb.on("file", (_name, file, info) => {
+      const { filename, mimeType } = info || {};
+      if (filename) out.fileName = String(filename).slice(0, 180);
+      if (mimeType) out.mime = mimeType;
+      file.on("data", (d) => chunks.push(d));
+      file.on("limit", () => {
+        truncated = true;
+      });
+    });
+    bb.on("error", reject);
+    bb.on("finish", () => {
+      if (truncated) return reject(new Error("Mix is too large for Pro Master right now."));
+      out.fileBytes = Buffer.concat(chunks);
+      resolve(out);
+    });
+    req.pipe(bb);
+  });
+}

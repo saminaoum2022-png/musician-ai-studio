@@ -65752,19 +65752,44 @@ async function blobToBase64(blob) {
   return blobToBase64Payload(blob);
 }
 
+async function putBlobViaHttpPut(url, blob, contentType) {
+  const type = contentType || blob?.type || "audio/wav";
+  const send = () =>
+    new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open("PUT", url);
+      xhr.setRequestHeader("Content-Type", type);
+      xhr.onload = () => {
+        if (xhr.status >= 200 && xhr.status < 300) resolve();
+        else reject(new Error(`Couldn’t upload your mix (${xhr.status}).`));
+      };
+      xhr.onerror = () => reject(new Error("Couldn’t upload your mix — check your connection."));
+      xhr.send(blob);
+    });
+
+  try {
+    await send();
+    return;
+  } catch (e) {
+    if (!isNativeShell()) throw e;
+  }
+
+  const put = await fetch(url, {
+    method: "PUT",
+    headers: { "Content-Type": type },
+    body: blob,
+  });
+  if (put.ok) return;
+  throw new Error(`Couldn’t upload your mix (${put.status}).`);
+}
+
 async function putMixBlobToRoexSignedUrl(signedUrl, blob) {
   const url = String(signedUrl || "").trim();
   const type = blob?.type || "audio/wav";
   if (!url) throw new Error("Missing upload URL.");
 
   try {
-    const put = await fetch(url, {
-      method: "PUT",
-      headers: { "Content-Type": type },
-      body: blob,
-    });
-    if (put.ok) return;
-    throw new Error(`Couldn’t upload your mix (${put.status}).`);
+    await putBlobViaHttpPut(url, blob, type);
   } catch (e) {
     const msg = String(e?.message || "");
     if (/load failed|failed to fetch|network/i.test(msg)) {
@@ -65808,8 +65833,8 @@ async function nativeHttpDownloadBlobUrl(remoteUrl, contentType = "audio/wav") {
 
 async function studioProMasterUploadMixNative(blob) {
   const contentType = blob.type || "audio/wav";
-  const maxServerBytes = 2.5 * 1024 * 1024;
 
+  // Direct RoEx upload — required for typical 20–40s takes (~4–8 MB WAV).
   try {
     const up = await studioProMasterApi({
       action: "upload-url",
@@ -65822,6 +65847,8 @@ async function studioProMasterUploadMixNative(blob) {
     console.warn("[studio] direct RoEx upload failed:", e?.message || e);
   }
 
+  // Server relay fallback for short takes only (Vercel body limit ~3 MB raw).
+  const maxServerBytes = 3 * 1024 * 1024;
   if (blob.size <= maxServerBytes) {
     const audioBase64 = await blobToBase64(blob);
     const up = await studioProMasterApi({
@@ -65833,7 +65860,7 @@ async function studioProMasterUploadMixNative(blob) {
     return up.readableUrl;
   }
 
-  throw new Error("Mix is too large for Pro Master — try a shorter take.");
+  throw new Error("Couldn’t upload your mix — try again on Wi‑Fi with a stable connection.");
 }
 
 async function studioProMasterUploadMix(blob) {

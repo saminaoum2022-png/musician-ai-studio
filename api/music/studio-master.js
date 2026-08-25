@@ -73,10 +73,12 @@ function verifyJobToken(token, expected) {
 }
 
 async function requireStudioPro(user, req) {
+  if (String(process.env.STUDIO_MASTER_DEV_SKIP_PAYMENT || "").trim() === "1") {
+    return { ok: true };
+  }
   const stagingTester =
     isAdminEmail(user.email) &&
-    (String(process.env.STUDIO_MASTER_ADMIN_BYPASS || "").trim() === "1" ||
-      String(process.env.STUDIO_MASTER_DEV_SKIP_PAYMENT || "").trim() === "1");
+    String(process.env.STUDIO_MASTER_ADMIN_BYPASS || "").trim() === "1";
   if (stagingTester) return { ok: true };
 
   const proGate = await requireProForWebApi(req, user.userId);

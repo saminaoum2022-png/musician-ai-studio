@@ -675,37 +675,65 @@
     );
   }
 
+  function bindCarouselCardPreviewInteractions(card, previewUrl, hookStartSec, signupHref) {
+    var playBtn = card.querySelector(".discoverCarouselPlay");
+    var signupEl = card.querySelector(".discoverCarouselBy");
+    var targetHref = String(signupHref || CAROUSEL_SIGNUP_HREF).trim() || CAROUSEL_SIGNUP_HREF;
+
+    function startPreview(e) {
+      if (!previewUrl) return;
+      if (e) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+      startCarouselPreview(card, previewUrl, hookStartSec);
+    }
+
+    if (signupEl) {
+      signupEl.classList.add("discoverCarouselSignupLink");
+      signupEl.setAttribute("role", "link");
+      signupEl.setAttribute("tabindex", "0");
+      signupEl.addEventListener("click", function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        stopCarouselPreview();
+        window.location.href = targetHref;
+      });
+      signupEl.addEventListener("keydown", function (e) {
+        if (e.key !== "Enter" && e.key !== " ") return;
+        e.preventDefault();
+        e.stopPropagation();
+        stopCarouselPreview();
+        window.location.href = targetHref;
+      });
+    }
+
+    card.addEventListener("click", function (e) {
+      if (e.target.closest(".discoverCarouselBy")) return;
+      startPreview(e);
+    });
+    card.addEventListener("keydown", function (e) {
+      if (e.key !== "Enter") return;
+      if (e.target.closest(".discoverCarouselBy")) return;
+      e.preventDefault();
+      startPreview(e);
+    });
+
+    if (!playBtn) return;
+    if (!previewUrl) {
+      playBtn.hidden = true;
+      return;
+    }
+    playBtn.addEventListener("click", startPreview);
+  }
+
   function wireDiscoverCarouselPreviews(root) {
     if (!root) return;
     var cards = root.querySelectorAll(".discoverCarouselCard");
     cards.forEach(function (card) {
       var previewUrl = card.getAttribute("data-preview-url") || "";
       var hookStartSec = Number(card.getAttribute("data-hook-start") || "0");
-      var playBtn = card.querySelector(".discoverCarouselPlay");
-
-      card.addEventListener("click", function (e) {
-        if (e.target.closest(".discoverCarouselPlay")) return;
-        stopCarouselPreview();
-        window.location.href = CAROUSEL_SIGNUP_HREF;
-      });
-      card.addEventListener("keydown", function (e) {
-        if (e.key === "Enter" && !e.target.closest(".discoverCarouselPlay")) {
-          e.preventDefault();
-          stopCarouselPreview();
-          window.location.href = CAROUSEL_SIGNUP_HREF;
-        }
-      });
-
-      if (!playBtn || !previewUrl) {
-        if (playBtn) playBtn.hidden = true;
-        return;
-      }
-
-      playBtn.addEventListener("click", function (e) {
-        e.preventDefault();
-        e.stopPropagation();
-        startCarouselPreview(card, previewUrl, hookStartSec);
-      });
+      bindCarouselCardPreviewInteractions(card, previewUrl, hookStartSec, CAROUSEL_SIGNUP_HREF);
     });
   }
 
@@ -756,32 +784,8 @@
     cards.forEach(function (card) {
       var previewUrl = card.getAttribute("data-preview-url") || "";
       var hookStartSec = Number(card.getAttribute("data-hook-start") || "0");
-      var playBtn = card.querySelector(".discoverCarouselPlay");
       var cardHref = card.getAttribute("data-card-href") || targetHref;
-
-      card.addEventListener("click", function (e) {
-        if (e.target.closest(".discoverCarouselPlay")) return;
-        stopCarouselPreview();
-        window.location.href = cardHref;
-      });
-      card.addEventListener("keydown", function (e) {
-        if (e.key === "Enter" && !e.target.closest(".discoverCarouselPlay")) {
-          e.preventDefault();
-          stopCarouselPreview();
-          window.location.href = cardHref;
-        }
-      });
-
-      if (!playBtn || !previewUrl) {
-        if (playBtn) playBtn.hidden = true;
-        return;
-      }
-
-      playBtn.addEventListener("click", function (e) {
-        e.preventDefault();
-        e.stopPropagation();
-        startCarouselPreview(card, previewUrl, hookStartSec);
-      });
+      bindCarouselCardPreviewInteractions(card, previewUrl, hookStartSec, cardHref);
     });
   }
 

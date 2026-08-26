@@ -206,32 +206,35 @@ img { display: block; max-width: 100%; height: auto; }
 .marketingDiscoverCarouselWrap {
   margin: 0 auto 28px;
   max-width: 100%;
-  -webkit-mask-image: linear-gradient(90deg, transparent, #000 3%, #000 97%, transparent);
-  mask-image: linear-gradient(90deg, transparent, #000 3%, #000 97%, transparent);
+  overflow: visible;
+  padding: 8px 0 4px;
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 1.5%, #000 98.5%, transparent);
+  mask-image: linear-gradient(90deg, transparent, #000 1.5%, #000 98.5%, transparent);
 }
 
 .marketingDiscoverCarousel {
   display: flex;
-  gap: 14px;
+  gap: 16px;
   overflow-x: auto;
+  overflow-y: visible;
   scroll-snap-type: x mandatory;
-  padding: 4px 8px 18px;
+  padding: 12px 20px 24px;
   scrollbar-width: thin;
 }
 
 .discoverCarouselCard {
-  flex: 0 0 min(210px, 72vw);
+  flex: 0 0 min(220px, 74vw);
   scroll-snap-align: start;
   display: grid;
   gap: 10px;
-  padding: 10px;
+  padding: 12px;
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 18px;
   background: rgba(255, 255, 255, 0.03);
   text-decoration: none;
   color: inherit;
   cursor: pointer;
-  transition: transform 140ms ease, border-color 140ms ease, background 140ms ease;
+  transition: transform 140ms ease, border-color 140ms ease, background 140ms ease, box-shadow 140ms ease;
   -webkit-tap-highlight-color: transparent;
 }
 
@@ -336,6 +339,20 @@ img { display: block; max-width: 100%; height: auto; }
   text-overflow: ellipsis;
 }
 
+.discoverCarouselBy.discoverCarouselSignupLink {
+  width: fit-content;
+  max-width: 100%;
+  cursor: pointer;
+  transition: color 140ms ease;
+}
+
+.discoverCarouselBy.discoverCarouselSignupLink:hover,
+.discoverCarouselBy.discoverCarouselSignupLink:focus-visible {
+  color: rgba(35, 213, 171, 0.92);
+  text-decoration: underline;
+  outline: none;
+}
+
 .marketingTemplateShowcase {
   margin: 0 auto 28px;
   max-width: 920px;
@@ -356,8 +373,10 @@ img { display: block; max-width: 100%; height: auto; }
 
 .marketingTemplateShowcaseCarouselWrap {
   margin-bottom: 8px;
-  -webkit-mask-image: linear-gradient(90deg, transparent, #000 3%, #000 97%, transparent);
-  mask-image: linear-gradient(90deg, transparent, #000 3%, #000 97%, transparent);
+  overflow: visible;
+  padding: 8px 0 4px;
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 1.5%, #000 98.5%, transparent);
+  mask-image: linear-gradient(90deg, transparent, #000 1.5%, #000 98.5%, transparent);
 }
 
 .marketingTemplateShowcaseCarousel .discoverCarouselCard {

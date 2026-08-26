@@ -595,7 +595,6 @@
 
   var CAROUSEL_PREVIEW_SEC = 30;
   var CAROUSEL_SIGNUP_HREF = "/app/#/intro";
-  var TEMPLATE_SHOWCASE_HREF = "/app/#/challenges";
   var carouselPreviewAudio = null;
   var carouselPreviewCardId = null;
   var carouselPreviewStopTimer = null;

@@ -27320,6 +27320,31 @@ let _authKeyboardScrollTimer = 0;
 let _authKeyboardInsetLast = 0;
 let _authKeyboardScrollDone = false;
 let _authKeyboardViewportRaf = 0;
+let _authMobileWebKbTimer = 0;
+let _authMobileWebKbTimer2 = 0;
+let _authNativeKbScrollOff = false;
+
+function isAuthMobileKeyboardHost() {
+  if (typeof window.matchMedia === "function" && window.matchMedia("(max-width: 720px)").matches) return true;
+  return isIosWebShell() || (isNativeShell() && isIosPlatform());
+}
+
+function authKeyboardUsesStableInsetOnly() {
+  return isAuthMobileKeyboardHost();
+}
+
+function authKeyboardUsesMobileWebSync() {
+  return authKeyboardUsesStableInsetOnly() && !getNativeKeyboardPlugin();
+}
+
+function setAuthNativeKeyboardScroll(disabled) {
+  const Keyboard = getNativeKeyboardPlugin();
+  if (!Keyboard?.setScroll) return;
+  const off = Boolean(disabled);
+  if (_authNativeKbScrollOff === off) return;
+  _authNativeKbScrollOff = off;
+  try { Keyboard.setScroll({ isDisabled: off }); } catch {}
+}
 
 function isAuthFormField(el) {
   if (!el || !els.authEmailForm || els.authEmailForm.hidden) return false;
@@ -27335,6 +27360,7 @@ function measureAuthViewportKeyboardInset() {
 }
 
 function scrollAuthFieldAboveKeyboard(field) {
+  if (authKeyboardUsesStableInsetOnly()) return;
   const target = field?.closest?.(".authField") || field;
   if (!target) return;
   const kb = Math.max(
@@ -27345,19 +27371,6 @@ function scrollAuthFieldAboveKeyboard(field) {
   if (kb > 0) {
     target.style.scrollMarginBottom = `${Math.round(kb + 28)}px`;
   }
-  // Mobile web: scroll the auth panel only — document scrollIntoView fights the keyboard.
-  if (!getNativeKeyboardPlugin()) {
-    const screen = document.querySelector(".authScreen");
-    if (!screen || kb <= 0) return;
-    const screenRect = screen.getBoundingClientRect();
-    const targetRect = target.getBoundingClientRect();
-    const visibleBottom = screenRect.bottom - kb - 16;
-    const overflow = targetRect.bottom - visibleBottom;
-    if (overflow > 4) {
-      screen.scrollTop += overflow;
-    }
-    return;
-  }
   try {
     target.scrollIntoView({ block: "center", inline: "nearest", behavior: "auto" });
   } catch {}
@@ -27366,17 +27379,31 @@ function scrollAuthFieldAboveKeyboard(field) {
 function applyAuthKeyboardOpen(height) {
   const kb = Math.max(0, Math.round(Number(height) || 0));
   if (!kb || !document.body.classList.contains("isAuth")) return;
-  const insetChanged = Math.abs(kb - _authKeyboardInsetLast) > 8;
+  const insetChanged = Math.abs(kb - _authKeyboardInsetLast) > 20;
+  if (document.body.classList.contains("authKeyboardOpen") && !insetChanged) return;
   _authKeyboardHeight = kb;
   _authKeyboardInsetLast = kb;
   document.body.classList.add("authKeyboardOpen");
   try {
     document.documentElement.style.setProperty("--auth-keyboard-inset", `${kb}px`);
   } catch {}
-  if (_authFocusedField && (!_authKeyboardScrollDone || insetChanged)) {
+  if (_authFocusedField && !authKeyboardUsesStableInsetOnly() && (!_authKeyboardScrollDone || insetChanged)) {
     scrollAuthFieldAboveKeyboard(_authFocusedField);
     _authKeyboardScrollDone = true;
   }
+}
+
+function scheduleAuthMobileWebKeyboardSync() {
+  if (!authKeyboardUsesMobileWebSync()) return;
+  if (_authMobileWebKbTimer) clearTimeout(_authMobileWebKbTimer);
+  if (_authMobileWebKbTimer2) clearTimeout(_authMobileWebKbTimer2);
+  const sync = () => {
+    if (!document.body.classList.contains("isAuth") || !_authFocusedField) return;
+    const kb = measureAuthViewportKeyboardInset();
+    if (kb > 0) applyAuthKeyboardOpen(kb);
+  };
+  _authMobileWebKbTimer = window.setTimeout(sync, 280);
+  _authMobileWebKbTimer2 = window.setTimeout(sync, 520);
 }
 
 function scheduleAuthKeyboardScroll() {
@@ -27396,10 +27423,19 @@ function clearAuthKeyboardInset() {
     clearTimeout(_authKeyboardScrollTimer);
     _authKeyboardScrollTimer = 0;
   }
+  if (_authMobileWebKbTimer) {
+    clearTimeout(_authMobileWebKbTimer);
+    _authMobileWebKbTimer = 0;
+  }
+  if (_authMobileWebKbTimer2) {
+    clearTimeout(_authMobileWebKbTimer2);
+    _authMobileWebKbTimer2 = 0;
+  }
   if (_authKeyboardViewportRaf) {
     cancelAnimationFrame(_authKeyboardViewportRaf);
     _authKeyboardViewportRaf = 0;
   }
+  setAuthNativeKeyboardScroll(false);
   document.body.classList.remove("authKeyboardOpen");
   try {
     document.documentElement.style.setProperty("--auth-keyboard-inset", "0px");
@@ -27424,10 +27460,6 @@ function wireAuthKeyboardOnce() {
 
   const Keyboard = getNativeKeyboardPlugin();
   if (Keyboard?.addListener) {
-    Keyboard.addListener("keyboardWillShow", (info) => {
-      if (!document.body.classList.contains("isAuth") || !_authFocusedField) return;
-      applyAuthKeyboardOpen(info?.keyboardHeight ?? measureAuthViewportKeyboardInset());
-    });
     Keyboard.addListener("keyboardDidShow", (info) => {
       if (!document.body.classList.contains("isAuth") || !_authFocusedField) return;
       applyAuthKeyboardOpen(info?.keyboardHeight ?? measureAuthViewportKeyboardInset());
@@ -27440,7 +27472,7 @@ function wireAuthKeyboardOnce() {
       if (!document.body.classList.contains("isAuth")) return;
       clearAuthKeyboardInset();
     });
-  } else {
+  } else if (!authKeyboardUsesStableInsetOnly()) {
     const vv = window.visualViewport;
     const onViewportResize = () => {
       if (!document.body.classList.contains("isAuth") || !_authFocusedField) return;
@@ -27461,7 +27493,15 @@ function wireAuthKeyboardOnce() {
   if (els.authEmailForm) {
     els.authEmailForm.addEventListener("focusin", (e) => {
       if (!document.body.classList.contains("isAuth")) return;
+      if (!isAuthFormField(e.target)) return;
       handleAuthFieldFocus(e.target);
+      setAuthNativeKeyboardScroll(true);
+      document.body.classList.add("authKeyboardOpen");
+      if (authKeyboardUsesMobileWebSync()) {
+        scheduleAuthMobileWebKeyboardSync();
+        return;
+      }
+      if (getNativeKeyboardPlugin()) return;
       const kb = measureAuthViewportKeyboardInset();
       if (kb > 0) applyAuthKeyboardOpen(kb);
       else scheduleAuthKeyboardScroll();

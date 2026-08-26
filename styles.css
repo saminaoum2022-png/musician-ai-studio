@@ -48647,7 +48647,14 @@ body.isAuth:not(.booting) .authGateChoices:not([hidden]){
     overflow-y: auto;
     overscroll-behavior: contain;
     -webkit-overflow-scrolling: touch;
-    padding-bottom: calc(var(--auth-keyboard-inset, 0px) + env(safe-area-inset-bottom, 0px) + 16px);
+    padding-bottom: calc(var(--auth-keyboard-inset, 0px) + env(keyboard-inset-height, 0px) + env(safe-area-inset-bottom, 0px) + 16px);
+  }
+  body.isAuth.authKeyboardOpen .authInner,
+  body.isAuth.authKeyboardOpen .authScreen,
+  body.isAuth.authKeyboardOpen .authBrand,
+  body.isAuth.authKeyboardOpen .authTagline,
+  body.isAuth.authKeyboardOpen .authSub{
+    transition: none !important;
   }
   body.isAuth.authKeyboardOpen .authInner{
     margin-top: max(8px, env(safe-area-inset-top));

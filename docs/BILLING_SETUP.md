@@ -115,9 +115,11 @@ Redeploy after adding env vars. `/api/public-config` exposes `stripeWebEnabled: 
 Browser (nabadai.com)
   → POST /api/billing/checkout
   → Stripe Checkout
-  → Stripe webhook → POST /api/billing/stripe-webhook
-  → upsert pro_subscriptions + grant_paid_credits
-  → app calls POST /api/billing/sync (backup)
+  → Stripe webhook (`invoice.paid` / subscription events) → POST /api/billing/stripe-webhook
+  → upsert pro_subscriptions + grant_paid_credits (idempotent via `billing_events`)
+  → app calls POST /api/billing/sync (backup if webhook was delayed)
+
+**SQL (run once in Supabase):** `supabase/claim_billing_credit_grant.sql` — atomic claim-before-grant + ledger ref dedupe. Prevents double trial credits when checkout, invoice, and sync race.
 ```
 
 Manage/cancel: **Manage subscription** → POST `/api/billing/portal` → Stripe Customer Portal.

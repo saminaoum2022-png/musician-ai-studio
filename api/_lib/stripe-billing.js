@@ -286,7 +286,7 @@ async function applyStripeEvent(event) {
         });
       } catch {}
     }
-    return applyStripeSubscription(sub, { grantCredits: true });
+    return applyStripeSubscription(sub, { grantCredits: false });
   }
 
   return { ok: true, kind: "ignored", type };

@@ -168,6 +168,60 @@ async function upsertProSubscription({
   });
 }
 
+async function tryClaimBillingEvent({
+  eventId,
+  userId,
+  provider,
+  eventType,
+  planId,
+  productId,
+}) {
+  const id = String(eventId || "").trim();
+  if (!id) return { claimed: false, duplicate: true, rpcMissing: false };
+
+  const claim = await callRpc("claim_billing_event", {
+    p_event_id: id,
+    p_user_id: userId,
+    p_provider: provider || "unknown",
+    p_event_type: eventType || "",
+    p_plan_id: planId || null,
+    p_product_id: productId || null,
+  });
+
+  if (claim.skipped || claim.status === 404) {
+    return { claimed: false, duplicate: false, rpcMissing: true };
+  }
+
+  const out = claim.data || {};
+  if (!claim.ok || out.ok === false) {
+    return {
+      claimed: false,
+      duplicate: false,
+      rpcMissing: false,
+      error: out.message || "claim_failed",
+    };
+  }
+  if (out.claimed === false || out.duplicate) {
+    return { claimed: false, duplicate: true, rpcMissing: false };
+  }
+  return { claimed: true, duplicate: false, rpcMissing: false };
+}
+
+async function completeBillingEventGrant(eventId, creditsGranted) {
+  const id = String(eventId || "").trim();
+  if (!id) return;
+  await callRpc("complete_billing_event_grant", {
+    p_event_id: id,
+    p_credits_granted: Number(creditsGranted || 0),
+  }).catch(() => null);
+}
+
+async function releaseBillingEventClaim(eventId) {
+  const id = String(eventId || "").trim();
+  if (!id) return;
+  await callRpc("release_billing_event_claim", { p_event_id: id }).catch(() => null);
+}
+
 async function grantCreditsOnce({
   eventId,
   userId,
@@ -181,35 +235,67 @@ async function grantCreditsOnce({
   const uid = cleanUserId(userId);
   const id = String(eventId || "").trim();
   const credits = Number(amount || 0);
+  const grantRef = ref || `${provider}:${id}`;
   if (!uid || !id || !Number.isFinite(credits) || credits <= 0) {
     return { granted: 0, skipped: true };
   }
-  if (await billingEventExists(id)) {
-    return { granted: 0, skipped: true, duplicate: true };
-  }
 
-  const rpc = await callRpc("grant_paid_credits", {
-    p_user_id: uid,
-    p_amount: credits,
-    p_ref: ref || `${provider}:${id}`,
-  });
-  if (rpc.skipped || rpc.status === 404) {
-    return { granted: 0, skipped: true, error: "gifts_not_migrated" };
-  }
-  const out = rpc.data || {};
-  if (!rpc.ok || out.ok === false) {
-    return { granted: 0, skipped: true, error: out.message || "grant_failed" };
-  }
-
-  await recordBillingEvent({
+  let claimedViaRpc = false;
+  const claim = await tryClaimBillingEvent({
     eventId: id,
     userId: uid,
     provider,
     eventType,
     planId,
     productId,
-    creditsGranted: credits,
   });
+
+  if (claim.duplicate) {
+    return { granted: 0, skipped: true, duplicate: true };
+  }
+
+  if (claim.rpcMissing) {
+    if (await billingEventExists(id)) {
+      return { granted: 0, skipped: true, duplicate: true };
+    }
+  } else if (!claim.claimed) {
+    return { granted: 0, skipped: true, error: claim.error || "claim_failed" };
+  } else {
+    claimedViaRpc = true;
+  }
+
+  const rpc = await callRpc("grant_paid_credits", {
+    p_user_id: uid,
+    p_amount: credits,
+    p_ref: grantRef,
+  });
+  if (rpc.skipped || rpc.status === 404) {
+    if (claimedViaRpc) await releaseBillingEventClaim(id);
+    return { granted: 0, skipped: true, error: "gifts_not_migrated" };
+  }
+  const out = rpc.data || {};
+  if (out.duplicate === true) {
+    if (claimedViaRpc) await completeBillingEventGrant(id, 0);
+    return { granted: 0, skipped: true, duplicate: true, balance: out.balance };
+  }
+  if (!rpc.ok || out.ok === false) {
+    if (claimedViaRpc) await releaseBillingEventClaim(id);
+    return { granted: 0, skipped: true, error: out.message || "grant_failed" };
+  }
+
+  if (claimedViaRpc) {
+    await completeBillingEventGrant(id, credits);
+  } else {
+    await recordBillingEvent({
+      eventId: id,
+      userId: uid,
+      provider,
+      eventType,
+      planId,
+      productId,
+      creditsGranted: credits,
+    });
+  }
 
   return { granted: credits, skipped: false, balance: out.balance };
 }

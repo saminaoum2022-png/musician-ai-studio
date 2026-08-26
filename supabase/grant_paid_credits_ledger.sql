@@ -15,9 +15,31 @@ declare
   v_row public.user_credits;
   v_before numeric(14, 4);
   v_ledger_id uuid;
+  v_ref text := coalesce(p_ref, '');
 begin
   if p_amount is null or p_amount <= 0 then
     return json_build_object('ok', false, 'message', 'Invalid amount.');
+  end if;
+
+  if length(trim(v_ref)) > 0 then
+    if exists (
+      select 1
+        from public.credit_ledger
+       where user_id = p_user_id
+         and reason = 'paid_purchase'
+         and ref = v_ref
+    ) then
+      select balance into v_before from public.user_credits where user_id = p_user_id;
+      if not found then
+        v_before := 0;
+      end if;
+      return json_build_object(
+        'ok', true,
+        'duplicate', true,
+        'balance', coalesce(v_before, 0),
+        'granted', 0
+      );
+    end if;
   end if;
 
   select balance into v_before from public.user_credits where user_id = p_user_id;
@@ -34,7 +56,7 @@ begin
     returning * into v_row;
 
   insert into public.credit_ledger (user_id, delta, reason, ref)
-    values (p_user_id, p_amount, 'paid_purchase', coalesce(p_ref, ''))
+    values (p_user_id, p_amount, 'paid_purchase', v_ref)
     returning id into v_ledger_id;
 
   begin

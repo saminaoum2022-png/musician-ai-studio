@@ -27297,6 +27297,15 @@ function setAuthEmailSubmitting(on) {
 
 function setAuthEmailPanelOpen(open) {
   const show = Boolean(open);
+  if (!show) {
+    try {
+      if (isAuthFormField(document.activeElement)) document.activeElement.blur();
+    } catch {}
+    clearAuthKeyboardInset();
+    try {
+      document.querySelector(".authScreen")?.scrollTo?.({ top: 0, behavior: "auto" });
+    } catch {}
+  }
   if (els.authEmailForm) els.authEmailForm.hidden = !show;
   if (els.authGateChoices) els.authGateChoices.hidden = show;
   if (els.btnAuthEmailReveal) {

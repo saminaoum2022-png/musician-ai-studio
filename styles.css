@@ -48661,9 +48661,9 @@ body.isAuth:not(.booting) .authGateChoices:not([hidden]){
     margin-bottom: 0;
     padding-top: max(10px, env(safe-area-inset-top));
   }
-  body.isAuth.authKeyboardOpen .authBrand,
-  body.isAuth.authKeyboardOpen .authTagline,
-  body.isAuth.authKeyboardOpen .authSub{
+  body.isAuth.authKeyboardOpen:has(.authEmailForm:not([hidden])) .authBrand,
+  body.isAuth.authKeyboardOpen:has(.authEmailForm:not([hidden])) .authTagline,
+  body.isAuth.authKeyboardOpen:has(.authEmailForm:not([hidden])) .authSub{
     max-height: 0;
     margin-top: 0;
     margin-bottom: 0;

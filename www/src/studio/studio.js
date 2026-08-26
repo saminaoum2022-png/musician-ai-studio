@@ -51,24 +51,24 @@ const DEFAULT_MIX = Object.freeze({
   fxDeesser: 0,
 });
 
-/** Applied after each new take — light vocal enhancer on by default. */
+/** Applied after each new take — start on Studio preset so polish is audible immediately. */
 const POST_RECORD_MIX = Object.freeze({
-  styleTab: "original",
+  styleTab: "studio",
   mixPanel: "basic",
-  voiceVol: 50,
-  vocalGain: 50,
-  musicVol: 70,
-  reverb: 0,
+  voiceVol: 54,
+  vocalGain: 52,
+  musicVol: 68,
+  reverb: 12,
   syncMs: 0,
   finish: "balanced",
   finishUserPick: false,
   finishSuggested: "balanced",
   _finishReady: true,
   fxDenoise: 0,
-  fxVocalEnhance: 50,
-  fxCompress: 0,
+  fxVocalEnhance: 70,
+  fxCompress: 40,
   fxEq: 0,
-  fxDeesser: 0,
+  fxDeesser: 30,
 });
 
 function applyPostRecordMixDefaults() {
@@ -95,17 +95,17 @@ const STYLE_TABS = Object.freeze({
   natural: {
     label: "Natural",
     finish: "warm",
-    mix: { voiceVol: 52, vocalGain: 50, musicVol: 70, fxVocalEnhance: 58, fxDenoise: 0, fxCompress: 6, fxDeesser: 12, reverb: 10 },
+    mix: { voiceVol: 52, vocalGain: 50, musicVol: 70, fxVocalEnhance: 45, fxDenoise: 0, fxCompress: 28, fxDeesser: 22, reverb: 14 },
   },
   studio: {
     label: "Studio",
     finish: "balanced",
-    mix: { voiceVol: 54, vocalGain: 52, musicVol: 68, fxVocalEnhance: 68, fxDenoise: 0, fxCompress: 10, fxDeesser: 16, reverb: 12 },
+    mix: { voiceVol: 54, vocalGain: 52, musicVol: 68, fxVocalEnhance: 70, fxDenoise: 0, fxCompress: 40, fxDeesser: 30, reverb: 18 },
   },
   pop: {
     label: "Pop",
     finish: "bright",
-    mix: { voiceVol: 56, vocalGain: 54, musicVol: 66, fxVocalEnhance: 62, fxDenoise: 0, fxCompress: 18, fxDeesser: 18, reverb: 14 },
+    mix: { voiceVol: 56, vocalGain: 54, musicVol: 66, fxVocalEnhance: 62, fxDenoise: 0, fxCompress: 55, fxDeesser: 34, reverb: 22 },
   },
   custom: { label: "Custom", finish: null, mix: null },
 });
@@ -1498,11 +1498,8 @@ async function startTake(root) {
       musicVol: guideVol(root),
       autoGainControl: false,
       monitor: !!current?.monitor,
-      // Live monitor = dry voice + a light reverb tail only. We intentionally
-      // drop the slap-back delay here: a 0.26s echo on what you hear reads as
-      // "latency", and the round-trip already adds some. Reverb tail doesn't
-      // delay the dry signal, so it stays tight.
-      monitorReverb: Math.min(0.22, Math.max(0.1, (Number(current?.mix?.reverb) || 0) / 100)),
+      // Dry monitor — wet FX on the live path read as extra lag in headphones.
+      monitorReverb: 0,
       monitorEcho: 0,
       onCountIn: (n) => {
         if (!countEl) return;
@@ -1726,18 +1723,16 @@ function applyStyleTab(root, take, tabId, state) {
   root.querySelectorAll("[data-studio-finish] .studioSegBtn").forEach((btn) => {
     btn.classList.toggle("isActive", btn.getAttribute("data-finish") === m.finish);
   });
-  if (engine?.isPlaying) {
-    try { engine.updateMix(mixParams()); } catch {}
-  }
-  updateAiApplyUi(root, m, state?.aiRec);
+  try { engine?.clearTakeFxCache?.(take); } catch {}
   if (state?.fromAi) {
     bridge.showToast?.("AI mix applied — playing preview…");
     if (state.playFrom) void state.playFrom(state.lastGuideSec || 0);
-  } else if (state?.playFrom && tabId !== "custom") {
-    void state.playFrom(state.lastGuideSec || 0);
   } else if (engine?.isPlaying) {
     void restartMixPreview(root);
+  } else if (state?.playFrom && tabId !== "custom") {
+    void state.playFrom(state.lastGuideSec || 0);
   }
+  updateAiApplyUi(root, m, state?.aiRec);
 }
 
 function renderPreviewMix(root, take) {
@@ -2018,8 +2013,13 @@ function bindPreviewMix(root, take, aiRec) {
       const out = root.querySelector(`[data-mix-val="${k}"]`);
       if (out) out.textContent = String(m[k]);
       if (engine?.isPlaying) {
-        if (k === "fxDenoise" || k === "fxVocalEnhance") restartMixPreview(root);
-        else { try { engine.updateMix(mixParams()); } catch {} }
+        const needsRestart = k === "fxDenoise" || k === "fxVocalEnhance" || k === "fxCompress" || k === "reverb" || k === "fxDeesser";
+        if (needsRestart) {
+          try { engine.clearTakeFxCache?.(); } catch {}
+          restartMixPreview(root);
+        } else {
+          try { engine.updateMix(mixParams()); } catch {}
+        }
       }
     });
   });
@@ -2538,7 +2538,11 @@ async function togglePreview(root) {
 }
 
 async function restartMixPreview(root) {
-  try { engine.stopMix(); await engine.playMix(mixParams(), { onEnded: () => setPlayUi(root, false) }); } catch {}
+  try {
+    engine?.clearTakeFxCache?.();
+    engine.stopMix();
+    await engine.playMix(mixParams(), { onEnded: () => setPlayUi(root, false) });
+  } catch {}
 }
 
 function saveDraft() {

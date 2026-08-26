@@ -86,19 +86,31 @@ export const EFFECT_REGISTRY = {
     label: "Compression",
     isPlaceholder: false,
     create(ctx, params = {}) {
-      return createParallelFx(ctx, params, (c, wetIn, wetOut) => {
-        const comp = c.createDynamicsCompressor();
+      const comp = ctx.createDynamicsCompressor();
+      const makeup = ctx.createGain();
+      try {
+        comp.attack.value = 0.012;
+        comp.release.value = 0.28;
+      } catch {}
+      const setStrength = (amt) => {
+        const a = clamp01(Number(amt) || 0);
         try {
-          comp.threshold.value = -22;
-          comp.knee.value = 18;
-          comp.ratio.value = 1.45;
-          comp.attack.value = 0.018;
-          comp.release.value = 0.34;
+          comp.threshold.value = -12 - a * 22;
+          comp.knee.value = 8 + a * 14;
+          comp.ratio.value = 1.35 + a * 4.5;
+          makeup.gain.value = 1 + a * 0.42;
         } catch {}
-        const makeup = c.createGain();
-        makeup.gain.value = 1.08;
+      };
+      const fx = createParallelFx(ctx, params, (_c, wetIn, wetOut) => {
         wetIn.connect(comp).connect(makeup).connect(wetOut);
       });
+      const baseUpdate = fx.update;
+      fx.update = (p = {}) => {
+        baseUpdate(p);
+        setStrength(p.amount ?? params.amount ?? 0);
+      };
+      setStrength(params.amount ?? 0);
+      return fx;
     },
   },
 
@@ -296,7 +308,25 @@ export class StudioEngine {
     if (this.ctx.state === "suspended") {
       try { await this.ctx.resume(); } catch {}
     }
+    if (!this._latencyBootstrapped) {
+      this._latencyBootstrapped = true;
+      try {
+        if (localStorage.getItem(LATENCY_STORAGE_KEY) == null) {
+          this.setLatencyMs(this.estimateLatencyMs());
+        }
+      } catch {}
+    }
     return this.ctx;
+  }
+
+  /** Drop cached vocal-enhancer buffers so slider / preset changes are audible. */
+  clearTakeFxCache(take = null) {
+    const list = take ? [take] : this.takes;
+    for (const t of list) {
+      if (!t) continue;
+      delete t._fxPlaybackBuf;
+      delete t._fxCacheKey;
+    }
   }
 
   get sampleRate() {
@@ -732,8 +762,8 @@ export class StudioEngine {
   /** Playback buffer — vocal enhancer and/or legacy noise gate blend. */
   _getTakePlaybackBuffer(take, params = {}) {
     if (!take?.buffer) return null;
-    const enhanceAmt = fxAmount01(params.fxVocalEnhance);
-    const denoiseAmt = fxAmount01(params.fxDenoise);
+    const enhanceAmt = fxAmountAudible(params.fxVocalEnhance);
+    const denoiseAmt = fxAmountAudible(params.fxDenoise);
     const useEnhance = enhanceAmt > 0.001;
     const useDenoise = !useEnhance && denoiseAmt > 0.001;
     if (!useEnhance && !useDenoise) return take.buffer;
@@ -763,19 +793,22 @@ export class StudioEngine {
     const take = this._resolveTake(params);
     const solo = params.solo || ""; // "" | "voice" | "music"
 
-    const master = this.ctx.createGain();
+    const mixBus = this.ctx.createGain();
+    const finishId = FINISH_PRESETS[params.finish] ? params.finish : "balanced";
+    const finishChain = this._buildMasterChain(this.ctx, finishId);
     const limiter = this._makeLimiter(this.ctx);
-    master.connect(limiter).connect(this.ctx.destination);
-    const startAt = this.ctx.currentTime + 0.08;
+    mixBus.connect(finishChain.input);
+    finishChain.output.connect(limiter).connect(this.ctx.destination);
+    const startAt = this.ctx.currentTime + 0.05;
     const fromSec = Math.max(0, Number(params.fromSec) || 0);
-    this._nodes = [master, limiter];
-    this._mix = { musicGain: null, voiceGain: null, voiceChain: null, mixParams: params };
+    this._nodes = [mixBus, finishChain.input, finishChain.output, limiter];
+    this._mix = { musicGain: null, voiceGain: null, voiceChain: null, mixParams: params, mixBus };
 
     const guideSrc = this.ctx.createBufferSource();
     guideSrc.buffer = this.guideBuffer;
     const musicGain = this.ctx.createGain();
     musicGain.gain.value = solo === "voice" ? 0 : musicOutputGain(params);
-    guideSrc.connect(musicGain).connect(master);
+    guideSrc.connect(musicGain).connect(mixBus);
     guideSrc.start(startAt, fromSec);
     this._nodes.push(guideSrc, musicGain);
     this._mix.musicGain = musicGain;
@@ -795,7 +828,7 @@ export class StudioEngine {
         const center = this._centerNode(this.ctx);
         voiceSrc.connect(chain.input);
         chain.output.connect(voiceGain).connect(center.input);
-        center.output.connect(master);
+        center.output.connect(mixBus);
         const off = this._takeBufferOffset(take) + voiceGuideStart;
         const voiceDelay = Math.max(0, voiceGuideStart - fromSec);
         voiceSrc.start(
@@ -1107,10 +1140,10 @@ export class StudioEngine {
 /* -------------------------------------------------------------------------- */
 
 function effectParamsFor(id, params) {
-  if (id === "reverb") return { amount: fxAmount01(params.reverb) };
-  if (id === "compression") return { amount: fxAmount01(params.fxCompress) };
-  if (id === "eq") return { amount: fxAmount01(params.fxEq) };
-  if (id === "deesser") return { amount: fxAmount01(params.fxDeesser) };
+  if (id === "reverb") return { amount: fxAmountAudible(params.reverb) };
+  if (id === "compression") return { amount: fxAmountAudible(params.fxCompress) };
+  if (id === "eq") return { amount: fxAmountAudible(params.fxEq) };
+  if (id === "deesser") return { amount: fxAmountAudible(params.fxDeesser) };
   return params;
 }
 
@@ -1141,6 +1174,13 @@ function fxAmount01(v) {
   if (v === false || v == null) return 0;
   if (typeof v === "number" && v <= 1 && v > 0 && !Number.isInteger(v)) return clamp01(v);
   return clamp01((Number(v) || 0) / 100);
+}
+
+/** Slider → wet mix with a audible floor so presets/compressor moves are obvious in preview. */
+function fxAmountAudible(v) {
+  const linear = fxAmount01(v);
+  if (linear <= 0) return 0;
+  return clamp01(0.1 + Math.pow(linear, 0.68) * 0.9);
 }
 
 function blendDenoiseBuffer(ctx, buffer, amount) {
@@ -1183,11 +1223,11 @@ function enhanceVocalBufferCopy(ctx, buffer, amount) {
   if (!buffer) return null;
   const out = ctx ? cloneAudioBuffer(ctx, buffer) : buffer;
   if (!out) return null;
-  const amt = clamp01(amount);
+  const amt = clamp01(amount * 1.15);
   softenRoomNoise(out, amt);
   applyVocalWarmth(out, amt);
   tameVocalHarshness(out, amt);
-  if (amt > 0.25) gentleVocalLevelRide(out, amt);
+  if (amt > 0.18) gentleVocalLevelRide(out, amt);
   return out;
 }
 

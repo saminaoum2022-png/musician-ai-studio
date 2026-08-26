@@ -16,12 +16,16 @@ function isWebClientRequest(req) {
 
 async function requireProForWebApi(req, userId) {
   if (!isWebClientRequest(req)) return { ok: true };
+  return requireProSubscription(userId);
+}
+
+async function requireProSubscription(userId) {
   const pro = await fetchProSubscriptionForUser(userId);
   if (pro?.active) return { ok: true };
   return {
     ok: false,
     status: 403,
-    error: "NabadAi Pro is required for this feature on web.",
+    error: "NabadAi Pro is required for this feature.",
     code: "pro_required",
   };
 }
@@ -29,4 +33,5 @@ async function requireProForWebApi(req, userId) {
 module.exports = {
   isWebClientRequest,
   requireProForWebApi,
+  requireProSubscription,
 };

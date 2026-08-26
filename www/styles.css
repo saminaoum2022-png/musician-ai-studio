@@ -49324,7 +49324,8 @@ body[data-route="studio"] .deskRail { display: none !important; }
   }
 }
 
-.studioRoute { padding: 0; }
+.studioRoute { padding: 0; min-height: 100svh; }
+#studioRoot { min-height: 100svh; }
 
 .studio {
   --studio-pad: 20px;
@@ -50390,6 +50391,49 @@ html[data-theme="light"] .studioProMasterCopy .studioProMasterTitle { color: #1a
 /* ===== Studio: source chooser, separating, lobby, recordings ===== */
 
 /* Source chooser */
+.studioSource {
+  gap: 0;
+}
+.studioSourceBody {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 28px;
+  padding: 12px 0 8px;
+  min-height: 0;
+}
+.studioSourceHero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 18px;
+}
+.studioSource .studioCover--source {
+  width: min(58vw, 228px);
+  height: min(58vw, 228px);
+  border-radius: 26px;
+  box-shadow:
+    0 28px 56px -20px rgba(0, 0, 0, 0.62),
+    0 0 0 1px rgba(255, 255, 255, 0.07);
+}
+.studioSourceMeta {
+  max-width: 340px;
+}
+.studioSource .studioTitle {
+  font-size: clamp(22px, 5.6vw, 26px);
+  line-height: 1.2;
+}
+.studioSource .studioArtist {
+  font-size: 15px;
+  margin: 8px 0 0;
+  line-height: 1.45;
+}
+.studioSource .studioChoices {
+  margin-top: 0;
+  width: 100%;
+}
 .studioChoices { display: flex; flex-direction: column; gap: 12px; margin-top: 22px; }
 .studioChoice {
   display: flex; align-items: center; gap: 14px; width: 100%;

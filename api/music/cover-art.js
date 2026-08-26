@@ -229,6 +229,13 @@ module.exports = async function handler(req, res) {
 
     const avoidTagsInput = String(body?.avoidTagsInput || body?.avoidTags || "").trim().slice(0, MAX_FIELD);
     const coverRegenerate = Boolean(body?.coverRegenerate);
+    if (coverRegenerate) {
+      const { requireProSubscription } = require("../_lib/pro-web-gate");
+      const proGate = await requireProSubscription(user.userId);
+      if (!proGate.ok) {
+        return sendJson(res, proGate.status, { error: proGate.error, code: proGate.code });
+      }
+    }
     const regenUserHint = String(body?.regenUserHint || "").trim().slice(0, MAX_ARTWORK);
     const clientPrompt = String(body?.clientPrompt || "").trim().slice(0, MAX_CLIENT_PROMPT);
     const clientSeedRaw = Number(body?.clientSeed);

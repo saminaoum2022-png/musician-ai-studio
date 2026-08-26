@@ -25837,6 +25837,21 @@ function requireProForWebFeature(featureLabel = "This feature") {
   return false;
 }
 
+function proFeatureAllowed() {
+  return Boolean(creditsState.proActive);
+}
+
+function proFeatureLocked() {
+  return !proFeatureAllowed();
+}
+
+/** Pro gate on web and native (RevenueCat / Stripe subscription). */
+function requireProFeature(featureLabel = "This feature") {
+  if (proFeatureAllowed()) return true;
+  promptWebProUpgrade(featureLabel);
+  return false;
+}
+
 function promptWebProUpgrade(featureLabel = "This feature") {
   const label = String(featureLabel || "This feature").trim() || "This feature";
   try {
@@ -26021,6 +26036,7 @@ function syncProSubscriptionUi() {
   syncCreditsProUpsell();
   try { syncDeskSidebarPromo(); } catch {}
   try { syncProGatedWebUi(); } catch {}
+  try { syncPlayerCoverToolsRail(); } catch {}
   try { refreshProSubscriptionUi(); } catch {}
 }
 
@@ -53634,7 +53650,14 @@ function syncPlayerCoverToolsRail() {
     return;
   }
   rail.hidden = false;
-  if (els.btnPlayerRegenCover) els.btnPlayerRegenCover.hidden = !canRegen;
+  if (els.btnPlayerRegenCover) {
+    els.btnPlayerRegenCover.hidden = !canRegen;
+    if (canRegen) {
+      const locked = proFeatureLocked();
+      els.btnPlayerRegenCover.classList.toggle("isProLocked", locked);
+      setWebProFeaturePill(els.btnPlayerRegenCover, locked, "inline");
+    }
+  }
   if (els.btnPlayerEditThumb) els.btnPlayerEditThumb.hidden = !canEdit;
 }
 
@@ -53756,6 +53779,7 @@ function setPlayerCoverGenerating(active) {
 }
 
 async function regeneratePlayerCover(artworkHint = "", trackId = "") {
+  if (!requireProFeature("Cover refresh")) return;
   if (!playerCoverToolsContextAllowed() && !trackId) return;
   const track = trackId
     ? loadLibrary().find((x) => String(x.id) === String(trackId))
@@ -53794,7 +53818,13 @@ async function regeneratePlayerCover(artworkHint = "", trackId = "") {
       setStatus("Cover regeneration failed.");
     }
   } catch (e) {
-    setStatus(`Cover failed: ${e?.message || String(e)}`);
+    const msg = String(e?.message || e || "");
+    if (/pro required|pro_required/i.test(msg)) {
+      promptWebProUpgrade("Cover refresh");
+      setStatus("");
+    } else {
+      setStatus(`Cover failed: ${msg}`);
+    }
   } finally {
     setPlayerCoverGenerating(false);
     syncPlayerCoverToolsRail();
@@ -53985,6 +54015,7 @@ function suggestArtworkTextFromTrack(track) {
 }
 
 function openCoverRegenSheet(track) {
+  if (!requireProFeature("Cover refresh")) return;
   if (!playerCoverToolsContextAllowed()) return;
   if (!track?.id || !playerCanRegenerateCover(track)) return;
   mountFixedOverlaysToBody();
@@ -54009,6 +54040,7 @@ function openCoverRegenSheet(track) {
 }
 
 async function confirmCoverRegenSheet() {
+  if (!requireProFeature("Cover refresh")) return;
   const id = String(_coverRegenTrackId || "").trim();
   if (!id) return;
   const track = loadLibrary().find((x) => String(x.id) === id);

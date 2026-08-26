@@ -64,6 +64,7 @@ export const PRO_FEATURES = Object.freeze([
   { key: "credits", label: "Monthly or weekly credits", sub: "Paid credits each renewal — create songs or gift Mic / Pulse / Star" },
   { key: "coach", label: "Unlimited NabadAi Coach", sub: "Free users get a daily message limit" },
   { key: "studio", label: "NabadAi Studio", sub: "Record your voice, AI mix, and save to My Vocals" },
+  { key: "cover_regen", label: "Cover refresh", sub: "Regenerate artwork until it feels right" },
   { key: "wav", label: "WAV export", sub: "Lossless downloads for your tracks" },
   { key: "analytics", label: "Song analytics", sub: "See who listened and how many plays" },
   { key: "badge", label: "Pro badge on your profile", sub: "Shows you support NabadAi creators" },

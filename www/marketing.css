@@ -336,6 +336,154 @@ img { display: block; max-width: 100%; height: auto; }
   text-overflow: ellipsis;
 }
 
+.marketingTemplateShowcase {
+  margin: 0 auto 28px;
+  max-width: 920px;
+}
+
+.marketingTemplateShowcaseHead {
+  margin-bottom: 14px;
+  text-align: start;
+}
+
+.marketingTemplateShowcaseLead {
+  margin: 8px 0 0;
+  max-width: 52ch;
+  font-size: 15px;
+  line-height: 1.55;
+  color: var(--muted);
+}
+
+.marketingTemplateShowcaseCarouselWrap {
+  margin-bottom: 8px;
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 3%, #000 97%, transparent);
+  mask-image: linear-gradient(90deg, transparent, #000 3%, #000 97%, transparent);
+}
+
+.marketingTemplateShowcaseCarousel .discoverCarouselCard {
+  transition: transform 140ms ease, border-color 140ms ease, background 140ms ease, box-shadow 180ms ease;
+}
+
+.marketingTemplateShowcaseCarousel .discoverCarouselCard--birthday {
+  border-color: rgba(255, 130, 190, 0.32);
+  box-shadow: 0 0 0 1px rgba(255, 130, 190, 0.08), 0 10px 28px rgba(255, 100, 170, 0.14);
+}
+
+.marketingTemplateShowcaseCarousel .discoverCarouselCard--birthday:hover,
+.marketingTemplateShowcaseCarousel .discoverCarouselCard--birthday.isPreviewPlaying {
+  border-color: rgba(255, 130, 190, 0.52);
+  box-shadow: 0 0 0 1px rgba(255, 130, 190, 0.12), 0 14px 36px rgba(255, 100, 170, 0.24);
+}
+
+.marketingTemplateShowcaseCarousel .discoverCarouselCard--birthday .discoverCarouselOccasion {
+  color: rgba(255, 170, 210, 0.96);
+  background: rgba(255, 120, 180, 0.14);
+  border-color: rgba(255, 130, 190, 0.32);
+}
+
+.marketingTemplateShowcaseCarousel .discoverCarouselCard--wedding {
+  border-color: rgba(255, 196, 92, 0.34);
+  box-shadow: 0 0 0 1px rgba(255, 196, 92, 0.08), 0 10px 28px rgba(255, 170, 60, 0.14);
+}
+
+.marketingTemplateShowcaseCarousel .discoverCarouselCard--wedding:hover,
+.marketingTemplateShowcaseCarousel .discoverCarouselCard--wedding.isPreviewPlaying {
+  border-color: rgba(255, 196, 92, 0.54);
+  box-shadow: 0 0 0 1px rgba(255, 196, 92, 0.12), 0 14px 36px rgba(255, 170, 60, 0.24);
+}
+
+.marketingTemplateShowcaseCarousel .discoverCarouselCard--wedding .discoverCarouselOccasion {
+  color: rgba(255, 214, 130, 0.96);
+  background: rgba(255, 196, 92, 0.14);
+  border-color: rgba(255, 196, 92, 0.32);
+}
+
+.marketingTemplateShowcaseCarousel .discoverCarouselCard--love {
+  border-color: rgba(255, 96, 128, 0.34);
+  box-shadow: 0 0 0 1px rgba(255, 96, 128, 0.08), 0 10px 28px rgba(255, 70, 110, 0.16);
+}
+
+.marketingTemplateShowcaseCarousel .discoverCarouselCard--love:hover,
+.marketingTemplateShowcaseCarousel .discoverCarouselCard--love.isPreviewPlaying {
+  border-color: rgba(255, 96, 128, 0.54);
+  box-shadow: 0 0 0 1px rgba(255, 96, 128, 0.12), 0 14px 36px rgba(255, 70, 110, 0.26);
+}
+
+.marketingTemplateShowcaseCarousel .discoverCarouselCard--love .discoverCarouselOccasion {
+  color: rgba(255, 150, 170, 0.96);
+  background: rgba(255, 96, 128, 0.14);
+  border-color: rgba(255, 96, 128, 0.32);
+}
+
+.marketingTemplateShowcaseCarousel .discoverCarouselCard--apology {
+  border-color: rgba(96, 168, 255, 0.34);
+  box-shadow: 0 0 0 1px rgba(96, 168, 255, 0.08), 0 10px 28px rgba(70, 140, 255, 0.14);
+}
+
+.marketingTemplateShowcaseCarousel .discoverCarouselCard--apology:hover,
+.marketingTemplateShowcaseCarousel .discoverCarouselCard--apology.isPreviewPlaying {
+  border-color: rgba(96, 168, 255, 0.54);
+  box-shadow: 0 0 0 1px rgba(96, 168, 255, 0.12), 0 14px 36px rgba(70, 140, 255, 0.24);
+}
+
+.marketingTemplateShowcaseCarousel .discoverCarouselCard--apology .discoverCarouselOccasion {
+  color: rgba(160, 205, 255, 0.96);
+  background: rgba(96, 168, 255, 0.14);
+  border-color: rgba(96, 168, 255, 0.32);
+}
+
+.marketingTemplateShowcaseCarousel .discoverCarouselCard--thanks {
+  border-color: rgba(35, 213, 171, 0.34);
+  box-shadow: 0 0 0 1px rgba(35, 213, 171, 0.08), 0 10px 28px rgba(35, 213, 171, 0.14);
+}
+
+.marketingTemplateShowcaseCarousel .discoverCarouselCard--thanks:hover,
+.marketingTemplateShowcaseCarousel .discoverCarouselCard--thanks.isPreviewPlaying {
+  border-color: rgba(35, 213, 171, 0.54);
+  box-shadow: 0 0 0 1px rgba(35, 213, 171, 0.12), 0 14px 36px rgba(35, 213, 171, 0.24);
+}
+
+.marketingTemplateShowcaseCarousel .discoverCarouselCard--thanks .discoverCarouselOccasion {
+  color: rgba(130, 240, 210, 0.96);
+  background: rgba(35, 213, 171, 0.14);
+  border-color: rgba(35, 213, 171, 0.32);
+}
+
+.marketingTemplateShowcaseCarousel .discoverCarouselCard--arabic {
+  border-color: rgba(168, 120, 255, 0.34);
+  box-shadow: 0 0 0 1px rgba(168, 120, 255, 0.08), 0 10px 28px rgba(140, 90, 255, 0.14);
+}
+
+.marketingTemplateShowcaseCarousel .discoverCarouselCard--arabic:hover,
+.marketingTemplateShowcaseCarousel .discoverCarouselCard--arabic.isPreviewPlaying {
+  border-color: rgba(168, 120, 255, 0.54);
+  box-shadow: 0 0 0 1px rgba(168, 120, 255, 0.12), 0 14px 36px rgba(140, 90, 255, 0.24);
+}
+
+.marketingTemplateShowcaseCarousel .discoverCarouselCard--arabic .discoverCarouselOccasion {
+  color: rgba(200, 170, 255, 0.96);
+  background: rgba(168, 120, 255, 0.14);
+  border-color: rgba(168, 120, 255, 0.32);
+}
+
+.discoverCarouselOccasion {
+  display: inline-block;
+  width: fit-content;
+  max-width: 100%;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: rgba(35, 213, 171, 0.92);
+  background: rgba(35, 213, 171, 0.1);
+  border: 1px solid rgba(35, 213, 171, 0.22);
+}
+
+.discoverCarouselCard--templateFallback .discoverCarouselPlay {
+  display: none;
+}
+
 .marketingOccasionScroll {
   width: 100%;
 }

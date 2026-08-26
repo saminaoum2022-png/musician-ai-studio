@@ -595,6 +595,7 @@
 
   var CAROUSEL_PREVIEW_SEC = 30;
   var CAROUSEL_SIGNUP_HREF = "/app/#/intro";
+  var TEMPLATE_SHOWCASE_HREF = "/app/#/challenges";
   var carouselPreviewAudio = null;
   var carouselPreviewCardId = null;
   var carouselPreviewStopTimer = null;
@@ -748,6 +749,142 @@
     setupScrollReveal(root);
   }
 
+  function wireTemplateShowcasePreviews(root, signupHref) {
+    if (!root) return;
+    var targetHref = String(signupHref || TEMPLATE_SHOWCASE_HREF).trim() || TEMPLATE_SHOWCASE_HREF;
+    var cards = root.querySelectorAll(".discoverCarouselCard");
+    cards.forEach(function (card) {
+      var previewUrl = card.getAttribute("data-preview-url") || "";
+      var hookStartSec = Number(card.getAttribute("data-hook-start") || "0");
+      var playBtn = card.querySelector(".discoverCarouselPlay");
+      var cardHref = card.getAttribute("data-card-href") || targetHref;
+
+      card.addEventListener("click", function (e) {
+        if (e.target.closest(".discoverCarouselPlay")) return;
+        stopCarouselPreview();
+        window.location.href = cardHref;
+      });
+      card.addEventListener("keydown", function (e) {
+        if (e.key === "Enter" && !e.target.closest(".discoverCarouselPlay")) {
+          e.preventDefault();
+          stopCarouselPreview();
+          window.location.href = cardHref;
+        }
+      });
+
+      if (!playBtn || !previewUrl) {
+        if (playBtn) playBtn.hidden = true;
+        return;
+      }
+
+      playBtn.addEventListener("click", function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        startCarouselPreview(card, previewUrl, hookStartSec);
+      });
+    });
+  }
+
+  function setMarketingTemplateGridVisible(visible) {
+    var gridWrap = document.querySelector("[data-mk-template-grid-wrap]");
+    if (gridWrap) gridWrap.hidden = !visible;
+  }
+
+  function setMarketingTemplateShowcaseVisible(visible) {
+    var section = document.querySelector("[data-mk-template-showcase-section]");
+    if (section) section.hidden = !visible;
+  }
+
+  function resolveShowcaseOccasionTone(label) {
+    var s = String(label || "").trim().toLowerCase();
+    if (!s) return "default";
+    if (/birthday|bday|عيد ميلاد/.test(s)) return "birthday";
+    if (/wedding|dabke|عرس|زفاف|engagement/.test(s)) return "wedding";
+    if (/love|valentine|romantic|anniversary|حب|عشق/.test(s)) return "love";
+    if (/apolog|sorry|اعتذار/.test(s)) return "apology";
+    if (/thank|gratitude|شكر/.test(s)) return "thanks";
+    if (/arabic|عرب/.test(s)) return "arabic";
+    if (/graduation|celebration|party/.test(s)) return "wedding";
+    return "default";
+  }
+
+  function renderTemplateShowcaseCarousel(songs, cards, opts) {
+    opts = opts || {};
+    var wrap = document.querySelector("[data-mk-template-showcase-wrap]");
+    var root = document.querySelector("[data-mk-template-showcase-carousel]");
+    var section = document.querySelector("[data-mk-template-showcase-section]");
+    if (!wrap || !root) return;
+    stopCarouselPreview();
+
+    var cardList = Array.isArray(cards) ? cards : [];
+    var items = [];
+    if (Array.isArray(songs) && songs.length) {
+      songs.forEach(function (song, i) {
+        if (!song) return;
+        var card = cardList[i] || {};
+        var occasionLabel = String(song.occasionLabel || song.tag || card.title || "").trim();
+        items.push({
+          id: song.id || ("showcase-" + i),
+          artUrl: String(song.artUrl || card.imageUrl || "").trim() || "/assets/marketing/nabadai-social-card.png",
+          title: String(song.title || card.title || "Example song").trim() || "Example song",
+          occasionLabel: occasionLabel,
+          occasionTone: resolveShowcaseOccasionTone(occasionLabel),
+          byLine: song.username ? "@" + song.username : String(song.byLine || "").trim(),
+          previewUrl: String(song.previewUrl || "").trim(),
+          hookStartSec: Number(song.hookStartSec),
+          href: String(card.href || opts.signupHref || TEMPLATE_SHOWCASE_HREF).trim() || TEMPLATE_SHOWCASE_HREF,
+        });
+      });
+    }
+
+    if (!items.length) {
+      if (section) section.hidden = true;
+      wrap.hidden = true;
+      root.innerHTML = "";
+      setMarketingTemplateGridVisible(true);
+      return;
+    }
+
+    setMarketingTemplateGridVisible(false);
+    if (section) section.hidden = false;
+    wrap.hidden = false;
+    root.className = "marketingDiscoverCarousel marketingTemplateShowcaseCarousel";
+    root.innerHTML = items.map(function (item) {
+      var previewUrl = String(item.previewUrl || "").trim();
+      var hookStart = Number(item.hookStartSec);
+      if (!Number.isFinite(hookStart) || hookStart < 0) hookStart = 0;
+      var toneClass = item.occasionTone && item.occasionTone !== "default"
+        ? " discoverCarouselCard--" + item.occasionTone
+        : "";
+      var occasion = item.occasionLabel
+        ? '<span class="discoverCarouselOccasion">' + item.occasionLabel.replace(/</g, "&lt;") + "</span>"
+        : "";
+      var by = item.byLine
+        ? '<span class="discoverCarouselBy">' + item.byLine.replace(/</g, "&lt;") + "</span>"
+        : "";
+      return (
+        '<article class="discoverCarouselCard' + toneClass + '" tabindex="0" role="button" data-song-id="' +
+          String(item.id).replace(/"/g, "&quot;") + '" data-preview-url="' +
+          previewUrl.replace(/"/g, "&quot;") + '" data-hook-start="' + hookStart +
+          '" data-card-href="' + String(item.href || TEMPLATE_SHOWCASE_HREF).replace(/"/g, "&quot;") + '">' +
+          '<span class="discoverCarouselArt">' +
+            '<img src="' + String(item.artUrl).replace(/"/g, "&quot;") + '" alt="" loading="lazy">' +
+            '<button type="button" class="discoverCarouselPlay" aria-label="Preview song">' +
+              CAROUSEL_PLAY_SVG +
+            "</button>" +
+          "</span>" +
+          '<span class="discoverCarouselMeta">' +
+            occasion +
+            '<span class="discoverCarouselTitle">' + String(item.title).replace(/</g, "&lt;") + "</span>" +
+            by +
+          "</span>" +
+        "</article>"
+      );
+    }).join("");
+    wireTemplateShowcasePreviews(root, opts.signupHref || TEMPLATE_SHOWCASE_HREF);
+    setupScrollReveal(root);
+  }
+
   function fetchFeaturedDiscoverSongs(ids) {
     if (!Array.isArray(ids) || !ids.length) return Promise.resolve([]);
     return fetch("/api/marketing/featured-discover?ids=" + encodeURIComponent(ids.join(",")), {
@@ -765,12 +902,15 @@
     setText("[data-mk='templates.lead']", t.lead);
     setText("[data-mk='templates.cta']", t.ctaLabel);
     setAttr("[data-mk='templates.cta']", "href", t.ctaHref);
+    setText("[data-mk='templates.showcase.eyebrow']", t.showcaseEyebrow);
+    setText("[data-mk='templates.showcase.lead']", t.showcaseLead);
     if (t.imageUrl) setImageSrc("[data-mk='templates.image']", t.imageUrl);
     if (t.imageAlt) setAttr("[data-mk='templates.image']", "alt", t.imageAlt);
     var cards = document.querySelectorAll("[data-mk-template-card]");
     var tones = ["birthday", "wedding", "love", "apology", "thanks", "arabic"];
-    if (Array.isArray(t.cards)) {
-      t.cards.forEach(function (card, i) {
+    var templateCards = Array.isArray(t.cards) ? t.cards : [];
+    if (templateCards.length) {
+      templateCards.forEach(function (card, i) {
         var node = cards[i];
         if (!node || !card) return;
         tones.forEach(function (tone) {
@@ -785,6 +925,28 @@
         if (h && card.title) h.textContent = card.title;
         if (p && card.body) p.textContent = card.body;
       });
+    }
+    var showcaseOpts = { signupHref: t.ctaHref || TEMPLATE_SHOWCASE_HREF };
+    if (Array.isArray(t.showcaseSongs) && t.showcaseSongs.length) {
+      renderTemplateShowcaseCarousel(t.showcaseSongs, templateCards, showcaseOpts);
+    } else if (Array.isArray(t.showcaseItems) && t.showcaseItems.length) {
+      var showcaseIds = t.showcaseItems.map(function (it) { return it && it.songId; }).filter(Boolean);
+      var tagById = {};
+      t.showcaseItems.forEach(function (it) {
+        if (it && it.songId) tagById[it.songId] = String(it.tag || "").trim();
+      });
+      fetchFeaturedDiscoverSongs(showcaseIds).then(function (songs) {
+        var tagged = songs.map(function (song) {
+          return Object.assign({}, song, { occasionLabel: tagById[song.id] || "" });
+        });
+        renderTemplateShowcaseCarousel(tagged, templateCards, showcaseOpts);
+      });
+    } else if (Array.isArray(t.showcaseSongIds) && t.showcaseSongIds.length) {
+      fetchFeaturedDiscoverSongs(t.showcaseSongIds).then(function (songs) {
+        renderTemplateShowcaseCarousel(songs, templateCards, showcaseOpts);
+      });
+    } else {
+      renderTemplateShowcaseCarousel([], templateCards, showcaseOpts);
     }
   }
 
@@ -1033,5 +1195,9 @@
         applySectionLayout(data.content);
       }
     })
-    .catch(function () { /* keep static HTML fallbacks */ });
+    .catch(function () {
+      if (PAGE !== "home") return;
+      setMarketingTemplateGridVisible(true);
+      setMarketingTemplateShowcaseVisible(false);
+    });
 })();

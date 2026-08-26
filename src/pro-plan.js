@@ -676,10 +676,18 @@ export function onProPlanRouteActive({ entering = false } = {}) {
   ensureProPageRendered();
   bindProBackOnce();
   paintProBackLink();
-  warmBillingIfReady();
+  // Defer RevenueCat warm-up so the Pro panel paints first (no logo flash).
+  window.setTimeout(() => warmBillingIfReady(), 0);
   void handleStripeCheckoutReturn();
   if (needsRender || entering) {
-    if (entering) _benefitsExpanded = true;
+    if (entering) {
+      _benefitsExpanded = true;
+      try {
+        const body = mount()?.closest?.("[data-route=\"pro\"]")?.querySelector?.(".proScrollBody")
+          || document.querySelector('[data-route="pro"] .proScrollBody');
+        if (body) body.scrollTop = 0;
+      } catch {}
+    }
     paintPlanCards();
     paintBenefitsExpanded();
   }

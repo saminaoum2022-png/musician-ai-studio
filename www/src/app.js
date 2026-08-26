@@ -111,7 +111,7 @@ import {
   openMySingerRequestsSheet,
   syncSettingsProSingerRows,
 } from "./pro-singer.js";
-import { configureProPlan, formatProPeriodLabel, onProPlanRouteActive, refreshProSubscriptionUi, setProReturnRoute, weeklyInTrialWindow, weeklyProDisplayStatus, weeklyTrialStartFromState } from "./pro-plan.js";
+import { configureProPlan, formatProPeriodLabel, initProPlanOnce, onProPlanRouteActive, refreshProSubscriptionUi, setProReturnRoute, weeklyInTrialWindow, weeklyProDisplayStatus, weeklyTrialStartFromState } from "./pro-plan.js";
 import { setRevenueCatApiKey, resetRevenueCatSession, reconcileProSubscription, isBillingConfigured } from "./billing/revenuecat.js";
 import { setStripeWebBillingEnabled, isStripeWebBillingConfigured, syncStripeBillingWithServer } from "./billing/stripe.js";
 import { augmentCoachApiPayload } from "./coach-knowledge.js";
@@ -327,13 +327,35 @@ try {
 
 const IS_NATIVE_SHELL = typeof location !== "undefined" && location.protocol === "capacitor:";
 /** Boot splash: static N mark only (see #bootSplash in index.html). */
-const BOOT_SPLASH_MIN_MS = 1400;
-const BOOT_SPLASH_MAX_MS = 2800;
+const BOOT_SPLASH_MIN_MS = IS_NATIVE_SHELL ? 1800 : 1400;
+const BOOT_SPLASH_MAX_MS = IS_NATIVE_SHELL ? 3200 : 2800;
 const _bootSplashStartedAt = Date.now();
 let _bootSplashAnimEnded = false;
 let _bootSplashCanDismiss = false;
 let _bootSplashMinTimer = 0;
+let _bootSplashFinishTimer = 0;
 let _bootSplashPermanentlyDismissed = false;
+
+function bootSplashRemainingMinMs() {
+  return Math.max(0, BOOT_SPLASH_MIN_MS - (Date.now() - _bootSplashStartedAt));
+}
+
+/** Always honor BOOT_SPLASH_MIN_MS — never flash the logo away on a fast error/rejection. */
+function scheduleBootSplashFinish() {
+  if (_bootSplashPermanentlyDismissed) return;
+  _bootSplashCanDismiss = true;
+  _bootSplashAnimEnded = true;
+  const wait = bootSplashRemainingMinMs();
+  if (wait > 0) {
+    if (_bootSplashFinishTimer) return;
+    _bootSplashFinishTimer = window.setTimeout(() => {
+      _bootSplashFinishTimer = 0;
+      finishBootSplash();
+    }, wait);
+    return;
+  }
+  finishBootSplash();
+}
 
 // iOS WKWebView cold-launch quirk: the first layout can happen at a wider
 // default logical width (before the real frame size / safe-area insets resolve),
@@ -367,6 +389,8 @@ function finishBootSplash() {
     _bootSplashPermanentlyDismissed = true;
     if (_bootSplashMinTimer) clearTimeout(_bootSplashMinTimer);
     _bootSplashMinTimer = 0;
+    if (_bootSplashFinishTimer) clearTimeout(_bootSplashFinishTimer);
+    _bootSplashFinishTimer = 0;
     const splash = document.getElementById("bootSplash");
     // Reveal instantly — NO opacity crossfade. The boot splash logo is screen-
     // centered, but the route it reveals (intro/auth) has its own logo at a
@@ -380,20 +404,16 @@ function finishBootSplash() {
       splash.style.opacity = "0";
       splash.style.display = "none";
       splash.classList.add("bootSplash--gone");
+      splash.setAttribute("aria-hidden", "true");
     }
     document.body.classList.remove("booting");
     // Force a correct device-width layout the instant the app is shown.
     reassertViewportScale();
-    if (splash) {
-      // Clear inline overrides so CSS (.bootSplash{display:none}) governs it next time.
-      splash.style.display = "";
-      splash.style.opacity = "";
-      splash.style.transition = "";
-    }
   } catch {}
 }
 
 function tryDismissBootSplash() {
+  if (_bootSplashPermanentlyDismissed) return;
   if (!_bootSplashCanDismiss || !_bootSplashAnimEnded) return;
   try {
     if (!document.body.classList.contains("booting")) return;
@@ -403,17 +423,15 @@ function tryDismissBootSplash() {
 
 /** Route is ready — reveal home after the minimum splash duration. */
 function dismissBootSplash() {
+  if (_bootSplashPermanentlyDismissed) return;
   _bootSplashCanDismiss = true;
   tryDismissBootSplash();
 }
 try {
-  const forceBootSplashEnd = () => {
-    _bootSplashCanDismiss = true;
-    finishBootSplash();
-  };
-  window.addEventListener("error", forceBootSplashEnd);
-  window.addEventListener("unhandledrejection", forceBootSplashEnd);
-  setTimeout(forceBootSplashEnd, BOOT_SPLASH_MAX_MS);
+  // Do not listen for unhandledrejection — benign async failures were dismissing
+  // the splash instantly and the N mark flashed for <1s on iPhone.
+  window.addEventListener("error", () => scheduleBootSplashFinish());
+  setTimeout(() => scheduleBootSplashFinish(), BOOT_SPLASH_MAX_MS);
 } catch {}
 
 _bootSplashMinTimer = window.setTimeout(() => {
@@ -3367,7 +3385,7 @@ function exitAltCreateFlowToHub() {
 
 const MOBILE_TAB_LIGHTWEIGHT = new Set(["discover", "friends", "challenges", "activity", "profile"]);
 /** Sub-screens opened from profile chrome — instant swap, no full applyRoute replay. */
-const SECONDARY_ROUTE_LIGHTWEIGHT = new Set(["settings", "credits", "profile-edit"]);
+const SECONDARY_ROUTE_LIGHTWEIGHT = new Set(["settings", "credits", "profile-edit", "pro"]);
 let _secondaryNavFromClick = false;
 let _profileChromeNavBound = false;
 
@@ -3463,6 +3481,7 @@ function finishSecondaryRouteEnter(route, prevRoute) {
   const wanted = String(route || "").trim();
   const prev = String(prevRoute || "").trim();
   if (prev && prev !== wanted) captureRouteScroll(prev);
+  if (prev !== wanted) resetRouteEnterScroll(wanted);
   syncProfileAuraHeaderChrome(wanted);
   if (wanted === "settings") {
     try { renderPersonaSelect(); } catch {}
@@ -3483,6 +3502,9 @@ function finishSecondaryRouteEnter(route, prevRoute) {
     try { onProfileEditRouteActive(); } catch {}
   } else if (wanted === "credits") {
     void refreshMyCredits({ silent: true });
+  } else if (wanted === "pro") {
+    try { setProReturnRoute(prev || "settings"); } catch {}
+    try { onProPlanRouteActive({ entering: prev !== "pro" }); } catch {}
   }
   if (authSession?.user?.id) {
     wireNotificationsLiveRefreshOnce();
@@ -3565,6 +3587,24 @@ function wireProfileChromeNavOnce() {
   };
   bindSecondary("#btnProfileSettingsGear", "settings", "#/settings");
   bindSecondary("#profileCreditsLink", "credits", "#/credits");
+  bindSecondary('a.settingsRowLink[href="#/credits"]', "credits", "#/credits");
+  document.querySelectorAll('a[href="#/pro"][data-route-link="pro"]').forEach((el) => {
+    if (el.dataset.chromeNavBound === "1") return;
+    el.dataset.chromeNavBound = "1";
+    el.addEventListener(
+      "pointerdown",
+      (e) => {
+        e.preventDefault();
+        try { haptic("light"); } catch {}
+        flushSecondaryRouteNavigation("pro", "#/pro");
+      },
+      { passive: false },
+    );
+    el.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+    });
+  });
   bindProfileTab("a.settingsBack[href=\"#/profile\"]");
   bindProfileTab("a.creditsBack[href=\"#/profile\"]");
   bindProfileTab("a.profileEditBack[href=\"#/profile\"]");
@@ -4196,10 +4236,10 @@ function syncRoutePanelVisibility(wanted) {
 
 function routeApplyFallback(err) {
   console.error("[route] applyRoute failed", err);
-  try { dismissBootSplash(); } catch {}
+  try { scheduleBootSplashFinish(); } catch {}
   const fb = authSession?.user?.id ? "discover" : "auth";
   syncRoutePanelVisibility(fb);
-  document.body.classList.remove("pageTransitioning", "booting");
+  document.body.classList.remove("pageTransitioning");
   const main = document.querySelector("main.grid");
   if (main) main.classList.remove("routeSwap");
 }
@@ -4740,6 +4780,7 @@ function applyRoute({ passGen } = {}) {
     isTabSwitch ||
     (prevRoute === "challenges" && wanted === "generate" && Boolean(getCreateFlow()));
   syncRoutePanelVisibility(wanted);
+  if (prevRoute !== wanted) resetRouteEnterScroll(wanted);
   if (wanted === "discover") {
     kickDiscoverFeedRoute({ deferFetch: isTabSwitch });
   }
@@ -6327,6 +6368,10 @@ try {
     navigateToRoute: (route) => {
       const r = String(route || "settings").trim() || "settings";
       const targetHash = `#/${r}`;
+      if (SECONDARY_ROUTE_LIGHTWEIGHT.has(r)) {
+        flushSecondaryRouteNavigation(r, targetHash);
+        return;
+      }
       try {
         if (location.hash !== targetHash) location.hash = targetHash;
       } catch {
@@ -6357,6 +6402,9 @@ try {
       };
     },
   });
+  try { initProPlanOnce(); } catch (e) {
+    console.warn("[pro-plan] init failed", e);
+  }
 } catch (err) {
   console.error("[pro-plan] configure failed", err);
 }
@@ -18910,6 +18958,7 @@ function openImageMoodSheet() {
   try {
     document.body.classList.add("imageMoodSheetOpen");
   } catch {}
+  resetPanelScroll(sheet.querySelector(".imageMoodBody, .photoMoodBody"));
   syncImageMoodSheetUi();
   // Deliberately no auto-opening of the file input here: triggering the
   // iOS photo picker while the sheet is still sliding in stacked the
@@ -24021,6 +24070,25 @@ function shouldSkipRouteHeavy(route) {
 
 function markRouteHeavy(route) {
   _routeHeavyAt[route] = Date.now();
+}
+
+function resetPanelScroll(el) {
+  if (!el) return;
+  try { el.scrollTop = 0; } catch {}
+}
+
+/** Reset window + inner scroll containers when opening a route (avoids landing mid-page). */
+function resetRouteEnterScroll(route) {
+  const r = String(route || "").trim();
+  if (!r) return;
+  try { window.scrollTo(0, 0); } catch {}
+  try {
+    document.documentElement.scrollTop = 0;
+    document.body.scrollTop = 0;
+  } catch {}
+  if (r === "pro") {
+    resetPanelScroll(document.querySelector('[data-route="pro"] .proScrollBody'));
+  }
 }
 
 function captureRouteScroll(route) {

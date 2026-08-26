@@ -79,6 +79,10 @@ function defaultHomeContentEn() {
         "Pick an occasion — NabadAi guides lyrics and style so you don't start from a blank page. Perfect for gifts, events, and surprises.",
       ctaLabel: "Browse templates",
       ctaHref: "/app/#/challenges",
+      showcaseEyebrow: "Hear examples",
+      showcaseLead: "Preview real occasion songs before you create yours — tap play, then sign up to make your own.",
+      showcaseItems: [],
+      showcaseSongIds: [],
       imageUrl: "",
       imageAlt: "",
       cards: [
@@ -337,6 +341,10 @@ function defaultHomeContentAr() {
         "اختر مناسبة — NabadAi يوجّه الكلمات والأسلوب حتى لا تبدأ من صفحة فارغة. مثالي للهدايا والأعراس والمفاجآت.",
       ctaLabel: "تصفّح القوالب",
       ctaHref: "/app/#/challenges",
+      showcaseEyebrow: "استمع لأمثلة",
+      showcaseLead: "معاينة أغاني مناسبات حقيقية قبل أن تنشئ أغانيك — ثم سجّل لصنع أغنيتك.",
+      showcaseItems: [],
+      showcaseSongIds: [],
       imageUrl: "",
       imageAlt: "",
       cards: [
@@ -693,6 +701,36 @@ function normalizeFeaturedSongIds(ids, defaults) {
   const normalized = normalizeSongIds(Array.isArray(ids) ? ids : []);
   if (normalized.length) return normalized;
   return normalizeSongIds(Array.isArray(defaults) ? defaults : []);
+}
+
+const SHOWCASE_ITEM_UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function normalizeShowcaseItems(itemsIn, legacyIds, defaults) {
+  const defaultItems = Array.isArray(defaults?.showcaseItems) ? defaults.showcaseItems : [];
+  let items = [];
+  if (Array.isArray(itemsIn) && itemsIn.length) {
+    const seen = new Set();
+    for (const raw of itemsIn) {
+      if (!raw || typeof raw !== "object") continue;
+      const songId = String(raw.songId || raw.id || "").trim();
+      if (!SHOWCASE_ITEM_UUID_RE.test(songId) || seen.has(songId)) continue;
+      seen.add(songId);
+      items.push({
+        songId,
+        tag: clip(raw.tag || raw.label || raw.occasionLabel, 80),
+      });
+      if (items.length >= 12) break;
+    }
+  }
+  if (!items.length) {
+    const legacy = normalizeFeaturedSongIds(legacyIds, []);
+    items = legacy.map((songId) => ({ songId, tag: "" }));
+  }
+  if (!items.length && defaultItems.length) {
+    return normalizeShowcaseItems(defaultItems, [], { showcaseItems: [] });
+  }
+  return items;
 }
 
 function normalizeTemplateCards(cards, defaults) {
@@ -1103,6 +1141,18 @@ function normalizeContent(pageKey, locale, raw) {
           lead: clip(templatesIn.lead, 400) || defaults.templates.lead,
           ctaLabel: clip(templatesIn.ctaLabel, 60) || defaults.templates.ctaLabel,
           ctaHref: sanitizeHref(templatesIn.ctaHref, defaults.templates.ctaHref),
+          showcaseEyebrow: clip(templatesIn.showcaseEyebrow, 80) || defaults.templates.showcaseEyebrow,
+          showcaseLead: clip(templatesIn.showcaseLead, 400) || defaults.templates.showcaseLead,
+          showcaseItems: normalizeShowcaseItems(
+            templatesIn.showcaseItems,
+            templatesIn.showcaseSongIds,
+            defaults.templates,
+          ),
+          showcaseSongIds: normalizeShowcaseItems(
+            templatesIn.showcaseItems,
+            templatesIn.showcaseSongIds,
+            defaults.templates,
+          ).map((it) => it.songId),
           imageUrl: sanitizeImageUrl(templatesIn.imageUrl, defaults.templates.imageUrl),
           imageAlt: clip(templatesIn.imageAlt, 200) || defaults.templates.imageAlt,
           cards: normalizeTemplateCards(templatesIn.cards, defaults.templates.cards),

@@ -3216,7 +3216,8 @@ function showMarketingSection(sectionId) {
   }
   pushMarketingPreviewToIframe();
   scrollPreviewToSection(id);
-  if (id === "discover") void bindMarketingDiscoverPicker();
+  if (id === "discover") void bindMarketingSongPicker("mkDiscoverPicker", { fieldId: "mkDiscoverFeaturedIds" });
+  if (id === "templates") void bindMarketingSongPicker("mkTemplatesShowcasePicker", { mode: "showcase" });
 }
 
 function scrollPreviewToSection(sectionId) {
@@ -3352,6 +3353,9 @@ function readMarketingFormContent(pageKey = "home") {
       lead: val("mkTemplatesLead"),
       ctaLabel: val("mkTemplatesCtaLabel"),
       ctaHref: val("mkTemplatesCtaHref"),
+      showcaseEyebrow: val("mkTemplatesShowcaseEyebrow"),
+      showcaseLead: val("mkTemplatesShowcaseLead"),
+      showcaseItems: readMarketingShowcaseItems(),
       imageUrl: val("mkTemplatesImageUrl"),
       imageAlt: val("mkTemplatesImageAlt"),
       cards: [0, 1, 2, 3, 4, 5].map((i) => ({
@@ -3677,6 +3681,81 @@ function renderMarketingBrandPanel(brand = {}) {
   });
 }
 
+const MARKETING_SHOWCASE_EXTRA_TAGS = [
+  "Valentine's",
+  "Anniversary",
+  "Graduation",
+  "Mother's Day",
+  "Father's Day",
+  "New baby",
+  "Engagement",
+];
+
+function getMarketingShowcaseItems(templates = {}) {
+  if (Array.isArray(templates.showcaseItems) && templates.showcaseItems.length) {
+    return templates.showcaseItems;
+  }
+  if (Array.isArray(templates.showcaseSongIds) && templates.showcaseSongIds.length) {
+    return templates.showcaseSongIds.map((songId) => ({ songId, tag: "" }));
+  }
+  return [];
+}
+
+function marketingShowcaseTagPresets(templateCards) {
+  const cards = Array.isArray(templateCards) ? templateCards : [];
+  const fromCards = cards.map((c) => String(c.title || "").trim()).filter(Boolean);
+  const seen = new Set();
+  const out = [];
+  for (const tag of [...fromCards, ...MARKETING_SHOWCASE_EXTRA_TAGS]) {
+    const key = tag.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(tag);
+  }
+  return out;
+}
+
+function marketingShowcaseRowHtml(item = {}, tagPresets = []) {
+  const songId = escapeHtml(String(item.songId || ""));
+  const tag = escapeHtml(String(item.tag || ""));
+  void tagPresets;
+  return `<div class="marketingShowcaseRow" data-showcase-row>
+    <input type="text" class="marketingFieldInput marketingShowcaseSongId" placeholder="Public song UUID" value="${songId}" aria-label="Song ID">
+    <input type="text" class="marketingFieldInput marketingShowcaseTag" list="mkShowcaseTagPresets" placeholder="Tag label (e.g. Birthday, Valentine's)" value="${tag}" aria-label="Occasion tag">
+    <button type="button" class="marketingShowcaseRemove btnGhost btnSm" aria-label="Remove example">Remove</button>
+  </div>`;
+}
+
+function renderMarketingShowcaseItemsEditor(items, tagPresets) {
+  const rows = (Array.isArray(items) ? items : []).map((it) => marketingShowcaseRowHtml(it, tagPresets)).join("");
+  const presets = (tagPresets || []).map((t) => `<option value="${escapeHtml(t)}">`).join("");
+  return `<div class="marketingField">
+    <span>Example songs</span>
+    <p class="cellMuted">Pick a song below, then choose any tag label for it — e.g. three love songs all tagged &quot;Valentine&apos;s&quot;. Skip occasions you don&apos;t have yet.</p>
+    <div id="mkTemplatesShowcaseItems" class="marketingShowcaseItems">${rows || marketingShowcaseRowHtml({}, tagPresets)}</div>
+    <button type="button" class="btnGhost btnSm" id="btnMkShowcaseAddRow">Add example row</button>
+    <datalist id="mkShowcaseTagPresets">${presets}</datalist>
+  </div>`;
+}
+
+function readMarketingShowcaseItems() {
+  const root = document.getElementById("mkTemplatesShowcaseItems");
+  if (!root) return [];
+  return [...root.querySelectorAll("[data-showcase-row]")].map((row) => ({
+    songId: String(row.querySelector(".marketingShowcaseSongId")?.value || "").trim(),
+    tag: String(row.querySelector(".marketingShowcaseTag")?.value || "").trim(),
+  })).filter((it) => it.songId);
+}
+
+function addMarketingShowcaseRow(songId = "", tag = "") {
+  const root = document.getElementById("mkTemplatesShowcaseItems");
+  if (!root) return;
+  const wrap = document.createElement("div");
+  wrap.innerHTML = marketingShowcaseRowHtml({ songId, tag });
+  const row = wrap.firstElementChild;
+  if (row) root.appendChild(row);
+}
+
 function buildMarketingEditorSections(ctx) {
   const { activeSection, isHome, content } = ctx;
   const on = (id) => activeSection === id;
@@ -3739,6 +3818,12 @@ function buildMarketingEditorSections(ctx) {
         ${marketingField("CTA label", "mkTemplatesCtaLabel", ctx.templates.ctaLabel || "")}
         ${marketingField("CTA link", "mkTemplatesCtaHref", ctx.templates.ctaHref || "")}
       `)}
+      ${marketingFieldGroup("Example songs carousel", `
+        ${marketingField("Carousel eyebrow", "mkTemplatesShowcaseEyebrow", ctx.templates.showcaseEyebrow || "", { hint: "Small label above the carousel, e.g. Hear examples" })}
+        ${marketingField("Carousel lead", "mkTemplatesShowcaseLead", ctx.templates.showcaseLead || "", { multiline: 2, hint: "One line under the eyebrow." })}
+        ${renderMarketingShowcaseItemsEditor(getMarketingShowcaseItems(ctx.templates), marketingShowcaseTagPresets(ctx.templateCards))}
+        <div id="mkTemplatesShowcasePicker" class="marketingDiscoverPicker"></div>
+      `, { hint: "Until you pick songs, visitors see the template art carousel without audio." })}
       ${[0, 1, 2, 3, 4, 5].map((i) => {
         const card = ctx.templateCards[i] || {};
         return marketingFieldGroup(`Template card ${i + 1}`, `
@@ -4017,7 +4102,8 @@ function renderMarketing(data) {
   bindMarketingComposerDrag();
   updateAddSectionControls();
   syncMarketingShellLayout();
-  if (activeSection === "discover") void bindMarketingDiscoverPicker();
+  if (activeSection === "discover") void bindMarketingSongPicker("mkDiscoverPicker", { fieldId: "mkDiscoverFeaturedIds" });
+  if (activeSection === "templates") void bindMarketingSongPicker("mkTemplatesShowcasePicker", { mode: "showcase" });
 }
 
 function bindMarketingColorFields() {
@@ -4033,10 +4119,10 @@ function bindMarketingColorFields() {
   }
 }
 
-async function bindMarketingDiscoverPicker() {
-  const root = document.getElementById("mkDiscoverPicker");
-  const field = document.getElementById("mkDiscoverFeaturedIds");
-  if (!root || !field) return;
+async function bindMarketingSongPicker(pickerId, { fieldId = "mkDiscoverFeaturedIds", mode = "ids" } = {}) {
+  const root = document.getElementById(pickerId);
+  const field = fieldId ? document.getElementById(fieldId) : null;
+  if (!root || (mode === "ids" && !field)) return;
   root.innerHTML = `<p class="cellMuted">Loading recent publications…</p>`;
   try {
     const data = await adminFetch("publications", { limit: 24, offset: 0 });
@@ -4045,11 +4131,14 @@ async function bindMarketingDiscoverPicker() {
       root.innerHTML = `<p class="cellMuted">No public Discover posts yet. Publish songs first, then pick them here.</p>`;
       return;
     }
+    const modeAttr = mode === "showcase"
+      ? ' data-marketing-song-mode="showcase"'
+      : ` data-marketing-song-field="${escapeHtml(fieldId)}"`;
     root.innerHTML = `
       <p class="marketingDiscoverPickerLabel">Pick from recent public posts</p>
       <div class="marketingDiscoverPickerGrid">
         ${rows.map((p) => `
-          <button type="button" class="marketingDiscoverPick" data-add-discover-song="${escapeHtml(p.id)}" title="${escapeHtml(p.title)}">
+          <button type="button" class="marketingDiscoverPick" data-add-marketing-song="${escapeHtml(p.id)}"${modeAttr} title="${escapeHtml(p.title)}">
             ${p.artUrl ? `<img src="${escapeHtml(p.artUrl)}" alt="" loading="lazy">` : `<span class="pubArtFallback">♪</span>`}
             <span>${escapeHtml(p.title)}</span>
           </button>`).join("")}
@@ -4057,6 +4146,10 @@ async function bindMarketingDiscoverPicker() {
   } catch (e) {
     root.innerHTML = `<p class="cellMuted">Could not load publications: ${escapeHtml(e?.message || String(e))}</p>`;
   }
+}
+
+async function bindMarketingDiscoverPicker() {
+  return bindMarketingSongPicker("mkDiscoverPicker", { fieldId: "mkDiscoverFeaturedIds" });
 }
 
 function renderMarketingView(data) {
@@ -5126,14 +5219,36 @@ document.body.addEventListener("click", (e) => {
     return;
   }
 
-  const discoverPickBtn = e.target.closest("[data-add-discover-song]");
+  const discoverPickBtn = e.target.closest("[data-add-discover-song], [data-add-marketing-song]");
   if (discoverPickBtn) {
-    const songId = String(discoverPickBtn.dataset.addDiscoverSong || "").trim();
-    const field = document.getElementById("mkDiscoverFeaturedIds");
+    const songId = String(discoverPickBtn.dataset.addDiscoverSong || discoverPickBtn.dataset.addMarketingSong || "").trim();
+    const pickMode = String(discoverPickBtn.dataset.marketingSongMode || "ids").trim();
+    if (pickMode === "showcase") {
+      if (!songId) return;
+      addMarketingShowcaseRow(songId, "");
+      pushMarketingPreviewToIframe();
+      return;
+    }
+    const fieldId = String(discoverPickBtn.dataset.marketingSongField || "mkDiscoverFeaturedIds").trim();
+    const field = document.getElementById(fieldId);
     if (!songId || !field) return;
     const ids = field.value.split(/[\s,]+/g).map((id) => id.trim()).filter(Boolean);
     if (!ids.includes(songId)) ids.push(songId);
     field.value = ids.join("\n");
+    return;
+  }
+
+  const showcaseAddBtn = e.target.closest("#btnMkShowcaseAddRow");
+  if (showcaseAddBtn) {
+    addMarketingShowcaseRow();
+    pushMarketingPreviewToIframe();
+    return;
+  }
+
+  const showcaseRemoveBtn = e.target.closest(".marketingShowcaseRemove");
+  if (showcaseRemoveBtn) {
+    showcaseRemoveBtn.closest("[data-showcase-row]")?.remove();
+    pushMarketingPreviewToIframe();
     return;
   }
 

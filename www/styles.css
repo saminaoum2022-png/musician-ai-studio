@@ -1844,6 +1844,7 @@ body.booting .hubNowPlaying{
 }
 body.booting .bootSplash{
   display: flex;
+  pointer-events: auto;
 }
 .bootSplashInner{
   display: flex;

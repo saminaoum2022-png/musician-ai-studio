@@ -24238,7 +24238,11 @@ main.grid > [data-route="pro"].routeEnter--present{
   width: 100%;
 }
 .proBenefitsRow{
-  padding: 10px 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 12px 8px;
   font-size: 14px;
   font-weight: 500;
   letter-spacing: -0.01em;
@@ -24246,6 +24250,36 @@ main.grid > [data-route="pro"].routeEnter--present{
   text-align: center;
   color: rgba(232,238,247,0.88);
   border-bottom: 1px solid rgba(255,255,255,0.06);
+}
+.proBenefitsLabel{
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+.proBenefitsSub{
+  display: block;
+  max-width: 320px;
+  font-size: 12px;
+  font-weight: 450;
+  line-height: 1.45;
+  color: rgba(232,238,247,0.52);
+}
+.proBenefitsRow--soon .proBenefitsLabel{
+  color: rgba(232,238,247,0.62);
+}
+.proBenefitsSoonBadge{
+  display: inline-block;
+  padding: 2px 7px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: rgba(196,181,253,0.95);
+  background: rgba(139,92,246,0.18);
+  border: 1px solid rgba(139,92,246,0.28);
 }
 .proBenefitsRow:first-child{
   border-top: 1px solid rgba(255,255,255,0.06);
@@ -53252,6 +53286,17 @@ html[data-theme="light"] .proBenefitsList{
 }
 html[data-theme="light"] .proBenefitsRow:first-child{
   border-top-color: var(--border);
+}
+html[data-theme="light"] .proBenefitsSub{
+  color: var(--text-secondary);
+}
+html[data-theme="light"] .proBenefitsRow--soon .proBenefitsLabel{
+  color: var(--text-muted);
+}
+html[data-theme="light"] .proBenefitsSoonBadge{
+  color: #6d28d9;
+  background: rgba(139,92,246,0.1);
+  border-color: rgba(139,92,246,0.22);
 }
 html[data-theme="light"] .creditsCard{
   border-color: var(--border);

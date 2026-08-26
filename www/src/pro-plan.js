@@ -89,9 +89,15 @@ function planCardHtml(plan, selected) {
 }
 
 function benefitsListHtml() {
-  return PRO_FEATURES.map((f) => `
-    <li class="proBenefitsRow">${esc(f.label)}</li>
-  `).join("");
+  return PRO_FEATURES.map((f) => {
+    const soon = Boolean(f.comingSoon);
+    const sub = String(f.sub || "").trim();
+    return `
+    <li class="proBenefitsRow${soon ? " proBenefitsRow--soon" : ""}">
+      <span class="proBenefitsLabel">${esc(f.label)}${soon ? '<span class="proBenefitsSoonBadge">Coming soon</span>' : ""}</span>
+      ${sub ? `<span class="proBenefitsSub">${esc(sub)}</span>` : ""}
+    </li>`;
+  }).join("");
 }
 
 function proPageNeedsRender() {

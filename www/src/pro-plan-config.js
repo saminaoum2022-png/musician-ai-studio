@@ -61,13 +61,42 @@ export const PRO_MASTER = Object.freeze({
 export const STUDIO_PRO_MASTER_ENABLED = false;
 
 export const PRO_FEATURES = Object.freeze([
-  { key: "credits", label: "Monthly or weekly credits", sub: "Paid credits each renewal — create songs or gift Mic / Pulse / Star" },
-  { key: "coach", label: "Unlimited NabadAi Coach", sub: "Free users get a daily message limit" },
-  { key: "studio", label: "NabadAi Studio", sub: "Record your voice, AI mix, and save to My Vocals" },
-  { key: "cover_regen", label: "Cover refresh", sub: "Regenerate artwork until it feels right" },
-  { key: "wav", label: "WAV export", sub: "Lossless downloads for your tracks" },
-  { key: "analytics", label: "Song analytics", sub: "See who listened and how many plays" },
-  { key: "badge", label: "Pro badge on your profile", sub: "Shows you support NabadAi creators" },
+  {
+    key: "credits",
+    label: "Weekly or monthly credits",
+    sub: "400/week on Weekly · 1,000 + 200 bonus/month on Monthly — giftable each renewal",
+  },
+  {
+    key: "coach",
+    label: "Unlimited NabadAi Coach",
+    sub: "Free accounts have a daily message limit",
+  },
+  {
+    key: "studio",
+    label: "NabadAi Studio",
+    sub: "Record your voice over a track, AI mix, and save to My Vocals",
+  },
+  {
+    key: "cover_regen",
+    label: "Cover refresh",
+    sub: "Regenerate AI artwork until it feels right — your first cover stays free",
+  },
+  {
+    key: "analytics",
+    label: "Song analytics",
+    sub: "See play counts and who listened — listener names are private to you",
+  },
+  {
+    key: "badge",
+    label: "Pro badge on your profile",
+    sub: "Shows you support NabadAi creators",
+  },
+  {
+    key: "exports_soon",
+    label: "WAV & stem exports",
+    sub: "Lossless downloads and separate tracks for producers",
+    comingSoon: true,
+  },
 ]);
 
 /**
@@ -139,7 +168,7 @@ export function subscriptionCreditUnitPrice() {
 
 export const PRO_LAUNCH_COPY = Object.freeze({
   eyebrow: "",
-  lead: "More credits, Studio, WAV export, unlimited Coach, and listener analytics.",
+  lead: "Weekly or monthly credits, Studio, cover refresh, unlimited Coach, and private song analytics.",
   footnote:
     "1 full song = 12 credits (2 versions). Subscription credits are paid credits — you can create or gift them. Cancel anytime in Settings → Subscriptions.",
   packsHeadline: "Only need a few songs?",

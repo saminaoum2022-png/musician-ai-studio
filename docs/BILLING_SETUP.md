@@ -75,7 +75,7 @@ iPhone (RevenueCat SDK)
 
 ## Not in v1 (can add later)
 
-- Pro feature gating (Coach, Studio, WAV, badge)
+- Pro feature gating (Coach, Studio, cover refresh, analytics, badge; WAV & stems coming soon)
 - One-time credit packs (`com.nabadai.music.credits.*`)
 
 ---

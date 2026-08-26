@@ -169,12 +169,13 @@ function defaultHomeContentEn() {
       pro: {
         title: "NabadAi Pro",
         price: "",
-        body: "Studio, WAV export, unlimited Coach, and song analytics.",
+        body: "Weekly or monthly credits, Studio, cover refresh, unlimited Coach, and private song analytics.",
         features: [
-          { label: "Credits each week or month · giftable" },
+          { label: "400/week or 1,000+200 bonus/month · giftable" },
           { label: "Unlimited NabadAi Coach" },
-          { label: "NabadAi Studio & WAV export" },
+          { label: "NabadAi Studio & cover refresh" },
           { label: "Song analytics & Pro badge" },
+          { label: "WAV & stem exports — coming soon" },
         ],
         finePrint: "1 full song = 12 credits (2 versions). Cancel anytime in Settings.",
         ctaLabel: "View plans",
@@ -424,12 +425,13 @@ function defaultHomeContentAr() {
       pro: {
         title: "NabadAi Pro",
         price: "",
-        body: "Studio، WAV، Coach غير محدود، وتحليلات الأغاني.",
+        body: "رصيد أسبوعي أو شهري، Studio، تجديد الغلاف، Coach غير محدود، وتحليلات أغانٍ خاصة بك.",
         features: [
-          { label: "رصيد أسبوعي أو شهري · قابل للإهداء" },
+          { label: "400/أسبوع أو 1,000+200 بونص/شهر · قابل للإهداء" },
           { label: "NabadAi Coach غير محدود" },
-          { label: "NabadAi Studio وتصدير WAV" },
+          { label: "NabadAi Studio وتجديد الغلاف" },
           { label: "تحليلات الأغاني وشارة Pro" },
+          { label: "تصدير WAV والـ stems — قريباً" },
         ],
         finePrint: "أغنية كاملة = 12 رصيد (نسختان). إلغاء في أي وقت من الإعدادات.",
         ctaLabel: "عرض الخطط",

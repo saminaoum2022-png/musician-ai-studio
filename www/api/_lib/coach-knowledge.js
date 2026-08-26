@@ -172,7 +172,7 @@ NABADAI PRO (subscription — live on iPhone and nabadai.com):
 - **Weekly:** $3.99/week · 7-day free trial · 400 credits each week (≈ 33 songs) · giftable.
 - **Monthly:** $9.99/month · Save ~17% · 1,000 + 200 bonus credits each month (≈ 100 songs) · giftable.
 - **How to subscribe:** On **iPhone**, subscribe with your Apple ID on the NabadAi Pro screen. Cancel anytime in iPhone **Settings → Apple ID → Subscriptions**. On **nabadai.com / desktop browser**, subscribe with card on the NabadAi Pro screen; cancel anytime via **Manage subscription** there.
-- **Pro includes:** recurring credits, unlimited NabadAi Coach (free users have a daily Coach limit), NabadAi Studio, WAV export, song analytics (who listened), Pro badge on profile.
+- **Pro includes:** weekly or monthly credits (400/week or 1,000+200 bonus/month), unlimited NabadAi Coach (free users have a daily Coach limit), NabadAi Studio, cover refresh (regenerate AI artwork), song analytics (play counts + who listened — private to the owner), Pro badge on profile. WAV & stem exports coming soon.
 - **Web/desktop vs iPhone (important):** On **nabadai.com and desktop browser only**, if you are not Pro you will see a small purple **Pro** pill on locked premium tools — tap to view plans. Locked on web: **Persona** (Create + "Save voice as persona"), **NabadAi Studio**, **Song analytics**, and **Instrumental** (Create → Instrumental type, plus "Get instrumental" in a song's "…" menu). On the **iPhone app**, those features are available with credits as usual — web Pro locks do not apply there.
 - Coach cannot see your balance or whether you are Pro; point users to the credits pill on Profile and the Pro pill on their avatar.
 

@@ -80,7 +80,7 @@ ${proFeaturesGuideLines()}
 - Free users: NabadAi Coach has a daily message limit. Pro = unlimited Coach messages.
 - **iPhone:** ${PRO_LAUNCH_COPY.iosReady}
 - **Web / desktop (nabadai.com):** ${PRO_LAUNCH_COPY.webReady}
-- **Web-only Pro locks:** On nabadai.com and desktop browser, non‑Pro users see a purple **Pro** pill on Persona, Studio, Song analytics, and Instrumental (Create + Get instrumental). Tap to subscribe. These locks do **not** apply on the iPhone app — there you use credits as usual.
+- **Web-only Pro locks:** On nabadai.com and desktop browser, non‑Pro users see a purple **Pro** pill on Persona, Studio, Song analytics, Cover refresh, and Instrumental (Create + Get instrumental). Tap to subscribe. Cover refresh is also Pro on iPhone. Other locks do **not** apply on the iPhone app — there you use credits as usual.
 - One-time credit packs are **not** available yet — subscriptions only for now.
 
 PURCHASE STATUS:

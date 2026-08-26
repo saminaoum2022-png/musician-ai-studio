@@ -623,7 +623,7 @@
       var prev = document.querySelector('[data-song-id="' + carouselPreviewCardId + '"]');
       if (prev) {
         prev.classList.remove("isPreviewPlaying");
-        var btn = prev.querySelector(".discoverCarouselPlay, .marketingOccasionPlay");
+        var btn = prev.querySelector(".discoverCarouselPlay, .marketingOccasionPlaySide");
         if (btn) {
           btn.innerHTML = CAROUSEL_PLAY_SVG;
           btn.setAttribute("aria-label", "Preview song");
@@ -647,7 +647,7 @@
     var startAt = Number(hookStartSec);
     if (!Number.isFinite(startAt) || startAt < 0) startAt = 0;
     card.classList.add("isPreviewPlaying");
-    var playBtn = card.querySelector(".discoverCarouselPlay, .marketingOccasionPlay");
+    var playBtn = card.querySelector(".discoverCarouselPlay, .marketingOccasionPlaySide");
     if (playBtn) {
       playBtn.innerHTML = CAROUSEL_PAUSE_SVG;
       playBtn.setAttribute("aria-label", "Stop preview");
@@ -732,9 +732,9 @@
     node.removeAttribute("data-hook-start");
     delete node.dataset.previewBound;
     var play = node.querySelector("[data-mk='template.play']");
-    var hint = node.querySelector("[data-mk='template.previewHint']");
+    var pill = node.querySelector("[data-mk='template.previewPill']");
     if (play) play.hidden = true;
-    if (hint) hint.hidden = true;
+    if (pill) pill.hidden = true;
   }
 
   function enablePreviewOnGridCard(node, song) {
@@ -753,9 +753,9 @@
     var img = node.querySelector("[data-mk='template.image']");
     if (song.artUrl && img) img.setAttribute("src", song.artUrl);
     var play = node.querySelector("[data-mk='template.play']");
-    var hint = node.querySelector("[data-mk='template.previewHint']");
+    var pill = node.querySelector("[data-mk='template.previewPill']");
     if (play) play.hidden = false;
-    if (hint) hint.hidden = false;
+    if (pill) pill.hidden = false;
     if (node.dataset.previewBound === "1") return;
     node.dataset.previewBound = "1";
     node.addEventListener("click", function (e) {
@@ -885,6 +885,7 @@
       });
     }
     wireTemplateGridPreviews(templateCards);
+    if (location.search.indexOf("mkTemplatePreviewDemo=1") !== -1) showTemplatePreviewDemo();
   }
 
   function applyCollab(c) {
@@ -1113,6 +1114,17 @@
     setupScrollReveal(document);
   }
 
+  function showTemplatePreviewDemo() {
+    document.querySelectorAll("[data-mk-template-card]").forEach(function (node, i) {
+      if (i > 3) return;
+      node.classList.add("marketingOccasionCard--hasPreview");
+      var pill = node.querySelector("[data-mk='template.previewPill']");
+      var play = node.querySelector("[data-mk='template.play']");
+      if (pill) pill.hidden = false;
+      if (play) play.hidden = false;
+    });
+  }
+
   fetchHeroMeta();
   initScrollReveal();
   document.addEventListener("visibilitychange", function () {
@@ -1134,5 +1146,10 @@
     })
     .catch(function () {
       if (PAGE !== "home") return;
+      if (location.search.indexOf("mkTemplatePreviewDemo=1") !== -1) showTemplatePreviewDemo();
     });
+
+  if (PAGE === "home" && location.search.indexOf("mkTemplatePreviewDemo=1") !== -1) {
+    showTemplatePreviewDemo();
+  }
 })();

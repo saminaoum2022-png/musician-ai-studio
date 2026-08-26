@@ -733,19 +733,23 @@ function normalizeShowcaseItems(itemsIn, legacyIds, defaults) {
   return items;
 }
 
-function normalizeTemplateCards(cards, defaults) {
+function normalizeTemplateCards(cards, defaults, showcaseItems) {
   const src = Array.isArray(cards) ? cards : [];
+  const legacyItems = Array.isArray(showcaseItems) ? showcaseItems : [];
   const out = [];
   for (let i = 0; i < 6; i += 1) {
     const d = defaults[i] || { tone: "birthday", title: "", body: "", href: "/app/#/challenges" };
     const c = src[i] || {};
     const tone = clip(c.tone, 24) || d.tone || "birthday";
+    const legacySongId = String(legacyItems[i]?.songId || "").trim();
+    const exampleSongId = String(c.exampleSongId || legacySongId || "").trim();
     out.push({
       tone,
       title: clip(c.title, 80) || d.title,
       body: clip(c.body, 200) || d.body,
       href: sanitizeHref(c.href, d.href || "/app/#/challenges"),
       imageUrl: sanitizeImageUrl(c.imageUrl, d.imageUrl || ""),
+      exampleSongId: SHOWCASE_ITEM_UUID_RE.test(exampleSongId) ? exampleSongId : "",
     });
   }
   return out;
@@ -1155,7 +1159,15 @@ function normalizeContent(pageKey, locale, raw) {
           ).map((it) => it.songId),
           imageUrl: sanitizeImageUrl(templatesIn.imageUrl, defaults.templates.imageUrl),
           imageAlt: clip(templatesIn.imageAlt, 200) || defaults.templates.imageAlt,
-          cards: normalizeTemplateCards(templatesIn.cards, defaults.templates.cards),
+          cards: normalizeTemplateCards(
+            templatesIn.cards,
+            defaults.templates.cards,
+            normalizeShowcaseItems(
+              templatesIn.showcaseItems,
+              templatesIn.showcaseSongIds,
+              defaults.templates,
+            ),
+          ),
         },
         collab: {
           eyebrow: clip(collabIn.eyebrow, 80) || defaults.collab.eyebrow,

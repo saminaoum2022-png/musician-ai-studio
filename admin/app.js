@@ -3217,7 +3217,7 @@ function showMarketingSection(sectionId) {
   pushMarketingPreviewToIframe();
   scrollPreviewToSection(id);
   if (id === "discover") void bindMarketingSongPicker("mkDiscoverPicker", { fieldId: "mkDiscoverFeaturedIds" });
-  if (id === "templates") void bindMarketingSongPicker("mkTemplatesShowcasePicker", { mode: "showcase" });
+  if (id === "templates") void bindMarketingSongPicker("mkTemplateExamplePicker", { fieldId: "template-slot" });
 }
 
 function scrollPreviewToSection(sectionId) {
@@ -3353,9 +3353,6 @@ function readMarketingFormContent(pageKey = "home") {
       lead: val("mkTemplatesLead"),
       ctaLabel: val("mkTemplatesCtaLabel"),
       ctaHref: val("mkTemplatesCtaHref"),
-      showcaseEyebrow: val("mkTemplatesShowcaseEyebrow"),
-      showcaseLead: val("mkTemplatesShowcaseLead"),
-      showcaseItems: readMarketingShowcaseItems(),
       imageUrl: val("mkTemplatesImageUrl"),
       imageAlt: val("mkTemplatesImageAlt"),
       cards: [0, 1, 2, 3, 4, 5].map((i) => ({
@@ -3363,7 +3360,8 @@ function readMarketingFormContent(pageKey = "home") {
         body: val(`mkTemplateCardBody${i}`),
         href: val(`mkTemplateCardHref${i}`),
         imageUrl: val(`mkTemplateCardImage${i}`),
-      })).filter((it) => it.title.trim()),
+        exampleSongId: val(`mkTemplateCardExampleSong${i}`).trim(),
+      })),
     };
     content.collab = {
       eyebrow: val("mkCollabEyebrow"),
@@ -3818,12 +3816,19 @@ function buildMarketingEditorSections(ctx) {
         ${marketingField("CTA label", "mkTemplatesCtaLabel", ctx.templates.ctaLabel || "")}
         ${marketingField("CTA link", "mkTemplatesCtaHref", ctx.templates.ctaHref || "")}
       `)}
-      ${marketingFieldGroup("Example songs carousel", `
-        ${marketingField("Carousel eyebrow", "mkTemplatesShowcaseEyebrow", ctx.templates.showcaseEyebrow || "", { hint: "Small label above the carousel, e.g. Hear examples" })}
-        ${marketingField("Carousel lead", "mkTemplatesShowcaseLead", ctx.templates.showcaseLead || "", { multiline: 2, hint: "One line under the eyebrow." })}
-        ${renderMarketingShowcaseItemsEditor(getMarketingShowcaseItems(ctx.templates), marketingShowcaseTagPresets(ctx.templateCards))}
-        <div id="mkTemplatesShowcasePicker" class="marketingDiscoverPicker"></div>
-      `, { hint: "Until you pick songs, visitors see the template art carousel without audio." })}
+      ${marketingFieldGroup("Example song picker", `
+        <label class="field marketingField">
+          <span>Assign picked song to card</span>
+          <select id="mkTemplateExamplePickSlot" class="marketingFieldInput">
+            ${[0, 1, 2, 3, 4, 5].map((i) => {
+              const card = ctx.templateCards[i] || {};
+              const label = card.title || `Template card ${i + 1}`;
+              return `<option value="${i}">${escapeHtml(label)}</option>`;
+            }).join("")}
+          </select>
+        </label>
+        <div id="mkTemplateExamplePicker" class="marketingDiscoverPicker"></div>
+      `, { hint: "Pick a public Discover post, then paste or assign it to each template card below." })}
       ${[0, 1, 2, 3, 4, 5].map((i) => {
         const card = ctx.templateCards[i] || {};
         return marketingFieldGroup(`Template card ${i + 1}`, `
@@ -3831,6 +3836,7 @@ function buildMarketingEditorSections(ctx) {
           ${marketingField("Body", `mkTemplateCardBody${i}`, card.body || "", { multiline: 2 })}
           ${marketingField("Link", `mkTemplateCardHref${i}`, card.href || "", { hint: "e.g. /app/#/challenges" })}
           ${marketingField("Image URL", `mkTemplateCardImage${i}`, card.imageUrl || "", { hint: "Optional override; defaults to bundled art." })}
+          ${marketingField("Example song ID", `mkTemplateCardExampleSong${i}`, card.exampleSongId || "", { hint: "Optional public song UUID. When set, the card shows a play icon and visitors can tap to preview." })}
         `);
       }).join("")}
     `, { active: on("templates") }),
@@ -4103,7 +4109,7 @@ function renderMarketing(data) {
   updateAddSectionControls();
   syncMarketingShellLayout();
   if (activeSection === "discover") void bindMarketingSongPicker("mkDiscoverPicker", { fieldId: "mkDiscoverFeaturedIds" });
-  if (activeSection === "templates") void bindMarketingSongPicker("mkTemplatesShowcasePicker", { mode: "showcase" });
+  if (activeSection === "templates") void bindMarketingSongPicker("mkTemplateExamplePicker", { fieldId: "template-slot" });
 }
 
 function bindMarketingColorFields() {
@@ -4121,8 +4127,8 @@ function bindMarketingColorFields() {
 
 async function bindMarketingSongPicker(pickerId, { fieldId = "mkDiscoverFeaturedIds", mode = "ids" } = {}) {
   const root = document.getElementById(pickerId);
-  const field = fieldId ? document.getElementById(fieldId) : null;
-  if (!root || (mode === "ids" && !field)) return;
+  const field = fieldId && fieldId !== "template-slot" ? document.getElementById(fieldId) : null;
+  if (!root || (mode === "ids" && fieldId !== "template-slot" && !field)) return;
   root.innerHTML = `<p class="cellMuted">Loading recent publications…</p>`;
   try {
     const data = await adminFetch("publications", { limit: 24, offset: 0 });
@@ -4133,7 +4139,9 @@ async function bindMarketingSongPicker(pickerId, { fieldId = "mkDiscoverFeatured
     }
     const modeAttr = mode === "showcase"
       ? ' data-marketing-song-mode="showcase"'
-      : ` data-marketing-song-field="${escapeHtml(fieldId)}"`;
+      : fieldId === "template-slot"
+        ? ' data-marketing-song-mode="template-slot"'
+        : ` data-marketing-song-field="${escapeHtml(fieldId)}"`;
     root.innerHTML = `
       <p class="marketingDiscoverPickerLabel">Pick from recent public posts</p>
       <div class="marketingDiscoverPickerGrid">
@@ -5226,6 +5234,14 @@ document.body.addEventListener("click", (e) => {
     if (pickMode === "showcase") {
       if (!songId) return;
       addMarketingShowcaseRow(songId, "");
+      pushMarketingPreviewToIframe();
+      return;
+    }
+    if (pickMode === "template-slot") {
+      const slot = String(document.getElementById("mkTemplateExamplePickSlot")?.value || "0").trim();
+      const slotField = document.getElementById(`mkTemplateCardExampleSong${slot}`);
+      if (!songId || !slotField) return;
+      slotField.value = songId;
       pushMarketingPreviewToIframe();
       return;
     }

@@ -621,12 +621,10 @@
       carouselPreviewAudio = null;
     }
     if (carouselPreviewCardId) {
-      var prev = document.querySelector(
-        '.discoverCarouselCard[data-song-id="' + carouselPreviewCardId + '"]',
-      );
+      var prev = document.querySelector('[data-song-id="' + carouselPreviewCardId + '"]');
       if (prev) {
         prev.classList.remove("isPreviewPlaying");
-        var btn = prev.querySelector(".discoverCarouselPlay");
+        var btn = prev.querySelector(".discoverCarouselPlay, .marketingOccasionPlay");
         if (btn) {
           btn.innerHTML = CAROUSEL_PLAY_SVG;
           btn.setAttribute("aria-label", "Preview song");
@@ -650,7 +648,7 @@
     var startAt = Number(hookStartSec);
     if (!Number.isFinite(startAt) || startAt < 0) startAt = 0;
     card.classList.add("isPreviewPlaying");
-    var playBtn = card.querySelector(".discoverCarouselPlay");
+    var playBtn = card.querySelector(".discoverCarouselPlay, .marketingOccasionPlay");
     if (playBtn) {
       playBtn.innerHTML = CAROUSEL_PAUSE_SVG;
       playBtn.setAttribute("aria-label", "Stop preview");
@@ -727,6 +725,77 @@
     playBtn.addEventListener("click", startPreview);
   }
 
+  function resetTemplateGridPreviewState(node) {
+    if (!node) return;
+    node.classList.remove("marketingOccasionCard--hasPreview", "isPreviewPlaying");
+    node.removeAttribute("data-song-id");
+    node.removeAttribute("data-preview-url");
+    node.removeAttribute("data-hook-start");
+    delete node.dataset.previewBound;
+    var play = node.querySelector("[data-mk='template.play']");
+    var hint = node.querySelector("[data-mk='template.previewHint']");
+    if (play) play.hidden = true;
+    if (hint) hint.hidden = true;
+  }
+
+  function enablePreviewOnGridCard(node, song) {
+    if (!node || !song) return;
+    var previewUrl = String(song.previewUrl || "").trim();
+    if (!previewUrl) {
+      resetTemplateGridPreviewState(node);
+      return;
+    }
+    var hookStartSec = Number(song.hookStartSec);
+    if (!Number.isFinite(hookStartSec) || hookStartSec < 0) hookStartSec = 0;
+    node.classList.add("marketingOccasionCard--hasPreview");
+    node.setAttribute("data-song-id", String(song.id || ""));
+    node.setAttribute("data-preview-url", previewUrl);
+    node.setAttribute("data-hook-start", String(hookStartSec));
+    var img = node.querySelector("[data-mk='template.image']");
+    if (song.artUrl && img) img.setAttribute("src", song.artUrl);
+    var play = node.querySelector("[data-mk='template.play']");
+    var hint = node.querySelector("[data-mk='template.previewHint']");
+    if (play) play.hidden = false;
+    if (hint) hint.hidden = false;
+    if (node.dataset.previewBound === "1") return;
+    node.dataset.previewBound = "1";
+    node.addEventListener("click", function (e) {
+      e.preventDefault();
+      startCarouselPreview(node, previewUrl, hookStartSec);
+    });
+    node.addEventListener("keydown", function (e) {
+      if (e.key !== "Enter") return;
+      e.preventDefault();
+      startCarouselPreview(node, previewUrl, hookStartSec);
+    });
+  }
+
+  function wireTemplateGridPreviews(templateCards) {
+    var nodes = document.querySelectorAll("[data-mk-template-card]");
+    var cards = Array.isArray(templateCards) ? templateCards : [];
+    nodes.forEach(function (node, i) {
+      resetTemplateGridPreviewState(node);
+      var card = cards[i];
+      if (card && card.exampleSong) enablePreviewOnGridCard(node, card.exampleSong);
+    });
+    var missingIds = cards
+      .map(function (card, i) {
+        if (!card || card.exampleSong || !card.exampleSongId) return null;
+        return { id: card.exampleSongId, index: i };
+      })
+      .filter(Boolean);
+    if (!missingIds.length) return;
+    fetchFeaturedDiscoverSongs(missingIds.map(function (row) { return row.id; })).then(function (songs) {
+      var byId = {};
+      songs.forEach(function (song) { if (song && song.id) byId[song.id] = song; });
+      missingIds.forEach(function (row) {
+        var node = nodes[row.index];
+        var song = byId[row.id];
+        if (node && song) enablePreviewOnGridCard(node, song);
+      });
+    });
+  }
+
   function wireDiscoverCarouselPreviews(root) {
     if (!root) return;
     var cards = root.querySelectorAll(".discoverCarouselCard");
@@ -777,118 +846,6 @@
     setupScrollReveal(root);
   }
 
-  function wireTemplateShowcasePreviews(root, signupHref) {
-    if (!root) return;
-    var targetHref = String(signupHref || TEMPLATE_SHOWCASE_HREF).trim() || TEMPLATE_SHOWCASE_HREF;
-    var cards = root.querySelectorAll(".discoverCarouselCard");
-    cards.forEach(function (card) {
-      var previewUrl = card.getAttribute("data-preview-url") || "";
-      var hookStartSec = Number(card.getAttribute("data-hook-start") || "0");
-      var cardHref = card.getAttribute("data-card-href") || targetHref;
-      bindCarouselCardPreviewInteractions(card, previewUrl, hookStartSec, cardHref);
-    });
-  }
-
-  function setMarketingTemplateGridVisible(visible) {
-    var gridWrap = document.querySelector("[data-mk-template-grid-wrap]");
-    if (gridWrap) gridWrap.hidden = !visible;
-  }
-
-  function setMarketingTemplateShowcaseVisible(visible) {
-    var section = document.querySelector("[data-mk-template-showcase-section]");
-    if (section) section.hidden = !visible;
-  }
-
-  function resolveShowcaseOccasionTone(label) {
-    var s = String(label || "").trim().toLowerCase();
-    if (!s) return "default";
-    if (/birthday|bday|عيد ميلاد/.test(s)) return "birthday";
-    if (/wedding|dabke|عرس|زفاف|engagement/.test(s)) return "wedding";
-    if (/love|valentine|romantic|anniversary|حب|عشق/.test(s)) return "love";
-    if (/apolog|sorry|اعتذار/.test(s)) return "apology";
-    if (/thank|gratitude|شكر/.test(s)) return "thanks";
-    if (/arabic|عرب/.test(s)) return "arabic";
-    if (/graduation|celebration|party/.test(s)) return "wedding";
-    return "default";
-  }
-
-  function renderTemplateShowcaseCarousel(songs, cards, opts) {
-    opts = opts || {};
-    var wrap = document.querySelector("[data-mk-template-showcase-wrap]");
-    var root = document.querySelector("[data-mk-template-showcase-carousel]");
-    var section = document.querySelector("[data-mk-template-showcase-section]");
-    if (!wrap || !root) return;
-    stopCarouselPreview();
-
-    var cardList = Array.isArray(cards) ? cards : [];
-    var items = [];
-    if (Array.isArray(songs) && songs.length) {
-      songs.forEach(function (song, i) {
-        if (!song) return;
-        var card = cardList[i] || {};
-        var occasionLabel = String(song.occasionLabel || song.tag || card.title || "").trim();
-        items.push({
-          id: song.id || ("showcase-" + i),
-          artUrl: String(song.artUrl || card.imageUrl || "").trim() || "/assets/marketing/nabadai-social-card.png",
-          title: String(song.title || card.title || "Example song").trim() || "Example song",
-          occasionLabel: occasionLabel,
-          occasionTone: resolveShowcaseOccasionTone(occasionLabel),
-          byLine: song.username ? "@" + song.username : String(song.byLine || "").trim(),
-          previewUrl: String(song.previewUrl || "").trim(),
-          hookStartSec: Number(song.hookStartSec),
-          href: String(card.href || opts.signupHref || TEMPLATE_SHOWCASE_HREF).trim() || TEMPLATE_SHOWCASE_HREF,
-        });
-      });
-    }
-
-    if (!items.length) {
-      if (section) section.hidden = true;
-      wrap.hidden = true;
-      root.innerHTML = "";
-      setMarketingTemplateGridVisible(true);
-      return;
-    }
-
-    setMarketingTemplateGridVisible(false);
-    if (section) section.hidden = false;
-    wrap.hidden = false;
-    root.className = "marketingDiscoverCarousel marketingTemplateShowcaseCarousel";
-    root.innerHTML = items.map(function (item) {
-      var previewUrl = String(item.previewUrl || "").trim();
-      var hookStart = Number(item.hookStartSec);
-      if (!Number.isFinite(hookStart) || hookStart < 0) hookStart = 0;
-      var toneClass = item.occasionTone && item.occasionTone !== "default"
-        ? " discoverCarouselCard--" + item.occasionTone
-        : "";
-      var occasion = item.occasionLabel
-        ? '<span class="discoverCarouselOccasion">' + item.occasionLabel.replace(/</g, "&lt;") + "</span>"
-        : "";
-      var by = item.byLine
-        ? '<span class="discoverCarouselBy">' + item.byLine.replace(/</g, "&lt;") + "</span>"
-        : "";
-      return (
-        '<article class="discoverCarouselCard' + toneClass + '" tabindex="0" role="button" data-song-id="' +
-          String(item.id).replace(/"/g, "&quot;") + '" data-preview-url="' +
-          previewUrl.replace(/"/g, "&quot;") + '" data-hook-start="' + hookStart +
-          '" data-card-href="' + String(item.href || TEMPLATE_SHOWCASE_HREF).replace(/"/g, "&quot;") + '">' +
-          '<span class="discoverCarouselArt">' +
-            '<img src="' + String(item.artUrl).replace(/"/g, "&quot;") + '" alt="" loading="lazy">' +
-            '<button type="button" class="discoverCarouselPlay" aria-label="Preview song">' +
-              CAROUSEL_PLAY_SVG +
-            "</button>" +
-          "</span>" +
-          '<span class="discoverCarouselMeta">' +
-            occasion +
-            '<span class="discoverCarouselTitle">' + String(item.title).replace(/</g, "&lt;") + "</span>" +
-            by +
-          "</span>" +
-        "</article>"
-      );
-    }).join("");
-    wireTemplateShowcasePreviews(root, opts.signupHref || TEMPLATE_SHOWCASE_HREF);
-    setupScrollReveal(root);
-  }
-
   function fetchFeaturedDiscoverSongs(ids) {
     if (!Array.isArray(ids) || !ids.length) return Promise.resolve([]);
     return fetch("/api/marketing/featured-discover?ids=" + encodeURIComponent(ids.join(",")), {
@@ -906,8 +863,6 @@
     setText("[data-mk='templates.lead']", t.lead);
     setText("[data-mk='templates.cta']", t.ctaLabel);
     setAttr("[data-mk='templates.cta']", "href", t.ctaHref);
-    setText("[data-mk='templates.showcase.eyebrow']", t.showcaseEyebrow);
-    setText("[data-mk='templates.showcase.lead']", t.showcaseLead);
     if (t.imageUrl) setImageSrc("[data-mk='templates.image']", t.imageUrl);
     if (t.imageAlt) setAttr("[data-mk='templates.image']", "alt", t.imageAlt);
     var cards = document.querySelectorAll("[data-mk-template-card]");
@@ -925,33 +880,12 @@
         var img = node.querySelector("[data-mk='template.image']");
         var h = node.querySelector("[data-mk='template.title']");
         var p = node.querySelector("[data-mk='template.body']");
-        if (img && card.imageUrl) img.setAttribute("src", card.imageUrl);
+        if (img && card.imageUrl && !card.exampleSong) img.setAttribute("src", card.imageUrl);
         if (h && card.title) h.textContent = card.title;
         if (p && card.body) p.textContent = card.body;
       });
     }
-    var showcaseOpts = { signupHref: t.ctaHref || TEMPLATE_SHOWCASE_HREF };
-    if (Array.isArray(t.showcaseSongs) && t.showcaseSongs.length) {
-      renderTemplateShowcaseCarousel(t.showcaseSongs, templateCards, showcaseOpts);
-    } else if (Array.isArray(t.showcaseItems) && t.showcaseItems.length) {
-      var showcaseIds = t.showcaseItems.map(function (it) { return it && it.songId; }).filter(Boolean);
-      var tagById = {};
-      t.showcaseItems.forEach(function (it) {
-        if (it && it.songId) tagById[it.songId] = String(it.tag || "").trim();
-      });
-      fetchFeaturedDiscoverSongs(showcaseIds).then(function (songs) {
-        var tagged = songs.map(function (song) {
-          return Object.assign({}, song, { occasionLabel: tagById[song.id] || "" });
-        });
-        renderTemplateShowcaseCarousel(tagged, templateCards, showcaseOpts);
-      });
-    } else if (Array.isArray(t.showcaseSongIds) && t.showcaseSongIds.length) {
-      fetchFeaturedDiscoverSongs(t.showcaseSongIds).then(function (songs) {
-        renderTemplateShowcaseCarousel(songs, templateCards, showcaseOpts);
-      });
-    } else {
-      renderTemplateShowcaseCarousel([], templateCards, showcaseOpts);
-    }
+    wireTemplateGridPreviews(templateCards);
   }
 
   function applyCollab(c) {
@@ -1201,7 +1135,5 @@
     })
     .catch(function () {
       if (PAGE !== "home") return;
-      setMarketingTemplateGridVisible(true);
-      setMarketingTemplateShowcaseVisible(false);
     });
 })();

@@ -24,20 +24,41 @@ module.exports = async function handler(req, res) {
     data.content.discover = { ...data.content.discover, featuredSongs };
   }
 
+  if (page === "home" && Array.isArray(data.content?.templates?.cards)) {
+    const exampleIds = data.content.templates.cards
+      .map((card) => card?.exampleSongId)
+      .filter(Boolean);
+    if (exampleIds.length) {
+      const resolved = await resolveFeaturedDiscoverSongs(exampleIds);
+      const byId = new Map(resolved.map((song) => [String(song.id), song]));
+      data.content.templates = {
+        ...data.content.templates,
+        cards: data.content.templates.cards.map((card) => {
+          const exampleSong = card?.exampleSongId ? byId.get(String(card.exampleSongId)) || null : null;
+          return exampleSong ? { ...card, exampleSong } : card;
+        }),
+      };
+    }
+  }
+
   const showcaseItems = data.content?.templates?.showcaseItems;
   const legacyShowcaseIds = data.content?.templates?.showcaseSongIds;
-  const showcaseIds = Array.isArray(showcaseItems) && showcaseItems.length
-    ? showcaseItems.map((it) => it.songId).filter(Boolean)
-    : legacyShowcaseIds;
-  if (page === "home" && Array.isArray(showcaseIds) && showcaseIds.length) {
-    const tagById = new Map(
-      (Array.isArray(showcaseItems) ? showcaseItems : []).map((it) => [String(it.songId), String(it.tag || "").trim()]),
-    );
-    const showcaseSongs = (await resolveFeaturedDiscoverSongs(showcaseIds)).map((song) => ({
-      ...song,
-      occasionLabel: tagById.get(String(song.id)) || "",
-    }));
-    data.content.templates = { ...data.content.templates, showcaseSongs };
+  const hasCardExamples = Array.isArray(data.content?.templates?.cards)
+    && data.content.templates.cards.some((card) => card?.exampleSong);
+  if (!hasCardExamples) {
+    const showcaseIds = Array.isArray(showcaseItems) && showcaseItems.length
+      ? showcaseItems.map((it) => it.songId).filter(Boolean)
+      : legacyShowcaseIds;
+    if (page === "home" && Array.isArray(showcaseIds) && showcaseIds.length) {
+      const tagById = new Map(
+        (Array.isArray(showcaseItems) ? showcaseItems : []).map((it) => [String(it.songId), String(it.tag || "").trim()]),
+      );
+      const showcaseSongs = (await resolveFeaturedDiscoverSongs(showcaseIds)).map((song) => ({
+        ...song,
+        occasionLabel: tagById.get(String(song.id)) || "",
+      }));
+      data.content.templates = { ...data.content.templates, showcaseSongs };
+    }
   }
 
   res.setHeader("Cache-Control", "public, max-age=60, stale-while-revalidate=300");

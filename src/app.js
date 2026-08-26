@@ -3894,7 +3894,7 @@ function arabicAddressPronunciationNote(value, singerGender = "") {
         : singer === "m"
         ? "Male lead vocalist; "
         : "";
-    return `${singerClause}Arabic address: lyrics sung TO a man; keep masculine addressee words: إنتَ، حبيبي، غالي، كنتَ.`;
+    return `${singerClause}Arabic address: lyrics sung TO a man; keep masculine addressee words: إنتَ، حبيبي، غالي.`;
   }
   if (v === "female") {
     const singerClause =

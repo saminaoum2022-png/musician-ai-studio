@@ -48638,12 +48638,15 @@ body.isAuth:not(.booting) .authGateChoices:not([hidden]){
   }
   body.isAuth.authKeyboardOpen main.grid{
     align-items: flex-start;
-    overflow-y: auto;
-    -webkit-overflow-scrolling: touch;
+    overflow: hidden;
   }
   body.isAuth.authKeyboardOpen .authScreen{
+    flex: 1 1 auto;
+    min-height: 0;
     align-items: flex-start;
     overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
     padding-bottom: calc(var(--auth-keyboard-inset, 0px) + env(safe-area-inset-bottom, 0px) + 16px);
   }
   body.isAuth.authKeyboardOpen .authInner{

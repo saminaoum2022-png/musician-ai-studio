@@ -20671,9 +20671,20 @@ function applyFeedHookToAudio(audio, hookSec) {
   if (!audio || hook <= 0) return false;
   try {
     const cur = Number(audio.currentTime || 0);
-    if (Math.abs(cur - hook) < 0.12) return true;
+    if (cur >= hook - 0.12 && cur <= hook + 0.35) return true;
     audio.currentTime = hook;
-    return Math.abs(Number(audio.currentTime || 0) - hook) < 0.35;
+    let landed = Number(audio.currentTime || 0);
+    // iOS/WKWebView often snaps seeks to the prior MP3 keyframe (~2–3s early).
+    if (landed < hook - 0.15) {
+      const dur = getAudioDuration(audio);
+      const maxTry = dur > 0 ? Math.min(hook + 3, Math.max(hook, dur - 0.05)) : hook + 3;
+      for (let t = hook + 0.25; t <= maxTry; t += 0.25) {
+        audio.currentTime = t;
+        landed = Number(audio.currentTime || 0);
+        if (landed >= hook - 0.15) break;
+      }
+    }
+    return landed >= hook - 0.15 && landed <= hook + 0.45;
   } catch {
     return false;
   }
@@ -20682,7 +20693,9 @@ function applyFeedHookToAudio(audio, hookSec) {
 function feedHookAtTarget(audio, hookSec) {
   const hook = normalizeHookStartSec(hookSec, getAudioDuration(audio));
   if (!audio || hook <= 0) return true;
-  return Math.abs(Number(audio.currentTime || 0) - hook) < 0.2;
+  const cur = Number(audio.currentTime || 0);
+  // Never treat landing 2–3s before the chosen hook as "on target".
+  return cur >= hook - 0.15 && cur <= hook + 0.45;
 }
 
 async function applyFeedHookAfterPlayStart(audio, source, trackRef) {
@@ -27304,6 +27317,9 @@ function resetAuthEmailPanel() {
 let _authFocusedField = null;
 let _authKeyboardHeight = 0;
 let _authKeyboardScrollTimer = 0;
+let _authKeyboardInsetLast = 0;
+let _authKeyboardScrollDone = false;
+let _authKeyboardViewportRaf = 0;
 
 function isAuthFormField(el) {
   if (!el || !els.authEmailForm || els.authEmailForm.hidden) return false;
@@ -27329,6 +27345,19 @@ function scrollAuthFieldAboveKeyboard(field) {
   if (kb > 0) {
     target.style.scrollMarginBottom = `${Math.round(kb + 28)}px`;
   }
+  // Mobile web: scroll the auth panel only — document scrollIntoView fights the keyboard.
+  if (!getNativeKeyboardPlugin()) {
+    const screen = document.querySelector(".authScreen");
+    if (!screen || kb <= 0) return;
+    const screenRect = screen.getBoundingClientRect();
+    const targetRect = target.getBoundingClientRect();
+    const visibleBottom = screenRect.bottom - kb - 16;
+    const overflow = targetRect.bottom - visibleBottom;
+    if (overflow > 4) {
+      screen.scrollTop += overflow;
+    }
+    return;
+  }
   try {
     target.scrollIntoView({ block: "center", inline: "nearest", behavior: "auto" });
   } catch {}
@@ -27337,12 +27366,17 @@ function scrollAuthFieldAboveKeyboard(field) {
 function applyAuthKeyboardOpen(height) {
   const kb = Math.max(0, Math.round(Number(height) || 0));
   if (!kb || !document.body.classList.contains("isAuth")) return;
+  const insetChanged = Math.abs(kb - _authKeyboardInsetLast) > 8;
   _authKeyboardHeight = kb;
+  _authKeyboardInsetLast = kb;
   document.body.classList.add("authKeyboardOpen");
   try {
     document.documentElement.style.setProperty("--auth-keyboard-inset", `${kb}px`);
   } catch {}
-  if (_authFocusedField) scrollAuthFieldAboveKeyboard(_authFocusedField);
+  if (_authFocusedField && (!_authKeyboardScrollDone || insetChanged)) {
+    scrollAuthFieldAboveKeyboard(_authFocusedField);
+    _authKeyboardScrollDone = true;
+  }
 }
 
 function scheduleAuthKeyboardScroll() {
@@ -27356,9 +27390,15 @@ function scheduleAuthKeyboardScroll() {
 function clearAuthKeyboardInset() {
   _authFocusedField = null;
   _authKeyboardHeight = 0;
+  _authKeyboardInsetLast = 0;
+  _authKeyboardScrollDone = false;
   if (_authKeyboardScrollTimer) {
     clearTimeout(_authKeyboardScrollTimer);
     _authKeyboardScrollTimer = 0;
+  }
+  if (_authKeyboardViewportRaf) {
+    cancelAnimationFrame(_authKeyboardViewportRaf);
+    _authKeyboardViewportRaf = 0;
   }
   document.body.classList.remove("authKeyboardOpen");
   try {
@@ -27372,6 +27412,7 @@ function clearAuthKeyboardInset() {
 function handleAuthFieldFocus(target) {
   if (!isAuthFormField(target)) return;
   _authFocusedField = target;
+  _authKeyboardScrollDone = false;
   if (document.body.classList.contains("authKeyboardOpen") && _authKeyboardHeight > 0) {
     scheduleAuthKeyboardScroll();
   }
@@ -27401,15 +27442,19 @@ function wireAuthKeyboardOnce() {
     });
   } else {
     const vv = window.visualViewport;
-    const onViewportChange = () => {
+    const onViewportResize = () => {
       if (!document.body.classList.contains("isAuth") || !_authFocusedField) return;
-      const kb = measureAuthViewportKeyboardInset();
-      if (kb > 0) applyAuthKeyboardOpen(kb);
-      else if (!isAuthFormField(document.activeElement)) clearAuthKeyboardInset();
+      if (_authKeyboardViewportRaf) return;
+      _authKeyboardViewportRaf = requestAnimationFrame(() => {
+        _authKeyboardViewportRaf = 0;
+        if (!document.body.classList.contains("isAuth") || !_authFocusedField) return;
+        const kb = measureAuthViewportKeyboardInset();
+        if (kb > 0) applyAuthKeyboardOpen(kb);
+        else if (!isAuthFormField(document.activeElement)) clearAuthKeyboardInset();
+      });
     };
     if (vv) {
-      vv.addEventListener("resize", onViewportChange);
-      vv.addEventListener("scroll", onViewportChange);
+      vv.addEventListener("resize", onViewportResize);
     }
   }
 
@@ -56193,6 +56238,13 @@ async function playInline(url, label, source, opts = {}) {
     renderHubNowPlaying();
   } catch {}
   // Kick play immediately while the tap gesture may still be valid on iOS.
+  const pendingHook =
+    shouldApplyFeedHook(miniSource) &&
+    miniSource?.applyFeedHook !== false &&
+    feedHookStartFromContext(miniSource) > 0;
+  if (pendingHook) {
+    try { a.volume = 0; } catch {}
+  }
   void hubAudioPlayWithRetry(a).then(async (ok) => {
     if (!ok) {
       clearPlaybackPending();

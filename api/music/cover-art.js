@@ -4,7 +4,7 @@
  */
 const path = require("path");
 const { pathToFileURL } = require("url");
-const { verifyUser } = require("../_lib/credits-auth");
+const { verifyUser, isAdminEmail } = require("../_lib/credits-auth");
 const { applyCors } = require("../_lib/cors");
 const { normalizeCoverPortraitBuffer, COVER_PORTRAIT_W, COVER_PORTRAIT_H } = require("../_lib/cover-portrait-normalize");
 const { tryGeminiCoverScene } = require("../_lib/gemini-cover-prompt");
@@ -229,7 +229,7 @@ module.exports = async function handler(req, res) {
 
     const avoidTagsInput = String(body?.avoidTagsInput || body?.avoidTags || "").trim().slice(0, MAX_FIELD);
     const coverRegenerate = Boolean(body?.coverRegenerate);
-    if (coverRegenerate) {
+    if (coverRegenerate && !isAdminEmail(user.email)) {
       const { requireProSubscription } = require("../_lib/pro-web-gate");
       const proGate = await requireProSubscription(user.userId);
       if (!proGate.ok) {

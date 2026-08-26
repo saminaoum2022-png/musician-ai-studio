@@ -7745,6 +7745,7 @@ html[data-theme="light"] .feedHookMarker::before{
 }
 .playerCoverToolsRail[hidden]{ display: none !important; }
 .playerCoverToolBtn{
+  position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;

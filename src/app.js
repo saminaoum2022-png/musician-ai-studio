@@ -25895,7 +25895,7 @@ function isWebOrDesktopShell() {
 
 function webProFeatureAllowed() {
   if (!isWebOrDesktopShell()) return true;
-  return Boolean(creditsState.proActive);
+  return Boolean(creditsState.proActive) || Boolean(creditsState.isAdmin);
 }
 
 /** Returns true when access is allowed; false when blocked (upgrade prompt shown). */
@@ -25906,7 +25906,7 @@ function requireProForWebFeature(featureLabel = "This feature") {
 }
 
 function proFeatureAllowed() {
-  return Boolean(creditsState.proActive);
+  return Boolean(creditsState.proActive) || Boolean(creditsState.isAdmin);
 }
 
 function proFeatureLocked() {
@@ -53723,7 +53723,7 @@ function syncPlayerCoverToolsRail() {
     if (canRegen) {
       const locked = proFeatureLocked();
       els.btnPlayerRegenCover.classList.toggle("isProLocked", locked);
-      setWebProFeaturePill(els.btnPlayerRegenCover, locked, "inline");
+      setWebProFeaturePill(els.btnPlayerRegenCover, locked, "act");
     }
   }
   if (els.btnPlayerEditThumb) els.btnPlayerEditThumb.hidden = !canEdit;

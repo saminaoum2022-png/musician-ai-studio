@@ -2,9 +2,8 @@
  * POST /api/lyrics
  * Body: { seed?: string, style?: string, mode?: "continue"|"full"|"arrange"|"challenge"|"remix_reply"|"diacritics", sourceLyrics?: string, sourceTitle?: string, sourceCreator?: string, lyricsProvider?: "gemini" }
  *
- * Provider: Gemini by default (free — uses GEMINI_API_KEY).
- * Suno lyrics when lyricsProvider is "suno" (costs Suno credits; same engine as song gen).
- * remix_reply + diacritics stay Gemini-only (long text / vowel marks need full lyrics in prompt).
+ * Provider: Suno when lyricsProvider is "suno" (default for ✦ Generate; costs Suno credits).
+ * Gemini for remix_reply, diacritics (vowel marks), and Suno fallback.
  */
 const { queueLogProviderUsage } = require("./_lib/provider-usage-log");
 
@@ -24,13 +23,10 @@ module.exports = async function handler(req, res) {
     const sourceCreator = String(body?.sourceCreator || "").trim().slice(0, 80);
     const lyricsProvider = String(body?.lyricsProvider || body?.providerPreference || "").trim().toLowerCase();
     const requestedMode = String(body?.mode || "").trim().toLowerCase();
-    const sunoLongTextMode =
-      (requestedMode === "arrange" || requestedMode === "continue") && seed.length > 180;
     const sunoLyricsRequested =
       lyricsProvider === "suno"
       && requestedMode !== "remix_reply"
-      && requestedMode !== "diacritics"
-      && !sunoLongTextMode;
+      && requestedMode !== "diacritics";
     if (requestedMode === "diacritics" && !seed) {
       return json(res, 400, {
         error: "Add vowel marks needs existing Arabic lyrics in the box.",
@@ -115,8 +111,12 @@ module.exports = async function handler(req, res) {
       if (sunoResult?.ok) {
         const normalized = sanitizeSunoLyricsOutput(sunoResult.lyrics);
         if (normalized) {
+          const lyricsVariants = Array.isArray(sunoResult.lyricsVariants) && sunoResult.lyricsVariants.length
+            ? sunoResult.lyricsVariants
+            : [{ text: normalized, title: sunoResult.title || "" }];
           return json(res, 200, {
             lyrics: normalized,
+            lyricsVariants,
             provider: "suno",
             title: sunoResult.title || "",
             debug: {
@@ -124,7 +124,7 @@ module.exports = async function handler(req, res) {
               suno: "ok",
               taskId: sunoResult.taskId || "",
               verbatim: true,
-              variantCount: sunoResult.variantCount || 1,
+              variantCount: sunoResult.variantCount || lyricsVariants.length,
               variantIndex: sunoResult.variantIndex ?? 0,
             },
           });
@@ -207,13 +207,18 @@ async function trySunoLyrics({ sunoKey, prompt, callBackUrl }) {
       }
       const extracted = extractSunoLyricsFromRecord(data);
       if (extracted?.lyrics) {
+        const allVariants = (extracted.allVariants || []).map((v) => ({
+          text: sanitizeSunoLyricsOutput(v.text),
+          title: v.title || "",
+        })).filter((v) => v.text);
         return {
           ok: true,
           taskId,
           lyrics: extracted.lyrics,
           title: extracted.title || "",
-          variantCount: extracted.variantCount || 1,
+          variantCount: extracted.variantCount || allVariants.length || 1,
           variantIndex: extracted.variantIndex ?? 0,
+          lyricsVariants: allVariants.length ? allVariants : [{ text: extracted.lyrics, title: extracted.title || "" }],
         };
       }
       const status = String(data?.data?.status || data?.status || "").toUpperCase();
@@ -653,13 +658,11 @@ function extractGeminiText(data) {
     .trim();
 }
 
-function extractSunoLyricsFromRecord(data) {
-  // Official shape: data.data.response.data = [{ text, title, status }, ...]
-  // Suno returns multiple lyric variations per task (callback docs show 2).
-  const rows = data?.data?.response?.data;
+function collectSunoLyricsVariantsRaw(data) {
   const variants = [];
-  if (Array.isArray(rows)) {
-    for (const item of rows) {
+  const pushRows = (arr) => {
+    if (!Array.isArray(arr)) return;
+    for (const item of arr) {
       const text = String(item?.text || item?.lyrics || "").trim();
       if (!text) continue;
       const status = String(item?.status || "").trim().toLowerCase();
@@ -669,35 +672,33 @@ function extractSunoLyricsFromRecord(data) {
         complete: !status || status === "complete",
       });
     }
-  }
-  // Legacy/alternate shapes — only if primary path empty.
-  if (!variants.length) {
-    const fallbackRows = data?.data?.data || data?.response?.data;
-    if (Array.isArray(fallbackRows)) {
-      for (const item of fallbackRows) {
-        const text = String(item?.text || item?.lyrics || "").trim();
-        if (!text) continue;
-        const status = String(item?.status || "").trim().toLowerCase();
-        variants.push({
-          text,
-          title: String(item?.title || "").trim(),
-          complete: !status || status === "complete",
-        });
-      }
-    }
-  }
+  };
+  pushRows(data?.data?.response?.data);
+  if (!variants.length) pushRows(data?.data?.data);
+  if (!variants.length) pushRows(data?.response?.data);
   if (!variants.length) {
     const direct = extractLyricsFromAny(data) || extractTextLoose(data);
-    if (direct) {
-      variants.push({ text: String(direct).trim(), title: "", complete: true });
-    }
+    if (direct) variants.push({ text: String(direct).trim(), title: "", complete: true });
   }
+  return variants;
+}
+
+function extractSunoLyricsFromRecord(data) {
+  const variants = collectSunoLyricsVariantsRaw(data);
   const variantCount = variants.length;
-  const pickIndex = Math.max(0, variants.findIndex((v) => v.complete));
-  const pick = variants[pickIndex >= 0 ? pickIndex : 0];
-  return pick
-    ? { lyrics: pick.text, title: pick.title, variantCount, variantIndex: pickIndex >= 0 ? pickIndex : 0 }
-    : null;
+  const pickIndex = variants.findIndex((v) => v.complete);
+  const useIndex = pickIndex >= 0 ? pickIndex : 0;
+  const pick = variants[useIndex];
+  if (!pick) return null;
+  const lyrics = sanitizeSunoLyricsOutput(pick.text);
+  if (!lyrics) return null;
+  return {
+    lyrics,
+    title: pick.title,
+    variantCount,
+    variantIndex: useIndex,
+    allVariants: variants,
+  };
 }
 
 /** Suno lyrics: keep verbatim — only drop obvious AI metadata lines, not content Suno wrote. */

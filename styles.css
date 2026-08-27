@@ -10705,6 +10705,47 @@ html[data-theme="light"] .personaVoiceTuneChips .optChip.isActive{
   font-weight:700;
   color:rgba(186,210,255,0.9);
 }
+.lyricsVariantRow{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+}
+.lyricsVariantRow[hidden]{ display:none !important; }
+.lyricsVariantPill{
+  -webkit-appearance:none;
+  appearance:none;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  height:32px;
+  padding:0 11px;
+  border-radius:999px;
+  border:1px solid rgba(255,255,255,0.12);
+  background:rgba(255,255,255,0.03);
+  color:rgba(232,238,247,0.72);
+  font-size:12px;
+  font-weight:650;
+  cursor:pointer;
+  white-space:nowrap;
+  -webkit-tap-highlight-color:transparent;
+  transition:background 160ms ease, color 160ms ease, border-color 160ms ease;
+}
+.lyricsVariantPill.isActive{
+  background:rgba(186,210,255,0.14);
+  border-color:rgba(186,210,255,0.35);
+  color:#fff;
+}
+.lyricsVariantPill:disabled{
+  opacity:0.45;
+  cursor:default;
+}
+/* Generate mode: variant pills sit left of the Generate button when Suno returns 2 drafts. */
+#lyricsFieldPanel[data-lyrics-mode="generate"] .lyricsAssistBar:has(.lyricsVariantRow:not([hidden])){
+  justify-content:flex-start;
+}
+#lyricsFieldPanel[data-lyrics-mode="generate"] .lyricsAssistBar:has(.lyricsVariantRow:not([hidden])) #btnLyricsMagic{
+  margin-left:auto;
+}
 #lyricsFieldPanel[data-lyrics-mode="generate"] #btnLyricsDiacritics{
   display:none !important;
 }

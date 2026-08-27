@@ -119,7 +119,14 @@ module.exports = async function handler(req, res) {
             lyrics: normalized,
             provider: "suno",
             title: sunoResult.title || "",
-            debug: { nonce, suno: "ok", taskId: sunoResult.taskId || "", verbatim: true },
+            debug: {
+              nonce,
+              suno: "ok",
+              taskId: sunoResult.taskId || "",
+              verbatim: true,
+              variantCount: sunoResult.variantCount || 1,
+              variantIndex: sunoResult.variantIndex ?? 0,
+            },
           });
         }
       }
@@ -199,7 +206,16 @@ async function trySunoLyrics({ sunoKey, prompt, callBackUrl }) {
         return { ok: false, error: data?.msg || data?.error || text || `status_http_${info.status}`, taskId };
       }
       const extracted = extractSunoLyricsFromRecord(data);
-      if (extracted?.lyrics) return { ok: true, taskId, lyrics: extracted.lyrics, title: extracted.title || "" };
+      if (extracted?.lyrics) {
+        return {
+          ok: true,
+          taskId,
+          lyrics: extracted.lyrics,
+          title: extracted.title || "",
+          variantCount: extracted.variantCount || 1,
+          variantIndex: extracted.variantIndex ?? 0,
+        };
+      }
       const status = String(data?.data?.status || data?.status || "").toUpperCase();
       if (["CREATE_TASK_FAILED", "GENERATE_LYRICS_FAILED", "CALLBACK_EXCEPTION", "SENSITIVE_WORD_ERROR"].includes(status)) {
         return { ok: false, error: status.toLowerCase(), taskId };
@@ -638,10 +654,12 @@ function extractGeminiText(data) {
 }
 
 function extractSunoLyricsFromRecord(data) {
+  // Official shape: data.data.response.data = [{ text, title, status }, ...]
+  // Suno returns multiple lyric variations per task (callback docs show 2).
+  const rows = data?.data?.response?.data;
   const variants = [];
-  const pushMany = (arr) => {
-    if (!Array.isArray(arr)) return;
-    for (const item of arr) {
+  if (Array.isArray(rows)) {
+    for (const item of rows) {
       const text = String(item?.text || item?.lyrics || "").trim();
       if (!text) continue;
       const status = String(item?.status || "").trim().toLowerCase();
@@ -651,18 +669,35 @@ function extractSunoLyricsFromRecord(data) {
         complete: !status || status === "complete",
       });
     }
-  };
-  pushMany(data?.data?.response?.data);
-  pushMany(data?.data?.data);
-  pushMany(data?.response?.data);
-  if (Array.isArray(data?.data?.response)) pushMany(data?.data?.response);
-  const direct = extractLyricsFromAny(data) || extractTextLoose(data);
-  if (direct && !variants.some((v) => v.text === String(direct).trim())) {
-    variants.push({ text: String(direct).trim(), title: "", complete: true });
   }
-  // Suno dashboard shows the first finished variant — do not pick the longest alternate.
-  const pick = variants.find((v) => v.complete) || variants[0];
-  return pick ? { lyrics: pick.text, title: pick.title } : null;
+  // Legacy/alternate shapes — only if primary path empty.
+  if (!variants.length) {
+    const fallbackRows = data?.data?.data || data?.response?.data;
+    if (Array.isArray(fallbackRows)) {
+      for (const item of fallbackRows) {
+        const text = String(item?.text || item?.lyrics || "").trim();
+        if (!text) continue;
+        const status = String(item?.status || "").trim().toLowerCase();
+        variants.push({
+          text,
+          title: String(item?.title || "").trim(),
+          complete: !status || status === "complete",
+        });
+      }
+    }
+  }
+  if (!variants.length) {
+    const direct = extractLyricsFromAny(data) || extractTextLoose(data);
+    if (direct) {
+      variants.push({ text: String(direct).trim(), title: "", complete: true });
+    }
+  }
+  const variantCount = variants.length;
+  const pickIndex = Math.max(0, variants.findIndex((v) => v.complete));
+  const pick = variants[pickIndex >= 0 ? pickIndex : 0];
+  return pick
+    ? { lyrics: pick.text, title: pick.title, variantCount, variantIndex: pickIndex >= 0 ? pickIndex : 0 }
+    : null;
 }
 
 /** Suno lyrics: keep verbatim — only drop obvious AI metadata lines, not content Suno wrote. */

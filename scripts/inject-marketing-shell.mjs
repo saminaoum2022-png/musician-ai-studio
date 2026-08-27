@@ -22,6 +22,19 @@ const navArSub = readPartial("nav-ar-sub.html");
 const LANG_AR_SUB = `<a class="marketingLangSwitch" href="{{AR_HREF}}" lang="ar" hreflang="ar" aria-label="Switch to Arabic">العربية</a>`;
 const LANG_EN_SUB = `<a class="marketingLangSwitch" href="{{EN_HREF}}" lang="en" hreflang="en" aria-label="Switch to English">English</a>`;
 
+/** Same Inter stack as home.html — injected only when missing (SEO-safe, no duplicate loads). */
+const MARKETING_FONT_LINKS = `<link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Display:wght@800;900&family=Inter:wght@400;600;700;800&display=swap">`;
+
+function ensureMarketingFonts(html) {
+  if (html.includes("fonts.googleapis.com")) return html;
+  if (html.includes("<head>")) {
+    return html.replace("<head>", `<head>\n  ${MARKETING_FONT_LINKS}`);
+  }
+  return html;
+}
+
 /** @type {{ file: string, nav: string, footer: string }[]} */
 const pages = [
   { file: "home.html", nav: navEnHome, footer: footerEn },
@@ -70,6 +83,16 @@ for (const { file, nav, footer } of pages) {
     continue;
   }
   html = html.replace(NAV_RE, nav).replace(FOOTER_RE, footer);
+  html = ensureMarketingFonts(html);
   fs.writeFileSync(abs, html);
   console.log(`inject-marketing-shell: ${file}`);
+}
+
+/** Blog post shells — fonts only (no nav/footer injection). */
+for (const file of ["blog-post.html", "ar/blog-post.html"]) {
+  const abs = path.join(root, file);
+  if (!fs.existsSync(abs)) continue;
+  const html = ensureMarketingFonts(fs.readFileSync(abs, "utf8"));
+  fs.writeFileSync(abs, html);
+  console.log(`inject-marketing-shell: fonts ${file}`);
 }

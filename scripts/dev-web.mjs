@@ -67,13 +67,13 @@ function rewritePath(pathname, search = "") {
   if (blogMatch) {
     const qs = new URLSearchParams(search.replace(/^\?/, ""));
     qs.set("slug", blogMatch[1]);
-    return { file: `/blog-post.html?${qs.toString()}` };
+    return { file: `/blog-post?${qs.toString()}` };
   }
   const arBlogMatch = pathname.match(/^\/ar\/blog\/([^/]+)$/);
   if (arBlogMatch) {
     const qs = new URLSearchParams(search.replace(/^\?/, ""));
     qs.set("slug", arBlogMatch[1]);
-    return { file: `/ar/blog-post.html?${qs.toString()}` };
+    return { file: `/ar/blog-post?${qs.toString()}` };
   }
 
   if (pathname === "/admin" || pathname === "/admin/") {

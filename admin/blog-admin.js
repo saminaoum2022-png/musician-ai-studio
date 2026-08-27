@@ -100,18 +100,27 @@ function fillBlogForm(content = {}) {
 
 function blogPreviewUrl(slug, locale, draft = true) {
   const origin = blogSiteOrigin();
-  const path = locale === "ar" ? `/ar/blog/${slug}` : `/blog/${slug}`;
-  return `${origin}${path}${draft ? "?preview=draft" : ""}`;
+  // Use blog-post?slug= for draft preview — works with cleanUrls and before /blog/:slug rewrite is live.
+  const page = locale === "ar" ? "/ar/blog-post" : "/blog-post";
+  const qs = new URLSearchParams({ slug: slug || "preview-slug" });
+  if (draft) qs.set("preview", "draft");
+  return `${origin}${page}?${qs.toString()}`;
 }
 
 function pushBlogDraftPreview(slug, locale, content) {
   const payload = { slug, locale, content, savedAt: Date.now() };
-  try {
-    sessionStorage.setItem(`nabad_blog_draft:${slug}:${locale}`, JSON.stringify(payload));
-  } catch { /* ignore */ }
+  const origin = blogSiteOrigin();
   const frame = document.getElementById("blogPreviewFrame");
-  if (!frame?.contentWindow) return;
-  frame.contentWindow.postMessage({ type: "nabad-blog-draft", payload }, blogSiteOrigin());
+  const msg = { type: "nabad-blog-draft", payload };
+  let attempts = 0;
+  const send = () => {
+    attempts += 1;
+    try {
+      if (frame?.contentWindow) frame.contentWindow.postMessage(msg, origin);
+    } catch { /* ignore */ }
+    if (attempts < 8) setTimeout(send, 250);
+  };
+  send();
 }
 
 export async function loadBlogViewData(state) {

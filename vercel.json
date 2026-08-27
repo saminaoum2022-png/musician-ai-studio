@@ -47,8 +47,8 @@
     { "source": "/robots.txt", "destination": "/api/robots" },
     { "source": "/sitemap.xml", "destination": "/api/sitemap" },
     { "source": "/s/:id", "destination": "/api/share?id=:id" },
-    { "source": "/blog/:slug", "destination": "/blog-post.html?slug=:slug" },
-    { "source": "/ar/blog/:slug", "destination": "/ar/blog-post.html?slug=:slug" },
+    { "source": "/blog/:slug", "destination": "/blog-post?slug=:slug" },
+    { "source": "/ar/blog/:slug", "destination": "/ar/blog-post?slug=:slug" },
     {
       "source": "/admin",
       "destination": "/admin/index.html"

@@ -9682,6 +9682,20 @@ html[data-theme="light"] .personaVoiceTuneChips .optChip.isActive{
 .inputPanel--style select{
   min-height:44px;
 }
+.inputPanel--style:has(.styleSuggestRow),
+.inputPanel--style:has(.styleSelectedRow:not([hidden])){
+  padding-bottom: 12px;
+}
+.inputPanel .styleSuggestRow,
+.inputPanel .styleSelectedRow{
+  width:100%;
+  max-width:100%;
+  margin-top:10px;
+  margin-bottom:0;
+}
+.inputPanel .styleSuggestRow{
+  padding-bottom:0;
+}
 /* Arabic address: four visible pills replacing the old dropdown. */
 .addressPills{
   display: grid;
@@ -10449,6 +10463,9 @@ html[data-theme="light"] .personaVoiceTuneChips .optChip.isActive{
   -webkit-overflow-scrolling:touch;
   scrollbar-width:none;
 }
+.inputPanel .styleSelectedRow{
+  margin-top:8px;
+}
 .styleSelectedRow::-webkit-scrollbar{ display:none; }
 .styleSelectedRow[hidden]{ display:none; }
 .styleSelectedChip{
@@ -10590,7 +10607,11 @@ html[data-theme="light"] .personaVoiceTuneChips .optChip.isActive{
 #lyricsFieldPanel[data-lyrics-mode="write"].showArabicLyricControls .lyricsAssistBar{
   display:flex;
 }
-#lyricsFieldPanel[data-lyrics-mode="write"].showArabicLyricControls #btnLyricsMagic{
+#lyricsFieldPanel[data-lyrics-mode="write"].showLyricsAssistPolish .lyricsAssistBar{
+  display:flex;
+}
+#lyricsFieldPanel[data-lyrics-mode="write"].showArabicLyricControls #btnLyricsMagic,
+#lyricsFieldPanel[data-lyrics-mode="write"].showLyricsAssistPolish #btnLyricsMagic{
   display:none;
 }
 #lyricsFieldPanel[data-lyrics-mode="generate"] #btnLyricsMagic{
@@ -10663,7 +10684,8 @@ html[data-theme="light"] .personaVoiceTuneChips .optChip.isActive{
 .lyricsDialectGroup[hidden],
 .lyricsAddressGroup[hidden]{ display:none; }
 .lyricsMagicBtn.isArabicGateBlocked,
-.lyricsDiacriticsBtn.isArabicGateBlocked{
+.lyricsDiacriticsBtn.isArabicGateBlocked,
+.lyricsPolishBtn.isArabicGateBlocked{
   opacity:0.42;
   cursor:not-allowed;
 }
@@ -10695,8 +10717,48 @@ html[data-theme="light"] .personaVoiceTuneChips .optChip.isActive{
   cursor:pointer;
   white-space:nowrap;
 }
-.lyricsDiacriticsBtn[hidden]{ display:none !important; }
-.lyricsDiacriticsBtn:disabled{
+.lyricsPolishBtn{
+  -webkit-appearance:none;
+  appearance:none;
+  position:relative;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  gap:6px;
+  height:32px;
+  padding:0 13px;
+  border-radius:999px;
+  border:1px solid rgba(124, 92, 255, 0.38);
+  background:linear-gradient(135deg, rgba(35, 213, 171, 0.14) 0%, rgba(124, 92, 255, 0.16) 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.12),
+    0 4px 14px rgba(124, 92, 255, 0.16);
+  font-size:12.5px;
+  font-weight:700;
+  cursor:pointer;
+  white-space:nowrap;
+}
+.lyricsPolishIco,
+.lyricsPolishLabel{
+  background:var(--nabad-squircle-gradient);
+  -webkit-background-clip:text;
+  background-clip:text;
+  color:transparent;
+}
+.lyricsPolishIco{
+  font-size:11px;
+  line-height:1;
+}
+.lyricsPolishBtn:hover:not(:disabled){
+  border-color:rgba(124, 92, 255, 0.52);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.16),
+    0 6px 18px rgba(124, 92, 255, 0.22);
+}
+.lyricsDiacriticsBtn[hidden],
+.lyricsPolishBtn[hidden]{ display:none !important; }
+.lyricsDiacriticsBtn:disabled,
+.lyricsPolishBtn:disabled{
   opacity:0.55;
   cursor:default;
 }
@@ -10708,12 +10770,13 @@ html[data-theme="light"] .personaVoiceTuneChips .optChip.isActive{
 #lyricsFieldPanel[data-lyrics-mode="generate"] #btnLyricsDiacritics{
   display:none !important;
 }
-#lyricsFieldPanel[data-lyrics-mode="write"] .lyricsDiacriticsBtn{
+#lyricsFieldPanel[data-lyrics-mode="write"] .lyricsDiacriticsBtn,
+#lyricsFieldPanel[data-lyrics-mode="write"] .lyricsPolishBtn{
   width:auto;
 }
 
 /* Artwork suggestion pills reuse the Style pill row styling. */
-.artworkSuggestRow{ margin-top:9px; }
+.artworkSuggestRow{ margin-top:0; }
 
 /* Singer pills — minimal line icons (Auto/Male/Female). */
 .addressPills--singer .addressPill{
@@ -41381,6 +41444,26 @@ html[data-theme="light"] body[data-route="generate"] .lyricsMagicBtn{
   background: var(--surface-secondary);
   box-shadow: none;
   color: var(--text);
+}
+html[data-theme="light"] body[data-route="generate"] .lyricsPolishBtn{
+  border-color: rgba(124, 92, 255, 0.34);
+  background: linear-gradient(135deg, rgba(35, 213, 171, 0.16) 0%, rgba(124, 92, 255, 0.14) 55%, rgba(183, 139, 255, 0.12) 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.85),
+    0 4px 14px rgba(124, 92, 255, 0.14);
+}
+html[data-theme="light"] body[data-route="generate"] .lyricsPolishBtn:hover:not(:disabled){
+  border-color: rgba(124, 92, 255, 0.48);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.92),
+    0 6px 18px rgba(124, 92, 255, 0.2);
+}
+html[data-theme="light"] body[data-route="generate"] .lyricsPolishIco,
+html[data-theme="light"] body[data-route="generate"] .lyricsPolishLabel{
+  background: linear-gradient(135deg, #0f9b7a 0%, #12b896 22%, #7c5cff 72%, #9b7bff 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
 }
 html[data-theme="light"] body[data-route="generate"] .generateOrb,
 html[data-theme="light"] body[data-route="generate"] #btnGenerateOrb,

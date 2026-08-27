@@ -702,7 +702,7 @@ const els = {
   lyricsAddressRow: document.getElementById("lyricsAddressRow"),
   sunoArabicAddress: document.getElementById("sunoArabicAddress"),
   btnLyricsDiacritics: document.getElementById("btnLyricsDiacritics"),
-  lyricsVariantRow: document.getElementById("lyricsVariantRow"),
+  btnLyricsPolish: document.getElementById("btnLyricsPolish"),
   sunoSingerGender: document.getElementById("sunoSingerGender"),
   singerPersonaRow: document.getElementById("singerPersonaRow"),
   sunoVoiceProfile: document.getElementById("sunoVoiceProfile"),
@@ -5291,10 +5291,10 @@ function arabicDialectAccentStyleNote() {
   return "";
 }
 
-/** Suno first for ✦ Generate lyrics (all languages). Gemini only for remix replies + vowel marks. */
+/** Suno first for ✦ Generate lyrics (all languages). Gemini for remix replies, polish, and vowel marks. */
 function resolveLyricsProviderForMode(mode) {
   const m = String(mode || "").trim().toLowerCase();
-  if (m === "remix_reply") return "gemini";
+  if (m === "remix_reply" || m === "enhance") return "gemini";
   return "suno";
 }
 
@@ -5349,6 +5349,18 @@ function shouldShowLyricsDiacritics() {
   return false;
 }
 
+/** Draft looks long enough to polish (post-Suno or pasted lyrics), not a one-line seed. */
+function lyricsLookPolishable(text, opts = {}) {
+  const t = String(text || "").trim();
+  if (t.length < 20) return false;
+  const inWrite = opts.writeMode ?? String(lyricsInputMode || "write") === "write";
+  if (/\[(verse|chorus|bridge|outro|intro|final chorus|pre-chorus|hook|refrain)/i.test(t)) return true;
+  const lineCount = t.split(/\n+/).map((line) => line.trim()).filter(Boolean).length;
+  // Write tab: pasted lyrics — allow polish with a shorter draft (2+ lines).
+  if (inWrite && lineCount >= 2 && t.length >= 40) return true;
+  return lineCount >= 3;
+}
+
 /** True when Arabic flow is active and dialect + address are both chosen. */
 function arabicLyricChoicesReady() {
   const instrumentalOnly = String(els.vocalInstrumentalOnly?.value || "0") === "1";
@@ -5396,6 +5408,20 @@ function syncArabicGenerateGate() {
         ? arabicLyricChoicesBlockReason()
         : "Add Arabic vowel marks for clearer singing";
   }
+  if (els.btnLyricsPolish) {
+    const polishBlocked = blocked || els.btnLyricsPolish.hidden;
+    els.btnLyricsPolish.classList.toggle("isArabicGateBlocked", polishBlocked);
+    if (!generating) {
+      els.btnLyricsPolish.disabled = instrumentalOnly || polishBlocked;
+    }
+    els.btnLyricsPolish.title = polishBlocked
+      ? blocked
+        ? arabicLyricChoicesBlockReason()
+        : "Polish lyrics"
+      : webProFeatureLocked()
+        ? "Polish lyrics — included with NabadAi Pro"
+        : "Tighten rhyme and line flow without changing the story";
+  }
   if (els.btnGenerateOrb && !generating) {
     // Only enforce when Arabic controls are showing; otherwise leave orb alone.
     if (shouldShowArabicDialectRow() || shouldShowArabicAddress()) {
@@ -5410,6 +5436,7 @@ function syncArabicLyricsControlsVisibility() {
   if (els.lyricsDialectGroup) els.lyricsDialectGroup.hidden = !showDialect;
   try { syncArabicAddressVisibility(); } catch {}
   try { syncLyricsDiacriticsVisibility(); } catch {}
+  try { syncLyricsPolishVisibility(); } catch {}
   if (els.lyricsFieldPanel) {
     const showPanelExtras = shouldShowArabicAddress() || showDialect || shouldShowLyricsDiacritics();
     els.lyricsFieldPanel.classList.toggle("showArabicLyricControls", showPanelExtras);
@@ -5489,6 +5516,7 @@ function setCreateSongType(type) {
   syncLyricsPlaceholder();
   if (els.btnLyricsMagic) els.btnLyricsMagic.disabled = instrumental;
   if (els.btnLyricsDiacritics) els.btnLyricsDiacritics.disabled = instrumental;
+  if (els.btnLyricsPolish) els.btnLyricsPolish.disabled = instrumental;
   try { syncArabicGenerateGate(); } catch {}
 }
 
@@ -5505,6 +5533,7 @@ function setGenerateFieldsLocked(locked) {
   if (els.sunoVocalUpload) els.sunoVocalUpload.disabled = locked;
   if (els.btnLyricsMagic) els.btnLyricsMagic.disabled = locked || instrumentalOnly;
   if (els.btnLyricsDiacritics) els.btnLyricsDiacritics.disabled = locked || instrumentalOnly;
+  if (els.btnLyricsPolish) els.btnLyricsPolish.disabled = locked || instrumentalOnly;
   if (els.btnMagicUploadVocal) els.btnMagicUploadVocal.disabled = locked;
   if (els.btnMagicRecordVocal) els.btnMagicRecordVocal.disabled = locked;
   if (els.vocalModeFull) els.vocalModeFull.disabled = locked;
@@ -5574,6 +5603,28 @@ function syncLyricsDiacriticsVisibility() {
   if (!show) {
     btn.disabled = true;
     btn.classList.add("isArabicGateBlocked");
+  }
+}
+
+function syncLyricsPolishVisibility() {
+  const btn = els.btnLyricsPolish || document.getElementById("btnLyricsPolish");
+  if (!btn) return;
+  const inWriteTab = String(lyricsInputMode || "write") === "write";
+  const show = lyricsLookPolishable(els.sunoPrompt?.value, { writeMode: inWriteTab });
+  btn.hidden = !show;
+  if (!show) {
+    btn.disabled = true;
+    btn.classList.add("isArabicGateBlocked");
+  }
+  if (els.lyricsFieldPanel) {
+    const diacriticsBtn = els.btnLyricsDiacritics || document.getElementById("btnLyricsDiacritics");
+    const diacriticsShown = Boolean(diacriticsBtn && !diacriticsBtn.hidden);
+    // Write tab: show assist bar for pasted/edited lyrics (Polish) and/or vowel marks.
+    const showWriteAssistBar = inWriteTab && (show || diacriticsShown);
+    els.lyricsFieldPanel.classList.toggle("showLyricsAssistPolish", showWriteAssistBar);
+  }
+  if (show && isWebOrDesktopShell()) {
+    try { setWebProFeaturePill(btn, webProFeatureLocked(), "pill"); } catch {}
   }
 }
 
@@ -23550,68 +23601,10 @@ let lastGenerationMeta = null;
 /** AI lyrics snapshot (✦ magic or auto-draft) — compared at Generate for Creator + Nabad. */
 let _nabadAiLyricsDraft = "";
 let _lyricsGeneratedInNabad = false;
-/** Suno ✦ Generate can return 2 lyric texts — stored for Variant 1/2 pills. */
-let _sunoLyricsVariantTexts = [];
-let _sunoLyricsVariantIndex = 0;
-
-function clearSunoLyricsVariants() {
-  _sunoLyricsVariantTexts = [];
-  _sunoLyricsVariantIndex = 0;
-  const row = els.lyricsVariantRow;
-  if (!row) return;
-  row.hidden = true;
-  row.querySelectorAll("[data-lyrics-variant]").forEach((btn, i) => {
-    btn.classList.toggle("isActive", i === 0);
-    btn.setAttribute("aria-pressed", i === 0 ? "true" : "false");
-    btn.disabled = false;
-    btn.hidden = i > 0;
-  });
-}
-
-function syncSunoLyricsVariantPills() {
-  const row = els.lyricsVariantRow;
-  if (!row) return;
-  const count = _sunoLyricsVariantTexts.length;
-  row.hidden = count < 2;
-  row.querySelectorAll("[data-lyrics-variant]").forEach((btn) => {
-    const idx = Number(btn.getAttribute("data-lyrics-variant"));
-    const has = Number.isFinite(idx) && idx < count;
-    btn.hidden = !has;
-    btn.disabled = !has;
-    const on = has && idx === _sunoLyricsVariantIndex;
-    btn.classList.toggle("isActive", on);
-    btn.setAttribute("aria-pressed", on ? "true" : "false");
-  });
-}
-
-function applySunoLyricsVariant(index) {
-  const idx = Number(index);
-  if (!Number.isFinite(idx) || idx < 0 || idx >= _sunoLyricsVariantTexts.length) return;
-  _sunoLyricsVariantIndex = idx;
-  const next = String(_sunoLyricsVariantTexts[idx] || "").trim();
-  if (els.sunoPrompt && next) els.sunoPrompt.value = next;
-  syncSunoLyricsVariantPills();
-  snapshotNabadAiLyricsDraft(next);
-  try { autoResizeLyricsBox(); } catch {}
-}
-
-function setSunoLyricsVariants(displayTexts, activeIndex = 0) {
-  _sunoLyricsVariantTexts = (displayTexts || [])
-    .map((t) => String(t || "").trim())
-    .filter(Boolean);
-  if (_sunoLyricsVariantTexts.length < 2) {
-    clearSunoLyricsVariants();
-    return;
-  }
-  const idx = Math.max(0, Math.min(_sunoLyricsVariantTexts.length - 1, Number(activeIndex) || 0));
-  _sunoLyricsVariantIndex = idx;
-  syncSunoLyricsVariantPills();
-}
 
 function resetNabadLyricsDraftState() {
   _lyricsGeneratedInNabad = false;
   _nabadAiLyricsDraft = "";
-  clearSunoLyricsVariants();
 }
 
 function snapshotNabadAiLyricsDraft(text) {
@@ -26154,6 +26147,9 @@ function syncProGatedWebUi() {
   if (els.vocalModeInstrumental) {
     els.vocalModeInstrumental.hidden = false;
     setWebProFeaturePill(els.vocalModeInstrumental, locked, "pill");
+  }
+  if (els.btnLyricsPolish) {
+    setWebProFeaturePill(els.btnLyricsPolish, locked, "pill");
   }
   if (els.btnSunoStems) {
     setWebProFeaturePill(els.btnSunoStems, locked, "inline");
@@ -58222,7 +58218,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
         else els.btnLyricsMagic.textContent = "✦";
       }
       if (els.btnLyricsDiacritics) els.btnLyricsDiacritics.disabled = true;
-      clearSunoLyricsVariants();
+      if (els.btnLyricsPolish) els.btnLyricsPolish.disabled = true;
       if (lyricsBoxEl) lyricsBoxEl.classList.add("generating");
       if (els.sunoPrompt) els.sunoPrompt.disabled = true;
       if (els.sunoStyle) els.sunoStyle.disabled = true;
@@ -58259,35 +58255,12 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       const data = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(data?.error || "Lyrics generation failed");
       const provider = String(data?.provider || "").trim();
-      const rawVariants = Array.isArray(data?.lyricsVariants) ? data.lyricsVariants : [];
-      const variantBodies = rawVariants
-        .map((v) => String(v?.text ?? v ?? "").trim())
-        .filter(Boolean);
-      const primaryLyrics = String(
-        variantBodies[Number(data?.debug?.variantIndex) || 0]
-        || variantBodies[0]
-        || data?.lyrics
-        || "",
-      ).trim();
-      if (!primaryLyrics) throw new Error("No lyrics returned");
-      const displayVariants = variantBodies.length
-        ? variantBodies.map((body) => {
-            if (!challenge && mode === "continue" && seed) return `${seed}\n\n${body}`.trim();
-            return body;
-          })
-        : [];
-      const activeIdx = Number(data?.debug?.variantIndex);
-      const pickIdx = Number.isFinite(activeIdx) && activeIdx >= 0 ? activeIdx : 0;
-      const nextLyrics = displayVariants.length
-        ? String(displayVariants[pickIdx] || displayVariants[0] || primaryLyrics).trim()
-        : (!challenge && mode === "continue" && seed
-          ? `${seed}\n\n${primaryLyrics}`.trim()
-          : primaryLyrics);
-      els.sunoPrompt.value = nextLyrics;
-      if (provider === "suno" && displayVariants.length >= 2) {
-        setSunoLyricsVariants(displayVariants, pickIdx);
+      const nextLyrics = String(data?.lyrics || "").trim();
+      if (!nextLyrics) throw new Error("No lyrics returned");
+      if (!challenge && mode === "continue" && seed) {
+        els.sunoPrompt.value = `${seed}\n\n${nextLyrics}`.trim();
       } else {
-        clearSunoLyricsVariants();
+        els.sunoPrompt.value = nextLyrics;
       }
       if (challenge && pendingSearchRemixMeta) {
         pendingSearchRemixMeta.challengePromptPending = false;
@@ -58309,12 +58282,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       const debugNote = debugSuno || debugGemini ? ` [engine:${debugSuno || "-"} gemini:${debugGemini || "-"}]` : "";
       setStatus(`Lyrics ready${providerNote}${debugNote}. Review and then generate song.`);
       if (usingSunoLyrics && provider === "suno") {
-        const variantNote =
-          displayVariants.length >= 2 ? " Pick Variant 1 or 2 if you prefer the other Suno draft." : "";
-        showToast(`Suno wrote lyrics — review, then Generate song.${variantNote}`, {
-          icon: "✦",
-          durationMs: displayVariants.length >= 2 ? 5200 : 4200,
-        });
+        showToast("Suno wrote lyrics — review, then Generate song.", { icon: "✦", durationMs: 4200 });
       }
       try { syncArabicLyricsControlsVisibility(); } catch {}
     } catch (e) {
@@ -58330,6 +58298,78 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
         else els.btnLyricsMagic.textContent = "✦";
       }
       if (els.btnLyricsDiacritics) els.btnLyricsDiacritics.disabled = false;
+      if (els.btnLyricsPolish) els.btnLyricsPolish.disabled = false;
+    }
+  };
+
+  const polishLyricsWithGemini = async () => {
+    if (!els.sunoPrompt) return;
+    if (!requireProForWebFeature("Polish lyrics")) return;
+    if (!arabicLyricChoicesReady()) {
+      const reason = arabicLyricChoicesBlockReason();
+      showToast(reason, { icon: "!", durationMs: 3600 });
+      setStatus(reason);
+      return;
+    }
+    const seed = String(els.sunoPrompt.value || "").trim();
+    if (!lyricsLookPolishable(seed)) {
+      showToast("Generate or paste lyrics first, then polish.", { icon: "!", durationMs: 3200 });
+      return;
+    }
+    try { applyLyricsLanguageToDialect(); } catch {}
+    const lyricsBoxEl = els.sunoPrompt.closest(".lyricsBox");
+    const style = String(els.sunoStyle?.value || "").trim();
+    const dialect = String(els.sunoDialect?.value || "").trim();
+    const dialectHint = String(els.sunoDialectHint?.value || "").trim();
+    const addressNote = arabicAddressPronunciationNote(
+      els.sunoArabicAddress?.value,
+      resolveSingerGenderForGeneration({ hasReference: Boolean(getVocalReferenceFile()) })
+    );
+    const lyricDialectHint = [dialectHint, addressNote].filter(Boolean).join(" ");
+    const labelEl = els.btnLyricsPolish?.querySelector(".lyricsPolishLabel");
+    const prevLabel = labelEl?.textContent || "Polish lyrics";
+    try {
+      if (els.btnLyricsPolish) els.btnLyricsPolish.disabled = true;
+      if (els.btnLyricsMagic) els.btnLyricsMagic.disabled = true;
+      if (els.btnLyricsDiacritics) els.btnLyricsDiacritics.disabled = true;
+      if (labelEl) labelEl.textContent = "Polishing…";
+      if (lyricsBoxEl) lyricsBoxEl.classList.add("generating");
+      if (els.sunoPrompt) els.sunoPrompt.disabled = true;
+      setStatus("Polishing lyrics for rhyme and flow…");
+      const r = await fetch(apiUrl("/api/lyrics"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          seed,
+          style,
+          mode: "enhance",
+          dialect,
+          dialectHint: lyricDialectHint,
+          lyricsProvider: "gemini",
+        }),
+      });
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(data?.error || "Could not polish lyrics");
+      const nextLyrics = String(data?.lyrics || "").trim();
+      if (!nextLyrics) throw new Error("No lyrics returned");
+      els.sunoPrompt.value = nextLyrics;
+      try { autoResizeLyricsBox(); } catch {}
+      try { syncArabicLyricsControlsVisibility(); } catch {}
+      snapshotNabadAiLyricsDraft(nextLyrics);
+      const doneMsg = "Lyrics polished — review, then Generate song.";
+      setStatus(doneMsg);
+      showToast(doneMsg, { icon: "✦", durationMs: 3600 });
+    } catch (e) {
+      setStatus(`Polish failed: ${e?.message || String(e)}`);
+      showToast(e?.message || "Could not polish lyrics", { icon: "!", durationMs: 3600 });
+    } finally {
+      if (els.sunoPrompt) els.sunoPrompt.disabled = false;
+      if (lyricsBoxEl) lyricsBoxEl.classList.remove("generating");
+      if (els.btnLyricsPolish) els.btnLyricsPolish.disabled = false;
+      if (els.btnLyricsMagic) els.btnLyricsMagic.disabled = false;
+      if (els.btnLyricsDiacritics) els.btnLyricsDiacritics.disabled = false;
+      if (labelEl) labelEl.textContent = prevLabel;
+      try { syncArabicGenerateGate(); } catch {}
     }
   };
 
@@ -58370,6 +58410,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
     const prevLabelAr = labelArEl?.textContent || "تشكيل";
     try {
       if (els.btnLyricsDiacritics) els.btnLyricsDiacritics.disabled = true;
+      if (els.btnLyricsPolish) els.btnLyricsPolish.disabled = true;
       if (els.btnLyricsMagic) els.btnLyricsMagic.disabled = true;
       if (labelEl) labelEl.textContent = "Adding…";
       if (labelArEl) labelArEl.textContent = "…";
@@ -58413,6 +58454,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       if (els.sunoPrompt) els.sunoPrompt.disabled = false;
       if (lyricsBoxEl) lyricsBoxEl.classList.remove("generating");
       if (els.btnLyricsDiacritics) els.btnLyricsDiacritics.disabled = false;
+      if (els.btnLyricsPolish) els.btnLyricsPolish.disabled = false;
       if (els.btnLyricsMagic) els.btnLyricsMagic.disabled = false;
       if (labelEl) labelEl.textContent = prevLabel;
       if (labelArEl) labelArEl.textContent = prevLabelAr;
@@ -58613,14 +58655,9 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       void addArabicVowelMarksToLyrics();
     });
   }
-  const lyricsVariantRow = els.lyricsVariantRow;
-  if (lyricsVariantRow && !lyricsVariantRow.dataset.bound) {
-    lyricsVariantRow.dataset.bound = "1";
-    lyricsVariantRow.addEventListener("click", (e) => {
-      const btn = e.target?.closest?.("[data-lyrics-variant]");
-      if (!btn || !lyricsVariantRow.contains(btn)) return;
-      haptic("light");
-      applySunoLyricsVariant(btn.getAttribute("data-lyrics-variant"));
+  if (els.btnLyricsPolish) {
+    els.btnLyricsPolish.addEventListener("click", () => {
+      void polishLyricsWithGemini();
     });
   }
   if (els.lyricsModeWrite) {
@@ -60982,8 +61019,9 @@ function addStyleTags(tags) {
 /* =================================================================
  *  Smart Style Assistant (UI only)
  *  Curated pills under Style with per-category limits (genres ≤2 fusion,
- *  moods ≤1, tempo ≤1, instruments unlimited). Genre presets expand to
- *  full Suno prompts at generation time; short labels stay in the field.
+ *  moods ≤1, tempo ≤1, instruments unlimited). ✨ Auto picks genre + mood +
+ *  up to 3 instruments + tempo from lyrics keywords and dialect (free, local).
+ *  Genre presets expand to full Suno prompts at generation time.
  * ================================================================= */
 const STYLE_GENRE_PRESETS = Object.freeze({
   "Levantine Dabke": Object.freeze({
@@ -61229,43 +61267,304 @@ function syncStyleUi() {
   renderVocalStyleRow();
 }
 
-function autoSuggestStyles() {
+/** Rotates through starter packs when lyrics are empty (tap Auto again for another vibe). */
+let _styleAutoStarterIndex = 0;
+
+const STYLE_AUTO_STARTERS = Object.freeze([
+  Object.freeze({ genres: ["Pop"], mood: "Emotional", instruments: ["Piano", "Strings"], tempo: "4/4" }),
+  Object.freeze({ genres: ["R&B"], mood: "Dreamy", instruments: ["Synth", "Drums"], tempo: "90 BPM" }),
+  Object.freeze({ genres: ["Lo-fi"], mood: "Chill", instruments: ["Piano", "Synth"], tempo: "Slow" }),
+  Object.freeze({ genres: ["House"], mood: "Energetic", instruments: ["Synth", "Drums"], tempo: "128 BPM" }),
+  Object.freeze({ genres: ["Folk"], mood: "Nostalgic", instruments: ["Guitar", "Strings"], tempo: "Mid Tempo" }),
+  Object.freeze({ genres: ["Jazz"], mood: "Chill", instruments: ["Saxophone", "Piano"], tempo: "Slow" }),
+]);
+
+const STYLE_AUTO_DIALECT_DEFAULTS = Object.freeze({
+  lebanese: Object.freeze({ genres: ["Levantine Pop"], mood: "Emotional", instruments: ["Oud", "Piano"], tempo: "Mid Tempo" }),
+  syrian: Object.freeze({ genres: ["Levantine Pop"], mood: "Emotional", instruments: ["Oud", "Strings"], tempo: "Mid Tempo" }),
+  palestinian: Object.freeze({ genres: ["Levantine Pop"], mood: "Emotional", instruments: ["Oud", "Piano"], tempo: "Mid Tempo" }),
+  egyptian: Object.freeze({ genres: ["Arabic Pop"], mood: "Emotional", instruments: ["Piano", "Strings"], tempo: "Mid Tempo" }),
+  iraqi: Object.freeze({ genres: ["Arabic Pop"], mood: "Nostalgic", instruments: ["Oud", "Violin"], tempo: "Mid Tempo" }),
+  gulf: Object.freeze({ genres: ["Arabic Pop"], mood: "Romantic", instruments: ["Oud", "Strings"], tempo: "Mid Tempo" }),
+  moroccan: Object.freeze({ genres: ["Arabic Pop"], mood: "Nostalgic", instruments: ["Oud", "Darbuka"], tempo: "Mid Tempo" }),
+  tunisian: Object.freeze({ genres: ["Arabic Pop"], mood: "Nostalgic", instruments: ["Oud", "Strings"], tempo: "Mid Tempo" }),
+  sudanese: Object.freeze({ genres: ["Arabic Pop"], mood: "Emotional", instruments: ["Strings", "Tabla"], tempo: "Mid Tempo" }),
+  msa: Object.freeze({ genres: ["Tarab"], mood: "Emotional", instruments: ["Oud", "Strings"], tempo: "Slow", preferSlowTempo: true }),
+});
+
+/** Free local rules — scans lyrics + dialect for genre, mood, instruments, tempo. */
+const STYLE_AUTO_RULES = Object.freeze([
+  Object.freeze({
+    id: "dabke",
+    weight: 100,
+    re: /(?:\bdabke?\b|\bdabka\b|mijwiz|ktakufti|line[\s-]?dance|wedding[\s-]?dance|\b6\/8\b|دب(?:كة|كه)|زفاف|عرس|فرح|ملك|سهر(?:ة|ه)|حفلة|رقص)/i,
+    suggest: () => ({
+      genres: ["Levantine Dabke"],
+      mood: "Energetic",
+      instruments: ["Mijwiz", "Tabla", "Darbuka"],
+      tempo: "6/8",
+    }),
+  }),
+  Object.freeze({
+    id: "tarab",
+    weight: 95,
+    re: /(?:\btarab\b|mawwal|muwashshah|golden[\s-]?age|classic[\s-]?arabic|طرب|موال|موشح|زخرف)/i,
+    suggest: () => ({
+      genres: ["Tarab"],
+      mood: "Emotional",
+      instruments: ["Oud", "Violin", "Strings"],
+      tempo: "Slow",
+      preferSlowTempo: true,
+    }),
+  }),
+  Object.freeze({
+    id: "trap",
+    weight: 92,
+    re: /(?:\btrap\b|\bdrill\b|\brap\b|hip[\s-]?hop|\b808\b|bars|freestyle|street|hustle|flex|gang|beats|راب|تراب|شارع|تح(?:دي|د)|فلوس)/i,
+    suggest: (ctx) => ({
+      genres: [ctx.hasArabic ? "Arabic Pop" : "Trap"],
+      mood: "Dark",
+      instruments: ["808", "Drums", "Synth"],
+      tempo: "128 BPM",
+    }),
+  }),
+  Object.freeze({
+    id: "epic",
+    weight: 88,
+    re: /(?:\bepic\b|cinematic|orchestral|hero|battle|war|rise|power|glory|victory|anthem|منتصر|بطل|معر(?:كة|كه)|قوة|انتصار|ملح(?:مة|مه))/i,
+    suggest: () => ({
+      genres: ["Classical"],
+      mood: "Epic",
+      instruments: ["Orchestra", "Strings", "Drums"],
+      tempo: "Slow",
+    }),
+  }),
+  Object.freeze({
+    id: "party",
+    weight: 85,
+    re: /(?:\bparty\b|\bclub\b|\brave\b|\bdisco\b|night[\s-]?out|turn[\s-]?up|dance[\s-]?floor|celebrat|fiesta|reggaeton|afrobeat|amapiano|سهرة|نادي|احتف|كاف(?:يه|ية))/i,
+    suggest: (ctx) => ({
+      genres: [/(?:reggaeton|latin|dembow)/i.test(ctx.text) ? "Reggaeton" : /(?:afro|amapiano)/i.test(ctx.text) ? "Afrobeat" : "House"],
+      mood: "Happy",
+      instruments: ["Synth", "Drums"],
+      tempo: "128 BPM",
+    }),
+  }),
+  Object.freeze({
+    id: "sad",
+    weight: 80,
+    re: /(?:\bsad\b|sorrow|melanchol|cry|tears|weeps?|alone|lonely|miss(?:ing|es)?|goodbye|farewell|heartbreak|broke(?:n)?|hurt|pain|grief|regret|empty|lost|rain|goodnight|حز(?:ين|ينة|ن)|دمو(?:ع|)|بك(?:اء|ي)|وح(?:يد|يدة)|اشت(?:قت|ياق)|فراق|وج(?:ع|يع)|أ?(?:لم|لام)|غياب|سهر(?:ان|انه))/i,
+    suggest: (ctx) => ({
+      genres: [styleAutoPickArabicGenre(ctx, "ballad")],
+      mood: "Sad",
+      instruments: ["Piano", "Strings"],
+      tempo: "Slow",
+      preferSlowTempo: true,
+    }),
+  }),
+  Object.freeze({
+    id: "nostalgic",
+    weight: 76,
+    re: /(?:nostalg|memor(?:y|ies)|remember|old[\s-]?days|childhood|hometown|back[\s-]?home|yearning|longing|ذكري(?:ات|ة)|ت(?:ذكر|ذكار)|طفول(?:ة|ه)|(?:بيت|وطن|بلد)|زمان|اي(?:ام|ّام)|قديم)/i,
+    suggest: (ctx) => ({
+      genres: [styleAutoPickArabicGenre(ctx, "nostalgic")],
+      mood: "Nostalgic",
+      instruments: ctx.hasArabic ? ["Oud", "Violin"] : ["Guitar", "Strings"],
+      tempo: "Slow",
+      preferSlowTempo: true,
+    }),
+  }),
+  Object.freeze({
+    id: "love",
+    weight: 75,
+    re: /(?:\blove\b|loving|heart|romance|romantic|kiss|darling|baby|sweetheart|forever|together|marry|habibi|habibti|beloved|حب(?:يب(?:ي|تي|ه))?|ع(?:شق|شاق)|قل(?:ب|وب)|غر(?:ام|ام)|رو(?:ح(?:ي|)|ح)|ح(?:يات(?:ي|)|ياة)|بوس(?:ة|))/i,
+    suggest: (ctx) => ({
+      genres: [styleAutoPickArabicGenre(ctx, "romantic")],
+      mood: "Romantic",
+      instruments: ctx.hasArabic ? ["Oud", "Strings"] : ["Strings", "Piano"],
+      tempo: "Mid Tempo",
+    }),
+  }),
+  Object.freeze({
+    id: "happy",
+    weight: 72,
+    re: /(?:\bhappy\b|joy|smile|sunshine|bright|celebrat|blessed|grateful|fun|playful|uplift|optimis|summer|فرح(?:ان|انه)?|سع(?:يد|ادة)|ضح(?:ك|كة)|ب(?:ش|ش)(?:ر|ر)(?:ة|)|صيف)/i,
+    suggest: (ctx) => ({
+      genres: [styleAutoPickArabicGenre(ctx, "upbeat")],
+      mood: "Happy",
+      instruments: ctx.hasArabic ? ["Oud", "Synth"] : ["Guitar", "Synth"],
+      tempo: "Mid Tempo",
+    }),
+  }),
+  Object.freeze({
+    id: "chill",
+    weight: 68,
+    re: /(?:\bchill\b|relax|calm|peace|soft|mellow|laid[\s-]?back|coffee|sunset|morning|lazy|quiet|هدو(?:ء|)|(?:راح(?:ة|ه))|(?:سك(?:ون|ون))|(?:قه(?:و(?:ة|)|وة)))/i,
+    suggest: (ctx) => ({
+      genres: [ctx.hasArabic ? styleAutoPickArabicGenre(ctx, "ballad") : "Lo-fi"],
+      mood: "Chill",
+      instruments: ["Piano", "Synth"],
+      tempo: "Slow",
+    }),
+  }),
+  Object.freeze({
+    id: "dreamy",
+    weight: 65,
+    re: /(?:dream|dreamy|float|ethereal|cosmic|stars|moon|midnight|fantasy|sleep|cloud|ح(?:لم|لم)|(?:نج(?:وم|م))|(?:ق(?:مر|م(?:ر|R)))|(?:سح(?:اب|اب)))/i,
+    suggest: (ctx) => ({
+      genres: [ctx.hasArabic ? "Arabic Pop" : "R&B"],
+      mood: "Dreamy",
+      instruments: ["Synth", "Strings"],
+      tempo: "90 BPM",
+    }),
+  }),
+  Object.freeze({
+    id: "dark",
+    weight: 63,
+    re: /(?:\bdark\b|shadow|devil|demon|nightmare|fear|haunt|sin|cold|ظلام|ليل(?:ة|)|(?:ش(?:يط(?:ان|ان)|طان))|(?:خ(?:وف|وف))|(?:ب(?:رد|رد)))/i,
+    suggest: (ctx) => ({
+      genres: [ctx.hasArabic ? "Arabic Pop" : "Trap"],
+      mood: "Dark",
+      instruments: ["808", "Synth", "Drums"],
+      tempo: "128 BPM",
+    }),
+  }),
+  Object.freeze({
+    id: "jazz",
+    weight: 60,
+    re: /(?:\bjazz\b|blues|lounge|swing|bossa|smooth|(?:ج(?:از|)))/i,
+    suggest: () => ({
+      genres: ["Jazz"],
+      mood: "Chill",
+      instruments: ["Saxophone", "Piano"],
+      tempo: "Slow",
+    }),
+  }),
+  Object.freeze({
+    id: "folk",
+    weight: 58,
+    re: /(?:\bfolk\b|acoustic|campfire|storytelling|country|desert|mountain|village|ري(?:ف|)|(?:ب(?:اد|اد))|(?:ق(?:ر(?:ى|ي)|ري)))/i,
+    suggest: (ctx) => ({
+      genres: ["Folk"],
+      mood: "Nostalgic",
+      instruments: ctx.hasArabic ? ["Oud", "Guitar"] : ["Guitar", "Strings"],
+      tempo: "Mid Tempo",
+    }),
+  }),
+]);
+
+function styleAutoIsLevantineDialect(dialect) {
+  return /^(?:lebanese|syrian|palestinian)$/.test(String(dialect || "").trim().toLowerCase());
+}
+
+function styleAutoPickArabicGenre(ctx, flavor) {
+  const d = String(ctx.dialect || "").trim().toLowerCase();
+  if (d === "egyptian" || /(?:مصر|cairo|masr|shaabi|sha'bi)/i.test(ctx.text)) return "Arabic Pop";
+  if (d === "msa" || flavor === "tarab") return "Tarab";
+  if (flavor === "upbeat" && /(?:dabke|دب(?:كة|كه)|رقص)/i.test(ctx.text)) return "Levantine Dabke";
+  if (styleAutoIsLevantineDialect(d) || (ctx.hasArabic && !d)) return "Levantine Pop";
+  if (ctx.hasArabic) return "Arabic Pop";
+  return "Pop";
+}
+
+function getStyleAutoContext() {
   const raw = String(els.sunoPrompt?.value || "");
   const text = raw.toLowerCase();
   const hasArabic = /[\u0600-\u06FF]/.test(raw);
-  writeStyleTagsToInput([]);
-  _styleAutoTempoTag = "";
-  const tags = [];
-  if (/(sad|cry|tears|alone|lonely|miss|broke|hurt|\u062d\u0632\u064a\u0646|\u062f\u0645\u0639\u0629|\u0648\u062d\u064a\u062f|\u0627\u0634\u062a\u0642\u062a|\u0641\u0631\u0627\u0642|\u0628\u0643\u0627\u0621)/.test(text)) {
-    tags.push(hasArabic ? "Levantine Pop" : "Pop", "Emotional", "Piano");
-  } else if (/(love|heart|habibi|kiss|romance|\u062d\u0628|\u062d\u0628\u064a\u0628\u064a|\u0642\u0644\u0628|\u063a\u0631\u0627\u0645|\u0639\u0634\u0642)/.test(text)) {
-    tags.push(hasArabic ? "Levantine Pop" : "Pop", "Romantic", "Strings");
-  } else if (/(party|dance|club|night|celebrate|\u0631\u0642\u0635|\u0633\u0647\u0631\u0629|\u062d\u0641\u0644\u0629|\u0639\u0631\u0633|\u062f\u0628\u0643\u0629)/.test(text)) {
-    tags.push("Energetic", "Levantine Dabke");
-  } else if (/(tarab|mawwal|\u0637\u0631\u0628|\u0645\u0648\u0627\u0644)/.test(text)) {
-    tags.push("Tarab", "Oud");
-  } else if (hasArabic) {
-    tags.push("Levantine Pop", "Emotional", "Piano");
-  } else {
-    tags.push("Pop", "Emotional", "Piano", "4/4");
-  }
-  for (const tag of tags) {
-    const cat = styleTagCategory(tag);
-    if (cat) {
-      const sec = STYLE_LIBRARY.find((s) => s.id === cat);
-      if (sec?.max != null && getStyleTagsInCategory(cat).length >= sec.max) continue;
-    }
-    addStyleTags([tag]);
-  }
-  applyAutoTempoForGenrePresets({ force: true });
-  syncStyleUi();
-  try { syncGenerateOrbVisibility(); } catch {}
-  showToast(
-    raw.trim() ? "Auto styles suggested from your lyrics" : "Suggested a starter style — add lyrics for smarter picks",
-    { icon: "\u2728", durationMs: 2600 }
-  );
+  try { applyLyricsLanguageToDialect(); } catch {}
+  const dialect = String(lyricsDialect || "").trim().toLowerCase();
+  const language = String(lyricsLanguage || "auto").trim().toLowerCase();
+  return { raw, text, hasArabic, dialect, language };
 }
 
+function computeAutoStyleSuggestion(ctx) {
+  let best = null;
+  let bestWeight = 0;
+  for (const rule of STYLE_AUTO_RULES) {
+    if (!rule.re.test(ctx.text)) continue;
+    if (rule.weight >= bestWeight) {
+      bestWeight = rule.weight;
+      best = rule;
+    }
+  }
+  if (best) {
+    const pack = best.suggest(ctx) || {};
+    return { ...pack, matchedRule: best.id };
+  }
+  if (ctx.dialect && STYLE_AUTO_DIALECT_DEFAULTS[ctx.dialect]) {
+    return { ...STYLE_AUTO_DIALECT_DEFAULTS[ctx.dialect], matchedRule: "dialect" };
+  }
+  if (ctx.language === "arabic" || ctx.hasArabic) {
+    return { ...STYLE_AUTO_DIALECT_DEFAULTS.lebanese, matchedRule: "arabic-default" };
+  }
+  if (!ctx.raw.trim()) {
+    const starter = STYLE_AUTO_STARTERS[_styleAutoStarterIndex % STYLE_AUTO_STARTERS.length];
+    _styleAutoStarterIndex += 1;
+    return { ...starter, matchedRule: "starter" };
+  }
+  const hash = ctx.raw.length + ctx.raw.charCodeAt(0) + ctx.raw.charCodeAt(ctx.raw.length - 1 || 0);
+  const starter = STYLE_AUTO_STARTERS[hash % STYLE_AUTO_STARTERS.length];
+  return { ...starter, matchedRule: "fallback" };
+}
+
+function applyAutoStyleSuggestion(suggestion) {
+  const pack = suggestion || {};
+  for (const genre of (pack.genres || []).slice(0, 2)) {
+    if (getStyleTagsInCategory("genres").length >= 2) break;
+    addStyleTags([genre]);
+  }
+  if (pack.mood && getStyleTagsInCategory("moods").length < 1) addStyleTags([pack.mood]);
+  let instAdded = 0;
+  for (const inst of pack.instruments || []) {
+    if (instAdded >= 3) break;
+    addStyleTags([inst]);
+    instAdded += 1;
+  }
+  if (pack.tempo && getStyleTagsInCategory("tempo").length < 1) {
+    addStyleTags([pack.tempo]);
+    _styleAutoTempoTag = pack.tempo;
+  }
+}
+
+function finalizeAutoStyleTempo(suggestion) {
+  applyAutoTempoForGenrePresets({ force: true });
+  if (!suggestion?.preferSlowTempo) return;
+  const tempoAll = styleCategoryAllTags("tempo");
+  const tags = styleTagsListFromInput().filter((t) => !tempoAll.has(t.toLowerCase()));
+  tags.push("Slow");
+  _styleAutoTempoTag = "Slow";
+  writeStyleTagsToInput(tags);
+}
+
+function autoStyleSuggestionSummary(suggestion) {
+  const parts = [
+    ...(suggestion?.genres || []),
+    suggestion?.mood,
+    ...(suggestion?.instruments || []).slice(0, 2),
+    suggestion?.tempo,
+  ].filter(Boolean);
+  return parts.slice(0, 6).join(", ");
+}
+
+function autoSuggestStyles() {
+  const ctx = getStyleAutoContext();
+  writeStyleTagsToInput([]);
+  _styleAutoTempoTag = "";
+  const suggestion = computeAutoStyleSuggestion(ctx);
+  applyAutoStyleSuggestion(suggestion);
+  finalizeAutoStyleTempo(suggestion);
+  syncStyleUi();
+  try { syncGenerateOrbVisibility(); } catch {}
+  const summary = autoStyleSuggestionSummary(suggestion);
+  const toastMsg = ctx.raw.trim()
+    ? summary
+      ? `Style from lyrics: ${summary}`
+      : "Auto styles suggested from your lyrics"
+    : summary
+      ? `Starter style: ${summary} — add lyrics for smarter picks`
+      : "Suggested a starter style — add lyrics for smarter picks";
+  showToast(toastMsg, { icon: "\u2728", durationMs: 3200 });
+}
 function renderStyleLibrary() {
   const scroll = document.getElementById("styleLibraryScroll");
   if (!scroll) return;

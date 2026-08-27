@@ -1127,6 +1127,7 @@
                     </div>
                     <div class="lyricsAssistBar" role="toolbar" aria-label="Lyrics assist">
                       <button id="btnLyricsDiacritics" class="lyricsDiacriticsBtn" type="button" hidden title="Add Arabic vowel marks for clearer singing" aria-label="Add Arabic vowel marks"><span class="lyricsDiacriticsLabel">Add vowel marks</span><span class="lyricsDiacriticsLabelAr" lang="ar" dir="rtl">تشكيل</span></button>
+                      <button id="btnLyricsPolish" class="lyricsPolishBtn" type="button" hidden title="Tighten rhyme and line flow without changing the story" aria-label="Polish lyrics"><span class="lyricsPolishIco" aria-hidden="true">✦</span><span class="lyricsPolishLabel">Polish lyrics</span></button>
                       <button id="btnLyricsMagic" class="lyricsMagicBtn" type="button" title="Generate lyrics with AI" aria-label="Generate lyrics with AI"><span class="lyricsMagicIco" aria-hidden="true">✦</span><span class="lyricsMagicLabel">Generate</span></button>
                     </div>
                   </div>
@@ -1149,9 +1150,9 @@
                 </div>
               </div>
               <input id="sunoStyle" type="text" placeholder="Tap a suggestion below — or type your own" />
+              <div id="styleSelectedRow" class="styleSelectedRow" hidden aria-label="Selected style tags"></div>
+              <div id="styleSuggestRow" class="styleSuggestRow" role="group" aria-label="Style suggestions"></div>
             </label>
-            <div id="styleSelectedRow" class="styleSelectedRow" hidden aria-label="Selected style tags"></div>
-            <div id="styleSuggestRow" class="styleSuggestRow" role="group" aria-label="Style suggestions"></div>
             <label class="field grow inputPanel inputPanel--style">
               <div class="label inPanelLabel">Song title</div>
               <input id="sunoTitle" type="text" placeholder="My new song" />
@@ -1183,8 +1184,8 @@
                   <button id="btnArtworkSuggest" class="lyricsMagicBtn styleBoostBtn" type="button" title="Suggest artwork from your song" aria-label="Suggest artwork from your song">✦</button>
                 </div>
                 <input id="sunoArtworkStyle" type="text" placeholder="Neon desert, cinematic portrait…" />
+                <div id="artworkSuggestRow" class="styleSuggestRow artworkSuggestRow" role="group" aria-label="Artwork suggestions"></div>
               </label>
-              <div id="artworkSuggestRow" class="styleSuggestRow artworkSuggestRow" role="group" aria-label="Artwork suggestions"></div>
           </section>
 
           <section class="createFlowStep createFlowStep--generate" aria-label="Generate">

@@ -1,9 +1,9 @@
 /**
  * POST /api/lyrics
- * Body: { seed?: string, style?: string, mode?: "continue"|"full"|"arrange"|"challenge"|"remix_reply"|"diacritics", sourceLyrics?: string, sourceTitle?: string, sourceCreator?: string, lyricsProvider?: "gemini" }
+ * Body: { seed?: string, style?: string, mode?: "continue"|"full"|"arrange"|"challenge"|"remix_reply"|"diacritics"|"enhance", sourceLyrics?: string, sourceTitle?: string, sourceCreator?: string, lyricsProvider?: "gemini"|"suno" }
  *
  * Provider: Suno when lyricsProvider is "suno" (default for ✦ Generate; costs Suno credits).
- * Gemini for remix_reply, diacritics (vowel marks), and Suno fallback.
+ * Gemini for remix_reply, diacritics (vowel marks), enhance (polish), and Suno fallback.
  */
 const { queueLogProviderUsage } = require("./_lib/provider-usage-log");
 
@@ -26,12 +26,20 @@ module.exports = async function handler(req, res) {
     const sunoLyricsRequested =
       lyricsProvider === "suno"
       && requestedMode !== "remix_reply"
-      && requestedMode !== "diacritics";
+      && requestedMode !== "diacritics"
+      && requestedMode !== "enhance";
     if (requestedMode === "diacritics" && !seed) {
       return json(res, 400, {
         error: "Add vowel marks needs existing Arabic lyrics in the box.",
         provider: "none",
         debug: { mode: "diacritics", seed: "missing" },
+      });
+    }
+    if (requestedMode === "enhance" && !seed) {
+      return json(res, 400, {
+        error: "Polish lyrics needs existing lyrics in the box.",
+        provider: "none",
+        debug: { mode: "enhance", seed: "missing" },
       });
     }
     if (requestedMode === "remix_reply" && !sourceLyrics) {
@@ -45,7 +53,9 @@ module.exports = async function handler(req, res) {
       ? "remix_reply"
       : requestedMode === "diacritics"
         ? "diacritics"
-        : detectModeFromSeed(seed, body?.mode);
+        : requestedMode === "enhance"
+          ? "enhance"
+          : detectModeFromSeed(seed, body?.mode);
     const nonce = Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 8);
     const prompt = buildPrompt({ seed, style, mode, nonce, dialect, dialectHint, sourceLyrics, sourceTitle, sourceCreator });
     const sunoPrompt = buildSunoPrompt({ seed, style, mode, dialect, dialectHint });
@@ -54,10 +64,16 @@ module.exports = async function handler(req, res) {
         ...extractComplianceTerms({ seed: sourceLyrics, style }),
         ...extractComplianceTerms({ seed, style }),
       ])]
-      : mode === "diacritics"
+      : mode === "diacritics" || mode === "enhance"
         ? []
         : extractComplianceTerms({ seed, style });
-    const geminiTemperature = mode === "remix_reply" ? 0.72 : mode === "diacritics" ? 0.35 : 0.9;
+    const geminiTemperature = mode === "remix_reply"
+      ? 0.72
+      : mode === "diacritics"
+        ? 0.35
+        : mode === "enhance"
+          ? 0.58
+          : 0.9;
     const sunoKey = process.env.SUNO_API_KEY || "";
 
     const debug = {};
@@ -80,14 +96,16 @@ module.exports = async function handler(req, res) {
           const fixed = await repairMetaAiLyrics({ geminiKey, prompt, text: normalized, temperature: geminiTemperature });
           if (fixed) normalized = fixed;
         }
-        const repaired = await maybeRepairOnce({
-          text: normalized,
-          prompt,
-          complianceTerms,
-          sunoKey: "",
-          geminiKey,
-          temperature: geminiTemperature,
-        });
+        const repaired = mode === "enhance" || mode === "diacritics"
+          ? { text: normalized, provider: "gemini" }
+          : await maybeRepairOnce({
+            text: normalized,
+            prompt,
+            complianceTerms,
+            sunoKey: "",
+            geminiKey,
+            temperature: geminiTemperature,
+          });
         if (String(repaired.provider || "").includes("gemini")) {
           queueLogProviderUsage({ provider: "gemini", kind: "lyrics" });
         }
@@ -437,6 +455,23 @@ function buildPrompt({ seed, style, mode, nonce, dialect, dialectHint, sourceLyr
       style ? `Style/Tags (context only): ${style}` : "",
       "",
       "Lyrics to mark:",
+      seed,
+    ].filter(Boolean).join("\n");
+  }
+  if (mode === "enhance") {
+    return [
+      "Polish existing lyrics for AI song generation — do NOT rewrite from scratch.",
+      "Keep the same language, dialect, story, and emotional meaning.",
+      "Preserve colloquial/dialect words — do NOT upgrade to formal MSA or change the accent flavor.",
+      "Keep the same section tags and overall structure; only lightly adjust wording, line breaks, or endings for flow.",
+      ...POP_RHYME_METER_LINES_LIGHT,
+      "Do NOT add heavy vowel marks (tashkeel) — that is a separate step.",
+      "Output lyrics only with section tags. No explanations or metadata.",
+      `Variation token: ${nonce}`,
+      ...(dialectLines ? [dialectLines] : []),
+      style ? `Style/Tags (context only): ${style}` : "",
+      "",
+      "Lyrics to polish:",
       seed,
     ].filter(Boolean).join("\n");
   }
@@ -869,6 +904,7 @@ function detectModeFromSeed(seed, requestedMode) {
     || requestedMode === "challenge"
     || requestedMode === "remix_reply"
     || requestedMode === "diacritics"
+    || requestedMode === "enhance"
   ) {
     return requestedMode;
   }

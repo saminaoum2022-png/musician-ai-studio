@@ -1656,8 +1656,16 @@ td.num { font-variant-numeric: tabular-nums; }
   gap: 12px;
 }
 
-.marketingDiscoverPicker {
+.marketingDiscoverPickerSearch {
   margin-top: 12px;
+}
+
+.marketingDiscoverPickerSearch .marketingFieldInput {
+  width: 100%;
+}
+
+.marketingDiscoverPickerResults {
+  margin-top: 10px;
 }
 
 .marketingDiscoverPickerLabel {

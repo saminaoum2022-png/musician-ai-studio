@@ -3891,7 +3891,7 @@ function buildMarketingEditorSections(ctx) {
       ${marketingFieldGroup("Featured songs", `
         ${marketingField("Song IDs", "mkDiscoverFeaturedIds", (ctx.discover.featuredSongIds || []).join("\n"), { multiline: 4, hint: "One public song UUID per line. Order = carousel order." })}
         <div id="mkDiscoverPicker" class="marketingDiscoverPicker"></div>
-      `, { hint: "Pick from recent publications below, or paste UUIDs manually." })}
+      `, { hint: "Search by song title, @username, or paste UUIDs manually." })}
     `, { active: on("discover") }),
     marketingSectionPanel("pricing", "Pricing", "Free and Pro tier cards on the homepage.", `
       ${marketingField("Section eyebrow", "mkPricingEyebrow", ctx.pricing.eyebrow || "")}
@@ -4141,35 +4141,78 @@ function bindMarketingColorFields() {
   }
 }
 
+async function renderMarketingSongPickerResults(resultsEl, rows, { fieldId, mode }) {
+  if (!resultsEl) return;
+  if (!rows.length) {
+    resultsEl.innerHTML = `<p class="cellMuted">No matching public posts. Try another title, @username, or paste a song UUID above.</p>`;
+    return;
+  }
+  const modeAttr = mode === "showcase"
+    ? ' data-marketing-song-mode="showcase"'
+    : fieldId === "template-slot"
+      ? ' data-marketing-song-mode="template-slot"'
+      : ` data-marketing-song-field="${escapeHtml(fieldId)}"`;
+  resultsEl.innerHTML = `
+    <p class="marketingDiscoverPickerLabel">${rows.length} song${rows.length === 1 ? "" : "s"} — click to add</p>
+    <div class="marketingDiscoverPickerGrid">
+      ${rows.map((p) => `
+        <button type="button" class="marketingDiscoverPick" data-add-marketing-song="${escapeHtml(p.id)}"${modeAttr} title="${escapeHtml(p.title)}">
+          ${p.artUrl ? `<img src="${escapeHtml(p.artUrl)}" alt="" loading="lazy">` : `<span class="pubArtFallback">♪</span>`}
+          <span>${escapeHtml(p.title)}</span>
+        </button>`).join("")}
+    </div>`;
+}
+
+async function loadMarketingSongPicker(pickerId, { fieldId = "mkDiscoverFeaturedIds", mode = "ids", search = "" } = {}) {
+  const resultsEl = document.getElementById(`${pickerId}Results`);
+  if (!resultsEl) return;
+  const q = String(search || "").trim();
+  resultsEl.innerHTML = `<p class="cellMuted">Loading${q ? " matches" : " recent publications"}…</p>`;
+  try {
+    const data = await adminFetch("publications", {
+      limit: q.length >= 2 ? 100 : 48,
+      offset: 0,
+      search: q,
+    });
+    await renderMarketingSongPickerResults(resultsEl, data?.publications || [], { fieldId, mode });
+  } catch (e) {
+    resultsEl.innerHTML = `<p class="cellMuted">Could not load publications: ${escapeHtml(e?.message || String(e))}</p>`;
+  }
+}
+
 async function bindMarketingSongPicker(pickerId, { fieldId = "mkDiscoverFeaturedIds", mode = "ids" } = {}) {
   const root = document.getElementById(pickerId);
   const field = fieldId && fieldId !== "template-slot" ? document.getElementById(fieldId) : null;
   if (!root || (mode === "ids" && fieldId !== "template-slot" && !field)) return;
-  root.innerHTML = `<p class="cellMuted">Loading recent publications…</p>`;
-  try {
-    const data = await adminFetch("publications", { limit: 24, offset: 0 });
-    const rows = data?.publications || [];
-    if (!rows.length) {
-      root.innerHTML = `<p class="cellMuted">No public Discover posts yet. Publish songs first, then pick them here.</p>`;
-      return;
-    }
-    const modeAttr = mode === "showcase"
-      ? ' data-marketing-song-mode="showcase"'
-      : fieldId === "template-slot"
-        ? ' data-marketing-song-mode="template-slot"'
-        : ` data-marketing-song-field="${escapeHtml(fieldId)}"`;
-    root.innerHTML = `
-      <p class="marketingDiscoverPickerLabel">Pick from recent public posts</p>
-      <div class="marketingDiscoverPickerGrid">
-        ${rows.map((p) => `
-          <button type="button" class="marketingDiscoverPick" data-add-marketing-song="${escapeHtml(p.id)}"${modeAttr} title="${escapeHtml(p.title)}">
-            ${p.artUrl ? `<img src="${escapeHtml(p.artUrl)}" alt="" loading="lazy">` : `<span class="pubArtFallback">♪</span>`}
-            <span>${escapeHtml(p.title)}</span>
-          </button>`).join("")}
-      </div>`;
-  } catch (e) {
-    root.innerHTML = `<p class="cellMuted">Could not load publications: ${escapeHtml(e?.message || String(e))}</p>`;
+
+  const searchId = `${pickerId}Search`;
+  root.innerHTML = `
+    <label class="field marketingField marketingDiscoverPickerSearch">
+      <span>Search public songs</span>
+      <input type="search" id="${searchId}" class="marketingFieldInput marketingDiscoverPickerSearchInput" placeholder="Song title, @username, or UUID" autocomplete="off" />
+    </label>
+    <div id="${pickerId}Results" class="marketingDiscoverPickerResults"><p class="cellMuted">Loading recent publications…</p></div>
+  `;
+
+  const searchInput = document.getElementById(searchId);
+  if (!root.dataset.pickerBound) {
+    root.dataset.pickerBound = "1";
+    let searchTimer = null;
+    root.addEventListener("input", (ev) => {
+      const input = ev.target.closest(".marketingDiscoverPickerSearchInput");
+      if (!input || !root.contains(input)) return;
+      clearTimeout(searchTimer);
+      searchTimer = setTimeout(() => {
+        void loadMarketingSongPicker(pickerId, {
+          fieldId,
+          mode,
+          search: input.value || "",
+        });
+      }, 320);
+    });
   }
+
+  await loadMarketingSongPicker(pickerId, { fieldId, mode, search: searchInput?.value || "" });
 }
 
 async function bindMarketingDiscoverPicker() {

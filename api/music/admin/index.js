@@ -8,7 +8,7 @@
  *   view       — section (default overview)
  *   limit      — pagination (default 50, max 200)
  *   offset     — pagination offset
- *   search     — users / billing views: email, @username, or display name
+ *   search     — users / billing / publications: email, @username, song title, or song UUID
  */
 
 const {
@@ -30,7 +30,7 @@ const { ensureProfileRow } = require("../../_lib/ensure-profile-row");
 const {
   listAssignableRoles,
 } = require("../../_lib/admin-permissions");
-const { adminSearchUserIds, resolveUserLookup } = require("../../_lib/admin-user-resolve");
+const { adminSearchUserIds, resolveUserLookup, escapeLike, searchNeedle } = require("../../_lib/admin-user-resolve");
 const { getProviderHealth } = require("../../_lib/provider-health");
 const {
   fetchProviderSpendData,
@@ -1460,10 +1460,31 @@ async function getGenerations(limit, offset, filters = {}) {
   return { generations, total: res.total ?? generations.length, filters: { dateFrom, dateTo, kind, provider, status } };
 }
 
-async function getPublications(limit, offset) {
-  const res = await serviceFetch(
-    `user_songs?select=id,user_id,title,art_url,song_url,task_id,audio_id,kind,meta,public_on_profile,published_at,created_at&public_on_profile=eq.true&order=published_at.desc.nullslast,created_at.desc&limit=${limit}&offset=${offset}`,
-  );
+async function getPublications(limit, offset, search = "") {
+  const q = String(search || "").trim();
+  let queryPath =
+    "user_songs?select=id,user_id,title,art_url,song_url,task_id,audio_id,kind,meta,public_on_profile,published_at,created_at&public_on_profile=eq.true";
+
+  if (q.length >= 2) {
+    const uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    if (uuidRe.test(q)) {
+      queryPath += `&id=eq.${encodeURIComponent(q)}`;
+    } else {
+      const needle = escapeLike(searchNeedle(q));
+      const orParts = [];
+      if (needle.length >= 2) orParts.push(`title.ilike.*${needle}*`);
+      const userIds = await adminSearchUserIds(q, { limit: 40 });
+      if (userIds.length) {
+        const inClause = userIds.map((id) => encodeURIComponent(id)).join(",");
+        orParts.push(`user_id.in.(${inClause})`);
+      }
+      if (!orParts.length) return { publications: [], total: 0 };
+      queryPath += `&or=(${orParts.join(",")})`;
+    }
+  }
+
+  queryPath += `&order=published_at.desc.nullslast,created_at.desc&limit=${limit}&offset=${offset}`;
+  const res = await serviceFetch(queryPath);
   const rows = Array.isArray(res.data) ? res.data : [];
   const ids = [...new Set(rows.map((r) => r.user_id).filter(Boolean))];
   let profileMap = new Map();
@@ -2056,7 +2077,7 @@ module.exports = async function handler(req, res) {
     } else if (view === "generation") {
       payload = { ...payload, ...(await getGenerationDetail(generationId)) };
     } else if (view === "publications") {
-      payload = { ...payload, ...(await getPublications(limit, offset)) };
+      payload = { ...payload, ...(await getPublications(limit, offset, search)) };
     } else if (view === "promos") {
       payload = { ...payload, ...(await getPromos(limit, offset)) };
     } else if (view === "singers") {

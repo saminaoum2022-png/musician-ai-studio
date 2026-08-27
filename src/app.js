@@ -58215,7 +58215,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       if (labelArEl) labelArEl.textContent = "…";
       if (lyricsBoxEl) lyricsBoxEl.classList.add("generating");
       if (els.sunoPrompt) els.sunoPrompt.disabled = true;
-      setStatus("Adding Arabic vowel marks for clearer singing…");
+      setStatus("Adding light vowel marks for dialect singing…");
       const r = await fetch(apiUrl("/api/lyrics"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -58237,7 +58237,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       try { syncArabicLyricsControlsVisibility(); } catch {}
       snapshotNabadAiLyricsDraft(nextLyrics);
       setStatus("Vowel marks added — review then Generate song.");
-      showToast("Vowel marks added — review then Generate song.", { icon: "✦", durationMs: 3600 });
+      showToast("Light vowel marks added — review then Generate song.", { icon: "✦", durationMs: 3600 });
     } catch (e) {
       setStatus(`Vowel marks failed: ${e?.message || String(e)}`);
       showToast(e?.message || "Could not add vowel marks", { icon: "!", durationMs: 3600 });

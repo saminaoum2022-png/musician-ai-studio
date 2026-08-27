@@ -71,6 +71,9 @@ module.exports = async function handler(req, res) {
       const gemResult = await tryGeminiLyrics({ geminiKey, prompt, temperature: geminiTemperature });
       if (gemResult?.ok) {
         let normalized = sanitizeLyricsOutput(gemResult.lyrics);
+        if (mode === "diacritics") {
+          normalized = lightenSungArabicDiacritics(normalized, { isMsa: isMsaDialect(dialect) });
+        }
         if (mode === "remix_reply" && isMetaAiLyrics(normalized)) {
           const fixed = await repairMetaAiLyrics({ geminiKey, prompt, text: normalized, temperature: geminiTemperature });
           if (fixed) normalized = fixed;
@@ -130,6 +133,9 @@ module.exports = async function handler(req, res) {
       const gemResult = await tryGeminiLyrics({ geminiKey, prompt, temperature: geminiTemperature });
       if (gemResult?.ok) {
         let normalized = sanitizeLyricsOutput(gemResult.lyrics);
+        if (mode === "diacritics") {
+          normalized = lightenSungArabicDiacritics(normalized, { isMsa: isMsaDialect(dialect) });
+        }
         if (mode === "remix_reply" && isMetaAiLyrics(normalized)) {
           const fixed = await repairMetaAiLyrics({ geminiKey, prompt, text: normalized, temperature: geminiTemperature });
           if (fixed) normalized = fixed;
@@ -381,29 +387,25 @@ function buildPrompt({ seed, style, mode, nonce, dialect, dialectHint, sourceLyr
       : isMsa ? "الفصحى"
       : "اللهجة العربية المحكية للغناء";
     return [
-      `أضف التشكيل (الحركات) على كلمات هذه الأغنية بأسلوب ${dialectAr} حتى يكون الغناء أوضح.`,
-      "حافظ على نفس الكلمات ونفس الأسطر ونفس الوسوم مثل [Verse] و [Chorus]. لا تعِد الكتابة ولا تترجم. أخرج الكلمات فقط.",
+      `حَرِّك الكلمات ب${dialectAr} عشان الغناء يطلع باللهجة — مثل Coach، مش تشكيل مدرسي.`,
+      "نفس الكلمات، نفس الأسطر، نفس الوسوم [Verse] [Chorus]… أخرج الكلمات فقط.",
       isMsa
-        ? "الفصحى: تشكيل أوضح للنطق مقبول."
-        : "لا تستخدم إعراب الفصحى ولا التنوين النحوي في أواخر الكلمات — تشكيل غناء محكي خفيف فقط لتوضيح الحروف الغامضة.",
-      !isMsa
-        ? "مهم — حرف ق (qaf): في اللهجة المحكية يُنطق همزة (2) وليس /q/ ولا /k/ فصيح. مثل: قلب → albi، قلت → 2elt، قال → 2al. شكّل ق للنطق المحكي (همزة) لا للفصحى."
-        : "",
-      !isMsa
-        ? "حرف ك (kaf): يبقى كاف عادي /k/ — شكّله كالعادة ولا تخلطه مع ق."
-        : "",
-      `Add tashkeel (Arabic vowel marks) to these lyrics for clearer singing in ${dialectSpeak}.`,
-      "Keep the SAME words, line breaks, and section tags. Output lyrics only — no commentary.",
+        ? "فصحى: تشكيل أوضح مقبول، بس بدون مبالغة على كل حرف."
+        : [
+          "لا تشكّل كل حرف — شكّل بس الكلمات يلي ممكن يغلط فيها الغناء.",
+          "ممنوع: تنوين (ًٌٍ)، إعراب، أو تشكيل نحوي على آخر الكلمات.",
+          "ق باللهجة المحكية = همزة (2) مش /q/ فصيح — مثل: قلب، قلت، قال.",
+        ].join("\n"),
+      `Mark these lyrics for sung ${dialectSpeak} — like Coach: help the singer hit the dialect, NOT school grammar.`,
+      "Keep SAME words, lines, and section tags. Output lyrics only.",
       isMsa
-        ? "MSA: fuller classical tashkeel is OK where it helps pronunciation."
-        : "Do NOT use formal fusHa / nahwi case endings or grammatical tanween. Light sung dialect marks only.",
-      !isMsa
-        ? "Important — ق (qaf): in this colloquial dialect, ق is spoken as hamza (glottal 2), NOT classical /q/ or /k/. Examples: قلب → albi, قلت → 2elt, قال → 2al. Vowelize ق for dialect hamza, not fusHa qaf."
-        : "",
-      !isMsa
-        ? "Keep ك (kaf) as normal /k/ — vowelize kaf as usual; do not confuse ك with ق."
-        : "",
-      "Honor any Arabic address / addressee gender hints in the dialect hint (masculine/feminine/plural forms).",
+        ? "MSA: clear marks OK, but do not vowelize every single letter."
+        : [
+          "Do NOT mark every letter — only words where the AI singer might guess wrong.",
+          "NO tanween (ًٌٍ), NO nahwi case endings, NO full textbook tashkeel.",
+          "ق (qaf) = hamza in this dialect, not classical /q/.",
+        ].join("\n"),
+      "Honor Arabic address/gender hints in the dialect hint if present.",
       `Variation token: ${nonce}`,
       ...(dialectLines ? [dialectLines] : []),
       style ? `Style/Tags (context only): ${style}` : "",
@@ -530,7 +532,7 @@ function buildPrompt({ seed, style, mode, nonce, dialect, dialectHint, sourceLyr
 
 function buildSunoPrompt({ seed, style, mode, dialect, dialectHint }) {
   const intent = mode === "diacritics"
-    ? `Add Arabic tashkeel for clearer singing in ${dialect || "the selected"} dialect; keep words unchanged; no fusHa nahwi endings.`
+    ? `Light sung tashkeel for ${dialect || "the selected"} dialect — mark ambiguous words only, not every letter; no tanween/nahwi.`
     : mode === "arrange"
     ? "Arrange user lyrics into a singable song with section tags."
     : mode === "continue"
@@ -603,6 +605,24 @@ function extractTextLoose(data) {
   if (typeof data?.data?.text === "string") return data.data.text;
   if (typeof data?.message === "string") return data.message;
   return "";
+}
+
+function isMsaDialect(dialect) {
+  const d = String(dialect || "").trim().toLowerCase();
+  return /\bmsa\b|modern standard|فصحى|fus[hḥ]a/.test(d);
+}
+
+/** After Gemini: drop nahwi tanween + heavy sukoon so dialect singing stays spoken, not formal. */
+function lightenSungArabicDiacritics(input, { isMsa = false } = {}) {
+  let text = String(input || "");
+  if (!text) return text;
+  // Tanween (ً ٌ ٍ) — main source of "nahwi" singing.
+  text = text.replace(/[\u064B-\u064D]/g, "");
+  if (!isMsa) {
+    // Colloquial: sukoon on every letter reads stiff in TTS — keep shadda + vowels only.
+    text = text.replace(/\u0652/g, "");
+  }
+  return text;
 }
 
 function sanitizeLyricsOutput(input) {

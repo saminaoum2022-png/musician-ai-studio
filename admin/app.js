@@ -1,4 +1,10 @@
 const SESSION_KEY = "nabad_admin_session_v1";
+import {
+  loadBlogViewData,
+  renderBlogView,
+  bindBlogEvents,
+  setBlogAdminToken,
+} from "./blog-admin.js";
 const AUTH_PKCE_KEY = "nabad_admin_pkce_v1";
 const AUTH_PENDING_KEY = "nabad_admin_oauth_pending_v1";
 const PKCE_COOKIE = "nabad_admin_pkce";
@@ -35,6 +41,10 @@ const state = {
   marketingDraftPreviewWindow: null,
   marketingDraftPreviewPayload: null,
   marketingLoadedContent: null,
+  blogLocale: "en",
+  blogSlug: "",
+  blogScreen: "hub",
+  blogLoadedContent: null,
   cache: {},
   recoveryTokenHash: "",
   activityWindow: 28,
@@ -71,6 +81,7 @@ const els = {
     generation: document.getElementById("viewGeneration"),
     credits: document.getElementById("viewCredits"),
     marketing: document.getElementById("viewMarketing"),
+    blog: document.getElementById("viewBlog"),
     promos: document.getElementById("viewPromos"),
     singers: document.getElementById("viewSingers"),
     generations: document.getElementById("viewGenerations"),
@@ -92,6 +103,7 @@ const VIEW_META = {
   generation: { title: "Generation detail", sub: "Prompt, status, credits, and saved output" },
   credits: { title: "Credits", sub: "Grant, remove, or adjust paid credits · full ledger" },
   marketing: { title: "Online store", sub: "Edit the marketing website — draft changes, preview, then publish to live" },
+  blog: { title: "Blog", sub: "Write articles, preview, and publish to nabadai.com/blog" },
   promos: { title: "Promo codes", sub: "Create and monitor redemption codes" },
   singers: { title: "Pro singers", sub: "Singer applications, roster, and performance requests" },
   generations: { title: "Generations", sub: "Song and audio generation requests" },
@@ -721,6 +733,7 @@ async function loadAdminSession({ force = false } = {}) {
   const data = await adminFetch("session");
   state.adminSession = data.session || null;
   if (Array.isArray(data.roles)) state.adminSession.roles = data.roles;
+  setBlogAdminToken(state.session?.access_token);
   applyNavPermissions();
   return state.adminSession;
 }
@@ -731,6 +744,7 @@ function canAccessView(view) {
   if (view === "user") return allowed.includes("user") || allowed.includes("users");
   if (view === "generation") return allowed.includes("generation") || allowed.includes("generations");
   if (view === "providers" || view === "suno") return allowed.includes("providers") || allowed.includes("suno");
+  if (view === "blog") return allowed.includes("blog") || allowed.includes("marketing");
   return allowed.includes(view);
 }
 
@@ -774,10 +788,9 @@ function openGenerationDetail(generationId, returnView = "generations") {
 
 function applyNavPermissions() {
   const session = state.adminSession;
-  const allowed = new Set(Array.isArray(session?.allowedViews) ? session.allowedViews : []);
   for (const btn of els.navItems) {
     const view = btn.dataset.view;
-    const ok = !allowed.size || allowed.has(view);
+    const ok = canAccessView(view);
     btn.hidden = !ok;
     btn.disabled = !ok;
   }
@@ -819,11 +832,14 @@ function viewCacheKey() {
   if (state.view === "marketing") {
     key += `:scr:${state.marketingScreen || "hub"}:pg:${state.marketingPage || "home"}:loc:${state.marketingLocale || "en"}:sec:${state.marketingSection || "hero"}`;
   }
+  if (state.view === "blog") {
+    key += `:scr:${state.blogScreen || "hub"}:slug:${state.blogSlug || ""}:loc:${state.blogLocale || "en"}`;
+  }
   return key;
 }
 
 function firstAllowedView() {
-  const order = ["overview", "providers", "users", "generations", "publications", "marketing", "credits", "promos", "singers", "subscriptions", "billing", "settings"];
+  const order = ["overview", "providers", "users", "generations", "publications", "marketing", "blog", "credits", "promos", "singers", "subscriptions", "billing", "settings"];
   for (const view of order) {
     if (canAccessView(view)) return view;
   }
@@ -4211,6 +4227,30 @@ function bindMarketingHubPreviews(hasDraft) {
   })();
 }
 
+function invalidateViewCache(view) {
+  for (const key of Object.keys(state.cache)) {
+    if (key.startsWith(`${view}:`)) delete state.cache[key];
+  }
+}
+
+function blogAdminContext() {
+  return {
+    state,
+    els,
+    escapeHtml,
+    adminPageStack,
+    fmtDate,
+    fmtDateCompact,
+    showError,
+    invalidateViewCache,
+    loadView,
+  };
+}
+
+function renderBlogViewWrapper(data) {
+  renderBlogView(data, blogAdminContext());
+}
+
 const RENDERERS = {
   overview: renderOverview,
   providers: renderProviders,
@@ -4220,6 +4260,7 @@ const RENDERERS = {
   generation: renderGenerationDetail,
   credits: renderCredits,
   marketing: renderMarketingView,
+  blog: renderBlogViewWrapper,
   promos: renderPromos,
   singers: renderSingers,
   generations: renderGenerations,
@@ -4235,6 +4276,10 @@ function setView(view) {
   }
   if (view === "marketing" && state.view !== "marketing") {
     state.marketingScreen = "hub";
+  }
+  if (view === "blog" && state.view !== "blog") {
+    state.blogScreen = "hub";
+    state.blogSlug = "";
   }
   state.view = view;
   state.offset = 0;
@@ -4577,6 +4622,26 @@ async function loadView({ force = false } = {}) {
         data = await marketingAdminFetch(state.marketingPage || "home", state.marketingLocale || "en");
         data.page = state.marketingPage || "home";
       }
+    } else if (view === "blog") {
+      setBlogAdminToken(state.session?.access_token);
+      if (state.blogScreen === "editor" && !state.blogSlug) {
+        data = {
+          slug: "",
+          locale: state.blogLocale || "en",
+          content: {
+            seo: { title: "", description: "" },
+            hero: { title: "", lead: "", coverImageUrl: "", coverImageAlt: "" },
+            body: { html: "<p>Start writing your article here.</p>" },
+            author: { name: "NabadAi", avatarUrl: "" },
+            tags: [],
+            cta: { label: "Try NabadAi", href: "/app/" },
+          },
+          hasDraftChanges: false,
+          published: false,
+        };
+      } else {
+        data = await loadBlogViewData(state);
+      }
     } else {
       data = await adminFetch(view, {
         offset: state.offset,
@@ -4819,6 +4884,8 @@ for (const btn of els.navItems) {
     void loadView();
   });
 }
+
+bindBlogEvents(blogAdminContext());
 
 document.body.addEventListener("submit", (e) => {
   const userSearchForm = e.target.closest("#userSearchForm");

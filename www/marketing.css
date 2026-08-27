@@ -1943,3 +1943,156 @@ body:has(.marketingDraftBanner) .marketingShell {
   border-style: dashed;
   opacity: 0.92;
 }
+
+/* ── Blog ───────────────────────────────────────────────────────────── */
+.blogPage,
+.blogArticle {
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 32px 20px 64px;
+}
+.blogHero {
+  padding: 24px 0 36px;
+}
+.blogHero h1 {
+  font-size: clamp(2rem, 4vw, 2.75rem);
+  margin: 0.35em 0 0.5em;
+}
+.blogPostGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 20px;
+}
+.blogCard {
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 16px;
+  overflow: hidden;
+  background: rgba(255,255,255,0.03);
+  transition: border-color 180ms ease, transform 180ms ease;
+}
+.blogCard:hover {
+  border-color: rgba(124,92,255,0.35);
+  transform: translateY(-2px);
+}
+.blogCardLink {
+  display: block;
+  color: inherit;
+  text-decoration: none;
+}
+.blogCardCover {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+  display: block;
+  background: rgba(124,92,255,0.12);
+}
+.blogCardCover--placeholder {
+  min-height: 160px;
+  background: linear-gradient(135deg, rgba(35,213,171,0.18), rgba(124,92,255,0.22));
+}
+.blogCardBody {
+  padding: 16px 16px 18px;
+}
+.blogCardBody h2 {
+  font-size: 1.15rem;
+  margin: 0 0 8px;
+  line-height: 1.35;
+}
+.blogCardBody p {
+  margin: 0 0 10px;
+  color: rgba(232,238,247,0.72);
+  font-size: 0.95rem;
+  line-height: 1.5;
+}
+.blogCardDate,
+.blogCardTags {
+  font-size: 0.82rem;
+  color: rgba(232,238,247,0.55);
+}
+.blogTag {
+  display: inline-block;
+  margin-right: 6px;
+  margin-bottom: 6px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: rgba(124,92,255,0.16);
+  color: rgba(232,238,247,0.88);
+  font-size: 0.75rem;
+}
+.blogEmptyState {
+  padding: 48px 20px;
+  text-align: center;
+  color: rgba(232,238,247,0.62);
+}
+.blogBackLink {
+  display: inline-block;
+  margin-bottom: 20px;
+  color: rgba(232,238,247,0.72);
+  text-decoration: none;
+}
+.blogBackLink:hover { color: #fff; }
+.blogArticleHeader h1 {
+  font-size: clamp(1.85rem, 4vw, 2.6rem);
+  line-height: 1.15;
+  margin: 0 0 12px;
+}
+.blogArticleLead {
+  font-size: 1.08rem;
+  line-height: 1.6;
+  color: rgba(232,238,247,0.78);
+  margin: 0 0 14px;
+}
+.blogArticleMeta {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  color: rgba(232,238,247,0.55);
+  font-size: 0.9rem;
+  margin-bottom: 20px;
+}
+.blogArticleCover {
+  width: 100%;
+  max-height: 420px;
+  object-fit: cover;
+  border-radius: 16px;
+  margin: 0 0 24px;
+}
+.blogArticleBody {
+  line-height: 1.75;
+  color: rgba(241,247,255,0.92);
+  font-size: 1.02rem;
+}
+.blogArticleBody h2,
+.blogArticleBody h3 {
+  margin-top: 1.6em;
+  margin-bottom: 0.5em;
+}
+.blogArticleBody p { margin: 0 0 1em; }
+.blogArticleBody a { color: #7c5cff; }
+.blogArticleCta { margin-top: 36px; }
+.blogDraftPreview::after {
+  content: "Draft preview";
+  position: fixed;
+  bottom: 16px;
+  right: 16px;
+  z-index: 20;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: rgba(124,92,255,0.85);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+}
+.blogAdminGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 42%);
+  gap: 20px;
+  align-items: start;
+}
+.blogAdminForm .field { margin-bottom: 12px; }
+.blogBodyEditor { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; }
+.blogPreviewFrame { min-height: 520px; }
+.blogDeleteBtn { color: #ff8ea6; }
+@media (max-width: 960px) {
+  .blogAdminGrid { grid-template-columns: 1fr; }
+}

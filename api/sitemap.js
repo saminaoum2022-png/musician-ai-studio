@@ -81,6 +81,13 @@ module.exports = async function handler(req, res) {
   }
 
   const songs = await fetchPublishedSongs();
+  let blogEntries = [];
+  try {
+    const { fetchPublishedBlogSitemapEntries } = require("./_lib/blog-store");
+    blogEntries = await fetchPublishedBlogSitemapEntries();
+  } catch {
+    blogEntries = [];
+  }
   const urls = STATIC_PATHS.map((entry) => {
     if (typeof entry === "string") return { loc: `${SITE_ORIGIN}${entry}` };
     return {
@@ -94,6 +101,13 @@ module.exports = async function handler(req, res) {
     urls.push({
       loc: `${SITE_ORIGIN}/s/${encodeURIComponent(id)}`,
       lastmod: song?.published_at || "",
+    });
+  }
+  for (const entry of blogEntries) {
+    if (!entry?.path) continue;
+    urls.push({
+      loc: `${SITE_ORIGIN}${entry.path}`,
+      lastmod: entry.lastmod || "",
     });
   }
 

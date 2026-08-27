@@ -1,13 +1,19 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-blog-index="1">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="color-scheme" content="dark">
-  <title>NabadAi Blog — Product updates &amp; creator stories</title>
-  <meta name="description" content="News, product updates, and creator stories from NabadAi. The blog is launching soon.">
+  <title>NabadAi Blog — AI music tips &amp; creator stories</title>
+  <meta name="description" content="Guides, product updates, and creator stories about making music with NabadAi — hum to song, lyrics to song, and Arabic AI music.">
   <meta name="robots" content="index,follow">
   <link rel="canonical" href="https://www.nabadai.com/blog">
+  <link rel="alternate" hreflang="en" href="https://www.nabadai.com/blog">
+  <link rel="alternate" hreflang="ar" href="https://www.nabadai.com/ar/blog">
+  <meta property="og:title" content="NabadAi Blog">
+  <meta property="og:description" content="AI music tips, guides, and creator stories from NabadAi.">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://www.nabadai.com/blog">
   <link rel="icon" href="/favicon.ico" sizes="any">
   <link rel="stylesheet" href="/marketing.css">
 </head>
@@ -28,16 +34,16 @@
         <a class="marketingNavSignIn" href="/app/#/auth">Sign in</a>
       </div>
     </nav>
-    <main>
-      <section class="hero" style="min-height:360px;grid-template-columns:1fr">
-        <div class="heroCopy">
-          <p class="eyebrow">Blog</p>
-          <h1>Updates &amp; creator stories</h1>
-          <p class="heroLead">We're preparing posts on new features, Arabic music workflows, and tips from the NabadAi community. Check back soon — or email us if you'd like to be featured.</p>
-          <div class="heroActions">
-            <a class="marketingCta" href="mailto:help@nabadai.com?subject=NabadAi%20blog">Get in touch</a>
-            <a class="textLink" href="/">Back to home</a>
-          </div>
+    <main class="blogPage">
+      <section class="blogHero">
+        <p class="eyebrow">Blog</p>
+        <h1>AI music tips &amp; creator stories</h1>
+        <p class="heroLead">Guides for hum-to-song, lyrics workflows, Arabic singing, and what's new in NabadAi.</p>
+      </section>
+      <section class="blogGridSection" aria-label="Blog posts">
+        <div id="blogPostGrid" class="blogPostGrid"></div>
+        <div id="blogEmptyState" class="blogEmptyState" hidden>
+          <p>No posts published yet. Check back soon.</p>
         </div>
       </section>
     </main>
@@ -84,5 +90,6 @@
       <div class="marketingFooterBottom"><span>© 2026 NabadAi · Dubai, UAE · AI-generated music — usage rights in our Terms.</span></div>
     </footer>
   </div>
+  <script src="/src/blog-index.js" defer></script>
 </body>
 </html>

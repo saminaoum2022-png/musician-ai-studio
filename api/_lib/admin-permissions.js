@@ -28,6 +28,7 @@ const ALL_VIEWS = Object.freeze([
   "billing",
   "settings",
   "marketing",
+  "blog",
 ]);
 
 const ROLE_META = Object.freeze({

@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en" data-blog-post="1" data-blog-slug="">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="color-scheme" content="dark">
+  <title>NabadAi Blog</title>
+  <meta name="description" content="NabadAi blog article">
+  <meta name="robots" content="index,follow">
+  <link rel="canonical" href="https://www.nabadai.com/blog">
+  <meta property="og:title" content="NabadAi Blog">
+  <meta property="og:description" content="NabadAi blog article">
+  <meta property="og:type" content="article">
+  <link rel="icon" href="/favicon.ico" sizes="any">
+  <link rel="stylesheet" href="/marketing.css">
+  <script>
+    (function () {
+      var parts = window.location.pathname.split("/").filter(Boolean);
+      var slug = parts[parts.length - 1] || "";
+      if (slug === "blog" || slug === "blog-post.html") slug = "";
+      if (slug) document.documentElement.setAttribute("data-blog-slug", slug);
+    })();
+  </script>
+</head>
+<body>
+  <div class="marketingShell">
+    <nav class="marketingNav" aria-label="Primary">
+      <a class="marketingBrand" href="/" aria-label="NabadAi">
+        <span class="brandLockup brandLockup--marketing">
+          <span class="brandLockupMark" aria-hidden="true"></span>
+          <span class="brandLockupText">abadAi</span>
+        </span>
+      </a>
+      <div class="marketingNavLinks marketingNavLinks--wide">
+        <a class="marketingNavText" href="/blog">Blog</a>
+        <a class="marketingNavSignIn" href="/app/#/auth">Sign in</a>
+      </div>
+    </nav>
+    <main class="blogArticle">
+      <a class="blogBackLink" href="/blog">← All posts</a>
+      <article>
+        <header class="blogArticleHeader">
+          <div data-blog="tags" class="blogArticleTags" hidden></div>
+          <h1 data-blog="hero.title">Loading…</h1>
+          <p class="blogArticleLead" data-blog="hero.lead"></p>
+          <div class="blogArticleMeta">
+            <span data-blog="author.name">NabadAi</span>
+            <span aria-hidden="true">·</span>
+            <time data-blog="meta.date"></time>
+          </div>
+        </header>
+        <img data-blog="hero.cover" class="blogArticleCover" alt="" hidden>
+        <div class="blogArticleBody" data-blog="body.html"></div>
+        <div class="blogArticleCta">
+          <a data-blog="cta" class="marketingCta" href="/app/" hidden>Try NabadAi</a>
+        </div>
+      </article>
+    </main>
+    <footer class="marketingFooter marketingFooter--site">
+      <div class="marketingFooterBottom"><span>© 2026 NabadAi</span></div>
+    </footer>
+  </div>
+  <script src="/src/blog-post.js" defer></script>
+</body>
+</html>

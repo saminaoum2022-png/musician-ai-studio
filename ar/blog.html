@@ -1,11 +1,13 @@
 <!doctype html>
-<html lang="ar" dir="rtl">
+<html lang="ar" dir="rtl" data-blog-index="1">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-  <title>مدونة NabadAi — تحديثات وقصص المبدعين</title>
-  <meta name="description" content="أخبار وتحديثات من NabadAi. المدونة قريباً.">
+  <title>مدونة NabadAi — نصائح ومقالات الموسيقى بالذكاء الاصطناعي</title>
+  <meta name="description" content="أدلة وقصص وتحديثات عن صناعة الموسيقى بالذكاء الاصطناعي مع NabadAi.">
   <link rel="canonical" href="https://www.nabadai.com/ar/blog">
+  <link rel="alternate" hreflang="ar" href="https://www.nabadai.com/ar/blog">
+  <link rel="alternate" hreflang="en" href="https://www.nabadai.com/blog">
   <link rel="icon" href="/favicon.ico" sizes="any">
   <link rel="stylesheet" href="/marketing.css">
 </head>
@@ -26,16 +28,16 @@
         <a class="marketingNavSignIn" href="/app/#/auth">تسجيل الدخول</a>
       </div>
     </nav>
-    <main>
-      <section class="hero" style="min-height:360px;grid-template-columns:1fr">
-        <div class="heroCopy">
-          <p class="eyebrow">المدونة</p>
-          <h1>تحديثات وقصص المبدعين</h1>
-          <p class="heroLead">نحضّر مقالات عن الميزات الجديدة، سير العمل للموسيقى العربية، ونصائح من مجتمع NabadAi. عد قريباً.</p>
-          <div class="heroActions">
-            <a class="marketingCta" href="mailto:help@nabadai.com">تواصل معنا</a>
-            <a class="textLink" href="/ar">العودة للرئيسية</a>
-          </div>
+    <main class="blogPage">
+      <section class="blogHero">
+        <p class="eyebrow">المدونة</p>
+        <h1>نصائح ومقالات الموسيقى بالذكاء الاصطناعي</h1>
+        <p class="heroLead">أدلة للهمهمة إلى أغنية، كتابة الكلمات، والموسيقى العربية مع NabadAi.</p>
+      </section>
+      <section class="blogGridSection" aria-label="المقالات">
+        <div id="blogPostGrid" class="blogPostGrid"></div>
+        <div id="blogEmptyState" class="blogEmptyState" hidden>
+          <p>لا توجد مقالات منشورة بعد.</p>
         </div>
       </section>
     </main>
@@ -82,5 +84,6 @@
       <div class="marketingFooterBottom"><span>© 2026 NabadAi · دبي، الإمارات · موسيقى بالذكاء الاصطناعي — الحقوق موضّحة في الشروط.</span></div>
     </footer>
   </div>
+  <script src="/src/blog-index.js" defer></script>
 </body>
 </html>

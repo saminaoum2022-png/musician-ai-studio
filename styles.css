@@ -14914,24 +14914,124 @@ body.generateLocked [data-route="generate"] #btnNewSong{
   background: linear-gradient(180deg, rgba(255, 99, 132, 0.18), rgba(255, 99, 132, 0.07));
   color: rgba(255, 222, 232, 0.97);
 }
+/* Lyrics AI busy — inkwell glow: soft brewing aura, readable text, no chase border. */
 .lyricsBox.generating{
-  box-shadow: 0 0 0 1px rgba(124,92,255,0.28), 0 14px 36px rgba(14,18,30,0.42);
+  box-shadow: none;
+  transform: none;
 }
 .lyricsBox.generating .lyricsBoxMain::before{
-  opacity:0.95;
-  animation: lyricAura 2.6s ease-in-out infinite;
+  opacity: 1;
+  inset: -6px;
+  border-radius: 16px;
+  filter: blur(16px);
+  background:
+    radial-gradient(ellipse 75% 60% at 22% 42%, rgba(35, 213, 171, 0.32), transparent 70%),
+    radial-gradient(ellipse 68% 55% at 76% 56%, rgba(124, 92, 255, 0.36), transparent 72%),
+    radial-gradient(ellipse 55% 40% at 50% 95%, rgba(183, 139, 255, 0.18), transparent 68%);
+  animation: lyricsInkwellBreath 3.8s ease-in-out infinite;
 }
 .lyricsBox.generating .lyricsBoxMain::after{
-  opacity:0.88;
-  animation: lyricShimmer 2.8s linear infinite;
+  opacity: 1;
+  inset: 0;
+  border-radius: 12px;
+  filter: none;
+  backdrop-filter: none;
+  background: rgba(124, 92, 255, 0.035);
+  border: 1px solid rgba(124, 92, 255, 0.14);
+  box-shadow:
+    inset 0 0 24px rgba(35, 213, 171, 0.06),
+    inset 0 0 40px rgba(124, 92, 255, 0.05);
+  animation: lyricsInkwellInner 3.8s ease-in-out infinite;
 }
 .lyricsBox.generating .lyricsBoxMain textarea{
-  filter: saturate(1.02) brightness(0.98);
-  color: rgba(241, 247, 255, 0.98);
-  text-shadow: 0 0 12px rgba(124,92,255,0.18), 0 0 10px rgba(35,213,171,0.12);
+  filter: none;
+  text-shadow: none;
+  opacity: 0.92;
+  transition: opacity 280ms ease;
 }
-.lyricsBox.generating .lyricsMagicBtn{
-  box-shadow: 0 0 0 1px rgba(124,92,255,0.35), 0 10px 20px rgba(124,92,255,0.28);
+.lyricsBox.generating .lyricsMagicBtn,
+.lyricsBox.generating .lyricsPolishBtn{
+  box-shadow:
+    0 0 0 1px rgba(124, 92, 255, 0.22),
+    0 0 14px rgba(124, 92, 255, 0.16);
+  animation: lyricsAssistBreathe 2.8s ease-in-out infinite;
+}
+@keyframes lyricsInkwellBreath{
+  0%, 100%{ opacity: 0.78; transform: scale(1); }
+  50%{ opacity: 1; transform: scale(1.012); }
+}
+@keyframes lyricsInkwellInner{
+  0%, 100%{
+    border-color: rgba(124, 92, 255, 0.12);
+    box-shadow:
+      inset 0 0 20px rgba(35, 213, 171, 0.05),
+      inset 0 0 36px rgba(124, 92, 255, 0.04);
+  }
+  50%{
+    border-color: rgba(35, 213, 171, 0.2);
+    box-shadow:
+      inset 0 0 28px rgba(35, 213, 171, 0.09),
+      inset 0 0 44px rgba(124, 92, 255, 0.07);
+  }
+}
+@keyframes lyricsAssistBreathe{
+  0%, 100%{ opacity: 1; }
+  50%{ opacity: 0.84; }
+}
+.lyricsBox.lyricsGenSettled .lyricsBoxMain::before{
+  opacity: 1;
+  inset: -8px;
+  border-radius: 18px;
+  filter: blur(20px);
+  background:
+    radial-gradient(circle at 50% 50%, rgba(124, 92, 255, 0.38), rgba(35, 213, 171, 0.24) 45%, transparent 74%);
+  animation: lyricsGenSettle 1.3s ease-out forwards;
+}
+.lyricsBox.lyricsGenSettled .lyricsBoxMain::after{
+  opacity: 0;
+  animation: none;
+}
+.lyricsBox.lyricsGenSettled .lyricsBoxMain textarea{
+  animation: lyricsGenTextSettle 1s ease-out;
+}
+@keyframes lyricsGenSettle{
+  0%{ opacity: 0.92; transform: scale(1.015); }
+  100%{ opacity: 0; transform: scale(1.05); }
+}
+@keyframes lyricsGenTextSettle{
+  0%{
+    text-shadow:
+      0 0 8px rgba(35, 213, 171, 0.28),
+      0 0 16px rgba(124, 92, 255, 0.22);
+  }
+  100%{ text-shadow: none; }
+}
+@media (prefers-reduced-motion: reduce){
+  .lyricsBox.generating .lyricsBoxMain::before,
+  .lyricsBox.generating .lyricsBoxMain::after{
+    animation: none;
+  }
+  .lyricsBox.generating .lyricsMagicBtn,
+  .lyricsBox.generating .lyricsPolishBtn{
+    animation: none;
+  }
+  .lyricsBox.lyricsGenSettled .lyricsBoxMain::before,
+  .lyricsBox.lyricsGenSettled .lyricsBoxMain textarea{
+    animation: none;
+  }
+}
+html[data-theme="light"] body[data-route="generate"] .lyricsBox.generating .lyricsBoxMain::before{
+  background:
+    radial-gradient(ellipse 75% 60% at 22% 42%, rgba(15, 155, 122, 0.24), transparent 70%),
+    radial-gradient(ellipse 68% 55% at 76% 56%, rgba(124, 92, 255, 0.28), transparent 72%);
+}
+html[data-theme="light"] body[data-route="generate"] .lyricsBox.generating .lyricsBoxMain::after{
+  background: rgba(124, 92, 255, 0.03);
+  border-color: rgba(124, 92, 255, 0.16);
+}
+html[data-theme="light"] body[data-route="generate"] .lyricsBox.generating .lyricsBoxMain textarea{
+  opacity: 0.94;
+  color: var(--text);
 }
 @keyframes lyricAura{
   0%,100%{ transform: scale(1); filter: blur(12px) saturate(1); }

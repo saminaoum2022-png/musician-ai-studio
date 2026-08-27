@@ -58210,6 +58210,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
         sourceCreator: String(currentRemixSource.creator || "").trim(),
       };
     }
+    let inkwellSettle = false;
     try {
       if (els.btnLyricsMagic) {
         els.btnLyricsMagic.disabled = true;
@@ -58219,7 +58220,10 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       }
       if (els.btnLyricsDiacritics) els.btnLyricsDiacritics.disabled = true;
       if (els.btnLyricsPolish) els.btnLyricsPolish.disabled = true;
-      if (lyricsBoxEl) lyricsBoxEl.classList.add("generating");
+      if (lyricsBoxEl) {
+        lyricsBoxEl.classList.remove("lyricsGenSettled");
+        lyricsBoxEl.classList.add("generating");
+      }
       if (els.sunoPrompt) els.sunoPrompt.disabled = true;
       if (els.sunoStyle) els.sunoStyle.disabled = true;
       const lyricsProvider = resolveLyricsProviderForMode(mode);
@@ -58268,6 +58272,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
         if (els.createChallengeHintSub) els.createChallengeHintSub.textContent = "Lyrics drafted. Review them, edit if needed, then Generate.";
       }
       if (lyricsBoxEl) lyricsBoxEl.classList.add("wandGenerated");
+      inkwellSettle = true;
       snapshotNabadAiLyricsDraft(els.sunoPrompt?.value || "");
       const debugSuno = String(data?.debug?.suno || "").trim();
       const debugGemini = String(data?.debug?.gemini || "").trim();
@@ -58291,6 +58296,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       if (els.sunoPrompt) els.sunoPrompt.disabled = false;
       if (els.sunoStyle) els.sunoStyle.disabled = false;
       if (lyricsBoxEl) lyricsBoxEl.classList.remove("generating");
+      if (inkwellSettle) pulseLyricsGenSettled(lyricsBoxEl);
       if (els.btnLyricsMagic) {
         els.btnLyricsMagic.disabled = false;
         const icoEl = els.btnLyricsMagic.querySelector(".lyricsMagicIco");
@@ -58328,6 +58334,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
     const lyricDialectHint = [dialectHint, addressNote].filter(Boolean).join(" ");
     const labelEl = els.btnLyricsPolish?.querySelector(".lyricsPolishLabel");
     const prevLabel = labelEl?.textContent || "Polish lyrics";
+    let inkwellSettle = false;
     try {
       if (els.btnLyricsPolish) els.btnLyricsPolish.disabled = true;
       if (els.btnLyricsMagic) els.btnLyricsMagic.disabled = true;
@@ -58356,6 +58363,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       try { autoResizeLyricsBox(); } catch {}
       try { syncArabicLyricsControlsVisibility(); } catch {}
       snapshotNabadAiLyricsDraft(nextLyrics);
+      inkwellSettle = true;
       const doneMsg = "Lyrics polished — review, then Generate song.";
       setStatus(doneMsg);
       showToast(doneMsg, { icon: "✦", durationMs: 3600 });
@@ -58365,6 +58373,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
     } finally {
       if (els.sunoPrompt) els.sunoPrompt.disabled = false;
       if (lyricsBoxEl) lyricsBoxEl.classList.remove("generating");
+      if (inkwellSettle) pulseLyricsGenSettled(lyricsBoxEl);
       if (els.btnLyricsPolish) els.btnLyricsPolish.disabled = false;
       if (els.btnLyricsMagic) els.btnLyricsMagic.disabled = false;
       if (els.btnLyricsDiacritics) els.btnLyricsDiacritics.disabled = false;
@@ -62247,6 +62256,15 @@ function autoResizeLyricsBox() {
   el.style.height = `${next}px`;
 }
 
+function pulseLyricsGenSettled(box) {
+  const el = box || els.sunoPrompt?.closest?.(".lyricsBox");
+  if (!el) return;
+  el.classList.remove("lyricsGenSettled");
+  void el.offsetWidth;
+  el.classList.add("lyricsGenSettled");
+  window.setTimeout(() => el.classList.remove("lyricsGenSettled"), 1400);
+}
+
 function wireLyricsPromptBidiOnce() {
   const el = els.sunoPrompt;
   if (!el || el.dataset.lyricsBidiWired) return;
@@ -62777,6 +62795,9 @@ els.sunoPrompt?.addEventListener("input", () => {
   const lyricsBoxEl = els.sunoPrompt?.closest?.(".lyricsBox");
   if (lyricsBoxEl?.classList.contains("wandGenerated")) {
     lyricsBoxEl.classList.remove("wandGenerated");
+  }
+  if (lyricsBoxEl?.classList.contains("lyricsGenSettled")) {
+    lyricsBoxEl.classList.remove("lyricsGenSettled");
   }
   try { syncArabicLyricsControlsVisibility(); } catch {}
 });

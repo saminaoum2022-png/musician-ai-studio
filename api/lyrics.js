@@ -360,6 +360,9 @@ function buildPrompt({ seed, style, mode, nonce, dialect, dialectHint, sourceLyr
     const dialectRaw = String(dialect || "").trim();
     const dialectLower = dialectRaw.toLowerCase();
     const isMsa = /\bmsa\b|modern standard|فصحى|fus[hḥ]a/.test(dialectLower);
+    const isLebanese = /lebanese|لبنان/.test(dialectLower);
+    const isLevantineColloquial =
+      isLebanese || /levantine|syrian|palestinian|jordanian|سور|فلسط/.test(dialectLower);
     // Friendly names match Create chips so Gemini gets the same simple ask
     // that works in Coach — short + dialect-named, not a soft essay.
     const dialectSpeak =
@@ -391,6 +394,19 @@ function buildPrompt({ seed, style, mode, nonce, dialect, dialectHint, sourceLyr
       "نفس الكلمات، نفس الأسطر، نفس الوسوم [Verse] [Chorus]… أخرج الكلمات فقط.",
       isMsa
         ? "فصحى: تشكيل أوضح مقبول، بس بدون مبالغة على كل حرف."
+        : isLebanese
+        ? [
+          "شكّل كل كلمة مغنّاة بحركات اللهجة اللبنانية المحكية (فتحة/كسرة/ضمة/شدة) — مش سكّون على كل حرف.",
+          "ممنوع: تنوين (ًٌٍ)، إعراب، أو تشكيل نحوي على آخر الكلمات.",
+          "ق = همزة (2): قلب، قلت، قال، أقول — مش /q/ فصيح.",
+          "امشي على نطق بيروت المحكي: شو، كيف، حبّيبي، عم، ما، منيح.",
+        ].join("\n")
+        : isLevantineColloquial
+        ? [
+          "شكّل الكلمات المغنّاة بحركات اللهجة الشامية المحكية — مش كل حرف بسكّون.",
+          "ممنوع: تنوين (ًٌٍ)، إعراب، أو تشكيل نحوي على آخر الكلمات.",
+          "ق باللهجة المحكية = همزة (2) مش /q/ فصيح — مثل: قلب، قلت، قال.",
+        ].join("\n")
         : [
           "لا تشكّل كل حرف — شكّل بس الكلمات يلي ممكن يغلط فيها الغناء.",
           "ممنوع: تنوين (ًٌٍ)، إعراب، أو تشكيل نحوي على آخر الكلمات.",
@@ -400,6 +416,19 @@ function buildPrompt({ seed, style, mode, nonce, dialect, dialectHint, sourceLyr
       "Keep SAME words, lines, and section tags. Output lyrics only.",
       isMsa
         ? "MSA: clear marks OK, but do not vowelize every single letter."
+        : isLebanese
+        ? [
+          "Vowelize EVERY sung word for spoken Beirut Lebanese (fatha/kasra/damma/shadda on words) — NOT sukoon on every letter.",
+          "NO tanween (ًٌٍ), NO nahwi case endings, NO formal MSA pronunciation.",
+          "Qaf ق = hamza (2), not classical /q/ — e.g. قلب، قلت، قال.",
+          "Spoken Beirut examples: شو، كيف، حبّيبي، عم، ما، منيح.",
+        ].join("\n")
+        : isLevantineColloquial
+        ? [
+          "Vowelize sung words for spoken Levantine — not sukoon on every letter.",
+          "NO tanween (ًٌٍ), NO nahwi case endings, NO textbook tashkeel.",
+          "Qaf ق = hamza in this dialect, not classical /q/.",
+        ].join("\n")
         : [
           "Do NOT mark every letter — only words where the AI singer might guess wrong.",
           "NO tanween (ًٌٍ), NO nahwi case endings, NO full textbook tashkeel.",

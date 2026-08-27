@@ -5245,7 +5245,7 @@ const LYRICS_LANGUAGE_VALUE = {
   german: "German",
 };
 const LYRICS_ARABIC_DIALECT_VALUE = {
-  lebanese: "Levantine Arabic",
+  lebanese: "Lebanese Arabic",
   egyptian: "Egyptian Arabic",
   iraqi: "Iraqi Arabic",
   gulf: "Gulf Arabic",
@@ -5256,17 +5256,54 @@ const LYRICS_ARABIC_DIALECT_VALUE = {
   sudanese: "Sudanese Arabic",
   msa: "Modern Standard Arabic",
 };
+/** Auto-filled into hidden sunoDialectHint — Suno reads this for accent, not just tashkeel. */
+const LYRICS_ARABIC_DIALECT_HINT = {
+  lebanese:
+    "Lebanese Beirut colloquial singing; qaf as hamza (2); soft spoken vowels; NOT Egyptian; NOT formal MSA/nahwi.",
+  syrian: "Syrian Levantine colloquial; qaf as hamza; spoken vowels; NOT Egyptian.",
+  palestinian: "Palestinian Levantine colloquial; qaf as hamza; spoken vowels; NOT Egyptian.",
+  egyptian: "Egyptian Masri colloquial; NOT Levantine.",
+  iraqi: "Iraqi colloquial; NOT Egyptian or Gulf.",
+  gulf: "Khaleeji/Gulf colloquial; NOT Egyptian or Levantine.",
+  moroccan: "Moroccan Darija colloquial; NOT Egyptian or Levantine.",
+  tunisian: "Tunisian colloquial; NOT Egyptian or Levantine.",
+  sudanese: "Sudanese colloquial; NOT Egyptian.",
+  msa: "Modern Standard Arabic (formal).",
+};
+
+function arabicDialectAccentStyleNote() {
+  if (lyricsDialect === "lebanese") {
+    return "Lebanese Arabic vocal, Beirut Levantine accent, colloquial pronunciation";
+  }
+  if (lyricsDialect === "syrian") {
+    return "Syrian Levantine Arabic vocal, colloquial pronunciation";
+  }
+  if (lyricsDialect === "palestinian") {
+    return "Palestinian Levantine Arabic vocal, colloquial pronunciation";
+  }
+  if (lyricsDialect === "egyptian") {
+    return "Egyptian Arabic vocal, Masri colloquial pronunciation";
+  }
+  const d = String(els.sunoDialect?.value || "").trim().toLowerCase();
+  if (/lebanese/.test(d)) return "Lebanese Arabic vocal, Beirut Levantine accent, colloquial pronunciation";
+  if (/syrian|levantine/.test(d)) return "Levantine Arabic vocal, colloquial pronunciation";
+  return "";
+}
 
 function applyLyricsLanguageToDialect() {
   let val = "";
+  let hint = "";
   if (lyricsLanguage === "arabic") {
     val = LYRICS_ARABIC_DIALECT_VALUE[lyricsDialect] || "";
+    hint = LYRICS_ARABIC_DIALECT_HINT[lyricsDialect] || "";
   } else if (lyricsLanguage !== "auto") {
     val = LYRICS_LANGUAGE_VALUE[lyricsLanguage] || "";
   } else if (textHasArabicScript(els.sunoPrompt?.value) && lyricsDialect) {
     val = LYRICS_ARABIC_DIALECT_VALUE[lyricsDialect] || "";
+    hint = LYRICS_ARABIC_DIALECT_HINT[lyricsDialect] || "";
   }
   if (els.sunoDialect) els.sunoDialect.value = val;
+  if (els.sunoDialectHint) els.sunoDialectHint.value = hint;
 }
 
 function syncLyricsLangPills() {
@@ -6930,8 +6967,8 @@ const CHALLENGE_LANGUAGES = [
     id: "levantine",
     label: "Levantine Arabic",
     prompt: "Use Levantine Arabic (Lebanese/Syrian/Palestinian). Avoid Egyptian dialect.",
-    dialect: "Levantine Arabic",
-    dialectHint: "Levantine colloquial; not Egyptian.",
+    dialect: "Lebanese Arabic",
+    dialectHint: "Lebanese Beirut colloquial; qaf as hamza; NOT Egyptian; NOT formal MSA.",
   },
   {
     id: "neutral-arabic",
@@ -58195,6 +58232,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       showToast("Vowel marks are for Arabic lyrics.", { icon: "!", durationMs: 2800 });
       return;
     }
+    try { applyLyricsLanguageToDialect(); } catch {}
     const lyricsBoxEl = els.sunoPrompt.closest(".lyricsBox");
     const style = String(els.sunoStyle?.value || "").trim();
     const dialect = String(els.sunoDialect?.value || "").trim();
@@ -58215,7 +58253,11 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       if (labelArEl) labelArEl.textContent = "…";
       if (lyricsBoxEl) lyricsBoxEl.classList.add("generating");
       if (els.sunoPrompt) els.sunoPrompt.disabled = true;
-      setStatus("Adding light vowel marks for dialect singing…");
+      setStatus(
+        lyricsDialect === "lebanese"
+          ? "Adding Lebanese vowel marks for colloquial singing…"
+          : "Adding vowel marks for dialect singing…",
+      );
       const r = await fetch(apiUrl("/api/lyrics"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -58236,8 +58278,12 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       try { autoResizeLyricsBox(); } catch {}
       try { syncArabicLyricsControlsVisibility(); } catch {}
       snapshotNabadAiLyricsDraft(nextLyrics);
-      setStatus("Vowel marks added — review then Generate song.");
-      showToast("Light vowel marks added — review then Generate song.", { icon: "✦", durationMs: 3600 });
+      const vowelDoneMsg =
+        lyricsDialect === "lebanese"
+          ? "Lebanese vowel marks added — pick Lebanese dialect + Generate."
+          : "Vowel marks added — review then Generate song.";
+      setStatus(vowelDoneMsg);
+      showToast(vowelDoneMsg, { icon: "✦", durationMs: 3600 });
     } catch (e) {
       setStatus(`Vowel marks failed: ${e?.message || String(e)}`);
       showToast(e?.message || "Could not add vowel marks", { icon: "!", durationMs: 3600 });
@@ -59518,6 +59564,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       setProgress(5);
 
       applyMaqamToStyleInput();
+      try { applyLyricsLanguageToDialect(); } catch {}
       const userPrompt = (els.sunoPrompt?.value || "").trim();
       const userStyle = resolveStyleInputForGeneration((els.sunoStyle?.value || "").trim());
       const userAvoidTags = trimAvoidTagsForSuno(els.sunoAvoidTags?.value || "");
@@ -59582,14 +59629,21 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       const personaModelSel = personaIdSel ? effectivePersonaModel(personaHit) : "";
       const isRecordedVoicePersona = personaModelSel === "voice_persona";
       // Heavy timing/groove tags fight voice_persona clones — keep dialect only.
+      const dialectAccentStyle = arabicDialectAccentStyleNote();
       const styleExtras = isRecordedVoicePersona
-        ? [dialect ? `Dialect: ${dialect}` : "", dialectHint ? `Hint: ${dialectHint}` : "", arabicAddressNote]
+        ? [
+            dialect ? `Dialect: ${dialect}` : "",
+            dialectHint ? `Hint: ${dialectHint}` : "",
+            dialectAccentStyle,
+            arabicAddressNote,
+          ]
             .filter(Boolean)
             .join(", ")
         : [
             resolvedSingerGender ? singerVoiceStyleNote(resolvedSingerGender) : "",
             dialect ? `Dialect: ${dialect}` : "",
             dialectHint ? `Hint: ${dialectHint}` : "",
+            dialectAccentStyle,
             arabicAddressNote,
             ...(hasReference
               ? []

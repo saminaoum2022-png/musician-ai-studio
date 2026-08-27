@@ -5290,6 +5290,17 @@ function arabicDialectAccentStyleNote() {
   return "";
 }
 
+/** Suno writes lyrics its singer knows how to pronounce — best for Arabic dialect. Gemini for long arrange/continue, remix, vowel marks. */
+function resolveLyricsProviderForMode(mode, seed = "") {
+  const m = String(mode || "").trim().toLowerCase();
+  if (m === "remix_reply" || m === "diacritics") return "gemini";
+  if ((m === "arrange" || m === "continue") && String(seed || "").length > 180) return "gemini";
+  const dialectOk = Boolean(lyricsDialect && lyricsDialect !== "msa" && LYRICS_ARABIC_DIALECT_VALUE[lyricsDialect]);
+  if (dialectOk) return "suno";
+  if (lyricsLanguage === "arabic" && lyricsDialect && lyricsDialect !== "msa") return "suno";
+  return "gemini";
+}
+
 function applyLyricsLanguageToDialect() {
   let val = "";
   let hint = "";
@@ -58118,9 +58129,10 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       return;
     }
     const lyricsBoxEl = els.sunoPrompt.closest(".lyricsBox");
+    try { applyLyricsLanguageToDialect(); } catch {}
     const seed = String(els.sunoPrompt.value || "").trim();
     const challenge = challengePromptContext();
-    const lyricsProvider = "gemini";
+    try { applyLyricsLanguageToDialect(); } catch {}
     const style = String(els.sunoStyle?.value || "").trim();
     const dialect = String(els.sunoDialect?.value || "").trim();
     const dialectHint = String(els.sunoDialectHint?.value || "").trim();
@@ -58158,7 +58170,23 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       if (lyricsBoxEl) lyricsBoxEl.classList.add("generating");
       if (els.sunoPrompt) els.sunoPrompt.disabled = true;
       if (els.sunoStyle) els.sunoStyle.disabled = true;
-      setStatus(challenge ? "AI is drafting short challenge lyrics…" : mode === "remix_reply" ? "AI is writing your reply to this song…" : mode === "continue" ? "AI is continuing your lyrics…" : mode === "arrange" ? "AI is arranging your lyrics for singing…" : "AI is writing structured lyrics…");
+      const lyricsProvider = resolveLyricsProviderForMode(mode, requestSeed);
+      const usingSunoLyrics = lyricsProvider === "suno";
+      setStatus(
+        usingSunoLyrics
+          ? challenge
+            ? "Suno is drafting short dialect lyrics…"
+            : "Suno is writing colloquial lyrics for singing…"
+          : challenge
+          ? "AI is drafting short challenge lyrics…"
+          : mode === "remix_reply"
+          ? "AI is writing your reply to this song…"
+          : mode === "continue"
+          ? "AI is continuing your lyrics…"
+          : mode === "arrange"
+          ? "AI is arranging your lyrics for singing…"
+          : "AI is writing structured lyrics…",
+      );
       const r = await fetch(apiUrl("/api/lyrics"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -58191,9 +58219,19 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       const provider = String(data?.provider || "").trim();
       const debugSuno = String(data?.debug?.suno || "").trim();
       const debugGemini = String(data?.debug?.gemini || "").trim();
-      const providerNote = provider === "fallback" ? " (fallback mode)" : provider ? ` (${provider})` : "";
+      const providerNote =
+        provider === "suno"
+          ? " (Suno — tuned for how it sings)"
+          : provider === "fallback" || (usingSunoLyrics && provider === "gemini")
+          ? " (Gemini fallback)"
+          : provider
+          ? ` (${provider})`
+          : "";
       const debugNote = debugSuno || debugGemini ? ` [engine:${debugSuno || "-"} gemini:${debugGemini || "-"}]` : "";
       setStatus(`Lyrics ready${providerNote}${debugNote}. Review and then generate song.`);
+      if (usingSunoLyrics && provider === "suno") {
+        showToast("Suno wrote dialect lyrics — review, then Generate song.", { icon: "✦", durationMs: 4200 });
+      }
       try { syncArabicLyricsControlsVisibility(); } catch {}
     } catch (e) {
       setStatus(`Lyrics assist failed: ${e?.message || String(e)}`);

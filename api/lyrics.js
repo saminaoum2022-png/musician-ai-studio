@@ -3,8 +3,8 @@
  * Body: { seed?: string, style?: string, mode?: "continue"|"full"|"arrange"|"challenge"|"remix_reply"|"diacritics", sourceLyrics?: string, sourceTitle?: string, sourceCreator?: string, lyricsProvider?: "gemini" }
  *
  * Provider: Gemini by default (free — uses GEMINI_API_KEY).
- * Suno lyrics API only when lyricsProvider is explicitly "suno" (costs Suno credits).
- * mode=diacritics is Gemini-only (adds Arabic vowel marks / tashkeel).
+ * Suno lyrics when lyricsProvider is "suno" (costs Suno credits; same engine as song gen).
+ * remix_reply + diacritics stay Gemini-only (long text / vowel marks need full lyrics in prompt).
  */
 const { queueLogProviderUsage } = require("./_lib/provider-usage-log");
 
@@ -24,7 +24,13 @@ module.exports = async function handler(req, res) {
     const sourceCreator = String(body?.sourceCreator || "").trim().slice(0, 80);
     const lyricsProvider = String(body?.lyricsProvider || body?.providerPreference || "").trim().toLowerCase();
     const requestedMode = String(body?.mode || "").trim().toLowerCase();
-    const sunoLyricsRequested = lyricsProvider === "suno" && requestedMode !== "diacritics";
+    const sunoLongTextMode =
+      (requestedMode === "arrange" || requestedMode === "continue") && seed.length > 180;
+    const sunoLyricsRequested =
+      lyricsProvider === "suno"
+      && requestedMode !== "remix_reply"
+      && requestedMode !== "diacritics"
+      && !sunoLongTextMode;
     if (requestedMode === "diacritics" && !seed) {
       return json(res, 400, {
         error: "Add vowel marks needs existing Arabic lyrics in the box.",
@@ -560,9 +566,55 @@ function buildPrompt({ seed, style, mode, nonce, dialect, dialectHint, sourceLyr
 }
 
 function buildSunoPrompt({ seed, style, mode, dialect, dialectHint }) {
-  const intent = mode === "diacritics"
-    ? `Light sung tashkeel for ${dialect || "the selected"} dialect — mark ambiguous words only, not every letter; no tanween/nahwi.`
-    : mode === "arrange"
+  const s = String(seed || "").trim();
+  const d = String(dialect || "").trim();
+  const hint = String(dialectHint || "").trim();
+  const st = String(style || "").trim();
+  const dialectLower = `${d} ${hint}`.toLowerCase();
+  const isLebanese = /lebanese|levantine|لبنان|بيروت/.test(dialectLower);
+  const isArabicDialect =
+    isLebanese
+    || /arabic|egyptian|iraqi|gulf|maghrebi|syrian|palestinian|tunisian|sudanese|darija|msa|فصحى|محك/.test(
+      dialectLower,
+    );
+
+  const pack = (prefix, body) => {
+    const head = String(prefix || "").replace(/\s+/g, " ").trim();
+    const room = Math.max(24, 200 - head.length - 1);
+    const tail = String(body || "").trim().slice(0, room);
+    return `${head} ${tail}`.replace(/\s+/g, " ").trim().slice(0, 200);
+  };
+
+  if (isArabicDialect && mode !== "diacritics") {
+    const hintShort = hint ? `${hint.split(";")[0].trim()}. ` : "";
+    const styleShort = st ? `${st.split(",")[0].trim()}. ` : "";
+    if (mode === "challenge") {
+      return pack(
+        "Short Arabic challenge lyrics, max 12 lines, verse+chorus tags.",
+        `${d ? `${d}. ` : ""}${hintShort}${styleShort}${s}`,
+      );
+    }
+    if (mode === "continue") {
+      return pack(
+        `${d || "Arabic colloquial"} — continue these lyrics, same dialect.`,
+        `${hintShort}${s}`,
+      );
+    }
+    if (mode === "arrange") {
+      return pack(
+        `${d || "Arabic colloquial"} — arrange into verse/chorus tags.`,
+        `${hintShort}${s}`,
+      );
+    }
+    const lead = isLebanese
+      ? "Lebanese Arabic colloquial pop lyrics, Beirut dialect, qaf as hamza, NOT Egyptian, NOT formal MSA."
+      : d
+      ? `${d} colloquial sung lyrics.`
+      : "Arabic colloquial sung lyrics.";
+    return pack(`${lead} ${hintShort}${styleShort}`, s);
+  }
+
+  const intent = mode === "arrange"
     ? "Arrange user lyrics into a singable song with section tags."
     : mode === "continue"
       ? "Continue these lyrics in the same mood and language."
@@ -571,10 +623,10 @@ function buildSunoPrompt({ seed, style, mode, dialect, dialectHint }) {
         : "Write complete singable song lyrics with verse and chorus tags.";
   const parts = [
     intent,
-    dialect ? `Dialect: ${dialect}.` : "",
-    dialectHint ? `Flavor: ${dialectHint}.` : "",
-    style ? `Style: ${style}.` : "",
-    seed ? `Idea: ${seed}` : "",
+    d ? `Dialect: ${d}.` : "",
+    hint ? `Flavor: ${hint}.` : "",
+    st ? `Style: ${st}.` : "",
+    s ? `Idea: ${s}` : "",
   ]
     .filter(Boolean)
     .join(" ")

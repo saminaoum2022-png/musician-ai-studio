@@ -113,20 +113,13 @@ module.exports = async function handler(req, res) {
       const callBackUrl = `${proto}://${host}/api/suno/callback`;
       const sunoResult = await trySunoLyrics({ sunoKey, prompt: sunoPrompt, callBackUrl });
       if (sunoResult?.ok) {
-        const normalized = sanitizeLyricsOutput(sunoResult.lyrics);
+        const normalized = sanitizeSunoLyricsOutput(sunoResult.lyrics);
         if (normalized) {
-          const repaired = await maybeRepairOnce({
-            text: normalized,
-            prompt,
-            complianceTerms,
-            sunoKey: "",
-            geminiKey,
-          });
           return json(res, 200, {
-            lyrics: repaired.text,
-            provider: repaired.provider || "suno",
+            lyrics: normalized,
+            provider: "suno",
             title: sunoResult.title || "",
-            debug: { nonce, suno: "ok", taskId: sunoResult.taskId || "" },
+            debug: { nonce, suno: "ok", taskId: sunoResult.taskId || "", verbatim: true },
           });
         }
       }
@@ -662,12 +655,30 @@ function extractSunoLyricsFromRecord(data) {
   pushMany(data?.data?.response?.data);
   pushMany(data?.data?.data);
   pushMany(data?.response?.data);
-  pushMany(data?.data?.response);
+  if (Array.isArray(data?.data?.response)) pushMany(data?.data?.response);
   const direct = extractLyricsFromAny(data) || extractTextLoose(data);
-  if (direct) variants.push({ text: direct, title: "", complete: true });
-  variants.sort((a, b) => Number(b.complete) - Number(a.complete) || b.text.length - a.text.length);
-  const pick = variants[0];
+  if (direct && !variants.some((v) => v.text === String(direct).trim())) {
+    variants.push({ text: String(direct).trim(), title: "", complete: true });
+  }
+  // Suno dashboard shows the first finished variant — do not pick the longest alternate.
+  const pick = variants.find((v) => v.complete) || variants[0];
   return pick ? { lyrics: pick.text, title: pick.title } : null;
+}
+
+/** Suno lyrics: keep verbatim — only drop obvious AI metadata lines, not content Suno wrote. */
+function sanitizeSunoLyricsOutput(input) {
+  return String(input || "")
+    .replace(/\r\n/g, "\n")
+    .split("\n")
+    .map((l) => l.trim())
+    .filter(Boolean)
+    .filter((line) => {
+      if (/^style\s*:/i.test(line)) return false;
+      if (/^(description|note|explanation|theme|meaning)\s*:/i.test(line)) return false;
+      return true;
+    })
+    .join("\n")
+    .trim();
 }
 
 function extractLyricsFromAny(data) {

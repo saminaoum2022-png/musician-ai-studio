@@ -111,22 +111,11 @@ module.exports = async function handler(req, res) {
       if (sunoResult?.ok) {
         const normalized = sanitizeSunoLyricsOutput(sunoResult.lyrics);
         if (normalized) {
-          const lyricsVariants = Array.isArray(sunoResult.lyricsVariants) && sunoResult.lyricsVariants.length
-            ? sunoResult.lyricsVariants
-            : [{ text: normalized, title: sunoResult.title || "" }];
           return json(res, 200, {
             lyrics: normalized,
-            lyricsVariants,
             provider: "suno",
             title: sunoResult.title || "",
-            debug: {
-              nonce,
-              suno: "ok",
-              taskId: sunoResult.taskId || "",
-              verbatim: true,
-              variantCount: sunoResult.variantCount || lyricsVariants.length,
-              variantIndex: sunoResult.variantIndex ?? 0,
-            },
+            debug: { nonce, suno: "ok", taskId: sunoResult.taskId || "", verbatim: true },
           });
         }
       }
@@ -207,19 +196,7 @@ async function trySunoLyrics({ sunoKey, prompt, callBackUrl }) {
       }
       const extracted = extractSunoLyricsFromRecord(data);
       if (extracted?.lyrics) {
-        const allVariants = (extracted.allVariants || []).map((v) => ({
-          text: sanitizeSunoLyricsOutput(v.text),
-          title: v.title || "",
-        })).filter((v) => v.text);
-        return {
-          ok: true,
-          taskId,
-          lyrics: extracted.lyrics,
-          title: extracted.title || "",
-          variantCount: extracted.variantCount || allVariants.length || 1,
-          variantIndex: extracted.variantIndex ?? 0,
-          lyricsVariants: allVariants.length ? allVariants : [{ text: extracted.lyrics, title: extracted.title || "" }],
-        };
+        return { ok: true, taskId, lyrics: extracted.lyrics, title: extracted.title || "" };
       }
       const status = String(data?.data?.status || data?.status || "").toUpperCase();
       if (["CREATE_TASK_FAILED", "GENERATE_LYRICS_FAILED", "CALLBACK_EXCEPTION", "SENSITIVE_WORD_ERROR"].includes(status)) {
@@ -658,7 +635,8 @@ function extractGeminiText(data) {
     .trim();
 }
 
-function collectSunoLyricsVariantsRaw(data) {
+function extractSunoLyricsFromRecord(data) {
+  const rows = data?.data?.response?.data;
   const variants = [];
   const pushRows = (arr) => {
     if (!Array.isArray(arr)) return;
@@ -673,32 +651,17 @@ function collectSunoLyricsVariantsRaw(data) {
       });
     }
   };
-  pushRows(data?.data?.response?.data);
+  pushRows(rows);
   if (!variants.length) pushRows(data?.data?.data);
   if (!variants.length) pushRows(data?.response?.data);
   if (!variants.length) {
     const direct = extractLyricsFromAny(data) || extractTextLoose(data);
     if (direct) variants.push({ text: String(direct).trim(), title: "", complete: true });
   }
-  return variants;
-}
-
-function extractSunoLyricsFromRecord(data) {
-  const variants = collectSunoLyricsVariantsRaw(data);
-  const variantCount = variants.length;
-  const pickIndex = variants.findIndex((v) => v.complete);
-  const useIndex = pickIndex >= 0 ? pickIndex : 0;
-  const pick = variants[useIndex];
+  const pick = variants.find((v) => v.complete) || variants[0];
   if (!pick) return null;
   const lyrics = sanitizeSunoLyricsOutput(pick.text);
-  if (!lyrics) return null;
-  return {
-    lyrics,
-    title: pick.title,
-    variantCount,
-    variantIndex: useIndex,
-    allVariants: variants,
-  };
+  return lyrics ? { lyrics, title: pick.title } : null;
 }
 
 /** Suno lyrics: keep verbatim — only drop obvious AI metadata lines, not content Suno wrote. */

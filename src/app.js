@@ -702,7 +702,6 @@ const els = {
   lyricsAddressRow: document.getElementById("lyricsAddressRow"),
   sunoArabicAddress: document.getElementById("sunoArabicAddress"),
   btnLyricsDiacritics: document.getElementById("btnLyricsDiacritics"),
-  lyricsVariantRow: document.getElementById("lyricsVariantRow"),
   sunoSingerGender: document.getElementById("sunoSingerGender"),
   singerPersonaRow: document.getElementById("singerPersonaRow"),
   sunoVoiceProfile: document.getElementById("sunoVoiceProfile"),
@@ -23550,68 +23549,10 @@ let lastGenerationMeta = null;
 /** AI lyrics snapshot (✦ magic or auto-draft) — compared at Generate for Creator + Nabad. */
 let _nabadAiLyricsDraft = "";
 let _lyricsGeneratedInNabad = false;
-/** Suno ✦ Generate can return 2 lyric texts — stored for Variant 1/2 pills. */
-let _sunoLyricsVariantTexts = [];
-let _sunoLyricsVariantIndex = 0;
-
-function clearSunoLyricsVariants() {
-  _sunoLyricsVariantTexts = [];
-  _sunoLyricsVariantIndex = 0;
-  const row = els.lyricsVariantRow;
-  if (!row) return;
-  row.hidden = true;
-  row.querySelectorAll("[data-lyrics-variant]").forEach((btn, i) => {
-    btn.classList.toggle("isActive", i === 0);
-    btn.setAttribute("aria-pressed", i === 0 ? "true" : "false");
-    btn.disabled = false;
-    btn.hidden = i > 0;
-  });
-}
-
-function syncSunoLyricsVariantPills() {
-  const row = els.lyricsVariantRow;
-  if (!row) return;
-  const count = _sunoLyricsVariantTexts.length;
-  row.hidden = count < 2;
-  row.querySelectorAll("[data-lyrics-variant]").forEach((btn) => {
-    const idx = Number(btn.getAttribute("data-lyrics-variant"));
-    const has = Number.isFinite(idx) && idx < count;
-    btn.hidden = !has;
-    btn.disabled = !has;
-    const on = has && idx === _sunoLyricsVariantIndex;
-    btn.classList.toggle("isActive", on);
-    btn.setAttribute("aria-pressed", on ? "true" : "false");
-  });
-}
-
-function applySunoLyricsVariant(index) {
-  const idx = Number(index);
-  if (!Number.isFinite(idx) || idx < 0 || idx >= _sunoLyricsVariantTexts.length) return;
-  _sunoLyricsVariantIndex = idx;
-  const next = String(_sunoLyricsVariantTexts[idx] || "").trim();
-  if (els.sunoPrompt && next) els.sunoPrompt.value = next;
-  syncSunoLyricsVariantPills();
-  snapshotNabadAiLyricsDraft(next);
-  try { autoResizeLyricsBox(); } catch {}
-}
-
-function setSunoLyricsVariants(displayTexts, activeIndex = 0) {
-  _sunoLyricsVariantTexts = (displayTexts || [])
-    .map((t) => String(t || "").trim())
-    .filter(Boolean);
-  if (_sunoLyricsVariantTexts.length < 2) {
-    clearSunoLyricsVariants();
-    return;
-  }
-  const idx = Math.max(0, Math.min(_sunoLyricsVariantTexts.length - 1, Number(activeIndex) || 0));
-  _sunoLyricsVariantIndex = idx;
-  syncSunoLyricsVariantPills();
-}
 
 function resetNabadLyricsDraftState() {
   _lyricsGeneratedInNabad = false;
   _nabadAiLyricsDraft = "";
-  clearSunoLyricsVariants();
 }
 
 function snapshotNabadAiLyricsDraft(text) {
@@ -58222,7 +58163,6 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
         else els.btnLyricsMagic.textContent = "✦";
       }
       if (els.btnLyricsDiacritics) els.btnLyricsDiacritics.disabled = true;
-      clearSunoLyricsVariants();
       if (lyricsBoxEl) lyricsBoxEl.classList.add("generating");
       if (els.sunoPrompt) els.sunoPrompt.disabled = true;
       if (els.sunoStyle) els.sunoStyle.disabled = true;
@@ -58259,38 +58199,12 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       const data = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(data?.error || "Lyrics generation failed");
       const provider = String(data?.provider || "").trim();
-      const rawVariants = Array.isArray(data?.lyricsVariants) ? data.lyricsVariants : [];
-      const variantBodies = rawVariants
-        .map((v) => String(v?.text ?? v ?? "").trim())
-        .filter(Boolean);
-      const primaryLyrics = String(
-        variantBodies[Number(data?.debug?.variantIndex) || 0]
-        || variantBodies[0]
-        || data?.lyrics
-        || "",
-      ).trim();
-      if (!primaryLyrics) throw new Error("No lyrics returned");
-      const displayVariants = variantBodies.length
-        ? variantBodies.map((body) => {
-            if (!challenge && mode === "continue" && seed) return `${seed}\n\n${body}`.trim();
-            return body;
-          })
-        : [];
-      const activeIdx = Number(data?.debug?.variantIndex);
-      const pickIdx = Number.isFinite(activeIdx) && activeIdx >= 0 ? activeIdx : 0;
-      const nextLyrics = displayVariants.length
-        ? String(displayVariants[pickIdx] || displayVariants[0] || primaryLyrics).trim()
-        : (!challenge && mode === "continue" && seed
-          ? `${seed}\n\n${primaryLyrics}`.trim()
-          : primaryLyrics);
-      els.sunoPrompt.value = nextLyrics;
-      if (provider === "suno" && displayVariants.length >= 2) {
-        setSunoLyricsVariants(displayVariants, pickIdx);
+      const nextLyrics = String(data?.lyrics || "").trim();
+      if (!nextLyrics) throw new Error("No lyrics returned");
+      if (!challenge && mode === "continue" && seed) {
+        els.sunoPrompt.value = `${seed}\n\n${nextLyrics}`.trim();
       } else {
-        clearSunoLyricsVariants();
-        if (usingSunoLyrics && provider === "suno" && displayVariants.length < 2) {
-          showToast("Suno returned one lyric draft this time.", { icon: "✦", durationMs: 3200 });
-        }
+        els.sunoPrompt.value = nextLyrics;
       }
       if (challenge && pendingSearchRemixMeta) {
         pendingSearchRemixMeta.challengePromptPending = false;
@@ -58312,12 +58226,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       const debugNote = debugSuno || debugGemini ? ` [engine:${debugSuno || "-"} gemini:${debugGemini || "-"}]` : "";
       setStatus(`Lyrics ready${providerNote}${debugNote}. Review and then generate song.`);
       if (usingSunoLyrics && provider === "suno") {
-        const variantNote =
-          displayVariants.length >= 2 ? " Pick Variant 1 or 2 if you prefer the other Suno draft." : "";
-        showToast(`Suno wrote lyrics — review, then Generate song.${variantNote}`, {
-          icon: "✦",
-          durationMs: displayVariants.length >= 2 ? 5200 : 4200,
-        });
+        showToast("Suno wrote lyrics — review, then Generate song.", { icon: "✦", durationMs: 4200 });
       }
       try { syncArabicLyricsControlsVisibility(); } catch {}
     } catch (e) {
@@ -58614,16 +58523,6 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
   if (els.btnLyricsDiacritics) {
     els.btnLyricsDiacritics.addEventListener("click", () => {
       void addArabicVowelMarksToLyrics();
-    });
-  }
-  const lyricsVariantRow = els.lyricsVariantRow;
-  if (lyricsVariantRow && !lyricsVariantRow.dataset.bound) {
-    lyricsVariantRow.dataset.bound = "1";
-    lyricsVariantRow.addEventListener("click", (e) => {
-      const btn = e.target?.closest?.("[data-lyrics-variant]");
-      if (!btn || !lyricsVariantRow.contains(btn)) return;
-      haptic("light");
-      applySunoLyricsVariant(btn.getAttribute("data-lyrics-variant"));
     });
   }
   if (els.lyricsModeWrite) {

@@ -1945,6 +1945,17 @@ body:has(.marketingDraftBanner) .marketingShell {
 }
 
 /* ── Blog ───────────────────────────────────────────────────────────── */
+html[data-blog-index],
+html[data-blog-post] {
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+html[data-blog-index] body,
+html[data-blog-post] body {
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+
 .blogPage,
 .blogArticle {
   max-width: 1080px;
@@ -1954,9 +1965,32 @@ body:has(.marketingDraftBanner) .marketingShell {
 .blogHero {
   padding: 24px 0 36px;
 }
+.blogHero h1,
+.blogArticleHeader h1 {
+  font-family: "Inter Display", Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  font-weight: 900;
+  letter-spacing: -0.055em;
+  line-height: 1.05;
+  color: var(--text);
+}
 .blogHero h1 {
   font-size: clamp(2rem, 4vw, 2.75rem);
   margin: 0.35em 0 0.5em;
+}
+.blogHero .heroLead,
+.blogArticleLead {
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  color: var(--muted);
+  font-size: clamp(17px, 2vw, 21px);
+  line-height: 1.55;
+}
+.blogArticleLead {
+  font-size: clamp(17px, 1.8vw, 20px);
+  margin: 0 0 14px;
+}
+.blogPage .marketingCta,
+.blogArticle .marketingCta {
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
 }
 .blogPostGrid {
   display: grid;
@@ -1994,7 +2028,10 @@ body:has(.marketingDraftBanner) .marketingShell {
   padding: 16px 16px 18px;
 }
 .blogCardBody h2 {
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   font-size: 1.15rem;
+  font-weight: 700;
+  letter-spacing: -0.03em;
   margin: 0 0 8px;
   line-height: 1.35;
 }
@@ -2033,14 +2070,7 @@ body:has(.marketingDraftBanner) .marketingShell {
 .blogBackLink:hover { color: #fff; }
 .blogArticleHeader h1 {
   font-size: clamp(1.85rem, 4vw, 2.6rem);
-  line-height: 1.15;
   margin: 0 0 12px;
-}
-.blogArticleLead {
-  font-size: 1.08rem;
-  line-height: 1.6;
-  color: rgba(232,238,247,0.78);
-  margin: 0 0 14px;
 }
 .blogArticleMeta {
   display: flex;
@@ -2048,6 +2078,8 @@ body:has(.marketingDraftBanner) .marketingShell {
   flex-wrap: wrap;
   color: rgba(232,238,247,0.55);
   font-size: 0.9rem;
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  font-weight: 600;
   margin-bottom: 20px;
 }
 .blogArticleCover {
@@ -2058,16 +2090,39 @@ body:has(.marketingDraftBanner) .marketingShell {
   margin: 0 0 24px;
 }
 .blogArticleBody {
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   line-height: 1.75;
   color: rgba(241,247,255,0.92);
-  font-size: 1.02rem;
+  font-size: clamp(16px, 1.6vw, 18px);
 }
 .blogArticleBody h2,
 .blogArticleBody h3 {
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  color: var(--text);
+  letter-spacing: -0.03em;
   margin-top: 1.6em;
   margin-bottom: 0.5em;
 }
+.blogArticleBody h2 {
+  font-size: clamp(1.35rem, 2.5vw, 1.65rem);
+  font-weight: 700;
+}
+.blogArticleBody h3 {
+  font-size: 1.12rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+.blogArticleBody strong {
+  font-weight: 700;
+  color: rgba(247, 250, 255, 0.98);
+}
 .blogArticleBody p { margin: 0 0 1em; }
+.blogArticleBody ul,
+.blogArticleBody ol {
+  margin: 0 0 1.2em 1.25em;
+  padding: 0;
+}
+.blogArticleBody li { margin-bottom: 0.45em; }
 .blogArticleBody a { color: #7c5cff; }
 .blogArticleCta { margin-top: 36px; }
 .blogDraftPreview::after {

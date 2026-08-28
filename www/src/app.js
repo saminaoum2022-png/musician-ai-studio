@@ -5257,7 +5257,7 @@ const LYRICS_ARABIC_DIALECT_VALUE = {
   sudanese: "Sudanese Arabic",
   msa: "Modern Standard Arabic",
 };
-/** Auto-filled into hidden sunoDialectHint — Suno reads this for accent, not just tashkeel. */
+/** Auto-filled into hidden sunoDialectHint — /api/lyrics (Gemini) reads this for dialect + accent. */
 const LYRICS_ARABIC_DIALECT_HINT = {
   lebanese:
     "Lebanese Beirut colloquial singing; qaf as hamza (2); soft spoken vowels; NOT Egyptian; NOT formal MSA/nahwi.",
@@ -5291,11 +5291,9 @@ function arabicDialectAccentStyleNote() {
   return "";
 }
 
-/** Suno first for ✦ Generate lyrics (all languages). Gemini for remix replies, polish, and vowel marks. */
-function resolveLyricsProviderForMode(mode) {
-  const m = String(mode || "").trim().toLowerCase();
-  if (m === "remix_reply" || m === "enhance") return "gemini";
-  return "suno";
+/** Gemini for ✦ Generate lyrics (all dialects) — rhyme/qafiya rules live in /api/lyrics buildPrompt. */
+function resolveLyricsProviderForMode(_mode) {
+  return "gemini";
 }
 
 function applyLyricsLanguageToDialect() {

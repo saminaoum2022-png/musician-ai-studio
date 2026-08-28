@@ -2,8 +2,8 @@
  * POST /api/lyrics
  * Body: { seed?: string, style?: string, mode?: "continue"|"full"|"arrange"|"challenge"|"remix_reply"|"diacritics"|"enhance", sourceLyrics?: string, sourceTitle?: string, sourceCreator?: string, lyricsProvider?: "gemini"|"suno" }
  *
- * Provider: Suno when lyricsProvider is "suno" (default for ✦ Generate; costs Suno credits).
- * Gemini for remix_reply, diacritics (vowel marks), enhance (polish), and Suno fallback.
+ * Provider: Gemini by default (GEMINI_API_KEY; rhyme/qafiya in buildPrompt).
+ * Suno only when lyricsProvider is explicitly "suno" (costs Suno credits).
  */
 const { queueLogProviderUsage } = require("./_lib/provider-usage-log");
 

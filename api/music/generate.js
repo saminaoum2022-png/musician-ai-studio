@@ -29,6 +29,7 @@ const {
   buildLyriaPrompt,
   lyriaGenerateMusic,
   lyriaGenerateEnabled,
+  nabadClipEnabled,
   resolveLyriaModel,
 } = require("../_lib/lyria-upstream");
 const {
@@ -56,9 +57,11 @@ const {
 } = require("../_lib/music-generation-log");
 
 const FULL_SONG_COST = 12;
+const NABAD_CLIP_COST = 6;
 const BUCKET = "song_archive";
 const MINIMAX_PROVIDER_COST_USD = Number(process.env.MINIMAX_USD_PER_TRACK || "0");
 const LYRIA_PROVIDER_COST_USD = Number(process.env.LYRIA_USD_PER_TRACK || "0.08");
+const LYRIA_CLIP_COST_USD = Number(process.env.LYRIA_CLIP_USD || "0.04");
 const ELEVENLABS_PROVIDER_COST_USD = Number(process.env.ELEVENLABS_USD_PER_TRACK || "0.45");
 
 function minimaxGenerateEnabled() {
@@ -657,6 +660,129 @@ async function handleLyriaGenerate(req, res, { user, isAdmin, body }) {
   });
 }
 
+async function handleLyriaClipGenerate(req, res, { user, isAdmin, body }) {
+  const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || "";
+  if (!apiKey) return sendJson(res, 500, { error: "Missing GEMINI_API_KEY on server" });
+
+  if (!isAdmin && !nabadClipEnabled()) {
+    return sendJson(res, 403, {
+      error: "Nabad Clip is admin-only on this environment.",
+      code: "nabad_clip_admin_only",
+    });
+  }
+
+  if (body?.personaId || body?.hasReference) {
+    return sendJson(res, 400, {
+      error: "Nabad Clip supports photo mood + lyrics only — no persona or audio reference yet.",
+      code: "nabad_clip_unsupported",
+    });
+  }
+
+  let balanceAfterDebit = null;
+  if (!isAdmin) {
+    const debit = await callRpc("consume_credits", {
+      p_user_id: user.userId,
+      p_amount: NABAD_CLIP_COST,
+      p_reason: "nabad_clip",
+      p_ref: "lyria_clip",
+    });
+    if (!debit.ok || !debit.data?.ok) {
+      const status = String(debit.data?.status || "");
+      if (status === "insufficient") {
+        return sendJson(res, 402, {
+          error: "Not enough credits",
+          code: "insufficient_credits",
+          balance: Number(debit.data?.balance || 0),
+          needed: NABAD_CLIP_COST,
+        });
+      }
+      return sendJson(res, 500, { error: "Credit check failed", details: debit.data || debit.error || null });
+    }
+    balanceAfterDebit = Number(debit.data?.balance || 0);
+  }
+
+  const lyrics = String(body?.prompt || "").trim();
+  const stylePrompt = buildMusicPrompt(body);
+  const title = String(body?.title || "").trim();
+  const instrumental = Boolean(body?.instrumental);
+  const taskId = newTaskId("lyria");
+  const audioId = `${taskId}_a`;
+  const model = resolveLyriaModel(body?.lyriaModel || "clip");
+
+  if (!instrumental && !lyrics && !stylePrompt) {
+    return sendJson(res, 400, {
+      error: "Add lyrics, style, or photo mood before generating a clip.",
+      code: "nabad_clip_missing_prompt",
+    });
+  }
+
+  queueLogMusicGeneration({
+    userId: user.userId,
+    taskId,
+    kind: "clip",
+    provider: "lyria",
+    prompt: buildPromptLabel(lyrics, stylePrompt, title),
+    status: "pending",
+    creditsUsed: isAdmin ? 0 : NABAD_CLIP_COST,
+    providerCostUsd: LYRIA_CLIP_COST_USD,
+  });
+
+  const lyriaPrompt = buildLyriaPrompt({
+    stylePrompt,
+    lyrics,
+    title,
+    instrumental,
+    clip: true,
+  });
+
+  const pendingPayload = buildPendingStatusPayload({ taskId, provider: "lyria" });
+  pendingPayload._clip = true;
+  const pendingStored = await saveMusicProviderTaskStatus({
+    userId: user.userId,
+    taskId,
+    statusPayload: pendingPayload,
+  });
+  if (!pendingStored.ok) {
+    if (!isAdmin) {
+      await refund(user.userId, NABAD_CLIP_COST, "refund_nabad_clip", "lyria_clip_task_store").catch(() => null);
+    }
+    return sendJson(res, 500, {
+      error: "Could not start Nabad Clip generation — try again.",
+      details: pendingStored.error || null,
+    });
+  }
+
+  scheduleBackgroundWork(
+    runLyriaGenerationJob({
+      userId: user.userId,
+      isAdmin,
+      taskId,
+      audioId,
+      apiKey,
+      model,
+      lyriaPrompt,
+      title,
+      lyrics,
+      instrumental,
+    }),
+  );
+
+  return sendJson(res, 200, {
+    code: 200,
+    data: { taskId, audioId, status: "PENDING" },
+    _provider: "lyria",
+    _model: model,
+    _clip: true,
+    _ready: false,
+    _variantCount: 1,
+    _credits: {
+      spent: isAdmin ? 0 : NABAD_CLIP_COST,
+      balance: balanceAfterDebit,
+      admin: isAdmin || undefined,
+    },
+  });
+}
+
 async function handleElevenlabsGenerate(req, res, { user, isAdmin, body }) {
   const apiKey = process.env.ELEVENLABS_API_KEY || "";
   if (!apiKey) return sendJson(res, 500, { error: "Missing ELEVENLABS_API_KEY on server" });
@@ -891,6 +1017,14 @@ module.exports = async function handler(req, res) {
     const provider = resolveProvider(req);
 
     if (provider === "lyria") {
+      const clipModel = resolveLyriaModel(body?.lyriaModel);
+      const clipRequested =
+        String(body?.lyriaModel || "").trim().toLowerCase() === "clip" ||
+        String(body?.nabadClip || "").trim() === "1" ||
+        clipModel === "lyria-3-clip-preview";
+      if (clipRequested) {
+        return handleLyriaClipGenerate(req, res, { user, isAdmin, body });
+      }
       return handleLyriaGenerate(req, res, { user, isAdmin, body });
     }
     if (provider === "elevenlabs") {

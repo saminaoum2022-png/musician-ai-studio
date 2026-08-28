@@ -11728,6 +11728,10 @@ function bindHomeDeskOnce(page) {
         enterGenerateSubFlow(null, null);
         return;
       }
+      if (card === "clip") {
+        openNabadClipFlow();
+        return;
+      }
       if (card === "persona") {
         if (!requireProForWebFeature("Persona")) return;
         void openVoiceWizard();
@@ -15334,13 +15338,22 @@ function setCreateFlow(flow) {
   } else {
     document.body.setAttribute("data-create-flow", next);
   }
+  if (next === "nabadclip") {
+    applyCreateChallengeFocus({ tab: "lyrics", tabs: ["photo", "lyrics"] });
+    if (els.btnSunoGenerate) els.btnSunoGenerate.textContent = "Generate clip";
+  }
   syncCreateFlowUi();
   try { syncCreateTabMorph(); } catch {}
 }
 
 function clearCreateFlow() {
-  if (!getCreateFlow()) return;
+  const was = getCreateFlow();
+  if (!was) return;
   document.body.removeAttribute("data-create-flow");
+  if (was === "nabadclip") {
+    clearCreateChallengeFocus();
+    if (els.btnSunoGenerate) els.btnSunoGenerate.textContent = "Generate song";
+  }
   syncCreateFlowUi();
   try { syncCreateTabMorph(); } catch {}
 }
@@ -15376,6 +15389,7 @@ function syncCreateFlowUi() {
     if (flow === "humtrack") title.textContent = "Hum Track";
     else if (flow === "sounds") title.textContent = "Sounds";
     else if (flow === "persona") title.textContent = "Persona";
+    else if (flow === "nabadclip") title.textContent = "Nabad Clip";
     else title.textContent = "Create";
   }
 }
@@ -23498,6 +23512,51 @@ function musicGenerateApiPath() {
   return "/api/suno/generate";
 }
 
+/** Staging trial — admin-only Nabad Clip (Lyria 3 Clip, ~30s). Not shipped to prod unless explicit. */
+function nabadClipEnabled() {
+  return Boolean(creditsState.isAdmin);
+}
+
+function isNabadClipFlow() {
+  return getCreateFlow() === "nabadclip";
+}
+
+function nabadClipGenerateApiPath() {
+  return "/api/music/generate?provider=lyria&lyriaModel=clip";
+}
+
+function syncNabadClipHomeCard() {
+  document.querySelectorAll('[data-home-card="clip"]').forEach((el) => {
+    const show = nabadClipEnabled();
+    el.hidden = !show;
+    el.setAttribute("aria-hidden", show ? "false" : "true");
+  });
+}
+
+function openNabadClipFlow() {
+  if (!authSession?.user?.id) {
+    setPostAuthReturnHash("#/generate");
+    try {
+      location.hash = "#/auth";
+    } catch {}
+    scheduleApplyRoute();
+    setStatus("Sign in to try Nabad Clip.");
+    return;
+  }
+  if (!nabadClipEnabled()) {
+    setStatus("Nabad Clip is not available on this account.");
+    return;
+  }
+  enterGenerateSubFlow("nabadclip", () => {
+    applyCreateChallengeFocus({ tab: "lyrics", tabs: ["photo", "lyrics"] });
+    if (els.btnSunoGenerate) {
+      els.btnSunoGenerate.textContent = "Generate clip";
+      els.btnSunoGenerate.disabled = false;
+      els.btnSunoGenerate.dataset.mode = "generate";
+    }
+  });
+}
+
 function musicStatusApiPath(taskId) {
   const tid = String(taskId || "").trim();
   if (tid.startsWith("mmx_") || tid.startsWith("lyr_") || tid.startsWith("elv_")) {
@@ -25792,6 +25851,7 @@ async function supabaseAuthedFetch(url, init = {}) {
  *  Server side: api/credits/* and api/_lib/credits-auth.js.
  * ----------------------------------------------------------------- */
 const FULL_SONG_CREDIT_COST = 12;
+const NABAD_CLIP_CREDIT_COST = 6;
 /** Mirrors Suno pricing for `/api/v1/generate/sounds` (beta). */
 const SOUND_CREDIT_COST = 2.5;
 const WEEKLY_TRIAL_MS = 7 * 24 * 60 * 60 * 1000;
@@ -26446,6 +26506,7 @@ async function refreshMyCredits({ silent = false } = {}) {
     }
     if (creditsState.isAdmin) await refreshAdminCreditsView();
     try { syncSettingsMusicProviderRow(); } catch {}
+    try { syncNabadClipHomeCard(); } catch {}
   } catch (e) {
     creditsState.lastError = e?.message || String(e);
     paintCreditsAccountEmail(authSession?.user?.email || activeProfile?.email);
@@ -59677,6 +59738,175 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       try { syncCoachPriorityStatusFromPending(getPriorityPending()); } catch {}
       try { openProfileSongsWhileGenerating(); } catch {}
       hideCreateResultCards();
+      return;
+    }
+    if (isNabadClipFlow()) {
+      if (!arabicLyricChoicesReady()) {
+        const reason = arabicLyricChoicesBlockReason();
+        showToast(reason, { icon: "!", durationMs: 3600 });
+        setStatus(reason);
+        return;
+      }
+      const clipPromptText = String(els.sunoPrompt?.value || "").trim();
+      const clipAllowImageOnly = Boolean(imageMoodAppliedForNextGen);
+      if (resolveVocalReferenceForSubmit()) {
+        window.alert("Nabad Clip uses photo mood and lyrics only — remove the audio reference first.");
+        return;
+      }
+      if (!clipPromptText && !clipAllowImageOnly) {
+        window.alert("Write lyrics or add a photo mood before generating your clip.");
+        return;
+      }
+      try {
+        setGenerateBtn("Generating…", true, "generate");
+        setGenerateFieldsLocked(true);
+        hideCreateResultCards();
+        els.btnSunoStems.disabled = true;
+        if (els.btnSunoMultiStems) els.btnSunoMultiStems.disabled = true;
+        setProgress(5);
+        applyMaqamToStyleInput();
+        try { applyLyricsLanguageToDialect(); } catch {}
+        const userPrompt = (els.sunoPrompt?.value || "").trim();
+        const userStyle = resolveStyleInputForGeneration((els.sunoStyle?.value || "").trim());
+        const dialect = String(els.sunoDialect?.value || "").trim();
+        const dialectHint = String(els.sunoDialectHint?.value || "").trim();
+        const arabicAddress = String(els.sunoArabicAddress?.value || "").trim();
+        const resolvedSingerGender = resolveSingerGenderForGeneration({});
+        const arabicAddressNote = arabicAddressPronunciationNote(arabicAddress, resolvedSingerGender);
+        const lyricDialectHint = [dialectHint, arabicAddressNote].filter(Boolean).join(" ");
+        let finalPrompt = sanitizeLyricsPrompt(userPrompt);
+        if (!finalPrompt && !clipAllowImageOnly) {
+          try {
+            setStatus("Drafting lyrics with Nabad AI…");
+            const lyricRes = await apiFetch("/api/lyrics", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                ...(getSupabaseAuthToken() ? { Authorization: `Bearer ${getSupabaseAuthToken()}` } : {}),
+              },
+              body: JSON.stringify({
+                prompt: userStyle || "Upbeat pop hook for a 30 second clip",
+                dialect,
+                dialectHint: lyricDialectHint,
+                lyricsProvider: "gemini",
+              }),
+            });
+            const lyricData = await lyricRes.json().catch(() => ({}));
+            if (lyricRes.ok && String(lyricData?.lyrics || "").trim()) {
+              finalPrompt = sanitizeLyricsPrompt(String(lyricData.lyrics || "").trim());
+              if (els.sunoPrompt) els.sunoPrompt.value = finalPrompt;
+              _nabadAiLyricsDraft = finalPrompt;
+              _lyricsGeneratedInNabad = true;
+            }
+          } catch {}
+        }
+        if (!finalPrompt && !userStyle && !clipAllowImageOnly) {
+          setLoading(false);
+          setGenerateBtn("Generate clip", false, "generate");
+          setGenerateFieldsLocked(false);
+          setProgress(0);
+          window.alert("Add lyrics, style, or photo mood before generating your clip.");
+          return;
+        }
+        const payload = {
+          prompt: finalPrompt,
+          style: userStyle,
+          title: String(els.sunoTitle?.value || "").trim() || "Nabad Clip",
+          dialect,
+          dialectHint: lyricDialectHint,
+          lyriaModel: "clip",
+          nabadClip: "1",
+          watchKind: clipAllowImageOnly ? "photo" : "clip",
+        };
+        lastGenerationMeta = {
+          engine: "lyria_clip",
+          mode: "Nabad Clip",
+          lyricsInput: userPrompt,
+          finalPrompt,
+          styleInput: userStyle,
+          dialect,
+          dialectHint,
+          arabicAddress,
+          musicProvider: "lyria",
+          imageOnlyInstrumental: false,
+          hasReference: false,
+          ...(photoCoverMetaForGeneration() || {}),
+        };
+        try {
+          showToast("Lyria is composing your clip… usually 1–2 minutes.", {
+            icon: "♪",
+            durationMs: 120000,
+          });
+        } catch {}
+        setStatus("Google Lyria is composing your ~30s clip… you can browse — we'll update when it's ready.");
+        const authToken = getSupabaseAuthToken();
+        const data = await trackCreditsAround("Generate Nabad Clip", async () => {
+          const r = await apiFetch(nabadClipGenerateApiPath(), {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
+            },
+            body: JSON.stringify(payload),
+          });
+          const d = await r.json().catch(() => ({}));
+          if (r.status === 402 || d?.code === "insufficient_credits") {
+            const need = Number(d?.needed ?? NABAD_CLIP_CREDIT_COST);
+            const have = Number(d?.balance || 0);
+            const err = new Error(
+              `Not enough credits (you have ${formatCreditsAmount(have)}, need ${formatCreditsAmount(need)} for a clip).`,
+            );
+            err.code = "insufficient_credits";
+            err.balance = have;
+            err.needed = need;
+            throw err;
+          }
+          if (r.status === 401) {
+            throw new Error("Please sign in before generating a clip.");
+          }
+          if (r.status === 403 && d?.code === "nabad_clip_admin_only") {
+            throw new Error("Nabad Clip is not enabled on this server yet.");
+          }
+          rejectSunoApiResponse(r, d);
+          if (d?._credits && Number.isFinite(Number(d._credits.balance))) {
+            setCreditsBalance(Number(d._credits.balance));
+            creditsState.loaded = true;
+          }
+          return d;
+        });
+        sunoTaskId = extractTaskIdLoose(data);
+        savePendingBackendTask(sunoTaskId || "");
+        if (sunoTaskId) {
+          saveRecoverableGenerationTask(sunoTaskId, String(els.sunoTitle?.value || "").trim());
+          setGenerationPending({
+            taskId: sunoTaskId,
+            title: String(els.sunoTitle?.value || "").trim() || "Nabad Clip",
+            source: clipAllowImageOnly ? "photo" : "clip",
+            photoCoverDataUrl: resolvePendingPhotoCoverDataUrl(),
+            photoCoverOnly: imageMoodCoverOnlyForNextGen,
+            variantCount: 1,
+          });
+          syncGenerationPendingLibraryUi();
+          try {
+            beginCoachGenerationStatus({ variantCount: 1, pillText: "Clip generating…" });
+          } catch {}
+          try { openProfileSongsWhileGenerating(); } catch {}
+          try { setLoading(false); } catch {}
+        }
+        setGenerateBtn("Generate clip", false, "generate");
+        setGenerateFieldsLocked(false);
+        if (sunoTaskId) startGeneratePolling();
+      } catch (e) {
+        console.warn("[nabad-clip]", e);
+        setLoading(false);
+        setGenerateBtn("Generate clip", false, "generate");
+        setGenerateFieldsLocked(false);
+        setProgress(0);
+        setStatus(e?.message || "Clip generation failed.");
+        try {
+          showToast(e?.message || "Clip generation failed.", { icon: "!", durationMs: 4800 });
+        } catch {}
+      }
       return;
     }
     if (!arabicLyricChoicesReady()) {

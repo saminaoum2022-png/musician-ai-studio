@@ -1,0 +1,25 @@
+# Nabad Clip — staging trial only (do not ship with other releases)
+
+Nabad Clip (Lyria 3 Clip, ~30s, 6 credits) is an **admin-only staging trial**. The user may cancel it after ~1 week.
+
+## Never ship unless explicitly requested
+
+- **Do NOT** merge Nabad Clip to `main`, deploy to production, or include it in TestFlight when the user says generic ship phrases: "ship it", "push to main", "deploy", "TestFlight", etc.
+- **Only ship Nabad Clip** when the user explicitly says **"ship Nabad Clip"** (or clearly equivalent: "ship the clip feature to production").
+- On **every** generic ship/push/deploy request, **remind the user**: *"I will not ship Nabad Clip unless you explicitly say 'ship Nabad Clip' — it stays staging-only."*
+
+## Default workflow
+
+- Feature work on **`staging`** branch only.
+- Preview on simulator (`npm run sim`) or user's phone (`npm run run:ios:staging`).
+- Backend: enable on Vercel **Preview** with `NABAD_CLIP_ENABLED=1` if needed; keep **off** on Production until explicit ship.
+
+## Files / flags (when reverting or excluding from prod)
+
+- Hub card + create flow: `index.html`, `src/app.js`, `styles.css` (Nabad Clip / `data-home-card="clip"`, `data-create-flow="nabadclip"`)
+- API: `api/music/generate.js`, `api/_lib/lyria-upstream.js` (clip model, 6-credit debit)
+- Env: `NABAD_CLIP_ENABLED` (Preview only until shipped)
+
+## If user cancels the trial
+
+- Hide/remove hub card and clip flow; leave Lyria full-song admin spike as-is unless asked to remove.

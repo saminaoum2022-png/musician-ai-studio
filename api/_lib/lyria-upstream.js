@@ -12,15 +12,28 @@ function safeJson(txt) {
   }
 }
 
+const LYRIA_CLIP_MODEL = "lyria-3-clip-preview";
+
 function resolveLyriaModel(explicit) {
   const env = String(process.env.LYRIA_MUSIC_MODEL || "").trim();
-  const m = String(explicit || env || "lyria-3-pro-preview").trim();
-  return m || "lyria-3-pro-preview";
+  const raw = String(explicit || env || "lyria-3-pro-preview").trim();
+  const low = raw.toLowerCase();
+  if (low === "clip" || low === LYRIA_CLIP_MODEL) return LYRIA_CLIP_MODEL;
+  return raw || "lyria-3-pro-preview";
 }
 
 function lyriaGenerateEnabled() {
   const v = String(process.env.LYRIA_GENERATE_ENABLED || "").trim().toLowerCase();
   return v === "1" || v === "true" || v === "yes";
+}
+
+function nabadClipEnabled() {
+  const v = String(process.env.NABAD_CLIP_ENABLED || "").trim().toLowerCase();
+  return v === "1" || v === "true" || v === "yes";
+}
+
+function isLyriaClipModel(model) {
+  return String(model || "").trim().toLowerCase() === LYRIA_CLIP_MODEL;
 }
 
 /**
@@ -31,12 +44,18 @@ function buildLyriaPrompt({
   lyrics = "",
   title = "",
   instrumental = false,
+  clip = false,
 } = {}) {
   const bits = [];
   const style = String(stylePrompt || "").trim();
   const lyricText = String(lyrics || "").trim();
   const songTitle = String(title || "").trim();
 
+  if (clip) {
+    bits.push(
+      "Create a short ~30 second music clip (hook-focused, compact structure — not a full-length song).",
+    );
+  }
   if (songTitle) bits.push(`Title: ${songTitle}`);
   if (style) bits.push(`Musical direction: ${style}`);
   if (instrumental) {
@@ -280,14 +299,17 @@ async function lyriaGenerateMusic({ apiKey, model, prompt }) {
 }
 
 module.exports = {
+  LYRIA_CLIP_MODEL,
   buildLyriaPrompt,
   extractLyriaAlignedWords,
   extractLyriaAudio,
   extractLyriaDurationSecs,
   extractLyriaTextParts,
+  isLyriaClipModel,
   lyriaGenerateEnabled,
   lyriaGenerateMusic,
   lyriaUserMessage,
+  nabadClipEnabled,
   parseLyriaLyricsToAlignedWords,
   pickLyriaLyricsPart,
   resolveLyriaModel,

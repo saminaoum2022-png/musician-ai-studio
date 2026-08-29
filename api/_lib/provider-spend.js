@@ -9,6 +9,7 @@ const PROVIDER_SPEND_IDS = Object.freeze([
   "gemini",
   "elevenlabs",
   "pollinations",
+  "cloudflare",
 ]);
 
 /** Lyria logs/top-ups roll into the shared Gemini wallet row. */
@@ -219,7 +220,7 @@ function mergeProviderSpend({ catalogIds = PROVIDER_SPEND_IDS, spendByProvider =
       balanceSource = "manual";
     }
 
-    const tracksUsage = ["suno", "gemini", "elevenlabs", "pollinations"].includes(id);
+    const tracksUsage = ["suno", "gemini", "elevenlabs", "pollinations", "cloudflare"].includes(id);
     const usageNote = tracksUsage
       ? ""
       : "Usage not logged for this vendor yet.";

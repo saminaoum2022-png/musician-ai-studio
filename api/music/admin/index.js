@@ -39,6 +39,17 @@ const {
   roundUsd,
 } = require("../../_lib/provider-spend");
 const { computeGeminiSharedWalletBalance } = require("../../_lib/gemini-wallet");
+const {
+  isCloudflareFluxConfigured,
+  resolveDefaultCoverImageProvider,
+} = require("../../_lib/cloudflare-flux-upstream");
+const { resolveCoverRegenImageProvider } = require("../../_lib/gemini-cover-image");
+
+const COVER_PROVIDER_LABELS = Object.freeze({
+  cloudflare: "Cloudflare Flux",
+  pollinations: "Pollinations",
+  gemini: "Gemini",
+});
 
 const SUPABASE_URL = (process.env.SUPABASE_URL || "").replace(/\/$/, "");
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
@@ -1929,14 +1940,87 @@ async function getSunoPanel() {
   };
 }
 
+async function fetchCoverArtAdminLog({ limit = 50 } = {}) {
+  const lim = clampInt(limit, 1, 100, 50);
+  const d30 = new Date(Date.now() - 30 * 86400000).toISOString();
+  const d7 = new Date(Date.now() - 7 * 86400000).toISOString();
+
+  const [recentRes, statsRes] = await Promise.all([
+    serviceFetch(
+      `provider_usage_events?select=id,provider,kind,amount_usd,user_id,status,ref,created_at&kind=in.(cover_image,cover_scene)&order=created_at.desc&limit=${lim}`,
+    ),
+    serviceFetch(
+      `provider_usage_events?select=provider,created_at&kind=eq.cover_image&status=eq.completed&created_at=gte.${encodeURIComponent(d30)}&order=created_at.desc&limit=5000`,
+    ),
+  ]);
+
+  const rows = Array.isArray(recentRes.data) ? recentRes.data : [];
+  const statsRows = Array.isArray(statsRes.data) ? statsRes.data : [];
+
+  const emptyCounts = () => ({ cloudflare: 0, pollinations: 0, gemini: 0, other: 0 });
+  const stats = { last7d: emptyCounts(), last30d: emptyCounts() };
+
+  for (const row of statsRows) {
+    const p = String(row.provider || "other").toLowerCase();
+    const bucket = stats.last30d[p] != null ? p : "other";
+    stats.last30d[bucket] += 1;
+    if (row.created_at >= d7) {
+      const b7 = stats.last7d[p] != null ? p : "other";
+      stats.last7d[b7] += 1;
+    }
+  }
+
+  const userIds = [...new Set(rows.map((r) => cleanUserId(r.user_id)).filter(Boolean))];
+  const emailByUser = {};
+  if (userIds.length) {
+    const profRes = await serviceFetch(
+      `profiles?select=user_id,email,username&user_id=in.(${userIds.join(",")})`,
+    );
+    for (const p of Array.isArray(profRes.data) ? profRes.data : []) {
+      const uid = cleanUserId(p.user_id);
+      if (!uid) continue;
+      emailByUser[uid] = String(p.email || p.username || "").trim();
+    }
+  }
+
+  return {
+    config: {
+      defaultCoverProvider: resolveDefaultCoverImageProvider(),
+      regenImageProvider: resolveCoverRegenImageProvider(),
+      cloudflareConfigured: isCloudflareFluxConfigured(),
+      coverImageProviderEnv: String(process.env.COVER_IMAGE_PROVIDER || "").trim() || "(auto)",
+      regenProviderEnv: String(process.env.COVER_REGEN_IMAGE_PROVIDER || "").trim() || "(auto)",
+    },
+    stats,
+    rows: rows.map((row) => {
+      const provider = String(row.provider || "").toLowerCase();
+      const uid = cleanUserId(row.user_id);
+      return {
+        id: row.id,
+        provider,
+        providerLabel: COVER_PROVIDER_LABELS[provider] || provider || "—",
+        kind: row.kind,
+        kindLabel: row.kind === "cover_scene" ? "Scene prompt" : "Cover image",
+        amountUsd: row.amount_usd != null ? roundUsd(row.amount_usd) : null,
+        userId: uid,
+        userEmail: emailByUser[uid] || "",
+        songId: String(row.ref || "").trim(),
+        status: row.status || "completed",
+        createdAt: row.created_at,
+      };
+    }),
+  };
+}
+
 async function getProvidersPanel({ forceHealth = false } = {}) {
   const since = new Date(Date.now() - 86400000).toISOString();
-  const [health, failRes, spendData] = await Promise.all([
+  const [health, failRes, spendData, coverArtLog] = await Promise.all([
     getProviderHealth({ force: forceHealth }),
     serviceFetch(
       `music_generation_logs?select=provider,status&created_at=gte.${encodeURIComponent(since)}&status=eq.failed&limit=1000`,
     ),
     fetchProviderSpendData({ callRpc, serviceFetch }),
+    fetchCoverArtAdminLog({ limit: 50 }),
   ]);
   const rolledUp = rollupGeminiLyriaSpendData({
     spendByProvider: spendData.spendByProvider,
@@ -1991,6 +2075,7 @@ async function getProvidersPanel({ forceHealth = false } = {}) {
       recentTopUps: spendData.recentTopUps,
       source: spendData.spendSource,
     },
+    coverArtLog,
     failures24h,
   };
 }

@@ -853,7 +853,14 @@ async function handleElevenlabsGenerate(req, res, { user, isAdmin, body }) {
   const audioId = `${taskId}_a`;
   const model = resolveElevenMusicModel(body?.elevenlabsModel);
   const musicLengthMs = resolveElevenMusicLengthMs(body?.musicLengthMs);
-  const finetuneId = resolveElevenFinetuneId(body?.elevenlabsFinetuneId);
+  let finetuneId = resolveElevenFinetuneId(body?.elevenlabsFinetuneId);
+  const finetuneSkippedForReference = Boolean(hasReference && finetuneId);
+  if (finetuneSkippedForReference) {
+    console.log(
+      "[music/generate] elevenlabs reference mode — skipping finetune_id (conditioning_ref drives voice/melody)",
+    );
+    finetuneId = null;
+  }
 
   if (finetuneId) {
     const finetuneCheck = await verifyElevenFinetuneAccess({ apiKey, finetuneId });
@@ -960,6 +967,9 @@ async function handleElevenlabsGenerate(req, res, { user, isAdmin, body }) {
     pendingPayload._finetuneId = finetuneId;
     pendingPayload._finetuneApplied = true;
   }
+  if (finetuneSkippedForReference) {
+    pendingPayload._finetuneSkippedForReference = true;
+  }
   if (referenceSongId) {
     pendingPayload._referenceSongId = referenceSongId;
     pendingPayload._referenceApplied = true;
@@ -1005,6 +1015,7 @@ async function handleElevenlabsGenerate(req, res, { user, isAdmin, body }) {
     _model: model,
     _finetuneId: finetuneId || undefined,
     _finetuneApplied: Boolean(finetuneId),
+    _finetuneSkippedForReference: finetuneSkippedForReference || undefined,
     _referenceApplied: Boolean(referenceSongId),
     _referenceSongId: referenceSongId || undefined,
     _ready: false,

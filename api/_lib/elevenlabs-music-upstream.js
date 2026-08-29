@@ -182,7 +182,8 @@ async function elevenlabsUploadMusic({ apiKey, buffer, mimeType, filename }) {
 }
 
 /**
- * music_v2 composition plan — conditioning_ref on the first chunk + finetune_id at compose time.
+ * music_v2 composition plan — conditioning_ref on the first chunk.
+ * Finetune is skipped when a reference is present (see music/generate.js).
  */
 function buildElevenReferenceCompositionPlan({
   lyrics = "",

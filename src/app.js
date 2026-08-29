@@ -226,7 +226,7 @@ import { MUSIC_VIDEO_FEATURE_ENABLED } from "./feature-flags.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260829-173257";
+const APP_BUILD = "20260829-212023";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -60787,7 +60787,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
                 ? "Lyria is composing your song… usually 2–3 minutes. You can browse the app — we'll update when it's ready."
                 : altProvider === "elevenlabs"
                   ? hasReference
-                    ? "ElevenLabs is matching your hum/voice + finetune… usually 1–3 minutes."
+                    ? "ElevenLabs is matching your hum/voice… usually 1–3 minutes."
                     : "ElevenLabs is composing your song… usually 1–3 minutes. You can browse the app — we'll update when it's ready."
                   : "MiniMax is composing your song… usually 1–2 minutes. Keep the app open.",
             );
@@ -60961,7 +60961,9 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
             const ref = Boolean(data?._referenceApplied);
             showToast(
               ref
-                ? `ElevenLabs · vocal reference +${ft ? ` finetune ${ft.slice(0, 12)}…` : " finetune (none)"} applied`
+                ? data?._finetuneSkippedForReference
+                  ? "ElevenLabs · vocal reference applied (finetune skipped — reference drives voice/melody)"
+                  : `ElevenLabs · vocal reference +${ft ? ` finetune ${ft.slice(0, 12)}…` : " finetune (none)"} applied`
                 : ft
                   ? `ElevenLabs · finetune ${ft.slice(0, 12)}… applied`
                   : "ElevenLabs · no finetune_id (generic voice) — set ELEVENLABS_FINETUNE_ID on server",
@@ -61042,9 +61044,17 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       if (friendly) {
         const isRemix = Boolean(currentRemixSource?.originalUrl || vocalRefOrigin === "remix");
         const userCopy = sunoFailureUserCopy(friendly.kind, { isRemix });
-        setStatus(userCopy.toast);
+        const upstreamDetail = String(friendly.detail || friendly.headline || e?.message || "").trim();
+        const toastMsg =
+          upstreamDetail &&
+          (friendly.kind === "generic" ||
+            friendly.kind === "transient" ||
+            useAltMusicProvider())
+            ? upstreamDetail.slice(0, 240)
+            : userCopy.toast;
+        setStatus(toastMsg);
         try {
-          showToast(userCopy.toast, { icon: "!", durationMs: 9000 });
+          showToast(toastMsg, { icon: "!", durationMs: 9000 });
         } catch {}
         try {
           pushLocalGenerationFailedActivity({

@@ -1947,10 +1947,10 @@ async function fetchCoverArtAdminLog({ limit = 50 } = {}) {
 
   const [recentRes, statsRes] = await Promise.all([
     serviceFetch(
-      `provider_usage_events?select=id,provider,kind,amount_usd,user_id,status,ref,created_at&kind=in.(cover_image,cover_scene)&order=created_at.desc&limit=${lim}`,
+      `provider_usage_events?select=id,provider,kind,amount_usd,user_id,status,ref,created_at&kind=in.(cover_image,cover_image_regen,cover_scene)&order=created_at.desc&limit=${lim}`,
     ),
     serviceFetch(
-      `provider_usage_events?select=provider,created_at&kind=eq.cover_image&status=eq.completed&created_at=gte.${encodeURIComponent(d30)}&order=created_at.desc&limit=5000`,
+      `provider_usage_events?select=provider,created_at,kind&kind=in.(cover_image,cover_image_regen)&status=eq.completed&created_at=gte.${encodeURIComponent(d30)}&order=created_at.desc&limit=5000`,
     ),
   ]);
 
@@ -1995,12 +1995,23 @@ async function fetchCoverArtAdminLog({ limit = 50 } = {}) {
     rows: rows.map((row) => {
       const provider = String(row.provider || "").toLowerCase();
       const uid = cleanUserId(row.user_id);
+      const kind = String(row.kind || "").trim().toLowerCase();
+      let flow = "First";
+      let kindLabel = "Cover image";
+      if (kind === "cover_scene") {
+        flow = "Scene";
+        kindLabel = "Scene prompt";
+      } else if (kind === "cover_image_regen") {
+        flow = "Regen";
+        kindLabel = "Cover image";
+      }
       return {
         id: row.id,
         provider,
         providerLabel: COVER_PROVIDER_LABELS[provider] || provider || "—",
-        kind: row.kind,
-        kindLabel: row.kind === "cover_scene" ? "Scene prompt" : "Cover image",
+        kind,
+        kindLabel,
+        flow,
         amountUsd: row.amount_usd != null ? roundUsd(row.amount_usd) : null,
         userId: uid,
         userEmail: emailByUser[uid] || "",

@@ -269,7 +269,7 @@ async function sendRegenCoverJson(res, {
     provider === "gemini" ? "gemini" : provider === "cloudflare" ? "cloudflare" : "pollinations";
   queueLogProviderUsage({
     provider: imageProvider,
-    kind: "cover_image",
+    kind: "cover_image_regen",
     userId,
     ref: String(params?.songId || "cover_regen").slice(0, 120),
   });
@@ -393,6 +393,15 @@ module.exports = async function handler(req, res) {
       if (!rendered.ok) {
         console.warn("[music/cover-art] regen failed (client prompt)", rendered.error);
         return sendJson(res, 502, { error: "Cover image generation failed upstream." });
+      }
+      if (rendered.fallbackReason && rendered.regenAttemptedProvider === "cloudflare") {
+        queueLogProviderUsage({
+          provider: "cloudflare",
+          kind: "cover_image_regen",
+          userId: user.userId,
+          ref: songId,
+          status: "failed",
+        });
       }
       return sendRegenCoverJson(res, {
         buf: rendered.buf,

@@ -1,7 +1,9 @@
 /**
  * Gemini native image generation for cover regen (Nano Banana / flash-image models).
- * Normal first-time cover generation stays on Pollinations.
+ * Default first-time abstract covers use Cloudflare Flux; regen follows COVER_REGEN_IMAGE_PROVIDER.
  */
+
+const { resolveDefaultCoverImageProvider } = require("./cloudflare-flux-upstream");
 
 const PREFERRED_IMAGE_MODELS = [
   "gemini-2.5-flash-image",
@@ -31,12 +33,11 @@ function stagingDeploymentHint() {
   return branch === "staging" || url.includes("git-staging") || url.includes("-staging-");
 }
 
-/** Regen image backend — Gemini on staging deployments unless overridden. */
+/** Regen image backend — Flux/Pollinations default; Gemini when env or user artwork hint. */
 function resolveCoverRegenImageProvider() {
   const explicit = String(process.env.COVER_REGEN_IMAGE_PROVIDER || "").trim().toLowerCase();
-  if (explicit === "gemini" || explicit === "pollinations") return explicit;
-  if (stagingDeploymentHint()) return "gemini";
-  return "pollinations";
+  if (explicit === "gemini" || explicit === "pollinations" || explicit === "cloudflare") return explicit;
+  return resolveDefaultCoverImageProvider();
 }
 
 function geminiRegenFallbackEnabled() {

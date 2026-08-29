@@ -40,7 +40,8 @@ function cleanUserId(v) {
 
 function estimateUsageCost(provider, kind) {
   const p = String(provider || "").trim().toLowerCase();
-  const k = String(kind || "").trim().toLowerCase();
+  let k = String(kind || "").trim().toLowerCase();
+  if (k === "cover_image_regen") k = "cover_image";
   const rate = USAGE_RATES[p]?.[k];
   if (rate == null || !Number.isFinite(rate)) return 0;
   return Math.round(rate * 1_000_000) / 1_000_000;

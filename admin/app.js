@@ -1528,9 +1528,15 @@ function renderCoverArtStatPills(stats = {}) {
   return `<div class="statGrid statGrid--4">${cards}</div>`;
 }
 
+function coverFlowBadge(flow = "") {
+  const f = String(flow || "").trim();
+  const tone = f === "Regen" ? "slow" : f === "Scene" ? "unknown" : "ok";
+  return `<span class="badge providerStatus providerStatus--${tone}">${escapeHtml(f || "—")}</span>`;
+}
+
 function renderCoverArtLogRows(rows = []) {
   if (!rows.length) {
-    return `<tr><td colspan="7" class="loading">No cover art logged yet — generate or regen a cover to see entries here.</td></tr>`;
+    return `<tr><td colspan="8" class="loading">No cover art logged yet — generate or regen a cover to see entries here.</td></tr>`;
   }
   return rows.map((row) => {
     const songShort = row.songId
@@ -1547,6 +1553,7 @@ function renderCoverArtLogRows(rows = []) {
     return `
       <tr${row.failed ? ' class="rowMuted"' : ""}>
         ${dateCell(row.createdAt)}
+        <td>${coverFlowBadge(row.flow)}</td>
         <td>${coverProviderBadge(row.provider)}</td>
         <td>${escapeHtml(row.kindLabel || row.kind || "—")}</td>
         <td class="monoCell" title="${escapeHtml(row.songId || "")}">${escapeHtml(songShort)}</td>
@@ -1565,7 +1572,9 @@ function renderCoverArtLog(data) {
     : (config.defaultCoverProvider === "pollinations" ? "Pollinations" : config.defaultCoverProvider || "—");
   const regenLabel = config.regenImageProvider === "gemini"
     ? "Gemini"
-    : (config.regenImageProvider || "Pollinations");
+    : config.regenImageProvider === "cloudflare"
+      ? "Cloudflare Flux"
+      : (config.regenImageProvider === "pollinations" ? "Pollinations" : config.regenImageProvider || "—");
   const envNote = [
     `Default cover: <strong>${escapeHtml(defaultLabel)}</strong>`,
     `Regen: <strong>${escapeHtml(regenLabel)}</strong>`,
@@ -1582,8 +1591,8 @@ function renderCoverArtLog(data) {
         <h3 class="sectionTitle">Cover art log</h3>
         <p class="sectionNote">
           Recent cover renders from <code>provider_usage_events</code>.
+          <strong>Flow</strong>: First = new song cover · Regen = magic wand · Scene = Gemini text-only step.
           <strong>Cover image</strong> = final artwork (Flux, Pollinations, or Gemini).
-          <strong>Scene prompt</strong> = Gemini text scene only (before Flux/Pollinations).
           ${envNote}.
         </p>
       </div>
@@ -1592,7 +1601,7 @@ function renderCoverArtLog(data) {
       <div class="tableWrap tableWrap--plain" style="margin-top: 1rem;">
         <table class="table--compact">
           <thead>
-            <tr><th>When</th><th>Provider</th><th>Type</th><th>Song</th><th>User</th><th>Status</th><th>Est. cost</th></tr>
+            <tr><th>When</th><th>Flow</th><th>Provider</th><th>Type</th><th>Song</th><th>User</th><th>Status</th><th>Est. cost</th></tr>
           </thead>
           <tbody>${renderCoverArtLogRows(log.rows || [])}</tbody>
         </table>

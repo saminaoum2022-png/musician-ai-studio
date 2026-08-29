@@ -178,10 +178,11 @@ async function fetchRegenCoverImage({
   allowHumans = false,
 }) {
   const pollOpts = { avoidTags, storyTheme: storyTheme || "", userArtwork: userArtwork || "" };
-  const forceGemini = allowHumans || Boolean(String(userArtwork || "").trim());
-  const attemptedProvider = forceGemini ? "gemini" : resolveCoverRegenImageProvider();
+  const explicitUserArt = allowHumans || Boolean(String(userArtwork || "").trim());
+  const regenProvider = resolveCoverRegenImageProvider();
+  const attemptedProvider = explicitUserArt ? "gemini" : regenProvider;
   if (attemptedProvider === "gemini") {
-    const gem = await tryGeminiCoverImage({ prompt, allowHumans: allowHumans || forceGemini });
+    const gem = await tryGeminiCoverImage({ prompt, allowHumans: allowHumans || explicitUserArt });
     if (gem.ok) {
       return {
         ok: true,
@@ -379,7 +380,7 @@ module.exports = async function handler(req, res) {
       const seed = Number.isFinite(clientSeedRaw) && clientSeedRaw > 0
         ? Math.floor(clientSeedRaw) % 2147483646
         : Math.floor(Math.random() * 2147483645) + 1;
-      const regenUserArt = regenUserHint || String(body?.clientParams?.userArtwork || body?.clientParams?.userArtworkRaw || "").trim();
+      const regenUserArt = String(regenUserHint || "").trim();
       const rendered = await fetchRegenCoverImage({
         prompt: clientPrompt,
         seed,

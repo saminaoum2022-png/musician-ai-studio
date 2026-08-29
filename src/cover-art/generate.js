@@ -152,7 +152,7 @@ export async function fetchAbstractCoverArt(params, opts = {}) {
   const body = { ...params };
   if (opts.coverRegenerate) {
     const userHint = String(
-      opts.artworkHint || opts.artworkStyle || params?.regenArtworkHint || params?.artworkHint || "",
+      opts.artworkHint || opts.artworkStyle || params?.regenArtworkHint || "",
     ).trim().slice(0, 280);
     const bundle = await resolveRegenPromptBundle(params, opts);
     body.coverRegenerate = true;
@@ -374,8 +374,10 @@ export async function regenerateAbstractCoverForTrack(track, opts = {}) {
   if (_inflight.has(id)) return _inflight.get(id);
   const fromSheet = Boolean(opts.regenFromSheet);
   const userHint = String(opts.artworkHint ?? opts.artworkStyle ?? "").trim().slice(0, 280);
-  const hintOverride = userHint
-    || (fromSheet ? "" : String(meta.artworkHint ?? meta.artworkStyle ?? "").trim().slice(0, 280));
+  /** Magic-wand regen ignores stale meta hints — only the sheet or explicit opts count as user art direction. */
+  const hintOverride = fromSheet
+    ? (userHint || String(meta.artworkHint ?? meta.artworkStyle ?? "").trim().slice(0, 280))
+    : userHint;
   const reset = {
     ...track,
     meta: {

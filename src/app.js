@@ -3920,9 +3920,12 @@ function setCreateTemplateLoadedHint(title) {
   els.createChallengeHint.classList.add("createChallengeHint--template");
   if (els.createChallengeHintTitle) els.createChallengeHintTitle.textContent = `Template: ${t}`;
   if (els.createChallengeHintSub) {
-    els.createChallengeHintSub.textContent = "Personalize the lyrics and style, then tap Generate.";
+    els.createChallengeHintSub.textContent = templateSparkClipStagingEnabled()
+      ? `~30s Lyria clip · ${formatCreditsAmount(TEMPLATE_SPARK_CLIP_CREDIT_COST)} credits — personalize below, then Generate clip.`
+      : "Personalize the lyrics and style, then tap Generate.";
   }
   els.createChallengeHint.hidden = false;
+  try { syncNabadClipCreateUi(); } catch {}
 }
 
 function setCreateChallengeHint(challenge) {
@@ -7622,8 +7625,19 @@ function applyDiscoveryIdeaToCreate(idea) {
   if (idea.challenge) persistCreateChallengeContext(pendingSearchRemixMeta);
   else clearCreateChallengeContext();
   const challenge = challengePromptContext();
-  const sourceKind = challenge ? creationSourceKind(challenge) : null;
-  setCreateChallengeHint(challenge);
+  const quickTemplateClip =
+    !challenge &&
+    templateSparkClipStagingEnabled() &&
+    pendingSearchRemixMeta?.searchTemplateId &&
+    !String(pendingSearchRemixMeta.searchTemplateId).startsWith("continue:");
+  if (challenge) setCreateChallengeHint(challenge);
+  else if (quickTemplateClip) setCreateTemplateLoadedHint(title);
+  else setCreateChallengeHint(null);
+  const sourceKind = challenge
+    ? creationSourceKind(challenge)
+    : quickTemplateClip
+      ? "template"
+      : null;
   const focus = idea.createFocus
     || (idea.challenge?.id ? challengeCreateFocusForId(idea.challenge.id) : null);
   const voiceClipOnly = isVoiceClipChallengeId(idea.challenge?.id) || focus?.tab === "hum";
@@ -12239,7 +12253,14 @@ function applyRemixTemplateToCreate(tpl, name) {
     searchRemixPersonalizedFor: cleanName,
   };
   setCreateTemplateLoadedHint(tpl.title);
-  try { setStatus?.(`Template: ${tpl.title} — tap Generate when ready.`); } catch {}
+  try {
+    setStatus?.(
+      templateSparkClipStagingEnabled()
+        ? `Template clip: ${tpl.title} — ~30s Lyria · ${formatCreditsAmount(TEMPLATE_SPARK_CLIP_CREDIT_COST)} credits.`
+        : `Template: ${tpl.title} — tap Generate when ready.`,
+    );
+  } catch {}
+  try { syncNabadClipCreateUi(); } catch {}
 }
 
 function openDiscoverSearch() {
@@ -23557,19 +23578,38 @@ function templateSparkClipStagingEnabled() {
 
 function templateSparkClipSourceKind() {
   const ch = challengePromptContext();
-  if (!ch) return null;
-  return creationSourceKind(ch);
+  if (ch) return creationSourceKind(ch);
+  const meta = pendingSearchRemixMeta && typeof pendingSearchRemixMeta === "object" ? pendingSearchRemixMeta : null;
+  if (
+    meta?.searchTemplateId &&
+    !String(meta.searchTemplateId).startsWith("continue:")
+  ) {
+    return "template";
+  }
+  return null;
+}
+
+function activeTemplateSparkClipMeta() {
+  const meta = pendingSearchRemixMeta && typeof pendingSearchRemixMeta === "object" ? pendingSearchRemixMeta : null;
+  if (!meta) return null;
+  const ch = challengePromptContext();
+  if (ch) {
+    const kind = creationSourceKind(ch);
+    if (kind !== "template" && kind !== "spark") return null;
+    if (isVoiceClipChallengeId(ch.id)) return null;
+    const focus = ch.id ? challengeCreateFocusForId(ch.id) : null;
+    if (focus?.tab === "hum") return null;
+    return meta;
+  }
+  const tplId = String(meta.searchTemplateId || "").trim();
+  if (!tplId || tplId.startsWith("continue:")) return null;
+  if (isVoiceClipChallengeId(tplId.replace(/^idea:/, ""))) return null;
+  return meta;
 }
 
 function isTemplateSparkClipFlow() {
   if (!templateSparkClipStagingEnabled() || isNabadClipFlow()) return false;
-  const kind = templateSparkClipSourceKind();
-  if (kind !== "template" && kind !== "spark") return false;
-  const ch = challengePromptContext();
-  if (isVoiceClipChallengeId(ch?.id)) return false;
-  const focus = ch?.id ? challengeCreateFocusForId(ch.id) : null;
-  if (focus?.tab === "hum") return false;
-  return true;
+  return Boolean(activeTemplateSparkClipMeta());
 }
 
 function isLyriaClipGenerateFlow() {

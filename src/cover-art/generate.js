@@ -118,13 +118,15 @@ async function resolveRegenPromptBundle(params, regenOpts = {}) {
         concreteSubject: true,
       }).text
     : (vd.identityPhrases || "");
-  /** No-hint regen: same story + Visual Director + mood palette as first cover; regenSalt varies the seed only. */
+  /** No-hint regen: rotate atmospheric scenes via regenSalt; keep Nabad identity + mood palette. */
   const built = buildAbstractCoverPrompt(promptInput, {
     regenSalt,
+    regenVariety: !hintOverride,
     directorSceneHint: hintOverride ? "" : (vd.sceneHint || ""),
     nabadIdentityPhrases: identityPhrases,
     visualDirection: vd.direction || undefined,
     userArtworkOverride: hintOverride || undefined,
+    creativeMode: true,
   });
 
   const avoidTags = [params.avoidTagsInput || "", vd.avoidMerged || ""].filter(Boolean).join(", ");

@@ -498,47 +498,12 @@ module.exports = async function handler(req, res) {
         ? { nabadIdentityPhrases: vdApplied.identityPhrases }
         : {}),
       ...(vd.mode === "apply" && vd.direction ? { visualDirection: vd.direction } : {}),
-      ...(userDirectedArtwork ? { imageProvider: "gemini", geminiImage: true } : {}),
     };
 
     const { prompt, seed, bucket, visualMode, storyTheme, artworkSource, params } = buildAbstractCoverPrompt(
       promptInput,
-      promptOpts,
+      { ...promptOpts, creativeMode: true },
     );
-
-    if (userDirectedArtwork) {
-      const gemImg = await tryGeminiCoverImage({ prompt, allowHumans: true });
-      if (!gemImg.ok) {
-        console.warn("[music/cover-art] gemini user-artwork failed", gemImg.error);
-        return sendJson(res, 502, { error: "Cover image generation failed upstream." });
-      }
-      const { outBuf, outMime } = await normalizeCoverResponseBuffer(gemImg.buf, { preferCenter: true });
-      queueLogProviderUsage({
-        provider: "gemini",
-        kind: "cover_image",
-        userId: user.userId,
-        ref: songId,
-      });
-      return sendJson(res, 200, {
-        ok: true,
-        dataUrl: coverDataUrlFromBuffer(outBuf, outMime),
-        seed,
-        bucket,
-        visualMode,
-        storyTheme,
-        artworkSource,
-        params: {
-          ...params,
-          visualDirectorMode: vd.mode,
-          ...(vd.direction ? { visualDirection: vd.direction } : {}),
-          geminiImageModel: gemImg.model || "",
-        },
-        coverWidth: COVER_PORTRAIT_W,
-        coverHeight: COVER_PORTRAIT_H,
-        provider: "gemini",
-        abstract: true,
-      });
-    }
 
     const rendered = await fetchAbstractCoverImage({
       prompt,

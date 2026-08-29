@@ -4,7 +4,7 @@
  */
 
 /** Bump when cover prompt policy changes — busts Gemini scene cache on the server. */
-export const COVER_PROMPT_POLICY_VERSION = 15;
+export const COVER_PROMPT_POLICY_VERSION = 16;
 /** Pollinations flux reliably returns ~768×768 square — request square, crop to 9:16 (avoids vertical stretch). */
 export const POLLINATIONS_COVER_WIDTH = 1024;
 export const POLLINATIONS_COVER_HEIGHT = 1024;
@@ -32,13 +32,18 @@ const MONOCHROME_PALETTE =
   "high contrast black and white monochrome photography, silver grey tones, dramatic shadows, no color tint";
 
 const MUSIC_FALLBACK_SCENES = [
-  "abstract audio waveform and sound aura in deep teal and violet, luminous morphing energy, premium music artwork, no people",
-  "glowing equalizer bars and soft sonic ripples in teal-violet gradient, cinematic music visualization, no people",
-  "premium podcast studio microphone on moody desk with teal-violet bokeh lights, atmospheric music cover, no people",
-  "floating sound waves and aurora glow in nabad teal and violet colors, abstract music atmosphere, no people",
-  "vintage condenser microphone silhouette against soft gradient aura, cinematic music studio mood, no people",
-  "rhythmic light pulses and audio spectrum bloom in deep void, elegant music-inspired abstract art, no people",
+  "abstract audio waveform and sound aura in deep teal and violet, luminous morphing energy, premium music artwork",
+  "glowing equalizer bars and soft sonic ripples in teal-violet gradient, cinematic music visualization",
+  "floating sound waves and aurora glow in nabad teal and violet colors, abstract music atmosphere",
+  "rhythmic light pulses and audio spectrum bloom in deep void, elegant music-inspired abstract art",
+  "cinematic atmospheric depth with flowing teal and violet light, immersive premium album mood",
+  "wide environmental scene with rich color grading, moody shadows and luminous accents",
+  "neon-accented void with soft bokeh and premium editorial lighting",
+  "surreal color bloom and pearlescent haze, dreamy premium album atmosphere",
 ];
+
+/** Regen without hint — rotate through atmospheric scenes instead of repeating story still-life props. */
+const REGEN_VARIETY_POOL = [...MUSIC_FALLBACK_SCENES];
 
 /** Appended to every cover prompt — Flux cannot render humans reliably. */
 const NO_HUMANS_GUARD =
@@ -616,8 +621,11 @@ function paletteForUserArtwork(userArtwork, bucketKey) {
   return moodPaletteForBucket(bucketKey);
 }
 
-function prepareDirectUserArtworkHint(raw, { allowHumans = false } = {}) {
+function prepareDirectUserArtworkHint(raw, { allowHumans = false, creative = true } = {}) {
   let s = expandArtworkStyleTags(String(raw || "").trim());
+  if (creative && !allowHumans) {
+    return s.replace(/\s+/g, " ").trim().slice(0, 280);
+  }
   s = toVisualOnlyPrompt(s, { title: "" });
   s = enrichUserArtworkHint(s);
   if (!allowHumans) s = enforceNoHumansScene(s);
@@ -922,31 +930,34 @@ function parseAvoidTagsList(raw) {
     .slice(0, 24);
 }
 
-export function buildCoverNegativePrompt(avoidTags, { storyTheme = "", userArtwork = "" } = {}) {
-  const extra = parseAvoidTagsList(avoidTags);
+export function buildCoverNegativePrompt(avoidTags, { storyTheme = "", userArtwork = "", minimal = true } = {}) {
+  const extra = parseAvoidTagsList(avoidTags).slice(0, 5);
+  if (minimal) {
+    const base = "song title text, artist name text, watermark, blurry, low quality";
+    return extra.length ? `${base}, ${extra.join(", ")}` : base;
+  }
   const antiMountain = landscapeAntiMountainAvoid(storyTheme, userArtwork);
   if (antiMountain) extra.push(...parseAvoidTagsList(antiMountain));
   if (!extra.length) return NEGATIVE_TEXT_PROMPT;
   return `${NEGATIVE_TEXT_PROMPT}, ${extra.join(", ")}`;
 }
 
-/** Flux Schnell has no negative_prompt — fold critical avoids into the positive prompt. */
-const FLUX_AVOID_INLINE =
-  "Avoid any text, words, letters, typography, watermark, logo, people, faces, hands, portraits, human figures, anatomy errors, extra fingers, blurry low quality imagery.";
+/** Flux Schnell — light touch; creative freedom in the main prompt, minimal guard at the tail. */
+const MINIMAL_TEXT_GUARD = "no song title or artist name text on the image";
 
 const FLUX_PROMPT_MAX = 2048;
 
-/** Style chips from the regen sheet — expand vague tags into Flux-safe scene phrases. */
+/** Style chips from the regen sheet — expand vague tags into scene phrases. */
 const ARTWORK_STYLE_TAG_EXPANSIONS = {
-  neon: "neon-lit cinematic atmosphere, electric teal and violet glow, no people",
-  minimal: "minimalist clean composition, generous negative space, soft gradient background, no people",
-  surreal: "surreal dreamlike atmosphere, symbolic props and lighting, no people",
-  dreamy: "dreamy soft atmospheric haze, pearlescent light, no people",
-  "studio light": "professional studio lighting, soft key light, moody shadows, no people",
-  "black & white": "black and white monochrome photography, high contrast silver tones, no people",
-  "vintage film": "vintage film grain, warm faded tones, nostalgic cinematic mood, no people",
-  "cinematic portrait": "cinematic mood, dramatic lighting, shallow depth of field, no people",
-  "cinematic mood": "cinematic mood, dramatic lighting, shallow depth of field, no people",
+  neon: "neon-lit cinematic atmosphere, electric teal and violet glow",
+  minimal: "minimalist clean composition, generous negative space, soft gradient background",
+  surreal: "surreal dreamlike atmosphere, symbolic lighting and depth",
+  dreamy: "dreamy soft atmospheric haze, pearlescent light",
+  "studio light": "professional studio lighting, soft key light, moody shadows",
+  "black & white": "black and white monochrome photography, high contrast silver tones",
+  "vintage film": "vintage film grain, warm faded tones, nostalgic cinematic mood",
+  "cinematic portrait": "cinematic mood, dramatic lighting, shallow depth of field",
+  "cinematic mood": "cinematic mood, dramatic lighting, shallow depth of field",
 };
 
 function expandArtworkStyleTags(raw) {
@@ -985,13 +996,11 @@ function compressPromptForFlux(prompt, maxLen) {
   return (lastComma > maxLen * 0.55 ? cut.slice(0, lastComma) : cut).trim();
 }
 
-export function buildFluxCoverPrompt(prompt, { avoidTags = "", storyTheme = "", userArtwork = "" } = {}) {
-  const suffixBits = [FLUX_AVOID_INLINE];
-  const parsedAvoid = parseAvoidTagsList(avoidTags).slice(0, 5);
-  if (parsedAvoid.length) suffixBits.push(`Avoid ${parsedAvoid.join(", ")}`);
-  const antiMountain = landscapeAntiMountainAvoid(storyTheme, userArtwork);
-  if (antiMountain) suffixBits.push(antiMountain);
-  const suffix = `. ${suffixBits.join(". ")}`;
+export function buildFluxCoverPrompt(prompt, { avoidTags = "" } = {}) {
+  const parsedAvoid = parseAvoidTagsList(avoidTags).slice(0, 4);
+  const suffixBits = [MINIMAL_TEXT_GUARD];
+  if (parsedAvoid.length) suffixBits.push(`avoid ${parsedAvoid.join(", ")}`);
+  const suffix = `. ${suffixBits.join(", ")}`;
   const baseBudget = Math.max(400, FLUX_PROMPT_MAX - suffix.length - 1);
   const base = compressPromptForFlux(String(prompt || "").trim(), baseBudget);
   const merged = `${base}${suffix}`.replace(/\s+/g, " ").trim();
@@ -1029,7 +1038,7 @@ export function enforceNoHumansScene(scene) {
 
 /**
  * @param {object} input
- * @param {{ sceneOverride?: string, artworkSourceOverride?: string, geminiModel?: string, directorSceneHint?: string, nabadIdentityPhrases?: string, visualDirection?: object, regenSalt?: string, userArtworkOverride?: string, forceMusicFallback?: boolean }} [options]
+ * @param {{ sceneOverride?: string, artworkSourceOverride?: string, geminiModel?: string, directorSceneHint?: string, nabadIdentityPhrases?: string, visualDirection?: object, regenSalt?: string, userArtworkOverride?: string, forceMusicFallback?: boolean, regenVariety?: boolean, creativeMode?: boolean }} [options]
  * @returns {{ prompt: string, seed: number, bucket: string, visualMode: string, storyTheme: string, artworkSource: string, params: object }}
  */
 export function buildAbstractCoverPrompt(input, options = {}) {
@@ -1044,45 +1053,61 @@ export function buildAbstractCoverPrompt(input, options = {}) {
   const sonicProfile = String(input?.sonicProfile || inferSonicProfile(`${genre} ${styleBlob}`));
   const geminiImage = options.imageProvider === "gemini" || Boolean(options.geminiImage);
   const allowHumans = geminiImage;
+  const creativeMode = options.creativeMode !== false && !geminiImage;
+  const regenVariety = Boolean(options.regenVariety && creativeMode);
+  const regenSaltKey = String(options.regenSalt || "").trim();
   const userArtworkOverride = String(options.userArtworkOverride || "").trim().slice(0, 280);
   const userDirectedRegen = isUserDirectedRegenHint(userArtworkOverride);
   const forceMusicFallback = Boolean(options.forceMusicFallback && !userArtworkOverride);
   const userArtworkRaw = userArtworkOverride || (forceMusicFallback ? "" : resolveUserArtworkPrompt(input));
   const regenMood = userDirectedRegen ? resolveRegenMoodFromHint(userArtworkOverride || userArtworkRaw) : null;
   let userArtwork = userArtworkOverride
-    ? prepareDirectUserArtworkHint(userArtworkRaw, { allowHumans })
-    : sanitizeArtworkPrompt(enrichUserArtworkHint(userArtworkRaw), { title });
-  const sceneOverrideRaw = sanitizeArtworkPrompt(String(options.sceneOverride || "").trim(), { title });
+    ? prepareDirectUserArtworkHint(userArtworkRaw, { allowHumans, creative: creativeMode })
+    : creativeMode
+      ? enrichUserArtworkHint(sanitizeArtworkPrompt(userArtworkRaw, { title }))
+      : sanitizeArtworkPrompt(enrichUserArtworkHint(userArtworkRaw), { title });
+  const sceneOverrideRaw = creativeMode
+    ? String(options.sceneOverride || "").trim()
+    : sanitizeArtworkPrompt(String(options.sceneOverride || "").trim(), { title });
   let sceneOverride = sceneOverrideRaw && userArtwork
-    ? sanitizeArtworkPrompt(`${userArtwork}, ${sceneOverrideRaw}`, { title })
+    ? (creativeMode ? `${userArtwork}, ${sceneOverrideRaw}` : sanitizeArtworkPrompt(`${userArtwork}, ${sceneOverrideRaw}`, { title }))
     : sceneOverrideRaw;
 
   const { scene, visualMode, storyTheme, bucketKey: storyBucketKey } = buildSceneFromStory(input);
   const bucketKey = regenMood?.bucket || storyBucketKey;
-  const directorSceneHintRaw = sanitizeArtworkPrompt(String(options.directorSceneHint || "").trim(), { title });
-  const directorSceneHint = allowHumans ? directorSceneHintRaw : enforceNoHumansScene(directorSceneHintRaw);
-  const nabadIdentityPhrases = sanitizeArtworkPrompt(String(options.nabadIdentityPhrases || "").trim(), { title });
-  const storyScene = toVisualOnlyPrompt(scene, { title });
+  const directorSceneHintRaw = creativeMode
+    ? String(options.directorSceneHint || "").trim()
+    : sanitizeArtworkPrompt(String(options.directorSceneHint || "").trim(), { title });
+  const directorSceneHint = allowHumans || creativeMode ? directorSceneHintRaw : enforceNoHumansScene(directorSceneHintRaw);
+  const nabadIdentityPhrases = creativeMode
+    ? String(options.nabadIdentityPhrases || "").trim()
+    : sanitizeArtworkPrompt(String(options.nabadIdentityPhrases || "").trim(), { title });
+  const storyScene = creativeMode ? String(scene || "").trim() : toVisualOnlyPrompt(scene, { title });
   const preferStoryScene = storyTheme !== "mood_fallback" && Boolean(storyScene);
   let visualScene = forceMusicFallback
-    ? pickFrom(MUSIC_FALLBACK_SCENES, songId, String(options.regenSalt || "regen-auto"))
-    : preferStoryScene
-      ? storyScene
-      : !sceneOverride && !userArtwork && directorSceneHint
-        ? directorSceneHint
-        : storyScene;
-  if (!allowHumans) {
+    ? pickFrom(MUSIC_FALLBACK_SCENES, songId, regenSaltKey || "regen-auto")
+    : regenVariety
+      ? pickFrom(REGEN_VARIETY_POOL, songId, regenSaltKey || "regen-variety")
+      : preferStoryScene
+        ? storyScene
+        : !sceneOverride && !userArtwork && directorSceneHint
+          ? directorSceneHint
+          : storyScene;
+  if (!allowHumans && !creativeMode) {
     sceneOverride = sceneOverride ? enforceNoHumansScene(sceneOverride) : "";
     visualScene = enforceNoHumansScene(visualScene);
     userArtwork = userArtwork ? enforceNoHumansScene(userArtwork) : "";
   }
   const palette = moodPaletteForBucket(bucketKey);
-  const composition = compositionPhraseForCover(
-    songId,
-    userArtwork || userArtworkRaw || sceneOverride || visualScene,
-    sceneOverride || userArtwork || userDirectedRegen ? "user_directed" : visualMode,
-    { geminiReel: geminiImage && Boolean(userArtwork || userArtworkOverride) },
-  );
+  const compositionSalt = regenSaltKey || "";
+  const composition = creativeMode
+    ? COMPOSITIONS[fnv1a(`${songId}:comp:${compositionSalt}`) % COMPOSITIONS.length]
+    : compositionPhraseForCover(
+        songId,
+        userArtwork || userArtworkRaw || sceneOverride || visualScene,
+        sceneOverride || userArtwork || userDirectedRegen ? "user_directed" : visualMode,
+        { geminiReel: geminiImage && Boolean(userArtwork || userArtworkOverride) },
+      );
   const effectiveStoryTheme = userDirectedRegen ? "user_regen" : storyTheme;
   const seed = buildCoverSeed(input, effectiveStoryTheme, bucketKey, userArtwork, String(options.regenSalt || "").trim());
   const artworkSource = forceMusicFallback
@@ -1097,15 +1122,63 @@ export function buildAbstractCoverPrompt(input, options = {}) {
 
   const isHumTrack = Boolean(input?.humTrack);
   const styleCore = isHumTrack ? HUM_TRACK_STYLE_CORE : STYLE_CORE;
-  const safetySuffix = isHumTrack ? HUM_TRACK_SAFETY_SUFFIX : SAFETY_SUFFIX;
   const humGuard = isHumTrack ? HUM_TRACK_SCENE_GUARD : "";
+  const autoFrame = MUSIC_COVER_FRAME;
+  const safetySuffix = isHumTrack ? HUM_TRACK_SAFETY_SUFFIX : SAFETY_SUFFIX;
   const humansGuard = allowHumans ? "" : NO_HUMANS_GUARD;
   const geminiReelFrame = geminiImage && Boolean(userArtwork || userArtworkOverride);
   const effectiveSafetySuffix =
     allowHumans && (userArtwork || userArtworkOverride) ? GEMINI_USER_SAFETY_SUFFIX : safetySuffix;
 
   let parts;
-  if (sceneOverride) {
+  if (creativeMode) {
+    if (sceneOverride) {
+      parts = [
+        autoFrame,
+        styleCore,
+        sceneOverride,
+        nabadIdentityPhrases,
+        palette,
+        composition,
+        storyMoodPhrase(storyTheme),
+        bucketMoodPhrase(bucketKey),
+        tempoPhrase(tempo),
+        brightnessPhrase(brightness),
+        sonicPhrase(sonicProfile),
+        humGuard,
+        MINIMAL_TEXT_GUARD,
+      ];
+    } else if (userArtwork) {
+      parts = [
+        autoFrame,
+        userArtwork,
+        nabadIdentityPhrases,
+        paletteForUserArtwork(userArtwork, bucketKey),
+        USER_STYLE_CORE,
+        composition,
+        sonicPhrase(sonicProfile),
+        storyMoodPhrase(storyTheme),
+        bucketMoodPhrase(bucketKey),
+        MINIMAL_TEXT_GUARD,
+      ];
+    } else {
+      parts = [
+        autoFrame,
+        styleCore,
+        visualScene,
+        nabadIdentityPhrases,
+        humGuard,
+        sonicPhrase(sonicProfile),
+        palette,
+        composition,
+        storyMoodPhrase(storyTheme),
+        bucketMoodPhrase(bucketKey),
+        tempoPhrase(tempo),
+        brightnessPhrase(brightness),
+        MINIMAL_TEXT_GUARD,
+      ];
+    }
+  } else if (sceneOverride) {
     parts = userArtwork
       ? [
           NO_TEXT_LEAD,
@@ -1234,7 +1307,7 @@ export function buildAbstractCoverPrompt(input, options = {}) {
       coverHeight: geminiImage ? 1280 : POLLINATIONS_COVER_HEIGHT,
       coverAspect: "9:16",
       coverSourceAspect: geminiImage ? "9:16" : "1:1",
-      imageProvider: geminiImage ? "gemini" : "pollinations",
+      imageProvider: geminiImage ? "gemini" : "cloudflare",
       landscapeAntiMountainAvoid: landscapeAntiMountainAvoid(effectiveStoryTheme, userArtwork),
     },
   };

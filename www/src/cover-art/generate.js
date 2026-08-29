@@ -87,7 +87,6 @@ async function resolveRegenPromptBundle(params, regenOpts = {}) {
     params?.artworkStyle ||
     "",
   ).trim().slice(0, 280);
-  const regenAutoMusic = Boolean(regenOpts.regenAutoMusic || params?.regenAutoMusic || !hintOverride);
 
   const bucketKey = classifyVisualBucket(params);
   const { theme, storyScore } = resolveStoryTheme(params);
@@ -104,13 +103,8 @@ async function resolveRegenPromptBundle(params, regenOpts = {}) {
   });
 
   const promptInput = hintOverride
-    ? { ...(vd.coverInput || params), artworkStyle: hintOverride, artworkHint: hintOverride, regenAutoMusic: false }
-    : {
-        ...(vd.coverInput || params),
-        artworkStyle: "",
-        artworkHint: "",
-        regenAutoMusic: true,
-      };
+    ? { ...(vd.coverInput || params), artworkStyle: hintOverride, artworkHint: hintOverride }
+    : { ...(vd.coverInput || params), artworkStyle: "", artworkHint: "" };
   const regenMood = hintOverride ? resolveRegenMoodFromHint(hintOverride) : null;
   const identityBucket = regenMood?.bucket || bucketKey;
   const concreteSubject = Boolean(hintOverride && shouldUseConcreteSubjectDna(hintOverride, { userArtworkOverride: hintOverride }));
@@ -124,14 +118,13 @@ async function resolveRegenPromptBundle(params, regenOpts = {}) {
         concreteSubject: true,
       }).text
     : (vd.identityPhrases || "");
+  /** No-hint regen: same story + Visual Director + mood palette as first cover; regenSalt varies the seed only. */
   const built = buildAbstractCoverPrompt(promptInput, {
     regenSalt,
-    directorSceneHint: hintOverride || regenAutoMusic ? "" : (vd.sceneHint || ""),
+    directorSceneHint: hintOverride ? "" : (vd.sceneHint || ""),
     nabadIdentityPhrases: identityPhrases,
     visualDirection: vd.direction || undefined,
     userArtworkOverride: hintOverride || undefined,
-    forceMusicFallback: regenAutoMusic,
-    ...(hintOverride ? { imageProvider: "gemini", geminiImage: true } : {}),
   });
 
   const avoidTags = [params.avoidTagsInput || "", vd.avoidMerged || ""].filter(Boolean).join(", ");
@@ -152,7 +145,7 @@ export async function fetchAbstractCoverArt(params, opts = {}) {
   const body = { ...params };
   if (opts.coverRegenerate) {
     const userHint = String(
-      opts.artworkHint || opts.artworkStyle || params?.regenArtworkHint || params?.artworkHint || "",
+      opts.artworkHint || opts.artworkStyle || params?.regenArtworkHint || "",
     ).trim().slice(0, 280);
     const bundle = await resolveRegenPromptBundle(params, opts);
     body.coverRegenerate = true;
@@ -372,10 +365,9 @@ export async function regenerateAbstractCoverForTrack(track, opts = {}) {
   const fromPhoto = Boolean(meta.photoMode);
   if (!id || !canRegenerateTrackCover(track)) return null;
   if (_inflight.has(id)) return _inflight.get(id);
-  const fromSheet = Boolean(opts.regenFromSheet);
   const userHint = String(opts.artworkHint ?? opts.artworkStyle ?? "").trim().slice(0, 280);
-  const hintOverride = userHint
-    || (fromSheet ? "" : String(meta.artworkHint ?? meta.artworkStyle ?? "").trim().slice(0, 280));
+  /** Only an artwork hint typed for this regen counts — never reuse stale meta hints. */
+  const hintOverride = userHint;
   const reset = {
     ...track,
     meta: {

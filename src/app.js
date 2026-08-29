@@ -54617,10 +54617,15 @@ async function regeneratePlayerCover(artworkHint = "", trackId = "") {
       if (revealed) {
         flashPlayerCover();
         const provider = String(updated._coverRegenProvider || updated.meta?.coverImageProvider || "").trim().toLowerCase();
+        const attempted = String(updated._coverRegenAttemptedProvider || provider || "").trim().toLowerCase();
         const fallback = String(updated._coverRegenFallbackReason || updated.meta?.regenFallbackReason || "").trim();
         let coverStatus = "";
         if (provider === "gemini") coverStatus = "Cover updated via Gemini.";
-        else if (provider === "cloudflare") coverStatus = "Cover updated via Cloudflare Flux.";
+        else if (provider === "cloudflare" && attempted === "gemini") {
+          coverStatus = fallback
+            ? `Cover updated via Flux (Gemini hint failed: ${fallback}).`
+            : "Cover updated via Flux (Gemini hint failed).";
+        } else if (provider === "cloudflare") coverStatus = "Cover updated via Cloudflare Flux.";
         else if (provider === "pollinations") {
           coverStatus = fallback
             ? `Cover updated via Pollinations (${fallback}).`

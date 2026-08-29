@@ -10685,8 +10685,7 @@ html[data-theme="light"] .personaVoiceTuneChips .optChip.isActive{
   gap:8px;
 }
 
-/* Generate trigger (the ✦ button) — icon only in Write mode (hidden),
-   icon + "Generate" label in Generate mode. */
+/* Generate trigger (the ✦ button) — hidden in Write mode; full pill in Generate mode. */
 .lyricsMagicLabel{ display:none; }
 #lyricsFieldPanel[data-lyrics-mode="write"] .lyricsAssistBar{
   display:none;
@@ -10701,16 +10700,103 @@ html[data-theme="light"] .personaVoiceTuneChips .optChip.isActive{
 #lyricsFieldPanel[data-lyrics-mode="write"].showLyricsAssistPolish #btnLyricsMagic{
   display:none;
 }
-#lyricsFieldPanel[data-lyrics-mode="generate"] #btnLyricsMagic{
-  width:auto;
-  height:32px;
-  padding:0 14px;
-  gap:7px;
-  font-size:13px;
-  font-weight:700;
+#lyricsFieldPanel[data-lyrics-mode="generate"] .lyricsAssistBar{
+  display:flex;
+  flex-wrap:wrap;
+  align-items:center;
+  gap:8px;
+  margin-top:10px;
 }
-#lyricsFieldPanel[data-lyrics-mode="generate"] #btnLyricsMagic .lyricsMagicLabel{
+#lyricsFieldPanel[data-lyrics-mode="generate"] #btnLyricsMagic .lyricsMagicLabel,
+#lyricsFieldPanel[data-lyrics-mode="generate"] #btnLyricsMagic .aiAssistLabel{
   display:inline;
+}
+
+/* Shared gradient pill for in-panel AI assists (not the main Generate orb). */
+.aiAssistBtn{
+  -webkit-appearance:none;
+  appearance:none;
+  position:relative;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  gap:6px;
+  height:32px;
+  padding:0 13px;
+  border-radius:999px;
+  border:1px solid rgba(124, 92, 255, 0.38);
+  background:linear-gradient(135deg, rgba(35, 213, 171, 0.14) 0%, rgba(124, 92, 255, 0.16) 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.12),
+    0 4px 14px rgba(124, 92, 255, 0.16);
+  font-size:12.5px;
+  font-weight:700;
+  cursor:pointer;
+  white-space:nowrap;
+  flex-shrink:0;
+  width:auto;
+}
+.aiAssistIco,
+.aiAssistLabel,
+.lyricsPolishIco,
+.lyricsPolishLabel,
+.lyricsMagicIco,
+.lyricsMagicLabel{
+  background:var(--nabad-squircle-gradient);
+  -webkit-background-clip:text;
+  background-clip:text;
+  color:transparent;
+}
+.aiAssistIco,
+.lyricsPolishIco,
+.lyricsMagicIco{
+  font-size:11px;
+  line-height:1;
+}
+.aiAssistBtn:hover:not(:disabled){
+  border-color:rgba(124, 92, 255, 0.52);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.16),
+    0 6px 18px rgba(124, 92, 255, 0.22);
+}
+.aiAssistBtn:disabled{
+  opacity:0.55;
+  cursor:default;
+}
+.aiAssistBtn.isGenerating{
+  opacity:0.68;
+  border-color:rgba(148,163,184,0.32);
+  background:rgba(148,163,184,0.12);
+  box-shadow:none;
+  cursor:wait;
+  pointer-events:none;
+}
+.aiAssistBtn.isGenerating .aiAssistIco,
+.aiAssistBtn.isGenerating .aiAssistLabel,
+.aiAssistBtn.isGenerating .lyricsMagicIco,
+.aiAssistBtn.isGenerating .lyricsMagicLabel,
+.aiAssistBtn.isGenerating .lyricsPolishIco,
+.aiAssistBtn.isGenerating .lyricsPolishLabel{
+  background:none;
+  -webkit-background-clip:unset;
+  background-clip:unset;
+  color:rgba(232,238,247,0.58);
+}
+html[data-theme="light"] body[data-route="generate"] .aiAssistBtn.isGenerating{
+  border-color:rgba(100,116,139,0.28);
+  background:rgba(148,163,184,0.14);
+}
+html[data-theme="light"] body[data-route="generate"] .aiAssistBtn.isGenerating .aiAssistIco,
+html[data-theme="light"] body[data-route="generate"] .aiAssistBtn.isGenerating .aiAssistLabel,
+html[data-theme="light"] body[data-route="generate"] .aiAssistBtn.isGenerating .lyricsMagicIco,
+html[data-theme="light"] body[data-route="generate"] .aiAssistBtn.isGenerating .lyricsMagicLabel{
+  color:rgba(15,23,40,0.45);
+}
+.stylePanelHead .aiAssistBtn,
+.inputPanel--style .stylePanelHead .aiAssistBtn{
+  height:30px;
+  padding:0 11px;
+  font-size:12px;
 }
 
 /* Lyrics language / dialect / address — Generate mode by default; Write mode
@@ -10805,42 +10891,7 @@ html[data-theme="light"] .personaVoiceTuneChips .optChip.isActive{
   white-space:nowrap;
 }
 .lyricsPolishBtn{
-  -webkit-appearance:none;
-  appearance:none;
-  position:relative;
-  display:inline-flex;
-  align-items:center;
-  justify-content:center;
-  gap:6px;
-  height:32px;
-  padding:0 13px;
-  border-radius:999px;
-  border:1px solid rgba(124, 92, 255, 0.38);
-  background:linear-gradient(135deg, rgba(35, 213, 171, 0.14) 0%, rgba(124, 92, 255, 0.16) 100%);
-  box-shadow:
-    inset 0 1px 0 rgba(255,255,255,0.12),
-    0 4px 14px rgba(124, 92, 255, 0.16);
-  font-size:12.5px;
-  font-weight:700;
-  cursor:pointer;
-  white-space:nowrap;
-}
-.lyricsPolishIco,
-.lyricsPolishLabel{
-  background:var(--nabad-squircle-gradient);
-  -webkit-background-clip:text;
-  background-clip:text;
-  color:transparent;
-}
-.lyricsPolishIco{
-  font-size:11px;
-  line-height:1;
-}
-.lyricsPolishBtn:hover:not(:disabled){
-  border-color:rgba(124, 92, 255, 0.52);
-  box-shadow:
-    inset 0 1px 0 rgba(255,255,255,0.16),
-    0 6px 18px rgba(124, 92, 255, 0.22);
+  /* inherits .aiAssistBtn */
 }
 .lyricsDiacriticsBtn[hidden],
 .lyricsPolishBtn[hidden]{ display:none !important; }
@@ -15128,7 +15179,7 @@ html[data-theme="light"] body[data-route="generate"] .lyricsBox.generating .lyri
   0%{ background-position: -140% 0; }
   100%{ background-position: 180% 0; }
 }
-.lyricsMagicBtn{
+.lyricsMagicBtn:not(.aiAssistBtn){
   position:relative;
   flex-shrink:0;
   width:30px;
@@ -41723,31 +41774,38 @@ html[data-theme="light"] #arabicAddressPills .addressPill.isActive{
 html[data-theme="light"] body[data-route="generate"] .addressPill.isActive .addressPillSub{
   color: rgba(15,23,40,0.55);
 }
-html[data-theme="light"] body[data-route="generate"] .lyricsMagicBtn{
-  border-color: var(--border);
-  background: var(--surface-secondary);
-  box-shadow: none;
-  color: var(--text);
-}
-html[data-theme="light"] body[data-route="generate"] .lyricsPolishBtn{
+html[data-theme="light"] body[data-route="generate"] .aiAssistBtn{
   border-color: rgba(124, 92, 255, 0.34);
   background: linear-gradient(135deg, rgba(35, 213, 171, 0.16) 0%, rgba(124, 92, 255, 0.14) 55%, rgba(183, 139, 255, 0.12) 100%);
   box-shadow:
     inset 0 1px 0 rgba(255,255,255,0.85),
     0 4px 14px rgba(124, 92, 255, 0.14);
 }
-html[data-theme="light"] body[data-route="generate"] .lyricsPolishBtn:hover:not(:disabled){
+html[data-theme="light"] body[data-route="generate"] .aiAssistBtn:hover:not(:disabled){
   border-color: rgba(124, 92, 255, 0.48);
   box-shadow:
     inset 0 1px 0 rgba(255,255,255,0.92),
     0 6px 18px rgba(124, 92, 255, 0.2);
 }
+html[data-theme="light"] body[data-route="generate"] .aiAssistIco,
+html[data-theme="light"] body[data-route="generate"] .aiAssistLabel,
 html[data-theme="light"] body[data-route="generate"] .lyricsPolishIco,
-html[data-theme="light"] body[data-route="generate"] .lyricsPolishLabel{
+html[data-theme="light"] body[data-route="generate"] .lyricsPolishLabel,
+html[data-theme="light"] body[data-route="generate"] .lyricsMagicIco,
+html[data-theme="light"] body[data-route="generate"] .lyricsMagicLabel{
   background: linear-gradient(135deg, #0f9b7a 0%, #12b896 22%, #7c5cff 72%, #9b7bff 100%);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
+}
+html[data-theme="light"] body[data-route="generate"] .lyricsMagicBtn:not(.aiAssistBtn){
+  border-color: var(--border);
+  background: var(--surface-secondary);
+  box-shadow: none;
+  color: var(--text);
+}
+html[data-theme="light"] body[data-route="generate"] .lyricsPolishBtn{
+  /* inherits .aiAssistBtn light theme above */
 }
 html[data-theme="light"] body[data-route="generate"] .generateOrb,
 html[data-theme="light"] body[data-route="generate"] #btnGenerateOrb,
@@ -41762,8 +41820,8 @@ html[data-theme="light"] body[data-route="generate"] .stepCard{
   background: var(--card);
   box-shadow: var(--chart-surface-shadow);
 }
-/* The ✦ helper buttons (lyrics "Generate", style "Boost") go neutral too. */
-body[data-route="generate"] .lyricsMagicBtn{
+/* Legacy neutral magic buttons without .aiAssistBtn */
+body[data-route="generate"] .lyricsMagicBtn:not(.aiAssistBtn){
   border-color: rgba(255,255,255,0.16);
   background: rgba(255,255,255,0.08);
   box-shadow: none;
@@ -46517,22 +46575,27 @@ html:not([data-theme="light"]) .discoverTemplatesChip.is-active .discoverTemplat
   }
 }
 html[data-theme="light"] .createOptionsSummary{
-  border-color: rgba(124, 92, 255, 0.18);
+  border-color: rgba(124, 92, 255, 0.16);
   background:
-    radial-gradient(120% 100% at 0% 0%, rgba(124, 92, 255, 0.1), transparent 58%),
-    linear-gradient(165deg, #fff, #f4f7fc);
-  box-shadow: 0 12px 28px rgba(88, 104, 140, 0.1);
+    radial-gradient(120% 100% at 0% 0%, rgba(124, 92, 255, 0.08), transparent 58%),
+    linear-gradient(165deg, #fff, #f8fafd);
+  box-shadow: 0 4px 14px rgba(88, 104, 140, 0.08);
 }
 html[data-theme="light"] .createOptionsSummaryLabel{
   color: var(--primary);
 }
 html[data-theme="light"] .createOptionsPanel{
-  background: rgba(255, 255, 255, 0.92) !important;
-  border-color: rgba(15, 23, 40, 0.08) !important;
+  background: var(--card) !important;
+  border-color: var(--border) !important;
+  box-shadow: none !important;
+  padding: 16px 16px 12px !important;
 }
 html[data-theme="light"] .createOptionsGroup{
-  background: rgba(248, 250, 255, 0.88);
-  border-color: rgba(15, 23, 40, 0.08);
+  background: var(--surface-secondary);
+  border-color: var(--border);
+}
+html[data-theme="light"] .createOptionsGroup[open] .createOptionsGroupHead{
+  border-bottom-color: var(--border);
 }
 html[data-theme="light"] .createOptionsField select,
 html[data-theme="light"] .createOptionsField input{
@@ -55238,6 +55301,13 @@ html[data-theme="light"] #arabicAddressPills .addressPillMain{
     background: var(--bg);
     backdrop-filter: none;
     -webkit-backdrop-filter: none;
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+  /* Mobile fullscreen sheet was crushing summary padding — restore card spacing. */
+  .stepDetails.createOptionsSheet > summary.createOptionsSummary{
+    padding: 16px 18px;
+    margin-bottom: 8px;
   }
 }
 html[data-theme="light"] .createOptionsGroupHead{
@@ -55267,18 +55337,23 @@ html[data-theme="light"] .createOptionsSummaryChev{
 html[data-theme="light"] .createOptionsSheet[open] .createOptionsSummaryChev{
   color: var(--primary);
 }
-html[data-theme="light"] .createOptionsFooter{
+html[data-theme="light"] .createOptionsFooter,
+html[data-theme="light"] .createOptionsFooter.optionsActions{
   border-top-color: var(--border);
+  background: linear-gradient(180deg, rgba(255,255,255,0) 0%, rgba(255,255,255,0.92) 36%, #fff 100%);
+  padding-top: 12px;
+  padding-bottom: calc(6px + env(safe-area-inset-bottom, 0px));
 }
 html[data-theme="light"] .createOptionsFooterBtn--ghost{
   border-color: var(--border);
   background: var(--card);
   color: var(--text-primary);
+  box-shadow: 0 1px 4px rgba(88, 104, 140, 0.08);
 }
 html[data-theme="light"] .createOptionsFooterBtn--done{
-  background: linear-gradient(135deg, #0d9488, #12b896);
+  background: linear-gradient(135deg, #23d5ab 0%, #12b896 100%);
   color: #fff;
-  box-shadow: none;
+  box-shadow: 0 6px 16px rgba(35, 213, 171, 0.22);
 }
 html[data-theme="light"] .createOptionsMobileTrigger{
   border-color: var(--accent-teal-border) !important;

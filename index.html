@@ -197,7 +197,7 @@
       onload="this.media='all'"
     />
     <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Display:wght@900&family=Inter:wght@900&display=swap" /></noscript>
-    <link rel="stylesheet" href="./styles.css?v=20260829-212023" />
+    <link rel="stylesheet" href="./styles.css?v=20260829-224357" />
 
     <meta name="description" content="Create complete songs from lyrics, a hum, or a photo with NabadAi. Explore AI music tools, Arabic styles, voice personas, and creator sharing." />
     <meta property="og:type" content="website" />
@@ -1127,8 +1127,8 @@
                     </div>
                     <div class="lyricsAssistBar" role="toolbar" aria-label="Lyrics assist">
                       <button id="btnLyricsDiacritics" class="lyricsDiacriticsBtn" type="button" hidden title="Add Arabic vowel marks for clearer singing" aria-label="Add Arabic vowel marks"><span class="lyricsDiacriticsLabel">Add vowel marks</span><span class="lyricsDiacriticsLabelAr" lang="ar" dir="rtl">تشكيل</span></button>
-                      <button id="btnLyricsPolish" class="lyricsPolishBtn" type="button" hidden title="Tighten rhyme and line flow without changing the story" aria-label="Polish lyrics"><span class="lyricsPolishIco" aria-hidden="true">✦</span><span class="lyricsPolishLabel">Polish lyrics</span></button>
-                      <button id="btnLyricsMagic" class="lyricsMagicBtn" type="button" title="Generate lyrics with AI" aria-label="Generate lyrics with AI"><span class="lyricsMagicIco" aria-hidden="true">✦</span><span class="lyricsMagicLabel">Generate</span></button>
+                      <button id="btnLyricsPolish" class="lyricsPolishBtn aiAssistBtn" type="button" hidden title="Tighten rhyme and line flow without changing the story" aria-label="Polish lyrics"><span class="lyricsPolishIco aiAssistIco" aria-hidden="true">✦</span><span class="lyricsPolishLabel aiAssistLabel">Polish lyrics</span></button>
+                      <button id="btnLyricsMagic" class="lyricsMagicBtn aiAssistBtn" type="button" title="Generate lyrics with AI" aria-label="Generate lyrics with AI"><span class="lyricsMagicIco aiAssistIco" aria-hidden="true">✦</span><span class="lyricsMagicLabel aiAssistLabel">Generate lyrics</span></button>
                     </div>
                   </div>
                   <div class="row imageMoodRow">
@@ -1146,7 +1146,7 @@
                 <span>Style / Tags</span>
                 <div class="stylePanelHeadActions">
                   <button id="btnClearStyle" class="styleClearBtn" type="button" hidden aria-label="Clear all style tags">Clear</button>
-                  <button id="btnBoostStyle" class="lyricsMagicBtn styleBoostBtn" type="button" title="Boost style with AI" aria-label="Boost style with AI">✦</button>
+                  <button id="btnBoostStyle" class="lyricsMagicBtn styleBoostBtn aiAssistBtn" type="button" title="Boost style with AI" aria-label="Boost style with AI"><span class="aiAssistIco" aria-hidden="true">✦</span><span class="aiAssistLabel">Boost</span></button>
                 </div>
               </div>
               <input id="sunoStyle" type="text" placeholder="Tap a suggestion below — or type your own" />
@@ -1181,7 +1181,7 @@
               <label class="field grow inputPanel inputPanel--style">
                 <div class="label inPanelLabel stylePanelHead">
                   <span>Artwork style</span>
-                  <button id="btnArtworkSuggest" class="lyricsMagicBtn styleBoostBtn" type="button" title="Suggest artwork from your song" aria-label="Suggest artwork from your song">✦</button>
+                  <button id="btnArtworkSuggest" class="lyricsMagicBtn styleBoostBtn aiAssistBtn" type="button" title="Suggest artwork from your song" aria-label="Suggest artwork from your song"><span class="aiAssistIco" aria-hidden="true">✦</span><span class="aiAssistLabel">Suggest</span></button>
                 </div>
                 <input id="sunoArtworkStyle" type="text" placeholder="Neon desert, cinematic portrait…" />
                 <div id="artworkSuggestRow" class="styleSuggestRow artworkSuggestRow" role="group" aria-label="Artwork suggestions"></div>
@@ -2806,7 +2806,7 @@
                   <label class="coverRegenField">
                     <div class="coverRegenFieldHead">
                       <span>Artwork hint</span>
-                      <button id="btnCoverRegenSuggest" class="lyricsMagicBtn styleBoostBtn" type="button" title="Suggest artwork from your song" aria-label="Suggest artwork from your song">✦</button>
+                      <button id="btnCoverRegenSuggest" class="lyricsMagicBtn styleBoostBtn aiAssistBtn" type="button" title="Suggest artwork from your song" aria-label="Suggest artwork from your song"><span class="aiAssistIco" aria-hidden="true">✦</span><span class="aiAssistLabel">Suggest</span></button>
                     </div>
                     <input id="coverRegenArtworkInput" type="text" maxlength="280" placeholder="Neon desert, celebration still life…" autocomplete="off" enterkeyhint="done" />
                   </label>
@@ -5098,6 +5098,6 @@
     </script>
     <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
     <script src="./env.client.js" onerror="void 0"></script>
-    <script type="module" src="./src/app.js?v=20260829-212023"></script>
+    <script type="module" src="./src/app.js?v=20260829-224357"></script>
   </body>
 </html>

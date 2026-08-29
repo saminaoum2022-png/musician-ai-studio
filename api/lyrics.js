@@ -549,6 +549,26 @@ function buildPrompt({ seed, style, mode, nonce, dialect, dialectHint, sourceLyr
       seed || "(none)",
     ].join("\n");
   }
+  if (mode === "challenge_clip") {
+    return [
+      "You are writing lyrics for a ~28 SECOND music clip (Lyria) — NOT a full song.",
+      "The clip MUST end on a complete phrase. Nothing cut mid-word or mid-sentence.",
+      "Output lyrics only with at most 2 sections:",
+      "[Verse] — 2 lines max (optional; skip if the brief is chorus-only)",
+      "[Chorus] — 2 to 4 lines max, one repeatable hook",
+      "Total: 8 lines maximum. Short syllables. Conversational, not shouty.",
+      "Do NOT include [Intro], [Verse 2], [Bridge], [Outro], or [Final Chorus].",
+      "The last line must feel like a natural ending (held word or clean stop).",
+      ...POP_RHYME_METER_LINES,
+      "Do not explain the challenge. Do not repeat the instruction text.",
+      `Variation token: ${nonce}`,
+      ...(dialectLines ? [dialectLines] : []),
+      style ? `Style/Tags: ${style}` : "Style/Tags: none",
+      "",
+      "Challenge brief to turn into clip lyrics:",
+      seed || "(none)",
+    ].join("\n");
+  }
   if (mode === "challenge") {
     return [
       "You are writing a SHORT lyric draft for a music challenge — NOT a full commercial song.",
@@ -614,6 +634,12 @@ function buildSunoPrompt({ seed, style, mode, dialect, dialectHint }) {
   if (isArabicDialect && mode !== "diacritics") {
     const hintShort = hint ? `${hint.split(";")[0].trim()}. ` : "";
     const styleShort = st ? `${st.split(",")[0].trim()}. ` : "";
+    if (mode === "challenge_clip") {
+      return pack(
+        "Short clip lyrics ~28s, verse+chorus max 8 lines, complete ending.",
+        `${d ? `${d}. ` : ""}${hintShort}${styleShort}${s}`,
+      );
+    }
     if (mode === "challenge") {
       return pack(
         "Short Arabic challenge lyrics, max 12 lines, verse+chorus tags.",
@@ -644,7 +670,9 @@ function buildSunoPrompt({ seed, style, mode, dialect, dialectHint }) {
     ? "Arrange user lyrics into a singable song with section tags."
     : mode === "continue"
       ? "Continue these lyrics in the same mood and language."
-      : mode === "challenge"
+      : mode === "challenge_clip"
+        ? "Write ~28s clip lyrics: Verse (optional) + Chorus only, max 8 lines, complete ending."
+        : mode === "challenge"
         ? "Write a short challenge lyric draft only: Verse 1, optional Pre-Chorus, Chorus. Max 12 lines. Not a full song."
         : "Write complete singable song lyrics with verse and chorus tags.";
   const parts = [

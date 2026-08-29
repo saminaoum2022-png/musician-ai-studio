@@ -65,7 +65,10 @@ function buildLyriaPrompt({
 
   if (clip) {
     bits.push(
-      "Create a short ~30 second music clip (hook-focused, compact structure — not a full-length song).",
+      "Create a short ~28 second music clip (hook-focused, compact structure — NOT a full-length song).",
+      "Use only one verse (optional) plus one chorus — fit all lyrics inside ~28 seconds.",
+      "End on a complete musical phrase with a natural vocal close — never cut mid-sentence or mid-word.",
+      "Vocal delivery: conversational and warm — no shouting, no belted high notes, no stadium anthem style.",
     );
   }
   if (songTitle) bits.push(`Title: ${songTitle}`);

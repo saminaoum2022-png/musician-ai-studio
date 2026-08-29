@@ -174,7 +174,7 @@ async function fetchAbstractCoverImage({
   };
 }
 
-/** Regen — Gemini when user artwork hint or configured provider; Cloudflare/Pollinations fallback optional. */
+/** Regen — Flux/Pollinations by default; Gemini only when COVER_REGEN_IMAGE_PROVIDER=gemini. Hints shape the prompt, not the provider. */
 async function fetchRegenCoverImage({
   prompt,
   seed,
@@ -186,11 +186,12 @@ async function fetchRegenCoverImage({
   allowHumans = false,
 }) {
   const pollOpts = { avoidTags, storyTheme: storyTheme || "", userArtwork: userArtwork || "" };
-  const explicitUserArt = allowHumans || Boolean(String(userArtwork || "").trim());
   const regenProvider = resolveCoverRegenImageProvider();
-  const attemptedProvider = explicitUserArt ? "gemini" : regenProvider;
-  if (attemptedProvider === "gemini") {
-    const gem = await tryGeminiCoverImage({ prompt, allowHumans: allowHumans || explicitUserArt });
+  if (regenProvider === "gemini") {
+    const gem = await tryGeminiCoverImage({
+      prompt,
+      allowHumans: allowHumans || Boolean(String(userArtwork || "").trim()),
+    });
     if (gem.ok) {
       return {
         ok: true,
@@ -390,7 +391,7 @@ module.exports = async function handler(req, res) {
       const seed = Number.isFinite(clientSeedRaw) && clientSeedRaw > 0
         ? Math.floor(clientSeedRaw) % 2147483646
         : Math.floor(Math.random() * 2147483645) + 1;
-      const regenUserArt = String(regenUserHint || "").trim();
+      const regenUserArt = String(regenUserHint || body?.artworkHint || body?.artworkStyle || "").trim().slice(0, MAX_ARTWORK);
       const rendered = await fetchRegenCoverImage({
         prompt: clientPrompt,
         seed,
@@ -404,6 +405,18 @@ module.exports = async function handler(req, res) {
       if (!rendered.ok) {
         console.warn("[music/cover-art] regen failed (client prompt)", rendered.error);
         return sendJson(res, 502, { error: "Cover image generation failed upstream." });
+      }
+      if (
+        rendered.regenAttemptedProvider === "gemini" &&
+        rendered.provider !== "gemini"
+      ) {
+        await recordCoverUsage({
+          provider: "gemini",
+          kind: "cover_image_regen",
+          userId: user.userId,
+          ref: songId,
+          status: "failed",
+        });
       }
       if (rendered.fallbackReason && rendered.regenAttemptedProvider === "cloudflare") {
         await recordCoverUsage({

@@ -131,7 +131,6 @@ async function resolveRegenPromptBundle(params, regenOpts = {}) {
     visualDirection: vd.direction || undefined,
     userArtworkOverride: hintOverride || undefined,
     forceMusicFallback: regenAutoMusic,
-    ...(hintOverride ? { imageProvider: "gemini", geminiImage: true } : {}),
   });
 
   const avoidTags = [params.avoidTagsInput || "", vd.avoidMerged || ""].filter(Boolean).join(", ");
@@ -310,6 +309,7 @@ async function runCoverJobForTrack(track, id, opts = {}) {
       void persistTrackCoverIfNeeded?.(patched);
       refreshPlayerIfTrack(patched, opts);
       patched._coverRegenProvider = String(result.provider || "").trim();
+      patched._coverRegenAttemptedProvider = String(result.regenAttemptedProvider || result.provider || "").trim();
       patched._coverRegenFallbackReason = String(result.regenFallbackReason || result.params?.regenFallbackReason || "").trim();
       return patched;
     } catch (e) {

@@ -929,6 +929,18 @@ export function buildCoverNegativePrompt(avoidTags, { storyTheme = "", userArtwo
   return `${NEGATIVE_TEXT_PROMPT}, ${extra.join(", ")}`;
 }
 
+/** Flux Schnell has no negative_prompt — fold critical avoids into the positive prompt. */
+const FLUX_AVOID_INLINE =
+  "Avoid any text, words, letters, typography, watermark, logo, people, faces, hands, portraits, human figures, anatomy errors, extra fingers, blurry low quality imagery.";
+
+export function buildFluxCoverPrompt(prompt, { avoidTags = "", storyTheme = "", userArtwork = "" } = {}) {
+  const base = String(prompt || "").trim();
+  const negative = buildCoverNegativePrompt(avoidTags, { storyTheme, userArtwork });
+  const condensedNegative = negative.length > 720 ? negative.slice(0, 720) : negative;
+  const merged = `${base}. ${FLUX_AVOID_INLINE} ${condensedNegative}`.replace(/\s+/g, " ").trim();
+  return merged.slice(0, 2048);
+}
+
 export function moodPaletteForBucket(bucketKey) {
   return MOOD_PALETTES[bucketKey] || MOOD_PALETTES.default;
 }

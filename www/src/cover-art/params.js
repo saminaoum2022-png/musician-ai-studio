@@ -190,12 +190,18 @@ export function metaFlagIsTrue(val) {
   return s === "true" || s === "1" || s === "yes";
 }
 
-/** User attached a real photo for cover — never replace with Pollinations. */
+/** Pollinations or Cloudflare Flux abstract covers from the API. */
+export function isAbstractApiCoverSource(source) {
+  const s = String(source || "").trim().toLowerCase();
+  return s === "pollinations" || s === "cloudflare";
+}
+
+/** User attached a real photo for cover — never replace with abstract API covers. */
 export function hasUserPhotoCoverMeta(meta) {
   const m = meta && typeof meta === "object" ? meta : {};
   if (metaFlagIsTrue(m.photoMode) || metaFlagIsTrue(m.customCoverOnly) || metaFlagIsTrue(m.photoCoverOnly)) return true;
   const img = String(m.imageUrl || m.imageThumb || "").trim();
-  return img.startsWith("data:") && !m.nabadAbstractCover && String(m.coverSource || "") !== "pollinations";
+  return img.startsWith("data:") && !m.nabadAbstractCover && !isAbstractApiCoverSource(m.coverSource);
 }
 
 /** Only tracks explicitly marked at add-time get Pollinations — never backfill old library rows. */
@@ -204,7 +210,7 @@ export function shouldUseAbstractCover(track) {
   if (hasUserPhotoCoverMeta(meta)) return false;
   if (!meta.pollinationsCoverPending) return false;
   if (meta.photoMode || meta.imageOnlyInstrumental) return false;
-  if (String(meta?.coverSource || "") === "pollinations" && meta?.nabadAbstractCover) return false;
+  if (isAbstractApiCoverSource(meta?.coverSource) && meta?.nabadAbstractCover) return false;
   if (String(track?.artUrl || meta?.imageUrl || "").startsWith("data:") && meta?.nabadAbstractCover) {
     return false;
   }
@@ -212,20 +218,20 @@ export function shouldUseAbstractCover(track) {
   return true;
 }
 
-/** Default Pollinations abstract cover path for new standard songs. */
+/** Default abstract cover path for new standard songs. */
 export function isPollinationsCoverEligible(meta) {
   const m = meta && typeof meta === "object" ? meta : {};
   if (hasUserPhotoCoverMeta(m)) return false;
   if (m.photoMode || m.imageOnlyInstrumental) return false;
-  if (String(m?.coverSource || "") === "pollinations" && m?.nabadAbstractCover) return false;
+  if (isAbstractApiCoverSource(m?.coverSource) && m?.nabadAbstractCover) return false;
   return true;
 }
 
-/** User may tap regen — Pollinations abstract covers and Photo Mood photo covers. */
+/** User may tap regen — abstract API covers and Photo Mood photo covers. */
 export function canRegeneratePollinationsCover(track) {
   const meta = track?.meta && typeof track.meta === "object" ? track.meta : {};
   if (meta.photoMode || meta.imageOnlyInstrumental) return false;
-  return String(meta?.coverSource || "") === "pollinations" && Boolean(meta?.nabadAbstractCover);
+  return isAbstractApiCoverSource(meta?.coverSource) && Boolean(meta?.nabadAbstractCover);
 }
 
 /** Player cover magic-wand — Pollinations abstract or Photo Mood photo. */

@@ -1,8 +1,8 @@
 /**
  * Client-side abstract cover generation via /api/music/cover-art
  */
-import { canRegeneratePollinationsCover, canRegenerateTrackCover, coverArtParamsFromTrack, hasUserPhotoCoverMeta, isPollinationsCoverEligible, shouldUseAbstractCover } from "./params.js";
-import { buildAbstractCoverPrompt, buildPollinationsUrl, classifyVisualBucket, COVER_PROMPT_POLICY_VERSION, resolveStoryTheme, resolveRegenMoodFromHint, shouldUseConcreteSubjectDna } from "./prompt.js";
+import { canRegeneratePollinationsCover, canRegenerateTrackCover, coverArtParamsFromTrack, hasUserPhotoCoverMeta, isAbstractApiCoverSource, isPollinationsCoverEligible, shouldUseAbstractCover } from "./params.js";
+import { buildAbstractCoverPrompt, classifyVisualBucket, COVER_PROMPT_POLICY_VERSION, resolveStoryTheme, resolveRegenMoodFromHint, shouldUseConcreteSubjectDna } from "./prompt.js";
 import { resolveVisualDirection } from "./visual-director/director.mjs";
 import { nabadIdentityPhrases } from "./visual-director/nabad-identity.mjs";
 import { DEFAULT_SONG_COVER_URL, isDefaultSongCoverUrl } from "./placeholders.js";
@@ -69,20 +69,11 @@ function trackNeedsCoverRetry(track) {
   if (hasUserPhotoCoverMeta(meta)) return false;
   if (!meta.pollinationsCoverPending) return false;
   if (meta.photoMode || meta.imageOnlyInstrumental) return false;
-  if (String(meta?.coverSource || "") === "pollinations" && meta?.nabadAbstractCover) return false;
+  if (isAbstractApiCoverSource(meta?.coverSource) && meta?.nabadAbstractCover) return false;
   if (String(track?.artUrl || meta?.imageUrl || "").startsWith("data:") && meta?.nabadAbstractCover) {
     return false;
   }
   return isDefaultSongCoverUrl(track?.artUrl || meta?.imageUrl);
-}
-
-async function blobToDataUrl(blob, mime = "image/jpeg") {
-  return await new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result || ""));
-    reader.onerror = () => reject(new Error("Could not read cover image"));
-    reader.readAsDataURL(blob);
-  });
 }
 
 /** Local regen bundle: Visual Director + Nabad DNA + latest prompt policy (no server Gemini cache). */
@@ -152,46 +143,6 @@ async function resolveRegenPromptBundle(params, regenOpts = {}) {
   };
 }
 
-/** Regen uses bundled director + prompt — Pollinations direct (no stale server/Gemini cache). */
-async function fetchRegeneratedCoverArt(params, regenOpts = {}) {
-  const bundle = await resolveRegenPromptBundle(params, regenOpts);
-  const upstreamUrl = buildPollinationsUrl(bundle.prompt, bundle.seed, {
-    avoidTags: bundle.avoidTags,
-    storyTheme: bundle.storyTheme || "",
-    userArtwork: String(bundle.params?.userArtwork || bundle.params?.userArtworkRaw || params?.regenArtworkHint || params?.artworkHint || "").trim(),
-  });
-
-  const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), COVER_FETCH_TIMEOUT_MS);
-  try {
-    const r = await fetch(upstreamUrl, { signal: ctrl.signal });
-    const mime = String(r.headers.get("content-type") || "image/jpeg").split(";")[0].trim();
-    const buf = await r.arrayBuffer();
-    if (!r.ok) throw new Error(`Cover upstream failed (${r.status})`);
-    if (/json/i.test(mime) || buf.byteLength < 512) {
-      throw new Error("Cover upstream returned an empty image.");
-    }
-    const dataUrl = await blobToDataUrl(new Blob([buf], { type: mime || "image/jpeg" }));
-    if (!dataUrl.startsWith("data:image/")) throw new Error("Invalid cover image.");
-    return {
-      dataUrl,
-      seed: bundle.seed,
-      bucket: bundle.bucket,
-      visualMode: bundle.visualMode,
-      storyTheme: bundle.storyTheme,
-      artworkSource: bundle.artworkSource,
-      params: {
-        ...(bundle.params || {}),
-        coverRegenerate: true,
-        visualDirectorMode: "apply",
-        ...(bundle.visualDirection ? { visualDirection: bundle.visualDirection } : {}),
-      },
-    };
-  } finally {
-    clearTimeout(timer);
-  }
-}
-
 export async function fetchAbstractCoverArt(params, opts = {}) {
   const { apiUrl, getSupabaseAuthToken } = d();
   const token = getSupabaseAuthToken?.() || "";
@@ -252,7 +203,7 @@ function patchLibraryTrackCover(trackId, patch) {
     seed,
     params,
     bucket,
-    coverSource = "pollinations",
+    coverSource = "cloudflare",
     coverImageProvider = "",
     regenFallbackReason = "",
     nabadAbstractCover = true,
@@ -275,7 +226,7 @@ function patchLibraryTrackCover(trackId, patch) {
     coverImageProvider: coverImageProvider || params?.regenAttemptedProvider || prev.meta?.coverImageProvider || "",
     regenFallbackReason: regenFallbackReason || params?.regenFallbackReason || "",
     photoMode: false,
-    coverNabadMark: coverSource === "pollinations",
+    coverNabadMark: isAbstractApiCoverSource(coverSource),
     coverGenAttempted: coverGenAttempted || prev.meta?.coverGenAttempted || false,
     ...(clearCoverPending ? { pollinationsCoverPending: false } : {}),
   };
@@ -339,6 +290,7 @@ async function runCoverJobForTrack(track, id, opts = {}) {
       try {
         thumbUrl = await squareCoverThumbFromDataUrl(stampedUrl);
       } catch {}
+      const coverProvider = String(result.provider || "cloudflare").trim().toLowerCase();
       const patched = await enqueueLibraryPatch(() =>
         patchLibraryTrackCover(id, {
           dataUrl: stampedUrl,
@@ -346,6 +298,7 @@ async function runCoverJobForTrack(track, id, opts = {}) {
           seed: result.seed,
           bucket: result.bucket,
           params: result.params || params,
+          coverSource: coverProvider,
           coverImageProvider: String(result.provider || result.regenAttemptedProvider || "").trim(),
           regenFallbackReason: String(result.regenFallbackReason || result.params?.regenFallbackReason || "").trim(),
           clearCoverPending: true,

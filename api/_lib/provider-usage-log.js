@@ -19,6 +19,9 @@ const USAGE_RATES = Object.freeze({
   pollinations: {
     cover_image: Number(process.env.POLLINATIONS_USD_PER_IMAGE || "0"),
   },
+  cloudflare: {
+    cover_image: Number(process.env.CLOUDFLARE_USD_PER_IMAGE || "0.002"),
+  },
 });
 
 function serviceHeaders(extra = {}) {

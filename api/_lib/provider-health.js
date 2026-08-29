@@ -40,10 +40,19 @@ const PROVIDER_CATALOG = Object.freeze([
     docsUrl: "https://elevenlabs.io/docs/api-reference/music/compose",
   },
   {
+    id: "cloudflare",
+    name: "Cloudflare Workers AI",
+    vendor: "Cloudflare",
+    role: "Cover art (default Flux Schnell)",
+    envKeys: ["CLOUDFLARE_ACCOUNT_ID", "CLOUDFLARE_API_TOKEN"],
+    dashboardUrl: "https://dash.cloudflare.com/?to=/:account/ai/workers-ai",
+    docsUrl: "https://developers.cloudflare.com/workers-ai/models/flux-1-schnell/",
+  },
+  {
     id: "pollinations",
     name: "Pollinations",
     vendor: "Pollinations.ai",
-    role: "Cover art (default image host)",
+    role: "Cover art fallback",
     envKeys: [],
     dashboardUrl: "https://pollinations.ai",
     docsUrl: "https://github.com/pollinations/pollinations",
@@ -233,10 +242,27 @@ async function pingPollinations() {
   };
 }
 
+async function pingCloudflare() {
+  const accountId = String(process.env.CLOUDFLARE_ACCOUNT_ID || "").trim();
+  const token = String(process.env.CLOUDFLARE_API_TOKEN || process.env.CLOUDFLARE_AI_API_TOKEN || "").trim();
+  const configured = Boolean(accountId && token);
+  if (!configured) {
+    return { status: "unconfigured", latencyMs: null, detail: "CLOUDFLARE_ACCOUNT_ID / CLOUDFLARE_API_TOKEN not set" };
+  }
+  const r = await timedFetch("https://api.cloudflare.com/client/v4/user/tokens/verify", {
+    headers: { Authorization: `Bearer ${token}` },
+  }, 8000);
+  const status = statusFromPing({ ok: r.ok, status: r.status, ms: r.ms, configured: true, error: r.error });
+  let detail = r.ok ? "API token verified" : (r.error || `HTTP ${r.status}`);
+  if (r.status === 401) detail = "Invalid API token";
+  return { status, latencyMs: r.ms, detail };
+}
+
 const PINGERS = {
   suno: pingSuno,
   gemini: pingGeminiLyria,
   elevenlabs: pingElevenLabs,
+  cloudflare: pingCloudflare,
   pollinations: pingPollinations,
 };
 

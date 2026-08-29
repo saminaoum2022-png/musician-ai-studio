@@ -1,6 +1,6 @@
 /**
  * POST /api/music/cover-art
- * Default abstract covers via Pollinations; user artwork-style covers via Gemini native image.
+ * Default abstract covers via Cloudflare Flux Schnell; Pollinations fallback; user artwork via Gemini.
  */
 const path = require("path");
 const { pathToFileURL } = require("url");
@@ -13,6 +13,10 @@ const {
   geminiRegenFallbackEnabled,
   tryGeminiCoverImage,
 } = require("../_lib/gemini-cover-image");
+const {
+  fetchCloudflareFluxCover,
+  resolveDefaultCoverImageProvider,
+} = require("../_lib/cloudflare-flux-upstream");
 const { runVisualDirector } = require("../_lib/visual-director");
 const { queueLogProviderUsage } = require("../_lib/provider-usage-log");
 
@@ -103,9 +107,77 @@ function coverDataUrlFromBuffer(outBuf, outMime) {
   return `data:${outMime || "image/jpeg"};base64,${outBuf.toString("base64")}`;
 }
 
-/** Regen — Gemini when user artwork hint or configured provider; Pollinations fallback optional. */
-async function fetchRegenCoverImage({ prompt, seed, avoidTags, storyTheme = "", userArtwork = "", buildPollinationsUrl, allowHumans = false }) {
-  const pollUrlOpts = { avoidTags, storyTheme: storyTheme || "", userArtwork: userArtwork || "" };
+async function fetchAbstractCoverImage({
+  prompt,
+  seed,
+  avoidTags = "",
+  storyTheme = "",
+  userArtwork = "",
+  buildPollinationsUrl,
+  buildFluxCoverPrompt,
+  preferredProvider,
+} = {}) {
+  const provider = preferredProvider || resolveDefaultCoverImageProvider();
+
+  if (provider === "cloudflare") {
+    const fluxPrompt = buildFluxCoverPrompt(prompt, { avoidTags, storyTheme, userArtwork });
+    const cf = await fetchCloudflareFluxCover({ prompt: fluxPrompt });
+    if (cf.ok) {
+      return {
+        ok: true,
+        buf: cf.buf,
+        mime: cf.mime || "image/jpeg",
+        provider: "cloudflare",
+        attemptedProvider: "cloudflare",
+      };
+    }
+    console.warn("[music/cover-art] cloudflare flux failed", cf.error);
+    const upstreamUrl = buildPollinationsUrl(prompt, seed, { avoidTags, storyTheme, userArtwork });
+    const polled = await fetchPollinationsCover(upstreamUrl);
+    if (!polled.ok) {
+      return {
+        ok: false,
+        error: polled.error || "pollinations_failed",
+        attemptedProvider: "cloudflare",
+        fallbackReason: cf.error || "cloudflare_failed",
+      };
+    }
+    return {
+      ok: true,
+      buf: polled.buf,
+      mime: polled.mime || "image/jpeg",
+      provider: "pollinations",
+      attemptedProvider: "cloudflare",
+      fallbackReason: cf.error || "cloudflare_failed",
+    };
+  }
+
+  const upstreamUrl = buildPollinationsUrl(prompt, seed, { avoidTags, storyTheme, userArtwork });
+  const polled = await fetchPollinationsCover(upstreamUrl);
+  if (!polled.ok) {
+    return { ok: false, error: polled.error || "pollinations_failed", attemptedProvider: "pollinations" };
+  }
+  return {
+    ok: true,
+    buf: polled.buf,
+    mime: polled.mime || "image/jpeg",
+    provider: "pollinations",
+    attemptedProvider: "pollinations",
+  };
+}
+
+/** Regen — Gemini when user artwork hint or configured provider; Cloudflare/Pollinations fallback optional. */
+async function fetchRegenCoverImage({
+  prompt,
+  seed,
+  avoidTags,
+  storyTheme = "",
+  userArtwork = "",
+  buildPollinationsUrl,
+  buildFluxCoverPrompt,
+  allowHumans = false,
+}) {
+  const pollOpts = { avoidTags, storyTheme: storyTheme || "", userArtwork: userArtwork || "" };
   const forceGemini = allowHumans || Boolean(String(userArtwork || "").trim());
   const attemptedProvider = forceGemini ? "gemini" : resolveCoverRegenImageProvider();
   if (attemptedProvider === "gemini") {
@@ -124,37 +196,55 @@ async function fetchRegenCoverImage({ prompt, seed, avoidTags, storyTheme = "", 
     if (!geminiRegenFallbackEnabled()) {
       return { ok: false, error: gem.error || "gemini_failed", regenAttemptedProvider: "gemini" };
     }
-    const upstreamUrl = buildPollinationsUrl(prompt, seed, pollUrlOpts);
-    const polled = await fetchPollinationsCover(upstreamUrl);
-    if (!polled.ok) {
+    const rendered = await fetchAbstractCoverImage({
+      prompt,
+      seed,
+      ...pollOpts,
+      buildPollinationsUrl,
+      buildFluxCoverPrompt,
+    });
+    if (!rendered.ok) {
       return {
         ok: false,
-        error: polled.error || "pollinations_failed",
+        error: rendered.error || "abstract_cover_failed",
         regenAttemptedProvider: "gemini",
         regenFallbackReason: gem.error || "gemini_failed",
       };
     }
     return {
       ok: true,
-      buf: polled.buf,
-      mime: polled.mime || "image/jpeg",
-      provider: "pollinations",
+      buf: rendered.buf,
+      mime: rendered.mime || "image/jpeg",
+      provider: rendered.provider,
       geminiModel: "",
       regenAttemptedProvider: "gemini",
       regenFallbackReason: gem.error || "gemini_failed",
+      ...(rendered.fallbackReason ? { abstractFallbackReason: rendered.fallbackReason } : {}),
     };
   }
 
-  const upstreamUrl = buildPollinationsUrl(prompt, seed, pollUrlOpts);
-  const polled = await fetchPollinationsCover(upstreamUrl);
-  if (!polled.ok) return { ok: false, error: polled.error || "pollinations_failed", regenAttemptedProvider: "pollinations" };
+  const rendered = await fetchAbstractCoverImage({
+    prompt,
+    seed,
+    ...pollOpts,
+    buildPollinationsUrl,
+    buildFluxCoverPrompt,
+  });
+  if (!rendered.ok) {
+    return {
+      ok: false,
+      error: rendered.error || "abstract_cover_failed",
+      regenAttemptedProvider: rendered.attemptedProvider || "pollinations",
+    };
+  }
   return {
     ok: true,
-    buf: polled.buf,
-    mime: polled.mime || "image/jpeg",
-    provider: "pollinations",
+    buf: rendered.buf,
+    mime: rendered.mime || "image/jpeg",
+    provider: rendered.provider,
     geminiModel: "",
-    regenAttemptedProvider: "pollinations",
+    regenAttemptedProvider: rendered.attemptedProvider || rendered.provider,
+    ...(rendered.fallbackReason ? { regenFallbackReason: rendered.fallbackReason } : {}),
   };
 }
 
@@ -175,7 +265,8 @@ async function sendRegenCoverJson(res, {
   preferCenter = false,
 }) {
   const { outBuf, outMime } = await normalizeCoverResponseBuffer(buf, { preferCenter });
-  const imageProvider = provider === "gemini" ? "gemini" : "pollinations";
+  const imageProvider =
+    provider === "gemini" ? "gemini" : provider === "cloudflare" ? "cloudflare" : "pollinations";
   queueLogProviderUsage({
     provider: imageProvider,
     kind: "cover_image",
@@ -221,6 +312,7 @@ module.exports = async function handler(req, res) {
     const {
       buildAbstractCoverPrompt,
       buildPollinationsUrl,
+      buildFluxCoverPrompt,
       moodPaletteForBucket,
       classifyVisualBucket,
       sanitizeArtworkPrompt,
@@ -295,6 +387,7 @@ module.exports = async function handler(req, res) {
         storyTheme: String(body?.clientStoryTheme || "").trim(),
         userArtwork: regenUserArt,
         buildPollinationsUrl,
+        buildFluxCoverPrompt,
         allowHumans: Boolean(regenUserArt),
       });
       if (!rendered.ok) {
@@ -407,21 +500,24 @@ module.exports = async function handler(req, res) {
       });
     }
 
-    const upstreamUrl = buildPollinationsUrl(prompt, seed, {
+    const rendered = await fetchAbstractCoverImage({
+      prompt,
+      seed,
       avoidTags: effectiveAvoidTags,
       storyTheme,
       userArtwork: params?.userArtwork || params?.userArtworkRaw || artworkHint || "",
+      buildPollinationsUrl,
+      buildFluxCoverPrompt,
     });
-    const polled = await fetchPollinationsCover(upstreamUrl);
-    if (!polled.ok) {
-      console.warn("[music/cover-art] pollinations failed", polled.error);
+    if (!rendered.ok) {
+      console.warn("[music/cover-art] abstract cover failed", rendered.error);
       return sendJson(res, 502, { error: "Cover image generation failed upstream." });
     }
 
-    const { outBuf, outMime } = await normalizeCoverResponseBuffer(polled.buf);
+    const { outBuf, outMime } = await normalizeCoverResponseBuffer(rendered.buf);
 
     queueLogProviderUsage({
-      provider: "pollinations",
+      provider: rendered.provider === "cloudflare" ? "cloudflare" : "pollinations",
       kind: "cover_image",
       userId: user.userId,
       ref: songId,
@@ -439,10 +535,14 @@ module.exports = async function handler(req, res) {
         ...params,
         visualDirectorMode: vd.mode,
         ...(vd.direction ? { visualDirection: vd.direction } : {}),
+        ...(rendered.fallbackReason ? { abstractFallbackReason: rendered.fallbackReason } : {}),
       },
       coverWidth: params?.coverWidth || COVER_PORTRAIT_W,
       coverHeight: params?.coverHeight || COVER_PORTRAIT_H,
-      provider: "pollinations",
+      provider: rendered.provider,
+      ...(rendered.attemptedProvider && rendered.provider !== rendered.attemptedProvider
+        ? { regenAttemptedProvider: rendered.attemptedProvider, regenFallbackReason: rendered.fallbackReason }
+        : {}),
       abstract: true,
     });
   } catch (e) {

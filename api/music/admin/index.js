@@ -1992,6 +1992,7 @@ async function fetchCoverArtAdminLog({ limit = 50 } = {}) {
       regenProviderEnv: String(process.env.COVER_REGEN_IMAGE_PROVIDER || "").trim() || "(auto)",
     },
     stats,
+    fetchedAt: new Date().toISOString(),
     rows: rows.map((row) => {
       const provider = String(row.provider || "").toLowerCase();
       const uid = cleanUserId(row.user_id);

@@ -1586,15 +1586,20 @@ function renderCoverArtLog(data) {
     : "";
 
   return `
-    <section class="sectionCard">
+    <section class="sectionCard" id="coverArtLogSection">
       <div class="sectionHead">
-        <h3 class="sectionTitle">Cover art log</h3>
-        <p class="sectionNote">
-          Recent cover renders from <code>provider_usage_events</code>.
-          <strong>Flow</strong>: First = new song cover · Regen = magic wand · Scene = Gemini text-only step.
-          <strong>Cover image</strong> = final artwork (Flux, Pollinations, or Gemini).
-          ${envNote}.
-        </p>
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap;">
+          <div>
+            <h3 class="sectionTitle">Cover art log</h3>
+            <p class="sectionNote">
+              Recent cover renders from <code>provider_usage_events</code>.
+              <strong>Flow</strong>: First = new song cover · Regen = magic wand · Scene = Gemini text-only step.
+              ${envNote}.
+            </p>
+          </div>
+          <button type="button" class="btnGhost btnGhost--sm" id="btnRefreshCoverLog">Refresh log</button>
+        </div>
+        ${log.fetchedAt ? `<p class="sectionNote cellMuted">Log loaded ${escapeHtml(new Date(log.fetchedAt).toLocaleString())} · tap Refresh log after each regen</p>` : ""}
       </div>
       ${configAlert}
       ${renderCoverArtStatPills(log.stats || {})}
@@ -5032,6 +5037,15 @@ els.btnRefresh?.addEventListener("click", () => {
     await loadAdminSession({ force: true });
     await loadView({ force: true });
   })();
+});
+
+document.body.addEventListener("click", (e) => {
+  if (e.target.closest("#btnRefreshCoverLog")) {
+    e.preventDefault();
+    delete state.cache[`providers:${state.offset}`];
+    delete state.cache[`suno:${state.offset}`];
+    void loadView({ force: true });
+  }
 });
 
 for (const btn of els.navItems) {

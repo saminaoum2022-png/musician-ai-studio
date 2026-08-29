@@ -18,7 +18,7 @@ const {
   resolveDefaultCoverImageProvider,
 } = require("../_lib/cloudflare-flux-upstream");
 const { runVisualDirector } = require("../_lib/visual-director");
-const { queueLogProviderUsage } = require("../_lib/provider-usage-log");
+const { queueLogProviderUsage, logProviderUsage } = require("../_lib/provider-usage-log");
 
 const MAX_FIELD = 160;
 const MAX_STYLE = 980;
@@ -105,6 +105,14 @@ async function normalizeCoverResponseBuffer(buf, { preferCenter = false } = {}) 
 
 function coverDataUrlFromBuffer(outBuf, outMime) {
   return `data:${outMime || "image/jpeg"};base64,${outBuf.toString("base64")}`;
+}
+
+async function recordCoverUsage(entry) {
+  try {
+    await logProviderUsage(entry);
+  } catch (e) {
+    console.warn("[music/cover-art] usage log skipped", e?.message || e);
+  }
 }
 
 async function fetchAbstractCoverImage({
@@ -263,16 +271,18 @@ async function sendRegenCoverJson(res, {
   artworkSource = "user_artwork",
   params = {},
   userId = "",
+  songId = "",
   preferCenter = false,
 }) {
   const { outBuf, outMime } = await normalizeCoverResponseBuffer(buf, { preferCenter });
   const imageProvider =
     provider === "gemini" ? "gemini" : provider === "cloudflare" ? "cloudflare" : "pollinations";
-  queueLogProviderUsage({
+  const usageRef = String(songId || params?.songId || "cover_regen").slice(0, 120);
+  await recordCoverUsage({
     provider: imageProvider,
     kind: "cover_image_regen",
     userId,
-    ref: String(params?.songId || "cover_regen").slice(0, 120),
+    ref: usageRef,
   });
   return sendJson(res, 200, {
     ok: true,
@@ -396,7 +406,7 @@ module.exports = async function handler(req, res) {
         return sendJson(res, 502, { error: "Cover image generation failed upstream." });
       }
       if (rendered.fallbackReason && rendered.regenAttemptedProvider === "cloudflare") {
-        queueLogProviderUsage({
+        await recordCoverUsage({
           provider: "cloudflare",
           kind: "cover_image_regen",
           userId: user.userId,
@@ -417,6 +427,7 @@ module.exports = async function handler(req, res) {
         storyTheme: String(body?.clientStoryTheme || "regen"),
         artworkSource: String(body?.clientArtworkSource || "client_regen"),
         userId: user.userId,
+        songId,
         preferCenter: rendered.provider === "gemini",
         params: {
           ...(body?.clientParams && typeof body.clientParams === "object" ? body.clientParams : {}),
@@ -527,7 +538,7 @@ module.exports = async function handler(req, res) {
     const { outBuf, outMime } = await normalizeCoverResponseBuffer(rendered.buf);
 
     if (rendered.fallbackReason && rendered.attemptedProvider === "cloudflare") {
-      queueLogProviderUsage({
+      await recordCoverUsage({
         provider: "cloudflare",
         kind: "cover_image",
         userId: user.userId,
@@ -536,7 +547,7 @@ module.exports = async function handler(req, res) {
       });
     }
 
-    queueLogProviderUsage({
+    await recordCoverUsage({
       provider: rendered.provider === "cloudflare" ? "cloudflare" : "pollinations",
       kind: "cover_image",
       userId: user.userId,

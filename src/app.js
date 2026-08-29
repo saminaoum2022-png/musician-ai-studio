@@ -54616,18 +54616,22 @@ async function regeneratePlayerCover(artworkHint = "", trackId = "") {
         : false;
       if (revealed) {
         flashPlayerCover();
-        const provider = String(updated._coverRegenProvider || updated.meta?.coverImageProvider || "").trim();
+        const provider = String(updated._coverRegenProvider || updated.meta?.coverImageProvider || "").trim().toLowerCase();
         const fallback = String(updated._coverRegenFallbackReason || updated.meta?.regenFallbackReason || "").trim();
-        if (provider === "gemini") {
-          setStatus("Cover updated via Gemini.");
-        } else if (fallback) {
-          setStatus(`Cover updated via Pollinations (Gemini failed: ${fallback}).`);
-        } else if (provider === "pollinations") {
-          setStatus("Cover updated via Pollinations.");
+        let coverStatus = "";
+        if (provider === "gemini") coverStatus = "Cover updated via Gemini.";
+        else if (provider === "cloudflare") coverStatus = "Cover updated via Cloudflare Flux.";
+        else if (provider === "pollinations") {
+          coverStatus = fallback
+            ? `Cover updated via Pollinations (${fallback}).`
+            : "Cover updated via Pollinations.";
+        } else if (provider) coverStatus = `Cover updated via ${provider}.`;
+        if (coverStatus) {
+          setStatus(coverStatus);
+          window.setTimeout(() => setStatus(""), 5200);
         } else {
           setStatus("");
         }
-        window.setTimeout(() => setStatus(""), provider ? 4200 : 0);
         refreshCoverChangeSurfaces(updated, artUrl);
       } else {
         setStatus("Cover regeneration failed.");

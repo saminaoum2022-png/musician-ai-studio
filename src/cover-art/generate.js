@@ -372,12 +372,9 @@ export async function regenerateAbstractCoverForTrack(track, opts = {}) {
   const fromPhoto = Boolean(meta.photoMode);
   if (!id || !canRegenerateTrackCover(track)) return null;
   if (_inflight.has(id)) return _inflight.get(id);
-  const fromSheet = Boolean(opts.regenFromSheet);
   const userHint = String(opts.artworkHint ?? opts.artworkStyle ?? "").trim().slice(0, 280);
-  /** Magic-wand regen ignores stale meta hints — only the sheet or explicit opts count as user art direction. */
-  const hintOverride = fromSheet
-    ? (userHint || String(meta.artworkHint ?? meta.artworkStyle ?? "").trim().slice(0, 280))
-    : userHint;
+  /** Only an artwork hint typed for this regen counts — never reuse stale meta hints. */
+  const hintOverride = userHint;
   const reset = {
     ...track,
     meta: {

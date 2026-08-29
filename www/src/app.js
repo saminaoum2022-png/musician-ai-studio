@@ -1340,6 +1340,7 @@ const HUB_AUDIO_UNLOCK_KEY = "mas:hub:audioUnlock:v1";
 // hearing anything.
 const HUB_AUDIO_SILENT_SRC =
   "data:audio/mp3;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU3LjgzLjEwMAAAAAAAAAAAAAAA//tQwAAAAAAAAAAAAAAAAAAAAAAASW5mbwAAAA8AAAACAAACcQCqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqv////////////////////////////////////////////////////////////////8AAAAATGF2YzU3LjEwAAAAAAAAAAAAAAAAJAAAAAAAAAAAAnFGn7hjAAAAAAAAAAAAAAAAAAAAAP/7kGQAD/AAAGkAAAAIAAANIAAAAQAAAaQAAAAgAAA0gAAABExBTUUzLjEwMFVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVU=";
+let _audioPrimeGen = 0;
 function getHubAudioUnlocked() {
   try {
     return sessionStorage.getItem(HUB_AUDIO_UNLOCK_KEY) === "1";
@@ -1383,25 +1384,25 @@ function updateHubAudioHint() {
  */
 function primeAudioElementInGesture(a) {
   if (!a) return;
+  const gen = ++_audioPrimeGen;
   try {
     a.muted = true;
-    const prevSrc = a.src;
     a.src = HUB_AUDIO_SILENT_SRC;
     const p = a.play();
     const cleanup = () => {
-      try { a.pause(); } catch {}
+      if (gen !== _audioPrimeGen) return;
       try { a.muted = false; } catch {}
       try {
-        if (a.src && a.src.startsWith("data:")) {
+        const cur = String(a.src || "");
+        if (cur.startsWith("data:")) {
+          try { a.pause(); } catch {}
           a.removeAttribute("src");
           a.load();
-        } else if (prevSrc) {
-          a.src = prevSrc;
         }
       } catch {}
     };
     if (p && typeof p.then === "function") {
-      p.then(cleanup).catch(() => { try { a.muted = false; } catch {} });
+      p.then(cleanup).catch(() => { if (gen === _audioPrimeGen) { try { a.muted = false; } catch {} } });
     } else {
       cleanup();
     }
@@ -20817,9 +20818,13 @@ function feedHookAtTarget(audio, hookSec) {
 async function applyFeedHookAfterPlayStart(audio, source, trackRef) {
   if (!audio || !shouldApplyFeedHook(source) || source?.applyFeedHook === false) return;
   const hook = feedHookStartFromContext(source, trackRef);
-  if (hook <= 0) return;
+  if (hook <= 0) {
+    try { if (audio.volume <= 0.01) audio.volume = 1; } catch {}
+    return;
+  }
 
-  const prevVol = Number.isFinite(audio.volume) ? audio.volume : 1;
+  const curVol = Number.isFinite(audio.volume) ? audio.volume : 1;
+  const prevVol = curVol > 0.01 ? curVol : 1;
   let hookApplied = false;
   try { audio.volume = 0; } catch {}
 
@@ -56532,6 +56537,7 @@ async function playOnPlayerPage(url, label, meta = null, opts = {}) {
   const a = ensurePlayer();
   const playUrl = normalizeAudioUrlForPlayback(url);
   const startPlayback = async () => {
+    try { a.muted = false; } catch {}
     try {
       const ok = await hubAudioPlayWithRetry(a);
       if (ok) {
@@ -56555,6 +56561,7 @@ async function playOnPlayerPage(url, label, meta = null, opts = {}) {
   }
   await primeAudioDurationHint(playUrl);
   await waitForAudioCanPlay(a, 12000);
+  try { a.muted = false; } catch {}
   try {
     const ok = await hubAudioPlayWithRetry(a);
     if (!ok) throw new Error("play_failed");
@@ -56588,6 +56595,7 @@ async function playInline(url, label, source, opts = {}) {
   setPlayerSource(url, label);
   const a = ensurePlayer();
   const playUrl = normalizeAudioUrlForPlayback(url);
+  try { a.muted = false; } catch {}
   void primeAudioDurationHint(playUrl);
   try {
     syncAllPlaybackRowHighlights();
@@ -56600,6 +56608,8 @@ async function playInline(url, label, source, opts = {}) {
     feedHookStartFromContext(miniSource) > 0;
   if (pendingHook) {
     try { a.volume = 0; } catch {}
+  } else {
+    try { if (a.volume <= 0.01) a.volume = 1; } catch {}
   }
   void hubAudioPlayWithRetry(a).then(async (ok) => {
     if (!ok) {

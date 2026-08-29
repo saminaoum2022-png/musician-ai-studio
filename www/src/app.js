@@ -226,7 +226,7 @@ import { MUSIC_VIDEO_FEATURE_ENABLED } from "./feature-flags.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260828-194336";
+const APP_BUILD = "20260829-132518";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -15339,10 +15339,10 @@ function setCreateFlow(flow) {
 }
 
 function clearCreateFlow() {
-  if (!getCreateFlow()) return;
+  const was = getCreateFlow();
+  if (!was) return;
   document.body.removeAttribute("data-create-flow");
   syncCreateFlowUi();
-  try { syncCreateTabMorph(); } catch {}
 }
 
 /** Drop alt create flows (Hum Track / Sounds / Persona) when leaving #/generate. */
@@ -23511,6 +23511,71 @@ function isSingleVariantMusicTask(taskId) {
   return tid.startsWith("mmx_") || tid.startsWith("lyr_") || tid.startsWith("elv_");
 }
 
+/** Suno full songs (not Lyria/MiniMax/ElevenLabs) — need archive on native. */
+function isSunoLibraryTaskId(taskId) {
+  const tid = String(taskId || "").trim();
+  return Boolean(tid) && !isSingleVariantMusicTask(tid);
+}
+
+function libraryTrackForPlaybackSource(source) {
+  if (!source || typeof source !== "object") return null;
+  if (source.type === "library" && source.id) {
+    return loadLibrary().find((x) => String(x.id) === String(source.id)) || null;
+  }
+  if (source.type === "generateResult") {
+    const tid = String(sunoTaskId || "").trim();
+    if (!tid) return null;
+    const rows = libraryEntriesForTaskId(tid);
+    const variant = String(source.variant || "a").toLowerCase();
+    if (variant === "b") {
+      return (
+        rows.find((x) => String(x?.meta?.variant || "").toUpperCase() === "B") ||
+        rows[1] ||
+        rows[0] ||
+        null
+      );
+    }
+    return (
+      rows.find((x) => String(x?.meta?.variant || "").toUpperCase() !== "B") ||
+      rows[0] ||
+      null
+    );
+  }
+  return null;
+}
+
+/** Pick a playable URL the same way Create result play does — no archive wait. */
+function libraryPlaybackUrl(raw) {
+  const s = String(raw?.url || raw || "").trim();
+  if (!s) return "";
+  if (isArchivedSongStorageUrl(s)) return normalizeAudioUrlForPlayback(s);
+  if (s.startsWith("blob:") || s.startsWith("data:")) return s;
+  const leaf = unwrapInnermostHttpAudioUrl(s) || s;
+  if (isLikelySunoOriginCdnUrl(leaf)) {
+    return inlinePlaybackUrl(leaf) || normalizeAudioUrlForPlayback(s);
+  }
+  if (isCapacitorNativeAuth() && /^https?:\/\//i.test(leaf) && !leaf.includes("/api/suno/audio")) {
+    return leaf;
+  }
+  return inlinePlaybackUrl(s) || normalizeAudioUrlForPlayback(s);
+}
+
+function playbackUrlForSource(url, source) {
+  const passed = String(url || "").trim();
+  const track = libraryTrackForPlaybackSource(source);
+  if (source?.type === "generateResult") {
+    if (passed.startsWith("blob:") || passed.startsWith("data:")) return passed;
+    if (passed && !passed.includes("/api/suno/audio")) return passed;
+  }
+  if (track) return libraryPlaybackUrl(track);
+  return libraryPlaybackUrl(passed);
+}
+
+function queueArchiveForPlaybackSource(source) {
+  const track = libraryTrackForPlaybackSource(source);
+  if (track && !isArchivedSongStorageUrl(track.url)) queueArchiveLibraryTrack(track);
+}
+
 /** Karaoke / timestamped lyrics — Suno, Lyria, ElevenLabs; skip MiniMax. */
 function isSunoKaraokeTaskId(taskId) {
   const tid = String(taskId || "").trim();
@@ -26638,22 +26703,43 @@ async function redeemPromoCode(rawCode) {
   }
 }
 
+/** Kie mirrors playable audio in audioUrl; Suno origin source* links are often 403. */
+function pickSunoClipAudioUrl(clip) {
+  if (!clip || typeof clip !== "object") return "";
+  for (const key of [
+    "audioUrl",
+    "audio_url",
+    "streamAudioUrl",
+    "stream_audio_url",
+    "sourceAudioUrl",
+    "source_audio_url",
+    "sourceStreamAudioUrl",
+    "source_stream_audio_url",
+  ]) {
+    const s = String(clip[key] || "").trim();
+    if (s.startsWith("http")) return s;
+  }
+  return "";
+}
+
+function isLikelySunoOriginCdnUrl(url) {
+  const raw = String(unwrapInnermostHttpAudioUrl(url) || url || "").trim();
+  if (!raw) return false;
+  try {
+    const host = new URL(raw).hostname.toLowerCase();
+    return host === "suno.ai" || host.endsWith(".suno.ai") || host.includes("audioprod");
+  } catch {
+    return false;
+  }
+}
+
 function extractFirstClipFromSunoStatusPayload(data) {
   const genData = data?.data?.response?.sunoData || data?.data?.response?.suno_data || [];
   const first = Array.isArray(genData) ? genData[0] : null;
   if (!first) {
     return { first: null, audioUrl: "", imageUrl: null, title: "", audioId: "" };
   }
-  const audioUrl =
-    first.sourceAudioUrl ||
-    first.source_audio_url ||
-    first.sourceStreamAudioUrl ||
-    first.source_stream_audio_url ||
-    first.audioUrl ||
-    first.audio_url ||
-    first.streamAudioUrl ||
-    first.stream_audio_url ||
-    "";
+  const audioUrl = pickSunoClipAudioUrl(first);
   const imageUrl =
     first.sourceImageUrl ||
     first.source_image_url ||
@@ -39325,8 +39411,21 @@ async function playLibraryListRowById(id, opts) {
   try {
     stopVocalsPlayback();
   } catch {}
-  const rawForPlay = unwrapInnermostHttpAudioUrl(t.url);
-  const playSource = normalizeAudioUrlForPlayback(toAudioProxyUrl(rawForPlay) || rawForPlay);
+  if (
+    t.taskId &&
+    !isArchivedSongStorageUrl(t.url) &&
+    isLikelySunoOriginCdnUrl(t.url)
+  ) {
+    try {
+      const refreshed = await tryRefreshLibraryTrackAudioFromSuno(t);
+      const freshUrl = String(refreshed?.url || "").trim();
+      if (freshUrl && !isLikelySunoOriginCdnUrl(freshUrl)) {
+        patchLibraryRowWithRefreshedUrl(id, freshUrl, freshUrl, t);
+        t = loadLibrary().find((x) => x.id === id) || { ...t, url: freshUrl };
+      }
+    } catch {}
+  }
+  const playSource = libraryPlaybackUrl(t);
   if (!isArchivedSongStorageUrl(t.url)) queueArchiveLibraryTrack(t);
   // Never block tap-to-play on Suno refresh — iOS rejects play() once the
   // gesture goes stale. Refresh in the background and retry only if stuck.
@@ -39335,9 +39434,10 @@ async function playLibraryListRowById(id, opts) {
       const refreshed = await tryRefreshLibraryTrackAudioFromSuno(t);
       if (!refreshed?.url) return;
       const freshInner = String(refreshed.url).trim();
+      const rawForPlay = unwrapInnermostHttpAudioUrl(t.url) || String(t.url || "").trim();
       if (!freshInner || freshInner === rawForPlay) return;
-      const newProx = normalizeAudioUrlForPlayback(toAudioProxyUrl(freshInner) || freshInner);
-      patchLibraryRowWithRefreshedUrl(id, newProx, freshInner, t);
+      const newProx = inlinePlaybackUrl(freshInner) || normalizeAudioUrlForPlayback(freshInner);
+      patchLibraryRowWithRefreshedUrl(id, freshInner, freshInner, t);
       const stillThis =
         libraryNowPlayingId === id || String(currentPlayerTrackRef?.id || "") === String(id);
       if (!stillThis) return;
@@ -55502,7 +55602,9 @@ function preferDirectAudioUrl(url) {
   return s;
 }
 
-/** Friends / Profile / Discover inline play — native WKWebView needs the proxy. */
+/** Friends / Profile / Discover inline play. Web uses our proxy; native streams
+ *  Supabase archive + Suno CDN directly (WKWebView cannot rely on cross-origin
+ *  staging `/api/suno/audio` proxy through `<audio src>`). */
 function inlinePlaybackUrl(raw) {
   const leaf = unwrapInnermostHttpAudioUrl(String(raw || "").trim()) || String(raw || "").trim();
   if (!leaf) return "";
@@ -55511,7 +55613,11 @@ function inlinePlaybackUrl(raw) {
   }
   if (leaf.startsWith("blob:") || leaf.startsWith("data:")) return leaf;
   if (isArchivedSongStorageUrl(leaf)) return normalizeAudioUrlForPlayback(leaf);
-  if (leaf.includes("/api/suno/audio")) return normalizeAudioUrlForPlayback(leaf);
+  const direct = preferDirectAudioUrl(leaf);
+  if (direct && /^https?:\/\//i.test(direct) && !direct.includes("/api/suno/audio")) {
+    return direct;
+  }
+  if (/^https?:\/\//i.test(leaf) && !leaf.includes("/api/suno/audio")) return leaf;
   return normalizeAudioUrlForPlayback(toAudioProxyUrl(leaf) || leaf);
 }
 
@@ -56131,8 +56237,7 @@ async function playSharedCloudSong(row, opts = {}) {
   libraryNowPlayingId = null;
   updatePlayerSecondaryChrome();
 
-  const rawForPlay = unwrapInnermostHttpAudioUrl(url);
-  const playSource = normalizeAudioUrlForPlayback(toAudioProxyUrl(rawForPlay) || rawForPlay);
+  const playSource = libraryPlaybackUrl(url);
   const meta = {
     title,
     subtitle: `${byLine} · Shared link`,
@@ -56368,6 +56473,10 @@ async function playOnPlayerPage(url, label, meta = null, opts = {}) {
 
 async function playInline(url, label, source, opts = {}) {
   if (!url) return false;
+  if (String(source?.type || "") !== "studio_vocal") {
+    url = playbackUrlForSource(url, source);
+    queueArchiveForPlaybackSource(source);
+  }
   const throwOnError = opts?.throwOnError === true;
   const canPlayMs = Number(opts?.canPlayTimeoutMs) > 0 ? Number(opts.canPlayTimeoutMs) : 8000;
   if (String(source?.type || "") !== "studio_vocal") {
@@ -56942,16 +57051,7 @@ function parseSunoGenerationRecordInfo(data) {
   const arr = Array.isArray(genData) ? genData : [];
   const pick = (first) => {
     if (!first) return null;
-    const audioUrl =
-      first?.sourceAudioUrl ||
-      first?.source_audio_url ||
-      first?.sourceStreamAudioUrl ||
-      first?.source_stream_audio_url ||
-      first?.audioUrl ||
-      first?.audio_url ||
-      first?.streamAudioUrl ||
-      first?.stream_audio_url ||
-      "";
+    const audioUrl = pickSunoClipAudioUrl(first);
     const imageUrl =
       first?.sourceImageUrl ||
       first?.source_image_url ||
@@ -57041,14 +57141,13 @@ function addMissingSunoClipsToLibrary(taskId, parsed, { metaBase = {}, kind = "f
   for (const { clip, variant, titleFallback } of specs) {
     if (!clip?.audioUrl) continue;
     if (libraryAlreadyHasSunoClip(existing, clip)) continue;
-    const prox = toAudioProxyUrl(clip.audioUrl) || clip.audioUrl;
     const pendingPhotoCover = String(metaBase?.imageUrl || "").trim().startsWith("data:")
       ? metaBase.imageUrl
       : "";
     const entry = addToLibrary({
       title: String(clip.title || "").trim() || titleFallback,
       artUrl: resolveLibraryEntryArtUrl({ pendingPhotoCover }),
-      url: prox,
+      url: clip.audioUrl,
       taskId: tid,
       audioId: clip.audioId || "",
       kind,
@@ -57074,7 +57173,7 @@ async function archiveLibraryTrackToCloud(track) {
   if (!leaf || isArchivedSongStorageUrl(leaf) || isArchivedSongStorageUrl(track.url)) {
     return isArchivedSongStorageUrl(track.url) ? String(track.url).trim() : leaf || null;
   }
-  const r = await fetch(apiUrl("/api/songs/archive"), {
+  const r = await apiFetch("/api/songs/archive", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -57086,6 +57185,7 @@ async function archiveLibraryTrackToCloud(track) {
       audioId: track.audioId || "",
       libraryLocalId: track.id || "",
     }),
+    nativeReadTimeoutMs: 90000,
   });
   const d = await r.json().catch(() => ({}));
   if (!r.ok || !d?.permanentUrl) return null;
@@ -57125,7 +57225,7 @@ async function tryRefreshLibraryTrackAudioFromSuno(t) {
   const tid = String(t?.taskId || "").trim();
   if (!tid) return null;
   try {
-    const r = await fetch(apiUrl(`/api/suno/status?taskId=${encodeURIComponent(tid)}`), {
+    const r = await apiFetch(`/api/suno/status?taskId=${encodeURIComponent(tid)}`, {
       cache: "no-store",
     });
     const data = await r.json().catch(() => ({}));
@@ -57135,20 +57235,7 @@ async function tryRefreshLibraryTrackAudioFromSuno(t) {
     const wantAid = String(t?.audioId || "").trim();
     const genData = data?.data?.response?.sunoData || data?.data?.response?.suno_data || [];
     const arr = Array.isArray(genData) ? genData : [];
-    const pickClipUrl = (clip) => {
-      if (!clip || typeof clip !== "object") return "";
-      return String(
-        clip.sourceAudioUrl ||
-          clip.source_audio_url ||
-          clip.sourceStreamAudioUrl ||
-          clip.source_stream_audio_url ||
-          clip.audioUrl ||
-          clip.audio_url ||
-          clip.streamAudioUrl ||
-          clip.stream_audio_url ||
-          "",
-      ).trim();
-    };
+    const pickClipUrl = (clip) => pickSunoClipAudioUrl(clip);
     let fresh = "";
     if (arr.length) {
       if (wantAid) {
@@ -57476,12 +57563,11 @@ async function recoverSoundFromTaskId(taskId, { silent = true, pushCategory = "s
   if (!r.ok) return false;
   const clip = extractFirstClipFromSunoStatusPayload(data);
   if (!clip.audioUrl) return false;
-  const url = toAudioProxyUrl(clip.audioUrl) || clip.audioUrl;
   const finalTitle = shortenSoundTitle(String(clip.title || "Sound").trim() || "Sound");
   addToLibrary({
     title: finalTitle,
     artUrl: "./assets/icons/splash-mark.png",
-    url,
+    url: clip.audioUrl,
     taskId: tid,
     audioId: String(clip.audioId || ""),
     kind: "sound",
@@ -59061,16 +59147,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
     const genData = inner.response?.sunoData || inner.response?.suno_data || data?.data?.response?.sunoData || data?.data?.response?.suno_data || [];
     const first = Array.isArray(genData) ? genData[0] : null;
     const second = Array.isArray(genData) ? genData[1] : null;
-    const audioUrl =
-      first?.sourceAudioUrl ||
-      first?.source_audio_url ||
-      first?.sourceStreamAudioUrl ||
-      first?.source_stream_audio_url ||
-      first?.audioUrl ||
-      first?.audio_url ||
-      first?.streamAudioUrl ||
-      first?.stream_audio_url ||
-      "";
+    const audioUrl = pickSunoClipAudioUrl(first);
     const imageUrl =
       first?.sourceImageUrl ||
       first?.source_image_url ||
@@ -59100,16 +59177,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       await cacheGeneratedAudio(lastSunoProxyUrl || audioUrl);
       if (els.btnLoadFull) els.btnLoadFull.disabled = false;
     }
-    const audioUrl2 =
-      second?.sourceAudioUrl ||
-      second?.source_audio_url ||
-      second?.sourceStreamAudioUrl ||
-      second?.source_stream_audio_url ||
-      second?.audioUrl ||
-      second?.audio_url ||
-      second?.streamAudioUrl ||
-      second?.stream_audio_url ||
-      "";
+    const audioUrl2 = pickSunoClipAudioUrl(second);
     const imageUrl2 =
       second?.sourceImageUrl ||
       second?.source_image_url ||
@@ -59259,7 +59327,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
             const variantAEntry = addToLibrary({
               title: lastSunoTitle,
               artUrl: "",
-              url: lastSunoProxyUrl || lastSunoFullUrl,
+              url: lastSunoFullUrl || lastSunoProxyUrl,
               taskId: sunoTaskId || "",
               audioId: sunoAudioId || "",
               kind: "full",
@@ -59270,7 +59338,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
               savedEntries.push(addToLibrary({
                 title: lastSunoTitle2 || "Generated song B",
                 artUrl: generationPhotoArtUrl("b"),
-                url: lastSunoProxyUrl2 || lastSunoFullUrl2,
+                url: lastSunoFullUrl2 || lastSunoProxyUrl2,
                 taskId: sunoTaskId || "",
                 audioId: lastSunoAudioId2 || "",
                 kind: "full",
@@ -60385,7 +60453,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
         const variantAEntry = addToLibrary({
           title: lastSunoTitle,
           artUrl: "",
-          url: lastSunoProxyUrl || lastSunoFullUrl,
+          url: lastSunoFullUrl || lastSunoProxyUrl,
           taskId: sunoTaskId || "",
           audioId: sunoAudioId || "",
           kind: "full",
@@ -60547,8 +60615,8 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       haptic("light");
       const url =
         lastSunoCachedUrl ||
-        lastSunoProxyUrl ||
         lastSunoFullUrl ||
+        lastSunoProxyUrl ||
         (els.sunoFullLink?.classList.contains("disabled") ? "" : els.sunoFullLink?.href);
       if (!url || url === "#") {
         setStatus("No playable result URL yet. Please wait a moment and try again.");
@@ -60578,7 +60646,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
     els.btnResultPlay2.addEventListener("click", async (ev) => {
       ev.stopPropagation();
       haptic("light");
-      const url = lastSunoCachedUrl2 || lastSunoProxyUrl2 || lastSunoFullUrl2;
+      const url = lastSunoCachedUrl2 || lastSunoFullUrl2 || lastSunoProxyUrl2;
       if (!url || url === "#") {
         setStatus("Second track is not ready for playback yet.");
         return;

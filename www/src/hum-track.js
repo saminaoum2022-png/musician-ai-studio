@@ -188,18 +188,27 @@ function dismissHumTrackSheetToCreate() {
   leaveHumTrackFlow();
 }
 
+function pickSunoClipAudioUrl(clip) {
+  if (!clip || typeof clip !== "object") return "";
+  for (const key of [
+    "audioUrl",
+    "audio_url",
+    "streamAudioUrl",
+    "stream_audio_url",
+    "sourceAudioUrl",
+    "source_audio_url",
+    "sourceStreamAudioUrl",
+    "source_stream_audio_url",
+  ]) {
+    const s = String(clip[key] || "").trim();
+    if (s.startsWith("http")) return s;
+  }
+  return "";
+}
+
 function trackFromSunoRow(raw) {
   if (!raw || typeof raw !== "object") return null;
-  const audioUrl =
-    raw.sourceAudioUrl ||
-    raw.source_audio_url ||
-    raw.sourceStreamAudioUrl ||
-    raw.source_stream_audio_url ||
-    raw.audioUrl ||
-    raw.audio_url ||
-    raw.streamAudioUrl ||
-    raw.stream_audio_url ||
-    "";
+  const audioUrl = pickSunoClipAudioUrl(raw);
   if (!audioUrl) return null;
   const imageUrl =
     raw.sourceImageUrl ||

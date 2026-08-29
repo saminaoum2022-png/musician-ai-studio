@@ -11,7 +11,7 @@
  */
 const { verifyUser, callRpc, isAdminEmail, selectFromTable } = require("../_lib/credits-auth");
 const { applyCors } = require("../_lib/cors");
-const { readJson, sendJson, sunoJsonRequest } = require("../_lib/suno-upstream");
+const { readJson, sendJson, sunoJsonRequest, pickSunoClipAudioUrl } = require("../_lib/suno-upstream");
 
 const MASHUP_COST = 12;
 const DEFAULT_MODEL = "V5_5";
@@ -312,18 +312,7 @@ async function refreshAudioFromSuno(apiKey, taskId, audioId) {
   const arr = upstream.data?.data?.response?.sunoData || upstream.data?.data?.response?.suno_data || [];
   const clips = Array.isArray(arr) ? arr : [];
   const wantAid = String(audioId || "").trim();
-  const pick = (clip) =>
-    String(
-      clip?.sourceAudioUrl ||
-        clip?.source_audio_url ||
-        clip?.sourceStreamAudioUrl ||
-        clip?.source_stream_audio_url ||
-        clip?.audioUrl ||
-        clip?.audio_url ||
-        clip?.streamAudioUrl ||
-        clip?.stream_audio_url ||
-        "",
-    ).trim();
+  const pick = (clip) => pickSunoClipAudioUrl(clip);
   if (wantAid) {
     for (const c of clips) {
       const cid = String(c?.id || c?.audioId || c?.audio_id || "").trim();

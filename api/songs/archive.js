@@ -13,6 +13,7 @@
 const { applyCors } = require("../_lib/cors");
 const { verifyUser, sendJson, readJsonBody } = require("../_lib/credits-auth");
 const { uploadObject, patchUserSongUrl } = require("../_lib/supabase-storage");
+const { pickSunoClipAudioUrl, sunoClipAudioUrlCandidates } = require("../_lib/suno-upstream");
 
 const BUCKET = "song_archive";
 /** Must match `file_size_limit` on storage.buckets `song_archive` (50 MB). */
@@ -75,11 +76,25 @@ async function fetchAudioBuffer(url) {
     if (ab.byteLength > MAX_AUDIO_BYTES) throw new Error("audio_too_large");
     if (ab.byteLength < 1024) throw new Error("audio_too_small");
     const ct = String(r.headers.get("content-type") || "").toLowerCase();
-    return { buffer: Buffer.from(ab), contentType: ct || "audio/mpeg" };
+    return { buffer: Buffer.from(ab), contentType: ct || "audio/mpeg", urlUsed: url };
   } catch (e) {
     clearTimeout(timer);
     throw e;
   }
+}
+
+async function fetchAudioBufferFromCandidates(urls) {
+  const list = [...new Set((urls || []).map((u) => String(u || "").trim()).filter((u) => u.startsWith("http")))];
+  if (!list.length) throw new Error("missing_source_url");
+  let lastErr;
+  for (const url of list) {
+    try {
+      return await fetchAudioBuffer(url);
+    } catch (e) {
+      lastErr = e;
+    }
+  }
+  throw lastErr || new Error("fetch_failed");
 }
 
 async function resolveSourceUrl(body, userId) {
@@ -89,7 +104,8 @@ async function resolveSourceUrl(body, userId) {
   }
   const taskId = String(body?.taskId || body?.task_id || "").trim();
   const audioId = String(body?.audioId || body?.audio_id || "").trim();
-  if (!source && taskId) {
+  let fetchCandidates = source ? [source] : [];
+  if (taskId) {
     const apiKey = process.env.SUNO_API_KEY;
     if (!apiKey) throw new Error("missing_suno_key");
     const r = await fetch(
@@ -102,26 +118,23 @@ async function resolveSourceUrl(body, userId) {
     if (st !== "SUCCESS") throw new Error("suno_not_ready");
     const clips = data?.data?.response?.sunoData || data?.data?.response?.suno_data || [];
     const arr = Array.isArray(clips) ? clips : [];
-    const pick = (clip) =>
-      String(
-        clip?.sourceAudioUrl ||
-          clip?.source_audio_url ||
-          clip?.audioUrl ||
-          clip?.audio_url ||
-          clip?.streamAudioUrl ||
-          clip?.stream_audio_url ||
-          "",
-      ).trim();
+    let matchedClip = null;
     if (audioId) {
       for (const clip of arr) {
         const cid = String(clip?.id || clip?.audioId || clip?.audio_id || "").trim();
         if (cid && cid === audioId) {
-          source = pick(clip);
+          matchedClip = clip;
           break;
         }
       }
     }
-    if (!source && arr[0]) source = pick(arr[0]);
+    if (!matchedClip && arr[0]) matchedClip = arr[0];
+    if (matchedClip) {
+      const kieUrl = pickSunoClipAudioUrl(matchedClip);
+      if (kieUrl) source = kieUrl;
+      fetchCandidates = sunoClipAudioUrlCandidates(matchedClip);
+      if (source && !fetchCandidates.includes(source)) fetchCandidates.unshift(source);
+    }
   }
   if (!source || !/^https?:\/\//i.test(source)) {
     throw new Error("missing_source_url");
@@ -129,7 +142,7 @@ async function resolveSourceUrl(body, userId) {
   if (isArchivedStorageUrl(source)) {
     return { source, alreadyArchived: true };
   }
-  return { source, taskId, audioId, userId };
+  return { source, taskId, audioId, userId, fetchCandidates };
 }
 
 module.exports = async function handler(req, res) {
@@ -163,8 +176,12 @@ module.exports = async function handler(req, res) {
     const taskId = String(body?.taskId || body?.task_id || resolved.taskId || "").trim();
     const libId = safePathSegment(body?.libraryLocalId || body?.library_local_id || "");
     const fileStem = safePathSegment(audioId) || safePathSegment(taskId) || libId || `${Date.now()}`;
-    const { buffer, contentType } = await fetchAudioBuffer(resolved.source);
-    const ext = extFromContentType(contentType, resolved.source);
+    const fetchCandidates = [
+      ...(Array.isArray(resolved.fetchCandidates) ? resolved.fetchCandidates : []),
+      resolved.source,
+    ];
+    const { buffer, contentType, urlUsed } = await fetchAudioBufferFromCandidates(fetchCandidates);
+    const ext = extFromContentType(contentType, urlUsed || resolved.source);
     const storageKey = `${user.userId}/${fileStem}.${ext}`;
 
     const up = await uploadObject({

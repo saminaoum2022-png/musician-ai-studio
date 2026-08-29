@@ -49,20 +49,31 @@ async function fetchCloudflareFluxCover({ prompt, timeoutMs = 65000, steps = res
         Authorization: `Bearer ${token}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ prompt: text, num_steps: steps }),
+      body: JSON.stringify({ prompt: text, steps }),
       signal: ctrl.signal,
     });
 
-    const mime = String(upstream.headers.get("content-type") || "image/jpeg").split(";")[0].trim();
+    const mime = String(upstream.headers.get("content-type") || "").split(";")[0].trim().toLowerCase();
     const buf = Buffer.from(await upstream.arrayBuffer());
 
-    if (/json/i.test(mime)) {
-      let detail = "cloudflare_json_error";
+    // REST API returns JSON { success, result: { image: "<base64>" } } — not raw bytes.
+    const looksJson = /json/i.test(mime) || (buf.length > 0 && buf[0] === 0x7b);
+    if (looksJson) {
+      let data = null;
       try {
-        const data = JSON.parse(buf.toString("utf8"));
-        detail = data?.errors?.[0]?.message || data?.error || detail;
-      } catch {}
-      return { ok: false, error: detail };
+        data = JSON.parse(buf.toString("utf8"));
+      } catch {
+        return { ok: false, error: "cloudflare_invalid_json" };
+      }
+      if (!data?.success) {
+        const detail = data?.errors?.[0]?.message || data?.error || "cloudflare_request_failed";
+        return { ok: false, error: detail };
+      }
+      const b64 = data?.result?.image || data?.result?.data || "";
+      if (!b64) return { ok: false, error: "cloudflare_missing_image" };
+      const imageBuf = Buffer.from(String(b64), "base64");
+      if (imageBuf.length < 512) return { ok: false, error: "empty_image" };
+      return { ok: true, buf: imageBuf, mime: "image/jpeg" };
     }
 
     if (!upstream.ok) {

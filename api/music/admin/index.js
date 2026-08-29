@@ -2006,6 +2006,7 @@ async function fetchCoverArtAdminLog({ limit = 50 } = {}) {
         userEmail: emailByUser[uid] || "",
         songId: String(row.ref || "").trim(),
         status: row.status || "completed",
+        failed: String(row.status || "").toLowerCase() === "failed",
         createdAt: row.created_at,
       };
     }),

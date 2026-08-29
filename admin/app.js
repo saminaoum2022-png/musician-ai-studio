@@ -1530,7 +1530,7 @@ function renderCoverArtStatPills(stats = {}) {
 
 function renderCoverArtLogRows(rows = []) {
   if (!rows.length) {
-    return `<tr><td colspan="6" class="loading">No cover art logged yet — generate or regen a cover to see entries here.</td></tr>`;
+    return `<tr><td colspan="7" class="loading">No cover art logged yet — generate or regen a cover to see entries here.</td></tr>`;
   }
   return rows.map((row) => {
     const songShort = row.songId
@@ -1541,13 +1541,17 @@ function renderCoverArtLogRows(rows = []) {
         ? `${escapeHtml(row.userEmail)}<br><span class="cellMuted">${userViewButton(row.userId, "providers", "Profile")}</span>`
         : userViewButton(row.userId, "providers", "View user"))
       : "—";
+    const statusBadge = row.failed
+      ? `<span class="badge providerStatus providerStatus--down">failed</span>`
+      : `<span class="badge providerStatus providerStatus--ok">ok</span>`;
     return `
-      <tr>
+      <tr${row.failed ? ' class="rowMuted"' : ""}>
         ${dateCell(row.createdAt)}
         <td>${coverProviderBadge(row.provider)}</td>
         <td>${escapeHtml(row.kindLabel || row.kind || "—")}</td>
         <td class="monoCell" title="${escapeHtml(row.songId || "")}">${escapeHtml(songShort)}</td>
         <td>${userCell}</td>
+        <td>${statusBadge}</td>
         <td class="num">${row.amountUsd != null ? fmtUsd(row.amountUsd) : "—"}</td>
       </tr>`;
   }).join("");
@@ -1568,6 +1572,9 @@ function renderCoverArtLog(data) {
     `COVER_IMAGE_PROVIDER=${escapeHtml(config.coverImageProviderEnv || "(auto)")}`,
     config.cloudflareConfigured ? "Cloudflare creds: set" : "Cloudflare creds: missing",
   ].join(" · ");
+  const configAlert = !config.cloudflareConfigured
+    ? `<div class="userDetailAlert">Cloudflare credentials are <strong>not configured</strong> on this deployment — abstract covers will use Pollinations until <code>CLOUDFLARE_ACCOUNT_ID</code> and <code>CLOUDFLARE_API_TOKEN</code> are set in Vercel (Production + Preview).</div>`
+    : "";
 
   return `
     <section class="sectionCard">
@@ -1580,11 +1587,12 @@ function renderCoverArtLog(data) {
           ${envNote}.
         </p>
       </div>
+      ${configAlert}
       ${renderCoverArtStatPills(log.stats || {})}
       <div class="tableWrap tableWrap--plain" style="margin-top: 1rem;">
         <table class="table--compact">
           <thead>
-            <tr><th>When</th><th>Provider</th><th>Type</th><th>Song</th><th>User</th><th>Est. cost</th></tr>
+            <tr><th>When</th><th>Provider</th><th>Type</th><th>Song</th><th>User</th><th>Status</th><th>Est. cost</th></tr>
           </thead>
           <tbody>${renderCoverArtLogRows(log.rows || [])}</tbody>
         </table>

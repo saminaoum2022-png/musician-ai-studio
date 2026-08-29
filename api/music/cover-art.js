@@ -516,6 +516,16 @@ module.exports = async function handler(req, res) {
 
     const { outBuf, outMime } = await normalizeCoverResponseBuffer(rendered.buf);
 
+    if (rendered.fallbackReason && rendered.attemptedProvider === "cloudflare") {
+      queueLogProviderUsage({
+        provider: "cloudflare",
+        kind: "cover_image",
+        userId: user.userId,
+        ref: songId,
+        status: "failed",
+      });
+    }
+
     queueLogProviderUsage({
       provider: rendered.provider === "cloudflare" ? "cloudflare" : "pollinations",
       kind: "cover_image",

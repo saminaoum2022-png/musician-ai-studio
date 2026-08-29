@@ -32886,9 +32886,16 @@ section.challengesPage{
   flex-direction: column;
   gap: 10px;
 }
+.homeDeskCreateStack .homeDeskPromoCard{
+  position: relative;
+}
+#singerGenderPills.nabadClipNoPersona .singerPersonaPill{
+  display: none !important;
+}
 .homeDeskCreateStack .homeDeskPromo--hero,
 .homeDeskCreateStack .homeDeskPromo--quick,
 .homeDeskCreateStack .homeDeskSongPromo,
+.homeDeskCreateStack .homeDeskClipPromo,
 .homeDeskCreateStack .homeDeskStudioPromo,
 .homeDeskCreateStack .homeDeskPersonaPromo,
 .homeDeskCreateStack .homeDeskPhotoPromo,
@@ -32906,6 +32913,7 @@ section.challengesPage{
 }
 .homeDeskCreateStack .homeDeskPromo--hero,
 .homeDeskCreateStack .homeDeskSongPromo,
+.homeDeskCreateStack .homeDeskClipPromo,
 .homeDeskCreateStack .homeDeskStudioPromo{
   padding: 16px 16px 16px;
   gap: 14px;
@@ -32936,13 +32944,15 @@ section.challengesPage{
 .homeDeskCreateStack .homeDeskPromoVisual--photo .homeDeskPhotoTileWrap,
 .homeDeskCreateStack .homeDeskPromoVisual--persona .homeDeskPersonaTileWrap,
 .homeDeskCreateStack .homeDeskPromoVisual--studio .homeDeskStudioTileWrap,
-.homeDeskCreateStack .homeDeskPromoVisual--song .homeDeskSongTileWrap{
+.homeDeskCreateStack .homeDeskPromoVisual--song .homeDeskSongTileWrap,
+.homeDeskCreateStack .homeDeskPromoVisual--clip .homeDeskClipTileWrap{
   transform: scale(0.64);
 }
 .homeDeskCreateStack .homeDeskPromo--quick .homeDeskPromoVisual--photo .homeDeskPhotoTileWrap,
 .homeDeskCreateStack .homeDeskPromo--quick .homeDeskPromoVisual--humtrack .homeDeskHumTrackTileWrap,
 .homeDeskCreateStack .homeDeskPromo--quick .homeDeskPromoVisual--persona .homeDeskPersonaTileWrap,
-.homeDeskCreateStack .homeDeskPromo--quick .homeDeskPromoVisual--sounds .homeDeskSoundsTileWrap{
+.homeDeskCreateStack .homeDeskPromo--quick .homeDeskPromoVisual--sounds .homeDeskSoundsTileWrap,
+.homeDeskCreateStack .homeDeskPromo--quick .homeDeskPromoVisual--studio .homeDeskStudioTileWrap{
   transform: scale(0.52);
 }
 .homeDeskCreateStack .homeDeskPromoCopy{
@@ -33203,6 +33213,79 @@ section.challengesPage{
   background:
     radial-gradient(120% 100% at 0% 0%, rgba(35,213,171,0.12), transparent 58%),
     linear-gradient(135deg, rgba(10,24,28,0.94), rgba(8,14,28,0.82));
+}
+.homeDeskClipPromo{
+  margin-bottom: 0;
+  border: 1px solid rgba(168,130,255,0.28);
+  background:
+    radial-gradient(120% 100% at 100% 0%, rgba(168,130,255,0.14), transparent 58%),
+    linear-gradient(135deg, rgba(18,12,32,0.94), rgba(10,14,28,0.82));
+}
+.homeDeskTrialBadge{
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  z-index: 2;
+  padding: 3px 8px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: rgba(233,213,255,0.95);
+  background: rgba(124,92,255,0.22);
+  border: 1px solid rgba(168,130,255,0.35);
+}
+.homeDeskClipTileWrap{
+  position: relative;
+  width: 108px;
+  height: 108px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.homeDeskClipPulse{
+  position: absolute;
+  inset: -14px;
+  border-radius: 30px;
+  border: 2px solid rgba(168,130,255,0.42);
+  animation: homeDeskSongPulse 2.4s ease-out infinite;
+  pointer-events: none;
+}
+.homeDeskClipTile{
+  position: relative;
+  width: 108px;
+  height: 108px;
+  border-radius: 22px;
+  padding: 3px;
+  background: linear-gradient(135deg, #a855f7, #4285f4, #7c5cff);
+  box-shadow: 0 20px 48px -20px rgba(124,92,255,0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.homeDeskClipTile::before{
+  content:"";
+  position: absolute;
+  inset: 3px;
+  border-radius: 19px;
+  background: linear-gradient(160deg, #141028 0%, #0a0c14 100%);
+}
+.homeDeskClipIco{
+  position: relative;
+  z-index: 1;
+  width: 34px;
+  height: 34px;
+  color: rgba(216,180,254,0.95);
+  display: block;
+}
+.homeDeskCreateStack .homeDeskClipPromo .homeDeskClipIco{
+  width: 36px;
+  height: 36px;
+}
+.homeDeskNewBadge--inline{
+  position: static;
+  align-self: flex-start;
+  margin-bottom: 4px;
 }
 .homeDeskSongTileWrap{
   position: relative;

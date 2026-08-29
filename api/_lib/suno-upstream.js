@@ -54,6 +54,51 @@ async function sunoJsonRequest(path, opts) {
   return { ok: r.ok && code === 200, httpStatus: r.status, code, data, text };
 }
 
+const SUNO_CLIP_AUDIO_KEYS = [
+  "audioUrl",
+  "audio_url",
+  "streamAudioUrl",
+  "stream_audio_url",
+  "sourceAudioUrl",
+  "source_audio_url",
+  "sourceStreamAudioUrl",
+  "source_stream_audio_url",
+];
+
+/** Kie mirrors playable audio in audioUrl; Suno origin source* links are often 403. */
+function pickSunoClipAudioUrl(clip) {
+  if (!clip || typeof clip !== "object") return "";
+  for (const key of SUNO_CLIP_AUDIO_KEYS) {
+    const s = String(clip[key] || "").trim();
+    if (s.startsWith("http")) return s;
+  }
+  return "";
+}
+
+function sunoClipAudioUrlCandidates(clip) {
+  if (!clip || typeof clip !== "object") return [];
+  const out = [];
+  const seen = new Set();
+  for (const key of SUNO_CLIP_AUDIO_KEYS) {
+    const s = String(clip[key] || "").trim();
+    if (!s.startsWith("http") || seen.has(s)) continue;
+    seen.add(s);
+    out.push(s);
+  }
+  return out;
+}
+
+function isLikelySunoOriginCdnUrl(url) {
+  const raw = String(url || "").trim();
+  if (!raw) return false;
+  try {
+    const host = new URL(raw).hostname.toLowerCase();
+    return host === "suno.ai" || host.endsWith(".suno.ai") || host.includes("audioprod");
+  } catch {
+    return false;
+  }
+}
+
 /** Suno timestamped lyrics only work for Suno music tasks — not Lyria/MiniMax/ElevenLabs ids. */
 function isSunoMusicGenerationTaskId(taskId) {
   const tid = String(taskId || "").trim();
@@ -67,6 +112,9 @@ module.exports = {
   safeJson,
   sendJson,
   sunoJsonRequest,
+  pickSunoClipAudioUrl,
+  sunoClipAudioUrlCandidates,
+  isLikelySunoOriginCdnUrl,
   isSunoMusicGenerationTaskId,
   SUNO_BASE,
 };

@@ -32886,6 +32886,12 @@ section.challengesPage{
   flex-direction: column;
   gap: 10px;
 }
+.homeDeskCreateStack .homeDeskPromoCard{
+  position: relative;
+}
+#singerGenderPills.nabadClipNoPersona .singerPersonaPill{
+  display: none !important;
+}
 .homeDeskCreateStack .homeDeskPromo--hero,
 .homeDeskCreateStack .homeDeskPromo--quick,
 .homeDeskCreateStack .homeDeskSongPromo,
@@ -32938,13 +32944,15 @@ section.challengesPage{
 .homeDeskCreateStack .homeDeskPromoVisual--photo .homeDeskPhotoTileWrap,
 .homeDeskCreateStack .homeDeskPromoVisual--persona .homeDeskPersonaTileWrap,
 .homeDeskCreateStack .homeDeskPromoVisual--studio .homeDeskStudioTileWrap,
-.homeDeskCreateStack .homeDeskPromoVisual--song .homeDeskSongTileWrap{
+.homeDeskCreateStack .homeDeskPromoVisual--song .homeDeskSongTileWrap,
+.homeDeskCreateStack .homeDeskPromoVisual--clip .homeDeskClipTileWrap{
   transform: scale(0.64);
 }
 .homeDeskCreateStack .homeDeskPromo--quick .homeDeskPromoVisual--photo .homeDeskPhotoTileWrap,
 .homeDeskCreateStack .homeDeskPromo--quick .homeDeskPromoVisual--humtrack .homeDeskHumTrackTileWrap,
 .homeDeskCreateStack .homeDeskPromo--quick .homeDeskPromoVisual--persona .homeDeskPersonaTileWrap,
-.homeDeskCreateStack .homeDeskPromo--quick .homeDeskPromoVisual--sounds .homeDeskSoundsTileWrap{
+.homeDeskCreateStack .homeDeskPromo--quick .homeDeskPromoVisual--sounds .homeDeskSoundsTileWrap,
+.homeDeskCreateStack .homeDeskPromo--quick .homeDeskPromoVisual--studio .homeDeskStudioTileWrap{
   transform: scale(0.52);
 }
 .homeDeskCreateStack .homeDeskPromoCopy{
@@ -33271,8 +33279,8 @@ section.challengesPage{
   display: block;
 }
 .homeDeskCreateStack .homeDeskClipPromo .homeDeskClipIco{
-  width: 44px;
-  height: 44px;
+  width: 36px;
+  height: 36px;
 }
 .homeDeskNewBadge--inline{
   position: static;

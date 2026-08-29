@@ -3,22 +3,11 @@
  * Mirrors in-app polling: SUCCESS + real clip audio (not task-accepted callbacks).
  */
 
-const { sunoJsonRequest } = require("./suno-upstream");
+const { sunoJsonRequest, pickSunoClipAudioUrl } = require("./suno-upstream");
 const { mapSunoUpstreamFailure } = require("./suno-user-errors");
 
 function pickClipAudio(first) {
-  if (!first || typeof first !== "object") return "";
-  return String(
-    first.sourceAudioUrl ||
-      first.source_audio_url ||
-      first.sourceStreamAudioUrl ||
-      first.source_stream_audio_url ||
-      first.audioUrl ||
-      first.audio_url ||
-      first.streamAudioUrl ||
-      first.stream_audio_url ||
-      "",
-  ).trim();
+  return pickSunoClipAudioUrl(first);
 }
 
 function clipLooksPlayable(clip) {

@@ -616,7 +616,9 @@ html[data-theme="light"] .nabadTabsTab.homeDeskSegBtn.is-active{
 html[data-theme="light"] .homeDeskPhotoPromo,
 html[data-theme="light"] .homeDeskPersonaPromo,
 html[data-theme="light"] .homeDeskSongPromo,
+html[data-theme="light"] .homeDeskClipPromo,
 html[data-theme="light"] .challengesPage.homeDesk .homeDeskSongPromo,
+html[data-theme="light"] .challengesPage.homeDesk .homeDeskClipPromo,
 html[data-theme="light"] .challengesPage.homeDesk .homeDeskStudioPromo,
 html[data-theme="light"] .challengesPage.homeDesk .homeDeskStudioPromo--featured,
 html[data-theme="light"] .challengesPage.homeDesk .homeDeskPhotoPromo,
@@ -1358,8 +1360,8 @@ html[data-theme="light"] body[data-route="friends"] .followAct--xstyle .followAc
 }
 html[data-theme="light"] .challengeFeatureCard::before{
   background:
-    linear-gradient(90deg, rgba(124, 92, 255, 0.14), transparent 48%),
-    radial-gradient(circle at 88% 18%, rgba(35, 213, 171, 0.12), transparent 34%);
+    linear-gradient(90deg, rgba(124, 92, 255, 0.06), transparent 48%),
+    radial-gradient(circle at 88% 18%, rgba(35, 213, 171, 0.05), transparent 34%);
 }
 html[data-theme="light"] .challengeFeatureCard h3,
 html[data-theme="light"] .homeDeskSpark.challengeFeatureCard h3{
@@ -1381,6 +1383,11 @@ html[data-theme="light"] .challengeMiniCard h3{
 html[data-theme="light"] .challengeMiniCard p,
 html[data-theme="light"] .challengeMiniCount{
   color: var(--muted);
+}
+html[data-theme="light"] .challengeMiniCount{
+  background: rgba(var(--challenge-rgb, 124, 92, 255), 0.08);
+  color: var(--text-secondary);
+  border: 1px solid rgba(var(--challenge-rgb, 124, 92, 255), 0.12);
 }
 html[data-theme="light"] .challengeMiniIcon{
   color: var(--primary);
@@ -1565,10 +1572,12 @@ html[data-theme="light"] .mentorFocusCard{
 /* Light mode — Home promos, Hook Rush, sparks, Templates occasion lab */
 html[data-theme="light"] .homeDeskPersonaTile::before,
 html[data-theme="light"] .onboardingEchoTile::before,
-html[data-theme="light"] .homeDeskSongTile::before{
+html[data-theme="light"] .homeDeskSongTile::before,
+html[data-theme="light"] .homeDeskClipTile::before{
   background: linear-gradient(160deg, rgba(255, 255, 255, 0.99) 0%, rgba(244, 247, 252, 0.94) 100%);
 }
 html[data-theme="light"] .challengesPage.homeDesk .homeDeskSongTile::before,
+html[data-theme="light"] .challengesPage.homeDesk .homeDeskClipTile::before,
 html[data-theme="light"] .challengesPage.homeDesk .homeDeskPersonaTile::before,
 html[data-theme="light"] .challengesPage.homeDesk .homeDeskStudioTile::before,
 html[data-theme="light"] .challengesPage.homeDesk .homeDeskPhotoTile::before,
@@ -1584,6 +1593,7 @@ html[data-theme="light"] .homeDeskSongTile{
     inset 0 0 0 1px rgba(255, 255, 255, 0.65);
 }
 html[data-theme="light"] .challengesPage.homeDesk .homeDeskSongTile,
+html[data-theme="light"] .challengesPage.homeDesk .homeDeskClipTile,
 html[data-theme="light"] .challengesPage.homeDesk .homeDeskPersonaTile,
 html[data-theme="light"] .challengesPage.homeDesk .homeDeskStudioTile,
 html[data-theme="light"] .challengesPage.homeDesk .homeDeskPhotoTile,
@@ -1632,7 +1642,7 @@ html[data-theme="light"] .challengeMiniCard::before{
   opacity: 1;
   background: radial-gradient(
     circle at 18% 0%,
-    rgba(var(--challenge-rgb, 124, 92, 255), 0.24),
+    rgba(var(--challenge-rgb, 124, 92, 255), 0.08),
     transparent 52%
   );
 }
@@ -1650,8 +1660,8 @@ html[data-theme="light"] .discoveryIdeaTags span{
 }
 html[data-theme="light"] .challengePresetLab{
   border-color: var(--border);
-  background: transparent;
-  box-shadow: none;
+  background: var(--card);
+  box-shadow: var(--chart-surface-shadow);
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
 }
@@ -1721,10 +1731,34 @@ html[data-theme="light"] .challengeNameField input{
 html[data-theme="light"] .challengeFilterChip{
   border-color: rgba(15, 23, 40, 0.10);
   background: rgba(255, 255, 255, 0.90);
-  color: var(--muted);
+  color: var(--text-secondary);
+}
+html[data-theme="light"] .challengeFilterChip--genre{
+  background: rgba(109, 77, 245, 0.08);
+  color: var(--text-secondary);
+}
+html[data-theme="light"] .challengeFilterChip--language{
+  background: rgba(13, 148, 136, 0.08);
+  color: var(--text-secondary);
 }
 html[data-theme="light"] .challengeFilterChip.active{
   color: #fff;
+}
+html[data-theme="light"] .homeDeskTrialBadge{
+  color: rgba(88, 64, 200, 0.95);
+  background: rgba(109, 77, 245, 0.10);
+  border-color: rgba(109, 77, 245, 0.18);
+}
+html[data-theme="light"] .homeDeskClipPulse{
+  display: none;
+}
+html[data-theme="light"] .homeDeskClipTile{
+  box-shadow:
+    0 12px 28px rgba(109, 77, 245, 0.10),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.65);
+}
+html[data-theme="light"] .homeDeskClipIco{
+  color: #6d4df5;
 }
 html[data-theme="light"] .challengePresetCard{
   border-color: rgba(15, 23, 40, 0.10);
@@ -37347,6 +37381,7 @@ body[data-route="mashup"] .app{
   display: none;
 }
 .challengesPage.homeDesk .homeDeskSongTile,
+.challengesPage.homeDesk .homeDeskClipTile,
 .challengesPage.homeDesk .homeDeskPersonaTile,
 .challengesPage.homeDesk .homeDeskMashupTile,
 .challengesPage.homeDesk .homeDeskPhotoTile,
@@ -37357,6 +37392,7 @@ body[data-route="mashup"] .app{
   box-shadow: none;
 }
 .challengesPage.homeDesk .homeDeskSongTile::before,
+.challengesPage.homeDesk .homeDeskClipTile::before,
 .challengesPage.homeDesk .homeDeskPersonaTile::before,
 .challengesPage.homeDesk .homeDeskPhotoTile::before,
 .challengesPage.homeDesk .homeDeskStudioTile::before,
@@ -37368,6 +37404,15 @@ body[data-route="mashup"] .app{
 .challengesPage.homeDesk .homeDeskSongTile{
   background: rgba(255, 255, 255, 0.05);
   border: 1px solid rgba(255, 255, 255, 0.08);
+}
+.challengesPage.homeDesk .homeDeskClipTile{
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+.challengesPage.homeDesk .homeDeskClipPromo{
+  border-color: rgba(255, 255, 255, 0.08);
+  background: transparent;
+  box-shadow: none;
 }
 .challengesPage.homeDesk .homeDeskPersonaTile,
 .challengesPage.homeDesk .homeDeskMashupTile{
@@ -37389,6 +37434,9 @@ body[data-route="mashup"] .app{
 .challengesPage.homeDesk .homeDeskSongPenIco{
   color: var(--text-secondary);
   animation: none;
+}
+.challengesPage.homeDesk .homeDeskClipIco{
+  color: var(--text-secondary);
 }
 .challengesPage.homeDesk .homeDeskPersonaIco{
   color: var(--text-secondary);
@@ -52554,6 +52602,10 @@ html[data-theme="light"] .challengesPage.homeDesk .homeDeskSongTile{
   background: var(--accent-teal-soft);
   border-color: var(--accent-teal-border);
 }
+html[data-theme="light"] .challengesPage.homeDesk .homeDeskClipTile{
+  background: var(--accent-violet-soft);
+  border-color: var(--accent-violet-border);
+}
 html[data-theme="light"] .challengesPage.homeDesk .homeDeskPhotoTile,
 html[data-theme="light"] .challengesPage.homeDesk .homeDeskStudioTile{
   background: var(--accent-violet-soft);
@@ -52571,6 +52623,9 @@ html[data-theme="light"] .challengesPage.homeDesk .homeDeskStudioIco{
 }
 html[data-theme="light"] .challengesPage.homeDesk .homeDeskSongPenIco{
   color: #0d9488;
+}
+html[data-theme="light"] .challengesPage.homeDesk .homeDeskClipIco{
+  color: #6d4df5;
 }
 html[data-theme="light"] .challengesPage.homeDesk .homeDeskPersonaIco{
   color: #6d4df5;

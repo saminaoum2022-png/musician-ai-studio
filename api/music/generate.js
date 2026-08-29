@@ -30,6 +30,7 @@ const {
   lyriaGenerateMusic,
   lyriaGenerateEnabled,
   nabadClipEnabled,
+  templateSparkClipEnabled,
   resolveLyriaModel,
 } = require("../_lib/lyria-upstream");
 const {
@@ -58,6 +59,10 @@ const {
 
 const FULL_SONG_COST = 12;
 const NABAD_CLIP_COST = 6;
+const TEMPLATE_SPARK_CLIP_COST = Math.max(
+  1,
+  Number(process.env.TEMPLATE_SPARK_CLIP_COST || 10),
+);
 const BUCKET = "song_archive";
 const MINIMAX_PROVIDER_COST_USD = Number(process.env.MINIMAX_USD_PER_TRACK || "0");
 const LYRIA_PROVIDER_COST_USD = Number(process.env.LYRIA_USD_PER_TRACK || "0.08");
@@ -660,11 +665,18 @@ async function handleLyriaGenerate(req, res, { user, isAdmin, body }) {
   });
 }
 
+function resolveClipCreditCost(body) {
+  if (String(body?.templateSparkClip || "").trim() === "1") return TEMPLATE_SPARK_CLIP_COST;
+  return NABAD_CLIP_COST;
+}
+
 async function handleLyriaClipGenerate(req, res, { user, isAdmin, body }) {
   const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || "";
   if (!apiKey) return sendJson(res, 500, { error: "Missing GEMINI_API_KEY on server" });
 
-  if (!isAdmin && !nabadClipEnabled()) {
+  const templateSpark = String(body?.templateSparkClip || "").trim() === "1";
+  const clipCost = resolveClipCreditCost(body);
+  if (!isAdmin && !nabadClipEnabled() && !(templateSpark && templateSparkClipEnabled())) {
     return sendJson(res, 403, {
       error: "Nabad Clip is admin-only on this environment.",
       code: "nabad_clip_admin_only",
@@ -682,9 +694,9 @@ async function handleLyriaClipGenerate(req, res, { user, isAdmin, body }) {
   if (!isAdmin) {
     const debit = await callRpc("consume_credits", {
       p_user_id: user.userId,
-      p_amount: NABAD_CLIP_COST,
-      p_reason: "nabad_clip",
-      p_ref: "lyria_clip",
+      p_amount: clipCost,
+      p_reason: templateSpark ? "template_spark_clip" : "nabad_clip",
+      p_ref: templateSpark ? "template_spark_lyria_clip" : "lyria_clip",
     });
     if (!debit.ok || !debit.data?.ok) {
       const status = String(debit.data?.status || "");
@@ -693,7 +705,7 @@ async function handleLyriaClipGenerate(req, res, { user, isAdmin, body }) {
           error: "Not enough credits",
           code: "insufficient_credits",
           balance: Number(debit.data?.balance || 0),
-          needed: NABAD_CLIP_COST,
+          needed: clipCost,
         });
       }
       return sendJson(res, 500, { error: "Credit check failed", details: debit.data || debit.error || null });
@@ -723,7 +735,7 @@ async function handleLyriaClipGenerate(req, res, { user, isAdmin, body }) {
     provider: "lyria",
     prompt: buildPromptLabel(lyrics, stylePrompt, title),
     status: "pending",
-    creditsUsed: isAdmin ? 0 : NABAD_CLIP_COST,
+    creditsUsed: isAdmin ? 0 : clipCost,
     providerCostUsd: LYRIA_CLIP_COST_USD,
   });
 
@@ -744,7 +756,7 @@ async function handleLyriaClipGenerate(req, res, { user, isAdmin, body }) {
   });
   if (!pendingStored.ok) {
     if (!isAdmin) {
-      await refund(user.userId, NABAD_CLIP_COST, "refund_nabad_clip", "lyria_clip_task_store").catch(() => null);
+      await refund(user.userId, clipCost, templateSpark ? "refund_template_spark_clip" : "refund_nabad_clip", "lyria_clip_task_store").catch(() => null);
     }
     return sendJson(res, 500, {
       error: "Could not start Nabad Clip generation — try again.",
@@ -773,10 +785,11 @@ async function handleLyriaClipGenerate(req, res, { user, isAdmin, body }) {
     _provider: "lyria",
     _model: model,
     _clip: true,
+    _templateSparkClip: templateSpark || undefined,
     _ready: false,
     _variantCount: 1,
     _credits: {
-      spent: isAdmin ? 0 : NABAD_CLIP_COST,
+      spent: isAdmin ? 0 : clipCost,
       balance: balanceAfterDebit,
       admin: isAdmin || undefined,
     },
@@ -1021,6 +1034,7 @@ module.exports = async function handler(req, res) {
       const clipRequested =
         String(body?.lyriaModel || "").trim().toLowerCase() === "clip" ||
         String(body?.nabadClip || "").trim() === "1" ||
+        String(body?.templateSparkClip || "").trim() === "1" ||
         clipModel === "lyria-3-clip-preview";
       if (clipRequested) {
         return handleLyriaClipGenerate(req, res, { user, isAdmin, body });

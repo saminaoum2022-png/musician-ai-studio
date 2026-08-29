@@ -3943,7 +3943,12 @@ function setCreateChallengeHint(challenge) {
   if (els.createChallengeHintTitle) els.createChallengeHintTitle.textContent = creationSourceHintTitle(c);
   if (els.createChallengeHintSub) {
     const voiceClip = isVoiceClipChallengeId(c.id);
-    if (kind === "template") {
+    const clipStaging = templateSparkClipStagingEnabled() && (kind === "template" || kind === "spark") && !voiceClip;
+    if (clipStaging) {
+      els.createChallengeHintSub.textContent = details
+        ? `${details}. ~30s Lyria clip · ${formatCreditsAmount(TEMPLATE_SPARK_CLIP_CREDIT_COST)} credits — edit below, then Generate clip.`
+        : "~30s Lyria clip · 10 credits — edit below, then Generate clip.";
+    } else if (kind === "template") {
       els.createChallengeHintSub.textContent = details
         ? `${details}. Edit below, then tap Generate.`
         : "Pick the details, edit the lyrics, then tap Generate.";
@@ -3956,6 +3961,7 @@ function setCreateChallengeHint(challenge) {
     }
   }
   els.createChallengeHint.hidden = false;
+  try { syncNabadClipCreateUi(); } catch {}
 }
 
 /** Suno "Sounds" task polling (separate from full-song generate). */
@@ -5650,7 +5656,7 @@ function syncSingerGenderPills() {
 function renderSingerPersonaPill() {
   const pill = document.getElementById("singerPersonaPill");
   if (!pill) return;
-  if (isNabadClipFlow()) {
+  if (isLyriaClipGenerateFlow()) {
     pill.hidden = true;
     pill.setAttribute("aria-hidden", "true");
     return;
@@ -7627,7 +7633,9 @@ function applyDiscoveryIdeaToCreate(idea) {
     setStatus?.(
       voiceClipOnly
         ? `Spark: ${title}. Record on Hum, then Generate.`
-        : sourceKind === "template"
+        : templateSparkClipStagingEnabled() && (sourceKind === "template" || sourceKind === "spark")
+          ? `${sourceKind === "template" ? "Template" : "Spark"} clip: ${title}. ~30s Lyria · ${formatCreditsAmount(TEMPLATE_SPARK_CLIP_CREDIT_COST)} credits.`
+          : sourceKind === "template"
           ? `Template: ${title}. Edit below, then Generate.`
           : sourceKind === "live"
             ? `Live event: ${title}. Drop your anthem.`
@@ -7640,7 +7648,9 @@ function applyDiscoveryIdeaToCreate(idea) {
     showToast(
       voiceClipOnly
         ? "Record on Hum — lyrics optional"
-        : sourceKind === "template"
+        : templateSparkClipStagingEnabled() && (sourceKind === "template" || sourceKind === "spark")
+          ? `${sourceKind === "template" ? "Template" : "Spark"} clip ready — ~30s, not a full song`
+          : sourceKind === "template"
           ? "Template ready — make it yours"
           : sourceKind === "live"
             ? "Live event loaded — drop your anthem"
@@ -7650,6 +7660,7 @@ function applyDiscoveryIdeaToCreate(idea) {
       { icon: "♪", durationMs: 2600 },
     );
   } catch {}
+  try { syncNabadClipCreateUi(); } catch {}
   try { syncGenerateOrbVisibility?.(); } catch {}
   location.hash = "#/generate";
   scheduleApplyRoute();
@@ -23534,6 +23545,41 @@ function isNabadClipFlow() {
   return getCreateFlow() === "nabadclip";
 }
 
+/** Staging only — Templates + Sparks use Lyria Clip instead of Suno full song. */
+function templateSparkClipStagingEnabled() {
+  if (isStagingNativeBuild()) return true;
+  try {
+    const host = String(location.hostname || "").toLowerCase();
+    if (host.includes("git-staging") || host.includes("-staging-")) return true;
+  } catch {}
+  return false;
+}
+
+function templateSparkClipSourceKind() {
+  const ch = challengePromptContext();
+  if (!ch) return null;
+  return creationSourceKind(ch);
+}
+
+function isTemplateSparkClipFlow() {
+  if (!templateSparkClipStagingEnabled() || isNabadClipFlow()) return false;
+  const kind = templateSparkClipSourceKind();
+  if (kind !== "template" && kind !== "spark") return false;
+  const ch = challengePromptContext();
+  if (isVoiceClipChallengeId(ch?.id)) return false;
+  const focus = ch?.id ? challengeCreateFocusForId(ch.id) : null;
+  if (focus?.tab === "hum") return false;
+  return true;
+}
+
+function isLyriaClipGenerateFlow() {
+  return isNabadClipFlow() || isTemplateSparkClipFlow();
+}
+
+function lyriaClipCreditCostForFlow() {
+  return isTemplateSparkClipFlow() ? TEMPLATE_SPARK_CLIP_CREDIT_COST : NABAD_CLIP_CREDIT_COST;
+}
+
 function nabadClipGenerateApiPath() {
   return "/api/music/generate?provider=lyria&lyriaModel=clip";
 }
@@ -23547,7 +23593,7 @@ function syncNabadClipHomeCard() {
 }
 
 function syncNabadClipCreateUi() {
-  const clip = isNabadClipFlow();
+  const clip = isLyriaClipGenerateFlow();
   const personaPill = document.getElementById("singerPersonaPill");
   const personaRow = document.getElementById("singerPersonaRow");
   const wrap = document.getElementById("singerGenderPills");
@@ -23565,6 +23611,14 @@ function syncNabadClipCreateUi() {
     }
     if (els.personaActiveBanner) els.personaActiveBanner.hidden = true;
     if (els.personaVoiceTune) els.personaVoiceTune.hidden = true;
+    if (
+      els.btnSunoGenerate &&
+      (document.body.getAttribute("data-route") || "") === "generate" &&
+      String(els.btnSunoGenerate.dataset.mode || "generate") === "generate" &&
+      !els.btnSunoGenerate.disabled
+    ) {
+      els.btnSunoGenerate.textContent = "Generate clip";
+    }
   } else {
     try { renderSingerPersonaPill(); } catch {}
     try { renderActivePersonaBanner(); } catch {}
@@ -24062,7 +24116,7 @@ function updateProfilePersonaInlineChip() {
 function renderActivePersonaBanner() {
   try {
     if (!els.personaActiveBanner || !els.personaActiveBannerLabel) return;
-    if (isNabadClipFlow()) {
+    if (isLyriaClipGenerateFlow()) {
       els.personaActiveBanner.hidden = true;
       if (els.personaVoiceTune) els.personaVoiceTune.hidden = true;
       return;
@@ -25962,6 +26016,7 @@ async function supabaseAuthedFetch(url, init = {}) {
  * ----------------------------------------------------------------- */
 const FULL_SONG_CREDIT_COST = 12;
 const NABAD_CLIP_CREDIT_COST = 6;
+const TEMPLATE_SPARK_CLIP_CREDIT_COST = 10;
 /** Mirrors Suno pricing for `/api/v1/generate/sounds` (beta). */
 const SOUND_CREDIT_COST = 2.5;
 const WEEKLY_TRIAL_MS = 7 * 24 * 60 * 60 * 1000;
@@ -59858,7 +59913,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       hideCreateResultCards();
       return;
     }
-    if (isNabadClipFlow()) {
+    if (isLyriaClipGenerateFlow()) {
       if (!arabicLyricChoicesReady()) {
         const reason = arabicLyricChoicesBlockReason();
         showToast(reason, { icon: "!", durationMs: 3600 });
@@ -59926,19 +59981,38 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
           window.alert("Add lyrics, style, or photo mood before generating your clip.");
           return;
         }
+        const clipCost = lyriaClipCreditCostForFlow();
+        const templateSparkClip = isTemplateSparkClipFlow();
+        const remixMeta =
+          templateSparkClip && pendingSearchRemixMeta && typeof pendingSearchRemixMeta === "object"
+            ? { ...pendingSearchRemixMeta }
+            : null;
+        const clipTitle =
+          String(els.sunoTitle?.value || "").trim() ||
+          String(remixMeta?.searchTemplateTitle || remixMeta?.challenge?.title || "").trim() ||
+          (templateSparkClip ? "Template clip" : "Nabad Clip");
         const payload = {
           prompt: finalPrompt,
           style: userStyle,
-          title: String(els.sunoTitle?.value || "").trim() || "Nabad Clip",
+          title: clipTitle,
           dialect,
           dialectHint: lyricDialectHint,
           lyriaModel: "clip",
-          nabadClip: "1",
+          nabadClip: templateSparkClip ? undefined : "1",
+          ...(templateSparkClip ? { templateSparkClip: "1" } : {}),
+          ...(remixMeta?.searchTemplateId ? { searchTemplateId: String(remixMeta.searchTemplateId).trim() } : {}),
+          ...(remixMeta?.searchTemplateTitle ? { searchTemplateTitle: String(remixMeta.searchTemplateTitle).trim() } : {}),
+          ...(templateSparkClip && remixMeta?.challenge ? { challenge: remixMeta.challenge } : {}),
           watchKind: clipAllowImageOnly ? "photo" : "clip",
         };
+        if (templateSparkClip) {
+          pendingSearchRemixMeta = null;
+          clearCreateChallengeContext();
+          setCreateChallengeHint(null);
+        }
         lastGenerationMeta = {
           engine: "lyria_clip",
-          mode: "Nabad Clip",
+          mode: templateSparkClip ? "Template clip" : "Nabad Clip",
           lyricsInput: userPrompt,
           finalPrompt,
           styleInput: userStyle,
@@ -59948,17 +60022,27 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
           musicProvider: "lyria",
           imageOnlyInstrumental: false,
           hasReference: false,
+          templateSparkClip: templateSparkClip || undefined,
+          ...(remixMeta || {}),
           ...(photoCoverMetaForGeneration() || {}),
         };
         try {
-          showToast("Composing your clip… usually 1–2 minutes.", {
+          showToast(
+            templateSparkClip
+              ? "Composing your template clip… usually 1–2 minutes."
+              : "Composing your clip… usually 1–2 minutes.",
+            {
             icon: "♪",
             durationMs: 120000,
           });
         } catch {}
-        setStatus("Composing your ~30s clip… you can browse — we'll update when it's ready.");
+        setStatus(
+          templateSparkClip
+            ? "Composing your ~30s template clip… you can browse — we'll update when it's ready."
+            : "Composing your ~30s clip… you can browse — we'll update when it's ready.",
+        );
         const authToken = getSupabaseAuthToken();
-        const data = await trackCreditsAround("Generate Nabad Clip", async () => {
+        const data = await trackCreditsAround(templateSparkClip ? "Generate template clip" : "Generate Nabad Clip", async () => {
           const r = await apiFetch(nabadClipGenerateApiPath(), {
             method: "POST",
             headers: {
@@ -59969,7 +60053,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
           });
           const d = await r.json().catch(() => ({}));
           if (r.status === 402 || d?.code === "insufficient_credits") {
-            const need = Number(d?.needed ?? NABAD_CLIP_CREDIT_COST);
+            const need = Number(d?.needed ?? clipCost);
             const have = Number(d?.balance || 0);
             const err = new Error(
               `Not enough credits (you have ${formatCreditsAmount(have)}, need ${formatCreditsAmount(need)} for a clip).`,
@@ -59983,7 +60067,11 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
             throw new Error("Please sign in before generating a clip.");
           }
           if (r.status === 403 && d?.code === "nabad_clip_admin_only") {
-            throw new Error("Nabad Clip is not enabled on this server yet.");
+            throw new Error(
+              templateSparkClip
+                ? "Template clips are not enabled on this server yet."
+                : "Nabad Clip is not enabled on this server yet.",
+            );
           }
           rejectSunoApiResponse(r, d);
           if (d?._credits && Number.isFinite(Number(d._credits.balance))) {
@@ -59995,11 +60083,11 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
         sunoTaskId = extractTaskIdLoose(data);
         savePendingBackendTask(sunoTaskId || "");
         if (sunoTaskId) {
-          saveRecoverableGenerationTask(sunoTaskId, String(els.sunoTitle?.value || "").trim());
+          saveRecoverableGenerationTask(sunoTaskId, clipTitle);
           setGenerationPending({
             taskId: sunoTaskId,
-            title: String(els.sunoTitle?.value || "").trim() || "Nabad Clip",
-            source: clipAllowImageOnly ? "photo" : "clip",
+            title: clipTitle,
+            source: clipAllowImageOnly ? "photo" : templateSparkClip ? "template_clip" : "clip",
             photoCoverDataUrl: resolvePendingPhotoCoverDataUrl(),
             photoCoverOnly: imageMoodCoverOnlyForNextGen,
             variantCount: 1,

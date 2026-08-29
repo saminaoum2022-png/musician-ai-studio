@@ -32,6 +32,18 @@ function nabadClipEnabled() {
   return v === "1" || v === "true" || v === "yes";
 }
 
+/** Staging: Templates + Sparks shelf → Lyria Clip for all signed-in users. */
+function templateSparkClipEnabled() {
+  const v = String(process.env.TEMPLATE_SPARK_CLIP_ENABLED || "").trim().toLowerCase();
+  if (v === "1" || v === "true" || v === "yes") return true;
+  const branch = String(
+    process.env.VERCEL_GIT_COMMIT_REF || process.env.VERCEL_GIT_COMMIT_REF_SLUG || "",
+  )
+    .trim()
+    .toLowerCase();
+  return branch === "staging";
+}
+
 function isLyriaClipModel(model) {
   return String(model || "").trim().toLowerCase() === LYRIA_CLIP_MODEL;
 }
@@ -310,6 +322,7 @@ module.exports = {
   lyriaGenerateMusic,
   lyriaUserMessage,
   nabadClipEnabled,
+  templateSparkClipEnabled,
   parseLyriaLyricsToAlignedWords,
   pickLyriaLyricsPart,
   resolveLyriaModel,

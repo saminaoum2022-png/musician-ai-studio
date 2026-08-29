@@ -617,7 +617,8 @@ function paletteForUserArtwork(userArtwork, bucketKey) {
 }
 
 function prepareDirectUserArtworkHint(raw, { allowHumans = false } = {}) {
-  let s = toVisualOnlyPrompt(String(raw || "").trim(), { title: "" });
+  let s = expandArtworkStyleTags(String(raw || "").trim());
+  s = toVisualOnlyPrompt(s, { title: "" });
   s = enrichUserArtworkHint(s);
   if (!allowHumans) s = enforceNoHumansScene(s);
   return s.replace(/\s+/g, " ").trim().slice(0, 280);
@@ -933,12 +934,68 @@ export function buildCoverNegativePrompt(avoidTags, { storyTheme = "", userArtwo
 const FLUX_AVOID_INLINE =
   "Avoid any text, words, letters, typography, watermark, logo, people, faces, hands, portraits, human figures, anatomy errors, extra fingers, blurry low quality imagery.";
 
+const FLUX_PROMPT_MAX = 2048;
+
+/** Style chips from the regen sheet — expand vague tags into Flux-safe scene phrases. */
+const ARTWORK_STYLE_TAG_EXPANSIONS = {
+  neon: "neon-lit cinematic atmosphere, electric teal and violet glow, no people",
+  minimal: "minimalist clean composition, generous negative space, soft gradient background, no people",
+  surreal: "surreal dreamlike atmosphere, symbolic props and lighting, no people",
+  dreamy: "dreamy soft atmospheric haze, pearlescent light, no people",
+  "studio light": "professional studio lighting, soft key light, moody shadows, no people",
+  "black & white": "black and white monochrome photography, high contrast silver tones, no people",
+  "vintage film": "vintage film grain, warm faded tones, nostalgic cinematic mood, no people",
+  "cinematic portrait": "cinematic mood, dramatic lighting, shallow depth of field, no people",
+  "cinematic mood": "cinematic mood, dramatic lighting, shallow depth of field, no people",
+};
+
+function expandArtworkStyleTags(raw) {
+  const parts = String(raw || "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  if (!parts.length) return String(raw || "").trim();
+  return parts
+    .map((tag) => {
+      const key = tag.toLowerCase();
+      return ARTWORK_STYLE_TAG_EXPANSIONS[key] || tag;
+    })
+    .join(", ");
+}
+
+/** Trim Pollinations-sized prompts to Flux's 2048 cap — keep the head (scene + hint), drop redundant tail safety. */
+function compressPromptForFlux(prompt, maxLen) {
+  let s = String(prompt || "").trim();
+  if (s.length <= maxLen) return s;
+  const dropPatterns = [
+    /,?\s*completely wordless photograph[^,]*/gi,
+    /,?\s*zero readable characters[^,]*/gi,
+    /,?\s*typography-free pure visual art[^,]*/gi,
+    /,?\s*pure photograph with absolutely zero text[^,]*/gi,
+    /,?\s*absolutely no text, no words, no letters[^,]{0,240}/gi,
+    /,?\s*absolutely no people, no humans, no faces[^,]{0,180}/gi,
+  ];
+  for (const re of dropPatterns) {
+    s = s.replace(re, " ");
+  }
+  s = s.replace(/,\s*,/g, ",").replace(/\s+/g, " ").trim();
+  if (s.length <= maxLen) return s;
+  const cut = s.slice(0, maxLen);
+  const lastComma = cut.lastIndexOf(",");
+  return (lastComma > maxLen * 0.55 ? cut.slice(0, lastComma) : cut).trim();
+}
+
 export function buildFluxCoverPrompt(prompt, { avoidTags = "", storyTheme = "", userArtwork = "" } = {}) {
-  const base = String(prompt || "").trim();
-  const negative = buildCoverNegativePrompt(avoidTags, { storyTheme, userArtwork });
-  const condensedNegative = negative.length > 720 ? negative.slice(0, 720) : negative;
-  const merged = `${base}. ${FLUX_AVOID_INLINE} ${condensedNegative}`.replace(/\s+/g, " ").trim();
-  return merged.slice(0, 2048);
+  const suffixBits = [FLUX_AVOID_INLINE];
+  const parsedAvoid = parseAvoidTagsList(avoidTags).slice(0, 5);
+  if (parsedAvoid.length) suffixBits.push(`Avoid ${parsedAvoid.join(", ")}`);
+  const antiMountain = landscapeAntiMountainAvoid(storyTheme, userArtwork);
+  if (antiMountain) suffixBits.push(antiMountain);
+  const suffix = `. ${suffixBits.join(". ")}`;
+  const baseBudget = Math.max(400, FLUX_PROMPT_MAX - suffix.length - 1);
+  const base = compressPromptForFlux(String(prompt || "").trim(), baseBudget);
+  const merged = `${base}${suffix}`.replace(/\s+/g, " ").trim();
+  return merged.length > FLUX_PROMPT_MAX ? merged.slice(0, FLUX_PROMPT_MAX) : merged;
 }
 
 export function moodPaletteForBucket(bucketKey) {

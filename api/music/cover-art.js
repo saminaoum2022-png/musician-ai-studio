@@ -129,7 +129,13 @@ async function fetchAbstractCoverImage({
 
   if (provider === "cloudflare") {
     const fluxPrompt = buildFluxCoverPrompt(prompt, { avoidTags, storyTheme, userArtwork });
-    const cf = await fetchCloudflareFluxCover({ prompt: fluxPrompt });
+    let cf = await fetchCloudflareFluxCover({ prompt: fluxPrompt });
+    if (!cf.ok && fluxPrompt.length > 1800) {
+      const retryPrompt = buildFluxCoverPrompt(prompt, { avoidTags: "", storyTheme: "", userArtwork: "" });
+      if (retryPrompt.length < fluxPrompt.length) {
+        cf = await fetchCloudflareFluxCover({ prompt: retryPrompt });
+      }
+    }
     if (cf.ok) {
       return {
         ok: true,

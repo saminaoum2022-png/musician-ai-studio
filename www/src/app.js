@@ -54617,10 +54617,15 @@ async function regeneratePlayerCover(artworkHint = "", trackId = "") {
       if (revealed) {
         flashPlayerCover();
         const provider = String(updated._coverRegenProvider || updated.meta?.coverImageProvider || "").trim().toLowerCase();
+        const attempted = String(updated._coverRegenAttemptedProvider || provider || "").trim().toLowerCase();
         const fallback = String(updated._coverRegenFallbackReason || updated.meta?.regenFallbackReason || "").trim();
         let coverStatus = "";
         if (provider === "gemini") coverStatus = "Cover updated via Gemini.";
-        else if (provider === "cloudflare") coverStatus = "Cover updated via Cloudflare Flux.";
+        else if (provider === "cloudflare" && attempted === "gemini") {
+          coverStatus = fallback
+            ? `Cover updated via Flux (Gemini hint failed: ${fallback}).`
+            : "Cover updated via Flux (Gemini hint failed).";
+        } else if (provider === "cloudflare") coverStatus = "Cover updated via Cloudflare Flux.";
         else if (provider === "pollinations") {
           coverStatus = fallback
             ? `Cover updated via Pollinations (${fallback}).`
@@ -54813,7 +54818,7 @@ function suggestArtworkTextFromParts({ style = "", lyrics = "" } = {}) {
   const styleStr = String(style || "");
   const hasArabic = /[\u0600-\u06FF]/.test(raw) || /arabic|oud|darbuka|maqam|dabke/i.test(styleStr);
   const parts = [];
-  parts.push(hasArabic ? "Cinematic desert portrait" : "Cinematic portrait");
+  parts.push(hasArabic ? "Cinematic desert mood" : "Cinematic mood");
   const lyricsLower = raw.toLowerCase();
   if (/(sad|cry|tears|alone|lonely|miss|hurt|\u062d\u0632\u064a\u0646|\u062f\u0645\u0639\u0629|\u0641\u0631\u0627\u0642)/.test(lyricsLower)) {
     parts.push("melancholic mood", "moody low light");
@@ -62494,7 +62499,7 @@ function closeStyleLibrary() {
  *  just fills the existing Artwork field, no backend/API calls.
  * ================================================================= */
 const ARTWORK_BASE_SUGGESTIONS = [
-  "Cinematic portrait", "Neon", "Vintage film", "Minimal", "Surreal", "Studio light", "Black & white", "Dreamy",
+  "Cinematic mood", "Neon", "Vintage film", "Minimal", "Surreal", "Studio light", "Black & white", "Dreamy",
 ];
 
 function artworkTagsListFromInput() {

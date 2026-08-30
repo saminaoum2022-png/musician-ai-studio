@@ -1598,8 +1598,8 @@ function renderCoverArtLog(data) {
             <h3 class="sectionTitle">Cover art log</h3>
             <p class="sectionNote">
               Recent cover renders from <code>provider_usage_events</code>.
-              <strong>Flow</strong>: First = new song cover · Regen = magic wand · Scene = Gemini text-only step.
-              Artwork hints on regen are woven into the Flux prompt — provider stays Flux unless <code>COVER_REGEN_IMAGE_PROVIDER=gemini</code>.
+              <strong>Flow</strong>: First = new song cover (Flux only) · Regen = magic wand (Flux).
+              Artwork hints are woven into the Flux prompt — provider stays Flux unless <code>COVER_REGEN_IMAGE_PROVIDER=gemini</code>.
               ${envNote}.
             </p>
           </div>

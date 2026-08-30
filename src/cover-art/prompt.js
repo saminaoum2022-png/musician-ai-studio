@@ -4,7 +4,7 @@
  */
 
 /** Bump when cover prompt policy changes — busts Gemini scene cache on the server. */
-export const COVER_PROMPT_POLICY_VERSION = 16;
+export const COVER_PROMPT_POLICY_VERSION = 17;
 /** Pollinations flux reliably returns ~768×768 square — request square, crop to 9:16 (avoids vertical stretch). */
 export const POLLINATIONS_COVER_WIDTH = 1024;
 export const POLLINATIONS_COVER_HEIGHT = 1024;
@@ -131,7 +131,7 @@ const STORY_THEMES = [
     id: "wedding",
     re: /wedding|bridal|bride|groom|marriage|ceremony|first dance|dabke entrance|زفاف|عرس|عروس/i,
     scene:
-      "wedding still life, diamond solitaire rings on ivory satin, soft floral bouquet and champagne gold bokeh, elegant ceremony mood, no people",
+      "wedding still life, soft floral bouquet and champagne gold bokeh on ivory satin, elegant ceremony mood, no people",
     visualMode: "still_life",
     bucket: "wedding",
   },
@@ -163,7 +163,7 @@ const STORY_THEMES = [
     id: "romance",
     re: /love you|my love|romantic|romance|darling|valentine|kiss|together forever|habibi|habibti|حبيب|حبيبي|حبيبتي|عشق|حب|قلبي/i,
     scene:
-      "romantic still life, intertwined gold rings and soft candlelight on dark surface, rose petals scatter, tender warmth, no people",
+      "romantic still life, rose petals and soft candlelight on dark surface, warm golden bokeh, tender warmth, no people",
     visualMode: "still_life",
     bucket: "love",
   },
@@ -285,7 +285,7 @@ const REGEN_MOOD_HINTS = [
     id: "romance",
     re: /\b(love|romantic|romance|valentine|darling|heartfelt|passion|habibi|habibti|حب|عشق|قلبي)\b/i,
     scene:
-      "romantic still life, intertwined gold rings and soft candlelight on dark surface, rose petals scatter, tender warmth, no people",
+      "romantic still life, rose petals and soft candlelight on dark surface, warm golden bokeh, tender warmth, no people",
     bucket: "love",
   },
   {
@@ -299,7 +299,7 @@ const REGEN_MOOD_HINTS = [
     id: "wedding",
     re: /\b(wedding|bridal|bride|groom|engagement|marriage|زفاف|عرس|عروس)\b/i,
     scene:
-      "wedding still life, diamond solitaire rings on ivory satin, soft floral bouquet and champagne gold bokeh, elegant ceremony mood, no people",
+      "wedding still life, soft floral bouquet and champagne gold bokeh on ivory satin, elegant ceremony mood, no people",
     bucket: "wedding",
   },
   {
@@ -683,7 +683,7 @@ function moodBucketFallback(bucketKey, energy) {
   }
   if (bucketKey === "love") {
     return {
-      scene: "romantic still life, roses and soft golden candlelight on dark surface, no people",
+      scene: "romantic still life, rose petals and soft candlelight on dark surface, warm golden bokeh, tender warmth, no people",
       visualMode: "still_life",
       palette,
     };
@@ -697,8 +697,8 @@ function moodBucketFallback(bucketKey, energy) {
   }
   if (bucketKey === "wedding") {
     return {
-      scene: "wedding still life, diamond rings on satin with soft floral glow, no people",
-      visualMode: "still_life",
+      scene: pickFrom(MUSIC_FALLBACK_SCENES, bucketKey, "wedding-music"),
+      visualMode: "abstract",
       palette,
     };
   }
@@ -862,7 +862,7 @@ const TEXT_TRIGGER_REPLACEMENTS = [
   ["album cover", "cinematic still life"],
   ["portrait", "symbolic object still life"],
   ["silhouette", "symbolic object still life"],
-  ["couple", "intertwined rings still life"],
+  ["couple", "romantic rose petals and candlelight still life"],
   ["person", "symbolic object"],
   ["people", "symbolic objects"],
 ];
@@ -1038,7 +1038,7 @@ export function enforceNoHumansScene(scene) {
 
 /**
  * @param {object} input
- * @param {{ sceneOverride?: string, artworkSourceOverride?: string, geminiModel?: string, directorSceneHint?: string, nabadIdentityPhrases?: string, visualDirection?: object, regenSalt?: string, userArtworkOverride?: string, forceMusicFallback?: boolean, regenVariety?: boolean, creativeMode?: boolean }} [options]
+ * @param {{ sceneOverride?: string, artworkSourceOverride?: string, geminiModel?: string, directorSceneHint?: string, nabadIdentityPhrases?: string, visualDirection?: object, regenSalt?: string, userArtworkOverride?: string, forceMusicFallback?: boolean, regenVariety?: boolean, firstGenAbstract?: boolean, creativeMode?: boolean }} [options]
  * @returns {{ prompt: string, seed: number, bucket: string, visualMode: string, storyTheme: string, artworkSource: string, params: object }}
  */
 export function buildAbstractCoverPrompt(input, options = {}) {
@@ -1055,6 +1055,7 @@ export function buildAbstractCoverPrompt(input, options = {}) {
   const allowHumans = geminiImage;
   const creativeMode = options.creativeMode !== false && !geminiImage;
   const regenVariety = Boolean(options.regenVariety && creativeMode);
+  const firstGenAbstract = Boolean(options.firstGenAbstract && creativeMode && !userArtworkOverride && !options.sceneOverride);
   const regenSaltKey = String(options.regenSalt || "").trim();
   const userArtworkOverride = String(options.userArtworkOverride || "").trim().slice(0, 280);
   const userDirectedRegen = isUserDirectedRegenHint(userArtworkOverride);
@@ -1084,8 +1085,8 @@ export function buildAbstractCoverPrompt(input, options = {}) {
     : sanitizeArtworkPrompt(String(options.nabadIdentityPhrases || "").trim(), { title });
   const storyScene = creativeMode ? String(scene || "").trim() : toVisualOnlyPrompt(scene, { title });
   const preferStoryScene = storyTheme !== "mood_fallback" && Boolean(storyScene);
-  let visualScene = forceMusicFallback
-    ? pickFrom(MUSIC_FALLBACK_SCENES, songId, regenSaltKey || "regen-auto")
+  let visualScene = forceMusicFallback || firstGenAbstract
+    ? pickFrom(MUSIC_FALLBACK_SCENES, songId, firstGenAbstract ? "first-gen" : (regenSaltKey || "regen-auto"))
     : regenVariety
       ? pickFrom(REGEN_VARIETY_POOL, songId, regenSaltKey || "regen-variety")
       : preferStoryScene
@@ -1112,6 +1113,8 @@ export function buildAbstractCoverPrompt(input, options = {}) {
   const seed = buildCoverSeed(input, effectiveStoryTheme, bucketKey, userArtwork, String(options.regenSalt || "").trim());
   const artworkSource = forceMusicFallback
     ? "regen_music_auto"
+    : firstGenAbstract
+      ? "first_gen_abstract"
     : sceneOverride
       ? String(options.artworkSourceOverride || "gemini_scene")
       : userArtwork

@@ -1,13 +1,12 @@
 /**
  * POST /api/music/cover-art
- * Default abstract covers via Cloudflare Flux Schnell; Pollinations fallback; user artwork via Gemini.
+ * Default abstract covers via Cloudflare Flux Schnell; Pollinations fallback on error.
  */
 const path = require("path");
 const { pathToFileURL } = require("url");
 const { verifyUser, isAdminEmail } = require("../_lib/credits-auth");
 const { applyCors } = require("../_lib/cors");
 const { normalizeCoverPortraitBuffer, COVER_PORTRAIT_W, COVER_PORTRAIT_H } = require("../_lib/cover-portrait-normalize");
-const { tryGeminiCoverScene } = require("../_lib/gemini-cover-prompt");
 const {
   resolveCoverRegenImageProvider,
   geminiRegenFallbackEnabled,
@@ -331,9 +330,7 @@ module.exports = async function handler(req, res) {
       buildAbstractCoverPrompt,
       buildPollinationsUrl,
       buildFluxCoverPrompt,
-      moodPaletteForBucket,
       classifyVisualBucket,
-      sanitizeArtworkPrompt,
       resolveStoryTheme,
     } = await getPromptModule();
 
@@ -369,13 +366,12 @@ module.exports = async function handler(req, res) {
       humTrack: Boolean(body?.humTrack),
       instrumentLabel: String(body?.instrumentLabel || "").trim().slice(0, 40),
       instrument: String(body?.instrument || body?.instrumentId || "").trim().slice(0, 40),
-      skipGeminiScene: Boolean(body?.skipGeminiScene || body?.humTrack || coverRegenerate),
+      skipGeminiScene: true,
       searchTemplateTitle: String(body?.searchTemplateTitle || "").trim().slice(0, MAX_FIELD),
       occasionLabel: String(body?.occasionLabel || "").trim().slice(0, MAX_FIELD),
     };
 
     const bucketKey = classifyVisualBucket(coverInput);
-    const brandPalette = moodPaletteForBucket(bucketKey);
     const artworkHint = String(coverInput.artworkHint || coverInput.artworkStyle || "").trim();
     const userDirectedArtwork = Boolean(artworkHint);
     const { theme, storyScore } = resolveStoryTheme(coverInput);
@@ -455,42 +451,7 @@ module.exports = async function handler(req, res) {
       });
     }
 
-    let nabadBriefLine = "";
-    if (vd.mode === "apply" && vdApplied?.identityPhrases) {
-      nabadBriefLine = `Nabad look: ${String(vdApplied.identityPhrases).trim()}.`;
-    }
-
-    let geminiScene = "";
-    let geminiModel = "";
-    if (!coverInput.skipGeminiScene && !userDirectedArtwork) {
-      try {
-        const gem = await tryGeminiCoverScene(promptInput, {
-          bucketKey,
-          palette: brandPalette,
-          artworkHint,
-          occasionLabel: coverInput.occasionLabel,
-          visualDirection: vd.mode === "apply" ? vd.direction : null,
-          nabadBriefLine: vd.mode === "apply" ? nabadBriefLine : "",
-        });
-        if (gem?.ok && gem.scene) {
-          geminiScene = sanitizeArtworkPrompt(gem.scene, { title: coverInput.title });
-          geminiModel = gem.model || "";
-          queueLogProviderUsage({
-            provider: "gemini",
-            kind: "cover_scene",
-            userId: user.userId,
-            ref: songId,
-          });
-        }
-      } catch (e) {
-        console.warn("[music/cover-art] gemini scene skipped", e?.message || e);
-      }
-    }
-
     const promptOpts = {
-      ...(geminiScene
-        ? { sceneOverride: geminiScene, artworkSourceOverride: "gemini_scene", geminiModel }
-        : {}),
       ...(vd.mode === "apply" && vdApplied?.sceneHint
         ? { directorSceneHint: vdApplied.sceneHint }
         : {}),
@@ -502,7 +463,7 @@ module.exports = async function handler(req, res) {
 
     const { prompt, seed, bucket, visualMode, storyTheme, artworkSource, params } = buildAbstractCoverPrompt(
       promptInput,
-      { ...promptOpts, creativeMode: true },
+      { ...promptOpts, creativeMode: true, firstGenAbstract: !userDirectedArtwork },
     );
 
     const rendered = await fetchAbstractCoverImage({

@@ -1239,10 +1239,18 @@ async function getCredits(limit, offset) {
   return { transactions, total };
 }
 
-function inferGenerationKind(kind, requestDetail = "", prompt = "") {
+function inferGenerationKind(kind, requestDetail = "", prompt = "", ctx = {}) {
   const k = String(kind || "").trim().toLowerCase();
-  if (k && k !== "song" && k !== "other") return k;
+  if (k === "clip") return "clip";
   const blob = `${requestDetail}\n${prompt}`.toLowerCase();
+  if (
+    /\b(nabad_clip|template_spark_clip|lyria_clip)\b/.test(blob) ||
+    (String(ctx.provider || "").trim().toLowerCase() === "lyria" &&
+      Number(ctx.creditsUsed || 0) > 0 &&
+      Number(ctx.creditsUsed || 0) <= 10)
+  ) {
+    return "clip";
+  }
   // Remix before cover: older hub remixes sometimes logged as vocal_full / bare song.
   if (
     /\bsong_remix\b/.test(blob) ||
@@ -1261,6 +1269,7 @@ function inferGenerationKind(kind, requestDetail = "", prompt = "") {
   if (/\b(humming_music|humming_backing|underpainting|add.?instrumental)\b/.test(blob)) {
     return "instrumental";
   }
+  if (k && k !== "song" && k !== "other") return k;
   return k || "song";
 }
 
@@ -1348,7 +1357,11 @@ async function getGenerations(limit, offset, filters = {}) {
   if (dateFrom) parts.push(`created_at=gte.${encodeURIComponent(`${dateFrom}T00:00:00.000Z`)}`);
   if (dateTo) parts.push(`created_at=lte.${encodeURIComponent(`${dateTo}T23:59:59.999Z`)}`);
   // Kind filter uses stored kind; older cover/remix rows may still be "song".
-  if (kind) parts.push(`kind=eq.${encodeURIComponent(kind)}`);
+  if (kind === "clip") {
+    parts.push("or=(kind.eq.clip,request_detail.in.(nabad_clip,template_spark_clip,lyria_clip))");
+  } else if (kind) {
+    parts.push(`kind=eq.${encodeURIComponent(kind)}`);
+  }
   if (provider) parts.push(`provider=eq.${encodeURIComponent(provider)}`);
   if (status && ["pending", "completed", "failed", "refunded"].includes(status)) {
     parts.push(`status=eq.${encodeURIComponent(status)}`);
@@ -1375,7 +1388,10 @@ async function getGenerations(limit, offset, filters = {}) {
         userId: r.user_id,
         userLabel: String(p.display_name || p.username || "—"),
         taskId: r.task_id || "",
-        kind: inferGenerationKind(r.kind, r.request_detail, r.prompt),
+        kind: inferGenerationKind(r.kind, r.request_detail, r.prompt, {
+          provider: r.provider,
+          creditsUsed: r.credits_used,
+        }),
         storedKind: r.kind,
         provider: r.provider,
         prompt: r.prompt || "",
@@ -1725,7 +1741,10 @@ async function getUserDetail(userIdInput, search = "") {
 
   const generationsBase = (Array.isArray(gensRes.data) ? gensRes.data : []).map((row) => ({
     id: row.id,
-    kind: inferGenerationKind(row.kind, row.request_detail, row.prompt),
+    kind: inferGenerationKind(row.kind, row.request_detail, row.prompt, {
+      provider: row.provider,
+      creditsUsed: row.credits_used,
+    }),
     provider: row.provider || "",
     status: row.status || "",
     creditsUsed: Number(row.credits_used || 0),
@@ -1862,7 +1881,10 @@ async function getGenerationDetail(generationIdInput) {
       shareUrl: songId ? `https://www.nabadai.com/s/${encodeURIComponent(songId)}` : "",
     };
   });
-  let inferredKind = inferGenerationKind(row.kind, row.request_detail, row.prompt);
+  let inferredKind = inferGenerationKind(row.kind, row.request_detail, row.prompt, {
+    provider: row.provider,
+    creditsUsed: row.credits_used,
+  });
   if (
     (inferredKind === "song" || inferredKind === "cover" || inferredKind === "other") &&
     songRows.some((s) => songMetaLooksLikeRemix(s.meta))

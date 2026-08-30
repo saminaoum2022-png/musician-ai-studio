@@ -1,8 +1,5 @@
--- Admin generation logs: Suno request payload + expanded kinds (cover, remix, extend).
+-- Allow Lyria clip rows in music_generation_logs (Nabad Clip, template/spark clips).
 -- Safe to run once on shared production/staging Supabase.
-
-alter table public.music_generation_logs
-  add column if not exists request_detail text default '';
 
 alter table public.music_generation_logs
   drop constraint if exists music_generation_logs_kind_check;

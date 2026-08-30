@@ -677,6 +677,7 @@ async function handleLyriaClipGenerate(req, res, { user, isAdmin, body }) {
   if (!apiKey) return sendJson(res, 500, { error: "Missing GEMINI_API_KEY on server" });
 
   const templateSpark = String(body?.templateSparkClip || "").trim() === "1";
+  const nabadClip = String(body?.nabadClip || "").trim() === "1";
   const clipCost = resolveClipCreditCost(body);
   if (!isAdmin && templateSpark && !templateSparkClipEnabled()) {
     return sendJson(res, 403, {
@@ -751,6 +752,11 @@ async function handleLyriaClipGenerate(req, res, { user, isAdmin, body }) {
     kind: "clip",
     provider: "lyria",
     prompt: buildPromptLabel(lyrics, stylePrompt, title),
+    requestDetail: templateSpark
+      ? "template_spark_clip"
+      : nabadClip
+        ? "nabad_clip"
+        : "lyria_clip",
     status: "pending",
     creditsUsed: isAdmin ? 0 : clipCost,
     providerCostUsd: LYRIA_CLIP_COST_USD,

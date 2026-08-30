@@ -94,9 +94,10 @@ async function logMusicGeneration({
     body: row,
     prefer: "return=representation",
   });
-  // Older DBs may lack cover/remix/extend/stems in the kind check — fall back so the row still lands.
-  if (!r.ok && ["cover", "remix", "extend", "stems"].includes(row.kind)) {
-    const fallbackKind = row.kind === "stems" ? "instrumental" : "song";
+  // Older DBs may lack cover/remix/extend/stems/clip in the kind check — fall back so the row still lands.
+  if (!r.ok && ["cover", "remix", "extend", "stems", "clip"].includes(row.kind)) {
+    const fallbackKind =
+      row.kind === "stems" ? "instrumental" : row.kind === "clip" ? "other" : "song";
     const retry = { ...row, kind: fallbackKind };
     r = await rest("music_generation_logs", {
       method: "POST",

@@ -57559,7 +57559,7 @@ function parseSunoGenerationRecordInfo(data) {
 
 function resolveExpectedGenerationVariants(taskId) {
   const tid = String(taskId || "").trim();
-  if (tid.startsWith("mmx_")) return 1;
+  if (tid.startsWith("mmx_") || tid.startsWith("lyr_") || tid.startsWith("elv_")) return 1;
   const pending = getGenerationPending();
   if (tid && pending?.taskId && String(pending.taskId) === tid) {
     return Math.max(
@@ -60464,6 +60464,16 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
             variantCount: 1,
           });
           syncGenerationPendingLibraryUi();
+          if (!resolvePendingPhotoCoverDataUrl() && isPollinationsCoverEligible(lastGenerationMeta)) {
+            startParallelCoverForTask(
+              sunoTaskId,
+              buildParallelCoverVariants(sunoTaskId, {
+                title: clipTitle,
+                meta: lastGenerationMeta,
+                variantCount: 1,
+              }),
+            );
+          }
           try {
             beginCoachGenerationStatus({ variantCount: 1, pillText: "Clip generating…" });
           } catch {}
@@ -61129,7 +61139,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
             buildParallelCoverVariants(sunoTaskId, {
               title: String(els.sunoTitle?.value || "").trim() || "Generated song",
               meta: lastGenerationMeta,
-              variantCount: GENERATION_VARIANT_COUNT,
+              variantCount: isSingleVariantTask ? 1 : GENERATION_VARIANT_COUNT,
             }),
           );
         }

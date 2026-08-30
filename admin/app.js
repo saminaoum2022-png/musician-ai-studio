@@ -2338,6 +2338,7 @@ function renderGenerations(data) {
     ["music_video", "Music video"],
     ["studio_guide", "Studio guide"],
     ["mashup", "Mashup"],
+    ["clip", "Nabad / template clip"],
     ["other", "Other"],
   ];
   const providerOptions = [

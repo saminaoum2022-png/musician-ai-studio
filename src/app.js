@@ -226,7 +226,7 @@ import { MUSIC_VIDEO_FEATURE_ENABLED } from "./feature-flags.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260830-215827";
+const APP_BUILD = "20260830-222522";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -23955,6 +23955,28 @@ function defaultClipVocalProfileIdForGender(gender) {
   return first?.id || "";
 }
 
+/** Clip Singer UI: pills first, then Advanced Range gender prefix. */
+function resolveClipSingerGenderForUi() {
+  const sg = String(els.sunoSingerGender?.value || "").trim().toLowerCase();
+  if (sg === "m" || sg === "f") return sg;
+  const vp = String(els.sunoVoiceProfile?.value || "").trim();
+  if (vp.includes("|")) {
+    const g = vp.split("|")[0];
+    if (g === "m" || g === "f") return g;
+  }
+  return "";
+}
+
+function ensureClipSingerGenderSynced() {
+  if (!isLyriaClipGenerateFlow()) return;
+  const inferred = resolveClipSingerGenderForUi();
+  if (!inferred) return;
+  const current = String(els.sunoSingerGender?.value || "").trim().toLowerCase();
+  if (current === inferred) return;
+  if (els.sunoSingerGender) els.sunoSingerGender.value = inferred;
+  try { syncSingerGenderPills(); } catch {}
+}
+
 function getSelectedClipVocalProfileId() {
   return String(els.clipVocalProfileId?.value || "").trim();
 }
@@ -23978,7 +24000,8 @@ function syncClipVocalCharacterUi() {
   }
 
   row.hidden = false;
-  const gender = String(els.sunoSingerGender?.value || "").trim().toLowerCase();
+  ensureClipSingerGenderSynced();
+  const gender = resolveClipSingerGenderForUi();
   const profiles = clipVocalProfilesForGender(gender);
   let selected = getSelectedClipVocalProfileId();
   if (selected && !profiles.some((p) => p.id === selected)) selected = "";
@@ -24026,6 +24049,11 @@ function syncNabadClipCreateUi() {
   }
   if (clip) {
     try { clearActiveVoicePersona({ silent: true }); } catch {}
+    // Advanced Range (Baritone/Soprano) fights clip vocal characters — clear on clip.
+    if (els.sunoVoiceProfile?.value) {
+      els.sunoVoiceProfile.value = "";
+      try { els.sunoVoiceProfile.dispatchEvent(new Event("change", { bubbles: true })); } catch {}
+    }
     _singerPersonaDrawerOpen = false;
     if (personaRow) {
       personaRow.hidden = true;
@@ -60507,10 +60535,18 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
           loadCreateChallengeContext()?.challenge ||
           null;
         const clipVoiceProfile = String(els.sunoVoiceProfile?.value || "").trim();
-        const clipVocalGender = resolveSingerGenderForGeneration({});
-        const clipVoiceTimbre = clipVoiceProfile.includes("|")
-          ? clipVoiceProfile.split("|")[1] || ""
-          : "";
+        ensureClipSingerGenderSynced();
+        const clipVocalGender = resolveClipSingerGenderForUi() || resolveSingerGenderForGeneration({});
+        const clipProfileId =
+          getSelectedClipVocalProfileId() ||
+          defaultClipVocalProfileIdForGender(clipVocalGender);
+        if (clipProfileId && clipProfileId !== getSelectedClipVocalProfileId()) {
+          setSelectedClipVocalProfileId(clipProfileId);
+        }
+        const clipVoiceTimbre =
+          clipProfileId || !clipVoiceProfile.includes("|")
+            ? ""
+            : clipVoiceProfile.split("|")[1] || "";
         const payload = {
           prompt: finalPrompt,
           style: userStyle,
@@ -60525,7 +60561,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
           ...(clipChallenge ? { challenge: clipChallenge } : {}),
           ...(clipVocalGender ? { vocalGender: clipVocalGender } : {}),
           ...(clipVoiceTimbre ? { voiceTimbre: clipVoiceTimbre } : {}),
-          ...(getSelectedClipVocalProfileId() ? { clipVocalProfileId: getSelectedClipVocalProfileId() } : {}),
+          ...(clipProfileId ? { clipVocalProfileId: clipProfileId } : {}),
           watchKind: clipAllowImageOnly ? "photo" : "clip",
         };
         if (templateSparkClip) {
@@ -60544,7 +60580,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
           arabicAddress,
           singerGender: clipVocalGender || undefined,
           voiceProfile: clipVoiceProfile || undefined,
-          clipVocalProfileId: getSelectedClipVocalProfileId() || undefined,
+          clipVocalProfileId: clipProfileId || undefined,
           musicProvider: "lyria",
           imageOnlyInstrumental: false,
           hasReference: false,

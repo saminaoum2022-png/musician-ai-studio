@@ -1859,7 +1859,7 @@ function renderGenerationDetail(data) {
     : `<p class="sectionNote">No prompt summary stored for this log entry.</p>`;
 
   const requestBlock = g.requestDetail
-    ? `<div class="detailMetaBlock"><strong>Suno request</strong></div>
+    ? `<div class="detailMetaBlock"><strong>${g.provider === "lyria" ? "Lyria request" : "Suno request"}</strong></div>
        <pre class="genDetailPrompt genDetailPrompt--payload">${escapeHtml(g.requestDetail)}</pre>`
     : "";
 

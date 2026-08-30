@@ -33,6 +33,7 @@ const {
   templateSparkClipEnabled,
   resolveLyriaModel,
 } = require("../_lib/lyria-upstream");
+const { clipVocalProfileById } = require("../_lib/clip-vocal-profiles");
 const { requireProSubscription } = require("../_lib/pro-web-gate");
 const {
   buildElevenMusicPrompt,
@@ -99,11 +100,41 @@ function buildMusicPrompt(body) {
   const instruments = String(body?.instruments || "").trim();
   const songKey = String(body?.songKey || "").trim();
   const voiceTimbre = String(body?.voiceTimbre || "").trim();
+  const clipVocalProfileId = String(body?.clipVocalProfileId || "").trim();
   const bits = [style];
   if (songKey) bits.push(`Key: ${songKey}`);
   if (instruments) bits.push(`Instruments: ${instruments}`);
-  if (voiceTimbre) bits.push(`Voice timbre: ${voiceTimbre}`);
+  // Clip vocal characters own the Lyria vocal profile — skip Suno-style range labels.
+  if (voiceTimbre && !clipVocalProfileId) bits.push(`Voice timbre: ${voiceTimbre}`);
   return bits.filter(Boolean).join(", ").slice(0, 2000);
+}
+
+function buildLyriaClipAdminDetail(body, lyriaPrompt, flowLabel) {
+  const vocalGender = String(body?.vocalGender || "").trim();
+  const clipVocalProfileId = String(body?.clipVocalProfileId || "").trim();
+  const catalog = clipVocalProfileById(clipVocalProfileId);
+  const lines = [String(flowLabel || "lyria_clip").trim()];
+  if (vocalGender === "m" || vocalGender === "f") {
+    lines.push(`Singer: ${vocalGender === "f" ? "Female" : "Male"}`);
+  }
+  if (clipVocalProfileId) lines.push(`clipVocalProfileId: ${clipVocalProfileId}`);
+  if (catalog) lines.push(`Character: ${catalog.label} (${catalog.labelAr})`);
+  const vocalMatch = /Vocal profile: ([^\n]+)/.exec(String(lyriaPrompt || ""));
+  if (vocalMatch?.[1]) lines.push(`Vocal profile: ${vocalMatch[1].trim()}`);
+  return lines.filter(Boolean).join("\n").slice(0, 4000);
+}
+
+function buildClipPromptLabel(lyrics, stylePrompt, title, body, lyriaPrompt) {
+  const bits = [String(title || "").trim(), String(lyrics || "").trim(), String(stylePrompt || "").trim()];
+  const vocalGender = String(body?.vocalGender || "").trim();
+  if (vocalGender === "m" || vocalGender === "f") {
+    bits.push(`Singer: ${vocalGender === "f" ? "Female" : "Male"}`);
+  }
+  const catalog = clipVocalProfileById(String(body?.clipVocalProfileId || "").trim());
+  if (catalog) bits.push(`Character: ${catalog.label}`);
+  const vocalMatch = /Vocal profile: ([^\n]+)/.exec(String(lyriaPrompt || ""));
+  if (vocalMatch?.[1]) bits.push(`Vocal profile: ${vocalMatch[1].trim()}`);
+  return bits.filter(Boolean).join(" · ").slice(0, 500);
 }
 
 function buildPromptLabel(prompt, style, title) {
@@ -619,6 +650,10 @@ async function handleLyriaGenerate(req, res, { user, isAdmin, body }) {
     lyrics,
     title,
     instrumental,
+    vocalGender: String(body?.vocalGender || "").trim(),
+    voiceTimbre: String(body?.voiceTimbre || "").trim(),
+    challengeId: String(body?.challenge?.id || body?.challengeId || "").trim(),
+    dialectHint: String(body?.dialectHint || body?.dialect || "").trim(),
   });
 
   const pendingPayload = buildPendingStatusPayload({ taskId, provider: "lyria" });
@@ -746,28 +781,35 @@ async function handleLyriaClipGenerate(req, res, { user, isAdmin, body }) {
     });
   }
 
-  queueLogMusicGeneration({
-    userId: user.userId,
-    taskId,
-    kind: "clip",
-    provider: "lyria",
-    prompt: buildPromptLabel(lyrics, stylePrompt, title),
-    requestDetail: templateSpark
-      ? "template_spark_clip"
-      : nabadClip
-        ? "nabad_clip"
-        : "lyria_clip",
-    status: "pending",
-    creditsUsed: isAdmin ? 0 : clipCost,
-    providerCostUsd: LYRIA_CLIP_COST_USD,
-  });
-
   const lyriaPrompt = buildLyriaPrompt({
     stylePrompt,
     lyrics,
     title,
     instrumental,
     clip: true,
+    vocalGender: String(body?.vocalGender || "").trim(),
+    voiceTimbre: String(body?.voiceTimbre || "").trim(),
+    challengeId: String(body?.challenge?.id || body?.challengeId || "").trim(),
+    dialectHint: String(body?.dialectHint || body?.dialect || "").trim(),
+    clipVocalProfileId: String(body?.clipVocalProfileId || "").trim(),
+  });
+
+  const clipFlowLabel = templateSpark
+    ? "template_spark_clip"
+    : nabadClip
+      ? "nabad_clip"
+      : "lyria_clip";
+
+  queueLogMusicGeneration({
+    userId: user.userId,
+    taskId,
+    kind: "clip",
+    provider: "lyria",
+    prompt: buildClipPromptLabel(lyrics, stylePrompt, title, body, lyriaPrompt),
+    requestDetail: buildLyriaClipAdminDetail(body, lyriaPrompt, clipFlowLabel),
+    status: "pending",
+    creditsUsed: isAdmin ? 0 : clipCost,
+    providerCostUsd: LYRIA_CLIP_COST_USD,
   });
 
   const pendingPayload = buildPendingStatusPayload({ taskId, provider: "lyria" });

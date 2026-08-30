@@ -126,6 +126,7 @@ async function resolveRegenPromptBundle(params, regenOpts = {}) {
     nabadIdentityPhrases: identityPhrases,
     visualDirection: vd.direction || undefined,
     userArtworkOverride: hintOverride || undefined,
+    userExplicitArtwork: Boolean(hintOverride),
     creativeMode: true,
   });
 

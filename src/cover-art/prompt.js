@@ -4,7 +4,7 @@
  */
 
 /** Bump when cover prompt policy changes. */
-export const COVER_PROMPT_POLICY_VERSION = 18;
+export const COVER_PROMPT_POLICY_VERSION = 19;
 /** Pollinations flux reliably returns ~768×768 square — request square, crop to 9:16 (avoids vertical stretch). */
 export const POLLINATIONS_COVER_WIDTH = 1024;
 export const POLLINATIONS_COVER_HEIGHT = 1024;
@@ -635,11 +635,14 @@ function paletteForUserArtwork(userArtwork, bucketKey) {
   return moodPaletteForBucket(bucketKey);
 }
 
+function prepareExplicitUserArtworkHint(raw) {
+  return expandArtworkStyleTags(String(raw || "").trim()).replace(/\s+/g, " ").trim().slice(0, 280);
+}
+
 function prepareDirectUserArtworkHint(raw, { allowHumans = false, creative = true } = {}) {
-  let s = expandArtworkStyleTags(String(raw || "").trim());
-  if (creative && !allowHumans) {
-    return s.replace(/\s+/g, " ").trim().slice(0, 280);
-  }
+  let s = prepareExplicitUserArtworkHint(raw);
+  if (!s) return "";
+  if (creative && !allowHumans) return s;
   s = toVisualOnlyPrompt(s, { title: "" });
   s = enrichUserArtworkHint(s);
   if (!allowHumans) s = enforceNoHumansScene(s);
@@ -967,6 +970,9 @@ const ARTWORK_STYLE_TAG_EXPANSIONS = {
   minimal: "minimalist clean composition, generous negative space, soft gradient background",
   surreal: "surreal dreamlike atmosphere, symbolic lighting and depth",
   dreamy: "dreamy soft atmospheric haze, pearlescent light",
+  equalizer: "glowing audio equalizer bars, luminous sonic visualization, premium music artwork",
+  waveform: "flowing audio waveform and sound aura, luminous energy, premium music artwork",
+  abstract: "abstract luminous atmosphere, morphing teal-violet energy, premium music artwork",
   "studio light": "professional studio lighting, soft key light, moody shadows",
   "black & white": "black and white monochrome photography, high contrast silver tones",
   "vintage film": "vintage film grain, warm faded tones, nostalgic cinematic mood",
@@ -1038,7 +1044,9 @@ export function buildFluxCoverPrompt(prompt, { avoidTags = "", visualMode = "" }
   const mode = String(visualMode || "").toLowerCase();
   if (mode === "still_life" || mode === "landscape") {
     const lead = "photorealistic, ";
-    if (!/^photorealistic/i.test(base)) base = `${lead}${base}`;
+    if (!/^photorealistic/i.test(base) && !/\bequalizer\b|\bwaveform\b|\babstract\b/i.test(base)) {
+      base = `${lead}${base}`;
+    }
   }
   const merged = `${base}${suffix}`.replace(/\s+/g, " ").trim();
   return merged.length > FLUX_PROMPT_MAX ? merged.slice(0, FLUX_PROMPT_MAX) : merged;
@@ -1075,7 +1083,7 @@ export function enforceNoHumansScene(scene) {
 
 /**
  * @param {object} input
- * @param {{ sceneOverride?: string, artworkSourceOverride?: string, geminiModel?: string, directorSceneHint?: string, nabadIdentityPhrases?: string, visualDirection?: object, regenSalt?: string, userArtworkOverride?: string, forceMusicFallback?: boolean, regenVariety?: boolean, creativeMode?: boolean }} [options]
+ * @param {{ sceneOverride?: string, artworkSourceOverride?: string, geminiModel?: string, directorSceneHint?: string, nabadIdentityPhrases?: string, visualDirection?: object, regenSalt?: string, userArtworkOverride?: string, userExplicitArtwork?: boolean, forceMusicFallback?: boolean, regenVariety?: boolean, creativeMode?: boolean }} [options]
  * @returns {{ prompt: string, seed: number, bucket: string, visualMode: string, storyTheme: string, artworkSource: string, params: object }}
  */
 export function buildAbstractCoverPrompt(input, options = {}) {
@@ -1094,15 +1102,22 @@ export function buildAbstractCoverPrompt(input, options = {}) {
   const regenVariety = Boolean(options.regenVariety && creativeMode);
   const regenSaltKey = String(options.regenSalt || "").trim();
   const userArtworkOverride = String(options.userArtworkOverride || "").trim().slice(0, 280);
-  const userDirectedRegen = isUserDirectedRegenHint(userArtworkOverride);
   const forceMusicFallback = Boolean(options.forceMusicFallback && !userArtworkOverride);
   const userArtworkRaw = userArtworkOverride || (forceMusicFallback ? "" : resolveUserArtworkPrompt(input));
-  const regenMood = userDirectedRegen ? resolveRegenMoodFromHint(userArtworkOverride || userArtworkRaw) : null;
-  let userArtwork = userArtworkOverride
-    ? prepareDirectUserArtworkHint(userArtworkRaw, { allowHumans, creative: creativeMode })
-    : creativeMode
-      ? enrichUserArtworkHint(sanitizeArtworkPrompt(userArtworkRaw, { title }))
-      : sanitizeArtworkPrompt(enrichUserArtworkHint(userArtworkRaw), { title });
+  const explicitUserHint = Boolean(
+    options.userExplicitArtwork
+    || userArtworkOverride
+    || String(input?.artworkHint || input?.artworkStyle || "").trim(),
+  );
+  const userDirectedRegen = explicitUserHint && isUserDirectedRegenHint(userArtworkOverride || userArtworkRaw);
+  const regenMood = !explicitUserHint && userDirectedRegen ? resolveRegenMoodFromHint(userArtworkOverride || userArtworkRaw) : null;
+  let userArtwork = explicitUserHint
+    ? prepareExplicitUserArtworkHint(userArtworkOverride || userArtworkRaw)
+    : userArtworkOverride
+      ? prepareDirectUserArtworkHint(userArtworkRaw, { allowHumans, creative: creativeMode })
+      : creativeMode
+        ? enrichUserArtworkHint(sanitizeArtworkPrompt(userArtworkRaw, { title }))
+        : sanitizeArtworkPrompt(enrichUserArtworkHint(userArtworkRaw), { title });
   const sceneOverrideRaw = creativeMode
     ? String(options.sceneOverride || "").trim()
     : sanitizeArtworkPrompt(String(options.sceneOverride || "").trim(), { title });
@@ -1121,7 +1136,9 @@ export function buildAbstractCoverPrompt(input, options = {}) {
     : sanitizeArtworkPrompt(String(options.nabadIdentityPhrases || "").trim(), { title });
   const storyScene = creativeMode ? String(scene || "").trim() : toVisualOnlyPrompt(scene, { title });
   const preferStoryScene = storyTheme !== "mood_fallback" && Boolean(storyScene);
-  let visualScene = forceMusicFallback
+  let visualScene = explicitUserHint
+    ? ""
+    : forceMusicFallback
     ? pickFrom(MUSIC_FALLBACK_SCENES, songId, regenSaltKey || "regen-auto")
     : regenVariety
       ? pickFrom(REGEN_VARIETY_POOL, songId, regenSaltKey || "regen-variety")
@@ -1190,18 +1207,27 @@ export function buildAbstractCoverPrompt(input, options = {}) {
         MINIMAL_TEXT_GUARD,
       ];
     } else if (userArtwork) {
-      parts = [
-        autoFrame,
-        userArtwork,
-        nabadIdentityPhrases,
-        paletteForUserArtwork(userArtwork, bucketKey),
-        USER_STYLE_CORE,
-        composition,
-        sonicPhrase(sonicProfile),
-        storyMoodPhrase(storyTheme),
-        bucketMoodPhrase(bucketKey),
-        MINIMAL_TEXT_GUARD,
-      ];
+      if (explicitUserHint && creativeMode) {
+        parts = [
+          userArtwork,
+          nabadIdentityPhrases,
+          paletteForUserArtwork(userArtwork, bucketKey),
+          MINIMAL_TEXT_GUARD,
+        ];
+      } else {
+        parts = [
+          autoFrame,
+          userArtwork,
+          nabadIdentityPhrases,
+          paletteForUserArtwork(userArtwork, bucketKey),
+          USER_STYLE_CORE,
+          composition,
+          sonicPhrase(sonicProfile),
+          storyMoodPhrase(storyTheme),
+          bucketMoodPhrase(bucketKey),
+          MINIMAL_TEXT_GUARD,
+        ];
+      }
     } else {
       parts = [
         autoFrame,

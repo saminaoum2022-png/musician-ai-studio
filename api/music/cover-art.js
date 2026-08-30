@@ -453,7 +453,7 @@ module.exports = async function handler(req, res) {
     }
 
     const promptOpts = {
-      ...(vd.mode === "apply" && vdApplied?.sceneHint
+      ...(vd.mode === "apply" && vdApplied?.sceneHint && !userDirectedArtwork
         ? { directorSceneHint: vdApplied.sceneHint }
         : {}),
       ...(vd.mode === "apply" && vdApplied?.identityPhrases
@@ -464,7 +464,7 @@ module.exports = async function handler(req, res) {
 
     const { prompt, seed, bucket, visualMode, storyTheme, artworkSource, params } = buildAbstractCoverPrompt(
       promptInput,
-      { ...promptOpts, creativeMode: true },
+      { ...promptOpts, creativeMode: true, userExplicitArtwork: userDirectedArtwork },
     );
 
     const rendered = await fetchAbstractCoverImage({

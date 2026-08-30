@@ -120,12 +120,9 @@ function occasionArtworkHintFromMeta(meta) {
 }
 
 function resolveArtworkHint(meta) {
-  const parts = [
-    String(meta?.artworkHint || "").trim(),
-    String(meta?.artworkStyle || "").trim(),
-    occasionArtworkHintFromMeta(meta),
-  ].filter(Boolean);
-  return parts.join(", ").slice(0, 280);
+  const user = String(meta?.artworkHint || meta?.artworkStyle || "").trim();
+  if (user) return user.slice(0, 280);
+  return occasionArtworkHintFromMeta(meta);
 }
 
 export function coverArtParamsFromTrack(track, opts = {}) {

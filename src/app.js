@@ -226,7 +226,7 @@ import { MUSIC_VIDEO_FEATURE_ENABLED } from "./feature-flags.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260830-222522";
+const APP_BUILD = "20260830-224347";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -60534,6 +60534,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
           remixMeta?.challenge ||
           loadCreateChallengeContext()?.challenge ||
           null;
+        const clipArtworkStyle = String(els.sunoArtworkStyle?.value || "").trim();
         const clipVoiceProfile = String(els.sunoVoiceProfile?.value || "").trim();
         ensureClipSingerGenderSynced();
         const clipVocalGender = resolveClipSingerGenderForUi() || resolveSingerGenderForGeneration({});
@@ -60581,6 +60582,9 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
           singerGender: clipVocalGender || undefined,
           voiceProfile: clipVoiceProfile || undefined,
           clipVocalProfileId: clipProfileId || undefined,
+          ...(clipArtworkStyle
+            ? { artworkStyle: clipArtworkStyle, artworkHint: clipArtworkStyle }
+            : {}),
           musicProvider: "lyria",
           imageOnlyInstrumental: false,
           hasReference: false,

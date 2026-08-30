@@ -12,7 +12,46 @@ function safeJson(txt) {
   }
 }
 
+const {
+  CLIP_VOCAL_PROFILES,
+  clipVocalProfileById,
+  defaultClipVocalProfileForGender,
+} = require("./clip-vocal-profiles");
+
 const LYRIA_CLIP_MODEL = "lyria-3-clip-preview";
+
+/** Spark/challenge delivery overrides — positive vocal direction for Lyria. */
+const CHALLENGE_VOCAL_PROFILES = {
+  "hook-rush": "Bright energetic hook delivery, mid-range chest voice, sticky chorus lift",
+  "one-line-reply": "Intimate close-mic reply-song delivery, warm conversational tone",
+  "whisper-to-hook": "Soft breathy opening that builds to a warm mid-range chorus — stay in chest voice",
+  "dabke-drop": "Warm festive vocal, confident polished delivery, clap-ready chorus energy",
+  "sad-to-dance": "Emotional conversational verse, uplifting but controlled chorus lift",
+  "arabic-trend-byte": "Warm Arabic pop vocal, natural dialect delivery, TikTok hook energy",
+  "roast-song": "Playful talk-sing delivery, witty conversational tone",
+  "three-word-hook": "Punchy minimal hook vocal, tight rhythmic delivery",
+  "last-photo-song": "Intimate photo-mood vocal, soft warm close-mic texture",
+  "tiktok-teaser": "Tight punchy social hook vocal, instant payoff energy",
+  "wrong-genre-party": "Ironic verse texture, sugary polished chorus vocal",
+  "countdown-hook": "Rising-tension delivery building to a punchy 3-2-1 payoff",
+  "caption-song": "Intimate caption-style vocal, conversational social hook",
+  "makhlouta-genre": "Playful fusion vocal, warm conversational mashup energy",
+  "city-night": "Intimate night-drive vocal, cinematic close-mic mood",
+  "before-after": "Quiet honest verse, brighter but controlled chorus lift",
+  "oud-loop": "Warm Arabic-friendly vocal, poetic conversational delivery",
+  "shower-thought": "Witty conversational delivery, philosophical one-liner chorus",
+};
+
+const TIMBRE_TO_LYRIA = {
+  breathy: "breathy, airy close-mic texture",
+  warm: "warm, soulful timbre",
+  soft: "soft, gentle delivery",
+  bright: "bright, clear upper chest tone",
+  deep: "deeper chest voice, smooth resonance",
+  raspy: "slightly raspy, textured timbre",
+  soulful: "soulful, emotive delivery",
+  crisp: "crisp, articulate delivery",
+};
 
 function resolveLyriaModel(explicit) {
   const env = String(process.env.LYRIA_MUSIC_MODEL || "").trim();
@@ -47,8 +86,91 @@ function isLyriaClipModel(model) {
   return String(model || "").trim().toLowerCase() === LYRIA_CLIP_MODEL;
 }
 
+/** Strip Suno-style negative clauses — Lyria responds to positive vocal profiles. */
+function sanitizeStyleForLyria(style) {
+  const parts = String(style || "")
+    .split(",")
+    .map((p) => p.trim())
+    .filter(Boolean);
+  if (!parts.length) return "";
+
+  const drop = (part) => {
+    const low = part.toLowerCase();
+    if (/^no\b/.test(low)) return true;
+    if (/^not\b/.test(low)) return true;
+    if (/\bnever\b/.test(low)) return true;
+    if (/\bavoid\b/.test(low)) return true;
+    if (/\bwithout\b/.test(low)) return true;
+    if (/\bno\s+\w+\s+\w+/.test(low)) return true;
+    if (/\bnot\s+a\b/.test(low)) return true;
+    if (low.includes("mid-sentence")) return true;
+    if (low.includes("mid-word")) return true;
+    if (low.includes("full-length")) return true;
+    if (low.includes("full song")) return true;
+    if (low.includes("4-minute")) return true;
+    if (low.includes("stadium")) return true;
+    if (low.includes("crowd sfx")) return true;
+    return false;
+  };
+
+  return parts.filter((p) => !drop(p)).join(", ").replace(/\s+/g, " ").trim();
+}
+
+function mapTimbreToLyria(timbre) {
+  const raw = String(timbre || "").trim();
+  if (!raw) return "";
+  const key = raw.toLowerCase().replace(/[^a-z0-9]+/g, "_");
+  for (const [k, v] of Object.entries(TIMBRE_TO_LYRIA)) {
+    if (key.includes(k)) return v;
+  }
+  return `${raw} vocal texture`;
+}
+
 /**
- * Build a single Lyria prompt from NabadAi create fields.
+ * Positive singer profile per Google Lyria prompting guide.
+ * @see https://ai.google.dev/gemini-api/docs/music-generation
+ */
+function buildLyriaVocalProfile({
+  vocalGender = "",
+  voiceTimbre = "",
+  challengeId = "",
+  dialectHint = "",
+  clipVocalProfileId = "",
+} = {}) {
+  const catalog = clipVocalProfileById(clipVocalProfileId);
+  const bits = [];
+
+  if (catalog?.lyriaVocalPrompt) {
+    bits.push(String(catalog.lyriaVocalPrompt).trim());
+  } else {
+    const g = String(vocalGender || "").trim().toLowerCase();
+    let genderProfile = "";
+    if (g === "f") {
+      genderProfile =
+        "Female Alto: warm, soulful, conversational close-mic chest voice";
+    } else if (g === "m") {
+      genderProfile =
+        "Male Baritone: smooth, warm chest voice, laid-back conversational delivery";
+    } else {
+      genderProfile =
+        "Warm conversational lead vocal, close-mic chest voice, natural cadence";
+    }
+    bits.push(genderProfile);
+    const timbreLine = mapTimbreToLyria(voiceTimbre);
+    if (timbreLine) bits.push(timbreLine);
+  }
+
+  const challengeLine = CHALLENGE_VOCAL_PROFILES[String(challengeId || "").trim()];
+  if (challengeLine) bits.push(challengeLine);
+
+  const dialect = String(dialectHint || "").trim();
+  if (dialect) bits.push(`Natural ${dialect} pronunciation and delivery`);
+
+  return bits.join(". ").replace(/\.\s*\./g, ".").trim();
+}
+
+/**
+ * Build a structured Lyria prompt: musical direction + vocal profile + Lyrics block.
  */
 function buildLyriaPrompt({
   stylePrompt = "",
@@ -56,31 +178,47 @@ function buildLyriaPrompt({
   title = "",
   instrumental = false,
   clip = false,
+  vocalGender = "",
+  voiceTimbre = "",
+  challengeId = "",
+  dialectHint = "",
+  clipVocalProfileId = "",
 } = {}) {
-  const bits = [];
-  const style = String(stylePrompt || "").trim();
+  const sections = [];
+  const style = sanitizeStyleForLyria(stylePrompt);
   const lyricText = String(lyrics || "").trim();
   const songTitle = String(title || "").trim();
 
   if (clip) {
-    bits.push(
-      "Create a short ~28 second music clip (hook-focused, compact structure — NOT a full-length song).",
-      "Use only one verse (optional) plus one chorus — fit all lyrics inside ~28 seconds.",
-      "End on a complete musical phrase with a natural vocal close — never cut mid-sentence or mid-word.",
-      "Vocal delivery: conversational and warm — no shouting, no belted high notes, no stadium anthem style.",
+    sections.push(
+      "Structure: Create a short ~28 second hook-focused music clip (one optional verse plus one chorus — not a full-length song).",
+      "End on a complete musical phrase with a natural vocal close.",
     );
   }
-  if (songTitle) bits.push(`Title: ${songTitle}`);
-  if (style) bits.push(`Musical direction: ${style}`);
-  if (instrumental) {
-    bits.push("Instrumental only — no vocals, no lyrics.");
-  } else if (lyricText) {
-    bits.push("Sing the following lyrics with clear structure tags where helpful:");
-    bits.push(lyricText);
-  } else {
-    bits.push("Write and perform original lyrics matching the musical direction.");
+
+  if (songTitle) sections.push(`Title: ${songTitle}`);
+  if (style) sections.push(`Musical direction: ${style}`);
+
+  if (!instrumental) {
+    const vocalProfile = buildLyriaVocalProfile({
+      vocalGender,
+      voiceTimbre,
+      challengeId,
+      dialectHint,
+      clipVocalProfileId,
+    });
+    if (vocalProfile) sections.push(`Vocal profile: ${vocalProfile}`);
   }
-  return bits.join("\n\n").slice(0, 8000);
+
+  if (instrumental) {
+    sections.push("Instrumental only — no vocals, no lyrics.");
+  } else if (lyricText) {
+    sections.push(`Lyrics:\n${lyricText}`);
+  } else {
+    sections.push("Write and perform original lyrics matching the musical direction.");
+  }
+
+  return sections.join("\n\n").slice(0, 8000);
 }
 
 function decodeInlineAudio(inline) {
@@ -314,7 +452,12 @@ async function lyriaGenerateMusic({ apiKey, model, prompt }) {
 
 module.exports = {
   LYRIA_CLIP_MODEL,
+  clipVocalProfileById,
+  CLIP_VOCAL_PROFILES,
+  defaultClipVocalProfileForGender,
   buildLyriaPrompt,
+  buildLyriaVocalProfile,
+  sanitizeStyleForLyria,
   extractLyriaAlignedWords,
   extractLyriaAudio,
   extractLyriaDurationSecs,

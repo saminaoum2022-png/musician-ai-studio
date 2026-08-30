@@ -619,6 +619,10 @@ async function handleLyriaGenerate(req, res, { user, isAdmin, body }) {
     lyrics,
     title,
     instrumental,
+    vocalGender: String(body?.vocalGender || "").trim(),
+    voiceTimbre: String(body?.voiceTimbre || "").trim(),
+    challengeId: String(body?.challenge?.id || body?.challengeId || "").trim(),
+    dialectHint: String(body?.dialectHint || body?.dialect || "").trim(),
   });
 
   const pendingPayload = buildPendingStatusPayload({ taskId, provider: "lyria" });
@@ -768,6 +772,11 @@ async function handleLyriaClipGenerate(req, res, { user, isAdmin, body }) {
     title,
     instrumental,
     clip: true,
+    vocalGender: String(body?.vocalGender || "").trim(),
+    voiceTimbre: String(body?.voiceTimbre || "").trim(),
+    challengeId: String(body?.challenge?.id || body?.challengeId || "").trim(),
+    dialectHint: String(body?.dialectHint || body?.dialect || "").trim(),
+    clipVocalProfileId: String(body?.clipVocalProfileId || "").trim(),
   });
 
   const pendingPayload = buildPendingStatusPayload({ taskId, provider: "lyria" });

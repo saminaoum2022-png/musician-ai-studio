@@ -226,7 +226,7 @@ import { MUSIC_VIDEO_FEATURE_ENABLED } from "./feature-flags.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260830-162202";
+const APP_BUILD = "20260830-215827";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -704,6 +704,10 @@ const els = {
   btnLyricsDiacritics: document.getElementById("btnLyricsDiacritics"),
   btnLyricsPolish: document.getElementById("btnLyricsPolish"),
   sunoSingerGender: document.getElementById("sunoSingerGender"),
+  clipVocalProfileId: document.getElementById("clipVocalProfileId"),
+  clipVocalCharacterRow: document.getElementById("clipVocalCharacterRow"),
+  clipVocalCharacterDeck: document.getElementById("clipVocalCharacterDeck"),
+  clipVocalCharacterSpec: document.getElementById("clipVocalCharacterSpec"),
   singerPersonaRow: document.getElementById("singerPersonaRow"),
   sunoVoiceProfile: document.getElementById("sunoVoiceProfile"),
   sunoPersonaId: document.getElementById("sunoPersonaId"),
@@ -6793,7 +6797,7 @@ const CHALLENGE_IDEAS = [
   {
     id: "hook-rush",
     title: "Hook Rush",
-    styleLyria: "instant pop hook, tight drums, bright melody, conversational vocal, sticky chorus, natural close, 112 bpm",
+    styleLyria: "instant pop hook, tight drums, bright melody, sticky chorus, 112 bpm",
     style: "Instant viral hook, no intro, punchy drums, bright lead melody, sticky chorus, 112 bpm",
     lyrics: "[Intro]\nRight now, right now, we light it up\nNo waiting for the night to start\n\n[Chorus]\nThis is the moment, don't let it go\nSay it again till everybody knows\nRight now, right now, we light it up\nThis little spark is more than enough",
     prompt: "Make the first 15 seconds the whole reason someone replays the song.",
@@ -6802,7 +6806,7 @@ const CHALLENGE_IDEAS = [
   {
     id: "one-line-reply",
     title: "One-Line Reply",
-    styleLyria: "intimate pop hook, conversational vocal, warm bass, soft drums, natural cadence, gentle close, 98 bpm",
+    styleLyria: "intimate pop hook, warm bass, soft drums, 98 bpm",
     style: "Reply-song pop, conversational vocal, warm bass, soft drums, natural cadence, 98 bpm",
     lyricsMode: "instructions",
     lyrics: "Write a ~25 second clip replying to a text or DM.\n\nOne short verse (2 lines) reacting to what they said.\nOne chorus (2–4 lines) — the line you'd actually send back.\n\nKeep words short. End on a complete phrase — nothing cut mid-sentence.",
@@ -6812,7 +6816,7 @@ const CHALLENGE_IDEAS = [
   {
     id: "whisper-to-hook",
     title: "Whisper to Hook",
-    styleLyria: "soft intimate opening, then bright pop chorus, close-mic vocal, no belt, natural ending, 102 bpm",
+    styleLyria: "soft intimate opening, bright pop chorus, close-mic vocal, 102 bpm",
     style: "Soft intro building to catchy chorus, intimate vocal opening, bright drop, 102 bpm",
     lyricsMode: "instructions",
     lyrics: "Challenge: start quiet, land loud — but keep it ~25 seconds total.\n\n[Verse] — 2 whisper-soft lines (close, personal).\n[Chorus] — 3–4 lines, bigger but not shouty; end on a held final word.\n\nNo bridge. No second verse. Must feel finished at the end.",
@@ -6822,7 +6826,7 @@ const CHALLENGE_IDEAS = [
   {
     id: "dabke-drop",
     title: "Dabke Drop",
-    styleLyria: "Levantine dabke pop, mijwiz accents, festive 6/8 rhythm, warm vocal, clap-ready chorus, natural close, 126 bpm",
+    styleLyria: "Levantine dabke pop, mijwiz accents, festive 6/8 rhythm, clap-ready chorus, 126 bpm",
     style: "Levantine dabke pop, mijwiz and oud accents, ktakufti 6/8 dabkeh rhythm, wedding energy, 126 bpm",
     lyrics: "[Verse]\nOpen the doors, let the family see\nHands in the air, everybody with me\nStep to the left, clap to the sound\nTonight we lift this whole room off the ground\n\n[Chorus]\nYalla yalla, clap your hands\nDabke rolling through the land\nOne more step and one more beat\nThe wedding rhythm starts right here",
     prompt: "Build the chorus everyone can clap to.",
@@ -6831,7 +6835,7 @@ const CHALLENGE_IDEAS = [
   {
     id: "sad-to-dance-challenge",
     title: "Sad to Dance",
-    styleLyria: "bittersweet dance pop, minor piano, warm bass, emotional conversational vocal, uplifting chorus, gentle close, 118 bpm",
+    styleLyria: "bittersweet dance pop, minor piano, warm bass, uplifting chorus, 118 bpm",
     style: "Bittersweet dance pop, minor-key piano intro, warm bass, emotional vocal, uplifting drop, 118 bpm",
     lyricsMode: "instructions",
     lyrics: "Challenge: flip a sad feeling into dance — keep the emotion.\n\nVerse: quiet and honest, like a text you never sent.\nPre-chorus: let the feeling lift.\nChorus: dance through the sadness — one repeatable hook line.\n\nMake it personal. Tap ✦ when ready for a short lyric draft (not a full song).",
@@ -6841,7 +6845,7 @@ const CHALLENGE_IDEAS = [
   {
     id: "arabic-trend-byte",
     title: "Arabic Trend Byte",
-    styleLyria: "modern Arabic pop hook, glossy beat, TikTok-ready, warm conversational vocal, natural ending, 104 bpm",
+    styleLyria: "modern Arabic pop hook, glossy beat, TikTok-ready, 104 bpm",
     style: "modern Arabic pop, TikTok-ready hook, glossy 808s, sticky hook energy, 104 bpm",
     lyrics: "[Verse]\nقليل كلام كتير إحساس\nالليلة الصوت بيعمل مزاج\nمن جملة وحدة طلع نغمة\nصارت أغنية على السريع\n\n[Chorus]\nيلا يلا اسمع المقطع\nصغير بس يضرب قوي\nمن الترند للقلب مباشرة\nهيدا هو الترند تبعي",
     prompt: "Turn a tiny Arabic phrase into a trend-sized hook under 20 seconds.",
@@ -6850,7 +6854,7 @@ const CHALLENGE_IDEAS = [
   {
     id: "roast-song",
     title: "Roast Song",
-    styleLyria: "playful comedy pop, talk-sing verse, catchy roast chorus, conversational delivery, no screaming, 118 bpm",
+    styleLyria: "playful comedy pop, talk-sing verse, catchy roast chorus, 118 bpm",
     style: "playful comedy pop, punchy brass stabs, talk-sing verse, catchy roast chorus, 118 bpm",
     lyrics: "[Verse]\nYou said you would be on time again\nYour excuses got a perfect ten\nI am not mad, I am impressed\nYou turned lateness into art, I guess\n\n[Chorus]\nThis is your roast, keep it light\nWe still love you tonight\nSay it with a smile, not a fight\nFunny but it feels alright",
     prompt: "Write a playful roast song for a friend — funny, never cruel.",
@@ -6859,7 +6863,7 @@ const CHALLENGE_IDEAS = [
   {
     id: "three-word-hook",
     title: "3-Word Hook",
-    styleLyria: "minimal pop hook, huge chorus feel, clap stack, conversational vocal, 3-word repeat, natural close, 110 bpm",
+    styleLyria: "minimal pop hook, huge chorus feel, clap stack, 110 bpm",
     style: "hyper-catchy pop, minimal lyrics, huge chorus, clap stack, 110 bpm",
     lyrics: "[Chorus]\nLights go up now\nFeel it right now\nSay it out loud\nLights go up now",
     prompt: "Only three words in the chorus — make them impossible to forget.",
@@ -6868,7 +6872,7 @@ const CHALLENGE_IDEAS = [
   {
     id: "last-photo-song",
     title: "Last Photo Song",
-    styleLyria: "photo-inspired pop, warm textures, intimate conversational vocal, soft natural ending, 98 bpm",
+    styleLyria: "photo-inspired pop, warm textures, intimate vocal, 98 bpm",
     style: "Photo-inspired pop, emotional snapshot, warm textures, intimate vocal, 98 bpm",
     lyrics: "[Verse]\nThis moment in a frame\nA little light, a little name\n\n[Chorus]\nHold it close, let it sing\nOne small photo, everything",
     prompt: "Turn the feeling in your photo into a short personal hook — any photo you choose.",
@@ -6877,7 +6881,7 @@ const CHALLENGE_IDEAS = [
   {
     id: "tiktok-teaser",
     title: "TikTok Teaser",
-    styleLyria: "short social hook, tight drums, bright ear-candy, conversational vocal, no belt, complete ending, 120 bpm",
+    styleLyria: "short social hook, tight drums, bright ear-candy, 120 bpm",
     style: "Short social teaser, instant hook, tight drums, bright ear-candy, 120 bpm",
     lyrics: "Start with the hook first.\nNo long intro.\nMake the first 8 seconds impossible to skip.",
     prompt: "Build a short teaser hook made for social — instant payoff, zero slow build.",
@@ -6886,7 +6890,7 @@ const CHALLENGE_IDEAS = [
   {
     id: "wrong-genre-party",
     title: "Wrong Genre",
-    styleLyria: "genre contrast pop, ironic verse texture, sugary chorus, conversational vocal, no scream, natural close, 132 bpm",
+    styleLyria: "genre contrast pop, ironic verse texture, sugary chorus, 132 bpm",
     style: "death metal drums with sugary K-pop chorus, ironic contrast, 132 bpm",
     lyrics: "[Verse]\nYou wanted soft and sweet and slow\nI brought thunder just for show\nThe verse sounds like a battle cry\nThen the chorus floats up to the sky\n\n[Chorus]\nWrong genre, right feeling\nStill dancing on the ceiling\nIf it should not work, it works tonight\nWrong genre, holding tight",
     prompt: "Pick two genres that should not match — make the chorus win anyway.",
@@ -6895,7 +6899,7 @@ const CHALLENGE_IDEAS = [
   {
     id: "countdown-hook",
     title: "Countdown Hook",
-    styleLyria: "countdown pop drop, tight drums, rising tension, 3-2-1 payoff, conversational vocal, natural close, 118 bpm",
+    styleLyria: "countdown pop drop, tight drums, rising tension, 3-2-1 payoff, 118 bpm",
     style: "countdown pop drop, rising tension, 3-2-1 hook, punchy drums, 118 bpm",
     lyricsMode: "instructions",
     lyrics: "Build a ~25 second countdown clip.\n\n[Verse] — 2 lines setting the moment.\n[Chorus] — 3–4 lines with a 3-2-1 or now-now-now hook.\n\nEnd on a complete phrase — nothing cut mid-count.",
@@ -6905,7 +6909,7 @@ const CHALLENGE_IDEAS = [
   {
     id: "caption-song",
     title: "Caption Song",
-    styleLyria: "Instagram-caption pop, intimate vocal, warm beat, conversational hook, natural ending, 100 bpm",
+    styleLyria: "Instagram-caption pop, intimate vocal, warm beat, 100 bpm",
     style: "social caption pop, intimate vocal, warm beat, sticky hook, 100 bpm",
     lyricsMode: "instructions",
     lyrics: "Turn an Instagram caption into a ~25 second clip.\n\nPaste or describe the caption in the box.\n\n[Verse] — 2 lines from the caption mood.\n[Chorus] — 2–4 lines, the line you'd post as the hook.\n\nShort words. Clean ending.",
@@ -6915,7 +6919,7 @@ const CHALLENGE_IDEAS = [
   {
     id: "makhlouta-genre",
     title: "Makhlouta Genre",
-    styleLyria: "genre-blend pop, unexpected fusion, warm conversational vocal, playful chorus, no belt, natural close, 110 bpm",
+    styleLyria: "genre-blend pop, unexpected fusion, playful chorus, 110 bpm",
     style: "genre mashup pop, unexpected fusion, playful contrast, catchy chorus, 110 bpm",
     lyricsMode: "instructions",
     lyrics: "Pick two genres that should not work together (e.g. Raï × K-pop, Dabke × trap).\n\n[Verse] — 2 lines lean into the weird combo.\n[Chorus] — 3–4 lines, one hook that owns the mashup.\n\n~25 seconds total. End cleanly.",
@@ -6925,7 +6929,7 @@ const CHALLENGE_IDEAS = [
   {
     id: "city-night",
     title: "City Night",
-    styleLyria: "night-drive pop, neon pads, warm bass, intimate conversational vocal, city-lights mood, soft close, 96 bpm",
+    styleLyria: "night-drive pop, neon pads, warm bass, city-lights mood, 96 bpm",
     style: "night-drive pop, neon pads, warm bass, city-lights mood, 96 bpm",
     lyricsMode: "instructions",
     lyrics: "Write a ~25 second night-in-the-city clip.\n\nName a city or vibe (Beirut, Dubai, Cairo, late taxi, rooftop).\n\n[Verse] — 2 cinematic lines.\n[Chorus] — 3–4 lines, one repeatable night hook.\n\nConversational, not shouty. Complete ending.",
@@ -6935,7 +6939,7 @@ const CHALLENGE_IDEAS = [
   {
     id: "before-after",
     title: "Before & After",
-    styleLyria: "mood-flip pop, quiet verse, brighter chorus, emotional conversational vocal, gentle lift, natural close, 104 bpm",
+    styleLyria: "mood-flip pop, quiet verse, brighter chorus, gentle lift, 104 bpm",
     style: "mood-flip pop, quiet verse, brighter chorus, emotional lift, 104 bpm",
     lyricsMode: "instructions",
     lyrics: "Flip the mood in ~25 seconds.\n\n[Verse] — 2 quiet honest lines (before).\n[Chorus] — 3–4 lines, brighter but not screamy (after).\n\nOne feeling changes. End on a held final word.",
@@ -6945,7 +6949,7 @@ const CHALLENGE_IDEAS = [
   {
     id: "oud-loop",
     title: "Oud Loop",
-    styleLyria: "minimal oud pop loop, modern beat, warm conversational vocal, Arabic-friendly, natural ending, 92 bpm",
+    styleLyria: "minimal oud pop loop, modern beat, Arabic-friendly, 92 bpm",
     style: "minimal oud pop loop, modern beat, warm vocal, Arabic-friendly, 92 bpm",
     lyricsMode: "instructions",
     lyrics: "Write a ~25 second oud-led clip.\n\n[Verse] — 2 lines, simple and poetic.\n[Chorus] — 2–4 lines with one Arabic or English hook phrase.\n\nKeep syllables short. Must feel finished at the end.",
@@ -6955,7 +6959,7 @@ const CHALLENGE_IDEAS = [
   {
     id: "shower-thought",
     title: "Shower Thought",
-    styleLyria: "philosophical pop hook, soft beat, conversational vocal, witty one-liner chorus, natural close, 98 bpm",
+    styleLyria: "philosophical pop hook, soft beat, witty one-liner chorus, 98 bpm",
     style: "philosophical pop hook, soft beat, witty one-liner chorus, 98 bpm",
     lyricsMode: "instructions",
     lyrics: "Turn a random shower thought into a ~25 second clip.\n\n[Verse] — 2 lines set up the thought.\n[Chorus] — 2–4 lines — the thought as a repeatable hook.\n\nFunny or deep. Short lines. Clean ending.",
@@ -7738,9 +7742,11 @@ function applyDiscoveryIdeaToCreate(idea) {
   if (Object.prototype.hasOwnProperty.call(idea, "dialect") && els.sunoDialect) els.sunoDialect.value = String(idea.dialect || "").trim();
   if (Object.prototype.hasOwnProperty.call(idea, "dialectHint") && els.sunoDialectHint) els.sunoDialectHint.value = String(idea.dialectHint || "").trim();
   if (els.sunoAvoidTags && (useTemplateGuards || Object.prototype.hasOwnProperty.call(idea, "avoidTags"))) {
-    els.sunoAvoidTags.value = trimAvoidTagsForSuno(
-      String(idea.avoidTags || (useTemplateGuards ? templateAvoidTagsForProvider() : "")),
-    );
+    els.sunoAvoidTags.value = templateSparkClipEnabled()
+      ? ""
+      : trimAvoidTagsForSuno(
+          String(idea.avoidTags || (useTemplateGuards ? templateAvoidTagsForProvider() : "")),
+        );
   }
   if (els.sunoPrompt) {
     const focus = idea.createFocus
@@ -8275,13 +8281,6 @@ const TEMPLATE_GENERATION_AVOID_TAGS =
 const TEMPLATE_GENERATION_STYLE_SUFFIX =
   "studio vocal, polished mix, no crowd sfx or stadium ambience";
 
-/** Lyria Clip: natural vocal, complete ~28s phrase — no Suno-style belt/shout. */
-const LYRIA_CLIP_STYLE_SUFFIX =
-  "~28 second clip, conversational vocal, natural cadence, complete musical ending, no mid-sentence cut, no belted high notes, no shouting, soft close";
-
-const LYRIA_CLIP_AVOID_TAGS =
-  "shouty vocals, screaming, belted high notes, stadium anthem, crowd noise, long intro, full song arrangement, 4-minute";
-
 function withTemplateStyleGuard(style) {
   const base = String(style || "").trim();
   if (!base) return TEMPLATE_GENERATION_STYLE_SUFFIX;
@@ -8294,7 +8293,7 @@ function withLyriaClipStyleGuard(style, challengeId = "") {
   const fromSpark = CHALLENGE_IDEAS.find((c) => String(c.id) === id);
   const base = String(fromSpark?.styleLyria || style || "").trim();
   const clause = lyriaClipDurationStyleClause(id);
-  const merged = [base, clause, LYRIA_CLIP_STYLE_SUFFIX].filter(Boolean).join(", ");
+  const merged = [base, clause].filter(Boolean).join(", ");
   return merged.replace(/,\s*,/g, ",").slice(0, 480);
 }
 
@@ -8306,7 +8305,7 @@ function templateStyleForProvider(style, challengeId = "") {
 }
 
 function templateAvoidTagsForProvider() {
-  if (templateSparkClipEnabled()) return LYRIA_CLIP_AVOID_TAGS;
+  if (templateSparkClipEnabled()) return "";
   return TEMPLATE_GENERATION_AVOID_TAGS;
 }
 
@@ -12400,10 +12399,16 @@ function applyRemixTemplateToCreate(tpl, name) {
   const lyrics = String(tpl.lyrics || "").replaceAll("[name]", cleanName);
   const titleWithName = `${tpl.title} — for ${cleanName}`;
   if (els.sunoPrompt) els.sunoPrompt.value = lyrics;
-  if (els.sunoStyle) els.sunoStyle.value = withTemplateStyleGuard(String(tpl.style || ""));
+  if (els.sunoStyle) {
+    els.sunoStyle.value = templateSparkClipEnabled()
+      ? templateStyleForProvider(String(tpl.style || ""), "")
+      : withTemplateStyleGuard(String(tpl.style || ""));
+  }
   if (els.sunoTitle) els.sunoTitle.value = titleWithName;
   if (els.sunoAvoidTags) {
-    els.sunoAvoidTags.value = trimAvoidTagsForSuno(TEMPLATE_GENERATION_AVOID_TAGS);
+    els.sunoAvoidTags.value = templateSparkClipEnabled()
+      ? ""
+      : trimAvoidTagsForSuno(TEMPLATE_GENERATION_AVOID_TAGS);
   }
   pendingSearchRemixMeta = {
     searchTemplateId: String(tpl.id || "").trim(),
@@ -23887,6 +23892,124 @@ function syncNabadClipHomeCard() {
   });
 }
 
+/** Nabad Clip vocal characters — keep in sync with api/_lib/clip-vocal-profiles.js */
+const CLIP_VOCAL_PROFILES = [
+  {
+    id: "male_jabali",
+    gender: "m",
+    label: "Folk",
+    labelAr: "جبلي",
+    spec: "Earthy folk chest voice with festive wedding energy. Best for Levantine dabke & jabali-style — Arabic or English.",
+  },
+  {
+    id: "male_bahha",
+    gender: "m",
+    label: "Grit",
+    labelAr: "بحة",
+    spec: "Warm rasp and texture — emotive, gritty, human. Pop, rock, or heartfelt tracks in any language.",
+  },
+  {
+    id: "male_deep",
+    gender: "m",
+    label: "Deep",
+    labelAr: "عميق",
+    spec: "Low resonant chest — smooth, heavy, laid-back warmth. Slow R&B, romance, or Gulf-leaning vibes.",
+  },
+  {
+    id: "female_warm",
+    gender: "f",
+    label: "Warm Pop",
+    labelAr: "دافئ",
+    spec: "Modern pop hook — glossy, conversational, close-mic warmth. Upbeat choruses in Arabic or English.",
+  },
+  {
+    id: "female_emotional",
+    gender: "f",
+    label: "Emotional",
+    labelAr: "عاطفي",
+    spec: "Soulful legato delivery — longing, expressive phrases. Ballads and emotional hooks in any language.",
+  },
+  {
+    id: "female_soft",
+    gender: "f",
+    label: "Soft",
+    labelAr: "ناعم",
+    spec: "Breathy intimate vocal — delicate, close-mic, gentle and light.",
+  },
+];
+
+function clipVocalProfileById(id) {
+  const key = String(id || "").trim();
+  if (!key) return null;
+  return CLIP_VOCAL_PROFILES.find((p) => p.id === key) || null;
+}
+
+function clipVocalProfilesForGender(gender) {
+  const g = String(gender || "").trim().toLowerCase();
+  if (g !== "m" && g !== "f") return [];
+  return CLIP_VOCAL_PROFILES.filter((p) => p.gender === g);
+}
+
+function defaultClipVocalProfileIdForGender(gender) {
+  const first = clipVocalProfilesForGender(gender)[0];
+  return first?.id || "";
+}
+
+function getSelectedClipVocalProfileId() {
+  return String(els.clipVocalProfileId?.value || "").trim();
+}
+
+function setSelectedClipVocalProfileId(id) {
+  const key = String(id || "").trim();
+  if (els.clipVocalProfileId) els.clipVocalProfileId.value = key;
+}
+
+function syncClipVocalCharacterUi() {
+  const row = els.clipVocalCharacterRow;
+  const deck = els.clipVocalCharacterDeck;
+  const specEl = els.clipVocalCharacterSpec;
+  if (!row || !deck) return;
+
+  if (!isLyriaClipGenerateFlow()) {
+    row.hidden = true;
+    deck.innerHTML = "";
+    if (specEl) specEl.textContent = "";
+    return;
+  }
+
+  row.hidden = false;
+  const gender = String(els.sunoSingerGender?.value || "").trim().toLowerCase();
+  const profiles = clipVocalProfilesForGender(gender);
+  let selected = getSelectedClipVocalProfileId();
+  if (selected && !profiles.some((p) => p.id === selected)) selected = "";
+  if (!selected && profiles.length) {
+    selected = profiles[0].id;
+    setSelectedClipVocalProfileId(selected);
+  }
+
+  if (!gender) {
+    deck.innerHTML = `<p class="clipVocalCharacterPickGender">Choose Male or Female above to see vocal characters.</p>`;
+    if (specEl) specEl.textContent = "";
+    setSelectedClipVocalProfileId("");
+    return;
+  }
+
+  deck.innerHTML = profiles
+    .map((p) => {
+      const active = p.id === selected;
+      return `<button type="button" class="clipVocalCharacterCard${active ? " isActive" : ""}" data-clip-vocal-id="${escapeHtml(p.id)}" role="option" aria-selected="${active ? "true" : "false"}">
+        <span class="clipVocalCharacterCardMain">${escapeHtml(p.label)}</span>
+        <span class="clipVocalCharacterCardSub">${escapeHtml(p.labelAr)}</span>
+      </button>`;
+    })
+    .join("");
+
+  const hit = clipVocalProfileById(selected);
+  if (specEl) {
+    specEl.textContent = hit?.spec || "Pick a vocal character for this clip.";
+  }
+}
+
 function syncNabadClipCreateUi() {
   const clip = isLyriaClipGenerateFlow();
   const personaPill = document.getElementById("singerPersonaPill");
@@ -23897,6 +24020,10 @@ function syncNabadClipCreateUi() {
     personaPill.setAttribute("aria-hidden", clip ? "true" : "false");
   }
   if (wrap) wrap.classList.toggle("nabadClipNoPersona", clip);
+  if (els.clipVocalCharacterRow) {
+    els.clipVocalCharacterRow.hidden = !clip;
+    els.clipVocalCharacterRow.setAttribute("aria-hidden", clip ? "false" : "true");
+  }
   if (clip) {
     try { clearActiveVoicePersona({ silent: true }); } catch {}
     _singerPersonaDrawerOpen = false;
@@ -23919,7 +24046,9 @@ function syncNabadClipCreateUi() {
   } else {
     try { renderSingerPersonaPill(); } catch {}
     try { renderActivePersonaBanner(); } catch {}
+    if (els.clipVocalProfileId) els.clipVocalProfileId.value = "";
   }
+  try { syncClipVocalCharacterUi(); } catch {}
   try { syncSingerGenderPills(); } catch {}
 }
 
@@ -60167,6 +60296,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
           try { els.sunoVoiceProfile.dispatchEvent(new Event("change", { bubbles: true })); } catch {}
         }
         syncSingerGenderPills();
+        try { syncClipVocalCharacterUi(); } catch {}
         try { renderReferenceHints(); } catch {}
       });
       // Keep pills in sync when a Range is picked in Options (its value
@@ -60178,9 +60308,21 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
             els.sunoSingerGender.value = vp.split("|")[0] === "f" ? "f" : "m";
           }
           syncSingerGenderPills();
+          try { syncClipVocalCharacterUi(); } catch {}
         });
       }
       syncSingerGenderPills();
+    }
+    if (els.clipVocalCharacterDeck) {
+      els.clipVocalCharacterDeck.addEventListener("click", (e) => {
+        const card = e.target?.closest?.("[data-clip-vocal-id]");
+        if (!card || !els.clipVocalCharacterDeck.contains(card)) return;
+        haptic("light");
+        const id = String(card.getAttribute("data-clip-vocal-id") || "").trim();
+        if (!id) return;
+        setSelectedClipVocalProfileId(id);
+        syncClipVocalCharacterUi();
+      });
     }
     // Persona pill (third Singer slot): create when none, else toggle the drawer.
     const personaPill = document.getElementById("singerPersonaPill");
@@ -60360,6 +60502,15 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
           String(els.sunoTitle?.value || "").trim() ||
           String(remixMeta?.searchTemplateTitle || remixMeta?.challenge?.title || "").trim() ||
           (templateSparkClip ? "Template clip" : "Nabad Clip");
+        const clipChallenge =
+          remixMeta?.challenge ||
+          loadCreateChallengeContext()?.challenge ||
+          null;
+        const clipVoiceProfile = String(els.sunoVoiceProfile?.value || "").trim();
+        const clipVocalGender = resolveSingerGenderForGeneration({});
+        const clipVoiceTimbre = clipVoiceProfile.includes("|")
+          ? clipVoiceProfile.split("|")[1] || ""
+          : "";
         const payload = {
           prompt: finalPrompt,
           style: userStyle,
@@ -60371,7 +60522,10 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
           ...(templateSparkClip ? { templateSparkClip: "1" } : {}),
           ...(remixMeta?.searchTemplateId ? { searchTemplateId: String(remixMeta.searchTemplateId).trim() } : {}),
           ...(remixMeta?.searchTemplateTitle ? { searchTemplateTitle: String(remixMeta.searchTemplateTitle).trim() } : {}),
-          ...(templateSparkClip && remixMeta?.challenge ? { challenge: remixMeta.challenge } : {}),
+          ...(clipChallenge ? { challenge: clipChallenge } : {}),
+          ...(clipVocalGender ? { vocalGender: clipVocalGender } : {}),
+          ...(clipVoiceTimbre ? { voiceTimbre: clipVoiceTimbre } : {}),
+          ...(getSelectedClipVocalProfileId() ? { clipVocalProfileId: getSelectedClipVocalProfileId() } : {}),
           watchKind: clipAllowImageOnly ? "photo" : "clip",
         };
         if (templateSparkClip) {
@@ -60388,6 +60542,9 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
           dialect,
           dialectHint,
           arabicAddress,
+          singerGender: clipVocalGender || undefined,
+          voiceProfile: clipVoiceProfile || undefined,
+          clipVocalProfileId: getSelectedClipVocalProfileId() || undefined,
           musicProvider: "lyria",
           imageOnlyInstrumental: false,
           hasReference: false,

@@ -197,7 +197,7 @@
       onload="this.media='all'"
     />
     <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Display:wght@900&family=Inter:wght@900&display=swap" /></noscript>
-    <link rel="stylesheet" href="./styles.css?v=20260830-162202" />
+    <link rel="stylesheet" href="./styles.css?v=20260830-215827" />
 
     <meta name="description" content="Create complete songs from lyrics, a hum, or a photo with NabadAi. Explore AI music tools, Arabic styles, voice personas, and creator sharing." />
     <meta property="og:type" content="website" />
@@ -1177,6 +1177,15 @@
                 </button>
               </div>
               <div id="singerPersonaRow" class="singerPersonaRow" hidden></div>
+              <input type="hidden" id="clipVocalProfileId" value="" />
+              <div id="clipVocalCharacterRow" class="clipVocalCharacterRow" hidden>
+                <div class="clipVocalCharacterHead">
+                  <span class="inPanelLabel">Vocal character</span>
+                  <span class="clipVocalCharacterHint">For Nabad Clip · Lyria</span>
+                </div>
+                <div id="clipVocalCharacterDeck" class="clipVocalCharacterDeck" role="listbox" aria-label="Vocal character"></div>
+                <p id="clipVocalCharacterSpec" class="clipVocalCharacterSpec" aria-live="polite"></p>
+              </div>
             </div>
               <label class="field grow inputPanel inputPanel--style">
                 <div class="label inPanelLabel stylePanelHead">
@@ -5097,6 +5106,6 @@
     </script>
     <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
     <script src="./env.client.js" onerror="void 0"></script>
-    <script type="module" src="./src/app.js?v=20260830-162202"></script>
+    <script type="module" src="./src/app.js?v=20260830-215827"></script>
   </body>
 </html>

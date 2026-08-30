@@ -27,21 +27,20 @@ function lyriaGenerateEnabled() {
   return v === "1" || v === "true" || v === "yes";
 }
 
-function nabadClipEnabled() {
-  const v = String(process.env.NABAD_CLIP_ENABLED || "").trim().toLowerCase();
-  return v === "1" || v === "true" || v === "yes";
+function envFlagEnabled(name, { defaultOn = true } = {}) {
+  const v = String(process.env[name] || "").trim().toLowerCase();
+  if (v === "1" || v === "true" || v === "yes") return true;
+  if (v === "0" || v === "false" || v === "no") return false;
+  return defaultOn;
 }
 
-/** Staging: Templates + Sparks shelf → Lyria Clip for all signed-in users. */
+function nabadClipEnabled() {
+  return envFlagEnabled("NABAD_CLIP_ENABLED", { defaultOn: true });
+}
+
+/** Templates, Sparks, and challenge shelves → Lyria Clip (~30s). */
 function templateSparkClipEnabled() {
-  const v = String(process.env.TEMPLATE_SPARK_CLIP_ENABLED || "").trim().toLowerCase();
-  if (v === "1" || v === "true" || v === "yes") return true;
-  const branch = String(
-    process.env.VERCEL_GIT_COMMIT_REF || process.env.VERCEL_GIT_COMMIT_REF_SLUG || "",
-  )
-    .trim()
-    .toLowerCase();
-  return branch === "staging";
+  return envFlagEnabled("TEMPLATE_SPARK_CLIP_ENABLED", { defaultOn: true });
 }
 
 function isLyriaClipModel(model) {

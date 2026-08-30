@@ -33,6 +33,7 @@ const {
   templateSparkClipEnabled,
   resolveLyriaModel,
 } = require("../_lib/lyria-upstream");
+const { requireProSubscription } = require("../_lib/pro-web-gate");
 const {
   buildElevenMusicPrompt,
   buildElevenReferenceCompositionPlan,
@@ -58,11 +59,12 @@ const {
 } = require("../_lib/music-generation-log");
 
 const FULL_SONG_COST = 12;
-const NABAD_CLIP_COST = 6;
-const TEMPLATE_SPARK_CLIP_COST = Math.max(
+const LYRIA_CLIP_CREDIT_COST = Math.max(
   1,
-  Number(process.env.TEMPLATE_SPARK_CLIP_COST || 10),
+  Number(process.env.LYRIA_CLIP_CREDIT_COST || process.env.TEMPLATE_SPARK_CLIP_COST || 10),
 );
+const NABAD_CLIP_COST = LYRIA_CLIP_CREDIT_COST;
+const TEMPLATE_SPARK_CLIP_COST = LYRIA_CLIP_CREDIT_COST;
 const BUCKET = "song_archive";
 const MINIMAX_PROVIDER_COST_USD = Number(process.env.MINIMAX_USD_PER_TRACK || "0");
 const LYRIA_PROVIDER_COST_USD = Number(process.env.LYRIA_USD_PER_TRACK || "0.08");
@@ -676,11 +678,26 @@ async function handleLyriaClipGenerate(req, res, { user, isAdmin, body }) {
 
   const templateSpark = String(body?.templateSparkClip || "").trim() === "1";
   const clipCost = resolveClipCreditCost(body);
-  if (!isAdmin && !nabadClipEnabled() && !(templateSpark && templateSparkClipEnabled())) {
+  if (!isAdmin && templateSpark && !templateSparkClipEnabled()) {
     return sendJson(res, 403, {
-      error: "Nabad Clip is admin-only on this environment.",
-      code: "nabad_clip_admin_only",
+      error: "Template and Spark clips are not enabled on this server.",
+      code: "template_spark_clip_disabled",
     });
+  }
+  if (!isAdmin && !templateSpark) {
+    if (!nabadClipEnabled()) {
+      return sendJson(res, 403, {
+        error: "Nabad Clip is not enabled on this server.",
+        code: "nabad_clip_disabled",
+      });
+    }
+    const proGate = await requireProSubscription(user.userId);
+    if (!proGate.ok) {
+      return sendJson(res, proGate.status, {
+        error: proGate.error,
+        code: proGate.code,
+      });
+    }
   }
 
   if (body?.personaId || body?.hasReference) {

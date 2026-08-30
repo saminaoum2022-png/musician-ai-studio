@@ -3920,7 +3920,7 @@ function setCreateTemplateLoadedHint(title) {
   els.createChallengeHint.classList.add("createChallengeHint--template");
   if (els.createChallengeHintTitle) els.createChallengeHintTitle.textContent = `Template: ${t}`;
   if (els.createChallengeHintSub) {
-    els.createChallengeHintSub.textContent = templateSparkClipStagingEnabled()
+    els.createChallengeHintSub.textContent = templateSparkClipEnabled()
       ? `~30s Lyria clip · ${formatCreditsAmount(TEMPLATE_SPARK_CLIP_CREDIT_COST)} credits. ${TEMPLATE_SPARK_CLIP_LYRICS_HINT}`
       : "Personalize the lyrics and style, then tap Generate.";
   }
@@ -3946,7 +3946,7 @@ function setCreateChallengeHint(challenge) {
   if (els.createChallengeHintTitle) els.createChallengeHintTitle.textContent = creationSourceHintTitle(c);
   if (els.createChallengeHintSub) {
     const voiceClip = isVoiceClipChallengeId(c.id);
-    const clipStaging = templateSparkClipStagingEnabled() && (kind === "template" || kind === "spark") && !voiceClip;
+    const clipStaging = templateSparkClipEnabled() && (kind === "template" || kind === "spark") && !voiceClip;
     if (clipStaging) {
       els.createChallengeHintSub.textContent = details
         ? `${details}. ~30s Lyria clip · ${formatCreditsAmount(TEMPLATE_SPARK_CLIP_CREDIT_COST)} credits. ${TEMPLATE_SPARK_CLIP_LYRICS_HINT}`
@@ -7761,7 +7761,7 @@ function applyDiscoveryIdeaToCreate(idea) {
   const challenge = challengePromptContext();
   const quickTemplateClip =
     !challenge &&
-    templateSparkClipStagingEnabled() &&
+    templateSparkClipEnabled() &&
     pendingSearchRemixMeta?.searchTemplateId &&
     !String(pendingSearchRemixMeta.searchTemplateId).startsWith("continue:");
   if (challenge) setCreateChallengeHint(challenge);
@@ -7781,7 +7781,7 @@ function applyDiscoveryIdeaToCreate(idea) {
     setStatus?.(
       voiceClipOnly
         ? `Spark: ${title}. Record on Hum, then Generate.`
-        : templateSparkClipStagingEnabled() && (sourceKind === "template" || sourceKind === "spark")
+        : templateSparkClipEnabled() && (sourceKind === "template" || sourceKind === "spark")
           ? `${sourceKind === "template" ? "Template" : "Spark"} clip: ${title}. ~30s Lyria · ${formatCreditsAmount(TEMPLATE_SPARK_CLIP_CREDIT_COST)} credits. Edit lyrics or tap Generate lyrics below.`
           : sourceKind === "template"
           ? `Template: ${title}. Edit below, then Generate.`
@@ -7796,7 +7796,7 @@ function applyDiscoveryIdeaToCreate(idea) {
     showToast(
       voiceClipOnly
         ? "Record on Hum — lyrics optional"
-        : templateSparkClipStagingEnabled() && (sourceKind === "template" || sourceKind === "spark")
+        : templateSparkClipEnabled() && (sourceKind === "template" || sourceKind === "spark")
           ? `${sourceKind === "template" ? "Template" : "Spark"} clip — add lyrics or tap Generate lyrics below`
           : sourceKind === "template"
           ? "Template ready — make it yours"
@@ -8299,14 +8299,14 @@ function withLyriaClipStyleGuard(style, challengeId = "") {
 }
 
 function templateStyleForProvider(style, challengeId = "") {
-  if (templateSparkClipStagingEnabled()) {
+  if (templateSparkClipEnabled()) {
     return withLyriaClipStyleGuard(style, challengeId);
   }
   return withTemplateStyleGuard(style);
 }
 
 function templateAvoidTagsForProvider() {
-  if (templateSparkClipStagingEnabled()) return LYRIA_CLIP_AVOID_TAGS;
+  if (templateSparkClipEnabled()) return LYRIA_CLIP_AVOID_TAGS;
   return TEMPLATE_GENERATION_AVOID_TAGS;
 }
 
@@ -12413,13 +12413,13 @@ function applyRemixTemplateToCreate(tpl, name) {
   setCreateTemplateLoadedHint(tpl.title);
   try {
     setStatus?.(
-      templateSparkClipStagingEnabled()
+      templateSparkClipEnabled()
         ? `Template clip: ${tpl.title} — ~30s Lyria · ${formatCreditsAmount(TEMPLATE_SPARK_CLIP_CREDIT_COST)} credits. ${TEMPLATE_SPARK_CLIP_LYRICS_HINT}`
         : `Template: ${tpl.title} — tap Generate when ready.`,
     );
   } catch {}
   try { syncNabadClipCreateUi(); } catch {}
-  if (templateSparkClipStagingEnabled()) {
+  if (templateSparkClipEnabled()) {
     primeTemplateSparkClipCreateUi(lyrics);
   }
 }
@@ -15449,7 +15449,7 @@ function challengeCreateFocusForId(challengeId) {
 
 function challengeDurationStyleClause(challengeId) {
   const id = String(challengeId || "").trim();
-  if (templateSparkClipStagingEnabled()) {
+  if (templateSparkClipEnabled()) {
     return lyriaClipDurationStyleClause(id);
   }
   if (["tiktok-teaser", "hook-rush", "three-word-hook", "arabic-trend-byte"].includes(id)) {
@@ -23741,23 +23741,18 @@ function musicGenerateApiPath() {
   return "/api/suno/generate";
 }
 
-/** Staging trial — admin-only Nabad Clip (Lyria 3 Clip, ~30s). Not shipped to prod unless explicit. */
+/** Nabad Clip hub card — Pro subscribers (and admin). */
 function nabadClipEnabled() {
-  return Boolean(creditsState.isAdmin);
+  return proFeatureAllowed();
 }
 
 function isNabadClipFlow() {
   return getCreateFlow() === "nabadclip";
 }
 
-/** Staging only — Templates + Sparks use Lyria Clip instead of Suno full song. */
-function templateSparkClipStagingEnabled() {
-  if (isStagingNativeBuild()) return true;
-  try {
-    const host = String(location.hostname || "").toLowerCase();
-    if (host.includes("git-staging") || host.includes("-staging-")) return true;
-  } catch {}
-  return false;
+/** Templates, Sparks, and challenge shelves → Lyria Clip (~30s). */
+function templateSparkClipEnabled() {
+  return true;
 }
 
 function templateSparkClipSourceKind() {
@@ -23792,7 +23787,7 @@ function activeTemplateSparkClipMeta() {
 }
 
 function isTemplateSparkClipFlow() {
-  if (!templateSparkClipStagingEnabled() || isNabadClipFlow()) return false;
+  if (!templateSparkClipEnabled() || isNabadClipFlow()) return false;
   return Boolean(activeTemplateSparkClipMeta());
 }
 
@@ -23931,13 +23926,10 @@ function openNabadClipFlow() {
       location.hash = "#/auth";
     } catch {}
     scheduleApplyRoute();
-    setStatus("Sign in to try Nabad Clip.");
+    setStatus("Sign in to use Nabad Clip.");
     return;
   }
-  if (!nabadClipEnabled()) {
-    setStatus("Nabad Clip is not available on this account.");
-    return;
-  }
+  if (!requireProFeature("Nabad Clip")) return;
   enterGenerateSubFlow("nabadclip", () => {
     applyCreateChallengeFocus({ tab: "lyrics", tabs: ["photo", "lyrics"] });
     if (els.btnSunoGenerate) {
@@ -26313,8 +26305,9 @@ async function supabaseAuthedFetch(url, init = {}) {
  *  Server side: api/credits/* and api/_lib/credits-auth.js.
  * ----------------------------------------------------------------- */
 const FULL_SONG_CREDIT_COST = 12;
-const NABAD_CLIP_CREDIT_COST = 6;
-const TEMPLATE_SPARK_CLIP_CREDIT_COST = 10;
+const LYRIA_CLIP_CREDIT_COST = 10;
+const NABAD_CLIP_CREDIT_COST = LYRIA_CLIP_CREDIT_COST;
+const TEMPLATE_SPARK_CLIP_CREDIT_COST = LYRIA_CLIP_CREDIT_COST;
 /** Mirrors Suno pricing for `/api/v1/generate/sounds` (beta). */
 const SOUND_CREDIT_COST = 2.5;
 const WEEKLY_TRIAL_MS = 7 * 24 * 60 * 60 * 1000;
@@ -58781,7 +58774,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
     );
     const lyricDialectHint = [dialectHint, addressNote].filter(Boolean).join(" ");
     let mode = challenge
-      ? templateSparkClipStagingEnabled() &&
+      ? templateSparkClipEnabled() &&
         ["spark", "template"].includes(creationSourceKind(challenge) || "") &&
         !isVoiceClipChallengeId(challenge.id)
         ? "challenge_clip"
@@ -60433,11 +60426,13 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
           if (r.status === 401) {
             throw new Error("Please sign in before generating a clip.");
           }
-          if (r.status === 403 && d?.code === "nabad_clip_admin_only") {
+          if (r.status === 403 && (d?.code === "pro_required" || d?.code === "nabad_clip_disabled")) {
             throw new Error(
-              templateSparkClip
-                ? "Template clips are not enabled on this server yet."
-                : "Nabad Clip is not enabled on this server yet.",
+              d?.code === "pro_required"
+                ? "Nabad Clip is included with NabadAi Pro."
+                : templateSparkClip
+                  ? "Template clips are not enabled on this server yet."
+                  : "Nabad Clip is not enabled on this server yet.",
             );
           }
           rejectSunoApiResponse(r, d);

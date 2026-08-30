@@ -120,6 +120,7 @@ async function fetchAbstractCoverImage({
   avoidTags = "",
   storyTheme = "",
   userArtwork = "",
+  visualMode = "",
   buildPollinationsUrl,
   buildFluxCoverPrompt,
   preferredProvider,
@@ -127,10 +128,10 @@ async function fetchAbstractCoverImage({
   const provider = preferredProvider || resolveDefaultCoverImageProvider();
 
   if (provider === "cloudflare") {
-    const fluxPrompt = buildFluxCoverPrompt(prompt, { avoidTags, storyTheme, userArtwork });
+    const fluxPrompt = buildFluxCoverPrompt(prompt, { avoidTags, storyTheme, userArtwork, visualMode });
     let cf = await fetchCloudflareFluxCover({ prompt: fluxPrompt });
     if (!cf.ok && fluxPrompt.length > 1800) {
-      const retryPrompt = buildFluxCoverPrompt(prompt, { avoidTags: "", storyTheme: "", userArtwork: "" });
+      const retryPrompt = buildFluxCoverPrompt(prompt, { avoidTags: "", storyTheme: "", userArtwork: "", visualMode });
       if (retryPrompt.length < fluxPrompt.length) {
         cf = await fetchCloudflareFluxCover({ prompt: retryPrompt });
       }
@@ -463,7 +464,7 @@ module.exports = async function handler(req, res) {
 
     const { prompt, seed, bucket, visualMode, storyTheme, artworkSource, params } = buildAbstractCoverPrompt(
       promptInput,
-      { ...promptOpts, creativeMode: true, firstGenAbstract: !userDirectedArtwork },
+      { ...promptOpts, creativeMode: true },
     );
 
     const rendered = await fetchAbstractCoverImage({
@@ -472,6 +473,7 @@ module.exports = async function handler(req, res) {
       avoidTags: effectiveAvoidTags,
       storyTheme,
       userArtwork: params?.userArtwork || params?.userArtworkRaw || artworkHint || "",
+      visualMode,
       buildPollinationsUrl,
       buildFluxCoverPrompt,
     });

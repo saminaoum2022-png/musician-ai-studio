@@ -23741,9 +23741,9 @@ function musicGenerateApiPath() {
   return "/api/suno/generate";
 }
 
-/** Nabad Clip hub card — Pro subscribers (and admin). */
+/** Nabad Clip hub card — live in production; access gated to Pro on tap. */
 function nabadClipEnabled() {
-  return proFeatureAllowed();
+  return true;
 }
 
 function isNabadClipFlow() {
@@ -23876,10 +23876,14 @@ function nabadClipGenerateApiPath() {
 }
 
 function syncNabadClipHomeCard() {
+  const show = nabadClipEnabled();
+  const locked = isWebOrDesktopShell() && webProFeatureLocked();
   document.querySelectorAll('[data-home-card="clip"]').forEach((el) => {
-    const show = nabadClipEnabled();
     el.hidden = !show;
     el.setAttribute("aria-hidden", show ? "false" : "true");
+    if (show && isWebOrDesktopShell()) {
+      setWebProFeaturePillOnHomeCard(el, locked);
+    }
   });
 }
 
@@ -26588,7 +26592,7 @@ function setWebProFeaturePillOnHomeCard(cardEl, locked) {
   cardEl.classList.toggle("isProLocked", Boolean(locked));
   const cardPill = cardEl.querySelector(":scope > .webProFeaturePill");
   if (cardPill) cardPill.hidden = true;
-  const wrap = cardEl.querySelector(".homeDeskPersonaTileWrap, .homeDeskStudioTileWrap");
+  const wrap = cardEl.querySelector(".homeDeskPersonaTileWrap, .homeDeskStudioTileWrap, .homeDeskClipTileWrap");
   setWebProFeaturePill(wrap || cardEl, locked, "visual");
 }
 
@@ -26625,7 +26629,12 @@ function syncProGatedWebUi() {
   document.documentElement.classList.toggle("web-pro-gated", locked);
   document.documentElement.classList.toggle("web-pro-unlocked", gate && !locked);
 
-  document.querySelectorAll('[data-home-card="persona"], [data-home-card="studio"]').forEach((el) => {
+  document.querySelectorAll('[data-home-card="persona"], [data-home-card="studio"], [data-home-card="clip"]').forEach((el) => {
+    if (el.getAttribute("data-home-card") === "clip" && !nabadClipEnabled()) {
+      el.hidden = true;
+      el.setAttribute("aria-hidden", "true");
+      return;
+    }
     el.hidden = false;
     el.setAttribute("aria-hidden", "false");
     setWebProFeaturePillOnHomeCard(el, locked);

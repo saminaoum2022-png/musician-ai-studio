@@ -56200,7 +56200,8 @@ html[data-theme="dark"] :is(#friendsPage .followActStack, #profileActivitiesList
   letter-spacing: 0.08em;
 }
 .homeDeskPersonaTileWrap,
-.homeDeskStudioTileWrap{
+.homeDeskStudioTileWrap,
+.homeDeskClipTileWrap{
   position: relative;
 }
 .webProFeaturePill--pill{

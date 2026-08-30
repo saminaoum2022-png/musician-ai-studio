@@ -58,6 +58,33 @@ const CLIP_VOCAL_PROFILES = [
     lyriaVocalPrompt:
       "Female lead vocal: soft breathy intimate delivery, delicate close-mic tone, gentle light register, whisper-soft verses opening into a warm chorus",
   },
+  {
+    id: "duo_verse_chorus",
+    gender: "duo",
+    label: "Verse / Chorus",
+    labelAr: "مغني/مغنية",
+    spec: "Male leads the verse, female takes the chorus — classic hook split in any language.",
+    lyriaVocalPrompt:
+      "Male and female duet: warm male chest voice on opening verse lines, female alto on chorus, clear handoff between voices, distinct male and female tones",
+  },
+  {
+    id: "duo_call_response",
+    gender: "duo",
+    label: "Call & Response",
+    labelAr: "ردّ ورد",
+    spec: "Trading lines back and forth — conversational duet. Best with short alternating lines.",
+    lyriaVocalPrompt:
+      "Male and female duet: conversational call-and-response, alternating male and female lines, intimate close-mic, playful back-and-forth delivery",
+  },
+  {
+    id: "duo_harmony",
+    gender: "duo",
+    label: "Harmony",
+    labelAr: "انسجام",
+    spec: "Male verse then blended chorus — warm romantic duet. Write a clear chorus section.",
+    lyriaVocalPrompt:
+      "Male and female duet: male verse then blended harmony on chorus, warm complementary tones, romantic close-mic duet, distinct but harmonious",
+  },
 ];
 
 function clipVocalProfileById(id) {
@@ -68,7 +95,7 @@ function clipVocalProfileById(id) {
 
 function clipVocalProfilesForGender(gender) {
   const g = String(gender || "").trim().toLowerCase();
-  if (g !== "m" && g !== "f") return CLIP_VOCAL_PROFILES.slice();
+  if (g !== "m" && g !== "f" && g !== "duo") return [];
   return CLIP_VOCAL_PROFILES.filter((p) => p.gender === g);
 }
 

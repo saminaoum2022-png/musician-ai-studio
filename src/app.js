@@ -226,7 +226,7 @@ import { MUSIC_VIDEO_FEATURE_ENABLED } from "./feature-flags.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260830-224347";
+const APP_BUILD = "20260830-234526";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -23936,6 +23936,27 @@ const CLIP_VOCAL_PROFILES = [
     labelAr: "ناعم",
     spec: "Breathy intimate vocal — delicate, close-mic, gentle and light.",
   },
+  {
+    id: "duo_verse_chorus",
+    gender: "duo",
+    label: "Verse / Chorus",
+    labelAr: "مغني/مغنية",
+    spec: "Male leads the verse, female takes the chorus — classic hook split in any language.",
+  },
+  {
+    id: "duo_call_response",
+    gender: "duo",
+    label: "Call & Response",
+    labelAr: "ردّ ورد",
+    spec: "Trading lines back and forth — conversational duet. Best with short alternating lines.",
+  },
+  {
+    id: "duo_harmony",
+    gender: "duo",
+    label: "Harmony",
+    labelAr: "انسجام",
+    spec: "Male verse then blended chorus — warm romantic duet. Write a clear chorus section.",
+  },
 ];
 
 function clipVocalProfileById(id) {
@@ -23946,7 +23967,7 @@ function clipVocalProfileById(id) {
 
 function clipVocalProfilesForGender(gender) {
   const g = String(gender || "").trim().toLowerCase();
-  if (g !== "m" && g !== "f") return [];
+  if (g !== "m" && g !== "f" && g !== "duo") return [];
   return CLIP_VOCAL_PROFILES.filter((p) => p.gender === g);
 }
 
@@ -23955,10 +23976,10 @@ function defaultClipVocalProfileIdForGender(gender) {
   return first?.id || "";
 }
 
-/** Clip Singer UI: pills first, then Advanced Range gender prefix. */
+/** Clip Singer UI: pills first, then Advanced Range gender prefix (never infers duo). */
 function resolveClipSingerGenderForUi() {
   const sg = String(els.sunoSingerGender?.value || "").trim().toLowerCase();
-  if (sg === "m" || sg === "f") return sg;
+  if (sg === "m" || sg === "f" || sg === "duo") return sg;
   const vp = String(els.sunoVoiceProfile?.value || "").trim();
   if (vp.includes("|")) {
     const g = vp.split("|")[0];
@@ -23969,12 +23990,16 @@ function resolveClipSingerGenderForUi() {
 
 function ensureClipSingerGenderSynced() {
   if (!isLyriaClipGenerateFlow()) return;
-  const inferred = resolveClipSingerGenderForUi();
-  if (!inferred) return;
   const current = String(els.sunoSingerGender?.value || "").trim().toLowerCase();
-  if (current === inferred) return;
-  if (els.sunoSingerGender) els.sunoSingerGender.value = inferred;
-  try { syncSingerGenderPills(); } catch {}
+  if (current === "m" || current === "f" || current === "duo") return;
+  const vp = String(els.sunoVoiceProfile?.value || "").trim();
+  if (vp.includes("|")) {
+    const g = vp.split("|")[0];
+    if (g === "m" || g === "f") {
+      if (els.sunoSingerGender) els.sunoSingerGender.value = g;
+      try { syncSingerGenderPills(); } catch {}
+    }
+  }
 }
 
 function getSelectedClipVocalProfileId() {
@@ -24011,10 +24036,15 @@ function syncClipVocalCharacterUi() {
   }
 
   if (!gender) {
-    deck.innerHTML = `<p class="clipVocalCharacterPickGender">Choose Male or Female above to see vocal characters.</p>`;
+    deck.innerHTML = `<p class="clipVocalCharacterPickGender">Choose Male, Female, or Duo above to see vocal characters.</p>`;
     if (specEl) specEl.textContent = "";
     setSelectedClipVocalProfileId("");
     return;
+  }
+
+  const headLabel = document.querySelector("#clipVocalCharacterRow .clipVocalCharacterHead .inPanelLabel");
+  if (headLabel) {
+    headLabel.textContent = gender === "duo" ? "Duo preset" : "Vocal character";
   }
 
   deck.innerHTML = profiles
@@ -24036,11 +24066,16 @@ function syncClipVocalCharacterUi() {
 function syncNabadClipCreateUi() {
   const clip = isLyriaClipGenerateFlow();
   const personaPill = document.getElementById("singerPersonaPill");
+  const duoPill = document.getElementById("singerDuoPill");
   const personaRow = document.getElementById("singerPersonaRow");
   const wrap = document.getElementById("singerGenderPills");
   if (personaPill) {
     personaPill.hidden = clip;
     personaPill.setAttribute("aria-hidden", clip ? "true" : "false");
+  }
+  if (duoPill) {
+    duoPill.hidden = !clip;
+    duoPill.setAttribute("aria-hidden", clip ? "false" : "true");
   }
   if (wrap) wrap.classList.toggle("nabadClipNoPersona", clip);
   if (els.clipVocalCharacterRow) {
@@ -24075,6 +24110,11 @@ function syncNabadClipCreateUi() {
     try { renderSingerPersonaPill(); } catch {}
     try { renderActivePersonaBanner(); } catch {}
     if (els.clipVocalProfileId) els.clipVocalProfileId.value = "";
+    const sg = String(els.sunoSingerGender?.value || "").trim().toLowerCase();
+    if (sg === "duo" && els.sunoSingerGender) {
+      els.sunoSingerGender.value = "";
+      try { syncSingerGenderPills(); } catch {}
+    }
   }
   try { syncClipVocalCharacterUi(); } catch {}
   try { syncSingerGenderPills(); } catch {}

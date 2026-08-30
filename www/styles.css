@@ -33030,6 +33030,12 @@ section.challengesPage{
 #singerGenderPills.nabadClipNoPersona .singerPersonaPill{
   display: none !important;
 }
+#singerGenderPills.nabadClipNoPersona .singerDuoPill{
+  display: flex !important;
+}
+.singerDuoPill{
+  display: none !important;
+}
 .clipVocalCharacterRow{
   margin-top: 10px;
   padding-top: 10px;

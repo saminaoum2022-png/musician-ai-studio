@@ -42,6 +42,7 @@ const { computeGeminiSharedWalletBalance } = require("../../_lib/gemini-wallet")
 const {
   isCloudflareFluxConfigured,
   resolveDefaultCoverImageProvider,
+  resolveAigGatewayId,
 } = require("../../_lib/cloudflare-flux-upstream");
 const { resolveCoverRegenImageProvider } = require("../../_lib/gemini-cover-image");
 
@@ -1988,6 +1989,7 @@ async function fetchCoverArtAdminLog({ limit = 50 } = {}) {
       defaultCoverProvider: resolveDefaultCoverImageProvider(),
       regenImageProvider: resolveCoverRegenImageProvider(),
       cloudflareConfigured: isCloudflareFluxConfigured(),
+      aigGatewayId: resolveAigGatewayId() || "(direct)",
       coverImageProviderEnv: String(process.env.COVER_IMAGE_PROVIDER || "").trim() || "(auto)",
       regenProviderEnv: String(process.env.COVER_REGEN_IMAGE_PROVIDER || "").trim() || "(auto)",
     },

@@ -1580,10 +1580,15 @@ function renderCoverArtLog(data) {
     `Regen: <strong>${escapeHtml(regenLabel)}</strong>`,
     `COVER_IMAGE_PROVIDER=${escapeHtml(config.coverImageProviderEnv || "(auto)")}`,
     config.cloudflareConfigured ? "Cloudflare creds: set" : "Cloudflare creds: missing",
+    config.aigGatewayId && config.aigGatewayId !== "(direct)"
+      ? `AI Gateway: <strong>${escapeHtml(config.aigGatewayId)}</strong> (unified billing)`
+      : "AI Gateway: direct Workers AI",
   ].join(" · ");
   const configAlert = !config.cloudflareConfigured
     ? `<div class="userDetailAlert">Cloudflare credentials are <strong>not configured</strong> on this deployment — abstract covers will use Pollinations until <code>CLOUDFLARE_ACCOUNT_ID</code> and <code>CLOUDFLARE_API_TOKEN</code> are set in Vercel (Production + Preview).</div>`
-    : "";
+    : (config.aigGatewayId && config.aigGatewayId !== "(direct)"
+      ? `<div class="userDetailAlert">Flux routes through AI Gateway <code>${escapeHtml(config.aigGatewayId)}</code>. Confirm dashboard → AI Gateway → Settings → <strong>Workers AI billing = Unified billing</strong> so prepaid credits apply.</div>`
+      : "");
 
   return `
     <section class="sectionCard" id="coverArtLogSection">

@@ -145,7 +145,7 @@ async function fetchAbstractCoverImage({
         attemptedProvider: "cloudflare",
       };
     }
-    console.warn("[music/cover-art] cloudflare flux failed", cf.error);
+    console.warn("[music/cover-art] cloudflare flux failed", cf.error, cf.gatewayId ? `(gateway ${cf.gatewayId})` : "(direct)");
     const upstreamUrl = buildPollinationsUrl(prompt, seed, { avoidTags, storyTheme, userArtwork });
     const polled = await fetchPollinationsCover(upstreamUrl);
     if (!polled.ok) {

@@ -43,10 +43,10 @@ const PROVIDER_CATALOG = Object.freeze([
     id: "cloudflare",
     name: "Cloudflare Workers AI",
     vendor: "Cloudflare",
-    role: "Cover art (default Flux Schnell)",
-    envKeys: ["CLOUDFLARE_ACCOUNT_ID", "CLOUDFLARE_API_TOKEN"],
-    dashboardUrl: "https://dash.cloudflare.com/?to=/:account/ai/workers-ai",
-    docsUrl: "https://developers.cloudflare.com/workers-ai/models/flux-1-schnell/",
+    role: "Cover art (Flux Schnell via AI Gateway unified billing)",
+    envKeys: ["CLOUDFLARE_ACCOUNT_ID", "CLOUDFLARE_API_TOKEN", "CLOUDFLARE_AIG_GATEWAY_ID"],
+    dashboardUrl: "https://dash.cloudflare.com/?to=/:account/ai/ai-gateway",
+    docsUrl: "https://developers.cloudflare.com/ai-gateway/features/unified-billing/",
   },
   {
     id: "pollinations",
@@ -249,11 +249,18 @@ async function pingCloudflare() {
   if (!configured) {
     return { status: "unconfigured", latencyMs: null, detail: "CLOUDFLARE_ACCOUNT_ID / CLOUDFLARE_API_TOKEN not set" };
   }
+  const { resolveAigGatewayId } = require("./cloudflare-flux-upstream");
+  const gatewayId = resolveAigGatewayId();
   const r = await timedFetch("https://api.cloudflare.com/client/v4/user/tokens/verify", {
     headers: { Authorization: `Bearer ${token}` },
   }, 8000);
   const status = statusFromPing({ ok: r.ok, status: r.status, ms: r.ms, configured: true, error: r.error });
   let detail = r.ok ? "API token verified" : (r.error || `HTTP ${r.status}`);
+  if (r.ok) {
+    detail = gatewayId
+      ? `API token verified · AI Gateway "${gatewayId}" (unified billing)`
+      : "API token verified · direct Workers AI (no gateway header)";
+  }
   if (r.status === 401) detail = "Invalid API token";
   return { status, latencyMs: r.ms, detail };
 }

@@ -1,10 +1,10 @@
 /**
- * Story-aware Pollinations prompts — derived from title, lyrics, style, mood.
+ * Story-aware cover prompts — Flux Schnell primary, Pollinations fallback.
  * User never writes these. Same song id + same story → same seed + same scene.
  */
 
-/** Bump when cover prompt policy changes — busts Gemini scene cache on the server. */
-export const COVER_PROMPT_POLICY_VERSION = 16;
+/** Bump when cover prompt policy changes. */
+export const COVER_PROMPT_POLICY_VERSION = 20;
 /** Pollinations flux reliably returns ~768×768 square — request square, crop to 9:16 (avoids vertical stretch). */
 export const POLLINATIONS_COVER_WIDTH = 1024;
 export const POLLINATIONS_COVER_HEIGHT = 1024;
@@ -24,26 +24,39 @@ const GEMINI_REEL_ENV_FRAME =
 /** @deprecated alias — use OBJECT_COMPOSE_FRAME */
 const STILL_LIFE_COMPOSE_FRAME = OBJECT_COMPOSE_FRAME;
 
+/** Vertical 9:16 reel frame — hero centered with safe margins (Flux + portrait crop). */
+const FLUX_REEL_PORTRAIT_FRAME =
+  "vertical 9:16 portrait album cover, main subject centered in frame with generous safe margins on all four edges, hero focal point fully inside the viewport, nothing important cropped at frame edges, balanced centered composition";
+
 /** Music-leaning frame — avoids plain square blocks when the theme is vague or user-directed. */
 const MUSIC_COVER_FRAME =
-  "vertical cinematic album art, full-frame immersive environment, atmospheric depth, premium music artwork aesthetic, natural proportions, no vertical stretch, no plain solid blocks, no people";
+  `${FLUX_REEL_PORTRAIT_FRAME}, full-frame immersive environment, atmospheric depth, premium music artwork aesthetic, natural proportions, no vertical stretch, no plain solid blocks, no people`;
 
 const MONOCHROME_PALETTE =
   "high contrast black and white monochrome photography, silver grey tones, dramatic shadows, no color tint";
 
-const MUSIC_FALLBACK_SCENES = [
-  "abstract audio waveform and sound aura in deep teal and violet, luminous morphing energy, premium music artwork",
-  "glowing equalizer bars and soft sonic ripples in teal-violet gradient, cinematic music visualization",
-  "floating sound waves and aurora glow in nabad teal and violet colors, abstract music atmosphere",
-  "rhythmic light pulses and audio spectrum bloom in deep void, elegant music-inspired abstract art",
-  "cinematic atmospheric depth with flowing teal and violet light, immersive premium album mood",
-  "wide environmental scene with rich color grading, moody shadows and luminous accents",
-  "neon-accented void with soft bokeh and premium editorial lighting",
-  "surreal color bloom and pearlescent haze, dreamy premium album atmosphere",
+/** Flux-native cinematic scenes — photographic environments and symbolic still lifes (not equalizer viz). */
+const FLUX_CINEMATIC_SCENES = [
+  "cinematic empty stage with teal-violet spill light and soft haze, dramatic shadows, premium album mood, no people",
+  "symbolic still life on dark velvet, single candle and rose-gold rim light, editorial studio photograph, no people",
+  "wet urban street at night, neon reflections in teal and violet grade, cinematic depth, no people",
+  "coastal horizon at dusk, pearlescent sky glow and moody atmospheric depth, no people",
+  "elegant interior with chandelier bokeh and champagne gold warmth, celebration mood, no people",
+  "serene botanical still life, soft window light on dried flowers, calm natural mood, no people",
+  "stormy atmospheric sky over dark landscape, single luminous accent beam, cinematic tension, no people",
+  "minimal studio still life, glass catching teal-cyan light beams on dark surface, premium mood, no people",
 ];
 
-/** Regen without hint — rotate through atmospheric scenes instead of repeating story still-life props. */
-const REGEN_VARIETY_POOL = [...MUSIC_FALLBACK_SCENES];
+/** Abstract sonic viz — only for hype/party buckets or explicit abstract mode. */
+const FLUX_ABSTRACT_SCENES = [
+  "abstract luminous sound aura in deep teal and violet, morphing energy bloom, premium music artwork",
+  "rhythmic light pulses in void black with cyan-violet gradient, elegant music visualization",
+];
+
+const MUSIC_FALLBACK_SCENES = FLUX_CINEMATIC_SCENES;
+
+/** Built after STORY_THEMES — see buildRegenVarietyPool(). */
+let REGEN_VARIETY_POOL = [...FLUX_CINEMATIC_SCENES];
 
 /** Appended to every cover prompt — Flux cannot render humans reliably. */
 const NO_HUMANS_GUARD =
@@ -79,7 +92,7 @@ const NEGATIVE_TEXT_PROMPT =
   "plain solid square block, flat color rectangle, empty geometric block, meaningless placeholder shape, solid teal square, featureless box, blank panel, low detail abstract block, text, words, letters, numbers, typography, font, writing, caption, subtitle, watermark, logo, album cover title, song title, track title, artist name, band name, signage, billboard, poster text, newspaper, book, magazine, speech bubble, label, stamp, signature, handwritten, calligraphy, cursive, script font, decorative lettering, word art, letter shapes, holiday lettering, christmas text, greeting card text, festive banner, neon sign with words, arabic text, english text, quotes, meme text, ui overlay, readable characters, sentences, lyrics on screen, cd cover text, record label, tracklist, credits block, diploma text, certificate text, graffiti letters, title card, greeting card, banner text, embroidered text, carved letters, glowing words, light text, 3d text, people, person, human, humans, humanoid, man, woman, child, baby, crowd, dancer, performer, musician, face, faces, portrait, portraits, silhouette, silhouettes, body, bodies, hand, hands, finger, fingers, arm, arms, leg, legs, head, heads, eye, eyes, mouth, mouths, teeth, nose, ear, skin, anatomy, bad anatomy, deformed anatomy, extra fingers, missing fingers, six fingers, duplicate limbs, floating limbs, mutated hands, broken hands, multiple mouths, crossed eyes, lazy eye, crooked eyes, disfigured face, cropped face, duplicate subject, floating objects, blurry, low quality, jpeg artifacts, oversaturated, distorted perspective, elongated face, stretched portrait, vertically stretched body, squashed proportions, wrong aspect ratio, fisheye portrait, close-up portrait, beauty portrait, fashion portrait, headshot, detailed facial features, recognizable face, portrait photography, full body portrait, tall thin figure, unnaturally long neck, stretched silhouette, selfie, model, fashion model, vertically stretched object, elongated object, stretched props, unnaturally tall object, macro close-up, extreme close-up, oversized object filling entire frame, giant prop dominating frame, object too large, fills frame edge to edge, cropped too tight, tight crop on single prop, low resolution zoom, object touching all four edges";
 
 const STYLE_CORE =
-  "premium cinematic visual art, elegant composition, rich color grading, high-end editorial look, moody dark tones with luminous accents, deep teal and violet palette when appropriate, physically plausible lighting, atmospheric depth, immersive environment, balanced vertical composition, professional music-inspired photography, minimal visual noise, high image coherence, clean perspective, symbolic objects only, no human subjects";
+  "premium cinematic photograph, elegant composition, rich color grading, high-end editorial look, moody dark tones with luminous accents, deep teal and violet palette, physically plausible lighting, atmospheric depth, immersive environment, balanced vertical composition, symbolic objects and environments, no human subjects";
 
 const HUM_TRACK_STYLE_CORE =
   "premium cinematic visual art, elegant composition, rich color grading, moody dark tones with luminous accents, deep teal and violet palette, photoreal studio nook still life, props only, warm wood surfaces, window sunlight with long shadows, dried botanical accents, balanced composition, professional studio photography, minimal visual noise, high image coherence, clean perspective, no instruments visible, no human subjects";
@@ -131,7 +144,7 @@ const STORY_THEMES = [
     id: "wedding",
     re: /wedding|bridal|bride|groom|marriage|ceremony|first dance|dabke entrance|زفاف|عرس|عروس/i,
     scene:
-      "wedding still life, diamond solitaire rings on ivory satin, soft floral bouquet and champagne gold bokeh, elegant ceremony mood, no people",
+      "wedding still life, soft floral bouquet and champagne gold bokeh on ivory satin, elegant ceremony mood, no people",
     visualMode: "still_life",
     bucket: "wedding",
   },
@@ -163,7 +176,7 @@ const STORY_THEMES = [
     id: "romance",
     re: /love you|my love|romantic|romance|darling|valentine|kiss|together forever|habibi|habibti|حبيب|حبيبي|حبيبتي|عشق|حب|قلبي/i,
     scene:
-      "romantic still life, intertwined gold rings and soft candlelight on dark surface, rose petals scatter, tender warmth, no people",
+      "romantic still life, rose petals and soft candlelight on dark surface, warm golden bokeh, tender warmth, no people",
     visualMode: "still_life",
     bucket: "love",
   },
@@ -241,29 +254,31 @@ const STORY_THEMES = [
   },
 ];
 
+REGEN_VARIETY_POOL = [
+  ...FLUX_CINEMATIC_SCENES,
+  ...STORY_THEMES.filter((t) => t.visualMode !== "abstract").map((t) => t.scene),
+];
+
 const ABSTRACT_FALLBACKS = MUSIC_FALLBACK_SCENES;
-
-const COMPOSITIONS = [
-  "centered single focal subject with strong negative space",
-  "symmetrical balanced composition with clear focal point",
-  "rule of thirds framing with one dominant subject",
-  "centered subject with clean horizon and balanced weight",
-  "symmetric composition with single clear focal subject",
-  "rule of thirds with subject placed on vertical third",
-];
-
-const OBJECT_COMPOSITIONS = [
-  "medium-scale props on a surface with generous negative space, object presence about 30% of frame, safe margins for vertical crop",
-  "modest-sized symbolic objects on rule-of-thirds placement, wide environmental context, pulled-back camera distance",
-  "editorial still life with small-to-medium props, natural viewing distance, atmospheric background clearly visible",
-  "grouped objects at moderate scale in lower or upper third, ample empty space around edges for reel framing",
-];
 
 const GEMINI_REEL_COMPOSITIONS = [
   "hero subject dead-center with equal negative space on left and right, scaled to fit entirely inside the 9:16 frame",
   "centered focal subject with wide safe margins above and below, nothing clipped at the top or bottom of the reel",
   "symmetrical centered composition, subject fully visible inside vertical portrait safe zone, moderate scale not edge-to-edge",
   "single dominant subject centered on the vertical midline, generous padding on all sides for reel crop safety",
+];
+
+const COMPOSITIONS = [
+  ...GEMINI_REEL_COMPOSITIONS,
+  "centered single focal subject with strong negative space",
+  "symmetrical balanced composition with clear focal point",
+];
+
+const OBJECT_COMPOSITIONS = [
+  "medium-scale props on a surface with generous negative space, object presence about 30% of frame, safe margins for vertical crop",
+  "modest-sized symbolic objects centered with wide environmental context, pulled-back camera distance",
+  "editorial still life with small-to-medium props, natural viewing distance, atmospheric background clearly visible",
+  "grouped objects at moderate scale in center third, ample empty space around edges for reel framing",
 ];
 
 const CONCRETE_OBJECT_RE =
@@ -285,7 +300,7 @@ const REGEN_MOOD_HINTS = [
     id: "romance",
     re: /\b(love|romantic|romance|valentine|darling|heartfelt|passion|habibi|habibti|حب|عشق|قلبي)\b/i,
     scene:
-      "romantic still life, intertwined gold rings and soft candlelight on dark surface, rose petals scatter, tender warmth, no people",
+      "romantic still life, rose petals and soft candlelight on dark surface, warm golden bokeh, tender warmth, no people",
     bucket: "love",
   },
   {
@@ -299,7 +314,7 @@ const REGEN_MOOD_HINTS = [
     id: "wedding",
     re: /\b(wedding|bridal|bride|groom|engagement|marriage|زفاف|عرس|عروس)\b/i,
     scene:
-      "wedding still life, diamond solitaire rings on ivory satin, soft floral bouquet and champagne gold bokeh, elegant ceremony mood, no people",
+      "wedding still life, soft floral bouquet and champagne gold bokeh on ivory satin, elegant ceremony mood, no people",
     bucket: "wedding",
   },
   {
@@ -621,11 +636,14 @@ function paletteForUserArtwork(userArtwork, bucketKey) {
   return moodPaletteForBucket(bucketKey);
 }
 
+function prepareExplicitUserArtworkHint(raw) {
+  return expandArtworkStyleTags(String(raw || "").trim()).replace(/\s+/g, " ").trim().slice(0, 280);
+}
+
 function prepareDirectUserArtworkHint(raw, { allowHumans = false, creative = true } = {}) {
-  let s = expandArtworkStyleTags(String(raw || "").trim());
-  if (creative && !allowHumans) {
-    return s.replace(/\s+/g, " ").trim().slice(0, 280);
-  }
+  let s = prepareExplicitUserArtworkHint(raw);
+  if (!s) return "";
+  if (creative && !allowHumans) return s;
   s = toVisualOnlyPrompt(s, { title: "" });
   s = enrichUserArtworkHint(s);
   if (!allowHumans) s = enforceNoHumansScene(s);
@@ -676,14 +694,14 @@ function moodBucketFallback(bucketKey, energy) {
   const palette = MOOD_PALETTES[bucketKey] || MOOD_PALETTES.default;
   if (bucketKey === "party" || bucketKey === "hype") {
     return {
-      scene: pickFrom(MUSIC_FALLBACK_SCENES, bucketKey, "party-music"),
-      visualMode: "abstract",
+      scene: pickFrom([...FLUX_CINEMATIC_SCENES, ...FLUX_ABSTRACT_SCENES], bucketKey, "party-music"),
+      visualMode: bucketKey === "hype" ? "abstract" : "landscape",
       palette,
     };
   }
   if (bucketKey === "love") {
     return {
-      scene: "romantic still life, roses and soft golden candlelight on dark surface, no people",
+      scene: "romantic still life, rose petals and soft candlelight on dark surface, warm golden bokeh, tender warmth, no people",
       visualMode: "still_life",
       palette,
     };
@@ -697,15 +715,15 @@ function moodBucketFallback(bucketKey, energy) {
   }
   if (bucketKey === "wedding") {
     return {
-      scene: "wedding still life, diamond rings on satin with soft floral glow, no people",
-      visualMode: "still_life",
+      scene: pickFrom(MUSIC_FALLBACK_SCENES, bucketKey, "wedding-music"),
+      visualMode: "abstract",
       palette,
     };
   }
   if (energy > 0.7) {
     return {
-      scene: pickFrom(MUSIC_FALLBACK_SCENES, bucketKey, "energy-music"),
-      visualMode: "abstract",
+      scene: pickFrom([...FLUX_CINEMATIC_SCENES, ...FLUX_ABSTRACT_SCENES], bucketKey, "energy-music"),
+      visualMode: "landscape",
       palette,
     };
   }
@@ -862,7 +880,7 @@ const TEXT_TRIGGER_REPLACEMENTS = [
   ["album cover", "cinematic still life"],
   ["portrait", "symbolic object still life"],
   ["silhouette", "symbolic object still life"],
-  ["couple", "intertwined rings still life"],
+  ["couple", "romantic rose petals and candlelight still life"],
   ["person", "symbolic object"],
   ["people", "symbolic objects"],
 ];
@@ -953,6 +971,9 @@ const ARTWORK_STYLE_TAG_EXPANSIONS = {
   minimal: "minimalist clean composition, generous negative space, soft gradient background",
   surreal: "surreal dreamlike atmosphere, symbolic lighting and depth",
   dreamy: "dreamy soft atmospheric haze, pearlescent light",
+  equalizer: "glowing audio equalizer bars, luminous sonic visualization, premium music artwork",
+  waveform: "flowing audio waveform and sound aura, luminous energy, premium music artwork",
+  abstract: "abstract luminous atmosphere, morphing teal-violet energy, premium music artwork",
   "studio light": "professional studio lighting, soft key light, moody shadows",
   "black & white": "black and white monochrome photography, high contrast silver tones",
   "vintage film": "vintage film grain, warm faded tones, nostalgic cinematic mood",
@@ -974,7 +995,27 @@ function expandArtworkStyleTags(raw) {
     .join(", ");
 }
 
-/** Trim Pollinations-sized prompts to Flux's 2048 cap — keep the head (scene + hint), drop redundant tail safety. */
+function composeFrameForCreativeMode(visualMode) {
+  const mode = String(visualMode || "").toLowerCase();
+  if (mode === "still_life" || mode === "studio_nook_still_life") {
+    return `${FLUX_REEL_PORTRAIT_FRAME}, ${OBJECT_COMPOSE_FRAME}`;
+  }
+  if (mode === "landscape") {
+    return `${FLUX_REEL_PORTRAIT_FRAME}, wide atmospheric environment, immersive environmental depth, natural proportions, no people`;
+  }
+  return MUSIC_COVER_FRAME;
+}
+
+function fluxPhotoLeadForMode(visualMode) {
+  const mode = String(visualMode || "").toLowerCase();
+  if (mode === "abstract") return "";
+  if (mode === "still_life" || mode === "landscape" || mode === "studio_nook_still_life") {
+    return "cinematic photograph, 85mm lens, shallow depth of field, ";
+  }
+  return "cinematic photograph, rich color grading, ";
+}
+
+/** Trim Flux-sized prompts to 2048 cap — keep the head (scene + hint), drop redundant tail safety. */
 function compressPromptForFlux(prompt, maxLen) {
   let s = String(prompt || "").trim();
   if (s.length <= maxLen) return s;
@@ -996,13 +1037,23 @@ function compressPromptForFlux(prompt, maxLen) {
   return (lastComma > maxLen * 0.55 ? cut.slice(0, lastComma) : cut).trim();
 }
 
-export function buildFluxCoverPrompt(prompt, { avoidTags = "" } = {}) {
+export function buildFluxCoverPrompt(prompt, { avoidTags = "", visualMode = "" } = {}) {
   const parsedAvoid = parseAvoidTagsList(avoidTags).slice(0, 4);
   const suffixBits = [MINIMAL_TEXT_GUARD];
   if (parsedAvoid.length) suffixBits.push(`avoid ${parsedAvoid.join(", ")}`);
   const suffix = `. ${suffixBits.join(", ")}`;
   const baseBudget = Math.max(400, FLUX_PROMPT_MAX - suffix.length - 1);
-  const base = compressPromptForFlux(String(prompt || "").trim(), baseBudget);
+  let base = compressPromptForFlux(String(prompt || "").trim(), baseBudget);
+  if (!/\bsafe margin|centered in frame|inside the (vertical )?(reel )?frame|9:16|viewport\b/i.test(base)) {
+    base = `${FLUX_REEL_PORTRAIT_FRAME}, ${base}`;
+  }
+  const mode = String(visualMode || "").toLowerCase();
+  if (mode === "still_life" || mode === "landscape") {
+    const lead = "photorealistic, ";
+    if (!/^photorealistic/i.test(base) && !/\bequalizer\b|\bwaveform\b|\babstract\b/i.test(base)) {
+      base = `${lead}${base}`;
+    }
+  }
   const merged = `${base}${suffix}`.replace(/\s+/g, " ").trim();
   return merged.length > FLUX_PROMPT_MAX ? merged.slice(0, FLUX_PROMPT_MAX) : merged;
 }
@@ -1038,7 +1089,7 @@ export function enforceNoHumansScene(scene) {
 
 /**
  * @param {object} input
- * @param {{ sceneOverride?: string, artworkSourceOverride?: string, geminiModel?: string, directorSceneHint?: string, nabadIdentityPhrases?: string, visualDirection?: object, regenSalt?: string, userArtworkOverride?: string, forceMusicFallback?: boolean, regenVariety?: boolean, creativeMode?: boolean }} [options]
+ * @param {{ sceneOverride?: string, artworkSourceOverride?: string, geminiModel?: string, directorSceneHint?: string, nabadIdentityPhrases?: string, visualDirection?: object, regenSalt?: string, userArtworkOverride?: string, userExplicitArtwork?: boolean, forceMusicFallback?: boolean, regenVariety?: boolean, creativeMode?: boolean }} [options]
  * @returns {{ prompt: string, seed: number, bucket: string, visualMode: string, storyTheme: string, artworkSource: string, params: object }}
  */
 export function buildAbstractCoverPrompt(input, options = {}) {
@@ -1057,15 +1108,22 @@ export function buildAbstractCoverPrompt(input, options = {}) {
   const regenVariety = Boolean(options.regenVariety && creativeMode);
   const regenSaltKey = String(options.regenSalt || "").trim();
   const userArtworkOverride = String(options.userArtworkOverride || "").trim().slice(0, 280);
-  const userDirectedRegen = isUserDirectedRegenHint(userArtworkOverride);
   const forceMusicFallback = Boolean(options.forceMusicFallback && !userArtworkOverride);
   const userArtworkRaw = userArtworkOverride || (forceMusicFallback ? "" : resolveUserArtworkPrompt(input));
-  const regenMood = userDirectedRegen ? resolveRegenMoodFromHint(userArtworkOverride || userArtworkRaw) : null;
-  let userArtwork = userArtworkOverride
-    ? prepareDirectUserArtworkHint(userArtworkRaw, { allowHumans, creative: creativeMode })
-    : creativeMode
-      ? enrichUserArtworkHint(sanitizeArtworkPrompt(userArtworkRaw, { title }))
-      : sanitizeArtworkPrompt(enrichUserArtworkHint(userArtworkRaw), { title });
+  const explicitUserHint = Boolean(
+    options.userExplicitArtwork
+    || userArtworkOverride
+    || String(input?.artworkHint || input?.artworkStyle || "").trim(),
+  );
+  const userDirectedRegen = explicitUserHint && isUserDirectedRegenHint(userArtworkOverride || userArtworkRaw);
+  const regenMood = !explicitUserHint && userDirectedRegen ? resolveRegenMoodFromHint(userArtworkOverride || userArtworkRaw) : null;
+  let userArtwork = explicitUserHint
+    ? prepareExplicitUserArtworkHint(userArtworkOverride || userArtworkRaw)
+    : userArtworkOverride
+      ? prepareDirectUserArtworkHint(userArtworkRaw, { allowHumans, creative: creativeMode })
+      : creativeMode
+        ? enrichUserArtworkHint(sanitizeArtworkPrompt(userArtworkRaw, { title }))
+        : sanitizeArtworkPrompt(enrichUserArtworkHint(userArtworkRaw), { title });
   const sceneOverrideRaw = creativeMode
     ? String(options.sceneOverride || "").trim()
     : sanitizeArtworkPrompt(String(options.sceneOverride || "").trim(), { title });
@@ -1084,15 +1142,20 @@ export function buildAbstractCoverPrompt(input, options = {}) {
     : sanitizeArtworkPrompt(String(options.nabadIdentityPhrases || "").trim(), { title });
   const storyScene = creativeMode ? String(scene || "").trim() : toVisualOnlyPrompt(scene, { title });
   const preferStoryScene = storyTheme !== "mood_fallback" && Boolean(storyScene);
-  let visualScene = forceMusicFallback
+  let visualScene = explicitUserHint
+    ? ""
+    : forceMusicFallback
     ? pickFrom(MUSIC_FALLBACK_SCENES, songId, regenSaltKey || "regen-auto")
     : regenVariety
       ? pickFrom(REGEN_VARIETY_POOL, songId, regenSaltKey || "regen-variety")
       : preferStoryScene
         ? storyScene
-        : !sceneOverride && !userArtwork && directorSceneHint
+        : directorSceneHint && !userArtwork
           ? directorSceneHint
-          : storyScene;
+          : storyScene || pickFrom(MUSIC_FALLBACK_SCENES, songId, "flux-fallback");
+  const effectiveVisualMode = sceneOverride || userArtwork || userDirectedRegen
+    ? "user_directed"
+    : visualMode;
   if (!allowHumans && !creativeMode) {
     sceneOverride = sceneOverride ? enforceNoHumansScene(sceneOverride) : "";
     visualScene = enforceNoHumansScene(visualScene);
@@ -1113,8 +1176,8 @@ export function buildAbstractCoverPrompt(input, options = {}) {
   const artworkSource = forceMusicFallback
     ? "regen_music_auto"
     : sceneOverride
-      ? String(options.artworkSourceOverride || "gemini_scene")
-      : userArtwork
+      ? String(options.artworkSourceOverride || "scene_override")
+    : userArtwork
         ? "user_artwork"
         : directorSceneHint
           ? "visual_director"
@@ -1123,7 +1186,8 @@ export function buildAbstractCoverPrompt(input, options = {}) {
   const isHumTrack = Boolean(input?.humTrack);
   const styleCore = isHumTrack ? HUM_TRACK_STYLE_CORE : STYLE_CORE;
   const humGuard = isHumTrack ? HUM_TRACK_SCENE_GUARD : "";
-  const autoFrame = MUSIC_COVER_FRAME;
+  const autoFrame = composeFrameForCreativeMode(effectiveVisualMode);
+  const photoLead = fluxPhotoLeadForMode(effectiveVisualMode);
   const safetySuffix = isHumTrack ? HUM_TRACK_SAFETY_SUFFIX : SAFETY_SUFFIX;
   const humansGuard = allowHumans ? "" : NO_HUMANS_GUARD;
   const geminiReelFrame = geminiImage && Boolean(userArtwork || userArtworkOverride);
@@ -1149,32 +1213,39 @@ export function buildAbstractCoverPrompt(input, options = {}) {
         MINIMAL_TEXT_GUARD,
       ];
     } else if (userArtwork) {
-      parts = [
-        autoFrame,
-        userArtwork,
-        nabadIdentityPhrases,
-        paletteForUserArtwork(userArtwork, bucketKey),
-        USER_STYLE_CORE,
-        composition,
-        sonicPhrase(sonicProfile),
-        storyMoodPhrase(storyTheme),
-        bucketMoodPhrase(bucketKey),
-        MINIMAL_TEXT_GUARD,
-      ];
+      if (explicitUserHint && creativeMode) {
+        parts = [
+          userArtwork,
+          nabadIdentityPhrases,
+          paletteForUserArtwork(userArtwork, bucketKey),
+          MINIMAL_TEXT_GUARD,
+        ];
+      } else {
+        parts = [
+          autoFrame,
+          userArtwork,
+          nabadIdentityPhrases,
+          paletteForUserArtwork(userArtwork, bucketKey),
+          USER_STYLE_CORE,
+          composition,
+          sonicPhrase(sonicProfile),
+          storyMoodPhrase(storyTheme),
+          bucketMoodPhrase(bucketKey),
+          MINIMAL_TEXT_GUARD,
+        ];
+      }
     } else {
       parts = [
         autoFrame,
         styleCore,
-        visualScene,
+        `${photoLead}${visualScene}`.trim(),
         nabadIdentityPhrases,
         humGuard,
-        sonicPhrase(sonicProfile),
         palette,
         composition,
         storyMoodPhrase(storyTheme),
         bucketMoodPhrase(bucketKey),
-        tempoPhrase(tempo),
-        brightnessPhrase(brightness),
+        effectiveVisualMode === "abstract" ? sonicPhrase(sonicProfile) : "",
         MINIMAL_TEXT_GUARD,
       ];
     }
@@ -1279,7 +1350,7 @@ export function buildAbstractCoverPrompt(input, options = {}) {
     prompt: parts.filter(Boolean).join(", "),
     seed,
     bucket: bucketKey,
-    visualMode: sceneOverride || userArtwork || userDirectedRegen ? "user_directed" : visualMode,
+    visualMode: effectiveVisualMode,
     storyTheme: effectiveStoryTheme,
     artworkSource,
     params: {
@@ -1293,7 +1364,7 @@ export function buildAbstractCoverPrompt(input, options = {}) {
       sonicProfile,
       bucket: bucketKey,
       brandPalette: palette,
-      visualMode: sceneOverride || userArtwork || userDirectedRegen ? "user_directed" : visualMode,
+      visualMode: effectiveVisualMode,
       storyTheme: effectiveStoryTheme,
       artworkSource,
       userArtwork: userArtwork || undefined,

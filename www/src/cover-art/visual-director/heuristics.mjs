@@ -35,7 +35,7 @@ function mainSubjectFromContext(ctx) {
   if (ctx.sourcePath === "instrumental") {
     return "premium abstract living light gradients with cinematic bloom, no people";
   }
-  return "abstract sound aura and luminous waveform energy in teal and violet, premium music artwork mood, no people";
+  return "cinematic symbolic still life, premium props on dark surface with teal-violet rim light, editorial photograph mood, no people";
 }
 
 function settingFromContext(ctx) {
@@ -56,7 +56,7 @@ function visualSymbolsFromContext(ctx) {
   const symbols = [];
   const occasion = String(ctx.occasionLabel || "").toLowerCase();
   if (occasion === "birthday") symbols.push("soft candle glow", "celebration balloons as bokeh");
-  if (occasion === "wedding") symbols.push("diamond rings on satin", "soft floral glow");
+  if (occasion === "wedding") symbols.push("soft floral glow", "champagne gold bokeh");
   if (occasion === "christmas") symbols.push("evergreen lights", "warm star glow");
   if (occasion === "graduation") symbols.push("mortarboard cap", "rolled diploma", "golden tassel");
   if (ctx.sourcePath === "mashup") symbols.push("interwoven light arcs");

@@ -4,7 +4,7 @@
  */
 
 /** Bump when cover prompt policy changes. */
-export const COVER_PROMPT_POLICY_VERSION = 19;
+export const COVER_PROMPT_POLICY_VERSION = 20;
 /** Pollinations flux reliably returns ~768×768 square — request square, crop to 9:16 (avoids vertical stretch). */
 export const POLLINATIONS_COVER_WIDTH = 1024;
 export const POLLINATIONS_COVER_HEIGHT = 1024;
@@ -24,9 +24,13 @@ const GEMINI_REEL_ENV_FRAME =
 /** @deprecated alias — use OBJECT_COMPOSE_FRAME */
 const STILL_LIFE_COMPOSE_FRAME = OBJECT_COMPOSE_FRAME;
 
+/** Vertical 9:16 reel frame — hero centered with safe margins (Flux + portrait crop). */
+const FLUX_REEL_PORTRAIT_FRAME =
+  "vertical 9:16 portrait album cover, main subject centered in frame with generous safe margins on all four edges, hero focal point fully inside the viewport, nothing important cropped at frame edges, balanced centered composition";
+
 /** Music-leaning frame — avoids plain square blocks when the theme is vague or user-directed. */
 const MUSIC_COVER_FRAME =
-  "vertical cinematic album art, full-frame immersive environment, atmospheric depth, premium music artwork aesthetic, natural proportions, no vertical stretch, no plain solid blocks, no people";
+  `${FLUX_REEL_PORTRAIT_FRAME}, full-frame immersive environment, atmospheric depth, premium music artwork aesthetic, natural proportions, no vertical stretch, no plain solid blocks, no people`;
 
 const MONOCHROME_PALETTE =
   "high contrast black and white monochrome photography, silver grey tones, dramatic shadows, no color tint";
@@ -257,27 +261,24 @@ REGEN_VARIETY_POOL = [
 
 const ABSTRACT_FALLBACKS = MUSIC_FALLBACK_SCENES;
 
-const COMPOSITIONS = [
-  "centered single focal subject with strong negative space",
-  "symmetrical balanced composition with clear focal point",
-  "rule of thirds framing with one dominant subject",
-  "centered subject with clean horizon and balanced weight",
-  "symmetric composition with single clear focal subject",
-  "rule of thirds with subject placed on vertical third",
-];
-
-const OBJECT_COMPOSITIONS = [
-  "medium-scale props on a surface with generous negative space, object presence about 30% of frame, safe margins for vertical crop",
-  "modest-sized symbolic objects on rule-of-thirds placement, wide environmental context, pulled-back camera distance",
-  "editorial still life with small-to-medium props, natural viewing distance, atmospheric background clearly visible",
-  "grouped objects at moderate scale in lower or upper third, ample empty space around edges for reel framing",
-];
-
 const GEMINI_REEL_COMPOSITIONS = [
   "hero subject dead-center with equal negative space on left and right, scaled to fit entirely inside the 9:16 frame",
   "centered focal subject with wide safe margins above and below, nothing clipped at the top or bottom of the reel",
   "symmetrical centered composition, subject fully visible inside vertical portrait safe zone, moderate scale not edge-to-edge",
   "single dominant subject centered on the vertical midline, generous padding on all sides for reel crop safety",
+];
+
+const COMPOSITIONS = [
+  ...GEMINI_REEL_COMPOSITIONS,
+  "centered single focal subject with strong negative space",
+  "symmetrical balanced composition with clear focal point",
+];
+
+const OBJECT_COMPOSITIONS = [
+  "medium-scale props on a surface with generous negative space, object presence about 30% of frame, safe margins for vertical crop",
+  "modest-sized symbolic objects centered with wide environmental context, pulled-back camera distance",
+  "editorial still life with small-to-medium props, natural viewing distance, atmospheric background clearly visible",
+  "grouped objects at moderate scale in center third, ample empty space around edges for reel framing",
 ];
 
 const CONCRETE_OBJECT_RE =
@@ -996,9 +997,11 @@ function expandArtworkStyleTags(raw) {
 
 function composeFrameForCreativeMode(visualMode) {
   const mode = String(visualMode || "").toLowerCase();
-  if (mode === "still_life" || mode === "studio_nook_still_life") return OBJECT_COMPOSE_FRAME;
+  if (mode === "still_life" || mode === "studio_nook_still_life") {
+    return `${FLUX_REEL_PORTRAIT_FRAME}, ${OBJECT_COMPOSE_FRAME}`;
+  }
   if (mode === "landscape") {
-    return "vertical cinematic album art, wide atmospheric environment, immersive environmental depth, natural proportions, no people";
+    return `${FLUX_REEL_PORTRAIT_FRAME}, wide atmospheric environment, immersive environmental depth, natural proportions, no people`;
   }
   return MUSIC_COVER_FRAME;
 }
@@ -1041,6 +1044,9 @@ export function buildFluxCoverPrompt(prompt, { avoidTags = "", visualMode = "" }
   const suffix = `. ${suffixBits.join(", ")}`;
   const baseBudget = Math.max(400, FLUX_PROMPT_MAX - suffix.length - 1);
   let base = compressPromptForFlux(String(prompt || "").trim(), baseBudget);
+  if (!/\bsafe margin|centered in frame|inside the (vertical )?(reel )?frame|9:16|viewport\b/i.test(base)) {
+    base = `${FLUX_REEL_PORTRAIT_FRAME}, ${base}`;
+  }
   const mode = String(visualMode || "").toLowerCase();
   if (mode === "still_life" || mode === "landscape") {
     const lead = "photorealistic, ";

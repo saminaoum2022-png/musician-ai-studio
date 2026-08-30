@@ -1,6 +1,6 @@
 /**
  * Pollinations often returns square or wrong aspect for portrait requests.
- * Top-biased cover-crop to true 9:16 — never non-uniform stretch.
+ * Center-biased cover-crop to true 9:16 — never non-uniform stretch.
  */
 const sharp = require("sharp");
 
@@ -20,9 +20,7 @@ function cropRectForPortrait916(w, h, { preferCenter = false } = {}) {
   }
   const cropW = iw;
   const cropH = Math.min(ih, Math.max(1, Math.floor(cropW / TARGET_AR)));
-  const top = preferCenter || ih <= iw * 1.08
-    ? Math.max(0, Math.floor((ih - cropH) / 2))
-    : 0;
+  const top = Math.max(0, Math.floor((ih - cropH) / 2));
   return { left: 0, top, width: cropW, height: cropH };
 }
 

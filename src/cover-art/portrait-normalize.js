@@ -16,21 +16,19 @@ export function portrait916CropRect(w, h, { preferCenter = false } = {}) {
   }
   const sw = iw;
   const sh = Math.min(ih, Math.max(1, Math.floor(sw / TARGET_AR)));
-  const sy = preferCenter || ih <= iw * 1.08
-    ? Math.max(0, Math.floor((ih - sh) / 2))
-    : 0;
+  const sy = Math.max(0, Math.floor((ih - sh) / 2));
   return { sx: 0, sy, sw, sh };
 }
 
 /** Draw source crop into dest using cover scaling — never non-uniform stretch. */
-function drawCoverPortrait916(ctx, img, sx, sy, sw, sh, { preferCenter = false } = {}) {
+function drawCoverPortrait916(ctx, img, sx, sy, sw, sh) {
   const tw = COVER_PORTRAIT_W;
   const th = COVER_PORTRAIT_H;
   const scale = Math.max(tw / sw, th / sh);
   const dw = Math.round(sw * scale);
   const dh = Math.round(sh * scale);
   const dx = Math.round((tw - dw) / 2);
-  const dy = preferCenter ? Math.round((th - dh) / 2) : 0;
+  const dy = Math.round((th - dh) / 2);
   ctx.drawImage(img, sx, sy, sw, sh, dx, dy, dw, dh);
 }
 
@@ -53,7 +51,7 @@ export async function normalizePortraitCoverDataUrl(dataUrl, { preferCenter = fa
   canvas.height = COVER_PORTRAIT_H;
   const ctx = canvas.getContext("2d");
   if (!ctx) return src;
-  drawCoverPortrait916(ctx, img, sx, sy, sw, sh, { preferCenter });
+  drawCoverPortrait916(ctx, img, sx, sy, sw, sh);
   try {
     const webp = canvas.toDataURL("image/webp", 0.82);
     if (webp.startsWith("data:image/webp")) return webp;

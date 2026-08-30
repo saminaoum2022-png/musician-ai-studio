@@ -22751,13 +22751,13 @@ function trackCoverArtCandidates(track) {
     .filter((c) => !isLogoCoverUrl(c));
 }
 
-/** Square crop for list thumbs — portrait covers use the top band, not dead center. */
+/** Square crop for list thumbs — center band matches 9:16 reel focal point. */
 function coverSquareCropRect(w, h) {
   const iw = Number(w) || 0;
   const ih = Number(h) || 0;
   const crop = Math.min(iw, ih);
   const sx = (iw - crop) / 2;
-  const sy = ih > iw * 1.08 ? 0 : (ih - crop) / 2;
+  const sy = (ih - crop) / 2;
   return { sx, sy, crop };
 }
 
@@ -22771,7 +22771,7 @@ function thumbFrameCropRect(w, h, frame = {}) {
   const offsetY = Math.max(-1, Math.min(1, Number(frame?.offsetY) || 0));
   const side = Math.min(iw, ih, crop / scale);
   const sx = (iw - side) / 2;
-  const defaultSy = ih > iw * 1.08 ? 0 : (ih - side) / 2;
+  const defaultSy = (ih - side) / 2;
   const maxSy = Math.max(0, ih - side);
   const travelDown = Math.max(0, maxSy - defaultSy);
   const travelUp = Math.max(0, defaultSy);

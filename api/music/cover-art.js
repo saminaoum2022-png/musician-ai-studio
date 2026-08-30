@@ -444,7 +444,7 @@ module.exports = async function handler(req, res) {
         artworkSource: String(body?.clientArtworkSource || "client_regen"),
         userId: user.userId,
         songId,
-        preferCenter: rendered.provider === "gemini",
+        preferCenter: true,
         params: {
           ...(body?.clientParams && typeof body.clientParams === "object" ? body.clientParams : {}),
           ...(regenUserHint ? { regenUserHint } : {}),
@@ -482,7 +482,7 @@ module.exports = async function handler(req, res) {
       return sendJson(res, 502, { error: "Cover image generation failed upstream." });
     }
 
-    const { outBuf, outMime } = await normalizeCoverResponseBuffer(rendered.buf);
+    const { outBuf, outMime } = await normalizeCoverResponseBuffer(rendered.buf, { preferCenter: true });
 
     if (rendered.fallbackReason && rendered.attemptedProvider === "cloudflare") {
       await recordCoverUsage({

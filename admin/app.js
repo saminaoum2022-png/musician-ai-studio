@@ -939,7 +939,6 @@ function renderProSubscriberRows(subscribers) {
         <td>${escapeHtml(sub.provider || "—")}</td>
         <td class="num">${fmtNum(sub.balance, 1)}</td>
         <td class="num">${fmtNum(sub.guaranteed ?? sub.periodCap, 0)}</td>
-        <td class="num">${fmtNum(sub.remaining ?? sub.reserved, 1)}</td>
       </tr>`;
   }).join("");
   return `
@@ -948,7 +947,7 @@ function renderProSubscriberRows(subscribers) {
         <thead>
           <tr>
             <th>Pro user</th><th>Plan</th><th>Status</th><th>Provider</th>
-            <th>Balance</th><th>Guaranteed</th><th>Remaining</th>
+            <th>Balance</th><th>Plan cap</th>
           </tr>
         </thead>
         <tbody>${body}</tbody>
@@ -969,21 +968,23 @@ function renderSunoCoverageSection(s, { compact = false } = {}) {
   const hasShortfall = shortfall > 0;
   const buyUsd = s.shortfallUsd != null ? fmtUsd(s.shortfallUsd) : "—";
   const coverage = s.coveragePct != null ? fmtPct(s.coveragePct) : "—";
+  const guaranteedCoverage = s.guaranteedCoveragePct != null ? fmtPct(s.guaranteedCoveragePct) : "—";
   const proCount = Number(s.proSubscriberCount || 0);
   const guaranteed = Number(s.guaranteedCredits ?? s.reservedCredits ?? 0);
-  const remaining = Number(s.remainingCredits ?? 0);
-  const allOutstanding = Number(s.allUserOutstanding ?? s.userOutstanding ?? 0);
-  const title = compact ? "Suno guarantee (Pro subs)" : "Suno guarantee & top-up plan";
+  const proBalances = Number(s.proBalancesOutstanding ?? s.remainingCredits ?? 0);
+  const freeTier = Number(s.freeTierOutstanding ?? 0);
+  const allTotal = Number(s.allUserOutstanding ?? s.userOutstanding ?? 0);
+  const title = compact ? "Suno liability (Pro + free)" : "Suno liability & top-up plan";
   const lead = compact
-    ? `${proCount} active Pro · guaranteed upstream backing required at subscribe time.`
-    : `When someone subscribes, you guarantee their full plan credits (400 weekly / 1,200 monthly) in your Suno bucket. Top up before the bucket runs low — not after it hits zero.`;
+    ? `${proCount} active Pro · buy when bucket is below Pro account balances.`
+    : `Guaranteed is your plan-cap commitment at subscribe (400 weekly / 1,200 monthly). Top up Suno when the bucket falls below what Pro users can actually spend — plus track free-tier welcome credits separately.`;
   const topUpAlert = hasShortfall
     ? `<div class="sunoTopUpAlert" role="alert">
-        <strong>Top up Suno now:</strong> buy at least <strong>${fmtNum(s.creditsToBuy, 0)} credits</strong> (~${buyUsd}) to fully back your ${proCount} active Pro subscriber${proCount === 1 ? "" : "s"}.
+        <strong>Top up Suno now:</strong> buy at least <strong>${fmtNum(s.creditsToBuy, 0)} credits</strong> (~${buyUsd}) — Pro account balances (${fmtNum(proBalances, 1)}) exceed your bucket (${fmtNum(s.masterBalance, 1)}).
         <a class="providerExtLink" href="https://sunoapi.org/billing" target="_blank" rel="noopener noreferrer">Open sunoapi.org/billing →</a>
       </div>`
     : `<div class="sunoTopUpAlert sunoTopUpAlert--ok" role="status">
-        <strong>Suno bucket covers guaranteed Pro liability.</strong> You have headroom for new subs until guaranteed total grows.
+        <strong>Suno bucket covers Pro account balances.</strong> ${fmtNum(s.headroomEstimate, 1)} credits headroom before Pro users outspend the bucket.
         <a class="providerExtLink" href="https://sunoapi.org/billing" target="_blank" rel="noopener noreferrer">Suno billing →</a>
       </div>`;
   return `
@@ -994,14 +995,15 @@ function renderSunoCoverageSection(s, { compact = false } = {}) {
       </div>
       ${topUpAlert}
       <div class="cardsGrid cardsGrid--inSection">
-        ${statCard("Guaranteed (Pro commitment)", fmtNum(guaranteed, 0), `${proCount} active Pro · full plan credits owed`, false, hasShortfall)}
+        ${statCard("Guaranteed (Pro commitment)", fmtNum(guaranteed, 0), `${proCount} active Pro · plan caps (${guaranteedCoverage} bucket coverage)`, false, Number(s.guaranteedShortfallCredits || 0) > 0)}
+        ${statCard("Pro balances (on accounts)", fmtNum(proBalances, 1), `${proCount} Pro users · full spendable balances`, false, hasShortfall)}
+        ${statCard("Free / welcome outstanding", fmtNum(freeTier, 1), "Non-Pro users · mostly signup 24 credits")}
+        ${statCard("All users total", fmtNum(allTotal, 1), "Every account balance on the platform")}
         ${statCard("Suno bucket available", fmtNum(s.masterBalance, 1), "Live upstream balance", true)}
-        ${statCard("Coverage", coverage, "Suno bucket ÷ guaranteed — aim for 100%+", false, hasShortfall && Number(s.coveragePct) < 100)}
-        ${statCard("Buy from Suno now", hasShortfall ? fmtNum(s.creditsToBuy, 0) : "0", hasShortfall ? "Guaranteed − bucket" : "Fully backed", false, hasShortfall)}
+        ${statCard("Coverage", coverage, "Suno bucket ÷ Pro balances — aim for 100%+", false, hasShortfall && Number(s.coveragePct) < 100)}
+        ${statCard("Buy from Suno now", hasShortfall ? fmtNum(s.creditsToBuy, 0) : "0", hasShortfall ? "Pro balances − bucket" : "Bucket covers Pro balances", false, hasShortfall)}
         ${statCard("Est. top-up cost", hasShortfall ? buyUsd : fmtUsd(0), s.usdPerCredit ? `@ $${Number(s.usdPerCredit).toFixed(5)}/credit` : "")}
-        ${statCard("Headroom", fmtNum(s.headroomEstimate, 1), "Bucket − guaranteed (negative = under-backed)", false, hasShortfall)}
-        ${statCard("Still spendable", fmtNum(remaining, 1), "Credits Pro users haven't used yet")}
-        ${statCard("All users (incl. test)", fmtNum(allOutstanding, 1), "Not used for guarantee", false, false)}
+        ${statCard("Headroom", fmtNum(s.headroomEstimate, 1), "Bucket − Pro balances (negative = buy now)", false, hasShortfall)}
       </div>
       ${renderProSubscriberRows(s.proSubscribers)}
     </section>

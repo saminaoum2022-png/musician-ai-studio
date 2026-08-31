@@ -70,7 +70,7 @@ function clipGeminiProducerEnabled() {
 }
 
 function resolveProducerModel() {
-  return String(process.env.CLIP_GEMINI_PRODUCER_MODEL || "gemini-2.0-flash").trim() || "gemini-2.0-flash";
+  return String(process.env.CLIP_GEMINI_PRODUCER_MODEL || "gemini-2.5-flash").trim() || "gemini-2.5-flash";
 }
 
 function extractGeminiText(data) {
@@ -170,8 +170,11 @@ function appendProducerAdminDetail(baseDetail, producerResult) {
 async function enrichClipWithGeminiProducer({ apiKey, input } = {}) {
   const started = Date.now();
   const instrumental = Boolean(input?.instrumental);
-  if (!apiKey || !clipGeminiProducerEnabled()) {
-    return { ok: false, used: false, fallback: true, error: "disabled" };
+  if (!clipGeminiProducerEnabled()) {
+    return { ok: false, used: false, fallback: true, error: "producer_disabled" };
+  }
+  if (!apiKey) {
+    return { ok: false, used: false, fallback: true, error: "missing_gemini_api_key" };
   }
 
   const model = resolveProducerModel();

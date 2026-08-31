@@ -69,8 +69,17 @@ function clipGeminiProducerEnabled() {
   return v === "1" || v === "true" || v === "yes";
 }
 
-function resolveProducerModel() {
-  return String(process.env.CLIP_GEMINI_PRODUCER_MODEL || "gemini-2.5-flash").trim() || "gemini-2.5-flash";
+const PRODUCER_MODEL_PREFERRED = [
+  "gemini-3.6-flash",
+  "gemini-3.5-flash",
+  "gemini-2.5-flash",
+  "gemini-2.5-flash-lite",
+];
+
+function resolveProducerModels() {
+  const override = String(process.env.CLIP_GEMINI_PRODUCER_MODEL || "").trim();
+  if (override) return [override];
+  return PRODUCER_MODEL_PREFERRED;
 }
 
 function extractGeminiText(data) {
@@ -177,60 +186,75 @@ async function enrichClipWithGeminiProducer({ apiKey, input } = {}) {
     return { ok: false, used: false, fallback: true, error: "missing_gemini_api_key" };
   }
 
-  const model = resolveProducerModel();
-  const url = `${GEMINI_BASE}/models/${encodeURIComponent(model)}:generateContent`;
+  const models = resolveProducerModels();
   const userMessage = JSON.stringify(input || {}, null, 0);
+  const requestBody = JSON.stringify({
+    systemInstruction: { parts: [{ text: CLIP_PRODUCER_SYSTEM_PROMPT }] },
+    contents: [{ role: "user", parts: [{ text: userMessage }] }],
+    generationConfig: {
+      temperature: 0.65,
+      responseMimeType: "application/json",
+    },
+  });
 
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), PRODUCER_TIMEOUT_MS);
+  let lastError = "unknown";
+  let lastModel = models[0] || "gemini-3.6-flash";
 
-  try {
-    const r = await fetch(url, {
-      method: "POST",
-      signal: controller.signal,
-      headers: {
-        "Content-Type": "application/json",
-        "x-goog-api-key": String(apiKey).trim(),
-      },
-      body: JSON.stringify({
-        systemInstruction: { parts: [{ text: CLIP_PRODUCER_SYSTEM_PROMPT }] },
-        contents: [{ role: "user", parts: [{ text: userMessage }] }],
-        generationConfig: {
-          temperature: 0.65,
-          responseMimeType: "application/json",
+  for (const model of models) {
+    lastModel = model;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), PRODUCER_TIMEOUT_MS);
+
+    try {
+      const url = `${GEMINI_BASE}/models/${encodeURIComponent(model)}:generateContent`;
+      const r = await fetch(url, {
+        method: "POST",
+        signal: controller.signal,
+        headers: {
+          "Content-Type": "application/json",
+          "x-goog-api-key": String(apiKey).trim(),
         },
-      }),
-    });
-    const text = await r.text().catch(() => "");
-    const data = safeJson(text);
-    const latencyMs = Date.now() - started;
+        body: requestBody,
+      });
+      const text = await r.text().catch(() => "");
+      const data = safeJson(text);
+      const latencyMs = Date.now() - started;
 
-    if (!r.ok) {
-      const err = data?.error?.message || text.slice(0, 200) || `HTTP ${r.status}`;
-      return { ok: false, used: false, fallback: true, error: err, model, latencyMs };
+      if (!r.ok) {
+        lastError = data?.error?.message || text.slice(0, 200) || `HTTP ${r.status}`;
+        continue;
+      }
+
+      const parsed = parseProducerJson(extractGeminiText(data));
+      const normalized = normalizeProducerOutput(parsed, { instrumental });
+      if (!normalized) {
+        lastError = "invalid_json";
+        continue;
+      }
+
+      return {
+        ok: true,
+        used: true,
+        fallback: false,
+        model,
+        latencyMs,
+        ...normalized,
+      };
+    } catch (e) {
+      lastError = e?.name === "AbortError" ? "timeout" : (e?.message || String(e));
+    } finally {
+      clearTimeout(timer);
     }
-
-    const parsed = parseProducerJson(extractGeminiText(data));
-    const normalized = normalizeProducerOutput(parsed, { instrumental });
-    if (!normalized) {
-      return { ok: false, used: false, fallback: true, error: "invalid_json", model, latencyMs };
-    }
-
-    return {
-      ok: true,
-      used: true,
-      fallback: false,
-      model,
-      latencyMs,
-      ...normalized,
-    };
-  } catch (e) {
-    const latencyMs = Date.now() - started;
-    const err = e?.name === "AbortError" ? "timeout" : (e?.message || String(e));
-    return { ok: false, used: false, fallback: true, error: err, model, latencyMs };
-  } finally {
-    clearTimeout(timer);
   }
+
+  return {
+    ok: false,
+    used: false,
+    fallback: true,
+    error: lastError,
+    model: lastModel,
+    latencyMs: Date.now() - started,
+  };
 }
 
 module.exports = {

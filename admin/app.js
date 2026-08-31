@@ -976,17 +976,24 @@ function renderCreditsOverviewSection(s, { compact = false } = {}) {
   const guaranteed = Number(uc.guaranteedCredits ?? s.guaranteedCredits ?? 0);
   const allTotal = Number(uc.allUserOutstanding ?? s.allUserOutstanding ?? 0);
   const freeBal = Number(ft.balanceTotal ?? s.freeTierOutstanding ?? 0);
-  const freePromo = Number(ft.promoOutstanding ?? 0);
+  const welcomeUnused = Number(ft.welcomeUnused ?? ft.promoOutstanding ?? 0);
+  const promoInAccounts = Number(ft.promoInAccounts ?? 0);
+  const promoCodesPool = Number(ft.promoCodesUnredeemed ?? 0);
+  const promoCodeSlots = Number(ft.promoCodesUnusedSlots ?? 0);
   const welcomeClaims = Number(ft.welcomeClaims ?? 0);
+  const proSuno = Number(suno.proSunoExposure ?? proBalances);
+  const welcomeSuno = Number(suno.welcomeSunoExposure ?? welcomeUnused);
+  const maxSuno = Number(suno.maxExposureCredits ?? 0);
+  const mixSuno = Number(suno.mixEstimateCredits ?? maxSuno);
+  const mixSunoBuy = Number(suno.mixCreditsToBuy ?? s.mixSunoBuyNow ?? 0);
 
   const songPct = mix.songPct != null ? fmtPct(mix.songPct) : "—";
   const clipPct = mix.clipPct != null ? fmtPct(mix.clipPct) : "—";
   const mixNote = mix.hasData
-    ? `Last ${mix.windowDays || 30}d spend: ${songPct} songs · ${clipPct} clips (${fmtNum(mix.songCreditsSpent, 0)} vs ${fmtNum(mix.clipCreditsSpent, 0)} credits)`
-    : `No recent spend mix — planning uses ${fmtPct(mix.songPct ?? 85)} songs / ${fmtPct(mix.clipPct ?? 15)} clips default until data arrives.`;
+    ? `Last ${mix.windowDays || 30}d: ${songPct} of credits went to songs · ${clipPct} to clips.`
+    : `Not enough recent data for mix — Suno buy uses worst-case (all songs).`;
 
   const sunoBuy = Number(suno.creditsToBuy ?? s.creditsToBuy ?? 0);
-  const sunoMaxBuy = Number(suno.maxCreditsToBuy ?? 0);
   const sunoShortfall = sunoBuy > 0;
   const sunoBuyUsd = suno.shortfallUsd != null ? fmtUsd(suno.shortfallUsd) : "—";
   const sunoCoverage = suno.coveragePct != null ? fmtPct(suno.coveragePct) : "—";
@@ -999,12 +1006,12 @@ function renderCreditsOverviewSection(s, { compact = false } = {}) {
 
   const sunoAlert = sunoShortfall
     ? `<div class="sunoTopUpAlert" role="alert">
-        <strong>Top up Suno pocket:</strong> buy ~<strong>${fmtNum(sunoBuy, 0)} credits</strong> (~${sunoBuyUsd}) based on expected song mix.
-        Max if everyone goes songs-only: ${fmtNum(sunoMaxBuy, 0)} credits.
+        <strong>Top up Suno pocket:</strong> buy ~<strong>${fmtNum(sunoBuy, 0)} credits</strong> (~${sunoBuyUsd}) to cover Pro + welcome if all spent on songs.
+        ${mix.hasData && mixSunoBuy !== sunoBuy ? `Mix estimate (optional): ${fmtNum(mixSuno, 0)} need · ${fmtNum(mixSunoBuy, 0)} to buy.` : ""}
         <a class="providerExtLink" href="https://sunoapi.org/billing" target="_blank" rel="noopener noreferrer">sunoapi.org/billing →</a>
       </div>`
     : `<div class="sunoTopUpAlert sunoTopUpAlert--ok" role="status">
-        <strong>Suno pocket covers expected song need.</strong> ${fmtNum(suno.headroom, 1)} credits headroom (expected mix).
+        <strong>Suno bucket covers Pro + welcome (all-songs worst case).</strong> ${fmtNum(suno.headroom, 1)} credits headroom.
         <a class="providerExtLink" href="https://sunoapi.org/billing" target="_blank" rel="noopener noreferrer">Suno billing →</a>
       </div>`;
 
@@ -1028,7 +1035,7 @@ function renderCreditsOverviewSection(s, { compact = false } = {}) {
     <section class="sectionCard">
       <div class="sectionHead">
         <h3 class="sectionTitle">${title}</h3>
-        <p class="sectionNote">Users hold one shared credit wallet. When they spend, Suno songs draw from your Suno pocket; Nabad Clips draw from Gemini (~$${Number(clip.usdPerGen || 0.04).toFixed(2)}/gen). Buy recommendations use the spend mix below.</p>
+        <p class="sectionNote">Users hold one shared credit wallet. Suno songs and Nabad Clips draw from different vendor pockets when credits are spent.</p>
       </div>
       <div class="sectionHead" style="margin-top:0.5rem">
         <h4 class="sectionTitle" style="font-size:1rem">Spend mix</h4>
@@ -1039,13 +1046,15 @@ function renderCreditsOverviewSection(s, { compact = false } = {}) {
     <section class="sectionCard">
       <div class="sectionHead">
         <h3 class="sectionTitle">User credits (shared wallet)</h3>
-        <p class="sectionNote">Granted credits Pro and free users can spend on songs or clips — same balance pool.</p>
+        <p class="sectionNote">Current balances only — goes down when users spend. Welcome (24× signup) is separate from promo codes (36×).</p>
       </div>
       <div class="cardsGrid cardsGrid--inSection">
-        ${statCard("Pro balances", fmtNum(proBalances, 1), `${proCount} active Pro · spendable now`)}
-        ${statCard("Guaranteed (plan caps)", fmtNum(guaranteed, 0), `Commitment at subscribe (${guaranteedCoverage} Suno coverage)`)}
-        ${statCard("Free-tier outstanding", fmtNum(freeBal, 1), `${fmtNum(ft.userCount, 0)} non-Pro users with balance`)}
-        ${statCard("Free promo (welcome)", fmtNum(freePromo, 1), `${fmtNum(welcomeClaims, 0)} welcome claims · Suno-only today`)}
+        ${statCard("Pro balances", fmtNum(proBalances, 1), `${proCount} active Pro · songs or clips`)}
+        ${statCard("Guaranteed (plan caps)", fmtNum(guaranteed, 0), `Owed at subscribe (${guaranteedCoverage} bucket coverage)`)}
+        ${statCard("Welcome unused (24×)", fmtNum(welcomeUnused, 1), `${fmtNum(welcomeClaims, 0)} signups granted · Suno-only today`)}
+        ${statCard("Promo in accounts", fmtNum(promoInAccounts, 1), "Redeemed promo codes still on balances")}
+        ${statCard("Promo codes (pool)", fmtNum(promoCodesPool, 0), `${fmtNum(promoCodeSlots, 0)} unused redemptions · not on anyone yet`)}
+        ${statCard("Free-tier total", fmtNum(freeBal, 1), `${fmtNum(ft.userCount, 0)} non-Pro users with balance`)}
         ${statCard("All users total", fmtNum(allTotal, 1), "Every account balance")}
       </div>
       ${renderProSubscriberRows(s.proSubscribers)}
@@ -1054,16 +1063,18 @@ function renderCreditsOverviewSection(s, { compact = false } = {}) {
     <section class="sectionCard${sunoShortfall ? " sectionCard--warn" : ""}">
       <div class="sectionHead">
         <h3 class="sectionTitle">Suno pocket</h3>
-        <p class="sectionNote">Full songs (~${Number(s.songCreditCost || 12)} credits). Welcome/free promo counts toward expected Suno need.</p>
+        <p class="sectionNote">Worst case: every Pro balance + unused welcome spent on full songs (~${Number(s.songCreditCost || 12)} credits each). Promo codes in the pool are not included until redeemed.</p>
       </div>
       ${sunoAlert}
       <div class="cardsGrid cardsGrid--inSection">
-        ${statCard("Suno bucket", fmtNum(suno.masterBalance ?? s.masterBalance, 1), "Live upstream balance", true)}
-        ${statCard("Expected need", fmtNum(suno.expectedNeedCredits, 0), `Mix-weighted · incl. ${fmtNum(suno.welcomeSunoExposure, 0)} welcome promo`)}
-        ${statCard("Max need (all songs)", fmtNum(suno.maxExposureCredits, 0), "If every Pro + welcome credit → songs")}
-        ${statCard("Coverage", sunoCoverage, "Bucket ÷ expected need")}
-        ${statCard("Buy Suno now", sunoShortfall ? fmtNum(sunoBuy, 0) : "0", sunoShortfall ? `Expected − bucket (~${sunoBuyUsd})` : "Covered for expected mix", false, sunoShortfall)}
-        ${statCard("Headroom", fmtNum(suno.headroom, 1), "Bucket − expected need")}
+        ${statCard("Suno bucket", fmtNum(suno.masterBalance ?? s.masterBalance, 1), "Your live Suno upstream balance", true)}
+        ${statCard("Pro → Suno", fmtNum(proSuno, 0), "Pro balances if all spent on songs")}
+        ${statCard("Welcome → Suno", fmtNum(welcomeSuno, 0), "Unused welcome 24× on free accounts")}
+        ${statCard("Max Suno need", fmtNum(maxSuno, 0), "Pro + welcome (all songs)")}
+        ${statCard("Mix estimate", fmtNum(mixSuno, 0), mix.hasData ? `If ${songPct} songs / ${clipPct} clips continue` : "Needs more spend data")}
+        ${statCard("Coverage", sunoCoverage, "Bucket ÷ max need (100% = fully covered)")}
+        ${statCard("Buy Suno now", sunoShortfall ? fmtNum(sunoBuy, 0) : "0", sunoShortfall ? `Max need − bucket (~${sunoBuyUsd})` : "Covered (worst case)", false, sunoShortfall)}
+        ${statCard("Headroom", fmtNum(suno.headroom, 1), "Bucket − max need")}
       </div>
     </section>
 

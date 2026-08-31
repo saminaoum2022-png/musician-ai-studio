@@ -63,6 +63,7 @@ const CLIP_CREDIT_COST = Math.max(
 );
 const CLIP_USD_PER_GEN = Number(process.env.LYRIA_CLIP_USD || "0.04");
 const DEFAULT_SONG_MIX_PCT = 0.85;
+const WELCOME_CREDITS_DEFAULT = Number(process.env.SIGNUP_WELCOME_CREDITS || 24);
 
 function roundCredits(n) {
   return Math.round(Number(n || 0) * 10) / 10;
@@ -136,13 +137,36 @@ function sunoCoverageMetrics(masterBalance, { guaranteedCredits = 0, proBalances
   };
 }
 
+async function fetchPromoCodesPool() {
+  const res = await serviceFetch(
+    "promo_codes?select=credits,max_redemptions,redemptions,active&active=eq.true&limit=500",
+  );
+  let unredeemedCredits = 0;
+  let unusedRedemptions = 0;
+  for (const row of res.data || []) {
+    const remaining = Math.max(
+      0,
+      Number(row.max_redemptions || 0) - Number(row.redemptions || 0),
+    );
+    if (remaining > 0) {
+      unusedRedemptions += remaining;
+      unredeemedCredits += remaining * Number(row.credits || 0);
+    }
+  }
+  return {
+    unredeemedCredits: roundCredits(unredeemedCredits),
+    unusedRedemptions,
+  };
+}
+
 async function fetchFreeTierLiability(proUserIds) {
   const proSet = new Set(Array.isArray(proUserIds) ? proUserIds : []);
-  const [creditsRes, profilesRes, welcomeRes, authMap] = await Promise.all([
+  const [creditsRes, profilesRes, welcomeRes, authMap, promoPool] = await Promise.all([
     serviceFetch("user_credits?select=user_id,balance,promo_balance,paid_balance,gift_balance&limit=5000"),
     serviceFetch("profiles?select=user_id,role&limit=5000"),
-    serviceFetch("welcome_credit_claims?select=email_lower,credits_granted&limit=5000"),
+    serviceFetch("welcome_credit_claims?select=email_lower,credits_granted,last_user_id&limit=5000"),
     fetchAuthUsersMap(),
+    fetchPromoCodesPool(),
   ]);
 
   const roleMap = new Map();
@@ -150,16 +174,22 @@ async function fetchFreeTierLiability(proUserIds) {
     roleMap.set(String(row.user_id), String(row.role || "user").toLowerCase());
   }
 
+  const welcomeByUser = new Map();
   let welcomeClaims = 0;
   let welcomeCreditsGranted = 0;
   for (const row of welcomeRes.data || []) {
     welcomeClaims += 1;
     welcomeCreditsGranted += Number(row.credits_granted || 0);
+    const uid = String(row.last_user_id || "").trim();
+    if (uid) {
+      welcomeByUser.set(uid, Number(row.credits_granted || 0) || WELCOME_CREDITS_DEFAULT);
+    }
   }
 
   let userCount = 0;
   let balanceTotal = 0;
-  let promoOutstanding = 0;
+  let welcomeUnused = 0;
+  let promoInAccounts = 0;
   let paidOutstanding = 0;
   let giftOutstanding = 0;
 
@@ -171,21 +201,35 @@ async function fetchFreeTierLiability(proUserIds) {
     if (isAdmin) continue;
     const balance = Number(row.balance || 0);
     if (balance <= 0) continue;
+    const promo = Number(row.promo_balance || 0);
     userCount += 1;
     balanceTotal += balance;
-    promoOutstanding += Number(row.promo_balance || 0);
     paidOutstanding += Number(row.paid_balance || 0);
     giftOutstanding += Number(row.gift_balance || 0);
+
+    if (welcomeByUser.has(uid)) {
+      const welcomeCap = welcomeByUser.get(uid);
+      const welcomeLeft = Math.min(balance, promo, welcomeCap);
+      welcomeUnused += welcomeLeft;
+      promoInAccounts += Math.max(0, promo - welcomeLeft);
+    } else {
+      promoInAccounts += promo;
+    }
   }
 
   return {
     userCount,
     balanceTotal: roundCredits(balanceTotal),
-    promoOutstanding: roundCredits(promoOutstanding),
+    welcomeUnused: roundCredits(welcomeUnused),
+    promoInAccounts: roundCredits(promoInAccounts),
+    promoCodesUnredeemed: promoPool.unredeemedCredits,
+    promoCodesUnusedSlots: promoPool.unusedRedemptions,
     paidOutstanding: roundCredits(paidOutstanding),
     giftOutstanding: roundCredits(giftOutstanding),
     welcomeClaims,
     welcomeCreditsGranted,
+    /** @deprecated use welcomeUnused — kept for older clients */
+    promoOutstanding: roundCredits(welcomeUnused),
   };
 }
 
@@ -255,7 +299,7 @@ function buildCreditsOverviewPayload({
   const outstanding = Number(allUserOutstanding || 0);
   const proBal = Number(proLiability.proBalancesOutstanding || 0);
   const guaranteed = Number(proLiability.guaranteedCredits || 0);
-  const welcomeExposure = Number(freeTier.promoOutstanding || 0);
+  const welcomeExposure = Number(freeTier.welcomeUnused ?? freeTier.promoOutstanding ?? 0);
   const songShare = spendMix.hasData
     ? mixShareFromPct(spendMix.songPct, DEFAULT_SONG_MIX_PCT)
     : DEFAULT_SONG_MIX_PCT;
@@ -265,15 +309,14 @@ function buildCreditsOverviewPayload({
 
   const maxSunoCredits = Math.ceil(proBal + welcomeExposure);
   const maxClipUsd = roundUsd((proBal / CLIP_CREDIT_COST) * CLIP_USD_PER_GEN);
-  const expectedSunoCredits = Math.min(
+  const mixEstimateSunoCredits = Math.min(
     maxSunoCredits,
     Math.ceil(proBal * songShare + welcomeExposure),
   );
-  const expectedClipUsd = roundUsd((proBal * clipShare / CLIP_CREDIT_COST) * CLIP_USD_PER_GEN);
 
   const master = masterSuno != null ? Number(masterSuno) : null;
-  const sunoBuyNow = master != null ? Math.max(0, Math.ceil(expectedSunoCredits - master)) : 0;
-  const maxSunoBuyNow = master != null ? Math.max(0, Math.ceil(maxSunoCredits - master)) : 0;
+  const sunoBuyNow = master != null ? Math.max(0, Math.ceil(maxSunoCredits - master)) : 0;
+  const mixSunoBuyNow = master != null ? Math.max(0, Math.ceil(mixEstimateSunoCredits - master)) : 0;
   const sunoShortfallUsd = sunoBuyNow > 0
     ? Math.round(sunoBuyNow * SUNO_USD_PER_CREDIT * 100) / 100
     : 0;
@@ -281,23 +324,24 @@ function buildCreditsOverviewPayload({
   const geminiBal = geminiWallet?.value != null && Number.isFinite(Number(geminiWallet.value))
     ? Number(geminiWallet.value)
     : null;
+  const expectedClipUsd = roundUsd((proBal * clipShare / CLIP_CREDIT_COST) * CLIP_USD_PER_GEN);
   const clipBuyNowUsd = geminiBal != null ? Math.max(0, roundUsd(expectedClipUsd - geminiBal)) : null;
   const maxClipBuyNowUsd = geminiBal != null ? Math.max(0, roundUsd(maxClipUsd - geminiBal)) : null;
 
-  const expectedSunoCoverage = master != null && expectedSunoCredits > 0
-    ? roundPct((master / expectedSunoCredits) * 100)
-    : master != null && expectedSunoCredits === 0
+  const sunoCoveragePct = master != null && maxSunoCredits > 0
+    ? roundPct(master / maxSunoCredits)
+    : master != null && maxSunoCredits === 0
       ? 100
       : null;
   const guaranteedCoveragePct = master != null && guaranteed > 0
-    ? roundPct((master / guaranteed) * 100)
+    ? roundPct(master / guaranteed)
     : master != null && guaranteed === 0
       ? 100
       : null;
 
   const legacyCoverage = sunoCoverageMetrics(masterSuno, {
     guaranteedCredits: guaranteed,
-    proBalancesOutstanding: expectedSunoCredits,
+    proBalancesOutstanding: maxSunoCredits,
   });
 
   const freeTierOutstanding = Math.max(0, roundCredits(outstanding - proBal));
@@ -316,10 +360,11 @@ function buildCreditsOverviewPayload({
     songCreditCost: SONG_CREDIT_COST,
     shortfallCredits: sunoBuyNow,
     creditsToBuy: sunoBuyNow,
-    maxSunoBuyNow,
+    maxSunoBuyNow: sunoBuyNow,
+    mixSunoBuyNow,
     shortfallUsd: sunoShortfallUsd,
-    coveragePct: expectedSunoCoverage,
-    headroomEstimate: master != null ? master - expectedSunoCredits : null,
+    coveragePct: sunoCoveragePct,
+    headroomEstimate: master != null ? master - maxSunoCredits : null,
     maxHeadroom: master != null ? master - maxSunoCredits : null,
     userCredits: {
       proBalancesOutstanding: proBal,
@@ -337,15 +382,18 @@ function buildCreditsOverviewPayload({
       masterBalance: master,
       guaranteedCredits: guaranteed,
       guaranteedCoveragePct,
-      maxExposureCredits: maxSunoCredits,
-      expectedNeedCredits: expectedSunoCredits,
-      creditsToBuy: sunoBuyNow,
-      maxCreditsToBuy: maxSunoBuyNow,
-      shortfallUsd: sunoShortfallUsd,
-      coveragePct: expectedSunoCoverage,
-      headroom: master != null ? master - expectedSunoCredits : null,
-      maxHeadroom: master != null ? master - maxSunoCredits : null,
+      proSunoExposure: Math.ceil(proBal),
       welcomeSunoExposure: welcomeExposure,
+      maxExposureCredits: maxSunoCredits,
+      mixEstimateCredits: mixEstimateSunoCredits,
+      expectedNeedCredits: maxSunoCredits,
+      creditsToBuy: sunoBuyNow,
+      maxCreditsToBuy: sunoBuyNow,
+      mixCreditsToBuy: mixSunoBuyNow,
+      shortfallUsd: sunoShortfallUsd,
+      coveragePct: sunoCoveragePct,
+      headroom: master != null ? master - maxSunoCredits : null,
+      maxHeadroom: master != null ? master - maxSunoCredits : null,
       usdPerCredit: SUNO_USD_PER_CREDIT,
     },
     clipPocket: {
@@ -373,6 +421,10 @@ function buildSunoOverviewPayload(masterBalance, proLiability, allUserOutstandin
       userCount: 0,
       balanceTotal: Math.max(0, roundCredits(Number(allUserOutstanding || 0) - proLiability.proBalancesOutstanding)),
       promoOutstanding: 0,
+      welcomeUnused: 0,
+      promoInAccounts: 0,
+      promoCodesUnredeemed: 0,
+      promoCodesUnusedSlots: 0,
       paidOutstanding: 0,
       giftOutstanding: 0,
       welcomeClaims: 0,
@@ -2292,7 +2344,7 @@ async function getSunoPanel() {
     geminiWallet,
     allUserOutstanding: outstanding,
   });
-  const expectedSunoNeed = suno.sunoPocket?.expectedNeedCredits ?? proLiability.proBalancesOutstanding;
+  const expectedSunoNeed = suno.sunoPocket?.maxExposureCredits ?? proLiability.proBalancesOutstanding;
   const runwayDays = masterSuno != null && dailyBurn > 0
     ? Math.floor((masterSuno - expectedSunoNeed) / dailyBurn)
     : null;

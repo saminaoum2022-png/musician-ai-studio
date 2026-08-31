@@ -8,6 +8,8 @@
  * Env:
  * - MINIMAX_API_KEY, MINIMAX_KEY_KIND, MINIMAX_MUSIC_MODEL, MINIMAX_GENERATE_ENABLED
  * - GEMINI_API_KEY / GOOGLE_API_KEY, LYRIA_MUSIC_MODEL, LYRIA_GENERATE_ENABLED
+ * - CLIP_GEMINI_PRODUCER_ENABLED=1 — Gemini prompt enrichment for clips (staging preview)
+ * - CLIP_GEMINI_PRODUCER_MODEL (default gemini-2.0-flash)
  * - ELEVENLABS_API_KEY, ELEVENLABS_MUSIC_MODEL, ELEVENLABS_MUSIC_LENGTH_MS, ELEVENLABS_FINETUNE_ID, ELEVENLABS_GENERATE_ENABLED
  */
 const crypto = require("crypto");
@@ -57,7 +59,13 @@ const { queueCacheTimestampedLyrics } = require("../_lib/music-timestamped-lyric
 const {
   queueLogMusicGeneration,
   queueUpdateMusicGenerationByTaskId,
+  updateMusicGenerationByTaskId,
 } = require("../_lib/music-generation-log");
+const {
+  appendProducerAdminDetail,
+  buildClipProducerInput,
+  enrichClipWithGeminiProducer,
+} = require("../_lib/clip-gemini-producer");
 
 const FULL_SONG_COST = 12;
 const LYRIA_CLIP_CREDIT_COST = Math.max(
@@ -321,6 +329,118 @@ async function runLyriaGenerationJob({
     });
   } catch (e) {
     console.error("[music/generate] lyria background job failed", taskId, e);
+    await fail(e?.message || "Lyria generation failed — try again.");
+  }
+}
+
+async function runLyriaClipGenerationJob({
+  userId,
+  isAdmin,
+  taskId,
+  audioId,
+  apiKey,
+  model,
+  title,
+  lyrics,
+  instrumental = false,
+  clipCost,
+  refundReason,
+  refundRef,
+  clipFlowLabel,
+  body,
+  stylePrompt,
+  adminDetailBase,
+  fallbackLyriaPrompt,
+}) {
+  const fail = async (msg) => {
+    if (!isAdmin) {
+      await refund(userId, clipCost, refundReason, refundRef).catch(() => null);
+    }
+    const statusPayload = buildFailedStatusPayload({
+      taskId,
+      provider: "lyria",
+      errorMessage: msg,
+    });
+    await saveMusicProviderTaskStatus({ userId, taskId, statusPayload }).catch(() => null);
+    queueUpdateMusicGenerationByTaskId(taskId, {
+      status: isAdmin ? "failed" : "refunded",
+      error_message: msg,
+    });
+  };
+
+  try {
+    let lyriaPrompt = fallbackLyriaPrompt;
+
+    const producerResult = await enrichClipWithGeminiProducer({
+      apiKey,
+      input: buildClipProducerInput(body, clipFlowLabel),
+    });
+
+    if (producerResult.ok) {
+      lyriaPrompt = buildLyriaPrompt({
+        stylePrompt,
+        lyrics,
+        title,
+        instrumental,
+        clip: true,
+        vocalGender: String(body?.vocalGender || "").trim(),
+        voiceTimbre: String(body?.voiceTimbre || "").trim(),
+        challengeId: String(body?.challenge?.id || body?.challengeId || "").trim(),
+        dialectHint: String(body?.dialectHint || body?.dialect || "").trim(),
+        clipVocalProfileId: String(body?.clipVocalProfileId || "").trim(),
+        enhancedStylePrompt: producerResult.enhanced_style_prompt,
+        structuredLyrics: producerResult.structured_lyrics,
+      });
+    }
+
+    await updateMusicGenerationByTaskId(taskId, {
+      request_detail: appendProducerAdminDetail(adminDetailBase, producerResult),
+    }).catch(() => null);
+
+    const upstream = await lyriaGenerateMusic({ apiKey, model, prompt: lyriaPrompt });
+    if (!upstream.ok) {
+      await fail(upstream.userMessage || "Lyria generation failed — try again.");
+      return;
+    }
+    const archived = await persistAudioBuffer({
+      userId,
+      taskId,
+      buffer: upstream.audio.buffer,
+      contentType: upstream.audio.mimeType || "audio/mpeg",
+    });
+    if (!archived.ok || !archived.url) {
+      await fail("Lyria audio upload failed — try again.");
+      return;
+    }
+    if (!instrumental && Array.isArray(upstream.alignedWords) && upstream.alignedWords.length) {
+      queueCacheTimestampedLyrics({
+        audioId,
+        taskId,
+        provider: "lyria",
+        alignedWords: upstream.alignedWords,
+      });
+    }
+    const displayLyrics = producerResult.ok && producerResult.structured_lyrics
+      ? producerResult.structured_lyrics
+      : lyrics;
+    const statusPayload = buildSunoStatusPayload({
+      taskId,
+      title,
+      lyrics: displayLyrics,
+      audioUrl: archived.url,
+      audioId,
+      provider: "lyria",
+    });
+    const stored = await saveMusicProviderTaskStatus({ userId, taskId, statusPayload });
+    if (!stored.ok) {
+      console.warn("[music/generate] lyria clip task store failed (audio ok)", stored.error);
+    }
+    queueUpdateMusicGenerationByTaskId(taskId, {
+      status: "completed",
+      provider_cost_usd: LYRIA_CLIP_COST_USD,
+    });
+  } catch (e) {
+    console.error("[music/generate] lyria clip background job failed", taskId, e);
     await fail(e?.message || "Lyria generation failed — try again.");
   }
 }
@@ -804,13 +924,15 @@ async function handleLyriaClipGenerate(req, res, { user, isAdmin, body }) {
       ? "nabad_clip"
       : "lyria_clip";
 
+  const adminDetailBase = buildLyriaClipAdminDetail(body, lyriaPrompt, clipFlowLabel);
+
   queueLogMusicGeneration({
     userId: user.userId,
     taskId,
     kind: "clip",
     provider: "lyria",
     prompt: buildClipPromptLabel(lyrics, stylePrompt, title, body, lyriaPrompt),
-    requestDetail: buildLyriaClipAdminDetail(body, lyriaPrompt, clipFlowLabel),
+    requestDetail: adminDetailBase,
     status: "pending",
     creditsUsed: isAdmin ? 0 : clipCost,
     providerCostUsd: LYRIA_CLIP_COST_USD,
@@ -834,17 +956,24 @@ async function handleLyriaClipGenerate(req, res, { user, isAdmin, body }) {
   }
 
   scheduleBackgroundWork(
-    runLyriaGenerationJob({
+    runLyriaClipGenerationJob({
       userId: user.userId,
       isAdmin,
       taskId,
       audioId,
       apiKey,
       model,
-      lyriaPrompt,
       title,
       lyrics,
       instrumental,
+      clipCost,
+      refundReason: templateSpark ? "refund_template_spark_clip" : "refund_nabad_clip",
+      refundRef: "lyria_clip_upstream",
+      clipFlowLabel,
+      body,
+      stylePrompt,
+      adminDetailBase,
+      fallbackLyriaPrompt: lyriaPrompt,
     }),
   );
 

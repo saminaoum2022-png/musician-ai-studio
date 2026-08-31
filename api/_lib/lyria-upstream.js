@@ -183,10 +183,13 @@ function buildLyriaPrompt({
   challengeId = "",
   dialectHint = "",
   clipVocalProfileId = "",
+  enhancedStylePrompt = "",
+  structuredLyrics = "",
 } = {}) {
   const sections = [];
-  const style = sanitizeStyleForLyria(stylePrompt);
-  const lyricText = String(lyrics || "").trim();
+  const style = String(enhancedStylePrompt || "").trim()
+    || sanitizeStyleForLyria(stylePrompt);
+  const lyricText = String(structuredLyrics || lyrics || "").trim();
   const songTitle = String(title || "").trim();
 
   if (clip) {

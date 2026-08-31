@@ -123,7 +123,80 @@ function isSubscriptionBillingReason(billingReason) {
   return reason.startsWith("subscription");
 }
 
-async function applyStripeSubscription(sub, { grantCredits = false, invoiceId = "" } = {}) {
+const PRO_STRIPE_STATUSES = new Set(["active", "trialing", "grace"]);
+
+function isProStripeStatus(status) {
+  return PRO_STRIPE_STATUSES.has(String(status || "").toLowerCase());
+}
+
+function stripeSubscriptionPriority(sub) {
+  const status = statusFromStripeSubscription(sub);
+  if (status === "active") return 4;
+  if (status === "trialing") return 3;
+  if (status === "grace") return 2;
+  if (status === "cancelled") return 1;
+  return 0;
+}
+
+async function listStripeSubscriptionsForCustomer(customerId) {
+  const stripe = getStripe();
+  const cid = String(customerId || "").trim();
+  if (!stripe || !cid) return [];
+  try {
+    const res = await stripe.subscriptions.list({
+      customer: cid,
+      status: "all",
+      limit: 10,
+      expand: ["data.items.data.price"],
+    });
+    return Array.isArray(res?.data) ? res.data : [];
+  } catch {
+    return [];
+  }
+}
+
+/** Prefer an active Stripe sub when checkout races leave a dead sub on the same customer. */
+async function findBestStripeSubscriptionForUser(userId) {
+  const uid = cleanUserId(userId);
+  if (!uid) return null;
+
+  let customerId = await findStripeCustomerId(uid);
+  if (!customerId) {
+    const pro = await fetchProSubscriptionForUser(uid);
+    const subId = String(pro?.provider === "stripe" ? pro.providerSubscriptionId : "").trim();
+    if (subId) {
+      try {
+        const stripe = getStripe();
+        const sub = await stripe.subscriptions.retrieve(subId, { expand: ["items.data.price"] });
+        customerId = String(sub.customer || "").trim();
+      } catch {}
+    }
+  }
+  if (!customerId) return null;
+
+  const subs = await listStripeSubscriptionsForCustomer(customerId);
+  let best = null;
+  let bestPriority = -1;
+  for (const sub of subs) {
+    if (!planIdFromSubscription(sub)) continue;
+    const priority = stripeSubscriptionPriority(sub);
+    if (priority > bestPriority) {
+      best = sub;
+      bestPriority = priority;
+    }
+  }
+  if (!best) return null;
+  return {
+    sub: best,
+    planId: planIdFromSubscription(best),
+    status: statusFromStripeSubscription(best),
+  };
+}
+
+async function applyStripeSubscription(
+  sub,
+  { grantCredits = false, invoiceId = "", skipStaleGuard = false } = {},
+) {
   const stripe = getStripe();
   if (!stripe || !sub?.id) return { ok: false, error: "invalid_subscription" };
 
@@ -138,8 +211,18 @@ async function applyStripeSubscription(sub, { grantCredits = false, invoiceId = 
   const planId = planIdFromSubscription(full);
   if (!planId) return { ok: true, kind: "ignored", userId };
 
-  const status = statusFromStripeSubscription(full);
-  const periodEndIso = periodEndIsoFromSubscription(full);
+  let status = statusFromStripeSubscription(full);
+  let target = full;
+
+  if (!skipStaleGuard && !isProStripeStatus(status)) {
+    const best = await findBestStripeSubscriptionForUser(userId);
+    const bestId = String(best?.sub?.id || "").trim();
+    if (bestId && bestId !== String(full.id) && isProStripeStatus(best.status)) {
+      return applyStripeSubscription(best.sub, { grantCredits, invoiceId, skipStaleGuard: true });
+    }
+  }
+
+  const periodEndIso = periodEndIsoFromSubscription(target);
 
   await upsertProSubscription({
     userId,
@@ -147,12 +230,12 @@ async function applyStripeSubscription(sub, { grantCredits = false, invoiceId = 
     planId,
     status,
     periodEndIso,
-    providerSubscriptionId: String(full.id),
+    providerSubscriptionId: String(target.id),
   });
 
   let grant = { granted: 0, skipped: true };
   if (grantCredits && CREDIT_GRANT_EVENT_TYPES.has("INITIAL_PURCHASE")) {
-    const priceId = full?.items?.data?.[0]?.price?.id || "";
+    const priceId = target?.items?.data?.[0]?.price?.id || "";
     const plan = planForStripePriceId(priceId);
     if (plan) {
       let amount = 0;
@@ -163,7 +246,7 @@ async function applyStripeSubscription(sub, { grantCredits = false, invoiceId = 
         amount = plan.creditsPerPeriod;
       }
       if (amount > 0) {
-        const eventKey = `sub_initial:${full.id}`;
+        const eventKey = `sub_initial:${target.id}`;
         grant = await grantCreditsOnce({
           eventId: `stripe:${eventKey}`,
           userId,
@@ -283,6 +366,11 @@ async function applyStripeEvent(event) {
     const userId = userIdFromStripeObject(sub);
     const planId = planIdFromSubscription(sub);
     if (!userId || !planId) return { ok: true, kind: "ignored" };
+    const best = await findBestStripeSubscriptionForUser(userId);
+    const bestId = String(best?.sub?.id || "").trim();
+    if (bestId && bestId !== String(sub?.id || "") && isProStripeStatus(best.status)) {
+      return applyStripeSubscription(best.sub, { grantCredits: false, skipStaleGuard: true });
+    }
     await upsertProSubscription({
       userId,
       provider: "stripe",
@@ -295,7 +383,7 @@ async function applyStripeEvent(event) {
   }
 
   if (type === "customer.subscription.created" || type === "customer.subscription.updated") {
-    return applyStripeSubscription(ev.data?.object, { grantCredits: false });
+    return applyStripeSubscription(ev.data?.object, { grantCredits: false, skipStaleGuard: false });
   }
 
   if (type === "invoice.paid") {
@@ -490,52 +578,23 @@ async function syncStripeSubscriber(userId) {
   const uid = cleanUserId(userId);
   if (!stripe || !uid) return { ok: false, error: "billing_not_configured" };
 
-  const pro = await fetchProSubscriptionForUser(uid);
-  const subId =
-    pro.provider === "stripe"
-      ? String(pro.providerSubscriptionId || "").trim()
-      : "";
+  const best = await findBestStripeSubscriptionForUser(uid);
+  if (!best?.sub) return { ok: true, active: false };
 
-  if (!subId) {
-    const customerId = await findStripeCustomerId(uid);
-    if (!customerId) return { ok: true, active: false };
-    const subs = await stripe.subscriptions.list({
-      customer: customerId,
-      status: "all",
-      limit: 5,
-      expand: ["data.items.data.price"],
-    });
-    const activeSub =
-      subs.data.find((s) => ["active", "trialing", "past_due"].includes(String(s.status))) ||
-      null;
-    if (!activeSub) return { ok: true, active: false };
-    const result = await applyStripeSubscription(activeSub, { grantCredits: false });
-    const grant = await ensureStripeInitialCreditsGranted(activeSub);
-    return {
-      ok: true,
-      active: ["active", "trialing", "grace"].includes(result.status),
-      planId: result.planId,
-      status: result.status,
-      grant,
-    };
-  }
-
-  try {
-    const sub = await stripe.subscriptions.retrieve(subId, { expand: ["items.data.price"] });
-    const result = await applyStripeSubscription(sub, { grantCredits: false });
-    const grant = await ensureStripeInitialCreditsGranted(sub);
-    const active = ["active", "trialing", "grace"].includes(String(result.status));
-    return {
-      ok: true,
-      active,
-      planId: result.planId,
-      status: result.status,
-      currentPeriodEnd: periodEndIsoFromSubscription(sub),
-      grant,
-    };
-  } catch (e) {
-    return { ok: false, error: e?.message || "stripe_sync_failed" };
-  }
+  const result = await applyStripeSubscription(best.sub, {
+    grantCredits: false,
+    skipStaleGuard: true,
+  });
+  const grant = await ensureStripeInitialCreditsGranted(best.sub);
+  const active = isProStripeStatus(result.status);
+  return {
+    ok: true,
+    active,
+    planId: result.planId,
+    status: result.status,
+    currentPeriodEnd: periodEndIsoFromSubscription(best.sub),
+    grant,
+  };
 }
 
 async function readRawBody(req) {

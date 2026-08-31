@@ -91,6 +91,38 @@ function userIdFromStripeObject(obj) {
   return cleanUserId(obj?.client_reference_id);
 }
 
+function stripeObjectId(value) {
+  if (typeof value === "string") return value.trim();
+  if (value && typeof value === "object") return String(value.id || "").trim();
+  return "";
+}
+
+/** Stripe 2025+ invoices may omit top-level `subscription`; read all known locations. */
+function subscriptionIdFromInvoice(invoice) {
+  if (!invoice || typeof invoice !== "object") return "";
+
+  const direct = stripeObjectId(invoice.subscription);
+  if (direct) return direct;
+
+  const parentSub = stripeObjectId(invoice.parent?.subscription_details?.subscription);
+  if (parentSub) return parentSub;
+
+  const lines = Array.isArray(invoice.lines?.data) ? invoice.lines.data : [];
+  for (const line of lines) {
+    const fromLine =
+      stripeObjectId(line?.parent?.subscription_item_details?.subscription) ||
+      stripeObjectId(line?.subscription);
+    if (fromLine) return fromLine;
+  }
+
+  return "";
+}
+
+function isSubscriptionBillingReason(billingReason) {
+  const reason = String(billingReason || "").trim();
+  return reason.startsWith("subscription");
+}
+
 async function applyStripeSubscription(sub, { grantCredits = false, invoiceId = "" } = {}) {
   const stripe = getStripe();
   if (!stripe || !sub?.id) return { ok: false, error: "invalid_subscription" };
@@ -160,17 +192,32 @@ async function applyStripeInvoicePaid(invoice) {
   const stripe = getStripe();
   if (!stripe || !invoice?.id) return { ok: false, error: "invalid_invoice" };
 
-  const subscriptionId = String(
-    invoice.subscription ||
-      (typeof invoice.subscription === "object" ? invoice.subscription?.id : "") ||
-      "",
-  ).trim();
-  if (!subscriptionId) return { ok: true, kind: "ignored_non_subscription" };
+  let invoiceObj = invoice;
+  let subscriptionId = subscriptionIdFromInvoice(invoiceObj);
+  if (!subscriptionId) {
+    try {
+      invoiceObj = await stripe.invoices.retrieve(String(invoice.id).trim(), {
+        expand: [
+          "parent.subscription_details.subscription",
+          "lines.data.parent.subscription_item_details.subscription",
+        ],
+      });
+      subscriptionId = subscriptionIdFromInvoice(invoiceObj);
+    } catch {}
+  }
+
+  const billingReason = String(invoiceObj.billing_reason || "").trim();
+  if (!subscriptionId) {
+    if (isSubscriptionBillingReason(billingReason)) {
+      return { ok: false, error: "missing_subscription_id", billingReason };
+    }
+    return { ok: true, kind: "ignored_non_subscription", billingReason };
+  }
 
   const sub = await stripe.subscriptions.retrieve(subscriptionId, {
     expand: ["items.data.price"],
   });
-  const userId = userIdFromStripeObject(sub) || userIdFromStripeObject(invoice);
+  const userId = userIdFromStripeObject(sub) || userIdFromStripeObject(invoiceObj);
   if (!userId) return { ok: false, error: "missing_user_id" };
 
   const planId = planIdFromSubscription(sub);
@@ -188,10 +235,9 @@ async function applyStripeInvoicePaid(invoice) {
     providerSubscriptionId: subscriptionId,
   });
 
-  const billingReason = String(invoice.billing_reason || "").trim();
   let amount = 0;
   let eventType = "RENEWAL";
-  let grantEventId = String(invoice.id).trim();
+  let grantEventId = String(invoiceObj.id).trim();
 
   if (billingReason === "subscription_create") {
     eventType = "INITIAL_PURCHASE";
@@ -523,6 +569,7 @@ module.exports = {
   createPortalSession,
   syncStripeSubscriber,
   applyStripeEvent,
+  subscriptionIdFromInvoice,
   readRawBody,
   verifyStripeWebhook,
 };

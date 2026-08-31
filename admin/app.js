@@ -963,51 +963,130 @@ function escapeHtml(str) {
     .replace(/"/g, "&quot;");
 }
 
-function renderSunoCoverageSection(s, { compact = false } = {}) {
-  const shortfall = Number(s.shortfallCredits || 0);
-  const hasShortfall = shortfall > 0;
-  const buyUsd = s.shortfallUsd != null ? fmtUsd(s.shortfallUsd) : "—";
-  const coverage = s.coveragePct != null ? fmtPct(s.coveragePct) : "—";
-  const guaranteedCoverage = s.guaranteedCoveragePct != null ? fmtPct(s.guaranteedCoveragePct) : "—";
-  const proCount = Number(s.proSubscriberCount || 0);
-  const guaranteed = Number(s.guaranteedCredits ?? s.reservedCredits ?? 0);
-  const proBalances = Number(s.proBalancesOutstanding ?? s.remainingCredits ?? 0);
-  const freeTier = Number(s.freeTierOutstanding ?? 0);
-  const allTotal = Number(s.allUserOutstanding ?? s.userOutstanding ?? 0);
-  const title = compact ? "Suno liability (Pro + free)" : "Suno liability & top-up plan";
-  const lead = compact
-    ? `${proCount} active Pro · buy when bucket is below Pro account balances.`
-    : `Guaranteed is your plan-cap commitment at subscribe (400 weekly / 1,200 monthly). Top up Suno when the bucket falls below what Pro users can actually spend — plus track free-tier welcome credits separately.`;
-  const topUpAlert = hasShortfall
+function renderCreditsOverviewSection(s, { compact = false } = {}) {
+  const uc = s.userCredits || {};
+  const ft = uc.freeTier || {};
+  const mix = s.spendMix || {};
+  const suno = s.sunoPocket || {};
+  const clip = s.clipPocket || {};
+  const gemini = clip.geminiWallet || {};
+
+  const proCount = Number(uc.proSubscriberCount ?? s.proSubscriberCount ?? 0);
+  const proBalances = Number(uc.proBalancesOutstanding ?? s.proBalancesOutstanding ?? 0);
+  const guaranteed = Number(uc.guaranteedCredits ?? s.guaranteedCredits ?? 0);
+  const allTotal = Number(uc.allUserOutstanding ?? s.allUserOutstanding ?? 0);
+  const freeBal = Number(ft.balanceTotal ?? s.freeTierOutstanding ?? 0);
+  const freePromo = Number(ft.promoOutstanding ?? 0);
+  const welcomeClaims = Number(ft.welcomeClaims ?? 0);
+
+  const songPct = mix.songPct != null ? fmtPct(mix.songPct) : "—";
+  const clipPct = mix.clipPct != null ? fmtPct(mix.clipPct) : "—";
+  const mixNote = mix.hasData
+    ? `Last ${mix.windowDays || 30}d spend: ${songPct} songs · ${clipPct} clips (${fmtNum(mix.songCreditsSpent, 0)} vs ${fmtNum(mix.clipCreditsSpent, 0)} credits)`
+    : `No recent spend mix — planning uses ${fmtPct(mix.songPct ?? 85)} songs / ${fmtPct(mix.clipPct ?? 15)} clips default until data arrives.`;
+
+  const sunoBuy = Number(suno.creditsToBuy ?? s.creditsToBuy ?? 0);
+  const sunoMaxBuy = Number(suno.maxCreditsToBuy ?? 0);
+  const sunoShortfall = sunoBuy > 0;
+  const sunoBuyUsd = suno.shortfallUsd != null ? fmtUsd(suno.shortfallUsd) : "—";
+  const sunoCoverage = suno.coveragePct != null ? fmtPct(suno.coveragePct) : "—";
+  const guaranteedCoverage = suno.guaranteedCoveragePct != null ? fmtPct(suno.guaranteedCoveragePct) : "—";
+
+  const clipBuyUsd = clip.buyNowUsd != null ? fmtUsd(clip.buyNowUsd) : "—";
+  const clipMaxBuyUsd = clip.maxBuyNowUsd != null ? fmtUsd(clip.maxBuyNowUsd) : "—";
+  const clipShortfall = Number(clip.buyNowUsd || 0) > 0;
+  const geminiBal = clip.geminiBalanceUsd != null ? fmtUsd(clip.geminiBalanceUsd) : (gemini.label || "—");
+
+  const sunoAlert = sunoShortfall
     ? `<div class="sunoTopUpAlert" role="alert">
-        <strong>Top up Suno now:</strong> buy at least <strong>${fmtNum(s.creditsToBuy, 0)} credits</strong> (~${buyUsd}) — Pro account balances (${fmtNum(proBalances, 1)}) exceed your bucket (${fmtNum(s.masterBalance, 1)}).
-        <a class="providerExtLink" href="https://sunoapi.org/billing" target="_blank" rel="noopener noreferrer">Open sunoapi.org/billing →</a>
+        <strong>Top up Suno pocket:</strong> buy ~<strong>${fmtNum(sunoBuy, 0)} credits</strong> (~${sunoBuyUsd}) based on expected song mix.
+        Max if everyone goes songs-only: ${fmtNum(sunoMaxBuy, 0)} credits.
+        <a class="providerExtLink" href="https://sunoapi.org/billing" target="_blank" rel="noopener noreferrer">sunoapi.org/billing →</a>
       </div>`
     : `<div class="sunoTopUpAlert sunoTopUpAlert--ok" role="status">
-        <strong>Suno bucket covers Pro account balances.</strong> ${fmtNum(s.headroomEstimate, 1)} credits headroom before Pro users outspend the bucket.
+        <strong>Suno pocket covers expected song need.</strong> ${fmtNum(suno.headroom, 1)} credits headroom (expected mix).
         <a class="providerExtLink" href="https://sunoapi.org/billing" target="_blank" rel="noopener noreferrer">Suno billing →</a>
       </div>`;
+
+  const clipAlert = clip.geminiBalanceUsd == null
+    ? `<div class="sunoTopUpAlert" role="status">
+        <strong>Gemini wallet not set up.</strong> Log a top-up on the Providers tab to track Clip exposure.
+        <a class="providerExtLink" href="https://aistudio.google.com/billing" target="_blank" rel="noopener noreferrer">AI Studio billing →</a>
+      </div>`
+    : clipShortfall
+      ? `<div class="sunoTopUpAlert" role="alert">
+          <strong>Top up Gemini for Clips:</strong> ~<strong>${clipBuyUsd}</strong> short vs expected Clip mix (max all-clips: ${clipMaxBuyUsd}).
+          <a class="providerExtLink" href="https://aistudio.google.com/billing" target="_blank" rel="noopener noreferrer">AI Studio billing →</a>
+        </div>`
+      : `<div class="sunoTopUpAlert sunoTopUpAlert--ok" role="status">
+          <strong>Gemini wallet covers expected Clip need.</strong> Balance ${geminiBal} · ${fmtNum(clip.gens30d, 0)} clips last 30d.
+        </div>`;
+
+  const title = compact ? "Credits & vendor pockets" : "User credits & vendor pockets";
+
   return `
-    <section class="sectionCard${hasShortfall ? " sectionCard--warn" : ""}">
+    <section class="sectionCard">
       <div class="sectionHead">
         <h3 class="sectionTitle">${title}</h3>
-        <p class="sectionNote">${lead}</p>
+        <p class="sectionNote">Users hold one shared credit wallet. When they spend, Suno songs draw from your Suno pocket; Nabad Clips draw from Gemini (~$${Number(clip.usdPerGen || 0.04).toFixed(2)}/gen). Buy recommendations use the spend mix below.</p>
       </div>
-      ${topUpAlert}
+      <div class="sectionHead" style="margin-top:0.5rem">
+        <h4 class="sectionTitle" style="font-size:1rem">Spend mix</h4>
+        <p class="sectionNote">${mixNote}</p>
+      </div>
+    </section>
+
+    <section class="sectionCard">
+      <div class="sectionHead">
+        <h3 class="sectionTitle">User credits (shared wallet)</h3>
+        <p class="sectionNote">Granted credits Pro and free users can spend on songs or clips — same balance pool.</p>
+      </div>
       <div class="cardsGrid cardsGrid--inSection">
-        ${statCard("Guaranteed (Pro commitment)", fmtNum(guaranteed, 0), `${proCount} active Pro · plan caps (${guaranteedCoverage} bucket coverage)`, false, Number(s.guaranteedShortfallCredits || 0) > 0)}
-        ${statCard("Pro balances (on accounts)", fmtNum(proBalances, 1), `${proCount} Pro users · full spendable balances`, false, hasShortfall)}
-        ${statCard("Free / welcome outstanding", fmtNum(freeTier, 1), "Non-Pro users · mostly signup 24 credits")}
-        ${statCard("All users total", fmtNum(allTotal, 1), "Every account balance on the platform")}
-        ${statCard("Suno bucket available", fmtNum(s.masterBalance, 1), "Live upstream balance", true)}
-        ${statCard("Coverage", coverage, "Suno bucket ÷ Pro balances — aim for 100%+", false, hasShortfall && Number(s.coveragePct) < 100)}
-        ${statCard("Buy from Suno now", hasShortfall ? fmtNum(s.creditsToBuy, 0) : "0", hasShortfall ? "Pro balances − bucket" : "Bucket covers Pro balances", false, hasShortfall)}
-        ${statCard("Est. top-up cost", hasShortfall ? buyUsd : fmtUsd(0), s.usdPerCredit ? `@ $${Number(s.usdPerCredit).toFixed(5)}/credit` : "")}
-        ${statCard("Headroom", fmtNum(s.headroomEstimate, 1), "Bucket − Pro balances (negative = buy now)", false, hasShortfall)}
+        ${statCard("Pro balances", fmtNum(proBalances, 1), `${proCount} active Pro · spendable now`)}
+        ${statCard("Guaranteed (plan caps)", fmtNum(guaranteed, 0), `Commitment at subscribe (${guaranteedCoverage} Suno coverage)`)}
+        ${statCard("Free-tier outstanding", fmtNum(freeBal, 1), `${fmtNum(ft.userCount, 0)} non-Pro users with balance`)}
+        ${statCard("Free promo (welcome)", fmtNum(freePromo, 1), `${fmtNum(welcomeClaims, 0)} welcome claims · Suno-only today`)}
+        ${statCard("All users total", fmtNum(allTotal, 1), "Every account balance")}
       </div>
       ${renderProSubscriberRows(s.proSubscribers)}
     </section>
+
+    <section class="sectionCard${sunoShortfall ? " sectionCard--warn" : ""}">
+      <div class="sectionHead">
+        <h3 class="sectionTitle">Suno pocket</h3>
+        <p class="sectionNote">Full songs (~${Number(s.songCreditCost || 12)} credits). Welcome/free promo counts toward expected Suno need.</p>
+      </div>
+      ${sunoAlert}
+      <div class="cardsGrid cardsGrid--inSection">
+        ${statCard("Suno bucket", fmtNum(suno.masterBalance ?? s.masterBalance, 1), "Live upstream balance", true)}
+        ${statCard("Expected need", fmtNum(suno.expectedNeedCredits, 0), `Mix-weighted · incl. ${fmtNum(suno.welcomeSunoExposure, 0)} welcome promo`)}
+        ${statCard("Max need (all songs)", fmtNum(suno.maxExposureCredits, 0), "If every Pro + welcome credit → songs")}
+        ${statCard("Coverage", sunoCoverage, "Bucket ÷ expected need")}
+        ${statCard("Buy Suno now", sunoShortfall ? fmtNum(sunoBuy, 0) : "0", sunoShortfall ? `Expected − bucket (~${sunoBuyUsd})` : "Covered for expected mix", false, sunoShortfall)}
+        ${statCard("Headroom", fmtNum(suno.headroom, 1), "Bucket − expected need")}
+      </div>
+    </section>
+
+    <section class="sectionCard${clipShortfall ? " sectionCard--warn" : ""}">
+      <div class="sectionHead">
+        <h3 class="sectionTitle">Nabad Clip / Gemini</h3>
+        <p class="sectionNote">${fmtNum(clip.clipCreditCost || 10, 0)} user credits per clip · ~$${Number(clip.usdPerGen || 0.04).toFixed(2)} API cost · not from Suno bucket.</p>
+      </div>
+      ${clipAlert}
+      <div class="cardsGrid cardsGrid--inSection">
+        ${statCard("Gemini wallet", geminiBal, gemini.detail || "Shared Lyria + Gemini billing")}
+        ${statCard("Clips (7d / 30d)", `${fmtNum(clip.gens7d, 0)} / ${fmtNum(clip.gens30d, 0)}`, `${fmtUsd(clip.apiCost30d)} API last 30d`)}
+        ${statCard("Credits charged (30d)", fmtNum(clip.creditsCharged30d, 0), `@ ${fmtNum(clip.clipCreditCost || 10, 0)} per clip`)}
+        ${statCard("Expected need", fmtUsd(clip.expectedNeedUsd), "Mix-weighted from Pro balances")}
+        ${statCard("Max need (all clips)", fmtUsd(clip.maxExposureUsd), "If every Pro credit → clips")}
+        ${statCard("Top up Gemini", clip.geminiBalanceUsd == null ? "Set up" : (clipShortfall ? clipBuyUsd : fmtUsd(0)), clipShortfall ? "Expected − wallet" : "Covered for expected mix", false, clipShortfall)}
+      </div>
+    </section>
   `;
+}
+
+function renderSunoCoverageSection(s, opts = {}) {
+  return renderCreditsOverviewSection(s, opts);
 }
 
 function renderActivityTrendLabel(pct) {

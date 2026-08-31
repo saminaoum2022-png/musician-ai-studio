@@ -73,6 +73,13 @@ function roundPct(n) {
   return Math.round(n * 1000) / 10;
 }
 
+/** spendMix.songPct / clipPct are 0–100 display values → 0–1 shares. */
+function mixShareFromPct(pctDisplay, fallback) {
+  const n = Number(pctDisplay);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.max(0, Math.min(1, n / 100));
+}
+
 function isClipGeneration(row) {
   const kind = String(row?.kind || "").toLowerCase();
   return kind === "clip";
@@ -225,8 +232,8 @@ async function fetchCreditSpendMix({ days = 30 } = {}) {
 
   return {
     windowDays,
-    songPct: roundPct(songPct * 100),
-    clipPct: roundPct(clipPct * 100),
+    songPct: roundPct(songPct),
+    clipPct: roundPct(clipPct),
     songGens30d,
     clipGens30d,
     clipGens7d,
@@ -249,12 +256,19 @@ function buildCreditsOverviewPayload({
   const proBal = Number(proLiability.proBalancesOutstanding || 0);
   const guaranteed = Number(proLiability.guaranteedCredits || 0);
   const welcomeExposure = Number(freeTier.promoOutstanding || 0);
-  const songShare = spendMix.hasData ? (spendMix.songPct || 0) / 100 : DEFAULT_SONG_MIX_PCT;
-  const clipShare = spendMix.hasData ? (spendMix.clipPct || 0) / 100 : (1 - DEFAULT_SONG_MIX_PCT);
+  const songShare = spendMix.hasData
+    ? mixShareFromPct(spendMix.songPct, DEFAULT_SONG_MIX_PCT)
+    : DEFAULT_SONG_MIX_PCT;
+  const clipShare = spendMix.hasData
+    ? mixShareFromPct(spendMix.clipPct, 1 - DEFAULT_SONG_MIX_PCT)
+    : (1 - DEFAULT_SONG_MIX_PCT);
 
   const maxSunoCredits = Math.ceil(proBal + welcomeExposure);
   const maxClipUsd = roundUsd((proBal / CLIP_CREDIT_COST) * CLIP_USD_PER_GEN);
-  const expectedSunoCredits = Math.ceil(proBal * songShare + welcomeExposure);
+  const expectedSunoCredits = Math.min(
+    maxSunoCredits,
+    Math.ceil(proBal * songShare + welcomeExposure),
+  );
   const expectedClipUsd = roundUsd((proBal * clipShare / CLIP_CREDIT_COST) * CLIP_USD_PER_GEN);
 
   const master = masterSuno != null ? Number(masterSuno) : null;
@@ -366,8 +380,8 @@ function buildSunoOverviewPayload(masterBalance, proLiability, allUserOutstandin
     },
     spendMix: extras.spendMix || {
       windowDays: 30,
-      songPct: roundPct(DEFAULT_SONG_MIX_PCT * 100),
-      clipPct: roundPct((1 - DEFAULT_SONG_MIX_PCT) * 100),
+      songPct: roundPct(DEFAULT_SONG_MIX_PCT),
+      clipPct: roundPct(1 - DEFAULT_SONG_MIX_PCT),
       songGens30d: 0,
       clipGens30d: 0,
       clipGens7d: 0,

@@ -57,32 +57,67 @@ const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
 
 const PRO_PRICES = { weekly: 3.99, monthly: 9.99 };
 
-/** Suno liability vs master bucket — how much to buy upstream. */
-function sunoCoverageMetrics(masterBalance, guaranteedCredits) {
+/** Suno liability vs master bucket — buy decision uses actual Pro balances, not plan caps. */
+function sunoCoverageMetrics(masterBalance, { guaranteedCredits = 0, proBalancesOutstanding = 0 } = {}) {
   const master = masterBalance != null ? Number(masterBalance) : null;
   const guaranteed = Number(guaranteedCredits || 0);
-  const headroom = master != null ? master - guaranteed : null;
-  const shortfallCredits = master != null && guaranteed > 0
+  const proBalances = Number(proBalancesOutstanding || 0);
+  const balanceHeadroom = master != null ? master - proBalances : null;
+  const guaranteedHeadroom = master != null ? master - guaranteed : null;
+  const shortfallCredits = master != null
+    ? Math.max(0, Math.ceil(proBalances - master))
+    : 0;
+  const guaranteedShortfallCredits = master != null
     ? Math.max(0, Math.ceil(guaranteed - master))
     : 0;
   const shortfallUsd = shortfallCredits > 0
     ? Math.round(shortfallCredits * SUNO_USD_PER_CREDIT * 100) / 100
     : 0;
-  const coveragePct = master != null && guaranteed > 0
+  const coveragePct = master != null && proBalances > 0
+    ? Math.round((master / proBalances) * 1000) / 10
+    : master != null && proBalances === 0
+      ? 100
+      : null;
+  const guaranteedCoveragePct = master != null && guaranteed > 0
     ? Math.round((master / guaranteed) * 1000) / 10
     : master != null && guaranteed === 0
       ? 100
       : null;
   return {
     guaranteedCredits: guaranteed,
+    proBalancesOutstanding: proBalances,
     reservedCredits: guaranteed,
     masterBalance: master,
-    headroomEstimate: headroom,
+    headroomEstimate: balanceHeadroom,
+    guaranteedHeadroom,
     shortfallCredits,
+    guaranteedShortfallCredits,
     shortfallUsd,
     creditsToBuy: shortfallCredits,
     coveragePct,
+    guaranteedCoveragePct,
     usdPerCredit: SUNO_USD_PER_CREDIT,
+  };
+}
+
+function buildSunoOverviewPayload(masterBalance, proLiability, allUserOutstanding) {
+  const outstanding = Number(allUserOutstanding || 0);
+  const coverage = sunoCoverageMetrics(masterBalance, {
+    guaranteedCredits: proLiability.guaranteedCredits,
+    proBalancesOutstanding: proLiability.proBalancesOutstanding,
+  });
+  const freeTierOutstanding = Math.max(
+    0,
+    Math.round((outstanding - proLiability.proBalancesOutstanding) * 10) / 10,
+  );
+  return {
+    ...coverage,
+    remainingCredits: proLiability.proBalancesOutstanding,
+    freeTierOutstanding,
+    allUserOutstanding: outstanding,
+    userOutstanding: outstanding,
+    proSubscriberCount: proLiability.subscriberCount,
+    proSubscribers: proLiability.subscribers,
   };
 }
 
@@ -107,6 +142,7 @@ async function fetchProSubscriberLiability() {
   if (!subs.length) {
     return {
       guaranteedCredits: 0,
+      proBalancesOutstanding: 0,
       remainingCredits: 0,
       reservedCredits: 0,
       subscriberCount: 0,
@@ -135,7 +171,7 @@ async function fetchProSubscriberLiability() {
   }
 
   let guaranteedTotal = 0;
-  let remainingTotal = 0;
+  let proBalancesTotal = 0;
   const subscribers = subs.map((sub) => {
     const uid = String(sub.user_id || "").trim();
     const planId = String(sub.plan_id || "").trim();
@@ -145,9 +181,9 @@ async function fetchProSubscriberLiability() {
     const auth = authMap.get(uid) || {};
     const isAdmin = roleMap.get(uid) === "admin" || isAdminEmail(auth.email || "");
     const guaranteed = isAdmin ? 0 : periodCap;
-    const remaining = isAdmin ? 0 : Math.min(balance, periodCap > 0 ? periodCap : balance);
+    const balanceLiability = isAdmin ? 0 : balance;
     guaranteedTotal += guaranteed;
-    remainingTotal += remaining;
+    proBalancesTotal += balanceLiability;
     return {
       userId: uid,
       email: auth.email || "",
@@ -158,14 +194,16 @@ async function fetchProSubscriberLiability() {
       balance,
       periodCap,
       guaranteed,
-      remaining,
+      balanceLiability,
+      remaining: balanceLiability,
       isAdmin,
     };
   });
 
   return {
     guaranteedCredits: guaranteedTotal,
-    remainingCredits: Math.round(remainingTotal * 10) / 10,
+    proBalancesOutstanding: Math.round(proBalancesTotal * 10) / 10,
+    remainingCredits: Math.round(proBalancesTotal * 10) / 10,
     reservedCredits: guaranteedTotal,
     subscriberCount: subs.length,
     subscribers,
@@ -782,16 +820,10 @@ async function getOverview() {
   }
 
   const proLiability = await fetchProSubscriberLiability();
-  const coverage = sunoCoverageMetrics(masterSuno, proLiability.guaranteedCredits);
 
   return {
     suno: {
-      ...coverage,
-      remainingCredits: proLiability.remainingCredits,
-      allUserOutstanding: outstanding,
-      userOutstanding: outstanding,
-      proSubscriberCount: proLiability.subscriberCount,
-      proSubscribers: proLiability.subscribers,
+      ...buildSunoOverviewPayload(masterSuno, proLiability, outstanding),
       userAllocatedTotal: allocated,
       userSpentTotal: spent,
     },
@@ -1943,23 +1975,18 @@ async function getSunoPanel() {
 
   const dailyBurn = spentLast7d / 7;
   const proLiability = await fetchProSubscriberLiability();
-  const coverage = sunoCoverageMetrics(masterSuno, proLiability.guaranteedCredits);
+  const suno = buildSunoOverviewPayload(masterSuno, proLiability, outstanding);
   const runwayDays = masterSuno != null && dailyBurn > 0
-    ? Math.floor((masterSuno - proLiability.guaranteedCredits) / dailyBurn)
+    ? Math.floor((masterSuno - proLiability.proBalancesOutstanding) / dailyBurn)
     : null;
 
   return {
-    ...coverage,
-    remainingCredits: proLiability.remainingCredits,
-    allUserOutstanding: outstanding,
-    userOutstanding: outstanding,
-    proSubscriberCount: proLiability.subscriberCount,
-    proSubscribers: proLiability.subscribers,
+    ...suno,
     userSpentAllTime: spent,
     burnLast7d: Math.round(spentLast7d * 10) / 10,
     avgDailyBurn: Math.round(dailyBurn * 10) / 10,
     runwayDaysEstimate: runwayDays,
-    note: "Guaranteed = full plan credits you owe each active Pro subscriber the moment they subscribe (400 weekly trial / 1,200 monthly). Buy from Suno when bucket is below guaranteed — don't wait until zero.",
+    note: "Guaranteed = plan caps owed at subscribe (400 weekly trial / 1,200 monthly). Buy from Suno when the bucket is below actual Pro balances on accounts — not only when it hits zero.",
   };
 }
 

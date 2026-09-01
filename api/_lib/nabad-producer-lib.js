@@ -471,9 +471,24 @@ function emptySession() {
   };
 }
 
+function sanitizeProducerSessionForLyria(session) {
+  let next = { ...(session || {}) };
+  const genre = String(next.genre || "").trim();
+  if (genre && (isProducerBriefMessage(genre) || (looksLikeReferenceMessage(genre) && genre.length > 30))) {
+    if (!next.referenceText) next.referenceText = genre.slice(0, 300);
+    next.referenceSkipped = false;
+    next.genre = inferProducerGenreLabel(next.referenceText, next);
+  }
+  const title = String(next.title || "").trim();
+  if (title && (isProducerBriefMessage(title) || looksLikeReferenceMessage(title))) {
+    next.title = "";
+  }
+  return next;
+}
+
 function normalizeSession(raw) {
   const s = raw && typeof raw === "object" ? raw : {};
-  return {
+  return sanitizeProducerSessionForLyria({
     ...emptySession(),
     genre: String(s.genre || "").trim().slice(0, 120),
     mood: String(s.mood || "").trim().slice(0, 120),
@@ -491,7 +506,7 @@ function normalizeSession(raw) {
     vocalCharacterDone: Boolean(s.vocalCharacterDone),
     lyricsDone: Boolean(s.lyricsDone),
     blueprintAttempts: Math.max(0, Number(s.blueprintAttempts) || 0),
-  };
+  });
 }
 
 function computeNextStep(session) {
@@ -807,15 +822,15 @@ function buildBlueprintInput(session) {
     clipVocalProfileId: session.clipVocalProfileId,
   });
   let referenceInspiration = "";
-  if (session.referenceText && !session.referenceSkipped) {
-    referenceInspiration = `User named this for mood only (do NOT repeat names in output): ${session.referenceText}`;
-    if (session.referenceNote) {
-      referenceInspiration += `. Producer note: ${session.referenceNote}`;
-    }
+  if (session.referenceNote) {
+    referenceInspiration = String(session.referenceNote).trim().slice(0, 600);
+  } else if (session.referenceText && !session.referenceSkipped) {
+    referenceInspiration =
+      "User requested style inspiration — translate to abstract musical descriptors only (tempo feel, arrangement density, vocal tone class, instrumentation). Never include artist names, song titles, or album names in output.";
   }
 
   return {
-    genre: session.genre,
+    genre: producerSafeGenreLabel(session) || "Arabic Pop",
     mood: session.mood,
     tempo: session.tempo,
     bpm: session.bpm,
@@ -854,6 +869,49 @@ async function buildProducerBlueprint({ apiKey, session }) {
     lastError = "invalid_blueprint_json";
   }
   return { ok: false, error: lastError };
+}
+
+function isProducerBriefMessage(message) {
+  const t = String(message || "").trim();
+  if (!t) return false;
+  if (t.length > 48) return true;
+  if (/(بدي|بدّي|I want|make me a song|make a song|اعمل|عندي كلمات)/iu.test(t)) return true;
+  if (/(ستايل|ستيل|style of|sound like|like the song)/iu.test(t)) return true;
+  return false;
+}
+
+function inferProducerGenreLabel(message, session = {}) {
+  const actionId = matchMessageToActionId("genre", message);
+  if (actionId) {
+    const patched = applyAction({ ...emptySession(), ...session }, actionId);
+    if (patched?.genre) return patched.genre;
+  }
+  const t = String(message || "").toLowerCase();
+  if (/dabke|دبكة|levantine/i.test(t)) return "Levantine Dabke";
+  if (/rap|trap|راب/i.test(t)) return "Arabic Rap / Trap";
+  if (/ballad|slow|بالاد|بطي/i.test(t)) return "Ballad / Slow";
+  if (/khaliji|خليج/i.test(t)) return "Khaliji";
+  if (/cinematic|سينم/i.test(t)) return "Cinematic";
+  if (/pop|بوب|ti ra ra|tara|تي را/i.test(t)) return "Arabic Pop";
+  return "Arabic Pop";
+}
+
+function producerDisplayTitle(session) {
+  const title = String(session?.title || "").trim();
+  if (title && title.length <= 56 && !looksLikeReferenceMessage(title) && !isProducerBriefMessage(title)) {
+    return title.slice(0, 80);
+  }
+  const genre = String(session?.genre || "").trim();
+  if (genre && genre.length <= 56 && !looksLikeReferenceMessage(genre) && !isProducerBriefMessage(genre)) {
+    return genre.slice(0, 80);
+  }
+  return "Nabad Producer";
+}
+
+function producerSafeGenreLabel(session) {
+  const genre = String(session?.genre || "").trim();
+  if (!genre || looksLikeReferenceMessage(genre) || isProducerBriefMessage(genre)) return "";
+  return genre.slice(0, 120);
 }
 
 function looksLikeReferenceMessage(message) {
@@ -984,7 +1042,19 @@ function applyTextToStep(session, step, message) {
     return applyReferenceFromMessage(session, text);
   }
   if (step === "instruments") return { ...session, instruments: text.slice(0, 200) };
-  if (step === "genre") return { ...session, genre: text.slice(0, 120) };
+  if (step === "genre") {
+    if (looksLikeReferenceMessage(text) || isProducerBriefMessage(text)) {
+      const genreLabel = inferProducerGenreLabel(text, session);
+      return {
+        ...session,
+        genre: genreLabel,
+        referenceText: session.referenceText || text.slice(0, 300),
+        referenceSkipped: false,
+        referenceNote: "",
+      };
+    }
+    return { ...session, genre: text.slice(0, 120) };
+  }
   if (step === "mood") return { ...session, mood: text.slice(0, 120) };
   if (step === "tempo") {
     return { ...session, tempo: text.slice(0, 80), bpm: session.bpm ?? null };
@@ -1088,7 +1158,7 @@ async function producerChatTurn({ apiKey, session: rawSession, message = "", act
   }
 
   const refStep = computeNextStep(session) === "reference" || stepBefore === "reference" || stepBefore === "blueprint";
-  if (refStep && session.referenceText && !session.referenceNote && apiKey && !lyricsHelp && !lyricsRewind) {
+  if (session.referenceText && !session.referenceSkipped && !session.referenceNote && apiKey && !lyricsHelp && !lyricsRewind) {
     session.referenceNote = await explainReferenceStyle({ apiKey, referenceText: session.referenceText });
   }
 
@@ -1211,9 +1281,9 @@ async function producerChatTurn({ apiKey, session: rawSession, message = "", act
 function sessionToGenerateBody(session, blueprint) {
   return {
     prompt: blueprint?.structured_lyrics || session.lyrics,
-    style: session.genre,
+    style: producerSafeGenreLabel(session),
     instruments: session.instruments,
-    title: session.title || session.genre || "Nabad Producer",
+    title: producerDisplayTitle(session),
     instrumental: session.instrumental,
     vocalGender: session.vocalGender,
     clipVocalProfileId: session.clipVocalProfileId,
@@ -1235,4 +1305,7 @@ module.exports = {
   buildProducerBlueprint,
   sessionToGenerateBody,
   buildBlueprintInput,
+  producerDisplayTitle,
+  producerSafeGenreLabel,
+  explainReferenceStyle,
 };

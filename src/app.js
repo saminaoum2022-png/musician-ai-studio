@@ -67408,7 +67408,11 @@ async function fetchMusicProviderGenerationStatus(taskId) {
   if (!r.ok) {
     throw new Error(data?.error || data?.message || `Status failed (${r.status})`);
   }
-  return parseSunoGenerationRecordInfo(data);
+  const parsed = parseSunoGenerationRecordInfo(data);
+  const errorMessage = String(
+    data?.data?.errorMessage || data?.errorMessage || "",
+  ).trim();
+  return { ...parsed, errorMessage };
 }
 
 function resolveNabadProducerRecoveryContext() {
@@ -67580,12 +67584,16 @@ async function tickNabadProducerGenerationPoll() {
       stopNabadProducerGenerationPolling();
       clearGenerationPending(ctx.taskId);
       syncGenerationPendingLibraryUi();
+      const errMsg = String(parsed?.errorMessage || "").trim();
+      const userMsg = /PROHIBITED_CONTENT|blocked this prompt/i.test(errMsg)
+        ? "Lyria blocked the prompt — artist names can't be sent. Mention the style at the reference step; we'll translate it to abstract production cues only."
+        : (errMsg || "Generation failed — credits were refunded if applicable. Try again from the blueprint.");
       showToast("Producer generation failed", { icon: "!", durationMs: 3600 });
       void refreshMyCredits({ silent: true });
       try {
         handleProducerGenerationFailed({
           taskId: ctx.taskId,
-          message: "Generation failed — credits were refunded if applicable. Try again from the blueprint.",
+          message: userMsg,
         });
       } catch {}
       nabadProducerPollCtx = null;

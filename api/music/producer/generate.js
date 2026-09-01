@@ -29,6 +29,9 @@ const {
   normalizeSession,
   sessionToGenerateBody,
   buildProducerBlueprint,
+  explainReferenceStyle,
+  producerDisplayTitle,
+  producerSafeGenreLabel,
 } = require("../../_lib/nabad-producer-lib");
 
 const BUCKET = "song_archive";
@@ -214,7 +217,13 @@ module.exports = async function handler(req, res) {
 
   try {
     const body = await readJsonBody(req);
-    const session = normalizeSession(body?.session);
+    let session = normalizeSession(body?.session);
+    if (session.referenceText && !session.referenceSkipped && !session.referenceNote) {
+      session.referenceNote = await explainReferenceStyle({
+        apiKey,
+        referenceText: session.referenceText,
+      });
+    }
     let blueprint = body?.blueprint && typeof body.blueprint === "object" ? body.blueprint : null;
 
     if (!blueprint?.master_style_prompt) {
@@ -234,7 +243,7 @@ module.exports = async function handler(req, res) {
 
     const genBody = sessionToGenerateBody(session, blueprint);
     const lyrics = String(genBody.prompt || blueprint.structured_lyrics || "").trim();
-    const title = String(genBody.title || "Nabad Producer").trim();
+    const title = String(genBody.title || producerDisplayTitle(session)).trim();
     const instrumental = Boolean(genBody.instrumental);
     const creditCost = NABAD_PRODUCER_CREDIT_COST;
 
@@ -269,7 +278,7 @@ module.exports = async function handler(req, res) {
     }
 
     const stylePrompt = [
-      session.genre,
+      producerSafeGenreLabel(session),
       session.mood,
       session.instruments,
       session.bpm ? `${session.bpm} BPM` : session.tempo,
@@ -293,20 +302,23 @@ module.exports = async function handler(req, res) {
 
     const adminDetail = [
       "flow: nabad_producer",
-      `genre: ${session.genre}`,
+      `genre: ${producerSafeGenreLabel(session) || "Arabic Pop"}`,
       `mood: ${session.mood}`,
       `bpm: ${session.bpm || session.tempo}`,
       `gemini_producer: applied`,
+      session.referenceText && !session.referenceSkipped
+        ? `reference_style_note: ${String(session.referenceNote || "abstract style only").slice(0, 280)}`
+        : "",
       `master_style_prompt: ${String(blueprint.master_style_prompt || "").slice(0, 600)}`,
       `structured_lyrics: ${String(blueprint.structured_lyrics || "").slice(0, 400)}`,
-    ].join("\n");
+    ].filter(Boolean).join("\n");
 
     queueLogMusicGeneration({
       userId: user.userId,
       taskId,
       kind: "song",
       provider: "lyria",
-      prompt: `${title} · ${session.genre}`.slice(0, 500),
+      prompt: `${title} · ${producerSafeGenreLabel(session) || "Producer"}`.slice(0, 500),
       requestDetail: adminDetail,
       status: "pending",
       creditsUsed: isAdmin ? 0 : creditCost,

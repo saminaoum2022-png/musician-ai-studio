@@ -64,6 +64,11 @@ const QUICK_REPLIES = {
   reference: [
     { id: "reference_skip", label: "No reference · original style" },
   ],
+  lyrics: [
+    { id: "lyrics_help_write", label: "Write lyrics for me" },
+    { id: "lyrics_help_continue", label: "Continue my lyrics" },
+    { id: "lyrics_done", label: "Done · continue" },
+  ],
   blueprint: [
     { id: "blueprint_edit_lyrics", label: "Edit lyrics" },
     { id: "blueprint_confirm", label: "Generate song · 50 credits" },
@@ -126,6 +131,9 @@ function allQuickReplyLabels() {
   map.set("blueprint_retry", "Retry blueprint");
   map.set("blueprint_confirm", "Generate song");
   map.set("blueprint_edit_lyrics", "Edit lyrics");
+  map.set("lyrics_help_write", "Write lyrics for me");
+  map.set("lyrics_help_continue", "Continue my lyrics");
+  map.set("lyrics_done", "Done · continue");
   return map;
 }
 
@@ -244,6 +252,31 @@ function matchVocalCharacterActionId(vocalGender, message) {
   }
   if (g === "duo" && /duo|verse.*chorus|ثنائي/i.test(t)) return "vocal_char_duo_verse_chorus";
   return "";
+}
+
+function isLyricsHelpRequest(message) {
+  const t = String(message || "").trim();
+  if (!t || t.length > 800) return false;
+  return (
+    /\b(write (the )?lyrics|write for me|help (me )?(write|finish)|complete (my |the )?lyrics|continue (my |the )?lyrics|finish (the |my )?words|more lyrics)\b/i.test(t)
+    || /(اكتب|كتبلي|اكتبلي|ساعدني|كمّل|كمل|كمّلي|كملي|خلص|أكمل|اكمل).{0,20}(الكلمات|كلمات|الغنا|الغناء|lyrics)/iu.test(t)
+    || /(ما عطيتك|ما أعطيتك|ما كتبت|مو كامل|نقص| incomplete).{0,30}(كلمات|الكلام|lyrics)/iu.test(t)
+    || /(خلينا|خلّينا|بدنا|بدي).{0,20}(نخلص|نكمّل|نكمل).{0,20}(الكلام|الكلمات|lyrics)/iu.test(t)
+  );
+}
+
+function isLyricsRewindRequest(message) {
+  const t = String(message || "").trim();
+  if (!t) return false;
+  return isLyricsHelpRequest(t)
+    || /(back to lyrics|edit lyrics|change lyrics|رجع.*كلمات|عد.*كلمات|بدي عدّل الكلمات)/iu.test(t);
+}
+
+function isLyricsAdvanceIntent(message) {
+  const t = String(message || "").trim().toLowerCase();
+  if (!t) return false;
+  return /^(done|next|continue|skip|ok(ay)?|that's all|move on|تمام|خلص|كمل|ماشي)/iu.test(t)
+    || /\b(done with lyrics|continue to reference|no more lyrics)\b/i.test(t);
 }
 
 function chipLabelsForStep(step, session) {
@@ -433,6 +466,7 @@ function emptySession() {
     instrumental: false,
     referenceSkipped: false,
     vocalCharacterDone: false,
+    lyricsDone: false,
   };
 }
 
@@ -454,6 +488,7 @@ function normalizeSession(raw) {
     instrumental: Boolean(s.instrumental),
     referenceSkipped: Boolean(s.referenceSkipped),
     vocalCharacterDone: Boolean(s.vocalCharacterDone),
+    lyricsDone: Boolean(s.lyricsDone),
   };
 }
 
@@ -464,8 +499,8 @@ function computeNextStep(session) {
   if (!session.instrumental && !normalizeVocalGenderValue(session.vocalGender)) return "vocal";
   if (!session.instrumental && normalizeVocalGenderValue(session.vocalGender) && !session.vocalCharacterDone) return "vocal";
   if (!session.instruments) return "instruments";
-  if (!session.instrumental && !session.lyrics) return "lyrics";
-  if (!session.referenceSkipped && !session.referenceText && !session.referenceNote) return "reference";
+  if (!session.instrumental && !session.lyricsDone) return "lyrics";
+  if (!session.referenceSkipped && !session.referenceText) return "reference";
   return "blueprint";
 }
 
@@ -501,6 +536,9 @@ function applyAction(session, actionId) {
     inst_minimal: { instruments: "Minimal — voice, warm pad, subtle percussion" },
     inst_skip: { instruments: "Producer's choice — match genre and mood" },
     reference_skip: { referenceSkipped: true, referenceText: "", referenceNote: "" },
+    lyrics_done: { lyricsDone: true },
+    lyrics_help_write: { _lyricsHelp: "write" },
+    lyrics_help_continue: { _lyricsHelp: "continue" },
     blueprint_edit_lyrics: { _editLyrics: true },
   };
 
@@ -524,7 +562,10 @@ function applyAction(session, actionId) {
   const patch = map[id];
   if (!patch) return session;
   if (patch._editLyrics) {
-    return { ...session, lyrics: "" };
+    return { ...session, lyrics: "", lyricsDone: false };
+  }
+  if (patch._lyricsHelp) {
+    return { ...session, lyricsDone: false, referenceText: "", referenceNote: "", referenceSkipped: false };
   }
   return { ...session, ...patch };
 }
@@ -560,8 +601,8 @@ function stepCoachCopy(step, session) {
       : "Who carries the vocal — male, female, duo, or instrumental? Tap a chip or describe the voice.",
     instruments: "Any core instruments you want in the arrangement? Pick below or name what you hear.",
     lyrics: session.instrumental
-      ? "Instrumental track — paste a title idea or tap Skip if you want me to name it."
-      : "Paste your lyrics here — I'll structure them for the full song without changing your words.",
+      ? "Instrumental track — paste a title idea or tap Done · continue when ready."
+      : "Paste your lyrics, ask me to write or continue them, then tap Done · continue when ready.",
     reference: "Optional: name a song or artist for *style inspiration* (text only). I'll describe the vibe — never copy a recording.",
     blueprint: "Here's your production blueprint. Review it, then generate when you're ready.",
   };
@@ -829,11 +870,63 @@ Return plain text only.`;
     || `I'll translate that into original arrangement cues — tempo feel, layers, and vocal tone — without copying any recording.`;
 }
 
+async function generateProducerLyricsAssist({ apiKey, session, message = "", mode = "continue" } = {}) {
+  const existing = String(session.lyrics || "").trim();
+  const writeMode = mode === "write" || (!existing && /\b(write|اكتب|كتبلي)\b/iu.test(String(message || "")));
+  const prompt = {
+    mode: writeMode ? "write" : "continue",
+    user_note: String(message || "").trim() || null,
+    existing_lyrics: existing || null,
+    genre: session.genre,
+    mood: session.mood,
+    tempo: session.tempo,
+    bpm: session.bpm,
+    vocal: session.instrumental ? "instrumental" : session.vocalGender,
+    instruments: session.instruments,
+  };
+  const systemPrompt = `You are Nabad Producer — an expert Arabic/English songwriter in a studio session.
+
+Return ONLY song lyrics with English structure tags: [Intro], [Verse 1], [Pre-Chorus], [Chorus], [Verse 2], [Bridge], [Outro].
+- If mode is continue, preserve every existing user line exactly — only add new lines to complete the song arc (~3 min).
+- If mode is write, create original lyrics matching genre/mood/tempo/vocal/instruments.
+- Arabic, English, or mixed — match what the user used.
+- No commentary outside the lyrics. No markdown fences.`;
+
+  const result = await geminiGenerateContent({
+    apiKey,
+    systemPrompt,
+    userMessage: JSON.stringify(prompt),
+    timeoutMs: COACH_TIMEOUT_MS,
+    jsonMode: false,
+    temperature: 0.85,
+    maxOutputTokens: 2048,
+    disableThinking: true,
+  });
+  if (!result.ok) return { ok: false, error: result.error || "lyrics_assist_failed" };
+  let lyrics = String(result.text || "").trim().replace(/^```[\s\S]*?```$/gm, "").trim();
+  if (!lyrics) return { ok: false, error: "empty_lyrics" };
+  if (lyrics.length > 4000) lyrics = lyrics.slice(0, 4000).trim();
+  return { ok: true, lyrics, model: result.model };
+}
+
 function applyTextToStep(session, step, message) {
   const text = String(message || "").trim();
   if (!text) return session;
-  if (step === "lyrics") return { ...session, lyrics: text.slice(0, 4000) };
-  if (step === "reference") return { ...session, referenceText: text.slice(0, 300), referenceSkipped: false };
+  if (step === "lyrics") {
+    return { ...session, lyrics: text.slice(0, 4000), lyricsDone: false };
+  }
+  if (step === "reference") {
+    if (isLyricsRewindRequest(text) || isLyricsHelpRequest(text)) {
+      return {
+        ...session,
+        lyricsDone: false,
+        referenceText: "",
+        referenceNote: "",
+        referenceSkipped: false,
+      };
+    }
+    return { ...session, referenceText: text.slice(0, 300), referenceSkipped: false };
+  }
   if (step === "instruments") return { ...session, instruments: text.slice(0, 200) };
   if (step === "genre") return { ...session, genre: text.slice(0, 120) };
   if (step === "mood") return { ...session, mood: text.slice(0, 120) };
@@ -871,6 +964,7 @@ function applyTextToStep(session, step, message) {
  */
 async function producerChatTurn({ apiKey, session: rawSession, message = "", actionId = "" } = {}) {
   let session = normalizeSession(rawSession);
+  let lyricsAssistReply = "";
 
   if (actionId === "vocal_char_skip") {
     session = { ...session, clipVocalProfileId: "", vocalCharacterDone: true };
@@ -883,15 +977,56 @@ async function producerChatTurn({ apiKey, session: rawSession, message = "", act
   const stepBefore = computeNextStep(session);
   const wantsOptions = message && !actionId && isAskingForOptions(message);
   const chitchat = message && !actionId && !wantsOptions && isLikelyChitchat(message);
+  const lyricsHelp = Boolean(
+    actionId === "lyrics_help_write"
+    || actionId === "lyrics_help_continue"
+    || (message && !actionId && isLyricsHelpRequest(message)),
+  );
+  const lyricsRewind = Boolean(message && !actionId && isLyricsRewindRequest(message));
+
   if (message && !actionId && !chitchat && !wantsOptions) {
-    session = applyMessageToSession(session, stepBefore, message);
+    if (isLyricsAdvanceIntent(message) && (stepBefore === "lyrics" || String(session.lyrics || "").trim())) {
+      session = { ...session, lyricsDone: true };
+    } else {
+      session = applyMessageToSession(session, stepBefore, message);
+    }
+  }
+
+  if (lyricsHelp || lyricsRewind) {
+    session = {
+      ...session,
+      lyricsDone: false,
+      referenceText: "",
+      referenceNote: "",
+      referenceSkipped: false,
+    };
+    if (apiKey && lyricsHelp) {
+      const mode = actionId === "lyrics_help_write" ? "write" : "continue";
+      const assisted = await generateProducerLyricsAssist({ apiKey, session, message, mode });
+      if (assisted.ok && assisted.lyrics) {
+        session = { ...session, lyrics: assisted.lyrics, lyricsDone: false };
+        const intro = userPrefersArabic(message)
+          ? "هاي مسودة الكلمات — عدّلها براحتك، ووقت ما تخلص اضغط Done · continue:"
+          : "Here's a lyrics draft — edit anything you want, then tap Done · continue when ready:";
+        lyricsAssistReply = `${intro}\n\n${assisted.lyrics}`;
+      } else {
+        lyricsAssistReply = userPrefersArabic(message)
+          ? "ما قدرت أكمّل الكلمات هلّق — جرّب الصق اللي عندك أو اضغط Write lyrics for me."
+          : "I couldn't draft lyrics just now — paste what you have or tap Write lyrics for me.";
+      }
+    } else if (lyricsRewind) {
+      lyricsAssistReply = userPrefersArabic(message)
+        ? "تمام — منرجع للكلمات. الصق أو اكتب اللي عندك، أو اطلب مني أكمّلها."
+        : "Got it — back to lyrics. Paste what you have, or ask me to continue writing.";
+    }
   }
 
   if (actionId === "reference_skip" || (stepBefore === "reference" && actionId === "reference_skip")) {
     session.referenceSkipped = true;
   }
 
-  if (stepBefore === "reference" && session.referenceText && !session.referenceNote && apiKey) {
+  const refStep = computeNextStep(session) === "reference" || stepBefore === "reference";
+  if (refStep && session.referenceText && !session.referenceNote && apiKey && !lyricsHelp && !lyricsRewind) {
     session.referenceNote = await explainReferenceStyle({ apiKey, referenceText: session.referenceText });
   }
 
@@ -901,12 +1036,17 @@ async function producerChatTurn({ apiKey, session: rawSession, message = "", act
   if (actionId === "blueprint_edit_lyrics") {
     step = "lyrics";
   }
+  if (lyricsHelp || lyricsRewind) {
+    step = "lyrics";
+  }
 
   let blueprint = null;
   let sessionReady = false;
 
   if (step === "blueprint") {
-    if (apiKey) {
+    if (!session.lyricsDone && !session.instrumental && !String(session.lyrics || "").trim()) {
+      step = "lyrics";
+    } else if (apiKey) {
       const built = await buildProducerBlueprint({ apiKey, session });
       if (built.ok) {
         blueprint = {
@@ -917,14 +1057,17 @@ async function producerChatTurn({ apiKey, session: rawSession, message = "", act
         sessionReady = true;
       }
     }
-    if (!blueprint) {
+    if (step === "blueprint" && !blueprint) {
       return {
-        ok: false,
-        error: "blueprint_failed",
+        ok: true,
         session,
-        step,
-        reply: "I couldn't build the blueprint right now — try again in a moment.",
+        step: session.referenceSkipped || session.referenceText ? "blueprint" : "reference",
+        stepIndex: STEPS.indexOf(session.referenceSkipped || session.referenceText ? "blueprint" : "reference") + 1,
+        stepTotal: STEPS.length,
+        reply: lyricsAssistReply || "I'm still shaping the production blueprint — tap Retry blueprint in a moment.",
+        coachModel: null,
         quickReplies: [{ id: "blueprint_retry", label: "Retry blueprint" }],
+        showQuickReplies: true,
         conflict,
         blueprint: null,
         sessionReady: false,
@@ -968,9 +1111,10 @@ async function producerChatTurn({ apiKey, session: rawSession, message = "", act
   }
 
   const fallbackReply = conflict?.message || stepCoachCopy(step, session);
-  let reply = (coachReply?.reply && !isBrokenCoachReply(coachReply.reply))
-    ? coachReply.reply
-    : ((chitchat && chitchatFallbackReply(message)) || fallbackReply);
+  let reply = lyricsAssistReply
+    || ((coachReply?.reply && !isBrokenCoachReply(coachReply.reply))
+      ? coachReply.reply
+      : ((chitchat && chitchatFallbackReply(message)) || fallbackReply));
   if (wantsOptions && (!coachReply?.reply || isBrokenCoachReply(coachReply?.reply))) {
     reply = optionsRevealReply(step, message);
   }

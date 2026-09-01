@@ -4,7 +4,6 @@
  */
 const { verifyUser, sendJson, readJsonBody } = require("../../_lib/credits-auth");
 const { applyCors } = require("../../_lib/cors");
-const { fetchProSubscriptionForUser } = require("../../_lib/pro-subscription");
 const { userIsAdmin } = require("../../_lib/admin-auth");
 const {
   nabadProducerEnabled,
@@ -24,16 +23,12 @@ async function requireProducerAccess(user) {
   if (await userIsAdmin(user)) {
     return { ok: true, isAdmin: true };
   }
-  const pro = await fetchProSubscriptionForUser(user.userId);
-  if (!pro?.active) {
-    return {
-      ok: false,
-      status: 403,
-      error: "NabadAi Pro is required for Nabad Producer.",
-      code: "pro_required",
-    };
-  }
-  return { ok: true, isAdmin: false };
+  return {
+    ok: false,
+    status: 403,
+    error: "Nabad Producer is admin-only on this environment.",
+    code: "nabad_producer_admin_only",
+  };
 }
 
 module.exports = async function handler(req, res) {

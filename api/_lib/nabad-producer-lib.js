@@ -93,6 +93,68 @@ master_style_prompt:
 
 Return ONLY the JSON object.`;
 
+const COACH_REPLY_SYSTEM_PROMPT = `You are Nabad Producer — a warm, expert music producer in the NabadAi booth guiding a full-length Lyria Pro song.
+
+Reply in 1–2 short sentences. Plain text only — no markdown, no bullet lists, no option menus.
+
+You receive JSON with: current_step, session_locked (choices so far), user_action (chip label if they tapped one), user_message (if they typed), next_step (where the session goes next), conflict_note (optional tempo/mood mismatch).
+
+Rules:
+- Sound human and creative — producer booth, not a form wizard.
+- If user_action is set, acknowledge that choice naturally and tee up next_step.
+- If user_message is small talk (hi, how are you), respond warmly and gently steer to current_step — do not lecture.
+- If user_message is a real creative answer, acknowledge it with specificity.
+- If conflict_note is set, weave that concern in conversationally (suggest fixing tempo/mood).
+- On blueprint step, tell them to review the blueprint card and generate when ready.
+- Arabic or English from the user is fine; match their vibe when obvious.
+- Never name copyrighted artists unless the user already did in reference.
+- Max 280 characters.`;
+
+function allQuickReplyLabels() {
+  const map = new Map();
+  for (const list of Object.values(QUICK_REPLIES)) {
+    for (const q of list) map.set(q.id, q.label);
+  }
+  map.set("vocal_char_male_jabali", "Folk · جبلي");
+  map.set("vocal_char_male_bahha", "Grit · بحة");
+  map.set("vocal_char_male_deep", "Deep · عميق");
+  map.set("vocal_char_female_warm", "Warm Pop");
+  map.set("vocal_char_female_emotional", "Emotional");
+  map.set("vocal_char_female_soft", "Soft");
+  map.set("vocal_char_duo_verse_chorus", "Duo · Verse/Chorus");
+  map.set("vocal_char_skip", "Skip · default vocal");
+  map.set("blueprint_retry", "Retry blueprint");
+  map.set("blueprint_confirm", "Generate song");
+  map.set("blueprint_edit_lyrics", "Edit lyrics");
+  return map;
+}
+
+const ACTION_LABELS = allQuickReplyLabels();
+
+function actionLabelFromId(actionId) {
+  return ACTION_LABELS.get(String(actionId || "").trim()) || "";
+}
+
+function isLikelyChitchat(message) {
+  const t = String(message || "").trim();
+  if (!t || t.length > 64) return false;
+  return /^(hi+|hey+|hello+|yo+|sup|how are you|how r u|what'?s up|good (morning|evening|night)|thanks|thank you|thx|ok(ay)?|cool|nice|مرحبا|مرحب|اهلين|أهلين|هلا|السلام|كيفك|شكرا)[!.?\s]*$/iu.test(t);
+}
+
+function sessionSnapshot(session) {
+  return {
+    genre: session.genre || null,
+    mood: session.mood || null,
+    tempo: session.tempo || null,
+    bpm: session.bpm ?? null,
+    vocal: session.instrumental ? "instrumental" : session.vocalGender || null,
+    vocal_character: session.clipVocalProfileId || null,
+    instruments: session.instruments || null,
+    has_lyrics: Boolean(session.lyrics),
+    reference: session.referenceSkipped ? "skipped" : session.referenceText || null,
+  };
+}
+
 function safeJson(txt) {
   try {
     return JSON.parse(txt);
@@ -326,15 +388,23 @@ function normalizeBlueprint(raw, { instrumental = false } = {}) {
   return { structured_lyrics: lyrics, master_style_prompt: master };
 }
 
-async function geminiGenerateJson({ apiKey, systemPrompt, userMessage, timeoutMs }) {
+async function geminiGenerateContent({
+  apiKey,
+  systemPrompt,
+  userMessage,
+  timeoutMs,
+  jsonMode = false,
+  temperature = 0.65,
+  maxOutputTokens = 2048,
+}) {
   const models = resolveProducerModels();
+  const generationConfig = { temperature, maxOutputTokens };
+  if (jsonMode) generationConfig.responseMimeType = "application/json";
+
   const body = JSON.stringify({
     systemInstruction: { parts: [{ text: systemPrompt }] },
     contents: [{ role: "user", parts: [{ text: userMessage }] }],
-    generationConfig: {
-      temperature: 0.65,
-      responseMimeType: "application/json",
-    },
+    generationConfig,
   });
 
   let lastError = "unknown";
@@ -366,6 +436,50 @@ async function geminiGenerateJson({ apiKey, systemPrompt, userMessage, timeoutMs
     }
   }
   return { ok: false, error: lastError };
+}
+
+async function geminiGenerateJson({ apiKey, systemPrompt, userMessage, timeoutMs }) {
+  return geminiGenerateContent({
+    apiKey,
+    systemPrompt,
+    userMessage,
+    timeoutMs,
+    jsonMode: true,
+    temperature: 0.65,
+  });
+}
+
+async function generateCoachReply({
+  apiKey,
+  session,
+  step,
+  nextStep,
+  userAction = "",
+  userMessage = "",
+  conflict = null,
+}) {
+  if (!apiKey) return null;
+  const payload = {
+    current_step: step,
+    next_step: nextStep,
+    session_locked: sessionSnapshot(session),
+    user_action: userAction || null,
+    user_message: userMessage || null,
+    conflict_note: conflict?.message || null,
+  };
+  const result = await geminiGenerateContent({
+    apiKey,
+    systemPrompt: COACH_REPLY_SYSTEM_PROMPT,
+    userMessage: JSON.stringify(payload),
+    timeoutMs: COACH_TIMEOUT_MS,
+    jsonMode: false,
+    temperature: 0.78,
+    maxOutputTokens: 180,
+  });
+  if (!result.ok) return null;
+  const reply = String(result.text || "").trim().replace(/^["']|["']$/g, "");
+  if (!reply) return null;
+  return { reply: reply.slice(0, 320), model: result.model };
 }
 
 function buildBlueprintInput(session) {
@@ -425,11 +539,14 @@ Say clearly this is an original arrangement inspired by the style — not a copy
 Do NOT include the artist or song name in your reply — use generic descriptors only.
 Return plain text only.`;
 
-  const result = await geminiGenerateJson({
+  const result = await geminiGenerateContent({
     apiKey,
     systemPrompt: "You are Nabad Producer, a friendly music coach.",
     userMessage: prompt,
     timeoutMs: COACH_TIMEOUT_MS,
+    jsonMode: false,
+    temperature: 0.7,
+    maxOutputTokens: 200,
   });
   if (!result.ok) {
     return `I'll translate that into original arrangement cues — tempo feel, layers, and vocal tone — without copying any recording.`;
@@ -464,7 +581,8 @@ async function producerChatTurn({ apiKey, session: rawSession, message = "", act
   }
 
   const stepBefore = computeNextStep(session);
-  if (message && !actionId) {
+  const chitchat = message && !actionId && isLikelyChitchat(message);
+  if (message && !actionId && !chitchat) {
     session = applyTextToStep(session, stepBefore, message);
   }
 
@@ -529,13 +647,32 @@ async function producerChatTurn({ apiKey, session: rawSession, message = "", act
     quickReplies = QUICK_REPLIES.blueprint;
   }
 
+  const userActionLabel = actionLabelFromId(actionId);
+  const coachStep = chitchat ? stepBefore : step;
+  const nextStep = step;
+  let coachReply = null;
+  if (apiKey && (step !== "blueprint" || sessionReady)) {
+    coachReply = await generateCoachReply({
+      apiKey,
+      session,
+      step: coachStep,
+      nextStep,
+      userAction: userActionLabel,
+      userMessage: chitchat || !actionId ? String(message || "").trim() : "",
+      conflict,
+    });
+  }
+
+  const fallbackReply = conflict?.message || stepCoachCopy(step, session);
+
   return {
     ok: true,
     session,
     step,
     stepIndex: STEPS.indexOf(step) + 1,
     stepTotal: STEPS.length,
-    reply: conflict?.message || stepCoachCopy(step, session),
+    reply: coachReply?.reply || fallbackReply,
+    coachModel: coachReply?.model || null,
     quickReplies,
     conflict,
     blueprint,

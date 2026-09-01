@@ -12,6 +12,15 @@ import {
   leaveStudioRoot,
 } from "./studio/studio.js";
 import {
+  configureNabadProducer,
+  enterNabadProducerRoot,
+  leaveNabadProducerRoot,
+  openNabadProducerFlow,
+  syncNabadProducerHomeCard,
+  handleProducerGenerationReady,
+  handleProducerGenerationFailed,
+} from "./nabad-producer.js";
+import {
   listVocals,
   getVocalBlob,
   deleteVocal,
@@ -4572,7 +4581,7 @@ function applyRoute({ passGen } = {}) {
     "intro", "onboarding", "music-preferences", "start", "auth", "generate",
     ...(HUB_FEATURE_ENABLED ? ["hub"] : []),
     ...(MESSAGES_FEATURE_ENABLED ? ["messages", "messages-thread"] : []),
-    "settings", "profile", "profile-edit", "player", "discover", "discover-playlist", "friends", "challenges", "activity", "mashup", "mentor", "vocal", "stems", "studio", "advanced", "user", "credits", "pro", "sounds", "singer-studio",
+    "settings", "profile", "profile-edit", "player", "discover", "discover-playlist", "friends", "challenges", "activity", "mashup", "mentor", "vocal", "stems", "studio", "nabad-producer", "advanced", "user", "credits", "pro", "sounds", "singer-studio",
   ]);
   const onboardingParsed = parseOnboardingRoute(route);
   let normalized = pendingPublicUsername ? "user" : (route === "start" ? "auth" : route);
@@ -4683,7 +4692,7 @@ function applyRoute({ passGen } = {}) {
   // Public profile is intentionally readable without auth so share-link
   // visitors don't hit a wall before discovering the rest of the product.
   const sharedTrackId = parseSharedTrackIdFromLocation();
-  const protectedRoutes = new Set(["generate", "profile", "profile-edit", "friends", "activity", "mashup", "player", "vocal", "stems", "studio", "advanced", "credits", "sounds", ...(MESSAGES_FEATURE_ENABLED ? ["messages", "messages-thread"] : [])]);
+  const protectedRoutes = new Set(["generate", "profile", "profile-edit", "friends", "activity", "mashup", "player", "vocal", "stems", "studio", "nabad-producer", "advanced", "credits", "sounds", ...(MESSAGES_FEATURE_ENABLED ? ["messages", "messages-thread"] : [])]);
   if (!isLoggedIn && protectedRoutes.has(wanted)) {
     if (wanted === "player" && sharedTrackId) {
       // Listen-only share links — do not bounce guests to sign-in.
@@ -4913,6 +4922,9 @@ function applyRoute({ passGen } = {}) {
   if (prevRoute === "studio" && wanted !== "studio") {
     try { leaveStudioRoot(); } catch {}
   }
+  if (prevRoute === "nabad-producer" && wanted !== "nabad-producer") {
+    try { leaveNabadProducerRoot(); } catch {}
+  }
   if (wanted === "studio") {
     if (isWebOrDesktopShell() && !webProFeatureAllowed()) {
       promptWebProUpgrade("NabadAi Studio");
@@ -4920,6 +4932,30 @@ function applyRoute({ passGen } = {}) {
       try { location.hash = "#/discover"; } catch {}
     } else {
       try { enterStudioRoot(); } catch {}
+    }
+  }
+  if (wanted === "nabad-producer") {
+    const enterProducer = () => {
+      try { enterNabadProducerRoot(); } catch (e) { console.warn("[nabad-producer] enter", e); }
+    };
+    const blockProducer = () => {
+      try { leaveNabadProducerRoot(); } catch {}
+      try { location.hash = "#/challenges"; } catch {}
+      if (creditsState.loaded && !creditsState.isAdmin) {
+        try {
+          showToast("Nabad Producer is admin-only right now.", { icon: "!", durationMs: 3200 });
+        } catch {}
+      }
+    };
+    if (creditsState.isAdmin) {
+      enterProducer();
+    } else if (!creditsState.loaded) {
+      void refreshMyCredits({ silent: true }).then(() => {
+        if (creditsState.isAdmin) enterProducer();
+        else blockProducer();
+      });
+    } else {
+      blockProducer();
     }
   }
   if (wanted === "settings") {
@@ -11920,6 +11956,10 @@ function bindHomeDeskOnce(page) {
       }
       if (card === "clip") {
         openNabadClipFlow();
+        return;
+      }
+      if (card === "producer") {
+        openNabadProducerFlow();
         return;
       }
       if (card === "persona") {
@@ -19167,6 +19207,7 @@ function kickForegroundGenerationPolls() {
   try { generatePollTimer?.kick?.(); } catch {}
   try { soundPollTimer?.kick?.(); } catch {}
   try { kickHumTrackGenerationPoll(); } catch {}
+  try { kickNabadProducerGenerationPoll(); } catch {}
 }
 
 let _resumeGenCheckInflight = false;
@@ -27169,6 +27210,7 @@ async function refreshMyCredits({ silent = false } = {}) {
     if (creditsState.isAdmin) await refreshAdminCreditsView();
     try { syncSettingsMusicProviderRow(); } catch {}
     try { syncNabadClipHomeCard(); } catch {}
+    try { syncNabadProducerHomeCard(); } catch {}
   } catch (e) {
     creditsState.lastError = e?.message || String(e);
     paintCreditsAccountEmail(authSession?.user?.email || activeProfile?.email);
@@ -67312,6 +67354,171 @@ try {
     },
   });
 } catch (e) { console.warn("[studio] init", e); }
+
+let nabadProducerPollTimer = null;
+let nabadProducerPollCtx = null;
+
+function stopNabadProducerGenerationPolling() {
+  if (nabadProducerPollTimer) {
+    clearInterval(nabadProducerPollTimer);
+    nabadProducerPollTimer = null;
+  }
+}
+
+async function tickNabadProducerGenerationPoll() {
+  const ctx = nabadProducerPollCtx;
+  if (!ctx?.taskId) {
+    stopNabadProducerGenerationPolling();
+    return;
+  }
+  ctx.tries = (ctx.tries || 0) + 1;
+  const maxTries = 120;
+  try {
+    const r = await apiFetch(musicStatusApiPath(ctx.taskId));
+    const data = await r.json().catch(() => ({}));
+    const status = String(data?.data?.status || data?.status || "").toUpperCase();
+    const clips = data?.data?.response?.sunoData || data?.data?.response?.suno_data || [];
+    const clip = Array.isArray(clips) ? clips[0] : null;
+    const rawUrl = String(clip?.audioUrl || clip?.audio_url || "").trim();
+    if (status === "SUCCESS" && rawUrl) {
+      stopNabadProducerGenerationPolling();
+      clearGenerationPending(ctx.taskId);
+      const proxied = toAudioProxyUrl(rawUrl) || rawUrl;
+      const playbackUrl = normalizeAudioUrlForPlayback(proxied) || proxied;
+      const audioId = String(clip?.id || clip?.audioId || clip?.audio_id || `${ctx.taskId}_a`).trim();
+      const songTitle = String(
+        clip?.title || ctx.title || ctx.session?.title || ctx.session?.genre || "Nabad Producer",
+      ).trim();
+      const track = addToLibrary({
+        title: songTitle,
+        artUrl: "",
+        url: playbackUrl,
+        taskId: ctx.taskId,
+        audioId,
+        kind: "full",
+        meta: {
+          engine: "lyria_producer",
+          nabadProducer: true,
+          musicProvider: "lyria",
+          genre: ctx.session?.genre || "",
+          mood: ctx.session?.mood || "",
+          bpm: ctx.session?.bpm ?? null,
+          tempo: ctx.session?.tempo || "",
+          instrumental: Boolean(ctx.session?.instrumental),
+        },
+      });
+      syncGenerationPendingLibraryUi();
+      pushLocalGenerationReadyActivity([track].filter(Boolean), { taskId: ctx.taskId });
+      showToast("Producer song saved to Library", { icon: "🎵", durationMs: 3200 });
+      void refreshMyCredits({ silent: true });
+      try {
+        handleProducerGenerationReady({
+          url: playbackUrl,
+          title: songTitle,
+          taskId: ctx.taskId,
+          track,
+        });
+      } catch {}
+      nabadProducerPollCtx = null;
+      return;
+    }
+    if (status === "FAILED" || status === "ERROR") {
+      stopNabadProducerGenerationPolling();
+      clearGenerationPending(ctx.taskId);
+      syncGenerationPendingLibraryUi();
+      showToast("Producer generation failed", { icon: "!", durationMs: 3600 });
+      void refreshMyCredits({ silent: true });
+      try {
+        handleProducerGenerationFailed({
+          taskId: ctx.taskId,
+          message: "Generation failed — credits were refunded if applicable. Try again from the blueprint.",
+        });
+      } catch {}
+      nabadProducerPollCtx = null;
+      return;
+    }
+    if (ctx.tries >= maxTries) {
+      stopNabadProducerGenerationPolling();
+      clearGenerationPending(ctx.taskId);
+      syncGenerationPendingLibraryUi();
+      showToast("Still composing — check Library in a minute.", { durationMs: 6000 });
+      nabadProducerPollCtx = null;
+    }
+  } catch {
+    if (ctx.tries >= maxTries) {
+      stopNabadProducerGenerationPolling();
+      clearGenerationPending(ctx.taskId);
+      syncGenerationPendingLibraryUi();
+      nabadProducerPollCtx = null;
+    }
+  }
+}
+
+function startNabadProducerGenerationPolling({ taskId, title, session } = {}) {
+  stopNabadProducerGenerationPolling();
+  const tid = String(taskId || "").trim();
+  if (!tid) return;
+  const songTitle = String(title || session?.title || session?.genre || "Nabad Producer").trim();
+  nabadProducerPollCtx = { taskId: tid, title: songTitle, session: session || {}, tries: 0 };
+  setGenerationPending({
+    taskId: tid,
+    title: songTitle,
+    variantCount: 1,
+    source: "nabad_producer",
+  });
+  syncGenerationPendingLibraryUi();
+  nabadProducerPollTimer = setInterval(() => { void tickNabadProducerGenerationPoll(); }, 3500);
+  void tickNabadProducerGenerationPoll();
+}
+
+function kickNabadProducerGenerationPoll() {
+  if (nabadProducerPollTimer && nabadProducerPollCtx?.taskId) {
+    void tickNabadProducerGenerationPoll();
+  }
+}
+
+function resumeNabadProducerGenerationPollIfNeeded() {
+  const pending = getGenerationPending();
+  if (String(pending?.source || "") !== "nabad_producer") return;
+  const tid = String(pending?.taskId || "").trim();
+  if (!tid) return;
+  if (libraryHasAllTaskVariants(tid, 1)) {
+    clearGenerationPending(tid);
+    syncGenerationPendingLibraryUi();
+    return;
+  }
+  if (nabadProducerPollTimer) return;
+  nabadProducerPollCtx = {
+    taskId: tid,
+    title: String(pending?.title || "Nabad Producer").trim(),
+    session: {},
+    tries: 0,
+  };
+  nabadProducerPollTimer = setInterval(() => { void tickNabadProducerGenerationPoll(); }, 3500);
+  void tickNabadProducerGenerationPoll();
+}
+
+try {
+  configureNabadProducer({
+    apiFetch: (path, opts) => apiFetch(path, opts),
+    getAuthToken: () => getSupabaseAuthToken(),
+    authSession: () => authSession,
+    showToast: (m, o) => { try { showToast(m, o); } catch {} },
+    proFeatureAllowed: () => proFeatureAllowed(),
+    creditsLoaded: () => Boolean(creditsState.loaded),
+    requireProFeature: (label) => requireProFeature(label),
+    setPostAuthReturnHash,
+    scheduleApplyRoute,
+    normalizeAudioUrlForPlayback: (url) => normalizeAudioUrlForPlayback(url),
+    startProducerGenerationPolling: (ctx) => startNabadProducerGenerationPolling(ctx),
+    openProfileSongsWhileGenerating: () => openProfileSongsWhileGenerating(),
+    isAdmin: () => Boolean(creditsState.isAdmin),
+    creditsLoaded: () => Boolean(creditsState.loaded),
+    refreshCredits: (opts) => refreshMyCredits(opts),
+  });
+  syncNabadProducerHomeCard();
+  resumeNabadProducerGenerationPollIfNeeded();
+} catch (e) { console.warn("[nabad-producer] init", e); }
 
 // Resolve the backing instrumental ("AI Guide") for a song. V1 prefers an
 // existing instrumental already in the library; otherwise it falls back to the

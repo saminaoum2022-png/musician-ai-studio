@@ -7,7 +7,6 @@
 const crypto = require("crypto");
 const { verifyUser, sendJson, readJsonBody, callRpc, refund } = require("../../_lib/credits-auth");
 const { applyCors } = require("../../_lib/cors");
-const { fetchProSubscriptionForUser } = require("../../_lib/pro-subscription");
 const { userIsAdmin } = require("../../_lib/admin-auth");
 const {
   buildLyriaPrompt,
@@ -199,12 +198,11 @@ module.exports = async function handler(req, res) {
     });
   }
 
-  const pro = await fetchProSubscriptionForUser(user.userId);
   const isAdmin = await userIsAdmin(user);
-  if (!isAdmin && !pro?.active) {
+  if (!isAdmin) {
     return sendJson(res, 403, {
-      error: "NabadAi Pro is required for Nabad Producer.",
-      code: "pro_required",
+      error: "Nabad Producer is admin-only on this environment.",
+      code: "nabad_producer_admin_only",
     });
   }
 

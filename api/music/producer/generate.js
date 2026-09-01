@@ -80,7 +80,10 @@ function buildFailedStatusPayload({ taskId, provider, errorMessage }) {
 }
 
 function scheduleBackgroundWork(promise) {
-  const waitUntilFn = globalThis.waitUntil;
+  let waitUntilFn = null;
+  try {
+    waitUntilFn = require("@vercel/functions").waitUntil;
+  } catch {}
   if (typeof waitUntilFn === "function") {
     waitUntilFn(promise);
     return;

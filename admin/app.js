@@ -1955,6 +1955,28 @@ function renderGenerationDetail(data) {
        <pre class="genDetailPrompt genDetailPrompt--payload">${escapeHtml(g.requestDetail)}</pre>`
     : "";
 
+  const outputLinks = [];
+  if (g.outputAudioUrl) {
+    outputLinks.push(`<a href="${escapeHtml(g.outputAudioUrl)}" target="_blank" rel="noopener noreferrer">Play / download audio</a>`);
+  }
+  for (const url of g.outputAudioCandidates || []) {
+    if (url && url !== g.outputAudioUrl) {
+      outputLinks.push(`<a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(url.split("/").pop() || "Archive")}</a>`);
+    }
+  }
+  if (g.taskStatusUrl) {
+    outputLinks.push(`<a href="${escapeHtml(g.taskStatusUrl)}" target="_blank" rel="noopener noreferrer">Task status JSON</a>`);
+  }
+  const outputBlock = g.taskId
+    ? `<div class="detailMetaBlock"><strong>Provider output</strong></div>
+       <p class="sectionNote">
+         ${g.taskStatus ? `Task status: <span class="badge ${escapeHtml(String(g.taskStatus).toLowerCase())}">${escapeHtml(g.taskStatus)}</span>` : "Task status: not stored yet"}
+         ${g.outputAudioUrl ? "" : " · No audio file found in storage yet"}
+       </p>
+       ${outputLinks.length ? `<p class="pubLinks">${outputLinks.join(" · ")}</p>` : ""}
+       ${g.outputAudioUrl ? `<p class="sectionNote monoCell">${escapeHtml(g.outputAudioUrl)}</p>` : ""}`
+    : "";
+
   const ledgerRows = data.ledger || [];
   const ledgerBody = ledgerRows.length
     ? ledgerRows.map((row) => `<tr>
@@ -2010,6 +2032,7 @@ function renderGenerationDetail(data) {
       <div class="detailMetaBlock"><strong>Prompt summary</strong></div>
       ${promptBlock}
       ${requestBlock}
+      ${outputBlock}
       <p class="detailMetaBlock detailMetaBlock--ids">
         <code class="promoCode">${escapeHtml(g.id)}</code>
         ${g.taskId ? ` · task <code class="promoCode">${escapeHtml(g.taskId)}</code>` : ""}

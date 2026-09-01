@@ -306,10 +306,17 @@ function actionLabel(actionId) {
   return hit?.label || String(actionId || "").replace(/_/g, " ");
 }
 function renderChoiceTrail() {
-  const picks = messages.filter((m) => m.role === "user").slice(-4);
+  if (!session) return "";
+  const picks = [];
+  if (session.genre) picks.push(session.genre);
+  if (session.mood) picks.push(session.mood);
+  if (session.tempo) picks.push(session.tempo);
+  if (session.instrumental) picks.push("Instrumental");
+  else if (session.vocalGender) picks.push(session.vocalGender === "f" ? "Female vocal" : session.vocalGender === "duo" ? "Duo vocal" : "Male vocal");
+  if (session.instruments) picks.push(session.instruments);
   if (!picks.length) return "";
-  return `<div class="nabadProducerTrail" aria-label="Your choices">
-    ${picks.map((m) => `<span class="nabadProducerTrailPill">${escapeHtml(m.text)}</span>`).join("")}
+  return `<div class="nabadProducerTrail" aria-label="Locked choices">
+    ${picks.slice(-4).map((m) => `<span class="nabadProducerTrailPill">${escapeHtml(m)}</span>`).join("")}
   </div>`;
 }
 
@@ -505,7 +512,7 @@ function updateUiState({ step, stepIndex, stepTotal, quickReplies }) {
   if (step) el.dataset.step = step;
   if (stepIndex != null) el.dataset.stepIndex = String(stepIndex);
   if (stepTotal != null) el.dataset.stepTotal = String(stepTotal);
-  if (quickReplies) el.dataset.quickReplies = JSON.stringify(quickReplies);
+  if (quickReplies != null) el.dataset.quickReplies = JSON.stringify(quickReplies);
   renderShell();
 }
 
@@ -531,7 +538,7 @@ async function applyChatResult(data) {
     step: data.step,
     stepIndex: data.stepIndex,
     stepTotal: data.stepTotal,
-    quickReplies: data.quickReplies || [],
+    quickReplies: Array.isArray(data.quickReplies) ? data.quickReplies : [],
   });
 }
 

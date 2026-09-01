@@ -97,12 +97,14 @@ const COACH_REPLY_SYSTEM_PROMPT = `You are Nabad Producer — a warm, expert mus
 
 Reply in 1–2 short sentences. Plain text only — no markdown, no bullet lists, no option menus.
 
-You receive JSON with: current_step, session_locked (choices so far), user_action (chip label if they tapped one), user_message (if they typed), next_step (where the session goes next), conflict_note (optional tempo/mood mismatch).
+You receive JSON with: current_step, session_locked (choices so far), user_action (chip label if they tapped one), user_message (if they typed), next_step (where the session goes next), conflict_note (optional tempo/mood mismatch), user_asks_for_options (boolean), chips_visible (boolean).
 
 Rules:
 - Sound human and creative — producer booth, not a form wizard.
 - If user_action is set, acknowledge that choice naturally and tee up next_step.
 - If user_message is small talk (hi, how are you), respond warmly and gently steer to current_step — do not lecture.
+- If user_asks_for_options is true, tell them you're showing the option chips below now — they can tap one or keep chatting in their own words.
+- If chips_visible is false, do NOT list chip labels in your reply — keep it conversational; they can ask to see options anytime.
 - If user_message is a real creative answer, acknowledge it with specificity.
 - If conflict_note is set, weave that concern in conversationally (suggest fixing tempo/mood).
 - On blueprint step, tell them to review the blueprint card and generate when ready.
@@ -147,7 +149,139 @@ function isLikelyChitchat(message) {
   if (/\b(how are you|how r u|how'?s it going|hope all is good|hope you'?re well)\b/iu.test(normalized) && normalized.length <= 80) {
     return true;
   }
+  if (/^(هاي|هلا|مرحب|أهلين|اهلين|السلام|كيفك|كيف حالك|شو اخبارك|شو الأخبار)([!.?\s]|$)/iu.test(normalized)) return true;
+  if (/^(hi+|hey+|hello+)\b/iu.test(normalized) && /\b(كيفك|how are you)\b/iu.test(normalized)) return true;
   return false;
+}
+
+function isAskingForOptions(message) {
+  const t = String(message || "").trim();
+  if (!t || t.length > 160) return false;
+  const lower = t.toLowerCase();
+  return (
+    /\b(what are (the )?options|show (me )?(the )?options|what can i choose|list (the )?options|see the options|what are my choices)\b/i.test(lower)
+    || /\b(show (me )?the chips|display (the )?options)\b/i.test(lower)
+    || /(فيني|فيمكنني|ممكن|بدي|بدّي).{0,24}(اشوف|أشوف|شوف|عرض).{0,24}(الخيارات|خيارات)/iu.test(t)
+    || /(شو|ما|what).{0,16}(الخيارات|options|choices)/iu.test(t)
+    || /(ورّيني|وريني|اعرض|أعرض).{0,16}(الخيارات|خيارات)/iu.test(t)
+  );
+}
+
+function userPrefersArabic(message) {
+  return /[\u0600-\u06FF]/.test(String(message || ""));
+}
+
+function optionsRevealReply(step, message) {
+  const ar = userPrefersArabic(message);
+  const stepAr = {
+    genre: "أنواع الموسيقى",
+    mood: "المود / الأحاسيس",
+    tempo: "سرعة الإيقاع",
+    vocal: "الغناء والصوت",
+    instruments: "الآلات",
+    lyrics: "كتابة الكلمات",
+    reference: "المرجع الموسيقي",
+  };
+  const stepEn = {
+    genre: "genre options",
+    mood: "mood options",
+    tempo: "tempo options",
+    vocal: "vocal options",
+    instruments: "instrument options",
+    lyrics: "lyrics step",
+    reference: "reference options",
+  };
+  if (ar) {
+    const label = stepAr[step] || "الخيارات";
+    return `أكيد — رح أعرضلك ${label} تحت هلّق. اختار chip أو احكيلي بكلماتك.`;
+  }
+  const label = stepEn[step] || "options";
+  return `Sure — I'll show the ${label} below. Tap one, or describe it in your own words.`;
+}
+
+function matchMessageToActionId(step, message) {
+  const t = String(message || "").trim().toLowerCase();
+  if (!t) return "";
+
+  if (step === "genre") {
+    if (/dabke|دبكة|levantine/i.test(t)) return "genre_dabke";
+    if (/pop|بوب|عربي/i.test(t) && !/rap|trap/i.test(t)) return "genre_pop";
+    if (/ballad|slow|بالاد|بطي/i.test(t)) return "genre_ballad";
+    if (/rap|trap|راب|تrap/i.test(t)) return "genre_rap";
+    if (/khaliji|خليج/i.test(t)) return "genre_khaliji";
+    if (/cinematic|سينم/i.test(t)) return "genre_cinematic";
+  }
+
+  if (step === "mood") {
+    if (/joy|upbeat|happy|حماس|فرح|قوي|strong|powerful|energetic/i.test(t)) return "mood_joyful";
+    if (/romantic|love|روم|حب|عاطف/i.test(t)) return "mood_romantic";
+    if (/melanchol|sad|حزن|أسى/i.test(t)) return "mood_melancholy";
+    if (/dark|cinematic|مظلم/i.test(t)) return "mood_dark";
+    if (/party|festival|dabke|حفل|رقص/i.test(t)) return "mood_party";
+    if (/nostalg|ذكري/i.test(t)) return "mood_nostalgic";
+  }
+
+  if (step === "tempo") {
+    if (/slow|بطي|هاد|calm|relaxed|70|85/i.test(t)) return "tempo_slow";
+    if (/mid|medium|متوسط|95|110/i.test(t)) return "tempo_mid";
+    if (/upbeat|danc|راقص|120|128|سريع.*رقص|رقص.*سريع/i.test(t)) return "tempo_upbeat";
+    if (/fast|130|140|سريع/i.test(t)) return "tempo_fast";
+  }
+
+  if (step === "vocal") {
+    if (/instrumental|no vocal|بدون غناء|موسيقى فقط|inst/i.test(t)) return "vocal_instrumental";
+    if (/duo|ثنائي|ذكر.*انث|male.*female/i.test(t)) return "vocal_duo";
+    if (/female|woman|girl|انث|امرأ|فتاة|صوت نس/i.test(t)) return "vocal_f";
+    if (/male|man|boy|ذكر|رجل|صوت رج/i.test(t)) return "vocal_m";
+  }
+
+  if (step === "instruments") {
+    if (/skip|decide|انت|اختر/i.test(t)) return "inst_skip";
+    if (/oud|darbuka|عود|دراب/i.test(t)) return "inst_oud_darbuka";
+    if (/synth|pop|سynth/i.test(t)) return "inst_synth_pop";
+    if (/string|piano|كمان|بيانو/i.test(t)) return "inst_strings";
+    if (/guitar|band|غitar|فرقة/i.test(t)) return "inst_guitar_band";
+    if (/minimal|minimal|بسيط/i.test(t)) return "inst_minimal";
+  }
+
+  return "";
+}
+
+function applyMessageToSession(session, step, message) {
+  const text = String(message || "").trim();
+  if (!text) return session;
+  const actionId = matchMessageToActionId(step, text);
+  if (actionId) return applyAction(session, actionId);
+  return applyTextToStep(session, step, text);
+}
+
+function resolveVisibleQuickReplies({
+  step,
+  session,
+  actionId,
+  message,
+  chitchat,
+  wantsOptions,
+  stepBefore,
+  sessionReady,
+}) {
+  let quickReplies = quickRepliesForStep(step, session);
+
+  if (step === "blueprint" && sessionReady) {
+    return QUICK_REPLIES.blueprint;
+  }
+
+  if (step === "lyrics" && session.instrumental) {
+    return [{ id: "reference_skip", label: "Skip · no lyrics needed" }];
+  }
+
+  if (wantsOptions) return quickReplies;
+
+  if (actionId && step !== stepBefore) return quickReplies;
+
+  if (actionId || chitchat || message) return [];
+
+  return quickReplies;
 }
 
 function chitchatFallbackReply(message) {
@@ -519,6 +653,8 @@ async function generateCoachReply({
   userAction = "",
   userMessage = "",
   conflict = null,
+  wantsOptions = false,
+  chipsVisible = false,
 }) {
   if (!apiKey) return null;
   const payload = {
@@ -528,6 +664,8 @@ async function generateCoachReply({
     user_action: userAction || null,
     user_message: userMessage || null,
     conflict_note: conflict?.message || null,
+    user_asks_for_options: Boolean(wantsOptions),
+    chips_visible: Boolean(chipsVisible),
   };
   let result = await geminiGenerateContent({
     apiKey,
@@ -641,6 +779,15 @@ function applyTextToStep(session, step, message) {
   if (step === "instruments") return { ...session, instruments: text.slice(0, 200) };
   if (step === "genre") return { ...session, genre: text.slice(0, 120) };
   if (step === "mood") return { ...session, mood: text.slice(0, 120) };
+  if (step === "tempo") {
+    return { ...session, tempo: text.slice(0, 80), bpm: session.bpm ?? null };
+  }
+  if (step === "vocal") {
+    if (/instrumental|بدون غناء|موسيقى فقط/i.test(text)) {
+      return { ...session, instrumental: true, vocalGender: "", lyrics: "", vocalCharacterDone: true };
+    }
+    return { ...session, vocalGender: session.vocalGender || text.slice(0, 16), instrumental: false };
+  }
   return session;
 }
 
@@ -659,9 +806,10 @@ async function producerChatTurn({ apiKey, session: rawSession, message = "", act
   }
 
   const stepBefore = computeNextStep(session);
-  const chitchat = message && !actionId && isLikelyChitchat(message);
-  if (message && !actionId && !chitchat) {
-    session = applyTextToStep(session, stepBefore, message);
+  const wantsOptions = message && !actionId && isAskingForOptions(message);
+  const chitchat = message && !actionId && !wantsOptions && isLikelyChitchat(message);
+  if (message && !actionId && !chitchat && !wantsOptions) {
+    session = applyMessageToSession(session, stepBefore, message);
   }
 
   if (actionId === "reference_skip" || (stepBefore === "reference" && actionId === "reference_skip")) {
@@ -709,25 +857,27 @@ async function producerChatTurn({ apiKey, session: rawSession, message = "", act
     }
   }
 
-  let quickReplies = quickRepliesForStep(step, session);
-  if (conflict?.suggestIds?.length) {
+  let quickReplies = resolveVisibleQuickReplies({
+    step,
+    session,
+    actionId,
+    message,
+    chitchat,
+    wantsOptions,
+    stepBefore,
+    sessionReady,
+  });
+  if (conflict?.suggestIds?.length && quickReplies.length) {
     quickReplies = conflict.suggestIds
       .map((id) => [...QUICK_REPLIES.tempo].find((q) => q.id === id))
       .filter(Boolean)
       .concat(quickReplies.slice(0, 2));
   }
 
-  if (step === "lyrics" && session.instrumental) {
-    quickReplies = [{ id: "reference_skip", label: "Skip · no lyrics needed" }];
-  }
-
-  if (step === "blueprint" && sessionReady) {
-    quickReplies = QUICK_REPLIES.blueprint;
-  }
-
   const userActionLabel = actionLabelFromId(actionId);
-  const coachStep = chitchat ? stepBefore : step;
+  const coachStep = chitchat || wantsOptions ? stepBefore : step;
   const nextStep = step;
+  const chipsVisible = quickReplies.length > 0;
   let coachReply = null;
   if (apiKey && (step !== "blueprint" || sessionReady)) {
     coachReply = await generateCoachReply({
@@ -736,15 +886,20 @@ async function producerChatTurn({ apiKey, session: rawSession, message = "", act
       step: coachStep,
       nextStep,
       userAction: userActionLabel,
-      userMessage: chitchat || !actionId ? String(message || "").trim() : "",
+      userMessage: (chitchat || wantsOptions || !actionId) ? String(message || "").trim() : "",
       conflict,
+      wantsOptions,
+      chipsVisible,
     });
   }
 
   const fallbackReply = conflict?.message || stepCoachCopy(step, session);
-  const reply = (coachReply?.reply && !isBrokenCoachReply(coachReply.reply))
+  let reply = (coachReply?.reply && !isBrokenCoachReply(coachReply.reply))
     ? coachReply.reply
     : ((chitchat && chitchatFallbackReply(message)) || fallbackReply);
+  if (wantsOptions && (!coachReply?.reply || isBrokenCoachReply(coachReply?.reply))) {
+    reply = optionsRevealReply(step, message);
+  }
 
   return {
     ok: true,
@@ -755,6 +910,7 @@ async function producerChatTurn({ apiKey, session: rawSession, message = "", act
     reply,
     coachModel: coachReply?.model || null,
     quickReplies,
+    showQuickReplies: chipsVisible,
     conflict,
     blueprint,
     sessionReady,

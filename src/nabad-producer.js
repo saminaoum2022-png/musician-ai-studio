@@ -380,6 +380,16 @@ function renderAudioCard({ title, url }) {
     </article>`;
 }
 
+function renderBlueprintBuildingBanner() {
+  if (!chatBusy) return "";
+  const step = rootEl()?.dataset?.step || "";
+  if (step !== "blueprint") return "";
+  return `<div class="nabadProducerGeneratingBanner" role="status">
+    <span class="nabadProducerGeneratingPulse" aria-hidden="true"></span>
+    <p>Writing your production blueprint — lyrics, vocal, groove, and reference...</p>
+  </div>`;
+}
+
 function renderGeneratingBanner() {
   if (!generateBusy) return "";
   return `<div class="nabadProducerGeneratingBanner" role="status">
@@ -456,6 +466,7 @@ function renderShell() {
       <div class="nabadProducerStage" id="nabadProducerStage" role="log" aria-live="polite">
         ${renderChoiceTrail()}
         ${renderGeneratingBanner()}
+        ${renderBlueprintBuildingBanner()}
         <div class="nabadProducerChat" id="nabadProducerChat">
           ${renderMessages()}${chatBusy || generateBusy ? renderThinkingBubble() : ""}
           <div class="nabadProducerScrollAnchor" id="nabadProducerScrollAnchor" aria-hidden="true"></div>

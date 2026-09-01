@@ -467,6 +467,7 @@ function emptySession() {
     referenceSkipped: false,
     vocalCharacterDone: false,
     lyricsDone: false,
+    blueprintAttempts: 0,
   };
 }
 
@@ -489,6 +490,7 @@ function normalizeSession(raw) {
     referenceSkipped: Boolean(s.referenceSkipped),
     vocalCharacterDone: Boolean(s.vocalCharacterDone),
     lyricsDone: Boolean(s.lyricsDone),
+    blueprintAttempts: Math.max(0, Number(s.blueprintAttempts) || 0),
   };
 }
 
@@ -730,7 +732,7 @@ async function geminiGenerateContent({
   return { ok: false, error: lastError };
 }
 
-async function geminiGenerateJson({ apiKey, systemPrompt, userMessage, timeoutMs }) {
+async function geminiGenerateJson({ apiKey, systemPrompt, userMessage, timeoutMs, maxOutputTokens = 4096 }) {
   return geminiGenerateContent({
     apiKey,
     systemPrompt,
@@ -738,6 +740,8 @@ async function geminiGenerateJson({ apiKey, systemPrompt, userMessage, timeoutMs
     timeoutMs,
     jsonMode: true,
     temperature: 0.65,
+    maxOutputTokens,
+    disableThinking: true,
   });
 }
 
@@ -829,21 +833,70 @@ function buildBlueprintInput(session) {
 
 async function buildProducerBlueprint({ apiKey, session }) {
   const input = buildBlueprintInput(session);
-  const result = await geminiGenerateJson({
-    apiKey,
-    systemPrompt: BLUEPRINT_SYSTEM_PROMPT,
-    userMessage: JSON.stringify(input),
-    timeoutMs: BLUEPRINT_TIMEOUT_MS,
-  });
-  if (!result.ok) {
-    return { ok: false, error: result.error || "blueprint_failed" };
+  let lastError = "blueprint_failed";
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const result = await geminiGenerateJson({
+      apiKey,
+      systemPrompt: BLUEPRINT_SYSTEM_PROMPT,
+      userMessage: JSON.stringify(input),
+      timeoutMs: BLUEPRINT_TIMEOUT_MS + attempt * 8000,
+      maxOutputTokens: 4096,
+    });
+    if (!result.ok) {
+      lastError = result.error || lastError;
+      continue;
+    }
+    const parsed = parseBlueprintJson(result.text);
+    const normalized = normalizeBlueprint(parsed, { instrumental: session.instrumental });
+    if (normalized) {
+      return { ok: true, model: result.model, attempt: attempt + 1, ...normalized };
+    }
+    lastError = "invalid_blueprint_json";
   }
-  const parsed = parseBlueprintJson(result.text);
-  const normalized = normalizeBlueprint(parsed, { instrumental: session.instrumental });
-  if (!normalized) {
-    return { ok: false, error: "invalid_blueprint_json", model: result.model };
+  return { ok: false, error: lastError };
+}
+
+function looksLikeReferenceMessage(message) {
+  const t = String(message || "").trim();
+  if (!t || t.length < 4 || isLyricsHelpRequest(t) || isLyricsRewindRequest(t)) return false;
+  if (isLikelyChitchat(t)) return false;
+  return (
+    /\b(style|reference|like|similar|inspired|sound like|artist|song|track|steal|vibe)\b/i.test(t)
+    || /(ستايل|ستيل|شبي|شبیه|مثل|زي|غنية|فنان|مرجع|بحب|على\s*غناء)/iu.test(t)
+    || t.length >= 12
+  );
+}
+
+function applyReferenceFromMessage(session, message) {
+  const text = String(message || "").trim();
+  if (!text || !looksLikeReferenceMessage(text)) return session;
+  return {
+    ...session,
+    referenceText: text.slice(0, 300),
+    referenceSkipped: false,
+    referenceNote: "",
+  };
+}
+
+function blueprintStatusReply(session, { error = "", attempt = 1, message = "", building = false } = {}) {
+  const ar = userPrefersArabic(message || session.referenceText || session.lyrics);
+  const refHint = session.referenceText
+    ? (ar ? "مرجعك" : "your reference")
+    : (ar ? "الجلسة" : "your session");
+  if (building && attempt <= 1) {
+    return ar
+      ? `عم بجهّز الـ blueprint — عم أوّل الكلمات مع الصوت والإيقاع و${refHint} لستايل Lyria Pro...`
+      : `Building your production blueprint — mapping lyrics, vocal, groove, and ${refHint} into a full Lyria Pro arrangement...`;
   }
-  return { ok: true, model: result.model, ...normalized };
+  if (building && attempt === 2) {
+    return ar
+      ? "لسّا عم شغّل على الـ blueprint — عم ضبط الـ master style prompt والـ sections..."
+      : "Still writing the blueprint — locking section structure and the master style prompt...";
+  }
+  if (ar) {
+    return `ما قدرت أكمل الـ blueprint هلّق${error ? ` (${error})` : ""}. جرّب Retry blueprint — أو عدّل ${refHint} وابعتلي من جديد.`;
+  }
+  return `Couldn't finish the blueprint yet${error ? ` (${error})` : ""}. Tap Retry blueprint — or re-send ${refHint} and I'll rebuild it.`;
 }
 
 async function explainReferenceStyle({ apiKey, referenceText }) {
@@ -925,7 +978,10 @@ function applyTextToStep(session, step, message) {
         referenceSkipped: false,
       };
     }
-    return { ...session, referenceText: text.slice(0, 300), referenceSkipped: false };
+    return { ...session, referenceText: text.slice(0, 300), referenceSkipped: false, referenceNote: "" };
+  }
+  if (step === "blueprint") {
+    return applyReferenceFromMessage(session, text);
   }
   if (step === "instruments") return { ...session, instruments: text.slice(0, 200) };
   if (step === "genre") return { ...session, genre: text.slice(0, 120) };
@@ -987,9 +1043,15 @@ async function producerChatTurn({ apiKey, session: rawSession, message = "", act
   if (message && !actionId && !chitchat && !wantsOptions) {
     if (isLyricsAdvanceIntent(message) && (stepBefore === "lyrics" || String(session.lyrics || "").trim())) {
       session = { ...session, lyricsDone: true };
+    } else if (stepBefore === "blueprint" && looksLikeReferenceMessage(message)) {
+      session = applyReferenceFromMessage(session, message);
     } else {
       session = applyMessageToSession(session, stepBefore, message);
     }
+  }
+
+  if (actionId === "blueprint_retry") {
+    session = { ...session, blueprintAttempts: 0 };
   }
 
   if (lyricsHelp || lyricsRewind) {
@@ -1025,7 +1087,7 @@ async function producerChatTurn({ apiKey, session: rawSession, message = "", act
     session.referenceSkipped = true;
   }
 
-  const refStep = computeNextStep(session) === "reference" || stepBefore === "reference";
+  const refStep = computeNextStep(session) === "reference" || stepBefore === "reference" || stepBefore === "blueprint";
   if (refStep && session.referenceText && !session.referenceNote && apiKey && !lyricsHelp && !lyricsRewind) {
     session.referenceNote = await explainReferenceStyle({ apiKey, referenceText: session.referenceText });
   }
@@ -1047,6 +1109,8 @@ async function producerChatTurn({ apiKey, session: rawSession, message = "", act
     if (!session.lyricsDone && !session.instrumental && !String(session.lyrics || "").trim()) {
       step = "lyrics";
     } else if (apiKey) {
+      const attemptBase = Number(session.blueprintAttempts) || 0;
+      session = { ...session, blueprintAttempts: attemptBase + 1 };
       const built = await buildProducerBlueprint({ apiKey, session });
       if (built.ok) {
         blueprint = {
@@ -1055,23 +1119,32 @@ async function producerChatTurn({ apiKey, session: rawSession, message = "", act
           model: built.model,
         };
         sessionReady = true;
+        session = { ...session, blueprintAttempts: 0 };
+      } else {
+        const failReply = blueprintStatusReply(session, {
+          error: String(built.error || "").slice(0, 80),
+          attempt: session.blueprintAttempts,
+          message,
+        });
+        return {
+          ok: true,
+          session,
+          step: "blueprint",
+          stepIndex: STEPS.indexOf("blueprint") + 1,
+          stepTotal: STEPS.length,
+          reply: lyricsAssistReply || failReply,
+          coachModel: null,
+          quickReplies: [
+            { id: "blueprint_retry", label: "Retry blueprint" },
+            ...(session.referenceText ? [] : [{ id: "reference_skip", label: "Skip reference · build now" }]),
+          ],
+          showQuickReplies: true,
+          conflict,
+          blueprint: null,
+          sessionReady: false,
+          blueprintStatus: "failed",
+        };
       }
-    }
-    if (step === "blueprint" && !blueprint) {
-      return {
-        ok: true,
-        session,
-        step: session.referenceSkipped || session.referenceText ? "blueprint" : "reference",
-        stepIndex: STEPS.indexOf(session.referenceSkipped || session.referenceText ? "blueprint" : "reference") + 1,
-        stepTotal: STEPS.length,
-        reply: lyricsAssistReply || "I'm still shaping the production blueprint — tap Retry blueprint in a moment.",
-        coachModel: null,
-        quickReplies: [{ id: "blueprint_retry", label: "Retry blueprint" }],
-        showQuickReplies: true,
-        conflict,
-        blueprint: null,
-        sessionReady: false,
-      };
     }
   }
 

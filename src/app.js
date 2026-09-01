@@ -19232,6 +19232,13 @@ async function resumePendingGenerationOnForeground() {
   ).trim();
   if (!tid) return;
 
+  if (String(pending?.source || "") === "nabad_producer") {
+    resumeNabadProducerGenerationPollIfNeeded();
+    kickNabadProducerGenerationPoll();
+  } else {
+    void recoverNabadProducerMissedFromServer({ silent: true });
+  }
+
   const expectedVariants = resolveExpectedGenerationVariants(tid);
   if (libraryHasAllTaskVariants(tid, expectedVariants)) {
     finalizeRecoveredGenerationJob(tid, { silent: true });
@@ -57592,10 +57599,11 @@ function loadPendingBackendTask() {
   }
 }
 
-function saveRecoverableGenerationTask(taskId, titleHint) {
+function saveRecoverableGenerationTask(taskId, titleHint, extra = {}) {
   const t = String(taskId || "").trim();
   if (!t) return;
   const photoCoverDataUrl = resolvePendingPhotoCoverDataUrl();
+  const source = String(extra?.source || "").trim();
   try {
     localStorage.setItem(
       RECOVERY_TASK_KEY,
@@ -57603,6 +57611,8 @@ function saveRecoverableGenerationTask(taskId, titleHint) {
         taskId: t,
         savedAt: Date.now(),
         titleHint: String(titleHint || "").trim().slice(0, 120),
+        ...(source ? { source } : {}),
+        ...(extra?.session && typeof extra.session === "object" ? { producerSession: extra.session } : {}),
         ...(photoCoverDataUrl
           ? {
             photoCoverDataUrl,
@@ -57629,6 +57639,8 @@ function loadRecoverableGenerationTask() {
       taskId: String(o.taskId),
       savedAt,
       titleHint: String(o.titleHint || ""),
+      source: String(o.source || "").trim(),
+      producerSession: o.producerSession && typeof o.producerSession === "object" ? o.producerSession : null,
       photoCoverDataUrl: String(o.photoCoverDataUrl || "").trim(),
       photoMode: Boolean(o.photoMode),
       photoCoverOnly: Boolean(o.photoCoverOnly),
@@ -58066,7 +58078,14 @@ async function recoverSongFromTaskId(taskId, { silent = false, pushCategory = ""
     return true;
   }
 
-  const r = await fetch(apiUrl(`/api/suno/status?taskId=${encodeURIComponent(tid)}`));
+  const statusTok = getSupabaseAuthToken();
+  const statusPath = isSingleVariantMusicTask(tid)
+    ? musicStatusApiPath(tid)
+    : `/api/suno/status?taskId=${encodeURIComponent(tid)}`;
+  const r = await apiFetch(statusPath, {
+    cache: "no-store",
+    headers: statusTok ? { Authorization: `Bearer ${statusTok}` } : undefined,
+  });
   const data = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error(data?.error || "Could not check the generation status.");
 
@@ -58157,6 +58176,11 @@ async function recoverSongFromTaskId(taskId, { silent = false, pushCategory = ""
   }
   metaBase.recoveredFromTaskId = tid;
   metaBase.recoveredAt = Date.now();
+  if (pendingGen?.source === "nabad_producer" || isSingleVariantMusicTask(tid)) {
+    metaBase.nabadProducer = pendingGen?.source === "nabad_producer" || undefined;
+    metaBase.engine = pendingGen?.source === "nabad_producer" ? "lyria_producer" : metaBase.engine;
+    metaBase.musicProvider = metaBase.musicProvider || (tid.startsWith("lyr_") ? "lyria" : metaBase.musicProvider);
+  }
   if (cat === "hum_track_ready") {
     metaBase.humTrack = true;
     metaBase.recoveredFromPush = true;
@@ -67372,6 +67396,163 @@ function stopNabadProducerGenerationPolling() {
   }
 }
 
+async function fetchMusicProviderGenerationStatus(taskId) {
+  const tid = String(taskId || "").trim();
+  if (!tid || !isSingleVariantMusicTask(tid)) return null;
+  const statusTok = getSupabaseAuthToken();
+  const r = await apiFetch(musicStatusApiPath(tid), {
+    cache: "no-store",
+    headers: statusTok ? { Authorization: `Bearer ${statusTok}` } : undefined,
+  });
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) {
+    throw new Error(data?.error || data?.message || `Status failed (${r.status})`);
+  }
+  return parseSunoGenerationRecordInfo(data);
+}
+
+function resolveNabadProducerRecoveryContext() {
+  const pending = getGenerationPending();
+  if (String(pending?.source || "") === "nabad_producer" && pending?.taskId) {
+    return {
+      taskId: String(pending.taskId).trim(),
+      title: String(pending.title || "Nabad Producer").trim(),
+      session: {},
+    };
+  }
+  const rec = loadRecoverableGenerationTask();
+  if (
+    rec?.taskId
+    && (rec.source === "nabad_producer" || String(rec.taskId).startsWith("lyr_"))
+  ) {
+    return {
+      taskId: String(rec.taskId).trim(),
+      title: String(rec.titleHint || "Nabad Producer").trim(),
+      session: rec.producerSession && typeof rec.producerSession === "object" ? rec.producerSession : {},
+    };
+  }
+  const backendTid = String(loadPendingBackendTask() || "").trim();
+  if (backendTid.startsWith("lyr_")) {
+    return {
+      taskId: backendTid,
+      title: String(rec?.titleHint || pending?.title || "Nabad Producer").trim(),
+      session: rec?.producerSession && typeof rec.producerSession === "object" ? rec.producerSession : {},
+    };
+  }
+  return null;
+}
+
+function saveNabadProducerTrackToLibrary({ taskId, title, session, clip, rawUrl }) {
+  const tid = String(taskId || "").trim();
+  const url = String(rawUrl || clip?.audioUrl || "").trim();
+  if (!tid || !url) return null;
+  const proxied = toAudioProxyUrl(url) || url;
+  const playbackUrl = normalizeAudioUrlForPlayback(proxied) || proxied;
+  const audioId = String(clip?.audioId || clip?.id || clip?.audio_id || `${tid}_a`).trim();
+  const songTitle = String(
+    clip?.title || title || session?.title || session?.genre || "Nabad Producer",
+  ).trim();
+  return addToLibrary({
+    title: songTitle,
+    artUrl: "",
+    url: playbackUrl,
+    taskId: tid,
+    audioId,
+    kind: "full",
+    meta: {
+      engine: "lyria_producer",
+      nabadProducer: true,
+      musicProvider: "lyria",
+      genre: session?.genre || "",
+      mood: session?.mood || "",
+      bpm: session?.bpm ?? null,
+      tempo: session?.tempo || "",
+      instrumental: Boolean(session?.instrumental),
+    },
+  });
+}
+
+function finalizeNabadProducerGenerationSuccess({ taskId, title, session, clip, rawUrl, silent = false } = {}) {
+  const tid = String(taskId || "").trim();
+  const track = saveNabadProducerTrackToLibrary({ taskId: tid, title, session, clip, rawUrl });
+  if (!track) return false;
+  stopNabadProducerGenerationPolling();
+  clearGenerationPending(tid);
+  try { savePendingBackendTask(""); } catch {}
+  clearRecoverableGenerationTask();
+  syncGenerationPendingLibraryUi();
+  pushLocalGenerationReadyActivity([track].filter(Boolean), { taskId: tid });
+  if (!silent) {
+    showToast("Producer song saved to Library", { icon: "🎵", durationMs: 3200 });
+  }
+  void refreshMyCredits({ silent: true });
+  try {
+    handleProducerGenerationReady({
+      url: track.url,
+      title: track.title,
+      taskId: tid,
+      track,
+    });
+  } catch {}
+  nabadProducerPollCtx = null;
+  return true;
+}
+
+let nabadProducerServerRecoverInflight = null;
+
+async function recoverNabadProducerMissedFromServer({ silent = true } = {}) {
+  if (!getSupabaseAuthToken()) return 0;
+  if (nabadProducerServerRecoverInflight) return nabadProducerServerRecoverInflight;
+  nabadProducerServerRecoverInflight = (async () => {
+    try {
+      const statusTok = getSupabaseAuthToken();
+      const r = await apiFetch("/api/music/producer/recover", {
+        cache: "no-store",
+        headers: statusTok ? { Authorization: `Bearer ${statusTok}` } : undefined,
+      });
+      const body = await r.json().catch(() => ({}));
+      if (!r.ok) return 0;
+      const items = body?.data?.items || body?.items || [];
+      let recovered = 0;
+      for (const item of items) {
+        const tid = String(item?.taskId || "").trim();
+        if (!tid || libraryHasAllTaskVariants(tid, 1)) continue;
+        if (String(item?.status || "").toUpperCase() !== "SUCCESS") continue;
+        const rawUrl = String(item?.audioUrl || "").trim();
+        if (!rawUrl) continue;
+        const clip = {
+          audioUrl: rawUrl,
+          audioId: String(item?.audioId || `${tid}_a`).trim(),
+          title: String(item?.title || "").trim(),
+        };
+        if (finalizeNabadProducerGenerationSuccess({
+          taskId: tid,
+          title: clip.title,
+          session: {},
+          clip,
+          rawUrl,
+          silent: true,
+        })) {
+          recovered += 1;
+        }
+      }
+      if (recovered && !silent) {
+        showToast(
+          recovered > 1 ? `${recovered} producer songs recovered to Library` : "Producer song recovered to Library",
+          { icon: "🎵", durationMs: 3600 },
+        );
+      }
+      syncGenerationPendingLibraryUi();
+      return recovered;
+    } catch {
+      return 0;
+    } finally {
+      nabadProducerServerRecoverInflight = null;
+    }
+  })();
+  return nabadProducerServerRecoverInflight;
+}
+
 async function tickNabadProducerGenerationPoll() {
   const ctx = nabadProducerPollCtx;
   if (!ctx?.taskId) {
@@ -67379,54 +67560,20 @@ async function tickNabadProducerGenerationPoll() {
     return;
   }
   ctx.tries = (ctx.tries || 0) + 1;
-  const maxTries = 120;
+  const maxTries = 200;
   try {
-    const r = await apiFetch(musicStatusApiPath(ctx.taskId));
-    const data = await r.json().catch(() => ({}));
-    const status = String(data?.data?.status || data?.status || "").toUpperCase();
-    const clips = data?.data?.response?.sunoData || data?.data?.response?.suno_data || [];
-    const clip = Array.isArray(clips) ? clips[0] : null;
-    const rawUrl = String(clip?.audioUrl || clip?.audio_url || "").trim();
+    const parsed = await fetchMusicProviderGenerationStatus(ctx.taskId);
+    const status = String(parsed?.status || "").toUpperCase();
+    const clip = parsed?.first || null;
+    const rawUrl = String(clip?.audioUrl || "").trim();
     if (status === "SUCCESS" && rawUrl) {
-      stopNabadProducerGenerationPolling();
-      clearGenerationPending(ctx.taskId);
-      const proxied = toAudioProxyUrl(rawUrl) || rawUrl;
-      const playbackUrl = normalizeAudioUrlForPlayback(proxied) || proxied;
-      const audioId = String(clip?.id || clip?.audioId || clip?.audio_id || `${ctx.taskId}_a`).trim();
-      const songTitle = String(
-        clip?.title || ctx.title || ctx.session?.title || ctx.session?.genre || "Nabad Producer",
-      ).trim();
-      const track = addToLibrary({
-        title: songTitle,
-        artUrl: "",
-        url: playbackUrl,
+      finalizeNabadProducerGenerationSuccess({
         taskId: ctx.taskId,
-        audioId,
-        kind: "full",
-        meta: {
-          engine: "lyria_producer",
-          nabadProducer: true,
-          musicProvider: "lyria",
-          genre: ctx.session?.genre || "",
-          mood: ctx.session?.mood || "",
-          bpm: ctx.session?.bpm ?? null,
-          tempo: ctx.session?.tempo || "",
-          instrumental: Boolean(ctx.session?.instrumental),
-        },
+        title: ctx.title,
+        session: ctx.session,
+        clip,
+        rawUrl,
       });
-      syncGenerationPendingLibraryUi();
-      pushLocalGenerationReadyActivity([track].filter(Boolean), { taskId: ctx.taskId });
-      showToast("Producer song saved to Library", { icon: "🎵", durationMs: 3200 });
-      void refreshMyCredits({ silent: true });
-      try {
-        handleProducerGenerationReady({
-          url: playbackUrl,
-          title: songTitle,
-          taskId: ctx.taskId,
-          track,
-        });
-      } catch {}
-      nabadProducerPollCtx = null;
       return;
     }
     if (status === "FAILED" || status === "ERROR") {
@@ -67446,17 +67593,13 @@ async function tickNabadProducerGenerationPoll() {
     }
     if (ctx.tries >= maxTries) {
       stopNabadProducerGenerationPolling();
-      clearGenerationPending(ctx.taskId);
       syncGenerationPendingLibraryUi();
-      showToast("Still composing — check Library in a minute.", { durationMs: 6000 });
-      nabadProducerPollCtx = null;
+      showToast("Still composing — we'll keep checking when you open the app.", { durationMs: 6000 });
     }
   } catch {
     if (ctx.tries >= maxTries) {
       stopNabadProducerGenerationPolling();
-      clearGenerationPending(ctx.taskId);
       syncGenerationPendingLibraryUi();
-      nabadProducerPollCtx = null;
     }
   }
 }
@@ -67473,6 +67616,10 @@ function startNabadProducerGenerationPolling({ taskId, title, session } = {}) {
     variantCount: 1,
     source: "nabad_producer",
   });
+  try {
+    saveRecoverableGenerationTask(tid, songTitle, { source: "nabad_producer", session: session || {} });
+  } catch {}
+  try { savePendingBackendTask(tid); } catch {}
   syncGenerationPendingLibraryUi();
   nabadProducerPollTimer = setInterval(() => { void tickNabadProducerGenerationPoll(); }, 3500);
   void tickNabadProducerGenerationPoll();
@@ -67485,24 +67632,37 @@ function kickNabadProducerGenerationPoll() {
 }
 
 function resumeNabadProducerGenerationPollIfNeeded() {
-  const pending = getGenerationPending();
-  if (String(pending?.source || "") !== "nabad_producer") return;
-  const tid = String(pending?.taskId || "").trim();
-  if (!tid) return;
+  const ctx = resolveNabadProducerRecoveryContext();
+  if (!ctx?.taskId) {
+    void recoverNabadProducerMissedFromServer({ silent: true });
+    return;
+  }
+  const tid = String(ctx.taskId || "").trim();
   if (libraryHasAllTaskVariants(tid, 1)) {
     clearGenerationPending(tid);
+    try { savePendingBackendTask(""); } catch {}
+    clearRecoverableGenerationTask();
     syncGenerationPendingLibraryUi();
     return;
   }
   if (nabadProducerPollTimer) return;
   nabadProducerPollCtx = {
     taskId: tid,
-    title: String(pending?.title || "Nabad Producer").trim(),
-    session: {},
+    title: String(ctx.title || "Nabad Producer").trim(),
+    session: ctx.session || {},
     tries: 0,
   };
+  if (!getGenerationPending()?.taskId) {
+    setGenerationPending({
+      taskId: tid,
+      title: nabadProducerPollCtx.title,
+      variantCount: 1,
+      source: "nabad_producer",
+    });
+  }
   nabadProducerPollTimer = setInterval(() => { void tickNabadProducerGenerationPoll(); }, 3500);
   void tickNabadProducerGenerationPoll();
+  void recoverNabadProducerMissedFromServer({ silent: true });
 }
 
 try {

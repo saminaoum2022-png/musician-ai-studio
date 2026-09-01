@@ -43,6 +43,9 @@
     },
     "api/music/producer/generate.js": {
       "maxDuration": 300
+    },
+    "api/music/producer/recover.js": {
+      "maxDuration": 30
     }
   },
   "crons": [

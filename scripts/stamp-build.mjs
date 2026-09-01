@@ -54,6 +54,7 @@ function rewrite(file, replacers) {
 rewrite("index.html", [
   [/(styles\.css\?v=)[^"']+/g, `$1${id}`],
   [/(src\/app\.js\?v=)[^"']+/g, `$1${id}`],
+  [/(env\.client\.js\?v=)[^"']+/g, `$1${id}`],
 ]);
 
 rewrite("src/app.js", [

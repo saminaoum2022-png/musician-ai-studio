@@ -235,7 +235,7 @@ import { MUSIC_VIDEO_FEATURE_ENABLED } from "./feature-flags.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260830-234526";
+const APP_BUILD = "20260901-163756";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -2512,10 +2512,11 @@ const NATIVE_API_BASE_CANDIDATES = [
   "https://musician-ai-studio.vercel.app",
 ];
 function nativeApiBaseCandidates() {
+  const baked = bakedNativeApiBase();
+  if (stagingNativeApiBaseLocked()) return [baked];
   const out = [];
   const custom = String(window.__API_BASE__ || "").trim().replace(/\/$/, "");
   if (custom) out.push(custom);
-  const baked = String(window.__NABAD_CLIENT_ENV__?.apiBase || "").trim().replace(/\/$/, "");
   if (baked) out.push(baked);
   for (const u of NATIVE_API_BASE_CANDIDATES) out.push(u.replace(/\/$/, ""));
   return [...new Set(out.filter(Boolean))];
@@ -2543,6 +2544,9 @@ function bakedNativeApiBase() {
   } catch {
     return "";
   }
+}
+function stagingNativeApiBaseLocked() {
+  return isStagingNativeBuild() && Boolean(bakedNativeApiBase());
 }
 function resolveNativeApiBase(preferred = "") {
   const staging = bakedNativeApiBase();
@@ -3065,7 +3069,9 @@ async function loadPublicConfig() {
   if (!ok || needsOnesignalRefresh) {
     lastPublicConfigStatus = 0;
     lastPublicConfigError = "";
-    const bases = isNativeShell() ? nativeApiBaseCandidates() : [""];
+    const bases = isNativeShell()
+      ? (stagingNativeApiBaseLocked() ? [bakedNativeApiBase()] : nativeApiBaseCandidates())
+      : [""];
     for (const base of bases) {
       try {
         if (await fetchPublicConfigOnce(base)) {
@@ -30895,6 +30901,7 @@ function isNativeApiNetworkError(err) {
 
 async function retryNativeApiFetch(run, timeoutMs) {
   if (!isNativeShell()) return null;
+  if (stagingNativeApiBaseLocked()) return null;
   const tried = new Set([String(_resolvedApiBase || "").replace(/\/$/, "")]);
   for (const base of nativeApiBaseCandidates()) {
     const b = String(base || "").replace(/\/$/, "");
@@ -67512,6 +67519,9 @@ try {
     isAdmin: () => Boolean(creditsState.isAdmin),
     creditsLoaded: () => Boolean(creditsState.loaded),
     refreshCredits: (opts) => refreshMyCredits(opts),
+    showProducerRoute: () => syncRoutePanelVisibility("nabad-producer"),
+    getNativeKeyboardPlugin: () => getNativeKeyboardPlugin(),
+    setNativeKeyboardScroll: (disabled) => setMessagesNativeKeyboardScroll(disabled),
   });
   syncNabadProducerHomeCard();
   resumeNabadProducerGenerationPollIfNeeded();

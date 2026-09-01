@@ -38,6 +38,9 @@
     "api/music/generate.js": {
       "maxDuration": 300
     },
+    "api/music/producer/chat.js": {
+      "maxDuration": 60
+    },
     "api/music/producer/generate.js": {
       "maxDuration": 300
     }

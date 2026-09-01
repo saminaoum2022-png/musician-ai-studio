@@ -108,6 +108,7 @@ Rules:
 - On blueprint step, tell them to review the blueprint card and generate when ready.
 - Arabic or English from the user is fine; match their vibe when obvious.
 - Never name copyrighted artists unless the user already did in reference.
+- Always finish complete sentences — never stop mid-word or mid-thought.
 - Max 280 characters.`;
 
 function allQuickReplyLabels() {
@@ -137,8 +138,57 @@ function actionLabelFromId(actionId) {
 
 function isLikelyChitchat(message) {
   const t = String(message || "").trim();
-  if (!t || t.length > 64) return false;
-  return /^(hi+|hey+|hello+|yo+|sup|how are you|how r u|what'?s up|good (morning|evening|night)|thanks|thank you|thx|ok(ay)?|cool|nice|مرحبا|مرحب|اهلين|أهلين|هلا|السلام|كيفك|شكرا)[!.?\s]*$/iu.test(t);
+  if (!t || t.length > 120) return false;
+  const normalized = t.toLowerCase().replace(/[^\w\s\u0600-\u06FF']/gu, " ").replace(/\s+/g, " ").trim();
+  if (/^(hi+|hey+|hello+|yo+|sup|how are you|how r u|what'?s up|how'?s it going|hope (you are|you'?re|all is) (good|well|ok)|good (morning|evening|night|afternoon)|thanks|thank you|thx|ok(ay)?|cool|nice|great|awesome|مرحبا|مرحب|اهلين|أهلين|هلا|السلام|كيفك|شكرا)([!.?\s]|$)/iu.test(normalized)) {
+    return true;
+  }
+  if (/^(hi+|hey+|hello+)\b.*\b(how are you|how are u|how'?s it going)\b/iu.test(normalized)) return true;
+  if (/\b(how are you|how r u|how'?s it going|hope all is good|hope you'?re well)\b/iu.test(normalized) && normalized.length <= 80) {
+    return true;
+  }
+  return false;
+}
+
+function chitchatFallbackReply(message) {
+  const t = String(message || "").toLowerCase();
+  if (/\b(how are you|how r u|how'?s it going|hope all is good|hope you'?re well)\b/.test(t)) {
+    return "Doing great — thanks for asking! When you're ready, tap a chip below or tell me the vibe you want.";
+  }
+  if (/^(hi+|hey+|hello|yo|sup)\b/.test(t)) {
+    return "Hey — glad you're here. Let's keep building your song whenever you're ready.";
+  }
+  if (/^(thanks|thank you|thx)\b/.test(t)) {
+    return "Anytime! Let's keep going on your track.";
+  }
+  return null;
+}
+
+function isBrokenCoachReply(text) {
+  const t = String(text || "").trim();
+  if (!t || t.length < 6) return true;
+  if (/^[\.*•\-\s]+$/u.test(t)) return true;
+  if (/^[\.*]\s*[\.*]$/u.test(t)) return true;
+  return false;
+}
+
+function clipCoachReply(text, max = 480) {
+  const t = String(text || "").trim();
+  if (t.length <= max) return t;
+  let cut = t.slice(0, max);
+  const lastEnd = Math.max(cut.lastIndexOf(". "), cut.lastIndexOf("! "), cut.lastIndexOf("? "));
+  if (lastEnd > Math.floor(max * 0.45)) return cut.slice(0, lastEnd + 1).trim();
+  const sp = cut.lastIndexOf(" ");
+  if (sp > Math.floor(max * 0.6)) return cut.slice(0, sp).trim();
+  return cut.trim();
+}
+
+function normalizeCoachReplyText(raw) {
+  let reply = String(raw || "").trim().replace(/^["']|["']$/g, "");
+  if (!reply) return "";
+  reply = reply.replace(/^```[\s\S]*?```$/gm, "").trim();
+  if (isBrokenCoachReply(reply)) return "";
+  return clipCoachReply(reply, 480);
 }
 
 function sessionSnapshot(session) {
@@ -355,7 +405,12 @@ function quickRepliesForStep(step, session) {
 function extractGeminiText(data) {
   const parts = data?.candidates?.[0]?.content?.parts;
   if (!Array.isArray(parts)) return "";
-  return parts.map((p) => String(p?.text || "").trim()).filter(Boolean).join("\n").trim();
+  return parts
+    .filter((p) => !p?.thought)
+    .map((p) => String(p?.text || "").trim())
+    .filter(Boolean)
+    .join("\n")
+    .trim();
 }
 
 function parseBlueprintJson(raw) {
@@ -396,10 +451,12 @@ async function geminiGenerateContent({
   jsonMode = false,
   temperature = 0.65,
   maxOutputTokens = 2048,
+  disableThinking = false,
 }) {
   const models = resolveProducerModels();
   const generationConfig = { temperature, maxOutputTokens };
   if (jsonMode) generationConfig.responseMimeType = "application/json";
+  if (disableThinking) generationConfig.thinkingConfig = { thinkingBudget: 0 };
 
   const body = JSON.stringify({
     systemInstruction: { parts: [{ text: systemPrompt }] },
@@ -428,7 +485,12 @@ async function geminiGenerateContent({
         lastError = data?.error?.message || text.slice(0, 200) || `HTTP ${r.status}`;
         continue;
       }
-      return { ok: true, model, text: extractGeminiText(data) };
+      return {
+        ok: true,
+        model,
+        text: extractGeminiText(data),
+        finishReason: String(data?.candidates?.[0]?.finishReason || "").trim(),
+      };
     } catch (e) {
       lastError = e?.name === "AbortError" ? "timeout" : (e?.message || String(e));
     } finally {
@@ -467,19 +529,35 @@ async function generateCoachReply({
     user_message: userMessage || null,
     conflict_note: conflict?.message || null,
   };
-  const result = await geminiGenerateContent({
+  let result = await geminiGenerateContent({
     apiKey,
     systemPrompt: COACH_REPLY_SYSTEM_PROMPT,
     userMessage: JSON.stringify(payload),
     timeoutMs: COACH_TIMEOUT_MS,
     jsonMode: false,
     temperature: 0.78,
-    maxOutputTokens: 180,
+    maxOutputTokens: 512,
+    disableThinking: true,
   });
   if (!result.ok) return null;
-  const reply = String(result.text || "").trim().replace(/^["']|["']$/g, "");
-  if (!reply) return null;
-  return { reply: reply.slice(0, 320), model: result.model };
+  let reply = normalizeCoachReplyText(result.text);
+  if (result.finishReason === "MAX_TOKENS" && reply) {
+    const cont = await geminiGenerateContent({
+      apiKey,
+      systemPrompt: COACH_REPLY_SYSTEM_PROMPT,
+      userMessage: `Continue this producer reply from exactly where it stopped. Finish the sentence — no repetition, plain text only:\n"""${reply}"""`,
+      timeoutMs: COACH_TIMEOUT_MS,
+      jsonMode: false,
+      temperature: 0.5,
+      maxOutputTokens: 256,
+      disableThinking: true,
+    });
+    if (cont.ok && cont.text) {
+      reply = normalizeCoachReplyText(`${reply}${String(cont.text || "").trim()}`);
+    }
+  }
+  if (!reply || isBrokenCoachReply(reply)) return null;
+  return { reply, model: result.model };
 }
 
 function buildBlueprintInput(session) {
@@ -664,6 +742,9 @@ async function producerChatTurn({ apiKey, session: rawSession, message = "", act
   }
 
   const fallbackReply = conflict?.message || stepCoachCopy(step, session);
+  const reply = (coachReply?.reply && !isBrokenCoachReply(coachReply.reply))
+    ? coachReply.reply
+    : ((chitchat && chitchatFallbackReply(message)) || fallbackReply);
 
   return {
     ok: true,
@@ -671,7 +752,7 @@ async function producerChatTurn({ apiKey, session: rawSession, message = "", act
     step,
     stepIndex: STEPS.indexOf(step) + 1,
     stepTotal: STEPS.length,
-    reply: coachReply?.reply || fallbackReply,
+    reply,
     coachModel: coachReply?.model || null,
     quickReplies,
     conflict,

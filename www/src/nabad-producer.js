@@ -12,6 +12,10 @@ let blueprint = null;
 let chatBusy = false;
 let generateBusy = false;
 let activeGenerateTaskId = "";
+let producerKeyboardWired = false;
+let producerStageResizeWired = false;
+let producerViewportBaseBottom = 0;
+let producerStickToBottom = true;
 
 const TEXT_STEPS = new Set(["lyrics", "reference"]);
 
@@ -79,6 +83,181 @@ function showToast(msg, opts) {
   try { bridge.showToast?.(msg, opts); } catch {}
 }
 
+function inProducerRoute() {
+  return String(document.body.getAttribute("data-route") || "") === "nabad-producer";
+}
+
+function getNativeKeyboardPlugin() {
+  if (typeof bridge.getNativeKeyboardPlugin === "function") return bridge.getNativeKeyboardPlugin();
+  return window.Capacitor?.Plugins?.Keyboard || null;
+}
+
+function setNativeKeyboardScroll(disabled) {
+  if (typeof bridge.setNativeKeyboardScroll === "function") {
+    bridge.setNativeKeyboardScroll(disabled);
+    return;
+  }
+  const Keyboard = getNativeKeyboardPlugin();
+  if (!Keyboard?.setScroll) return;
+  try { Keyboard.setScroll({ isDisabled: Boolean(disabled) }); } catch {}
+}
+
+function measureProducerVisibleBottom() {
+  const vv = window.visualViewport;
+  const vvHeight = Math.max(0, Math.round(vv?.height || window.innerHeight || 0));
+  const vvTop = Math.max(0, Math.round(vv?.offsetTop || 0));
+  return Math.max(0, vvHeight + vvTop);
+}
+
+function rememberProducerViewportBase() {
+  const current = measureProducerVisibleBottom();
+  if (current > producerViewportBaseBottom) producerViewportBaseBottom = current;
+}
+
+function isProducerComposerFocused() {
+  const input = document.getElementById("nabadProducerInput");
+  return Boolean(input && document.activeElement === input);
+}
+
+function measureProducerKeyboardInset() {
+  const vv = window.visualViewport;
+  if (!vv) return 0;
+  const vvHeight = Math.max(0, Math.round(vv.height || 0));
+  const vvTop = Math.max(0, Math.round(vv.offsetTop || 0));
+  const rawInset = Math.max(0, Math.round(window.innerHeight - vvHeight - vvTop));
+  if (rawInset > 6) return rawInset;
+  if (!isProducerComposerFocused()) return 0;
+  const currentBottom = Math.max(0, Math.round(vvHeight + vvTop));
+  const collapsedBy = Math.max(0, producerViewportBaseBottom - currentBottom);
+  return collapsedBy > 40 ? collapsedBy : 0;
+}
+
+function shouldAutoScrollProducerStage() {
+  const stage = document.getElementById("nabadProducerStage");
+  if (!stage) return true;
+  const dist = stage.scrollHeight - stage.scrollTop - stage.clientHeight;
+  return dist < 120;
+}
+
+function scrollProducerStageToBottom({ force = false } = {}) {
+  const stage = document.getElementById("nabadProducerStage");
+  if (!stage) return;
+  if (!force && !producerStickToBottom && !shouldAutoScrollProducerStage()) return;
+  try {
+    stage.scrollTop = stage.scrollHeight;
+  } catch {}
+}
+
+function scheduleProducerScrollToBottom({ force = false } = {}) {
+  if (force) producerStickToBottom = true;
+  scrollProducerStageToBottom({ force });
+  window.requestAnimationFrame(() => {
+    updateProducerDockReserve();
+    scrollProducerStageToBottom({ force });
+    window.requestAnimationFrame(() => scrollProducerStageToBottom({ force }));
+  });
+}
+
+function wireProducerStageScrollOnce() {
+  if (producerStageResizeWired) return;
+  producerStageResizeWired = true;
+  const stage = document.getElementById("nabadProducerStage");
+  stage?.addEventListener("scroll", () => {
+    if (!inProducerRoute()) return;
+    producerStickToBottom = shouldAutoScrollProducerStage();
+  }, { passive: true });
+  if (typeof ResizeObserver !== "function") return;
+  const ro = new ResizeObserver(() => {
+    if (!inProducerRoute()) return;
+    const prevDock = Number.parseFloat(
+      getComputedStyle(document.documentElement).getPropertyValue("--nabad-producer-dock-h") || "0",
+    );
+    updateProducerDockReserve();
+    const nextDock = Number.parseFloat(
+      getComputedStyle(document.documentElement).getPropertyValue("--nabad-producer-dock-h") || "0",
+    );
+    if (
+      producerStickToBottom
+      || Math.abs(nextDock - prevDock) > 1
+      || document.body.classList.contains("nabadProducerKeyboardOpen")
+    ) {
+      scheduleProducerScrollToBottom({ force: producerStickToBottom });
+    }
+  });
+  const observe = () => {
+    const chat = document.getElementById("nabadProducerChat");
+    const dock = document.querySelector(".nabadProducerDock");
+    if (chat) ro.observe(chat);
+    if (dock) ro.observe(dock);
+  };
+  observe();
+  wireProducerStageScrollOnce._ro = ro;
+  wireProducerStageScrollOnce._observe = observe;
+}
+
+function updateProducerDockReserve() {
+  const dock = document.querySelector(".nabadProducerDock");
+  if (!dock) return;
+  const h = Math.ceil(dock.getBoundingClientRect().height);
+  if (h <= 0) return;
+  try {
+    document.documentElement.style.setProperty("--nabad-producer-dock-h", `${h}px`);
+  } catch {}
+}
+
+function clearProducerKeyboardInset() {
+  document.body.classList.remove("nabadProducerKeyboardOpen");
+  try {
+    document.documentElement.style.setProperty("--nabad-producer-keyboard-inset", "0px");
+  } catch {}
+  setNativeKeyboardScroll(false);
+}
+
+function applyProducerKeyboardInset(rawInset) {
+  const inset = Math.max(0, Math.round(Number(rawInset) || 0));
+  const open = inset > 0;
+  document.body.classList.toggle("nabadProducerKeyboardOpen", open);
+  try {
+    document.documentElement.style.setProperty("--nabad-producer-keyboard-inset", `${inset}px`);
+  } catch {}
+  updateProducerDockReserve();
+  if (open) scheduleProducerScrollToBottom({ force: true });
+}
+
+function syncProducerKeyboardInset() {
+  if (!inProducerRoute() || !isProducerComposerFocused()) return;
+  applyProducerKeyboardInset(measureProducerKeyboardInset());
+}
+
+function wireProducerKeyboardOnce() {
+  if (producerKeyboardWired) return;
+  producerKeyboardWired = true;
+  const Keyboard = getNativeKeyboardPlugin();
+  const inProducer = () => inProducerRoute();
+  if (Keyboard?.addListener) {
+    Keyboard.addListener("keyboardWillShow", (info) => {
+      if (!inProducer()) return;
+      applyProducerKeyboardInset(info?.keyboardHeight);
+    });
+    Keyboard.addListener("keyboardDidShow", (info) => {
+      if (!inProducer()) return;
+      applyProducerKeyboardInset(info?.keyboardHeight);
+    });
+    Keyboard.addListener("keyboardWillHide", () => {
+      if (!inProducer()) return;
+      clearProducerKeyboardInset();
+    });
+  }
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener("resize", syncProducerKeyboardInset);
+    window.visualViewport.addEventListener("scroll", syncProducerKeyboardInset);
+  }
+  window.addEventListener("orientationchange", () => {
+    producerViewportBaseBottom = 0;
+    rememberProducerViewportBase();
+  });
+}
+
 async function producerChat({ message = "", actionId = "" } = {}) {
   const r = await apiFetch("/api/music/producer/chat", {
     method: "POST",
@@ -88,7 +267,10 @@ async function producerChat({ message = "", actionId = "" } = {}) {
   const data = await r.json().catch(() => ({}));
   if (!r.ok) {
     const err = data?.error || data?.code || `HTTP ${r.status}`;
-    throw new Error(err);
+    const hint = r.status === 404
+      ? " (Producer API missing — staging build must use the staging API, not nabadai.com)"
+      : "";
+    throw new Error(`${err}${hint}`);
   }
   return data;
 }
@@ -102,7 +284,10 @@ async function producerGenerate() {
   const data = await r.json().catch(() => ({}));
   if (!r.ok) {
     const err = data?.error || data?.code || `HTTP ${r.status}`;
-    throw new Error(err);
+    const hint = r.status === 404
+      ? " (Producer API missing — staging build must use the staging API, not nabadai.com)"
+      : "";
+    throw new Error(`${err}${hint}`);
   }
   return data;
 }
@@ -266,6 +451,7 @@ function renderShell() {
         ${renderGeneratingBanner()}
         <div class="nabadProducerChat" id="nabadProducerChat">
           ${renderMessages()}${chatBusy || generateBusy ? renderThinkingBubble() : ""}
+          <div class="nabadProducerScrollAnchor" id="nabadProducerScrollAnchor" aria-hidden="true"></div>
         </div>
       </div>
       ${renderDock(step, replies)}
@@ -285,6 +471,20 @@ function renderShell() {
     if (input) input.value = "";
   });
 
+  const input = el.querySelector("#nabadProducerInput");
+  input?.addEventListener("focus", () => {
+    rememberProducerViewportBase();
+    window.requestAnimationFrame(() => {
+      syncProducerKeyboardInset();
+      scheduleProducerScrollToBottom({ force: true });
+    });
+  });
+  input?.addEventListener("blur", () => {
+    window.setTimeout(() => {
+      if (!isProducerComposerFocused()) clearProducerKeyboardInset();
+    }, 80);
+  });
+
   el.querySelectorAll("[data-producer-action]").forEach((btn) => {
     btn.addEventListener("click", () => {
       const id = String(btn.getAttribute("data-producer-action") || "").trim();
@@ -293,8 +493,10 @@ function renderShell() {
     });
   });
 
-  const stage = el.querySelector("#nabadProducerStage");
-  if (stage) stage.scrollTop = stage.scrollHeight;
+  wireProducerStageScrollOnce();
+  wireProducerStageScrollOnce._observe?.();
+  updateProducerDockReserve();
+  scheduleProducerScrollToBottom({ force: producerStickToBottom || chatBusy || generateBusy });
 }
 
 function updateUiState({ step, stepIndex, stepTotal, quickReplies }) {
@@ -335,6 +537,7 @@ async function applyChatResult(data) {
 
 async function handleUserText(text) {
   if (chatBusy || generateBusy) return;
+  producerStickToBottom = true;
   pushUser(text);
   chatBusy = true;
   renderShell();
@@ -361,6 +564,7 @@ async function handleAction(actionId) {
   const label = actionLabel(actionId);
   if (!actionId.startsWith("blueprint_")) pushUser(label);
 
+  producerStickToBottom = true;
   chatBusy = true;
   renderShell();
   try {
@@ -442,6 +646,9 @@ async function startGenerate() {
 }
 
 export function enterNabadProducerRoot() {
+  wireProducerKeyboardOnce();
+  producerStickToBottom = true;
+  rememberProducerViewportBase();
   if (mounted && rootEl()?.innerHTML) return;
   mounted = true;
   session = emptySession();
@@ -469,6 +676,7 @@ export function leaveNabadProducerRoot() {
   mounted = false;
   chatBusy = false;
   generateBusy = false;
+  clearProducerKeyboardInset();
   const el = rootEl();
   if (el) el.innerHTML = "";
 }
@@ -481,6 +689,7 @@ export function openNabadProducerFlow() {
     return;
   }
   const go = () => {
+    try { bridge.showProducerRoute?.(); } catch {}
     try { enterNabadProducerRoot(); } catch {}
     try { location.hash = "#/nabad-producer"; } catch {}
     bridge.scheduleApplyRoute?.();

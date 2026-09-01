@@ -1,0 +1,21 @@
+# Nabad Producer — staging / simulator first
+
+Nabad Producer (guided full song · 50 credits · Lyria Pro) ships on **staging** first.
+
+## Env (Vercel Preview)
+
+- `NABAD_PRODUCER_ENABLED=1` — required for `/api/music/producer/*`
+- Optional: `NABAD_PRODUCER_CREDIT_COST=50`, `NABAD_PRODUCER_MODEL`
+
+Keep **off** on Production until explicit ship approval.
+
+## Paths
+
+- UI: `#/nabad-producer`, Create hub card `data-home-card="producer"`
+- API: `/api/music/producer/chat`, `/api/music/producer/generate`
+- Lib: `api/_lib/nabad-producer-lib.js`, `src/nabad-producer.js`
+
+## Test
+
+- `npm run sim` (staging API)
+- Pro account required; 50 credits debited on generate

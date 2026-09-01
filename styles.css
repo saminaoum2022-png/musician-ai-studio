@@ -4252,6 +4252,9 @@ body[data-route="vocal"] main.grid > [data-route="vocal"],
 body[data-route="stems"] main.grid > [data-route="stems"],
 body[data-route="advanced"] main.grid > [data-route="advanced"],
 body[data-route="studio"] main.grid > [data-route="studio"],
+body[data-route="nabad-producer"] main.grid > [data-route="nabad-producer"]{
+  display: block !important;
+}
 body[data-route="settings"] main.grid > [data-route="settings"],
 body[data-route="pro"] main.grid > [data-route="pro"],
 body[data-route="profile-edit"] main.grid > [data-route="profile-edit"]{
@@ -33478,6 +33481,190 @@ html[data-theme="light"] .clipVocalCharacterCard.isActive .clipVocalCharacterCar
   background:
     radial-gradient(120% 100% at 100% 0%, rgba(168,130,255,0.14), transparent 58%),
     linear-gradient(135deg, rgba(18,12,32,0.94), rgba(10,14,28,0.82));
+}
+.homeDeskProducerPromo{
+  margin-bottom: 0;
+  border: 1px solid rgba(35,211,171,0.32);
+  background:
+    radial-gradient(120% 100% at 0% 100%, rgba(35,211,171,0.12), transparent 58%),
+    linear-gradient(135deg, rgba(8,22,28,0.94), rgba(12,10,32,0.82));
+}
+.homeDeskProducerTileWrap{
+  position: relative;
+  width: 108px;
+  height: 108px;
+  display: grid;
+  place-items: center;
+}
+.homeDeskProducerTile{
+  width: 72px;
+  height: 72px;
+  border-radius: 22px;
+  display: grid;
+  place-items: center;
+  color: rgba(180,255,240,0.95);
+  background: linear-gradient(145deg, rgba(35,211,171,0.22), rgba(124,92,255,0.18));
+  border: 1px solid rgba(35,211,171,0.35);
+  box-shadow: 0 10px 28px rgba(0,0,0,0.28);
+}
+.homeDeskProducerIco{ width: 34px; height: 34px; }
+
+.nabadProducerRoute{
+  display: none;
+  min-height: 100dvh;
+  padding: calc(env(safe-area-inset-top, 0px) + 8px) 0 calc(env(safe-area-inset-bottom, 0px) + 8px);
+}
+body[data-route="nabad-producer"] .nabadProducerRoute{
+  display: block;
+}
+body[data-route="nabad-producer"] .mobileTabbar{ display: none; }
+body[data-route="nabad-producer"] .header{ display: none; }
+
+.nabadProducerShell{
+  max-width: 720px;
+  margin: 0 auto;
+  min-height: calc(100dvh - 16px);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 0 14px 12px;
+}
+.nabadProducerHead{
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.nabadProducerHeadCopy{ flex: 1; min-width: 0; }
+.nabadProducerKicker{
+  margin: 0;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(180,255,240,0.72);
+}
+.nabadProducerTitle{
+  margin: 2px 0 0;
+  font-size: 22px;
+  line-height: 1.15;
+}
+.nabadProducerProgressTrack{
+  height: 4px;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.08);
+  overflow: hidden;
+}
+.nabadProducerProgressTrack span{
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, rgba(35,211,171,0.95), rgba(168,130,255,0.9));
+}
+.nabadProducerProgressLabel{
+  margin: 6px 0 0;
+  font-size: 12px;
+  color: rgba(255,255,255,0.55);
+}
+.nabadProducerChat{
+  flex: 1;
+  min-height: 220px;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 8px 2px 12px;
+}
+.nabadProducerBubble{
+  max-width: 92%;
+  padding: 10px 12px;
+  border-radius: 16px;
+  font-size: 15px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+}
+.nabadProducerBubble--coach{
+  align-self: flex-start;
+  background: rgba(255,255,255,0.07);
+  border: 1px solid rgba(255,255,255,0.08);
+}
+.nabadProducerBubble--user{
+  align-self: flex-end;
+  background: rgba(35,211,171,0.16);
+  border: 1px solid rgba(35,211,171,0.28);
+}
+.nabadProducerBlueprint,
+.nabadProducerAudioCard{
+  border-radius: 16px;
+  border: 1px solid rgba(168,130,255,0.28);
+  background: rgba(12,10,24,0.72);
+  padding: 12px;
+}
+.nabadProducerBlueprintHead strong{ display: block; font-size: 16px; }
+.nabadProducerBlueprintKicker{
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: rgba(200,180,255,0.75);
+}
+.nabadProducerBlueprintBlock h4{
+  margin: 10px 0 6px;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: rgba(255,255,255,0.55);
+}
+.nabadProducerBlueprintBlock pre{
+  margin: 0;
+  white-space: pre-wrap;
+  font-size: 12px;
+  line-height: 1.45;
+  color: rgba(255,255,255,0.82);
+  max-height: 180px;
+  overflow: auto;
+}
+.nabadProducerAudio{ width: 100%; margin-top: 8px; }
+.nabadProducerComposerWrap{
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 4px;
+  border-top: 1px solid rgba(255,255,255,0.08);
+}
+.nabadProducerChips{
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.nabadProducerChip{
+  border: 1px solid rgba(255,255,255,0.14);
+  background: rgba(255,255,255,0.06);
+  color: inherit;
+  border-radius: 999px;
+  padding: 8px 12px;
+  font-size: 13px;
+}
+.nabadProducerComposer{
+  display: flex;
+  gap: 8px;
+  align-items: flex-end;
+}
+.nabadProducerComposer textarea{
+  flex: 1;
+  min-height: 42px;
+  max-height: 120px;
+  resize: vertical;
+  border-radius: 14px;
+  border: 1px solid rgba(255,255,255,0.12);
+  background: rgba(0,0,0,0.22);
+  color: inherit;
+  padding: 10px 12px;
+  font: inherit;
+}
+.nabadProducerSend{
+  border: 0;
+  border-radius: 14px;
+  padding: 10px 14px;
+  background: linear-gradient(135deg, rgba(35,211,171,0.95), rgba(124,92,255,0.88));
+  color: #041018;
+  font-weight: 700;
 }
 .homeDeskTrialBadge{
   position: absolute;

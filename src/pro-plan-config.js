@@ -4,6 +4,7 @@
  */
 
 export const FULL_SONG_CREDIT_COST = 12;
+export const NABAD_PRODUCER_CREDIT_COST = 50;
 
 /** @typedef {"weekly"|"monthly"} ProPlanId */
 

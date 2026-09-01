@@ -12,6 +12,13 @@ import {
   leaveStudioRoot,
 } from "./studio/studio.js";
 import {
+  configureNabadProducer,
+  enterNabadProducerRoot,
+  leaveNabadProducerRoot,
+  openNabadProducerFlow,
+  syncNabadProducerHomeCard,
+} from "./nabad-producer.js";
+import {
   listVocals,
   getVocalBlob,
   deleteVocal,
@@ -4572,7 +4579,7 @@ function applyRoute({ passGen } = {}) {
     "intro", "onboarding", "music-preferences", "start", "auth", "generate",
     ...(HUB_FEATURE_ENABLED ? ["hub"] : []),
     ...(MESSAGES_FEATURE_ENABLED ? ["messages", "messages-thread"] : []),
-    "settings", "profile", "profile-edit", "player", "discover", "discover-playlist", "friends", "challenges", "activity", "mashup", "mentor", "vocal", "stems", "studio", "advanced", "user", "credits", "pro", "sounds", "singer-studio",
+    "settings", "profile", "profile-edit", "player", "discover", "discover-playlist", "friends", "challenges", "activity", "mashup", "mentor", "vocal", "stems", "studio", "nabad-producer", "advanced", "user", "credits", "pro", "sounds", "singer-studio",
   ]);
   const onboardingParsed = parseOnboardingRoute(route);
   let normalized = pendingPublicUsername ? "user" : (route === "start" ? "auth" : route);
@@ -4683,7 +4690,7 @@ function applyRoute({ passGen } = {}) {
   // Public profile is intentionally readable without auth so share-link
   // visitors don't hit a wall before discovering the rest of the product.
   const sharedTrackId = parseSharedTrackIdFromLocation();
-  const protectedRoutes = new Set(["generate", "profile", "profile-edit", "friends", "activity", "mashup", "player", "vocal", "stems", "studio", "advanced", "credits", "sounds", ...(MESSAGES_FEATURE_ENABLED ? ["messages", "messages-thread"] : [])]);
+  const protectedRoutes = new Set(["generate", "profile", "profile-edit", "friends", "activity", "mashup", "player", "vocal", "stems", "studio", "nabad-producer", "advanced", "credits", "sounds", ...(MESSAGES_FEATURE_ENABLED ? ["messages", "messages-thread"] : [])]);
   if (!isLoggedIn && protectedRoutes.has(wanted)) {
     if (wanted === "player" && sharedTrackId) {
       // Listen-only share links — do not bounce guests to sign-in.
@@ -4913,6 +4920,9 @@ function applyRoute({ passGen } = {}) {
   if (prevRoute === "studio" && wanted !== "studio") {
     try { leaveStudioRoot(); } catch {}
   }
+  if (prevRoute === "nabad-producer" && wanted !== "nabad-producer") {
+    try { leaveNabadProducerRoot(); } catch {}
+  }
   if (wanted === "studio") {
     if (isWebOrDesktopShell() && !webProFeatureAllowed()) {
       promptWebProUpgrade("NabadAi Studio");
@@ -4920,6 +4930,26 @@ function applyRoute({ passGen } = {}) {
       try { location.hash = "#/discover"; } catch {}
     } else {
       try { enterStudioRoot(); } catch {}
+    }
+  }
+  if (wanted === "nabad-producer") {
+    const enterProducer = () => {
+      try { enterNabadProducerRoot(); } catch (e) { console.warn("[nabad-producer] enter", e); }
+    };
+    const blockProducer = () => {
+      promptWebProUpgrade("Nabad Producer");
+      try { leaveNabadProducerRoot(); } catch {}
+      try { location.hash = "#/challenges"; } catch {}
+    };
+    if (proFeatureAllowed()) {
+      enterProducer();
+    } else if (!creditsState.loaded) {
+      enterProducer();
+      void refreshMyCredits({ silent: true }).then(() => {
+        if (!proFeatureAllowed()) blockProducer();
+      });
+    } else {
+      blockProducer();
     }
   }
   if (wanted === "settings") {
@@ -11920,6 +11950,10 @@ function bindHomeDeskOnce(page) {
       }
       if (card === "clip") {
         openNabadClipFlow();
+        return;
+      }
+      if (card === "producer") {
+        openNabadProducerFlow();
         return;
       }
       if (card === "persona") {
@@ -27169,6 +27203,7 @@ async function refreshMyCredits({ silent = false } = {}) {
     if (creditsState.isAdmin) await refreshAdminCreditsView();
     try { syncSettingsMusicProviderRow(); } catch {}
     try { syncNabadClipHomeCard(); } catch {}
+    try { syncNabadProducerHomeCard(); } catch {}
   } catch (e) {
     creditsState.lastError = e?.message || String(e);
     paintCreditsAccountEmail(authSession?.user?.email || activeProfile?.email);
@@ -67312,6 +67347,22 @@ try {
     },
   });
 } catch (e) { console.warn("[studio] init", e); }
+
+try {
+  configureNabadProducer({
+    apiFetch: (path, opts) => apiFetch(path, opts),
+    authSession: () => authSession,
+    showToast: (m, o) => { try { showToast(m, o); } catch {} },
+    proFeatureAllowed: () => proFeatureAllowed(),
+    requireProFeature: (label) => requireProFeature(label),
+    refreshMyCredits: (opts) => refreshMyCredits(opts),
+    setPostAuthReturnHash,
+    scheduleApplyRoute,
+    musicStatusApiPath: (taskId) => musicStatusApiPath(taskId),
+    normalizeAudioUrlForPlayback: (url) => normalizeAudioUrlForPlayback(url),
+  });
+  syncNabadProducerHomeCard();
+} catch (e) { console.warn("[nabad-producer] init", e); }
 
 // Resolve the backing instrumental ("AI Guide") for a song. V1 prefers an
 // existing instrumental already in the library; otherwise it falls back to the

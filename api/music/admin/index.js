@@ -45,13 +45,7 @@ const {
   resolveAigGatewayId,
 } = require("../../_lib/cloudflare-flux-upstream");
 const { resolveCoverRegenImageProvider } = require("../../_lib/gemini-cover-image");
-const {
-  loadMusicProviderTaskStatus,
-  providerFolder,
-} = require("../../_lib/music-provider-task-store");
-const { publicObjectUrl } = require("../../_lib/supabase-storage");
-
-const SONG_ARCHIVE_BUCKET = "song_archive";
+const { resolveGenerationOutput } = require("../../_lib/admin-generation-output");
 
 const COVER_PROVIDER_LABELS = Object.freeze({
   cloudflare: "Cloudflare Flux",
@@ -2194,69 +2188,6 @@ async function getUserDetail(userIdInput, search = "") {
   };
 }
 
-function extractTaskStatusAudioUrl(statusPayload) {
-  const clips = statusPayload?.data?.response?.sunoData
-    || statusPayload?.data?.response?.suno_data
-    || [];
-  const clip = Array.isArray(clips) ? clips[0] : null;
-  return String(clip?.audioUrl || clip?.audio_url || "").trim();
-}
-
-async function probePublicStorageUrl(url) {
-  const target = String(url || "").trim();
-  if (!target) return "";
-  try {
-    const r = await fetch(target, { method: "HEAD", cache: "no-store" });
-    if (r.ok) return target;
-  } catch {}
-  return "";
-}
-
-async function resolveGenerationTaskOutput({ userId, taskId }) {
-  const uid = String(userId || "").trim();
-  const tid = String(taskId || "").trim();
-  if (!uid || !tid) {
-    return {
-      taskStatus: "",
-      taskStatusUrl: "",
-      outputAudioUrl: "",
-      outputAudioCandidates: [],
-    };
-  }
-
-  const folder = providerFolder(tid);
-  const candidateKeys = [
-    `${uid}/${folder}/${tid}.mp3`,
-    `${uid}/${folder}/${tid}.wav`,
-  ];
-  const candidateUrls = candidateKeys.map((key) => publicObjectUrl(SONG_ARCHIVE_BUCKET, key));
-  const taskStatusUrl = publicObjectUrl(SONG_ARCHIVE_BUCKET, `${uid}/${folder}/${tid}.json`);
-
-  const stored = await loadMusicProviderTaskStatus({ userId: uid, taskId: tid }).catch(() => ({ ok: false }));
-  const statusPayload = stored.ok ? stored.data : null;
-  const taskStatus = String(statusPayload?.data?.status || statusPayload?.status || "").trim().toUpperCase();
-  const taskError = String(
-    statusPayload?.data?.errorMessage
-    || statusPayload?.errorMessage
-    || "",
-  ).trim();
-  const statusAudioUrl = extractTaskStatusAudioUrl(statusPayload);
-
-  const probed = await Promise.all(candidateUrls.map((url) => probePublicStorageUrl(url)));
-  const outputAudioCandidates = probed.filter(Boolean);
-  const outputAudioUrl = statusAudioUrl || outputAudioCandidates[0] || "";
-
-  return {
-    taskStatus,
-    taskStatusUrl,
-    taskError,
-    outputAudioUrl,
-    outputAudioCandidates: outputAudioCandidates.length
-      ? outputAudioCandidates
-      : (statusAudioUrl ? [statusAudioUrl] : []),
-  };
-}
-
 async function getGenerationDetail(generationIdInput) {
   const gid = cleanGenerationId(generationIdInput);
   if (!gid) {
@@ -2346,13 +2277,14 @@ async function getGenerationDetail(generationIdInput) {
     : null;
 
   const taskOutput = taskId
-    ? await resolveGenerationTaskOutput({ userId: uid, taskId })
+    ? await resolveGenerationOutput({ userId: uid, taskId, savedSongs: songRows })
     : {
         taskStatus: "",
         taskStatusUrl: "",
         taskError: "",
         outputAudioUrl: "",
         outputAudioCandidates: [],
+        outputClips: [],
       };
 
   return {
@@ -2378,6 +2310,7 @@ async function getGenerationDetail(generationIdInput) {
       taskStatusUrl: taskOutput.taskStatusUrl,
       outputAudioUrl: taskOutput.outputAudioUrl,
       outputAudioCandidates: taskOutput.outputAudioCandidates,
+      outputClips: taskOutput.outputClips || [],
     },
     ledger,
     songs,

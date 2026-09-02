@@ -1865,6 +1865,7 @@ function renderGenerationDetail(data) {
        <pre class="genDetailPrompt genDetailPrompt--payload">${escapeHtml(g.requestDetail)}</pre>`
     : "";
 
+  const outputClips = Array.isArray(g.outputClips) ? g.outputClips : [];
   const outputLinks = [];
   if (g.outputAudioUrl) {
     outputLinks.push(`<a href="${escapeHtml(g.outputAudioUrl)}" target="_blank" rel="noopener noreferrer">Play / download audio</a>`);
@@ -1877,14 +1878,42 @@ function renderGenerationDetail(data) {
   if (g.taskStatusUrl) {
     outputLinks.push(`<a href="${escapeHtml(g.taskStatusUrl)}" target="_blank" rel="noopener noreferrer">Task status JSON</a>`);
   }
+
+  const clipRows = outputClips.length
+    ? outputClips.map((clip) => {
+      const playHref = clip.playUrl || clip.upstreamUrl || "";
+      const playCell = playHref
+        ? `<a href="${escapeHtml(playHref)}" target="_blank" rel="noopener noreferrer">Play</a>`
+        : "—";
+      const libraryCell = clip.inUserLibrary
+        ? `<span class="badge active">in library</span>${clip.savedSongId ? ` · <code class="promoCode">${escapeHtml(String(clip.savedSongId).slice(0, 8))}…</code>` : ""}`
+        : `<span class="badge">missing</span>`;
+      const recoverBtn = clip.recoverable
+        ? `<button type="button" class="btnGhost btnGhost--sm" data-recover-generation="${escapeHtml(g.id)}" data-recover-audio-id="${escapeHtml(clip.audioId || "")}" data-recover-clip-index="${clip.index}" data-recover-label="${escapeHtml(clip.label || "Output")}">Recover to user</button>`
+        : "";
+      return `<tr>
+        <td>${escapeHtml(clip.label || "Output")}</td>
+        <td>${escapeHtml(clip.title || "—")}</td>
+        <td class="monoCell">${escapeHtml(String(clip.audioId || "—").slice(0, 20))}</td>
+        <td class="pubLinks">${playCell}</td>
+        <td>${libraryCell}</td>
+        <td class="pubLinks">${recoverBtn || "—"}</td>
+      </tr>`;
+    }).join("")
+    : "";
+
   const outputBlock = g.taskId
     ? `<div class="detailMetaBlock"><strong>Provider output</strong></div>
        <p class="sectionNote">
          ${g.taskStatus ? `Task status: <span class="badge ${escapeHtml(String(g.taskStatus).toLowerCase())}">${escapeHtml(g.taskStatus)}</span>` : "Task status: not stored yet"}
-         ${g.outputAudioUrl ? "" : " · No audio file found in storage yet"}
+         ${outputClips.length ? "" : g.outputAudioUrl ? "" : " · No audio file found yet"}
        </p>
-       ${outputLinks.length ? `<p class="pubLinks">${outputLinks.join(" · ")}</p>` : ""}
-       ${g.outputAudioUrl ? `<p class="sectionNote monoCell">${escapeHtml(g.outputAudioUrl)}</p>` : ""}`
+       ${outputClips.length
+    ? `<div class="tableWrap tableWrap--plain"><table class="table--compact"><thead><tr>
+         <th>Clip</th><th>Title</th><th>Audio id</th><th>Play</th><th>Library</th><th>Recover</th>
+       </tr></thead><tbody>${clipRows}</tbody></table></div>`
+    : (outputLinks.length ? `<p class="pubLinks">${outputLinks.join(" · ")}</p>` : "")}
+       ${!outputClips.length && g.outputAudioUrl ? `<p class="sectionNote monoCell">${escapeHtml(g.outputAudioUrl)}</p>` : ""}`
     : "";
 
   const ledgerRows = data.ledger || [];
@@ -4695,6 +4724,32 @@ async function adminSingersRequest(body = {}) {
   return data;
 }
 
+async function adminRecoverGeneration(payload = {}) {
+  await refreshSessionIfNeeded();
+  const token = state.session?.access_token;
+  if (!token) throw new Error("Not signed in");
+  const r = await fetch("/api/music/admin/recover-generation", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+  const data = await r.json().catch(() => ({}));
+  if (r.status === 401) {
+    writeSession(null);
+    throw new Error("Session expired — sign in again");
+  }
+  if (r.status === 403) {
+    throw new Error(data?.error || "You do not have permission to recover songs.");
+  }
+  if (!r.ok) {
+    throw new Error(data?.error || `Request failed (${r.status})`);
+  }
+  return data;
+}
+
 async function adminModerate(action, payload = {}) {
   await refreshSessionIfNeeded();
   const token = state.session?.access_token;
@@ -5838,6 +5893,34 @@ document.body.addEventListener("click", (e) => {
     const returnView = state.returnView || "generations";
     setView(returnView);
     void loadView();
+    return;
+  }
+
+  const recoverGenBtn = e.target.closest("[data-recover-generation]");
+  if (recoverGenBtn) {
+    const generationId = recoverGenBtn.dataset.recoverGeneration;
+    const audioId = recoverGenBtn.dataset.recoverAudioId || "";
+    const clipIndex = recoverGenBtn.dataset.recoverClipIndex;
+    const label = recoverGenBtn.dataset.recoverLabel || "this clip";
+    if (!generationId) return;
+    if (!window.confirm(`Recover "${label}" to the user's library? This archives the audio and creates or updates their saved song.`)) return;
+    void (async () => {
+      recoverGenBtn.disabled = true;
+      try {
+        const data = await adminRecoverGeneration({
+          generationId,
+          ...(audioId ? { audioId } : {}),
+          ...(clipIndex != null && clipIndex !== "" ? { clipIndex: Number(clipIndex) } : {}),
+        });
+        state.cache = {};
+        if (state.view === "generation") await loadView({ force: true });
+        showError("");
+      } catch (err) {
+        showError(err?.message || "Could not recover song");
+      } finally {
+        recoverGenBtn.disabled = false;
+      }
+    })();
     return;
   }
 

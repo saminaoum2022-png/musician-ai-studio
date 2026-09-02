@@ -2894,9 +2894,102 @@ function renderBilling(data) {
     })}`, { plain: true });
 }
 
+function renderSubscriptionChurnSection(churn = {}) {
+  const activeCount = Number(churn.activeCount || 0);
+  const churned = Array.isArray(churn.churnedLast30d) ? churn.churnedLast30d : [];
+  const recent = Array.isArray(churn.recentUpdatesLast7d) ? churn.recentUpdatesLast7d : [];
+  const newSubs = Array.isArray(churn.newSubscribersLast30d) ? churn.newSubscribersLast30d : [];
+  const orphaned = Array.isArray(churn.orphanedProBillingLast30d) ? churn.orphanedProBillingLast30d : [];
+
+  const churnBody = churned.length
+    ? churned.map((s) => `
+      <tr>
+        <td>${escapeHtml(s.userLabel || "—")}<br><span class="cellMuted">${escapeHtml(s.email || "")}</span></td>
+        <td><span class="badge ${escapeHtml(s.status || "none")}">${escapeHtml(s.changeType || s.status || "—")}</span></td>
+        <td>${escapeHtml(s.planId || "—")}</td>
+        <td>${escapeHtml(s.provider || "—")}</td>
+        ${dateCell(s.updatedAt)}
+        <td>${s.userId ? `<button type="button" class="btnGhost btnGhost--sm" data-user-view="${escapeHtml(s.userId)}" data-return-view="subscriptions">View user</button>` : "—"}</td>
+      </tr>`).join("")
+    : `<tr><td colspan="6" class="loading">No cancelled or expired subscriptions in the last 30 days.</td></tr>`;
+
+  const recentBody = recent.length
+    ? recent.map((s) => `
+      <tr>
+        <td>${escapeHtml(s.userLabel || "—")}<br><span class="cellMuted">${escapeHtml(s.email || "")}</span></td>
+        <td><span class="badge ${escapeHtml(s.status || "none")}">${escapeHtml(s.statusLabel || s.status || "—")}</span></td>
+        <td>${escapeHtml(s.planId || "—")}</td>
+        ${dateCell(s.updatedAt)}
+      </tr>`).join("")
+    : `<tr><td colspan="4" class="loading">No subscription updates in the last 7 days.</td></tr>`;
+
+  const newBody = newSubs.length
+    ? newSubs.map((s) => `
+      <tr>
+        <td>${escapeHtml(s.userLabel || "—")}<br><span class="cellMuted">${escapeHtml(s.email || "")}</span></td>
+        <td>${escapeHtml(s.planId || "—")}</td>
+        <td>${escapeHtml(s.provider || "—")}</td>
+        ${dateCell(s.createdAt)}
+      </tr>`).join("")
+    : `<tr><td colspan="4" class="loading">No new Pro subscribers in the last 30 days.</td></tr>`;
+
+  const orphanBody = orphaned.length
+    ? orphaned.map((ev) => `
+      <tr>
+        ${dateCell(ev.createdAt)}
+        <td>${escapeHtml(ev.eventTypeLabel || ev.eventType || "—")}</td>
+        <td>${escapeHtml(ev.planId || ev.productId || "—")}</td>
+        <td class="sectionNote">${escapeHtml(ev.note || "")}</td>
+      </tr>`).join("")
+    : "";
+
+  const orphanBlock = orphaned.length
+    ? `<div class="detailMetaBlock" style="margin-top:20px"><strong>Deleted-account hints</strong></div>
+       <p class="sectionNote">Pro billing events with no user link (last 30 days). Someone may have deleted their account after subscribing.</p>
+       <div class="tableWrap tableWrap--plain">
+         <table class="table--compact">
+           <thead><tr><th>When</th><th>Event</th><th>Plan</th><th>Note</th></tr></thead>
+           <tbody>${orphanBody}</tbody>
+         </table>
+       </div>`
+    : "";
+
+  return `
+    <section class="sectionCard">
+      <div class="sectionHead">
+        <h3 class="sectionTitle">Who left Pro?</h3>
+        <p class="sectionNote">${fmtNum(activeCount)} active subscribers now. Cancelled/expired rows stay in the database; deleted accounts disappear entirely.</p>
+      </div>
+      <div class="tableWrap tableWrap--plain">
+        <table class="table--compact">
+          <thead>
+            <tr><th>User</th><th>Change</th><th>Plan</th><th>Provider</th><th>Updated</th><th></th></tr>
+          </thead>
+          <tbody>${churnBody}</tbody>
+        </table>
+      </div>
+      <div class="detailMetaBlock" style="margin-top:20px"><strong>All subscription updates (7d)</strong></div>
+      <div class="tableWrap tableWrap--plain">
+        <table class="table--compact">
+          <thead><tr><th>User</th><th>Status</th><th>Plan</th><th>Updated</th></tr></thead>
+          <tbody>${recentBody}</tbody>
+        </table>
+      </div>
+      <div class="detailMetaBlock" style="margin-top:20px"><strong>New Pro subscribers (30d)</strong></div>
+      <div class="tableWrap tableWrap--plain">
+        <table class="table--compact">
+          <thead><tr><th>User</th><th>Plan</th><th>Provider</th><th>Started</th></tr></thead>
+          <tbody>${newBody}</tbody>
+        </table>
+      </div>
+      ${orphanBlock}
+    </section>`;
+}
+
 function renderSubscriptions(data) {
   const rows = data?.subscriptions || [];
   const total = data?.total || rows.length;
+  const churnSection = renderSubscriptionChurnSection(data?.churn || {});
   const body = rows.length
     ? rows.map((s) => `
       <tr>
@@ -2911,8 +3004,10 @@ function renderSubscriptions(data) {
     `).join("")
     : `<tr><td colspan="7" class="loading">No subscriptions yet</td></tr>`;
 
-  els.panels.subscriptions.innerHTML = adminPageStack(listSection({
-    title: "Pro subscriptions",
+  els.panels.subscriptions.innerHTML = adminPageStack(`
+    ${churnSection}
+    ${listSection({
+    title: "All Pro subscriptions",
     tableHtml: `
     <div class="tableWrap tableWrap--plain">
       <table class="table--compact">
@@ -2926,7 +3021,7 @@ function renderSubscriptions(data) {
       </table>
     </div>`,
     pager: pagerHtml(total, state.offset),
-  }), { plain: true });
+  })}`, { plain: true });
 }
 
 function marketingField(label, id, value, { multiline = false, hint = "", highlight = false } = {}) {

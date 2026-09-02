@@ -1591,12 +1591,27 @@ async function getPublications(limit, offset, search = "") {
   return { publications, total: res.total ?? publications.length };
 }
 
-async function getSubscriptions(limit, offset) {
-  const res = await serviceFetch(
-    `pro_subscriptions?select=user_id,provider,plan_id,status,current_period_end,provider_subscription_id,created_at,updated_at&order=updated_at.desc&limit=${limit}&offset=${offset}`,
-  );
-  const rows = Array.isArray(res.data) ? res.data : [];
-  const ids = rows.map((r) => r.user_id).filter(Boolean);
+function mapSubscriptionRow(r, profileMap, authMap) {
+  const p = profileMap.get(r.user_id) || {};
+  const auth = authMap.get(r.user_id) || {};
+  return {
+    userId: r.user_id,
+    userLabel: String(p.display_name || p.username || "—"),
+    email: auth.email || "",
+    provider: r.provider,
+    planId: r.plan_id,
+    status: r.status,
+    statusLabel: r.status === "grace" ? "billing_retry" : r.status,
+    currentPeriodEnd: r.current_period_end,
+    providerSubscriptionId: r.provider_subscription_id || "",
+    createdAt: r.created_at,
+    updatedAt: r.updated_at,
+  };
+}
+
+async function enrichSubscriptionRows(rows) {
+  const list = Array.isArray(rows) ? rows : [];
+  const ids = [...new Set(list.map((r) => r.user_id).filter(Boolean))];
   const authMap = await fetchAuthUsersMap();
   let profileMap = new Map();
   if (ids.length) {
@@ -1608,24 +1623,72 @@ async function getSubscriptions(limit, offset) {
       profileMap.set(p.user_id, p);
     }
   }
-  const subscriptions = rows.map((r) => {
-    const p = profileMap.get(r.user_id) || {};
-    const auth = authMap.get(r.user_id) || {};
-    return {
-      userId: r.user_id,
-      userLabel: String(p.display_name || p.username || "—"),
-      email: auth.email || "",
-      provider: r.provider,
-      planId: r.plan_id,
-      status: r.status,
-      statusLabel: r.status === "grace" ? "billing_retry" : r.status,
-      currentPeriodEnd: r.current_period_end,
-      providerSubscriptionId: r.provider_subscription_id || "",
-      createdAt: r.created_at,
-      updatedAt: r.updated_at,
-    };
-  });
-  return { subscriptions, total: res.total ?? subscriptions.length };
+  return list.map((r) => mapSubscriptionRow(r, profileMap, authMap));
+}
+
+async function getSubscriptionChurn() {
+  const days30 = new Date(Date.now() - 30 * 86400000).toISOString();
+  const days7 = new Date(Date.now() - 7 * 86400000).toISOString();
+
+  const [activeRes, churnRes, recentRes, newSubsRes, orphanBillingRes] = await Promise.all([
+    serviceFetch("pro_subscriptions?select=user_id&status=in.(active,trialing,grace)&limit=2000"),
+    serviceFetch(
+      `pro_subscriptions?select=user_id,provider,plan_id,status,current_period_end,provider_subscription_id,created_at,updated_at&status=in.(cancelled,expired)&updated_at=gte.${encodeURIComponent(days30)}&order=updated_at.desc&limit=30`,
+    ),
+    serviceFetch(
+      `pro_subscriptions?select=user_id,provider,plan_id,status,current_period_end,provider_subscription_id,created_at,updated_at&updated_at=gte.${encodeURIComponent(days7)}&order=updated_at.desc&limit=40`,
+    ),
+    serviceFetch(
+      `pro_subscriptions?select=user_id,provider,plan_id,status,created_at,updated_at&status=in.(active,trialing,grace)&created_at=gte.${encodeURIComponent(days30)}&order=created_at.desc&limit=20`,
+    ),
+    serviceFetch(
+      `billing_events?select=id,event_type,plan_id,product_id,created_at,user_id&user_id=is.null&created_at=gte.${encodeURIComponent(days30)}&order=created_at.desc&limit=30`,
+    ),
+  ]);
+
+  const [churnRows, recentRows, newRows] = await Promise.all([
+    enrichSubscriptionRows(churnRes.data),
+    enrichSubscriptionRows(recentRes.data),
+    enrichSubscriptionRows(newSubsRes.data),
+  ]);
+
+  const proProductRe = /pro\.(weekly|monthly)/i;
+  const orphanedBilling = (Array.isArray(orphanBillingRes.data) ? orphanBillingRes.data : [])
+    .filter((row) => {
+      const plan = String(row.plan_id || "").trim();
+      const product = String(row.product_id || "").trim();
+      return plan === "weekly" || plan === "monthly" || proProductRe.test(product);
+    })
+    .map((row) => ({
+      id: row.id,
+      eventType: row.event_type || "",
+      eventTypeLabel: billingEventTypeLabel(row.event_type),
+      planId: row.plan_id || "",
+      productId: row.product_id || "",
+      createdAt: row.created_at,
+      note: "Billing row lost user link — account may have been deleted.",
+    }));
+
+  return {
+    activeCount: Array.isArray(activeRes.data) ? activeRes.data.length : 0,
+    churnedLast30d: churnRows.map((row) => ({
+      ...row,
+      changeType: row.status === "expired" ? "expired" : "cancelled",
+    })),
+    recentUpdatesLast7d: recentRows,
+    newSubscribersLast30d: newRows,
+    orphanedProBillingLast30d: orphanedBilling,
+  };
+}
+
+async function getSubscriptions(limit, offset) {
+  const res = await serviceFetch(
+    `pro_subscriptions?select=user_id,provider,plan_id,status,current_period_end,provider_subscription_id,created_at,updated_at&order=updated_at.desc&limit=${limit}&offset=${offset}`,
+  );
+  const rows = Array.isArray(res.data) ? res.data : [];
+  const subscriptions = await enrichSubscriptionRows(rows);
+  const churn = await getSubscriptionChurn();
+  return { subscriptions, total: res.total ?? subscriptions.length, churn };
 }
 
 function billingEventTypeLabel(eventType) {

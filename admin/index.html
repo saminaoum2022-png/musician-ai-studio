@@ -124,7 +124,8 @@
           <div class="navGroup" data-nav-group="support">
             <div class="navGroupLabel">Support</div>
             <button type="button" class="navItem" data-view="support-inbox">Inbox</button>
-            <button type="button" class="navItem" data-view="support-compose">Compose email</button>
+            <button type="button" class="navItem" data-view="support-sent">Sent</button>
+            <button type="button" class="navItem" data-view="support-compose">Compose</button>
           </div>
           <div class="navGroup">
             <div class="navGroupLabel">Billing</div>
@@ -154,7 +155,9 @@
             <p id="pageSub" class="pageSub">Platform health at a glance</p>
           </div>
           <div class="topbarActions">
-            <button type="button" class="btnGhost" id="btnRefresh">Refresh</button>
+            <button type="button" class="btnGhost btnIcon" id="btnRefresh" aria-label="Refresh" title="Refresh">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>
+            </button>
           </div>
         </header>
 
@@ -172,6 +175,7 @@
         <div id="viewPublications" class="viewPanel" data-panel="publications" hidden></div>
         <div id="viewSubscriptions" class="viewPanel" data-panel="subscriptions" hidden></div>
         <div id="viewSupportInbox" class="viewPanel" data-panel="support-inbox" hidden></div>
+        <div id="viewSupportSent" class="viewPanel" data-panel="support-sent" hidden></div>
         <div id="viewSupportCompose" class="viewPanel" data-panel="support-compose" hidden></div>
         <div id="viewBilling" class="viewPanel" data-panel="billing" hidden></div>
         <div id="viewSettings" class="viewPanel" data-panel="settings" hidden></div>

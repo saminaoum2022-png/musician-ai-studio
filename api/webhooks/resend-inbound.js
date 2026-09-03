@@ -60,6 +60,7 @@ module.exports = async function handler(req, res) {
       emailId,
       inserted: Boolean(result.inserted),
       id: result.row?.id || null,
+      forward: result.forward || null,
     });
   } catch (e) {
     return sendJson(res, 500, { error: e?.message || "Webhook processing failed" });

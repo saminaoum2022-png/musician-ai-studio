@@ -30,6 +30,10 @@ const state = {
   grantPrefillEmail: "",
   supportEmailTemplates: [],
   supportEmailModal: { userId: "", email: "", templateId: "" },
+  inboxMessageId: "",
+  inboxSearch: "",
+  inboxUnreadOnly: false,
+  supportComposePrefill: null,
   marketingLocale: "en",
   marketingPage: "home",
   marketingScreen: "hub",
@@ -89,6 +93,7 @@ const els = {
     generations: document.getElementById("viewGenerations"),
     publications: document.getElementById("viewPublications"),
     subscriptions: document.getElementById("viewSubscriptions"),
+    "support-inbox": document.getElementById("viewSupportInbox"),
     "support-compose": document.getElementById("viewSupportCompose"),
     billing: document.getElementById("viewBilling"),
     settings: document.getElementById("viewSettings"),
@@ -112,7 +117,8 @@ const VIEW_META = {
   generations: { title: "Generations", sub: "Song and audio generation requests" },
   publications: { title: "Publications", sub: "Public profile posts — moderation view (not friends-only)" },
   subscriptions: { title: "Subscriptions", sub: "NabadAi Pro status by user" },
-  "support-compose": { title: "Compose email", sub: "Send from support@nabadai.com — inbox coming later" },
+  "support-inbox": { title: "Inbox", sub: "Incoming mail to support@ and help@" },
+  "support-compose": { title: "Compose email", sub: "Send from support@nabadai.com" },
   billing: { title: "Billing events", sub: "Subscription and IAP credit grants from webhooks" },
   settings: { title: "Team & roles", sub: "Invite coworkers and control dashboard access" },
 };
@@ -656,6 +662,59 @@ async function sendSupportEmailApi({ userId, templateId, subject, text, to }) {
   return data;
 }
 
+async function fetchSupportInbox(params = {}) {
+  await refreshSessionIfNeeded();
+  const token = state.session?.access_token;
+  if (!token) throw new Error("Not signed in");
+  const qs = new URLSearchParams();
+  if (params.id) qs.set("id", params.id);
+  if (params.markRead) qs.set("markRead", "1");
+  if (params.limit != null) qs.set("limit", String(params.limit));
+  if (params.offset != null) qs.set("offset", String(params.offset));
+  if (params.unreadOnly) qs.set("unreadOnly", "1");
+  if (params.q) qs.set("q", params.q);
+  const r = await fetch(`/api/admin/support-inbox?${qs}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(data?.error || `Inbox failed (${r.status})`);
+  return data;
+}
+
+async function patchSupportInboxMessage(id, { isRead }) {
+  await refreshSessionIfNeeded();
+  const token = state.session?.access_token;
+  if (!token) throw new Error("Not signed in");
+  const r = await fetch("/api/admin/support-inbox", {
+    method: "PATCH",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ id, isRead }),
+  });
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(data?.error || `Update failed (${r.status})`);
+  return data;
+}
+
+async function syncSupportInbox(limit = 30) {
+  await refreshSessionIfNeeded();
+  const token = state.session?.access_token;
+  if (!token) throw new Error("Not signed in");
+  const r = await fetch("/api/admin/support-inbox", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ action: "sync", limit }),
+  });
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(data?.error || `Sync failed (${r.status})`);
+  return data;
+}
+
 async function adminStripeSync(userId) {
   await refreshSessionIfNeeded();
   const token = state.session?.access_token;
@@ -975,7 +1034,7 @@ async function loadAdminSession({ force = false } = {}) {
 }
 
 function canAccessView(view) {
-  if (view === "support-compose") {
+  if (view === "support-compose" || view === "support-inbox") {
     return Boolean(state.adminSession?.canSendSupportEmail);
   }
   const allowed = state.adminSession?.allowedViews;
@@ -1077,6 +1136,9 @@ function viewCacheKey() {
   }
   if (state.view === "blog") {
     key += `:scr:${state.blogScreen || "hub"}:slug:${state.blogSlug || ""}:loc:${state.blogLocale || "en"}`;
+  }
+  if (state.view === "support-inbox") {
+    key += `:mid:${state.inboxMessageId || ""}:q:${state.inboxSearch || ""}:unread:${state.inboxUnreadOnly ? "1" : "0"}`;
   }
   return key;
 }
@@ -3205,6 +3267,133 @@ function renderSubscriptions(data) {
   })}`, { plain: true });
 }
 
+function stripHtml(html) {
+  const el = document.createElement("div");
+  el.innerHTML = String(html || "");
+  return (el.textContent || el.innerText || "").trim();
+}
+
+function replySubject(subject) {
+  const s = String(subject || "").trim();
+  if (!s) return "Re: NabadAi support";
+  return /^re:/i.test(s) ? s : `Re: ${s}`;
+}
+
+function openSupportComposePrefill({ to, subject, text }) {
+  state.supportComposePrefill = {
+    to: String(to || "").trim(),
+    subject: String(subject || "").trim(),
+    text: String(text || "").trim(),
+  };
+  setView("support-compose");
+  void loadView({ force: true });
+}
+
+function renderSupportInboxDetail(message) {
+  const m = message || {};
+  const fromLabel = m.fromName ? `${m.fromName} <${m.fromEmail}>` : (m.fromEmail || "—");
+  const bodyText = m.textBody || stripHtml(m.htmlBody) || "(No body)";
+  const attachments = Array.isArray(m.attachments) ? m.attachments : [];
+  const attachHtml = attachments.length
+    ? `<ul class="supportInboxAttachments">${attachments.map((a) =>
+        `<li>${escapeHtml(a.filename || "attachment")}${a.content_type ? ` <span class="cellMuted">(${escapeHtml(a.content_type)})</span>` : ""}</li>`,
+      ).join("")}</ul>`
+    : "";
+  const userBtn = m.matchedUserId
+    ? `<button type="button" class="btnGhost" data-inbox-open-user="${escapeHtml(m.matchedUserId)}">View NabadAi user</button>`
+    : "";
+
+  return `
+    <section class="sectionCard supportInboxDetail">
+      <div class="supportInboxDetailHead">
+        <button type="button" class="btnGhost btnGhost--sm" data-inbox-back>← Inbox</button>
+        <div class="supportInboxDetailActions">
+          ${userBtn}
+          <button type="button" class="btnPrimary" data-inbox-reply="${escapeHtml(m.id)}">Reply</button>
+          <button type="button" class="btnGhost" data-inbox-mark-unread="${escapeHtml(m.id)}">Mark unread</button>
+        </div>
+      </div>
+      <h3 class="supportInboxSubject">${escapeHtml(m.subject || "(No subject)")}</h3>
+      <dl class="supportInboxMeta">
+        <div><dt>From</dt><dd>${escapeHtml(fromLabel)}</dd></div>
+        <div><dt>To</dt><dd>${escapeHtml((m.toEmails || []).join(", ") || "—")}</dd></div>
+        <div><dt>Received</dt><dd>${escapeHtml(fmtDate(m.receivedAt))}</dd></div>
+      </dl>
+      ${attachHtml}
+      <pre class="supportInboxBody">${escapeHtml(bodyText)}</pre>
+    </section>
+  `;
+}
+
+function renderSupportInbox(data) {
+  const panel = els.panels["support-inbox"];
+  const canSend = Boolean(state.adminSession?.canSendSupportEmail);
+  if (!canSend) {
+    panel.innerHTML = adminPageStack(`
+      <section class="sectionCard">
+        <p class="sectionNote">Inbox requires Owner / Admin or Support role.</p>
+      </section>
+    `, { plain: true });
+    return;
+  }
+
+  if (state.inboxMessageId && data?.message) {
+    panel.innerHTML = adminPageStack(renderSupportInboxDetail(data.message), { plain: true });
+    return;
+  }
+
+  const messages = Array.isArray(data?.messages) ? data.messages : [];
+  const unreadCount = Number(data?.unreadCount) || 0;
+  const configured = data?.resendInboundConfigured !== false;
+  const setupNote = configured
+    ? ""
+    : `<p class="sectionNote">Add <code>RESEND_API_KEY</code>, run <code>support_inbound_messages.sql</code>, enable Resend receiving on <code>nabadai.com</code>, and point the webhook to <code>/api/webhooks/resend-inbound</code>.</p>`;
+
+  const rows = messages.length
+    ? messages.map((m) => {
+        const unread = !m.isRead;
+        const fromLabel = m.fromName ? `${m.fromName} <${m.fromEmail}>` : (m.fromEmail || "—");
+        const attachBadge = Array.isArray(m.attachments) && m.attachments.length
+          ? `<span class="badge badge--muted">📎 ${m.attachments.length}</span>`
+          : "";
+        return `<tr class="supportInboxRow${unread ? " isUnread" : ""}" data-inbox-open="${escapeHtml(m.id)}">
+          <td>${unread ? '<span class="supportInboxUnreadDot" aria-label="Unread"></span>' : ""}${escapeHtml(fromLabel)}</td>
+          <td>${escapeHtml(m.subject || "(No subject)")} ${attachBadge}</td>
+          <td class="cellMuted">${escapeHtml(fmtDateCompact(m.receivedAt))}</td>
+        </tr>`;
+      }).join("")
+    : `<tr><td colspan="3" class="loading">No messages yet — sync from Resend or send a test to support@nabadai.com</td></tr>`;
+
+  panel.innerHTML = adminPageStack(`
+    ${setupNote}
+    <section class="sectionCard">
+      <div class="sectionHead supportInboxHead">
+        <div>
+          <h3 class="sectionTitle">Inbox</h3>
+          <p class="sectionNote">${unreadCount ? `${unreadCount} unread` : "All caught up"} · mail to support@ / help@</p>
+        </div>
+        <div class="supportInboxToolbar">
+          <label class="supportInboxFilter">
+            <input type="checkbox" id="inboxUnreadOnly"${state.inboxUnreadOnly ? " checked" : ""} />
+            Unread only
+          </label>
+          <input type="search" id="inboxSearch" class="marketingFieldInput supportInboxSearch" placeholder="Search from or subject" value="${escapeHtml(state.inboxSearch)}" />
+          <button type="button" class="btnGhost" id="btnInboxSync"${configured ? "" : " disabled"}>Sync from Resend</button>
+        </div>
+      </div>
+      <div class="tableWrap tableWrap--plain">
+        <table class="table--compact table--inbox">
+          <thead>
+            <tr><th>From</th><th>Subject</th><th>Received</th></tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+      <p id="inboxSyncMsg" class="grantMsg" hidden></p>
+    </section>
+  `, { plain: true });
+}
+
 function renderSupportCompose() {
   const panel = els.panels["support-compose"];
   const canSend = Boolean(state.adminSession?.canSendSupportEmail);
@@ -3218,6 +3407,7 @@ function renderSupportCompose() {
   }
 
   const resendOk = state.adminSession?.resendConfigured !== false;
+  const prefill = state.supportComposePrefill || {};
   panel.innerHTML = adminPageStack(`
     <section class="sectionCard supportComposeCard">
       <div class="sectionHead">
@@ -3228,15 +3418,15 @@ function renderSupportCompose() {
       <form id="supportComposeForm" class="grantForm supportComposeForm">
         <label class="field grantField">
           <span>To</span>
-          <input id="supportComposeTo" type="email" required placeholder="customer@example.com" autocomplete="off" class="marketingFieldInput" />
+          <input id="supportComposeTo" type="email" required placeholder="customer@example.com" autocomplete="off" class="marketingFieldInput" value="${escapeHtml(prefill.to || "")}" />
         </label>
         <label class="field grantField">
           <span>Subject</span>
-          <input id="supportComposeSubject" type="text" required placeholder="Re: NabadAi Pro" class="marketingFieldInput" />
+          <input id="supportComposeSubject" type="text" required placeholder="Re: NabadAi Pro" class="marketingFieldInput" value="${escapeHtml(prefill.subject || "")}" />
         </label>
         <label class="field grantField">
           <span>Message</span>
-          <textarea id="supportComposeBody" rows="16" required placeholder="Hi,&#10;&#10;…&#10;&#10;— NabadAi Support" class="marketingFieldInput"></textarea>
+          <textarea id="supportComposeBody" rows="16" required placeholder="Hi,&#10;&#10;…&#10;&#10;— NabadAi Support" class="marketingFieldInput">${escapeHtml(prefill.text || "")}</textarea>
         </label>
         <div class="supportComposeActions">
           <button type="submit" class="btnPrimary" id="btnSupportComposeSend"${resendOk ? "" : " disabled"}>Send from support@</button>
@@ -3244,10 +3434,11 @@ function renderSupportCompose() {
         <p id="supportComposeMsg" class="grantMsg" hidden></p>
       </form>
       <div class="supportComposeAside">
-        <p class="sectionNote"><strong>Inbox</strong> — coming in a later update. For now, read replies in Gmail and compose here or reply from Gmail (Send as support@).</p>
+        <p class="sectionNote">Read incoming mail in <strong>Support → Inbox</strong>. Replies still go through Resend from support@.</p>
       </div>
     </section>
   `, { plain: true });
+  state.supportComposePrefill = null;
 }
 
 function marketingField(label, id, value, { multiline = false, hint = "", highlight = false } = {}) {
@@ -4899,6 +5090,7 @@ const RENDERERS = {
   generations: renderGenerations,
   publications: renderPublications,
   subscriptions: renderSubscriptions,
+  "support-inbox": renderSupportInbox,
   "support-compose": renderSupportCompose,
   billing: renderBilling,
   settings: renderSettings,
@@ -4921,6 +5113,7 @@ function setView(view) {
   if (view !== "billing") state.billingSearch = "";
   if (view !== "user") state.userDetailId = "";
   if (view !== "generation") state.generationDetailId = "";
+  if (view !== "support-inbox") state.inboxMessageId = "";
   const meta = VIEW_META[view] || VIEW_META.overview;
   els.pageTitle.textContent = meta.title;
   els.pageSub.textContent = meta.sub;
@@ -5308,6 +5501,17 @@ async function loadView({ force = false } = {}) {
       RENDERERS["support-compose"](data);
       state.cache[cacheKey] = data;
       return;
+    } else if (view === "support-inbox") {
+      if (state.inboxMessageId) {
+        data = await fetchSupportInbox({ id: state.inboxMessageId, markRead: true });
+      } else {
+        data = await fetchSupportInbox({
+          limit: PAGE_SIZE,
+          offset: state.offset,
+          unreadOnly: state.inboxUnreadOnly,
+          q: state.inboxSearch.trim(),
+        });
+      }
     } else {
       data = await adminFetch(view, {
         offset: state.offset,
@@ -5559,6 +5763,25 @@ for (const btn of els.navItems) {
     void loadView();
   });
 }
+
+document.body.addEventListener("change", (e) => {
+  if (e.target?.id === "inboxUnreadOnly") {
+    state.inboxUnreadOnly = Boolean(e.target.checked);
+    state.offset = 0;
+    state.cache = {};
+    void loadView({ force: true });
+  }
+});
+
+document.body.addEventListener("keydown", (e) => {
+  if (e.target?.id === "inboxSearch" && e.key === "Enter") {
+    e.preventDefault();
+    state.inboxSearch = String(e.target.value || "").trim();
+    state.offset = 0;
+    state.cache = {};
+    void loadView({ force: true });
+  }
+});
 
 bindBlogEvents(blogAdminContext());
 
@@ -5898,6 +6121,110 @@ document.body.addEventListener("click", (e) => {
       supportEmailOpen.dataset.supportEmailOpen,
       supportEmailOpen.dataset.supportEmailTemplate || "",
     );
+    return;
+  }
+
+  const inboxOpen = e.target.closest("[data-inbox-open]");
+  if (inboxOpen) {
+    e.preventDefault();
+    state.inboxMessageId = String(inboxOpen.dataset.inboxOpen || "").trim();
+    void loadView({ force: true });
+    return;
+  }
+
+  const inboxBack = e.target.closest("[data-inbox-back]");
+  if (inboxBack) {
+    e.preventDefault();
+    state.inboxMessageId = "";
+    delete state.cache[viewCacheKey()];
+    void loadView({ force: true });
+    return;
+  }
+
+  const inboxOpenUser = e.target.closest("[data-inbox-open-user]");
+  if (inboxOpenUser) {
+    e.preventDefault();
+    openUserDetail(inboxOpenUser.dataset.inboxOpenUser, "support-inbox");
+    return;
+  }
+
+  const inboxMarkUnread = e.target.closest("[data-inbox-mark-unread]");
+  if (inboxMarkUnread) {
+    e.preventDefault();
+    const mid = String(inboxMarkUnread.dataset.inboxMarkUnread || "").trim();
+    if (!mid) return;
+    inboxMarkUnread.disabled = true;
+    void (async () => {
+      try {
+        await patchSupportInboxMessage(mid, { isRead: false });
+        state.inboxMessageId = "";
+        state.cache = {};
+        await loadView({ force: true });
+      } catch (err) {
+        showError(err?.message || "Could not mark unread");
+      } finally {
+        inboxMarkUnread.disabled = false;
+      }
+    })();
+    return;
+  }
+
+  const inboxReply = e.target.closest("[data-inbox-reply]");
+  if (inboxReply) {
+    e.preventDefault();
+    const mid = String(inboxReply.dataset.inboxReply || "").trim();
+    const cached = state.cache[viewCacheKey()]?.message;
+    void (async () => {
+      try {
+        const message = cached?.id === mid
+          ? cached
+          : (await fetchSupportInbox({ id: mid })).message;
+        if (!message) throw new Error("Message not found");
+        const quote = message.textBody || stripHtml(message.htmlBody) || "";
+        const quoted = quote
+          ? `\n\n---\nOn ${fmtDate(message.receivedAt)}, ${message.fromEmail} wrote:\n${quote}`
+          : "";
+        openSupportComposePrefill({
+          to: message.fromEmail,
+          subject: replySubject(message.subject),
+          text: `Hi,\n\n${quoted}`,
+        });
+      } catch (err) {
+        showError(err?.message || "Could not open reply");
+      }
+    })();
+    return;
+  }
+
+  const inboxSyncBtn = e.target.closest("#btnInboxSync");
+  if (inboxSyncBtn) {
+    e.preventDefault();
+    const msg = document.getElementById("inboxSyncMsg");
+    inboxSyncBtn.disabled = true;
+    if (msg) {
+      msg.hidden = false;
+      msg.textContent = "Syncing from Resend…";
+      msg.dataset.tone = "warn";
+    }
+    void (async () => {
+      try {
+        const result = await syncSupportInbox(40);
+        state.cache = {};
+        await loadView({ force: true });
+        if (msg) {
+          msg.textContent = `Synced ${result.scanned || 0} — ${result.ingested || 0} new, ${result.skipped || 0} already stored`;
+          msg.dataset.tone = "ok";
+        }
+      } catch (err) {
+        if (msg) {
+          msg.textContent = err?.message || "Sync failed";
+          msg.dataset.tone = "err";
+        }
+        showError(err?.message || "Inbox sync failed");
+      } finally {
+        inboxSyncBtn.disabled = false;
+      }
+    })();
     return;
   }
 

@@ -131,6 +131,13 @@ function canGrantCredits(role, { isOwner = false } = {}) {
   return Boolean(meta?.grantCredits);
 }
 
+/** Manual Pro lifecycle emails (Resend) — Owner / Admin + Support only. */
+function canSendSupportEmail(role, { isOwner = false } = {}) {
+  if (isOwner) return true;
+  const r = normalizeRole(role);
+  return r === "admin" || r === "support";
+}
+
 function canManageTeam(role, { isOwner = false } = {}) {
   if (isOwner) return true;
   return normalizeRole(role) === "admin";
@@ -176,6 +183,7 @@ function buildAdminContext(user, profileRole, { isOwner = false } = {}) {
     allowedViews,
     canManageTeam: canManageTeam(effectiveRole, { isOwner }),
     canGrantCredits: canGrantCredits(effectiveRole, { isOwner }),
+    canSendSupportEmail: canSendSupportEmail(effectiveRole, { isOwner }),
     canModeratePublications: canModeratePublications(effectiveRole, { isOwner }),
     canManageMarketing: canManageMarketing(effectiveRole, { isOwner }),
   };
@@ -190,6 +198,7 @@ module.exports = {
   roleViews,
   canAccessView,
   canGrantCredits,
+  canSendSupportEmail,
   canManageTeam,
   canModeratePublications,
   canManageMarketing,

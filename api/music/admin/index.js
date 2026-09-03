@@ -31,6 +31,12 @@ const {
   listAssignableRoles,
 } = require("../../_lib/admin-permissions");
 const { adminSearchUserIds, resolveUserLookup, escapeLike, searchNeedle } = require("../../_lib/admin-user-resolve");
+const {
+  suggestSupportEmailTemplate,
+  isPendingCancel,
+  SUPPORT_TEMPLATES,
+} = require("../../_lib/support-email");
+const { isResendConfigured } = require("../../_lib/resend-mail");
 const { getProviderHealth } = require("../../_lib/provider-health");
 const {
   fetchProviderSpendData,
@@ -1591,10 +1597,11 @@ async function getPublications(limit, offset, search = "") {
   return { publications, total: res.total ?? publications.length };
 }
 
-function mapSubscriptionRow(r, profileMap, authMap) {
+function mapSubscriptionRow(r, profileMap, authMap, supportMeta = null) {
   const p = profileMap.get(r.user_id) || {};
   const auth = authMap.get(r.user_id) || {};
-  return {
+  const cancelAtPeriodEnd = Boolean(r.cancel_at_period_end);
+  const base = {
     userId: r.user_id,
     userLabel: String(p.display_name || p.username || "—"),
     email: auth.email || "",
@@ -1603,9 +1610,79 @@ function mapSubscriptionRow(r, profileMap, authMap) {
     status: r.status,
     statusLabel: r.status === "grace" ? "billing_retry" : r.status,
     currentPeriodEnd: r.current_period_end,
+    cancelAtPeriodEnd,
     providerSubscriptionId: r.provider_subscription_id || "",
     createdAt: r.created_at,
     updatedAt: r.updated_at,
+  };
+  base.renewalLabel = subscriptionRenewalLabel(base);
+  if (supportMeta) {
+    base.suggestedEmailTemplate = supportMeta.suggestedTemplateId;
+    base.emailLogs = supportMeta.emailLogs || [];
+    base.lastEmailSentAt = supportMeta.lastEmailSentAt || null;
+  }
+  return base;
+}
+
+function subscriptionRenewalLabel(sub) {
+  const status = String(sub?.status || "").toLowerCase();
+  const end = sub?.currentPeriodEnd || sub?.current_period_end;
+  const endLabel = end
+    ? new Date(end).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+    : "";
+  if (isPendingCancel(sub)) {
+    return endLabel ? `Will not renew · access until ${endLabel}` : "Will not renew";
+  }
+  if (status === "trialing") {
+    return endLabel ? `Trial ends ${endLabel}` : "Trialing";
+  }
+  if (status === "active" || status === "grace") {
+    return endLabel ? `Renews ${endLabel}` : "Active";
+  }
+  if (status === "cancelled" || status === "expired") {
+    return endLabel ? `Ended ${endLabel}` : status;
+  }
+  return endLabel || "—";
+}
+
+async function fetchSupportEmailLogsMap(userIds) {
+  const ids = [...new Set((Array.isArray(userIds) ? userIds : []).filter(Boolean))];
+  const out = new Map();
+  if (!ids.length) return out;
+  const inClause = ids.map((id) => encodeURIComponent(id)).join(",");
+  const res = await serviceFetch(
+    `support_email_log?select=user_id,template_id,recipient_email,subject,sent_by_email,created_at&user_id=in.(${inClause})&order=created_at.desc&limit=500`,
+  );
+  for (const row of Array.isArray(res.data) ? res.data : []) {
+    const uid = row.user_id;
+    if (!out.has(uid)) out.set(uid, []);
+    const list = out.get(uid);
+    if (list.length >= 10) continue;
+    list.push({
+      templateId: row.template_id,
+      recipientEmail: row.recipient_email,
+      subject: row.subject,
+      sentByEmail: row.sent_by_email,
+      sentAt: row.created_at,
+    });
+  }
+  return out;
+}
+
+function supportMetaForSubscription(row, emailLogsMap) {
+  const logs = emailLogsMap.get(row.user_id) || [];
+  const subscription = {
+    planId: row.plan_id,
+    status: row.status,
+    currentPeriodEnd: row.current_period_end,
+    cancelAtPeriodEnd: Boolean(row.cancel_at_period_end),
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+  return {
+    suggestedTemplateId: suggestSupportEmailTemplate({ subscription, emailLogs: logs }),
+    emailLogs: logs,
+    lastEmailSentAt: logs[0]?.sentAt || null,
   };
 }
 
@@ -1623,7 +1700,8 @@ async function enrichSubscriptionRows(rows) {
       profileMap.set(p.user_id, p);
     }
   }
-  return list.map((r) => mapSubscriptionRow(r, profileMap, authMap));
+  const emailLogsMap = await fetchSupportEmailLogsMap(ids);
+  return list.map((r) => mapSubscriptionRow(r, profileMap, authMap, supportMetaForSubscription(r, emailLogsMap)));
 }
 
 async function getSubscriptionChurn() {
@@ -1633,10 +1711,10 @@ async function getSubscriptionChurn() {
   const [activeRes, churnRes, recentRes, newSubsRes, orphanBillingRes] = await Promise.all([
     serviceFetch("pro_subscriptions?select=user_id&status=in.(active,trialing,grace)&limit=2000"),
     serviceFetch(
-      `pro_subscriptions?select=user_id,provider,plan_id,status,current_period_end,provider_subscription_id,created_at,updated_at&status=in.(cancelled,expired)&updated_at=gte.${encodeURIComponent(days30)}&order=updated_at.desc&limit=30`,
+      `pro_subscriptions?select=user_id,provider,plan_id,status,current_period_end,cancel_at_period_end,provider_subscription_id,created_at,updated_at&status=in.(cancelled,expired)&updated_at=gte.${encodeURIComponent(days30)}&order=updated_at.desc&limit=30`,
     ),
     serviceFetch(
-      `pro_subscriptions?select=user_id,provider,plan_id,status,current_period_end,provider_subscription_id,created_at,updated_at&updated_at=gte.${encodeURIComponent(days7)}&order=updated_at.desc&limit=40`,
+      `pro_subscriptions?select=user_id,provider,plan_id,status,current_period_end,cancel_at_period_end,provider_subscription_id,created_at,updated_at&updated_at=gte.${encodeURIComponent(days7)}&order=updated_at.desc&limit=40`,
     ),
     serviceFetch(
       `pro_subscriptions?select=user_id,provider,plan_id,status,created_at,updated_at&status=in.(active,trialing,grace)&created_at=gte.${encodeURIComponent(days30)}&order=created_at.desc&limit=20`,
@@ -1683,12 +1761,18 @@ async function getSubscriptionChurn() {
 
 async function getSubscriptions(limit, offset) {
   const res = await serviceFetch(
-    `pro_subscriptions?select=user_id,provider,plan_id,status,current_period_end,provider_subscription_id,created_at,updated_at&order=updated_at.desc&limit=${limit}&offset=${offset}`,
+    `pro_subscriptions?select=user_id,provider,plan_id,status,current_period_end,cancel_at_period_end,provider_subscription_id,created_at,updated_at&order=updated_at.desc&limit=${limit}&offset=${offset}`,
   );
   const rows = Array.isArray(res.data) ? res.data : [];
   const subscriptions = await enrichSubscriptionRows(rows);
   const churn = await getSubscriptionChurn();
-  return { subscriptions, total: res.total ?? subscriptions.length, churn };
+  return {
+    subscriptions,
+    total: res.total ?? subscriptions.length,
+    churn,
+    supportEmailTemplates: SUPPORT_TEMPLATES,
+    resendConfigured: isResendConfigured(),
+  };
 }
 
 function billingEventTypeLabel(eventType) {
@@ -1796,7 +1880,7 @@ async function getUserDetail(userIdInput, search = "") {
   const [profRes, creditsRes, subRes, billingRes, ledgerMerged, gensRes, songsRes] = await Promise.all([
     serviceFetch(`profiles?select=user_id,username,display_name,role,last_active_at,created_at,signup_platform&user_id=eq.${enc}&limit=1`),
     serviceFetch(`user_credits?select=balance,paid_balance,gift_balance,promo_balance,updated_at&user_id=eq.${enc}&limit=1`),
-    serviceFetch(`pro_subscriptions?select=provider,plan_id,status,current_period_end,provider_subscription_id,created_at,updated_at&user_id=eq.${enc}&limit=1`),
+    serviceFetch(`pro_subscriptions?select=provider,plan_id,status,current_period_end,cancel_at_period_end,provider_subscription_id,created_at,updated_at&user_id=eq.${enc}&limit=1`),
     serviceFetch(`billing_events?select=id,provider,event_type,plan_id,product_id,credits_granted,created_at&user_id=eq.${enc}&order=created_at.desc&limit=50`),
     fetchMergedCreditRows({ userId: uid, limit: 40, offset: 0 }),
     serviceFetch(`music_generation_logs?select=id,kind,provider,status,credits_used,error_message,prompt,request_detail,created_at&user_id=eq.${enc}&order=created_at.desc&limit=15`),
@@ -1860,6 +1944,32 @@ async function getUserDetail(userIdInput, search = "") {
     publicOnProfile: Boolean(row.public_on_profile),
   }));
 
+  const emailLogsMap = await fetchSupportEmailLogsMap([uid]);
+  const emailLogs = emailLogsMap.get(uid) || [];
+  const subscriptionRow = sub
+    ? {
+        provider: sub.provider || "—",
+        planId: sub.plan_id || "",
+        status: sub.status || "none",
+        statusLabel: sub.status === "grace" ? "billing_retry" : (sub.status || "none"),
+        currentPeriodEnd: sub.current_period_end || null,
+        cancelAtPeriodEnd: Boolean(sub.cancel_at_period_end),
+        providerSubscriptionId: sub.provider_subscription_id || "",
+        createdAt: sub.created_at || null,
+        updatedAt: sub.updated_at || null,
+      }
+    : null;
+  if (subscriptionRow) {
+    subscriptionRow.renewalLabel = subscriptionRenewalLabel(subscriptionRow);
+  }
+  const suggestedEmailTemplate = subscriptionRow
+    ? suggestSupportEmailTemplate({
+        subscription: subscriptionRow,
+        emailLogs,
+        billingEvents,
+      })
+    : null;
+
   return {
     user: {
       userId: uid,
@@ -1879,16 +1989,13 @@ async function getUserDetail(userIdInput, search = "") {
       promo: Number(cr?.promo_balance || 0),
       updatedAt: cr?.updated_at || null,
     },
-    subscription: sub
+    subscription: subscriptionRow,
+    supportEmail: subscriptionRow
       ? {
-          provider: sub.provider || "—",
-          planId: sub.plan_id || "",
-          status: sub.status || "none",
-          statusLabel: sub.status === "grace" ? "billing_retry" : (sub.status || "none"),
-          currentPeriodEnd: sub.current_period_end || null,
-          providerSubscriptionId: sub.provider_subscription_id || "",
-          createdAt: sub.created_at || null,
-          updatedAt: sub.updated_at || null,
+          suggestedTemplateId: suggestedEmailTemplate,
+          emailLogs,
+          templates: SUPPORT_TEMPLATES,
+          resendConfigured: isResendConfigured(),
         }
       : null,
     billingEvents,
@@ -2265,6 +2372,7 @@ module.exports = async function handler(req, res) {
         isOwner: admin.isOwner,
         canManageTeam: admin.canManageTeam,
         canGrantCredits: admin.canGrantCredits,
+        canSendSupportEmail: admin.canSendSupportEmail,
         canModeratePublications: admin.canModeratePublications,
         allowedViews: admin.allowedViews,
       },

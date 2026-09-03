@@ -2432,3 +2432,96 @@ td.num { font-variant-numeric: tabular-nums; }
   }
 }
 
+.badge.willNotRenew {
+  background: rgba(245, 185, 66, 0.16);
+  color: #f5d278;
+  border: 1px solid rgba(245, 185, 66, 0.35);
+}
+
+.badge.suggestedEmail {
+  background: rgba(124, 92, 255, 0.16);
+  color: #c4b5fd;
+  border: 1px solid rgba(124, 92, 255, 0.35);
+  white-space: nowrap;
+}
+
+.supportEmailModal {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+}
+
+.supportEmailModalBackdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(2, 4, 10, 0.72);
+  backdrop-filter: blur(4px);
+}
+
+.supportEmailModalCard {
+  position: relative;
+  width: min(720px, 100%);
+  max-height: min(92vh, 900px);
+  display: flex;
+  flex-direction: column;
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  border-radius: calc(var(--radius) + 2px);
+  box-shadow: var(--shadow);
+}
+
+.supportEmailModalHeader,
+.supportEmailModalFooter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 18px;
+  border-bottom: 1px solid var(--border);
+}
+
+.supportEmailModalFooter {
+  border-bottom: 0;
+  border-top: 1px solid var(--border);
+  justify-content: flex-end;
+}
+
+.supportEmailModalTitle {
+  margin: 0;
+  font-size: 1.05rem;
+}
+
+.supportEmailModalSub {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 0.88rem;
+}
+
+.supportEmailModalBody {
+  padding: 16px 18px;
+  overflow: auto;
+  display: grid;
+  gap: 12px;
+}
+
+.supportEmailActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+.supportEmailLogList {
+  margin: 8px 0 0;
+  padding-left: 18px;
+  color: var(--muted);
+  font-size: 0.86rem;
+}
+
+.supportEmailLogList li {
+  margin: 4px 0;
+}
+

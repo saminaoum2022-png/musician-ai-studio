@@ -146,6 +146,7 @@ async function upsertProSubscription({
   status,
   periodEndIso,
   providerSubscriptionId,
+  cancelAtPeriodEnd,
 }) {
   const uid = cleanUserId(userId);
   if (!uid || !planId) return { ok: false, error: "invalid_subscription_row" };
@@ -161,6 +162,9 @@ async function upsertProSubscription({
       : null,
     updated_at: new Date().toISOString(),
   };
+  if (cancelAtPeriodEnd != null) {
+    row.cancel_at_period_end = Boolean(cancelAtPeriodEnd);
+  }
   return restWrite("pro_subscriptions", {
     method: "POST",
     body: row,
@@ -386,6 +390,12 @@ async function applyRevenueCatEvent(event) {
     status,
     periodEndIso: periodEndIsoFromMs(expirationMs),
     providerSubscriptionId: transactionId,
+    cancelAtPeriodEnd:
+      eventType === "CANCELLATION" && Number(expirationMs) > Date.now()
+        ? true
+        : eventType === "UNCANCELLATION"
+          ? false
+          : undefined,
   });
 
   let grant = { granted: 0, skipped: true };

@@ -28,6 +28,8 @@ const state = {
   generationDetailId: "",
   returnView: "users",
   grantPrefillEmail: "",
+  supportEmailTemplates: [],
+  supportEmailModal: { userId: "", email: "", templateId: "" },
   marketingLocale: "en",
   marketingPage: "home",
   marketingScreen: "hub",
@@ -601,6 +603,181 @@ async function adminFetch(view, {
     throw new Error(data?.error || `Request failed (${r.status})`);
   }
   return data;
+}
+
+const SUPPORT_TEMPLATE_LABELS = Object.freeze({
+  trial_welcome: "Trial welcome",
+  trial_ending: "Trial ending soon",
+  first_paid: "First paid — thank you",
+  feedback_checkin: "Feedback check-in",
+  cancel_confirm: "Cancel confirm",
+});
+
+function supportTemplateLabel(id) {
+  return SUPPORT_TEMPLATE_LABELS[String(id || "").trim()] || String(id || "Email");
+}
+
+async function fetchSupportEmailPreview(userId, templateId = "") {
+  await refreshSessionIfNeeded();
+  const token = state.session?.access_token;
+  if (!token) throw new Error("Not signed in");
+  const qs = new URLSearchParams({ userId: String(userId || "").trim() });
+  if (templateId) qs.set("templateId", templateId);
+  const r = await fetch(`/api/admin/support-email?${qs}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(data?.error || `Preview failed (${r.status})`);
+  return data;
+}
+
+async function sendSupportEmailApi({ userId, templateId, subject, text }) {
+  await refreshSessionIfNeeded();
+  const token = state.session?.access_token;
+  if (!token) throw new Error("Not signed in");
+  const r = await fetch("/api/admin/support-email", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      userId,
+      templateId,
+      subject,
+      text,
+    }),
+  });
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(data?.error || `Send failed (${r.status})`);
+  return data;
+}
+
+function closeSupportEmailModal() {
+  const modal = document.getElementById("supportEmailModal");
+  if (modal) {
+    modal.hidden = true;
+    modal.setAttribute("aria-hidden", "true");
+  }
+  state.supportEmailModal = { userId: "", email: "", templateId: "" };
+  const msg = document.getElementById("supportEmailModalMsg");
+  if (msg) {
+    msg.hidden = true;
+    msg.textContent = "";
+  }
+}
+
+async function openSupportEmailModal(userId, templateId = "") {
+  const uid = String(userId || "").trim();
+  if (!uid) return;
+  if (!state.adminSession?.canSendSupportEmail) {
+    showError("Support email requires Owner / Admin or Support role.");
+    return;
+  }
+
+  const modal = document.getElementById("supportEmailModal");
+  const subEl = document.getElementById("supportEmailModalSub");
+  const toEl = document.getElementById("supportEmailTo");
+  const subjectEl = document.getElementById("supportEmailSubject");
+  const bodyEl = document.getElementById("supportEmailBody");
+  const tplEl = document.getElementById("supportEmailTemplate");
+  const sendBtn = document.getElementById("btnSupportEmailSend");
+  if (!modal || !subEl || !toEl || !subjectEl || !bodyEl || !tplEl || !sendBtn) return;
+
+  modal.hidden = false;
+  modal.setAttribute("aria-hidden", "false");
+  subEl.textContent = "Loading preview…";
+  toEl.value = "";
+  subjectEl.value = "";
+  bodyEl.value = "";
+  sendBtn.disabled = true;
+
+  try {
+    const data = await fetchSupportEmailPreview(uid, templateId);
+    const templates = Array.isArray(data.templates) ? data.templates : state.supportEmailTemplates;
+    if (templates.length) state.supportEmailTemplates = templates;
+
+    const pick = String(templateId || data.suggestedTemplateId || data.preview?.templateId || "").trim()
+      || templates[0]?.id
+      || "trial_welcome";
+
+    tplEl.innerHTML = templates.map((t) =>
+      `<option value="${escapeHtml(t.id)}"${t.id === pick ? " selected" : ""}>${escapeHtml(t.label || supportTemplateLabel(t.id))}</option>`,
+    ).join("");
+
+    state.supportEmailModal = {
+      userId: uid,
+      email: data.email || "",
+      templateId: pick,
+    };
+
+    subEl.textContent = data.email
+      ? `${data.email}${data.suggestedTemplateId ? ` · suggested: ${supportTemplateLabel(data.suggestedTemplateId)}` : ""}`
+      : "—";
+    toEl.value = data.email || "";
+    subjectEl.value = data.preview?.subject || "";
+    bodyEl.value = data.preview?.text || "";
+
+    const msg = document.getElementById("supportEmailModalMsg");
+    if (msg) {
+      if (!data.resendConfigured) {
+        msg.hidden = false;
+        msg.textContent = "Resend is not configured on the server (RESEND_API_KEY). Preview only.";
+      } else {
+        msg.hidden = true;
+        msg.textContent = "";
+      }
+    }
+
+    sendBtn.disabled = !data.resendConfigured;
+  } catch (err) {
+    subEl.textContent = err?.message || "Could not load preview";
+    showError(err?.message || "Could not load email preview");
+  }
+}
+
+async function reloadSupportEmailPreviewFromModal() {
+  const uid = state.supportEmailModal.userId;
+  const tplEl = document.getElementById("supportEmailTemplate");
+  const templateId = String(tplEl?.value || "").trim();
+  if (!uid || !templateId) return;
+  const subjectEl = document.getElementById("supportEmailSubject");
+  const bodyEl = document.getElementById("supportEmailBody");
+  const sendBtn = document.getElementById("btnSupportEmailSend");
+  if (subjectEl) subjectEl.value = "Loading…";
+  if (bodyEl) bodyEl.value = "";
+  if (sendBtn) sendBtn.disabled = true;
+  try {
+    const data = await fetchSupportEmailPreview(uid, templateId);
+    state.supportEmailModal.templateId = templateId;
+    if (subjectEl) subjectEl.value = data.preview?.subject || "";
+    if (bodyEl) bodyEl.value = data.preview?.text || "";
+    if (sendBtn) sendBtn.disabled = !data.resendConfigured;
+  } catch (err) {
+    showError(err?.message || "Could not reload template");
+  }
+}
+
+function renderSupportEmailActions(s, { compact = false } = {}) {
+  if (!state.adminSession?.canSendSupportEmail || !s?.userId) return "—";
+  const suggested = s.suggestedEmailTemplate || "";
+  const suggestBadge = suggested
+    ? `<span class="badge suggestedEmail" title="Suggested template">${escapeHtml(supportTemplateLabel(suggested))}</span>`
+    : "";
+  const btnLabel = compact ? "Send" : "Send email";
+  return `<div class="supportEmailActions">
+    ${suggestBadge}
+    <button type="button" class="btnGhost btnGhost--sm" data-support-email-open="${escapeHtml(s.userId)}"${suggested ? ` data-support-email-template="${escapeHtml(suggested)}"` : ""}>${btnLabel}</button>
+  </div>`;
+}
+
+function renderRenewalCell(s) {
+  const label = s.renewalLabel || "—";
+  const pending = Boolean(s.cancelAtPeriodEnd) || String(s.status || "").toLowerCase() === "cancelled";
+  const badge = pending && !String(label).toLowerCase().includes("ended")
+    ? `<span class="badge willNotRenew">Will not renew</span>`
+    : "";
+  return `${badge ? `${badge}<br>` : ""}<span class="cellMuted">${escapeHtml(label)}</span>`;
 }
 
 async function marketingAdminFetch(page = "home", locale = "en") {
@@ -1722,8 +1899,27 @@ function renderUserDetail(data) {
     : "";
 
   const subBlock = sub
-    ? `${escapeHtml(sub.planId || "—")} · ${escapeHtml(sub.statusLabel || sub.status || "—")}${sub.currentPeriodEnd ? ` · ends ${fmtDateCompact(sub.currentPeriodEnd)}` : ""}`
+    ? `${escapeHtml(sub.planId || "—")} · ${escapeHtml(sub.statusLabel || sub.status || "—")}${sub.currentPeriodEnd ? ` · ends ${fmtDateCompact(sub.currentPeriodEnd)}` : ""}${sub.cancelAtPeriodEnd ? " · will not renew" : ""}`
     : "No Pro subscription on file.";
+
+  const supportEmail = data.supportEmail || null;
+  const supportEmailBlock = supportEmail && state.adminSession?.canSendSupportEmail
+    ? `<div class="detailMetaBlock" style="margin-top:12px">
+        <strong>Support email</strong>
+        ${supportEmail.suggestedTemplateId
+    ? `<span class="badge suggestedEmail">${escapeHtml(supportTemplateLabel(supportEmail.suggestedTemplateId))}</span> suggested`
+    : "No template suggested right now"}
+        <div class="supportEmailActions" style="margin-top:8px">
+          <button type="button" class="btnPrimary" data-support-email-open="${escapeHtml(u.userId)}"${supportEmail.suggestedTemplateId ? ` data-support-email-template="${escapeHtml(supportEmail.suggestedTemplateId)}"` : ""}>Preview &amp; send</button>
+        </div>
+        ${Array.isArray(supportEmail.emailLogs) && supportEmail.emailLogs.length
+    ? `<ul class="supportEmailLogList">${supportEmail.emailLogs.slice(0, 5).map((log) =>
+      `<li>${escapeHtml(supportTemplateLabel(log.templateId))} · ${fmtDateCompact(log.sentAt)}</li>`,
+    ).join("")}</ul>`
+    : `<p class="sectionNote" style="margin-top:8px">No support emails sent yet.</p>`}
+        ${supportEmail.resendConfigured === false ? `<p class="sectionNote" style="margin-top:8px">Resend not configured — preview works; sending needs RESEND_API_KEY on Vercel.</p>` : ""}
+      </div>`
+    : "";
 
   const billingRows = data.billingEvents || [];
   const billingBody = billingRows.length
@@ -1807,6 +2003,7 @@ function renderUserDetail(data) {
       <div class="detailMetaBlock">
         <strong>Subscription</strong> — ${subBlock}
       </div>
+      ${supportEmailBlock}
     </div>
     ${listSection({
       title: "Billing events",
@@ -2900,21 +3097,29 @@ function renderSubscriptions(data) {
   const rows = data?.subscriptions || [];
   const total = data?.total || rows.length;
   const churnSection = renderSubscriptionChurnSection(data?.churn || {});
+  if (Array.isArray(data?.supportEmailTemplates) && data.supportEmailTemplates.length) {
+    state.supportEmailTemplates = data.supportEmailTemplates;
+  }
+  const resendNote = data?.resendConfigured === false && state.adminSession?.canSendSupportEmail
+    ? `<p class="sectionNote">Support email preview is available. Add <code>RESEND_API_KEY</code> on Vercel to send from support@nabadai.com.</p>`
+    : "";
   const body = rows.length
     ? rows.map((s) => `
       <tr>
         <td>${s.userLabel || "—"}<br><span class="cellMuted">${s.email || ""}</span></td>
         <td>${s.planId || "—"}</td>
         <td><span class="badge ${s.status}">${s.statusLabel || s.status}</span></td>
+        <td>${renderRenewalCell(s)}</td>
         <td>${s.provider}</td>
         ${dateCell(s.currentPeriodEnd)}
-        <td class="monoCell">${s.providerSubscriptionId || "—"}</td>
+        <td>${renderSupportEmailActions(s)}</td>
         ${dateCell(s.updatedAt)}
       </tr>
     `).join("")
-    : `<tr><td colspan="7" class="loading">No subscriptions yet</td></tr>`;
+    : `<tr><td colspan="8" class="loading">No subscriptions yet</td></tr>`;
 
   els.panels.subscriptions.innerHTML = adminPageStack(`
+    ${resendNote}
     ${churnSection}
     ${listSection({
     title: "All Pro subscriptions",
@@ -2923,8 +3128,8 @@ function renderSubscriptions(data) {
       <table class="table--compact">
         <thead>
           <tr>
-            <th>User</th><th>Plan</th><th>Status</th><th>Provider</th>
-            <th>Period end</th><th>Provider ID</th><th>Updated</th>
+            <th>User</th><th>Plan</th><th>Status</th><th>Renewal</th><th>Provider</th>
+            <th>Period end</th><th>Support email</th><th>Updated</th>
           </tr>
         </thead>
         <tbody>${body}</tbody>
@@ -5511,6 +5716,63 @@ document.body.addEventListener("keydown", (e) => {
 });
 
 document.body.addEventListener("click", (e) => {
+  const supportEmailClose = e.target.closest("[data-support-email-close]");
+  if (supportEmailClose) {
+    e.preventDefault();
+    closeSupportEmailModal();
+    return;
+  }
+
+  const supportEmailOpen = e.target.closest("[data-support-email-open]");
+  if (supportEmailOpen) {
+    e.preventDefault();
+    void openSupportEmailModal(
+      supportEmailOpen.dataset.supportEmailOpen,
+      supportEmailOpen.dataset.supportEmailTemplate || "",
+    );
+    return;
+  }
+
+  const supportEmailSend = e.target.closest("#btnSupportEmailSend");
+  if (supportEmailSend) {
+    e.preventDefault();
+    void (async () => {
+      const uid = state.supportEmailModal.userId;
+      const tplEl = document.getElementById("supportEmailTemplate");
+      const templateId = String(tplEl?.value || state.supportEmailModal.templateId || "").trim();
+      const subject = String(document.getElementById("supportEmailSubject")?.value || "").trim();
+      const text = String(document.getElementById("supportEmailBody")?.value || "").trim();
+      const msg = document.getElementById("supportEmailModalMsg");
+      if (!uid || !templateId || !subject || !text) {
+        if (msg) {
+          msg.hidden = false;
+          msg.textContent = "Subject and message are required.";
+        }
+        return;
+      }
+      supportEmailSend.disabled = true;
+      if (msg) {
+        msg.hidden = false;
+        msg.textContent = "Sending…";
+      }
+      try {
+        await sendSupportEmailApi({ userId: uid, templateId, subject, text });
+        closeSupportEmailModal();
+        state.cache = {};
+        showError("");
+        if (state.view === "user" || state.view === "subscriptions") {
+          await loadView({ force: true });
+        }
+      } catch (err) {
+        if (msg) msg.textContent = err?.message || "Send failed";
+        showError(err?.message || "Could not send email");
+      } finally {
+        supportEmailSend.disabled = false;
+      }
+    })();
+    return;
+  }
+
   const activityWinBtn = e.target.closest("[data-activity-window]");
   if (activityWinBtn) {
     const next = Number(activityWinBtn.getAttribute("data-activity-window") || 0);
@@ -6135,6 +6397,10 @@ document.body.addEventListener("click", (e) => {
 });
 
 document.body.addEventListener("change", (e) => {
+  if (e.target.id === "supportEmailTemplate") {
+    void reloadSupportEmailPreviewFromModal();
+    return;
+  }
   if (e.target.id === "mkPageSelect") {
     state.marketingPage = e.target.value || "home";
     state.marketingSection = "hero";

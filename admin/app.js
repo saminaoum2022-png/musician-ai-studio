@@ -3522,33 +3522,30 @@ function renderSupportCompose() {
   const resendOk = state.adminSession?.resendConfigured !== false;
   const prefill = state.supportComposePrefill || {};
   panel.innerHTML = adminPageStack(`
-    <section class="sectionCard supportComposeCard">
-      <div class="sectionHead">
-        <h3 class="sectionTitle">New message</h3>
-        <p class="sectionNote">Sends from <strong>support@nabadai.com</strong> with Reply-To support@. Use for one-off replies — Pro templates stay on Subscriptions.</p>
-      </div>
-      ${resendOk ? "" : `<p class="sectionNote" style="margin-bottom:12px">Add <code>RESEND_API_KEY</code> on Vercel to enable sending.</p>`}
-      <form id="supportComposeForm" class="grantForm supportComposeForm">
-        <label class="field grantField">
-          <span>To</span>
-          <input id="supportComposeTo" type="email" required placeholder="customer@example.com" autocomplete="off" class="marketingFieldInput" value="${escapeHtml(prefill.to || "")}" />
-        </label>
-        <label class="field grantField">
-          <span>Subject</span>
-          <input id="supportComposeSubject" type="text" required placeholder="Re: NabadAi Pro" class="marketingFieldInput" value="${escapeHtml(prefill.subject || "")}" />
-        </label>
-        <label class="field grantField">
-          <span>Message</span>
-          <textarea id="supportComposeBody" rows="16" required placeholder="Hi,&#10;&#10;…&#10;&#10;— NabadAi Support" class="marketingFieldInput">${escapeHtml(prefill.text || "")}</textarea>
-        </label>
-        <div class="supportComposeActions">
-          <button type="submit" class="btnPrimary" id="btnSupportComposeSend"${resendOk ? "" : " disabled"}>Send from support@</button>
+    <section class="sectionCard mailClient mailCompose">
+      <div class="mailComposeToolbar">
+        <div class="mailComposeFrom">
+          <span class="mailComposeFromLabel">From</span>
+          <strong>support@nabadai.com</strong>
+          <span class="mailComposeFromHint">Reply-To support@</span>
         </div>
-        <p id="supportComposeMsg" class="grantMsg" hidden></p>
-      </form>
-      <div class="supportComposeAside">
-        <p class="sectionNote">Read incoming mail in <strong>Support → Inbox</strong>. Replies still go through Resend from support@.</p>
+        <button type="submit" form="supportComposeForm" class="btnPrimary mailComposeSendBtn" id="btnSupportComposeSend"${resendOk ? "" : " disabled"}>Send</button>
       </div>
+      ${resendOk ? "" : `<p class="mailComposeWarn">Add <code>RESEND_API_KEY</code> on Vercel to enable sending.</p>`}
+      <form id="supportComposeForm" class="mailComposeForm">
+        <div class="mailComposeRow">
+          <label class="mailComposeLabel" for="supportComposeTo">To</label>
+          <input id="supportComposeTo" type="email" required placeholder="customer@example.com" autocomplete="off" class="mailComposeInput" value="${escapeHtml(prefill.to || "")}" />
+        </div>
+        <div class="mailComposeRow">
+          <label class="mailComposeLabel" for="supportComposeSubject">Subject</label>
+          <input id="supportComposeSubject" type="text" required placeholder="Re: NabadAi Pro" class="mailComposeInput" value="${escapeHtml(prefill.subject || "")}" />
+        </div>
+        <div class="mailComposeBodyWrap">
+          <textarea id="supportComposeBody" required placeholder="Hi,&#10;&#10;…&#10;&#10;— NabadAi Support" class="mailComposeTextarea">${escapeHtml(prefill.text || "")}</textarea>
+        </div>
+        <p id="supportComposeMsg" class="grantMsg mailComposeMsg" hidden></p>
+      </form>
     </section>
   `, { plain: true });
   state.supportComposePrefill = null;

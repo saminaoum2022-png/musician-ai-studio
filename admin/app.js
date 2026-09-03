@@ -89,6 +89,7 @@ const els = {
     generations: document.getElementById("viewGenerations"),
     publications: document.getElementById("viewPublications"),
     subscriptions: document.getElementById("viewSubscriptions"),
+    "support-compose": document.getElementById("viewSupportCompose"),
     billing: document.getElementById("viewBilling"),
     settings: document.getElementById("viewSettings"),
   },
@@ -111,6 +112,7 @@ const VIEW_META = {
   generations: { title: "Generations", sub: "Song and audio generation requests" },
   publications: { title: "Publications", sub: "Public profile posts — moderation view (not friends-only)" },
   subscriptions: { title: "Subscriptions", sub: "NabadAi Pro status by user" },
+  "support-compose": { title: "Compose email", sub: "Send from support@nabadai.com — inbox coming later" },
   billing: { title: "Billing events", sub: "Subscription and IAP credit grants from webhooks" },
   settings: { title: "Team & roles", sub: "Invite coworkers and control dashboard access" },
 };
@@ -631,7 +633,7 @@ async function fetchSupportEmailPreview(userId, templateId = "") {
   return data;
 }
 
-async function sendSupportEmailApi({ userId, templateId, subject, text }) {
+async function sendSupportEmailApi({ userId, templateId, subject, text, to }) {
   await refreshSessionIfNeeded();
   const token = state.session?.access_token;
   if (!token) throw new Error("Not signed in");
@@ -646,6 +648,7 @@ async function sendSupportEmailApi({ userId, templateId, subject, text }) {
       templateId,
       subject,
       text,
+      to,
     }),
   });
   const data = await r.json().catch(() => ({}));
@@ -775,29 +778,62 @@ async function reloadSupportEmailPreviewFromModal() {
   }
 }
 
-function renderSupportEmailActions(s, { compact = false } = {}) {
-  if (!state.adminSession?.canSendSupportEmail || !s?.userId) return "—";
+function renderSupportEmailActions(s) {
+  if (!state.adminSession?.canSendSupportEmail || !s?.userId) {
+    return `<span class="cellMuted">—</span>`;
+  }
   const suggested = s.suggestedEmailTemplate || "";
   const suggestBadge = suggested
     ? `<span class="badge suggestedEmail" title="Suggested template">${escapeHtml(supportTemplateLabel(suggested))}</span>`
-    : "";
-  const btnLabel = compact ? "Send" : "Send email";
-  return `<div class="supportEmailActions">
-    ${suggestBadge}
-    <button type="button" class="btnGhost btnGhost--sm" data-support-email-open="${escapeHtml(s.userId)}"${suggested ? ` data-support-email-template="${escapeHtml(suggested)}"` : ""}>${btnLabel}</button>
+    : `<span class="subEmailHint">Manual send</span>`;
+  return `<div class="subEmailCell">
+    <div class="subEmailCellTop">${suggestBadge}</div>
+    <button type="button" class="btnGhost btnGhost--sm subEmailSendBtn" data-support-email-open="${escapeHtml(s.userId)}"${suggested ? ` data-support-email-template="${escapeHtml(suggested)}"` : ""}>Send template</button>
   </div>`;
 }
 
+function renewalDateNote(s) {
+  const status = String(s?.status || "").toLowerCase();
+  const endLabel = fmtDateCompact(s?.currentPeriodEnd) || "";
+  const pending = Boolean(s?.cancelAtPeriodEnd)
+    || (status === "cancelled" && endLabel);
+  if (pending && status !== "expired") {
+    return endLabel ? `Access until ${endLabel}` : "Access until period end";
+  }
+  if (status === "trialing") {
+    return endLabel ? `Trial ends ${endLabel}` : "Trialing";
+  }
+  if (status === "active" || status === "grace") {
+    return endLabel ? `Renews ${endLabel}` : "Active";
+  }
+  if (status === "expired" || status === "cancelled") {
+    return endLabel ? `Ended ${endLabel}` : status;
+  }
+  return endLabel || "—";
+}
+
 function renderRenewalCell(s) {
-  const label = s.renewalLabel || "—";
-  const pending = Boolean(s.cancelAtPeriodEnd) || String(s.status || "").toLowerCase() === "cancelled";
-  const badge = pending && !String(label).toLowerCase().includes("ended")
-    ? `<span class="badge willNotRenew">Will not renew</span>`
-    : "";
-  const stripeSync = String(s.provider || "").toLowerCase() === "stripe" && state.adminSession?.canSendSupportEmail && s.userId
-    ? `<br><button type="button" class="btnGhost btnGhost--sm" data-stripe-sync="${escapeHtml(s.userId)}" title="Re-read cancel status from Stripe">Sync Stripe</button>`
-    : "";
-  return `${badge ? `${badge}<br>` : ""}<span class="cellMuted">${escapeHtml(label)}</span>${stripeSync}`;
+  const status = String(s?.status || "").toLowerCase();
+  const pending = Boolean(s.cancelAtPeriodEnd)
+    || (status === "cancelled" && s.currentPeriodEnd);
+  const showWillNotRenew = pending && status !== "expired";
+  const dateNote = renewalDateNote(s);
+  const isStripe = String(s.provider || "").toLowerCase() === "stripe";
+  const canSync = isStripe && state.adminSession?.canSendSupportEmail && s.userId;
+
+  return `<div class="subRenewalCell">
+    <div class="subRenewalBadges">
+      ${showWillNotRenew ? `<span class="badge willNotRenew">Will not renew</span>` : ""}
+    </div>
+    <div class="subRenewalDate">${escapeHtml(dateNote)}</div>
+    ${canSync ? `<button type="button" class="subRenewalSync btnGhost btnGhost--sm" data-stripe-sync="${escapeHtml(s.userId)}" title="Re-read from Stripe">↻ Stripe</button>` : ""}
+  </div>`;
+}
+
+function renderPlanCell(s) {
+  const plan = escapeHtml(s.planId || "—");
+  const provider = escapeHtml(String(s.provider || "").toLowerCase() || "—");
+  return `<div class="subPlanCell"><span class="subPlanName">${plan}</span><span class="subPlanProvider">${provider}</span></div>`;
 }
 
 async function marketingAdminFetch(page = "home", locale = "en") {
@@ -930,12 +966,18 @@ async function loadAdminSession({ force = false } = {}) {
   const data = await adminFetch("session");
   state.adminSession = data.session || null;
   if (Array.isArray(data.roles)) state.adminSession.roles = data.roles;
+  if (data.resendConfigured != null && state.adminSession) {
+    state.adminSession.resendConfigured = Boolean(data.resendConfigured);
+  }
   setBlogAdminToken(state.session?.access_token);
   applyNavPermissions();
   return state.adminSession;
 }
 
 function canAccessView(view) {
+  if (view === "support-compose") {
+    return Boolean(state.adminSession?.canSendSupportEmail);
+  }
   const allowed = state.adminSession?.allowedViews;
   if (!Array.isArray(allowed) || !allowed.length) return true;
   if (view === "user") return allowed.includes("user") || allowed.includes("users");
@@ -994,6 +1036,10 @@ function applyNavPermissions() {
   const settingsGroup = document.querySelector('[data-nav-group="settings"]');
   if (settingsGroup) {
     settingsGroup.hidden = !session?.canManageTeam;
+  }
+  const supportGroup = document.querySelector('[data-nav-group="support"]');
+  if (supportGroup) {
+    supportGroup.hidden = !session?.canSendSupportEmail;
   }
   if (els.adminRoleBadge) {
     if (session?.roleLabel) {
@@ -3129,17 +3175,15 @@ function renderSubscriptions(data) {
   const body = rows.length
     ? rows.map((s) => `
       <tr>
-        <td>${s.userLabel || "—"}<br><span class="cellMuted">${s.email || ""}</span></td>
-        <td>${s.planId || "—"}</td>
-        <td><span class="badge ${s.status}">${s.statusLabel || s.status}</span></td>
-        <td>${renderRenewalCell(s)}</td>
-        <td>${s.provider}</td>
-        ${dateCell(s.currentPeriodEnd)}
+        <td class="subUserCell"><span class="subUserName">${escapeHtml(s.userLabel || "—")}</span><span class="subUserEmail">${escapeHtml(s.email || "")}</span></td>
+        <td>${renderPlanCell(s)}</td>
+        <td><span class="badge ${escapeHtml(s.status || "")}">${escapeHtml(s.statusLabel || s.status || "—")}</span></td>
+        <td class="subRenewalCol">${renderRenewalCell(s)}</td>
         <td>${renderSupportEmailActions(s)}</td>
         ${dateCell(s.updatedAt)}
       </tr>
     `).join("")
-    : `<tr><td colspan="8" class="loading">No subscriptions yet</td></tr>`;
+    : `<tr><td colspan="6" class="loading">No subscriptions yet</td></tr>`;
 
   els.panels.subscriptions.innerHTML = adminPageStack(`
     ${resendNote}
@@ -3147,12 +3191,11 @@ function renderSubscriptions(data) {
     ${listSection({
     title: "All Pro subscriptions",
     tableHtml: `
-    <div class="tableWrap tableWrap--plain">
-      <table class="table--compact">
+    <div class="tableWrap tableWrap--plain tableWrap--subscriptions">
+      <table class="table--compact table--subscriptions">
         <thead>
           <tr>
-            <th>User</th><th>Plan</th><th>Status</th><th>Renewal</th><th>Provider</th>
-            <th>Period end</th><th>Support email</th><th>Updated</th>
+            <th>User</th><th>Plan</th><th>Status</th><th>Renewal</th><th>Email</th><th>Updated</th>
           </tr>
         </thead>
         <tbody>${body}</tbody>
@@ -3160,6 +3203,51 @@ function renderSubscriptions(data) {
     </div>`,
     pager: pagerHtml(total, state.offset),
   })}`, { plain: true });
+}
+
+function renderSupportCompose() {
+  const panel = els.panels["support-compose"];
+  const canSend = Boolean(state.adminSession?.canSendSupportEmail);
+  if (!canSend) {
+    panel.innerHTML = adminPageStack(`
+      <section class="sectionCard">
+        <p class="sectionNote">Compose email requires Owner / Admin or Support role.</p>
+      </section>
+    `, { plain: true });
+    return;
+  }
+
+  const resendOk = state.adminSession?.resendConfigured !== false;
+  panel.innerHTML = adminPageStack(`
+    <section class="sectionCard supportComposeCard">
+      <div class="sectionHead">
+        <h3 class="sectionTitle">New message</h3>
+        <p class="sectionNote">Sends from <strong>support@nabadai.com</strong> with Reply-To support@. Use for one-off replies — Pro templates stay on Subscriptions.</p>
+      </div>
+      ${resendOk ? "" : `<p class="sectionNote" style="margin-bottom:12px">Add <code>RESEND_API_KEY</code> on Vercel to enable sending.</p>`}
+      <form id="supportComposeForm" class="grantForm supportComposeForm">
+        <label class="field grantField">
+          <span>To</span>
+          <input id="supportComposeTo" type="email" required placeholder="customer@example.com" autocomplete="off" class="marketingFieldInput" />
+        </label>
+        <label class="field grantField">
+          <span>Subject</span>
+          <input id="supportComposeSubject" type="text" required placeholder="Re: NabadAi Pro" class="marketingFieldInput" />
+        </label>
+        <label class="field grantField">
+          <span>Message</span>
+          <textarea id="supportComposeBody" rows="16" required placeholder="Hi,&#10;&#10;…&#10;&#10;— NabadAi Support" class="marketingFieldInput"></textarea>
+        </label>
+        <div class="supportComposeActions">
+          <button type="submit" class="btnPrimary" id="btnSupportComposeSend"${resendOk ? "" : " disabled"}>Send from support@</button>
+        </div>
+        <p id="supportComposeMsg" class="grantMsg" hidden></p>
+      </form>
+      <div class="supportComposeAside">
+        <p class="sectionNote"><strong>Inbox</strong> — coming in a later update. For now, read replies in Gmail and compose here or reply from Gmail (Send as support@).</p>
+      </div>
+    </section>
+  `, { plain: true });
 }
 
 function marketingField(label, id, value, { multiline = false, hint = "", highlight = false } = {}) {
@@ -4811,6 +4899,7 @@ const RENDERERS = {
   generations: renderGenerations,
   publications: renderPublications,
   subscriptions: renderSubscriptions,
+  "support-compose": renderSupportCompose,
   billing: renderBilling,
   settings: renderSettings,
 };
@@ -5213,6 +5302,12 @@ async function loadView({ force = false } = {}) {
       } else {
         data = await loadBlogViewData(state);
       }
+    } else if (view === "support-compose") {
+      data = { ok: true };
+      panel.classList.remove("isLoading");
+      RENDERERS["support-compose"](data);
+      state.cache[cacheKey] = data;
+      return;
     } else {
       data = await adminFetch(view, {
         offset: state.offset,
@@ -5553,6 +5648,56 @@ document.body.addEventListener("submit", (e) => {
         );
       } catch (err) {
         setPromoCreateMsg(err?.message || "Create failed", "err");
+      } finally {
+        if (btn) btn.disabled = false;
+      }
+    })();
+    return;
+  }
+
+  const supportComposeForm = e.target.closest("#supportComposeForm");
+  if (supportComposeForm) {
+    e.preventDefault();
+    void (async () => {
+      const to = String(document.getElementById("supportComposeTo")?.value || "").trim();
+      const subject = String(document.getElementById("supportComposeSubject")?.value || "").trim();
+      const text = String(document.getElementById("supportComposeBody")?.value || "").trim();
+      const msg = document.getElementById("supportComposeMsg");
+      const btn = document.getElementById("btnSupportComposeSend");
+      if (!to || !subject || !text) {
+        if (msg) {
+          msg.hidden = false;
+          msg.textContent = "To, subject, and message are required.";
+          msg.dataset.tone = "warn";
+        }
+        return;
+      }
+      if (btn) btn.disabled = true;
+      if (msg) {
+        msg.hidden = false;
+        msg.textContent = "Sending…";
+        msg.dataset.tone = "warn";
+      }
+      try {
+        await sendSupportEmailApi({
+          to,
+          subject,
+          text,
+          templateId: "custom_compose",
+        });
+        if (msg) {
+          msg.textContent = `Sent to ${to}`;
+          msg.dataset.tone = "ok";
+        }
+        document.getElementById("supportComposeSubject").value = "";
+        document.getElementById("supportComposeBody").value = "";
+        showError("");
+      } catch (err) {
+        if (msg) {
+          msg.textContent = err?.message || "Send failed";
+          msg.dataset.tone = "err";
+        }
+        showError(err?.message || "Could not send email");
       } finally {
         if (btn) btn.disabled = false;
       }

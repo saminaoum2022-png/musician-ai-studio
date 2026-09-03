@@ -8,7 +8,7 @@
     <title>NabadAi Admin</title>
     <meta name="theme-color" content="#05070d" />
     <link rel="icon" href="/favicon.ico" sizes="any" />
-    <link rel="stylesheet" href="/admin/styles.css?v=20260818-mk-v7" />
+    <link rel="stylesheet" href="/admin/styles.css?v=20260903-support-ui" />
     <script>
       (function () {
         try {
@@ -121,6 +121,10 @@
             <button type="button" class="navItem" data-view="marketing">Online store</button>
             <button type="button" class="navItem" data-view="blog">Blog</button>
           </div>
+          <div class="navGroup" data-nav-group="support">
+            <div class="navGroupLabel">Support</div>
+            <button type="button" class="navItem" data-view="support-compose">Compose email</button>
+          </div>
           <div class="navGroup">
             <div class="navGroupLabel">Billing</div>
             <button type="button" class="navItem" data-view="credits">Credits</button>
@@ -166,6 +170,7 @@
         <div id="viewGeneration" class="viewPanel" data-panel="generation" hidden></div>
         <div id="viewPublications" class="viewPanel" data-panel="publications" hidden></div>
         <div id="viewSubscriptions" class="viewPanel" data-panel="subscriptions" hidden></div>
+        <div id="viewSupportCompose" class="viewPanel" data-panel="support-compose" hidden></div>
         <div id="viewBilling" class="viewPanel" data-panel="billing" hidden></div>
         <div id="viewSettings" class="viewPanel" data-panel="settings" hidden></div>
 
@@ -209,6 +214,6 @@
       </div>
     </div>
 
-    <script type="module" src="/admin/app.js?v=20260830-162100"></script>
+    <script type="module" src="/admin/app.js?v=20260903-support-ui"></script>
   </body>
 </html>

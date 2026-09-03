@@ -206,18 +206,28 @@ module.exports = async function handler(req, res) {
 
     if (req.method === "POST") {
       const body = await readJsonBody(req);
-      const userId = String(body?.userId || "").trim();
+      let userId = String(body?.userId || "").trim();
       const templateId = String(body?.templateId || "").trim();
       const subject = String(body?.subject || "").trim();
       const text = String(body?.text || body?.bodyText || "").trim();
       const html = String(body?.html || body?.bodyHtml || "").trim();
+      const toDirect = String(body?.to || "").trim().toLowerCase();
+      const isCompose = templateId === "custom_compose" || (!userId && toDirect);
 
-      if (!userId || !templateId || !subject || !text) {
+      if (isCompose) {
+        if (!toDirect || !subject || !text) {
+          return sendJson(res, 400, {
+            error: "to, subject, and text are required for compose",
+          });
+        }
+      } else if (!userId || !templateId || !subject || !text) {
         return sendJson(res, 400, {
           error: "userId, templateId, subject, and text are required",
         });
       }
-      if (!templateMeta(templateId)) {
+
+      const effectiveTemplateId = isCompose ? "custom_compose" : templateId;
+      if (!templateMeta(effectiveTemplateId) && effectiveTemplateId !== "custom_compose") {
         return sendJson(res, 400, { error: "Unknown templateId" });
       }
       if (!isResendConfigured()) {
@@ -227,13 +237,20 @@ module.exports = async function handler(req, res) {
         });
       }
 
-      const ctx = await loadUserEmailContext(userId);
-      if (!ctx?.email) {
-        return sendJson(res, 404, { error: "User email not found" });
+      let recipient = toDirect;
+      if (!isCompose) {
+        const ctx = await loadUserEmailContext(userId);
+        if (!ctx?.email) {
+          return sendJson(res, 404, { error: "User email not found" });
+        }
+        recipient = ctx.email;
+      } else if (!userId) {
+        const { resolveUserIdByEmail } = require("../_lib/admin-auth");
+        userId = (await resolveUserIdByEmail(toDirect)) || "";
       }
 
       const sendResult = await sendSupportEmail({
-        to: ctx.email,
+        to: recipient,
         subject,
         text,
         html: html || undefined,
@@ -245,21 +262,23 @@ module.exports = async function handler(req, res) {
         });
       }
 
-      const logRes = await serviceInsert("support_email_log", {
-        user_id: userId,
-        template_id: templateId,
-        recipient_email: ctx.email,
+      const logRow = {
+        template_id: effectiveTemplateId,
+        recipient_email: recipient,
         subject,
         sent_by_user_id: admin.userId,
         sent_by_email: admin.email,
         provider_message_id: sendResult.id || null,
-      });
+      };
+      if (userId) logRow.user_id = userId;
+
+      const logRes = await serviceInsert("support_email_log", logRow);
 
       return sendJson(res, 200, {
         ok: true,
         messageId: sendResult.id || null,
-        recipient: ctx.email,
-        templateId,
+        recipient,
+        templateId: effectiveTemplateId,
         logged: Boolean(logRes.ok),
       });
     }

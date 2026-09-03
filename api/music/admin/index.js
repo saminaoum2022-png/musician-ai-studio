@@ -2364,6 +2364,7 @@ module.exports = async function handler(req, res) {
     let payload = {
       ok: true,
       view,
+      resendConfigured: isResendConfigured(),
       session: {
         email: admin.email,
         userId: admin.userId,

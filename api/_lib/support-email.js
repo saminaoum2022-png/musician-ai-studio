@@ -36,6 +36,9 @@ const PLAN_PRICES = Object.freeze({
 });
 
 function templateMeta(id) {
+  if (String(id || "").trim() === "custom_compose") {
+    return { id: "custom_compose", label: "Custom compose", description: "Freeform support reply" };
+  }
   return SUPPORT_TEMPLATES.find((t) => t.id === id) || null;
 }
 

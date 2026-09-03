@@ -37,7 +37,6 @@ const state = {
   supportMailSelected: {},
   supportComposePrefill: null,
   inboxUnreadCount: 0,
-  inboxTotalCount: 0,
   marketingLocale: "en",
   marketingPage: "home",
   marketingScreen: "hub",
@@ -1045,7 +1044,7 @@ function updateInboxNavBadge() {
   const btn = document.querySelector('.navItem[data-view="support-inbox"]');
   if (!btn) return;
   let badge = btn.querySelector(".navInboxBadge");
-  const n = Number(state.inboxTotalCount) || 0;
+  const n = Number(state.inboxUnreadCount) || 0;
   if (n <= 0) {
     badge?.remove();
     return;
@@ -1056,20 +1055,18 @@ function updateInboxNavBadge() {
     btn.appendChild(badge);
   }
   badge.textContent = n > 99 ? "99+" : String(n);
-  badge.setAttribute("aria-label", `${n} received`);
+  badge.setAttribute("aria-label", `${n} unread`);
 }
 
 async function refreshInboxNavBadge() {
   if (!state.adminSession?.canSendSupportEmail) {
     state.inboxUnreadCount = 0;
-    state.inboxTotalCount = 0;
     updateInboxNavBadge();
     return;
   }
   try {
     const data = await fetchSupportInbox({ folder: "inbox", limit: 1 });
     state.inboxUnreadCount = Number(data?.unreadCount) || 0;
-    state.inboxTotalCount = Number(data?.inboxTotalCount) || 0;
   } catch {
     /* keep previous count */
   }
@@ -5797,7 +5794,6 @@ async function loadView({ force = false } = {}) {
     if (view === "support-inbox" && !state.inboxMessageId && els.pageSub) {
       const unread = Number(data?.unreadCount) || 0;
       state.inboxUnreadCount = unread;
-      state.inboxTotalCount = Number(data?.inboxTotalCount) || 0;
       updateInboxNavBadge();
       els.pageSub.textContent = unread
         ? `${unread} unread · support@ and help@`

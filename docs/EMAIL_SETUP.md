@@ -273,3 +273,47 @@ ImprovMX + Shopify: [improvmx.com/guides/shopify](https://improvmx.com/guides/sh
 ---
 
 See also: [LAUNCH_CHECKLIST.md](./LAUNCH_CHECKLIST.md) Phase 1 → Email & support.
+
+---
+
+## Admin Inbox (Resend receiving)
+
+The admin dashboard **Support → Inbox** stores inbound mail in Supabase and shows it at [admin.nabadai.com](https://admin.nabadai.com). Outbound replies still use Resend send (`support@nabadai.com`).
+
+### 1. Supabase
+
+Run `supabase/support_inbound_messages.sql` in the SQL Editor.
+
+### 2. Resend — enable receiving on nabadai.com
+
+1. [Resend Dashboard](https://resend.com/domains) → **nabadai.com** → **Receiving** → enable.
+2. Copy the **MX records** Resend provides (receiving MX — different from the `send` subdomain used for outbound).
+
+### 3. Cloudflare DNS (replace ImprovMX)
+
+If mail today goes **ImprovMX → Gmail**, switch root MX to Resend so the admin Inbox receives copies:
+
+1. Cloudflare → **nabadai.com** → **DNS**
+2. **Remove** ImprovMX MX records (`mx1.improvmx.com`, `mx2.improvmx.com`) on `@`
+3. **Add** Resend receiving MX records (priority + host from Resend UI)
+4. Keep **Resend send** records on `send` subdomain and DKIM as-is
+
+Optional: In Resend receiving settings, add a **forward** to your Gmail as backup while you test.
+
+### 4. Webhook
+
+1. Resend → **Webhooks** → Add webhook
+2. URL: `https://www.nabadai.com/api/webhooks/resend-inbound`
+3. Event: **`email.received`**
+4. Copy the **signing secret** → Vercel env `RESEND_INBOUND_WEBHOOK_SECRET` (Production + Preview)
+
+### 5. Test
+
+1. Send email from an external account to `support@nabadai.com`
+2. Admin → **Support → Inbox** → **Sync from Resend** (or wait for webhook)
+3. Open message → **Reply** prefills Compose
+
+| Direction | Provider |
+|-----------|----------|
+| **Inbound** (Inbox) | Resend receiving + webhook |
+| **Outbound** (Compose / templates) | Resend send API |

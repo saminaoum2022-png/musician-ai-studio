@@ -41,6 +41,7 @@ where user_id = (
 | `RESEND_API_KEY` | Send Pro lifecycle emails from admin (`support@nabadai.com`) |
 | `SUPPORT_EMAIL_FROM` | Optional From header (default `NabadAi Support <support@nabadai.com>`) |
 | `SUPPORT_EMAIL_REPLY_TO` | Optional Reply-To (default `support@nabadai.com`) |
+| `RESEND_INBOUND_WEBHOOK_SECRET` | Svix signing secret from Resend webhook (inbound `email.received`) |
 
 ### 4. Support email SQL (admin Phase 1)
 
@@ -48,10 +49,14 @@ Run after `pro_subscriptions.sql`:
 
 1. `supabase/support_email_log.sql`
 2. `supabase/pro_subscriptions_cancel_at_period_end.sql`
+3. `supabase/support_email_log_compose.sql` (optional user_id + custom compose template)
+4. **`supabase/support_inbound_messages.sql`** — admin **Support → Inbox**
 
 Verify **Resend** domain for `nabadai.com` and add `RESEND_API_KEY` in Vercel (Production + Preview).
 
 **Subscriptions** tab shows **Will not renew** when Stripe `cancel_at_period_end` is synced. **Support email** column (Owner / Admin + Support) — preview, edit, send; suggested template per subscriber; sends logged in `support_email_log`.
+
+**Support → Inbox** lists mail to `support@` / `help@` via [Resend receiving](https://resend.com/docs/dashboard/receiving/introduction). Webhook: `POST https://www.nabadai.com/api/webhooks/resend-inbound` with event `email.received`. Use **Sync from Resend** to backfill recent mail. See `docs/EMAIL_SETUP.md` for DNS (replace ImprovMX MX with Resend receiving MX on Cloudflare).
 
 ## Access
 

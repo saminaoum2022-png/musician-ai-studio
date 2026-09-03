@@ -285,6 +285,9 @@ button, input { font: inherit; }
 .navItem {
   display: flex;
   align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
   text-align: left;
   padding: 10px 12px;
   border-radius: var(--radius-sm);
@@ -294,6 +297,21 @@ button, input { font: inherit; }
   cursor: pointer;
   font-size: 0.9rem;
   transition: background 160ms ease, border-color 160ms ease, color 160ms ease;
+}
+
+.navInboxBadge {
+  flex-shrink: 0;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #051018;
+  font-size: 0.68rem;
+  font-weight: 700;
+  line-height: 20px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
 }
 
 .navIcon { display: none; }
@@ -2880,7 +2898,7 @@ td.num { font-variant-numeric: tabular-nums; }
 .mailListHeader,
 .mailRow {
   display: grid;
-  grid-template-columns: 36px 36px minmax(140px, 1.1fr) minmax(0, 2fr) 108px;
+  grid-template-columns: 36px minmax(140px, 1.1fr) minmax(0, 2fr) 108px;
   align-items: center;
   gap: 8px;
   padding: 0 14px;

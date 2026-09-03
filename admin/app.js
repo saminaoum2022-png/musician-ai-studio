@@ -36,6 +36,8 @@ const state = {
   inboxFilter: "all",
   supportMailSelected: {},
   supportComposePrefill: null,
+  inboxUnreadCount: 0,
+  inboxTotalCount: 0,
   marketingLocale: "en",
   marketingPage: "home",
   marketingScreen: "hub",
@@ -1035,7 +1037,43 @@ async function loadAdminSession({ force = false } = {}) {
   }
   setBlogAdminToken(state.session?.access_token);
   applyNavPermissions();
+  void refreshInboxNavBadge();
   return state.adminSession;
+}
+
+function updateInboxNavBadge() {
+  const btn = document.querySelector('.navItem[data-view="support-inbox"]');
+  if (!btn) return;
+  let badge = btn.querySelector(".navInboxBadge");
+  const n = Number(state.inboxTotalCount) || 0;
+  if (n <= 0) {
+    badge?.remove();
+    return;
+  }
+  if (!badge) {
+    badge = document.createElement("span");
+    badge.className = "navInboxBadge";
+    btn.appendChild(badge);
+  }
+  badge.textContent = n > 99 ? "99+" : String(n);
+  badge.setAttribute("aria-label", `${n} received`);
+}
+
+async function refreshInboxNavBadge() {
+  if (!state.adminSession?.canSendSupportEmail) {
+    state.inboxUnreadCount = 0;
+    state.inboxTotalCount = 0;
+    updateInboxNavBadge();
+    return;
+  }
+  try {
+    const data = await fetchSupportInbox({ folder: "inbox", limit: 1 });
+    state.inboxUnreadCount = Number(data?.unreadCount) || 0;
+    state.inboxTotalCount = Number(data?.inboxTotalCount) || 0;
+  } catch {
+    /* keep previous count */
+  }
+  updateInboxNavBadge();
 }
 
 function canAccessView(view) {
@@ -1116,6 +1154,7 @@ function applyNavPermissions() {
       els.adminRoleBadge.hidden = true;
     }
   }
+  updateInboxNavBadge();
 }
 
 function viewCacheKey() {
@@ -3422,7 +3461,6 @@ function renderSupportMailListHeader({ folder }) {
     <label class="mailCheckCell mailCheckCell--head" title="Select all">
       <input type="checkbox" id="mailSelectAll" aria-label="Select all" />
     </label>
-    <span class="mailNumCell">#</span>
     <span class="mailFromCell">${folder === "sent" ? "To" : "From"}</span>
     <span class="mailSubjectCell">Subject</span>
     <span class="mailDateCell">Date</span>
@@ -3489,13 +3527,12 @@ function renderSupportSentDetail(sent) {
   `;
 }
 
-function renderSupportInboxRows(messages, { offset = 0 } = {}) {
+function renderSupportInboxRows(messages) {
   if (!messages.length) {
     return `<div class="mailEmpty">No messages yet. Email support@nabadai.com or sync from Resend.</div>`;
   }
-  return messages.map((m, i) => {
+  return messages.map((m) => {
     const unread = !m.isRead;
-    const rowNum = offset + i + 1;
     const fromLabel = m.fromName ? m.fromName : (m.fromEmail || "—");
     const fromSub = m.fromName ? m.fromEmail : "";
     const checked = Boolean(state.supportMailSelected[m.id]);
@@ -3506,7 +3543,6 @@ function renderSupportInboxRows(messages, { offset = 0 } = {}) {
       <label class="mailCheckCell" data-mail-check-stop="1">
         <input type="checkbox" class="mailRowCheck" data-mail-check="${escapeHtml(m.id)}"${checked ? " checked" : ""} aria-label="Select message" />
       </label>
-      <span class="mailNumCell">${rowNum}</span>
       <div class="mailFromCell">
         ${unread ? '<span class="supportInboxUnreadDot" aria-hidden="true"></span>' : ""}
         <span class="mailFromName">${escapeHtml(fromLabel)}</span>
@@ -3521,19 +3557,17 @@ function renderSupportInboxRows(messages, { offset = 0 } = {}) {
   }).join("");
 }
 
-function renderSupportSentRows(messages, { offset = 0 } = {}) {
+function renderSupportSentRows(messages) {
   if (!messages.length) {
     return `<div class="mailEmpty">No sent mail yet. Use Compose or Pro templates on Subscriptions.</div>`;
   }
-  return messages.map((m, i) => {
-    const rowNum = offset + i + 1;
+  return messages.map((m) => {
     const checked = Boolean(state.supportMailSelected[m.id]);
     const typeBadge = `<span class="mailTypeBadge">${escapeHtml(supportTemplateShortLabel(m.templateId))}</span>`;
     return `<div class="mailRow${checked ? " isSelected" : ""}" data-sent-open="${escapeHtml(m.id)}">
       <label class="mailCheckCell" data-mail-check-stop="1">
         <input type="checkbox" class="mailRowCheck" data-mail-check="${escapeHtml(m.id)}"${checked ? " checked" : ""} aria-label="Select message" />
       </label>
-      <span class="mailNumCell">${rowNum}</span>
       <div class="mailFromCell">
         <span class="mailFromName">${escapeHtml(m.toEmail || "—")}</span>
       </div>
@@ -3567,7 +3601,7 @@ function renderSupportInbox(data) {
     <section class="sectionCard mailClient">
       ${renderSupportMailToolbar({ folder: "inbox", unreadCount, configured, searchValue: state.inboxSearch })}
       ${renderSupportMailListHeader({ folder: "inbox" })}
-      <div class="mailList">${renderSupportInboxRows(messages, { offset: state.offset })}</div>
+      <div class="mailList">${renderSupportInboxRows(messages)}</div>
       <p id="inboxSyncMsg" class="grantMsg mailSyncMsg" hidden></p>
     </section>
   `, { plain: true });
@@ -3592,7 +3626,7 @@ function renderSupportSent(data) {
     <section class="sectionCard mailClient">
       ${renderSupportMailToolbar({ folder: "sent", searchValue: state.inboxSearch })}
       ${renderSupportMailListHeader({ folder: "sent" })}
-      <div class="mailList">${renderSupportSentRows(messages, { offset: state.offset })}</div>
+      <div class="mailList">${renderSupportSentRows(messages)}</div>
     </section>
   `, { plain: true });
 }
@@ -5762,6 +5796,9 @@ async function loadView({ force = false } = {}) {
     state.cache[cacheKey] = data;
     if (view === "support-inbox" && !state.inboxMessageId && els.pageSub) {
       const unread = Number(data?.unreadCount) || 0;
+      state.inboxUnreadCount = unread;
+      state.inboxTotalCount = Number(data?.inboxTotalCount) || 0;
+      updateInboxNavBadge();
       els.pageSub.textContent = unread
         ? `${unread} unread · support@ and help@`
         : (VIEW_META["support-inbox"]?.sub || "support@ and help@");

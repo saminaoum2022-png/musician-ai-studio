@@ -223,6 +223,7 @@ async function applyStripeSubscription(
   }
 
   const periodEndIso = periodEndIsoFromSubscription(target);
+  const cancelAtPeriodEnd = Boolean(target.cancel_at_period_end);
 
   await upsertProSubscription({
     userId,
@@ -231,6 +232,7 @@ async function applyStripeSubscription(
     status,
     periodEndIso,
     providerSubscriptionId: String(target.id),
+    cancelAtPeriodEnd,
   });
 
   let grant = { granted: 0, skipped: true };
@@ -316,6 +318,7 @@ async function applyStripeInvoicePaid(invoice) {
     status,
     periodEndIso: periodEndIsoFromSubscription(sub),
     providerSubscriptionId: subscriptionId,
+    cancelAtPeriodEnd: Boolean(sub.cancel_at_period_end),
   });
 
   let amount = 0;
@@ -378,6 +381,7 @@ async function applyStripeEvent(event) {
       status: "expired",
       periodEndIso: periodEndIsoFromSubscription(sub),
       providerSubscriptionId: String(sub.id || ""),
+      cancelAtPeriodEnd: false,
     });
     return { ok: true, kind: "expiration", userId, planId };
   }

@@ -173,6 +173,42 @@
       </main>
     </div>
 
+    <div id="supportEmailModal" class="supportEmailModal" hidden aria-hidden="true">
+      <div class="supportEmailModalBackdrop" data-support-email-close></div>
+      <div class="supportEmailModalCard" role="dialog" aria-labelledby="supportEmailModalTitle" aria-modal="true">
+        <header class="supportEmailModalHeader">
+          <div>
+            <h3 id="supportEmailModalTitle" class="supportEmailModalTitle">Send support email</h3>
+            <p id="supportEmailModalSub" class="supportEmailModalSub">—</p>
+          </div>
+          <button type="button" class="btnGhost btnGhost--sm" data-support-email-close aria-label="Close">✕</button>
+        </header>
+        <div class="supportEmailModalBody">
+          <label class="field grantField">
+            <span>Template</span>
+            <select id="supportEmailTemplate" class="marketingFieldInput"></select>
+          </label>
+          <label class="field grantField">
+            <span>To</span>
+            <input id="supportEmailTo" type="email" readonly class="marketingFieldInput" />
+          </label>
+          <label class="field grantField">
+            <span>Subject</span>
+            <input id="supportEmailSubject" type="text" class="marketingFieldInput" />
+          </label>
+          <label class="field grantField">
+            <span>Message</span>
+            <textarea id="supportEmailBody" rows="14" class="marketingFieldInput"></textarea>
+          </label>
+          <p id="supportEmailModalMsg" class="grantMsg" hidden></p>
+        </div>
+        <footer class="supportEmailModalFooter">
+          <button type="button" class="btnGhost" data-support-email-close>Cancel</button>
+          <button type="button" class="btnPrimary" id="btnSupportEmailSend">Send from support@</button>
+        </footer>
+      </div>
+    </div>
+
     <script type="module" src="/admin/app.js?v=20260830-162100"></script>
   </body>
 </html>

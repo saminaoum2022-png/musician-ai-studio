@@ -38,6 +38,20 @@ where user_id = (
 |----------|---------|
 | `ADMIN_EMAILS` | Fallback admin gate (comma-separated) |
 | `SUNO_USD_PER_CREDIT` | Est. API cost per credit (default `0.00525` — $5.25 / 1000 credits) |
+| `RESEND_API_KEY` | Send Pro lifecycle emails from admin (`support@nabadai.com`) |
+| `SUPPORT_EMAIL_FROM` | Optional From header (default `NabadAi Support <support@nabadai.com>`) |
+| `SUPPORT_EMAIL_REPLY_TO` | Optional Reply-To (default `support@nabadai.com`) |
+
+### 4. Support email SQL (admin Phase 1)
+
+Run after `pro_subscriptions.sql`:
+
+1. `supabase/support_email_log.sql`
+2. `supabase/pro_subscriptions_cancel_at_period_end.sql`
+
+Verify **Resend** domain for `nabadai.com` and add `RESEND_API_KEY` in Vercel (Production + Preview).
+
+**Subscriptions** tab shows **Will not renew** when Stripe `cancel_at_period_end` is synced. **Support email** column (Owner / Admin + Support) — preview, edit, send; suggested template per subscriber; sends logged in `support_email_log`.
 
 ## Access
 

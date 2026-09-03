@@ -2525,3 +2525,136 @@ td.num { font-variant-numeric: tabular-nums; }
   margin: 4px 0;
 }
 
+/* Subscriptions table — cleaner renewal + email columns */
+.tableWrap--subscriptions {
+  overflow-x: auto;
+}
+
+.table--subscriptions {
+  min-width: 880px;
+}
+
+.table--subscriptions .subUserCell {
+  min-width: 160px;
+  max-width: 220px;
+}
+
+.subUserName {
+  display: block;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.subUserEmail {
+  display: block;
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 0.78rem;
+  line-height: 1.35;
+  word-break: break-all;
+}
+
+.subPlanCell {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 72px;
+}
+
+.subPlanName {
+  font-weight: 600;
+  text-transform: capitalize;
+}
+
+.subPlanProvider {
+  color: var(--muted);
+  font-size: 0.76rem;
+  text-transform: lowercase;
+}
+
+.subRenewalCol {
+  min-width: 148px;
+  max-width: 200px;
+}
+
+.subRenewalCell {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.subRenewalBadges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.subRenewalDate {
+  color: var(--muted);
+  font-size: 0.82rem;
+  line-height: 1.35;
+}
+
+.subRenewalSync {
+  padding: 2px 8px !important;
+  font-size: 0.72rem !important;
+  opacity: 0.85;
+}
+
+.subEmailCell {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  min-width: 120px;
+}
+
+.subEmailCellTop {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.subEmailHint {
+  color: var(--muted);
+  font-size: 0.76rem;
+}
+
+.subEmailSendBtn {
+  white-space: nowrap;
+}
+
+.supportComposeCard {
+  max-width: 720px;
+}
+
+.supportComposeForm {
+  display: grid;
+  gap: 12px;
+}
+
+.supportComposeActions {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.supportComposeAside {
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+
+.grantMsg[data-tone="ok"] {
+  color: var(--ok);
+}
+
+.grantMsg[data-tone="err"] {
+  color: var(--danger);
+}
+
+.grantMsg[data-tone="warn"] {
+  color: var(--warn);
+}
+

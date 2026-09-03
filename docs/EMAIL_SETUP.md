@@ -300,12 +300,13 @@ If mail today goes **ImprovMX → Gmail**, switch root MX to Resend so the admin
 
 Optional: In Resend receiving settings, add a **forward** to your Gmail as backup while you test.
 
-### 4. Webhook
+### 4. Webhook + Gmail copy
 
 1. Resend → **Webhooks** → Add webhook
 2. URL: `https://www.nabadai.com/api/webhooks/resend-inbound`
 3. Event: **`email.received`**
 4. Copy the **signing secret** → Vercel env `RESEND_INBOUND_WEBHOOK_SECRET` (Production + Preview)
+5. Vercel env **`SUPPORT_INBOUND_FORWARD_TO`** = your Gmail (e.g. `you@gmail.com`) — webhook forwards a copy so you keep Gmail **after** MX moves to Resend
 
 ### 5. Test
 

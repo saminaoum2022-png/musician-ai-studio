@@ -31,8 +31,10 @@ const state = {
   supportEmailTemplates: [],
   supportEmailModal: { userId: "", email: "", templateId: "" },
   inboxMessageId: "",
+  sentMessageId: "",
   inboxSearch: "",
-  inboxUnreadOnly: false,
+  inboxFilter: "all",
+  supportMailSelected: {},
   supportComposePrefill: null,
   marketingLocale: "en",
   marketingPage: "home",
@@ -94,6 +96,7 @@ const els = {
     publications: document.getElementById("viewPublications"),
     subscriptions: document.getElementById("viewSubscriptions"),
     "support-inbox": document.getElementById("viewSupportInbox"),
+    "support-sent": document.getElementById("viewSupportSent"),
     "support-compose": document.getElementById("viewSupportCompose"),
     billing: document.getElementById("viewBilling"),
     settings: document.getElementById("viewSettings"),
@@ -117,8 +120,9 @@ const VIEW_META = {
   generations: { title: "Generations", sub: "Song and audio generation requests" },
   publications: { title: "Publications", sub: "Public profile posts — moderation view (not friends-only)" },
   subscriptions: { title: "Subscriptions", sub: "NabadAi Pro status by user" },
-  "support-inbox": { title: "Inbox", sub: "Incoming mail to support@ and help@" },
-  "support-compose": { title: "Compose email", sub: "Send from support@nabadai.com" },
+  "support-inbox": { title: "Inbox", sub: "support@ and help@" },
+  "support-sent": { title: "Sent", sub: "Outbound from support@nabadai.com" },
+  "support-compose": { title: "Compose", sub: "New message from support@" },
   billing: { title: "Billing events", sub: "Subscription and IAP credit grants from webhooks" },
   settings: { title: "Team & roles", sub: "Invite coworkers and control dashboard access" },
 };
@@ -668,6 +672,7 @@ async function fetchSupportInbox(params = {}) {
   if (!token) throw new Error("Not signed in");
   const qs = new URLSearchParams();
   if (params.id) qs.set("id", params.id);
+  if (params.folder) qs.set("folder", params.folder);
   if (params.markRead) qs.set("markRead", "1");
   if (params.limit != null) qs.set("limit", String(params.limit));
   if (params.offset != null) qs.set("offset", String(params.offset));
@@ -1034,7 +1039,7 @@ async function loadAdminSession({ force = false } = {}) {
 }
 
 function canAccessView(view) {
-  if (view === "support-compose" || view === "support-inbox") {
+  if (view === "support-compose" || view === "support-inbox" || view === "support-sent") {
     return Boolean(state.adminSession?.canSendSupportEmail);
   }
   const allowed = state.adminSession?.allowedViews;
@@ -1138,7 +1143,10 @@ function viewCacheKey() {
     key += `:scr:${state.blogScreen || "hub"}:slug:${state.blogSlug || ""}:loc:${state.blogLocale || "en"}`;
   }
   if (state.view === "support-inbox") {
-    key += `:mid:${state.inboxMessageId || ""}:q:${state.inboxSearch || ""}:unread:${state.inboxUnreadOnly ? "1" : "0"}`;
+    key += `:mid:${state.inboxMessageId || ""}:q:${state.inboxSearch || ""}:filter:${state.inboxFilter || "all"}`;
+  }
+  if (state.view === "support-sent") {
+    key += `:sid:${state.sentMessageId || ""}:q:${state.inboxSearch || ""}`;
   }
   return key;
 }
@@ -3379,6 +3387,48 @@ function openSupportComposePrefill({ to, subject, text }) {
   void loadView({ force: true });
 }
 
+function supportTemplateShortLabel(id) {
+  const map = {
+    trial_welcome: "Trial welcome",
+    trial_ending: "Trial ending",
+    first_paid: "First paid",
+    feedback_checkin: "Feedback",
+    cancel_confirm: "Cancel confirm",
+    custom_compose: "Compose",
+  };
+  return map[String(id || "").trim()] || String(id || "Email");
+}
+
+function renderSupportMailToolbar({ folder, unreadCount = 0, configured = true, searchValue = "" } = {}) {
+  const isInbox = folder === "inbox";
+  const filterAllActive = state.inboxFilter !== "unread";
+  const filterUnreadActive = state.inboxFilter === "unread";
+  return `<div class="mailToolbar">
+    ${isInbox ? `<div class="mailFilterPills" role="tablist" aria-label="Inbox filter">
+      <button type="button" class="mailFilterPill${filterAllActive ? " isActive" : ""}" data-inbox-filter="all" role="tab" aria-selected="${filterAllActive}">All</button>
+      <button type="button" class="mailFilterPill${filterUnreadActive ? " isActive" : ""}" data-inbox-filter="unread" role="tab" aria-selected="${filterUnreadActive}">Unread${unreadCount ? ` (${unreadCount})` : ""}</button>
+    </div>` : `<div class="mailToolbarSpacer"></div>`}
+    <div class="mailToolbarSearchWrap">
+      <input type="search" id="inboxSearch" class="mailSearchInput" placeholder="${isInbox ? "Search inbox…" : "Search sent…"}" value="${escapeHtml(searchValue)}" autocomplete="off" />
+    </div>
+    ${isInbox ? `<button type="button" class="btnGhost btnIcon mailSyncBtn" id="btnInboxSync"${configured ? "" : " disabled"} aria-label="Sync from Resend" title="Sync from Resend">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>
+    </button>` : ""}
+  </div>`;
+}
+
+function renderSupportMailListHeader({ folder }) {
+  return `<div class="mailListHeader">
+    <label class="mailCheckCell mailCheckCell--head" title="Select all">
+      <input type="checkbox" id="mailSelectAll" aria-label="Select all" />
+    </label>
+    <span class="mailNumCell">#</span>
+    <span class="mailFromCell">${folder === "sent" ? "To" : "From"}</span>
+    <span class="mailSubjectCell">Subject</span>
+    <span class="mailDateCell">Date</span>
+  </div>`;
+}
+
 function renderSupportInboxDetail(message) {
   const m = message || {};
   const fromLabel = m.fromName ? `${m.fromName} <${m.fromEmail}>` : (m.fromEmail || "—");
@@ -3390,13 +3440,13 @@ function renderSupportInboxDetail(message) {
       ).join("")}</ul>`
     : "";
   const userBtn = m.matchedUserId
-    ? `<button type="button" class="btnGhost" data-inbox-open-user="${escapeHtml(m.matchedUserId)}">View NabadAi user</button>`
+    ? `<button type="button" class="btnGhost" data-inbox-open-user="${escapeHtml(m.matchedUserId)}">View user</button>`
     : "";
 
   return `
-    <section class="sectionCard supportInboxDetail">
+    <section class="sectionCard mailDetail">
       <div class="supportInboxDetailHead">
-        <button type="button" class="btnGhost btnGhost--sm" data-inbox-back>← Inbox</button>
+        <button type="button" class="btnGhost btnGhost--sm" data-mail-back="inbox">← Inbox</button>
         <div class="supportInboxDetailActions">
           ${userBtn}
           <button type="button" class="btnPrimary" data-inbox-reply="${escapeHtml(m.id)}">Reply</button>
@@ -3406,7 +3456,7 @@ function renderSupportInboxDetail(message) {
       <h3 class="supportInboxSubject">${escapeHtml(m.subject || "(No subject)")}</h3>
       <dl class="supportInboxMeta">
         <div><dt>From</dt><dd>${escapeHtml(fromLabel)}</dd></div>
-        <div><dt>To</dt><dd>${escapeHtml((m.toEmails || []).join(", ") || "—")}</dd></div>
+        <div><dt>To</dt><dd>${escapeHtml((m.toEmails || []).join(", ") || "support@nabadai.com")}</dd></div>
         <div><dt>Received</dt><dd>${escapeHtml(fmtDate(m.receivedAt))}</dd></div>
       </dl>
       ${attachHtml}
@@ -3415,15 +3465,92 @@ function renderSupportInboxDetail(message) {
   `;
 }
 
+function renderSupportSentDetail(sent) {
+  const s = sent || {};
+  const userBtn = s.userId
+    ? `<button type="button" class="btnGhost" data-inbox-open-user="${escapeHtml(s.userId)}">View user</button>`
+    : "";
+  return `
+    <section class="sectionCard mailDetail">
+      <div class="supportInboxDetailHead">
+        <button type="button" class="btnGhost btnGhost--sm" data-mail-back="sent">← Sent</button>
+        <div class="supportInboxDetailActions">${userBtn}</div>
+      </div>
+      <h3 class="supportInboxSubject">${escapeHtml(s.subject || "(No subject)")}</h3>
+      <dl class="supportInboxMeta">
+        <div><dt>To</dt><dd>${escapeHtml(s.toEmail || "—")}</dd></div>
+        <div><dt>From</dt><dd>support@nabadai.com</dd></div>
+        <div><dt>Sent</dt><dd>${escapeHtml(fmtDate(s.sentAt))}</dd></div>
+        <div><dt>Type</dt><dd>${escapeHtml(supportTemplateShortLabel(s.templateId))}</dd></div>
+        ${s.sentByEmail ? `<div><dt>By</dt><dd>${escapeHtml(s.sentByEmail)}</dd></div>` : ""}
+      </dl>
+      <p class="sectionNote mailDetailNote">Message body is not stored in the sent log — only subject and recipient metadata.</p>
+    </section>
+  `;
+}
+
+function renderSupportInboxRows(messages, { offset = 0 } = {}) {
+  if (!messages.length) {
+    return `<div class="mailEmpty">No messages yet. Email support@nabadai.com or sync from Resend.</div>`;
+  }
+  return messages.map((m, i) => {
+    const unread = !m.isRead;
+    const rowNum = offset + i + 1;
+    const fromLabel = m.fromName ? m.fromName : (m.fromEmail || "—");
+    const fromSub = m.fromName ? m.fromEmail : "";
+    const checked = Boolean(state.supportMailSelected[m.id]);
+    const attachBadge = Array.isArray(m.attachments) && m.attachments.length
+      ? `<span class="mailAttachBadge" title="${m.attachments.length} attachment(s)">📎</span>`
+      : "";
+    return `<div class="mailRow${unread ? " isUnread" : ""}${checked ? " isSelected" : ""}" data-inbox-open="${escapeHtml(m.id)}">
+      <label class="mailCheckCell" data-mail-check-stop="1">
+        <input type="checkbox" class="mailRowCheck" data-mail-check="${escapeHtml(m.id)}"${checked ? " checked" : ""} aria-label="Select message" />
+      </label>
+      <span class="mailNumCell">${rowNum}</span>
+      <div class="mailFromCell">
+        ${unread ? '<span class="supportInboxUnreadDot" aria-hidden="true"></span>' : ""}
+        <span class="mailFromName">${escapeHtml(fromLabel)}</span>
+        ${fromSub ? `<span class="mailFromEmail">${escapeHtml(fromSub)}</span>` : ""}
+      </div>
+      <div class="mailSubjectCell">
+        <span class="mailSubjectText">${escapeHtml(m.subject || "(No subject)")}</span>
+        ${attachBadge}
+      </div>
+      <time class="mailDateCell">${escapeHtml(fmtDateCompact(m.receivedAt))}</time>
+    </div>`;
+  }).join("");
+}
+
+function renderSupportSentRows(messages, { offset = 0 } = {}) {
+  if (!messages.length) {
+    return `<div class="mailEmpty">No sent mail yet. Use Compose or Pro templates on Subscriptions.</div>`;
+  }
+  return messages.map((m, i) => {
+    const rowNum = offset + i + 1;
+    const checked = Boolean(state.supportMailSelected[m.id]);
+    const typeBadge = `<span class="mailTypeBadge">${escapeHtml(supportTemplateShortLabel(m.templateId))}</span>`;
+    return `<div class="mailRow${checked ? " isSelected" : ""}" data-sent-open="${escapeHtml(m.id)}">
+      <label class="mailCheckCell" data-mail-check-stop="1">
+        <input type="checkbox" class="mailRowCheck" data-mail-check="${escapeHtml(m.id)}"${checked ? " checked" : ""} aria-label="Select message" />
+      </label>
+      <span class="mailNumCell">${rowNum}</span>
+      <div class="mailFromCell">
+        <span class="mailFromName">${escapeHtml(m.toEmail || "—")}</span>
+      </div>
+      <div class="mailSubjectCell">
+        <span class="mailSubjectText">${escapeHtml(m.subject || "(No subject)")}</span>
+        ${typeBadge}
+      </div>
+      <time class="mailDateCell">${escapeHtml(fmtDateCompact(m.sentAt))}</time>
+    </div>`;
+  }).join("");
+}
+
 function renderSupportInbox(data) {
   const panel = els.panels["support-inbox"];
   const canSend = Boolean(state.adminSession?.canSendSupportEmail);
   if (!canSend) {
-    panel.innerHTML = adminPageStack(`
-      <section class="sectionCard">
-        <p class="sectionNote">Inbox requires Owner / Admin or Support role.</p>
-      </section>
-    `, { plain: true });
+    panel.innerHTML = adminPageStack(`<section class="sectionCard"><p class="sectionNote">Inbox requires Owner / Admin or Support role.</p></section>`, { plain: true });
     return;
   }
 
@@ -3435,51 +3562,37 @@ function renderSupportInbox(data) {
   const messages = Array.isArray(data?.messages) ? data.messages : [];
   const unreadCount = Number(data?.unreadCount) || 0;
   const configured = data?.resendInboundConfigured !== false;
-  const setupNote = configured
-    ? ""
-    : `<p class="sectionNote">Add <code>RESEND_API_KEY</code>, run <code>support_inbound_messages.sql</code>, enable Resend receiving on <code>nabadai.com</code>, and point the webhook to <code>/api/webhooks/resend-inbound</code>.</p>`;
-
-  const rows = messages.length
-    ? messages.map((m) => {
-        const unread = !m.isRead;
-        const fromLabel = m.fromName ? `${m.fromName} <${m.fromEmail}>` : (m.fromEmail || "—");
-        const attachBadge = Array.isArray(m.attachments) && m.attachments.length
-          ? `<span class="badge badge--muted">📎 ${m.attachments.length}</span>`
-          : "";
-        return `<tr class="supportInboxRow${unread ? " isUnread" : ""}" data-inbox-open="${escapeHtml(m.id)}">
-          <td>${unread ? '<span class="supportInboxUnreadDot" aria-label="Unread"></span>' : ""}${escapeHtml(fromLabel)}</td>
-          <td>${escapeHtml(m.subject || "(No subject)")} ${attachBadge}</td>
-          <td class="cellMuted">${escapeHtml(fmtDateCompact(m.receivedAt))}</td>
-        </tr>`;
-      }).join("")
-    : `<tr><td colspan="3" class="loading">No messages yet — sync from Resend or send a test to support@nabadai.com</td></tr>`;
 
   panel.innerHTML = adminPageStack(`
-    ${setupNote}
-    <section class="sectionCard">
-      <div class="sectionHead supportInboxHead">
-        <div>
-          <h3 class="sectionTitle">Inbox</h3>
-          <p class="sectionNote">${unreadCount ? `${unreadCount} unread` : "All caught up"} · mail to support@ / help@</p>
-        </div>
-        <div class="supportInboxToolbar">
-          <label class="supportInboxFilter">
-            <input type="checkbox" id="inboxUnreadOnly"${state.inboxUnreadOnly ? " checked" : ""} />
-            Unread only
-          </label>
-          <input type="search" id="inboxSearch" class="marketingFieldInput supportInboxSearch" placeholder="Search from or subject" value="${escapeHtml(state.inboxSearch)}" />
-          <button type="button" class="btnGhost" id="btnInboxSync"${configured ? "" : " disabled"}>Sync from Resend</button>
-        </div>
-      </div>
-      <div class="tableWrap tableWrap--plain">
-        <table class="table--compact table--inbox">
-          <thead>
-            <tr><th>From</th><th>Subject</th><th>Received</th></tr>
-          </thead>
-          <tbody>${rows}</tbody>
-        </table>
-      </div>
-      <p id="inboxSyncMsg" class="grantMsg" hidden></p>
+    <section class="sectionCard mailClient">
+      ${renderSupportMailToolbar({ folder: "inbox", unreadCount, configured, searchValue: state.inboxSearch })}
+      ${renderSupportMailListHeader({ folder: "inbox" })}
+      <div class="mailList">${renderSupportInboxRows(messages, { offset: state.offset })}</div>
+      <p id="inboxSyncMsg" class="grantMsg mailSyncMsg" hidden></p>
+    </section>
+  `, { plain: true });
+}
+
+function renderSupportSent(data) {
+  const panel = els.panels["support-sent"];
+  const canSend = Boolean(state.adminSession?.canSendSupportEmail);
+  if (!canSend) {
+    panel.innerHTML = adminPageStack(`<section class="sectionCard"><p class="sectionNote">Sent mail requires Owner / Admin or Support role.</p></section>`, { plain: true });
+    return;
+  }
+
+  if (state.sentMessageId && data?.sent) {
+    panel.innerHTML = adminPageStack(renderSupportSentDetail(data.sent), { plain: true });
+    return;
+  }
+
+  const messages = Array.isArray(data?.sentMessages) ? data.sentMessages : [];
+
+  panel.innerHTML = adminPageStack(`
+    <section class="sectionCard mailClient">
+      ${renderSupportMailToolbar({ folder: "sent", searchValue: state.inboxSearch })}
+      ${renderSupportMailListHeader({ folder: "sent" })}
+      <div class="mailList">${renderSupportSentRows(messages, { offset: state.offset })}</div>
     </section>
   `, { plain: true });
 }
@@ -5181,6 +5294,7 @@ const RENDERERS = {
   publications: renderPublications,
   subscriptions: renderSubscriptions,
   "support-inbox": renderSupportInbox,
+  "support-sent": renderSupportSent,
   "support-compose": renderSupportCompose,
   billing: renderBilling,
   settings: renderSettings,
@@ -5204,6 +5318,11 @@ function setView(view) {
   if (view !== "user") state.userDetailId = "";
   if (view !== "generation") state.generationDetailId = "";
   if (view !== "support-inbox") state.inboxMessageId = "";
+  if (view !== "support-sent") state.sentMessageId = "";
+  if (view !== "support-inbox" && view !== "support-sent") {
+    state.supportMailSelected = {};
+    state.inboxSearch = "";
+  }
   const meta = VIEW_META[view] || VIEW_META.overview;
   els.pageTitle.textContent = meta.title;
   els.pageSub.textContent = meta.sub;
@@ -5596,9 +5715,21 @@ async function loadView({ force = false } = {}) {
         data = await fetchSupportInbox({ id: state.inboxMessageId, markRead: true });
       } else {
         data = await fetchSupportInbox({
+          folder: "inbox",
           limit: PAGE_SIZE,
           offset: state.offset,
-          unreadOnly: state.inboxUnreadOnly,
+          unreadOnly: state.inboxFilter === "unread",
+          q: state.inboxSearch.trim(),
+        });
+      }
+    } else if (view === "support-sent") {
+      if (state.sentMessageId) {
+        data = await fetchSupportInbox({ folder: "sent", id: state.sentMessageId });
+      } else {
+        data = await fetchSupportInbox({
+          folder: "sent",
+          limit: PAGE_SIZE,
+          offset: state.offset,
           q: state.inboxSearch.trim(),
         });
       }
@@ -5632,6 +5763,12 @@ async function loadView({ force = false } = {}) {
       }
     }
     state.cache[cacheKey] = data;
+    if (view === "support-inbox" && !state.inboxMessageId && els.pageSub) {
+      const unread = Number(data?.unreadCount) || 0;
+      els.pageSub.textContent = unread
+        ? `${unread} unread · support@ and help@`
+        : (VIEW_META["support-inbox"]?.sub || "support@ and help@");
+    }
     RENDERERS[view](data);
   } catch (e) {
     panel.innerHTML = "";
@@ -5855,11 +5992,38 @@ for (const btn of els.navItems) {
 }
 
 document.body.addEventListener("change", (e) => {
-  if (e.target?.id === "inboxUnreadOnly") {
-    state.inboxUnreadOnly = Boolean(e.target.checked);
-    state.offset = 0;
-    state.cache = {};
-    void loadView({ force: true });
+  if (e.target?.id === "mailSelectAll") {
+    const checked = Boolean(e.target.checked);
+    const checks = document.querySelectorAll(".mailRowCheck");
+    const next = { ...state.supportMailSelected };
+    for (const input of checks) {
+      const id = String(input.dataset.mailCheck || "").trim();
+      if (!id) continue;
+      if (checked) next[id] = true;
+      else delete next[id];
+    }
+    state.supportMailSelected = next;
+    for (const input of checks) {
+      input.checked = checked;
+      input.closest(".mailRow")?.classList.toggle("isSelected", checked);
+    }
+    return;
+  }
+
+  if (e.target?.classList?.contains("mailRowCheck")) {
+    const id = String(e.target.dataset.mailCheck || "").trim();
+    if (!id) return;
+    const next = { ...state.supportMailSelected };
+    if (e.target.checked) next[id] = true;
+    else delete next[id];
+    state.supportMailSelected = next;
+    e.target.closest(".mailRow")?.classList.toggle("isSelected", e.target.checked);
+    const all = [...document.querySelectorAll(".mailRowCheck")];
+    const selectAll = document.getElementById("mailSelectAll");
+    if (selectAll && all.length) {
+      selectAll.checked = all.every((el) => el.checked);
+      selectAll.indeterminate = !selectAll.checked && all.some((el) => el.checked);
+    }
   }
 });
 
@@ -6214,18 +6378,49 @@ document.body.addEventListener("click", (e) => {
     return;
   }
 
+  const inboxFilter = e.target.closest("[data-inbox-filter]");
+  if (inboxFilter) {
+    e.preventDefault();
+    const next = String(inboxFilter.dataset.inboxFilter || "all");
+    if (next === state.inboxFilter) return;
+    state.inboxFilter = next === "unread" ? "unread" : "all";
+    state.offset = 0;
+    state.supportMailSelected = {};
+    state.cache = {};
+    void loadView({ force: true });
+    return;
+  }
+
+  const mailCheckStop = e.target.closest("[data-mail-check-stop]");
+  if (mailCheckStop) {
+    e.stopPropagation();
+    return;
+  }
+
+  const sentOpen = e.target.closest("[data-sent-open]");
+  if (sentOpen) {
+    e.preventDefault();
+    if (e.target.closest(".mailRowCheck")) return;
+    state.sentMessageId = String(sentOpen.dataset.sentOpen || "").trim();
+    void loadView({ force: true });
+    return;
+  }
+
   const inboxOpen = e.target.closest("[data-inbox-open]");
   if (inboxOpen) {
     e.preventDefault();
+    if (e.target.closest(".mailRowCheck")) return;
     state.inboxMessageId = String(inboxOpen.dataset.inboxOpen || "").trim();
     void loadView({ force: true });
     return;
   }
 
-  const inboxBack = e.target.closest("[data-inbox-back]");
-  if (inboxBack) {
+  const mailBack = e.target.closest("[data-mail-back]");
+  if (mailBack) {
     e.preventDefault();
-    state.inboxMessageId = "";
+    const folder = mailBack.dataset.mailBack;
+    if (folder === "sent") state.sentMessageId = "";
+    else state.inboxMessageId = "";
     delete state.cache[viewCacheKey()];
     void loadView({ force: true });
     return;

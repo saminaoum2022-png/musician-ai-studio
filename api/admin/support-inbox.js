@@ -84,6 +84,52 @@ async function countUnread() {
   return Array.isArray(res.data) ? res.data.length : 0;
 }
 
+async function fetchSentById(id) {
+  const mid = String(id || "").trim();
+  if (!mid) return null;
+  const res = await serviceFetch(
+    `support_email_log?select=id,template_id,recipient_email,subject,sent_by_email,sent_by_user_id,user_id,created_at&id=eq.${encodeURIComponent(mid)}&limit=1`,
+  );
+  const row = Array.isArray(res.data) && res.data[0] ? res.data[0] : null;
+  if (!row) return null;
+  return {
+    id: row.id,
+    templateId: row.template_id,
+    toEmail: row.recipient_email,
+    subject: row.subject,
+    sentByEmail: row.sent_by_email,
+    userId: row.user_id,
+    sentAt: row.created_at,
+  };
+}
+
+async function listSentMessages({ limit = 50, offset = 0, q = "" } = {}) {
+  const lim = Math.min(Math.max(Number(limit) || 50, 1), 100);
+  const off = Math.max(Number(offset) || 0, 0);
+  const params = [
+    "select=id,template_id,recipient_email,subject,sent_by_email,user_id,created_at",
+    "order=created_at.desc",
+    `limit=${lim}`,
+    `offset=${off}`,
+  ];
+  const term = String(q || "").trim().toLowerCase();
+  if (term) {
+    const enc = encodeURIComponent(term);
+    params.push(`or=(recipient_email.ilike.*${enc}*,subject.ilike.*${enc}*)`);
+  }
+  const res = await serviceFetch(`support_email_log?${params.join("&")}`);
+  const rows = Array.isArray(res.data) ? res.data : [];
+  return rows.map((row) => ({
+    id: row.id,
+    templateId: row.template_id,
+    toEmail: row.recipient_email,
+    subject: row.subject,
+    sentByEmail: row.sent_by_email,
+    userId: row.user_id,
+    sentAt: row.created_at,
+  }));
+}
+
 async function markRead(id, isRead) {
   const mid = String(id || "").trim();
   if (!mid) return null;
@@ -147,8 +193,22 @@ module.exports = async function handler(req, res) {
   try {
     if (req.method === "GET") {
       const url = new URL(req.url || "", "http://localhost");
+      const folder = String(url.searchParams.get("folder") || "inbox").trim().toLowerCase();
       const id = String(url.searchParams.get("id") || "").trim();
       const markReadFlag = url.searchParams.get("markRead") === "1";
+
+      if (folder === "sent") {
+        if (id) {
+          const sent = await fetchSentById(id);
+          if (!sent) return sendJson(res, 404, { error: "Message not found" });
+          return sendJson(res, 200, { ok: true, sent });
+        }
+        const limit = Number(url.searchParams.get("limit") || 50);
+        const offset = Number(url.searchParams.get("offset") || 0);
+        const q = String(url.searchParams.get("q") || "").trim();
+        const sentMessages = await listSentMessages({ limit, offset, q });
+        return sendJson(res, 200, { ok: true, sentMessages });
+      }
 
       if (id) {
         const message = await fetchMessageById(id);

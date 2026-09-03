@@ -399,6 +399,19 @@ button, input { font: inherit; }
   gap: 10px;
 }
 
+.btnIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+}
+
+.btnIcon svg {
+  display: block;
+}
+
 .viewPanel {
   flex: 1;
   padding: 24px 28px 40px;
@@ -2646,51 +2659,229 @@ td.num { font-variant-numeric: tabular-nums; }
   border-top: 1px solid var(--border);
 }
 
-.supportInboxHead {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
+/* Support mail client (Inbox + Sent) */
+.mailClient {
+  padding: 0 !important;
+  overflow: hidden;
 }
 
-.supportInboxToolbar {
+.mailToolbar {
   display: flex;
-  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.mailToolbarSpacer {
+  flex: 0 0 8px;
+}
+
+.mailFilterPills {
+  display: inline-flex;
+  gap: 4px;
+  padding: 3px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border);
+}
+
+.mailFilterPill {
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 600;
+  padding: 6px 12px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.mailFilterPill.isActive {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06);
+}
+
+.mailToolbarSearchWrap {
+  flex: 1;
+  min-width: 0;
+}
+
+.mailSearchInput {
+  width: 100%;
+  max-width: 360px;
+  margin-left: auto;
+  display: block;
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: rgba(0, 0, 0, 0.18);
+  color: var(--text);
+  font: inherit;
+  font-size: 0.84rem;
+}
+
+.mailSearchInput:focus {
+  outline: none;
+  border-color: rgba(255, 255, 255, 0.18);
+}
+
+.mailSyncBtn {
+  flex-shrink: 0;
+}
+
+.mailListHeader,
+.mailRow {
+  display: grid;
+  grid-template-columns: 36px 36px minmax(140px, 1.1fr) minmax(0, 2fr) 108px;
+  align-items: center;
+  gap: 8px;
+  padding: 0 14px;
+}
+
+.mailListHeader {
+  min-height: 34px;
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--muted);
+  border-bottom: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.015);
+}
+
+.mailList {
+  display: flex;
+  flex-direction: column;
+}
+
+.mailRow {
+  min-height: 52px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  cursor: pointer;
+  transition: background 0.12s;
+}
+
+.mailRow:hover {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.mailRow.isSelected {
+  background: rgba(120, 140, 255, 0.08);
+}
+
+.mailRow.isUnread .mailFromName,
+.mailRow.isUnread .mailSubjectText {
+  font-weight: 650;
+  color: var(--text);
+}
+
+.mailCheckCell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0;
+}
+
+.mailCheckCell input {
+  width: 15px;
+  height: 15px;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.mailNumCell {
+  font-size: 0.72rem;
+  color: var(--muted);
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.mailFromCell {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.mailFromName {
+  font-size: 0.86rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.mailFromEmail {
+  display: none;
+}
+
+.mailSubjectCell {
+  min-width: 0;
+  display: flex;
   align-items: center;
   gap: 8px;
 }
 
-.supportInboxSearch {
-  min-width: 200px;
-  max-width: 280px;
+.mailSubjectText {
+  font-size: 0.86rem;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.supportInboxFilter {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 0.82rem;
+.mailRow.isUnread .mailSubjectText {
+  color: var(--text);
+}
+
+.mailDateCell {
+  font-size: 0.76rem;
   color: var(--muted);
+  text-align: right;
   white-space: nowrap;
 }
 
-.table--inbox tbody tr {
-  cursor: pointer;
+.mailAttachBadge,
+.mailTypeBadge {
+  flex-shrink: 0;
+  font-size: 0.68rem;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--muted);
 }
 
-.table--inbox tbody tr.isUnread td {
-  font-weight: 600;
+.mailEmpty {
+  padding: 48px 20px;
+  text-align: center;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.mailSyncMsg {
+  margin: 0;
+  padding: 10px 14px;
+  border-top: 1px solid var(--border);
+}
+
+.mailDetail {
+  padding: 18px 20px !important;
+}
+
+.mailDetailNote {
+  margin-top: 12px;
 }
 
 .supportInboxUnreadDot {
-  display: inline-block;
+  flex-shrink: 0;
   width: 8px;
   height: 8px;
-  margin-right: 8px;
   border-radius: 50%;
   background: var(--accent);
-  vertical-align: middle;
 }
 
 .supportInboxDetailHead {

@@ -7,6 +7,10 @@ const crypto = require("crypto");
 const RESEND_API_KEY = String(process.env.RESEND_API_KEY || "").trim();
 const SUPABASE_URL = (process.env.SUPABASE_URL || "").replace(/\/$/, "");
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
+const SUPPORT_INBOUND_FORWARD_TO = String(process.env.SUPPORT_INBOUND_FORWARD_TO || "").trim();
+const SUPPORT_EMAIL_FROM = String(
+  process.env.SUPPORT_EMAIL_FROM || "NabadAi Support <support@nabadai.com>",
+).trim();
 
 function isResendInboundConfigured() {
   return Boolean(RESEND_API_KEY && SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY);
@@ -27,14 +31,17 @@ function normalizeStringArray(val) {
   return val.map((v) => String(v || "").trim()).filter(Boolean);
 }
 
-async function resendApiGet(path) {
+async function resendApiRequest(path, { method = "GET", body } = {}) {
   if (!RESEND_API_KEY) return { ok: false, error: "resend_not_configured", status: 503 };
   try {
     const r = await fetch(`https://api.resend.com${path}`, {
+      method,
       headers: {
         Authorization: `Bearer ${RESEND_API_KEY}`,
         Accept: "application/json",
+        ...(body != null ? { "Content-Type": "application/json" } : {}),
       },
+      body: body != null ? JSON.stringify(body) : undefined,
     });
     const data = await r.json().catch(() => ({}));
     if (!r.ok) {
@@ -49,6 +56,10 @@ async function resendApiGet(path) {
   } catch (e) {
     return { ok: false, error: e?.message || "resend_request_failed", status: 502 };
   }
+}
+
+async function resendApiGet(path) {
+  return resendApiRequest(path);
 }
 
 async function fetchReceivedEmail(emailId) {
@@ -175,7 +186,43 @@ async function upsertInboundMessage(row) {
   return { ok: res.ok, row: inserted, inserted: true };
 }
 
-async function ingestReceivedEmail(emailId) {
+function inboundForwardTargets() {
+  return SUPPORT_INBOUND_FORWARD_TO
+    .split(",")
+    .map((s) => s.trim().toLowerCase())
+    .filter(Boolean);
+}
+
+/** Passthrough copy to Gmail (or other inbox) after Resend receives mail. */
+async function forwardInboundCopy(email) {
+  const targets = inboundForwardTargets();
+  if (!targets.length || !email) return { ok: true, skipped: true, reason: "forward_not_configured" };
+
+  const fromParsed = parseEmailAddress(email?.from);
+  const replyTo = fromParsed.email || String(email?.from || "").trim();
+  const subject = String(email?.subject || "").trim() || "(no subject)";
+  const text = email?.text != null
+    ? String(email.text)
+    : String(email?.html || "").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+  const html = email?.html != null ? String(email.html) : undefined;
+
+  const payload = {
+    from: SUPPORT_EMAIL_FROM,
+    to: targets,
+    reply_to: replyTo || undefined,
+    subject,
+    text: text || `Support message from ${replyTo || "unknown sender"}`,
+    ...(html ? { html } : {}),
+  };
+
+  const sent = await resendApiRequest("/emails", { method: "POST", body: payload });
+  if (!sent.ok) {
+    return { ok: false, error: sent.error || "forward_failed", status: sent.status };
+  }
+  return { ok: true, skipped: false, messageId: sent.data?.id || null, targets };
+}
+
+async function ingestReceivedEmail(emailId, { forwardCopy = true } = {}) {
   const fetched = await fetchReceivedEmail(emailId);
   if (!fetched.ok) return fetched;
   const email = fetched.data;
@@ -186,7 +233,18 @@ async function ingestReceivedEmail(emailId) {
   if (!saved.ok) {
     return { ok: false, error: "db_upsert_failed", details: saved };
   }
-  return { ok: true, row: saved.row, inserted: saved.inserted };
+
+  let forward = { ok: true, skipped: true, reason: "duplicate" };
+  if (forwardCopy && saved.inserted) {
+    forward = await forwardInboundCopy(email);
+  }
+
+  return {
+    ok: true,
+    row: saved.row,
+    inserted: saved.inserted,
+    forward,
+  };
 }
 
 /**
@@ -261,10 +319,12 @@ function mapDbRow(row) {
 
 module.exports = {
   isResendInboundConfigured,
+  inboundForwardTargets,
   parseEmailAddress,
   fetchReceivedEmail,
   listReceivedEmails,
   ingestReceivedEmail,
+  forwardInboundCopy,
   upsertInboundMessage,
   mapInboundRow,
   mapDbRow,

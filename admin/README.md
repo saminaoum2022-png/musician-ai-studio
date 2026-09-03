@@ -42,6 +42,7 @@ where user_id = (
 | `SUPPORT_EMAIL_FROM` | Optional From header (default `NabadAi Support <support@nabadai.com>`) |
 | `SUPPORT_EMAIL_REPLY_TO` | Optional Reply-To (default `support@nabadai.com`) |
 | `RESEND_INBOUND_WEBHOOK_SECRET` | Svix signing secret from Resend webhook (inbound `email.received`) |
+| `SUPPORT_INBOUND_FORWARD_TO` | Gmail (or comma-separated addresses) — copy of each inbound mail after Resend receives it |
 
 ### 4. Support email SQL (admin Phase 1)
 

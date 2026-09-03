@@ -653,6 +653,23 @@ async function sendSupportEmailApi({ userId, templateId, subject, text }) {
   return data;
 }
 
+async function adminStripeSync(userId) {
+  await refreshSessionIfNeeded();
+  const token = state.session?.access_token;
+  if (!token) throw new Error("Not signed in");
+  const r = await fetch("/api/admin/stripe-sync", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ userId: String(userId || "").trim() }),
+  });
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(data?.error || `Stripe sync failed (${r.status})`);
+  return data;
+}
+
 function closeSupportEmailModal() {
   const modal = document.getElementById("supportEmailModal");
   if (modal) {
@@ -777,7 +794,10 @@ function renderRenewalCell(s) {
   const badge = pending && !String(label).toLowerCase().includes("ended")
     ? `<span class="badge willNotRenew">Will not renew</span>`
     : "";
-  return `${badge ? `${badge}<br>` : ""}<span class="cellMuted">${escapeHtml(label)}</span>`;
+  const stripeSync = String(s.provider || "").toLowerCase() === "stripe" && state.adminSession?.canSendSupportEmail && s.userId
+    ? `<br><button type="button" class="btnGhost btnGhost--sm" data-stripe-sync="${escapeHtml(s.userId)}" title="Re-read cancel status from Stripe">Sync Stripe</button>`
+    : "";
+  return `${badge ? `${badge}<br>` : ""}<span class="cellMuted">${escapeHtml(label)}</span>${stripeSync}`;
 }
 
 async function marketingAdminFetch(page = "home", locale = "en") {
@@ -1991,6 +2011,9 @@ function renderUserDetail(data) {
   const subBlock = sub
     ? `${escapeHtml(sub.planId || "—")} · ${escapeHtml(sub.statusLabel || sub.status || "—")}${sub.currentPeriodEnd ? ` · ends ${fmtDateCompact(sub.currentPeriodEnd)}` : ""}${sub.cancelAtPeriodEnd ? " · will not renew" : ""}`
     : "No Pro subscription on file.";
+  const stripeSyncBtn = sub && String(sub.provider || "").toLowerCase() === "stripe" && state.adminSession?.canSendSupportEmail
+    ? `<button type="button" class="btnGhost btnGhost--sm" data-stripe-sync="${escapeHtml(u.userId)}" style="margin-left:8px">Sync Stripe</button>`
+    : "";
 
   const supportEmail = data.supportEmail || null;
   const supportEmailBlock = supportEmail && state.adminSession?.canSendSupportEmail
@@ -2091,7 +2114,7 @@ function renderUserDetail(data) {
         ${statCard("Songs saved", fmtNum(songRows.length), insights.billingEventCount ? `${fmtNum(insights.billingEventCount)} billing events` : "")}
       </div>
       <div class="detailMetaBlock">
-        <strong>Subscription</strong> — ${subBlock}
+        <strong>Subscription</strong> — ${subBlock}${stripeSyncBtn}
       </div>
       ${supportEmailBlock}
     </div>
@@ -5858,6 +5881,27 @@ document.body.addEventListener("click", (e) => {
         showError(err?.message || "Could not send email");
       } finally {
         supportEmailSend.disabled = false;
+      }
+    })();
+    return;
+  }
+
+  const stripeSyncBtn = e.target.closest("[data-stripe-sync]");
+  if (stripeSyncBtn) {
+    e.preventDefault();
+    const uid = stripeSyncBtn.dataset.stripeSync;
+    if (!uid) return;
+    stripeSyncBtn.disabled = true;
+    void (async () => {
+      try {
+        await adminStripeSync(uid);
+        state.cache = {};
+        showError("");
+        await loadView({ force: true });
+      } catch (err) {
+        showError(err?.message || "Stripe sync failed");
+      } finally {
+        stripeSyncBtn.disabled = false;
       }
     })();
     return;

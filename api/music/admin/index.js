@@ -1690,20 +1690,34 @@ async function remixTaskIdSet(taskIds) {
  * Stems remix often debited credits but the generation log never landed
  * (fire-and-forget before Vercel froze). Surface those ledger rows so admin
  * can still see the remix happened.
+ *
+ * IMPORTANT: `dbLogTimesMs` must include generation log timestamps from the DB,
+ * not only rows on the current admin page — otherwise real logs that fell off
+ * the paginated list get replaced by synthetic unclickable recoveries.
  */
-function mergeOrphanStemsRemixFromLedger(generations, ledgerRows, { userId = "", userLabel = "" } = {}) {
+const ORPHAN_LEDGER_MATCH_MS = 3 * 60 * 1000;
+
+function mergeOrphanStemsRemixFromLedger(
+  generations,
+  ledgerRows,
+  { userId = "", userLabel = "", dbLogTimesMs = [] } = {},
+) {
   const gens = Array.isArray(generations) ? [...generations] : [];
   const ledger = Array.isArray(ledgerRows) ? ledgerRows : [];
-  const genTimes = gens
-    .map((g) => Date.parse(String(g.createdAt || "")))
-    .filter((t) => Number.isFinite(t));
+  const extraTimes = Array.isArray(dbLogTimesMs) ? dbLogTimesMs : [];
+  const genTimes = [
+    ...gens
+      .map((g) => Date.parse(String(g.createdAt || "")))
+      .filter((t) => Number.isFinite(t)),
+    ...extraTimes.filter((t) => Number.isFinite(t)),
+  ];
   const orphans = [];
   for (const tx of ledger) {
     const reason = String(tx.reason || tx.p_reason || "").toLowerCase();
     if (reason !== "stems_remix") continue;
     const txMs = Date.parse(String(tx.createdAt || tx.created_at || ""));
     if (!Number.isFinite(txMs)) continue;
-    const hasNearby = genTimes.some((t) => Math.abs(t - txMs) <= 3 * 60 * 1000);
+    const hasNearby = genTimes.some((t) => Math.abs(t - txMs) <= ORPHAN_LEDGER_MATCH_MS);
     if (hasNearby) continue;
     const credits = Math.abs(Number(tx.delta || tx.creditsUsed || 0));
     orphans.push({
@@ -1729,6 +1743,61 @@ function mergeOrphanStemsRemixFromLedger(generations, ledgerRows, { userId = "",
   return [...gens, ...orphans].sort(
     (a, b) => Date.parse(String(b.createdAt || "")) - Date.parse(String(a.createdAt || "")),
   );
+}
+
+/** Load real generation log timestamps from DB so paginated admin lists do not fake orphans. */
+async function fetchGenerationLogTimesByUser(userIds, { minMs, maxMs } = {}) {
+  const ids = [...new Set((userIds || []).map((id) => String(id || "").trim()).filter(Boolean))];
+  const out = new Map();
+  if (!ids.length) return out;
+  if (!Number.isFinite(minMs) || !Number.isFinite(maxMs)) return out;
+
+  const minIso = new Date(minMs).toISOString();
+  const maxIso = new Date(maxMs).toISOString();
+  const chunkSize = 25;
+  for (let i = 0; i < ids.length; i += chunkSize) {
+    const chunk = ids.slice(i, i + chunkSize);
+    const inClause = chunk.map((id) => encodeURIComponent(id)).join(",");
+    const res = await serviceFetch(
+      [
+        "music_generation_logs?select=user_id,created_at",
+        `user_id=in.(${inClause})`,
+        `created_at=gte.${encodeURIComponent(minIso)}`,
+        `created_at=lte.${encodeURIComponent(maxIso)}`,
+        "order=created_at.desc",
+        "limit=500",
+      ].join("&"),
+    );
+    for (const row of Array.isArray(res.data) ? res.data : []) {
+      const uid = String(row.user_id || "").trim();
+      const t = Date.parse(String(row.created_at || ""));
+      if (!uid || !Number.isFinite(t)) continue;
+      if (!out.has(uid)) out.set(uid, []);
+      out.get(uid).push(t);
+    }
+  }
+  return out;
+}
+
+async function fetchUserGenerationLogTimesMs(userId, { minMs, maxMs } = {}) {
+  const uid = String(userId || "").trim();
+  if (!uid) return [];
+  const parts = [
+    "music_generation_logs?select=created_at",
+    `user_id=eq.${encodeURIComponent(uid)}`,
+    "order=created_at.desc",
+    "limit=300",
+  ];
+  if (Number.isFinite(minMs)) {
+    parts.push(`created_at=gte.${encodeURIComponent(new Date(minMs).toISOString())}`);
+  }
+  if (Number.isFinite(maxMs)) {
+    parts.push(`created_at=lte.${encodeURIComponent(new Date(maxMs).toISOString())}`);
+  }
+  const res = await serviceFetch(parts.join("&"));
+  return (Array.isArray(res.data) ? res.data : [])
+    .map((row) => Date.parse(String(row.created_at || "")))
+    .filter((t) => Number.isFinite(t));
 }
 
 async function getGenerations(limit, offset, filters = {}) {
@@ -1820,6 +1889,15 @@ async function getGenerations(limit, offset, filters = {}) {
         const ledgerRows = Array.isArray(ledgerRes.data) ? ledgerRes.data : [];
         if (ledgerRows.length) {
           const orphanUserIds = [...new Set(ledgerRows.map((r) => r.user_id).filter(Boolean))];
+          const ledgerTimes = ledgerRows
+            .map((r) => Date.parse(String(r.created_at || "")))
+            .filter((t) => Number.isFinite(t));
+          const dbTimesByUser = ledgerTimes.length
+            ? await fetchGenerationLogTimesByUser(orphanUserIds, {
+                minMs: Math.min(...ledgerTimes) - ORPHAN_LEDGER_MATCH_MS,
+                maxMs: Math.max(...ledgerTimes) + ORPHAN_LEDGER_MATCH_MS,
+              })
+            : new Map();
           const missingProfileIds = orphanUserIds.filter((id) => !profileMap.has(id));
           if (missingProfileIds.length) {
             const inClause = missingProfileIds.map((id) => encodeURIComponent(id)).join(",");
@@ -1849,6 +1927,7 @@ async function getGenerations(limit, offset, filters = {}) {
               const combined = mergeOrphanStemsRemixFromLedger(userGens, userLedger, {
                 userId: uid,
                 userLabel: String(p.display_name || p.username || "—"),
+                dbLogTimesMs: dbTimesByUser.get(uid) || [],
               });
               merged.push(...combined);
             }
@@ -2279,9 +2358,22 @@ async function getUserDetail(userIdInput, search = "") {
     createdAt: row.created_at,
   }));
   const name = String(prof?.display_name || prof?.username || "—").trim() || "—";
+  const ledgerStemsRemix = ledger.filter(
+    (tx) => String(tx.reason || tx.p_reason || "").toLowerCase() === "stems_remix",
+  );
+  const ledgerTimes = ledgerStemsRemix
+    .map((tx) => Date.parse(String(tx.createdAt || tx.created_at || "")))
+    .filter((t) => Number.isFinite(t));
+  const dbLogTimesMs = ledgerTimes.length
+    ? await fetchUserGenerationLogTimesMs(uid, {
+        minMs: Math.min(...ledgerTimes) - ORPHAN_LEDGER_MATCH_MS,
+        maxMs: Math.max(...ledgerTimes) + ORPHAN_LEDGER_MATCH_MS,
+      })
+    : [];
   const generations = mergeOrphanStemsRemixFromLedger(generationsBase, ledger, {
     userId: uid,
     userLabel: name,
+    dbLogTimesMs,
   });
 
   const songs = (Array.isArray(songsRes.data) ? songsRes.data : []).map((row) => ({

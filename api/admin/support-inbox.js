@@ -84,6 +84,17 @@ async function countUnread() {
   return Array.isArray(res.data) ? res.data.length : 0;
 }
 
+async function countInboxTotal() {
+  const res = await serviceFetch(
+    "support_inbound_messages?select=id",
+    { prefer: "count=exact" },
+  );
+  const range = res.headers?.get ? res.headers.get("content-range") : "";
+  const m = String(range || "").match(/\/(\d+)$/);
+  if (m) return Number(m[1]) || 0;
+  return Array.isArray(res.data) ? res.data.length : 0;
+}
+
 async function fetchSentById(id) {
   const mid = String(id || "").trim();
   if (!mid) return null;
@@ -232,15 +243,17 @@ module.exports = async function handler(req, res) {
       const offset = Number(url.searchParams.get("offset") || 0);
       const unreadOnly = url.searchParams.get("unreadOnly") === "1";
       const q = String(url.searchParams.get("q") || "").trim();
-      const [messages, unreadCount] = await Promise.all([
+      const [messages, unreadCount, inboxTotalCount] = await Promise.all([
         listMessages({ limit, offset, unreadOnly, q }),
         countUnread(),
+        countInboxTotal(),
       ]);
 
       return sendJson(res, 200, {
         ok: true,
         messages,
         unreadCount,
+        inboxTotalCount,
         resendInboundConfigured: isResendInboundConfigured(),
       });
     }
@@ -272,7 +285,8 @@ module.exports = async function handler(req, res) {
         return sendJson(res, 502, { error: result.error || "Sync failed" });
       }
       const unreadCount = await countUnread();
-      return sendJson(res, 200, { ok: true, ...result, unreadCount });
+      const inboxTotalCount = await countInboxTotal();
+      return sendJson(res, 200, { ok: true, ...result, unreadCount, inboxTotalCount });
     }
 
     res.setHeader("Allow", "GET, POST, PATCH, OPTIONS");

@@ -36,6 +36,7 @@ const state = {
   inboxFilter: "all",
   supportMailSelected: {},
   supportComposePrefill: null,
+  inboxUnreadCount: 0,
   marketingLocale: "en",
   marketingPage: "home",
   marketingScreen: "hub",
@@ -623,6 +624,7 @@ const SUPPORT_TEMPLATE_LABELS = Object.freeze({
   first_paid: "First paid — thank you",
   feedback_checkin: "Feedback check-in",
   cancel_confirm: "Cancel confirm",
+  refund_confirm: "Refund confirm",
 });
 
 function supportTemplateLabel(id) {
@@ -1035,7 +1037,41 @@ async function loadAdminSession({ force = false } = {}) {
   }
   setBlogAdminToken(state.session?.access_token);
   applyNavPermissions();
+  void refreshInboxNavBadge();
   return state.adminSession;
+}
+
+function updateInboxNavBadge() {
+  const btn = document.querySelector('.navItem[data-view="support-inbox"]');
+  if (!btn) return;
+  let badge = btn.querySelector(".navInboxBadge");
+  const n = Number(state.inboxUnreadCount) || 0;
+  if (n <= 0) {
+    badge?.remove();
+    return;
+  }
+  if (!badge) {
+    badge = document.createElement("span");
+    badge.className = "navInboxBadge";
+    btn.appendChild(badge);
+  }
+  badge.textContent = n > 99 ? "99+" : String(n);
+  badge.setAttribute("aria-label", `${n} unread`);
+}
+
+async function refreshInboxNavBadge() {
+  if (!state.adminSession?.canSendSupportEmail) {
+    state.inboxUnreadCount = 0;
+    updateInboxNavBadge();
+    return;
+  }
+  try {
+    const data = await fetchSupportInbox({ folder: "inbox", limit: 1 });
+    state.inboxUnreadCount = Number(data?.unreadCount) || 0;
+  } catch {
+    /* keep previous count */
+  }
+  updateInboxNavBadge();
 }
 
 function canAccessView(view) {
@@ -1116,6 +1152,7 @@ function applyNavPermissions() {
       els.adminRoleBadge.hidden = true;
     }
   }
+  updateInboxNavBadge();
 }
 
 function viewCacheKey() {
@@ -1276,51 +1313,141 @@ function escapeHtml(str) {
     .replace(/"/g, "&quot;");
 }
 
-function renderSunoCoverageSection(s, { compact = false } = {}) {
-  const shortfall = Number(s.shortfallCredits || 0);
-  const hasShortfall = shortfall > 0;
-  const buyUsd = s.shortfallUsd != null ? fmtUsd(s.shortfallUsd) : "—";
-  const coverage = s.coveragePct != null ? fmtPct(s.coveragePct) : "—";
-  const guaranteedCoverage = s.guaranteedCoveragePct != null ? fmtPct(s.guaranteedCoveragePct) : "—";
-  const proCount = Number(s.proSubscriberCount || 0);
-  const guaranteed = Number(s.guaranteedCredits ?? s.reservedCredits ?? 0);
-  const proBalances = Number(s.proBalancesOutstanding ?? s.remainingCredits ?? 0);
-  const freeTier = Number(s.freeTierOutstanding ?? 0);
-  const allTotal = Number(s.allUserOutstanding ?? s.userOutstanding ?? 0);
-  const title = compact ? "Suno liability (Pro + free)" : "Suno liability & top-up plan";
-  const lead = compact
-    ? `${proCount} active Pro · buy when bucket is below Pro account balances.`
-    : `Guaranteed is your plan-cap commitment at subscribe (400 weekly / 1,200 monthly). Top up Suno when the bucket falls below what Pro users can actually spend — plus track free-tier welcome credits separately.`;
-  const topUpAlert = hasShortfall
+function renderCreditsOverviewSection(s, { compact = false } = {}) {
+  const uc = s.userCredits || {};
+  const ft = uc.freeTier || {};
+  const mix = s.spendMix || {};
+  const suno = s.sunoPocket || {};
+  const clip = s.clipPocket || {};
+  const gemini = clip.geminiWallet || {};
+
+  const proCount = Number(uc.proSubscriberCount ?? s.proSubscriberCount ?? 0);
+  const proBalances = Number(uc.proBalancesOutstanding ?? s.proBalancesOutstanding ?? 0);
+  const guaranteed = Number(uc.guaranteedCredits ?? s.guaranteedCredits ?? 0);
+  const allTotal = Number(uc.allUserOutstanding ?? s.allUserOutstanding ?? 0);
+  const freeBal = Number(ft.balanceTotal ?? s.freeTierOutstanding ?? 0);
+  const welcomeUnused = Number(ft.welcomeUnused ?? ft.promoOutstanding ?? 0);
+  const promoInAccounts = Number(ft.promoInAccounts ?? 0);
+  const promoCodesPool = Number(ft.promoCodesUnredeemed ?? 0);
+  const promoCodeSlots = Number(ft.promoCodesUnusedSlots ?? 0);
+  const welcomeClaims = Number(ft.welcomeClaims ?? 0);
+  const proSuno = Number(suno.proSunoExposure ?? proBalances);
+  const welcomeSuno = Number(suno.welcomeSunoExposure ?? welcomeUnused);
+  const maxSuno = Number(suno.maxExposureCredits ?? 0);
+  const mixSuno = Number(suno.mixEstimateCredits ?? maxSuno);
+  const mixSunoBuy = Number(suno.mixCreditsToBuy ?? s.mixSunoBuyNow ?? 0);
+
+  const songPct = mix.songPct != null ? fmtPct(mix.songPct) : "—";
+  const clipPct = mix.clipPct != null ? fmtPct(mix.clipPct) : "—";
+  const mixNote = mix.hasData
+    ? `Last ${mix.windowDays || 30}d: ${songPct} of credits went to songs · ${clipPct} to clips.`
+    : `Not enough recent data for mix — Suno buy uses worst-case (all songs).`;
+
+  const sunoBuy = Number(suno.creditsToBuy ?? s.creditsToBuy ?? 0);
+  const sunoShortfall = sunoBuy > 0;
+  const sunoBuyUsd = suno.shortfallUsd != null ? fmtUsd(suno.shortfallUsd) : "—";
+  const sunoCoverage = suno.coveragePct != null ? fmtPct(suno.coveragePct) : "—";
+  const guaranteedCoverage = suno.guaranteedCoveragePct != null ? fmtPct(suno.guaranteedCoveragePct) : "—";
+
+  const clipBuyUsd = clip.buyNowUsd != null ? fmtUsd(clip.buyNowUsd) : "—";
+  const clipMaxBuyUsd = clip.maxBuyNowUsd != null ? fmtUsd(clip.maxBuyNowUsd) : "—";
+  const clipShortfall = Number(clip.buyNowUsd || 0) > 0;
+  const geminiBal = clip.geminiBalanceUsd != null ? fmtUsd(clip.geminiBalanceUsd) : (gemini.label || "—");
+
+  const sunoAlert = sunoShortfall
     ? `<div class="sunoTopUpAlert" role="alert">
-        <strong>Top up Suno now:</strong> buy at least <strong>${fmtNum(s.creditsToBuy, 0)} credits</strong> (~${buyUsd}) — Pro account balances (${fmtNum(proBalances, 1)}) exceed your bucket (${fmtNum(s.masterBalance, 1)}).
-        <a class="providerExtLink" href="https://sunoapi.org/billing" target="_blank" rel="noopener noreferrer">Open sunoapi.org/billing →</a>
+        <strong>Top up Suno pocket:</strong> buy ~<strong>${fmtNum(sunoBuy, 0)} credits</strong> (~${sunoBuyUsd}) to cover Pro + welcome if all spent on songs.
+        ${mix.hasData && mixSunoBuy !== sunoBuy ? `Mix estimate (optional): ${fmtNum(mixSuno, 0)} need · ${fmtNum(mixSunoBuy, 0)} to buy.` : ""}
+        <a class="providerExtLink" href="https://sunoapi.org/billing" target="_blank" rel="noopener noreferrer">sunoapi.org/billing →</a>
       </div>`
     : `<div class="sunoTopUpAlert sunoTopUpAlert--ok" role="status">
-        <strong>Suno bucket covers Pro account balances.</strong> ${fmtNum(s.headroomEstimate, 1)} credits headroom before Pro users outspend the bucket.
+        <strong>Suno bucket covers Pro + welcome (all-songs worst case).</strong> ${fmtNum(suno.headroom, 1)} credits headroom.
         <a class="providerExtLink" href="https://sunoapi.org/billing" target="_blank" rel="noopener noreferrer">Suno billing →</a>
       </div>`;
+
+  const clipAlert = clip.geminiBalanceUsd == null
+    ? `<div class="sunoTopUpAlert" role="status">
+        <strong>Gemini wallet not set up.</strong> Log a top-up on the Providers tab to track Clip exposure.
+        <a class="providerExtLink" href="https://aistudio.google.com/billing" target="_blank" rel="noopener noreferrer">AI Studio billing →</a>
+      </div>`
+    : clipShortfall
+      ? `<div class="sunoTopUpAlert" role="alert">
+          <strong>Top up Gemini for Clips:</strong> ~<strong>${clipBuyUsd}</strong> short vs expected Clip mix (max all-clips: ${clipMaxBuyUsd}).
+          <a class="providerExtLink" href="https://aistudio.google.com/billing" target="_blank" rel="noopener noreferrer">AI Studio billing →</a>
+        </div>`
+      : `<div class="sunoTopUpAlert sunoTopUpAlert--ok" role="status">
+          <strong>Gemini wallet covers expected Clip need.</strong> Balance ${geminiBal} · ${fmtNum(clip.gens30d, 0)} clips last 30d.
+        </div>`;
+
+  const title = compact ? "Credits & vendor pockets" : "User credits & vendor pockets";
+
   return `
-    <section class="sectionCard${hasShortfall ? " sectionCard--warn" : ""}">
+    <section class="sectionCard">
       <div class="sectionHead">
         <h3 class="sectionTitle">${title}</h3>
-        <p class="sectionNote">${lead}</p>
+        <p class="sectionNote">Users hold one shared credit wallet. Suno songs and Nabad Clips draw from different vendor pockets when credits are spent.</p>
       </div>
-      ${topUpAlert}
+      <div class="sectionHead" style="margin-top:0.5rem">
+        <h4 class="sectionTitle" style="font-size:1rem">Spend mix</h4>
+        <p class="sectionNote">${mixNote}</p>
+      </div>
+    </section>
+
+    <section class="sectionCard">
+      <div class="sectionHead">
+        <h3 class="sectionTitle">User credits (shared wallet)</h3>
+        <p class="sectionNote">Current balances only — goes down when users spend. Welcome (24× signup) is separate from promo codes (36×).</p>
+      </div>
       <div class="cardsGrid cardsGrid--inSection">
-        ${statCard("Guaranteed (Pro commitment)", fmtNum(guaranteed, 0), `${proCount} active Pro · plan caps (${guaranteedCoverage} bucket coverage)`, false, Number(s.guaranteedShortfallCredits || 0) > 0)}
-        ${statCard("Pro balances (on accounts)", fmtNum(proBalances, 1), `${proCount} Pro users · full spendable balances`, false, hasShortfall)}
-        ${statCard("Free / welcome outstanding", fmtNum(freeTier, 1), "Non-Pro users · mostly signup 24 credits")}
-        ${statCard("All users total", fmtNum(allTotal, 1), "Every account balance on the platform")}
-        ${statCard("Suno bucket available", fmtNum(s.masterBalance, 1), "Live upstream balance", true)}
-        ${statCard("Coverage", coverage, "Suno bucket ÷ Pro balances — aim for 100%+", false, hasShortfall && Number(s.coveragePct) < 100)}
-        ${statCard("Buy from Suno now", hasShortfall ? fmtNum(s.creditsToBuy, 0) : "0", hasShortfall ? "Pro balances − bucket" : "Bucket covers Pro balances", false, hasShortfall)}
-        ${statCard("Est. top-up cost", hasShortfall ? buyUsd : fmtUsd(0), s.usdPerCredit ? `@ $${Number(s.usdPerCredit).toFixed(5)}/credit` : "")}
-        ${statCard("Headroom", fmtNum(s.headroomEstimate, 1), "Bucket − Pro balances (negative = buy now)", false, hasShortfall)}
+        ${statCard("Pro balances", fmtNum(proBalances, 1), `${proCount} active Pro · songs or clips`)}
+        ${statCard("Guaranteed (plan caps)", fmtNum(guaranteed, 0), `Owed at subscribe (${guaranteedCoverage} bucket coverage)`)}
+        ${statCard("Welcome unused (24×)", fmtNum(welcomeUnused, 1), `${fmtNum(welcomeClaims, 0)} signups granted · Suno-only today`)}
+        ${statCard("Promo in accounts", fmtNum(promoInAccounts, 1), "Redeemed promo codes still on balances")}
+        ${statCard("Promo codes (pool)", fmtNum(promoCodesPool, 0), `${fmtNum(promoCodeSlots, 0)} unused redemptions · not on anyone yet`)}
+        ${statCard("Free-tier total", fmtNum(freeBal, 1), `${fmtNum(ft.userCount, 0)} non-Pro users with balance`)}
+        ${statCard("All users total", fmtNum(allTotal, 1), "Every account balance")}
       </div>
       ${renderProSubscriberRows(s.proSubscribers)}
     </section>
+
+    <section class="sectionCard${sunoShortfall ? " sectionCard--warn" : ""}">
+      <div class="sectionHead">
+        <h3 class="sectionTitle">Suno pocket</h3>
+        <p class="sectionNote">Worst case: every Pro balance + unused welcome spent on full songs (~${Number(s.songCreditCost || 12)} credits each). Promo codes in the pool are not included until redeemed.</p>
+      </div>
+      ${sunoAlert}
+      <div class="cardsGrid cardsGrid--inSection">
+        ${statCard("Suno bucket", fmtNum(suno.masterBalance ?? s.masterBalance, 1), "Your live Suno upstream balance", true)}
+        ${statCard("Pro → Suno", fmtNum(proSuno, 0), "Pro balances if all spent on songs")}
+        ${statCard("Welcome → Suno", fmtNum(welcomeSuno, 0), "Unused welcome 24× on free accounts")}
+        ${statCard("Max Suno need", fmtNum(maxSuno, 0), "Pro + welcome (all songs)")}
+        ${statCard("Mix estimate", fmtNum(mixSuno, 0), mix.hasData ? `If ${songPct} songs / ${clipPct} clips continue` : "Needs more spend data")}
+        ${statCard("Coverage", sunoCoverage, "Bucket ÷ max need (100% = fully covered)")}
+        ${statCard("Buy Suno now", sunoShortfall ? fmtNum(sunoBuy, 0) : "0", sunoShortfall ? `Max need − bucket (~${sunoBuyUsd})` : "Covered (worst case)", false, sunoShortfall)}
+        ${statCard("Headroom", fmtNum(suno.headroom, 1), "Bucket − max need")}
+      </div>
+    </section>
+
+    <section class="sectionCard${clipShortfall ? " sectionCard--warn" : ""}">
+      <div class="sectionHead">
+        <h3 class="sectionTitle">Nabad Clip / Gemini</h3>
+        <p class="sectionNote">${fmtNum(clip.clipCreditCost || 10, 0)} user credits per clip · ~$${Number(clip.usdPerGen || 0.04).toFixed(2)} API cost · not from Suno bucket.</p>
+      </div>
+      ${clipAlert}
+      <div class="cardsGrid cardsGrid--inSection">
+        ${statCard("Gemini wallet", geminiBal, gemini.detail || "Shared Lyria + Gemini billing")}
+        ${statCard("Clips (7d / 30d)", `${fmtNum(clip.gens7d, 0)} / ${fmtNum(clip.gens30d, 0)}`, `${fmtUsd(clip.apiCost30d)} API last 30d`)}
+        ${statCard("Credits charged (30d)", fmtNum(clip.creditsCharged30d, 0), `@ ${fmtNum(clip.clipCreditCost || 10, 0)} per clip`)}
+        ${statCard("Expected need", fmtUsd(clip.expectedNeedUsd), "Mix-weighted from Pro balances")}
+        ${statCard("Max need (all clips)", fmtUsd(clip.maxExposureUsd), "If every Pro credit → clips")}
+        ${statCard("Top up Gemini", clip.geminiBalanceUsd == null ? "Set up" : (clipShortfall ? clipBuyUsd : fmtUsd(0)), clipShortfall ? "Expected − wallet" : "Covered for expected mix", false, clipShortfall)}
+      </div>
+    </section>
   `;
+}
+
+function renderSunoCoverageSection(s, opts = {}) {
+  return renderCreditsOverviewSection(s, opts);
 }
 
 function renderActivityTrendLabel(pct) {
@@ -3304,6 +3431,7 @@ function supportTemplateShortLabel(id) {
     first_paid: "First paid",
     feedback_checkin: "Feedback",
     cancel_confirm: "Cancel confirm",
+    refund_confirm: "Refund",
     custom_compose: "Compose",
   };
   return map[String(id || "").trim()] || String(id || "Email");
@@ -3332,7 +3460,6 @@ function renderSupportMailListHeader({ folder }) {
     <label class="mailCheckCell mailCheckCell--head" title="Select all">
       <input type="checkbox" id="mailSelectAll" aria-label="Select all" />
     </label>
-    <span class="mailNumCell">#</span>
     <span class="mailFromCell">${folder === "sent" ? "To" : "From"}</span>
     <span class="mailSubjectCell">Subject</span>
     <span class="mailDateCell">Date</span>
@@ -3399,13 +3526,12 @@ function renderSupportSentDetail(sent) {
   `;
 }
 
-function renderSupportInboxRows(messages, { offset = 0 } = {}) {
+function renderSupportInboxRows(messages) {
   if (!messages.length) {
     return `<div class="mailEmpty">No messages yet. Email support@nabadai.com or sync from Resend.</div>`;
   }
-  return messages.map((m, i) => {
+  return messages.map((m) => {
     const unread = !m.isRead;
-    const rowNum = offset + i + 1;
     const fromLabel = m.fromName ? m.fromName : (m.fromEmail || "—");
     const fromSub = m.fromName ? m.fromEmail : "";
     const checked = Boolean(state.supportMailSelected[m.id]);
@@ -3416,7 +3542,6 @@ function renderSupportInboxRows(messages, { offset = 0 } = {}) {
       <label class="mailCheckCell" data-mail-check-stop="1">
         <input type="checkbox" class="mailRowCheck" data-mail-check="${escapeHtml(m.id)}"${checked ? " checked" : ""} aria-label="Select message" />
       </label>
-      <span class="mailNumCell">${rowNum}</span>
       <div class="mailFromCell">
         ${unread ? '<span class="supportInboxUnreadDot" aria-hidden="true"></span>' : ""}
         <span class="mailFromName">${escapeHtml(fromLabel)}</span>
@@ -3431,19 +3556,17 @@ function renderSupportInboxRows(messages, { offset = 0 } = {}) {
   }).join("");
 }
 
-function renderSupportSentRows(messages, { offset = 0 } = {}) {
+function renderSupportSentRows(messages) {
   if (!messages.length) {
     return `<div class="mailEmpty">No sent mail yet. Use Compose or Pro templates on Subscriptions.</div>`;
   }
-  return messages.map((m, i) => {
-    const rowNum = offset + i + 1;
+  return messages.map((m) => {
     const checked = Boolean(state.supportMailSelected[m.id]);
     const typeBadge = `<span class="mailTypeBadge">${escapeHtml(supportTemplateShortLabel(m.templateId))}</span>`;
     return `<div class="mailRow${checked ? " isSelected" : ""}" data-sent-open="${escapeHtml(m.id)}">
       <label class="mailCheckCell" data-mail-check-stop="1">
         <input type="checkbox" class="mailRowCheck" data-mail-check="${escapeHtml(m.id)}"${checked ? " checked" : ""} aria-label="Select message" />
       </label>
-      <span class="mailNumCell">${rowNum}</span>
       <div class="mailFromCell">
         <span class="mailFromName">${escapeHtml(m.toEmail || "—")}</span>
       </div>
@@ -3477,7 +3600,7 @@ function renderSupportInbox(data) {
     <section class="sectionCard mailClient">
       ${renderSupportMailToolbar({ folder: "inbox", unreadCount, configured, searchValue: state.inboxSearch })}
       ${renderSupportMailListHeader({ folder: "inbox" })}
-      <div class="mailList">${renderSupportInboxRows(messages, { offset: state.offset })}</div>
+      <div class="mailList">${renderSupportInboxRows(messages)}</div>
       <p id="inboxSyncMsg" class="grantMsg mailSyncMsg" hidden></p>
     </section>
   `, { plain: true });
@@ -3502,7 +3625,7 @@ function renderSupportSent(data) {
     <section class="sectionCard mailClient">
       ${renderSupportMailToolbar({ folder: "sent", searchValue: state.inboxSearch })}
       ${renderSupportMailListHeader({ folder: "sent" })}
-      <div class="mailList">${renderSupportSentRows(messages, { offset: state.offset })}</div>
+      <div class="mailList">${renderSupportSentRows(messages)}</div>
     </section>
   `, { plain: true });
 }
@@ -5672,6 +5795,8 @@ async function loadView({ force = false } = {}) {
     state.cache[cacheKey] = data;
     if (view === "support-inbox" && !state.inboxMessageId && els.pageSub) {
       const unread = Number(data?.unreadCount) || 0;
+      state.inboxUnreadCount = unread;
+      updateInboxNavBadge();
       els.pageSub.textContent = unread
         ? `${unread} unread · support@ and help@`
         : (VIEW_META["support-inbox"]?.sub || "support@ and help@");

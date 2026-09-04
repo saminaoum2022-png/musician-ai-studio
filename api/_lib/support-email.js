@@ -28,6 +28,11 @@ const SUPPORT_TEMPLATES = Object.freeze([
     label: "Cancel confirm",
     description: "User cancelled — confirms access until period end.",
   },
+  {
+    id: "refund_confirm",
+    label: "Refund confirm",
+    description: "After you issue a refund in Stripe — confirm amount and reason.",
+  },
 ]);
 
 const PLAN_PRICES = Object.freeze({
@@ -88,6 +93,8 @@ function buildTemplateVars({ subscription, billingEvents } = {}) {
     iosManagePath: "Settings → Apple ID → Subscriptions → NabadAi",
     supportEmail: "support@nabadai.com",
     hasBillingEvents: Array.isArray(billingEvents) && billingEvents.length > 0,
+    refundAmount: "[refund amount]",
+    refundReason: "[reason — edit before send]",
   };
 }
 
@@ -101,6 +108,8 @@ function renderTemplate(templateId, vars) {
   const manage = v.managePath;
   const ios = v.iosManagePath;
   const support = v.supportEmail || "support@nabadai.com";
+  const refundAmount = v.refundAmount || "[refund amount]";
+  const refundReason = v.refundReason || "[reason]";
 
   const bodies = {
     trial_welcome: {
@@ -197,6 +206,26 @@ iPhone: ${ios}
 
 Thanks for trying NabadAi Pro. We'd love to have you back anytime.
 
+— NabadAi Support`,
+    },
+    refund_confirm: {
+      subject: "Your NabadAi refund has been processed",
+      text: `Hi,
+
+We've processed a refund of ${refundAmount} to your original payment method for NabadAi Pro.
+
+Reason: ${refundReason}
+
+Depending on your bank or card issuer, it may take 5–10 business days to appear on your statement.
+
+Your Pro subscription has been updated accordingly. If you cancelled, you won't be charged again unless you resubscribe.
+
+If anything looks wrong, reply to this email and we'll help.
+
+Web: ${manage}
+iPhone: ${ios}
+
+Thank you,
 — NabadAi Support`,
     },
   };

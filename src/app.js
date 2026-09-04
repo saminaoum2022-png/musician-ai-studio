@@ -27010,7 +27010,6 @@ function syncDeskSidebarPromo() {
 function syncProSubscriptionUi() {
   syncProfileProAvatarPill();
   syncSettingsProRow();
-  syncCreditsProUpsell();
   try { syncDeskSidebarPromo(); } catch {}
   try { syncProGatedWebUi(); } catch {}
   try { syncPlayerCoverToolsRail(); } catch {}
@@ -27098,14 +27097,6 @@ function syncSettingsPageSub() {
     el.classList.remove("settingsPageSub--email");
     el.removeAttribute("title");
   }
-}
-
-function syncCreditsProUpsell() {
-  const card = document.getElementById("creditsProUpsell");
-  if (!card) return;
-  const show = isAppLoggedIn() && !creditsState.proActive;
-  card.hidden = !show;
-  card.setAttribute("aria-hidden", show ? "false" : "true");
 }
 
 /** Live Suno API remaining credits (same pool as `SUNO_API_KEY`). Shown on

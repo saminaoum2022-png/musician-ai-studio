@@ -23792,6 +23792,35 @@ a.vwPrimary,
   line-height: 1.5;
 }
 .creditsRules li{ margin-bottom: 4px; }
+.creditsCardDisclosure > summary.creditsCardDisclosureSummary{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  cursor: pointer;
+  list-style: none;
+  -webkit-tap-highlight-color: transparent;
+}
+.creditsCardDisclosure > summary.creditsCardDisclosureSummary::-webkit-details-marker{ display: none; }
+.creditsCardDisclosure > summary.creditsCardDisclosureSummary::marker{ content: ""; }
+.creditsCardDisclosure > summary.creditsCardDisclosureSummary .creditsCardTitle{ margin: 0; }
+.creditsCardDisclosure > summary.creditsCardDisclosureSummary::after{
+  content: "";
+  flex: 0 0 auto;
+  width: 8px;
+  height: 8px;
+  border-right: 2px solid rgba(232,238,247,0.42);
+  border-bottom: 2px solid rgba(232,238,247,0.42);
+  transform: rotate(45deg);
+  transition: transform 180ms ease;
+}
+.creditsCardDisclosure[open] > summary.creditsCardDisclosureSummary::after{
+  transform: rotate(-135deg);
+}
+.creditsCardDisclosure > .creditsRules,
+.creditsCardDisclosure > .creditsLedgerList{
+  margin-top: 10px;
+}
 .creditsLedgerList{ display: flex; flex-direction: column; gap: 6px; }
 .creditsLedgerEmpty{
   padding: 14px;

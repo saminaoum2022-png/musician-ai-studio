@@ -1,8 +1,5 @@
--- Allow freeform compose logs without a linked user (optional user_id).
--- Run after support_email_log.sql.
-
-alter table public.support_email_log
-  alter column user_id drop not null;
+-- Allow refund_confirm in support email log.
+-- Run after support_email_log_compose.sql.
 
 alter table public.support_email_log
   drop constraint if exists support_email_log_template_check;

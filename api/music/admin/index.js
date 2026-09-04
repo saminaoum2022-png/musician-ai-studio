@@ -52,6 +52,11 @@ const {
 } = require("../../_lib/cloudflare-flux-upstream");
 const { resolveCoverRegenImageProvider } = require("../../_lib/gemini-cover-image");
 const { resolveGenerationOutput } = require("../../_lib/admin-generation-output");
+const {
+  GENERATION_DEBIT_REASONS,
+  ORPHAN_MATCH_MS,
+  mapReasonToLogMeta,
+} = require("../../_lib/backfill-generation-logs");
 
 const COVER_PROVIDER_LABELS = Object.freeze({
   cloudflare: "Cloudflare Flux",
@@ -1687,17 +1692,21 @@ async function remixTaskIdSet(taskIds) {
 }
 
 /**
- * Stems remix often debited credits but the generation log never landed
- * (fire-and-forget before Vercel froze). Surface those ledger rows so admin
- * can still see the remix happened.
+ * Generation debits that may lack a music_generation_logs row (fire-and-forget era).
+ * Surface unmatched ledger rows so admin can still open/recover them.
  *
  * IMPORTANT: `dbLogTimesMs` must include generation log timestamps from the DB,
- * not only rows on the current admin page — otherwise real logs that fell off
- * the paginated list get replaced by synthetic unclickable recoveries.
+ * not only rows on the current admin page.
  */
-const ORPHAN_LEDGER_MATCH_MS = 3 * 60 * 1000;
+const ORPHAN_LEDGER_MATCH_MS = ORPHAN_MATCH_MS;
+const LEDGER_RECOVERY_LOOKBACK_DAYS = 90;
 
-function mergeOrphanStemsRemixFromLedger(
+function orphanRecoveryPrompt(reason) {
+  const label = String(reason || "generation").replace(/_/g, " ");
+  return `${label.charAt(0).toUpperCase()}${label.slice(1)} (recovered from credit ledger — log missing)`;
+}
+
+function mergeOrphanGenerationsFromLedger(
   generations,
   ledgerRows,
   { userId = "", userLabel = "", dbLogTimesMs = [] } = {},
@@ -1714,28 +1723,34 @@ function mergeOrphanStemsRemixFromLedger(
   const orphans = [];
   for (const tx of ledger) {
     const reason = String(tx.reason || tx.p_reason || "").toLowerCase();
-    if (reason !== "stems_remix") continue;
+    if (!GENERATION_DEBIT_REASONS.includes(reason)) continue;
+    if (Number(tx.delta || 0) >= 0) continue;
     const txMs = Date.parse(String(tx.createdAt || tx.created_at || ""));
     if (!Number.isFinite(txMs)) continue;
     const hasNearby = genTimes.some((t) => Math.abs(t - txMs) <= ORPHAN_LEDGER_MATCH_MS);
     if (hasNearby) continue;
     const credits = Math.abs(Number(tx.delta || tx.creditsUsed || 0));
+    const meta = mapReasonToLogMeta(reason, tx.ref);
+    const creditId = String(tx.id || txMs).trim();
     orphans.push({
-      id: `ledger-stems-remix-${txMs}`,
-      userId: userId || tx.userId || "",
+      id: `ledger-credit-${creditId}`,
+      userId: userId || tx.userId || tx.user_id || "",
       userLabel: userLabel || "",
       taskId: "",
-      kind: "remix",
+      kind: meta.kind,
       storedKind: "ledger",
-      provider: "suno",
-      prompt: "Hub / reference remix (recovered from credit ledger — generation log missing)",
-      requestDetail: "",
+      provider: meta.provider,
+      prompt: orphanRecoveryPrompt(reason),
+      requestDetail: meta.requestDetail || "",
       status: "completed",
       creditsUsed: credits || 12,
       providerCostUsd: null,
       errorMessage: "",
       createdAt: tx.createdAt || tx.created_at,
       completedAt: tx.createdAt || tx.created_at,
+      recoveredFromLedger: true,
+      creditTxId: creditId,
+      creditReason: reason,
     });
     genTimes.push(txMs);
   }
@@ -1874,71 +1889,75 @@ async function getGenerations(limit, offset, filters = {}) {
       }
     }
 
-    // Recover remixes that charged stems_remix but never wrote a generation log.
-    if (!provider || provider === "suno") {
-      if (!kind || kind === "remix") {
-        const ledgerParts = [
-          "credits_transactions?select=id,user_id,delta,reason,created_at",
-          "reason=eq.stems_remix",
-          "order=created_at.desc",
-          "limit=120",
-        ];
-        if (dateFrom) ledgerParts.push(`created_at=gte.${encodeURIComponent(`${dateFrom}T00:00:00.000Z`)}`);
-        if (dateTo) ledgerParts.push(`created_at=lte.${encodeURIComponent(`${dateTo}T23:59:59.999Z`)}`);
-        const ledgerRes = await serviceFetch(ledgerParts.join("&"));
-        const ledgerRows = Array.isArray(ledgerRes.data) ? ledgerRes.data : [];
-        if (ledgerRows.length) {
-          const orphanUserIds = [...new Set(ledgerRows.map((r) => r.user_id).filter(Boolean))];
-          const ledgerTimes = ledgerRows
-            .map((r) => Date.parse(String(r.created_at || "")))
-            .filter((t) => Number.isFinite(t));
-          const dbTimesByUser = ledgerTimes.length
-            ? await fetchGenerationLogTimesByUser(orphanUserIds, {
-                minMs: Math.min(...ledgerTimes) - ORPHAN_LEDGER_MATCH_MS,
-                maxMs: Math.max(...ledgerTimes) + ORPHAN_LEDGER_MATCH_MS,
-              })
-            : new Map();
-          const missingProfileIds = orphanUserIds.filter((id) => !profileMap.has(id));
-          if (missingProfileIds.length) {
-            const inClause = missingProfileIds.map((id) => encodeURIComponent(id)).join(",");
-            const prof = await serviceFetch(
-              `profiles?select=user_id,username,display_name&user_id=in.(${inClause})`,
-            );
-            for (const p of Array.isArray(prof.data) ? prof.data : []) {
-              profileMap.set(p.user_id, p);
-            }
-          }
-          // Merge per user so "nearby log" checks stay accurate.
-          const byUser = new Map();
-          for (const g of withSongMeta) {
-            const uid = String(g.userId || "");
-            if (!byUser.has(uid)) byUser.set(uid, []);
-            byUser.get(uid).push(g);
-          }
-          const merged = [];
-          const seenUsers = new Set();
-          for (const tx of ledgerRows) {
-            const uid = String(tx.user_id || "");
-            if (!seenUsers.has(uid)) {
-              seenUsers.add(uid);
-              const userGens = byUser.get(uid) || [];
-              const userLedger = ledgerRows.filter((r) => String(r.user_id || "") === uid);
-              const p = profileMap.get(uid) || {};
-              const combined = mergeOrphanStemsRemixFromLedger(userGens, userLedger, {
-                userId: uid,
-                userLabel: String(p.display_name || p.username || "—"),
-                dbLogTimesMs: dbTimesByUser.get(uid) || [],
-              });
-              merged.push(...combined);
-            }
-          }
-          for (const [uid, userGens] of byUser) {
-            if (!seenUsers.has(uid)) merged.push(...userGens);
-          }
-          withSongMeta = merged.sort(
-            (a, b) => Date.parse(String(b.createdAt || "")) - Date.parse(String(a.createdAt || "")),
+    // Recover generation debits that never wrote a music_generation_logs row.
+    if (!provider || ["suno", "lyria", "minimax", "elevenlabs"].includes(provider)) {
+      const reasonIn = GENERATION_DEBIT_REASONS.map((r) => encodeURIComponent(r)).join(",");
+      const ledgerParts = [
+        "credits_transactions?select=id,user_id,delta,reason,ref,created_at",
+        `reason=in.(${reasonIn})`,
+        "delta=lt.0",
+        "order=created_at.desc",
+        "limit=500",
+      ];
+      if (dateFrom) {
+        ledgerParts.push(`created_at=gte.${encodeURIComponent(`${dateFrom}T00:00:00.000Z`)}`);
+      } else {
+        const sinceLedger = new Date(Date.now() - LEDGER_RECOVERY_LOOKBACK_DAYS * 24 * 60 * 60 * 1000).toISOString();
+        ledgerParts.push(`created_at=gte.${encodeURIComponent(sinceLedger)}`);
+      }
+      if (dateTo) ledgerParts.push(`created_at=lte.${encodeURIComponent(`${dateTo}T23:59:59.999Z`)}`);
+      const ledgerRes = await serviceFetch(ledgerParts.join("&"));
+      const ledgerRows = Array.isArray(ledgerRes.data) ? ledgerRes.data : [];
+      if (ledgerRows.length) {
+        const orphanUserIds = [...new Set(ledgerRows.map((r) => r.user_id).filter(Boolean))];
+        const ledgerTimes = ledgerRows
+          .map((r) => Date.parse(String(r.created_at || "")))
+          .filter((t) => Number.isFinite(t));
+        const dbTimesByUser = ledgerTimes.length
+          ? await fetchGenerationLogTimesByUser(orphanUserIds, {
+              minMs: Math.min(...ledgerTimes) - ORPHAN_LEDGER_MATCH_MS,
+              maxMs: Math.max(...ledgerTimes) + ORPHAN_LEDGER_MATCH_MS,
+            })
+          : new Map();
+        const missingProfileIds = orphanUserIds.filter((id) => !profileMap.has(id));
+        if (missingProfileIds.length) {
+          const inClause = missingProfileIds.map((id) => encodeURIComponent(id)).join(",");
+          const prof = await serviceFetch(
+            `profiles?select=user_id,username,display_name&user_id=in.(${inClause})`,
           );
+          for (const p of Array.isArray(prof.data) ? prof.data : []) {
+            profileMap.set(p.user_id, p);
+          }
         }
+        const byUser = new Map();
+        for (const g of withSongMeta) {
+          const uid = String(g.userId || "");
+          if (!byUser.has(uid)) byUser.set(uid, []);
+          byUser.get(uid).push(g);
+        }
+        const merged = [];
+        const seenUsers = new Set();
+        for (const tx of ledgerRows) {
+          const uid = String(tx.user_id || "");
+          if (!seenUsers.has(uid)) {
+            seenUsers.add(uid);
+            const userGens = byUser.get(uid) || [];
+            const userLedger = ledgerRows.filter((r) => String(r.user_id || "") === uid);
+            const p = profileMap.get(uid) || {};
+            const combined = mergeOrphanGenerationsFromLedger(userGens, userLedger, {
+              userId: uid,
+              userLabel: String(p.display_name || p.username || "—"),
+              dbLogTimesMs: dbTimesByUser.get(uid) || [],
+            });
+            merged.push(...combined);
+          }
+        }
+        for (const [uid, userGens] of byUser) {
+          if (!seenUsers.has(uid)) merged.push(...userGens);
+        }
+        withSongMeta = merged.sort(
+          (a, b) => Date.parse(String(b.createdAt || "")) - Date.parse(String(a.createdAt || "")),
+        );
       }
     }
 
@@ -2303,13 +2322,27 @@ async function getUserDetail(userIdInput, search = "") {
   const authMap = await fetchAuthUsersMap();
   const auth = authMap.get(uid) || {};
 
-  const [profRes, creditsRes, subRes, billingRes, ledgerMerged, gensRes, songsRes] = await Promise.all([
+  const reasonIn = GENERATION_DEBIT_REASONS.map((r) => encodeURIComponent(r)).join(",");
+  const sinceUserLedger = new Date(Date.now() - LEDGER_RECOVERY_LOOKBACK_DAYS * 24 * 60 * 60 * 1000).toISOString();
+
+  const [profRes, creditsRes, subRes, billingRes, ledgerMerged, genLedgerRes, gensRes, songsRes] = await Promise.all([
     serviceFetch(`profiles?select=user_id,username,display_name,role,last_active_at,created_at,signup_platform&user_id=eq.${enc}&limit=1`),
     serviceFetch(`user_credits?select=balance,paid_balance,gift_balance,promo_balance,updated_at&user_id=eq.${enc}&limit=1`),
     serviceFetch(`pro_subscriptions?select=provider,plan_id,status,current_period_end,cancel_at_period_end,provider_subscription_id,created_at,updated_at&user_id=eq.${enc}&limit=1`),
     serviceFetch(`billing_events?select=id,provider,event_type,plan_id,product_id,credits_granted,created_at&user_id=eq.${enc}&order=created_at.desc&limit=50`),
     fetchMergedCreditRows({ userId: uid, limit: 40, offset: 0 }),
-    serviceFetch(`music_generation_logs?select=id,kind,provider,status,credits_used,error_message,prompt,request_detail,created_at&user_id=eq.${enc}&order=created_at.desc&limit=15`),
+    serviceFetch(
+      [
+        "credits_transactions?select=id,user_id,delta,reason,ref,created_at",
+        `user_id=eq.${enc}`,
+        `reason=in.(${reasonIn})`,
+        "delta=lt.0",
+        `created_at=gte.${encodeURIComponent(sinceUserLedger)}`,
+        "order=created_at.desc",
+        "limit=300",
+      ].join("&"),
+    ),
+    serviceFetch(`music_generation_logs?select=id,kind,provider,status,credits_used,error_message,prompt,request_detail,created_at&user_id=eq.${enc}&order=created_at.desc&limit=100`),
     serviceFetch(`user_songs?select=id,title,created_at,public_on_profile&user_id=eq.${enc}&order=created_at.desc&limit=12`),
   ]);
 
@@ -2337,6 +2370,7 @@ async function getUserDetail(userIdInput, search = "") {
   }));
 
   const ledger = (ledgerMerged.rows || []).map((row) => ({
+    id: row.id,
     delta: Number(row.delta || 0),
     balanceBefore: row.balance_before != null ? Number(row.balance_before) : null,
     balanceAfter: row.balance_after != null ? Number(row.balance_after) : null,
@@ -2344,6 +2378,8 @@ async function getUserDetail(userIdInput, search = "") {
     ref: row.ref || "",
     createdAt: row.created_at,
   }));
+
+  const ledgerGenerationDebitsRaw = Array.isArray(genLedgerRes.data) ? genLedgerRes.data : [];
 
   const generationsBase = (Array.isArray(gensRes.data) ? gensRes.data : []).map((row) => ({
     id: row.id,
@@ -2358,10 +2394,13 @@ async function getUserDetail(userIdInput, search = "") {
     createdAt: row.created_at,
   }));
   const name = String(prof?.display_name || prof?.username || "—").trim() || "—";
-  const ledgerStemsRemix = ledger.filter(
-    (tx) => String(tx.reason || tx.p_reason || "").toLowerCase() === "stems_remix",
-  );
-  const ledgerTimes = ledgerStemsRemix
+  const ledgerGenerationDebits = ledgerGenerationDebitsRaw.length
+    ? ledgerGenerationDebitsRaw
+    : ledger.filter((tx) => {
+        const reason = String(tx.reason || tx.p_reason || "").toLowerCase();
+        return GENERATION_DEBIT_REASONS.includes(reason) && Number(tx.delta || 0) < 0;
+      });
+  const ledgerTimes = ledgerGenerationDebits
     .map((tx) => Date.parse(String(tx.createdAt || tx.created_at || "")))
     .filter((t) => Number.isFinite(t));
   const dbLogTimesMs = ledgerTimes.length
@@ -2370,7 +2409,7 @@ async function getUserDetail(userIdInput, search = "") {
         maxMs: Math.max(...ledgerTimes) + ORPHAN_LEDGER_MATCH_MS,
       })
     : [];
-  const generations = mergeOrphanStemsRemixFromLedger(generationsBase, ledger, {
+  const generations = mergeOrphanGenerationsFromLedger(generationsBase, ledgerGenerationDebits, {
     userId: uid,
     userLabel: name,
     dbLogTimesMs,
@@ -2450,8 +2489,166 @@ async function getUserDetail(userIdInput, search = "") {
   };
 }
 
+async function getGenerationDetailFromCreditLedger(creditTxIdInput) {
+  const creditId = cleanGenerationId(creditTxIdInput);
+  if (!creditId) {
+    return { generation: null, error: "generation_not_found" };
+  }
+  const enc = encodeURIComponent(creditId);
+  const txRes = await serviceFetch(
+    `credits_transactions?select=id,user_id,delta,reason,ref,created_at,balance_before,balance_after&id=eq.${enc}&limit=1`,
+  );
+  const tx = Array.isArray(txRes.data) && txRes.data[0] ? txRes.data[0] : null;
+  if (!tx || Number(tx.delta || 0) >= 0) {
+    return { generation: null, error: "generation_not_found" };
+  }
+  const reason = String(tx.reason || "").toLowerCase();
+  if (!GENERATION_DEBIT_REASONS.includes(reason)) {
+    return { generation: null, error: "generation_not_found" };
+  }
+
+  const uid = tx.user_id;
+  const creditMs = Date.parse(String(tx.created_at || ""));
+  const anchorMs = Number.isFinite(creditMs) ? creditMs : Date.now();
+  const watchWindowStart = new Date(anchorMs - 12 * 60 * 1000).toISOString();
+  const watchWindowEnd = new Date(anchorMs + 12 * 60 * 1000).toISOString();
+  const uidEnc = encodeURIComponent(uid);
+  const meta = mapReasonToLogMeta(reason, tx.ref);
+
+  const [authMap, profRes, watchRes, existingLogRes] = await Promise.all([
+    fetchAuthUsersMap(),
+    serviceFetch(`profiles?select=user_id,username,display_name&user_id=eq.${uidEnc}&limit=1`),
+    serviceFetch(
+      [
+        "suno_generation_watch?select=task_id,kind,title,status,created_at",
+        `user_id=eq.${uidEnc}`,
+        `created_at=gte.${encodeURIComponent(watchWindowStart)}`,
+        `created_at=lte.${encodeURIComponent(watchWindowEnd)}`,
+        "order=created_at.asc",
+        "limit=20",
+      ].join("&"),
+    ),
+    serviceFetch(
+      [
+        "music_generation_logs?select=id",
+        `user_id=eq.${uidEnc}`,
+        `created_at=gte.${encodeURIComponent(new Date(anchorMs - ORPHAN_LEDGER_MATCH_MS).toISOString())}`,
+        `created_at=lte.${encodeURIComponent(new Date(anchorMs + ORPHAN_LEDGER_MATCH_MS).toISOString())}`,
+        "limit=1",
+      ].join("&"),
+    ),
+  ]);
+
+  if (Array.isArray(existingLogRes.data) && existingLogRes.data[0]?.id) {
+    return getGenerationDetail(existingLogRes.data[0].id);
+  }
+
+  const watches = Array.isArray(watchRes.data) ? watchRes.data : [];
+  let watch = null;
+  let bestDelta = Infinity;
+  for (const w of watches) {
+    const wMs = Date.parse(String(w.created_at || ""));
+    if (!Number.isFinite(wMs)) continue;
+    const delta = Math.abs(wMs - anchorMs);
+    if (delta < bestDelta) {
+      bestDelta = delta;
+      watch = w;
+    }
+  }
+
+  const prof = Array.isArray(profRes.data) && profRes.data[0] ? profRes.data[0] : null;
+  const auth = authMap.get(uid) || {};
+  const name = String(prof?.display_name || prof?.username || "—").trim() || "—";
+  const taskId = String(watch?.task_id || "").trim();
+  const title = String(watch?.title || "").trim();
+  const prompt = title || orphanRecoveryPrompt(reason);
+  const creditsUsed = Math.abs(Number(tx.delta || 0));
+  const generationId = `ledger-credit-${creditId}`;
+
+  const songsRes = taskId
+    ? await serviceFetch(
+        `user_songs?select=id,title,song_url,art_url,task_id,audio_id,kind,meta,public_on_profile,created_at&task_id=eq.${encodeURIComponent(taskId)}&order=created_at.desc&limit=6`,
+      )
+    : { data: [] };
+  const songRows = Array.isArray(songsRes.data) ? songsRes.data : [];
+  const songs = songRows.map((s) => {
+    const songId = s.id;
+    return {
+      id: songId,
+      title: String(s.title || "Untitled").trim() || "Untitled",
+      songUrl: String(s.song_url || "").trim(),
+      artUrl: String(s.art_url || "").trim(),
+      taskId: String(s.task_id || "").trim(),
+      audioId: String(s.audio_id || "").trim(),
+      kind: String(s.kind || "").trim(),
+      publicOnProfile: Boolean(s.public_on_profile),
+      createdAt: s.created_at,
+      shareUrl: songId ? `https://www.nabadai.com/s/${encodeURIComponent(songId)}` : "",
+    };
+  });
+
+  let inferredKind = meta.kind;
+  if (watch?.kind) {
+    const wk = String(watch.kind || "").trim().toLowerCase();
+    if (wk) inferredKind = wk === "instrumental" && reason === "stems_remix" ? "remix" : wk;
+  }
+
+  const taskOutput = taskId
+    ? await resolveGenerationOutput({ userId: uid, taskId, savedSongs: songRows })
+    : {
+        taskStatus: "",
+        taskStatusUrl: "",
+        taskError: "",
+        outputAudioUrl: "",
+        outputAudioCandidates: [],
+        outputClips: [],
+      };
+
+  const ledger = [{
+    delta: Number(tx.delta || 0),
+    balanceBefore: Number(tx.balance_before || 0),
+    balanceAfter: Number(tx.balance_after || 0),
+    reason: tx.reason || "",
+    ref: tx.ref || "",
+    createdAt: tx.created_at,
+  }];
+
+  return {
+    generation: {
+      id: generationId,
+      userId: uid,
+      userLabel: name,
+      userEmail: auth.email || "",
+      username: prof?.username || "",
+      taskId,
+      kind: inferredKind,
+      storedKind: "ledger",
+      provider: meta.provider,
+      prompt,
+      requestDetail: meta.requestDetail || "",
+      status: taskId ? (taskOutput.outputClips?.length ? "completed" : "pending") : "completed",
+      creditsUsed,
+      providerCostUsd: null,
+      errorMessage: "",
+      createdAt: tx.created_at,
+      completedAt: tx.created_at,
+      durationMs: null,
+      recoveredFromLedger: true,
+      creditTxId: creditId,
+      ...taskOutput,
+    },
+    ledger,
+    songs,
+  };
+}
+
 async function getGenerationDetail(generationIdInput) {
-  const gid = cleanGenerationId(generationIdInput);
+  const raw = String(generationIdInput || "").trim();
+  if (raw.startsWith("ledger-credit-")) {
+    return getGenerationDetailFromCreditLedger(raw.slice("ledger-credit-".length));
+  }
+
+  const gid = cleanGenerationId(raw);
   if (!gid) {
     return { generation: null, error: "generation_not_found" };
   }

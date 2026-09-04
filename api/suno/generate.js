@@ -22,8 +22,7 @@ const { userIsAdmin } = require("../_lib/admin-auth");
 const { applyCors } = require("../_lib/cors");
 const { sanitizeSunoStyleTags, buildSunoErrorBody } = require("../_lib/suno-user-errors");
 const { queueRegisterSunoWatch } = require("../_lib/suno-generation-watch");
-const { formatRequestDetail, sunoErrorMessage } = require("../_lib/suno-admin-log");
-const { queueLogMusicGeneration } = require("../_lib/music-generation-log");
+const { formatRequestDetail, sunoErrorMessage, logSunoGeneration } = require("../_lib/suno-admin-log");
 const { requireProForWebApi } = require("../_lib/pro-web-gate");
 
 const FULL_SONG_COST = 12;
@@ -198,14 +197,16 @@ module.exports = async function handler(req, res) {
       if (!isAdmin) {
         await refund(user.userId, FULL_SONG_COST, "refund_full_song", "suno_http_error").catch(() => null);
       }
-      queueLogMusicGeneration({
+      await logSunoGeneration({
         userId: user.userId,
         kind: watchKindForBody(body),
+        endpoint: "generate",
         prompt: buildPromptLabel(prompt, mergedStyle, title),
-        requestDetail: formatRequestDetail("generate", payload),
+        requestPayload: payload,
         status: isAdmin ? "failed" : "refunded",
         creditsUsed: isAdmin ? 0 : FULL_SONG_COST,
         errorMessage: sunoErrorMessage(data, text, r.status),
+        isAdmin,
       });
       return json(res, 502, buildSunoErrorBody(data || text, { error: "Upstream engine error" }));
     }
@@ -215,28 +216,32 @@ module.exports = async function handler(req, res) {
         await refund(user.userId, FULL_SONG_COST, "refund_full_song", `suno_code_${sunoCode}`).catch(() => null);
       }
       const msg = data?.msg || data?.message || data?.error || "Request was rejected upstream";
-      queueLogMusicGeneration({
+      await logSunoGeneration({
         userId: user.userId,
         kind: watchKindForBody(body),
+        endpoint: "generate",
         prompt: buildPromptLabel(prompt, mergedStyle, title),
-        requestDetail: formatRequestDetail("generate", payload),
+        requestPayload: payload,
         status: isAdmin ? "failed" : "refunded",
         creditsUsed: isAdmin ? 0 : FULL_SONG_COST,
         errorMessage: msg,
+        isAdmin,
       });
       return json(res, 502, buildSunoErrorBody(data, { error: "Request was rejected upstream" }));
     }
 
     const sunoTaskId = extractSunoTaskId(data);
     const watchKind = watchKindForBody(body);
-    queueLogMusicGeneration({
+    await logSunoGeneration({
       userId: user.userId,
       taskId: sunoTaskId,
       kind: watchKind,
+      endpoint: "generate",
       prompt: buildPromptLabel(prompt, mergedStyle, title),
-      requestDetail: formatRequestDetail("generate", payload),
+      requestPayload: payload,
       status: "pending",
       creditsUsed: isAdmin ? 0 : FULL_SONG_COST,
+      isAdmin,
     });
     if (sunoTaskId) {
       queueRegisterSunoWatch({

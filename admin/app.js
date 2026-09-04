@@ -2217,14 +2217,12 @@ function renderUserDetail(data) {
   const genBody = genRows.length
     ? genRows.map((g) => {
       const gid = escapeHtml(g.id || "");
-      const synthetic = String(g.id || "").startsWith("ledger-stems-remix-");
+      const ledgerRecovery = String(g.id || "").startsWith("ledger-credit-");
       const reason = String(g.errorMessage || "").trim();
       const reasonShort = reason
         ? (reason.length > 48 ? `${reason.slice(0, 45)}…` : reason)
-        : (synthetic ? "Recovered from ledger" : "—");
-      const rowAttrs = synthetic
-        ? `class="rowMuted" title="Remix charged credits but generation log was missing"`
-        : `class="rowClickable" tabindex="0" role="link" data-generation-view="${gid}" data-return-view="user" aria-label="Open generation"`;
+        : (ledgerRecovery ? "Recovered from ledger" : "—");
+      const rowAttrs = `class="rowClickable${ledgerRecovery ? " rowRecovered" : ""}" tabindex="0" role="link" data-generation-view="${gid}" data-return-view="user" aria-label="Open generation"`;
       return `<tr ${rowAttrs}>
         ${dateCell(g.createdAt)}
         <td>${escapeHtml(g.kind || "—")}</td>
@@ -2840,6 +2838,7 @@ function renderGenerations(data) {
   const rows = data?.generations || [];
   const total = data?.total || rows.length;
   const filters = data?.filters || state.generationFilters || {};
+  const canBackfillLogs = Boolean(state.adminSession?.isOwner || state.adminSession?.role === "admin");
   const kindOptions = [
     ["", "All types"],
     ["song", "Full song"],
@@ -2885,14 +2884,12 @@ function renderGenerations(data) {
   const body = rows.length
     ? rows.map((g) => {
       const gid = escapeHtml(g.id || "");
-      const synthetic = String(g.id || "").startsWith("ledger-stems-remix-");
+      const ledgerRecovery = String(g.id || "").startsWith("ledger-credit-");
       const reason = String(g.errorMessage || "").trim();
       const reasonShort = reason
         ? (reason.length > 72 ? `${reason.slice(0, 69)}…` : reason)
-        : (g.status === "pending" ? "Waiting on Suno…" : (synthetic ? "Recovered from credit ledger" : "—"));
-      const rowAttrs = synthetic
-        ? `class="rowMuted" title="Remix charged credits but generation log was missing"`
-        : `class="rowClickable" tabindex="0" role="link" data-generation-view="${gid}" data-return-view="generations" aria-label="Open generation"`;
+        : (g.status === "pending" ? "Waiting on Suno…" : (ledgerRecovery ? "Recovered from credit ledger" : "—"));
+      const rowAttrs = `class="rowClickable${ledgerRecovery ? " rowRecovered" : ""}" tabindex="0" role="link" data-generation-view="${gid}" data-return-view="generations" aria-label="Open generation"`;
       return `
       <tr ${rowAttrs}>
         <td>${escapeHtml(g.userLabel || "—")}</td>
@@ -2935,6 +2932,7 @@ function renderGenerations(data) {
       <div class="heroActions">
         <button type="submit" class="btnPrimary">Apply filters</button>
         <button type="button" class="btnGhost" id="genFilterClear">Clear</button>
+        ${canBackfillLogs ? `<button type="button" class="btnGhost" id="genBackfillLogs" title="Insert missing generation logs from credit history (last 90 days)">Backfill missing logs</button>` : ""}
       </div>
     </form>
     ${listSection({
@@ -5568,6 +5566,32 @@ async function adminSingersRequest(body = {}) {
   return data;
 }
 
+async function adminBackfillGenerationLogs(payload = {}) {
+  await refreshSessionIfNeeded();
+  const token = state.session?.access_token;
+  if (!token) throw new Error("Not signed in");
+  const r = await fetch("/api/music/admin/backfill-generation-logs", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+  const data = await r.json().catch(() => ({}));
+  if (r.status === 401) {
+    writeSession(null);
+    throw new Error("Session expired — sign in again");
+  }
+  if (r.status === 403) {
+    throw new Error(data?.error || "You do not have permission to backfill logs.");
+  }
+  if (!r.ok) {
+    throw new Error(data?.error || `Request failed (${r.status})`);
+  }
+  return data;
+}
+
 async function adminRecoverGeneration(payload = {}) {
   await refreshSessionIfNeeded();
   const token = state.session?.access_token;
@@ -7019,6 +7043,25 @@ document.body.addEventListener("click", (e) => {
     state.billingSearch = "";
     state.offset = 0;
     void loadView({ force: true });
+    return;
+  }
+
+  const genBackfillLogs = e.target.closest("#genBackfillLogs");
+  if (genBackfillLogs) {
+    if (!window.confirm("Backfill missing generation logs from the last 90 days of credit debits? This may take a minute.")) return;
+    genBackfillLogs.disabled = true;
+    genBackfillLogs.textContent = "Backfilling…";
+    adminBackfillGenerationLogs({ daysBack: 90, dryRun: false, limit: 10000 })
+      .then((result) => {
+        window.alert(`Backfill complete: ${result.inserted || 0} logs inserted, ${result.skipped || 0} skipped.`);
+        state.offset = 0;
+        return loadView({ force: true });
+      })
+      .catch((err) => window.alert(err?.message || String(err)))
+      .finally(() => {
+        genBackfillLogs.disabled = false;
+        genBackfillLogs.textContent = "Backfill missing logs";
+      });
     return;
   }
 

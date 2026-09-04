@@ -62,9 +62,17 @@ async function logMusicGeneration({
   creditsUsed = 0,
   providerCostUsd = null,
   errorMessage = "",
+  createdAt = "",
+  completedAt = "",
 } = {}) {
   const uid = cleanUserId(userId);
   if (!uid) return { ok: false };
+  const createdIso = createdAt ? new Date(createdAt).toISOString() : "";
+  const completedIso = completedAt
+    ? new Date(completedAt).toISOString()
+    : status === "completed" || status === "failed" || status === "refunded"
+      ? (createdIso || new Date().toISOString())
+      : "";
   const row = {
     user_id: uid,
     task_id: cleanTaskId(taskId),
@@ -85,9 +93,8 @@ async function logMusicGeneration({
     credits_used: Number(creditsUsed || 0),
     provider_cost_usd: providerCostUsd != null ? providerCostUsd : estimateProviderCost(creditsUsed),
     error_message: String(errorMessage || "").trim().slice(0, 500),
-    ...(status === "completed" || status === "failed" || status === "refunded"
-      ? { completed_at: new Date().toISOString() }
-      : {}),
+    ...(createdIso ? { created_at: createdIso } : {}),
+    ...(completedIso ? { completed_at: completedIso } : {}),
   };
   let r = await rest("music_generation_logs", {
     method: "POST",

@@ -15,7 +15,7 @@ const {
 } = require("../_lib/credits-auth");
 const { applyCors } = require("../_lib/cors");
 const { queueRegisterSunoWatch } = require("../_lib/suno-generation-watch");
-const { queueLogSunoGeneration, sunoErrorMessage } = require("../_lib/suno-admin-log");
+const { queueLogSunoGeneration, sunoErrorMessage, logSunoGeneration } = require("../_lib/suno-admin-log");
 
 const SOUND_COST = 2.5;
 
@@ -105,7 +105,7 @@ module.exports = async function handler(req, res) {
       if (!isAdmin) {
         await refund(user.userId, SOUND_COST, "refund_sound_generate", "suno_http_error").catch(() => null);
       }
-      queueLogSunoGeneration({
+      await logSunoGeneration({
         userId: user.userId,
         kind: "sound",
         endpoint: "sounds",
@@ -124,7 +124,7 @@ module.exports = async function handler(req, res) {
         await refund(user.userId, SOUND_COST, "refund_sound_generate", `suno_code_${sunoCode}`).catch(() => null);
       }
       const msg = data?.msg || data?.message || data?.error || "Request was rejected upstream";
-      queueLogSunoGeneration({
+      await logSunoGeneration({
         userId: user.userId,
         kind: "sound",
         endpoint: "sounds",
@@ -139,7 +139,7 @@ module.exports = async function handler(req, res) {
     }
 
     const soundTaskId = extractSunoTaskId(data);
-    queueLogSunoGeneration({
+    await logSunoGeneration({
       userId: user.userId,
       taskId: soundTaskId,
       kind: "sound",

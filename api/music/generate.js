@@ -55,7 +55,7 @@ const {
 const { uploadObject } = require("../_lib/supabase-storage");
 const { queueCacheTimestampedLyrics } = require("../_lib/music-timestamped-lyrics-cache");
 const {
-  queueLogMusicGeneration,
+  logMusicGeneration,
   queueUpdateMusicGenerationByTaskId,
 } = require("../_lib/music-generation-log");
 
@@ -477,7 +477,7 @@ async function handleMinimaxGenerate(req, res, { user, isAdmin, body }) {
   const taskId = newTaskId("minimax");
   const audioId = `${taskId}_a`;
 
-  queueLogMusicGeneration({
+  await logMusicGeneration({
     userId: user.userId,
     taskId,
     kind: body?.watchKind === "photo" ? "photo" : "song",
@@ -634,7 +634,7 @@ async function handleLyriaGenerate(req, res, { user, isAdmin, body }) {
   const audioId = `${taskId}_a`;
   const model = resolveLyriaModel(body?.lyriaModel);
 
-  queueLogMusicGeneration({
+  await logMusicGeneration({
     userId: user.userId,
     taskId,
     kind: body?.watchKind === "photo" ? "photo" : "song",
@@ -800,7 +800,7 @@ async function handleLyriaClipGenerate(req, res, { user, isAdmin, body }) {
       ? "nabad_clip"
       : "lyria_clip";
 
-  queueLogMusicGeneration({
+  await logMusicGeneration({
     userId: user.userId,
     taskId,
     kind: "clip",
@@ -953,7 +953,7 @@ async function handleElevenlabsGenerate(req, res, { user, isAdmin, body }) {
     console.warn("[music/generate] elevenlabs generate without finetune_id — set ELEVENLABS_FINETUNE_ID");
   }
 
-  queueLogMusicGeneration({
+  await logMusicGeneration({
     userId: user.userId,
     taskId,
     kind: body?.watchKind === "photo" ? "photo" : "song",

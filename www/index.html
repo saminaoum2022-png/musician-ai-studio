@@ -197,7 +197,7 @@
       onload="this.media='all'"
     />
     <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Display:wght@900&family=Inter:wght@900&display=swap" /></noscript>
-    <link rel="stylesheet" href="./styles.css?v=20260904-232108" />
+    <link rel="stylesheet" href="./styles.css?v=20260904-232612" />
 
     <meta name="description" content="Create complete songs from lyrics, a hum, or a photo with NabadAi. Explore AI music tools, Arabic styles, voice personas, and creator sharing." />
     <meta property="og:type" content="website" />
@@ -308,6 +308,26 @@
             <summary>I found a bug or have a question.</summary>
             <p>We'd love to hear from you. Email <a href="mailto:help@nabadai.com?subject=NabadAi%20Music%20%E2%80%94%20Help">help@nabadai.com</a> for help, or <a href="mailto:support@nabadai.com?subject=NabadAi%20Music%20%E2%80%94%20Bug%20report">support@nabadai.com</a> to report a bug.</p>
           </details>
+        </div>
+      </div>
+    </div>
+    <div id="appleSubManageOverlay" class="faqOverlay appleSubManageOverlay" hidden aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="appleSubManageTitle">
+      <div class="faqOverlayInner">
+        <header class="faqOverlayTop">
+          <h2 id="appleSubManageTitle" class="faqOverlayTitle">Manage subscription</h2>
+          <button type="button" id="btnAppleSubManageClose" class="faqOverlayClose" aria-label="Close">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+          </button>
+        </header>
+        <div class="faqOverlayBody">
+          <p class="faqIntro">Your NabadAi Pro subscription is billed through Apple. Cancel anytime — you keep Pro until the end of your current billing period.</p>
+          <ol class="appleSubManageSteps">
+            <li class="appleSubManageStep"><span class="appleSubManageStepNum" aria-hidden="true">1</span><span>Open <strong>Settings</strong> on your iPhone</span></li>
+            <li class="appleSubManageStep"><span class="appleSubManageStepNum" aria-hidden="true">2</span><span>Tap your <strong>name</strong> → <strong>Subscriptions</strong></span></li>
+            <li class="appleSubManageStep"><span class="appleSubManageStepNum" aria-hidden="true">3</span><span>Select <strong>NabadAi</strong> → <strong>Cancel Subscription</strong></span></li>
+          </ol>
+          <button type="button" id="btnAppleSubManageOpenApple" class="appleSubManageSecondaryBtn">Open Apple Subscriptions</button>
+          <p class="appleSubManageFine">Questions? Email <a href="mailto:help@nabadai.com?subject=NabadAi%20Pro%20%E2%80%94%20Billing">help@nabadai.com</a></p>
         </div>
       </div>
     </div>
@@ -5145,6 +5165,6 @@
     </script>
     <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
     <script src="./env.client.js" onerror="void 0"></script>
-    <script type="module" src="./src/app.js?v=20260904-232108"></script>
+    <script type="module" src="./src/app.js?v=20260904-232612"></script>
   </body>
 </html>

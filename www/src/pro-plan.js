@@ -620,7 +620,12 @@ export function showAppleManageSubscriptionSheet() {
     overlay.classList.add("isOpen");
     overlay.setAttribute("aria-hidden", "false");
     document.body.classList.add("faqOverlayOpen");
+    return;
   }
+  _deps?.showToast?.(
+    "Open Settings → Apple ID → Subscriptions → NabadAi on your iPhone.",
+    { durationMs: 4200 },
+  );
 }
 
 /** Open Stripe portal (web) or in-app Apple steps (App Store). */
@@ -631,6 +636,10 @@ export async function openProManageSubscription() {
     return;
   }
   const provider = String(readProState().provider || "").toLowerCase();
+  if (isNativeIos() && provider !== "stripe") {
+    showAppleManageSubscriptionSheet();
+    return;
+  }
   if (provider === "stripe") {
     try {
       await openStripeBillingPortal({

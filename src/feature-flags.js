@@ -6,3 +6,6 @@ export const MUSIC_VIDEO_FEATURE_ENABLED = false;
  * Keep false until explicit launch — dev phone testing uses baked nabadProducerUi instead.
  */
 export const NABAD_PRODUCER_PUBLIC_SHIPPED = false;
+
+/** When false: hide play counts on Discover cards, charts, and challenge heroes (sorting unchanged). */
+export const DISCOVER_SHOW_PLAY_COUNTS = false;

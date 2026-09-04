@@ -35,7 +35,7 @@ function defaultHomeContentEn() {
       ctaHref: "/app/#/intro",
       secondaryLabel: "See how it works",
       secondaryHref: "#features",
-      storeNote: "Also on iPhone · Android coming soon",
+      storeNote: "Available on web and iOS (TestFlight)",
       heroImageUrl: "/assets/marketing/seo-hero-device.png",
       heroImageAlt: "NabadAi app — create songs from lyrics, hums, and photos",
     },
@@ -321,7 +321,7 @@ function defaultHomeContentAr() {
         "حوّل الكلمات أو اللحن الذي تدندنه أو مزاج صورة إلى أغنية كاملة. احفظ صوتك كشخصية، انشر على Discover، وتواصل مع المبدعين.",
       ctaLabel: "جرّب مجاناً",
       secondaryLabel: "كيف يعمل",
-      storeNote: "متوفر على iPhone · Android قريباً",
+      storeNote: "متوفر على الويب و iOS (TestFlight)",
       heroImageAlt: "تطبيق NabadAi — إنشاء أغاني من كلمات ودندنات وصور",
     },
     features: {

@@ -231,11 +231,11 @@ import {
   screenshotProf,
   screenshotSanitizeCopy,
 } from "./screenshot-mode.js";
-import { MUSIC_VIDEO_FEATURE_ENABLED } from "./feature-flags.js";
+import { DISCOVER_SHOW_PLAY_COUNTS, MUSIC_VIDEO_FEATURE_ENABLED } from "./feature-flags.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260904-232108";
+const APP_BUILD = "20260904-232612";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -9094,6 +9094,7 @@ function chartWeekTrendHtml(entry) {
 }
 
 function chartWeekPlaysText(plays, compact = false) {
+  if (!DISCOVER_SHOW_PLAY_COUNTS) return "";
   const n = Math.max(0, Number(plays) || 0);
   if (!n) return "";
   const count = formatStatCount(n);
@@ -10572,7 +10573,7 @@ function discoverFeedByLineHtml(byLine, prof, opts = {}) {
 }
 
 function discoverTemplatesMetricsHtml(t) {
-  const plays = Math.max(0, Number(t.playCount) || 0);
+  const plays = DISCOVER_SHOW_PLAY_COUNTS ? Math.max(0, Number(t.playCount) || 0) : 0;
   const likes = discoverHubReactionCount(t);
   const durSec = discoverTrackDurationSec(t);
   const bits = [];
@@ -10784,11 +10785,14 @@ function discoverFeedSongRowHtml(t, profMap, opts = {}) {
     : titleWithNabadBadgeHtml(t, escapeHtml(title), "discoverFeedSongTitle");
   let secondaryHtml = "";
   if (opts.compactMeta) {
-    const plays = Math.max(0, Number(t.playCount) || 0);
+    const plays = DISCOVER_SHOW_PLAY_COUNTS ? Math.max(0, Number(t.playCount) || 0) : 0;
     const playText = plays > 0
       ? `${discoverHubStatLabel(plays)} ${plays === 1 ? "play" : "plays"}`
       : "New";
-    secondaryHtml = `<span class="discoverFeedSongMeta">${discoverFeedByLineHtml(byLine, prof, { byPrefix: "" })}<span class="discoverFeedSongMetaDot" aria-hidden="true">·</span><span class="discoverFeedSongPlays">${escapeHtml(playText)}</span></span>`;
+    const playHtml = DISCOVER_SHOW_PLAY_COUNTS
+      ? `<span class="discoverFeedSongMetaDot" aria-hidden="true">·</span><span class="discoverFeedSongPlays">${escapeHtml(playText)}</span>`
+      : "";
+    secondaryHtml = `<span class="discoverFeedSongMeta">${discoverFeedByLineHtml(byLine, prof, { byPrefix: "" })}${playHtml}</span>`;
   } else {
     const byHtml = opts.hideByLine
       ? ""
@@ -11311,7 +11315,7 @@ function discoverHubReactionCount(t) {
 }
 
 function discoverHubPickStatsHtml(t) {
-  const plays = Math.max(0, Number(t.playCount) || 0);
+  const plays = DISCOVER_SHOW_PLAY_COUNTS ? Math.max(0, Number(t.playCount) || 0) : 0;
   const likes = discoverHubReactionCount(t);
   const bits = [];
   if (plays > 0) bits.push(`${discoverHubStatLabel(plays)} plays`);
@@ -11354,7 +11358,7 @@ function discoverHubEntryMiniHtml(t, profMap) {
   const title = String(t.title || "Untitled").trim();
   const art = trackCoverArtForFeed(t);
   const playAttrs = discoverHubTrackPlayAttrs(t, profMap);
-  const plays = Math.max(0, Number(t.playCount) || 0);
+  const plays = DISCOVER_SHOW_PLAY_COUNTS ? Math.max(0, Number(t.playCount) || 0) : 0;
   return `
     <button type="button" class="discoverHubEntryMini" ${playAttrs}>
       <img class="discoverHubEntryMiniArt" src="${escapeHtml(art)}" alt="" loading="lazy" decoding="async" />
@@ -11390,7 +11394,7 @@ function discoverChallengeEntryHeroHtml(t, profMap) {
   const title = String(t.title || "Untitled").trim();
   const art = trackCoverArtForFeed(t);
   const playAttrs = discoverHubTrackPlayAttrs(t, profMap);
-  const plays = Math.max(0, Number(t.playCount) || 0);
+  const plays = DISCOVER_SHOW_PLAY_COUNTS ? Math.max(0, Number(t.playCount) || 0) : 0;
   const ch = challengeMetaForTrack(t);
   const flag = String(ch?.teamFlag || "").trim();
   return `

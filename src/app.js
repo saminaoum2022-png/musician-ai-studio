@@ -27182,10 +27182,12 @@ function renderCreditsLedger() {
       const cls = delta > 0 ? "isPositive" : delta < 0 ? "isNegative" : "";
       const reason = formatLedgerReason(row?.reason);
       const rawRef = String(row?.ref || "").trim();
-      const ref =
-        row?.reason === "signup_welcome" && rawRef === "new_user_web"
-          ? "Website signup"
-          : rawRef;
+      const ref = (() => {
+        if (!rawRef) return "";
+        if (row?.reason === "signup_welcome" && rawRef === "new_user_web") return "Website signup";
+        if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(rawRef)) return "";
+        return rawRef;
+      })();
       const ts = row?.created_at ? new Date(row.created_at) : null;
       const when = ts && !Number.isNaN(ts.valueOf()) ? ts.toLocaleString() : "";
       return `

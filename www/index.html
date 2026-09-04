@@ -3376,7 +3376,7 @@
           </div>
         </section>
 
-        <section class="wide creditsPage" data-route="credits">
+        <section class="wide creditsPage creditsPage--wallet" data-route="credits">
           <header class="creditsHeader">
             <a href="#/profile" class="nabadBackBtn creditsBack" aria-label="Back to Profile">
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6 9 12l6 6"/></svg>
@@ -3384,106 +3384,108 @@
             <h2 class="creditsTitle">Credits</h2>
           </header>
 
-          <div class="creditsHero">
-            <div class="creditsHeroLabel">Balance</div>
-            <div class="creditsHeroValue"><span id="creditsBalanceBig">0</span></div>
-            <div class="creditsHeroSub">credits total</div>
-            <div id="creditsBreakdown" class="creditsBreakdown" hidden>
-              <div class="creditsBreakdownRow">
-                <span class="creditsBreakdownLabel">Paid credits</span>
-                <span class="creditsBreakdownValue" id="creditsPaidValue">0</span>
-              </div>
-              <div class="creditsBreakdownHint" id="creditsPaidHint">Purchased or charged — can gift and create.</div>
-              <div class="creditsBreakdownRow">
-                <span class="creditsBreakdownLabel">Gift credits received</span>
-                <span class="creditsBreakdownValue" id="creditsGiftValue">0</span>
-              </div>
-              <div class="creditsBreakdownHint">Received from other users — create only, not giftable.</div>
-              <div class="creditsBreakdownRow">
-                <span class="creditsBreakdownLabel">Promo credits</span>
-                <span class="creditsBreakdownValue" id="creditsPromoValue">0</span>
-              </div>
-              <div class="creditsBreakdownHint">From promo codes — can gift and create (testing).</div>
+          <div class="creditsWallet">
+            <div class="creditsWalletBalance">
+              <span class="creditsWalletValue" id="creditsBalanceBig">0</span>
+              <span class="creditsWalletLabel">credits available</span>
             </div>
-            <div id="creditsHeroEmail" class="creditsHeroEmail" style="display:none"></div>
+            <div id="creditsBreakdown" class="creditsWalletChips" hidden>
+              <div class="creditsWalletChip" title="Purchased or charged — can gift and create.">
+                <span class="creditsWalletChipLabel">Paid</span>
+                <span class="creditsWalletChipValue" id="creditsPaidValue">0</span>
+              </div>
+              <div class="creditsWalletChip" title="Received from others — create only, not giftable.">
+                <span class="creditsWalletChipLabel">Gift</span>
+                <span class="creditsWalletChipValue" id="creditsGiftValue">0</span>
+              </div>
+              <div class="creditsWalletChip" title="From promo codes — can gift and create.">
+                <span class="creditsWalletChipLabel">Promo</span>
+                <span class="creditsWalletChipValue" id="creditsPromoValue">0</span>
+              </div>
+            </div>
+            <a href="#/pro" class="creditsWalletCta" data-route-link="pro">Get more credits</a>
+            <p id="creditsHeroEmail" class="creditsWalletEmail" style="display:none" hidden></p>
           </div>
 
-          <section class="creditsCard">
-            <h3 class="creditsCardTitle">Redeem a code</h3>
-            <p class="creditsCardLead">Have a promo code? Enter it below.</p>
-            <div class="creditsRedeemRow">
+          <section class="creditsSection" aria-labelledby="creditsRedeemKicker">
+            <h3 class="creditsSectionKicker" id="creditsRedeemKicker">Redeem</h3>
+            <div class="creditsRedeemPanel">
               <input
                 id="creditsRedeemInput"
                 class="creditsRedeemInput"
                 type="text"
-                placeholder="PROMO-CODE"
+                placeholder="Promo code"
                 autocapitalize="characters"
                 autocomplete="off"
                 spellcheck="false"
+                aria-label="Promo code"
               />
               <button id="btnCreditsRedeem" class="primary creditsRedeemBtn" type="button">Redeem</button>
             </div>
             <div id="creditsRedeemMsg" class="creditsRedeemMsg" style="display:none"></div>
           </section>
 
-          <details class="creditsCard creditsCardDisclosure">
-            <summary class="creditsCardDisclosureSummary"><span class="creditsCardTitle">How it works</span></summary>
-            <ul class="creditsRules">
-              <li><strong>1 full song = 10–50 credits</strong> — depends on the song type and options you choose.</li>
-              <li><strong>1 sound</strong> (loop / ambience) = <strong>2.5 credits</strong>.</li>
-              <li><strong>Lyrics are free</strong> — write as many drafts as you like.</li>
-              <li>Each promo code can be redeemed <strong>once per account</strong>.</li>
-              <li><strong>Paid and promo credits can be gifted</strong> to other creators on their posts. Received gift credits are for creating only.</li>
-              <li>If a generation fails, your credits are <strong>refunded automatically</strong>.</li>
-              <li>Need more credits? Redeem a promo code, open <strong>Settings → NabadAi Pro</strong>, or email <strong>help@nabadai.com</strong>.</li>
+          <details class="creditsSection creditsHowFold">
+            <summary class="creditsHowFoldSummary">
+              <span class="creditsHowFoldLabel">How credits work</span>
+              <span class="creditsHowFoldChev" aria-hidden="true"></span>
+            </summary>
+            <ul class="creditsRules creditsRules--compact">
+              <li><strong>Full song:</strong> 10–50 credits — depends on song type and options.</li>
+              <li><strong>Sounds:</strong> 2.5 credits · <strong>Lyrics</strong> are free.</li>
+              <li>Failed generations are <strong>refunded automatically</strong>.</li>
+              <li>Promo codes: once per account. Paid and promo credits can be <strong>gifted</strong>; gift credits are create-only.</li>
             </ul>
           </details>
 
-          <details class="creditsCard creditsCardDisclosure">
-            <summary class="creditsCardDisclosureSummary"><span class="creditsCardTitle">Recent activity</span></summary>
-            <div id="creditsLedgerList" class="creditsLedgerList">
+          <details class="creditsSection creditsHowFold creditsActivityFold">
+            <summary class="creditsHowFoldSummary">
+              <span class="creditsHowFoldLabel">Transaction history</span>
+              <span class="creditsHowFoldChev" aria-hidden="true"></span>
+            </summary>
+            <div id="creditsLedgerList" class="creditsLedgerList creditsLedgerList--feed creditsLedgerList--inFold">
               <div class="creditsLedgerEmpty">No activity yet.</div>
             </div>
           </details>
 
-          <section id="creditsAdminCard" class="creditsCard creditsAdminCard" style="display:none">
-            <h3 class="creditsCardTitle">Admin</h3>
-            <div class="creditsAdminGrantRow">
-              <p class="creditsCardLead">Manual grant for testing gifts — Pro and sandbox purchases add credits automatically via billing.</p>
-              <div class="creditsRedeemRow">
-                <input id="creditsGrantPaidInput" class="creditsRedeemInput" type="number" min="1" max="500" step="1" placeholder="Amount" inputmode="numeric" />
+          <section id="creditsAdminCard" class="creditsSection creditsAdminSection" style="display:none" hidden aria-labelledby="creditsAdminKicker">
+            <h3 class="creditsSectionKicker creditsSectionKicker--admin" id="creditsAdminKicker">Developer</h3>
+            <div class="creditsAdminPanel">
+              <p class="creditsAdminLead">Manual grant for testing — Pro and purchases add credits via billing.</p>
+              <div class="creditsRedeemPanel creditsRedeemPanel--admin">
+                <input id="creditsGrantPaidInput" class="creditsRedeemInput" type="number" min="1" max="500" step="1" placeholder="Amount" inputmode="numeric" aria-label="Grant amount" />
                 <button type="button" id="btnCreditsGrantPaid" class="primary creditsRedeemBtn">Grant paid</button>
               </div>
               <div id="creditsGrantPaidMsg" class="creditsRedeemMsg" style="display:none"></div>
+              <div class="creditsAdminGrid">
+                <div class="creditsAdminStat">
+                  <div class="creditsAdminStatLabel">Master engine balance</div>
+                  <div class="creditsAdminStatValue" id="adminMasterSuno">—</div>
+                </div>
+                <div class="creditsAdminStat">
+                  <div class="creditsAdminStatLabel">Allocated</div>
+                  <div class="creditsAdminStatValue" id="adminAllocated">—</div>
+                </div>
+                <div class="creditsAdminStat">
+                  <div class="creditsAdminStatLabel">Spent</div>
+                  <div class="creditsAdminStatValue" id="adminSpent">—</div>
+                </div>
+                <div class="creditsAdminStat">
+                  <div class="creditsAdminStatLabel">Outstanding</div>
+                  <div class="creditsAdminStatValue" id="adminOutstanding">—</div>
+                </div>
+                <div class="creditsAdminStat">
+                  <div class="creditsAdminStatLabel">Users</div>
+                  <div class="creditsAdminStatValue" id="adminUsers">—</div>
+                </div>
+                <div class="creditsAdminStat">
+                  <div class="creditsAdminStatLabel">Codes redeemed</div>
+                  <div class="creditsAdminStatValue" id="adminCodesRedeemed">—</div>
+                </div>
+              </div>
+              <h4 class="creditsAdminCodesHead">Promo codes <span class="creditsAdminCodesHint">(tap unused to copy)</span></h4>
+              <div id="adminCodesList" class="creditsAdminCodesList"></div>
             </div>
-            <div class="creditsAdminGrid">
-              <div class="creditsAdminStat">
-                <div class="creditsAdminStatLabel">Master engine balance</div>
-                <div class="creditsAdminStatValue" id="adminMasterSuno">—</div>
-              </div>
-              <div class="creditsAdminStat">
-                <div class="creditsAdminStatLabel">Allocated</div>
-                <div class="creditsAdminStatValue" id="adminAllocated">—</div>
-              </div>
-              <div class="creditsAdminStat">
-                <div class="creditsAdminStatLabel">Spent</div>
-                <div class="creditsAdminStatValue" id="adminSpent">—</div>
-              </div>
-              <div class="creditsAdminStat">
-                <div class="creditsAdminStatLabel">Outstanding</div>
-                <div class="creditsAdminStatValue" id="adminOutstanding">—</div>
-              </div>
-              <div class="creditsAdminStat">
-                <div class="creditsAdminStatLabel">Users</div>
-                <div class="creditsAdminStatValue" id="adminUsers">—</div>
-              </div>
-              <div class="creditsAdminStat">
-                <div class="creditsAdminStatLabel">Codes redeemed</div>
-                <div class="creditsAdminStatValue" id="adminCodesRedeemed">—</div>
-              </div>
-            </div>
-            <h4 class="creditsAdminCodesHead">Promo codes <span class="creditsAdminCodesHint">(tap unused to copy)</span></h4>
-            <div id="adminCodesList" class="creditsAdminCodesList"></div>
           </section>
         </section>
 

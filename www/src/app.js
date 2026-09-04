@@ -226,7 +226,7 @@ import { MUSIC_VIDEO_FEATURE_ENABLED } from "./feature-flags.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260904-151415";
+const APP_BUILD = "20260904-222538";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -23974,6 +23974,33 @@ function isSunoLibraryTaskId(taskId) {
   return Boolean(tid) && !isSingleVariantMusicTask(tid);
 }
 
+/** Lyria clips / songs — keep video export; Suno songs are audio-only in menus. */
+function trackMusicProvider(track) {
+  const tid = String(track?.taskId || track?.meta?.taskId || "").trim();
+  const fromMeta = String(
+    track?.meta?.musicProvider || track?.meta?.provider || track?.meta?.engine || "",
+  ).toLowerCase();
+  if (fromMeta.includes("lyria")) return "lyria";
+  if (fromMeta.includes("minimax")) return "minimax";
+  if (fromMeta.includes("eleven")) return "elevenlabs";
+  if (tid.startsWith("lyr_")) return "lyria";
+  if (tid.startsWith("mmx_")) return "minimax";
+  if (tid.startsWith("elv_")) return "elevenlabs";
+  return "suno";
+}
+
+function trackOffersVideoDownload(track) {
+  return trackMusicProvider(track) === "lyria";
+}
+
+function trackSheetDownloadRowsHtml(track) {
+  const audioRow =
+    `<button type="button" class="discoverTrackSheetRow" data-track-sheet-action="library_dl_audio">Download audio</button>`;
+  if (!trackOffersVideoDownload(track)) return audioRow;
+  return `${audioRow}
+    <button type="button" class="discoverTrackSheetRow" data-track-sheet-action="library_dl_video">Download video</button>`;
+}
+
 function libraryTrackForPlaybackSource(source) {
   if (!source || typeof source !== "object") return null;
   if (source.type === "library" && source.id) {
@@ -26656,14 +26683,6 @@ function syncProGatedWebUi() {
     singerPill.setAttribute("aria-hidden", "false");
     setWebProFeaturePill(singerPill, locked, "pill");
   }
-
-  ["#btnResultPersona", "#btnResultPersona2"].forEach((sel) => {
-    const el = document.querySelector(sel);
-    if (!el) return;
-    el.hidden = false;
-    el.setAttribute("aria-hidden", "false");
-    setWebProFeaturePill(el, locked, "inline");
-  });
 
   document.querySelectorAll('[data-profile-edit-field="persona"]').forEach((el) => {
     el.hidden = false;
@@ -39618,8 +39637,7 @@ function renderTrackSheetDiscover(ctx) {
     ? "Play another from this profile"
     : "Play another from Discover";
   const ownDownloadRows = trackSheetCtxIsOwnSong(ctx)
-    ? `<button type="button" class="discoverTrackSheetRow" data-track-sheet-action="library_dl_audio">Download audio</button>
-    <button type="button" class="discoverTrackSheetRow" data-track-sheet-action="library_dl_video">Download video</button>`
+    ? trackSheetDownloadRowsHtml(ctx)
     : "";
   l.innerHTML = `
     ${TRACK_SHEET_ADD_PLAYLIST_ROW}
@@ -39643,7 +39661,6 @@ function renderTrackSheetLibrary(track) {
   const isInstrumental = kind === "instrumental";
   const isSound = kind === "sound";
   const remixEligible = !isSound && Boolean(track?.url && String(track.url).trim());
-  const personaEligible = !isInstrumental && !isSound && Boolean(track?.taskId) && Boolean(track?.audioId);
   const musicVideoEligible = MUSIC_VIDEO_FEATURE_ENABLED && !isSound && Boolean(track?.taskId) && Boolean(track?.audioId);
   const mvWatchable = musicVideoIsWatchable(musicVideoMetaFromTrack(track));
   const musicVideoLabel = mvWatchable ? "Watch music video" : "Create music video";
@@ -39682,11 +39699,9 @@ function renderTrackSheetLibrary(track) {
     ${TRACK_SHEET_ADD_PLAYLIST_ROW}
     ${profilePublic ? "" : `<button type="button" class="discoverTrackSheetRow" data-track-sheet-action="library_change_cover">Change cover</button>`}
     <button type="button" class="discoverTrackSheetRow" data-track-sheet-action="library_pin">${escapeHtml(pinLabel)}</button>
-    <button type="button" class="discoverTrackSheetRow" data-track-sheet-action="library_dl_audio">Download audio</button>
-    <button type="button" class="discoverTrackSheetRow" data-track-sheet-action="library_dl_video">Download video</button>
+    ${trackSheetDownloadRowsHtml(track)}
     ${musicVideoEligible ? `<button type="button" class="discoverTrackSheetRow" data-track-sheet-action="library_music_video">${musicVideoLabel}</button>` : ""}
     ${HUB_FEATURE_ENABLED ? `<button type="button" class="discoverTrackSheetRow" data-track-sheet-action="library_share_hub">Share to Hub</button>` : ""}
-    ${personaEligible ? `<button type="button" class="discoverTrackSheetRow${webProFeatureLocked() ? " isProLocked" : ""}" data-track-sheet-action="library_persona">Save voice as persona${webProFeaturePillInlineHtml()}</button>` : ""}
     ${renameRow}
     ${unpublishRow}
     <button type="button" class="discoverTrackSheetRow" data-track-sheet-action="library_details">About this song</button>
@@ -39716,8 +39731,7 @@ function renderTrackSheetProfileLib(t) {
   `;
   l.innerHTML = `
     ${TRACK_SHEET_ADD_PLAYLIST_ROW}
-    <button type="button" class="discoverTrackSheetRow" data-track-sheet-action="library_dl_audio">Download audio</button>
-    <button type="button" class="discoverTrackSheetRow" data-track-sheet-action="library_dl_video">Download video</button>
+    ${trackSheetDownloadRowsHtml(t)}
     <button type="button" class="discoverTrackSheetRow" data-track-sheet-action="profile_lib_featured">${escapeHtml(featuredLabel)}</button>
   `;
   d.innerHTML = `
@@ -39740,8 +39754,7 @@ function renderTrackSheetProfileHub(p) {
   `;
   l.innerHTML = `
     ${TRACK_SHEET_ADD_PLAYLIST_ROW}
-    <button type="button" class="discoverTrackSheetRow" data-track-sheet-action="library_dl_audio">Download audio</button>
-    <button type="button" class="discoverTrackSheetRow" data-track-sheet-action="library_dl_video">Download video</button>
+    ${trackSheetDownloadRowsHtml(p)}
     <button type="button" class="discoverTrackSheetRow" data-track-sheet-action="profile_hub_vis" data-track-sheet-pub-to="${profilePublic ? "private" : "public"}">${profilePublic ? "Hide from public profile" : "Show on public profile"}</button>
     <button type="button" class="discoverTrackSheetRow" data-track-sheet-action="profile_hub_proof">Proof of creation</button>
   `;
@@ -40489,22 +40502,6 @@ function runTrackSheetAction(action, sourceEl) {
       shareToHub(t);
       openShareLiveModal(t.title || "Your song");
       setStatus("Shared to Hub.");
-      return;
-    }
-    if (action === "library_persona") {
-      if (!requireProForWebFeature("Persona")) return;
-      shut();
-      void createPersonaForSong({
-        taskId: t.taskId,
-        audioId: t.audioId,
-        audioUrl: t.url,
-        title: t.title,
-        style: t?.meta?.style,
-        voiceProfile: t?.meta?.voiceProfile,
-        dialect: t?.meta?.dialect,
-        timbre: activeProfile?.voiceTimbre,
-        source: "library",
-      });
       return;
     }
     if (action === "library_pubprof") {
@@ -45014,7 +45011,6 @@ function renderHub() {
       </footer>
       <div class="libMenu hubMoreMenu hubReelMoreMenu" id="hubMore_${p.id}" style="display:none">
         <button class="ghost" data-hub-copy-link="${p.id}">Copy link</button>
-        <button class="ghost" data-hub-persona="${p.id}">Save voice as persona</button>
       </div>
     </article>
   `;
@@ -45127,14 +45123,6 @@ function renderHub() {
     if (!p) return;
     document.getElementById(`hubMore_${id}`)?.style.setProperty("display", "none");
     await startHubRemix(p);
-  }));
-  els.hubList.querySelectorAll("[data-hub-persona]").forEach((b) => b.addEventListener("click", async (e) => {
-    e.stopPropagation();
-    const id = b.getAttribute("data-hub-persona");
-    const p = loadHubFeed().find((x) => x.id === id);
-    if (!p) return;
-    document.getElementById(`hubMore_${id}`)?.style.setProperty("display", "none");
-    await createPersonaFromHubPost(p);
   }));
   els.hubList.querySelectorAll("[data-hub-copy-link]").forEach((b) => b.addEventListener("click", async (e) => {
     e.stopPropagation();
@@ -51321,6 +51309,9 @@ async function ensureTrackAudioArchivedForVideoExport(track, say) {
 }
 
 async function downloadLibraryVideoTrack(track, { onRendered } = {}) {
+  if (!trackOffersVideoDownload(track)) {
+    throw new Error("Video download is only available for Lyria clips.");
+  }
   const isHttpUrl = (u) => /^https?:\/\//i.test(String(u || "").trim());
   let t = resolveTrackForVideoExport(track) || track;
   if (!t?.url) throw new Error("Missing audio URL");
@@ -61493,64 +61484,6 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
     });
   }
 
-  // "Save voice as persona" — placed in the result card's more-menu so the
-  // user sees it the moment a song finishes, not buried in Advanced Options.
-  const btnResultPersona = document.getElementById("btnResultPersona");
-  const btnResultPersona2 = document.getElementById("btnResultPersona2");
-  if (btnResultPersona) {
-    btnResultPersona.addEventListener("click", async (ev) => {
-      ev.preventDefault();
-      ev.stopPropagation();
-      haptic("light");
-      if (!sunoTaskId || !sunoAudioId) {
-        showToast("Wait until your song fully finishes, then try again.", { icon: "!", durationMs: 3600 });
-        return;
-      }
-      try {
-        btnResultPersona.disabled = true;
-        await createPersonaForSong({
-          taskId: sunoTaskId,
-          audioId: sunoAudioId,
-          audioUrl: lastSunoProxyUrl || lastSunoFullUrl,
-          title: lastSunoTitle,
-          style: els.sunoStyle?.value || lastGenerationMeta?.style,
-          voiceProfile: els.sunoVoiceProfile?.value || lastGenerationMeta?.voiceProfile,
-          dialect: els.sunoDialect?.value || lastGenerationMeta?.dialect,
-          timbre: activeProfile?.voiceTimbre,
-          source: "result",
-        });
-      } finally {
-        btnResultPersona.disabled = false;
-      }
-    });
-  }
-  if (btnResultPersona2) {
-    btnResultPersona2.addEventListener("click", async (ev) => {
-      ev.preventDefault();
-      ev.stopPropagation();
-      haptic("light");
-      if (!sunoTaskId || !lastSunoAudioId2) {
-        showToast("Wait until version B fully finishes, then try again.", { icon: "!", durationMs: 3600 });
-        return;
-      }
-      try {
-        btnResultPersona2.disabled = true;
-        await createPersonaForSong({
-          taskId: sunoTaskId,
-          audioId: lastSunoAudioId2,
-          audioUrl: lastSunoProxyUrl2 || lastSunoFullUrl2,
-          title: lastSunoTitle2 || lastSunoTitle,
-          style: els.sunoStyle?.value || lastGenerationMeta?.style,
-          voiceProfile: els.sunoVoiceProfile?.value || lastGenerationMeta?.voiceProfile,
-          dialect: els.sunoDialect?.value || lastGenerationMeta?.dialect,
-          timbre: activeProfile?.voiceTimbre,
-          source: "result",
-        });
-      } finally {
-        btnResultPersona2.disabled = false;
-      }
-    });
-  }
   if (els.btnResultListenRef) {
     // Opens the exact temporary file Suno received as the vocal reference in a
     // new tab so the system audio player handles it. We deliberately avoid the

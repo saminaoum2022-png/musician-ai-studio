@@ -8,10 +8,5 @@
     "label": "Staging — daily dev (simulator + preview API)",
     "branch": "staging",
     "apiBase": "https://musician-ai-studio-git-staging-nabadais-projects.vercel.app"
-  },
-  "producer": {
-    "label": "Producer dev — feature/nabad-producer preview API",
-    "branch": "feature/nabad-producer",
-    "apiBase": "https://musician-ai-studio-git-feature-nabad-producer-nabadais-projects.vercel.app"
   }
 }

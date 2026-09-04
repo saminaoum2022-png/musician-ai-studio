@@ -27,7 +27,7 @@ When you finish a task that changes tracked project files (`www/`, `src/`, root 
 Once the user approves the simulator preview (e.g. "approved", "push it", "ship it"):
 
 1. **`git status`** — confirm what changed.
-2. **`npm run verify:no-producer-on-main`** — must pass before any merge/push to `main` (blocks accidental Producer ship).
+2. **`npm run verify:no-producer-ship`** — must pass before any merge/push to `main` (Producer code OK; public launch flag must stay false).
 3. **`npm run stamp:build`** — stamps a fresh, unique build id into the cache-busting asset URLs (`styles.css?v=…`, `src/app.js?v=…`) and the `APP_BUILD` marker, **and** mirrors everything into `www/` (it runs `sync-www` internally). The static `?v=` is what busts the WKWebView (native) and browser/CDN caches; without a bump the device/web keep serving stale code (the recurring "I don't see my change" problem). The id also shows in the faint on-screen build marker, so you can confirm a device got the new build.
 4. **`git add`** the relevant paths (including the stamped `index.html`, `src/app.js`, and their `www/` mirrors) and **`git commit -m "…"`** with a short, accurate message (full sentences, no fluff).
 5. **`git push origin main`** — production deploy (Vercel + nabadai.com). Merge from `staging` first unless the user explicitly ships a hotfix on `main`.
@@ -40,7 +40,5 @@ Once the user approves the simulator preview (e.g. "approved", "push it", "ship 
 8. If `run:ios` changes tracked files under `ios/`, commit and push those too in the same pass.
 
 9. **After every ship to `main` / TestFlight / production** — merge **`main` → `staging`** in the same pass (no need to ask). Push `staging` so daily dev never falls behind what testers have. Resolve conflicts on `staging`; do not leave staging missing commits that only landed on `main`.
-
-10. **After step 9** — run **`npm run sync:producer -- --push`** so `feature/nabad-producer` gets every fix that landed on `main`. Sami's Producer phone branch must never fall behind production code.
 
 If push fails, fix or report and do not claim success. If build/launch fails after a successful push, say so clearly — web deploy may still be live.

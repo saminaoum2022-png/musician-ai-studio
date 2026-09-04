@@ -1,0 +1,44 @@
+---
+description: Nabad Producer stays in the codebase hidden — one command to test on Sami's phone
+alwaysApply: true
+---
+
+# Nabad Producer — hidden in code, one command to test
+
+Producer **lives on `staging` and `main`** (UI + API files) but is **invisible** until launched.
+
+## Hidden by default (safe for TestFlight / main)
+
+| Gate | Default |
+|------|---------|
+| `NABAD_PRODUCER_PUBLIC_SHIPPED` in `src/feature-flags.js` | **`false`** — must stay false until explicit launch |
+| Phone/simulator bake | `nabadProducerUi: false` unless `NABAD_PRODUCER_UI=1` |
+| Who sees UI when hidden | **Admin only**, and only with UI bake flag |
+| Production API | `NABAD_PRODUCER_ENABLED` **off** on nabadai.com |
+| Staging API | `NABAD_PRODUCER_ENABLED=1` on Vercel Preview |
+
+Before **every push to `main`**: `npm run verify:no-producer-ship`
+
+## Daily workflow
+
+| Task | Command |
+|------|---------|
+| Normal fixes (simulator) | `git checkout staging` → `npm run sim` |
+| Sami's phone — Producer testing | `npm run run:ios:producer` |
+| Sami's phone — staging (when asked) | `npm run run:ios:staging` |
+| Ship fixes to production | staging → main (verify flag still false) |
+
+**One command for Producer on phone:** `npm run run:ios:producer`  
+(staging API + admin account + UI flag baked in)
+
+## When Sami is ready to launch Producer publicly
+
+1. Set `NABAD_PRODUCER_PUBLIC_SHIPPED = true` in `src/feature-flags.js`
+2. Enable `NABAD_PRODUCER_ENABLED=1` on **production** Vercel
+3. Ship to main + TestFlight with explicit approval
+
+## Agent rules
+
+- **Do not** remove Producer code from staging/main to "hide" it — use the flag.
+- **Do not** set `NABAD_PRODUCER_PUBLIC_SHIPPED = true` without explicit user approval.
+- **Do not** merge `feature/nabad-producer` unless user asks — prefer hidden code on staging.

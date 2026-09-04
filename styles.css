@@ -33497,6 +33497,9 @@ html[data-theme="light"] .clipVocalCharacterCard.isActive .clipVocalCharacterCar
     radial-gradient(120% 100% at 100% 0%, rgba(168,130,255,0.14), transparent 58%),
     linear-gradient(135deg, rgba(18,12,32,0.94), rgba(10,14,28,0.82));
 }
+.homeDeskProducerPromo[hidden]{
+  display: none !important;
+}
 .homeDeskProducerPromo{
   margin-bottom: 0;
   border: 1px solid rgba(35,211,171,0.32);

@@ -120,7 +120,7 @@ import {
   openMySingerRequestsSheet,
   syncSettingsProSingerRows,
 } from "./pro-singer.js";
-import { configureProPlan, formatProPeriodLabel, initProPlanOnce, onProPlanRouteActive, refreshProSubscriptionUi, setProReturnRoute, weeklyInTrialWindow, weeklyProDisplayStatus, weeklyTrialStartFromState } from "./pro-plan.js";
+import { configureProPlan, formatProPeriodLabel, initProPlanOnce, onProPlanRouteActive, openProManageSubscription, proManageSubscriptionSubcopyForState, refreshProSubscriptionUi, setProReturnRoute, weeklyInTrialWindow, weeklyProDisplayStatus, weeklyTrialStartFromState } from "./pro-plan.js";
 import { setRevenueCatApiKey, resetRevenueCatSession, reconcileProSubscription, isBillingConfigured } from "./billing/revenuecat.js";
 import { setStripeWebBillingEnabled, isStripeWebBillingConfigured, syncStripeBillingWithServer } from "./billing/stripe.js";
 import { augmentCoachApiPayload } from "./coach-knowledge.js";
@@ -235,7 +235,7 @@ import { MUSIC_VIDEO_FEATURE_ENABLED } from "./feature-flags.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260904-231253";
+const APP_BUILD = "20260904-232108";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -27063,6 +27063,37 @@ function syncSettingsProRow() {
       sub.textContent = "Weekly and monthly plans, benefits";
     }
   }
+  syncSettingsManageSubscriptionRow(pro);
+}
+
+function syncSettingsManageSubscriptionRow(proState) {
+  const row = document.getElementById("btnSettingsManageSubscription");
+  const sub = document.getElementById("settingsManageSubscriptionSub");
+  if (!row) return;
+  const pro = proState || getHealedProState();
+  const show = isAppLoggedIn() && Boolean(pro.active);
+  row.hidden = !show;
+  row.setAttribute("aria-hidden", show ? "false" : "true");
+  if (sub && show) {
+    sub.textContent = proManageSubscriptionSubcopyForState(pro);
+  }
+}
+
+const SETTINGS_PAGE_SUB_DEFAULT = "Manage your account, creator tools and preferences.";
+
+function syncSettingsPageSub() {
+  const el = document.getElementById("settingsPageSub");
+  if (!el) return;
+  const email = String(authSession?.user?.email || "").trim();
+  if (email) {
+    el.textContent = email;
+    el.classList.add("settingsPageSub--email");
+    el.title = "Signed in as " + email;
+  } else {
+    el.textContent = SETTINGS_PAGE_SUB_DEFAULT;
+    el.classList.remove("settingsPageSub--email");
+    el.removeAttribute("title");
+  }
 }
 
 function syncCreditsProUpsell() {
@@ -27831,6 +27862,7 @@ function renderAuthStatus() {
   try { syncSettingsPrivacyToggle(isAuthed); } catch {}
   try { refreshSettingsMusicPrefsRow(); } catch {}
   try { syncSettingsMemberIdRow(); } catch {}
+  try { syncSettingsPageSub(); } catch {}
   try { renderProfileMusicStylesInline(); } catch {}
   // Hide the Credits pill entirely when logged-out. A "0 credits" badge
   // on a guest profile is meaningless and was where the previous user's
@@ -65462,6 +65494,12 @@ if (els.btnProfileEdit) {
 if (els.profilePreviewUsernameInput) {
   els.profilePreviewUsernameInput.addEventListener("input", () => {
     scheduleProfileUsernameAvailabilityCheck(els.profilePreviewUsernameInput.value);
+  });
+}
+const btnSettingsManageSubscription = document.getElementById("btnSettingsManageSubscription");
+if (btnSettingsManageSubscription) {
+  btnSettingsManageSubscription.addEventListener("click", () => {
+    void openProManageSubscription();
   });
 }
 if (els.btnSettingsMemberId) {

@@ -197,7 +197,7 @@
       onload="this.media='all'"
     />
     <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Display:wght@900&family=Inter:wght@900&display=swap" /></noscript>
-    <link rel="stylesheet" href="./styles.css?v=20260904-231253" />
+    <link rel="stylesheet" href="./styles.css?v=20260904-232108" />
 
     <meta name="description" content="Create complete songs from lyrics, a hum, or a photo with NabadAi. Explore AI music tools, Arabic styles, voice personas, and creator sharing." />
     <meta property="og:type" content="website" />
@@ -3833,7 +3833,7 @@
             </a>
             <div class="settingsPageHeadText">
               <h1 class="discoveryStudioH2 appScreenTitle">Settings</h1>
-              <p class="settingsPageSub">Manage your account, creator tools and preferences.</p>
+              <p id="settingsPageSub" class="settingsPageSub">Manage your account, creator tools and preferences.</p>
             </div>
           </header>
 
@@ -3993,6 +3993,16 @@
                   <span id="settingsProPill" class="settingsProPill" hidden>Active</span>
                   <span class="settingsRowChev" aria-hidden="true">›</span>
                 </a>
+                <button type="button" id="btnSettingsManageSubscription" class="settingsRow settingsRowLink" hidden>
+                  <span class="settingsRowIco" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M7 9h4M7 13h6"/><circle cx="16" cy="12" r="2"/></svg>
+                  </span>
+                  <span class="settingsRowBody">
+                    <span class="settingsRowTitle">Manage subscription</span>
+                    <span id="settingsManageSubscriptionSub" class="settingsRowSub">Cancel or update payment</span>
+                  </span>
+                  <span class="settingsRowChev" aria-hidden="true">›</span>
+                </button>
                 <a class="settingsRow settingsRowLink" href="#/credits" data-route-link="credits">
                   <span class="settingsRowIco" aria-hidden="true">
                     <svg viewBox="0 0 24 24"><path d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7H14a3.5 3.5 0 0 1 0 7H6"/></svg>
@@ -5135,6 +5145,6 @@
     </script>
     <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
     <script src="./env.client.js" onerror="void 0"></script>
-    <script type="module" src="./src/app.js?v=20260904-231253"></script>
+    <script type="module" src="./src/app.js?v=20260904-232108"></script>
   </body>
 </html>

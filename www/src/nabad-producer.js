@@ -728,6 +728,15 @@ export function openNabadProducerFlow() {
     try { location.hash = "#/nabad-producer"; } catch {}
     bridge.scheduleApplyRoute?.();
   };
+  const blockedToast = () => {
+    const admin = typeof bridge.isAdmin === "function" && bridge.isAdmin();
+    const uiOn = clientProducerUiBaked();
+    if (admin && !uiOn && !NABAD_PRODUCER_PUBLIC_SHIPPED) {
+      showToast("Producer is hidden on this build. Use the producer dev install on your phone.", { icon: "!", durationMs: 3600 });
+      return;
+    }
+    showToast("Nabad Producer is admin-only right now.", { icon: "!", durationMs: 3200 });
+  };
   if (nabadProducerEnabled()) {
     go();
     return;
@@ -735,11 +744,11 @@ export function openNabadProducerFlow() {
   if (typeof bridge.creditsLoaded === "function" && !bridge.creditsLoaded()) {
     void Promise.resolve(bridge.refreshCredits?.({ silent: true })).then(() => {
       if (nabadProducerEnabled()) go();
-      else showToast("Nabad Producer is admin-only right now.", { icon: "!", durationMs: 3200 });
+      else blockedToast();
     });
     return;
   }
-  showToast("Nabad Producer is admin-only right now.", { icon: "!", durationMs: 3200 });
+  blockedToast();
 }
 
 export function syncNabadProducerHomeCard() {
@@ -747,5 +756,6 @@ export function syncNabadProducerHomeCard() {
   document.querySelectorAll('[data-home-card="producer"]').forEach((el) => {
     el.hidden = !show;
     el.setAttribute("aria-hidden", show ? "false" : "true");
+    el.style.display = show ? "" : "none";
   });
 }

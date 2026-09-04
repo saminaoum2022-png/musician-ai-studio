@@ -12,15 +12,6 @@ import {
   leaveStudioRoot,
 } from "./studio/studio.js";
 import {
-  configureNabadProducer,
-  enterNabadProducerRoot,
-  leaveNabadProducerRoot,
-  openNabadProducerFlow,
-  syncNabadProducerHomeCard,
-  handleProducerGenerationReady,
-  handleProducerGenerationFailed,
-} from "./nabad-producer.js";
-import {
   listVocals,
   getVocalBlob,
   deleteVocal,
@@ -120,7 +111,7 @@ import {
   openMySingerRequestsSheet,
   syncSettingsProSingerRows,
 } from "./pro-singer.js";
-import { configureProPlan, formatProPeriodLabel, initProPlanOnce, onProPlanRouteActive, refreshProSubscriptionUi, setProReturnRoute, weeklyInTrialWindow, weeklyProDisplayStatus, weeklyTrialStartFromState } from "./pro-plan.js";
+import { configureProPlan, formatProPeriodLabel, initProPlanOnce, onProPlanRouteActive, openProManageSubscription, proManageSubscriptionSubcopyForState, refreshProSubscriptionUi, setProReturnRoute, showAppleManageSubscriptionSheet, weeklyInTrialWindow, weeklyProDisplayStatus, weeklyTrialStartFromState } from "./pro-plan.js";
 import { setRevenueCatApiKey, resetRevenueCatSession, reconcileProSubscription, isBillingConfigured } from "./billing/revenuecat.js";
 import { setStripeWebBillingEnabled, isStripeWebBillingConfigured, syncStripeBillingWithServer } from "./billing/stripe.js";
 import { augmentCoachApiPayload } from "./coach-knowledge.js";
@@ -235,7 +226,7 @@ import { MUSIC_VIDEO_FEATURE_ENABLED } from "./feature-flags.js";
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260901-172429";
+const APP_BUILD = "20260904-151415";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -713,10 +704,6 @@ const els = {
   btnLyricsDiacritics: document.getElementById("btnLyricsDiacritics"),
   btnLyricsPolish: document.getElementById("btnLyricsPolish"),
   sunoSingerGender: document.getElementById("sunoSingerGender"),
-  clipVocalProfileId: document.getElementById("clipVocalProfileId"),
-  clipVocalCharacterRow: document.getElementById("clipVocalCharacterRow"),
-  clipVocalCharacterDeck: document.getElementById("clipVocalCharacterDeck"),
-  clipVocalCharacterSpec: document.getElementById("clipVocalCharacterSpec"),
   singerPersonaRow: document.getElementById("singerPersonaRow"),
   sunoVoiceProfile: document.getElementById("sunoVoiceProfile"),
   sunoPersonaId: document.getElementById("sunoPersonaId"),
@@ -2512,11 +2499,10 @@ const NATIVE_API_BASE_CANDIDATES = [
   "https://musician-ai-studio.vercel.app",
 ];
 function nativeApiBaseCandidates() {
-  const baked = bakedNativeApiBase();
-  if (stagingNativeApiBaseLocked()) return [baked];
   const out = [];
   const custom = String(window.__API_BASE__ || "").trim().replace(/\/$/, "");
   if (custom) out.push(custom);
+  const baked = String(window.__NABAD_CLIENT_ENV__?.apiBase || "").trim().replace(/\/$/, "");
   if (baked) out.push(baked);
   for (const u of NATIVE_API_BASE_CANDIDATES) out.push(u.replace(/\/$/, ""));
   return [...new Set(out.filter(Boolean))];
@@ -2544,9 +2530,6 @@ function bakedNativeApiBase() {
   } catch {
     return "";
   }
-}
-function stagingNativeApiBaseLocked() {
-  return isStagingNativeBuild() && Boolean(bakedNativeApiBase());
 }
 function resolveNativeApiBase(preferred = "") {
   const staging = bakedNativeApiBase();
@@ -3069,9 +3052,7 @@ async function loadPublicConfig() {
   if (!ok || needsOnesignalRefresh) {
     lastPublicConfigStatus = 0;
     lastPublicConfigError = "";
-    const bases = isNativeShell()
-      ? (stagingNativeApiBaseLocked() ? [bakedNativeApiBase()] : nativeApiBaseCandidates())
-      : [""];
+    const bases = isNativeShell() ? nativeApiBaseCandidates() : [""];
     for (const base of bases) {
       try {
         if (await fetchPublicConfigOnce(base)) {
@@ -3513,6 +3494,14 @@ function finishSecondaryRouteEnter(route, prevRoute) {
     try { syncSettingsThemePicker(); } catch {}
     try { syncSettingsMusicProviderRow(); } catch {}
     try { syncSettingsProSingerRows(); } catch {}
+    try {
+      const hash = String(location.hash || "");
+      const raw = hash.startsWith("#/") ? hash.slice(2) : "";
+      const sq = new URLSearchParams(String(raw.split("?")[1] || "").split("#")[0]);
+      if (sq.get("appleManage") === "preview") {
+        window.setTimeout(() => { try { showAppleManageSubscriptionSheet(); } catch {} }, 200);
+      }
+    } catch {}
     if (!_onesignalAppId) {
       void loadPublicConfig().then(() => {
         try { syncSettingsPushRow(); } catch {}
@@ -4587,7 +4576,7 @@ function applyRoute({ passGen } = {}) {
     "intro", "onboarding", "music-preferences", "start", "auth", "generate",
     ...(HUB_FEATURE_ENABLED ? ["hub"] : []),
     ...(MESSAGES_FEATURE_ENABLED ? ["messages", "messages-thread"] : []),
-    "settings", "profile", "profile-edit", "player", "discover", "discover-playlist", "friends", "challenges", "activity", "mashup", "mentor", "vocal", "stems", "studio", "nabad-producer", "advanced", "user", "credits", "pro", "sounds", "singer-studio",
+    "settings", "profile", "profile-edit", "player", "discover", "discover-playlist", "friends", "challenges", "activity", "mashup", "mentor", "vocal", "stems", "studio", "advanced", "user", "credits", "pro", "sounds", "singer-studio",
   ]);
   const onboardingParsed = parseOnboardingRoute(route);
   let normalized = pendingPublicUsername ? "user" : (route === "start" ? "auth" : route);
@@ -4698,7 +4687,7 @@ function applyRoute({ passGen } = {}) {
   // Public profile is intentionally readable without auth so share-link
   // visitors don't hit a wall before discovering the rest of the product.
   const sharedTrackId = parseSharedTrackIdFromLocation();
-  const protectedRoutes = new Set(["generate", "profile", "profile-edit", "friends", "activity", "mashup", "player", "vocal", "stems", "studio", "nabad-producer", "advanced", "credits", "sounds", ...(MESSAGES_FEATURE_ENABLED ? ["messages", "messages-thread"] : [])]);
+  const protectedRoutes = new Set(["generate", "profile", "profile-edit", "friends", "activity", "mashup", "player", "vocal", "stems", "studio", "advanced", "credits", "sounds", ...(MESSAGES_FEATURE_ENABLED ? ["messages", "messages-thread"] : [])]);
   if (!isLoggedIn && protectedRoutes.has(wanted)) {
     if (wanted === "player" && sharedTrackId) {
       // Listen-only share links — do not bounce guests to sign-in.
@@ -4928,9 +4917,6 @@ function applyRoute({ passGen } = {}) {
   if (prevRoute === "studio" && wanted !== "studio") {
     try { leaveStudioRoot(); } catch {}
   }
-  if (prevRoute === "nabad-producer" && wanted !== "nabad-producer") {
-    try { leaveNabadProducerRoot(); } catch {}
-  }
   if (wanted === "studio") {
     if (isWebOrDesktopShell() && !webProFeatureAllowed()) {
       promptWebProUpgrade("NabadAi Studio");
@@ -4938,30 +4924,6 @@ function applyRoute({ passGen } = {}) {
       try { location.hash = "#/discover"; } catch {}
     } else {
       try { enterStudioRoot(); } catch {}
-    }
-  }
-  if (wanted === "nabad-producer") {
-    const enterProducer = () => {
-      try { enterNabadProducerRoot(); } catch (e) { console.warn("[nabad-producer] enter", e); }
-    };
-    const blockProducer = () => {
-      try { leaveNabadProducerRoot(); } catch {}
-      try { location.hash = "#/challenges"; } catch {}
-      if (creditsState.loaded && !creditsState.isAdmin) {
-        try {
-          showToast("Nabad Producer is admin-only right now.", { icon: "!", durationMs: 3200 });
-        } catch {}
-      }
-    };
-    if (creditsState.isAdmin) {
-      enterProducer();
-    } else if (!creditsState.loaded) {
-      void refreshMyCredits({ silent: true }).then(() => {
-        if (creditsState.isAdmin) enterProducer();
-        else blockProducer();
-      });
-    } else {
-      blockProducer();
     }
   }
   if (wanted === "settings") {
@@ -4982,6 +4944,8 @@ function applyRoute({ passGen } = {}) {
         window.setTimeout(() => { try { void openSingerApplicationSheet(); } catch {} }, 120);
       } else if (sq.get("proSinger") === "request") {
         window.setTimeout(() => { try { void openProSingerRequestSheet(null); } catch {} }, 120);
+      } else if (sq.get("appleManage") === "preview") {
+        window.setTimeout(() => { try { showAppleManageSubscriptionSheet(); } catch {} }, 200);
       }
     } catch {}
     if (!_onesignalAppId) {
@@ -6839,7 +6803,7 @@ const CHALLENGE_IDEAS = [
   {
     id: "hook-rush",
     title: "Hook Rush",
-    styleLyria: "instant pop hook, tight drums, bright melody, sticky chorus, 112 bpm",
+    styleLyria: "instant pop hook, tight drums, bright melody, conversational vocal, sticky chorus, natural close, 112 bpm",
     style: "Instant viral hook, no intro, punchy drums, bright lead melody, sticky chorus, 112 bpm",
     lyrics: "[Intro]\nRight now, right now, we light it up\nNo waiting for the night to start\n\n[Chorus]\nThis is the moment, don't let it go\nSay it again till everybody knows\nRight now, right now, we light it up\nThis little spark is more than enough",
     prompt: "Make the first 15 seconds the whole reason someone replays the song.",
@@ -6848,7 +6812,7 @@ const CHALLENGE_IDEAS = [
   {
     id: "one-line-reply",
     title: "One-Line Reply",
-    styleLyria: "intimate pop hook, warm bass, soft drums, 98 bpm",
+    styleLyria: "intimate pop hook, conversational vocal, warm bass, soft drums, natural cadence, gentle close, 98 bpm",
     style: "Reply-song pop, conversational vocal, warm bass, soft drums, natural cadence, 98 bpm",
     lyricsMode: "instructions",
     lyrics: "Write a ~25 second clip replying to a text or DM.\n\nOne short verse (2 lines) reacting to what they said.\nOne chorus (2–4 lines) — the line you'd actually send back.\n\nKeep words short. End on a complete phrase — nothing cut mid-sentence.",
@@ -6858,7 +6822,7 @@ const CHALLENGE_IDEAS = [
   {
     id: "whisper-to-hook",
     title: "Whisper to Hook",
-    styleLyria: "soft intimate opening, bright pop chorus, close-mic vocal, 102 bpm",
+    styleLyria: "soft intimate opening, then bright pop chorus, close-mic vocal, no belt, natural ending, 102 bpm",
     style: "Soft intro building to catchy chorus, intimate vocal opening, bright drop, 102 bpm",
     lyricsMode: "instructions",
     lyrics: "Challenge: start quiet, land loud — but keep it ~25 seconds total.\n\n[Verse] — 2 whisper-soft lines (close, personal).\n[Chorus] — 3–4 lines, bigger but not shouty; end on a held final word.\n\nNo bridge. No second verse. Must feel finished at the end.",
@@ -6868,7 +6832,7 @@ const CHALLENGE_IDEAS = [
   {
     id: "dabke-drop",
     title: "Dabke Drop",
-    styleLyria: "Levantine dabke pop, mijwiz accents, festive 6/8 rhythm, clap-ready chorus, 126 bpm",
+    styleLyria: "Levantine dabke pop, mijwiz accents, festive 6/8 rhythm, warm vocal, clap-ready chorus, natural close, 126 bpm",
     style: "Levantine dabke pop, mijwiz and oud accents, ktakufti 6/8 dabkeh rhythm, wedding energy, 126 bpm",
     lyrics: "[Verse]\nOpen the doors, let the family see\nHands in the air, everybody with me\nStep to the left, clap to the sound\nTonight we lift this whole room off the ground\n\n[Chorus]\nYalla yalla, clap your hands\nDabke rolling through the land\nOne more step and one more beat\nThe wedding rhythm starts right here",
     prompt: "Build the chorus everyone can clap to.",
@@ -6877,7 +6841,7 @@ const CHALLENGE_IDEAS = [
   {
     id: "sad-to-dance-challenge",
     title: "Sad to Dance",
-    styleLyria: "bittersweet dance pop, minor piano, warm bass, uplifting chorus, 118 bpm",
+    styleLyria: "bittersweet dance pop, minor piano, warm bass, emotional conversational vocal, uplifting chorus, gentle close, 118 bpm",
     style: "Bittersweet dance pop, minor-key piano intro, warm bass, emotional vocal, uplifting drop, 118 bpm",
     lyricsMode: "instructions",
     lyrics: "Challenge: flip a sad feeling into dance — keep the emotion.\n\nVerse: quiet and honest, like a text you never sent.\nPre-chorus: let the feeling lift.\nChorus: dance through the sadness — one repeatable hook line.\n\nMake it personal. Tap ✦ when ready for a short lyric draft (not a full song).",
@@ -6887,7 +6851,7 @@ const CHALLENGE_IDEAS = [
   {
     id: "arabic-trend-byte",
     title: "Arabic Trend Byte",
-    styleLyria: "modern Arabic pop hook, glossy beat, TikTok-ready, 104 bpm",
+    styleLyria: "modern Arabic pop hook, glossy beat, TikTok-ready, warm conversational vocal, natural ending, 104 bpm",
     style: "modern Arabic pop, TikTok-ready hook, glossy 808s, sticky hook energy, 104 bpm",
     lyrics: "[Verse]\nقليل كلام كتير إحساس\nالليلة الصوت بيعمل مزاج\nمن جملة وحدة طلع نغمة\nصارت أغنية على السريع\n\n[Chorus]\nيلا يلا اسمع المقطع\nصغير بس يضرب قوي\nمن الترند للقلب مباشرة\nهيدا هو الترند تبعي",
     prompt: "Turn a tiny Arabic phrase into a trend-sized hook under 20 seconds.",
@@ -6896,7 +6860,7 @@ const CHALLENGE_IDEAS = [
   {
     id: "roast-song",
     title: "Roast Song",
-    styleLyria: "playful comedy pop, talk-sing verse, catchy roast chorus, 118 bpm",
+    styleLyria: "playful comedy pop, talk-sing verse, catchy roast chorus, conversational delivery, no screaming, 118 bpm",
     style: "playful comedy pop, punchy brass stabs, talk-sing verse, catchy roast chorus, 118 bpm",
     lyrics: "[Verse]\nYou said you would be on time again\nYour excuses got a perfect ten\nI am not mad, I am impressed\nYou turned lateness into art, I guess\n\n[Chorus]\nThis is your roast, keep it light\nWe still love you tonight\nSay it with a smile, not a fight\nFunny but it feels alright",
     prompt: "Write a playful roast song for a friend — funny, never cruel.",
@@ -6905,7 +6869,7 @@ const CHALLENGE_IDEAS = [
   {
     id: "three-word-hook",
     title: "3-Word Hook",
-    styleLyria: "minimal pop hook, huge chorus feel, clap stack, 110 bpm",
+    styleLyria: "minimal pop hook, huge chorus feel, clap stack, conversational vocal, 3-word repeat, natural close, 110 bpm",
     style: "hyper-catchy pop, minimal lyrics, huge chorus, clap stack, 110 bpm",
     lyrics: "[Chorus]\nLights go up now\nFeel it right now\nSay it out loud\nLights go up now",
     prompt: "Only three words in the chorus — make them impossible to forget.",
@@ -6914,7 +6878,7 @@ const CHALLENGE_IDEAS = [
   {
     id: "last-photo-song",
     title: "Last Photo Song",
-    styleLyria: "photo-inspired pop, warm textures, intimate vocal, 98 bpm",
+    styleLyria: "photo-inspired pop, warm textures, intimate conversational vocal, soft natural ending, 98 bpm",
     style: "Photo-inspired pop, emotional snapshot, warm textures, intimate vocal, 98 bpm",
     lyrics: "[Verse]\nThis moment in a frame\nA little light, a little name\n\n[Chorus]\nHold it close, let it sing\nOne small photo, everything",
     prompt: "Turn the feeling in your photo into a short personal hook — any photo you choose.",
@@ -6923,7 +6887,7 @@ const CHALLENGE_IDEAS = [
   {
     id: "tiktok-teaser",
     title: "TikTok Teaser",
-    styleLyria: "short social hook, tight drums, bright ear-candy, 120 bpm",
+    styleLyria: "short social hook, tight drums, bright ear-candy, conversational vocal, no belt, complete ending, 120 bpm",
     style: "Short social teaser, instant hook, tight drums, bright ear-candy, 120 bpm",
     lyrics: "Start with the hook first.\nNo long intro.\nMake the first 8 seconds impossible to skip.",
     prompt: "Build a short teaser hook made for social — instant payoff, zero slow build.",
@@ -6932,7 +6896,7 @@ const CHALLENGE_IDEAS = [
   {
     id: "wrong-genre-party",
     title: "Wrong Genre",
-    styleLyria: "genre contrast pop, ironic verse texture, sugary chorus, 132 bpm",
+    styleLyria: "genre contrast pop, ironic verse texture, sugary chorus, conversational vocal, no scream, natural close, 132 bpm",
     style: "death metal drums with sugary K-pop chorus, ironic contrast, 132 bpm",
     lyrics: "[Verse]\nYou wanted soft and sweet and slow\nI brought thunder just for show\nThe verse sounds like a battle cry\nThen the chorus floats up to the sky\n\n[Chorus]\nWrong genre, right feeling\nStill dancing on the ceiling\nIf it should not work, it works tonight\nWrong genre, holding tight",
     prompt: "Pick two genres that should not match — make the chorus win anyway.",
@@ -6941,7 +6905,7 @@ const CHALLENGE_IDEAS = [
   {
     id: "countdown-hook",
     title: "Countdown Hook",
-    styleLyria: "countdown pop drop, tight drums, rising tension, 3-2-1 payoff, 118 bpm",
+    styleLyria: "countdown pop drop, tight drums, rising tension, 3-2-1 payoff, conversational vocal, natural close, 118 bpm",
     style: "countdown pop drop, rising tension, 3-2-1 hook, punchy drums, 118 bpm",
     lyricsMode: "instructions",
     lyrics: "Build a ~25 second countdown clip.\n\n[Verse] — 2 lines setting the moment.\n[Chorus] — 3–4 lines with a 3-2-1 or now-now-now hook.\n\nEnd on a complete phrase — nothing cut mid-count.",
@@ -6951,7 +6915,7 @@ const CHALLENGE_IDEAS = [
   {
     id: "caption-song",
     title: "Caption Song",
-    styleLyria: "Instagram-caption pop, intimate vocal, warm beat, 100 bpm",
+    styleLyria: "Instagram-caption pop, intimate vocal, warm beat, conversational hook, natural ending, 100 bpm",
     style: "social caption pop, intimate vocal, warm beat, sticky hook, 100 bpm",
     lyricsMode: "instructions",
     lyrics: "Turn an Instagram caption into a ~25 second clip.\n\nPaste or describe the caption in the box.\n\n[Verse] — 2 lines from the caption mood.\n[Chorus] — 2–4 lines, the line you'd post as the hook.\n\nShort words. Clean ending.",
@@ -6961,7 +6925,7 @@ const CHALLENGE_IDEAS = [
   {
     id: "makhlouta-genre",
     title: "Makhlouta Genre",
-    styleLyria: "genre-blend pop, unexpected fusion, playful chorus, 110 bpm",
+    styleLyria: "genre-blend pop, unexpected fusion, warm conversational vocal, playful chorus, no belt, natural close, 110 bpm",
     style: "genre mashup pop, unexpected fusion, playful contrast, catchy chorus, 110 bpm",
     lyricsMode: "instructions",
     lyrics: "Pick two genres that should not work together (e.g. Raï × K-pop, Dabke × trap).\n\n[Verse] — 2 lines lean into the weird combo.\n[Chorus] — 3–4 lines, one hook that owns the mashup.\n\n~25 seconds total. End cleanly.",
@@ -6971,7 +6935,7 @@ const CHALLENGE_IDEAS = [
   {
     id: "city-night",
     title: "City Night",
-    styleLyria: "night-drive pop, neon pads, warm bass, city-lights mood, 96 bpm",
+    styleLyria: "night-drive pop, neon pads, warm bass, intimate conversational vocal, city-lights mood, soft close, 96 bpm",
     style: "night-drive pop, neon pads, warm bass, city-lights mood, 96 bpm",
     lyricsMode: "instructions",
     lyrics: "Write a ~25 second night-in-the-city clip.\n\nName a city or vibe (Beirut, Dubai, Cairo, late taxi, rooftop).\n\n[Verse] — 2 cinematic lines.\n[Chorus] — 3–4 lines, one repeatable night hook.\n\nConversational, not shouty. Complete ending.",
@@ -6981,7 +6945,7 @@ const CHALLENGE_IDEAS = [
   {
     id: "before-after",
     title: "Before & After",
-    styleLyria: "mood-flip pop, quiet verse, brighter chorus, gentle lift, 104 bpm",
+    styleLyria: "mood-flip pop, quiet verse, brighter chorus, emotional conversational vocal, gentle lift, natural close, 104 bpm",
     style: "mood-flip pop, quiet verse, brighter chorus, emotional lift, 104 bpm",
     lyricsMode: "instructions",
     lyrics: "Flip the mood in ~25 seconds.\n\n[Verse] — 2 quiet honest lines (before).\n[Chorus] — 3–4 lines, brighter but not screamy (after).\n\nOne feeling changes. End on a held final word.",
@@ -6991,7 +6955,7 @@ const CHALLENGE_IDEAS = [
   {
     id: "oud-loop",
     title: "Oud Loop",
-    styleLyria: "minimal oud pop loop, modern beat, Arabic-friendly, 92 bpm",
+    styleLyria: "minimal oud pop loop, modern beat, warm conversational vocal, Arabic-friendly, natural ending, 92 bpm",
     style: "minimal oud pop loop, modern beat, warm vocal, Arabic-friendly, 92 bpm",
     lyricsMode: "instructions",
     lyrics: "Write a ~25 second oud-led clip.\n\n[Verse] — 2 lines, simple and poetic.\n[Chorus] — 2–4 lines with one Arabic or English hook phrase.\n\nKeep syllables short. Must feel finished at the end.",
@@ -7001,7 +6965,7 @@ const CHALLENGE_IDEAS = [
   {
     id: "shower-thought",
     title: "Shower Thought",
-    styleLyria: "philosophical pop hook, soft beat, witty one-liner chorus, 98 bpm",
+    styleLyria: "philosophical pop hook, soft beat, conversational vocal, witty one-liner chorus, natural close, 98 bpm",
     style: "philosophical pop hook, soft beat, witty one-liner chorus, 98 bpm",
     lyricsMode: "instructions",
     lyrics: "Turn a random shower thought into a ~25 second clip.\n\n[Verse] — 2 lines set up the thought.\n[Chorus] — 2–4 lines — the thought as a repeatable hook.\n\nFunny or deep. Short lines. Clean ending.",
@@ -7784,11 +7748,9 @@ function applyDiscoveryIdeaToCreate(idea) {
   if (Object.prototype.hasOwnProperty.call(idea, "dialect") && els.sunoDialect) els.sunoDialect.value = String(idea.dialect || "").trim();
   if (Object.prototype.hasOwnProperty.call(idea, "dialectHint") && els.sunoDialectHint) els.sunoDialectHint.value = String(idea.dialectHint || "").trim();
   if (els.sunoAvoidTags && (useTemplateGuards || Object.prototype.hasOwnProperty.call(idea, "avoidTags"))) {
-    els.sunoAvoidTags.value = templateSparkClipEnabled()
-      ? ""
-      : trimAvoidTagsForSuno(
-          String(idea.avoidTags || (useTemplateGuards ? templateAvoidTagsForProvider() : "")),
-        );
+    els.sunoAvoidTags.value = trimAvoidTagsForSuno(
+      String(idea.avoidTags || (useTemplateGuards ? templateAvoidTagsForProvider() : "")),
+    );
   }
   if (els.sunoPrompt) {
     const focus = idea.createFocus
@@ -8323,6 +8285,13 @@ const TEMPLATE_GENERATION_AVOID_TAGS =
 const TEMPLATE_GENERATION_STYLE_SUFFIX =
   "studio vocal, polished mix, no crowd sfx or stadium ambience";
 
+/** Lyria Clip: natural vocal, complete ~28s phrase — no Suno-style belt/shout. */
+const LYRIA_CLIP_STYLE_SUFFIX =
+  "~28 second clip, conversational vocal, natural cadence, complete musical ending, no mid-sentence cut, no belted high notes, no shouting, soft close";
+
+const LYRIA_CLIP_AVOID_TAGS =
+  "shouty vocals, screaming, belted high notes, stadium anthem, crowd noise, long intro, full song arrangement, 4-minute";
+
 function withTemplateStyleGuard(style) {
   const base = String(style || "").trim();
   if (!base) return TEMPLATE_GENERATION_STYLE_SUFFIX;
@@ -8335,7 +8304,7 @@ function withLyriaClipStyleGuard(style, challengeId = "") {
   const fromSpark = CHALLENGE_IDEAS.find((c) => String(c.id) === id);
   const base = String(fromSpark?.styleLyria || style || "").trim();
   const clause = lyriaClipDurationStyleClause(id);
-  const merged = [base, clause].filter(Boolean).join(", ");
+  const merged = [base, clause, LYRIA_CLIP_STYLE_SUFFIX].filter(Boolean).join(", ");
   return merged.replace(/,\s*,/g, ",").slice(0, 480);
 }
 
@@ -8347,7 +8316,7 @@ function templateStyleForProvider(style, challengeId = "") {
 }
 
 function templateAvoidTagsForProvider() {
-  if (templateSparkClipEnabled()) return "";
+  if (templateSparkClipEnabled()) return LYRIA_CLIP_AVOID_TAGS;
   return TEMPLATE_GENERATION_AVOID_TAGS;
 }
 
@@ -11964,10 +11933,6 @@ function bindHomeDeskOnce(page) {
         openNabadClipFlow();
         return;
       }
-      if (card === "producer") {
-        openNabadProducerFlow();
-        return;
-      }
       if (card === "persona") {
         if (!requireProForWebFeature("Persona")) return;
         void openVoiceWizard();
@@ -12445,16 +12410,10 @@ function applyRemixTemplateToCreate(tpl, name) {
   const lyrics = String(tpl.lyrics || "").replaceAll("[name]", cleanName);
   const titleWithName = `${tpl.title} — for ${cleanName}`;
   if (els.sunoPrompt) els.sunoPrompt.value = lyrics;
-  if (els.sunoStyle) {
-    els.sunoStyle.value = templateSparkClipEnabled()
-      ? templateStyleForProvider(String(tpl.style || ""), "")
-      : withTemplateStyleGuard(String(tpl.style || ""));
-  }
+  if (els.sunoStyle) els.sunoStyle.value = withTemplateStyleGuard(String(tpl.style || ""));
   if (els.sunoTitle) els.sunoTitle.value = titleWithName;
   if (els.sunoAvoidTags) {
-    els.sunoAvoidTags.value = templateSparkClipEnabled()
-      ? ""
-      : trimAvoidTagsForSuno(TEMPLATE_GENERATION_AVOID_TAGS);
+    els.sunoAvoidTags.value = trimAvoidTagsForSuno(TEMPLATE_GENERATION_AVOID_TAGS);
   }
   pendingSearchRemixMeta = {
     searchTemplateId: String(tpl.id || "").trim(),
@@ -19213,7 +19172,6 @@ function kickForegroundGenerationPolls() {
   try { generatePollTimer?.kick?.(); } catch {}
   try { soundPollTimer?.kick?.(); } catch {}
   try { kickHumTrackGenerationPoll(); } catch {}
-  try { kickNabadProducerGenerationPoll(); } catch {}
 }
 
 let _resumeGenCheckInflight = false;
@@ -19231,13 +19189,6 @@ async function resumePendingGenerationOnForeground() {
       "",
   ).trim();
   if (!tid) return;
-
-  if (String(pending?.source || "") === "nabad_producer") {
-    resumeNabadProducerGenerationPollIfNeeded();
-    kickNabadProducerGenerationPoll();
-  } else {
-    void recoverNabadProducerMissedFromServer({ silent: true });
-  }
 
   const expectedVariants = resolveExpectedGenerationVariants(tid);
   if (libraryHasAllTaskVariants(tid, expectedVariants)) {
@@ -23946,203 +23897,18 @@ function syncNabadClipHomeCard() {
   });
 }
 
-/** Nabad Clip vocal characters — keep in sync with api/_lib/clip-vocal-profiles.js */
-const CLIP_VOCAL_PROFILES = [
-  {
-    id: "male_jabali",
-    gender: "m",
-    label: "Folk",
-    labelAr: "جبلي",
-    spec: "Earthy folk chest voice with festive wedding energy. Best for Levantine dabke & jabali-style — Arabic or English.",
-  },
-  {
-    id: "male_bahha",
-    gender: "m",
-    label: "Grit",
-    labelAr: "بحة",
-    spec: "Warm rasp and texture — emotive, gritty, human. Pop, rock, or heartfelt tracks in any language.",
-  },
-  {
-    id: "male_deep",
-    gender: "m",
-    label: "Deep",
-    labelAr: "عميق",
-    spec: "Low resonant chest — smooth, heavy, laid-back warmth. Slow R&B, romance, or Gulf-leaning vibes.",
-  },
-  {
-    id: "female_warm",
-    gender: "f",
-    label: "Warm Pop",
-    labelAr: "دافئ",
-    spec: "Modern pop hook — glossy, conversational, close-mic warmth. Upbeat choruses in Arabic or English.",
-  },
-  {
-    id: "female_emotional",
-    gender: "f",
-    label: "Emotional",
-    labelAr: "عاطفي",
-    spec: "Soulful legato delivery — longing, expressive phrases. Ballads and emotional hooks in any language.",
-  },
-  {
-    id: "female_soft",
-    gender: "f",
-    label: "Soft",
-    labelAr: "ناعم",
-    spec: "Breathy intimate vocal — delicate, close-mic, gentle and light.",
-  },
-  {
-    id: "duo_verse_chorus",
-    gender: "duo",
-    label: "Verse / Chorus",
-    labelAr: "مغني/مغنية",
-    spec: "Male leads the verse, female takes the chorus — classic hook split in any language.",
-  },
-  {
-    id: "duo_call_response",
-    gender: "duo",
-    label: "Call & Response",
-    labelAr: "ردّ ورد",
-    spec: "Trading lines back and forth — conversational duet. Best with short alternating lines.",
-  },
-  {
-    id: "duo_harmony",
-    gender: "duo",
-    label: "Harmony",
-    labelAr: "انسجام",
-    spec: "Male verse then blended chorus — warm romantic duet. Write a clear chorus section.",
-  },
-];
-
-function clipVocalProfileById(id) {
-  const key = String(id || "").trim();
-  if (!key) return null;
-  return CLIP_VOCAL_PROFILES.find((p) => p.id === key) || null;
-}
-
-function clipVocalProfilesForGender(gender) {
-  const g = String(gender || "").trim().toLowerCase();
-  if (g !== "m" && g !== "f" && g !== "duo") return [];
-  return CLIP_VOCAL_PROFILES.filter((p) => p.gender === g);
-}
-
-function defaultClipVocalProfileIdForGender(gender) {
-  const first = clipVocalProfilesForGender(gender)[0];
-  return first?.id || "";
-}
-
-/** Clip Singer UI: pills first, then Advanced Range gender prefix (never infers duo). */
-function resolveClipSingerGenderForUi() {
-  const sg = String(els.sunoSingerGender?.value || "").trim().toLowerCase();
-  if (sg === "m" || sg === "f" || sg === "duo") return sg;
-  const vp = String(els.sunoVoiceProfile?.value || "").trim();
-  if (vp.includes("|")) {
-    const g = vp.split("|")[0];
-    if (g === "m" || g === "f") return g;
-  }
-  return "";
-}
-
-function ensureClipSingerGenderSynced() {
-  if (!isLyriaClipGenerateFlow()) return;
-  const current = String(els.sunoSingerGender?.value || "").trim().toLowerCase();
-  if (current === "m" || current === "f" || current === "duo") return;
-  const vp = String(els.sunoVoiceProfile?.value || "").trim();
-  if (vp.includes("|")) {
-    const g = vp.split("|")[0];
-    if (g === "m" || g === "f") {
-      if (els.sunoSingerGender) els.sunoSingerGender.value = g;
-      try { syncSingerGenderPills(); } catch {}
-    }
-  }
-}
-
-function getSelectedClipVocalProfileId() {
-  return String(els.clipVocalProfileId?.value || "").trim();
-}
-
-function setSelectedClipVocalProfileId(id) {
-  const key = String(id || "").trim();
-  if (els.clipVocalProfileId) els.clipVocalProfileId.value = key;
-}
-
-function syncClipVocalCharacterUi() {
-  const row = els.clipVocalCharacterRow;
-  const deck = els.clipVocalCharacterDeck;
-  const specEl = els.clipVocalCharacterSpec;
-  if (!row || !deck) return;
-
-  if (!isLyriaClipGenerateFlow()) {
-    row.hidden = true;
-    deck.innerHTML = "";
-    if (specEl) specEl.textContent = "";
-    return;
-  }
-
-  row.hidden = false;
-  ensureClipSingerGenderSynced();
-  const gender = resolveClipSingerGenderForUi();
-  const profiles = clipVocalProfilesForGender(gender);
-  let selected = getSelectedClipVocalProfileId();
-  if (selected && !profiles.some((p) => p.id === selected)) selected = "";
-  if (!selected && profiles.length) {
-    selected = profiles[0].id;
-    setSelectedClipVocalProfileId(selected);
-  }
-
-  if (!gender) {
-    deck.innerHTML = `<p class="clipVocalCharacterPickGender">Choose Male, Female, or Duo above to see vocal characters.</p>`;
-    if (specEl) specEl.textContent = "";
-    setSelectedClipVocalProfileId("");
-    return;
-  }
-
-  const headLabel = document.querySelector("#clipVocalCharacterRow .clipVocalCharacterHead .inPanelLabel");
-  if (headLabel) {
-    headLabel.textContent = gender === "duo" ? "Duo preset" : "Vocal character";
-  }
-
-  deck.innerHTML = profiles
-    .map((p) => {
-      const active = p.id === selected;
-      return `<button type="button" class="clipVocalCharacterCard${active ? " isActive" : ""}" data-clip-vocal-id="${escapeHtml(p.id)}" role="option" aria-selected="${active ? "true" : "false"}">
-        <span class="clipVocalCharacterCardMain">${escapeHtml(p.label)}</span>
-        <span class="clipVocalCharacterCardSub">${escapeHtml(p.labelAr)}</span>
-      </button>`;
-    })
-    .join("");
-
-  const hit = clipVocalProfileById(selected);
-  if (specEl) {
-    specEl.textContent = hit?.spec || "Pick a vocal character for this clip.";
-  }
-}
-
 function syncNabadClipCreateUi() {
   const clip = isLyriaClipGenerateFlow();
   const personaPill = document.getElementById("singerPersonaPill");
-  const duoPill = document.getElementById("singerDuoPill");
   const personaRow = document.getElementById("singerPersonaRow");
   const wrap = document.getElementById("singerGenderPills");
   if (personaPill) {
     personaPill.hidden = clip;
     personaPill.setAttribute("aria-hidden", clip ? "true" : "false");
   }
-  if (duoPill) {
-    duoPill.hidden = !clip;
-    duoPill.setAttribute("aria-hidden", clip ? "false" : "true");
-  }
   if (wrap) wrap.classList.toggle("nabadClipNoPersona", clip);
-  if (els.clipVocalCharacterRow) {
-    els.clipVocalCharacterRow.hidden = !clip;
-    els.clipVocalCharacterRow.setAttribute("aria-hidden", clip ? "false" : "true");
-  }
   if (clip) {
     try { clearActiveVoicePersona({ silent: true }); } catch {}
-    // Advanced Range (Baritone/Soprano) fights clip vocal characters — clear on clip.
-    if (els.sunoVoiceProfile?.value) {
-      els.sunoVoiceProfile.value = "";
-      try { els.sunoVoiceProfile.dispatchEvent(new Event("change", { bubbles: true })); } catch {}
-    }
     _singerPersonaDrawerOpen = false;
     if (personaRow) {
       personaRow.hidden = true;
@@ -24163,14 +23929,7 @@ function syncNabadClipCreateUi() {
   } else {
     try { renderSingerPersonaPill(); } catch {}
     try { renderActivePersonaBanner(); } catch {}
-    if (els.clipVocalProfileId) els.clipVocalProfileId.value = "";
-    const sg = String(els.sunoSingerGender?.value || "").trim().toLowerCase();
-    if (sg === "duo" && els.sunoSingerGender) {
-      els.sunoSingerGender.value = "";
-      try { syncSingerGenderPills(); } catch {}
-    }
   }
-  try { syncClipVocalCharacterUi(); } catch {}
   try { syncSingerGenderPills(); } catch {}
 }
 
@@ -27044,6 +26803,37 @@ function syncSettingsProRow() {
       sub.textContent = "Weekly and monthly plans, benefits";
     }
   }
+  syncSettingsManageSubscriptionRow(pro);
+}
+
+function syncSettingsManageSubscriptionRow(proState) {
+  const row = document.getElementById("btnSettingsManageSubscription");
+  const sub = document.getElementById("settingsManageSubscriptionSub");
+  if (!row) return;
+  const pro = proState || getHealedProState();
+  const show = isAppLoggedIn() && Boolean(pro.active);
+  row.hidden = !show;
+  row.setAttribute("aria-hidden", show ? "false" : "true");
+  if (sub && show) {
+    sub.textContent = proManageSubscriptionSubcopyForState(pro);
+  }
+}
+
+const SETTINGS_PAGE_SUB_DEFAULT = "Manage your account, creator tools and preferences.";
+
+function syncSettingsPageSub() {
+  const el = document.getElementById("settingsPageSub");
+  if (!el) return;
+  const email = String(authSession?.user?.email || "").trim();
+  if (email) {
+    el.textContent = email;
+    el.classList.add("settingsPageSub--email");
+    el.title = "Signed in as " + email;
+  } else {
+    el.textContent = SETTINGS_PAGE_SUB_DEFAULT;
+    el.classList.remove("settingsPageSub--email");
+    el.removeAttribute("title");
+  }
 }
 
 function syncCreditsProUpsell() {
@@ -27223,7 +27013,6 @@ async function refreshMyCredits({ silent = false } = {}) {
     if (creditsState.isAdmin) await refreshAdminCreditsView();
     try { syncSettingsMusicProviderRow(); } catch {}
     try { syncNabadClipHomeCard(); } catch {}
-    try { syncNabadProducerHomeCard(); } catch {}
   } catch (e) {
     creditsState.lastError = e?.message || String(e);
     paintCreditsAccountEmail(authSession?.user?.email || activeProfile?.email);
@@ -27805,6 +27594,7 @@ function renderAuthStatus() {
   if (els.settingsAccountEmail) {
     els.settingsAccountEmail.textContent = email || (hasToken ? "Checking session..." : "Guest mode");
   }
+  try { syncSettingsPageSub(); } catch {}
   if (els.settingsBtnSignIn) els.settingsBtnSignIn.hidden = isAuthed;
   if (els.settingsBtnLogout) els.settingsBtnLogout.hidden = !isAuthed;
   const settingsDelete = document.getElementById("settingsBtnDeleteAccount");
@@ -30908,7 +30698,6 @@ function isNativeApiNetworkError(err) {
 
 async function retryNativeApiFetch(run, timeoutMs) {
   if (!isNativeShell()) return null;
-  if (stagingNativeApiBaseLocked()) return null;
   const tried = new Set([String(_resolvedApiBase || "").replace(/\/$/, "")]);
   for (const base of nativeApiBaseCandidates()) {
     const b = String(base || "").replace(/\/$/, "");
@@ -57599,11 +57388,10 @@ function loadPendingBackendTask() {
   }
 }
 
-function saveRecoverableGenerationTask(taskId, titleHint, extra = {}) {
+function saveRecoverableGenerationTask(taskId, titleHint) {
   const t = String(taskId || "").trim();
   if (!t) return;
   const photoCoverDataUrl = resolvePendingPhotoCoverDataUrl();
-  const source = String(extra?.source || "").trim();
   try {
     localStorage.setItem(
       RECOVERY_TASK_KEY,
@@ -57611,8 +57399,6 @@ function saveRecoverableGenerationTask(taskId, titleHint, extra = {}) {
         taskId: t,
         savedAt: Date.now(),
         titleHint: String(titleHint || "").trim().slice(0, 120),
-        ...(source ? { source } : {}),
-        ...(extra?.session && typeof extra.session === "object" ? { producerSession: extra.session } : {}),
         ...(photoCoverDataUrl
           ? {
             photoCoverDataUrl,
@@ -57639,8 +57425,6 @@ function loadRecoverableGenerationTask() {
       taskId: String(o.taskId),
       savedAt,
       titleHint: String(o.titleHint || ""),
-      source: String(o.source || "").trim(),
-      producerSession: o.producerSession && typeof o.producerSession === "object" ? o.producerSession : null,
       photoCoverDataUrl: String(o.photoCoverDataUrl || "").trim(),
       photoMode: Boolean(o.photoMode),
       photoCoverOnly: Boolean(o.photoCoverOnly),
@@ -58078,14 +57862,7 @@ async function recoverSongFromTaskId(taskId, { silent = false, pushCategory = ""
     return true;
   }
 
-  const statusTok = getSupabaseAuthToken();
-  const statusPath = isSingleVariantMusicTask(tid)
-    ? musicStatusApiPath(tid)
-    : `/api/suno/status?taskId=${encodeURIComponent(tid)}`;
-  const r = await apiFetch(statusPath, {
-    cache: "no-store",
-    headers: statusTok ? { Authorization: `Bearer ${statusTok}` } : undefined,
-  });
+  const r = await fetch(apiUrl(`/api/suno/status?taskId=${encodeURIComponent(tid)}`));
   const data = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error(data?.error || "Could not check the generation status.");
 
@@ -58176,11 +57953,6 @@ async function recoverSongFromTaskId(taskId, { silent = false, pushCategory = ""
   }
   metaBase.recoveredFromTaskId = tid;
   metaBase.recoveredAt = Date.now();
-  if (pendingGen?.source === "nabad_producer" || isSingleVariantMusicTask(tid)) {
-    metaBase.nabadProducer = pendingGen?.source === "nabad_producer" || undefined;
-    metaBase.engine = pendingGen?.source === "nabad_producer" ? "lyria_producer" : metaBase.engine;
-    metaBase.musicProvider = metaBase.musicProvider || (tid.startsWith("lyr_") ? "lyria" : metaBase.musicProvider);
-  }
   if (cat === "hum_track_ready") {
     metaBase.humTrack = true;
     metaBase.recoveredFromPush = true;
@@ -60437,7 +60209,6 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
           try { els.sunoVoiceProfile.dispatchEvent(new Event("change", { bubbles: true })); } catch {}
         }
         syncSingerGenderPills();
-        try { syncClipVocalCharacterUi(); } catch {}
         try { renderReferenceHints(); } catch {}
       });
       // Keep pills in sync when a Range is picked in Options (its value
@@ -60449,21 +60220,9 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
             els.sunoSingerGender.value = vp.split("|")[0] === "f" ? "f" : "m";
           }
           syncSingerGenderPills();
-          try { syncClipVocalCharacterUi(); } catch {}
         });
       }
       syncSingerGenderPills();
-    }
-    if (els.clipVocalCharacterDeck) {
-      els.clipVocalCharacterDeck.addEventListener("click", (e) => {
-        const card = e.target?.closest?.("[data-clip-vocal-id]");
-        if (!card || !els.clipVocalCharacterDeck.contains(card)) return;
-        haptic("light");
-        const id = String(card.getAttribute("data-clip-vocal-id") || "").trim();
-        if (!id) return;
-        setSelectedClipVocalProfileId(id);
-        syncClipVocalCharacterUi();
-      });
     }
     // Persona pill (third Singer slot): create when none, else toggle the drawer.
     const personaPill = document.getElementById("singerPersonaPill");
@@ -60643,24 +60402,6 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
           String(els.sunoTitle?.value || "").trim() ||
           String(remixMeta?.searchTemplateTitle || remixMeta?.challenge?.title || "").trim() ||
           (templateSparkClip ? "Template clip" : "Nabad Clip");
-        const clipChallenge =
-          remixMeta?.challenge ||
-          loadCreateChallengeContext()?.challenge ||
-          null;
-        const clipArtworkStyle = String(els.sunoArtworkStyle?.value || "").trim();
-        const clipVoiceProfile = String(els.sunoVoiceProfile?.value || "").trim();
-        ensureClipSingerGenderSynced();
-        const clipVocalGender = resolveClipSingerGenderForUi() || resolveSingerGenderForGeneration({});
-        const clipProfileId =
-          getSelectedClipVocalProfileId() ||
-          defaultClipVocalProfileIdForGender(clipVocalGender);
-        if (clipProfileId && clipProfileId !== getSelectedClipVocalProfileId()) {
-          setSelectedClipVocalProfileId(clipProfileId);
-        }
-        const clipVoiceTimbre =
-          clipProfileId || !clipVoiceProfile.includes("|")
-            ? ""
-            : clipVoiceProfile.split("|")[1] || "";
         const payload = {
           prompt: finalPrompt,
           style: userStyle,
@@ -60672,10 +60413,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
           ...(templateSparkClip ? { templateSparkClip: "1" } : {}),
           ...(remixMeta?.searchTemplateId ? { searchTemplateId: String(remixMeta.searchTemplateId).trim() } : {}),
           ...(remixMeta?.searchTemplateTitle ? { searchTemplateTitle: String(remixMeta.searchTemplateTitle).trim() } : {}),
-          ...(clipChallenge ? { challenge: clipChallenge } : {}),
-          ...(clipVocalGender ? { vocalGender: clipVocalGender } : {}),
-          ...(clipVoiceTimbre ? { voiceTimbre: clipVoiceTimbre } : {}),
-          ...(clipProfileId ? { clipVocalProfileId: clipProfileId } : {}),
+          ...(templateSparkClip && remixMeta?.challenge ? { challenge: remixMeta.challenge } : {}),
           watchKind: clipAllowImageOnly ? "photo" : "clip",
         };
         if (templateSparkClip) {
@@ -60692,12 +60430,6 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
           dialect,
           dialectHint,
           arabicAddress,
-          singerGender: clipVocalGender || undefined,
-          voiceProfile: clipVoiceProfile || undefined,
-          clipVocalProfileId: clipProfileId || undefined,
-          ...(clipArtworkStyle
-            ? { artworkStyle: clipArtworkStyle, artworkHint: clipArtworkStyle }
-            : {}),
           musicProvider: "lyria",
           imageOnlyInstrumental: false,
           hasReference: false,
@@ -65531,6 +65263,13 @@ if (els.profilePreviewUsernameInput) {
     scheduleProfileUsernameAvailabilityCheck(els.profilePreviewUsernameInput.value);
   });
 }
+const btnSettingsManageSubscription = document.getElementById("btnSettingsManageSubscription");
+if (btnSettingsManageSubscription) {
+  btnSettingsManageSubscription.addEventListener("click", () => {
+    void openProManageSubscription();
+  });
+}
+
 if (els.btnSettingsMemberId) {
   els.btnSettingsMemberId.addEventListener("click", () => {
     try { haptic("light"); } catch {}
@@ -67385,315 +67124,6 @@ try {
     },
   });
 } catch (e) { console.warn("[studio] init", e); }
-
-let nabadProducerPollTimer = null;
-let nabadProducerPollCtx = null;
-
-function stopNabadProducerGenerationPolling() {
-  if (nabadProducerPollTimer) {
-    clearInterval(nabadProducerPollTimer);
-    nabadProducerPollTimer = null;
-  }
-}
-
-async function fetchMusicProviderGenerationStatus(taskId) {
-  const tid = String(taskId || "").trim();
-  if (!tid || !isSingleVariantMusicTask(tid)) return null;
-  const statusTok = getSupabaseAuthToken();
-  const r = await apiFetch(musicStatusApiPath(tid), {
-    cache: "no-store",
-    headers: statusTok ? { Authorization: `Bearer ${statusTok}` } : undefined,
-  });
-  const data = await r.json().catch(() => ({}));
-  if (!r.ok) {
-    throw new Error(data?.error || data?.message || `Status failed (${r.status})`);
-  }
-  const parsed = parseSunoGenerationRecordInfo(data);
-  const errorMessage = String(
-    data?.data?.errorMessage || data?.errorMessage || "",
-  ).trim();
-  return { ...parsed, errorMessage };
-}
-
-function resolveNabadProducerRecoveryContext() {
-  const pending = getGenerationPending();
-  if (String(pending?.source || "") === "nabad_producer" && pending?.taskId) {
-    return {
-      taskId: String(pending.taskId).trim(),
-      title: String(pending.title || "Nabad Producer").trim(),
-      session: {},
-    };
-  }
-  const rec = loadRecoverableGenerationTask();
-  if (
-    rec?.taskId
-    && (rec.source === "nabad_producer" || String(rec.taskId).startsWith("lyr_"))
-  ) {
-    return {
-      taskId: String(rec.taskId).trim(),
-      title: String(rec.titleHint || "Nabad Producer").trim(),
-      session: rec.producerSession && typeof rec.producerSession === "object" ? rec.producerSession : {},
-    };
-  }
-  const backendTid = String(loadPendingBackendTask() || "").trim();
-  if (backendTid.startsWith("lyr_")) {
-    return {
-      taskId: backendTid,
-      title: String(rec?.titleHint || pending?.title || "Nabad Producer").trim(),
-      session: rec?.producerSession && typeof rec.producerSession === "object" ? rec.producerSession : {},
-    };
-  }
-  return null;
-}
-
-function saveNabadProducerTrackToLibrary({ taskId, title, session, clip, rawUrl }) {
-  const tid = String(taskId || "").trim();
-  const url = String(rawUrl || clip?.audioUrl || "").trim();
-  if (!tid || !url) return null;
-  const proxied = toAudioProxyUrl(url) || url;
-  const playbackUrl = normalizeAudioUrlForPlayback(proxied) || proxied;
-  const audioId = String(clip?.audioId || clip?.id || clip?.audio_id || `${tid}_a`).trim();
-  const songTitle = String(
-    clip?.title || title || session?.title || session?.genre || "Nabad Producer",
-  ).trim();
-  return addToLibrary({
-    title: songTitle,
-    artUrl: "",
-    url: playbackUrl,
-    taskId: tid,
-    audioId,
-    kind: "full",
-    meta: {
-      engine: "lyria_producer",
-      nabadProducer: true,
-      musicProvider: "lyria",
-      genre: session?.genre || "",
-      mood: session?.mood || "",
-      bpm: session?.bpm ?? null,
-      tempo: session?.tempo || "",
-      instrumental: Boolean(session?.instrumental),
-    },
-  });
-}
-
-function finalizeNabadProducerGenerationSuccess({ taskId, title, session, clip, rawUrl, silent = false } = {}) {
-  const tid = String(taskId || "").trim();
-  const track = saveNabadProducerTrackToLibrary({ taskId: tid, title, session, clip, rawUrl });
-  if (!track) return false;
-  stopNabadProducerGenerationPolling();
-  clearGenerationPending(tid);
-  try { savePendingBackendTask(""); } catch {}
-  clearRecoverableGenerationTask();
-  syncGenerationPendingLibraryUi();
-  pushLocalGenerationReadyActivity([track].filter(Boolean), { taskId: tid });
-  if (!silent) {
-    showToast("Producer song saved to Library", { icon: "🎵", durationMs: 3200 });
-  }
-  void refreshMyCredits({ silent: true });
-  try {
-    handleProducerGenerationReady({
-      url: track.url,
-      title: track.title,
-      taskId: tid,
-      track,
-    });
-  } catch {}
-  nabadProducerPollCtx = null;
-  return true;
-}
-
-let nabadProducerServerRecoverInflight = null;
-
-async function recoverNabadProducerMissedFromServer({ silent = true } = {}) {
-  if (!getSupabaseAuthToken()) return 0;
-  if (nabadProducerServerRecoverInflight) return nabadProducerServerRecoverInflight;
-  nabadProducerServerRecoverInflight = (async () => {
-    try {
-      const statusTok = getSupabaseAuthToken();
-      const r = await apiFetch("/api/music/producer/recover", {
-        cache: "no-store",
-        headers: statusTok ? { Authorization: `Bearer ${statusTok}` } : undefined,
-      });
-      const body = await r.json().catch(() => ({}));
-      if (!r.ok) return 0;
-      const items = body?.data?.items || body?.items || [];
-      let recovered = 0;
-      for (const item of items) {
-        const tid = String(item?.taskId || "").trim();
-        if (!tid || libraryHasAllTaskVariants(tid, 1)) continue;
-        if (String(item?.status || "").toUpperCase() !== "SUCCESS") continue;
-        const rawUrl = String(item?.audioUrl || "").trim();
-        if (!rawUrl) continue;
-        const clip = {
-          audioUrl: rawUrl,
-          audioId: String(item?.audioId || `${tid}_a`).trim(),
-          title: String(item?.title || "").trim(),
-        };
-        if (finalizeNabadProducerGenerationSuccess({
-          taskId: tid,
-          title: clip.title,
-          session: {},
-          clip,
-          rawUrl,
-          silent: true,
-        })) {
-          recovered += 1;
-        }
-      }
-      if (recovered && !silent) {
-        showToast(
-          recovered > 1 ? `${recovered} producer songs recovered to Library` : "Producer song recovered to Library",
-          { icon: "🎵", durationMs: 3600 },
-        );
-      }
-      syncGenerationPendingLibraryUi();
-      return recovered;
-    } catch {
-      return 0;
-    } finally {
-      nabadProducerServerRecoverInflight = null;
-    }
-  })();
-  return nabadProducerServerRecoverInflight;
-}
-
-async function tickNabadProducerGenerationPoll() {
-  const ctx = nabadProducerPollCtx;
-  if (!ctx?.taskId) {
-    stopNabadProducerGenerationPolling();
-    return;
-  }
-  ctx.tries = (ctx.tries || 0) + 1;
-  const maxTries = 200;
-  try {
-    const parsed = await fetchMusicProviderGenerationStatus(ctx.taskId);
-    const status = String(parsed?.status || "").toUpperCase();
-    const clip = parsed?.first || null;
-    const rawUrl = String(clip?.audioUrl || "").trim();
-    if (status === "SUCCESS" && rawUrl) {
-      finalizeNabadProducerGenerationSuccess({
-        taskId: ctx.taskId,
-        title: ctx.title,
-        session: ctx.session,
-        clip,
-        rawUrl,
-      });
-      return;
-    }
-    if (status === "FAILED" || status === "ERROR") {
-      stopNabadProducerGenerationPolling();
-      clearGenerationPending(ctx.taskId);
-      syncGenerationPendingLibraryUi();
-      const errMsg = String(parsed?.errorMessage || "").trim();
-      const userMsg = /PROHIBITED_CONTENT|blocked this prompt/i.test(errMsg)
-        ? "Lyria blocked the prompt — artist names can't be sent. Mention the style at the reference step; we'll translate it to abstract production cues only."
-        : (errMsg || "Generation failed — credits were refunded if applicable. Try again from the blueprint.");
-      showToast("Producer generation failed", { icon: "!", durationMs: 3600 });
-      void refreshMyCredits({ silent: true });
-      try {
-        handleProducerGenerationFailed({
-          taskId: ctx.taskId,
-          message: userMsg,
-        });
-      } catch {}
-      nabadProducerPollCtx = null;
-      return;
-    }
-    if (ctx.tries >= maxTries) {
-      stopNabadProducerGenerationPolling();
-      syncGenerationPendingLibraryUi();
-      showToast("Still composing — we'll keep checking when you open the app.", { durationMs: 6000 });
-    }
-  } catch {
-    if (ctx.tries >= maxTries) {
-      stopNabadProducerGenerationPolling();
-      syncGenerationPendingLibraryUi();
-    }
-  }
-}
-
-function startNabadProducerGenerationPolling({ taskId, title, session } = {}) {
-  stopNabadProducerGenerationPolling();
-  const tid = String(taskId || "").trim();
-  if (!tid) return;
-  const songTitle = String(title || session?.title || session?.genre || "Nabad Producer").trim();
-  nabadProducerPollCtx = { taskId: tid, title: songTitle, session: session || {}, tries: 0 };
-  setGenerationPending({
-    taskId: tid,
-    title: songTitle,
-    variantCount: 1,
-    source: "nabad_producer",
-  });
-  try {
-    saveRecoverableGenerationTask(tid, songTitle, { source: "nabad_producer", session: session || {} });
-  } catch {}
-  try { savePendingBackendTask(tid); } catch {}
-  syncGenerationPendingLibraryUi();
-  nabadProducerPollTimer = setInterval(() => { void tickNabadProducerGenerationPoll(); }, 3500);
-  void tickNabadProducerGenerationPoll();
-}
-
-function kickNabadProducerGenerationPoll() {
-  if (nabadProducerPollTimer && nabadProducerPollCtx?.taskId) {
-    void tickNabadProducerGenerationPoll();
-  }
-}
-
-function resumeNabadProducerGenerationPollIfNeeded() {
-  const ctx = resolveNabadProducerRecoveryContext();
-  if (!ctx?.taskId) {
-    void recoverNabadProducerMissedFromServer({ silent: true });
-    return;
-  }
-  const tid = String(ctx.taskId || "").trim();
-  if (libraryHasAllTaskVariants(tid, 1)) {
-    clearGenerationPending(tid);
-    try { savePendingBackendTask(""); } catch {}
-    clearRecoverableGenerationTask();
-    syncGenerationPendingLibraryUi();
-    return;
-  }
-  if (nabadProducerPollTimer) return;
-  nabadProducerPollCtx = {
-    taskId: tid,
-    title: String(ctx.title || "Nabad Producer").trim(),
-    session: ctx.session || {},
-    tries: 0,
-  };
-  if (!getGenerationPending()?.taskId) {
-    setGenerationPending({
-      taskId: tid,
-      title: nabadProducerPollCtx.title,
-      variantCount: 1,
-      source: "nabad_producer",
-    });
-  }
-  nabadProducerPollTimer = setInterval(() => { void tickNabadProducerGenerationPoll(); }, 3500);
-  void tickNabadProducerGenerationPoll();
-  void recoverNabadProducerMissedFromServer({ silent: true });
-}
-
-try {
-  configureNabadProducer({
-    apiFetch: (path, opts) => apiFetch(path, opts),
-    getAuthToken: () => getSupabaseAuthToken(),
-    authSession: () => authSession,
-    showToast: (m, o) => { try { showToast(m, o); } catch {} },
-    setPostAuthReturnHash,
-    scheduleApplyRoute,
-    normalizeAudioUrlForPlayback: (url) => normalizeAudioUrlForPlayback(url),
-    startProducerGenerationPolling: (ctx) => startNabadProducerGenerationPolling(ctx),
-    openProfileSongsWhileGenerating: () => openProfileSongsWhileGenerating(),
-    isAdmin: () => Boolean(creditsState.isAdmin),
-    creditsLoaded: () => Boolean(creditsState.loaded),
-    refreshCredits: (opts) => refreshMyCredits(opts),
-    showProducerRoute: () => syncRoutePanelVisibility("nabad-producer"),
-    getNativeKeyboardPlugin: () => getNativeKeyboardPlugin(),
-    setNativeKeyboardScroll: (disabled) => setMessagesNativeKeyboardScroll(disabled),
-  });
-  syncNabadProducerHomeCard();
-  resumeNabadProducerGenerationPollIfNeeded();
-} catch (e) { console.warn("[nabad-producer] init", e); }
 
 // Resolve the backing instrumental ("AI Guide") for a song. V1 prefers an
 // existing instrumental already in the library; otherwise it falls back to the

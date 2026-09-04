@@ -21572,6 +21572,13 @@ body[data-route="settings"] main.grid{
   font-size: 14px;
   line-height: 1.45;
 }
+.settingsPageSub--email{
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  word-break: break-word;
+}
 .settingsOrbModeBlock{
   padding: 4px 4px 10px;
 }
@@ -49982,6 +49989,77 @@ body.faqOverlayOpen{ overflow: hidden; }
   color: rgba(223, 231, 251, 0.6);
 }
 .faqIntro a{ color: #8ad9c6; text-decoration: none; }
+.appleSubManageSteps{
+  margin: 0 0 18px;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 10px;
+}
+.appleSubManageStep{
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.03);
+  font-size: 14px;
+  line-height: 1.45;
+  color: rgba(232, 238, 247, 0.88);
+}
+.appleSubManageStepNum{
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #04120f;
+  background: linear-gradient(135deg, #5ef5d6, #23d5ab 58%, #12b88f);
+}
+.appleSubManageSecondaryBtn{
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 46px;
+  margin: 0 0 12px;
+  padding: 0 16px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(242, 246, 255, 0.92);
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.appleSubManageSecondaryBtn:active{
+  transform: scale(0.98);
+  background: rgba(255, 255, 255, 0.08);
+}
+.appleSubManageFine{
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.45;
+  color: rgba(223, 231, 251, 0.55);
+  text-align: center;
+}
+.appleSubManageFine a{ color: #8ad9c6; text-decoration: none; }
+html[data-theme="light"] .appleSubManageStep{
+  border-color: rgba(15, 23, 42, 0.08);
+  background: rgba(15, 23, 42, 0.03);
+  color: rgba(15, 23, 42, 0.88);
+}
+html[data-theme="light"] .appleSubManageSecondaryBtn{
+  border-color: rgba(15, 23, 42, 0.12);
+  background: rgba(15, 23, 42, 0.04);
+  color: rgba(15, 23, 42, 0.9);
+}
 .faqItem{
   border: 1px solid rgba(255, 255, 255, 0.08);
   background: rgba(255, 255, 255, 0.03);

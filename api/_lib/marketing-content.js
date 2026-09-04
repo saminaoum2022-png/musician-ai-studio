@@ -232,6 +232,11 @@ function defaultHomeContentEn() {
           answerHtml:
             "No. NabadAi is built for people who start with an idea, not a DAW. You guide mood, lyrics, and style; the studio handles generation.",
         },
+        {
+          question: "How can I cancel my subscription?",
+          answerHtml:
+            'On <strong>iPhone</strong>, open <strong>Settings → Apple ID → Subscriptions → NabadAi</strong> and cancel there. On the <strong>web</strong>, sign in at <a href="/app/#/pro">NabadAi Pro</a> and tap <strong>Manage subscription</strong>. Canceling stops future charges — you keep Pro until the end of your current billing period. Questions? Email <a href="mailto:help@nabadai.com">help@nabadai.com</a>.',
+        },
       ],
     },
     finalCta: {
@@ -489,6 +494,11 @@ function defaultHomeContentAr() {
           question: "هل أحتاج خبرة في الإنتاج الموسيقي؟",
           answerHtml:
             "لا. NabadAi مُصمَّم للمبدعين الذين يبدأون بفكرة، لا ببرنامج DAW. أنت توجّه المزاج والكلمات والأسلوب؛ والاستوديو يتولى التوليد.",
+        },
+        {
+          question: "كيف ألغي اشتراك Pro؟",
+          answerHtml:
+            'على <strong>iPhone</strong>: <strong>الإعدادات → Apple ID → الاشتراكات → NabadAi</strong> ثم إلغاء الاشتراك. على <strong>الويب</strong>: سجّل الدخول وافتح <a href="/app/#/pro">NabadAi Pro</a> واضغط <strong>إدارة الاشتراك</strong>. الإلغاء يوقف التجديد فقط — تبقى مزايا Pro حتى نهاية فترة الفوترة الحالية. للمساعدة: <a href="mailto:help@nabadai.com">help@nabadai.com</a>.',
         },
       ],
     },

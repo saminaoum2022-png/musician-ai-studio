@@ -283,7 +283,7 @@ function paintSubscribedState() {
     if (statusEl) {
       statusEl.hidden = false;
       const provider = String(state.provider || "").toLowerCase();
-      const manageCopy = provider === "stripe"
+      const manageCopy = provider === "stripe" || isNativeIos()
         ? `<button type="button" class="proManageLink" data-pro-manage>Manage subscription</button>`
         : `<p class="proActiveStatusManage">Manage or cancel in iPhone Settings → Subscriptions.</p>`;
       statusEl.innerHTML = `
@@ -530,22 +530,134 @@ async function handleSubscribeClick() {
   }
 }
 
-async function handleManageSubscriptionClick() {
-  const provider = String(readProState().provider || "").toLowerCase();
-  if (provider !== "stripe") return;
+const APPLE_SUBSCRIPTIONS_URL = "https://apps.apple.com/account/subscriptions";
+
+let _appleManageSheetBound = false;
+let _appleManageSheetOpen = false;
+let _appleManageSheetHideTimer = 0;
+
+function proManageSubscriptionSubcopy(provider) {
+  const p = String(provider || "").toLowerCase();
+  if (p === "stripe") return "Cancel or update payment";
+  if (isNativeIos()) return "Cancel or renew in iPhone Settings";
+  return "Started on iPhone — manage there";
+}
+
+async function openAppleSubscriptions() {
+  const target = APPLE_SUBSCRIPTIONS_URL;
+  try {
+    const cap = globalThis.Capacitor;
+    const Browser = cap?.Plugins?.Browser;
+    if (cap?.isNativePlatform?.() && Browser?.open) {
+      await Browser.open({ url: target, presentationStyle: "fullscreen" });
+      return;
+    }
+  } catch {}
+  window.location.href = target;
+}
+
+function bindAppleManageSheetOnce() {
+  if (_appleManageSheetBound) return;
+  _appleManageSheetBound = true;
+  const overlay = document.getElementById("appleSubManageOverlay");
+  const closeBtn = document.getElementById("btnAppleSubManageClose");
+  const openAppleBtn = document.getElementById("btnAppleSubManageOpenApple");
+  if (!overlay) return;
+
+  const close = () => {
+    _appleManageSheetOpen = false;
+    overlay.classList.remove("isOpen");
+    overlay.setAttribute("aria-hidden", "true");
+    document.body.classList.remove("faqOverlayOpen");
+    if (_appleManageSheetHideTimer) clearTimeout(_appleManageSheetHideTimer);
+    _appleManageSheetHideTimer = window.setTimeout(() => {
+      _appleManageSheetHideTimer = 0;
+      if (!_appleManageSheetOpen) overlay.hidden = true;
+    }, 280);
+  };
+
+  const open = () => {
+    if (_appleManageSheetHideTimer) {
+      clearTimeout(_appleManageSheetHideTimer);
+      _appleManageSheetHideTimer = 0;
+    }
+    _appleManageSheetOpen = true;
+    overlay.hidden = false;
+    overlay.setAttribute("aria-hidden", "false");
+    document.body.classList.add("faqOverlayOpen");
+    overlay.querySelector(".faqOverlayBody")?.scrollTo?.(0, 0);
+    window.requestAnimationFrame(() => {
+      if (_appleManageSheetOpen) overlay.classList.add("isOpen");
+    });
+  };
+
+  bindAppleManageSheetOnce.open = open;
+  bindAppleManageSheetOnce.close = close;
+
+  if (closeBtn) closeBtn.addEventListener("click", close);
+  overlay.addEventListener("click", (ev) => {
+    if (ev.target === overlay) close();
+  });
+  if (openAppleBtn) {
+    openAppleBtn.addEventListener("click", () => {
+      void openAppleSubscriptions();
+    });
+  }
+  document.addEventListener("keydown", (ev) => {
+    if (ev.key === "Escape" && _appleManageSheetOpen) close();
+  });
+}
+
+export function showAppleManageSubscriptionSheet() {
+  bindAppleManageSheetOnce();
+  if (typeof bindAppleManageSheetOnce.open === "function") {
+    bindAppleManageSheetOnce.open();
+    return;
+  }
+  const overlay = document.getElementById("appleSubManageOverlay");
+  if (overlay) {
+    overlay.hidden = false;
+    overlay.classList.add("isOpen");
+    overlay.setAttribute("aria-hidden", "false");
+    document.body.classList.add("faqOverlayOpen");
+  }
+}
+
+/** Open Stripe portal (web) or in-app Apple steps (App Store). */
+export async function openProManageSubscription() {
   const loggedIn = typeof _deps?.isLoggedIn === "function" ? _deps.isLoggedIn() : false;
   if (!loggedIn) {
     _deps?.showToast?.("Sign in to manage your subscription.", { durationMs: 2800 });
     return;
   }
-  try {
-    await openStripeBillingPortal({
-      getAuthToken: _deps?.getAuthToken,
-      apiBase: _deps?.getApiBase?.() || "",
-    });
-  } catch (err) {
-    _deps?.showToast?.(err?.message || "Could not open billing portal", { durationMs: 3600 });
+  const provider = String(readProState().provider || "").toLowerCase();
+  if (provider === "stripe") {
+    try {
+      await openStripeBillingPortal({
+        getAuthToken: _deps?.getAuthToken,
+        apiBase: _deps?.getApiBase?.() || "",
+      });
+    } catch (err) {
+      _deps?.showToast?.(err?.message || "Could not open billing portal", { durationMs: 3600 });
+    }
+    return;
   }
+  if (isNativeIos()) {
+    showAppleManageSubscriptionSheet();
+    return;
+  }
+  _deps?.showToast?.(
+    "This subscription was started on iPhone. Open Settings → Apple ID → Subscriptions on your device.",
+    { durationMs: 4200 },
+  );
+}
+
+export function proManageSubscriptionSubcopyForState(state) {
+  return proManageSubscriptionSubcopy(state?.provider);
+}
+
+async function handleManageSubscriptionClick() {
+  await openProManageSubscription();
 }
 
 async function handleStripeCheckoutReturn() {
@@ -669,6 +781,7 @@ export function configureProPlan(deps) {
 export function initProPlanOnce() {
   ensureProPageRendered();
   bindProBackOnce();
+  bindAppleManageSheetOnce();
 }
 
 export function onProPlanRouteActive({ entering = false } = {}) {

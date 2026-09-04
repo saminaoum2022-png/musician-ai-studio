@@ -92,12 +92,6 @@ export const PRO_FEATURES = Object.freeze([
     label: "Pro badge on your profile",
     sub: "Shows you support NabadAi creators",
   },
-  {
-    key: "exports_soon",
-    label: "WAV & stem exports",
-    sub: "Lossless downloads and separate tracks for producers",
-    comingSoon: true,
-  },
 ]);
 
 /**
@@ -195,11 +189,10 @@ export function planCreditsTotal(plan) {
 export function planCreditsMeta(plan) {
   const base = Number(plan?.creditsPerPeriod) || 0;
   const bonus = Number(plan?.bonusCredits) || 0;
-  const songs = songsFromCredits(base + bonus);
   if (bonus > 0) {
-    return `${base.toLocaleString()} + ${bonus} bonus credits · ≈ ${songs}`;
+    return `${base.toLocaleString()} + ${bonus} bonus credits`;
   }
-  return `${base.toLocaleString()} credits · ≈ ${songs}`;
+  return `${base.toLocaleString()} credits`;
 }
 
 export function songsFromCredits(credits) {

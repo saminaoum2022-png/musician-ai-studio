@@ -36401,6 +36401,7 @@ function detectCoachSongIntent(text) {
   );
   const hasMakeVerb = (
     /\b(help|want|need|trying|can you|could you)\b.*\b(make|create|write|start|do)\b/.test(t)
+    || /\b(help|want|need).{0,48}\b(song|music|track)\b/.test(t)
     || /\b(make|create|write|start)\b.*\b(song|music|track)\b/.test(t)
     || /\b(new song|make a song|create a song|write a song|make music)\b/.test(t)
     || /\b(a3m\w*|3m\w*|3amal|aamel|a3mel)\b/.test(t)

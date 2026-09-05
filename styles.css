@@ -50075,7 +50075,8 @@ body[data-route="user"] #userPublicRepostsList{
 
   /* Friends + Profile feed posts: stay inside the content column on desktop web.
      Mobile web + native iOS keep the full-bleed 100vw breakout below. */
-  html.is-web-shell #friendsPage{
+  html.is-web-shell #friendsPage,
+  html.is-web-shell #discoverFriendsPanel{
     width: 100%;
     min-width: 0;
     overflow-x: clip;
@@ -50086,12 +50087,14 @@ body[data-route="user"] #userPublicRepostsList{
   }
   html.is-web-shell :is(
     #friendsPage,
+    #discoveryFollowingList,
     #profileActivitiesList,
     #profileRepostsList,
     #userPublicSongs,
     #userPublicRepostsList
   ) :is(
     .followAct--xstyle > .followActMediaWrap,
+    .followAct--xstyle > .feedVinylWrap,
     .followAct--xstyle .followActRemixFlow .followActMediaWrap--friendsDock,
     .followAct--xstyle .followActMashup .followActMediaWrap--friendsDock,
     .followAct--xstyle .followActRemixFlow .followActMediaWrap--remixResult,
@@ -50129,6 +50132,7 @@ body[data-route="user"] #userPublicRepostsList{
   }
   html.is-web-shell :is(
     #friendsPage,
+    #discoveryFollowingList,
     #profileActivitiesList,
     #profileRepostsList,
     #userPublicSongs,
@@ -50144,6 +50148,10 @@ body[data-route="user"] #userPublicRepostsList{
     .followAct--xstyle.followAct--skel .followActSkelHero
   ){
     border-radius: var(--feed-cover-radius, 14px);
+  }
+  html.is-web-shell :is(#friendsPage, #discoveryFollowingList) .followAct--xstyle > .feedVinylWrap .feedVinylStage{
+    width: min(82%, 420px);
+    max-width: 100%;
   }
 
   /* --- Discover as a multi-column grid --- */

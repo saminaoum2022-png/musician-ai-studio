@@ -1851,7 +1851,9 @@ function renderFunnel(data) {
     : "";
   const productNote = product.source === "rpc"
     ? "Supabase product_analytics_events — includes native iOS app events Vercel cannot see."
-    : escapeHtml(product.note || "Run supabase/product_analytics_events.sql for app funnel events.");
+    : product.source === "table"
+      ? escapeHtml(product.note || "Supabase table read (RPC fallback).")
+      : escapeHtml(product.note || "Run supabase/product_analytics_events.sql for app funnel events.");
 
   const visitLegend = VERCEL_VISIT_SERIES.map((series) => `
     <span class="activityLegendItem">

@@ -860,9 +860,26 @@ async function fetchActivitySummary({ days = 28 } = {}) {
 async function fetchWebFunnelSummary({ days = 28 } = {}) {
   const dayCount = Math.max(7, Math.min(90, Number(days) || 28));
   const rpc = await callRpc("get_admin_web_funnel_summary", { p_days: dayCount });
-  if (rpc.ok && rpc.data && typeof rpc.data === "object") {
-    return { ...rpc.data, source: "rpc" };
+  const parsed = parseRpcJsonPayload(rpc.data);
+  if (rpc.ok && parsed) {
+    return { ...parsed, source: "rpc" };
   }
+
+  const tableSummary = await fetchWebFunnelSummaryFromTable({ days: dayCount });
+  if (tableSummary.source === "table") {
+    tableSummary.rpcStatus = rpc.status || null;
+    tableSummary.note =
+      "Reading product_analytics_events directly. RPC was unavailable — in Supabase SQL Editor run: NOTIFY pgrst, 'reload schema'; then hard-refresh admin (or redeploy production).";
+    return tableSummary;
+  }
+  if (tableSummary.source === "missing_table") {
+    return tableSummary;
+  }
+  if (tableSummary.source === "table_error") {
+    tableSummary.rpcStatus = rpc.status || null;
+    return tableSummary;
+  }
+
   return {
     days: dayCount,
     totals: {},
@@ -870,7 +887,112 @@ async function fetchWebFunnelSummary({ days = 28 } = {}) {
     daily: [],
     breakdowns: {},
     source: "missing_rpc",
-    note: "Run supabase/product_analytics_events.sql for native app funnel events.",
+    rpcStatus: rpc.status || null,
+    note: "Could not load funnel summary. Confirm supabase/product_analytics_events.sql ran on the same Supabase project as production Vercel env, then run: NOTIFY pgrst, 'reload schema';",
+  };
+}
+
+function parseRpcJsonPayload(data) {
+  if (data == null) return null;
+  if (typeof data === "string") {
+    try {
+      const parsed = JSON.parse(data);
+      return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : null;
+    } catch {
+      return null;
+    }
+  }
+  if (typeof data === "object" && !Array.isArray(data)) return data;
+  return null;
+}
+
+function utcDayKey(date) {
+  return date.toISOString().slice(0, 10);
+}
+
+function startOfUtcDay(date = new Date()) {
+  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
+}
+
+async function fetchWebFunnelSummaryFromTable({ days = 28 } = {}) {
+  const dayCount = Math.max(7, Math.min(90, Number(days) || 28));
+  const today = startOfUtcDay();
+  const start = new Date(today.getTime() - (dayCount - 1) * 86400000);
+  const sinceIso = start.toISOString();
+  const todayIso = today.toISOString();
+
+  const res = await serviceFetch(
+    `product_analytics_events?select=event_name,event_data,created_at&created_at=gte.${encodeURIComponent(sinceIso)}&order=created_at.desc&limit=10000`,
+  );
+
+  const errMsg = String(res.data?.message || res.data?.hint || res.data || "");
+  if (res.status === 404 || /product_analytics_events/i.test(errMsg)) {
+    return {
+      days: dayCount,
+      totals: {},
+      totalsToday: {},
+      daily: [],
+      breakdowns: {},
+      source: "missing_table",
+      note: "Table product_analytics_events not found in this Supabase project — run supabase/product_analytics_events.sql.",
+    };
+  }
+  if (!res.ok) {
+    return {
+      days: dayCount,
+      totals: {},
+      totalsToday: {},
+      daily: [],
+      breakdowns: {},
+      source: "table_error",
+      note: `Could not read product_analytics_events (HTTP ${res.status}). Run NOTIFY pgrst, 'reload schema'; in Supabase SQL Editor.`,
+    };
+  }
+
+  const rows = Array.isArray(res.data) ? res.data : [];
+  const daySeries = [];
+  for (let i = dayCount - 1; i >= 0; i -= 1) {
+    daySeries.push(utcDayKey(new Date(today.getTime() - i * 86400000)));
+  }
+
+  const totals = {};
+  const totalsToday = {};
+  const dailyMap = Object.fromEntries(daySeries.map((day) => [day, {}]));
+  const breakdowns = {};
+  const breakdownEvents = new Set([
+    "nabad_signup_complete",
+    "nabad_signin_complete",
+    "nabad_cta_click",
+    "nabad_route_view",
+    "nabad_song_plan_start",
+    "nabad_blog_cta_click",
+  ]);
+
+  for (const row of rows) {
+    const name = String(row?.event_name || "").trim();
+    if (!name) continue;
+    const created = String(row?.created_at || "");
+    const day = created.slice(0, 10);
+    totals[name] = (totals[name] || 0) + 1;
+    if (created >= todayIso) totalsToday[name] = (totalsToday[name] || 0) + 1;
+    if (dailyMap[day]) {
+      dailyMap[day][name] = (dailyMap[day][name] || 0) + 1;
+    }
+    if (breakdownEvents.has(name)) {
+      const data = row?.event_data && typeof row.event_data === "object" ? row.event_data : {};
+      const dim = data.method || data.page || data.route || data.placement || data.path || "other";
+      if (!breakdowns[name]) breakdowns[name] = {};
+      breakdowns[name][String(dim)] = (breakdowns[name][String(dim)] || 0) + 1;
+    }
+  }
+
+  return {
+    days: dayCount,
+    totals,
+    totalsToday,
+    daily: daySeries.map((day) => ({ day, events: dailyMap[day] || {} })),
+    breakdowns,
+    source: "table",
   };
 }
 

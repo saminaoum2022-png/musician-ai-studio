@@ -8,7 +8,12 @@
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Display:wght@800;900&family=Inter:wght@400;600;700;800&display=swap">
   <title>مدونة NabadAi</title>
   <meta name="description" content="مقال من مدونة NabadAi">
+  <meta name="robots" content="index,follow">
   <link rel="canonical" href="https://www.nabadai.com/ar/blog">
+  <meta property="og:title" content="مدونة NabadAi">
+  <meta property="og:description" content="مقال من مدونة NabadAi">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://www.nabadai.com/ar/blog">
   <link rel="icon" href="/favicon.ico" sizes="any">
   <link rel="stylesheet" href="/marketing.css?v=20260828-blog">
   <script>
@@ -16,7 +21,15 @@
       var parts = window.location.pathname.split("/").filter(Boolean);
       var slug = parts[parts.length - 1] || "";
       if (slug === "blog" || slug === "blog-post.html") slug = "";
-      if (slug) document.documentElement.setAttribute("data-blog-slug", slug);
+      var locale = (document.documentElement.lang || "en").indexOf("ar") === 0 ? "ar" : "en";
+      var base = "https://www.nabadai.com" + (locale === "ar" ? "/ar" : "");
+      if (slug) {
+        document.documentElement.setAttribute("data-blog-slug", slug);
+        var canon = document.querySelector('link[rel="canonical"]');
+        if (canon) canon.href = base + "/blog/" + encodeURIComponent(slug);
+        var ogUrl = document.querySelector('meta[property="og:url"]');
+        if (ogUrl) ogUrl.setAttribute("content", base + "/blog/" + encodeURIComponent(slug));
+      }
     })();
   </script>
 </head>

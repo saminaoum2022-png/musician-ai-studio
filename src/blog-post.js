@@ -50,16 +50,31 @@
     if (el) el.setAttribute("content", content);
   }
 
+  function setLinkRel(rel, href) {
+    if (!href) return;
+    var el = document.querySelector('link[rel="' + rel + '"]');
+    if (el) el.setAttribute("href", href);
+  }
+
   function applyPost(post) {
     if (!post || !post.content) return;
     var c = post.content;
     var title = c.hero?.title || c.seo?.title || slug;
     var desc = c.hero?.lead || c.seo?.description || "";
+    var localePrefix = LOCALE.indexOf("ar") === 0 ? "/ar" : "";
+    var articlePath = localePrefix + "/blog/" + encodeURIComponent(post.slug || slug);
+    var canonical = "https://www.nabadai.com" + articlePath;
     document.title = (c.seo?.title || title) + " — NabadAi Blog";
     setMeta("description", c.seo?.description || desc);
     setMeta("og:title", title, true);
     setMeta("og:description", desc, true);
-    if (c.hero?.coverImageUrl) setMeta("og:image", c.hero.coverImageUrl, true);
+    setMeta("og:url", canonical, true);
+    setLinkRel("canonical", canonical);
+    if (c.hero?.coverImageUrl) {
+      var image = c.hero.coverImageUrl;
+      if (image.indexOf("http") !== 0) image = "https://www.nabadai.com" + image;
+      setMeta("og:image", image, true);
+    }
 
     setText("[data-blog='hero.title']", c.hero?.title || title);
     setText("[data-blog='hero.lead']", c.hero?.lead || "");

@@ -105,7 +105,45 @@ function rowMetrics(row) {
   };
 }
 
-function normalizeDimRows(rows, dimKeys = []) {
+let _countryDisplay;
+function countryDisplayNames() {
+  if (!_countryDisplay) {
+    try {
+      _countryDisplay = new Intl.DisplayNames(["en"], { type: "region" });
+    } catch {
+      _countryDisplay = null;
+    }
+  }
+  return _countryDisplay;
+}
+
+function formatCountryLabel(code) {
+  const c = String(code || "").trim().toUpperCase();
+  if (!c || c === "(DIRECT / UNKNOWN)") return "(unknown)";
+  if (c.length === 2) {
+    try {
+      const dn = countryDisplayNames();
+      const name = dn?.of(c);
+      if (name && name !== c) return `${name} (${c})`;
+    } catch {}
+  }
+  return code;
+}
+
+function formatDimLabel(label, dimKind) {
+  const raw = String(label || "").trim();
+  if (!raw || raw === "(direct / unknown)") return "(unknown)";
+  if (dimKind === "country") return formatCountryLabel(raw);
+  if (dimKind === "device") {
+    const lower = raw.toLowerCase();
+    if (lower === "mobile") return "Mobile";
+    if (lower === "desktop") return "Desktop";
+    if (lower === "tablet") return "Tablet";
+  }
+  return raw;
+}
+
+function normalizeDimRows(rows, dimKeys = [], dimKind = "") {
   const keys = Array.isArray(dimKeys) ? dimKeys : [dimKeys];
   return rows.map((row) => {
     let label = "";
@@ -118,8 +156,10 @@ function normalizeDimRows(rows, dimKeys = []) {
     }
     if (!label) label = "(direct / unknown)";
     const metrics = rowMetrics(row);
+    const formatted = formatDimLabel(label, dimKind);
     return {
-      label,
+      label: formatted,
+      rawLabel: label,
       pageviews: metrics.pageviews,
       visitors: metrics.visitors,
       count: metrics.pageviews || metrics.visitors,
@@ -172,6 +212,29 @@ function collectQueryErrors(results, labels) {
   return errors.length ? errors : undefined;
 }
 
+const ONLINE_NOW_WINDOW_MINUTES = 5;
+
+async function fetchVercelOnlineNow() {
+  const untilMs = Date.now();
+  const sinceMs = untilMs - ONLINE_NOW_WINDOW_MINUTES * 60 * 1000;
+  const res = await query("visits/count", {
+    since: String(sinceMs),
+    until: String(untilMs),
+  });
+  if (!res.ok || !res.data) {
+    return {
+      onlineNow: null,
+      onlineNowWindowMinutes: ONLINE_NOW_WINDOW_MINUTES,
+      onlineNowNote: res.error ? String(res.error).slice(0, 120) : undefined,
+    };
+  }
+  const visitors = Number(res.data.visitors ?? 0);
+  return {
+    onlineNow: Number.isFinite(visitors) ? visitors : null,
+    onlineNowWindowMinutes: ONLINE_NOW_WINDOW_MINUTES,
+  };
+}
+
 /**
  * Fetch web traffic + custom events from Vercel Web Analytics API.
  * @param {{ days?: number }} opts
@@ -196,6 +259,10 @@ async function fetchVercelWebAnalyticsSummary({ days = 28 } = {}) {
       browsers: [],
       referrers: [],
       customEvents: [],
+      onlineNow: null,
+      onlineNowWindowMinutes: ONLINE_NOW_WINDOW_MINUTES,
+      bounceRate: null,
+      bounceRateNote: "Bounce rate is only shown in the Vercel Analytics dashboard — not exposed on the public API.",
       dashboardUrl: `https://vercel.com/${teamSlug}/musician-ai-studio/analytics`,
     };
   }
@@ -215,6 +282,7 @@ async function fetchVercelWebAnalyticsSummary({ days = 28 } = {}) {
     browsersRes,
     referrersRes,
     eventsRes,
+    onlineNowRes,
   ] = await Promise.all([
     query("visits/aggregate", { ...base, by: "day", limit: "90" }),
     query("visits/aggregate", { ...base, by: "requestPath" }),
@@ -224,6 +292,7 @@ async function fetchVercelWebAnalyticsSummary({ days = 28 } = {}) {
     query("visits/aggregate", { ...base, by: "browserName" }),
     query("visits/aggregate", { ...base, by: "referrerHostname" }),
     query("events/aggregate", { ...base, by: "eventName", limit: "25" }),
+    fetchVercelOnlineNow(),
   ]);
 
   const daily = normalizeDailyRows(rowsFromAggregate(dailyRes));
@@ -243,6 +312,10 @@ async function fetchVercelWebAnalyticsSummary({ days = 28 } = {}) {
     },
   );
 
+  const pagesPerVisitor = totalsFromDaily.visitors > 0
+    ? Math.round((totalsFromDaily.pageviews / totalsFromDaily.visitors) * 100) / 100
+    : null;
+
   return {
     configured: true,
     source: "vercel_api",
@@ -252,12 +325,18 @@ async function fetchVercelWebAnalyticsSummary({ days = 28 } = {}) {
     totals: totalsFromDaily,
     daily,
     pages: normalizeDimRows(rowsFromAggregate(pagesRes), ["requestPath", "route"]),
-    countries: normalizeDimRows(rowsFromAggregate(countriesRes), ["country", "clientIpCountry"]),
-    devices: normalizeDimRows(rowsFromAggregate(devicesRes), ["deviceType"]),
+    countries: normalizeDimRows(rowsFromAggregate(countriesRes), ["country", "clientIpCountry"], "country"),
+    devices: normalizeDimRows(rowsFromAggregate(devicesRes), ["deviceType"], "device"),
     operatingSystems: normalizeDimRows(rowsFromAggregate(osRes), ["osName"]),
     browsers: normalizeDimRows(rowsFromAggregate(browsersRes), ["browserName"]),
     referrers: normalizeDimRows(rowsFromAggregate(referrersRes), ["referrerHostname"]),
     customEvents: normalizeEventRows(rowsFromAggregate(eventsRes)),
+    onlineNow: onlineNowRes.onlineNow,
+    onlineNowWindowMinutes: onlineNowRes.onlineNowWindowMinutes || ONLINE_NOW_WINDOW_MINUTES,
+    onlineNowNote: onlineNowRes.onlineNowNote,
+    pagesPerVisitor,
+    bounceRate: null,
+    bounceRateNote: "Exact bounce rate is dashboard-only on Vercel. Approximation: single-page sessions ÷ total sessions — not available via API.",
     dashboardUrl: `https://vercel.com/${teamSlug}/musician-ai-studio/analytics`,
     errors: queryErrors,
   };

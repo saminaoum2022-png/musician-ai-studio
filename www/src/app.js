@@ -36136,15 +36136,40 @@ function showCoachProjectSummary(flow) {
   appendCoachSignupCoachMessage(formatCoachProjectSummary(flow), coachProjectSummaryCtas());
 }
 function detectCoachSongIntent(text) {
-  const t = String(text || "").trim().toLowerCase();
-  if (!t) return false;
-  return (
-    /\b(help|want|need|trying)\b.*\b(make|create|write|start)\b.*\bsong\b/.test(t)
-    || /\bnew song\b/.test(t)
-    || /\bmake a song\b/.test(t)
-    || /\bcreate a song\b/.test(t)
-    || /\bwrite a song\b/.test(t)
+  const raw = String(text || "").trim();
+  if (!raw) return false;
+  const t = raw.toLowerCase();
+  const ar = raw.replace(/[أإآ]/g, "ا").replace(/ة/g, "ه");
+  const hasSongNoun = (
+    /\b(song|songs|track|music)\b/.test(t)
+    || /\b(gheniy\w*|ghan\w*|8an\w*|ougniy\w*)\b/.test(t)
+    || /(اغاني|أغاني|اغنيه|أغنية|اغنية|غنية|غنيه|غاني)/.test(ar)
+    || /\b(chanson|chansons)\b/.test(t)
   );
+  const hasMakeVerb = (
+    /\b(help|want|need|trying|can you|could you)\b.*\b(make|create|write|start|do)\b/.test(t)
+    || /\b(make|create|write|start)\b.*\b(song|music|track)\b/.test(t)
+    || /\b(new song|make a song|create a song|write a song|make music)\b/.test(t)
+    || /\b(a3m\w*|3m\w*|3amal|aamel|a3mel)\b/.test(t)
+    || /\b(tse?3d\w*|sa3d\w*|sa3ed\w*|3awn\w*|saa3ed\w*)\b/.test(t)
+    || /\bfik\b.*\b(tse?3d|sa3d|3awn|a3m|3m)/.test(t)
+    || /(اعمل|اعمللي|عمل|بدي|بدّي|ساعد|ساعدني|فيك.*تساعد)/.test(ar)
+    || /\b(faire|cr[ée]er|composer)\b.*\b(chanson|musique)\b/.test(t)
+  );
+  if (hasSongNoun && hasMakeVerb) return true;
+  if (/\b(gheniy\w*|8an\w*)\b/.test(t) && /\b(a3m\w*|3m\w*|tse?3d\w*|sa3d\w*|fik|help)\b/.test(t)) return true;
+  if (/(اغن|غن)/.test(ar) && /(اعمل|ساعد|بدي|فيك)/.test(ar)) return true;
+  return false;
+}
+function startCoachSongPlanFromMenu() {
+  closeCoachActionSheet();
+  try { haptic("light"); } catch {}
+  const flow = loadCoachSignupFlow();
+  if (flow && coachSignupFlowActive()) {
+    openCoachSongPlanSheet();
+    return;
+  }
+  offerCoachNewSongFlow(false);
 }
 function tryParseCoachProjectStepAnswer(step, text) {
   const t = String(text || "").trim().toLowerCase();
@@ -36205,6 +36230,7 @@ async function sendCoachSideHelpDuringProject(text, input, flow) {
     const payload = augmentCoachApiPayload({
       message: text,
       history,
+      songProjectActive: true,
       contextAppendixExtra: `The user is mid song-setup. Pending field: ${pendingHint}. Answer their question briefly, then remind them to use the chips or Song plan to answer ${pendingHint}. Do not pretend they already chose.`,
     });
     const data = await messagesApi("/api/coach", {
@@ -36877,7 +36903,7 @@ async function sendCoachMessage(text, input) {
   let replyText = "";
   let errorText = "";
   const fetchCoachReply = async () => {
-    const payload = augmentCoachApiPayload({ message: text, history });
+    const payload = augmentCoachApiPayload({ message: text, history, songProjectActive: false });
     return messagesApi("/api/coach", {
       method: "POST",
       timeoutMs: 38000,
@@ -67670,6 +67696,10 @@ syncAuthTermsCheckbox();
     const action = String(row.getAttribute("data-coach-action") || "").trim();
     if (action === "cancel") {
       closeCoachActionSheet();
+      return;
+    }
+    if (action === "start-plan") {
+      startCoachSongPlanFromMenu();
       return;
     }
     if (action === "clear") {

@@ -127,18 +127,48 @@ Do not paste this block to the user. Reply in their language (Arabic if they wri
 `.trim();
 }
 
+/** When no Song plan is active — stop Coach from freestyling whole songs in chat. */
+export function buildCoachSongPlanRedirectGuide() {
+  return `
+SONG CREATION FLOW (mandatory — user has NO active Song plan in the app right now):
+
+When the user wants to MAKE / CREATE / START a new song in NabadAi:
+- Do NOT write full lyrics, long Create tutorials, or improvise a whole song across many messages.
+- Tell them to tap **New song with Coach** or pick a topic chip (Love, Apology, Dabke). The app runs Language → Dialect → For who → Name → Lyrics, shows a **Song plan** bar, then opens Create with settings filled in.
+- Keep that redirect to 1–3 sentences. You may still answer brief questions about credits, Pro, or review pasted lyrics.
+
+Do not paste this block to the user. Reply in their language (Arabic if they write Arabic).
+`.trim();
+}
+
+/** When Song plan intake is in progress — side answers only. */
+export function buildCoachActiveProjectGuide() {
+  return `
+SONG PLAN ACTIVE: The user is mid song-setup via chips (Language, Dialect, For who, Name, Lyrics). Answer side questions briefly; remind them to use chips or the Song plan bar to continue. Do not skip ahead to Create instructions or rewrite the whole song unless they finished the plan.
+`.trim();
+}
+
 /**
  * Augment a Coach API payload with frontend-only product knowledge.
  * Chat history stays unchanged; pricing/lyrics guides ride in contextAppendix.
  */
-export function augmentCoachApiPayload({ message, history, contextAppendixExtra = "" }) {
+export function augmentCoachApiPayload({
+  message,
+  history,
+  contextAppendixExtra = "",
+  songProjectActive = false,
+}) {
   const prior = Array.isArray(history) ? history : [];
   const userMessage = String(message || "").trim();
   const base = buildCoachContextAppendix();
+  const flowGuide = songProjectActive
+    ? buildCoachActiveProjectGuide()
+    : buildCoachSongPlanRedirectGuide();
   const extra = String(contextAppendixExtra || "").trim();
+  const parts = [base, flowGuide, extra].filter(Boolean);
   return {
     message: userMessage,
     history: prior,
-    contextAppendix: extra ? `${base}\n\n${extra}` : base,
+    contextAppendix: parts.join("\n\n"),
   };
 }

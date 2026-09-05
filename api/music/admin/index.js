@@ -857,6 +857,23 @@ async function fetchActivitySummary({ days = 28 } = {}) {
   }, "fallback");
 }
 
+async function fetchWebFunnelSummary({ days = 28 } = {}) {
+  const dayCount = Math.max(7, Math.min(90, Number(days) || 28));
+  const rpc = await callRpc("get_admin_web_funnel_summary", { p_days: dayCount });
+  if (rpc.ok && rpc.data && typeof rpc.data === "object") {
+    return { ...rpc.data, source: "rpc" };
+  }
+  return {
+    days: dayCount,
+    totals: {},
+    totalsToday: {},
+    daily: [],
+    breakdowns: {},
+    source: "missing_rpc",
+    note: "Run supabase/product_analytics_events.sql in Supabase to enable funnel analytics.",
+  };
+}
+
 async function fetchCoachUsageSummary() {
   const rpc = await callRpc("get_coach_usage_summary", {});
   if (rpc.ok && rpc.data && typeof rpc.data === "object") {
@@ -3007,6 +3024,7 @@ module.exports = async function handler(req, res) {
   const genProvider = String(url.searchParams.get("provider") || "").trim().toLowerCase();
   const genStatus = String(url.searchParams.get("status") || "").trim().toLowerCase();
   const healthRefresh = String(url.searchParams.get("healthRefresh") || "").trim() === "1";
+  const funnelDays = clampInt(url.searchParams.get("days"), 7, 90, 28);
 
   const adminView = view === "user" ? "user" : view === "generation" ? "generation" : view === "suno" ? "providers" : view;
   const admin = await verifyAdmin(req, { view: adminView === "session" ? null : adminView });
@@ -3080,10 +3098,12 @@ module.exports = async function handler(req, res) {
       payload = { ...payload, ...(await getSingers(limit, offset)) };
     } else if (view === "providers" || view === "suno") {
       payload = { ...payload, ...(await getProvidersPanel({ forceHealth: healthRefresh })) };
+    } else if (view === "funnel") {
+      payload.funnel = await fetchWebFunnelSummary({ days: funnelDays });
     } else {
       return sendJson(res, 400, {
         error: "Unknown view",
-        allowed: ["session", "settings", "overview", "providers", "users", "user", "credits", "promos", "singers", "generations", "generation", "subscriptions", "billing", "publications", "suno"],
+        allowed: ["session", "settings", "overview", "providers", "users", "user", "credits", "promos", "singers", "generations", "generation", "subscriptions", "billing", "publications", "suno", "funnel"],
       });
     }
     return sendJson(res, 200, payload);

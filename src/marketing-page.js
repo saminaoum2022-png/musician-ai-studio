@@ -1125,8 +1125,40 @@
     });
   }
 
+  function wireMarketingAnalytics() {
+    document.addEventListener("click", function (e) {
+      var track = window.trackNabad;
+      if (typeof track !== "function") return;
+      var appStore = e.target.closest('a[href*="apps.apple.com"], a[href*="itunes.apple.com"]');
+      if (appStore) {
+        track("nabad_app_store_click", { page: PAGE, placement: "badge", locale: LOCALE });
+        return;
+      }
+      var blogCta = e.target.closest(".blogPostCta, [data-mk='blog.cta']");
+      if (blogCta) {
+        track("nabad_blog_cta_click", { page: PAGE, slug: PAGE, locale: LOCALE });
+        return;
+      }
+      var cta = e.target.closest(
+        "[data-mk='hero.cta'], [data-mk='final.cta'], [data-mk='pricing.free.cta'], " +
+        "[data-mk='pricing.pro.cta'], [data-mk='discover.cta'], [data-mk='templates.cta'], " +
+        "[data-mk='collab.ctaPrimary'], [data-mk='collab.ctaSecondary']",
+      );
+      if (cta) {
+        var placement = cta.getAttribute("data-mk") || "cta";
+        track("nabad_cta_click", { page: PAGE, placement: placement, locale: LOCALE });
+        return;
+      }
+      var appLink = e.target.closest('a[href*="/app/"]');
+      if (appLink && !appStore) {
+        track("nabad_cta_click", { page: PAGE, placement: "app_link", locale: LOCALE });
+      }
+    }, true);
+  }
+
   fetchHeroMeta();
   initScrollReveal();
+  wireMarketingAnalytics();
   document.addEventListener("visibilitychange", function () {
     if (document.hidden) stopCarouselPreview();
   });

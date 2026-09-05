@@ -22,6 +22,7 @@ import {
   readStripeCheckoutResultFromHash,
   clearStripeCheckoutQueryFromHash,
 } from "./billing/stripe.js";
+import { trackNabad } from "./analytics.js";
 
 /** @type {{ showToast?: (msg: string, opts?: object) => void, isLoggedIn?: () => boolean, isNativeIos?: () => boolean, navigateToRoute?: (route: string) => void, getProState?: () => { active?: boolean, planId?: string|null, status?: string|null, periodEnd?: string|null, provider?: string|null }, reconcilePro?: () => Promise<void> } | null} */
 let _deps = null;
@@ -502,6 +503,14 @@ async function handleSubscribeClick() {
     btn.textContent = native ? "Opening…" : "Redirecting…";
   }
   try {
+    if (plan.trialDays > 0) {
+      try {
+        trackNabad("nabad_pro_trial_start", {
+          plan: String(plan.id || "").slice(0, 32),
+          provider: webStripe ? "stripe" : "apple",
+        });
+      } catch {}
+    }
     if (webStripe) {
       await startStripeCheckout(plan.id, {
         getAuthToken: _deps?.getAuthToken,

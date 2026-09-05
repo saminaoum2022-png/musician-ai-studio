@@ -69,6 +69,7 @@ import {
   shouldShowOnboardingForUser,
   shouldSkipIntroOrOnboardingRoute,
 } from "./onboarding.js";
+import { trackNabad } from "./analytics.js";
 import {
   initMusicPreferences,
   isMusicPreferencesComplete,
@@ -245,7 +246,7 @@ import { DISCOVER_SHOW_PLAY_COUNTS, MUSIC_VIDEO_FEATURE_ENABLED } from "./featur
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260905-173619";
+const APP_BUILD = "20260905-183229";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -4296,6 +4297,7 @@ function syncRoutePanelVisibility(wanted) {
   if (route !== "auth") clearAuthKeyboardInset();
   document.body.setAttribute("data-route", route);
   try { document.body.dataset.route = route; } catch {}
+  try { trackRouteView(route); } catch {}
   document.body.classList.toggle("isIntro", route === "intro");
   document.body.classList.toggle("isOnboarding", route === "onboarding");
   document.body.classList.toggle("isAuth", route === "auth");
@@ -16098,6 +16100,12 @@ async function finishPostAuthNavigation() {
     scheduleApplyRoute();
   }
   void ensureAuthBoot({ force: true, fast: true });
+  if (postAuthUid) {
+    if (!_skipNextSigninTrack) {
+      try { trackNabad("nabad_signin_complete", { method: _authMethodPending || "email" }); } catch {}
+    }
+    _skipNextSigninTrack = false;
+  }
   void (async () => {
     try {
       const cloud = await supabaseLoadProfile();
@@ -27562,6 +27570,8 @@ async function refreshMyCredits({ silent = false } = {}) {
         `Welcome to NabadAi — ${welcomeGranted} free credits added. Start creating!`,
         { durationMs: 4200 },
       );
+      try { trackNabad("nabad_signup_complete", { method: _authMethodPending || "email" }); } catch {}
+      _skipNextSigninTrack = true;
     }
     paintCreditsAccountEmail(d?.email);
     if (els.creditsAdminCard) {
@@ -28274,6 +28284,35 @@ function resetProfileUiToGuest() {
   try { syncProfilePersonaAvatarBadge(); } catch {}
 }
 let _authEmailMode = "signin";
+let _authMethodPending = "email";
+let _skipNextSigninTrack = false;
+let _lastAnalyticsRoute = "";
+
+function setAuthMethodPending(method) {
+  _authMethodPending = String(method || "email").trim().slice(0, 32) || "email";
+}
+
+function trackRouteView(route) {
+  const r = String(route || "").trim();
+  if (!r || r === _lastAnalyticsRoute) return;
+  _lastAnalyticsRoute = r;
+  try { trackNabad("nabad_route_view", { route: r }); } catch {}
+  if (r === "pro") {
+    try { trackNabad("nabad_pro_view", { route: r }); } catch {}
+  }
+}
+
+function trackFirstGenerateOnce(mode) {
+  const modeLabel = String(mode || "song").trim().slice(0, 40) || "song";
+  try {
+    const key = "nabad_tracked_first_gen:v1";
+    if (sessionStorage.getItem(key) === "1") return;
+    sessionStorage.setItem(key, "1");
+    trackNabad("nabad_first_generate", { mode: modeLabel });
+  } catch {
+    try { trackNabad("nabad_first_generate", { mode: modeLabel }); } catch {}
+  }
+}
 let _authEmailSubmitInFlight = false;
 
 const TERMS_ACCEPTED_LS_KEY = "nabad_terms_accepted_v1";
@@ -28821,6 +28860,7 @@ async function runEmailPasswordAuth() {
     return;
   }
 
+  setAuthMethodPending("email");
   setAuthEmailSubmitting(true);
   setAuthEmailMessage("");
   beginLoginSettling(_authEmailMode === "signup" ? "Creating your account…" : "Signing you in…");
@@ -36817,12 +36857,24 @@ function startCoachSignupTopicFlow(topicId, customLabel = "") {
     songTitleSkipped: false,
   });
   saveCoachSignupFlow(flow);
+  try {
+    trackNabad("nabad_song_plan_start", {
+      path: String(flow.path || "vibe").slice(0, 40),
+      topic: String(topic).slice(0, 40),
+    });
+  } catch {}
   askCoachSignupLanguageStep({ topic });
 }
 function finishCoachSignupFlow({ hasLyrics = false } = {}) {
   const flow = loadCoachSignupFlow();
   const uid = String(authSession?.user?.id || "").trim();
   if (!flow || !uid) return;
+  try {
+    trackNabad("nabad_song_plan_complete", {
+      path: String(flow.path || "vibe").slice(0, 40),
+      topic: String(flow.topic || "").slice(0, 40),
+    });
+  } catch {}
   saveCoachSignupFlow(null);
   markFirstSongActivationDone(uid);
   clearCoachSignupUnread(uid);
@@ -37037,6 +37089,7 @@ function ensureSignupCoachWelcome(userId = authSession?.user?.id) {
   chat = [coachSignupWelcomeMessage(), ...chat];
   saveCoachChat(chat);
   setCoachSignupUnread(true, uid);
+  try { trackNabad("nabad_coach_welcome_open", { source: "signup" }); } catch {}
   return true;
 }
 function trySignupCoachWelcomeAfterAuth(userId = authSession?.user?.id) {
@@ -45811,6 +45864,7 @@ async function setLibraryTrackPublicOnProfile(trackId, wantPublic, opts = {}) {
   void refreshOwnerPublicPostsCache({ force: true });
   if (next.publicOnProfile) {
     if (!track.publicOnProfile) {
+      try { trackNabad("nabad_discover_publish", { source: "profile" }); } catch {}
       notifyPublicSongPublished(next);
       const remixOf = remixAttributionForTrack(next);
       const remixCloudId = trackCloudShareId(next);
@@ -62707,6 +62761,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       els.btnSunoStems.disabled = true;
       if (els.btnSunoMultiStems) els.btnSunoMultiStems.disabled = true;
       setProgress(5);
+      try { trackFirstGenerateOnce(modeLabel); } catch {}
 
       applyMaqamToStyleInput();
       try { applyLyricsLanguageToDialect(); } catch {}
@@ -67688,6 +67743,7 @@ async function runOAuthLogin(provider) {
     return;
   }
   try {
+    setAuthMethodPending(provider);
     setOAuthGateBusy(provider, true);
     notifyLoginFeedback(`Opening ${label} sign-in…`);
     try {
@@ -67736,6 +67792,7 @@ async function runNativeAppleLogin() {
   });
   const idToken = String(result?.response?.identityToken || "").trim();
   if (!idToken) throw new Error("Apple did not return an identity token");
+  setAuthMethodPending("apple");
   beginLoginSettling("Finishing Apple sign in…");
   const ok = await exchangeAppleIdTokenForSession(idToken);
   if (!ok) throw new Error(lastAuthDebug || "Apple token exchange failed");

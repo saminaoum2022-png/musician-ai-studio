@@ -2396,9 +2396,7 @@ body.isBusy[data-route="profile"] .loadingBar{
   content:"";
   width: min(31vw, 143px);
   aspect-ratio: 1 / 1;
-  background:
-    radial-gradient(78% 78% at 50% 50%, rgba(124,92,255,0.10), transparent 70%),
-    url("./assets/icons/splash-mark.png") center / contain no-repeat;
+  background: url("./assets/icons/splash-mark.png") center / contain no-repeat;
   pointer-events:none;
 }
 .introHero.entering{
@@ -3764,6 +3762,10 @@ body.oauthPending .app{
   background: #05070d;
 }
 
+body.loginSettling{
+  background: #05070d;
+}
+
 .loginSettlingOverlay{
   position: fixed;
   inset: 0;
@@ -3772,9 +3774,7 @@ body.oauthPending .app{
   align-items: center;
   justify-content: center;
   padding: env(safe-area-inset-top) 24px env(safe-area-inset-bottom);
-  background:
-    radial-gradient(90% 70% at 50% 0%, rgba(124,92,255,0.16), transparent 62%),
-    #05070d;
+  background: #05070d;
   box-sizing: border-box;
 }
 .loginSettlingOverlay[hidden]{ display: none !important; }
@@ -51170,9 +51170,7 @@ body[data-route="studio"] .deskRail { display: none !important; }
   html.is-web-shell body.isMusicPrefs .musicPrefsScreen{
     width: 100%;
     min-height: 100%;
-    background:
-      radial-gradient(90% 70% at 50% 0%, rgba(124,92,255,0.16), transparent 62%),
-      #05070d !important;
+    background: #05070d !important;
   }
   html.is-web-shell body.isAuth .authInner{
     max-width: 420px;

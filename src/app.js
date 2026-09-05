@@ -81,8 +81,16 @@ import {
   profileMusicStylesAriaLine,
   profileMusicStylesDisplaySlice,
   PROFILE_MUSIC_STYLES_DISPLAY_MAX,
-  shouldShowMusicPreferencesScreen,
 } from "./music-preferences.js";
+import {
+  initFirstSong,
+  onFirstSongRouteActive,
+  shouldShowFirstSongActivation,
+  clearFirstSongPendingGeneration,
+  isFirstSongPendingGeneration,
+  openFirstSongPreview,
+  resetFirstSongActivation,
+} from "./first-song.js";
 import {
   configureCoverArt,
   ensureAbstractCoverForTrack,
@@ -837,8 +845,8 @@ const els = {
   activityStatus: document.getElementById("activityStatus"),
   activityLoadMore: document.getElementById("activityLoadMore"),
   activityTabLink: document.querySelector('.mobileTabbar [data-route-link="activity"]'),
-  friendsTabLink: document.querySelector('.mobileTabbar [data-route-link="friends"]'),
-  friendsTabBadge: document.getElementById("friendsTabBadge"),
+  friendsTabLink: document.querySelector('.mobileTabbar [data-route-link="messages"]'),
+  friendsTabBadge: document.getElementById("messagesTabBadge"),
   mashupPage: document.getElementById("mashupPage"),
   mashupLead: document.getElementById("mashupLead"),
   mashupSlotA: document.getElementById("mashupSlotA"),
@@ -3229,6 +3237,12 @@ const TAB_REFRESH_ACTIONS = {
       void refreshDiscoveryFollowingFeed();
     } catch (e) { console.warn("[tabRefresh/friends]", e); }
   },
+  messages(opts = {}) {
+    try {
+      bindMessagesPageOnce();
+      enterMessagesRoute({ fromThread: Boolean(opts.fromThread) });
+    } catch (e) { console.warn("[tabRefresh/messages]", e); }
+  },
   mentor() {
     resetMentorSession();
   },
@@ -3276,6 +3290,7 @@ function makeRefreshGate() {
 const _routeRefreshGate = {
   discover: makeRefreshGate(),
   friends: makeRefreshGate(),
+  messages: makeRefreshGate(),
   profile: makeRefreshGate(),
   activity: makeRefreshGate(),
 };
@@ -3284,6 +3299,7 @@ function isRouteRefreshInFlight(route) {
   const gate = _routeRefreshGate[route];
   if (gate?.inFlight) return true;
   if (route === "friends" && _friendsFeedRefreshInFlight) return true;
+  if (route === "messages" && (_messagesInboxLoading || _messagesInboxRefreshing)) return true;
   if (route === "discover" && _discoverFeedRefreshInFlight) return true;
   if (route === "activity" && _activityFeedState.loading) return true;
   return false;
@@ -3404,7 +3420,7 @@ function exitAltCreateFlowToHub() {
   flushTabRouteNavigation("challenges", "#/challenges");
 }
 
-const MOBILE_TAB_LIGHTWEIGHT = new Set(["discover", "friends", "challenges", "activity", "profile"]);
+const MOBILE_TAB_LIGHTWEIGHT = new Set(["discover", "messages", "challenges", "activity", "profile"]);
 /** Sub-screens opened from profile chrome — instant swap, no full applyRoute replay. */
 const SECONDARY_ROUTE_LIGHTWEIGHT = new Set(["settings", "credits", "profile-edit", "pro"]);
 let _secondaryNavFromClick = false;
@@ -3640,14 +3656,24 @@ function finishTabRouteEnter(route, prevRoute) {
 
   if (wanted === "discover") {
     kickDiscoverFeedRoute({ deferFetch: true });
-  } else if (wanted === "friends") {
-    bindFriendsPageOnce();
-    wireFriendsComposeFabOnce();
-    syncFollowingComposeUi();
-    hydrateFriendsFeedSnapshotFromStorage();
-    if (MESSAGES_FEATURE_ENABLED) syncFriendsMessagesBtn();
-    paintFriendsFeedSnapshotIfFresh();
-    deferRouteIdle(() => enterFriendsRoute());
+  } else if (wanted === "messages") {
+    bindMessagesPageOnce();
+    const backBtn = document.getElementById("messagesBackBtn");
+    if (backBtn) backBtn.hidden = true;
+    loadMessagesInboxFromStorage();
+    const hasCache = messagesInboxHasCachedData();
+    if (hasCache) {
+      renderMessagesInbox();
+      restoreRouteScroll("messages");
+      markRouteHeavy("messages");
+      deferRouteIdle(() => {
+        startMessagesInboxPoll();
+        startMessagesInboxRealtime();
+        if (!shouldSkipRouteHeavy("messages")) void loadMessagesInbox({ silent: true });
+      });
+    } else {
+      enterMessagesRoute({ fromThread: false });
+    }
   } else if (wanted === "activity") {
     bindActivityPageOnce();
     const hasActivityCache = _activityFeedState.items.length > 0 || paintActivityFeedSnapshotIfFresh();
@@ -3671,10 +3697,10 @@ function finishTabRouteEnter(route, prevRoute) {
   deferRouteIdle(() => {
     if (!authSession?.user?.id) return;
     wireNotificationsLiveRefreshOnce();
-    void refreshNotificationsUnreadBadge({ force: wanted === "friends" || wanted === "activity" });
+    void refreshNotificationsUnreadBadge({ force: wanted === "activity" || wanted === "messages" });
     if (MESSAGES_FEATURE_ENABLED) {
       prefetchMessagesInboxQuiet();
-      void refreshMessagesUnreadBadge({ force: wanted === "friends" });
+      void refreshMessagesUnreadBadge({ force: wanted === "messages" });
     }
   }, 180);
 
@@ -3744,7 +3770,7 @@ function createTabMorphTapPending(tabLink) {
 
 function resolveMobileTabTap(a) {
   const linkRoute = tabBarRouteKey(a.getAttribute("data-route-link") || "");
-  if (!TAB_REFRESH_ACTIONS[linkRoute]) return null;
+  if (!TAB_REFRESH_ACTIONS[linkRoute] && !NAV_TAB_ROOTS.has(linkRoute)) return null;
   const href = String(a.getAttribute("href") || `#/${linkRoute}`).trim();
   let targetHash = href.startsWith("#") ? href : `#/${href.replace(/^#?\/?/, "")}`;
   let route = linkRoute;
@@ -4149,10 +4175,10 @@ function resolveEmptyHashRoute() {
   const uid = String(authSession?.user?.id || "").trim();
   if (isAppLoggedIn() || getSupabaseAuthToken()) {
     if (uid && shouldShowOnboardingForUser(uid)) return "onboarding";
-    return "discover";
+    return DEFAULT_LOGGED_IN_ROUTE;
   }
   if (!shouldSkipIntroOrOnboardingRoute()) return "onboarding";
-  if (isGuestModeEnabled()) return "discover";
+  if (isGuestModeEnabled()) return DEFAULT_LOGGED_IN_ROUTE;
   return "auth";
 }
 
@@ -4162,7 +4188,7 @@ function redirectToOnboardingIfNeeded() {
   const uid = String(authSession?.user?.id || "").trim();
   if (!uid || !shouldShowOnboardingForUser(uid)) return false;
   const route = String(location.hash || "").replace(/^#\/?/, "").split(/[?#&]/)[0] || "";
-  if (route === "onboarding" || route.startsWith("onboarding/") || route === "music-preferences") {
+  if (route === "onboarding" || route.startsWith("onboarding/") || route === "music-preferences" || route === "first-song") {
     return false;
   }
   if (route === "player" && parseSharedTrackIdFromLocation()) return false;
@@ -4236,12 +4262,15 @@ function syncRoutePanelVisibility(wanted) {
   document.body.classList.toggle("isOnboarding", route === "onboarding");
   document.body.classList.toggle("isAuth", route === "auth");
   document.body.classList.toggle("isMusicPrefs", route === "music-preferences");
+  document.body.classList.toggle("isFirstSong", route === "first-song");
   const flow = getCreateFlow();
   document.querySelectorAll("[data-route]").forEach((el) => {
     const key = el.getAttribute("data-route");
     let show = key === route;
     if (route === "generate" && flow === "sounds" && key === "sounds") show = true;
-    if (show && (route === "onboarding" || route === "music-preferences")) {
+    if (show && (route === "onboarding" || route === "music-preferences" || route === "first-song")) {
+      el.hidden = false;
+      el.setAttribute("aria-hidden", "false");
       el.style.display = "flex";
     } else {
       el.style.display = show ? "" : "none";
@@ -4256,8 +4285,8 @@ function syncRoutePanelVisibility(wanted) {
       || (route === "mashup" && link === "challenges")
       || (route === "vocal" && link === "challenges");
     a.classList.toggle("active", active
-      || (route === "messages" && link === "friends")
-      || (route === "messages-thread" && link === "friends"));
+      || (route === "messages" && link === "messages")
+      || (route === "messages-thread" && link === "messages"));
   });
   try { syncDeskRailVisibility(); } catch {}
   try { syncDeskCoachPanel(); } catch {}
@@ -4267,7 +4296,7 @@ function syncRoutePanelVisibility(wanted) {
 function routeApplyFallback(err) {
   console.error("[route] applyRoute failed", err);
   try { scheduleBootSplashFinish(); } catch {}
-  const fb = authSession?.user?.id ? "discover" : "auth";
+  const fb = authSession?.user?.id ? DEFAULT_LOGGED_IN_ROUTE : "auth";
   syncRoutePanelVisibility(fb);
   document.body.classList.remove("pageTransitioning");
   const main = document.querySelector("main.grid");
@@ -4324,7 +4353,7 @@ function tabBarRouteKey(route = "") {
   const r = String(route || "").trim();
   if (r === "generate" || r === "mashup" || r === "vocal") return "challenges";
   if (r === "discover-playlist") return "discover";
-  if (r === "messages" || r === "messages-thread") return "friends";
+  if (r === "messages" || r === "messages-thread") return "messages";
   return r;
 }
 
@@ -4333,10 +4362,12 @@ function tabBarRouteKey(route = "") {
 // from the left, and lateral bottom-tab switches use a soft fade. We animate the
 // individual [data-route] panel — never main.grid, because transforming
 // main.grid breaks iOS touch handling on fixed overlays (mini-player, tab bar).
-const NAV_TAB_ROOTS = new Set(["discover", "friends", "challenges", "activity", "profile"]);
+const NAV_TAB_ROOTS = new Set(["discover", "messages", "challenges", "activity", "profile"]);
+/** Default landing after login / cold open (Create tab). */
+const DEFAULT_LOGGED_IN_ROUTE = "challenges";
 // Screens that run their own bespoke transition or appear at boot/auth and
 // should not get the generic slide/fade.
-const NAV_ANIM_SKIP = new Set(["messages-thread", "auth", "intro", "onboarding", "music-preferences", "pro", "settings", "credits", "profile-edit"]);
+const NAV_ANIM_SKIP = new Set(["messages-thread", "auth", "intro", "onboarding", "music-preferences", "first-song", "pro", "settings", "credits", "profile-edit"]);
 let _navStack = [];
 
 function navPrefersReducedMotion() {
@@ -4439,9 +4470,9 @@ function previewRouteFromHash(hash = "") {
   if (/^u\//.test(route)) return "user";
   if (route === "search" || /^discover\/playlist\//i.test(route)) return "discover";
   const aliases = {
-    home: "discover",
-    hub: "discover",
-    start: "discover",
+    home: DEFAULT_LOGGED_IN_ROUTE,
+    hub: DEFAULT_LOGGED_IN_ROUTE,
+    start: DEFAULT_LOGGED_IN_ROUTE,
     sparks: "challenges",
     moment: "friends",
     notifications: "activity",
@@ -4584,7 +4615,7 @@ function applyRoute({ passGen } = {}) {
     }
   }
   const allowedRoutes = new Set([
-    "intro", "onboarding", "music-preferences", "start", "auth", "generate",
+    "intro", "onboarding", "music-preferences", "first-song", "start", "auth", "generate",
     ...(HUB_FEATURE_ENABLED ? ["hub"] : []),
     ...(MESSAGES_FEATURE_ENABLED ? ["messages", "messages-thread"] : []),
     "settings", "profile", "profile-edit", "player", "discover", "discover-playlist", "friends", "challenges", "activity", "mashup", "mentor", "vocal", "stems", "studio", "nabad-producer", "advanced", "user", "credits", "pro", "sounds", "singer-studio",
@@ -4597,8 +4628,9 @@ function applyRoute({ passGen } = {}) {
   } else if (normalized === "discover") {
     try {
       if (sessionStorage.getItem(DISCOVERY_SEGMENT_KEY) === "following") {
-        history.replaceState(null, "", "#/friends");
-        normalized = "friends";
+        _discoverFeedTab = "friends";
+        sessionStorage.setItem(DISCOVER_FEED_TAB_KEY, "friends");
+        sessionStorage.setItem(DISCOVERY_SEGMENT_KEY, "for-you");
       }
     } catch {}
   }
@@ -4608,9 +4640,11 @@ function applyRoute({ passGen } = {}) {
     try { sessionStorage.setItem(PROFILE_SONGS_SEGMENT_KEY, "all"); } catch {}
     _profileSongsSegment = "all";
   }
-  if (normalized === "moment") {
-    try { history.replaceState(null, "", "#/friends"); } catch {}
-    normalized = "friends";
+  if (normalized === "moment" || normalized === "friends") {
+    try { sessionStorage.setItem(DISCOVER_FEED_TAB_KEY, "friends"); } catch {}
+    _discoverFeedTab = "friends";
+    try { history.replaceState(null, "", "#/discover"); } catch {}
+    normalized = "discover";
   }
   if (normalized === "sparks") {
     try { history.replaceState(null, "", "#/challenges"); } catch {}
@@ -4642,14 +4676,14 @@ function applyRoute({ passGen } = {}) {
     const needsOnboarding = uid && shouldShowOnboardingForUser(uid);
     if (hasAuthToken || isLoggedIn) {
       if (wanted === "auth" || wanted === "intro") {
-        wanted = needsOnboarding ? "onboarding" : "discover";
+        wanted = needsOnboarding ? "onboarding" : DEFAULT_LOGGED_IN_ROUTE;
         try {
           history.replaceState(null, "", `#/${wanted}`);
         } catch {}
       } else if (wanted === "onboarding" && !needsOnboarding && shouldSkipIntroOrOnboardingRoute(uid)) {
-        wanted = "discover";
+        wanted = DEFAULT_LOGGED_IN_ROUTE;
         try {
-          history.replaceState(null, "", "#/discover");
+          history.replaceState(null, "", `#/${DEFAULT_LOGGED_IN_ROUTE}`);
         } catch {}
       }
     } else if (wanted !== "auth") {
@@ -4662,19 +4696,19 @@ function applyRoute({ passGen } = {}) {
   // Keychain/session often loads after first paint — never keep a signed-in user on #/auth.
   if (wanted === "auth" && (isLoggedIn || hasAuthToken)) {
     const uid = String(authSession?.user?.id || "").trim();
-    wanted = uid && shouldShowOnboardingForUser(uid) ? "onboarding" : "discover";
+    wanted = uid && shouldShowOnboardingForUser(uid) ? "onboarding" : DEFAULT_LOGGED_IN_ROUTE;
     try {
       history.replaceState(null, "", `#/${wanted}`);
     } catch {}
   }
   if (wanted === "intro") {
-    wanted = isLoggedIn ? "discover" : "auth";
+    wanted = isLoggedIn ? DEFAULT_LOGGED_IN_ROUTE : "auth";
     try {
       history.replaceState(null, "", `#/${wanted}`);
     } catch {}
   }
   if (shouldSkipIntroOrOnboardingRoute(authSession?.user?.id) && wanted === "onboarding") {
-    wanted = isLoggedIn ? "discover" : "auth";
+    wanted = isLoggedIn ? DEFAULT_LOGGED_IN_ROUTE : "auth";
     try {
       history.replaceState(null, "", `#/${wanted}`);
     } catch {}
@@ -4683,8 +4717,12 @@ function applyRoute({ passGen } = {}) {
     wanted = "auth";
     try { history.replaceState(null, "", "#/auth"); } catch {}
   }
+  if (wanted === "first-song" && !isLoggedIn && !hasAuthToken) {
+    wanted = "auth";
+    try { history.replaceState(null, "", "#/auth"); } catch {}
+  }
   if (!HUB_FEATURE_ENABLED && normalized === "hub") {
-    wanted = isLoggedIn ? "discover" : "auth";
+    wanted = isLoggedIn ? DEFAULT_LOGGED_IN_ROUTE : "auth";
     try {
       history.replaceState(null, "", `#/${wanted}`);
     } catch {}
@@ -4842,6 +4880,9 @@ function applyRoute({ passGen } = {}) {
   }
   if (wanted === "music-preferences") {
     try { onMusicPreferencesRouteActive(); } catch {}
+  }
+  if (wanted === "first-song") {
+    try { onFirstSongRouteActive(); } catch {}
   }
 
   try {
@@ -5111,21 +5152,11 @@ function applyRoute({ passGen } = {}) {
   }
   if (wanted === "friends") {
     try { onLeaveSearchRoute(); } catch {}
-    bindFriendsPageOnce();
-    wireFriendsComposeFabOnce();
-    syncFollowingComposeUi();
-    hydrateFriendsFeedSnapshotFromStorage();
-    if (MESSAGES_FEATURE_ENABLED) syncFriendsMessagesBtn();
-    if (isTabSwitch) paintFriendsFeedSnapshotIfFresh();
-    if (!shouldSkipRouteHeavy("friends")) {
-      markRouteHeavy("friends");
-      if (isTabSwitch) deferRouteIdle(() => enterFriendsRoute());
-      else enterFriendsRoute();
-    } else {
-      paintFriendsFeedSnapshotIfFresh();
-      restoreRouteScroll("friends");
-      markRouteHeavy("friends");
-    }
+    try { sessionStorage.setItem(DISCOVER_FEED_TAB_KEY, "friends"); } catch {}
+    _discoverFeedTab = "friends";
+    try { history.replaceState(null, "", "#/discover"); } catch {}
+    syncRoutePanelVisibility("discover");
+    kickDiscoverFeedRoute({ deferFetch: isTabSwitch });
   }
   if (MESSAGES_FEATURE_ENABLED && wanted === "messages") {
     bindMessagesPageOnce();
@@ -5286,6 +5317,7 @@ function setLyricsInputMode(mode, opts = {}) {
   }
   syncLyricsPlaceholder();
   try { syncArabicLyricsControlsVisibility(); } catch {}
+  try { syncCreateTabMorph(); } catch {}
   // Brief cross-fade of the textarea so the intent change feels smooth.
   if (!opts.silent && els.lyricsFieldPanel && els.sunoPrompt) {
     els.lyricsFieldPanel.classList.add("lyricsModeSwitching");
@@ -6004,7 +6036,7 @@ try {
   initOnboarding({
     getAuthSession: () => authSession,
     applyRoute,
-    shouldShowMusicPreferences: () => shouldShowMusicPreferencesScreen(authSession?.user?.id, activeProfile),
+    shouldShowFirstSong: () => shouldShowFirstSongActivation(authSession?.user?.id),
   });
 } catch (e) {
   console.error("[onboarding] init failed", e);
@@ -6155,6 +6187,26 @@ try {
 } catch (e) {
   console.error("[music-prefs] init failed", e);
 }
+try {
+  initFirstSong({
+    getUserId: () => String(authSession?.user?.id || activeProfile?.id || "").trim(),
+    getCreditsBalance: () => Number(creditsState.balance || 0),
+    formatCreditsAmount,
+    launchFirstSongActivation,
+    applyRoute,
+    haptic,
+    showToast,
+  });
+} catch (e) {
+  console.error("[first-song] init failed", e);
+}
+document.getElementById("btnSettingsPreviewFirstSong")?.addEventListener("click", (e) => {
+  e.preventDefault();
+  const uid = String(authSession?.user?.id || "").trim();
+  if (!uid || !creditsState.isAdmin) return;
+  resetFirstSongActivation(uid);
+  openFirstSongPreview();
+});
 const btnSettingsMusicPrefs = document.getElementById("btnSettingsMusicPrefs");
 if (btnSettingsMusicPrefs) {
   btnSettingsMusicPrefs.addEventListener("click", (e) => {
@@ -9233,6 +9285,19 @@ function kickDiscoverFeedRoute({ deferFetch = false } = {}) {
   bindDiscoveryDiscoverControls();
   bindDiscoverPlaylistScreenOnce();
   bindDiscoverWeeklyChartSectionOnce();
+  syncDiscoverFriendsFeedChrome();
+  if (_discoverFeedTab === "friends") {
+    bindFriendsPageOnce();
+    wireFriendsComposeFabOnce();
+    syncFollowingComposeUi();
+    hydrateFriendsFeedSnapshotFromStorage();
+    paintFriendsFeedTabsActive();
+    paintFriendsFeedSnapshotIfFresh();
+    markRouteHeavy("discover");
+    if (deferFetch) deferRouteIdle(() => enterFriendsRoute());
+    else enterFriendsRoute();
+    return;
+  }
   const discoverMount = document.getElementById("discoverFeedMount");
   const discoverMountEmpty = !discoverMount?.innerHTML?.trim();
   const canSkipDiscoverNetwork =
@@ -9521,7 +9586,7 @@ function syncCoachFabHeaderMount() {
   const route = String(document.body.getAttribute("data-route") || "");
   const slotKey =
     route === "discover"
-      ? "discover"
+      ? (_discoverFeedTab === "friends" ? "friends" : "discover")
       : route === "friends"
         ? "friends"
         : route === "challenges" || route === "generate"
@@ -10252,6 +10317,7 @@ function discoverCommunityPicksTracks(tracks) {
 
 const DISCOVER_FEED_TABS = [
   { id: "for-you", label: "For You" },
+  { id: "friends", label: "Friends" },
   { id: "templates", label: "Templates" },
   { id: "challenges", label: "Challenges" },
   { id: "remixes", label: "Remixes" },
@@ -11204,6 +11270,34 @@ function renderDiscoverFeedForYou(tracks, profMap) {
     ${suggestedFollowBlock}`;
 }
 
+function isFriendsFeedSurface() {
+  const route = String(document.body.getAttribute("data-route") || "");
+  return route === "friends" || (route === "discover" && _discoverFeedTab === "friends");
+}
+
+function syncDiscoverFriendsFeedChrome() {
+  const panel = document.getElementById("discoverFriendsPanel");
+  const mount = document.getElementById("discoverFeedMount");
+  const feedStatus = document.getElementById("discoveryFeedStatus");
+  const onFriends = _discoverFeedTab === "friends";
+  document.body.classList.toggle(
+    "friendsFeedActive",
+    onFriends && String(document.body.getAttribute("data-route") || "") === "discover",
+  );
+  if (panel) {
+    panel.hidden = !onFriends;
+    panel.setAttribute("aria-hidden", onFriends ? "false" : "true");
+  }
+  if (mount) {
+    mount.hidden = onFriends;
+    mount.setAttribute("aria-hidden", onFriends ? "true" : "false");
+  }
+  if (feedStatus) feedStatus.hidden = onFriends;
+  if (onFriends) {
+    try { syncCoachFabHeaderMount(); } catch {}
+  }
+}
+
 function renderDiscoverFeedTabPanel(tab, tracks, profMap) {
   if (tab === "for-you") return renderDiscoverFeedForYou(tracks, profMap);
   if (tab === "challenges") {
@@ -11244,6 +11338,17 @@ function renderDiscoverFeed(tracks, profMap, tab = _discoverFeedTab) {
   }
   rebuildDiscoveryChallengeBuckets(tracks);
   paintDiscoverFeedTabsActive(_discoverFeedTab);
+  syncDiscoverFriendsFeedChrome();
+  if (_discoverFeedTab === "friends") {
+    bindFriendsPageOnce();
+    wireFriendsComposeFabOnce();
+    syncFollowingComposeUi();
+    hydrateFriendsFeedSnapshotFromStorage();
+    paintFriendsFeedTabsActive();
+    paintFriendsFeedSnapshotIfFresh();
+    void enterFriendsRoute();
+    return;
+  }
   mount.innerHTML = renderDiscoverFeedTabPanel(_discoverFeedTab, tracks, profMap);
   mount.classList.remove("isLoading");
   mount.removeAttribute("aria-busy");
@@ -13967,7 +14072,7 @@ function observeFriendsFeedLoadMore(listEl) {
   _friendsFeedLoadMoreObserver = new IntersectionObserver(
     (entries) => {
       if (!entries.some((e) => e.isIntersecting)) return;
-      if (String(document.body.getAttribute("data-route") || "") !== "friends") return;
+      if (!isFriendsFeedSurface()) return;
       extendFriendsFeedPage();
     },
     { root: null, rootMargin: "240px 0px", threshold: 0.01 },
@@ -13981,7 +14086,7 @@ function wireFriendsFeedLoadMoreOnce() {
   document.addEventListener("click", (e) => {
     const btn = e.target?.closest?.("#friendsFeedLoadMore");
     if (!btn) return;
-    if (String(document.body.getAttribute("data-route") || "") !== "friends") return;
+    if (!isFriendsFeedSurface()) return;
     e.preventDefault();
     haptic("light");
     extendFriendsFeedPage();
@@ -15563,6 +15668,127 @@ function clearCreateChallengeFocus() {
   });
 }
 
+function scrollFirstSongCreateLangControlsIntoView() {
+  try { syncArabicLyricsControlsVisibility(); } catch {}
+  const langRow = els.lyricsLangRow;
+  const dialectGroup = els.lyricsDialectGroup;
+  if (els.lyricsFieldPanel) {
+    els.lyricsFieldPanel.classList.add("showArabicLyricControls");
+  }
+  window.setTimeout(() => {
+    try {
+      if (langRow) langRow.scrollIntoView({ behavior: "smooth", block: "nearest" });
+      if (dialectGroup && !dialectGroup.hidden) {
+        dialectGroup.scrollIntoView({ behavior: "smooth", block: "nearest" });
+      }
+    } catch {}
+  }, 320);
+}
+
+function ensureFirstSongArabicAddressDefault() {
+  if (els.sunoArabicAddress && !String(els.sunoArabicAddress.value || "").trim()) {
+    els.sunoArabicAddress.value = "male";
+    try { syncArabicAddressPills(); } catch {}
+  }
+}
+
+function openFirstSongGenerateRoute() {
+  try { location.hash = "#/generate"; } catch {}
+  syncRoutePanelVisibility("generate");
+  try { scheduleApplyRoute(); } catch { try { applyRoute(); } catch {} }
+}
+
+function triggerFirstSongLyricsGeneration() {
+  if (typeof _generateLyricsWithMagic === "function") {
+    void _generateLyricsWithMagic();
+    return;
+  }
+  try { els.btnLyricsMagic?.click(); } catch {}
+}
+
+function launchFirstSongActivation({ language, dialect, topic, seed }) {
+  const t = topic && typeof topic === "object" ? topic : {};
+  const topicId = String(t.id || "love").trim();
+  const lang = String(language || "auto").trim().toLowerCase() || "auto";
+  const dialectKey = String(dialect || "").trim().toLowerCase();
+  const dialectVal = LYRICS_ARABIC_DIALECT_VALUE[dialectKey] || "";
+  const dialectHint = LYRICS_ARABIC_DIALECT_HINT[dialectKey] || "";
+
+  try { clearCreateFlow(); } catch {}
+  try { clearCreateChallengeFocus(); } catch {}
+  try { hideCreateResultCards(); } catch {}
+
+  try { setLyricsLanguage(lang); } catch {}
+  if (lang === "arabic" && dialectKey) {
+    try { setLyricsDialect(dialectKey); } catch {}
+  }
+
+  pendingSearchRemixMeta = null;
+  try { clearCreateChallengeContext(); } catch {}
+  try { resetNabadLyricsDraftState(); } catch {}
+  try { setCreateChallengeHint(null); } catch {}
+
+  if (topicId === "custom") {
+    if (els.sunoTitle) els.sunoTitle.value = "";
+    if (els.sunoStyle) els.sunoStyle.value = "";
+    if (els.sunoAvoidTags) els.sunoAvoidTags.value = "";
+    if (els.sunoPrompt) {
+      els.sunoPrompt.value = "";
+      try { autoResizeLyricsBox(); } catch {}
+    }
+    if (els.sunoArtworkStyle) els.sunoArtworkStyle.value = "";
+    try { renderArtworkSuggestions(); } catch {}
+    try { setLyricsInputMode("generate", { silent: true }); } catch {}
+    openFirstSongGenerateRoute();
+    window.setTimeout(() => {
+      try { syncArabicLyricsControlsVisibility(); } catch {}
+      scrollFirstSongCreateLangControlsIntoView();
+    }, 180);
+    return;
+  }
+
+  const s = seed && typeof seed === "object" ? seed : {};
+  const prompt = String(s.prompt || "").trim();
+  const style = String(s.style || "Modern pop, catchy melody, 100 BPM").trim();
+  const title = String(s.title || "My first song").trim();
+  const artworkTags = Array.isArray(s.artworkTags) ? s.artworkTags.filter(Boolean) : [];
+
+  if (els.sunoDialect) els.sunoDialect.value = dialectVal;
+  if (els.sunoDialectHint) els.sunoDialectHint.value = dialectHint;
+  if (els.sunoTitle) els.sunoTitle.value = title;
+  if (els.sunoStyle) els.sunoStyle.value = style;
+  if (els.sunoAvoidTags) els.sunoAvoidTags.value = "";
+  if (els.sunoPrompt) {
+    els.sunoPrompt.value = prompt;
+    try { autoResizeLyricsBox(); } catch {}
+  }
+  if (els.sunoArtworkStyle) els.sunoArtworkStyle.value = "";
+  if (artworkTags.length) {
+    try { writeArtworkTags(artworkTags); } catch {}
+  } else {
+    try { renderArtworkSuggestions(); } catch {}
+  }
+
+  try { setLyricsInputMode("generate", { silent: true }); } catch {}
+  try { syncArabicLyricsControlsVisibility(); } catch {}
+  if (lang === "arabic") ensureFirstSongArabicAddressDefault();
+  try { applyLyricsLanguageToDialect(); } catch {}
+
+  openFirstSongGenerateRoute();
+
+  window.setTimeout(() => {
+    try { syncArabicLyricsControlsVisibility(); } catch {}
+    scrollFirstSongCreateLangControlsIntoView();
+    triggerFirstSongLyricsGeneration();
+  }, 420);
+}
+
+function navigateToFirstSongAfterAuth() {
+  try { location.hash = "#/first-song"; } catch {}
+  syncRoutePanelVisibility("first-song");
+  try { applyRoute(); } catch { scheduleApplyRoute(); }
+}
+
 function isGuestModeEnabled() {
   try { return localStorage.getItem(GUEST_MODE_KEY) === "1"; } catch {}
   return false;
@@ -15781,17 +16007,17 @@ async function finishPostAuthNavigation() {
     }
   }
   if (
-    shouldShowMusicPreferencesScreen(authSession?.user?.id, activeProfile)
-    && !returnHash
-    && !pending
+    postAuthUid &&
+    shouldShowFirstSongActivation(postAuthUid) &&
+    !returnHash &&
+    !pending &&
+    !pendingPushRoute
   ) {
-    try { location.hash = "#/music-preferences"; } catch {}
-    syncRoutePanelVisibility("music-preferences");
-    try { applyRoute(); } catch { scheduleApplyRoute(); }
+    navigateToFirstSongAfterAuth();
     void ensureAuthBoot({ force: true, fast: true });
     return;
   }
-  const target = authSession?.user?.id ? "discover" : "auth";
+  const target = authSession?.user?.id ? DEFAULT_LOGGED_IN_ROUTE : "auth";
   try {
     location.hash = `#/${target}`;
   } catch {}
@@ -18353,7 +18579,7 @@ let _friendsFeedRefreshQueued = false;
 
 function runFriendsRouteRefresh(token) {
   if (token !== _friendsRouteEnterToken) return;
-  if (String(document.body.getAttribute("data-route") || "") !== "friends") return;
+  if (!isFriendsFeedSurface()) return;
   void refreshDiscoveryFollowingFeed();
 }
 
@@ -18434,7 +18660,7 @@ async function enrichFriendsFeedAfterPaint({
       hydrateMashupSourcesForTracks(playable),
     ]);
     if (gen !== _discoveryFollowingGen) return;
-    if (String(document.body.getAttribute("data-route") || "") !== "friends") return;
+    if (!isFriendsFeedSurface()) return;
     const mediaSigAfter = friendsFeedPlayableMediaSig(playable, profMap);
     applyFollowActPlayCountsToDom(listEl, playable, logFriendsFeedPatch);
     if (mediaSigBefore !== mediaSigAfter) {
@@ -18454,7 +18680,7 @@ async function enrichFriendsFeedAfterPaint({
         if (gen !== _discoveryFollowingGen) return;
         const wtfHtml = whoToFollowSectionHtml(suggestList);
         if (!wtfHtml) return;
-        if (String(document.body.getAttribute("data-route") || "") !== "friends") return;
+        if (!isFriendsFeedSurface()) return;
         if (friendsFeedHasMoreVisible()) return;
         if (listEl.querySelector(".friendsWhoToFollow")) return;
         listEl.insertAdjacentHTML("beforeend", wtfHtml);
@@ -18499,7 +18725,7 @@ function wireFriendsComposeFabOnce() {
     (e) => {
       const btn = e.target.closest("#friendsComposeOpenBtn");
       if (!btn) return;
-      if (String(document.body.getAttribute("data-route") || "") !== "friends") return;
+      if (!isFriendsFeedSurface()) return;
       e.preventDefault();
       e.stopPropagation();
       haptic("light");
@@ -18602,7 +18828,7 @@ async function refreshDiscoveryFollowingFeed(opts = {}) {
         _friendsFeedAuthRetry += 1;
         window.setTimeout(() => {
           if (gen !== _discoveryFollowingGen) return;
-          if ((document.body.getAttribute("data-route") || "") !== "friends") return;
+          if (!isFriendsFeedSurface()) return;
           void refreshDiscoveryFollowingFeed();
         }, 200);
         return;
@@ -18946,14 +19172,14 @@ function bindFriendsPageOnce() {
   if (!_friendsStatusMenuDocBound) {
     _friendsStatusMenuDocBound = true;
     document.addEventListener("click", (e) => {
-      if (String(document.body.getAttribute("data-route") || "") !== "friends") return;
+      if (!isFriendsFeedSurface()) return;
       if (e.target.closest(".followActMenuWrap")) return;
       closeAllFollowStatusMenus();
     });
   }
   if (_friendsPageBound) return;
   _friendsPageBound = true;
-  const friendsPage = document.getElementById("friendsPage");
+  const friendsPage = document.getElementById("discoverFriendsPanel") || document.getElementById("friendsPage");
   if (friendsPage && !friendsPage.dataset.boundFriendsPage) {
     friendsPage.dataset.boundFriendsPage = "1";
     wireTrackOptionsSheetOnce();
@@ -24393,6 +24619,8 @@ let lastGenerationMeta = null;
 /** AI lyrics snapshot (✦ magic or auto-draft) — compared at Generate for Creator + Nabad. */
 let _nabadAiLyricsDraft = "";
 let _lyricsGeneratedInNabad = false;
+/** Set by generate-form init; used for first-song auto ✦ lyrics handoff. */
+let _generateLyricsWithMagic = null;
 
 function resetNabadLyricsDraftState() {
   _lyricsGeneratedInNabad = false;
@@ -27267,10 +27495,18 @@ async function refreshMyCredits({ silent = false } = {}) {
     if (els.creditsAdminCard) {
       els.creditsAdminCard.style.display = creditsState.isAdmin ? "" : "none";
     }
+    const firstSongPreviewBtn = document.getElementById("btnSettingsPreviewFirstSong");
+    if (firstSongPreviewBtn) {
+      firstSongPreviewBtn.hidden = !creditsState.isAdmin;
+      firstSongPreviewBtn.style.display = creditsState.isAdmin ? "" : "none";
+    }
     if (creditsState.isAdmin) await refreshAdminCreditsView();
     try { syncSettingsMusicProviderRow(); } catch {}
     try { syncNabadClipHomeCard(); } catch {}
     try { syncNabadProducerHomeCard(); } catch {}
+    if (document.body.getAttribute("data-route") === "first-song") {
+      try { onFirstSongRouteActive(); } catch {}
+    }
   } catch (e) {
     creditsState.lastError = e?.message || String(e);
     paintCreditsAccountEmail(authSession?.user?.email || activeProfile?.email);
@@ -27819,6 +28055,10 @@ async function rehydrateAuthSessionOnForeground({ force = false } = {}) {
 function refreshActiveFeedAfterAuthRehydrate() {
   const route = String(document.body.getAttribute("data-route") || "");
   if (route === "discover") void refreshDiscoverFeed();
+  if (route === "discover" && _discoverFeedTab === "friends") {
+    hydrateFriendsFeedSnapshotFromStorage();
+    void refreshDiscoveryFollowingFeed({ force: true });
+  }
   if (route === "friends") {
     hydrateFriendsFeedSnapshotFromStorage();
     void refreshDiscoveryFollowingFeed({ force: true });
@@ -34165,10 +34405,10 @@ function updateMessagesUnreadBadge(count) {
   }
   try {
     els.friendsTabLink?.classList?.toggle?.("hasNotice", hasUnread);
-    const friendsLabel = hasUnread
-      ? `Friends, ${n} unread ${n === 1 ? "message" : "messages"}`
-      : "Friends";
-    els.friendsTabLink?.setAttribute?.("aria-label", friendsLabel);
+    const tabLabel = hasUnread
+      ? `Messages, ${n} unread ${n === 1 ? "message" : "messages"}`
+      : "Messages";
+    els.friendsTabLink?.setAttribute?.("aria-label", tabLabel);
     if (els.friendsTabBadge) {
       if (!hasUnread) {
         els.friendsTabBadge.hidden = true;
@@ -35820,6 +36060,8 @@ function startMessagesInboxPoll() {
 
 function enterMessagesRoute({ fromThread = false, inboxFilter = "" } = {}) {
   syncFriendsMessagesBtn();
+  const backBtn = document.getElementById("messagesBackBtn");
+  if (backBtn) backBtn.hidden = true;
   const filter = String(inboxFilter || "").trim().toLowerCase();
   if (["all", "requests", "chats"].includes(filter)) {
     _messagesInboxFilter = filter;
@@ -35913,10 +36155,10 @@ function bindMessagesPageOnce() {
       return;
     }
     const backInbox = e.target.closest("#messagesBackBtn");
-    if (backInbox) {
+    if (backInbox && !backInbox.hidden) {
       e.preventDefault();
       try { haptic("light"); } catch {}
-      try { location.hash = "#/friends"; } catch {}
+      try { history.back(); } catch { try { location.hash = "#/messages"; } catch {} }
       return;
     }
     const backThread = e.target.closest("#messagesThreadBackBtn");
@@ -44008,7 +44250,7 @@ async function setLibraryTrackPublicOnProfile(trackId, wantPublic, opts = {}) {
   try {
     const route = String(document.body.getAttribute("data-route") || "");
     if (route === "discover") void refreshDiscoverFeed();
-    if (route === "friends") void refreshDiscoveryFollowingFeed();
+    if (isFriendsFeedSurface()) void refreshDiscoveryFollowingFeed();
     if (route === "profile" && _profileSongsSegment === "activities") void renderProfileActivities();
   } catch {}
   return { ok: true };
@@ -50364,7 +50606,7 @@ function refreshCoverChangeSurfaces(track, coverUrl = "") {
     const route = String(document.body.getAttribute("data-route") || "");
     if (route === "profile" && _profileSongsSegment === "activities") void renderProfileActivities();
     if (route === "discover") void refreshDiscoverFeed();
-    if (route === "friends") void refreshDiscoveryFollowingFeed();
+    if (isFriendsFeedSurface()) void refreshDiscoveryFollowingFeed();
   } catch {}
 }
 async function syncHubCoverForTrack(track, coverUrl) {
@@ -59194,8 +59436,11 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       setLyricsMagicBtnBusy(false);
       if (els.btnLyricsDiacritics) els.btnLyricsDiacritics.disabled = false;
       if (els.btnLyricsPolish) els.btnLyricsPolish.disabled = false;
+      try { syncGenerateOrbVisibility(); } catch {}
+      try { syncCreateTabMorph(); } catch {}
     }
   };
+  _generateLyricsWithMagic = generateLyricsWithMagic;
 
   const polishLyricsWithGemini = async () => {
     if (!els.sunoPrompt) return;
@@ -60560,6 +60805,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
 
   els.btnSunoGenerate.addEventListener("click", async () => {
     haptic("impact");
+    if (isFirstSongPendingGeneration()) clearFirstSongPendingGeneration();
     const actionMode = String(els.btnSunoGenerate?.dataset?.mode || "generate");
     if (actionMode === "resume") {
       const resumeTask = sunoTaskId || loadPendingBackendTask();
@@ -62906,6 +63152,18 @@ if (els.btnGenerateOrb && els.btnSunoGenerate) {
       location.hash = "#/generate";
       return;
     }
+    if (isCreateGenerateBlockedAwaitingLyrics()) {
+      try {
+        showToast(createGenerateBlockedToastMessage(), { icon: "✦", durationMs: 3200 });
+      } catch {}
+      return;
+    }
+    if (!arabicLyricChoicesReady()) {
+      try {
+        showToast(arabicLyricChoicesBlockReason(), { icon: "!", durationMs: 3200 });
+      } catch {}
+      return;
+    }
     els.btnSunoGenerate.click();
   });
 }
@@ -63239,6 +63497,64 @@ var _tabLastHasResult = false;
 var TAB_TIP_KEY = "nabadai_tab_generate_tip_v1";
 var _tabTipTimer = null;
 var _syncCreateTabMorphRaf = 0;
+
+function isCreateTabGeneratingAnim() {
+  if (document.body.classList.contains("generateLocked")) return true;
+  const flow = getCreateFlow();
+  if (flow === "humtrack") return humTrackIsGenerating();
+  if (flow === "sounds") {
+    return /generating|checking/i.test(String(els.btnSoundGenerate?.textContent || ""));
+  }
+  const btnLabel = String(els.btnSunoGenerate?.textContent || "").trim();
+  if (/^(generating|checking)/i.test(btnLabel)) return true;
+  if (generatePollTimer) return true;
+  const tid = String(sunoTaskId || loadPendingBackendTask() || "").trim();
+  if (tid && document.body.classList.contains("isBusy") && busyCount > 0) return true;
+  return false;
+}
+
+/** Generate tab looks "ready" only when lyrics are actually prepared (not just style). */
+function isCreateGenerateBlockedAwaitingLyrics() {
+  if (isCreateTabGeneratingAnim()) return false;
+  const instrumental = String(els.vocalInstrumentalOnly?.value || "0") === "1";
+  if (instrumental) return false;
+  if (isTemplateSparkClipFlow()) return !templateSparkClipLyricsReady();
+  if (String(lyricsInputMode || "write") === "generate") {
+    const text = String(els.sunoPrompt?.value || "").trim();
+    if (!text) return true;
+    if (_lyricsGeneratedInNabad) return false;
+    return !looksLikeSingableLyrics(text);
+  }
+  return false;
+}
+
+function createGenerateBlockedToastMessage() {
+  if (isTemplateSparkClipFlow()) return TEMPLATE_SPARK_CLIP_LYRICS_HINT;
+  return "Tap Generate lyrics first — then you can generate your song.";
+}
+
+function createTabCanGenerate() {
+  if (isCreateTabGeneratingAnim()) return false;
+  if (isCreateGenerateBlockedAwaitingLyrics()) return false;
+  if (!arabicLyricChoicesReady()) return false;
+  const hasResult = (els.resultCard?.style.display || "none") !== "none";
+  if (hasResult) return false;
+  const flow = getCreateFlow();
+  if (flow === "humtrack") return humTrackReadyForGenerate();
+  if (flow === "sounds") return Boolean(String(els.soundPrompt?.value || "").trim());
+  const hasLyrics = Boolean(String(els.sunoPrompt?.value || "").trim());
+  const hasStyle = Boolean(String(els.sunoStyle?.value || "").trim());
+  const instrumental = String(els.vocalInstrumentalOnly?.value || "0") === "1";
+  if (instrumental) return hasStyle || imageMoodAppliedForNextGen;
+  if (isTemplateSparkClipFlow()) return templateSparkClipLyricsReady();
+  return hasLyrics || hasStyle || imageMoodAppliedForNextGen;
+}
+
+function createTabIsBlocked() {
+  if (isCreateTabGeneratingAnim()) return false;
+  return isCreateGenerateBlockedAwaitingLyrics() || !arabicLyricChoicesReady();
+}
+
 function syncCreateTabMorph() {
   if (_syncCreateTabMorphRaf) return;
   _syncCreateTabMorphRaf = requestAnimationFrame(() => {
@@ -63259,12 +63575,13 @@ function syncCreateTabMorphNow() {
     String(els.sunoStyle?.value || "").trim() ||
     imageMoodAppliedForNextGen
   );
-  const generating = Boolean(els.btnSunoGenerate?.disabled);
+  const generating = isCreateTabGeneratingAnim();
+  const blocked = createTabIsBlocked();
   const hasResult = (els.resultCard?.style.display || "none") !== "none";
   const humGenerating = flow === "humtrack" && humTrackIsGenerating();
   const humReady = flow === "humtrack" && humTrackReadyForGenerate();
   const soundPromptReady = flow === "sounds" && Boolean(String(els.soundPrompt?.value || "").trim());
-  const soundGenerating = flow === "sounds" && Boolean(els.btnSoundGenerate?.disabled);
+  const soundGenerating = flow === "sounds" && /generating|checking/i.test(String(els.btnSoundGenerate?.textContent || ""));
   const jobInFlight = createJobHidesResultCards();
   if (jobInFlight) hideCreateResultCards();
 
@@ -63277,7 +63594,7 @@ function syncCreateTabMorphNow() {
 
   if (justFinished) {
     _tabListenFlashedForRun = true;
-    tab.classList.remove("tabIsReady", "tabIsGenerating");
+    tab.classList.remove("tabIsReady", "tabIsGenerating", "tabIsAwaitingLyrics");
     tab.classList.add("tabIsListen");
     if (_tabListenTimer) clearTimeout(_tabListenTimer);
     _tabListenTimer = setTimeout(() => {
@@ -63293,35 +63610,37 @@ function syncCreateTabMorphNow() {
 
   // Off the Create page → no morph at all.
   if (!onCreate) {
-    tab.classList.remove("tabIsReady", "tabIsGenerating", "tabIsListen");
+    tab.classList.remove("tabIsReady", "tabIsGenerating", "tabIsListen", "tabIsAwaitingLyrics");
     if (tooltip) tooltip.hidden = true;
     return;
   }
 
   if (humGenerating || soundGenerating || generating) {
     tab.classList.add("tabIsGenerating");
-    tab.classList.remove("tabIsReady", "tabIsListen");
+    tab.classList.remove("tabIsReady", "tabIsListen", "tabIsAwaitingLyrics");
     if (tooltip) tooltip.hidden = true;
     return;
   }
 
   if (flow === "humtrack") {
+    const humReady = humTrackReadyForGenerate();
     tab.classList.toggle("tabIsReady", humReady);
-    tab.classList.remove("tabIsGenerating", "tabIsListen");
+    tab.classList.remove("tabIsGenerating", "tabIsListen", "tabIsAwaitingLyrics");
     if (tooltip) tooltip.hidden = !humReady;
     return;
   }
 
   if (flow === "sounds") {
     tab.classList.toggle("tabIsReady", soundPromptReady);
-    tab.classList.remove("tabIsGenerating", "tabIsListen");
+    tab.classList.remove("tabIsGenerating", "tabIsListen", "tabIsAwaitingLyrics");
     if (tooltip) tooltip.hidden = !soundPromptReady;
     return;
   }
 
-  const ready = hasInput && !hasResult;
+  const ready = createTabCanGenerate();
   tab.classList.toggle("tabIsReady", ready);
-  tab.classList.remove("tabIsGenerating");
+  tab.classList.toggle("tabIsAwaitingLyrics", blocked && hasInput);
+  tab.classList.remove("tabIsGenerating", "tabIsListen");
   if (tooltip) tooltip.hidden = !ready;
 }
 
@@ -63332,17 +63651,20 @@ function syncGenerateOrbVisibility() {
     String(els.sunoStyle?.value || "").trim() ||
     imageMoodAppliedForNextGen
   );
-  const generating = Boolean(els.btnSunoGenerate?.disabled);
+  const generating = isCreateTabGeneratingAnim();
   const hasResult = (els.resultCard?.style.display || "none") !== "none";
   const templateClipAwaitingLyrics =
     isTemplateSparkClipFlow() && !templateSparkClipLyricsReady();
+  const generateBlocked = isCreateGenerateBlockedAwaitingLyrics();
   if (els.btnGenerateOrb) {
     const visible =
       route === "generate" &&
       hasInput &&
       !generating &&
       !hasResult &&
-      !templateClipAwaitingLyrics;
+      !templateClipAwaitingLyrics &&
+      !generateBlocked &&
+      createTabCanGenerate();
     els.btnGenerateOrb.style.display = visible ? "inline-flex" : "none";
   }
   try { syncArabicLyricsControlsVisibility(); } catch {}
@@ -63697,8 +64019,26 @@ syncCreateTabMorph();
       String(els.sunoStyle?.value || "").trim() ||
       imageMoodAppliedForNextGen
     );
-    const generating = Boolean(els.btnSunoGenerate?.disabled);
+    const generating = isCreateTabGeneratingAnim();
     const hasResult = (els.resultCard?.style.display || "none") !== "none";
+    if (isCreateGenerateBlockedAwaitingLyrics()) {
+      ev.preventDefault();
+      ev.stopPropagation();
+      try { haptic("light"); } catch {}
+      try {
+        showToast(createGenerateBlockedToastMessage(), { icon: "✦", durationMs: 3200 });
+      } catch {}
+      return;
+    }
+    if (!arabicLyricChoicesReady()) {
+      ev.preventDefault();
+      ev.stopPropagation();
+      try { haptic("light"); } catch {}
+      try {
+        showToast(arabicLyricChoicesBlockReason(), { icon: "!", durationMs: 3200 });
+      } catch {}
+      return;
+    }
     // On the song form, the Create tab morphs into Generate — don't send users
     // back to the home desk (#/challenges) when they meant to start a run.
     if (generating || (hasInput && !hasResult)) {

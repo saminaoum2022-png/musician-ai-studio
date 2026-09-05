@@ -482,7 +482,8 @@ html[data-theme="light"] .settingsThemeOpt.is-active{
   }
   html[data-theme="light"] .mobileTabbar a.active,
   html[data-theme="light"] .mobileTabbar a.active .tabIco,
-  html[data-theme="light"] .mobileTabbar a.friendsTab.active{
+  html[data-theme="light"] .mobileTabbar a.friendsTab.active,
+  html[data-theme="light"] .mobileTabbar a.messagesTab.active{
     color: var(--text-primary);
     opacity: 1;
   }
@@ -1342,14 +1343,14 @@ html[data-theme="light"] .followActBadge--release .followActBadgeIco{
   background: var(--surface-secondary);
   border-color: var(--border);
 }
-html[data-theme="light"] body[data-route="friends"] .followAct--xstyle .followActActions .followActAct{
+html[data-theme="light"] body[data-route="friends"], body.friendsFeedActive .followAct--xstyle .followActActions .followActAct{
   color: var(--text-secondary);
 }
-html[data-theme="light"] body[data-route="friends"] .followAct--xstyle .followActActions .followActAct .followActActCount{
+html[data-theme="light"] body[data-route="friends"], body.friendsFeedActive .followAct--xstyle .followActActions .followActAct .followActActCount{
   color: var(--text-muted);
   font-weight: 700;
 }
-html[data-theme="light"] body[data-route="friends"] .followAct--xstyle .followActTop > .followActAvatar{
+html[data-theme="light"] body[data-route="friends"], body.friendsFeedActive .followAct--xstyle .followActTop > .followActAvatar{
   box-shadow: 0 4px 14px rgba(88, 104, 140, 0.10);
 }
 html[data-theme="light"] .challengeFeatureCard::before{
@@ -4013,6 +4014,227 @@ body.isAuth .hubNowPlaying{ display:none !important; }
   -webkit-tap-highlight-color: transparent;
 }
 .musicPrefsSkip:hover{ color: #f4f6ff; }
+
+/* ---- Post-signin first song activation -------------------------------- */
+
+.firstSongScreen{
+  padding: 0;
+  min-height: 0;
+  height: 100%;
+  border: 0 !important;
+  background: var(--bg) !important;
+  box-shadow: none !important;
+}
+.firstSongInner{
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  box-sizing: border-box;
+  gap: 0;
+  background: var(--bg);
+}
+.firstSongHeader{
+  flex: 0 0 auto;
+  padding:
+    max(20px, env(safe-area-inset-top, 0))
+    22px
+    8px;
+  text-align: left;
+}
+.firstSongKicker{
+  margin: 0 0 10px;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(13, 148, 136, 0.92);
+}
+.firstSongTitle{
+  margin: 0;
+  font-size: clamp(26px, 6vw, 32px);
+  font-weight: 780;
+  letter-spacing: -0.03em;
+  line-height: 1.1;
+  color: #f4f6ff;
+}
+.firstSongCreditsHero{
+  flex: 0 0 auto;
+  text-align: center;
+  padding: 8px 22px 20px;
+}
+.firstSongCreditsLead{
+  margin: 0 0 4px;
+  font-size: 15px;
+  font-weight: 600;
+  color: rgba(223, 231, 251, 0.55);
+  letter-spacing: -0.01em;
+}
+.firstSongCreditsBig{
+  margin: 0;
+  font-size: clamp(52px, 14vw, 64px);
+  font-weight: 800;
+  letter-spacing: -0.05em;
+  line-height: 1;
+  color: #f4f6ff;
+}
+.firstSongCreditsUnit{
+  margin: 6px 0 0;
+  font-size: 15px;
+  font-weight: 650;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: rgba(223, 231, 251, 0.42);
+}
+.firstSongBody{
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: 4px 22px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+.firstSongBlock{
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+.firstSongSectionLabel{
+  margin: 0;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: rgba(223, 231, 251, 0.72);
+}
+.firstSongLangRow,
+.firstSongDialectRow{
+  flex-wrap: wrap;
+  gap: 8px;
+}
+#firstSongDialectBlock[hidden]{
+  display: none !important;
+}
+.firstSongTopicRow{
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.firstSongTopic{
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.02);
+  color: #f4f6ff;
+  font-size: 14px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: border-color 160ms ease, background 160ms ease;
+}
+.firstSongTopic.isActive{
+  border-color: rgba(13, 148, 136, 0.52);
+  background: rgba(13, 148, 136, 0.1);
+}
+.firstSongTopicIcon{
+  width: 18px;
+  height: 18px;
+  flex: 0 0 auto;
+  opacity: 0.88;
+  filter: brightness(0) invert(1);
+}
+.firstSongFooter{
+  flex: 0 0 auto;
+  padding:
+    12px 22px
+    calc(16px + env(safe-area-inset-bottom, 0));
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  background: var(--bg);
+}
+.firstSongMakeBtn{
+  width: 100%;
+  min-height: 52px;
+  border: none;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #0d9488 0%, #6d4df5 100%);
+  color: #fff;
+  font-size: 17px;
+  font-weight: 750;
+  letter-spacing: -0.02em;
+  text-align: center;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  box-shadow: 0 10px 28px rgba(13, 148, 136, 0.22);
+}
+.firstSongMakeBtn:active{ transform: scale(0.985); }
+.firstSongSkipLink{
+  width: 100%;
+  margin: 0;
+  border: none;
+  background: transparent;
+  color: rgba(223, 231, 251, 0.46);
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  padding: 6px 10px 0;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.firstSongSkipLink:hover{ color: rgba(244, 246, 255, 0.72); }
+.firstSongSkipLink:active{ opacity: 0.75; }
+
+body.isFirstSong{
+  overflow: hidden;
+  height: 100dvh;
+  height: 100svh;
+}
+body.isFirstSong .app{
+  margin: 0;
+  padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom);
+  max-width: none;
+  width: 100%;
+  min-height: 100dvh;
+  min-height: 100svh;
+  height: 100dvh;
+  height: 100svh;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+body.isFirstSong main.grid{
+  flex: 1 1 auto;
+  min-height: 0;
+  margin: 0;
+  display: flex;
+  align-items: stretch;
+  justify-content: center;
+  overflow: hidden;
+  padding-bottom: 0 !important;
+}
+body.isFirstSong .firstSongScreen{
+  width: 100%;
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex !important;
+}
+body.isFirstSong .header{ display:none; }
+body.isFirstSong .mobileTabbar{ display:none !important; }
+body.isFirstSong .footer{ display:none; }
+body.isFirstSong .generateOrb{ display:none !important; }
+body.isFirstSong .hubNowPlaying{ display:none !important; }
+
 .musicPrefsHeader{
   flex: 0 0 auto;
   padding: 52px 4px 22px;
@@ -4225,6 +4447,9 @@ body[data-route="auth"] main.grid > [data-route="auth"]{
 body[data-route="music-preferences"] main.grid > [data-route="music-preferences"]{
   display: flex !important;
 }
+body[data-route="first-song"] main.grid > [data-route="first-song"]{
+  display: flex !important;
+}
 body[data-route="messages-thread"] main.grid > [data-route="messages-thread"]{
   display: flex !important;
   flex-direction: column;
@@ -4238,7 +4463,7 @@ body[data-route="sounds"] main.grid > [data-route="sounds"],
 body[data-route="more"] main.grid > [data-route="more"],
 body[data-route="discover"] main.grid > [data-route="discover"],
 body[data-route="discover-playlist"] main.grid > [data-route="discover-playlist"],
-body[data-route="friends"] main.grid > [data-route="friends"],
+body[data-route="friends"], body.friendsFeedActive main.grid > [data-route="friends"],
 body[data-route="messages"] main.grid > [data-route="messages"],
 body[data-route="activity"] main.grid > [data-route="activity"],
 body[data-route="mashup"] main.grid > [data-route="mashup"],
@@ -6105,8 +6330,18 @@ input.userTextBidi--rtl{
 .libraryTab{
   position: relative;
 }
-.friendsTab{
+.friendsTab,
+.messagesTab{
   position: relative;
+}
+.discoverFriendsPanel{
+  display: block;
+}
+.discoverFriendsPanel[hidden]{
+  display: none !important;
+}
+.discoverFeedMount[hidden]{
+  display: none !important;
 }
 /* Friends tab DM badge — a small red chat bubble pinned to the top-right corner
    of the tab icon. Single unread conversation shows three dots; 2+ shows the
@@ -20665,6 +20900,34 @@ input::placeholder, textarea::placeholder{
     border-top-color: rgba(124,92,255,0.95);
     animation: tabCreateSpin 900ms linear infinite;
   }
+  /* Lyrics / dialect not ready — grey wand, no fake "generating" spinner. */
+  .mobileTabbar a.tabCreate.tabIsAwaitingLyrics{
+    color: rgba(244, 247, 255, 0.42);
+    background: transparent;
+    box-shadow: none;
+    margin: 0;
+    pointer-events: auto;
+  }
+  .mobileTabbar a.tabCreate.tabIsAwaitingLyrics::before{
+    background: rgba(255, 255, 255, 0.06);
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.1);
+    animation: none;
+  }
+  .mobileTabbar a.tabCreate.tabIsAwaitingLyrics .tabIcoCreate{
+    display: none;
+  }
+  .mobileTabbar a.tabCreate.tabIsAwaitingLyrics .tabIcoPlay,
+  .mobileTabbar a.tabCreate.tabIsAwaitingLyrics .tabIcoWand{
+    display: block;
+    position: absolute;
+    left: 50%;
+    top: calc(var(--tab-create-orbit-top) + var(--tab-create-orbit-size) / 2);
+    transform: translate(-50%, -50%);
+    opacity: 0.38;
+  }
+  .mobileTabbar a.tabCreate.tabIsAwaitingLyrics .tabIcoSpinner{
+    display: none;
+  }
   @keyframes tabCreatePulse{
     0%, 100%{
       box-shadow:
@@ -20786,7 +21049,8 @@ input::placeholder, textarea::placeholder{
     stroke: var(--nav-item-active);
     stroke-width: 1.75;
   }
-  .mobileTabbar a.friendsTab.active{
+  .mobileTabbar a.friendsTab.active,
+  .mobileTabbar a.messagesTab.active{
     color: var(--nav-item-active);
     opacity: 1;
     background: transparent;
@@ -21372,7 +21636,7 @@ input::placeholder, textarea::placeholder{
 }
 /* Header-mounted coach orb — Discover, Friends, Create only. */
 body[data-route="discover"] .coachFab.coachFab--header,
-body[data-route="friends"] .coachFab.coachFab--header,
+body[data-route="friends"], body.friendsFeedActive .coachFab.coachFab--header,
 body[data-route="challenges"] .coachFab.coachFab--header,
 body[data-route="generate"] .coachFab.coachFab--header{
   display: inline-flex;
@@ -21394,7 +21658,7 @@ body[data-coach-orb-mode="hidden"][data-route="generate"] .coachFab.coachFab--he
 }
 @media (min-width: 721px){
   html.is-web-shell body[data-route="discover"] .coachFab.coachFab--header,
-  html.is-web-shell body[data-route="friends"] .coachFab.coachFab--header,
+  html.is-web-shell body[data-route="friends"], body.friendsFeedActive .coachFab.coachFab--header,
   html.is-web-shell body[data-route="challenges"] .coachFab.coachFab--header,
   html.is-web-shell body[data-route="generate"] .coachFab.coachFab--header{
     display: inline-flex !important;
@@ -21430,6 +21694,7 @@ body.isIntro .coachFab,
 body.isAuth .coachFab,
 body.isOnboarding .coachFab,
 body.isMusicPrefs .coachFab,
+body.isFirstSong .coachFab,
 body.createChooserSheetOpen .coachFab,
 body.trackSheetOpen .coachFab{
   display: none !important;
@@ -27747,6 +28012,7 @@ body[data-route="discover"] > .app{
 .discoveryCardStack,
 .discoveryStudioFooter,
 .friendsPage .followActStack,
+#discoveryFollowingList.followActStack,
 .activityPage .discoverFeedTabs,
 .activityPage .activityFeed{
   position: relative;
@@ -28389,6 +28655,7 @@ body[data-profile-songs-seg="reposts"] .profileSongsToolbar{
   display: none !important;
 }
 .profileRepostsList.profileActivitiesList.followActStack .followAct.followAct--xstyle,
+#discoveryFollowingList.followActStack .followAct.followAct--xstyle,
 #profileRepostsList.followActStack .followAct.followAct--xstyle,
 #userPublicRepostsList.followActStack .followAct.followAct--xstyle{
   padding: 0 var(--feed-post-pad-x, 14px) var(--feed-post-gap-after-actions, 20px);
@@ -28778,7 +29045,7 @@ body[data-profile-songs-seg="all"] #profileActivitiesLoadMoreWrap{
   pointer-events: none;
   transition: opacity 200ms ease, visibility 200ms ease;
 }
-body[data-route="friends"] #friendsComposeFabRoot{
+body[data-route="friends"], body.friendsFeedActive #friendsComposeFabRoot{
   display: none !important;
   visibility: hidden;
   opacity: 0;
@@ -40070,6 +40337,7 @@ section.mentorPage{
   min-width: 0;
 }
 #friendsPage .followActStack .followAct.followAct--xstyle,
+#discoveryFollowingList.followActStack .followAct.followAct--xstyle,
 .profileActivitiesList.followActStack .followAct.followAct--xstyle,
 #profileRepostsList.followActStack .followAct.followAct--xstyle,
 #userPublicSongs.followActStack .followAct.followAct--xstyle,
@@ -40089,6 +40357,7 @@ section.mentorPage{
 }
 /* Explicit overrides for profile/public feed scopes — match Friends spacing, no dividers. */
 .profileActivitiesList.followActStack .followAct.followAct--xstyle,
+#discoveryFollowingList.followActStack .followAct.followAct--xstyle,
 #profileRepostsList.followActStack .followAct.followAct--xstyle,
 #userPublicSongs.followActStack .followAct.followAct--xstyle,
 #userPublicRepostsList.followActStack .followAct.followAct--xstyle{
@@ -40111,6 +40380,7 @@ section.mentorPage{
   overflow: visible;
 }
 .profileActivitiesList.followActStack .followAct.followAct--xstyle + .followAct.followAct--xstyle,
+#discoveryFollowingList.followActStack .followAct.followAct--xstyle + .followAct.followAct--xstyle,
 #profileRepostsList.followActStack .followAct.followAct--xstyle + .followAct.followAct--xstyle,
 #userPublicSongs.followActStack .followAct.followAct--xstyle + .followAct.followAct--xstyle,
 #userPublicRepostsList.followActStack .followAct.followAct--xstyle + .followAct.followAct--xstyle{
@@ -40118,6 +40388,7 @@ section.mentorPage{
   border-top: 0;
 }
 .profileActivitiesList.followActStack .followAct.followAct--xstyle:first-child,
+#discoveryFollowingList.followActStack .followAct.followAct--xstyle:first-child,
 #profileRepostsList.followActStack .followAct.followAct--xstyle:first-child,
 #userPublicSongs.followActStack .followAct.followAct--xstyle:first-child,
 #userPublicRepostsList.followActStack .followAct.followAct--xstyle:first-child{
@@ -40128,6 +40399,8 @@ section.mentorPage{
  * out of alignment with the new grid edges. */
 .profileActivitiesList.followActStack .followAct.followAct--xstyle.followAct--music,
 .profileActivitiesList.followActStack .followAct.followAct--xstyle.followAct--status,
+#discoveryFollowingList.followActStack .followAct.followAct--xstyle.followAct--music,
+#discoveryFollowingList.followActStack .followAct.followAct--xstyle.followAct--status,
 #profileRepostsList.followActStack .followAct.followAct--xstyle.followAct--music,
 #profileRepostsList.followActStack .followAct.followAct--xstyle.followAct--status,
 #userPublicSongs.followActStack .followAct.followAct--xstyle.followAct--music,
@@ -41160,9 +41433,9 @@ button.feedSourceRowMashupTitle:active{
   margin-left: 0;
   margin-top: 0;
 }
-:is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followActRemixFlow .followActMediaWrap--remixResult,
-:is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followActMashup .followActMediaWrap--mashupResult,
-:is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followActMediaWrap--feedResult{
+:is(#friendsPage, #discoveryFollowingList, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followActRemixFlow .followActMediaWrap--remixResult,
+:is(#friendsPage, #discoveryFollowingList, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followActMashup .followActMediaWrap--mashupResult,
+:is(#friendsPage, #discoveryFollowingList, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followActMediaWrap--feedResult{
   position: relative;
   left: 50%;
   right: 50%;
@@ -41182,9 +41455,9 @@ button.feedSourceRowMashupTitle:active{
   border-radius: var(--feed-cover-radius, 19px);
   overflow: hidden;
 }
-:is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followActRemixFlow .followActMediaWrap--remixResult .followActMedia,
-:is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followActMashup .followActMediaWrap--mashupResult .followActMedia,
-:is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followActMediaWrap--feedResult .followActMedia{
+:is(#friendsPage, #discoveryFollowingList, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followActRemixFlow .followActMediaWrap--remixResult .followActMedia,
+:is(#friendsPage, #discoveryFollowingList, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followActMashup .followActMediaWrap--mashupResult .followActMedia,
+:is(#friendsPage, #discoveryFollowingList, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followActMediaWrap--feedResult .followActMedia{
   border-radius: 0;
 }
 .followActMediaWrap--feedResult .followActMediaImg,
@@ -41567,8 +41840,8 @@ button.feedSourceRowMashupTitle:active{
   color: var(--text-secondary);
   opacity: 1;
 }
-html[data-theme="light"] body[data-route="friends"] .followAct--xstyle .followActTopMenu .discoverCardMenuBtn,
-html[data-theme="light"] body[data-route="friends"] .followAct--xstyle .followActTopMenu .followActQuoteMenuBtn{
+html[data-theme="light"] body[data-route="friends"], body.friendsFeedActive .followAct--xstyle .followActTopMenu .discoverCardMenuBtn,
+html[data-theme="light"] body[data-route="friends"], body.friendsFeedActive .followAct--xstyle .followActTopMenu .followActQuoteMenuBtn{
   color: var(--text-muted);
 }
 
@@ -41803,15 +42076,15 @@ html[data-theme="light"] body[data-route="friends"] .followAct--xstyle .followAc
 }
 /* Slightly larger interaction icons in the premium feed cards (Friends, own
    Profile, public profiles). Scoped so Discover and other rows stay at 16px. */
-:is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followActActIco{
+:is(#friendsPage, #discoveryFollowingList, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followActActIco{
   width: 18px;
   height: 18px;
 }
-:is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followActActIco--comment,
-:is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followActActIco--like,
-:is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followActActIco--plays,
-:is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followActActIco--gift,
-:is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followActActIco--analytics{
+:is(#friendsPage, #discoveryFollowingList, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followActActIco--comment,
+:is(#friendsPage, #discoveryFollowingList, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followActActIco--like,
+:is(#friendsPage, #discoveryFollowingList, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followActActIco--plays,
+:is(#friendsPage, #discoveryFollowingList, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followActActIco--gift,
+:is(#friendsPage, #discoveryFollowingList, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followActActIco--analytics{
   width: 22px;
   height: 22px;
 }
@@ -41859,8 +42132,8 @@ html[data-theme="light"] .followActAct--gift.isGifted,
 html[data-theme="light"] .followActAct[data-friends-act="gift"].isGifted{
   color: #1FA892;
 }
-html[data-theme="light"] body[data-route="friends"] .followAct--xstyle .followActActions .followActAct--gift.isGifted,
-html[data-theme="light"] body[data-route="friends"] .followAct--xstyle .followActActions .followActAct[data-friends-act="gift"].isGifted{
+html[data-theme="light"] body[data-route="friends"], body.friendsFeedActive .followAct--xstyle .followActActions .followActAct--gift.isGifted,
+html[data-theme="light"] body[data-route="friends"], body.friendsFeedActive .followAct--xstyle .followActActions .followActAct[data-friends-act="gift"].isGifted{
   color: #1FA892;
 }
 
@@ -48284,7 +48557,7 @@ body[data-route="flow"] .app{
 }
 
 /* Friends feed: premium, content-first post treatment. */
-body[data-route="friends"] .friendsPage{
+body[data-route="friends"], body.friendsFeedActive .friendsPage{
   max-width: 460px;
   margin-inline: auto;
   padding-inline: 0;
@@ -48292,11 +48565,12 @@ body[data-route="friends"] .friendsPage{
 /* Scoped to the section (not the body route attr) so the header layout is
    correct on the very first paint — otherwise the DM icon rendered with the
    base header alignment/padding and visibly jumped once data-route landed. */
-.friendsPage .followActStack{
+.friendsPage .followActStack,
+#discoveryFollowingList.followActStack{
   gap: 0;
   padding: 0 0 calc(var(--bottomNavClearance, 110px) + 22px);
 }
-:is(#friendsPage .followActStack, #profileActivitiesList.followActStack, #profileRepostsList.followActStack, #userPublicSongs.followActStack, #userPublicRepostsList.followActStack, .profileActivitiesList.followActStack) > .followAct.followAct--xstyle{
+:is(#friendsPage .followActStack, #discoveryFollowingList.followActStack, #profileActivitiesList.followActStack, #profileRepostsList.followActStack, #userPublicSongs.followActStack, #userPublicRepostsList.followActStack, .profileActivitiesList.followActStack) > .followAct.followAct--xstyle{
   --feed-post-gap-before-header: 24px;
   --feed-post-gap-after-actions: 20px;
   --feed-post-pad-x: 14px;
@@ -48310,19 +48584,19 @@ body[data-route="friends"] .friendsPage{
   background: transparent;
   box-shadow: none;
 }
-:is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle .followActMediaWrap .followActMedia,
-:is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle .followActRemixFlow .followActMediaWrap--remixResult .followActMedia,
-:is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle .followActMashup .followActMediaWrap--mashupResult .followActMedia,
-:is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle.followAct--skel .followActSkelHero{
+:is(#friendsPage, #discoveryFollowingList, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle .followActMediaWrap .followActMedia,
+:is(#friendsPage, #discoveryFollowingList, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle .followActRemixFlow .followActMediaWrap--remixResult .followActMedia,
+:is(#friendsPage, #discoveryFollowingList, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle .followActMashup .followActMediaWrap--mashupResult .followActMedia,
+:is(#friendsPage, #discoveryFollowingList, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle.followAct--skel .followActSkelHero{
   border-radius: 0;
 }
 /* Full-bleed feed covers: break out of post padding to the screen edges. */
-:is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle > .followActMediaWrap,
-:is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle .followActRemixFlow .followActMediaWrap--friendsDock,
-:is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle .followActMashup .followActMediaWrap--friendsDock,
-:is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle .followActRemixFlow .followActMediaWrap--remixResult,
-:is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle .followActMashup .followActMediaWrap--mashupResult,
-:is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle .followActMediaWrap--feedResult{
+:is(#friendsPage, #discoveryFollowingList, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle > .followActMediaWrap,
+:is(#friendsPage, #discoveryFollowingList, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle .followActRemixFlow .followActMediaWrap--friendsDock,
+:is(#friendsPage, #discoveryFollowingList, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle .followActMashup .followActMediaWrap--friendsDock,
+:is(#friendsPage, #discoveryFollowingList, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle .followActRemixFlow .followActMediaWrap--remixResult,
+:is(#friendsPage, #discoveryFollowingList, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle .followActMashup .followActMediaWrap--mashupResult,
+:is(#friendsPage, #discoveryFollowingList, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle .followActMediaWrap--feedResult{
   position: relative;
   left: 50%;
   right: 50%;
@@ -48331,21 +48605,22 @@ body[data-route="friends"] .friendsPage{
   margin-left: -50vw;
   margin-right: -50vw;
 }
-:is(#friendsPage .followActStack, #profileActivitiesList.followActStack, #profileRepostsList.followActStack, #userPublicSongs.followActStack, #userPublicRepostsList.followActStack, .profileActivitiesList.followActStack) > .followAct.followAct--xstyle + .followAct.followAct--xstyle{
+:is(#friendsPage .followActStack, #discoveryFollowingList.followActStack, #profileActivitiesList.followActStack, #profileRepostsList.followActStack, #userPublicSongs.followActStack, #userPublicRepostsList.followActStack, .profileActivitiesList.followActStack) > .followAct.followAct--xstyle + .followAct.followAct--xstyle{
   padding-top: var(--feed-post-gap-before-header, 24px);
   border-top: 0;
 }
-:is(#friendsPage .followActStack, #profileActivitiesList.followActStack, #profileRepostsList.followActStack, #userPublicSongs.followActStack, #userPublicRepostsList.followActStack, .profileActivitiesList.followActStack) > .followAct.followAct--xstyle:first-child{
+:is(#friendsPage .followActStack, #discoveryFollowingList.followActStack, #profileActivitiesList.followActStack, #profileRepostsList.followActStack, #userPublicSongs.followActStack, #userPublicRepostsList.followActStack, .profileActivitiesList.followActStack) > .followAct.followAct--xstyle:first-child{
   padding-top: 8px;
 }
-#friendsPage .followActStack > .followAct.followAct--xstyle:first-child{
+#friendsPage .followActStack > .followAct.followAct--xstyle:first-child,
+#discoveryFollowingList.followActStack > .followAct.followAct--xstyle:first-child{
   padding-top: 0;
 }
-body[data-route="friends"] .followAct--xstyle .followActTop{
+body[data-route="friends"], body.friendsFeedActive .followAct--xstyle .followActTop{
   gap: 12px;
   align-items: flex-start;
 }
-body[data-route="friends"] .followAct--xstyle .followActTop > .followActAvatar{
+body[data-route="friends"], body.friendsFeedActive .followAct--xstyle .followActTop > .followActAvatar{
   width: 44px;
   height: 44px;
   flex: 0 0 44px;
@@ -48353,91 +48628,91 @@ body[data-route="friends"] .followAct--xstyle .followActTop > .followActAvatar{
   border-color: var(--border);
   box-shadow: var(--elev-1);
 }
-body[data-route="friends"] .followAct--xstyle .followActAvatar img,
-body[data-route="friends"] .followAct--xstyle .followActAvatarFallback{
+body[data-route="friends"], body.friendsFeedActive .followAct--xstyle .followActAvatar img,
+body[data-route="friends"], body.friendsFeedActive .followAct--xstyle .followActAvatarFallback{
   border-radius: 15px;
 }
-body[data-route="friends"] .followAct--xstyle .followActHeadStack{
+body[data-route="friends"], body.friendsFeedActive .followAct--xstyle .followActHeadStack{
   min-width: 0;
 }
-body[data-route="friends"] .followAct--xstyle .followActMeta{
+body[data-route="friends"], body.friendsFeedActive .followAct--xstyle .followActMeta{
   gap: 7px;
   font-size: 14px;
   line-height: 1.2;
   color: var(--text-muted);
 }
-body[data-route="friends"] .followAct--xstyle .followActMeta .followActBadgeLabel{
+body[data-route="friends"], body.friendsFeedActive .followAct--xstyle .followActMeta .followActBadgeLabel{
   font-size: 12px;
   font-weight: 800;
   letter-spacing: .08em;
   text-transform: uppercase;
   color: var(--text-secondary);
 }
-body[data-route="friends"] .followAct--xstyle > .followActContent{
+body[data-route="friends"], body.friendsFeedActive .followAct--xstyle > .followActContent{
   margin-top: var(--feed-caption-gap, 4px);
 }
-body[data-route="friends"] .followAct--xstyle .followActCaption,
-body[data-route="friends"] .followAct--xstyle .followActStatusText{
+body[data-route="friends"], body.friendsFeedActive .followAct--xstyle .followActCaption,
+body[data-route="friends"], body.friendsFeedActive .followAct--xstyle .followActStatusText{
   font-size: 16px;
   line-height: 1.45;
   letter-spacing: -.01em;
   color: var(--text-primary);
 }
-body[data-route="friends"] .followAct--xstyle .followActCaption{
+body[data-route="friends"], body.friendsFeedActive .followAct--xstyle .followActCaption{
   color: var(--text-secondary);
 }
 /* Friends repost: nested original stays secondary; reposter uses shared --feed-username-size */
-body[data-route="friends"] .followAct--xstyle.followAct--repost{
+body[data-route="friends"], body.friendsFeedActive .followAct--xstyle.followAct--repost{
   --feed-repost-nested-user-size: 13px;
   --feed-repost-nested-avatar: 36px;
 }
-body[data-route="friends"] .followAct--xstyle.followAct--repost > .followActTop{
+body[data-route="friends"], body.friendsFeedActive .followAct--xstyle.followAct--repost > .followActTop{
   gap: 10px;
 }
-body[data-route="friends"] .followAct--xstyle.followAct--repost > .followActTop > .followActAvatar{
+body[data-route="friends"], body.friendsFeedActive .followAct--xstyle.followAct--repost > .followActTop > .followActAvatar{
   border-radius: 13px;
   box-shadow: none;
 }
-body[data-route="friends"] .followAct--xstyle.followAct--repost > .followActTop > .followActAvatar img,
-body[data-route="friends"] .followAct--xstyle.followAct--repost > .followActTop > .followActAvatarFallback{
+body[data-route="friends"], body.friendsFeedActive .followAct--xstyle.followAct--repost > .followActTop > .followActAvatar img,
+body[data-route="friends"], body.friendsFeedActive .followAct--xstyle.followAct--repost > .followActTop > .followActAvatarFallback{
   border-radius: 12px;
 }
-body[data-route="friends"] .followAct--xstyle.followAct--repost > .followActRepostNote{
+body[data-route="friends"], body.friendsFeedActive .followAct--xstyle.followAct--repost > .followActRepostNote{
   font-size: 16px;
   line-height: 1.45;
   letter-spacing: -.01em;
   color: var(--text-primary);
   margin-bottom: var(--feed-repost-section-gap, 10px);
 }
-body[data-route="friends"] .followAct--xstyle.followAct--repost .followActCaption,
-body[data-route="friends"] .followAct--xstyle.followAct--repost .followActStatusText{
+body[data-route="friends"], body.friendsFeedActive .followAct--xstyle.followAct--repost .followActCaption,
+body[data-route="friends"], body.friendsFeedActive .followAct--xstyle.followAct--repost .followActStatusText{
   font-size: 14px;
   line-height: 1.35;
   letter-spacing: normal;
   color: var(--text-secondary);
 }
-body[data-route="friends"] .followAct--xstyle > .followActQuoteRow:has(.feedHeroPlayer){
+body[data-route="friends"], body.friendsFeedActive .followAct--xstyle > .followActQuoteRow:has(.feedHeroPlayer){
   margin-top: var(--feed-art-gap, 10px);
 }
-:is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle > .followActMediaWrap:not(.followActMediaWrap--friendsDock){
+:is(#friendsPage, #discoveryFollowingList, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle > .followActMediaWrap:not(.followActMediaWrap--friendsDock){
   margin-top: var(--feed-art-gap, 10px);
   padding: 0;
   background: transparent;
   border: 0;
   box-shadow: none;
 }
-:is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle > .followActRemixFlow{
+:is(#friendsPage, #discoveryFollowingList, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle > .followActRemixFlow{
   margin-top: var(--feed-art-gap, 10px);
 }
-:is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle .followActRemixFlow .followActMediaWrap--remixResult .followActMedia{
+:is(#friendsPage, #discoveryFollowingList, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle .followActRemixFlow .followActMediaWrap--remixResult .followActMedia{
   border-radius: 0;
   background: rgba(10,14,22,.46);
   box-shadow: none;
 }
-:is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle > .followActContent + .followActMediaWrap{
+:is(#friendsPage, #discoveryFollowingList, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle > .followActContent + .followActMediaWrap{
   margin-top: var(--feed-art-gap, 10px);
 }
-:is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle .followActMediaWrap .followActMedia{
+:is(#friendsPage, #discoveryFollowingList, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle .followActMediaWrap .followActMedia{
   width: 100%;
   margin: 0;
   aspect-ratio: 1 / 1;
@@ -48448,7 +48723,7 @@ body[data-route="friends"] .followAct--xstyle > .followActQuoteRow:has(.feedHero
   box-shadow: none;
   overflow: hidden;
 }
-:is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle .followActMediaImg{
+:is(#friendsPage, #discoveryFollowingList, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle .followActMediaImg{
   width: 100%;
   height: 100%;
   object-fit: cover;
@@ -48465,7 +48740,7 @@ body[data-route="friends"] .followAct--xstyle > .followActQuoteRow:has(.feedHero
   border-radius: 0;
   pointer-events: none;
 }
-:is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle.followAct--skel .followActSkelHero{
+:is(#friendsPage, #discoveryFollowingList, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle.followAct--skel .followActSkelHero{
   position: relative;
   left: 50%;
   right: 50%;
@@ -48473,20 +48748,20 @@ body[data-route="friends"] .followAct--xstyle > .followActQuoteRow:has(.feedHero
   max-width: 100vw;
   margin: 14px -50vw 0;
 }
-:is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle .followActMedia .discoverCoverPlay,
-:is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle .followActMediaPlay,
-:is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle .feedHeroPlayerBlurBg,
-:is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle .feedHeroPlayerCenterPlay,
-:is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle .feedHeroPlayerChrome,
-:is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle .feedHeroPlayerControls{
+:is(#friendsPage, #discoveryFollowingList, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle .followActMedia .discoverCoverPlay,
+:is(#friendsPage, #discoveryFollowingList, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle .followActMediaPlay,
+:is(#friendsPage, #discoveryFollowingList, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle .feedHeroPlayerBlurBg,
+:is(#friendsPage, #discoveryFollowingList, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle .feedHeroPlayerCenterPlay,
+:is(#friendsPage, #discoveryFollowingList, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle .feedHeroPlayerChrome,
+:is(#friendsPage, #discoveryFollowingList, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle .feedHeroPlayerControls{
   display: none !important;
 }
-:is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle.discoveryRowPlaying .followActMedia,
-:is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle.discoveryRowActive .followActMedia{
+:is(#friendsPage, #discoveryFollowingList, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle.discoveryRowPlaying .followActMedia,
+:is(#friendsPage, #discoveryFollowingList, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle.discoveryRowActive .followActMedia{
   box-shadow: none;
 }
 /* Soft bottom scrim so the play button + seek line read on any artwork */
-:is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle .followActMediaScrim{
+:is(#friendsPage, #discoveryFollowingList, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle .followActMediaScrim{
   position: absolute;
   left: 0;
   right: 0;
@@ -48499,7 +48774,7 @@ body[data-route="friends"] .followAct--xstyle > .followActQuoteRow:has(.feedHero
   transition: opacity 200ms ease;
 }
 /* Premium frosted play / pause control, centered on the cover */
-:is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle .followActMediaPlayBtn{
+:is(#friendsPage, #discoveryFollowingList, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle .followActMediaPlayBtn{
   position: absolute;
   top: 50%;
   left: 50%;
@@ -48520,40 +48795,40 @@ body[data-route="friends"] .followAct--xstyle > .followActQuoteRow:has(.feedHero
   pointer-events: none;
   transition: transform 200ms cubic-bezier(.2,.7,.2,1), background 200ms ease, opacity 200ms ease;
 }
-:is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle .followActMediaPlayBtn .coverArtPlayIco--play{
+:is(#friendsPage, #discoveryFollowingList, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle .followActMediaPlayBtn .coverArtPlayIco--play{
   margin-left: 3px;
 }
-:is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle .followActMediaPlayBtn .coverArtPlayIco--pause,
-:is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle .followActMediaPlayBtn .coverArtPlayIco--loading{
+:is(#friendsPage, #discoveryFollowingList, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle .followActMediaPlayBtn .coverArtPlayIco--pause,
+:is(#friendsPage, #discoveryFollowingList, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle .followActMediaPlayBtn .coverArtPlayIco--loading{
   display: none;
 }
-:is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle.discoveryRowPlaying .followActMediaPlayBtn .coverArtPlayIco--play{
+:is(#friendsPage, #discoveryFollowingList, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle.discoveryRowPlaying .followActMediaPlayBtn .coverArtPlayIco--play{
   display: none;
 }
-:is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle.discoveryRowPlaying .followActMediaPlayBtn .coverArtPlayIco--pause{
+:is(#friendsPage, #discoveryFollowingList, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle.discoveryRowPlaying .followActMediaPlayBtn .coverArtPlayIco--pause{
   display: flex;
 }
-:is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle.discoveryRowLoading .followActMediaPlayBtn .coverArtPlayIco--play,
-:is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle.discoveryRowLoading .followActMediaPlayBtn .coverArtPlayIco--pause{
+:is(#friendsPage, #discoveryFollowingList, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle.discoveryRowLoading .followActMediaPlayBtn .coverArtPlayIco--play,
+:is(#friendsPage, #discoveryFollowingList, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle.discoveryRowLoading .followActMediaPlayBtn .coverArtPlayIco--pause{
   display: none !important;
 }
-:is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle.discoveryRowLoading .followActMediaPlayBtn .coverArtPlayIco--loading{
+:is(#friendsPage, #discoveryFollowingList, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle.discoveryRowLoading .followActMediaPlayBtn .coverArtPlayIco--loading{
   display: flex !important;
 }
-:is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle.discoveryRowLoading .followActMediaPlayBtn .coverArtPlaySpinner{
+:is(#friendsPage, #discoveryFollowingList, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle.discoveryRowLoading .followActMediaPlayBtn .coverArtPlaySpinner{
   width: 22px;
   height: 22px;
   border-width: 2.5px;
 }
-:is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle.discoveryRowLoading .followActMediaPlayBtn{
+:is(#friendsPage, #discoveryFollowingList, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle.discoveryRowLoading .followActMediaPlayBtn{
   opacity: 1;
 }
-:is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle .followActMedia:active .followActMediaPlayBtn{
+:is(#friendsPage, #discoveryFollowingList, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle .followActMedia:active .followActMediaPlayBtn{
   transform: translate(-50%, -50%) scale(.92);
   background: rgba(14,18,26,.56);
 }
 /* While this track is playing, ease the button back so the artwork breathes */
-:is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle.discoveryRowPlaying .followActMediaPlayBtn{
+:is(#friendsPage, #discoveryFollowingList, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle.discoveryRowPlaying .followActMediaPlayBtn{
   width: 53px;
   height: 53px;
   opacity: .9;
@@ -48563,7 +48838,7 @@ body[data-route="friends"] .followAct--xstyle > .followActQuoteRow:has(.feedHero
 .followActMediaTitle{
   display: none;
 }
-:is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle .followActMediaWrap:not(.followActMediaWrap--friendsDock) .followActMediaTitle{
+:is(#friendsPage, #discoveryFollowingList, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle .followActMediaWrap:not(.followActMediaWrap--friendsDock) .followActMediaTitle{
   display: block;
   position: absolute;
   left: 16px;
@@ -48583,7 +48858,7 @@ body[data-route="friends"] .followAct--xstyle > .followActQuoteRow:has(.feedHero
   text-overflow: ellipsis;
   pointer-events: none;
 }
-:is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followActRealtimeProgress:not(.followActMediaDockWave){
+:is(#friendsPage, #discoveryFollowingList, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followActRealtimeProgress:not(.followActMediaDockWave){
   position: absolute;
   left: 14px;
   right: 14px;
@@ -48593,7 +48868,7 @@ body[data-route="friends"] .followAct--xstyle > .followActQuoteRow:has(.feedHero
   margin: 0;
   padding: 0;
 }
-:is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followActRealtimeSeek{
+:is(#friendsPage, #discoveryFollowingList, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followActRealtimeSeek{
   --feedSeekPct: 0%;
   -webkit-appearance: none;
   appearance: none;
@@ -48606,28 +48881,28 @@ body[data-route="friends"] .followAct--xstyle > .followActQuoteRow:has(.feedHero
   display: block;
   cursor: pointer;
 }
-:is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followActRealtimeSeek:disabled{
+:is(#friendsPage, #discoveryFollowingList, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followActRealtimeSeek:disabled{
   cursor: default;
 }
-:is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followActRealtimeSeek::-webkit-slider-runnable-track{
+:is(#friendsPage, #discoveryFollowingList, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followActRealtimeSeek::-webkit-slider-runnable-track{
   height: 4px;
   border-radius: 999px;
   background:
     linear-gradient(90deg, rgba(255, 255, 255, 0.82), rgba(255, 255, 255, 0.58)) 0 / var(--feedSeekPct) 100% no-repeat,
     rgba(232,238,247,.16);
 }
-:is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct[data-cover-prog="ready"] .followActRealtimeSeek::-webkit-slider-runnable-track{
+:is(#friendsPage, #discoveryFollowingList, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct[data-cover-prog="ready"] .followActRealtimeSeek::-webkit-slider-runnable-track{
   background:
     linear-gradient(90deg, rgb(var(--cover-prog-rgb)), rgba(var(--cover-prog-rgb), 0.62)) 0 / var(--feedSeekPct) 100% no-repeat,
     rgba(232,238,247,.16);
 }
-:is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followActRealtimeSeek::-webkit-slider-thumb{
+:is(#friendsPage, #discoveryFollowingList, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followActRealtimeSeek::-webkit-slider-thumb{
   -webkit-appearance: none;
   appearance: none;
   width: 0;
   height: 0;
 }
-:is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followActRealtimeProgress.isActive .followActRealtimeSeek::-webkit-slider-thumb{
+:is(#friendsPage, #discoveryFollowingList, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followActRealtimeProgress.isActive .followActRealtimeSeek::-webkit-slider-thumb{
   width: 10px;
   height: 10px;
   margin-top: -3.5px;
@@ -48635,41 +48910,41 @@ body[data-route="friends"] .followAct--xstyle > .followActQuoteRow:has(.feedHero
   background: rgba(246,249,255,.96);
   box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.16), 0 4px 10px rgba(0,0,0,.32);
 }
-:is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct[data-cover-prog="ready"] .followActRealtimeProgress.isActive .followActRealtimeSeek::-webkit-slider-thumb{
+:is(#friendsPage, #discoveryFollowingList, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct[data-cover-prog="ready"] .followActRealtimeProgress.isActive .followActRealtimeSeek::-webkit-slider-thumb{
   box-shadow: 0 0 0 3px rgba(var(--cover-prog-rgb), 0.24), 0 4px 10px rgba(0,0,0,.32);
 }
-:is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followActRealtimeSeek::-moz-range-track{
+:is(#friendsPage, #discoveryFollowingList, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followActRealtimeSeek::-moz-range-track{
   height: 4px;
   border-radius: 999px;
   background: rgba(232,238,247,.16);
 }
-:is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followActRealtimeSeek::-moz-range-progress{
+:is(#friendsPage, #discoveryFollowingList, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followActRealtimeSeek::-moz-range-progress{
   height: 4px;
   border-radius: 999px;
   background: linear-gradient(90deg, rgba(255, 255, 255, 0.82), rgba(255, 255, 255, 0.55));
 }
-:is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct[data-cover-prog="ready"] .followActRealtimeSeek::-moz-range-progress{
+:is(#friendsPage, #discoveryFollowingList, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct[data-cover-prog="ready"] .followActRealtimeSeek::-moz-range-progress{
   background: linear-gradient(90deg, rgb(var(--cover-prog-rgb)), rgba(var(--cover-prog-rgb), 0.52));
 }
-:is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followActRealtimeSeek::-moz-range-thumb{
+:is(#friendsPage, #discoveryFollowingList, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followActRealtimeSeek::-moz-range-thumb{
   width: 0;
   height: 0;
   border: 0;
 }
-:is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followActRealtimeProgress.isActive .followActRealtimeSeek::-moz-range-thumb{
+:is(#friendsPage, #discoveryFollowingList, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followActRealtimeProgress.isActive .followActRealtimeSeek::-moz-range-thumb{
   width: 10px;
   height: 10px;
   border-radius: 999px;
   background: rgba(246,249,255,.96);
   box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.16), 0 4px 10px rgba(0,0,0,.32);
 }
-:is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct[data-cover-prog="ready"] .followActRealtimeProgress.isActive .followActRealtimeSeek::-moz-range-thumb{
+:is(#friendsPage, #discoveryFollowingList, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct[data-cover-prog="ready"] .followActRealtimeProgress.isActive .followActRealtimeSeek::-moz-range-thumb{
   box-shadow: 0 0 0 3px rgba(var(--cover-prog-rgb), 0.24), 0 4px 10px rgba(0,0,0,.32);
 }
 
 /* Full-bleed release note + style pills (aligned to screen edges like cover) */
-:is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle > .followActReleaseCaption,
-:is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle > .followActContent.followActContent--release{
+:is(#friendsPage, #discoveryFollowingList, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle > .followActReleaseCaption,
+:is(#friendsPage, #discoveryFollowingList, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle > .followActContent.followActContent--release{
   position: relative;
   left: 50%;
   right: 50%;
@@ -48688,7 +48963,7 @@ body[data-route="friends"] .followAct--xstyle > .followActQuoteRow:has(.feedHero
 .followAct--xstyle > .followActStylePills:empty{
   display: none;
 }
-:is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle > .followActStylePills{
+:is(#friendsPage, #discoveryFollowingList, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle > .followActStylePills{
   position: relative;
   left: 50%;
   right: 50%;
@@ -48795,14 +49070,14 @@ html[data-theme="light"] .followAct--xstyle:has(> .followActReleaseCaption:not(:
   border-color: rgba(37, 99, 235, 0.16);
   background: rgba(37, 99, 235, 0.06);
 }
-:is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle > .followActTop + .followActReleaseCaption + .followActStylePills,
-:is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle > .followActTop + .followActStylePills{
+:is(#friendsPage, #discoveryFollowingList, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle > .followActTop + .followActReleaseCaption + .followActStylePills,
+:is(#friendsPage, #discoveryFollowingList, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle > .followActTop + .followActStylePills{
   margin-top: 5px;
 }
-:is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle > .followActStylePills + .followActMediaWrap,
-:is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle > .followActReleaseCaption + .followActStylePills + .followActMediaWrap,
-:is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle > .followActStylePills + .followActRemixFlow,
-:is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle > .followActStylePills + .followActMashup{
+:is(#friendsPage, #discoveryFollowingList, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle > .followActStylePills + .followActMediaWrap,
+:is(#friendsPage, #discoveryFollowingList, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle > .followActReleaseCaption + .followActStylePills + .followActMediaWrap,
+:is(#friendsPage, #discoveryFollowingList, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle > .followActStylePills + .followActRemixFlow,
+:is(#friendsPage, #discoveryFollowingList, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle > .followActStylePills + .followActMashup{
   margin-top: var(--feed-art-gap, 10px);
 }
 
@@ -48829,8 +49104,8 @@ html[data-theme="light"] .followAct--xstyle:has(> .followActReleaseCaption:not(:
   font-weight: 400;
   color: var(--text-primary);
 }
-body[data-route="friends"] .followAct--xstyle > .followActReleaseCaption .followActCaption--releaseNote,
-body[data-route="friends"] .followAct--friendsFeed .followActReleaseCaption .followActCaption--friends{
+body[data-route="friends"], body.friendsFeedActive .followAct--xstyle > .followActReleaseCaption .followActCaption--releaseNote,
+body[data-route="friends"], body.friendsFeedActive .followAct--friendsFeed .followActReleaseCaption .followActCaption--friends{
   color: var(--text-secondary);
 }
 .followAct--friendsFeed .followActReleaseCaption--clamp .followActCaption--friends,
@@ -48860,9 +49135,9 @@ body[data-route="friends"] .followAct--friendsFeed .followActReleaseCaption .fol
 .followAct.followAct--friendsFeed > .followActMediaWrap.followActMediaWrap--friendsDock,
 .followAct.followAct--friendsFeed > .followActRemixFlow .followActMediaWrap--friendsDock,
 .followAct.followAct--friendsFeed > .followActMashup .followActMediaWrap--friendsDock,
-:is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct.followAct--friendsFeed > .followActMediaWrap.followActMediaWrap--friendsDock,
-:is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct.followAct--friendsFeed > .followActRemixFlow .followActMediaWrap--friendsDock,
-:is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct.followAct--friendsFeed > .followActMashup .followActMediaWrap--friendsDock{
+:is(#friendsPage, #discoveryFollowingList, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct.followAct--friendsFeed > .followActMediaWrap.followActMediaWrap--friendsDock,
+:is(#friendsPage, #discoveryFollowingList, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct.followAct--friendsFeed > .followActRemixFlow .followActMediaWrap--friendsDock,
+:is(#friendsPage, #discoveryFollowingList, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct.followAct--friendsFeed > .followActMashup .followActMediaWrap--friendsDock{
   margin-top: var(--feed-art-gap, 8px);
 }
 .followActMediaWrap--friendsDock{
@@ -48899,7 +49174,7 @@ body[data-route="friends"] .followAct--friendsFeed .followActReleaseCaption .fol
   pointer-events: none;
   text-align: left;
 }
-:is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followActMediaWrap--friendsDock .followActMediaTitle{
+:is(#friendsPage, #discoveryFollowingList, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followActMediaWrap--friendsDock .followActMediaTitle{
   display: block;
   position: static;
   margin: 0;
@@ -49080,13 +49355,13 @@ body[data-route="friends"] .followAct--friendsFeed .followActReleaseCaption .fol
   display: none;
 }
 
-body[data-route="friends"] .followAct--xstyle .followActQuoteCard--hero{
+body[data-route="friends"], body.friendsFeedActive .followAct--xstyle .followActQuoteCard--hero{
   border: 0;
   border-radius: var(--feed-cover-radius, 19px);
   background: transparent;
   box-shadow: none;
 }
-body[data-route="friends"] .followAct--xstyle .feedHeroPlayerStage.followActQuoteArt--hero{
+body[data-route="friends"], body.friendsFeedActive .followAct--xstyle .feedHeroPlayerStage.followActQuoteArt--hero{
   min-height: 320px;
   aspect-ratio: 1 / 1.03;
   border-radius: var(--feed-cover-radius, 19px);
@@ -49098,18 +49373,18 @@ body[data-route="friends"] .followAct--xstyle .feedHeroPlayerStage.followActQuot
     0 20px 52px rgba(0,0,0,.34),
     inset 0 1px 0 rgba(255,255,255,.11);
 }
-body[data-route="friends"] .feedHeroPlayerBlurBg{
+body[data-route="friends"], body.friendsFeedActive .feedHeroPlayerBlurBg{
   opacity: .66;
   filter: blur(28px) saturate(1.14) brightness(.82);
   transform: scale(1.12);
 }
-body[data-route="friends"] .feedHeroPlayerArtFrame{
+body[data-route="friends"], body.friendsFeedActive .feedHeroPlayerArtFrame{
   top: 42%;
   width: min(72%, 270px);
   border-radius: var(--feed-cover-art-radius, 18px);
   box-shadow: 0 18px 42px rgba(0,0,0,.32);
 }
-body[data-route="friends"] .feedHeroPlayerCenterPlay{
+body[data-route="friends"], body.friendsFeedActive .feedHeroPlayerCenterPlay{
   top: 42%;
   width: 63px;
   height: 63px;
@@ -49119,42 +49394,42 @@ body[data-route="friends"] .feedHeroPlayerCenterPlay{
     linear-gradient(135deg, rgba(42,217,184,.28), rgba(123,87,255,.42));
   box-shadow: 0 14px 36px rgba(0,0,0,.34), 0 0 26px rgba(94,132,255,.2);
 }
-body[data-route="friends"] .feedHeroPlayerChrome{
+body[data-route="friends"], body.friendsFeedActive .feedHeroPlayerChrome{
   padding: 18px 22px 18px;
   gap: 12px;
   background: linear-gradient(180deg, transparent, rgba(4,7,13,.42) 20%, rgba(4,7,13,.78));
 }
-body[data-route="friends"] .followAct--xstyle .followActQuoteCard--hero .followActQuoteTitle{
+body[data-route="friends"], body.friendsFeedActive .followAct--xstyle .followActQuoteCard--hero .followActQuoteTitle{
   font-size: 24px;
   line-height: 1.05;
   letter-spacing: -.045em;
   max-width: 100%;
 }
-body[data-route="friends"] .followAct--xstyle .followActQuoteCard--hero .followActQuoteSub{
+body[data-route="friends"], body.friendsFeedActive .followAct--xstyle .followActQuoteCard--hero .followActQuoteSub{
   font-size: 15px;
   color: rgba(232,238,247,.58);
 }
-body[data-route="friends"] .feedHeroPlayerProgress{
+body[data-route="friends"], body.friendsFeedActive .feedHeroPlayerProgress{
   gap: 10px;
 }
-body[data-route="friends"] .feedHeroPlayerTime{
+body[data-route="friends"], body.friendsFeedActive .feedHeroPlayerTime{
   min-width: 38px;
   font-size: 13px;
   font-weight: 800;
   color: rgba(232,238,247,.62);
 }
-body[data-route="friends"] .feedHeroPlayerProgTrack{
+body[data-route="friends"], body.friendsFeedActive .feedHeroPlayerProgTrack{
   height: 5px;
   background: rgba(255,255,255,.13);
 }
-body[data-route="friends"] .feedHeroPlayerControls{
+body[data-route="friends"], body.friendsFeedActive .feedHeroPlayerControls{
   padding-top: 2px;
   opacity: .82;
 }
-body[data-route="friends"] .feedHeroPlayerCtrl{
+body[data-route="friends"], body.friendsFeedActive .feedHeroPlayerCtrl{
   color: rgba(240,244,255,.7);
 }
-body[data-route="friends"] .followAct--xstyle .followActActions{
+body[data-route="friends"], body.friendsFeedActive .followAct--xstyle .followActActions{
   /* Spacing above the action row comes from .followActActionsBar (12px),
      same as Profile. No extra top margin here, or Friends double-spaces. */
   display: flex;
@@ -49162,7 +49437,7 @@ body[data-route="friends"] .followAct--xstyle .followActActions{
   justify-content: flex-start;
   gap: 2px;
 }
-body[data-route="friends"] .followAct--xstyle .followActActions .followActAct{
+body[data-route="friends"], body.friendsFeedActive .followAct--xstyle .followActActions .followActAct{
   justify-content: center;
   min-height: 44px;
   padding-block: 6px;
@@ -49173,42 +49448,42 @@ body[data-route="friends"] .followAct--xstyle .followActActions .followActAct{
   font-size: 14px;
   font-weight: 800;
 }
-body[data-route="friends"] .followAct--xstyle .followActActions .followActAct .followActActCount{
+body[data-route="friends"], body.friendsFeedActive .followAct--xstyle .followActActions .followActAct .followActActCount{
   color: var(--text-muted);
 }
-body[data-route="friends"] .followAct--xstyle .followActActions .followActAct[data-friends-act="reply"],
-body[data-route="friends"] .followAct--xstyle .followActActions .followActAct[data-friends-act="like"],
-body[data-route="friends"] .followAct--xstyle .followActActions .followActAct[data-friends-act="plays"],
-body[data-route="friends"] .followAct--xstyle .followActActions .followActAct[data-friends-act="gift"],
-body[data-route="friends"] .followAct--xstyle .followActActions .followActAct.followActAct--gift,
-body[data-route="friends"] .followAct--xstyle .followActActions .followActAct[data-friends-act="analytics"],
-body[data-route="friends"] .followAct--xstyle .followActActions .followActAct.followActAct--analytics{
+body[data-route="friends"], body.friendsFeedActive .followAct--xstyle .followActActions .followActAct[data-friends-act="reply"],
+body[data-route="friends"], body.friendsFeedActive .followAct--xstyle .followActActions .followActAct[data-friends-act="like"],
+body[data-route="friends"], body.friendsFeedActive .followAct--xstyle .followActActions .followActAct[data-friends-act="plays"],
+body[data-route="friends"], body.friendsFeedActive .followAct--xstyle .followActActions .followActAct[data-friends-act="gift"],
+body[data-route="friends"], body.friendsFeedActive .followAct--xstyle .followActActions .followActAct.followActAct--gift,
+body[data-route="friends"], body.friendsFeedActive .followAct--xstyle .followActActions .followActAct[data-friends-act="analytics"],
+body[data-route="friends"], body.friendsFeedActive .followAct--xstyle .followActActions .followActAct.followActAct--analytics{
   gap: 5px;
   min-width: 44px;
 }
-body[data-route="friends"] .followAct--xstyle .followActActions .followActAct.isLiked,
-body[data-route="friends"] .followAct--xstyle .followActActions .followActAct[data-friends-act="like"].isLiked{
+body[data-route="friends"], body.friendsFeedActive .followAct--xstyle .followActActions .followActAct.isLiked,
+body[data-route="friends"], body.friendsFeedActive .followAct--xstyle .followActActions .followActAct[data-friends-act="like"].isLiked{
   color: #FF4D5A;
   text-shadow: 0 0 18px rgba(255, 77, 109, 0.22);
 }
-body[data-route="friends"] .followAct--xstyle .followActActions .followActAct.isGifted,
-body[data-route="friends"] .followAct--xstyle .followActActions .followActAct[data-friends-act="gift"].isGifted{
+body[data-route="friends"], body.friendsFeedActive .followAct--xstyle .followActActions .followActAct.isGifted,
+body[data-route="friends"], body.friendsFeedActive .followAct--xstyle .followActActions .followActAct[data-friends-act="gift"].isGifted{
   color: #4FD1B8;
   text-shadow: 0 0 16px rgba(79, 209, 184, 0.2);
 }
-html[data-theme="light"] body[data-route="friends"] .followAct--xstyle .followActActions .followActAct.isGifted,
-html[data-theme="light"] body[data-route="friends"] .followAct--xstyle .followActActions .followActAct[data-friends-act="gift"].isGifted{
+html[data-theme="light"] body[data-route="friends"], body.friendsFeedActive .followAct--xstyle .followActActions .followActAct.isGifted,
+html[data-theme="light"] body[data-route="friends"], body.friendsFeedActive .followAct--xstyle .followActActions .followActAct[data-friends-act="gift"].isGifted{
   color: #1FA892;
   text-shadow: none;
 }
 
 /* Feed covers: full viewport width (wins over generic xstyle width:100% reset). */
-:is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle > .followActMediaWrap,
-:is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle .followActRemixFlow .followActMediaWrap--friendsDock,
-:is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle .followActMashup .followActMediaWrap--friendsDock,
-:is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle .followActRemixFlow .followActMediaWrap--remixResult,
-:is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle .followActMashup .followActMediaWrap--mashupResult,
-:is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle .followActMediaWrap--feedResult{
+:is(#friendsPage, #discoveryFollowingList, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle > .followActMediaWrap,
+:is(#friendsPage, #discoveryFollowingList, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle .followActRemixFlow .followActMediaWrap--friendsDock,
+:is(#friendsPage, #discoveryFollowingList, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle .followActMashup .followActMediaWrap--friendsDock,
+:is(#friendsPage, #discoveryFollowingList, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle .followActRemixFlow .followActMediaWrap--remixResult,
+:is(#friendsPage, #discoveryFollowingList, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle .followActMashup .followActMediaWrap--mashupResult,
+:is(#friendsPage, #discoveryFollowingList, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle .followActMediaWrap--feedResult{
   position: relative;
   left: 50%;
   right: 50%;
@@ -49217,11 +49492,11 @@ html[data-theme="light"] body[data-route="friends"] .followAct--xstyle .followAc
   margin-left: -50vw;
   margin-right: -50vw;
 }
-:is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followActMediaWrap--friendsDock .followActMedia,
-:is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle .followActMediaWrap .followActMedia,
-:is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle .followActRemixFlow .followActMediaWrap--remixResult .followActMedia,
-:is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle .followActMashup .followActMediaWrap--mashupResult .followActMedia,
-:is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle .followActMediaWrap--feedResult .followActMedia{
+:is(#friendsPage, #discoveryFollowingList, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followActMediaWrap--friendsDock .followActMedia,
+:is(#friendsPage, #discoveryFollowingList, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle .followActMediaWrap .followActMedia,
+:is(#friendsPage, #discoveryFollowingList, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle .followActRemixFlow .followActMediaWrap--remixResult .followActMedia,
+:is(#friendsPage, #discoveryFollowingList, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle .followActMashup .followActMediaWrap--mashupResult .followActMedia,
+:is(#friendsPage, #discoveryFollowingList, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle .followActMediaWrap--feedResult .followActMedia{
   border-radius: 0;
 }
 
@@ -49244,19 +49519,19 @@ body[data-route="user"] #userPublicRepostsList{
 }
 
 @media (max-width: 430px){
-  :is(#friendsPage .followActStack, #profileActivitiesList.followActStack, #profileRepostsList.followActStack, #userPublicSongs.followActStack, #userPublicRepostsList.followActStack, .profileActivitiesList.followActStack) > .followAct.followAct--xstyle{
+  :is(#friendsPage .followActStack, #discoveryFollowingList.followActStack, #profileActivitiesList.followActStack, #profileRepostsList.followActStack, #userPublicSongs.followActStack, #userPublicRepostsList.followActStack, .profileActivitiesList.followActStack) > .followAct.followAct--xstyle{
     --feed-post-pad-x: 12px;
     --feed-cover-extra-bleed: 4px;
     padding-inline: var(--feed-post-pad-x);
   }
-  body[data-route="friends"] .followAct--xstyle .feedHeroPlayerStage.followActQuoteArt--hero{
+  body[data-route="friends"], body.friendsFeedActive .followAct--xstyle .feedHeroPlayerStage.followActQuoteArt--hero{
     min-height: 306px;
     border-radius: var(--feed-cover-radius, 19px);
   }
-  body[data-route="friends"] .feedHeroPlayerArtFrame{
+  body[data-route="friends"], body.friendsFeedActive .feedHeroPlayerArtFrame{
     width: min(74%, 255px);
   }
-  body[data-route="friends"] .feedHeroPlayerChrome{
+  body[data-route="friends"], body.friendsFeedActive .feedHeroPlayerChrome{
     padding-inline: 18px;
   }
 }
@@ -49304,7 +49579,7 @@ body[data-route="user"] #userPublicRepostsList{
 
   /* Keep Discover shell metrics on every main tab (Create zero-padding reset is mobile-only). */
   html.is-web-shell body[data-route="discover"] > .app,
-  html.is-web-shell body[data-route="friends"] > .app,
+  html.is-web-shell body[data-route="friends"], body.friendsFeedActive > .app,
   html.is-web-shell body[data-route="challenges"] > .app,
   html.is-web-shell body[data-route="generate"] > .app,
   html.is-web-shell body[data-route="activity"] > .app,
@@ -49520,7 +49795,7 @@ body[data-route="user"] #userPublicRepostsList{
     margin-right: 0;
   }
   html.is-web-shell :is(
-    #friendsPage .followActStack,
+    #friendsPage .followActStack, #discoveryFollowingList.followActStack,
     #profileActivitiesList.followActStack,
     #profileRepostsList.followActStack,
     #userPublicSongs.followActStack,
@@ -49577,7 +49852,7 @@ body[data-route="user"] #userPublicRepostsList{
     grid-template-columns: var(--nb-sidebar, 248px) minmax(0, 1fr) var(--nb-rail, 320px);
   }
   html.is-web-shell body[data-route="discover"] > .app,
-  html.is-web-shell body[data-route="friends"] > .app,
+  html.is-web-shell body[data-route="friends"], body.friendsFeedActive > .app,
   html.is-web-shell body[data-route="challenges"] > .app,
   html.is-web-shell body[data-route="generate"] > .app,
   html.is-web-shell body[data-route="activity"] > .app,
@@ -49951,7 +50226,8 @@ body[data-route="user"] #userPublicRepostsList{
 body.isAuth:not(.booting) .authInner,
 body.isIntro:not(.booting) .introInner,
 body.isOnboarding:not(.booting) .onboardingInner,
-body.isMusicPrefs:not(.booting) .musicPrefsInner{
+body.isMusicPrefs:not(.booting) .musicPrefsInner,
+body.isFirstSong:not(.booting) .firstSongInner{
   animation: uxEntryFadeIn 320ms cubic-bezier(0.32, 0.72, 0, 1) both;
 }
 
@@ -49986,6 +50262,7 @@ body.isAuth:not(.booting) .authGateChoices:not([hidden]){
   body.isIntro .introInner,
   body.isOnboarding .onboardingInner,
   body.isMusicPrefs .musicPrefsInner,
+  body.isFirstSong .firstSongInner,
   .authEmailForm:not([hidden]),
   body.isAuth .authGateChoices:not([hidden]),
   .authConfirmField:not([hidden]){
@@ -50002,7 +50279,10 @@ body.isAuth:not(.booting) .authGateChoices:not([hidden]){
 .onboardingPrimaryBtn,
 .onboardingSkip,
 .musicPrefsContinueBtn,
-.musicPrefsSkip{
+.musicPrefsSkip,
+.firstSongMakeBtn,
+.firstSongSkipLink,
+.firstSongTopic{
   transition: transform 120ms cubic-bezier(0.32, 0.72, 0, 1),
     background 160ms ease, border-color 160ms ease, opacity 160ms ease;
   -webkit-tap-highlight-color: transparent;
@@ -53917,17 +54197,17 @@ html[data-theme="light"] .mobileTabbar a.tabCreate .tabIco{
 }
 
 /* Social feeds — light mode: spacing only, no dividers (Friends + profile + public). */
-html[data-theme="light"] :is(#friendsPage .followActStack, #profileActivitiesList.followActStack, #profileRepostsList.followActStack, #userPublicSongs.followActStack, #userPublicRepostsList.followActStack, .profileActivitiesList.followActStack) > .followAct.followAct--xstyle{
+html[data-theme="light"] :is(#friendsPage .followActStack, #discoveryFollowingList.followActStack, #profileActivitiesList.followActStack, #profileRepostsList.followActStack, #userPublicSongs.followActStack, #userPublicRepostsList.followActStack, .profileActivitiesList.followActStack) > .followAct.followAct--xstyle{
   --feed-post-gap-before-header: 24px;
   --feed-post-gap-after-actions: 20px;
   --feed-post-pad-x: 14px;
   border-bottom: none;
   padding: 0 var(--feed-post-pad-x) var(--feed-post-gap-after-actions, 20px);
 }
-html[data-theme="light"] :is(#friendsPage .followActStack, #profileActivitiesList.followActStack, #profileRepostsList.followActStack, #userPublicSongs.followActStack, #userPublicRepostsList.followActStack, .profileActivitiesList.followActStack) > .followAct.followAct--xstyle + .followAct.followAct--xstyle{
+html[data-theme="light"] :is(#friendsPage .followActStack, #discoveryFollowingList.followActStack, #profileActivitiesList.followActStack, #profileRepostsList.followActStack, #userPublicSongs.followActStack, #userPublicRepostsList.followActStack, .profileActivitiesList.followActStack) > .followAct.followAct--xstyle + .followAct.followAct--xstyle{
   padding-top: var(--feed-post-gap-before-header, 24px);
 }
-html[data-theme="light"] :is(#friendsPage .followActStack, #profileActivitiesList.followActStack, #profileRepostsList.followActStack, #userPublicSongs.followActStack, #userPublicRepostsList.followActStack, .profileActivitiesList.followActStack) > .followAct.followAct--xstyle:first-child{
+html[data-theme="light"] :is(#friendsPage .followActStack, #discoveryFollowingList.followActStack, #profileActivitiesList.followActStack, #profileRepostsList.followActStack, #userPublicSongs.followActStack, #userPublicRepostsList.followActStack, .profileActivitiesList.followActStack) > .followAct.followAct--xstyle:first-child{
   padding-top: 8px;
 }
 html[data-theme="light"] .followActStack .followAct.followAct--xstyle:hover,
@@ -54023,8 +54303,8 @@ html[data-theme="light"] .followActRemixFlowOrig--static{
   border-color: #E5E7EC;
   background: #F3F4F7;
 }
-html[data-theme="light"] :is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followActRemixFlow .followActMediaWrap--remixResult .followActMedia,
-html[data-theme="light"] :is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followActMashup .followActMediaWrap--mashupResult .followActMedia{
+html[data-theme="light"] :is(#friendsPage, #discoveryFollowingList, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followActRemixFlow .followActMediaWrap--remixResult .followActMedia,
+html[data-theme="light"] :is(#friendsPage, #discoveryFollowingList, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followActMashup .followActMediaWrap--mashupResult .followActMedia{
   background: var(--surface-secondary);
 }
 
@@ -57082,7 +57362,7 @@ html[data-theme="light"] body[data-route="generate"] .singerPersonaChip--create{
   max-height: calc(2 * 1.3 * 16px);
   word-break: break-word;
 }
-:is(html[data-theme="light"], html[data-theme="dark"]) :is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .feedVinylTimeline.followActRealtimeProgress{
+:is(html[data-theme="light"], html[data-theme="dark"]) :is(#friendsPage, #discoveryFollowingList, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .feedVinylTimeline.followActRealtimeProgress{
   position: static !important;
   left: auto !important;
   right: auto !important;
@@ -57151,27 +57431,27 @@ html[data-theme="light"] body[data-route="generate"] .singerPersonaChip--create{
 :is(html[data-theme="light"], html[data-theme="dark"]) .followAct.discoveryRowLoading .feedVinylCenterIco .coverArtPlayIco--loading{
   display: inline-flex;
 }
-:is(html[data-theme="light"], html[data-theme="dark"]) :is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle > .feedVinylWrap{
+:is(html[data-theme="light"], html[data-theme="dark"]) :is(#friendsPage, #discoveryFollowingList, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle > .feedVinylWrap{
   margin-top: 20px;
 }
-:is(html[data-theme="light"], html[data-theme="dark"]) :is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle > .followActContent:not(:empty) + .feedVinylWrap{
+:is(html[data-theme="light"], html[data-theme="dark"]) :is(#friendsPage, #discoveryFollowingList, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followAct--xstyle > .followActContent:not(:empty) + .feedVinylWrap{
   margin-top: 20px;
 }
-:is(html[data-theme="light"], html[data-theme="dark"]) :is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .feedVinylTimeline .feedVinylSeek.followActRealtimeSeek{
+:is(html[data-theme="light"], html[data-theme="dark"]) :is(#friendsPage, #discoveryFollowingList, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .feedVinylTimeline .feedVinylSeek.followActRealtimeSeek{
   height: 18px;
   background: transparent;
 }
-:is(html[data-theme="light"], html[data-theme="dark"]) :is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .feedVinylTimeline .feedVinylSeek.followActRealtimeSeek::-webkit-slider-runnable-track{
+:is(html[data-theme="light"], html[data-theme="dark"]) :is(#friendsPage, #discoveryFollowingList, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .feedVinylTimeline .feedVinylSeek.followActRealtimeSeek::-webkit-slider-runnable-track{
   height: 4px;
   border-radius: 999px;
   background: linear-gradient(90deg, #7c5cff 0%, #23d5ab var(--feedSeekPct, 0%), #E2E4EA var(--feedSeekPct, 0%), #E2E4EA 100%);
 }
-:is(html[data-theme="light"], html[data-theme="dark"]) :is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .feedVinylTimeline .feedVinylSeek.followActRealtimeSeek::-moz-range-track{
+:is(html[data-theme="light"], html[data-theme="dark"]) :is(#friendsPage, #discoveryFollowingList, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .feedVinylTimeline .feedVinylSeek.followActRealtimeSeek::-moz-range-track{
   height: 4px;
   border-radius: 999px;
   background: #E2E4EA;
 }
-:is(html[data-theme="light"], html[data-theme="dark"]) :is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .feedVinylTimeline .feedVinylSeek.followActRealtimeSeek::-moz-range-progress{
+:is(html[data-theme="light"], html[data-theme="dark"]) :is(#friendsPage, #discoveryFollowingList, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .feedVinylTimeline .feedVinylSeek.followActRealtimeSeek::-moz-range-progress{
   height: 4px;
   border-radius: 999px;
   background: linear-gradient(90deg, #7c5cff, #23d5ab);
@@ -57197,10 +57477,10 @@ html[data-theme="dark"] .feedVinylTimeDur{
 html[data-theme="dark"] .feedVinylSeek.followActRealtimeSeek{
   background: linear-gradient(90deg, #7c5cff 0%, #23d5ab var(--feedSeekPct, 0%), #3a404c var(--feedSeekPct, 0%), #3a404c 100%);
 }
-html[data-theme="dark"] :is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .feedVinylTimeline .feedVinylSeek.followActRealtimeSeek::-webkit-slider-runnable-track{
+html[data-theme="dark"] :is(#friendsPage, #discoveryFollowingList, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .feedVinylTimeline .feedVinylSeek.followActRealtimeSeek::-webkit-slider-runnable-track{
   background: #3a404c;
 }
-html[data-theme="dark"] :is(#friendsPage, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .feedVinylTimeline .feedVinylSeek.followActRealtimeSeek::-moz-range-track{
+html[data-theme="dark"] :is(#friendsPage, #discoveryFollowingList, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .feedVinylTimeline .feedVinylSeek.followActRealtimeSeek::-moz-range-track{
   background: #3a404c;
 }
 html[data-theme="dark"] .feedVinylCenterBtn{
@@ -57229,9 +57509,9 @@ html[data-theme="dark"] .feedVinylGloss{
 /* ============================================================================
  * Social feeds — final overrides (no dividers): Friends, profile, public.
  * ============================================================================ */
-:is(#friendsPage .followActStack, #profileActivitiesList.followActStack, #profileRepostsList.followActStack, #userPublicSongs.followActStack, #userPublicRepostsList.followActStack, .profileActivitiesList.followActStack) > .followAct.followAct--xstyle,
-html[data-theme="light"] :is(#friendsPage .followActStack, #profileActivitiesList.followActStack, #profileRepostsList.followActStack, #userPublicSongs.followActStack, #userPublicRepostsList.followActStack, .profileActivitiesList.followActStack) > .followAct.followAct--xstyle,
-html[data-theme="dark"] :is(#friendsPage .followActStack, #profileActivitiesList.followActStack, #profileRepostsList.followActStack, #userPublicSongs.followActStack, #userPublicRepostsList.followActStack, .profileActivitiesList.followActStack) > .followAct.followAct--xstyle{
+:is(#friendsPage .followActStack, #discoveryFollowingList.followActStack, #profileActivitiesList.followActStack, #profileRepostsList.followActStack, #userPublicSongs.followActStack, #userPublicRepostsList.followActStack, .profileActivitiesList.followActStack) > .followAct.followAct--xstyle,
+html[data-theme="light"] :is(#friendsPage .followActStack, #discoveryFollowingList.followActStack, #profileActivitiesList.followActStack, #profileRepostsList.followActStack, #userPublicSongs.followActStack, #userPublicRepostsList.followActStack, .profileActivitiesList.followActStack) > .followAct.followAct--xstyle,
+html[data-theme="dark"] :is(#friendsPage .followActStack, #discoveryFollowingList.followActStack, #profileActivitiesList.followActStack, #profileRepostsList.followActStack, #userPublicSongs.followActStack, #userPublicRepostsList.followActStack, .profileActivitiesList.followActStack) > .followAct.followAct--xstyle{
   border: 0;
   border-bottom: none;
   border-top: none;

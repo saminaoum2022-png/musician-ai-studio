@@ -359,8 +359,8 @@
         <div class="headerMain">
           <h1 id="brandTitle" class="brandTitle" title="Start new"><span class="brandLockup brandLockup--header"><span class="brandLockupMark" aria-hidden="true"></span><span class="brandLockupText brandPrimary">abadAi</span></span><span id="brandSecondary" class="brandSecondary">Music</span></h1>
           <div class="journeyBar" aria-label="Primary navigation">
-            <a href="#/discover" class="journeyStep" data-route-link="discover"><span class="journeyIco" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.75"/><path d="M12 4v3.5l2.75 2.75" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"/><circle cx="12" cy="12" r="1.35" fill="currentColor" stroke="none"/></svg></span><span class="journeyLabel">Discover</span></a>
-            <a href="#/friends" class="journeyStep" data-route-link="friends"><span class="journeyIco" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></span><span class="journeyLabel">Friends</span></a>
+            <a href="#/discover" class="journeyStep" data-route-link="discover"><span class="journeyIco" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.75"/><path d="M12 4v3.5l2.75 2.75" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"/><circle cx="12" cy="12" r="1.35" fill="currentColor" stroke="none"/></svg></span><span class="journeyLabel">Home</span></a>
+            <a href="#/messages" class="journeyStep" data-route-link="messages"><span class="journeyIco" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5Z"/></svg></span><span class="journeyLabel">Messages</span></a>
             <a href="#/challenges" class="journeyStep" data-route-link="challenges"><span class="journeyIco" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><circle cx="12" cy="12" r="9"/><path d="M12 7v10M7 12h10" stroke-width="2.4" stroke-linecap="round"/></svg></span><span class="journeyLabel">Create</span></a>
             <a href="#/activity" class="journeyStep" data-route-link="activity"><span class="journeyIco" aria-hidden="true"><svg viewBox="0 0 24 24"><polyline fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></span><span class="journeyLabel">Activity</span></a>
             <a href="#/profile" class="journeyStep" data-route-link="profile"><span class="journeyIco" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></span><span class="journeyLabel">Profile</span></a>
@@ -672,6 +672,72 @@
               <button type="button" id="btnMusicPrefsContinue" class="musicPrefsContinueBtn" disabled>
                 Continue <span class="musicPrefsContinueChev" aria-hidden="true">›</span>
               </button>
+            </footer>
+          </div>
+        </section>
+
+        <section class="card wide firstSongScreen" data-route="first-song" data-first-song-root aria-label="Make your first song">
+          <div class="firstSongInner">
+            <header class="firstSongHeader">
+              <p class="firstSongKicker">You're in</p>
+              <h1 class="firstSongTitle">Let's make your first song</h1>
+            </header>
+
+            <div class="firstSongCreditsHero" aria-live="polite">
+              <p class="firstSongCreditsLead">Now you have</p>
+              <p id="firstSongCreditsValue" class="firstSongCreditsBig">—</p>
+              <p class="firstSongCreditsUnit">credits</p>
+            </div>
+
+            <div class="firstSongBody">
+              <section class="firstSongBlock">
+                <p class="firstSongSectionLabel">Language</p>
+                <div class="optChipRow firstSongLangRow" role="group" aria-label="Lyrics language">
+                  <button type="button" class="optChip" data-first-song-lang="auto" aria-pressed="false">Auto</button>
+                  <button type="button" class="optChip" data-first-song-lang="english" aria-pressed="false">English</button>
+                  <button type="button" class="optChip isActive" data-first-song-lang="arabic" aria-pressed="true">Arabic</button>
+                  <button type="button" class="optChip" data-first-song-lang="french" aria-pressed="false">French</button>
+                </div>
+              </section>
+
+              <section id="firstSongDialectBlock" class="firstSongBlock">
+                <p class="firstSongSectionLabel">Dialect</p>
+                <div class="optChipRow firstSongDialectRow" role="group" aria-label="Arabic dialect">
+                  <button type="button" class="optChip isActive" data-first-song-dialect="lebanese" aria-pressed="true">Lebanese</button>
+                  <button type="button" class="optChip" data-first-song-dialect="egyptian" aria-pressed="false">Egyptian</button>
+                  <button type="button" class="optChip" data-first-song-dialect="gulf" aria-pressed="false">Gulf</button>
+                  <button type="button" class="optChip" data-first-song-dialect="iraqi" aria-pressed="false">Iraqi</button>
+                  <button type="button" class="optChip" data-first-song-dialect="syrian" aria-pressed="false">Syrian</button>
+                  <button type="button" class="optChip" data-first-song-dialect="palestinian" aria-pressed="false">Palestinian</button>
+                </div>
+              </section>
+
+              <section class="firstSongBlock">
+                <p class="firstSongSectionLabel">What's it about?</p>
+                <div class="firstSongTopicRow" role="group" aria-label="Song topic">
+                  <button type="button" class="firstSongTopic isActive" data-first-song-topic="love" aria-pressed="true">
+                    <img class="firstSongTopicIcon" src="https://cdn.jsdelivr.net/npm/lucide-static@0.471.0/icons/heart.svg" width="18" height="18" alt="" aria-hidden="true" />
+                    <span>Love</span>
+                  </button>
+                  <button type="button" class="firstSongTopic" data-first-song-topic="apology" aria-pressed="false">
+                    <img class="firstSongTopicIcon" src="https://cdn.jsdelivr.net/npm/lucide-static@0.471.0/icons/message-circle-heart.svg" width="18" height="18" alt="" aria-hidden="true" />
+                    <span>Apology</span>
+                  </button>
+                  <button type="button" class="firstSongTopic" data-first-song-topic="dabke" aria-pressed="false">
+                    <img class="firstSongTopicIcon" src="https://cdn.jsdelivr.net/npm/lucide-static@0.471.0/icons/music-2.svg" width="18" height="18" alt="" aria-hidden="true" />
+                    <span>Dabke</span>
+                  </button>
+                  <button type="button" class="firstSongTopic" data-first-song-topic="custom" aria-pressed="false">
+                    <img class="firstSongTopicIcon" src="https://cdn.jsdelivr.net/npm/lucide-static@0.471.0/icons/pen-line.svg" width="18" height="18" alt="" aria-hidden="true" />
+                    <span>My own prompt</span>
+                  </button>
+                </div>
+              </section>
+            </div>
+
+            <footer class="firstSongFooter">
+              <button type="button" id="btnFirstSongMake" class="firstSongMakeBtn">Make my first song</button>
+              <button type="button" id="btnFirstSongSkip" class="firstSongSkipLink">Explore first — I'll create later</button>
             </footer>
           </div>
         </section>
@@ -1457,11 +1523,11 @@
                 <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6 9 12l6 6"/></svg>
               </button>
               <div class="discoveryStudioTitles">
-                <h2 class="discoveryStudioH2 appScreenTitle">Discover</h2>
+                <h2 class="discoveryStudioH2 appScreenTitle">Home</h2>
               </div>
               <div class="discoveryHeadActions">
                 <span class="coachFabSlot" data-coach-fab-slot="discover" aria-hidden="true"></span>
-                <button type="button" class="discoveryRefreshBtn discoveryHeadIconBtn" id="discoverySearchBtn" aria-label="Search Discover" aria-expanded="false" aria-controls="discoverySearchPanel">
+                <button type="button" class="discoveryRefreshBtn discoveryHeadIconBtn" id="discoverySearchBtn" aria-label="Search Home" aria-expanded="false" aria-controls="discoverySearchPanel">
                   <svg class="discoveryRefreshIco" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
                     <circle cx="11" cy="11" r="7" fill="none" stroke="currentColor" stroke-width="1.85"/>
                     <path fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" d="M20 20l-4.2-4.2"/>
@@ -1507,9 +1573,10 @@
             </div>
 
             <div id="discoveryMainContent" class="discoveryMainContent discoverFeedV2">
-            <nav id="discoverFeedTabs" class="nabadTabs discoverFeedTabs" aria-label="Discover categories">
+            <nav id="discoverFeedTabs" class="nabadTabs discoverFeedTabs" aria-label="Home categories">
               <div class="nabadTabsTrack discoverFeedTabsTrack" role="tablist">
                 <button type="button" class="nabadTabsTab is-active" role="tab" aria-selected="true" data-discover-feed-tab="for-you"><span class="nabadTabsLabel">For You</span></button>
+                <button type="button" class="nabadTabsTab" role="tab" aria-selected="false" data-discover-feed-tab="friends"><span class="nabadTabsLabel">Friends</span></button>
                 <button type="button" class="nabadTabsTab" role="tab" aria-selected="false" data-discover-feed-tab="templates"><span class="nabadTabsLabel">Templates</span></button>
                 <button type="button" class="nabadTabsTab" role="tab" aria-selected="false" data-discover-feed-tab="challenges"><span class="nabadTabsLabel">Challenges</span></button>
                 <button type="button" class="nabadTabsTab" role="tab" aria-selected="false" data-discover-feed-tab="remixes"><span class="nabadTabsLabel">Remixes</span></button>
@@ -1517,6 +1584,10 @@
               </div>
             </nav>
             <div id="discoverFeedMount" class="discoverFeedMount" aria-live="polite"></div>
+            <div id="discoverFriendsPanel" class="discoverFriendsPanel" hidden aria-hidden="true">
+              <div id="discoveryFollowingStatus" class="discoveryFeedStatus" role="status" aria-live="polite"></div>
+              <div id="discoveryFollowingList" class="followActStack" hidden></div>
+            </div>
             <div id="discoveryFeedStatus" class="discoveryFeedStatus" role="status" aria-live="polite"></div>
             <div id="discoveryFeedList" class="discoveryFeedList discoveryDiscoverGrid" hidden aria-hidden="true"></div>
             </div>
@@ -1611,36 +1682,20 @@
           </div>
         </div>
 
-        <section class="friendsPage wide" data-route="friends" id="friendsPage">
+        <section class="friendsPage wide" data-route="friends" id="friendsPage" hidden aria-hidden="true">
           <header class="discoveryStudioHead">
             <div class="discoveryStudioTitles">
               <h2 class="discoveryStudioH2 appScreenTitle">Friends</h2>
             </div>
             <div class="discoveryHeadActions">
               <span class="coachFabSlot" data-coach-fab-slot="friends" aria-hidden="true"></span>
-              <button type="button" class="discoveryRefreshBtn discoveryHeadIconBtn friendsMessagesBtn" id="friendsMessagesBtn" aria-label="Messages" hidden>
-                <svg class="discoveryRefreshIco" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
-                  <path fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round" d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5Z"/>
-                </svg>
-                <span class="friendsMessagesBadge" id="friendsMessagesBadge" hidden aria-hidden="true"></span>
-              </button>
             </div>
           </header>
-          <nav class="nabadTabs discoverFeedTabs friendsFeedTabs" id="friendsFeedTabs" aria-label="Friends feed filters">
-            <div class="nabadTabsTrack discoverFeedTabsTrack" role="tablist">
-              <button type="button" class="nabadTabsTab is-active" data-friends-feed-filter="all" role="tab" aria-selected="true"><span class="nabadTabsLabel">All</span></button>
-              <button type="button" class="nabadTabsTab" data-friends-feed-filter="new" role="tab" aria-selected="false"><span class="nabadTabsLabel">New</span></button>
-              <button type="button" class="nabadTabsTab" data-friends-feed-filter="photo-mood" role="tab" aria-selected="false"><span class="nabadTabsLabel">Photo Mood</span></button>
-              <button type="button" class="nabadTabsTab" data-friends-feed-filter="music" role="tab" aria-selected="false"><span class="nabadTabsLabel">Music</span></button>
-            </div>
-          </nav>
-          <div id="discoveryFollowingStatus" class="discoveryFeedStatus" role="status" aria-live="polite"></div>
-          <div id="discoveryFollowingList" class="followActStack" hidden></div>
         </section>
 
         <section class="messagesPage wide" data-route="messages" id="messagesPage">
           <header class="messagesHead">
-            <button type="button" class="nabadBackBtn messagesBackBtn" id="messagesBackBtn" aria-label="Back to Friends">
+            <button type="button" class="nabadBackBtn messagesBackBtn" id="messagesBackBtn" aria-label="Back" hidden>
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6 9 12l6 6"/></svg>
             </button>
             <div class="messagesHeadCopy">
@@ -4121,6 +4176,16 @@
                   </span>
                   <span class="settingsRowChev" aria-hidden="true">›</span>
                 </button>
+                <button type="button" id="btnSettingsPreviewFirstSong" class="settingsRow settingsRowLink" hidden>
+                  <span class="settingsRowIco" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+                  </span>
+                  <span class="settingsRowBody">
+                    <span class="settingsRowTitle">First song preview</span>
+                    <span class="settingsRowSub">Open the post-signup activation screen (admin)</span>
+                  </span>
+                  <span class="settingsRowChev" aria-hidden="true">›</span>
+                </button>
                 <button id="btnSettingsHelpFaq" class="settingsRow settingsRowLink" type="button">
                   <span class="settingsRowIco" aria-hidden="true">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.2a2.6 2.6 0 0 1 5 .9c0 1.7-2.5 2.2-2.5 3.9" stroke-linecap="round"/><circle cx="12" cy="17.4" r="0.6" fill="currentColor" stroke="none"/></svg>
@@ -4602,23 +4667,20 @@
         </defs>
       </svg>
       <nav class="mobileTabbar" aria-label="Primary navigation">
-        <a href="#/discover" data-route-link="discover" aria-label="Discover">
+        <a href="#/discover" data-route-link="discover" aria-label="Home">
           <svg class="tabIco tabIcoDiscover" viewBox="0 0 24 24" aria-hidden="true">
             <circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.75"/>
             <path fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" d="M12 4v3.5l2.75 2.75"/>
             <circle cx="12" cy="12" r="1.35" fill="currentColor" stroke="none"/>
           </svg>
-          <span class="tabLabel">Discover</span>
+          <span class="tabLabel">Home</span>
         </a>
-        <a href="#/friends" data-route-link="friends" class="friendsTab" aria-label="Friends">
-          <svg class="tabIco tabIcoFriends" viewBox="0 0 24 24" aria-hidden="true">
-            <path fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/>
-            <circle cx="9" cy="7" r="4" fill="none" stroke="currentColor" stroke-width="1.75"/>
-            <path fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" d="M22 21v-2a4 4 0 0 0-3-3.87"/>
-            <path fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" d="M16 3.13a4 4 0 0 1 0 7.75"/>
+        <a href="#/messages" data-route-link="messages" class="messagesTab" aria-label="Messages">
+          <svg class="tabIco tabIcoMessages" viewBox="0 0 24 24" aria-hidden="true">
+            <path fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5Z"/>
           </svg>
-          <span class="tabLabel">Friends</span>
-          <span id="friendsTabBadge" class="friendsTabDmBadge" hidden aria-hidden="true"></span>
+          <span class="tabLabel">Messages</span>
+          <span id="messagesTabBadge" class="friendsTabDmBadge" hidden aria-hidden="true"></span>
         </a>
         <a href="#/challenges" data-route-link="challenges" id="tabCreate" class="tabCreate challengesTab" aria-label="Create">
           <span class="tabIcoSpinner" aria-hidden="true"></span>
@@ -5119,7 +5181,7 @@
         var done = bootOnboardingDone();
         var h = String(location.hash || "").replace(/^#\/?/, "").split(/[?#&]/)[0] || "";
         if (/^u\//.test(h)) h = "user";
-        if (h === "hub" || h === "home" || h === "start") h = "discover";
+        if (h === "hub" || h === "home" || h === "start") h = "challenges";
         if (h === "sparks") h = "challenges";
         var guestMode = false;
         try { guestMode = localStorage.getItem("nabadai_guest_mode_v1") === "1"; } catch (e) {}
@@ -5132,10 +5194,10 @@
         var needsOnboarding = bootUid ? !bootOnboardingDone() : !done;
         if (!h) {
           if (needsOnboarding) h = "onboarding";
-          else h = hasSessionEarly ? "discover" : (guestMode ? "discover" : "auth");
+          else h = hasSessionEarly ? "challenges" : (guestMode ? "challenges" : "auth");
         }
         if (/^onboarding\/\d+$/.test(h)) h = "onboarding";
-        var ok = /^(intro|onboarding|music-preferences|auth|generate|challenges|activity|discover|friends|profile|profile-edit|settings|player|sounds|user|vocal|stems|studio|advanced|credits|mentor)$/.test(h);
+        var ok = /^(intro|onboarding|music-preferences|first-song|auth|generate|challenges|activity|discover|friends|profile|profile-edit|settings|player|sounds|user|vocal|stems|studio|advanced|credits|mentor)$/.test(h);
         if (!ok) {
           if (needsOnboarding) h = "onboarding";
           else {
@@ -5144,7 +5206,7 @@
               var rawFb = localStorage.getItem("mas:supabase:session:v1");
               hasSessionFallback = !!(rawFb && rawFb.indexOf("access_token") !== -1);
             } catch (e) {}
-            h = hasSessionFallback ? "discover" : (guestMode ? "discover" : "auth");
+            h = hasSessionFallback ? "challenges" : (guestMode ? "challenges" : "auth");
           }
         }
         document.body.setAttribute("data-route", h);
@@ -5152,6 +5214,7 @@
         document.body.classList.toggle("isOnboarding", h === "onboarding");
         document.body.classList.toggle("isAuth", h === "auth");
         document.body.classList.toggle("isMusicPrefs", h === "music-preferences");
+        document.body.classList.toggle("isFirstSong", h === "first-song");
       })();
     </script>
     <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>

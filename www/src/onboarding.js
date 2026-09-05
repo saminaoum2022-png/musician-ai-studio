@@ -93,9 +93,9 @@ export function shouldSkipIntroOrOnboardingRoute(userId) {
 
 export function getPostOnboardingHash(getAuthSession) {
   const session = typeof getAuthSession === "function" ? getAuthSession() : null;
-  if (session?.user?.id) return "#/discover";
+  if (session?.user?.id) return "#/challenges";
   try {
-    if (localStorage.getItem("nabadai_guest_mode_v1") === "1") return "#/discover";
+    if (localStorage.getItem("nabadai_guest_mode_v1") === "1") return "#/challenges";
   } catch {}
   return "#/auth";
 }
@@ -167,10 +167,11 @@ function finishOnboarding() {
   markOnboardingComplete(uid);
   let hash = "#/auth";
   if (uid) {
-    const showMusicPrefs = typeof _deps?.shouldShowMusicPreferences === "function"
-      ? Boolean(_deps.shouldShowMusicPreferences())
-      : false;
-    hash = showMusicPrefs ? "#/music-preferences" : "#/discover";
+    if (typeof _deps?.shouldShowFirstSong === "function" && _deps.shouldShowFirstSong()) {
+      hash = "#/first-song";
+    } else {
+      hash = "#/challenges";
+    }
   } else {
     hash = getPostOnboardingHash(_deps?.getAuthSession);
   }
@@ -206,7 +207,7 @@ function advanceOnboarding() {
 }
 
 /**
- * @param {{ getAuthSession: () => object|null, applyRoute: () => void, shouldShowMusicPreferences?: () => boolean }} deps
+ * @param {{ getAuthSession: () => object|null, applyRoute: () => void, shouldShowFirstSong?: () => boolean }} deps
  */
 export function initOnboarding(deps) {
   if (_inited) return;

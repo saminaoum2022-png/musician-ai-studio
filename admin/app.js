@@ -1915,6 +1915,35 @@ function renderFunnel(data) {
     ? `<a class="providerExtLink" href="${escapeHtml(vercel.dashboardUrl)}" target="_blank" rel="noopener noreferrer">Open Vercel Analytics →</a>`
     : "";
 
+  const onlineWindow = Number(vercel.onlineNowWindowMinutes || 5);
+  const onlineNowVal = vercel.onlineNow != null ? fmtNum(vercel.onlineNow) : "—";
+  const onlineNowSub = vercel.onlineNow != null
+    ? `Active last ${onlineWindow} min (web)`
+    : escapeHtml(vercel.onlineNowNote || "Vercel realtime approx.");
+
+  const pagesPerVisitor = vercel.pagesPerVisitor != null ? Number(vercel.pagesPerVisitor) : null;
+  const bounceHint = pagesPerVisitor != null && pagesPerVisitor <= 1.05
+    ? "Low depth — check Vercel for exact bounce %"
+    : pagesPerVisitor != null
+      ? `${pagesPerVisitor} pages / visitor`
+      : "See Vercel dashboard";
+
+  const bounceCard = vercel.dashboardUrl
+    ? `<a class="statCard statCard--link" href="${escapeHtml(vercel.dashboardUrl)}" target="_blank" rel="noopener noreferrer" title="${escapeHtml(vercel.bounceRateNote || "Bounce rate is in the Vercel dashboard only.")}">
+        <div class="statLabel">Bounce rate</div>
+        <div class="statValue statValue--muted">Vercel →</div>
+        <div class="statSub">${escapeHtml(bounceHint)}</div>
+      </a>`
+    : statCard("Bounce rate", "—", "Add Vercel token");
+
+  const onlineNowPill = vercelConfigured && vercel.onlineNow != null
+    ? `<div class="activityLivePill" title="Visitors with page activity in the last ${onlineWindow} minutes on nabadai.com">
+        <span class="activityLiveDot" aria-hidden="true"></span>
+        <strong>${fmtNum(vercel.onlineNow)}</strong>
+        <span>online now</span>
+      </div>`
+    : "";
+
   els.panels.funnel.innerHTML = adminPageStack(`
     ${vercelErrors}
     <section class="sectionCard sectionCard--data" data-funnel-section>
@@ -1923,11 +1952,15 @@ function renderFunnel(data) {
           <h3 class="sectionTitle">Web traffic</h3>
           <p class="sectionNote">${vercelNote}. ${dashboardLink}</p>
         </div>
-        <div class="activityHeadActions">${windowToggle}</div>
+        <div class="activityHeadActions">${onlineNowPill}${windowToggle}</div>
       </div>
       <div class="cardsGrid cardsGrid--inSection">
         ${statCard("Visitors", fmtNum(vercel.totals?.visitors), vercelConfigured ? "Unique (Vercel)" : "—")}
         ${statCard("Page views", fmtNum(vercel.totals?.pageviews), vercelConfigured ? "All loads" : "—")}
+        ${statCard("Online now", onlineNowVal, onlineNowSub)}
+        ${bounceCard}
+      </div>
+      <div class="cardsGrid cardsGrid--inSection">
         ${statCard("Top country", escapeHtml(vercel.countries?.[0]?.label || "—"), vercel.countries?.[0] ? `${fmtNum(vercel.countries[0].visitors)} visitors` : "")}
         ${statCard("Top device", escapeHtml(vercel.devices?.[0]?.label || "—"), vercel.devices?.[0] ? `${fmtNum(vercel.devices[0].visitors)} visitors` : "")}
       </div>
@@ -1938,7 +1971,7 @@ function renderFunnel(data) {
     </section>
 
     <div class="cardsGrid cardsGrid--twoCol">
-      ${renderVercelDimPanel("Countries", vercel.countries || [])}
+      ${renderVercelDimPanel("Countries", vercel.countries || [], "Full country names · ISO code in parentheses")}
       ${renderVercelDimPanel("Devices", vercel.devices || [])}
       ${renderVercelDimPanel("Operating systems", vercel.operatingSystems || [])}
       ${renderVercelDimPanel("Browsers", vercel.browsers || [])}

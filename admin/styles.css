@@ -659,6 +659,23 @@ button, input { font: inherit; }
 
 .statCard.isWarn .statValue { color: #fca5a5; }
 
+.statCard--link {
+  display: block;
+  text-decoration: none;
+  color: inherit;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.statCard--link:hover {
+  border-color: rgba(35, 213, 171, 0.45);
+  background: linear-gradient(168deg, rgba(35, 213, 171, 0.08), rgba(8, 11, 20, 0.92));
+}
+
+.statValue--muted {
+  font-size: 1.35rem;
+  color: var(--accent);
+}
+
 .sectionCard {
   background: var(--surface-raised);
   border: 1px solid var(--border);

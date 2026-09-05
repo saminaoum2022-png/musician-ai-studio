@@ -1,25 +1,7 @@
--- Product funnel analytics for admin Web funnel tab + Vercel custom events mirror.
--- Run in Supabase SQL Editor (shared production DB).
-
-create table if not exists public.product_analytics_events (
-  id bigint generated always as identity primary key,
-  event_name text not null check (char_length(event_name) <= 128),
-  event_data jsonb not null default '{}'::jsonb,
-  page_path text,
-  source text not null default 'web',
-  created_at timestamptz not null default now()
-);
-
-create index if not exists product_analytics_events_created_at_idx
-  on public.product_analytics_events (created_at desc);
-
-create index if not exists product_analytics_events_name_created_idx
-  on public.product_analytics_events (event_name, created_at desc);
-
-alter table public.product_analytics_events enable row level security;
-
-comment on table public.product_analytics_events is
-  'Allowlisted product funnel events from web/app (no PII). Admin reads via service role RPC.';
+-- Fix get_admin_web_funnel_summary breakdowns query (event_data bug in subquery x).
+-- Run once in Supabase SQL Editor, then:
+--   NOTIFY pgrst, 'reload schema';
+--   select public.get_admin_web_funnel_summary(28);
 
 create or replace function public.get_admin_web_funnel_summary(p_days int default 28)
 returns jsonb
@@ -113,3 +95,5 @@ $$;
 
 revoke all on function public.get_admin_web_funnel_summary(int) from public;
 grant execute on function public.get_admin_web_funnel_summary(int) to service_role;
+
+NOTIFY pgrst, 'reload schema';

@@ -20,6 +20,7 @@
     "check:seo": "node scripts/check-seo.mjs",
     "check:seo:local": "node scripts/check-seo.mjs --local",
     "build:app-store": "node scripts/build-app-store-metadata.mjs && node scripts/build-app-store-screenshots.mjs",
+    "build:press-kit": "node scripts/build-press-kit.mjs",
     "build:icons": "node scripts/build-app-icon.mjs",
     "sync:ios": "node scripts/sync-www.mjs && npx cap sync ios && node scripts/patch-ios-capacitor-plugins.mjs",
     "fix:xcode": "sh ios/App/scripts/fix-xcode-ios.sh",

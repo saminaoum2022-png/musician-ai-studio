@@ -20786,7 +20786,7 @@ input::placeholder, textarea::placeholder{
     color: inherit;
     opacity: 0.92;
   }
-  /* Create tab — Nabad trademark: diagonal teal/violet split circle. */
+  /* Create tab — Nabad trademark: diagonal teal/violet split squircle. */
   .mobileTabbar a.tabCreate{
     --tab-create-orbit-top: 4px;
     --tab-create-orbit-size: 46px;
@@ -20804,7 +20804,7 @@ input::placeholder, textarea::placeholder{
     width: var(--tab-create-orbit-size);
     height: var(--tab-create-orbit-size);
     transform: translateX(-50%);
-    border-radius: 50%;
+    border-radius: var(--nabad-squircle-radius);
     background: var(--brand-signature-gradient-diag);
     box-shadow:
       0 8px 22px rgba(0, 0, 0, 0.42),
@@ -20828,8 +20828,8 @@ input::placeholder, textarea::placeholder{
   .mobileTabbar a.tabCreate .tabIcoCreate{
     object-fit: contain;
     pointer-events: none;
-    width: 24px;
-    height: 24px;
+    width: 30px;
+    height: 30px;
   }
   .mobileTabbar a.tabCreate .tabIcoPlay circle{
     display: none;

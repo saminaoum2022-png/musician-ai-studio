@@ -212,6 +212,7 @@ import {
   applyUserTextInputDir,
   applyLyricsInputBidi,
   insertTextAtInputSelection,
+  isPrimarilyArabic,
   normalizePastedUserText,
   userTextHtml,
 } from "./text-bidi.js";
@@ -4332,6 +4333,10 @@ function syncRoutePanelVisibility(wanted) {
   try { syncDeskCoachPanel(); } catch {}
   try { syncCoachFabDesktopAnchor(); } catch {}
   try { ensurePageScrollHealthy(); } catch {}
+  if (route !== "discover") {
+    document.body.classList.remove("friendsFeedActive");
+    try { syncDiscoverFriendsFeedChrome(); } catch {}
+  }
 }
 
 function routeApplyFallback(err) {
@@ -4595,7 +4600,6 @@ function applyRoute({ passGen } = {}) {
   let pendingDiscoverPlaylistSlug = "";
   let pendingMessagesThreadId = "";
   let pendingMessagesThreadUserId = "";
-  let pendingMessagesInboxFilter = "";
   const playlistRouteMatch = route.match(/^discover\/playlist\/([a-z0-9_-]+)/i);
   if (playlistRouteMatch) {
     pendingDiscoverPlaylistSlug = decodeURIComponent(String(playlistRouteMatch[1] || "")).trim();
@@ -4644,15 +4648,6 @@ function applyRoute({ passGen } = {}) {
     } catch {
       pendingMessagesThreadId = "";
       pendingMessagesThreadUserId = "";
-    }
-  }
-  if (route === "messages") {
-    try {
-      const inboxQs = new URLSearchParams(rawRouteQuery);
-      const f = String(inboxQs.get("filter") || "").trim().toLowerCase();
-      if (["all", "requests", "chats"].includes(f)) pendingMessagesInboxFilter = f;
-    } catch {
-      pendingMessagesInboxFilter = "";
     }
   }
   const allowedRoutes = new Set([
@@ -5208,7 +5203,6 @@ function applyRoute({ passGen } = {}) {
     bindMessagesPageOnce();
     enterMessagesRoute({
       fromThread: prevRoute === "messages-thread",
-      inboxFilter: pendingMessagesInboxFilter,
     });
   }
   if (MESSAGES_FEATURE_ENABLED && wanted === "messages-thread") {
@@ -11332,21 +11326,22 @@ function isFriendsFeedSurface() {
 }
 
 function syncDiscoverFriendsFeedChrome() {
+  const route = String(document.body.getAttribute("data-route") || "");
   const panel = document.getElementById("discoverFriendsPanel");
   const mount = document.getElementById("discoverFeedMount");
   const feedStatus = document.getElementById("discoveryFeedStatus");
-  const onFriends = _discoverFeedTab === "friends";
-  document.body.classList.toggle(
-    "friendsFeedActive",
-    onFriends && String(document.body.getAttribute("data-route") || "") === "discover",
-  );
+  const onDiscover = route === "discover";
+  const onFriends = onDiscover && _discoverFeedTab === "friends";
+  document.body.classList.toggle("friendsFeedActive", onFriends);
   if (panel) {
     panel.hidden = !onFriends;
     panel.setAttribute("aria-hidden", onFriends ? "false" : "true");
+    panel.style.display = onFriends ? "" : "none";
   }
   if (mount) {
     mount.hidden = onFriends;
     mount.setAttribute("aria-hidden", onFriends ? "true" : "false");
+    mount.style.display = onFriends ? "none" : "";
   }
   if (feedStatus) feedStatus.hidden = onFriends;
   if (onFriends) {
@@ -31433,7 +31428,6 @@ let _messagesInboxRefreshing = false;
 let _messagesInboxHasLoadedOnce = false;
 let _messagesInboxFetchInFlight = null;
 let _messagesInboxScrollY = 0;
-let _messagesInboxFilter = "all";
 let _messagesInboxPollTimer = 0;
 let _dmReceiptHeartbeatTimer = 0;
 let _messagesMarkReadTimer = 0;
@@ -33295,7 +33289,6 @@ async function submitMessagesRequestSheet() {
     });
     closeMessagesRequestSheet();
     try { showToast("Message request sent.", { icon: "💬", durationMs: 2600 }); } catch {}
-    _messagesInboxFilter = "all";
     try { location.hash = "#/messages"; } catch {}
   } catch (e) {
     try { showToast(String(e?.message || "Could not send request"), { icon: "💬", durationMs: 2800 }); } catch {}
@@ -34666,37 +34659,7 @@ function messagesInboxSentRequestRowHtml(req) {
     </article>`;
 }
 
-function syncMessagesInboxFilterUi() {
-  const filter = String(_messagesInboxFilter || "all");
-  const nav = document.getElementById("messagesFilterTabs");
-  if (nav) setNabadTabsActiveByAttr(nav, filter, "data-messages-filter");
-  const requests = Array.isArray(_messagesInboxState.requests) ? _messagesInboxState.requests : [];
-  const badge = document.getElementById("messagesRequestsTabBadge");
-  if (badge) {
-    if (requests.length > 0) {
-      badge.hidden = false;
-      badge.textContent = requests.length > 99 ? "99+" : String(requests.length);
-    } else {
-      badge.hidden = true;
-      badge.textContent = "";
-    }
-  }
-  const lead = document.getElementById("messagesLead");
-  if (lead) {
-    if (filter === "requests") {
-      lead.textContent = requests.length
-        ? `${requests.length} ${requests.length === 1 ? "creator wants" : "creators want"} to message you.`
-        : "No pending message requests.";
-    } else if (filter === "chats") {
-      lead.textContent = "Your active conversations.";
-    } else {
-      lead.textContent = "Chats, requests, and messages waiting for a reply.";
-    }
-  }
-}
-
 function renderMessagesInbox() {
-  syncMessagesInboxFilterUi();
   const mount = document.getElementById("messagesInboxMount");
   const statusEl = document.getElementById("messagesStatus");
   if (!mount) return;
@@ -34705,35 +34668,20 @@ function renderMessagesInbox() {
     if (statusEl) statusEl.hidden = true;
     return;
   }
-  const filter = String(_messagesInboxFilter || "all");
   const threads = Array.isArray(_messagesInboxState.threads) ? _messagesInboxState.threads : [];
   const requests = Array.isArray(_messagesInboxState.requests) ? _messagesInboxState.requests : [];
   const sentRequests = Array.isArray(_messagesInboxState.sentRequests) ? _messagesInboxState.sentRequests : [];
-  const showRequests = filter === "all" || filter === "requests";
-  const showChats = filter === "all" || filter === "chats";
-  const showSent = filter === "all";
-  const visibleRequests = showRequests ? requests : [];
-  const visibleThreads = showChats ? threads : [];
-  const visibleSent = showSent ? sentRequests : [];
+  const visibleRequests = requests;
+  const visibleThreads = threads;
+  const visibleSent = sentRequests;
   // Nabad Coach is a pinned, always-present helper at the top of the inbox.
-  const coachHtml = showChats
-    ? `<section class="messagesInboxSection messagesInboxSection--coach"><div class="messagesInboxList">${coachInboxRowHtml()}</div></section>`
-    : "";
+  const coachHtml = `<section class="messagesInboxSection messagesInboxSection--coach"><div class="messagesInboxList">${coachInboxRowHtml()}</div></section>`;
 
   if (!visibleRequests.length && !visibleThreads.length && !visibleSent.length) {
-    let emptyTitle = "No messages yet";
-    let emptyLead = "When you and another creator follow each other, you can chat here.";
-    if (filter === "requests") {
-      emptyTitle = "No requests";
-      emptyLead = "When someone messages you without being a mutual fan, their request shows up here.";
-    } else if (filter === "chats") {
-      emptyTitle = "No chats yet";
-      emptyLead = "Start a conversation from a creator profile.";
-    }
     mount.innerHTML = `${coachHtml}
       <div class="messagesEmpty">
-        <p class="messagesEmptyTitle">${escapeHtml(emptyTitle)}</p>
-        <p class="messagesEmptyLead">${escapeHtml(emptyLead)}</p>
+        <p class="messagesEmptyTitle">No messages yet</p>
+        <p class="messagesEmptyLead">When you and another creator follow each other, you can chat here.</p>
       </div>`;
     if (statusEl) statusEl.hidden = true;
     return;
@@ -35140,9 +35088,10 @@ function messagesBubbleHtml(msg, viewerId, opts) {
   const body = String(parsed.text || "").trim();
   const isCoachMsg = !mine && String(msg?.sender_id || "") === COACH_SENDER_ID;
   const ctaHtml = isCoachMsg ? coachSignupCtasHtml(msg?.coachCtas) : "";
+  const coachRtl = isCoachMsg && isPrimarilyArabic(body);
   const textHtml = isCoachMsg
-    ? `<div class="messagesBubbleText messagesBubbleText--coachMd">${renderCoachMarkdown(body)}</div>${ctaHtml}`
-    : userTextHtml(body, { tag: "p", className: "messagesBubbleText", escapeHtml });
+    ? `<div class="messagesBubbleText messagesBubbleText--coachMd allowTextSelect${coachRtl ? " userTextBidi--rtl" : ""}"${coachRtl ? ' dir="rtl"' : ""}>${renderCoachMarkdown(body)}</div>${ctaHtml}`
+    : userTextHtml(body, { tag: "p", className: "messagesBubbleText allowTextSelect", escapeHtml });
   return `
     <div class="messagesBubbleWrap${mine ? " is-mine" : ""}${pendingCls}${failedCls}${readByPartnerCls}${deliveredToPartnerCls}${enterCls}${revealAttrs.cls}"${revealAttrs.style} data-msg-id="${escapeHtml(String(msg?.id || ""))}" data-client-msg-id="${escapeHtml(String(msg?.client_message_id || ""))}">
       <div class="messagesBubble${ctaHtml ? " messagesBubble--coachSignup" : ""}">
@@ -35834,6 +35783,10 @@ let _coachSignupFlow = null;
 const COACH_PROJECT_CHIP_STEPS = new Set([
   "path", "topic", "occasion", "language", "dialect", "dedicated", "name", "song_title", "lyrics",
 ]);
+/** Free-form chat steps during song plan (not chip-only). */
+const COACH_PROJECT_CHAT_STEPS = new Set([
+  "lyrics_collab", "lyrics_paste", "lyrics_gen_choice", "name_input", "song_title_input",
+]);
 /** Steps where typed chat must stay in Song plan — never fall through to generic Coach API. */
 const COACH_PROJECT_INTAKE_STEPS = COACH_PROJECT_CHIP_STEPS;
 const COACH_OCCASION_PRIMARY_IDS = ["birthday", "anniversary", "wedding", "apology", "congrats", "mom-day"];
@@ -35866,7 +35819,7 @@ const COACH_TYPING_ID = "coach:typing";
 // Nabad Coach mark — a glassy gradient orb inside a dual ring (teal orbit arcs
 // over a navy ring), designed to complement the "n" logo. Rendered as SVG so it
 // stays crisp, transparent (no white box), and recolorable at any size.
-const COACH_ORB_SVG = `<svg viewBox="0 0 100 100" aria-hidden="true"><defs><linearGradient id="coachOrbG" x1="26" y1="24" x2="74" y2="80" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#36e7c0"/><stop offset=".42" stop-color="#3f73f0"/><stop offset="1" stop-color="#6a23da"/></linearGradient><radialGradient id="coachOrbHi" cx=".36" cy=".30" r=".75"><stop offset="0" stop-color="#ffffff" stop-opacity=".55"/><stop offset=".45" stop-color="#ffffff" stop-opacity="0"/></radialGradient></defs><circle cx="50" cy="50" r="45" fill="none" stroke="#16264f" stroke-width="2.3"/><path class="coachOrbArc" d="M50 12 A38 38 0 0 1 88 50" fill="none" stroke="#2dd4bf" stroke-width="2.3" stroke-linecap="round"/><path class="coachOrbArc coachOrbArc--b" d="M50 88 A38 38 0 0 1 12 50" fill="none" stroke="#2dd4bf" stroke-width="2.3" stroke-linecap="round"/><circle cx="50" cy="50" r="27.5" fill="url(#coachOrbG)"/><circle cx="50" cy="50" r="27.5" fill="url(#coachOrbHi)"/></svg>`;
+const COACH_ORB_SVG = `<svg viewBox="0 0 100 100" aria-hidden="true"><defs><linearGradient id="coachOrbG" x1="26" y1="24" x2="74" y2="80" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#36e7c0"/><stop offset=".42" stop-color="#3f73f0"/><stop offset="1" stop-color="#6a23da"/></linearGradient><radialGradient id="coachOrbHi" cx=".36" cy=".30" r=".75"><stop offset="0" stop-color="#ffffff" stop-opacity=".55"/><stop offset=".45" stop-color="#ffffff" stop-opacity="0"/></radialGradient></defs><circle class="coachOrbOuterRing" cx="50" cy="50" r="45" fill="none" stroke="#16264f" stroke-width="2.3"/><path class="coachOrbArc" d="M50 12 A38 38 0 0 1 88 50" fill="none" stroke="#2dd4bf" stroke-width="2.3" stroke-linecap="round"/><path class="coachOrbArc coachOrbArc--b" d="M50 88 A38 38 0 0 1 12 50" fill="none" stroke="#2dd4bf" stroke-width="2.3" stroke-linecap="round"/><circle cx="50" cy="50" r="27.5" fill="url(#coachOrbG)"/><circle cx="50" cy="50" r="27.5" fill="url(#coachOrbHi)"/></svg>`;
 let _coachReplyInFlight = false;
 
 function isCoachThreadId(tid) {
@@ -36008,6 +35961,9 @@ function coachEmptyProjectFlow(overrides = {}) {
     recipientName: "",
     songTitle: "",
     lyricsMode: "",
+    lyricsText: "",
+    lyricsDraft: "",
+    lyricsCollabActive: false,
     ...overrides,
   };
 }
@@ -36142,8 +36098,20 @@ function coachProjectPlanRows(flow) {
   rows.push({
     id: "lyrics",
     label: "Lyrics",
-    value: flow.lyricsMode === "have" ? "I have lyrics" : flow.lyricsMode === "generate" ? "Write for me" : "—",
-    done: Boolean(flow.lyricsMode),
+    value: (() => {
+      const approved = String(flow.lyricsText || "").trim();
+      if (approved) {
+        const preview = approved.split("\n").filter(Boolean).slice(0, 2).join(" · ");
+        const short = preview.slice(0, 80);
+        return short + (preview.length > 80 ? "…" : "");
+      }
+      if (flow.step === "lyrics_collab") return "Writing together…";
+      if (flow.step === "lyrics_paste") return "Paste or co-write…";
+      if (flow.lyricsMode === "have") return "I have lyrics";
+      if (flow.lyricsMode === "generate") return "Write for me";
+      return "—";
+    })(),
+    done: Boolean(String(flow.lyricsText || "").trim()) || Boolean(flow.lyricsMode),
   });
   const artwork = coachArtworkLabelForFlow(flow);
   if (artwork !== "—") {
@@ -36192,6 +36160,9 @@ function syncCoachSongPlanBar() {
       song_title: "Add a song title?",
       song_title_input: "Type song title",
       lyrics: "Lyrics option",
+      lyrics_collab: "Writing lyrics together",
+      lyrics_paste: "Paste or write lyrics",
+      lyrics_gen_choice: "How to handle lyrics",
       summary: "Ready — open Create",
     };
     subEl.textContent = pendingLabels[pending] || "Tap to review or re-ask";
@@ -36443,6 +36414,164 @@ function detectCoachSongIntent(text) {
   if (/(اغن|غن)/.test(ar) && /(اعمل|ساعد|بدي|فيك)/.test(ar)) return true;
   return false;
 }
+function getLatestCoachCtasFromChat(chat = loadCoachChat()) {
+  const list = Array.isArray(chat) ? chat : [];
+  for (let i = list.length - 1; i >= 0; i -= 1) {
+    const ctas = list[i]?.coachCtas;
+    if (Array.isArray(ctas) && ctas.length) return ctas;
+  }
+  return [];
+}
+function detectCoachLyricsHelpIntent(text) {
+  const raw = String(text || "").trim();
+  if (!raw) return false;
+  const t = raw.toLowerCase();
+  const ar = raw.replace(/[أإآ]/g, "ا").replace(/ة/g, "ه");
+  return (
+    /\b(help|write|draft|co[- ]?write|work on|need).{0,40}\b(lyric|lyrics|words|verse|chorus)\b/.test(t)
+    || /\b(lyric|lyrics).{0,40}\b(help|write|draft|for me)\b/.test(t)
+    || /(ساعد|اكتب|اعمل|بدي|فيك).{0,30}(كلمات|اغاني|اغنية|غنية|شعر|بيت)/.test(ar)
+    || /(كلمات|اغاني|اغنية|غنية).{0,30}(ساعد|اكتب|اعمل)/.test(ar)
+  );
+}
+function detectCoachLyricsApprovalIntent(text) {
+  const raw = String(text || "").trim();
+  if (!raw) return false;
+  const t = raw.toLowerCase();
+  const ar = raw.replace(/[أإآ]/g, "ا").replace(/ة/g, "ه");
+  return (
+    /\b(use these|looks good|love it|perfect|approved|approve|done|that's it|that works|keep these|save these)\b/.test(t)
+    || /\b(yes|yep|yeah|ok|okay)\b.{0,20}\b(lyrics|these|them|it)\b/.test(t)
+    || /(تمام|ممتاز|حلو|زابط|اوك|استخدم|احفظ|خلص|جاهز|موافق)/.test(ar)
+  );
+}
+function detectCoachResumePlanIntent(text) {
+  const raw = String(text || "").trim();
+  if (!raw) return false;
+  const t = raw.toLowerCase();
+  const ar = raw.replace(/[أإآ]/g, "ا").replace(/ة/g, "ه");
+  return (
+    /\b(back to|continue|resume|finish|song plan|view plan|summary|next step)\b/.test(t)
+    || /(كمل|كمّل|ارجع|الخطة|ملخص|التالي)/.test(ar)
+  );
+}
+function looksLikeLyricsPaste(text) {
+  const raw = String(text || "").trim();
+  if (raw.length < 48) return false;
+  const lines = raw.split("\n").map((l) => l.trim()).filter(Boolean);
+  if (lines.length >= 3) return true;
+  if (raw.length >= 120 && /(\[|\(|verse|chorus|hook|بيت|كوبل|مقطع)/i.test(raw)) return true;
+  return raw.length >= 200;
+}
+function extractCoachDraftLyrics(text) {
+  const raw = String(text || "");
+  const m = raw.match(/\[DRAFT LYRICS\]\s*([\s\S]*?)\s*\[\/DRAFT LYRICS\]/i);
+  return m ? String(m[1] || "").trim() : "";
+}
+function stripCoachDraftLyricsBlock(text) {
+  return String(text || "")
+    .replace(/\n*\[DRAFT LYRICS\][\s\S]*?\[\/DRAFT LYRICS\]\s*/gi, "")
+    .trim();
+}
+function inferCoachDraftLyricsFromReply(text) {
+  const raw = String(text || "").trim();
+  if (!raw) return "";
+  const lines = raw.split("\n");
+  const sectionRe = /^(verse\s*\d*|chorus|hook|bridge|pre-chorus|outro|intro)\s*:?\s*$/i;
+  const bracketRe = /^\[(verse|chorus|hook|bridge|pre-chorus|outro|intro)[^\]]*\]\s*$/i;
+  const arRe = /^(بيت|كوبل|مقطع|لازمة|لازمه|ق\s*chorus)/i;
+  for (let i = 0; i < lines.length; i += 1) {
+    const line = String(lines[i] || "").trim();
+    if (sectionRe.test(line) || bracketRe.test(line) || arRe.test(line)) {
+      return lines.slice(i).join("\n").trim();
+    }
+  }
+  const parts = raw.split(/\n\s*\n/);
+  if (parts.length >= 2) {
+    const tail = parts.slice(1).join("\n\n").trim();
+    const tailLines = tail.split("\n").map((l) => l.trim()).filter(Boolean);
+    if (tailLines.length >= 3 && tail.length >= 48) return tail;
+  }
+  return "";
+}
+function formatCoachLyricsCollabDisplay(replyText) {
+  const raw = String(replyText || "").trim();
+  if (!raw) return { draft: "", display: "" };
+  let draft = extractCoachDraftLyrics(raw) || inferCoachDraftLyricsFromReply(raw);
+  let intro = stripCoachDraftLyricsBlock(raw);
+  if (draft && intro) {
+    intro = intro.replace(/\*\*Here's an updated draft[^*]*\*\*/gi, "").trim();
+    intro = intro.replace(/here'?s an updated draft[^.?!]*[.?!]/gi, "").trim();
+  }
+  if (draft) {
+    const display = intro ? `${intro}\n\n${draft}` : draft;
+    return { draft, display: display.trim() };
+  }
+  return { draft: "", display: intro || raw };
+}
+function coachLyricsCollabCtas() {
+  return [
+    { id: "lyrics-approve", label: "Use these lyrics ✓", topic: "lyrics:approve" },
+    { id: "lyrics-refine", label: "Keep refining", topic: "lyrics:refine" },
+    { id: "lyrics-plan", label: "Back to song plan", topic: "lyrics:plan" },
+  ];
+}
+function coachLyricsGenerateChoiceCtas() {
+  return [
+    { id: "lyrics-collab", label: "Write lyrics with me", topic: "lyrics:collab" },
+    { id: "lyrics-skip-gen", label: "Skip — generate in Create", topic: "lyrics:skip_gen" },
+  ];
+}
+function coachFlowHasLyricsReady(flow) {
+  return Boolean(String(flow?.lyricsText || "").trim());
+}
+function coachFlowShouldAutoGenerateLyrics(flow) {
+  return flow?.lyricsMode === "generate" && !coachFlowHasLyricsReady(flow);
+}
+function coachApplyLyricsToCreate(flow) {
+  const lyrics = String(flow?.lyricsText || "").trim();
+  if (!lyrics || !els.sunoPrompt) return;
+  els.sunoPrompt.value = lyrics;
+  try { autoResizeLyricsBox(); } catch {}
+  try { setLyricsInputMode("write", { silent: true }); } catch {}
+}
+function startCoachLyricsCollab(flow, { promptMessage = "", ctas = [] } = {}) {
+  if (!flow) return;
+  flow.step = "lyrics_collab";
+  flow.lyricsCollabActive = true;
+  if (!flow.lyricsMode) flow.lyricsMode = "generate";
+  saveCoachSignupFlow(flow);
+  const lead = promptMessage || "Let's write lyrics that match your song plan ✍️ Tell me the mood, a story, or a line to start from — I'll draft and we can refine.";
+  appendCoachSignupCoachMessage(lead, ctas.length ? ctas : []);
+  try { syncMessagesComposerForSignupFlow(); } catch {}
+}
+function approveCoachLyricsDraft(flow, lyricsOverride = "") {
+  if (!flow) return;
+  const text = String(lyricsOverride || flow.lyricsDraft || "").trim();
+  if (!text) {
+    appendCoachSignupCoachMessage("I don't have a lyric draft saved yet — ask me to write a full draft, then tap **Use these lyrics ✓**.", coachLyricsCollabCtas());
+    return;
+  }
+  flow.lyricsText = text.slice(0, COACH_MESSAGE_MAX);
+  flow.lyricsDraft = flow.lyricsText;
+  flow.lyricsMode = "have";
+  flow.lyricsCollabActive = false;
+  saveCoachSignupFlow(flow);
+  appendCoachSignupCoachMessage("Saved your lyrics to the **Song plan** ✨", []);
+  showCoachProjectSummary(flow);
+}
+function saveCoachLyricsFromPaste(flow, text) {
+  if (!flow) return;
+  const clean = String(text || "").trim().slice(0, COACH_MESSAGE_MAX);
+  if (!clean) return;
+  flow.lyricsText = clean;
+  flow.lyricsDraft = clean;
+  flow.lyricsMode = "have";
+  flow.lyricsCollabActive = false;
+  saveCoachSignupFlow(flow);
+  appendCoachSignupCoachMessage("Got it — saved your lyrics to the **Song plan** ✨", []);
+  showCoachProjectSummary(flow);
+}
 function startCoachSongPlanFromMenu() {
   closeCoachActionSheet();
   closeMessagesComposerSheet();
@@ -36463,7 +36592,7 @@ function openCoachCreateFromComposerSheet() {
     try { showToast("Finish your song plan first — tap View song plan.", { durationMs: 2800 }); } catch {}
     return;
   }
-  finishCoachSignupFlow({ hasLyrics: flow.lyricsMode === "have" });
+  finishCoachSignupFlow({ hasLyrics: coachFlowHasLyricsReady(flow) || flow.lyricsMode === "have" });
 }
 function tryParseCoachProjectStepAnswer(step, text, flow = loadCoachSignupFlow()) {
   const t = String(text || "").trim().toLowerCase();
@@ -36539,9 +36668,73 @@ function applyCoachProjectParsedAnswer(flow, parsed, echoLabel = "") {
   }
   handleCoachSignupCta(`${parsed.kind}:${parsed.value}`, echoLabel || "");
 }
+async function sendCoachLyricsCollaboration(text, input, flow) {
+  const prior = Array.isArray(_messagesList) ? _messagesList.filter((m) => !m.coachTyping) : [];
+  const history = coachHistoryForApi(prior);
+  const latestCtas = getLatestCoachCtasFromChat(prior);
+  const userMsg = {
+    id: `coach:u:${Date.now()}:${Math.random().toString(36).slice(2, 6)}`,
+    sender_id: String(authSession?.user?.id || "me"),
+    body: text,
+    created_at: new Date().toISOString(),
+    sendStatus: "sent",
+  };
+  if (input) {
+    input.value = "";
+    syncMessagesComposerInputHeight(input);
+  }
+  _messagesList = [...prior, userMsg];
+  saveCoachChat(_messagesList);
+  renderMessagesMount({ scrollToBottom: true, forceScroll: true });
+  _coachReplyInFlight = true;
+  _messagesList = [
+    ..._messagesList,
+    { id: COACH_TYPING_ID, sender_id: COACH_SENDER_ID, body: "", created_at: new Date().toISOString(), coachTyping: true },
+  ];
+  renderMessagesMount({ scrollToBottom: true, forceScroll: true });
+  let replyText = "";
+  try {
+    const payload = augmentCoachApiPayload({
+      message: text,
+      history,
+      songProjectActive: true,
+      projectFlow: flow,
+      latestCoachCtas: latestCtas,
+      contextAppendixExtra: "Mode: lyrics_collab. Co-write lyrics matching the plan. When presenting a full draft, put the complete lyrics inside [DRAFT LYRICS]...[/DRAFT LYRICS] — the app shows them in chat. Answer chip questions from plan state.",
+    });
+    const data = await messagesApi("/api/coach", {
+      method: "POST",
+      timeoutMs: 45000,
+      body: JSON.stringify(payload),
+    });
+    replyText = data?.ok ? String(data.reply || "").trim() : "I'm here — tell me the mood or a line to start from, and I'll draft lyrics.";
+  } catch {
+    replyText = "I'm here — tell me the mood or a line to start from, and I'll draft lyrics.";
+  }
+  _coachReplyInFlight = false;
+  const { draft, display } = formatCoachLyricsCollabDisplay(replyText);
+  if (draft) {
+    flow.lyricsDraft = draft.slice(0, COACH_MESSAGE_MAX);
+    saveCoachSignupFlow(flow);
+  }
+  const base = (Array.isArray(_messagesList) ? _messagesList : []).filter((m) => m.id !== COACH_TYPING_ID);
+  const ctas = draft || flow.lyricsDraft ? coachLyricsCollabCtas() : [];
+  _messagesList = [...base, {
+    id: `coach:a:${Date.now()}`,
+    sender_id: COACH_SENDER_ID,
+    body: display || replyText,
+    coachCtas: ctas,
+    created_at: new Date().toISOString(),
+    sendStatus: "sent",
+  }];
+  saveCoachChat(_messagesList);
+  renderMessagesMount({ scrollToBottom: true, forceScroll: true });
+  try { input?.focus({ preventScroll: true }); } catch {}
+}
 async function sendCoachSideHelpDuringProject(text, input, flow) {
   const prior = Array.isArray(_messagesList) ? _messagesList.filter((m) => !m.coachTyping) : [];
   const history = coachHistoryForApi(prior);
+  const latestCtas = getLatestCoachCtasFromChat(prior);
   const userMsg = {
     id: `coach:u:${Date.now()}:${Math.random().toString(36).slice(2, 6)}`,
     sender_id: String(authSession?.user?.id || "me"),
@@ -36569,7 +36762,9 @@ async function sendCoachSideHelpDuringProject(text, input, flow) {
       message: text,
       history,
       songProjectActive: true,
-      contextAppendixExtra: `The user is mid song-setup. Pending field: ${pendingHint}. Answer their question briefly, then remind them to use the chips or Song plan to answer ${pendingHint}. Do not pretend they already chose.`,
+      projectFlow: flow,
+      latestCoachCtas: latestCtas,
+      contextAppendixExtra: `Pending step field: ${pendingHint}. Answer using plan state and chips you offered. Brief side answer, then nudge them to continue the plan unless they are co-writing lyrics.`,
     });
     const data = await messagesApi("/api/coach", {
       method: "POST",
@@ -36582,7 +36777,9 @@ async function sendCoachSideHelpDuringProject(text, input, flow) {
   }
   _coachReplyInFlight = false;
   const base = (Array.isArray(_messagesList) ? _messagesList : []).filter((m) => m.id !== COACH_TYPING_ID);
-  const suffix = `\n\n_When you're ready, answer **${pendingHint}** with the chips or tap **Song plan**._`;
+  const suffix = flow.step === "lyrics_collab" || flow.step === "lyrics_paste"
+    ? ""
+    : `\n\n_When you're ready, answer **${pendingHint}** with the chips or tap **Song plan**._`;
   _messagesList = [...base, {
     id: `coach:a:${Date.now()}`,
     sender_id: COACH_SENDER_ID,
@@ -36597,6 +36794,7 @@ async function sendCoachSideHelpDuringProject(text, input, flow) {
 }
 function ensurePendingCoachStepPrompt(flow) {
   if (!flow || flow.step === "summary" || flow.step === "name_input" || flow.step === "song_title_input") return;
+  if (flow.step === "lyrics_collab" || flow.step === "lyrics_paste" || flow.step === "lyrics_gen_choice") return;
   const ctas = coachCtasForFlowStep(flow);
   if (!ctas.length) return;
   const chat = loadCoachChat();
@@ -36618,6 +36816,8 @@ function coachCtasForFlowStep(flow) {
     case "name": return coachSignupNameCtas();
     case "song_title": return coachSongTitleCtas();
     case "lyrics": return coachSignupLyricsCtas();
+    case "lyrics_gen_choice": return coachLyricsGenerateChoiceCtas();
+    case "lyrics_collab": return coachLyricsCollabCtas();
     case "summary": return coachProjectSummaryCtas();
     default: return [];
   }
@@ -36867,6 +37067,9 @@ function startCoachSignupTopicFlow(topicId, customLabel = "") {
     recipientName: "",
     songTitle: "",
     lyricsMode: "",
+    lyricsText: "",
+    lyricsDraft: "",
+    lyricsCollabActive: false,
     nameSkipped: false,
     songTitleSkipped: false,
   });
@@ -36883,6 +37086,10 @@ function finishCoachSignupFlow({ hasLyrics = false } = {}) {
   const flow = loadCoachSignupFlow();
   const uid = String(authSession?.user?.id || "").trim();
   if (!flow || !uid) return;
+  const lyricsText = String(flow.lyricsText || "").trim();
+  const hasLyricsInPlan = Boolean(lyricsText);
+  const autoGenerate = coachFlowShouldAutoGenerateLyrics(flow);
+  const openWithLyrics = hasLyricsInPlan || hasLyrics;
   try {
     trackNabad("nabad_song_plan_complete", {
       path: String(flow.path || "vibe").slice(0, 40),
@@ -36912,7 +37119,7 @@ function finishCoachSignupFlow({ hasLyrics = false } = {}) {
       id: `coach:occasion:${occ?.id || flow.occasionId}`,
       title: seed.title || occ?.title || "My song",
       prompt: seed.prompt,
-      lyrics: hasLyrics ? "" : String(occ?.lyricSeed || "").trim(),
+      lyrics: hasLyricsInPlan ? lyricsText : openWithLyrics ? "" : String(occ?.lyricSeed || "").trim(),
       style: "",
       tags: occ?.tags || [],
       challenge: {
@@ -36926,14 +37133,20 @@ function finishCoachSignupFlow({ hasLyrics = false } = {}) {
       },
     });
     coachApplyArtworkTagsForFlow(flow);
-    if (!hasLyrics) {
+    if (hasLyricsInPlan) {
+      coachApplyLyricsToCreate(flow);
+    } else if (!openWithLyrics) {
       try { setLyricsInputMode("generate", { silent: true }); } catch {}
+    } else {
+      try { setLyricsInputMode("write", { silent: true }); } catch {}
     }
-    coachScheduleLyricsGenerationIfReady(hasLyrics);
+    coachScheduleLyricsGenerationIfReady(openWithLyrics && !hasLyricsInPlan);
     appendCoachSignupCoachMessage(
-      hasLyrics
-        ? "Opening Create with your occasion preset — paste your lyrics there ✨"
-        : "Opening Create — occasion clip preset loaded; generating lyrics… ✨",
+      hasLyricsInPlan
+        ? "Opening Create with your lyrics and occasion preset ✨"
+        : openWithLyrics
+          ? "Opening Create with your occasion preset — paste your lyrics there ✨"
+          : "Opening Create — occasion clip preset loaded; generating lyrics… ✨",
       [],
     );
     return;
@@ -36947,8 +37160,8 @@ function finishCoachSignupFlow({ hasLyrics = false } = {}) {
     dialect,
     topic: { id: flow.topic === "custom" ? "custom" : flow.topic },
     seed: flow.topic === "custom" ? { ...seed, prompt: enrichFirstSongSeedFromCoachFlow({ prompt: flow.customTopicLabel }, flow).prompt } : seed,
-    autoGenerateLyrics: !hasLyrics,
-    inputMode: hasLyrics ? "write" : "generate",
+    autoGenerateLyrics: autoGenerate,
+    inputMode: openWithLyrics ? "write" : "generate",
     dedicatedTo: flow.dedicatedTo,
     recipientName: flow.recipientName,
   });
@@ -36956,10 +37169,15 @@ function finishCoachSignupFlow({ hasLyrics = false } = {}) {
   if (flow.songTitle && els.sunoTitle) {
     els.sunoTitle.value = String(flow.songTitle).trim().slice(0, 80);
   }
+  if (hasLyricsInPlan) {
+    coachApplyLyricsToCreate(flow);
+  }
   appendCoachSignupCoachMessage(
-    hasLyrics
-      ? "Opening Create — paste or write your lyrics there ✨"
-      : "Opening Create — I'll start writing your lyrics ✨",
+    hasLyricsInPlan
+      ? "Opening Create with your song plan and lyrics ✨"
+      : openWithLyrics
+        ? "Opening Create — paste or write your lyrics there ✨"
+        : "Opening Create — I'll start writing your lyrics ✨",
     [],
   );
 }
@@ -36973,6 +37191,14 @@ function syncMessagesComposerForSignupFlow() {
   }
   if (flow?.step === "song_title_input") {
     input.placeholder = "Song title…";
+    return;
+  }
+  if (flow?.step === "lyrics_collab") {
+    input.placeholder = "Describe the lyrics or paste a line…";
+    return;
+  }
+  if (flow?.step === "lyrics_paste") {
+    input.placeholder = "Paste lyrics or ask for help…";
     return;
   }
   syncMessagesComposerForThread();
@@ -37271,13 +37497,51 @@ function handleCoachSignupCta(topicId, label = "") {
     return;
   }
   if (kind === "lyrics") {
+    if (value === "approve") {
+      approveCoachLyricsDraft(flow);
+      return;
+    }
+    if (value === "refine") {
+      flow.step = "lyrics_collab";
+      flow.lyricsCollabActive = true;
+      saveCoachSignupFlow(flow);
+      appendCoachSignupCoachMessage("Sure — tell me what to change (mood, a line, chorus, language…)", []);
+      try { syncMessagesComposerForSignupFlow(); } catch {}
+      const input = document.getElementById("messagesComposerInput");
+      try { input?.focus({ preventScroll: true }); } catch {}
+      return;
+    }
+    if (value === "plan" || value === "skip_gen") {
+      flow.lyricsCollabActive = false;
+      saveCoachSignupFlow(flow);
+      showCoachProjectSummary(flow);
+      return;
+    }
+    if (value === "collab") {
+      startCoachLyricsCollab(flow);
+      return;
+    }
     flow.lyricsMode = value === "have" ? "have" : "generate";
     saveCoachSignupFlow(flow);
-    showCoachProjectSummary(flow);
+    if (value === "have") {
+      flow.step = "lyrics_paste";
+      saveCoachSignupFlow(flow);
+      appendCoachSignupCoachMessage(
+        "Paste your lyrics below, or tap **Help me write lyrics** and we'll draft together ✍️",
+        [{ id: "lyrics-collab", label: "Help me write lyrics", topic: "lyrics:collab" }],
+      );
+      return;
+    }
+    flow.step = "lyrics_gen_choice";
+    saveCoachSignupFlow(flow);
+    appendCoachSignupCoachMessage(
+      "Want to write lyrics together here, or generate them automatically in Create?",
+      coachLyricsGenerateChoiceCtas(),
+    );
     return;
   }
   if (kind === "project") {
-    if (value === "open") finishCoachSignupFlow({ hasLyrics: flow.lyricsMode === "have" });
+    if (value === "open") finishCoachSignupFlow({ hasLyrics: coachFlowHasLyricsReady(flow) || flow.lyricsMode === "have" });
     else if (value === "plan") openCoachSongPlanSheet();
     return;
   }
@@ -37321,6 +37585,7 @@ function syncMessagesComposerForThread() {
 
 function syncCoachComposerSheet() {
   const coach = isCoachThreadId(_conversationId);
+  document.body.classList.toggle("coachComposerMode", coach);
   const sheetTitle = document.getElementById("messagesComposerSheetTitle");
   const dmList = document.getElementById("messagesComposerSheetListDm");
   const coachList = document.getElementById("messagesComposerSheetListCoach");
@@ -37438,7 +37703,7 @@ function enterCoachThread(bootToken) {
   scheduleMessagesComposerAutofocus({ bootToken, delayMs: 120 });
   syncCoachSongPlanBar();
   const activeFlow = loadCoachSignupFlow();
-  if (activeFlow && (COACH_PROJECT_INTAKE_STEPS.has(activeFlow.step) || activeFlow.step === "summary")) {
+  if (activeFlow && (COACH_PROJECT_INTAKE_STEPS.has(activeFlow.step) || COACH_PROJECT_CHAT_STEPS.has(activeFlow.step) || activeFlow.step === "summary")) {
     ensurePendingCoachStepPrompt(activeFlow);
   }
 }
@@ -37457,7 +37722,49 @@ async function sendCoachMessage(text, input) {
     handleCoachSongTitleTyped(text, input);
     return;
   }
+  if (flow && (flow.step === "lyrics_collab" || flow.step === "lyrics_paste")) {
+    if (detectCoachLyricsApprovalIntent(text)) {
+      if (input) {
+        input.value = "";
+        syncMessagesComposerInputHeight(input);
+      }
+      appendCoachSignupUserEcho(text);
+      approveCoachLyricsDraft(flow, looksLikeLyricsPaste(text) ? text : "");
+      return;
+    }
+    if (detectCoachResumePlanIntent(text)) {
+      if (input) {
+        input.value = "";
+        syncMessagesComposerInputHeight(input);
+      }
+      appendCoachSignupUserEcho(text);
+      flow.lyricsCollabActive = false;
+      saveCoachSignupFlow(flow);
+      showCoachProjectSummary(flow);
+      return;
+    }
+    if (flow.step === "lyrics_paste" && looksLikeLyricsPaste(text) && !detectCoachLyricsHelpIntent(text)) {
+      if (input) {
+        input.value = "";
+        syncMessagesComposerInputHeight(input);
+      }
+      appendCoachSignupUserEcho(text.slice(0, 200) + (text.length > 200 ? "…" : ""));
+      saveCoachLyricsFromPaste(flow, text);
+      return;
+    }
+    if (detectCoachLyricsHelpIntent(text) || flow.step === "lyrics_collab") {
+      await sendCoachLyricsCollaboration(text, input, flow);
+      return;
+    }
+    await sendCoachSideHelpDuringProject(text, input, flow);
+    return;
+  }
   if (flow && COACH_PROJECT_INTAKE_STEPS.has(flow.step)) {
+    if (flow.step === "lyrics" && detectCoachLyricsHelpIntent(text)) {
+      startCoachLyricsCollab(flow);
+      await sendCoachLyricsCollaboration(text, input, flow);
+      return;
+    }
     const parsed = tryParseCoachProjectStepAnswer(flow.step, text, flow);
     if (parsed) {
       if (input) {
@@ -37717,14 +38024,8 @@ function startMessagesInboxPoll() {
   restartMessagesInboxPoll();
 }
 
-function enterMessagesRoute({ fromThread = false, inboxFilter = "" } = {}) {
+function enterMessagesRoute({ fromThread = false } = {}) {
   syncFriendsMessagesBtn();
-  const filter = String(inboxFilter || "").trim().toLowerCase();
-  if (["all", "requests", "chats"].includes(filter)) {
-    _messagesInboxFilter = filter;
-  } else if (!fromThread) {
-    _messagesInboxFilter = "all";
-  }
   startMessagesInboxPoll();
   startMessagesInboxRealtime();
   loadMessagesInboxFromStorage();
@@ -37902,6 +38203,7 @@ function bindMessagesPageOnce() {
     if (attachBtn) {
       e.preventDefault();
       try { haptic("light"); } catch {}
+      syncCoachComposerSheet();
       openMessagesComposerSheet();
       return;
     }
@@ -38012,6 +38314,16 @@ function bindMessagesPageOnce() {
       scrollMessagesMountToBottom({ force: true });
       void maybeSendDmTypingPulse();
     });
+    composer.addEventListener("paste", (e) => {
+      const raw = e.clipboardData?.getData("text/plain");
+      if (raw == null) return;
+      e.preventDefault();
+      insertTextAtInputSelection(composer, normalizePastedUserText(raw));
+      applyUserTextInputDir(composer);
+      syncMessagesComposerInputHeight(composer);
+      updateMessagesComposerReserve();
+      scrollMessagesMountToBottom({ force: true });
+    });
     composer.addEventListener("focus", () => {
       syncMessagesComposerInputHeight(composer);
       syncMessagesThreadComposerInset();
@@ -38042,21 +38354,6 @@ function bindMessagesPageOnce() {
         e.preventDefault();
         void submitMessagesRequestSheet();
       }
-    });
-  }
-
-  if (!document.documentElement.dataset.messagesFilterTabsWired) {
-    document.documentElement.dataset.messagesFilterTabsWired = "1";
-    document.getElementById("messagesFilterTabs")?.addEventListener("click", (e) => {
-      const tab = e.target.closest("[data-messages-filter]");
-      if (!tab) return;
-      const next = String(tab.getAttribute("data-messages-filter") || "all");
-      if (!["all", "requests", "chats"].includes(next)) return;
-      _messagesInboxFilter = next;
-      try { haptic("light"); } catch {}
-      const hashPath = next === "all" ? "#/messages" : `#/messages?filter=${encodeURIComponent(next)}`;
-      try { history.replaceState(null, "", hashPath); } catch {}
-      renderMessagesInbox();
     });
   }
 

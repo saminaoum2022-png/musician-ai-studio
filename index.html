@@ -366,7 +366,7 @@
         <div class="headerMain">
           <h1 id="brandTitle" class="brandTitle" title="Start new"><span class="brandLockup brandLockup--header"><span class="brandLockupMark" aria-hidden="true"></span><span class="brandLockupText brandPrimary">abadAi</span></span><span id="brandSecondary" class="brandSecondary">Music</span></h1>
           <div class="journeyBar" aria-label="Primary navigation">
-            <a href="#/discover" class="journeyStep" data-route-link="discover"><span class="journeyIco" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.75"/><path d="M12 4v3.5l2.75 2.75" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"/><circle cx="12" cy="12" r="1.35" fill="currentColor" stroke="none"/></svg></span><span class="journeyLabel">Home</span></a>
+            <a href="#/discover" class="journeyStep" data-route-link="discover"><span class="journeyIco" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4.75 19.75 11v8.25a1.25 1.25 0 0 1-1.25 1.25H5.5A1.25 1.25 0 0 1 4.25 19.25V11L12 4.75z"/></svg></span><span class="journeyLabel">Home</span></a>
             <a href="#/messages" class="journeyStep" data-route-link="messages"><span class="journeyIco" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5Z"/></svg></span><span class="journeyLabel">Messages</span></a>
             <a href="#/challenges" class="journeyStep" data-route-link="challenges"><span class="journeyIco" aria-hidden="true"><svg class="nabadCreateIco" viewBox="0 0 24 24" fill="none"><circle class="nabadCreateIcoRing" cx="12" cy="12" r="9"/><path class="nabadCreateIcoBarV" d="M12 7v10" stroke-width="2.4" stroke-linecap="round"/><path class="nabadCreateIcoBarH" d="M7 12h10" stroke-width="2.4" stroke-linecap="round"/></svg></span><span class="journeyLabel">Create</span></a>
             <a href="#/activity" class="journeyStep" data-route-link="activity"><span class="journeyIco" aria-hidden="true"><svg viewBox="0 0 24 24"><polyline fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></span><span class="journeyLabel">Activity</span></a>
@@ -1603,7 +1603,7 @@
 
         <section class="activityPage wide" data-route="activity" id="activityPage">
           <header class="activityHead">
-            <h2 class="activityTitle appScreenTitle" id="activityTitle">Activity</h2>
+            <h2 class="discoveryStudioH2 appScreenTitle" id="activityTitle">Activity</h2>
           </header>
           <nav id="activityFilterTabs" class="activityFilterBar" role="tablist" aria-label="Activity filters">
             <button type="button" class="activityFilterBtn is-active" role="tab" aria-selected="true" data-activity-filter="all">All</button>
@@ -1701,21 +1701,11 @@
         </section>
 
         <section class="messagesPage wide" data-route="messages" id="messagesPage">
-          <header class="messagesHead">
-            <div class="messagesHeadCopy">
+          <header class="discoveryStudioHead">
+            <div class="discoveryStudioTitles">
               <h2 class="discoveryStudioH2 appScreenTitle">Messages</h2>
-              <p class="messagesLead" id="messagesLead">Chat with creators you're a fan of.</p>
             </div>
           </header>
-          <nav class="nabadTabs discoverFeedTabs" id="messagesFilterTabs" aria-label="Message filters">
-            <div class="nabadTabsTrack discoverFeedTabsTrack" role="tablist">
-              <button type="button" class="nabadTabsTab is-active" data-messages-filter="all" role="tab" aria-selected="true"><span class="nabadTabsLabel">All</span></button>
-              <button type="button" class="nabadTabsTab" data-messages-filter="requests" role="tab" aria-selected="false">
-                <span class="nabadTabsLabel">Requests</span><span class="messagesFilterTabBadge" id="messagesRequestsTabBadge" hidden></span>
-              </button>
-              <button type="button" class="nabadTabsTab" data-messages-filter="chats" role="tab" aria-selected="false"><span class="nabadTabsLabel">Chats</span></button>
-            </div>
-          </nav>
           <div id="messagesStatus" class="messagesStatus" role="status" aria-live="polite" hidden></div>
           <div id="messagesInboxMount" class="messagesInboxMount" aria-label="Message threads"></div>
         </section>
@@ -1733,7 +1723,9 @@
                 <span class="messagesThreadRelation" id="messagesThreadRelation" hidden></span>
               </div>
             </div>
-            <button type="button" class="coachClearChatBtn" id="coachClearChatBtn" aria-label="Clear chat" hidden>Clear chat</button>
+            <button type="button" class="coachClearChatBtn" id="coachClearChatBtn" aria-label="Clear chat" title="Clear chat" hidden>
+              <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round" d="M21 12a9 9 0 1 1-2.64-6.36"/><path fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round" d="M21 3v6h-6"/></svg>
+            </button>
           </header>
           <div id="coachSongPlanBar" class="coachSongPlanBar" hidden aria-hidden="true">
             <button type="button" class="coachSongPlanBarBtn" id="coachSongPlanOpenBtn" aria-haspopup="dialog" aria-controls="coachSongPlanSheet">
@@ -1761,7 +1753,7 @@
             <button type="button" class="messagesComposerAttach" id="messagesComposerAttach" aria-label="More send options" aria-haspopup="dialog" aria-controls="messagesComposerSheet">
               <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M12 5v14M5 12h14"/></svg>
             </button>
-            <textarea id="messagesComposerInput" class="messagesComposerInput" rows="1" maxlength="500" placeholder="Write a message…" aria-label="Message" autocorrect="off" autocomplete="off" autocapitalize="sentences" spellcheck="false" enterkeyhint="send"></textarea>
+            <textarea id="messagesComposerInput" class="messagesComposerInput" rows="1" maxlength="500" dir="auto" placeholder="Write a message…" aria-label="Message" autocorrect="off" autocomplete="off" autocapitalize="sentences" spellcheck="false" enterkeyhint="send"></textarea>
             <button type="button" class="messagesComposerSend" id="messagesComposerSend" aria-label="Send message">
               <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="currentColor" d="M3.4 20.6 22 12 3.4 3.4l2.8 7.2L17 12l-10.8 1.4-2.8 7.2Z"/></svg>
             </button>
@@ -4694,10 +4686,8 @@
       </svg>
       <nav class="mobileTabbar" aria-label="Primary navigation">
         <a href="#/discover" data-route-link="discover" aria-label="Home">
-          <svg class="tabIco tabIcoDiscover" viewBox="0 0 24 24" aria-hidden="true">
-            <circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.75"/>
-            <path fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" d="M12 4v3.5l2.75 2.75"/>
-            <circle cx="12" cy="12" r="1.35" fill="currentColor" stroke="none"/>
+          <svg class="tabIco tabIcoDiscover tabIcoHome" viewBox="0 0 24 24" aria-hidden="true">
+            <path fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" d="M12 4.75 19.75 11v8.25a1.25 1.25 0 0 1-1.25 1.25H5.5A1.25 1.25 0 0 1 4.25 19.25V11L12 4.75z"/>
           </svg>
           <span class="tabLabel">Home</span>
         </a>
@@ -4971,21 +4961,27 @@
         </div>
         <div id="messagesComposerSheetListCoach" class="messagesComposerSheetList" role="menu" aria-label="Coach actions" hidden>
           <button type="button" class="messagesComposerSheetRow" data-messages-composer-action="coach-start-plan" role="menuitem">
-            <span class="messagesComposerSheetIcon messagesComposerSheetIcon--plan" aria-hidden="true">🎵</span>
+            <span class="messagesComposerSheetIcon messagesComposerSheetIcon--plan" aria-hidden="true">
+              <svg viewBox="0 0 24 24" width="22" height="22"><path fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round" d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3" fill="currentColor"/><circle cx="18" cy="16" r="3" fill="currentColor"/></svg>
+            </span>
             <span class="messagesComposerSheetCopy">
               <strong id="coachComposerStartPlanLabel">Start song plan</strong>
               <span>Occasion or vibe → language → lyrics</span>
             </span>
           </button>
           <button type="button" class="messagesComposerSheetRow" data-messages-composer-action="coach-view-plan" role="menuitem" hidden>
-            <span class="messagesComposerSheetIcon messagesComposerSheetIcon--plan" aria-hidden="true">📋</span>
+            <span class="messagesComposerSheetIcon messagesComposerSheetIcon--planList" aria-hidden="true">
+              <svg viewBox="0 0 24 24" width="22" height="22"><path fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" d="M9 5h6a2 2 0 0 1 2 2v14H7V7a2 2 0 0 1 2-2Z"/><path fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" d="M9 3h6v4H9z"/><path fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" d="M9 12h6M9 16h4"/></svg>
+            </span>
             <span class="messagesComposerSheetCopy">
               <strong>View song plan</strong>
               <span>Review choices · re-ask any step</span>
             </span>
           </button>
           <button type="button" class="messagesComposerSheetRow" data-messages-composer-action="coach-open-create" role="menuitem" hidden>
-            <span class="messagesComposerSheetIcon messagesComposerSheetIcon--create" aria-hidden="true">✨</span>
+            <span class="messagesComposerSheetIcon messagesComposerSheetIcon--create" aria-hidden="true">
+              <svg viewBox="0 0 24 24" width="22" height="22"><path fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" d="M12 5v14M5 12h14"/><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.5" opacity="0.35"/></svg>
+            </span>
             <span class="messagesComposerSheetCopy">
               <strong>Open Create</strong>
               <span>Apply your plan to Generate</span>

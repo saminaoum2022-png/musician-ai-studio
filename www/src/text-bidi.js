@@ -76,7 +76,15 @@ export function applyUserTextBidi(el, text) {
 
 export function applyUserTextInputDir(el) {
   if (!el) return;
-  const rtl = isPrimarilyArabic(el.value);
-  el.dir = rtl ? "rtl" : "";
+  const raw = String(el.value || "");
+  if (!raw.trim()) {
+    el.dir = "auto";
+    el.removeAttribute("data-text-dir");
+    el.classList.remove("userTextBidi--rtl");
+    return;
+  }
+  const rtl = isPrimarilyArabic(raw);
+  el.dir = rtl ? "rtl" : "ltr";
+  el.dataset.textDir = rtl ? "rtl" : "ltr";
   el.classList.toggle("userTextBidi--rtl", rtl);
 }

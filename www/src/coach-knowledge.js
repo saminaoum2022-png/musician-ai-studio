@@ -144,8 +144,66 @@ Do not paste this block to the user. Reply in their language (Arabic if they wri
 /** When Song plan intake is in progress — side answers only. */
 export function buildCoachActiveProjectGuide() {
   return `
-SONG PLAN ACTIVE: The user is mid song-setup via chips (Language, Dialect, For who, Name, Lyrics). Answer side questions briefly; remind them to use chips or the Song plan bar to continue. Do not skip ahead to Create instructions or rewrite the whole song unless they finished the plan.
+SONG PLAN ACTIVE: The user is mid song-setup via chips (Language, Dialect, For who, Name, Lyrics). You have full plan state in the appendix below — use it for continuity.
+
+CONTINUITY RULES:
+- Remember every chip you offered and what the user already chose. If they ask "what did you suggest?", "your choice?", or refer to a chip label, answer from the plan state and latest chips — do not guess.
+- If they ask about a plan field (language, vibe, name, etc.), answer from saved values first.
+- Side questions: answer briefly, then nudge the pending step (chips or Song plan bar) unless they are in lyrics collaboration mode.
+
+LYRICS COLLABORATION (when appendix says mode = lyrics_collab or lyrics_paste):
+- Co-write lyrics that match the plan (language, dialect, vibe/occasion, dedicated-to, names, title).
+- When presenting a full draft for approval, end your message with this exact block (the app parses it and also shows the lyrics in chat):
+
+[DRAFT LYRICS]
+(full lyrics — keep verse/chorus labels)
+[/DRAFT LYRICS]
+
+- Put the complete lyric text inside the block. You may briefly introduce the draft above the block.
+- Only use that block for complete drafts. For small tips or one-line fixes, do not use the block.
+- If they approve ("looks good", "use these", "done", Arabic equivalents), confirm and say the lyrics are saved to their Song plan.
+- If they want to continue the plan without lyrics yet, acknowledge and let the app handle chips.
+
+Reply in their language (Arabic if they write Arabic).
 `.trim();
+}
+
+/**
+ * Rich song-plan state for Coach API — not stored in chat history.
+ * @param {object} flow — persisted coach project flow
+ * @param {{ latestCtas?: Array<{label?: string, topic?: string}>, mode?: string }} [opts]
+ */
+export function buildCoachProjectStateGuide(flow, opts = {}) {
+  if (!flow || typeof flow !== "object") return "";
+  const mode = String(opts.mode || flow.step || "").trim();
+  const latestCtas = Array.isArray(opts.latestCtas) ? opts.latestCtas : [];
+  const lines = [
+    "SONG PLAN STATE (authoritative — user’s in-app plan; treat as ground truth):",
+    `- Step: ${mode || "—"}`,
+    `- Start: ${flow.path === "occasion" ? "Occasion" : flow.path === "vibe" ? "Vibe" : flow.path || "—"}`,
+  ];
+  if (flow.occasionId) lines.push(`- Occasion: ${flow.occasionId}`);
+  if (flow.topic) lines.push(`- Vibe/topic: ${flow.topic}${flow.customTopicLabel ? ` (${flow.customTopicLabel})` : ""}`);
+  if (flow.language) lines.push(`- Language: ${flow.language}`);
+  if (flow.dialect) lines.push(`- Dialect: ${flow.dialect}`);
+  if (flow.dedicatedTo) lines.push(`- For who: ${flow.dedicatedTo}`);
+  if (flow.recipientName) lines.push(`- Their name: ${flow.recipientName}`);
+  if (flow.songTitle) lines.push(`- Song title: ${flow.songTitle}`);
+  if (flow.lyricsMode) lines.push(`- Lyrics mode: ${flow.lyricsMode === "have" ? "User has / will provide lyrics" : "Generate in Create"}`);
+  const draft = String(flow.lyricsDraft || "").trim();
+  const approved = String(flow.lyricsText || "").trim();
+  if (approved) lines.push(`- Approved lyrics (saved in plan):\n${approved.slice(0, 1200)}`);
+  else if (draft) lines.push(`- Lyrics draft (not approved yet):\n${draft.slice(0, 1200)}`);
+  if (latestCtas.length) {
+    lines.push("- Latest chips you offered (user may tap or ask about these):");
+    latestCtas.forEach((c) => {
+      const label = String(c?.label || "").trim();
+      const topic = String(c?.topic || c?.id || "").trim();
+      if (label) lines.push(`  · "${label}"${topic ? ` (${topic})` : ""}`);
+    });
+  }
+  lines.push("- Song plan bar in the app shows the same fields — keep answers consistent with it.");
+  return lines.join("\n");
 }
 
 /**
@@ -157,6 +215,8 @@ export function augmentCoachApiPayload({
   history,
   contextAppendixExtra = "",
   songProjectActive = false,
+  projectFlow = null,
+  latestCoachCtas = null,
 }) {
   const prior = Array.isArray(history) ? history : [];
   const userMessage = String(message || "").trim();
@@ -164,8 +224,11 @@ export function augmentCoachApiPayload({
   const flowGuide = songProjectActive
     ? buildCoachActiveProjectGuide()
     : buildCoachSongPlanRedirectGuide();
+  const projectState = songProjectActive && projectFlow
+    ? buildCoachProjectStateGuide(projectFlow, { latestCtas: latestCoachCtas || [] })
+    : "";
   const extra = String(contextAppendixExtra || "").trim();
-  const parts = [base, flowGuide, extra].filter(Boolean);
+  const parts = [base, flowGuide, projectState, extra].filter(Boolean);
   return {
     message: userMessage,
     history: prior,

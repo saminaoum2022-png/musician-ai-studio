@@ -7,6 +7,22 @@ export const PTR_REFRESH_OFFSET_PX = 44;
 export const PTR_MAX_CONTENT_OFFSET_PX = 52;
 export const PTR_MIN_SPIN_MS = 900;
 
+/** Best-effort page scroll top — WKWebView can report 0 on `window` while the doc moved. */
+export function ptrPageScrollTop() {
+  return Math.max(
+    window.scrollY || 0,
+    document.documentElement.scrollTop || 0,
+    document.body.scrollTop || 0,
+  );
+}
+
+let _ptrForceReset = null;
+
+/** Clear a stuck pull gesture (e.g. after route change or lost touchend). */
+export function resetPullToRefreshState() {
+  _ptrForceReset?.();
+}
+
 /** Rubber-band: content follows finger, caps near 52px. */
 export function ptrContentOffset(rawPullPx) {
   const t = Math.max(0, Number(rawPullPx) || 0);
@@ -237,12 +253,17 @@ export function initPullToRefresh(deps) {
     resetPull(true);
   }
 
+  _ptrForceReset = () => {
+    refreshing = false;
+    resetPull(false);
+  };
+
   document.addEventListener(
     "touchstart",
     (e) => {
       if (refreshing || pulling) return;
       if (!isRouteEnabled()) return;
-      if (window.scrollY > 2) return;
+      if (ptrPageScrollTop() > 2) return;
       if (e.touches.length !== 1) return;
       if (ptrNestedScrollContainer(e.target)) return;
       ensurePtrShells();
@@ -266,7 +287,7 @@ export function initPullToRefresh(deps) {
       if (!isRouteEnabled()) return;
       const touch = Array.from(e.touches).find((t) => t.identifier === touchId);
       if (!touch) return;
-      if (window.scrollY > 2) {
+      if (ptrPageScrollTop() > 2) {
         pulling = false;
         resetPull(false);
         return;
@@ -282,6 +303,7 @@ export function initPullToRefresh(deps) {
         if (dy > 8) verticalIntent = true;
       }
       if (dy <= 0) {
+        pulling = false;
         rawPull = 0;
         setContentOffset(0);
         return;

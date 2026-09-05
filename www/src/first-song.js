@@ -1,5 +1,5 @@
 /**
- * Post-sign-in first song activation — credits, language, topic → Create.
+ * Post-sign-in first song activation — Coach welcome CTAs → Create.
  */
 
 import { pickFirstSongSeed, FIRST_SONG_ICON_URLS } from "./first-song-seeds.js";

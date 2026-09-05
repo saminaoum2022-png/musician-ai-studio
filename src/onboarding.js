@@ -167,11 +167,8 @@ function finishOnboarding() {
   markOnboardingComplete(uid);
   let hash = "#/auth";
   if (uid) {
-    if (typeof _deps?.shouldShowFirstSong === "function" && _deps.shouldShowFirstSong()) {
-      hash = "#/first-song";
-    } else {
-      hash = "#/challenges";
-    }
+    hash = "#/challenges";
+    try { _deps?.queueSignupCoachWelcome?.(uid); } catch {}
   } else {
     hash = getPostOnboardingHash(_deps?.getAuthSession);
   }
@@ -207,7 +204,7 @@ function advanceOnboarding() {
 }
 
 /**
- * @param {{ getAuthSession: () => object|null, applyRoute: () => void, shouldShowFirstSong?: () => boolean }} deps
+ * @param {{ getAuthSession: () => object|null, applyRoute: () => void, queueSignupCoachWelcome?: (userId: string) => void }} deps
  */
 export function initOnboarding(deps) {
   if (_inited) return;

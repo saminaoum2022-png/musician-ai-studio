@@ -36104,6 +36104,21 @@ function coachProjectPlanRows(flow) {
     value: flow.lyricsMode === "have" ? "I have lyrics" : flow.lyricsMode === "generate" ? "Write for me" : "—",
     done: Boolean(flow.lyricsMode),
   });
+  const artwork = coachArtworkLabelForFlow(flow);
+  if (artwork !== "—") {
+    rows.push({
+      id: "artwork",
+      label: "Artwork mood",
+      value: artwork,
+      done: true,
+    });
+  }
+  rows.push({
+    id: "format",
+    label: "Format",
+    value: coachOutputFormatLabel(flow),
+    done: true,
+  });
   return rows;
 }
 function coachProjectProgressLabel(flow) {
@@ -36129,7 +36144,7 @@ function syncCoachSongPlanBar() {
       topic: "Pick a vibe",
       occasion: "Pick an occasion",
       language: "Pick a language",
-      dialect: "Pick a dialect",
+      dialect: "Pick Arabic dialect (required)",
       dedicated: "Who is it for?",
       name: "Add a name?",
       name_input: "Type their name",
@@ -36348,9 +36363,12 @@ function coachProjectSummaryCtas() {
   ];
 }
 function formatCoachProjectSummary(flow) {
-  const rows = coachProjectPlanRows(flow).filter((r) => r.done && r.value !== "—");
+  const rows = coachProjectPlanRows(flow).filter((r) => r.done && r.value !== "—" && r.id !== "format");
   const lines = rows.map((r) => `• **${r.label}:** ${r.value}`);
-  return `Here's your song plan ✨\n\n${lines.join("\n")}\n\nReady when you are — open Create and I'll set everything up.`;
+  const formatLine = flow?.path === "occasion" && templateSparkClipEnabled()
+    ? "\n\n**Format:** Short clip (~30s) — same as Templates & Sparks."
+    : "\n\n**Format:** Full song (~3 min)";
+  return `Here's your song plan ✨\n\n${lines.join("\n")}${formatLine}\n\nReady when you are — open Create and I'll set everything up.`;
 }
 function showCoachProjectSummary(flow) {
   flow.step = "summary";
@@ -36594,6 +36612,68 @@ function coachSignupLyricsCtas() {
     { id: "lyrics-generate", label: "Write them for me", topic: "lyrics:generate" },
   ];
 }
+function coachArtworkTagsForFlow(flow) {
+  const occ = coachOccasionById(flow?.occasionId);
+  if (occ?.tags?.length) return [...occ.tags];
+  const topic = flow?.topic === "custom" ? "love" : String(flow?.topic || "love").trim();
+  try {
+    const seed = pickFirstSongSeed(topic, String(flow?.language || "auto").trim().toLowerCase() || "auto");
+    return Array.isArray(seed?.artworkTags) ? seed.artworkTags.filter(Boolean) : [];
+  } catch {
+    return [];
+  }
+}
+function coachArtworkLabelForFlow(flow) {
+  const tags = coachArtworkTagsForFlow(flow);
+  return tags.length ? tags.join(", ") : "—";
+}
+function coachApplyArabicCreateSetup(flow) {
+  const lang = String(flow?.language || "auto").trim().toLowerCase();
+  const dialect = String(flow?.dialect || "").trim().toLowerCase();
+  try { setLyricsLanguage(lang); } catch {}
+  if (lang === "arabic" && dialect) {
+    try { setLyricsDialect(dialect); } catch {}
+  }
+  if (lang === "arabic" && dialect && els.sunoDialect) {
+    els.sunoDialect.value = LYRICS_ARABIC_DIALECT_VALUE[dialect] || "";
+    if (els.sunoDialectHint) els.sunoDialectHint.value = LYRICS_ARABIC_DIALECT_HINT[dialect] || "";
+  }
+  const dedicated = String(flow?.dedicatedTo || "").trim().toLowerCase();
+  if (dedicated === "her" && els.sunoArabicAddress) {
+    els.sunoArabicAddress.value = "female";
+    try { syncArabicAddressPills(); } catch {}
+  } else if (dedicated === "him" && els.sunoArabicAddress) {
+    els.sunoArabicAddress.value = "male";
+    try { syncArabicAddressPills(); } catch {}
+  } else if (lang === "arabic") {
+    ensureFirstSongArabicAddressDefault();
+  }
+  try { syncArabicLyricsControlsVisibility(); } catch {}
+  try { applyLyricsLanguageToDialect(); } catch {}
+  try { syncArabicGenerateGate(); } catch {}
+}
+function coachApplyArtworkTagsForFlow(flow) {
+  const tags = coachArtworkTagsForFlow(flow);
+  if (!tags.length) {
+    try { renderArtworkSuggestions(); } catch {}
+    return;
+  }
+  try { writeArtworkTags(tags); } catch {}
+}
+function coachScheduleLyricsGenerationIfReady(hasLyrics) {
+  if (hasLyrics) return;
+  window.setTimeout(() => {
+    try { syncArabicLyricsControlsVisibility(); } catch {}
+    try { syncArabicGenerateGate(); } catch {}
+    if (arabicLyricChoicesReady() || (!shouldShowArabicDialectRow() && !shouldShowArabicAddress())) {
+      triggerFirstSongLyricsGeneration();
+    }
+  }, 520);
+}
+function coachOutputFormatLabel(flow) {
+  if (flow?.path === "occasion" && templateSparkClipEnabled()) return "Short clip (~30s)";
+  return "Full song";
+}
 function coachSignupDedicatedQuestion(topicId) {
   const topic = String(topicId || "love").trim();
   if (topic === "apology") return "Got it 🙏 Who is this apology for?";
@@ -36678,7 +36758,7 @@ function askCoachSignupLanguageStep(flow) {
 }
 function askCoachSignupDialectStep() {
   appendCoachSignupCoachMessage(
-    "Which Arabic dialect? This shapes how the lyrics sound when sung.",
+    "Which **Arabic dialect**? Required for lyric generation — this shapes how the words sound when sung.",
     coachSignupDialectCtas(),
   );
 }
@@ -36761,10 +36841,7 @@ function finishCoachSignupFlow({ hasLyrics = false } = {}) {
     try { clearCreateFlow(); } catch {}
     try { clearCreateChallengeFocus(); } catch {}
     try { hideCreateResultCards(); } catch {}
-    try { setLyricsLanguage(lang); } catch {}
-    if (lang === "arabic" && dialect) {
-      try { setLyricsDialect(dialect); } catch {}
-    }
+    coachApplyArabicCreateSetup(flow);
     applyDiscoveryIdeaToCreate({
       id: `coach:occasion:${occ?.id || flow.occasionId}`,
       title: seed.title || occ?.title || "My song",
@@ -36782,11 +36859,15 @@ function finishCoachSignupFlow({ hasLyrics = false } = {}) {
         variant: "occasion",
       },
     });
-    try { location.hash = "#/generate"; } catch {}
+    coachApplyArtworkTagsForFlow(flow);
+    if (!hasLyrics) {
+      try { setLyricsInputMode("generate", { silent: true }); } catch {}
+    }
+    coachScheduleLyricsGenerationIfReady(hasLyrics);
     appendCoachSignupCoachMessage(
       hasLyrics
         ? "Opening Create with your occasion preset — paste your lyrics there ✨"
-        : "Opening Create — your occasion template is ready ✨",
+        : "Opening Create — occasion clip preset loaded; generating lyrics… ✨",
       [],
     );
     return;
@@ -36805,6 +36886,7 @@ function finishCoachSignupFlow({ hasLyrics = false } = {}) {
     dedicatedTo: flow.dedicatedTo,
     recipientName: flow.recipientName,
   });
+  coachApplyArtworkTagsForFlow(flow);
   if (flow.songTitle && els.sunoTitle) {
     els.sunoTitle.value = String(flow.songTitle).trim().slice(0, 80);
   }

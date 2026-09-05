@@ -121,7 +121,7 @@ for (const name of brandRootFiles) {
   }
 }
 
-const brandIconFiles = ["icon-192.png", "icon-512.png", "apple-touch-icon.png", "splash-mark.png"];
+const brandIconFiles = ["icon-192.png", "icon-512.png", "apple-touch-icon.png", "splash-mark.png", "create-tab-music-note.png"];
 for (const name of brandIconFiles) {
   const src = path.join(root, "assets", "icons", name);
   const dest = path.join(root, "www", "assets", "icons", name);

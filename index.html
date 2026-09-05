@@ -21,14 +21,9 @@
           var host = window.location.hostname || "";
           var p = window.location.pathname || "";
 
-          // Always use www so admin OAuth PKCE keys in storage match after redirect.
-          if (
-            host === "nabadai.com" &&
-            (sp.get("code") ||
-              sp.get("error") ||
-              sp.get("type") === "recovery" ||
-              (hash && hash.indexOf("access_token=") !== -1))
-          ) {
+          // PKCE storage is per-host — bare nabadai.com and www do not share it.
+          // Always canonicalize to www before any OAuth starts or returns.
+          if (host === "nabadai.com") {
             window.location.replace(
               "https://www.nabadai.com" + p + search + hash
             );
@@ -197,7 +192,7 @@
       onload="this.media='all'"
     />
     <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Display:wght@900&family=Inter:wght@900&display=swap" /></noscript>
-    <link rel="stylesheet" href="./styles.css?v=20260906-014551" />
+    <link rel="stylesheet" href="./styles.css?v=20260906-021633" />
 
     <meta name="description" content="Create complete songs from lyrics, a hum, or a photo with NabadAi. Explore AI music tools, Arabic styles, voice personas, and creator sharing." />
     <meta property="og:type" content="website" />
@@ -5261,7 +5256,7 @@
     </script>
     <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
     <script src="./env.client.js" onerror="void 0"></script>
-    <script type="module" src="./src/app.js?v=20260906-014551"></script>
+    <script type="module" src="./src/app.js?v=20260906-021633"></script>
     <script defer src="/_vercel/insights/script.js"></script>
   </body>
 </html>

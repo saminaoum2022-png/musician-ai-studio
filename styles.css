@@ -49187,6 +49187,9 @@ body[data-route="friends"], body.friendsFeedActive .followAct--xstyle > .followA
   margin: 0;
   padding: 0;
 }
+:is(#friendsPage, #discoveryFollowingList, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followActRealtimeProgress{
+  --feedSeekPct: 0%;
+}
 :is(#friendsPage, #discoveryFollowingList, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .followActRealtimeSeek{
   --feedSeekPct: 0%;
   -webkit-appearance: none;
@@ -57694,6 +57697,7 @@ html[data-theme="light"] body[data-route="generate"] .singerPersonaChip--create{
   word-break: break-word;
 }
 :is(html[data-theme="light"], html[data-theme="dark"]) :is(#friendsPage, #discoveryFollowingList, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .feedVinylTimeline.followActRealtimeProgress{
+  --feedSeekPct: 0%;
   position: static !important;
   left: auto !important;
   right: auto !important;
@@ -57734,7 +57738,9 @@ html[data-theme="light"] body[data-route="generate"] .singerPersonaChip--create{
   margin: 0;
   appearance: none;
   -webkit-appearance: none;
-  background: linear-gradient(90deg, #7c5cff 0%, #23d5ab var(--feedSeekPct, 0%), #E2E4EA var(--feedSeekPct, 0%), #E2E4EA 100%);
+  background:
+    linear-gradient(90deg, #7c5cff 0%, #23d5ab 100%) 0 / var(--feedSeekPct, 0%) 100% no-repeat,
+    #E2E4EA;
   border-radius: 999px;
   outline: none;
 }
@@ -57775,7 +57781,9 @@ html[data-theme="light"] body[data-route="generate"] .singerPersonaChip--create{
 :is(html[data-theme="light"], html[data-theme="dark"]) :is(#friendsPage, #discoveryFollowingList, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .feedVinylTimeline .feedVinylSeek.followActRealtimeSeek::-webkit-slider-runnable-track{
   height: 4px;
   border-radius: 999px;
-  background: linear-gradient(90deg, #7c5cff 0%, #23d5ab var(--feedSeekPct, 0%), #E2E4EA var(--feedSeekPct, 0%), #E2E4EA 100%);
+  background:
+    linear-gradient(90deg, #7c5cff 0%, #23d5ab 100%) 0 / var(--feedSeekPct, 0%) 100% no-repeat,
+    #E2E4EA;
 }
 :is(html[data-theme="light"], html[data-theme="dark"]) :is(#friendsPage, #discoveryFollowingList, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .feedVinylTimeline .feedVinylSeek.followActRealtimeSeek::-moz-range-track{
   height: 4px;
@@ -57806,10 +57814,14 @@ html[data-theme="dark"] .feedVinylTimeDur{
   color: #9aa0b0;
 }
 html[data-theme="dark"] .feedVinylSeek.followActRealtimeSeek{
-  background: linear-gradient(90deg, #7c5cff 0%, #23d5ab var(--feedSeekPct, 0%), #3a404c var(--feedSeekPct, 0%), #3a404c 100%);
+  background:
+    linear-gradient(90deg, #7c5cff 0%, #23d5ab 100%) 0 / var(--feedSeekPct, 0%) 100% no-repeat,
+    #3a404c;
 }
 html[data-theme="dark"] :is(#friendsPage, #discoveryFollowingList, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .feedVinylTimeline .feedVinylSeek.followActRealtimeSeek::-webkit-slider-runnable-track{
-  background: #3a404c;
+  background:
+    linear-gradient(90deg, #7c5cff 0%, #23d5ab 100%) 0 / var(--feedSeekPct, 0%) 100% no-repeat,
+    #3a404c;
 }
 html[data-theme="dark"] :is(#friendsPage, #discoveryFollowingList, #profileActivitiesList, #profileRepostsList, #userPublicSongs, #userPublicRepostsList) .feedVinylTimeline .feedVinylSeek.followActRealtimeSeek::-moz-range-track{
   background: #3a404c;

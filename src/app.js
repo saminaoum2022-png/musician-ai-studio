@@ -247,7 +247,7 @@ import { DISCOVER_SHOW_PLAY_COUNTS, MUSIC_VIDEO_FEATURE_ENABLED } from "./featur
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260906-014551";
+const APP_BUILD = "20260906-021633";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -16014,10 +16014,10 @@ async function finishPostAuthNavigation() {
   setGuestModeEnabled(false);
   loadAuthSession();
   ensureAuthSessionUserFromToken();
-  if (authSession?.user?.id) {
-    await bootstrapPostLoginCredits();
-  }
   endLoginSettling({ minimum: true });
+  if (authSession?.user?.id) {
+    void bootstrapPostLoginCredits();
+  }
   maybePromptTermsUpdate();
   const postAuthUid = String(authSession?.user?.id || "").trim();
   if (postAuthUid && shouldShowOnboardingForUser(postAuthUid)) {
@@ -16113,11 +16113,7 @@ async function finishPostAuthNavigation() {
 }
 
 function hasOAuthCodeInUrl() {
-  try {
-    return Boolean(new URLSearchParams(window.location.search || "").get("code"));
-  } catch {
-    return false;
-  }
+  return Boolean(getOAuthCodeFromUrl());
 }
 
 async function navigateFromPushRoute(route) {
@@ -25581,9 +25577,91 @@ function ensureAuthBoot({ force = false, fast = false } = {}) {
   return _authBootPromise;
 }
 const AUTH_PKCE_KEY = "mas:supabase:pkce:v1";
+const AUTH_PKCE_COOKIE = "nabad_oauth_pkce";
 const AUTH_APPLE_NONCE_KEY = "mas:supabase:apple-nonce:v1";
 const OAUTH_NATIVE_REDIRECT = "com.nabadai.music://auth-callback";
 const APPLE_NATIVE_BUNDLE_ID = "com.nabadai.music";
+
+function oauthPkceCookieDomain() {
+  return /\.?nabadai\.com$/i.test(location.hostname) ? "; Domain=.nabadai.com" : "";
+}
+
+function saveOAuthPkceVerifier(verifier) {
+  const v = String(verifier || "").trim();
+  if (!v) return;
+  try {
+    localStorage.setItem(AUTH_PKCE_KEY, v);
+  } catch {}
+  try {
+    sessionStorage.setItem(AUTH_PKCE_KEY, v);
+  } catch {}
+  try {
+    const secure = location.protocol === "https:" ? "; Secure" : "";
+    document.cookie = `${AUTH_PKCE_COOKIE}=${encodeURIComponent(v)}; Path=/; Max-Age=600; SameSite=Lax${secure}${oauthPkceCookieDomain()}`;
+  } catch {}
+}
+
+function readOAuthPkceVerifier() {
+  let v = "";
+  try {
+    v = localStorage.getItem(AUTH_PKCE_KEY) || "";
+  } catch {}
+  if (!v) {
+    try {
+      v = sessionStorage.getItem(AUTH_PKCE_KEY) || "";
+    } catch {}
+  }
+  if (!v) {
+    try {
+      const m = document.cookie.match(new RegExp(`(?:^|; )${AUTH_PKCE_COOKIE.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}=([^;]*)`));
+      if (m?.[1]) v = decodeURIComponent(m[1]);
+    } catch {}
+  }
+  return v;
+}
+
+function clearOAuthPkceVerifier() {
+  try {
+    localStorage.removeItem(AUTH_PKCE_KEY);
+  } catch {}
+  try {
+    sessionStorage.removeItem(AUTH_PKCE_KEY);
+  } catch {}
+  try {
+    document.cookie = `${AUTH_PKCE_COOKIE}=; Path=/; Max-Age=0${oauthPkceCookieDomain()}`;
+  } catch {}
+}
+
+function oauthWebRedirectTarget() {
+  const p = window.location.pathname || "/";
+  if (/\.?nabadai\.com$/i.test(location.hostname)) {
+    return `https://www.nabadai.com${p}`;
+  }
+  return `${window.location.origin}${p}`;
+}
+
+function getOAuthCodeFromUrl() {
+  try {
+    const sp = new URLSearchParams(window.location.search || "");
+    let code = sp.get("code") || "";
+    if (code) return code;
+    const hash = String(window.location.hash || "").replace(/^#/, "");
+    if (!hash.includes("code=")) return "";
+    const tokenPart = hash.slice(hash.indexOf("code="));
+    const hashQs = new URLSearchParams(
+      tokenPart.includes("?") ? tokenPart.slice(tokenPart.indexOf("?") + 1) : tokenPart,
+    );
+    return hashQs.get("code") || "";
+  } catch {
+    return "";
+  }
+}
+
+function stripOAuthCallbackFromUrl() {
+  try {
+    window.history.replaceState({}, document.title, `${window.location.pathname || "/"}${window.location.hash || ""}`);
+  } catch {}
+}
 let activeProfile = { id: "guest", username: "guest", email: "", displayName: "", soundCertified: false };
 let lastAuthDebug = "";
 function loadProfile() {
@@ -28982,7 +29060,7 @@ function maybeHandleMagicLinkFromHash() {
 }
 async function exchangeOAuthCodeForSession(code) {
   if (!code) return false;
-  const verifier = localStorage.getItem(AUTH_PKCE_KEY) || "";
+  const verifier = readOAuthPkceVerifier();
   if (!verifier) {
     lastAuthDebug = "missing pkce verifier";
     return false;
@@ -29004,7 +29082,7 @@ async function exchangeOAuthCodeForSession(code) {
       lastAuthDebug = `code exchange ${r.status}: ${String(JSON.stringify(d)).slice(0, 120)}`;
       return false;
     }
-    localStorage.removeItem(AUTH_PKCE_KEY);
+    clearOAuthPkceVerifier();
     const user = d?.user || { id: "", email: "" };
     saveAuthSession({
       access_token: d.access_token,
@@ -29080,7 +29158,7 @@ async function exchangeAppleIdTokenForSession(idToken) {
 async function maybeHandleAuthCodeFromQuery() {
   try {
     const sp = new URLSearchParams(window.location.search || "");
-    const code = sp.get("code");
+    const code = getOAuthCodeFromUrl();
     const oauthError = sp.get("error") || sp.get("error_description") || "";
     const hash = String(window.location.hash || "");
     const hasOAuthReturn =
@@ -29100,11 +29178,33 @@ async function maybeHandleAuthCodeFromQuery() {
         return true;
       }
     } catch {}
+    if (oauthError && !code) {
+      endLoginSettling();
+      stripOAuthCallbackFromUrl();
+      const msg = decodeURIComponent(String(oauthError).replace(/\+/g, " "));
+      notifyLoginFeedback(msg || "Sign-in was cancelled.");
+      try {
+        location.hash = "#/auth";
+        syncRoutePanelVisibility("auth");
+        scheduleApplyRoute();
+      } catch {}
+      return false;
+    }
     if (!code) return false;
     beginLoginSettling("Finishing sign in…");
     const ok = await exchangeOAuthCodeForSession(code);
     if (!ok) {
       endLoginSettling();
+      stripOAuthCallbackFromUrl();
+      const msg = lastAuthDebug?.includes("missing pkce verifier")
+        ? "Sign-in expired — tap Apple or Google again."
+        : `Sign-in failed: ${lastAuthDebug || "exchange error"}`;
+      notifyLoginFeedback(msg);
+      try {
+        location.hash = "#/auth";
+        syncRoutePanelVisibility("auth");
+        scheduleApplyRoute();
+      } catch {}
       return false;
     }
     try {
@@ -29157,11 +29257,11 @@ function getCapacitorAppleSignInPlugin() {
 }
 async function supabaseOAuthLoginUrl(provider) {
   const verifier = randomVerifier(64);
-  localStorage.setItem(AUTH_PKCE_KEY, verifier);
+  saveOAuthPkceVerifier(verifier);
   const challenge = await sha256Base64Url(verifier);
   const redirectTarget = isCapacitorNativeAuth()
     ? OAUTH_NATIVE_REDIRECT
-    : `${window.location.origin}${window.location.pathname || "/"}`;
+    : oauthWebRedirectTarget();
   const redirectTo = encodeURIComponent(redirectTarget);
   const scope =
     provider === "apple"
@@ -43844,6 +43944,7 @@ function syncDiscoveryPlayingHighlights() {
     document.getElementById("discoverFeedMount"),
     document.getElementById("deskRailTrending"),
     document.getElementById("friendsPage"),
+    document.getElementById("discoveryFollowingList"),
     document.getElementById("profileActivitiesList"),
     document.getElementById("profileRepostsList"),
     // NOTE: #userPublicSongs is intentionally NOT here — it only ever plays the
@@ -43980,14 +44081,19 @@ function syncDiscoveryPlayingHighlights() {
   syncFriendsFeedProgressBars();
 }
 
-function syncFriendsFeedProgressBars() {
-  const roots = [
+function friendsFeedProgressRoots() {
+  return [
     document.getElementById("friendsPage"),
+    document.getElementById("discoveryFollowingList"),
     document.getElementById("profileActivitiesList"),
     document.getElementById("profileRepostsList"),
     document.getElementById("userPublicSongs"),
     document.getElementById("userPublicRepostsList"),
   ].filter(Boolean);
+}
+
+function syncFriendsFeedProgressBars() {
+  const roots = friendsFeedProgressRoots();
   if (!roots.length) return;
   const curRef = String(currentPlayerTrackRef?.url || "").trim();
   const a = playerEl;
@@ -44008,8 +44114,18 @@ function syncFriendsFeedProgressBars() {
       input.value = String(value);
       const pct = active && dur > 0 ? `${(value / max) * 100}%` : "0%";
       input.style.setProperty("--feedSeekPct", pct);
+      wrap.style.setProperty("--feedSeekPct", pct);
       wrap.style.setProperty("--feedWavePct", pct);
       const followAct = wrap.closest(".followAct");
+      if (followAct) {
+        const heroFill = followAct.querySelector(".feedHeroPlayerProgFill");
+        if (heroFill) heroFill.style.width = pct;
+        const heroTimes = followAct.querySelectorAll(".feedHeroPlayerTime");
+        if (heroTimes.length >= 2) {
+          heroTimes[0].textContent = active ? formatTime(cur) : "0:00";
+          heroTimes[1].textContent = active && dur > 0 ? formatTime(dur) : heroTimes[1].textContent;
+        }
+      }
       if (followAct && active) {
         const playBtn = followAct.querySelector("[data-user-lib-play], .feedHeroPlayer, .followActMedia");
         const artHint =
@@ -67981,7 +68097,7 @@ async function handleNativeAuthDeepLink(url) {
       await closeOAuthBrowser({ keepPending: true });
       return true;
     }
-    const pkceReady = Boolean(localStorage.getItem(AUTH_PKCE_KEY));
+    const pkceReady = Boolean(readOAuthPkceVerifier());
     if (!pkceReady) {
       endLoginSettling();
       notifyLoginFeedback("Sign-in expired — tap Apple or Google again.");
@@ -69408,10 +69524,21 @@ void (async () => {
   // throw or a hung fetch would leave it stuck on with @guest visible.
   try {
   await waitForNativeAuthHydration();
+  let usedCodeFlow = false;
+  if (_bootOAuthCodePending) {
+    applyClientEnvBootstrap();
+    loadPublicConfigFromCache();
+    if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+      await loadPublicConfig();
+    }
+    usedCodeFlow = await maybeHandleAuthCodeFromQuery();
+  }
   invalidateAuthBoot();
   await ensureAuthBoot({ force: true });
   await loadPublicConfig();
-  const usedCodeFlow = await maybeHandleAuthCodeFromQuery();
+  if (!usedCodeFlow) {
+    usedCodeFlow = await maybeHandleAuthCodeFromQuery();
+  }
   const usedTokenFlow = !usedCodeFlow && maybeHandleMagicLinkFromHash();
   if (usedCodeFlow || usedTokenFlow || !authSession?.user?.id) {
     await refreshAuthStateFromSupabase({ force: true });
@@ -69603,6 +69730,9 @@ void (async () => {
     // skip them and leave the profile header stuck. This finally
     // guarantees a single dismissal.
     try { setProfileHeaderLoading(false); } catch {}
+    if (_bootOAuthCodePending && isLoginSettling() && !isAppLoggedIn() && !getSupabaseAuthToken()) {
+      try { endLoginSettling(); } catch {}
+    }
   }
 })();
 if (els.profilePreviewUsernameInput) els.profilePreviewUsernameInput.value = activeProfile.username ? `@${activeProfile.username}` : "@guest";

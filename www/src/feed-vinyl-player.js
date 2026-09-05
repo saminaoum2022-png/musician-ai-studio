@@ -9,6 +9,7 @@ const FEED_VINYL_REV_SEC = 10;
 const FEED_VINYL_DEG_PER_SEC = 360 / FEED_VINYL_REV_SEC;
 const FEED_VINYL_ROOTS = [
   "friendsPage",
+  "discoveryFollowingList",
   "profileActivitiesList",
   "profileRepostsList",
   "userPublicSongs",
@@ -302,6 +303,19 @@ export function syncFeedVinylPlayers(deps) {
         const fallback = Number(timeDur.dataset.fallbackDur || "0") || 0;
         const total = active && dur > 0 ? dur : fallback;
         timeDur.textContent = formatTime(total > 0 ? total : 0);
+      }
+
+      const timeline = wrap.querySelector(".feedVinylTimeline");
+      const seek = wrap.querySelector(".feedVinylSeek");
+      if (seek) {
+        const max = Number(seek.max || 1000) || 1000;
+        const liveDur = active && dur > 0 ? dur : Number(seek.closest(".feedVinylWrap")?.querySelector(".feedVinylTimeDur")?.dataset?.fallbackDur || "0") || 0;
+        const value = active && liveDur > 0 ? Math.max(0, Math.min(max, Math.round((liveCur / liveDur) * max))) : 0;
+        seek.value = String(value);
+        const pct = active && liveDur > 0 ? `${(value / max) * 100}%` : "0%";
+        seek.style.setProperty("--feedSeekPct", pct);
+        timeline?.style.setProperty("--feedSeekPct", pct);
+        seek.disabled = !active || !(liveDur > 0);
       }
     });
   }

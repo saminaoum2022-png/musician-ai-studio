@@ -36749,6 +36749,25 @@ html[data-theme="light"] .messagesThreadMoreBtn{
   background: rgba(15,23,42,0.06);
   color: var(--text-secondary);
 }
+.coachClearChatBtn{
+  flex: 0 0 auto;
+  margin: 0 0 0 4px;
+  padding: 8px 12px;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.06);
+  color: rgba(223,231,251,0.78);
+  font: 600 13px/1.2 var(--font);
+  letter-spacing: -0.01em;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.coachClearChatBtn:active{ transform: scale(0.98); opacity: 0.88; }
+.coachClearChatBtn[hidden]{ display: none !important; }
+html[data-theme="light"] .coachClearChatBtn{
+  background: rgba(15,23,42,0.06);
+  color: var(--text-secondary);
+}
 .messagesThreadHeadMeta--profile{
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
@@ -37474,6 +37493,18 @@ html.is-web-shell body.messagesThreadViewportSized[data-route="messages-thread"]
 .messagesComposerSheetIcon--voice{
   background: rgba(13,148,136,0.18);
   color: rgba(134,239,220,0.98);
+}
+.messagesComposerSheetIcon--plan{
+  background: rgba(35,213,171,0.14);
+  color: rgba(134,239,220,0.98);
+  font-size: 1.1rem;
+  line-height: 1;
+}
+.messagesComposerSheetIcon--create{
+  background: rgba(251,191,36,0.16);
+  color: rgba(255,236,179,0.98);
+  font-size: 1.05rem;
+  line-height: 1;
 }
 .messagesComposerSheetCopy{
   display: flex;

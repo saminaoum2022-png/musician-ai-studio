@@ -32468,7 +32468,7 @@ function renderChatHeaderSkeleton() {
     metaEl.removeAttribute("aria-label");
   }
   updateMessagesThreadHeadReserve();
-  syncCoachThreadMoreBtn(false);
+  syncCoachThreadClearBtn(false);
 }
 
 function renderChatHeader() {
@@ -32481,7 +32481,7 @@ function renderChatHeader() {
     renderCoachChatHeader();
     return;
   }
-  syncCoachThreadMoreBtn(false);
+  syncCoachThreadClearBtn(false);
   const displayEl = document.getElementById("messagesThreadDisplayName");
   const handleEl = document.getElementById("messagesThreadHandleSub");
   const relationEl = document.getElementById("messagesThreadRelation");
@@ -34346,6 +34346,7 @@ function closeMessagesComposerSheet() {
 }
 
 function openMessagesComposerSheet() {
+  syncCoachComposerSheet();
   const sheet = document.getElementById("messagesComposerSheet");
   if (!sheet) return;
   sheet.hidden = false;
@@ -35892,8 +35893,8 @@ function saveCoachChat(list) {
     localStorage.setItem(coachChatStorageKey(), JSON.stringify(trimmed));
   } catch {}
 }
-function syncCoachThreadMoreBtn(show = isCoachThreadId(_conversationId)) {
-  const btn = document.getElementById("coachThreadMoreBtn");
+function syncCoachThreadClearBtn(show = isCoachThreadId(_conversationId)) {
+  const btn = document.getElementById("coachClearChatBtn");
   if (!btn) return;
   btn.hidden = !show;
   btn.setAttribute("aria-hidden", show ? "false" : "true");
@@ -36196,6 +36197,7 @@ function syncCoachSongPlanBar() {
     subEl.textContent = pendingLabels[pending] || "Tap to review or re-ask";
   }
   renderCoachSongPlanList();
+  try { syncCoachComposerSheet(); } catch {}
 }
 function renderCoachSongPlanList() {
   const list = document.getElementById("coachSongPlanList");
@@ -36443,6 +36445,7 @@ function detectCoachSongIntent(text) {
 }
 function startCoachSongPlanFromMenu() {
   closeCoachActionSheet();
+  closeMessagesComposerSheet();
   try { haptic("light"); } catch {}
   const flow = loadCoachSignupFlow();
   if (flow && coachSignupFlowActive()) {
@@ -36450,6 +36453,17 @@ function startCoachSongPlanFromMenu() {
     return;
   }
   offerCoachNewSongFlow(false);
+}
+
+function openCoachCreateFromComposerSheet() {
+  closeMessagesComposerSheet();
+  try { haptic("light"); } catch {}
+  const flow = loadCoachSignupFlow();
+  if (!flow || flow.step !== "summary") {
+    try { showToast("Finish your song plan first — tap View song plan.", { durationMs: 2800 }); } catch {}
+    return;
+  }
+  finishCoachSignupFlow({ hasLyrics: flow.lyricsMode === "have" });
 }
 function tryParseCoachProjectStepAnswer(step, text, flow = loadCoachSignupFlow()) {
   const t = String(text || "").trim().toLowerCase();
@@ -37302,6 +37316,46 @@ function syncMessagesComposerForThread() {
   const coach = isCoachThreadId(_conversationId);
   input.maxLength = coach ? COACH_MESSAGE_MAX : DM_MESSAGE_MAX;
   input.placeholder = coach ? "Ask NabadAi Coach…" : "Write a message…";
+  syncCoachComposerSheet();
+}
+
+function syncCoachComposerSheet() {
+  const coach = isCoachThreadId(_conversationId);
+  const sheetTitle = document.getElementById("messagesComposerSheetTitle");
+  const dmList = document.getElementById("messagesComposerSheetListDm");
+  const coachList = document.getElementById("messagesComposerSheetListCoach");
+  const attachBtn = document.getElementById("messagesComposerAttach");
+  if (dmList) {
+    dmList.hidden = coach;
+    dmList.setAttribute("aria-hidden", coach ? "true" : "false");
+  }
+  if (coachList) {
+    coachList.hidden = !coach;
+    coachList.setAttribute("aria-hidden", coach ? "false" : "true");
+  }
+  if (sheetTitle) sheetTitle.textContent = coach ? "Coach" : "Send";
+  if (attachBtn) {
+    attachBtn.setAttribute("aria-label", coach ? "Coach actions" : "More send options");
+  }
+  if (!coach) return;
+
+  const flow = loadCoachSignupFlow();
+  const active = Boolean(flow && coachSignupFlowActive());
+  const atSummary = Boolean(flow && flow.step === "summary");
+  const startLabel = document.getElementById("coachComposerStartPlanLabel");
+  if (startLabel) {
+    startLabel.textContent = active && !atSummary ? "Continue song plan" : "Start song plan";
+  }
+  const viewRow = document.querySelector('[data-messages-composer-action="coach-view-plan"]');
+  const createRow = document.querySelector('[data-messages-composer-action="coach-open-create"]');
+  if (viewRow) {
+    viewRow.hidden = !active;
+    viewRow.setAttribute("aria-hidden", active ? "false" : "true");
+  }
+  if (createRow) {
+    createRow.hidden = !atSummary;
+    createRow.setAttribute("aria-hidden", atSummary ? "false" : "true");
+  }
 }
 
 function renderCoachChatHeader() {
@@ -37335,7 +37389,7 @@ function renderCoachChatHeader() {
   }
   updateMessagesThreadHeadReserve();
   syncCoachSongPlanBar();
-  syncCoachThreadMoreBtn(true);
+  syncCoachThreadClearBtn(true);
 }
 
 function enterCoachThread(bootToken) {
@@ -37776,11 +37830,11 @@ function bindMessagesPageOnce() {
       closeCoachSongPlanSheet();
       return;
     }
-    const coachMore = e.target.closest("#coachThreadMoreBtn");
-    if (coachMore) {
+    const coachClear = e.target.closest("#coachClearChatBtn");
+    if (coachClear) {
       e.preventDefault();
-      try { haptic("light"); } catch {}
-      openCoachActionSheet();
+      try { haptic("medium"); } catch {}
+      resetCoachChat();
       return;
     }
     const friendsBtn = e.target.closest("#friendsMessagesBtn");
@@ -37855,13 +37909,27 @@ function bindMessagesPageOnce() {
     if (composerAction) {
       e.preventDefault();
       const action = String(composerAction.getAttribute("data-messages-composer-action") || "").trim();
+      if (action === "coach-start-plan" && !composerAction.disabled) {
+        startCoachSongPlanFromMenu();
+        return;
+      }
+      if (action === "coach-view-plan" && !composerAction.disabled) {
+        try { haptic("light"); } catch {}
+        closeMessagesComposerSheet();
+        openCoachSongPlanSheet();
+        return;
+      }
+      if (action === "coach-open-create" && !composerAction.disabled) {
+        openCoachCreateFromComposerSheet();
+        return;
+      }
+      if (isCoachThreadId(_conversationId)) return;
       if (action === "song" && !composerAction.disabled) {
         try { haptic("light"); } catch {}
         closeMessagesComposerSheet();
         void openMessagesShareSheet();
       }
       if (action === "voice" && !composerAction.disabled) {
-        if (isCoachThreadId(_conversationId)) return;
         try { haptic("light"); } catch {}
         closeMessagesComposerSheet();
         openDmVoiceDropSheet();
@@ -68265,7 +68333,7 @@ syncAuthTermsCheckbox();
   });
 })();
 
-// Coach thread "..." menu → Clear chat (resets messages + song plan).
+// Legacy coach action sheet scrim (kept for any deep links).
 (function wireCoachActionSheet() {
   const sheet = document.getElementById("coachActionSheet");
   const scrim = document.getElementById("coachActionSheetScrim");
@@ -68280,19 +68348,7 @@ syncAuthTermsCheckbox();
     if (!row) return;
     e.preventDefault();
     const action = String(row.getAttribute("data-coach-action") || "").trim();
-    if (action === "cancel") {
-      closeCoachActionSheet();
-      return;
-    }
-    if (action === "start-plan") {
-      startCoachSongPlanFromMenu();
-      return;
-    }
-    if (action === "clear") {
-      try { haptic("medium"); } catch {}
-      closeCoachActionSheet();
-      resetCoachChat();
-    }
+    if (action === "cancel") closeCoachActionSheet();
   });
   document.addEventListener("keydown", (e) => {
     if (_coachActionSheetOpen && e.key === "Escape") closeCoachActionSheet();

@@ -476,7 +476,9 @@ html[data-theme="light"] .settingsThemeOpt.is-active{
     }
     50%{
       box-shadow:
-        0 4px 12px rgba(35, 213, 171, 0.14),
+        0 4px 12px rgba(0, 0, 0, 0.08),
+        0 0 10px rgba(35, 213, 171, 0.12),
+        0 0 12px rgba(124, 92, 255, 0.1),
         inset 0 0 0 1px rgba(255, 255, 255, 0.24);
     }
   }
@@ -20786,10 +20788,16 @@ input::placeholder, textarea::placeholder{
     color: inherit;
     opacity: 0.92;
   }
-  /* Create tab — Nabad trademark: diagonal teal/violet split squircle. */
+  /* Create tab — dual-brand gradient disc + white music-note mark. */
   .mobileTabbar a.tabCreate{
     --tab-create-orbit-top: 4px;
     --tab-create-orbit-size: 46px;
+    --tab-create-gradient: linear-gradient(145deg, #23d5ab 0%, #3fd9c0 32%, #7c5cff 100%);
+    --tab-create-glow:
+      0 8px 22px rgba(0, 0, 0, 0.42),
+      0 0 14px rgba(35, 213, 171, 0.2),
+      0 0 18px rgba(124, 92, 255, 0.16),
+      inset 0 0 0 1px rgba(255, 255, 255, 0.14);
     color: #fff;
     opacity: 1;
     justify-content: center;
@@ -20804,11 +20812,9 @@ input::placeholder, textarea::placeholder{
     width: var(--tab-create-orbit-size);
     height: var(--tab-create-orbit-size);
     transform: translateX(-50%);
-    border-radius: var(--nabad-squircle-radius);
-    background: var(--brand-signature-gradient-diag);
-    box-shadow:
-      0 8px 22px rgba(0, 0, 0, 0.42),
-      inset 0 0 0 1px rgba(255, 255, 255, 0.14);
+    border-radius: 50%;
+    background: var(--tab-create-gradient);
+    box-shadow: var(--tab-create-glow);
     z-index: 0;
     pointer-events: none;
   }
@@ -20826,10 +20832,19 @@ input::placeholder, textarea::placeholder{
     opacity: 1;
   }
   .mobileTabbar a.tabCreate .tabIcoCreate{
-    object-fit: contain;
+    display: block;
     pointer-events: none;
-    width: 30px;
-    height: 30px;
+    width: 27px;
+    height: 27px;
+    background: #fff;
+    -webkit-mask-image: url(assets/icons/create-tab-music-note.png);
+            mask-image: url(assets/icons/create-tab-music-note.png);
+    -webkit-mask-size: contain;
+            mask-size: contain;
+    -webkit-mask-repeat: no-repeat;
+            mask-repeat: no-repeat;
+    -webkit-mask-position: center;
+            mask-position: center;
   }
   .mobileTabbar a.tabCreate .tabIcoPlay circle{
     display: none;
@@ -20877,7 +20892,7 @@ input::placeholder, textarea::placeholder{
      below, so the Create tab cycles through both Nabad brand colours). */
   .mobileTabbar a.tabCreate.tabIsReady::before,
   .mobileTabbar a.tabCreate.tabIsListen::before{
-    background: linear-gradient(135deg, #23d5ab, #1fb6c9);
+    background: linear-gradient(145deg, #2eebbc 0%, #45e8d4 30%, #9178ff 100%);
     animation: tabCreatePulse 2400ms ease-in-out infinite;
   }
   .mobileTabbar a.tabCreate.tabIsReady .tabIcoCreate,
@@ -20893,7 +20908,7 @@ input::placeholder, textarea::placeholder{
     transform: translate(-50%, -50%);
   }
   .mobileTabbar a.tabCreate.tabIsListen::before{
-    background: linear-gradient(135deg, #23d5ab, #2ad1d1);
+    background: linear-gradient(145deg, #2eebbc 0%, #5aeddc 28%, #a48bff 100%);
   }
   /* Magic-wand icon: thin stroked stick + filled sparkle. Keep .tabIco from
      forcing a stroke onto the filled star (it would blob it out). */
@@ -20910,8 +20925,11 @@ input::placeholder, textarea::placeholder{
     margin: 0;
   }
   .mobileTabbar a.tabCreate.tabIsGenerating::before{
-    background: rgba(124, 92, 255, 0.22);
-    box-shadow: inset 0 0 0 1px rgba(124, 92, 255, 0.32);
+    background: linear-gradient(145deg, #23d5ab 0%, #1fb6c9 45%, #6b52e8 100%);
+    box-shadow:
+      0 8px 18px rgba(0, 0, 0, 0.38),
+      0 0 16px rgba(35, 213, 171, 0.28),
+      inset 0 0 0 1px rgba(255, 255, 255, 0.14);
   }
   .mobileTabbar a.tabCreate.tabIsGenerating .tabIcoCreate,
   .mobileTabbar a.tabCreate.tabIsGenerating .tabIcoPlay{
@@ -20923,7 +20941,7 @@ input::placeholder, textarea::placeholder{
     height: 24px;
     border-radius: 999px;
     border: 2px solid rgba(255,255,255,0.18);
-    border-top-color: rgba(124,92,255,0.95);
+    border-top-color: var(--brand-violet);
     animation: tabCreateSpin 900ms linear infinite;
   }
   /* Lyrics / dialect not ready — grey wand, no fake "generating" spinner. */
@@ -20958,11 +20976,15 @@ input::placeholder, textarea::placeholder{
     0%, 100%{
       box-shadow:
         0 8px 18px rgba(0, 0, 0, 0.38),
+        0 0 12px rgba(35, 213, 171, 0.18),
+        0 0 16px rgba(124, 92, 255, 0.14),
         inset 0 0 0 1px rgba(255, 255, 255, 0.12);
     }
     50%{
       box-shadow:
-        0 12px 28px rgba(35, 213, 171, 0.28),
+        0 12px 28px rgba(0, 0, 0, 0.32),
+        0 0 20px rgba(35, 213, 171, 0.32),
+        0 0 24px rgba(124, 92, 255, 0.26),
         inset 0 0 0 1px rgba(255, 255, 255, 0.2);
     }
   }

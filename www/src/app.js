@@ -3661,8 +3661,6 @@ function finishTabRouteEnter(route, prevRoute) {
     kickDiscoverFeedRoute({ deferFetch: true });
   } else if (wanted === "messages") {
     bindMessagesPageOnce();
-    const backBtn = document.getElementById("messagesBackBtn");
-    if (backBtn) backBtn.hidden = true;
     loadMessagesInboxFromStorage();
     const hasCache = messagesInboxHasCachedData();
     if (hasCache) {
@@ -32430,6 +32428,7 @@ function renderChatHeaderSkeleton() {
     metaEl.removeAttribute("aria-label");
   }
   updateMessagesThreadHeadReserve();
+  syncCoachThreadMoreBtn(false);
 }
 
 function renderChatHeader() {
@@ -32442,6 +32441,7 @@ function renderChatHeader() {
     renderCoachChatHeader();
     return;
   }
+  syncCoachThreadMoreBtn(false);
   const displayEl = document.getElementById("messagesThreadDisplayName");
   const handleEl = document.getElementById("messagesThreadHandleSub");
   const relationEl = document.getElementById("messagesThreadRelation");
@@ -35786,8 +35786,31 @@ const COACH_THREAD_ID = "nabad-coach";
 const COACH_SENDER_ID = "nabad-coach";
 const COACH_SIGNUP_MSG_ID = "coach:signup-welcome";
 const COACH_SIGNUP_UNREAD_KEY_PREFIX = "nabad_coach_signup_unread:v1:";
+const COACH_PROJECT_FLOW_KEY_PREFIX = "nabad_coach_project:v1:";
+/** @deprecated alias — project flow persisted in localStorage per user */
 const COACH_SIGNUP_FLOW_KEY = "nabad_coach_signup_flow:v1";
 let _coachSignupFlow = null;
+const COACH_PROJECT_CHIP_STEPS = new Set(["language", "dialect", "dedicated", "name", "lyrics"]);
+const COACH_TOPIC_LABELS = Object.freeze({
+  love: "Love song",
+  apology: "Apology",
+  dabke: "Dabke",
+  write: "Write my own",
+});
+const COACH_LANG_LABELS = Object.freeze({
+  auto: "Auto",
+  english: "English",
+  arabic: "Arabic",
+  french: "French",
+});
+const COACH_DIALECT_LABELS = Object.freeze({
+  lebanese: "Lebanese",
+  egyptian: "Egyptian",
+  gulf: "Gulf",
+  syrian: "Syrian",
+  palestinian: "Palestinian",
+  iraqi: "Iraqi",
+});
 const COACH_CHAT_MAX = 60;
 const COACH_MESSAGE_MAX = 2000;
 const DM_MESSAGE_MAX = 500;
@@ -35822,27 +35845,418 @@ function saveCoachChat(list) {
     localStorage.setItem(coachChatStorageKey(), JSON.stringify(trimmed));
   } catch {}
 }
+function syncCoachThreadMoreBtn(show = isCoachThreadId(_conversationId)) {
+  const btn = document.getElementById("coachThreadMoreBtn");
+  if (!btn) return;
+  btn.hidden = !show;
+  btn.setAttribute("aria-hidden", show ? "false" : "true");
+}
+function resetCoachChat() {
+  if (_coachReplyInFlight) {
+    try { showToast("Coach is still replying — one moment…", { icon: "🎧", durationMs: 2200 }); } catch {}
+    return false;
+  }
+  _coachReplyInFlight = false;
+  closeCoachSongPlanSheet();
+  saveCoachSignupFlow(null);
+  try { localStorage.removeItem(coachChatStorageKey()); } catch {}
+  const uid = String(authSession?.user?.id || "").trim();
+  const chat = shouldShowFirstSongActivation(uid)
+    ? [coachSignupWelcomeMessage()]
+    : [coachWelcomeMessage()];
+  if (shouldShowFirstSongActivation(uid)) setCoachSignupUnread(true, uid);
+  saveCoachChat(chat);
+  if (isCoachThreadId(_conversationId)) {
+    _messagesList = chat.map((m) => ({ ...m }));
+    renderMessagesMount({ scrollToBottom: true, forceScroll: true });
+    syncMessagesComposerForThread();
+    try { syncMessagesComposerForSignupFlow(); } catch {}
+  }
+  try { renderMessagesInbox(); } catch {}
+  void refreshMessagesUnreadBadge({ force: true });
+  try { showToast("Coach chat cleared", { icon: "✨", durationMs: 2400 }); } catch {}
+  return true;
+}
+let _coachActionSheetOpen = false;
+let _coachActionSheetHideTimer = 0;
+function openCoachActionSheet() {
+  const sheet = document.getElementById("coachActionSheet");
+  if (!sheet) return;
+  if (_coachActionSheetHideTimer) {
+    clearTimeout(_coachActionSheetHideTimer);
+    _coachActionSheetHideTimer = 0;
+  }
+  _coachActionSheetOpen = true;
+  sheet.hidden = false;
+  sheet.setAttribute("aria-hidden", "false");
+  requestAnimationFrame(() => {
+    if (_coachActionSheetOpen) sheet.classList.add("isOpen");
+  });
+}
+function closeCoachActionSheet() {
+  const sheet = document.getElementById("coachActionSheet");
+  if (!sheet) return;
+  _coachActionSheetOpen = false;
+  sheet.classList.remove("isOpen");
+  sheet.setAttribute("aria-hidden", "true");
+  if (_coachActionSheetHideTimer) clearTimeout(_coachActionSheetHideTimer);
+  _coachActionSheetHideTimer = window.setTimeout(() => {
+    _coachActionSheetHideTimer = 0;
+    if (!_coachActionSheetOpen) sheet.hidden = true;
+  }, 260);
+}
+function coachProjectFlowStorageKey(userId = authSession?.user?.id) {
+  return `${COACH_PROJECT_FLOW_KEY_PREFIX}${String(userId || "").trim()}`;
+}
 function loadCoachSignupFlow() {
   if (_coachSignupFlow) return _coachSignupFlow;
+  const uid = String(authSession?.user?.id || "").trim();
+  if (!uid) return null;
   try {
-    const raw = sessionStorage.getItem(COACH_SIGNUP_FLOW_KEY);
+    let raw = localStorage.getItem(coachProjectFlowStorageKey(uid));
+    if (!raw) {
+      raw = sessionStorage.getItem(COACH_SIGNUP_FLOW_KEY);
+      if (raw) {
+        localStorage.setItem(coachProjectFlowStorageKey(uid), raw);
+        sessionStorage.removeItem(COACH_SIGNUP_FLOW_KEY);
+      }
+    }
     const parsed = raw ? JSON.parse(raw) : null;
     if (parsed && typeof parsed === "object") _coachSignupFlow = parsed;
   } catch {}
   return _coachSignupFlow;
 }
 function saveCoachSignupFlow(flow) {
+  const uid = String(authSession?.user?.id || "").trim();
   if (!flow) {
     _coachSignupFlow = null;
-    try { sessionStorage.removeItem(COACH_SIGNUP_FLOW_KEY); } catch {}
+    try {
+      if (uid) localStorage.removeItem(coachProjectFlowStorageKey(uid));
+      sessionStorage.removeItem(COACH_SIGNUP_FLOW_KEY);
+    } catch {}
+    syncCoachSongPlanBar();
     return;
   }
   _coachSignupFlow = flow;
-  try { sessionStorage.setItem(COACH_SIGNUP_FLOW_KEY, JSON.stringify(flow)); } catch {}
+  try {
+    if (uid) localStorage.setItem(coachProjectFlowStorageKey(uid), JSON.stringify(flow));
+  } catch {}
+  syncCoachSongPlanBar();
 }
 function coachSignupFlowActive() {
   const flow = loadCoachSignupFlow();
   return Boolean(flow && flow.step && flow.step !== "done");
+}
+function coachProjectTopicLabel(topicId) {
+  return COACH_TOPIC_LABELS[String(topicId || "").trim()] || String(topicId || "").trim() || "—";
+}
+function coachProjectLangLabel(code) {
+  return COACH_LANG_LABELS[String(code || "").trim().toLowerCase()] || String(code || "").trim() || "—";
+}
+function coachProjectDialectLabel(code) {
+  return COACH_DIALECT_LABELS[String(code || "").trim().toLowerCase()] || String(code || "").trim() || "—";
+}
+function coachProjectDedicatedLabel(code) {
+  const v = String(code || "").trim().toLowerCase();
+  if (v === "her") return "For her";
+  if (v === "him") return "For him";
+  if (v === "anyone") return "No one specific";
+  return "—";
+}
+function coachProjectPlanRows(flow) {
+  if (!flow) return [];
+  const topic = String(flow.topic || "").trim();
+  const isDabke = topic === "dabke";
+  const rows = [
+    { id: "topic", label: "Topic", value: coachProjectTopicLabel(topic), done: Boolean(topic) },
+    { id: "language", label: "Language", value: coachProjectLangLabel(flow.language), done: Boolean(flow.language) },
+  ];
+  if (String(flow.language || "").toLowerCase() === "arabic") {
+    rows.push({
+      id: "dialect",
+      label: "Dialect",
+      value: coachProjectDialectLabel(flow.dialect),
+      done: Boolean(flow.dialect),
+    });
+  }
+  if (!isDabke) {
+    rows.push({
+      id: "dedicated",
+      label: "For who",
+      value: coachProjectDedicatedLabel(flow.dedicatedTo),
+      done: Boolean(flow.dedicatedTo),
+    });
+    if (flow.dedicatedTo && flow.dedicatedTo !== "anyone") {
+      rows.push({
+        id: "name",
+        label: "Name",
+        value: String(flow.recipientName || "").trim() || (flow.step === "name_input" ? "Type below…" : "—"),
+        done: Boolean(String(flow.recipientName || "").trim()) || flow.step === "name" && flow.dedicatedTo === "anyone",
+      });
+    }
+  }
+  rows.push({
+    id: "lyrics",
+    label: "Lyrics",
+    value: flow.lyricsMode === "have" ? "I have lyrics" : flow.lyricsMode === "generate" ? "Write for me" : "—",
+    done: Boolean(flow.lyricsMode),
+  });
+  return rows;
+}
+function coachProjectProgressLabel(flow) {
+  const rows = coachProjectPlanRows(flow);
+  const done = rows.filter((r) => r.done).length;
+  return `Song plan · ${done}/${rows.length}`;
+}
+function syncCoachSongPlanBar() {
+  const bar = document.getElementById("coachSongPlanBar");
+  const titleEl = document.getElementById("coachSongPlanBarTitle");
+  const subEl = document.getElementById("coachSongPlanBarSub");
+  if (!bar) return;
+  const show = isCoachThreadId(_conversationId) && coachSignupFlowActive();
+  bar.hidden = !show;
+  bar.setAttribute("aria-hidden", show ? "false" : "true");
+  if (!show) return;
+  const flow = loadCoachSignupFlow();
+  if (titleEl) titleEl.textContent = coachProjectProgressLabel(flow);
+  if (subEl) {
+    const pending = String(flow?.step || "").trim();
+    const pendingLabels = {
+      language: "Pick a language",
+      dialect: "Pick a dialect",
+      dedicated: "Who is it for?",
+      name: "Add a name?",
+      name_input: "Type their name",
+      lyrics: "Lyrics option",
+      summary: "Ready — open Create",
+    };
+    subEl.textContent = pendingLabels[pending] || "Tap to review or re-ask";
+  }
+  renderCoachSongPlanList();
+}
+function renderCoachSongPlanList() {
+  const list = document.getElementById("coachSongPlanList");
+  const flow = loadCoachSignupFlow();
+  if (!list || !flow) {
+    if (list) list.innerHTML = "";
+    return;
+  }
+  const pendingStep = String(flow.step || "").trim();
+  const rows = coachProjectPlanRows(flow);
+  list.innerHTML = rows.map((row) => {
+    const empty = !row.done || row.value === "—";
+    const isPending = row.id === pendingStep
+      || (pendingStep === "name_input" && row.id === "name");
+    return `<li class="coachSongPlanRow${isPending ? " isPending" : ""}">
+      <span class="coachSongPlanRowLabel">${escapeHtml(row.label)}</span>
+      <span class="coachSongPlanRowValue${empty ? " isEmpty" : ""}">${escapeHtml(row.value)}</span>
+      <button type="button" class="coachSongPlanReask" data-coach-reask-step="${escapeHtml(row.id)}">Re-ask</button>
+    </li>`;
+  }).join("");
+}
+function openCoachSongPlanSheet() {
+  const sheet = document.getElementById("coachSongPlanSheet");
+  if (!sheet) return;
+  renderCoachSongPlanList();
+  sheet.hidden = false;
+  sheet.setAttribute("aria-hidden", "false");
+  requestAnimationFrame(() => sheet.classList.add("isOpen"));
+}
+function closeCoachSongPlanSheet() {
+  const sheet = document.getElementById("coachSongPlanSheet");
+  if (!sheet) return;
+  sheet.classList.remove("isOpen");
+  sheet.setAttribute("aria-hidden", "true");
+  window.setTimeout(() => {
+    if (!sheet.classList.contains("isOpen")) sheet.hidden = true;
+  }, 240);
+}
+function reaskCoachProjectStep(stepId) {
+  const flow = loadCoachSignupFlow();
+  if (!flow) return;
+  const step = String(stepId || "").trim();
+  try { haptic("light"); } catch {}
+  closeCoachSongPlanSheet();
+  if (step === "topic") {
+    appendCoachSignupCoachMessage("Pick a vibe to start 🎵", coachTopicPickerCtas());
+    return;
+  }
+  if (step === "language") {
+    flow.step = "language";
+    saveCoachSignupFlow(flow);
+    askCoachSignupLanguageStep(flow);
+    return;
+  }
+  if (step === "dialect") {
+    flow.step = "dialect";
+    saveCoachSignupFlow(flow);
+    askCoachSignupDialectStep();
+    return;
+  }
+  if (step === "dedicated") {
+    flow.step = "dedicated";
+    saveCoachSignupFlow(flow);
+    appendCoachSignupCoachMessage(coachSignupDedicatedQuestion(flow.topic), coachSignupDedicatedCtas());
+    return;
+  }
+  if (step === "name") {
+    flow.step = "name";
+    saveCoachSignupFlow(flow);
+    appendCoachSignupCoachMessage("Want to include their name?", coachSignupNameCtas());
+    return;
+  }
+  if (step === "lyrics") {
+    flow.step = "lyrics";
+    saveCoachSignupFlow(flow);
+    askCoachSignupLyricsStep(flow);
+  }
+}
+function coachTopicPickerCtas() {
+  return [
+    { id: "love", label: "💜 Love song", topic: "love" },
+    { id: "apology", label: "🙏 Apology", topic: "apology" },
+    { id: "dabke", label: "🎉 Dabke", topic: "dabke" },
+    { id: "surprise", label: "✨ Surprise me", topic: "surprise" },
+  ];
+}
+function coachProjectSummaryCtas() {
+  return [
+    { id: "open-create", label: "Open Create →", topic: "project:open" },
+    { id: "edit-plan", label: "Change something", topic: "project:plan" },
+  ];
+}
+function formatCoachProjectSummary(flow) {
+  const rows = coachProjectPlanRows(flow).filter((r) => r.done && r.value !== "—");
+  const lines = rows.map((r) => `• **${r.label}:** ${r.value}`);
+  return `Here's your song plan ✨\n\n${lines.join("\n")}\n\nReady when you are — open Create and I'll set everything up.`;
+}
+function showCoachProjectSummary(flow) {
+  flow.step = "summary";
+  saveCoachSignupFlow(flow);
+  appendCoachSignupCoachMessage(formatCoachProjectSummary(flow), coachProjectSummaryCtas());
+}
+function detectCoachSongIntent(text) {
+  const t = String(text || "").trim().toLowerCase();
+  if (!t) return false;
+  return (
+    /\b(help|want|need|trying)\b.*\b(make|create|write|start)\b.*\bsong\b/.test(t)
+    || /\bnew song\b/.test(t)
+    || /\bmake a song\b/.test(t)
+    || /\bcreate a song\b/.test(t)
+    || /\bwrite a song\b/.test(t)
+  );
+}
+function tryParseCoachProjectStepAnswer(step, text) {
+  const t = String(text || "").trim().toLowerCase();
+  if (!t) return null;
+  if (step === "language") {
+    if (/\barab(ic)?\b/.test(t)) return { kind: "lang", value: "arabic" };
+    if (/\benglish\b/.test(t)) return { kind: "lang", value: "english" };
+    if (/\bfrench\b/.test(t)) return { kind: "lang", value: "french" };
+    if (/\bauto\b/.test(t)) return { kind: "lang", value: "auto" };
+  }
+  if (step === "dialect") {
+    for (const key of Object.keys(COACH_DIALECT_LABELS)) {
+      if (t.includes(key)) return { kind: "dialect", value: key };
+    }
+  }
+  if (step === "dedicated") {
+    if (/\b(her|she|woman|girl|wife|girlfriend|mom|mother)\b/.test(t)) return { kind: "dedicated", value: "her" };
+    if (/\b(him|he|man|boy|husband|boyfriend|dad|father)\b/.test(t)) return { kind: "dedicated", value: "him" };
+    if (/\b(no one|anyone|general|nobody)\b/.test(t)) return { kind: "dedicated", value: "anyone" };
+  }
+  if (step === "lyrics") {
+    if (/\b(have|got|already|my lyrics|wrote)\b/.test(t)) return { kind: "lyrics", value: "have" };
+    if (/\b(write|generate|create|for me)\b/.test(t)) return { kind: "lyrics", value: "generate" };
+  }
+  return null;
+}
+function applyCoachProjectParsedAnswer(flow, parsed, echoLabel = "") {
+  if (!flow || !parsed) return;
+  consumeLatestCoachSignupCtas();
+  handleCoachSignupCta(`${parsed.kind}:${parsed.value}`, echoLabel || "");
+}
+async function sendCoachSideHelpDuringProject(text, input, flow) {
+  const prior = Array.isArray(_messagesList) ? _messagesList.filter((m) => !m.coachTyping) : [];
+  const history = coachHistoryForApi(prior);
+  const userMsg = {
+    id: `coach:u:${Date.now()}:${Math.random().toString(36).slice(2, 6)}`,
+    sender_id: String(authSession?.user?.id || "me"),
+    body: text,
+    created_at: new Date().toISOString(),
+    sendStatus: "sent",
+  };
+  if (input) {
+    input.value = "";
+    syncMessagesComposerInputHeight(input);
+  }
+  _messagesList = [...prior, userMsg];
+  saveCoachChat(_messagesList);
+  renderMessagesMount({ scrollToBottom: true, forceScroll: true });
+  _coachReplyInFlight = true;
+  _messagesList = [
+    ..._messagesList,
+    { id: COACH_TYPING_ID, sender_id: COACH_SENDER_ID, body: "", created_at: new Date().toISOString(), coachTyping: true },
+  ];
+  renderMessagesMount({ scrollToBottom: true, forceScroll: true });
+  const pendingHint = coachProjectPlanRows(flow).find((r) => r.id === flow.step)?.label || "this step";
+  let replyText = "";
+  try {
+    const payload = augmentCoachApiPayload({
+      message: text,
+      history,
+      contextAppendixExtra: `The user is mid song-setup. Pending field: ${pendingHint}. Answer their question briefly, then remind them to use the chips or Song plan to answer ${pendingHint}. Do not pretend they already chose.`,
+    });
+    const data = await messagesApi("/api/coach", {
+      method: "POST",
+      timeoutMs: 38000,
+      body: JSON.stringify(payload),
+    });
+    replyText = data?.ok ? String(data.reply || "").trim() : "I'm here — use the chips above or tap **Song plan** when you're ready to continue.";
+  } catch {
+    replyText = "I'm here — use the chips above or tap **Song plan** when you're ready to continue.";
+  }
+  _coachReplyInFlight = false;
+  const base = (Array.isArray(_messagesList) ? _messagesList : []).filter((m) => m.id !== COACH_TYPING_ID);
+  const suffix = `\n\n_When you're ready, answer **${pendingHint}** with the chips or tap **Song plan**._`;
+  _messagesList = [...base, {
+    id: `coach:a:${Date.now()}`,
+    sender_id: COACH_SENDER_ID,
+    body: `${replyText}${suffix}`,
+    created_at: new Date().toISOString(),
+    sendStatus: "sent",
+  }];
+  saveCoachChat(_messagesList);
+  renderMessagesMount({ scrollToBottom: true, forceScroll: true });
+  ensurePendingCoachStepPrompt(flow);
+  try { input?.focus({ preventScroll: true }); } catch {}
+}
+function ensurePendingCoachStepPrompt(flow) {
+  if (!flow || flow.step === "summary" || flow.step === "name_input") return;
+  const ctas = coachCtasForFlowStep(flow);
+  if (!ctas.length) return;
+  const chat = loadCoachChat();
+  const lastCoach = [...chat].reverse().find((m) => String(m.sender_id) === COACH_SENDER_ID);
+  if (lastCoach && Array.isArray(lastCoach.coachCtas) && lastCoach.coachCtas.length) return;
+  appendCoachSignupCoachMessage("Still on this step — pick an option 👇", ctas);
+}
+function coachCtasForFlowStep(flow) {
+  if (!flow) return [];
+  switch (String(flow.step || "")) {
+    case "language": return coachSignupLanguageCtas();
+    case "dialect": return coachSignupDialectCtas();
+    case "dedicated": return coachSignupDedicatedCtas();
+    case "name": return coachSignupNameCtas();
+    case "lyrics": return coachSignupLyricsCtas();
+    case "summary": return coachProjectSummaryCtas();
+    default: return [];
+  }
+}
+function offerCoachNewSongFlow(fromIntent = false) {
+  const lead = fromIntent
+    ? "I'd love to help you make a song 🎵 Pick a vibe to start:"
+    : "Ready for a new song? Pick a vibe:";
+  appendCoachSignupCoachMessage(lead, coachTopicPickerCtas());
 }
 function coachSignupLanguageCtas() {
   return [
@@ -36159,7 +36573,7 @@ function maybeShowSignupCoachNudgeOnCreateHub() {
 function coachSignupCtasHtml(ctas) {
   const items = Array.isArray(ctas) ? ctas.filter((c) => c && String(c.label || "").trim()) : [];
   if (!items.length) return "";
-  return `<div class="coachSignupCtas" role="group" aria-label="First song starters">${items
+  return `<div class="coachSignupCtas" role="group" aria-label="Song setup options">${items
     .map((c) => {
       const topic = String(c.topic || c.id || "").trim();
       const label = String(c.label || "").trim();
@@ -36200,6 +36614,12 @@ function handleCoachSignupCta(topicId, label = "") {
     void refreshMessagesUnreadBadge({ force: true });
     consumeCoachSignupCtasInChat();
     appendCoachSignupCoachMessage("Anytime — tap **+** when you're ready to make your first song 🎵", []);
+    return;
+  }
+  if (action === "project:new") {
+    consumeLatestCoachSignupCtas();
+    saveCoachSignupFlow(null);
+    offerCoachNewSongFlow(false);
     return;
   }
   if (!action.includes(":")) {
@@ -36252,14 +36672,25 @@ function handleCoachSignupCta(topicId, label = "") {
     return;
   }
   if (kind === "lyrics") {
-    finishCoachSignupFlow({ hasLyrics: value === "have" });
+    flow.lyricsMode = value === "have" ? "have" : "generate";
+    saveCoachSignupFlow(flow);
+    showCoachProjectSummary(flow);
+    return;
+  }
+  if (kind === "project") {
+    if (value === "open") finishCoachSignupFlow({ hasLyrics: flow.lyricsMode === "have" });
+    else if (value === "plan") openCoachSongPlanSheet();
+    return;
   }
 }
 function coachWelcomeMessage() {
   return {
     id: "coach:welcome",
     sender_id: COACH_SENDER_ID,
-    body: "Hey! I'm **NabadAi Coach** 🎵 your guide to making music here.\n\nAsk me anything — writing a song, **feedback on your lyrics** (syllables, rhythm, Arabic وزن/أوف), picking a style, publishing, credits, **NabadAi Pro**, and more.\n\nPaste lyrics and ask what works or what sounds maksour when sung. I can't see your balance or account details, but I can explain costs and where to subscribe. Please don't share passwords. 🎧",
+    body: "Hey! I'm **NabadAi Coach** 🎵 your guide to making music here.\n\nAsk me anything — or tap **New song** and I'll walk you through language, dialect, dedication, and lyrics, then open Create with everything ready.\n\nPaste lyrics for feedback, or ask about credits and **NabadAi Pro**. I can't see your balance, but I can explain costs. 🎧",
+    coachCtas: [
+      { id: "new-song", label: "🎵 New song with Coach", topic: "project:new" },
+    ],
     created_at: new Date().toISOString(),
     sendStatus: "sent",
   };
@@ -36318,6 +36749,8 @@ function renderCoachChatHeader() {
     metaEl.removeAttribute("aria-label");
   }
   updateMessagesThreadHeadReserve();
+  syncCoachSongPlanBar();
+  syncCoachThreadMoreBtn(true);
 }
 
 function enterCoachThread(bootToken) {
@@ -36364,6 +36797,11 @@ function enterCoachThread(bootToken) {
   scheduleMessagesThreadScrollToBottom({ force: true });
   beginMessagesThreadEnterTransition();
   scheduleMessagesComposerAutofocus({ bootToken, delayMs: 120 });
+  syncCoachSongPlanBar();
+  const activeFlow = loadCoachSignupFlow();
+  if (activeFlow && (COACH_PROJECT_CHIP_STEPS.has(activeFlow.step) || activeFlow.step === "summary")) {
+    ensurePendingCoachStepPrompt(activeFlow);
+  }
 }
 
 async function sendCoachMessage(text, input) {
@@ -36374,6 +36812,38 @@ async function sendCoachMessage(text, input) {
   const flow = loadCoachSignupFlow();
   if (flow?.step === "name_input") {
     handleCoachSignupNameTyped(text, input);
+    return;
+  }
+  if (flow && COACH_PROJECT_CHIP_STEPS.has(flow.step)) {
+    const parsed = tryParseCoachProjectStepAnswer(flow.step, text);
+    if (parsed) {
+      if (input) {
+        input.value = "";
+        syncMessagesComposerInputHeight(input);
+      }
+      applyCoachProjectParsedAnswer(flow, parsed, text);
+      return;
+    }
+    await sendCoachSideHelpDuringProject(text, input, flow);
+    return;
+  }
+  if (!flow && detectCoachSongIntent(text)) {
+    const prior = Array.isArray(_messagesList) ? _messagesList.filter((m) => !m.coachTyping) : [];
+    const userMsg = {
+      id: `coach:u:${Date.now()}:${Math.random().toString(36).slice(2, 6)}`,
+      sender_id: String(authSession?.user?.id || "me"),
+      body: text,
+      created_at: new Date().toISOString(),
+      sendStatus: "sent",
+    };
+    if (input) {
+      input.value = "";
+      syncMessagesComposerInputHeight(input);
+    }
+    _messagesList = [...prior, userMsg];
+    saveCoachChat(_messagesList);
+    renderMessagesMount({ scrollToBottom: true, forceScroll: true });
+    offerCoachNewSongFlow(true);
     return;
   }
   const prior = Array.isArray(_messagesList) ? _messagesList.filter((m) => !m.coachTyping) : [];
@@ -36587,8 +37057,6 @@ function startMessagesInboxPoll() {
 
 function enterMessagesRoute({ fromThread = false, inboxFilter = "" } = {}) {
   syncFriendsMessagesBtn();
-  const backBtn = document.getElementById("messagesBackBtn");
-  if (backBtn) backBtn.hidden = true;
   const filter = String(inboxFilter || "").trim().toLowerCase();
   if (["all", "requests", "chats"].includes(filter)) {
     _messagesInboxFilter = filter;
@@ -36682,18 +37150,36 @@ function bindMessagesPageOnce() {
       handleCoachSignupCta(topic, label);
       return;
     }
+    const reaskBtn = e.target.closest("[data-coach-reask-step]");
+    if (reaskBtn) {
+      e.preventDefault();
+      reaskCoachProjectStep(reaskBtn.getAttribute("data-coach-reask-step"));
+      return;
+    }
+    const planOpen = e.target.closest("#coachSongPlanOpenBtn");
+    if (planOpen) {
+      e.preventDefault();
+      openCoachSongPlanSheet();
+      return;
+    }
+    const planClose = e.target.closest("#coachSongPlanSheetClose, #coachSongPlanSheetBackdrop");
+    if (planClose) {
+      e.preventDefault();
+      closeCoachSongPlanSheet();
+      return;
+    }
+    const coachMore = e.target.closest("#coachThreadMoreBtn");
+    if (coachMore) {
+      e.preventDefault();
+      try { haptic("light"); } catch {}
+      openCoachActionSheet();
+      return;
+    }
     const friendsBtn = e.target.closest("#friendsMessagesBtn");
     if (friendsBtn) {
       e.preventDefault();
       try { haptic("light"); } catch {}
       try { location.hash = "#/messages"; } catch {}
-      return;
-    }
-    const backInbox = e.target.closest("#messagesBackBtn");
-    if (backInbox && !backInbox.hidden) {
-      e.preventDefault();
-      try { haptic("light"); } catch {}
-      try { history.back(); } catch { try { location.hash = "#/messages"; } catch {} }
       return;
     }
     const backThread = e.target.closest("#messagesThreadBackBtn");
@@ -67164,6 +67650,36 @@ syncAuthTermsCheckbox();
   });
   document.addEventListener("keydown", (e) => {
     if (isOpen && e.key === "Escape") close();
+  });
+})();
+
+// Coach thread "..." menu → Clear chat (resets messages + song plan).
+(function wireCoachActionSheet() {
+  const sheet = document.getElementById("coachActionSheet");
+  const scrim = document.getElementById("coachActionSheetScrim");
+  if (!sheet) return;
+
+  scrim?.addEventListener("click", (e) => {
+    e.preventDefault();
+    closeCoachActionSheet();
+  });
+  sheet.addEventListener("click", (e) => {
+    const row = e.target.closest("[data-coach-action]");
+    if (!row) return;
+    e.preventDefault();
+    const action = String(row.getAttribute("data-coach-action") || "").trim();
+    if (action === "cancel") {
+      closeCoachActionSheet();
+      return;
+    }
+    if (action === "clear") {
+      try { haptic("medium"); } catch {}
+      closeCoachActionSheet();
+      resetCoachChat();
+    }
+  });
+  document.addEventListener("keydown", (e) => {
+    if (_coachActionSheetOpen && e.key === "Escape") closeCoachActionSheet();
   });
 })();
 

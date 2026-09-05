@@ -131,12 +131,14 @@ Do not paste this block to the user. Reply in their language (Arabic if they wri
  * Augment a Coach API payload with frontend-only product knowledge.
  * Chat history stays unchanged; pricing/lyrics guides ride in contextAppendix.
  */
-export function augmentCoachApiPayload({ message, history }) {
+export function augmentCoachApiPayload({ message, history, contextAppendixExtra = "" }) {
   const prior = Array.isArray(history) ? history : [];
   const userMessage = String(message || "").trim();
+  const base = buildCoachContextAppendix();
+  const extra = String(contextAppendixExtra || "").trim();
   return {
     message: userMessage,
     history: prior,
-    contextAppendix: buildCoachContextAppendix(),
+    contextAppendix: extra ? `${base}\n\n${extra}` : base,
   };
 }

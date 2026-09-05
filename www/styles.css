@@ -36072,9 +36072,6 @@ body[data-route="messages"]{
   border-bottom: 1px solid rgba(255,255,255,0.08);
   background: var(--bg);
 }
-.messagesHead .nabadBackBtn{
-  margin-top: 2px;
-}
 .messagesHeadCopy{
   flex: 1 1 auto;
   min-width: 0;
@@ -36294,6 +36291,187 @@ html[data-theme="light"] .coachSignupCta{
   background: rgba(91, 60, 255, 0.08);
   color: rgba(18, 22, 34, 0.92);
 }
+/* Coach song plan — progress bar + re-ask sheet (mirrors signup intake) */
+.coachSongPlanBar{
+  flex: 0 0 auto;
+  padding: 0 max(12px, env(safe-area-inset-left, 0px)) 8px max(12px, env(safe-area-inset-right, 0px));
+  box-sizing: border-box;
+}
+.coachSongPlanBarBtn{
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(124, 92, 255, 0.35);
+  background: rgba(124, 92, 255, 0.1);
+  color: rgba(245, 247, 255, 0.96);
+  cursor: pointer;
+  text-align: left;
+  -webkit-tap-highlight-color: transparent;
+}
+.coachSongPlanBarBtn:active{ transform: scale(0.99); }
+.coachSongPlanBarIco{ flex: 0 0 auto; font-size: 16px; line-height: 1; }
+.coachSongPlanBarCopy{
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.coachSongPlanBarTitle{
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+.coachSongPlanBarSub{
+  font-size: 11px;
+  font-weight: 550;
+  color: rgba(223, 231, 251, 0.55);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.coachSongPlanBarChev{
+  flex: 0 0 auto;
+  font-size: 18px;
+  font-weight: 700;
+  opacity: 0.55;
+}
+.coachSongPlanSheet{
+  position: fixed;
+  inset: 0;
+  z-index: 130;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  pointer-events: none;
+}
+.coachSongPlanSheet.isOpen{ pointer-events: auto; }
+.coachSongPlanSheet[hidden]{ display: none !important; }
+.coachSongPlanSheetBackdrop{
+  position: absolute;
+  inset: 0;
+  background: rgba(3, 5, 10, 0.72);
+  opacity: 0;
+  transition: opacity 220ms ease;
+}
+.coachSongPlanSheet.isOpen .coachSongPlanSheetBackdrop{ opacity: 1; }
+.coachSongPlanSheetCard{
+  position: relative;
+  width: 100%;
+  max-width: 520px;
+  max-height: min(78dvh, 560px);
+  margin: 0 10px max(10px, env(safe-area-inset-bottom, 0px));
+  padding: 14px 16px 18px;
+  border-radius: 20px 20px 16px 16px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: linear-gradient(180deg, rgba(10, 13, 21, 0.99), rgba(5, 7, 13, 0.995));
+  box-shadow: 0 -16px 54px rgba(0, 0, 0, 0.46);
+  transform: translateY(24px);
+  opacity: 0;
+  transition: transform 280ms cubic-bezier(0.22, 1, 0.36, 1), opacity 220ms ease;
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
+}
+.coachSongPlanSheet.isOpen .coachSongPlanSheetCard{
+  transform: translateY(0);
+  opacity: 1;
+}
+.coachSongPlanSheetHead{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+.coachSongPlanSheetTitle{
+  margin: 0;
+  font-size: 17px;
+  font-weight: 750;
+  letter-spacing: -0.02em;
+}
+.coachSongPlanSheetClose{
+  flex: 0 0 auto;
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(245, 247, 255, 0.9);
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+}
+.coachSongPlanSheetLead{
+  margin: 0 0 12px;
+  font-size: 12px;
+  line-height: 1.45;
+  color: rgba(223, 231, 251, 0.58);
+}
+.coachSongPlanList{
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.coachSongPlanRow{
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.03);
+}
+.coachSongPlanRow.isPending{
+  border-color: rgba(124, 92, 255, 0.42);
+  background: rgba(124, 92, 255, 0.08);
+}
+.coachSongPlanRowLabel{
+  flex: 0 0 auto;
+  width: 88px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: rgba(223, 231, 251, 0.5);
+}
+.coachSongPlanRowValue{
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 650;
+  color: rgba(245, 247, 255, 0.94);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.coachSongPlanRowValue.isEmpty{
+  color: rgba(223, 231, 251, 0.42);
+  font-weight: 550;
+}
+.coachSongPlanReask{
+  flex: 0 0 auto;
+  appearance: none;
+  border: 1px solid rgba(124, 92, 255, 0.35);
+  background: rgba(124, 92, 255, 0.12);
+  color: rgba(245, 247, 255, 0.92);
+  border-radius: 999px;
+  padding: 5px 10px;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.coachSongPlanReask:active{ transform: scale(0.97); }
+body[data-route="messages-thread"] .coachSongPlanBar{
+  width: min(100%, 640px);
+  margin-inline: auto;
+}
 .messagesBubble--coachTyping{
   padding: 12px 14px;
 }
@@ -36506,6 +36684,28 @@ html[data-theme="light"] .coachSignupCta{
   flex: 1 1 auto;
   min-width: 0;
   padding-top: 0;
+}
+.messagesThreadMoreBtn{
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.06);
+  color: rgba(223,231,251,0.78);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.messagesThreadMoreBtn:active{ transform: scale(0.96); opacity: 0.88; }
+.messagesThreadMoreBtn[hidden]{ display: none !important; }
+html[data-theme="light"] .messagesThreadMoreBtn{
+  background: rgba(15,23,42,0.06);
+  color: var(--text-secondary);
 }
 .messagesThreadHeadMeta--profile{
   cursor: pointer;

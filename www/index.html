@@ -354,6 +354,14 @@
         <button type="button" class="userActionSheetRow userActionSheetCancel" data-user-action="cancel">Cancel</button>
       </div>
     </div>
+    <div id="coachActionSheet" class="userActionSheet" hidden aria-hidden="true">
+      <button type="button" id="coachActionSheetScrim" class="userActionSheetScrim" aria-label="Close"></button>
+      <div class="userActionSheetPanel" role="dialog" aria-modal="true" aria-label="Coach options">
+        <p class="userActionSheetTitle">NabadAi Coach</p>
+        <button type="button" class="userActionSheetRow userActionSheetRow--danger" data-coach-action="clear">Clear chat</button>
+        <button type="button" class="userActionSheetRow userActionSheetCancel" data-coach-action="cancel">Cancel</button>
+      </div>
+    </div>
     <div class="app">
       <header class="header">
         <div class="headerMain">
@@ -1695,9 +1703,6 @@
 
         <section class="messagesPage wide" data-route="messages" id="messagesPage">
           <header class="messagesHead">
-            <button type="button" class="nabadBackBtn messagesBackBtn" id="messagesBackBtn" aria-label="Back" hidden>
-              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6 9 12l6 6"/></svg>
-            </button>
             <div class="messagesHeadCopy">
               <h2 class="discoveryStudioH2 appScreenTitle">Messages</h2>
               <p class="messagesLead" id="messagesLead">Chat with creators you're a fan of.</p>
@@ -1729,7 +1734,31 @@
                 <span class="messagesThreadRelation" id="messagesThreadRelation" hidden></span>
               </div>
             </div>
+            <button type="button" class="messagesThreadMoreBtn" id="coachThreadMoreBtn" aria-label="Coach options" aria-haspopup="dialog" aria-controls="coachActionSheet" hidden>
+              <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><circle cx="5" cy="12" r="1.75" fill="currentColor"/><circle cx="12" cy="12" r="1.75" fill="currentColor"/><circle cx="19" cy="12" r="1.75" fill="currentColor"/></svg>
+            </button>
           </header>
+          <div id="coachSongPlanBar" class="coachSongPlanBar" hidden aria-hidden="true">
+            <button type="button" class="coachSongPlanBarBtn" id="coachSongPlanOpenBtn" aria-haspopup="dialog" aria-controls="coachSongPlanSheet">
+              <span class="coachSongPlanBarIco" aria-hidden="true">🎵</span>
+              <span class="coachSongPlanBarCopy">
+                <span class="coachSongPlanBarTitle" id="coachSongPlanBarTitle">Song plan</span>
+                <span class="coachSongPlanBarSub" id="coachSongPlanBarSub">Tap to review or re-ask</span>
+              </span>
+              <span class="coachSongPlanBarChev" aria-hidden="true">›</span>
+            </button>
+          </div>
+          <div id="coachSongPlanSheet" class="coachSongPlanSheet" hidden aria-hidden="true">
+            <div class="coachSongPlanSheetBackdrop" id="coachSongPlanSheetBackdrop"></div>
+            <section class="coachSongPlanSheetCard" role="dialog" aria-modal="true" aria-labelledby="coachSongPlanSheetTitle">
+              <header class="coachSongPlanSheetHead">
+                <h2 id="coachSongPlanSheetTitle" class="coachSongPlanSheetTitle">Your song plan</h2>
+                <button type="button" class="coachSongPlanSheetClose" id="coachSongPlanSheetClose" aria-label="Close">×</button>
+              </header>
+              <p class="coachSongPlanSheetLead">These choices shape your Create prompt. Tap <strong>Re-ask</strong> to change any step.</p>
+              <ul id="coachSongPlanList" class="coachSongPlanList"></ul>
+            </section>
+          </div>
           <div id="messagesThreadMount" class="messagesThreadMount" aria-live="polite"></div>
           <footer class="messagesComposer">
             <button type="button" class="messagesComposerAttach" id="messagesComposerAttach" aria-label="More send options" aria-haspopup="dialog" aria-controls="messagesComposerSheet">

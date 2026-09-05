@@ -245,7 +245,7 @@ import { DISCOVER_SHOW_PLAY_COUNTS, MUSIC_VIDEO_FEATURE_ENABLED } from "./featur
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260905-004844";
+const APP_BUILD = "20260905-172359";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -27559,7 +27559,7 @@ async function refreshMyCredits({ silent = false } = {}) {
     const welcomeGranted = Number(d?.welcomeGranted || 0);
     if (welcomeGranted > 0) {
       showToast?.(
-        `Welcome to NabadAi — ${welcomeGranted} free credits added. That's 2 full songs to try.`,
+        `Welcome to NabadAi — ${welcomeGranted} free credits added. Start creating!`,
         { durationMs: 4200 },
       );
     }

@@ -1846,6 +1846,9 @@ function renderFunnel(data) {
   const vercelNote = vercelConfigured
     ? `Vercel Web Analytics · ${vercel.since || ""} → ${vercel.until || ""}`
     : escapeHtml(vercel.note || "Add VERCEL_ANALYTICS_TOKEN on Vercel to load countries, devices, and pages.");
+  const vercelErrors = Array.isArray(vercel.errors) && vercel.errors.length
+    ? `<div class="globalError" style="margin-bottom:16px">${vercel.errors.map((e) => escapeHtml(e)).join("<br>")}</div>`
+    : "";
   const productNote = product.source === "rpc"
     ? "Supabase product_analytics_events — includes native iOS app events Vercel cannot see."
     : escapeHtml(product.note || "Run supabase/product_analytics_events.sql for app funnel events.");
@@ -1911,6 +1914,7 @@ function renderFunnel(data) {
     : "";
 
   els.panels.funnel.innerHTML = adminPageStack(`
+    ${vercelErrors}
     <section class="sectionCard sectionCard--data" data-funnel-section>
       <div class="sectionHead activitySectionHead">
         <div>

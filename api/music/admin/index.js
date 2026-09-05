@@ -870,8 +870,17 @@ async function fetchWebFunnelSummary({ days = 28 } = {}) {
     daily: [],
     breakdowns: {},
     source: "missing_rpc",
-    note: "Run supabase/product_analytics_events.sql in Supabase to enable funnel analytics.",
+    note: "Run supabase/product_analytics_events.sql for native app funnel events.",
   };
+}
+
+async function fetchAdminFunnelView({ days = 28 } = {}) {
+  const { fetchVercelWebAnalyticsSummary } = require("../../_lib/vercel-web-analytics");
+  const [vercel, product] = await Promise.all([
+    fetchVercelWebAnalyticsSummary({ days }),
+    fetchWebFunnelSummary({ days }),
+  ]);
+  return { vercel, product };
 }
 
 async function fetchCoachUsageSummary() {
@@ -3099,7 +3108,7 @@ module.exports = async function handler(req, res) {
     } else if (view === "providers" || view === "suno") {
       payload = { ...payload, ...(await getProvidersPanel({ forceHealth: healthRefresh })) };
     } else if (view === "funnel") {
-      payload.funnel = await fetchWebFunnelSummary({ days: funnelDays });
+      payload.funnel = await fetchAdminFunnelView({ days: funnelDays });
     } else {
       return sendJson(res, 400, {
         error: "Unknown view",

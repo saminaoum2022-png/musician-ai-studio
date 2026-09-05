@@ -119,7 +119,7 @@ const VIEW_META = {
   credits: { title: "Credits", sub: "Grant, remove, or adjust paid credits · full ledger" },
   marketing: { title: "Online store", sub: "Edit the marketing website — draft changes, preview, then publish to live" },
   blog: { title: "Blog", sub: "Write articles, preview, and publish to nabadai.com/blog" },
-  funnel: { title: "Web funnel", sub: "Product events from marketing site and app — mirrored to Vercel Analytics" },
+  funnel: { title: "Web funnel", sub: "Vercel web analytics + product events (web and native app)" },
   promos: { title: "Promo codes", sub: "Create and monitor redemption codes" },
   singers: { title: "Pro singers", sub: "Singer applications, roster, and performance requests" },
   generations: { title: "Generations", sub: "Song and audio generation requests" },
@@ -1728,6 +1728,11 @@ const FUNNEL_CHART_SERIES = [
   { key: "nabad_pro_trial_start", label: "Pro trial", color: "#fbbf24" },
 ];
 
+const VERCEL_VISIT_SERIES = [
+  { key: "visitors", label: "Visitors", color: "#60a5fa" },
+  { key: "pageviews", label: "Page views", color: "#23d5ab" },
+];
+
 function funnelTotal(totals, key) {
   return Number(totals?.[key] || 0);
 }
@@ -1747,6 +1752,55 @@ function sliceFunnelDaily(daily, days) {
   const n = Math.max(1, Number(days) || 28);
   const rows = Array.isArray(daily) ? daily : [];
   return rows.slice(Math.max(0, rows.length - n));
+}
+
+function renderVercelDimTable(rows, { metric = "visitors" } = {}) {
+  const list = Array.isArray(rows) ? rows : [];
+  if (!list.length) {
+    return `<tr><td colspan="3" class="loading">No data for this period</td></tr>`;
+  }
+  const total = list.reduce((s, r) => s + Number(r[metric] || r.visitors || r.pageviews || 0), 0) || 1;
+  return list.map((r) => {
+    const val = Number(r[metric] || r.visitors || r.pageviews || 0);
+    const pct = Math.round((val / total) * 1000) / 10;
+    const label = String(r.label || "—");
+    const barPct = Math.max(2, Math.round((val / total) * 100));
+    return `
+      <tr>
+        <td>
+          <div class="growthBucketLabel">${escapeHtml(label)}</div>
+          <div class="growthBarTrack" aria-hidden="true">
+            <span class="growthBarFill" style="width:${barPct}%"></span>
+          </div>
+        </td>
+        <td class="num">${fmtNum(val)}</td>
+        <td class="num">${fmtNum(pct, 1)}%</td>
+      </tr>
+    `;
+  }).join("");
+}
+
+function renderVercelDimPanel(title, rows, note = "") {
+  return `
+    <section class="sectionCard sectionCard--data">
+      <div class="sectionHead">
+        <h3 class="sectionTitle">${escapeHtml(title)}</h3>
+        ${note ? `<p class="sectionNote">${escapeHtml(note)}</p>` : ""}
+      </div>
+      <div class="tableWrap tableWrap--plain">
+        <table class="table--compact growthBucketTable">
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th class="num">Visitors</th>
+              <th class="num">Share</th>
+            </tr>
+          </thead>
+          <tbody>${renderVercelDimTable(rows, { metric: "visitors" })}</tbody>
+        </table>
+      </div>
+    </section>
+  `;
 }
 
 function renderFunnelBreakdowns(breakdowns = {}) {
@@ -1776,62 +1830,157 @@ function renderFunnelBreakdowns(breakdowns = {}) {
 }
 
 function renderFunnel(data) {
-  const funnel = data?.funnel || {};
-  const totals = funnel.totals && typeof funnel.totals === "object" ? funnel.totals : {};
-  const totalsToday = funnel.totalsToday && typeof funnel.totalsToday === "object" ? funnel.totalsToday : {};
-  const sourceNote = funnel.source === "rpc"
-    ? "Live from product_analytics_events"
-    : escapeHtml(funnel.note || "Run supabase/product_analytics_events.sql to enable.");
-  state.funnelDaily = transformFunnelDaily(funnel.daily || [], FUNNEL_CHART_SERIES);
-  const windowDays = state.funnelWindow || funnel.days || 28;
-  const daily = sliceFunnelDaily(state.funnelDaily, windowDays);
-  const legend = FUNNEL_CHART_SERIES.map((series) => `
+  const bundle = data?.funnel || {};
+  const vercel = bundle.vercel || {};
+  const product = bundle.product || {};
+  const totals = product.totals && typeof product.totals === "object" ? product.totals : {};
+  const totalsToday = product.totalsToday && typeof product.totalsToday === "object" ? product.totalsToday : {};
+  const windowDays = state.funnelWindow || vercel.days || product.days || 28;
+
+  state.funnelDaily = transformFunnelDaily(product.daily || [], FUNNEL_CHART_SERIES);
+  state.funnelVisitDaily = Array.isArray(vercel.daily) ? vercel.daily : [];
+  const productDaily = sliceFunnelDaily(state.funnelDaily, windowDays);
+  const visitDaily = sliceFunnelDaily(state.funnelVisitDaily, windowDays);
+
+  const vercelConfigured = Boolean(vercel.configured);
+  const vercelNote = vercelConfigured
+    ? `Vercel Web Analytics · ${vercel.since || ""} → ${vercel.until || ""}`
+    : escapeHtml(vercel.note || "Add VERCEL_ANALYTICS_TOKEN on Vercel to load countries, devices, and pages.");
+  const productNote = product.source === "rpc"
+    ? "Supabase product_analytics_events — includes native iOS app events Vercel cannot see."
+    : escapeHtml(product.note || "Run supabase/product_analytics_events.sql for app funnel events.");
+
+  const visitLegend = VERCEL_VISIT_SERIES.map((series) => `
     <span class="activityLegendItem">
       <span class="activityLegendSwatch" style="background:${series.color}"></span>
       ${escapeHtml(series.label)}
     </span>
   `).join("");
 
+  const productLegend = FUNNEL_CHART_SERIES.map((series) => `
+    <span class="activityLegendItem">
+      <span class="activityLegendSwatch" style="background:${series.color}"></span>
+      ${escapeHtml(series.label)}
+    </span>
+  `).join("");
+
+  const vercelEvents = Array.isArray(vercel.customEvents) ? vercel.customEvents : [];
+  const vercelEventRows = vercelEvents.length
+    ? vercelEvents.map((ev) => `
+        <tr>
+          <td>${escapeHtml(ev.name || "—")}</td>
+          <td class="num">${fmtNum(ev.count)}</td>
+          <td class="num">${fmtNum(ev.visitors)}</td>
+        </tr>
+      `).join("")
+    : `<tr><td colspan="3" class="loading">No custom events in Vercel yet — click CTAs on nabadai.com to populate.</td></tr>`;
+
   const tierSections = FUNNEL_TIERS.map((tier) => {
     const cards = tier.events.map((ev) => {
       const total = funnelTotal(totals, ev.key);
       const today = funnelTotal(totalsToday, ev.key);
-      return statCard(ev.label, fmtNum(total), today > 0 ? `${fmtNum(today)} today` : "Last 28d total");
+      const vercelMatch = vercelEvents.find((e) => String(e.name) === ev.key);
+      const vercelCount = vercelMatch ? Number(vercelMatch.count || 0) : null;
+      const sub = today > 0
+        ? `${fmtNum(today)} today`
+        : vercelCount != null && vercelCount > 0
+          ? `${fmtNum(vercelCount)} on web (Vercel)`
+          : "App + web store";
+      return statCard(ev.label, fmtNum(total), sub);
     }).join("");
     return `
       <section class="sectionCard">
         <div class="sectionHead">
           <h3 class="sectionTitle">${escapeHtml(tier.label)}</h3>
+          <p class="sectionNote">Counts from Supabase (native app + web mirror).</p>
         </div>
         <div class="cardsGrid cardsGrid--inSection">${cards}</div>
       </section>
     `;
   }).join("");
 
+  const windowToggle = `
+    <div class="activityWindowToggle" role="group" aria-label="Funnel range">
+      <button type="button" class="activityWindowBtn${windowDays === 7 ? " isActive" : ""}" data-funnel-window="7">7d</button>
+      <button type="button" class="activityWindowBtn${windowDays === 28 ? " isActive" : ""}" data-funnel-window="28">28d</button>
+    </div>
+  `;
+
+  const dashboardLink = vercel.dashboardUrl
+    ? `<a class="providerExtLink" href="${escapeHtml(vercel.dashboardUrl)}" target="_blank" rel="noopener noreferrer">Open Vercel Analytics →</a>`
+    : "";
+
   els.panels.funnel.innerHTML = adminPageStack(`
     <section class="sectionCard sectionCard--data" data-funnel-section>
       <div class="sectionHead activitySectionHead">
         <div>
-          <h3 class="sectionTitle">Activation path</h3>
-          <p class="sectionNote">Signup → song plan → first generate → Pro trial. ${sourceNote}.</p>
+          <h3 class="sectionTitle">Web traffic</h3>
+          <p class="sectionNote">${vercelNote}. ${dashboardLink}</p>
         </div>
-        <div class="activityHeadActions">
-          <div class="activityWindowToggle" role="group" aria-label="Funnel range">
-            <button type="button" class="activityWindowBtn${windowDays === 7 ? " isActive" : ""}" data-funnel-window="7">7d</button>
-            <button type="button" class="activityWindowBtn${windowDays === 28 ? " isActive" : ""}" data-funnel-window="28">28d</button>
-          </div>
-        </div>
+        <div class="activityHeadActions">${windowToggle}</div>
       </div>
-      <div class="activityChartLegend">${legend}</div>
-      <div class="activityChartWrap" data-funnel-chart>
-        ${buildActivityChartSvg(daily, {}, FUNNEL_CHART_SERIES)}
+      <div class="cardsGrid cardsGrid--inSection">
+        ${statCard("Visitors", fmtNum(vercel.totals?.visitors), vercelConfigured ? "Unique (Vercel)" : "—")}
+        ${statCard("Page views", fmtNum(vercel.totals?.pageviews), vercelConfigured ? "All loads" : "—")}
+        ${statCard("Top country", escapeHtml(vercel.countries?.[0]?.label || "—"), vercel.countries?.[0] ? `${fmtNum(vercel.countries[0].visitors)} visitors` : "")}
+        ${statCard("Top device", escapeHtml(vercel.devices?.[0]?.label || "—"), vercel.devices?.[0] ? `${fmtNum(vercel.devices[0].visitors)} visitors` : "")}
+      </div>
+      <div class="activityChartLegend">${visitLegend}</div>
+      <div class="activityChartWrap" data-funnel-visit-chart>
+        ${buildActivityChartSvg(visitDaily, {}, VERCEL_VISIT_SERIES)}
       </div>
     </section>
-    ${tierSections}
+
+    <div class="cardsGrid cardsGrid--twoCol">
+      ${renderVercelDimPanel("Countries", vercel.countries || [])}
+      ${renderVercelDimPanel("Devices", vercel.devices || [])}
+      ${renderVercelDimPanel("Operating systems", vercel.operatingSystems || [])}
+      ${renderVercelDimPanel("Browsers", vercel.browsers || [])}
+    </div>
+
+    <div class="cardsGrid cardsGrid--twoCol">
+      ${renderVercelDimPanel("Top pages", vercel.pages || [], "Exact URL paths on nabadai.com")}
+      ${renderVercelDimPanel("Referrers", vercel.referrers || [], "Where visitors came from")}
+    </div>
+
     <section class="sectionCard sectionCard--data">
       <div class="sectionHead">
-        <h3 class="sectionTitle">Event breakdowns</h3>
-        <p class="sectionNote">Top dimensions per event (method, page, route, placement).</p>
+        <h3 class="sectionTitle">Custom events (Vercel)</h3>
+        <p class="sectionNote">Web-only events tracked with va('event') — CTA clicks, signups in browser, etc.</p>
+      </div>
+      <div class="tableWrap tableWrap--plain">
+        <table class="table--compact">
+          <thead>
+            <tr>
+              <th>Event</th>
+              <th class="num">Count</th>
+              <th class="num">Visitors</th>
+            </tr>
+          </thead>
+          <tbody>${vercelEventRows}</tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="sectionCard sectionCard--data">
+      <div class="sectionHead activitySectionHead">
+        <div>
+          <h3 class="sectionTitle">Product activation path</h3>
+          <p class="sectionNote">Signup → song plan → first generate → Pro trial. ${productNote}</p>
+        </div>
+      </div>
+      <div class="activityChartLegend">${productLegend}</div>
+      <div class="activityChartWrap" data-funnel-chart>
+        ${buildActivityChartSvg(productDaily, {}, FUNNEL_CHART_SERIES)}
+      </div>
+    </section>
+
+    ${tierSections}
+
+    <section class="sectionCard sectionCard--data">
+      <div class="sectionHead">
+        <h3 class="sectionTitle">Product event breakdowns</h3>
+        <p class="sectionNote">Top dimensions per stored event (method, page, route, placement).</p>
       </div>
       <div class="tableWrap tableWrap--plain">
         <table class="table--compact">
@@ -1842,7 +1991,7 @@ function renderFunnel(data) {
               <th>Top dimensions</th>
             </tr>
           </thead>
-          <tbody>${renderFunnelBreakdowns(funnel.breakdowns || {})}</tbody>
+          <tbody>${renderFunnelBreakdowns(product.breakdowns || {})}</tbody>
         </table>
       </div>
     </section>

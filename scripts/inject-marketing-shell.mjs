@@ -38,9 +38,19 @@ function ensureMarketingFonts(html) {
 
 /** Vercel Web Analytics — deferred, no SEO/meta impact. */
 function ensureVercelAnalytics(html) {
-  if (html.includes("_vercel/insights/script.js")) return html;
+  const block = vercelAnalytics.trim();
+  if (html.includes("/src/analytics.js")) return html;
+  if (html.includes("_vercel/insights/script.js")) {
+    return html.replace(
+      /<script>\s*window\.va[\s\S]*?<\/script>\s*<script defer src="\/_vercel\/insights\/script\.js"><\/script>/,
+      block,
+    ).replace(
+      '<script defer src="/_vercel/insights/script.js"></script>',
+      block,
+    );
+  }
   if (!html.includes("</body>")) return html;
-  return html.replace("</body>", `${vercelAnalytics}\n</body>`);
+  return html.replace("</body>", `${block}\n</body>`);
 }
 
 /** @type {{ file: string, nav: string, footer: string }[]} */

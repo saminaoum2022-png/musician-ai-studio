@@ -29,6 +29,7 @@ const ALL_VIEWS = Object.freeze([
   "settings",
   "marketing",
   "blog",
+  "funnel",
 ]);
 
 const ROLE_META = Object.freeze({
@@ -44,7 +45,7 @@ const ROLE_META = Object.freeze({
   operations: {
     label: "Operations",
     description: "Platform health, Suno bucket, users, and subscription monitoring.",
-    views: ["overview", "providers", "users", "user", "generations", "generation", "singers", "subscriptions", "billing"],
+    views: ["overview", "providers", "users", "user", "generations", "generation", "singers", "subscriptions", "billing", "funnel"],
     grantCredits: false,
     manageTeam: false,
     moderatePublications: false,
@@ -71,7 +72,7 @@ const ROLE_META = Object.freeze({
   finance: {
     label: "Finance",
     description: "Revenue, subscriptions, and credit ledger visibility.",
-    views: ["overview", "credits", "promos", "subscriptions", "billing", "users", "user"],
+    views: ["overview", "credits", "promos", "subscriptions", "billing", "users", "user", "funnel"],
     grantCredits: false,
     manageTeam: false,
     moderatePublications: false,
@@ -93,6 +94,7 @@ const ROLE_META = Object.freeze({
       "publications",
       "subscriptions",
       "billing",
+      "funnel",
     ],
     grantCredits: false,
     manageTeam: false,

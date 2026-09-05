@@ -144,6 +144,20 @@ Moderation (Admin + Moderator):
 
 Requires `Authorization: Bearer <supabase access_token>` and appropriate dashboard role.
 
+### Web funnel (Vercel + Supabase)
+
+`GET /api/music/admin?view=funnel&days=28` — Vercel Web Analytics (visitors, countries, devices, pages, referrers, custom events) plus Supabase product funnel events (native app + web mirror).
+
+**Vercel env vars** (Production on Vercel → Settings → Environment Variables):
+
+| Variable | Required | Notes |
+|----------|----------|-------|
+| `VERCEL_ANALYTICS_TOKEN` | Yes | [Vercel access token](https://vercel.com/account/tokens) with read access |
+| `VERCEL_PROJECT_ID` | Auto | Set automatically on Vercel deploys |
+| `VERCEL_ANALYTICS_TEAM_SLUG` | Optional | Default `nabadais-projects` |
+
+**Supabase:** run `supabase/product_analytics_events.sql` once for native app funnel events.
+
 ### Grant paid credits (portal + in-app)
 
 `POST /api/credits/grant-paid` with body `{ "amount": 50, "email": "user@example.com" }`.

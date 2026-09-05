@@ -14,6 +14,7 @@
   <meta property="og:title" content="NabadAi Blog">
   <meta property="og:description" content="NabadAi blog article">
   <meta property="og:type" content="article">
+  <meta property="og:url" content="https://www.nabadai.com/blog">
   <link rel="icon" href="/favicon.ico" sizes="any">
   <link rel="stylesheet" href="/marketing.css?v=20260828-blog">
   <script>
@@ -21,7 +22,15 @@
       var parts = window.location.pathname.split("/").filter(Boolean);
       var slug = parts[parts.length - 1] || "";
       if (slug === "blog" || slug === "blog-post.html") slug = "";
-      if (slug) document.documentElement.setAttribute("data-blog-slug", slug);
+      var locale = (document.documentElement.lang || "en").indexOf("ar") === 0 ? "ar" : "en";
+      var base = "https://www.nabadai.com" + (locale === "ar" ? "/ar" : "");
+      if (slug) {
+        document.documentElement.setAttribute("data-blog-slug", slug);
+        var canon = document.querySelector('link[rel="canonical"]');
+        if (canon) canon.href = base + "/blog/" + encodeURIComponent(slug);
+        var ogUrl = document.querySelector('meta[property="og:url"]');
+        if (ogUrl) ogUrl.setAttribute("content", base + "/blog/" + encodeURIComponent(slug));
+      }
     })();
   </script>
 </head>
@@ -64,6 +73,10 @@
     </footer>
   </div>
   <script src="/src/blog-post.js" defer></script>
+  <script>
+    window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };
+  </script>
+  <script type="module" src="/src/analytics.js"></script>
   <script defer src="/_vercel/insights/script.js"></script>
 
 </body>

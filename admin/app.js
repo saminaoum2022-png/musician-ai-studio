@@ -58,6 +58,8 @@ const state = {
   recoveryTokenHash: "",
   activityWindow: 28,
   activityDaily: [],
+  funnelWindow: 28,
+  funnelDaily: [],
 };
 
 const els = {
@@ -91,6 +93,7 @@ const els = {
     credits: document.getElementById("viewCredits"),
     marketing: document.getElementById("viewMarketing"),
     blog: document.getElementById("viewBlog"),
+    funnel: document.getElementById("viewFunnel"),
     promos: document.getElementById("viewPromos"),
     singers: document.getElementById("viewSingers"),
     generations: document.getElementById("viewGenerations"),
@@ -116,6 +119,7 @@ const VIEW_META = {
   credits: { title: "Credits", sub: "Grant, remove, or adjust paid credits · full ledger" },
   marketing: { title: "Online store", sub: "Edit the marketing website — draft changes, preview, then publish to live" },
   blog: { title: "Blog", sub: "Write articles, preview, and publish to nabadai.com/blog" },
+  funnel: { title: "Web funnel", sub: "Vercel web analytics + product events (web and native app)" },
   promos: { title: "Promo codes", sub: "Create and monitor redemption codes" },
   singers: { title: "Pro singers", sub: "Singer applications, roster, and performance requests" },
   generations: { title: "Generations", sub: "Song and audio generation requests" },
@@ -600,6 +604,7 @@ async function adminFetch(view, {
   if (gf.provider) qs.set("provider", gf.provider);
   if (gf.status) qs.set("status", gf.status);
   if (healthRefresh) qs.set("healthRefresh", "1");
+  if (view === "funnel") qs.set("days", String(state.funnelWindow || 28));
   const r = await fetch(`/api/music/admin?${qs}`, {
     headers: { Authorization: `Bearer ${token}` },
   });
@@ -1179,6 +1184,9 @@ function viewCacheKey() {
   if (state.view === "blog") {
     key += `:scr:${state.blogScreen || "hub"}:slug:${state.blogSlug || ""}:loc:${state.blogLocale || "en"}`;
   }
+  if (state.view === "funnel") {
+    key += `:days:${state.funnelWindow || 28}`;
+  }
   if (state.view === "support-inbox") {
     key += `:mid:${state.inboxMessageId || ""}:q:${state.inboxSearch || ""}:filter:${state.inboxFilter || "all"}`;
   }
@@ -1189,7 +1197,7 @@ function viewCacheKey() {
 }
 
 function firstAllowedView() {
-  const order = ["overview", "providers", "users", "generations", "publications", "marketing", "blog", "credits", "promos", "singers", "subscriptions", "billing", "settings"];
+  const order = ["overview", "providers", "users", "generations", "publications", "marketing", "blog", "funnel", "credits", "promos", "singers", "subscriptions", "billing", "settings"];
   for (const view of order) {
     if (canAccessView(view)) return view;
   }
@@ -1474,7 +1482,7 @@ const ACTIVITY_SERIES = [
   { key: "signups", label: "Signups", color: "#60a5fa" },
 ];
 
-function buildActivityChartSvg(daily = [], { width = 760, height = 240 } = {}) {
+function buildActivityChartSvg(daily = [], { width = 760, height = 240 } = {}, series = ACTIVITY_SERIES) {
   if (!daily.length) {
     return `<div class="activityChartEmpty">No activity data yet.</div>`;
   }
@@ -1483,7 +1491,7 @@ function buildActivityChartSvg(daily = [], { width = 760, height = 240 } = {}) {
   const innerH = height - pad.top - pad.bottom;
   const maxVal = Math.max(
     1,
-    ...daily.flatMap((row) => ACTIVITY_SERIES.map((s) => Number(row?.[s.key] || 0))),
+    ...daily.flatMap((row) => series.map((s) => Number(row?.[s.key] || 0))),
   );
   const xAt = (index) => (
     pad.left + (daily.length <= 1 ? innerW / 2 : (index / (daily.length - 1)) * innerW)
@@ -1507,15 +1515,15 @@ function buildActivityChartSvg(daily = [], { width = 760, height = 240 } = {}) {
     return `<text class="activityChartAxis" x="${xAt(i).toFixed(1)}" y="${(height - 8).toFixed(1)}" text-anchor="middle">${escapeHtml(day || "—")}</text>`;
   }).join("");
 
-  const seriesLines = ACTIVITY_SERIES.map((series) => {
-    const points = daily.map((row, i) => `${xAt(i).toFixed(1)},${yAt(row?.[series.key]).toFixed(1)}`).join(" ");
-    return `<polyline class="activityChartLine" fill="none" stroke="${series.color}" stroke-width="2.25" stroke-linejoin="round" stroke-linecap="round" points="${points}"></polyline>`;
+  const seriesLines = series.map((seriesItem) => {
+    const points = daily.map((row, i) => `${xAt(i).toFixed(1)},${yAt(row?.[seriesItem.key]).toFixed(1)}`).join(" ");
+    return `<polyline class="activityChartLine" fill="none" stroke="${seriesItem.color}" stroke-width="2.25" stroke-linejoin="round" stroke-linecap="round" points="${points}"></polyline>`;
   }).join("");
 
-  const dots = ACTIVITY_SERIES.map((series) => daily.map((row, i) => {
+  const dots = series.map((seriesItem) => daily.map((row, i) => {
     const x = xAt(i);
-    const y = yAt(row?.[series.key]);
-    return `<circle class="activityChartDot" cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="2.6" fill="${series.color}"></circle>`;
+    const y = yAt(row?.[seriesItem.key]);
+    return `<circle class="activityChartDot" cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="2.6" fill="${seriesItem.color}"></circle>`;
   }).join("")).join("");
 
   return `
@@ -1665,6 +1673,333 @@ function renderGrowthSection(growth = {}) {
       </div>
     </section>
   `;
+}
+
+const FUNNEL_TIERS = [
+  {
+    id: "acquisition",
+    label: "Acquisition",
+    events: [
+      { key: "nabad_cta_click", label: "CTA clicks" },
+      { key: "nabad_app_store_click", label: "App Store clicks" },
+      { key: "nabad_blog_cta_click", label: "Blog CTA clicks" },
+    ],
+  },
+  {
+    id: "auth",
+    label: "Auth",
+    events: [
+      { key: "nabad_signup_complete", label: "Signups" },
+      { key: "nabad_signin_complete", label: "Sign-ins" },
+    ],
+  },
+  {
+    id: "activation",
+    label: "Activation",
+    events: [
+      { key: "nabad_coach_welcome_open", label: "Coach welcome" },
+      { key: "nabad_song_plan_start", label: "Song plan start" },
+      { key: "nabad_song_plan_complete", label: "Song plan done" },
+      { key: "nabad_first_generate", label: "First generate" },
+    ],
+  },
+  {
+    id: "engagement",
+    label: "Engagement",
+    events: [
+      { key: "nabad_route_view", label: "Route views" },
+      { key: "nabad_discover_publish", label: "Discover publish" },
+    ],
+  },
+  {
+    id: "monetization",
+    label: "Monetization",
+    events: [
+      { key: "nabad_pro_view", label: "Pro page views" },
+      { key: "nabad_pro_trial_start", label: "Pro trial starts" },
+    ],
+  },
+];
+
+const FUNNEL_CHART_SERIES = [
+  { key: "nabad_signup_complete", label: "Signups", color: "#60a5fa" },
+  { key: "nabad_song_plan_complete", label: "Song plan done", color: "#23d5ab" },
+  { key: "nabad_first_generate", label: "First generate", color: "#8b7cf6" },
+  { key: "nabad_pro_trial_start", label: "Pro trial", color: "#fbbf24" },
+];
+
+const VERCEL_VISIT_SERIES = [
+  { key: "visitors", label: "Visitors", color: "#60a5fa" },
+  { key: "pageviews", label: "Page views", color: "#23d5ab" },
+];
+
+function funnelTotal(totals, key) {
+  return Number(totals?.[key] || 0);
+}
+
+function transformFunnelDaily(daily = [], series = FUNNEL_CHART_SERIES) {
+  return (Array.isArray(daily) ? daily : []).map((row) => {
+    const events = row?.events && typeof row.events === "object" ? row.events : {};
+    const out = { day: row?.day || "" };
+    for (const s of series) {
+      out[s.key] = Number(events[s.key] || 0);
+    }
+    return out;
+  });
+}
+
+function sliceFunnelDaily(daily, days) {
+  const n = Math.max(1, Number(days) || 28);
+  const rows = Array.isArray(daily) ? daily : [];
+  return rows.slice(Math.max(0, rows.length - n));
+}
+
+function renderVercelDimTable(rows, { metric = "visitors" } = {}) {
+  const list = Array.isArray(rows) ? rows : [];
+  if (!list.length) {
+    return `<tr><td colspan="3" class="loading">No data for this period</td></tr>`;
+  }
+  const total = list.reduce((s, r) => s + Number(r[metric] || r.visitors || r.pageviews || 0), 0) || 1;
+  return list.map((r) => {
+    const val = Number(r[metric] || r.visitors || r.pageviews || 0);
+    const pct = Math.round((val / total) * 1000) / 10;
+    const label = String(r.label || "—");
+    const barPct = Math.max(2, Math.round((val / total) * 100));
+    return `
+      <tr>
+        <td>
+          <div class="growthBucketLabel">${escapeHtml(label)}</div>
+          <div class="growthBarTrack" aria-hidden="true">
+            <span class="growthBarFill" style="width:${barPct}%"></span>
+          </div>
+        </td>
+        <td class="num">${fmtNum(val)}</td>
+        <td class="num">${fmtNum(pct, 1)}%</td>
+      </tr>
+    `;
+  }).join("");
+}
+
+function renderVercelDimPanel(title, rows, note = "") {
+  return `
+    <section class="sectionCard sectionCard--data">
+      <div class="sectionHead">
+        <h3 class="sectionTitle">${escapeHtml(title)}</h3>
+        ${note ? `<p class="sectionNote">${escapeHtml(note)}</p>` : ""}
+      </div>
+      <div class="tableWrap tableWrap--plain">
+        <table class="table--compact growthBucketTable">
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th class="num">Visitors</th>
+              <th class="num">Share</th>
+            </tr>
+          </thead>
+          <tbody>${renderVercelDimTable(rows, { metric: "visitors" })}</tbody>
+        </table>
+      </div>
+    </section>
+  `;
+}
+
+function renderFunnelBreakdowns(breakdowns = {}) {
+  const rows = [];
+  for (const tier of FUNNEL_TIERS) {
+    for (const ev of tier.events) {
+      const dims = breakdowns?.[ev.key];
+      if (!dims || typeof dims !== "object" || !Object.keys(dims).length) continue;
+      const parts = Object.entries(dims)
+        .sort((a, b) => Number(b[1]) - Number(a[1]))
+        .slice(0, 6)
+        .map(([k, v]) => `${escapeHtml(k)} (${fmtNum(v)})`)
+        .join(" · ");
+      rows.push(`
+        <tr>
+          <td>${escapeHtml(tier.label)}</td>
+          <td>${escapeHtml(ev.label)}</td>
+          <td>${parts || "—"}</td>
+        </tr>
+      `);
+    }
+  }
+  if (!rows.length) {
+    return `<tr><td colspan="3" class="loading">No breakdown data yet</td></tr>`;
+  }
+  return rows.join("");
+}
+
+function renderFunnel(data) {
+  const bundle = data?.funnel || {};
+  const vercel = bundle.vercel || {};
+  const product = bundle.product || {};
+  const totals = product.totals && typeof product.totals === "object" ? product.totals : {};
+  const totalsToday = product.totalsToday && typeof product.totalsToday === "object" ? product.totalsToday : {};
+  const windowDays = state.funnelWindow || vercel.days || product.days || 28;
+
+  state.funnelDaily = transformFunnelDaily(product.daily || [], FUNNEL_CHART_SERIES);
+  state.funnelVisitDaily = Array.isArray(vercel.daily) ? vercel.daily : [];
+  const productDaily = sliceFunnelDaily(state.funnelDaily, windowDays);
+  const visitDaily = sliceFunnelDaily(state.funnelVisitDaily, windowDays);
+
+  const vercelConfigured = Boolean(vercel.configured);
+  const vercelNote = vercelConfigured
+    ? `Vercel Web Analytics · ${vercel.since || ""} → ${vercel.until || ""}`
+    : escapeHtml(vercel.note || "Add VERCEL_ANALYTICS_TOKEN on Vercel to load countries, devices, and pages.");
+  const vercelErrors = Array.isArray(vercel.errors) && vercel.errors.length
+    ? `<div class="globalError" style="margin-bottom:16px">${vercel.errors.map((e) => escapeHtml(e)).join("<br>")}</div>`
+    : "";
+  const productNote = product.source === "rpc"
+    ? "Supabase product_analytics_events — includes native iOS app events Vercel cannot see."
+    : escapeHtml(product.note || "Run supabase/product_analytics_events.sql for app funnel events.");
+
+  const visitLegend = VERCEL_VISIT_SERIES.map((series) => `
+    <span class="activityLegendItem">
+      <span class="activityLegendSwatch" style="background:${series.color}"></span>
+      ${escapeHtml(series.label)}
+    </span>
+  `).join("");
+
+  const productLegend = FUNNEL_CHART_SERIES.map((series) => `
+    <span class="activityLegendItem">
+      <span class="activityLegendSwatch" style="background:${series.color}"></span>
+      ${escapeHtml(series.label)}
+    </span>
+  `).join("");
+
+  const vercelEvents = Array.isArray(vercel.customEvents) ? vercel.customEvents : [];
+  const vercelEventRows = vercelEvents.length
+    ? vercelEvents.map((ev) => `
+        <tr>
+          <td>${escapeHtml(ev.name || "—")}</td>
+          <td class="num">${fmtNum(ev.count)}</td>
+          <td class="num">${fmtNum(ev.visitors)}</td>
+        </tr>
+      `).join("")
+    : `<tr><td colspan="3" class="loading">No custom events in Vercel yet — click CTAs on nabadai.com to populate.</td></tr>`;
+
+  const tierSections = FUNNEL_TIERS.map((tier) => {
+    const cards = tier.events.map((ev) => {
+      const total = funnelTotal(totals, ev.key);
+      const today = funnelTotal(totalsToday, ev.key);
+      const vercelMatch = vercelEvents.find((e) => String(e.name) === ev.key);
+      const vercelCount = vercelMatch ? Number(vercelMatch.count || 0) : null;
+      const sub = today > 0
+        ? `${fmtNum(today)} today`
+        : vercelCount != null && vercelCount > 0
+          ? `${fmtNum(vercelCount)} on web (Vercel)`
+          : "App + web store";
+      return statCard(ev.label, fmtNum(total), sub);
+    }).join("");
+    return `
+      <section class="sectionCard">
+        <div class="sectionHead">
+          <h3 class="sectionTitle">${escapeHtml(tier.label)}</h3>
+          <p class="sectionNote">Counts from Supabase (native app + web mirror).</p>
+        </div>
+        <div class="cardsGrid cardsGrid--inSection">${cards}</div>
+      </section>
+    `;
+  }).join("");
+
+  const windowToggle = `
+    <div class="activityWindowToggle" role="group" aria-label="Funnel range">
+      <button type="button" class="activityWindowBtn${windowDays === 7 ? " isActive" : ""}" data-funnel-window="7">7d</button>
+      <button type="button" class="activityWindowBtn${windowDays === 28 ? " isActive" : ""}" data-funnel-window="28">28d</button>
+    </div>
+  `;
+
+  const dashboardLink = vercel.dashboardUrl
+    ? `<a class="providerExtLink" href="${escapeHtml(vercel.dashboardUrl)}" target="_blank" rel="noopener noreferrer">Open Vercel Analytics →</a>`
+    : "";
+
+  els.panels.funnel.innerHTML = adminPageStack(`
+    ${vercelErrors}
+    <section class="sectionCard sectionCard--data" data-funnel-section>
+      <div class="sectionHead activitySectionHead">
+        <div>
+          <h3 class="sectionTitle">Web traffic</h3>
+          <p class="sectionNote">${vercelNote}. ${dashboardLink}</p>
+        </div>
+        <div class="activityHeadActions">${windowToggle}</div>
+      </div>
+      <div class="cardsGrid cardsGrid--inSection">
+        ${statCard("Visitors", fmtNum(vercel.totals?.visitors), vercelConfigured ? "Unique (Vercel)" : "—")}
+        ${statCard("Page views", fmtNum(vercel.totals?.pageviews), vercelConfigured ? "All loads" : "—")}
+        ${statCard("Top country", escapeHtml(vercel.countries?.[0]?.label || "—"), vercel.countries?.[0] ? `${fmtNum(vercel.countries[0].visitors)} visitors` : "")}
+        ${statCard("Top device", escapeHtml(vercel.devices?.[0]?.label || "—"), vercel.devices?.[0] ? `${fmtNum(vercel.devices[0].visitors)} visitors` : "")}
+      </div>
+      <div class="activityChartLegend">${visitLegend}</div>
+      <div class="activityChartWrap" data-funnel-visit-chart>
+        ${buildActivityChartSvg(visitDaily, {}, VERCEL_VISIT_SERIES)}
+      </div>
+    </section>
+
+    <div class="cardsGrid cardsGrid--twoCol">
+      ${renderVercelDimPanel("Countries", vercel.countries || [])}
+      ${renderVercelDimPanel("Devices", vercel.devices || [])}
+      ${renderVercelDimPanel("Operating systems", vercel.operatingSystems || [])}
+      ${renderVercelDimPanel("Browsers", vercel.browsers || [])}
+    </div>
+
+    <div class="cardsGrid cardsGrid--twoCol">
+      ${renderVercelDimPanel("Top pages", vercel.pages || [], "Exact URL paths on nabadai.com")}
+      ${renderVercelDimPanel("Referrers", vercel.referrers || [], "Where visitors came from")}
+    </div>
+
+    <section class="sectionCard sectionCard--data">
+      <div class="sectionHead">
+        <h3 class="sectionTitle">Custom events (Vercel)</h3>
+        <p class="sectionNote">Web-only events tracked with va('event') — CTA clicks, signups in browser, etc.</p>
+      </div>
+      <div class="tableWrap tableWrap--plain">
+        <table class="table--compact">
+          <thead>
+            <tr>
+              <th>Event</th>
+              <th class="num">Count</th>
+              <th class="num">Visitors</th>
+            </tr>
+          </thead>
+          <tbody>${vercelEventRows}</tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="sectionCard sectionCard--data">
+      <div class="sectionHead activitySectionHead">
+        <div>
+          <h3 class="sectionTitle">Product activation path</h3>
+          <p class="sectionNote">Signup → song plan → first generate → Pro trial. ${productNote}</p>
+        </div>
+      </div>
+      <div class="activityChartLegend">${productLegend}</div>
+      <div class="activityChartWrap" data-funnel-chart>
+        ${buildActivityChartSvg(productDaily, {}, FUNNEL_CHART_SERIES)}
+      </div>
+    </section>
+
+    ${tierSections}
+
+    <section class="sectionCard sectionCard--data">
+      <div class="sectionHead">
+        <h3 class="sectionTitle">Product event breakdowns</h3>
+        <p class="sectionNote">Top dimensions per stored event (method, page, route, placement).</p>
+      </div>
+      <div class="tableWrap tableWrap--plain">
+        <table class="table--compact">
+          <thead>
+            <tr>
+              <th>Tier</th>
+              <th>Event</th>
+              <th>Top dimensions</th>
+            </tr>
+          </thead>
+          <tbody>${renderFunnelBreakdowns(product.breakdowns || {})}</tbody>
+        </table>
+      </div>
+    </section>
+  `);
 }
 
 function renderCoachUsageSection(coach = {}) {
@@ -5316,6 +5651,7 @@ const RENDERERS = {
   credits: renderCredits,
   marketing: renderMarketingView,
   blog: renderBlogViewWrapper,
+  funnel: renderFunnel,
   promos: renderPromos,
   singers: renderSingers,
   generations: renderGenerations,
@@ -6636,6 +6972,17 @@ document.body.addEventListener("click", (e) => {
     if (next === 7 || next === 28) {
       state.activityWindow = next;
       updateActivityChartDom();
+    }
+    return;
+  }
+
+  const funnelWinBtn = e.target.closest("[data-funnel-window]");
+  if (funnelWinBtn) {
+    const next = Number(funnelWinBtn.getAttribute("data-funnel-window") || 0);
+    if (next === 7 || next === 28) {
+      state.funnelWindow = next;
+      invalidateViewCache("funnel");
+      void loadView({ force: true });
     }
     return;
   }

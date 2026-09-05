@@ -46,6 +46,9 @@
     },
     "api/music/producer/recover.js": {
       "maxDuration": 30
+    },
+    "api/blog/page.js": {
+      "includeFiles": "blog-post.html,ar/blog-post.html"
     }
   },
   "crons": [
@@ -56,8 +59,8 @@
     { "source": "/robots.txt", "destination": "/api/robots" },
     { "source": "/sitemap.xml", "destination": "/api/sitemap" },
     { "source": "/s/:id", "destination": "/api/share?id=:id" },
-    { "source": "/blog/:slug", "destination": "/blog-post?slug=:slug" },
-    { "source": "/ar/blog/:slug", "destination": "/ar/blog-post?slug=:slug" },
+    { "source": "/blog/:slug", "destination": "/api/blog/page?slug=:slug&locale=en" },
+    { "source": "/ar/blog/:slug", "destination": "/api/blog/page?slug=:slug&locale=ar" },
     {
       "source": "/admin",
       "destination": "/admin/index.html"

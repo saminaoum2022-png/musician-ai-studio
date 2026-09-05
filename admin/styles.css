@@ -626,6 +626,19 @@ button, input { font: inherit; }
   margin-bottom: 0;
 }
 
+.cardsGrid--twoCol {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+@media (max-width: 960px) {
+  .cardsGrid--twoCol {
+    grid-template-columns: 1fr;
+  }
+}
+
 .statCard {
   background: var(--surface-raised);
   border: 1px solid var(--border);

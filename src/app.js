@@ -35790,11 +35790,18 @@ const COACH_PROJECT_FLOW_KEY_PREFIX = "nabad_coach_project:v1:";
 /** @deprecated alias — project flow persisted in localStorage per user */
 const COACH_SIGNUP_FLOW_KEY = "nabad_coach_signup_flow:v1";
 let _coachSignupFlow = null;
-const COACH_PROJECT_CHIP_STEPS = new Set(["language", "dialect", "dedicated", "name", "lyrics"]);
+const COACH_PROJECT_CHIP_STEPS = new Set([
+  "path", "topic", "occasion", "language", "dialect", "dedicated", "name", "song_title", "lyrics",
+]);
+/** Steps where typed chat must stay in Song plan — never fall through to generic Coach API. */
+const COACH_PROJECT_INTAKE_STEPS = COACH_PROJECT_CHIP_STEPS;
+const COACH_OCCASION_PRIMARY_IDS = ["birthday", "anniversary", "wedding", "apology", "congrats", "mom-day"];
+const COACH_OCCASION_MORE_IDS = ["proud-of-you", "missing-you", "christmas", "new-year", "prom"];
 const COACH_TOPIC_LABELS = Object.freeze({
   love: "Love song",
   apology: "Apology",
   dabke: "Dabke",
+  custom: "Custom vibe",
   write: "Write my own",
 });
 const COACH_LANG_LABELS = Object.freeze({
@@ -35947,8 +35954,38 @@ function coachSignupFlowActive() {
   const flow = loadCoachSignupFlow();
   return Boolean(flow && flow.step && flow.step !== "done");
 }
-function coachProjectTopicLabel(topicId) {
+function coachEmptyProjectFlow(overrides = {}) {
+  return {
+    step: "",
+    path: "",
+    topic: "",
+    customTopicLabel: "",
+    occasionId: "",
+    language: "",
+    dialect: "",
+    dedicatedTo: "",
+    recipientName: "",
+    songTitle: "",
+    lyricsMode: "",
+    ...overrides,
+  };
+}
+function coachOccasionById(id) {
+  return CHALLENGE_OCCASIONS.find((o) => String(o.id) === String(id || "").trim()) || null;
+}
+function coachOccasionLabel(id) {
+  return coachOccasionById(id)?.label || String(id || "").trim() || "—";
+}
+function coachProjectTopicLabel(topicId, flow) {
+  const custom = String(flow?.customTopicLabel || "").trim();
+  if (String(topicId || "").trim() === "custom" && custom) return custom;
   return COACH_TOPIC_LABELS[String(topicId || "").trim()] || String(topicId || "").trim() || "—";
+}
+function coachProjectPathLabel(path) {
+  const v = String(path || "").trim().toLowerCase();
+  if (v === "occasion") return "Occasion";
+  if (v === "vibe") return "Vibe / mood";
+  return "—";
 }
 function coachProjectLangLabel(code) {
   return COACH_LANG_LABELS[String(code || "").trim().toLowerCase()] || String(code || "").trim() || "—";
@@ -35965,33 +36002,99 @@ function coachProjectDedicatedLabel(code) {
 }
 function coachProjectPlanRows(flow) {
   if (!flow) return [];
+  const path = String(flow.path || "").trim().toLowerCase();
   const topic = String(flow.topic || "").trim();
+  const isOccasion = path === "occasion";
   const isDabke = topic === "dabke";
-  const rows = [
-    { id: "topic", label: "Topic", value: coachProjectTopicLabel(topic), done: Boolean(topic) },
-    { id: "language", label: "Language", value: coachProjectLangLabel(flow.language), done: Boolean(flow.language) },
-  ];
-  if (String(flow.language || "").toLowerCase() === "arabic") {
+  const rows = [];
+  if (path) rows.push({ id: "path", label: "Start", value: coachProjectPathLabel(path), done: true });
+  if (isOccasion) {
     rows.push({
-      id: "dialect",
-      label: "Dialect",
-      value: coachProjectDialectLabel(flow.dialect),
-      done: Boolean(flow.dialect),
+      id: "occasion",
+      label: "Occasion",
+      value: coachOccasionLabel(flow.occasionId),
+      done: Boolean(flow.occasionId),
+    });
+    rows.push({
+      id: "name",
+      label: "Their name",
+      value: String(flow.recipientName || "").trim() || (flow.step === "name_input" ? "Type below…" : flow.nameSkipped ? "Skipped" : "—"),
+      done: Boolean(String(flow.recipientName || "").trim()) || Boolean(flow.nameSkipped),
+    });
+    rows.push({
+      id: "song_title",
+      label: "Song title",
+      value: String(flow.songTitle || "").trim() || (flow.step === "song_title_input" ? "Type below…" : flow.songTitleSkipped ? "Auto" : "—"),
+      done: Boolean(String(flow.songTitle || "").trim()) || Boolean(flow.songTitleSkipped),
+    });
+  } else if (topic) {
+    rows.push({
+      id: "topic",
+      label: "Vibe",
+      value: coachProjectTopicLabel(topic, flow),
+      done: Boolean(topic),
+    });
+  } else if (flow.step === "path") {
+    rows.push({ id: "path", label: "Start", value: "Pick Occasion or Vibe", done: false });
+  } else if (flow.step === "topic" || flow.step === "occasion") {
+    rows.push({
+      id: flow.step,
+      label: flow.step === "occasion" ? "Occasion" : "Vibe",
+      value: "—",
+      done: false,
     });
   }
-  if (!isDabke) {
+  if (!isOccasion) {
     rows.push({
-      id: "dedicated",
-      label: "For who",
-      value: coachProjectDedicatedLabel(flow.dedicatedTo),
-      done: Boolean(flow.dedicatedTo),
+      id: "language",
+      label: "Language",
+      value: coachProjectLangLabel(flow.language),
+      done: Boolean(flow.language),
     });
-    if (flow.dedicatedTo && flow.dedicatedTo !== "anyone") {
+    if (String(flow.language || "").toLowerCase() === "arabic") {
       rows.push({
-        id: "name",
-        label: "Name",
-        value: String(flow.recipientName || "").trim() || (flow.step === "name_input" ? "Type below…" : "—"),
-        done: Boolean(String(flow.recipientName || "").trim()) || flow.step === "name" && flow.dedicatedTo === "anyone",
+        id: "dialect",
+        label: "Dialect",
+        value: coachProjectDialectLabel(flow.dialect),
+        done: Boolean(flow.dialect),
+      });
+    }
+    if (!isDabke && path === "vibe") {
+      rows.push({
+        id: "dedicated",
+        label: "For who",
+        value: coachProjectDedicatedLabel(flow.dedicatedTo),
+        done: Boolean(flow.dedicatedTo),
+      });
+      if (flow.dedicatedTo && flow.dedicatedTo !== "anyone") {
+        rows.push({
+          id: "name",
+          label: "Their name",
+          value: String(flow.recipientName || "").trim() || (flow.step === "name_input" ? "Type below…" : "—"),
+          done: Boolean(String(flow.recipientName || "").trim()),
+        });
+      }
+    }
+    rows.push({
+      id: "song_title",
+      label: "Song title",
+      value: String(flow.songTitle || "").trim() || (flow.step === "song_title_input" ? "Type below…" : flow.songTitleSkipped ? "Auto" : "—"),
+      done: Boolean(String(flow.songTitle || "").trim()) || Boolean(flow.songTitleSkipped),
+    });
+  }
+  if (isOccasion) {
+    rows.push({
+      id: "language",
+      label: "Language",
+      value: coachProjectLangLabel(flow.language),
+      done: Boolean(flow.language),
+    });
+    if (String(flow.language || "").toLowerCase() === "arabic") {
+      rows.push({
+        id: "dialect",
+        label: "Dialect",
+        value: coachProjectDialectLabel(flow.dialect),
+        done: Boolean(flow.dialect),
       });
     }
   }
@@ -36022,11 +36125,16 @@ function syncCoachSongPlanBar() {
   if (subEl) {
     const pending = String(flow?.step || "").trim();
     const pendingLabels = {
+      path: "Occasion or vibe?",
+      topic: "Pick a vibe",
+      occasion: "Pick an occasion",
       language: "Pick a language",
       dialect: "Pick a dialect",
       dedicated: "Who is it for?",
       name: "Add a name?",
       name_input: "Type their name",
+      song_title: "Add a song title?",
+      song_title_input: "Type song title",
       lyrics: "Lyrics option",
       summary: "Ready — open Create",
     };
@@ -36046,7 +36154,8 @@ function renderCoachSongPlanList() {
   list.innerHTML = rows.map((row) => {
     const empty = !row.done || row.value === "—";
     const isPending = row.id === pendingStep
-      || (pendingStep === "name_input" && row.id === "name");
+      || (pendingStep === "name_input" && row.id === "name")
+      || (pendingStep === "song_title_input" && row.id === "song_title");
     return `<li class="coachSongPlanRow${isPending ? " isPending" : ""}">
       <span class="coachSongPlanRowLabel">${escapeHtml(row.label)}</span>
       <span class="coachSongPlanRowValue${empty ? " isEmpty" : ""}">${escapeHtml(row.value)}</span>
@@ -36077,8 +36186,29 @@ function reaskCoachProjectStep(stepId) {
   const step = String(stepId || "").trim();
   try { haptic("light"); } catch {}
   closeCoachSongPlanSheet();
+  if (step === "path") {
+    flow.step = "path";
+    saveCoachSignupFlow(flow);
+    appendCoachSignupCoachMessage("Start with an occasion or a vibe 🎵", coachPathPickerCtas());
+    return;
+  }
   if (step === "topic") {
-    appendCoachSignupCoachMessage("Pick a vibe to start 🎵", coachTopicPickerCtas());
+    flow.step = "topic";
+    flow.topic = "";
+    flow.customTopicLabel = "";
+    saveCoachSignupFlow(flow);
+    appendCoachSignupCoachMessage("Pick a vibe 🎵", coachTopicPickerCtas());
+    return;
+  }
+  if (step === "occasion") {
+    flow.step = "occasion";
+    flow.occasionId = "";
+    flow.recipientName = "";
+    flow.nameSkipped = false;
+    flow.songTitle = "";
+    flow.songTitleSkipped = false;
+    saveCoachSignupFlow(flow);
+    askCoachOccasionStep();
     return;
   }
   if (step === "language") {
@@ -36101,8 +36231,19 @@ function reaskCoachProjectStep(stepId) {
   }
   if (step === "name") {
     flow.step = "name";
+    flow.recipientName = "";
+    flow.nameSkipped = false;
     saveCoachSignupFlow(flow);
-    appendCoachSignupCoachMessage("Want to include their name?", coachSignupNameCtas());
+    if (String(flow.path || "") === "occasion") askCoachOccasionRecipientStep(flow);
+    else appendCoachSignupCoachMessage("Want to include their name?", coachSignupNameCtas());
+    return;
+  }
+  if (step === "song_title") {
+    flow.step = "song_title";
+    flow.songTitle = "";
+    flow.songTitleSkipped = false;
+    saveCoachSignupFlow(flow);
+    askCoachSongTitleStep();
     return;
   }
   if (step === "lyrics") {
@@ -36111,6 +36252,27 @@ function reaskCoachProjectStep(stepId) {
     askCoachSignupLyricsStep(flow);
   }
 }
+function coachPathPickerCtas() {
+  return [
+    { id: "path-occasion", label: "🎁 Occasion", topic: "path:occasion" },
+    { id: "path-vibe", label: "💜 Vibe / mood", topic: "path:vibe" },
+  ];
+}
+function coachOccasionPickerCtas(ids = COACH_OCCASION_PRIMARY_IDS) {
+  const emoji = {
+    birthday: "🎂", anniversary: "💍", wedding: "💒", apology: "🙏", congrats: "🎓", "mom-day": "💐",
+    "proud-of-you": "🏆", "missing-you": "💭", christmas: "🎄", "new-year": "🎆", prom: "✨",
+  };
+  const ctas = ids.map((id) => {
+    const occ = coachOccasionById(id);
+    if (!occ) return null;
+    return { id: `occ-${id}`, label: `${emoji[id] || "🎵"} ${occ.label}`, topic: `occasion:${id}` };
+  }).filter(Boolean);
+  if (ids === COACH_OCCASION_PRIMARY_IDS) {
+    ctas.push({ id: "occ-more", label: "More occasions…", topic: "occasion:more" });
+  }
+  return ctas;
+}
 function coachTopicPickerCtas() {
   return [
     { id: "love", label: "💜 Love song", topic: "love" },
@@ -36118,6 +36280,66 @@ function coachTopicPickerCtas() {
     { id: "dabke", label: "🎉 Dabke", topic: "dabke" },
     { id: "surprise", label: "✨ Surprise me", topic: "surprise" },
   ];
+}
+function coachSongTitleCtas() {
+  return [
+    { id: "songtitle-yes", label: "Yes, add title", topic: "songtitle:yes" },
+    { id: "songtitle-skip", label: "Skip for now", topic: "songtitle:skip" },
+  ];
+}
+function askCoachOccasionStep() {
+  appendCoachSignupCoachMessage(
+    "Which occasion is this song for? 🎁",
+    coachOccasionPickerCtas(COACH_OCCASION_PRIMARY_IDS),
+  );
+}
+function askCoachOccasionRecipientStep(flow) {
+  const occ = coachOccasionById(flow?.occasionId);
+  const label = occ?.label || "this occasion";
+  appendCoachSignupCoachMessage(
+    `Perfect — a **${label}** song 🎁 Include their name in the lyrics?`,
+    coachSignupNameCtas(),
+  );
+}
+function askCoachSongTitleStep() {
+  appendCoachSignupCoachMessage(
+    "Want to set the **song title** now? (Different from their name — this is what the track is called in Create.)",
+    coachSongTitleCtas(),
+  );
+}
+function startCoachOccasionFlow(occasionId) {
+  const occ = coachOccasionById(occasionId);
+  if (!occ) return;
+  const flow = coachEmptyProjectFlow({
+    step: "name",
+    path: "occasion",
+    occasionId: occ.id,
+    topic: occ.id === "apology" ? "apology" : "",
+  });
+  saveCoachSignupFlow(flow);
+  askCoachOccasionRecipientStep(flow);
+}
+function coachSignupAfterRecipientName(flow) {
+  flow.step = "song_title";
+  saveCoachSignupFlow(flow);
+  askCoachSongTitleStep();
+}
+function coachSignupAfterSongTitle(flow) {
+  if (String(flow.path || "") === "occasion" && !String(flow.language || "").trim()) {
+    flow.step = "language";
+    saveCoachSignupFlow(flow);
+    askCoachSignupLanguageStep(flow);
+    return;
+  }
+  coachSignupBeforeLyrics(flow);
+}
+function coachSignupBeforeLyrics(flow) {
+  flow.step = "lyrics";
+  saveCoachSignupFlow(flow);
+  askCoachSignupLyricsStep(flow);
+}
+function startCoachPathFlow() {
+  saveCoachSignupFlow(coachEmptyProjectFlow({ step: "path" }));
 }
 function coachProjectSummaryCtas() {
   return [
@@ -36171,9 +36393,31 @@ function startCoachSongPlanFromMenu() {
   }
   offerCoachNewSongFlow(false);
 }
-function tryParseCoachProjectStepAnswer(step, text) {
+function tryParseCoachProjectStepAnswer(step, text, flow = loadCoachSignupFlow()) {
   const t = String(text || "").trim().toLowerCase();
-  if (!t) return null;
+  const raw = String(text || "").trim();
+  if (!raw) return null;
+  if (step === "path") {
+    if (/(occasion|event|gift|birthday|wedding|🎁)/.test(t)) return { kind: "path", value: "occasion" };
+    if (/(vibe|mood|theme|love|dabke|💜)/.test(t)) return { kind: "path", value: "vibe" };
+  }
+  if (step === "topic") {
+    if (/\b(love|romantic|heart)\b/.test(t) || /حب|غرام/.test(raw)) return { kind: "topic", value: "love" };
+    if (/\b(apolog|sorry)\b/.test(t) || /اسف|آسف|اعتذ/.test(raw)) return { kind: "topic", value: "apology" };
+    if (/\b(dabke|dabkeh|party)\b/.test(t) || /دبke/.test(raw)) return { kind: "topic", value: "dabke" };
+    if (raw.length >= 2) return { kind: "topic", value: "custom", label: raw.slice(0, 80) };
+  }
+  if (step === "occasion") {
+    for (const occ of CHALLENGE_OCCASIONS) {
+      const label = String(occ.label || "").toLowerCase();
+      const id = String(occ.id || "").toLowerCase();
+      if (t.includes(label) || t.includes(id.replace(/-/g, " "))) return { kind: "occasion", value: occ.id };
+    }
+    if (/birthday|bday|عيد ميلاد/.test(t)) return { kind: "occasion", value: "birthday" };
+    if (/wedding|زفاف|عرس/.test(t)) return { kind: "occasion", value: "wedding" };
+    if (/anniversary|ذكرى/.test(t)) return { kind: "occasion", value: "anniversary" };
+    if (/mom|mother|ام|mama/.test(t)) return { kind: "occasion", value: "mom-day" };
+  }
   if (step === "language") {
     if (/\barab(ic)?\b/.test(t)) return { kind: "lang", value: "arabic" };
     if (/\benglish\b/.test(t)) return { kind: "lang", value: "english" };
@@ -36194,11 +36438,33 @@ function tryParseCoachProjectStepAnswer(step, text) {
     if (/\b(have|got|already|my lyrics|wrote)\b/.test(t)) return { kind: "lyrics", value: "have" };
     if (/\b(write|generate|create|for me)\b/.test(t)) return { kind: "lyrics", value: "generate" };
   }
+  if (step === "song_title" && raw.length >= 2) return { kind: "songtitle", value: "yes", label: raw.slice(0, 80) };
   return null;
 }
 function applyCoachProjectParsedAnswer(flow, parsed, echoLabel = "") {
   if (!flow || !parsed) return;
   consumeLatestCoachSignupCtas();
+  if (parsed.kind === "path") {
+    handleCoachSignupCta(`path:${parsed.value}`, echoLabel || "");
+    return;
+  }
+  if (parsed.kind === "topic") {
+    if (parsed.value === "custom") startCoachSignupTopicFlow("custom", parsed.label || echoLabel || "");
+    else startCoachSignupTopicFlow(parsed.value);
+    return;
+  }
+  if (parsed.kind === "occasion") {
+    handleCoachSignupCta(`occasion:${parsed.value}`, echoLabel || "");
+    return;
+  }
+  if (parsed.kind === "songtitle") {
+    flow.songTitle = String(parsed.label || echoLabel || "").trim().slice(0, 80);
+    flow.songTitleSkipped = false;
+    saveCoachSignupFlow(flow);
+    if (echoLabel) appendCoachSignupUserEcho(echoLabel);
+    coachSignupAfterSongTitle(flow);
+    return;
+  }
   handleCoachSignupCta(`${parsed.kind}:${parsed.value}`, echoLabel || "");
 }
 async function sendCoachSideHelpDuringProject(text, input, flow) {
@@ -36258,7 +36524,7 @@ async function sendCoachSideHelpDuringProject(text, input, flow) {
   try { input?.focus({ preventScroll: true }); } catch {}
 }
 function ensurePendingCoachStepPrompt(flow) {
-  if (!flow || flow.step === "summary" || flow.step === "name_input") return;
+  if (!flow || flow.step === "summary" || flow.step === "name_input" || flow.step === "song_title_input") return;
   const ctas = coachCtasForFlowStep(flow);
   if (!ctas.length) return;
   const chat = loadCoachChat();
@@ -36269,20 +36535,27 @@ function ensurePendingCoachStepPrompt(flow) {
 function coachCtasForFlowStep(flow) {
   if (!flow) return [];
   switch (String(flow.step || "")) {
+    case "path": return coachPathPickerCtas();
+    case "topic": return coachTopicPickerCtas();
+    case "occasion": return coachOccasionPickerCtas(
+      flow.showMoreOccasions ? COACH_OCCASION_MORE_IDS : COACH_OCCASION_PRIMARY_IDS,
+    );
     case "language": return coachSignupLanguageCtas();
     case "dialect": return coachSignupDialectCtas();
     case "dedicated": return coachSignupDedicatedCtas();
     case "name": return coachSignupNameCtas();
+    case "song_title": return coachSongTitleCtas();
     case "lyrics": return coachSignupLyricsCtas();
     case "summary": return coachProjectSummaryCtas();
     default: return [];
   }
 }
 function offerCoachNewSongFlow(fromIntent = false) {
+  startCoachPathFlow();
   const lead = fromIntent
-    ? "I'd love to help you make a song 🎵 Pick a vibe to start:"
-    : "Ready for a new song? Pick a vibe:";
-  appendCoachSignupCoachMessage(lead, coachTopicPickerCtas());
+    ? "I'd love to help you make a song 🎵 Start with an **occasion** (birthday, wedding…) or a **vibe** (love, dabke…):"
+    : "Ready for a new song? Pick **Occasion** or **Vibe / mood** to open your Song plan:";
+  appendCoachSignupCoachMessage(lead, coachPathPickerCtas());
 }
 function coachSignupLanguageCtas() {
   return [
@@ -36331,6 +36604,16 @@ function enrichFirstSongSeedFromCoachFlow(seed, flow) {
   let prompt = String(s.prompt || "").trim();
   const dedicated = String(flow?.dedicatedTo || "").trim().toLowerCase();
   const name = String(flow?.recipientName || "").trim();
+  const customTopic = String(flow?.customTopicLabel || "").trim();
+  const songTitle = String(flow?.songTitle || "").trim();
+  const occ = coachOccasionById(flow?.occasionId);
+  if (occ) {
+    prompt = [String(occ.angle || "").trim(), String(occ.lyricSeed || "").trim(), prompt].filter(Boolean).join("\n");
+    if (Array.isArray(occ.tags) && occ.tags.length) {
+      s.artworkTags = [...new Set([...(Array.isArray(s.artworkTags) ? s.artworkTags : []), ...occ.tags])];
+    }
+  }
+  if (customTopic) prompt = `${customTopic}. ${prompt}`.trim();
   if (name) {
     if (dedicated === "her") prompt += ` Address her by name (${name}) naturally in the lyrics.`;
     else if (dedicated === "him") prompt += ` Address him by name (${name}) naturally in the lyrics.`;
@@ -36340,7 +36623,11 @@ function enrichFirstSongSeedFromCoachFlow(seed, flow) {
   } else if (dedicated === "him") {
     prompt += " The song is dedicated to a man (him).";
   }
-  if (name && s.title) {
+  if (songTitle) {
+    s.title = songTitle.slice(0, 100);
+  } else if (occ?.title) {
+    s.title = String(occ.title).slice(0, 100);
+  } else if (name && s.title) {
     const baseTitle = String(s.title || "").trim();
     if (baseTitle && !baseTitle.toLowerCase().includes(name.toLowerCase())) {
       s.title = `${baseTitle} — ${name}`.slice(0, 100);
@@ -36378,10 +36665,15 @@ function appendCoachSignupCoachMessage(body, ctas = []) {
   try { syncMessagesComposerForSignupFlow(); } catch {}
 }
 function askCoachSignupLanguageStep(flow) {
+  const path = String(flow?.path || "").trim();
   const topic = String(flow?.topic || "love").trim();
-  const lead = topic === "dabke"
+  const occ = coachOccasionById(flow?.occasionId);
+  let lead = topic === "dabke"
     ? "Dabke energy 🔥 Which language for your lyrics?"
     : "Which language should your lyrics be in?";
+  if (path === "occasion" && occ) {
+    lead = `**${occ.label}** song 🎁 Which language for the lyrics?`;
+  }
   appendCoachSignupCoachMessage(lead, coachSignupLanguageCtas());
 }
 function askCoachSignupDialectStep() {
@@ -36401,11 +36693,17 @@ function coachSignupAfterLanguage(flow) {
   coachSignupAfterLangDialect(flow);
 }
 function coachSignupAfterLangDialect(flow) {
-  if (flow.topic === "dabke") {
+  if (flow.path === "occasion") {
     flow.step = "lyrics";
-    flow.dedicatedTo = flow.dedicatedTo || "anyone";
     saveCoachSignupFlow(flow);
     askCoachSignupLyricsStep(flow);
+    return;
+  }
+  if (flow.topic === "dabke") {
+    flow.step = "song_title";
+    flow.dedicatedTo = flow.dedicatedTo || "anyone";
+    saveCoachSignupFlow(flow);
+    askCoachSongTitleStep();
     return;
   }
   flow.step = "dedicated";
@@ -36418,19 +36716,27 @@ function askCoachSignupLyricsStep(flow) {
     coachSignupLyricsCtas(),
   );
 }
-function startCoachSignupTopicFlow(topicId) {
+function startCoachSignupTopicFlow(topicId, customLabel = "") {
   let topic = String(topicId || "love").trim() || "love";
   if (topic === "surprise") {
     topic = ["love", "apology", "dabke"][Math.floor(Math.random() * 3)];
   }
-  saveCoachSignupFlow({
+  const flow = loadCoachSignupFlow() || coachEmptyProjectFlow();
+  Object.assign(flow, {
     step: "language",
+    path: "vibe",
     topic,
+    customTopicLabel: topic === "custom" ? String(customLabel || "").trim().slice(0, 80) : "",
     language: "",
     dialect: "",
     dedicatedTo: "",
     recipientName: "",
+    songTitle: "",
+    lyricsMode: "",
+    nameSkipped: false,
+    songTitleSkipped: false,
   });
+  saveCoachSignupFlow(flow);
   askCoachSignupLanguageStep({ topic });
 }
 function finishCoachSignupFlow({ hasLyrics = false } = {}) {
@@ -36443,18 +36749,65 @@ function finishCoachSignupFlow({ hasLyrics = false } = {}) {
   void refreshMessagesUnreadBadge({ force: true });
   const lang = String(flow.language || "auto").trim().toLowerCase() || "auto";
   const dialect = String(flow.dialect || "").trim().toLowerCase();
-  const seedRaw = pickFirstSongSeed(flow.topic, lang);
+
+  if (flow.path === "occasion" && flow.occasionId) {
+    const occ = coachOccasionById(flow.occasionId);
+    const seed = enrichFirstSongSeedFromCoachFlow({
+      prompt: String(occ?.lyricSeed || occ?.angle || "").trim(),
+      title: String(flow.songTitle || occ?.title || "My song").trim(),
+      style: "",
+      artworkTags: occ?.tags || [],
+    }, flow);
+    try { clearCreateFlow(); } catch {}
+    try { clearCreateChallengeFocus(); } catch {}
+    try { hideCreateResultCards(); } catch {}
+    try { setLyricsLanguage(lang); } catch {}
+    if (lang === "arabic" && dialect) {
+      try { setLyricsDialect(dialect); } catch {}
+    }
+    applyDiscoveryIdeaToCreate({
+      id: `coach:occasion:${occ?.id || flow.occasionId}`,
+      title: seed.title || occ?.title || "My song",
+      prompt: seed.prompt,
+      lyrics: hasLyrics ? "" : String(occ?.lyricSeed || "").trim(),
+      style: "",
+      tags: occ?.tags || [],
+      challenge: {
+        id: occ?.id || flow.occasionId,
+        title: seed.title || occ?.title || "My song",
+        type: "occasion",
+        occasion: occ?.label || "",
+        genre: "",
+        personName: String(flow.recipientName || "").trim(),
+        variant: "occasion",
+      },
+    });
+    try { location.hash = "#/generate"; } catch {}
+    appendCoachSignupCoachMessage(
+      hasLyrics
+        ? "Opening Create with your occasion preset — paste your lyrics there ✨"
+        : "Opening Create — your occasion template is ready ✨",
+      [],
+    );
+    return;
+  }
+
+  const topicForSeed = flow.topic === "custom" ? "love" : flow.topic;
+  const seedRaw = pickFirstSongSeed(topicForSeed, lang);
   const seed = enrichFirstSongSeedFromCoachFlow(seedRaw, flow);
   launchFirstSongActivation({
     language: lang,
     dialect,
-    topic: { id: flow.topic },
-    seed,
+    topic: { id: flow.topic === "custom" ? "custom" : flow.topic },
+    seed: flow.topic === "custom" ? { ...seed, prompt: enrichFirstSongSeedFromCoachFlow({ prompt: flow.customTopicLabel }, flow).prompt } : seed,
     autoGenerateLyrics: !hasLyrics,
     inputMode: hasLyrics ? "write" : "generate",
     dedicatedTo: flow.dedicatedTo,
     recipientName: flow.recipientName,
   });
+  if (flow.songTitle && els.sunoTitle) {
+    els.sunoTitle.value = String(flow.songTitle).trim().slice(0, 80);
+  }
   appendCoachSignupCoachMessage(
     hasLyrics
       ? "Opening Create — paste or write your lyrics there ✨"
@@ -36470,6 +36823,10 @@ function syncMessagesComposerForSignupFlow() {
     input.placeholder = "Their name…";
     return;
   }
+  if (flow?.step === "song_title_input") {
+    input.placeholder = "Song title…";
+    return;
+  }
   syncMessagesComposerForThread();
 }
 function handleCoachSignupNameTyped(name, input) {
@@ -36478,14 +36835,30 @@ function handleCoachSignupNameTyped(name, input) {
   const clean = String(name || "").trim().slice(0, 40);
   if (!clean) return;
   flow.recipientName = clean;
-  flow.step = "lyrics";
+  flow.nameSkipped = false;
   saveCoachSignupFlow(flow);
   if (input) {
     input.value = "";
     syncMessagesComposerInputHeight(input);
   }
   appendCoachSignupUserEcho(clean);
-  askCoachSignupLyricsStep(flow);
+  coachSignupAfterRecipientName(flow);
+  try { input?.focus({ preventScroll: true }); } catch {}
+}
+function handleCoachSongTitleTyped(title, input) {
+  const flow = loadCoachSignupFlow();
+  if (!flow || flow.step !== "song_title_input") return;
+  const clean = String(title || "").trim().slice(0, 80);
+  if (!clean) return;
+  flow.songTitle = clean;
+  flow.songTitleSkipped = false;
+  saveCoachSignupFlow(flow);
+  if (input) {
+    input.value = "";
+    syncMessagesComposerInputHeight(input);
+  }
+  appendCoachSignupUserEcho(clean);
+  coachSignupAfterSongTitle(flow);
   try { input?.focus({ preventScroll: true }); } catch {}
 }
 function coachSignupUnreadStorageKey(userId = authSession?.user?.id) {
@@ -36523,10 +36896,11 @@ function coachSignupWelcomeBody(balance = creditsState.balance) {
 
 You're in — you start with ${creditsLine}, enough for your first song.
 
-Pick a vibe and I'll set everything up in Create. Or explore first and come back anytime.`;
+Pick **Occasion** or a quick vibe — I'll build your **Song plan** and open Create when you're ready. Or explore first and come back anytime.`;
 }
 function coachSignupWelcomeCtas() {
   return [
+    { id: "path-occasion", label: "🎁 Occasion", topic: "path:occasion" },
     { id: "love", label: "💜 Love song", topic: "love" },
     { id: "apology", label: "🙏 Apology", topic: "apology" },
     { id: "dabke", label: "🎉 Dabke", topic: "dabke" },
@@ -36655,7 +37029,18 @@ function handleCoachSignupCta(topicId, label = "") {
   }
   const flow = loadCoachSignupFlow();
   if (!flow) {
+    if (action.startsWith("path:")) {
+      const val = action.slice(5);
+      saveCoachSignupFlow(coachEmptyProjectFlow({
+        step: val === "occasion" ? "occasion" : "topic",
+        path: val,
+      }));
+      if (val === "occasion") askCoachOccasionStep();
+      else appendCoachSignupCoachMessage("Pick a vibe 🎵", coachTopicPickerCtas());
+      return;
+    }
     if (action.startsWith("topic:")) startCoachSignupTopicFlow(action.slice(6));
+    if (action.startsWith("occasion:") && action !== "occasion:more") startCoachOccasionFlow(action.slice(9));
     return;
   }
   const [kind, value] = action.split(":");
@@ -36672,9 +37057,9 @@ function handleCoachSignupCta(topicId, label = "") {
   if (kind === "dedicated") {
     flow.dedicatedTo = value;
     if (value === "anyone") {
-      flow.step = "lyrics";
+      flow.step = "song_title";
       saveCoachSignupFlow(flow);
-      askCoachSignupLyricsStep(flow);
+      askCoachSongTitleStep();
       return;
     }
     flow.step = "name";
@@ -36692,9 +37077,48 @@ function handleCoachSignupCta(topicId, label = "") {
       try { input?.focus({ preventScroll: true }); } catch {}
       return;
     }
-    flow.step = "lyrics";
-    saveCoachSignupFlow(flow);
-    askCoachSignupLyricsStep(flow);
+    flow.nameSkipped = true;
+    flow.recipientName = "";
+    coachSignupAfterRecipientName(flow);
+    return;
+  }
+  if (kind === "songtitle") {
+    if (value === "yes") {
+      flow.step = "song_title_input";
+      saveCoachSignupFlow(flow);
+      appendCoachSignupCoachMessage("What's the song title? Type it below 👇", []);
+      try { syncMessagesComposerForSignupFlow(); } catch {}
+      const input = document.getElementById("messagesComposerInput");
+      try { input?.focus({ preventScroll: true }); } catch {}
+      return;
+    }
+    flow.songTitleSkipped = true;
+    flow.songTitle = "";
+    coachSignupAfterSongTitle(flow);
+    return;
+  }
+  if (kind === "path") {
+    flow.path = value;
+    if (value === "occasion") {
+      flow.step = "occasion";
+      saveCoachSignupFlow(flow);
+      askCoachOccasionStep();
+    } else {
+      flow.step = "topic";
+      saveCoachSignupFlow(flow);
+      appendCoachSignupCoachMessage("Pick a vibe 🎵", coachTopicPickerCtas());
+    }
+    return;
+  }
+  if (kind === "occasion") {
+    if (value === "more") {
+      flow.showMoreOccasions = true;
+      flow.step = "occasion";
+      saveCoachSignupFlow(flow);
+      appendCoachSignupCoachMessage("More occasions 🎁", coachOccasionPickerCtas(COACH_OCCASION_MORE_IDS));
+      return;
+    }
+    startCoachOccasionFlow(value);
     return;
   }
   if (kind === "lyrics") {
@@ -36713,7 +37137,7 @@ function coachWelcomeMessage() {
   return {
     id: "coach:welcome",
     sender_id: COACH_SENDER_ID,
-    body: "Hey! I'm **NabadAi Coach** 🎵 your guide to making music here.\n\nAsk me anything — or tap **New song** and I'll walk you through language, dialect, dedication, and lyrics, then open Create with everything ready.\n\nPaste lyrics for feedback, or ask about credits and **NabadAi Pro**. I can't see your balance, but I can explain costs. 🎧",
+    body: "Hey! I'm **NabadAi Coach** 🎵 your guide to making music here.\n\nTap **New song** for a **Song plan** — occasion or vibe, language, names, lyrics — then I open Create with everything set.\n\nPaste lyrics for feedback, or ask about credits and **NabadAi Pro**. 🎧",
     coachCtas: [
       { id: "new-song", label: "🎵 New song with Coach", topic: "project:new" },
     ],
@@ -36825,7 +37249,7 @@ function enterCoachThread(bootToken) {
   scheduleMessagesComposerAutofocus({ bootToken, delayMs: 120 });
   syncCoachSongPlanBar();
   const activeFlow = loadCoachSignupFlow();
-  if (activeFlow && (COACH_PROJECT_CHIP_STEPS.has(activeFlow.step) || activeFlow.step === "summary")) {
+  if (activeFlow && (COACH_PROJECT_INTAKE_STEPS.has(activeFlow.step) || activeFlow.step === "summary")) {
     ensurePendingCoachStepPrompt(activeFlow);
   }
 }
@@ -36840,8 +37264,12 @@ async function sendCoachMessage(text, input) {
     handleCoachSignupNameTyped(text, input);
     return;
   }
-  if (flow && COACH_PROJECT_CHIP_STEPS.has(flow.step)) {
-    const parsed = tryParseCoachProjectStepAnswer(flow.step, text);
+  if (flow?.step === "song_title_input") {
+    handleCoachSongTitleTyped(text, input);
+    return;
+  }
+  if (flow && COACH_PROJECT_INTAKE_STEPS.has(flow.step)) {
+    const parsed = tryParseCoachProjectStepAnswer(flow.step, text, flow);
     if (parsed) {
       if (input) {
         input.value = "";
@@ -36870,6 +37298,25 @@ async function sendCoachMessage(text, input) {
     saveCoachChat(_messagesList);
     renderMessagesMount({ scrollToBottom: true, forceScroll: true });
     offerCoachNewSongFlow(true);
+    return;
+  }
+  if (flow && coachSignupFlowActive() && flow.step !== "summary") {
+    const prior = Array.isArray(_messagesList) ? _messagesList.filter((m) => !m.coachTyping) : [];
+    const userMsg = {
+      id: `coach:u:${Date.now()}:${Math.random().toString(36).slice(2, 6)}`,
+      sender_id: String(authSession?.user?.id || "me"),
+      body: text,
+      created_at: new Date().toISOString(),
+      sendStatus: "sent",
+    };
+    if (input) {
+      input.value = "";
+      syncMessagesComposerInputHeight(input);
+    }
+    _messagesList = [...prior, userMsg];
+    saveCoachChat(_messagesList);
+    renderMessagesMount({ scrollToBottom: true, forceScroll: true });
+    await sendCoachSideHelpDuringProject(text, input, flow);
     return;
   }
   const prior = Array.isArray(_messagesList) ? _messagesList.filter((m) => !m.coachTyping) : [];

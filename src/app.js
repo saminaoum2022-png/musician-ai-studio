@@ -63817,6 +63817,12 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
               payload.referenceConditionStrength = "high";
               const refMs = await estimateBlobDurationMs(sendFile);
               if (refMs) payload.referenceDurationMs = refMs;
+              const remixUrl = unwrapInnermostHttpAudioUrl(
+                String(currentRemixSource?.originalUrl || currentRemixSource?.url || "").trim(),
+              );
+              if (remixUrl && (vocalRefOrigin === "remix" || hubRemixLocked)) {
+                payload.referenceAudioUrl = remixUrl;
+              }
             }
             try {
               showToast(`${providerLabel} composing… keep the app open (about 1–3 min).`, {

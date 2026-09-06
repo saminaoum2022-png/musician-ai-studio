@@ -42,11 +42,11 @@ const {
   buildElevenMusicPrompt,
   buildElevenReferenceCompositionPlan,
   buildElevenSongCompositionPlan,
-  decodeReferenceAudioPayload,
   elevenlabsGenerateEnabled,
   elevenlabsGenerateMusicDetailedWithRetry,
   elevenlabsUploadMusic,
   estimateReferenceDurationMs,
+  resolveElevenReferenceAudio,
   resolveElevenMusicLengthMs,
   resolveElevenMusicLengthMsFromBody,
   resolveElevenMusicModel,
@@ -1146,7 +1146,7 @@ async function handleElevenlabsGenerate(req, res, { user, isAdmin, body }) {
     });
   }
 
-  const hasReference = Boolean(body?.hasReference || body?.referenceAudio);
+  const hasReference = Boolean(body?.hasReference || body?.referenceAudio || body?.referenceAudioUrl);
   if (hasReference && Boolean(body?.instrumental) && Boolean(body?.referenceInstrumentalOnly)) {
     return sendJson(res, 400, {
       error: "ElevenLabs reference mode supports vocal hum/sing references — disable instrumental-from-melody for now.",
@@ -1234,14 +1234,15 @@ async function handleElevenlabsGenerate(req, res, { user, isAdmin, body }) {
   let referenceRangeMs = null;
   let referenceConditionStrength = body?.referenceConditionStrength || "high";
   if (hasReference) {
-    const refAudio = decodeReferenceAudioPayload(body?.referenceAudio);
-    if (!refAudio?.buffer?.length) {
+    const refResolved = await resolveElevenReferenceAudio(body);
+    if (!refResolved.ok) {
       return sendJson(res, 400, {
-        error: "Missing or invalid vocal reference audio — record or upload again.",
-        code: "elevenlabs_reference_invalid",
+        error: refResolved.userMessage || "Missing or invalid vocal reference audio — record or upload again.",
+        code: refResolved.code || "elevenlabs_reference_invalid",
+        details: refResolved.details || undefined,
       });
     }
-    if (refAudio.buffer.length > 15 * 1024 * 1024) {
+    if (refResolved.buffer.length > 15 * 1024 * 1024) {
       return sendJson(res, 400, {
         error: "Reference audio is too large (max 15 MB). Try a shorter hum or clip.",
         code: "elevenlabs_reference_too_large",
@@ -1249,8 +1250,8 @@ async function handleElevenlabsGenerate(req, res, { user, isAdmin, body }) {
     }
     const upload = await elevenlabsUploadMusic({
       apiKey,
-      buffer: refAudio.buffer,
-      mimeType: refAudio.mimeType,
+      buffer: refResolved.buffer,
+      mimeType: refResolved.mimeType,
     });
     if (!upload.ok || !upload.songId) {
       return sendJson(res, upload.httpStatus && upload.httpStatus >= 400 && upload.httpStatus < 500 ? upload.httpStatus : 502, {
@@ -1261,10 +1262,11 @@ async function handleElevenlabsGenerate(req, res, { user, isAdmin, body }) {
     referenceSongId = upload.songId;
     referenceRangeMs = Number(body?.referenceDurationMs) > 0
       ? Number(body.referenceDurationMs)
-      : estimateReferenceDurationMs(refAudio.buffer);
+      : estimateReferenceDurationMs(refResolved.buffer);
     console.log(
       "[music/generate] elevenlabs reference uploaded",
       referenceSongId.slice(0, 12),
+      refResolved.source || "payload",
       "rangeMs",
       referenceRangeMs,
     );

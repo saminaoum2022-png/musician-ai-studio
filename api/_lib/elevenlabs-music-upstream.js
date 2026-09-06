@@ -350,12 +350,16 @@ function estimateReferenceDurationMs(buffer) {
 function decodeReferenceAudioPayload(raw) {
   const s = String(raw || "").trim();
   if (!s) return null;
-  const m = /^data:([^;]+);base64,(.+)$/i.exec(s);
   try {
-    if (m) {
-      const buffer = Buffer.from(m[2], "base64");
+    if (s.startsWith("data:")) {
+      const comma = s.indexOf(",");
+      if (comma < 0) return null;
+      const header = s.slice(5, comma);
+      const b64 = s.slice(comma + 1);
+      const mimeType = header.split(";")[0].trim() || "audio/mpeg";
+      const buffer = Buffer.from(b64, "base64");
       if (!buffer.length) return null;
-      return { buffer, mimeType: m[1].split(";")[0].trim() || "audio/mpeg" };
+      return { buffer, mimeType };
     }
     const buffer = Buffer.from(s, "base64");
     if (!buffer.length) return null;
@@ -363,6 +367,65 @@ function decodeReferenceAudioPayload(raw) {
   } catch {
     return null;
   }
+}
+
+const ELEVEN_REFERENCE_MAX_BYTES = 15 * 1024 * 1024;
+
+/** Server-fetch remix / library audio when the client sends a URL (ElevenLabs reference). */
+async function fetchElevenReferenceBytesFromUrl(rawUrl) {
+  const target = String(rawUrl || "").trim();
+  if (!target || !/^https?:\/\//i.test(target)) {
+    return { ok: false, error: "invalid_source_url" };
+  }
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 45000);
+  try {
+    const r = await fetch(target, { method: "GET", redirect: "follow", signal: ctrl.signal });
+    if (!r.ok) return { ok: false, error: `upstream_${r.status}` };
+    const ab = await r.arrayBuffer();
+    const buffer = Buffer.from(ab);
+    if (buffer.length < 128) return { ok: false, error: "source_empty" };
+    if (buffer.length > ELEVEN_REFERENCE_MAX_BYTES) {
+      return { ok: false, error: "source_too_large" };
+    }
+    const ct = String(r.headers.get("content-type") || "audio/mpeg").split(";")[0].trim();
+    const mime = ct.includes("audio") ? ct : "audio/mpeg";
+    return { ok: true, buffer, mimeType: mime };
+  } catch (e) {
+    return { ok: false, error: e?.message || String(e) };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function resolveElevenReferenceAudio(body) {
+  const fromPayload = decodeReferenceAudioPayload(body?.referenceAudio);
+  if (fromPayload?.buffer?.length >= 128) {
+    return { ok: true, ...fromPayload, source: "payload" };
+  }
+  const url = String(body?.referenceAudioUrl || body?.reference_audio_url || "").trim();
+  if (!url) {
+    return {
+      ok: false,
+      userMessage: "Missing or invalid vocal reference audio — record or upload again.",
+      code: "elevenlabs_reference_invalid",
+    };
+  }
+  const fetched = await fetchElevenReferenceBytesFromUrl(url);
+  if (!fetched.ok || !fetched.buffer?.length) {
+    return {
+      ok: false,
+      userMessage: "Could not load remix reference audio — try again.",
+      code: "elevenlabs_reference_fetch_failed",
+      details: fetched.error || null,
+    };
+  }
+  return {
+    ok: true,
+    buffer: fetched.buffer,
+    mimeType: fetched.mimeType || "audio/mpeg",
+    source: "url",
+  };
 }
 
 function referenceFilenameForMime(mime) {
@@ -1324,6 +1387,7 @@ module.exports = {
   buildElevenReferenceCompositionPlan,
   buildElevenSongCompositionPlan,
   decodeReferenceAudioPayload,
+  fetchElevenReferenceBytesFromUrl,
   elevenlabsCreateCompositionPlan,
   estimateReferenceDurationMs,
   elevenlabsGenerateEnabled,
@@ -1341,6 +1405,7 @@ module.exports = {
   resolveElevenMusicLengthMsFromBody,
   resolveElevenMusicModel,
   resolveElevenFinetuneId,
+  resolveElevenReferenceAudio,
   scaleCompositionPlanDuration,
   splitElevenNegativeStyleTags,
   splitElevenStyleTags,

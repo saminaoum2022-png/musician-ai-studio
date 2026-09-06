@@ -460,6 +460,7 @@ async function runElevenlabsGenerationJob({
   musicLengthMs,
   instrumental,
   finetuneId,
+  adminFinetuneDisabled = false,
   elevenPrompt,
   title,
   lyrics,
@@ -586,6 +587,7 @@ async function runElevenlabsGenerationJob({
       musicLengthMs,
       instrumental,
       finetuneId,
+      skipFinetune: Boolean(adminFinetuneDisabled),
       withTimestamps: !instrumental,
     });
     if (!upstream.ok) {
@@ -622,6 +624,8 @@ async function runElevenlabsGenerationJob({
     if (finetuneId) {
       statusPayload._finetuneId = finetuneId;
       statusPayload._finetuneApplied = true;
+    } else if (adminFinetuneDisabled) {
+      statusPayload._finetuneDisabledByAdmin = true;
     }
     if (referenceSongId) {
       statusPayload._referenceSongId = referenceSongId;
@@ -1192,7 +1196,7 @@ async function handleElevenlabsGenerate(req, res, { user, isAdmin, body }) {
       finetuneId,
       finetuneCheck.finetune?.name || "NabadAi DNA",
     );
-  } else {
+  } else if (!adminFinetuneDisabled) {
     console.warn("[music/generate] elevenlabs generate without finetune_id — set ELEVENLABS_FINETUNE_ID");
   }
 
@@ -1312,6 +1316,7 @@ async function handleElevenlabsGenerate(req, res, { user, isAdmin, body }) {
       musicLengthMs,
       instrumental,
       finetuneId,
+      adminFinetuneDisabled,
       elevenPrompt,
       title,
       lyrics,

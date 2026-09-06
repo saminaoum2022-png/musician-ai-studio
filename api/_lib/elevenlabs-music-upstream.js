@@ -60,9 +60,11 @@ const DEFAULT_ELEVEN_MUSIC_FINETUNE_ID = "sj8dpdiqccqdoovlxuyx";
 /** Retired finetunes — ignore if still set in ELEVENLABS_FINETUNE_ID on Vercel. */
 const LEGACY_ELEVEN_MUSIC_FINETUNE_IDS = new Set(["trxfjjiiornsrkpjb4ne"]);
 
-function resolveElevenFinetuneId(explicit) {
+function resolveElevenFinetuneId(explicit, { allowEnvDefault = true } = {}) {
+  if (explicit === false || explicit === "off" || explicit === "none") return null;
   const fromRequest = String(explicit || "").trim();
   if (fromRequest) return fromRequest;
+  if (!allowEnvDefault) return null;
   const env = String(process.env.ELEVENLABS_FINETUNE_ID || "").trim();
   if (env && !LEGACY_ELEVEN_MUSIC_FINETUNE_IDS.has(env)) return env;
   return DEFAULT_ELEVEN_MUSIC_FINETUNE_ID || null;
@@ -826,10 +828,13 @@ async function elevenlabsGenerateMusic({
   musicLengthMs,
   instrumental = false,
   finetuneId,
+  skipFinetune = false,
 }) {
   const resolvedModel = resolveElevenMusicModel(model);
   const lengthMs = resolveElevenMusicLengthMs(musicLengthMs);
-  const resolvedFinetuneId = resolveElevenFinetuneId(finetuneId);
+  const resolvedFinetuneId = skipFinetune
+    ? null
+    : resolveElevenFinetuneId(finetuneId);
   const url = `${ELEVEN_MUSIC_URL}?output_format=mp3_48000_192`;
   const body = {
     prompt: String(prompt || "").trim(),
@@ -890,11 +895,14 @@ async function elevenlabsGenerateMusicDetailed({
   musicLengthMs,
   instrumental = false,
   finetuneId,
+  skipFinetune = false,
   withTimestamps = true,
 }) {
   const resolvedModel = resolveElevenMusicModel(model);
   const lengthMs = resolveElevenMusicLengthMs(musicLengthMs);
-  const resolvedFinetuneId = resolveElevenFinetuneId(finetuneId);
+  const resolvedFinetuneId = skipFinetune
+    ? null
+    : resolveElevenFinetuneId(finetuneId);
   const wantTimestamps = withTimestamps && !instrumental;
   const url = `${ELEVEN_MUSIC_DETAILED_URL}?output_format=mp3_48000_192`;
   const plan = compositionPlan && typeof compositionPlan === "object" ? compositionPlan : null;

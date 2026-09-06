@@ -58,39 +58,45 @@ Be specific ("palm-muted guitar stabs", "808 on downbeats") — avoid vague fill
 
 Return ONLY the JSON object.`;
 
-const ELEVENLABS_SONG_PRODUCER_SYSTEM_PROMPT = `You are an expert music producer for NabadAi full-length songs (~2–3 minutes) for ElevenLabs Music v2 (NabadAi DNA finetune).
+const ELEVENLABS_SONG_PRODUCER_SYSTEM_PROMPT = `You are an expert music producer for NabadAi full-length songs (~2–3 minutes) for ElevenLabs Music v2 composition plans.
 
-Transform the user's raw inputs into a production-ready brief. Return ONLY valid JSON with exactly two string fields. No markdown, no code fences, no commentary, no extra keys.
+Transform the user's raw inputs into a section-by-section production plan. Return ONLY valid JSON. No markdown, no code fences, no commentary.
 
 OUTPUT SCHEMA:
 {
   "structured_lyrics": "<string>",
-  "enhanced_style_prompt": "<string>"
+  "enhanced_style_prompt": "<string>",
+  "composition_chunks": [
+    {
+      "section": "[Intro]",
+      "lines": ["lyric line 1", "lyric line 2"],
+      "duration_seconds": 12,
+      "positive_styles": ["English style tag", "120 BPM", "C minor", "warm male vocal"],
+      "negative_styles": ["shouting", "a cappella"]
+    }
+  ]
 }
 
+=== composition_chunks (PRIMARY — required, 4–8 chunks) ===
+- Ordered song sections for ElevenLabs music_v2. Sum of duration_seconds ≈ target_length_seconds (±10%).
+- section: English tag in brackets, e.g. [Intro], [Verse 1], [Pre-Chorus], [Chorus], [Verse 2], [Bridge], [Final Chorus], [Outro].
+- lines: user's lyric lines for that section ONLY — preserve Arabic/English/mixed exactly. Do NOT translate or rewrite. Max ~8 lines per section, max 200 chars per line.
+- duration_seconds: integer 3–120 per chunk. Intro/outro shorter; chorus often longer.
+- positive_styles: 6–10 English tags per chunk — genre, BPM, key, instrumentation, vocal character, energy for THIS section. First chunk sets overall genre/tone.
+- negative_styles: 2–6 English tags to avoid unwanted sounds in THIS section (e.g. chorus: ["mumbled", "a cappella"]; instrumental intro: ["vocals", "lyrics"]).
+- Section dynamics: sparse intro → fuller verses → peak chorus → contrasting bridge → resolved outro.
+- If instrumental is true: lines may be empty; use {instrumental} direction in section text via empty lines + styles that exclude vocals; every chunk negative_styles must include "vocals" and "lyrics".
+
 === structured_lyrics ===
-- The user ALWAYS provides lyrics when instrumental is false — preserve their words exactly (Arabic, English, or mixed). Do NOT translate. Do NOT rewrite lines.
-- English structure tags only, on their own lines, e.g. [Intro], [Verse 1], [Pre-Chorus], [Chorus], [Verse 2], [Bridge], [Final Chorus], [Outro].
-- Full song arc — NOT a 30s clip. Natural section flow for target_length_seconds.
+- Concatenation of all sections for display: section tag on its own line, then lines. Must match composition_chunks content.
 - If instrumental is true, return "".
 
 === enhanced_style_prompt ===
-Rich sonic specification for ElevenLabs Music. Target length: 1200–2000 characters max.
+- Global fallback brief (800–1200 chars): tempo, key, genre, vocal character, mix — used if chunk styles need a safety net.
+- English only. No artist or band names.
 
-Include ALL when inferable:
-1. Duration: explicit target length in seconds from target_length_seconds.
-2. Tempo: exact BPM (integer) + rhythmic feel.
-3. Key / scale — honor song_key if provided.
-4. Genre + mood in producer language.
-5. Layers: bass, drums/percussion, harmonic bed, lead elements, ear-candy.
-6. Full-song dynamics: intro hook, builds, chorus lift, bridge contrast, outro resolution.
-7. Vocal: gender, character, delivery from inputs; merge vocal_lyria_hint if present.
-   Conversational, warm, close-mic — NO shouting or stadium belt unless requested.
-8. Mix: density, brightness, space ("dry intimate vocal, wide chorus pads").
-9. Dialect: if dialect_hint is set (Levantine, Gulf, Egyptian, etc.), reflect in vocal color and rhythm — tasteful, not stereotyped.
-
-If style_tags imply visual mood, translate to sonic texture.
-Be specific — avoid vague filler alone.
+Dialect: if dialect_hint is set, reflect in vocal color and rhythm via positive_styles — tasteful, not stereotyped.
+Be specific in styles — avoid vague filler alone.
 
 Return ONLY the JSON object.`;
 
@@ -166,6 +172,97 @@ function normalizeProducerOutput(raw, { instrumental = false, maxStyleChars = EN
   };
 }
 
+function normalizeElevenProducerChunk(raw, fallbackStyleTags = []) {
+  if (!raw || typeof raw !== "object") return null;
+  const sectionRaw = String(raw.section || raw.tag || raw.section_name || "").trim();
+  if (!sectionRaw) return null;
+  const section = sectionRaw.startsWith("[") ? sectionRaw : `[${sectionRaw.replace(/^\[|\]$/g, "")}]`;
+  const lines = Array.isArray(raw.lines)
+    ? raw.lines.map((l) => String(l || "").trim()).filter(Boolean).slice(0, 30)
+    : String(raw.text || "")
+        .split(/\r?\n/)
+        .map((l) => l.trim())
+        .filter((l) => l && !/^\[[^\]]+\]$/.test(l))
+        .slice(0, 30);
+  const durationSec = Number(raw.duration_seconds ?? raw.durationSeconds ?? raw.duration_sec);
+  const positiveRaw = raw.positive_styles || raw.positiveStyles || raw.positive_local_styles || [];
+  const negativeRaw = raw.negative_styles || raw.negativeStyles || raw.negative_local_styles || [];
+  let positive_styles = Array.isArray(positiveRaw)
+    ? positiveRaw.map(String).map((s) => s.trim()).filter(Boolean)
+    : String(positiveRaw || "")
+        .split(/[,|]/)
+        .map((s) => s.trim())
+        .filter(Boolean);
+  if (positive_styles.length < 3 && fallbackStyleTags.length) {
+    positive_styles = [...new Set([...positive_styles, ...fallbackStyleTags])];
+  }
+  const negative_styles = Array.isArray(negativeRaw)
+    ? negativeRaw.map(String).map((s) => s.trim()).filter(Boolean)
+    : String(negativeRaw || "")
+        .split(/[,|]/)
+        .map((s) => s.trim())
+        .filter(Boolean);
+  return {
+    section,
+    lines: lines.map((l) => l.slice(0, 200)),
+    duration_seconds:
+      Number.isFinite(durationSec) && durationSec >= 3 ? Math.min(120, Math.round(durationSec)) : null,
+    positive_styles: positive_styles.slice(0, 50),
+    negative_styles: negative_styles.slice(0, 50),
+  };
+}
+
+function structuredLyricsFromChunks(chunks) {
+  return chunks
+    .map((c) => {
+      const body = (c.lines || []).join("\n");
+      return body ? `${c.section}\n${body}` : c.section;
+    })
+    .join("\n\n")
+    .trim();
+}
+
+/** ElevenLabs Phase C — chunk plan + legacy string fields. */
+function normalizeElevenSongProducerOutput(raw, { instrumental = false, maxStyleChars = SONG_ENHANCED_STYLE_MAX_CHARS, input = {} } = {}) {
+  if (!raw || typeof raw !== "object") return null;
+  let enhanced = String(
+    raw.enhanced_style_prompt || raw.enhancedStylePrompt || raw.master_style_prompt || "",
+  ).trim();
+  const fallbackTags = String(input?.style_tags || "")
+    .split(/[,|]/)
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .slice(0, 10);
+  const rawChunks = raw.composition_chunks || raw.compositionChunks || raw.chunks || [];
+  const composition_chunks = (Array.isArray(rawChunks) ? rawChunks : [])
+    .map((c) => normalizeElevenProducerChunk(c, fallbackTags))
+    .filter(Boolean)
+    .slice(0, 30);
+  let structured = instrumental ? "" : String(raw.structured_lyrics || raw.structuredLyrics || "").trim();
+  if (!structured && composition_chunks.length && !instrumental) {
+    structured = structuredLyricsFromChunks(composition_chunks);
+  }
+  if (!enhanced && composition_chunks.length) {
+    const first = composition_chunks[0];
+    enhanced = [
+      `Target length: ${Number(input?.target_length_seconds) || 180} seconds`,
+      ...first.positive_styles.slice(0, 8),
+    ].join(", ");
+  }
+  if (!enhanced) return null;
+  const cap = Math.max(400, Number(maxStyleChars) || SONG_ENHANCED_STYLE_MAX_CHARS);
+  if (enhanced.length > cap) enhanced = enhanced.slice(0, cap).trim();
+  const out = {
+    structured_lyrics: structured,
+    enhanced_style_prompt: enhanced,
+  };
+  if (composition_chunks.length >= 2) {
+    out.composition_chunks = composition_chunks;
+    out.chunk_plan = true;
+  }
+  return out;
+}
+
 /**
  * Build producer input JSON from clip generate body.
  */
@@ -230,6 +327,9 @@ function appendProducerAdminDetail(baseDetail, producerResult) {
   if (producerResult.structured_lyrics) {
     lines.push(`structured_lyrics: ${producerResult.structured_lyrics.slice(0, 400)}`);
   }
+  if (producerResult.chunk_plan && Array.isArray(producerResult.composition_chunks)) {
+    lines.push(`gemini_chunk_plan: ${producerResult.composition_chunks.length} sections`);
+  }
   return lines.join("\n").slice(0, 4000);
 }
 
@@ -239,6 +339,7 @@ async function enrichWithGeminiProducer({
   systemPrompt,
   timeoutMs,
   maxStyleChars,
+  normalizeFn,
 } = {}) {
   const started = Date.now();
   const instrumental = Boolean(input?.instrumental);
@@ -263,6 +364,10 @@ async function enrichWithGeminiProducer({
   let lastError = "unknown";
   let lastModel = models[0] || "gemini-3.6-flash";
   const waitMs = Math.max(5000, Number(timeoutMs) || PRODUCER_TIMEOUT_MS);
+  const normalize =
+    typeof normalizeFn === "function"
+      ? normalizeFn
+      : (parsed) => normalizeProducerOutput(parsed, { instrumental, maxStyleChars });
 
   for (const model of models) {
     lastModel = model;
@@ -290,7 +395,7 @@ async function enrichWithGeminiProducer({
       }
 
       const parsed = parseProducerJson(extractGeminiText(data));
-      const normalized = normalizeProducerOutput(parsed, { instrumental, maxStyleChars });
+      const normalized = normalize(parsed, { instrumental, maxStyleChars, input });
       if (!normalized) {
         lastError = "invalid_json";
         continue;
@@ -332,7 +437,7 @@ async function enrichClipWithGeminiProducer({ apiKey, input } = {}) {
   });
 }
 
-/** Full-length song enrichment for ElevenLabs Music (same gate as clip producer). */
+/** Full-length song enrichment for ElevenLabs Music (chunk plan + legacy fields). */
 async function enrichSongWithGeminiProducer({ apiKey, input } = {}) {
   return enrichWithGeminiProducer({
     apiKey,
@@ -340,6 +445,7 @@ async function enrichSongWithGeminiProducer({ apiKey, input } = {}) {
     systemPrompt: ELEVENLABS_SONG_PRODUCER_SYSTEM_PROMPT,
     timeoutMs: SONG_PRODUCER_TIMEOUT_MS,
     maxStyleChars: SONG_ENHANCED_STYLE_MAX_CHARS,
+    normalizeFn: normalizeElevenSongProducerOutput,
   });
 }
 

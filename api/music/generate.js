@@ -509,6 +509,10 @@ async function runElevenlabsGenerationJob({
     let finalPrompt = elevenPrompt;
     let finalCompositionPlan = null;
     let elevenPlanSource = null;
+    const producerChunks =
+      producerResult.ok && Array.isArray(producerResult.composition_chunks)
+        ? producerResult.composition_chunks
+        : null;
     if (referenceSongId) {
       finalCompositionPlan = buildElevenReferenceCompositionPlan({
         lyrics: effectiveLyrics,
@@ -533,6 +537,7 @@ async function runElevenlabsGenerationJob({
         model,
         instrumental,
         negativeTags: body?.negativeTags,
+        producerChunks,
       });
       if (planBuilt.ok && planBuilt.plan?.chunks?.length) {
         finalCompositionPlan = planBuilt.plan;

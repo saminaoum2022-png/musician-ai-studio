@@ -505,7 +505,74 @@ async function elevenlabsCreateCompositionPlan({
 }
 
 /**
+ * Phase C: build ElevenLabs composition plan directly from Gemini chunk output.
+ */
+function buildCompositionPlanFromProducerChunks({
+  producerChunks = [],
+  musicLengthMs,
+  stylePrompt = "",
+  negativeTags = "",
+  instrumental = false,
+}) {
+  const rawList = Array.isArray(producerChunks) ? producerChunks : [];
+  if (rawList.length < 2) return null;
+
+  const chunks = [];
+  for (const raw of rawList.slice(0, 30)) {
+    const sectionRaw = String(raw?.section || raw?.tag || "").trim();
+    if (!sectionRaw) continue;
+    const tag = sectionRaw.startsWith("[") ? sectionRaw : `[${sectionRaw.replace(/^\[|\]$/g, "")}]`;
+    const lines = Array.isArray(raw?.lines)
+      ? raw.lines.map((l) => String(l || "").trim()).filter(Boolean).slice(0, 30)
+      : [];
+    let text = lines.length ? `${tag}\n${lines.join("\n")}` : tag;
+    if (instrumental && !lines.length) {
+      text = `${tag}\n{instrumental}`;
+    }
+    const durationSec = Number(raw?.duration_seconds ?? raw?.durationSeconds);
+    const duration_ms =
+      Number.isFinite(durationSec) && durationSec >= 3
+        ? Math.max(3000, Math.min(120000, Math.round(durationSec * 1000)))
+        : 15000;
+    const positiveRaw = raw?.positive_styles || raw?.positiveStyles || [];
+    const negativeRaw = raw?.negative_styles || raw?.negativeStyles || [];
+    let positive_styles = Array.isArray(positiveRaw)
+      ? positiveRaw.map(String).filter(Boolean)
+      : splitElevenStyleTags(String(positiveRaw || stylePrompt || ""));
+    let negative_styles = Array.isArray(negativeRaw)
+      ? negativeRaw.map(String).filter(Boolean)
+      : String(negativeRaw || "")
+          .split(/[,|]/)
+          .map((s) => s.trim())
+          .filter(Boolean);
+    chunks.push({
+      text: text.slice(0, 4000),
+      duration_ms,
+      positive_styles: ensureMinPositiveStyles(positive_styles).slice(0, 50),
+      negative_styles: negative_styles.slice(0, 50),
+      context_adherence: "high",
+    });
+  }
+  if (chunks.length < 2) return null;
+
+  let plan = { chunks };
+  plan = applyNegativeStylesToPlan(plan, negativeTags, { instrumental });
+  plan = scaleCompositionPlanDuration(plan, musicLengthMs);
+
+  const styleTags = splitElevenStyleTags(stylePrompt);
+  if (plan.chunks[0]) {
+    plan.chunks[0].positive_styles = ensureMinPositiveStyles([
+      ...new Set(
+        [...styleTags, ...(plan.chunks[0].positive_styles || [])].map((s) => String(s).trim()).filter(Boolean),
+      ),
+    ]).slice(0, 50);
+  }
+  return plan;
+}
+
+/**
  * Phase B: create plan via ElevenLabs API, inject Gemini/user lyrics, apply negatives + duration.
+ * Phase C: prefer Gemini composition_chunks when present (2+ sections).
  */
 async function buildElevenSongCompositionPlan({
   apiKey,
@@ -517,8 +584,28 @@ async function buildElevenSongCompositionPlan({
   model,
   instrumental = false,
   negativeTags = "",
+  producerChunks = null,
 }) {
   const lyricSource = String(structuredLyrics || lyrics || "").trim();
+
+  if (Array.isArray(producerChunks) && producerChunks.length >= 2) {
+    const geminiPlan = buildCompositionPlanFromProducerChunks({
+      producerChunks,
+      musicLengthMs,
+      stylePrompt,
+      negativeTags,
+      instrumental,
+    });
+    if (geminiPlan?.chunks?.length >= 2) {
+      return {
+        ok: true,
+        plan: geminiPlan,
+        planSource: "gemini_chunk_plan",
+        chunkCount: geminiPlan.chunks.length,
+      };
+    }
+  }
+
   const planPrompt = buildElevenPlanCreatePrompt({
     stylePrompt,
     title,
@@ -921,6 +1008,7 @@ async function elevenlabsGenerateMusicDetailedWithRetry(opts) {
 
 module.exports = {
   applyNegativeStylesToPlan,
+  buildCompositionPlanFromProducerChunks,
   buildElevenMusicPrompt,
   buildElevenPlanCreatePrompt,
   buildElevenReferenceCompositionPlan,

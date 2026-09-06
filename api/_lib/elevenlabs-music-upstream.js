@@ -56,10 +56,10 @@ function resolveElevenMusicLengthMsFromBody(body) {
   return resolveElevenMusicLengthMs();
 }
 
-/** Music finetune id — original ElevenLabs music finetune (first NabadAi model). */
-const DEFAULT_ELEVEN_MUSIC_FINETUNE_ID = "sj8dpdiqccqdoovlxuyx";
+/** Music finetune id — active NabadAi ElevenLabs music finetune. */
+const DEFAULT_ELEVEN_MUSIC_FINETUNE_ID = "trxfjjiiornsrkpjb4ne";
 /** Retired finetunes — ignore if still set in ELEVENLABS_FINETUNE_ID on Vercel. */
-const LEGACY_ELEVEN_MUSIC_FINETUNE_IDS = new Set(["trxfjjiiornsrkpjb4ne"]);
+const LEGACY_ELEVEN_MUSIC_FINETUNE_IDS = new Set(["sj8dpdiqccqdoovlxuyx"]);
 
 function resolveElevenFinetuneId(explicit, { allowEnvDefault = true } = {}) {
   if (explicit === false || explicit === "off" || explicit === "none") return null;

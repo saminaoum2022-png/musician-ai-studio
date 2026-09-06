@@ -82,19 +82,20 @@ OUTPUT SCHEMA:
 - section: English tag in brackets, e.g. [Intro], [Verse 1], [Pre-Chorus], [Chorus], [Verse 2], [Bridge], [Final Chorus], [Outro].
 - lines: user's lyric lines for that section ONLY — preserve Arabic/English/mixed exactly. Do NOT translate or rewrite. Max ~8 lines per section, max 200 chars per line.
 - duration_seconds: integer 3–120 per chunk. Intro/outro shorter; chorus often longer.
-- positive_styles: 6–10 English tags per chunk — genre, BPM, key, instrumentation, vocal character, energy for THIS section. First chunk sets overall genre/tone.
-- negative_styles: 2–6 English tags to avoid unwanted sounds in THIS section (e.g. chorus: ["mumbled", "a cappella"]; instrumental intro: ["vocals", "lyrics"]).
+- positive_styles: 6–10 English tags per chunk — genre, BPM (REQUIRED same number every chunk, e.g. "108 BPM"), key, instrumentation, vocal character, energy for THIS section. First chunk sets overall genre/tone.
+- negative_styles: 2–6 English tags to avoid unwanted sounds in THIS section (e.g. chorus: ["drawn-out syllables", "a cappella"]; instrumental intro: ["vocals", "lyrics"]).
 - Section dynamics: sparse intro → fuller verses → peak chorus → contrasting bridge → resolved outro.
+- Lyric density vs duration: duration_seconds must fit the lyric line count at the stated BPM (~4–6 beats per line). Prefer shorter sections with tight lines over long sections that force stretched syllables. Split long lyric lines into two shorter lines instead of one long line.
 - If instrumental is true: lines may be empty; use {instrumental} direction in section text via empty lines + styles that exclude vocals; every chunk negative_styles must include "vocals" and "lyrics".
 
 === VOCAL PERFORMANCE (critical — every vocal chunk) ===
-- Honor vocal_gender from input: "f" → bright/warm female pop vocal with clear tone; "m" → warm male TENOR with expressive delivery (NOT deep bass, NOT baritone, NOT muddy low pitch).
+- Honor vocal_gender from input: "f" → bright clear female pop vocal; "m" → warm male TENOR pop vocal (NOT deep bass, NOT baritone).
 - Merge vocal_lyria_hint into positive_styles when present.
-- Every vocal chunk positive_styles MUST include at least: "expressive melodic delivery", "clear diction", "mid-range vocal pitch", "emotionally engaged performance", "close-mic studio vocal".
-- Verse / pre-chorus: "intimate conversational delivery", "natural phrasing", "warm but forward in the mix".
-- Chorus / hook: "lifted anthemic energy", "strong melodic hook", "controlled power" — NO shouting, NO stadium belt unless user asked.
-- Every vocal chunk negative_styles MUST include: "monotone delivery", "flat emotionless vocals", "overly deep low pitch", "mumbled lyrics", "spoken word", "lifeless bored singing".
-- Arabic lyrics are fine — still use English tags for all styles.
+- EVERY vocal chunk positive_styles MUST include the exact BPM tag (e.g. "108 BPM") plus: "on-pitch accurate vocals", "tempo-locked to the beat", "concise syllables no melisma", "conversational pop vocal", "rhythmic tight phrasing", "clear diction".
+- Verse / pre-chorus: "conversational on-beat delivery" — sing like pop radio, not ballad or opera.
+- Chorus / hook: "hook on the beat", "sing-along clarity" — energy yes, but NO melisma, NO drawn-out syllables, NO stadium belt unless user asked.
+- EVERY vocal chunk negative_styles MUST include: "off-key vocals", "drawn-out syllables", "melismatic singing", "slow legato vocal delivery", "oversinging", "rubato against the beat", "theatrical vocal performance", "slow vocal tempo", "operatic delivery".
+- Arabic lyrics are fine — still use English tags for all styles. Keep Arabic lines short per line so they fit the beat.
 
 === structured_lyrics ===
 - Concatenation of all sections for display: section tag on its own line, then lines. Must match composition_chunks content.

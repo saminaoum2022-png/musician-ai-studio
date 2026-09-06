@@ -46,5 +46,10 @@ module.exports = async function handler(req, res) {
     });
   }
 
-  return sendJson(res, 200, { ok: true, url: session.url, sessionId: session.sessionId });
+  return sendJson(res, 200, {
+    ok: true,
+    url: session.url,
+    sessionId: session.sessionId,
+    trialIncluded: session.trialIncluded !== false,
+  });
 };

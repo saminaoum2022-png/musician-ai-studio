@@ -16,6 +16,11 @@ const {
   grantCreditsOnce,
 } = require("./billing-subscription");
 const { fetchProSubscriptionForUser } = require("./pro-subscription");
+const {
+  hasUsedStripeTrial,
+  resolveStripeTrialCreditAmount,
+  markStripeTrialStartedIfNeeded,
+} = require("./stripe-trial-claims");
 
 let _stripe = null;
 
@@ -235,18 +240,16 @@ async function applyStripeSubscription(
     cancelAtPeriodEnd,
   });
 
+  await markStripeTrialStartedIfNeeded(stripe, target, { userId, planId, status });
+
   let grant = { granted: 0, skipped: true };
   if (grantCredits && CREDIT_GRANT_EVENT_TYPES.has("INITIAL_PURCHASE")) {
     const priceId = target?.items?.data?.[0]?.price?.id || "";
     const plan = planForStripePriceId(priceId);
     if (plan) {
-      let amount = 0;
       const eventType = "INITIAL_PURCHASE";
-      if (status === "trialing" && plan.trialCredits > 0) {
-        amount = plan.trialCredits;
-      } else if (status === "active") {
-        amount = plan.creditsPerPeriod;
-      }
+      const resolved = await resolveStripeTrialCreditAmount(stripe, target, plan, status, userId);
+      const amount = Number(resolved.amount || 0);
       if (amount > 0) {
         const eventKey = `sub_initial:${target.id}`;
         grant = await grantCreditsOnce({
@@ -328,9 +331,9 @@ async function applyStripeInvoicePaid(invoice) {
   if (billingReason === "subscription_create") {
     eventType = "INITIAL_PURCHASE";
     grantEventId = `sub_initial:${subscriptionId}`;
-    if (status === "trialing" && plan.trialCredits > 0) {
-      amount = plan.trialCredits;
-    } else {
+    const resolved = await resolveStripeTrialCreditAmount(stripe, sub, plan, status, userId);
+    amount = Number(resolved.amount || 0);
+    if (amount <= 0 && status === "active") {
       amount = plan.creditsPerPeriod;
     }
   } else if (billingReason === "subscription_cycle") {
@@ -461,7 +464,8 @@ async function createCheckoutSession({ userId, email, planId, origin }) {
   const subscriptionData = {
     metadata: { user_id: uid, plan_id: pid },
   };
-  if (pid === "weekly") {
+  const trialIncluded = pid === "weekly" && !(await hasUsedStripeTrial(email));
+  if (trialIncluded) {
     subscriptionData.trial_period_days = 7;
   }
 
@@ -477,7 +481,7 @@ async function createCheckoutSession({ userId, email, planId, origin }) {
     allow_promotion_codes: false,
   });
 
-  return { ok: true, url: session.url, sessionId: session.id };
+  return { ok: true, url: session.url, sessionId: session.id, trialIncluded };
 }
 
 async function createStudioMasterCheckoutSession({ userId, email, origin, masteringTaskId, jobToken }) {
@@ -545,6 +549,7 @@ async function createPortalSession({ userId, origin }) {
 
 async function ensureStripeInitialCreditsGranted(sub) {
   if (!sub?.id) return { granted: 0, skipped: true };
+  const stripe = getStripe();
   const userId = userIdFromStripeObject(sub);
   const planId = planIdFromSubscription(sub);
   const priceId = sub?.items?.data?.[0]?.price?.id || "";
@@ -556,13 +561,12 @@ async function ensureStripeInitialCreditsGranted(sub) {
     return { granted: 0, skipped: true };
   }
 
-  let amount = 0;
-  if (status === "trialing" && plan.trialCredits > 0) {
-    amount = plan.trialCredits;
-  } else if (status === "active") {
+  const resolved = await resolveStripeTrialCreditAmount(stripe, sub, plan, status, userId);
+  let amount = Number(resolved.amount || 0);
+  if (amount <= 0 && status === "active") {
     amount = plan.creditsPerPeriod;
   }
-  if (amount <= 0) return { granted: 0, skipped: true };
+  if (amount <= 0) return { granted: 0, skipped: true, blocked: Boolean(resolved.blocked) };
 
   const eventKey = `sub_initial:${sub.id}`;
   return grantCreditsOnce({

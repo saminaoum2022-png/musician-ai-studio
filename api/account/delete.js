@@ -16,6 +16,8 @@ const {
   readJsonBody,
 } = require("../_lib/credits-auth");
 const { recordWelcomeEligibilityUsed } = require("../_lib/signup-welcome-credits");
+const { recordStripeTrialEligibilityUsed } = require("../_lib/stripe-trial-claims");
+const { fetchProSubscriptionForUser } = require("../_lib/pro-subscription");
 
 const SUPABASE_URL = (process.env.SUPABASE_URL || "").replace(/\/$/, "");
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
@@ -56,6 +58,10 @@ module.exports = async function handler(req, res) {
     });
   }
 
+  const proBeforeDelete = await fetchProSubscriptionForUser(user.userId).catch(() => null);
+  const hadStripeWeekly =
+    proBeforeDelete?.provider === "stripe" && String(proBeforeDelete?.planId || "").trim() === "weekly";
+
   const result = await deleteAuthUser(user.userId);
   if (!result.ok) {
     return sendJson(res, result.status || 500, {
@@ -67,6 +73,14 @@ module.exports = async function handler(req, res) {
     userId: user.userId,
     source: "account_deleted",
   });
+
+  if (hadStripeWeekly) {
+    void recordStripeTrialEligibilityUsed(user.email, {
+      userId: user.userId,
+      subscriptionId: proBeforeDelete?.providerSubscriptionId || null,
+      source: "account_deleted",
+    });
+  }
 
   return sendJson(res, 200, {
     ok: true,

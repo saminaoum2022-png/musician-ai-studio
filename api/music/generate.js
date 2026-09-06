@@ -124,11 +124,11 @@ function buildMusicPrompt(body) {
   return bits.filter(Boolean).join(", ").slice(0, 2000);
 }
 
-function buildLyriaClipAdminDetail(body, lyriaPrompt, flowLabel) {
+function buildLyriaClipMetaLines(body, lyriaPrompt) {
   const vocalGender = String(body?.vocalGender || "").trim();
   const clipVocalProfileId = String(body?.clipVocalProfileId || "").trim();
   const catalog = clipVocalProfileById(clipVocalProfileId);
-  const lines = [String(flowLabel || "lyria_clip").trim()];
+  const lines = [];
   if (vocalGender === "m" || vocalGender === "f") {
     lines.push(`Singer: ${vocalGender === "f" ? "Female" : "Male"}`);
   } else if (vocalGender === "duo") {
@@ -138,7 +138,53 @@ function buildLyriaClipAdminDetail(body, lyriaPrompt, flowLabel) {
   if (catalog) lines.push(`Character: ${catalog.label} (${catalog.labelAr})`);
   const vocalMatch = /Vocal profile: ([^\n]+)/.exec(String(lyriaPrompt || ""));
   if (vocalMatch?.[1]) lines.push(`Vocal profile: ${vocalMatch[1].trim()}`);
-  return lines.filter(Boolean).join("\n").slice(0, 4000);
+  return lines.filter(Boolean);
+}
+
+function buildLyriaClipAdminDetail(body, lyriaPrompt, flowLabel) {
+  return [
+    String(flowLabel || "lyria_clip").trim(),
+    ...buildLyriaClipMetaLines(body, lyriaPrompt),
+  ].filter(Boolean).join("\n").slice(0, 4000);
+}
+
+/** Admin observability — full prompt + model sent to Lyria Interactions API. */
+function buildLyriaRequestDetail({
+  flow = "lyria",
+  model = "",
+  lyriaPrompt = "",
+  photoCount = 0,
+  extraLines = [],
+} = {}) {
+  const lines = [
+    `flow: ${String(flow || "lyria").trim()}`,
+    `model: ${String(model || "").trim() || "unknown"}`,
+    "api: interactions",
+  ];
+  if (photoCount > 0) lines.push(`photo_input: ${photoCount} image(s)`);
+  for (const line of extraLines) {
+    const bit = String(line || "").trim();
+    if (bit) lines.push(bit);
+  }
+  lines.push("", "lyria_prompt:", String(lyriaPrompt || "").trim());
+  return lines.join("\n").slice(0, 4000);
+}
+
+function mergeLyriaUpstreamAdminDetail(baseDetail, upstream = {}) {
+  let detail = String(baseDetail || "").trim();
+  if (!detail) return detail;
+  const resolvedModel = String(upstream?.model || "").trim();
+  const api = String(upstream?.api || "").trim();
+  if (api) {
+    detail = detail.replace(/^api: .*$/m, `api: ${api}`);
+    if (!/^api: /m.test(detail)) {
+      detail = detail.replace(/^(flow: .*)$/m, `$1\napi: ${api}`);
+    }
+  }
+  if (resolvedModel && !/^resolved_model: /m.test(detail)) {
+    detail = detail.replace(/^(model: .*)$/m, `$1\nresolved_model: ${resolvedModel}`);
+  }
+  return detail.slice(0, 4000);
 }
 
 function buildClipPromptLabel(lyrics, stylePrompt, title, body, lyriaPrompt) {
@@ -311,6 +357,7 @@ async function runLyriaGenerationJob({
   lyrics,
   instrumental = false,
   photoImages = [],
+  adminDetailBase = "",
 }) {
   const fail = async (msg) => {
     if (!isAdmin) {
@@ -325,6 +372,7 @@ async function runLyriaGenerationJob({
     queueUpdateMusicGenerationByTaskId(taskId, {
       status: isAdmin ? "failed" : "refunded",
       error_message: msg,
+      request_detail: adminDetailBase || undefined,
     });
   };
 
@@ -334,6 +382,7 @@ async function runLyriaGenerationJob({
       await fail(upstream.userMessage || "Lyria generation failed — try again.");
       return;
     }
+    const requestDetail = mergeLyriaUpstreamAdminDetail(adminDetailBase, upstream);
     const archived = await persistAudioBuffer({
       userId,
       taskId,
@@ -367,6 +416,7 @@ async function runLyriaGenerationJob({
     queueUpdateMusicGenerationByTaskId(taskId, {
       status: "completed",
       provider_cost_usd: LYRIA_PROVIDER_COST_USD,
+      request_detail: requestDetail || undefined,
     });
   } catch (e) {
     console.error("[music/generate] lyria background job failed", taskId, e);
@@ -437,8 +487,21 @@ async function runLyriaClipGenerationJob({
       });
     }
 
+    let requestDetail = buildLyriaRequestDetail({
+      flow: clipFlowLabel,
+      model,
+      lyriaPrompt,
+      photoCount: photoImages.length,
+      extraLines: [
+        ...buildLyriaClipMetaLines(body, lyriaPrompt),
+        ...String(appendProducerAdminDetail("", producerResult) || "")
+          .split("\n")
+          .filter(Boolean),
+      ],
+    });
+
     await updateMusicGenerationByTaskId(taskId, {
-      request_detail: appendProducerAdminDetail(adminDetailBase, producerResult),
+      request_detail: requestDetail,
     }).catch(() => null);
 
     const upstream = await lyriaGenerateMusic({ apiKey, model, prompt: lyriaPrompt, photoImages });
@@ -446,6 +509,7 @@ async function runLyriaClipGenerationJob({
       await fail(upstream.userMessage || "Lyria generation failed — try again.");
       return;
     }
+    requestDetail = mergeLyriaUpstreamAdminDetail(requestDetail, upstream);
     const archived = await persistAudioBuffer({
       userId,
       taskId,
@@ -482,6 +546,7 @@ async function runLyriaClipGenerationJob({
     queueUpdateMusicGenerationByTaskId(taskId, {
       status: "completed",
       provider_cost_usd: LYRIA_CLIP_COST_USD,
+      request_detail: requestDetail || undefined,
     });
   } catch (e) {
     console.error("[music/generate] lyria clip background job failed", taskId, e);
@@ -939,18 +1004,25 @@ async function handleLyriaGenerate(req, res, { user, isAdmin, body }) {
     });
   }
 
+  const lyriaPrompt = buildLyriaPromptFromBody(body, { stylePrompt, lyrics, title, instrumental });
+  const adminDetailBase = buildLyriaRequestDetail({
+    flow: "lyria_full_song",
+    model,
+    lyriaPrompt,
+    photoCount: photoImages.length,
+  });
+
   await logMusicGeneration({
     userId: user.userId,
     taskId,
     kind: body?.watchKind === "photo" || photoImages.length ? "photo" : "song",
     provider: "lyria",
     prompt: buildPromptLabel(lyrics, stylePrompt, title),
+    requestDetail: adminDetailBase,
     status: "pending",
     creditsUsed: isAdmin ? 0 : FULL_SONG_COST,
     providerCostUsd: LYRIA_PROVIDER_COST_USD,
   });
-
-  const lyriaPrompt = buildLyriaPromptFromBody(body, { stylePrompt, lyrics, title, instrumental });
 
   const pendingPayload = buildPendingStatusPayload({ taskId, provider: "lyria" });
   const pendingStored = await saveMusicProviderTaskStatus({
@@ -981,6 +1053,7 @@ async function handleLyriaGenerate(req, res, { user, isAdmin, body }) {
       lyrics,
       instrumental,
       photoImages,
+      adminDetailBase,
     }),
   );
 
@@ -989,6 +1062,7 @@ async function handleLyriaGenerate(req, res, { user, isAdmin, body }) {
     data: { taskId, audioId, status: "PENDING" },
     _provider: "lyria",
     _model: model,
+    _lyriaApi: "interactions",
     _ready: false,
     _variantCount: 1,
     _credits: {
@@ -1093,10 +1167,13 @@ async function handleLyriaClipGenerate(req, res, { user, isAdmin, body }) {
       ? "nabad_clip"
       : "lyria_clip";
 
-  const adminDetailBase = [
-    buildLyriaClipAdminDetail(body, lyriaPrompt, clipFlowLabel),
-    photoImages.length ? "photo: lyria_multimodal" : "",
-  ].filter(Boolean).join("\n");
+  const adminDetailBase = buildLyriaRequestDetail({
+    flow: clipFlowLabel,
+    model,
+    lyriaPrompt,
+    photoCount: photoImages.length,
+    extraLines: buildLyriaClipMetaLines(body, lyriaPrompt),
+  });
 
   await logMusicGeneration({
     userId: user.userId,

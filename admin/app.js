@@ -2670,6 +2670,32 @@ function renderUserDetail(data) {
   els.pageSub.textContent = u.email || u.username || VIEW_META.user.sub;
 }
 
+function parseLyriaRequestDetail(detail) {
+  const text = String(detail || "");
+  const lineValue = (key) => {
+    const m = new RegExp(`^${key}:\\s*(.+)$`, "im").exec(text);
+    return m?.[1]?.trim() || "";
+  };
+  const promptIdx = text.search(/^lyria_prompt:\s*$/im);
+  const lyriaPrompt = promptIdx >= 0
+    ? text.slice(promptIdx).replace(/^lyria_prompt:\s*/i, "").trim()
+    : "";
+  return {
+    flow: lineValue("flow"),
+    model: lineValue("resolved_model") || lineValue("model"),
+    api: lineValue("api"),
+    photoInput: lineValue("photo_input"),
+    lyriaPrompt,
+  };
+}
+
+function providerRequestLabel(provider) {
+  if (provider === "lyria") return "Lyria request";
+  if (provider === "elevenlabs") return "ElevenLabs request";
+  if (provider === "minimax") return "MiniMax request";
+  return "Suno request";
+}
+
 function renderGenerationDetail(data) {
   const g = data?.generation;
   const panel = els.panels.generation;
@@ -2689,12 +2715,39 @@ function renderGenerationDetail(data) {
 
   const promptBlock = g.prompt
     ? `<pre class="genDetailPrompt">${escapeHtml(g.prompt)}</pre>`
-    : `<p class="sectionNote">No prompt summary stored for this log entry.</p>`;
+    : `<p class="sectionNote">No user-facing prompt summary stored for this log entry.</p>`;
 
-  const requestBlock = g.requestDetail
-    ? `<div class="detailMetaBlock"><strong>${g.provider === "lyria" ? "Lyria request" : "Suno request"}</strong></div>
-       <pre class="genDetailPrompt genDetailPrompt--payload">${escapeHtml(g.requestDetail)}</pre>`
+  const lyriaMeta = g.provider === "lyria" ? parseLyriaRequestDetail(g.requestDetail) : null;
+  const lyriaMetaBlock = g.provider === "lyria"
+    ? `<div class="detailMetaBlock"><strong>Lyria engine</strong></div>
+       <p class="sectionNote">
+         Provider: <span class="badge active">lyria</span>
+         · Model: <code class="promoCode">${escapeHtml(lyriaMeta?.model || (String(g.taskId || "").startsWith("lyr_") ? "lyria-3.5 (inferred)" : "—"))}</code>
+         · API: <code class="promoCode">${escapeHtml(lyriaMeta?.api || "interactions (default)")}</code>
+         ${lyriaMeta?.photoInput ? ` · Photo: ${escapeHtml(lyriaMeta.photoInput)}` : ""}
+         ${lyriaMeta?.flow ? ` · ${escapeHtml(lyriaMeta.flow)}` : ""}
+       </p>`
     : "";
+
+  const lyriaPromptBlock = lyriaMeta?.lyriaPrompt
+    ? `<div class="detailMetaBlock"><strong>Prompt sent to Lyria</strong></div>
+       <pre class="genDetailPrompt genDetailPrompt--payload">${escapeHtml(lyriaMeta.lyriaPrompt)}</pre>`
+    : (g.provider === "lyria"
+      ? `<div class="detailMetaBlock"><strong>Prompt sent to Lyria</strong></div>
+         <p class="sectionNote">Not stored for this generation (logged before Lyria observability). The user prompt summary above is what Nabad composed; the exact payload sent to Google Lyria was not saved.</p>`
+      : "");
+
+  const requestBlock = g.requestDetail && !lyriaMeta?.lyriaPrompt
+    ? `<div class="detailMetaBlock"><strong>${providerRequestLabel(g.provider)}</strong></div>
+       <pre class="genDetailPrompt genDetailPrompt--payload">${escapeHtml(g.requestDetail)}</pre>`
+    : (g.requestDetail && lyriaMeta?.lyriaPrompt
+      ? `<div class="detailMetaBlock"><strong>${providerRequestLabel(g.provider)} metadata</strong></div>
+         <pre class="genDetailPrompt genDetailPrompt--payload">${escapeHtml(
+           String(g.requestDetail || "")
+             .replace(/^lyria_prompt:[\s\S]*/im, "")
+             .trim(),
+         )}</pre>`
+      : "");
 
   const outputClips = Array.isArray(g.outputClips) ? g.outputClips : [];
   const outputLinks = [];
@@ -2799,8 +2852,10 @@ function renderGenerationDetail(data) {
         ${statCard("Duration", fmtDurationMs(g.durationMs), g.completedAt ? fmtDateCompact(g.completedAt) : "Pending")}
         ${statCard("Started", fmtDateCompact(g.createdAt), g.taskId ? `${g.taskId.slice(0, 18)}…` : "No task")}
       </div>
-      <div class="detailMetaBlock"><strong>Prompt summary</strong></div>
+      <div class="detailMetaBlock"><strong>User prompt summary</strong></div>
       ${promptBlock}
+      ${lyriaMetaBlock}
+      ${lyriaPromptBlock}
       ${requestBlock}
       ${outputBlock}
       <p class="detailMetaBlock detailMetaBlock--ids">

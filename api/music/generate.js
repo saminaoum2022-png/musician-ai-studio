@@ -8,7 +8,7 @@
  * Env:
  * - MINIMAX_API_KEY, MINIMAX_KEY_KIND, MINIMAX_MUSIC_MODEL, MINIMAX_GENERATE_ENABLED
  * - GEMINI_API_KEY / GOOGLE_API_KEY, LYRIA_MUSIC_MODEL, LYRIA_GENERATE_ENABLED
- * - CLIP_GEMINI_PRODUCER_ENABLED=1 — Gemini prompt enrichment for clips (staging preview)
+ * - CLIP_GEMINI_PRODUCER_ENABLED=1 — Gemini prompt enrichment for clips + ElevenLabs (staging preview)
  * - CLIP_GEMINI_PRODUCER_MODEL — optional override; else tries 3.6 → 3.5 → 2.5 flash
  * - ELEVENLABS_API_KEY, ELEVENLABS_MUSIC_MODEL, ELEVENLABS_MUSIC_LENGTH_MS, ELEVENLABS_FINETUNE_ID, ELEVENLABS_GENERATE_ENABLED
  */
@@ -64,7 +64,9 @@ const {
 const {
   appendProducerAdminDetail,
   buildClipProducerInput,
+  buildSongProducerInput,
   enrichClipWithGeminiProducer,
+  enrichSongWithGeminiProducer,
 } = require("../_lib/clip-gemini-producer");
 
 const FULL_SONG_COST = 12;
@@ -451,15 +453,20 @@ async function runElevenlabsGenerationJob({
   taskId,
   audioId,
   apiKey,
+  geminiApiKey,
   model,
   musicLengthMs,
   instrumental,
   finetuneId,
   elevenPrompt,
-  compositionPlan,
   title,
   lyrics,
+  stylePrompt,
+  body,
+  adminDetailBase,
   referenceSongId,
+  referenceRangeMs,
+  referenceConditionStrength,
 }) {
   const fail = async (msg) => {
     if (!isAdmin) {
@@ -478,10 +485,55 @@ async function runElevenlabsGenerationJob({
   };
 
   try {
+    let effectiveLyrics = lyrics;
+    let effectiveStyle = stylePrompt;
+    let producerResult = { ok: false, used: false, fallback: true };
+
+    if (geminiApiKey) {
+      producerResult = await enrichSongWithGeminiProducer({
+        apiKey: geminiApiKey,
+        input: buildSongProducerInput({ ...body, musicLengthMs }, "elevenlabs"),
+      });
+      if (producerResult.ok) {
+        if (producerResult.structured_lyrics) {
+          effectiveLyrics = producerResult.structured_lyrics;
+        }
+        if (producerResult.enhanced_style_prompt) {
+          effectiveStyle = producerResult.enhanced_style_prompt;
+        }
+      }
+    }
+
+    await updateMusicGenerationByTaskId(taskId, {
+      request_detail: appendProducerAdminDetail(adminDetailBase, producerResult),
+    }).catch(() => null);
+
+    let finalPrompt = elevenPrompt;
+    let finalCompositionPlan = null;
+    if (referenceSongId) {
+      finalCompositionPlan = buildElevenReferenceCompositionPlan({
+        lyrics: effectiveLyrics,
+        stylePrompt: effectiveStyle,
+        title,
+        musicLengthMs,
+        instrumental,
+        referenceSongId,
+        referenceRangeMs,
+        conditionStrength: referenceConditionStrength,
+      });
+    } else {
+      finalPrompt = buildElevenMusicPrompt({
+        stylePrompt: effectiveStyle,
+        lyrics: effectiveLyrics,
+        title,
+        instrumental,
+      });
+    }
+
     const upstream = await elevenlabsGenerateMusicDetailed({
       apiKey,
-      prompt: compositionPlan ? undefined : elevenPrompt,
-      compositionPlan: compositionPlan || undefined,
+      prompt: finalCompositionPlan ? undefined : finalPrompt,
+      compositionPlan: finalCompositionPlan || undefined,
       model,
       musicLengthMs,
       instrumental,
@@ -514,7 +566,7 @@ async function runElevenlabsGenerationJob({
     const statusPayload = buildSunoStatusPayload({
       taskId,
       title,
-      lyrics,
+      lyrics: effectiveLyrics,
       audioUrl: archived.url,
       audioId,
       provider: "elevenlabs",
@@ -1086,26 +1138,9 @@ async function handleElevenlabsGenerate(req, res, { user, isAdmin, body }) {
     console.warn("[music/generate] elevenlabs generate without finetune_id — set ELEVENLABS_FINETUNE_ID");
   }
 
-  await logMusicGeneration({
-    userId: user.userId,
-    taskId,
-    kind: body?.watchKind === "photo" ? "photo" : "song",
-    provider: "elevenlabs",
-    prompt: buildPromptLabel(lyrics, stylePrompt, title),
-    status: "pending",
-    creditsUsed: isAdmin ? 0 : FULL_SONG_COST,
-    providerCostUsd: ELEVENLABS_PROVIDER_COST_USD,
-  });
-
-  const elevenPrompt = buildElevenMusicPrompt({
-    stylePrompt,
-    lyrics,
-    title,
-    instrumental,
-  });
-
   let referenceSongId = null;
-  let compositionPlan = null;
+  let referenceRangeMs = null;
+  let referenceConditionStrength = body?.referenceConditionStrength || "high";
   if (hasReference) {
     const refAudio = decodeReferenceAudioPayload(body?.referenceAudio);
     if (!refAudio?.buffer?.length) {
@@ -1132,33 +1167,50 @@ async function handleElevenlabsGenerate(req, res, { user, isAdmin, body }) {
       });
     }
     referenceSongId = upload.songId;
-    const refDurationMs = Number(body?.referenceDurationMs) > 0
+    referenceRangeMs = Number(body?.referenceDurationMs) > 0
       ? Number(body.referenceDurationMs)
       : estimateReferenceDurationMs(refAudio.buffer);
-    compositionPlan = buildElevenReferenceCompositionPlan({
-      lyrics,
-      stylePrompt,
-      title,
-      musicLengthMs,
-      instrumental,
-      referenceSongId,
-      referenceRangeMs: refDurationMs,
-      conditionStrength: body?.referenceConditionStrength || "high",
-    });
     console.log(
       "[music/generate] elevenlabs reference uploaded",
       referenceSongId.slice(0, 12),
       "rangeMs",
-      refDurationMs,
+      referenceRangeMs,
     );
   }
 
-  if (!instrumental && !lyrics && !stylePrompt && !compositionPlan) {
+  if (!instrumental && !lyrics && !stylePrompt && !hasReference) {
     return sendJson(res, 400, {
       error: "Add lyrics, style, or enable instrumental mode for ElevenLabs.",
       code: "elevenlabs_missing_prompt",
     });
   }
+
+  const adminDetailBase = [
+    "flow: elevenlabs",
+    finetuneId ? `finetune: ${finetuneId}` : "",
+    referenceSongId ? `reference: ${referenceSongId.slice(0, 12)}` : "",
+  ].filter(Boolean).join("\n");
+
+  await logMusicGeneration({
+    userId: user.userId,
+    taskId,
+    kind: body?.watchKind === "photo" ? "photo" : "song",
+    provider: "elevenlabs",
+    prompt: buildPromptLabel(lyrics, stylePrompt, title),
+    requestDetail: adminDetailBase,
+    status: "pending",
+    creditsUsed: isAdmin ? 0 : FULL_SONG_COST,
+    providerCostUsd: ELEVENLABS_PROVIDER_COST_USD,
+  });
+
+  const elevenPrompt = buildElevenMusicPrompt({
+    stylePrompt,
+    lyrics,
+    title,
+    instrumental,
+  });
+
+  const geminiApiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || "";
 
   const pendingPayload = buildPendingStatusPayload({ taskId, provider: "elevenlabs" });
   if (finetuneId) {
@@ -1194,15 +1246,20 @@ async function handleElevenlabsGenerate(req, res, { user, isAdmin, body }) {
       taskId,
       audioId,
       apiKey,
+      geminiApiKey,
       model,
       musicLengthMs,
       instrumental,
       finetuneId,
       elevenPrompt,
-      compositionPlan,
       title,
       lyrics,
+      stylePrompt,
+      body,
+      adminDetailBase,
       referenceSongId,
+      referenceRangeMs,
+      referenceConditionStrength,
     }),
   );
 

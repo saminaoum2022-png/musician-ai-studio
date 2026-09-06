@@ -7,7 +7,9 @@ const { buildLyriaVocalProfile, clipVocalProfileById } = require("./lyria-upstre
 
 const GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta";
 const PRODUCER_TIMEOUT_MS = Number(process.env.CLIP_GEMINI_PRODUCER_TIMEOUT_MS || 15000);
+const SONG_PRODUCER_TIMEOUT_MS = Number(process.env.SONG_GEMINI_PRODUCER_TIMEOUT_MS || 25000);
 const ENHANCED_STYLE_MAX_CHARS = 1200;
+const SONG_ENHANCED_STYLE_MAX_CHARS = 2000;
 
 const CLIP_PRODUCER_SYSTEM_PROMPT = `You are an expert audio engineer and music producer specializing in ultra-short, high-impact music clips (~28–30 seconds) for NabadAi — mobile hook clips, not full songs.
 
@@ -53,6 +55,42 @@ Dialect: if dialect_hint is set (Levantine, Gulf, Egyptian, etc.), reflect in rh
 If style_tags imply visual mood (sunset, party, melancholy), translate to sonic texture.
 
 Be specific ("palm-muted guitar stabs", "808 on downbeats") — avoid vague filler alone.
+
+Return ONLY the JSON object.`;
+
+const ELEVENLABS_SONG_PRODUCER_SYSTEM_PROMPT = `You are an expert music producer for NabadAi full-length songs (~2–3 minutes) for ElevenLabs Music v2 (NabadAi DNA finetune).
+
+Transform the user's raw inputs into a production-ready brief. Return ONLY valid JSON with exactly two string fields. No markdown, no code fences, no commentary, no extra keys.
+
+OUTPUT SCHEMA:
+{
+  "structured_lyrics": "<string>",
+  "enhanced_style_prompt": "<string>"
+}
+
+=== structured_lyrics ===
+- The user ALWAYS provides lyrics when instrumental is false — preserve their words exactly (Arabic, English, or mixed). Do NOT translate. Do NOT rewrite lines.
+- English structure tags only, on their own lines, e.g. [Intro], [Verse 1], [Pre-Chorus], [Chorus], [Verse 2], [Bridge], [Final Chorus], [Outro].
+- Full song arc — NOT a 30s clip. Natural section flow for target_length_seconds.
+- If instrumental is true, return "".
+
+=== enhanced_style_prompt ===
+Rich sonic specification for ElevenLabs Music. Target length: 1200–2000 characters max.
+
+Include ALL when inferable:
+1. Duration: explicit target length in seconds from target_length_seconds.
+2. Tempo: exact BPM (integer) + rhythmic feel.
+3. Key / scale — honor song_key if provided.
+4. Genre + mood in producer language.
+5. Layers: bass, drums/percussion, harmonic bed, lead elements, ear-candy.
+6. Full-song dynamics: intro hook, builds, chorus lift, bridge contrast, outro resolution.
+7. Vocal: gender, character, delivery from inputs; merge vocal_lyria_hint if present.
+   Conversational, warm, close-mic — NO shouting or stadium belt unless requested.
+8. Mix: density, brightness, space ("dry intimate vocal, wide chorus pads").
+9. Dialect: if dialect_hint is set (Levantine, Gulf, Egyptian, etc.), reflect in vocal color and rhythm — tasteful, not stereotyped.
+
+If style_tags imply visual mood, translate to sonic texture.
+Be specific — avoid vague filler alone.
 
 Return ONLY the JSON object.`;
 
@@ -105,15 +143,22 @@ function parseProducerJson(raw) {
   return null;
 }
 
-function normalizeProducerOutput(raw, { instrumental = false } = {}) {
+function normalizeProducerOutput(raw, { instrumental = false, maxStyleChars = ENHANCED_STYLE_MAX_CHARS } = {}) {
   if (!raw || typeof raw !== "object") return null;
-  let enhanced = String(raw.enhanced_style_prompt || raw.enhancedStylePrompt || "").trim();
+  let enhanced = String(
+    raw.enhanced_style_prompt ||
+      raw.enhancedStylePrompt ||
+      raw.master_style_prompt ||
+      raw.masterStylePrompt ||
+      "",
+  ).trim();
   let structured = instrumental
     ? ""
     : String(raw.structured_lyrics || raw.structuredLyrics || "").trim();
   if (!enhanced) return null;
-  if (enhanced.length > ENHANCED_STYLE_MAX_CHARS) {
-    enhanced = enhanced.slice(0, ENHANCED_STYLE_MAX_CHARS).trim();
+  const cap = Math.max(400, Number(maxStyleChars) || ENHANCED_STYLE_MAX_CHARS);
+  if (enhanced.length > cap) {
+    enhanced = enhanced.slice(0, cap).trim();
   }
   return {
     structured_lyrics: structured,
@@ -154,6 +199,21 @@ function buildClipProducerInput(body, flow = "nabad_clip") {
   };
 }
 
+/** Full-length song producer input (ElevenLabs, Lyria full, etc.). */
+function buildSongProducerInput(body, flow = "elevenlabs") {
+  const base = buildClipProducerInput(body, flow);
+  const musicLengthMs = Number(body?.musicLengthMs) > 0
+    ? Number(body.musicLengthMs)
+    : Number(process.env.ELEVENLABS_MUSIC_LENGTH_MS || 180000);
+  const targetSeconds = Math.max(60, Math.min(360, Math.round(musicLengthMs / 1000)));
+  return {
+    ...base,
+    target: "full_length_song",
+    target_length_seconds: targetSeconds,
+    mood: String(body?.mood || "").trim(),
+  };
+}
+
 function appendProducerAdminDetail(baseDetail, producerResult) {
   const lines = [String(baseDetail || "").trim()].filter(Boolean);
   if (!producerResult) {
@@ -173,10 +233,13 @@ function appendProducerAdminDetail(baseDetail, producerResult) {
   return lines.join("\n").slice(0, 4000);
 }
 
-/**
- * Call Gemini to enrich clip prompts. Returns { ok, ... } — caller falls back on !ok.
- */
-async function enrichClipWithGeminiProducer({ apiKey, input } = {}) {
+async function enrichWithGeminiProducer({
+  apiKey,
+  input,
+  systemPrompt,
+  timeoutMs,
+  maxStyleChars,
+} = {}) {
   const started = Date.now();
   const instrumental = Boolean(input?.instrumental);
   if (!clipGeminiProducerEnabled()) {
@@ -189,7 +252,7 @@ async function enrichClipWithGeminiProducer({ apiKey, input } = {}) {
   const models = resolveProducerModels();
   const userMessage = JSON.stringify(input || {}, null, 0);
   const requestBody = JSON.stringify({
-    systemInstruction: { parts: [{ text: CLIP_PRODUCER_SYSTEM_PROMPT }] },
+    systemInstruction: { parts: [{ text: String(systemPrompt || "").trim() }] },
     contents: [{ role: "user", parts: [{ text: userMessage }] }],
     generationConfig: {
       temperature: 0.65,
@@ -199,11 +262,12 @@ async function enrichClipWithGeminiProducer({ apiKey, input } = {}) {
 
   let lastError = "unknown";
   let lastModel = models[0] || "gemini-3.6-flash";
+  const waitMs = Math.max(5000, Number(timeoutMs) || PRODUCER_TIMEOUT_MS);
 
   for (const model of models) {
     lastModel = model;
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), PRODUCER_TIMEOUT_MS);
+    const timer = setTimeout(() => controller.abort(), waitMs);
 
     try {
       const url = `${GEMINI_BASE}/models/${encodeURIComponent(model)}:generateContent`;
@@ -226,7 +290,7 @@ async function enrichClipWithGeminiProducer({ apiKey, input } = {}) {
       }
 
       const parsed = parseProducerJson(extractGeminiText(data));
-      const normalized = normalizeProducerOutput(parsed, { instrumental });
+      const normalized = normalizeProducerOutput(parsed, { instrumental, maxStyleChars });
       if (!normalized) {
         lastError = "invalid_json";
         continue;
@@ -257,10 +321,35 @@ async function enrichClipWithGeminiProducer({ apiKey, input } = {}) {
   };
 }
 
+/** Call Gemini to enrich clip prompts. Returns { ok, ... } — caller falls back on !ok. */
+async function enrichClipWithGeminiProducer({ apiKey, input } = {}) {
+  return enrichWithGeminiProducer({
+    apiKey,
+    input,
+    systemPrompt: CLIP_PRODUCER_SYSTEM_PROMPT,
+    timeoutMs: PRODUCER_TIMEOUT_MS,
+    maxStyleChars: ENHANCED_STYLE_MAX_CHARS,
+  });
+}
+
+/** Full-length song enrichment for ElevenLabs Music (same gate as clip producer). */
+async function enrichSongWithGeminiProducer({ apiKey, input } = {}) {
+  return enrichWithGeminiProducer({
+    apiKey,
+    input,
+    systemPrompt: ELEVENLABS_SONG_PRODUCER_SYSTEM_PROMPT,
+    timeoutMs: SONG_PRODUCER_TIMEOUT_MS,
+    maxStyleChars: SONG_ENHANCED_STYLE_MAX_CHARS,
+  });
+}
+
 module.exports = {
   CLIP_PRODUCER_SYSTEM_PROMPT,
+  ELEVENLABS_SONG_PRODUCER_SYSTEM_PROMPT,
   appendProducerAdminDetail,
   buildClipProducerInput,
+  buildSongProducerInput,
   clipGeminiProducerEnabled,
   enrichClipWithGeminiProducer,
+  enrichSongWithGeminiProducer,
 };

@@ -371,9 +371,40 @@ function decodeReferenceAudioPayload(raw) {
 
 const ELEVEN_REFERENCE_MAX_BYTES = 15 * 1024 * 1024;
 
+function unwrapProxyAudioUrl(raw) {
+  let cur = String(raw || "").trim();
+  if (!cur) return "";
+  const base = process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "https://www.nabadai.com";
+  for (let i = 0; i < 8; i++) {
+    if (!cur.toLowerCase().includes("api/suno/audio")) break;
+    try {
+      const u = /^https?:\/\//i.test(cur) ? new URL(cur) : new URL(cur, base);
+      const inner = u.searchParams.get("url");
+      if (!inner) break;
+      cur = inner.includes("%") ? decodeURIComponent(inner) : inner;
+    } catch {
+      break;
+    }
+  }
+  return cur.trim();
+}
+
+function absoluteFetchUrl(raw) {
+  const s = String(raw || "").trim();
+  if (!s) return "";
+  if (/^https?:\/\//i.test(s)) return s;
+  const base = process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "https://www.nabadai.com";
+  try {
+    return new URL(s, base).toString();
+  } catch {
+    return s;
+  }
+}
+
 /** Server-fetch remix / library audio when the client sends a URL (ElevenLabs reference). */
 async function fetchElevenReferenceBytesFromUrl(rawUrl) {
-  const target = String(rawUrl || "").trim();
+  const unwrapped = unwrapProxyAudioUrl(rawUrl);
+  const target = absoluteFetchUrl(unwrapped || rawUrl);
   if (!target || !/^https?:\/\//i.test(target)) {
     return { ok: false, error: "invalid_source_url" };
   }
@@ -399,6 +430,15 @@ async function fetchElevenReferenceBytesFromUrl(rawUrl) {
 }
 
 async function resolveElevenReferenceAudio(body) {
+  const multipartBytes = body?._referenceFileBytes;
+  if (Buffer.isBuffer(multipartBytes) && multipartBytes.length >= 128) {
+    return {
+      ok: true,
+      buffer: multipartBytes,
+      mimeType: String(body?._referenceFileMime || "audio/mpeg").split(";")[0].trim() || "audio/mpeg",
+      source: "multipart",
+    };
+  }
   const fromPayload = decodeReferenceAudioPayload(body?.referenceAudio);
   if (fromPayload?.buffer?.length >= 128) {
     return { ok: true, ...fromPayload, source: "payload" };

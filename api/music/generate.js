@@ -13,6 +13,7 @@
  * - ELEVENLABS_API_KEY, ELEVENLABS_MUSIC_MODEL, ELEVENLABS_MUSIC_LENGTH_MS, ELEVENLABS_FINETUNE_ID, ELEVENLABS_GENERATE_ENABLED
  */
 const crypto = require("crypto");
+const Busboy = require("busboy");
 const {
   verifyUser,
   callRpc,
@@ -1383,6 +1384,72 @@ async function handleElevenlabsGenerate(req, res, { user, isAdmin, body }) {
   });
 }
 
+const ELEVEN_REFERENCE_UPLOAD_MAX_BYTES = 15 * 1024 * 1024;
+
+function readElevenlabsMultipartBody(req) {
+  return new Promise((resolve, reject) => {
+    const bb = Busboy({
+      headers: req.headers,
+      limits: { fileSize: ELEVEN_REFERENCE_UPLOAD_MAX_BYTES },
+    });
+    let payloadJson = "";
+    let referenceAudioUrl = "";
+    let fileBytes = null;
+    let fileType = "audio/mpeg";
+    let fileName = "vocal-reference.m4a";
+    let truncated = false;
+    const fileChunks = [];
+    bb.on("field", (name, val) => {
+      if (name === "payload") payloadJson = String(val || "");
+      else if (name === "referenceAudioUrl") referenceAudioUrl = String(val || "").trim();
+    });
+    bb.on("file", (name, file, info) => {
+      if (name !== "referenceFile") {
+        file.resume();
+        return;
+      }
+      fileName = info?.filename || fileName;
+      fileType = info?.mimeType || fileType;
+      file.on("data", (d) => fileChunks.push(d));
+      file.on("limit", () => {
+        truncated = true;
+      });
+    });
+    bb.on("error", reject);
+    bb.on("finish", () => {
+      fileBytes = fileChunks.length ? Buffer.concat(fileChunks) : null;
+      let body = {};
+      if (payloadJson) {
+        try {
+          body = JSON.parse(payloadJson);
+        } catch {
+          body = {};
+        }
+      }
+      if (referenceAudioUrl) body.referenceAudioUrl = referenceAudioUrl;
+      if (truncated) {
+        return reject(new Error("Reference audio is too large (max 15 MB)."));
+      }
+      if (fileBytes?.length >= 128) {
+        body._referenceFileBytes = fileBytes;
+        body._referenceFileMime = fileType;
+        body._referenceFileName = fileName;
+        body.hasReference = true;
+      }
+      resolve(body);
+    });
+    req.pipe(bb);
+  });
+}
+
+async function readGenerateRequestBody(req, provider) {
+  const ct = String(req.headers["content-type"] || "").toLowerCase();
+  if (provider === "elevenlabs" && ct.includes("multipart/form-data")) {
+    return readElevenlabsMultipartBody(req);
+  }
+  return readJson(req);
+}
+
 module.exports = async function handler(req, res) {
   if (applyCors(req, res)) return;
   try {
@@ -1392,8 +1459,8 @@ module.exports = async function handler(req, res) {
     if (!user) return sendJson(res, 401, { error: "Sign in to generate songs." });
 
     const isAdmin = await userIsAdmin(user);
-    const body = await readJson(req);
     const provider = resolveProvider(req);
+    const body = await readGenerateRequestBody(req, provider);
 
     if (provider === "lyria") {
       const clipModel = resolveLyriaModel(body?.lyriaModel);

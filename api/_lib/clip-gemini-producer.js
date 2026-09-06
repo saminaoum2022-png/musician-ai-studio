@@ -97,6 +97,12 @@ OUTPUT SCHEMA:
 - EVERY vocal chunk negative_styles MUST include: "off-key vocals", "drawn-out syllables", "melismatic singing", "slow legato vocal delivery", "oversinging", "rubato against the beat", "theatrical vocal performance", "slow vocal tempo", "operatic delivery".
 - Arabic lyrics are fine — still use English tags for all styles. Keep Arabic lines short per line so they fit the beat.
 
+=== VOCAL REFERENCE (when has_vocal_reference is true) ===
+- User uploaded a hum/voice clip — timbre, pitch contour, and rhythmic feel should align with that reference.
+- Still output full composition_chunks (4–8 sections); the server attaches the reference to each vocal section.
+- Prefer shorter sections and shorter lines so lyrics fit the reference melody without stretching syllables.
+- Every vocal chunk positive_styles should include "match reference melody and rhythm".
+
 === structured_lyrics ===
 - Concatenation of all sections for display: section tag on its own line, then lines. Must match composition_chunks content.
 - If instrumental is true, return "".
@@ -318,6 +324,7 @@ function buildSongProducerInput(body, flow = "elevenlabs") {
     target: "full_length_song",
     target_length_seconds: targetSeconds,
     mood: String(body?.mood || "").trim(),
+    has_vocal_reference: Boolean(body?.hasReference || body?.referenceAudio),
   };
 }
 

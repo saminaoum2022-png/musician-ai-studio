@@ -857,9 +857,83 @@ async function buildElevenSongCompositionPlan({
   return { ok: true, plan, planSource: "elevenlabs_plan_api", chunkCount: plan.chunks.length };
 }
 
+function isElevenVocalPlanChunk(text, { instrumental = false } = {}) {
+  if (instrumental) return false;
+  const t = String(text || "").trim();
+  if (!t) return false;
+  const lines = t.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+  const lyricLines = lines.filter(
+    (l) => !/^\[[^\]]+\]$/.test(l) && !/^\{[^}]+\}$/.test(l),
+  );
+  if (lyricLines.length > 0) return true;
+  return /\[(verse|chorus|pre-chorus|bridge|hook|final chorus)/i.test(t);
+}
+
+function sectionReferenceConditionStrength(sectionText = "", baseStrength = "high") {
+  const t = String(sectionText || "").toLowerCase();
+  if (/\[intro\]|\[outro\]|count-in|whisper/.test(t)) {
+    return baseStrength === "high" || baseStrength === "xhigh" ? "medium" : baseStrength;
+  }
+  if (/\[verse|\[pre-chorus|\[chorus|\[bridge|\[hook|\[final chorus/.test(t)) {
+    return baseStrength;
+  }
+  return baseStrength === "xhigh" ? "high" : baseStrength === "high" ? "medium" : baseStrength;
+}
+
 /**
- * music_v2 composition plan — conditioning_ref on the first chunk.
- * Finetune is skipped when a reference is present (see music/generate.js).
+ * Phase D: attach hum/vocal reference (conditioning_ref) to every vocal chunk in a multi-section plan.
+ * @see https://elevenlabs.io/docs/api-reference/music/compose-detailed
+ */
+function applyElevenReferenceToCompositionPlan(
+  plan,
+  {
+    referenceSongId,
+    referenceRangeMs = 30000,
+    conditionStrength = "high",
+    instrumental = false,
+  } = {},
+) {
+  if (!plan?.chunks?.length || !referenceSongId) return plan;
+  const songId = String(referenceSongId || "").trim();
+  if (!songId) return plan;
+  const refEnd = Math.max(
+    3000,
+    Math.min(30000, Math.round(Number(referenceRangeMs) || 30000)),
+  );
+  const conditioningRef = {
+    song_id: songId,
+    range: { start_ms: 0, end_ms: refEnd },
+  };
+  const baseStrength = ["low", "medium", "high", "xhigh"].includes(String(conditionStrength))
+    ? String(conditionStrength)
+    : "high";
+  let firstVocalSeen = false;
+  const chunks = plan.chunks.map((c) => {
+    if (!isElevenVocalPlanChunk(c.text, { instrumental })) return c;
+    let strength = sectionReferenceConditionStrength(c.text, baseStrength);
+    if (!firstVocalSeen) {
+      firstVocalSeen = true;
+      strength =
+        baseStrength === "low" ? "medium" : baseStrength === "medium" ? "high" : "xhigh";
+    }
+    const positive_styles = ensureMinPositiveStyles([
+      "match reference vocal timbre melody and rhythm",
+      "follow hum reference pitch and phrasing",
+      ...(c.positive_styles || []),
+    ]).slice(0, 50);
+    return {
+      ...c,
+      positive_styles,
+      conditioning_ref: conditioningRef,
+      condition_strength: strength,
+    };
+  });
+  return { chunks };
+}
+
+/**
+ * Single-chunk fallback when plan API / Gemini chunks are unavailable.
+ * Prefer applyElevenReferenceToCompositionPlan on a multi-chunk plan (Phase D).
  */
 function buildElevenReferenceCompositionPlan({
   lyrics = "",
@@ -1242,6 +1316,7 @@ async function elevenlabsGenerateMusicDetailedWithRetry(opts) {
 }
 
 module.exports = {
+  applyElevenReferenceToCompositionPlan,
   applyNegativeStylesToPlan,
   buildCompositionPlanFromProducerChunks,
   buildElevenMusicPrompt,

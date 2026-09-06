@@ -38,6 +38,7 @@ const {
 const { clipVocalProfileById } = require("../_lib/clip-vocal-profiles");
 const { requireProSubscription } = require("../_lib/pro-web-gate");
 const {
+  applyElevenReferenceToCompositionPlan,
   buildElevenMusicPrompt,
   buildElevenReferenceCompositionPlan,
   buildElevenSongCompositionPlan,
@@ -516,7 +517,50 @@ async function runElevenlabsGenerationJob({
         : null;
     const vocalGender = String(body?.vocalGender || "").trim();
     const voiceTimbre = String(body?.voiceTimbre || "").trim();
-    if (referenceSongId) {
+    const planBuilt = await buildElevenSongCompositionPlan({
+      apiKey,
+      stylePrompt: effectiveStyle,
+      title,
+      lyrics: effectiveLyrics,
+      structuredLyrics: effectiveLyrics,
+      musicLengthMs,
+      model,
+      instrumental,
+      negativeTags: body?.negativeTags,
+      producerChunks,
+      vocalGender,
+      voiceTimbre,
+    });
+    if (planBuilt.ok && planBuilt.plan?.chunks?.length) {
+      finalCompositionPlan = planBuilt.plan;
+      elevenPlanSource = planBuilt.planSource || "elevenlabs_plan_api";
+      if (referenceSongId) {
+        finalCompositionPlan = applyElevenReferenceToCompositionPlan(finalCompositionPlan, {
+          referenceSongId,
+          referenceRangeMs,
+          conditionStrength: referenceConditionStrength,
+          instrumental,
+        });
+        const refChunkCount = finalCompositionPlan.chunks.filter((c) => c.conditioning_ref).length;
+        elevenPlanSource = `${elevenPlanSource}_reference`;
+        console.log(
+          "[music/generate] elevenlabs multi-chunk reference",
+          taskId,
+          refChunkCount,
+          "vocal chunks",
+        );
+      }
+      console.log(
+        "[music/generate] elevenlabs composition plan",
+        taskId,
+        `${finalCompositionPlan.chunks.length} chunks`,
+      );
+    } else if (referenceSongId) {
+      console.warn(
+        "[music/generate] elevenlabs plan fallback to single-chunk reference",
+        taskId,
+        planBuilt.userMessage || planBuilt.error || "unknown",
+      );
       finalCompositionPlan = buildElevenReferenceCompositionPlan({
         lyrics: effectiveLyrics,
         stylePrompt: effectiveStyle,
@@ -530,45 +574,21 @@ async function runElevenlabsGenerationJob({
         vocalGender,
         voiceTimbre,
       });
-      elevenPlanSource = "reference";
+      elevenPlanSource = "reference_fallback";
     } else {
-      const planBuilt = await buildElevenSongCompositionPlan({
-        apiKey,
+      console.warn(
+        "[music/generate] elevenlabs plan API fallback to prompt",
+        taskId,
+        planBuilt.userMessage || planBuilt.error || "unknown",
+      );
+      finalPrompt = buildElevenMusicPrompt({
         stylePrompt: effectiveStyle,
-        title,
         lyrics: effectiveLyrics,
-        structuredLyrics: effectiveLyrics,
-        musicLengthMs,
-        model,
+        title,
         instrumental,
-        negativeTags: body?.negativeTags,
-        producerChunks,
         vocalGender,
-        voiceTimbre,
       });
-      if (planBuilt.ok && planBuilt.plan?.chunks?.length) {
-        finalCompositionPlan = planBuilt.plan;
-        elevenPlanSource = planBuilt.planSource || "elevenlabs_plan_api";
-        console.log(
-          "[music/generate] elevenlabs composition plan",
-          taskId,
-          `${planBuilt.plan.chunks.length} chunks`,
-        );
-      } else {
-        console.warn(
-          "[music/generate] elevenlabs plan API fallback to prompt",
-          taskId,
-          planBuilt.userMessage || planBuilt.error || "unknown",
-        );
-        finalPrompt = buildElevenMusicPrompt({
-          stylePrompt: effectiveStyle,
-          lyrics: effectiveLyrics,
-          title,
-          instrumental,
-          vocalGender,
-        });
-        elevenPlanSource = "prompt_fallback";
-      }
+      elevenPlanSource = "prompt_fallback";
     }
 
     await updateMusicGenerationByTaskId(taskId, {
@@ -578,6 +598,9 @@ async function runElevenlabsGenerationJob({
           elevenPlanSource ? `eleven_plan: ${elevenPlanSource}` : "",
           finalCompositionPlan?.chunks?.length
             ? `eleven_chunks: ${finalCompositionPlan.chunks.length}`
+            : "",
+          referenceSongId && finalCompositionPlan?.chunks?.length
+            ? `reference_chunks: ${finalCompositionPlan.chunks.filter((c) => c.conditioning_ref).length}`
             : "",
         ]
           .filter(Boolean)

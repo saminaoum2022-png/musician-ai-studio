@@ -9,7 +9,8 @@ const ELEVEN_MUSIC_PLAN_URL = "https://api.elevenlabs.io/v1/music/plan";
 
 const ELEVEN_POSITIVE_STYLE_PAD = [
   "professional studio production",
-  "clear vocals",
+  "expressive melodic vocal delivery",
+  "clear diction",
   "warm mix",
   "steady rhythm",
   "polished arrangement",
@@ -140,13 +141,133 @@ function splitElevenNegativeStyleTags(negativeTags, { instrumental = false } = {
     .slice(0, 20);
   const defaults = instrumental
     ? ["vocals", "lyrics", "spoken word", "singing"]
-    : ["off-key vocals", "mumbled lyrics", "harsh clipping", "random tempo changes"];
+    : [
+        "off-key vocals",
+        "mumbled lyrics",
+        "harsh clipping",
+        "random tempo changes",
+        "monotone delivery",
+        "flat emotionless vocals",
+        "overly deep low pitch",
+        "spoken word",
+        "lifeless bored singing",
+      ];
   const merged = [...fromUser];
   for (const d of defaults) {
-    if (merged.length >= 12) break;
+    if (merged.length >= 16) break;
     if (!merged.some((t) => t.toLowerCase() === d.toLowerCase())) merged.push(d);
   }
   return merged.slice(0, 50);
+}
+
+/** Map Create singer / timbre picks → ElevenLabs positive_styles (English). */
+function resolveElevenVocalPositiveTags({ vocalGender = "", voiceTimbre = "", instrumental = false } = {}) {
+  if (instrumental) return [];
+  const g = String(vocalGender || "").trim().toLowerCase();
+  const timbre = String(voiceTimbre || "").trim().toLowerCase();
+  const tags = [];
+  if (g === "f" || g === "female") {
+    tags.push(
+      "female vocalist",
+      "bright clear female vocal",
+      "warm expressive female pop voice",
+      "mid-range vocal pitch",
+    );
+  } else if (g === "m" || g === "male") {
+    tags.push(
+      "male vocalist",
+      "warm male tenor vocal",
+      "expressive melodic male delivery",
+      "mid-range vocal pitch not bass",
+    );
+  } else {
+    tags.push("clear expressive vocals", "melodic vocal performance", "mid-range vocal pitch");
+  }
+  if (timbre.includes("warm")) tags.push("warm intimate vocal tone");
+  if (timbre.includes("bright") || timbre.includes("pop")) tags.push("bright forward vocal presence");
+  if (timbre.includes("deep") || timbre.includes("grit")) {
+    tags.push("rich vocal texture but not muddy low pitch");
+  }
+  tags.push(
+    "expressive melodic delivery",
+    "clear diction",
+    "emotionally engaged performance",
+    "close-mic studio vocal",
+    "natural phrasing",
+  );
+  return [...new Set(tags.map((t) => t.trim()).filter(Boolean))];
+}
+
+function sectionElevenVocalBoost(sectionText = "") {
+  const t = String(sectionText || "").toLowerCase();
+  if (/chorus|hook|drop|final chorus/.test(t)) {
+    return ["lifted anthemic chorus vocals", "strong melodic hook", "controlled power not shouting"];
+  }
+  if (/bridge/.test(t)) {
+    return ["contrasting vocal color", "emotional bridge delivery"];
+  }
+  if (/intro|outro/.test(t)) {
+    return ["smooth vocal entrance", "polished vocal tone"];
+  }
+  return ["intimate conversational verse delivery", "natural phrasing"];
+}
+
+/** Apply singer-gender + performance tags to every chunk (ElevenLabs path only). */
+function applyElevenVocalStylesToPlan(
+  plan,
+  { vocalGender = "", voiceTimbre = "", instrumental = false } = {},
+) {
+  if (!plan?.chunks?.length || instrumental) return plan;
+  const baseVocal = resolveElevenVocalPositiveTags({ vocalGender, voiceTimbre, instrumental });
+  const chunks = plan.chunks.map((c) => {
+    const sectionBoost = sectionElevenVocalBoost(c.text);
+    const positive_styles = ensureMinPositiveStyles([
+      ...baseVocal,
+      ...sectionBoost,
+      ...(c.positive_styles || []),
+    ]).slice(0, 50);
+    const vocalNeg = [
+      "monotone delivery",
+      "flat emotionless vocals",
+      "overly deep low pitch",
+      "mumbled lyrics",
+      "spoken word",
+      "lifeless bored singing",
+    ];
+    const negative_styles = [...(c.negative_styles || [])];
+    for (const n of vocalNeg) {
+      if (negative_styles.length >= 50) break;
+      if (!negative_styles.some((t) => t.toLowerCase() === n.toLowerCase())) negative_styles.push(n);
+    }
+    return { ...c, positive_styles, negative_styles: negative_styles.slice(0, 50) };
+  });
+  return { chunks };
+}
+
+function finalizeElevenSongPlan(
+  plan,
+  {
+    stylePrompt = "",
+    negativeTags = "",
+    musicLengthMs,
+    instrumental = false,
+    vocalGender = "",
+    voiceTimbre = "",
+  } = {},
+) {
+  if (!plan?.chunks?.length) return plan;
+  let out = applyElevenVocalStylesToPlan(plan, { vocalGender, voiceTimbre, instrumental });
+  out = applyNegativeStylesToPlan(out, negativeTags, { instrumental });
+  out = scaleCompositionPlanDuration(out, musicLengthMs);
+  const styleTags = splitElevenStyleTags(stylePrompt);
+  if (out.chunks[0]) {
+    out.chunks[0].positive_styles = ensureMinPositiveStyles([
+      ...new Set(
+        [...styleTags, ...(out.chunks[0].positive_styles || [])].map((s) => String(s).trim()).filter(Boolean),
+      ),
+    ]).slice(0, 50);
+  }
+  return out;
 }
 
 function extractElevenErrorDetail(data) {
@@ -424,7 +545,13 @@ function scaleCompositionPlanDuration(plan, targetLengthMs) {
   return { chunks };
 }
 
-function buildElevenPlanCreatePrompt({ stylePrompt = "", title = "", lyrics = "", instrumental = false } = {}) {
+function buildElevenPlanCreatePrompt({
+  stylePrompt = "",
+  title = "",
+  lyrics = "",
+  instrumental = false,
+  vocalGender = "",
+} = {}) {
   const bits = [];
   const songTitle = String(title || "").trim();
   const style = String(stylePrompt || "").trim();
@@ -436,6 +563,16 @@ function buildElevenPlanCreatePrompt({ stylePrompt = "", title = "", lyrics = ""
       "Instrumental track only — no vocals, no lyrics. Structured sections with intro, build, peak, and outro.",
     );
   } else {
+    const g = String(vocalGender || "").trim().toLowerCase();
+    if (g === "f" || g === "female") {
+      bits.push(
+        "Vocalist: female — bright clear tone, expressive melodic delivery, mid-range pitch, emotionally engaged performance.",
+      );
+    } else if (g === "m" || g === "male") {
+      bits.push(
+        "Vocalist: male TENOR — warm expressive delivery, mid-range pitch (not deep bass/baritone), clear diction, natural phrasing.",
+      );
+    }
     if (lyricPreview) {
       bits.push(`Theme from user lyrics (preserve language, do not name artists): ${lyricPreview}`);
     }
@@ -515,6 +652,8 @@ function buildCompositionPlanFromProducerChunks({
   stylePrompt = "",
   negativeTags = "",
   instrumental = false,
+  vocalGender = "",
+  voiceTimbre = "",
 }) {
   const rawList = Array.isArray(producerChunks) ? producerChunks : [];
   if (rawList.length < 2) return null;
@@ -557,19 +696,10 @@ function buildCompositionPlanFromProducerChunks({
   }
   if (chunks.length < 2) return null;
 
-  let plan = { chunks };
-  plan = applyNegativeStylesToPlan(plan, negativeTags, { instrumental });
-  plan = scaleCompositionPlanDuration(plan, musicLengthMs);
-
-  const styleTags = splitElevenStyleTags(stylePrompt);
-  if (plan.chunks[0]) {
-    plan.chunks[0].positive_styles = ensureMinPositiveStyles([
-      ...new Set(
-        [...styleTags, ...(plan.chunks[0].positive_styles || [])].map((s) => String(s).trim()).filter(Boolean),
-      ),
-    ]).slice(0, 50);
-  }
-  return plan;
+  return finalizeElevenSongPlan(
+    { chunks },
+    { stylePrompt, negativeTags, musicLengthMs, instrumental, vocalGender, voiceTimbre },
+  );
 }
 
 /**
@@ -587,8 +717,18 @@ async function buildElevenSongCompositionPlan({
   instrumental = false,
   negativeTags = "",
   producerChunks = null,
+  vocalGender = "",
+  voiceTimbre = "",
 }) {
   const lyricSource = String(structuredLyrics || lyrics || "").trim();
+  const finalizeOpts = {
+    stylePrompt,
+    negativeTags,
+    musicLengthMs,
+    instrumental,
+    vocalGender,
+    voiceTimbre,
+  };
 
   if (Array.isArray(producerChunks) && producerChunks.length >= 2) {
     const geminiPlan = buildCompositionPlanFromProducerChunks({
@@ -597,6 +737,8 @@ async function buildElevenSongCompositionPlan({
       stylePrompt,
       negativeTags,
       instrumental,
+      vocalGender,
+      voiceTimbre,
     });
     if (geminiPlan?.chunks?.length >= 2) {
       return {
@@ -613,6 +755,7 @@ async function buildElevenSongCompositionPlan({
     title,
     lyrics: lyricSource,
     instrumental,
+    vocalGender,
   });
 
   let created = await elevenlabsCreateCompositionPlan({
@@ -645,16 +788,7 @@ async function buildElevenSongCompositionPlan({
   if (lyricSource && !instrumental) {
     plan = injectLyricsIntoCompositionPlan(plan, lyricSource, { instrumental });
   }
-  plan = applyNegativeStylesToPlan(plan, negativeTags, { instrumental });
-  plan = scaleCompositionPlanDuration(plan, musicLengthMs);
-
-  const styleTags = splitElevenStyleTags(stylePrompt);
-  if (plan.chunks[0]) {
-    const mergedPos = ensureMinPositiveStyles([
-      ...new Set([...styleTags, ...(plan.chunks[0].positive_styles || [])].map((s) => String(s).trim()).filter(Boolean)),
-    ]).slice(0, 50);
-    plan.chunks[0].positive_styles = mergedPos;
-  }
+  plan = finalizeElevenSongPlan(plan, finalizeOpts);
 
   return { ok: true, plan, planSource: "elevenlabs_plan_api", chunkCount: plan.chunks.length };
 }
@@ -673,6 +807,8 @@ function buildElevenReferenceCompositionPlan({
   referenceRangeMs = 30000,
   conditionStrength = "high",
   negativeTags = "",
+  vocalGender = "",
+  voiceTimbre = "",
 } = {}) {
   const lengthMs = Math.min(120000, resolveElevenMusicLengthMs(musicLengthMs));
   const styles = splitElevenStyleTags(stylePrompt);
@@ -701,28 +837,37 @@ function buildElevenReferenceCompositionPlan({
     ? String(conditionStrength)
     : "high";
 
-  return {
-    chunks: [
-      {
-        text: text.slice(0, 4000),
-        duration_ms: lengthMs,
-        positive_styles: styles.slice(0, 50),
-        negative_styles,
-        context_adherence: "high",
-        conditioning_ref: {
-          song_id: String(referenceSongId || "").trim(),
-          range: { start_ms: 0, end_ms: refEnd },
+  return finalizeElevenSongPlan(
+    {
+      chunks: [
+        {
+          text: text.slice(0, 4000),
+          duration_ms: lengthMs,
+          positive_styles: styles.slice(0, 50),
+          negative_styles,
+          context_adherence: "high",
+          conditioning_ref: {
+            song_id: String(referenceSongId || "").trim(),
+            range: { start_ms: 0, end_ms: refEnd },
+          },
+          condition_strength: strength,
         },
-        condition_strength: strength,
-      },
-    ],
-  };
+      ],
+    },
+    { stylePrompt, negativeTags, musicLengthMs: lengthMs, instrumental, vocalGender, voiceTimbre },
+  );
 }
 
 /**
  * Build a single prompt for Eleven Music v2 (prompt mode).
  */
-function buildElevenMusicPrompt({ stylePrompt = "", lyrics = "", title = "", instrumental = false } = {}) {
+function buildElevenMusicPrompt({
+  stylePrompt = "",
+  lyrics = "",
+  title = "",
+  instrumental = false,
+  vocalGender = "",
+} = {}) {
   const bits = [];
   const style = String(stylePrompt || "").trim();
   const lyricText = String(lyrics || "").trim();
@@ -732,11 +877,23 @@ function buildElevenMusicPrompt({ stylePrompt = "", lyrics = "", title = "", ins
   if (style) bits.push(`Style and production: ${style}`);
   if (instrumental) {
     bits.push("Instrumental only — no vocals, no lyrics.");
-  } else if (lyricText) {
-    bits.push("Lyrics to sing (keep section tags like [Verse] and [Chorus]):");
-    bits.push(lyricText);
   } else {
-    bits.push("Write and perform original lyrics that match the style.");
+    const g = String(vocalGender || "").trim().toLowerCase();
+    if (g === "f" || g === "female") {
+      bits.push(
+        "Vocal performance: female — bright clear tone, expressive melodic delivery, mid-range pitch, emotionally engaged.",
+      );
+    } else if (g === "m" || g === "male") {
+      bits.push(
+        "Vocal performance: male TENOR — warm expressive delivery, mid-range pitch (not deep bass), clear diction.",
+      );
+    }
+    if (lyricText) {
+      bits.push("Lyrics to sing (keep section tags like [Verse] and [Chorus]):");
+      bits.push(lyricText);
+    } else {
+      bits.push("Write and perform original lyrics that match the style.");
+    }
   }
   bits.push("Studio-grade production, clear structure, professional mix.");
   return bits.join("\n\n").slice(0, 8000);

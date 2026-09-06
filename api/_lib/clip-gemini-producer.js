@@ -87,6 +87,15 @@ OUTPUT SCHEMA:
 - Section dynamics: sparse intro → fuller verses → peak chorus → contrasting bridge → resolved outro.
 - If instrumental is true: lines may be empty; use {instrumental} direction in section text via empty lines + styles that exclude vocals; every chunk negative_styles must include "vocals" and "lyrics".
 
+=== VOCAL PERFORMANCE (critical — every vocal chunk) ===
+- Honor vocal_gender from input: "f" → bright/warm female pop vocal with clear tone; "m" → warm male TENOR with expressive delivery (NOT deep bass, NOT baritone, NOT muddy low pitch).
+- Merge vocal_lyria_hint into positive_styles when present.
+- Every vocal chunk positive_styles MUST include at least: "expressive melodic delivery", "clear diction", "mid-range vocal pitch", "emotionally engaged performance", "close-mic studio vocal".
+- Verse / pre-chorus: "intimate conversational delivery", "natural phrasing", "warm but forward in the mix".
+- Chorus / hook: "lifted anthemic energy", "strong melodic hook", "controlled power" — NO shouting, NO stadium belt unless user asked.
+- Every vocal chunk negative_styles MUST include: "monotone delivery", "flat emotionless vocals", "overly deep low pitch", "mumbled lyrics", "spoken word", "lifeless bored singing".
+- Arabic lyrics are fine — still use English tags for all styles.
+
 === structured_lyrics ===
 - Concatenation of all sections for display: section tag on its own line, then lines. Must match composition_chunks content.
 - If instrumental is true, return "".

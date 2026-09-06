@@ -514,6 +514,8 @@ async function runElevenlabsGenerationJob({
       producerResult.ok && Array.isArray(producerResult.composition_chunks)
         ? producerResult.composition_chunks
         : null;
+    const vocalGender = String(body?.vocalGender || "").trim();
+    const voiceTimbre = String(body?.voiceTimbre || "").trim();
     if (referenceSongId) {
       finalCompositionPlan = buildElevenReferenceCompositionPlan({
         lyrics: effectiveLyrics,
@@ -525,6 +527,8 @@ async function runElevenlabsGenerationJob({
         referenceRangeMs,
         conditionStrength: referenceConditionStrength,
         negativeTags: body?.negativeTags,
+        vocalGender,
+        voiceTimbre,
       });
       elevenPlanSource = "reference";
     } else {
@@ -539,6 +543,8 @@ async function runElevenlabsGenerationJob({
         instrumental,
         negativeTags: body?.negativeTags,
         producerChunks,
+        vocalGender,
+        voiceTimbre,
       });
       if (planBuilt.ok && planBuilt.plan?.chunks?.length) {
         finalCompositionPlan = planBuilt.plan;
@@ -559,6 +565,7 @@ async function runElevenlabsGenerationJob({
           lyrics: effectiveLyrics,
           title,
           instrumental,
+          vocalGender,
         });
         elevenPlanSource = "prompt_fallback";
       }
@@ -1270,6 +1277,7 @@ async function handleElevenlabsGenerate(req, res, { user, isAdmin, body }) {
     lyrics,
     title,
     instrumental,
+    vocalGender: String(body?.vocalGender || "").trim(),
   });
 
   const geminiApiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || "";

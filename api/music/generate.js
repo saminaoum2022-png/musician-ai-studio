@@ -40,12 +40,14 @@ const { requireProSubscription } = require("../_lib/pro-web-gate");
 const {
   buildElevenMusicPrompt,
   buildElevenReferenceCompositionPlan,
+  buildElevenSongCompositionPlan,
   decodeReferenceAudioPayload,
   elevenlabsGenerateEnabled,
-  elevenlabsGenerateMusicDetailed,
+  elevenlabsGenerateMusicDetailedWithRetry,
   elevenlabsUploadMusic,
   estimateReferenceDurationMs,
   resolveElevenMusicLengthMs,
+  resolveElevenMusicLengthMsFromBody,
   resolveElevenMusicModel,
   resolveElevenFinetuneId,
   verifyElevenFinetuneAccess,
@@ -504,12 +506,9 @@ async function runElevenlabsGenerationJob({
       }
     }
 
-    await updateMusicGenerationByTaskId(taskId, {
-      request_detail: appendProducerAdminDetail(adminDetailBase, producerResult),
-    }).catch(() => null);
-
     let finalPrompt = elevenPrompt;
     let finalCompositionPlan = null;
+    let elevenPlanSource = null;
     if (referenceSongId) {
       finalCompositionPlan = buildElevenReferenceCompositionPlan({
         lyrics: effectiveLyrics,
@@ -520,17 +519,61 @@ async function runElevenlabsGenerationJob({
         referenceSongId,
         referenceRangeMs,
         conditionStrength: referenceConditionStrength,
+        negativeTags: body?.negativeTags,
       });
+      elevenPlanSource = "reference";
     } else {
-      finalPrompt = buildElevenMusicPrompt({
+      const planBuilt = await buildElevenSongCompositionPlan({
+        apiKey,
         stylePrompt: effectiveStyle,
-        lyrics: effectiveLyrics,
         title,
+        lyrics: effectiveLyrics,
+        structuredLyrics: effectiveLyrics,
+        musicLengthMs,
+        model,
         instrumental,
+        negativeTags: body?.negativeTags,
       });
+      if (planBuilt.ok && planBuilt.plan?.chunks?.length) {
+        finalCompositionPlan = planBuilt.plan;
+        elevenPlanSource = planBuilt.planSource || "elevenlabs_plan_api";
+        console.log(
+          "[music/generate] elevenlabs composition plan",
+          taskId,
+          `${planBuilt.plan.chunks.length} chunks`,
+        );
+      } else {
+        console.warn(
+          "[music/generate] elevenlabs plan API fallback to prompt",
+          taskId,
+          planBuilt.userMessage || planBuilt.error || "unknown",
+        );
+        finalPrompt = buildElevenMusicPrompt({
+          stylePrompt: effectiveStyle,
+          lyrics: effectiveLyrics,
+          title,
+          instrumental,
+        });
+        elevenPlanSource = "prompt_fallback";
+      }
     }
 
-    const upstream = await elevenlabsGenerateMusicDetailed({
+    await updateMusicGenerationByTaskId(taskId, {
+      request_detail: appendProducerAdminDetail(
+        [
+          adminDetailBase,
+          elevenPlanSource ? `eleven_plan: ${elevenPlanSource}` : "",
+          finalCompositionPlan?.chunks?.length
+            ? `eleven_chunks: ${finalCompositionPlan.chunks.length}`
+            : "",
+        ]
+          .filter(Boolean)
+          .join("\n"),
+        producerResult,
+      ),
+    }).catch(() => null);
+
+    const upstream = await elevenlabsGenerateMusicDetailedWithRetry({
       apiKey,
       prompt: finalCompositionPlan ? undefined : finalPrompt,
       compositionPlan: finalCompositionPlan || undefined,
@@ -1102,7 +1145,7 @@ async function handleElevenlabsGenerate(req, res, { user, isAdmin, body }) {
   const taskId = newTaskId("elevenlabs");
   const audioId = `${taskId}_a`;
   const model = resolveElevenMusicModel(body?.elevenlabsModel);
-  const musicLengthMs = resolveElevenMusicLengthMs(body?.musicLengthMs);
+  const musicLengthMs = resolveElevenMusicLengthMsFromBody(body);
   let finetuneId = resolveElevenFinetuneId(body?.elevenlabsFinetuneId);
   const envFinetuneId = finetuneId;
   const adminFinetuneDisabled =

@@ -5,6 +5,16 @@
  */
 const ELEVEN_MUSIC_URL = "https://api.elevenlabs.io/v1/music";
 const ELEVEN_MUSIC_DETAILED_URL = "https://api.elevenlabs.io/v1/music/detailed";
+const ELEVEN_MUSIC_PLAN_URL = "https://api.elevenlabs.io/v1/music/plan";
+
+const ELEVEN_POSITIVE_STYLE_PAD = [
+  "professional studio production",
+  "clear vocals",
+  "warm mix",
+  "steady rhythm",
+  "polished arrangement",
+  "radio-ready",
+];
 
 function safeJson(txt) {
   try {
@@ -30,6 +40,19 @@ function resolveElevenMusicLengthMs(explicit) {
   const n = Number(explicit || env);
   if (!Number.isFinite(n)) return 180000;
   return Math.max(3000, Math.min(600000, Math.round(n)));
+}
+
+/** Map client `duration` (seconds) or explicit musicLengthMs — ElevenLabs only. */
+function resolveElevenMusicLengthMsFromBody(body) {
+  const explicitMs = Number(body?.musicLengthMs);
+  if (Number.isFinite(explicitMs) && explicitMs > 0) {
+    return resolveElevenMusicLengthMs(explicitMs);
+  }
+  const durationSec = Number(body?.duration);
+  if (Number.isFinite(durationSec) && durationSec >= 10) {
+    return resolveElevenMusicLengthMs(Math.round(durationSec * 1000));
+  }
+  return resolveElevenMusicLengthMs();
 }
 
 /** Music finetune id — original ElevenLabs music finetune (first NabadAi model). */
@@ -89,25 +112,63 @@ function splitLyricLines(text) {
     .map((l) => l.slice(0, 200));
 }
 
+function ensureMinPositiveStyles(tags) {
+  const out = [...tags.map(String).filter(Boolean)];
+  for (const p of ELEVEN_POSITIVE_STYLE_PAD) {
+    if (out.length >= 7) break;
+    if (!out.some((t) => t.toLowerCase() === p.toLowerCase())) out.push(p);
+  }
+  return out;
+}
+
 function splitElevenStyleTags(stylePrompt) {
   const tags = String(stylePrompt || "")
     .split(/[,|]/)
     .map((s) => s.trim())
     .filter(Boolean)
     .slice(0, 20);
-  const pad = [
-    "professional studio production",
-    "clear vocals",
-    "warm mix",
-    "steady rhythm",
-    "polished arrangement",
-    "radio-ready",
-  ];
-  for (const p of pad) {
-    if (tags.length >= 6) break;
-    if (!tags.some((t) => t.toLowerCase() === p)) tags.push(p);
+  return ensureMinPositiveStyles(tags).slice(0, 50);
+}
+
+function splitElevenNegativeStyleTags(negativeTags, { instrumental = false } = {}) {
+  const fromUser = String(negativeTags || "")
+    .split(/[,|]/)
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .slice(0, 20);
+  const defaults = instrumental
+    ? ["vocals", "lyrics", "spoken word", "singing"]
+    : ["off-key vocals", "mumbled lyrics", "harsh clipping", "random tempo changes"];
+  const merged = [...fromUser];
+  for (const d of defaults) {
+    if (merged.length >= 12) break;
+    if (!merged.some((t) => t.toLowerCase() === d.toLowerCase())) merged.push(d);
   }
-  return tags;
+  return merged.slice(0, 50);
+}
+
+function extractElevenErrorDetail(data) {
+  const detail = data?.detail;
+  if (detail && typeof detail === "object" && !Array.isArray(detail)) return detail;
+  if (Array.isArray(detail) && detail[0] && typeof detail[0] === "object") return detail[0];
+  return null;
+}
+
+/** bad_prompt / bad_composition_plan → one automatic retry payload. */
+function extractElevenCopyrightRetry(data) {
+  const d = extractElevenErrorDetail(data);
+  const status = String(d?.status || d?.type || "").toLowerCase();
+  if (status === "bad_prompt") {
+    const suggestion = String(d?.data?.prompt_suggestion || d?.prompt_suggestion || "").trim();
+    if (suggestion) return { kind: "prompt", suggestion };
+  }
+  if (status === "bad_composition_plan") {
+    const plan = d?.data?.composition_plan_suggestion ?? d?.composition_plan_suggestion;
+    if (plan && typeof plan === "object") return { kind: "composition_plan", plan };
+    const suggestion = String(d?.data?.prompt_suggestion || d?.prompt_suggestion || "").trim();
+    if (suggestion) return { kind: "prompt", suggestion };
+  }
+  return null;
 }
 
 /** Rough duration for clamping conditioning_ref range (hum clips are short). */
@@ -181,6 +242,334 @@ async function elevenlabsUploadMusic({ apiKey, buffer, mimeType, filename }) {
   }
 }
 
+function normalizePlanChunks(chunks) {
+  const normalized = (Array.isArray(chunks) ? chunks : []).map((c) => ({
+    text: String(c?.text || "").trim().slice(0, 4000),
+    duration_ms: Math.max(
+      3000,
+      Math.min(120000, Math.round(Number(c?.duration_ms ?? c?.durationMs) || 15000)),
+    ),
+    positive_styles: ensureMinPositiveStyles(
+      (c?.positive_styles || c?.positiveStyles || []).map(String).filter(Boolean),
+    ).slice(0, 50),
+    negative_styles: (c?.negative_styles || c?.negativeStyles || []).map(String).filter(Boolean).slice(0, 50),
+    context_adherence: ["low", "medium", "high"].includes(
+      String(c?.context_adherence || c?.contextAdherence || "high"),
+    )
+      ? String(c?.context_adherence || c?.contextAdherence)
+      : "high",
+    ...(c?.conditioning_ref || c?.conditioningRef
+      ? { conditioning_ref: c.conditioning_ref || c.conditioningRef }
+      : {}),
+    ...(c?.condition_strength || c?.conditionStrength
+      ? { condition_strength: c.condition_strength || c.conditionStrength }
+      : {}),
+  }));
+  return { chunks: normalized };
+}
+
+function normalizeElevenCompositionPlanResponse(data) {
+  if (!data || typeof data !== "object") return null;
+  if (Array.isArray(data.chunks) && data.chunks.length) {
+    return normalizePlanChunks(data.chunks);
+  }
+  if (Array.isArray(data.composition_plan?.chunks) && data.composition_plan.chunks.length) {
+    return normalizePlanChunks(data.composition_plan.chunks);
+  }
+  if (Array.isArray(data.sections) && data.sections.length) {
+    const globalPos = (data.positive_global_styles || data.positiveGlobalStyles || [])
+      .map(String)
+      .filter(Boolean)
+      .slice(0, 20);
+    const globalNeg = (data.negative_global_styles || data.negativeGlobalStyles || [])
+      .map(String)
+      .filter(Boolean)
+      .slice(0, 20);
+    const chunks = data.sections.map((sec, i) => {
+      const sectionName = String(sec?.section_name || sec?.sectionName || `Section ${i + 1}`).trim();
+      const tag = sectionName.startsWith("[") ? sectionName : `[${sectionName}]`;
+      const lines = Array.isArray(sec?.lines) ? sec.lines.map(String).filter(Boolean) : [];
+      const text = lines.length ? `${tag}\n${lines.join("\n")}` : tag;
+      return {
+        text: text.trim(),
+        duration_ms: Math.max(
+          3000,
+          Math.min(120000, Number(sec?.duration_ms ?? sec?.durationMs) || 15000),
+        ),
+        positive_styles: [
+          ...globalPos,
+          ...(sec?.positive_local_styles || sec?.positiveLocalStyles || []),
+        ],
+        negative_styles: [
+          ...globalNeg,
+          ...(sec?.negative_local_styles || sec?.negativeLocalStyles || []),
+        ],
+        context_adherence: "high",
+      };
+    });
+    return normalizePlanChunks(chunks);
+  }
+  return null;
+}
+
+function parseStructuredLyricsIntoSections(structuredLyrics) {
+  const text = String(structuredLyrics || "").trim();
+  if (!text) return [];
+  const sections = [];
+  const lines = text.split(/\r?\n/);
+  let current = null;
+  const sectionRe = /^\[([^\]]+)\]\s*$/;
+  for (const rawLine of lines) {
+    const line = rawLine.trim();
+    if (!line) continue;
+    const m = sectionRe.exec(line);
+    if (m) {
+      if (current) sections.push(current);
+      current = { tag: `[${m[1].trim()}]`, lines: [] };
+    } else if (current) {
+      current.lines.push(line.slice(0, 200));
+    } else {
+      current = { tag: "[Verse]", lines: [line.slice(0, 200)] };
+    }
+  }
+  if (current) sections.push(current);
+  return sections.slice(0, 30);
+}
+
+function injectLyricsIntoCompositionPlan(plan, structuredLyrics, { instrumental = false } = {}) {
+  if (!plan?.chunks?.length || instrumental) return plan;
+  const sections = parseStructuredLyricsIntoSections(structuredLyrics);
+  if (!sections.length) return plan;
+
+  const chunks = plan.chunks.map((c) => ({
+    ...c,
+    positive_styles: [...(c.positive_styles || [])],
+    negative_styles: [...(c.negative_styles || [])],
+  }));
+
+  if (sections.length === 1 && chunks.length === 1) {
+    chunks[0].text = `${sections[0].tag}\n${sections[0].lines.join("\n")}`.slice(0, 4000);
+    return { chunks };
+  }
+
+  if (sections.length <= chunks.length) {
+    for (let i = 0; i < chunks.length; i++) {
+      if (i >= sections.length) {
+        if (/outro/i.test(String(chunks[i].text || "")) || i === chunks.length - 1) {
+          chunks[i].text = "[Outro]\n{fading out}";
+        }
+        continue;
+      }
+      const sec = sections[i];
+      chunks[i].text = `${sec.tag}\n${sec.lines.join("\n")}`.slice(0, 4000);
+    }
+  } else {
+    const perChunk = Math.ceil(sections.length / chunks.length);
+    for (let i = 0; i < chunks.length; i++) {
+      const slice = sections.slice(i * perChunk, (i + 1) * perChunk);
+      chunks[i].text = slice
+        .map((s) => `${s.tag}\n${s.lines.join("\n")}`)
+        .join("\n\n")
+        .slice(0, 4000);
+    }
+  }
+  return { chunks };
+}
+
+function applyNegativeStylesToPlan(plan, negativeTags, { instrumental = false } = {}) {
+  if (!plan?.chunks?.length) return plan;
+  const neg = splitElevenNegativeStyleTags(negativeTags, { instrumental });
+  const chunks = plan.chunks.map((c) => {
+    const merged = [...(c.negative_styles || [])];
+    for (const n of neg) {
+      if (merged.length >= 50) break;
+      if (!merged.some((t) => t.toLowerCase() === n.toLowerCase())) merged.push(n);
+    }
+    return { ...c, negative_styles: merged.slice(0, 50) };
+  });
+  return { chunks };
+}
+
+function scaleCompositionPlanDuration(plan, targetLengthMs) {
+  const target = resolveElevenMusicLengthMs(targetLengthMs);
+  if (!plan?.chunks?.length) return plan;
+  const chunks = plan.chunks.map((c) => ({ ...c }));
+  const current = chunks.reduce((s, c) => s + (Number(c.duration_ms) || 0), 0);
+  if (current <= 0) {
+    const each = Math.max(3000, Math.min(120000, Math.floor(target / chunks.length)));
+    chunks.forEach((c) => {
+      c.duration_ms = each;
+    });
+    return { chunks };
+  }
+  if (Math.abs(current - target) <= 2000) return { chunks };
+
+  const ratio = target / current;
+  let sum = 0;
+  for (let i = 0; i < chunks.length; i++) {
+    const scaled = Math.round((Number(chunks[i].duration_ms) || 15000) * ratio);
+    chunks[i].duration_ms = Math.max(3000, Math.min(120000, scaled));
+    sum += chunks[i].duration_ms;
+  }
+  const diff = target - sum;
+  if (diff !== 0 && chunks.length) {
+    const last = chunks.length - 1;
+    chunks[last].duration_ms = Math.max(
+      3000,
+      Math.min(120000, (Number(chunks[last].duration_ms) || 15000) + diff),
+    );
+  }
+  return { chunks };
+}
+
+function buildElevenPlanCreatePrompt({ stylePrompt = "", title = "", lyrics = "", instrumental = false } = {}) {
+  const bits = [];
+  const songTitle = String(title || "").trim();
+  const style = String(stylePrompt || "").trim();
+  const lyricPreview = String(lyrics || "").trim().slice(0, 400);
+  if (songTitle) bits.push(`Song title: ${songTitle}`);
+  if (style) bits.push(`Production brief (English style tags only, no artist names): ${style}`);
+  if (instrumental) {
+    bits.push(
+      "Instrumental track only — no vocals, no lyrics. Structured sections with intro, build, peak, and outro.",
+    );
+  } else {
+    if (lyricPreview) {
+      bits.push(`Theme from user lyrics (preserve language, do not name artists): ${lyricPreview}`);
+    }
+    bits.push(
+      "Full vocal song with intro, verses, pre-chorus, chorus, bridge, and outro. User lyrics will be injected per section.",
+    );
+  }
+  bits.push("Professional studio production. Use English for all style descriptors.");
+  return bits.join("\n\n").slice(0, 4000);
+}
+
+/**
+ * POST /v1/music/plan — free plan generation (rate-limited).
+ * @see https://elevenlabs.io/docs/api-reference/music/create-composition-plan
+ */
+async function elevenlabsCreateCompositionPlan({
+  apiKey,
+  prompt,
+  musicLengthMs,
+  model,
+  sourceCompositionPlan,
+}) {
+  const resolvedModel = resolveElevenMusicModel(model);
+  const lengthMs = resolveElevenMusicLengthMs(musicLengthMs);
+  const body = {
+    prompt: String(prompt || "").trim(),
+    model_id: resolvedModel,
+    music_length_ms: lengthMs,
+    ...(sourceCompositionPlan ? { source_composition_plan: sourceCompositionPlan } : {}),
+  };
+  try {
+    const r = await fetch(ELEVEN_MUSIC_PLAN_URL, {
+      method: "POST",
+      headers: {
+        "xi-api-key": String(apiKey || "").trim(),
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(body),
+    });
+    const text = await r.text().catch(() => "");
+    const data = safeJson(text);
+    if (!r.ok) {
+      return {
+        ok: false,
+        httpStatus: r.status,
+        data,
+        text,
+        userMessage: elevenUserMessage(r.status, data, text),
+        copyrightRetry: extractElevenCopyrightRetry(data),
+      };
+    }
+    const plan = normalizeElevenCompositionPlanResponse(data);
+    if (!plan?.chunks?.length) {
+      return {
+        ok: false,
+        httpStatus: r.status,
+        data,
+        text,
+        userMessage: "ElevenLabs returned an empty composition plan.",
+      };
+    }
+    return { ok: true, httpStatus: r.status, plan, data };
+  } catch (e) {
+    return {
+      ok: false,
+      userMessage: e?.message || "ElevenLabs composition plan request failed.",
+    };
+  }
+}
+
+/**
+ * Phase B: create plan via ElevenLabs API, inject Gemini/user lyrics, apply negatives + duration.
+ */
+async function buildElevenSongCompositionPlan({
+  apiKey,
+  stylePrompt = "",
+  title = "",
+  lyrics = "",
+  structuredLyrics = "",
+  musicLengthMs,
+  model,
+  instrumental = false,
+  negativeTags = "",
+}) {
+  const lyricSource = String(structuredLyrics || lyrics || "").trim();
+  const planPrompt = buildElevenPlanCreatePrompt({
+    stylePrompt,
+    title,
+    lyrics: lyricSource,
+    instrumental,
+  });
+
+  let created = await elevenlabsCreateCompositionPlan({
+    apiKey,
+    prompt: planPrompt,
+    musicLengthMs,
+    model,
+  });
+
+  if (!created.ok && created.copyrightRetry?.kind === "prompt") {
+    console.log("[elevenlabs] plan API copyright retry with prompt_suggestion");
+    created = await elevenlabsCreateCompositionPlan({
+      apiKey,
+      prompt: created.copyrightRetry.suggestion,
+      musicLengthMs,
+      model,
+    });
+  }
+  if (!created.ok && created.copyrightRetry?.kind === "composition_plan") {
+    const plan = normalizeElevenCompositionPlanResponse(created.copyrightRetry.plan);
+    if (plan?.chunks?.length) {
+      created = { ok: true, plan, data: created.data };
+    }
+  }
+  if (!created.ok || !created.plan?.chunks?.length) {
+    return created;
+  }
+
+  let plan = created.plan;
+  if (lyricSource && !instrumental) {
+    plan = injectLyricsIntoCompositionPlan(plan, lyricSource, { instrumental });
+  }
+  plan = applyNegativeStylesToPlan(plan, negativeTags, { instrumental });
+  plan = scaleCompositionPlanDuration(plan, musicLengthMs);
+
+  const styleTags = splitElevenStyleTags(stylePrompt);
+  if (plan.chunks[0]) {
+    const mergedPos = ensureMinPositiveStyles([
+      ...new Set([...styleTags, ...(plan.chunks[0].positive_styles || [])].map((s) => String(s).trim()).filter(Boolean)),
+    ]).slice(0, 50);
+    plan.chunks[0].positive_styles = mergedPos;
+  }
+
+  return { ok: true, plan, planSource: "elevenlabs_plan_api", chunkCount: plan.chunks.length };
+}
+
 /**
  * music_v2 composition plan — conditioning_ref on the first chunk.
  * Finetune is skipped when a reference is present (see music/generate.js).
@@ -194,10 +583,12 @@ function buildElevenReferenceCompositionPlan({
   referenceSongId,
   referenceRangeMs = 30000,
   conditionStrength = "high",
+  negativeTags = "",
 } = {}) {
   const lengthMs = Math.min(120000, resolveElevenMusicLengthMs(musicLengthMs));
   const styles = splitElevenStyleTags(stylePrompt);
   styles.push("match reference vocal timbre and melody");
+  const negative_styles = splitElevenNegativeStyleTags(negativeTags, { instrumental });
 
   const lyricText = String(lyrics || "").trim();
   let text = "";
@@ -226,7 +617,8 @@ function buildElevenReferenceCompositionPlan({
       {
         text: text.slice(0, 4000),
         duration_ms: lengthMs,
-        positive_styles: styles.slice(0, 20),
+        positive_styles: styles.slice(0, 50),
+        negative_styles,
         context_adherence: "high",
         conditioning_ref: {
           song_id: String(referenceSongId || "").trim(),
@@ -477,22 +869,82 @@ async function elevenlabsGenerateMusicDetailed({
     musicLengthMs: lengthMs,
     finetuneId: resolvedFinetuneId || undefined,
     userMessage: elevenUserMessage(r.status, data, text),
+    copyrightRetry: extractElevenCopyrightRetry(data),
   };
 }
 
+/** One automatic retry on ElevenLabs copyright / bad-plan errors. */
+async function elevenlabsGenerateMusicDetailedWithRetry(opts) {
+  const first = await elevenlabsGenerateMusicDetailed(opts);
+  if (first.ok) return first;
+  const retry = first.copyrightRetry || extractElevenCopyrightRetry(first.data);
+  if (!retry) return first;
+
+  if (retry.kind === "composition_plan") {
+    const plan = normalizeElevenCompositionPlanResponse(retry.plan);
+    if (plan?.chunks?.length) {
+      console.log("[elevenlabs] compose copyright retry with composition_plan_suggestion");
+      return elevenlabsGenerateMusicDetailed({
+        ...opts,
+        prompt: undefined,
+        compositionPlan: plan,
+      });
+    }
+  }
+  if (retry.kind === "prompt") {
+    if (opts.compositionPlan) {
+      console.log("[elevenlabs] compose copyright retry — new plan from prompt_suggestion");
+      const replanned = await elevenlabsCreateCompositionPlan({
+        apiKey: opts.apiKey,
+        prompt: retry.suggestion,
+        musicLengthMs: opts.musicLengthMs,
+        model: opts.model,
+      });
+      if (replanned.ok && replanned.plan?.chunks?.length) {
+        return elevenlabsGenerateMusicDetailed({
+          ...opts,
+          prompt: undefined,
+          compositionPlan: replanned.plan,
+        });
+      }
+    } else {
+      console.log("[elevenlabs] compose copyright retry with prompt_suggestion");
+      return elevenlabsGenerateMusicDetailed({
+        ...opts,
+        prompt: retry.suggestion,
+        compositionPlan: undefined,
+      });
+    }
+  }
+  return first;
+}
+
 module.exports = {
+  applyNegativeStylesToPlan,
   buildElevenMusicPrompt,
+  buildElevenPlanCreatePrompt,
   buildElevenReferenceCompositionPlan,
+  buildElevenSongCompositionPlan,
   decodeReferenceAudioPayload,
+  elevenlabsCreateCompositionPlan,
   estimateReferenceDurationMs,
   elevenlabsGenerateEnabled,
   elevenlabsGenerateMusic,
   elevenlabsGenerateMusicDetailed,
+  elevenlabsGenerateMusicDetailedWithRetry,
   elevenlabsUploadMusic,
   elevenUserMessage,
+  extractElevenCopyrightRetry,
+  injectLyricsIntoCompositionPlan,
+  normalizeElevenCompositionPlanResponse,
   normalizeElevenWordsTimestamps,
+  parseStructuredLyricsIntoSections,
   resolveElevenMusicLengthMs,
+  resolveElevenMusicLengthMsFromBody,
   resolveElevenMusicModel,
   resolveElevenFinetuneId,
+  scaleCompositionPlanDuration,
+  splitElevenNegativeStyleTags,
+  splitElevenStyleTags,
   verifyElevenFinetuneAccess,
 };

@@ -1104,7 +1104,17 @@ async function handleElevenlabsGenerate(req, res, { user, isAdmin, body }) {
   const model = resolveElevenMusicModel(body?.elevenlabsModel);
   const musicLengthMs = resolveElevenMusicLengthMs(body?.musicLengthMs);
   let finetuneId = resolveElevenFinetuneId(body?.elevenlabsFinetuneId);
-  const finetuneSkippedForReference = Boolean(hasReference && finetuneId);
+  const envFinetuneId = finetuneId;
+  const adminFinetuneDisabled =
+    isAdmin &&
+    (body?.elevenlabsUseFinetune === false ||
+      body?.elevenlabsUseFinetune === "false" ||
+      body?.elevenlabsUseFinetune === 0);
+  if (adminFinetuneDisabled) {
+    console.log("[music/generate] elevenlabs admin finetune OFF — using base music_v2");
+    finetuneId = null;
+  }
+  const finetuneSkippedForReference = Boolean(hasReference && envFinetuneId && !adminFinetuneDisabled);
   if (finetuneSkippedForReference) {
     console.log(
       "[music/generate] elevenlabs reference mode — skipping finetune_id (conditioning_ref drives voice/melody)",
@@ -1187,7 +1197,7 @@ async function handleElevenlabsGenerate(req, res, { user, isAdmin, body }) {
 
   const adminDetailBase = [
     "flow: elevenlabs",
-    finetuneId ? `finetune: ${finetuneId}` : "",
+    adminFinetuneDisabled ? "finetune: admin_off" : finetuneId ? `finetune: ${finetuneId}` : "",
     referenceSongId ? `reference: ${referenceSongId.slice(0, 12)}` : "",
   ].filter(Boolean).join("\n");
 
@@ -1216,6 +1226,9 @@ async function handleElevenlabsGenerate(req, res, { user, isAdmin, body }) {
   if (finetuneId) {
     pendingPayload._finetuneId = finetuneId;
     pendingPayload._finetuneApplied = true;
+  }
+  if (adminFinetuneDisabled) {
+    pendingPayload._finetuneDisabledByAdmin = true;
   }
   if (finetuneSkippedForReference) {
     pendingPayload._finetuneSkippedForReference = true;
@@ -1270,6 +1283,7 @@ async function handleElevenlabsGenerate(req, res, { user, isAdmin, body }) {
     _model: model,
     _finetuneId: finetuneId || undefined,
     _finetuneApplied: Boolean(finetuneId),
+    _finetuneDisabledByAdmin: adminFinetuneDisabled || undefined,
     _finetuneSkippedForReference: finetuneSkippedForReference || undefined,
     _referenceApplied: Boolean(referenceSongId),
     _referenceSongId: referenceSongId || undefined,

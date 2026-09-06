@@ -6297,7 +6297,10 @@ function syncSettingsMusicProviderRow(pref = getMusicProviderPref()) {
     section.hidden = !show;
     section.style.display = show ? "" : "none";
   }
-  if (!show) return;
+  if (!show) {
+    syncSettingsElevenFinetuneRow("suno");
+    return;
+  }
   const p = normalizeMusicProviderPref(pref) || "suno";
   if (root) {
     root.querySelectorAll("[data-music-provider]").forEach((btn) => {
@@ -6307,38 +6310,118 @@ function syncSettingsMusicProviderRow(pref = getMusicProviderPref()) {
     });
   }
   if (sub) sub.textContent = musicProviderSubline(p);
+  syncSettingsElevenFinetuneRow(p);
+}
+
+const ELEVENLABS_FINETUNE_LS_KEY = "nabadElevenFinetune";
+
+/** Admin ElevenLabs: use NabadAi DNA finetune (default on). */
+function getElevenlabsFinetunePref() {
+  if (!creditsState.isAdmin || getMusicProviderPref() !== "elevenlabs") return true;
+  try {
+    const saved = localStorage.getItem(ELEVENLABS_FINETUNE_LS_KEY);
+    if (saved === "0" || saved === "false") return false;
+  } catch {}
+  return true;
+}
+
+function setElevenlabsFinetunePref(useFinetune) {
+  if (!creditsState.isAdmin) return;
+  const on = Boolean(useFinetune);
+  try {
+    localStorage.setItem(ELEVENLABS_FINETUNE_LS_KEY, on ? "1" : "0");
+  } catch {}
+  syncSettingsElevenFinetuneRow(getMusicProviderPref());
+  const providerSub = document.getElementById("settingsMusicProviderSub");
+  if (providerSub && getMusicProviderPref() === "elevenlabs") {
+    providerSub.textContent = musicProviderSubline("elevenlabs");
+  }
+}
+
+function syncSettingsElevenFinetuneRow(providerPref = getMusicProviderPref()) {
+  const row = document.getElementById("settingsElevenFinetuneRow");
+  const root = document.getElementById("settingsElevenFinetunePicker");
+  const sub = document.getElementById("settingsElevenFinetuneSub");
+  const show = Boolean(creditsState.isAdmin) && providerPref === "elevenlabs";
+  if (row) {
+    row.hidden = !show;
+    row.style.display = show ? "" : "none";
+  }
+  if (!show) return;
+  const useFinetune = getElevenlabsFinetunePref();
+  if (root) {
+    root.querySelectorAll("[data-eleven-finetune]").forEach((btn) => {
+      const wantOn = String(btn.getAttribute("data-eleven-finetune") || "") === "1";
+      const active = wantOn === useFinetune;
+      btn.classList.toggle("is-active", active);
+      btn.setAttribute("aria-checked", active ? "true" : "false");
+    });
+  }
+  if (sub) {
+    sub.textContent = useFinetune
+      ? "NabadAi DNA finetune — custom voice"
+      : "Base music_v2 — no finetune (generic model)";
+  }
 }
 
 function wireSettingsMusicProviderOnce() {
   const root = document.getElementById("settingsMusicProviderPicker");
-  if (!root || root.dataset.boundMusicProvider === "1") return;
-  root.dataset.boundMusicProvider = "1";
-  root.addEventListener("click", (ev) => {
-    const btn = ev.target?.closest?.("[data-music-provider]");
-    if (!btn || !root.contains(btn)) return;
-    ev.preventDefault();
-    if (!creditsState.isAdmin) return;
-    const pref = normalizeMusicProviderPref(btn.getAttribute("data-music-provider"));
-    if (!pref || pref === getMusicProviderPref()) return;
-    try {
-      if (typeof haptic === "function") haptic("light");
-    } catch {}
-    setMusicProviderPref(pref);
-    try {
-      const toastMsg =
-        pref === "minimax"
-          ? "MiniMax engine enabled for your next songs."
-          : pref === "lyria"
-            ? "Lyria engine enabled — Google Gemini music for your next songs."
-            : pref === "elevenlabs"
-              ? "ElevenLabs engine enabled for your next songs."
-              : "Suno engine restored (two variants).";
-      showToast(toastMsg, {
-        icon: pref === "suno" ? "✓" : "♪",
-        durationMs: 3600,
-      });
-    } catch {}
-  });
+  if (root && root.dataset.boundMusicProvider !== "1") {
+    root.dataset.boundMusicProvider = "1";
+    root.addEventListener("click", (ev) => {
+      const btn = ev.target?.closest?.("[data-music-provider]");
+      if (!btn || !root.contains(btn)) return;
+      ev.preventDefault();
+      if (!creditsState.isAdmin) return;
+      const pref = normalizeMusicProviderPref(btn.getAttribute("data-music-provider"));
+      if (!pref || pref === getMusicProviderPref()) return;
+      try {
+        if (typeof haptic === "function") haptic("light");
+      } catch {}
+      setMusicProviderPref(pref);
+      syncSettingsElevenFinetuneRow(pref);
+      try {
+        const toastMsg =
+          pref === "minimax"
+            ? "MiniMax engine enabled for your next songs."
+            : pref === "lyria"
+              ? "Lyria engine enabled — Google Gemini music for your next songs."
+              : pref === "elevenlabs"
+                ? getElevenlabsFinetunePref()
+                  ? "ElevenLabs enabled — NabadAi DNA finetune on."
+                  : "ElevenLabs enabled — base model (no finetune)."
+                : "Suno engine restored (two variants).";
+        showToast(toastMsg, {
+          icon: pref === "suno" ? "✓" : "♪",
+          durationMs: 3600,
+        });
+      } catch {}
+    });
+  }
+  const finetuneRoot = document.getElementById("settingsElevenFinetunePicker");
+  if (finetuneRoot && finetuneRoot.dataset.boundElevenFinetune !== "1") {
+    finetuneRoot.dataset.boundElevenFinetune = "1";
+    finetuneRoot.addEventListener("click", (ev) => {
+      const btn = ev.target?.closest?.("[data-eleven-finetune]");
+      if (!btn || !finetuneRoot.contains(btn)) return;
+      ev.preventDefault();
+      if (!creditsState.isAdmin || getMusicProviderPref() !== "elevenlabs") return;
+      const useFinetune = String(btn.getAttribute("data-eleven-finetune") || "") === "1";
+      if (useFinetune === getElevenlabsFinetunePref()) return;
+      try {
+        if (typeof haptic === "function") haptic("light");
+      } catch {}
+      setElevenlabsFinetunePref(useFinetune);
+      try {
+        showToast(
+          useFinetune
+            ? "ElevenLabs finetune ON — NabadAi DNA voice."
+            : "ElevenLabs finetune OFF — base music_v2 model.",
+          { icon: "♪", durationMs: 3600 },
+        );
+      } catch {}
+    });
+  }
 }
 
 function syncSettingsOrbMode(mode = getCoachOrbMode()) {
@@ -24070,7 +24153,11 @@ function setMusicProviderPref(pref) {
 function musicProviderSubline(pref) {
   if (pref === "minimax") return "MiniMax — English only, one variant (staging)";
   if (pref === "lyria") return "Lyria — Google Gemini, one variant (~$0.08/song)";
-  if (pref === "elevenlabs") return "ElevenLabs — music_v2, one variant (~$0.45/song)";
+  if (pref === "elevenlabs") {
+    return getElevenlabsFinetunePref()
+      ? "ElevenLabs — NabadAi DNA finetune (~$0.45/song)"
+      : "ElevenLabs — base music_v2, no finetune (~$0.45/song)";
+  }
   return "Suno — two variants per song";
 }
 
@@ -63439,6 +63526,9 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       }
       if (userAvoidTags) payload.negativeTags = userAvoidTags;
       payload.style = compactStyleForProvider(payload.style, 980);
+      if (useElevenlabsMusicProvider()) {
+        payload.elevenlabsUseFinetune = getElevenlabsFinetunePref();
+      }
       restoreCreateChallengeContext();
       const remixMeta =
         pendingSearchRemixMeta && typeof pendingSearchRemixMeta === "object"
@@ -63916,9 +64006,11 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
                 ? data?._finetuneSkippedForReference
                   ? "ElevenLabs · vocal reference applied (finetune skipped — reference drives voice/melody)"
                   : `ElevenLabs · vocal reference +${ft ? ` finetune ${ft.slice(0, 12)}…` : " finetune (none)"} applied`
-                : ft
-                  ? `ElevenLabs · finetune ${ft.slice(0, 12)}… applied`
-                  : "ElevenLabs · no finetune_id (generic voice) — set ELEVENLABS_FINETUNE_ID on server",
+                : data?._finetuneDisabledByAdmin
+                  ? "ElevenLabs · base model (admin finetune OFF)"
+                  : ft
+                    ? `ElevenLabs · finetune ${ft.slice(0, 12)}… applied`
+                    : "ElevenLabs · no finetune_id (generic voice) — set ELEVENLABS_FINETUNE_ID on server",
               { icon: ft || ref ? "♪" : "!", durationMs: 9000 },
             );
           } catch {}

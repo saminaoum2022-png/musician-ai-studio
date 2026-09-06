@@ -21938,7 +21938,8 @@ body[data-route="settings"] main.grid{
   margin-bottom: 24px;
 }
 .settingsSection[hidden],
-#settingsMusicProviderSection[hidden]{
+#settingsMusicProviderSection[hidden],
+#settingsElevenFinetuneRow[hidden]{
   display: none !important;
 }
 .settingsSectionLabel{

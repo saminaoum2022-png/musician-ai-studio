@@ -4036,6 +4036,19 @@
                     <button type="button" class="settingsThemeOpt" data-music-provider="elevenlabs" role="radio" aria-checked="false">Eleven</button>
                   </div>
                 </div>
+                <div id="settingsElevenFinetuneRow" class="settingsRow settingsThemeRow" hidden>
+                  <span class="settingsRowIco" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v18M8 7h8M7 12h10M8 17h8"/></svg>
+                  </span>
+                  <span class="settingsRowBody">
+                    <span class="settingsRowTitle">ElevenLabs voice model</span>
+                    <span class="settingsRowSub" id="settingsElevenFinetuneSub">NabadAi DNA finetune — custom voice</span>
+                  </span>
+                  <div id="settingsElevenFinetunePicker" class="settingsThemePicker" role="radiogroup" aria-label="ElevenLabs finetune">
+                    <button type="button" class="settingsThemeOpt is-active" data-eleven-finetune="1" role="radio" aria-checked="true">Finetune</button>
+                    <button type="button" class="settingsThemeOpt" data-eleven-finetune="0" role="radio" aria-checked="false">Base</button>
+                  </div>
+                </div>
                 <p class="settingsOrbModeIntro">Admin test only. Suno is default (Arabic + two variants). MiniMax is English-only. Lyria uses Google Gemini. ElevenLabs uses music_v2 — one variant, good failover A/B. Persona and reference uploads require Suno.</p>
               </div>
             </section>

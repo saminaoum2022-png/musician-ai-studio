@@ -20003,6 +20003,15 @@ function photoCoverMetaForGeneration() {
   }
   return { imageUrl: cover, imageThumb: cover, photoCoverOnly: true, customCoverOnly: true };
 }
+
+/** JPEG data URL for Lyria multimodal input when Photo Mood was applied. */
+function resolvePhotoImagePayloadForLyria() {
+  if (!imageMoodAppliedForNextGen) return "";
+  const dataUrl = String(
+    imageMoodCoverDataUrl || resolvePendingPhotoCoverDataUrl() || "",
+  ).trim();
+  return dataUrl.startsWith("data:image/") ? dataUrl : "";
+}
 let pendingBackendTaskId = "";
 const PENDING_TASK_KEY = "mas:pending_backend_task_v1";
 const RECOVERY_TASK_KEY = "mas:gen_task_recovery_v1";
@@ -63126,6 +63135,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
           clipProfileId || !clipVoiceProfile.includes("|")
             ? ""
             : clipVoiceProfile.split("|")[1] || "";
+        const photoImageForLyria = resolvePhotoImagePayloadForLyria();
         const payload = {
           prompt: finalPrompt,
           style: userStyle,
@@ -63142,6 +63152,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
           ...(clipVoiceTimbre ? { voiceTimbre: clipVoiceTimbre } : {}),
           ...(clipProfileId ? { clipVocalProfileId: clipProfileId } : {}),
           watchKind: clipAllowImageOnly ? "photo" : "clip",
+          ...(photoImageForLyria ? { photoImage: photoImageForLyria } : {}),
         };
         if (templateSparkClip) {
           pendingSearchRemixMeta = null;
@@ -63488,6 +63499,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
         ? [userStyle, styleExtras, artworkStyle ? `cover art: ${artworkStyle}` : ""].filter(Boolean).join(" | ")
         : `${userStyle}${userStyle ? " | " : ""}${timingClause}, ${styleExtras}${artworkStyle ? `, cover art: ${artworkStyle}` : ""}`;
       const songDurationSec = resolveSongDurationForGeneration();
+      const photoImageForLyria = useLyriaMusicProvider() ? resolvePhotoImagePayloadForLyria() : "";
       const payload = {
         prompt: finalPrompt,
         style: personaStyleBase,
@@ -63497,6 +63509,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
         instrumental: shouldGenerateInstrumental,
         model: modelForRequest,
         ...(imageMoodAppliedForNextGen ? { watchKind: "photo" } : {}),
+        ...(photoImageForLyria ? { photoImage: photoImageForLyria } : {}),
         personaId: personaIdSel || undefined,
         personaModel: personaModelSel || undefined,
         ...(songDurationSec != null ? { duration: songDurationSec } : {}),
@@ -63593,6 +63606,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       const data = await trackCreditsAround(
         hasReference ? "Upload reference song" : "Generate song",
         async () => {
+          let elevenlabsReferenceUpload = null;
           const elevenReferenceGenerate =
             hasReference && useAltMusicProvider() && getMusicProviderPref() === "elevenlabs";
           if (hasReference && !elevenReferenceGenerate) {
@@ -63813,10 +63827,17 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
               }
               setStatus("Uploading vocal reference to ElevenLabs…");
               payload.hasReference = true;
-              payload.referenceAudio = await blobToDataUrl(sendFile);
               payload.referenceConditionStrength = "high";
               const refMs = await estimateBlobDurationMs(sendFile);
               if (refMs) payload.referenceDurationMs = refMs;
+              const remixUrl = unwrapInnermostHttpAudioUrl(
+                String(currentRemixSource?.originalUrl || currentRemixSource?.url || "").trim(),
+              );
+              elevenlabsReferenceUpload = {
+                file: sendFile,
+                remixUrl:
+                  remixUrl && (vocalRefOrigin === "remix" || hubRemixLocked) ? remixUrl : "",
+              };
             }
             try {
               showToast(`${providerLabel} composing… keep the app open (about 1–3 min).`, {
@@ -63834,15 +63855,37 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
                   : "MiniMax is composing your song… usually 1–2 minutes. Keep the app open.",
             );
           }
-          const r = await apiFetch(musicGenerateApiPath(), {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
-            },
-            body: JSON.stringify(payload),
-          });
-          const d = await r.json().catch(() => ({}));
+          let r;
+          let d;
+          if (elevenlabsReferenceUpload?.file?.size) {
+            const fd = new FormData();
+            const { referenceAudio: _dropRef, ...restPayload } = payload;
+            fd.append("payload", JSON.stringify(restPayload));
+            fd.append(
+              "referenceFile",
+              elevenlabsReferenceUpload.file,
+              elevenlabsReferenceUpload.file.name || "vocal-reference.m4a",
+            );
+            if (elevenlabsReferenceUpload.remixUrl) {
+              fd.append("referenceAudioUrl", elevenlabsReferenceUpload.remixUrl);
+            }
+            r = await fetch(apiUrl(musicGenerateApiPath()), {
+              method: "POST",
+              headers: authToken ? { Authorization: `Bearer ${authToken}` } : {},
+              body: fd,
+            });
+            d = await r.json().catch(() => ({}));
+          } else {
+            r = await apiFetch(musicGenerateApiPath(), {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
+              },
+              body: JSON.stringify(payload),
+            });
+            d = await r.json().catch(() => ({}));
+          }
           if (d?.code === "pro_required" || r.status === 403) {
             promptWebProUpgrade("Persona");
             throw new Error(d?.error || "NabadAi Pro is required for Persona on web.");

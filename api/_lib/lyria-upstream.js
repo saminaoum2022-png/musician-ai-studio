@@ -1,8 +1,10 @@
 /**
- * Google Lyria 3 music generation via Gemini generateContent API.
+ * Google Lyria 3 music generation via Interactions API (preferred) or legacy generateContent.
  * @see https://ai.google.dev/gemini-api/docs/music-generation
  */
 const GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta";
+const LYRIA_INTERACTIONS_URL = `${GEMINI_BASE}/interactions`;
+const LYRIA_FULL_MODEL = "lyria-3.5";
 
 function safeJson(txt) {
   try {
@@ -53,12 +55,22 @@ const TIMBRE_TO_LYRIA = {
   crisp: "crisp, articulate delivery",
 };
 
+const LEGACY_LYRIA_MODEL_ALIASES = Object.freeze({
+  "lyria-3-pro-preview": LYRIA_FULL_MODEL,
+  pro: LYRIA_FULL_MODEL,
+  full: LYRIA_FULL_MODEL,
+});
+
 function resolveLyriaModel(explicit) {
   const env = String(process.env.LYRIA_MUSIC_MODEL || "").trim();
-  const raw = String(explicit || env || "lyria-3-pro-preview").trim();
+  const raw = String(explicit || env || LYRIA_FULL_MODEL).trim();
   const low = raw.toLowerCase();
   if (low === "clip" || low === LYRIA_CLIP_MODEL) return LYRIA_CLIP_MODEL;
-  return raw || "lyria-3-pro-preview";
+  return LEGACY_LYRIA_MODEL_ALIASES[low] || raw || LYRIA_FULL_MODEL;
+}
+
+function lyriaUseInteractionsApi() {
+  return envFlagEnabled("LYRIA_USE_INTERACTIONS", { defaultOn: true });
 }
 
 function lyriaGenerateEnabled() {
@@ -185,12 +197,28 @@ function buildLyriaPrompt({
   clipVocalProfileId = "",
   enhancedStylePrompt = "",
   structuredLyrics = "",
+  photoMood = false,
+  durationSec = 0,
 } = {}) {
   const sections = [];
   const style = String(enhancedStylePrompt || "").trim()
     || sanitizeStyleForLyria(stylePrompt);
   const lyricText = String(structuredLyrics || lyrics || "").trim();
   const songTitle = String(title || "").trim();
+  const duration = Number(durationSec);
+
+  if (Number.isFinite(duration) && duration >= 30 && !clip) {
+    const mins = Math.max(1, Math.round(duration / 60));
+    sections.push(
+      `Duration: Create a song approximately ${mins} minute${mins === 1 ? "" : "s"} (${Math.round(duration)} seconds).`,
+    );
+  }
+
+  if (photoMood) {
+    sections.push(
+      "Photo mood: Compose music inspired by the mood, colors, atmosphere, and feeling in the attached image.",
+    );
+  }
 
   if (clip) {
     sections.push(
@@ -241,20 +269,40 @@ function decodeInlineAudio(inline) {
 /**
  * Parse audio bytes from generateContent or Interactions-shaped payloads.
  */
-function extractLyriaAudio(payload) {
-  if (!payload || typeof payload !== "object") return null;
+function normalizeLyriaPayload(payload) {
+  if (!payload || typeof payload !== "object") return payload;
+  if (payload.interaction && typeof payload.interaction === "object") return payload.interaction;
+  return payload;
+}
 
-  const topAudio = decodeInlineAudio(payload?.output_audio);
+function extractLyriaAudio(payload) {
+  const data = normalizeLyriaPayload(payload);
+  if (!data || typeof data !== "object") return null;
+
+  const topAudio = decodeInlineAudio(data?.output_audio);
   if (topAudio) return topAudio;
 
-  const outputs = Array.isArray(payload?.outputs) ? payload.outputs : [];
+  const steps = Array.isArray(data?.steps) ? data.steps : [];
+  for (const step of steps) {
+    if (String(step?.type || "") !== "model_output") continue;
+    for (const block of step?.content || []) {
+      if (String(block?.type || "") !== "audio") continue;
+      const parsed = decodeInlineAudio({
+        data: block?.data,
+        mimeType: block?.mime_type || block?.mimeType || "audio/mpeg",
+      });
+      if (parsed) return parsed;
+    }
+  }
+
+  const outputs = Array.isArray(data?.outputs) ? data.outputs : [];
   for (const out of outputs) {
     const inline = out?.inline_data || out?.inlineData || out?.audio || out;
     const parsed = decodeInlineAudio(inline);
     if (parsed) return parsed;
   }
 
-  const parts = payload?.candidates?.[0]?.content?.parts;
+  const parts = data?.candidates?.[0]?.content?.parts;
   if (Array.isArray(parts)) {
     for (const part of parts) {
       const parsed = decodeInlineAudio(part?.inlineData || part?.inline_data);
@@ -265,13 +313,34 @@ function extractLyriaAudio(payload) {
   return null;
 }
 
-/** Collect all text parts from a Lyria generateContent response. */
+/** Collect lyric / analysis text from Interactions or generateContent payloads. */
 function extractLyriaTextParts(payload) {
-  const parts = payload?.candidates?.[0]?.content?.parts;
-  if (!Array.isArray(parts)) return [];
-  return parts
-    .map((p) => String(p?.text || "").trim())
-    .filter(Boolean);
+  const data = normalizeLyriaPayload(payload);
+  if (!data || typeof data !== "object") return [];
+
+  const collected = [];
+  const outputText = String(data?.output_text || "").trim();
+  if (outputText) collected.push(outputText);
+
+  const steps = Array.isArray(data?.steps) ? data.steps : [];
+  for (const step of steps) {
+    if (String(step?.type || "") !== "model_output") continue;
+    for (const block of step?.content || []) {
+      if (String(block?.type || "") !== "text") continue;
+      const text = String(block?.text || "").trim();
+      if (text) collected.push(text);
+    }
+  }
+
+  const parts = data?.candidates?.[0]?.content?.parts;
+  if (Array.isArray(parts)) {
+    for (const part of parts) {
+      const text = String(part?.text || "").trim();
+      if (text) collected.push(text);
+    }
+  }
+
+  return collected;
 }
 
 /** Duration from the music-analysis text part (duration_secs: 150.5). */
@@ -405,11 +474,12 @@ function extractLyriaAlignedWords(payload) {
 }
 
 function lyriaUserMessage(httpStatus, payload, rawText) {
-  const err = payload?.error?.message || payload?.error;
+  const data = normalizeLyriaPayload(payload);
+  const err = data?.error?.message || data?.error;
   if (err) return String(err).slice(0, 280);
-  const block = payload?.promptFeedback?.blockReason;
+  const block = data?.promptFeedback?.blockReason;
   if (block) return `Lyria blocked this prompt (${block}). Try softer wording.`;
-  const finish = payload?.candidates?.[0]?.finishReason;
+  const finish = data?.candidates?.[0]?.finishReason;
   if (finish && finish !== "STOP") return `Lyria could not finish (${finish}). Try again.`;
   if (httpStatus === 429) return "Lyria rate limit — wait a minute and try again.";
   if (httpStatus === 403) return "Lyria access denied — check GEMINI_API_KEY billing and Lyria access.";
@@ -418,10 +488,54 @@ function lyriaUserMessage(httpStatus, payload, rawText) {
   return snippet || "Lyria generation failed — try again.";
 }
 
-/**
- * @param {{ apiKey: string, model?: string, prompt: string }} opts
- */
-async function lyriaGenerateMusic({ apiKey, model, prompt }) {
+function parseLyriaPhotoDataUrl(dataUrl) {
+  const raw = String(dataUrl || "").trim();
+  const match = /^data:(image\/[a-z0-9.+-]+);base64,([a-z0-9+/=\s]+)$/i.exec(raw);
+  if (!match) return null;
+  const mimeType = match[1].toLowerCase();
+  const data = match[2].replace(/\s/g, "");
+  if (!data || data.length > 2_600_000) return null;
+  try {
+    const buffer = Buffer.from(data, "base64");
+    if (!buffer.length || buffer.length > 12 * 1024 * 1024) return null;
+    return { mimeType, data, buffer };
+  } catch {
+    return null;
+  }
+}
+
+/** Up to 10 images for Lyria multimodal input. */
+function resolveLyriaPhotoImages({ photoImage = "", photoImages = null } = {}) {
+  const rawList = Array.isArray(photoImages)
+    ? photoImages
+    : photoImage
+      ? [photoImage]
+      : [];
+  const out = [];
+  for (const item of rawList) {
+    if (out.length >= 10) break;
+    const parsed = parseLyriaPhotoDataUrl(item);
+    if (parsed) out.push(parsed);
+  }
+  return out;
+}
+
+function buildLyriaInteractionsInput(prompt, photoImages = []) {
+  const text = String(prompt || "").trim();
+  const images = Array.isArray(photoImages) ? photoImages : [];
+  if (!images.length) return text;
+  const input = [{ type: "text", text }];
+  for (const img of images) {
+    input.push({
+      type: "image",
+      mime_type: img.mimeType,
+      data: img.data,
+    });
+  }
+  return input;
+}
+
+async function lyriaGenerateViaGenerateContent({ apiKey, model, prompt }) {
   const resolvedModel = resolveLyriaModel(model);
   const url = `${GEMINI_BASE}/models/${encodeURIComponent(resolvedModel)}:generateContent`;
   const r = await fetch(url, {
@@ -449,15 +563,88 @@ async function lyriaGenerateMusic({ apiKey, model, prompt }) {
     audio,
     alignedWords,
     model: resolvedModel,
+    api: "generateContent",
     userMessage: lyriaUserMessage(r.status, data, text),
   };
 }
 
+async function lyriaGenerateViaInteractions({ apiKey, model, prompt, photoImages = [] }) {
+  const resolvedModel = resolveLyriaModel(model);
+  const images = Array.isArray(photoImages) ? photoImages : [];
+  const r = await fetch(LYRIA_INTERACTIONS_URL, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-goog-api-key": String(apiKey || "").trim(),
+    },
+    body: JSON.stringify({
+      model: resolvedModel,
+      input: buildLyriaInteractionsInput(prompt, images),
+    }),
+  });
+  const text = await r.text().catch(() => "");
+  const data = safeJson(text);
+  const audio = extractLyriaAudio(data);
+  const alignedWords = extractLyriaAlignedWords(data);
+  return {
+    ok: r.ok && Boolean(audio?.buffer?.length),
+    httpStatus: r.status,
+    data,
+    text,
+    audio,
+    alignedWords,
+    model: resolvedModel,
+    api: "interactions",
+    userMessage: lyriaUserMessage(r.status, data, text),
+  };
+}
+
+/**
+ * @param {{ apiKey: string, model?: string, prompt: string, photoImages?: Array<{ mimeType: string, data: string, buffer: Buffer }> }} opts
+ */
+async function lyriaGenerateMusic({ apiKey, model, prompt, photoImages = [] }) {
+  const images = Array.isArray(photoImages) ? photoImages : [];
+  const useInteractions = lyriaUseInteractionsApi();
+
+  if (useInteractions) {
+    const interactionResult = await lyriaGenerateViaInteractions({
+      apiKey,
+      model,
+      prompt,
+      photoImages: images,
+    });
+    if (interactionResult.ok || images.length) return interactionResult;
+    console.warn(
+      "[lyria] interactions failed — falling back to generateContent",
+      interactionResult.httpStatus,
+      interactionResult.userMessage,
+    );
+  }
+
+  if (images.length) {
+    return {
+      ok: false,
+      httpStatus: 502,
+      data: null,
+      text: "",
+      audio: null,
+      alignedWords: [],
+      model: resolveLyriaModel(model),
+      api: "interactions",
+      userMessage: "Lyria could not compose from your photo — try again in a minute.",
+    };
+  }
+
+  return lyriaGenerateViaGenerateContent({ apiKey, model, prompt });
+}
+
 module.exports = {
   LYRIA_CLIP_MODEL,
+  LYRIA_FULL_MODEL,
   clipVocalProfileById,
   CLIP_VOCAL_PROFILES,
   defaultClipVocalProfileForGender,
+  buildLyriaInteractionsInput,
   buildLyriaPrompt,
   buildLyriaVocalProfile,
   sanitizeStyleForLyria,
@@ -468,10 +655,13 @@ module.exports = {
   isLyriaClipModel,
   lyriaGenerateEnabled,
   lyriaGenerateMusic,
+  lyriaUseInteractionsApi,
   lyriaUserMessage,
   nabadClipEnabled,
+  parseLyriaPhotoDataUrl,
   templateSparkClipEnabled,
   parseLyriaLyricsToAlignedWords,
   pickLyriaLyricsPart,
   resolveLyriaModel,
+  resolveLyriaPhotoImages,
 };

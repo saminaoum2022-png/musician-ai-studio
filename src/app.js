@@ -20003,6 +20003,15 @@ function photoCoverMetaForGeneration() {
   }
   return { imageUrl: cover, imageThumb: cover, photoCoverOnly: true, customCoverOnly: true };
 }
+
+/** JPEG data URL for Lyria multimodal input when Photo Mood was applied. */
+function resolvePhotoImagePayloadForLyria() {
+  if (!imageMoodAppliedForNextGen) return "";
+  const dataUrl = String(
+    imageMoodCoverDataUrl || resolvePendingPhotoCoverDataUrl() || "",
+  ).trim();
+  return dataUrl.startsWith("data:image/") ? dataUrl : "";
+}
 let pendingBackendTaskId = "";
 const PENDING_TASK_KEY = "mas:pending_backend_task_v1";
 const RECOVERY_TASK_KEY = "mas:gen_task_recovery_v1";
@@ -63126,6 +63135,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
           clipProfileId || !clipVoiceProfile.includes("|")
             ? ""
             : clipVoiceProfile.split("|")[1] || "";
+        const photoImageForLyria = resolvePhotoImagePayloadForLyria();
         const payload = {
           prompt: finalPrompt,
           style: userStyle,
@@ -63142,6 +63152,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
           ...(clipVoiceTimbre ? { voiceTimbre: clipVoiceTimbre } : {}),
           ...(clipProfileId ? { clipVocalProfileId: clipProfileId } : {}),
           watchKind: clipAllowImageOnly ? "photo" : "clip",
+          ...(photoImageForLyria ? { photoImage: photoImageForLyria } : {}),
         };
         if (templateSparkClip) {
           pendingSearchRemixMeta = null;
@@ -63488,6 +63499,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
         ? [userStyle, styleExtras, artworkStyle ? `cover art: ${artworkStyle}` : ""].filter(Boolean).join(" | ")
         : `${userStyle}${userStyle ? " | " : ""}${timingClause}, ${styleExtras}${artworkStyle ? `, cover art: ${artworkStyle}` : ""}`;
       const songDurationSec = resolveSongDurationForGeneration();
+      const photoImageForLyria = useLyriaMusicProvider() ? resolvePhotoImagePayloadForLyria() : "";
       const payload = {
         prompt: finalPrompt,
         style: personaStyleBase,
@@ -63497,6 +63509,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
         instrumental: shouldGenerateInstrumental,
         model: modelForRequest,
         ...(imageMoodAppliedForNextGen ? { watchKind: "photo" } : {}),
+        ...(photoImageForLyria ? { photoImage: photoImageForLyria } : {}),
         personaId: personaIdSel || undefined,
         personaModel: personaModelSel || undefined,
         ...(songDurationSec != null ? { duration: songDurationSec } : {}),

@@ -298,7 +298,7 @@ module.exports = async function handler(req, res) {
 
     const taskId = newTaskId();
     const audioId = `${taskId}_a`;
-    const model = resolveLyriaModel("lyria-3-pro-preview");
+    const model = resolveLyriaModel();
 
     const adminDetail = [
       "flow: nabad_producer",

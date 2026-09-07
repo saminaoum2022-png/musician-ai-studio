@@ -1055,7 +1055,7 @@ async function handleLyriaGenerate(req, res, { user, isAdmin, body }) {
     model,
     lyriaPrompt: fallbackLyriaPrompt,
     photoCount: photoImages.length,
-    extraLines: buildLyriaFullSongDirectAdminExtra({ body, stylePrompt, lyrics }),
+    extraLines: buildLyriaFullSongDirectAdminExtra({ body, stylePrompt, lyrics, model }),
   });
 
   await logMusicGeneration({

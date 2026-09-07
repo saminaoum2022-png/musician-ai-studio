@@ -369,7 +369,7 @@ async function listGeminiGenerateModels(geminiKey) {
 }
 
 const POP_RHYME_SCHEME_LINES = [
-  "Any section (verse, chorus, bridge, pre-chorus) can use any clear rhyme scheme — AABB, ABAB, ABBA, ABCB, AAAA, AAAB, AA, repeating hook lines, etc.",
+  "Any section (verse, chorus, bridge, pre-chorus) can use any clear rhyme scheme — AABB, ABAB, ABBA, ABCB, AAAA, AAAB, AABA, AA, repeating hook lines, etc.",
   "Pick one scheme per section and keep it consistent; do not mix patterns mid-section.",
   "Do not favor one scheme for chorus vs verse — match what fits the song.",
   "Arabic / Levantine: parallel couplets (موازي) — matching grammar slot and similar مقاطع per line help singability in any scheme.",
@@ -401,7 +401,7 @@ const FIX_SINGING_LINES = [
   "Fix these lyrics for AI singing — prioritize singability (wazen/وزن, qafiya/قافية, balanced lines).",
   "- Keep the SAME story, meaning, names, and dialect. Do NOT rewrite from scratch.",
   "- Balance line length within each section (similar syllable count / مقاطع per line).",
-  "- Fix end-rhyme to match each section's existing scheme (AABB, ABAB, ABBA, ABCB, AAAA, AAAB, etc.) — do not swap schemes unless rhyme is broken.",
+  "- Fix end-rhyme to match each section's existing scheme (AABB, ABAB, ABBA, ABCB, AAAA, AAAB, AABA, etc.) — do not swap schemes unless rhyme is broken.",
   "- For Arabic / Levantine: strengthen parallel couplets (موازي) — same opener or mirrored line shape within paired lines.",
   "- Adjust word choice, line breaks, or endings only as needed — keep natural colloquial speech.",
   "- For Arabic: think pop-song feet/stress (أوف), not classical عروض exam.",
@@ -578,7 +578,7 @@ function buildPrompt({ seed, style, mode, nonce, dialect, dialectHint, sourceLyr
       "You are a lyrics coach for AI music singing (Suno/Lyria). Analyze singability only — do NOT rewrite lyrics.",
       "Focus on: line length balance (wazen/وزن), end-rhyme (qafiya/قافية), chorus hook fit, lines that are too long or uneven.",
       "Rhyme schemes:",
-      "- Verse and chorus can use any scheme (AABB, ABAB, ABBA, ABCB, AAAA, AAAB, AA, repeating hooks). Do NOT prefer one scheme for chorus vs verse.",
+      "- Verse and chorus can use any scheme (AABB, ABAB, ABBA, ABCB, AAAA, AAAB, AABA, AA, repeating hooks). Do NOT prefer one scheme for chorus vs verse.",
       "- Flag issues only when a section's lines do not match its apparent scheme, or when rhyme/meter is uneven — not because a scheme is 'wrong' for that section.",
       "- Arabic / Levantine: note parallel couplets (موازي) — paired lines with matching structure and similar مقاطع.",
       "- Near-rhyme / assonance OK in colloquial Arabic.",

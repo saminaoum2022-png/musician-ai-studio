@@ -58,6 +58,7 @@ export function detectRhymeScheme(lines) {
   const [k1, k2, k3, k4] = keys;
   if (sameRhyme(k1, k2) && sameRhyme(k2, k3) && sameRhyme(k3, k4)) return "AAAA";
   if (sameRhyme(k1, k2) && sameRhyme(k2, k3) && !sameRhyme(k1, k4)) return "AAAB";
+  if (sameRhyme(k1, k2) && sameRhyme(k1, k4) && !sameRhyme(k1, k3)) return "AABA";
   if (sameRhyme(k1, k2) && sameRhyme(k3, k4)) return "AABB";
   if (sameRhyme(k1, k3) && sameRhyme(k2, k4) && k1 !== k2) return "ABAB";
   if (sameRhyme(k2, k4) && k2 !== k1 && k2 !== k3) return "ABCB";
@@ -78,6 +79,8 @@ function rhymePairsForScheme(scheme, lineCount) {
       return lineCount >= 4 ? [[0, 3], [1, 2]] : [];
     case "AAAB":
       return lineCount >= 4 ? [[0, 1], [0, 2], [1, 2]] : [];
+    case "AABA":
+      return lineCount >= 4 ? [[0, 1], [0, 3], [1, 3]] : [];
     case "AAAA":
     case "AA":
       return Array.from({ length: Math.max(0, lineCount - 1) }, (_, i) => [i, i + 1]);
@@ -204,7 +207,7 @@ export function computeLocalSingability(text) {
           level: isChorus ? "high" : "medium",
           section: name,
           line: null,
-          message: "Rhyme pattern looks loose — pick a clear scheme (AABB, ABAB, ABBA, ABCB, AAAA, AAAB, etc.) and match it within this section.",
+          message: "Rhyme pattern looks loose — pick a clear scheme (AABB, ABAB, ABBA, ABCB, AAAA, AAAB, AABA, etc.) and match it within this section.",
         });
       }
     }

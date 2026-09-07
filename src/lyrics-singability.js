@@ -57,6 +57,7 @@ export function detectRhymeScheme(lines) {
 
   const [k1, k2, k3, k4] = keys;
   if (sameRhyme(k1, k2) && sameRhyme(k2, k3) && sameRhyme(k3, k4)) return "AAAA";
+  if (sameRhyme(k1, k2) && sameRhyme(k2, k3) && !sameRhyme(k1, k4)) return "AAAB";
   if (sameRhyme(k1, k2) && sameRhyme(k3, k4)) return "AABB";
   if (sameRhyme(k1, k3) && sameRhyme(k2, k4) && k1 !== k2) return "ABAB";
   if (sameRhyme(k2, k4) && k2 !== k1 && k2 !== k3) return "ABCB";
@@ -75,6 +76,8 @@ function rhymePairsForScheme(scheme, lineCount) {
       return lineCount >= 4 ? [[1, 3]] : [];
     case "ABBA":
       return lineCount >= 4 ? [[0, 3], [1, 2]] : [];
+    case "AAAB":
+      return lineCount >= 4 ? [[0, 1], [0, 2], [1, 2]] : [];
     case "AAAA":
     case "AA":
       return Array.from({ length: Math.max(0, lineCount - 1) }, (_, i) => [i, i + 1]);
@@ -147,15 +150,6 @@ export function computeLocalSingability(text) {
       }
     });
 
-    if (isChorus && scheme === "ABAB" && lines.length >= 4) {
-      pushWarning(warnings, seen, {
-        level: "medium",
-        section: name,
-        line: null,
-        message: "Chorus uses alternate rhyme (ABAB) — AABB or a repeating hook (AAAA) usually lands better for AI singing.",
-      });
-    }
-
     const pairs = rhymePairsForScheme(scheme, lines.length);
     for (const [i, j] of pairs) {
       if (j >= lines.length) continue;
@@ -175,21 +169,21 @@ export function computeLocalSingability(text) {
       const rkA = keys[i];
       const rkB = keys[j];
       if (rkA && rkB && rkA !== rkB) {
-        const pairLabel = scheme === "ABCB" ? "hook pair" : "rhyme pair";
+        const pairLabel = scheme === "ABCB" ? "rhyme pair (lines 2 & 4)" : "rhyme pair";
         pushWarning(warnings, seen, {
           level: isChorus ? "high" : "medium",
           section: name,
           line: j + 1,
-          message: `Lines ${i + 1} and ${j + 1} may not rhyme (قافية) — ${isChorus ? "chorus" : "section"} ${pairLabel} usually shares an ending sound.`,
+          message: `Lines ${i + 1} and ${j + 1} may not rhyme (قافية) — this section's ${pairLabel} usually shares an ending sound.`,
         });
       }
 
-      if (isChorus && (scheme === "AABB" || scheme === "ABBA") && !isParallelLine(lines[i], lines[j])) {
+      if ((scheme === "AABB" || scheme === "ABBA") && !isParallelLine(lines[i], lines[j])) {
         pushWarning(warnings, seen, {
           level: "low",
           section: name,
           line: j + 1,
-          message: `Lines ${i + 1} and ${j + 1} could mirror each other more (parallel Levantine couplet / موازي) — same slot and similar مقاطع help the hook lock in.`,
+          message: `Lines ${i + 1} and ${j + 1} could mirror each other more (parallel Levantine couplet / موازي) — same slot and similar مقاطع help vocals lock in.`,
         });
       }
     }
@@ -199,18 +193,18 @@ export function computeLocalSingability(text) {
         level: "low",
         section: name,
         line: 1,
-        message: "Chorus has only one line — add a matching rhyming line for a stronger hook.",
+        message: "Section has only one line — add a matching line if you want a paired hook.",
       });
     }
 
-    if (isChorus && scheme === "free" && lines.length >= 4) {
+    if (scheme === "free" && lines.length >= 4) {
       const rhymedPairs = pairs.filter(([i, j]) => sameRhyme(keys[i], keys[j])).length;
       if (rhymedPairs === 0) {
         pushWarning(warnings, seen, {
-          level: "high",
+          level: isChorus ? "high" : "medium",
           section: name,
           line: null,
-          message: "Chorus rhyme looks loose — try AABB couplets, a repeating hook (AAAA), ABCB, or ABBA for a catchier hook.",
+          message: "Rhyme pattern looks loose — pick a clear scheme (AABB, ABAB, ABBA, ABCB, AAAA, AAAB, etc.) and match it within this section.",
         });
       }
     }

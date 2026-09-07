@@ -405,16 +405,20 @@ async function runLyriaGenerationJob({
         clip: false,
         vocalGender: session.vocalGender,
         clipVocalProfileId: session.clipVocalProfileId,
+        dialectHint: session.dialectHint || mergeLyriaDialectHint(body),
         enhancedStylePrompt: blueprint.master_style_prompt,
         structuredLyrics: blueprint.structured_lyrics || lyrics,
       });
     }
 
+    const dialectHintLine = String(session.dialectHint || mergeLyriaDialectHint(body) || "").trim();
     const blueprintExtra = blueprint.ok
       ? [
           "gemini_producer: nabad_blueprint",
           `gemini_producer_model: ${blueprint.model || "unknown"}`,
           `blueprint_attempt: ${blueprint.attempt || 1}`,
+          ...(session.dialect ? [`dialect: ${session.dialect}`] : []),
+          ...(dialectHintLine ? [`dialect_hint: ${dialectHintLine.slice(0, 400)}`] : []),
           `master_style_prompt: ${String(blueprint.master_style_prompt || "").slice(0, 600)}`,
           `structured_lyrics: ${String(blueprint.structured_lyrics || "").slice(0, 400)}`,
         ]

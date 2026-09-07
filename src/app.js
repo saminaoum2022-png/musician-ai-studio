@@ -43028,6 +43028,13 @@ function openProfileHubPostSheet(sid) {
 
 async function playLibraryListRowById(id, opts) {
   let t = loadLibrary().find((x) => x.id === id);
+  if (!t) return;
+  if (!String(t.url || "").trim() && t.taskId && isSingleVariantMusicTask(t.taskId)) {
+    try {
+      await recoverSongFromTaskId(t.taskId, { silent: true });
+      t = loadLibrary().find((x) => x.id === id) || t;
+    } catch {}
+  }
   if (!t?.url) return;
   primeGlobalPlayerInGesture();
   setPlaybackPending({ type: "library", id });
@@ -60866,7 +60873,10 @@ async function tryRefreshLibraryTrackAudioFromSuno(t) {
   const tid = String(t?.taskId || "").trim();
   if (!tid) return null;
   try {
-    const r = await apiFetch(`/api/suno/status?taskId=${encodeURIComponent(tid)}`, {
+    const statusPath = isSingleVariantMusicTask(tid)
+      ? musicStatusApiPath(tid)
+      : `/api/suno/status?taskId=${encodeURIComponent(tid)}`;
+    const r = await apiFetch(statusPath, {
       cache: "no-store",
     });
     const data = await r.json().catch(() => ({}));

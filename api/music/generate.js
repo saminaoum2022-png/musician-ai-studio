@@ -73,8 +73,12 @@ const {
   buildSongProducerInput,
   enrichClipWithGeminiProducer,
   enrichSongWithGeminiProducer,
-  enrichLyriaSongWithGeminiProducer,
 } = require("../_lib/clip-gemini-producer");
+const {
+  buildProducerBlueprint,
+  producerSafeGenreLabel,
+  sessionFromMusicGenerateBody,
+} = require("../_lib/nabad-producer-lib");
 
 const FULL_SONG_COST = 12;
 const LYRIA_CLIP_CREDIT_COST = Math.max(
@@ -382,48 +386,49 @@ async function runLyriaGenerationJob({
 
   try {
     let lyriaPrompt = fallbackLyriaPrompt;
-    const dialectHint = mergeLyriaDialectHint(body);
-    const durationSec = resolveLyriaDurationSec(body);
-    const producerResult = await enrichLyriaSongWithGeminiProducer({
-      apiKey,
-      input: buildSongProducerInput(
-        {
-          ...body,
-          style: stylePrompt || body?.style,
-          prompt: lyrics,
-          ...(durationSec > 0 ? { musicLengthMs: durationSec * 1000 } : {}),
-        },
-        "lyria_full_song",
-      ),
-    });
+    const session = sessionFromMusicGenerateBody(body, { lyrics, title, stylePrompt, instrumental });
+    const blueprint = await buildProducerBlueprint({ apiKey, session });
 
-    if (producerResult.ok) {
+    if (blueprint.ok) {
+      const styleForPrompt = [
+        producerSafeGenreLabel(session),
+        session.mood,
+        session.instruments,
+        session.bpm ? `${session.bpm} BPM` : session.tempo,
+      ].filter(Boolean).join(", ");
+
       lyriaPrompt = buildLyriaPrompt({
-        stylePrompt,
+        stylePrompt: styleForPrompt,
         lyrics,
         title,
         instrumental,
         clip: false,
-        vocalGender: String(body?.vocalGender || "").trim(),
-        voiceTimbre: String(body?.voiceTimbre || "").trim(),
-        challengeId: String(body?.challenge?.id || body?.challengeId || "").trim(),
-        dialectHint,
-        clipVocalProfileId: String(body?.clipVocalProfileId || "").trim(),
-        enhancedStylePrompt: producerResult.enhanced_style_prompt,
-        structuredLyrics: producerResult.structured_lyrics,
-        photoMood: photoImages.length > 0,
-        durationSec: resolveLyriaDurationSec(body),
+        vocalGender: session.vocalGender,
+        clipVocalProfileId: session.clipVocalProfileId,
+        enhancedStylePrompt: blueprint.master_style_prompt,
+        structuredLyrics: blueprint.structured_lyrics || lyrics,
       });
     }
+
+    const blueprintExtra = blueprint.ok
+      ? [
+          "gemini_producer: nabad_blueprint",
+          `gemini_producer_model: ${blueprint.model || "unknown"}`,
+          `blueprint_attempt: ${blueprint.attempt || 1}`,
+          `master_style_prompt: ${String(blueprint.master_style_prompt || "").slice(0, 600)}`,
+          `structured_lyrics: ${String(blueprint.structured_lyrics || "").slice(0, 400)}`,
+        ]
+      : [
+          "gemini_producer: fallback",
+          `gemini_producer_error: ${String(blueprint.error || "blueprint_failed").slice(0, 200)}`,
+        ];
 
     let requestDetail = buildLyriaRequestDetail({
       flow: "lyria_full_song",
       model,
       lyriaPrompt,
       photoCount: photoImages.length,
-      extraLines: String(appendProducerAdminDetail("", producerResult) || "")
-        .split("\n")
-        .filter(Boolean),
+      extraLines: blueprintExtra,
     });
 
     await updateMusicGenerationByTaskId(taskId, {
@@ -454,8 +459,8 @@ async function runLyriaGenerationJob({
         alignedWords: upstream.alignedWords,
       });
     }
-    const displayLyrics = producerResult.ok && producerResult.structured_lyrics
-      ? producerResult.structured_lyrics
+    const displayLyrics = blueprint.ok && blueprint.structured_lyrics
+      ? blueprint.structured_lyrics
       : lyrics;
     const statusPayload = buildSunoStatusPayload({
       taskId,

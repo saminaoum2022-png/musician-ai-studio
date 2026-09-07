@@ -846,6 +846,29 @@ function buildBlueprintInput(session) {
   };
 }
 
+function sessionFromMusicGenerateBody(body, { lyrics = "", title = "", stylePrompt = "", instrumental = false } = {}) {
+  const style = String(stylePrompt || body?.style || "").trim();
+  const bpmMatch = style.match(/\b(\d{2,3})\s*bpm\b/i);
+  const bpm = bpmMatch ? Number(bpmMatch[1]) : null;
+  const genre = style.split(/[|,]/).map((s) => s.trim()).filter(Boolean)[0] || "Arabic Pop";
+  const instruments = String(body?.instruments || "").trim() || style;
+  return normalizeSession({
+    genre: genre.slice(0, 120),
+    mood: String(body?.mood || "").trim(),
+    tempo: bpm ? `${bpm} BPM` : "",
+    bpm,
+    vocalGender: String(body?.vocalGender || "").trim(),
+    clipVocalProfileId: String(body?.clipVocalProfileId || "").trim(),
+    instruments: instruments.slice(0, 200),
+    lyrics: String(lyrics || body?.prompt || "").trim(),
+    title: String(title || body?.title || "").trim(),
+    instrumental: Boolean(instrumental ?? body?.instrumental),
+    lyricsDone: true,
+    referenceSkipped: true,
+    vocalCharacterDone: Boolean(String(body?.clipVocalProfileId || "").trim()),
+  });
+}
+
 async function buildProducerBlueprint({ apiKey, session }) {
   const input = buildBlueprintInput(session);
   let lastError = "blueprint_failed";
@@ -1303,6 +1326,7 @@ module.exports = {
   normalizeSession,
   producerChatTurn,
   buildProducerBlueprint,
+  sessionFromMusicGenerateBody,
   sessionToGenerateBody,
   buildBlueprintInput,
   producerDisplayTitle,

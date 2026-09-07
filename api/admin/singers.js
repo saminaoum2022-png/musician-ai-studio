@@ -6,6 +6,7 @@
  *   reject_application  { applicationId, adminNotes? }
  *   update_request      { requestId, status?, paymentStatus?, singerId?, adminNotes?, deliveredSongId? }
  *   toggle_singer       { userId, active }
+ *   remove_singer       { userId, adminNotes? }
  */
 
 const {
@@ -25,11 +26,17 @@ const { insertAppNotification } = require("../_lib/app-notifications");
 const SUPABASE_URL = (process.env.SUPABASE_URL || "").replace(/\/$/, "");
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
 
+const TABLES_WITHOUT_UPDATED_AT = new Set(["pro_singers"]);
+
 async function servicePatch(table, filterPath, body) {
   if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
-    return { ok: false, status: 500, data: null };
+    return { ok: false, status: 500, data: null, error: "Missing Supabase config." };
   }
   try {
+    const patchBody = { ...body };
+    if (!TABLES_WITHOUT_UPDATED_AT.has(table)) {
+      patchBody.updated_at = new Date().toISOString();
+    }
     const r = await fetch(`${SUPABASE_URL}/rest/v1/${table}?${filterPath}`, {
       method: "PATCH",
       headers: {
@@ -38,14 +45,46 @@ async function servicePatch(table, filterPath, body) {
         "Content-Type": "application/json",
         Prefer: "return=representation",
       },
-      body: JSON.stringify({ ...body, updated_at: new Date().toISOString() }),
+      body: JSON.stringify(patchBody),
     });
     const text = await r.text().catch(() => "");
     let data = null;
     try { data = text ? JSON.parse(text) : null; } catch { data = text; }
-    return { ok: r.ok, status: r.status, data };
+    const errorMessage = typeof data?.message === "string"
+      ? data.message
+      : typeof data?.error === "string"
+        ? data.error
+        : "";
+    return { ok: r.ok, status: r.status, data, error: errorMessage };
   } catch {
-    return { ok: false, status: 500, data: null };
+    return { ok: false, status: 500, data: null, error: "Patch failed." };
+  }
+}
+
+async function serviceDelete(table, filterPath) {
+  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+    return { ok: false, status: 500, data: null, error: "Missing Supabase config." };
+  }
+  try {
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/${table}?${filterPath}`, {
+      method: "DELETE",
+      headers: {
+        apikey: SUPABASE_SERVICE_ROLE_KEY,
+        Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+        Prefer: "return=representation",
+      },
+    });
+    const text = await r.text().catch(() => "");
+    let data = null;
+    try { data = text ? JSON.parse(text) : null; } catch { data = text; }
+    const errorMessage = typeof data?.message === "string"
+      ? data.message
+      : typeof data?.error === "string"
+        ? data.error
+        : "";
+    return { ok: r.ok, status: r.status, data, error: errorMessage };
+  } catch {
+    return { ok: false, status: 500, data: null, error: "Delete failed." };
   }
 }
 
@@ -180,14 +219,58 @@ module.exports = async function handler(req, res) {
   if (action === "toggle_singer") {
     const userId = String(body.userId || body.user_id || "").trim();
     if (!userId) return sendJson(res, 400, { error: "Missing userId." });
-    const active = body.active !== false;
+    const active = body.active === true || body.active === "true";
     const patch = await servicePatch(
       "pro_singers",
       `user_id=eq.${encodeURIComponent(userId)}`,
       { active },
     );
-    if (!patch.ok) return sendJson(res, patch.status || 500, { error: "Could not update singer." });
-    return sendJson(res, 200, { ok: true, active });
+    if (!patch.ok) {
+      return sendJson(res, patch.status || 500, {
+        error: patch.error || "Could not update singer.",
+      });
+    }
+    const row = Array.isArray(patch.data) ? patch.data[0] : patch.data;
+    if (!row?.user_id) {
+      return sendJson(res, 404, { error: "Singer not found on roster." });
+    }
+    return sendJson(res, 200, { ok: true, active: Boolean(row.active) });
+  }
+
+  if (action === "remove_singer") {
+    const userId = String(body.userId || body.user_id || "").trim();
+    if (!userId) return sendJson(res, 400, { error: "Missing userId." });
+    const adminNotes = String(
+      body.adminNotes || body.admin_notes || "Removed from pro singer roster by admin.",
+    ).trim().slice(0, 1000);
+
+    const del = await serviceDelete(
+      "pro_singers",
+      `user_id=eq.${encodeURIComponent(userId)}`,
+    );
+    if (!del.ok) {
+      return sendJson(res, del.status || 500, {
+        error: del.error || "Could not remove singer from roster.",
+      });
+    }
+    const removed = Array.isArray(del.data) ? del.data[0] : del.data;
+    if (!removed?.user_id) {
+      return sendJson(res, 404, { error: "Singer not found on roster." });
+    }
+
+    const appRes = await selectFromTable(
+      `singer_applications?select=id&user_id=eq.${encodeURIComponent(userId)}&limit=1`,
+    );
+    const app = Array.isArray(appRes.data) ? appRes.data[0] : null;
+    if (app?.id) {
+      await servicePatch(
+        "singer_applications",
+        `id=eq.${encodeURIComponent(app.id)}`,
+        { status: "rejected", admin_notes: adminNotes, reviewed_at: now },
+      );
+    }
+
+    return sendJson(res, 200, { ok: true, removed: true });
   }
 
   if (action === "update_request") {

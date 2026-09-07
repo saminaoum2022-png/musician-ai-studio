@@ -2723,6 +2723,20 @@ tr.singerRowClickable.isNew td {
   font-size: 0.72rem;
 }
 
+.singerRosterActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.btnGhost.btnGhost--danger {
+  color: var(--danger);
+}
+
+.btnGhost.btnGhost--danger:hover {
+  background: rgba(255, 107, 122, 0.1);
+}
+
 .tableWrap--plain td.singerRowActions {
   cursor: default;
 }

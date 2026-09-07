@@ -3394,7 +3394,9 @@ function renderSingers(data) {
 
   const rosterBody = roster.length
     ? roster.map((s) => {
-      const toggleBtn = `<button type="button" class="btnGhost" data-singer-toggle="${escapeHtml(s.userId)}" data-singer-active="${s.active ? "1" : "0"}">${s.active ? "Deactivate" : "Activate"}</button>`;
+      const singerLabel = escapeHtml(s.displayName || s.userLabel || "this singer");
+      const toggleBtn = `<button type="button" class="btnGhost singerRosterBtn" data-singer-toggle="${escapeHtml(s.userId)}" data-singer-active="${s.active ? "1" : "0"}">${s.active ? "Deactivate" : "Activate"}</button>`;
+      const removeBtn = `<button type="button" class="btnGhost btnGhost--danger singerRosterBtn" data-singer-remove="${escapeHtml(s.userId)}" data-singer-label="${singerLabel}">Remove</button>`;
       return `
       <tr>
         <td>${escapeHtml(s.userLabel || "—")}</td>
@@ -3402,7 +3404,7 @@ function renderSingers(data) {
         <td>@${escapeHtml(s.instagram || "—")}</td>
         <td>${s.active ? `<span class="badge active">active</span>` : `<span class="badge exhausted">inactive</span>`}</td>
         ${dateCell(s.approvedAt)}
-        <td>${toggleBtn}</td>
+        <td class="singerRosterActions">${toggleBtn}${removeBtn}</td>
       </tr>`;
     }).join("")
     : `<tr><td colspan="6" class="loading">No approved singers yet.</td></tr>`;
@@ -3486,7 +3488,7 @@ function renderSingers(data) {
     <div class="tableWrap tableWrap--plain">
       <table class="table--compact">
         <thead>
-          <tr><th>User</th><th>Stage name</th><th>Instagram</th><th>Status</th><th>Approved</th><th></th></tr>
+          <tr><th>User</th><th>Stage name</th><th>Instagram</th><th>Status</th><th>Approved</th><th>Actions</th></tr>
         </thead>
         <tbody>${rosterBody}</tbody>
       </table>
@@ -7840,19 +7842,50 @@ document.body.addEventListener("click", (e) => {
 
   const singerToggleBtn = e.target.closest("[data-singer-toggle]");
   if (singerToggleBtn) {
+    e.preventDefault();
+    e.stopPropagation();
     const userId = singerToggleBtn.dataset.singerToggle;
     const currentlyActive = singerToggleBtn.dataset.singerActive === "1";
     if (!userId) return;
     void (async () => {
       singerToggleBtn.disabled = true;
       try {
-        await adminSingersRequest({ action: "toggle_singer", userId, active: !currentlyActive });
+        await adminSingersRequest({
+          action: "toggle_singer",
+          userId,
+          active: !currentlyActive,
+        });
         if (state.view === "singers") await loadView({ force: true });
         showError("");
       } catch (err) {
         showError(err?.message || "Could not update singer");
       } finally {
         singerToggleBtn.disabled = false;
+      }
+    })();
+    return;
+  }
+
+  const singerRemoveBtn = e.target.closest("[data-singer-remove]");
+  if (singerRemoveBtn) {
+    e.preventDefault();
+    e.stopPropagation();
+    const userId = singerRemoveBtn.dataset.singerRemove;
+    const label = singerRemoveBtn.dataset.singerLabel || "this singer";
+    if (!userId) return;
+    if (!window.confirm(`Remove ${label} from the pro singer roster? They will disappear from the app and their application will be marked rejected.`)) {
+      return;
+    }
+    void (async () => {
+      singerRemoveBtn.disabled = true;
+      try {
+        await adminSingersRequest({ action: "remove_singer", userId });
+        if (state.view === "singers") await loadView({ force: true });
+        showError("");
+      } catch (err) {
+        showError(err?.message || "Could not remove singer");
+      } finally {
+        singerRemoveBtn.disabled = false;
       }
     })();
     return;

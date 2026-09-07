@@ -5691,26 +5691,22 @@ function invalidateLyricsSingabilityOnEdit() {
   syncLyricsSingabilityCheckVisibility();
 }
 
-async function runLyricsSingabilityCheck() {
-  const text = String(els.sunoPrompt?.value || "").trim();
-  if (!lyricsSingabilityEligible(text)) {
-    showToast("Add a few lines of lyrics first, then check singability.", { icon: "!", durationMs: 3200 });
-    return;
+async function fetchLyricsSingabilityReport(text, { updateUi = true, reqId = null } = {}) {
+  const seed = String(text || "").trim();
+  if (!seed) return null;
+
+  if (updateUi) {
+    lyricsSingabilityLastText = seed;
+    setSingabilityCheckBtnBusy(true);
+    lastSingabilityReport = {
+      score: null,
+      summary: "",
+      warnings: [],
+      source: "loading",
+      checking: true,
+    };
+    renderLyricsSingabilityPanel(lastSingabilityReport);
   }
-
-  lyricsSingabilityLastText = text;
-  const reqId = ++lyricsSingabilityRequestSeq;
-  lyricsSingabilityApiPending = true;
-  setSingabilityCheckBtnBusy(true);
-
-  lastSingabilityReport = {
-    score: null,
-    summary: "",
-    warnings: [],
-    source: "loading",
-    checking: true,
-  };
-  renderLyricsSingabilityPanel(lastSingabilityReport);
 
   try {
     try { applyLyricsLanguageToDialect(); } catch {}
@@ -5729,7 +5725,7 @@ async function runLyricsSingabilityCheck() {
         ...(getSupabaseAuthToken() ? { Authorization: `Bearer ${getSupabaseAuthToken()}` } : {}),
       },
       body: JSON.stringify({
-        seed: text,
+        seed,
         style,
         mode: "singability_check",
         dialect,
@@ -5739,16 +5735,19 @@ async function runLyricsSingabilityCheck() {
       }),
     });
     const data = await r.json().catch(() => ({}));
-    if (reqId !== lyricsSingabilityRequestSeq) return;
+    if (reqId != null && reqId !== lyricsSingabilityRequestSeq) return null;
     if (!r.ok || !data?.singability) {
       throw new Error(data?.error || "Could not check singability");
     }
-    lastSingabilityReport = normalizeSingabilityReport(data.singability, text);
-    renderLyricsSingabilityPanel(lastSingabilityReport);
+    const report = normalizeSingabilityReport(data.singability, seed);
+    lyricsSingabilityLastText = seed;
+    lastSingabilityReport = report;
+    if (updateUi) renderLyricsSingabilityPanel(report);
+    return report;
   } catch (e) {
-    if (reqId !== lyricsSingabilityRequestSeq) return;
-    const local = computeLocalSingability(text);
-    lastSingabilityReport = {
+    if (reqId != null && reqId !== lyricsSingabilityRequestSeq) return null;
+    const local = computeLocalSingability(seed);
+    const report = {
       ...local,
       summary: String(e?.message || "Couldn't check singability — try again.").slice(0, 200),
       warnings: [{
@@ -5758,29 +5757,146 @@ async function runLyricsSingabilityCheck() {
         message: "AI check failed — tap Check singability to retry.",
       }],
       source: "error",
+      ready: false,
     };
-    renderLyricsSingabilityPanel(lastSingabilityReport);
+    lastSingabilityReport = report;
+    if (updateUi) renderLyricsSingabilityPanel(report);
+    return report;
   } finally {
-    if (reqId === lyricsSingabilityRequestSeq) {
+    if (updateUi && (reqId == null || reqId === lyricsSingabilityRequestSeq)) {
       lyricsSingabilityApiPending = false;
       setSingabilityCheckBtnBusy(false);
     }
   }
 }
 
-async function confirmSingabilityBeforeGenerate() {
+async function runLyricsSingabilityCheck() {
+  const text = String(els.sunoPrompt?.value || "").trim();
+  if (!lyricsSingabilityEligible(text)) {
+    showToast("Add a few lines of lyrics first, then check singability.", { icon: "!", durationMs: 3200 });
+    return;
+  }
+
+  const reqId = ++lyricsSingabilityRequestSeq;
+  lyricsSingabilityApiPending = true;
+  await fetchLyricsSingabilityReport(text, { updateUi: true, reqId });
+}
+
+function singabilityReportIsFresh(text) {
+  const t = String(text || "").trim();
+  return Boolean(
+    t
+    && t === lyricsSingabilityLastText
+    && lastSingabilityReport
+    && !lastSingabilityReport.checking
+    && (lastSingabilityReport.source === "api" || lastSingabilityReport.source === "error"),
+  );
+}
+
+function isSingabilityReadyForGenerate(report) {
+  if (!report || report.checking) return false;
+  const warnings = Array.isArray(report.warnings) ? report.warnings : [];
+  const high = warnings.filter((w) => w.level === "high").length;
+  const medium = warnings.filter((w) => w.level === "medium").length;
+  if (high > 0) return false;
+  if (report.source === "error") return false;
+  if (typeof report.ready === "boolean" && report.ready) return true;
+  const score = Number(report.score);
+  if (Number.isFinite(score) && score >= 75 && high === 0 && medium <= 1) return true;
+  return false;
+}
+
+async function applyFixLyricsForSingingInternal(text) {
+  const seed = String(text || "").trim();
+  if (!seed) throw new Error("No lyrics to fix");
+  try { applyLyricsLanguageToDialect(); } catch {}
+  const style = String(els.sunoStyle?.value || "").trim();
+  const dialect = String(els.sunoDialect?.value || "").trim();
+  const dialectHint = String(els.sunoDialectHint?.value || "").trim();
+  const addressNote = arabicAddressPronunciationNote(
+    els.sunoArabicAddress?.value,
+    resolveSingerGenderForGeneration({ hasReference: Boolean(getVocalReferenceFile()) }),
+  );
+  const lyricDialectHint = [dialectHint, addressNote].filter(Boolean).join(" ");
+  const r = await fetch(apiUrl("/api/lyrics"), {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...(getSupabaseAuthToken() ? { Authorization: `Bearer ${getSupabaseAuthToken()}` } : {}),
+    },
+    body: JSON.stringify({
+      seed,
+      style,
+      mode: "fix_singing",
+      dialect,
+      dialectHint: lyricDialectHint,
+      lyricsProvider: "gemini",
+      scriptFormat: resolveLyricsScriptFormat(),
+    }),
+  });
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(data?.error || "Could not fix lyrics for singing");
+  const nextLyrics = String(data?.lyrics || "").trim();
+  if (!nextLyrics) throw new Error("No lyrics returned");
+  if (els.sunoPrompt) els.sunoPrompt.value = nextLyrics;
+  try { autoResizeLyricsBox(); } catch {}
+  try { syncArabicLyricsControlsVisibility(); } catch {}
+  snapshotNabadAiLyricsDraft(nextLyrics);
+  lyricsSingabilityLastText = "";
+  lastSingabilityReport = null;
+  return nextLyrics;
+}
+
+function blockGenerateForSingability(report) {
+  renderLyricsSingabilityPanel(report || lastSingabilityReport);
+  const warnings = Array.isArray(report?.warnings) ? report.warnings : [];
+  const top = warnings
+    .filter((w) => w.level === "high" || w.level === "medium")
+    .slice(0, 3)
+    .map((w) => w.message);
+  const scoreNote = Number.isFinite(Number(report?.score)) ? ` (${report.score}/100)` : "";
+  const msg = top.length
+    ? top.join(" · ")
+    : String(report?.summary || "Lyrics need rhyme and line-balance fixes first.");
+  showToast(`Not ready to generate${scoreNote} — ${msg}`.slice(0, 220), { icon: "!", durationMs: 5200 });
+  setStatus("Review singability below — fix issues, then Generate again.");
+  try {
+    els.lyricsSingabilityPanel?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  } catch {}
+}
+
+async function ensureSingabilityBeforeGenerate() {
   const instrumentalOnly = String(els.vocalInstrumentalOnly?.value || "0") === "1";
   if (instrumentalOnly) return true;
   const text = String(els.sunoPrompt?.value || "").trim();
   if (!lyricsSingabilityEligible(text)) return true;
-  const report = lastSingabilityReport || computeLocalSingability(text);
-  const warnings = Array.isArray(report?.warnings) ? report.warnings : [];
-  const high = warnings.filter((w) => w.level === "high");
-  if (!high.length) return true;
-  const summary = high.slice(0, 2).map((w) => `• ${w.message}`).join("\n");
-  return window.confirm(
-    `Lyrics may be hard for the AI singer (${high.length} issue${high.length > 1 ? "s" : ""}).\n\n${summary}\n\nGenerate anyway?\n\nTip: tap Check singability first.`,
-  );
+
+  if (!arabicLyricChoicesReady()) return true;
+
+  let report = singabilityReportIsFresh(text)
+    ? lastSingabilityReport
+    : await fetchLyricsSingabilityReport(text, { updateUi: true });
+
+  if (isSingabilityReadyForGenerate(report)) return true;
+
+  setStatus("Tuning lyrics for singing (rhyme, wazen, line balance)…");
+  showToast("Fixing lyrics for singing before generate…", { icon: "♫", durationMs: 4200 });
+  try {
+    const fixedText = await applyFixLyricsForSingingInternal(text);
+    report = await fetchLyricsSingabilityReport(fixedText, { updateUi: true });
+    if (isSingabilityReadyForGenerate(report)) {
+      showToast("Lyrics tuned — ready to generate.", { icon: "♫", durationMs: 3200 });
+      return true;
+    }
+  } catch (e) {
+    report = lastSingabilityReport || report;
+    if (!report || report.source === "loading") {
+      report = await fetchLyricsSingabilityReport(text, { updateUi: true });
+    }
+  }
+
+  blockGenerateForSingability(report);
+  return false;
 }
 
 /** True when Arabic flow is active and dialect + address are both chosen. */
@@ -63630,7 +63746,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
         setStatus(reason);
         return;
       }
-      if (!(await confirmSingabilityBeforeGenerate())) return;
+      if (!(await ensureSingabilityBeforeGenerate())) return;
       const clipPromptText = String(els.sunoPrompt?.value || "").trim();
       const clipAllowImageOnly = Boolean(imageMoodAppliedForNextGen);
       if (resolveVocalReferenceForSubmit()) {
@@ -63873,7 +63989,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       setStatus(reason);
       return;
     }
-    if (!(await confirmSingabilityBeforeGenerate())) return;
+    if (!(await ensureSingabilityBeforeGenerate())) return;
     const promptText = String(els.sunoPrompt?.value || "").trim();
     const vocalRefFile = resolveVocalReferenceForSubmit();
     const hasUploadedReference = Boolean(vocalRefFile);

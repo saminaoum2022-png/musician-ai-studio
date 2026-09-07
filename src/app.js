@@ -63508,6 +63508,8 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
         customMode: true,
         instrumental: shouldGenerateInstrumental,
         model: modelForRequest,
+        ...(dialect ? { dialect: String(dialect) } : {}),
+        ...(lyricDialectHint ? { dialectHint: String(lyricDialectHint) } : {}),
         ...(imageMoodAppliedForNextGen ? { watchKind: "photo" } : {}),
         ...(photoImageForLyria ? { photoImage: photoImageForLyria } : {}),
         personaId: personaIdSel || undefined,

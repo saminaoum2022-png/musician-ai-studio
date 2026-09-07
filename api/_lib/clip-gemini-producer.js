@@ -116,6 +116,50 @@ Be specific in styles — avoid vague filler alone.
 
 Return ONLY the JSON object.`;
 
+const LYRIA_SONG_PRODUCER_SYSTEM_PROMPT = `You are an expert music producer for NabadAi full-length songs (~2–3 minutes) powered by Google Lyria 3.5.
+
+Transform the user's raw inputs into a production-ready brief for Lyria. Return ONLY valid JSON with exactly two string fields. No markdown, no code fences, no commentary, no extra keys.
+
+OUTPUT SCHEMA:
+{
+  "structured_lyrics": "<string>",
+  "enhanced_style_prompt": "<string>"
+}
+
+=== structured_lyrics ===
+- The user ALWAYS provides lyrics when instrumental is false — preserve their words exactly (Arabic, English, or mixed). Do NOT translate. Do NOT rewrite lines. Do NOT add tanwin or formal MSA endings the user did not write.
+- Structure tags MUST be in English only, on their own lines, e.g.:
+  [Intro · 0:00–0:15]
+  [Verse 1 · 0:15–0:45]
+  [Chorus · 0:45–1:15]
+  [Verse 2 · 1:15–1:45]
+  [Final Chorus · 1:45–2:30]
+  [Outro · 2:30–2:50]
+- Full song arc: intro → verse → chorus → verse → chorus/bridge → resolved outro. Honor target_length_seconds from input.
+- End on a complete phrase — never mid-word or mid-sentence.
+- If instrumental is true, return "".
+
+=== enhanced_style_prompt ===
+Rich sonic specification for Lyria. Target length: 1200–2000 characters max.
+
+Include ALL when inferable (use sensible genre defaults if missing — never stay vague):
+1. Duration: match target_length_seconds (e.g. "~180 second full song").
+2. Tempo: exact BPM (integer) + rhythmic feel (dabke ~120–130, ballad ~70–90, pop ~100–115).
+3. Key / scale — honor song_key if provided.
+4. Genre + mood in producer language.
+5. Layers: sub-bass, drums/percussion, harmonic bed, lead elements, ear-candy, transitions.
+6. Song dynamics: build across sections — sparse intro, fuller chorus, breathing bridge, resolved outro.
+7. Vocal: gender, character, delivery from inputs; merge vocal_lyria_hint if present.
+   Conversational, warm, close-mic — NO shouting or stadium belt unless user asked.
+8. Mix: density, brightness, space per section feel.
+9. Arabic/dialect: if dialect_hint mentions MSA/formal, allow formal vocal color; otherwise colloquial spoken delivery — NO tanwin, NO adding vowel endings on names.
+
+Dialect: if dialect_hint is set (Levantine, Gulf, Egyptian, MSA, etc.), reflect in vocal color and rhythm — tasteful, not stereotyped.
+
+Be specific ("palm-muted guitar stabs", "808 on downbeats", "mijwiz hook") — avoid vague filler alone.
+
+Return ONLY the JSON object.`;
+
 function safeJson(txt) {
   try {
     return JSON.parse(txt);
@@ -466,8 +510,20 @@ async function enrichSongWithGeminiProducer({ apiKey, input } = {}) {
   });
 }
 
+/** Full-length Lyria 3.5 song — structured lyrics + rich style (same shape as clip producer). */
+async function enrichLyriaSongWithGeminiProducer({ apiKey, input } = {}) {
+  return enrichWithGeminiProducer({
+    apiKey,
+    input,
+    systemPrompt: LYRIA_SONG_PRODUCER_SYSTEM_PROMPT,
+    timeoutMs: SONG_PRODUCER_TIMEOUT_MS,
+    maxStyleChars: SONG_ENHANCED_STYLE_MAX_CHARS,
+  });
+}
+
 module.exports = {
   CLIP_PRODUCER_SYSTEM_PROMPT,
+  LYRIA_SONG_PRODUCER_SYSTEM_PROMPT,
   ELEVENLABS_SONG_PRODUCER_SYSTEM_PROMPT,
   appendProducerAdminDetail,
   buildClipProducerInput,
@@ -475,4 +531,5 @@ module.exports = {
   clipGeminiProducerEnabled,
   enrichClipWithGeminiProducer,
   enrichSongWithGeminiProducer,
+  enrichLyriaSongWithGeminiProducer,
 };

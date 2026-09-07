@@ -10652,6 +10652,80 @@ html[data-theme="light"] .personaVoiceTuneChips .optChip.isActive{
   padding:0 2px;
 }
 
+.lyricsSingabilityPanel{
+  margin-top:10px;
+  padding:12px 14px;
+  border-radius:12px;
+  border:1px solid rgba(255,255,255,0.08);
+  background:rgba(255,255,255,0.03);
+}
+.lyricsSingabilityPanel.isReady{
+  border-color:rgba(52,211,153,0.28);
+  background:rgba(52,211,153,0.06);
+}
+.lyricsSingabilityPanel.isWarn{
+  border-color:rgba(245,158,11,0.32);
+  background:rgba(245,158,11,0.07);
+}
+.lyricsSingabilityPanel.isBad{
+  border-color:rgba(255,107,122,0.32);
+  background:rgba(255,107,122,0.07);
+}
+.lyricsSingabilityHead{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+  margin-bottom:6px;
+}
+.lyricsSingabilityTitle{
+  font-size:0.78rem;
+  font-weight:700;
+  text-transform:uppercase;
+  letter-spacing:0.04em;
+  color:var(--muted);
+}
+.lyricsSingabilityScore{
+  font-size:0.82rem;
+  font-weight:700;
+  color:#eef4ff;
+}
+.lyricsSingabilitySummary{
+  margin:0 0 8px;
+  font-size:0.84rem;
+  color:rgba(238,244,255,0.88);
+  line-height:1.45;
+}
+.lyricsSingabilityList{
+  margin:0;
+  padding:0;
+  list-style:none;
+  display:grid;
+  gap:6px;
+}
+.lyricsSingabilityList li{
+  font-size:0.8rem;
+  line-height:1.4;
+  padding:8px 10px;
+  border-radius:8px;
+  background:rgba(0,0,0,0.18);
+}
+.lyricsSingabilityList li.isHigh{
+  border-left:3px solid #ff6b7a;
+}
+.lyricsSingabilityList li.isMedium{
+  border-left:3px solid #f59e0b;
+}
+.lyricsSingabilityList li.isLow{
+  border-left:3px solid rgba(148,163,184,0.8);
+}
+.lyricsSingabilityList .singabilityMeta{
+  display:block;
+  font-size:0.72rem;
+  color:var(--muted);
+  margin-bottom:2px;
+}
+
 /* ── Lyrics input mode: Write vs Generate (UI state only) ─────────────
    A lightweight segmented control so users discover AI generation
    without it hiding behind a tiny icon. Switching only changes the

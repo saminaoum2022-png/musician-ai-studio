@@ -1,6 +1,6 @@
 /**
  * POST /api/lyrics
- * Body: { seed?: string, style?: string, mode?: "continue"|"full"|"arrange"|"challenge"|"remix_reply"|"diacritics"|"enhance", sourceLyrics?: string, sourceTitle?: string, sourceCreator?: string, lyricsProvider?: "gemini"|"suno" }
+ * Body: { seed?: string, style?: string, mode?: "continue"|"full"|"arrange"|"challenge"|"remix_reply"|"diacritics"|"enhance"|"fix_singing"|"singability_check", sourceLyrics?: string, sourceTitle?: string, sourceCreator?: string, lyricsProvider?: "gemini"|"suno" }
  *
  * Provider: Gemini by default (GEMINI_API_KEY; rhyme/qafiya in buildPrompt).
  * Suno only when lyricsProvider is explicitly "suno" (costs Suno credits).
@@ -27,7 +27,9 @@ module.exports = async function handler(req, res) {
       lyricsProvider === "suno"
       && requestedMode !== "remix_reply"
       && requestedMode !== "diacritics"
-      && requestedMode !== "enhance";
+      && requestedMode !== "enhance"
+      && requestedMode !== "fix_singing"
+      && requestedMode !== "singability_check";
     if (requestedMode === "diacritics" && !seed) {
       return json(res, 400, {
         error: "Add vowel marks needs existing Arabic lyrics in the box.",
@@ -40,6 +42,13 @@ module.exports = async function handler(req, res) {
         error: "Polish lyrics needs existing lyrics in the box.",
         provider: "none",
         debug: { mode: "enhance", seed: "missing" },
+      });
+    }
+    if ((requestedMode === "fix_singing" || requestedMode === "singability_check") && !seed) {
+      return json(res, 400, {
+        error: "Add lyrics first, then check or fix singability.",
+        provider: "none",
+        debug: { mode: requestedMode, seed: "missing" },
       });
     }
     if (requestedMode === "remix_reply" && !sourceLyrics) {
@@ -55,7 +64,11 @@ module.exports = async function handler(req, res) {
         ? "diacritics"
         : requestedMode === "enhance"
           ? "enhance"
-          : detectModeFromSeed(seed, body?.mode);
+          : requestedMode === "fix_singing"
+            ? "fix_singing"
+            : requestedMode === "singability_check"
+              ? "singability_check"
+              : detectModeFromSeed(seed, body?.mode);
     const nonce = Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 8);
     const prompt = buildPrompt({ seed, style, mode, nonce, dialect, dialectHint, sourceLyrics, sourceTitle, sourceCreator });
     const sunoPrompt = buildSunoPrompt({ seed, style, mode, dialect, dialectHint });
@@ -64,7 +77,7 @@ module.exports = async function handler(req, res) {
         ...extractComplianceTerms({ seed: sourceLyrics, style }),
         ...extractComplianceTerms({ seed, style }),
       ])]
-      : mode === "diacritics" || mode === "enhance"
+      : mode === "diacritics" || mode === "enhance" || mode === "fix_singing" || mode === "singability_check"
         ? []
         : extractComplianceTerms({ seed, style });
     const geminiTemperature = mode === "remix_reply"
@@ -73,7 +86,11 @@ module.exports = async function handler(req, res) {
         ? 0.35
         : mode === "enhance"
           ? 0.58
-          : 0.9;
+          : mode === "fix_singing"
+            ? 0.52
+            : mode === "singability_check"
+              ? 0.25
+              : 0.9;
     const sunoKey = process.env.SUNO_API_KEY || "";
 
     const debug = {};
@@ -88,6 +105,23 @@ module.exports = async function handler(req, res) {
       }
       const gemResult = await tryGeminiLyrics({ geminiKey, prompt, temperature: geminiTemperature });
       if (gemResult?.ok) {
+        if (mode === "singability_check") {
+          const report = parseSingabilityReport(gemResult.lyrics);
+          if (!report) {
+            return json(res, 502, {
+              error: "Could not read singability check — try again.",
+              provider: "none",
+              debug: { nonce, gemini: "bad_json", mode },
+            });
+          }
+          queueLogProviderUsage({ provider: "gemini", kind: "lyrics" });
+          return json(res, 200, {
+            ok: true,
+            singability: report,
+            provider: "gemini",
+            debug: { nonce, gemini: "ok", mode },
+          });
+        }
         let normalized = sanitizeLyricsOutput(gemResult.lyrics);
         if (mode === "diacritics") {
           normalized = lightenSungArabicDiacritics(normalized, { isMsa: isMsaDialect(dialect) });
@@ -96,7 +130,7 @@ module.exports = async function handler(req, res) {
           const fixed = await repairMetaAiLyrics({ geminiKey, prompt, text: normalized, temperature: geminiTemperature });
           if (fixed) normalized = fixed;
         }
-        const repaired = mode === "enhance" || mode === "diacritics"
+        const repaired = mode === "enhance" || mode === "diacritics" || mode === "fix_singing"
           ? { text: normalized, provider: "gemini" }
           : await maybeRepairOnce({
             text: normalized,
@@ -356,6 +390,51 @@ const POP_RHYME_METER_LINES_CONTINUE = [
   "- New lines should rhyme with the established scheme in each section.",
 ];
 
+const FIX_SINGING_LINES = [
+  "Fix these lyrics for AI singing — prioritize singability (wazen/وزن, qafiya/قافية, balanced lines).",
+  "- Keep the SAME story, meaning, names, and dialect. Do NOT rewrite from scratch.",
+  "- Balance line length within each section (similar syllable count / مقاطع per line).",
+  "- Fix end-rhyme on paired lines; chorus should rhyme strongly (AABB or repeating hook).",
+  "- Adjust word choice, line breaks, or endings only as needed — keep natural colloquial speech.",
+  "- For Arabic: think pop-song feet/stress (أوف), not classical عروض exam.",
+  "- Keep all section tags [Verse] [Chorus] etc.",
+  "- Do NOT add heavy tashkeel — vowel marks are a separate step.",
+  "- Output lyrics only with section tags. No explanations.",
+];
+
+function parseSingabilityReport(text) {
+  const raw = String(text || "").trim();
+  if (!raw) return null;
+  const fenced = raw.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  const candidate = fenced ? fenced[1].trim() : raw;
+  let data = null;
+  try { data = JSON.parse(candidate); } catch { data = null; }
+  if (!data || typeof data !== "object") return null;
+  const warnings = Array.isArray(data.warnings)
+    ? data.warnings
+      .map((w) => ({
+        level: ["high", "medium", "low"].includes(String(w?.level || "").toLowerCase())
+          ? String(w.level).toLowerCase()
+          : "medium",
+        section: String(w?.section || "Lyrics").trim() || "Lyrics",
+        line: Number(w?.line) > 0 ? Number(w.line) : null,
+        message: String(w?.message || "").trim(),
+      }))
+      .filter((w) => w.message)
+    : [];
+  const scoreRaw = Number(data.score);
+  const score = Number.isFinite(scoreRaw) ? Math.max(0, Math.min(100, Math.round(scoreRaw))) : null;
+  const ready = typeof data.ready === "boolean" ? data.ready : null;
+  const summary = String(data.summary || "").trim();
+  if (!summary && !warnings.length && score == null) return null;
+  return {
+    score,
+    ready: ready ?? (score != null ? score >= 75 && !warnings.some((w) => w.level === "high") : null),
+    summary: summary || (warnings.length ? "Review singability warnings before generating." : "Looks singable."),
+    warnings,
+  };
+}
+
 const REMIX_REPLY_GUARDRAILS = [
   "STRICT — you are writing lyrics for a HUMAN singer (Person B) answering another HUMAN singer (Person A).",
   "NEVER mention AI, artificial intelligence, systems, algorithms, data, chatbots, robots, or software.",
@@ -472,6 +551,34 @@ function buildPrompt({ seed, style, mode, nonce, dialect, dialectHint, sourceLyr
       style ? `Style/Tags (context only): ${style}` : "",
       "",
       "Lyrics to polish:",
+      seed,
+    ].filter(Boolean).join("\n");
+  }
+  if (mode === "fix_singing") {
+    return [
+      ...FIX_SINGING_LINES,
+      `Variation token: ${nonce}`,
+      ...(dialectLines ? [dialectLines] : []),
+      style ? `Style/Tags (context only): ${style}` : "",
+      "",
+      "Lyrics to fix for singing:",
+      seed,
+    ].filter(Boolean).join("\n");
+  }
+  if (mode === "singability_check") {
+    return [
+      "You are a lyrics coach for AI music singing (Suno/Lyria). Analyze singability only — do NOT rewrite lyrics.",
+      "Focus on: line length balance (wazen/وزن), end-rhyme (qafiya/قافية), chorus hook fit, lines that are too long or uneven.",
+      "For Arabic lyrics, comment on colloquial singability — uneven مقاطع make the AI singer stumble.",
+      "Return ONLY valid JSON (no markdown) with this shape:",
+      '{"score":0-100,"ready":true|false,"summary":"one sentence","warnings":[{"level":"high|medium|low","section":"Chorus","line":2,"message":"..."}]}',
+      "- score: 100 = very singable for AI vocals; below 60 = likely problems.",
+      "- ready: true only if safe to generate without edits.",
+      "- warnings: 0-8 specific issues; line is 1-based within that section.",
+      ...(dialectLines ? [dialectLines] : []),
+      style ? `Style/Tags (context only): ${style}` : "",
+      "",
+      "Lyrics to analyze:",
       seed,
     ].filter(Boolean).join("\n");
   }

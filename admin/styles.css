@@ -2711,6 +2711,18 @@ tr.singerRowClickable.isNew td {
   font-size: 0.72rem;
 }
 
+.singerOpenBtn {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 0.72rem;
+}
+
+.singerRowId {
+  display: block;
+  color: var(--muted);
+  font-size: 0.72rem;
+}
+
 .tableWrap--plain td.singerRowActions {
   cursor: default;
 }

@@ -38,6 +38,7 @@ const {
   resolveLyriaPhotoImages,
   mergeLyriaDialectHint,
   resolveLyriaDialectLabel,
+  buildLyriaDirectStylePrompt,
   buildLyriaArabicPronunciationLine,
   resolveLyriaArabicPronunciationMode,
 } = require("../_lib/lyria-upstream");
@@ -357,12 +358,14 @@ function buildLyriaFullSongDirectAdminExtra({ body, stylePrompt = "", lyrics = "
     resolveLyriaArabicPronunciationMode({ dialectHint: dialectHintLine, lyrics }),
     dialectHintLine,
   );
+  const rawStyle = String(body?.style || "").trim();
   return [
     "pipeline: direct (no Gemini)",
     "gemini_producer: skipped",
     ...(dialectLabel ? [`dialect: ${dialectLabel}`] : []),
     ...(dialectHintLine ? [`dialect_hint: ${dialectHintLine.slice(0, 400)}`] : []),
     ...(pronunciationNote ? [`pronunciation_note: ${pronunciationNote.slice(0, 300)}`] : []),
+    ...(rawStyle ? [`style_raw: ${rawStyle.slice(0, 400)}`] : []),
     ...(stylePrompt ? [`style_prompt: ${String(stylePrompt).slice(0, 600)}`] : []),
     ...(lyrics ? [`user_lyrics: ${String(lyrics).slice(0, 400)}`] : []),
   ];

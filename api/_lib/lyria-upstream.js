@@ -128,6 +128,41 @@ function sanitizeStyleForLyria(style) {
   return parts.filter((p) => !drop(p)).join(", ").replace(/\s+/g, " ").trim();
 }
 
+/** Suno-style meta clauses in body.style — Lyria may sing these if left in the prompt. */
+function isLyriaInternalStyleClause(part) {
+  const p = String(part || "").trim();
+  if (!p) return true;
+  if (/^dialect\s*:/i.test(p)) return true;
+  if (/^hint\s*:/i.test(p)) return true;
+  if (/^arabic address\s*:/i.test(p)) return true;
+  if (/^timing lock\s*:/i.test(p)) return true;
+  if (/^cover art\s*:/i.test(p)) return true;
+  if (/^voice timbre\s*:/i.test(p)) return true;
+  if (/\blead vocalist\b/i.test(p)) return true;
+  if (/\barabic vocal\b/i.test(p)) return true;
+  if (/\bcolloquial pronunciation\b/i.test(p)) return true;
+  if (/\bfollow-prompt behavior\b/i.test(p)) return true;
+  if (/\bkeep this timing stable\b/i.test(p)) return true;
+  if (/\baddressee words\b/i.test(p)) return true;
+  if (/\bmelody lock\b/i.test(p)) return true;
+  if (/\bgroove\b/i.test(p) && /\bpace\b/i.test(p)) return true;
+  if (/\bprosody\b/i.test(p)) return true;
+  if (/\bbeat stability\b/i.test(p)) return true;
+  return false;
+}
+
+/** User-facing genre/style only — dialect/vocal/address travel via dialectHint fields. */
+function buildLyriaDirectStylePrompt(body = {}) {
+  const raw = String(body?.style || "").trim();
+  const songKey = String(body?.songKey || "").trim();
+  const chunks = raw.split(/[|,]/).map((s) => s.trim()).filter(Boolean);
+  const musical = chunks.filter((c) => !isLyriaInternalStyleClause(c));
+  const style = sanitizeStyleForLyria(musical.join(", ") || chunks[0] || raw);
+  const bits = [style];
+  if (songKey) bits.push(`Key: ${songKey}`);
+  return bits.filter(Boolean).join(", ").slice(0, 1200);
+}
+
 function extractDialectFromStyleText(style = "") {
   const s = String(style || "");
   const parts = [];
@@ -773,6 +808,7 @@ module.exports = {
   resolveLyriaDialectLabel,
   resolveLyriaArabicPronunciationMode,
   buildLyriaArabicPronunciationLine,
+  buildLyriaDirectStylePrompt,
   sanitizeStyleForLyria,
   extractLyriaAlignedWords,
   extractLyriaAudio,

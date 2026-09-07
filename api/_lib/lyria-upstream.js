@@ -6,8 +6,8 @@ const GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta";
 const LYRIA_INTERACTIONS_URL = `${GEMINI_BASE}/interactions`;
 const LYRIA_PRO_MODEL = "lyria-3-pro-preview";
 const LYRIA_35_MODEL = "lyria-3.5";
-/** Default for full song + Nabad Producer — override with LYRIA_MUSIC_MODEL=lyria-3.5 */
-const LYRIA_FULL_MODEL = LYRIA_PRO_MODEL;
+/** Default for full song + Nabad Producer — override with LYRIA_MUSIC_MODEL=lyria-3-pro-preview */
+const LYRIA_FULL_MODEL = LYRIA_35_MODEL;
 
 function safeJson(txt) {
   try {
@@ -61,7 +61,8 @@ const TIMBRE_TO_LYRIA = {
 
 const LEGACY_LYRIA_MODEL_ALIASES = Object.freeze({
   pro: LYRIA_PRO_MODEL,
-  full: LYRIA_PRO_MODEL,
+  "lyria-3-pro-preview": LYRIA_PRO_MODEL,
+  full: LYRIA_35_MODEL,
   "lyria-3.5": LYRIA_35_MODEL,
   "3.5": LYRIA_35_MODEL,
 });

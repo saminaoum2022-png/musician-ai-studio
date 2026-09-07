@@ -1,11 +1,17 @@
 /**
  * POST /api/lyrics
- * Body: { seed?: string, style?: string, mode?: "continue"|"full"|"arrange"|"challenge"|"remix_reply"|"diacritics"|"enhance"|"fix_singing"|"singability_check", sourceLyrics?: string, sourceTitle?: string, sourceCreator?: string, lyricsProvider?: "gemini"|"suno" }
+ * Body: { seed?: string, style?: string, mode?: "continue"|"full"|"arrange"|"challenge"|"remix_reply"|"diacritics"|"enhance"|"fix_singing"|"singability_check"|"to_arabizi", sourceLyrics?: string, sourceTitle?: string, sourceCreator?: string, lyricsProvider?: "gemini"|"suno", scriptFormat?: "arabic"|"arabizi"|"auto" }
  *
  * Provider: Gemini by default (GEMINI_API_KEY; rhyme/qafiya in buildPrompt).
  * Suno only when lyricsProvider is explicitly "suno" (costs Suno credits).
  */
 const { queueLogProviderUsage } = require("./_lib/provider-usage-log");
+const {
+  looksLikeArabizi,
+  resolveScriptFormat,
+  buildArabiziPromptLines,
+  TO_ARABIZI_LINES,
+} = require("./_lib/arabizi");
 
 module.exports = async function handler(req, res) {
   setCors(res);
@@ -22,6 +28,7 @@ module.exports = async function handler(req, res) {
     const sourceTitle = String(body?.sourceTitle || "").trim().slice(0, 160);
     const sourceCreator = String(body?.sourceCreator || "").trim().slice(0, 80);
     const lyricsProvider = String(body?.lyricsProvider || body?.providerPreference || "").trim().toLowerCase();
+    const scriptFormat = resolveScriptFormat(body, seed);
     const requestedMode = String(body?.mode || "").trim().toLowerCase();
     const sunoLyricsRequested =
       lyricsProvider === "suno"
@@ -29,7 +36,8 @@ module.exports = async function handler(req, res) {
       && requestedMode !== "diacritics"
       && requestedMode !== "enhance"
       && requestedMode !== "fix_singing"
-      && requestedMode !== "singability_check";
+      && requestedMode !== "singability_check"
+      && requestedMode !== "to_arabizi";
     if (requestedMode === "diacritics" && !seed) {
       return json(res, 400, {
         error: "Add vowel marks needs existing Arabic lyrics in the box.",
@@ -51,6 +59,13 @@ module.exports = async function handler(req, res) {
         debug: { mode: requestedMode, seed: "missing" },
       });
     }
+    if (requestedMode === "to_arabizi" && !seed) {
+      return json(res, 400, {
+        error: "Add Arabic lyrics first, then convert to Arabizi.",
+        provider: "none",
+        debug: { mode: "to_arabizi", seed: "missing" },
+      });
+    }
     if (requestedMode === "remix_reply" && !sourceLyrics) {
       return json(res, 400, {
         error: "Remix reply needs the original song lyrics. Wait for them to load, then try again.",
@@ -68,16 +83,18 @@ module.exports = async function handler(req, res) {
             ? "fix_singing"
             : requestedMode === "singability_check"
               ? "singability_check"
+              : requestedMode === "to_arabizi"
+                ? "to_arabizi"
               : detectModeFromSeed(seed, body?.mode);
     const nonce = Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 8);
-    const prompt = buildPrompt({ seed, style, mode, nonce, dialect, dialectHint, sourceLyrics, sourceTitle, sourceCreator });
+    const prompt = buildPrompt({ seed, style, mode, nonce, dialect, dialectHint, sourceLyrics, sourceTitle, sourceCreator, scriptFormat });
     const sunoPrompt = buildSunoPrompt({ seed, style, mode, dialect, dialectHint });
     const complianceTerms = mode === "remix_reply"
       ? [...new Set([
         ...extractComplianceTerms({ seed: sourceLyrics, style }),
         ...extractComplianceTerms({ seed, style }),
       ])]
-      : mode === "diacritics" || mode === "enhance" || mode === "fix_singing" || mode === "singability_check"
+      : mode === "diacritics" || mode === "enhance" || mode === "fix_singing" || mode === "singability_check" || mode === "to_arabizi"
         ? []
         : extractComplianceTerms({ seed, style });
     const geminiTemperature = mode === "remix_reply"
@@ -130,7 +147,7 @@ module.exports = async function handler(req, res) {
           const fixed = await repairMetaAiLyrics({ geminiKey, prompt, text: normalized, temperature: geminiTemperature });
           if (fixed) normalized = fixed;
         }
-        const repaired = mode === "enhance" || mode === "diacritics" || mode === "fix_singing"
+        const repaired = mode === "enhance" || mode === "diacritics" || mode === "fix_singing" || mode === "to_arabizi"
           ? { text: normalized, provider: "gemini" }
           : await maybeRepairOnce({
             text: normalized,
@@ -451,13 +468,27 @@ const REMIX_REPLY_GUARDRAILS = [
   "Echo specific feelings, names, or images from the original song so the reply clearly connects.",
 ];
 
-function buildPrompt({ seed, style, mode, nonce, dialect, dialectHint, sourceLyrics, sourceTitle, sourceCreator }) {
+function buildPrompt({ seed, style, mode, nonce, dialect, dialectHint, sourceLyrics, sourceTitle, sourceCreator, scriptFormat = "latin" }) {
   const dialectLines = [
     dialect ? `Target dialect/accent: ${dialect}` : "",
     dialectHint ? `Dialect hint line (follow this flavor): ${dialectHint}` : "",
   ]
     .filter(Boolean)
     .join("\n");
+  const useArabizi = scriptFormat === "arabizi" || (scriptFormat !== "arabic" && looksLikeArabizi(seed));
+  const arabiziLines = useArabizi ? buildArabiziPromptLines({ dialect, dialectHint }) : [];
+  const scriptLines = useArabizi ? arabiziLines : [];
+  if (mode === "to_arabizi") {
+    return [
+      ...TO_ARABIZI_LINES,
+      ...buildArabiziPromptLines({ dialect, dialectHint }),
+      ...(dialectLines ? [dialectLines] : []),
+      style ? `Style/Tags (context only): ${style}` : "",
+      "",
+      "Lyrics to convert:",
+      seed,
+    ].filter(Boolean).join("\n");
+  }
   if (mode === "diacritics") {
     const dialectRaw = String(dialect || "").trim();
     const dialectLower = dialectRaw.toLowerCase();
@@ -552,7 +583,7 @@ function buildPrompt({ seed, style, mode, nonce, dialect, dialectHint, sourceLyr
       "Preserve colloquial/dialect words — do NOT upgrade to formal MSA or change the accent flavor.",
       "Keep the same section tags and overall structure; only lightly adjust wording, line breaks, or endings for flow.",
       ...POP_RHYME_METER_LINES_LIGHT,
-      "Do NOT add heavy vowel marks (tashkeel) — that is a separate step.",
+      ...(useArabizi ? scriptLines : ["Do NOT add heavy vowel marks (tashkeel) — that is a separate step."]),
       "Output lyrics only with section tags. No explanations or metadata.",
       `Variation token: ${nonce}`,
       ...(dialectLines ? [dialectLines] : []),
@@ -565,6 +596,7 @@ function buildPrompt({ seed, style, mode, nonce, dialect, dialectHint, sourceLyr
   if (mode === "fix_singing") {
     return [
       ...FIX_SINGING_LINES,
+      ...(useArabizi ? scriptLines : []),
       `Variation token: ${nonce}`,
       ...(dialectLines ? [dialectLines] : []),
       style ? `Style/Tags (context only): ${style}` : "",
@@ -577,6 +609,12 @@ function buildPrompt({ seed, style, mode, nonce, dialect, dialectHint, sourceLyr
     return [
       "You are a lyrics coach for AI music singing (Suno/Lyria). Analyze singability only — do NOT rewrite lyrics.",
       "Focus on: line length balance (wazen/وزن), end-rhyme (qafiya/قافية), chorus hook fit, lines that are too long or uneven.",
+      ...(useArabizi
+        ? [
+          "Lyrics are in Arabizi (Latin phonetic spelling). Analyze rhyme by spoken ending sounds (-ak, -na, -eh, etc.).",
+          "2/3/7 in words encode Arabic sounds — judge rhyme as pronounced, not as English.",
+        ]
+        : []),
       "Rhyme schemes:",
       "- Verse and chorus can use any scheme (AABB, ABAB, ABBA, ABCB, AAAA, AAAB, AABA, AA, repeating hooks). Do NOT prefer one scheme for chorus vs verse.",
       "- Flag issues only when a section's lines do not match its apparent scheme, or when rhyme/meter is uneven — not because a scheme is 'wrong' for that section.",
@@ -641,6 +679,7 @@ function buildPrompt({ seed, style, mode, nonce, dialect, dialectHint, sourceLyr
       "Do NOT change theme or language. Do NOT invent a new story.",
       "Keep original lines as much as possible; only reorganize and lightly polish for flow.",
       "Output lyrics only with section tags.",
+      ...(useArabizi ? scriptLines : []),
       "Use structure:",
       "[Verse 1]",
       "[Chorus]",
@@ -664,6 +703,7 @@ function buildPrompt({ seed, style, mode, nonce, dialect, dialectHint, sourceLyr
       "Continue the user's lyrics in the same mood, theme, and language.",
       "Do not rewrite existing lines.",
       "Output lyrics only.",
+      ...(useArabizi ? scriptLines : []),
       ...POP_RHYME_METER_LINES_CONTINUE,
       ...(dialectLines ? [dialectLines] : []),
       style ? `Style/Tags: ${style}` : "Style/Tags: none",
@@ -681,6 +721,7 @@ function buildPrompt({ seed, style, mode, nonce, dialect, dialectHint, sourceLyr
       "[Verse] — 2 lines max (optional; skip if the brief is chorus-only)",
       "[Chorus] — 2 to 4 lines max, one repeatable hook",
       "Total: 8 lines maximum. Short syllables. Conversational, not shouty.",
+      ...(useArabizi ? scriptLines : []),
       "Do NOT include [Intro], [Verse 2], [Bridge], [Outro], or [Final Chorus].",
       "The last line must feel like a natural ending (held word or clean stop).",
       ...POP_RHYME_METER_LINES,
@@ -702,6 +743,7 @@ function buildPrompt({ seed, style, mode, nonce, dialect, dialectHint, sourceLyr
       "[Pre-Chorus] — 2 lines max (optional; omit if not needed)",
       "[Chorus] — 4 lines max, with one repeatable hook",
       "Total output: 12 lines maximum. Keep lines short and singable.",
+      ...(useArabizi ? scriptLines : []),
       ...POP_RHYME_METER_LINES,
       "Do not explain the challenge. Do not repeat the instruction text.",
       "Do not include metadata, notes, or descriptions.",
@@ -716,6 +758,7 @@ function buildPrompt({ seed, style, mode, nonce, dialect, dialectHint, sourceLyr
   return [
     "Write complete singable lyrics for AI song generation.",
     "Output lyrics only.",
+    ...(useArabizi ? scriptLines : []),
     "Use this structure exactly:",
     "[Intro]",
     "[Verse 1]",

@@ -1,9 +1,11 @@
 import {
   computeLocalSingability,
   hasLyricSectionTags,
+  looksLikeArabizi,
   normalizeSingabilityReport,
   singabilityLevelClass,
 } from "./lyrics-singability.js";
+import { isArabiziLyricsLanguage } from "./arabizi.js";
 import { generateArrangement, randomizeParams } from "./arrangement.js";
 import { renderArrangementToWav } from "./render.js";
 import { recordHumToMelody } from "./melody/extract.js";
@@ -5422,8 +5424,8 @@ const LYRICS_ARABIC_DIALECT_VALUE = {
 const LYRICS_ARABIC_DIALECT_HINT = {
   lebanese:
     "Lebanese Beirut colloquial singing; qaf as hamza (2); soft spoken vowels; NOT Egyptian; NOT formal MSA/nahwi.",
-  syrian: "Syrian Levantine colloquial; qaf as hamza; spoken vowels; NOT Egyptian.",
-  palestinian: "Palestinian Levantine colloquial; qaf as hamza; spoken vowels; NOT Egyptian.",
+  syrian: "Syrian Levantine colloquial; qaf as hamza (2); spoken vowels; NOT Egyptian.",
+  palestinian: "Palestinian Levantine colloquial; qaf as hamza (2); spoken vowels; NOT Egyptian.",
   egyptian: "Egyptian Masri colloquial; NOT Levantine.",
   iraqi: "Iraqi colloquial; NOT Egyptian or Gulf.",
   gulf: "Khaleeji/Gulf colloquial; NOT Egyptian or Levantine.",
@@ -5457,17 +5459,40 @@ function resolveLyricsProviderForMode(_mode) {
   return "gemini";
 }
 
+function resolveLyricsScriptFormat() {
+  if (isArabiziLyricsLanguage(lyricsLanguage)) return "arabizi";
+  const text = String(els.sunoPrompt?.value || "");
+  if (looksLikeArabizi(text)) return "arabizi";
+  if (lyricsLanguage === "arabic" || textHasArabicScript(text)) return "arabic";
+  return "auto";
+}
+
+function isArabicLyricsFlowActive() {
+  if (isArabiziLyricsLanguage(lyricsLanguage)) return true;
+  if (lyricsLanguage === "arabic") return true;
+  if (lyricsLanguage === "auto" && (textHasArabicScript(els.sunoPrompt?.value) || looksLikeArabizi(els.sunoPrompt?.value))) {
+    return true;
+  }
+  return false;
+}
+
 function applyLyricsLanguageToDialect() {
   let val = "";
   let hint = "";
-  if (lyricsLanguage === "arabic") {
+  if (lyricsLanguage === "arabic" || isArabiziLyricsLanguage(lyricsLanguage)) {
     val = LYRICS_ARABIC_DIALECT_VALUE[lyricsDialect] || "";
     hint = LYRICS_ARABIC_DIALECT_HINT[lyricsDialect] || "";
+    if (isArabiziLyricsLanguage(lyricsLanguage)) {
+      hint = [hint, "Output Arabizi (Latin phonetic spelling for Lyria/Lebanese singing)."].filter(Boolean).join(" ");
+    }
   } else if (lyricsLanguage !== "auto") {
     val = LYRICS_LANGUAGE_VALUE[lyricsLanguage] || "";
   } else if (textHasArabicScript(els.sunoPrompt?.value) && lyricsDialect) {
     val = LYRICS_ARABIC_DIALECT_VALUE[lyricsDialect] || "";
     hint = LYRICS_ARABIC_DIALECT_HINT[lyricsDialect] || "";
+  } else if (looksLikeArabizi(els.sunoPrompt?.value) && lyricsDialect) {
+    val = LYRICS_ARABIC_DIALECT_VALUE[lyricsDialect] || "";
+    hint = [LYRICS_ARABIC_DIALECT_HINT[lyricsDialect] || "", "Arabizi Latin script."].filter(Boolean).join(" ");
   }
   if (els.sunoDialect) els.sunoDialect.value = val;
   if (els.sunoDialectHint) els.sunoDialectHint.value = hint;
@@ -5491,8 +5516,21 @@ function syncLyricsLangPills() {
   syncArabicLyricsControlsVisibility();
 }
 
-/** Arabic dialect / address / vowel-marks when language is Arabic, or Auto detects Arabic script. */
+/** Arabic dialect / address when language is Arabic, Arabizi, or Auto detects Arabic/Arabizi. */
 function shouldShowArabicDialectRow() {
+  if (isArabiziLyricsLanguage(lyricsLanguage)) return true;
+  if (typeof lyricsLanguage !== "undefined" && lyricsLanguage === "arabic") return true;
+  if (typeof lyricsLanguage !== "undefined" && lyricsLanguage === "auto" && textHasArabicScript(els.sunoPrompt?.value)) {
+    return true;
+  }
+  if (typeof lyricsLanguage !== "undefined" && lyricsLanguage === "auto" && looksLikeArabizi(els.sunoPrompt?.value)) {
+    return true;
+  }
+  return false;
+}
+
+function shouldShowLyricsDiacritics() {
+  if (isArabiziLyricsLanguage(lyricsLanguage)) return false;
   if (typeof lyricsLanguage !== "undefined" && lyricsLanguage === "arabic") return true;
   if (typeof lyricsLanguage !== "undefined" && lyricsLanguage === "auto" && textHasArabicScript(els.sunoPrompt?.value)) {
     return true;
@@ -5500,12 +5538,11 @@ function shouldShowArabicDialectRow() {
   return false;
 }
 
-function shouldShowLyricsDiacritics() {
-  if (typeof lyricsLanguage !== "undefined" && lyricsLanguage === "arabic") return true;
-  if (typeof lyricsLanguage !== "undefined" && lyricsLanguage === "auto" && textHasArabicScript(els.sunoPrompt?.value)) {
-    return true;
-  }
-  return false;
+function shouldOfferArabiziConvert(text) {
+  if (isArabiziLyricsLanguage(lyricsLanguage)) return false;
+  if (looksLikeArabizi(text)) return false;
+  if (!textHasArabicScript(text)) return false;
+  return isArabicLyricsFlowActive();
 }
 
 /** Draft looks long enough for singability / polish (post-Suno or pasted lyrics). */
@@ -5554,6 +5591,8 @@ function buildSingabilityActionChips(report, text) {
   }
   if (shouldShowLyricsDiacritics()) {
     chips.push({ action: "diacritics", label: "تشكيل · vowel marks" });
+  } else if (shouldOfferArabiziConvert(text)) {
+    chips.push({ action: "arabizi", label: "Convert to Arabizi" });
   }
   return chips;
 }
@@ -5696,6 +5735,7 @@ async function runLyricsSingabilityCheck() {
         dialect,
         dialectHint: lyricDialectHint,
         lyricsProvider: "gemini",
+        scriptFormat: resolveLyricsScriptFormat(),
       }),
     });
     const data = await r.json().catch(() => ({}));
@@ -5842,8 +5882,11 @@ function syncArabicLyricsControlsVisibility() {
 
 function setLyricsLanguage(lang) {
   lyricsLanguage = lang || "auto";
-  if (lyricsLanguage !== "arabic") {
+  if (lyricsLanguage !== "arabic" && !isArabiziLyricsLanguage(lyricsLanguage)) {
     lyricsDialect = "";
+  }
+  if (isArabiziLyricsLanguage(lyricsLanguage) && !lyricsDialect) {
+    lyricsDialect = "lebanese";
   }
   syncLyricsLangPills();
   applyLyricsLanguageToDialect();
@@ -5968,11 +6011,16 @@ function textHasArabicScript(t) {
  *  hidden until the user picks Arabic as the lyrics language OR types/generates
  *  Arabic text in the lyrics, style, or title. Keeps the form minimal otherwise. */
 function shouldShowArabicAddress() {
+  if (isArabiziLyricsLanguage(lyricsLanguage)) return true;
   if (typeof lyricsLanguage !== "undefined" && lyricsLanguage === "arabic") return true;
   if (typeof lyricsLanguage !== "undefined" && lyricsLanguage === "auto" && textHasArabicScript(els.sunoPrompt?.value)) {
     return true;
   }
+  if (typeof lyricsLanguage !== "undefined" && lyricsLanguage === "auto" && looksLikeArabizi(els.sunoPrompt?.value)) {
+    return true;
+  }
   if (textHasArabicScript(els.sunoPrompt?.value)) return true;
+  if (looksLikeArabizi(els.sunoPrompt?.value)) return true;
   if (textHasArabicScript(els.sunoStyle?.value)) return true;
   if (textHasArabicScript(els.sunoTitle?.value)) return true;
   return false;
@@ -61860,6 +61908,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
           dialect,
           dialectHint: lyricDialectHint,
           lyricsProvider,
+          scriptFormat: resolveLyricsScriptFormat(),
           ...(remixReplyBody || {}),
         }),
       });
@@ -61971,6 +62020,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
           dialect,
           dialectHint: lyricDialectHint,
           lyricsProvider: "gemini",
+          scriptFormat: resolveLyricsScriptFormat(),
         }),
       });
       const data = await r.json().catch(() => ({}));
@@ -62046,6 +62096,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
           dialect,
           dialectHint: lyricDialectHint,
           lyricsProvider: "gemini",
+          scriptFormat: resolveLyricsScriptFormat(),
         }),
       });
       const data = await r.json().catch(() => ({}));
@@ -62125,6 +62176,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
           dialect,
           dialectHint: lyricDialectHint,
           lyricsProvider: "gemini",
+          scriptFormat: resolveLyricsScriptFormat(),
         }),
       });
       const data = await r.json().catch(() => ({}));
@@ -62237,6 +62289,88 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       if (els.btnLyricsMagic) els.btnLyricsMagic.disabled = false;
       if (labelEl) labelEl.textContent = prevLabel;
       if (labelArEl) labelArEl.textContent = prevLabelAr;
+    }
+  };
+
+  const convertLyricsToArabizi = async () => {
+    if (!els.sunoPrompt) return;
+    if (!requireProForWebFeature("Convert to Arabizi")) return;
+    if (!arabicLyricChoicesReady()) {
+      const reason = arabicLyricChoicesBlockReason();
+      showToast(reason, { icon: "!", durationMs: 3600 });
+      setStatus(reason);
+      return;
+    }
+    const seed = String(els.sunoPrompt.value || "").trim();
+    if (!seed) {
+      showToast("Add Arabic lyrics first, then convert to Arabizi.", { icon: "!", durationMs: 3200 });
+      return;
+    }
+    if (!textHasArabicScript(seed)) {
+      showToast("Lyrics are already Latin — pick Arabizi language or edit spelling.", { icon: "!", durationMs: 3200 });
+      return;
+    }
+    try { applyLyricsLanguageToDialect(); } catch {}
+    const lyricsBoxEl = els.sunoPrompt.closest(".lyricsBox");
+    const style = String(els.sunoStyle?.value || "").trim();
+    const dialect = String(els.sunoDialect?.value || "").trim();
+    const dialectHint = String(els.sunoDialectHint?.value || "").trim();
+    const addressNote = arabicAddressPronunciationNote(
+      els.sunoArabicAddress?.value,
+      resolveSingerGenderForGeneration({ hasReference: Boolean(getVocalReferenceFile()) }),
+    );
+    const lyricDialectHint = [dialectHint, addressNote].filter(Boolean).join(" ");
+    let inkwellSettle = false;
+    try {
+      if (els.btnLyricsFixSinging) els.btnLyricsFixSinging.disabled = true;
+      if (els.btnLyricsPolish) els.btnLyricsPolish.disabled = true;
+      if (els.btnLyricsMagic) els.btnLyricsMagic.disabled = true;
+      if (els.btnLyricsSingabilityCheck) els.btnLyricsSingabilityCheck.disabled = true;
+      if (lyricsBoxEl) lyricsBoxEl.classList.add("generating");
+      if (els.sunoPrompt) els.sunoPrompt.disabled = true;
+      setStatus("Converting to Arabizi for Lyria singing…");
+      const r = await fetch(apiUrl("/api/lyrics"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          seed,
+          style,
+          mode: "to_arabizi",
+          dialect,
+          dialectHint: lyricDialectHint,
+          lyricsProvider: "gemini",
+          scriptFormat: "arabizi",
+        }),
+      });
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(data?.error || "Could not convert to Arabizi");
+      const nextLyrics = String(data?.lyrics || "").trim();
+      if (!nextLyrics) throw new Error("No lyrics returned");
+      els.sunoPrompt.value = nextLyrics;
+      lyricsLanguage = "arabizi";
+      if (!lyricsDialect) lyricsDialect = "lebanese";
+      try { syncLyricsLangPills(); } catch {}
+      try { applyLyricsLanguageToDialect(); } catch {}
+      try { autoResizeLyricsBox(); } catch {}
+      try { syncArabicLyricsControlsVisibility(); } catch {}
+      snapshotNabadAiLyricsDraft(nextLyrics);
+      void runLyricsSingabilityCheck();
+      inkwellSettle = true;
+      const doneMsg = "Converted to Arabizi — best for Lyria Lebanese singing.";
+      setStatus(doneMsg);
+      showToast(doneMsg, { icon: "♫", durationMs: 3800 });
+    } catch (e) {
+      setStatus(`Arabizi conversion failed: ${e?.message || String(e)}`);
+      showToast(e?.message || "Could not convert to Arabizi", { icon: "!", durationMs: 3600 });
+    } finally {
+      if (els.sunoPrompt) els.sunoPrompt.disabled = false;
+      if (lyricsBoxEl) lyricsBoxEl.classList.remove("generating");
+      if (inkwellSettle) pulseLyricsGenSettled(lyricsBoxEl);
+      if (els.btnLyricsFixSinging) els.btnLyricsFixSinging.disabled = false;
+      if (els.btnLyricsPolish) els.btnLyricsPolish.disabled = false;
+      if (els.btnLyricsMagic) els.btnLyricsMagic.disabled = false;
+      if (els.btnLyricsSingabilityCheck) els.btnLyricsSingabilityCheck.disabled = false;
+      try { syncArabicGenerateGate(); } catch {}
     }
   };
 
@@ -62458,6 +62592,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       if (action === "fix") void fixLyricsForSinging();
       else if (action === "polish") void polishLyricsWithGemini();
       else if (action === "diacritics") void addArabicVowelMarksToLyrics();
+      else if (action === "arabizi") void convertLyricsToArabizi();
       else if (action === "sections") void arrangeLyricsWithSections();
     });
   }

@@ -1,5 +1,7 @@
 /** Local + merged singability helpers for lyrics before AI singing. */
 
+import { looksLikeArabizi, normalizeArabiziRhymeKey } from "./arabizi.js";
+
 const SECTION_TAG_RE = /^\[(.+?)\]\s*$/i;
 
 export function parseLyricSections(text) {
@@ -27,10 +29,16 @@ function syllableProxy(line) {
 }
 
 function rhymeKey(word) {
-  const w = String(word || "").replace(/[^\u0600-\u06FFa-zA-Z']/g, "");
+  const w = String(word || "").replace(/[^\u0600-\u06FFa-zA-Z0-9']/g, "");
+  if (!w) return "";
+  if (/[a-z0-9]/i.test(w) && !/[\u0600-\u06FF]/.test(w)) {
+    return normalizeArabiziRhymeKey(w);
+  }
   if (w.length < 2) return w.toLowerCase();
   return w.slice(-2).toLowerCase();
 }
+
+export { looksLikeArabizi };
 
 function lastWord(line) {
   const parts = String(line || "").trim().split(/\s+/).filter(Boolean);

@@ -22,6 +22,7 @@ const {
   clipVocalProfileById,
   defaultClipVocalProfileForGender,
 } = require("./clip-vocal-profiles");
+const { looksLikeArabizi } = require("./arabizi");
 
 const LYRIA_CLIP_MODEL = "lyria-3-clip-preview";
 
@@ -204,6 +205,7 @@ function resolveLyriaArabicPronunciationMode({ dialectHint = "", lyrics = "" } =
     return "msa";
   }
   if (blob.trim()) return "dialect";
+  if (looksLikeArabizi(String(lyrics || ""))) return "dialect";
   if (/[\u0600-\u06FF]/.test(String(lyrics || ""))) return "natural";
   return "";
 }
@@ -273,6 +275,9 @@ function buildLyriaArabicPronunciationLine(mode, dialectHint = "") {
   }
   if (mode === "natural") {
     return "Arabic lyrics: colloquial spoken pronunciation.";
+  }
+  if (mode === "arabizi") {
+    return "Lyrics in Lebanese Arabizi phonetic Latin — pronounce colloquially; 2=hamza/spoken qaf.";
   }
   return "";
 }
@@ -401,13 +406,17 @@ function buildLyriaPrompt({
   }
 
   if (lyricText) {
-    return [
+    const lines = [
       `Create a song. ${directionText}.`,
       "",
       "With the following lyrics:",
       "",
       lyricText,
-    ].join("\n").slice(0, 8000);
+    ];
+    if (looksLikeArabizi(lyricText)) {
+      lines.splice(1, 0, "Lyrics are Arabizi phonetic spelling — sing Lebanese/Levantine colloquial pronunciation (2=hamza/qaf).");
+    }
+    return lines.join("\n").slice(0, 8000);
   }
 
   return `Create a song. ${directionText}. Write and perform original lyrics matching this direction.`.slice(0, 8000);

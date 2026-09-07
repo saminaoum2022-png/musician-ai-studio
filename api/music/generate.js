@@ -37,6 +37,7 @@ const {
   resolveLyriaModel,
   resolveLyriaPhotoImages,
   mergeLyriaDialectHint,
+  resolveLyriaDialectLabel,
   buildLyriaArabicPronunciationLine,
   resolveLyriaArabicPronunciationMode,
 } = require("../_lib/lyria-upstream");
@@ -76,12 +77,8 @@ const {
   enrichClipWithGeminiProducer,
   enrichSongWithGeminiProducer,
 } = require("../_lib/clip-gemini-producer");
-const {
-  buildProducerBlueprint,
-  producerSafeGenreLabel,
-  sessionFromMusicGenerateBody,
-} = require("../_lib/nabad-producer-lib");
 
+const LYRIA_FULL_SONG_FLOW = "lyria_full_song_v2_direct";
 const FULL_SONG_COST = 12;
 const LYRIA_CLIP_CREDIT_COST = Math.max(
   1,
@@ -353,6 +350,24 @@ function scheduleBackgroundWork(promise) {
   void promise;
 }
 
+function buildLyriaFullSongDirectAdminExtra({ body, stylePrompt = "", lyrics = "" } = {}) {
+  const dialectHintLine = mergeLyriaDialectHint(body);
+  const dialectLabel = resolveLyriaDialectLabel(body);
+  const pronunciationNote = buildLyriaArabicPronunciationLine(
+    resolveLyriaArabicPronunciationMode({ dialectHint: dialectHintLine, lyrics }),
+    dialectHintLine,
+  );
+  return [
+    "pipeline: direct (no Gemini)",
+    "gemini_producer: skipped",
+    ...(dialectLabel ? [`dialect: ${dialectLabel}`] : []),
+    ...(dialectHintLine ? [`dialect_hint: ${dialectHintLine.slice(0, 400)}`] : []),
+    ...(pronunciationNote ? [`pronunciation_note: ${pronunciationNote.slice(0, 300)}`] : []),
+    ...(stylePrompt ? [`style_prompt: ${String(stylePrompt).slice(0, 600)}`] : []),
+    ...(lyrics ? [`user_lyrics: ${String(lyrics).slice(0, 400)}`] : []),
+  ];
+}
+
 async function runLyriaGenerationJob({
   userId,
   isAdmin,
@@ -387,59 +402,14 @@ async function runLyriaGenerationJob({
   };
 
   try {
-    let lyriaPrompt = fallbackLyriaPrompt;
-    const session = sessionFromMusicGenerateBody(body, { lyrics, title, stylePrompt, instrumental });
-    const blueprint = await buildProducerBlueprint({ apiKey, session });
-
-    if (blueprint.ok) {
-      const styleForPrompt = [
-        producerSafeGenreLabel(session),
-        session.mood,
-        session.instruments,
-        session.bpm ? `${session.bpm} BPM` : session.tempo,
-      ].filter(Boolean).join(", ");
-
-      lyriaPrompt = buildLyriaPrompt({
-        stylePrompt: styleForPrompt,
-        lyrics,
-        title,
-        instrumental,
-        clip: false,
-        vocalGender: session.vocalGender,
-        clipVocalProfileId: session.clipVocalProfileId,
-        dialectHint: session.dialectHint || mergeLyriaDialectHint(body),
-        enhancedStylePrompt: blueprint.master_style_prompt,
-        structuredLyrics: blueprint.structured_lyrics || lyrics,
-      });
-    }
-
-    const dialectHintLine = String(session.dialectHint || mergeLyriaDialectHint(body) || "").trim();
-    const pronunciationNote = buildLyriaArabicPronunciationLine(
-      resolveLyriaArabicPronunciationMode({ dialectHint: dialectHintLine, lyrics }),
-      dialectHintLine,
-    );
-    const blueprintExtra = blueprint.ok
-      ? [
-          "gemini_producer: nabad_blueprint",
-          `gemini_producer_model: ${blueprint.model || "unknown"}`,
-          `blueprint_attempt: ${blueprint.attempt || 1}`,
-          ...(session.dialect ? [`dialect: ${session.dialect}`] : []),
-          ...(dialectHintLine ? [`dialect_hint: ${dialectHintLine.slice(0, 400)}`] : []),
-          ...(pronunciationNote ? [`pronunciation_note: ${pronunciationNote.slice(0, 300)}`] : []),
-          `master_style_prompt: ${String(blueprint.master_style_prompt || "").slice(0, 600)}`,
-          `structured_lyrics: ${String(blueprint.structured_lyrics || "").slice(0, 400)}`,
-        ]
-      : [
-          "gemini_producer: fallback",
-          `gemini_producer_error: ${String(blueprint.error || "blueprint_failed").slice(0, 200)}`,
-        ];
+    const lyriaPrompt = buildLyriaPromptFromBody(body, { stylePrompt, lyrics, title, instrumental });
 
     let requestDetail = buildLyriaRequestDetail({
-      flow: "lyria_full_song",
+      flow: LYRIA_FULL_SONG_FLOW,
       model,
       lyriaPrompt,
       photoCount: photoImages.length,
-      extraLines: blueprintExtra,
+      extraLines: buildLyriaFullSongDirectAdminExtra({ body, stylePrompt, lyrics }),
     });
 
     await updateMusicGenerationByTaskId(taskId, {
@@ -470,13 +440,10 @@ async function runLyriaGenerationJob({
         alignedWords: upstream.alignedWords,
       });
     }
-    const displayLyrics = blueprint.ok && blueprint.structured_lyrics
-      ? blueprint.structured_lyrics
-      : lyrics;
     const statusPayload = buildSunoStatusPayload({
       taskId,
       title,
-      lyrics: displayLyrics,
+      lyrics,
       audioUrl: archived.url,
       audioId,
       provider: "lyria",
@@ -1078,10 +1045,11 @@ async function handleLyriaGenerate(req, res, { user, isAdmin, body }) {
 
   const fallbackLyriaPrompt = buildLyriaPromptFromBody(body, { stylePrompt, lyrics, title, instrumental });
   const adminDetailBase = buildLyriaRequestDetail({
-    flow: "lyria_full_song",
+    flow: LYRIA_FULL_SONG_FLOW,
     model,
     lyriaPrompt: fallbackLyriaPrompt,
     photoCount: photoImages.length,
+    extraLines: buildLyriaFullSongDirectAdminExtra({ body, stylePrompt, lyrics }),
   });
 
   await logMusicGeneration({

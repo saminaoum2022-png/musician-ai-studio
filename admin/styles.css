@@ -2568,6 +2568,157 @@ td.num { font-variant-numeric: tabular-nums; }
   gap: 12px;
 }
 
+.adminDetailModalBody {
+  gap: 14px;
+}
+
+.adminDetailModalCard {
+  width: min(680px, 100%);
+}
+
+.adminDetailModalFooter {
+  flex-wrap: wrap;
+}
+
+.adminDetailGrid {
+  display: grid;
+  gap: 10px;
+}
+
+.adminDetailRow {
+  display: grid;
+  grid-template-columns: 9.5rem 1fr;
+  gap: 10px;
+  align-items: start;
+  font-size: 0.88rem;
+}
+
+.adminDetailRow dt {
+  margin: 0;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.adminDetailRow dd {
+  margin: 0;
+  word-break: break-word;
+}
+
+.adminDetailBlock {
+  margin: 0;
+  padding: 12px 14px;
+  border-radius: var(--radius);
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--border);
+  white-space: pre-wrap;
+  font-size: 0.88rem;
+  line-height: 1.45;
+}
+
+.adminDetailHint {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: var(--radius);
+  background: rgba(245, 158, 11, 0.1);
+  border: 1px solid rgba(245, 158, 11, 0.28);
+  color: #fcd34d;
+  font-size: 0.84rem;
+  line-height: 1.4;
+}
+
+.adminDetailSongCard {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  padding: 10px 12px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.adminDetailSongArt {
+  width: 52px;
+  height: 52px;
+  border-radius: 8px;
+  object-fit: cover;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.adminDetailSongMeta {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.adminDetailSongMeta strong {
+  font-size: 0.92rem;
+}
+
+.adminDetailSongMeta code {
+  font-size: 0.76rem;
+  color: var(--muted);
+  word-break: break-all;
+}
+
+.adminDetailLinks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.adminDetailLinks a {
+  color: #93c5fd;
+  font-size: 0.86rem;
+}
+
+tr.singerRowClickable {
+  cursor: pointer;
+}
+
+tr.singerRowClickable:hover td {
+  background: rgba(124, 92, 255, 0.06);
+}
+
+tr.singerRowClickable.isNew td {
+  background: rgba(245, 158, 11, 0.06);
+}
+
+.singerRowHint {
+  margin: 0 0 0.65rem;
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.singerRowSummary {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 2px;
+}
+
+.singerRowSummarySub {
+  color: var(--muted);
+  font-size: 0.78rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 12rem;
+}
+
+.singerRowContact {
+  margin-left: 4px;
+  color: #86efac;
+  font-size: 0.72rem;
+}
+
+.tableWrap--plain td.singerRowActions {
+  cursor: default;
+}
+
+.tableWrap--plain td.singerRowActions:hover {
+  background: transparent;
+}
+
 .supportEmailActions {
   display: flex;
   flex-wrap: wrap;

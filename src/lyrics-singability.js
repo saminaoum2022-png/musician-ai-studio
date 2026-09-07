@@ -41,7 +41,10 @@ function sameRhyme(a, b) {
   return Boolean(a && b && a === b);
 }
 
-/** Rough pop rhyme scheme from end-word keys (first 4 lines). */
+export function hasLyricSectionTags(text) {
+  return /\[(verse|chorus|bridge|outro|intro|final chorus|pre-chorus|hook|refrain)/i.test(String(text || ""));
+}
+
 export function detectRhymeScheme(lines) {
   const keys = lines.map((line) => rhymeKey(lastWord(line)));
   const n = keys.length;

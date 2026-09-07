@@ -10671,6 +10671,26 @@ html[data-theme="light"] .personaVoiceTuneChips .optChip.isActive{
   border-color:rgba(255,107,122,0.32);
   background:rgba(255,107,122,0.07);
 }
+.lyricsSingabilityPanel.isChecking{
+  border-color:rgba(124,92,255,0.35);
+  background:rgba(124,92,255,0.08);
+  animation: lyricsAssistBreathe 2.8s ease-in-out infinite;
+}
+.lyricsSingabilityActions{
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px;
+  margin-top:10px;
+  padding-top:10px;
+  border-top:1px solid rgba(255,255,255,0.06);
+}
+.lyricsSingabilityActions .optChip{
+  font-size:12px;
+  padding:6px 12px;
+}
+.lyricsSingabilityActions .optChip[data-singability-action="diacritics"]{
+  font-family:inherit;
+}
 .lyricsSingabilityHead{
   display:flex;
   align-items:center;
@@ -11015,15 +11035,25 @@ html[data-theme="light"] .personaVoiceTuneChips .optChip.isActive{
 #lyricsFieldPanel[data-lyrics-mode="write"] .lyricsAssistBar{
   display:none;
 }
-#lyricsFieldPanel[data-lyrics-mode="write"].showArabicLyricControls .lyricsAssistBar{
-  display:flex;
-}
 #lyricsFieldPanel[data-lyrics-mode="write"].showLyricsAssistPolish .lyricsAssistBar{
   display:flex;
 }
-#lyricsFieldPanel[data-lyrics-mode="write"].showArabicLyricControls #btnLyricsMagic,
+#lyricsFieldPanel[data-lyrics-mode="write"] #btnLyricsDiacritics,
+#lyricsFieldPanel[data-lyrics-mode="write"] #btnLyricsFixSinging,
+#lyricsFieldPanel[data-lyrics-mode="write"] #btnLyricsPolish,
+#lyricsFieldPanel[data-lyrics-mode="generate"] #btnLyricsDiacritics,
+#lyricsFieldPanel[data-lyrics-mode="generate"] #btnLyricsFixSinging,
+#lyricsFieldPanel[data-lyrics-mode="generate"] #btnLyricsPolish{
+  display:none !important;
+}
 #lyricsFieldPanel[data-lyrics-mode="write"].showLyricsAssistPolish #btnLyricsMagic{
   display:none;
+}
+#lyricsFieldPanel[data-lyrics-mode="generate"] #btnLyricsSingabilityCheck{
+  display:none;
+}
+#lyricsFieldPanel[data-lyrics-mode="generate"].showLyricsAssistCheck #btnLyricsSingabilityCheck{
+  display:inline-flex;
 }
 #lyricsFieldPanel[data-lyrics-mode="generate"] .lyricsAssistBar{
   display:flex;
@@ -11219,7 +11249,8 @@ html[data-theme="light"] body[data-route="generate"] .aiAssistBtn.isGenerating .
   /* inherits .aiAssistBtn */
 }
 .lyricsDiacriticsBtn[hidden],
-.lyricsPolishBtn[hidden]{ display:none !important; }
+.lyricsPolishBtn[hidden],
+.lyricsSingabilityCheckBtn[hidden]{ display:none !important; }
 .lyricsDiacriticsBtn:disabled,
 .lyricsPolishBtn:disabled{
   opacity:0.55;

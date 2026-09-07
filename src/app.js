@@ -1,5 +1,6 @@
 import {
   computeLocalSingability,
+  hasLyricSectionTags,
   normalizeSingabilityReport,
   singabilityLevelClass,
 } from "./lyrics-singability.js";
@@ -698,9 +699,9 @@ initLockScreenNowPlaying({
 initCoverArtOverlay();
 
 let lastSingabilityReport = null;
-let lyricsSingabilityLocalTimer = null;
-let lyricsSingabilityApiTimer = null;
 let lyricsSingabilityRequestSeq = 0;
+let lyricsSingabilityLastText = "";
+let lyricsSingabilityApiPending = false;
 
 const els = {
   sunoPrompt: document.getElementById("sunoPrompt"),
@@ -736,10 +737,12 @@ const els = {
   btnLyricsDiacritics: document.getElementById("btnLyricsDiacritics"),
   btnLyricsPolish: document.getElementById("btnLyricsPolish"),
   btnLyricsFixSinging: document.getElementById("btnLyricsFixSinging"),
+  btnLyricsSingabilityCheck: document.getElementById("btnLyricsSingabilityCheck"),
   lyricsSingabilityPanel: document.getElementById("lyricsSingabilityPanel"),
   lyricsSingabilityScore: document.getElementById("lyricsSingabilityScore"),
   lyricsSingabilitySummary: document.getElementById("lyricsSingabilitySummary"),
   lyricsSingabilityList: document.getElementById("lyricsSingabilityList"),
+  lyricsSingabilityActions: document.getElementById("lyricsSingabilityActions"),
   sunoSingerGender: document.getElementById("sunoSingerGender"),
   clipVocalProfileId: document.getElementById("clipVocalProfileId"),
   clipVocalCharacterRow: document.getElementById("clipVocalCharacterRow"),
@@ -5373,6 +5376,7 @@ function setLyricsInputMode(mode, opts = {}) {
   }
   syncLyricsPlaceholder();
   try { syncArabicLyricsControlsVisibility(); } catch {}
+  try { syncLyricsSingabilityCheckVisibility(); } catch {}
   try { syncCreateTabMorph(); } catch {}
   // Brief cross-fade of the textarea so the intent change feels smooth.
   if (!opts.silent && els.lyricsFieldPanel && els.sunoPrompt) {
@@ -5504,7 +5508,7 @@ function shouldShowLyricsDiacritics() {
   return false;
 }
 
-/** Draft looks long enough to polish (post-Suno or pasted lyrics), not a one-line seed. */
+/** Draft looks long enough for singability / polish (post-Suno or pasted lyrics). */
 function lyricsLookPolishable(text, opts = {}) {
   const t = String(text || "").trim();
   if (t.length < 20) return false;
@@ -5516,75 +5520,159 @@ function lyricsLookPolishable(text, opts = {}) {
   return lineCount >= 3;
 }
 
+function lyricsSingabilityEligible(text) {
+  const mode = String(lyricsInputMode || "write");
+  if (mode !== "write" && mode !== "generate") return false;
+  return lyricsLookPolishable(text, { writeMode: mode === "write" });
+}
+
+function setSingabilityCheckBtnBusy(busy) {
+  const btn = els.btnLyricsSingabilityCheck;
+  if (!btn) return;
+  const labelEl = btn.querySelector(".lyricsSingabilityCheckLabel");
+  btn.disabled = busy;
+  btn.classList.toggle("isGenerating", busy);
+  btn.setAttribute("aria-busy", busy ? "true" : "false");
+  if (labelEl) labelEl.textContent = busy ? "Checking…" : "Check singability";
+}
+
+function buildSingabilityActionChips(report, text) {
+  if (!report || report.checking) return [];
+  const chips = [];
+  const warnings = Array.isArray(report.warnings) ? report.warnings : [];
+  const highMed = warnings.filter((w) => w.level === "high" || w.level === "medium");
+  const score = Number(report.score);
+
+  if (!hasLyricSectionTags(text)) {
+    chips.push({ action: "sections", label: "Add verse/chorus tags" });
+  }
+  if (highMed.length || (Number.isFinite(score) && score < 80)) {
+    chips.push({ action: "fix", label: "Fix for singing" });
+  }
+  if (warnings.length && (!Number.isFinite(score) || score < 95)) {
+    chips.push({ action: "polish", label: "Polish lyrics" });
+  }
+  if (shouldShowLyricsDiacritics()) {
+    chips.push({ action: "diacritics", label: "تشكيل · vowel marks" });
+  }
+  return chips;
+}
+
 function renderLyricsSingabilityPanel(report) {
   const panel = els.lyricsSingabilityPanel;
   if (!panel) return;
   const instrumentalOnly = String(els.vocalInstrumentalOnly?.value || "0") === "1";
-  const inWriteTab = String(lyricsInputMode || "write") === "write";
   const text = String(els.sunoPrompt?.value || "").trim();
-  if (instrumentalOnly || !inWriteTab || !lyricsLookPolishable(text, { writeMode: true })) {
+  if (instrumentalOnly || !lyricsSingabilityEligible(text)) {
     panel.hidden = true;
+    if (els.lyricsSingabilityActions) els.lyricsSingabilityActions.hidden = true;
     return;
   }
   if (!report) {
     panel.hidden = true;
+    if (els.lyricsSingabilityActions) els.lyricsSingabilityActions.hidden = true;
     return;
   }
-  const warnings = Array.isArray(report.warnings) ? report.warnings : [];
+
+  const checking = Boolean(report.checking);
+  const warnings = checking ? [] : (Array.isArray(report.warnings) ? report.warnings : []);
   panel.hidden = false;
-  panel.classList.remove("isReady", "isWarn", "isBad");
-  const high = warnings.filter((w) => w.level === "high").length;
-  const medium = warnings.filter((w) => w.level === "medium").length;
-  if (!warnings.length) panel.classList.add("isReady");
-  else if (high) panel.classList.add("isBad");
-  else panel.classList.add("isWarn");
+  panel.classList.remove("isReady", "isWarn", "isBad", "isChecking");
+  if (checking) {
+    panel.classList.add("isChecking");
+  } else {
+    const high = warnings.filter((w) => w.level === "high").length;
+    if (!warnings.length) panel.classList.add("isReady");
+    else if (high) panel.classList.add("isBad");
+    else panel.classList.add("isWarn");
+  }
 
   if (els.lyricsSingabilityScore) {
-    els.lyricsSingabilityScore.textContent = Number.isFinite(Number(report.score))
-      ? `${report.score}/100`
-      : "";
+    els.lyricsSingabilityScore.textContent = checking
+      ? "…"
+      : Number.isFinite(Number(report.score))
+        ? `${report.score}/100`
+        : "";
   }
   if (els.lyricsSingabilitySummary) {
-    els.lyricsSingabilitySummary.textContent = String(report.summary || "").trim()
-      || (warnings.length ? "Review warnings before generating." : "Looks good for singing.");
+    els.lyricsSingabilitySummary.textContent = checking
+      ? "Analyzing with AI — rhyme, wazen (وزن), and line balance…"
+      : String(report.summary || "").trim()
+        || (warnings.length ? "Review warnings before generating." : "Looks good for singing.");
   }
   if (els.lyricsSingabilityList) {
-    els.lyricsSingabilityList.innerHTML = warnings.length
-      ? warnings.slice(0, 8).map((w) => {
-        const meta = [w.section, w.line ? `line ${w.line}` : ""].filter(Boolean).join(" · ");
-        return `<li class="${singabilityLevelClass(w.level)}"><span class="singabilityMeta">${escapeHtml(meta)}</span>${escapeHtml(w.message)}</li>`;
-      }).join("")
-      : `<li class="isLow">No issues spotted — vocals should land cleaner.</li>`;
+    els.lyricsSingabilityList.innerHTML = checking
+      ? `<li class="isLow">Checking singability…</li>`
+      : warnings.length
+        ? warnings.slice(0, 8).map((w) => {
+          const meta = [w.section, w.line ? `line ${w.line}` : ""].filter(Boolean).join(" · ");
+          return `<li class="${singabilityLevelClass(w.level)}"><span class="singabilityMeta">${escapeHtml(meta)}</span>${escapeHtml(w.message)}</li>`;
+        }).join("")
+        : `<li class="isLow">No issues spotted — vocals should land cleaner.</li>`;
+  }
+
+  const actionsEl = els.lyricsSingabilityActions;
+  if (actionsEl) {
+    const chips = buildSingabilityActionChips(report, text);
+    if (!chips.length || checking) {
+      actionsEl.hidden = true;
+      actionsEl.innerHTML = "";
+    } else {
+      actionsEl.hidden = false;
+      actionsEl.innerHTML = chips.map((chip) => (
+        `<button type="button" class="optChip" data-singability-action="${escapeHtml(chip.action)}">${escapeHtml(chip.label)}</button>`
+      )).join("");
+    }
   }
 }
 
-function scheduleLyricsSingabilityCheck({ immediateApi = false } = {}) {
-  clearTimeout(lyricsSingabilityLocalTimer);
-  clearTimeout(lyricsSingabilityApiTimer);
-  const instrumentalOnly = String(els.vocalInstrumentalOnly?.value || "0") === "1";
-  const inWriteTab = String(lyricsInputMode || "write") === "write";
+function syncLyricsSingabilityCheckVisibility() {
+  const btn = els.btnLyricsSingabilityCheck;
+  if (!btn) return;
   const text = String(els.sunoPrompt?.value || "").trim();
-  if (instrumentalOnly || !inWriteTab || !lyricsLookPolishable(text, { writeMode: true })) {
+  const show = lyricsSingabilityEligible(text);
+  btn.hidden = !show;
+  if (!show) {
     lastSingabilityReport = null;
     renderLyricsSingabilityPanel(null);
-    return;
   }
-  lyricsSingabilityLocalTimer = setTimeout(() => {
-    const local = computeLocalSingability(text);
-    lastSingabilityReport = local;
-    renderLyricsSingabilityPanel(local);
-  }, immediateApi ? 0 : 280);
-
-  const apiDelay = immediateApi ? 120 : 1800;
-  lyricsSingabilityApiTimer = setTimeout(() => {
-    void refreshLyricsSingabilityFromApi(text);
-  }, apiDelay);
 }
 
-async function refreshLyricsSingabilityFromApi(text) {
-  const seed = String(text || els.sunoPrompt?.value || "").trim();
-  if (!lyricsLookPolishable(seed, { writeMode: true })) return;
+function invalidateLyricsSingabilityOnEdit() {
+  if (lyricsSingabilityApiPending) {
+    lyricsSingabilityRequestSeq += 1;
+    lyricsSingabilityApiPending = false;
+    setSingabilityCheckBtnBusy(false);
+  }
+  if (lyricsSingabilityLastText && String(els.sunoPrompt?.value || "").trim() !== lyricsSingabilityLastText) {
+    lyricsSingabilityLastText = "";
+    lastSingabilityReport = null;
+    renderLyricsSingabilityPanel(null);
+  }
+  syncLyricsSingabilityCheckVisibility();
+}
+
+async function runLyricsSingabilityCheck() {
+  const text = String(els.sunoPrompt?.value || "").trim();
+  if (!lyricsSingabilityEligible(text)) {
+    showToast("Add a few lines of lyrics first, then check singability.", { icon: "!", durationMs: 3200 });
+    return;
+  }
+
+  lyricsSingabilityLastText = text;
   const reqId = ++lyricsSingabilityRequestSeq;
+  lyricsSingabilityApiPending = true;
+  setSingabilityCheckBtnBusy(true);
+
+  lastSingabilityReport = {
+    score: null,
+    summary: "",
+    warnings: [],
+    source: "loading",
+    checking: true,
+  };
+  renderLyricsSingabilityPanel(lastSingabilityReport);
+
   try {
     try { applyLyricsLanguageToDialect(); } catch {}
     const style = String(els.sunoStyle?.value || "").trim();
@@ -5602,7 +5690,7 @@ async function refreshLyricsSingabilityFromApi(text) {
         ...(getSupabaseAuthToken() ? { Authorization: `Bearer ${getSupabaseAuthToken()}` } : {}),
       },
       body: JSON.stringify({
-        seed,
+        seed: text,
         style,
         mode: "singability_check",
         dialect,
@@ -5612,11 +5700,31 @@ async function refreshLyricsSingabilityFromApi(text) {
     });
     const data = await r.json().catch(() => ({}));
     if (reqId !== lyricsSingabilityRequestSeq) return;
-    if (!r.ok || !data?.singability) return;
-    lastSingabilityReport = normalizeSingabilityReport(data.singability, seed);
+    if (!r.ok || !data?.singability) {
+      throw new Error(data?.error || "Could not check singability");
+    }
+    lastSingabilityReport = normalizeSingabilityReport(data.singability, text);
     renderLyricsSingabilityPanel(lastSingabilityReport);
-  } catch {
-    /* keep local report */
+  } catch (e) {
+    if (reqId !== lyricsSingabilityRequestSeq) return;
+    const local = computeLocalSingability(text);
+    lastSingabilityReport = {
+      ...local,
+      summary: String(e?.message || "Couldn't check singability — try again.").slice(0, 200),
+      warnings: [{
+        level: "medium",
+        section: "Lyrics",
+        line: null,
+        message: "AI check failed — tap Check singability to retry.",
+      }],
+      source: "error",
+    };
+    renderLyricsSingabilityPanel(lastSingabilityReport);
+  } finally {
+    if (reqId === lyricsSingabilityRequestSeq) {
+      lyricsSingabilityApiPending = false;
+      setSingabilityCheckBtnBusy(false);
+    }
   }
 }
 
@@ -5624,14 +5732,14 @@ async function confirmSingabilityBeforeGenerate() {
   const instrumentalOnly = String(els.vocalInstrumentalOnly?.value || "0") === "1";
   if (instrumentalOnly) return true;
   const text = String(els.sunoPrompt?.value || "").trim();
-  if (!lyricsLookPolishable(text, { writeMode: true })) return true;
+  if (!lyricsSingabilityEligible(text)) return true;
   const report = lastSingabilityReport || computeLocalSingability(text);
   const warnings = Array.isArray(report?.warnings) ? report.warnings : [];
   const high = warnings.filter((w) => w.level === "high");
   if (!high.length) return true;
   const summary = high.slice(0, 2).map((w) => `• ${w.message}`).join("\n");
   return window.confirm(
-    `Lyrics may be hard for the AI singer (${high.length} issue${high.length > 1 ? "s" : ""}).\n\n${summary}\n\nGenerate anyway?\n\nTip: tap Fix for singing first.`,
+    `Lyrics may be hard for the AI singer (${high.length} issue${high.length > 1 ? "s" : ""}).\n\n${summary}\n\nGenerate anyway?\n\nTip: tap Check singability first.`,
   );
 }
 
@@ -5886,10 +5994,10 @@ function syncArabicAddressVisibility() {
 function syncLyricsDiacriticsVisibility() {
   const btn = els.btnLyricsDiacritics || document.getElementById("btnLyricsDiacritics");
   if (!btn) return;
-  // Vowel marks only in Write — Generate tab keeps ✦ Generate as the only assist action.
   const inWriteTab = String(lyricsInputMode || "write") === "write";
   const show = inWriteTab && shouldShowLyricsDiacritics();
-  btn.hidden = !show;
+  // Write tab: tashkeel lives in singability results chips only — not the top assist bar.
+  btn.hidden = true;
   if (!show) {
     btn.disabled = true;
     btn.classList.add("isArabicGateBlocked");
@@ -5902,36 +6010,35 @@ function syncLyricsPolishVisibility() {
   if (!btn && !fixBtn) return;
   const inWriteTab = String(lyricsInputMode || "write") === "write";
   const show = lyricsLookPolishable(els.sunoPrompt?.value, { writeMode: inWriteTab });
+  // Write tab: polish + fix only via singability panel chips — not the top assist bar.
   if (btn) {
-    btn.hidden = !show;
+    btn.hidden = true;
     if (!show) {
       btn.disabled = true;
       btn.classList.add("isArabicGateBlocked");
     }
   }
   if (fixBtn) {
-    fixBtn.hidden = !show;
+    fixBtn.hidden = true;
     if (!show) {
       fixBtn.disabled = true;
       fixBtn.classList.add("isArabicGateBlocked");
     }
   }
   if (els.lyricsFieldPanel) {
-    const diacriticsBtn = els.btnLyricsDiacritics || document.getElementById("btnLyricsDiacritics");
-    const diacriticsShown = Boolean(diacriticsBtn && !diacriticsBtn.hidden);
-    // Write tab: show assist bar for pasted/edited lyrics (Polish) and/or vowel marks.
-    const showWriteAssistBar = inWriteTab && (show || diacriticsShown);
-    els.lyricsFieldPanel.classList.toggle("showLyricsAssistPolish", showWriteAssistBar);
+    const checkReady = lyricsSingabilityEligible(els.sunoPrompt?.value);
+    els.lyricsFieldPanel.classList.toggle("showLyricsAssistPolish", inWriteTab && checkReady);
+    els.lyricsFieldPanel.classList.toggle("showLyricsAssistCheck", String(lyricsInputMode || "write") === "generate" && checkReady);
   }
   if (show && isWebOrDesktopShell()) {
     try { if (btn) setWebProFeaturePill(btn, webProFeatureLocked(), "pill"); } catch {}
     try { if (fixBtn) setWebProFeaturePill(fixBtn, webProFeatureLocked(), "pill"); } catch {}
   }
-  if (show) scheduleLyricsSingabilityCheck();
-  else {
+  if (!lyricsSingabilityEligible(els.sunoPrompt?.value)) {
     lastSingabilityReport = null;
     renderLyricsSingabilityPanel(null);
   }
+  try { syncLyricsSingabilityCheckVisibility(); } catch {}
 }
 
 /** Mirror the hidden #sunoSingerGender input onto the Singer pills, and dim
@@ -61777,7 +61884,6 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       } else if (isTemplateSparkClipFlow() && els.createChallengeHintSub) {
         els.createChallengeHintSub.textContent = "Lyrics ready — edit if you want, then Generate clip.";
       }
-      setLyricsInputMode("write", { silent: true });
       if (lyricsBoxEl) lyricsBoxEl.classList.add("wandGenerated");
       inkwellSettle = true;
       snapshotNabadAiLyricsDraft(els.sunoPrompt?.value || "");
@@ -61793,14 +61899,17 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
           ? ` (${provider})`
           : "";
       const debugNote = debugSuno || debugGemini ? ` [engine:${debugSuno || "-"} gemini:${debugGemini || "-"}]` : "";
-      setStatus(`Lyrics ready${providerNote}${debugNote}. Review and then generate song.`);
+      setStatus(`Lyrics ready${providerNote}${debugNote}. Tap Check singability, then generate song.`);
       if (isTemplateSparkClipFlow()) {
-        setStatus("Lyrics ready — tap Generate clip when you're happy.");
-        showToast("Lyrics ready — now tap Generate clip.", { icon: "✦", durationMs: 3200 });
+        setStatus("Lyrics ready — tap Check singability or Generate clip.");
+        showToast("Lyrics ready — check singability, then Generate clip.", { icon: "✦", durationMs: 3200 });
       } else if (usingSunoLyrics && provider === "suno") {
-        showToast("Suno wrote lyrics — review, then Generate song.", { icon: "✦", durationMs: 4200 });
+        showToast("Suno wrote lyrics — check singability, then Generate song.", { icon: "✦", durationMs: 4200 });
+      } else {
+        showToast("Lyrics ready — tap Check singability.", { icon: "♫", durationMs: 3600 });
       }
       try { syncArabicLyricsControlsVisibility(); } catch {}
+      try { syncLyricsSingabilityCheckVisibility(); } catch {}
     } catch (e) {
       setStatus(`Lyrics assist failed: ${e?.message || String(e)}`);
     } finally {
@@ -61947,7 +62056,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       try { autoResizeLyricsBox(); } catch {}
       try { syncArabicLyricsControlsVisibility(); } catch {}
       snapshotNabadAiLyricsDraft(nextLyrics);
-      scheduleLyricsSingabilityCheck({ immediateApi: true });
+      void runLyricsSingabilityCheck();
       inkwellSettle = true;
       const doneMsg = "Lyrics tuned for singing — review warnings, then Generate.";
       setStatus(doneMsg);
@@ -61968,12 +62077,87 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
     }
   };
 
-  const addArabicVowelMarksToLyrics = async () => {
+  const arrangeLyricsWithSections = async () => {
     if (!els.sunoPrompt) return;
-    if (String(lyricsInputMode || "write") !== "write") {
-      showToast("Switch to Write to add vowel marks.", { icon: "!", durationMs: 2800 });
+    if (!requireProForWebFeature("Add verse/chorus tags")) return;
+    if (!arabicLyricChoicesReady()) {
+      const reason = arabicLyricChoicesBlockReason();
+      showToast(reason, { icon: "!", durationMs: 3600 });
+      setStatus(reason);
       return;
     }
+    const seed = String(els.sunoPrompt.value || "").trim();
+    if (!lyricsLookPolishable(seed)) {
+      showToast("Add lyrics first, then add section tags.", { icon: "!", durationMs: 3200 });
+      return;
+    }
+    if (hasLyricSectionTags(seed)) {
+      showToast("Section tags already present.", { icon: "♫", durationMs: 2800 });
+      return;
+    }
+    try { applyLyricsLanguageToDialect(); } catch {}
+    const lyricsBoxEl = els.sunoPrompt.closest(".lyricsBox");
+    const style = String(els.sunoStyle?.value || "").trim();
+    const dialect = String(els.sunoDialect?.value || "").trim();
+    const dialectHint = String(els.sunoDialectHint?.value || "").trim();
+    const addressNote = arabicAddressPronunciationNote(
+      els.sunoArabicAddress?.value,
+      resolveSingerGenderForGeneration({ hasReference: Boolean(getVocalReferenceFile()) }),
+    );
+    const lyricDialectHint = [dialectHint, addressNote].filter(Boolean).join(" ");
+    let inkwellSettle = false;
+    try {
+      if (els.btnLyricsFixSinging) els.btnLyricsFixSinging.disabled = true;
+      if (els.btnLyricsPolish) els.btnLyricsPolish.disabled = true;
+      if (els.btnLyricsMagic) els.btnLyricsMagic.disabled = true;
+      if (els.btnLyricsDiacritics) els.btnLyricsDiacritics.disabled = true;
+      if (els.btnLyricsSingabilityCheck) els.btnLyricsSingabilityCheck.disabled = true;
+      if (lyricsBoxEl) lyricsBoxEl.classList.add("generating");
+      if (els.sunoPrompt) els.sunoPrompt.disabled = true;
+      setStatus("Adding [Verse] and [Chorus] tags…");
+      const r = await fetch(apiUrl("/api/lyrics"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          seed,
+          style,
+          mode: "arrange",
+          dialect,
+          dialectHint: lyricDialectHint,
+          lyricsProvider: "gemini",
+        }),
+      });
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(data?.error || "Could not add section tags");
+      const nextLyrics = String(data?.lyrics || "").trim();
+      if (!nextLyrics) throw new Error("No lyrics returned");
+      els.sunoPrompt.value = nextLyrics;
+      try { autoResizeLyricsBox(); } catch {}
+      try { syncArabicLyricsControlsVisibility(); } catch {}
+      snapshotNabadAiLyricsDraft(nextLyrics);
+      void runLyricsSingabilityCheck();
+      inkwellSettle = true;
+      const doneMsg = "Verse/chorus tags added — review, then Generate.";
+      setStatus(doneMsg);
+      showToast(doneMsg, { icon: "♫", durationMs: 3600 });
+    } catch (e) {
+      setStatus(`Add sections failed: ${e?.message || String(e)}`);
+      showToast(e?.message || "Could not add section tags", { icon: "!", durationMs: 3600 });
+    } finally {
+      if (els.sunoPrompt) els.sunoPrompt.disabled = false;
+      if (lyricsBoxEl) lyricsBoxEl.classList.remove("generating");
+      if (inkwellSettle) pulseLyricsGenSettled(lyricsBoxEl);
+      if (els.btnLyricsFixSinging) els.btnLyricsFixSinging.disabled = false;
+      if (els.btnLyricsPolish) els.btnLyricsPolish.disabled = false;
+      if (els.btnLyricsMagic) els.btnLyricsMagic.disabled = false;
+      if (els.btnLyricsDiacritics) els.btnLyricsDiacritics.disabled = false;
+      if (els.btnLyricsSingabilityCheck) els.btnLyricsSingabilityCheck.disabled = false;
+      try { syncArabicGenerateGate(); } catch {}
+    }
+  };
+
+  const addArabicVowelMarksToLyrics = async () => {
+    if (!els.sunoPrompt) return;
     if (!arabicLyricChoicesReady()) {
       const reason = arabicLyricChoicesBlockReason();
       showToast(reason, { icon: "!", durationMs: 3600 });
@@ -62259,6 +62443,22 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
   if (els.btnLyricsFixSinging) {
     els.btnLyricsFixSinging.addEventListener("click", () => {
       void fixLyricsForSinging();
+    });
+  }
+  if (els.btnLyricsSingabilityCheck) {
+    els.btnLyricsSingabilityCheck.addEventListener("click", () => {
+      void runLyricsSingabilityCheck();
+    });
+  }
+  if (els.lyricsSingabilityActions) {
+    els.lyricsSingabilityActions.addEventListener("click", (e) => {
+      const btn = e.target?.closest?.("[data-singability-action]");
+      if (!btn) return;
+      const action = String(btn.getAttribute("data-singability-action") || "").trim();
+      if (action === "fix") void fixLyricsForSinging();
+      else if (action === "polish") void polishLyricsWithGemini();
+      else if (action === "diacritics") void addArabicVowelMarksToLyrics();
+      else if (action === "sections") void arrangeLyricsWithSections();
     });
   }
   if (els.lyricsModeWrite) {
@@ -66762,7 +66962,7 @@ els.sunoPrompt?.addEventListener("input", () => {
   }
   try { syncArabicLyricsControlsVisibility(); } catch {}
   try { syncTemplateSparkClipGenerateReady(); } catch {}
-  try { scheduleLyricsSingabilityCheck(); } catch {}
+  try { invalidateLyricsSingabilityOnEdit(); } catch {}
 });
 void (async () => {
   await loadPublicConfig();

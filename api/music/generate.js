@@ -1031,7 +1031,7 @@ async function handleLyriaGenerate(req, res, { user, isAdmin, body }) {
   }
 
   const lyrics = String(body?.prompt || "").trim();
-  const stylePrompt = buildMusicPrompt(body);
+  const stylePrompt = buildLyriaDirectStylePrompt(body);
   const title = String(body?.title || "").trim();
   const instrumental = Boolean(body?.instrumental);
   const taskId = newTaskId("lyria");

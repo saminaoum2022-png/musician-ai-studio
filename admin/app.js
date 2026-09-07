@@ -2722,7 +2722,7 @@ function renderGenerationDetail(data) {
     ? `<div class="detailMetaBlock"><strong>Lyria engine</strong></div>
        <p class="sectionNote">
          Provider: <span class="badge active">lyria</span>
-         · Model: <code class="promoCode">${escapeHtml(lyriaMeta?.model || (String(g.taskId || "").startsWith("lyr_") ? "lyria-3.5 (inferred)" : "—"))}</code>
+         · Model: <code class="promoCode">${escapeHtml(lyriaMeta?.model || (String(g.taskId || "").startsWith("lyr_") ? "lyria-3-pro-preview (inferred)" : "—"))}</code>
          · API: <code class="promoCode">${escapeHtml(lyriaMeta?.api || "interactions (default)")}</code>
          ${lyriaMeta?.photoInput ? ` · Photo: ${escapeHtml(lyriaMeta.photoInput)}` : ""}
          ${lyriaMeta?.flow ? ` · ${escapeHtml(lyriaMeta.flow)}` : ""}

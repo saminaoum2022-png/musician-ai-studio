@@ -351,7 +351,7 @@ function scheduleBackgroundWork(promise) {
   void promise;
 }
 
-function buildLyriaFullSongDirectAdminExtra({ body, stylePrompt = "", lyrics = "" } = {}) {
+function buildLyriaFullSongDirectAdminExtra({ body, stylePrompt = "", lyrics = "", model = "" } = {}) {
   const dialectHintLine = mergeLyriaDialectHint(body);
   const dialectLabel = resolveLyriaDialectLabel(body);
   const pronunciationNote = buildLyriaArabicPronunciationLine(
@@ -362,6 +362,7 @@ function buildLyriaFullSongDirectAdminExtra({ body, stylePrompt = "", lyrics = "
   return [
     "pipeline: direct (no Gemini)",
     "gemini_producer: skipped",
+    ...(model ? [`lyria_model: ${model}`] : []),
     ...(dialectLabel ? [`dialect: ${dialectLabel}`] : []),
     ...(dialectHintLine ? [`dialect_hint: ${dialectHintLine.slice(0, 400)}`] : []),
     ...(pronunciationNote ? [`pronunciation_note: ${pronunciationNote.slice(0, 300)}`] : []),
@@ -412,7 +413,7 @@ async function runLyriaGenerationJob({
       model,
       lyriaPrompt,
       photoCount: photoImages.length,
-      extraLines: buildLyriaFullSongDirectAdminExtra({ body, stylePrompt, lyrics }),
+      extraLines: buildLyriaFullSongDirectAdminExtra({ body, stylePrompt, lyrics, model }),
     });
 
     await updateMusicGenerationByTaskId(taskId, {
@@ -1036,7 +1037,9 @@ async function handleLyriaGenerate(req, res, { user, isAdmin, body }) {
   const instrumental = Boolean(body?.instrumental);
   const taskId = newTaskId("lyria");
   const audioId = `${taskId}_a`;
-  const model = resolveLyriaModel(body?.lyriaModel);
+  const model = resolveLyriaModel(
+    String(body?.lyriaModel || "").trim() || "lyria-3-pro-preview",
+  );
   const photoImages = resolveLyriaPhotosFromBody(body);
 
   if (!instrumental && !lyrics && !stylePrompt && !photoImages.length) {

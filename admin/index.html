@@ -222,6 +222,21 @@
       </div>
     </div>
 
-    <script type="module" src="/admin/app.js?v=20260903-support-ui"></script>
+    <div id="proSingerDetailModal" class="supportEmailModal adminDetailModal" hidden aria-hidden="true">
+      <div class="supportEmailModalBackdrop" data-pro-singer-detail-close></div>
+      <div class="supportEmailModalCard adminDetailModalCard" role="dialog" aria-labelledby="proSingerDetailTitle" aria-modal="true">
+        <header class="supportEmailModalHeader">
+          <div>
+            <h3 id="proSingerDetailTitle" class="supportEmailModalTitle">Request details</h3>
+            <p id="proSingerDetailSub" class="supportEmailModalSub">—</p>
+          </div>
+          <button type="button" class="btnGhost btnGhost--sm" data-pro-singer-detail-close aria-label="Close">✕</button>
+        </header>
+        <div id="proSingerDetailBody" class="supportEmailModalBody adminDetailModalBody"></div>
+        <footer id="proSingerDetailFooter" class="supportEmailModalFooter adminDetailModalFooter"></footer>
+      </div>
+    </div>
+
+    <script type="module" src="/admin/app.js?v=20260907-pro-singers-detail"></script>
   </body>
 </html>

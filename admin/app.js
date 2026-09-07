@@ -30,6 +30,8 @@ const state = {
   grantPrefillEmail: "",
   supportEmailTemplates: [],
   supportEmailModal: { userId: "", email: "", templateId: "" },
+  singersCache: null,
+  proSingerDetail: null,
   inboxMessageId: "",
   sentMessageId: "",
   inboxSearch: "",
@@ -756,6 +758,220 @@ function closeSupportEmailModal() {
     msg.hidden = true;
     msg.textContent = "";
   }
+}
+
+const PRO_SINGER_PACKAGE_LABELS = Object.freeze({
+  re_vocal: "Pro Re-vocal — existing song, pro vocal",
+  occasion: "Occasion song — new custom song + pro vocal",
+  premium: "Premium — rush, WAV, 2 revisions",
+});
+
+function closeProSingerDetailModal() {
+  const modal = document.getElementById("proSingerDetailModal");
+  if (!modal) return;
+  modal.hidden = true;
+  modal.setAttribute("aria-hidden", "true");
+  state.proSingerDetail = null;
+  const body = document.getElementById("proSingerDetailBody");
+  const footer = document.getElementById("proSingerDetailFooter");
+  if (body) body.innerHTML = "";
+  if (footer) footer.innerHTML = "";
+}
+
+function adminDetailRow(label, valueHtml) {
+  const html = String(valueHtml ?? "").trim();
+  if (!html) return "";
+  return `<div class="adminDetailRow"><dt>${escapeHtml(label)}</dt><dd>${html}</dd></div>`;
+}
+
+function adminDetailBlock(label, text) {
+  const t = String(text || "").trim();
+  if (!t) return "";
+  return `
+    <div>
+      <div class="adminDetailRow" style="margin-bottom:6px"><dt>${escapeHtml(label)}</dt><dd></dd></div>
+      <pre class="adminDetailBlock">${escapeHtml(t)}</pre>
+    </div>`;
+}
+
+function isUuidLike(value) {
+  return /^[0-9a-f-]{36}$/i.test(String(value || "").trim());
+}
+
+function proSingerPackageLabel(tier) {
+  const key = String(tier || "").trim().toLowerCase();
+  return PRO_SINGER_PACKAGE_LABELS[key] || key || "—";
+}
+
+function fmtDateTime(iso) {
+  if (!iso) return "";
+  try {
+    return new Date(iso).toLocaleString(undefined, {
+      dateStyle: "medium",
+      timeStyle: "short",
+    });
+  } catch {
+    return String(iso);
+  }
+}
+
+function openProSingerRequestDetail(requestId) {
+  const req = (state.singersCache?.requests || []).find((r) => r.id === requestId);
+  if (!req) return;
+
+  const modal = document.getElementById("proSingerDetailModal");
+  const title = document.getElementById("proSingerDetailTitle");
+  const sub = document.getElementById("proSingerDetailSub");
+  const body = document.getElementById("proSingerDetailBody");
+  const footer = document.getElementById("proSingerDetailFooter");
+  if (!modal || !body || !footer) return;
+
+  state.proSingerDetail = { kind: "request", id: requestId };
+
+  const pkgLabel = proSingerPackageLabel(req.packageTier);
+  const isReVocal = String(req.packageTier || "").toLowerCase() === "re_vocal"
+    || String(req.requestType || "").toLowerCase() === "re_vocal";
+  const songId = String(req.songId || "").trim();
+  const songShareUrl = isUuidLike(songId) ? `${MARKETING_SITE_ORIGIN}/s/${encodeURIComponent(songId)}` : "";
+
+  if (title) title.textContent = "Performance request";
+  if (sub) {
+    sub.textContent = `${req.requesterLabel || "User"} · ${pkgLabel} · ${fmtUsd(req.priceUsd)}`;
+  }
+
+  const contactBits = [];
+  if (req.contactEmail) {
+    contactBits.push(`<a href="mailto:${escapeHtml(req.contactEmail)}">${escapeHtml(req.contactEmail)}</a>`);
+  }
+  if (req.contactInstagram) {
+    const ig = String(req.contactInstagram).replace(/^@/, "");
+    contactBits.push(`<a href="https://instagram.com/${encodeURIComponent(ig)}" target="_blank" rel="noopener">@${escapeHtml(ig)}</a>`);
+  }
+
+  let songSection = "";
+  if (isReVocal && (songId || req.songTitle)) {
+    const art = req.songArtUrl
+      ? `<img class="adminDetailSongArt" src="${escapeHtml(req.songArtUrl)}" alt="" />`
+      : `<div class="adminDetailSongArt" aria-hidden="true"></div>`;
+    const links = [];
+    if (songShareUrl) links.push(`<a href="${escapeHtml(songShareUrl)}" target="_blank" rel="noopener">Open song page</a>`);
+    if (songId) links.push(`<span>Song id: <code>${escapeHtml(songId)}</code></span>`);
+    songSection = `
+      <div>
+        <div class="adminDetailRow" style="margin-bottom:8px"><dt>Library song</dt><dd>Re-vocal on this track</dd></div>
+        <div class="adminDetailSongCard">
+          ${art}
+          <div class="adminDetailSongMeta">
+            <strong>${escapeHtml(req.songTitle || "Untitled")}</strong>
+            ${songId ? `<code>${escapeHtml(songId)}</code>` : ""}
+            ${links.length ? `<div class="adminDetailLinks">${links.join("")}</div>` : ""}
+          </div>
+        </div>
+      </div>`;
+  } else {
+    songSection = adminDetailRow("Request type", "New custom song — no library track attached");
+  }
+
+  const needsFollowUp = !isReVocal || !String(req.brief || "").trim();
+  const hint = needsFollowUp
+    ? `<p class="adminDetailHint">Contact the user by email or Instagram to confirm occasion details, lyrics direction, and timeline before taking payment. No Stripe checkout is wired here yet.</p>`
+    : "";
+
+  body.innerHTML = `
+    ${hint}
+    <div class="adminDetailGrid">
+      ${adminDetailRow("Request id", `<code>${escapeHtml(req.id || "")}</code>`)}
+      ${adminDetailRow("Status", requestStatusBadge(req.status))}
+      ${adminDetailRow("Payment", `<span class="badge ${req.paymentStatus === "paid" ? "active" : "exhausted"}">${escapeHtml(req.paymentStatus || "pending")}</span>`)}
+      ${adminDetailRow("Singer", escapeHtml(req.singerLabel || "Best match"))}
+      ${adminDetailRow("Singer response", singerAssignmentBadge(req.singerAssignmentStatus))}
+      ${adminDetailRow("Occasion", escapeHtml(req.occasion || "—"))}
+      ${adminDetailRow("Submitted", escapeHtml(fmtDateTime(req.createdAt) || "—"))}
+      ${adminDetailRow("Contact", contactBits.length ? contactBits.join(" · ") : "—")}
+    </div>
+    ${songSection}
+    ${adminDetailBlock("Brief / story", req.brief || "—")}
+    ${adminDetailBlock("Notes for singer", req.singerNotes)}
+    <label class="field grantField">
+      <span>Internal admin notes</span>
+      <textarea id="proSingerDetailAdminNotes" rows="3" class="marketingFieldInput" placeholder="Payment link sent, waiting for lyrics…">${escapeHtml(req.adminNotes || "")}</textarea>
+    </label>
+  `;
+
+  footer.innerHTML = `
+    <button type="button" class="btnGhost" data-pro-singer-detail-close>Close</button>
+    ${req.requesterId ? `<button type="button" class="btnGhost" data-pro-singer-open-user="${escapeHtml(req.requesterId)}">Open user profile</button>` : ""}
+    ${req.contactEmail ? `<a class="btnPrimary" href="mailto:${escapeHtml(req.contactEmail)}?subject=${encodeURIComponent("Your NabadAi pro singer request")}">Email user</a>` : ""}
+    <button type="button" class="btnPrimary" data-pro-singer-save-notes="${escapeHtml(req.id)}">Save admin notes</button>
+  `;
+
+  modal.hidden = false;
+  modal.setAttribute("aria-hidden", "false");
+}
+
+function openSingerApplicationDetail(applicationId) {
+  const app = (state.singersCache?.applications || []).find((a) => a.id === applicationId);
+  if (!app) return;
+
+  const modal = document.getElementById("proSingerDetailModal");
+  const title = document.getElementById("proSingerDetailTitle");
+  const sub = document.getElementById("proSingerDetailSub");
+  const body = document.getElementById("proSingerDetailBody");
+  const footer = document.getElementById("proSingerDetailFooter");
+  if (!modal || !body || !footer) return;
+
+  state.proSingerDetail = { kind: "application", id: applicationId };
+
+  if (title) title.textContent = "Singer application";
+  if (sub) sub.textContent = `${app.userLabel || "User"} · @${app.instagram || "—"}`;
+
+  const demoLink = app.demoUrl
+    ? `<a href="${escapeHtml(app.demoUrl)}" target="_blank" rel="noopener">Listen to demo</a>`
+    : "—";
+  const ig = String(app.instagram || "").replace(/^@/, "");
+  const igLink = ig
+    ? `<a href="https://instagram.com/${encodeURIComponent(ig)}" target="_blank" rel="noopener">@${escapeHtml(ig)}</a>`
+    : "—";
+
+  body.innerHTML = `
+    <div class="adminDetailGrid">
+      ${adminDetailRow("Applicant", escapeHtml(app.userLabel || "—"))}
+      ${adminDetailRow("Stage name", escapeHtml(app.displayName || "—"))}
+      ${adminDetailRow("Instagram", igLink)}
+      ${adminDetailRow("Languages", escapeHtml(app.languages || "—"))}
+      ${adminDetailRow("Genres", escapeHtml(app.genres || "—"))}
+      ${adminDetailRow("Demo", demoLink)}
+      ${adminDetailRow("Status", singerAppStatusBadge(app.status))}
+      ${adminDetailRow("Applied", escapeHtml(fmtDateTime(app.createdAt) || "—"))}
+    </div>
+    ${app.photoUrl ? `<img src="${escapeHtml(app.photoUrl)}" alt="" style="max-width:120px;border-radius:10px" />` : ""}
+    ${adminDetailBlock("Bio", app.bio)}
+    ${app.adminNotes ? adminDetailBlock("Admin notes", app.adminNotes) : ""}
+  `;
+
+  const pending = app.status === "pending";
+  footer.innerHTML = `
+    <button type="button" class="btnGhost" data-pro-singer-detail-close>Close</button>
+    ${app.userId ? `<button type="button" class="btnGhost" data-pro-singer-open-user="${escapeHtml(app.userId)}">Open user profile</button>` : ""}
+    ${pending ? `<button type="button" class="btnGhost" data-singer-reject="${escapeHtml(app.id)}">Reject</button>` : ""}
+    ${pending ? `<button type="button" class="btnPrimary" data-singer-approve="${escapeHtml(app.id)}">Approve</button>` : ""}
+  `;
+
+  modal.hidden = false;
+  modal.setAttribute("aria-hidden", "false");
+}
+
+async function saveProSingerRequestAdminNotes(requestId) {
+  const notesEl = document.getElementById("proSingerDetailAdminNotes");
+  const adminNotes = String(notesEl?.value || "").trim();
+  await adminSingersRequest({
+    action: "update_request",
+    requestId,
+    adminNotes,
+  });
+  const req = (state.singersCache?.requests || []).find((r) => r.id === requestId);
+  if (req) req.adminNotes = adminNotes;
+  showError("");
 }
 
 async function openSupportEmailModal(userId, templateId = "") {
@@ -3051,8 +3267,16 @@ function renderSingers(data) {
   const apps = data?.applications || [];
   const roster = data?.roster || [];
   const requests = data?.requests || [];
+  state.singersCache = { applications: apps, roster, requests };
   const appsTotal = data?.applicationsTotal || apps.length;
   const reqTotal = data?.requestsTotal || requests.length;
+
+  const sortedRequests = [...requests].sort((a, b) => {
+    const rank = (s) => (s === "submitted" ? 0 : s === "confirmed" ? 1 : 2);
+    const dr = rank(a.status) - rank(b.status);
+    if (dr !== 0) return dr;
+    return Date.parse(b.createdAt || 0) - Date.parse(a.createdAt || 0);
+  });
 
   const appBody = apps.length
     ? apps.map((a) => {
@@ -3061,14 +3285,14 @@ function renderSingers(data) {
            <button type="button" class="btnGhost" data-singer-reject="${escapeHtml(a.id)}">Reject</button>`
         : "—";
       return `
-      <tr>
+      <tr class="singerRowClickable" data-singer-app-id="${escapeHtml(a.id)}" title="Click row for full application">
         <td>${escapeHtml(a.userLabel || "—")}</td>
         <td>${escapeHtml(a.displayName || "—")}</td>
         <td>@${escapeHtml(a.instagram || "—")}</td>
         <td style="max-width:12rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(a.languages || "—")}</td>
         <td>${singerAppStatusBadge(a.status)}</td>
         ${dateCell(a.createdAt)}
-        <td>${actions}</td>
+        <td class="singerRowActions">${actions}</td>
       </tr>`;
     }).join("")
     : `<tr><td colspan="7" class="loading">No applications yet.</td></tr>`;
@@ -3092,8 +3316,8 @@ function renderSingers(data) {
     `<option value="${escapeHtml(s.userId)}">${escapeHtml(s.displayName || s.userLabel)}</option>`,
   ).join("");
 
-  const reqBody = requests.length
-    ? requests.map((r) => {
+  const reqBody = sortedRequests.length
+    ? sortedRequests.map((r) => {
       const singerSelect = `<select class="inputCompact" data-request-singer="${escapeHtml(r.id)}">
         <option value="">Best match</option>
         ${rosterOptions}
@@ -3108,18 +3332,37 @@ function renderSingers(data) {
           `<option value="${st}"${st === r.paymentStatus ? " selected" : ""}>${st}</option>`,
         ).join("")}
       </select>`;
+      const isReVocal = String(r.packageTier || "").toLowerCase() === "re_vocal"
+        || String(r.requestType || "").toLowerCase() === "re_vocal";
+      const hasSongId = Boolean(String(r.songId || "").trim());
+      const typeLabel = isReVocal
+        ? (hasSongId ? "Re-vocal" : "Re-vocal · no song")
+        : "New song";
+      const typeBadge = isReVocal
+        ? `<span class="badge ${hasSongId ? "" : "pending"}">${typeLabel}</span>`
+        : `<span class="badge active">${typeLabel}</span>`;
+      const summary = isReVocal
+        ? (r.songTitle || (hasSongId ? String(r.songId).slice(0, 8) : "Needs library track"))
+        : (r.occasion || "Needs occasion details");
+      const contactHint = (r.contactEmail || r.contactInstagram)
+        ? `<span class="singerRowContact" title="Contact on file">✉</span>`
+        : "";
+      const rowClass = r.status === "submitted" ? "singerRowClickable isNew" : "singerRowClickable";
       return `
-      <tr>
+      <tr class="${rowClass}" data-singer-request-id="${escapeHtml(r.id)}" title="Click row for brief, contact info, and song link">
         <td style="font-size:0.78rem">${escapeHtml(r.id?.slice(0, 8) || "—")}</td>
-        <td>${escapeHtml(r.requesterLabel || "—")}</td>
+        <td>${escapeHtml(r.requesterLabel || "—")}${contactHint}</td>
         <td>${escapeHtml(r.packageTier || "—")} · ${fmtUsd(r.priceUsd)}</td>
-        <td style="max-width:10rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(r.songTitle || r.occasion || "—")}</td>
+        <td style="max-width:12rem">
+          <div class="singerRowSummary">${typeBadge}</div>
+          <div class="singerRowSummarySub">${escapeHtml(summary)}</div>
+        </td>
         <td>${requestStatusBadge(r.status)}</td>
         <td>${singerAssignmentBadge(r.singerAssignmentStatus)}</td>
-        <td>${paySelect}</td>
-        <td>${singerSelect}</td>
-        <td>${statusSelect}</td>
-        <td><button type="button" class="btnGhost" data-request-save="${escapeHtml(r.id)}">Save</button></td>
+        <td class="singerRowActions">${paySelect}</td>
+        <td class="singerRowActions">${singerSelect}</td>
+        <td class="singerRowActions">${statusSelect}</td>
+        <td class="singerRowActions"><button type="button" class="btnGhost" data-request-save="${escapeHtml(r.id)}">Save</button></td>
       </tr>`;
     }).join("")
     : `<tr><td colspan="10" class="loading">No performance requests yet.</td></tr>`;
@@ -3128,6 +3371,7 @@ function renderSingers(data) {
     ${listSection({
       title: "Pending applications",
       tableHtml: `
+    <p class="singerRowHint">Click a row to read bio, demo link, and full details.</p>
     <div class="tableWrap tableWrap--plain">
       <table class="table--compact">
         <thead>
@@ -3153,7 +3397,7 @@ function renderSingers(data) {
     ${listSection({
       title: "Performance requests",
       tableHtml: `
-    <p class="pageSub" style="margin:0 0 0.75rem">After submit, send the user a Stripe payment link by email or Instagram. Mark paid when received.</p>
+    <p class="singerRowHint">Click a row for brief, contact info, and song link (Re-vocal). New submissions appear first. Contact the user before payment — no Stripe checkout here.</p>
     <div class="tableWrap tableWrap--plain">
       <table class="table--compact">
         <thead>
@@ -3166,7 +3410,7 @@ function renderSingers(data) {
     })}
   `, { plain: true });
 
-  requests.forEach((r) => {
+  sortedRequests.forEach((r) => {
     const singerEl = document.querySelector(`[data-request-singer="${r.id}"]`);
     if (singerEl && r.singerId) singerEl.value = r.singerId;
   });
@@ -6834,12 +7078,24 @@ document.body.addEventListener("submit", (e) => {
 });
 
 document.body.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") {
+    const proModal = document.getElementById("proSingerDetailModal");
+    if (proModal && !proModal.hidden) {
+      e.preventDefault();
+      closeProSingerDetailModal();
+      return;
+    }
+  }
+
   if (e.key !== "Enter" && e.key !== " ") return;
-  const row = e.target.closest("tr.rowClickable");
+  const row = e.target.closest("tr.rowClickable, tr.singerRowClickable");
   if (!row) return;
+  if (e.target.closest(".singerRowActions")) return;
   e.preventDefault();
   if (row.dataset.userView) openUserDetail(row.dataset.userView, row.dataset.returnView || "users");
   else if (row.dataset.generationView) openGenerationDetail(row.dataset.generationView, row.dataset.returnView || "generations");
+  else if (row.dataset.singerRequestId) openProSingerRequestDetail(row.dataset.singerRequestId);
+  else if (row.dataset.singerAppId) openSingerApplicationDetail(row.dataset.singerAppId);
 });
 
 document.body.addEventListener("click", (e) => {
@@ -6847,6 +7103,52 @@ document.body.addEventListener("click", (e) => {
   if (supportEmailClose) {
     e.preventDefault();
     closeSupportEmailModal();
+    return;
+  }
+
+  const proSingerDetailClose = e.target.closest("[data-pro-singer-detail-close]");
+  if (proSingerDetailClose) {
+    e.preventDefault();
+    closeProSingerDetailModal();
+    return;
+  }
+
+  const proSingerOpenUser = e.target.closest("[data-pro-singer-open-user]");
+  if (proSingerOpenUser) {
+    e.preventDefault();
+    const uid = String(proSingerOpenUser.dataset.proSingerOpenUser || "").trim();
+    if (uid) openUserDetail(uid, "singers");
+    return;
+  }
+
+  const proSingerSaveNotes = e.target.closest("[data-pro-singer-save-notes]");
+  if (proSingerSaveNotes) {
+    const requestId = String(proSingerSaveNotes.dataset.proSingerSaveNotes || "").trim();
+    if (!requestId) return;
+    void (async () => {
+      proSingerSaveNotes.disabled = true;
+      try {
+        await saveProSingerRequestAdminNotes(requestId);
+      } catch (err) {
+        showError(err?.message || "Could not save admin notes");
+      } finally {
+        proSingerSaveNotes.disabled = false;
+      }
+    })();
+    return;
+  }
+
+  const singerRequestRow = e.target.closest("[data-singer-request-id]");
+  if (singerRequestRow && !e.target.closest(".singerRowActions")) {
+    e.preventDefault();
+    openProSingerRequestDetail(String(singerRequestRow.dataset.singerRequestId || "").trim());
+    return;
+  }
+
+  const singerAppRow = e.target.closest("[data-singer-app-id]");
+  if (singerAppRow && !e.target.closest(".singerRowActions")) {
+    e.preventDefault();
+    openSingerApplicationDetail(String(singerAppRow.dataset.singerAppId || "").trim());
     return;
   }
 
@@ -7388,6 +7690,7 @@ document.body.addEventListener("click", (e) => {
       singerApproveBtn.disabled = true;
       try {
         await adminSingersRequest({ action: "approve_application", applicationId });
+        closeProSingerDetailModal();
         if (state.view === "singers") await loadView({ force: true });
         showError("");
       } catch (err) {
@@ -7408,6 +7711,7 @@ document.body.addEventListener("click", (e) => {
       singerRejectBtn.disabled = true;
       try {
         await adminSingersRequest({ action: "reject_application", applicationId, adminNotes });
+        closeProSingerDetailModal();
         if (state.view === "singers") await loadView({ force: true });
         showError("");
       } catch (err) {

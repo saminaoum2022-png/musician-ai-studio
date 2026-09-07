@@ -368,12 +368,19 @@ async function listGeminiGenerateModels(geminiKey) {
   }
 }
 
+const POP_RHYME_SCHEME_LINES = [
+  "Chorus (best for AI singing): AABB couplets, AAAA repeating hook, same hook line repeated, ABCB (rhyme lines 2 & 4), ABBA (envelope: 1&4 and 2&3), or a short AA hook looped.",
+  "Verse: ABAB or ABCB; pre-chorus may use AA leading into the chorus; bridge may be looser.",
+  "Avoid ABAB in chorus when you can — alternate rhyme is weaker for a sticky hook than AABB or AAAA.",
+  "Arabic / Levantine: use parallel couplets (موازي) — matching grammar slot and similar مقاطع per line (e.g. both lines open with يا or mirror the same structure).",
+  "Optional radif (رديف): repeat the same tail phrase after the rhyme word on hook lines when it fits naturally.",
+];
+
 const POP_RHYME_METER_LINES = [
   "Rhythm & rhyme (required):",
   "- Within each section, keep lines a similar length with a clear singable rhythm.",
   "- Use end-rhyme (qafiya): paired lines should share the same or near ending sound where natural.",
-  "- Chorus: strong rhyme (AABB or a repeating hook line AAAA).",
-  "- Verse: ABAB or ABCB; pre-chorus may use AA leading into the chorus; bridge may be looser.",
+  ...POP_RHYME_SCHEME_LINES.map((line) => `- ${line}`),
   "- Do not sacrifice dialect, meaning, or natural speech for forced rhyme. Near-rhyme is fine, especially in colloquial Arabic.",
   "- Do not print rhyme scheme labels — output lyrics with section tags only.",
 ];
@@ -394,7 +401,9 @@ const FIX_SINGING_LINES = [
   "Fix these lyrics for AI singing — prioritize singability (wazen/وزن, qafiya/قافية, balanced lines).",
   "- Keep the SAME story, meaning, names, and dialect. Do NOT rewrite from scratch.",
   "- Balance line length within each section (similar syllable count / مقاطع per line).",
-  "- Fix end-rhyme on paired lines; chorus should rhyme strongly (AABB or repeating hook).",
+  "- Fix end-rhyme on paired lines; chorus should rhyme strongly — prefer AABB, AAAA (repeating hook), ABCB, or ABBA.",
+  "- If chorus uses ABAB, reshape toward AABB or a repeating hook when possible without changing meaning.",
+  "- For Arabic / Levantine: strengthen parallel couplets (موازي) — same opener or mirrored line shape within each chorus pair.",
   "- Adjust word choice, line breaks, or endings only as needed — keep natural colloquial speech.",
   "- For Arabic: think pop-song feet/stress (أوف), not classical عروض exam.",
   "- Keep all section tags [Verse] [Chorus] etc.",
@@ -569,6 +578,11 @@ function buildPrompt({ seed, style, mode, nonce, dialect, dialectHint, sourceLyr
     return [
       "You are a lyrics coach for AI music singing (Suno/Lyria). Analyze singability only — do NOT rewrite lyrics.",
       "Focus on: line length balance (wazen/وزن), end-rhyme (qafiya/قافية), chorus hook fit, lines that are too long or uneven.",
+      "Rhyme schemes:",
+      "- Chorus: prefer AABB, AAAA (repeating hook), ABCB, ABBA, or AA loop. Flag ABAB in chorus as medium — weaker for a sticky hook.",
+      "- Verse: ABAB and ABCB are fine.",
+      "- Arabic / Levantine: note parallel couplets (موازي) — paired lines with matching structure and similar مقاطع; flag weak parallelism in chorus pairs.",
+      "- Near-rhyme / assonance OK in colloquial Arabic.",
       "For Arabic lyrics, comment on colloquial singability — uneven مقاطع make the AI singer stumble.",
       "Return ONLY valid JSON (no markdown) with this shape:",
       '{"score":0-100,"ready":true|false,"summary":"one sentence","warnings":[{"level":"high|medium|low","section":"Chorus","line":2,"message":"..."}]}',

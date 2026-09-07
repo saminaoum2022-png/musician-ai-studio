@@ -37,6 +37,68 @@ function lastWord(line) {
   return parts[parts.length - 1] || "";
 }
 
+function sameRhyme(a, b) {
+  return Boolean(a && b && a === b);
+}
+
+/** Rough pop rhyme scheme from end-word keys (first 4 lines). */
+export function detectRhymeScheme(lines) {
+  const keys = lines.map((line) => rhymeKey(lastWord(line)));
+  const n = keys.length;
+  if (n < 2) return "unknown";
+  if (n === 2) return sameRhyme(keys[0], keys[1]) ? "AA" : "free";
+  if (n === 3) {
+    if (sameRhyme(keys[0], keys[1]) && sameRhyme(keys[1], keys[2])) return "AAAA";
+    if (sameRhyme(keys[0], keys[1])) return "AAX";
+    if (sameRhyme(keys[1], keys[2])) return "XAA";
+    if (sameRhyme(keys[0], keys[2])) return "ABA";
+    return "free";
+  }
+
+  const [k1, k2, k3, k4] = keys;
+  if (sameRhyme(k1, k2) && sameRhyme(k2, k3) && sameRhyme(k3, k4)) return "AAAA";
+  if (sameRhyme(k1, k2) && sameRhyme(k3, k4)) return "AABB";
+  if (sameRhyme(k1, k3) && sameRhyme(k2, k4) && k1 !== k2) return "ABAB";
+  if (sameRhyme(k2, k4) && k2 !== k1 && k2 !== k3) return "ABCB";
+  if (sameRhyme(k1, k4) && sameRhyme(k2, k3) && k1 !== k2) return "ABBA";
+  if (keys.slice(0, 4).every((k) => sameRhyme(k, k1))) return "AAAA";
+  return "free";
+}
+
+function rhymePairsForScheme(scheme, lineCount) {
+  switch (scheme) {
+    case "AABB":
+      return lineCount >= 4 ? [[0, 1], [2, 3]] : [[0, 1]];
+    case "ABAB":
+      return lineCount >= 4 ? [[0, 2], [1, 3]] : [];
+    case "ABCB":
+      return lineCount >= 4 ? [[1, 3]] : [];
+    case "ABBA":
+      return lineCount >= 4 ? [[0, 3], [1, 2]] : [];
+    case "AAAA":
+    case "AA":
+      return Array.from({ length: Math.max(0, lineCount - 1) }, (_, i) => [i, i + 1]);
+    default:
+      return Array.from({ length: Math.floor(lineCount / 2) }, (_, i) => [i * 2, i * 2 + 1]);
+  }
+}
+
+/** Levantine-style parallel lines — same opener or mirrored length/وزن. */
+function isParallelLine(a, b) {
+  const wordsA = String(a || "").trim().split(/\s+/).filter(Boolean);
+  const wordsB = String(b || "").trim().split(/\s+/).filter(Boolean);
+  if (!wordsA.length || !wordsB.length) return false;
+  if (wordsA[0] === wordsB[0] && wordsA.length >= 2 && wordsB.length >= 2) return true;
+
+  const maxWords = Math.max(wordsA.length, wordsB.length, 1);
+  if (Math.abs(wordsA.length - wordsB.length) / maxWords > 0.3) return false;
+
+  const syllA = syllableProxy(a);
+  const syllB = syllableProxy(b);
+  const maxSyll = Math.max(syllA, syllB, 1);
+  return Math.abs(syllA - syllB) / maxSyll <= 0.25;
+}
+
 function pushWarning(warnings, seen, item) {
   const key = `${item.level}|${item.section}|${item.line || 0}|${item.message}`;
   if (seen.has(key)) return;
@@ -63,6 +125,8 @@ export function computeLocalSingability(text) {
     const name = section.name || "Section";
     const isChorus = /chorus|hook|refrain|لازمة|كورس/i.test(name);
     const lines = section.lines;
+    const scheme = detectRhymeScheme(lines);
+    const keys = lines.map((line) => rhymeKey(lastWord(line)));
 
     lines.forEach((line, idx) => {
       const syll = syllableProxy(line);
@@ -83,27 +147,49 @@ export function computeLocalSingability(text) {
       }
     });
 
-    for (let i = 0; i + 1 < lines.length; i += 2) {
+    if (isChorus && scheme === "ABAB" && lines.length >= 4) {
+      pushWarning(warnings, seen, {
+        level: "medium",
+        section: name,
+        line: null,
+        message: "Chorus uses alternate rhyme (ABAB) — AABB or a repeating hook (AAAA) usually lands better for AI singing.",
+      });
+    }
+
+    const pairs = rhymePairsForScheme(scheme, lines.length);
+    for (const [i, j] of pairs) {
+      if (j >= lines.length) continue;
       const a = syllableProxy(lines[i]);
-      const b = syllableProxy(lines[i + 1]);
+      const b = syllableProxy(lines[j]);
       const max = Math.max(a, b, 1);
       const diff = Math.abs(a - b) / max;
       if (diff >= 0.45) {
         pushWarning(warnings, seen, {
           level: isChorus ? "high" : "medium",
           section: name,
-          line: i + 2,
-          message: `Lines ${i + 1} and ${i + 2} have uneven length — balance وزن/meter for smoother vocals.`,
+          line: j + 1,
+          message: `Lines ${i + 1} and ${j + 1} have uneven length — balance وزن/meter for smoother vocals.`,
         });
       }
-      const rkA = rhymeKey(lastWord(lines[i]));
-      const rkB = rhymeKey(lastWord(lines[i + 1]));
+
+      const rkA = keys[i];
+      const rkB = keys[j];
       if (rkA && rkB && rkA !== rkB) {
+        const pairLabel = scheme === "ABCB" ? "hook pair" : "rhyme pair";
         pushWarning(warnings, seen, {
           level: isChorus ? "high" : "medium",
           section: name,
-          line: i + 2,
-          message: `Lines ${i + 1} and ${i + 2} may not rhyme (قافية) — chorus pairs usually share an ending sound.`,
+          line: j + 1,
+          message: `Lines ${i + 1} and ${j + 1} may not rhyme (قافية) — ${isChorus ? "chorus" : "section"} ${pairLabel} usually shares an ending sound.`,
+        });
+      }
+
+      if (isChorus && (scheme === "AABB" || scheme === "ABBA") && !isParallelLine(lines[i], lines[j])) {
+        pushWarning(warnings, seen, {
+          level: "low",
+          section: name,
+          line: j + 1,
+          message: `Lines ${i + 1} and ${j + 1} could mirror each other more (parallel Levantine couplet / موازي) — same slot and similar مقاطع help the hook lock in.`,
         });
       }
     }
@@ -115,6 +201,18 @@ export function computeLocalSingability(text) {
         line: 1,
         message: "Chorus has only one line — add a matching rhyming line for a stronger hook.",
       });
+    }
+
+    if (isChorus && scheme === "free" && lines.length >= 4) {
+      const rhymedPairs = pairs.filter(([i, j]) => sameRhyme(keys[i], keys[j])).length;
+      if (rhymedPairs === 0) {
+        pushWarning(warnings, seen, {
+          level: "high",
+          section: name,
+          line: null,
+          message: "Chorus rhyme looks loose — try AABB couplets, a repeating hook (AAAA), ABCB, or ABBA for a catchier hook.",
+        });
+      }
     }
   }
 

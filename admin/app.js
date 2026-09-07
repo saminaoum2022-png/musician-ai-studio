@@ -766,11 +766,93 @@ const PRO_SINGER_PACKAGE_LABELS = Object.freeze({
   premium: "Premium — rush, WAV, 2 revisions",
 });
 
-function closeProSingerDetailModal() {
-  const modal = document.getElementById("proSingerDetailModal");
+function revealAdminModal(modal) {
+  if (!modal) return;
+  modal.hidden = false;
+  modal.removeAttribute("hidden");
+  modal.setAttribute("aria-hidden", "false");
+}
+
+function hideAdminModal(modal) {
   if (!modal) return;
   modal.hidden = true;
   modal.setAttribute("aria-hidden", "true");
+}
+
+function findSingersViewData() {
+  if (state.view === "singers") {
+    const current = state.cache[viewCacheKey()];
+    if (current) return current;
+  }
+  const cacheKey = Object.keys(state.cache).find((key) => key.startsWith("singers:"));
+  return cacheKey ? state.cache[cacheKey] : state.singersCache;
+}
+
+function resolveProSingerRequest(requestId) {
+  const id = String(requestId || "").trim();
+  if (!id) return null;
+  const pools = [
+    state.singersCache?.requests,
+    findSingersViewData()?.requests,
+  ];
+  for (const list of pools) {
+    const hit = (Array.isArray(list) ? list : []).find((row) => String(row.id) === id);
+    if (hit) return hit;
+  }
+  return null;
+}
+
+function resolveSingerApplication(applicationId) {
+  const id = String(applicationId || "").trim();
+  if (!id) return null;
+  const pools = [
+    state.singersCache?.applications,
+    findSingersViewData()?.applications,
+  ];
+  for (const list of pools) {
+    const hit = (Array.isArray(list) ? list : []).find((row) => String(row.id) === id);
+    if (hit) return hit;
+  }
+  return null;
+}
+
+function ensureProSingerPanelClicks() {
+  const panel = els.panels?.singers;
+  if (!panel || panel.dataset.singerClickBound === "1") return;
+  panel.dataset.singerClickBound = "1";
+  panel.addEventListener("click", (e) => {
+    const openReq = e.target.closest("[data-singer-request-open]");
+    if (openReq) {
+      e.preventDefault();
+      e.stopPropagation();
+      openProSingerRequestDetail(String(openReq.dataset.singerRequestOpen || "").trim());
+      return;
+    }
+    const openApp = e.target.closest("[data-singer-app-open]");
+    if (openApp) {
+      e.preventDefault();
+      e.stopPropagation();
+      openSingerApplicationDetail(String(openApp.dataset.singerAppOpen || "").trim());
+      return;
+    }
+    if (e.target.closest(".singerRowActions")) return;
+    const reqRow = e.target.closest("tr[data-singer-request-id]");
+    if (reqRow) {
+      e.preventDefault();
+      openProSingerRequestDetail(String(reqRow.dataset.singerRequestId || "").trim());
+      return;
+    }
+    const appRow = e.target.closest("tr[data-singer-app-id]");
+    if (appRow) {
+      e.preventDefault();
+      openSingerApplicationDetail(String(appRow.dataset.singerAppId || "").trim());
+    }
+  });
+}
+
+function closeProSingerDetailModal() {
+  const modal = document.getElementById("proSingerDetailModal");
+  hideAdminModal(modal);
   state.proSingerDetail = null;
   const body = document.getElementById("proSingerDetailBody");
   const footer = document.getElementById("proSingerDetailFooter");
@@ -816,15 +898,22 @@ function fmtDateTime(iso) {
 }
 
 function openProSingerRequestDetail(requestId) {
-  const req = (state.singersCache?.requests || []).find((r) => r.id === requestId);
-  if (!req) return;
+  const req = resolveProSingerRequest(requestId);
+  if (!req) {
+    showError("Could not open that request — refresh Pro singers and try again.");
+    return;
+  }
 
   const modal = document.getElementById("proSingerDetailModal");
   const title = document.getElementById("proSingerDetailTitle");
   const sub = document.getElementById("proSingerDetailSub");
   const body = document.getElementById("proSingerDetailBody");
   const footer = document.getElementById("proSingerDetailFooter");
-  if (!modal || !body || !footer) return;
+  if (!modal || !body || !footer) {
+    showError("Detail panel is missing — hard refresh the admin page (Shift+Reload).");
+    return;
+  }
+  showError("");
 
   state.proSingerDetail = { kind: "request", id: requestId };
 
@@ -905,20 +994,26 @@ function openProSingerRequestDetail(requestId) {
     <button type="button" class="btnPrimary" data-pro-singer-save-notes="${escapeHtml(req.id)}">Save admin notes</button>
   `;
 
-  modal.hidden = false;
-  modal.setAttribute("aria-hidden", "false");
+  revealAdminModal(modal);
 }
 
 function openSingerApplicationDetail(applicationId) {
-  const app = (state.singersCache?.applications || []).find((a) => a.id === applicationId);
-  if (!app) return;
+  const app = resolveSingerApplication(applicationId);
+  if (!app) {
+    showError("Could not open that application — refresh Pro singers and try again.");
+    return;
+  }
 
   const modal = document.getElementById("proSingerDetailModal");
   const title = document.getElementById("proSingerDetailTitle");
   const sub = document.getElementById("proSingerDetailSub");
   const body = document.getElementById("proSingerDetailBody");
   const footer = document.getElementById("proSingerDetailFooter");
-  if (!modal || !body || !footer) return;
+  if (!modal || !body || !footer) {
+    showError("Detail panel is missing — hard refresh the admin page (Shift+Reload).");
+    return;
+  }
+  showError("");
 
   state.proSingerDetail = { kind: "application", id: applicationId };
 
@@ -957,8 +1052,7 @@ function openSingerApplicationDetail(applicationId) {
     ${pending ? `<button type="button" class="btnPrimary" data-singer-approve="${escapeHtml(app.id)}">Approve</button>` : ""}
   `;
 
-  modal.hidden = false;
-  modal.setAttribute("aria-hidden", "false");
+  revealAdminModal(modal);
 }
 
 async function saveProSingerRequestAdminNotes(requestId) {
@@ -969,7 +1063,7 @@ async function saveProSingerRequestAdminNotes(requestId) {
     requestId,
     adminNotes,
   });
-  const req = (state.singersCache?.requests || []).find((r) => r.id === requestId);
+  const req = resolveProSingerRequest(requestId);
   if (req) req.adminNotes = adminNotes;
   showError("");
 }
@@ -3285,17 +3379,18 @@ function renderSingers(data) {
            <button type="button" class="btnGhost" data-singer-reject="${escapeHtml(a.id)}">Reject</button>`
         : "—";
       return `
-      <tr class="singerRowClickable" data-singer-app-id="${escapeHtml(a.id)}" title="Click row for full application">
+      <tr class="singerRowClickable" data-singer-app-id="${escapeHtml(a.id)}" tabindex="0" role="button" title="Click row for full application">
         <td>${escapeHtml(a.userLabel || "—")}</td>
         <td>${escapeHtml(a.displayName || "—")}</td>
         <td>@${escapeHtml(a.instagram || "—")}</td>
         <td style="max-width:12rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(a.languages || "—")}</td>
         <td>${singerAppStatusBadge(a.status)}</td>
         ${dateCell(a.createdAt)}
+        <td><button type="button" class="btnGhost btnGhost--sm singerOpenBtn" data-singer-app-open="${escapeHtml(a.id)}">Details</button></td>
         <td class="singerRowActions">${actions}</td>
       </tr>`;
     }).join("")
-    : `<tr><td colspan="7" class="loading">No applications yet.</td></tr>`;
+    : `<tr><td colspan="8" class="loading">No applications yet.</td></tr>`;
 
   const rosterBody = roster.length
     ? roster.map((s) => {
@@ -3349,8 +3444,11 @@ function renderSingers(data) {
         : "";
       const rowClass = r.status === "submitted" ? "singerRowClickable isNew" : "singerRowClickable";
       return `
-      <tr class="${rowClass}" data-singer-request-id="${escapeHtml(r.id)}" title="Click row for brief, contact info, and song link">
-        <td style="font-size:0.78rem">${escapeHtml(r.id?.slice(0, 8) || "—")}</td>
+      <tr class="${rowClass}" data-singer-request-id="${escapeHtml(r.id)}" tabindex="0" role="button" title="Click row for brief, contact info, and song link">
+        <td style="font-size:0.78rem">
+          <button type="button" class="btnGhost btnGhost--sm singerOpenBtn" data-singer-request-open="${escapeHtml(r.id)}">Details</button>
+          <span class="singerRowId">${escapeHtml(r.id?.slice(0, 8) || "—")}</span>
+        </td>
         <td>${escapeHtml(r.requesterLabel || "—")}${contactHint}</td>
         <td>${escapeHtml(r.packageTier || "—")} · ${fmtUsd(r.priceUsd)}</td>
         <td style="max-width:12rem">
@@ -3375,7 +3473,7 @@ function renderSingers(data) {
     <div class="tableWrap tableWrap--plain">
       <table class="table--compact">
         <thead>
-          <tr><th>User</th><th>Name</th><th>Instagram</th><th>Languages</th><th>Status</th><th>Applied</th><th></th></tr>
+          <tr><th>User</th><th>Name</th><th>Instagram</th><th>Languages</th><th>Status</th><th>Applied</th><th>Details</th><th></th></tr>
         </thead>
         <tbody>${appBody}</tbody>
       </table>
@@ -3414,6 +3512,7 @@ function renderSingers(data) {
     const singerEl = document.querySelector(`[data-request-singer="${r.id}"]`);
     if (singerEl && r.singerId) singerEl.value = r.singerId;
   });
+  ensureProSingerPanelClicks();
 }
 
 function renderCredits(data) {
@@ -7121,6 +7220,22 @@ document.body.addEventListener("click", (e) => {
     return;
   }
 
+  const singerRequestOpen = e.target.closest("[data-singer-request-open]");
+  if (singerRequestOpen) {
+    e.preventDefault();
+    e.stopPropagation();
+    openProSingerRequestDetail(String(singerRequestOpen.dataset.singerRequestOpen || "").trim());
+    return;
+  }
+
+  const singerAppOpen = e.target.closest("[data-singer-app-open]");
+  if (singerAppOpen) {
+    e.preventDefault();
+    e.stopPropagation();
+    openSingerApplicationDetail(String(singerAppOpen.dataset.singerAppOpen || "").trim());
+    return;
+  }
+
   const proSingerSaveNotes = e.target.closest("[data-pro-singer-save-notes]");
   if (proSingerSaveNotes) {
     const requestId = String(proSingerSaveNotes.dataset.proSingerSaveNotes || "").trim();
@@ -8155,4 +8270,5 @@ window.addEventListener("message", (e) => {
   sendMarketingDraftToPreviewWindow(e.source, state.marketingDraftPreviewPayload);
 });
 
+ensureProSingerPanelClicks();
 void boot();

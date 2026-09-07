@@ -230,9 +230,10 @@ function resolveLyriaPhotosFromBody(body) {
 
 function buildLyriaPromptFromBody(body, extra = {}) {
   const photoImages = resolveLyriaPhotosFromBody(body);
+  const lyrics = extra.lyrics ?? String(body?.prompt || "").trim();
   return buildLyriaPrompt({
     stylePrompt: extra.stylePrompt ?? buildMusicPrompt(body),
-    lyrics: extra.lyrics ?? String(body?.prompt || "").trim(),
+    lyrics,
     title: extra.title ?? String(body?.title || "").trim(),
     instrumental: extra.instrumental ?? Boolean(body?.instrumental),
     clip: extra.clip ?? false,
@@ -245,6 +246,7 @@ function buildLyriaPromptFromBody(body, extra = {}) {
     structuredLyrics: extra.structuredLyrics || "",
     photoMood: photoImages.length > 0,
     durationSec: resolveLyriaDurationSec(body),
+    scriptFormat: extra.scriptFormat ?? String(body?.scriptFormat || "").trim(),
   });
 }
 
@@ -432,6 +434,7 @@ async function runLyriaGenerationJob({
         structuredLyrics: producerResult.structured_lyrics,
         photoMood: photoImages.length > 0,
         durationSec,
+        scriptFormat: String(body?.scriptFormat || "").trim(),
       });
     }
 
@@ -557,6 +560,7 @@ async function runLyriaClipGenerationJob({
         structuredLyrics: producerResult.structured_lyrics,
         photoMood: photoImages.length > 0,
         durationSec: resolveLyriaDurationSec(body),
+        scriptFormat: String(body?.scriptFormat || "").trim(),
       });
     }
 

@@ -64144,6 +64144,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
         model: modelForRequest,
         ...(dialect ? { dialect: String(dialect) } : {}),
         ...(lyricDialectHint ? { dialectHint: String(lyricDialectHint) } : {}),
+        ...(useLyriaMusicProvider() ? { scriptFormat: resolveLyricsScriptFormat() } : {}),
         ...(imageMoodAppliedForNextGen ? { watchKind: "photo" } : {}),
         ...(photoImageForLyria ? { photoImage: photoImageForLyria } : {}),
         personaId: personaIdSel || undefined,

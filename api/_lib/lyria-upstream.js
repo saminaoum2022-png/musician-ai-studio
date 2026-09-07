@@ -22,7 +22,7 @@ const {
   clipVocalProfileById,
   defaultClipVocalProfileForGender,
 } = require("./clip-vocal-profiles");
-const { looksLikeArabizi } = require("./arabizi");
+const { looksLikeArabizi, isArabiziScript, buildLyriaArabiziPerformanceNote } = require("./arabizi");
 
 const LYRIA_CLIP_MODEL = "lyria-3-clip-preview";
 
@@ -205,13 +205,25 @@ function resolveLyriaArabicPronunciationMode({ dialectHint = "", lyrics = "" } =
   ) {
     return "msa";
   }
+  if (looksLikeArabizi(String(lyrics || ""))) return "arabizi";
   if (blob.trim()) return "dialect";
-  if (looksLikeArabizi(String(lyrics || ""))) return "dialect";
   if (/[\u0600-\u06FF]/.test(String(lyrics || ""))) return "natural";
   return "";
 }
 
-function buildLyriaDialectVocalNote(dialectHint = "") {
+function buildLyriaArabiziVocalNote(dialectHint = "") {
+  const hint = String(dialectHint || "").trim();
+  if (/lebanese|beirut/i.test(hint)) {
+    return "Native Lebanese Arabic lead vocal, authentic Beirut colloquial pronunciation and vowels, NOT English-accented delivery";
+  }
+  if (/syrian|palestinian|levantine/i.test(hint)) {
+    return "Native Levantine Arabic lead vocal, authentic colloquial pronunciation, NOT English-accented delivery";
+  }
+  return "Native Arabic dialect lead vocal, authentic colloquial pronunciation, NOT English-accented delivery";
+}
+
+function buildLyriaDialectVocalNote(dialectHint = "", { arabizi = false } = {}) {
+  if (arabizi) return buildLyriaArabiziVocalNote(dialectHint);
   const hint = String(dialectHint || "").trim();
   if (!hint) return "";
   const mode = resolveLyriaArabicPronunciationMode({ dialectHint: hint });
@@ -237,6 +249,7 @@ function buildLyriaInlineVocalDirection({
   challengeId = "",
   dialectHint = "",
   clipVocalProfileId = "",
+  arabizi = false,
 } = {}) {
   const catalog = clipVocalProfileById(clipVocalProfileId);
   const bits = [];
@@ -259,7 +272,7 @@ function buildLyriaInlineVocalDirection({
   const challengeLine = CHALLENGE_VOCAL_PROFILES[String(challengeId || "").trim()];
   if (challengeLine) bits.push(challengeLine);
 
-  const dialectLine = buildLyriaDialectVocalNote(dialectHint);
+  const dialectLine = buildLyriaDialectVocalNote(dialectHint, { arabizi });
   if (dialectLine) bits.push(dialectLine);
 
   return bits.join(", ").replace(/\s+/g, " ").trim();
@@ -278,7 +291,7 @@ function buildLyriaArabicPronunciationLine(mode, dialectHint = "") {
     return "Arabic lyrics: colloquial spoken pronunciation.";
   }
   if (mode === "arabizi") {
-    return "Lyrics in Lebanese Arabizi phonetic Latin — pronounce colloquially; 2=hamza/spoken qaf.";
+    return "Arabizi: Arabic language in Latin letters — native colloquial Arabic pronunciation, NOT English.";
   }
   return "";
 }
@@ -359,12 +372,14 @@ function buildLyriaPrompt({
   structuredLyrics = "",
   photoMood = false,
   durationSec = 0,
+  scriptFormat = "",
 } = {}) {
   const style = String(enhancedStylePrompt || "").trim();
   const sanitizedStyle = style ? sanitizeStyleForLyria(style) : sanitizeStyleForLyria(stylePrompt);
   const lyricText = String(structuredLyrics || lyrics || "").trim();
   const songTitle = String(title || "").trim();
   const duration = Number(durationSec);
+  const arabizi = isArabiziScript({ scriptFormat, lyrics: lyricText });
 
   const direction = [];
 
@@ -394,6 +409,7 @@ function buildLyriaPrompt({
       challengeId,
       dialectHint,
       clipVocalProfileId,
+      arabizi,
     });
     if (vocal) direction.push(vocal);
   } else {
@@ -414,8 +430,11 @@ function buildLyriaPrompt({
       "",
       lyricText,
     ];
-    if (looksLikeArabizi(lyricText)) {
-      lines.splice(1, 0, "Lyrics are Arabizi phonetic spelling — sing Lebanese/Levantine colloquial pronunciation (2=hamza/qaf).");
+    if (arabizi) {
+      lines.splice(1, 0, buildLyriaArabiziPerformanceNote({
+        dialect: dialectHint,
+        dialectHint,
+      }));
     }
     return lines.join("\n").slice(0, 8000);
   }

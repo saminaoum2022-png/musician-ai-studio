@@ -3,7 +3,7 @@
  * Staging-first: NABAD_PRODUCER_ENABLED=1 on Vercel Preview.
  */
 
-const { buildLyriaVocalProfile, clipVocalProfileById } = require("./lyria-upstream");
+const { buildLyriaVocalProfile, clipVocalProfileById, mergeLyriaDialectHint, resolveLyriaDialectLabel } = require("./lyria-upstream");
 
 const GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta";
 const COACH_TIMEOUT_MS = Number(process.env.NABAD_PRODUCER_COACH_TIMEOUT_MS || 20000);
@@ -86,6 +86,7 @@ Return ONLY valid JSON with exactly two string fields. No markdown fences, no co
 
 structured_lyrics:
 - Preserve user lyrics exactly (Arabic, English, or mixed). Do NOT translate or rewrite lines.
+- Do NOT add tanwin (ـٌ ـٍ ـً) or formal MSA vowel endings the user did not write.
 - English structure tags only, e.g. [Intro], [Verse 1], [Pre-Chorus], [Chorus - Dynamic Drop], [Verse 2], [Bridge], [Outro].
 - Full song arc — not a 30s clip.
 - If instrumental is true, return "".
@@ -862,8 +863,8 @@ function sessionFromMusicGenerateBody(body, { lyrics = "", title = "", styleProm
   const bpm = bpmMatch ? Number(bpmMatch[1]) : null;
   const genre = style.split(/[|,]/).map((s) => s.trim()).filter(Boolean)[0] || "Arabic Pop";
   const instruments = String(body?.instruments || "").trim() || style;
-  const dialect = String(body?.dialect || "").trim();
-  const dialectHint = [String(body?.dialectHint || "").trim(), dialect].filter(Boolean).join(" — ");
+  const dialectHint = mergeLyriaDialectHint(body).slice(0, 500);
+  const dialect = (resolveLyriaDialectLabel(body) || dialectHint.split(" — ")[0] || "").slice(0, 120);
   return normalizeSession({
     genre: genre.slice(0, 120),
     mood: String(body?.mood || "").trim(),
@@ -874,8 +875,8 @@ function sessionFromMusicGenerateBody(body, { lyrics = "", title = "", styleProm
     instruments: instruments.slice(0, 200),
     lyrics: String(lyrics || body?.prompt || "").trim(),
     title: String(title || body?.title || "").trim(),
-    dialect: dialect.slice(0, 120),
-    dialectHint: dialectHint.slice(0, 500),
+    dialect,
+    dialectHint,
     instrumental: Boolean(instrumental ?? body?.instrumental),
     lyricsDone: true,
     referenceSkipped: true,

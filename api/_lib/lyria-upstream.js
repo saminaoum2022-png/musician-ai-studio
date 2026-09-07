@@ -128,10 +128,32 @@ function sanitizeStyleForLyria(style) {
   return parts.filter((p) => !drop(p)).join(", ").replace(/\s+/g, " ").trim();
 }
 
+function extractDialectFromStyleText(style = "") {
+  const s = String(style || "");
+  const parts = [];
+  const dialect = s.match(/\bDialect:\s*([^|,]+)/i)?.[1]?.trim();
+  const hint = s.match(/\bHint:\s*([^|,]+)/i)?.[1]?.trim();
+  const address = s.match(/Arabic address:\s*[^|,]+/i)?.[0]?.trim();
+  const accent = s.match(/(?:Lebanese|Syrian|Palestinian|Egyptian|Gulf|Iraqi|Maghrebi|Tunisian|Sudanese) Arabic vocal[^|,]*/i)?.[0]?.trim();
+  if (dialect) parts.push(dialect);
+  if (hint) parts.push(hint);
+  if (address) parts.push(address);
+  if (accent && !parts.some((p) => /arabic vocal/i.test(p))) parts.push(accent);
+  return parts.filter(Boolean).join(" — ");
+}
+
 function mergeLyriaDialectHint(body = {}) {
-  return [String(body?.dialectHint || "").trim(), String(body?.dialect || "").trim()]
+  const direct = [String(body?.dialectHint || "").trim(), String(body?.dialect || "").trim()]
     .filter(Boolean)
     .join(" — ");
+  if (direct) return direct;
+  return extractDialectFromStyleText(body?.style || "");
+}
+
+function resolveLyriaDialectLabel(body = {}) {
+  const direct = String(body?.dialect || "").trim();
+  if (direct) return direct;
+  return String(body?.style || "").match(/\bDialect:\s*([^|,]+)/i)?.[1]?.trim() || "";
 }
 
 /** msa = formal allowed; dialect = colloquial + no tanwin; natural = Arabic lyrics but no dialect chip. */
@@ -154,16 +176,29 @@ function buildLyriaArabicPronunciationLine(mode, dialectHint = "") {
   if (mode === "dialect") {
     const hint = String(dialectHint || "").trim();
     const flavor = hint || "colloquial Arabic dialect";
+    const levantine = /lebanese|beirut|syrian|palestinian|levantine/i.test(flavor);
+    const examples = levantine
+      ? [
+          "Examples (Levantine colloquial, NOT MSA):",
+          "فرحانة → far-7a-ne (NOT far-7a-na-tun);",
+          "شربل / يا شربل → shar-bel (NOT shar-be-loun unless written);",
+          "اليوم → el-yom (NOT el-yaw-ma);",
+          "إنتَ → inta (NOT anta with formal endings).",
+        ].join(" ")
+      : "Do NOT add -un/-an/-in tanween or MSA case endings on any word or name.";
     return [
       `${flavor}.`,
-      "Sing lyrics exactly as written — conversational spoken vowels.",
-      "NO tanwin (ـٌ ـٍ ـً), NO formal MSA declension on names or address forms.",
-      "Do NOT add vowel endings the text does not show (e.g. Charbel stays Charbel, not Charbelon).",
+      "Sing lyrics exactly as written — conversational spoken vowels only.",
+      "NO tanwin (ـٌ ـٍ ـً), NO formal MSA declension or nunation on ANY word.",
+      "Ta marbuta (ة): pronounce -a/-e only, never -atun/-atan.",
+      "Do NOT add vowel endings the text does not show.",
+      examples,
     ].join(" ");
   }
   if (mode === "natural") {
     return [
-      "Arabic lyrics: natural spoken pronunciation — NO tanwin, NO formal MSA declension unless the written text includes it.",
+      "Arabic lyrics: colloquial spoken pronunciation — NO tanwin, NO formal MSA declension.",
+      "Ta marbuta (ة): -a/-e only. Names stay as written (e.g. شربل not sharbeloun).",
       "Do not add extra vowel endings on names or words.",
     ].join(" ");
   }
@@ -702,6 +737,7 @@ module.exports = {
   buildLyriaPrompt,
   buildLyriaVocalProfile,
   mergeLyriaDialectHint,
+  resolveLyriaDialectLabel,
   resolveLyriaArabicPronunciationMode,
   buildLyriaArabicPronunciationLine,
   sanitizeStyleForLyria,

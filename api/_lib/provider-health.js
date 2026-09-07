@@ -197,7 +197,7 @@ async function pingGeminiLyria() {
     return { status: "unconfigured", latencyMs: null, detail: "GEMINI_API_KEY not set", enabled: lyriaEnabled };
   }
   const ping = await pingGeminiModels(apiKey);
-  const model = String(process.env.LYRIA_MUSIC_MODEL || "lyria-3.5").trim();
+  const model = String(process.env.LYRIA_MUSIC_MODEL || "lyria-3-pro-preview").trim();
   const lyriaNote = lyriaEnabled ? `Lyria ${model} live` : "Lyria admin-only";
   return {
     ...ping,

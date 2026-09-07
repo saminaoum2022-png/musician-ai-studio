@@ -4,7 +4,10 @@
  */
 const GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta";
 const LYRIA_INTERACTIONS_URL = `${GEMINI_BASE}/interactions`;
-const LYRIA_FULL_MODEL = "lyria-3.5";
+const LYRIA_PRO_MODEL = "lyria-3-pro-preview";
+const LYRIA_35_MODEL = "lyria-3.5";
+/** Default for full song + Nabad Producer — override with LYRIA_MUSIC_MODEL=lyria-3.5 */
+const LYRIA_FULL_MODEL = LYRIA_PRO_MODEL;
 
 function safeJson(txt) {
   try {
@@ -56,9 +59,10 @@ const TIMBRE_TO_LYRIA = {
 };
 
 const LEGACY_LYRIA_MODEL_ALIASES = Object.freeze({
-  "lyria-3-pro-preview": LYRIA_FULL_MODEL,
-  pro: LYRIA_FULL_MODEL,
-  full: LYRIA_FULL_MODEL,
+  pro: LYRIA_PRO_MODEL,
+  full: LYRIA_PRO_MODEL,
+  "lyria-3.5": LYRIA_35_MODEL,
+  "3.5": LYRIA_35_MODEL,
 });
 
 function resolveLyriaModel(explicit) {
@@ -798,6 +802,8 @@ async function lyriaGenerateMusic({ apiKey, model, prompt, photoImages = [] }) {
 module.exports = {
   LYRIA_CLIP_MODEL,
   LYRIA_FULL_MODEL,
+  LYRIA_PRO_MODEL,
+  LYRIA_35_MODEL,
   clipVocalProfileById,
   CLIP_VOCAL_PROFILES,
   defaultClipVocalProfileForGender,

@@ -23,6 +23,7 @@ const {
   defaultClipVocalProfileForGender,
 } = require("./clip-vocal-profiles");
 const { looksLikeArabizi, isArabiziScript, buildLyriaArabiziPerformanceNote } = require("./arabizi");
+const { buildLyriaLebaneseArabicNote, dialectFlags } = require("./arabic-dialect-lyrics");
 
 const LYRIA_CLIP_MODEL = "lyria-3-clip-preview";
 
@@ -285,7 +286,11 @@ function buildLyriaArabicPronunciationLine(mode, dialectHint = "") {
   }
   if (mode === "dialect") {
     const hint = String(dialectHint || "").trim();
-    return [hint || "colloquial Arabic dialect", "spoken vowels only; no tanwin"].filter(Boolean).join(" — ");
+    const flags = dialectFlags("", hint);
+    if (flags.isLebanese) {
+      return buildLyriaLebaneseArabicNote();
+    }
+    return [hint || "colloquial Arabic dialect", "spoken vowels only; no tanween; sukoon on stopped consonants"].filter(Boolean).join(" — ");
   }
   if (mode === "natural") {
     return "Arabic lyrics: colloquial spoken pronunciation.";

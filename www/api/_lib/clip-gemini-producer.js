@@ -157,7 +157,7 @@ Include ALL when inferable (use sensible genre defaults if missing — never sta
 7. Vocal: gender, character, delivery from inputs; merge vocal_lyria_hint if present.
    Conversational, warm, close-mic — NO shouting or stadium belt unless user asked.
 8. Mix: density, brightness, space per section feel.
-9. Arabic/dialect: if dialect_hint mentions MSA/formal, allow formal vocal color; otherwise colloquial spoken delivery — NO tanwin, NO adding vowel endings on names.
+9. Arabic/dialect: if dialect_hint mentions MSA/formal, allow formal vocal color; otherwise colloquial spoken delivery — NO tanween unless user asked for MSA; Lebanese uses sukoon on stopped consonants at word ends and inside clusters.
 
 Dialect: if dialect_hint is set (Levantine, Gulf, Egyptian, MSA, etc.), reflect in vocal color and rhythm — tasteful, not stereotyped.
 

@@ -292,6 +292,7 @@ module.exports = async function handler(req, res) {
       clip: false,
       vocalGender: session.vocalGender,
       clipVocalProfileId: session.clipVocalProfileId,
+      dialectHint: session.dialectHint || session.dialect || "",
       enhancedStylePrompt: blueprint.master_style_prompt,
       structuredLyrics: blueprint.structured_lyrics || lyrics,
     });
@@ -305,6 +306,8 @@ module.exports = async function handler(req, res) {
       `genre: ${producerSafeGenreLabel(session) || "Arabic Pop"}`,
       `mood: ${session.mood}`,
       `bpm: ${session.bpm || session.tempo}`,
+      ...(session.dialect ? [`dialect: ${session.dialect}`] : []),
+      ...(session.dialectHint ? [`dialect_hint: ${String(session.dialectHint).slice(0, 400)}`] : []),
       `gemini_producer: applied`,
       session.referenceText && !session.referenceSkipped
         ? `reference_style_note: ${String(session.referenceNote || "abstract style only").slice(0, 280)}`

@@ -93,6 +93,8 @@ structured_lyrics:
 master_style_prompt:
 - 1200–2000 characters. Rich production brief for Lyria.
 - Include: genre, mood, exact BPM, key/scale, vocal delivery, instrument layers, dynamic drops/builds, transitions, mix space.
+- If dialect_hint is provided, reflect that dialect and accent explicitly in vocal delivery (e.g. Lebanese Beirut colloquial, not generic Levantine).
+- If dialect_hint includes Arabic address (TO a man/woman/group), honor addressee gender in vocal feel; do not confuse addressee with singer gender.
 - NEVER include copyrighted artist names, song titles, or album names — only generic musical descriptors.
 - If reference_inspiration is provided, translate to abstract style only (tempo feel, arrangement density, vocal tone class).
 
@@ -460,6 +462,8 @@ function emptySession() {
     clipVocalProfileId: "",
     instruments: "",
     lyrics: "",
+    dialect: "",
+    dialectHint: "",
     referenceText: "",
     referenceNote: "",
     title: "",
@@ -498,6 +502,8 @@ function normalizeSession(raw) {
     clipVocalProfileId: String(s.clipVocalProfileId || "").trim().slice(0, 64),
     instruments: String(s.instruments || "").trim().slice(0, 200),
     lyrics: String(s.lyrics || "").trim().slice(0, 4000),
+    dialect: String(s.dialect || "").trim().slice(0, 120),
+    dialectHint: String(s.dialectHint || "").trim().slice(0, 500),
     referenceText: String(s.referenceText || "").trim().slice(0, 300),
     referenceNote: String(s.referenceNote || "").trim().slice(0, 600),
     title: String(s.title || "").trim().slice(0, 120),
@@ -817,9 +823,11 @@ async function generateCoachReply({
 }
 
 function buildBlueprintInput(session) {
+  const dialectHint = String(session.dialectHint || session.dialect || "").trim();
   const vocalLyriaHint = buildLyriaVocalProfile({
     vocalGender: session.vocalGender,
     clipVocalProfileId: session.clipVocalProfileId,
+    dialectHint,
   });
   let referenceInspiration = "";
   if (session.referenceNote) {
@@ -841,6 +849,8 @@ function buildBlueprintInput(session) {
     vocal_gender: session.vocalGender,
     vocal_character_id: session.clipVocalProfileId,
     vocal_lyria_hint: vocalLyriaHint,
+    dialect: String(session.dialect || "").trim(),
+    dialect_hint: dialectHint,
     reference_inspiration: referenceInspiration,
     target: "full_length_song",
   };
@@ -852,6 +862,8 @@ function sessionFromMusicGenerateBody(body, { lyrics = "", title = "", styleProm
   const bpm = bpmMatch ? Number(bpmMatch[1]) : null;
   const genre = style.split(/[|,]/).map((s) => s.trim()).filter(Boolean)[0] || "Arabic Pop";
   const instruments = String(body?.instruments || "").trim() || style;
+  const dialect = String(body?.dialect || "").trim();
+  const dialectHint = [String(body?.dialectHint || "").trim(), dialect].filter(Boolean).join(" — ");
   return normalizeSession({
     genre: genre.slice(0, 120),
     mood: String(body?.mood || "").trim(),
@@ -862,6 +874,8 @@ function sessionFromMusicGenerateBody(body, { lyrics = "", title = "", styleProm
     instruments: instruments.slice(0, 200),
     lyrics: String(lyrics || body?.prompt || "").trim(),
     title: String(title || body?.title || "").trim(),
+    dialect: dialect.slice(0, 120),
+    dialectHint: dialectHint.slice(0, 500),
     instrumental: Boolean(instrumental ?? body?.instrumental),
     lyricsDone: true,
     referenceSkipped: true,

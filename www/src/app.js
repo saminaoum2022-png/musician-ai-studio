@@ -5777,9 +5777,46 @@ async function runLyricsSingabilityCheck() {
     return;
   }
 
+  const lyricsBoxEl = els.sunoPrompt?.closest?.(".lyricsBox");
   const reqId = ++lyricsSingabilityRequestSeq;
   lyricsSingabilityApiPending = true;
-  await fetchLyricsSingabilityReport(text, { updateUi: true, reqId });
+  let inkwellSettle = false;
+  try {
+    if (els.btnLyricsMagic) els.btnLyricsMagic.disabled = true;
+    if (els.btnLyricsPolish) els.btnLyricsPolish.disabled = true;
+    if (els.btnLyricsFixSinging) els.btnLyricsFixSinging.disabled = true;
+    if (els.btnLyricsDiacritics) els.btnLyricsDiacritics.disabled = true;
+    if (lyricsBoxEl) {
+      lyricsBoxEl.classList.remove("lyricsGenSettled");
+      lyricsBoxEl.classList.add("generating");
+    }
+    if (els.sunoPrompt) els.sunoPrompt.disabled = true;
+    setStatus("AI is checking singability — rhyme, wazen (وزن), and line balance…");
+    const report = await fetchLyricsSingabilityReport(text, { updateUi: true, reqId });
+    if (report && !report.checking) {
+      inkwellSettle = true;
+      const scoreNote = Number.isFinite(Number(report.score)) ? `${report.score}/100 — ` : "";
+      const summary = String(report.summary || "").trim() || "Review the singability panel below.";
+      setStatus(`Singability ${scoreNote}${summary}`);
+      showToast(`Singability check ready${Number.isFinite(Number(report.score)) ? ` (${report.score}/100)` : ""}.`, {
+        icon: "♫",
+        durationMs: 3600,
+      });
+      try {
+        els.lyricsSingabilityPanel?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+      } catch {}
+    }
+  } catch (e) {
+    setStatus(`Singability check failed: ${e?.message || String(e)}`);
+  } finally {
+    if (els.sunoPrompt) els.sunoPrompt.disabled = false;
+    if (lyricsBoxEl) lyricsBoxEl.classList.remove("generating");
+    if (inkwellSettle) pulseLyricsGenSettled(lyricsBoxEl);
+    if (els.btnLyricsMagic) els.btnLyricsMagic.disabled = false;
+    if (els.btnLyricsPolish) els.btnLyricsPolish.disabled = false;
+    if (els.btnLyricsFixSinging) els.btnLyricsFixSinging.disabled = false;
+    if (els.btnLyricsDiacritics) els.btnLyricsDiacritics.disabled = false;
+  }
 }
 
 function singabilityReportIsFresh(text) {
@@ -24516,6 +24553,7 @@ function setMusicProviderPref(pref) {
     localStorage.setItem(MUSIC_PROVIDER_LS_KEY, p);
   } catch {}
   syncSettingsMusicProviderRow(p);
+  try { syncNabadClipCreateUi(); } catch {}
 }
 
 function musicProviderSubline(pref) {
@@ -24796,8 +24834,12 @@ function resolveClipSingerGenderForUi() {
   return "";
 }
 
+function showLyriaVocalCharacterUi() {
+  return isLyriaClipGenerateFlow() || useLyriaMusicProvider();
+}
+
 function ensureClipSingerGenderSynced() {
-  if (!isLyriaClipGenerateFlow()) return;
+  if (!showLyriaVocalCharacterUi()) return;
   const current = String(els.sunoSingerGender?.value || "").trim().toLowerCase();
   if (current === "m" || current === "f" || current === "duo") return;
   const vp = String(els.sunoVoiceProfile?.value || "").trim();
@@ -24825,7 +24867,7 @@ function syncClipVocalCharacterUi() {
   const specEl = els.clipVocalCharacterSpec;
   if (!row || !deck) return;
 
-  if (!isLyriaClipGenerateFlow()) {
+  if (!showLyriaVocalCharacterUi()) {
     row.hidden = true;
     deck.innerHTML = "";
     if (specEl) specEl.textContent = "";
@@ -24833,6 +24875,12 @@ function syncClipVocalCharacterUi() {
   }
 
   row.hidden = false;
+  const hintEl = document.querySelector("#clipVocalCharacterRow .clipVocalCharacterHint");
+  if (hintEl) {
+    hintEl.textContent = isLyriaClipGenerateFlow()
+      ? "For Nabad Clip · Lyria"
+      : "For Lyria full song · admin";
+  }
   ensureClipSingerGenderSynced();
   const gender = resolveClipSingerGenderForUi();
   const profiles = clipVocalProfilesForGender(gender);
@@ -24873,6 +24921,8 @@ function syncClipVocalCharacterUi() {
 
 function syncNabadClipCreateUi() {
   const clip = isLyriaClipGenerateFlow();
+  const lyriaFull = useLyriaMusicProvider();
+  const showVocalCharacter = clip || lyriaFull;
   const personaPill = document.getElementById("singerPersonaPill");
   const duoPill = document.getElementById("singerDuoPill");
   const personaRow = document.getElementById("singerPersonaRow");
@@ -24882,13 +24932,13 @@ function syncNabadClipCreateUi() {
     personaPill.setAttribute("aria-hidden", clip ? "true" : "false");
   }
   if (duoPill) {
-    duoPill.hidden = !clip;
-    duoPill.setAttribute("aria-hidden", clip ? "false" : "true");
+    duoPill.hidden = !showVocalCharacter;
+    duoPill.setAttribute("aria-hidden", showVocalCharacter ? "false" : "true");
   }
   if (wrap) wrap.classList.toggle("nabadClipNoPersona", clip);
   if (els.clipVocalCharacterRow) {
-    els.clipVocalCharacterRow.hidden = !clip;
-    els.clipVocalCharacterRow.setAttribute("aria-hidden", clip ? "false" : "true");
+    els.clipVocalCharacterRow.hidden = !showVocalCharacter;
+    els.clipVocalCharacterRow.setAttribute("aria-hidden", showVocalCharacter ? "false" : "true");
   }
   if (clip) {
     try { clearActiveVoicePersona({ silent: true }); } catch {}
@@ -24917,11 +24967,13 @@ function syncNabadClipCreateUi() {
   } else {
     try { renderSingerPersonaPill(); } catch {}
     try { renderActivePersonaBanner(); } catch {}
-    if (els.clipVocalProfileId) els.clipVocalProfileId.value = "";
-    const sg = String(els.sunoSingerGender?.value || "").trim().toLowerCase();
-    if (sg === "duo" && els.sunoSingerGender) {
-      els.sunoSingerGender.value = "";
-      try { syncSingerGenderPills(); } catch {}
+    if (!lyriaFull) {
+      if (els.clipVocalProfileId) els.clipVocalProfileId.value = "";
+      const sg = String(els.sunoSingerGender?.value || "").trim().toLowerCase();
+      if (sg === "duo" && els.sunoSingerGender) {
+        els.sunoSingerGender.value = "";
+        try { syncSingerGenderPills(); } catch {}
+      }
     }
   }
   try { syncClipVocalCharacterUi(); } catch {}
@@ -64172,6 +64224,25 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
         const singerGender = String(els.sunoSingerGender?.value || "").trim();
         if (singerGender === "m" || singerGender === "f") {
           payload.vocalGender = singerGender;
+        }
+      }
+      if (useLyriaMusicProvider() && !shouldGenerateInstrumental) {
+        ensureClipSingerGenderSynced();
+        const lyriaVocalGender =
+          resolveClipSingerGenderForUi()
+          || resolveSingerGenderForGeneration({ personaId: personaIdSel });
+        let clipProfileId =
+          getSelectedClipVocalProfileId()
+          || defaultClipVocalProfileIdForGender(lyriaVocalGender);
+        if (clipProfileId && clipProfileId !== getSelectedClipVocalProfileId()) {
+          setSelectedClipVocalProfileId(clipProfileId);
+        }
+        if (clipProfileId) {
+          payload.clipVocalProfileId = clipProfileId;
+          if (lyriaVocalGender === "m" || lyriaVocalGender === "f" || lyriaVocalGender === "duo") {
+            payload.vocalGender = lyriaVocalGender;
+          }
+          delete payload.voiceTimbre;
         }
       }
       if (userAvoidTags) payload.negativeTags = userAvoidTags;

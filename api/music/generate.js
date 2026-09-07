@@ -354,7 +354,7 @@ function scheduleBackgroundWork(promise) {
   void promise;
 }
 
-function buildLyriaFullSongAdminExtra({ body, producerResult, model = "" } = {}) {
+function buildLyriaFullSongAdminExtra({ body, producerResult, model = "", lyriaPrompt = "" } = {}) {
   const dialectHintLine = mergeLyriaDialectHint(body);
   const dialectLabel = resolveLyriaDialectLabel(body);
   return [
@@ -362,6 +362,7 @@ function buildLyriaFullSongAdminExtra({ body, producerResult, model = "" } = {})
     ...(model ? [`lyria_model: ${model}`] : []),
     ...(dialectLabel ? [`dialect: ${dialectLabel}`] : []),
     ...(dialectHintLine ? [`dialect_hint: ${dialectHintLine.slice(0, 400)}`] : []),
+    ...buildLyriaClipMetaLines(body, lyriaPrompt),
     ...String(appendProducerAdminDetail("", producerResult) || "")
       .split("\n")
       .filter(Boolean),
@@ -443,7 +444,7 @@ async function runLyriaGenerationJob({
       model,
       lyriaPrompt,
       photoCount: photoImages.length,
-      extraLines: buildLyriaFullSongAdminExtra({ body, producerResult, model }),
+      extraLines: buildLyriaFullSongAdminExtra({ body, producerResult, model, lyriaPrompt }),
     });
 
     await updateMusicGenerationByTaskId(taskId, {

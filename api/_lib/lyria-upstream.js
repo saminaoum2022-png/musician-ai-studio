@@ -169,38 +169,71 @@ function resolveLyriaArabicPronunciationMode({ dialectHint = "", lyrics = "" } =
   return "";
 }
 
+function buildLyriaDialectVocalNote(dialectHint = "") {
+  const hint = String(dialectHint || "").trim();
+  if (!hint) return "";
+  const mode = resolveLyriaArabicPronunciationMode({ dialectHint: hint });
+  if (mode === "msa") return "Modern Standard Arabic vocal delivery.";
+  if (/lebanese|beirut/i.test(hint)) {
+    return "Lebanese Beirut colloquial vocal, warm conversational Levantine delivery.";
+  }
+  if (/syrian|palestinian|levantine/i.test(hint)) {
+    return "Levantine colloquial vocal, warm conversational delivery.";
+  }
+  if (/egyptian|masri/i.test(hint)) return "Egyptian Masri colloquial vocal delivery.";
+  if (/gulf|khaleeji/i.test(hint)) return "Gulf Khaleeji colloquial vocal delivery.";
+  const short = hint.split(" — ")[0].split(".")[0].trim().slice(0, 100);
+  return short ? `${short}, colloquial conversational vocal delivery.` : "";
+}
+
+/**
+ * Positive-only vocal direction for Lyria (no NOT/NO clauses — the model may sing them).
+ */
+function buildLyriaInlineVocalDirection({
+  vocalGender = "",
+  voiceTimbre = "",
+  challengeId = "",
+  dialectHint = "",
+  clipVocalProfileId = "",
+} = {}) {
+  const catalog = clipVocalProfileById(clipVocalProfileId);
+  const bits = [];
+
+  if (catalog?.lyriaVocalPrompt) {
+    bits.push(String(catalog.lyriaVocalPrompt).trim());
+  } else {
+    const g = String(vocalGender || "").trim().toLowerCase();
+    if (g === "f") {
+      bits.push("Female alto vocal, warm soulful close-mic chest voice");
+    } else if (g === "m") {
+      bits.push("Male baritone vocal, smooth warm conversational delivery");
+    } else {
+      bits.push("Warm conversational lead vocal, close-mic chest voice");
+    }
+    const timbreLine = mapTimbreToLyria(voiceTimbre);
+    if (timbreLine) bits.push(timbreLine);
+  }
+
+  const challengeLine = CHALLENGE_VOCAL_PROFILES[String(challengeId || "").trim()];
+  if (challengeLine) bits.push(challengeLine);
+
+  const dialectLine = buildLyriaDialectVocalNote(dialectHint);
+  if (dialectLine) bits.push(dialectLine);
+
+  return bits.join(", ").replace(/\s+/g, " ").trim();
+}
+
+/** Admin logging only — never append as a labeled block in the Lyria prompt. */
 function buildLyriaArabicPronunciationLine(mode, dialectHint = "") {
   if (mode === "msa") {
-    return "Modern Standard Arabic (MSA): formal pronunciation and grammar are allowed when appropriate.";
+    return "Modern Standard Arabic (MSA): formal pronunciation allowed when appropriate.";
   }
   if (mode === "dialect") {
     const hint = String(dialectHint || "").trim();
-    const flavor = hint || "colloquial Arabic dialect";
-    const levantine = /lebanese|beirut|syrian|palestinian|levantine/i.test(flavor);
-    const examples = levantine
-      ? [
-          "Examples (Levantine colloquial, NOT MSA):",
-          "فرحانة → far-7a-ne (NOT far-7a-na-tun);",
-          "شربل / يا شربل → shar-bel (NOT shar-be-loun unless written);",
-          "اليوم → el-yom (NOT el-yaw-ma);",
-          "إنتَ → inta (NOT anta with formal endings).",
-        ].join(" ")
-      : "Do NOT add -un/-an/-in tanween or MSA case endings on any word or name.";
-    return [
-      `${flavor}.`,
-      "Sing lyrics exactly as written — conversational spoken vowels only.",
-      "NO tanwin (ـٌ ـٍ ـً), NO formal MSA declension or nunation on ANY word.",
-      "Ta marbuta (ة): pronounce -a/-e only, never -atun/-atan.",
-      "Do NOT add vowel endings the text does not show.",
-      examples,
-    ].join(" ");
+    return [hint || "colloquial Arabic dialect", "spoken vowels only; no tanwin"].filter(Boolean).join(" — ");
   }
   if (mode === "natural") {
-    return [
-      "Arabic lyrics: colloquial spoken pronunciation — NO tanwin, NO formal MSA declension.",
-      "Ta marbuta (ة): -a/-e only. Names stay as written (e.g. شربل not sharbeloun).",
-      "Do not add extra vowel endings on names or words.",
-    ].join(" ");
+    return "Arabic lyrics: colloquial spoken pronunciation.";
   }
   return "";
 }
@@ -254,19 +287,17 @@ function buildLyriaVocalProfile({
 
   const dialect = String(dialectHint || "").trim();
   if (dialect) {
-    const mode = resolveLyriaArabicPronunciationMode({ dialectHint: dialect });
-    if (mode === "msa") {
-      bits.push(`Modern Standard Arabic vocal delivery — ${dialect}`);
-    } else {
-      bits.push(`Natural ${dialect} pronunciation and delivery — colloquial, not formal MSA`);
-    }
+    const note = buildLyriaDialectVocalNote(dialect);
+    if (note) bits.push(note);
   }
 
   return bits.join(". ").replace(/\.\s*\./g, ".").trim();
 }
 
 /**
- * Build a structured Lyria prompt: musical direction + vocal profile + Lyrics block.
+ * Build a Lyria prompt: one musical-direction paragraph, then lyrics only.
+ * Google guidance: separate instructions from lyrics — labeled meta blocks get sung.
+ * @see https://ai.google.dev/gemini-api/docs/music-generation
  */
 function buildLyriaPrompt({
   stylePrompt = "",
@@ -284,61 +315,63 @@ function buildLyriaPrompt({
   photoMood = false,
   durationSec = 0,
 } = {}) {
-  const sections = [];
-  const style = String(enhancedStylePrompt || "").trim()
-    || sanitizeStyleForLyria(stylePrompt);
+  const style = String(enhancedStylePrompt || "").trim();
+  const sanitizedStyle = style ? sanitizeStyleForLyria(style) : sanitizeStyleForLyria(stylePrompt);
   const lyricText = String(structuredLyrics || lyrics || "").trim();
   const songTitle = String(title || "").trim();
   const duration = Number(durationSec);
 
+  const direction = [];
+
   if (Number.isFinite(duration) && duration >= 30 && !clip) {
     const mins = Math.max(1, Math.round(duration / 60));
-    sections.push(
-      `Duration: Create a song approximately ${mins} minute${mins === 1 ? "" : "s"} (${Math.round(duration)} seconds).`,
-    );
+    direction.push(`Approximately ${mins} minute${mins === 1 ? "" : "s"} (${Math.round(duration)} seconds)`);
   }
 
   if (photoMood) {
-    sections.push(
-      "Photo mood: Compose music inspired by the mood, colors, atmosphere, and feeling in the attached image.",
-    );
+    direction.push("Music inspired by the mood, colors, and atmosphere in the attached image");
   }
 
   if (clip) {
-    sections.push(
-      "Structure: Create a short ~28 second hook-focused music clip (one optional verse plus one chorus — not a full-length song).",
-      "End on a complete musical phrase with a natural vocal close.",
+    direction.push(
+      "Short hook-focused music clip about 28 seconds, one optional verse plus one chorus, end on a complete phrase",
     );
   }
 
-  if (songTitle) sections.push(`Title: ${songTitle}`);
-  if (style) sections.push(`Musical direction: ${style}`);
+  if (songTitle) direction.push(`Title: ${songTitle}`);
+
+  if (sanitizedStyle) direction.push(sanitizedStyle);
 
   if (!instrumental) {
-    const vocalProfile = buildLyriaVocalProfile({
+    const vocal = buildLyriaInlineVocalDirection({
       vocalGender,
       voiceTimbre,
       challengeId,
       dialectHint,
       clipVocalProfileId,
     });
-    if (vocalProfile) sections.push(`Vocal profile: ${vocalProfile}`);
-    const pronunciationLine = buildLyriaArabicPronunciationLine(
-      resolveLyriaArabicPronunciationMode({ dialectHint, lyrics: lyricText }),
-      dialectHint,
-    );
-    if (pronunciationLine) sections.push(`Pronunciation: ${pronunciationLine}`);
+    if (vocal) direction.push(vocal);
+  } else {
+    direction.push("Instrumental only, no vocals");
   }
+
+  const directionText = direction.filter(Boolean).join(". ").replace(/\.\s*\./g, ".").trim();
 
   if (instrumental) {
-    sections.push("Instrumental only — no vocals, no lyrics.");
-  } else if (lyricText) {
-    sections.push(`Lyrics:\n${lyricText}`);
-  } else {
-    sections.push("Write and perform original lyrics matching the musical direction.");
+    return `Create an instrumental track. ${directionText}.`.slice(0, 8000);
   }
 
-  return sections.join("\n\n").slice(0, 8000);
+  if (lyricText) {
+    return [
+      `Create a song. ${directionText}.`,
+      "",
+      "With the following lyrics:",
+      "",
+      lyricText,
+    ].join("\n").slice(0, 8000);
+  }
+
+  return `Create a song. ${directionText}. Write and perform original lyrics matching this direction.`.slice(0, 8000);
 }
 
 function decodeInlineAudio(inline) {

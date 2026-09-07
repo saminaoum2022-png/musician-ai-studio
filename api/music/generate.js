@@ -37,6 +37,8 @@ const {
   resolveLyriaModel,
   resolveLyriaPhotoImages,
   mergeLyriaDialectHint,
+  buildLyriaArabicPronunciationLine,
+  resolveLyriaArabicPronunciationMode,
 } = require("../_lib/lyria-upstream");
 const { clipVocalProfileById } = require("../_lib/clip-vocal-profiles");
 const { requireProSubscription } = require("../_lib/pro-web-gate");
@@ -412,6 +414,10 @@ async function runLyriaGenerationJob({
     }
 
     const dialectHintLine = String(session.dialectHint || mergeLyriaDialectHint(body) || "").trim();
+    const pronunciationNote = buildLyriaArabicPronunciationLine(
+      resolveLyriaArabicPronunciationMode({ dialectHint: dialectHintLine, lyrics }),
+      dialectHintLine,
+    );
     const blueprintExtra = blueprint.ok
       ? [
           "gemini_producer: nabad_blueprint",
@@ -419,6 +425,7 @@ async function runLyriaGenerationJob({
           `blueprint_attempt: ${blueprint.attempt || 1}`,
           ...(session.dialect ? [`dialect: ${session.dialect}`] : []),
           ...(dialectHintLine ? [`dialect_hint: ${dialectHintLine.slice(0, 400)}`] : []),
+          ...(pronunciationNote ? [`pronunciation_note: ${pronunciationNote.slice(0, 300)}`] : []),
           `master_style_prompt: ${String(blueprint.master_style_prompt || "").slice(0, 600)}`,
           `structured_lyrics: ${String(blueprint.structured_lyrics || "").slice(0, 400)}`,
         ]

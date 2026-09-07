@@ -94,6 +94,7 @@ structured_lyrics:
 master_style_prompt:
 - 1200–2000 characters. Rich production brief for Lyria.
 - Include: genre, mood, exact BPM, key/scale, vocal delivery, instrument layers, dynamic drops/builds, transitions, mix space.
+- Positive musical language only — describe what to include, never "NO", "NOT", or "never" clauses (Lyria may sing them).
 - If dialect_hint is provided, reflect that dialect and accent explicitly in vocal delivery (e.g. Lebanese Beirut colloquial, not generic Levantine).
 - If dialect_hint includes Arabic address (TO a man/woman/group), honor addressee gender in vocal feel; do not confuse addressee with singer gender.
 - NEVER include copyrighted artist names, song titles, or album names — only generic musical descriptors.

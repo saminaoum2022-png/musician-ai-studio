@@ -445,7 +445,8 @@ function envFlagEnabled(name, { defaultOn = false } = {}) {
 }
 
 function nabadProducerEnabled() {
-  return envFlagEnabled("NABAD_PRODUCER_ENABLED", { defaultOn: false });
+  const isPreview = String(process.env.VERCEL_ENV || "").trim().toLowerCase() === "preview";
+  return envFlagEnabled("NABAD_PRODUCER_ENABLED", { defaultOn: isPreview });
 }
 
 function resolveProducerModels() {

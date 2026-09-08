@@ -2741,7 +2741,8 @@ function nativeHttpTimeoutsForApiPath(path) {
   if (
     p === "/api/music/generate" ||
     p === "/api/suno/generate" ||
-    p === "/api/suno/stems"
+    p === "/api/suno/stems" ||
+    p === "/api/music/vibe-read"
   ) {
     return {
       connectTimeout: NATIVE_HTTP_LONG_COMPOSE_CONNECT_MS,
@@ -20639,9 +20640,18 @@ async function analyzeVibeRead() {
       throw new Error("Audio clip too large — trim to about 3 minutes.");
     }
     vibeReadSourceName = String(file.name || "track").trim();
+    const authToken = getSupabaseAuthToken();
+    if (!authToken) {
+      throw new Error("Sign in to use Vibe read.");
+    }
     const r = await apiFetch("/api/music/vibe-read", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${authToken}`,
+      },
+      nativeReadTimeoutMs: 90000,
+      nativeConnectTimeoutMs: 30000,
       body: JSON.stringify({ audio: dataUrl }),
     });
     const d = await r.json().catch(() => ({}));

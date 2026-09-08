@@ -20653,10 +20653,16 @@ async function analyzeVibeRead() {
     setCreateVibeAttachmentPreview(String(vibeReadData?.concept || tags || "Vibe read ready."), vibeReadSourceName);
     setStatus("Vibe read ready. Tap Use in Create — inspiration only, not a copy.");
   } catch (e) {
+    const msg = String(e?.message || "Vibe read failed").trim();
+    const panelHint = /too large|3 minutes/i.test(msg)
+      ? msg
+      : (msg.includes("not enabled") || msg.includes("admin-only") || msg.includes("GEMINI")
+        ? msg
+        : `${msg} — try a shorter clip if the track is long.`);
     if (els.vibeReadOutput) {
-      els.vibeReadOutput.innerHTML = `<div class="imageMoodEmpty">Vibe read failed — try a shorter clip.</div>`;
+      els.vibeReadOutput.innerHTML = `<div class="imageMoodEmpty">${escapeHtml(panelHint)}</div>`;
     }
-    setStatus(`Vibe read failed: ${e?.message || String(e)}`);
+    setStatus(`Vibe read failed: ${msg}`);
   } finally {
     syncVibeReadSheetUi({ analyzing: false });
   }

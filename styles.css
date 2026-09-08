@@ -7341,6 +7341,45 @@ body.hubJumpingToTop #hubList .hubRow{
   gap: 8px;
   min-width: 0;
 }
+/* ── Player lyrics chip (plain scroll — no sync) ── */
+.playerLyricsChip{
+  position: absolute;
+  left: 14px;
+  bottom: 14px;
+  z-index: 7;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 13px 8px 11px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(8, 10, 18, 0.28);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  color: rgba(255, 255, 255, 0.72);
+  opacity: 0.52;
+  font-size: 12.5px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  transition: opacity 180ms ease, background 180ms ease, color 180ms ease, transform 180ms ease;
+}
+.playerLyricsChip[hidden]{ display: none !important; }
+.playerLyricsChip:hover,
+.playerLyricsChip:focus-visible{
+  opacity: 0.88;
+  color: rgba(255, 255, 255, 0.94);
+  background: rgba(8, 10, 18, 0.44);
+}
+.playerLyricsChip:active{ transform: scale(0.97); }
+.playerLyricsChipIco{
+  width: 15px;
+  height: 15px;
+  flex: 0 0 auto;
+  opacity: 0.92;
+}
+.playerLyricsChipLabel{ line-height: 1; }
+
 /* ── Karaoke (3-line stack; below cover on mobile player) ── */
 .playerKaraokeFloat{
   position: absolute;
@@ -10389,8 +10428,39 @@ html[data-theme="light"] .personaVoiceTuneChips .optChip.isActive{
   transform: scale(1.03);
   text-shadow: 0 0 24px rgba(124,92,255,0.45), 0 0 60px rgba(35,213,171,0.18);
 }
+.playerLyricsOverlay--plain .playerLyricsList{
+  gap: 14px;
+  text-align: start;
+}
+.playerLyricsPlainLine{
+  margin: 0;
+  font-size: 18px;
+  line-height: 1.55;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: rgba(231, 238, 248, 0.88);
+  white-space: pre-wrap;
+}
+.playerLyricsOverlay--plain .playerLyricsSection{
+  text-align: start;
+  margin-top: 18px;
+  margin-bottom: 2px;
+}
+.playerLyricsEmpty{
+  margin: 12vh auto 0;
+  max-width: 320px;
+  text-align: center;
+  font-size: 16px;
+  line-height: 1.5;
+  color: rgba(226, 233, 245, 0.62);
+}
+body.playerLyricsOpen .playerLyricsChip{
+  opacity: 0;
+  pointer-events: none;
+}
 @media (max-width: 480px){
   .playerLyricsLine{ font-size:21px; }
+  .playerLyricsPlainLine{ font-size: 17px; }
 }
 
 /* ── In-app music video viewer: fullscreen portrait, single loader ── */
@@ -12637,6 +12707,18 @@ body.vibeReadSheetOpen .mobileTabbar{
   width: 100%;
   margin: 0;
   align-items: stretch;
+}
+.photoMoodSheet--clipDirect .photoMoodActions{
+  grid-template-columns: 1fr;
+}
+.photoMoodSheet--clipDirect .photoMoodActions #btnAnalyzeImageMood{
+  display: none !important;
+}
+.photoMoodSheet--clipDirect .photoMoodSection--results{
+  display: none !important;
+}
+.photoMoodSheet--clipDirect #imageMoodCoverRow{
+  display: none !important;
 }
 .photoMoodPrimary,
 .photoMoodSecondary,
@@ -20283,6 +20365,17 @@ body.trackSheetOpen .footer{
     top: var(--player-karaoke-v-center);
     bottom: auto;
     transform: translateY(calc(-50% + 42px));
+    z-index: 10;
+  }
+  body[data-route="player"] .playerLyricsChip{
+    position: fixed;
+    left: 20px;
+    bottom: calc(
+      var(--player-meta-pad-bottom) +
+      var(--player-meta-transport-block) +
+      var(--player-meta-timeline-block) +
+      118px
+    );
     z-index: 10;
   }
   body[data-route="player"] .playerTransport{

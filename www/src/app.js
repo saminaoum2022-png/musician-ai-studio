@@ -965,6 +965,7 @@ const els = {
   playerLyricsScroll: document.getElementById("playerLyricsScroll"),
   playerLyricsList: document.getElementById("playerLyricsList"),
   btnClosePlayerLyrics: document.getElementById("btnClosePlayerLyrics"),
+  btnPlayerLyrics: document.getElementById("btnPlayerLyrics"),
   playerKaraokeStrip: document.getElementById("playerKaraokeStrip"),
   playerKaraokeLinePrev: document.getElementById("playerKaraokeLinePrev"),
   playerKaraokeLineCurrent: document.getElementById("playerKaraokeLineCurrent"),
@@ -16140,6 +16141,7 @@ function closeCreateChooserSheet({ immediate = false } = {}) {
 }
 
 const CREATE_ENTRY_INTENT_KEY = "nabadai_create_entry_intent_v1";
+const NABAD_CLIP_SESSION_KEY = "nabadai_nabad_clip_session_v1";
 const PENDING_CREATE_ACTION_KEY = "nabadai_pending_create_action_v1";
 const GUEST_MODE_KEY = "nabadai_guest_mode_v1";
 const POST_AUTH_RETURN_HASH_KEY = "nabadai_post_auth_return_v1";
@@ -16402,6 +16404,19 @@ function consumePendingDiscoveryIdea() {
   return null;
 }
 
+function markNabadClipSessionActive() {
+  try { sessionStorage.setItem(NABAD_CLIP_SESSION_KEY, "1"); } catch {}
+}
+
+function clearNabadClipSessionActive() {
+  try { sessionStorage.removeItem(NABAD_CLIP_SESSION_KEY); } catch {}
+}
+
+function isNabadClipSessionActive() {
+  try { return sessionStorage.getItem(NABAD_CLIP_SESSION_KEY) === "1"; } catch {}
+  return false;
+}
+
 function getCreateFlow() {
   return String(document.body.getAttribute("data-create-flow") || "").trim().toLowerCase();
 }
@@ -16414,6 +16429,7 @@ function setCreateFlow(flow) {
     document.body.setAttribute("data-create-flow", next);
   }
   if (next === "nabadclip") {
+    markNabadClipSessionActive();
     applyCreateChallengeFocus({ tab: "lyrics", tabs: ["photo", "lyrics"] });
     if (els.btnSunoGenerate) els.btnSunoGenerate.textContent = "Generate clip";
   }
@@ -16427,6 +16443,7 @@ function clearCreateFlow() {
   if (!was) return;
   document.body.removeAttribute("data-create-flow");
   if (was === "nabadclip") {
+    clearNabadClipSessionActive();
     clearCreateChallengeFocus();
     if (els.btnSunoGenerate) els.btnSunoGenerate.textContent = "Generate song";
   }
@@ -20003,6 +20020,7 @@ let _startGeneratePolling = null;
 function stopGeneratePoll() {
   stopPollLoop(generatePollTimer);
   generatePollTimer = null;
+  releaseCreateGenerateInFlight();
 }
 
 function resolveGenerationPollStartedAt() {
@@ -20123,9 +20141,14 @@ function setCreatePhotoAttachmentPreview(dataUrl = "", summary = "") {
     const sub = els.createPhotoCta.querySelector(".createPaneCtaSub");
     if (title) title.textContent = url ? "Photo attached" : "Add a photo";
     if (sub) {
+      const clipHint = isNabadClipPhotoDirectFlow()
+        ? "Pick singer & style below, then Generate clip."
+        : "";
       sub.textContent = url
-        ? (String(summary || "").trim() || "This image will guide the mood and cover.")
-        : "We'll catch the mood and feed it into your song.";
+        ? (String(summary || "").trim() || (clipHint || "This image will guide the mood and cover."))
+        : (isNabadClipPhotoDirectFlow()
+          ? "Lyria composes from your photo — singer & style optional."
+          : "We'll catch the mood and feed it into your song.");
     }
   }
 }
@@ -20137,8 +20160,63 @@ function openPhotoMoodFlow() {
   });
 }
 
+/** Nabad Clip — Lyria reads the photo on generate; no Gemini Analyze step. */
+function isNabadClipPhotoDirectFlow() {
+  if (isNabadClipFlow() || isNabadClipSessionActive()) return true;
+  if (document.body.getAttribute("data-route") !== "generate") return false;
+  const title = String(document.querySelector(".createPageHeader .appScreenTitle")?.textContent || "");
+  if (/nabad clip/i.test(title)) return true;
+  const genLabel = String(els.btnSunoGenerate?.textContent || "");
+  return /generate clip/i.test(genLabel);
+}
+
+function syncImageMoodSheetForCreateFlow() {
+  const clipDirect = isNabadClipPhotoDirectFlow();
+  const sheet = els.imageMoodModal || document.getElementById("imageMoodModal");
+  sheet?.classList.toggle("photoMoodSheet--clipDirect", clipDirect);
+  const title = document.getElementById("imageMoodSheetTitle");
+  const lead = document.getElementById("imageMoodLead");
+  const kicker = sheet?.querySelector?.(".photoMoodKicker");
+  if (kicker) kicker.textContent = clipDirect ? "Nabad Clip" : "Photo mood";
+  if (title) {
+    title.textContent = clipDirect ? "Photo for your clip" : "Analyze your photo";
+  }
+  if (lead) {
+    lead.textContent = clipDirect
+      ? "Lyria reads your photo. On the next screen, pick singer & style (optional lyrics) — then Generate clip."
+      : "We'll turn the vibe into style tags — and the scene into a lyric idea.";
+  }
+  const analyzeBtn = document.getElementById("btnAnalyzeImageMood") || els.btnAnalyzeImageMood;
+  const applyBtn = document.getElementById("btnApplyImageMood") || els.btnApplyImageMood;
+  const resultsSection = sheet?.querySelector?.(".photoMoodSection--results");
+  const coverRow = document.getElementById("imageMoodCoverRow");
+  if (coverRow) {
+    coverRow.hidden = clipDirect;
+    coverRow.setAttribute("aria-hidden", clipDirect ? "true" : "false");
+  }
+  if (analyzeBtn) {
+    analyzeBtn.hidden = clipDirect;
+    analyzeBtn.setAttribute("aria-hidden", clipDirect ? "true" : "false");
+  }
+  if (resultsSection) {
+    resultsSection.hidden = clipDirect;
+    resultsSection.setAttribute("aria-hidden", clipDirect ? "true" : "false");
+  }
+  if (analyzeBtn && applyBtn) {
+    if (clipDirect) {
+      applyBtn.classList.remove("photoMoodSecondary", "ghost");
+      applyBtn.classList.add("photoMoodPrimary", "primary");
+    } else {
+      analyzeBtn.classList.remove("photoMoodSecondary", "ghost");
+      analyzeBtn.classList.add("photoMoodPrimary", "primary");
+      applyBtn.classList.remove("photoMoodPrimary", "primary");
+      applyBtn.classList.add("photoMoodSecondary", "ghost");
+    }
+  }
+}
+
 function openImageMoodSheet() {
-  setCreateEntryIntent("song");
+  if (!isNabadClipPhotoDirectFlow()) setCreateEntryIntent("song");
   try {
     setActiveCreateTab("photo");
   } catch {}
@@ -20151,6 +20229,7 @@ function openImageMoodSheet() {
     document.body.classList.add("imageMoodSheetOpen");
   } catch {}
   resetPanelScroll(sheet.querySelector(".imageMoodBody, .photoMoodBody"));
+  syncImageMoodSheetForCreateFlow();
   syncImageMoodSheetUi();
   // Deliberately no auto-opening of the file input here: triggering the
   // iOS photo picker while the sheet is still sliding in stacked the
@@ -20165,7 +20244,9 @@ function resetImageMoodSheetSession() {
   }
   syncImageMoodPreviewUi(false);
   if (els.imageMoodOutput) {
-    els.imageMoodOutput.innerHTML = `<div class="imageMoodEmpty">Choose a photo, then tap Analyze.</div>`;
+    els.imageMoodOutput.innerHTML = `<div class="imageMoodEmpty">${isNabadClipPhotoDirectFlow()
+      ? "Choose a photo, then tap Use for clip."
+      : "Choose a photo, then tap Analyze."}</div>`;
   }
   const card = els.imageMoodOutput?.closest?.(".imageMoodCard")
     || els.imageMoodModal?.querySelector?.(".imageMoodCard");
@@ -20177,12 +20258,13 @@ function resetImageMoodSheetSession() {
   if (els.btnAnalyzeImageMood) {
     els.btnAnalyzeImageMood.disabled = true;
     els.btnAnalyzeImageMood.classList.remove("isReady", "isBusy");
-    els.btnAnalyzeImageMood.textContent = "Analyze";
+    els.btnAnalyzeImageMood.textContent = isNabadClipPhotoDirectFlow() ? "Preview mood" : "Analyze";
   }
   if (!imageMoodAppliedForNextGen && els.imageMoodSummary) {
     els.imageMoodSummary.textContent = "";
     els.imageMoodSummary.hidden = true;
   }
+  syncImageMoodSheetForCreateFlow();
   syncImageMoodSheetUi();
 }
 
@@ -20249,6 +20331,7 @@ function sanitizeImageMoodForClient(raw) {
 }
 
 function syncImageMoodSheetUi({ analyzing = false } = {}) {
+  const clipDirect = isNabadClipPhotoDirectFlow();
   const applyBtn = document.getElementById("btnApplyImageMood") || els.btnApplyImageMood;
   const analyzeBtn = document.getElementById("btnAnalyzeImageMood") || els.btnAnalyzeImageMood;
   const hasFile = Boolean(els.imageMoodUpload?.files?.[0]);
@@ -20259,14 +20342,23 @@ function syncImageMoodSheetUi({ analyzing = false } = {}) {
     const canApplyMood = Boolean(imageMoodData) && !analyzing;
     const canApplyCoverOnly = hasCoverData && !imageMoodData && !analyzing;
     applyBtn.disabled = !(canApplyMood || canApplyCoverOnly);
-    applyBtn.textContent = imageMoodData ? "Apply to song" : "Use as cover";
+    if (clipDirect) {
+      applyBtn.textContent = imageMoodData ? "Apply to clip" : "Use for clip";
+    } else {
+      applyBtn.textContent = imageMoodData ? "Apply to song" : "Use as cover";
+    }
     applyBtn.classList.toggle("isReady", Boolean(canApplyCoverOnly || canApplyMood));
   }
   if (analyzeBtn) {
-    analyzeBtn.disabled = !hasFile || analyzing;
-    analyzeBtn.classList.toggle("isReady", Boolean(hasFile && !analyzing && !imageMoodData));
-    analyzeBtn.classList.toggle("isBusy", Boolean(analyzing));
-    analyzeBtn.textContent = analyzing ? "Analyzing…" : "Analyze";
+    if (clipDirect) {
+      analyzeBtn.hidden = true;
+    } else {
+      analyzeBtn.hidden = false;
+      analyzeBtn.disabled = !hasFile || analyzing;
+      analyzeBtn.classList.toggle("isReady", Boolean(hasFile && !analyzing && !imageMoodData));
+      analyzeBtn.classList.toggle("isBusy", Boolean(analyzing));
+      analyzeBtn.textContent = analyzing ? "Analyzing…" : "Analyze";
+    }
   }
   if (card) {
     card.classList.toggle("analyzing", Boolean(analyzing));
@@ -20410,6 +20502,35 @@ async function applyCoverOnlyFromPhotoMood() {
     els.imageMoodSummary.textContent = "Cover attached — generate when you're ready.";
     els.imageMoodSummary.hidden = false;
   }
+  return true;
+}
+
+/** Nabad Clip — attach photo for Lyria multimodal generate (no Gemini Analyze required). */
+async function applyPhotoForNabadClipDirect() {
+  const file = els.imageMoodUpload?.files?.[0];
+  if (file && !String(imageMoodCoverDataUrl || "").startsWith("data:")) {
+    try {
+      imageMoodCoverDataUrl = await prepareMomentCoverDataUrl(file);
+    } catch {
+      setStatus("Could not load that photo.");
+      return false;
+    }
+  }
+  if (!String(imageMoodCoverDataUrl || "").startsWith("data:")) return false;
+  imageMoodCoverOnlyForNextGen = false;
+  imageMoodAppliedForNextGen = true;
+  if (els.imageMoodUseAsCover?.checked) {
+    stashPhotoCoverForGeneration(imageMoodCoverDataUrl);
+  } else {
+    clearPhotoCoverForGeneration();
+  }
+  const summary = "Photo attached — pick singer & style, then Generate clip.";
+  setCreatePhotoAttachmentPreview(imageMoodCoverDataUrl, summary);
+  if (els.imageMoodSummary) {
+    els.imageMoodSummary.textContent = summary;
+    els.imageMoodSummary.hidden = false;
+  }
+  try { syncNabadClipCreateUi(); } catch {}
   return true;
 }
 
@@ -25270,6 +25391,7 @@ function openNabadClipFlow() {
     return;
   }
   if (!requireProFeature("Nabad Clip")) return;
+  markNabadClipSessionActive();
   enterGenerateSubFlow("nabadclip", () => {
     applyCreateChallengeFocus({ tab: "lyrics", tabs: ["photo", "lyrics"] });
     if (els.btnSunoGenerate) {
@@ -25278,6 +25400,7 @@ function openNabadClipFlow() {
       els.btnSunoGenerate.dataset.mode = "generate";
     }
     try { syncNabadClipCreateUi(); } catch {}
+    try { syncImageMoodSheetForCreateFlow(); } catch {}
   });
 }
 
@@ -25474,8 +25597,20 @@ let lastGenerationMeta = null;
 /** AI lyrics snapshot (✦ magic or auto-draft) — compared at Generate for Creator + Nabad. */
 let _nabadAiLyricsDraft = "";
 let _lyricsGeneratedInNabad = false;
+/** Blocks duplicate Generate taps before the button label flips to Generating…. */
+let _createGenerateInFlight = false;
 /** Set by generate-form init; used for first-song auto ✦ lyrics handoff. */
 let _generateLyricsWithMagic = null;
+
+function releaseCreateGenerateInFlight() {
+  _createGenerateInFlight = false;
+}
+
+function armCreateGenerateInFlight() {
+  if (_createGenerateInFlight || isCreateTabGeneratingAnim()) return false;
+  _createGenerateInFlight = true;
+  return true;
+}
 
 function resetNabadLyricsDraftState() {
   _lyricsGeneratedInNabad = false;
@@ -55647,10 +55782,23 @@ function songDetailsFirstText(...values) {
   return "";
 }
 
-function songDetailsLyricsForTrack(track) {
-  const meta = track?.meta || {};
+function trackRefIsInstrumental(track) {
+  if (!track) return false;
   const kind = String(track?.kind || "").trim().toLowerCase();
-  if (kind === "instrumental" || kind === "sound") return "";
+  if (kind === "instrumental" || kind === "sound") return true;
+  const meta = track?.meta && typeof track.meta === "object" ? track.meta : {};
+  const mode = String(meta.mode || track?.kind || "").toLowerCase();
+  if (mode.includes("instrumental")) return true;
+  if (meta.instrumental === true || meta.instrumentalSelected === true) return true;
+  if (meta.imageOnlyInstrumental === true || meta.referenceInstrumentalOnly === true) return true;
+  const title = String(track?.title || "").trim();
+  if (/\s*[•·\-]\s*instrumental\s*$/i.test(title)) return true;
+  return false;
+}
+
+function songDetailsLyricsForTrack(track) {
+  if (trackRefIsInstrumental(track)) return "";
+  const meta = track?.meta || {};
   return songDetailsFirstText(
     meta.lyricsInput,
     meta.finalPrompt,
@@ -55926,16 +56074,25 @@ function playerCurrentTrackIsInstrumental() {
   if (!t) return false;
   const lib = resolvePlayerLibraryTrack();
   const full = lib || t;
-  const kind = String(full?.kind || t?.kind || "").trim();
-  return kind === "instrumental" || kind === "sound";
+  return trackRefIsInstrumental(full) || trackRefIsInstrumental(t);
 }
 
 function syncPlayerInstrumentalLabel() {
   const el = els.playerInstrumentalLabel;
   if (!el) return;
-  const show = playerCurrentTrackIsInstrumental() && !playerKaraokeStripState;
+  const show = playerCurrentTrackIsInstrumental();
   el.hidden = !show;
   el.setAttribute("aria-hidden", show ? "false" : "true");
+}
+
+function syncPlayerLyricsChip() {
+  const btn = els.btnPlayerLyrics;
+  if (!btn) return;
+  const hide =
+    !currentPlayerTrackRef
+    || playerCurrentTrackIsInstrumental()
+    || playerSourceIsExternalListenOnly();
+  btn.hidden = hide;
 }
 
 function activeLyricLineIndexForTime(lines, t, lead = 0.25) {
@@ -56084,10 +56241,80 @@ async function maybeAutostartPlayerKaraoke() {
 
 let playerLyricsState = null; // { lines, activeIdx, userScrollUntil }
 
+function plainLyricsDisplayLines(text) {
+  const lines = [];
+  for (const raw of String(text || "").split(/\r?\n/)) {
+    const line = raw.trim();
+    if (!line) continue;
+    if (/^\[[^\]]+\]$/.test(line)) {
+      lines.push({ text: line.replace(/^\[|\]$/g, ""), isSection: true });
+    } else {
+      lines.push({ text: line, isSection: false });
+    }
+  }
+  return lines;
+}
+
 function closePlayerLyricsOverlay() {
   playerLyricsState = null;
-  if (els.playerLyricsOverlay) els.playerLyricsOverlay.style.display = "none";
+  if (els.playerLyricsOverlay) {
+    els.playerLyricsOverlay.style.display = "none";
+    els.playerLyricsOverlay.classList.remove("playerLyricsOverlay--plain");
+  }
+  try { document.body.classList.remove("playerLyricsOpen"); } catch {}
   try { document.body.style.overflow = ""; } catch {}
+  const a = ensurePlayer();
+  a.removeEventListener("timeupdate", syncPlayerLyricsHighlight);
+}
+
+function openPlayerPlainLyricsOverlay({ title, subtitle, lyricsText } = {}) {
+  if (!els.playerLyricsOverlay || !els.playerLyricsList) return false;
+  playerLyricsState = null;
+
+  const lines = plainLyricsDisplayLines(lyricsText);
+  if (els.playerLyricsTitle) els.playerLyricsTitle.textContent = String(title || "Lyrics").trim() || "Lyrics";
+  if (els.playerLyricsSub) els.playerLyricsSub.textContent = String(subtitle || "").trim();
+  const art = String(els.playerArt?.src || "").trim();
+  if (els.playerLyricsBg) {
+    els.playerLyricsBg.style.backgroundImage = art ? `url("${art.replace(/"/g, '\\"')}")` : "";
+  }
+
+  if (!lines.length) {
+    const emptyMsg = playerCurrentTrackIsInstrumental()
+      ? "Instrumental — no lyrics."
+      : "No lyrics saved for this song.";
+    els.playerLyricsList.innerHTML = `<p class="playerLyricsEmpty" dir="auto">${escapeHtml(emptyMsg)}</p>`;
+  } else {
+    els.playerLyricsList.innerHTML = lines
+      .map((l) =>
+        l.isSection
+          ? `<div class="playerLyricsSection">${escapeHtml(l.text)}</div>`
+          : `<p class="playerLyricsPlainLine" dir="auto">${escapeHtml(l.text)}</p>`,
+      )
+      .join("");
+  }
+
+  els.playerLyricsOverlay.classList.add("playerLyricsOverlay--plain");
+  els.playerLyricsOverlay.style.display = "";
+  try { document.body.classList.add("playerLyricsOpen"); } catch {}
+  try { document.body.style.overflow = "hidden"; } catch {}
+  try { els.playerLyricsScroll.scrollTop = 0; } catch {}
+
+  const a = ensurePlayer();
+  a.removeEventListener("timeupdate", syncPlayerLyricsHighlight);
+  return true;
+}
+
+async function openPlayerPlainLyricsFromTrack() {
+  const t = currentPlayerTrackRef;
+  if (!t) return;
+  const title = String(t.title || "Song").trim() || "Song";
+  const subtitle = String(t.byLine || (t.creatorUsername ? `@${t.creatorUsername}` : "")).trim();
+  let lyrics = songDetailsLyricsForTrack(t);
+  if (!lyrics) {
+    try { lyrics = await resolveLyricsForTrackRef(t); } catch {}
+  }
+  openPlayerPlainLyricsOverlay({ title, subtitle, lyricsText: lyrics });
 }
 
 function syncPlayerLyricsHighlight() {
@@ -56147,6 +56374,9 @@ function openPlayerLyricsOverlay({ title, subtitle, words }) {
 }
 
 els.btnClosePlayerLyrics?.addEventListener("click", closePlayerLyricsOverlay);
+els.btnPlayerLyrics?.addEventListener("click", () => {
+  void openPlayerPlainLyricsFromTrack();
+});
 els.playerLyricsScroll?.addEventListener(
   "touchstart",
   () => {
@@ -57269,13 +57499,11 @@ function ensurePlayer() {
     syncPlayerUI();
     syncLockScreenNowPlaying({ force: true });
     try { presenceTick(); } catch {}
-    void maybeAutostartPlayerKaraoke();
   });
   playerEl.addEventListener("pause", () => {
     syncPlayerUI();
     syncLockScreenNowPlaying({ force: true });
     try { presenceTick(); } catch {}
-    try { syncPlayerKaraokeStrip(); } catch {}
   });
   playerEl.addEventListener("play", () => { try { setProfileAuraAudioState(true); } catch {} });
   playerEl.addEventListener("pause", () => { try { setProfileAuraAudioState(isAnyAppAudioPlaying()); } catch {} });
@@ -58523,6 +58751,7 @@ function updatePlayerSecondaryChrome() {
   syncPlayerPublishCta();
   syncPlayerPlaysCount();
   syncPlayerInstrumentalLabel();
+  syncPlayerLyricsChip();
   void syncPlayerSocialRail();
 }
 
@@ -62855,7 +63084,11 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
         els.imageMoodSummary.textContent = tags || String(imageMoodData?.concept || "Image mood ready.");
         els.imageMoodSummary.hidden = false;
       }
-      setStatus("Image mood ready. Tap Apply to send style tags + lyric idea into your song.");
+      setStatus(
+        isNabadClipPhotoDirectFlow()
+          ? "Mood preview ready — tap Apply to clip."
+          : "Image mood ready. Tap Apply to send style tags + lyric idea into your song.",
+      );
     } catch (e) {
       if (els.imageMoodOutput) {
         els.imageMoodOutput.innerHTML = `<div class="imageMoodEmpty">Analysis failed — try another photo.</div>`;
@@ -62867,6 +63100,13 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
   };
   const applyImageMood = async () => {
     if (!imageMoodData) {
+      if (isNabadClipPhotoDirectFlow()) {
+        if (!(await applyPhotoForNabadClipDirect())) return;
+        closeImageMoodModal();
+        setStatus("Photo attached — pick singer & style on Create, then Generate clip.");
+        syncGenerateOrbVisibility();
+        return;
+      }
       if (!(await applyCoverOnlyFromPhotoMood())) return;
       closeImageMoodModal();
       setStatus("Cover attached — generate when you're ready.");
@@ -62887,9 +63127,13 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
     const wantsLyrics = String(imageMoodData?.vocalSuggestion || "lyrics") !== "instrumental";
     closeImageMoodModal();
     setStatus(
-      wantsLyrics
-        ? "Photo Mood applied — style tags in Style, scene in Lyrics. Clear lyrics if you want instrumental."
-        : "Photo Mood applied — style tags ready. Leave lyrics empty for instrumental, or write/Magic for vocals."
+      isNabadClipPhotoDirectFlow()
+        ? (wantsLyrics
+          ? "Preview applied — edit style or lyrics, then Generate clip."
+          : "Preview applied — style tags ready. Generate clip when you're ready.")
+        : (wantsLyrics
+          ? "Photo Mood applied — style tags in Style, scene in Lyrics. Clear lyrics if you want instrumental."
+          : "Photo Mood applied — style tags ready. Leave lyrics empty for instrumental, or write/Magic for vocals.")
     );
     syncGenerateOrbVisibility();
   };
@@ -63000,6 +63244,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       if (!file) return;
       imageMoodData = null;
       renderImageMood(null);
+      try { syncImageMoodSheetForCreateFlow(); } catch {}
       try { syncImageMoodSheetUi(); } catch {}
       const preview = URL.createObjectURL(file);
       if (els.imageMoodPreview) {
@@ -63012,6 +63257,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       prepareMomentCoverDataUrl(file)
         .then((v) => {
           imageMoodCoverDataUrl = v;
+          try { syncImageMoodSheetForCreateFlow(); } catch {}
           try { syncImageMoodSheetUi(); } catch {}
         })
         .catch(() => {
@@ -63021,7 +63267,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       // No auto-analyze: the user reviews the photo and taps Analyze
       // themselves (analysis costs a network round-trip they may not want
       // yet — e.g. when they picked the wrong photo).
-      if (els.imageMoodOutput) {
+      if (els.imageMoodOutput && !isNabadClipPhotoDirectFlow()) {
         els.imageMoodOutput.innerHTML =
           `<div class="imageMoodEmpty">Photo ready — Use as cover or tap Analyze for mood.</div>`;
       }
@@ -64037,7 +64283,6 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
         setStatus(reason);
         return;
       }
-      if (!(await ensureSingabilityBeforeGenerate())) return;
       const clipPromptText = String(els.sunoPrompt?.value || "").trim();
       const clipAllowImageOnly = Boolean(imageMoodAppliedForNextGen);
       if (resolveVocalReferenceForSubmit()) {
@@ -64045,13 +64290,20 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
         return;
       }
       if (!clipPromptText && !clipAllowImageOnly) {
-        window.alert("Write lyrics or add a photo mood before generating your clip.");
+        window.alert("Choose a photo or write lyrics before generating your clip.");
+        return;
+      }
+      if (!armCreateGenerateInFlight()) return;
+      setGenerateBtn("Generating…", true, "generate");
+      setGenerateFieldsLocked(true);
+      hideCreateResultCards();
+      if (!(await ensureSingabilityBeforeGenerate())) {
+        releaseCreateGenerateInFlight();
+        setGenerateBtn("Generate clip", false, "generate");
+        setGenerateFieldsLocked(false);
         return;
       }
       try {
-        setGenerateBtn("Generating…", true, "generate");
-        setGenerateFieldsLocked(true);
-        hideCreateResultCards();
         els.btnSunoStems.disabled = true;
         if (els.btnSunoMultiStems) els.btnSunoMultiStems.disabled = true;
         setProgress(5);
@@ -64096,6 +64348,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
           setGenerateBtn("Generate clip", false, "generate");
           setGenerateFieldsLocked(false);
           setProgress(0);
+          releaseCreateGenerateInFlight();
           window.alert("Add lyrics, style, or photo mood before generating your clip.");
           return;
         }
@@ -64263,6 +64516,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
         if (sunoTaskId) startGeneratePolling();
       } catch (e) {
         console.warn("[nabad-clip]", e);
+        releaseCreateGenerateInFlight();
         setLoading(false);
         setGenerateBtn("Generate clip", false, "generate");
         setGenerateFieldsLocked(false);
@@ -66412,6 +66666,7 @@ if (els.btnAdvancedApply) {
 if (els.btnGenerateOrb && els.btnSunoGenerate) {
   els.btnGenerateOrb.addEventListener("click", () => {
     haptic("impact");
+    if (_createGenerateInFlight || isCreateTabGeneratingAnim()) return;
     if (location.hash !== "#/generate") {
       location.hash = "#/generate";
       return;
@@ -67305,10 +67560,10 @@ syncCreateTabMorph();
     }
     // On the song form, the Create tab morphs into Generate — don't send users
     // back to the home desk (#/challenges) when they meant to start a run.
-    if (generating || (hasInput && !hasResult)) {
+    if (generating || _createGenerateInFlight || (hasInput && !hasResult)) {
       ev.preventDefault();
       ev.stopPropagation();
-      if (!generating && els.btnSunoGenerate) {
+      if (!generating && !_createGenerateInFlight && els.btnSunoGenerate) {
         haptic("impact");
         els.btnSunoGenerate.click();
       }

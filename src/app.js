@@ -29,6 +29,11 @@ import {
   handleProducerGenerationFailed,
 } from "./nabad-producer.js";
 import {
+  configureNabadVibe,
+  syncNabadVibeCreateTab,
+  nabadVibeEnabled,
+} from "./nabad-vibe.js";
+import {
   listVocals,
   getVocalBlob,
   deleteVocal,
@@ -812,6 +817,14 @@ const els = {
   btnAnalyzeImageMood: document.getElementById("btnAnalyzeImageMood"),
   btnApplyImageMood: document.getElementById("btnApplyImageMood"),
   createPhotoCta: document.getElementById("createPhotoCta"),
+  createVibeCta: document.getElementById("createVibeCta"),
+  vibeReadSummary: document.getElementById("vibeReadSummary"),
+  vibeReadModal: document.getElementById("vibeReadModal"),
+  vibeReadUpload: document.getElementById("vibeReadUpload"),
+  vibeReadOutput: document.getElementById("vibeReadOutput"),
+  btnAnalyzeVibeRead: document.getElementById("btnAnalyzeVibeRead"),
+  btnApplyVibeRead: document.getElementById("btnApplyVibeRead"),
+  btnCloseVibeRead: document.getElementById("btnCloseVibeRead"),
   createPhotoPreview: document.getElementById("createPhotoPreview"),
   lyricsMagicMenu: document.getElementById("lyricsMagicMenu"),
   btnMagicUploadVocal: document.getElementById("btnMagicUploadVocal"),
@@ -1298,6 +1311,9 @@ const els = {
 var imageMoodAppliedForNextGen = false;
 /** Photo attached as cover only — no mood analysis, lyrics/style unchanged. */
 var imageMoodCoverOnlyForNextGen = false;
+var vibeReadData = null;
+var vibeReadAppliedForNextGen = false;
+var vibeReadSourceName = "";
 let currentProofPost = null;
 let hubAudio = null;
 let hubAudioPostId = null;
@@ -6369,7 +6385,11 @@ function resetCreateDraft() {
   imageMoodCoverOnlyForNextGen = false;
   imageMoodData = null;
   imageMoodCoverDataUrl = "";
+  vibeReadAppliedForNextGen = false;
+  vibeReadData = null;
+  vibeReadSourceName = "";
   setCreatePhotoAttachmentPreview("");
+  setCreateVibeAttachmentPreview("");
   sunoTaskId = null;
   sunoAudioId = null;
   lastSunoAudioId2 = "";
@@ -16056,7 +16076,7 @@ function openFriendsComposeSheet() {
   }
 }
 
-const FIXED_OVERLAY_IDS = ["createChooserSheet", "friendsComposeSheet", "imageMoodModal", "coverRegenSheet"];
+const FIXED_OVERLAY_IDS = ["createChooserSheet", "friendsComposeSheet", "imageMoodModal", "vibeReadModal", "coverRegenSheet"];
 
 /** Keep full-screen overlays on `body` — `main.grid.routeSwap` transform breaks iOS touch on fixed children. */
 function mountFixedOverlaysToBody() {
@@ -20407,6 +20427,252 @@ function resolvePhotoImagePayloadForLyria() {
     imageMoodCoverDataUrl || resolvePendingPhotoCoverDataUrl() || "",
   ).trim();
   return dataUrl.startsWith("data:image/") ? dataUrl : "";
+}
+
+function setCreateVibeAttachmentPreview(summary = "", fileName = "") {
+  const name = String(fileName || "").trim();
+  const text = String(summary || "").trim();
+  if (els.createVibeCta) {
+    els.createVibeCta.classList.toggle("hasVibeAttached", Boolean(text || name));
+    els.createVibeCta.setAttribute("aria-label", text || name ? "Change vibe source track" : "Upload a song for vibe read");
+    const title = els.createVibeCta.querySelector(".createPaneCtaTitle");
+    const sub = els.createVibeCta.querySelector(".createPaneCtaSub");
+    if (title) title.textContent = text ? "Vibe read ready" : "Upload a song";
+    if (sub) {
+      sub.textContent = text
+        ? text
+        : (name ? `${name} — tap to read vibe` : "Inspired by its vibe — not a copy.");
+    }
+  }
+  if (els.vibeReadSummary) {
+    if (text) {
+      els.vibeReadSummary.textContent = text;
+      els.vibeReadSummary.hidden = false;
+    } else if (!vibeReadAppliedForNextGen) {
+      els.vibeReadSummary.textContent = "";
+      els.vibeReadSummary.hidden = true;
+    }
+  }
+}
+
+function openVibeReadSheet() {
+  if (!nabadVibeEnabled()) return;
+  setCreateEntryIntent("song");
+  try { setActiveCreateTab("vibe"); } catch {}
+  mountFixedOverlaysToBody();
+  const sheet = els.vibeReadModal || document.getElementById("vibeReadModal");
+  if (!sheet) return;
+  sheet.hidden = false;
+  sheet.setAttribute("aria-hidden", "false");
+  try { document.body.classList.add("vibeReadSheetOpen"); } catch {}
+  resetPanelScroll(sheet.querySelector(".vibeReadBody, .photoMoodBody"));
+  syncVibeReadSheetUi();
+}
+
+function resetVibeReadSheetSession() {
+  vibeReadData = null;
+  vibeReadSourceName = "";
+  if (els.vibeReadUpload) {
+    try { els.vibeReadUpload.value = ""; } catch {}
+  }
+  if (els.vibeReadOutput) {
+    els.vibeReadOutput.innerHTML = `<div class="imageMoodEmpty">Choose a track, then tap Read vibe.</div>`;
+  }
+  const card = els.vibeReadModal?.querySelector?.(".vibeReadCard")
+    || els.vibeReadOutput?.closest?.(".vibeReadCard");
+  if (card) card.classList.remove("analyzing", "hasAudioReady");
+  if (els.vibeReadOutput) els.vibeReadOutput.classList.remove("isAnalyzing");
+  if (els.btnApplyVibeRead) els.btnApplyVibeRead.disabled = true;
+  if (els.btnAnalyzeVibeRead) {
+    els.btnAnalyzeVibeRead.disabled = true;
+    els.btnAnalyzeVibeRead.classList.remove("isReady", "isBusy");
+    els.btnAnalyzeVibeRead.textContent = "Read vibe";
+  }
+  if (!vibeReadAppliedForNextGen) {
+    setCreateVibeAttachmentPreview("", "");
+  }
+  syncVibeReadSheetUi();
+}
+
+function closeVibeReadSheet() {
+  const sheet = els.vibeReadModal || document.getElementById("vibeReadModal");
+  if (!sheet) return;
+  sheet.hidden = true;
+  sheet.setAttribute("aria-hidden", "true");
+  try { document.body.classList.remove("vibeReadSheetOpen"); } catch {}
+  resetVibeReadSheetSession();
+}
+
+function syncVibeReadSheetUi({ analyzing = false } = {}) {
+  const hasFile = Boolean(els.vibeReadUpload?.files?.[0]);
+  const card = els.vibeReadModal?.querySelector?.(".vibeReadCard")
+    || els.vibeReadOutput?.closest?.(".vibeReadCard");
+  if (els.btnApplyVibeRead) {
+    els.btnApplyVibeRead.disabled = !vibeReadData || analyzing;
+    els.btnApplyVibeRead.classList.toggle("isReady", Boolean(vibeReadData && !analyzing));
+  }
+  if (els.btnAnalyzeVibeRead) {
+    els.btnAnalyzeVibeRead.disabled = !hasFile || analyzing;
+    els.btnAnalyzeVibeRead.classList.toggle("isReady", Boolean(hasFile && !analyzing && !vibeReadData));
+    els.btnAnalyzeVibeRead.classList.toggle("isBusy", Boolean(analyzing));
+    els.btnAnalyzeVibeRead.textContent = analyzing ? "Reading…" : "Read vibe";
+  }
+  if (card) {
+    card.classList.toggle("analyzing", Boolean(analyzing));
+    card.classList.toggle("hasAudioReady", Boolean(hasFile));
+  }
+  if (els.vibeReadOutput) els.vibeReadOutput.classList.toggle("isAnalyzing", Boolean(analyzing));
+  const pickLabel = document.querySelector(".vibeReadPickLabel");
+  const file = els.vibeReadUpload?.files?.[0];
+  if (pickLabel) {
+    pickLabel.textContent = file?.name ? `Change audio · ${file.name}` : "Choose audio";
+  }
+}
+
+function renderVibeReadResult(data) {
+  if (!els.vibeReadOutput) return;
+  if (!data || typeof data !== "object") {
+    els.vibeReadOutput.innerHTML = `<div class="imageMoodEmpty">No analysis yet.</div>`;
+    return;
+  }
+  const structureLines = Array.isArray(data.structure)
+    ? data.structure
+      .slice(0, 8)
+      .map((s) => `${s.section}${s.start ? ` · ${s.start}` : ""}${s.end ? `–${s.end}` : ""}`)
+      .join(" · ")
+    : "";
+  const rows = [
+    ["Mood", data.concept],
+    ["Genre", Array.isArray(data.genre) ? data.genre.join(", ") : ""],
+    ["Style tags", Array.isArray(data.styleTags) ? data.styleTags.join(", ") : ""],
+    data.bpmEstimate ? ["Tempo", `${data.bpmEstimate} BPM (${data.bpmConfidence || "estimate"})`] : null,
+    data.keyEstimate ? ["Key", `${data.keyEstimate} (${data.keyConfidence || "estimate"})`] : null,
+    data.timeSignature ? ["Time", data.timeSignature] : null,
+    structureLines ? ["Structure", structureLines] : null,
+    data.instruments?.length ? ["Instruments", data.instruments.join(", ")] : null,
+    data.vocalStyle ? ["Vocal feel", data.vocalStyle] : null,
+    data.dynamics ? ["Dynamics", data.dynamics] : null,
+    data.stylePrompt ? ["Generation prompt", data.stylePrompt] : null,
+    data.lyricDirection ? ["Lyric direction", data.lyricDirection] : null,
+  ].filter(Boolean);
+  els.vibeReadOutput.innerHTML = rows.length
+    ? rows.map(([label, value]) => `
+        <div class="imageMoodResultRow">
+          <span>${escapeHtml(label)}</span>
+          <p>${escapeHtml(value)}</p>
+        </div>
+      `).join("")
+    : `<div class="imageMoodEmpty">No analysis yet.</div>`;
+}
+
+function applyVibeReadToSongFields() {
+  if (!vibeReadData) return;
+  const data = vibeReadData;
+  const tags = Array.isArray(data.styleTags) ? data.styleTags.filter(Boolean) : [];
+  const promptLine = String(data.stylePrompt || "").trim();
+  if (els.sunoStyle) {
+    const existing = String(els.sunoStyle.value || "").trim();
+    const current = existing ? existing.split(",").map((s) => s.trim()).filter(Boolean) : [];
+    const fromPrompt = promptLine ? promptLine.split(",").map((s) => s.trim()).filter(Boolean) : [];
+    const merged = [...new Set([...current, ...tags, ...fromPrompt])].slice(0, 14);
+    els.sunoStyle.value = merged.join(", ");
+  }
+  const wantsInstrumental = Boolean(data.instrumentalSuggestion);
+  if (els.vocalInstrumentalOnly) {
+    els.vocalInstrumentalOnly.value = wantsInstrumental ? "1" : "0";
+  }
+  const structureTemplate = String(data.structureTemplate || "").trim();
+  const lyricDirection = String(data.lyricDirection || "").trim();
+  if (els.sunoPrompt) {
+    const existingLyrics = String(els.sunoPrompt.value || "").trim();
+    if (!existingLyrics) {
+      const parts = [];
+      if (structureTemplate) parts.push(structureTemplate);
+      if (lyricDirection && !wantsInstrumental) parts.push("", lyricDirection);
+      if (parts.length) {
+        els.sunoPrompt.value = parts.join("\n").trim();
+        try { autoResizeLyricsBox(); } catch {}
+      }
+    } else if (structureTemplate && !hasLyricSectionTags(existingLyrics)) {
+      els.sunoPrompt.value = `${structureTemplate}\n\n${existingLyrics}`.trim();
+      try { autoResizeLyricsBox(); } catch {}
+    }
+  }
+  vibeReadAppliedForNextGen = true;
+  const summaryTags = tags.slice(0, 3).join(", ");
+  const summaryText = String(data.concept || summaryTags || "Vibe read applied.").trim();
+  setCreateVibeAttachmentPreview(`${summaryText} · inspiration only`, vibeReadSourceName);
+  try { syncGenerateOrbVisibility(); } catch {}
+  try { renderStyleSelectedChips(); } catch {}
+}
+
+async function analyzeVibeRead() {
+  if (!nabadVibeEnabled()) {
+    showToast("Vibe read is admin-only on this build.", { icon: "!", durationMs: 3200 });
+    return;
+  }
+  const file = els.vibeReadUpload?.files?.[0];
+  if (!file) {
+    setStatus("Choose an audio file first.");
+    return;
+  }
+  try {
+    syncVibeReadSheetUi({ analyzing: true });
+    if (els.vibeReadOutput) {
+      els.vibeReadOutput.innerHTML = `
+        <div class="imageMoodAnalyzingState" aria-live="polite">
+          <span class="imageMoodAnalyzingAura" aria-hidden="true"></span>
+          <span class="imageMoodAnalyzingShimmer" aria-hidden="true"></span>
+          <p class="imageMoodAnalyzingLabel">Reading the vibe…</p>
+        </div>`;
+    }
+    const dataUrl = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result || ""));
+      reader.onerror = () => reject(new Error("Could not read audio file"));
+      reader.readAsDataURL(file);
+    });
+    if (!dataUrl.startsWith("data:audio/")) {
+      throw new Error("Unsupported audio format");
+    }
+    if (dataUrl.length > 4_200_000) {
+      throw new Error("Audio clip too large — trim to about 3 minutes.");
+    }
+    vibeReadSourceName = String(file.name || "track").trim();
+    const r = await apiFetch("/api/music/vibe-read", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ audio: dataUrl }),
+    });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(d?.error || "Vibe read failed");
+    vibeReadData = d;
+    renderVibeReadResult(vibeReadData);
+    syncVibeReadSheetUi({ analyzing: false });
+    const tags = Array.isArray(vibeReadData?.styleTags) ? vibeReadData.styleTags.slice(0, 3).join(", ") : "";
+    setCreateVibeAttachmentPreview(String(vibeReadData?.concept || tags || "Vibe read ready."), vibeReadSourceName);
+    setStatus("Vibe read ready. Tap Use in Create — inspiration only, not a copy.");
+  } catch (e) {
+    if (els.vibeReadOutput) {
+      els.vibeReadOutput.innerHTML = `<div class="imageMoodEmpty">Vibe read failed — try a shorter clip.</div>`;
+    }
+    setStatus(`Vibe read failed: ${e?.message || String(e)}`);
+  } finally {
+    syncVibeReadSheetUi({ analyzing: false });
+  }
+}
+
+function applyVibeReadAndClose() {
+  if (!vibeReadData) return;
+  applyVibeReadToSongFields();
+  closeVibeReadSheet();
+  try { setActiveCreateTab("lyrics"); } catch {}
+  const wantsInstrumental = Boolean(vibeReadData?.instrumentalSuggestion);
+  setStatus(
+    wantsInstrumental
+      ? "Vibe applied — style tags ready. Leave lyrics empty for instrumental."
+      : "Vibe applied — style tags + structure in Create. Write your own lyrics — we never copy from the upload.",
+  );
 }
 let pendingBackendTaskId = "";
 const PENDING_TASK_KEY = "mas:pending_backend_task_v1";
@@ -28167,6 +28433,7 @@ async function refreshMyCredits({ silent = false } = {}) {
     try { syncSettingsMusicProviderRow(); } catch {}
     try { syncNabadClipHomeCard(); } catch {}
     try { syncNabadProducerHomeCard(); } catch {}
+    try { syncNabadVibeCreateTab(); } catch {}
     if (document.body.getAttribute("data-route") === "first-song") {
       try { onFirstSongRouteActive(); } catch {}
     }
@@ -62753,6 +63020,33 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
   if (els.btnApplyImageMood) {
     els.btnApplyImageMood.addEventListener("click", () => void applyImageMood());
   }
+  if (els.btnCloseVibeRead) {
+    els.btnCloseVibeRead.addEventListener("click", closeVibeReadSheet);
+  }
+  document.querySelectorAll("[data-vibe-read-dismiss]").forEach((el) => {
+    el.addEventListener("click", closeVibeReadSheet);
+  });
+  if (els.vibeReadUpload) {
+    els.vibeReadUpload.addEventListener("change", () => {
+      const file = els.vibeReadUpload.files?.[0];
+      if (!file) return;
+      vibeReadData = null;
+      renderVibeReadResult(null);
+      vibeReadSourceName = String(file.name || "").trim();
+      try { syncVibeReadSheetUi(); } catch {}
+      if (els.vibeReadOutput) {
+        els.vibeReadOutput.innerHTML =
+          `<div class="imageMoodEmpty">Track ready — tap Read vibe. Inspiration only, not a copy.</div>`;
+      }
+      setCreateVibeAttachmentPreview("", vibeReadSourceName);
+    });
+  }
+  if (els.btnAnalyzeVibeRead) {
+    els.btnAnalyzeVibeRead.addEventListener("click", () => void analyzeVibeRead());
+  }
+  if (els.btnApplyVibeRead) {
+    els.btnApplyVibeRead.addEventListener("click", () => applyVibeReadAndClose());
+  }
   if (els.btnCloseVocalRecorder) {
     els.btnCloseVocalRecorder.addEventListener("click", closeVocalRecorderModal);
   }
@@ -70999,6 +71293,14 @@ try {
   resumeNabadProducerGenerationPollIfNeeded();
 } catch (e) { console.warn("[nabad-producer] init", e); }
 
+try {
+  configureNabadVibe({
+    isAdmin: () => Boolean(creditsState.isAdmin),
+    setActiveCreateTab: (mode) => setActiveCreateTab(mode),
+  });
+  syncNabadVibeCreateTab();
+} catch (e) { console.warn("[nabad-vibe] init", e); }
+
 // Resolve the backing instrumental ("AI Guide") for a song. V1 prefers an
 // existing instrumental already in the library; otherwise it falls back to the
 // song's own audio as a temporary guide. NOTE: real on-demand vocal-removal
@@ -72171,12 +72473,13 @@ const createTabEls = {
   photo: document.getElementById("createTabPhoto"),
   hum: document.getElementById("createTabHum"),
   lyrics: document.getElementById("createTabLyrics"),
+  vibe: document.getElementById("createTabVibe"),
 };
 const createPanesWrap = document.querySelector(".createPanes");
 function setActiveCreateTab(mode) {
-  ["photo", "hum", "lyrics"].forEach((k) => {
+  ["photo", "hum", "lyrics", "vibe"].forEach((k) => {
     const el = createTabEls[k];
-    if (!el) return;
+    if (!el || el.hidden) return;
     const active = k === mode;
     el.classList.toggle("isActive", active);
     el.setAttribute("aria-selected", active ? "true" : "false");
@@ -72204,10 +72507,21 @@ if (createTabEls.hum) {
     setActiveCreateTab("hum");
   });
 }
+if (createTabEls.vibe) {
+  createTabEls.vibe.addEventListener("click", () => {
+    setActiveCreateTab("vibe");
+  });
+}
 const createPhotoCtaBtn = document.getElementById("createPhotoCta");
 if (createPhotoCtaBtn) {
   createPhotoCtaBtn.addEventListener("click", () => {
     openImageMoodSheet();
+  });
+}
+const createVibeCtaBtn = document.getElementById("createVibeCta");
+if (createVibeCtaBtn) {
+  createVibeCtaBtn.addEventListener("click", () => {
+    openVibeReadSheet();
   });
 }
 

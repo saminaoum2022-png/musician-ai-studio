@@ -903,6 +903,16 @@
               </svg>
               <span class="createTabLabel">Lyrics</span>
             </button>
+            <button id="createTabVibe" class="createTab" type="button" role="tab" aria-selected="false" data-mode="vibe" hidden aria-hidden="true">
+              <svg class="createTabIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+                <path d="M4 14v4"/>
+                <path d="M8 10v8"/>
+                <path d="M12 6v12"/>
+                <path d="M16 10v8"/>
+                <path d="M20 14v4"/>
+              </svg>
+              <span class="createTabLabel">Vibe</span>
+            </button>
           </div>
           <div id="resultCard" class="resultCard" style="display:none">
             <div class="resultCardInner">
@@ -1142,6 +1152,22 @@
                   <div id="sunoVocalUploadName" class="uploadVocalsName" hidden></div>
                   <div id="vocalRefHint" class="hint createInlineHint" hidden></div>
                 </div>
+              </div>
+
+              <div class="createPane createPane--vibe" data-mode="vibe" hidden aria-hidden="true">
+                <button id="createVibeCta" class="createPaneCta createPaneCta--vibe" type="button" aria-label="Upload a song for vibe read">
+                  <span id="createVibePreview" class="createVibePreview" aria-hidden="true"></span>
+                  <span class="createPhotoShade" aria-hidden="true"></span>
+                  <span class="createPaneCtaIcon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" width="28" height="28" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                      <path d="M4 14v4"/><path d="M8 10v8"/><path d="M12 6v12"/><path d="M16 10v8"/><path d="M20 14v4"/>
+                    </svg>
+                  </span>
+                  <span class="createPaneCtaTitle">Upload a song</span>
+                  <span class="createPaneCtaSub">Inspired by its vibe — not a copy.</span>
+                </button>
+                <p class="vibeLegalNote hint createInlineHint">Original inspiration only. We read mood, style, and structure — never lyrics or melody from your upload.</p>
+                <span id="vibeReadSummary" class="vibeReadSummary imageMoodSummary" hidden></span>
               </div>
 
               <div class="createPane createPane--lyrics" data-mode="lyrics">
@@ -1511,6 +1537,43 @@
                 <div class="photoMoodActions imageMoodActions">
                   <button id="btnAnalyzeImageMood" class="photoMoodPrimary primary" type="button">Analyze</button>
                   <button id="btnApplyImageMood" class="photoMoodSecondary ghost" type="button" disabled>Use as cover</button>
+                </div>
+              </footer>
+            </div>
+          </div>
+
+          <div id="vibeReadModal" class="imageMoodSheet photoMoodSheet vibeReadSheet" hidden aria-hidden="true">
+            <div class="imageMoodSheetBackdrop photoMoodBackdrop" data-vibe-read-dismiss="1"></div>
+            <div class="imageMoodCard photoMoodCard modalCard vibeReadCard" role="dialog" aria-modal="true" aria-labelledby="vibeReadSheetTitle">
+              <header class="photoMoodHead">
+                <button type="button" id="btnCloseVibeRead" class="nabadBackBtn photoMoodBack" aria-label="Back">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6 9 12l6 6"/></svg>
+                </button>
+                <div class="photoMoodHeadCopy">
+                  <p class="photoMoodKicker">Vibe read</p>
+                  <h2 class="photoMoodTitle" id="vibeReadSheetTitle">Read a song's vibe</h2>
+                  <p class="photoMoodSub" id="vibeReadLead">Inspired by mood and structure — not a clone. We never copy lyrics or melody.</p>
+                </div>
+              </header>
+              <div class="photoMoodBody imageMoodBody vibeReadBody">
+                <p class="vibeReadDisclaimer hint">Original inspiration only. Descriptive style and section tags for your new song.</p>
+                <section class="photoMoodSection">
+                  <label class="photoMoodPick imageMoodPick field">
+                    <span class="photoMoodPickLabel imageMoodPickLabel vibeReadPickLabel">Choose audio</span>
+                    <input id="vibeReadUpload" class="imageMoodUploadInput" type="file" accept="audio/*,.wav,.mp3,.m4a,.aac,.ogg,.webm" />
+                  </label>
+                  <p class="hint createInlineHint vibeReadUploadHint">30 sec – 3 min works best. Your file stays private.</p>
+                </section>
+                <section class="photoMoodSection photoMoodSection--results">
+                  <div id="vibeReadOutput" class="imageMoodOutput vibeReadOutput">
+                    <div class="imageMoodEmpty">Choose a track, then tap Read vibe.</div>
+                  </div>
+                </section>
+              </div>
+              <footer class="photoMoodFoot imageMoodFooter vibeReadFooter">
+                <div class="photoMoodActions imageMoodActions">
+                  <button id="btnAnalyzeVibeRead" class="photoMoodPrimary primary" type="button" disabled>Read vibe</button>
+                  <button id="btnApplyVibeRead" class="photoMoodSecondary ghost" type="button" disabled>Use in Create</button>
                 </div>
               </footer>
             </div>

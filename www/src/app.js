@@ -33,6 +33,7 @@ import {
   syncNabadVibeCreateTab,
   nabadVibeEnabled,
 } from "./nabad-vibe.js";
+import { prepareAudioForVibeRead } from "./vibe-audio-prep.js";
 import {
   listVocals,
   getVocalBlob,
@@ -20627,19 +20628,15 @@ async function analyzeVibeRead() {
           <p class="imageMoodAnalyzingLabel">Reading the vibe…</p>
         </div>`;
     }
-    const dataUrl = await new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(String(reader.result || ""));
-      reader.onerror = () => reject(new Error("Could not read audio file"));
-      reader.readAsDataURL(file);
-    });
+    const prep = await prepareAudioForVibeRead(file);
+    const dataUrl = String(prep?.dataUrl || "").trim();
     if (!dataUrl.startsWith("data:audio/")) {
       throw new Error("Unsupported audio format");
     }
-    if (dataUrl.length > 4_200_000) {
-      throw new Error("Audio clip too large — trim to about 3 minutes.");
-    }
     vibeReadSourceName = String(file.name || "track").trim();
+    const trimNote = prep.compressed && prep.originalSec > prep.analyzedSec + 5
+      ? ` (analyzed first ${Math.round(prep.analyzedSec)}s of ${Math.round(prep.originalSec)}s)`
+      : "";
     const authToken = getSupabaseAuthToken();
     if (!authToken) {
       throw new Error("Sign in to use Vibe read.");
@@ -20650,7 +20647,7 @@ async function analyzeVibeRead() {
         "Content-Type": "application/json",
         Authorization: `Bearer ${authToken}`,
       },
-      nativeReadTimeoutMs: 90000,
+      nativeReadTimeoutMs: 120000,
       nativeConnectTimeoutMs: 30000,
       body: JSON.stringify({ audio: dataUrl }),
     });
@@ -20660,8 +20657,8 @@ async function analyzeVibeRead() {
     renderVibeReadResult(vibeReadData);
     syncVibeReadSheetUi({ analyzing: false });
     const tags = Array.isArray(vibeReadData?.styleTags) ? vibeReadData.styleTags.slice(0, 3).join(", ") : "";
-    setCreateVibeAttachmentPreview(String(vibeReadData?.concept || tags || "Vibe read ready."), vibeReadSourceName);
-    setStatus("Vibe read ready. Tap Use in Create — inspiration only, not a copy.");
+    setCreateVibeAttachmentPreview(String(vibeReadData?.concept || tags || "Vibe read ready.") + trimNote, vibeReadSourceName);
+    setStatus(`Vibe read ready${trimNote}. Tap Use in Create — inspiration only, not a copy.`);
   } catch (e) {
     const msg = String(e?.message || "Vibe read failed").trim();
     const panelHint = /too large|3 minutes/i.test(msg)

@@ -6,7 +6,7 @@
  */
 
 const GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta";
-const VIBE_TIMEOUT_MS = Number(process.env.NABAD_VIBE_TIMEOUT_MS || 45000);
+const VIBE_TIMEOUT_MS = Number(process.env.NABAD_VIBE_TIMEOUT_MS || 90000);
 
 const VIBE_MODEL_PREFERRED = [
   "gemini-2.5-flash",

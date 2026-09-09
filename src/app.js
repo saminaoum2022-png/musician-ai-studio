@@ -742,6 +742,7 @@ const els = {
   lyricsAddressGroup: document.getElementById("lyricsAddressGroup"),
   lyricsAddressRow: document.getElementById("lyricsAddressRow"),
   sunoArabicAddress: document.getElementById("sunoArabicAddress"),
+  btnLyricsFrancoAdmin: document.getElementById("btnLyricsFrancoAdmin"),
   btnLyricsDiacritics: document.getElementById("btnLyricsDiacritics"),
   btnLyricsPolish: document.getElementById("btnLyricsPolish"),
   btnLyricsFixSinging: document.getElementById("btnLyricsFixSinging"),
@@ -6023,7 +6024,6 @@ function setLyricsDialect(dialect) {
     });
   };
   bindLangRow(els.lyricsLangRow);
-  bindLangRow(document.getElementById("createSoloLangChipRow"));
   const bindDialectRow = (dialectRow) => {
     if (!dialectRow || dialectRow.dataset.boundDialect) return;
     dialectRow.dataset.boundDialect = "1";
@@ -6041,7 +6041,6 @@ function setLyricsDialect(dialect) {
     });
   };
   bindDialectRow(els.lyricsDialectRow);
-  bindDialectRow(document.getElementById("createSoloDialectChipRow"));
   syncLyricsLangPills();
 })();
 
@@ -6749,6 +6748,7 @@ function syncSettingsMusicProviderRow(pref = getMusicProviderPref()) {
   }
   if (sub) sub.textContent = musicProviderSubline(p);
   syncSettingsElevenFinetuneRow(p);
+  try { syncAdminFrancoConvertVisibility(); } catch {}
 }
 
 const ELEVENLABS_FINETUNE_LS_KEY = "nabadElevenFinetune";
@@ -10598,11 +10598,25 @@ function photoSoloChallengeHeroArtUrl(challengeId) {
   return `${bundleAssetUrl(base)}?v=${DISCOVER_CHALLENGE_ART_VERSION}`;
 }
 
-function handlePhotoSoloBannerTap() {
-  if (!activePhotoSoloChallengeId()) return;
+function openPhotoSoloChallengeOnDiscover(challengeId) {
+  const id = String(challengeId || "").trim();
+  if (!id) return;
+  const slug = discoverChallengePlaylistSlug(id);
+  try { location.hash = `#/discover/playlist/${encodeURIComponent(slug)}`; } catch {}
+  scheduleApplyRoute();
+}
+
+function handlePhotoSoloBannerTap(e) {
+  const id = activePhotoSoloChallengeId();
+  if (!id) return;
   haptic("light");
-  try { setActiveCreateTab("photo"); } catch {}
-  try { openImageMoodSheet(); } catch {}
+  const cta = e?.target?.closest?.(".createPhotoSoloBannerCta");
+  if (cta && !cta.hidden && imageMoodAppliedForNextGen) {
+    try { setActiveCreateTab("photo"); } catch {}
+    try { openImageMoodSheet(); } catch {}
+    return;
+  }
+  openPhotoSoloChallengeOnDiscover(id);
 }
 
 function syncPhotoSoloBannerUi(challenge) {
@@ -10635,11 +10649,10 @@ function syncPhotoSoloBannerUi(challenge) {
   if (cta) {
     if (imageMoodAppliedForNextGen) {
       cta.textContent = "Change photo →";
-      cta.hidden = false;
     } else {
-      cta.textContent = "";
-      cta.hidden = true;
+      cta.textContent = "View challenge →";
     }
+    cta.hidden = false;
   }
   banner.hidden = false;
 }
@@ -16285,6 +16298,7 @@ const HUM_CHALLENGE_IDS = new Set(["voice-note-remix"]);
 const PHOTO_CHALLENGE_IDS = new Set(["last-photo-song", "80s-you"]);
 const PHOTO_SOLO_CHALLENGE_IDS = new Set(["80s-you"]);
 let _80sLyricsGenInFlight = null;
+let _francoLyricsRevertSnapshot = "";
 
 const EIGHTIES_YOU_CREATIVE_ANGLES = [
   "mall arcade neon — chase-the-feeling sprint",
@@ -16371,6 +16385,156 @@ function lyricDialectHintFor80sYou() {
   return [base, addressNote].filter(Boolean).join(" ");
 }
 
+function resolveFrancoConversionDialectHint() {
+  try { applyLyricsLanguageToDialect(); } catch {}
+  try { apply80sYouArabicLyricsContext(); } catch {}
+  if (activePhotoSoloChallengeId() === "80s-you") {
+    return lyricDialectHintFor80sYou();
+  }
+  const dialectHint = String(els.sunoDialectHint?.value || "").trim();
+  const addressNote = arabicAddressPronunciationNote(
+    els.sunoArabicAddress?.value,
+    resolveSingerGenderForGeneration({ hasReference: Boolean(getVocalReferenceFile()) })
+  );
+  return [dialectHint, addressNote].filter(Boolean).join(" ");
+}
+
+function syncAdminFrancoConvertVisibility() {
+  const isAdmin = Boolean(creditsState?.isAdmin);
+  const seed = String(els.sunoPrompt?.value || "").trim();
+  const hasArabic = textHasArabicScript(seed);
+  const hasFranco = looksLikeArabizi(seed);
+  const photoSolo = Boolean(activePhotoSoloChallengeId());
+  const lyricsBtn = els.btnLyricsFrancoAdmin || document.getElementById("btnLyricsFrancoAdmin");
+  const soloRow = document.getElementById("createSoloFrancoAdminRow");
+  const soloConvert = document.getElementById("btnCreateSoloFrancoAdmin");
+  const soloRevert = document.getElementById("btnCreateSoloFrancoRevertAdmin");
+  if (lyricsBtn) lyricsBtn.hidden = !isAdmin || !hasArabic || photoSolo;
+  if (soloRow) soloRow.hidden = !isAdmin || !photoSolo;
+  if (soloConvert) soloConvert.hidden = !isAdmin || !photoSolo || !hasArabic;
+  if (soloRevert) {
+    soloRevert.hidden = !isAdmin || !photoSolo || !hasFranco || !String(_francoLyricsRevertSnapshot || "").trim();
+  }
+}
+
+async function convertLyricsToFrancoForAdmin() {
+  if (!creditsState?.isAdmin) {
+    showToast("Convert to Franco is admin-only.", { icon: "!", durationMs: 2800 });
+    return;
+  }
+  if (!els.sunoPrompt) return;
+  let seed = String(els.sunoPrompt.value || "").trim();
+  if (!seed && activePhotoSoloChallengeId() && imageMoodAppliedForNextGen && imageMoodData) {
+    try { setStatus("Drafting Arabic lyrics first…"); } catch {}
+    await draft80sYouLyricsForGenerate(imageMoodData);
+    seed = String(els.sunoPrompt.value || "").trim();
+  }
+  if (!seed) {
+    showToast("Add or generate Arabic lyrics first.", { icon: "!", durationMs: 3200 });
+    return;
+  }
+  if (!textHasArabicScript(seed)) {
+    showToast("Lyrics are already Franco/Latin — tap Revert or paste Arabic script.", { icon: "!", durationMs: 3200 });
+    return;
+  }
+  const lyricsBoxEl = els.sunoPrompt.closest(".lyricsBox");
+  const style = String(els.sunoStyle?.value || "").trim();
+  const dialect = String(els.sunoDialect?.value || "").trim();
+  const lyricDialectHint = resolveFrancoConversionDialectHint();
+  const labelEls = [
+    els.btnLyricsFrancoAdmin?.querySelector(".lyricsFrancoAdminLabel"),
+    document.getElementById("btnCreateSoloFrancoAdmin"),
+  ].filter(Boolean);
+  const prevLabels = labelEls.map((el) => el.textContent);
+  let inkwellSettle = false;
+  try {
+    _francoLyricsRevertSnapshot = seed;
+    if (els.btnLyricsFixSinging) els.btnLyricsFixSinging.disabled = true;
+    if (els.btnLyricsPolish) els.btnLyricsPolish.disabled = true;
+    if (els.btnLyricsMagic) els.btnLyricsMagic.disabled = true;
+    if (els.btnLyricsDiacritics) els.btnLyricsDiacritics.disabled = true;
+    if (els.btnLyricsFrancoAdmin) els.btnLyricsFrancoAdmin.disabled = true;
+    labelEls.forEach((el) => { el.textContent = "Converting…"; });
+    if (lyricsBoxEl) lyricsBoxEl.classList.add("generating");
+    if (els.sunoPrompt) els.sunoPrompt.disabled = true;
+    setStatus("Converting to Franco for Lyria 3.5…");
+    const authToken = getSupabaseAuthToken();
+    const r = await apiFetch("/api/lyrics", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
+      },
+      body: JSON.stringify({
+        seed,
+        style,
+        mode: "to_arabizi",
+        dialect,
+        dialectHint: lyricDialectHint,
+        lyricsProvider: "gemini",
+        scriptFormat: "arabizi",
+      }),
+    });
+    const data = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(data?.error || "Could not convert to Franco");
+    const nextLyrics = String(data?.lyrics || "").trim();
+    if (!nextLyrics) throw new Error("No lyrics returned");
+    els.sunoPrompt.value = nextLyrics;
+    lyricsLanguage = "arabizi";
+    if (!lyricsDialect && isLevantineDialectLabel(dialect, lyricDialectHint)) {
+      lyricsDialect = "lebanese";
+    }
+    try { syncLyricsLangPills(); } catch {}
+    try { applyLyricsLanguageToDialect(); } catch {}
+    try { autoResizeLyricsBox(); } catch {}
+    try { syncArabicLyricsControlsVisibility(); } catch {}
+    snapshotNabadAiLyricsDraft(nextLyrics);
+    void runLyricsSingabilityCheck();
+    inkwellSettle = true;
+    const doneMsg = "Franco ready — review spelling, then Generate to test Lyria.";
+    setStatus(doneMsg);
+    showToast(doneMsg, { icon: "Fr", durationMs: 3800 });
+  } catch (e) {
+    _francoLyricsRevertSnapshot = "";
+    setStatus(`Franco conversion failed: ${e?.message || String(e)}`);
+    showToast(e?.message || "Could not convert to Franco", { icon: "!", durationMs: 3600 });
+  } finally {
+    if (els.sunoPrompt) els.sunoPrompt.disabled = false;
+    if (lyricsBoxEl) lyricsBoxEl.classList.remove("generating");
+    if (inkwellSettle) pulseLyricsGenSettled(lyricsBoxEl);
+    if (els.btnLyricsFixSinging) els.btnLyricsFixSinging.disabled = false;
+    if (els.btnLyricsPolish) els.btnLyricsPolish.disabled = false;
+    if (els.btnLyricsMagic) els.btnLyricsMagic.disabled = false;
+    if (els.btnLyricsDiacritics) els.btnLyricsDiacritics.disabled = false;
+    if (els.btnLyricsFrancoAdmin) els.btnLyricsFrancoAdmin.disabled = false;
+    labelEls.forEach((el, i) => { el.textContent = prevLabels[i] || "Convert to Franco"; });
+    try { syncAdminFrancoConvertVisibility(); } catch {}
+    try { syncArabicGenerateGate(); } catch {}
+  }
+}
+
+function isLevantineDialectLabel(dialect = "", dialectHint = "") {
+  const blob = `${dialect} ${dialectHint}`.toLowerCase();
+  return /lebanese|levantine|syrian|palestinian|beirut|shami/.test(blob);
+}
+
+function revertFrancoLyricsForAdmin() {
+  if (!creditsState?.isAdmin) return;
+  const prev = String(_francoLyricsRevertSnapshot || "").trim();
+  if (!prev || !els.sunoPrompt) return;
+  els.sunoPrompt.value = prev;
+  _francoLyricsRevertSnapshot = "";
+  lyricsLanguage = "arabic";
+  try { syncLyricsLangPills(); } catch {}
+  try { applyLyricsLanguageToDialect(); } catch {}
+  try { autoResizeLyricsBox(); } catch {}
+  try { syncArabicLyricsControlsVisibility(); } catch {}
+  snapshotNabadAiLyricsDraft(prev);
+  setStatus("Reverted to Arabic script.");
+  showToast("Reverted to Arabic script.", { icon: "↩", durationMs: 2800 });
+  try { syncAdminFrancoConvertVisibility(); } catch {}
+}
+
 function is80sLevantineDialectForDiacritics() {
   if (activePhotoSoloChallengeId() !== "80s-you") return false;
   const d = String(lyricsDialect || "").trim().toLowerCase();
@@ -16433,11 +16597,7 @@ function syncPhotoSoloVocalSections() {
   } else {
     document.body.removeAttribute("data-solo-arabic");
   }
-  const langRow = document.getElementById("createSoloLangRow");
-  const dialectRow = document.getElementById("createSoloDialectRow");
   const singerPanel = document.getElementById("singerVoicePanel");
-  if (langRow) langRow.hidden = instrumental;
-  if (dialectRow) dialectRow.hidden = instrumental || !showArabicDialect;
   if (singerPanel) singerPanel.hidden = instrumental;
   const duoPill = document.getElementById("singerDuoPill");
   if (duoPill) {
@@ -16450,6 +16610,7 @@ function syncPhotoSoloVocalSections() {
     try { syncClipVocalCharacterUi(); } catch {}
   }
   try { apply80sYouArabicLyricsContext(); } catch {}
+  try { syncAdminFrancoConvertVisibility(); } catch {}
 }
 
 function apply80sYouPortraitGender(mood) {
@@ -16519,6 +16680,7 @@ async function draft80sYouLyricsForGenerate(mood) {
     _lyricsGeneratedInNabad = true;
     try { autoResizeLyricsBox(); } catch {}
     try { syncTemplateSparkClipGenerateReady(); syncGenerateOrbVisibility(); } catch {}
+    try { syncAdminFrancoConvertVisibility(); } catch {}
     return true;
   };
 
@@ -16555,12 +16717,8 @@ function syncPhotoSoloChallengeCreateUi() {
     document.body.removeAttribute("data-photo-solo-challenge");
   }
   const instRow = document.getElementById("createSoloInstrumentalRow");
-  const langRow = document.getElementById("createSoloLangRow");
-  const dialectRow = document.getElementById("createSoloDialectRow");
   if (instRow) instRow.hidden = !id;
   if (!id) {
-    if (langRow) langRow.hidden = true;
-    if (dialectRow) dialectRow.hidden = true;
     document.body.removeAttribute("data-solo-instrumental");
     document.body.removeAttribute("data-solo-arabic");
   } else {
@@ -16580,6 +16738,7 @@ function syncPhotoSoloChallengeCreateUi() {
   if (id) {
     try { syncSoloInstrumentalToggleUi(); } catch {}
     try { syncPhotoSoloBannerUi(challengePromptContext()); } catch {}
+    try { setActiveCreateTab("photo"); } catch {}
     const photoSub = document.querySelector("#createPhotoCta .createPaneCtaSub");
     if (photoSub && id === "80s-you") {
       photoSub.textContent = "Tap to upload your retro portrait.";
@@ -16670,12 +16829,8 @@ function clearCreateChallengeFocus() {
     el.style.display = "";
   });
   const instRow = document.getElementById("createSoloInstrumentalRow");
-  const langRow = document.getElementById("createSoloLangRow");
-  const dialectRow = document.getElementById("createSoloDialectRow");
   const singerPanel = document.getElementById("singerVoicePanel");
   if (instRow) instRow.hidden = true;
-  if (langRow) langRow.hidden = true;
-  if (dialectRow) dialectRow.hidden = true;
   if (singerPanel) singerPanel.hidden = false;
   const createTabs = document.querySelector(".createTabs");
   if (createTabs) {
@@ -29083,6 +29238,7 @@ async function refreshMyCredits({ silent = false } = {}) {
     try { syncNabadClipHomeCard(); } catch {}
     try { syncNabadProducerHomeCard(); } catch {}
     try { syncNabadVibeCreateTab(); } catch {}
+    try { syncPhotoSoloChallengeCreateUi(); } catch {}
     if (document.body.getAttribute("data-route") === "first-song") {
       try { onFirstSongRouteActive(); } catch {}
     }
@@ -61671,6 +61827,8 @@ function restoreCreatePageOnRouteEnter() {
   }
 
   try { restoreCreateChallengeContext(); } catch {}
+  try { resyncActiveCreateTabPanes(); } catch {}
+  try { syncPhotoSoloChallengeCreateUi(); } catch {}
   try { syncGenerateOrbVisibility(); } catch {}
   try { syncCreateTabMorph(); } catch {}
   try { updateBrandPulse(); } catch {}
@@ -63424,12 +63582,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
     const lyricsBoxEl = els.sunoPrompt.closest(".lyricsBox");
     const style = String(els.sunoStyle?.value || "").trim();
     const dialect = String(els.sunoDialect?.value || "").trim();
-    const dialectHint = String(els.sunoDialectHint?.value || "").trim();
-    const addressNote = arabicAddressPronunciationNote(
-      els.sunoArabicAddress?.value,
-      resolveSingerGenderForGeneration({ hasReference: Boolean(getVocalReferenceFile()) }),
-    );
-    const lyricDialectHint = [dialectHint, addressNote].filter(Boolean).join(" ");
+    const lyricDialectHint = resolveFrancoConversionDialectHint();
     let inkwellSettle = false;
     try {
       if (els.btnLyricsFixSinging) els.btnLyricsFixSinging.disabled = true;
@@ -63438,7 +63591,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       if (els.btnLyricsSingabilityCheck) els.btnLyricsSingabilityCheck.disabled = true;
       if (lyricsBoxEl) lyricsBoxEl.classList.add("generating");
       if (els.sunoPrompt) els.sunoPrompt.disabled = true;
-      setStatus("Converting to Arabizi for Lyria singing…");
+      setStatus("Converting to Franco for Lyria singing…");
       const r = await fetch(apiUrl("/api/lyrics"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -63466,7 +63619,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       snapshotNabadAiLyricsDraft(nextLyrics);
       void runLyricsSingabilityCheck();
       inkwellSettle = true;
-      const doneMsg = "Converted to Arabizi — best for Lyria Lebanese singing.";
+      const doneMsg = "Converted to Franco — best for Lyria dialect singing.";
       setStatus(doneMsg);
       showToast(doneMsg, { icon: "♫", durationMs: 3800 });
     } catch (e) {
@@ -63695,6 +63848,23 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       if (!t) return;
       if (t === els.btnLyricsMagic || t.closest?.("#lyricsMagicMenu")) return;
       closeMagicMenu();
+    });
+  }
+  if (els.btnLyricsFrancoAdmin) {
+    els.btnLyricsFrancoAdmin.addEventListener("click", () => {
+      void convertLyricsToFrancoForAdmin();
+    });
+  }
+  const btnCreateSoloFrancoAdmin = document.getElementById("btnCreateSoloFrancoAdmin");
+  if (btnCreateSoloFrancoAdmin) {
+    btnCreateSoloFrancoAdmin.addEventListener("click", () => {
+      void convertLyricsToFrancoForAdmin();
+    });
+  }
+  const btnCreateSoloFrancoRevertAdmin = document.getElementById("btnCreateSoloFrancoRevertAdmin");
+  if (btnCreateSoloFrancoRevertAdmin) {
+    btnCreateSoloFrancoRevertAdmin.addEventListener("click", () => {
+      revertFrancoLyricsForAdmin();
     });
   }
   if (els.btnLyricsDiacritics) {
@@ -72113,6 +72283,7 @@ try {
   configureNabadVibe({
     isAdmin: () => Boolean(creditsState.isAdmin),
     setActiveCreateTab: (mode) => setActiveCreateTab(mode),
+    getActiveCreateTab: () => getActiveCreateTabMode(),
   });
   syncNabadVibeCreateTab();
 } catch (e) { console.warn("[nabad-vibe] init", e); }
@@ -73292,7 +73463,19 @@ const createTabEls = {
   vibe: document.getElementById("createTabVibe"),
 };
 const createPanesWrap = document.querySelector(".createPanes");
+function getActiveCreateTabMode() {
+  const fromWrap = String(createPanesWrap?.dataset?.mode || "").trim();
+  if (fromWrap) return fromWrap;
+  for (const [k, el] of Object.entries(createTabEls)) {
+    if (el && !el.hidden && el.classList.contains("isActive")) return k;
+  }
+  return "lyrics";
+}
+function resyncActiveCreateTabPanes() {
+  setActiveCreateTab(getActiveCreateTabMode());
+}
 function setActiveCreateTab(mode) {
+  const photoSolo = Boolean(document.body.getAttribute("data-photo-solo-challenge"));
   ["photo", "hum", "lyrics", "vibe"].forEach((k) => {
     const el = createTabEls[k];
     if (!el || el.hidden) return;
@@ -73302,7 +73485,12 @@ function setActiveCreateTab(mode) {
   });
   if (createPanesWrap) createPanesWrap.dataset.mode = mode;
   document.querySelectorAll(".createPane").forEach((p) => {
-    p.hidden = p.dataset.mode !== mode;
+    const paneMode = String(p.dataset.mode || "").trim();
+    if (photoSolo && paneMode === "lyrics") {
+      p.hidden = false;
+    } else {
+      p.hidden = paneMode !== mode;
+    }
   });
 }
 if (createTabEls.lyrics) {
@@ -73336,8 +73524,8 @@ if (createPhotoCtaBtn) {
 }
 const createPhotoSoloBannerBtn = document.getElementById("createPhotoSoloBanner");
 if (createPhotoSoloBannerBtn) {
-  createPhotoSoloBannerBtn.addEventListener("click", () => {
-    handlePhotoSoloBannerTap();
+  createPhotoSoloBannerBtn.addEventListener("click", (e) => {
+    handlePhotoSoloBannerTap(e);
   });
 }
 const createVibeCtaBtn = document.getElementById("createVibeCta");

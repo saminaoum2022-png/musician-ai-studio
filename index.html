@@ -1122,7 +1122,7 @@
                 <span class="createPhotoSoloBannerKicker">80s You</span>
                 <span class="createPhotoSoloBannerTitle">My 80s Moment</span>
                 <span class="createPhotoSoloBannerSub">Your portrait becomes a synth-pop anthem.</span>
-                <span class="createPhotoSoloBannerCta">Join challenge →</span>
+                <span class="createPhotoSoloBannerCta">View challenge →</span>
               </span>
             </button>
             <div class="createPanes" data-mode="lyrics">
@@ -1247,6 +1247,7 @@
                     </div>
                     <div class="lyricsAssistBar" role="toolbar" aria-label="Lyrics assist">
                       <button id="btnLyricsSingabilityCheck" class="lyricsSingabilityCheckBtn aiAssistBtn" type="button" hidden title="Analyze rhyme, wazen (وزن), and line balance for AI singing" aria-label="Check singability"><span class="lyricsSingabilityCheckIco aiAssistIco" aria-hidden="true">♫</span><span class="lyricsSingabilityCheckLabel aiAssistLabel">Check singability</span></button>
+                      <button id="btnLyricsFrancoAdmin" class="lyricsFrancoAdminBtn aiAssistBtn" type="button" hidden title="Admin: convert Arabic lyrics to Franco for Lyria testing" aria-label="Convert to Franco"><span class="lyricsFrancoAdminIco aiAssistIco" aria-hidden="true">Fr</span><span class="lyricsFrancoAdminLabel aiAssistLabel">Convert to Franco</span></button>
                       <button id="btnLyricsDiacritics" class="lyricsDiacriticsBtn" type="button" hidden title="Add Arabic vowel marks for clearer singing" aria-label="Add Arabic vowel marks"><span class="lyricsDiacriticsLabel">Add vowel marks</span><span class="lyricsDiacriticsLabelAr" lang="ar" dir="rtl">تشكيل</span></button>
                       <button id="btnLyricsFixSinging" class="lyricsFixSingingBtn aiAssistBtn" type="button" hidden title="Balance rhyme and wazen (وزن) for cleaner AI singing" aria-label="Fix lyrics for singing"><span class="lyricsFixSingingIco aiAssistIco" aria-hidden="true">♪</span><span class="lyricsFixSingingLabel aiAssistLabel">Fix for singing</span></button>
                       <button id="btnLyricsPolish" class="lyricsPolishBtn aiAssistBtn" type="button" hidden title="Tighten rhyme and line flow without changing the story" aria-label="Polish lyrics"><span class="lyricsPolishIco aiAssistIco" aria-hidden="true">✦</span><span class="lyricsPolishLabel aiAssistLabel">Polish lyrics</span></button>
@@ -1333,26 +1334,13 @@
                 </button>
               </div>
             </div>
-            <div id="createSoloLangRow" class="createSoloLangRow field grow inputPanel inputPanel--style" hidden>
-              <div class="label inPanelLabel">Lyrics language</div>
-              <div id="createSoloLangChipRow" class="optChipRow lyricsLangRow createSoloLangChipRow" role="group" aria-label="Lyrics language">
-                <button type="button" class="optChip isActive" data-lyrics-lang="auto" aria-pressed="true">Auto</button>
-                <button type="button" class="optChip" data-lyrics-lang="english" aria-pressed="false">English</button>
-                <button type="button" class="optChip" data-lyrics-lang="arabic" aria-pressed="false">Arabic</button>
-                <button type="button" class="optChip" data-lyrics-lang="french" aria-pressed="false">French</button>
-                <button type="button" class="optChip" data-lyrics-lang="spanish" aria-pressed="false">Spanish</button>
+            <div id="createSoloFrancoAdminRow" class="createSoloFrancoAdminRow field grow inputPanel inputPanel--style" hidden>
+              <div class="label inPanelLabel">Admin · Lyria Franco test</div>
+              <div class="createSoloFrancoAdminActions" role="group" aria-label="Franco conversion admin tools">
+                <button id="btnCreateSoloFrancoAdmin" type="button" class="optChip createSoloFrancoAdminChip" hidden>Convert to Franco</button>
+                <button id="btnCreateSoloFrancoRevertAdmin" type="button" class="optChip createSoloFrancoRevertChip" hidden>Revert to Arabic</button>
               </div>
-            </div>
-            <div id="createSoloDialectRow" class="createSoloDialectRow field grow inputPanel inputPanel--style" hidden>
-              <div class="label inPanelLabel">Arabic dialect</div>
-              <div id="createSoloDialectChipRow" class="optChipRow lyricsDialectRow createSoloDialectChipRow" role="group" aria-label="Arabic dialect">
-                <button type="button" class="optChip" data-lyrics-dialect="lebanese" aria-pressed="false">Lebanese</button>
-                <button type="button" class="optChip" data-lyrics-dialect="syrian" aria-pressed="false">Syrian</button>
-                <button type="button" class="optChip" data-lyrics-dialect="palestinian" aria-pressed="false">Palestinian</button>
-                <button type="button" class="optChip" data-lyrics-dialect="egyptian" aria-pressed="false">Egyptian</button>
-                <button type="button" class="optChip" data-lyrics-dialect="gulf" aria-pressed="false">Gulf</button>
-                <button type="button" class="optChip" data-lyrics-dialect="msa" aria-pressed="false">MSA</button>
-              </div>
+              <p class="createSoloFrancoAdminHint">Converts lyrics in the box for Lyria testing — does not auto-run on Generate yet.</p>
             </div>
               <label class="field grow inputPanel inputPanel--style">
                 <div class="label inPanelLabel stylePanelHead">

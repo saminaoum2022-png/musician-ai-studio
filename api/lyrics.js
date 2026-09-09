@@ -10,7 +10,7 @@ const {
   looksLikeArabizi,
   resolveScriptFormat,
   buildArabiziPromptLines,
-  TO_ARABIZI_LINES,
+  buildToArabiziConversionLines,
 } = require("./_lib/arabizi");
 const {
   dialectFlags,
@@ -510,9 +510,7 @@ function buildPrompt({ seed, style, mode, nonce, dialect, dialectHint, sourceLyr
     : [];
   if (mode === "to_arabizi") {
     return [
-      ...TO_ARABIZI_LINES,
-      ...buildArabiziPromptLines({ dialect, dialectHint }),
-      ...(colloquialArabicLines.length && mode !== "diacritics" ? colloquialArabicLines : []),
+      ...buildToArabiziConversionLines({ dialect, dialectHint }),
       ...(dialectLines ? [dialectLines] : []),
       style ? `Style/Tags (context only): ${style}` : "",
       "",

@@ -9761,26 +9761,38 @@ html[data-theme="light"] .personaVoiceTuneChips .optChip.isActive{
 body[data-photo-solo-challenge] .createSoloInstrumentalRow{
   order: 1;
 }
-body[data-photo-solo-challenge] .createSoloLangRow{
-  order: 2;
-}
-body[data-photo-solo-challenge] .createSoloDialectRow{
-  order: 3;
-}
 body[data-photo-solo-challenge] #singerVoicePanel{
   order: 4;
 }
-body[data-photo-solo-challenge][data-solo-instrumental="1"] .createSoloLangRow,
-body[data-photo-solo-challenge][data-solo-instrumental="1"] .createSoloDialectRow,
 body[data-photo-solo-challenge][data-solo-instrumental="1"] #singerVoicePanel{
-  display: none !important;
-}
-body[data-photo-solo-challenge]:not([data-solo-arabic="1"]) .createSoloDialectRow{
   display: none !important;
 }
 body[data-photo-solo-challenge] #singerGenderPills.nabadClipNoPersona .singerDuoPill,
 body[data-photo-solo-challenge] #singerDuoPill{
   display: none !important;
+}
+body[data-photo-solo-challenge] .createSoloFrancoAdminRow{
+  order: 5;
+}
+.createSoloFrancoAdminActions{
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.createSoloFrancoAdminHint{
+  margin: 8px 0 0;
+  font-size: 11px;
+  line-height: 1.35;
+  color: rgba(226,232,240,0.62);
+}
+.createSoloFrancoAdminChip,
+.createSoloFrancoRevertChip{
+  border-color: rgba(168,85,247,0.38);
+}
+.lyricsFrancoAdminBtn .lyricsFrancoAdminIco{
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
 }
 body[data-photo-solo-challenge] .createPhotoSoloBannerCta[hidden]{
   display: none !important;
@@ -9788,7 +9800,15 @@ body[data-photo-solo-challenge] .createPhotoSoloBannerCta[hidden]{
 body[data-photo-solo-challenge] .createTabs{
   display: none !important;
 }
-body[data-photo-solo-challenge] .createPane--lyrics{
+body[data-photo-solo-challenge] .createPane--vibe{
+  display: none !important;
+}
+body[data-photo-solo-challenge] .createPane--lyrics .lyricsPanelHead,
+body[data-photo-solo-challenge] .createPane--lyrics .lyricsBox,
+body[data-photo-solo-challenge] .createPane--lyrics .imageMoodRow{
+  display: none !important;
+}
+body[data-photo-solo-challenge][data-solo-instrumental="1"] .createPane--lyrics .lyricsLangBlock{
   display: none !important;
 }
 body[data-photo-solo-challenge] .createFlowStep .inputPanel--style:has(#sunoStyle),

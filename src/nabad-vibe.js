@@ -35,19 +35,27 @@ export function configureNabadVibe(b) {
 }
 
 export function syncNabadVibeCreateTab() {
-  const show = nabadVibeEnabled();
+  const photoSolo = Boolean(document.body.getAttribute("data-photo-solo-challenge"));
+  const show = nabadVibeEnabled() && !photoSolo;
   const tab = document.getElementById("createTabVibe");
-  const pane = document.querySelector(".createPane--vibe");
-  [tab, pane].forEach((el) => {
-    if (!el) return;
-    el.hidden = !show;
-    el.style.display = show ? "" : "none";
-    if (tab) tab.setAttribute("aria-hidden", show ? "false" : "true");
-  });
+  if (tab) {
+    tab.hidden = !show;
+    tab.style.display = show ? "" : "none";
+    tab.setAttribute("aria-hidden", show ? "false" : "true");
+  }
   if (!show) {
-    const active = document.getElementById("createTabVibe")?.classList.contains("isActive");
+    const active = tab?.classList.contains("isActive");
     if (active && typeof bridge.setActiveCreateTab === "function") {
       bridge.setActiveCreateTab("lyrics");
+      return;
     }
+  }
+  // Pane visibility is owned by setActiveCreateTab — re-sync so vibe unhide never leaks.
+  if (typeof bridge.setActiveCreateTab === "function") {
+    const mode =
+      (typeof bridge.getActiveCreateTab === "function" && bridge.getActiveCreateTab())
+      || document.querySelector(".createPanes")?.dataset?.mode
+      || "lyrics";
+    bridge.setActiveCreateTab(mode);
   }
 }

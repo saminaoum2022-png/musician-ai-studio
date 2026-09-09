@@ -4046,6 +4046,10 @@ function setCreateChallengeHint(challenge) {
       els.createChallengeHintSub.textContent = "Drop your anthem — edit the lyrics, then tap Generate.";
     } else if (voiceClip) {
       els.createChallengeHintSub.textContent = "Record on Hum. Optional: type what you sang on Lyrics — or leave empty and Generate.";
+    } else if (["last-photo-song", "80s-you"].includes(String(c.id || ""))) {
+      els.createChallengeHintSub.textContent = String(c.id || "") === "80s-you"
+        ? "Upload your retro portrait on Photo — Analyze, then Generate your 80s anthem."
+        : "Upload a photo on Photo — Analyze mood, then Generate.";
     } else {
       els.createChallengeHintSub.textContent = `${details ? `${details}. ` : ""}Instructions below — edit them, then tap ✦ for a short lyric draft (not a full song).`;
     }
@@ -7525,6 +7529,16 @@ const CHALLENGE_IDEAS = [
     tags: ["Photo", "Personal", "Mood"],
   },
   {
+    id: "80s-you",
+    title: "My 80s Moment",
+    styleLyria: "1980s synth-pop, analog synth leads, gated reverb drums, Juno bass, neon nostalgia, 108 bpm",
+    style: "1980s synth-pop, analog synths, gated reverb drums, Juno bass, new wave energy, neon nostalgia, 108 bpm",
+    lyricsMode: "instructions",
+    lyrics: "Write a ~25 second 80s anthem inspired by the uploaded photo.\n\n[Verse] — 2 lines: neon nights, mall glow, cassette tapes, retro confidence.\n[Chorus] — 3–4 lines with one repeatable hook about your 80s look.\n\nFun and cinematic — not a parody. Complete ending.",
+    prompt: "Upload your retro portrait — get your personal synth-pop anthem.",
+    tags: ["80s", "Photo", "Trend"],
+  },
+  {
     id: "tiktok-teaser",
     title: "TikTok Teaser",
     styleLyria: "short social hook, tight drums, bright ear-candy, 120 bpm",
@@ -7678,6 +7692,7 @@ const CHALLENGE_SPARK_KICKERS = {
   "arabic-trend-byte": "Arabic",
   "roast-song": "Roast",
   "last-photo-song": "Photo",
+  "80s-you": "Trending",
   "roast-song": "Roast",
 };
 const CHALLENGE_SPARK_TONES = ["violet", "cyan", "rose", "gold", "mint", "amber"];
@@ -10415,6 +10430,13 @@ function discoverAllChallengeFeedTracks(tracks, prefs, limit = 8) {
 /** Pick the live challenge block with real songs for For You — not an empty spotlight. */
 function discoverFeaturedChallengeForForYou(tracks, prefs) {
   const ranked = discoverLiveChallengesForUser(prefs);
+  const pinned = ranked.find((c) => c.featured);
+  if (pinned) {
+    return {
+      challenge: pinned,
+      entries: discoverTracksForChallenge(pinned, tracks, 8),
+    };
+  }
   let featured = ranked[0] || DISCOVER_LIVE_CHALLENGES[0] || null;
   let entries = [];
   for (const c of ranked) {
@@ -10499,6 +10521,7 @@ const DISCOVER_CHALLENGE_AVATAR_SEEDS = {
   "wrong-genre-party": ["W", "G", "F", "N"],
   "sad-to-dance": ["D", "M", "S", "K"],
   "last-photo-song": ["P", "H", "O", "T"],
+  "80s-you": ["8", "0", "S", "U"],
   "roast-song": ["R", "O", "A", "S"],
 };
 
@@ -10512,6 +10535,7 @@ const DISCOVER_CHALLENGE_ART = {
   "wrong-genre-party": "./assets/discover/challenges/remix-battle.svg",
   "sad-to-dance": "./assets/discover/challenges/remix-battle.svg",
   "last-photo-song": "./assets/discover/challenges/birthday-song.svg",
+  "80s-you": "./assets/discover/challenges/love-song.svg",
   "roast-song": "./assets/discover/challenges/remix-battle.svg",
   birthday: "./assets/discover/challenges/birthday-song.svg",
   "love-song": "./assets/discover/challenges/love-song.svg",
@@ -10547,6 +10571,21 @@ const DISCOVER_LIVE_CHALLENGES = [
     totalDays: 45,
     progressGoal: 500,
     action: "campaign",
+  },
+  {
+    id: "80s-you",
+    emoji: "📼",
+    title: "80s You",
+    blurb: "Your retro portrait. Your synth-pop anthem.",
+    tone: "violet",
+    participants: 1842,
+    submissions: 267,
+    daysLeft: 12,
+    totalDays: 14,
+    progressGoal: 200,
+    action: "challenge",
+    challengeId: "80s-you",
+    featured: true,
   },
   {
     id: "dabke-drop",
@@ -10629,6 +10668,7 @@ const DISCOVER_SUGGESTED_CREATORS = [
 ];
 
 const DISCOVER_NEW_THIS_WEEK = [
+  { id: "80s-you", emoji: "📼", kicker: "Trending", title: "80s You", blurb: "Photo → your personal 80s anthem.", tone: "violet", action: "challenge", challengeId: "80s-you" },
   { id: "graduation", emoji: "🎓", kicker: "New template", title: "Graduation Song", blurb: "Celebrate the milestone.", tone: "gold", action: "occasion", occasionId: "congrats" },
   { id: "ramadan", emoji: "🌙", kicker: "Seasonal", title: "Ramadan Glow", blurb: "Warm spiritual vibes.", tone: "violet", action: "occasion", occasionId: "christmas" },
   { id: "roast-week", emoji: "😄", kicker: "Fun challenge", title: "Roast Song", blurb: "Playful roast for a friend — funny, never cruel.", tone: "gold", action: "challenge", challengeId: "roast-song" },
@@ -10764,6 +10804,7 @@ function discoverChallengeMatchesTrack(c, track) {
   if (c.id === "wrong-genre-party" && (chId === "wrong-genre-party" || chTitle.includes("wrong genre"))) return true;
   if (c.id === "sad-to-dance" && (chId === "sad-to-dance-challenge" || chTitle.includes("sad") || chTitle.includes("dance"))) return true;
   if (c.id === "last-photo-song" && (chId === "last-photo-song" || chTitle.includes("photo"))) return true;
+  if (c.id === "80s-you" && (chId === "80s-you" || chTitle.includes("80s") || chTitle.includes("80's"))) return true;
   if (c.challengeId === "roast-song" && (chId === "roast-song" || chTitle.includes("roast"))) return true;
   if (c.action === "campaign" && String(ch.campaign || "").trim()) {
     if (c.id === "worldcup2026") return true;
@@ -11492,6 +11533,7 @@ function discoverFeaturedChallengeSubtitle(c, topEntry, tracks) {
 
 function discoverFeaturedChallengeKicker(c) {
   if (String(c?.action || "") === "campaign") return "Live event";
+  if (c?.featured) return "Trending now";
   return "Featured challenge";
 }
 
@@ -16148,7 +16190,7 @@ const POST_AUTH_RETURN_HASH_KEY = "nabadai_post_auth_return_v1";
 const PENDING_DISCOVERY_IDEA_KEY = "nabadai_pending_discovery_idea_v1";
 
 const HUM_CHALLENGE_IDS = new Set(["voice-note-remix"]);
-const PHOTO_CHALLENGE_IDS = new Set(["last-photo-song"]);
+const PHOTO_CHALLENGE_IDS = new Set(["last-photo-song", "80s-you"]);
 
 function isVoiceClipChallengeId(challengeId) {
   return HUM_CHALLENGE_IDS.has(String(challengeId || "").trim());

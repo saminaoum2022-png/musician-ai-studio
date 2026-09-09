@@ -4021,6 +4021,12 @@ function setCreateChallengeHint(challenge) {
   if (!c) {
     els.createChallengeHint.hidden = true;
     els.createChallengeHint.classList.remove("createChallengeHint--template", "createChallengeHint--spark", "createChallengeHint--live");
+    try { syncPhotoSoloBannerUi(null); } catch {}
+    return;
+  }
+  if (isPhotoSoloChallengeId(c.id)) {
+    els.createChallengeHint.hidden = true;
+    try { syncPhotoSoloBannerUi(c); } catch {}
     return;
   }
   const kind = creationSourceKind(c);
@@ -4048,7 +4054,7 @@ function setCreateChallengeHint(challenge) {
       els.createChallengeHintSub.textContent = "Record on Hum. Optional: type what you sang on Lyrics — or leave empty and Generate.";
     } else if (["last-photo-song", "80s-you"].includes(String(c.id || ""))) {
       els.createChallengeHintSub.textContent = String(c.id || "") === "80s-you"
-        ? "Upload your retro portrait on Photo — Analyze, then Generate your 80s anthem."
+        ? "Upload your portrait — we write your 80s lyrics. Pick singer & vocal character, then Generate."
         : "Upload a photo on Photo — Analyze mood, then Generate.";
     } else {
       els.createChallengeHintSub.textContent = `${details ? `${details}. ` : ""}Instructions below — edit them, then tap ✦ for a short lyric draft (not a full song).`;
@@ -6056,6 +6062,8 @@ function setCreateSongType(type) {
   if (els.btnLyricsPolish) els.btnLyricsPolish.disabled = instrumental;
   if (els.btnLyricsFixSinging) els.btnLyricsFixSinging.disabled = instrumental;
   try { syncArabicGenerateGate(); } catch {}
+  try { syncSoloInstrumentalToggleUi(); } catch {}
+  try { syncTemplateSparkClipGenerateReady(); syncGenerateOrbVisibility(); } catch {}
 }
 
 function setGenerateFieldsLocked(locked) {
@@ -7534,7 +7542,7 @@ const CHALLENGE_IDEAS = [
     styleLyria: "1980s synth-pop, analog synth leads, gated reverb drums, Juno bass, neon nostalgia, 108 bpm",
     style: "1980s synth-pop, analog synths, gated reverb drums, Juno bass, new wave energy, neon nostalgia, 108 bpm",
     lyricsMode: "instructions",
-    lyrics: "Write a ~25 second 80s anthem inspired by the uploaded photo.\n\n[Verse] — 2 lines: neon nights, mall glow, cassette tapes, retro confidence.\n[Chorus] — 3–4 lines with one repeatable hook about your 80s look.\n\nFun and cinematic — not a parody. Complete ending.",
+    lyrics: "80s photo anthem — lyrics auto-written from your portrait after Analyze.",
     prompt: "Upload your retro portrait — get your personal synth-pop anthem.",
     tags: ["80s", "Photo", "Trend"],
   },
@@ -8409,12 +8417,18 @@ function applyDiscoveryIdeaToCreate(idea) {
           String(idea.avoidTags || (useTemplateGuards ? templateAvoidTagsForProvider() : "")),
         );
   }
+  const photoSoloChallenge = isPhotoSoloChallengeId(idea.challenge?.id);
   if (els.sunoPrompt) {
     const focus = idea.createFocus
       || (idea.challenge?.id ? challengeCreateFocusForId(idea.challenge.id) : null);
     const voiceClipOnly = isVoiceClipChallengeId(idea.challenge?.id) || focus?.tab === "hum";
-    const body = voiceClipOnly ? "" : String(idea.lyrics || idea.prompt || "").trim();
-    els.sunoPrompt.value = body;
+    if (photoSoloChallenge) {
+      els.sunoPrompt.value = "";
+      resetNabadLyricsDraftState();
+    } else {
+      const body = voiceClipOnly ? "" : String(idea.lyrics || idea.prompt || "").trim();
+      els.sunoPrompt.value = body;
+    }
     try { autoResizeLyricsBox(); } catch {}
   }
   pendingSearchRemixMeta = {
@@ -8476,11 +8490,15 @@ function applyDiscoveryIdeaToCreate(idea) {
     );
   } catch {}
   try { syncNabadClipCreateUi(); } catch {}
+  try { syncPhotoSoloChallengeCreateUi(); } catch {}
   try { syncGenerateOrbVisibility?.(); } catch {}
   location.hash = "#/generate";
   scheduleApplyRoute();
-  if (isTemplateSparkClipFlow() && !voiceClipOnly) {
+  if (isTemplateSparkClipFlow() && !voiceClipOnly && !photoSoloChallenge) {
     primeTemplateSparkClipCreateUi(String(idea.lyrics || idea.prompt || "").trim());
+  }
+  if (photoSoloChallenge) {
+    try { setActiveCreateTab("photo"); } catch {}
   }
 }
 
@@ -10550,7 +10568,48 @@ function discoverChallengeArtUrl(challengeId) {
 /** Full-bleed photo art for For You featured challenge hero cards only. */
 const DISCOVER_FEATURED_HERO_ART = {
   worldcup2026: "./assets/discover/challenges/worldcup-hero.png",
+  "80s-you": "./assets/discover/challenges/80s-you-hero.png",
 };
+
+const PHOTO_SOLO_CHALLENGE_ART = {
+  "80s-you": "./assets/discover/challenges/80s-you-hero.png",
+};
+
+function photoSoloChallengeHeroArtUrl(challengeId) {
+  const base = PHOTO_SOLO_CHALLENGE_ART[String(challengeId || "")];
+  if (!base) return "";
+  return `${base}?v=${DISCOVER_CHALLENGE_ART_VERSION}`;
+}
+
+function syncPhotoSoloBannerUi(challenge) {
+  const banner = document.getElementById("createPhotoSoloBanner");
+  if (!banner) return;
+  const id = String(challenge?.id || activePhotoSoloChallengeId() || "").trim();
+  if (!isPhotoSoloChallengeId(id)) {
+    banner.hidden = true;
+    return;
+  }
+  const art = banner.querySelector(".createPhotoSoloBannerArt");
+  const kicker = banner.querySelector(".createPhotoSoloBannerKicker");
+  const title = banner.querySelector(".createPhotoSoloBannerTitle");
+  const sub = banner.querySelector(".createPhotoSoloBannerSub");
+  const artUrl = photoSoloChallengeHeroArtUrl(id);
+  if (art && artUrl) {
+    art.src = artUrl;
+    art.alt = "";
+  }
+  const spark = CHALLENGE_IDEAS.find((row) => String(row.id) === id);
+  if (kicker) kicker.textContent = id === "80s-you" ? "80s You · Trending" : "Challenge";
+  if (title) {
+    title.textContent = String(challenge?.title || spark?.title || "Challenge").trim();
+  }
+  if (sub) {
+    sub.textContent = id === "80s-you"
+      ? "Add your portrait — we write your synth-pop anthem."
+      : String(spark?.prompt || "Add a photo to start.").trim();
+  }
+  banner.hidden = false;
+}
 
 function discoverFeaturedHeroArtUrl(challengeId) {
   const base = DISCOVER_FEATURED_HERO_ART[String(challengeId || "")];
@@ -16191,14 +16250,202 @@ const PENDING_DISCOVERY_IDEA_KEY = "nabadai_pending_discovery_idea_v1";
 
 const HUM_CHALLENGE_IDS = new Set(["voice-note-remix"]);
 const PHOTO_CHALLENGE_IDS = new Set(["last-photo-song", "80s-you"]);
+const PHOTO_SOLO_CHALLENGE_IDS = new Set(["80s-you"]);
+let _80sLyricsGenInFlight = null;
+
+const EIGHTIES_YOU_CREATIVE_ANGLES = [
+  "mall arcade neon — chase-the-feeling sprint",
+  "convertible highway sunset — wind-in-hair freedom",
+  "bedroom mirror Polaroid — quiet confident self-myth",
+  "rooftop city lights — glitter bass and big chorus",
+  "VHS sleepover warmth — laughing with your crew",
+  "aerobics-class pulse — playful bounce and wink",
+  "late-night diner booth — soft romance under fluorescent glow",
+  "skate park concrete — reckless joy and bright hooks",
+  "prom night corsage — dreamy slow-dance then power chorus",
+  "cassette mixtape crush — handwritten feelings on repeat",
+  "neon sign alley — cinematic mystery and cool swagger",
+  "suburban sprinkler summer — golden-hour kid-energy turned anthem",
+];
 
 function isVoiceClipChallengeId(challengeId) {
   return HUM_CHALLENGE_IDS.has(String(challengeId || "").trim());
 }
 
+function isPhotoSoloChallengeId(challengeId) {
+  return PHOTO_SOLO_CHALLENGE_IDS.has(String(challengeId || "").trim());
+}
+
+function activePhotoSoloChallengeId() {
+  const ch = challengePromptContext();
+  return ch && isPhotoSoloChallengeId(ch.id) ? String(ch.id).trim() : "";
+}
+
+function pick80sCreativeAngle(seed = "") {
+  const s = String(seed || "");
+  let hash = 0;
+  for (let i = 0; i < s.length; i += 1) {
+    hash = (hash * 33 + s.charCodeAt(i)) >>> 0;
+  }
+  hash = (hash + (Date.now() % 9973)) >>> 0;
+  return EIGHTIES_YOU_CREATIVE_ANGLES[hash % EIGHTIES_YOU_CREATIVE_ANGLES.length];
+}
+
+function build80sYouLyricsBrief(mood = null) {
+  const subject = String(mood?.subject || "").trim() || "the person in the photo";
+  const concept = String(mood?.concept || "").trim();
+  const lyricSeed = String(mood?.lyricSeed || "").trim();
+  const angle = pick80sCreativeAngle(`${subject}|${concept}|${lyricSeed}|${Date.now()}`);
+  return [
+    "Write a ~25 second personal 80s synth-pop anthem inspired by the uploaded photo.",
+    "",
+    `Photo subject: ${subject}`,
+    concept ? `Mood: ${concept}` : "",
+    lyricSeed ? `Personal detail to weave in: ${lyricSeed}` : "",
+    "",
+    `Creative angle for THIS version (commit to it — avoid generic filler unless it truly fits): ${angle}`,
+    "",
+    "[Verse] — 2 lines: vivid 80s imagery tied to this photo and angle.",
+    "[Chorus] — 3–4 lines with one repeatable hook about their 80s look or moment.",
+    "",
+    "Fun and cinematic — not a parody. Complete ending.",
+  ].filter(Boolean).join("\n");
+}
+
+function apply80sYouPortraitGender(mood) {
+  if (activePhotoSoloChallengeId() !== "80s-you") return;
+  const pg = String(mood?.portraitGender || "").trim().toLowerCase();
+  const gender =
+    pg === "male" || pg === "m"
+      ? "m"
+      : pg === "female" || pg === "f"
+        ? "f"
+        : "";
+  if (!gender || !els.sunoSingerGender) return;
+  els.sunoSingerGender.value = gender;
+  try {
+    syncSingerGenderPills();
+    syncClipVocalCharacterUi();
+    const profileId = defaultClipVocalProfileIdForGender(gender);
+    if (profileId) setSelectedClipVocalProfileId(profileId);
+  } catch {}
+}
+
+async function generate80sYouLyricsInBackground(mood, { silent = true } = {}) {
+  if (activePhotoSoloChallengeId() !== "80s-you") return;
+  if (String(els.vocalInstrumentalOnly?.value || "0") === "1") return;
+  const existing = String(els.sunoPrompt?.value || "").trim();
+  if (existing && looksLikeSingableLyrics(existing) && _lyricsGeneratedInNabad) return;
+
+  const style = String(els.sunoStyle?.value || "").trim();
+  const challenge = challengePromptContext();
+  const brief = build80sYouLyricsBrief(mood);
+  const requestSeed = challenge ? challengePromptMagicSeed(brief, challenge) : brief;
+
+  const run = async () => {
+    try {
+      if (!silent) setStatus("Writing your 80s lyrics…");
+      const r = await fetch(apiUrl("/api/lyrics"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          seed: requestSeed,
+          style,
+          mode: "challenge_clip",
+          lyricsProvider: "gemini",
+        }),
+      });
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok || !String(data?.lyrics || "").trim()) return;
+      const lyrics = sanitizeLyricsPrompt(String(data.lyrics || "").trim());
+      if (els.sunoPrompt) els.sunoPrompt.value = lyrics;
+      _nabadAiLyricsDraft = lyrics;
+      _lyricsGeneratedInNabad = true;
+      try { autoResizeLyricsBox(); } catch {}
+      try { syncTemplateSparkClipGenerateReady(); syncGenerateOrbVisibility(); } catch {}
+      if (!silent) setStatus("Lyrics ready — tap Generate clip.");
+    } catch {}
+  };
+
+  _80sLyricsGenInFlight = run().finally(() => {
+    _80sLyricsGenInFlight = null;
+  });
+  return _80sLyricsGenInFlight;
+}
+
+async function ensure80sYouLyricsBeforeGenerate() {
+  if (activePhotoSoloChallengeId() !== "80s-you") return true;
+  if (String(els.vocalInstrumentalOnly?.value || "0") === "1") return true;
+  if (templateSparkClipLyricsReady()) return true;
+  if (_80sLyricsGenInFlight) {
+    try { await _80sLyricsGenInFlight; } catch {}
+    return templateSparkClipLyricsReady();
+  }
+  if (!imageMoodData) return false;
+  await generate80sYouLyricsInBackground(imageMoodData, { silent: false });
+  return templateSparkClipLyricsReady();
+}
+
+function photoSoloChallengeCanGenerate() {
+  if (!activePhotoSoloChallengeId()) return false;
+  if (!imageMoodAppliedForNextGen) return false;
+  const instrumental = String(els.vocalInstrumentalOnly?.value || "0") === "1";
+  if (instrumental) return true;
+  return templateSparkClipLyricsReady();
+}
+
+function syncSoloInstrumentalToggleUi() {
+  const instrumental = String(els.vocalInstrumentalOnly?.value || "0") === "1";
+  const vocalBtn = document.getElementById("createSoloVocalMode");
+  const instBtn = document.getElementById("createSoloInstrumentalMode");
+  if (vocalBtn) {
+    vocalBtn.classList.toggle("active", !instrumental);
+    vocalBtn.setAttribute("aria-pressed", instrumental ? "false" : "true");
+  }
+  if (instBtn) {
+    instBtn.classList.toggle("active", instrumental);
+    instBtn.setAttribute("aria-pressed", instrumental ? "true" : "false");
+  }
+}
+
+function syncPhotoSoloChallengeCreateUi() {
+  const id = activePhotoSoloChallengeId();
+  if (id) {
+    document.body.setAttribute("data-photo-solo-challenge", id);
+  } else {
+    document.body.removeAttribute("data-photo-solo-challenge");
+  }
+  const instRow = document.getElementById("createSoloInstrumentalRow");
+  if (instRow) instRow.hidden = !id;
+  const createTabs = document.querySelector(".createTabs");
+  if (createTabs) {
+    createTabs.hidden = Boolean(id);
+    createTabs.setAttribute("aria-hidden", id ? "true" : "false");
+  }
+  const vibeTab = document.getElementById("createTabVibe");
+  if (vibeTab && id) {
+    vibeTab.hidden = true;
+    vibeTab.style.display = "none";
+  }
+  if (id) {
+    try { syncSoloInstrumentalToggleUi(); } catch {}
+    try { syncPhotoSoloBannerUi(challengePromptContext()); } catch {}
+    const photoSub = document.querySelector("#createPhotoCta .createPaneCtaSub");
+    if (photoSub && id === "80s-you") {
+      photoSub.textContent = "Tap to upload your retro portrait.";
+    }
+  } else {
+    const banner = document.getElementById("createPhotoSoloBanner");
+    if (banner) banner.hidden = true;
+    const photoSub = document.querySelector("#createPhotoCta .createPaneCtaSub");
+    if (photoSub) photoSub.textContent = "We'll catch the mood and feed it into your song.";
+  }
+}
+
 function challengeCreateFocusForId(challengeId) {
   const id = String(challengeId || "").trim();
   if (HUM_CHALLENGE_IDS.has(id)) return { tab: "hum", tabs: ["hum", "lyrics"] };
+  if (isPhotoSoloChallengeId(id)) return { tab: "photo", tabs: ["photo"] };
   if (PHOTO_CHALLENGE_IDS.has(id)) return { tab: "photo", tabs: ["photo", "lyrics"] };
   return { tab: "lyrics", tabs: ["lyrics"] };
 }
@@ -16251,17 +16498,32 @@ function applyCreateChallengeFocus(focus) {
     el.hidden = !show;
     el.style.display = show ? "" : "none";
   });
+  const vibeTab = document.getElementById("createTabVibe");
+  if (vibeTab) {
+    const showVibe = tabs.includes("vibe");
+    vibeTab.hidden = !showVibe;
+    vibeTab.style.display = showVibe ? "" : "none";
+  }
   try { setActiveCreateTab(String(focus.tab || tabs[0])); } catch {}
+  try { syncPhotoSoloChallengeCreateUi(); } catch {}
 }
 
 function clearCreateChallengeFocus() {
   document.body.removeAttribute("data-create-focus");
+  document.body.removeAttribute("data-photo-solo-challenge");
   ["createTabPhoto", "createTabHum", "createTabLyrics"].forEach((id) => {
     const el = document.getElementById(id);
     if (!el) return;
     el.hidden = false;
     el.style.display = "";
   });
+  const instRow = document.getElementById("createSoloInstrumentalRow");
+  if (instRow) instRow.hidden = true;
+  const createTabs = document.querySelector(".createTabs");
+  if (createTabs) {
+    createTabs.hidden = false;
+    createTabs.setAttribute("aria-hidden", "false");
+  }
 }
 
 function scrollFirstSongCreateLangControlsIntoView() {
@@ -20204,6 +20466,7 @@ function openPhotoMoodFlow() {
 
 /** Nabad Clip — Lyria reads the photo on generate; no Gemini Analyze step. */
 function isNabadClipPhotoDirectFlow() {
+  if (activePhotoSoloChallengeId()) return false;
   if (isNabadClipFlow() || isNabadClipSessionActive()) return true;
   if (document.body.getAttribute("data-route") !== "generate") return false;
   const title = String(document.querySelector(".createPageHeader .appScreenTitle")?.textContent || "");
@@ -20214,19 +20477,26 @@ function isNabadClipPhotoDirectFlow() {
 
 function syncImageMoodSheetForCreateFlow() {
   const clipDirect = isNabadClipPhotoDirectFlow();
+  const photoSolo80s = activePhotoSoloChallengeId() === "80s-you";
   const sheet = els.imageMoodModal || document.getElementById("imageMoodModal");
   sheet?.classList.toggle("photoMoodSheet--clipDirect", clipDirect);
   const title = document.getElementById("imageMoodSheetTitle");
   const lead = document.getElementById("imageMoodLead");
   const kicker = sheet?.querySelector?.(".photoMoodKicker");
-  if (kicker) kicker.textContent = clipDirect ? "Nabad Clip" : "Photo mood";
+  if (kicker) kicker.textContent = photoSolo80s ? "80s You" : clipDirect ? "Nabad Clip" : "Photo mood";
   if (title) {
-    title.textContent = clipDirect ? "Photo for your clip" : "Analyze your photo";
+    title.textContent = photoSolo80s
+      ? "Your 80s portrait"
+      : clipDirect
+        ? "Photo for your clip"
+        : "Analyze your photo";
   }
   if (lead) {
-    lead.textContent = clipDirect
-      ? "Lyria reads your photo. On the next screen, pick singer & style (optional lyrics) — then Generate clip."
-      : "We'll turn the vibe into style tags — and the scene into a lyric idea.";
+    lead.textContent = photoSolo80s
+      ? "Upload your retro portrait — we read the mood and write your personal synth-pop lyrics in the background."
+      : clipDirect
+        ? "Lyria reads your photo. On the next screen, pick singer & style (optional lyrics) — then Generate clip."
+        : "We'll turn the vibe into style tags — and the scene into a lyric idea.";
   }
   const analyzeBtn = document.getElementById("btnAnalyzeImageMood") || els.btnAnalyzeImageMood;
   const applyBtn = document.getElementById("btnApplyImageMood") || els.btnApplyImageMood;
@@ -20443,16 +20713,27 @@ function applyImageMoodToSongFields() {
   }
   const wantsLyrics = String(mood.vocalSuggestion || "lyrics") !== "instrumental";
   const lyricSeed = String(mood.lyricSeed || "").trim();
-  if (els.sunoPrompt && lyricSeed && wantsLyrics && !String(els.sunoPrompt.value || "").trim()) {
+  const photoSolo = Boolean(activePhotoSoloChallengeId());
+  if (
+    els.sunoPrompt &&
+    lyricSeed &&
+    wantsLyrics &&
+    !String(els.sunoPrompt.value || "").trim() &&
+    !photoSolo
+  ) {
     els.sunoPrompt.value = lyricSeed;
     try {
       autoResizeLyricsBox();
     } catch {}
   }
   imageMoodAppliedForNextGen = true;
-  if (els.sunoArtworkStyle && mood.artworkHint) {
+  if (!photoSolo && els.sunoArtworkStyle && mood.artworkHint) {
     const cur = String(els.sunoArtworkStyle.value || "").trim();
     if (!cur) els.sunoArtworkStyle.value = String(mood.artworkHint).trim();
+  }
+  if (photoSolo && activePhotoSoloChallengeId() === "80s-you") {
+    apply80sYouPortraitGender(mood);
+    void generate80sYouLyricsInBackground(mood);
   }
   const summaryTags = tags.slice(0, 4).join(", ");
   const summaryText = String(mood.concept || summaryTags || "Image mood applied.").trim();
@@ -25126,6 +25407,14 @@ function looksLikeSingableLyrics(text) {
 }
 
 function templateSparkClipLyricsReady() {
+  if (activePhotoSoloChallengeId()) {
+    const instrumental = String(els.vocalInstrumentalOnly?.value || "0") === "1";
+    if (instrumental) return Boolean(imageMoodAppliedForNextGen);
+    if (!imageMoodAppliedForNextGen) return false;
+    const text = String(els.sunoPrompt?.value || "").trim();
+    if (_lyricsGeneratedInNabad && looksLikeSingableLyrics(text)) return true;
+    return looksLikeSingableLyrics(text);
+  }
   const text = String(els.sunoPrompt?.value || "").trim();
   if (!text) return false;
   if (_lyricsGeneratedInNabad) return true;
@@ -25420,6 +25709,7 @@ function syncNabadClipCreateUi() {
   }
   try { syncClipVocalCharacterUi(); } catch {}
   try { syncSingerGenderPills(); } catch {}
+  try { syncPhotoSoloChallengeCreateUi(); } catch {}
 }
 
 function openNabadClipFlow() {
@@ -63168,15 +63458,23 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
     applyImageMoodToSongFields();
     const wantsLyrics = String(imageMoodData?.vocalSuggestion || "lyrics") !== "instrumental";
     closeImageMoodModal();
-    setStatus(
-      isNabadClipPhotoDirectFlow()
-        ? (wantsLyrics
-          ? "Preview applied — edit style or lyrics, then Generate clip."
-          : "Preview applied — style tags ready. Generate clip when you're ready.")
-        : (wantsLyrics
-          ? "Photo Mood applied — style tags in Style, scene in Lyrics. Clear lyrics if you want instrumental."
-          : "Photo Mood applied — style tags ready. Leave lyrics empty for instrumental, or write/Magic for vocals.")
-    );
+    if (activePhotoSoloChallengeId() === "80s-you") {
+      setStatus(
+        wantsLyrics
+          ? "Photo locked in — we're writing your 80s lyrics. Pick singer, then Generate."
+          : "Photo locked in — pick singer & vocal character, then Generate.",
+      );
+    } else {
+      setStatus(
+        isNabadClipPhotoDirectFlow()
+          ? (wantsLyrics
+            ? "Preview applied — edit style or lyrics, then Generate clip."
+            : "Preview applied — style tags ready. Generate clip when you're ready.")
+          : (wantsLyrics
+            ? "Photo Mood applied — style tags in Style, scene in Lyrics. Clear lyrics if you want instrumental."
+            : "Photo Mood applied — style tags ready. Leave lyrics empty for instrumental, or write/Magic for vocals.")
+      );
+    }
     syncGenerateOrbVisibility();
   };
 
@@ -64314,7 +64612,19 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       return;
     }
     if (isLyriaClipGenerateFlow()) {
-      if (isTemplateSparkClipFlow() && !templateSparkClipLyricsReady()) {
+      if (isTemplateSparkClipFlow() && activePhotoSoloChallengeId() && !imageMoodAppliedForNextGen) {
+        showToast("Upload and analyze your photo first.", { icon: "📷", durationMs: 3200 });
+        setStatus("Add your portrait on Photo — Analyze, then Generate.");
+        return;
+      }
+      if (isTemplateSparkClipFlow() && activePhotoSoloChallengeId() && !templateSparkClipLyricsReady()) {
+        const lyricsOk = await ensure80sYouLyricsBeforeGenerate();
+        if (!lyricsOk) {
+          showToast("Lyrics still drafting — try again in a moment.", { icon: "✦", durationMs: 3600 });
+          setStatus("Still writing your 80s lyrics…");
+          return;
+        }
+      } else if (isTemplateSparkClipFlow() && !templateSparkClipLyricsReady()) {
         showToast(TEMPLATE_SPARK_CLIP_LYRICS_HINT, { icon: "✦", durationMs: 3600 });
         setStatus(TEMPLATE_SPARK_CLIP_LYRICS_HINT);
         return;
@@ -67079,6 +67389,9 @@ function isCreateGenerateBlockedAwaitingLyrics() {
   if (isCreateTabGeneratingAnim()) return false;
   const instrumental = String(els.vocalInstrumentalOnly?.value || "0") === "1";
   if (instrumental) return false;
+  if (isTemplateSparkClipFlow() && activePhotoSoloChallengeId()) {
+    return !photoSoloChallengeCanGenerate();
+  }
   if (isTemplateSparkClipFlow()) return !templateSparkClipLyricsReady();
   if (String(lyricsInputMode || "write") === "generate") {
     const text = String(els.sunoPrompt?.value || "").trim();
@@ -67090,6 +67403,11 @@ function isCreateGenerateBlockedAwaitingLyrics() {
 }
 
 function createGenerateBlockedToastMessage() {
+  if (isTemplateSparkClipFlow() && activePhotoSoloChallengeId()) {
+    return imageMoodAppliedForNextGen
+      ? "Writing your lyrics — wait a moment, then Generate."
+      : "Upload and analyze your photo first.";
+  }
   if (isTemplateSparkClipFlow()) return TEMPLATE_SPARK_CLIP_LYRICS_HINT;
   return "Tap Generate lyrics first — then you can generate your song.";
 }
@@ -67107,6 +67425,7 @@ function createTabCanGenerate() {
   const hasStyle = Boolean(String(els.sunoStyle?.value || "").trim());
   const instrumental = String(els.vocalInstrumentalOnly?.value || "0") === "1";
   if (instrumental) return hasStyle || imageMoodAppliedForNextGen;
+  if (isTemplateSparkClipFlow() && activePhotoSoloChallengeId()) return photoSoloChallengeCanGenerate();
   if (isTemplateSparkClipFlow()) return templateSparkClipLyricsReady();
   return hasLyrics || hasStyle || imageMoodAppliedForNextGen;
 }
@@ -72832,6 +73151,18 @@ const createVibeCtaBtn = document.getElementById("createVibeCta");
 if (createVibeCtaBtn) {
   createVibeCtaBtn.addEventListener("click", () => {
     openVibeReadSheet();
+  });
+}
+const createSoloVocalBtn = document.getElementById("createSoloVocalMode");
+const createSoloInstBtn = document.getElementById("createSoloInstrumentalMode");
+if (createSoloVocalBtn) {
+  createSoloVocalBtn.addEventListener("click", () => {
+    setCreateSongType("full");
+  });
+}
+if (createSoloInstBtn) {
+  createSoloInstBtn.addEventListener("click", () => {
+    setCreateSongType("instrumental");
   });
 }
 

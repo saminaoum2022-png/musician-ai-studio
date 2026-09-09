@@ -1115,6 +1115,15 @@
                 <small id="createChallengeHintSub">Edit below, then tap Generate.</small>
               </span>
             </div>
+            <div id="createPhotoSoloBanner" class="createPhotoSoloBanner" hidden>
+              <img class="createPhotoSoloBannerArt" src="" alt="" decoding="async" />
+              <span class="createPhotoSoloBannerScrim" aria-hidden="true"></span>
+              <span class="createPhotoSoloBannerBody">
+                <span class="createPhotoSoloBannerKicker">80s You</span>
+                <span class="createPhotoSoloBannerTitle">My 80s Moment</span>
+                <span class="createPhotoSoloBannerSub">Add your portrait — we write your synth-pop anthem.</span>
+              </span>
+            </div>
             <div class="createPanes" data-mode="lyrics">
               <div class="createPane createPane--photo" data-mode="photo" hidden>
                 <button id="createPhotoCta" class="createPaneCta" type="button" aria-label="Add a photo">
@@ -1311,6 +1320,13 @@
                 <div id="clipVocalCharacterDeck" class="clipVocalCharacterDeck" role="listbox" aria-label="Vocal character"></div>
                 <p id="clipVocalCharacterSpec" class="clipVocalCharacterSpec" aria-live="polite"></p>
               </div>
+            </div>
+            <div id="createSoloInstrumentalRow" class="createSoloInstrumentalRow field grow inputPanel inputPanel--style" hidden>
+              <div class="label inPanelLabel">Song type</div>
+              <span class="vocalModePill optTypePill createSoloTypePill" role="group" aria-label="Song type">
+                <button id="createSoloVocalMode" class="ghost active" type="button" aria-pressed="true">Vocal</button>
+                <button id="createSoloInstrumentalMode" class="ghost" type="button" aria-pressed="false">Instrumental</button>
+              </span>
             </div>
               <label class="field grow inputPanel inputPanel--style">
                 <div class="label inPanelLabel stylePanelHead">

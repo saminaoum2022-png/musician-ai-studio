@@ -1,3 +1,5 @@
+const { queueLogProviderUsage } = require("./_lib/provider-usage-log");
+
 module.exports = async function handler(req, res) {
   setCors(res);
   if (req.method === "OPTIONS") return res.status(200).end();
@@ -14,6 +16,7 @@ module.exports = async function handler(req, res) {
     if (!gem?.ok) return json(res, 200, fallbackMood(dataUrl, gem?.error || "gemini_failed"));
     const parsed = tryParseGeminiObject(gem.text);
     if (!parsed || typeof parsed !== "object") return json(res, 200, fallbackMood(dataUrl, "parse_failed"));
+    queueLogProviderUsage({ provider: "gemini", kind: "image_mood" });
     return json(res, 200, { ...sanitizeMood(parsed), source: `gemini:${gem.model || "unknown"}` });
   } catch (e) {
     return json(res, 200, fallbackMood("", "server_error"));
@@ -40,7 +43,7 @@ async function tryGeminiImageMood({ geminiKey, dataUrl }) {
                 "Identify the scene/subject first, then translate ONLY the emotional/visual atmosphere into music language.",
                 "",
                 "Return JSON only (no markdown) with keys:",
-                "{\"concept\":\"...\",\"subject\":\"...\",\"tags\":[\"...\"],\"lyricSeed\":\"...\",\"artworkHint\":\"...\",\"vocalSuggestion\":\"lyrics|instrumental\"}",
+                "{\"concept\":\"...\",\"subject\":\"...\",\"tags\":[\"...\"],\"lyricSeed\":\"...\",\"artworkHint\":\"...\",\"vocalSuggestion\":\"lyrics|instrumental\",\"portraitGender\":\"male|female|unknown|none\"}",
                 "",
                 "Field rules:",
                 "- concept: 1 short sentence for the musical mood (not a photo caption).",
@@ -54,6 +57,7 @@ async function tryGeminiImageMood({ geminiKey, dataUrl }) {
                 "  Prefer English unless Arabic script/culture is clearly dominant in the image.",
                 "- artworkHint: short cover-art direction if we do NOT use the photo as cover. No text-in-image requests.",
                 "- vocalSuggestion: \"lyrics\" when a subject/story is clear; \"instrumental\" for abstract/texture/landscape-only vibes.",
+                "- portraitGender: if a person is clearly the main subject, infer presentation for vocal casting — \"male\", \"female\", or \"unknown\". Use \"none\" when no person is dominant.",
                 "",
                 "Do not default to human-portrait mood unless a person is clearly the dominant subject.",
               ].join("\n") },
@@ -106,6 +110,7 @@ function fallbackMood(dataUrl, reason) {
       lyricSeed: "A light, breezy mood with calm flow and an easy singable hook.",
       artworkHint: "coastal cover art, airy tones, natural light, clean horizon",
       vocalSuggestion: "instrumental",
+      portraitGender: "none",
     },
     {
       concept: "Clean natural visual mood",
@@ -114,6 +119,7 @@ function fallbackMood(dataUrl, reason) {
       lyricSeed: "Natural, grounded emotion with simple lines and a smooth chorus.",
       artworkHint: "nature-forward cover, soft contrast, minimal composition",
       vocalSuggestion: "instrumental",
+      portraitGender: "none",
     },
     {
       concept: "Dreamy cinematic atmosphere",
@@ -122,6 +128,7 @@ function fallbackMood(dataUrl, reason) {
       lyricSeed: "Dreamy cinematic lyrics with an emotional arc and smooth chorus.",
       artworkHint: "soft cinematic cover art, moody light, gentle grain",
       vocalSuggestion: "lyrics",
+      portraitGender: "none",
     },
   ];
   const idx = pickFromDataUrl(dataUrl, presets.length);
@@ -171,7 +178,16 @@ function sanitizeMood(raw) {
   const vocalSuggestion = vocalRaw === "instrumental" || vocalRaw === "lyrics"
     ? vocalRaw
     : (subject ? "lyrics" : "instrumental");
-  return { concept, subject, tags, lyricSeed, artworkHint, vocalSuggestion };
+  const portraitRaw = String(raw?.portraitGender || "").trim().toLowerCase();
+  const portraitGender =
+    portraitRaw === "male" || portraitRaw === "m"
+      ? "male"
+      : portraitRaw === "female" || portraitRaw === "f"
+        ? "female"
+        : portraitRaw === "unknown"
+          ? "unknown"
+          : "none";
+  return { concept, subject, tags, lyricSeed, artworkHint, vocalSuggestion, portraitGender };
 }
 
 function toInlineData(dataUrl) {

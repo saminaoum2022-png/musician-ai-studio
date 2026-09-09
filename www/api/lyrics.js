@@ -745,6 +745,7 @@ function buildPrompt({ seed, style, mode, nonce, dialect, dialectHint, sourceLyr
       "The last line must feel like a natural ending (held word or clean stop).",
       ...POP_RHYME_METER_LINES,
       "Do not explain the challenge. Do not repeat the instruction text.",
+      "Avoid generic filler every user would get — make hooks specific to the brief's photo, mood, and creative angle.",
       `Variation token: ${nonce}`,
       ...(colloquialArabicLines.length && mode !== "diacritics" ? colloquialArabicLines : []),
       ...(dialectLines ? [dialectLines] : []),

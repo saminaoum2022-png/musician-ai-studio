@@ -64,7 +64,8 @@ async function main() {
     || /^(1|true|yes)$/i.test(String(process.env.NABAD_PRODUCER_UI || "").trim());
 
   const vibeUi =
-    String(process.env.NABAD_VIBE_UI || "").trim() === "1"
+    envName === "staging"
+    || String(process.env.NABAD_VIBE_UI || "").trim() === "1"
     || /^(1|true|yes)$/i.test(String(process.env.NABAD_VIBE_UI || "").trim());
 
   const payload = {

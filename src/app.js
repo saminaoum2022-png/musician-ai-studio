@@ -3933,6 +3933,11 @@ function restoreCreateChallengeContext() {
     ...saved,
     challengePromptPending: true,
   };
+  const chId = String(saved.challenge?.id || "").trim();
+  if (isPhotoSoloChallengeId(chId)) {
+    try { applyCreateChallengeFocus(challengeCreateFocusForId(chId)); } catch {}
+    try { syncPhotoSoloChallengeCreateUi(); } catch {}
+  }
   setCreateChallengeHint(saved.challenge);
   return pendingSearchRemixMeta;
 }
@@ -5528,21 +5533,18 @@ function applyLyricsLanguageToDialect() {
 }
 
 function syncLyricsLangPills() {
-  if (els.lyricsLangRow) {
-    els.lyricsLangRow.querySelectorAll("[data-lyrics-lang]").forEach((b) => {
-      const on = b.getAttribute("data-lyrics-lang") === lyricsLanguage;
-      b.classList.toggle("isActive", on);
-      b.setAttribute("aria-pressed", on ? "true" : "false");
-    });
-  }
-  if (els.lyricsDialectRow) {
-    els.lyricsDialectRow.querySelectorAll("[data-lyrics-dialect]").forEach((b) => {
-      const on = b.getAttribute("data-lyrics-dialect") === lyricsDialect;
-      b.classList.toggle("isActive", on);
-      b.setAttribute("aria-pressed", on ? "true" : "false");
-    });
-  }
+  document.querySelectorAll("[data-lyrics-lang]").forEach((b) => {
+    const on = b.getAttribute("data-lyrics-lang") === lyricsLanguage;
+    b.classList.toggle("isActive", on);
+    b.setAttribute("aria-pressed", on ? "true" : "false");
+  });
+  document.querySelectorAll("[data-lyrics-dialect]").forEach((b) => {
+    const on = b.getAttribute("data-lyrics-dialect") === lyricsDialect;
+    b.classList.toggle("isActive", on);
+    b.setAttribute("aria-pressed", on ? "true" : "false");
+  });
   syncArabicLyricsControlsVisibility();
+  try { syncPhotoSoloVocalSections(); } catch {}
 }
 
 /** Arabic dialect / address when language is Arabic, Arabizi, or Auto detects Arabic/Arabizi. */
@@ -6004,8 +6006,8 @@ function setLyricsDialect(dialect) {
 }
 
 (function bindLyricsLanguagePills() {
-  const langRow = els.lyricsLangRow;
-  if (langRow && !langRow.dataset.boundLang) {
+  const bindLangRow = (langRow) => {
+    if (!langRow || langRow.dataset.boundLang) return;
     langRow.dataset.boundLang = "1";
     langRow.addEventListener("click", (e) => {
       const btn = e.target?.closest?.("button");
@@ -6019,9 +6021,11 @@ function setLyricsDialect(dialect) {
       const lang = btn.getAttribute("data-lyrics-lang");
       if (lang) setLyricsLanguage(lang);
     });
-  }
-  const dialectRow = els.lyricsDialectRow;
-  if (dialectRow && !dialectRow.dataset.boundDialect) {
+  };
+  bindLangRow(els.lyricsLangRow);
+  bindLangRow(document.getElementById("createSoloLangChipRow"));
+  const bindDialectRow = (dialectRow) => {
+    if (!dialectRow || dialectRow.dataset.boundDialect) return;
     dialectRow.dataset.boundDialect = "1";
     dialectRow.addEventListener("click", (e) => {
       const btn = e.target?.closest?.("button");
@@ -6035,7 +6039,9 @@ function setLyricsDialect(dialect) {
       const d = btn.getAttribute("data-lyrics-dialect");
       if (d) setLyricsDialect(d);
     });
-  }
+  };
+  bindDialectRow(els.lyricsDialectRow);
+  bindDialectRow(document.getElementById("createSoloDialectChipRow"));
   syncLyricsLangPills();
 })();
 
@@ -6063,6 +6069,7 @@ function setCreateSongType(type) {
   if (els.btnLyricsFixSinging) els.btnLyricsFixSinging.disabled = instrumental;
   try { syncArabicGenerateGate(); } catch {}
   try { syncSoloInstrumentalToggleUi(); } catch {}
+  try { syncPhotoSoloVocalSections(); } catch {}
   try { syncTemplateSparkClipGenerateReady(); syncGenerateOrbVisibility(); } catch {}
 }
 
@@ -10543,7 +10550,7 @@ const DISCOVER_CHALLENGE_AVATAR_SEEDS = {
   "roast-song": ["R", "O", "A", "S"],
 };
 
-const DISCOVER_CHALLENGE_ART_VERSION = "20260621worldcupHero";
+const DISCOVER_CHALLENGE_ART_VERSION = "2026091080sHero";
 const DISCOVER_CHALLENGE_ART = {
   worldcup2026: "./assets/discover/challenges/worldcup-anthem.svg",
   "one-line-reply": "./assets/discover/challenges/remix-battle.svg",
@@ -10575,10 +10582,27 @@ const PHOTO_SOLO_CHALLENGE_ART = {
   "80s-you": "./assets/discover/challenges/80s-you-hero.png",
 };
 
+function bundleAssetUrl(relativePath) {
+  const clean = String(relativePath || "").replace(/^\.\//, "").replace(/^\/+/, "");
+  if (!clean) return "";
+  try {
+    const origin = String(location?.origin || "").trim();
+    if (origin && origin !== "null") return `${origin}/${clean}`;
+  } catch {}
+  return `/${clean}`;
+}
+
 function photoSoloChallengeHeroArtUrl(challengeId) {
   const base = PHOTO_SOLO_CHALLENGE_ART[String(challengeId || "")];
   if (!base) return "";
-  return `${base}?v=${DISCOVER_CHALLENGE_ART_VERSION}`;
+  return `${bundleAssetUrl(base)}?v=${DISCOVER_CHALLENGE_ART_VERSION}`;
+}
+
+function handlePhotoSoloBannerTap() {
+  if (!activePhotoSoloChallengeId()) return;
+  haptic("light");
+  try { setActiveCreateTab("photo"); } catch {}
+  try { openImageMoodSheet(); } catch {}
 }
 
 function syncPhotoSoloBannerUi(challenge) {
@@ -10589,14 +10613,14 @@ function syncPhotoSoloBannerUi(challenge) {
     banner.hidden = true;
     return;
   }
-  const art = banner.querySelector(".createPhotoSoloBannerArt");
+  const bg = banner.querySelector(".createPhotoSoloBannerBg");
   const kicker = banner.querySelector(".createPhotoSoloBannerKicker");
   const title = banner.querySelector(".createPhotoSoloBannerTitle");
   const sub = banner.querySelector(".createPhotoSoloBannerSub");
+  const cta = banner.querySelector(".createPhotoSoloBannerCta");
   const artUrl = photoSoloChallengeHeroArtUrl(id);
-  if (art && artUrl) {
-    art.src = artUrl;
-    art.alt = "";
+  if (bg && artUrl) {
+    bg.style.backgroundImage = `url("${artUrl}")`;
   }
   const spark = CHALLENGE_IDEAS.find((row) => String(row.id) === id);
   if (kicker) kicker.textContent = id === "80s-you" ? "80s You · Trending" : "Challenge";
@@ -10605,8 +10629,17 @@ function syncPhotoSoloBannerUi(challenge) {
   }
   if (sub) {
     sub.textContent = id === "80s-you"
-      ? "Add your portrait — we write your synth-pop anthem."
+      ? "Your portrait becomes a synth-pop anthem."
       : String(spark?.prompt || "Add a photo to start.").trim();
+  }
+  if (cta) {
+    if (imageMoodAppliedForNextGen) {
+      cta.textContent = "Change photo →";
+      cta.hidden = false;
+    } else {
+      cta.textContent = "";
+      cta.hidden = true;
+    }
   }
   banner.hidden = false;
 }
@@ -10614,7 +10647,7 @@ function syncPhotoSoloBannerUi(challenge) {
 function discoverFeaturedHeroArtUrl(challengeId) {
   const base = DISCOVER_FEATURED_HERO_ART[String(challengeId || "")];
   if (!base) return "";
-  return `${base}?v=${DISCOVER_CHALLENGE_ART_VERSION}`;
+  return `${bundleAssetUrl(base)}?v=${DISCOVER_CHALLENGE_ART_VERSION}`;
 }
 
 const DISCOVER_LIVE_CHALLENGES = [
@@ -16278,7 +16311,9 @@ function isPhotoSoloChallengeId(challengeId) {
 
 function activePhotoSoloChallengeId() {
   const ch = challengePromptContext();
-  return ch && isPhotoSoloChallengeId(ch.id) ? String(ch.id).trim() : "";
+  if (ch && isPhotoSoloChallengeId(ch.id)) return String(ch.id).trim();
+  const fromBody = String(document.body.getAttribute("data-photo-solo-challenge") || "").trim();
+  return isPhotoSoloChallengeId(fromBody) ? fromBody : "";
 }
 
 function pick80sCreativeAngle(seed = "") {
@@ -16312,6 +16347,111 @@ function build80sYouLyricsBrief(mood = null) {
   ].filter(Boolean).join("\n");
 }
 
+function photoSoloShowsArabicDialect() {
+  return lyricsLanguage === "arabic";
+}
+
+function apply80sYouArabicLyricsContext() {
+  if (activePhotoSoloChallengeId() !== "80s-you") return;
+  if (!photoSoloShowsArabicDialect()) return;
+  if (els.sunoArabicAddress) {
+    els.sunoArabicAddress.value = "male";
+    try { syncArabicAddressPills(); } catch {}
+  }
+}
+
+function lyricDialectHintFor80sYou() {
+  const base = String(els.sunoDialectHint?.value || "").trim();
+  if (activePhotoSoloChallengeId() !== "80s-you") return base;
+  if (!photoSoloShowsArabicDialect()) return base;
+  const addressNote = arabicAddressPronunciationNote(
+    "male",
+    resolveSingerGenderForGeneration({ hasReference: Boolean(getVocalReferenceFile()) })
+  );
+  return [base, addressNote].filter(Boolean).join(" ");
+}
+
+function is80sLevantineDialectForDiacritics() {
+  if (activePhotoSoloChallengeId() !== "80s-you") return false;
+  const d = String(lyricsDialect || "").trim().toLowerCase();
+  return d === "lebanese" || d === "syrian" || d === "palestinian";
+}
+
+async function apply80sLevantineDiacriticsIfNeeded(lyrics) {
+  const text = String(lyrics || "").trim();
+  if (!text || !is80sLevantineDialectForDiacritics()) return text;
+  try { applyLyricsLanguageToDialect(); } catch {}
+  try { apply80sYouArabicLyricsContext(); } catch {}
+  const style = String(els.sunoStyle?.value || "").trim();
+  const dialect = String(els.sunoDialect?.value || "").trim();
+  const dialectHint = lyricDialectHintFor80sYou();
+  const authToken = getSupabaseAuthToken();
+  try {
+    const r = await apiFetch("/api/lyrics", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
+      },
+      body: JSON.stringify({
+        seed: text,
+        style,
+        mode: "diacritics",
+        dialect,
+        dialectHint,
+        lyricsProvider: "gemini",
+      }),
+    });
+    const data = await r.json().catch(() => ({}));
+    if (!r.ok || !String(data?.lyrics || "").trim()) {
+      console.warn("[80s-you] diacritics failed", data?.error || r.status);
+      return text;
+    }
+    return sanitizeLyricsPrompt(String(data.lyrics || "").trim());
+  } catch (e) {
+    console.warn("[80s-you] diacritics failed", e?.message || e);
+    return text;
+  }
+}
+
+function syncPhotoSoloVocalSections() {
+  const id = activePhotoSoloChallengeId();
+  if (!id) {
+    document.body.removeAttribute("data-solo-instrumental");
+    document.body.removeAttribute("data-solo-arabic");
+    return;
+  }
+  const instrumental = String(els.vocalInstrumentalOnly?.value || "0") === "1";
+  const showArabicDialect = photoSoloShowsArabicDialect();
+  if (instrumental) {
+    document.body.setAttribute("data-solo-instrumental", "1");
+  } else {
+    document.body.removeAttribute("data-solo-instrumental");
+  }
+  if (showArabicDialect) {
+    document.body.setAttribute("data-solo-arabic", "1");
+  } else {
+    document.body.removeAttribute("data-solo-arabic");
+  }
+  const langRow = document.getElementById("createSoloLangRow");
+  const dialectRow = document.getElementById("createSoloDialectRow");
+  const singerPanel = document.getElementById("singerVoicePanel");
+  if (langRow) langRow.hidden = instrumental;
+  if (dialectRow) dialectRow.hidden = instrumental || !showArabicDialect;
+  if (singerPanel) singerPanel.hidden = instrumental;
+  const duoPill = document.getElementById("singerDuoPill");
+  if (duoPill) {
+    duoPill.hidden = true;
+    duoPill.setAttribute("aria-hidden", "true");
+  }
+  if (String(els.sunoSingerGender?.value || "").trim().toLowerCase() === "duo" && els.sunoSingerGender) {
+    els.sunoSingerGender.value = "";
+    try { syncSingerGenderPills(); } catch {}
+    try { syncClipVocalCharacterUi(); } catch {}
+  }
+  try { apply80sYouArabicLyricsContext(); } catch {}
+}
+
 function apply80sYouPortraitGender(mood) {
   if (activePhotoSoloChallengeId() !== "80s-you") return;
   const pg = String(mood?.portraitGender || "").trim().toLowerCase();
@@ -16331,40 +16471,55 @@ function apply80sYouPortraitGender(mood) {
   } catch {}
 }
 
-async function generate80sYouLyricsInBackground(mood, { silent = true } = {}) {
-  if (activePhotoSoloChallengeId() !== "80s-you") return;
-  if (String(els.vocalInstrumentalOnly?.value || "0") === "1") return;
+async function draft80sYouLyricsForGenerate(mood) {
+  if (activePhotoSoloChallengeId() !== "80s-you") return true;
+  if (String(els.vocalInstrumentalOnly?.value || "0") === "1") return true;
   const existing = String(els.sunoPrompt?.value || "").trim();
-  if (existing && looksLikeSingableLyrics(existing) && _lyricsGeneratedInNabad) return;
-
-  const style = String(els.sunoStyle?.value || "").trim();
-  const challenge = challengePromptContext();
-  const brief = build80sYouLyricsBrief(mood);
-  const requestSeed = challenge ? challengePromptMagicSeed(brief, challenge) : brief;
+  if (existing && looksLikeSingableLyrics(existing) && _lyricsGeneratedInNabad) return true;
+  if (_80sLyricsGenInFlight) {
+    try { await _80sLyricsGenInFlight; } catch {}
+    return Boolean(String(els.sunoPrompt?.value || "").trim());
+  }
+  if (!mood) return false;
 
   const run = async () => {
-    try {
-      if (!silent) setStatus("Writing your 80s lyrics…");
-      const r = await fetch(apiUrl("/api/lyrics"), {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          seed: requestSeed,
-          style,
-          mode: "challenge_clip",
-          lyricsProvider: "gemini",
-        }),
-      });
-      const data = await r.json().catch(() => ({}));
-      if (!r.ok || !String(data?.lyrics || "").trim()) return;
-      const lyrics = sanitizeLyricsPrompt(String(data.lyrics || "").trim());
-      if (els.sunoPrompt) els.sunoPrompt.value = lyrics;
-      _nabadAiLyricsDraft = lyrics;
-      _lyricsGeneratedInNabad = true;
-      try { autoResizeLyricsBox(); } catch {}
-      try { syncTemplateSparkClipGenerateReady(); syncGenerateOrbVisibility(); } catch {}
-      if (!silent) setStatus("Lyrics ready — tap Generate clip.");
-    } catch {}
+    try { applyLyricsLanguageToDialect(); } catch {}
+    try { apply80sYouArabicLyricsContext(); } catch {}
+    const style = String(els.sunoStyle?.value || "").trim();
+    const dialect = String(els.sunoDialect?.value || "").trim();
+    const dialectHint = lyricDialectHintFor80sYou();
+    const challenge = challengePromptContext();
+    const brief = build80sYouLyricsBrief(mood);
+    const requestSeed = challenge ? challengePromptMagicSeed(brief, challenge) : brief;
+    const authToken = getSupabaseAuthToken();
+    const r = await apiFetch("/api/lyrics", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
+      },
+      body: JSON.stringify({
+        seed: requestSeed,
+        style,
+        mode: "challenge_clip",
+        dialect,
+        dialectHint,
+        lyricsProvider: "gemini",
+      }),
+    });
+    const data = await r.json().catch(() => ({}));
+    if (!r.ok || !String(data?.lyrics || "").trim()) {
+      console.warn("[80s-you] lyrics draft failed", data?.error || r.status);
+      return false;
+    }
+    let lyrics = sanitizeLyricsPrompt(String(data.lyrics || "").trim());
+    lyrics = await apply80sLevantineDiacriticsIfNeeded(lyrics);
+    if (els.sunoPrompt) els.sunoPrompt.value = lyrics;
+    _nabadAiLyricsDraft = lyrics;
+    _lyricsGeneratedInNabad = true;
+    try { autoResizeLyricsBox(); } catch {}
+    try { syncTemplateSparkClipGenerateReady(); syncGenerateOrbVisibility(); } catch {}
+    return true;
   };
 
   _80sLyricsGenInFlight = run().finally(() => {
@@ -16373,39 +16528,23 @@ async function generate80sYouLyricsInBackground(mood, { silent = true } = {}) {
   return _80sLyricsGenInFlight;
 }
 
-async function ensure80sYouLyricsBeforeGenerate() {
-  if (activePhotoSoloChallengeId() !== "80s-you") return true;
-  if (String(els.vocalInstrumentalOnly?.value || "0") === "1") return true;
-  if (templateSparkClipLyricsReady()) return true;
-  if (_80sLyricsGenInFlight) {
-    try { await _80sLyricsGenInFlight; } catch {}
-    return templateSparkClipLyricsReady();
-  }
-  if (!imageMoodData) return false;
-  await generate80sYouLyricsInBackground(imageMoodData, { silent: false });
-  return templateSparkClipLyricsReady();
+function generate80sYouLyricsInBackground(mood) {
+  void draft80sYouLyricsForGenerate(mood);
 }
 
 function photoSoloChallengeCanGenerate() {
   if (!activePhotoSoloChallengeId()) return false;
-  if (!imageMoodAppliedForNextGen) return false;
-  const instrumental = String(els.vocalInstrumentalOnly?.value || "0") === "1";
-  if (instrumental) return true;
-  return templateSparkClipLyricsReady();
+  return Boolean(imageMoodAppliedForNextGen);
 }
 
 function syncSoloInstrumentalToggleUi() {
   const instrumental = String(els.vocalInstrumentalOnly?.value || "0") === "1";
-  const vocalBtn = document.getElementById("createSoloVocalMode");
-  const instBtn = document.getElementById("createSoloInstrumentalMode");
-  if (vocalBtn) {
-    vocalBtn.classList.toggle("active", !instrumental);
-    vocalBtn.setAttribute("aria-pressed", instrumental ? "false" : "true");
-  }
-  if (instBtn) {
-    instBtn.classList.toggle("active", instrumental);
-    instBtn.setAttribute("aria-pressed", instrumental ? "true" : "false");
-  }
+  document.querySelectorAll("#createSoloTypePills .addressPill[data-solo-song-type]").forEach((b) => {
+    const type = String(b.getAttribute("data-solo-song-type") || "");
+    const on = instrumental ? type === "instrumental" : type === "vocal";
+    b.classList.toggle("isActive", on);
+    b.setAttribute("aria-pressed", on ? "true" : "false");
+  });
 }
 
 function syncPhotoSoloChallengeCreateUi() {
@@ -16416,7 +16555,18 @@ function syncPhotoSoloChallengeCreateUi() {
     document.body.removeAttribute("data-photo-solo-challenge");
   }
   const instRow = document.getElementById("createSoloInstrumentalRow");
+  const langRow = document.getElementById("createSoloLangRow");
+  const dialectRow = document.getElementById("createSoloDialectRow");
   if (instRow) instRow.hidden = !id;
+  if (!id) {
+    if (langRow) langRow.hidden = true;
+    if (dialectRow) dialectRow.hidden = true;
+    document.body.removeAttribute("data-solo-instrumental");
+    document.body.removeAttribute("data-solo-arabic");
+  } else {
+    try { syncLyricsLangPills(); } catch {}
+    try { syncPhotoSoloVocalSections(); } catch {}
+  }
   const createTabs = document.querySelector(".createTabs");
   if (createTabs) {
     createTabs.hidden = Boolean(id);
@@ -16511,6 +16661,8 @@ function applyCreateChallengeFocus(focus) {
 function clearCreateChallengeFocus() {
   document.body.removeAttribute("data-create-focus");
   document.body.removeAttribute("data-photo-solo-challenge");
+  document.body.removeAttribute("data-solo-instrumental");
+  document.body.removeAttribute("data-solo-arabic");
   ["createTabPhoto", "createTabHum", "createTabLyrics"].forEach((id) => {
     const el = document.getElementById(id);
     if (!el) return;
@@ -16518,7 +16670,13 @@ function clearCreateChallengeFocus() {
     el.style.display = "";
   });
   const instRow = document.getElementById("createSoloInstrumentalRow");
+  const langRow = document.getElementById("createSoloLangRow");
+  const dialectRow = document.getElementById("createSoloDialectRow");
+  const singerPanel = document.getElementById("singerVoicePanel");
   if (instRow) instRow.hidden = true;
+  if (langRow) langRow.hidden = true;
+  if (dialectRow) dialectRow.hidden = true;
+  if (singerPanel) singerPanel.hidden = false;
   const createTabs = document.querySelector(".createTabs");
   if (createTabs) {
     createTabs.hidden = false;
@@ -20493,7 +20651,7 @@ function syncImageMoodSheetForCreateFlow() {
   }
   if (lead) {
     lead.textContent = photoSolo80s
-      ? "Upload your retro portrait — we read the mood and write your personal synth-pop lyrics in the background."
+      ? "One quick read for mood, singer match, and lyrics — Lyria gets your photo once when the song generates."
       : clipDirect
         ? "Lyria reads your photo. On the next screen, pick singer & style (optional lyrics) — then Generate clip."
         : "We'll turn the vibe into style tags — and the scene into a lyric idea.";
@@ -20503,8 +20661,8 @@ function syncImageMoodSheetForCreateFlow() {
   const resultsSection = sheet?.querySelector?.(".photoMoodSection--results");
   const coverRow = document.getElementById("imageMoodCoverRow");
   if (coverRow) {
-    coverRow.hidden = clipDirect;
-    coverRow.setAttribute("aria-hidden", clipDirect ? "true" : "false");
+    coverRow.hidden = clipDirect || photoSolo80s;
+    coverRow.setAttribute("aria-hidden", clipDirect || photoSolo80s ? "true" : "false");
   }
   if (analyzeBtn) {
     analyzeBtn.hidden = clipDirect;
@@ -20644,6 +20802,7 @@ function sanitizeImageMoodForClient(raw) {
 
 function syncImageMoodSheetUi({ analyzing = false } = {}) {
   const clipDirect = isNabadClipPhotoDirectFlow();
+  const photoSolo80s = activePhotoSoloChallengeId() === "80s-you";
   const applyBtn = document.getElementById("btnApplyImageMood") || els.btnApplyImageMood;
   const analyzeBtn = document.getElementById("btnAnalyzeImageMood") || els.btnAnalyzeImageMood;
   const hasFile = Boolean(els.imageMoodUpload?.files?.[0]);
@@ -20654,7 +20813,9 @@ function syncImageMoodSheetUi({ analyzing = false } = {}) {
     const canApplyMood = Boolean(imageMoodData) && !analyzing;
     const canApplyCoverOnly = hasCoverData && !imageMoodData && !analyzing;
     applyBtn.disabled = !(canApplyMood || canApplyCoverOnly);
-    if (clipDirect) {
+    if (photoSolo80s) {
+      applyBtn.textContent = imageMoodData ? "Continue" : "Continue";
+    } else if (clipDirect) {
       applyBtn.textContent = imageMoodData ? "Apply to clip" : "Use for clip";
     } else {
       applyBtn.textContent = imageMoodData ? "Apply to song" : "Use as cover";
@@ -20669,7 +20830,11 @@ function syncImageMoodSheetUi({ analyzing = false } = {}) {
       analyzeBtn.disabled = !hasFile || analyzing;
       analyzeBtn.classList.toggle("isReady", Boolean(hasFile && !analyzing && !imageMoodData));
       analyzeBtn.classList.toggle("isBusy", Boolean(analyzing));
-      analyzeBtn.textContent = analyzing ? "Analyzing…" : "Analyze";
+      analyzeBtn.textContent = analyzing
+        ? "Analyzing…"
+        : photoSolo80s
+          ? "Analyze portrait"
+          : "Analyze";
     }
   }
   if (card) {
@@ -20751,6 +20916,9 @@ function applyImageMoodToSongFields() {
     }
   }
   setCreatePhotoAttachmentPreview(imageMoodCoverDataUrl, summaryText);
+  try {
+    syncPhotoSoloBannerUi(challengePromptContext());
+  } catch {}
   try {
     syncGenerateOrbVisibility();
   } catch {}
@@ -21590,8 +21758,9 @@ function wireProfileSongsForActiveJob() {
 }
 
 /** While Suno runs, show Profile → Songs (all) shimmer instead of staying on Create. */
-function openProfileSongsWhileGenerating() {
-  if (!hasActiveProfileJobPending()) return;
+function openProfileSongsWhileGenerating(opts = {}) {
+  const force = opts?.force === true;
+  if (!force && !hasActiveProfileJobPending()) return;
   try { sessionStorage.setItem(PROFILE_SONGS_SEGMENT_KEY, "all"); } catch {}
   _profileSongsSegment = "all";
   syncGenerationPendingLibraryUi();
@@ -25408,12 +25577,7 @@ function looksLikeSingableLyrics(text) {
 
 function templateSparkClipLyricsReady() {
   if (activePhotoSoloChallengeId()) {
-    const instrumental = String(els.vocalInstrumentalOnly?.value || "0") === "1";
-    if (instrumental) return Boolean(imageMoodAppliedForNextGen);
-    if (!imageMoodAppliedForNextGen) return false;
-    const text = String(els.sunoPrompt?.value || "").trim();
-    if (_lyricsGeneratedInNabad && looksLikeSingableLyrics(text)) return true;
-    return looksLikeSingableLyrics(text);
+    return Boolean(imageMoodAppliedForNextGen);
   }
   const text = String(els.sunoPrompt?.value || "").trim();
   if (!text) return false;
@@ -25623,7 +25787,10 @@ function syncClipVocalCharacterUi() {
   }
 
   if (!gender) {
-    deck.innerHTML = `<p class="clipVocalCharacterPickGender">Choose Male, Female, or Duo above to see vocal characters.</p>`;
+    const pickGenderHint = activePhotoSoloChallengeId()
+      ? "Choose Male or Female above to see vocal characters."
+      : "Choose Male, Female, or Duo above to see vocal characters.";
+    deck.innerHTML = `<p class="clipVocalCharacterPickGender">${pickGenderHint}</p>`;
     if (specEl) specEl.textContent = "";
     setSelectedClipVocalProfileId("");
     return;
@@ -25662,9 +25829,11 @@ function syncNabadClipCreateUi() {
     personaPill.hidden = clip;
     personaPill.setAttribute("aria-hidden", clip ? "true" : "false");
   }
+  const photoSoloChallenge = Boolean(activePhotoSoloChallengeId());
   if (duoPill) {
-    duoPill.hidden = !showVocalCharacter;
-    duoPill.setAttribute("aria-hidden", showVocalCharacter ? "false" : "true");
+    const showDuo = showVocalCharacter && !photoSoloChallenge;
+    duoPill.hidden = !showDuo;
+    duoPill.setAttribute("aria-hidden", showDuo ? "false" : "true");
   }
   if (wrap) wrap.classList.toggle("nabadClipNoPersona", clip);
   if (els.clipVocalCharacterRow) {
@@ -64617,14 +64786,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
         setStatus("Add your portrait on Photo — Analyze, then Generate.");
         return;
       }
-      if (isTemplateSparkClipFlow() && activePhotoSoloChallengeId() && !templateSparkClipLyricsReady()) {
-        const lyricsOk = await ensure80sYouLyricsBeforeGenerate();
-        if (!lyricsOk) {
-          showToast("Lyrics still drafting — try again in a moment.", { icon: "✦", durationMs: 3600 });
-          setStatus("Still writing your 80s lyrics…");
-          return;
-        }
-      } else if (isTemplateSparkClipFlow() && !templateSparkClipLyricsReady()) {
+      if (isTemplateSparkClipFlow() && !activePhotoSoloChallengeId() && !templateSparkClipLyricsReady()) {
         showToast(TEMPLATE_SPARK_CLIP_LYRICS_HINT, { icon: "✦", durationMs: 3600 });
         setStatus(TEMPLATE_SPARK_CLIP_LYRICS_HINT);
         return;
@@ -64646,6 +64808,13 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
         return;
       }
       if (!armCreateGenerateInFlight()) return;
+      const is80sPhotoSolo =
+        isTemplateSparkClipFlow() && activePhotoSoloChallengeId() === "80s-you";
+      const is80sInstrumental = String(els.vocalInstrumentalOnly?.value || "0") === "1";
+      if (is80sPhotoSolo) {
+        try { beginCoachPriorityStatus("Starting your 80s moment…", { generating: true }); } catch {}
+        try { openProfileSongsWhileGenerating({ force: true }); } catch {}
+      }
       setGenerateBtn("Generating…", true, "generate");
       setGenerateFieldsLocked(true);
       hideCreateResultCards();
@@ -64653,6 +64822,9 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
         releaseCreateGenerateInFlight();
         setGenerateBtn("Generate clip", false, "generate");
         setGenerateFieldsLocked(false);
+        if (is80sPhotoSolo) {
+          try { cancelCoachPriorityStatus(); } catch {}
+        }
         return;
       }
       try {
@@ -64670,6 +64842,12 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
         const arabicAddressNote = arabicAddressPronunciationNote(arabicAddress, resolvedSingerGender);
         const lyricDialectHint = [dialectHint, arabicAddressNote].filter(Boolean).join(" ");
         let finalPrompt = sanitizeLyricsPrompt(userPrompt);
+        if (!finalPrompt && is80sPhotoSolo && !is80sInstrumental) {
+          try { updateCoachPriorityStatus("Crafting your lyrics…", { generating: true }); } catch {}
+          await draft80sYouLyricsForGenerate(imageMoodData);
+          finalPrompt = sanitizeLyricsPrompt(String(els.sunoPrompt?.value || "").trim());
+          try { updateCoachPriorityStatus("Making your 80s clip…", { generating: true }); } catch {}
+        }
         if (!finalPrompt && !clipAllowImageOnly && !isTemplateSparkClipFlow()) {
           try {
             setStatus("Drafting lyrics with Nabad AI…");
@@ -64858,9 +65036,15 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
             );
           }
           try {
-            beginCoachGenerationStatus({ variantCount: 1, pillText: "Clip generating…" });
+            if (is80sPhotoSolo) {
+              try { cancelCoachPriorityStatus(); } catch {}
+            }
+            beginCoachGenerationStatus({
+              variantCount: 1,
+              pillText: is80sPhotoSolo ? "Making your 80s clip…" : "Clip generating…",
+            });
           } catch {}
-          try { openProfileSongsWhileGenerating(); } catch {}
+          try { openProfileSongsWhileGenerating({ force: is80sPhotoSolo }); } catch {}
           try { setLoading(false); } catch {}
         }
         setGenerateBtn("Generate clip", false, "generate");
@@ -64877,6 +65061,9 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
         try {
           showToast(e?.message || "Clip generation failed.", { icon: "!", durationMs: 4800 });
         } catch {}
+        if (is80sPhotoSolo) {
+          try { cancelCoachPriorityStatus(); } catch {}
+        }
       }
       return;
     }
@@ -67405,7 +67592,7 @@ function isCreateGenerateBlockedAwaitingLyrics() {
 function createGenerateBlockedToastMessage() {
   if (isTemplateSparkClipFlow() && activePhotoSoloChallengeId()) {
     return imageMoodAppliedForNextGen
-      ? "Writing your lyrics — wait a moment, then Generate."
+      ? "Ready — tap Generate."
       : "Upload and analyze your photo first.";
   }
   if (isTemplateSparkClipFlow()) return TEMPLATE_SPARK_CLIP_LYRICS_HINT;
@@ -73147,22 +73334,26 @@ if (createPhotoCtaBtn) {
     openImageMoodSheet();
   });
 }
+const createPhotoSoloBannerBtn = document.getElementById("createPhotoSoloBanner");
+if (createPhotoSoloBannerBtn) {
+  createPhotoSoloBannerBtn.addEventListener("click", () => {
+    handlePhotoSoloBannerTap();
+  });
+}
 const createVibeCtaBtn = document.getElementById("createVibeCta");
 if (createVibeCtaBtn) {
   createVibeCtaBtn.addEventListener("click", () => {
     openVibeReadSheet();
   });
 }
-const createSoloVocalBtn = document.getElementById("createSoloVocalMode");
-const createSoloInstBtn = document.getElementById("createSoloInstrumentalMode");
-if (createSoloVocalBtn) {
-  createSoloVocalBtn.addEventListener("click", () => {
-    setCreateSongType("full");
-  });
-}
-if (createSoloInstBtn) {
-  createSoloInstBtn.addEventListener("click", () => {
-    setCreateSongType("instrumental");
+const createSoloTypePills = document.getElementById("createSoloTypePills");
+if (createSoloTypePills) {
+  createSoloTypePills.addEventListener("click", (e) => {
+    const btn = e.target?.closest?.(".addressPill[data-solo-song-type]");
+    if (!btn) return;
+    haptic("light");
+    const type = String(btn.getAttribute("data-solo-song-type") || "");
+    setCreateSongType(type === "instrumental" ? "instrumental" : "full");
   });
 }
 

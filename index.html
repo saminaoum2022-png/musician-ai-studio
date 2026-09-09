@@ -1115,15 +1115,16 @@
                 <small id="createChallengeHintSub">Edit below, then tap Generate.</small>
               </span>
             </div>
-            <div id="createPhotoSoloBanner" class="createPhotoSoloBanner" hidden>
-              <img class="createPhotoSoloBannerArt" src="" alt="" decoding="async" />
+            <button id="createPhotoSoloBanner" type="button" class="createPhotoSoloBanner" hidden aria-label="80s You challenge — add your photo">
+              <span class="createPhotoSoloBannerBg" style="background-image:url(/assets/discover/challenges/80s-you-hero.png)" aria-hidden="true"></span>
               <span class="createPhotoSoloBannerScrim" aria-hidden="true"></span>
               <span class="createPhotoSoloBannerBody">
                 <span class="createPhotoSoloBannerKicker">80s You</span>
                 <span class="createPhotoSoloBannerTitle">My 80s Moment</span>
-                <span class="createPhotoSoloBannerSub">Add your portrait — we write your synth-pop anthem.</span>
+                <span class="createPhotoSoloBannerSub">Your portrait becomes a synth-pop anthem.</span>
+                <span class="createPhotoSoloBannerCta">Join challenge →</span>
               </span>
-            </div>
+            </button>
             <div class="createPanes" data-mode="lyrics">
               <div class="createPane createPane--photo" data-mode="photo" hidden>
                 <button id="createPhotoCta" class="createPaneCta" type="button" aria-label="Add a photo">
@@ -1323,10 +1324,35 @@
             </div>
             <div id="createSoloInstrumentalRow" class="createSoloInstrumentalRow field grow inputPanel inputPanel--style" hidden>
               <div class="label inPanelLabel">Song type</div>
-              <span class="vocalModePill optTypePill createSoloTypePill" role="group" aria-label="Song type">
-                <button id="createSoloVocalMode" class="ghost active" type="button" aria-pressed="true">Vocal</button>
-                <button id="createSoloInstrumentalMode" class="ghost" type="button" aria-pressed="false">Instrumental</button>
-              </span>
+              <div id="createSoloTypePills" class="addressPills addressPills--two createSoloTypePills" role="group" aria-label="Song type">
+                <button type="button" class="addressPill isActive" data-solo-song-type="vocal" aria-pressed="true">
+                  <span class="addressPillMain">Vocal</span>
+                </button>
+                <button type="button" class="addressPill" data-solo-song-type="instrumental" aria-pressed="false">
+                  <span class="addressPillMain">Instrumental</span>
+                </button>
+              </div>
+            </div>
+            <div id="createSoloLangRow" class="createSoloLangRow field grow inputPanel inputPanel--style" hidden>
+              <div class="label inPanelLabel">Lyrics language</div>
+              <div id="createSoloLangChipRow" class="optChipRow lyricsLangRow createSoloLangChipRow" role="group" aria-label="Lyrics language">
+                <button type="button" class="optChip isActive" data-lyrics-lang="auto" aria-pressed="true">Auto</button>
+                <button type="button" class="optChip" data-lyrics-lang="english" aria-pressed="false">English</button>
+                <button type="button" class="optChip" data-lyrics-lang="arabic" aria-pressed="false">Arabic</button>
+                <button type="button" class="optChip" data-lyrics-lang="french" aria-pressed="false">French</button>
+                <button type="button" class="optChip" data-lyrics-lang="spanish" aria-pressed="false">Spanish</button>
+              </div>
+            </div>
+            <div id="createSoloDialectRow" class="createSoloDialectRow field grow inputPanel inputPanel--style" hidden>
+              <div class="label inPanelLabel">Arabic dialect</div>
+              <div id="createSoloDialectChipRow" class="optChipRow lyricsDialectRow createSoloDialectChipRow" role="group" aria-label="Arabic dialect">
+                <button type="button" class="optChip" data-lyrics-dialect="lebanese" aria-pressed="false">Lebanese</button>
+                <button type="button" class="optChip" data-lyrics-dialect="syrian" aria-pressed="false">Syrian</button>
+                <button type="button" class="optChip" data-lyrics-dialect="palestinian" aria-pressed="false">Palestinian</button>
+                <button type="button" class="optChip" data-lyrics-dialect="egyptian" aria-pressed="false">Egyptian</button>
+                <button type="button" class="optChip" data-lyrics-dialect="gulf" aria-pressed="false">Gulf</button>
+                <button type="button" class="optChip" data-lyrics-dialect="msa" aria-pressed="false">MSA</button>
+              </div>
             </div>
               <label class="field grow inputPanel inputPanel--style">
                 <div class="label inPanelLabel stylePanelHead">

@@ -9755,9 +9755,35 @@ html[data-theme="light"] .personaVoiceTuneChips .optChip.isActive{
 .createChallengeHint--live{
   border-color: rgba(250,204,21,0.22);
 }
-.createSoloInstrumentalRow .createSoloTypePill{
-  display: inline-flex;
-  gap: 6px;
+.addressPills--two{
+  grid-template-columns: repeat(2, 1fr);
+}
+body[data-photo-solo-challenge] .createSoloInstrumentalRow{
+  order: 1;
+}
+body[data-photo-solo-challenge] .createSoloLangRow{
+  order: 2;
+}
+body[data-photo-solo-challenge] .createSoloDialectRow{
+  order: 3;
+}
+body[data-photo-solo-challenge] #singerVoicePanel{
+  order: 4;
+}
+body[data-photo-solo-challenge][data-solo-instrumental="1"] .createSoloLangRow,
+body[data-photo-solo-challenge][data-solo-instrumental="1"] .createSoloDialectRow,
+body[data-photo-solo-challenge][data-solo-instrumental="1"] #singerVoicePanel{
+  display: none !important;
+}
+body[data-photo-solo-challenge]:not([data-solo-arabic="1"]) .createSoloDialectRow{
+  display: none !important;
+}
+body[data-photo-solo-challenge] #singerGenderPills.nabadClipNoPersona .singerDuoPill,
+body[data-photo-solo-challenge] #singerDuoPill{
+  display: none !important;
+}
+body[data-photo-solo-challenge] .createPhotoSoloBannerCta[hidden]{
+  display: none !important;
 }
 body[data-photo-solo-challenge] .createTabs{
   display: none !important;
@@ -9773,41 +9799,54 @@ body[data-photo-solo-challenge] #btnOpenAdvancedSheet,
 body[data-photo-solo-challenge] .generateRow > button.ghost{
   display: none !important;
 }
-.createPhotoSoloBanner{
+button.createPhotoSoloBanner{
   position: relative;
   display: block;
   width: 100%;
-  min-height: 128px;
+  min-height: 136px;
   border-radius: 18px;
   overflow: hidden;
   margin-bottom: 12px;
   border: 1px solid rgba(167,139,250,0.22);
   box-shadow: 0 12px 32px rgba(76,29,149,0.18);
+  appearance: none;
+  padding: 0;
+  cursor: pointer;
+  text-align: inherit;
+  font: inherit;
+  color: inherit;
+  background: #0a0814;
+  -webkit-tap-highlight-color: transparent;
 }
-.createPhotoSoloBannerArt{
+button.createPhotoSoloBanner:active{
+  transform: scale(0.992);
+}
+.createPhotoSoloBannerBg{
   position: absolute;
   inset: 0;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  object-position: 42% 38%;
+  background-size: cover;
+  background-position: 38% 42%;
+  background-repeat: no-repeat;
 }
 .createPhotoSoloBannerScrim{
   position: absolute;
   inset: 0;
+  pointer-events: none;
   background:
-    linear-gradient(90deg, rgba(8,6,20,0.08) 0%, rgba(8,6,20,0.42) 48%, rgba(8,6,20,0.88) 100%),
-    linear-gradient(180deg, rgba(8,6,20,0.04) 0%, rgba(8,6,20,0.78) 100%);
+    linear-gradient(90deg, rgba(8,6,20,0.02) 0%, rgba(8,6,20,0.28) 42%, rgba(8,6,20,0.82) 100%),
+    linear-gradient(180deg, rgba(8,6,20,0.02) 0%, rgba(8,6,20,0.55) 100%);
 }
 .createPhotoSoloBannerBody{
   position: relative;
   z-index: 1;
   display: grid;
   gap: 3px;
-  padding: 16px 14px;
-  min-height: 128px;
+  padding: 14px 14px 12px;
+  min-height: 136px;
   align-content: end;
+  justify-items: end;
   text-align: right;
+  pointer-events: none;
 }
 .createPhotoSoloBannerKicker{
   font-size: 10px;
@@ -9826,17 +9865,25 @@ body[data-photo-solo-challenge] .generateRow > button.ghost{
   font-size: 12px;
   color: rgba(226,232,240,0.82);
   line-height: 1.35;
-  max-width: 15em;
-  margin-left: auto;
+  max-width: 14em;
+}
+.createPhotoSoloBannerCta{
+  display: inline-flex;
+  align-items: center;
+  margin-top: 8px;
+  padding: 5px 11px;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,0.26);
+  background: rgba(8,6,20,0.28);
+  color: rgba(255,255,255,0.9);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
 }
 body[data-photo-solo-challenge] .createPaneCtaSub{
   color: rgba(220,232,247,0.72);
-}
-body[data-photo-solo-challenge] .createFlowStep .inputPanel--style:has(#singerGenderPills){
-  order: 1;
-}
-body[data-photo-solo-challenge] .createSoloInstrumentalRow{
-  order: 2;
 }
 body[data-photo-solo-challenge] .createFlowStep:nth-child(2){
   display: flex;

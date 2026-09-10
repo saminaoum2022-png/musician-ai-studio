@@ -10617,12 +10617,14 @@ function photoSoloChallengeHeroArtUrl(challengeId) {
 function resolvePhotoSoloBannerChallengeId() {
   const fromFlow = activePhotoSoloChallengeId();
   if (fromFlow) return fromFlow;
-  const banner = document.getElementById("createPhotoSoloBanner");
-  const fromBanner = String(banner?.dataset?.challengeId || "").trim();
-  if (isPhotoSoloChallengeId(fromBanner)) return fromBanner;
   const ch = challengePromptContext() || loadCreateChallengeContext()?.challenge;
   const fromCtx = String(ch?.id || "").trim();
   if (isPhotoSoloChallengeId(fromCtx)) return fromCtx;
+  const banner = document.getElementById("createPhotoSoloBanner");
+  if (banner && !banner.hidden) {
+    const fromBanner = String(banner.dataset?.challengeId || "").trim();
+    if (isPhotoSoloChallengeId(fromBanner)) return fromBanner;
+  }
   return "";
 }
 
@@ -10636,26 +10638,83 @@ function openPhotoSoloChallengeOnDiscover(challengeId) {
   scheduleApplyRoute();
 }
 
+function open80sYouPhotoSheetAfterBannerTap() {
+  mountFixedOverlaysToBody();
+  try { setActiveCreateTab("photo"); } catch {}
+  try { syncPhotoSoloChallengeCreateUi(); } catch {}
+  window.setTimeout(() => {
+    try { openImageMoodSheet(); } catch (err) {
+      console.warn("[80s-you] openImageMoodSheet failed", err);
+      try {
+        showToast("Tap Add a photo below to upload your portrait.", { icon: "!", durationMs: 3200 });
+      } catch {}
+    }
+  }, 0);
+}
+
 function handlePhotoSoloBannerTap(e) {
-  const id = resolvePhotoSoloBannerChallengeId();
-  if (!id) return;
-  const cta = e?.target?.closest?.(".createPhotoSoloBannerCta");
-  const changePhoto = Boolean(
-    cta && !cta.hidden && imageMoodAppliedForNextGen && activePhotoSoloChallengeId() === id,
-  );
+  e?.preventDefault?.();
+  e?.stopPropagation?.();
+  const banner = document.getElementById("createPhotoSoloBanner");
+  if (banner?.hidden) return;
+  let id = resolvePhotoSoloBannerChallengeId();
+  if (!id) id = String(banner?.dataset?.challengeId || "80s-you").trim();
+  if (!isPhotoSoloChallengeId(id)) return;
+  haptic("light");
+  const changePhoto = Boolean(imageMoodAppliedForNextGen && activePhotoSoloChallengeId() === id);
   if (changePhoto) {
-    haptic("light");
-    try { setActiveCreateTab("photo"); } catch {}
-    try { openImageMoodSheet(); } catch {}
+    open80sYouPhotoSheetAfterBannerTap();
     return;
   }
-  applyChallengeStartById(id, null);
+  const needsStart = activePhotoSoloChallengeId() !== id;
+  if (needsStart) {
+    applyChallengeStartById(id, null);
+  }
+  open80sYouPhotoSheetAfterBannerTap();
+}
+
+function wireCreatePhotoSoloBannerOnce() {
+  const root = document.getElementById("createFlow") || document.body;
+  if (!root || root.dataset.photoSoloBannerBound === "1") return;
+  root.dataset.photoSoloBannerBound = "1";
+  const onBannerTap = (e) => {
+    const btn = e.target?.closest?.("#createPhotoSoloBanner");
+    if (!btn || btn.hidden) return;
+    handlePhotoSoloBannerTap(e);
+  };
+  root.addEventListener("click", onBannerTap, true);
+  root.addEventListener(
+    "touchend",
+    (e) => {
+      const btn = e.target?.closest?.("#createPhotoSoloBanner");
+      if (!btn || btn.hidden) return;
+      if (e.cancelable) e.preventDefault();
+      handlePhotoSoloBannerTap(e);
+    },
+    { capture: true, passive: false },
+  );
 }
 
 function syncPhotoSoloBannerUi(challenge) {
   const banner = document.getElementById("createPhotoSoloBanner");
   if (!banner) return;
-  const id = String(challenge?.id || resolvePhotoSoloBannerChallengeId() || "").trim();
+  const onGenerate = (document.body.getAttribute("data-route") || "") === "generate";
+  const activeChallenge = challengePromptContext();
+  if (activeChallenge && !isPhotoSoloChallengeId(activeChallenge.id)) {
+    banner.hidden = true;
+    delete banner.dataset.challengeId;
+    return;
+  }
+  let id = "";
+  if (challenge && isPhotoSoloChallengeId(challenge.id)) {
+    id = String(challenge.id).trim();
+  } else if (is80sYouCreateFlow()) {
+    id = "80s-you";
+  } else if (onGenerate) {
+    const flow = getCreateFlow();
+    const blockFeatured = flow === "nabadclip" || flow === "humtrack" || flow === "sounds" || flow === "persona";
+    if (!blockFeatured) id = "80s-you";
+  }
   if (!isPhotoSoloChallengeId(id)) {
     banner.hidden = true;
     delete banner.dataset.challengeId;
@@ -16832,16 +16891,14 @@ function syncPhotoSoloChallengeCreateUi() {
   }
   if (is80s) {
     try { syncSoloInstrumentalToggleUi(); } catch {}
-    try { syncPhotoSoloBannerUi(challengePromptContext()); } catch {}
     try { setActiveCreateTab("photo"); } catch {}
     const photoSub = document.querySelector("#createPhotoCta .createPaneCtaSub");
     if (photoSub) photoSub.textContent = "Tap to upload your retro portrait.";
   } else {
-    const banner = document.getElementById("createPhotoSoloBanner");
-    if (banner) banner.hidden = true;
     const photoSub = document.querySelector("#createPhotoCta .createPaneCtaSub");
     if (photoSub) photoSub.textContent = "We'll catch the mood and feed it into your song.";
   }
+  try { syncPhotoSoloBannerUi(is80s ? challengePromptContext() : null); } catch {}
 }
 
 function challengeCreateFocusForId(challengeId) {
@@ -16929,6 +16986,7 @@ function clearCreateChallengeFocus() {
     createTabs.hidden = false;
     createTabs.setAttribute("aria-hidden", "false");
   }
+  try { syncPhotoSoloChallengeCreateUi(); } catch {}
 }
 
 function scrollFirstSongCreateLangControlsIntoView() {
@@ -73643,6 +73701,10 @@ function getActiveCreateTabMode() {
   return "lyrics";
 }
 function resyncActiveCreateTabPanes() {
+  if (is80sYouCreateFlow()) {
+    setActiveCreateTab("photo");
+    return;
+  }
   setActiveCreateTab(getActiveCreateTabMode());
 }
 function setActiveCreateTab(mode) {
@@ -73687,12 +73749,7 @@ if (createPhotoCtaBtn) {
     openImageMoodSheet();
   });
 }
-const createPhotoSoloBannerBtn = document.getElementById("createPhotoSoloBanner");
-if (createPhotoSoloBannerBtn) {
-  createPhotoSoloBannerBtn.addEventListener("click", (e) => {
-    handlePhotoSoloBannerTap(e);
-  });
-}
+wireCreatePhotoSoloBannerOnce();
 const createVibeCtaBtn = document.getElementById("createVibeCta");
 if (createVibeCtaBtn) {
   createVibeCtaBtn.addEventListener("click", () => {

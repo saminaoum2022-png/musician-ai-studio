@@ -9813,8 +9813,12 @@ body[data-photo-solo-challenge] #btnOpenAdvancedSheet,
 body[data-photo-solo-challenge] .generateRow > button.ghost{
   display: none !important;
 }
+button.createPhotoSoloBanner[hidden]{
+  display: none !important;
+}
 button.createPhotoSoloBanner{
   position: relative;
+  z-index: 2;
   display: block;
   width: 100%;
   min-height: 136px;
@@ -9831,6 +9835,8 @@ button.createPhotoSoloBanner{
   color: inherit;
   background: #0a0814;
   -webkit-tap-highlight-color: transparent;
+  pointer-events: auto;
+  touch-action: manipulation;
 }
 button.createPhotoSoloBanner:active{
   transform: scale(0.992);
@@ -9841,6 +9847,7 @@ button.createPhotoSoloBanner:active{
   background-size: cover;
   background-position: 38% 42%;
   background-repeat: no-repeat;
+  pointer-events: none;
 }
 .createPhotoSoloBannerScrim{
   position: absolute;
@@ -9897,6 +9904,9 @@ button.createPhotoSoloBanner:active{
   box-shadow:
     0 8px 24px rgba(124, 92, 255, 0.32),
     0 2px 10px rgba(35, 213, 171, 0.22);
+  pointer-events: auto;
+  position: relative;
+  z-index: 2;
 }
 .createPhotoSoloBannerCta--ghost{
   border: 1px solid rgba(255,255,255,0.24);

@@ -10611,35 +10611,54 @@ function photoSoloChallengeHeroArtUrl(challengeId) {
   return `${bundleAssetUrl(base)}?v=${DISCOVER_CHALLENGE_ART_VERSION}`;
 }
 
+function resolvePhotoSoloBannerChallengeId() {
+  const fromFlow = activePhotoSoloChallengeId();
+  if (fromFlow) return fromFlow;
+  const banner = document.getElementById("createPhotoSoloBanner");
+  const fromBanner = String(banner?.dataset?.challengeId || "").trim();
+  if (isPhotoSoloChallengeId(fromBanner)) return fromBanner;
+  const ch = challengePromptContext() || loadCreateChallengeContext()?.challenge;
+  const fromCtx = String(ch?.id || "").trim();
+  if (isPhotoSoloChallengeId(fromCtx)) return fromCtx;
+  return "";
+}
+
 function openPhotoSoloChallengeOnDiscover(challengeId) {
   const id = String(challengeId || "").trim();
-  if (!id) return;
+  if (!id || !isPhotoSoloChallengeId(id)) return;
   const slug = discoverChallengePlaylistSlug(id);
+  haptic("light");
   try { location.hash = `#/discover/playlist/${encodeURIComponent(slug)}`; } catch {}
+  try { syncRoutePanelVisibility("discover-playlist"); } catch {}
   scheduleApplyRoute();
 }
 
 function handlePhotoSoloBannerTap(e) {
-  const id = activePhotoSoloChallengeId();
+  const id = resolvePhotoSoloBannerChallengeId();
   if (!id) return;
-  haptic("light");
   const cta = e?.target?.closest?.(".createPhotoSoloBannerCta");
-  if (cta && !cta.hidden && imageMoodAppliedForNextGen) {
+  const changePhoto = Boolean(
+    cta && !cta.hidden && imageMoodAppliedForNextGen && activePhotoSoloChallengeId() === id,
+  );
+  if (changePhoto) {
+    haptic("light");
     try { setActiveCreateTab("photo"); } catch {}
     try { openImageMoodSheet(); } catch {}
     return;
   }
-  openPhotoSoloChallengeOnDiscover(id);
+  applyChallengeStartById(id, null);
 }
 
 function syncPhotoSoloBannerUi(challenge) {
   const banner = document.getElementById("createPhotoSoloBanner");
   if (!banner) return;
-  const id = String(challenge?.id || activePhotoSoloChallengeId() || "").trim();
+  const id = String(challenge?.id || resolvePhotoSoloBannerChallengeId() || "").trim();
   if (!isPhotoSoloChallengeId(id)) {
     banner.hidden = true;
+    delete banner.dataset.challengeId;
     return;
   }
+  banner.dataset.challengeId = id;
   const bg = banner.querySelector(".createPhotoSoloBannerBg");
   const kicker = banner.querySelector(".createPhotoSoloBannerKicker");
   const title = banner.querySelector(".createPhotoSoloBannerTitle");
@@ -10660,11 +10679,9 @@ function syncPhotoSoloBannerUi(challenge) {
       : String(spark?.prompt || "Add a photo to start.").trim();
   }
   if (cta) {
-    if (imageMoodAppliedForNextGen) {
-      cta.textContent = "Change photo →";
-    } else {
-      cta.textContent = "View challenge →";
-    }
+    const changePhoto = imageMoodAppliedForNextGen && activePhotoSoloChallengeId() === id;
+    cta.textContent = changePhoto ? "Change photo" : "Try now";
+    cta.classList.toggle("createPhotoSoloBannerCta--ghost", changePhoto);
     cta.hidden = false;
   }
   banner.hidden = false;
@@ -16428,7 +16445,7 @@ function syncAdminFrancoConvertVisibility() {
   const seed = String(els.sunoPrompt?.value || "").trim();
   const hasArabic = textHasArabicScript(seed);
   const lyricsBtn = els.btnLyricsFrancoAdmin || document.getElementById("btnLyricsFrancoAdmin");
-  if (lyricsBtn) lyricsBtn.hidden = !isAdmin || !hasArabic;
+  if (lyricsBtn) lyricsBtn.hidden = !isAdmin || !hasArabic || is80sYouCreateFlow();
 }
 
 async function convertLyricsToFrancoForAdmin() {
@@ -46353,6 +46370,19 @@ function renderDiscoverPlaylistScreen(slug) {
       ? `${tracks.length} public ${tracks.length === 1 ? "song" : "songs"} · ranked by plays`
       : "No songs for this challenge yet.";
   }
+  const tryNowBtn = document.getElementById("discoverPlaylistTryNow");
+  if (tryNowBtn) {
+    const showTry = pl.kind === "challenge" && pl.challengeId;
+    tryNowBtn.hidden = !showTry;
+    if (showTry) {
+      tryNowBtn.dataset.challengeId = String(pl.challengeId);
+      tryNowBtn.textContent = "Try now";
+    } else {
+      delete tryNowBtn.dataset.challengeId;
+    }
+  }
+  const playAllBtn = document.getElementById("discoverPlaylistPlayAll");
+  if (playAllBtn) playAllBtn.hidden = !tracks.length;
   if (!listEl) return;
   listEl.className = useProfileRows
     ? "discoverPlaylistList discoverPlaylistList--libRows"
@@ -47090,6 +47120,15 @@ function bindDiscoverPlaylistScreenOnce() {
     back.addEventListener("click", () => {
       haptic("light");
       location.hash = "#/discover";
+    });
+  }
+  const tryNow = document.getElementById("discoverPlaylistTryNow");
+  if (tryNow && !tryNow.dataset.bound) {
+    tryNow.dataset.bound = "1";
+    tryNow.addEventListener("click", () => {
+      const chId = String(tryNow.dataset.challengeId || "").trim();
+      if (!chId) return;
+      applyChallengeStartById(chId, null);
     });
   }
   const playAll = document.getElementById("discoverPlaylistPlayAll");
@@ -73488,7 +73527,6 @@ function resyncActiveCreateTabPanes() {
   setActiveCreateTab(getActiveCreateTabMode());
 }
 function setActiveCreateTab(mode) {
-  const is80s = is80sYouCreateFlow();
   ["photo", "hum", "lyrics", "vibe"].forEach((k) => {
     const el = createTabEls[k];
     if (!el || el.hidden) return;
@@ -73498,12 +73536,7 @@ function setActiveCreateTab(mode) {
   });
   if (createPanesWrap) createPanesWrap.dataset.mode = mode;
   document.querySelectorAll(".createPane").forEach((p) => {
-    const paneMode = String(p.dataset.mode || "").trim();
-    if (is80s && paneMode === "lyrics") {
-      p.hidden = false;
-    } else {
-      p.hidden = paneMode !== mode;
-    }
+    p.hidden = p.dataset.mode !== mode;
   });
 }
 if (createTabEls.lyrics) {

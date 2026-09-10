@@ -4,9 +4,10 @@ function dialectFlags(dialect = "", dialectHint = "") {
   const blob = `${dialect} ${dialectHint}`.toLowerCase();
   const isMsa = /\bmsa\b|modern standard|fusha|fus'?ha|formal arabic|classical arabic|فصحى|فصح/.test(blob);
   const isLebanese = /lebanese|levantine|لبنان|بيروت|beirut/.test(blob);
+  const isEgyptian = /egyptian|masri|مصر|cairo/.test(blob);
   const isLevantineColloquial =
-    isLebanese || /syrian|palestinian|jordanian|سور|فلسط|shami/.test(blob);
-  return { blob, isMsa, isLebanese, isLevantineColloquial };
+    (isLebanese || /syrian|palestinian|jordanian|سور|فلسط|shami/.test(blob)) && !isEgyptian;
+  return { blob, isMsa, isLebanese, isEgyptian, isLevantineColloquial };
 }
 
 function isArabicLyricsContext({ dialect = "", dialectHint = "", scriptFormat = "", seed = "" } = {}) {
@@ -20,10 +21,24 @@ function isArabicLyricsContext({ dialect = "", dialectHint = "", scriptFormat = 
 }
 
 /** Rules when Gemini writes Arabic script (full song, arrange, fix, etc.). */
-function buildColloquialArabicGenerationLines({ isMsa = false, isLebanese = false, isLevantineColloquial = false } = {}) {
+function buildColloquialArabicGenerationLines({
+  isMsa = false,
+  isLebanese = false,
+  isEgyptian = false,
+  isLevantineColloquial = false,
+} = {}) {
   if (isMsa) {
     return [
       "MSA / فصحى: formal Arabic OK, but do NOT add tanween (ًٌٍ) unless the user explicitly asked for classical nahwi endings.",
+    ];
+  }
+  if (isEgyptian) {
+    return [
+      "EGYPTIAN ARABIC SCRIPT (required):",
+      "- Spoken Cairo Masri ONLY — never fusHa nahwi, NEVER tanween (ًٌٍ) unless user explicitly asked for MSA.",
+      "- Use Egyptian present-tense prefix ب- on verbs (بيحلى، بيقول، بشوف، بعمل).",
+      "- Do NOT add heavy tashkeel in generated lyrics.",
+      ...buildEgyptianLexiconLines(),
     ];
   }
   if (isLebanese) {
@@ -115,6 +130,22 @@ function buildLyriaLebaneseArabicNote() {
   return "Lebanese colloquial Arabic: stopped consonants with sukoon at word ends and inside clusters; no tanween; no MSA case endings; qaf as hamza.";
 }
 
+function buildLyriaEgyptianArabicNote() {
+  return "Egyptian Masri colloquial Arabic: Cairo spoken forms, ب- present prefix on verbs, authentic Masri vocabulary; no tanween; no MSA case endings.";
+}
+
+/** Word-level Egyptian vs Levantine — for lyrics generation, not just vocal accent. */
+function buildEgyptianLexiconLines() {
+  return [
+    "EGYPTIAN WORD CHOICE (required — Levantine vocabulary is WRONG):",
+    "- with me: معايا — NEVER معي (Levantine).",
+    "- in my imagination / in my mind: في خيالي or في بالي — NEVER بخيالي or ع خيالي (Levantine).",
+    "- Use Egyptian present-tense prefix ب- on verbs (بيحلى، بيقول، بشوف، بعمل).",
+    "- Prefer Egyptian: إزاي، كده، أوي، عايز، دلوقتي، ليه، مفيش، حاجة، كمان — not Lebanese شو، هيدا، عم، منيح، ليش.",
+    "- Addressing a man: إنت، حبيبي، معاك — keep Masri pronouns, not Lebanese-only slang.",
+  ];
+}
+
 /** Word-level Lebanese vs Egyptian — for lyrics generation, not just vocal accent. */
 function buildLebaneseLexiconLines() {
   return [
@@ -138,5 +169,7 @@ module.exports = {
   stripColloquialTanween,
   lightenSungArabicDiacritics,
   buildLyriaLebaneseArabicNote,
+  buildLyriaEgyptianArabicNote,
+  buildEgyptianLexiconLines,
   buildLebaneseLexiconLines,
 };

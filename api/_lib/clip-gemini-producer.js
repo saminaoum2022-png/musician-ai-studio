@@ -142,7 +142,7 @@ OUTPUT SCHEMA:
 === ARABIZI (when script_format is "arabizi") ===
 - Lyrics are Arabizi: colloquial Arabic in Latin letters for Lyria — NOT English lyrics.
 - Preserve the user's Arabizi spelling exactly — do NOT translate to English or Arabic script.
-- enhanced_style_prompt MUST include: "native Lebanese Arabic vocal" (or matching dialect), "authentic colloquial Arabic pronunciation", "Arabizi phonetic lyrics — sing as Arabic NOT English", "NOT English-accented delivery".
+- enhanced_style_prompt MUST include vocal direction matching dialect_hint (e.g. native Egyptian Masri or Lebanese Beirut), "authentic colloquial Arabic pronunciation", "Arabizi phonetic lyrics — sing as Arabic NOT English", "NOT English-accented delivery".
 
 === enhanced_style_prompt ===
 Rich sonic specification for Lyria. Target length: 1200–2000 characters max.
@@ -157,7 +157,7 @@ Include ALL when inferable (use sensible genre defaults if missing — never sta
 7. Vocal: gender, character, delivery from inputs; merge vocal_lyria_hint if present.
    Conversational, warm, close-mic — NO shouting or stadium belt unless user asked.
 8. Mix: density, brightness, space per section feel.
-9. Arabic/dialect: if dialect_hint mentions MSA/formal, allow formal vocal color; otherwise colloquial spoken delivery — NO tanween unless user asked for MSA; Lebanese uses sukoon on stopped consonants at word ends and inside clusters.
+9. Arabic/dialect: if dialect_hint mentions MSA/formal, allow formal vocal color; otherwise colloquial spoken delivery — NO tanween unless user asked for MSA; honor dialect_hint for vocabulary and vocal color (Lebanese sukoon vs Egyptian Masri ب- prefix, etc.).
 
 Dialect: if dialect_hint is set (Levantine, Gulf, Egyptian, MSA, etc.), reflect in vocal color and rhythm — tasteful, not stereotyped.
 

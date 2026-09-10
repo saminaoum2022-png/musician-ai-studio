@@ -818,9 +818,11 @@ function buildSunoPrompt({ seed, style, mode, dialect, dialectHint }) {
   const st = String(style || "").trim();
   const dialectLower = `${d} ${hint}`.toLowerCase();
   const isLebanese = /lebanese|levantine|لبنان|بيروت/.test(dialectLower);
+  const isEgyptian = /egyptian|masri|مصر|cairo/.test(dialectLower);
   const isArabicDialect =
     isLebanese
-    || /arabic|egyptian|iraqi|gulf|maghrebi|syrian|palestinian|tunisian|sudanese|darija|msa|فصحى|محك/.test(
+    || isEgyptian
+    || /arabic|iraqi|gulf|maghrebi|syrian|palestinian|tunisian|sudanese|darija|msa|فصحى|محك/.test(
       dialectLower,
     );
 
@@ -860,6 +862,8 @@ function buildSunoPrompt({ seed, style, mode, dialect, dialectHint }) {
     }
     const lead = isLebanese
       ? "Lebanese Arabic colloquial pop lyrics, Beirut dialect, qaf as hamza, tight sukoon word endings, NO tanween, NOT Egyptian, NOT formal MSA."
+      : isEgyptian
+      ? "Egyptian Masri colloquial pop lyrics, Cairo dialect, ب- present prefix on verbs, authentic Masri vocabulary, NO tanween, NOT Levantine, NOT formal MSA."
       : d
       ? `${d} colloquial sung lyrics.`
       : "Arabic colloquial sung lyrics.";

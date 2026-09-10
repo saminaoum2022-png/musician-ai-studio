@@ -5472,7 +5472,8 @@ const LYRICS_ARABIC_DIALECT_HINT = {
     "Lebanese Beirut colloquial singing; qaf as hamza (2); soft spoken vowels; use معي not معايا, بخيالي not في خيالي, no Egyptian ب- verb prefix; NOT Egyptian; NOT formal MSA/nahwi.",
   syrian: "Syrian Levantine colloquial; qaf as hamza (2); spoken vowels; NOT Egyptian.",
   palestinian: "Palestinian Levantine colloquial; qaf as hamza (2); spoken vowels; NOT Egyptian.",
-  egyptian: "Egyptian Masri colloquial; NOT Levantine.",
+  egyptian:
+    "Egyptian Masri colloquial singing; use معايا not معي, في خيالي not بخيالي, Egyptian ب- verb prefix (بيحلى، بيقول); prefer إزاي، كده، أوي، عايز، دلوقتي; NOT Levantine; NOT formal MSA/nahwi.",
   iraqi: "Iraqi colloquial; NOT Egyptian or Gulf.",
   gulf: "Khaleeji/Gulf colloquial; NOT Egyptian or Levantine.",
   moroccan: "Moroccan Darija colloquial; NOT Egyptian or Levantine.",
@@ -65340,7 +65341,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
           finalPrompt,
           styleInput: userStyle,
           dialect,
-          dialectHint,
+          dialectHint: lyricDialectHint,
           arabicAddress,
           singerGender: clipVocalGender || undefined,
           voiceProfile: clipVoiceProfile || undefined,

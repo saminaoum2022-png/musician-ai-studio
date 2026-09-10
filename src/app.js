@@ -2557,7 +2557,7 @@ function scheduleRenderHubNowPlaying() {
     renderHubNowPlaying();
   });
 }
-const LATEST_SUNO_MODEL = "V5_5";
+const LATEST_SUNO_MODEL = "V6";
 /** Production API origins for native (try in order if one host fails). */
 const NATIVE_API_BASE_CANDIDATES = [
   "https://www.nabadai.com",
@@ -50407,7 +50407,7 @@ function stripPersonaConflictingStyleTags(raw) {
     .trim();
 }
 
-/** V5_5 optional target length — omit when Auto (empty preset). */
+/** V6 optional target length — omit when Auto (empty preset). */
 const SONG_DURATION_PRESET_SEC = Object.freeze({
   short: 60,
   standard: 120,

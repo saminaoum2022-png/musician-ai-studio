@@ -11,10 +11,16 @@
  */
 const { verifyUser, callRpc, isAdminEmail, selectFromTable } = require("../_lib/credits-auth");
 const { applyCors } = require("../_lib/cors");
-const { readJson, sendJson, sunoJsonRequest, pickSunoClipAudioUrl } = require("../_lib/suno-upstream");
+const {
+  readJson,
+  sendJson,
+  sunoJsonRequest,
+  pickSunoClipAudioUrl,
+  DEFAULT_SUNO_MODEL,
+} = require("../_lib/suno-upstream");
 
 const MASHUP_COST = 12;
-const DEFAULT_MODEL = "V5_5";
+const DEFAULT_MODEL = DEFAULT_SUNO_MODEL;
 const DEFAULT_PROMPT = "A dynamic mashup blending two songs together";
 
 module.exports = async function handler(req, res) {

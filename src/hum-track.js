@@ -532,7 +532,7 @@ async function submitHumTrackGeneration() {
       fd.append("fileName", sendFile.name);
       fd.append("fileType", sendFile.type);
       fd.append("title", `Hum Track · ${label}`);
-      fd.append("model", ctx.latestSunoModel || "V5_5");
+      fd.append("model", ctx.latestSunoModel || "V6");
       fd.append("audioWeight", "0.95");
       fd.append("styleWeight", "0.22");
       const fp = await ctx.computeBytesFingerprint(sendFile);

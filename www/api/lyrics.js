@@ -110,6 +110,8 @@ module.exports = async function handler(req, res) {
         : extractComplianceTerms({ seed, style });
     const geminiTemperature = mode === "remix_reply"
       ? 0.72
+      : mode === "to_arabizi"
+        ? 0.1
       : mode === "diacritics"
         ? 0.35
         : mode === "enhance"
@@ -119,6 +121,9 @@ module.exports = async function handler(req, res) {
             : mode === "singability_check"
               ? 0.25
               : 0.9;
+    const geminiPreferredModels = mode === "to_arabizi"
+      ? ["gemini-2.5-flash", "gemini-2.0-flash"]
+      : null;
     const sunoKey = process.env.SUNO_API_KEY || "";
 
     const debug = {};
@@ -131,7 +136,12 @@ module.exports = async function handler(req, res) {
           debug: { nonce, gemini: "missing_gemini_key" },
         });
       }
-      const gemResult = await tryGeminiLyrics({ geminiKey, prompt, temperature: geminiTemperature });
+      const gemResult = await tryGeminiLyrics({
+        geminiKey,
+        prompt,
+        temperature: geminiTemperature,
+        preferredModels: geminiPreferredModels,
+      });
       if (gemResult?.ok) {
         if (mode === "singability_check") {
           const report = parseSingabilityReport(gemResult.lyrics);
@@ -362,9 +372,11 @@ async function repairMetaAiLyrics({ geminiKey, prompt, text, temperature = 0.72 
   return out && !isMetaAiLyrics(out) ? out : "";
 }
 
-async function tryGeminiLyrics({ geminiKey, prompt, temperature = 0.9 }) {
+async function tryGeminiLyrics({ geminiKey, prompt, temperature = 0.9, preferredModels = null }) {
   const discovered = await listGeminiGenerateModels(geminiKey);
-  const preferred = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-2.0-flash-lite", "gemini-1.5-flash"];
+  const preferred = Array.isArray(preferredModels) && preferredModels.length
+    ? preferredModels
+    : ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-2.0-flash-lite", "gemini-1.5-flash"];
   const models = [...preferred, ...discovered].filter(Boolean).filter((v, i, a) => a.indexOf(v) === i);
   let lastError = discovered.length ? "unknown" : "no generateContent models discovered";
   for (const model of models) {

@@ -36,6 +36,7 @@ function buildColloquialArabicGenerationLines({ isMsa = false, isLebanese = fals
       "- Internal clusters keep sukoon feel (كتب، شفت، قلّي) — do NOT add formal tashkeel or tanween in generated lyrics.",
       "- ق = hamza in speech (قلب، قلت، قال) — not classical /q/.",
       "- Do NOT add vowel marks (tashkeel) in generated lyrics — diacritics is a separate step.",
+      ...buildLebaneseLexiconLines(),
     ];
   }
   if (isLevantineColloquial) {
@@ -114,6 +115,18 @@ function buildLyriaLebaneseArabicNote() {
   return "Lebanese colloquial Arabic: stopped consonants with sukoon at word ends and inside clusters; no tanween; no MSA case endings; qaf as hamza.";
 }
 
+/** Word-level Lebanese vs Egyptian — for lyrics generation, not just vocal accent. */
+function buildLebaneseLexiconLines() {
+  return [
+    "LEBANESE WORD CHOICE (required — Egyptian vocabulary is WRONG):",
+    "- with me: معي — NEVER معايا (Egyptian).",
+    "- in my imagination / in my mind: بخيالي or ع خيالي — NEVER في خيالي (Egyptian).",
+    "- Avoid Egyptian present-tense prefix ب- on verbs (بيحلى، بيقول، بشوف) — use Lebanese forms (عم + verb, or natural Lebanese present without Egyptian ب-).",
+    "- Prefer Lebanese: شو، كيف، هيدا، هيك، منيح، يلّا، عم، ما، ليش — not Egyptian: إزاي، كده، أوي، عايز، دلوقتي، ليه، مفيش، حاجة.",
+    "- Addressing a man: إنت، حبيبي، معك — keep Levantine pronouns, not Egyptian-only slang.",
+  ];
+}
+
 module.exports = {
   dialectFlags,
   isArabicLyricsContext,
@@ -125,4 +138,5 @@ module.exports = {
   stripColloquialTanween,
   lightenSungArabicDiacritics,
   buildLyriaLebaneseArabicNote,
+  buildLebaneseLexiconLines,
 };

@@ -12907,6 +12907,24 @@ body.vibeReadSheetOpen .mobileTabbar{
 .photoMoodSheet--clipDirect #imageMoodCoverRow{
   display: none !important;
 }
+.photoMoodSheet--80sPreAnalyze .photoMoodActions{
+  grid-template-columns: 1fr;
+}
+.photoMoodSheet--80sPreAnalyze #btnApplyImageMood{
+  display: none !important;
+}
+.imageMoodEmpty--soft{
+  margin-top: 4px;
+  padding: 8px 4px 0;
+  text-align: left;
+  font-size: 12px;
+  line-height: 1.45;
+  color: rgba(226, 232, 240, 0.72);
+}
+.imageMoodEmpty--soft strong{
+  color: rgba(35, 213, 171, 0.95);
+  font-weight: 750;
+}
 .photoMoodPrimary,
 .photoMoodSecondary,
 .imageMoodActions .primary,

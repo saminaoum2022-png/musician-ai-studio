@@ -5469,7 +5469,7 @@ const LYRICS_ARABIC_DIALECT_VALUE = {
 /** Auto-filled into hidden sunoDialectHint — /api/lyrics (Gemini) reads this for dialect + accent. */
 const LYRICS_ARABIC_DIALECT_HINT = {
   lebanese:
-    "Lebanese Beirut colloquial singing; qaf as hamza (2); soft spoken vowels; NOT Egyptian; NOT formal MSA/nahwi.",
+    "Lebanese Beirut colloquial singing; qaf as hamza (2); soft spoken vowels; use معي not معايا, بخيالي not في خيالي, no Egyptian ب- verb prefix; NOT Egyptian; NOT formal MSA/nahwi.",
   syrian: "Syrian Levantine colloquial; qaf as hamza (2); spoken vowels; NOT Egyptian.",
   palestinian: "Palestinian Levantine colloquial; qaf as hamza (2); spoken vowels; NOT Egyptian.",
   egyptian: "Egyptian Masri colloquial; NOT Levantine.",
@@ -6006,8 +6006,10 @@ function setLyricsLanguage(lang) {
   if (isArabiziLyricsLanguage(lyricsLanguage) && !lyricsDialect) {
     lyricsDialect = "lebanese";
   }
+  ensure80sYouArabicDefaults();
   syncLyricsLangPills();
   applyLyricsLanguageToDialect();
+  maybeRedraft80sYouLyricsAfterDialectChange();
 }
 
 function setLyricsDialect(dialect) {
@@ -6015,6 +6017,7 @@ function setLyricsDialect(dialect) {
   lyricsDialect = next === "auto" ? "" : next;
   syncLyricsLangPills();
   applyLyricsLanguageToDialect();
+  maybeRedraft80sYouLyricsAfterDialectChange();
 }
 
 (function bindLyricsLanguagePills() {
@@ -16328,6 +16331,7 @@ const HUM_CHALLENGE_IDS = new Set(["voice-note-remix"]);
 const PHOTO_CHALLENGE_IDS = new Set(["last-photo-song", "80s-you"]);
 const PHOTO_SOLO_CHALLENGE_IDS = new Set(["80s-you"]);
 let _80sLyricsGenInFlight = null;
+let _80sLyricsDraftDialectKey = "";
 let _francoLyricsRevertSnapshot = "";
 
 const EIGHTIES_YOU_CREATIVE_ANGLES = [
@@ -16413,6 +16417,44 @@ function apply80sYouArabicLyricsContext() {
     els.sunoArabicAddress.value = "male";
     try { syncArabicAddressPills(); } catch {}
   }
+}
+
+function current80sLyricsDialectKey() {
+  try { applyLyricsLanguageToDialect(); } catch {}
+  const address = String(els.sunoArabicAddress?.value || "").trim();
+  return `${lyricsLanguage}|${lyricsDialect}|${address}`;
+}
+
+function invalidate80sYouLyricsDraft() {
+  if (activePhotoSoloChallengeId() !== "80s-you") return;
+  _lyricsGeneratedInNabad = false;
+  _80sLyricsDraftDialectKey = "";
+  if (els.sunoPrompt) {
+    els.sunoPrompt.value = "";
+    _nabadAiLyricsDraft = "";
+  }
+  try { syncAdminFrancoConvertVisibility(); } catch {}
+}
+
+function ensure80sYouArabicDefaults() {
+  if (activePhotoSoloChallengeId() !== "80s-you") return;
+  if (String(els.vocalInstrumentalOnly?.value || "0") === "1") return;
+  if (lyricsLanguage === "arabic" && !lyricsDialect) {
+    lyricsDialect = "lebanese";
+  }
+}
+
+function maybeRedraft80sYouLyricsAfterDialectChange() {
+  if (activePhotoSoloChallengeId() !== "80s-you") return;
+  if (!imageMoodAppliedForNextGen || !imageMoodData) return;
+  if (String(els.vocalInstrumentalOnly?.value || "0") === "1") return;
+  const key = current80sLyricsDialectKey();
+  if (_80sLyricsDraftDialectKey && _80sLyricsDraftDialectKey !== key) {
+    invalidate80sYouLyricsDraft();
+  }
+  if (!photoSoloShowsArabicDialect()) return;
+  if (!arabicLyricChoicesReady()) return;
+  void draft80sYouLyricsForGenerate(imageMoodData);
 }
 
 function lyricDialectHintFor80sYou() {
@@ -16680,8 +16722,18 @@ function apply80sYouPortraitGender(mood) {
 async function draft80sYouLyricsForGenerate(mood) {
   if (activePhotoSoloChallengeId() !== "80s-you") return true;
   if (String(els.vocalInstrumentalOnly?.value || "0") === "1") return true;
+  if (!photoSoloShowsArabicDialect()) return true;
+  if (!arabicLyricChoicesReady()) return false;
+  const dialectKey = current80sLyricsDialectKey();
   const existing = String(els.sunoPrompt?.value || "").trim();
-  if (existing && looksLikeSingableLyrics(existing) && _lyricsGeneratedInNabad) return true;
+  if (
+    existing &&
+    looksLikeSingableLyrics(existing) &&
+    _lyricsGeneratedInNabad &&
+    _80sLyricsDraftDialectKey === dialectKey
+  ) {
+    return true;
+  }
   if (_80sLyricsGenInFlight) {
     try { await _80sLyricsGenInFlight; } catch {}
     return Boolean(String(els.sunoPrompt?.value || "").trim());
@@ -16710,6 +16762,7 @@ async function draft80sYouLyricsForGenerate(mood) {
         mode: "challenge_clip",
         dialect,
         dialectHint,
+        scriptFormat: resolveLyricsScriptFormat(),
         lyricsProvider: "gemini",
       }),
     });
@@ -16723,6 +16776,7 @@ async function draft80sYouLyricsForGenerate(mood) {
     if (els.sunoPrompt) els.sunoPrompt.value = lyrics;
     _nabadAiLyricsDraft = lyrics;
     _lyricsGeneratedInNabad = true;
+    _80sLyricsDraftDialectKey = dialectKey;
     try { autoResizeLyricsBox(); } catch {}
     try { syncTemplateSparkClipGenerateReady(); syncGenerateOrbVisibility(); } catch {}
     try { syncAdminFrancoConvertVisibility(); } catch {}
@@ -16733,10 +16787,6 @@ async function draft80sYouLyricsForGenerate(mood) {
     _80sLyricsGenInFlight = null;
   });
   return _80sLyricsGenInFlight;
-}
-
-function generate80sYouLyricsInBackground(mood) {
-  void draft80sYouLyricsForGenerate(mood);
 }
 
 function photoSoloChallengeCanGenerate() {
@@ -20869,7 +20919,7 @@ function syncImageMoodSheetForCreateFlow() {
     resultsSection.hidden = clipDirect;
     resultsSection.setAttribute("aria-hidden", clipDirect ? "true" : "false");
   }
-  if (analyzeBtn && applyBtn) {
+  if (analyzeBtn && applyBtn && !photoSolo80s) {
     if (clipDirect) {
       applyBtn.classList.remove("photoMoodSecondary", "ghost");
       applyBtn.classList.add("photoMoodPrimary", "primary");
@@ -20880,6 +20930,83 @@ function syncImageMoodSheetForCreateFlow() {
       applyBtn.classList.add("photoMoodSecondary", "ghost");
     }
   }
+}
+
+function syncPhotoMoodActionButtonsState({ analyzing = false } = {}) {
+  const clipDirect = isNabadClipPhotoDirectFlow();
+  const photoSolo80s = activePhotoSoloChallengeId() === "80s-you";
+  const analyzeBtn = document.getElementById("btnAnalyzeImageMood") || els.btnAnalyzeImageMood;
+  const applyBtn = document.getElementById("btnApplyImageMood") || els.btnApplyImageMood;
+  const sheet = els.imageMoodModal || document.getElementById("imageMoodModal");
+  const hasFile = Boolean(els.imageMoodUpload?.files?.[0]);
+  const hasCoverData = String(imageMoodCoverDataUrl || "").startsWith("data:");
+  const hasResult = Boolean(imageMoodData);
+  if (!analyzeBtn || !applyBtn) return;
+
+  sheet?.classList.toggle("photoMoodSheet--80sPortrait", photoSolo80s);
+  sheet?.classList.toggle("photoMoodSheet--80sPreAnalyze", photoSolo80s && !hasResult);
+  sheet?.classList.toggle("photoMoodSheet--80sPostAnalyze", photoSolo80s && hasResult);
+
+  const setPrimary = (btn) => {
+    btn.classList.remove("photoMoodSecondary", "ghost");
+    btn.classList.add("photoMoodPrimary", "primary");
+  };
+  const setSecondary = (btn) => {
+    btn.classList.remove("photoMoodPrimary", "primary", "isReady", "isBusy");
+    btn.classList.add("photoMoodSecondary", "ghost");
+  };
+
+  if (clipDirect) {
+    analyzeBtn.hidden = true;
+    applyBtn.hidden = false;
+    setPrimary(applyBtn);
+    const canApplyCoverOnly = hasCoverData && !hasResult && !analyzing;
+    applyBtn.disabled = !canApplyCoverOnly;
+    applyBtn.textContent = hasResult ? "Apply to clip" : "Use for clip";
+    applyBtn.classList.toggle("isReady", Boolean(canApplyCoverOnly));
+    return;
+  }
+
+  if (photoSolo80s) {
+    analyzeBtn.hidden = false;
+    if (hasResult) {
+      analyzeBtn.disabled = analyzing;
+      analyzeBtn.textContent = analyzing ? "Analyzing…" : "Retry";
+      setSecondary(analyzeBtn);
+      analyzeBtn.classList.toggle("isBusy", analyzing);
+
+      applyBtn.hidden = false;
+      applyBtn.disabled = analyzing;
+      applyBtn.textContent = "Continue";
+      setPrimary(applyBtn);
+      applyBtn.classList.toggle("isReady", !analyzing);
+    } else {
+      analyzeBtn.disabled = !hasFile || analyzing;
+      analyzeBtn.textContent = analyzing ? "Analyzing…" : "Analyze portrait";
+      setPrimary(analyzeBtn);
+      analyzeBtn.classList.toggle("isReady", Boolean(hasFile && !analyzing));
+      analyzeBtn.classList.toggle("isBusy", analyzing);
+
+      applyBtn.hidden = true;
+      applyBtn.disabled = true;
+      applyBtn.classList.remove("isReady");
+    }
+    return;
+  }
+
+  analyzeBtn.hidden = false;
+  const canApplyMood = hasResult && !analyzing;
+  const canApplyCoverOnly = hasCoverData && !hasResult && !analyzing;
+  applyBtn.hidden = false;
+  applyBtn.disabled = !(canApplyMood || canApplyCoverOnly);
+  applyBtn.textContent = hasResult ? "Apply to song" : "Use as cover";
+  applyBtn.classList.toggle("isReady", Boolean(canApplyCoverOnly || canApplyMood));
+  setPrimary(analyzeBtn);
+  setSecondary(applyBtn);
+  analyzeBtn.disabled = !hasFile || analyzing;
+  analyzeBtn.classList.toggle("isReady", Boolean(hasFile && !analyzing && !hasResult));
+  analyzeBtn.classList.toggle("isBusy", analyzing);
+  analyzeBtn.textContent = analyzing ? "Analyzing…" : "Analyze";
 }
 
 function openImageMoodSheet() {
@@ -20911,9 +21038,11 @@ function resetImageMoodSheetSession() {
   }
   syncImageMoodPreviewUi(false);
   if (els.imageMoodOutput) {
-    els.imageMoodOutput.innerHTML = `<div class="imageMoodEmpty">${isNabadClipPhotoDirectFlow()
-      ? "Choose a photo, then tap Use for clip."
-      : "Choose a photo, then tap Analyze."}</div>`;
+    els.imageMoodOutput.innerHTML = `<div class="imageMoodEmpty">${activePhotoSoloChallengeId() === "80s-you"
+      ? "Choose a portrait, then tap Analyze portrait."
+      : isNabadClipPhotoDirectFlow()
+        ? "Choose a photo, then tap Use for clip."
+        : "Choose a photo, then tap Analyze."}</div>`;
   }
   const card = els.imageMoodOutput?.closest?.(".imageMoodCard")
     || els.imageMoodModal?.querySelector?.(".imageMoodCard");
@@ -20998,42 +21127,10 @@ function sanitizeImageMoodForClient(raw) {
 }
 
 function syncImageMoodSheetUi({ analyzing = false } = {}) {
-  const clipDirect = isNabadClipPhotoDirectFlow();
-  const photoSolo80s = activePhotoSoloChallengeId() === "80s-you";
-  const applyBtn = document.getElementById("btnApplyImageMood") || els.btnApplyImageMood;
-  const analyzeBtn = document.getElementById("btnAnalyzeImageMood") || els.btnAnalyzeImageMood;
   const hasFile = Boolean(els.imageMoodUpload?.files?.[0]);
-  const hasCoverData = String(imageMoodCoverDataUrl || "").startsWith("data:");
   const card = els.imageMoodModal?.querySelector?.(".imageMoodCard")
     || els.imageMoodOutput?.closest?.(".imageMoodCard");
-  if (applyBtn) {
-    const canApplyMood = Boolean(imageMoodData) && !analyzing;
-    const canApplyCoverOnly = hasCoverData && !imageMoodData && !analyzing;
-    applyBtn.disabled = !(canApplyMood || canApplyCoverOnly);
-    if (photoSolo80s) {
-      applyBtn.textContent = imageMoodData ? "Continue" : "Continue";
-    } else if (clipDirect) {
-      applyBtn.textContent = imageMoodData ? "Apply to clip" : "Use for clip";
-    } else {
-      applyBtn.textContent = imageMoodData ? "Apply to song" : "Use as cover";
-    }
-    applyBtn.classList.toggle("isReady", Boolean(canApplyCoverOnly || canApplyMood));
-  }
-  if (analyzeBtn) {
-    if (clipDirect) {
-      analyzeBtn.hidden = true;
-    } else {
-      analyzeBtn.hidden = false;
-      analyzeBtn.disabled = !hasFile || analyzing;
-      analyzeBtn.classList.toggle("isReady", Boolean(hasFile && !analyzing && !imageMoodData));
-      analyzeBtn.classList.toggle("isBusy", Boolean(analyzing));
-      analyzeBtn.textContent = analyzing
-        ? "Analyzing…"
-        : photoSolo80s
-          ? "Analyze portrait"
-          : "Analyze";
-    }
-  }
+  try { syncPhotoMoodActionButtonsState({ analyzing }); } catch {}
   if (card) {
     card.classList.toggle("analyzing", Boolean(analyzing));
     card.classList.toggle("hasPhotoReady", Boolean(hasFile));
@@ -21095,7 +21192,6 @@ function applyImageMoodToSongFields() {
   }
   if (photoSolo && activePhotoSoloChallengeId() === "80s-you") {
     apply80sYouPortraitGender(mood);
-    void generate80sYouLyricsInBackground(mood);
   }
   const summaryTags = tags.slice(0, 4).join(", ");
   const summaryText = String(mood.concept || summaryTags || "Image mood applied.").trim();
@@ -26313,6 +26409,7 @@ function armCreateGenerateInFlight() {
 function resetNabadLyricsDraftState() {
   _lyricsGeneratedInNabad = false;
   _nabadAiLyricsDraft = "";
+  _80sLyricsDraftDialectKey = "";
 }
 
 function snapshotNabadAiLyricsDraft(text) {
@@ -63739,10 +63836,27 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
   const renderImageMood = (m) => {
     if (!els.imageMoodOutput) return;
     if (!m) {
-      els.imageMoodOutput.innerHTML = `<div class="imageMoodEmpty">No analysis yet.</div>`;
+      els.imageMoodOutput.innerHTML = `<div class="imageMoodEmpty">${activePhotoSoloChallengeId() === "80s-you"
+        ? "Choose a portrait, then tap Analyze portrait."
+        : "No analysis yet."}</div>`;
       return;
     }
     const mood = sanitizeImageMoodForClient(m);
+    if (activePhotoSoloChallengeId() === "80s-you") {
+      const concept = String(mood.concept || "Synth-pop portrait mood").trim();
+      const subject = String(mood.subject || "Your retro look").trim();
+      els.imageMoodOutput.innerHTML = `
+        <div class="imageMoodResultRow">
+          <span>Portrait read</span>
+          <p>${escapeHtml(concept)}</p>
+        </div>
+        <div class="imageMoodResultRow">
+          <span>Scene</span>
+          <p>${escapeHtml(subject)}</p>
+        </div>
+        <div class="imageMoodEmpty imageMoodEmpty--soft">Happy with this read? Tap <strong>Continue</strong>. Want another pass? Tap <strong>Retry</strong>.</div>`;
+      return;
+    }
     const tags = Array.isArray(mood.tags) ? mood.tags.join(", ") : "";
     const vocalNote = mood.vocalSuggestion === "instrumental"
       ? "Instrumental vibe — clear lyrics before generate if you want that."
@@ -63803,9 +63917,11 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
         els.imageMoodSummary.hidden = false;
       }
       setStatus(
-        isNabadClipPhotoDirectFlow()
-          ? "Mood preview ready — tap Apply to clip."
-          : "Image mood ready. Tap Apply to send style tags + lyric idea into your song.",
+        activePhotoSoloChallengeId() === "80s-you"
+          ? "Portrait read ready — tap Continue, or Retry for another pass."
+          : isNabadClipPhotoDirectFlow()
+            ? "Mood preview ready — tap Apply to clip."
+            : "Image mood ready. Tap Apply to send style tags + lyric idea into your song.",
       );
     } catch (e) {
       if (els.imageMoodOutput) {
@@ -65055,6 +65171,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
         setProgress(5);
         applyMaqamToStyleInput();
         try { applyLyricsLanguageToDialect(); } catch {}
+        try { apply80sYouArabicLyricsContext(); } catch {}
         const userPrompt = (els.sunoPrompt?.value || "").trim();
         const userStyle = resolveStyleInputForGeneration((els.sunoStyle?.value || "").trim());
         const dialect = String(els.sunoDialect?.value || "").trim();
@@ -65062,7 +65179,9 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
         const arabicAddress = String(els.sunoArabicAddress?.value || "").trim();
         const resolvedSingerGender = resolveSingerGenderForGeneration({});
         const arabicAddressNote = arabicAddressPronunciationNote(arabicAddress, resolvedSingerGender);
-        const lyricDialectHint = [dialectHint, arabicAddressNote].filter(Boolean).join(" ");
+        const lyricDialectHint = is80sPhotoSolo
+          ? lyricDialectHintFor80sYou()
+          : [dialectHint, arabicAddressNote].filter(Boolean).join(" ");
         let finalPrompt = sanitizeLyricsPrompt(userPrompt);
         if (!finalPrompt && is80sPhotoSolo && !is80sInstrumental) {
           try { updateCoachPriorityStatus("Crafting your lyrics…", { generating: true }); } catch {}

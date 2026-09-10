@@ -9758,13 +9758,30 @@ html[data-theme="light"] .personaVoiceTuneChips .optChip.isActive{
 .addressPills--two{
   grid-template-columns: repeat(2, 1fr);
 }
+/* 80s You only — never show solo lang/dialect on normal Create (Lyrics tab has its own). */
+body:not([data-photo-solo-challenge="80s-you"]) #createSoloInstrumentalRow,
+body:not([data-photo-solo-challenge="80s-you"]) #createSoloLangRow,
+body:not([data-photo-solo-challenge="80s-you"]) #createSoloDialectRow{
+  display: none !important;
+}
 body[data-photo-solo-challenge] .createSoloInstrumentalRow{
   order: 1;
+}
+body[data-photo-solo-challenge] .createSoloLangRow{
+  order: 2;
+}
+body[data-photo-solo-challenge] .createSoloDialectRow{
+  order: 3;
 }
 body[data-photo-solo-challenge] #singerVoicePanel{
   order: 4;
 }
+body[data-photo-solo-challenge][data-solo-instrumental="1"] .createSoloLangRow,
+body[data-photo-solo-challenge][data-solo-instrumental="1"] .createSoloDialectRow,
 body[data-photo-solo-challenge][data-solo-instrumental="1"] #singerVoicePanel{
+  display: none !important;
+}
+body[data-photo-solo-challenge]:not([data-solo-arabic="1"]) .createSoloDialectRow{
   display: none !important;
 }
 body[data-photo-solo-challenge] #singerGenderPills.nabadClipNoPersona .singerDuoPill,
@@ -9800,15 +9817,8 @@ body[data-photo-solo-challenge] .createPhotoSoloBannerCta[hidden]{
 body[data-photo-solo-challenge] .createTabs{
   display: none !important;
 }
-body[data-photo-solo-challenge] .createPane--vibe{
-  display: none !important;
-}
-body[data-photo-solo-challenge] .createPane--lyrics .lyricsPanelHead,
-body[data-photo-solo-challenge] .createPane--lyrics .lyricsBox,
-body[data-photo-solo-challenge] .createPane--lyrics .imageMoodRow{
-  display: none !important;
-}
-body[data-photo-solo-challenge][data-solo-instrumental="1"] .createPane--lyrics .lyricsLangBlock{
+body[data-photo-solo-challenge] .createPane--vibe,
+body[data-photo-solo-challenge] .createPane--lyrics{
   display: none !important;
 }
 body[data-photo-solo-challenge] .createFlowStep .inputPanel--style:has(#sunoStyle),

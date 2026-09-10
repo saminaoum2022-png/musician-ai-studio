@@ -4028,13 +4028,16 @@ function setCreateChallengeHint(challenge) {
     els.createChallengeHint.hidden = true;
     els.createChallengeHint.classList.remove("createChallengeHint--template", "createChallengeHint--spark", "createChallengeHint--live");
     try { syncPhotoSoloBannerUi(null); } catch {}
+    try { syncPhotoSoloChallengeCreateUi(); } catch {}
     return;
   }
   if (isPhotoSoloChallengeId(c.id)) {
     els.createChallengeHint.hidden = true;
     try { syncPhotoSoloBannerUi(c); } catch {}
+    try { syncPhotoSoloChallengeCreateUi(); } catch {}
     return;
   }
+  try { syncPhotoSoloChallengeCreateUi(); } catch {}
   const kind = creationSourceKind(c);
   els.createChallengeHint.classList.remove("createChallengeHint--template", "createChallengeHint--spark", "createChallengeHint--live");
   if (kind) els.createChallengeHint.classList.add(`createChallengeHint--${kind}`);
@@ -6024,6 +6027,7 @@ function setLyricsDialect(dialect) {
     });
   };
   bindLangRow(els.lyricsLangRow);
+  bindLangRow(document.getElementById("createSoloLangChipRow"));
   const bindDialectRow = (dialectRow) => {
     if (!dialectRow || dialectRow.dataset.boundDialect) return;
     dialectRow.dataset.boundDialect = "1";
@@ -6041,6 +6045,7 @@ function setLyricsDialect(dialect) {
     });
   };
   bindDialectRow(els.lyricsDialectRow);
+  bindDialectRow(document.getElementById("createSoloDialectChipRow"));
   syncLyricsLangPills();
 })();
 
@@ -16323,11 +16328,22 @@ function isPhotoSoloChallengeId(challengeId) {
   return PHOTO_SOLO_CHALLENGE_IDS.has(String(challengeId || "").trim());
 }
 
-function activePhotoSoloChallengeId() {
+/** 80s You only — photo-solo Create with external lang/dialect rows (not the Lyrics tab). */
+function is80sYouCreateFlow() {
   const ch = challengePromptContext();
-  if (ch && isPhotoSoloChallengeId(ch.id)) return String(ch.id).trim();
-  const fromBody = String(document.body.getAttribute("data-photo-solo-challenge") || "").trim();
-  return isPhotoSoloChallengeId(fromBody) ? fromBody : "";
+  return String(ch?.id || "").trim() === "80s-you";
+}
+
+function activePhotoSoloChallengeId() {
+  return is80sYouCreateFlow() ? "80s-you" : "";
+}
+
+function hide80sYouSoloCreateRows() {
+  ["createSoloInstrumentalRow", "createSoloLangRow", "createSoloDialectRow"].forEach((rowId) => {
+    const el = document.getElementById(rowId);
+    if (el) el.hidden = true;
+  });
+  try { syncAdminFrancoConvertVisibility(); } catch {}
 }
 
 function pick80sCreativeAngle(seed = "") {
@@ -16579,8 +16595,8 @@ async function apply80sLevantineDiacriticsIfNeeded(lyrics) {
 }
 
 function syncPhotoSoloVocalSections() {
-  const id = activePhotoSoloChallengeId();
-  if (!id) {
+  if (!is80sYouCreateFlow()) {
+    hide80sYouSoloCreateRows();
     document.body.removeAttribute("data-solo-instrumental");
     document.body.removeAttribute("data-solo-arabic");
     return;
@@ -16597,7 +16613,11 @@ function syncPhotoSoloVocalSections() {
   } else {
     document.body.removeAttribute("data-solo-arabic");
   }
+  const langRow = document.getElementById("createSoloLangRow");
+  const dialectRow = document.getElementById("createSoloDialectRow");
   const singerPanel = document.getElementById("singerVoicePanel");
+  if (langRow) langRow.hidden = instrumental;
+  if (dialectRow) dialectRow.hidden = instrumental || !showArabicDialect;
   if (singerPanel) singerPanel.hidden = instrumental;
   const duoPill = document.getElementById("singerDuoPill");
   if (duoPill) {
@@ -16710,39 +16730,37 @@ function syncSoloInstrumentalToggleUi() {
 }
 
 function syncPhotoSoloChallengeCreateUi() {
-  const id = activePhotoSoloChallengeId();
-  if (id) {
-    document.body.setAttribute("data-photo-solo-challenge", id);
+  const is80s = is80sYouCreateFlow();
+  if (is80s) {
+    document.body.setAttribute("data-photo-solo-challenge", "80s-you");
   } else {
     document.body.removeAttribute("data-photo-solo-challenge");
-  }
-  const instRow = document.getElementById("createSoloInstrumentalRow");
-  if (instRow) instRow.hidden = !id;
-  if (!id) {
     document.body.removeAttribute("data-solo-instrumental");
     document.body.removeAttribute("data-solo-arabic");
-  } else {
+    hide80sYouSoloCreateRows();
+  }
+  const instRow = document.getElementById("createSoloInstrumentalRow");
+  if (instRow) instRow.hidden = !is80s;
+  if (is80s) {
     try { syncLyricsLangPills(); } catch {}
     try { syncPhotoSoloVocalSections(); } catch {}
   }
   const createTabs = document.querySelector(".createTabs");
   if (createTabs) {
-    createTabs.hidden = Boolean(id);
-    createTabs.setAttribute("aria-hidden", id ? "true" : "false");
+    createTabs.hidden = is80s;
+    createTabs.setAttribute("aria-hidden", is80s ? "true" : "false");
   }
   const vibeTab = document.getElementById("createTabVibe");
-  if (vibeTab && id) {
+  if (vibeTab && is80s) {
     vibeTab.hidden = true;
     vibeTab.style.display = "none";
   }
-  if (id) {
+  if (is80s) {
     try { syncSoloInstrumentalToggleUi(); } catch {}
     try { syncPhotoSoloBannerUi(challengePromptContext()); } catch {}
     try { setActiveCreateTab("photo"); } catch {}
     const photoSub = document.querySelector("#createPhotoCta .createPaneCtaSub");
-    if (photoSub && id === "80s-you") {
-      photoSub.textContent = "Tap to upload your retro portrait.";
-    }
+    if (photoSub) photoSub.textContent = "Tap to upload your retro portrait.";
   } else {
     const banner = document.getElementById("createPhotoSoloBanner");
     if (banner) banner.hidden = true;
@@ -16828,9 +16846,8 @@ function clearCreateChallengeFocus() {
     el.hidden = false;
     el.style.display = "";
   });
-  const instRow = document.getElementById("createSoloInstrumentalRow");
+  hide80sYouSoloCreateRows();
   const singerPanel = document.getElementById("singerVoicePanel");
-  if (instRow) instRow.hidden = true;
   if (singerPanel) singerPanel.hidden = false;
   const createTabs = document.querySelector(".createTabs");
   if (createTabs) {
@@ -73475,7 +73492,6 @@ function resyncActiveCreateTabPanes() {
   setActiveCreateTab(getActiveCreateTabMode());
 }
 function setActiveCreateTab(mode) {
-  const photoSolo = Boolean(document.body.getAttribute("data-photo-solo-challenge"));
   ["photo", "hum", "lyrics", "vibe"].forEach((k) => {
     const el = createTabEls[k];
     if (!el || el.hidden) return;
@@ -73485,12 +73501,7 @@ function setActiveCreateTab(mode) {
   });
   if (createPanesWrap) createPanesWrap.dataset.mode = mode;
   document.querySelectorAll(".createPane").forEach((p) => {
-    const paneMode = String(p.dataset.mode || "").trim();
-    if (photoSolo && paneMode === "lyrics") {
-      p.hidden = false;
-    } else {
-      p.hidden = paneMode !== mode;
-    }
+    p.hidden = p.dataset.mode !== mode;
   });
 }
 if (createTabEls.lyrics) {

@@ -9788,24 +9788,6 @@ body[data-photo-solo-challenge] #singerGenderPills.nabadClipNoPersona .singerDuo
 body[data-photo-solo-challenge] #singerDuoPill{
   display: none !important;
 }
-body[data-photo-solo-challenge] .createSoloFrancoAdminRow{
-  order: 5;
-}
-.createSoloFrancoAdminActions{
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-.createSoloFrancoAdminHint{
-  margin: 8px 0 0;
-  font-size: 11px;
-  line-height: 1.35;
-  color: rgba(226,232,240,0.62);
-}
-.createSoloFrancoAdminChip,
-.createSoloFrancoRevertChip{
-  border-color: rgba(168,85,247,0.38);
-}
 .lyricsFrancoAdminBtn .lyricsFrancoAdminIco{
   font-size: 10px;
   font-weight: 800;
@@ -9817,8 +9799,12 @@ body[data-photo-solo-challenge] .createPhotoSoloBannerCta[hidden]{
 body[data-photo-solo-challenge] .createTabs{
   display: none !important;
 }
-body[data-photo-solo-challenge] .createPane--vibe,
-body[data-photo-solo-challenge] .createPane--lyrics{
+body[data-photo-solo-challenge] .createPane--vibe{
+  display: none !important;
+}
+body[data-photo-solo-challenge="80s-you"] .createPane--lyrics .lyricsPanelHead,
+body[data-photo-solo-challenge="80s-you"] .createPane--lyrics .lyricsLangBlock,
+body[data-photo-solo-challenge="80s-you"] .createPane--lyrics .imageMoodRow{
   display: none !important;
 }
 body[data-photo-solo-challenge] .createFlowStep .inputPanel--style:has(#sunoStyle),

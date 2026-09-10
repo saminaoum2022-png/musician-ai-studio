@@ -2739,6 +2739,8 @@ const NATIVE_HTTP_DEFAULT_READ_MS = 15000;
 const NATIVE_HTTP_LONG_COMPOSE_CONNECT_MS = 30000;
 const NATIVE_HTTP_LONG_COMPOSE_READ_MS = 300000;
 
+const NATIVE_HTTP_LYRICS_READ_MS = 120000;
+
 function nativeHttpTimeoutsForApiPath(path) {
   const p = String(path || "").split("?")[0];
   if (
@@ -2750,6 +2752,12 @@ function nativeHttpTimeoutsForApiPath(path) {
     return {
       connectTimeout: NATIVE_HTTP_LONG_COMPOSE_CONNECT_MS,
       readTimeout: NATIVE_HTTP_LONG_COMPOSE_READ_MS,
+    };
+  }
+  if (p === "/api/lyrics") {
+    return {
+      connectTimeout: NATIVE_HTTP_LONG_COMPOSE_CONNECT_MS,
+      readTimeout: NATIVE_HTTP_LYRICS_READ_MS,
     };
   }
   return {
@@ -16419,18 +16427,8 @@ function syncAdminFrancoConvertVisibility() {
   const isAdmin = Boolean(creditsState?.isAdmin);
   const seed = String(els.sunoPrompt?.value || "").trim();
   const hasArabic = textHasArabicScript(seed);
-  const hasFranco = looksLikeArabizi(seed);
-  const photoSolo = Boolean(activePhotoSoloChallengeId());
   const lyricsBtn = els.btnLyricsFrancoAdmin || document.getElementById("btnLyricsFrancoAdmin");
-  const soloRow = document.getElementById("createSoloFrancoAdminRow");
-  const soloConvert = document.getElementById("btnCreateSoloFrancoAdmin");
-  const soloRevert = document.getElementById("btnCreateSoloFrancoRevertAdmin");
-  if (lyricsBtn) lyricsBtn.hidden = !isAdmin || !hasArabic || photoSolo;
-  if (soloRow) soloRow.hidden = !isAdmin || !photoSolo;
-  if (soloConvert) soloConvert.hidden = !isAdmin || !photoSolo || !hasArabic;
-  if (soloRevert) {
-    soloRevert.hidden = !isAdmin || !photoSolo || !hasFranco || !String(_francoLyricsRevertSnapshot || "").trim();
-  }
+  if (lyricsBtn) lyricsBtn.hidden = !isAdmin || !hasArabic;
 }
 
 async function convertLyricsToFrancoForAdmin() {
@@ -16459,7 +16457,6 @@ async function convertLyricsToFrancoForAdmin() {
   const lyricDialectHint = resolveFrancoConversionDialectHint();
   const labelEls = [
     els.btnLyricsFrancoAdmin?.querySelector(".lyricsFrancoAdminLabel"),
-    document.getElementById("btnCreateSoloFrancoAdmin"),
   ].filter(Boolean);
   const prevLabels = labelEls.map((el) => el.textContent);
   let inkwellSettle = false;
@@ -16475,22 +16472,33 @@ async function convertLyricsToFrancoForAdmin() {
     if (els.sunoPrompt) els.sunoPrompt.disabled = true;
     setStatus("Converting to Franco for Lyria 3.5…");
     const authToken = getSupabaseAuthToken();
-    const r = await apiFetch("/api/lyrics", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
-      },
-      body: JSON.stringify({
-        seed,
-        style,
-        mode: "to_arabizi",
-        dialect,
-        dialectHint: lyricDialectHint,
-        lyricsProvider: "gemini",
-        scriptFormat: "arabizi",
-      }),
-    });
+    let r;
+    try {
+      r = await apiFetch("/api/lyrics", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
+        },
+        body: JSON.stringify({
+          seed,
+          style,
+          mode: "to_arabizi",
+          dialect,
+          dialectHint: lyricDialectHint,
+          lyricsProvider: "gemini",
+          scriptFormat: "arabizi",
+        }),
+        nativeReadTimeoutMs: NATIVE_HTTP_LYRICS_READ_MS,
+        nativeConnectTimeoutMs: NATIVE_HTTP_LONG_COMPOSE_CONNECT_MS,
+      });
+    } catch (netErr) {
+      const msg = String(netErr?.message || netErr || "");
+      if (/load failed|failed to fetch|network|timed out/i.test(msg)) {
+        throw new Error("Could not reach the lyrics server — check Wi‑Fi and try again.");
+      }
+      throw netErr;
+    }
     const data = await r.json().catch(() => ({}));
     if (!r.ok) throw new Error(data?.error || "Could not convert to Franco");
     const nextLyrics = String(data?.lyrics || "").trim();
@@ -63872,18 +63880,6 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       void convertLyricsToFrancoForAdmin();
     });
   }
-  const btnCreateSoloFrancoAdmin = document.getElementById("btnCreateSoloFrancoAdmin");
-  if (btnCreateSoloFrancoAdmin) {
-    btnCreateSoloFrancoAdmin.addEventListener("click", () => {
-      void convertLyricsToFrancoForAdmin();
-    });
-  }
-  const btnCreateSoloFrancoRevertAdmin = document.getElementById("btnCreateSoloFrancoRevertAdmin");
-  if (btnCreateSoloFrancoRevertAdmin) {
-    btnCreateSoloFrancoRevertAdmin.addEventListener("click", () => {
-      revertFrancoLyricsForAdmin();
-    });
-  }
   if (els.btnLyricsDiacritics) {
     els.btnLyricsDiacritics.addEventListener("click", () => {
       void addArabicVowelMarksToLyrics();
@@ -73492,6 +73488,7 @@ function resyncActiveCreateTabPanes() {
   setActiveCreateTab(getActiveCreateTabMode());
 }
 function setActiveCreateTab(mode) {
+  const is80s = is80sYouCreateFlow();
   ["photo", "hum", "lyrics", "vibe"].forEach((k) => {
     const el = createTabEls[k];
     if (!el || el.hidden) return;
@@ -73501,7 +73498,12 @@ function setActiveCreateTab(mode) {
   });
   if (createPanesWrap) createPanesWrap.dataset.mode = mode;
   document.querySelectorAll(".createPane").forEach((p) => {
-    p.hidden = p.dataset.mode !== mode;
+    const paneMode = String(p.dataset.mode || "").trim();
+    if (is80s && paneMode === "lyrics") {
+      p.hidden = false;
+    } else {
+      p.hidden = paneMode !== mode;
+    }
   });
 }
 if (createTabEls.lyrics) {

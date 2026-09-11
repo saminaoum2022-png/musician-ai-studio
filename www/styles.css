@@ -20700,6 +20700,10 @@ body.trackSheetOpen .footer{
     background: #0a0c12;
     box-shadow: none;
     border-radius: 0;
+    position: relative;
+    overflow: hidden;
+    min-height: 100dvh;
+    min-height: 100svh;
   }
   .playerCard[data-discover-reel="1"] .playerArtStage{
     position: fixed;
@@ -20708,6 +20712,7 @@ body.trackSheetOpen .footer{
     right: 0;
     bottom: var(--player-cover-bottom, 0);
     width: 100%;
+    height: var(--player-cover-height, 100dvh);
     height: var(--player-cover-height, 100svh);
     min-height: 0;
     border-radius: 0;
@@ -20716,17 +20721,34 @@ body.trackSheetOpen .footer{
     z-index: 2;
   }
   .playerCard[data-discover-reel="1"] .playerArt{
-    position: absolute;
+    position: absolute !important;
     inset: 0;
-    width: 100%;
-    height: 100%;
+    width: 100% !important;
+    height: 100% !important;
     min-width: 0;
     min-height: 0;
     max-width: none;
     aspect-ratio: unset !important;
-    object-fit: cover;
+    object-fit: cover !important;
     object-position: center top;
     border-radius: 0;
+    display: block;
+  }
+  /* Mobile Safari browser: never fall back to square list-art layout on first paint. */
+  html.is-web-shell body[data-route="player"] .playerArtWrap,
+  html.is-web-shell .playerCard[data-discover-reel="1"] .playerArtWrap{
+    min-height: var(--player-cover-height, 100dvh);
+    min-height: var(--player-cover-height, 100svh);
+  }
+  html.is-web-shell body[data-route="player"] .playerArt,
+  html.is-web-shell .playerCard[data-discover-reel="1"] .playerArt{
+    position: absolute !important;
+    inset: 0;
+    width: 100% !important;
+    height: 100% !important;
+    aspect-ratio: unset !important;
+    object-fit: cover !important;
+    object-position: center top;
   }
   body[data-route="player"] .playerCard[data-discover-reel="1"] .playerArtWrap{
     --cover-glow-rgb: 100, 108, 128;

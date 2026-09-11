@@ -23184,8 +23184,6 @@ async function applyFeedHookAfterPlayStart(audio, source, trackRef) {
 }
 
 const FEED_HOOK_FADE_MS = 320;
-const FEED_HOOK_HINT_SEEN = new Set();
-
 function feedHookMarkerPct(hookSec, dur) {
   const d = Number(dur || 0);
   const h = Number(hookSec || 0);
@@ -23234,19 +23232,8 @@ function syncGlobalFeedHookMarkers() {
   });
 }
 
-function feedHookHintStorageKey(url, hookSec) {
-  return `${String(url || "").trim()}|${Math.round(Number(hookSec || 0) * 10)}`;
-}
-
-function maybeShowFeedHookStartHint(hookSec, source) {
-  if (!(Number(hookSec) > 0)) return;
-  const url = String(source?.url || currentPlayerTrackRef?.url || "").trim();
-  const key = feedHookHintStorageKey(url, hookSec);
-  if (FEED_HOOK_HINT_SEEN.has(key)) return;
-  FEED_HOOK_HINT_SEEN.add(key);
-  try {
-    showToast(`Starts at hook · ${formatTime(hookSec)}`, { icon: "♪", durationMs: 2600 });
-  } catch {}
+function maybeShowFeedHookStartHint(_hookSec, _source) {
+  /* Hook start is shown on the seek bar (feedHookMarker) — no player toast. */
 }
 
 async function feedHookVolumeFadeIn(audio, ms = FEED_HOOK_FADE_MS, targetVol = 1) {

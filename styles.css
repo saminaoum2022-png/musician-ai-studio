@@ -20692,8 +20692,50 @@ body.trackSheetOpen .footer{
     opacity: 0;
     pointer-events: none;
   }
+  /* Discover reel: full-bleed cover from frame 1 (mobile browser — before route paint). */
+  .playerCard[data-discover-reel="1"] .playerArtWrap{
+    --cover-glow-rgb: 100, 108, 128;
+    border: none;
+    padding: 0;
+    background: #0a0c12;
+    box-shadow: none;
+    border-radius: 0;
+  }
+  .playerCard[data-discover-reel="1"] .playerArtStage{
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: var(--player-cover-bottom, 0);
+    width: 100%;
+    height: var(--player-cover-height, 100svh);
+    min-height: 0;
+    border-radius: 0;
+    overflow: hidden;
+    background: #0a0c12;
+    z-index: 2;
+  }
+  .playerCard[data-discover-reel="1"] .playerArt{
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    min-width: 0;
+    min-height: 0;
+    max-width: none;
+    aspect-ratio: unset !important;
+    object-fit: cover;
+    object-position: center top;
+    border-radius: 0;
+  }
   body[data-route="player"] .playerCard[data-discover-reel="1"] .playerArtWrap{
     --cover-glow-rgb: 100, 108, 128;
+  }
+  body[data-route="player"] .playerCard[data-discover-reel="1"] .playerArtWrap.isNowPlaying .playerArt,
+  body[data-route="player"] .playerCard[data-discover-reel="1"] .playerArtWrap.isCoverLive.isNowPlaying .playerArt{
+    animation: none;
+    transform: none;
+    filter: none;
   }
   body[data-route="player"] .playerCard[data-discover-reel="1"] .playerArtWrap .playerKaraokeFloat{
     right: 28px;

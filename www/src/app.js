@@ -45357,6 +45357,23 @@ function prefetchDiscoverReelNeighbors(centerIdx) {
   prefetchDiscoverReelCoverAt(idx - 1);
 }
 
+/** Decode reel cover before first paint so mobile web does not letterbox (1:1 → full bleed). */
+async function primeDiscoverReelCoverDecode(artUrl) {
+  const art = String(artUrl || "").trim();
+  if (!art) return;
+  try {
+    const img = new Image();
+    if (/^https?:\/\//i.test(art)) img.crossOrigin = "anonymous";
+    img.decoding = "async";
+    await new Promise((resolve) => {
+      img.addEventListener("load", resolve, { once: true });
+      img.addEventListener("error", resolve, { once: true });
+      img.src = art;
+    });
+    if (typeof img.decode === "function") await img.decode();
+  } catch {}
+}
+
 function captureCurrentDiscoverReelPick() {
   const t = currentPlayerTrackRef || {};
   let byLine = String(t.byLine || "").trim();
@@ -45580,6 +45597,7 @@ async function playDiscoverReelAt(index, opts = {}) {
   if (!pick?.url) return;
   if (!opts.silent && !opts.skipSlide) haptic("light");
   hidePlayerKaraokeStrip();
+  if (!opts.skipCoverPaint) await primeDiscoverReelCoverDecode(pick.artUrl);
   await playLibraryUrlOnPlayer(pick.url, pick.title, pick.artUrl, {
     discoverFeed: true,
     discoverReel: true,
@@ -45673,6 +45691,7 @@ async function playDiscoverFeedEntry({ raw, title, art, by, playSource, el, opts
       resetDiscoverReelRailFade();
       const inPlace = shouldUseDiscoverReelInPlace();
       if (inPlace) openDiscoverReelOverlay();
+      else syncRoutePanelVisibility("player");
       await playDiscoverReelAt(idx, { openPlayer: !inPlace });
       return;
     }
@@ -61421,6 +61440,14 @@ function updateListenRefButton() {
 
 async function playOnPlayerPage(url, label, meta = null, opts = {}) {
   if (!url) return;
+  const shareListen =
+    Boolean(opts.shareListen) ||
+    Boolean(currentPlayerTrackRef?.fromSharedLink) ||
+    Boolean(parseSharedTrackIdFromLocation());
+  if (!shareListen && opts.reelSwap) {
+    syncRoutePanelVisibility("player");
+    try { location.hash = "#/player"; } catch {}
+  }
   const metaOpts = {
     coverImmediate: Boolean(opts.reelSwap || opts.coverImmediate),
     skipCoverPaint: Boolean(opts.skipCoverPaint),
@@ -61436,11 +61463,7 @@ async function playOnPlayerPage(url, label, meta = null, opts = {}) {
     }, metaOpts);
   }
   setPlayerSource(url, label);
-  const shareListen =
-    Boolean(opts.shareListen) ||
-    Boolean(currentPlayerTrackRef?.fromSharedLink) ||
-    Boolean(parseSharedTrackIdFromLocation());
-  if (!shareListen) {
+  if (!shareListen && !opts.reelSwap) {
     location.hash = "#/player";
   }
   const a = ensurePlayer();

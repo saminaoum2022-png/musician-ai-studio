@@ -8482,37 +8482,39 @@ function applyDiscoveryIdeaToCreate(idea) {
   const voiceClipOnly = isVoiceClipChallengeId(idea.challenge?.id) || focus?.tab === "hum";
   if (focus) applyCreateChallengeFocus(focus);
   else clearCreateChallengeFocus();
-  try {
-    setStatus?.(
-      voiceClipOnly
-        ? `Spark: ${title}. Record on Hum, then Generate.`
-        : templateSparkClipEnabled() && (sourceKind === "template" || sourceKind === "spark")
-          ? `${sourceKind === "template" ? "Template" : "Spark"} clip: ${title}. ~30s Lyria · ${formatCreditsAmount(TEMPLATE_SPARK_CLIP_CREDIT_COST)} credits. Edit lyrics or tap Generate lyrics below.`
-          : sourceKind === "template"
-          ? `Template: ${title}. Edit below, then Generate.`
-          : sourceKind === "live"
-            ? `Live event: ${title}. Drop your anthem.`
-            : sourceKind === "spark"
-              ? `Spark: ${title}. Edit the instructions or tap ✦.`
-              : `Loaded idea: ${title}. Make it yours.`,
-    );
-  } catch {}
-  try {
-    showToast(
-      voiceClipOnly
-        ? "Record on Hum — lyrics optional"
-        : templateSparkClipEnabled() && (sourceKind === "template" || sourceKind === "spark")
-          ? `${sourceKind === "template" ? "Template" : "Spark"} clip — add lyrics or tap Generate lyrics below`
-          : sourceKind === "template"
-          ? "Template ready — make it yours"
-          : sourceKind === "live"
-            ? "Live event loaded — drop your anthem"
-            : sourceKind === "spark"
-              ? "Spark ready — make your version"
-              : "Idea loaded — make it yours",
-      { icon: "♪", durationMs: 2600 },
-    );
-  } catch {}
+  if (!photoSoloChallenge) {
+    try {
+      setStatus?.(
+        voiceClipOnly
+          ? `Spark: ${title}. Record on Hum, then Generate.`
+          : templateSparkClipEnabled() && (sourceKind === "template" || sourceKind === "spark")
+            ? `${sourceKind === "template" ? "Template" : "Spark"} clip: ${title}. ~30s Lyria · ${formatCreditsAmount(TEMPLATE_SPARK_CLIP_CREDIT_COST)} credits. Edit lyrics or tap Generate lyrics below.`
+            : sourceKind === "template"
+            ? `Template: ${title}. Edit below, then Generate.`
+            : sourceKind === "live"
+              ? `Live event: ${title}. Drop your anthem.`
+              : sourceKind === "spark"
+                ? `Spark: ${title}. Edit the instructions or tap ✦.`
+                : `Loaded idea: ${title}. Make it yours.`,
+      );
+    } catch {}
+    try {
+      showToast(
+        voiceClipOnly
+          ? "Record on Hum — lyrics optional"
+          : templateSparkClipEnabled() && (sourceKind === "template" || sourceKind === "spark")
+            ? `${sourceKind === "template" ? "Template" : "Spark"} clip — add lyrics or tap Generate lyrics below`
+            : sourceKind === "template"
+            ? "Template ready — make it yours"
+            : sourceKind === "live"
+              ? "Live event loaded — drop your anthem"
+              : sourceKind === "spark"
+                ? "Spark ready — make your version"
+                : "Idea loaded — make it yours",
+        { icon: "♪", durationMs: 2600 },
+      );
+    } catch {}
+  }
   try { syncNabadClipCreateUi(); } catch {}
   try { syncPhotoSoloChallengeCreateUi(); } catch {}
   try { syncGenerateOrbVisibility?.(); } catch {}

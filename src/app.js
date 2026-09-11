@@ -12049,8 +12049,8 @@ function renderDiscoverFeedForYou(tracks, profMap) {
   const suggestedFollowBlock = discoverFeedSuggestedFollowBlockHtml(tracks, profMap);
   return `
     <section id="discoverWeeklyChart" class="discoverWeeklyChart discoverWeeklyChart--final isLoading" aria-busy="true" aria-label="Top songs this week">${discoverWeeklyChartSkeletonHtml()}</section>
-    ${communityBlock}
     ${challengeBlock}
+    ${communityBlock}
     <section class="discoverFeedSection">
       ${discoverFeedSectionHeadHtml("Remixes you'll love")}
       <div class="discoverFeedListStack discoverFeedListStack--remix">${remixList}</div>

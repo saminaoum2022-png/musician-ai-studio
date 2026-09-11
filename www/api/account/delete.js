@@ -15,6 +15,9 @@ const {
   sendJson,
   readJsonBody,
 } = require("../_lib/credits-auth");
+const { recordWelcomeEligibilityUsed } = require("../_lib/signup-welcome-credits");
+const { recordStripeTrialEligibilityUsed } = require("../_lib/stripe-trial-claims");
+const { fetchProSubscriptionForUser } = require("../_lib/pro-subscription");
 
 const SUPABASE_URL = (process.env.SUPABASE_URL || "").replace(/\/$/, "");
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
@@ -55,10 +58,34 @@ module.exports = async function handler(req, res) {
     });
   }
 
+  const proBeforeDelete = await fetchProSubscriptionForUser(user.userId).catch(() => null);
+  if (proBeforeDelete?.active) {
+    return sendJson(res, 409, {
+      error: "Cancel your NabadAi Pro subscription before deleting your account. Deleting your account does not stop billing.",
+      code: "active_subscription",
+      provider: proBeforeDelete.provider || null,
+    });
+  }
+  const hadStripeWeekly =
+    proBeforeDelete?.provider === "stripe" && String(proBeforeDelete?.planId || "").trim() === "weekly";
+
   const result = await deleteAuthUser(user.userId);
   if (!result.ok) {
     return sendJson(res, result.status || 500, {
       error: result.error || "Could not delete account",
+    });
+  }
+
+  void recordWelcomeEligibilityUsed(user.email, {
+    userId: user.userId,
+    source: "account_deleted",
+  });
+
+  if (hadStripeWeekly) {
+    void recordStripeTrialEligibilityUsed(user.email, {
+      userId: user.userId,
+      subscriptionId: proBeforeDelete?.providerSubscriptionId || null,
+      source: "account_deleted",
     });
   }
 

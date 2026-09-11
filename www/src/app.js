@@ -71280,6 +71280,51 @@ try {
   if (_vsub) _vsub.textContent = `Version 1.0.8 · build ${APP_BUILD}`;
 } catch {}
 
+/** Block account deletion while NabadAi Pro is active — billing continues after delete. */
+async function userHasActiveProSubscriptionForDelete() {
+  const uid = String(authSession?.user?.id || "").trim();
+  if (!uid) return false;
+  try {
+    await refreshMyCredits({ silent: true });
+  } catch {}
+  if (getHealedProState().active) return true;
+  if (isNativeShell() && isBillingConfigured()) {
+    try {
+      const merged = await reconcileProSubscription({
+        userId: uid,
+        getAuthToken: getSupabaseAuthToken,
+        apiBase: _resolvedApiBase || API_BASE || "",
+      });
+      if (merged?.active) return true;
+    } catch {}
+  }
+  return false;
+}
+
+async function warnActiveSubscriptionBeforeAccountDelete() {
+  if (!(await userHasActiveProSubscriptionForDelete())) return false;
+  const provider = String(getHealedProState().provider || creditsState.proProvider || "").toLowerCase();
+  const manageHint = provider === "stripe"
+    ? "Manage or cancel under Credits & plan → Manage subscription."
+    : "Cancel under iPhone Settings → Subscriptions → NabadAi.";
+  let openManage = false;
+  try {
+    openManage = window.confirm(
+      `You have an active NabadAi Pro subscription.\n\nCancel your subscription first, then delete your account. Deleting your account does not stop billing.\n\n${manageHint}\n\nOpen subscription management now?`,
+    );
+  } catch {
+    openManage = false;
+  }
+  if (openManage) {
+    try { void openProManageSubscription(); } catch {}
+  } else {
+    try {
+      showToast("Cancel your subscription first, then delete your account.", { icon: "!", durationMs: 4200 });
+    } catch {}
+  }
+  return true;
+}
+
 /** Permanently delete signed-in account (server + device). Guests only clear local data. */
 async function deleteAccountAndData(opts = {}) {
   const uid = String(authSession?.user?.id || "").trim();
@@ -71307,6 +71352,8 @@ async function deleteAccountAndData(opts = {}) {
     }
     return;
   }
+
+  if (await warnActiveSubscriptionBeforeAccountDelete()) return;
 
   if (
     !window.confirm(
@@ -71342,7 +71389,12 @@ async function deleteAccountAndData(opts = {}) {
       body: JSON.stringify({ confirm: "DELETE" }),
     });
     const d = await r.json().catch(() => ({}));
-    if (!r.ok) throw new Error(d?.error || `Delete failed (${r.status})`);
+    if (!r.ok) {
+      if (r.status === 409 && d?.code === "active_subscription") {
+        try { void openProManageSubscription(); } catch {}
+      }
+      throw new Error(d?.error || `Delete failed (${r.status})`);
+    }
 
     wipeLocalStorageForUserId(uid);
     saveHubFeed([]);

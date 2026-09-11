@@ -59,6 +59,13 @@ module.exports = async function handler(req, res) {
   }
 
   const proBeforeDelete = await fetchProSubscriptionForUser(user.userId).catch(() => null);
+  if (proBeforeDelete?.active) {
+    return sendJson(res, 409, {
+      error: "Cancel your NabadAi Pro subscription before deleting your account. Deleting your account does not stop billing.",
+      code: "active_subscription",
+      provider: proBeforeDelete.provider || null,
+    });
+  }
   const hadStripeWeekly =
     proBeforeDelete?.provider === "stripe" && String(proBeforeDelete?.planId || "").trim() === "weekly";
 

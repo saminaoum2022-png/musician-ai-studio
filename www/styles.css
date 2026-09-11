@@ -20698,14 +20698,23 @@ body.trackSheetOpen .footer{
   body[data-route="player"] .playerCard[data-discover-reel="1"] .playerArtWrap .playerKaraokeFloat{
     right: 28px;
   }
+  body[data-route="player"] .playerCard[data-discover-reel="1"] .playerMeta{
+    z-index: 20;
+  }
+  body[data-route="player"] .playerCard[data-discover-reel="1"] .playerHeader{
+    z-index: 21;
+  }
   body[data-route="player"] .playerChallengeAttribution,
   body[data-route="player"] .playerTemplateAttribution{
     display: none !important;
   }
   body[data-route="player"] .playerReelAnimLayer{
     position: fixed;
-    inset: 0;
-    z-index: 15;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: var(--player-reel-meta-bottom);
+    z-index: 8;
     overflow: hidden;
     pointer-events: none;
     background: transparent;
@@ -20722,12 +20731,9 @@ body.trackSheetOpen .footer{
     z-index: 2;
   }
   body[data-route="player"] .playerReelAnimCover{
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: var(--player-cover-bottom);
-    height: var(--player-cover-height);
+    position: absolute;
+    inset: 0;
+    height: auto;
     overflow: hidden;
     background: #0a0c12;
     z-index: 1;
@@ -51917,8 +51923,11 @@ body[data-route="studio"] .deskRail { display: none !important; }
   }
   html.is-web-shell body.discoverReelInShell[data-route="player"] .playerReelAnimLayer{
     position: absolute;
-    inset: 0;
-    z-index: 20;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 132px;
+    z-index: 8;
     border-radius: inherit;
     overflow: hidden;
   }
@@ -51926,7 +51935,9 @@ body[data-route="studio"] .deskRail { display: none !important; }
     position: absolute;
     inset: 0;
     height: auto;
-    bottom: 0;
+  }
+  html.is-web-shell body.discoverReelInShell[data-route="player"] .playerMeta{
+    z-index: 12;
   }
   html.is-web-shell body.discoverReelInShell[data-route="player"] .playerReelAnimMeta{
     position: absolute;

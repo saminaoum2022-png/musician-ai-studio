@@ -45337,6 +45337,26 @@ function discoverReelPickAt(index) {
   return _discoverReelQueue[idx] || null;
 }
 
+/** Warm the browser image cache so reel scroll does not flash black on web. */
+function prefetchDiscoverReelCoverAt(index) {
+  const pick = discoverReelPickAt(index);
+  const art = String(pick?.artUrl || "").trim();
+  if (!art) return;
+  try {
+    const img = new Image();
+    img.decoding = "async";
+    img.src = art;
+  } catch {}
+}
+
+function prefetchDiscoverReelNeighbors(centerIdx) {
+  const idx = Number(centerIdx);
+  if (!Number.isFinite(idx)) return;
+  prefetchDiscoverReelCoverAt(idx);
+  prefetchDiscoverReelCoverAt(idx + 1);
+  prefetchDiscoverReelCoverAt(idx - 1);
+}
+
 function captureCurrentDiscoverReelPick() {
   const t = currentPlayerTrackRef || {};
   let byLine = String(t.byLine || "").trim();
@@ -45484,16 +45504,17 @@ async function finishDiscoverReelSlideSwap(layer, outPanel, inPanel, targetIdx, 
   hidePlayerKaraokeStrip();
   if (outPanel) outPanel.style.visibility = "hidden";
   await peelDiscoverReelAnimToPlayer(inPanel, target);
+  setDiscoverReelAnimLayerActive(false);
   await playDiscoverReelAt(targetIdx, {
     openPlayer: resolveDiscoverReelOpenPlayer({ openPlayer: true }),
     silent: true,
     skipSlide: true,
     skipCoverPaint: true,
   });
+  prefetchDiscoverReelNeighbors(targetIdx);
   await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
   layer.hidden = true;
   layer.setAttribute("aria-hidden", "true");
-  setDiscoverReelAnimLayerActive(false);
   resetDiscoverReelAnimPanels(outPanel, inPanel);
   requestAnimationFrame(() => resetDiscoverReelRailFade());
 }
@@ -45504,14 +45525,6 @@ function discoverReelSlideWait(ms) {
 
 async function runDiscoverReelSlideTransition(direction, targetIdx, opts = {}) {
   if (_discoverReelSlideAnimating) return false;
-  if (discoverReelInPlaceActive()) {
-    await playDiscoverReelAt(targetIdx, {
-      openPlayer: false,
-      silent: opts.silent,
-      skipSlide: true,
-    });
-    return true;
-  }
   const layer = document.getElementById("playerReelAnimLayer");
   const outPanel = layer?.querySelector(".playerReelAnimPanel--out");
   const inPanel = layer?.querySelector(".playerReelAnimPanel--in");
@@ -45580,6 +45593,7 @@ async function playDiscoverReelAt(index, opts = {}) {
       : null,
     feedHookSec: feedHookStartFromTrack(pick) || undefined,
   });
+  prefetchDiscoverReelNeighbors(idx);
 }
 
 async function playNextDiscoverReelTrack(excludeUrl, opts = {}) {
@@ -45596,7 +45610,7 @@ async function playNextDiscoverReelTrack(excludeUrl, opts = {}) {
     if (opts.manual) showToast("End of For You", { durationMs: 2200 });
     return;
   }
-  if (opts.skipSlide || discoverReelInPlaceActive()) {
+  if (opts.skipSlide) {
     await playDiscoverReelAt(nextIdx, {
       openPlayer: resolveDiscoverReelOpenPlayer({}),
       silent: !opts.manual,
@@ -45616,7 +45630,7 @@ async function playPrevDiscoverReelTrack(opts = {}) {
     if (opts.manual) showToast("Start of For You", { durationMs: 2200 });
     return;
   }
-  if (opts.skipSlide || discoverReelInPlaceActive()) {
+  if (opts.skipSlide) {
     await playDiscoverReelAt(prevIdx, {
       openPlayer: resolveDiscoverReelOpenPlayer({}),
       silent: !opts.manual,
@@ -59891,7 +59905,8 @@ function wirePlayerDiscoverReelSwipeOnce() {
     if (!layer || !outPanel || !inPanel || targetIdx < 0) return;
     const target = discoverReelPickAt(targetIdx);
     if (!target?.url) return;
-    const h = window.innerHeight || layer.clientHeight || 800;
+    prefetchDiscoverReelCoverAt(targetIdx);
+    const h = layer.clientHeight || window.innerHeight || 800;
     paintDiscoverReelAnimPanel(outPanel, captureCurrentDiscoverReelPick());
     paintDiscoverReelAnimPanel(inPanel, target);
     previewDiscoverReelMeta(target);
@@ -59911,7 +59926,7 @@ function wirePlayerDiscoverReelSwipeOnce() {
       resetDiscoverReelDragPreview();
       return;
     }
-    const h = window.innerHeight || layer.clientHeight || 800;
+    const h = layer.clientHeight || window.innerHeight || 800;
     const commit = Math.abs(dyPx) >= DISCOVER_REEL_DRAG_COMMIT_PX;
     if (!commit) {
       const easing = "cubic-bezier(0.22, 1, 0.36, 1)";

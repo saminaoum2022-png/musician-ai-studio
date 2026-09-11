@@ -23184,8 +23184,6 @@ async function applyFeedHookAfterPlayStart(audio, source, trackRef) {
 }
 
 const FEED_HOOK_FADE_MS = 320;
-const FEED_HOOK_HINT_SEEN = new Set();
-
 function feedHookMarkerPct(hookSec, dur) {
   const d = Number(dur || 0);
   const h = Number(hookSec || 0);
@@ -23232,10 +23230,6 @@ function syncGlobalFeedHookMarkers() {
       syncFeedHookMarkerOnWrap(wrap, 0, 0);
     }
   });
-}
-
-function feedHookHintStorageKey(url, hookSec) {
-  return `${String(url || "").trim()}|${Math.round(Number(hookSec || 0) * 10)}`;
 }
 
 function maybeShowFeedHookStartHint(_hookSec, _source) {
@@ -45358,18 +45352,7 @@ function discoverReelPlayerArtUrl(pick, fallbackArt = "") {
   return resolvePlayerCoverArtUrl(stub.artUrl, stub) || stub.artUrl;
 }
 
-function discoverReelRowCoverImg(el) {
-  if (!el) return null;
-  if (el.matches?.("img")) return el;
-  const direct = el.querySelector?.("img");
-  if (direct) return direct;
-  const host = el.closest?.(
-    "[data-user-lib-url], [data-discovery-play], .discoveryRow, .discoverFeedRow, .chartWeekLeaderRow",
-  );
-  return host?.querySelector?.("img") || null;
-}
-
-/** Route + full-bleed shell before any async work (matches native iOS first frame). */
+/** Route + full-bleed shell before any async work (mobile web browser only). */
 function openDiscoverReelPlayerShell() {
   const card = document.querySelector(".playerCard");
   if (card) card.dataset.discoverReel = "1";
@@ -45378,32 +45361,15 @@ function openDiscoverReelPlayerShell() {
   try { location.hash = "#/player"; } catch {}
 }
 
-/** Paint reel cover synchronously from the tapped Discover row (already decoded in DOM). */
-function primeDiscoverReelCoverInstant({ el, artUrl, title, subtitle } = {}) {
-  if (!els.playerArt) return "";
+/** Mobile web: paint full portrait cover before async decode (never list thumbs). */
+function primeDiscoverReelCoverInstant({ artUrl, title, subtitle } = {}) {
+  if (!els.playerArt || isNativeShell()) return "";
   const resolved = String(artUrl || "").trim();
+  if (!resolved || isSquareListCoverUrl(resolved) || isDefaultSongCoverUrl(resolved)) return "";
   if (els.playerTitle && title) els.playerTitle.textContent = title;
   if (els.playerSubtitle && subtitle) els.playerSubtitle.textContent = subtitle;
-  const rowImg = discoverReelRowCoverImg(el);
-  const rowSrc = String(rowImg?.currentSrc || rowImg?.src || "").trim();
-  if (rowImg?.complete && rowImg.naturalWidth > 0 && rowSrc) {
-    els.playerArt.dataset.coverSrc = resolved || rowSrc;
-    els.playerArt.dataset.coverRetry = "0";
-    els.playerArt.dataset.coverFallback = "";
-    els.playerArt.src = rowSrc;
-    applyCoverImageStateClasses(els.playerArt, resolved || rowSrc, rowSrc, false);
-    els.playerArt.classList.remove("isPlaceholder", "isCoverPlaceholder");
-    try {
-      const artWrap = document.querySelector(".playerArtWrap");
-      if (artWrap) applyCoverGlowRgb(artWrap, resolved || rowSrc);
-    } catch {}
-    return resolved || rowSrc;
-  }
-  if (resolved) {
-    setCoverImageSrc(els.playerArt, resolved, { immediate: true });
-    return resolved;
-  }
-  return "";
+  setCoverImageSrc(els.playerArt, resolved, { immediate: true });
+  return resolved;
 }
 
 /** Decode reel cover before first paint so mobile web does not letterbox (1:1 → full bleed). */
@@ -45656,7 +45622,7 @@ async function playDiscoverReelAt(index, opts = {}) {
   if (!opts.silent && !opts.skipSlide) haptic("light");
   hidePlayerKaraokeStrip();
   const playerArtUrl = discoverReelPlayerArtUrl(pick);
-  if (!opts.skipCoverPaint) await primeDiscoverReelCoverDecode(playerArtUrl);
+  if (!opts.skipCoverPaint && !isNativeShell()) await primeDiscoverReelCoverDecode(playerArtUrl);
   await playLibraryUrlOnPlayer(pick.url, pick.title, playerArtUrl, {
     discoverFeed: true,
     discoverReel: true,
@@ -45748,22 +45714,22 @@ async function playDiscoverFeedEntry({ raw, title, art, by, playSource, el, opts
       const pick = _discoverReelQueue[idx];
       const playerArtUrl = discoverReelPlayerArtUrl(pick, art);
       const inPlace = shouldUseDiscoverReelInPlace();
-      let instantCover = "";
       if (inPlace) {
         openDiscoverReelOverlay();
+      } else if (isNativeShell()) {
+        const card = document.querySelector(".playerCard");
+        if (card) card.dataset.discoverReel = "1";
+        resetDiscoverReelRailFade();
+        syncRoutePanelVisibility("player");
       } else {
         openDiscoverReelPlayerShell();
-        instantCover = primeDiscoverReelCoverInstant({
-          el,
+        primeDiscoverReelCoverInstant({
           artUrl: playerArtUrl,
           title: pick?.title || title,
           subtitle: pick?.byLine || by,
         });
       }
-      await playDiscoverReelAt(idx, {
-        openPlayer: !inPlace,
-        skipCoverPaint: Boolean(instantCover),
-      });
+      await playDiscoverReelAt(idx, { openPlayer: !inPlace });
       return;
     }
   }
@@ -61516,7 +61482,12 @@ async function playOnPlayerPage(url, label, meta = null, opts = {}) {
     Boolean(currentPlayerTrackRef?.fromSharedLink) ||
     Boolean(parseSharedTrackIdFromLocation());
   if (!shareListen && opts.reelSwap) {
-    openDiscoverReelPlayerShell();
+    if (isNativeShell()) {
+      syncRoutePanelVisibility("player");
+      try { location.hash = "#/player"; } catch {}
+    } else {
+      openDiscoverReelPlayerShell();
+    }
   }
   const metaOpts = {
     coverImmediate: Boolean(opts.reelSwap || opts.coverImmediate),

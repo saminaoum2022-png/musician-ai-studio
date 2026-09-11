@@ -59096,3 +59096,147 @@ html[data-theme="light"] .proSingerReqBadge--declined{
   background: rgba(239,68,68,0.12);
   color: #b91c1c;
 }
+
+/* Native iOS: full-bleed Discover reel — not gated on @media (WKWebView can miss 720px on first paint). */
+html.is-native-shell body.isDiscoverReelPlayer[data-route="player"],
+html.is-native-shell body.discoverReelOpening[data-route="player"]{
+  --player-chrome-safe: env(safe-area-inset-bottom, 0px);
+  --player-social-rail-bottom: calc(var(--player-chrome-safe) + 172px);
+  --player-cover-bottom: 0px;
+  --player-cover-height: 100svh;
+}
+html.is-native-shell body.isDiscoverReelPlayer[data-route="player"] .mobileTabbar,
+html.is-native-shell body.isDiscoverReelPlayer[data-route="player"] .header,
+html.is-native-shell body.isDiscoverReelPlayer[data-route="player"] .hubNowPlaying,
+html.is-native-shell body.discoverReelOpening[data-route="player"] .mobileTabbar,
+html.is-native-shell body.discoverReelOpening[data-route="player"] .header,
+html.is-native-shell body.discoverReelOpening[data-route="player"] .hubNowPlaying{
+  display: none !important;
+}
+html.is-native-shell body.isDiscoverReelPlayer[data-route="player"] .app,
+html.is-native-shell body.discoverReelOpening[data-route="player"] .app{
+  padding: 0 !important;
+  min-height: 100svh;
+}
+html.is-native-shell body.isDiscoverReelPlayer[data-route="player"] .playerCard,
+html.is-native-shell body.discoverReelOpening[data-route="player"] .playerCard,
+html.is-native-shell .playerCard.isDiscoverReelLayout{
+  padding: 0;
+  flex: 1;
+  min-height: 100svh;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+}
+html.is-native-shell body.isDiscoverReelPlayer[data-route="player"] .playerShell,
+html.is-native-shell body.discoverReelOpening[data-route="player"] .playerShell,
+html.is-native-shell .playerCard.isDiscoverReelLayout .playerShell{
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 100svh;
+  gap: 0;
+  background: #0a0c12;
+}
+html.is-native-shell body.isDiscoverReelPlayer[data-route="player"] .playerArtCol,
+html.is-native-shell body.discoverReelOpening[data-route="player"] .playerArtCol,
+html.is-native-shell .playerCard.isDiscoverReelLayout .playerArtCol{
+  flex: 1;
+  position: relative;
+  min-height: 100svh;
+  width: 100%;
+}
+html.is-native-shell body.isDiscoverReelPlayer[data-route="player"] .playerArtWrap,
+html.is-native-shell body.discoverReelOpening[data-route="player"] .playerArtWrap,
+html.is-native-shell .playerCard.isDiscoverReelLayout .playerArtWrap,
+html.is-native-shell .playerCard[data-discover-reel="1"] .playerArtWrap{
+  border: none !important;
+  padding: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  background: #0a0c12 !important;
+  min-height: 100svh !important;
+  position: absolute;
+  inset: 0;
+}
+html.is-native-shell body.isDiscoverReelPlayer .playerArtStage,
+html.is-native-shell body.discoverReelOpening .playerArtStage,
+html.is-native-shell .playerCard.isDiscoverReelLayout .playerArtStage,
+html.is-native-shell .playerCard[data-discover-reel="1"] .playerArtStage{
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  width: 100%;
+  height: 100svh;
+  min-height: 100svh;
+  border-radius: 0;
+  overflow: hidden;
+  background: #0a0c12;
+  z-index: 2;
+}
+/* One bottom fade only — playerMeta gradient; never stack with stage ::after. */
+html.is-native-shell body.isDiscoverReelPlayer .playerArtStage::after,
+html.is-native-shell body.discoverReelOpening .playerArtStage::after,
+html.is-native-shell .playerCard.isDiscoverReelLayout .playerArtStage::after,
+html.is-native-shell .playerCard[data-discover-reel="1"] .playerArtStage::after{
+  display: none !important;
+  content: none !important;
+}
+html.is-native-shell body.isDiscoverReelPlayer[data-route="player"] .playerArt,
+html.is-native-shell body.discoverReelOpening[data-route="player"] .playerArt,
+html.is-native-shell .playerCard.isDiscoverReelLayout .playerArt,
+html.is-native-shell .playerCard[data-discover-reel="1"] .playerArt{
+  position: absolute !important;
+  inset: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  min-width: 0 !important;
+  min-height: 0 !important;
+  max-width: none !important;
+  aspect-ratio: unset !important;
+  object-fit: cover !important;
+  object-position: center top !important;
+  border-radius: 0 !important;
+  padding: 0 !important;
+}
+html.is-native-shell body.isDiscoverReelPlayer[data-route="player"] .playerSocialRail,
+html.is-native-shell body.isDiscoverReelPlayer[data-route="player"] .playerSocialRail[hidden],
+html.is-native-shell body.discoverReelOpening[data-route="player"] .playerSocialRail,
+html.is-native-shell body.discoverReelOpening[data-route="player"] .playerSocialRail[hidden],
+html.is-native-shell .playerCard.isDiscoverReelLayout .playerSocialRail,
+html.is-native-shell .playerCard.isDiscoverReelLayout .playerSocialRail[hidden],
+html.is-native-shell .playerCard[data-discover-reel="1"] .playerSocialRail,
+html.is-native-shell .playerCard[data-discover-reel="1"] .playerSocialRail[hidden]{
+  display: flex !important;
+  visibility: visible !important;
+  position: fixed;
+  right: 12px;
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 172px);
+  top: auto;
+  transform: none;
+  z-index: 12;
+  opacity: 1;
+  pointer-events: auto;
+}
+html.is-native-shell body.isDiscoverReelPlayer .playerMeta,
+html.is-native-shell body.discoverReelOpening .playerMeta,
+html.is-native-shell .playerCard.isDiscoverReelLayout .playerMeta{
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 11;
+  width: 100%;
+  box-sizing: border-box;
+  background: linear-gradient(
+    180deg,
+    transparent 0%,
+    rgba(6, 8, 14, 0.72) 28%,
+    rgba(6, 8, 14, 0.96) 100%
+  );
+}

@@ -261,7 +261,7 @@ import { DISCOVER_SHOW_PLAY_COUNTS, MUSIC_VIDEO_FEATURE_ENABLED } from "./featur
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260911-203602";
+const APP_BUILD = "20260911-225930";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -25081,6 +25081,7 @@ function schedulePlayerCoverUpgrade(fullArt, trackId, seq) {
   const raw = String(fullArt || "").trim();
   const img = els.playerArt;
   if (!img || !raw || isDefaultSongCoverUrl(raw) || isLogoCoverUrl(raw)) return;
+  if (discoverReelModeActive() || isDiscoverReelCoverPaint({}) || document.body.classList.contains("isDiscoverReelPlayer")) return;
   const pre = new Image();
   if (/^https?:\/\//i.test(raw)) pre.crossOrigin = "anonymous";
   pre.onload = () => {
@@ -45273,6 +45274,8 @@ function openDiscoverReelOverlay() {
 
 function closeDiscoverReelOverlay(opts = {}) {
   if (!discoverReelInPlaceActive()) return;
+  unmarkDiscoverReelPlayerShell();
+  clearDiscoverReelFullBleedLayout();
   document.body.classList.remove("discoverReelInShell");
   const card = document.querySelector(".playerCard");
   if (card) {
@@ -45342,6 +45345,330 @@ function prefetchDiscoverReelNeighbors(centerIdx) {
   prefetchDiscoverReelCoverAt(idx);
   prefetchDiscoverReelCoverAt(idx + 1);
   prefetchDiscoverReelCoverAt(idx - 1);
+}
+
+function isDiscoverReelCoverPaint(opts = {}) {
+  if (opts.coverImmediate) return true;
+  if (miniSource?.discoverReel) return true;
+  try {
+    return document.querySelector(".playerCard")?.dataset?.discoverReel === "1";
+  } catch {
+    return false;
+  }
+}
+
+function discoverReelPlayerArtUrl(pick, fallbackArt = "") {
+  const stub = {
+    ...(pick || {}),
+    artUrl: String(pick?.artUrl || fallbackArt || "").trim(),
+    meta: pick?.meta || {},
+  };
+  const portrait = trackCoverArtForPlayer(stub);
+  return portrait && !isDefaultSongCoverUrl(portrait) && !isLogoCoverUrl(portrait)
+    ? portrait
+    : stub.artUrl;
+}
+
+function discoverReelRowCoverImg(el) {
+  if (!el) return null;
+  if (el.matches?.("img")) return el;
+  const direct = el.querySelector?.("img");
+  if (direct) return direct;
+  const host = el.closest?.(
+    ".discoverFeedSongRow, [data-user-lib-url], [data-discovery-play], .discoveryRow, .discoverFeedRow, .chartWeekLeaderRow",
+  );
+  return host?.querySelector?.(".discoverFeedSongArt img, img") || null;
+}
+
+/** Paint reel cover synchronously from the tapped Discover row (already decoded in DOM). */
+function primeDiscoverReelCoverInstant({ el, artUrl, title, subtitle } = {}) {
+  if (!els.playerArt) return "";
+  const resolved = String(artUrl || "").trim();
+  if (els.playerTitle && title) els.playerTitle.textContent = title;
+  if (els.playerSubtitle && subtitle) {
+    els.playerSubtitle.textContent = screenshotSanitizeCopy(subtitle);
+  }
+  const rowImg = discoverReelRowCoverImg(el);
+  const rowSrc = String(rowImg?.currentSrc || rowImg?.src || "").trim();
+  if (rowImg?.complete && rowImg.naturalWidth > 0 && rowSrc) {
+    els.playerArt.dataset.coverSrc = resolved || rowSrc;
+    els.playerArt.dataset.coverRetry = "0";
+    els.playerArt.dataset.coverFallback = "";
+    els.playerArt.src = rowSrc;
+    applyCoverImageStateClasses(els.playerArt, resolved || rowSrc, rowSrc, false);
+    els.playerArt.classList.remove("isPlaceholder", "isCoverPlaceholder");
+    lockDiscoverReelFullBleedLayout();
+    try {
+      const artWrap = document.querySelector(".playerArtWrap");
+      if (artWrap) applyCoverGlowRgb(artWrap, resolved || rowSrc);
+    } catch {}
+    return resolved || rowSrc;
+  }
+  if (resolved && !isDefaultSongCoverUrl(resolved) && !isLogoCoverUrl(resolved)) {
+    setCoverImageSrc(els.playerArt, resolved, { immediate: true });
+    lockDiscoverReelFullBleedLayout();
+    return resolved;
+  }
+  return "";
+}
+
+/** Decode incoming reel cover before playback when instant row paint was not possible. */
+async function primeDiscoverReelCoverDecode(artUrl) {
+  const art = String(artUrl || "").trim();
+  if (!art || isSquareListCoverUrl(art)) return;
+  const painted = String(els.playerArt?.dataset.coverSrc || els.playerArt?.src || "").trim();
+  if (painted && (painted === art || painted.startsWith(art.split("?")[0]))) {
+    try {
+      if (els.playerArt?.complete && els.playerArt.naturalWidth > 0) {
+        if (typeof els.playerArt.decode === "function") await els.playerArt.decode();
+        return;
+      }
+    } catch {}
+  }
+  try {
+    const img = new Image();
+    if (/^https?:\/\//i.test(art)) img.crossOrigin = "anonymous";
+    img.decoding = "async";
+    await new Promise((resolve) => {
+      img.addEventListener("load", resolve, { once: true });
+      img.addEventListener("error", resolve, { once: true });
+      img.src = art;
+    });
+    if (typeof img.decode === "function") await img.decode();
+  } catch {}
+}
+
+/** Inline critical CSS — WKWebView may miss @media (max-width:720px) on first paint. */
+function ensureNativeDiscoverReelCriticalCss() {
+  if (!isNativeShell()) return;
+  try {
+    document.documentElement.classList.add("is-native-shell");
+  } catch {}
+  if (document.getElementById("nativeDiscoverReelCritical")) return;
+  const s = document.createElement("style");
+  s.id = "nativeDiscoverReelCritical";
+  s.textContent = [
+    "html.is-native-shell body.isDiscoverReelPlayer .mobileTabbar,",
+    "html.is-native-shell body.isDiscoverReelPlayer .header,",
+    "html.is-native-shell body.isDiscoverReelPlayer .hubNowPlaying{display:none!important}",
+    "html.is-native-shell body.isDiscoverReelPlayer .app{padding:0!important;min-height:100svh}",
+    "html.is-native-shell .playerCard.isDiscoverReelLayout{padding:0!important;min-height:100svh!important;",
+    "border:none!important;box-shadow:none!important;background:transparent!important}",
+    "html.is-native-shell .playerCard.isDiscoverReelLayout .playerArtWrap{padding:0!important;border:none!important;",
+    "border-radius:0!important;box-shadow:none!important;background:#0a0c12!important;min-height:100svh!important}",
+    "html.is-native-shell .playerCard.isDiscoverReelLayout .playerArtStage{position:fixed!important;top:0!important;",
+    "left:0!important;right:0!important;bottom:0!important;width:100%!important;height:100svh!important;",
+    "border-radius:0!important;overflow:hidden!important;background:#0a0c12!important;z-index:2!important}",
+    "html.is-native-shell .playerCard.isDiscoverReelLayout .playerArtStage::after{display:none!important;content:none!important}",
+    "html.is-native-shell .playerCard.isDiscoverReelLayout .playerArt{position:absolute!important;inset:0!important;",
+    "width:100%!important;height:100%!important;max-width:none!important;aspect-ratio:unset!important;",
+    "object-fit:cover!important;object-position:center top!important;border-radius:0!important;padding:0!important}",
+    "html.is-native-shell .playerCard.isDiscoverReelLayout .playerSocialRail,",
+    "html.is-native-shell .playerCard.isDiscoverReelLayout .playerSocialRail[hidden]{display:flex!important;",
+    "visibility:visible!important;position:fixed!important;right:12px!important;",
+    "bottom:calc(env(safe-area-inset-bottom,0px) + 172px)!important;z-index:12!important;opacity:1!important;",
+    "pointer-events:auto!important}",
+    "html.is-native-shell .playerCard.isDiscoverReelLayout .playerMeta{position:fixed!important;left:0!important;",
+    "right:0!important;bottom:0!important;z-index:11!important;width:100%!important;box-sizing:border-box!important;",
+    "background:linear-gradient(180deg,transparent 0%,rgba(6,8,14,.72) 28%,rgba(6,8,14,.96) 100%)!important}",
+  ].join("");
+  document.head.appendChild(s);
+}
+
+function markDiscoverReelPlayerShell() {
+  try { document.body.classList.add("isDiscoverReelPlayer"); } catch {}
+  const card = document.querySelector(".playerCard");
+  if (card) card.classList.add("isDiscoverReelLayout");
+  ensureNativeDiscoverReelCriticalCss();
+  if (isNativeShell()) {
+    try { reassertViewportScale(); } catch {}
+  }
+}
+
+function unmarkDiscoverReelPlayerShell() {
+  try { document.body.classList.remove("isDiscoverReelPlayer"); } catch {}
+  const card = document.querySelector(".playerCard");
+  if (card) card.classList.remove("isDiscoverReelLayout");
+}
+
+/** Force edge-to-edge cover layout before body[data-route=player] CSS applies. */
+function lockDiscoverReelFullBleedLayout() {
+  markDiscoverReelPlayerShell();
+  try { document.body.classList.add("discoverReelOpening"); } catch {}
+  if (isNativeShell()) {
+    try { void document.body.offsetHeight; } catch {}
+    return;
+  }
+  const wrap = document.querySelector(".playerArtWrap");
+  const stage = document.querySelector(".playerArtStage");
+  const art = els.playerArt;
+  if (wrap) {
+    wrap.style.setProperty("border", "none", "important");
+    wrap.style.setProperty("padding", "0", "important");
+    wrap.style.setProperty("border-radius", "0", "important");
+    wrap.style.setProperty("box-shadow", "none", "important");
+    wrap.style.setProperty("background", "#0a0c12", "important");
+    wrap.style.setProperty("min-height", "100svh", "important");
+  }
+  if (stage) {
+    stage.style.setProperty("position", "fixed", "important");
+    stage.style.setProperty("top", "0", "important");
+    stage.style.setProperty("left", "0", "important");
+    stage.style.setProperty("right", "0", "important");
+    stage.style.setProperty("bottom", "0", "important");
+    stage.style.setProperty("width", "100%", "important");
+    stage.style.setProperty("height", "100svh", "important");
+    stage.style.setProperty("border-radius", "0", "important");
+    stage.style.setProperty("overflow", "hidden", "important");
+    stage.style.setProperty("z-index", "2", "important");
+    stage.style.setProperty("background", "#0a0c12", "important");
+  }
+  if (art) {
+    art.style.setProperty("position", "absolute", "important");
+    art.style.setProperty("inset", "0", "important");
+    art.style.setProperty("width", "100%", "important");
+    art.style.setProperty("height", "100%", "important");
+    art.style.setProperty("max-width", "none", "important");
+    art.style.setProperty("aspect-ratio", "unset", "important");
+    art.style.setProperty("object-fit", "cover", "important");
+    art.style.setProperty("object-position", "center top", "important");
+    art.style.setProperty("border-radius", "0", "important");
+    art.classList.remove("isPlaceholder", "isCoverPlaceholder");
+  }
+  try { void document.body.offsetHeight; } catch {}
+}
+
+function clearDiscoverReelFullBleedLayout() {
+  if (discoverReelChromeActive()) return;
+  clearDiscoverReelOpeningLock();
+  unmarkDiscoverReelPlayerShell();
+  try { document.body.classList.remove("discoverReelOpening"); } catch {}
+  const wrap = document.querySelector(".playerArtWrap");
+  const stage = document.querySelector(".playerArtStage");
+  const art = els.playerArt;
+  for (const el of [wrap, stage, art]) {
+    if (!el) continue;
+    el.removeAttribute("style");
+  }
+}
+
+function releaseDiscoverReelFullBleedLayout() {
+  window.requestAnimationFrame(() => {
+    try { document.body.classList.remove("discoverReelOpening"); } catch {}
+  });
+}
+
+function isDiscoverReelOpening() {
+  if (_discoverReelOpeningLock && Date.now() - _discoverReelOpeningLock < 4000) return true;
+  try {
+    return document.body.classList.contains("discoverReelOpening");
+  } catch {
+    return false;
+  }
+}
+
+function discoverReelChromeActive() {
+  const route = String(document.body.getAttribute("data-route") || "").trim();
+  const inShell = document.body.classList.contains("discoverReelInShell");
+  if (route !== "player" && !inShell) return false;
+  if (isDiscoverReelOpening()) return true;
+  if (miniSource?.discoverReel) return true;
+  if (document.body.classList.contains("isDiscoverReelPlayer")) return true;
+  return discoverReelModeActive();
+}
+
+function clearDiscoverReelOpeningLock() {
+  _discoverReelOpeningLock = 0;
+}
+
+/** Social rail visible on frame 1 — do not wait for async syncPlayerSocialRail. */
+function primeDiscoverReelSocialRail(pick) {
+  const rail = els.playerSocialRail;
+  const row = els.playerSocialActions;
+  if (!rail || !row) return;
+  rail.hidden = false;
+  rail.removeAttribute("hidden");
+  rail.closest(".playerArtWrap")?.classList.remove("playerArtWrap--noSocialRail");
+  const songId = String(pick?.songId || pick?.id || "").trim();
+  const ownerUserId = String(pick?.ownerUserId || pick?.userId || "").trim();
+  if (!isShareUuid(songId)) return;
+  row.setAttribute("data-friends-act-kind", "music");
+  row.setAttribute("data-friends-act-target-kind", "song");
+  row.setAttribute("data-friends-act-id", songId);
+  row.setAttribute("data-friends-act-uid", ownerUserId);
+  ensurePlayerSocialRailIcons(songId);
+  try { applyFeedSocialStatsToDom(document); } catch {}
+}
+
+/** Route + full bleed + social rail + portrait cover — all before any await. */
+function primeDiscoverReelOpenFirstFrame(pick, reelIdx, { title = "", subtitle = "", el = null } = {}) {
+  _discoverReelOpeningLock = Date.now();
+  const card = document.querySelector(".playerCard");
+  if (card) {
+    card.dataset.discoverReel = "1";
+    card.classList.add("isDiscoverReelLayout");
+  }
+  try { document.body.classList.add("isDiscoverReelPlayer", "discoverReelOpening"); } catch {}
+  ensureNativeDiscoverReelCriticalCss();
+  if (isNativeShell()) try { reassertViewportScale(); } catch {}
+  resetDiscoverReelRailFade();
+  const url = String(pick?.url || "").trim();
+  miniSource = {
+    type: "discover_feed",
+    url,
+    discoverReel: true,
+    reelIndex: Number.isFinite(reelIdx) ? Number(reelIdx) : 0,
+    applyFeedHook: true,
+  };
+  currentPlayerTrackRef = {
+    ...(currentPlayerTrackRef || {}),
+    id: String(pick?.id || pick?.songId || `public_${String(pick?.title || "Song").slice(0, 24)}`),
+    url,
+    title: String(pick?.title || title || "Song"),
+    artUrl: String(pick?.artUrl || ""),
+    byLine: String(pick?.byLine || subtitle || ""),
+    songId: String(pick?.songId || pick?.id || ""),
+    ownerUserId: String(pick?.ownerUserId || pick?.userId || ""),
+    taskId: String(pick?.taskId || ""),
+    audioId: String(pick?.audioId || ""),
+    meta: pick?.meta || {},
+  };
+  syncRoutePanelVisibility("player");
+  try { location.hash = "#/player"; } catch {}
+  lockDiscoverReelFullBleedLayout();
+  primeDiscoverReelSocialRail(pick);
+  void syncPlayerSocialRail();
+  const playerArtUrl = discoverReelPlayerArtUrl(pick);
+  const instant = primeDiscoverReelCoverInstant({
+    el,
+    artUrl: playerArtUrl,
+    title: String(title || pick?.title || "Song"),
+    subtitle: String(subtitle || pick?.byLine || ""),
+  });
+  if (instant) return true;
+  return primeDiscoverReelCoverFirstFrame(pick, { title, subtitle });
+}
+
+/** Full portrait + full-bleed shell synchronously on tap (before any await). */
+function primeDiscoverReelCoverFirstFrame(pick, { title = "", subtitle = "" } = {}) {
+  if (!pick || !els.playerArt) return false;
+  if (!document.body.classList.contains("discoverReelOpening")) lockDiscoverReelFullBleedLayout();
+  const trackRef = {
+    ...pick,
+    meta: pick.meta || {},
+    artUrl: String(pick.artUrl || "").trim(),
+  };
+  const fullArt = discoverReelPlayerArtUrl(trackRef);
+  if (!fullArt || isDefaultSongCoverUrl(fullArt) || isLogoCoverUrl(fullArt)) return false;
+  setPlayerMeta(
+    {
+      title: String(title || pick.title || "Song").trim() || "Song",
+      subtitle: String(subtitle || pick.byLine || "Discover feed").trim() || "Discover feed",
+      artUrl: fullArt,
+    },
+    { coverImmediate: true, trackRef },
+  );
+  return true;
 }
 
 function captureCurrentDiscoverReelPick() {
@@ -45655,12 +45982,19 @@ async function playDiscoverFeedEntry({ raw, title, art, by, playSource, el, opts
           _discoverReelQueue[idx] = { ...row, artUrl: safeArt };
         }
       }
-      const card = document.querySelector(".playerCard");
-      if (card) card.dataset.discoverReel = "1";
-      resetDiscoverReelRailFade();
       const inPlace = shouldUseDiscoverReelInPlace();
       if (inPlace) openDiscoverReelOverlay();
-      await playDiscoverReelAt(idx, { openPlayer: !inPlace });
+      let pick = _discoverReelQueue[idx];
+      const playerArtUrl = discoverReelPlayerArtUrl(pick, art);
+      if (playerArtUrl && !isSquareListCoverUrl(playerArtUrl) && !isDefaultSongCoverUrl(playerArtUrl)) {
+        pick = { ...pick, artUrl: playerArtUrl };
+        _discoverReelQueue[idx] = pick;
+      }
+      const skipCoverPaint = !inPlace && primeDiscoverReelOpenFirstFrame(pick, idx, { title, subtitle: by, el });
+      if (!inPlace && !skipCoverPaint && playerArtUrl) {
+        await primeDiscoverReelCoverDecode(playerArtUrl);
+      }
+      await playDiscoverReelAt(idx, { openPlayer: !inPlace, skipCoverPaint });
       return;
     }
   }
@@ -46381,6 +46715,8 @@ let _discoverPlaylistAdvancing = false;
 let _discoverPlaylistAdvanceToken = 0;
 /** For You swipe-player queue (chart order, in-memory only). */
 let _discoverReelQueue = [];
+/** Blocks applyRoute from clearing reel chrome before miniSource is wired. */
+let _discoverReelOpeningLock = 0;
 let _discoverReelAdvancing = false;
 let _discoverReelAdvanceToken = 0;
 let _discoverReelSlideAnimating = false;
@@ -48364,7 +48700,7 @@ async function playLibraryUrlOnPlayer(rawUrl, title, artUrl, opts) {
   if (!openPlayer) {
     setPlayerMeta(meta, {
       trackRef: currentPlayerTrackRef,
-      coverImmediate: Boolean(opts.reelSwap),
+      coverImmediate: Boolean(opts.reelSwap || opts.discoverReel),
     });
     try {
       syncDiscoveryPlayingHighlights();
@@ -48375,7 +48711,8 @@ async function playLibraryUrlOnPlayer(rawUrl, title, artUrl, opts) {
     } catch {}
   } else {
     await playOnPlayerPage(prox, title || "Song", meta, {
-      reelSwap: Boolean(opts.discoverReel),
+      reelSwap: Boolean(opts.discoverReel || opts.reelSwap),
+      coverImmediate: Boolean(opts.discoverReel || opts.reelSwap),
       skipCoverPaint: Boolean(opts.skipCoverPaint),
       trackRef: currentPlayerTrackRef,
     });
@@ -58778,15 +59115,22 @@ function setCoverImageSrc(img, url, opts = {}) {
 
 function setPlayerMeta({ title, subtitle, artUrl, releaseCaption, remixOf, challenge, mashupOf } = {}, opts = {}) {
   const track = opts.trackRef || resolvePlayerLibraryTrack() || currentPlayerTrackRef;
+  const reelCover = isDiscoverReelCoverPaint(opts);
   const resolvedArt = artUrl ? resolvePlayerCoverArtUrl(artUrl, track) : artUrl;
   const hasTrack = Boolean(resolvedArt);
-  const coverOpts = opts.coverImmediate ? { immediate: true } : {};
+  const coverOpts = (opts.coverImmediate || reelCover) ? { immediate: true } : {};
   if (els.playerTitle) els.playerTitle.textContent = title || "Now Playing";
   if (els.playerSubtitle) els.playerSubtitle.textContent = screenshotSanitizeCopy(subtitle || "");
   void syncPlayerCreatorChrome(subtitle);
   if (els.playerArt && !opts.skipCoverPaint) {
     if (hasTrack) {
-      const quickArt = !opts.coverImmediate ? resolvePlayerCoverQuickArt(track) : "";
+      const fromDiscoverFeed =
+        miniSource?.type === "discover_feed" ||
+        miniSource?.discoverReel ||
+        isDiscoverReelOpening() ||
+        document.body.classList.contains("isDiscoverReelPlayer");
+      const quickArt =
+        !opts.coverImmediate && !reelCover && !fromDiscoverFeed ? resolvePlayerCoverQuickArt(track) : "";
       if (quickArt) {
         const seq = bumpPlayerCoverAssignSeq();
         els.playerArt.dataset.coverAssignSeq = String(seq);
@@ -59624,8 +59968,12 @@ function updatePlayerSecondaryChrome() {
   const card = document.querySelector(".playerCard");
   if (card) {
     card.dataset.readOnlyListen = ro ? "1" : "0";
-    card.dataset.discoverReel = discoverReelModeActive() ? "1" : "0";
-    if (!discoverReelModeActive()) resetDiscoverReelRailFade();
+    const reelOn = discoverReelChromeActive();
+    card.dataset.discoverReel = reelOn ? "1" : "0";
+    if (!reelOn) {
+      resetDiscoverReelRailFade();
+      clearDiscoverReelFullBleedLayout();
+    }
   }
   void syncPlayerCreatorChrome();
   syncPlayerPublishCta();
@@ -59794,7 +60142,7 @@ async function syncPlayerSocialRail() {
   const row = els.playerSocialActions;
   if (!rail || !row) return;
   const target = playerSocialTargetFromRef();
-  const reelMode = discoverReelModeActive();
+  const reelMode = discoverReelChromeActive();
   const songId = String(
     target?.songId || currentPlayerTrackRef?.songId || currentPlayerTrackRef?.cloudSongId || "",
   ).trim();
@@ -59802,6 +60150,9 @@ async function syncPlayerSocialRail() {
     if (!reelMode) {
       rail.hidden = true;
       rail.closest(".playerArtWrap")?.classList.add("playerArtWrap--noSocialRail");
+    } else {
+      rail.hidden = false;
+      rail.closest(".playerArtWrap")?.classList.remove("playerArtWrap--noSocialRail");
     }
     return;
   }
@@ -61408,8 +61759,14 @@ function updateListenRefButton() {
 
 async function playOnPlayerPage(url, label, meta = null, opts = {}) {
   if (!url) return;
+  const shareListen =
+    Boolean(opts.shareListen) ||
+    Boolean(currentPlayerTrackRef?.fromSharedLink) ||
+    Boolean(parseSharedTrackIdFromLocation());
+  const reelOpen = Boolean(opts.reelSwap || opts.coverImmediate);
+  if (reelOpen) lockDiscoverReelFullBleedLayout();
   const metaOpts = {
-    coverImmediate: Boolean(opts.reelSwap || opts.coverImmediate),
+    coverImmediate: reelOpen,
     skipCoverPaint: Boolean(opts.skipCoverPaint),
     trackRef: opts.trackRef || null,
   };
@@ -61423,12 +61780,19 @@ async function playOnPlayerPage(url, label, meta = null, opts = {}) {
     }, metaOpts);
   }
   setPlayerSource(url, label);
-  const shareListen =
-    Boolean(opts.shareListen) ||
-    Boolean(currentPlayerTrackRef?.fromSharedLink) ||
-    Boolean(parseSharedTrackIdFromLocation());
   if (!shareListen) {
-    location.hash = "#/player";
+    if (document.body.getAttribute("data-route") !== "player") {
+      syncRoutePanelVisibility("player");
+    }
+    try {
+      if (!/^#\/player\b/i.test(String(location.hash || ""))) location.hash = "#/player";
+    } catch {}
+  }
+  if (reelOpen) {
+    markDiscoverReelPlayerShell();
+    void syncPlayerSocialRail();
+    releaseDiscoverReelFullBleedLayout();
+    window.setTimeout(() => clearDiscoverReelOpeningLock(), 1200);
   }
   const a = ensurePlayer();
   const playUrl = normalizeAudioUrlForPlayback(url);

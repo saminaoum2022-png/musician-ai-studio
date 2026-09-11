@@ -261,7 +261,7 @@ import { DISCOVER_SHOW_PLAY_COUNTS, MUSIC_VIDEO_FEATURE_ENABLED } from "./featur
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260911-225930";
+const APP_BUILD = "20260912-031732";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -45380,9 +45380,44 @@ function discoverReelRowCoverImg(el) {
   return host?.querySelector?.(".discoverFeedSongArt img, img") || null;
 }
 
+function discoverReelRowCoverInstantSafe(rowImg, rowSrc) {
+  if (!rowImg?.complete || !rowImg.naturalWidth) return false;
+  const src = String(rowSrc || rowImg.currentSrc || rowImg.src || "").trim();
+  if (!src || isSquareListCoverUrl(src)) return false;
+  const w = rowImg.naturalWidth;
+  const h = rowImg.naturalHeight;
+  if (w > 0 && h > 0) {
+    const ratio = w / h;
+    if (ratio > 0.92 && ratio < 1.08) return false;
+  }
+  return true;
+}
+
+function stashDiscoverReelCoverPending() {
+  const art = els.playerArt;
+  if (!art) return;
+  art.classList.add("isReelCoverPending");
+  art.style.setProperty("opacity", "0", "important");
+}
+
+function revealDiscoverReelCoverWhenReady(img) {
+  if (!img) return;
+  const reveal = () => {
+    img.classList.remove("isReelCoverPending");
+    img.style.removeProperty("opacity");
+  };
+  if (img.complete && img.naturalWidth > 0) {
+    reveal();
+    return;
+  }
+  img.addEventListener("load", reveal, { once: true });
+  img.addEventListener("error", reveal, { once: true });
+}
+
 /** Paint reel cover synchronously from the tapped Discover row (already decoded in DOM). */
 function primeDiscoverReelCoverInstant({ el, artUrl, title, subtitle } = {}) {
   if (!els.playerArt) return "";
+  if (isNativeShell()) return "";
   const resolved = String(artUrl || "").trim();
   if (els.playerTitle && title) els.playerTitle.textContent = title;
   if (els.playerSubtitle && subtitle) {
@@ -45390,7 +45425,7 @@ function primeDiscoverReelCoverInstant({ el, artUrl, title, subtitle } = {}) {
   }
   const rowImg = discoverReelRowCoverImg(el);
   const rowSrc = String(rowImg?.currentSrc || rowImg?.src || "").trim();
-  if (rowImg?.complete && rowImg.naturalWidth > 0 && rowSrc) {
+  if (discoverReelRowCoverInstantSafe(rowImg, rowSrc)) {
     els.playerArt.dataset.coverSrc = resolved || rowSrc;
     els.playerArt.dataset.coverRetry = "0";
     els.playerArt.dataset.coverFallback = "";
@@ -45463,6 +45498,8 @@ function ensureNativeDiscoverReelCriticalCss() {
     "html.is-native-shell .playerCard.isDiscoverReelLayout .playerArt{position:absolute!important;inset:0!important;",
     "width:100%!important;height:100%!important;max-width:none!important;aspect-ratio:unset!important;",
     "object-fit:cover!important;object-position:center top!important;border-radius:0!important;padding:0!important}",
+    "html.is-native-shell .playerCard.isDiscoverReelLayout .playerArt.isReelCoverPending{opacity:0!important;",
+    "visibility:hidden!important}",
     "html.is-native-shell .playerCard.isDiscoverReelLayout .playerSocialRail,",
     "html.is-native-shell .playerCard.isDiscoverReelLayout .playerSocialRail[hidden]{display:flex!important;",
     "visibility:visible!important;position:fixed!important;right:12px!important;",
@@ -45611,6 +45648,8 @@ function primeDiscoverReelOpenFirstFrame(pick, reelIdx, { title = "", subtitle =
   try { document.body.classList.add("isDiscoverReelPlayer", "discoverReelOpening"); } catch {}
   ensureNativeDiscoverReelCriticalCss();
   if (isNativeShell()) try { reassertViewportScale(); } catch {}
+  lockDiscoverReelFullBleedLayout();
+  stashDiscoverReelCoverPending();
   resetDiscoverReelRailFade();
   const url = String(pick?.url || "").trim();
   miniSource = {
@@ -45635,7 +45674,6 @@ function primeDiscoverReelOpenFirstFrame(pick, reelIdx, { title = "", subtitle =
   };
   syncRoutePanelVisibility("player");
   try { location.hash = "#/player"; } catch {}
-  lockDiscoverReelFullBleedLayout();
   primeDiscoverReelSocialRail(pick);
   void syncPlayerSocialRail();
   const playerArtUrl = discoverReelPlayerArtUrl(pick);
@@ -45645,8 +45683,10 @@ function primeDiscoverReelOpenFirstFrame(pick, reelIdx, { title = "", subtitle =
     title: String(title || pick?.title || "Song"),
     subtitle: String(subtitle || pick?.byLine || ""),
   });
-  if (instant) return true;
-  return primeDiscoverReelCoverFirstFrame(pick, { title, subtitle });
+  let painted = Boolean(instant);
+  if (!painted) painted = primeDiscoverReelCoverFirstFrame(pick, { title, subtitle });
+  if (painted) revealDiscoverReelCoverWhenReady(els.playerArt);
+  return painted;
 }
 
 /** Full portrait + full-bleed shell synchronously on tap (before any await). */
@@ -45990,11 +46030,17 @@ async function playDiscoverFeedEntry({ raw, title, art, by, playSource, el, opts
         pick = { ...pick, artUrl: playerArtUrl };
         _discoverReelQueue[idx] = pick;
       }
-      const skipCoverPaint = !inPlace && primeDiscoverReelOpenFirstFrame(pick, idx, { title, subtitle: by, el });
-      if (!inPlace && !skipCoverPaint && playerArtUrl) {
-        await primeDiscoverReelCoverDecode(playerArtUrl);
+      if (!inPlace) {
+        primeDiscoverReelOpenFirstFrame(pick, idx, { title, subtitle: by, el });
+        if (playerArtUrl) await primeDiscoverReelCoverDecode(playerArtUrl);
+        if (els.playerArt?.classList.contains("isReelCoverPending")) {
+          primeDiscoverReelCoverFirstFrame(pick, { title, subtitle: by });
+          revealDiscoverReelCoverWhenReady(els.playerArt);
+        }
+        await playDiscoverReelAt(idx, { openPlayer: true, skipCoverPaint: true });
+        return;
       }
-      await playDiscoverReelAt(idx, { openPlayer: !inPlace, skipCoverPaint });
+      await playDiscoverReelAt(idx, { openPlayer: !inPlace, skipCoverPaint: false });
       return;
     }
   }
@@ -61763,11 +61809,11 @@ async function playOnPlayerPage(url, label, meta = null, opts = {}) {
     Boolean(opts.shareListen) ||
     Boolean(currentPlayerTrackRef?.fromSharedLink) ||
     Boolean(parseSharedTrackIdFromLocation());
-  const reelOpen = Boolean(opts.reelSwap || opts.coverImmediate);
+  const reelOpen = Boolean(opts.reelSwap || opts.coverImmediate || miniSource?.discoverReel || discoverReelChromeActive());
   if (reelOpen) lockDiscoverReelFullBleedLayout();
   const metaOpts = {
     coverImmediate: reelOpen,
-    skipCoverPaint: Boolean(opts.skipCoverPaint),
+    skipCoverPaint: Boolean(opts.skipCoverPaint || miniSource?.discoverReel || discoverReelChromeActive()),
     trackRef: opts.trackRef || null,
   };
   if (meta && (meta.title || meta.subtitle || meta.artUrl)) {

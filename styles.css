@@ -59204,6 +59204,11 @@ html.is-native-shell .playerCard[data-discover-reel="1"] .playerArt{
   border-radius: 0 !important;
   padding: 0 !important;
 }
+html.is-native-shell .playerCard.isDiscoverReelLayout .playerArt.isReelCoverPending,
+html.is-native-shell .playerCard[data-discover-reel="1"] .playerArt.isReelCoverPending{
+  opacity: 0 !important;
+  visibility: hidden !important;
+}
 html.is-native-shell body.isDiscoverReelPlayer[data-route="player"] .playerSocialRail,
 html.is-native-shell body.isDiscoverReelPlayer[data-route="player"] .playerSocialRail[hidden],
 html.is-native-shell body.discoverReelOpening[data-route="player"] .playerSocialRail,

@@ -48,6 +48,7 @@ const {
   resolveStemsLogKind,
   buildStemsPromptLabel,
 } = require("../_lib/suno-admin-log");
+const { DEFAULT_SUNO_MODEL, normalizeSunoModel } = require("../_lib/suno-upstream");
 
 const MAX_UPLOAD_BYTES = 25 * 1024 * 1024;
 // Reference-audio generations (remix / cover / hum / extend) produce full
@@ -204,7 +205,7 @@ module.exports = async function handler(req, res) {
         } catch {}
       }
       const title = String(body?.title || "").trim();
-      const model = String(body?.model || "V5_5").trim();
+      const model = String(body?.model || DEFAULT_SUNO_MODEL).trim();
       const vocalGender = String(body?.vocalGender || "").trim().toLowerCase();
       const voiceTimbre = String(body?.voiceTimbre || "").trim();
       const songKey = String(body?.songKey || "").trim();
@@ -277,9 +278,7 @@ module.exports = async function handler(req, res) {
       } catch {}
 
       // 2) Route by reference mode
-      const requestedModel = String(model || "").trim().toUpperCase();
-      const allowedModels = new Set(["V4_5PLUS", "V5", "V5_5", "V4_5ALL", "V4_5", "V4"]);
-      const safeModel = allowedModels.has(requestedModel) ? requestedModel : "V5_5";
+      const safeModel = normalizeSunoModel(model || DEFAULT_SUNO_MODEL);
 
       // === Cover mode: melody-following new arrangement ===
       const coverModes = new Set(["vocal_full", "vocal_cover", "song_remix", "song_cover", "vocal_instrumental"]);
@@ -508,7 +507,9 @@ module.exports = async function handler(req, res) {
       // descriptors only. Anything that looks like an instruction is
       // dropped. If style is empty we fall back to a single neutral
       // style word so the field is never empty (it's required).
-      const instModel = ["V4_5PLUS", "V5", "V5_5"].includes(safeModel) ? safeModel : "V4_5PLUS";
+      const instModel = ["V4_5PLUS", "V5", "V5_5", "V6", "V6_WILD", "V6_MINI"].includes(safeModel)
+        ? safeModel
+        : DEFAULT_SUNO_MODEL;
       const styleClean = String(style || "").replace(/\s+/g, " ").trim();
       // Build the addPayload to mirror the Suno OpenAPI example AS
       // CLOSELY AS POSSIBLE: short style words for `tags`, short

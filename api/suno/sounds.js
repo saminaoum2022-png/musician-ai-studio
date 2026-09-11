@@ -79,7 +79,7 @@ module.exports = async function handler(req, res) {
 
     const payload = {
       prompt: prompt.slice(0, 500),
-      model: "V5",
+      model: "V6",
       soundLoop,
       grabLyrics,
       soundKey,

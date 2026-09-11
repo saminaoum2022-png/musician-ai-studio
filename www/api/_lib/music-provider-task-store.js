@@ -31,6 +31,49 @@ async function readJsonUrl(url) {
   }
 }
 
+async function probeArchiveAudioUrl(userId, taskId) {
+  const uid = String(userId || "").trim();
+  const tid = String(taskId || "").trim();
+  if (!uid || !tid) return { ok: false };
+  const folder = providerFolder(tid);
+  for (const ext of ["mp3", "wav"]) {
+    const key = `${uid}/${folder}/${tid}.${ext}`;
+    const url = publicObjectUrl(BUCKET, key);
+    try {
+      const r = await fetch(url, { method: "HEAD", cache: "no-store" });
+      if (r.ok) return { ok: true, url, ext };
+    } catch {
+      /* try next ext */
+    }
+  }
+  return { ok: false };
+}
+
+/** When task JSON is missing but MP3 exists in song_archive (admin can play). */
+function buildArchiveRecoveryStatusPayload({ taskId, audioUrl }) {
+  const tid = String(taskId || "").trim();
+  const audioId = `${tid}_a`;
+  const clip = {
+    id: audioId,
+    audioId,
+    audio_url: audioUrl,
+    audioUrl,
+    title: "Generated song",
+    prompt: "",
+  };
+  const prov = tid.startsWith("lyr_") ? "lyria" : tid.startsWith("elv_") ? "elevenlabs" : "minimax";
+  return {
+    code: 200,
+    data: {
+      taskId: tid,
+      status: "SUCCESS",
+      response: { sunoData: [clip], suno_data: [clip] },
+    },
+    _provider: prov,
+    _recoveredFromArchive: true,
+  };
+}
+
 async function saveMusicProviderTaskStatus({ userId, taskId, statusPayload }) {
   const key = taskObjectKey(userId, taskId);
   const body = Buffer.from(JSON.stringify(statusPayload), "utf8");
@@ -48,8 +91,15 @@ async function loadMusicProviderTaskStatus({ userId, taskId }) {
   const key = taskObjectKey(userId, taskId);
   const url = publicObjectUrl(BUCKET, key);
   const data = await readJsonUrl(url);
-  if (!data) return { ok: false, error: "task_not_found" };
-  return { ok: true, data, url };
+  if (data) return { ok: true, data, url };
+  const audio = await probeArchiveAudioUrl(userId, taskId);
+  if (!audio.ok) return { ok: false, error: "task_not_found" };
+  return {
+    ok: true,
+    data: buildArchiveRecoveryStatusPayload({ taskId, audioUrl: audio.url }),
+    url: audio.url,
+    recoveredFromArchive: true,
+  };
 }
 
 function isMusicProviderTaskId(taskId) {

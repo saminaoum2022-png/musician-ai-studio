@@ -1,11 +1,28 @@
 /**
  * POST /api/lyrics
- * Body: { seed?: string, style?: string, mode?: "continue"|"full"|"arrange"|"challenge"|"remix_reply"|"diacritics"|"enhance", sourceLyrics?: string, sourceTitle?: string, sourceCreator?: string, lyricsProvider?: "gemini"|"suno" }
+ * Body: { seed?: string, style?: string, mode?: "continue"|"full"|"arrange"|"challenge"|"remix_reply"|"diacritics"|"enhance"|"fix_singing"|"singability_check"|"to_arabizi", sourceLyrics?: string, sourceTitle?: string, sourceCreator?: string, lyricsProvider?: "gemini"|"suno", scriptFormat?: "arabic"|"arabizi"|"auto" }
  *
  * Provider: Gemini by default (GEMINI_API_KEY; rhyme/qafiya in buildPrompt).
  * Suno only when lyricsProvider is explicitly "suno" (costs Suno credits).
  */
 const { queueLogProviderUsage } = require("./_lib/provider-usage-log");
+const {
+  looksLikeArabizi,
+  resolveScriptFormat,
+  buildArabiziPromptLines,
+  buildToArabiziConversionLines,
+} = require("./_lib/arabizi");
+const {
+  dialectFlags,
+  isArabicLyricsContext,
+  buildColloquialArabicGenerationLines,
+  buildLebaneseDiacriticsLinesAr,
+  buildLebaneseDiacriticsLinesEn,
+  buildLevantineDiacriticsLinesAr,
+  buildLevantineDiacriticsLinesEn,
+  stripColloquialTanween,
+  lightenSungArabicDiacritics,
+} = require("./_lib/arabic-dialect-lyrics");
 
 module.exports = async function handler(req, res) {
   setCors(res);
@@ -22,12 +39,16 @@ module.exports = async function handler(req, res) {
     const sourceTitle = String(body?.sourceTitle || "").trim().slice(0, 160);
     const sourceCreator = String(body?.sourceCreator || "").trim().slice(0, 80);
     const lyricsProvider = String(body?.lyricsProvider || body?.providerPreference || "").trim().toLowerCase();
+    const scriptFormat = resolveScriptFormat(body, seed);
     const requestedMode = String(body?.mode || "").trim().toLowerCase();
     const sunoLyricsRequested =
       lyricsProvider === "suno"
       && requestedMode !== "remix_reply"
       && requestedMode !== "diacritics"
-      && requestedMode !== "enhance";
+      && requestedMode !== "enhance"
+      && requestedMode !== "fix_singing"
+      && requestedMode !== "singability_check"
+      && requestedMode !== "to_arabizi";
     if (requestedMode === "diacritics" && !seed) {
       return json(res, 400, {
         error: "Add vowel marks needs existing Arabic lyrics in the box.",
@@ -40,6 +61,20 @@ module.exports = async function handler(req, res) {
         error: "Polish lyrics needs existing lyrics in the box.",
         provider: "none",
         debug: { mode: "enhance", seed: "missing" },
+      });
+    }
+    if ((requestedMode === "fix_singing" || requestedMode === "singability_check") && !seed) {
+      return json(res, 400, {
+        error: "Add lyrics first, then check or fix singability.",
+        provider: "none",
+        debug: { mode: requestedMode, seed: "missing" },
+      });
+    }
+    if (requestedMode === "to_arabizi" && !seed) {
+      return json(res, 400, {
+        error: "Add Arabic lyrics first, then convert to Arabizi.",
+        provider: "none",
+        debug: { mode: "to_arabizi", seed: "missing" },
       });
     }
     if (requestedMode === "remix_reply" && !sourceLyrics) {
@@ -55,25 +90,40 @@ module.exports = async function handler(req, res) {
         ? "diacritics"
         : requestedMode === "enhance"
           ? "enhance"
-          : detectModeFromSeed(seed, body?.mode);
+          : requestedMode === "fix_singing"
+            ? "fix_singing"
+            : requestedMode === "singability_check"
+              ? "singability_check"
+              : requestedMode === "to_arabizi"
+                ? "to_arabizi"
+              : detectModeFromSeed(seed, body?.mode);
     const nonce = Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 8);
-    const prompt = buildPrompt({ seed, style, mode, nonce, dialect, dialectHint, sourceLyrics, sourceTitle, sourceCreator });
+    const prompt = buildPrompt({ seed, style, mode, nonce, dialect, dialectHint, sourceLyrics, sourceTitle, sourceCreator, scriptFormat });
     const sunoPrompt = buildSunoPrompt({ seed, style, mode, dialect, dialectHint });
     const complianceTerms = mode === "remix_reply"
       ? [...new Set([
         ...extractComplianceTerms({ seed: sourceLyrics, style }),
         ...extractComplianceTerms({ seed, style }),
       ])]
-      : mode === "diacritics" || mode === "enhance"
+      : mode === "diacritics" || mode === "enhance" || mode === "fix_singing" || mode === "singability_check" || mode === "to_arabizi"
         ? []
         : extractComplianceTerms({ seed, style });
     const geminiTemperature = mode === "remix_reply"
       ? 0.72
+      : mode === "to_arabizi"
+        ? 0.1
       : mode === "diacritics"
         ? 0.35
         : mode === "enhance"
           ? 0.58
-          : 0.9;
+          : mode === "fix_singing"
+            ? 0.52
+            : mode === "singability_check"
+              ? 0.25
+              : 0.9;
+    const geminiPreferredModels = mode === "to_arabizi"
+      ? ["gemini-2.5-flash", "gemini-2.0-flash"]
+      : null;
     const sunoKey = process.env.SUNO_API_KEY || "";
 
     const debug = {};
@@ -86,17 +136,46 @@ module.exports = async function handler(req, res) {
           debug: { nonce, gemini: "missing_gemini_key" },
         });
       }
-      const gemResult = await tryGeminiLyrics({ geminiKey, prompt, temperature: geminiTemperature });
+      const gemResult = await tryGeminiLyrics({
+        geminiKey,
+        prompt,
+        temperature: geminiTemperature,
+        preferredModels: geminiPreferredModels,
+      });
       if (gemResult?.ok) {
+        if (mode === "singability_check") {
+          const report = parseSingabilityReport(gemResult.lyrics);
+          if (!report) {
+            return json(res, 502, {
+              error: "Could not read singability check — try again.",
+              provider: "none",
+              debug: { nonce, gemini: "bad_json", mode },
+            });
+          }
+          queueLogProviderUsage({ provider: "gemini", kind: "lyrics" });
+          return json(res, 200, {
+            ok: true,
+            singability: report,
+            provider: "gemini",
+            debug: { nonce, gemini: "ok", mode },
+          });
+        }
         let normalized = sanitizeLyricsOutput(gemResult.lyrics);
+        const flags = dialectFlags(dialect, dialectHint);
+        const arabicScript = isArabicLyricsContext({ dialect, dialectHint, scriptFormat, seed });
         if (mode === "diacritics") {
-          normalized = lightenSungArabicDiacritics(normalized, { isMsa: isMsaDialect(dialect) });
+          normalized = lightenSungArabicDiacritics(normalized, {
+            isMsa: flags.isMsa,
+            isLebanese: flags.isLebanese,
+          });
+        } else if (arabicScript && !flags.isMsa) {
+          normalized = stripColloquialTanween(normalized);
         }
         if (mode === "remix_reply" && isMetaAiLyrics(normalized)) {
           const fixed = await repairMetaAiLyrics({ geminiKey, prompt, text: normalized, temperature: geminiTemperature });
           if (fixed) normalized = fixed;
         }
-        const repaired = mode === "enhance" || mode === "diacritics"
+        const repaired = mode === "enhance" || mode === "diacritics" || mode === "fix_singing" || mode === "to_arabizi"
           ? { text: normalized, provider: "gemini" }
           : await maybeRepairOnce({
             text: normalized,
@@ -146,8 +225,15 @@ module.exports = async function handler(req, res) {
       const gemResult = await tryGeminiLyrics({ geminiKey, prompt, temperature: geminiTemperature });
       if (gemResult?.ok) {
         let normalized = sanitizeLyricsOutput(gemResult.lyrics);
+        const flags = dialectFlags(dialect, dialectHint);
+        const arabicScript = isArabicLyricsContext({ dialect, dialectHint, scriptFormat, seed });
         if (mode === "diacritics") {
-          normalized = lightenSungArabicDiacritics(normalized, { isMsa: isMsaDialect(dialect) });
+          normalized = lightenSungArabicDiacritics(normalized, {
+            isMsa: flags.isMsa,
+            isLebanese: flags.isLebanese,
+          });
+        } else if (arabicScript && !flags.isMsa) {
+          normalized = stripColloquialTanween(normalized);
         }
         if (mode === "remix_reply" && isMetaAiLyrics(normalized)) {
           const fixed = await repairMetaAiLyrics({ geminiKey, prompt, text: normalized, temperature: geminiTemperature });
@@ -286,9 +372,11 @@ async function repairMetaAiLyrics({ geminiKey, prompt, text, temperature = 0.72 
   return out && !isMetaAiLyrics(out) ? out : "";
 }
 
-async function tryGeminiLyrics({ geminiKey, prompt, temperature = 0.9 }) {
+async function tryGeminiLyrics({ geminiKey, prompt, temperature = 0.9, preferredModels = null }) {
   const discovered = await listGeminiGenerateModels(geminiKey);
-  const preferred = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-2.0-flash-lite", "gemini-1.5-flash"];
+  const preferred = Array.isArray(preferredModels) && preferredModels.length
+    ? preferredModels
+    : ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-2.0-flash-lite", "gemini-1.5-flash"];
   const models = [...preferred, ...discovered].filter(Boolean).filter((v, i, a) => a.indexOf(v) === i);
   let lastError = discovered.length ? "unknown" : "no generateContent models discovered";
   for (const model of models) {
@@ -334,12 +422,19 @@ async function listGeminiGenerateModels(geminiKey) {
   }
 }
 
+const POP_RHYME_SCHEME_LINES = [
+  "Any section (verse, chorus, bridge, pre-chorus) can use any clear rhyme scheme — AABB, ABAB, ABBA, ABCB, AAAA, AAAB, AABA, AA, repeating hook lines, etc.",
+  "Pick one scheme per section and keep it consistent; do not mix patterns mid-section.",
+  "Do not favor one scheme for chorus vs verse — match what fits the song.",
+  "Arabic / Levantine: parallel couplets (موازي) — matching grammar slot and similar مقاطع per line help singability in any scheme.",
+  "Optional radif (رديف): repeat the same tail phrase after the rhyme word when it fits naturally.",
+];
+
 const POP_RHYME_METER_LINES = [
   "Rhythm & rhyme (required):",
   "- Within each section, keep lines a similar length with a clear singable rhythm.",
   "- Use end-rhyme (qafiya): paired lines should share the same or near ending sound where natural.",
-  "- Chorus: strong rhyme (AABB or a repeating hook line AAAA).",
-  "- Verse: ABAB or ABCB; pre-chorus may use AA leading into the chorus; bridge may be looser.",
+  ...POP_RHYME_SCHEME_LINES.map((line) => `- ${line}`),
   "- Do not sacrifice dialect, meaning, or natural speech for forced rhyme. Near-rhyme is fine, especially in colloquial Arabic.",
   "- Do not print rhyme scheme labels — output lyrics with section tags only.",
 ];
@@ -356,6 +451,53 @@ const POP_RHYME_METER_LINES_CONTINUE = [
   "- New lines should rhyme with the established scheme in each section.",
 ];
 
+const FIX_SINGING_LINES = [
+  "Fix these lyrics for AI singing — prioritize singability (wazen/وزن, qafiya/قافية, balanced lines).",
+  "- Keep the SAME story, meaning, names, and dialect. Do NOT rewrite from scratch.",
+  "- Balance line length within each section (similar syllable count / مقاطع per line).",
+  "- Fix end-rhyme to match each section's existing scheme (AABB, ABAB, ABBA, ABCB, AAAA, AAAB, AABA, etc.) — do not swap schemes unless rhyme is broken.",
+  "- For Arabic / Levantine: strengthen parallel couplets (موازي) — same opener or mirrored line shape within paired lines.",
+  "- Lebanese: tight stopped word endings (sukoon feel) — never tanween (ًٌٍ) or MSA nahwi endings unless user asked.",
+  "- Adjust word choice, line breaks, or endings only as needed — keep natural colloquial speech.",
+  "- For Arabic: think pop-song feet/stress (أوف), not classical عروض exam.",
+  "- Keep all section tags [Verse] [Chorus] etc.",
+  "- Do NOT add heavy tashkeel — vowel marks are a separate step.",
+  "- Output lyrics only with section tags. No explanations.",
+];
+
+function parseSingabilityReport(text) {
+  const raw = String(text || "").trim();
+  if (!raw) return null;
+  const fenced = raw.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  const candidate = fenced ? fenced[1].trim() : raw;
+  let data = null;
+  try { data = JSON.parse(candidate); } catch { data = null; }
+  if (!data || typeof data !== "object") return null;
+  const warnings = Array.isArray(data.warnings)
+    ? data.warnings
+      .map((w) => ({
+        level: ["high", "medium", "low"].includes(String(w?.level || "").toLowerCase())
+          ? String(w.level).toLowerCase()
+          : "medium",
+        section: String(w?.section || "Lyrics").trim() || "Lyrics",
+        line: Number(w?.line) > 0 ? Number(w.line) : null,
+        message: String(w?.message || "").trim(),
+      }))
+      .filter((w) => w.message)
+    : [];
+  const scoreRaw = Number(data.score);
+  const score = Number.isFinite(scoreRaw) ? Math.max(0, Math.min(100, Math.round(scoreRaw))) : null;
+  const ready = typeof data.ready === "boolean" ? data.ready : null;
+  const summary = String(data.summary || "").trim();
+  if (!summary && !warnings.length && score == null) return null;
+  return {
+    score,
+    ready: ready ?? (score != null ? score >= 75 && !warnings.some((w) => w.level === "high") : null),
+    summary: summary || (warnings.length ? "Review singability warnings before generating." : "Looks singable."),
+    warnings,
+  };
+}
+
 const REMIX_REPLY_GUARDRAILS = [
   "STRICT — you are writing lyrics for a HUMAN singer (Person B) answering another HUMAN singer (Person A).",
   "NEVER mention AI, artificial intelligence, systems, algorithms, data, chatbots, robots, or software.",
@@ -364,20 +506,36 @@ const REMIX_REPLY_GUARDRAILS = [
   "Echo specific feelings, names, or images from the original song so the reply clearly connects.",
 ];
 
-function buildPrompt({ seed, style, mode, nonce, dialect, dialectHint, sourceLyrics, sourceTitle, sourceCreator }) {
+function buildPrompt({ seed, style, mode, nonce, dialect, dialectHint, sourceLyrics, sourceTitle, sourceCreator, scriptFormat = "latin" }) {
   const dialectLines = [
     dialect ? `Target dialect/accent: ${dialect}` : "",
     dialectHint ? `Dialect hint line (follow this flavor): ${dialectHint}` : "",
   ]
     .filter(Boolean)
     .join("\n");
+  const useArabizi = scriptFormat === "arabizi" || (scriptFormat !== "arabic" && looksLikeArabizi(seed));
+  const arabiziLines = useArabizi ? buildArabiziPromptLines({ dialect, dialectHint }) : [];
+  const scriptLines = useArabizi ? arabiziLines : [];
+  const flags = dialectFlags(dialect, dialectHint);
+  const colloquialArabicLines = isArabicLyricsContext({ dialect, dialectHint, scriptFormat, seed })
+    ? buildColloquialArabicGenerationLines(flags)
+    : [];
+  if (mode === "to_arabizi") {
+    return [
+      ...buildToArabiziConversionLines({ dialect, dialectHint }),
+      ...(dialectLines ? [dialectLines] : []),
+      style ? `Style/Tags (context only): ${style}` : "",
+      "",
+      "Lyrics to convert:",
+      seed,
+    ].filter(Boolean).join("\n");
+  }
   if (mode === "diacritics") {
     const dialectRaw = String(dialect || "").trim();
     const dialectLower = dialectRaw.toLowerCase();
-    const isMsa = /\bmsa\b|modern standard|فصحى|fus[hḥ]a/.test(dialectLower);
-    const isLebanese = /lebanese|لبنان/.test(dialectLower);
-    const isLevantineColloquial =
-      isLebanese || /levantine|syrian|palestinian|jordanian|سور|فلسط/.test(dialectLower);
+    const isMsa = flags.isMsa;
+    const isLebanese = flags.isLebanese;
+    const isLevantineColloquial = flags.isLevantineColloquial;
     // Friendly names match Create chips so Gemini gets the same simple ask
     // that works in Coach — short + dialect-named, not a soft essay.
     const dialectSpeak =
@@ -408,49 +566,32 @@ function buildPrompt({ seed, style, mode, nonce, dialect, dialectHint, sourceLyr
       `حَرِّك الكلمات ب${dialectAr} عشان الغناء يطلع باللهجة — مثل Coach، مش تشكيل مدرسي.`,
       "نفس الكلمات، نفس الأسطر، نفس الوسوم [Verse] [Chorus]… أخرج الكلمات فقط.",
       isMsa
-        ? "فصحى: تشكيل أوضح مقبول، بس بدون مبالغة على كل حرف."
+        ? "فصحى: تشكيل أوضح مقبول، بس بدون مبالغة على كل حرف — لا تنوين إلا إذا طلب المستخدم إعراباً صراحة."
         : isLebanese
-        ? [
-          "شكّل كل كلمة مغنّاة بحركات اللهجة اللبنانية المحكية (فتحة/كسرة/ضمة/شدة) — مش سكّون على كل حرف.",
-          "ممنوع: تنوين (ًٌٍ)، إعراب، أو تشكيل نحوي على آخر الكلمات.",
-          "ق = همزة (2): قلب، قلت، قال، أقول — مش /q/ فصيح.",
-          "امشي على نطق بيروت المحكي: شو، كيف، حبّيبي، عم، ما، منيح.",
-        ].join("\n")
+        ? buildLebaneseDiacriticsLinesAr().join("\n")
         : isLevantineColloquial
-        ? [
-          "شكّل الكلمات المغنّاة بحركات اللهجة الشامية المحكية — مش كل حرف بسكّون.",
-          "ممنوع: تنوين (ًٌٍ)، إعراب، أو تشكيل نحوي على آخر الكلمات.",
-          "ق باللهجة المحكية = همزة (2) مش /q/ فصيح — مثل: قلب، قلت، قال.",
-        ].join("\n")
+        ? buildLevantineDiacriticsLinesAr().join("\n")
         : [
-          "لا تشكّل كل حرف — شكّل بس الكلمات يلي ممكن يغلط فيها الغناء.",
+          "لا تشكّل كل حرف — شكّل الكلمات يلي ممكن يغلط فيها الغناء + سكّون على السوكن.",
           "ممنوع: تنوين (ًٌٍ)، إعراب، أو تشكيل نحوي على آخر الكلمات.",
-          "ق باللهجة المحكية = همزة (2) مش /q/ فصيح — مثل: قلب، قلت، قال.",
+          "ق باللهجة المحكية = همزة (2) مش /q/ فصيح.",
         ].join("\n"),
       `Mark these lyrics for sung ${dialectSpeak} — like Coach: help the singer hit the dialect, NOT school grammar.`,
       "Keep SAME words, lines, and section tags. Output lyrics only.",
       isMsa
-        ? "MSA: clear marks OK, but do not vowelize every single letter."
+        ? "MSA: clear marks OK, but do not vowelize every single letter — no tanween unless user explicitly asked for nahwi."
         : isLebanese
-        ? [
-          "Vowelize EVERY sung word for spoken Beirut Lebanese (fatha/kasra/damma/shadda on words) — NOT sukoon on every letter.",
-          "NO tanween (ًٌٍ), NO nahwi case endings, NO formal MSA pronunciation.",
-          "Qaf ق = hamza (2), not classical /q/ — e.g. قلب، قلت، قال.",
-          "Spoken Beirut examples: شو، كيف، حبّيبي، عم، ما، منيح.",
-        ].join("\n")
+        ? buildLebaneseDiacriticsLinesEn().join("\n")
         : isLevantineColloquial
-        ? [
-          "Vowelize sung words for spoken Levantine — not sukoon on every letter.",
-          "NO tanween (ًٌٍ), NO nahwi case endings, NO textbook tashkeel.",
-          "Qaf ق = hamza in this dialect, not classical /q/.",
-        ].join("\n")
+        ? buildLevantineDiacriticsLinesEn().join("\n")
         : [
-          "Do NOT mark every letter — only words where the AI singer might guess wrong.",
+          "Mark vowels on words the singer might misread; add sukoon on stopped consonants.",
           "NO tanween (ًٌٍ), NO nahwi case endings, NO full textbook tashkeel.",
-          "ق (qaf) = hamza in this dialect, not classical /q/.",
+          "Qaf ق = hamza in this dialect, not classical /q/.",
         ].join("\n"),
       "Honor Arabic address/gender hints in the dialect hint if present.",
       `Variation token: ${nonce}`,
+      ...(colloquialArabicLines.length && mode !== "diacritics" ? colloquialArabicLines : []),
       ...(dialectLines ? [dialectLines] : []),
       style ? `Style/Tags (context only): ${style}` : "",
       "",
@@ -465,13 +606,60 @@ function buildPrompt({ seed, style, mode, nonce, dialect, dialectHint, sourceLyr
       "Preserve colloquial/dialect words — do NOT upgrade to formal MSA or change the accent flavor.",
       "Keep the same section tags and overall structure; only lightly adjust wording, line breaks, or endings for flow.",
       ...POP_RHYME_METER_LINES_LIGHT,
-      "Do NOT add heavy vowel marks (tashkeel) — that is a separate step.",
+      ...(useArabizi ? scriptLines : ["Do NOT add heavy vowel marks (tashkeel) — that is a separate step."]),
       "Output lyrics only with section tags. No explanations or metadata.",
       `Variation token: ${nonce}`,
+      ...(colloquialArabicLines.length && mode !== "diacritics" ? colloquialArabicLines : []),
       ...(dialectLines ? [dialectLines] : []),
       style ? `Style/Tags (context only): ${style}` : "",
       "",
       "Lyrics to polish:",
+      seed,
+    ].filter(Boolean).join("\n");
+  }
+  if (mode === "fix_singing") {
+    return [
+      ...FIX_SINGING_LINES,
+      ...(useArabizi ? scriptLines : []),
+      `Variation token: ${nonce}`,
+      ...(colloquialArabicLines.length && mode !== "diacritics" ? colloquialArabicLines : []),
+      ...(dialectLines ? [dialectLines] : []),
+      style ? `Style/Tags (context only): ${style}` : "",
+      "",
+      "Lyrics to fix for singing:",
+      seed,
+    ].filter(Boolean).join("\n");
+  }
+  if (mode === "singability_check") {
+    return [
+      "You are a lyrics coach for AI music singing (Suno/Lyria). Analyze singability only — do NOT rewrite lyrics.",
+      "Focus on: line length balance (wazen/وزن), end-rhyme (qafiya/قافية), chorus hook fit, lines that are too long or uneven.",
+      ...(useArabizi
+        ? [
+          "Lyrics are in Arabizi (Latin phonetic spelling). Analyze rhyme by spoken ending sounds (-ak, -na, -eh, etc.).",
+          "2/3/7 in words encode Arabic sounds — judge rhyme as pronounced, not as English.",
+        ]
+        : []),
+      "Rhyme schemes:",
+      "- Verse and chorus can use any scheme (AABB, ABAB, ABBA, ABCB, AAAA, AAAB, AABA, AA, repeating hooks). Do NOT prefer one scheme for chorus vs verse.",
+      "- Flag issues only when a section's lines do not match its apparent scheme, or when rhyme/meter is uneven — not because a scheme is 'wrong' for that section.",
+      "- AABA: lines 1, 2, and 4 rhyme; line 3 is the B turn — do NOT flag line 3 for breaking rhyme.",
+      "- AAAB: lines 1, 2, and 3 rhyme; line 4 is the B turn — do NOT flag line 4 for breaking rhyme.",
+      "- Near-rhyme counts (e.g. Lebanese -na endings: لخّصنا / خلّصنا / فنّصنا). Do not nitpick 1-syllable length shifts (7 vs 8) unless they clearly break singing.",
+      "- If lyrics lack [Verse]/[Chorus] section tags, mention it once as a low-priority tip — not a high-severity rhyme failure.",
+      "- Arabic / Levantine: note parallel couplets (موازي) — paired lines with matching structure and similar مقاطع.",
+      "- Near-rhyme / assonance OK in colloquial Arabic.",
+      "For Arabic lyrics, comment on colloquial singability — uneven مقاطع make the AI singer stumble.",
+      "Return ONLY valid JSON (no markdown) with this shape:",
+      '{"score":0-100,"ready":true|false,"summary":"one sentence","warnings":[{"level":"high|medium|low","section":"Chorus","line":2,"message":"..."}]}',
+      "- score: 100 = very singable for AI vocals; below 60 = likely problems.",
+      "- ready: true only if safe to generate without edits.",
+      "- warnings: 0-8 specific issues; line is 1-based within that section.",
+      ...(colloquialArabicLines.length && mode !== "diacritics" ? colloquialArabicLines : []),
+      ...(dialectLines ? [dialectLines] : []),
+      style ? `Style/Tags (context only): ${style}` : "",
+      "",
+      "Lyrics to analyze:",
       seed,
     ].filter(Boolean).join("\n");
   }
@@ -500,6 +688,7 @@ function buildPrompt({ seed, style, mode, nonce, dialect, dialectHint, sourceLyr
       "Verse 1 may acknowledge what the original said; chorus should feel like the direct answer or counter-voice.",
       ...POP_RHYME_METER_LINES,
       `Variation token: ${nonce}`,
+      ...(colloquialArabicLines.length && mode !== "diacritics" ? colloquialArabicLines : []),
       ...(dialectLines ? [dialectLines] : []),
       style ? `Style/Tags: ${style}` : "Style/Tags: none",
       sourceTitle ? `Original song title: ${sourceTitle}` : "",
@@ -517,6 +706,7 @@ function buildPrompt({ seed, style, mode, nonce, dialect, dialectHint, sourceLyr
       "Do NOT change theme or language. Do NOT invent a new story.",
       "Keep original lines as much as possible; only reorganize and lightly polish for flow.",
       "Output lyrics only with section tags.",
+      ...(useArabizi ? scriptLines : []),
       "Use structure:",
       "[Verse 1]",
       "[Chorus]",
@@ -528,6 +718,7 @@ function buildPrompt({ seed, style, mode, nonce, dialect, dialectHint, sourceLyr
       "In [Outro], include a clear musical ending phrase.",
       ...POP_RHYME_METER_LINES_LIGHT,
       `Variation token: ${nonce}`,
+      ...(colloquialArabicLines.length && mode !== "diacritics" ? colloquialArabicLines : []),
       ...(dialectLines ? [dialectLines] : []),
       style ? `Style/Tags: ${style}` : "Style/Tags: none",
       "",
@@ -540,7 +731,9 @@ function buildPrompt({ seed, style, mode, nonce, dialect, dialectHint, sourceLyr
       "Continue the user's lyrics in the same mood, theme, and language.",
       "Do not rewrite existing lines.",
       "Output lyrics only.",
+      ...(useArabizi ? scriptLines : []),
       ...POP_RHYME_METER_LINES_CONTINUE,
+      ...(colloquialArabicLines.length && mode !== "diacritics" ? colloquialArabicLines : []),
       ...(dialectLines ? [dialectLines] : []),
       style ? `Style/Tags: ${style}` : "Style/Tags: none",
       "",
@@ -557,11 +750,14 @@ function buildPrompt({ seed, style, mode, nonce, dialect, dialectHint, sourceLyr
       "[Verse] — 2 lines max (optional; skip if the brief is chorus-only)",
       "[Chorus] — 2 to 4 lines max, one repeatable hook",
       "Total: 8 lines maximum. Short syllables. Conversational, not shouty.",
+      ...(useArabizi ? scriptLines : []),
       "Do NOT include [Intro], [Verse 2], [Bridge], [Outro], or [Final Chorus].",
       "The last line must feel like a natural ending (held word or clean stop).",
       ...POP_RHYME_METER_LINES,
       "Do not explain the challenge. Do not repeat the instruction text.",
+      "Avoid generic filler every user would get — make hooks specific to the brief's photo, mood, and creative angle.",
       `Variation token: ${nonce}`,
+      ...(colloquialArabicLines.length && mode !== "diacritics" ? colloquialArabicLines : []),
       ...(dialectLines ? [dialectLines] : []),
       style ? `Style/Tags: ${style}` : "Style/Tags: none",
       "",
@@ -578,10 +774,12 @@ function buildPrompt({ seed, style, mode, nonce, dialect, dialectHint, sourceLyr
       "[Pre-Chorus] — 2 lines max (optional; omit if not needed)",
       "[Chorus] — 4 lines max, with one repeatable hook",
       "Total output: 12 lines maximum. Keep lines short and singable.",
+      ...(useArabizi ? scriptLines : []),
       ...POP_RHYME_METER_LINES,
       "Do not explain the challenge. Do not repeat the instruction text.",
       "Do not include metadata, notes, or descriptions.",
       `Variation token: ${nonce}`,
+      ...(colloquialArabicLines.length && mode !== "diacritics" ? colloquialArabicLines : []),
       ...(dialectLines ? [dialectLines] : []),
       style ? `Style/Tags: ${style}` : "Style/Tags: none",
       "",
@@ -592,6 +790,7 @@ function buildPrompt({ seed, style, mode, nonce, dialect, dialectHint, sourceLyr
   return [
     "Write complete singable lyrics for AI song generation.",
     "Output lyrics only.",
+    ...(useArabizi ? scriptLines : []),
     "Use this structure exactly:",
     "[Intro]",
     "[Verse 1]",
@@ -605,6 +804,7 @@ function buildPrompt({ seed, style, mode, nonce, dialect, dialectHint, sourceLyr
     "Make the [Outro] contain a clear ending phrase so the song can finish naturally.",
     ...POP_RHYME_METER_LINES,
     `Variation token: ${nonce}`,
+    ...(colloquialArabicLines.length && mode !== "diacritics" ? colloquialArabicLines : []),
     ...(dialectLines ? [dialectLines] : []),
     style ? `Style/Tags: ${style}` : "Style/Tags: none",
     seed ? `Use this seed idea:\n${seed}` : "No seed provided; create a coherent theme.",
@@ -618,9 +818,11 @@ function buildSunoPrompt({ seed, style, mode, dialect, dialectHint }) {
   const st = String(style || "").trim();
   const dialectLower = `${d} ${hint}`.toLowerCase();
   const isLebanese = /lebanese|levantine|لبنان|بيروت/.test(dialectLower);
+  const isEgyptian = /egyptian|masri|مصر|cairo/.test(dialectLower);
   const isArabicDialect =
     isLebanese
-    || /arabic|egyptian|iraqi|gulf|maghrebi|syrian|palestinian|tunisian|sudanese|darija|msa|فصحى|محك/.test(
+    || isEgyptian
+    || /arabic|iraqi|gulf|maghrebi|syrian|palestinian|tunisian|sudanese|darija|msa|فصحى|محك/.test(
       dialectLower,
     );
 
@@ -659,7 +861,9 @@ function buildSunoPrompt({ seed, style, mode, dialect, dialectHint }) {
       );
     }
     const lead = isLebanese
-      ? "Lebanese Arabic colloquial pop lyrics, Beirut dialect, qaf as hamza, NOT Egyptian, NOT formal MSA."
+      ? "Lebanese Arabic colloquial pop lyrics, Beirut dialect, qaf as hamza, tight sukoon word endings, NO tanween, NOT Egyptian, NOT formal MSA."
+      : isEgyptian
+      ? "Egyptian Masri colloquial pop lyrics, Cairo dialect, ب- present prefix on verbs, authentic Masri vocabulary, NO tanween, NOT Levantine, NOT formal MSA."
       : d
       ? `${d} colloquial sung lyrics.`
       : "Arabic colloquial sung lyrics.";
@@ -759,24 +963,6 @@ function extractTextLoose(data) {
   if (typeof data?.data?.text === "string") return data.data.text;
   if (typeof data?.message === "string") return data.message;
   return "";
-}
-
-function isMsaDialect(dialect) {
-  const d = String(dialect || "").trim().toLowerCase();
-  return /\bmsa\b|modern standard|فصحى|fus[hḥ]a/.test(d);
-}
-
-/** After Gemini: drop nahwi tanween + heavy sukoon so dialect singing stays spoken, not formal. */
-function lightenSungArabicDiacritics(input, { isMsa = false } = {}) {
-  let text = String(input || "");
-  if (!text) return text;
-  // Tanween (ً ٌ ٍ) — main source of "nahwi" singing.
-  text = text.replace(/[\u064B-\u064D]/g, "");
-  if (!isMsa) {
-    // Colloquial: sukoon on every letter reads stiff in TTS — keep shadda + vowels only.
-    text = text.replace(/\u0652/g, "");
-  }
-  return text;
 }
 
 function sanitizeLyricsOutput(input) {

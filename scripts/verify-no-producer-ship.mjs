@@ -19,12 +19,24 @@ try {
   process.exit(2);
 }
 
+let failed = false;
+
 if (/export\s+const\s+NABAD_PRODUCER_PUBLIC_SHIPPED\s*=\s*true/.test(text)) {
   console.error(
     "NABAD_PRODUCER_PUBLIC_SHIPPED is true — Producer would go live for users.",
   );
   console.error("Set it back to false in src/feature-flags.js before shipping to main.");
-  process.exit(1);
+  failed = true;
 }
 
-console.log("verify-no-producer-ship: OK (Producer stays hidden — code in tree is fine)");
+if (/export\s+const\s+NABAD_VIBE_PUBLIC_SHIPPED\s*=\s*true/.test(text)) {
+  console.error(
+    "NABAD_VIBE_PUBLIC_SHIPPED is true — Vibe would go live for users.",
+  );
+  console.error("Set it back to false in src/feature-flags.js before shipping to main.");
+  failed = true;
+}
+
+if (failed) process.exit(1);
+
+console.log("verify-no-producer-ship: OK (Producer + Vibe stay hidden — code in tree is fine)");

@@ -59,8 +59,14 @@ async function main() {
   }
 
   const producerUi =
-    String(process.env.NABAD_PRODUCER_UI || "").trim() === "1"
+    envName === "staging"
+    || String(process.env.NABAD_PRODUCER_UI || "").trim() === "1"
     || /^(1|true|yes)$/i.test(String(process.env.NABAD_PRODUCER_UI || "").trim());
+
+  const vibeUi =
+    envName === "staging"
+    || String(process.env.NABAD_VIBE_UI || "").trim() === "1"
+    || /^(1|true|yes)$/i.test(String(process.env.NABAD_VIBE_UI || "").trim());
 
   const payload = {
     supabaseUrl: String(d.supabaseUrl).trim().replace(/\/+$/, ""),
@@ -72,6 +78,7 @@ async function main() {
     environment: envName,
     environmentLabel: String(profile.label || envName),
     nabadProducerUi: producerUi,
+    nabadVibeUi: vibeUi,
   };
 
   const body = `window.__NABAD_CLIENT_ENV__ = ${JSON.stringify(payload, null, 2)};\n`;

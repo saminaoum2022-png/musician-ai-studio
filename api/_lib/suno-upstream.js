@@ -3,6 +3,34 @@
  */
 const SUNO_BASE = "https://api.sunoapi.org";
 
+/** Default for full-song / stems / mashup — not Lyria clip or 80s You. */
+const DEFAULT_SUNO_MODEL = "V6";
+
+const SUNO_ALLOWED_MODELS = new Set([
+  "V6",
+  "V6_WILD",
+  "V6_MINI",
+  "V5_5",
+  "V5",
+  "V4_5PLUS",
+  "V4_5ALL",
+  "V4_5",
+  "V4",
+]);
+
+function normalizeSunoModel(raw, fallback = DEFAULT_SUNO_MODEL) {
+  const m = String(raw || "").trim().toUpperCase();
+  return SUNO_ALLOWED_MODELS.has(m) ? m : fallback;
+}
+
+function sunoModelSupportsDuration(model) {
+  return /^(V5_5|V6|V6_WILD|V6_MINI)$/i.test(String(model || "").trim());
+}
+
+function sunoModelSupportsVoicePersona(model) {
+  return /^(V5|V5_5|V6|V6_WILD|V6_MINI)$/i.test(String(model || "").trim());
+}
+
 async function readJson(req) {
   const chunks = [];
   for await (const c of req) chunks.push(c);
@@ -117,4 +145,9 @@ module.exports = {
   isLikelySunoOriginCdnUrl,
   isSunoMusicGenerationTaskId,
   SUNO_BASE,
+  DEFAULT_SUNO_MODEL,
+  SUNO_ALLOWED_MODELS,
+  normalizeSunoModel,
+  sunoModelSupportsDuration,
+  sunoModelSupportsVoicePersona,
 };

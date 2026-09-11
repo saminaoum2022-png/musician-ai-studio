@@ -21,6 +21,12 @@ const {
 const { userIsAdmin } = require("../_lib/admin-auth");
 const { applyCors } = require("../_lib/cors");
 const { sanitizeSunoStyleTags, buildSunoErrorBody } = require("../_lib/suno-user-errors");
+const {
+  DEFAULT_SUNO_MODEL,
+  normalizeSunoModel,
+  sunoModelSupportsDuration,
+  sunoModelSupportsVoicePersona,
+} = require("../_lib/suno-upstream");
 const { queueRegisterSunoWatch } = require("../_lib/suno-generation-watch");
 const { formatRequestDetail, sunoErrorMessage, logSunoGeneration } = require("../_lib/suno-admin-log");
 const { requireProForWebApi } = require("../_lib/pro-web-gate");
@@ -113,7 +119,7 @@ module.exports = async function handler(req, res) {
     //   - personaModel selects which dimension of the persona to apply:
     //       style_persona (default): IDs from generate-persona (saved from a song).
     //       voice_persona: voiceId from Suno Voice wizard (recorded voice).
-    //   - voice_persona is supported on V5 and V5_5.
+    //   - voice_persona is supported on V5, V5_5, and V6-series models.
     const cleanPersonaId = personaId ? String(personaId).trim() : "";
     let personaModel = "";
     if (cleanPersonaId) {
@@ -126,10 +132,9 @@ module.exports = async function handler(req, res) {
         personaModel = "style_persona";
       }
     }
-    let chosenModel = String(requestedModel || "V5_5").trim() || "V5_5";
-    if (cleanPersonaId && personaModel === "voice_persona") {
-      const voiceOk = chosenModel === "V5" || chosenModel === "V5_5";
-      if (!voiceOk) chosenModel = "V5_5";
+    let chosenModel = normalizeSunoModel(requestedModel || DEFAULT_SUNO_MODEL);
+    if (cleanPersonaId && personaModel === "voice_persona" && !sunoModelSupportsVoicePersona(chosenModel)) {
+      chosenModel = DEFAULT_SUNO_MODEL;
     }
 
     const payload = {
@@ -149,7 +154,7 @@ module.exports = async function handler(req, res) {
         ? { weirdnessConstraint: clamp01(Number(weirdnessConstraint)) }
         : {}),
       ...(Number.isFinite(Number(audioWeight)) ? { audioWeight: clamp01(Number(audioWeight)) } : {}),
-      ...(chosenModel === "V5_5" && Number.isFinite(Number(duration))
+      ...(sunoModelSupportsDuration(chosenModel) && Number.isFinite(Number(duration))
         ? (() => {
             const sec = Math.round(Number(duration));
             return sec >= 10 && sec <= 360 ? { duration: sec } : {};

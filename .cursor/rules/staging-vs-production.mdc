@@ -15,7 +15,7 @@ TestFlight testers and live web users are **production**. Daily dev uses a **sep
 | API | Vercel preview for `staging` branch (`config/environments.json`) | `https://www.nabadai.com` |
 | Web users | Preview URL only (not nabadai.com) | nabadai.com |
 | iOS simulator | `npm run sim` (bakes **staging** API into bundled `www/`) | — |
-| **Your iPhone (dev)** | `npm run run:ios:staging` — staging frontend + staging API | — |
+| **Your iPhone (dev)** | `npm run run:ios:staging` — staging frontend + staging API + **Producer + Vibe UI baked** (admin-only) | — |
 | TestFlight (testers + prod check) | — | Archive from `main` with **production** env |
 | Supabase | **Shared today** — same DB unless Preview env vars point to a staging project | Production project |
 

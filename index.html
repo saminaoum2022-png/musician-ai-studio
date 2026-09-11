@@ -903,6 +903,16 @@
               </svg>
               <span class="createTabLabel">Lyrics</span>
             </button>
+            <button id="createTabVibe" class="createTab" type="button" role="tab" aria-selected="false" data-mode="vibe" hidden aria-hidden="true">
+              <svg class="createTabIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+                <path d="M4 14v4"/>
+                <path d="M8 10v8"/>
+                <path d="M12 6v12"/>
+                <path d="M16 10v8"/>
+                <path d="M20 14v4"/>
+              </svg>
+              <span class="createTabLabel">Vibe</span>
+            </button>
           </div>
           <div id="resultCard" class="resultCard" style="display:none">
             <div class="resultCardInner">
@@ -1105,6 +1115,16 @@
                 <small id="createChallengeHintSub">Edit below, then tap Generate.</small>
               </span>
             </div>
+            <button id="createPhotoSoloBanner" type="button" class="createPhotoSoloBanner" hidden aria-label="80s You challenge — add your photo">
+              <span class="createPhotoSoloBannerBg" style="background-image:url(/assets/discover/challenges/80s-you-hero.png)" aria-hidden="true"></span>
+              <span class="createPhotoSoloBannerScrim" aria-hidden="true"></span>
+              <span class="createPhotoSoloBannerBody">
+                <span class="createPhotoSoloBannerKicker">80s You</span>
+                <span class="createPhotoSoloBannerTitle">My 80s Moment</span>
+                <span class="createPhotoSoloBannerSub">Your portrait becomes a synth-pop anthem.</span>
+                <span class="createPhotoSoloBannerCta">Try now</span>
+              </span>
+            </button>
             <div class="createPanes" data-mode="lyrics">
               <div class="createPane createPane--photo" data-mode="photo" hidden>
                 <button id="createPhotoCta" class="createPaneCta" type="button" aria-label="Add a photo">
@@ -1144,6 +1164,22 @@
                 </div>
               </div>
 
+              <div class="createPane createPane--vibe" data-mode="vibe" hidden aria-hidden="true">
+                <button id="createVibeCta" class="createPaneCta createPaneCta--vibe" type="button" aria-label="Upload a song for vibe read">
+                  <span id="createVibePreview" class="createVibePreview" aria-hidden="true"></span>
+                  <span class="createPhotoShade" aria-hidden="true"></span>
+                  <span class="createPaneCtaIcon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" width="28" height="28" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                      <path d="M4 14v4"/><path d="M8 10v8"/><path d="M12 6v12"/><path d="M16 10v8"/><path d="M20 14v4"/>
+                    </svg>
+                  </span>
+                  <span class="createPaneCtaTitle">Upload a song</span>
+                  <span class="createPaneCtaSub">Inspired by its vibe — not a copy.</span>
+                </button>
+                <p class="vibeLegalNote hint createInlineHint">Original inspiration only. We read mood, style, and structure — never lyrics or melody from your upload.</p>
+                <span id="vibeReadSummary" class="vibeReadSummary imageMoodSummary" hidden></span>
+              </div>
+
               <div class="createPane createPane--lyrics" data-mode="lyrics">
                 <label class="field grow inputPanel" id="lyricsFieldPanel" data-lyrics-mode="write">
                   <div class="label inPanelLabel lyricsPanelHead">
@@ -1164,6 +1200,7 @@
                         <button type="button" class="optChip isActive" data-lyrics-lang="auto" aria-pressed="true">Auto</button>
                         <button type="button" class="optChip" data-lyrics-lang="english" aria-pressed="false">English</button>
                         <button type="button" class="optChip" data-lyrics-lang="arabic" aria-pressed="false">Arabic</button>
+                        <button type="button" class="optChip" data-lyrics-lang="arabizi" aria-pressed="false" title="Latin-script Lebanese — best for Lyria dialect singing">Arabizi</button>
                         <button type="button" class="optChip" data-lyrics-lang="french" aria-pressed="false">French</button>
                         <button type="button" class="optChip optChip--extra" data-lyrics-lang="spanish" aria-pressed="false">Spanish</button>
                         <button type="button" class="optChip optChip--extra" data-lyrics-lang="turkish" aria-pressed="false">Turkish</button>
@@ -1209,9 +1246,21 @@
                       <textarea id="sunoPrompt" dir="auto" rows="4" placeholder="Write your lyrics…"></textarea>
                     </div>
                     <div class="lyricsAssistBar" role="toolbar" aria-label="Lyrics assist">
+                      <button id="btnLyricsSingabilityCheck" class="lyricsSingabilityCheckBtn aiAssistBtn" type="button" hidden title="Analyze rhyme, wazen (وزن), and line balance for AI singing" aria-label="Check singability"><span class="lyricsSingabilityCheckIco aiAssistIco" aria-hidden="true">♫</span><span class="lyricsSingabilityCheckLabel aiAssistLabel">Check singability</span></button>
+                      <button id="btnLyricsFrancoAdmin" class="lyricsFrancoAdminBtn aiAssistBtn" type="button" hidden title="Admin: convert Arabic lyrics to Franco for Lyria testing" aria-label="Convert to Franco"><span class="lyricsFrancoAdminIco aiAssistIco" aria-hidden="true">Fr</span><span class="lyricsFrancoAdminLabel aiAssistLabel">Convert to Franco</span></button>
                       <button id="btnLyricsDiacritics" class="lyricsDiacriticsBtn" type="button" hidden title="Add Arabic vowel marks for clearer singing" aria-label="Add Arabic vowel marks"><span class="lyricsDiacriticsLabel">Add vowel marks</span><span class="lyricsDiacriticsLabelAr" lang="ar" dir="rtl">تشكيل</span></button>
+                      <button id="btnLyricsFixSinging" class="lyricsFixSingingBtn aiAssistBtn" type="button" hidden title="Balance rhyme and wazen (وزن) for cleaner AI singing" aria-label="Fix lyrics for singing"><span class="lyricsFixSingingIco aiAssistIco" aria-hidden="true">♪</span><span class="lyricsFixSingingLabel aiAssistLabel">Fix for singing</span></button>
                       <button id="btnLyricsPolish" class="lyricsPolishBtn aiAssistBtn" type="button" hidden title="Tighten rhyme and line flow without changing the story" aria-label="Polish lyrics"><span class="lyricsPolishIco aiAssistIco" aria-hidden="true">✦</span><span class="lyricsPolishLabel aiAssistLabel">Polish lyrics</span></button>
                       <button id="btnLyricsMagic" class="lyricsMagicBtn aiAssistBtn" type="button" title="Generate lyrics with AI" aria-label="Generate lyrics with AI"><span class="lyricsMagicIco aiAssistIco" aria-hidden="true">✦</span><span class="lyricsMagicLabel aiAssistLabel">Generate lyrics</span></button>
+                    </div>
+                    <div id="lyricsSingabilityPanel" class="lyricsSingabilityPanel" hidden aria-live="polite">
+                      <div class="lyricsSingabilityHead">
+                        <span class="lyricsSingabilityTitle">Singability check</span>
+                        <span id="lyricsSingabilityScore" class="lyricsSingabilityScore"></span>
+                      </div>
+                      <p id="lyricsSingabilitySummary" class="lyricsSingabilitySummary"></p>
+                      <ul id="lyricsSingabilityList" class="lyricsSingabilityList"></ul>
+                      <div id="lyricsSingabilityActions" class="lyricsSingabilityActions" hidden role="toolbar" aria-label="Suggested lyric fixes"></div>
                     </div>
                   </div>
                   <div class="row imageMoodRow">
@@ -1272,6 +1321,38 @@
                 </div>
                 <div id="clipVocalCharacterDeck" class="clipVocalCharacterDeck" role="listbox" aria-label="Vocal character"></div>
                 <p id="clipVocalCharacterSpec" class="clipVocalCharacterSpec" aria-live="polite"></p>
+              </div>
+            </div>
+            <div id="createSoloInstrumentalRow" class="createSoloInstrumentalRow field grow inputPanel inputPanel--style" hidden>
+              <div class="label inPanelLabel">Song type</div>
+              <div id="createSoloTypePills" class="addressPills addressPills--two createSoloTypePills" role="group" aria-label="Song type">
+                <button type="button" class="addressPill isActive" data-solo-song-type="vocal" aria-pressed="true">
+                  <span class="addressPillMain">Vocal</span>
+                </button>
+                <button type="button" class="addressPill" data-solo-song-type="instrumental" aria-pressed="false">
+                  <span class="addressPillMain">Instrumental</span>
+                </button>
+              </div>
+            </div>
+            <div id="createSoloLangRow" class="createSoloLangRow field grow inputPanel inputPanel--style" hidden>
+              <div class="label inPanelLabel">Lyrics language</div>
+              <div id="createSoloLangChipRow" class="optChipRow lyricsLangRow createSoloLangChipRow" role="group" aria-label="Lyrics language">
+                <button type="button" class="optChip isActive" data-lyrics-lang="auto" aria-pressed="true">Auto</button>
+                <button type="button" class="optChip" data-lyrics-lang="english" aria-pressed="false">English</button>
+                <button type="button" class="optChip" data-lyrics-lang="arabic" aria-pressed="false">Arabic</button>
+                <button type="button" class="optChip" data-lyrics-lang="french" aria-pressed="false">French</button>
+                <button type="button" class="optChip" data-lyrics-lang="spanish" aria-pressed="false">Spanish</button>
+              </div>
+            </div>
+            <div id="createSoloDialectRow" class="createSoloDialectRow field grow inputPanel inputPanel--style" hidden>
+              <div class="label inPanelLabel">Arabic dialect</div>
+              <div id="createSoloDialectChipRow" class="optChipRow lyricsDialectRow createSoloDialectChipRow" role="group" aria-label="Arabic dialect">
+                <button type="button" class="optChip" data-lyrics-dialect="lebanese" aria-pressed="false">Lebanese</button>
+                <button type="button" class="optChip" data-lyrics-dialect="syrian" aria-pressed="false">Syrian</button>
+                <button type="button" class="optChip" data-lyrics-dialect="palestinian" aria-pressed="false">Palestinian</button>
+                <button type="button" class="optChip" data-lyrics-dialect="egyptian" aria-pressed="false">Egyptian</button>
+                <button type="button" class="optChip" data-lyrics-dialect="gulf" aria-pressed="false">Gulf</button>
+                <button type="button" class="optChip" data-lyrics-dialect="msa" aria-pressed="false">MSA</button>
               </div>
             </div>
               <label class="field grow inputPanel inputPanel--style">
@@ -1499,6 +1580,43 @@
                 <div class="photoMoodActions imageMoodActions">
                   <button id="btnAnalyzeImageMood" class="photoMoodPrimary primary" type="button">Analyze</button>
                   <button id="btnApplyImageMood" class="photoMoodSecondary ghost" type="button" disabled>Use as cover</button>
+                </div>
+              </footer>
+            </div>
+          </div>
+
+          <div id="vibeReadModal" class="imageMoodSheet photoMoodSheet vibeReadSheet" hidden aria-hidden="true">
+            <div class="imageMoodSheetBackdrop photoMoodBackdrop" data-vibe-read-dismiss="1"></div>
+            <div class="imageMoodCard photoMoodCard modalCard vibeReadCard" role="dialog" aria-modal="true" aria-labelledby="vibeReadSheetTitle">
+              <header class="photoMoodHead">
+                <button type="button" id="btnCloseVibeRead" class="nabadBackBtn photoMoodBack" aria-label="Back">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6 9 12l6 6"/></svg>
+                </button>
+                <div class="photoMoodHeadCopy">
+                  <p class="photoMoodKicker">Vibe read</p>
+                  <h2 class="photoMoodTitle" id="vibeReadSheetTitle">Read a song's vibe</h2>
+                  <p class="photoMoodSub" id="vibeReadLead">Inspired by mood and structure — not a clone. We never copy lyrics or melody.</p>
+                </div>
+              </header>
+              <div class="photoMoodBody imageMoodBody vibeReadBody">
+                <p class="vibeReadDisclaimer hint">Original inspiration only. Descriptive style and section tags for your new song.</p>
+                <section class="photoMoodSection">
+                  <label class="photoMoodPick imageMoodPick field">
+                    <span class="photoMoodPickLabel imageMoodPickLabel vibeReadPickLabel">Choose audio</span>
+                    <input id="vibeReadUpload" class="imageMoodUploadInput" type="file" accept="audio/*,.wav,.mp3,.m4a,.aac,.ogg,.webm" />
+                  </label>
+                  <p class="hint createInlineHint vibeReadUploadHint">Up to 3 minutes — long tracks are compressed automatically for analysis.</p>
+                </section>
+                <section class="photoMoodSection photoMoodSection--results">
+                  <div id="vibeReadOutput" class="imageMoodOutput vibeReadOutput">
+                    <div class="imageMoodEmpty">Choose a track, then tap Read vibe.</div>
+                  </div>
+                </section>
+              </div>
+              <footer class="photoMoodFoot imageMoodFooter vibeReadFooter">
+                <div class="photoMoodActions imageMoodActions">
+                  <button id="btnAnalyzeVibeRead" class="photoMoodPrimary primary" type="button" disabled>Read vibe</button>
+                  <button id="btnApplyVibeRead" class="photoMoodSecondary ghost" type="button" disabled>Use in Create</button>
                 </div>
               </footer>
             </div>
@@ -1765,6 +1883,7 @@
             <h1 class="discoverPlaylistTitle" id="discoverPlaylistTitle">Playlist</h1>
             <p class="discoverPlaylistLead" id="discoverPlaylistLead"></p>
             <p class="discoverPlaylistCount" id="discoverPlaylistCount"></p>
+            <button type="button" class="discoverPlaylistTryNow" id="discoverPlaylistTryNow" hidden>Try now</button>
           </div>
           <div id="discoverPlaylistStatus" class="discoveryFeedStatus" role="status" aria-live="polite" hidden></div>
           <div id="discoverPlaylistList" class="discoveryFeedList discoveryCardStack discoverPlaylistList"></div>
@@ -2757,6 +2876,13 @@
                   <p class="playerCoverGenLabel">Generating new cover</p>
                 </div>
                 <p id="playerInstrumentalLabel" class="playerInstrumentalLabel" hidden aria-hidden="true">Instrumental</p>
+                <button id="btnPlayerLyrics" class="playerLyricsChip" type="button" hidden aria-label="View lyrics">
+                  <svg class="playerLyricsChipIco" viewBox="0 0 24 24" aria-hidden="true">
+                    <path fill="currentColor" d="M5 7h14v2H5V7zm0 4h14v2H5v-2zm0 4h10v2H5v-2z"/>
+                    <path fill="currentColor" d="M18 4a2 2 0 0 1 2 2v6.5a2.5 2.5 0 1 1-1.5-2.28V6h-3.5a2 2 0 1 1 0-2H18z"/>
+                  </svg>
+                  <span class="playerLyricsChipLabel">Lyrics</span>
+                </button>
               </div>
               <div id="playerKaraokeStrip" class="playerKaraokeFloat" hidden aria-live="polite" aria-label="Synced lyrics">
                 <p id="playerKaraokeLinePrev" class="playerKaraokeLine playerKaraokeLine--prev" dir="auto" aria-hidden="true"></p>
@@ -4449,7 +4575,7 @@
         </div>
       </div>
 
-      <div id="playerLyricsOverlay" class="playerLyricsOverlay" style="display:none" role="dialog" aria-modal="true" aria-label="Synced lyrics">
+      <div id="playerLyricsOverlay" class="playerLyricsOverlay" style="display:none" role="dialog" aria-modal="true" aria-label="Lyrics">
         <div id="playerLyricsBg" class="playerLyricsBg" aria-hidden="true"></div>
         <div class="playerLyricsTop">
           <div class="playerLyricsHeadText">
@@ -5266,7 +5392,7 @@
     </script>
     <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
     <script src="./env.client.js" onerror="void 0"></script>
-    <script type="module" src="./src/app.js?v=20260907-131640"></script>
+    <script type="module" src="./src/app.js?v=20260907-singability"></script>
     <script defer src="/_vercel/insights/script.js"></script>
   </body>
 </html>

@@ -1,0 +1,37 @@
+# Nabad Vibe — hidden in code, one command to test
+
+Vibe **lives on `staging` and `main`** (UI + API) but is **invisible** until launched.
+
+## Hidden by default (safe for TestFlight / main)
+
+| Gate | Default |
+|---|---|
+| `NABAD_VIBE_PUBLIC_SHIPPED` in `src/feature-flags.js` | **`false`** — must stay false until explicit launch |
+| Phone/simulator bake | `nabadVibeUi: true` on **staging** env (same as Producer); `false` on production |
+| Who sees UI when hidden | **Admin only** (UI flag + `isAdmin()`) |
+| Production API | `NABAD_VIBE_ENABLED` **off** on nabadai.com |
+| Staging API | `NABAD_VIBE_ENABLED=1` on Vercel Preview |
+
+Before **every push to `main`**: `npm run verify:no-producer-ship` (checks Producer + Vibe flags).
+
+## Daily workflow
+
+| Task | Command |
+|---|---|
+| Normal fixes (simulator) | `git checkout staging` → `npm run sim` |
+| Sami's phone — staging (Producer + Vibe) | `npm run run:ios:staging` |
+| Ship fixes to production | staging → main (verify flags still false) |
+
+**Staging phone:** `npm run run:ios:staging` bakes **Producer + Vibe** UI flags (admin-only at runtime). Agents install staging phone builds with this command — no separate vibe/producer install unless user asks.
+
+## When Sami is ready to launch Vibe publicly
+
+1. Set `NABAD_VIBE_PUBLIC_SHIPPED = true` in `src/feature-flags.js`
+2. Enable `NABAD_VIBE_ENABLED=1` on **production** Vercel
+3. Ship to main + TestFlight with explicit approval (user must say by name: ship feature Vibe)
+
+## Agent rules
+
+- **Do not** remove Vibe code from staging/main to "hide" it — use the flag.
+- **Do not** set `NABAD_VIBE_PUBLIC_SHIPPED = true` without explicit user approval.
+- Vibe is **inspiration only** — never copy lyrics/melody from uploads (prompt + UI disclaimers).

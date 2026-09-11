@@ -12,8 +12,8 @@ Producer **lives on `staging` and `main`** (UI + API files) but is **invisible**
 | Gate | Default |
 |------|---------|
 | `NABAD_PRODUCER_PUBLIC_SHIPPED` in `src/feature-flags.js` | **`false`** — must stay false until explicit launch |
-| Phone/simulator bake | `nabadProducerUi: false` unless `NABAD_PRODUCER_UI=1` |
-| Who sees UI when hidden | **Admin only**, and only with UI bake flag |
+| Phone/simulator bake | `nabadProducerUi: true` on **staging** env; `false` on production |
+| Who sees UI when hidden | **Admin only** (UI flag + `isAdmin()`) |
 | Production API | `NABAD_PRODUCER_ENABLED` **off** on nabadai.com |
 | Staging API | `NABAD_PRODUCER_ENABLED=1` on Vercel Preview |
 
@@ -24,12 +24,10 @@ Before **every push to `main`**: `npm run verify:no-producer-ship`
 | Task | Command |
 |------|---------|
 | Normal fixes (simulator) | `git checkout staging` → `npm run sim` |
-| Sami's phone — Producer testing | `npm run run:ios:producer` |
-| Sami's phone — staging (when asked) | `npm run run:ios:staging` |
+| Sami's phone — staging (Producer + Vibe) | `npm run run:ios:staging` |
 | Ship fixes to production | staging → main (verify flag still false) |
 
-**One command for Producer on phone:** `npm run run:ios:producer`  
-(staging API + admin account + UI flag baked in)
+**Staging phone:** `npm run run:ios:staging` bakes **Producer + Vibe** UI flags (admin-only at runtime). Agents install staging phone builds with this command — no separate producer/vibe install unless user asks.
 
 ## When Sami is ready to launch Producer publicly
 

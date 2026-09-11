@@ -15,6 +15,7 @@ const USAGE_RATES = Object.freeze({
     image_mood: Number(process.env.GEMINI_USD_IMAGE_MOOD || "0.002"),
     maqam: Number(process.env.GEMINI_USD_MAQAM || "0.002"),
     transcribe: Number(process.env.GEMINI_USD_TRANSCRIBE || "0.004"),
+    vibe_read: Number(process.env.GEMINI_USD_VIBE_READ || "0.008"),
   },
   pollinations: {
     cover_image: Number(process.env.POLLINATIONS_USD_PER_IMAGE || "0"),

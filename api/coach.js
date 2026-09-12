@@ -100,6 +100,7 @@ function buildCoachSystemPrompt(contextAppendix) {
   return `${COACH_SYSTEM_PROMPT}
 
 LIVE PRODUCT UPDATES (prefer over older guide text if they conflict — do not paste verbatim):
+If these updates include LIVE WALLET, that is this user's real credit balance. Answer balance questions from it. Do not say you cannot see their balance.
 ${extra}`.trim();
 }
 

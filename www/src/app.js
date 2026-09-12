@@ -4960,9 +4960,6 @@ function applyRoute({ passGen } = {}) {
     stopMessagesInboxPoll();
     stopMessagesInboxRealtime();
   }
-  if (prevRoute === "generate" && wanted !== "generate") {
-    try { hideCoachNotice(); } catch {}
-  }
   if (wanted === "challenges" && hasActiveCreateSession() && !_createHubExitBypassSessionPin && !isOnCreateHubRoute()) {
     if (createSessionIsGenerating()) {
       wanted = "profile";
@@ -5843,27 +5840,23 @@ function offerSingabilityAfterLyricsReady({ fromGenerate = false } = {}) {
     return;
   }
   renderSingabilityProTease();
-  try {
-    showCoachNotice({
-      body: "Singability is Pro — I can check if these will sing.",
-      actions: [{ id: "pro", label: "See Pro" }],
-    });
-  } catch {}
+  try { finishCoachPriorityStatus("Singability is Pro", { success: false }); } catch {}
   try {
     els.lyricsSingabilityPanel?.scrollIntoView({ behavior: "smooth", block: "nearest" });
   } catch {}
 }
 
+function coachSingabilityEnhanceHint() {
+  return typeof shouldShowLyricsDiacritics === "function" && shouldShowLyricsDiacritics()
+    ? "Fix, Polish, or Vowels might help"
+    : "Fix or Polish might help";
+}
+
 function coachSingabilityOneLiner(report) {
   const score = Number(report?.score);
   const scoreBit = Number.isFinite(score) ? String(score) : "";
-  const warnings = Array.isArray(report?.warnings) ? report.warnings : [];
-  const top = warnings.find((w) => w.level === "high" || w.level === "medium") || warnings[0];
-  const issue = String(top?.message || "").trim();
-  const short = issue.length > 42 ? `${issue.slice(0, 39).trim()}…` : issue;
-  if (scoreBit && short) return `${scoreBit} — ${short}`;
-  if (scoreBit && Number.isFinite(score) && score >= 85) return `${scoreBit} — ready to generate`;
-  if (scoreBit) return `${scoreBit} — review the report`;
+  if (scoreBit && Number.isFinite(score) && score > 75) return `${scoreBit} — these should sing`;
+  if (scoreBit) return `${scoreBit} — ${coachSingabilityEnhanceHint()}`;
   return "Singability ready";
 }
 
@@ -5872,8 +5865,12 @@ function setPendingCoachSingabilitySeed(report) {
   const warnings = Array.isArray(report?.warnings) ? report.warnings : [];
   const top = warnings.find((w) => w.level === "high" || w.level === "medium") || warnings[0];
   const scoreBit = Number.isFinite(score) ? `${score}/100` : "a score";
-  const issue = String(top?.message || "").trim() || "They look okay — any tips before I generate?";
-  _pendingCoachSingabilitySeed = `My lyrics scored ${scoreBit}. ${issue} Help me make them sing better.`;
+  if (Number.isFinite(score) && score > 75) {
+    _pendingCoachSingabilitySeed = `My lyrics scored ${scoreBit}. These should sing — any last tip before I generate?`;
+    return;
+  }
+  const issue = String(top?.message || "").trim() || coachSingabilityEnhanceHint();
+  _pendingCoachSingabilitySeed = `My lyrics scored ${scoreBit}. ${issue} Help me choose Fix, Polish${typeof shouldShowLyricsDiacritics === "function" && shouldShowLyricsDiacritics() ? ", or Vowels" : ""} so they sing better.`;
 }
 
 function applyPendingCoachSingabilitySeed() {
@@ -5888,163 +5885,17 @@ function applyPendingCoachSingabilitySeed() {
 }
 
 function announceCoachSingability(report) {
-  if (!report || report.checking || report.source === "pro_tease") {
-    if (report?.source === "pro_tease") {
-      showCoachNotice({
-        body: "Singability is Pro — I can check if these will sing.",
-        actions: [{ id: "pro", label: "See Pro" }],
-      });
-    }
+  if (!report || report.checking) return;
+  if (report.source === "pro_tease") {
+    try { finishCoachPriorityStatus("Singability is Pro", { success: false }); } catch {}
     return;
   }
   setPendingCoachSingabilitySeed(report);
   const score = Number(report.score);
   const ready = Number.isFinite(score) && score > 75;
-  const line = coachSingabilityOneLiner(report);
-  const actions = ready
-    ? [{ id: "generate", label: "Generate song" }]
-    : [
-        { id: "fix", label: "Fix" },
-        { id: "polish", label: "Polish" },
-        ...(typeof shouldShowLyricsDiacritics === "function" && shouldShowLyricsDiacritics()
-          ? [{ id: "diacritics", label: "Vowels" }]
-          : []),
-      ];
-  const body = ready
-    ? `${Number.isFinite(score) ? score : "Looks good"} — these should sing. Ready when you are.`
-    : `${Number.isFinite(score) ? score : "A bit rough"} — Fix, Polish${typeof shouldShowLyricsDiacritics === "function" && shouldShowLyricsDiacritics() ? ", or Vowels" : ""} might help.`;
-  showCoachNotice({ body, actions });
   try {
-    finishCoachPriorityStatus(line, { success: ready });
+    finishCoachPriorityStatus(coachSingabilityOneLiner(report), { success: ready });
   } catch {}
-}
-
-function coachNoticeEl() {
-  return document.getElementById("coachNotice");
-}
-
-function hideCoachNotice() {
-  const el = coachNoticeEl();
-  if (!el) return;
-  el.classList.remove("isShow", "isChecking");
-  el.style.removeProperty("transform");
-  window.setTimeout(() => {
-    if (!el.classList.contains("isShow")) el.hidden = true;
-  }, 240);
-}
-
-function showCoachNotice({ body = "", actions = [], checking = false } = {}) {
-  const el = coachNoticeEl();
-  const bodyEl = document.getElementById("coachNoticeBody");
-  const actionsEl = document.getElementById("coachNoticeActions");
-  const av = document.getElementById("coachNoticeAv");
-  if (!el || !bodyEl) return;
-  if (av && !av.innerHTML && typeof coachAvatarHtml === "function") {
-    av.innerHTML = coachAvatarHtml("coachNoticeOrb");
-  }
-  bodyEl.textContent = String(body || "").trim() || "Coach";
-  el.classList.toggle("isChecking", Boolean(checking));
-  if (actionsEl) {
-    const chips = Array.isArray(actions) ? actions : [];
-    if (!chips.length || checking) {
-      actionsEl.hidden = true;
-      actionsEl.innerHTML = "";
-    } else {
-      actionsEl.hidden = false;
-      actionsEl.innerHTML = chips.map((chip) => (
-        `<button type="button" class="coachNoticeChip" data-coach-notice="${escapeHtml(chip.id)}">${escapeHtml(chip.label)}</button>`
-      )).join("");
-    }
-  }
-  el.hidden = false;
-  requestAnimationFrame(() => el.classList.add("isShow"));
-  try { surfaceCoachOrb({ priority: true }); } catch {}
-}
-
-function runCoachNoticeAction(action) {
-  hideCoachNotice();
-  if (action === "generate") {
-    const btn = els.btnSunoGenerate;
-    if (btn && !btn.disabled) btn.click();
-    else showToast("Add lyrics and style, then Generate song.", { icon: "♪", durationMs: 2800 });
-    return;
-  }
-  if (action === "fix") {
-    void fixLyricsForSinging();
-    return;
-  }
-  if (action === "polish") {
-    void polishLyricsWithGemini();
-    return;
-  }
-  if (action === "diacritics") {
-    void addArabicVowelMarksToLyrics();
-    return;
-  }
-  if (action === "pro") {
-    requireProFeature("Singability");
-  }
-}
-
-function bindCoachNoticeOnce() {
-  const el = coachNoticeEl();
-  if (!el || el.dataset.bound === "1") return;
-  el.dataset.bound = "1";
-  let startY = 0;
-  let dragging = false;
-  let swipedAway = false;
-  const card = document.getElementById("coachNoticeCard");
-  card?.addEventListener("click", (ev) => {
-    ev.preventDefault();
-    if (swipedAway) {
-      swipedAway = false;
-      return;
-    }
-    hideCoachNotice();
-    openNabadCoach();
-  });
-  document.getElementById("coachNoticeActions")?.addEventListener("click", (ev) => {
-    const btn = ev.target?.closest?.("[data-coach-notice]");
-    if (!btn) return;
-    ev.preventDefault();
-    ev.stopPropagation();
-    if (swipedAway) {
-      swipedAway = false;
-      return;
-    }
-    runCoachNoticeAction(String(btn.getAttribute("data-coach-notice") || ""));
-  });
-  const onStart = (y) => {
-    dragging = true;
-    swipedAway = false;
-    startY = y;
-    el.style.transition = "none";
-  };
-  const onMove = (y) => {
-    if (!dragging) return;
-    const dy = Math.min(0, y - startY);
-    el.style.transform = `translateY(${dy}px)`;
-  };
-  const onEnd = (y) => {
-    if (!dragging) return;
-    dragging = false;
-    el.style.transition = "";
-    const dy = y - startY;
-    if (dy < -36) {
-      swipedAway = true;
-      hideCoachNotice();
-    } else {
-      el.style.removeProperty("transform");
-    }
-  };
-  el.addEventListener("pointerdown", (ev) => {
-    if (ev.pointerType === "mouse" && ev.button !== 0) return;
-    onStart(ev.clientY || 0);
-    try { el.setPointerCapture(ev.pointerId); } catch {}
-  });
-  el.addEventListener("pointermove", (ev) => onMove(ev.clientY || 0));
-  el.addEventListener("pointerup", (ev) => onEnd(ev.clientY || startY));
-  el.addEventListener("pointercancel", (ev) => onEnd(ev.clientY || startY));
 }
 
 function clearLyricsDraftFromToolsBar() {
@@ -6055,7 +5906,6 @@ function clearLyricsDraftFromToolsBar() {
   lastSingabilityReport = null;
   lyricsSingabilityLastText = "";
   _pendingCoachSingabilitySeed = "";
-  try { hideCoachNotice(); } catch {}
   renderLyricsSingabilityPanel(null);
   try { resetNabadLyricsDraftState(); } catch {}
   try { syncArabicLyricsControlsVisibility(); } catch {}
@@ -6211,12 +6061,6 @@ async function runLyricsSingabilityCheck({ fromAuto = false } = {}) {
     try {
       beginCoachPriorityStatus("Checking singability…", { generating: true });
     } catch {}
-    try {
-      showCoachNotice({
-        body: "Checking if these will sing…",
-        checking: true,
-      });
-    } catch {}
     const report = await fetchLyricsSingabilityReport(text, { updateUi: true, reqId });
     if (report && !report.checking) {
       inkwellSettle = true;
@@ -6236,11 +6080,6 @@ async function runLyricsSingabilityCheck({ fromAuto = false } = {}) {
     }
   } catch (e) {
     setStatus(`Singability check failed: ${e?.message || String(e)}`);
-    try {
-      showCoachNotice({
-        body: "Couldn't check singability just now. Try Done again.",
-      });
-    } catch {}
     try { finishCoachPriorityStatus("Check failed", { success: false }); } catch {}
   } finally {
     if (els.sunoPrompt) els.sunoPrompt.disabled = false;
@@ -29727,7 +29566,9 @@ async function refreshMyCredits({ silent = false } = {}) {
     }
   } catch (e) {
     creditsState.lastError = e?.message || String(e);
+    creditsState.loaded = true;
     paintCreditsAccountEmail(authSession?.user?.email || activeProfile?.email);
+    try { patchSignupCoachWelcomeCredits(); } catch {}
     if (!silent) console.warn("[credits/me]", creditsState.lastError);
   } finally {
     creditsState.inFlight = false;
@@ -38865,6 +38706,7 @@ async function sendCoachLyricsCollaboration(text, input, flow) {
       songProjectActive: true,
       projectFlow: flow,
       latestCoachCtas: latestCtas,
+      wallet: coachWalletSnapshot(),
       contextAppendixExtra: "Mode: lyrics_collab. Co-write lyrics matching the plan. When presenting a full draft, put the complete lyrics inside [DRAFT LYRICS]...[/DRAFT LYRICS] — the app shows them in chat. Answer chip questions from plan state.",
     });
     const data = await messagesApi("/api/coach", {
@@ -38897,6 +38739,13 @@ async function sendCoachLyricsCollaboration(text, input, flow) {
   try { input?.focus({ preventScroll: true }); } catch {}
 }
 async function sendCoachSideHelpDuringProject(text, input, flow) {
+  if (looksLikeCoachWalletQuestion(text)) {
+    if (!creditsState.loaded) {
+      try { await refreshMyCredits({ silent: true }); } catch {}
+    }
+    await replyCoachFromWallet(text, input);
+    return;
+  }
   const prior = Array.isArray(_messagesList) ? _messagesList.filter((m) => !m.coachTyping) : [];
   const history = coachHistoryForApi(prior);
   const latestCtas = getLatestCoachCtasFromChat(prior);
@@ -38929,6 +38778,7 @@ async function sendCoachSideHelpDuringProject(text, input, flow) {
       songProjectActive: true,
       projectFlow: flow,
       latestCoachCtas: latestCtas,
+      wallet: coachWalletSnapshot(),
       contextAppendixExtra: `Pending step field: ${pendingHint}. Answer using plan state and chips you offered. Brief side answer, then nudge them to continue the plan unless they are co-writing lyrics.`,
     });
     const data = await messagesApi("/api/coach", {
@@ -39424,35 +39274,168 @@ function setCoachSignupUnread(on, userId = authSession?.user?.id) {
 function clearCoachSignupUnread(userId = authSession?.user?.id) {
   setCoachSignupUnread(false, userId);
 }
-function coachSignupCreditsLine(balance = creditsState.balance) {
-  const v = Number(balance);
-  if (Number.isFinite(v) && v > 0) return `**${formatCreditsAmount(v)} credits**`;
-  return "**free starter credits**";
+function coachWalletSnapshot() {
+  const loaded = Boolean(creditsState.loaded) || Boolean(creditsState.lastError);
+  const raw = Number(creditsState.balance);
+  const balance = loaded && Number.isFinite(raw) ? Math.max(0, raw) : 0;
+  const songCost = FULL_SONG_CREDIT_COST;
+  const soundCost = SOUND_CREDIT_COST;
+  const clipCost = LYRIA_CLIP_CREDIT_COST;
+  return {
+    loaded,
+    balance,
+    proActive: Boolean(creditsState.proActive || creditsState.isAdmin),
+    songCost,
+    soundCost,
+    clipCost,
+    canSong: loaded && balance >= songCost,
+    canClip: loaded && balance >= clipCost,
+    canSound: loaded && balance >= soundCost,
+    showSongCost: loaded && balance < 50,
+    showSoundCost: loaded && balance < songCost,
+    suggestPro: loaded && balance < songCost && !Boolean(creditsState.proActive || creditsState.isAdmin),
+  };
 }
-function coachSignupWelcomeBody(balance = creditsState.balance) {
-  const creditsLine = coachSignupCreditsLine(balance);
+function looksLikeCoachWalletQuestion(text) {
+  const t = String(text || "").trim().toLowerCase();
+  if (!t || t.length > 140) return false;
+  if (/what(?:'s| is) my (credit )?balance/.test(t)) return true;
+  if (/how many credits/.test(t)) return true;
+  if (/do i have (enough )?credits/.test(t)) return true;
+  if (/(كم|رصيد).*(كريدت|رصيد|عندي)|(رصيد|كريدت).*(كم|عندي)/.test(t)) return true;
+  if (/my credits|credit balance|enough for (a )?(song|sound|clip)/.test(t)) return true;
+  return false;
+}
+function coachWalletSpokenReply(wallet = coachWalletSnapshot()) {
+  const song = formatCreditsAmount(wallet.songCost);
+  const sound = formatCreditsAmount(wallet.soundCost);
+  if (!wallet.loaded) {
+    return "I'm still checking your credits. Ask me again in a moment, or open Profile → Credits.";
+  }
+  const have = formatCreditsAmount(wallet.balance);
+  if (!wallet.showSongCost) {
+    return `You have **${have} credits**.`;
+  }
+  if (wallet.canSong) {
+    return `You have **${have} credits** — enough for a song (${song}).`;
+  }
+  if (wallet.canSound) {
+    return `You have **${have} credits**. A song is ${song}, so not enough yet. A **Sound** is ${sound}. Get **Pro** if you want full songs — lyrics stay free.`;
+  }
+  return `You have **${have} credits**. A song is ${song}; a Sound is ${sound}. Get **Pro** for credits, or redeem a code — lyrics stay free.`;
+}
+async function replyCoachFromWallet(userText, input) {
+  if (_coachReplyInFlight) return;
+  if (input) {
+    input.value = "";
+    try { syncMessagesComposerInputHeight(input); } catch {}
+  }
+  const prior = Array.isArray(_messagesList) ? _messagesList.filter((m) => !m.coachTyping) : [];
+  const uid = String(authSession?.user?.id || "me");
+  const userMsg = {
+    id: `coach:u:${Date.now()}`,
+    sender_id: uid,
+    body: String(userText || "").trim(),
+    created_at: new Date().toISOString(),
+    sendStatus: "sent",
+  };
+  _messagesList = [...prior, userMsg];
+  saveCoachChat(_messagesList);
+  renderMessagesMount({ scrollToBottom: true, forceScroll: true });
+  _coachReplyInFlight = true;
+  _messagesList = [
+    ..._messagesList,
+    { id: COACH_TYPING_ID, sender_id: COACH_SENDER_ID, body: "", created_at: new Date().toISOString(), coachTyping: true },
+  ];
+  renderMessagesMount({ scrollToBottom: true, forceScroll: true });
+  const waitMs = 780 + Math.round(Math.random() * 520);
+  await new Promise((r) => window.setTimeout(r, waitMs));
+  const wallet = coachWalletSnapshot();
+  const ctas = wallet.suggestPro || wallet.showSoundCost ? coachSignupWelcomeCtas(wallet) : [];
+  const base = (Array.isArray(_messagesList) ? _messagesList : []).filter((m) => m.id !== COACH_TYPING_ID);
+  _messagesList = [
+    ...base,
+    {
+      id: `coach:a:${Date.now()}`,
+      sender_id: COACH_SENDER_ID,
+      body: coachWalletSpokenReply(wallet),
+      coachCtas: ctas,
+      created_at: new Date().toISOString(),
+      sendStatus: "sent",
+    },
+  ];
+  _coachReplyInFlight = false;
+  saveCoachChat(_messagesList);
+  renderMessagesMount({ scrollToBottom: true, forceScroll: true });
+}
+function coachSignupWelcomeBody(wallet = coachWalletSnapshot()) {
+  if (!wallet.loaded) {
+    return `Welcome to NabadAi 🎵
+
+I'm checking your credits now.
+
+Pick **Occasion** or a vibe — lyrics are free. We'll generate when your balance is ready.`;
+  }
+  const have = formatCreditsAmount(wallet.balance);
+  const song = formatCreditsAmount(wallet.songCost);
+  const sound = formatCreditsAmount(wallet.soundCost);
+  if (!wallet.showSongCost) {
+    return `Welcome to NabadAi 🎵
+
+You have **${have} credits**.
+
+Pick **Occasion** or a quick vibe — I'll build your **Song plan** and open Create when you're ready.`;
+  }
+  if (wallet.canSong) {
+    return `Welcome to NabadAi 🎵
+
+You have **${have} credits** — enough for a song (${song}).
+
+Pick **Occasion** or a quick vibe — I'll build your **Song plan** and open Create when you're ready.`;
+  }
+  if (wallet.canSound) {
+    return `Welcome to NabadAi 🎵
+
+You have **${have} credits**. A song is ${song}, so that's not enough yet.
+
+A **Sound** is ${sound}. Lyrics are still free. Or get **Pro** for more credits.`;
+  }
   return `Welcome to NabadAi 🎵
 
-You're in — you start with ${creditsLine}, enough for your first song.
+You have **${have} credits**. A song is ${song}; a Sound is ${sound}.
 
-Pick **Occasion** or a quick vibe — I'll build your **Song plan** and open Create when you're ready. Or explore first and come back anytime.`;
+Lyrics are free — we can still write. Get **Pro** for credits, or redeem a code on Credits.`;
 }
-function coachSignupWelcomeCtas() {
-  return [
-    { id: "path-occasion", label: "🎁 Occasion", topic: "path:occasion" },
-    { id: "love", label: "💜 Love song", topic: "love" },
-    { id: "apology", label: "🙏 Apology", topic: "apology" },
-    { id: "dabke", label: "🎉 Dabke", topic: "dabke" },
-    { id: "surprise", label: "✨ Surprise me", topic: "surprise" },
-    { id: "skip", label: "Explore first", topic: "skip" },
-  ];
+function coachSignupWelcomeCtas(wallet = coachWalletSnapshot()) {
+  if (!wallet.loaded || wallet.canSong) {
+    return [
+      { id: "path-occasion", label: "🎁 Occasion", topic: "path:occasion" },
+      { id: "love", label: "💜 Love song", topic: "love" },
+      { id: "apology", label: "🙏 Apology", topic: "apology" },
+      { id: "dabke", label: "🎉 Dabke", topic: "dabke" },
+      { id: "surprise", label: "✨ Surprise me", topic: "surprise" },
+      { id: "skip", label: "Explore first", topic: "skip" },
+    ];
+  }
+  const ctas = [];
+  if (wallet.canSound) {
+    ctas.push({ id: "path-sounds", label: "🔊 Make a Sound", topic: "path:sounds" });
+  }
+  if (!wallet.proActive) {
+    ctas.push({ id: "wallet-pro", label: "★ Get Pro", topic: "wallet:pro" });
+  }
+  ctas.push({ id: "wallet-credits", label: "Credits", topic: "wallet:credits" });
+  ctas.push({ id: "path-occasion", label: "🎁 Plan a song", topic: "path:occasion" });
+  ctas.push({ id: "skip", label: "Explore first", topic: "skip" });
+  return ctas;
 }
-function coachSignupWelcomeMessage(balance = creditsState.balance) {
+function coachSignupWelcomeMessage() {
+  const wallet = coachWalletSnapshot();
   return {
     id: COACH_SIGNUP_MSG_ID,
     sender_id: COACH_SENDER_ID,
-    body: coachSignupWelcomeBody(balance),
-    coachCtas: coachSignupWelcomeCtas(),
+    body: coachSignupWelcomeBody(wallet),
+    coachCtas: coachSignupWelcomeCtas(wallet),
     created_at: new Date().toISOString(),
     sendStatus: "sent",
   };
@@ -39467,14 +39450,18 @@ function consumeCoachSignupCtasInChat() {
   return next;
 }
 function patchSignupCoachWelcomeCredits() {
-  if (!shouldShowFirstSongActivation(authSession?.user?.id)) return;
   const chat = loadCoachChat();
   const idx = chat.findIndex((m) => m.id === COACH_SIGNUP_MSG_ID);
   if (idx < 0) return;
-  const nextBody = coachSignupWelcomeBody(creditsState.balance);
-  if (String(chat[idx]?.body || "") === nextBody) return;
+  const wallet = coachWalletSnapshot();
+  const nextBody = coachSignupWelcomeBody(wallet);
+  const keepCtas = Array.isArray(chat[idx]?.coachCtas) && chat[idx].coachCtas.length > 0;
+  const nextCtas = keepCtas ? coachSignupWelcomeCtas(wallet) : chat[idx].coachCtas;
+  const sameBody = String(chat[idx]?.body || "") === nextBody;
+  const sameCtas = JSON.stringify(chat[idx]?.coachCtas || []) === JSON.stringify(nextCtas || []);
+  if (sameBody && sameCtas) return;
   const next = chat.slice();
-  next[idx] = { ...next[idx], body: nextBody };
+  next[idx] = { ...next[idx], body: nextBody, coachCtas: nextCtas };
   saveCoachChat(next);
   if (isCoachThreadId(_conversationId)) {
     _messagesList = next.map((m) => ({ ...m }));
@@ -39577,13 +39564,53 @@ function handleCoachSignupCta(topicId, label = "") {
   try { haptic("light"); } catch {}
   if (label) appendCoachSignupUserEcho(label);
   consumeLatestCoachSignupCtas();
+  if (action === "path:sounds") {
+    consumeCoachSignupCtasInChat();
+    appendCoachSignupCoachMessage(
+      `Sounds are **${formatCreditsAmount(SOUND_CREDIT_COST)} credits** — describe a loop or bed, then generate.`,
+      [],
+    );
+    try { openSoundsFlow(); } catch {}
+    return;
+  }
+  if (action === "wallet:pro") {
+    consumeCoachSignupCtasInChat();
+    appendCoachSignupCoachMessage("Pro adds credits each week or month. I'll be here when you're back.", []);
+    try { setProReturnRoute("messages-thread"); } catch {}
+    try {
+      location.hash = "#/pro";
+      bumpApplyRouteGeneration();
+      void runApplyRouteOnce();
+    } catch {
+      try { location.hash = "#/pro"; } catch {}
+    }
+    return;
+  }
+  if (action === "wallet:credits") {
+    consumeCoachSignupCtasInChat();
+    appendCoachSignupCoachMessage("Credits shows your balance and promo codes. Come back anytime.", []);
+    try {
+      location.hash = "#/credits";
+      bumpApplyRouteGeneration();
+      void runApplyRouteOnce();
+    } catch {
+      try { location.hash = "#/credits"; } catch {}
+    }
+    return;
+  }
   if (action === "skip") {
     saveCoachSignupFlow(null);
     markFirstSongActivationDone(uid);
     clearCoachSignupUnread(uid);
     void refreshMessagesUnreadBadge({ force: true });
     consumeCoachSignupCtasInChat();
-    appendCoachSignupCoachMessage("Anytime — tap **+** when you're ready to make your first song 🎵", []);
+    const wallet = coachWalletSnapshot();
+    appendCoachSignupCoachMessage(
+      wallet.canSong
+        ? "Anytime — tap **+** when you're ready to make your first song 🎵"
+        : "Anytime. Lyrics are free — or grab Pro when you want to generate.",
+      [],
+    );
     return;
   }
   if (action === "project:new") {
@@ -39855,6 +39882,12 @@ function renderCoachChatHeader() {
 function enterCoachThread(bootToken) {
   _messagesThreadNeedsInitialScroll = true;
   _conversationId = COACH_THREAD_ID;
+  try { patchSignupCoachWelcomeCredits(); } catch {}
+  if (!creditsState.loaded) {
+    void refreshMyCredits({ silent: true }).then(() => {
+      try { patchSignupCoachWelcomeCredits(); } catch {}
+    });
+  }
   let chat = loadCoachChat();
   if (!chat.length) {
     if (shouldShowFirstSongActivation(authSession?.user?.id)) {
@@ -39973,6 +40006,13 @@ async function sendCoachMessage(text, input) {
     await sendCoachSideHelpDuringProject(text, input, flow);
     return;
   }
+  if (looksLikeCoachWalletQuestion(text)) {
+    if (!creditsState.loaded) {
+      try { await refreshMyCredits({ silent: true }); } catch {}
+    }
+    await replyCoachFromWallet(text, input);
+    return;
+  }
   if (!flow && detectCoachSongIntent(text)) {
     const prior = Array.isArray(_messagesList) ? _messagesList.filter((m) => !m.coachTyping) : [];
     const userMsg = {
@@ -40042,7 +40082,12 @@ async function sendCoachMessage(text, input) {
   let replyText = "";
   let errorText = "";
   const fetchCoachReply = async () => {
-    const payload = augmentCoachApiPayload({ message: text, history, songProjectActive: false });
+    const payload = augmentCoachApiPayload({
+      message: text,
+      history,
+      songProjectActive: false,
+      wallet: coachWalletSnapshot(),
+    });
     return messagesApi("/api/coach", {
       method: "POST",
       timeoutMs: 38000,
@@ -64579,12 +64624,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       if (lyricsBoxEl) lyricsBoxEl.classList.add("generating");
       if (els.sunoPrompt) els.sunoPrompt.disabled = true;
       setStatus("Polishing lyrics for rhyme and flow…");
-      try {
-        showCoachNotice({
-          body: "Polishing these so they sing better…",
-          checking: true,
-        });
-      } catch {}
+      try { beginCoachPriorityStatus("Polishing…", { generating: true }); } catch {}
       const r = await fetch(apiUrl("/api/lyrics"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -64614,9 +64654,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
     } catch (e) {
       setStatus(`Polish failed: ${e?.message || String(e)}`);
       showToast(e?.message || "Could not polish lyrics", { icon: "!", durationMs: 3600 });
-      try {
-        showCoachNotice({ body: "Polish didn't land. Try Fix, or tap me." });
-      } catch {}
+      try { finishCoachPriorityStatus("Polish didn't land", { success: false }); } catch {}
     } finally {
       if (els.sunoPrompt) els.sunoPrompt.disabled = false;
       if (lyricsBoxEl) lyricsBoxEl.classList.remove("generating");
@@ -64665,12 +64703,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       if (lyricsBoxEl) lyricsBoxEl.classList.add("generating");
       if (els.sunoPrompt) els.sunoPrompt.disabled = true;
       setStatus("Fixing rhyme and wazen for singing…");
-      try {
-        showCoachNotice({
-          body: "Fixing rhyme and وزن so these will sing…",
-          checking: true,
-        });
-      } catch {}
+      try { beginCoachPriorityStatus("Fixing…", { generating: true }); } catch {}
       const r = await fetch(apiUrl("/api/lyrics"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -64700,9 +64733,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
     } catch (e) {
       setStatus(`Fix for singing failed: ${e?.message || String(e)}`);
       showToast(e?.message || "Could not fix lyrics for singing", { icon: "!", durationMs: 3600 });
-      try {
-        showCoachNotice({ body: "Fix didn't land. Try Polish, or tap me." });
-      } catch {}
+      try { finishCoachPriorityStatus("Fix didn't land", { success: false }); } catch {}
     } finally {
       if (els.sunoPrompt) els.sunoPrompt.disabled = false;
       if (lyricsBoxEl) lyricsBoxEl.classList.remove("generating");
@@ -64840,12 +64871,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
           ? "Adding Lebanese vowel marks for colloquial singing…"
           : "Adding vowel marks for dialect singing…",
       );
-      try {
-        showCoachNotice({
-          body: "Adding vowel marks so these sit better when sung…",
-          checking: true,
-        });
-      } catch {}
+      try { beginCoachPriorityStatus("Adding vowels…", { generating: true }); } catch {}
       const r = await fetch(apiUrl("/api/lyrics"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -64877,9 +64903,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
     } catch (e) {
       setStatus(`Vowel marks failed: ${e?.message || String(e)}`);
       showToast(e?.message || "Could not add vowel marks", { icon: "!", durationMs: 3600 });
-      try {
-        showCoachNotice({ body: "Vowels didn't land. Try Fix or Polish." });
-      } catch {}
+      try { finishCoachPriorityStatus("Vowels didn't land", { success: false }); } catch {}
     } finally {
       if (els.sunoPrompt) els.sunoPrompt.disabled = false;
       if (lyricsBoxEl) lyricsBoxEl.classList.remove("generating");
@@ -68966,7 +68990,6 @@ function resumePriorityJobsIfPending() {
   } catch {}
   const fab = document.getElementById("coachFab");
   if (fab) fab.addEventListener("click", () => openNabadCoach());
-  try { bindCoachNoticeOnce(); } catch {}
   try { syncCoachFabHeaderMount(); } catch {}
   try { scheduleCoachFabNudge(); } catch {}
   try { syncCoachGenerationStatusFromPending(getGenerationPending()); } catch {}

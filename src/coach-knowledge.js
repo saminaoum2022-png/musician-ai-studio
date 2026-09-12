@@ -86,21 +86,57 @@ ${proFeaturesGuideLines()}
 PURCHASE STATUS:
 - Subscriptions are live on iPhone (Apple) and on nabadai.com (card). Same plans and credits either way.
 - Do not ask for payment details, card numbers, or Apple ID passwords.
-- You cannot see whether the user is Pro or their balance — tell them to check the credits pill on Profile and the Pro pill on their avatar.
+- A LIVE WALLET block is injected when available — treat that as the user's real balance and Pro state. Do not tell them to go look up their own balance unless the wallet block is missing.
 
 COACH BEHAVIOR FOR THESE TOPICS:
 - Explain costs before suggesting an action that spends credits.
-- For "not enough credits": mention redeeming a promo code (Credits page) or subscribing to NabadAi Pro — never ask for payment details.
+- If they cannot afford a full song but can afford a Sound (${SOUND_CREDIT_COST} credits), offer Sounds as the cheaper make.
+- If they cannot afford a song or a Sound, suggest NabadAi Pro (credits each week/month) or redeeming a promo code on Credits. Lyrics stay free.
+- Never say they have "free starter credits" or "enough for a first song" unless LIVE WALLET says they can afford a song.
+- Never ask for payment details.
 - For Pro questions: point to Settings → NabadAi Pro, the avatar Pro pill when subscribed, or Credits → View plans.
 `.trim();
 }
 
+/** Live balance — injected per request, not stored in chat history. */
+export function buildCoachLiveWalletGuide(wallet = null) {
+  if (!wallet || typeof wallet !== "object") return "";
+  if (!wallet.loaded) {
+    return `
+LIVE WALLET (authoritative — do not contradict):
+- Balance is still loading. Do not claim they have starter credits or enough for a song.
+`.trim();
+  }
+  const have = Math.max(0, Number(wallet.balance) || 0);
+  const songCost = Number(wallet.songCost) || FULL_SONG_CREDIT_COST;
+  const soundCost = Number(wallet.soundCost) || SOUND_CREDIT_COST;
+  const clipCost = Number(wallet.clipCost) || 10;
+  const pro = wallet.proActive ? "yes" : "no";
+  const canSong = have >= songCost;
+  const canSound = have >= soundCost;
+  const nextStep = have >= 50
+    ? "Just state the balance. Do NOT mention song cost, Sound cost, or Pro."
+    : canSong
+      ? `They can afford a song. You may mention a song is ${songCost}. Do not mention Sound or Pro.`
+      : canSound
+        ? `Not enough for a song (${songCost}). Mention Sound (${soundCost}) and suggest Pro. Lyrics stay free.`
+        : `Not enough for a song (${songCost}) or a Sound (${soundCost}). Suggest Pro or a promo code. Lyrics stay free.`;
+  return `
+LIVE WALLET (authoritative — you CAN see this):
+- Current balance: ${have} credits. Pro subscriber: ${pro}.
+- Costs: full song = ${songCost} (2 versions) · Sound = ${soundCost} · clip ≈ ${clipCost}.
+- ${nextStep}
+- Never invent a welcome bonus. Never say "enough for a first song" when balance is 50 or more.
+`.trim();
+}
+
 /** Combined live product appendix for the Coach API (not stored in chat history). */
-export function buildCoachContextAppendix() {
+export function buildCoachContextAppendix(wallet = null) {
   return [
+    buildCoachLiveWalletGuide(wallet),
     buildCoachCreditsProGuide(),
     buildCoachLyricsWritingGuide(),
-  ].join("\n\n---\n\n");
+  ].filter(Boolean).join("\n\n---\n\n");
 }
 
 /** Static guide for lyric craft — injected so Coach can review pasted lyrics. */
@@ -219,10 +255,11 @@ export function augmentCoachApiPayload({
   songProjectActive = false,
   projectFlow = null,
   latestCoachCtas = null,
+  wallet = null,
 }) {
   const prior = Array.isArray(history) ? history : [];
   const userMessage = String(message || "").trim();
-  const base = buildCoachContextAppendix();
+  const base = buildCoachContextAppendix(wallet);
   const flowGuide = songProjectActive
     ? buildCoachActiveProjectGuide()
     : buildCoachSongPlanRedirectGuide();

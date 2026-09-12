@@ -1203,8 +1203,8 @@
                         <button type="button" class="optChip isActive" data-lyrics-lang="auto" aria-pressed="true">Auto</button>
                         <button type="button" class="optChip" data-lyrics-lang="english" aria-pressed="false">English</button>
                         <button type="button" class="optChip" data-lyrics-lang="arabic" aria-pressed="false">Arabic</button>
-                        <button type="button" class="optChip" data-lyrics-lang="arabizi" aria-pressed="false" title="Latin-script Lebanese — how it should be sung">Arabizi</button>
-                        <button type="button" class="optChip" data-lyrics-lang="french" aria-pressed="false">French</button>
+                        <button type="button" class="optChip optChip--extra" data-lyrics-lang="arabizi" aria-pressed="false" title="Latin-script Lebanese — how it should be sung">Arabizi</button>
+                        <button type="button" class="optChip optChip--extra" data-lyrics-lang="french" aria-pressed="false">French</button>
                         <button type="button" class="optChip optChip--extra" data-lyrics-lang="spanish" aria-pressed="false">Spanish</button>
                         <button type="button" class="optChip optChip--extra" data-lyrics-lang="turkish" aria-pressed="false">Turkish</button>
                         <button type="button" class="optChip optChip--extra" data-lyrics-lang="italian" aria-pressed="false">Italian</button>
@@ -1217,9 +1217,9 @@
                       <div id="lyricsDialectRow" class="optChipRow lyricsDialectRow" role="group" aria-label="Arabic dialect">
                         <button type="button" class="optChip" data-lyrics-dialect="lebanese" aria-pressed="false">Lebanese</button>
                         <button type="button" class="optChip" data-lyrics-dialect="egyptian" aria-pressed="false">Egyptian</button>
-                        <button type="button" class="optChip" data-lyrics-dialect="iraqi" aria-pressed="false">Iraqi</button>
-                        <button type="button" class="optChip" data-lyrics-dialect="gulf" aria-pressed="false">Gulf</button>
-                        <button type="button" class="optChip" data-lyrics-dialect="moroccan" aria-pressed="false">Moroccan</button>
+                        <button type="button" class="optChip optChip--extra" data-lyrics-dialect="iraqi" aria-pressed="false">Iraqi</button>
+                        <button type="button" class="optChip optChip--extra" data-lyrics-dialect="gulf" aria-pressed="false">Gulf</button>
+                        <button type="button" class="optChip optChip--extra" data-lyrics-dialect="moroccan" aria-pressed="false">Moroccan</button>
                         <button type="button" class="optChip optChip--extra" data-lyrics-dialect="syrian" aria-pressed="false">Syrian</button>
                         <button type="button" class="optChip optChip--extra" data-lyrics-dialect="palestinian" aria-pressed="false">Palestinian</button>
                         <button type="button" class="optChip optChip--extra" data-lyrics-dialect="tunisian" aria-pressed="false">Tunisian</button>
@@ -1248,32 +1248,36 @@
                     <div class="lyricsBoxMain">
                       <textarea id="sunoPrompt" dir="auto" rows="4" placeholder="Write your lyrics…"></textarea>
                     </div>
-                    <div class="lyricsAssistBar" role="toolbar" aria-label="Lyrics assist">
+                    <div class="lyricsAssistBar" role="toolbar" aria-label="Lyrics assist" hidden>
                       <button id="btnLyricsSingabilityCheck" class="lyricsSingabilityCheckBtn aiAssistBtn" type="button" hidden title="Analyze rhyme, wazen (وزن), and line balance for AI singing" aria-label="Check singability"><span class="lyricsSingabilityCheckIco aiAssistIco" aria-hidden="true">♫</span><span class="lyricsSingabilityCheckLabel aiAssistLabel">Check singability</span></button>
                       <button id="btnLyricsDiacritics" class="lyricsDiacriticsBtn" type="button" hidden title="Add Arabic vowel marks for clearer singing" aria-label="Add Arabic vowel marks"><span class="lyricsDiacriticsLabel">Add vowel marks</span><span class="lyricsDiacriticsLabelAr" lang="ar" dir="rtl">تشكيل</span></button>
                       <button id="btnLyricsFixSinging" class="lyricsFixSingingBtn aiAssistBtn" type="button" hidden title="Balance rhyme and wazen (وزن) for cleaner AI singing" aria-label="Fix lyrics for singing"><span class="lyricsFixSingingIco aiAssistIco" aria-hidden="true">♪</span><span class="lyricsFixSingingLabel aiAssistLabel">Fix for singing</span></button>
                       <button id="btnLyricsPolish" class="lyricsPolishBtn aiAssistBtn" type="button" hidden title="Tighten rhyme and line flow without changing the story" aria-label="Polish lyrics"><span class="lyricsPolishIco aiAssistIco" aria-hidden="true">✦</span><span class="lyricsPolishLabel aiAssistLabel">Polish lyrics</span></button>
-                      <button id="btnLyricsMagic" class="lyricsMagicBtn aiAssistBtn" type="button" title="Generate lyrics with AI" aria-label="Generate lyrics with AI"><span class="lyricsMagicIco aiAssistIco" aria-hidden="true">✦</span><span class="lyricsMagicLabel aiAssistLabel">Generate lyrics</span></button>
-                    </div>
-                    <div id="lyricsToolsBar" class="lyricsToolsBar" hidden role="toolbar" aria-label="Lyrics tools">
-                      <button id="btnLyricsDone" class="lyricsToolBtn" type="button" title="These are the lyrics" aria-label="Done with these lyrics">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
+                      <button id="btnLyricsMagic" class="lyricsMagicBtn aiAssistBtn lyricsActionChip lyricsActionChip--generate" type="button" title="Generate lyrics with AI" aria-label="Generate lyrics with AI"><span class="lyricsMagicIco aiAssistIco" aria-hidden="true">✦</span><span class="lyricsMagicLabel aiAssistLabel">Generate lyrics</span></button>
+                      <button id="btnLyricsUndo" class="lyricsToolBtn" type="button" hidden title="Undo last lyrics change" aria-label="Undo lyrics">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 7H5v4"/><path d="M5 11c1.5-3 4.5-5 8-5 4.4 0 8 3.6 8 8s-3.6 8-8 8"/></svg>
                       </button>
-                      <button id="btnLyricsNew" class="lyricsToolBtn" type="button" title="Clear lyrics" aria-label="Clear lyrics">
+                      <button id="btnLyricsCopy" class="lyricsToolBtn" type="button" hidden title="Copy lyrics" aria-label="Copy lyrics">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                      </button>
+                      <button id="btnLyricsNew" class="lyricsToolBtn" type="button" hidden title="Clear lyrics" aria-label="Clear lyrics">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M8 13h8"/><path d="M8 17h5"/></svg>
                       </button>
-                      <button id="btnLyricsCopy" class="lyricsToolBtn" type="button" title="Copy lyrics" aria-label="Copy lyrics">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                      <button id="btnLyricsDone" class="lyricsToolBtn" type="button" hidden title="Check how these lyrics will sing" aria-label="Check singability">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
                       </button>
                     </div>
                     <div id="lyricsSingabilityPanel" class="lyricsSingabilityPanel" hidden aria-live="polite">
-                      <div class="lyricsSingabilityHead">
-                        <span class="lyricsSingabilityTitle">Singability check</span>
+                      <button type="button" id="lyricsSingabilityToggle" class="lyricsSingabilityCardHead" aria-expanded="false">
                         <span id="lyricsSingabilityScore" class="lyricsSingabilityScore"></span>
+                        <span id="lyricsSingabilitySummary" class="lyricsSingabilitySummary"></span>
+                        <span id="lyricsSingabilityExpandHint" class="lyricsSingabilityExpandHint" aria-hidden="true"></span>
+                      </button>
+                      <div id="lyricsSingabilityDetails" class="lyricsSingabilityDetails">
+                        <p id="lyricsSingabilityNote" class="lyricsSingabilityNote" hidden></p>
+                        <ul id="lyricsSingabilityList" class="lyricsSingabilityList"></ul>
+                        <div id="lyricsSingabilityActions" class="lyricsSingabilityActions" hidden role="toolbar" aria-label="Suggested lyric fixes"></div>
                       </div>
-                      <p id="lyricsSingabilitySummary" class="lyricsSingabilitySummary"></p>
-                      <ul id="lyricsSingabilityList" class="lyricsSingabilityList"></ul>
-                      <div id="lyricsSingabilityActions" class="lyricsSingabilityActions" hidden role="toolbar" aria-label="Suggested lyric fixes"></div>
                     </div>
                   </div>
                   <div class="row imageMoodRow">

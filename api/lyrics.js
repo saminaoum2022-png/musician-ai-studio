@@ -51,6 +51,7 @@ module.exports = async function handler(req, res) {
     const lyricsProvider = String(body?.lyricsProvider || body?.providerPreference || "").trim().toLowerCase();
     const scriptFormat = resolveScriptFormat(body, seed);
     const requestedMode = String(body?.mode || "").trim().toLowerCase();
+    const includeSingability = Boolean(body?.includeSingability);
     const sunoLyricsRequested =
       lyricsProvider === "suno"
       && requestedMode !== "remix_reply"
@@ -231,11 +232,20 @@ module.exports = async function handler(req, res) {
         if (String(repaired.provider || "").includes("gemini")) {
           queueLogProviderUsage({ provider: "gemini", kind: "lyrics" });
         }
-        return json(res, 200, {
+        return json(res, 200, await withOptionalSingability({
           lyrics: repaired.text,
           provider: repaired.provider || "gemini",
           debug: { nonce, gemini: "ok", lyricsProvider: "gemini", mode, model: gemResult.model || "" },
-        });
+        }, {
+          includeSingability,
+          mode,
+          geminiKey,
+          style,
+          dialect,
+          dialectHint,
+          scriptFormat,
+          nonce,
+        }));
       }
       return json(res, 502, {
         error: `Gemini lyrics provider unavailable: ${gemResult?.error || "failed"}`,
@@ -251,12 +261,21 @@ module.exports = async function handler(req, res) {
       if (sunoResult?.ok) {
         const normalized = sanitizeSunoLyricsOutput(sunoResult.lyrics);
         if (normalized) {
-          return json(res, 200, {
+          return json(res, 200, await withOptionalSingability({
             lyrics: normalized,
             provider: "suno",
             title: sunoResult.title || "",
             debug: { nonce, suno: "ok", taskId: sunoResult.taskId || "", verbatim: true },
-          });
+          }, {
+            includeSingability,
+            mode,
+            geminiKey,
+            style,
+            dialect,
+            dialectHint,
+            scriptFormat,
+            nonce,
+          }));
         }
       }
       debug.suno = sunoResult?.error || "failed";
@@ -302,11 +321,20 @@ module.exports = async function handler(req, res) {
         if (String(repaired.provider || "").includes("gemini")) {
           queueLogProviderUsage({ provider: "gemini", kind: "lyrics" });
         }
-        return json(res, 200, {
+        return json(res, 200, await withOptionalSingability({
           lyrics: repaired.text,
           provider: repaired.provider || "gemini",
           debug: { ...debug, nonce, gemini: "ok", mode },
-        });
+        }, {
+          includeSingability,
+          mode,
+          geminiKey,
+          style,
+          dialect,
+          dialectHint,
+          scriptFormat,
+          nonce,
+        }));
       }
       debug.gemini = gemResult?.error || "failed";
     }
@@ -548,6 +576,68 @@ function parseSingabilityReport(text) {
     summary: summary || (warnings.length ? "Review singability warnings before generating." : "Looks singable."),
     warnings,
   };
+}
+
+function canAttachSingability(mode, includeSingability) {
+  if (!includeSingability) return false;
+  return mode !== "singability_check" && mode !== "to_arabizi";
+}
+
+async function attachSingabilityReport({
+  lyrics,
+  geminiKey,
+  style,
+  dialect,
+  dialectHint,
+  scriptFormat,
+  nonce,
+}) {
+  const seed = String(lyrics || "").trim();
+  if (!seed || !geminiKey) return null;
+  try {
+    const prompt = buildPrompt({
+      seed,
+      style,
+      mode: "singability_check",
+      nonce: `${nonce || "sing"}-check`,
+      dialect,
+      dialectHint,
+      scriptFormat,
+    });
+    const gem = await tryGeminiLyrics({
+      geminiKey,
+      prompt,
+      temperature: 0.25,
+    });
+    if (!gem?.ok) return null;
+    return parseSingabilityReport(gem.lyrics);
+  } catch {
+    return null;
+  }
+}
+
+async function withOptionalSingability(payload, {
+  includeSingability,
+  mode,
+  geminiKey,
+  style,
+  dialect,
+  dialectHint,
+  scriptFormat,
+  nonce,
+}) {
+  if (!canAttachSingability(mode, includeSingability)) return payload;
+  const singability = await attachSingabilityReport({
+    lyrics: payload?.lyrics,
+    geminiKey,
+    style,
+    dialect,
+    dialectHint,
+    scriptFormat,
+    nonce,
+  });
+  if (singability) payload.singability = singability;
+  return payload;
 }
 
 const REMIX_REPLY_GUARDRAILS = [

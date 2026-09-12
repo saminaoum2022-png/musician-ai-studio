@@ -742,7 +742,6 @@ const els = {
   lyricsAddressGroup: document.getElementById("lyricsAddressGroup"),
   lyricsAddressRow: document.getElementById("lyricsAddressRow"),
   sunoArabicAddress: document.getElementById("sunoArabicAddress"),
-  btnLyricsFrancoAdmin: document.getElementById("btnLyricsFrancoAdmin"),
   btnLyricsDiacritics: document.getElementById("btnLyricsDiacritics"),
   btnLyricsPolish: document.getElementById("btnLyricsPolish"),
   btnLyricsFixSinging: document.getElementById("btnLyricsFixSinging"),
@@ -5582,13 +5581,6 @@ function shouldShowLyricsDiacritics() {
   return false;
 }
 
-function shouldOfferArabiziConvert(text) {
-  if (isArabiziLyricsLanguage(lyricsLanguage)) return false;
-  if (looksLikeArabizi(text)) return false;
-  if (!textHasArabicScript(text)) return false;
-  return isArabicLyricsFlowActive();
-}
-
 /** Draft looks long enough for singability / polish (post-Suno or pasted lyrics). */
 function lyricsLookPolishable(text, opts = {}) {
   const t = String(text || "").trim();
@@ -5635,8 +5627,6 @@ function buildSingabilityActionChips(report, text) {
   }
   if (shouldShowLyricsDiacritics()) {
     chips.push({ action: "diacritics", label: "تشكيل · vowel marks" });
-  } else if (shouldOfferArabiziConvert(text)) {
-    chips.push({ action: "arabizi", label: "Convert to Arabizi" });
   }
   return chips;
 }
@@ -6765,7 +6755,6 @@ function syncSettingsMusicProviderRow(pref = getMusicProviderPref()) {
   }
   if (sub) sub.textContent = musicProviderSubline(p);
   syncSettingsElevenFinetuneRow(p);
-  try { syncAdminFrancoConvertVisibility(); } catch {}
 }
 
 const ELEVENLABS_FINETUNE_LS_KEY = "nabadElevenFinetune";
@@ -16396,7 +16385,6 @@ const PHOTO_CHALLENGE_IDS = new Set(["last-photo-song", "80s-you"]);
 const PHOTO_SOLO_CHALLENGE_IDS = new Set(["80s-you"]);
 let _80sLyricsGenInFlight = null;
 let _80sLyricsDraftDialectKey = "";
-let _francoLyricsRevertSnapshot = "";
 
 const EIGHTIES_YOU_CREATIVE_ANGLES = [
   "mall arcade neon — chase-the-feeling sprint",
@@ -16436,7 +16424,6 @@ function hide80sYouSoloCreateRows() {
     const el = document.getElementById(rowId);
     if (el) el.hidden = true;
   });
-  try { syncAdminFrancoConvertVisibility(); } catch {}
 }
 
 function pick80sCreativeAngle(seed = "") {
@@ -16497,7 +16484,6 @@ function invalidate80sYouLyricsDraft() {
     els.sunoPrompt.value = "";
     _nabadAiLyricsDraft = "";
   }
-  try { syncAdminFrancoConvertVisibility(); } catch {}
 }
 
 function ensure80sYouArabicDefaults() {
@@ -16544,142 +16530,6 @@ function resolveFrancoConversionDialectHint() {
     resolveSingerGenderForGeneration({ hasReference: Boolean(getVocalReferenceFile()) })
   );
   return [dialectHint, addressNote].filter(Boolean).join(" ");
-}
-
-function syncAdminFrancoConvertVisibility() {
-  const isAdmin = Boolean(creditsState?.isAdmin);
-  const seed = String(els.sunoPrompt?.value || "").trim();
-  const hasArabic = textHasArabicScript(seed);
-  const lyricsBtn = els.btnLyricsFrancoAdmin || document.getElementById("btnLyricsFrancoAdmin");
-  if (lyricsBtn) lyricsBtn.hidden = !isAdmin || !hasArabic || is80sYouCreateFlow();
-}
-
-async function convertLyricsToFrancoForAdmin() {
-  if (!creditsState?.isAdmin) {
-    showToast("Convert to Franco is admin-only.", { icon: "!", durationMs: 2800 });
-    return;
-  }
-  if (!els.sunoPrompt) return;
-  let seed = String(els.sunoPrompt.value || "").trim();
-  if (!seed && activePhotoSoloChallengeId() && imageMoodAppliedForNextGen && imageMoodData) {
-    try { setStatus("Drafting Arabic lyrics first…"); } catch {}
-    await draft80sYouLyricsForGenerate(imageMoodData);
-    seed = String(els.sunoPrompt.value || "").trim();
-  }
-  if (!seed) {
-    showToast("Add or generate Arabic lyrics first.", { icon: "!", durationMs: 3200 });
-    return;
-  }
-  if (!textHasArabicScript(seed)) {
-    showToast("Lyrics are already Franco/Latin — tap Revert or paste Arabic script.", { icon: "!", durationMs: 3200 });
-    return;
-  }
-  const lyricsBoxEl = els.sunoPrompt.closest(".lyricsBox");
-  const style = String(els.sunoStyle?.value || "").trim();
-  const dialect = String(els.sunoDialect?.value || "").trim();
-  const lyricDialectHint = resolveFrancoConversionDialectHint();
-  const labelEls = [
-    els.btnLyricsFrancoAdmin?.querySelector(".lyricsFrancoAdminLabel"),
-  ].filter(Boolean);
-  const prevLabels = labelEls.map((el) => el.textContent);
-  let inkwellSettle = false;
-  try {
-    _francoLyricsRevertSnapshot = seed;
-    if (els.btnLyricsFixSinging) els.btnLyricsFixSinging.disabled = true;
-    if (els.btnLyricsPolish) els.btnLyricsPolish.disabled = true;
-    if (els.btnLyricsMagic) els.btnLyricsMagic.disabled = true;
-    if (els.btnLyricsDiacritics) els.btnLyricsDiacritics.disabled = true;
-    if (els.btnLyricsFrancoAdmin) els.btnLyricsFrancoAdmin.disabled = true;
-    labelEls.forEach((el) => { el.textContent = "Converting…"; });
-    if (lyricsBoxEl) lyricsBoxEl.classList.add("generating");
-    if (els.sunoPrompt) els.sunoPrompt.disabled = true;
-    setStatus("Converting to Franco for Lyria 3.5…");
-    const authToken = getSupabaseAuthToken();
-    let r;
-    try {
-      r = await apiFetch("/api/lyrics", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
-        },
-        body: JSON.stringify({
-          seed,
-          style,
-          mode: "to_arabizi",
-          dialect,
-          dialectHint: lyricDialectHint,
-          lyricsProvider: "gemini",
-          scriptFormat: "arabizi",
-        }),
-        nativeReadTimeoutMs: NATIVE_HTTP_LYRICS_READ_MS,
-        nativeConnectTimeoutMs: NATIVE_HTTP_LONG_COMPOSE_CONNECT_MS,
-      });
-    } catch (netErr) {
-      const msg = String(netErr?.message || netErr || "");
-      if (/load failed|failed to fetch|network|timed out/i.test(msg)) {
-        throw new Error("Could not reach the lyrics server — check Wi‑Fi and try again.");
-      }
-      throw netErr;
-    }
-    const data = await r.json().catch(() => ({}));
-    if (!r.ok) throw new Error(data?.error || "Could not convert to Franco");
-    const nextLyrics = String(data?.lyrics || "").trim();
-    if (!nextLyrics) throw new Error("No lyrics returned");
-    els.sunoPrompt.value = nextLyrics;
-    lyricsLanguage = "arabizi";
-    if (!lyricsDialect && isLevantineDialectLabel(dialect, lyricDialectHint)) {
-      lyricsDialect = "lebanese";
-    }
-    try { syncLyricsLangPills(); } catch {}
-    try { applyLyricsLanguageToDialect(); } catch {}
-    try { autoResizeLyricsBox(); } catch {}
-    try { syncArabicLyricsControlsVisibility(); } catch {}
-    snapshotNabadAiLyricsDraft(nextLyrics);
-    void runLyricsSingabilityCheck();
-    inkwellSettle = true;
-    const doneMsg = "Franco ready — review spelling, then Generate to test Lyria.";
-    setStatus(doneMsg);
-    showToast(doneMsg, { icon: "Fr", durationMs: 3800 });
-  } catch (e) {
-    _francoLyricsRevertSnapshot = "";
-    setStatus(`Franco conversion failed: ${e?.message || String(e)}`);
-    showToast(e?.message || "Could not convert to Franco", { icon: "!", durationMs: 3600 });
-  } finally {
-    if (els.sunoPrompt) els.sunoPrompt.disabled = false;
-    if (lyricsBoxEl) lyricsBoxEl.classList.remove("generating");
-    if (inkwellSettle) pulseLyricsGenSettled(lyricsBoxEl);
-    if (els.btnLyricsFixSinging) els.btnLyricsFixSinging.disabled = false;
-    if (els.btnLyricsPolish) els.btnLyricsPolish.disabled = false;
-    if (els.btnLyricsMagic) els.btnLyricsMagic.disabled = false;
-    if (els.btnLyricsDiacritics) els.btnLyricsDiacritics.disabled = false;
-    if (els.btnLyricsFrancoAdmin) els.btnLyricsFrancoAdmin.disabled = false;
-    labelEls.forEach((el, i) => { el.textContent = prevLabels[i] || "Convert to Franco"; });
-    try { syncAdminFrancoConvertVisibility(); } catch {}
-    try { syncArabicGenerateGate(); } catch {}
-  }
-}
-
-function isLevantineDialectLabel(dialect = "", dialectHint = "") {
-  const blob = `${dialect} ${dialectHint}`.toLowerCase();
-  return /lebanese|levantine|syrian|palestinian|beirut|shami/.test(blob);
-}
-
-function revertFrancoLyricsForAdmin() {
-  if (!creditsState?.isAdmin) return;
-  const prev = String(_francoLyricsRevertSnapshot || "").trim();
-  if (!prev || !els.sunoPrompt) return;
-  els.sunoPrompt.value = prev;
-  _francoLyricsRevertSnapshot = "";
-  lyricsLanguage = "arabic";
-  try { syncLyricsLangPills(); } catch {}
-  try { applyLyricsLanguageToDialect(); } catch {}
-  try { autoResizeLyricsBox(); } catch {}
-  try { syncArabicLyricsControlsVisibility(); } catch {}
-  snapshotNabadAiLyricsDraft(prev);
-  setStatus("Reverted to Arabic script.");
-  showToast("Reverted to Arabic script.", { icon: "↩", durationMs: 2800 });
-  try { syncAdminFrancoConvertVisibility(); } catch {}
 }
 
 function is80sLevantineDialectForDiacritics() {
@@ -16761,7 +16611,6 @@ function syncPhotoSoloVocalSections() {
     try { syncClipVocalCharacterUi(); } catch {}
   }
   try { apply80sYouArabicLyricsContext(); } catch {}
-  try { syncAdminFrancoConvertVisibility(); } catch {}
 }
 
 function apply80sYouPortraitGender(mood) {
@@ -16843,7 +16692,6 @@ async function draft80sYouLyricsForGenerate(mood) {
     _80sLyricsDraftDialectKey = dialectKey;
     try { autoResizeLyricsBox(); } catch {}
     try { syncTemplateSparkClipGenerateReady(); syncGenerateOrbVisibility(); } catch {}
-    try { syncAdminFrancoConvertVisibility(); } catch {}
     return true;
   };
 
@@ -64445,83 +64293,6 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
     }
   };
 
-  const convertLyricsToArabizi = async () => {
-    if (!els.sunoPrompt) return;
-    if (!requireProForWebFeature("Convert to Arabizi")) return;
-    if (!arabicLyricChoicesReady()) {
-      const reason = arabicLyricChoicesBlockReason();
-      showToast(reason, { icon: "!", durationMs: 3600 });
-      setStatus(reason);
-      return;
-    }
-    const seed = String(els.sunoPrompt.value || "").trim();
-    if (!seed) {
-      showToast("Add Arabic lyrics first, then convert to Arabizi.", { icon: "!", durationMs: 3200 });
-      return;
-    }
-    if (!textHasArabicScript(seed)) {
-      showToast("Lyrics are already Latin — pick Arabizi language or edit spelling.", { icon: "!", durationMs: 3200 });
-      return;
-    }
-    try { applyLyricsLanguageToDialect(); } catch {}
-    const lyricsBoxEl = els.sunoPrompt.closest(".lyricsBox");
-    const style = String(els.sunoStyle?.value || "").trim();
-    const dialect = String(els.sunoDialect?.value || "").trim();
-    const lyricDialectHint = resolveFrancoConversionDialectHint();
-    let inkwellSettle = false;
-    try {
-      if (els.btnLyricsFixSinging) els.btnLyricsFixSinging.disabled = true;
-      if (els.btnLyricsPolish) els.btnLyricsPolish.disabled = true;
-      if (els.btnLyricsMagic) els.btnLyricsMagic.disabled = true;
-      if (els.btnLyricsSingabilityCheck) els.btnLyricsSingabilityCheck.disabled = true;
-      if (lyricsBoxEl) lyricsBoxEl.classList.add("generating");
-      if (els.sunoPrompt) els.sunoPrompt.disabled = true;
-      setStatus("Converting to Franco for Lyria singing…");
-      const r = await fetch(apiUrl("/api/lyrics"), {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          seed,
-          style,
-          mode: "to_arabizi",
-          dialect,
-          dialectHint: lyricDialectHint,
-          lyricsProvider: "gemini",
-          scriptFormat: "arabizi",
-        }),
-      });
-      const data = await r.json().catch(() => ({}));
-      if (!r.ok) throw new Error(data?.error || "Could not convert to Arabizi");
-      const nextLyrics = String(data?.lyrics || "").trim();
-      if (!nextLyrics) throw new Error("No lyrics returned");
-      els.sunoPrompt.value = nextLyrics;
-      lyricsLanguage = "arabizi";
-      if (!lyricsDialect) lyricsDialect = "lebanese";
-      try { syncLyricsLangPills(); } catch {}
-      try { applyLyricsLanguageToDialect(); } catch {}
-      try { autoResizeLyricsBox(); } catch {}
-      try { syncArabicLyricsControlsVisibility(); } catch {}
-      snapshotNabadAiLyricsDraft(nextLyrics);
-      void runLyricsSingabilityCheck();
-      inkwellSettle = true;
-      const doneMsg = "Converted to Franco — best for Lyria dialect singing.";
-      setStatus(doneMsg);
-      showToast(doneMsg, { icon: "♫", durationMs: 3800 });
-    } catch (e) {
-      setStatus(`Arabizi conversion failed: ${e?.message || String(e)}`);
-      showToast(e?.message || "Could not convert to Arabizi", { icon: "!", durationMs: 3600 });
-    } finally {
-      if (els.sunoPrompt) els.sunoPrompt.disabled = false;
-      if (lyricsBoxEl) lyricsBoxEl.classList.remove("generating");
-      if (inkwellSettle) pulseLyricsGenSettled(lyricsBoxEl);
-      if (els.btnLyricsFixSinging) els.btnLyricsFixSinging.disabled = false;
-      if (els.btnLyricsPolish) els.btnLyricsPolish.disabled = false;
-      if (els.btnLyricsMagic) els.btnLyricsMagic.disabled = false;
-      if (els.btnLyricsSingabilityCheck) els.btnLyricsSingabilityCheck.disabled = false;
-      try { syncArabicGenerateGate(); } catch {}
-    }
-  };
-
   const openImageMoodModal = () => {
     openImageMoodSheet();
   };
@@ -64754,11 +64525,6 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       closeMagicMenu();
     });
   }
-  if (els.btnLyricsFrancoAdmin) {
-    els.btnLyricsFrancoAdmin.addEventListener("click", () => {
-      void convertLyricsToFrancoForAdmin();
-    });
-  }
   if (els.btnLyricsDiacritics) {
     els.btnLyricsDiacritics.addEventListener("click", () => {
       void addArabicVowelMarksToLyrics();
@@ -64787,7 +64553,6 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       if (action === "fix") void fixLyricsForSinging();
       else if (action === "polish") void polishLyricsWithGemini();
       else if (action === "diacritics") void addArabicVowelMarksToLyrics();
-      else if (action === "arabizi") void convertLyricsToArabizi();
       else if (action === "sections") void arrangeLyricsWithSections();
     });
   }

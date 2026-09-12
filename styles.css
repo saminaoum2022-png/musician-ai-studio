@@ -9794,11 +9794,6 @@ body[data-photo-solo-challenge] #singerGenderPills.nabadClipNoPersona .singerDuo
 body[data-photo-solo-challenge] #singerDuoPill{
   display: none !important;
 }
-.lyricsFrancoAdminBtn .lyricsFrancoAdminIco{
-  font-size: 10px;
-  font-weight: 800;
-  letter-spacing: 0.04em;
-}
 body[data-photo-solo-challenge] .createPhotoSoloBannerCta[hidden]{
   display: none !important;
 }

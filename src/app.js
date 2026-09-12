@@ -3594,7 +3594,9 @@ function enterProfileRouteHooks({ skipHeavy = false } = {}) {
   try { setProfileEditing(false); } catch {}
   scheduleProfileSongsRender();
   if (skipHeavy || shouldSkipRouteHeavy("profile")) {
-    try { setProfileHeaderLoading(false); } catch {}
+    try {
+      setProfileHeaderLoading(shouldShowProfileHeaderSkeleton());
+    } catch {}
     try { renderProfilePreviewFromInputs(); } catch {}
     restoreRouteScroll("profile");
     return;
@@ -27631,7 +27633,7 @@ function onAuthAccountSwitched(prevUserId, nextUserId) {
   if (String(activeProfile?.id || "") !== String(nextUserId)) {
     activeProfile = {
       id: nextUserId,
-      username: deriveUsernameFromAuth(user) || "guest",
+      username: "",
       displayName: "",
       email: String(user?.email || ""),
       gender: "",
@@ -53041,24 +53043,24 @@ function setProfileHeaderLoading(on) {
 function refreshProfileHandleFromActiveProfile() {
   const handle = String(activeProfile?.username || "").trim();
   if (els.profilePreviewUsernameInput) {
-    els.profilePreviewUsernameInput.value = handle ? `@${handle}` : "@guest";
+    const hidePlaceholder = isPlaceholderUsername(handle) && !_profileCloudMergedAt;
+    els.profilePreviewUsernameInput.value = hidePlaceholder ? "" : (handle ? `@${handle}` : "");
   }
   try { renderProfilePreviewFromInputs(); } catch {}
 }
 
-/** Signed-in but the visible handle is still the unauthenticated
- *  sentinel or not set yet. We intentionally do NOT treat auto-generated
- *  `user_xxxxx` as "loading" — once boot assigns that, the header may
- *  show it; the bad flash is specifically @guest + default logo while
- *  session is valid. A cached avatar alone must NOT skip this. */
+/** Signed-in but the visible handle is not settled yet. Hide @guest and
+ *  the signup default `user_xxxxx` until cloud merge confirms it — if they
+ *  already picked a handle, that name should appear, not the original. */
 function shouldShowProfileHeaderSkeleton() {
   if (!authSession?.user?.id) return false;
   const uid = String(authSession.user.id);
   const localId = String(activeProfile?.id || "guest");
   if (localId === "guest" || localId !== uid) return true;
   const u = String(activeProfile?.username || "").trim().toLowerCase();
-  if (!u) return true;
-  return u === "guest";
+  if (!u || u === "guest") return true;
+  if (isPlaceholderUsername(u) && !_profileCloudMergedAt) return true;
+  return false;
 }
 
 /* =================================================================
@@ -53072,8 +53074,11 @@ function renderProfileIdentityLine() {
   const input = els.profilePreviewUsernameInput;
   const stack = els.profileAuraNameStack || document.getElementById("profileAuraNameStack");
   const friendly = screenshotDisplayName(normalizeDisplayName(activeProfile?.displayName));
-  const handle = screenshotHandle(normalizeProfileUsername(activeProfile?.username));
-  const handleText = handle ? `@${handle}` : "@guest";
+  const rawHandle = normalizeProfileUsername(activeProfile?.username);
+  const handle = (isPlaceholderUsername(rawHandle) && !_profileCloudMergedAt)
+    ? ""
+    : screenshotHandle(rawHandle);
+  const handleText = handle ? `@${handle}` : "";
 
   if (profileEditing) {
     if (displayEl) {
@@ -73080,6 +73085,15 @@ void (async () => {
         cloud,
         localFilled,
       );
+    } else if (
+      localProfileBelongsToAuthUser()
+      && !isPlaceholderUsername(activeProfile?.username)
+    ) {
+      nextProfile = {
+        ...activeProfile,
+        id: String(authSession.user.id),
+        email: activeProfile.email || authSession.user.email || "",
+      };
     } else {
       // First sign-in for this user. Don't fall back to the boot-time
       // `username: "guest"` default — that's the unauthenticated

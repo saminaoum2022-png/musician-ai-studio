@@ -25918,6 +25918,13 @@ function syncNabadClipHomeCard() {
 /** Nabad Clip vocal characters — keep in sync with api/_lib/clip-vocal-profiles.js */
 const CLIP_VOCAL_PROFILES = [
   {
+    id: "male_warm",
+    gender: "m",
+    label: "Warm Pop",
+    labelAr: "دافئ",
+    spec: "Modern pop tenor — clear, on-pitch, radio-ready close-mic. Default male voice for Arabic or English hooks.",
+  },
+  {
     id: "male_jabali",
     gender: "m",
     label: "Folk",

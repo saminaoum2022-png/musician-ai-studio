@@ -33,28 +33,36 @@ OUTPUT SCHEMA:
 - If instrumental is true, return "".
 
 === enhanced_style_prompt ===
-Rich sonic specification for Lyria. Target length: 800–1200 characters max.
+Musical brief for Lyria Clip. Target 500–900 characters — a real song sketch, not a stacked plugin list.
 
-Include ALL when inferable (use sensible genre defaults if missing — never stay vague):
-1. Duration: "~28 second clip" explicitly.
-2. Tempo: exact BPM (integer) + rhythmic feel (e.g. dabke ~120–130, ballad ~70–90).
-3. Key / scale — honor song_key if provided (e.g. "A minor", "D with hijaz color").
+Include when inferable:
+1. Duration: "~28 second clip".
+2. Tempo: exact BPM + feel (dabke ~120–130, ballad ~70–90, pop ~100–115).
+3. Key / scale — honor song_key if provided.
 4. Genre + mood in producer language.
-5. Layers: sub-bass, drums/percussion, harmonic bed, lead elements, ear-candy.
-6. Hook/ad-sync dynamics for 30s:
-   - Immediate catchy motif (no long ambient intro).
-   - Fast build to main drop/peak (time cues OK, e.g. ~0:04–0:06).
-   - Punchy outro with clean stop — not a fade mid-phrase.
-7. Vocal: gender, character, delivery from inputs; merge vocal_lyria_hint if present.
-   Conversational, warm, close-mic — NO shouting, belted stadium vocals, or extreme high notes.
-8. Mix: density, brightness, space (e.g. "dry intimate vocal, wide chorus pads").
-9. Hard limits: one optional verse + one chorus max; hook-focused compact clip.
+5. Arrangement as a composed hook (pick ONE of each — do not stack):
+   - A lead melody a human could hum after one listen.
+   - Simple chord movement (not a one-chord loop).
+   - One drum identity (kit OR dabke percussion — not 808 + trap hats + folk drums).
+   - One harmonic bed (keys OR guitar OR oud).
+   - Bass that follows the chords. Skip generic 808 / "ear-candy" / risers unless the genre is trap.
+6. Hook dynamics: motif in the first 2 seconds, chorus peak, clean last phrase.
+7. Vocal: honor vocal_gender, vocal_character_id, and vocal_lyria_hint.
+   Default male (warm / empty / unknown character): modern pop TENOR — mid-range, on-pitch, radio-ready. Never default to baritone, bass, rasp, or jabali folk.
+   Default female: warm modern pop alto.
+   Folk / grit / deep / soft characters only when vocal_character_id names them.
+   Conversational close-mic; belt only if the character or genre needs it.
+8. Mix: vocal forward, instruments support the melody, leave space.
 
-Dialect: if dialect_hint is set (Levantine, Gulf, Egyptian, etc.), reflect in rhythm and vocal color — tasteful, not stereotyped.
+Avoid: "ear-candy", stacked 808+pads+plucks, ringtone / MIDI-demo language, stadium crowd, vague cinematic filler with no melody.
 
-If style_tags imply visual mood (sunset, party, melancholy), translate to sonic texture.
+Hard limits: one optional verse + one chorus; hook-focused compact clip.
 
-Be specific ("palm-muted guitar stabs", "808 on downbeats") — avoid vague filler alone.
+Dialect: if dialect_hint is set (Levantine, Gulf, Egyptian, etc.), reflect in vocal color and rhythm — tasteful, not stereotyped.
+
+If style_tags imply visual mood (sunset, party, melancholy), translate to sonic texture (harmony + melody), not extra layers.
+
+Be specific ("palm-muted guitar stabs", "mijwiz hook") — avoid vague filler alone.
 
 Return ONLY the JSON object.`;
 

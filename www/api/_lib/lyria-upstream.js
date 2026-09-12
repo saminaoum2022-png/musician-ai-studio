@@ -262,7 +262,7 @@ function buildLyriaInlineVocalDirection({
     if (g === "f") {
       bits.push("Female alto vocal, warm soulful close-mic chest voice");
     } else if (g === "m") {
-      bits.push("Male baritone vocal, smooth warm conversational delivery");
+      bits.push("Male tenor vocal, warm modern pop chest voice, on-pitch close-mic");
     } else {
       bits.push("Warm conversational lead vocal, close-mic chest voice");
     }
@@ -335,7 +335,7 @@ function buildLyriaVocalProfile({
         "Female Alto: warm, soulful, conversational close-mic chest voice";
     } else if (g === "m") {
       genderProfile =
-        "Male Baritone: smooth, warm chest voice, laid-back conversational delivery";
+        "Male tenor: warm modern pop chest voice, on-pitch close-mic, radio-ready hook energy";
     } else {
       genderProfile =
         "Warm conversational lead vocal, close-mic chest voice, natural cadence";

@@ -133,7 +133,13 @@ async function generateGeminiOnce({ geminiKey, model, systemPrompt, contents }) 
 
 async function askGemini({ geminiKey, history, message, systemPrompt }) {
   const discovered = await listGeminiGenerateModels(geminiKey);
-  const preferred = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-2.0-flash-lite", "gemini-1.5-flash"];
+  const preferred = [
+    "gemini-3.6-flash",
+    "gemini-3.5-flash",
+    "gemini-2.5-flash",
+    "gemini-2.0-flash",
+    "gemini-2.0-flash-lite",
+  ];
   const models = [...preferred, ...discovered].filter(Boolean).filter((v, i, a) => a.indexOf(v) === i);
   const baseContents = [
     ...history.map((h) => ({ role: h.role, parts: [{ text: h.text }] })),

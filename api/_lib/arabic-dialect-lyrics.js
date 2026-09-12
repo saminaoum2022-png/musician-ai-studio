@@ -86,8 +86,8 @@ function buildColloquialArabicGenerationLines({
 /** Light marks baked into Generate lyrics — a hint, not the sung pass. */
 function buildHintTashkeelGenerationLines() {
   return [
-    "LIGHT tashkeel HINT only (so the user sees vowel marks exist): sukoon on a few stopped word ends (شفتْ، عمْ), address إنتَ/إنتِ/إنتو only — NEVER mark kaf (قلبك not قلبكَ/قلبكِ; that sings 2albaka/albaki). Shadda when the word needs it.",
-    "Do NOT vowelize every letter. Do NOT do a full sung tashkeel pass — that is the separate Add vowel marks button.",
+    "LIGHT tashkeel HINT only (so the user sees vowel marks exist): address إنتَ/إنتِ/إنتو only + shadda when the word needs it. NEVER mark kaf (قلبك not قلبكَ/قلبكِ). Do NOT add sukoon or ending vowels on other words.",
+    "Do NOT vowelize every letter. Do NOT do the sung tashkeel pass — that is the separate Add vowel marks button.",
   ];
 }
 
@@ -109,33 +109,33 @@ function buildSparseDiacriticsLinesEn() {
 
 function buildLebaneseDiacriticsLinesAr() {
   return [
-    "لبناني خفيف: سكّون (ْ) على آخر الكلمة إذا منسكر + شدة إذا لازمة. لا تحرّك كل حرف.",
-    "أمثلة خفيفة: شفتْ، خلّصْ، عمْ، إنتَ/إنتِ — مش شَفْتُكَ المدرسية.",
-    "ممنوع: تنوين (ًٌٍ)، إعراب، أو تشكيل على وسط الكلمة إلا إذا اللفظ بيتلبس.",
+    "لبناني للغناء: زيد سكون على الحروف المسكورة (آخر الكلمة وجوا التجميع) + حركة آخر الكلمة إذا الغناء ممكن يغلط + شدة إذا لازمة.",
+    "أمثلة: شفتْ، خلّصْ، عمْ، إنتَ/إنتِ، هوّي — مش تلميح إنتَ وبس، ومش شَفْتُكَ المدرسية.",
+    "ممنوع: تنوين (ًٌٍ)، إعراب، أو تشكيل كل حرف. وسط الكلمة بس إذا اللفظ بيتلبس.",
     "ق = همزة (2): قلب، قلت — مش /q/ فصيح.",
   ];
 }
 
 function buildLebaneseDiacriticsLinesEn() {
   return [
-    "Light Lebanese: sukoon (ْ) on stopped word ends + shadda when needed. Do not mark every letter.",
-    "Light examples: شفتْ، خلّصْ، عمْ، إنتَ/إنتِ — never textbook شَفْتُكَ.",
-    "NEVER tanween (ًٌٍ) or nahwi. No mid-word vowels unless the singer would guess wrong.",
+    "Lebanese sung pass: ADD sukoon on stopped ends and clusters + last-letter vowels the singer might miss + shadda.",
+    "Examples: شفتْ، خلّصْ، عمْ، إنتَ/إنتِ، هوّي — more than a hint إنتَ, never textbook شَفْتُكَ.",
+    "NEVER tanween (ًٌٍ) or nahwi. Mid-word vowels only if the singer would guess wrong.",
     "Qaf ق = hamza (2), not classical /q/.",
   ];
 }
 
 function buildLevantineDiacriticsLinesAr() {
   return [
-    "شامي خفيف: سكّون على آخر الكلمة المسكور + آخر حرف للعنوان. لا تشكّل كل حرف.",
-    "ممنوع: تنوين (ًٌٍ)، إعراب، أو تشكيل مدرسي.",
+    "شامي للغناء: زيد سكون على آخر الكلمة المسكور + حركة آخر الكلمة إذا ممكن يغلط الغناء + العنوان.",
+    "ممنوع: تنوين (ًٌٍ)، إعراب، أو تشكيل مدرسي لكل حرف.",
     "ق باللهجة المحكية = همزة (2) مش /q/ فصيح.",
   ];
 }
 
 function buildLevantineDiacriticsLinesEn() {
   return [
-    "Light Levantine: sukoon on stopped word ends + address endings only. Do not mark every letter.",
+    "Levantine sung pass: ADD sukoon on stopped word ends + last-letter vowels the singer might miss + address marks.",
     "NO tanween (ًٌٍ), NO nahwi, NO textbook MSA pronunciation.",
     "Qaf ق = hamza in this dialect, not classical /q/.",
   ];
@@ -316,6 +316,16 @@ function stripColloquialTanween(input) {
   return String(input || "").replace(/[\u064B-\u064D]/g, "");
 }
 
+/** Count harakat so we can tell a hint pass from a fuller sung pass. */
+function countArabicDiacritics(input) {
+  return (String(input || "").match(/[\u064B-\u0652\u0670]/g) || []).length;
+}
+
+/** Drop short vowels / sukoon / tanween but keep shadda — used before Add vowel marks. */
+function stripSungMarksKeepShadda(input) {
+  return String(input || "").replace(/[\u064B-\u0650\u0652-\u065F\u0670]/g, "");
+}
+
 function isArabicCombiningMark(ch) {
   const c = String(ch || "").charCodeAt(0);
   return (c >= 0x064B && c <= 0x065F) || c === 0x0670;
@@ -384,7 +394,7 @@ function hintSungWordMarks(run) {
       const keepShort = !lastKaf && isLast && (n <= 2 || intaIntiWord);
       const marks = L.marks.filter((m) => {
         if (m === "\u0651") return true;
-        if (m === "\u0652") return isLast;
+        if (m === "\u0652") return false;
         if (m >= "\u064B" && m <= "\u064D") return false;
         if (isArabicShortVowel(m)) return keepShort;
         return false;
@@ -394,7 +404,7 @@ function hintSungWordMarks(run) {
     .join("");
 }
 
-/** Generate-time hint: end sukoon + address marks + shadda. Lighter than the button. */
+/** Generate-time hint: address marks + shadda only. Sukoon is the vowel-marks button. */
 function hintSungArabicDiacritics(input) {
   let text = stripColloquialTanween(input);
   if (!text) return text;
@@ -468,6 +478,8 @@ module.exports = {
   buildDiacriticsAddressLinesAr,
   buildDiacriticsAddressLinesEn,
   stripColloquialTanween,
+  countArabicDiacritics,
+  stripSungMarksKeepShadda,
   applySparseSungDiacritics,
   hintSungArabicDiacritics,
   lightenSungArabicDiacritics,

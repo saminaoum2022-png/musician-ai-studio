@@ -64893,12 +64893,15 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       try { autoResizeLyricsBox(); } catch {}
       try { syncArabicLyricsControlsVisibility(); } catch {}
       snapshotNabadAiLyricsDraft(nextLyrics);
-      const vowelDoneMsg =
-        lyricsDialect === "lebanese"
-          ? "Lebanese vowel marks added — pick Lebanese dialect + Generate."
+      const markRe = /[\u064B-\u0652\u0670]/g;
+      const addedMarks = (nextLyrics.match(markRe) || []).length > (seed.match(markRe) || []).length;
+      const vowelDoneMsg = !addedMarks
+        ? "Vowel marks look the same — tap again if you want a fuller sung pass."
+        : lyricsDialect === "lebanese"
+          ? "Lebanese vowel marks added — more sukoon and endings than Generate."
           : "Vowel marks added — review then Generate song.";
       setStatus(vowelDoneMsg);
-      showToast(vowelDoneMsg, { icon: "✦", durationMs: 3600 });
+      showToast(vowelDoneMsg, { icon: addedMarks ? "✦" : "!", durationMs: 3600 });
       void runLyricsSingabilityCheck({ fromAuto: true });
     } catch (e) {
       setStatus(`Vowel marks failed: ${e?.message || String(e)}`);

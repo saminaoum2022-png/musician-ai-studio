@@ -24,6 +24,8 @@ const {
   buildDiacriticsAddressLinesAr,
   buildDiacriticsAddressLinesEn,
   stripColloquialTanween,
+  countArabicDiacritics,
+  stripSungMarksKeepShadda,
   hintSungArabicDiacritics,
   lightenSungArabicDiacritics,
 } = require("./_lib/arabic-dialect-lyrics");
@@ -106,7 +108,8 @@ module.exports = async function handler(req, res) {
                 ? "to_arabizi"
               : detectModeFromSeed(seed, body?.mode);
     const nonce = Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 8);
-    const prompt = buildPrompt({ seed, style, mode, nonce, dialect, dialectHint, arabicAddress, sourceLyrics, sourceTitle, sourceCreator, scriptFormat });
+    const promptSeed = mode === "diacritics" ? stripSungMarksKeepShadda(seed) : seed;
+    const prompt = buildPrompt({ seed: promptSeed, style, mode, nonce, dialect, dialectHint, arabicAddress, sourceLyrics, sourceTitle, sourceCreator, scriptFormat });
     const sunoPrompt = buildSunoPrompt({ seed, style, mode, dialect, dialectHint });
     const complianceTerms = mode === "remix_reply"
       ? [...new Set([
@@ -121,7 +124,7 @@ module.exports = async function handler(req, res) {
       : mode === "to_arabizi"
         ? 0.1
       : mode === "diacritics"
-        ? 0.2
+        ? 0.38
         : mode === "enhance"
           ? 0.58
           : mode === "fix_singing"
@@ -174,11 +177,32 @@ module.exports = async function handler(req, res) {
         const flags = dialectFlags(dialect, dialectHint);
         const arabicScript = isArabicLyricsContext({ dialect, dialectHint, scriptFormat, seed });
         if (mode === "diacritics") {
-          normalized = lightenSungArabicDiacritics(normalized, {
+          const diacriticOpts = {
             isMsa: flags.isMsa,
             isLebanese: flags.isLebanese,
             isLevantineColloquial: flags.isLevantineColloquial,
-          });
+          };
+          normalized = lightenSungArabicDiacritics(normalized, diacriticOpts);
+          if (countArabicDiacritics(normalized) <= countArabicDiacritics(seed)) {
+            const retry = await tryGeminiLyrics({
+              geminiKey,
+              prompt: [
+                "The previous marking was too light — it looks like Generate's hint, not the sung pass.",
+                "ADD sukoon on stopped consonants and last-letter vowels the singer might miss.",
+                "Keep the same words and section tags. Output lyrics only.",
+                "",
+                prompt,
+              ].join("\n"),
+              temperature: Math.max(Number(geminiTemperature) || 0.38, 0.5),
+              preferredModels: geminiPreferredModels,
+            });
+            if (retry?.ok) {
+              const retried = lightenSungArabicDiacritics(sanitizeLyricsOutput(retry.lyrics), diacriticOpts);
+              if (countArabicDiacritics(retried) > countArabicDiacritics(normalized)) {
+                normalized = retried;
+              }
+            }
+          }
         } else if (arabicScript && !flags.isMsa) {
           normalized = stripColloquialTanween(normalized);
           if (
@@ -601,13 +625,15 @@ function buildPrompt({ seed, style, mode, nonce, dialect, dialectHint, arabicAdd
       : address === "group" ? "مجموعة (إنتو · حبايبي)"
       : "المخاطَب كما هو مكتوب";
     return [
-      `تشكيل خفيف ب${dialectAr} — آخر الكلمة + العنوان + سكون إذا اللهجة بتسكر. كثرة الحركات بتقتل الغناء.`,
+      `تشكيل للغناء ب${dialectAr} — أكتر من تلميح التوليد. زيد سكون وحركات آخر الكلمة. كثرة الحركات بتقتل الغناء.`,
+      "الكلمات ممكن تكون بلا حركات أو فيها تلميح خفيف (إنتَ/إنتِ وشدة). هيدي خطوة التشكيل الكاملة للغناء — ممنوع ترجع نفس النص.",
       `العنوان: الأغنية موجهة لـ${addressAr}.`,
       "نفس الأسطر ونفس الوسوم [Verse] [Chorus]. أخرج الكلمات فقط.",
       ...buildSparseDiacriticsLinesAr(),
       ...buildDiacriticsDialectLinesAr(flags),
       ...buildDiacriticsAddressLinesAr(address, flags),
-      `Sparse sung marks for ${dialectSpeak} to ${addressSpeak} — endings + address + sukoon only. Heavy tashkeel kills the vocal.`,
+      `Sung tashkeel for ${dialectSpeak} to ${addressSpeak} — fuller than Generate's hint: endings + address + sukoon. Heavy tashkeel kills the vocal.`,
+      "Input may be plain or only lightly hinted (إنتَ/إنتِ + shadda). ADD more singer-useful marks. Returning the same text is wrong.",
       "Keep the same lines and section tags. Output lyrics only.",
       ...buildSparseDiacriticsLinesEn(),
       ...buildDiacriticsDialectLinesEn(flags),

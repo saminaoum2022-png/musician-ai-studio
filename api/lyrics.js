@@ -14,12 +14,13 @@ const {
 } = require("./_lib/arabizi");
 const {
   dialectFlags,
+  normalizeArabicAddress,
   isArabicLyricsContext,
   buildColloquialArabicGenerationLines,
-  buildLebaneseDiacriticsLinesAr,
-  buildLebaneseDiacriticsLinesEn,
-  buildLevantineDiacriticsLinesAr,
-  buildLevantineDiacriticsLinesEn,
+  buildDiacriticsDialectLinesAr,
+  buildDiacriticsDialectLinesEn,
+  buildDiacriticsAddressLinesAr,
+  buildDiacriticsAddressLinesEn,
   stripColloquialTanween,
   lightenSungArabicDiacritics,
 } = require("./_lib/arabic-dialect-lyrics");
@@ -35,6 +36,10 @@ module.exports = async function handler(req, res) {
     const style = String(body?.style || "").trim().slice(0, 700);
     const dialect = String(body?.dialect || "").trim().slice(0, 120);
     const dialectHint = String(body?.dialectHint || "").trim().slice(0, 500);
+    const arabicAddress = normalizeArabicAddress(
+      String(body?.arabicAddress || body?.address || "").trim().slice(0, 40),
+      dialectHint,
+    );
     const sourceLyrics = String(body?.sourceLyrics || "").trim().slice(0, 3500);
     const sourceTitle = String(body?.sourceTitle || "").trim().slice(0, 160);
     const sourceCreator = String(body?.sourceCreator || "").trim().slice(0, 80);
@@ -98,7 +103,7 @@ module.exports = async function handler(req, res) {
                 ? "to_arabizi"
               : detectModeFromSeed(seed, body?.mode);
     const nonce = Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 8);
-    const prompt = buildPrompt({ seed, style, mode, nonce, dialect, dialectHint, sourceLyrics, sourceTitle, sourceCreator, scriptFormat });
+    const prompt = buildPrompt({ seed, style, mode, nonce, dialect, dialectHint, arabicAddress, sourceLyrics, sourceTitle, sourceCreator, scriptFormat });
     const sunoPrompt = buildSunoPrompt({ seed, style, mode, dialect, dialectHint });
     const complianceTerms = mode === "remix_reply"
       ? [...new Set([
@@ -123,7 +128,9 @@ module.exports = async function handler(req, res) {
               : 0.9;
     const geminiPreferredModels = mode === "to_arabizi"
       ? ["gemini-2.5-flash", "gemini-2.0-flash"]
-      : null;
+      : mode === "diacritics"
+        ? ["gemini-3.6-flash", "gemini-3.5-flash", "gemini-2.5-flash", "gemini-2.0-flash"]
+        : null;
     const sunoKey = process.env.SUNO_API_KEY || "";
 
     const debug = {};
@@ -167,6 +174,7 @@ module.exports = async function handler(req, res) {
           normalized = lightenSungArabicDiacritics(normalized, {
             isMsa: flags.isMsa,
             isLebanese: flags.isLebanese,
+            isLevantineColloquial: flags.isLevantineColloquial,
           });
         } else if (arabicScript && !flags.isMsa) {
           normalized = stripColloquialTanween(normalized);
@@ -191,7 +199,7 @@ module.exports = async function handler(req, res) {
         return json(res, 200, {
           lyrics: repaired.text,
           provider: repaired.provider || "gemini",
-          debug: { nonce, gemini: "ok", lyricsProvider: "gemini", mode },
+          debug: { nonce, gemini: "ok", lyricsProvider: "gemini", mode, model: gemResult.model || "" },
         });
       }
       return json(res, 502, {
@@ -231,6 +239,7 @@ module.exports = async function handler(req, res) {
           normalized = lightenSungArabicDiacritics(normalized, {
             isMsa: flags.isMsa,
             isLebanese: flags.isLebanese,
+            isLevantineColloquial: flags.isLevantineColloquial,
           });
         } else if (arabicScript && !flags.isMsa) {
           normalized = stripColloquialTanween(normalized);
@@ -506,7 +515,7 @@ const REMIX_REPLY_GUARDRAILS = [
   "Echo specific feelings, names, or images from the original song so the reply clearly connects.",
 ];
 
-function buildPrompt({ seed, style, mode, nonce, dialect, dialectHint, sourceLyrics, sourceTitle, sourceCreator, scriptFormat = "latin" }) {
+function buildPrompt({ seed, style, mode, nonce, dialect, dialectHint, arabicAddress = "", sourceLyrics, sourceTitle, sourceCreator, scriptFormat = "latin" }) {
   const dialectLines = [
     dialect ? `Target dialect/accent: ${dialect}` : "",
     dialectHint ? `Dialect hint line (follow this flavor): ${dialectHint}` : "",
@@ -533,65 +542,56 @@ function buildPrompt({ seed, style, mode, nonce, dialect, dialectHint, sourceLyr
   if (mode === "diacritics") {
     const dialectRaw = String(dialect || "").trim();
     const dialectLower = dialectRaw.toLowerCase();
-    const isMsa = flags.isMsa;
-    const isLebanese = flags.isLebanese;
-    const isLevantineColloquial = flags.isLevantineColloquial;
+    const address = normalizeArabicAddress(arabicAddress, dialectHint);
     // Friendly names match Create chips so Gemini gets the same simple ask
     // that works in Coach — short + dialect-named, not a soft essay.
     const dialectSpeak =
-      /levantine|lebanese/.test(dialectLower) ? "Lebanese / Levantine (لبنانية محكية)"
-      : /egyptian/.test(dialectLower) ? "Egyptian (مصرية محكية)"
-      : /iraqi/.test(dialectLower) ? "Iraqi (عراقية محكية)"
-      : /gulf|khaleeji|خليج/.test(dialectLower) ? "Gulf / Khaleeji (خليجية محكية)"
-      : /maghrebi|moroccan|دارجة/.test(dialectLower) ? "Moroccan / Maghrebi (دارجة محكية)"
+      flags.isLebanese || /lebanese/.test(dialectLower) ? "Lebanese (لبنانية محكية)"
       : /syrian/.test(dialectLower) ? "Syrian (سورية محكية)"
       : /palestinian/.test(dialectLower) ? "Palestinian (فلسطينية محكية)"
+      : flags.isLevantineColloquial || /levantine/.test(dialectLower) ? "Levantine (شامية محكية)"
+      : /egyptian/.test(dialectLower) || flags.isEgyptian ? "Egyptian (مصرية محكية)"
+      : /iraqi/.test(dialectLower) || flags.isIraqi ? "Iraqi (عراقية محكية)"
+      : /gulf|khaleeji|خليج/.test(dialectLower) || flags.isGulf ? "Gulf / Khaleeji (خليجية محكية)"
+      : /maghrebi|moroccan|دارجة/.test(dialectLower) || flags.isMaghrebi ? "Moroccan / Maghrebi (دارجة محكية)"
       : /tunisian/.test(dialectLower) ? "Tunisian (تونسية محكية)"
       : /sudanese/.test(dialectLower) ? "Sudanese (سودانية محكية)"
-      : isMsa ? "Modern Standard Arabic / فصحى"
+      : flags.isMsa ? "Modern Standard Arabic / فصحى"
       : dialectRaw || "colloquial sung Arabic (محكية للغناء)";
     const dialectAr =
-      /levantine|lebanese/.test(dialectLower) ? "اللهجة اللبنانية المحكية"
-      : /egyptian/.test(dialectLower) ? "اللهجة المصرية المحكية"
-      : /iraqi/.test(dialectLower) ? "اللهجة العراقية المحكية"
-      : /gulf|khaleeji|خليج/.test(dialectLower) ? "اللهجة الخليجية المحكية"
-      : /maghrebi|moroccan|دارجة/.test(dialectLower) ? "الدارجة المغاربية المحكية"
+      flags.isLebanese || /lebanese/.test(dialectLower) ? "اللهجة اللبنانية المحكية"
       : /syrian/.test(dialectLower) ? "اللهجة السورية المحكية"
       : /palestinian/.test(dialectLower) ? "اللهجة الفلسطينية المحكية"
+      : flags.isLevantineColloquial || /levantine/.test(dialectLower) ? "اللهجة الشامية المحكية"
+      : /egyptian/.test(dialectLower) || flags.isEgyptian ? "اللهجة المصرية المحكية"
+      : /iraqi/.test(dialectLower) || flags.isIraqi ? "اللهجة العراقية المحكية"
+      : /gulf|khaleeji|خليج/.test(dialectLower) || flags.isGulf ? "اللهجة الخليجية المحكية"
+      : /maghrebi|moroccan|دارجة/.test(dialectLower) || flags.isMaghrebi ? "الدارجة المغاربية المحكية"
       : /tunisian/.test(dialectLower) ? "اللهجة التونسية المحكية"
       : /sudanese/.test(dialectLower) ? "اللهجة السودانية المحكية"
-      : isMsa ? "الفصحى"
+      : flags.isMsa ? "الفصحى"
       : "اللهجة العربية المحكية للغناء";
+    const addressSpeak =
+      address === "female" ? "a woman (إنتِ · حبيبتي)"
+      : address === "male" ? "a man (إنتَ · حبيبي)"
+      : address === "group" ? "a group (إنتو · حبايبي)"
+      : "the addressee as written";
+    const addressAr =
+      address === "female" ? "امرأة (إنتِ · حبيبتي)"
+      : address === "male" ? "رجل (إنتَ · حبيبي)"
+      : address === "group" ? "مجموعة (إنتو · حبايبي)"
+      : "المخاطَب كما هو مكتوب";
     return [
-      `حَرِّك الكلمات ب${dialectAr} عشان الغناء يطلع باللهجة — مثل Coach، مش تشكيل مدرسي.`,
-      "نفس الكلمات، نفس الأسطر، نفس الوسوم [Verse] [Chorus]… أخرج الكلمات فقط.",
-      isMsa
-        ? "فصحى: تشكيل أوضح مقبول، بس بدون مبالغة على كل حرف — لا تنوين إلا إذا طلب المستخدم إعراباً صراحة."
-        : isLebanese
-        ? buildLebaneseDiacriticsLinesAr().join("\n")
-        : isLevantineColloquial
-        ? buildLevantineDiacriticsLinesAr().join("\n")
-        : [
-          "لا تشكّل كل حرف — شكّل الكلمات يلي ممكن يغلط فيها الغناء + سكّون على السوكن.",
-          "ممنوع: تنوين (ًٌٍ)، إعراب، أو تشكيل نحوي على آخر الكلمات.",
-          "ق باللهجة المحكية = همزة (2) مش /q/ فصيح.",
-        ].join("\n"),
-      `Mark these lyrics for sung ${dialectSpeak} — like Coach: help the singer hit the dialect, NOT school grammar.`,
-      "Keep SAME words, lines, and section tags. Output lyrics only.",
-      isMsa
-        ? "MSA: clear marks OK, but do not vowelize every single letter — no tanween unless user explicitly asked for nahwi."
-        : isLebanese
-        ? buildLebaneseDiacriticsLinesEn().join("\n")
-        : isLevantineColloquial
-        ? buildLevantineDiacriticsLinesEn().join("\n")
-        : [
-          "Mark vowels on words the singer might misread; add sukoon on stopped consonants.",
-          "NO tanween (ًٌٍ), NO nahwi case endings, NO full textbook tashkeel.",
-          "Qaf ق = hamza in this dialect, not classical /q/.",
-        ].join("\n"),
-      "Honor Arabic address/gender hints in the dialect hint if present.",
+      `حَرِّك الكلمات ب${dialectAr} عشان الغناء يطلع باللهجة — مش تشكيل مدرسي.`,
+      `العنوان: الأغنية موجهة لـ${addressAr}. اقرأ اللهجة + العنوان قبل ما تشكّل.`,
+      "نفس الأسطر ونفس الوسوم [Verse] [Chorus]. أخرج الكلمات فقط.",
+      ...buildDiacriticsDialectLinesAr(flags),
+      ...buildDiacriticsAddressLinesAr(address, flags),
+      `Mark these lyrics for sung ${dialectSpeak} addressed to ${addressSpeak} — dialect + address first, NOT school grammar.`,
+      "Keep the same lines and section tags. Output lyrics only.",
+      ...buildDiacriticsDialectLinesEn(flags),
+      ...buildDiacriticsAddressLinesEn(address, flags),
       `Variation token: ${nonce}`,
-      ...(colloquialArabicLines.length && mode !== "diacritics" ? colloquialArabicLines : []),
       ...(dialectLines ? [dialectLines] : []),
       style ? `Style/Tags (context only): ${style}` : "",
       "",

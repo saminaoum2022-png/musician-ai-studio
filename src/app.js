@@ -16648,6 +16648,7 @@ async function apply80sLevantineDiacriticsIfNeeded(lyrics) {
         mode: "diacritics",
         dialect,
         dialectHint,
+        arabicAddress: String(els.sunoArabicAddress?.value || "male").trim() || "male",
         lyricsProvider: "gemini",
       }),
     });
@@ -64461,6 +64462,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
           mode: "diacritics",
           dialect,
           dialectHint: lyricDialectHint,
+          arabicAddress: String(els.sunoArabicAddress?.value || "").trim(),
           lyricsProvider: "gemini",
         }),
       });

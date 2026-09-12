@@ -5289,7 +5289,6 @@ function applyRoute({ passGen } = {}) {
     bindChallengesPageOnce();
     renderHomeDesk();
     void loadAppTourModule().then((m) => m.scheduleHomeTourIfNeeded());
-    maybeShowSignupCoachNudgeOnCreateHub();
   }
   if (wanted === "activity") {
     bindActivityPageOnce();
@@ -5349,6 +5348,7 @@ function applyRoute({ passGen } = {}) {
     syncCoachOrbAfterRouteChange();
   } catch {}
   try { syncCoachFabDesktopAnchor(); } catch {}
+  try { maybeShowStartupCoachNudge(); } catch {}
   try {
     updatePlayerSecondaryChrome();
   } catch {}
@@ -10195,14 +10195,13 @@ function syncCoachFabHeaderMount() {
   const parking = document.getElementById("coachFabParking");
   if (!fab || !parking) return;
   const route = String(document.body.getAttribute("data-route") || "");
+  // Friends lives inside Home. Never park the orb on #friendsPage (display:none).
   const slotKey =
-    route === "discover"
-      ? (_discoverFeedTab === "friends" ? "friends" : "discover")
-      : route === "friends"
-        ? "friends"
-        : route === "challenges" || route === "generate"
-          ? "create"
-          : "";
+    route === "discover" || route === "friends"
+      ? "discover"
+      : route === "challenges" || route === "generate"
+        ? "create"
+        : "";
   fab.style.removeProperty("left");
   fab.style.removeProperty("right");
   fab.style.removeProperty("bottom");
@@ -10230,6 +10229,11 @@ function syncCoachFabHeaderMount() {
   }
   fab.classList.add("coachFab--header");
   if (fab.parentElement !== slot) slot.appendChild(fab);
+  if (!fab.classList.contains("coachFab--settled")) {
+    const settle = () => fab.classList.add("coachFab--settled");
+    fab.addEventListener("animationend", settle, { once: true });
+    window.setTimeout(settle, 480);
+  }
   try {
     surfaceCoachOrb();
   } catch {}
@@ -12088,9 +12092,7 @@ function syncDiscoverFriendsFeedChrome() {
     mount.style.display = onFriends ? "none" : "";
   }
   if (feedStatus) feedStatus.hidden = onFriends;
-  if (onFriends) {
-    try { syncCoachFabHeaderMount(); } catch {}
-  }
+  try { syncCoachFabHeaderMount(); } catch {}
 }
 
 function renderDiscoverFeedTabPanel(tab, tracks, profMap) {
@@ -39206,16 +39208,46 @@ function ensureSignupCoachWelcome(userId = authSession?.user?.id) {
 }
 function trySignupCoachWelcomeAfterAuth(userId = authSession?.user?.id) {
   if (!ensureSignupCoachWelcome(userId)) return;
+  _startupCoachNudgeArmed = false;
+  _startupCoachNudgeTries = 0;
+  maybeShowStartupCoachNudge();
+}
+let _startupCoachNudgeArmed = false;
+let _startupCoachNudgeTimer = null;
+let _startupCoachNudgeTries = 0;
+const STARTUP_COACH_NUDGE_MAX_TRIES = 48;
+function maybeShowStartupCoachNudge() {
+  if (_startupCoachNudgeArmed) return;
   const route = String(document.body.getAttribute("data-route") || "");
-  if (route === DEFAULT_LOGGED_IN_ROUTE) maybeShowSignupCoachNudgeOnCreateHub();
+  if (route !== "discover" && route !== "challenges" && route !== "generate") return;
+  const uiHidden = document.body.classList.contains("booting")
+    || document.body.classList.contains("isAuth")
+    || document.body.classList.contains("isIntro")
+    || document.body.classList.contains("isOnboarding")
+    || document.body.classList.contains("isMusicPrefs")
+    || document.body.classList.contains("isFirstSong");
+  if (uiHidden || !coachFabIsVisible()) {
+    if (_startupCoachNudgeTries >= STARTUP_COACH_NUDGE_MAX_TRIES) return;
+    _startupCoachNudgeTries += 1;
+    if (_startupCoachNudgeTimer) clearTimeout(_startupCoachNudgeTimer);
+    _startupCoachNudgeTimer = setTimeout(() => {
+      _startupCoachNudgeTimer = null;
+      maybeShowStartupCoachNudge();
+    }, 250);
+    return;
+  }
+  const welcomePending = shouldShowFirstSongActivation(authSession?.user?.id)
+    && ensureSignupCoachWelcome();
+  _startupCoachNudgeArmed = true;
+  const text = welcomePending ? "Welcome note 🎵" : COACH_PILL_DEFAULT;
+  showCoachFabPill(text, {
+    contextual: true,
+    visibleMs: 12000,
+    force: true,
+  });
 }
 function maybeShowSignupCoachNudgeOnCreateHub() {
-  if (!coachSignupUnreadBump()) return;
-  if (!shouldShowFirstSongActivation(authSession?.user?.id)) return;
-  showCoachFabPill("Coach left you a welcome note 🎵", {
-    contextual: true,
-    visibleMs: COACH_HINT_VISIBLE_MS,
-  });
+  maybeShowStartupCoachNudge();
 }
 function coachSignupCtasHtml(ctas) {
   const items = Array.isArray(ctas) ? ctas.filter((c) => c && String(c.label || "").trim()) : [];
@@ -65842,7 +65874,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
         isTemplateSparkClipFlow() && activePhotoSoloChallengeId() === "80s-you";
       const is80sInstrumental = String(els.vocalInstrumentalOnly?.value || "0") === "1";
       if (is80sPhotoSolo) {
-        try { beginCoachPriorityStatus("Starting your 80s moment…", { generating: true }); } catch {}
+        try { beginCoachPriorityStatus("80s moment…", { generating: true }); } catch {}
         try { openProfileSongsWhileGenerating({ force: true }); } catch {}
       }
       setGenerateBtn("Generating…", true, "generate");
@@ -68308,11 +68340,11 @@ function dismissCoachFabNudge() {
   _coachIdleNudgeShowing = false;
   try { notifyCoachOrbPillHidden(); } catch {}
 }
-function showCoachFabPill(text, { visibleMs = COACH_NUDGE_VISIBLE_MS, contextual = false } = {}) {
+function showCoachFabPill(text, { visibleMs = COACH_NUDGE_VISIBLE_MS, contextual = false, force = false } = {}) {
   if (isCoachStatusActive()) return;
-  if (contextual && !coachOrbAllowsContextHints()) return;
-  if (!contextual && !coachOrbAllowsIdleNudges()) return;
-  if (isCoachThreadId(_conversationId)) return;
+  if (!force && contextual && !coachOrbAllowsContextHints()) return;
+  if (!force && !contextual && !coachOrbAllowsIdleNudges()) return;
+  if (!force && isCoachThreadId(_conversationId)) return;
   const fab = document.getElementById("coachFab");
   if (!fab) return;
   const idleDefault = !contextual && String(text || COACH_PILL_DEFAULT) === COACH_PILL_DEFAULT;
@@ -68420,29 +68452,29 @@ function evaluateCreateHints({ ignoreFocus = false } = {}) {
   // 1) Arabic without harakat → accent tip. Harakat range \u064B-\u0652 (tanwin/
   //    fatha/kasra/damma/sukoon/shadda) + superscript alef \u0670.
   if (hasArabic && arabicLetters >= 6 && !/[\u064B-\u0652\u0670]/.test(combined)) {
-    if (showCoachContextHint("أضِف التشكيل (الحركات) للهجة أوضح 🎵", "ar-harakat")) return;
+    if (showCoachContextHint("أضِف التشكيل 🎵", "ar-harakat")) return;
   }
 
   // 2) Arabic lyrics but no dialect chosen → suggest a dialect for an
   //    authentic accent. Only when the dialect picker is actually available.
   const dialectPickerOpen = !!els.lyricsDialectGroup && !els.lyricsDialectGroup.hidden;
   if (hasArabic && arabicLetters >= 6 && dialectPickerOpen && !lyricsDialect) {
-    if (showCoachContextHint("اختر لهجة (لبناني، مصري، خليجي…) لنطق أوضح 🎤", "ar-dialect")) return;
+    if (showCoachContextHint("اختر لهجة 🎤", "ar-dialect")) return;
   }
   if (hasArabic && arabicLetters >= 6 && shouldShowArabicAddress() && !String(els.sunoArabicAddress?.value || "").trim()) {
-    if (showCoachContextHint("اختر لمن الأغنية: إنتَ / إنتِ / إنتو 🎤", "ar-address")) return;
+    if (showCoachContextHint("اختر المخاطَب 🎤", "ar-address")) return;
   }
 
   // 3) Style tags: empty (with lyrics written) → Boost; only one tag → add more.
   const tags = style.split(",").map((s) => s.trim()).filter(Boolean);
   if (lyrics.trim() && tags.length === 0) {
     if (showCoachContextHint(
-      pick("اكتب وسم ستايل أو اضغط ✦ لتوليد الوسوم ✨", "Add a style tag, or tap ✦ to generate them ✨"),
+      pick("أضِف وسوم ستايل ✨", "Add style tags ✨"),
       "style-empty",
     )) return;
   } else if (tags.length === 1) {
     if (showCoachContextHint(
-      pick("أضِف وسمين أو ٣ للستايل لصوت أوضح ✨", "Add 2–3 style tags for a sharper sound ✨"),
+      pick("أضِف وسوماً ✨", "Add more tags ✨"),
       "style-tags",
     )) return;
   }
@@ -68451,7 +68483,7 @@ function evaluateCreateHints({ ignoreFocus = false } = {}) {
   try {
     if (loadPersonas().length > 0 && !getActivePersonaId()) {
       if (showCoachContextHint(
-        pick("لديك بصمة صوتية — اخترها لتغنّي بصوتك 🎤", "Pick your Persona to sing it in your own voice 🎤"),
+        pick("اختر بصمتك 🎤", "Pick your Persona 🎤"),
         "persona-pick",
       )) return;
     }
@@ -68463,7 +68495,7 @@ function evaluateCreateHints({ ignoreFocus = false } = {}) {
     const lineBreaks = (body.match(/\n/g) || []).length;
     if (lineBreaks < 4) {
       if (showCoachContextHint(
-        pick("قسّم الكلمات إلى مقاطع (كوبليه/لازمة) لنتيجة أقوى 🎵", "Split lyrics into verse / chorus for a stronger song 🎵"),
+        pick("قسّم المقاطع 🎵", "Add verse / chorus 🎵"),
         "lyrics-structure",
       )) return;
     }

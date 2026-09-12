@@ -98,46 +98,40 @@ export function isCoachPriorityActive() {
 
 export function coachGeneratingPillText(variantCount = 2) {
   const n = Math.max(1, Number(variantCount) || 2);
-  return n > 1 ? "Creating your songs…" : "Creating your song…";
+  return n > 1 ? "Creating songs…" : "Creating song…";
 }
 
 export function coachReadyPillText(variantCount = 1) {
   const n = Math.max(1, Number(variantCount) || 1);
-  return n > 1 ? "Your songs are ready ✓" : "Your song is ready ✓";
+  return n > 1 ? "Songs ready ✓" : "Song ready ✓";
 }
 
 export function coachStillCreatingPillText() {
-  return "Still creating — usually 1–2 min…";
+  return "Still creating…";
 }
 
-export function coachMusicVideoPillText(title) {
-  const t = String(title || "Your song").trim() || "Your song";
-  return `Music video · ${t.slice(0, 28)}${t.length > 28 ? "…" : ""}`;
+export function coachMusicVideoPillText(_title) {
+  return "Making video…";
 }
 
-export function coachExportVideoPillText(title) {
-  const t = String(title || "Your song").trim() || "Your song";
-  return `Rendering video · ${t.slice(0, 26)}${t.length > 26 ? "…" : ""}`;
+export function coachExportVideoPillText(_title) {
+  return "Rendering video…";
 }
 
-export function coachInstrumentalPillText(title) {
-  const t = String(title || "Your song").trim() || "Your song";
-  return `Instrumental · ${t.slice(0, 28)}${t.length > 28 ? "…" : ""}`;
+export function coachInstrumentalPillText(_title) {
+  return "Making instrumental…";
 }
 
-export function coachSoundPillText(title) {
-  const t = String(title || "Your sound").trim() || "Your sound";
-  return `Creating sound · ${t.slice(0, 28)}${t.length > 28 ? "…" : ""}`;
+export function coachSoundPillText(_title) {
+  return "Creating sound…";
 }
 
-export function coachHumTrackGeneratingPillText(instrumentLabel) {
-  const l = String(instrumentLabel || "instrument").trim() || "instrument";
-  return `Hum Track · ${l}…`;
+export function coachHumTrackGeneratingPillText(_instrumentLabel) {
+  return "Hum Track…";
 }
 
-export function coachPhotoMoodPillText(variantCount = 2) {
-  const n = Math.max(1, Number(variantCount) || 2);
-  return n > 1 ? "Photo Mood · creating songs…" : "Photo Mood · creating song…";
+export function coachPhotoMoodPillText(_variantCount = 2) {
+  return "Photo Mood…";
 }
 
 /** Persistent pill for the whole backend run. */

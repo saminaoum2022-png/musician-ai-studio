@@ -8089,6 +8089,12 @@ html[data-theme="light"] .feedHookMarker::before{
   line-height: 1;
   color: rgba(223, 231, 251, 0.72);
   min-width: 0;
+  display: block;
+  min-height: 11px;
+}
+.playerSocialAct .followActActCount:empty{
+  display: block;
+  visibility: hidden;
 }
 .playerSocialAct[data-friends-act="like"].isLiked{
   color: #FF4D5A;
@@ -21876,6 +21882,7 @@ input::placeholder, textarea::placeholder{
   height: 34px;
   position: relative;
   overflow: visible;
+  z-index: 8;
 }
 .discoveryHeadActions{
   display: inline-flex;
@@ -21885,6 +21892,8 @@ input::placeholder, textarea::placeholder{
   align-self: center;
   min-height: calc(var(--tab-screen-title-size, clamp(28px, 6vw, 36px)) * var(--tab-screen-title-lh, 1.1));
   margin-top: 0;
+  overflow: visible;
+  z-index: 8;
 }
 .discoveryHeadActions .discoveryHeadIconBtn,
 .discoveryHeadActions .friendsMessagesBtn,
@@ -21934,8 +21943,13 @@ input::placeholder, textarea::placeholder{
 .coachFab--header{
   display: inline-flex;
   flex: 0 0 auto;
-  z-index: 2;
+  z-index: 8;
   overflow: visible;
+}
+.coachFab.coachFab--settled{
+  animation: none;
+  opacity: 1;
+  transform: none;
 }
 .coachFab:active{ transform: scale(0.94); }
 .coachFabIco{
@@ -21995,6 +22009,7 @@ input::placeholder, textarea::placeholder{
   position: absolute;
   right: calc(100% + 8px);
   top: 50%;
+  z-index: 9;
   white-space: nowrap;
   padding: 5px 10px;
   border-radius: 999px;
@@ -22064,7 +22079,9 @@ input::placeholder, textarea::placeholder{
   transform: translateY(-50%) translateX(0) scale(1);
   white-space: nowrap;
   width: auto;
-  max-width: none;
+  max-width: min(42vw, 148px);
+  overflow: hidden;
+  text-overflow: ellipsis;
   border-radius: 999px;
   line-height: 1.2;
   text-align: left;
@@ -22079,6 +22096,32 @@ input::placeholder, textarea::placeholder{
   opacity: 1;
   transform: translateY(0) scale(1);
   animation: coachGenPillPulseHeader 2600ms ease-in-out infinite;
+}
+/* Home: keep the pill on the orb's center line so it never covers For You tabs. */
+body[data-route="discover"] .coachFab--header.coachFab--hint .coachFabPill,
+body[data-route="discover"] .coachFab--header.coachFab--hint.coachFab--nudge .coachFabPill,
+body[data-route="discover"] .coachFab--header.coachFab--generating.coachFab--nudge .coachFabPill{
+  right: calc(100% + 8px);
+  left: auto;
+  top: 50%;
+  bottom: auto;
+  white-space: nowrap;
+  width: auto;
+  max-width: min(42vw, 148px);
+  border-radius: 999px;
+  line-height: 1.2;
+  text-align: left;
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  -webkit-line-clamp: unset;
+  -webkit-box-orient: unset;
+  transform: translateY(-50%) translateX(0) scale(1);
+  transform-origin: right center;
+  animation: none;
+}
+body[data-route="discover"] .coachFab--header.coachFab--hint .coachFabPill::after{
+  display: none;
 }
 /* Song generation — persistent status pill (replaces the loading bar). */
 .coachFab--generating.coachFab--nudge .coachFabPill{
@@ -28536,6 +28579,10 @@ body.friendsFeedActive #discoverFriendsPanel .discoveryFeedStatus[hidden]{
   position: relative;
   z-index: 1;
 }
+.discoveryPaneDiscover > .discoveryStudioHead,
+.discoveryPaneStudio > .discoveryStudioHead{
+  z-index: 6;
+}
 .discoveryStudioHead{
   --tab-screen-title-size: clamp(28px, 6vw, 36px);
   --tab-screen-title-lh: 1.1;
@@ -28545,6 +28592,7 @@ body.friendsFeedActive #discoverFriendsPanel .discoveryFeedStatus[hidden]{
   gap: 12px;
   padding: 4px 2px 14px;
   min-width: 0;
+  overflow: visible;
 }
 .discoveryStudioHead--tools{
   justify-content: flex-end;

@@ -84,66 +84,76 @@ function buildColloquialArabicGenerationLines({
   ];
 }
 
+function buildSparseDiacriticsLinesAr() {
+  return [
+    "تشكيل خفيف للغناء — مش كتاب مدرسي. كثرة الحركات بتقتل الغناء.",
+    "شكّل فقط: (1) آخر الكلمة إذا الغناء ممكن يغلط، (2) العنوان إنتَ/إنتِ/إنتو وكاف المخاطبة، (3) شدة إذا بتغيّر اللفظ، (4) سكون لبناني/شامي على الحرف المسكور.",
+    "ممنوع: فتحة/كسرة/ضمة على كل حرف، تنوين، إعراب نحوي.",
+  ];
+}
+
+function buildSparseDiacriticsLinesEn() {
+  return [
+    "SPARSE sung tashkeel — heavy marks kill the vocal. Do NOT vowelize every letter.",
+    "Mark ONLY: (1) word endings the singer might misread, (2) address إنتَ/إنتِ/إنتو and addressee kaf, (3) shadda when it changes the word, (4) Lebanese/Levantine sukoon on stopped letters.",
+    "NO textbook full tashkeel. NO tanween. NO nahwi case endings.",
+  ];
+}
+
 function buildLebaneseDiacriticsLinesAr() {
   return [
-    "شكّل بحركات اللهجة اللبنانية المحكية: فتحة/كسرة/ضمة/شدة + سكّون (ْ) على الحروف الساكنة داخل الكلمة وآخرها.",
-    "اللبناني فيه سكّون كتير — آخر الكلمة غالباً ينسكر بسكّون على الحرف الأخير (مش تنوين، مش إعراب).",
-    "أمثلة: شُفتْ، مِنّ، فيّ، خلَّصْ، قلّي، عمْ — سكّون على السوكن، مش -ًا/-ٌ/-ٍ.",
-    "ممنوع تماماً: تنوين (ًٌٍ)، إعراب، أو تشكيل نحوي على آخر الكلمات — إلا إذا طلب المستخدم فصحى صراحة.",
-    "ق = همزة (2): قلب، قلت، قال — مش /q/ فصيح.",
-    "امشي على نطق بيروت المحكي: شو، كيف، حبّيبي، عم، ما، منيح.",
+    "لبناني خفيف: سكّون (ْ) على آخر الكلمة إذا منسكر + شدة إذا لازمة. لا تحرّك كل حرف.",
+    "أمثلة خفيفة: شفتْ، خلّصْ، عمْ، إنتَ/إنتِ — مش شَفْتُكَ المدرسية.",
+    "ممنوع: تنوين (ًٌٍ)، إعراب، أو تشكيل على وسط الكلمة إلا إذا اللفظ بيتلبس.",
+    "ق = همزة (2): قلب، قلت — مش /q/ فصيح.",
   ];
 }
 
 function buildLebaneseDiacriticsLinesEn() {
   return [
-    "Mark for spoken Beirut Lebanese: fatha/kasra/damma/shadda PLUS sukoon (ْ) on stopped consonants inside words AND at word ends.",
-    "Lebanese uses many sukoons — final consonants are often closed with sukoon, NOT tanween or nahwi endings.",
-    "Examples: shuftْ, minn, fiyy, khallasْ, qilli — sukoon on the stopped letter, never -an/-un/-in tanween.",
-    "NEVER add tanween (ًٌٍ) or nahwi case endings unless user explicitly requested MSA/formal.",
-    "Qaf ق = hamza (2), not classical /q/ — e.g. قلب، قلت، قال.",
-    "Spoken Beirut: شو، كيف، حبّيبي، عم، ما، منيح.",
+    "Light Lebanese: sukoon (ْ) on stopped word ends + shadda when needed. Do not mark every letter.",
+    "Light examples: شفتْ، خلّصْ، عمْ، إنتَ/إنتِ — never textbook شَفْتُكَ.",
+    "NEVER tanween (ًٌٍ) or nahwi. No mid-word vowels unless the singer would guess wrong.",
+    "Qaf ق = hamza (2), not classical /q/.",
   ];
 }
 
 function buildLevantineDiacriticsLinesAr() {
   return [
-    "شكّل بحركات اللهجة الشامية المحكية + سكّون على الحروف الساكنة (داخل وآخر الكلمة).",
-    "ممنوع: تنوين (ًٌٍ)، إعراب، أو تشكيل نحوي على آخر الكلمات.",
+    "شامي خفيف: سكّون على آخر الكلمة المسكور + آخر حرف للعنوان. لا تشكّل كل حرف.",
+    "ممنوع: تنوين (ًٌٍ)، إعراب، أو تشكيل مدرسي.",
     "ق باللهجة المحكية = همزة (2) مش /q/ فصيح.",
   ];
 }
 
 function buildLevantineDiacriticsLinesEn() {
   return [
-    "Mark spoken Levantine with vowels + sukoon on stopped consonants at word ends and in clusters.",
-    "NO tanween (ًٌٍ), NO nahwi case endings, NO textbook MSA pronunciation.",
+    "Light Levantine: sukoon on stopped word ends + address endings only. Do not mark every letter.",
+    "NO tanween (ًٌٍ), NO nahwi, NO textbook MSA pronunciation.",
     "Qaf ق = hamza in this dialect, not classical /q/.",
   ];
 }
 
 function buildEgyptianDiacriticsLinesAr() {
   return [
-    "شكّل بالمصري المحكي (قاهرة): فتحة/كسرة/ضمة/شدة على الكلمات يلي الغناء ممكن يغلط فيها.",
-    "ق = همزة (2) زي القاهرة — قلب، قلت — مش /q/ فصيح.",
-    "حافظ على اللفظ المصري: معايا، بيحلى/بيقول، إزاي، كده — مش معي/عم اللبناني.",
-    "ممنوع: تنوين (ًٌٍ)، إعراب مدرسي، أو قلب اللهجة لشامي.",
+    "مصري خفيف: آخر الكلمة + العنوان (إنتَ/إنتِ، معاكي). لا تشكّل كل حرف.",
+    "ق = همزة (2) زي القاهرة. حافظ على معايا / بيحلى — مش معي اللبناني.",
+    "ممنوع: تنوين (ًٌٍ)، إعراب مدرسي، أو تشكيل وسط الكلمة إلا للبس.",
   ];
 }
 
 function buildEgyptianDiacriticsLinesEn() {
   return [
-    "Mark for sung Cairo Masri: fatha/kasra/damma/shadda on words the singer might misread.",
-    "Qaf ق = hamza (2) as in Cairo — قلب، قلت — not classical /q/.",
-    "Keep Egyptian forms: معايا، بيحلى/بيقول، إزاي، كده — never Levantine معي / عم.",
-    "NO tanween (ًٌٍ), NO school nahwi, NO Levantine pronunciation.",
+    "Light Cairo Masri: word endings + address (إنتَ/إنتِ، معاكي). Do not mark every letter.",
+    "Qaf ق = hamza (2) as in Cairo. Keep معايا / بيحلى — never Levantine معي.",
+    "NO tanween (ًٌٍ), NO school nahwi, NO mid-word vowels unless ambiguous.",
   ];
 }
 
 function buildDiacriticsDialectLinesAr(flags = {}) {
   if (flags.isMsa) {
     return [
-      "فصحى: تشكيل أوضح مقبول، بس بدون مبالغة على كل حرف — لا تنوين إلا إذا طلب المستخدم إعراباً صراحة.",
+      "فصحى خفيفة: آخر الكلمة + ما يلزم للبس. لا تنوين إلا إذا طلب المستخدم إعراباً صراحة. ممنوع تشكيل كل حرف.",
     ];
   }
   if (flags.isEgyptian) return buildEgyptianDiacriticsLinesAr();
@@ -176,7 +186,7 @@ function buildDiacriticsDialectLinesAr(flags = {}) {
 function buildDiacriticsDialectLinesEn(flags = {}) {
   if (flags.isMsa) {
     return [
-      "MSA: clear marks OK, but do not vowelize every single letter — no tanween unless user explicitly asked for nahwi.",
+      "Light MSA: word endings + marks that prevent a wrong reading. No tanween unless user asked for nahwi. Do not vowelize every letter.",
     ];
   }
   if (flags.isEgyptian) return buildEgyptianDiacriticsLinesEn();
@@ -299,17 +309,65 @@ function stripColloquialTanween(input) {
   return String(input || "").replace(/[\u064B-\u064D]/g, "");
 }
 
+function isArabicCombiningMark(ch) {
+  const c = String(ch || "").charCodeAt(0);
+  return (c >= 0x064B && c <= 0x065F) || c === 0x0670;
+}
+
+function isArabicShortVowel(ch) {
+  return ch === "\u064E" || ch === "\u064F" || ch === "\u0650";
+}
+
 /**
- * Post-process Gemini tashkeel output.
- * Colloquial: always drop tanween; keep sukoon for Lebanese; strip all sukoon for other dialects.
+ * Keep only singer-useful marks: last-letter short vowels (address / ending),
+ * shadda, and optional sukoon. Mid-word fatha/kasra/damma get stripped so
+ * Lyria is not locked into textbook tashkeel. Words of 1–2 letters keep their
+ * short vowels (مِن، شُو).
+ */
+function sparseSungWordMarks(run, { keepSukoon = false } = {}) {
+  const letters = [];
+  for (const ch of String(run || "")) {
+    if (isArabicCombiningMark(ch)) {
+      if (letters.length) letters[letters.length - 1].marks.push(ch);
+      continue;
+    }
+    letters.push({ letter: ch, marks: [] });
+  }
+  const n = letters.length;
+  return letters
+    .map((L, i) => {
+      const keepShort = i === n - 1 || n <= 2;
+      const marks = L.marks.filter((m) => {
+        if (m === "\u0651") return true;
+        if (m === "\u0652") return keepSukoon;
+        if (m >= "\u064B" && m <= "\u064D") return false;
+        if (isArabicShortVowel(m)) return keepShort;
+        return false;
+      });
+      return `${L.letter}${marks.join("")}`;
+    })
+    .join("");
+}
+
+function applySparseSungDiacritics(text, { keepSukoon = false } = {}) {
+  return String(text || "").replace(/[\u0600-\u06FF]+/g, (run) => {
+    if (!/[\u0621-\u064A\u0671-\u06D3]/.test(run)) return run;
+    return sparseSungWordMarks(run, { keepSukoon });
+  });
+}
+
+/**
+ * Post-process Gemini tashkeel: drop tanween, keep sukoon only for
+ * Lebanese/Levantine, then strip mid-word short vowels so singing stays free.
  */
 function lightenSungArabicDiacritics(input, { isMsa = false, isLebanese = false, isLevantineColloquial = false } = {}) {
   let text = stripColloquialTanween(input);
   if (!text) return text;
-  if (!isMsa && !isLebanese && !isLevantineColloquial) {
+  const keepSukoon = Boolean(isMsa || isLebanese || isLevantineColloquial);
+  if (!keepSukoon) {
     text = text.replace(/\u0652/g, "");
   }
-  return text;
+  return applySparseSungDiacritics(text, { keepSukoon });
 }
 
 function buildLyriaLebaneseArabicNote() {
@@ -349,6 +407,8 @@ module.exports = {
   normalizeArabicAddress,
   isArabicLyricsContext,
   buildColloquialArabicGenerationLines,
+  buildSparseDiacriticsLinesAr,
+  buildSparseDiacriticsLinesEn,
   buildLebaneseDiacriticsLinesAr,
   buildLebaneseDiacriticsLinesEn,
   buildLevantineDiacriticsLinesAr,
@@ -360,6 +420,7 @@ module.exports = {
   buildDiacriticsAddressLinesAr,
   buildDiacriticsAddressLinesEn,
   stripColloquialTanween,
+  applySparseSungDiacritics,
   lightenSungArabicDiacritics,
   buildLyriaLebaneseArabicNote,
   buildLyriaEgyptianArabicNote,

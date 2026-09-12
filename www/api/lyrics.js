@@ -17,6 +17,8 @@ const {
   normalizeArabicAddress,
   isArabicLyricsContext,
   buildColloquialArabicGenerationLines,
+  buildSparseDiacriticsLinesAr,
+  buildSparseDiacriticsLinesEn,
   buildDiacriticsDialectLinesAr,
   buildDiacriticsDialectLinesEn,
   buildDiacriticsAddressLinesAr,
@@ -118,7 +120,7 @@ module.exports = async function handler(req, res) {
       : mode === "to_arabizi"
         ? 0.1
       : mode === "diacritics"
-        ? 0.35
+        ? 0.2
         : mode === "enhance"
           ? 0.58
           : mode === "fix_singing"
@@ -582,13 +584,15 @@ function buildPrompt({ seed, style, mode, nonce, dialect, dialectHint, arabicAdd
       : address === "group" ? "مجموعة (إنتو · حبايبي)"
       : "المخاطَب كما هو مكتوب";
     return [
-      `حَرِّك الكلمات ب${dialectAr} عشان الغناء يطلع باللهجة — مش تشكيل مدرسي.`,
-      `العنوان: الأغنية موجهة لـ${addressAr}. اقرأ اللهجة + العنوان قبل ما تشكّل.`,
+      `تشكيل خفيف ب${dialectAr} — آخر الكلمة + العنوان + سكون إذا اللهجة بتسكر. كثرة الحركات بتقتل الغناء.`,
+      `العنوان: الأغنية موجهة لـ${addressAr}.`,
       "نفس الأسطر ونفس الوسوم [Verse] [Chorus]. أخرج الكلمات فقط.",
+      ...buildSparseDiacriticsLinesAr(),
       ...buildDiacriticsDialectLinesAr(flags),
       ...buildDiacriticsAddressLinesAr(address, flags),
-      `Mark these lyrics for sung ${dialectSpeak} addressed to ${addressSpeak} — dialect + address first, NOT school grammar.`,
+      `Sparse sung marks for ${dialectSpeak} to ${addressSpeak} — endings + address + sukoon only. Heavy tashkeel kills the vocal.`,
       "Keep the same lines and section tags. Output lyrics only.",
+      ...buildSparseDiacriticsLinesEn(),
       ...buildDiacriticsDialectLinesEn(flags),
       ...buildDiacriticsAddressLinesEn(address, flags),
       `Variation token: ${nonce}`,

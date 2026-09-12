@@ -39517,9 +39517,9 @@ function maybeShowStartupCoachNudge() {
   const welcomePending = shouldShowFirstSongActivation(authSession?.user?.id)
     && ensureSignupCoachWelcome();
   _startupCoachNudgeArmed = true;
-  const text = welcomePending ? "Welcome note 🎵" : COACH_PILL_DEFAULT;
+  const text = welcomePending ? "Hi 🎵" : COACH_PILL_DEFAULT;
   showCoachFabPill(text, {
-    contextual: true,
+    contextual: text !== COACH_PILL_DEFAULT,
     visibleMs: 12000,
     force: true,
   });
@@ -68748,7 +68748,7 @@ function setCoachPillText(text) {
 function dismissCoachFabNudge() {
   if (isCoachStatusActive()) return;
   const fab = document.getElementById("coachFab");
-  if (fab) fab.classList.remove("coachFab--nudge", "coachFab--hint", "coachFab--generating");
+  if (fab) fab.classList.remove("coachFab--nudge", "coachFab--hint", "coachFab--generating", "coachFab--speak");
   if (_coachNudgeHideTimer) { clearTimeout(_coachNudgeHideTimer); _coachNudgeHideTimer = null; }
   _coachIdleNudgeShowing = false;
   try { notifyCoachOrbPillHidden(); } catch {}
@@ -68776,11 +68776,12 @@ function showCoachFabPill(text, { visibleMs = COACH_NUDGE_VISIBLE_MS, contextual
   fab.classList.remove("coachFab--generating");
   _coachIdleNudgeShowing = idleDefault;
   try { syncCoachFabDesktopAnchor(); } catch {}
+  try { haptic("light"); } catch {}
   try { notifyCoachOrbPillShown({ contextual, priority: false }); } catch {}
   if (_coachNudgeHideTimer) clearTimeout(_coachNudgeHideTimer);
   _coachNudgeHideTimer = setTimeout(() => {
     if (isCoachStatusActive()) return;
-    fab.classList.remove("coachFab--nudge", "coachFab--hint", "coachFab--generating");
+    fab.classList.remove("coachFab--nudge", "coachFab--hint", "coachFab--generating", "coachFab--speak");
     setCoachPillText(COACH_PILL_DEFAULT);
     _coachIdleNudgeShowing = false;
     try { notifyCoachOrbPillHidden(); } catch {}

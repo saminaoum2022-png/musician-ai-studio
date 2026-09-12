@@ -56,6 +56,17 @@ function setPillText(text) {
   if (pill) pill.textContent = String(text || COACH_PILL_DEFAULT);
 }
 
+function flashCoachSpeak(fab = coachFabEl()) {
+  if (!fab) return;
+  fab.classList.remove("coachFab--speak");
+  void fab.offsetWidth;
+  fab.classList.add("coachFab--speak");
+  window.clearTimeout(flashCoachSpeak._timer);
+  flashCoachSpeak._timer = window.setTimeout(() => {
+    fab.classList.remove("coachFab--speak");
+  }, 760);
+}
+
 function showStatusPill(text, { generating = false, priority = false } = {}) {
   const fab = coachFabEl();
   if (!fab) return;
@@ -70,11 +81,12 @@ function showStatusPill(text, { generating = false, priority = false } = {}) {
   _pillVisible = true;
   surfaceCoachOrb({ priority: priority || generating });
   refreshOrbShell();
+  if (!generating) flashCoachSpeak(fab);
 }
 
 function resetCoachPill({ restoreDefault = true } = {}) {
   const fab = coachFabEl();
-  if (fab) fab.classList.remove("coachFab--nudge", "coachFab--hint", "coachFab--generating");
+  if (fab) fab.classList.remove("coachFab--nudge", "coachFab--hint", "coachFab--generating", "coachFab--speak");
   if (restoreDefault) setPillText(COACH_PILL_DEFAULT);
   _generationLocked = false;
   _statusActive = false;
@@ -266,6 +278,7 @@ export function notifyCoachOrbPillShown({ contextual = false, priority = false }
   fab.classList.add("coachFab--nudge");
   surfaceCoachOrb({ priority });
   refreshOrbShell();
+  flashCoachSpeak(fab);
 }
 
 export function notifyCoachOrbPillHidden() {

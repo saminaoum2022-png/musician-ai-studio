@@ -61,10 +61,9 @@ function buildColloquialArabicGenerationLines({
       "- Spoken Beirut colloquial ONLY — never fusHa nahwi, NEVER tanween (ًٌٍ) on any word unless user explicitly asked for MSA.",
       "- Lebanese closes syllables with sukoon (سكون): many consonants inside words and at word ends are stopped, not left open.",
       "- Tight word endings (ساكن): write how Lebanese speaks — ما not مًا، شو not شَوًّا، منيح not منيحًا; no accusative/genitive tanween.",
-      "- Examples of stopped endings: خلّص، عم، منّ، فيّ، شُفت، قلّي — consonant feels closed, not classical open vowel + tanween.",
-      "- Internal clusters keep sukoon feel (كتب، شفت، قلّي) — do NOT add formal tashkeel or tanween in generated lyrics.",
+      "- Examples of stopped endings: خلّص، عم، منّ، فيّ، شفت، قلّي — consonant feels closed, not classical open vowel + tanween.",
       "- ق = hamza in speech (قلب، قلت، قال) — not classical /q/.",
-      "- Do NOT add vowel marks (tashkeel) in generated lyrics — diacritics is a separate step.",
+      ...buildHintTashkeelGenerationLines(),
       ...buildLebaneseLexiconLines(),
     ];
   }
@@ -74,7 +73,7 @@ function buildColloquialArabicGenerationLines({
       "- Spoken colloquial ONLY — no tanween (ًٌٍ) or nahwi case endings unless user asked for MSA.",
       "- Close word endings naturally (sukoon feel) — no open classical case endings on final words.",
       "- ق = hamza in this dialect, not classical /q/.",
-      "- No heavy tashkeel in generated lyrics.",
+      ...buildHintTashkeelGenerationLines(),
     ];
   }
   return [
@@ -84,18 +83,26 @@ function buildColloquialArabicGenerationLines({
   ];
 }
 
+/** Light marks baked into Generate lyrics — a hint, not the sung pass. */
+function buildHintTashkeelGenerationLines() {
+  return [
+    "LIGHT tashkeel HINT only (so the user sees vowel marks exist): sukoon on a few stopped word ends (شفتْ، عمْ), address إنتَ/إنتِ/إنتو only — NEVER mark kaf (قلبك not قلبكَ/قلبكِ; that sings 2albaka/albaki). Shadda when the word needs it.",
+    "Do NOT vowelize every letter. Do NOT do a full sung tashkeel pass — that is the separate Add vowel marks button.",
+  ];
+}
+
 function buildSparseDiacriticsLinesAr() {
   return [
     "تشكيل خفيف للغناء — مش كتاب مدرسي. كثرة الحركات بتقتل الغناء.",
-    "شكّل فقط: (1) آخر الكلمة إذا الغناء ممكن يغلط، (2) العنوان إنتَ/إنتِ/إنتو وكاف المخاطبة، (3) شدة إذا بتغيّر اللفظ، (4) سكون لبناني/شامي على الحرف المسكور.",
-    "ممنوع: فتحة/كسرة/ضمة على كل حرف، تنوين، إعراب نحوي.",
+    "شكّل فقط: (1) آخر الكلمة إذا الغناء ممكن يغلط، (2) العنوان إنتَ/إنتِ/إنتو فقط — ممنوع حركة على كاف قلبك/معك، (3) شدة إذا بتغيّر اللفظ، (4) سكون لبناني/شامي على الحرف المسكور.",
+    "ممنوع: فتحة/كسرة/ضمة على كل حرف، تنوين، إعراب نحوي، وقلبكَ/قلبكِ (بتصير 2albaka/albaki).",
   ];
 }
 
 function buildSparseDiacriticsLinesEn() {
   return [
     "SPARSE sung tashkeel — heavy marks kill the vocal. Do NOT vowelize every letter.",
-    "Mark ONLY: (1) word endings the singer might misread, (2) address إنتَ/إنتِ/إنتو and addressee kaf, (3) shadda when it changes the word, (4) Lebanese/Levantine sukoon on stopped letters.",
+    "Mark ONLY: (1) word endings the singer might misread, (2) address إنتَ/إنتِ/إنتو only — NEVER fatha/kasra on kaf (قلبك = 2albak/2albik, not قلبكَ/قلبكِ), (3) shadda when it changes the word, (4) Lebanese/Levantine sukoon on stopped letters.",
     "NO textbook full tashkeel. NO tanween. NO nahwi case endings.",
   ];
 }
@@ -219,10 +226,10 @@ function buildDiacriticsDialectLinesEn(flags = {}) {
 function buildDiacriticsAddressLinesAr(address = "", flags = {}) {
   if (address === "female") {
     const ending = flags.isEgyptian
-      ? "مصري للمؤنث: إنتِ، معاكي، عليكي، قلبكِ — ياء/كسرة المخاطبة، مش معكِ الشامية."
+      ? "مصري للمؤنث: إنتِ، معاكي، عليكي (ياء). ممنوع قلبكِ المدرسية."
       : flags.isLebanese || flags.isLevantineColloquial
-        ? "شامي/لبناني للمؤنث: إنتِ (كسرة)، معكِ، كيفكِ، قلبكِ — كاف المخاطبة مكسورة."
-        : "إنتِ (كسرة على التاء) + كاف المخاطبة كِ (معكِ، قلبكِ).";
+        ? "شامي/لبناني للمؤنث: إنتِ فقط. قلبك / معك / كيفك بلا حركة على الكاف — اللفظ 2albik مش قلبكِ (albaki)."
+        : "إنتِ فقط. قلبك / معك بلا كَ أو كِ — ممنوع 2albaka / albaki.";
     return [
       "العنوان إلزامي: الأغنية موجهة لامرأة (المخاطَبة)، مش جنس المغنّي.",
       ending,
@@ -234,8 +241,8 @@ function buildDiacriticsAddressLinesAr(address = "", flags = {}) {
     const ending = flags.isEgyptian
       ? "مصري للمذكر: إنتَ، معاك، عليك، قلبك — مش معي اللبنانية."
       : flags.isLebanese || flags.isLevantineColloquial
-        ? "شامي/لبناني للمذكر: إنتَ (فتحة)، معكْ/معك، قلبك — كاف المخاطبة مفتوحة أو ساكنة، مش كِ."
-        : "إنتَ (فتحة) + كاف المخاطبة كَ (معك، قلبك).";
+        ? "شامي/لبناني للمذكر: إنتَ فقط. قلبك / معك بلا فتحة على الكاف — اللفظ 2albak مش قلبكَ (2albaka)."
+        : "إنتَ فقط. قلبك / معك بلا حركة على الكاف.";
     return [
       "العنوان إلزامي: الأغنية موجهة لرجل (المخاطَب)، مش جنس المغنّي.",
       ending,
@@ -263,10 +270,10 @@ function buildDiacriticsAddressLinesAr(address = "", flags = {}) {
 function buildDiacriticsAddressLinesEn(address = "", flags = {}) {
   if (address === "female") {
     const ending = flags.isEgyptian
-      ? "Egyptian feminine addressee: إنتِ، معاكي، عليكي، قلبكِ — -ik / -ki, not Levantine معكِ."
+      ? "Egyptian feminine addressee: إنتِ، معاكي، عليكي (yeh). Never textbook قلبكِ."
       : flags.isLebanese || flags.isLevantineColloquial
-        ? "Levantine feminine addressee: إنتِ (kasra), معكِ، كيفكِ، قلبكِ — feminine kaf."
-        : "Feminine: إنتِ (kasra on ta) + kaf كِ (معكِ، قلبكِ).";
+        ? "Levantine feminine: mark إنتِ only. Write قلبك / معك / كيفك with NO mark on kaf — sung 2albik, never قلبكِ (albaki)."
+        : "Feminine: إنتِ only. Do not mark kaf on قلبك / معك.";
     return [
       "REQUIRED address: lyrics are sung TO a woman (addressee), not the singer's gender.",
       ending,
@@ -278,8 +285,8 @@ function buildDiacriticsAddressLinesEn(address = "", flags = {}) {
     const ending = flags.isEgyptian
       ? "Egyptian masculine addressee: إنتَ، معاك، عليك، قلبك — not Levantine معي."
       : flags.isLebanese || flags.isLevantineColloquial
-        ? "Levantine masculine addressee: إنتَ (fatha), معكْ/معك، قلبك — open or stopped kaf, not كِ."
-        : "Masculine: إنتَ (fatha) + kaf كَ (معك، قلبك).";
+        ? "Levantine masculine: mark إنتَ only. Write قلبك / معك with NO fatha on kaf — sung 2albak, never قلبكَ (2albaka)."
+        : "Masculine: إنتَ only. Do not mark kaf on قلبك / معك.";
     return [
       "REQUIRED address: lyrics are sung TO a man (addressee), not the singer's gender.",
       ending,
@@ -336,7 +343,9 @@ function sparseSungWordMarks(run, { keepSukoon = false } = {}) {
   const n = letters.length;
   return letters
     .map((L, i) => {
-      const keepShort = i === n - 1 || n <= 2;
+      const isLast = i === n - 1;
+      const lastKaf = isLast && L.letter === "ك";
+      const keepShort = !lastKaf && (isLast || n <= 2);
       const marks = L.marks.filter((m) => {
         if (m === "\u0651") return true;
         if (m === "\u0652") return keepSukoon;
@@ -353,6 +362,45 @@ function applySparseSungDiacritics(text, { keepSukoon = false } = {}) {
   return String(text || "").replace(/[\u0600-\u06FF]+/g, (run) => {
     if (!/[\u0621-\u064A\u0671-\u06D3]/.test(run)) return run;
     return sparseSungWordMarks(run, { keepSukoon });
+  });
+}
+
+function hintSungWordMarks(run) {
+  const letters = [];
+  for (const ch of String(run || "")) {
+    if (isArabicCombiningMark(ch)) {
+      if (letters.length) letters[letters.length - 1].marks.push(ch);
+      continue;
+    }
+    letters.push({ letter: ch, marks: [] });
+  }
+  const n = letters.length;
+  const bare = letters.map((L) => L.letter).join("");
+  const intaIntiWord = /^(?:[اأإ]نت|كنت)/.test(bare);
+  return letters
+    .map((L, i) => {
+      const isLast = i === n - 1;
+      const lastKaf = isLast && L.letter === "ك";
+      const keepShort = !lastKaf && isLast && (n <= 2 || intaIntiWord);
+      const marks = L.marks.filter((m) => {
+        if (m === "\u0651") return true;
+        if (m === "\u0652") return isLast;
+        if (m >= "\u064B" && m <= "\u064D") return false;
+        if (isArabicShortVowel(m)) return keepShort;
+        return false;
+      });
+      return `${L.letter}${marks.join("")}`;
+    })
+    .join("");
+}
+
+/** Generate-time hint: end sukoon + address marks + shadda. Lighter than the button. */
+function hintSungArabicDiacritics(input) {
+  let text = stripColloquialTanween(input);
+  if (!text) return text;
+  return String(text).replace(/[\u0600-\u06FF]+/g, (run) => {
+    if (!/[\u0621-\u064A\u0671-\u06D3]/.test(run)) return run;
+    return hintSungWordMarks(run);
   });
 }
 
@@ -421,6 +469,7 @@ module.exports = {
   buildDiacriticsAddressLinesEn,
   stripColloquialTanween,
   applySparseSungDiacritics,
+  hintSungArabicDiacritics,
   lightenSungArabicDiacritics,
   buildLyriaLebaneseArabicNote,
   buildLyriaEgyptianArabicNote,

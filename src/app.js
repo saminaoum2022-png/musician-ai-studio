@@ -64157,13 +64157,24 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
           : "";
       const debugNote = debugSuno || debugGemini ? ` [engine:${debugSuno || "-"} gemini:${debugGemini || "-"}]` : "";
       setStatus(`Lyrics ready${providerNote}${debugNote}. Tap Check singability, then generate song.`);
+      const levantineHintTashkeel = /lebanese|syrian|palestinian/.test(String(lyricsDialect || ""));
       if (isTemplateSparkClipFlow()) {
         setStatus("Lyrics ready — tap Check singability or Generate clip.");
-        showToast("Lyrics ready — check singability, then Generate clip.", { icon: "✦", durationMs: 3200 });
+        showToast(
+          levantineHintTashkeel
+            ? "Lyrics ready with light تشكيل — tap vowel marks to refine, then Generate clip."
+            : "Lyrics ready — check singability, then Generate clip.",
+          { icon: "✦", durationMs: 3600 },
+        );
       } else if (usingSunoLyrics && provider === "suno") {
         showToast("Suno wrote lyrics — check singability, then Generate song.", { icon: "✦", durationMs: 4200 });
       } else {
-        showToast("Lyrics ready — tap Check singability.", { icon: "♫", durationMs: 3600 });
+        showToast(
+          levantineHintTashkeel
+            ? "Lyrics ready with light تشكيل — tap vowel marks for a fuller sung pass."
+            : "Lyrics ready — tap Check singability.",
+          { icon: "♫", durationMs: 3800 },
+        );
       }
       try { syncArabicLyricsControlsVisibility(); } catch {}
       try { syncLyricsSingabilityCheckVisibility(); } catch {}

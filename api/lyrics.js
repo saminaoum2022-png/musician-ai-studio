@@ -24,6 +24,7 @@ const {
   buildDiacriticsAddressLinesAr,
   buildDiacriticsAddressLinesEn,
   stripColloquialTanween,
+  hintSungArabicDiacritics,
   lightenSungArabicDiacritics,
 } = require("./_lib/arabic-dialect-lyrics");
 
@@ -180,6 +181,14 @@ module.exports = async function handler(req, res) {
           });
         } else if (arabicScript && !flags.isMsa) {
           normalized = stripColloquialTanween(normalized);
+          if (
+            (flags.isLebanese || flags.isLevantineColloquial)
+            && mode !== "enhance"
+            && mode !== "fix_singing"
+            && mode !== "to_arabizi"
+          ) {
+            normalized = hintSungArabicDiacritics(normalized);
+          }
         }
         if (mode === "remix_reply" && isMetaAiLyrics(normalized)) {
           const fixed = await repairMetaAiLyrics({ geminiKey, prompt, text: normalized, temperature: geminiTemperature });
@@ -245,6 +254,14 @@ module.exports = async function handler(req, res) {
           });
         } else if (arabicScript && !flags.isMsa) {
           normalized = stripColloquialTanween(normalized);
+          if (
+            (flags.isLebanese || flags.isLevantineColloquial)
+            && mode !== "enhance"
+            && mode !== "fix_singing"
+            && mode !== "to_arabizi"
+          ) {
+            normalized = hintSungArabicDiacritics(normalized);
+          }
         }
         if (mode === "remix_reply" && isMetaAiLyrics(normalized)) {
           const fixed = await repairMetaAiLyrics({ geminiKey, prompt, text: normalized, temperature: geminiTemperature });

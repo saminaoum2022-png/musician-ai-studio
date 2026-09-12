@@ -406,7 +406,7 @@ function renderProPlanPage({ preserveTab = true } = {}) {
   const webStripe = isWebStripeBilling();
   const statusNote = native
     ? (isBillingConfigured() ? PRO_LAUNCH_COPY.iosReady : PRO_LAUNCH_COPY.iapSoon)
-    : (webStripe ? PRO_LAUNCH_COPY.webReady : PRO_LAUNCH_COPY.webSoon);
+    : "";
 
   host.innerHTML = `
     <div class="proShell">
@@ -451,7 +451,7 @@ function renderProPlanPage({ preserveTab = true } = {}) {
           </button>
           ${webStripe ? "" : `<button type="button" class="proRestoreLink" data-pro-restore>Restore purchases</button>`}
         </div>
-        <p class="proStatusNote">${esc(statusNote)}</p>
+        ${statusNote ? `<p class="proStatusNote">${esc(statusNote)}</p>` : ""}
       </footer>
     </div>
   `;

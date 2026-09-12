@@ -43,7 +43,6 @@ const {
   resolveLyriaArabicPronunciationMode,
 } = require("../_lib/lyria-upstream");
 const { clipVocalProfileById } = require("../_lib/clip-vocal-profiles");
-const { requireProSubscription } = require("../_lib/pro-web-gate");
 const {
   applyElevenReferenceToCompositionPlan,
   buildElevenMusicPrompt,
@@ -1180,13 +1179,6 @@ async function handleLyriaClipGenerate(req, res, { user, isAdmin, body }) {
       return sendJson(res, 403, {
         error: "Nabad Clip is not enabled on this server.",
         code: "nabad_clip_disabled",
-      });
-    }
-    const proGate = await requireProSubscription(user.userId);
-    if (!proGate.ok) {
-      return sendJson(res, proGate.status, {
-        error: proGate.error,
-        code: proGate.code,
       });
     }
   }

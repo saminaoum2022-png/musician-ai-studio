@@ -25953,7 +25953,7 @@ function musicGenerateApiPath() {
   return "/api/suno/generate";
 }
 
-/** Nabad Clip hub card — live in production; access gated to Pro on tap. */
+/** Nabad Clip hub card — live for every signed-in user (credits, not Pro). */
 function nabadClipEnabled() {
   return true;
 }
@@ -26092,13 +26092,10 @@ function nabadClipGenerateApiPath() {
 
 function syncNabadClipHomeCard() {
   const show = nabadClipEnabled();
-  const locked = isWebOrDesktopShell() && webProFeatureLocked();
   document.querySelectorAll('[data-home-card="clip"]').forEach((el) => {
     el.hidden = !show;
     el.setAttribute("aria-hidden", show ? "false" : "true");
-    if (show && isWebOrDesktopShell()) {
-      setWebProFeaturePillOnHomeCard(el, locked);
-    }
+    if (show) setWebProFeaturePillOnHomeCard(el, false);
   });
 }
 
@@ -26367,7 +26364,6 @@ function openNabadClipFlow() {
     setStatus("Sign in to use Nabad Clip.");
     return;
   }
-  if (!requireProFeature("Nabad Clip")) return;
   markNabadClipSessionActive();
   enterGenerateSubFlow("nabadclip", () => {
     applyCreateChallengeFocus({ tab: "lyrics", tabs: ["photo", "lyrics"] });

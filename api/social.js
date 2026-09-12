@@ -60,6 +60,23 @@ async function svcFetch(path, opts) {
   }
 }
 
+function runSocialBackground(work) {
+  const task = Promise.resolve()
+    .then(() => work)
+    .catch((e) => {
+      console.warn("[social] background work failed", e?.message || e);
+    });
+  let waitUntilFn = null;
+  try {
+    waitUntilFn = require("@vercel/functions").waitUntil;
+  } catch {}
+  if (typeof waitUntilFn === "function") {
+    waitUntilFn(task);
+    return;
+  }
+  return task;
+}
+
 /** PostgREST exact count via HEAD + Prefer: count=exact (no row payload). */
 async function countExact(path, timeoutMs = SVC_FETCH_TIMEOUT_MS) {
   if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) return 0;
@@ -1541,25 +1558,25 @@ async function handlePost(req, res, user) {
   const action = String(body?.action || "").trim();
 
   if (action === "follow" || action === "unfollow") {
-    const target = await resolveTarget({ userId: body?.targetUserId, username: body?.username });
-    const targetUserId = cleanUserId(target?.user_id);
+    let targetUserId = cleanUserId(body?.targetUserId);
+    let target = null;
+    if (!targetUserId) {
+      target = await resolveTarget({ username: body?.username });
+      targetUserId = cleanUserId(target?.user_id);
+    }
     if (!targetUserId) return sendJson(res, 404, { ok: false, error: "Profile not found" });
     if (targetUserId === user.userId) return sendJson(res, 400, { ok: false, error: "Cannot follow yourself" });
 
     if (action === "follow") {
-      const existing = await svcFetch(
-        `social_follows?select=follower_user_id&follower_user_id=eq.${encodeURIComponent(user.userId)}&following_user_id=eq.${encodeURIComponent(targetUserId)}&limit=1`,
-      );
-      const already = Array.isArray(existing.data) && existing.data.length > 0;
-      if (!already) {
-        const ins = await svcFetch("social_follows", {
-          method: "POST",
-          headers: { Prefer: "return=minimal" },
-          body: JSON.stringify({ follower_user_id: user.userId, following_user_id: targetUserId }),
-        });
-        if (!ins.ok) return sendJson(res, 500, { ok: false, error: "Follow failed", details: ins.text });
-        await createFollowNotification({ actorUserId: user.userId, targetUserId });
+      const ins = await svcFetch("social_follows", {
+        method: "POST",
+        headers: { Prefer: "return=minimal,resolution=ignore-duplicates" },
+        body: JSON.stringify({ follower_user_id: user.userId, following_user_id: targetUserId }),
+      });
+      if (!ins.ok && !/duplicate|23505|already exists/i.test(String(ins.text || ""))) {
+        return sendJson(res, 500, { ok: false, error: "Follow failed", details: ins.text });
       }
+      runSocialBackground(createFollowNotification({ actorUserId: user.userId, targetUserId }));
     } else {
       await svcFetch(
         `social_follows?follower_user_id=eq.${encodeURIComponent(user.userId)}&following_user_id=eq.${encodeURIComponent(targetUserId)}`,
@@ -1567,8 +1584,11 @@ async function handlePost(req, res, user) {
       );
     }
 
-    const stats = await socialStats(targetUserId, user.userId);
-    return sendJson(res, 200, { ok: true, profile: target, stats });
+    return sendJson(res, 200, {
+      ok: true,
+      profile: target || { user_id: targetUserId },
+      stats: { isFollowing: action === "follow" },
+    });
   }
 
   if (action === "mark_notifications_read") {

@@ -3221,6 +3221,39 @@ function haptic(kind = "light") {
     else navigator.vibrate(6);
   } catch {}
 }
+
+let _fanSoundCtx = null;
+function playFanConfirmSound() {
+  try {
+    const Ctx = window.AudioContext || window.webkitAudioContext;
+    if (!Ctx) return;
+    if (!_fanSoundCtx || _fanSoundCtx.state === "closed") _fanSoundCtx = new Ctx();
+    const ctx = _fanSoundCtx;
+    void ctx.resume().catch(() => {});
+    const now = ctx.currentTime;
+    const note = (freq, start, dur, vol, type = "sine") => {
+      const gain = ctx.createGain();
+      gain.connect(ctx.destination);
+      gain.gain.setValueAtTime(0.0001, start);
+      gain.gain.exponentialRampToValueAtTime(Math.max(0.0001, vol), start + 0.012);
+      gain.gain.exponentialRampToValueAtTime(0.0001, start + dur);
+      const osc = ctx.createOscillator();
+      osc.type = type;
+      osc.frequency.setValueAtTime(freq, start);
+      osc.connect(gain);
+      osc.start(start);
+      osc.stop(start + dur + 0.02);
+    };
+    note(440, now, 0.09, 0.044);
+    note(659.25, now + 0.07, 0.18, 0.036);
+    note(1318.5, now + 0.084, 0.1, 0.012, "triangle");
+  } catch {}
+}
+
+function playBecameFanFeedback() {
+  try { haptic("success"); } catch {}
+  try { playFanConfirmSound(); } catch {}
+}
 function showLikeBurst() {
   if (!els.likeBurst) return;
   const el = els.likeBurst;
@@ -11942,6 +11975,7 @@ async function handleDiscoverFeedFollowClick(btn, targetUserId) {
     location.hash = "#/auth";
     return;
   }
+  if (btn.dataset.followBusy === "1") return;
   const wasFollowing = btn.dataset.following === "1" || btn.classList.contains("isFollowing");
   const handle = String(btn.getAttribute("data-discover-follow-handle") || "").trim();
   if (wasFollowing) {
@@ -11950,7 +11984,17 @@ async function handleDiscoverFeedFollowClick(btn, targetUserId) {
     try { ok = window.confirm(FAN_COPY.confirmUnfan(who)); } catch { ok = true; }
     if (!ok) return;
   }
-  btn.disabled = true;
+  const nowFollowing = !wasFollowing;
+  const paintFollow = (following) => {
+    btn.textContent = fanCtaLabel(following, { compact: true });
+    btn.classList.toggle("isFollowing", following);
+    btn.dataset.following = following ? "1" : "0";
+  };
+  btn.dataset.followBusy = "1";
+  paintFollow(nowFollowing);
+  if (nowFollowing) playBecameFanFeedback();
+  else try { haptic("light"); } catch {}
+  showToast(nowFollowing ? FAN_COPY.toastBecameFan(handle) : FAN_COPY.toastUnfan);
   try {
     await socialApi("/api/social", {
       method: "POST",
@@ -11961,15 +12005,11 @@ async function handleDiscoverFeedFollowClick(btn, targetUserId) {
     });
     _followingListCache = null;
     _followingListCacheAt = 0;
-    const nowFollowing = !wasFollowing;
-    btn.textContent = fanCtaLabel(nowFollowing, { compact: true });
-    btn.classList.toggle("isFollowing", nowFollowing);
-    btn.dataset.following = nowFollowing ? "1" : "0";
-    showToast(nowFollowing ? FAN_COPY.toastBecameFan(handle) : FAN_COPY.toastUnfan);
   } catch (e) {
+    paintFollow(wasFollowing);
     showToast(e?.message || FAN_COPY.toastError);
   } finally {
-    btn.disabled = false;
+    delete btn.dataset.followBusy;
   }
 }
 
@@ -19493,9 +19533,7 @@ async function handleFriendsWtfFollow(btn) {
   btn.disabled = true;
   const prevLabel = btn.textContent;
   btn.textContent = FAN_COPY.ctaBusy;
-  try {
-    haptic("light");
-  } catch {}
+  playBecameFanFeedback();
   try {
     await socialApi("/api/social", {
       method: "POST",
@@ -32991,6 +33029,7 @@ async function supabaseFetchPublicSongRemixMeta({ songId, ownerUserId }) {
 
 let currentUserPublicProfileId = "";
 let currentUserPublicSocialStats = { followers: 0, following: 0, isFollowing: false, followsViewer: false };
+let _userPublicFollowInflight = false;
 
 function socialApiErrorMessage(err) {
   const status = Number(err?.status || 0);
@@ -40442,7 +40481,7 @@ async function toggleCurrentUserPublicFollow() {
     location.hash = "#/auth";
     return;
   }
-  const btn = els.btnUserPublicFollow;
+  if (_userPublicFollowInflight) return;
   const wasFollowing = Boolean(currentUserPublicSocialStats?.isFollowing);
   if (wasFollowing) {
     const handle = String(els.userPublicName?.textContent || "").trim() || "this creator";
@@ -40454,7 +40493,27 @@ async function toggleCurrentUserPublicFollow() {
     }
     if (!ok) return;
   }
-  setUserPublicFollowBtnDisabled(true);
+  const nowFollowing = !wasFollowing;
+  const prevStats = { ...currentUserPublicSocialStats };
+  const paintStats = (stats) => {
+    currentUserPublicSocialStats = stats;
+    renderUserPublicSocialStats({
+      songCount: _userPublicProfileCache?.postItems?.length ?? userPublicStatsSongCount(),
+      stats: currentUserPublicSocialStats,
+    });
+    renderUserPublicFollowButton();
+  };
+  paintStats({
+    ...currentUserPublicSocialStats,
+    isFollowing: nowFollowing,
+    followers: Math.max(0, (Number(currentUserPublicSocialStats.followers) || 0) + (nowFollowing ? 1 : -1)),
+  });
+  if (nowFollowing) playBecameFanFeedback();
+  else try { haptic("light"); } catch {}
+  showToast(wasFollowing
+    ? FAN_COPY.toastUnfan
+    : FAN_COPY.toastBecameFan(String(els.userPublicName?.textContent || "").replace(/^@/, "").trim()));
+  _userPublicFollowInflight = true;
   try {
     const data = await socialApi("/api/social", {
       method: "POST",
@@ -40463,23 +40522,28 @@ async function toggleCurrentUserPublicFollow() {
         targetUserId,
       }),
     });
-    currentUserPublicSocialStats = data?.stats || {
-      ...currentUserPublicSocialStats,
-      isFollowing: !wasFollowing,
-    };
-    renderUserPublicSocialStats({
-      songCount: _userPublicProfileCache?.postItems?.length ?? userPublicStatsSongCount(),
-      stats: currentUserPublicSocialStats,
-    });
-    renderUserPublicFollowButton();
-    showToast(wasFollowing ? FAN_COPY.toastUnfan : FAN_COPY.toastBecameFan(String(els.userPublicName?.textContent || "").replace(/^@/, "").trim()));
+    if (data?.stats && typeof data.stats === "object") {
+      paintStats({
+        ...currentUserPublicSocialStats,
+        ...data.stats,
+        followers: data.stats.followers != null
+          ? Number(data.stats.followers) || 0
+          : currentUserPublicSocialStats.followers,
+        isFollowing: data.stats.isFollowing != null
+          ? Boolean(data.stats.isFollowing)
+          : nowFollowing,
+      });
+    }
+    _followingListCache = null;
+    _followingListCacheAt = 0;
     if (wasFollowing && (document.body.getAttribute("data-route") || "") === "friends") {
       void refreshDiscoveryFollowingFeed();
     }
   } catch (e) {
+    paintStats(prevStats);
     showToast(e?.message || FAN_COPY.toastError);
   } finally {
-    setUserPublicFollowBtnDisabled(false);
+    _userPublicFollowInflight = false;
   }
 }
 

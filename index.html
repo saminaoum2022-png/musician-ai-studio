@@ -870,13 +870,16 @@
           <header class="appScreenHeader createPageHeader">
             <div class="createHeadRow">
               <h2 class="appScreenTitle">Create</h2>
-              <button id="btnNewSong" class="btnNewSong" type="button" title="Start a new song" aria-label="Start a new song">
+              <div class="createHeadActions">
+                <span class="coachFabSlot" data-coach-fab-slot="generate" aria-hidden="true"></span>
+                <button id="btnNewSong" class="btnNewSong" type="button" title="Start a new song" aria-label="Start a new song">
                 <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
                   <polyline points="23 4 23 10 17 10"/>
                   <path d="M20.49 15A9 9 0 1 1 18.36 5.64L23 10"/>
                 </svg>
-                <span class="btnNewSongLabel">New</span>
-              </button>
+                  <span class="btnNewSongLabel">New</span>
+                </button>
+              </div>
             </div>
           </header>
           <div class="createFlow" id="createFlow">
@@ -5042,6 +5045,20 @@
       </section>
     </div>
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
+    <div id="coachNotice" class="coachNotice" hidden role="status" aria-live="polite">
+      <div class="coachNoticeHandle" aria-hidden="true"></div>
+      <button type="button" class="coachNoticeCard" id="coachNoticeCard" aria-label="Open Coach">
+        <span class="coachNoticeAv" id="coachNoticeAv" aria-hidden="true"></span>
+        <span class="coachNoticeCopy">
+          <span class="coachNoticeMeta">
+            <span class="coachNoticeApp">Coach</span>
+            <span class="coachNoticeTime">now</span>
+          </span>
+          <span class="coachNoticeBody" id="coachNoticeBody"></span>
+        </span>
+      </button>
+      <div id="coachNoticeActions" class="coachNoticeActions" hidden></div>
+    </div>
 
     <div id="shareChooserSheet" class="shareChooserSheet messagesShareSheet" hidden aria-hidden="true">
       <div class="shareChooserSheetBackdrop" id="shareChooserSheetBackdrop"></div>

@@ -6482,6 +6482,142 @@ input.userTextBidi--rtl{
   font-weight: 500;
   letter-spacing: 0.05px;
 }
+
+/* Coach in-app notification — swipe up to dismiss, same language as push. */
+.coachNotice{
+  position: fixed;
+  left: 10px;
+  right: 10px;
+  top: calc(8px + env(safe-area-inset-top, 0px));
+  z-index: 240;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px 10px 10px;
+  border-radius: 22px;
+  border: 1px solid rgba(255,255,255,0.16);
+  background: linear-gradient(180deg, rgba(28,33,52,0.94), rgba(14,18,30,0.90));
+  box-shadow:
+    0 16px 40px -16px rgba(0,0,0,0.55),
+    0 0 0 1px rgba(124, 92, 255, 0.18) inset;
+  backdrop-filter: saturate(1.4) blur(22px);
+  -webkit-backdrop-filter: saturate(1.4) blur(22px);
+  transform: translateY(-120%);
+  opacity: 0;
+  pointer-events: none;
+  touch-action: none;
+  transition:
+    opacity 220ms cubic-bezier(0.22, 1, 0.36, 1),
+    transform 280ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.coachNotice.isShow{
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+.coachNotice[hidden]{ display: none !important; }
+.coachNoticeHandle{
+  width: 36px;
+  height: 4px;
+  border-radius: 999px;
+  margin: 0 auto 2px;
+  background: rgba(255,255,255,0.28);
+}
+.coachNoticeCard{
+  -webkit-appearance: none;
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 2px 2px 0;
+  text-align: left;
+  cursor: pointer;
+}
+.coachNoticeAv{
+  flex: 0 0 auto;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  overflow: hidden;
+}
+.coachNoticeAv .coachAvatar,
+.coachNoticeAv svg{
+  width: 36px;
+  height: 36px;
+  display: block;
+}
+.coachNoticeCopy{
+  min-width: 0;
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.coachNoticeMeta{
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+.coachNoticeApp{
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  color: rgba(216, 200, 255, 0.92);
+}
+.coachNoticeTime{
+  flex: 0 0 auto;
+  font-size: 11px;
+  font-weight: 650;
+  color: rgba(236, 240, 255, 0.46);
+}
+.coachNoticeBody{
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.35;
+  color: #f0f4ff;
+}
+.coachNoticeActions{
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 0 2px;
+}
+.coachNoticeActions[hidden]{ display: none !important; }
+.coachNoticeChip{
+  -webkit-appearance: none;
+  appearance: none;
+  border: 1px solid rgba(255,255,255,0.14);
+  background: rgba(255,255,255,0.06);
+  color: #eef4ff;
+  border-radius: 999px;
+  padding: 6px 11px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.coachNoticeChip:active{ transform: scale(0.97); }
+.coachNotice.isChecking .coachNoticeBody{
+  color: rgba(240,244,255,0.82);
+}
+html[data-theme="light"] .coachNotice{
+  border-color: rgba(15,23,40,0.10);
+  background: linear-gradient(180deg, rgba(255,255,255,0.98), rgba(246,247,252,0.96));
+  box-shadow: 0 16px 36px -16px rgba(15,23,40,0.22);
+}
+html[data-theme="light"] .coachNoticeHandle{ background: rgba(15,23,40,0.18); }
+html[data-theme="light"] .coachNoticeApp{ color: #6d28d9; }
+html[data-theme="light"] .coachNoticeTime{ color: rgba(15, 23, 40, 0.42); }
+html[data-theme="light"] .coachNoticeBody{ color: var(--text-primary); }
+html[data-theme="light"] .coachNoticeChip{
+  border-color: rgba(15,23,40,0.10);
+  background: rgba(15,23,40,0.05);
+  color: var(--text-primary);
+}
 @media (prefers-reduced-motion: reduce){
   .toast{ transition: opacity 120ms linear; }
 }
@@ -9982,6 +10118,13 @@ body[data-photo-solo-challenge] .createFlowStep:nth-child(2){
   gap: 12px;
   margin: 0;
   min-width: 0;
+}
+.createHeadActions{
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+  margin-top: 10px;
 }
 .createHeadRow .appScreenTitle{
   flex: 1 1 auto;
@@ -16020,8 +16163,12 @@ button:disabled{ opacity:0.5; cursor:not-allowed; }
 /* `.createHeadRow` lives above next to `.createPageHeader` (min-width guards). */
 
 .createPageHeader .btnNewSong{
-  margin-top: 10px;
+  margin-top: 0;
   flex-shrink: 0;
+}
+.createPageHeader .coachFabSlot{
+  width: 34px;
+  height: 34px;
 }
 .btnNewSong{
   font-size: 12px;

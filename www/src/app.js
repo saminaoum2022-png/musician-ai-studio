@@ -4960,6 +4960,9 @@ function applyRoute({ passGen } = {}) {
     stopMessagesInboxPoll();
     stopMessagesInboxRealtime();
   }
+  if (prevRoute === "generate" && wanted !== "generate") {
+    try { hideCoachNotice(); } catch {}
+  }
   if (wanted === "challenges" && hasActiveCreateSession() && !_createHubExitBypassSessionPin && !isOnCreateHubRoute()) {
     if (createSessionIsGenerating()) {
       wanted = "profile";
@@ -5841,6 +5844,12 @@ function offerSingabilityAfterLyricsReady({ fromGenerate = false } = {}) {
   }
   renderSingabilityProTease();
   try {
+    showCoachNotice({
+      body: "Singability is Pro — I can check if these will sing.",
+      actions: [{ id: "pro", label: "See Pro" }],
+    });
+  } catch {}
+  try {
     els.lyricsSingabilityPanel?.scrollIntoView({ behavior: "smooth", block: "nearest" });
   } catch {}
 }
@@ -5879,12 +5888,163 @@ function applyPendingCoachSingabilitySeed() {
 }
 
 function announceCoachSingability(report) {
-  if (!report || report.checking || report.source === "pro_tease") return;
-  const line = coachSingabilityOneLiner(report);
+  if (!report || report.checking || report.source === "pro_tease") {
+    if (report?.source === "pro_tease") {
+      showCoachNotice({
+        body: "Singability is Pro — I can check if these will sing.",
+        actions: [{ id: "pro", label: "See Pro" }],
+      });
+    }
+    return;
+  }
   setPendingCoachSingabilitySeed(report);
+  const score = Number(report.score);
+  const ready = Number.isFinite(score) && score > 75;
+  const line = coachSingabilityOneLiner(report);
+  const actions = ready
+    ? [{ id: "generate", label: "Generate song" }]
+    : [
+        { id: "fix", label: "Fix" },
+        { id: "polish", label: "Polish" },
+        ...(typeof shouldShowLyricsDiacritics === "function" && shouldShowLyricsDiacritics()
+          ? [{ id: "diacritics", label: "Vowels" }]
+          : []),
+      ];
+  const body = ready
+    ? `${Number.isFinite(score) ? score : "Looks good"} — these should sing. Ready when you are.`
+    : `${Number.isFinite(score) ? score : "A bit rough"} — Fix, Polish${typeof shouldShowLyricsDiacritics === "function" && shouldShowLyricsDiacritics() ? ", or Vowels" : ""} might help.`;
+  showCoachNotice({ body, actions });
   try {
-    finishCoachPriorityStatus(line, { success: Number(report.score) >= 70 });
+    finishCoachPriorityStatus(line, { success: ready });
   } catch {}
+}
+
+function coachNoticeEl() {
+  return document.getElementById("coachNotice");
+}
+
+function hideCoachNotice() {
+  const el = coachNoticeEl();
+  if (!el) return;
+  el.classList.remove("isShow", "isChecking");
+  el.style.removeProperty("transform");
+  window.setTimeout(() => {
+    if (!el.classList.contains("isShow")) el.hidden = true;
+  }, 240);
+}
+
+function showCoachNotice({ body = "", actions = [], checking = false } = {}) {
+  const el = coachNoticeEl();
+  const bodyEl = document.getElementById("coachNoticeBody");
+  const actionsEl = document.getElementById("coachNoticeActions");
+  const av = document.getElementById("coachNoticeAv");
+  if (!el || !bodyEl) return;
+  if (av && !av.innerHTML && typeof coachAvatarHtml === "function") {
+    av.innerHTML = coachAvatarHtml("coachNoticeOrb");
+  }
+  bodyEl.textContent = String(body || "").trim() || "Coach";
+  el.classList.toggle("isChecking", Boolean(checking));
+  if (actionsEl) {
+    const chips = Array.isArray(actions) ? actions : [];
+    if (!chips.length || checking) {
+      actionsEl.hidden = true;
+      actionsEl.innerHTML = "";
+    } else {
+      actionsEl.hidden = false;
+      actionsEl.innerHTML = chips.map((chip) => (
+        `<button type="button" class="coachNoticeChip" data-coach-notice="${escapeHtml(chip.id)}">${escapeHtml(chip.label)}</button>`
+      )).join("");
+    }
+  }
+  el.hidden = false;
+  requestAnimationFrame(() => el.classList.add("isShow"));
+  try { surfaceCoachOrb({ priority: true }); } catch {}
+}
+
+function runCoachNoticeAction(action) {
+  hideCoachNotice();
+  if (action === "generate") {
+    const btn = els.btnSunoGenerate;
+    if (btn && !btn.disabled) btn.click();
+    else showToast("Add lyrics and style, then Generate song.", { icon: "♪", durationMs: 2800 });
+    return;
+  }
+  if (action === "fix") {
+    void fixLyricsForSinging();
+    return;
+  }
+  if (action === "polish") {
+    void polishLyricsWithGemini();
+    return;
+  }
+  if (action === "diacritics") {
+    void addArabicVowelMarksToLyrics();
+    return;
+  }
+  if (action === "pro") {
+    requireProFeature("Singability");
+  }
+}
+
+function bindCoachNoticeOnce() {
+  const el = coachNoticeEl();
+  if (!el || el.dataset.bound === "1") return;
+  el.dataset.bound = "1";
+  let startY = 0;
+  let dragging = false;
+  let swipedAway = false;
+  const card = document.getElementById("coachNoticeCard");
+  card?.addEventListener("click", (ev) => {
+    ev.preventDefault();
+    if (swipedAway) {
+      swipedAway = false;
+      return;
+    }
+    hideCoachNotice();
+    openNabadCoach();
+  });
+  document.getElementById("coachNoticeActions")?.addEventListener("click", (ev) => {
+    const btn = ev.target?.closest?.("[data-coach-notice]");
+    if (!btn) return;
+    ev.preventDefault();
+    ev.stopPropagation();
+    if (swipedAway) {
+      swipedAway = false;
+      return;
+    }
+    runCoachNoticeAction(String(btn.getAttribute("data-coach-notice") || ""));
+  });
+  const onStart = (y) => {
+    dragging = true;
+    swipedAway = false;
+    startY = y;
+    el.style.transition = "none";
+  };
+  const onMove = (y) => {
+    if (!dragging) return;
+    const dy = Math.min(0, y - startY);
+    el.style.transform = `translateY(${dy}px)`;
+  };
+  const onEnd = (y) => {
+    if (!dragging) return;
+    dragging = false;
+    el.style.transition = "";
+    const dy = y - startY;
+    if (dy < -36) {
+      swipedAway = true;
+      hideCoachNotice();
+    } else {
+      el.style.removeProperty("transform");
+    }
+  };
+  el.addEventListener("pointerdown", (ev) => {
+    if (ev.pointerType === "mouse" && ev.button !== 0) return;
+    onStart(ev.clientY || 0);
+    try { el.setPointerCapture(ev.pointerId); } catch {}
+  });
+  el.addEventListener("pointermove", (ev) => onMove(ev.clientY || 0));
+  el.addEventListener("pointerup", (ev) => onEnd(ev.clientY || startY));
+  el.addEventListener("pointercancel", (ev) => onEnd(ev.clientY || startY));
 }
 
 function clearLyricsDraftFromToolsBar() {
@@ -5895,6 +6055,7 @@ function clearLyricsDraftFromToolsBar() {
   lastSingabilityReport = null;
   lyricsSingabilityLastText = "";
   _pendingCoachSingabilitySeed = "";
+  try { hideCoachNotice(); } catch {}
   renderLyricsSingabilityPanel(null);
   try { resetNabadLyricsDraftState(); } catch {}
   try { syncArabicLyricsControlsVisibility(); } catch {}
@@ -6047,6 +6208,15 @@ async function runLyricsSingabilityCheck({ fromAuto = false } = {}) {
     }
     if (els.sunoPrompt) els.sunoPrompt.disabled = true;
     setStatus("AI is checking singability — rhyme, wazen (وزن), and line balance…");
+    try {
+      beginCoachPriorityStatus("Checking singability…", { generating: true });
+    } catch {}
+    try {
+      showCoachNotice({
+        body: "Checking if these will sing…",
+        checking: true,
+      });
+    } catch {}
     const report = await fetchLyricsSingabilityReport(text, { updateUi: true, reqId });
     if (report && !report.checking) {
       inkwellSettle = true;
@@ -6066,6 +6236,12 @@ async function runLyricsSingabilityCheck({ fromAuto = false } = {}) {
     }
   } catch (e) {
     setStatus(`Singability check failed: ${e?.message || String(e)}`);
+    try {
+      showCoachNotice({
+        body: "Couldn't check singability just now. Try Done again.",
+      });
+    } catch {}
+    try { finishCoachPriorityStatus("Check failed", { success: false }); } catch {}
   } finally {
     if (els.sunoPrompt) els.sunoPrompt.disabled = false;
     if (lyricsBoxEl) lyricsBoxEl.classList.remove("generating");
@@ -10430,9 +10606,11 @@ function syncCoachFabHeaderMount() {
   const slotKey =
     route === "discover" || route === "friends"
       ? "discover"
-      : route === "challenges" || route === "generate"
+      : route === "challenges"
         ? "create"
-        : "";
+        : route === "generate"
+          ? "generate"
+          : "";
   fab.style.removeProperty("left");
   fab.style.removeProperty("right");
   fab.style.removeProperty("bottom");
@@ -64401,6 +64579,12 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       if (lyricsBoxEl) lyricsBoxEl.classList.add("generating");
       if (els.sunoPrompt) els.sunoPrompt.disabled = true;
       setStatus("Polishing lyrics for rhyme and flow…");
+      try {
+        showCoachNotice({
+          body: "Polishing these so they sing better…",
+          checking: true,
+        });
+      } catch {}
       const r = await fetch(apiUrl("/api/lyrics"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -64426,9 +64610,13 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       const doneMsg = "Lyrics polished — review, then Generate song.";
       setStatus(doneMsg);
       showToast(doneMsg, { icon: "✦", durationMs: 3600 });
+      void runLyricsSingabilityCheck({ fromAuto: true });
     } catch (e) {
       setStatus(`Polish failed: ${e?.message || String(e)}`);
       showToast(e?.message || "Could not polish lyrics", { icon: "!", durationMs: 3600 });
+      try {
+        showCoachNotice({ body: "Polish didn't land. Try Fix, or tap me." });
+      } catch {}
     } finally {
       if (els.sunoPrompt) els.sunoPrompt.disabled = false;
       if (lyricsBoxEl) lyricsBoxEl.classList.remove("generating");
@@ -64477,6 +64665,12 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       if (lyricsBoxEl) lyricsBoxEl.classList.add("generating");
       if (els.sunoPrompt) els.sunoPrompt.disabled = true;
       setStatus("Fixing rhyme and wazen for singing…");
+      try {
+        showCoachNotice({
+          body: "Fixing rhyme and وزن so these will sing…",
+          checking: true,
+        });
+      } catch {}
       const r = await fetch(apiUrl("/api/lyrics"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -64498,7 +64692,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       try { autoResizeLyricsBox(); } catch {}
       try { syncArabicLyricsControlsVisibility(); } catch {}
       snapshotNabadAiLyricsDraft(nextLyrics);
-      void runLyricsSingabilityCheck();
+      void runLyricsSingabilityCheck({ fromAuto: true });
       inkwellSettle = true;
       const doneMsg = "Lyrics tuned for singing — review warnings, then Generate.";
       setStatus(doneMsg);
@@ -64506,6 +64700,9 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
     } catch (e) {
       setStatus(`Fix for singing failed: ${e?.message || String(e)}`);
       showToast(e?.message || "Could not fix lyrics for singing", { icon: "!", durationMs: 3600 });
+      try {
+        showCoachNotice({ body: "Fix didn't land. Try Polish, or tap me." });
+      } catch {}
     } finally {
       if (els.sunoPrompt) els.sunoPrompt.disabled = false;
       if (lyricsBoxEl) lyricsBoxEl.classList.remove("generating");
@@ -64643,6 +64840,12 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
           ? "Adding Lebanese vowel marks for colloquial singing…"
           : "Adding vowel marks for dialect singing…",
       );
+      try {
+        showCoachNotice({
+          body: "Adding vowel marks so these sit better when sung…",
+          checking: true,
+        });
+      } catch {}
       const r = await fetch(apiUrl("/api/lyrics"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -64670,9 +64873,13 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
           : "Vowel marks added — review then Generate song.";
       setStatus(vowelDoneMsg);
       showToast(vowelDoneMsg, { icon: "✦", durationMs: 3600 });
+      void runLyricsSingabilityCheck({ fromAuto: true });
     } catch (e) {
       setStatus(`Vowel marks failed: ${e?.message || String(e)}`);
       showToast(e?.message || "Could not add vowel marks", { icon: "!", durationMs: 3600 });
+      try {
+        showCoachNotice({ body: "Vowels didn't land. Try Fix or Polish." });
+      } catch {}
     } finally {
       if (els.sunoPrompt) els.sunoPrompt.disabled = false;
       if (lyricsBoxEl) lyricsBoxEl.classList.remove("generating");
@@ -68759,6 +68966,7 @@ function resumePriorityJobsIfPending() {
   } catch {}
   const fab = document.getElementById("coachFab");
   if (fab) fab.addEventListener("click", () => openNabadCoach());
+  try { bindCoachNoticeOnce(); } catch {}
   try { syncCoachFabHeaderMount(); } catch {}
   try { scheduleCoachFabNudge(); } catch {}
   try { syncCoachGenerationStatusFromPending(getGenerationPending()); } catch {}

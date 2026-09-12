@@ -46,7 +46,7 @@ module.exports = async function handler(req, res) {
 
     if (isLyriaTaskId(taskId)) {
       return sendJson(res, 404, {
-        error: "No synced lyrics for this Lyria track — regenerate with vocals to enable karaoke.",
+        error: "No synced lyrics for this clip — regenerate with vocals to enable karaoke.",
         code: "lyria_timestamps_missing",
       });
     }

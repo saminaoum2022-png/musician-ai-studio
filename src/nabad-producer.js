@@ -22,7 +22,7 @@ const TEXT_STEPS = new Set(["lyrics", "reference"]);
 
 const WELCOME = {
   role: "coach",
-  text: "Welcome to the producer booth. We'll lock genre, mood, vocal, and lyrics — then I'll build your Lyria Pro blueprint. Tap a genre to start.",
+  text: "Welcome to the producer booth. We'll lock genre, mood, vocal, and lyrics — then I'll build your production blueprint. Tap a genre to start.",
 };
 
 /** Hidden by default. Dev phone: npm run run:ios:producer (admin + baked UI flag). */
@@ -410,7 +410,7 @@ function renderGeneratingBanner() {
   if (!generateBusy) return "";
   return `<div class="nabadProducerGeneratingBanner" role="status">
     <span class="nabadProducerGeneratingPulse" aria-hidden="true"></span>
-    <span>Lyria Pro is composing your song — usually about a minute. You can leave; it will land in Library.</span>
+    <span>Nabad is composing your song — usually about a minute. You can leave; it will land in Library.</span>
   </div>`;
 }
 
@@ -471,7 +471,7 @@ function renderShell() {
             </button>
             <span class="nabadProducerHeadMark">${producerMarkSvg()}</span>
             <div class="nabadProducerHeadCopy">
-              <span class="nabadProducerBadge">Producer session · Lyria Pro</span>
+              <span class="nabadProducerBadge">Producer session</span>
               <h1 class="nabadProducerTitle">Nabad Producer</h1>
               <p class="nabadProducerSub">${NABAD_PRODUCER_CREDIT_COST} credits · full song master</p>
             </div>
@@ -651,7 +651,7 @@ async function startGenerate() {
   if (generateBusy) return;
   generateBusy = true;
   pushUser(`Generate song · ${NABAD_PRODUCER_CREDIT_COST} credits`);
-  pushCoach("Starting Lyria Pro — your song will appear in Library when it's ready. You can leave this session anytime.");
+  pushCoach("Starting your song — it will appear in Library when it's ready. You can leave this session anytime.");
   updateUiState({ quickReplies: [] });
   renderShell();
   try {

@@ -4076,7 +4076,7 @@ function setCreateTemplateLoadedHint(title) {
   if (els.createChallengeHintTitle) els.createChallengeHintTitle.textContent = `Template: ${t}`;
   if (els.createChallengeHintSub) {
     els.createChallengeHintSub.textContent = templateSparkClipEnabled()
-      ? `~30s Lyria clip · ${formatCreditsAmount(TEMPLATE_SPARK_CLIP_CREDIT_COST)} credits. ${TEMPLATE_SPARK_CLIP_LYRICS_HINT}`
+      ? `~30s clip · ${formatCreditsAmount(TEMPLATE_SPARK_CLIP_CREDIT_COST)} credits. ${TEMPLATE_SPARK_CLIP_LYRICS_HINT}`
       : "Personalize the lyrics and style, then tap Generate.";
   }
   els.createChallengeHint.hidden = false;
@@ -4113,8 +4113,8 @@ function setCreateChallengeHint(challenge) {
     const clipStaging = templateSparkClipEnabled() && (kind === "template" || kind === "spark") && !voiceClip;
     if (clipStaging) {
       els.createChallengeHintSub.textContent = details
-        ? `${details}. ~30s Lyria clip · ${formatCreditsAmount(TEMPLATE_SPARK_CLIP_CREDIT_COST)} credits. ${TEMPLATE_SPARK_CLIP_LYRICS_HINT}`
-        : `~30s Lyria clip · 10 credits. ${TEMPLATE_SPARK_CLIP_LYRICS_HINT}`;
+        ? `${details}. ~30s clip · ${formatCreditsAmount(TEMPLATE_SPARK_CLIP_CREDIT_COST)} credits. ${TEMPLATE_SPARK_CLIP_LYRICS_HINT}`
+        : `~30s clip · 10 credits. ${TEMPLATE_SPARK_CLIP_LYRICS_HINT}`;
     } else if (kind === "template") {
       els.createChallengeHintSub.textContent = details
         ? `${details}. Edit below, then tap Generate.`
@@ -5584,7 +5584,7 @@ function applyLyricsLanguageToDialect() {
     val = LYRICS_ARABIC_DIALECT_VALUE[lyricsDialect] || "";
     hint = LYRICS_ARABIC_DIALECT_HINT[lyricsDialect] || "";
     if (isArabiziLyricsLanguage(lyricsLanguage)) {
-      hint = [hint, "Output Arabizi (Latin phonetic spelling for Lyria/Lebanese singing)."].filter(Boolean).join(" ");
+      hint = [hint, "Output Arabizi (Latin phonetic spelling for Lebanese singing)."].filter(Boolean).join(" ");
     }
   } else if (lyricsLanguage !== "auto") {
     val = LYRICS_LANGUAGE_VALUE[lyricsLanguage] || "";
@@ -8549,7 +8549,7 @@ function applyDiscoveryIdeaToCreate(idea) {
         voiceClipOnly
           ? `Spark: ${title}. Record on Hum, then Generate.`
           : templateSparkClipEnabled() && (sourceKind === "template" || sourceKind === "spark")
-            ? `${sourceKind === "template" ? "Template" : "Spark"} clip: ${title}. ~30s Lyria · ${formatCreditsAmount(TEMPLATE_SPARK_CLIP_CREDIT_COST)} credits. Edit lyrics or tap Generate lyrics below.`
+            ? `${sourceKind === "template" ? "Template" : "Spark"} clip: ${title}. ~30s clip · ${formatCreditsAmount(TEMPLATE_SPARK_CLIP_CREDIT_COST)} credits. Edit lyrics or tap Generate lyrics below.`
             : sourceKind === "template"
             ? `Template: ${title}. Edit below, then Generate.`
             : sourceKind === "live"
@@ -13439,7 +13439,7 @@ function applyRemixTemplateToCreate(tpl, name) {
   try {
     setStatus?.(
       templateSparkClipEnabled()
-        ? `Template clip: ${tpl.title} — ~30s Lyria · ${formatCreditsAmount(TEMPLATE_SPARK_CLIP_CREDIT_COST)} credits. ${TEMPLATE_SPARK_CLIP_LYRICS_HINT}`
+        ? `Template clip: ${tpl.title} — ~30s clip · ${formatCreditsAmount(TEMPLATE_SPARK_CLIP_CREDIT_COST)} credits. ${TEMPLATE_SPARK_CLIP_LYRICS_HINT}`
         : `Template: ${tpl.title} — tap Generate when ready.`,
     );
   } catch {}
@@ -20854,7 +20854,7 @@ function setCreatePhotoAttachmentPreview(dataUrl = "", summary = "") {
       sub.textContent = url
         ? (String(summary || "").trim() || (clipHint || "This image will guide the mood and cover."))
         : (isNabadClipPhotoDirectFlow()
-          ? "Lyria composes from your photo — singer & style optional."
+          ? "Your photo sets the mood — singer & style optional."
           : "We'll catch the mood and feed it into your song.");
     }
   }
@@ -20896,9 +20896,9 @@ function syncImageMoodSheetForCreateFlow() {
   }
   if (lead) {
     lead.textContent = photoSolo80s
-      ? "One quick read for mood, singer match, and lyrics — Lyria gets your photo once when the song generates."
+      ? "One quick read for mood, singer match, and lyrics — your photo is used once when the song generates."
       : clipDirect
-        ? "Lyria reads your photo. On the next screen, pick singer & style (optional lyrics) — then Generate clip."
+        ? "Your photo sets the mood. On the next screen, pick singer & style (optional lyrics) — then Generate clip."
         : "We'll turn the vibe into style tags — and the scene into a lyric idea.";
   }
   const analyzeBtn = document.getElementById("btnAnalyzeImageMood") || els.btnAnalyzeImageMood;
@@ -26062,8 +26062,8 @@ function syncClipVocalCharacterUi() {
   const hintEl = document.querySelector("#clipVocalCharacterRow .clipVocalCharacterHint");
   if (hintEl) {
     hintEl.textContent = isLyriaClipGenerateFlow()
-      ? "For Nabad Clip · Lyria"
-      : "For Lyria full song · admin";
+      ? "For Nabad Clip"
+      : "For full song · admin";
   }
   ensureClipSingerGenderSynced();
   const gender = resolveClipSingerGenderForUi();
@@ -56391,7 +56391,7 @@ async function ensureTrackAudioArchivedForVideoExport(track, say) {
 
 async function downloadLibraryVideoTrack(track, { onRendered } = {}) {
   if (!trackOffersVideoDownload(track)) {
-    throw new Error("Video download is only available for Lyria clips.");
+    throw new Error("Video download is only available for clips.");
   }
   const isHttpUrl = (u) => /^https?:\/\//i.test(String(u || "").trim());
   let t = resolveTrackForVideoExport(track) || track;
@@ -73101,7 +73101,7 @@ async function tickNabadProducerGenerationPoll() {
       syncGenerationPendingLibraryUi();
       const errMsg = String(parsed?.errorMessage || "").trim();
       const userMsg = /PROHIBITED_CONTENT|blocked this prompt/i.test(errMsg)
-        ? "Lyria blocked the prompt — artist names can't be sent. Mention the style at the reference step; we'll translate it to abstract production cues only."
+        ? "This prompt was blocked — artist names can't be sent. Mention the style at the reference step; we'll translate it to abstract production cues only."
         : (errMsg || "Generation failed — credits were refunded if applicable. Try again from the blueprint.");
       showToast("Producer generation failed", { icon: "!", durationMs: 3600 });
       void refreshMyCredits({ silent: true });

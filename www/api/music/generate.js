@@ -453,7 +453,7 @@ async function runLyriaGenerationJob({
 
     const upstream = await lyriaGenerateMusic({ apiKey, model, prompt: lyriaPrompt, photoImages });
     if (!upstream.ok) {
-      await fail(upstream.userMessage || "Lyria generation failed — try again.");
+      await fail(upstream.userMessage || "Couldn't generate this song — try again.");
       return;
     }
     requestDetail = mergeLyriaUpstreamAdminDetail(requestDetail, upstream);
@@ -464,7 +464,7 @@ async function runLyriaGenerationJob({
       contentType: upstream.audio.mimeType || "audio/mpeg",
     });
     if (!archived.ok || !archived.url) {
-      await fail("Lyria audio upload failed — try again.");
+      await fail("Couldn't save the audio — try again.");
       return;
     }
     if (!instrumental && Array.isArray(upstream.alignedWords) && upstream.alignedWords.length) {
@@ -497,7 +497,7 @@ async function runLyriaGenerationJob({
     });
   } catch (e) {
     console.error("[music/generate] lyria background job failed", taskId, e);
-    await fail(e?.message || "Lyria generation failed — try again.");
+    await fail(e?.message || "Couldn't generate this song — try again.");
   }
 }
 
@@ -584,7 +584,7 @@ async function runLyriaClipGenerationJob({
 
     const upstream = await lyriaGenerateMusic({ apiKey, model, prompt: lyriaPrompt, photoImages });
     if (!upstream.ok) {
-      await fail(upstream.userMessage || "Lyria generation failed — try again.");
+      await fail(upstream.userMessage || "Couldn't generate this song — try again.");
       return;
     }
     requestDetail = mergeLyriaUpstreamAdminDetail(requestDetail, upstream);
@@ -595,7 +595,7 @@ async function runLyriaClipGenerationJob({
       contentType: upstream.audio.mimeType || "audio/mpeg",
     });
     if (!archived.ok || !archived.url) {
-      await fail("Lyria audio upload failed — try again.");
+      await fail("Couldn't save the audio — try again.");
       return;
     }
     if (!instrumental && Array.isArray(upstream.alignedWords) && upstream.alignedWords.length) {
@@ -628,7 +628,7 @@ async function runLyriaClipGenerationJob({
     });
   } catch (e) {
     console.error("[music/generate] lyria clip background job failed", taskId, e);
-    await fail(e?.message || "Lyria generation failed — try again.");
+    await fail(e?.message || "Couldn't generate this song — try again.");
   }
 }
 
@@ -1031,14 +1031,14 @@ async function handleLyriaGenerate(req, res, { user, isAdmin, body }) {
 
   if (!isAdmin && !lyriaGenerateEnabled()) {
     return sendJson(res, 403, {
-      error: "Lyria generation is admin-only on this environment.",
+      error: "This generation mode isn't available yet.",
       code: "lyria_admin_only",
     });
   }
 
   if (body?.personaId || body?.hasReference) {
     return sendJson(res, 400, {
-      error: "Lyria spike does not support persona or reference uploads yet.",
+      error: "Persona and voice reference aren't available for this mode yet.",
       code: "lyria_unsupported",
     });
   }
@@ -1117,7 +1117,7 @@ async function handleLyriaGenerate(req, res, { user, isAdmin, body }) {
       await refund(user.userId, FULL_SONG_COST, "refund_full_song", "lyria_task_store").catch(() => null);
     }
     return sendJson(res, 500, {
-      error: "Could not start Lyria generation — try again.",
+      error: "Could not start generation — try again.",
       details: pendingStored.error || null,
     });
   }

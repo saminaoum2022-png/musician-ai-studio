@@ -148,7 +148,7 @@ async function runProducerGenerationJob({
   try {
     const upstream = await lyriaGenerateMusic({ apiKey, model, prompt: lyriaPrompt });
     if (!upstream.ok) {
-      await fail(upstream.userMessage || "Lyria generation failed — try again.");
+      await fail(upstream.userMessage || "Couldn't generate this song — try again.");
       return;
     }
     const archived = await persistAudioBuffer({
@@ -158,7 +158,7 @@ async function runProducerGenerationJob({
       contentType: upstream.audio.mimeType || "audio/mpeg",
     });
     if (!archived.ok || !archived.url) {
-      await fail("Lyria audio upload failed — try again.");
+      await fail("Couldn't save the audio — try again.");
       return;
     }
     if (!instrumental && Array.isArray(upstream.alignedWords) && upstream.alignedWords.length) {
@@ -185,7 +185,7 @@ async function runProducerGenerationJob({
     });
   } catch (e) {
     console.error("[music/producer/generate] background job failed", taskId, e);
-    await fail(e?.message || "Lyria generation failed — try again.");
+    await fail(e?.message || "Couldn't generate this song — try again.");
   }
 }
 

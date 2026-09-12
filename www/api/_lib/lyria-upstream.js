@@ -23,7 +23,7 @@ const {
   defaultClipVocalProfileForGender,
 } = require("./clip-vocal-profiles");
 const { looksLikeArabizi, isArabiziScript, buildLyriaArabiziPerformanceNote } = require("./arabizi");
-const { buildLyriaLebaneseArabicNote, dialectFlags } = require("./arabic-dialect-lyrics");
+const { buildLyriaLebaneseArabicNote, buildLyriaEgyptianArabicNote, dialectFlags } = require("./arabic-dialect-lyrics");
 
 const LYRIA_CLIP_MODEL = "lyria-3-clip-preview";
 
@@ -220,6 +220,9 @@ function buildLyriaArabiziVocalNote(dialectHint = "") {
   if (/syrian|palestinian|levantine/i.test(hint)) {
     return "Native Levantine Arabic lead vocal, authentic colloquial pronunciation, NOT English-accented delivery";
   }
+  if (/egyptian|masri/i.test(hint)) {
+    return "Native Egyptian Arabic lead vocal, authentic Masri colloquial pronunciation and vowels, NOT English-accented delivery";
+  }
   return "Native Arabic dialect lead vocal, authentic colloquial pronunciation, NOT English-accented delivery";
 }
 
@@ -235,7 +238,9 @@ function buildLyriaDialectVocalNote(dialectHint = "", { arabizi = false } = {}) 
   if (/syrian|palestinian|levantine/i.test(hint)) {
     return "Levantine colloquial vocal, warm conversational delivery.";
   }
-  if (/egyptian|masri/i.test(hint)) return "Egyptian Masri colloquial vocal delivery.";
+  if (/egyptian|masri/i.test(hint)) {
+    return "Egyptian Masri colloquial vocal, Cairo accent, warm conversational delivery, authentic Masri pronunciation.";
+  }
   if (/gulf|khaleeji/i.test(hint)) return "Gulf Khaleeji colloquial vocal delivery.";
   const short = hint.split(" — ")[0].split(".")[0].trim().slice(0, 100);
   return short ? `${short}, colloquial conversational vocal delivery.` : "";
@@ -290,7 +295,10 @@ function buildLyriaArabicPronunciationLine(mode, dialectHint = "") {
     if (flags.isLebanese) {
       return buildLyriaLebaneseArabicNote();
     }
-    return [hint || "colloquial Arabic dialect", "spoken vowels only; no tanween; sukoon on stopped consonants"].filter(Boolean).join(" — ");
+    if (flags.isEgyptian) {
+      return buildLyriaEgyptianArabicNote();
+    }
+    return [hint || "colloquial Arabic dialect", "spoken vowels only; no tanween"].filter(Boolean).join(" — ");
   }
   if (mode === "natural") {
     return "Arabic lyrics: colloquial spoken pronunciation.";
@@ -673,14 +681,14 @@ function lyriaUserMessage(httpStatus, payload, rawText) {
   const err = data?.error?.message || data?.error;
   if (err) return String(err).slice(0, 280);
   const block = data?.promptFeedback?.blockReason;
-  if (block) return `Lyria blocked this prompt (${block}). Try softer wording.`;
+  if (block) return `This prompt was blocked (${block}). Try softer wording.`;
   const finish = data?.candidates?.[0]?.finishReason;
-  if (finish && finish !== "STOP") return `Lyria could not finish (${finish}). Try again.`;
-  if (httpStatus === 429) return "Lyria rate limit — wait a minute and try again.";
-  if (httpStatus === 403) return "Lyria access denied — check GEMINI_API_KEY billing and Lyria access.";
-  if (httpStatus >= 500) return "Lyria is temporarily unavailable — try again shortly.";
+  if (finish && finish !== "STOP") return `Couldn't finish this clip (${finish}). Try again.`;
+  if (httpStatus === 429) return "Too many requests — wait a minute and try again.";
+  if (httpStatus === 403) return "Couldn't start this clip — try again shortly.";
+  if (httpStatus >= 500) return "Music generation is temporarily unavailable — try again shortly.";
   const snippet = String(rawText || "").trim().slice(0, 180);
-  return snippet || "Lyria generation failed — try again.";
+  return snippet || "Couldn't generate this clip — try again.";
 }
 
 function parseLyriaPhotoDataUrl(dataUrl) {
@@ -826,7 +834,7 @@ async function lyriaGenerateMusic({ apiKey, model, prompt, photoImages = [] }) {
       alignedWords: [],
       model: resolveLyriaModel(model),
       api: "interactions",
-      userMessage: "Lyria could not compose from your photo — try again in a minute.",
+      userMessage: "Couldn't compose from your photo — try again in a minute.",
     };
   }
 

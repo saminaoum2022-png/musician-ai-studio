@@ -983,8 +983,8 @@ function blueprintStatusReply(session, { error = "", attempt = 1, message = "", 
     : (ar ? "الجلسة" : "your session");
   if (building && attempt <= 1) {
     return ar
-      ? `عم بجهّز الـ blueprint — عم أوّل الكلمات مع الصوت والإيقاع و${refHint} لستايل Lyria Pro...`
-      : `Building your production blueprint — mapping lyrics, vocal, groove, and ${refHint} into a full Lyria Pro arrangement...`;
+      ? `عم بجهّز الـ blueprint — عم أوّل الكلمات مع الصوت والإيقاع و${refHint}...`
+      : `Building your production blueprint — mapping lyrics, vocal, groove, and ${refHint} into a full arrangement...`;
   }
   if (building && attempt === 2) {
     return ar

@@ -681,14 +681,14 @@ function lyriaUserMessage(httpStatus, payload, rawText) {
   const err = data?.error?.message || data?.error;
   if (err) return String(err).slice(0, 280);
   const block = data?.promptFeedback?.blockReason;
-  if (block) return `Lyria blocked this prompt (${block}). Try softer wording.`;
+  if (block) return `This prompt was blocked (${block}). Try softer wording.`;
   const finish = data?.candidates?.[0]?.finishReason;
-  if (finish && finish !== "STOP") return `Lyria could not finish (${finish}). Try again.`;
-  if (httpStatus === 429) return "Lyria rate limit — wait a minute and try again.";
-  if (httpStatus === 403) return "Lyria access denied — check GEMINI_API_KEY billing and Lyria access.";
-  if (httpStatus >= 500) return "Lyria is temporarily unavailable — try again shortly.";
+  if (finish && finish !== "STOP") return `Couldn't finish this clip (${finish}). Try again.`;
+  if (httpStatus === 429) return "Too many requests — wait a minute and try again.";
+  if (httpStatus === 403) return "Couldn't start this clip — try again shortly.";
+  if (httpStatus >= 500) return "Music generation is temporarily unavailable — try again shortly.";
   const snippet = String(rawText || "").trim().slice(0, 180);
-  return snippet || "Lyria generation failed — try again.";
+  return snippet || "Couldn't generate this clip — try again.";
 }
 
 function parseLyriaPhotoDataUrl(dataUrl) {
@@ -834,7 +834,7 @@ async function lyriaGenerateMusic({ apiKey, model, prompt, photoImages = [] }) {
       alignedWords: [],
       model: resolveLyriaModel(model),
       api: "interactions",
-      userMessage: "Lyria could not compose from your photo — try again in a minute.",
+      userMessage: "Couldn't compose from your photo — try again in a minute.",
     };
   }
 

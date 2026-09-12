@@ -10971,6 +10971,7 @@ body.playerLyricsOpen .playerLyricsChip{
 .lyricsActionChip[hidden]{ display:none !important; }
 .lyricsActionChip--generate{
   height:32px;
+  margin-inline-start:auto;
 }
 .lyricsToolBtn{
   -webkit-appearance:none;

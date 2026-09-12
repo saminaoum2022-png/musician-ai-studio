@@ -710,6 +710,7 @@ let lastSingabilityReport = null;
 let lyricsSingabilityRequestSeq = 0;
 let lyricsSingabilityLastText = "";
 let lyricsSingabilityApiPending = false;
+let _pendingCoachSingabilitySeed = "";
 
 const els = {
   sunoPrompt: document.getElementById("sunoPrompt"),
@@ -746,6 +747,10 @@ const els = {
   btnLyricsPolish: document.getElementById("btnLyricsPolish"),
   btnLyricsFixSinging: document.getElementById("btnLyricsFixSinging"),
   btnLyricsSingabilityCheck: document.getElementById("btnLyricsSingabilityCheck"),
+  lyricsToolsBar: document.getElementById("lyricsToolsBar"),
+  btnLyricsDone: document.getElementById("btnLyricsDone"),
+  btnLyricsNew: document.getElementById("btnLyricsNew"),
+  btnLyricsCopy: document.getElementById("btnLyricsCopy"),
   lyricsSingabilityPanel: document.getElementById("lyricsSingabilityPanel"),
   lyricsSingabilityScore: document.getElementById("lyricsSingabilityScore"),
   lyricsSingabilitySummary: document.getElementById("lyricsSingabilitySummary"),
@@ -5693,11 +5698,13 @@ function renderLyricsSingabilityPanel(report) {
   const text = String(els.sunoPrompt?.value || "").trim();
   if (instrumentalOnly || !lyricsSingabilityEligible(text)) {
     panel.hidden = true;
+    panel.classList.remove("isProTease");
     if (els.lyricsSingabilityActions) els.lyricsSingabilityActions.hidden = true;
     return;
   }
   if (!report) {
     panel.hidden = true;
+    panel.classList.remove("isProTease");
     if (els.lyricsSingabilityActions) els.lyricsSingabilityActions.hidden = true;
     return;
   }
@@ -5705,7 +5712,9 @@ function renderLyricsSingabilityPanel(report) {
   const checking = Boolean(report.checking);
   const warnings = checking ? [] : (Array.isArray(report.warnings) ? report.warnings : []);
   panel.hidden = false;
-  panel.classList.remove("isReady", "isWarn", "isBad", "isChecking");
+  panel.classList.remove("isReady", "isWarn", "isBad", "isChecking", "isProTease");
+  const titleEl = lyricsSingabilityTitleEl();
+  if (titleEl) titleEl.textContent = "Singability check";
   if (checking) {
     panel.classList.add("isChecking");
   } else {
@@ -5754,15 +5763,165 @@ function renderLyricsSingabilityPanel(report) {
   }
 }
 
-function syncLyricsSingabilityCheckVisibility() {
-  const btn = els.btnLyricsSingabilityCheck;
-  if (!btn) return;
+function syncLyricsToolsBar() {
+  const bar = els.lyricsToolsBar;
+  if (!bar) return;
   const text = String(els.sunoPrompt?.value || "").trim();
-  const show = lyricsSingabilityEligible(text);
-  btn.hidden = !show;
-  if (!show) {
+  bar.hidden = !text;
+  const eligible = lyricsSingabilityEligible(text);
+  if (els.btnLyricsDone) {
+    els.btnLyricsDone.disabled = !eligible || lyricsSingabilityApiPending;
+    els.btnLyricsDone.classList.toggle("isReady", Boolean(eligible && !singabilityReportIsFresh(text) && !lyricsSingabilityApiPending));
+  }
+  if (els.btnLyricsCopy) els.btnLyricsCopy.disabled = !text;
+  if (els.btnLyricsNew) els.btnLyricsNew.disabled = !text;
+}
+
+function syncLyricsSingabilityCheckVisibility() {
+  if (els.btnLyricsSingabilityCheck) els.btnLyricsSingabilityCheck.hidden = true;
+  const text = String(els.sunoPrompt?.value || "").trim();
+  if (!lyricsSingabilityEligible(text)) {
     lastSingabilityReport = null;
     renderLyricsSingabilityPanel(null);
+  }
+  syncLyricsToolsBar();
+}
+
+function lyricsSingabilityTitleEl() {
+  return document.querySelector("#lyricsSingabilityPanel .lyricsSingabilityTitle");
+}
+
+function renderSingabilityProTease() {
+  const panel = els.lyricsSingabilityPanel;
+  if (!panel) return;
+  lastSingabilityReport = {
+    score: null,
+    summary: "See if these lyrics will sing.",
+    warnings: [],
+    source: "pro_tease",
+    checking: false,
+  };
+  panel.hidden = false;
+  panel.classList.remove("isReady", "isWarn", "isBad", "isChecking");
+  panel.classList.add("isProTease");
+  const titleEl = lyricsSingabilityTitleEl();
+  if (titleEl) titleEl.textContent = "Singability · Pro";
+  if (els.lyricsSingabilityScore) els.lyricsSingabilityScore.textContent = "Pro";
+  if (els.lyricsSingabilitySummary) {
+    els.lyricsSingabilitySummary.textContent = "See if these lyrics will sing.";
+  }
+  if (els.lyricsSingabilityList) {
+    els.lyricsSingabilityList.innerHTML = `<li class="isLow">Unlock to check rhyme, وزن, and line balance.</li>`;
+  }
+  if (els.lyricsSingabilityActions) {
+    els.lyricsSingabilityActions.hidden = true;
+    els.lyricsSingabilityActions.innerHTML = "";
+  }
+}
+
+function offerSingabilityAfterLyricsReady({ fromGenerate = false } = {}) {
+  const text = String(els.sunoPrompt?.value || "").trim();
+  syncLyricsToolsBar();
+  if (!lyricsSingabilityEligible(text)) {
+    if (fromGenerate) return;
+    showToast("Add a few more lines, then tap Done.", { icon: "!", durationMs: 2800 });
+    return;
+  }
+  if (typeof proFeatureAllowed === "function" ? proFeatureAllowed() : false) {
+    if (singabilityReportIsFresh(text)) {
+      renderLyricsSingabilityPanel(lastSingabilityReport);
+      announceCoachSingability(lastSingabilityReport);
+      try {
+        els.lyricsSingabilityPanel?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+      } catch {}
+      return;
+    }
+    void runLyricsSingabilityCheck({ fromAuto: fromGenerate });
+    return;
+  }
+  renderSingabilityProTease();
+  try {
+    els.lyricsSingabilityPanel?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  } catch {}
+}
+
+function coachSingabilityOneLiner(report) {
+  const score = Number(report?.score);
+  const scoreBit = Number.isFinite(score) ? String(score) : "";
+  const warnings = Array.isArray(report?.warnings) ? report.warnings : [];
+  const top = warnings.find((w) => w.level === "high" || w.level === "medium") || warnings[0];
+  const issue = String(top?.message || "").trim();
+  const short = issue.length > 42 ? `${issue.slice(0, 39).trim()}…` : issue;
+  if (scoreBit && short) return `${scoreBit} — ${short}`;
+  if (scoreBit && Number.isFinite(score) && score >= 85) return `${scoreBit} — ready to generate`;
+  if (scoreBit) return `${scoreBit} — review the report`;
+  return "Singability ready";
+}
+
+function setPendingCoachSingabilitySeed(report) {
+  const score = Number(report?.score);
+  const warnings = Array.isArray(report?.warnings) ? report.warnings : [];
+  const top = warnings.find((w) => w.level === "high" || w.level === "medium") || warnings[0];
+  const scoreBit = Number.isFinite(score) ? `${score}/100` : "a score";
+  const issue = String(top?.message || "").trim() || "They look okay — any tips before I generate?";
+  _pendingCoachSingabilitySeed = `My lyrics scored ${scoreBit}. ${issue} Help me make them sing better.`;
+}
+
+function applyPendingCoachSingabilitySeed() {
+  const text = String(_pendingCoachSingabilitySeed || "").trim();
+  if (!text) return;
+  const input = document.getElementById("messagesComposerInput");
+  if (!input) return;
+  input.value = text;
+  _pendingCoachSingabilitySeed = "";
+  try { syncMessagesComposerInputHeight(input); } catch {}
+  try { syncMessagesThreadComposerReady(); } catch {}
+}
+
+function announceCoachSingability(report) {
+  if (!report || report.checking || report.source === "pro_tease") return;
+  const line = coachSingabilityOneLiner(report);
+  setPendingCoachSingabilitySeed(report);
+  try {
+    finishCoachPriorityStatus(line, { success: Number(report.score) >= 70 });
+  } catch {}
+}
+
+function clearLyricsDraftFromToolsBar() {
+  if (!els.sunoPrompt) return;
+  try { haptic("light"); } catch {}
+  els.sunoPrompt.value = "";
+  try { autoResizeLyricsBox(); } catch {}
+  lastSingabilityReport = null;
+  lyricsSingabilityLastText = "";
+  _pendingCoachSingabilitySeed = "";
+  renderLyricsSingabilityPanel(null);
+  try { resetNabadLyricsDraftState(); } catch {}
+  try { syncArabicLyricsControlsVisibility(); } catch {}
+  try { syncLyricsSingabilityCheckVisibility(); } catch {}
+  try { syncGenerateOrbVisibility(); } catch {}
+  try { syncCreateTabMorph(); } catch {}
+  showToast("Lyrics cleared", { icon: "✓", durationMs: 1800 });
+}
+
+async function copyLyricsFromToolsBar() {
+  const text = String(els.sunoPrompt?.value || "").trim();
+  if (!text) {
+    showToast("Nothing to copy yet.", { icon: "!", durationMs: 2200 });
+    return;
+  }
+  try { haptic("light"); } catch {}
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text);
+    } else {
+      els.sunoPrompt.focus();
+      els.sunoPrompt.select();
+      document.execCommand("copy");
+    }
+    showToast("Lyrics copied", { icon: "✓", durationMs: 1800 });
+  } catch {
+    showToast("Couldn't copy lyrics", { icon: "!", durationMs: 2400 });
   }
 }
 
@@ -5843,7 +6002,7 @@ async function fetchLyricsSingabilityReport(text, { updateUi = true, reqId = nul
         level: "medium",
         section: "Lyrics",
         line: null,
-        message: "AI check failed — tap Check singability to retry.",
+        message: "AI check failed — tap Done to retry.",
       }],
       source: "error",
       ready: false,
@@ -5859,16 +6018,23 @@ async function fetchLyricsSingabilityReport(text, { updateUi = true, reqId = nul
   }
 }
 
-async function runLyricsSingabilityCheck() {
+async function runLyricsSingabilityCheck({ fromAuto = false } = {}) {
   const text = String(els.sunoPrompt?.value || "").trim();
   if (!lyricsSingabilityEligible(text)) {
-    showToast("Add a few lines of lyrics first, then check singability.", { icon: "!", durationMs: 3200 });
+    if (!fromAuto) {
+      showToast("Add a few more lines, then tap Done.", { icon: "!", durationMs: 3200 });
+    }
+    return;
+  }
+  if (typeof proFeatureAllowed === "function" && !proFeatureAllowed()) {
+    renderSingabilityProTease();
     return;
   }
 
   const lyricsBoxEl = els.sunoPrompt?.closest?.(".lyricsBox");
   const reqId = ++lyricsSingabilityRequestSeq;
   lyricsSingabilityApiPending = true;
+  try { syncLyricsToolsBar(); } catch {}
   let inkwellSettle = false;
   try {
     if (els.btnLyricsMagic) els.btnLyricsMagic.disabled = true;
@@ -5887,10 +6053,13 @@ async function runLyricsSingabilityCheck() {
       const scoreNote = Number.isFinite(Number(report.score)) ? `${report.score}/100 — ` : "";
       const summary = String(report.summary || "").trim() || "Review the singability panel below.";
       setStatus(`Singability ${scoreNote}${summary}`);
-      showToast(`Singability check ready${Number.isFinite(Number(report.score)) ? ` (${report.score}/100)` : ""}.`, {
-        icon: "♫",
-        durationMs: 3600,
-      });
+      if (!fromAuto) {
+        showToast(`Singability check ready${Number.isFinite(Number(report.score)) ? ` (${report.score}/100)` : ""}.`, {
+          icon: "♫",
+          durationMs: 3600,
+        });
+      }
+      try { announceCoachSingability(report); } catch {}
       try {
         els.lyricsSingabilityPanel?.scrollIntoView({ behavior: "smooth", block: "nearest" });
       } catch {}
@@ -5905,6 +6074,7 @@ async function runLyricsSingabilityCheck() {
     if (els.btnLyricsPolish) els.btnLyricsPolish.disabled = false;
     if (els.btnLyricsFixSinging) els.btnLyricsFixSinging.disabled = false;
     if (els.btnLyricsDiacritics) els.btnLyricsDiacritics.disabled = false;
+    try { syncLyricsToolsBar(); } catch {}
   }
 }
 
@@ -5942,7 +6112,7 @@ async function ensureSingabilityBeforeGenerate() {
   const detail = [top, summary].filter(Boolean).join("\n\n").slice(0, 400);
 
   const goBackToCheck = window.confirm(
-    `Singability ${score}/100 — lyrics may not sing well.\n\n${detail || "Tap Check singability to review rhyme and line balance."}\n\nOK — go back and check singability\nCancel — generate anyway`,
+    `Singability ${score}/100 — lyrics may not sing well.\n\n${detail || "Tap Done to review rhyme and line balance."}\n\nOK — go back and review lyrics\nCancel — generate anyway`,
   );
   return !goBackToCheck;
 }
@@ -39549,6 +39719,7 @@ function enterCoachThread(bootToken) {
   beginMessagesThreadEnterTransition();
   scheduleMessagesComposerAutofocus({ bootToken, delayMs: 120 });
   syncCoachSongPlanBar();
+  try { applyPendingCoachSingabilitySeed(); } catch {}
   const activeFlow = loadCoachSignupFlow();
   if (activeFlow && (COACH_PROJECT_INTAKE_STEPS.has(activeFlow.step) || COACH_PROJECT_CHAT_STEPS.has(activeFlow.step) || activeFlow.step === "summary")) {
     ensurePendingCoachStepPrompt(activeFlow);
@@ -64156,28 +64327,29 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
           ? ` (${provider})`
           : "";
       const debugNote = debugSuno || debugGemini ? ` [engine:${debugSuno || "-"} gemini:${debugGemini || "-"}]` : "";
-      setStatus(`Lyrics ready${providerNote}${debugNote}. Tap Check singability, then generate song.`);
+      setStatus(`Lyrics ready${providerNote}${debugNote}.`);
       const levantineHintTashkeel = /lebanese|syrian|palestinian/.test(String(lyricsDialect || ""));
       if (isTemplateSparkClipFlow()) {
-        setStatus("Lyrics ready — tap Check singability or Generate clip.");
+        setStatus("Lyrics ready — review, then Generate clip.");
         showToast(
           levantineHintTashkeel
             ? "Lyrics ready with light تشكيل — tap vowel marks to refine, then Generate clip."
-            : "Lyrics ready — check singability, then Generate clip.",
+            : "Lyrics ready — then Generate clip.",
           { icon: "✦", durationMs: 3600 },
         );
       } else if (usingSunoLyrics && provider === "suno") {
-        showToast("Suno wrote lyrics — check singability, then Generate song.", { icon: "✦", durationMs: 4200 });
+        showToast("Lyrics ready — then Generate song.", { icon: "✦", durationMs: 4200 });
       } else {
         showToast(
           levantineHintTashkeel
             ? "Lyrics ready with light تشكيل — tap vowel marks for a fuller sung pass."
-            : "Lyrics ready — tap Check singability.",
-          { icon: "♫", durationMs: 3800 },
+            : "Lyrics ready.",
+          { icon: "♫", durationMs: 3200 },
         );
       }
       try { syncArabicLyricsControlsVisibility(); } catch {}
       try { syncLyricsSingabilityCheckVisibility(); } catch {}
+      try { offerSingabilityAfterLyricsReady({ fromGenerate: true }); } catch {}
     } catch (e) {
       setStatus(`Lyrics assist failed: ${e?.message || String(e)}`);
     } finally {
@@ -64762,6 +64934,29 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
   if (els.btnLyricsSingabilityCheck) {
     els.btnLyricsSingabilityCheck.addEventListener("click", () => {
       void runLyricsSingabilityCheck();
+    });
+  }
+  if (els.btnLyricsDone) {
+    els.btnLyricsDone.addEventListener("click", () => {
+      try { haptic("light"); } catch {}
+      offerSingabilityAfterLyricsReady();
+    });
+  }
+  if (els.btnLyricsNew) {
+    els.btnLyricsNew.addEventListener("click", () => {
+      clearLyricsDraftFromToolsBar();
+    });
+  }
+  if (els.btnLyricsCopy) {
+    els.btnLyricsCopy.addEventListener("click", () => {
+      void copyLyricsFromToolsBar();
+    });
+  }
+  if (els.lyricsSingabilityPanel) {
+    els.lyricsSingabilityPanel.addEventListener("click", (ev) => {
+      if (!els.lyricsSingabilityPanel.classList.contains("isProTease")) return;
+      if (ev.target?.closest?.("[data-singability-action]")) return;
+      requireProFeature("Singability");
     });
   }
   if (els.lyricsSingabilityActions) {

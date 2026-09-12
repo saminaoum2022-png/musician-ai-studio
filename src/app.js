@@ -40297,28 +40297,29 @@ function applyUserPublicAvatar(url, displayName = "") {
   if (!img) return;
   const normalized = normalizeProfileAvatarForImg(String(url || "").trim());
   const handle = String(displayName || "").trim();
-  img.onerror = () => {
+  const showFallback = () => {
     try {
       img.removeAttribute("src");
       img.dataset.empty = "true";
     } catch {}
   };
-  img.onload = () => {
+  const revealPhoto = () => {
     try {
-      if (img.dataset.empty !== "true") {
-        img.style.opacity = "";
-        img.style.visibility = "";
-      }
+      if (!img.currentSrc && !img.src) return;
+      if (!img.naturalWidth) return;
+      img.dataset.empty = "false";
     } catch {}
   };
+  img.onload = revealPhoto;
+  img.onerror = showFallback;
   if (isRealUserAvatarUrl(normalized)) {
-    img.dataset.empty = "false";
-    img.src = normalized;
     img.alt = handle ? `${handle} avatar` : "Profile avatar";
-  } else {
-    img.removeAttribute("src");
     img.dataset.empty = "true";
+    img.src = normalized;
+    if (img.complete && img.naturalWidth > 0) revealPhoto();
+  } else {
     img.alt = handle ? `${handle} profile` : "Profile";
+    showFallback();
   }
 }
 

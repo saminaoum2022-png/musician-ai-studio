@@ -18624,11 +18624,18 @@ body[data-route="user"] section.card.wide[data-route="user"]{
   position: relative;
   width: 100px;
   height: 100px;
-  flex: 0 0 auto;
+  flex: 0 0 100px;
   border-radius: var(--nabad-squircle-radius);
   box-shadow:
     0 18px 42px rgba(0,0,0,0.34),
     0 0 34px rgba(124,92,255,0.14);
+}
+.userPublic .userPublicAvatarWrap.profileAuraAvatarWrap,
+.userPublic .userPublicAvatarWrap.profileAuraAvatarWrapNeon{
+  width: 100px;
+  height: 100px;
+  flex: 0 0 100px;
+  margin: 4px auto 2px;
 }
 .userPublicAvatarRing{
   position: absolute;
@@ -18667,10 +18674,12 @@ body[data-route="user"] section.card.wide[data-route="user"]{
   height: 100%;
   border-radius: inherit;
   object-fit: cover;
+  object-position: center;
   border: 2px solid rgba(255,255,255,0.08);
   background: rgba(255,255,255,0.04);
   display: block;
   box-sizing: border-box;
+  transition: opacity 180ms ease;
 }
 .userPublicAvatar[data-empty="true"]{
   visibility: hidden;
@@ -18680,20 +18689,32 @@ body[data-route="user"] section.card.wide[data-route="user"]{
   position: absolute;
   inset: 2px;
   z-index: 2;
+  width: auto;
+  height: auto;
   border-radius: inherit;
   display: none;
+  align-items: center;
+  justify-content: center;
   box-sizing: border-box;
+  background:
+    linear-gradient(160deg, rgba(124,92,255,0.24), rgba(34,211,238,0.10)),
+    rgba(255,255,255,0.05);
+  border: 2px solid rgba(255,255,255,0.06);
+  color: rgba(232, 238, 247, 0.46);
 }
 .userPublicAvatarWrap .userPublicAvatarFallback.activityAvatarSilhouette{
   display: none;
+  align-items: center;
+  justify-content: center;
 }
 .userPublicAvatar[data-empty="true"] + .userPublicAvatarFallback,
 .userPublicAvatarWrap .userPublicAvatar[data-empty="true"] + .userPublicAvatarFallback.activityAvatarSilhouette{
   display: flex;
 }
 .userPublicAvatarWrap .userPublicAvatarFallback.activityAvatarSilhouette svg{
-  width: 44px;
-  height: 44px;
+  width: 58%;
+  height: 58%;
+  flex: 0 0 auto;
 }
 .userPublic[data-loading="true"] .userPublicAvatar[data-empty="true"]{
   visibility: hidden;
@@ -19075,9 +19096,12 @@ body[data-route="user"] section.card.wide[data-route="user"]{
     flex: 0 0 auto;
     flex-shrink: 0;
   }
-  .userPublicAvatarWrap{
-    width: 92px;
-    height: 92px;
+  .userPublicAvatarWrap,
+  .userPublic .userPublicAvatarWrap.profileAuraAvatarWrap,
+  .userPublic .userPublicAvatarWrap.profileAuraAvatarWrapNeon{
+    width: 100px;
+    height: 100px;
+    flex: 0 0 100px;
   }
 }
 @media (max-width:390px){
@@ -55196,9 +55220,11 @@ html[data-theme="light"] .userPublicAvatar{
   border-color: rgba(255, 255, 255, 0.72);
   background: var(--surface-secondary);
 }
+html[data-theme="light"] .userPublicAvatarWrap .userPublicAvatarFallback,
 html[data-theme="light"] .userPublicAvatarWrap .userPublicAvatarFallback.activityAvatarSilhouette{
   color: var(--icon-muted);
   background: var(--surface-secondary);
+  border-color: rgba(255, 255, 255, 0.72);
 }
 html[data-theme="light"] .userPublicFollowBtn[data-following="true"],
 html[data-theme="light"] .userPublicMessageBtn{

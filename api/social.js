@@ -203,8 +203,13 @@ async function profileByUserId(userId) {
   const uid = cleanUserId(userId);
   if (!uid) return null;
   if (profileCache?.has(uid)) return profileCache.get(uid);
-  const r = await svcFetch(`profiles?select=user_id,username,avatar,sound_certified&user_id=eq.${encodeURIComponent(uid)}&limit=1`);
-  const row = Array.isArray(r.data) && r.data[0] ? r.data[0] : null;
+  const path = `profiles?select=user_id,username,avatar,sound_certified&user_id=eq.${encodeURIComponent(uid)}&limit=1`;
+  let r = await svcFetch(path);
+  let row = Array.isArray(r.data) && r.data[0] ? r.data[0] : null;
+  if (!row) {
+    r = await svcFetch(path);
+    row = Array.isArray(r.data) && r.data[0] ? r.data[0] : null;
+  }
   if (profileCache) profileCache.set(uid, row);
   return row;
 }

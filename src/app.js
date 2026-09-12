@@ -41225,6 +41225,62 @@ function activitySongCoverHtml(n) {
   return `<span class="activityRowCover activityRowCoverPlaceholder" aria-hidden="true">♪</span>`;
 }
 
+function activityActorUsername(n) {
+  return screenshotHandle(String(n?.metadata?.actor_username || "").replace(/^@/, "").trim());
+}
+
+function applyActivityActorProfile(n, prof) {
+  if (!n || !prof) return false;
+  if (!n.metadata || typeof n.metadata !== "object") n.metadata = {};
+  const nextUser = String(prof.username || "").replace(/^@/, "").trim();
+  const nextAvatar = String(prof.avatar || "").trim();
+  let changed = false;
+  if (nextUser && !String(n.metadata.actor_username || "").trim()) {
+    n.metadata.actor_username = nextUser;
+    changed = true;
+  }
+  if (nextAvatar && !isRealUserAvatarUrl(String(n.metadata.actor_avatar || "").trim())) {
+    n.metadata.actor_avatar = nextAvatar;
+    changed = true;
+  }
+  return changed;
+}
+
+/** Fill missing actor name/avatar from actor_user_id so like bursts don't
+ *  show as "Someone" and so profile tap still works. */
+async function enrichActivityActors(notifications) {
+  const wanted = [];
+  for (const n of notifications || []) {
+    if (!ACTIVITY_ACTOR_TYPES.has(String(n?.type || "").trim())) continue;
+    const uid = String(n?.actor_user_id || "").trim();
+    if (!uid) continue;
+    const hasName = Boolean(String(n?.metadata?.actor_username || "").trim());
+    const hasAvatar = isRealUserAvatarUrl(String(n?.metadata?.actor_avatar || "").trim());
+    if (hasName && hasAvatar) continue;
+    wanted.push(uid);
+  }
+  if (!wanted.length) return false;
+  const map = await fetchProfilesByUserIdsMap(wanted);
+  if (!map.size) return false;
+  let changed = false;
+  for (const n of notifications || []) {
+    const uid = String(n?.actor_user_id || "").trim();
+    if (!uid) continue;
+    if (applyActivityActorProfile(n, map.get(uid))) changed = true;
+  }
+  return changed;
+}
+
+async function enrichActivityFeedRows(notifications) {
+  const rows = Array.isArray(notifications) ? notifications : [];
+  if (!rows.length) return false;
+  const [art, actors] = await Promise.all([
+    enrichActivitySongArt(rows),
+    enrichActivityActors(rows),
+  ]);
+  return Boolean(art || actors);
+}
+
 async function enrichActivitySongArt(notifications) {
   const wanted = new Set();
   for (const n of notifications) {
@@ -41288,7 +41344,7 @@ function collapseActivityRows(rows) {
       t === "song_feedback"
         ? String(n?.metadata?.feedback_label || "").trim()
         : String(n?.metadata?.reply_preview || "").trim();
-    const songTitle = String(n?.metadata?.song_title || "").trim();
+    const songTitle = String(n?.metadata?.target_title || n?.metadata?.song_title || "").trim();
     const existing = byKey.get(key);
     if (!existing) {
       const g = {
@@ -41304,6 +41360,13 @@ function collapseActivityRows(rows) {
       existing._groupCount += 1;
       if (songTitle && !existing._groupTitles.includes(songTitle)) existing._groupTitles.push(songTitle);
       if (detail) existing._groupDetails.push(detail);
+      if (!String(existing.metadata?.actor_username || "").trim() && String(n?.metadata?.actor_username || "").trim()) {
+        existing.metadata = {
+          ...(existing.metadata || {}),
+          actor_username: n.metadata.actor_username,
+          actor_avatar: n.metadata.actor_avatar || existing.metadata?.actor_avatar || "",
+        };
+      }
       if (t === "chart_rank") {
         const rank = Number(n?.metadata?.rank || 0);
         if (rank && (!existing._groupBestRank || rank < existing._groupBestRank)) {
@@ -41367,8 +41430,12 @@ function notificationActivityHref(n) {
 
 function notificationActorProfileHref(n) {
   const meta = n?.metadata || {};
-  const username = String(meta.actor_username || "").replace(/^@/, "").trim();
+  let username = String(meta.actor_username || "").replace(/^@/, "").trim();
   const actorUserId = String(n?.actor_user_id || "").trim();
+  if (!username && actorUserId) {
+    const cached = _profileRowCache.get(actorUserId);
+    username = String(cached?.row?.username || "").replace(/^@/, "").trim();
+  }
   if (!username) return "";
   return `#/u/${encodeURIComponent(username)}${actorUserId ? `?uid=${encodeURIComponent(actorUserId)}` : ""}`;
 }
@@ -41411,7 +41478,7 @@ function activityRowTitleHtml(n, titleText, { splitTap = false } = {}) {
   const safe = escapeHtml(String(titleText || ""));
   if (!splitTap) return safe;
   const profileHref = notificationActorProfileHref(n);
-  const username = screenshotHandle(String(n?.metadata?.actor_username || "").replace(/^@/, "").trim());
+  const username = activityActorUsername(n);
   if (!profileHref || !username) return safe;
   const plain = String(titleText || "");
   const prefixes = [`@${username}`, username];
@@ -41690,17 +41757,10 @@ function activityItemDisplayParts(n, msg) {
   }
   if (t === "social_like") {
     const songTitle = String(meta.target_title || meta.song_title || "").trim();
-    if (gc > 1) {
-      return {
-        category: "New Like",
-        title: `${gc} new likes`,
-        description: songTitle || "On one of your songs",
-      };
-    }
     return {
       category: "New Like",
       title: username ? `${username} liked your song` : "Someone liked your song",
-      description: "",
+      description: songTitle,
     };
   }
   if (t === "social_reply") {
@@ -41827,7 +41887,7 @@ function activityRowSecondaryForIg(n, parts) {
   if (activityNotificationShowRightThumb(n)) {
     if (t === "social_reply" || t === "social_mention" || t === "song_feedback") return desc;
     if (t === "gift_received") return desc;
-    if ((t === "social_repost" || t === "social_like") && Number(n?._groupCount || 0) > 1) return desc;
+    if (t === "social_like" || t === "social_repost") return desc;
     return "";
   }
   return desc;
@@ -41849,7 +41909,7 @@ function activityItemHtml(n) {
       const details = (n._groupDetails || []).slice(0, 3).map((d) => `"${d.slice(0, 60)}${d.length > 60 ? "…" : ""}"`);
       if (details.length) msg.body = details.join(" · ");
     } else if (t === "social_like") {
-      msg.body = `${gc} likes on this.`;
+      msg.body = String(n?.metadata?.target_title || n?.metadata?.song_title || "").trim() || `${gc} likes`;
     } else if (t === "social_repost") {
       msg.body = `${gc} reposts of this.`;
     }
@@ -41860,31 +41920,36 @@ function activityItemHtml(n) {
   const unread = !n?.read_at;
   const time = relativeTime(new Date(n?.created_at || Date.now()).getTime());
   const href = unavailable ? "" : notificationActivityHref(n);
-  const splitTap = !unavailable && activityNotificationSplitTap(n);
-  const profileHref = splitTap ? notificationActorProfileHref(n) : "";
+  const profileHref = unavailable ? "" : notificationActorProfileHref(n);
+  const songHref = !unavailable && activityNotificationHasSongCover(n) ? href : "";
+  const splitTap = Boolean(profileHref && songHref);
   const notifType = String(n?.type || "").trim() || "default";
   const notifId = String(n?.id || "").trim();
   const secondary = activityRowSecondaryForIg(n, parts);
-  const titleHtml = splitTap
+  const titleHtml = profileHref
     ? activityRowTitleHtml(n, parts.title, { splitTap: true })
     : escapeHtml(parts.title);
   const secondaryHtml = secondary
     ? userTextHtml(secondary, { tag: "p", className: "activityRowSub", escapeHtml })
     : "";
   const thumbInner = unavailable ? "" : activitySongCoverHtml(n);
-  const thumbWrap = thumbInner ? `<div class="activityRowThumb" aria-hidden="true">${thumbInner}</div>` : "";
+  const thumbWrap = thumbInner
+    ? (songHref
+      ? `<button type="button" class="activityRowThumb activityRowSongTap" data-activity-song-href="${escapeHtml(songHref)}"${notifId ? ` data-activity-id="${escapeHtml(notifId)}"` : ""} aria-label="Open song">${thumbInner}</button>`
+      : `<div class="activityRowThumb" aria-hidden="true">${thumbInner}</div>`)
+    : "";
   const unreadDot = unread ? `<span class="activityRowUnreadDot" aria-label="Unread"></span>` : "";
   const isSelfRow = activityNotificationIsSelfRow(n);
   const leadWrapClass = activityRowLeadWrapClass(n);
   const leadInner = `${activityRowLeadHtml(n)}${activityNotificationShowTypeBadge(n) ? activityTypeBadgeHtml(notifType) : ""}`;
   const rowSelfClass = isSelfRow ? " activityRow--self" : "";
-  if (splitTap && href) {
+  if (splitTap) {
     return `
-    <article class="activityRow activityRow--${escapeHtml(notifType)} activityRow--split${unread ? " isUnread" : ""}${rowSelfClass}" data-activity-href="${escapeHtml(href)}"${notifId ? ` data-activity-id="${escapeHtml(notifId)}"` : ""}>
+    <article class="activityRow activityRow--${escapeHtml(notifType)} activityRow--split${unread ? " isUnread" : ""}${rowSelfClass}" data-activity-href="${escapeHtml(profileHref)}"${notifId ? ` data-activity-id="${escapeHtml(notifId)}"` : ""}>
       <button type="button" class="${leadWrapClass} activityRowProfileTap" data-activity-profile-href="${escapeHtml(profileHref)}" aria-label="View profile">
         ${leadInner}
       </button>
-      <div class="activityRowBody activityRowTargetTap" role="button" tabindex="0" aria-label="Open song">
+      <div class="activityRowBody activityRowTargetTap" role="button" tabindex="0" data-activity-profile-href="${escapeHtml(profileHref)}" aria-label="View profile">
         <p class="activityRowText">${titleHtml}</p>
         ${secondaryHtml}
         <span class="activityRowTime">${escapeHtml(time)}</span>
@@ -41992,7 +42057,7 @@ async function refreshActivityFeedHead() {
     if (!fresh.length) return;
     _activityFeedState.items.unshift(...fresh);
     fresh.forEach((n) => cacheActivitySongArtFromNotification(n));
-    await enrichActivitySongArt(fresh);
+    await enrichActivityFeedRows(fresh);
     renderActivityFeedFromState();
     updateNotificationsEntryBadges(_activityFeedState.items.filter((n) => !n?.read_at).length);
   } catch (e) {
@@ -42016,7 +42081,7 @@ async function fetchActivityFeedFromTop() {
     _activityFeedState.offset = batch.length;
     _activityFeedState.hasMore = batch.length >= limit;
     batch.forEach((n) => cacheActivitySongArtFromNotification(n));
-    if (batch.length) await enrichActivitySongArt(batch);
+    if (batch.length) await enrichActivityFeedRows(batch);
     if (batch.length) await validateActivityNotificationsAvailability(batch);
     try { purgeLocalJobCompletionActivitiesInFeed(); } catch {}
     try { mergePersistedGenerationFailedActivities(); } catch {}
@@ -42066,7 +42131,7 @@ async function fetchActivityBatch() {
         _activityFeedState.items.push(...fresh);
         _activityFeedState.offset += batch.length;
         fresh.forEach((n) => cacheActivitySongArtFromNotification(n));
-        await enrichActivitySongArt(fresh);
+        await enrichActivityFeedRows(fresh);
         await validateActivityNotificationsAvailability(fresh);
         if (batch.length < limit) _activityFeedState.hasMore = false;
       }
@@ -42174,6 +42239,17 @@ function bindActivityPageOnce() {
     img.replaceWith(blank);
   }, true);
   els.activityFeed?.addEventListener("click", (ev) => {
+    const songTap = ev.target.closest("[data-activity-song-href]");
+    if (songTap && els.activityFeed.contains(songTap)) {
+      ev.preventDefault();
+      ev.stopPropagation();
+      const songHref = songTap.getAttribute("data-activity-song-href") || "";
+      const notifId = songTap.getAttribute("data-activity-id") || "";
+      const n = notifId ? _activityFeedState.items.find((item) => String(item?.id || "") === notifId) : null;
+      if (n) void openActivityNotificationTarget(n);
+      else void openActivityTargetFromHref(songHref);
+      return;
+    }
     const profileTap = ev.target.closest("[data-activity-profile-href]");
     if (profileTap && els.activityFeed.contains(profileTap)) {
       ev.preventDefault();
@@ -42186,6 +42262,10 @@ function bindActivityPageOnce() {
     const href = row.getAttribute("data-activity-href") || "";
     if (!href) return;
     ev.preventDefault();
+    if (href.includes("/u/")) {
+      navigateActivityActorProfile(href);
+      return;
+    }
     const notifId = row.getAttribute("data-activity-id") || "";
     const n = notifId ? _activityFeedState.items.find((item) => String(item?.id || "") === notifId) : null;
     if (n) void openActivityNotificationTarget(n);

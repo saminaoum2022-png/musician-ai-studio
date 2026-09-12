@@ -3229,24 +3229,46 @@ function playFanConfirmSound() {
     if (!Ctx) return;
     if (!_fanSoundCtx || _fanSoundCtx.state === "closed") _fanSoundCtx = new Ctx();
     const ctx = _fanSoundCtx;
-    void ctx.resume().catch(() => {});
+    if (ctx.state === "suspended") void ctx.resume().catch(() => {});
+    if (!ctx._fanUnlockDone) {
+      try {
+        const silent = ctx.createBuffer(1, 1, 22050);
+        const src = ctx.createBufferSource();
+        src.buffer = silent;
+        src.connect(ctx.destination);
+        src.start(0);
+        ctx._fanUnlockDone = true;
+      } catch {}
+    }
     const now = ctx.currentTime;
     const note = (freq, start, dur, vol, type = "sine") => {
       const gain = ctx.createGain();
       gain.connect(ctx.destination);
       gain.gain.setValueAtTime(0.0001, start);
-      gain.gain.exponentialRampToValueAtTime(Math.max(0.0001, vol), start + 0.012);
+      gain.gain.exponentialRampToValueAtTime(Math.max(0.0001, vol), start + 0.014);
       gain.gain.exponentialRampToValueAtTime(0.0001, start + dur);
       const osc = ctx.createOscillator();
       osc.type = type;
       osc.frequency.setValueAtTime(freq, start);
       osc.connect(gain);
       osc.start(start);
-      osc.stop(start + dur + 0.02);
+      osc.stop(start + dur + 0.03);
     };
-    note(440, now, 0.09, 0.044);
-    note(659.25, now + 0.07, 0.18, 0.036);
-    note(1318.5, now + 0.084, 0.1, 0.012, "triangle");
+    const whoopGain = ctx.createGain();
+    whoopGain.connect(ctx.destination);
+    whoopGain.gain.setValueAtTime(0.0001, now);
+    whoopGain.gain.exponentialRampToValueAtTime(0.078, now + 0.02);
+    whoopGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.16);
+    const whoop = ctx.createOscillator();
+    whoop.type = "sine";
+    whoop.frequency.setValueAtTime(290, now);
+    whoop.frequency.exponentialRampToValueAtTime(820, now + 0.12);
+    whoop.connect(whoopGain);
+    whoop.start(now);
+    whoop.stop(now + 0.18);
+    note(659.25, now + 0.1, 0.18, 0.058);
+    note(783.99, now + 0.15, 0.22, 0.05);
+    note(1046.5, now + 0.21, 0.26, 0.034, "triangle");
   } catch {}
 }
 
@@ -8043,13 +8065,18 @@ function profileDisplayNameForSearchHandle(handle, userId = "") {
   return "";
 }
 
+let _searchPeopleAbort = null;
 async function supabaseSearchPublicProfiles(qNorm) {
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return [];
   const token = escapePostgrestIlikeToken(qNorm);
   if (!token) return [];
   const wild = `*${token}*`;
-  const orRaw = `(username.ilike.${wild},display_name.ilike.${wild},bio.ilike.${wild})`;
+  const orRaw = `(username.ilike.${wild},display_name.ilike.${wild})`;
+  if (_searchPeopleAbort) {
+    try { _searchPeopleAbort.abort(); } catch {}
+  }
   const ctrl = new AbortController();
+  _searchPeopleAbort = ctrl;
   const timer = setTimeout(() => ctrl.abort(), 8000);
   try {
     const url = `${SUPABASE_URL}/rest/v1/profiles?or=${encodeURIComponent(orRaw)}&select=username,display_name,avatar,user_id&limit=14`;
@@ -8305,12 +8332,13 @@ function renderSearchPeople(query) {
   })();
 }
 
-function searchTrackMatchesQuery(track, qNorm) {
-  if (!qNorm || !track) return false;
+function searchHaystackForTrack(track) {
+  if (!track) return "";
+  if (track._searchHay) return track._searchHay;
   const prof = _discoveryLastProfMap?.get?.(track.userId);
   const handle = String(prof?.username || "").trim();
   const displayName = normalizeDisplayName(prof?.display_name || prof?.displayName || "");
-  const hay = [
+  track._searchHay = [
     track.title,
     track.creator,
     track.by,
@@ -8321,14 +8349,16 @@ function searchTrackMatchesQuery(track, qNorm) {
     track.meta?.styleInput,
     track.meta?.styleSent,
     ...(Array.isArray(track.meta?.styleTags) ? track.meta.styleTags : []),
-    trackStyleTagsList(track, 8).join(" "),
-    track.meta?.finalPrompt,
-    track.meta?.lyricsInput,
   ]
     .filter(Boolean)
     .join(" ")
     .toLowerCase();
-  return hay.includes(qNorm);
+  return track._searchHay;
+}
+
+function searchTrackMatchesQuery(track, qNorm) {
+  if (!qNorm || !track) return false;
+  return searchHaystackForTrack(track).includes(qNorm);
 }
 
 function renderSearchTracks(query) {
@@ -8344,7 +8374,7 @@ function renderSearchTracks(query) {
   if (!_discoveryFeedTracks.length) {
     section.hidden = false;
     grid.innerHTML = `<div class="searchTracksLoading">Loading songs…</div>`;
-    void refreshDiscoverFeed().then(() => renderSearchTracks(query));
+    if (!_discoverFeedRefreshInFlight) void refreshDiscoverFeed();
     return;
   }
   const profMap = _discoveryLastProfMap || new Map();
@@ -8433,6 +8463,15 @@ function runSearchQuery(query) {
   renderSearchTracks(query);
   renderSearchShelves(query);
   updateSearchEmptyState(query);
+}
+
+let _searchQueryTimer = 0;
+function scheduleSearchQuery(query) {
+  if (_searchQueryTimer) window.clearTimeout(_searchQueryTimer);
+  _searchQueryTimer = window.setTimeout(() => {
+    _searchQueryTimer = 0;
+    runSearchQuery(query);
+  }, 160);
 }
 
 function applyDiscoveryIdeaToCreate(idea) {
@@ -13426,7 +13465,7 @@ function openDiscoverSearch() {
     btn.setAttribute("aria-label", "Close search");
   }
   startSearchHintRotator();
-  if (!_discoveryFeedTracks.length) void refreshDiscoverFeed();
+  if (!_discoveryFeedTracks.length && !_discoverFeedRefreshInFlight) void refreshDiscoverFeed();
   if (DISCOVER_SEARCH_SHOW_IDEA_SHELVES) {
     void refreshSearchTemplates().then(() => {
       const input = document.getElementById("searchInput");
@@ -13436,7 +13475,10 @@ function openDiscoverSearch() {
     runSearchQuery("");
   }
   requestAnimationFrame(() => {
-    window.setTimeout(() => document.getElementById("searchInput")?.focus(), 40);
+    window.setTimeout(() => {
+      if (!_discoverSearchOpen) return;
+      document.getElementById("searchInput")?.focus();
+    }, 120);
   });
 }
 
@@ -13467,6 +13509,12 @@ function closeDiscoverSearch() {
   stopSearchHintRotator();
   closeSearchRemixSheet();
   runSearchQuery("");
+  if (_discoverFeedPaintDeferred) {
+    _discoverFeedPaintDeferred = false;
+    try {
+      renderDiscoverFeed(_discoveryFeedTracksRaw || [], _discoveryLastProfMap || new Map());
+    } catch {}
+  }
 }
 
 function initSearchPageOnce() {
@@ -13487,7 +13535,7 @@ function initSearchPageOnce() {
       const v = input.value;
       if (bar) bar.classList.toggle("hasValue", Boolean(v));
       if (clearBtn) clearBtn.hidden = !v;
-      runSearchQuery(v);
+      scheduleSearchQuery(v);
     });
     input.addEventListener("focus", stopSearchHintRotator);
     input.addEventListener("blur", () => { if (!input.value) startSearchHintRotator(); });
@@ -46972,6 +47020,7 @@ function classifyDiscoverPlaylistsForTrack(track) {
 
 let _discoveryFeedGen = 0;
 let _discoverFeedRefreshInFlight = false;
+let _discoverFeedPaintDeferred = false;
 /** Playable Discover feed rows (spotlight + list) for shuffle-next on the mini player. */
 let _discoveryFeedTracks = [];
 /** Last profile map from Discover refresh (playlist screen rows). */
@@ -48283,7 +48332,12 @@ async function refreshDiscoverFeed() {
     }
     if (gen !== _discoveryFeedGen) return;
     _discoveryFeedTracksRaw = playable;
-    renderDiscoverFeed(playable, profMap);
+    if (_discoverSearchOpen) {
+      _discoverFeedPaintDeferred = true;
+    } else {
+      _discoverFeedPaintDeferred = false;
+      renderDiscoverFeed(playable, profMap);
+    }
 
     if (!playable.length) {
       _discoveryFeedTracks = [];

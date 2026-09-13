@@ -3536,7 +3536,7 @@ function exitAltCreateFlowToHub() {
   if (isPersonaFlowActive()) abandonPersonaFlow();
   else if (getCreateFlow()) clearCreateFlow();
   _createHubExitBypassSessionPin = true;
-  flushTabRouteNavigation("challenges", "#/challenges");
+  flushTabRouteNavigation("challenges", createHubMenuHash());
 }
 
 const MOBILE_TAB_LIGHTWEIGHT = new Set(["discover", "messages", "challenges", "activity", "profile"]);
@@ -3894,10 +3894,29 @@ function resolveMobileTabTap(a) {
   let targetHash = href.startsWith("#") ? href : `#/${href.replace(/^#?\/?/, "")}`;
   let route = linkRoute;
 
-  if (linkRoute === "challenges" && !isOnCreateHubRoute()) {
+  // Center Create tab → Create Song by default (hub is no longer the front door).
+  if (linkRoute === "challenges") {
     const createNav = resolveCreateTabNavigation();
     if (createNav.route === "generate") {
       route = "generate";
+      targetHash = createNav.hash;
+      try { setCreateEntryIntent("song"); } catch {}
+      const resume =
+        hasActiveCreateSession() ||
+        getCreateFlow() === "humtrack" ||
+        getCreateFlow() === "sounds";
+      if (!resume) {
+        try {
+          if (getCreateFlow() === "nabadclip") clearCreateFlow();
+          else clearNabadClipSessionActive();
+        } catch {}
+        window.setTimeout(() => {
+          try { setActiveCreateTab?.("lyrics"); } catch {}
+          try { els.sunoPrompt?.focus?.({ preventScroll: true }); } catch {}
+        }, 100);
+      }
+    } else if (createNav.route === "profile") {
+      route = "profile";
       targetHash = createNav.hash;
     }
   }
@@ -3930,7 +3949,7 @@ function handleMobileTabTap(a, e) {
     }
     if (getCreateFlow() && !createTabMorphTapPending(a)) {
       clearCreateFlow();
-      flushTabRouteNavigation("challenges", "#/challenges");
+      flushTabRouteNavigation("challenges", createHubMenuHash());
       return true;
     }
     restoreCreatePageOnRouteEnter();
@@ -4543,8 +4562,39 @@ function tabBarRouteKey(route = "") {
 // individual [data-route] panel — never main.grid, because transforming
 // main.grid breaks iOS touch handling on fixed overlays (mini-player, tab bar).
 const NAV_TAB_ROOTS = new Set(["discover", "messages", "challenges", "activity", "profile"]);
-/** Default landing after login / cold open (Create tab). */
-const DEFAULT_LOGGED_IN_ROUTE = "challenges";
+/** Default landing after login / cold open (Home feed). */
+const DEFAULT_LOGGED_IN_ROUTE = "discover";
+
+/** Create hub is a menu — open it only via #/challenges?menu=1 (not as a restored "home"). */
+function createHubMenuHash() {
+  return "#/challenges?menu=1";
+}
+
+function isExplicitCreateHubMenu() {
+  try {
+    const hash = String(location.hash || "");
+    if (!/^#\/challenges\b/i.test(hash)) return false;
+    const q = hash.includes("?") ? hash.slice(hash.indexOf("?") + 1).split("#")[0] : "";
+    return new URLSearchParams(q).get("menu") === "1";
+  } catch {
+    return false;
+  }
+}
+
+function demoteBareCreateHub(wanted) {
+  if (String(wanted || "").trim() !== "challenges") return wanted;
+  if (isExplicitCreateHubMenu()) return wanted;
+  try {
+    if (createSessionIsGenerating()) {
+      try { sessionStorage.setItem(PROFILE_SONGS_SEGMENT_KEY, "all"); } catch {}
+      _profileSongsSegment = "all";
+      try { history.replaceState(null, "", "#/profile?seg=all"); } catch {}
+      return "profile";
+    }
+  } catch {}
+  try { history.replaceState(null, "", "#/discover"); } catch {}
+  return "discover";
+}
 // Screens that run their own bespoke transition or appear at boot/auth and
 // should not get the generic slide/fade.
 const NAV_ANIM_SKIP = new Set(["messages-thread", "auth", "intro", "onboarding", "music-preferences", "first-song", "pro", "settings", "credits", "profile-edit"]);
@@ -4817,7 +4867,7 @@ function applyRoute({ passGen } = {}) {
     normalized = "discover";
   }
   if (normalized === "sparks") {
-    try { history.replaceState(null, "", "#/challenges"); } catch {}
+    try { history.replaceState(null, "", createHubMenuHash()); } catch {}
     normalized = "challenges";
   }
   if (normalized === "home" || normalized === "hub" || normalized === "start") {
@@ -4952,6 +5002,7 @@ function applyRoute({ passGen } = {}) {
       history.replaceState(null, "", `#/player?track=${encodeURIComponent(sharedTrackId)}`);
     } catch {}
   }
+  wanted = demoteBareCreateHub(wanted);
   const prevRoute = document.body.getAttribute("data-route") || "";
   if (prevRoute && prevRoute !== wanted) {
     captureRouteScroll(prevRoute);
@@ -5162,7 +5213,7 @@ function applyRoute({ passGen } = {}) {
     };
     const blockProducer = () => {
       try { leaveNabadProducerRoot(); } catch {}
-      try { location.hash = "#/challenges"; } catch {}
+      try { location.hash = createHubMenuHash(); } catch {}
       if (creditsState.loaded && !creditsState.isAdmin) {
         try {
           showToast("Nabad Producer is admin-only right now.", { icon: "!", durationMs: 3200 });
@@ -5476,7 +5527,7 @@ function setLyricsInputMode(mode, opts = {}) {
       try { autoResizeLyricsBox(); } catch {}
       if (!opts.silent) {
         try {
-          showToast("Describe your song idea — then tap Generate lyrics.", { icon: "✦", durationMs: 2800 });
+          showToast("Describe your song idea — then tap AI lyrics.", { icon: "✦", durationMs: 2800 });
         } catch {}
       }
     }
@@ -6280,7 +6331,7 @@ function syncArabicGenerateGate() {
     }
     els.btnLyricsMagic.title = blocked
       ? arabicLyricChoicesBlockReason()
-      : "Generate lyrics with AI";
+      : "Write AI lyrics";
   }
   if (els.btnLyricsDiacritics) {
     const diacriticsOnlyInWrite = String(lyricsInputMode || "write") === "write";
@@ -8850,7 +8901,7 @@ function applyDiscoveryIdeaToCreate(idea) {
         voiceClipOnly
           ? `Spark: ${title}. Record on Hum, then Generate.`
           : templateSparkClipEnabled() && (sourceKind === "template" || sourceKind === "spark")
-            ? `${sourceKind === "template" ? "Template" : "Spark"} clip: ${title}. ~30s clip · ${formatCreditsAmount(TEMPLATE_SPARK_CLIP_CREDIT_COST)} credits. Edit lyrics or tap Generate lyrics below.`
+            ? `${sourceKind === "template" ? "Template" : "Spark"} clip: ${title}. ~30s clip · ${formatCreditsAmount(TEMPLATE_SPARK_CLIP_CREDIT_COST)} credits. Edit lyrics or tap AI lyrics below.`
             : sourceKind === "template"
             ? `Template: ${title}. Edit below, then Generate.`
             : sourceKind === "live"
@@ -8865,7 +8916,7 @@ function applyDiscoveryIdeaToCreate(idea) {
         voiceClipOnly
           ? "Record on Hum — lyrics optional"
           : templateSparkClipEnabled() && (sourceKind === "template" || sourceKind === "spark")
-            ? `${sourceKind === "template" ? "Template" : "Spark"} clip — add lyrics or tap Generate lyrics below`
+            ? `${sourceKind === "template" ? "Template" : "Spark"} clip — add lyrics or tap AI lyrics below`
             : sourceKind === "template"
             ? "Template ready — make it yours"
             : sourceKind === "live"
@@ -17677,7 +17728,7 @@ function requireAuthForCreate(onAuthed, pendingAction = "") {
     return true;
   }
   setPendingCreateAction(pendingAction);
-  setPostAuthReturnHash(String(location.hash || "#/challenges").trim() || "#/challenges");
+  setPostAuthReturnHash(String(location.hash || "#/discover").trim() || "#/discover");
   closeCreateChooserSheet();
   try { showToast("Sign in to create", { icon: "👤", durationMs: 2400 }); } catch {}
   try { location.hash = "#/auth"; } catch {}
@@ -26128,7 +26179,7 @@ function lyriaClipCreditCostForFlow() {
 }
 
 const TEMPLATE_SPARK_CLIP_LYRICS_HINT =
-  "Write lyrics or tap Generate lyrics below, then Generate clip";
+  "Write lyrics or tap AI lyrics below, then Generate clip";
 
 function isLyricsBriefOrInstructions(text) {
   const t = String(text || "").trim();
@@ -51471,7 +51522,7 @@ function abandonPersonaFlow() {
 function closeVoiceWizard() {
   abandonPersonaFlow();
   try {
-    location.hash = "#/challenges";
+    location.hash = createHubMenuHash();
   } catch {}
   scheduleApplyRoute();
 }
@@ -63215,7 +63266,7 @@ function hasActiveCreateSession() {
 
 function resolveCreateTabNavigation() {
   if (isPersonaFlowActive()) {
-    return { route: "challenges", hash: "#/challenges" };
+    return { route: "challenges", hash: createHubMenuHash() };
   }
   if (createSessionIsGenerating()) {
     return { route: "profile", hash: "#/profile?seg=all" };
@@ -63237,9 +63288,10 @@ function resolveCreateTabNavigation() {
     }
   }
   if (flow === "persona") {
-    return { route: "challenges", hash: "#/challenges" };
+    return { route: "challenges", hash: createHubMenuHash() };
   }
-  return { route: "challenges", hash: "#/challenges" };
+  // Default: open Create Song (the engine), not the Create hub menu.
+  return { route: "generate", hash: "#/generate" };
 }
 
 /** Re-sync loading lock, poll loop, and result cards after returning to #/generate. */
@@ -64525,7 +64577,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       btn.disabled = false;
       btn.classList.remove("isGenerating");
       btn.removeAttribute("aria-busy");
-      if (labelEl) labelEl.textContent = "Generate lyrics";
+      if (labelEl) labelEl.textContent = "AI lyrics";
       if (icoEl) {
         icoEl.hidden = false;
         icoEl.textContent = "✦";
@@ -64548,7 +64600,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
     const challenge = challengePromptContext();
     if (lyricsInputMode === "generate" && !challenge && !seed && !currentRemixSource) {
       showToast("Describe your song idea first — a mood, story, or a few words.", { icon: "✦", durationMs: 3200 });
-      setStatus("Type a prompt in the box, then tap Generate lyrics.");
+      setStatus("Type a prompt in the box, then tap AI lyrics.");
       try { els.sunoPrompt?.focus({ preventScroll: true }); } catch {}
       return;
     }
@@ -69249,7 +69301,7 @@ function createGenerateBlockedToastMessage() {
       : "Upload and analyze your photo first.";
   }
   if (isTemplateSparkClipFlow()) return TEMPLATE_SPARK_CLIP_LYRICS_HINT;
-  return "Tap Generate lyrics first — then you can generate your song.";
+  return "Tap AI lyrics first — then you can generate your song.";
 }
 
 function createTabCanGenerate() {

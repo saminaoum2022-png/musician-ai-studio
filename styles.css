@@ -1,5 +1,5 @@
 :root{
-  /* Dark theme — soft purple/teal depth (see nabad-preview After).
+  /* Dark theme — teal-led brand + quiet violet focus (site CTAs stay teal).
    * Light mode overrides live under `html[data-theme="light"]`. */
   --bg: #101018;
   --card: rgba(35, 34, 49, 0.86);
@@ -23,14 +23,16 @@
   --surface-panel: rgba(35, 34, 49, 0.86);
   --chip-bg: #2B2A3B;
   --chip-border: rgba(211, 202, 255, 0.12);
-  --chip-text: #B6B3C7;
-  --chip-selected-bg: #443464;
-  --chip-selected-border: #8E73DC;
-  --chip-selected-text: #F5F0FF;
-  --text-placeholder: #A6A2B8;
-  /* Soft atmosphere — present on every dark route, never a status-bar bruise. */
-  --bg-wash-purple: rgba(124, 92, 255, 0.18);
-  --bg-wash-teal: rgba(40, 199, 184, 0.11);
+  /* Chip / tab labels — white like Suno; selection keeps soft violet fill. */
+  --chip-text: #FFFFFF;
+  --chip-selected-bg: rgba(124, 92, 255, 0.20);
+  --chip-selected-border: rgba(167, 148, 230, 0.48);
+  --chip-selected-text: #FFFFFF;
+  /* Placeholders — faded to the max so real copy owns the field. */
+  --text-placeholder: rgba(244, 243, 255, 0.12);
+  /* Atmosphere: teal leads (matches site CTAs); violet stays soft support. */
+  --bg-wash-purple: rgba(124, 92, 255, 0.11);
+  --bg-wash-teal: rgba(35, 213, 171, 0.16);
   --space-1: 8px;
   --space-2: 12px;
   --space-3: 16px;
@@ -1883,8 +1885,8 @@ body::before{
   pointer-events: none;
   /* Broad + low: sits behind headers/content on every route, fades cleanly. */
   background:
-    radial-gradient(120% 78% at 50% -6%, var(--bg-wash-purple) 0%, transparent 70%),
-    radial-gradient(90% 62% at 108% 18%, var(--bg-wash-teal) 0%, transparent 68%);
+    radial-gradient(100% 70% at 100% -4%, var(--bg-wash-teal) 0%, transparent 68%),
+    radial-gradient(110% 72% at 18% -8%, var(--bg-wash-purple) 0%, transparent 72%);
 }
 html[data-theme="light"] body::before{
   display: none;
@@ -9141,7 +9143,16 @@ h2{ margin:0 0 12px; font-size:16px; letter-spacing:-0.01em; }
 .grow{ flex:1; min-width:260px; }
 
 .field{ display:flex; flex-direction:column; gap:6px; min-width:160px; }
+/* `.field { display:flex }` otherwise beats the HTML hidden attribute. */
+#createSongTitleField[hidden],
+#createSongTitleField{
+  display: none !important;
+}
 .label{ color:var(--muted); font-size: 13px; font-weight:700; }
+.label.inPanelLabel,
+.inPanelLabel{
+  color: #FFFFFF;
+}
 input,select{
   border:1px solid var(--border);
   background: rgba(5, 8, 15, 0.72);
@@ -10300,9 +10311,10 @@ body[data-photo-solo-challenge] .createFlowStep:nth-child(2){
 }
 .inPanelLabel{
   margin:0;
-  color: var(--text-primary);
+  color: #FFFFFF;
   font-size: 13.5px;
   letter-spacing: 0.01em;
+  font-weight: 700;
 }
 .inPanelLabelHint{
   margin-left: 6px;
@@ -10315,7 +10327,7 @@ body[data-photo-solo-challenge] .createFlowStep:nth-child(2){
   background: rgba(8,12,20,0.35);
 }
 .inputPanel--avoid input::placeholder{
-  color: rgba(232,238,247,0.34);
+  color: var(--text-placeholder);
 }
 .inputPanel--style input,
 .inputPanel--style select{
@@ -10387,6 +10399,9 @@ body[data-photo-solo-challenge] .createFlowStep:nth-child(2){
 }
 .addressPills--three{
   grid-template-columns: repeat(3, 1fr);
+}
+#singerGenderPills.addressPills--three{
+  grid-template-columns: none;
 }
 /* When a saved voice persona is active it controls the singer entirely, so the
    Male/Female pills dim out — but the Persona pill itself stays live (it shows
@@ -11723,16 +11738,16 @@ html[data-theme="light"] body[data-route="generate"] .aiAssistBtn.isGenerating .
   width:auto;
 }
 
-/* Artwork suggestion pills reuse the Style pill row styling. */
-.artworkSuggestRow{ margin-top:0; }
+/* Artwork suggestion pills retired from Create. */
+.artworkSuggestRow{ display:none !important; margin-top:0; }
 
-/* Singer pills — minimal line icons (Auto/Male/Female). */
+/* Singer pills — chip row (optChip look); Arabic sub hidden via #singerGenderPills rules. */
 .addressPills--singer .addressPill{
-  flex-direction:column;
-  align-items:center;
-  text-align:center;
-  gap:3px;
-  padding-top:11px;
+  flex-direction: row;
+  align-items: center;
+  text-align: center;
+  gap: 0;
+  padding-top: 4px;
 }
 .singerPillIco{
   display:inline-flex;
@@ -11745,15 +11760,67 @@ html[data-theme="light"] body[data-route="generate"] .aiAssistBtn.isGenerating .
   color:#fff;
 }
 
-/* Singer + Arabic address are secondary controls — they were catching the eye
-   too much. Make them quieter: smaller pills, a subtle active tint instead of
-   the bright purple card, and drop the singer icons (the noisiest part). */
-#singerGenderPills.addressPills,
+/* Singer chips — same pill language as Style / language optChips (not card grid). */
+#singerGenderPills.addressPills{
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+  grid-template-columns: none;
+}
+#singerGenderPills .addressPill{
+  display: inline-flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  min-height: 32px;
+  padding: 4px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--chip-border);
+  background: var(--chip-bg);
+  color: var(--chip-text);
+  font-size: 12.5px;
+  font-weight: 700;
+}
+#singerGenderPills .addressPillMain{
+  font-size: 12.5px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+#singerGenderPills .addressPillSub{
+  display: none;
+}
+#singerGenderPills .addressPill.isActive{
+  border-color: var(--chip-selected-border);
+  background: var(--chip-selected-bg);
+  color: var(--chip-selected-text);
+  box-shadow: none;
+}
+#singerGenderPills .singerPillIco{
+  display: none;
+}
+/* Persona “＋” stays readable as a chip affordance. */
+#singerGenderPills .singerPersonaPill .addressPillSub.singerPersonaPillSub{
+  display: inline;
+  margin-inline-start: 4px;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: inherit;
+  direction: ltr;
+}
+
+/* Artwork suggestion chips retired — free-text + Suggest only. */
+.artworkSuggestRow,
+#artworkSuggestRow{
+  display: none !important;
+}
+
+/* Arabic address pills keep their quieter chip treatment. */
 #arabicAddressPills.addressPills{
   gap: 6px;
   margin-top: 8px;
 }
-#singerGenderPills .addressPill,
 #arabicAddressPills .addressPill{
   min-height: 38px;
   padding: 6px 8px;
@@ -11762,27 +11829,19 @@ html[data-theme="light"] body[data-route="generate"] .aiAssistBtn.isGenerating .
   background: var(--chip-bg);
   color: var(--chip-text);
 }
-#singerGenderPills .addressPillMain,
 #arabicAddressPills .addressPillMain{
   font-size: 12.5px;
   font-weight: 600;
 }
-#singerGenderPills .addressPillSub,
 #arabicAddressPills .addressPillSub{
   font-size: 10.5px;
   font-weight: 500;
 }
-/* The minimal base rules above are ID-scoped, so they out-specify the shared
-   `.addressPill.isActive`. Re-assert the Create-surface active pill here too. */
-#singerGenderPills .addressPill.isActive,
 #arabicAddressPills .addressPill.isActive{
   border-color: var(--chip-selected-border);
   background: var(--chip-selected-bg);
   color: var(--chip-selected-text);
   box-shadow: none;
-}
-#singerGenderPills .singerPillIco{
-  display: none;
 }
 
 /* Smooth cross-fade of the textarea when toggling modes. */
@@ -21094,6 +21153,12 @@ body.trackSheetOpen .footer{
   .label{
     color: rgba(232,238,247,0.72);
   }
+  body[data-route="generate"] .label,
+  body[data-route="generate"] .inPanelLabel,
+  body[data-route="generate"] .stylePanelHead,
+  body[data-route="generate"] .stylePanelHead > span{
+    color: #FFFFFF;
+  }
   input, select, textarea{
     background: rgba(26, 42, 64, 0.28);
     border-color: rgba(255,255,255,0.07);
@@ -21425,16 +21490,16 @@ input::placeholder, textarea::placeholder{
     color: inherit;
     opacity: 0.92;
   }
-  /* Create tab — filled brand signature (not outline). Quiet teal→violet,
-     soft depth shadow; glow dialed down so it feels premium, not neon. */
+  /* Create tab — signature mark: teal-led → violet (matches site CTA + brand kit). */
   .mobileTabbar a.tabCreate{
     --tab-create-orbit-top: 4px;
     --tab-create-orbit-size: 46px;
-    --tab-create-gradient: linear-gradient(148deg, #2aabb0 0%, #5a78e0 48%, #7c5cff 100%);
+    --tab-create-gradient: linear-gradient(148deg, #23d5ab 0%, #2ec4b8 34%, #6b78e8 72%, #7c5cff 100%);
     --tab-create-glow:
       0 8px 20px rgba(0, 0, 0, 0.40),
       0 0 0 1px rgba(255, 255, 255, 0.12),
-      0 0 18px rgba(124, 92, 255, 0.18),
+      0 0 16px rgba(35, 213, 171, 0.18),
+      0 0 14px rgba(124, 92, 255, 0.12),
       inset 0 1px 0 rgba(255, 255, 255, 0.16);
     color: #fff;
     opacity: 1;
@@ -21530,7 +21595,7 @@ input::placeholder, textarea::placeholder{
      below, so the Create tab cycles through both Nabad brand colours). */
   .mobileTabbar a.tabCreate.tabIsReady::before,
   .mobileTabbar a.tabCreate.tabIsListen::before{
-    background: linear-gradient(148deg, #2ec4b0 0%, #6a7ef0 48%, #9178ff 100%);
+    background: linear-gradient(148deg, #23d5ab 0%, #3dd4c4 36%, #7c5cff 100%);
     animation: tabCreatePulse 2400ms ease-in-out infinite;
   }
   .mobileTabbar a.tabCreate.tabIsReady .tabIcoCreate,
@@ -21546,7 +21611,7 @@ input::placeholder, textarea::placeholder{
     transform: translate(-50%, -50%);
   }
   .mobileTabbar a.tabCreate.tabIsListen::before{
-    background: linear-gradient(148deg, #2ec4b0 0%, #7086f2 45%, #a48bff 100%);
+    background: linear-gradient(148deg, #2eebbc 0%, #45d4c8 34%, #9178ff 100%);
   }
   /* Magic-wand icon: thin stroked stick + filled sparkle. Keep .tabIco from
      forcing a stroke onto the filled star (it would blob it out). */
@@ -21563,10 +21628,11 @@ input::placeholder, textarea::placeholder{
     margin: 0;
   }
   .mobileTabbar a.tabCreate.tabIsGenerating::before{
-    background: linear-gradient(148deg, #2aabb0 0%, #5a78e0 48%, #6b52e8 100%);
+    background: linear-gradient(148deg, #23d5ab 0%, #3aa8d4 45%, #6b52e8 100%);
     box-shadow:
       0 8px 18px rgba(0, 0, 0, 0.38),
-      0 0 16px rgba(124, 92, 255, 0.20),
+      0 0 14px rgba(35, 213, 171, 0.22),
+      0 0 12px rgba(124, 92, 255, 0.14),
       inset 0 1px 0 rgba(255, 255, 255, 0.14);
   }
   .mobileTabbar a.tabCreate.tabIsGenerating .tabIcoCreate,
@@ -44090,6 +44156,32 @@ body[data-route="generate"] .lyricsModeTab.isActive{
   background: var(--chip-selected-bg);
   color: var(--chip-selected-text);
   box-shadow: none;
+}
+/* Create — white chip/section type; placeholders almost invisible until focus. */
+body[data-route="generate"] .inPanelLabel,
+body[data-route="generate"] .inputPanel .label,
+body[data-route="generate"] .label.inPanelLabel,
+body[data-route="generate"] .stylePanelHead,
+body[data-route="generate"] .stylePanelHead > span,
+body[data-route="generate"] .createTab:not(.isActive),
+body[data-route="generate"] .lyricsModeTab:not(.isActive),
+body[data-route="generate"] .optChip:not(.isActive),
+body[data-route="generate"] .styleSuggestPill:not(.isActive),
+body[data-route="generate"] #singerGenderPills .addressPill:not(.isActive),
+body[data-route="generate"] #singerGenderPills .addressPill:not(.isActive) .addressPillMain{
+  color: #FFFFFF;
+  -webkit-text-fill-color: #FFFFFF;
+  opacity: 1;
+}
+body[data-route="generate"] input::placeholder,
+body[data-route="generate"] textarea::placeholder,
+body[data-route="generate"] .inputPanel input::placeholder,
+body[data-route="generate"] .inputPanel textarea::placeholder,
+body[data-route="generate"] input::-webkit-input-placeholder,
+body[data-route="generate"] textarea::-webkit-input-placeholder{
+  color: rgba(244, 243, 255, 0.12);
+  -webkit-text-fill-color: rgba(244, 243, 255, 0.12);
+  opacity: 1;
 }
 body[data-route="generate"] .createTab.isActive,
 body[data-route="generate"] .lyricsModeTab.isActive{

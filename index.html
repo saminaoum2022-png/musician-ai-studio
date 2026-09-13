@@ -1302,16 +1302,16 @@
               <div id="styleSelectedRow" class="styleSelectedRow" hidden aria-label="Selected style tags"></div>
               <div id="styleSuggestRow" class="styleSuggestRow" role="group" aria-label="Style suggestions"></div>
             </label>
-            <label class="field grow inputPanel inputPanel--style">
+            <label class="field grow inputPanel inputPanel--style" id="createSongTitleField" hidden>
               <div class="label inPanelLabel">Song title</div>
-              <input id="sunoTitle" type="text" placeholder="My new song" />
+              <input id="sunoTitle" type="text" placeholder="Auto" autocomplete="off" />
             </label>
             <div id="singerVoicePanel" class="field grow inputPanel inputPanel--style">
               <div class="label inPanelLabel">Singer</div>
-              <!-- Hidden input is the form state; pills are the visible control.
+              <!-- Hidden input is the form state; chips are the visible control.
                    A saved voice persona (chips below) overrides the gender. -->
               <input type="hidden" id="sunoSingerGender" value="" />
-              <div id="singerGenderPills" class="addressPills addressPills--three addressPills--singer" role="group" aria-label="Singer voice">
+              <div id="singerGenderPills" class="addressPills addressPills--three addressPills--singer optChipRow" role="group" aria-label="Singer voice">
                 <button type="button" class="addressPill" data-singer-value="m" aria-pressed="false">
                   <span class="addressPillMain">Male</span>
                   <span class="addressPillSub">مغني</span>
@@ -1378,7 +1378,7 @@
                   <button id="btnArtworkSuggest" class="lyricsMagicBtn styleBoostBtn aiAssistBtn" type="button" title="Suggest artwork from your song" aria-label="Suggest artwork from your song"><span class="aiAssistIco" aria-hidden="true">✦</span><span class="aiAssistLabel">Suggest</span></button>
                 </div>
                 <input id="sunoArtworkStyle" type="text" placeholder="Neon desert, cinematic portrait…" />
-                <div id="artworkSuggestRow" class="styleSuggestRow artworkSuggestRow" role="group" aria-label="Artwork suggestions"></div>
+                <div id="artworkSuggestRow" class="styleSuggestRow artworkSuggestRow" role="group" aria-label="Artwork suggestions" hidden></div>
               </label>
           </section>
 

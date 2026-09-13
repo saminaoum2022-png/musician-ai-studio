@@ -11120,7 +11120,6 @@ function wireCreatePhotoSoloBannerOnce() {
 function syncPhotoSoloBannerUi(challenge) {
   const banner = document.getElementById("createPhotoSoloBanner");
   if (!banner) return;
-  const onGenerate = (document.body.getAttribute("data-route") || "") === "generate";
   const activeChallenge = challengePromptContext();
   if (activeChallenge && !isPhotoSoloChallengeId(activeChallenge.id)) {
     banner.hidden = true;
@@ -11132,11 +11131,8 @@ function syncPhotoSoloBannerUi(challenge) {
     id = String(challenge.id).trim();
   } else if (is80sYouCreateFlow()) {
     id = "80s-you";
-  } else if (onGenerate) {
-    const flow = getCreateFlow();
-    const blockFeatured = flow === "nabadclip" || flow === "humtrack" || flow === "sounds" || flow === "persona";
-    if (!blockFeatured) id = "80s-you";
   }
+  // Do not auto-feature 80s You on normal Create — only when that challenge is active.
   if (!isPhotoSoloChallengeId(id)) {
     banner.hidden = true;
     delete banner.dataset.challengeId;
@@ -68808,11 +68804,8 @@ function writeArtworkTags(list) {
 function renderArtworkSuggestions() {
   const row = els.artworkSuggestRow;
   if (!row) return;
-  const selected = new Set(artworkTagsListFromInput().map((t) => t.toLowerCase()));
-  row.innerHTML = ARTWORK_BASE_SUGGESTIONS.map((tag) => {
-    const on = selected.has(tag.toLowerCase());
-    return `<button type="button" class="styleSuggestPill${on ? " isActive" : ""}" data-artwork-tag="${escapeHtml(tag)}" aria-pressed="${on ? "true" : "false"}">${escapeHtml(tag)}</button>`;
-  }).join("");
+  row.innerHTML = "";
+  row.hidden = true;
 }
 function suggestArtworkText() {
   return suggestArtworkTextFromParts({

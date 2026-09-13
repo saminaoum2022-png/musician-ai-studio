@@ -17633,7 +17633,7 @@ async function finishPostAuthNavigation() {
   }
   if (returnHash && returnHash.startsWith("#/")) {
     try { location.hash = returnHash; } catch {}
-    syncRoutePanelVisibility(returnHash.slice(2).split(/[?#&]/)[0].trim() || "challenges");
+    syncRoutePanelVisibility(returnHash.slice(2).split(/[?#&]/)[0].trim() || "discover");
     try { applyRoute(); } catch { scheduleApplyRoute(); }
     if (pendingIdea && returnHash.includes("generate")) {
       window.setTimeout(() => {

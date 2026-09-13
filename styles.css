@@ -1,28 +1,36 @@
 :root{
-  /* Black mood trial (default dark theme). Future light mode: mirror these tokens under
-   * `html[data-theme="light"]` and flip `data-theme` from app settings.
-   *
-   * App icon is black, so the canvas now leads with near-black OLED depth.
-   * Surfaces sit just above black and accents stay teal/purple. */
-  --bg: #05070d;
-  --card: #10141f;
-  --card2:#0b0f18;
-  --text: #eef4ff;
-  --muted: #97a5ba;
-  --border: rgba(255,255,255,0.105);
+  /* Dark theme — soft purple/teal depth (see nabad-preview After).
+   * Light mode overrides live under `html[data-theme="light"]`. */
+  --bg: #101018;
+  --card: rgba(35, 34, 49, 0.86);
+  --card2: #1a1924;
+  --text: #F4F3FF;
+  --muted: #B6B3C7;
+  --border: rgba(211, 202, 255, 0.14);
   --primary:#7c5cff;
   --primary2:#23d5ab;
   --danger:#ff4d6d;
   --ai-a: rgba(124,92,255,0.24);
-  --ai-b: rgba(35,213,171,0.18);
-  --ai-c: #05070d;
-  --elev-1: 0 10px 30px rgba(0, 0, 0, 0.38), 0 2px 8px rgba(0, 0, 0, 0.24);
-  --elev-2: 0 20px 52px rgba(0, 0, 0, 0.44), 0 4px 14px rgba(0, 0, 0, 0.28);
-  --elev-glow-primary: 0 0 44px rgba(124, 92, 255, 0.24);
-  --elev-glow-teal: 0 0 40px rgba(35, 213, 171, 0.2);
-  --surface-raised: linear-gradient(168deg, rgba(20, 26, 40, 0.94), rgba(8, 11, 20, 0.88));
-  --surface-border: rgba(255, 255, 255, 0.115);
-  --surface-highlight: inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  --ai-b: rgba(40,199,184,0.13);
+  --ai-c: #101018;
+  --elev-1: 0 10px 28px rgba(0, 0, 0, 0.32), 0 2px 8px rgba(0, 0, 0, 0.20);
+  --elev-2: 0 16px 40px rgba(0, 0, 0, 0.36), 0 4px 12px rgba(0, 0, 0, 0.22);
+  --elev-glow-primary: 0 0 36px rgba(124, 92, 255, 0.12);
+  --elev-glow-teal: 0 0 32px rgba(40, 199, 184, 0.10);
+  --surface-raised: rgba(35, 34, 49, 0.86);
+  --surface-border: rgba(211, 202, 255, 0.14);
+  --surface-highlight: inset 0 1px 0 rgba(245, 240, 255, 0.08);
+  --surface-panel: rgba(35, 34, 49, 0.86);
+  --chip-bg: #2B2A3B;
+  --chip-border: rgba(211, 202, 255, 0.12);
+  --chip-text: #B6B3C7;
+  --chip-selected-bg: #443464;
+  --chip-selected-border: #8E73DC;
+  --chip-selected-text: #F5F0FF;
+  --text-placeholder: #A6A2B8;
+  /* Soft atmosphere — present on every dark route, never a status-bar bruise. */
+  --bg-wash-purple: rgba(124, 92, 255, 0.18);
+  --bg-wash-teal: rgba(40, 199, 184, 0.11);
   --space-1: 8px;
   --space-2: 12px;
   --space-3: 16px;
@@ -45,26 +53,26 @@
   --brand-cta-bg-hover: var(--brand-teal-hover);
   --brand-cta-shadow: 0 10px 28px rgba(35, 213, 171, 0.26);
   /* Song list reading order: title → creator → description → plays */
-  --song-row-title-color: rgba(244, 247, 255, 0.96);
-  --song-row-creator-color: rgba(223, 231, 251, 0.50);
-  --song-row-desc-color: rgba(205, 216, 247, 0.58);
-  --song-row-plays-color: rgba(223, 231, 251, 0.38);
+  --song-row-title-color: rgba(244, 243, 255, 0.96);
+  --song-row-creator-color: rgba(182, 179, 199, 0.72);
+  --song-row-desc-color: rgba(182, 179, 199, 0.62);
+  --song-row-plays-color: rgba(182, 179, 199, 0.48);
   --brand-accent: var(--brand-violet);
   --brand-accent-soft: rgba(124, 92, 255, 0.72);
   --brand-surface-glass: rgba(255, 255, 255, 0.06);
-  --brand-border-glass: rgba(255, 255, 255, 0.12);
+  --brand-border-glass: rgba(211, 202, 255, 0.14);
   /* Nabad Glass Control System — utility/navigation controls only. */
   --nabad-glass-blur: 12px;
   --nabad-glass-saturate: 165%;
   --nabad-glass-bg: linear-gradient(145deg, rgba(255, 255, 255, 0.11), rgba(255, 255, 255, 0.04));
   --nabad-glass-bg-hover: linear-gradient(145deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0.06));
-  --nabad-glass-border: rgba(255, 255, 255, 0.13);
-  --nabad-glass-border-hover: rgba(255, 255, 255, 0.20);
-  --nabad-glass-color: rgba(248, 250, 255, 0.94);
+  --nabad-glass-border: rgba(211, 202, 255, 0.14);
+  --nabad-glass-border-hover: rgba(211, 202, 255, 0.22);
+  --nabad-glass-color: rgba(244, 243, 255, 0.94);
   --nabad-glass-color-hover: #fff;
   --nabad-glass-shadow: 0 8px 24px rgba(0, 0, 0, 0.26);
   --nabad-glass-shadow-hover: 0 10px 28px rgba(0, 0, 0, 0.30);
-  --nabad-glass-inset-top: inset 0 1px 0 rgba(255, 255, 255, 0.10);
+  --nabad-glass-inset-top: inset 0 1px 0 rgba(245, 240, 255, 0.10);
   --nabad-glass-inset-bottom: inset 0 -1px 0 rgba(0, 0, 0, 0.06);
   --nabad-glass-radius-sm: 12px;
   --nabad-glass-radius-round: 999px;
@@ -76,21 +84,21 @@
   --surface: var(--card);
   --surface-secondary: var(--card2);
   --text-primary: var(--text);
-  --text-secondary: rgba(223, 231, 251, 0.72);
-  --text-muted: var(--muted);
-  --icon: rgba(248, 250, 255, 0.94);
-  --icon-muted: #A8A8A8;
-  --nav-bg: linear-gradient(180deg, rgba(6, 8, 14, 0.97), rgba(3, 5, 10, 0.94));
-  --nav-border: rgba(255, 255, 255, 0.09);
-  --nav-item-opacity: 0.55;
-  --nav-item-active: #FFFFFF;
-  --nav-item-hover: #A8A8A8;
+  --text-secondary: var(--muted);
+  --text-muted: #A6A2B8;
+  --icon: rgba(244, 243, 255, 0.94);
+  --icon-muted: #A6A2B8;
+  --nav-bg: #191922;
+  --nav-border: rgba(211, 202, 255, 0.10);
+  --nav-item-opacity: 0.62;
+  --nav-item-active: #F4F3FF;
+  --nav-item-hover: #B6B3C7;
   --card-bg: var(--card);
-  --tab-strip-bg: linear-gradient(180deg, rgba(5, 7, 13, 0.96) 0%, rgba(5, 7, 13, 0.88) 72%, rgba(5, 7, 13, 0) 100%);
-  --tab-inactive: rgba(255, 255, 255, 0.57);
-  --tab-active: #ffffff;
-  --seg-tab-active: #FFFFFF;
-  --seg-tab-inactive-opacity: 0.6;
+  --tab-strip-bg: linear-gradient(180deg, rgba(16, 16, 24, 0.96) 0%, rgba(16, 16, 24, 0.88) 72%, rgba(16, 16, 24, 0) 100%);
+  --tab-inactive: rgba(182, 179, 199, 0.78);
+  --tab-active: #F4F3FF;
+  --seg-tab-active: #F4F3FF;
+  --seg-tab-inactive-opacity: 0.62;
   --link-accent: rgba(94, 234, 212, 0.9);
   --link-accent-hover: rgba(45, 212, 191, 0.95);
   --chart-surface: rgba(255, 255, 255, 0.035);
@@ -101,7 +109,7 @@
   --skeleton-shimmer-strong: linear-gradient(110deg, rgba(255, 255, 255, 0.08) 0%, rgba(255, 255, 255, 0.18) 42%, rgba(255, 255, 255, 0.08) 88%);
   --skeleton-fill: rgba(255, 255, 255, 0.03);
   --skeleton-stroke: rgba(255, 255, 255, 0.06);
-  --row-divider: rgba(255, 255, 255, 0.06);
+  --row-divider: rgba(211, 202, 255, 0.08);
 }
 
 /* ========== Nabad Glass Control System ==========
@@ -198,6 +206,16 @@ html[data-theme="light"]{
   --elev-glow-primary: 0 0 24px rgba(124, 92, 255, 0.12);
   --elev-glow-teal: 0 0 24px rgba(35, 213, 171, 0.12);
   --surface-raised: #FFFFFF;
+  --surface-panel: #FFFFFF;
+  --chip-bg: #EBEEF3;
+  --chip-border: #E1E4EA;
+  --chip-text: #5F6572;
+  --chip-selected-bg: rgba(109, 77, 245, 0.12);
+  --chip-selected-border: rgba(109, 77, 245, 0.34);
+  --chip-selected-text: #15171C;
+  --text-placeholder: #858B98;
+  --bg-wash-purple: transparent;
+  --bg-wash-teal: transparent;
   --accent-teal-soft: rgba(13, 148, 136, 0.12);
   --accent-violet-soft: rgba(109, 77, 245, 0.10);
   --accent-teal-border: rgba(13, 148, 136, 0.22);
@@ -1847,7 +1865,7 @@ body{
   transition: opacity 260ms ease;
   position: relative;
   min-height: 100vh;
-  /* Near-black canvas — brand color lives in CTAs, not ambient wash. */
+  /* Soft depth canvas — purple/teal washes sit on ::before, not on content. */
   background: var(--bg);
   /* Hard clamp: no descendant can ever drag the whole page sideways.
      A single too-wide row (e.g. an over-wide banner on a 360px phone)
@@ -1856,6 +1874,20 @@ body{
      here — `hidden` would create a containing block for fixed children
      and break sticky/iOS bottom-bar offsets. */
   overflow-x: clip;
+}
+body::before{
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  /* Broad + low: sits behind headers/content on every route, fades cleanly. */
+  background:
+    radial-gradient(120% 78% at 50% -6%, var(--bg-wash-purple) 0%, transparent 70%),
+    radial-gradient(90% 62% at 108% 18%, var(--bg-wash-teal) 0%, transparent 68%);
+}
+html[data-theme="light"] body::before{
+  display: none;
 }
 /* Mobile shell: long-press is used for preview, record, etc. — not text selection.
  * Re-enable only where users genuinely edit or copy (inputs, lyrics, legal). */
@@ -1883,16 +1915,11 @@ body[data-route="hub"],
 body[data-route="challenges"]{
   background: var(--bg);
 }
-/* Mentor: same canvas as Settings / Credits — subtle accent only */
+/* Mentor: same global canvas + body::before wash (no extra route gradient). */
 body[data-route="mentor"]{
-  background:
-    radial-gradient(90% 42% at 50% -8%, rgba(124, 92, 255, 0.05) 0%, transparent 72%),
-    var(--bg);
+  background: var(--bg);
 }
 @media (prefers-reduced-motion: reduce){
-  body[data-route="mentor"]{
-    background: var(--bg);
-  }
   body{
     background: var(--bg);
   }
@@ -1900,7 +1927,7 @@ body[data-route="mentor"]{
 html{ overflow-x: clip; }
 body.pageTransitioning{ opacity: 0; }
 body.booting{
-  background: #05070d;
+  background: #101018;
   overflow: hidden;
 }
 body.booting > *:not(#bootSplash):not(#loginSettlingOverlay){
@@ -9052,15 +9079,11 @@ main.grid > .card.wide[data-route="player"]{
 
 .card{
   border:1px solid var(--surface-border);
-  background:
-    radial-gradient(120% 100% at 8% 0%, rgba(124,92,255,0.1), transparent 58%),
-    radial-gradient(95% 85% at 100% 12%, rgba(35,213,171,0.05), transparent 62%),
-    var(--surface-raised);
+  background: var(--surface-panel);
   border-radius:16px;
   padding:16px;
   box-shadow:
-    var(--elev-2),
-    var(--elev-glow-primary),
+    var(--elev-1),
     var(--surface-highlight);
 }
 .wide{ grid-column: 1 / -1; }
@@ -9086,7 +9109,7 @@ h2{ margin:0 0 12px; font-size:16px; letter-spacing:-0.01em; }
   font-weight: 850;
   letter-spacing: -0.04em;
   color: var(--text);
-  text-shadow: 0 0 40px rgba(124, 92, 255, 0.25);
+  text-shadow: none;
 }
 /* Hub tab screens — title row matches Discover (size + left edge). */
 .discoveryStudioHead .appScreenTitle,
@@ -10002,10 +10025,10 @@ body[data-photo-solo-challenge] .createFlowStep:nth-child(2){
   gap:4px;
   padding:4px;
   margin: 0 0 14px;
-  border:1px solid rgba(255,255,255,0.08);
+  border:1px solid var(--surface-border);
   border-radius:999px;
-  background: linear-gradient(180deg, rgba(255,255,255,0.035), rgba(255,255,255,0.012));
-  box-shadow: inset 0 1px 0 rgba(255,255,255,0.04), 0 6px 18px rgba(0,0,0,0.18);
+  background: var(--surface-panel);
+  box-shadow: var(--surface-highlight), 0 6px 18px rgba(0,0,0,0.18);
   width:100%;
   box-sizing:border-box;
 }
@@ -10020,27 +10043,26 @@ body[data-photo-solo-challenge] .createFlowStep:nth-child(2){
   border:0;
   border-radius:999px;
   background:transparent;
-  color: rgba(232,238,247,0.72);
+  color: var(--chip-text);
   font-size: 13.5px;
   font-weight:700;
   letter-spacing:0.01em;
   cursor:pointer;
   -webkit-tap-highlight-color: transparent;
-  transition: background 200ms ease, color 200ms ease, transform 140ms ease, box-shadow 200ms ease;
+  transition: background 200ms ease, color 200ms ease, transform 140ms ease, box-shadow 200ms ease, border-color 200ms ease;
 }
 .createTab:hover{
-  color: rgba(244,247,255,0.95);
+  color: var(--text-primary);
 }
 .createTab:active{
   transform: scale(0.985);
 }
 .createTab.isActive{
-  background: linear-gradient(180deg, rgba(255,255,255,0.17), rgba(255,255,255,0.085));
-  color: #fff;
+  background: var(--chip-selected-bg);
+  color: var(--chip-selected-text);
   box-shadow:
-    inset 0 1px 0 rgba(255,255,255,0.22),
-    inset 0 0 0 1px rgba(255,255,255,0.19),
-    0 3px 12px rgba(255,255,255,0.05);
+    inset 0 0 0 1px var(--chip-selected-border),
+    var(--surface-highlight);
 }
 .createTabIcon{
   width:14px;
@@ -10270,15 +10292,15 @@ body[data-photo-solo-challenge] .createFlowStep:nth-child(2){
 .inputPanel{
   width:100%;
   padding: 11px 12px;
-  border:1px solid rgba(255,255,255,0.10);
+  border:1px solid var(--surface-border);
   border-radius:18px;
-  background: linear-gradient(180deg, rgba(255,255,255,0.045), rgba(255,255,255,0.02));
-  box-shadow: inset 0 1px 0 rgba(255,255,255,0.06), 0 10px 24px rgba(0,0,0,0.20);
+  background: var(--surface-panel);
+  box-shadow: var(--surface-highlight), 0 10px 24px rgba(0,0,0,0.20);
   gap: var(--space-1);
 }
 .inPanelLabel{
   margin:0;
-  color: rgba(232,238,247,0.90);
+  color: var(--text-primary);
   font-size: 13.5px;
   letter-spacing: 0.01em;
 }
@@ -10355,14 +10377,13 @@ body[data-photo-solo-challenge] .createFlowStep:nth-child(2){
   direction: rtl;
 }
 .addressPill.isActive{
-  /* Unified active-purple pill (shared with .styleSuggestPill + .optChip). */
-  border-color: rgba(167,139,250,0.55);
-  background: linear-gradient(150deg, rgba(124,92,255,0.20), rgba(124,92,255,0.09));
-  color: #fff;
+  border-color: var(--chip-selected-border);
+  background: var(--chip-selected-bg);
+  color: var(--chip-selected-text);
   box-shadow: none;
 }
 .addressPill.isActive .addressPillSub{
-  color: rgba(232,226,255,0.78);
+  color: rgba(245, 240, 255, 0.78);
 }
 .addressPills--three{
   grid-template-columns: repeat(3, 1fr);
@@ -11189,8 +11210,8 @@ body.playerLyricsOpen .playerLyricsChip{
   margin:0;
   padding:3px;
   border-radius:999px;
-  background:rgba(255,255,255,0.04);
-  border:1px solid rgba(255,255,255,0.08);
+  background: var(--chip-bg);
+  border:1px solid var(--chip-border);
 }
 .lyricsModeTab{
   -webkit-appearance:none;
@@ -11200,7 +11221,7 @@ body.playerLyricsOpen .playerLyricsChip{
   gap:6px;
   border:0;
   background:transparent;
-  color:rgba(232,238,247,0.6);
+  color: var(--chip-text);
   font-size:12.5px;
   font-weight:700;
   letter-spacing:0.01em;
@@ -11208,14 +11229,12 @@ body.playerLyricsOpen .playerLyricsChip{
   border-radius:999px;
   cursor:pointer;
   -webkit-tap-highlight-color:transparent;
-  transition:background 200ms ease, color 200ms ease;
+  transition:background 200ms ease, color 200ms ease, box-shadow 200ms ease;
 }
 .lyricsModeTab.isActive{
-  background: linear-gradient(180deg, rgba(255,255,255,0.15), rgba(255,255,255,0.08));
-  color:#fff;
-  box-shadow:
-    inset 0 1px 0 rgba(255,255,255,0.19),
-    inset 0 0 0 1px rgba(255,255,255,0.15);
+  background: var(--chip-selected-bg);
+  color: var(--chip-selected-text);
+  box-shadow: inset 0 0 0 1px var(--chip-selected-border);
 }
 .lyricsModeTab:disabled{
   opacity:0.4;
@@ -11255,9 +11274,9 @@ body.playerLyricsOpen .playerLyricsChip{
   gap:6px;
   padding:7px 13px;
   border-radius:999px;
-  border:1px solid rgba(255,255,255,0.12);
-  background:rgba(255,255,255,0.04);
-  color:rgba(232,238,247,0.86);
+  border:1px solid var(--chip-border);
+  background: var(--chip-bg);
+  color: var(--chip-text);
   font-size:12.5px;
   font-weight:650;
   letter-spacing:0.01em;
@@ -11278,10 +11297,9 @@ body.playerLyricsOpen .playerLyricsChip{
   80%{ transform:translateX(3px); }
 }
 .styleSuggestPill.isActive{
-  /* Unified active-purple pill (shared with .optChip + .addressPill). */
-  border-color: rgba(167,139,250,0.55);
-  background: linear-gradient(150deg, rgba(124,92,255,0.20), rgba(124,92,255,0.09));
-  color:#fff;
+  border-color: var(--chip-selected-border);
+  background: var(--chip-selected-bg);
+  color: var(--chip-selected-text);
 }
 .styleSuggestPillIco{
   font-size:12px;
@@ -11740,9 +11758,9 @@ html[data-theme="light"] body[data-route="generate"] .aiAssistBtn.isGenerating .
   min-height: 38px;
   padding: 6px 8px;
   border-radius: 11px;
-  border-color: rgba(255,255,255,0.08);
-  background: rgba(255,255,255,0.028);
-  color: rgba(232,238,247,0.74);
+  border-color: var(--chip-border);
+  background: var(--chip-bg);
+  color: var(--chip-text);
 }
 #singerGenderPills .addressPillMain,
 #arabicAddressPills .addressPillMain{
@@ -11758,14 +11776,10 @@ html[data-theme="light"] body[data-route="generate"] .aiAssistBtn.isGenerating .
    `.addressPill.isActive`. Re-assert the Create-surface active pill here too. */
 #singerGenderPills .addressPill.isActive,
 #arabicAddressPills .addressPill.isActive{
-  border-color: rgba(255,255,255,0.34);
-  background: linear-gradient(180deg, rgba(255,255,255,0.20), rgba(255,255,255,0.09));
-  color: #fff;
-  box-shadow:
-    inset 0 1px 0 rgba(255,255,255,0.25),
-    0 0 0 1px rgba(255,255,255,0.085),
-    0 3px 14px rgba(255,255,255,0.06),
-    0 8px 24px rgba(0,0,0,0.17);
+  border-color: var(--chip-selected-border);
+  background: var(--chip-selected-bg);
+  color: var(--chip-selected-text);
+  box-shadow: none;
 }
 #singerGenderPills .singerPillIco{
   display: none;
@@ -17039,11 +17053,19 @@ body:not([data-route="profile"]) #profileAuraHeaderChromeRoot{
  *  edit mode (profileAura form fields still work underneath).
  * ================================================================= */
 
-/* --- Hero hugs the page: no separate background, no card chrome,
-   no backdrop image. The aura tint glow already provides warmth. --- */
+/* --- Profile hero: no local wash. Global body::before is the only atmosphere
+   (a second hero wash stacked into a muddy status-bar bruise). --- */
 .profileAura{
   position: relative;
   isolation: isolate;
+  background: transparent;
+}
+.profileAura::before{
+  display: none;
+}
+.profileAura > *{
+  position: relative;
+  z-index: 1;
 }
 
 /* --- Genre wash: retired from hero (genres stay off the hero). --- */
@@ -21115,7 +21137,7 @@ body.trackSheetOpen .footer{
     font-size: 13.5px;
   }
 input::placeholder, textarea::placeholder{
-  color: rgba(232,238,247,0.36);
+  color: var(--text-placeholder);
   font-size: 13px;
 }
   .checks{
@@ -21265,11 +21287,9 @@ input::placeholder, textarea::placeholder{
     border-radius: 0;
     padding: 6px 4px max(6px, env(safe-area-inset-bottom)) 4px;
     background: var(--nav-bg);
-    box-shadow:
-      0 -18px 40px rgba(0,0,0,0.32),
-      0 -1px 0 rgba(255,255,255,0.06);
-    -webkit-backdrop-filter: blur(22px) saturate(165%);
-    backdrop-filter: blur(22px) saturate(165%);
+    box-shadow: 0 -10px 28px rgba(0,0,0,0.28);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
   }
   .mobileTabbar a{
     text-decoration:none;
@@ -21405,16 +21425,17 @@ input::placeholder, textarea::placeholder{
     color: inherit;
     opacity: 0.92;
   }
-  /* Create tab — dual-brand gradient disc + white music-note mark. */
+  /* Create tab — filled brand signature (not outline). Quiet teal→violet,
+     soft depth shadow; glow dialed down so it feels premium, not neon. */
   .mobileTabbar a.tabCreate{
     --tab-create-orbit-top: 4px;
     --tab-create-orbit-size: 46px;
-    --tab-create-gradient: linear-gradient(145deg, #23d5ab 0%, #3fd9c0 32%, #7c5cff 100%);
+    --tab-create-gradient: linear-gradient(148deg, #2aabb0 0%, #5a78e0 48%, #7c5cff 100%);
     --tab-create-glow:
-      0 8px 22px rgba(0, 0, 0, 0.42),
-      0 0 14px rgba(35, 213, 171, 0.2),
-      0 0 18px rgba(124, 92, 255, 0.16),
-      inset 0 0 0 1px rgba(255, 255, 255, 0.14);
+      0 8px 20px rgba(0, 0, 0, 0.40),
+      0 0 0 1px rgba(255, 255, 255, 0.12),
+      0 0 18px rgba(124, 92, 255, 0.18),
+      inset 0 1px 0 rgba(255, 255, 255, 0.16);
     color: #fff;
     opacity: 1;
     justify-content: center;
@@ -21509,7 +21530,7 @@ input::placeholder, textarea::placeholder{
      below, so the Create tab cycles through both Nabad brand colours). */
   .mobileTabbar a.tabCreate.tabIsReady::before,
   .mobileTabbar a.tabCreate.tabIsListen::before{
-    background: linear-gradient(145deg, #2eebbc 0%, #45e8d4 30%, #9178ff 100%);
+    background: linear-gradient(148deg, #2ec4b0 0%, #6a7ef0 48%, #9178ff 100%);
     animation: tabCreatePulse 2400ms ease-in-out infinite;
   }
   .mobileTabbar a.tabCreate.tabIsReady .tabIcoCreate,
@@ -21525,7 +21546,7 @@ input::placeholder, textarea::placeholder{
     transform: translate(-50%, -50%);
   }
   .mobileTabbar a.tabCreate.tabIsListen::before{
-    background: linear-gradient(145deg, #2eebbc 0%, #5aeddc 28%, #a48bff 100%);
+    background: linear-gradient(148deg, #2ec4b0 0%, #7086f2 45%, #a48bff 100%);
   }
   /* Magic-wand icon: thin stroked stick + filled sparkle. Keep .tabIco from
      forcing a stroke onto the filled star (it would blob it out). */
@@ -21542,11 +21563,11 @@ input::placeholder, textarea::placeholder{
     margin: 0;
   }
   .mobileTabbar a.tabCreate.tabIsGenerating::before{
-    background: linear-gradient(145deg, #23d5ab 0%, #1fb6c9 45%, #6b52e8 100%);
+    background: linear-gradient(148deg, #2aabb0 0%, #5a78e0 48%, #6b52e8 100%);
     box-shadow:
       0 8px 18px rgba(0, 0, 0, 0.38),
-      0 0 16px rgba(35, 213, 171, 0.28),
-      inset 0 0 0 1px rgba(255, 255, 255, 0.14);
+      0 0 16px rgba(124, 92, 255, 0.20),
+      inset 0 1px 0 rgba(255, 255, 255, 0.14);
   }
   .mobileTabbar a.tabCreate.tabIsGenerating .tabIcoCreate,
   .mobileTabbar a.tabCreate.tabIsGenerating .tabIcoPlay{
@@ -22551,14 +22572,15 @@ body.trackSheetOpen .coachFab{
   display: flex;
   flex-direction: column;
   gap: 0;
-  background: var(--bg);
+  /* Transparent so the global dark wash shows through. */
+  background: transparent;
 }
 body[data-route="settings"] .app{
   padding-left: 0;
   padding-right: 0;
 }
 body[data-route="settings"] main.grid{
-  background: var(--bg);
+  background: transparent;
 }
 .settingsPageHead{
   display: flex;
@@ -29395,10 +29417,11 @@ button.discoverySpotCard{
   width: 100%;
   --profile-seg-gap: 22px;
   margin: var(--profile-seg-gap) 0 0;
-  padding: 0;
-  background: none;
-  border: 0;
-  box-shadow: none;
+  padding: 8px 6px;
+  background: var(--surface-panel);
+  border: 1px solid var(--surface-border);
+  border-radius: 16px;
+  box-shadow: var(--surface-highlight), 0 8px 20px rgba(0, 0, 0, 0.18);
 }
 .profileSegBar--dual{
   margin: 18px 0 0;
@@ -36681,7 +36704,7 @@ section.messagesThreadPage{
 }
 .messagesPage{
   padding: 0 0 88px;
-  background: var(--bg);
+  background: transparent;
 }
 .messagesThreadPage{
   display: flex;
@@ -36691,7 +36714,7 @@ section.messagesThreadPage{
   overflow: hidden;
   padding: 0;
   box-sizing: border-box;
-  background: var(--bg);
+  background: transparent;
 }
 @keyframes messagesThreadSlideIn{
   from{ transform: translate3d(100%, 0, 0); }
@@ -44031,9 +44054,9 @@ html[data-theme="light"] body[data-route="friends"], body.friendsFeedActive .fol
   min-height: 32px;
   padding: 4px 12px;
   border-radius: 999px;
-  border: 1px solid rgba(255,255,255,0.12);
-  background: rgba(255,255,255,0.045);
-  color: rgba(232,238,247,0.8);
+  border: 1px solid var(--chip-border);
+  background: var(--chip-bg);
+  color: var(--chip-text);
   font: inherit;
   font-size: 12.5px;
   font-weight: 700;
@@ -44048,32 +44071,32 @@ html[data-theme="light"] body[data-route="friends"], body.friendsFeedActive .fol
 }
 .optChip:active{ transform: scale(0.96); }
 .optChip.isActive{
-  /* Unified active-purple pill (shared with .styleSuggestPill + .addressPill). */
-  border-color: rgba(167,139,250,0.55);
-  background: linear-gradient(150deg, rgba(124,92,255,0.20), rgba(124,92,255,0.09));
-  color: #fff;
+  border-color: var(--chip-selected-border);
+  background: var(--chip-selected-bg);
+  color: var(--chip-selected-text);
 }
 
-/* ── Create surface — neutral selected pills: brighter fill + soft white glow,
-   no brand purple. Scoped to the route so other pages keep their accents. */
+/* Create selected controls — restrained purple, not metallic grey. */
 body[data-route="generate"] .createPageHeader .appScreenTitle,
 body[data-route="generate"] .appScreenTitle{
   text-shadow: none;
 }
 body[data-route="generate"] .optChip.isActive,
 body[data-route="generate"] .styleSuggestPill.isActive,
-body[data-route="generate"] .addressPill.isActive{
-  border-color: rgba(255,255,255,0.34);
-  background: linear-gradient(180deg, rgba(255,255,255,0.20), rgba(255,255,255,0.09));
-  color: #fff;
-  box-shadow:
-    inset 0 1px 0 rgba(255,255,255,0.25),
-    0 0 0 1px rgba(255,255,255,0.085),
-    0 3px 14px rgba(255,255,255,0.06),
-    0 8px 24px rgba(0,0,0,0.17);
+body[data-route="generate"] .addressPill.isActive,
+body[data-route="generate"] .createTab.isActive,
+body[data-route="generate"] .lyricsModeTab.isActive{
+  border-color: var(--chip-selected-border);
+  background: var(--chip-selected-bg);
+  color: var(--chip-selected-text);
+  box-shadow: none;
+}
+body[data-route="generate"] .createTab.isActive,
+body[data-route="generate"] .lyricsModeTab.isActive{
+  box-shadow: inset 0 0 0 1px var(--chip-selected-border);
 }
 body[data-route="generate"] .addressPill.isActive .addressPillSub{
-  color: rgba(244,247,255,0.78);
+  color: rgba(245, 240, 255, 0.78);
 }
 html[data-theme="light"] body[data-route="generate"] .optChip.isActive,
 html[data-theme="light"] body[data-route="generate"] .styleSuggestPill.isActive,

@@ -3877,14 +3877,8 @@ function createTabMorphTapPending(tabLink) {
     const generating = Boolean(els.btnSoundGenerate?.disabled);
     return generating || hasPrompt;
   }
-  const generating = Boolean(els.btnSunoGenerate?.disabled);
-  const hasInput = Boolean(
-    String(els.sunoPrompt?.value || "").trim() ||
-    String(els.sunoStyle?.value || "").trim() ||
-    imageMoodAppliedForNextGen
-  );
-  const hasResult = (els.resultCard?.style.display || "none") !== "none";
-  return generating || (hasInput && !hasResult);
+  // Song generate lives on the floating CTA — Create tab stays navigation.
+  return false;
 }
 
 function resolveMobileTabTap(a) {
@@ -3970,6 +3964,119 @@ function handleMobileTabTap(a, e) {
   return true;
 }
 
+let tabbarDockExpandConsumed = false;
+let tabbarDockIgnoreScrollUntil = 0;
+
+function setTabbarCollapsed(collapsed) {
+  const on = Boolean(collapsed);
+  document.body.classList.toggle("tabbarCollapsed", on);
+  const tabbar = document.querySelector(".mobileTabbar");
+  const createTab = document.getElementById("tabCreate");
+  try { tabbar?.setAttribute("aria-expanded", on ? "false" : "true"); } catch {}
+  try { createTab?.setAttribute("aria-label", on ? "Show tabs" : "Create"); } catch {}
+}
+
+function consumeTabbarDockExpand(ev, fromClick) {
+  const collapsed = document.body.classList.contains("tabbarCollapsed");
+  if (!collapsed && !tabbarDockExpandConsumed) return false;
+  if (collapsed) {
+    setTabbarCollapsed(false);
+    tabbarDockExpandConsumed = true;
+    tabbarDockIgnoreScrollUntil = Date.now() + 700;
+    window.setTimeout(() => { tabbarDockExpandConsumed = false; }, 600);
+    try { haptic("light"); } catch {}
+  }
+  if (ev) {
+    ev.preventDefault();
+    ev.stopPropagation();
+    try { ev.stopImmediatePropagation(); } catch {}
+  }
+  if (fromClick) tabbarDockExpandConsumed = false;
+  return true;
+}
+
+function tabbarDockBlocked() {
+  if (document.body.classList.contains("echoComposeOpen")) return true;
+  if (document.body.classList.contains("isDiscoverReelPlayer")) return true;
+  const route = String(document.body.getAttribute("data-route") || "").trim();
+  if (route === "player" || route === "studio" || route === "nabad-producer") return true;
+  try {
+    if (typeof isCreateChooserOpen === "function" && isCreateChooserOpen()) return true;
+  } catch {}
+  if (document.querySelector("dialog[open]")) return true;
+  return false;
+}
+
+function isTabbarPageScroller(el) {
+  if (!el || el === window || el === document || el === document.documentElement || el === document.body) {
+    return true;
+  }
+  if (!(el instanceof Element)) return false;
+  const h = el.clientHeight;
+  if (h < 220) return false;
+  if (el.scrollHeight < h + 48) return false;
+  return h >= Math.min(window.innerHeight * 0.45, 320);
+}
+
+function wireFloatingTabDock() {
+  const tabbar = document.querySelector(".mobileTabbar");
+  if (!tabbar) return;
+  let lastY = window.scrollY || document.documentElement.scrollTop || 0;
+  const THRESH = 16;
+
+  function onScroll(e) {
+    if (Date.now() < tabbarDockIgnoreScrollUntil) return;
+    if (tabbarDockBlocked()) {
+      setTabbarCollapsed(false);
+      return;
+    }
+    const target = e?.target;
+    const fromWindow = !target || target === document || target === document.documentElement || target === document.body;
+    if (!fromWindow && !isTabbarPageScroller(target)) return;
+    const y = fromWindow
+      ? (window.scrollY || document.documentElement.scrollTop || 0)
+      : Number(target.scrollTop || 0);
+    const dy = y - lastY;
+    lastY = y;
+    if (y < 28) {
+      setTabbarCollapsed(false);
+      return;
+    }
+    // Stay collapsed until the music note is tapped (or the user returns to top).
+    if (dy > THRESH) setTabbarCollapsed(true);
+  }
+
+  const createTab = document.getElementById("tabCreate");
+  function expandFromNote(ev) {
+    if (!document.body.classList.contains("tabbarCollapsed")) return;
+    consumeTabbarDockExpand(ev);
+  }
+  if (createTab) {
+    createTab.addEventListener("pointerdown", expandFromNote, { capture: true, passive: false });
+  }
+  tabbar.addEventListener("pointerdown", expandFromNote, { capture: true, passive: false });
+  tabbar.addEventListener("click", expandFromNote, { capture: true, passive: false });
+  document.addEventListener(
+    "click",
+    (ev) => {
+      if (!document.body.classList.contains("tabbarCollapsed")) return;
+      const y = Number(ev.clientY || 0);
+      const x = Number(ev.clientX || 0);
+      if (y < window.innerHeight - 130) return;
+      if (Math.abs(x - window.innerWidth / 2) > 52) return;
+      consumeTabbarDockExpand(ev, true);
+    },
+    true,
+  );
+
+  document.addEventListener("scroll", onScroll, { passive: true, capture: true });
+  window.addEventListener("hashchange", () => {
+    lastY = 0;
+    tabbarDockExpandConsumed = false;
+    setTabbarCollapsed(false);
+  });
+}
+
 function attachTabRefresh() {
   const tabs = document.querySelectorAll(".mobileTabbar a[data-route-link]");
   tabs.forEach((a) => {
@@ -3979,6 +4086,7 @@ function attachTabRefresh() {
       "pointerdown",
       (e) => {
         if (createTabMorphTapPending(a)) return;
+        if (a.id === "tabCreate" && consumeTabbarDockExpand(e)) return;
         if (!handleMobileTabTap(a, e)) return;
         e.preventDefault();
         haptic("light");
@@ -69359,14 +69467,6 @@ function syncCreateTabMorphNow() {
 
   if (justFinished) {
     _tabListenFlashedForRun = true;
-    tab.classList.remove("tabIsReady", "tabIsGenerating", "tabIsAwaitingLyrics");
-    tab.classList.add("tabIsListen");
-    if (_tabListenTimer) clearTimeout(_tabListenTimer);
-    _tabListenTimer = setTimeout(() => {
-      tab.classList.remove("tabIsListen");
-      _tabListenTimer = null;
-      try { syncCreateTabMorph(); } catch {}
-    }, 2400);
     return;
   }
 
@@ -69380,7 +69480,7 @@ function syncCreateTabMorphNow() {
     return;
   }
 
-  if (humGenerating || soundGenerating || generating) {
+  if (humGenerating || soundGenerating) {
     tab.classList.add("tabIsGenerating");
     tab.classList.remove("tabIsReady", "tabIsListen", "tabIsAwaitingLyrics");
     if (tooltip) tooltip.hidden = true;
@@ -69402,11 +69502,46 @@ function syncCreateTabMorphNow() {
     return;
   }
 
-  const ready = createTabCanGenerate();
-  tab.classList.toggle("tabIsReady", ready);
-  tab.classList.toggle("tabIsAwaitingLyrics", blocked && hasInput);
-  tab.classList.remove("tabIsGenerating", "tabIsListen");
-  if (tooltip) tooltip.hidden = !ready;
+  // Song form: floating Generate CTA owns ready / generating / listen.
+  tab.classList.remove("tabIsReady", "tabIsGenerating", "tabIsListen", "tabIsAwaitingLyrics");
+  if (tooltip) tooltip.hidden = true;
+}
+
+function createGenerateCtaArmed() {
+  const hasLyrics = Boolean(String(els.sunoPrompt?.value || "").trim());
+  const hasStyle =
+    Boolean(String(els.sunoStyle?.value || "").trim()) ||
+    Boolean(imageMoodAppliedForNextGen);
+  const instrumental = String(els.vocalInstrumentalOnly?.value || "0") === "1";
+  if (isCreateGenerateBlockedAwaitingLyrics()) return false;
+  if (!arabicLyricChoicesReady()) return false;
+  if (isTemplateSparkClipFlow() && activePhotoSoloChallengeId()) {
+    return photoSoloChallengeCanGenerate();
+  }
+  if (isTemplateSparkClipFlow()) return templateSparkClipLyricsReady();
+  if (instrumental) return hasStyle;
+  return hasLyrics && hasStyle;
+}
+
+function syncCreateGenerateDock() {
+  const dock = document.getElementById("createGenerateDock");
+  const route = document.body.getAttribute("data-route") || "";
+  const flow = getCreateFlow();
+  const hide =
+    route !== "generate" ||
+    flow === "humtrack" ||
+    flow === "sounds" ||
+    flow === "persona";
+  if (dock) dock.hidden = hide;
+  const btn = els.btnSunoGenerate;
+  if (!btn) return;
+  const generating =
+    isCreateTabGeneratingAnim() ||
+    (btn.disabled && /generating|checking/i.test(String(btn.textContent || "")));
+  const hasResult = (els.resultCard?.style.display || "none") !== "none";
+  const armed = createGenerateCtaArmed();
+  btn.classList.toggle("isReady", !hide && (armed || generating || hasResult));
+  btn.classList.toggle("isIdle", !hide && !generating && !hasResult && !armed);
 }
 
 function syncGenerateOrbVisibility() {
@@ -69434,6 +69569,7 @@ function syncGenerateOrbVisibility() {
   }
   try { syncArabicLyricsControlsVisibility(); } catch {}
   syncCreateTabMorph();
+  try { syncCreateGenerateDock(); } catch {}
   if (!/generating|checking/i.test(String(els.btnSunoGenerate?.textContent || ""))) {
     try { syncTemplateSparkClipGenerateReady(); } catch {}
   }
@@ -69730,13 +69866,15 @@ window.addEventListener("hashchange", syncGenerateOrbVisibility);
 
 const _tabMo = new MutationObserver(() => {
   try { syncCreateTabMorph(); } catch {}
+  try { syncCreateGenerateDock(); } catch {}
 });
 try {
-  _tabMo.observe(document.body, { attributes: true, attributeFilter: ["data-route", "class"] });
+  _tabMo.observe(document.body, { attributes: true, attributeFilter: ["data-route", "class", "data-create-flow"] });
   if (els.resultCard) _tabMo.observe(els.resultCard, { attributes: true, attributeFilter: ["style"] });
   if (els.btnSunoGenerate) _tabMo.observe(els.btnSunoGenerate, { attributes: true, attributeFilter: ["disabled"] });
 } catch {}
 syncCreateTabMorph();
+try { syncCreateGenerateDock(); } catch {}
 // First route apply runs after loadAuthSession() below — not here — so empty
 // hash does not briefly bounce through #/auth before Welcome / Get Started.
 
@@ -69744,6 +69882,7 @@ syncCreateTabMorph();
   const tab = document.getElementById("tabCreate");
   if (!tab) return;
   tab.addEventListener("click", (ev) => {
+    if (consumeTabbarDockExpand(ev, true)) return;
     if (isCreateChooserOpen()) {
       ev.preventDefault();
       closeCreateChooserSheet({ immediate: true });
@@ -69779,41 +69918,7 @@ syncCreateTabMorph();
       void submitSoundGenerate();
       return;
     }
-    const hasInput = Boolean(
-      String(els.sunoPrompt?.value || "").trim() ||
-      String(els.sunoStyle?.value || "").trim() ||
-      imageMoodAppliedForNextGen
-    );
-    const generating = isCreateTabGeneratingAnim();
-    const hasResult = (els.resultCard?.style.display || "none") !== "none";
-    if (isCreateGenerateBlockedAwaitingLyrics()) {
-      ev.preventDefault();
-      ev.stopPropagation();
-      try { haptic("light"); } catch {}
-      try {
-        showToast(createGenerateBlockedToastMessage(), { icon: "✦", durationMs: 3200 });
-      } catch {}
-      return;
-    }
-    if (!arabicLyricChoicesReady()) {
-      ev.preventDefault();
-      ev.stopPropagation();
-      try { haptic("light"); } catch {}
-      try {
-        showToast(arabicLyricChoicesBlockReason(), { icon: "!", durationMs: 3200 });
-      } catch {}
-      return;
-    }
-    // On the song form, the Create tab morphs into Generate — don't send users
-    // back to the home desk (#/challenges) when they meant to start a run.
-    if (generating || _createGenerateInFlight || (hasInput && !hasResult)) {
-      ev.preventDefault();
-      ev.stopPropagation();
-      if (!generating && !_createGenerateInFlight && els.btnSunoGenerate) {
-        haptic("impact");
-        els.btnSunoGenerate.click();
-      }
-    }
+    // Song generate lives on the floating CTA. Center Create stays navigation.
   }, true);
 })();
 
@@ -73470,6 +73575,7 @@ setProfileEditing(false);
 // click time, so it stays correct across hash changes without needing
 // a rebind.
 try { attachTabRefresh(); } catch (e) { console.warn("[tabRefresh] init", e); }
+try { wireFloatingTabDock(); } catch (e) { console.warn("[tabDock] init", e); }
 try { wireProfileChromeNavOnce(); } catch (e) { console.warn("[profileChromeNav] init", e); }
 try {
   initPullToRefresh({

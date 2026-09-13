@@ -1908,6 +1908,17 @@ body{
   -webkit-user-select: none;
   user-select: none;
   -webkit-touch-callout: none;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+html::-webkit-scrollbar,
+body::-webkit-scrollbar,
+.app::-webkit-scrollbar,
+*::-webkit-scrollbar{
+  display: none;
+  width: 0;
+  height: 0;
+  background: transparent;
 }
 html.is-web-shell,
 html.is-web-shell body{
@@ -10049,6 +10060,7 @@ html:not([data-theme="light"]) body[data-route="generate"]::after{
 html:not([data-theme="light"]) body[data-route="generate"] .app{
   position: relative;
   z-index: 1;
+  scrollbar-width: none;
 }
 html:not([data-theme="light"]) body[data-route="generate"] .mobileTabbar{
   position: fixed;
@@ -16267,23 +16279,32 @@ html[data-theme="light"] body[data-route="generate"] .lyricsBox.generating .lyri
 }
 /* Generate focus mode: keep identity, reduce noise while editing any card */
 body[data-route="generate"] #createFlow.focusInput{
-  gap: 12px;
+  gap: 10px;
 }
 body[data-route="generate"] #createFlow.focusInput .inputPanel{
-  transition: border-color 180ms ease, box-shadow 180ms ease, opacity 180ms ease;
+  transition: border-color 180ms ease, box-shadow 180ms ease, opacity 180ms ease, transform 180ms ease;
 }
 body[data-route="generate"] #createFlow.focusInput .inputPanel:not(.isFocusCard){
-  opacity: 0.72;
+  opacity: 0.88;
   filter: none;
   transform: none;
 }
 body[data-route="generate"] #createFlow.focusInput .inputPanel.isFocusCard{
+  position: relative;
+  z-index: 2;
   opacity: 1;
-  transform: none;
-  border-color: rgba(124,92,255,0.36);
+  transform: translateY(-3px);
+  border-color: rgba(255, 255, 255, 0.18);
   box-shadow:
-    0 0 0 1px rgba(124,92,255,0.22) inset,
-    0 10px 24px rgba(14,18,30,0.26);
+    inset 0 1px 0 rgba(255, 255, 255, 0.16),
+    0 18px 32px rgba(0, 0, 0, 0.34),
+    0 0 34px rgba(124, 92, 255, 0.16),
+    0 10px 22px rgba(35, 213, 171, 0.10);
+}
+@media (prefers-reduced-motion: reduce){
+  body[data-route="generate"] #createFlow.focusInput .inputPanel.isFocusCard{
+    transform: none;
+  }
 }
 .lyricsBox.wandGenerated .lyricsBoxMain textarea{
   color: var(--text);
@@ -16297,6 +16318,13 @@ body[data-route="generate"] #createFlow.focusInput .inputPanel.isFocusCard{
 }
 input:focus,select:focus{ border-color: rgba(124,92,255,0.65); box-shadow:0 0 0 3px rgba(124,92,255,0.15); }
 textarea:focus{ border-color: rgba(124,92,255,0.65); box-shadow:0 0 0 3px rgba(124,92,255,0.15); }
+body[data-route="generate"] input:focus,
+body[data-route="generate"] textarea:focus,
+body[data-route="generate"] select:focus{
+  outline: none;
+  border-color: transparent;
+  box-shadow: none;
+}
 input:disabled,
 textarea:disabled{
   background: rgba(148,163,184,0.14);
@@ -21299,7 +21327,7 @@ body.trackSheetOpen .footer{
     overflow-x: clip;
   }
   body[data-route="generate"] .app{
-    padding-bottom: calc(186px + env(safe-area-inset-bottom));
+    padding-bottom: calc(198px + env(safe-area-inset-bottom));
   }
   body[data-route="generate"].createKeyboardOpen .app{
     padding-bottom: calc(186px + env(safe-area-inset-bottom) + var(--create-keyboard-inset, 0px));
@@ -21404,9 +21432,35 @@ body.trackSheetOpen .footer{
     min-height: 124px;
   }
   .card.wide[data-route="generate"] .inputPanel .lyricsBoxMain textarea{
-    min-height: 104px;
+    min-height: 72px;
     max-height: 260px;
     overflow-y: auto;
+    outline: none;
+  }
+  body[data-route="generate"] .createFlow,
+  body[data-route="generate"] .createFlowStep,
+  body[data-route="generate"] .createSectionStack,
+  body[data-route="generate"] #createFlow > .createFlowStep:first-child{
+    gap: 10px;
+  }
+  body[data-route="generate"] .createSectionStack{
+    margin-bottom: 0;
+  }
+  body[data-route="generate"] .createTabs{
+    margin-bottom: 10px;
+  }
+  body[data-route="generate"] #advancedSheet:not([open]){
+    display: none;
+  }
+  body[data-route="generate"] input:focus,
+  body[data-route="generate"] textarea:focus,
+  body[data-route="generate"] select:focus{
+    outline: none;
+    border-color: transparent;
+    box-shadow: none;
+  }
+  body[data-route="generate"] .addressPills--singer .addressPill{
+    min-height: 44px;
   }
   .card.wide[data-route="generate"] .inputPanel--style input{
     min-height: 36px;
@@ -22889,7 +22943,7 @@ body.trackSheetOpen .coachFab{
 @media (max-width: 720px){
   body[data-route="generate"] .createGenerateDockSpacer{
     display: block;
-    height: 108px;
+    height: 132px;
   }
   body[data-route="generate"][data-create-flow="humtrack"] .createGenerateDockSpacer,
   body[data-route="generate"][data-create-flow="sounds"] .createGenerateDockSpacer,

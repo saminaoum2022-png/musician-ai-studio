@@ -44,6 +44,8 @@ final class BridgeViewController: CAPBridgeViewController {
         sv.minimumZoomScale = 1
         sv.maximumZoomScale = 1
         sv.bouncesZoom = false
+        sv.showsVerticalScrollIndicator = false
+        sv.showsHorizontalScrollIndicator = false
         sv.pinchGestureRecognizer?.isEnabled = false
         if abs(sv.zoomScale - 1) > 0.001 {
             sv.setZoomScale(1, animated: false)

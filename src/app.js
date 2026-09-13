@@ -3906,7 +3906,6 @@ function resolveMobileTabTap(a) {
         } catch {}
         window.setTimeout(() => {
           try { setActiveCreateTab?.("lyrics"); } catch {}
-          try { els.sunoPrompt?.focus?.({ preventScroll: true }); } catch {}
         }, 100);
       }
     } else if (createNav.route === "profile") {
@@ -5561,6 +5560,12 @@ function applyRoute({ passGen } = {}) {
   if (wanted === "generate") {
     try { renderPersonaSelect(); } catch {}
     try { restoreCreatePageOnRouteEnter(); } catch {}
+    try { autoResizeLyricsBox(); } catch {}
+    if (prevRoute !== "generate") {
+      armCreateAutofocusGuard();
+      window.setTimeout(blurCreateFieldsQuietly, 80);
+      window.setTimeout(blurCreateFieldsQuietly, 240);
+    }
   }
   syncGenerateOrbVisibility();
   renderGenerateReadyDot();
@@ -5660,9 +5665,6 @@ function setLyricsInputMode(mode, opts = {}) {
     window.setTimeout(() => {
       els.lyricsFieldPanel?.classList.remove("lyricsModeSwitching");
     }, 220);
-    if (next === "generate") {
-      try { els.sunoPrompt.focus({ preventScroll: true }); } catch {}
-    }
   }
 }
 
@@ -17866,7 +17868,6 @@ function navigateFromCreateChooser(action) {
       else scheduleApplyRoute();
       window.setTimeout(() => {
         try { if (typeof setActiveCreateTab === "function") setActiveCreateTab("lyrics"); } catch {}
-        try { els.sunoPrompt?.focus?.({ preventScroll: true }); } catch {}
       }, 100);
       return;
     }
@@ -69575,14 +69576,40 @@ function syncGenerateOrbVisibility() {
   }
 }
 
+function lyricsBoxEmptyBaseHeight() {
+  try {
+    if (window.matchMedia("(max-width: 720px)").matches) return 72;
+  } catch {}
+  return 132;
+}
+
+let _createIgnoreAutofocus = false;
+
+function blurCreateFieldsQuietly() {
+  try {
+    const active = document.activeElement;
+    if (active && isCreateFormField(active)) active.blur();
+  } catch {}
+  try { setGenerateInputFocus(null); } catch {}
+  try { getNativeKeyboardPlugin()?.hide?.(); } catch {}
+}
+
+function armCreateAutofocusGuard() {
+  _createIgnoreAutofocus = true;
+  blurCreateFieldsQuietly();
+}
+
 function autoResizeLyricsBox() {
   if (!els.sunoPrompt) return;
   const el = els.sunoPrompt;
   try { applyLyricsInputBidi(el); } catch {}
   el.style.height = "auto";
-  const base = 132;
+  const base = lyricsBoxEmptyBaseHeight();
   const max = 340;
-  const next = Math.max(base, Math.min(max, el.scrollHeight));
+  const hasText = Boolean(String(el.value || "").trim());
+  const next = hasText
+    ? Math.max(base, Math.min(max, el.scrollHeight))
+    : base;
   el.style.height = `${next}px`;
 }
 
@@ -69707,6 +69734,10 @@ function clearCreatePageKeyboardInset() {
 
 function handleCreateFieldFocus(target) {
   if (!isCreateFormField(target)) return;
+  if (_createIgnoreAutofocus) {
+    try { target.blur(); } catch {}
+    return;
+  }
   _createFocusedField = target;
   setGenerateInputFocus(target.closest(".inputPanel") || null);
   if (document.body.classList.contains("createKeyboardOpen") && _createKeyboardHeight > 0) {
@@ -69745,6 +69776,9 @@ function wireCreatePageKeyboardOnce() {
 
   const root = getCreatePageRoot();
   if (root) {
+    root.addEventListener("pointerdown", () => {
+      _createIgnoreAutofocus = false;
+    }, { capture: true });
     root.addEventListener("focusin", (e) => {
       if (!isGenerateRouteActive()) return;
       handleCreateFieldFocus(e.target);
@@ -75189,9 +75223,6 @@ function setActiveCreateTab(mode) {
 if (createTabEls.lyrics) {
   createTabEls.lyrics.addEventListener("click", () => {
     setActiveCreateTab("lyrics");
-    setTimeout(() => {
-      try { els.sunoPrompt?.focus({ preventScroll: true }); } catch {}
-    }, 220);
   });
 }
 if (createTabEls.photo) {

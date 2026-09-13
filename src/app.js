@@ -6883,6 +6883,8 @@ function resetCreateDraft() {
   clearCreateChallengeContext();
   setCreateChallengeHint(null);
   clearCreateChallengeFocus();
+  try { syncPhotoSoloChallengeCreateUi(); } catch {}
+  try { syncPhotoSoloBannerUi(null); } catch {}
   if (els.sunoArtworkStyle) els.sunoArtworkStyle.value = "";
   if (els.sunoReferenceMode) els.sunoReferenceMode.value = "none";
   try { setCreateSongType("vocal"); } catch {
@@ -69539,10 +69541,9 @@ function syncCreateGenerateDock() {
   const generating =
     isCreateTabGeneratingAnim() ||
     (btn.disabled && /generating|checking/i.test(String(btn.textContent || "")));
-  const hasResult = (els.resultCard?.style.display || "none") !== "none";
   const armed = createGenerateCtaArmed();
-  btn.classList.toggle("isReady", !hide && (armed || generating || hasResult));
-  btn.classList.toggle("isIdle", !hide && !generating && !hasResult && !armed);
+  btn.classList.toggle("isReady", !hide && armed && !generating);
+  btn.classList.toggle("isIdle", !hide && !generating && !armed);
 }
 
 function syncGenerateOrbVisibility() {

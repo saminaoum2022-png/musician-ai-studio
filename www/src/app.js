@@ -2434,15 +2434,12 @@ function syncHubNowPlayPauseUi(audible) {
   const btn = document.getElementById("hubNowPlayPause");
   const playing = Boolean(audible);
   if (els.hubNowPlaying) {
-    els.hubNowPlaying.setAttribute("data-mini-pp", playing ? "pause" : "play");
+    els.hubNowPlaying.removeAttribute("data-mini-pp");
   }
   if (!btn) return;
   btn.classList.toggle("isPlaying", playing);
-  const pPause = btn.querySelector(".hubNowPPIco--pause");
-  const pPlay = btn.querySelector(".hubNowPPIco--play");
-  if (pPause) pPause.hidden = !playing;
-  if (pPlay) pPlay.hidden = playing;
-  btn.setAttribute("aria-label", playing ? "Pause" : "Play");
+  const title = String(hubNowMeta?.title || "Now playing").trim() || "Now playing";
+  btn.setAttribute("aria-label", `Open player, ${title}`);
 }
 
 /** Audio element backing the bottom mini player (Discover uses `playerEl`). */
@@ -6558,6 +6555,8 @@ function syncArabicGenerateGate() {
       els.btnGenerateOrb.title = blocked ? arabicLyricChoicesBlockReason() : "";
     }
   }
+  try { syncCreateGenerateDock(); } catch {}
+  try { syncCreateTabMorph(); } catch {}
 }
 
 function syncArabicLyricsControlsVisibility() {
@@ -69723,9 +69722,6 @@ function syncCreateTabMorphNow() {
 
 function createGenerateCtaArmed() {
   const hasLyrics = Boolean(String(els.sunoPrompt?.value || "").trim());
-  const hasStyle =
-    Boolean(String(els.sunoStyle?.value || "").trim()) ||
-    Boolean(imageMoodAppliedForNextGen);
   const instrumental = String(els.vocalInstrumentalOnly?.value || "0") === "1";
   if (isCreateGenerateBlockedAwaitingLyrics()) return false;
   if (!arabicLyricChoicesReady()) return false;
@@ -69733,8 +69729,8 @@ function createGenerateCtaArmed() {
     return photoSoloChallengeCanGenerate();
   }
   if (isTemplateSparkClipFlow()) return templateSparkClipLyricsReady();
-  if (instrumental) return hasStyle;
-  return hasLyrics && hasStyle;
+  if (instrumental) return true;
+  return hasLyrics;
 }
 
 function syncCreateGenerateDock() {
@@ -69902,7 +69898,7 @@ function scrollCreatePanelAboveKeyboard(field) {
     measureCreateViewportKeyboardInset(),
   );
   if (kb > 0) {
-    panel.style.scrollMarginBottom = `${Math.round(kb + 28)}px`;
+    panel.style.scrollMarginBottom = `${Math.round(kb + 72)}px`;
   }
   try {
     panel.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "auto" });
@@ -69910,14 +69906,19 @@ function scrollCreatePanelAboveKeyboard(field) {
 }
 
 function applyCreateKeyboardOpen(height) {
-  const kb = Math.max(0, Math.round(Number(height) || 0));
-  if (!kb || !_createFocusedField) return;
+  if (!isGenerateRouteActive()) return;
+  const kb = Math.max(
+    0,
+    Math.round(Number(height) || 0),
+    measureCreateViewportKeyboardInset(),
+  );
+  if (!kb) return;
   _createKeyboardHeight = kb;
   document.body.classList.add("createKeyboardOpen");
   try {
     document.documentElement.style.setProperty("--create-keyboard-inset", `${kb}px`);
   } catch {}
-  scrollCreatePanelAboveKeyboard(_createFocusedField);
+  if (_createFocusedField) scrollCreatePanelAboveKeyboard(_createFocusedField);
 }
 
 function scheduleCreateKeyboardScroll() {
@@ -69963,22 +69964,33 @@ function wireCreatePageKeyboardOnce() {
 
   const Keyboard = getNativeKeyboardPlugin();
   if (Keyboard?.addListener) {
-    Keyboard.addListener("keyboardDidShow", (info) => {
-      if (!isGenerateRouteActive() || !_createFocusedField) return;
+    Keyboard.addListener("keyboardWillShow", (info) => {
+      if (!isGenerateRouteActive()) return;
       applyCreateKeyboardOpen(info?.keyboardHeight ?? measureCreateViewportKeyboardInset());
+    });
+    Keyboard.addListener("keyboardDidShow", (info) => {
+      if (!isGenerateRouteActive()) return;
+      applyCreateKeyboardOpen(info?.keyboardHeight ?? measureCreateViewportKeyboardInset());
+    });
+    Keyboard.addListener("keyboardWillHide", () => {
+      if (!isGenerateRouteActive()) return;
+      clearCreatePageKeyboardInset();
     });
     Keyboard.addListener("keyboardDidHide", () => {
       if (!isGenerateRouteActive()) return;
       clearCreatePageKeyboardInset();
       setGenerateInputFocus(null);
     });
-  } else {
+  }
+  {
     const vv = window.visualViewport;
     const onViewportChange = () => {
-      if (!isGenerateRouteActive() || !_createFocusedField) return;
+      if (!isGenerateRouteActive()) return;
       const kb = measureCreateViewportKeyboardInset();
-      if (kb > 0) applyCreateKeyboardOpen(kb);
-      else if (!isCreateFormField(document.activeElement)) clearCreatePageKeyboardInset();
+      if (kb > 80) applyCreateKeyboardOpen(kb);
+      else if (!getNativeKeyboardPlugin() && !isCreateFormField(document.activeElement)) {
+        clearCreatePageKeyboardInset();
+      }
     };
     if (vv) {
       vv.addEventListener("resize", onViewportChange);
@@ -70094,7 +70106,7 @@ function showReferenceHintsPopupOnce() {
   const msg = hints.map((h, i) => `${i + 1}. ${h.text}`).join("\n");
   window.alert(msg);
 }
-["input", "change"].forEach((ev) => {
+["input", "change", "compositionend"].forEach((ev) => {
   els.sunoPrompt?.addEventListener(ev, syncGenerateOrbVisibility);
   els.sunoStyle?.addEventListener(ev, syncGenerateOrbVisibility);
 });
@@ -70636,7 +70648,6 @@ if (els.hubTabLink) {
     }, 250);
   });
 }
-let vinylLongPressFired = false;
 if (els.hubNowClose) {
   els.hubNowClose.addEventListener("click", (e) => {
     try {
@@ -70653,23 +70664,8 @@ if (els.hubNowPlayPause && !els.hubNowPlayPause.dataset.boundHubPp) {
       e.preventDefault();
       e.stopPropagation();
     } catch {}
-    if (vinylLongPressFired) return;
-    const a = getMiniPlayerAudio();
-    if (!a) return;
     haptic("light");
-    try {
-      if (a.paused || a.ended) void hubAudioPlayWithRetry(a);
-      else a.pause();
-    } catch {}
-    try {
-      syncPlayerUI();
-    } catch {}
-    try {
-      syncDiscoveryPlayingHighlights();
-    } catch {}
-    try {
-      renderHubNowPlaying();
-    } catch {}
+    openMiniPlayerFullSurface();
   });
 }
 if (els.hubNowExpand && !els.hubNowExpand.dataset.boundHubExp) {
@@ -70711,50 +70707,9 @@ function openMiniPlayerFullSurface() {
     }, 120);
     return;
   }
-  if (playerEl && playerEl.src) {
-    try { location.hash = "#/player"; } catch {}
-  }
+  try { location.hash = "#/player"; } catch {}
 }
 
-if (els.hubNowPlaying) {
-  let vinylLongPressTimer = null;
-  let vinylPressX = 0;
-  let vinylPressY = 0;
-  const cancelVinylLongPress = () => {
-    if (vinylLongPressTimer) {
-      clearTimeout(vinylLongPressTimer);
-      vinylLongPressTimer = null;
-    }
-  };
-  els.hubNowPlaying.addEventListener("pointerdown", (e) => {
-    if (e.target?.closest?.(".hubNowClose")) return;
-    vinylLongPressFired = false;
-    vinylPressX = Number(e.clientX || 0);
-    vinylPressY = Number(e.clientY || 0);
-    cancelVinylLongPress();
-    vinylLongPressTimer = setTimeout(() => {
-      vinylLongPressTimer = null;
-      vinylLongPressFired = true;
-      haptic("medium");
-      openMiniPlayerFullSurface();
-    }, 480);
-  });
-  els.hubNowPlaying.addEventListener("pointermove", (e) => {
-    if (!vinylLongPressTimer) return;
-    const dx = Number(e.clientX || 0) - vinylPressX;
-    const dy = Number(e.clientY || 0) - vinylPressY;
-    if ((dx * dx) + (dy * dy) > 144) cancelVinylLongPress();
-  });
-  els.hubNowPlaying.addEventListener("pointerup", cancelVinylLongPress);
-  els.hubNowPlaying.addEventListener("pointercancel", cancelVinylLongPress);
-  els.hubNowPlaying.addEventListener("lostpointercapture", cancelVinylLongPress);
-  els.hubNowPlaying.addEventListener("click", (e) => {
-    if (!vinylLongPressFired) return;
-    vinylLongPressFired = false;
-    e.preventDefault();
-    e.stopPropagation();
-  }, true);
-}
 window.addEventListener("scroll", () => {
   const route = document.body.getAttribute("data-route") || "";
   // Hub reel scrolls inside `#hubList` — `window` does not move. All Hub

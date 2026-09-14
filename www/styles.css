@@ -21357,7 +21357,17 @@ body.trackSheetOpen .footer{
     padding-bottom: calc(198px + env(safe-area-inset-bottom));
   }
   body[data-route="generate"].createKeyboardOpen .app{
-    padding-bottom: calc(186px + env(safe-area-inset-bottom) + var(--create-keyboard-inset, 0px));
+    padding-bottom: calc(72px + var(--create-keyboard-inset, 0px));
+  }
+  body[data-route="generate"].createKeyboardOpen .mobileTabbar{
+    opacity: 0;
+    pointer-events: none;
+    visibility: hidden;
+  }
+  body[data-route="generate"].createKeyboardOpen .hubNowPlaying{
+    opacity: 0 !important;
+    pointer-events: none !important;
+    transform: translate3d(0, 12px, 0) scale(0.92);
   }
   body[data-route="generate"] .footer{
     display: none;
@@ -21657,10 +21667,17 @@ input::placeholder, textarea::placeholder{
   }
   .mobileTabbar{
     --tab-pill-size: 46px;
-    --tab-pill-fill: rgba(255, 255, 255, 0.10);
+    --tab-tray-size: 58px;
+    --tab-tray-collapsed: 52px;
+    --tab-pad-x: 6px;
+    --tab-pad-y: 8px;
+    --tab-col: calc((100% - (var(--tab-pad-x) * 2)) / 5);
+    --tab-col-shift: calc((100vw - (var(--tab-pad-x) * 2)) / 5);
+    --tab-pill-fill: rgba(255, 255, 255, 0.12);
     --tab-pill-glow:
-      inset 0 1px 0 rgba(255, 255, 255, 0.22),
-      0 0 0 1px rgba(255, 255, 255, 0.14);
+      inset 0 1px 0 rgba(255, 255, 255, 0.28),
+      0 0 0 1px rgba(255, 255, 255, 0.16),
+      0 3px 8px rgba(0, 0, 0, 0.22);
     display:grid;
     grid-template-columns: repeat(5, 1fr);
     gap: 0;
@@ -21671,13 +21688,46 @@ input::placeholder, textarea::placeholder{
     z-index: 90;
     border: 0;
     border-radius: 0;
-    padding: 8px 6px max(10px, env(safe-area-inset-bottom)) 6px;
+    padding: var(--tab-pad-y) var(--tab-pad-x) max(10px, env(safe-area-inset-bottom)) var(--tab-pad-x);
     background: transparent;
     box-shadow: none;
     -webkit-backdrop-filter: none;
     backdrop-filter: none;
     pointer-events: none;
     overflow: visible;
+  }
+  /* Glass tray — one nav instrument under the five pills. Collapses with them. */
+  .mobileTabbar::after{
+    content: "";
+    position: absolute;
+    left: calc(var(--tab-pad-x) + (var(--tab-col) - var(--tab-pill-size)) / 2 - 6px);
+    right: calc(var(--tab-pad-x) + (var(--tab-col) - var(--tab-pill-size)) / 2 - 6px);
+    top: calc(var(--tab-pad-y) + (var(--tab-pill-size) - var(--tab-tray-size)) / 2);
+    height: var(--tab-tray-size);
+    border-radius: 999px;
+    background: linear-gradient(180deg, rgba(36, 42, 58, 0.78), rgba(10, 12, 20, 0.82));
+    -webkit-backdrop-filter: blur(28px) saturate(1.55);
+    backdrop-filter: blur(28px) saturate(1.55);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.20),
+      0 0 0 1px rgba(255, 255, 255, 0.14),
+      0 18px 44px rgba(0, 0, 0, 0.48);
+    pointer-events: none;
+    z-index: 0;
+    transition:
+      left 320ms cubic-bezier(0.22, 1, 0.36, 1),
+      right 320ms cubic-bezier(0.22, 1, 0.36, 1),
+      top 320ms cubic-bezier(0.22, 1, 0.36, 1),
+      height 320ms cubic-bezier(0.22, 1, 0.36, 1),
+      border-radius 320ms cubic-bezier(0.22, 1, 0.36, 1),
+      opacity 240ms ease;
+  }
+  body.tabbarCollapsed .mobileTabbar::after{
+    left: calc(var(--tab-pad-x) + (4 * var(--tab-col)) + (var(--tab-col) - var(--tab-tray-collapsed)) / 2);
+    right: calc(var(--tab-pad-x) + (var(--tab-col) - var(--tab-tray-collapsed)) / 2);
+    top: calc(var(--tab-pad-y) + (var(--tab-pill-size) - var(--tab-tray-collapsed)) / 2);
+    height: var(--tab-tray-collapsed);
+    border-radius: 50%;
   }
   .mobileTabbar a{
     --tab-create-orbit-top: 0px;
@@ -21712,9 +21762,11 @@ input::placeholder, textarea::placeholder{
     gap: 0;
     position: relative;
     isolation: isolate;
+    z-index: 1;
     pointer-events: auto;
     -webkit-tap-highlight-color: transparent;
     outline: none;
+    transform-origin: 50% calc(var(--tab-pill-size) / 2);
   }
   .mobileTabbar a::before{
     content: "";
@@ -21750,49 +21802,54 @@ input::placeholder, textarea::placeholder{
     z-index: 5;
   }
   body.tabbarCollapsed .mobileTabbar a[data-tab-slot="l2"]{
-    transform: translateX(80vw) scale(0.18);
+    transform: translateX(calc(4 * var(--tab-col-shift))) scale(0.18);
   }
   body.tabbarCollapsed .mobileTabbar a[data-tab-slot="l1"]{
-    transform: translateX(60vw) scale(0.18);
+    transform: translateX(calc(3 * var(--tab-col-shift))) scale(0.18);
   }
   body.tabbarCollapsed .mobileTabbar a[data-tab-slot="c"]{
-    transform: translateX(40vw) scale(0.18);
+    transform: translateX(calc(2 * var(--tab-col-shift))) scale(0.18);
   }
   body.tabbarCollapsed .mobileTabbar a[data-tab-slot="r1"]{
-    transform: translateX(20vw) scale(0.18);
+    transform: translateX(var(--tab-col-shift)) scale(0.18);
   }
   body.tabbarCollapsed .mobileTabbar a[data-tab-slot="r2"]{
     transform: scale(0.18);
   }
   body.tabbarCollapsed .mobileTabbar a.tabDock[data-tab-slot="l2"]{
-    transform: translateX(80vw) scale(1.08);
+    transform: translateX(calc(4 * var(--tab-col-shift)));
   }
   body.tabbarCollapsed .mobileTabbar a.tabDock[data-tab-slot="l1"]{
-    transform: translateX(60vw) scale(1.08);
+    transform: translateX(calc(3 * var(--tab-col-shift)));
   }
   body.tabbarCollapsed .mobileTabbar a.tabDock[data-tab-slot="c"]{
-    transform: translateX(40vw) scale(1.08);
+    transform: translateX(calc(2 * var(--tab-col-shift)));
   }
   body.tabbarCollapsed .mobileTabbar a.tabDock[data-tab-slot="r1"]{
-    transform: translateX(20vw) scale(1.08);
+    transform: translateX(var(--tab-col-shift));
   }
   body.tabbarCollapsed .mobileTabbar a.tabDock[data-tab-slot="r2"]{
-    transform: scale(1.08);
+    transform: none;
   }
   body.tabbarCollapsed .mobileTabbar a.tabDock:active[data-tab-slot="l2"]{
-    transform: translateX(80vw) scale(1.02);
+    transform: translateX(calc(4 * var(--tab-col-shift))) scale(0.96);
   }
   body.tabbarCollapsed .mobileTabbar a.tabDock:active[data-tab-slot="l1"]{
-    transform: translateX(60vw) scale(1.02);
+    transform: translateX(calc(3 * var(--tab-col-shift))) scale(0.96);
   }
   body.tabbarCollapsed .mobileTabbar a.tabDock:active[data-tab-slot="c"]{
-    transform: translateX(40vw) scale(1.02);
+    transform: translateX(calc(2 * var(--tab-col-shift))) scale(0.96);
   }
   body.tabbarCollapsed .mobileTabbar a.tabDock:active[data-tab-slot="r1"]{
-    transform: translateX(20vw) scale(1.02);
+    transform: translateX(var(--tab-col-shift)) scale(0.96);
   }
   body.tabbarCollapsed .mobileTabbar a.tabDock:active[data-tab-slot="r2"]{
-    transform: scale(1.02);
+    transform: scale(0.96);
+  }
+  body.tabbarCollapsed .mobileTabbar a.tabDock::before{
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.28),
+      0 0 0 1px rgba(255, 255, 255, 0.16);
   }
   body.tabbarCollapsed .mobileTabbar a:not(.tabDock) .tabLabel,
   body.tabbarCollapsed .mobileTabbar a:not(.tabDock) .friendsTabDmBadge,
@@ -21808,6 +21865,10 @@ input::placeholder, textarea::placeholder{
   @media (prefers-reduced-motion: reduce){
     body.tabbarCollapsed .mobileTabbar a:not(.tabDock){
       transform: none;
+    }
+    .mobileTabbar::after,
+    body.tabbarCollapsed .mobileTabbar::after{
+      transition: none;
     }
     .mobileTabbar a{
       transition: opacity 140ms ease, color 140ms ease, filter 140ms ease;
@@ -22020,10 +22081,18 @@ input::placeholder, textarea::placeholder{
     background: #fff;
   }
   html[data-theme="light"] .mobileTabbar{
-    --tab-pill-fill: rgba(15, 23, 40, 0.06);
+    --tab-pill-fill: rgba(15, 23, 40, 0.07);
     --tab-pill-glow:
-      inset 0 1px 0 rgba(255, 255, 255, 0.88),
-      0 0 0 1px rgba(15, 23, 40, 0.08);
+      inset 0 1px 0 rgba(255, 255, 255, 0.92),
+      0 0 0 1px rgba(15, 23, 40, 0.10),
+      0 6px 14px rgba(15, 23, 40, 0.10);
+  }
+  html[data-theme="light"] .mobileTabbar::after{
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(246, 248, 252, 0.78));
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.98),
+      0 0 0 1px rgba(15, 23, 40, 0.10),
+      0 14px 32px rgba(15, 23, 40, 0.16);
   }
   html[data-theme="light"] .mobileTabbar a{
     color: #1a1a24;
@@ -22346,6 +22415,10 @@ input::placeholder, textarea::placeholder{
     pointer-events: auto;
     transform: translate3d(0, 0, 0) scale(1);
     opacity: 1;
+  }
+  /* Create: vinyl shares the Generate CTA baseline (meet halfway). */
+  body[data-route="generate"] .hubNowPlaying{
+    bottom: calc(var(--tabbar-h, calc(62px + env(safe-area-inset-bottom, 0px))) + 12px);
   }
   .hubNowVinyl{
     -webkit-appearance: none;
@@ -22958,18 +23031,24 @@ body.trackSheetOpen .coachFab{
     position: fixed;
     left: 0;
     right: 0;
-    bottom: calc(var(--tabbar-h, calc(62px + env(safe-area-inset-bottom, 0px))) + 10px);
+    bottom: calc(var(--tabbar-h, calc(62px + env(safe-area-inset-bottom, 0px))) + 12px);
     z-index: 91;
     margin: 0;
-    padding: 8px 16px 10px;
+    padding: 0 16px;
     border: 0;
     border-radius: 0;
     background: transparent;
     box-shadow: none;
     pointer-events: none;
+    transition: bottom 280ms cubic-bezier(0.22, 1, 0.36, 1), padding 180ms ease;
   }
   body[data-route="generate"]:has(.hubNowPlaying.isVisible) #createGenerateDock{
     padding-right: 72px;
+  }
+  body[data-route="generate"].createKeyboardOpen #createGenerateDock{
+    bottom: calc(var(--create-keyboard-inset, 0px) + 10px);
+    padding-right: 16px;
+    z-index: 120;
   }
   body[data-route="generate"][data-create-flow="humtrack"] #createGenerateDock,
   body[data-route="generate"][data-create-flow="sounds"] #createGenerateDock,
@@ -55884,7 +55963,7 @@ html[data-theme="light"] .appScreenTitle{
 }
 @media (max-width: 720px){
   html[data-theme="light"] .mobileTabbar{
-    border-top: 1px solid var(--border);
+    border: 0;
     box-shadow: none;
   }
   html[data-theme="light"] #discoverFeedTabs.discoverFeedTabs{

@@ -28759,6 +28759,11 @@ body[data-route="discover"] > .app{
   position: relative;
   z-index: 1;
 }
+@media (max-width: 720px){
+  body[data-route="discover"] > .app{
+    padding-bottom: calc(108px + env(safe-area-inset-bottom, 0px));
+  }
+}
 .discoverySegmentBar{
   position: relative;
   z-index: 2;
@@ -47270,7 +47275,7 @@ body[data-route="generate"] .aiGenerate{
 
 /* For You — featured challenge hero (campaign-style block) */
 .discoverFeedSection--featuredChallenge{
-  margin-bottom: 32px;
+  margin: 0 0 28px;
 }
 .discoverFeaturedChallengeHero{
   position: relative;

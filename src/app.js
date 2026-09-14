@@ -3549,11 +3549,11 @@ function enterGenerateSubFlow(flow, onReady) {
   scheduleApplyRoute();
 }
 
-function exitAltCreateFlowToHub() {
+function exitAltCreateFlowToCreate() {
   if (isPersonaFlowActive()) abandonPersonaFlow();
   else if (getCreateFlow()) clearCreateFlow();
-  _createHubExitBypassSessionPin = true;
-  flushTabRouteNavigation("challenges", createHubMenuHash());
+  _createHubExitBypassSessionPin = false;
+  flushTabRouteNavigation("generate", "#/generate");
 }
 
 const MOBILE_TAB_LIGHTWEIGHT = new Set(["discover", "messages", "challenges", "activity", "profile"]);
@@ -3948,18 +3948,18 @@ function handleMobileTabTap(a, e) {
     /^#\/generate\b/i.test(String(location.hash || ""));
 
   if (linkRoute === "challenges" && isPersonaFlowActive()) {
-    exitAltCreateFlowToHub();
+    exitAltCreateFlowToCreate();
     return true;
   }
 
   if (route === "generate" && onGenerateForm) {
     if (isPersonaFlowActive()) {
-      exitAltCreateFlowToHub();
+      exitAltCreateFlowToCreate();
       return true;
     }
     if (getCreateFlow() && !createTabMorphTapPending(a)) {
       clearCreateFlow();
-      flushTabRouteNavigation("challenges", createHubMenuHash());
+      flushTabRouteNavigation("generate", "#/generate");
       return true;
     }
     restoreCreatePageOnRouteEnter();
@@ -4734,9 +4734,9 @@ const NAV_TAB_ROOTS = new Set(["discover", "messages", "challenges", "activity",
 /** Default landing after login / cold open (Home feed). */
 const DEFAULT_LOGGED_IN_ROUTE = "discover";
 
-/** Create hub is a menu — open it only via #/challenges?menu=1 (not as a restored "home"). */
+/** Old Create hub is retired — leftover callers must land on Create Song. */
 function createHubMenuHash() {
-  return "#/challenges?menu=1";
+  return "#/generate";
 }
 
 function isExplicitCreateHubMenu() {
@@ -4752,7 +4752,10 @@ function isExplicitCreateHubMenu() {
 
 function demoteBareCreateHub(wanted) {
   if (String(wanted || "").trim() !== "challenges") return wanted;
-  if (isExplicitCreateHubMenu()) return wanted;
+  if (isExplicitCreateHubMenu()) {
+    try { history.replaceState(null, "", "#/generate"); } catch {}
+    return "generate";
+  }
   try {
     if (createSessionIsGenerating()) {
       try { sessionStorage.setItem(PROFILE_SONGS_SEGMENT_KEY, "all"); } catch {}
@@ -5036,8 +5039,8 @@ function applyRoute({ passGen } = {}) {
     normalized = "discover";
   }
   if (normalized === "sparks") {
-    try { history.replaceState(null, "", createHubMenuHash()); } catch {}
-    normalized = "challenges";
+    try { history.replaceState(null, "", "#/generate"); } catch {}
+    normalized = "generate";
   }
   if (normalized === "home" || normalized === "hub" || normalized === "start") {
     try { history.replaceState(null, "", "#/discover"); } catch {}
@@ -12646,8 +12649,8 @@ function renderDiscoverFeedForYou(tracks, profMap) {
   );
   const suggestedFollowBlock = discoverFeedSuggestedFollowBlockHtml(tracks, profMap);
   return `
-    <section id="discoverWeeklyChart" class="discoverWeeklyChart discoverWeeklyChart--final isLoading" aria-busy="true" aria-label="Top songs this week">${discoverWeeklyChartSkeletonHtml()}</section>
     ${challengeBlock}
+    <section id="discoverWeeklyChart" class="discoverWeeklyChart discoverWeeklyChart--final isLoading" aria-busy="true" aria-label="Top songs this week">${discoverWeeklyChartSkeletonHtml()}</section>
     ${communityBlock}
     <section class="discoverFeedSection">
       ${discoverFeedSectionHeadHtml("Remixes you'll love")}
@@ -51691,7 +51694,9 @@ function abandonPersonaFlow() {
 function closeVoiceWizard() {
   abandonPersonaFlow();
   try {
-    location.hash = createHubMenuHash();
+    if (!/^#\/generate\b/i.test(String(location.hash || ""))) {
+      location.hash = "#/generate";
+    }
   } catch {}
   scheduleApplyRoute();
 }
@@ -63436,7 +63441,7 @@ function hasActiveCreateSession() {
 
 function resolveCreateTabNavigation() {
   if (isPersonaFlowActive()) {
-    return { route: "challenges", hash: createHubMenuHash() };
+    return { route: "generate", hash: "#/generate" };
   }
   if (createSessionIsGenerating()) {
     return { route: "profile", hash: "#/profile?seg=all" };
@@ -63458,9 +63463,9 @@ function resolveCreateTabNavigation() {
     }
   }
   if (flow === "persona") {
-    return { route: "challenges", hash: createHubMenuHash() };
+    return { route: "generate", hash: "#/generate" };
   }
-  // Default: open Create Song (the engine), not the Create hub menu.
+  // Default: open Create Song (the engine), not the retired Create hub.
   return { route: "generate", hash: "#/generate" };
 }
 
@@ -69986,11 +69991,11 @@ try { syncCreateGenerateDock(); } catch {}
       closeCreateChooserSheet({ immediate: true });
       return;
     }
-    // Persona: + always returns to the Create hub (Studio / cards), not Create Song.
+    // Persona: + returns to Create Song, not the retired Create hub.
     if (isPersonaFlowActive()) {
       ev.preventDefault();
       ev.stopPropagation();
-      exitAltCreateFlowToHub();
+      exitAltCreateFlowToCreate();
       return;
     }
     const route = document.body.getAttribute("data-route") || "";

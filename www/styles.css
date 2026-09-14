@@ -1898,6 +1898,11 @@ body::before{
     radial-gradient(100% 70% at 100% -4%, var(--bg-wash-teal) 0%, transparent 68%),
     radial-gradient(110% 72% at 18% -8%, var(--bg-wash-purple) 0%, transparent 72%);
 }
+/* Profile — same canvas as Home, a bit more teal/violet, edge-to-edge. */
+html:not([data-theme="light"]) body[data-route="profile"]{
+  --bg-wash-purple: rgba(124, 92, 255, 0.26);
+  --bg-wash-teal: rgba(35, 213, 171, 0.22);
+}
 html[data-theme="light"] body::before{
   display: none;
 }
@@ -17337,8 +17342,9 @@ body:not([data-route="profile"]) #profileAuraHeaderChromeRoot{
  *  edit mode (profileAura form fields still work underneath).
  * ================================================================= */
 
-/* --- Profile hero: no local wash. Global body::before is the only atmosphere
-   (a second hero wash stacked into a muddy status-bar bruise). --- */
+/* --- Profile hero: no local wash. Route-level body::before (below) is the
+   only atmosphere so color reaches the status-bar edge without a stacked
+   bruise. --- */
 .profileAura{
   position: relative;
   isolation: isolate;
@@ -46198,6 +46204,8 @@ body[data-route="generate"] .aiGenerate{
 /* ─── Discover V2 — content-first feed ─────────────────────────────────── */
 .discoveryMainContent.discoverFeedV2,
 .discoveryMainContent.discoverHubV1{
+  position: relative;
+  z-index: 1;
   display: flex;
   flex-direction: column;
   gap: 0;
@@ -46276,9 +46284,9 @@ body[data-route="generate"] .aiGenerate{
   z-index: 5;
   margin: 0 -2px 8px;
   padding: 0 0 4px;
-  background: var(--tab-strip-bg);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+  background: transparent;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
 }
 .discoverFeedTabsTrack{
   /* legacy alias — layout lives on .nabadTabsTrack */
@@ -46347,8 +46355,8 @@ body[data-route="generate"] .aiGenerate{
   right: 0;
   bottom: -1px;
   height: 2px;
-  background: currentColor;
-  opacity: 0.92;
+  background: linear-gradient(90deg, var(--brand-teal), var(--brand-violet));
+  opacity: 1;
   z-index: 1;
 }
 
@@ -47462,6 +47470,15 @@ body[data-route="generate"] .aiGenerate{
   letter-spacing: -0.01em;
   color: rgba(232, 238, 247, 0.78);
 }
+.discoverFeedSectionKicker{
+  margin: 0;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  opacity: 0.78;
+}
 .discoverFeaturedChallengeHeroCta{
   display: inline-flex;
   align-items: center;
@@ -47469,12 +47486,16 @@ body[data-route="generate"] .aiGenerate{
   margin-top: 8px;
   padding: 11px 18px;
   border-radius: 999px;
-  background: var(--brand-teal);
-  color: #04110e;
+  border: 0;
+  background: linear-gradient(148deg, #23d5ab 0%, #2ec4b8 34%, #6b78e8 72%, #7c5cff 100%);
+  color: #fff;
   font-size: 13px;
   font-weight: 850;
   letter-spacing: -0.01em;
-  box-shadow: 0 10px 24px rgba(35, 213, 171, 0.22);
+  box-shadow:
+    0 8px 20px rgba(0, 0, 0, 0.28),
+    0 0 16px rgba(35, 213, 171, 0.18),
+    0 0 14px rgba(124, 92, 255, 0.12);
 }
 .discoverFeaturedChallengeCreationsHead{
   margin: 0 0 10px;
@@ -47507,40 +47528,83 @@ body[data-route="generate"] .aiGenerate{
   filter: none;
 }
 
-/* ─── Discover gift strip + Occasions picker (listen page, not Create) ─ */
-.discoverOccasionStrip{
-  margin: 0 0 18px;
+/* ─── Discover moment tiles (Nabad identity, not white chips) ─ */
+.discoverMomentSection{
+  margin: 0 0 22px;
 }
-.discoverOccasionChipRow{
-  margin-top: 0;
-  padding-bottom: 0;
-  flex: 0 1 auto;
-  min-width: 0;
-  max-width: calc(100% - 76px);
+.discoverMomentHead{
+  margin-bottom: 10px;
 }
-.discoverOccasionStripBar{
+.discoverMomentGrid{
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.discoverMomentTile{
+  position: relative;
+  isolation: isolate;
   display: flex;
-  align-items: center;
-  justify-content: flex-start;
-  gap: 8px;
-  min-width: 0;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: flex-end;
+  gap: 4px;
+  min-height: 108px;
+  padding: 14px 14px 13px;
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.045);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  color: #fff;
+  text-align: left;
+  overflow: hidden;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-appearance: none;
+  appearance: none;
 }
-.discoverOccasionChip{
-  background: #f4f2f8;
-  border-color: transparent;
-  color: #14151c;
-  -webkit-text-fill-color: #14151c;
+.discoverMomentTileWash{
+  position: absolute;
+  inset: -30% -10% auto auto;
+  width: 160%;
+  height: 160%;
+  z-index: 0;
+  pointer-events: none;
+}
+.discoverMomentTile--teal .discoverMomentTileWash{
+  background: radial-gradient(ellipse at 80% 0%, rgba(35, 213, 171, 0.46), transparent 58%);
+}
+.discoverMomentTile--violet .discoverMomentTileWash{
+  background: radial-gradient(ellipse at 80% 0%, rgba(124, 92, 255, 0.48), transparent 58%);
+}
+.discoverMomentTile--rose .discoverMomentTileWash{
+  background: radial-gradient(ellipse at 80% 0%, rgba(232, 120, 180, 0.36), rgba(35, 213, 171, 0.18) 42%, transparent 64%);
+}
+.discoverMomentTile--mix .discoverMomentTileWash{
+  background:
+    radial-gradient(ellipse at 18% 110%, rgba(35, 213, 171, 0.32), transparent 52%),
+    radial-gradient(ellipse at 88% 0%, rgba(124, 92, 255, 0.42), transparent 56%);
+}
+.discoverMomentTileKicker,
+.discoverMomentTileTitle{
+  position: relative;
+  z-index: 1;
+}
+.discoverMomentTileKicker{
+  font-size: 10px;
   font-weight: 800;
-  letter-spacing: -0.02em;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: rgba(248, 250, 255, 0.62);
 }
-.discoverOccasionChip--more,
-.discoverOccasionChip.styleSuggestPill--more{
-  flex: 0 0 auto;
-  margin-top: 0;
-  background: transparent;
-  border: 1px dashed rgba(255, 255, 255, 0.22);
-  color: rgba(232, 238, 247, 0.78);
-  -webkit-text-fill-color: rgba(232, 238, 247, 0.78);
+.discoverMomentTileTitle{
+  font-size: 20px;
+  font-weight: 850;
+  letter-spacing: -0.03em;
+  line-height: 1.1;
+  color: #fff;
+}
+.discoverMomentTile:active{
+  transform: scale(0.98);
 }
 .discoverOccasionsPanel{
   display: flex;
@@ -47562,10 +47626,12 @@ body[data-route="generate"] .aiGenerate{
 }
 body[data-route="discover"] .discoverOccasionStartCta,
 body[data-route="discover"] .discoverSparksStartCta{
-  background: var(--brand-teal);
-  color: #04110e;
+  background: linear-gradient(148deg, #23d5ab 0%, #2ec4b8 34%, #6b78e8 72%, #7c5cff 100%);
+  color: #fff;
   border: none;
-  box-shadow: 0 10px 24px rgba(35, 213, 171, 0.18);
+  box-shadow:
+    0 8px 20px rgba(0, 0, 0, 0.24),
+    0 0 14px rgba(35, 213, 171, 0.16);
 }
 body[data-route="discover"] .discoverOccasionStartCta{
   width: 100%;
@@ -47589,18 +47655,22 @@ body[data-route="discover"] .discoverSparksStartCta:active{
 .discoverChallengesLive{
   margin-top: 8px;
 }
-html[data-theme="light"] .discoverOccasionChip{
-  background: #fff;
-  color: #1a1d26;
-  -webkit-text-fill-color: #1a1d26;
-  border: 1px solid var(--border);
+html[data-theme="light"] .discoverMomentTile{
+  background: rgba(255, 255, 255, 0.72);
+  border-color: rgba(15, 23, 40, 0.08);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9);
 }
-html[data-theme="light"] .discoverOccasionChip--more,
-html[data-theme="light"] .discoverOccasionChip.styleSuggestPill--more{
-  background: transparent;
-  border-style: dashed;
-  color: var(--text-secondary);
-  -webkit-text-fill-color: var(--text-secondary);
+html[data-theme="light"] .discoverMomentTileTitle{
+  color: #14151c;
+}
+html[data-theme="light"] .discoverMomentTileKicker{
+  color: rgba(20, 21, 28, 0.48);
+}
+html[data-theme="light"] .discoverMomentTile--teal .discoverMomentTileWash{
+  background: radial-gradient(ellipse at 80% 0%, rgba(35, 213, 171, 0.28), transparent 58%);
+}
+html[data-theme="light"] .discoverMomentTile--violet .discoverMomentTileWash{
+  background: radial-gradient(ellipse at 80% 0%, rgba(124, 92, 255, 0.26), transparent 58%);
 }
 
 /* ─── Discover Templates tab — song showcase ─────────────────────────── */

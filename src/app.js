@@ -11754,11 +11754,6 @@ const DISCOVER_FEED_TABS = [
   { id: "challenges", label: "Challenges" },
 ];
 const DISCOVER_FEED_TAB_KEY = "nabad_discover_feed_tab";
-const DISCOVER_OCCASION_STRIP = [
-  { id: "birthday", label: "Birthday" },
-  { id: "wedding", label: "Wedding" },
-  { id: "mom-day", label: "For mom" },
-];
 
 function normalizeDiscoverFeedTab(tab) {
   const raw = String(tab || "").trim();
@@ -12670,17 +12665,26 @@ function discoverFeedCommunityPicksBlockHtml(tracks, profMap, prefs) {
 }
 
 function discoverOccasionStripHtml() {
-  const chips = DISCOVER_OCCASION_STRIP.map((chip) => `
-    <button type="button" class="styleSuggestPill discoverOccasionChip" data-discover-occasion-open="${escapeHtml(chip.id)}">${escapeHtml(chip.label)}</button>
+  const tiles = [
+    { id: "birthday", label: "Birthday", kicker: "Gift", tone: "teal", attr: `data-discover-occasion-open="birthday"` },
+    { id: "wedding", label: "Wedding", kicker: "Gift", tone: "violet", attr: `data-discover-occasion-open="wedding"` },
+    { id: "mom-day", label: "For mom", kicker: "Gift", tone: "rose", attr: `data-discover-occasion-open="mom-day"` },
+    { id: "more", label: "Occasions", kicker: "See all", tone: "mix", attr: `data-discover-occasions-more` },
+  ];
+  const cards = tiles.map((tile) => `
+    <button type="button" class="discoverMomentTile discoverMomentTile--${escapeHtml(tile.tone)}" ${tile.attr} aria-label="${escapeHtml(tile.kicker)}: ${escapeHtml(tile.label)}">
+      <span class="discoverMomentTileWash" aria-hidden="true"></span>
+      <span class="discoverMomentTileKicker">${escapeHtml(tile.kicker)}</span>
+      <span class="discoverMomentTileTitle">${escapeHtml(tile.label)}</span>
+    </button>
   `).join("");
   return `
-    <section class="discoverFeedSection discoverOccasionStrip" aria-label="Make it for someone">
-      ${discoverFeedSectionHeadHtml("Make it for someone")}
-      <div class="discoverOccasionStripBar">
-        <div class="styleSuggestRow discoverOccasionChipRow" role="list">
-          ${chips}
-        </div>
-        <button type="button" class="styleSuggestPill styleSuggestPill--more discoverOccasionChip discoverOccasionChip--more" data-discover-occasions-more>More</button>
+    <section class="discoverFeedSection discoverMomentSection" aria-label="Gift a song">
+      <header class="discoverFeedSectionHead discoverMomentHead">
+        <p class="discoverFeedSectionKicker">Gift a song</p>
+      </header>
+      <div class="discoverMomentGrid">
+        ${cards}
       </div>
     </section>`;
 }

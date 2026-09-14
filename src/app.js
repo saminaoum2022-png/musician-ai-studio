@@ -3966,13 +3966,57 @@ function handleMobileTabTap(a, e) {
 let tabbarDockExpandConsumed = false;
 let tabbarDockIgnoreScrollUntil = 0;
 
+function tabbarDockRouteKey() {
+  const route = tabBarRouteKey(document.body.getAttribute("data-route") || "");
+  if (
+    route === "discover" ||
+    route === "messages" ||
+    route === "challenges" ||
+    route === "activity" ||
+    route === "profile"
+  ) {
+    return route;
+  }
+  const active = document.querySelector(".mobileTabbar a.active[data-route-link]");
+  const link = String(active?.getAttribute("data-route-link") || "").trim();
+  if (
+    link === "discover" ||
+    link === "messages" ||
+    link === "challenges" ||
+    link === "activity" ||
+    link === "profile"
+  ) {
+    return link;
+  }
+  return "discover";
+}
+
+function syncTabbarDockTarget() {
+  const key = tabbarDockRouteKey();
+  document.body.setAttribute("data-tab-dock", key);
+  const labels = {
+    discover: "Home",
+    messages: "Messages",
+    challenges: "Create",
+    activity: "Activity",
+    profile: "Profile",
+  };
+  const collapsed = document.body.classList.contains("tabbarCollapsed");
+  document.querySelectorAll(".mobileTabbar a[data-route-link]").forEach((a) => {
+    const link = a.getAttribute("data-route-link") || "";
+    const isDock = link === key;
+    a.classList.toggle("tabDock", isDock);
+    try {
+      a.setAttribute("aria-label", isDock && collapsed ? "Show tabs" : (labels[link] || a.getAttribute("aria-label") || ""));
+    } catch {}
+  });
+}
+
 function setTabbarCollapsed(collapsed) {
-  const on = Boolean(collapsed);
-  document.body.classList.toggle("tabbarCollapsed", on);
+  document.body.classList.toggle("tabbarCollapsed", Boolean(collapsed));
   const tabbar = document.querySelector(".mobileTabbar");
-  const createTab = document.getElementById("tabCreate");
-  try { tabbar?.setAttribute("aria-expanded", on ? "false" : "true"); } catch {}
-  try { createTab?.setAttribute("aria-label", on ? "Show tabs" : "Create"); } catch {}
+  try { tabbar?.setAttribute("aria-expanded", collapsed ? "false" : "true"); } catch {}
+  syncTabbarDockTarget();
 }
 
 function consumeTabbarDockExpand(ev, fromClick) {
@@ -4041,20 +4085,17 @@ function wireFloatingTabDock() {
       setTabbarCollapsed(false);
       return;
     }
-    // Stay collapsed until the music note is tapped (or the user returns to top).
+    // Stay collapsed until the dock (active tab, parked right) is tapped
+    // or the user returns to top.
     if (dy > THRESH) setTabbarCollapsed(true);
   }
 
-  const createTab = document.getElementById("tabCreate");
-  function expandFromNote(ev) {
+  function expandFromDock(ev) {
     if (!document.body.classList.contains("tabbarCollapsed")) return;
     consumeTabbarDockExpand(ev);
   }
-  if (createTab) {
-    createTab.addEventListener("pointerdown", expandFromNote, { capture: true, passive: false });
-  }
-  tabbar.addEventListener("pointerdown", expandFromNote, { capture: true, passive: false });
-  tabbar.addEventListener("click", expandFromNote, { capture: true, passive: false });
+  tabbar.addEventListener("pointerdown", expandFromDock, { capture: true, passive: false });
+  tabbar.addEventListener("click", expandFromDock, { capture: true, passive: false });
   document.addEventListener(
     "click",
     (ev) => {
@@ -4062,7 +4103,8 @@ function wireFloatingTabDock() {
       const y = Number(ev.clientY || 0);
       const x = Number(ev.clientX || 0);
       if (y < window.innerHeight - 130) return;
-      if (Math.abs(x - window.innerWidth / 2) > 52) return;
+      // Collapsed dock sits in Profile's right slot for thumb reach.
+      if (x < window.innerWidth - 92 || x > window.innerWidth - 8) return;
       consumeTabbarDockExpand(ev, true);
     },
     true,
@@ -4074,6 +4116,7 @@ function wireFloatingTabDock() {
     tabbarDockExpandConsumed = false;
     setTabbarCollapsed(false);
   });
+  syncTabbarDockTarget();
 }
 
 function attachTabRefresh() {
@@ -4084,8 +4127,8 @@ function attachTabRefresh() {
     a.addEventListener(
       "pointerdown",
       (e) => {
+        if (consumeTabbarDockExpand(e)) return;
         if (createTabMorphTapPending(a)) return;
-        if (a.id === "tabCreate" && consumeTabbarDockExpand(e)) return;
         if (!handleMobileTabTap(a, e)) return;
         e.preventDefault();
         haptic("light");
@@ -4589,6 +4632,7 @@ function syncRoutePanelVisibility(wanted) {
       || (route === "messages" && link === "messages")
       || (route === "messages-thread" && link === "messages"));
   });
+  try { syncTabbarDockTarget(); } catch {}
   try { syncDeskRailVisibility(); } catch {}
   try { syncDeskCoachPanel(); } catch {}
   try { syncCoachFabDesktopAnchor(); } catch {}

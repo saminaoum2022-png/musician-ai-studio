@@ -478,13 +478,13 @@ html[data-theme="light"] .settingsThemeOpt.is-active{
     box-shadow: none;
   }
   html[data-theme="light"] .mobileTabbar a{
-    color: var(--icon-muted);
+    color: #1a1a24;
     opacity: 1;
   }
   html[data-theme="light"] .mobileTabbar a.tabCreate,
   html[data-theme="light"] .mobileTabbar a.tabCreate .tabIco{
-    color: #fff;
-    stroke: #fff;
+    color: #1a1a24;
+    stroke: #1a1a24;
     opacity: 1;
   }
   html[data-theme="light"] .mobileTabbar a.tabCreate::before{
@@ -21682,8 +21682,8 @@ input::placeholder, textarea::placeholder{
     --tab-create-gradient: var(--tab-pill-fill);
     --tab-create-glow: var(--tab-pill-glow);
     text-decoration:none;
-    color: var(--icon-muted);
-    opacity: var(--nav-item-opacity);
+    color: #fff;
+    opacity: 1;
     font-size: 10px;
     font-weight: 650;
     letter-spacing: 0.02em;
@@ -21733,40 +21733,77 @@ input::placeholder, textarea::placeholder{
     z-index: 3;
     min-height: calc(var(--tab-pill-size) + 16px);
   }
-  /* Scroll-down: Home/Messages/Activity/Profile join the music note.
-     Tap the note to fan 2 left + 2 right. */
-  body.tabbarCollapsed .mobileTabbar a:not(.tabCreate){
+  /* Scroll-down: other tabs join the active tab, parked in Profile's right slot
+     for easier thumb reach. Tap that dock to fan the five destinations back out. */
+  body.tabbarCollapsed .mobileTabbar a:not(.tabDock){
     opacity: 0;
     pointer-events: none;
+    z-index: 1;
+  }
+  body.tabbarCollapsed .mobileTabbar a.tabDock{
+    opacity: 1;
+    pointer-events: auto;
+    visibility: visible;
+    z-index: 5;
   }
   body.tabbarCollapsed .mobileTabbar a[data-tab-slot="l2"]{
-    transform: translateX(40vw) scale(0.18);
+    transform: translateX(80vw) scale(0.18);
   }
   body.tabbarCollapsed .mobileTabbar a[data-tab-slot="l1"]{
-    transform: translateX(20vw) scale(0.18);
+    transform: translateX(60vw) scale(0.18);
+  }
+  body.tabbarCollapsed .mobileTabbar a[data-tab-slot="c"]{
+    transform: translateX(40vw) scale(0.18);
   }
   body.tabbarCollapsed .mobileTabbar a[data-tab-slot="r1"]{
-    transform: translateX(-20vw) scale(0.18);
+    transform: translateX(20vw) scale(0.18);
   }
   body.tabbarCollapsed .mobileTabbar a[data-tab-slot="r2"]{
-    transform: translateX(-40vw) scale(0.18);
+    transform: scale(0.18);
   }
-  body.tabbarCollapsed .mobileTabbar a.tabCreate{
+  body.tabbarCollapsed .mobileTabbar a.tabDock[data-tab-slot="l2"]{
+    transform: translateX(80vw) scale(1.08);
+  }
+  body.tabbarCollapsed .mobileTabbar a.tabDock[data-tab-slot="l1"]{
+    transform: translateX(60vw) scale(1.08);
+  }
+  body.tabbarCollapsed .mobileTabbar a.tabDock[data-tab-slot="c"]{
+    transform: translateX(40vw) scale(1.08);
+  }
+  body.tabbarCollapsed .mobileTabbar a.tabDock[data-tab-slot="r1"]{
+    transform: translateX(20vw) scale(1.08);
+  }
+  body.tabbarCollapsed .mobileTabbar a.tabDock[data-tab-slot="r2"]{
     transform: scale(1.08);
   }
-  body.tabbarCollapsed .mobileTabbar a:not(.tabCreate) .tabLabel,
-  body.tabbarCollapsed .friendsTabDmBadge,
-  body.tabbarCollapsed .activityTabDot,
-  body.tabbarCollapsed .profileTabDot{
+  body.tabbarCollapsed .mobileTabbar a.tabDock:active[data-tab-slot="l2"]{
+    transform: translateX(80vw) scale(1.02);
+  }
+  body.tabbarCollapsed .mobileTabbar a.tabDock:active[data-tab-slot="l1"]{
+    transform: translateX(60vw) scale(1.02);
+  }
+  body.tabbarCollapsed .mobileTabbar a.tabDock:active[data-tab-slot="c"]{
+    transform: translateX(40vw) scale(1.02);
+  }
+  body.tabbarCollapsed .mobileTabbar a.tabDock:active[data-tab-slot="r1"]{
+    transform: translateX(20vw) scale(1.02);
+  }
+  body.tabbarCollapsed .mobileTabbar a.tabDock:active[data-tab-slot="r2"]{
+    transform: scale(1.02);
+  }
+  body.tabbarCollapsed .mobileTabbar a:not(.tabDock) .tabLabel,
+  body.tabbarCollapsed .mobileTabbar a:not(.tabDock) .friendsTabDmBadge,
+  body.tabbarCollapsed .mobileTabbar a:not(.tabDock) .activityTabDot,
+  body.tabbarCollapsed .mobileTabbar a:not(.tabDock) .profileTabDot{
     opacity: 0;
   }
-  body.tabbarCollapsed .mobileTabbar a.tabCreate .tabIcoCreate{
+  body.tabbarCollapsed .mobileTabbar a.tabCreate.tabDock .tabIcoCreate{
     filter:
       drop-shadow(0 0 10px rgba(255, 255, 255, 0.95))
       drop-shadow(0 0 22px rgba(255, 255, 255, 0.45));
   }
   @media (prefers-reduced-motion: reduce){
-    body.tabbarCollapsed .mobileTabbar a:not(.tabCreate){
+    body.tabbarCollapsed .mobileTabbar a:not(.tabDock){
       transform: none;
     }
     .mobileTabbar a{
@@ -21786,8 +21823,9 @@ input::placeholder, textarea::placeholder{
     position: relative;
     z-index: 1;
     margin-top: 12px;
-    transition: stroke 180ms ease, opacity 180ms ease, fill 180ms ease;
+    transition: stroke 180ms ease, opacity 180ms ease, fill 180ms ease, filter 180ms ease;
     opacity: 1;
+    filter: drop-shadow(0 2px 8px rgba(255, 255, 255, 0.18));
   }
   .tabProfileAvatarSlot{
     position: relative;
@@ -21984,13 +22022,23 @@ input::placeholder, textarea::placeholder{
       inset 0 1px 0 rgba(255, 255, 255, 0.88),
       0 0 0 1px rgba(15, 23, 40, 0.08);
   }
+  html[data-theme="light"] .mobileTabbar a{
+    color: #1a1a24;
+    opacity: 1;
+  }
+  html[data-theme="light"] .mobileTabbar a .tabIco{
+    filter: drop-shadow(0 1px 4px rgba(15, 23, 40, 0.12));
+  }
+  html[data-theme="light"] .mobileTabbar a:hover:not(.active){
+    color: #1a1a24;
+    opacity: 1;
+  }
   html[data-theme="light"] .mobileTabbar a.tabCreate{
     --tab-create-gradient: var(--tab-pill-fill);
     --tab-create-glow: var(--tab-pill-glow);
+    color: #1a1a24;
   }
-  html[data-theme="light"] .mobileTabbar a.tabCreate .tabIcoCreate{
-    background: #1a1a24;
-  }
+  html[data-theme="light"] .mobileTabbar a.tabCreate .tabIcoCreate,
   html[data-theme="light"] .mobileTabbar a.tabCreate.active .tabIcoCreate{
     background: #1a1a24;
   }
@@ -22165,8 +22213,8 @@ input::placeholder, textarea::placeholder{
     50%{ transform: translate(-50%, -5px); }
   }
   .mobileTabbar a:hover:not(.active){
-    color: var(--nav-item-hover);
-    opacity: 0.72;
+    color: #fff;
+    opacity: 1;
   }
   .mobileTabbar a.active{
     color: #fff;
@@ -55884,8 +55932,8 @@ html[data-theme="light"] .appScreenTitle{
 }
 html[data-theme="light"] .mobileTabbar a.tabCreate,
 html[data-theme="light"] .mobileTabbar a.tabCreate .tabIco{
-  color: #fff;
-  stroke: #fff;
+  color: #1a1a24;
+  stroke: #1a1a24;
 }
 
 /* Social feeds — light mode: spacing only, no dividers (Friends + profile + public). */

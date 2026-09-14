@@ -4887,43 +4887,26 @@
         </a>
       </nav>
       <div id="hubNowPlaying" class="hubNowPlaying" style="display:none">
-        <div class="hubNowShell">
-          <div id="hubNowAura" class="hubNowAura" aria-hidden="true"></div>
-          <div class="hubNowGlass">
-            <div class="hubNowRow">
-              <div class="hubNowCoverWrap">
-                <img id="hubNowArt" class="hubNowArt" src="./assets/icons/splash-mark.png" alt="" decoding="async" />
-              </div>
-              <div class="hubNowText">
-                <div class="hubNowTitleRow">
-                  <div id="hubNowTitle" class="hubNowTitle">Now playing</div>
-                  <span id="hubNowNabadBadge" class="hubNowNabadBadgeSlot" hidden></span>
-                </div>
-                <div id="hubNowSubtitle" class="hubNowSubtitle"></div>
-              </div>
-              <div class="hubNowActions">
-                <button id="hubNowPlayPause" type="button" class="hubNowPlayPause" aria-label="Pause">
-                  <span class="hubNowPPIco hubNowPPIco--pause" aria-hidden="true">
-                    <svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M8 5h3v14H8V5zm5 0h3v14h-3V5z"/></svg>
-                  </span>
-                  <span class="hubNowPPIco hubNowPPIco--play" hidden aria-hidden="true">
-                    <svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M9 7.5v9l7.5-4.5L9 7.5z"/></svg>
-                  </span>
-                </button>
-                <button id="hubNowClose" class="hubNowClose" type="button" aria-label="Stop">
-                  <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
-                    <path d="M6.4 6.4 17.6 17.6" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/>
-                    <path d="M17.6 6.4 6.4 17.6" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/>
-                  </svg>
-                </button>
-              </div>
-            </div>
-            <div class="hubNowProg" aria-hidden="true">
-              <span class="feedHookMarker" aria-hidden="true"></span>
-              <span id="hubNowProgBar" class="hubNowProgBar" style="width:0%"></span>
-            </div>
-          </div>
-        </div>
+        <button type="button" id="hubNowPlayPause" class="hubNowVinyl" aria-label="Pause">
+          <svg class="hubNowRing" viewBox="0 0 36 36" aria-hidden="true">
+            <circle class="hubNowRingTrack" cx="18" cy="18" r="15.2" fill="none" pathLength="100"/>
+            <circle id="hubNowRingFill" class="hubNowRingFill" cx="18" cy="18" r="15.2" fill="none" pathLength="100" style="stroke-dasharray:100;stroke-dashoffset:100"/>
+          </svg>
+          <span class="hubNowCoverWrap">
+            <img id="hubNowArt" class="hubNowArt" src="./assets/icons/splash-mark.png" alt="" decoding="async" />
+            <span class="hubNowVinylHole" aria-hidden="true"></span>
+          </span>
+        </button>
+        <button id="hubNowClose" class="hubNowClose" type="button" aria-label="Close player">
+          <svg viewBox="0 0 24 24" width="11" height="11" aria-hidden="true">
+            <path d="M6.4 6.4 17.6 17.6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" fill="none"/>
+            <path d="M17.6 6.4 6.4 17.6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" fill="none"/>
+          </svg>
+        </button>
+        <span id="hubNowTitle" class="hubNowTitle">Now playing</span>
+        <span id="hubNowSubtitle" class="hubNowSubtitle" hidden></span>
+        <span id="hubNowNabadBadge" class="hubNowNabadBadgeSlot" hidden></span>
+        <span id="hubNowProgBar" class="hubNowProgBar" hidden style="width:0%"></span>
       </div>
       <button id="btnGenerateOrb" class="generateOrb" type="button">Generate</button>
       <div id="likeBurst" class="likeBurst" style="display:none">❤</div>

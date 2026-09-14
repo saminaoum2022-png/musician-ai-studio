@@ -1175,6 +1175,7 @@ const els = {
   hubNowNabadBadge: document.getElementById("hubNowNabadBadge"),
   hubNowSubtitle: document.getElementById("hubNowSubtitle"),
   hubNowProgBar: document.getElementById("hubNowProgBar"),
+  hubNowRingFill: document.getElementById("hubNowRingFill"),
   hubNowPlayPause: document.getElementById("hubNowPlayPause"),
   hubNowExpand: document.getElementById("hubNowExpand"),
   hubNowClose: document.getElementById("hubNowClose"),
@@ -2500,6 +2501,7 @@ function renderHubNowPlaying() {
 
   if (!showMini) {
     els.hubNowPlaying.classList.remove("isVisible", "isPlaying");
+    syncHubNowProgressRing(0, 0);
     try {
       els.hubNowPlaying.removeAttribute("data-mini-pp");
     } catch {}
@@ -2554,10 +2556,25 @@ function renderHubNowPlaying() {
   } else if (els.hubNowProgBar) {
     els.hubNowProgBar.style.width = "0%";
   }
+  syncHubNowProgressRing(cur, dur);
+  try {
+    const nowTitle = String(hubNowMeta.title || "Now playing").trim() || "Now playing";
+    els.hubNowPlaying.setAttribute("aria-label", nowTitle);
+  } catch {}
 
   syncHubNowPlayPauseUi(Boolean(miniShowsPause));
   syncLockScreenNowPlaying();
   try { syncGlobalFeedHookMarkers(); } catch {}
+}
+
+function syncHubNowProgressRing(cur, dur) {
+  const fill = els.hubNowRingFill || document.getElementById("hubNowRingFill");
+  if (!fill) return;
+  const valid = Number.isFinite(dur) && dur > 0;
+  const time = Number.isFinite(cur) ? Math.max(0, cur) : 0;
+  const ratio = valid ? Math.max(0, Math.min(1, time / dur)) : 0;
+  fill.style.strokeDasharray = "100";
+  fill.style.strokeDashoffset = valid ? String((100 * (1 - ratio)).toFixed(3)) : "100";
 }
 
 let hubNowPlayingScrollRaf = 0;
@@ -4099,6 +4116,7 @@ function wireFloatingTabDock() {
   document.addEventListener(
     "click",
     (ev) => {
+      if (ev.target?.closest?.("#hubNowPlaying")) return;
       if (!document.body.classList.contains("tabbarCollapsed")) return;
       const y = Number(ev.clientY || 0);
       const x = Number(ev.clientX || 0);
@@ -59756,6 +59774,7 @@ function ensurePlayer() {
     try { maybeAdvanceDiscoverPlaylistFromProgress(playerEl); } catch {}
     try { maybeAdvanceUserPlaylistFromProgress(playerEl); } catch {}
   });
+  playerEl.addEventListener("seeked", syncPlayerUI);
   playerEl.addEventListener("loadedmetadata", syncPlayerUI);
   // iOS Safari often reports `duration === Infinity` on Suno-proxied audio
   // until enough is buffered. `durationchange` and `canplay` are the events
@@ -70469,6 +70488,7 @@ if (els.hubTabLink) {
     }, 250);
   });
 }
+let vinylLongPressFired = false;
 if (els.hubNowClose) {
   els.hubNowClose.addEventListener("click", (e) => {
     try {
@@ -70485,6 +70505,7 @@ if (els.hubNowPlayPause && !els.hubNowPlayPause.dataset.boundHubPp) {
       e.preventDefault();
       e.stopPropagation();
     } catch {}
+    if (vinylLongPressFired) return;
     const a = getMiniPlayerAudio();
     if (!a) return;
     haptic("light");
@@ -70532,28 +70553,59 @@ if (els.hubNowExpand && !els.hubNowExpand.dataset.boundHubExp) {
     } catch {}
   });
 }
+function openMiniPlayerFullSurface() {
+  if (miniSource?.type === "hub" && hubAudioPostId) {
+    if ((location.hash || "") !== "#/hub") location.hash = "#/hub";
+    setTimeout(() => {
+      const row = document.querySelector(`[data-hub-row="${hubAudioPostId}"]`);
+      if (!row) return;
+      row.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 120);
+    return;
+  }
+  if (playerEl && playerEl.src) {
+    try { location.hash = "#/player"; } catch {}
+  }
+}
+
 if (els.hubNowPlaying) {
-  els.hubNowPlaying.addEventListener("click", (e) => {
-    if (e.target?.closest?.(".hubNowPlayPause, .hubNowClose")) return;
-    // Hub posts get special treatment: the post itself is the richer
-    // "now playing" surface (cover art, full controls, comments, share),
-    // so we jump back to the post in the feed instead of the player.
-    if (miniSource?.type === "hub" && hubAudioPostId) {
-      if ((location.hash || "") !== "#/hub") location.hash = "#/hub";
-      setTimeout(() => {
-        const row = document.querySelector(`[data-hub-row="${hubAudioPostId}"]`);
-        if (!row) return;
-        row.scrollIntoView({ behavior: "smooth", block: "center" });
-      }, 120);
-      return;
+  let vinylLongPressTimer = null;
+  let vinylPressX = 0;
+  let vinylPressY = 0;
+  const cancelVinylLongPress = () => {
+    if (vinylLongPressTimer) {
+      clearTimeout(vinylLongPressTimer);
+      vinylLongPressTimer = null;
     }
-    // Everything else (Library tracks, generated result cards, vocal
-    // takes, …) expands into the full-screen Now Playing modal — same
-    // pattern as Apple Music's mini-player tap.
-    if (playerEl && playerEl.src) {
-      location.hash = "#/player";
-    }
+  };
+  els.hubNowPlaying.addEventListener("pointerdown", (e) => {
+    if (e.target?.closest?.(".hubNowClose")) return;
+    vinylLongPressFired = false;
+    vinylPressX = Number(e.clientX || 0);
+    vinylPressY = Number(e.clientY || 0);
+    cancelVinylLongPress();
+    vinylLongPressTimer = setTimeout(() => {
+      vinylLongPressTimer = null;
+      vinylLongPressFired = true;
+      haptic("medium");
+      openMiniPlayerFullSurface();
+    }, 480);
   });
+  els.hubNowPlaying.addEventListener("pointermove", (e) => {
+    if (!vinylLongPressTimer) return;
+    const dx = Number(e.clientX || 0) - vinylPressX;
+    const dy = Number(e.clientY || 0) - vinylPressY;
+    if ((dx * dx) + (dy * dy) > 144) cancelVinylLongPress();
+  });
+  els.hubNowPlaying.addEventListener("pointerup", cancelVinylLongPress);
+  els.hubNowPlaying.addEventListener("pointercancel", cancelVinylLongPress);
+  els.hubNowPlaying.addEventListener("lostpointercapture", cancelVinylLongPress);
+  els.hubNowPlaying.addEventListener("click", (e) => {
+    if (!vinylLongPressFired) return;
+    vinylLongPressFired = false;
+    e.preventDefault();
+    e.stopPropagation();
+  }, true);
 }
 window.addEventListener("scroll", () => {
   const route = document.body.getAttribute("data-route") || "";

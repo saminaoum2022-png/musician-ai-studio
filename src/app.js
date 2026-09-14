@@ -4875,7 +4875,7 @@ function previewRouteFromHash(hash = "") {
     home: DEFAULT_LOGGED_IN_ROUTE,
     hub: DEFAULT_LOGGED_IN_ROUTE,
     start: DEFAULT_LOGGED_IN_ROUTE,
-    sparks: "challenges",
+    sparks: "discover",
     moment: "friends",
     notifications: "activity",
     library: "profile",
@@ -5039,8 +5039,10 @@ function applyRoute({ passGen } = {}) {
     normalized = "discover";
   }
   if (normalized === "sparks") {
-    try { history.replaceState(null, "", "#/generate"); } catch {}
-    normalized = "generate";
+    try { sessionStorage.setItem(DISCOVER_FEED_TAB_KEY, "challenges"); } catch {}
+    _discoverFeedTab = "challenges";
+    try { history.replaceState(null, "", "#/discover"); } catch {}
+    normalized = "discover";
   }
   if (normalized === "home" || normalized === "hub" || normalized === "start") {
     try { history.replaceState(null, "", "#/discover"); } catch {}
@@ -9121,6 +9123,9 @@ function applyDiscoveryIdeaToCreate(idea) {
 let _homeDeskContinueTrack = null;
 let _homeSeg = "start";
 let _homeMakeSeg = "occasion";
+let _challengeOccasionId = "";
+let _challengeGenreId = "";
+let _challengeLanguageId = "auto";
 
 function libraryTrackNeedsContinue(track) {
   if (!track) return false;
@@ -9198,7 +9203,8 @@ function wireHomeDeskSegOnce() {
 }
 
 function syncHomeMakeSegUi() {
-  const page = document.querySelector('[data-route="challenges"]');
+  const page = document.getElementById("discoverOccasionsPanel")
+    || document.querySelector('[data-route="challenges"]');
   const personal = document.getElementById("homeDeskMakePersonal");
   const versions = document.getElementById("homeDeskPresetVersions");
   const quick = document.getElementById("homeDeskOccasionQuick");
@@ -9387,11 +9393,9 @@ function applyChallengeStartById(id, challengesMap) {
   applyDiscoveryIdeaToCreate(idea);
 }
 
-function renderHomeDeskSparksDeck() {
-  const deck = document.getElementById("homeDeskSparksDeck");
-  if (!deck) return;
+function sparksDeckCardsHtml() {
   const sparks = CHALLENGE_IDEAS.filter((c) => c.id !== "hook-rush");
-  deck.innerHTML = sparks.map((c, i) => {
+  return sparks.map((c, i) => {
     const tone = CHALLENGE_SPARK_TONES[i % CHALLENGE_SPARK_TONES.length];
     const kicker = CHALLENGE_SPARK_KICKERS[c.id] || "Spark";
     const blurb = String(c.prompt || "").trim() || "Open Create with this challenge ready.";
@@ -9404,6 +9408,42 @@ function renderHomeDeskSparksDeck() {
         <button type="button" data-challenge-start="${escapeHtml(c.id)}">Join</button>
       </article>`;
   }).join("");
+}
+
+function renderHomeDeskSparksDeck() {
+  const deck = document.getElementById("homeDeskSparksDeck");
+  if (!deck) return;
+  deck.innerHTML = sparksDeckCardsHtml();
+}
+
+function renderDiscoverHookRushCardHtml() {
+  const hook = CHALLENGE_IDEAS.find((c) => String(c.id) === "hook-rush");
+  if (!hook) return "";
+  const blurb = String(hook.prompt || "").trim()
+    || "Make the first 15 seconds impossible to skip — no long intro, just the part people replay.";
+  return `
+    <section class="challengeFeatureCard discoverSparksFeature" aria-labelledby="discoverHookRushTitle">
+      <div class="challengeFeatureTop">
+        <span class="challengeLivePill"><span></span> Today’s spark</span>
+        <span class="challengeTimer"><span data-challenge-count="hook-rush">0 joined</span></span>
+      </div>
+      <h3 id="discoverHookRushTitle">${escapeHtml(hook.title || "Hook Rush")}</h3>
+      <p>${escapeHtml(blurb)}</p>
+      <div class="challengeTagRow">
+        <span>15 sec hook</span>
+        <span>Fast idea</span>
+      </div>
+      <button type="button" class="challengeFeatureStart discoverSparksStartCta" data-challenge-start="hook-rush">Use this spark</button>
+    </section>`;
+}
+
+function renderDiscoverSparksSectionHtml() {
+  return `
+    <section class="discoverFeedSection discoverSparksHome" aria-label="Sparks">
+      ${discoverFeedSectionHeadHtml("Sparks")}
+      ${renderDiscoverHookRushCardHtml()}
+      <div class="challengeDeck challengeDeck--stack discoverSparksDeck" aria-label="Creative spark cards">${sparksDeckCardsHtml()}</div>
+    </section>`;
 }
 
 /** Shimmer placeholders while the World Cup rail and weekly chart load. */
@@ -10486,6 +10526,8 @@ function kickDiscoverFeedRoute({ deferFetch = false } = {}) {
   bindDiscoveryDiscoverControls();
   bindDiscoverPlaylistScreenOnce();
   bindDiscoverWeeklyChartSectionOnce();
+  bindChallengesPageOnce();
+  _discoverFeedTab = normalizeDiscoverFeedTab(_discoverFeedTab);
   syncDiscoverFriendsFeedChrome();
   if (_discoverFeedTab === "friends") {
     bindFriendsPageOnce();
@@ -10499,18 +10541,24 @@ function kickDiscoverFeedRoute({ deferFetch = false } = {}) {
     else enterFriendsRoute();
     return;
   }
+  if (_discoverFeedTab === "occasions" && _discoveryFeedTracksRaw.length) {
+    renderDiscoverOccasionsSongs(_discoveryFeedTracksRaw, _discoveryLastProfMap || new Map());
+  }
   const discoverMount = document.getElementById("discoverFeedMount");
   const discoverMountEmpty = !discoverMount?.innerHTML?.trim();
+  const occasionsSongs = document.getElementById("discoverOccasionsSongs");
+  const occasionsEmpty = _discoverFeedTab === "occasions" && !occasionsSongs?.innerHTML?.trim();
   const canSkipDiscoverNetwork =
     shouldSkipRouteHeavy("discover") &&
     _discoveryFeedTracksRaw.length > 0 &&
-    !discoverMountEmpty;
+    !discoverMountEmpty &&
+    !occasionsEmpty;
   if (canSkipDiscoverNetwork) {
     restoreRouteScroll("discover");
     markRouteHeavy("discover");
     return;
   }
-  if (discoverMountEmpty) paintDiscoverTopSectionsLoading();
+  if (discoverMountEmpty && _discoverFeedTab !== "occasions") paintDiscoverTopSectionsLoading();
   markRouteHeavy("discover");
   if (deferFetch) deferRouteIdle(() => void refreshDiscoverFeed());
   else void refreshDiscoverFeed();
@@ -11702,17 +11750,29 @@ function discoverCommunityPicksTracks(tracks) {
 
 const DISCOVER_FEED_TABS = [
   { id: "for-you", label: "For You" },
+  { id: "occasions", label: "Occasions" },
   { id: "friends", label: "Friends" },
-  { id: "templates", label: "Templates" },
   { id: "challenges", label: "Challenges" },
-  { id: "remixes", label: "Remixes" },
-  { id: "all", label: "All" },
 ];
 const DISCOVER_FEED_TAB_KEY = "nabad_discover_feed_tab";
+const DISCOVER_OCCASION_STRIP = [
+  { id: "birthday", label: "Birthday" },
+  { id: "wedding", label: "Wedding" },
+  { id: "mom-day", label: "For mom" },
+];
+
+function normalizeDiscoverFeedTab(tab) {
+  const raw = String(tab || "").trim();
+  if (raw === "templates") return "occasions";
+  if (raw === "remixes" || raw === "all") return "for-you";
+  if (DISCOVER_FEED_TABS.some((t) => t.id === raw)) return raw;
+  return "for-you";
+}
+
 let _discoverFeedTab = (() => {
   try {
     const saved = String(sessionStorage.getItem(DISCOVER_FEED_TAB_KEY) || "").trim();
-    if (DISCOVER_FEED_TABS.some((t) => t.id === saved)) return saved;
+    return normalizeDiscoverFeedTab(saved);
   } catch {}
   return "for-you";
 })();
@@ -11799,7 +11859,7 @@ function discoverChallengeRankText(track, tracks) {
 
 function discoverFeedFilterTracks(tab, tracks) {
   const sorted = discoverFeedSortByPlays(tracks);
-  if (tab === "templates") return discoverTemplatesBaseTracks(tracks, "all");
+  if (tab === "templates" || tab === "occasions") return discoverTemplatesBaseTracks(tracks, "all");
   if (tab === "challenges") return sorted.filter((t) => trackIsChallengeContent(t));
   if (tab === "remixes") return sorted.filter((t) => remixAttributionForTrack(t) || mashupAttributionForTrack(t));
   if (tab === "all") return sorted;
@@ -11809,7 +11869,7 @@ function discoverFeedFilterTracks(tab, tracks) {
 const DISCOVER_TEMPLATES_SORT_KEY = "nabad_discover_templates_sort";
 const DISCOVER_TEMPLATES_FILTER_KEY = "nabad_discover_templates_filter";
 const DISCOVER_TEMPLATE_FILTERS = [
-  { id: "all", label: "All Templates", emoji: "✦" },
+  { id: "all", label: "All", emoji: "✦" },
   { id: "birthday", label: "Birthday", emoji: "🎂", tokens: ["birthday", "bday", "happy birthday", "sana helwa", "dabke", "سنة حلوة", "عيد ميلاد"] },
   { id: "wedding", label: "Wedding", emoji: "💍", tokens: ["wedding", "entrance", "first dance", "mariage", "zafaf", "زفاف", "walking in"] },
   { id: "love", label: "Love", emoji: "💜", tokens: ["love", "anniversary", "romantic", "couple", "anniv", "all our years"] },
@@ -12068,12 +12128,12 @@ function discoverTemplatesIntroHtml() {
   return `
     <header class="discoverTemplatesIntro">
       <div class="discoverTemplatesIntroCopy">
-        <h3 class="discoverTemplatesIntroTitle">Songs created with templates</h3>
-        <p class="discoverTemplatesIntroSub">Explore what the community is creating with Nabad templates.</p>
+        <h3 class="discoverTemplatesIntroTitle">Made for these moments</h3>
+        <p class="discoverTemplatesIntroSub">Hear songs people gifted for birthdays, weddings, and the people they love.</p>
       </div>
       <label class="discoverTemplatesSort">
         <span class="discoverTemplatesSortLabel">Sort</span>
-        <select data-discover-templates-sort aria-label="Sort template songs">
+        <select data-discover-templates-sort aria-label="Sort gift songs">
           <option value="popular"${sort === "popular" ? " selected" : ""}>Popular</option>
           <option value="newest"${sort === "newest" ? " selected" : ""}>Newest</option>
           <option value="trending"${sort === "trending" ? " selected" : ""}>Trending</option>
@@ -12105,7 +12165,7 @@ function renderDiscoverTemplatesTab(tracks, profMap) {
     ? `<div class="discoverTemplatesGrid" role="list">${filtered.map((t, i) => discoverTemplatesShowcaseCardHtml(t, profMap, i)).join("")}</div>`
     : `<p class="discoverHubQuietNote discoverFeedEmpty">No songs match this template filter yet — try another chip or publish from Create.</p>`;
   return `
-    <section class="discoverTemplatesTab" aria-label="Songs created with templates">
+    <section class="discoverTemplatesTab" aria-label="Songs made for these moments">
       ${discoverTemplatesIntroHtml()}
       ${discoverTemplatesFilterChipsHtml()}
       ${grid}
@@ -12603,13 +12663,26 @@ function discoverFeedTemplateCarouselRowsHtml(tracks, profMap, emptyNote = "", r
 
 function discoverFeedCommunityPicksBlockHtml(tracks, profMap, prefs) {
   const picks = discoverCommunityPicksTracksPersonalized(tracks, prefs);
-  const seeAllBtn = picks.length
-    ? `<button type="button" class="discoverFeedSectionLink" data-discover-feed-tab-jump="all">See all</button>`
-    : "";
   return `
     <section class="discoverFeedSection discoverFeedSection--communityPicks">
-      ${discoverFeedSectionHeadHtml("Community picks", seeAllBtn)}
+      ${discoverFeedSectionHeadHtml("Community picks")}
       ${discoverFeedTemplateCarouselRowsHtml(picks, profMap, "Community songs will show here as creators publish to Discover.")}
+    </section>`;
+}
+
+function discoverOccasionStripHtml() {
+  const chips = DISCOVER_OCCASION_STRIP.map((chip) => `
+    <button type="button" class="styleSuggestPill discoverOccasionChip" data-discover-occasion-open="${escapeHtml(chip.id)}">${escapeHtml(chip.label)}</button>
+  `).join("");
+  return `
+    <section class="discoverFeedSection discoverOccasionStrip" aria-label="Make it for someone">
+      ${discoverFeedSectionHeadHtml("Make it for someone")}
+      <div class="discoverOccasionStripBar">
+        <div class="styleSuggestRow discoverOccasionChipRow" role="list">
+          ${chips}
+        </div>
+        <button type="button" class="styleSuggestPill styleSuggestPill--more discoverOccasionChip discoverOccasionChip--more" data-discover-occasions-more>More</button>
+      </div>
     </section>`;
 }
 
@@ -12639,7 +12712,7 @@ function renderDiscoverFeedForYou(tracks, profMap) {
     ? remixTracks.map((t) => discoverFeedSongRowHtml(t, profMap, remixRowOpts)).join("")
     : `<p class="discoverHubQuietNote">Remixes and mashups will appear as creators publish.</p>`;
   const templateSeeAll = templateTracks.length
-    ? `<button type="button" class="discoverFeedSectionLink" data-discover-feed-tab-jump="templates">See all</button>`
+    ? `<button type="button" class="discoverFeedSectionLink" data-discover-feed-tab-jump="occasions">See all</button>`
     : "";
   const templateCarousel = discoverFeedTemplateCarouselRowsHtml(
     templateTracks,
@@ -12650,6 +12723,7 @@ function renderDiscoverFeedForYou(tracks, profMap) {
   const suggestedFollowBlock = discoverFeedSuggestedFollowBlockHtml(tracks, profMap);
   return `
     ${challengeBlock}
+    ${discoverOccasionStripHtml()}
     <section id="discoverWeeklyChart" class="discoverWeeklyChart discoverWeeklyChart--final isLoading" aria-busy="true" aria-label="Top songs this week">${discoverWeeklyChartSkeletonHtml()}</section>
     ${communityBlock}
     <section class="discoverFeedSection">
@@ -12670,24 +12744,54 @@ function isFriendsFeedSurface() {
 
 function syncDiscoverFriendsFeedChrome() {
   const route = String(document.body.getAttribute("data-route") || "");
-  const panel = document.getElementById("discoverFriendsPanel");
+  const friendsPanel = document.getElementById("discoverFriendsPanel");
+  const occasionsPanel = document.getElementById("discoverOccasionsPanel");
   const mount = document.getElementById("discoverFeedMount");
   const feedStatus = document.getElementById("discoveryFeedStatus");
   const onDiscover = route === "discover";
   const onFriends = onDiscover && _discoverFeedTab === "friends";
+  const onOccasions = onDiscover && _discoverFeedTab === "occasions";
+  const hideMount = onFriends || onOccasions;
   document.body.classList.toggle("friendsFeedActive", onFriends);
-  if (panel) {
-    panel.hidden = !onFriends;
-    panel.setAttribute("aria-hidden", onFriends ? "false" : "true");
-    panel.style.display = onFriends ? "" : "none";
+  document.body.classList.toggle("occasionsFeedActive", onOccasions);
+  if (friendsPanel) {
+    friendsPanel.hidden = !onFriends;
+    friendsPanel.setAttribute("aria-hidden", onFriends ? "false" : "true");
+    friendsPanel.style.display = onFriends ? "" : "none";
+  }
+  if (occasionsPanel) {
+    occasionsPanel.hidden = !onOccasions;
+    occasionsPanel.setAttribute("aria-hidden", onOccasions ? "false" : "true");
+    occasionsPanel.style.display = onOccasions ? "" : "none";
   }
   if (mount) {
-    mount.hidden = onFriends;
-    mount.setAttribute("aria-hidden", onFriends ? "true" : "false");
-    mount.style.display = onFriends ? "none" : "";
+    mount.hidden = hideMount;
+    mount.setAttribute("aria-hidden", hideMount ? "true" : "false");
+    mount.style.display = hideMount ? "none" : "";
   }
-  if (feedStatus) feedStatus.hidden = onFriends;
+  if (feedStatus) feedStatus.hidden = hideMount;
   try { syncCoachFabHeaderMount(); } catch {}
+}
+
+function renderDiscoverOccasionsSongs(tracks, profMap) {
+  const mount = document.getElementById("discoverOccasionsSongs");
+  if (!mount) return;
+  mount.innerHTML = renderDiscoverTemplatesTab(tracks, profMap);
+}
+
+function openDiscoverOccasionsTab(occasionId) {
+  const id = String(occasionId || "").trim();
+  if (id && CHALLENGE_OCCASIONS.some((o) => String(o.id) === id)) {
+    _challengeOccasionId = id;
+    _homeMakeSeg = "occasion";
+  }
+  renderDiscoverFeed(_discoveryFeedTracksRaw || [], _discoveryLastProfMap || new Map(), "occasions");
+  const panel = document.getElementById("discoverOccasionsPanel");
+  try { panel?._renderPresetLab?.(); } catch {}
+  try { syncHomeMakeSegUi(); } catch {}
+  try {
+    document.getElementById("discoverFeedTabs")?.scrollIntoView?.({ block: "nearest", behavior: "smooth" });
+  } catch {}
 }
 
 function renderDiscoverFeedTabPanel(tab, tracks, profMap) {
@@ -12695,9 +12799,15 @@ function renderDiscoverFeedTabPanel(tab, tracks, profMap) {
   if (tab === "challenges") {
     const blocks = discoverFeedChallengesForUser(getUserMusicPreferenceLabels())
       .map((c) => discoverFeedChallengeBlockHtml(c, tracks, profMap)).join("");
-    return blocks || `<p class="discoverHubQuietNote discoverFeedEmpty">Sparks and live events will appear here as creators publish.</p>`;
+    const live = blocks
+      || `<p class="discoverHubQuietNote discoverFeedEmpty">Live events will appear here as creators publish.</p>`;
+    return `${renderDiscoverSparksSectionHtml()}
+    <section class="discoverFeedSection discoverChallengesLive" aria-label="Live events">
+      ${discoverFeedSectionHeadHtml("Live events")}
+      ${live}
+    </section>`;
   }
-  if (tab === "templates") {
+  if (tab === "templates" || tab === "occasions") {
     return renderDiscoverTemplatesTab(tracks, profMap);
   }
   const filtered = discoverFeedFilterTracks(tab, tracks);
@@ -12723,13 +12833,14 @@ function paintDiscoverFeedTabsActive(tab) {
 function renderDiscoverFeed(tracks, profMap, tab = _discoverFeedTab) {
   const mount = document.getElementById("discoverFeedMount");
   if (!mount) return;
-  _discoverFeedTab = DISCOVER_FEED_TABS.some((t) => t.id === tab) ? tab : "for-you";
+  _discoverFeedTab = normalizeDiscoverFeedTab(tab);
   try { sessionStorage.setItem(DISCOVER_FEED_TAB_KEY, _discoverFeedTab); } catch {}
   if (_discoverFeedTab !== "for-you") {
     try { closeDiscoverReelOverlay(); } catch {}
   }
   rebuildDiscoveryChallengeBuckets(tracks);
   paintDiscoverFeedTabsActive(_discoverFeedTab);
+  bindChallengesPageOnce();
   syncDiscoverFriendsFeedChrome();
   if (_discoverFeedTab === "friends") {
     bindFriendsPageOnce();
@@ -12741,12 +12852,21 @@ function renderDiscoverFeed(tracks, profMap, tab = _discoverFeedTab) {
     void enterFriendsRoute();
     return;
   }
+  if (_discoverFeedTab === "occasions") {
+    renderDiscoverOccasionsSongs(tracks, profMap);
+    try { document.getElementById("discoverOccasionsPanel")?._renderPresetLab?.(); } catch {}
+    try { syncHomeMakeSegUi(); } catch {}
+    return;
+  }
   mount.innerHTML = renderDiscoverFeedTabPanel(_discoverFeedTab, tracks, profMap);
   mount.classList.remove("isLoading");
   mount.removeAttribute("aria-busy");
   if (_discoverFeedTab === "for-you") {
     void refreshDiscoverWeeklyChart();
     void paintDiscoverFeedFollowCards();
+  }
+  if (_discoverFeedTab === "challenges") {
+    try { document.getElementById("discoverOccasionsPanel")?._refreshChallengeEntries?.(); } catch {}
   }
   playDiscoverSectionEnter(mount);
 }
@@ -12759,8 +12879,8 @@ function bindDiscoverFeedTabsOnce() {
     const tabBtn = e.target?.closest?.("[data-discover-feed-tab]");
     if (!tabBtn || !root.contains(tabBtn)) return;
     e.preventDefault();
-    const tab = String(tabBtn.getAttribute("data-discover-feed-tab") || "").trim();
-    if (!tab || tab === _discoverFeedTab) return;
+      const tab = normalizeDiscoverFeedTab(tabBtn.getAttribute("data-discover-feed-tab") || "");
+      if (!tab || tab === _discoverFeedTab) return;
     haptic("light");
     renderDiscoverFeed(_discoveryFeedTracksRaw || [], _discoveryLastProfMap || new Map(), tab);
     try {
@@ -12775,7 +12895,7 @@ function bindDiscoverFeedTabsOnce() {
       const jumpBtn = e.target?.closest?.("[data-discover-feed-tab-jump]");
       if (!jumpBtn) return;
       e.preventDefault();
-      const tab = String(jumpBtn.getAttribute("data-discover-feed-tab-jump") || "").trim();
+      const tab = normalizeDiscoverFeedTab(jumpBtn.getAttribute("data-discover-feed-tab-jump") || "");
       if (!tab || tab === _discoverFeedTab) return;
       haptic("light");
       renderDiscoverFeed(_discoveryFeedTracksRaw || [], _discoveryLastProfMap || new Map(), tab);
@@ -13309,6 +13429,7 @@ function applyDiscoverOccasionStart(occasionId, liveChallenge) {
 
 function bindDiscoverHubV1Once() {
   bindDiscoverFeedTabsOnce();
+  bindChallengesPageOnce();
   const root = document.getElementById("discoveryMainContent");
   if (!root || root.dataset.boundDiscoverHubV1 === "1") return;
   root.dataset.boundDiscoverHubV1 = "1";
@@ -13320,11 +13441,31 @@ function bindDiscoverHubV1Once() {
     haptic("light");
     _discoverTemplatesSort = next;
     try { sessionStorage.setItem(DISCOVER_TEMPLATES_SORT_KEY, next); } catch {}
-    if (_discoverFeedTab === "templates") {
-      renderDiscoverFeed(_discoveryFeedTracksRaw || [], _discoveryLastProfMap || new Map(), "templates");
+    if (_discoverFeedTab === "occasions" || _discoverFeedTab === "templates") {
+      renderDiscoverOccasionsSongs(_discoveryFeedTracksRaw || [], _discoveryLastProfMap || new Map());
     }
   });
   root.addEventListener("click", (e) => {
+    const occasionChip = e.target?.closest?.("[data-discover-occasion-open]");
+    if (occasionChip && root.contains(occasionChip)) {
+      e.preventDefault();
+      haptic("light");
+      openDiscoverOccasionsTab(occasionChip.getAttribute("data-discover-occasion-open"));
+      return;
+    }
+    const occasionsMore = e.target?.closest?.("[data-discover-occasions-more]");
+    if (occasionsMore && root.contains(occasionsMore)) {
+      e.preventDefault();
+      haptic("light");
+      openDiscoverOccasionsTab("");
+      return;
+    }
+    const sparkStartBtn = e.target?.closest?.("[data-challenge-start]");
+    if (sparkStartBtn && root.contains(sparkStartBtn)) {
+      e.preventDefault();
+      applyChallengeStartById(String(sparkStartBtn.getAttribute("data-challenge-start") || ""), null);
+      return;
+    }
     const filterChip = e.target?.closest?.("[data-discover-templates-filter]");
     if (filterChip && root.contains(filterChip)) {
       e.preventDefault();
@@ -13333,8 +13474,8 @@ function bindDiscoverHubV1Once() {
       haptic("light");
       _discoverTemplatesFilter = next;
       try { sessionStorage.setItem(DISCOVER_TEMPLATES_FILTER_KEY, next); } catch {}
-      if (_discoverFeedTab === "templates") {
-        renderDiscoverFeed(_discoveryFeedTracksRaw || [], _discoveryLastProfMap || new Map(), "templates");
+      if (_discoverFeedTab === "occasions" || _discoverFeedTab === "templates") {
+        renderDiscoverOccasionsSongs(_discoveryFeedTracksRaw || [], _discoveryLastProfMap || new Map());
       }
       return;
     }
@@ -13579,7 +13720,8 @@ function renderHomeDesk() {
 }
 
 function bindChallengesPageOnce() {
-  const page = document.querySelector('[data-route="challenges"]');
+  const page = document.getElementById("discoverOccasionsPanel")
+    || document.querySelector('[data-route="challenges"]');
   if (!page || page.dataset.boundChallenges === "1") return;
   page.dataset.boundChallenges = "1";
   const challenges = new Map(CHALLENGE_IDEAS.map((idea) => [String(idea.id), idea]));
@@ -13588,9 +13730,9 @@ function bindChallengesPageOnce() {
   const languageRail = document.getElementById("challengeLanguageRail");
   const presetGrid = document.getElementById("challengePresetGrid");
   const nameInput = document.getElementById("challengePersonName");
-  let selectedOccasion = CHALLENGE_OCCASIONS[0]?.id || "";
-  let selectedGenre = CHALLENGE_GENRES[0]?.id || "";
-  let selectedLanguage = CHALLENGE_LANGUAGES[0]?.id || "auto";
+  if (!_challengeOccasionId) _challengeOccasionId = CHALLENGE_OCCASIONS[0]?.id || "";
+  if (!_challengeGenreId) _challengeGenreId = CHALLENGE_GENRES[0]?.id || "";
+  if (!_challengeLanguageId) _challengeLanguageId = CHALLENGE_LANGUAGES[0]?.id || "auto";
   const selected = (list, id) => list.find((item) => item.id === id) || list[0] || null;
   const nameForPrompt = () => String(nameInput?.value || "").trim();
   const requireChallengeName = () => {
@@ -13621,7 +13763,7 @@ function bindChallengesPageOnce() {
     ].join("\n");
   };
   const buildPresetIdea = (occasion, genre, variant = "anthem") => {
-    const language = selected(CHALLENGE_LANGUAGES, selectedLanguage);
+    const language = selected(CHALLENGE_LANGUAGES, _challengeLanguageId);
     const person = nameForPrompt() || "someone special";
     const variantLabel = variant === "dance"
       ? "Dance version"
@@ -13665,24 +13807,24 @@ function bindChallengesPageOnce() {
   const renderFilters = () => {
     if (occasionRail) {
       occasionRail.innerHTML = CHALLENGE_OCCASIONS.map((o) => `
-        <button type="button" class="challengeFilterChip${o.id === selectedOccasion ? " active" : ""}" data-challenge-occasion="${escapeHtml(o.id)}" aria-pressed="${o.id === selectedOccasion ? "true" : "false"}">${escapeHtml(o.label)}</button>
+        <button type="button" class="challengeFilterChip${o.id === _challengeOccasionId ? " active" : ""}" data-challenge-occasion="${escapeHtml(o.id)}" aria-pressed="${o.id === _challengeOccasionId ? "true" : "false"}">${escapeHtml(o.label)}</button>
       `).join("");
     }
     if (genreRail) {
       genreRail.innerHTML = CHALLENGE_GENRES.map((g) => `
-        <button type="button" class="challengeFilterChip challengeFilterChip--genre${g.id === selectedGenre ? " active" : ""}" data-challenge-genre="${escapeHtml(g.id)}" aria-pressed="${g.id === selectedGenre ? "true" : "false"}">${escapeHtml(g.label)}</button>
+        <button type="button" class="challengeFilterChip challengeFilterChip--genre${g.id === _challengeGenreId ? " active" : ""}" data-challenge-genre="${escapeHtml(g.id)}" aria-pressed="${g.id === _challengeGenreId ? "true" : "false"}">${escapeHtml(g.label)}</button>
       `).join("");
     }
     if (languageRail) {
       languageRail.innerHTML = CHALLENGE_LANGUAGES.map((l) => `
-        <button type="button" class="challengeFilterChip challengeFilterChip--language${l.id === selectedLanguage ? " active" : ""}" data-challenge-language="${escapeHtml(l.id)}" aria-pressed="${l.id === selectedLanguage ? "true" : "false"}">${escapeHtml(l.label)}</button>
+        <button type="button" class="challengeFilterChip challengeFilterChip--language${l.id === _challengeLanguageId ? " active" : ""}" data-challenge-language="${escapeHtml(l.id)}" aria-pressed="${l.id === _challengeLanguageId ? "true" : "false"}">${escapeHtml(l.label)}</button>
       `).join("");
     }
   };
   const renderPresets = () => {
     if (!presetGrid) return;
-    const occasion = selected(CHALLENGE_OCCASIONS, selectedOccasion);
-    const genre = selected(CHALLENGE_GENRES, selectedGenre);
+    const occasion = selected(CHALLENGE_OCCASIONS, _challengeOccasionId);
+    const genre = selected(CHALLENGE_GENRES, _challengeGenreId);
     if (!occasion || !genre) return;
     const variants = ["anthem", "dance", "cinematic"].map((variant) => buildPresetIdea(occasion, genre, variant));
     presetGrid.innerHTML = variants.map((preset) => `
@@ -13699,6 +13841,7 @@ function bindChallengesPageOnce() {
     renderFilters();
     renderPresets();
   };
+  page._renderPresetLab = renderPresetLab;
   const updateChallengeJoinCounts = (entries = []) => {
     const counts = new Map();
     for (const track of entries) {
@@ -13731,8 +13874,8 @@ function bindChallengesPageOnce() {
   page.addEventListener("click", (e) => {
     const occCreate = e.target?.closest?.("[data-home-occasion-create]");
     if (occCreate && page.contains(occCreate)) {
-      const occasion = selected(CHALLENGE_OCCASIONS, selectedOccasion);
-      const genre = selected(CHALLENGE_GENRES, selectedGenre);
+      const occasion = selected(CHALLENGE_OCCASIONS, _challengeOccasionId);
+      const genre = selected(CHALLENGE_GENRES, _challengeGenreId);
       if (!occasion || !genre) return;
       haptic("light");
       applyDiscoveryIdeaToCreate(buildPresetIdea(occasion, genre, "anthem"));
@@ -13747,21 +13890,21 @@ function bindChallengesPageOnce() {
     }
     const occasionBtn = e.target?.closest?.("[data-challenge-occasion]");
     if (occasionBtn && page.contains(occasionBtn)) {
-      selectedOccasion = String(occasionBtn.getAttribute("data-challenge-occasion") || selectedOccasion);
+      _challengeOccasionId = String(occasionBtn.getAttribute("data-challenge-occasion") || _challengeOccasionId);
       haptic("light");
       renderPresetLab();
       return;
     }
     const genreBtn = e.target?.closest?.("[data-challenge-genre]");
     if (genreBtn && page.contains(genreBtn)) {
-      selectedGenre = String(genreBtn.getAttribute("data-challenge-genre") || selectedGenre);
+      _challengeGenreId = String(genreBtn.getAttribute("data-challenge-genre") || _challengeGenreId);
       haptic("light");
       renderPresetLab();
       return;
     }
     const languageBtn = e.target?.closest?.("[data-challenge-language]");
     if (languageBtn && page.contains(languageBtn)) {
-      selectedLanguage = String(languageBtn.getAttribute("data-challenge-language") || selectedLanguage);
+      _challengeLanguageId = String(languageBtn.getAttribute("data-challenge-language") || _challengeLanguageId);
       haptic("light");
       renderPresetLab();
       return;

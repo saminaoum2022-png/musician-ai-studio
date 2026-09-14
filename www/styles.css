@@ -6398,6 +6398,9 @@ input.userTextBidi--rtl{
 .discoverFeedMount[hidden]{
   display: none !important;
 }
+.discoverOccasionsPanel[hidden]{
+  display: none !important;
+}
 /* Friends tab DM badge — a small red chat bubble pinned to the top-right corner
    of the tab icon. Single unread conversation shows three dots; 2+ shows the
    conversation count (9+ when 10 or more). The asymmetric bottom-left corner
@@ -29327,6 +29330,14 @@ body.friendsFeedActive #discoverFeedMount{
 body.friendsFeedActive .discoverFriendsPanel{
   margin-top: 0;
 }
+body.occasionsFeedActive #discoverFeedMount{
+  display: none !important;
+  min-height: 0 !important;
+  height: 0 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  overflow: hidden !important;
+}
 body.friendsFeedActive #discoveryFollowingList.followActStack > .followAct.followAct--xstyle:first-child,
 html[data-theme="light"] body.friendsFeedActive #discoveryFollowingList.followActStack > .followAct.followAct--xstyle:first-child{
   padding-top: 0 !important;
@@ -47415,6 +47426,102 @@ body[data-route="generate"] .aiGenerate{
 }
 .discoverFeedV2 .discoverWeeklyChart .chartTitleBadge{
   filter: none;
+}
+
+/* ─── Discover gift strip + Occasions picker (listen page, not Create) ─ */
+.discoverOccasionStrip{
+  margin: 0 0 18px;
+}
+.discoverOccasionChipRow{
+  margin-top: 0;
+  padding-bottom: 0;
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: calc(100% - 76px);
+}
+.discoverOccasionStripBar{
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+  min-width: 0;
+}
+.discoverOccasionChip{
+  background: #f4f2f8;
+  border-color: transparent;
+  color: #14151c;
+  -webkit-text-fill-color: #14151c;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+.discoverOccasionChip--more,
+.discoverOccasionChip.styleSuggestPill--more{
+  flex: 0 0 auto;
+  margin-top: 0;
+  background: transparent;
+  border: 1px dashed rgba(255, 255, 255, 0.22);
+  color: rgba(232, 238, 247, 0.78);
+  -webkit-text-fill-color: rgba(232, 238, 247, 0.78);
+}
+.discoverOccasionsPanel{
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+  min-width: 0;
+}
+.discoverOccasionsPicker{
+  margin: 0;
+  padding: 0;
+}
+.discoverOccasionsPicker .homeDeskSectionHead h3{
+  margin: 0;
+  font-size: clamp(20px, 5.2vw, 24px);
+  font-weight: 850;
+  letter-spacing: -0.03em;
+  color: var(--text-primary);
+  line-height: 1.12;
+}
+body[data-route="discover"] .discoverOccasionStartCta,
+body[data-route="discover"] .discoverSparksStartCta{
+  background: var(--brand-teal);
+  color: #04110e;
+  border: none;
+  box-shadow: 0 10px 24px rgba(35, 213, 171, 0.18);
+}
+body[data-route="discover"] .discoverOccasionStartCta{
+  width: 100%;
+}
+body[data-route="discover"] .discoverOccasionStartCta:active,
+body[data-route="discover"] .discoverSparksStartCta:active{
+  transform: scale(0.98);
+  filter: brightness(0.95);
+}
+.discoverSparksHome{
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.discoverSparksFeature{
+  margin: 0;
+}
+.discoverSparksDeck{
+  margin: 0;
+}
+.discoverChallengesLive{
+  margin-top: 8px;
+}
+html[data-theme="light"] .discoverOccasionChip{
+  background: #fff;
+  color: #1a1d26;
+  -webkit-text-fill-color: #1a1d26;
+  border: 1px solid var(--border);
+}
+html[data-theme="light"] .discoverOccasionChip--more,
+html[data-theme="light"] .discoverOccasionChip.styleSuggestPill--more{
+  background: transparent;
+  border-style: dashed;
+  color: var(--text-secondary);
+  -webkit-text-fill-color: var(--text-secondary);
 }
 
 /* ─── Discover Templates tab — song showcase ─────────────────────────── */

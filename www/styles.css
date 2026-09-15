@@ -9077,6 +9077,21 @@ main.grid > .card.wide[data-route="player"]{
   animation: navFadeIn 190ms cubic-bezier(0.32, 0.72, 0, 1) both;
   will-change: opacity;
 }
+/* Native Generate dock is position:fixed. Transform / will-change:transform on
+   this card makes the dock's containing block the card, so Generate first sits
+   in-flow under Artwork then jumps to the tab bar when the transform clears. */
+@media (max-width: 720px){
+  html.is-native-shell main.grid > .card.wide[data-route="generate"],
+  html.is-native-shell main.grid > .card.wide[data-route="generate"].routeEnter,
+  html.is-native-shell main.grid > .card.wide[data-route="generate"].routeEnter--push,
+  html.is-native-shell main.grid > .card.wide[data-route="generate"].routeEnter--pop,
+  html.is-native-shell main.grid > .card.wide[data-route="generate"].routeEnter--fade,
+  html.is-native-shell main.grid > .card.wide[data-route="generate"].routeEnter--present{
+    animation: navFadeIn 190ms cubic-bezier(0.32, 0.72, 0, 1) both;
+    transform: none;
+    will-change: opacity;
+  }
+}
 /* Pure slides — the incoming page is fully opaque the whole time and just
    moves into place. No fade-from-blank, so cached pages never look like they
    re-fetched/flashed. */
@@ -23234,7 +23249,7 @@ body.trackSheetOpen .coachFab{
     background: transparent;
     box-shadow: none;
     pointer-events: none;
-    transition: bottom 280ms cubic-bezier(0.22, 1, 0.36, 1), padding 180ms ease;
+    transition: none;
   }
   body[data-route="generate"]:has(.hubNowPlaying.isVisible) #createGenerateDock{
     padding-right: 72px;

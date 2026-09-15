@@ -5176,7 +5176,7 @@ function animateRouteEnter(wanted, direction) {
   // shell leaves a blank gap (reads as a flash). A plain opacity fade has no
   // transform — the fixed header stays anchored and there is no gap.
   const cls =
-    wanted === "player"
+    wanted === "player" || (wanted === "generate" && isNativeShell())
       ? "routeEnter--fade"
       : direction === "forward"
         ? "routeEnter--push"

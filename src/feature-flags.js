@@ -15,3 +15,10 @@ export const NABAD_VIBE_PUBLIC_SHIPPED = false;
 
 /** When false: hide play counts on Discover cards, charts, and challenge heroes (sorting unchanged). */
 export const DISCOVER_SHOW_PLAY_COUNTS = false;
+
+/**
+ * When true: Settings Appearance (Dark / Light / Auto) is shown.
+ * Keep false until light theme is ready to ship — the code stays, the picker is hidden,
+ * and the app always renders dark.
+ */
+export const LIGHT_THEME_PUBLIC_SHIPPED = false;

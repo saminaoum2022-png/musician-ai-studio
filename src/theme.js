@@ -2,6 +2,8 @@
  * App appearance — dark, light, or match system.
  */
 
+import { LIGHT_THEME_PUBLIC_SHIPPED } from "./feature-flags.js";
+
 export const THEME_STORAGE_KEY = "nabadai_theme_v1";
 export const THEME_PREFS = ["dark", "light", "system"];
 
@@ -35,6 +37,7 @@ export function getSystemTheme() {
 }
 
 export function resolveEffectiveTheme(pref = getThemePreference()) {
+  if (!LIGHT_THEME_PUBLIC_SHIPPED) return "dark";
   const p = normalizeThemePreference(pref);
   return p === "system" ? getSystemTheme() : p;
 }
@@ -137,6 +140,12 @@ export function wireSettingsThemeOnce() {
 export function initTheme() {
   applyTheme();
   bindSystemThemeListener();
+  const section = document.getElementById("settingsAppearanceSection");
+  if (!LIGHT_THEME_PUBLIC_SHIPPED) {
+    if (section) section.hidden = true;
+    return;
+  }
+  if (section) section.hidden = false;
   wireSettingsThemeOnce();
   syncSettingsThemePicker();
 }

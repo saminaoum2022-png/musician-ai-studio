@@ -83,13 +83,16 @@
     <script>
       (function () {
         var KEY = "nabadai_theme_v1";
+        var LIGHT_THEME_PUBLIC_SHIPPED = false;
         var pref = "dark";
         try {
           var stored = localStorage.getItem(KEY);
           if (stored === "light" || stored === "dark" || stored === "system") pref = stored;
         } catch (e) {}
         var effective = pref;
-        if (pref === "system") {
+        if (!LIGHT_THEME_PUBLIC_SHIPPED) {
+          effective = "dark";
+        } else if (pref === "system") {
           try {
             effective = window.matchMedia && window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
           } catch (e2) {
@@ -193,7 +196,7 @@
       onload="this.media='all'"
     />
     <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Display:wght@900&family=Inter:wght@900&display=swap" /></noscript>
-    <link rel="stylesheet" href="./styles.css?v=20260915-201224" />
+    <link rel="stylesheet" href="./styles.css?v=20260915-230709" />
 
     <meta name="description" content="Create complete songs from lyrics, a hum, or a photo with NabadAi. Explore AI music tools, Arabic styles, voice personas, and creator sharing." />
     <meta property="og:type" content="website" />
@@ -4146,7 +4149,7 @@
               </div>
             </section>
 
-            <section class="settingsSection" aria-labelledby="settingsAppearanceTitle">
+            <section id="settingsAppearanceSection" class="settingsSection" hidden aria-labelledby="settingsAppearanceTitle">
               <h2 id="settingsAppearanceTitle" class="settingsSectionLabel">Appearance</h2>
               <div class="settingsList">
                 <div class="settingsRow settingsThemeRow">
@@ -5430,7 +5433,7 @@
         requestAnimationFrame(() => requestAnimationFrame(play));
       }
       // Dynamic import so the giant app module does not block the first dots.
-      import("./src/app.js?v=20260915-201224");
+      import("./src/app.js?v=20260915-230709");
     </script>
     <script defer src="/_vercel/insights/script.js"></script>
   </body>

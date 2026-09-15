@@ -382,17 +382,20 @@ function paintProBackLink() {
     credits: "Back to Credits",
     settings: "Back to Settings",
     profile: "Back to Profile",
+    generate: "Back to Create",
+    discover: "Back to Discover",
+    challenges: "Back to Challenges",
+    activity: "Back to Activity",
+    studio: "Back to Studio",
+    messages: "Back",
+    "messages-thread": "Back",
   };
-  backBtn.setAttribute("aria-label", labels[route] || labels.settings);
+  backBtn.setAttribute("aria-label", labels[route] || "Back");
 }
 
 export function setProReturnRoute(route) {
   const r = String(route || "").trim();
-  if (r === "credits" || r === "settings" || r === "profile") {
-    _returnRoute = r;
-  } else {
-    _returnRoute = "settings";
-  }
+  _returnRoute = r && r !== "pro" ? r : "settings";
   paintProBackLink();
 }
 

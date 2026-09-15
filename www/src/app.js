@@ -262,7 +262,7 @@ import { DISCOVER_SHOW_PLAY_COUNTS, MUSIC_VIDEO_FEATURE_ENABLED } from "./featur
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260915-201224";
+const APP_BUILD = "20260915-230709";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -46582,7 +46582,12 @@ function discoverReelInPlaceActive() {
 function resolveDiscoverReelOpenPlayer(opts = {}) {
   if (opts.openPlayer === false) return false;
   if (discoverReelInPlaceActive() || shouldUseDiscoverReelInPlace()) return false;
-  return opts.openPlayer !== false;
+  if (opts.openPlayer === true) return true;
+  try {
+    return (document.body.getAttribute("data-route") || "") === "player";
+  } catch {
+    return false;
+  }
 }
 
 function openDiscoverReelOverlay() {
@@ -47358,7 +47363,7 @@ async function finishDiscoverReelSlideSwap(layer, outPanel, inPanel, targetIdx, 
   await peelDiscoverReelAnimToPlayer(inPanel, target);
   setDiscoverReelAnimLayerActive(false);
   await playDiscoverReelAt(targetIdx, {
-    openPlayer: resolveDiscoverReelOpenPlayer({ openPlayer: true }),
+    openPlayer: resolveDiscoverReelOpenPlayer({}),
     silent: true,
     skipSlide: true,
     skipCoverPaint: true,
@@ -47466,7 +47471,8 @@ async function playNextDiscoverReelTrack(excludeUrl, opts = {}) {
     if (opts.manual) showToast("End of For You", { durationMs: 2200 });
     return;
   }
-  if (opts.skipSlide) {
+  const stayMini = (document.body.getAttribute("data-route") || "") !== "player";
+  if (opts.skipSlide || stayMini) {
     await playDiscoverReelAt(nextIdx, {
       openPlayer: resolveDiscoverReelOpenPlayer({}),
       silent: !opts.manual,
@@ -47486,7 +47492,8 @@ async function playPrevDiscoverReelTrack(opts = {}) {
     if (opts.manual) showToast("Start of For You", { durationMs: 2200 });
     return;
   }
-  if (opts.skipSlide) {
+  const stayMini = (document.body.getAttribute("data-route") || "") !== "player";
+  if (opts.skipSlide || stayMini) {
     await playDiscoverReelAt(prevIdx, {
       openPlayer: resolveDiscoverReelOpenPlayer({}),
       silent: !opts.manual,

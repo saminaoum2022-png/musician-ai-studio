@@ -5,6 +5,7 @@ import {
   normalizeSingabilityReport,
   singabilityLevelClass,
 } from "./lyrics-singability.js";
+import { createNabadSplash } from "./nabad-splash.js";
 import { isArabiziLyricsLanguage } from "./arabizi.js";
 import { generateArrangement, randomizeParams } from "./arrangement.js";
 import { renderArrangementToWav } from "./render.js";
@@ -261,7 +262,7 @@ import { DISCOVER_SHOW_PLAY_COUNTS, MUSIC_VIDEO_FEATURE_ENABLED } from "./featur
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260915-195503";
+const APP_BUILD = "20260915-201224";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -28098,19 +28099,26 @@ let _loginSettlingCarouselTimer = 0;
 let _loginSettlingForceEndTimer = 0;
 let _loginSettlingCarouselStep = 0;
 const LOGIN_SETTLING_MAX_MS = isCapacitorNativeAuth() ? 45000 : 18000;
-// Keep the branded loader on screen long enough to read the slogan even when
-// auth resolves instantly, so it doesn't flash and vanish. Tunable.
+// Hold long enough for the N → NabadAi lockup (1820ms) plus a beat of dots.
 const LOGIN_SETTLING_MIN_MS = 3200;
 let _loginSettlingEndTimer = 0;
+let _loginSettlingSplash = null;
+
+function ensureLoginSettlingSplash() {
+  const mount = document.getElementById("loginSettlingAnim");
+  if (!mount) return null;
+  if (_loginSettlingSplash) return _loginSettlingSplash;
+  _loginSettlingSplash = createNabadSplash(mount, {
+    wordmarkSrc: "./assets/splash/nabad-wordmark.png",
+  });
+  return _loginSettlingSplash;
+}
 
 function setLoginSettlingCarouselStep(step) {
   _loginSettlingCarouselStep = Math.max(0, step | 0);
 }
 
-// The post-login loader now shows the NabadAi brand slogan ("Create. Share.
-// Connect.") statically — matching the sign-in screen — instead of cycling
-// per-feature labels. Kept as a no-op spinner so the existing begin/stop call
-// sites stay valid without spinning a pointless interval.
+// The post-login loader plays the NabadAi splash with loading dots.
 function startLoginSettlingCarousel() {
   stopLoginSettlingCarousel();
   setLoginSettlingCarouselStep(0);
@@ -28145,6 +28153,7 @@ function beginLoginSettling(message = "Signing you in…") {
     overlay.setAttribute("aria-hidden", "false");
   }
   startLoginSettlingCarousel();
+  try { ensureLoginSettlingSplash()?.play?.(); } catch {}
   if (_loginSettlingForceEndTimer) clearTimeout(_loginSettlingForceEndTimer);
   _loginSettlingForceEndTimer = window.setTimeout(() => {
     _loginSettlingForceEndTimer = 0;
@@ -28162,9 +28171,8 @@ function beginLoginSettling(message = "Signing you in…") {
 }
 
 function endLoginSettling(opts = {}) {
-  // On a successful sign-in (minimum: true) keep the carousel up long enough
-  // to make one full pass, so users actually see Create/Mashup/Friends/Persona
-  // instead of an instant jump to Discover. Error/timeout paths end instantly.
+  // On a successful sign-in (minimum: true) hold the splash + dots until the
+  // lockup has played, so it doesn't flash away. Error/timeout paths end now.
   if (opts && opts.minimum && _loginSettling) {
     const remaining = LOGIN_SETTLING_MIN_MS - (Date.now() - _loginSettlingStartedAt);
     if (remaining > 0) {
@@ -28194,6 +28202,10 @@ function endLoginSettling(opts = {}) {
   if (overlay) {
     overlay.hidden = true;
     overlay.setAttribute("aria-hidden", "true");
+  }
+  if (_loginSettlingSplash) {
+    try { _loginSettlingSplash.destroy(); } catch {}
+    _loginSettlingSplash = null;
   }
   if (_applyRouteAfterLoginSettle) {
     _applyRouteAfterLoginSettle = false;

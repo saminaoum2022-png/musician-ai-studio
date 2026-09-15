@@ -2005,6 +2005,15 @@ body.booting .bootSplash{
   flex-direction: column;
   align-items: center;
   justify-content: center;
+  /* 300px keeps the opening N ~84px (near the old 90px mark) and the
+     finished NabadAi lockup readable without filling the phone. */
+  width: min(84vw, 300px);
+}
+.nabadSplash{
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: visible;
 }
 .bootSplashMark,
 .introWelcomeMark{
@@ -3841,8 +3850,12 @@ body.loginSettling{
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 16px;
+  gap: 28px;
   text-align: center;
+}
+.loginSettlingAnim{
+  width: min(84vw, 300px);
+  overflow: visible;
 }
 .loginSettlingMsg{
   margin: 0;
@@ -52577,16 +52590,8 @@ body.isAuth:not(.booting) .authGateChoices:not([hidden]){
   }
 }
 
-/* Post-login loader: branded slogan splash (matches the sign-in screen) instead
-   of cycling per-feature labels. Calm, centered, on-brand. */
-.loginSettlingMark{
-  width: min(22vw, 84px);
-  margin-bottom: 4px;
-}
-.loginSettlingTagline{
+.loginSettlingDots{
   margin: 0;
-  text-align: center;
-  max-width: 320px;
 }
 
 /* P1: Build marker — was a centered pill floating over feed content. Demote to
@@ -58332,8 +58337,9 @@ html[data-theme="light"] .authEmailToggle{
 html[data-theme="light"] .authEmailToggle:hover{
   color: var(--text-primary);
 }
+html[data-theme="light"] body.loginSettling,
 html[data-theme="light"] .loginSettlingOverlay{
-  background: var(--bg);
+  background: #05070d;
 }
 html[data-theme="light"] .loginSettlingMsg{
   color: var(--text-primary);

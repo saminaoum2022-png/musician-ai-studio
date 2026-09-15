@@ -193,7 +193,7 @@
       onload="this.media='all'"
     />
     <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Display:wght@900&family=Inter:wght@900&display=swap" /></noscript>
-    <link rel="stylesheet" href="./styles.css?v=20260915-195503" />
+    <link rel="stylesheet" href="./styles.css?v=20260915-201224" />
 
     <meta name="description" content="Create complete songs from lyrics, a hum, or a photo with NabadAi. Explore AI music tools, Arabic styles, voice personas, and creator sharing." />
     <meta property="og:type" content="website" />
@@ -247,12 +247,9 @@
     <div id="bootSplash" class="bootSplash" aria-hidden="true">
       <div class="bootSplashInner" id="bootSplashAnim"></div>
     </div>
-    <div id="loginSettlingOverlay" class="loginSettlingOverlay" hidden aria-hidden="true">
+    <div id="loginSettlingOverlay" class="loginSettlingOverlay" hidden aria-hidden="true" aria-label="Signing you in">
       <div class="loginSettlingInner">
-        <span class="bootSplashMark loginSettlingMark" aria-hidden="true"></span>
-        <h1 class="authTagline loginSettlingTagline" aria-label="Create. Share. Connect.">
-          <span class="authTaglineWord">Create<span class="authTaglineDot authTaglineDot--create" aria-hidden="true">.</span></span><span class="authTaglineWord"> Share<span class="authTaglineDot authTaglineDot--share" aria-hidden="true">.</span></span><span class="authTaglineWord"> Connect<span class="authTaglineDot authTaglineDot--connect" aria-hidden="true">.</span></span>
-        </h1>
+        <div class="loginSettlingAnim" id="loginSettlingAnim"></div>
         <span class="loginSettlingDots introDots" aria-hidden="true"><i></i><i></i><i></i></span>
       </div>
     </div>
@@ -5433,7 +5430,7 @@
         requestAnimationFrame(() => requestAnimationFrame(play));
       }
       // Dynamic import so the giant app module does not block the first dots.
-      import("./src/app.js?v=20260915-195503");
+      import("./src/app.js?v=20260915-201224");
     </script>
     <script defer src="/_vercel/insights/script.js"></script>
   </body>

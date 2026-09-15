@@ -712,6 +712,18 @@ img { display: block; max-width: 100%; height: auto; }
   margin: 0 auto;
 }
 
+/* Hold the static occasion placeholders until CMS songs land, so the default
+   cards never flash and then swap into the real artwork. */
+.marketingOccasionGrid[data-mk-template-grid]:not(.is-ready) {
+  opacity: 0;
+  min-height: 280px;
+}
+
+.marketingOccasionGrid[data-mk-template-grid].is-ready {
+  opacity: 1;
+  transition: opacity 180ms ease;
+}
+
 .marketingOccasionCard {
   display: grid;
   grid-template-columns: 56px minmax(0, 1fr);

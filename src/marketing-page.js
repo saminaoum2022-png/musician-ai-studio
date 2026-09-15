@@ -779,9 +779,7 @@
     node.removeAttribute("data-hook-start");
     delete node.dataset.previewBound;
     var play = node.querySelector("[data-mk='template.play']");
-    var pill = node.querySelector("[data-mk='template.previewPill']");
     if (play) play.hidden = true;
-    if (pill) pill.hidden = true;
   }
 
   function enablePreviewOnGridCard(node, song) {
@@ -800,9 +798,7 @@
     var img = node.querySelector("[data-mk='template.image']");
     if (song.artUrl && img) img.setAttribute("src", song.artUrl);
     var play = node.querySelector("[data-mk='template.play']");
-    var pill = node.querySelector("[data-mk='template.previewPill']");
     if (play) play.hidden = false;
-    if (pill) pill.hidden = false;
     if (node.dataset.previewBound === "1") return;
     node.dataset.previewBound = "1";
     node.addEventListener("click", function (e) {
@@ -814,6 +810,11 @@
       e.preventDefault();
       startCarouselPreview(node, previewUrl, hookStartSec);
     });
+  }
+
+  function revealTemplateGrid() {
+    var grid = document.querySelector("[data-mk-template-grid]");
+    if (grid) grid.classList.add("is-ready");
   }
 
   function wireTemplateGridPreviews(templateCards) {
@@ -830,8 +831,11 @@
         return { id: card.exampleSongId, index: i };
       })
       .filter(Boolean);
-    if (!missingIds.length) return;
-    fetchFeaturedDiscoverSongs(missingIds.map(function (row) { return row.id; })).then(function (songs) {
+    if (!missingIds.length) {
+      revealTemplateGrid();
+      return Promise.resolve();
+    }
+    return fetchFeaturedDiscoverSongs(missingIds.map(function (row) { return row.id; })).then(function (songs) {
       var byId = {};
       songs.forEach(function (song) { if (song && song.id) byId[song.id] = song; });
       missingIds.forEach(function (row) {
@@ -839,7 +843,7 @@
         var song = byId[row.id];
         if (node && song) enablePreviewOnGridCard(node, song);
       });
-    });
+    }).finally(revealTemplateGrid);
   }
 
   function wireDiscoverCarouselPreviews(root) {
@@ -1174,6 +1178,7 @@
 
   function applyHomeExtras(c) {
     if (c.templates) applyTemplates(c.templates);
+    else revealTemplateGrid();
     if (c.collab) applyCollab(c.collab);
     if (c.discover) {
       setText("[data-mk='discover.eyebrow']", c.discover.eyebrow);
@@ -1351,9 +1356,7 @@
     document.querySelectorAll("[data-mk-template-card]").forEach(function (node, i) {
       if (i > 3) return;
       node.classList.add("marketingOccasionCard--hasPreview");
-      var pill = node.querySelector("[data-mk='template.previewPill']");
       var play = node.querySelector("[data-mk='template.play']");
-      if (pill) pill.hidden = false;
       if (play) play.hidden = false;
     });
   }
@@ -1416,6 +1419,8 @@
     revealHeroPhoto(img);
   });
 
+  if (PAGE === "home") setTimeout(revealTemplateGrid, 4000);
+
   fetch("/api/marketing/content?page=" + encodeURIComponent(PAGE) + "&locale=" + encodeURIComponent(LOCALE), {
     credentials: "omit",
   })
@@ -1431,6 +1436,7 @@
     })
     .catch(function () {
       if (PAGE !== "home") return;
+      revealTemplateGrid();
       if (location.search.indexOf("mkTemplatePreviewDemo=1") !== -1) showTemplatePreviewDemo();
     });
 

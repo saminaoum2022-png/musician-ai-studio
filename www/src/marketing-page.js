@@ -473,8 +473,14 @@
     root.style.setProperty("--brand-teal-hover", ctaHover);
     root.style.setProperty("--brand-violet", violet);
     root.style.setProperty("--brand-violet-hover", violetHover);
-    root.style.setProperty("--brand-cta-bg", cta);
-    root.style.setProperty("--brand-cta-bg-hover", ctaHover);
+    root.style.setProperty(
+      "--brand-cta-bg",
+      "linear-gradient(145deg, " + lightenHex(cta, 0.22) + " 0%, " + cta + " 34%, " + violet + " 78%, " + violet + " 100%)",
+    );
+    root.style.setProperty(
+      "--brand-cta-bg-hover",
+      "linear-gradient(145deg, " + lightenHex(cta, 0.32) + " 0%, " + ctaHover + " 34%, " + violetHover + " 78%, " + violetHover + " 100%)",
+    );
     root.style.setProperty("--brand-cta-text", ctaText);
     var ctaRgb = hexToRgb(cta) || { r: 35, g: 213, b: 171 };
     var violetRgb = hexToRgb(violet) || { r: 124, g: 92, b: 255 };

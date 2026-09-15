@@ -61,52 +61,8 @@ body:has(.marketingShell) {
 }
 
 .marketingShell {
-  position: relative;
-  z-index: 1;
   width: min(1120px, calc(100% - 40px));
   margin: 0 auto;
-}
-
-/* Homepage — same drifting Create bloom (purple + teal), quieter so copy stays readable. */
-html[data-marketing-page="home"] {
-  background: #05070d;
-}
-html[data-marketing-page="home"] body {
-  background-color: #05070d;
-  background-image: none;
-}
-html[data-marketing-page="home"] body::before,
-html[data-marketing-page="home"] body::after {
-  content: "";
-  position: fixed;
-  inset: -55%;
-  z-index: 0;
-  pointer-events: none;
-  will-change: transform;
-}
-html[data-marketing-page="home"] body::before {
-  background: radial-gradient(ellipse 46% 42% at 50% 50%, rgba(124, 92, 255, 0.26) 0%, rgba(124, 92, 255, 0.10) 38%, transparent 70%);
-  animation: marketingWashDriftA 36s ease-in-out infinite;
-}
-html[data-marketing-page="home"] body::after {
-  background: radial-gradient(ellipse 48% 44% at 50% 50%, rgba(57, 203, 185, 0.18) 0%, rgba(57, 203, 185, 0.07) 40%, transparent 72%);
-  animation: marketingWashDriftB 44s ease-in-out infinite;
-}
-@keyframes marketingWashDriftA {
-  0% { transform: translate3d(-28%, -22%, 0); }
-  20% { transform: translate3d(8%, -6%, 0); }
-  40% { transform: translate3d(26%, 18%, 0); }
-  60% { transform: translate3d(4%, 28%, 0); }
-  80% { transform: translate3d(-22%, 10%, 0); }
-  100% { transform: translate3d(-28%, -22%, 0); }
-}
-@keyframes marketingWashDriftB {
-  0% { transform: translate3d(26%, 24%, 0); }
-  20% { transform: translate3d(-4%, 16%, 0); }
-  40% { transform: translate3d(-24%, -8%, 0); }
-  60% { transform: translate3d(-8%, -26%, 0); }
-  80% { transform: translate3d(20%, -4%, 0); }
-  100% { transform: translate3d(26%, 24%, 0); }
 }
 
 a { color: inherit; }
@@ -1769,10 +1725,6 @@ body:has(.marketingDraftBanner) .marketingShell {
     transform: none;
     transition: none;
     will-change: auto;
-  }
-  html[data-marketing-page="home"] body::before,
-  html[data-marketing-page="home"] body::after {
-    animation: none;
   }
 }
 

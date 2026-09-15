@@ -85,7 +85,7 @@ function patchHtml(html, { key, locale }) {
   if (!out.includes("marketing-page.js")) {
     out = out.replace(
       /<\/body>\s*<\/html>\s*$/,
-      '  <script src="/src/marketing-page.js" defer></script>\n</body>\n</html>\n',
+      '  <script src="/src/marketing-page.js?v=20260915-nowash" defer></script>\n</body>\n</html>\n',
     );
   }
   return out;

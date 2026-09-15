@@ -10275,6 +10275,7 @@ html[data-theme="light"] .btnCreateSettings{
   box-shadow: var(--surface-highlight), 0 6px 18px rgba(0,0,0,0.18);
   width:100%;
   box-sizing:border-box;
+  overflow: visible;
 }
 .createTab{
   flex:1 1 0;
@@ -10292,6 +10293,7 @@ html[data-theme="light"] .btnCreateSettings{
   font-weight:700;
   letter-spacing:0.01em;
   cursor:pointer;
+  position: relative;
   -webkit-tap-highlight-color: transparent;
   transition: background 200ms ease, color 200ms ease, transform 140ms ease, box-shadow 200ms ease, border-color 200ms ease;
 }
@@ -59776,6 +59778,14 @@ html[data-theme="dark"] :is(#friendsPage .followActStack, #discoveryFollowingLis
   letter-spacing: 0.06em;
 }
 .singerPersonaPill{ position: relative; }
+#createTabHum .webProFeaturePill--pill{
+  top: -4px;
+  right: 2px;
+}
+.btnCreateSettings .webProFeaturePill--pill{
+  top: 2px;
+  right: -2px;
+}
 .webProFeaturePill--act{
   position: absolute;
   top: 2px;

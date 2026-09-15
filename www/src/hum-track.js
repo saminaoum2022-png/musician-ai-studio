@@ -650,6 +650,9 @@ export function triggerHumTrackGenerate() {
 }
 
 export function openHumTrackFlow() {
+  if (typeof ctx?.requireProAccess === "function" && !ctx.requireProAccess("Hum")) {
+    return;
+  }
   if (humTrackGenerating) {
     leaveHumTrackFlow();
     return;

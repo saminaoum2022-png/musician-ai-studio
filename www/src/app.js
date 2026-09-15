@@ -261,7 +261,7 @@ import { DISCOVER_SHOW_PLAY_COUNTS, MUSIC_VIDEO_FEATURE_ENABLED } from "./featur
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260915-192028";
+const APP_BUILD = "20260915-195503";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -6330,6 +6330,12 @@ function sanitizeSingabilityReport(report, lyricsText) {
 function renderLyricsSingabilityPanel(report) {
   const panel = els.lyricsSingabilityPanel;
   if (!panel) return;
+  if (!proFeatureAllowed() && report && report.source !== "pro_tease") {
+    panel.hidden = true;
+    panel.classList.remove("isReady", "isWarn", "isBad", "isChecking", "isProTease", "isExpanded");
+    if (els.lyricsSingabilityActions) els.lyricsSingabilityActions.hidden = true;
+    return;
+  }
   const instrumentalOnly = String(els.vocalInstrumentalOnly?.value || "0") === "1";
   const text = String(els.sunoPrompt?.value || "").trim();
   if (instrumentalOnly || !lyricsSingabilityEligible(text) || !report || report.checking) {
@@ -6791,31 +6797,9 @@ function singabilityReportIsFresh(text) {
 }
 
 async function ensureSingabilityBeforeGenerate() {
-  const instrumentalOnly = String(els.vocalInstrumentalOnly?.value || "0") === "1";
-  if (instrumentalOnly) return true;
-  const text = String(els.sunoPrompt?.value || "").trim();
-  if (!lyricsSingabilityEligible(text)) return true;
-
-  const report = singabilityReportIsFresh(text)
-    ? lastSingabilityReport
-    : computeLocalSingability(text);
-  const score = Number(report?.score);
-  if (!Number.isFinite(score) || score >= 70) return true;
-
-  renderLyricsSingabilityPanel(report);
-  const warnings = Array.isArray(report?.warnings) ? report.warnings : [];
-  const top = warnings
-    .filter((w) => w.level === "high" || w.level === "medium")
-    .slice(0, 2)
-    .map((w) => `• ${w.message}`)
-    .join("\n");
-  const summary = String(report?.summary || "").trim();
-  const detail = [top, summary].filter(Boolean).join("\n\n").slice(0, 400);
-
-  const goBackToCheck = window.confirm(
-    `Singability ${score}/100 — lyrics may not sing well.\n\n${detail || "Open the score card to review rhyme and line balance."}\n\nOK — go back and review lyrics\nCancel — generate anyway`,
-  );
-  return !goBackToCheck;
+  // Generate should not pop a native confirm or leak Pro results. Check
+  // singability from the lyrics card instead.
+  return true;
 }
 
 /** True when Arabic flow is active and dialect + address are both chosen. */
@@ -7944,6 +7928,7 @@ try {
     latestSunoModel: LATEST_SUNO_MODEL,
     haptic,
     showToast,
+    requireProAccess: (label) => requireProFeature(label || "Hum"),
     mountFixedOverlaysToBody,
     setPostAuthReturnHash,
     scheduleApplyRoute,
@@ -13976,6 +13961,7 @@ function bindHomeDeskOnce(page) {
         return;
       }
       if (card === "humtrack") {
+        if (!requireProFeature("Hum")) return;
         openHumTrackFlow();
         return;
       }
@@ -17922,7 +17908,7 @@ function applyCreateChallengeFocus(focus) {
     vibeTab.hidden = !showVibe;
     vibeTab.style.display = showVibe ? "" : "none";
   }
-  try { setActiveCreateTab(String(focus.tab || tabs[0])); } catch {}
+  try { setActiveCreateTab(String(focus.tab || tabs[0]), { requestPro: true }); } catch {}
   try { syncPhotoSoloChallengeCreateUi(); } catch {}
 }
 
@@ -30009,6 +29995,29 @@ function syncTrackSheetProPills() {
   });
 }
 
+function syncCreateProLocks() {
+  const locked = proFeatureLocked();
+  const humTab = document.getElementById("createTabHum");
+  if (humTab) {
+    humTab.classList.toggle("isProLocked", locked);
+    setWebProFeaturePill(humTab, locked, "pill");
+  }
+  if (els.btnOpenAdvancedSheet) {
+    els.btnOpenAdvancedSheet.classList.toggle("isProLocked", locked);
+    setWebProFeaturePill(els.btnOpenAdvancedSheet, locked, "pill");
+  }
+  const humCard = document.querySelector('[data-home-card="humtrack"]');
+  if (humCard) setWebProFeaturePillOnHomeCard(humCard, locked);
+  if (locked) {
+    try {
+      if (typeof getActiveCreateTabMode === "function" && getActiveCreateTabMode() === "hum") {
+        setActiveCreateTab("lyrics");
+      }
+    } catch {}
+    if (els.advancedSheet) els.advancedSheet.open = false;
+  }
+}
+
 function syncProGatedWebUi() {
   const gate = isWebOrDesktopShell();
   const locked = gate && !Boolean(creditsState.proActive);
@@ -30117,6 +30126,7 @@ function syncProSubscriptionUi() {
   syncSettingsProRow();
   try { syncDeskSidebarPromo(); } catch {}
   try { syncProGatedWebUi(); } catch {}
+  try { syncCreateProLocks(); } catch {}
   try { syncPlayerCoverToolsRail(); } catch {}
   try { refreshProSubscriptionUi(); } catch {}
 }
@@ -72177,15 +72187,25 @@ function openFineTunePanelIfPresent() {
   const el = els.fineTuneDetails;
   if (el && "open" in el) el.open = true;
 }
+function openAdvancedOptionsSheet() {
+  if (!requireProFeature("Advanced")) return false;
+  if (!els.advancedSheet) return false;
+  els.advancedSheet.open = true;
+  openFineTunePanelIfPresent();
+  els.advancedSheet.scrollTop = 0;
+  const first = els.advancedSheet.querySelector("select, input");
+  if (first) setTimeout(() => first.focus(), 120);
+  return true;
+}
 if (els.btnOpenAdvancedSheet && els.advancedSheet) {
   els.btnOpenAdvancedSheet.addEventListener("click", () => {
-    els.advancedSheet.open = true;
-    openFineTunePanelIfPresent();
-    els.advancedSheet.scrollTop = 0;
-    const first = els.advancedSheet.querySelector("select, input");
-    if (first) setTimeout(() => first.focus(), 120);
+    openAdvancedOptionsSheet();
   });
 }
+document.querySelector(".generateDockOptions")?.addEventListener("click", (e) => {
+  e.preventDefault();
+  openAdvancedOptionsSheet();
+});
 if (els.sunoPersonaId) {
   els.sunoPersonaId.addEventListener("change", () => {
     const id = String(els.sunoPersonaId.value || "").trim();
@@ -72198,9 +72218,7 @@ if (els.sunoPersonaId) {
 }
 if (els.personaActiveBannerChange && els.advancedSheet) {
   els.personaActiveBannerChange.addEventListener("click", () => {
-    // Same opening behavior as the main "Open advanced options" button.
-    els.advancedSheet.open = true;
-    openFineTunePanelIfPresent();
+    if (!openAdvancedOptionsSheet()) return;
     els.advancedSheet.scrollTop = 0;
     if (els.sunoPersonaId) {
       try {
@@ -75800,7 +75818,12 @@ function resyncActiveCreateTabPanes() {
   }
   setActiveCreateTab(getActiveCreateTabMode());
 }
-function setActiveCreateTab(mode) {
+function setActiveCreateTab(mode, opts = {}) {
+  if (mode === "hum" && !proFeatureAllowed()) {
+    if (opts.requestPro) requireProFeature("Hum");
+    else mode = "lyrics";
+    if (opts.requestPro) return;
+  }
   ["photo", "hum", "lyrics", "vibe"].forEach((k) => {
     const el = createTabEls[k];
     if (!el || el.hidden) return;
@@ -75825,7 +75848,7 @@ if (createTabEls.photo) {
 }
 if (createTabEls.hum) {
   createTabEls.hum.addEventListener("click", () => {
-    setActiveCreateTab("hum");
+    setActiveCreateTab("hum", { requestPro: true });
   });
 }
 if (createTabEls.vibe) {
@@ -75868,6 +75891,7 @@ setStatus(
 );
 try {
   if (isWebOrDesktopShell()) syncProGatedWebUi();
+  try { syncCreateProLocks(); } catch {}
 } catch {}
 
 function clampInt(n, min, max) {

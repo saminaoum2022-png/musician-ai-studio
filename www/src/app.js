@@ -12656,24 +12656,23 @@ function discoverFeedCommunityPicksBlockHtml(tracks, profMap, prefs) {
 
 function discoverOccasionStripHtml() {
   const tiles = [
-    { id: "birthday", label: "Birthday", kicker: "Gift", tone: "teal", attr: `data-discover-occasion-open="birthday"` },
-    { id: "wedding", label: "Wedding", kicker: "Gift", tone: "violet", attr: `data-discover-occasion-open="wedding"` },
-    { id: "mom-day", label: "For mom", kicker: "Gift", tone: "rose", attr: `data-discover-occasion-open="mom-day"` },
-    { id: "more", label: "Occasions", kicker: "See all", tone: "mix", attr: `data-discover-occasions-more` },
+    { id: "birthday", label: "Birthday", tone: "teal" },
+    { id: "wedding", label: "Wedding", tone: "violet" },
+    { id: "mom-day", label: "For mom", tone: "rose" },
+    { id: "anniversary", label: "Anniversary", tone: "mix" },
+    { id: "congrats", label: "Congrats", tone: "teal" },
   ];
   const cards = tiles.map((tile) => `
-    <button type="button" class="discoverMomentTile discoverMomentTile--${escapeHtml(tile.tone)}" ${tile.attr} aria-label="${escapeHtml(tile.kicker)}: ${escapeHtml(tile.label)}">
+    <button type="button" class="discoverMomentTile discoverMomentTile--${escapeHtml(tile.tone)}" data-discover-occasion-open="${escapeHtml(tile.id)}" aria-label="Gift a song: ${escapeHtml(tile.label)}">
       <span class="discoverMomentTileWash" aria-hidden="true"></span>
-      <span class="discoverMomentTileKicker">${escapeHtml(tile.kicker)}</span>
       <span class="discoverMomentTileTitle">${escapeHtml(tile.label)}</span>
     </button>
   `).join("");
+  const seeAll = `<button type="button" class="discoverFeedSectionLink" data-discover-feed-tab-jump="occasions">See all</button>`;
   return `
     <section class="discoverFeedSection discoverMomentSection" aria-label="Gift a song">
-      <header class="discoverFeedSectionHead discoverMomentHead">
-        <p class="discoverFeedSectionKicker">Gift a song</p>
-      </header>
-      <div class="discoverMomentGrid">
+      ${discoverFeedSectionHeadHtml("Gift a song", seeAll)}
+      <div class="discoverMomentRail" role="list">
         ${cards}
       </div>
     </section>`;

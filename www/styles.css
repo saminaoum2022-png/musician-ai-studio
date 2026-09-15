@@ -47531,36 +47531,47 @@ body[data-route="generate"] .aiGenerate{
   filter: none;
 }
 
-/* ─── Discover moment tiles (Nabad identity, not white chips) ─ */
+/* ─── Discover moment rail — compact snap carousel ─ */
 .discoverMomentSection{
   margin: 0 0 22px;
 }
-.discoverMomentHead{
-  margin-bottom: 10px;
-}
-.discoverMomentGrid{
-  display: grid;
-  grid-template-columns: 1fr 1fr;
+.discoverMomentRail{
+  display: flex;
   gap: 10px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scroll-snap-type: x mandatory;
+  scroll-padding-inline: 2px;
+  padding: 2px 18px 8px 2px;
+  margin: 0 -2px;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.discoverMomentRail::-webkit-scrollbar{
+  display: none;
 }
 .discoverMomentTile{
   position: relative;
   isolation: isolate;
+  flex: 0 0 68%;
+  max-width: 248px;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
   justify-content: flex-end;
-  gap: 4px;
-  min-height: 108px;
-  padding: 14px 14px 13px;
+  min-height: 76px;
+  padding: 16px 16px 14px;
   border: 1px solid rgba(255, 255, 255, 0.10);
-  border-radius: 20px;
+  border-radius: 18px;
   background: rgba(255, 255, 255, 0.045);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
   color: #fff;
   text-align: left;
   overflow: hidden;
   cursor: pointer;
+  scroll-snap-align: start;
+  scroll-snap-stop: always;
   -webkit-tap-highlight-color: transparent;
   -webkit-appearance: none;
   appearance: none;
@@ -47600,7 +47611,7 @@ body[data-route="generate"] .aiGenerate{
   color: rgba(248, 250, 255, 0.62);
 }
 .discoverMomentTileTitle{
-  font-size: 20px;
+  font-size: 18px;
   font-weight: 850;
   letter-spacing: -0.03em;
   line-height: 1.1;

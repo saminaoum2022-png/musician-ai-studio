@@ -51,7 +51,10 @@
   }
 
   function isBundledHeroAsset(url) {
-    return /\/assets\/marketing\/seo-hero-device/i.test(String(url || ""));
+    var u = String(url || "");
+    return /\/assets\/marketing\/seo-hero-home/i.test(u)
+      || /seo-hero-device/i.test(u)
+      || /nabadai-homepage-ai-music-creator-hero/i.test(u);
   }
 
   function revealHeroPhoto(el) {
@@ -1203,6 +1206,24 @@
   });
 
   revealHeroPhoto();
+  window.addEventListener("pageshow", function () {
+    var img = document.querySelector(".marketingHeroArt img");
+    if (!img) return;
+    var src = String(img.currentSrc || img.getAttribute("src") || "");
+    if (src.indexOf("seo-hero-device") === -1) {
+      revealHeroPhoto(img);
+      return;
+    }
+    var pic = img.closest("picture");
+    if (pic) {
+      var sources = pic.querySelectorAll("source");
+      for (var i = 0; i < sources.length; i++) sources[i].remove();
+    }
+    img.removeAttribute("srcset");
+    img.classList.remove("is-loaded");
+    img.setAttribute("src", "/assets/marketing/seo-hero-home-1600.jpg");
+    revealHeroPhoto(img);
+  });
 
   fetch("/api/marketing/content?page=" + encodeURIComponent(PAGE) + "&locale=" + encodeURIComponent(LOCALE), {
     credentials: "omit",

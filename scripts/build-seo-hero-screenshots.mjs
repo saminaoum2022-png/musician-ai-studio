@@ -106,23 +106,3 @@ async function buildPlayerHero() {
 
 await buildCreateFlowHero();
 await buildPlayerHero();
-
-async function buildDeviceHero() {
-  const source = path.join(outDir, "seo-hero-device-source.jpg");
-  if (!fs.existsSync(source)) return;
-
-  const targetWidth = 2560;
-  const dest = path.join(outDir, "seo-hero-device.png");
-  await sharp(source)
-    .resize(targetWidth, null, { kernel: sharp.kernel.lanczos3 })
-    .sharpen({ sigma: 0.65, m1: 0.45, m2: 0.25 })
-    .png({ compressionLevel: 6, quality: 95 })
-    .toFile(dest);
-
-  const meta = await sharp(dest).metadata();
-  console.log(
-    `build-seo-hero-screenshots: ${path.relative(root, dest)} (${meta.width}×${meta.height})`,
-  );
-}
-
-await buildDeviceHero();

@@ -65,12 +65,10 @@ if (fs.existsSync(seoArabicSrc)) {
 
 const seoMarketingFiles = [
   "nabadai-social-card.png",
-  "seo-hero-device.png",
-  "seo-hero-device-source.jpg",
-  "seo-hero-device-800.webp",
-  "seo-hero-device-800.jpg",
-  "seo-hero-device-1600.webp",
-  "seo-hero-device-1600.jpg",
+  "seo-hero-home-800.webp",
+  "seo-hero-home-800.jpg",
+  "seo-hero-home-1600.webp",
+  "seo-hero-home-1600.jpg",
   "seo-hero-player.png",
   "seo-hero-create-flow.png",
   "app-store-screenshots/01-discover.png",

@@ -40,8 +40,8 @@ function patchHtml(html, { key, locale }) {
         '<a class="textLink" data-mk="hero.secondary" href="#features">',
       )
       .replace(
-        /<img src="\/assets\/marketing\/seo-hero-device.png"/g,
-        '<img data-mk="hero.image" src="/assets/marketing/seo-hero-device.png"',
+        /<img src="\/assets\/marketing\/seo-hero-home-1600.jpg"/g,
+        '<img data-mk="hero.image" src="/assets/marketing/seo-hero-home-1600.jpg"',
       )
       .replace(
         /<header class="sectionHead"><p class="eyebrow">/g,

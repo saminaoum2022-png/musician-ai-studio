@@ -16,8 +16,17 @@ function marketingHeroMetaApiPath(page, locale) {
   return `/api/marketing/hero-meta?page=${encodeURIComponent(p)}&locale=${encodeURIComponent(l)}`;
 }
 
-function toAbsoluteRedirectUrl(heroImageUrl, req) {
+function canonicalHeroImageUrl(heroImageUrl) {
   const url = String(heroImageUrl || "").trim();
+  if (!url) return "";
+  if (/nabadai-homepage-ai-music-creator-hero/i.test(url) || /seo-hero-device/i.test(url)) {
+    return "/assets/marketing/seo-hero-home-1600.jpg";
+  }
+  return url;
+}
+
+function toAbsoluteRedirectUrl(heroImageUrl, req) {
+  const url = canonicalHeroImageUrl(heroImageUrl);
   if (!url) return null;
   if (/^https?:\/\//i.test(url)) return url;
   if (!url.startsWith("/")) return null;

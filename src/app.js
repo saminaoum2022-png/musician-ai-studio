@@ -261,7 +261,7 @@ import { DISCOVER_SHOW_PLAY_COUNTS, MUSIC_VIDEO_FEATURE_ENABLED } from "./featur
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260915-163840";
+const APP_BUILD = "20260915-172921";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -4503,6 +4503,16 @@ function attachTabRefresh() {
       e.stopPropagation();
     });
   });
+  document.querySelectorAll(".journeyBar a[data-route-link]").forEach((a) => {
+    if (a.dataset.deskNavBound) return;
+    a.dataset.deskNavBound = "1";
+    a.addEventListener("click", (e) => {
+      if (e.button != null && e.button !== 0) return;
+      if (!handleMobileTabTap(a, e)) return;
+      e.preventDefault();
+      e.stopPropagation();
+    });
+  });
 }
 
 var authSession = null;
@@ -5081,28 +5091,13 @@ const NAV_TAB_ROOTS = new Set(["discover", "messages", "challenges", "activity",
 /** Default landing after login / cold open (Home feed). */
 const DEFAULT_LOGGED_IN_ROUTE = "discover";
 
-/** Old Create hub is retired — leftover callers must land on Create Song. */
+/** Old Create hub is retired — leftover `#/challenges` callers land on Create Song. */
 function createHubMenuHash() {
   return "#/generate";
 }
 
-function isExplicitCreateHubMenu() {
-  try {
-    const hash = String(location.hash || "");
-    if (!/^#\/challenges\b/i.test(hash)) return false;
-    const q = hash.includes("?") ? hash.slice(hash.indexOf("?") + 1).split("#")[0] : "";
-    return new URLSearchParams(q).get("menu") === "1";
-  } catch {
-    return false;
-  }
-}
-
 function demoteBareCreateHub(wanted) {
   if (String(wanted || "").trim() !== "challenges") return wanted;
-  if (isExplicitCreateHubMenu()) {
-    try { history.replaceState(null, "", "#/generate"); } catch {}
-    return "generate";
-  }
   try {
     if (createSessionIsGenerating()) {
       try { sessionStorage.setItem(PROFILE_SONGS_SEGMENT_KEY, "all"); } catch {}
@@ -5111,8 +5106,8 @@ function demoteBareCreateHub(wanted) {
       return "profile";
     }
   } catch {}
-  try { history.replaceState(null, "", "#/discover"); } catch {}
-  return "discover";
+  try { history.replaceState(null, "", createHubMenuHash()); } catch {}
+  return "generate";
 }
 // Screens that run their own bespoke transition or appear at boot/auth and
 // should not get the generic slide/fade.
@@ -5482,6 +5477,7 @@ function applyRoute({ passGen } = {}) {
   // Public profile is intentionally readable without auth so share-link
   // visitors don't hit a wall before discovering the rest of the product.
   const sharedTrackId = parseSharedTrackIdFromLocation();
+  wanted = demoteBareCreateHub(wanted);
   const protectedRoutes = new Set(["generate", "profile", "profile-edit", "friends", "activity", "mashup", "player", "vocal", "stems", "studio", "nabad-producer", "advanced", "credits", "sounds", ...(MESSAGES_FEATURE_ENABLED ? ["messages", "messages-thread"] : [])]);
   if (!isLoggedIn && protectedRoutes.has(wanted)) {
     if (wanted === "player" && sharedTrackId) {
@@ -5523,7 +5519,6 @@ function applyRoute({ passGen } = {}) {
       history.replaceState(null, "", `#/player?track=${encodeURIComponent(sharedTrackId)}`);
     } catch {}
   }
-  wanted = demoteBareCreateHub(wanted);
   const prevRoute = document.body.getAttribute("data-route") || "";
   if (prevRoute && prevRoute !== wanted) {
     captureRouteScroll(prevRoute);

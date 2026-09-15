@@ -361,8 +361,8 @@ try {
 }
 
 const IS_NATIVE_SHELL = typeof location !== "undefined" && location.protocol === "capacitor:";
-/** In-app boot splash: two dots grow into N (1100ms), then the supplied wordmark. */
-const BOOT_SPLASH_MAX_MS = IS_NATIVE_SHELL ? 3200 : 2800;
+/** In-app boot splash: 1100ms motion, then 500ms hold on the NabadAi wordmark. */
+const BOOT_SPLASH_MAX_MS = IS_NATIVE_SHELL ? 3700 : 3300;
 let _bootSplashMotion = window.__nabadBootSplash || null;
 let _bootSplashAnimEnded = Boolean(window.__nabadBootSplashEnded);
 let _bootSplashCanDismiss = false;

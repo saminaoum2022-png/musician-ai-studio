@@ -5413,6 +5413,13 @@
         const play = () => {
           Promise.resolve(motion.play())
             .catch(() => ({ cancelled: true }))
+            .then((result) => {
+              if (result && result.cancelled) return result;
+              // Hold the finished N + NabadAi wordmark so it can actually be read.
+              return new Promise((resolve) => {
+                window.setTimeout(() => resolve(result), 500);
+              });
+            })
             .then(() => {
               window.__nabadBootSplashEnded = true;
               if (typeof window.__nabadOnBootSplashEnded === "function") {

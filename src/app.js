@@ -4047,9 +4047,10 @@ function ensureTabGlassThumb(tabbar) {
 }
 
 function tabGlassPillSize(tabbar) {
-  const raw = getComputedStyle(tabbar).getPropertyValue("--tab-pill-size");
+  const raw = getComputedStyle(tabbar).getPropertyValue("--tab-thumb-w")
+    || getComputedStyle(tabbar).getPropertyValue("--tab-pill-size");
   const n = parseFloat(raw);
-  return Number.isFinite(n) && n > 0 ? n : 46;
+  return Number.isFinite(n) && n > 0 ? n : 56;
 }
 
 function tabGlassActiveIndex(tabbar) {
@@ -4120,6 +4121,33 @@ function resetTabGlassDeform(tabbar) {
   tabbar.style.setProperty("--tab-thumb-drag-x", "0px");
 }
 
+let _tabPulseLast = "";
+let _tabPulseTimer = 0;
+
+function pulseTabTrayIfChanged() {
+  const tabbar = document.querySelector(".mobileTabbar");
+  if (!tabbar) return;
+  const active = tabbar.querySelector(":scope > a.active[data-route-link]");
+  const key = String(active?.getAttribute("data-route-link") || "").trim();
+  if (!key || key === _tabPulseLast) {
+    if (key) _tabPulseLast = key;
+    return;
+  }
+  const skip = !_tabPulseLast || document.body.classList.contains("tabbarCollapsed");
+  _tabPulseLast = key;
+  if (skip) return;
+  tabbar.classList.remove("isTabPulse");
+  void tabbar.offsetWidth;
+  tabbar.classList.add("isTabPulse");
+  if (_tabPulseTimer) {
+    try { clearTimeout(_tabPulseTimer); } catch {}
+  }
+  _tabPulseTimer = window.setTimeout(() => {
+    tabbar.classList.remove("isTabPulse");
+    _tabPulseTimer = 0;
+  }, 360);
+}
+
 function syncTabGlassThumb(opts = {}) {
   const tabbar = document.querySelector(".mobileTabbar");
   if (!tabbar) return;
@@ -4134,7 +4162,7 @@ function syncTabGlassThumb(opts = {}) {
     return;
   }
   const scale = opts.scale != null ? opts.scale : (_tabGlassHold?.live ? 1.36 : 1);
-  setTabGlassVars(tabbar, { scale, opacity: 1 });
+  setTabGlassVars(tabbar, { scale });
 }
 
 function tabGlassMagnetX(slots, clientX, tabbar) {
@@ -4966,6 +4994,7 @@ function syncRoutePanelVisibility(wanted) {
       || (route === "messages" && link === "messages")
       || (route === "messages-thread" && link === "messages"));
   });
+  try { pulseTabTrayIfChanged(); } catch {}
   try { syncTabGlassThumb(); } catch {}
   try { syncTabbarDockTarget(); } catch {}
   try { syncDeskRailVisibility(); } catch {}

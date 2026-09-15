@@ -649,6 +649,11 @@
     '<svg class="discoverCarouselPlayIco" viewBox="0 0 24 24" aria-hidden="true" focusable="false">' +
       '<path fill="currentColor" d="M6 5h4v14H6V5zm8 0h4v14h-4V5z"/>' +
     "</svg>";
+  var CAROUSEL_ARROW_SVG =
+    '<svg class="marketingCarouselNavIco" viewBox="0 0 24 24" aria-hidden="true" focusable="false">' +
+      '<path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" ' +
+      'stroke-linejoin="round" d="m9 5 7 7-7 7"/>' +
+    "</svg>";
 
   function stopCarouselPreview() {
     if (carouselPreviewStopTimer) {
@@ -847,6 +852,53 @@
     });
   }
 
+  function makeCarouselNavButton(kind, label) {
+    var btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "marketingCarouselNav marketingCarouselNav--" + kind;
+    btn.setAttribute("data-mk-carousel-nav", kind);
+    btn.setAttribute("aria-label", label);
+    btn.innerHTML = CAROUSEL_ARROW_SVG;
+    return btn;
+  }
+
+  /* Arrows for pointer users; touch keeps the native swipe. Position is read as an
+     absolute offset so RTL (negative scrollLeft) reports the same 0..max range. */
+  function setupCarouselNav(wrap, scroller, labels) {
+    if (!wrap || !scroller || wrap.getAttribute("data-mk-carousel-nav-ready") === "1") return;
+    wrap.setAttribute("data-mk-carousel-nav-ready", "1");
+
+    var prev = makeCarouselNavButton("prev", (labels && labels.prev) || "Show previous");
+    var next = makeCarouselNavButton("next", (labels && labels.next) || "Show next");
+    wrap.appendChild(prev);
+    wrap.appendChild(next);
+
+    var rtl = document.documentElement.getAttribute("dir") === "rtl";
+
+    function update() {
+      var max = scroller.scrollWidth - scroller.clientWidth;
+      var at = Math.abs(scroller.scrollLeft);
+      wrap.classList.toggle("hasCarouselNav", max > 8);
+      wrap.classList.toggle("atCarouselEnd", max <= 8 || at >= max - 8);
+      prev.disabled = at <= 8;
+      next.disabled = max <= 8 || at >= max - 8;
+    }
+
+    function step(towardsEnd) {
+      var amount = Math.max(180, Math.round(scroller.clientWidth * 0.8));
+      var direction = towardsEnd ? 1 : -1;
+      if (rtl) direction *= -1;
+      scroller.scrollBy({ left: direction * amount, behavior: "smooth" });
+    }
+
+    prev.addEventListener("click", function () { step(false); });
+    next.addEventListener("click", function () { step(true); });
+    scroller.addEventListener("scroll", update, { passive: true });
+    window.addEventListener("resize", update);
+    if (window.ResizeObserver) new ResizeObserver(update).observe(scroller);
+    update();
+  }
+
   function renderDiscoverCarousel(songs) {
     var wrap = document.querySelector("[data-mk-discover-carousel-wrap]");
     var root = document.querySelector("[data-mk-discover-carousel]");
@@ -884,6 +936,7 @@
       );
     }).join("");
     wireDiscoverCarouselPreviews(root);
+    setupCarouselNav(wrap, root, { prev: "Show previous songs", next: "Show more songs" });
     setupScrollReveal(root);
   }
 
@@ -1118,9 +1171,8 @@
       markScrollReveal(el, "up", Math.min(i, 4) * 60);
     });
 
-    root.querySelectorAll(".discoverCarouselCard").forEach(function (el, i) {
-      markScrollReveal(el, "up", Math.min(i, 6) * 80);
-    });
+    /* Carousel cards are deliberately skipped: a translateY reveal fires per card as
+       the row scrolls sideways, which reads as vertical drift inside a horizontal rail. */
 
     root.querySelectorAll(".marketingOccasionCard").forEach(function (el, i) {
       var col = i % 3;

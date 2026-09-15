@@ -361,34 +361,19 @@ try {
 }
 
 const IS_NATIVE_SHELL = typeof location !== "undefined" && location.protocol === "capacitor:";
-/** Boot splash: static N mark only (see #bootSplash in index.html). */
-const BOOT_SPLASH_MIN_MS = IS_NATIVE_SHELL ? 1800 : 1400;
+/** In-app boot splash: two dots grow into N (1100ms), then the supplied wordmark. */
 const BOOT_SPLASH_MAX_MS = IS_NATIVE_SHELL ? 3200 : 2800;
-const _bootSplashStartedAt = Date.now();
-let _bootSplashAnimEnded = false;
+let _bootSplashMotion = window.__nabadBootSplash || null;
+let _bootSplashAnimEnded = Boolean(window.__nabadBootSplashEnded);
 let _bootSplashCanDismiss = false;
-let _bootSplashMinTimer = 0;
 let _bootSplashFinishTimer = 0;
 let _bootSplashPermanentlyDismissed = false;
 
-function bootSplashRemainingMinMs() {
-  return Math.max(0, BOOT_SPLASH_MIN_MS - (Date.now() - _bootSplashStartedAt));
-}
-
-/** Always honor BOOT_SPLASH_MIN_MS — never flash the logo away on a fast error/rejection. */
+/** Error / max-timeout path — never leave the overlay stuck. */
 function scheduleBootSplashFinish() {
   if (_bootSplashPermanentlyDismissed) return;
   _bootSplashCanDismiss = true;
   _bootSplashAnimEnded = true;
-  const wait = bootSplashRemainingMinMs();
-  if (wait > 0) {
-    if (_bootSplashFinishTimer) return;
-    _bootSplashFinishTimer = window.setTimeout(() => {
-      _bootSplashFinishTimer = 0;
-      finishBootSplash();
-    }, wait);
-    return;
-  }
   finishBootSplash();
 }
 
@@ -422,10 +407,10 @@ function finishBootSplash() {
   try {
     if (_bootSplashPermanentlyDismissed) return;
     _bootSplashPermanentlyDismissed = true;
-    if (_bootSplashMinTimer) clearTimeout(_bootSplashMinTimer);
-    _bootSplashMinTimer = 0;
     if (_bootSplashFinishTimer) clearTimeout(_bootSplashFinishTimer);
     _bootSplashFinishTimer = 0;
+    try { _bootSplashMotion?.destroy?.(); } catch {}
+    _bootSplashMotion = null;
     const splash = document.getElementById("bootSplash");
     // Reveal instantly — NO opacity crossfade. The boot splash logo is screen-
     // centered, but the route it reveals (intro/auth) has its own logo at a
@@ -457,7 +442,7 @@ function tryDismissBootSplash() {
   } catch {}
 }
 
-/** Route is ready — reveal home after the minimum splash duration. */
+/** Route is ready — keep the overlay until the 1100ms motion finishes. */
 function dismissBootSplash() {
   if (_bootSplashPermanentlyDismissed) return;
   _bootSplashCanDismiss = true;
@@ -467,14 +452,19 @@ try {
   // Do not listen for unhandledrejection — benign async failures were dismissing
   // the splash instantly and the N mark flashed for <1s on iPhone.
   window.addEventListener("error", () => scheduleBootSplashFinish());
-  setTimeout(() => scheduleBootSplashFinish(), BOOT_SPLASH_MAX_MS);
+  _bootSplashFinishTimer = window.setTimeout(() => scheduleBootSplashFinish(), BOOT_SPLASH_MAX_MS);
 } catch {}
 
-_bootSplashMinTimer = window.setTimeout(() => {
+window.__nabadOnBootSplashEnded = () => {
   _bootSplashAnimEnded = true;
-  _bootSplashCanDismiss = true;
+  if (!_bootSplashMotion) _bootSplashMotion = window.__nabadBootSplash || null;
   tryDismissBootSplash();
-}, BOOT_SPLASH_MIN_MS);
+};
+if (!_bootSplashMotion) _bootSplashMotion = window.__nabadBootSplash || null;
+if (window.__nabadBootSplashEnded) {
+  _bootSplashAnimEnded = true;
+  tryDismissBootSplash();
+}
 
 /** UUID allowlist from `/api/public-config` (env `NABAD_CERTIFIED_USER_IDS`)
  *  — interim gate for the Profile "Verified Nabad Creator" badge until

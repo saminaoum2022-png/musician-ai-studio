@@ -113,9 +113,9 @@
         style.id = "themeCritical";
         var base = "html,body{background-color:" + bg + ";color:" + fg + ";margin:0}html{color-scheme:" + scheme + "}";
         var bootHide =
-          "body.booting{background:" + bg + ";overflow:hidden}" +
+          "body.booting{background:#05070d;overflow:hidden}" +
           "body.booting>*:not(#bootSplash):not(#loginSettlingOverlay){display:none!important}" +
-          "body.booting #bootSplash{display:flex!important;position:fixed;inset:0;z-index:10000;align-items:center;justify-content:center;background:" + bg + "}" +
+          "body.booting #bootSplash{display:flex!important;position:fixed;inset:0;z-index:10000;align-items:center;justify-content:center;background:#05070d}" +
           "body.booting .app,body.booting main.grid>[data-route],body.booting .header,body.booting .mobileTabbar,body.booting .footer{display:none!important}";
         style.textContent = base + bootHide;
         document.head.appendChild(style);
@@ -165,6 +165,7 @@
     <link rel="apple-touch-startup-image" media="(device-width: 430px) and (device-height: 932px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" href="./assets/splash/ios/startup-430x932@3x.png" />
     <link rel="apple-touch-startup-image" media="(device-width: 440px) and (device-height: 956px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" href="./assets/splash/ios/startup-440x956@3x.png" />
     <link rel="preload" href="./assets/icons/splash-mark.png" as="image" />
+    <link rel="preload" href="./assets/splash/nabad-wordmark.png" as="image" />
     <link rel="canonical" href="https://www.nabadai.com/" />
     <!--
       Network preflight hints. Supabase + CDN audio origins warm up faster on first tap.
@@ -244,9 +245,7 @@
 </head>
   <body class="booting">
     <div id="bootSplash" class="bootSplash" aria-hidden="true">
-      <div class="bootSplashInner">
-        <span class="bootSplashMark" aria-hidden="true"></span>
-      </div>
+      <div class="bootSplashInner" id="bootSplashAnim"></div>
     </div>
     <div id="loginSettlingOverlay" class="loginSettlingOverlay" hidden aria-hidden="true">
       <div class="loginSettlingInner">
@@ -5401,7 +5400,33 @@
     </script>
     <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
     <script src="./env.client.js" onerror="void 0"></script>
-    <script type="module" src="./src/app.js?v=20260913-021019"></script>
+    <script type="module">
+      import { createNabadSplash } from "./src/nabad-splash.js";
+      const mount = document.getElementById("bootSplashAnim");
+      if (!mount) {
+        window.__nabadBootSplashEnded = true;
+      } else {
+        const motion = createNabadSplash(mount, {
+          wordmarkSrc: "./assets/splash/nabad-wordmark.png",
+        });
+        window.__nabadBootSplash = motion;
+        const play = () => {
+          Promise.resolve(motion.play())
+            .catch(() => ({ cancelled: true }))
+            .then(() => {
+              window.__nabadBootSplashEnded = true;
+              if (typeof window.__nabadOnBootSplashEnded === "function") {
+                window.__nabadOnBootSplashEnded();
+              }
+            });
+        };
+        // Native LaunchScreen hides on first web paint. Two frames later the
+        // overlay is visible, then the 1100ms motion starts.
+        requestAnimationFrame(() => requestAnimationFrame(play));
+      }
+      // Dynamic import so the giant app module does not block the first dots.
+      import("./src/app.js?v=20260913-021019");
+    </script>
     <script defer src="/_vercel/insights/script.js"></script>
   </body>
 </html>

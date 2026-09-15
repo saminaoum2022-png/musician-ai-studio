@@ -294,8 +294,9 @@ html[data-theme="light"] body[data-route="mentor"]{
 }
 
 html[data-theme="light"] body.booting,
-html[data-theme="light"] body.booting::before{
-  background: #F2F2F7;
+html[data-theme="light"] body.booting::before,
+html[data-theme="light"] body.booting #bootSplash{
+  background: #05070d;
 }
 
 html[data-theme="light"] .card{
@@ -1955,7 +1956,7 @@ body[data-route="mentor"]{
 html{ overflow-x: clip; }
 body.pageTransitioning{ opacity: 0; }
 body.booting{
-  background: #101018;
+  background: #05070d;
   overflow: hidden;
 }
 body.booting > *:not(#bootSplash):not(#loginSettlingOverlay){
@@ -1995,8 +1996,10 @@ body.booting .hubNowPlaying{
 body.booting .bootSplash{
   display: flex;
   pointer-events: auto;
+  background: #05070d;
 }
-.bootSplashInner{
+.bootSplashInner,
+#bootSplashAnim{
   display: flex;
   flex-direction: column;
   align-items: center;

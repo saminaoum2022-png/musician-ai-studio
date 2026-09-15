@@ -76,8 +76,8 @@ export function applyTheme(effective = resolveEffectiveTheme()) {
       critical.textContent =
         `html,body{background-color:${pal.bg};color:${pal.text};margin:0}` +
         `html{color-scheme:${pal.scheme}}` +
-        `body.booting{background:${pal.bg};overflow:hidden}` +
-        `body.booting #bootSplash{background:${pal.bg}}`;
+        `body.booting{background:#05070d;overflow:hidden}` +
+        `body.booting #bootSplash{background:#05070d}`;
     }
   } catch {}
 }

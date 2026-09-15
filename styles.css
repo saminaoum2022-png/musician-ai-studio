@@ -21727,8 +21727,8 @@ input::placeholder, textarea::placeholder{
     height: var(--tab-tray-size);
     border-radius: 999px;
     background:
-      linear-gradient(180deg, rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0.04) 40%, transparent 72%),
-      color-mix(in srgb, var(--bg) 32%, rgba(255, 255, 255, 0.06));
+      linear-gradient(180deg, rgba(255, 255, 255, 0.10), rgba(255, 255, 255, 0.02) 42%, transparent 70%),
+      color-mix(in srgb, var(--bg) 40%, transparent);
     -webkit-backdrop-filter: blur(40px) saturate(1.75);
     backdrop-filter: blur(40px) saturate(1.75);
     box-shadow:
@@ -21746,7 +21746,8 @@ input::placeholder, textarea::placeholder{
       border-radius 320ms cubic-bezier(0.22, 1, 0.36, 1),
       opacity 240ms ease;
   }
-  /* Selected tab — dark well in the glass (WhatsApp-style), not a bright bubble. */
+  /* Selected-tab Liquid Glass capsule — slot-indexed so collapse transforms
+     cannot leave it parked on the wrong icon. */
   .tabGlassThumb{
     position: absolute;
     left: calc(
@@ -21761,17 +21762,15 @@ input::placeholder, textarea::placeholder{
     border-radius: 50%;
     z-index: 1;
     pointer-events: none;
-    overflow: hidden;
     opacity: var(--tab-thumb-opacity);
     background:
-      linear-gradient(180deg, rgba(255, 255, 255, 0.08), transparent 36%),
-      rgba(0, 0, 0, 0.58);
-    -webkit-backdrop-filter: blur(18px) saturate(1.2);
-    backdrop-filter: blur(18px) saturate(1.2);
+      linear-gradient(180deg, rgba(255, 255, 255, 0.22) 0%, rgba(255, 255, 255, 0.07) 42%, rgba(255, 255, 255, 0.03) 100%);
+    -webkit-backdrop-filter: blur(22px) saturate(1.85);
+    backdrop-filter: blur(22px) saturate(1.85);
     box-shadow:
-      inset 0 1px 0 rgba(255, 255, 255, 0.10),
-      inset 0 -2px 6px rgba(0, 0, 0, 0.35),
-      0 0 0 0.5px rgba(255, 255, 255, 0.06);
+      inset 0 1px 1px rgba(255, 255, 255, 0.48),
+      inset 0 -10px 14px rgba(255, 255, 255, 0.04),
+      0 0 0 0.5px rgba(255, 255, 255, 0.24);
     transform: translate3d(var(--tab-thumb-drag-x), var(--tab-thumb-y), 0)
       rotate(var(--tab-thumb-rot))
       scale(var(--tab-thumb-scale))
@@ -21781,16 +21780,17 @@ input::placeholder, textarea::placeholder{
     transition:
       left 320ms cubic-bezier(0.22, 1, 0.36, 1),
       transform 320ms cubic-bezier(0.22, 1, 0.36, 1),
-      opacity 200ms ease,
-      background 200ms ease,
-      box-shadow 200ms ease;
+      opacity 200ms ease;
   }
   .tabGlassThumb::after{
     content: "";
     position: absolute;
-    inset: 0;
-    border-radius: inherit;
-    background: linear-gradient(180deg, rgba(255, 255, 255, 0.10), transparent 42%);
+    left: 6px;
+    right: 6px;
+    top: 3px;
+    height: 38%;
+    border-radius: 999px;
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.42), rgba(255, 255, 255, 0));
     pointer-events: none;
   }
   .mobileTabbar.isThumbPressed,
@@ -22244,12 +22244,12 @@ input::placeholder, textarea::placeholder{
   }
   html[data-theme="light"] .tabGlassThumb{
     background:
-      linear-gradient(180deg, rgba(255, 255, 255, 0.35), transparent 40%),
-      rgba(15, 23, 40, 0.14);
+      linear-gradient(180deg, rgba(255, 255, 255, 0.82) 0%, rgba(255, 255, 255, 0.38) 100%);
     box-shadow:
-      inset 0 1px 0 rgba(255, 255, 255, 0.65),
-      inset 0 -2px 6px rgba(15, 23, 40, 0.08),
-      0 0 0 0.5px rgba(15, 23, 40, 0.08);
+      inset 0 1px 1px rgba(255, 255, 255, 0.95),
+      inset 0 -8px 12px rgba(15, 23, 40, 0.04),
+      0 0 0 0.5px rgba(15, 23, 40, 0.08),
+      0 8px 18px rgba(15, 23, 40, 0.10);
   }
   html[data-theme="light"] .mobileTabbar a{
     color: rgba(26, 26, 36, 0.46);

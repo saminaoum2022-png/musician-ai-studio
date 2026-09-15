@@ -42,7 +42,7 @@ for (const { file, page, locale, preload } of targets) {
   if (preload) {
     html = html.replace(
       /<link rel="stylesheet" href="\/marketing\.css">/,
-      `<link rel="stylesheet" href="/marketing.css?v=20260915-nowash">\n  <link rel="preload" as="image" href="${proxy}">`,
+      `<link rel="stylesheet" href="/marketing.css?v=20260915-appcta">\n  <link rel="preload" as="image" href="${proxy}">`,
     );
   }
 

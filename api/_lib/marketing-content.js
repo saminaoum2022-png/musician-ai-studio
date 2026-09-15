@@ -272,7 +272,7 @@ const BRAND_FONTS = Object.freeze(["inter-display", "inter", "system"]);
 function defaultBrand() {
   return {
     ctaColor: "#23d5ab",
-    ctaTextColor: "#051018",
+    ctaTextColor: "#ffffff",
     headingFont: "inter-display",
     bodyFont: "inter",
     accentViolet: "#7c5cff",

@@ -461,7 +461,6 @@
   function applyBrand(brand) {
     if (!brand) return;
     var cta = brand.ctaColor || "#23d5ab";
-    var ctaText = brand.ctaTextColor || "#051018";
     var violet = brand.accentViolet || "#7c5cff";
     var ctaHover = lightenHex(cta, 0.12);
     var violetHover = lightenHex(violet, 0.12);
@@ -473,15 +472,16 @@
     root.style.setProperty("--brand-teal-hover", ctaHover);
     root.style.setProperty("--brand-violet", violet);
     root.style.setProperty("--brand-violet-hover", violetHover);
+    // Same capsule as in-app Discover "Join Challenge": teal → violet, white type.
     root.style.setProperty(
       "--brand-cta-bg",
-      "linear-gradient(145deg, " + lightenHex(cta, 0.22) + " 0%, " + cta + " 34%, " + violet + " 78%, " + violet + " 100%)",
+      "linear-gradient(148deg, " + cta + " 0%, #2ec4b8 34%, #6b78e8 72%, " + violet + " 100%)",
     );
     root.style.setProperty(
       "--brand-cta-bg-hover",
-      "linear-gradient(145deg, " + lightenHex(cta, 0.32) + " 0%, " + ctaHover + " 34%, " + violetHover + " 78%, " + violetHover + " 100%)",
+      "linear-gradient(148deg, " + ctaHover + " 0%, #3dd4c4 34%, #7c8cf0 72%, " + violetHover + " 100%)",
     );
-    root.style.setProperty("--brand-cta-text", ctaText);
+    root.style.setProperty("--brand-cta-text", "#ffffff");
     var ctaRgb = hexToRgb(cta) || { r: 35, g: 213, b: 171 };
     var violetRgb = hexToRgb(violet) || { r: 124, g: 92, b: 255 };
     root.style.setProperty("--brand-teal-muted", "rgba(" + ctaRgb.r + ", " + ctaRgb.g + ", " + ctaRgb.b + ", 0.14)");

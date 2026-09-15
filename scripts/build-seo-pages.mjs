@@ -312,7 +312,7 @@ function renderPage(page, lang) {
   <meta name="twitter:image" content="${image}">
   <link rel="icon" href="/favicon.ico" sizes="any">
   <link rel="apple-touch-icon" href="/apple-touch-icon.png">
-  <link rel="stylesheet" href="/marketing.css?v=20260915-nowash">
+  <link rel="stylesheet" href="/marketing.css?v=20260915-appcta">
   <script type="application/ld+json">${JSON.stringify(faqSchema)}</script>
   <script type="application/ld+json">${JSON.stringify(appSchema)}</script>
 </head>

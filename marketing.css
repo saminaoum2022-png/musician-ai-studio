@@ -218,6 +218,7 @@ img { display: block; max-width: 100%; height: auto; }
   scroll-snap-type: x mandatory;
   scroll-padding-inline-start: 2px;
   overscroll-behavior-x: contain;
+  scroll-behavior: auto;
   -webkit-overflow-scrolling: touch;
   padding: 8px 2px 30px;
   scrollbar-width: none;

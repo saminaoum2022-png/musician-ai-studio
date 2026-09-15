@@ -649,6 +649,7 @@
     '<svg class="discoverCarouselPlayIco" viewBox="0 0 24 24" aria-hidden="true" focusable="false">' +
       '<path fill="currentColor" d="M6 5h4v14H6V5zm8 0h4v14h-4V5z"/>' +
     "</svg>";
+  var CAROUSEL_TAKEOVER_EVENT = "mk-carousel-takeover";
   var CAROUSEL_ARROW_SVG =
     '<svg class="marketingCarouselNavIco" viewBox="0 0 24 24" aria-hidden="true" focusable="false">' +
       '<path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" ' +
@@ -885,6 +886,8 @@
     }
 
     function step(towardsEnd) {
+      /* Arrows sit outside the scroller, so tell the drift to stand down explicitly. */
+      scroller.dispatchEvent(new Event(CAROUSEL_TAKEOVER_EVENT));
       var amount = Math.max(180, Math.round(scroller.clientWidth * 0.8));
       var direction = towardsEnd ? 1 : -1;
       if (rtl) direction *= -1;
@@ -897,6 +900,70 @@
     window.addEventListener("resize", update);
     if (window.ResizeObserver) new ResizeObserver(update).observe(scroller);
     update();
+  }
+
+  /* The rail eases sideways as its section settles into the viewport, so the row reads
+     as horizontal without pinning the page. Hands over permanently on first input. */
+  function setupCarouselDrift(section, scroller) {
+    if (!section || !scroller || prefersReducedMotion()) return;
+    if (scroller.getAttribute("data-mk-carousel-drift-ready") === "1") return;
+    scroller.setAttribute("data-mk-carousel-drift-ready", "1");
+
+    var engaged = false;
+    var queued = false;
+    var takeoverEvents = ["pointerdown", "touchstart", "wheel", "keydown", CAROUSEL_TAKEOVER_EVENT];
+
+    /* Snapping would yank a partial offset to the nearest card mid-drift. */
+    scroller.style.scrollSnapType = "none";
+
+    function release() {
+      if (engaged) return;
+      engaged = true;
+      scroller.style.removeProperty("scroll-snap-type");
+      takeoverEvents.forEach(function (name) {
+        scroller.removeEventListener(name, release);
+      });
+      window.removeEventListener("scroll", onScroll);
+    }
+
+    function apply() {
+      queued = false;
+      if (engaged) return;
+      var max = scroller.scrollWidth - scroller.clientWidth;
+      var card = scroller.querySelector(".discoverCarouselCard");
+      if (max <= 8 || !card) return;
+      var rect = section.getBoundingClientRect();
+      var vh = window.innerHeight || 1;
+      /* 0 as the section crosses the bottom edge, 1 once it is centred. */
+      var span = vh / 2 + rect.height / 2;
+      var progress = span > 0 ? (vh - rect.top) / span : 0;
+      progress = Math.min(1, Math.max(0, progress));
+      var eased = progress * progress * (3 - 2 * progress);
+      var distance = Math.min(max, Math.round(card.offsetWidth * 0.8));
+      scroller.scrollLeft = eased * distance;
+    }
+
+    function onScroll() {
+      if (engaged || queued) return;
+      queued = true;
+      requestAnimationFrame(apply);
+    }
+
+    takeoverEvents.forEach(function (name) {
+      scroller.addEventListener(name, release, { passive: true });
+    });
+    window.addEventListener("scroll", onScroll, { passive: true });
+    apply();
+  }
+
+  function revealCarouselRow(wrap) {
+    if (!wrap) return;
+    markScrollReveal(wrap, "up", 0);
+    /* If the row is already above the viewport when songs land, the observer never
+       fires and the row would sit at opacity 0 forever. */
+    if (wrap.classList.contains("mkReveal")) {
+      setTimeout(function () { wrap.classList.add("is-visible"); }, 1600);
+    }
   }
 
   function renderDiscoverCarousel(songs) {
@@ -937,6 +1004,8 @@
     }).join("");
     wireDiscoverCarouselPreviews(root);
     setupCarouselNav(wrap, root, { prev: "Show previous songs", next: "Show more songs" });
+    setupCarouselDrift(wrap.closest(".marketingDiscoverTeaser") || wrap, root);
+    revealCarouselRow(wrap);
     setupScrollReveal(root);
   }
 

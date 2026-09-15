@@ -21383,10 +21383,10 @@ body.trackSheetOpen .footer{
   }
   html:not(.is-native-shell) body[data-route="generate"] .app,
   html:not(.is-native-shell) body[data-route="generate"].createKeyboardOpen .app{
-    padding-bottom: calc(80px + max(10px, env(safe-area-inset-bottom, 0px)));
+    padding-bottom: calc(12px + 58px + 16px + max(10px, env(safe-area-inset-bottom, 0px)));
   }
   html:not(.is-native-shell) body[data-route="generate"] .createFlowStep--generate{
-    padding-bottom: 12px;
+    padding-bottom: 0;
   }
   body[data-route="generate"].createKeyboardOpen,
   body[data-route="generate"].createKeyboardOpen .app{
@@ -23229,6 +23229,10 @@ body.trackSheetOpen .coachFab{
   body[data-route="generate"] .createGenerateDockSpacer{
     display: none;
   }
+  html:not(.is-native-shell) body[data-route="generate"] .createGenerateDockSpacer{
+    display: block;
+    height: 72px;
+  }
   html.is-native-shell body[data-route="generate"] .createGenerateDockSpacer{
     display: block;
     height: 132px;
@@ -23258,7 +23262,19 @@ body.trackSheetOpen .coachFab{
     transition: none;
   }
   html:not(.is-native-shell) body[data-route="generate"] #createGenerateDock{
-    margin-bottom: 12px;
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: calc(58px + 8px + 16px + max(10px, env(safe-area-inset-bottom, 0px)));
+    z-index: 80;
+    margin: 0;
+    padding: 0 16px;
+    pointer-events: none;
+  }
+  html:not(.is-native-shell) body[data-route="generate"].createKeyboardOpen #createGenerateDock{
+    bottom: calc(var(--create-keyboard-inset, 0px) + 10px);
+    z-index: 80;
+    padding-bottom: 0;
   }
   html.is-native-shell body[data-route="generate"] #createGenerateDock{
     position: fixed;

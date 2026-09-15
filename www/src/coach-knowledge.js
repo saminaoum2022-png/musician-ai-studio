@@ -19,6 +19,7 @@ const MASHUP_CREDIT_COST = 12;
 const PERSONA_CREDIT_COST = 5;
 const INSTRUMENTAL_CREDIT_COST = 2;
 const STUDIO_SEPARATE_VOCALS_COST = 2;
+const TEMPLATE_CLIP_CREDIT_COST = 10;
 const GIFT_TIERS = Object.freeze([
   { id: "mic", label: "Mic", credits: 1 },
   { id: "pulse", label: "Pulse", credits: 3 },
@@ -65,7 +66,8 @@ WHAT COSTS CREDITS:
 - Save a Persona voice = ${PERSONA_CREDIT_COST} credits · Sound = ${SOUND_CREDIT_COST} credits.
 - Instrumental (karaoke) version = ${INSTRUMENTAL_CREDIT_COST} credits.
 - NabadAi Studio "Separate vocals" for a clean guide track ≈ ${STUDIO_SEPARATE_VOCALS_COST} credits.
-FREE (no credits): AI lyrics write/refine, ✦ Boost style, artwork suggestions, Voice Lab scan.
+- Short **template clip** (~30s from Create → Templates) ≈ ${TEMPLATE_CLIP_CREDIT_COST} credits. There is no standalone Nabad Clip product.
+FREE (no credits): AI lyrics, Add vowel marks, ✦ Boost style, artwork suggestions, Voice Lab scan. Check singability is a Pro feature (no extra credits).
 
 GIFTING CREDITS (on someone else's published song post):
 - Tap Gift on the post → Mic (${GIFT_TIERS[0].credits} cr), Pulse (${GIFT_TIERS[1].credits} cr), or Star (${GIFT_TIERS[2].credits} cr).
@@ -75,12 +77,17 @@ GIFTING CREDITS (on someone else's published song post):
 NABADAI PRO SUBSCRIPTION (live — iPhone + nabadai.com):
 ${proPlansGuideLines()}
 ${trialNote}
-Pro benefits:
+Pro benefits (use this full list when asked what Pro includes):
 ${proFeaturesGuideLines()}
+- Hum (Create → Hum): melody to song — Pro on iPhone and web.
+- Advanced options (vocal style, range, Prosody): Pro on iPhone and web.
+- Check singability (Create → Lyrics): rhyme / وزن report — Pro on iPhone and web.
+- Polish lyrics and Fix for singing: Pro lock on web/desktop (available on iPhone without that web lock).
 - Free users: NabadAi Coach has a daily message limit. Pro = unlimited Coach messages.
 - **iPhone:** ${PRO_LAUNCH_COPY.iosReady}
 - **Web / desktop (nabadai.com):** ${PRO_LAUNCH_COPY.webReady}
-- **Web-only Pro locks:** On nabadai.com and desktop browser, non‑Pro users see a purple **Pro** pill on Persona, Studio, Song analytics, Cover refresh, and Instrumental (Create + Get instrumental). Tap to subscribe. Cover refresh is also Pro on iPhone. Other locks do **not** apply on the iPhone app — there you use credits as usual.
+- **Web-only Pro locks:** On nabadai.com and desktop, non‑Pro users see a purple **Pro** pill on Persona, Studio, Song analytics, Instrumental, Polish lyrics, and Fix for singing. Cover refresh, Hum, Advanced, and Check singability need Pro on iPhone too.
+- There is **no** standalone Nabad Clip, Producer, or Vibe product to recommend. Short clips = Create → Templates.
 - One-time credit packs are **not** available yet — subscriptions only for now.
 
 PURCHASE STATUS:
@@ -110,7 +117,7 @@ LIVE WALLET (authoritative — do not contradict):
   const have = Math.max(0, Number(wallet.balance) || 0);
   const songCost = Number(wallet.songCost) || FULL_SONG_CREDIT_COST;
   const soundCost = Number(wallet.soundCost) || SOUND_CREDIT_COST;
-  const clipCost = Number(wallet.clipCost) || 10;
+  const clipCost = Number(wallet.clipCost) || TEMPLATE_CLIP_CREDIT_COST;
   const pro = wallet.proActive ? "yes" : "no";
   const canSong = have >= songCost;
   const canSound = have >= soundCost;
@@ -124,7 +131,7 @@ LIVE WALLET (authoritative — do not contradict):
   return `
 LIVE WALLET (authoritative — you CAN see this):
 - Current balance: ${have} credits. Pro subscriber: ${pro}.
-- Costs: full song = ${songCost} (2 versions) · Sound = ${soundCost} · clip ≈ ${clipCost}.
+- Costs: full song = ${songCost} (2 versions) · Sound = ${soundCost} · template clip ≈ ${clipCost} (Create → Templates only; no standalone Nabad Clip).
 - ${nextStep}
 - Never invent a welcome bonus. Never say "enough for a first song" when balance is 50 or more.
 `.trim();
@@ -157,7 +164,12 @@ FIXES FOR MAKSOUR / OFF-SYLLABLE LINES:
 - Bad word break → move the word to the next line or merge phrases.
 - Chorus hook must repeat with the same syllable count every time.
 
-APP TIE-IN: Advanced → Prosody Tight/Ultra; Tarab preset uses ultra-tight alignment. Harakat on Arabic helps accent land on beat.
+APP BUTTONS (name these — they live on Create → Lyrics, in the lyrics box):
+- **Check singability**: Pro. Score + notes for rhyme, وزن, line balance. Does not rewrite.
+- **Fix for singing**: Pro on web. Rewrites for cleaner AI singing (rhyme + وزن), keeps the story.
+- **Polish lyrics**: Pro on web. Tightens flow without changing the story.
+- **Add vowel marks** / تشكيل: Arabic Write tab. Adds harakat. Not Pro.
+- After a review, tell them which button to tap next.
 
 Do not paste this block to the user. Reply in their language (Arabic if they write Arabic).
 `.trim();

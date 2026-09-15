@@ -16503,6 +16503,11 @@ a.primary:active{
 }
 .ghost:hover, a.ghost:hover{ border-color: rgba(255,255,255,0.18); }
 button:disabled{ opacity:0.5; cursor:not-allowed; }
+body[data-route="generate"] #btnSunoGenerate.aiGenerate:disabled,
+body[data-route="generate"] #btnSunoGenerate.aiGenerate.isIdle,
+body[data-route="generate"] #btnSunoGenerate.aiGenerate:not(.isReady){
+  opacity: 1;
+}
 .disabled{ opacity:0.55; pointer-events:none; }
 
 .hint{ margin-top:12px; color:var(--muted); font-size:14px; line-height:1.4; }
@@ -19931,6 +19936,11 @@ body[data-route="user"] section.card.wide[data-route="user"]{
   }
   body[data-route="generate"] #btnSunoGenerate.aiGenerate::before{
     display: none;
+  }
+  body[data-route="generate"] #btnSunoGenerate.aiGenerate:disabled,
+  body[data-route="generate"] #btnSunoGenerate.aiGenerate.isIdle,
+  body[data-route="generate"] #btnSunoGenerate.aiGenerate:not(.isReady){
+    opacity: 1;
   }
 }
 .generateRow{
@@ -23434,8 +23444,10 @@ body.trackSheetOpen .coachFab{
   body[data-route="generate"] #btnSunoGenerate.aiGenerate::before{
     display: none;
   }
-  body[data-route="generate"] #btnSunoGenerate.aiGenerate:disabled{
-    opacity: 0.62;
+  body[data-route="generate"] #btnSunoGenerate.aiGenerate:disabled,
+  body[data-route="generate"] #btnSunoGenerate.aiGenerate.isIdle,
+  body[data-route="generate"] #btnSunoGenerate.aiGenerate:not(.isReady){
+    opacity: 1;
   }
   #btnGenerateOrb{
     display: none !important;

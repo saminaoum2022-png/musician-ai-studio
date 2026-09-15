@@ -893,6 +893,10 @@ function buildPrompt({ seed, style, mode, nonce, dialect, dialectHint, arabicAdd
       ...POP_RHYME_METER_LINES,
       "Do not explain the challenge. Do not repeat the instruction text.",
       "Avoid generic filler every user would get — make hooks specific to the brief's photo, mood, and creative angle.",
+      "Invent a fresh opening image and hook. Do not reuse a previous draft for the same brief.",
+      ...(scriptFormat === "arabic"
+        ? ["Write in Arabic script only. Never Latin, Franco, or Arabizi."]
+        : []),
       `Variation token: ${nonce}`,
       ...(colloquialArabicLines.length && mode !== "diacritics" ? colloquialArabicLines : []),
       ...(dialectLines ? [dialectLines] : []),
@@ -915,6 +919,10 @@ function buildPrompt({ seed, style, mode, nonce, dialect, dialectHint, arabicAdd
       ...POP_RHYME_METER_LINES,
       "Do not explain the challenge. Do not repeat the instruction text.",
       "Do not include metadata, notes, or descriptions.",
+      "Invent a fresh opening image and hook. Do not reuse a previous draft for the same brief.",
+      ...(scriptFormat === "arabic"
+        ? ["Write in Arabic script only. Never Latin, Franco, or Arabizi."]
+        : []),
       `Variation token: ${nonce}`,
       ...(colloquialArabicLines.length && mode !== "diacritics" ? colloquialArabicLines : []),
       ...(dialectLines ? [dialectLines] : []),

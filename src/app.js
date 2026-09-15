@@ -110,6 +110,14 @@ import {
   resetFirstSongActivation,
 } from "./first-song.js";
 import {
+  readStoredChallengeLanguageId,
+  storeChallengeLanguageId,
+  resolveChallengePromptLang,
+  mapChallengeLangToCreate,
+  pickOccasionLyricPrompt,
+  pickSparkLyricPrompt,
+} from "./challenge-prompt-seeds.js";
+import {
   configureCoverArt,
   ensureAbstractCoverForTrack,
   backfillPendingAbstractCovers,
@@ -262,7 +270,7 @@ import { DISCOVER_SHOW_PLAY_COUNTS, MUSIC_VIDEO_FEATURE_ENABLED } from "./featur
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260916-022016";
+const APP_BUILD = "20260916-025818";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -6062,9 +6070,9 @@ function setLyricsInputMode(mode, opts = {}) {
   const prev = lyricsInputMode;
   lyricsInputMode = next;
   if (els.lyricsFieldPanel) els.lyricsFieldPanel.setAttribute("data-lyrics-mode", next);
-  if (next === "generate" && prev === "write" && els.sunoPrompt) {
+  if (next === "generate" && prev === "write" && els.sunoPrompt && !opts.preserveText) {
     const current = String(els.sunoPrompt.value || "").trim();
-    if (looksLikeSingableLyrics(current)) {
+    if (looksLikeSingableLyrics(current) && !isLyricsBriefOrInstructions(current)) {
       pushLyricsUndoSnapshot(current);
       els.sunoPrompt.value = "";
       try { autoResizeLyricsBox(); } catch {}
@@ -6168,9 +6176,10 @@ function resolveLyricsProviderForMode(_mode) {
 
 function resolveLyricsScriptFormat() {
   if (isArabiziLyricsLanguage(lyricsLanguage)) return "arabizi";
+  if (lyricsLanguage === "arabic") return "arabic";
   const text = String(els.sunoPrompt?.value || "");
+  if (textHasArabicScript(text)) return "arabic";
   if (looksLikeArabizi(text)) return "arabizi";
-  if (lyricsLanguage === "arabic" || textHasArabicScript(text)) return "arabic";
   return "auto";
 }
 
@@ -8435,8 +8444,9 @@ const CHALLENGE_IDEAS = [
     title: "Dabke Drop",
     styleLyria: "Levantine dabke pop, mijwiz accents, festive 6/8 rhythm, clap-ready chorus, 126 bpm",
     style: "Levantine dabke pop, mijwiz and oud accents, ktakufti 6/8 dabkeh rhythm, wedding energy, 126 bpm",
-    lyrics: "[Verse]\nOpen the doors, let the family see\nHands in the air, everybody with me\nStep to the left, clap to the sound\nTonight we lift this whole room off the ground\n\n[Chorus]\nYalla yalla, clap your hands\nDabke rolling through the land\nOne more step and one more beat\nThe wedding rhythm starts right here",
-    prompt: "Build the chorus everyone can clap to.",
+    lyricsMode: "instructions",
+    lyrics: "Write a short clip about any personal idea — reunion, summer, pride, missing someone.\nSTYLE is Levantine dabke. Do not write lyrics about dabke or weddings.",
+    prompt: "Any idea. Dabke is the style, not the story.",
     tags: ["Dabke", "Party", "Rhythm"],
   },
   {
@@ -8454,7 +8464,8 @@ const CHALLENGE_IDEAS = [
     title: "Arabic Trend Byte",
     styleLyria: "modern Arabic pop hook, glossy beat, TikTok-ready, 104 bpm",
     style: "modern Arabic pop, TikTok-ready hook, glossy 808s, sticky hook energy, 104 bpm",
-    lyrics: "[Verse]\nقليل كلام كتير إحساس\nالليلة الصوت بيعمل مزاج\nمن جملة وحدة طلع نغمة\nصارت أغنية على السريع\n\n[Chorus]\nيلا يلا اسمع المقطع\nصغير بس يضرب قوي\nمن الترند للقلب مباشرة\nهيدا هو الترند تبعي",
+    lyricsMode: "instructions",
+    lyrics: "حوّل جملة يومية صغيرة لكورس ترند عربي قصير. اكتب بالأحرف العربية فقط.",
     prompt: "Turn a tiny Arabic phrase into a trend-sized hook under 20 seconds.",
     tags: ["Arabic", "Trend", "Short"],
   },
@@ -8500,6 +8511,7 @@ const CHALLENGE_IDEAS = [
     title: "TikTok Teaser",
     styleLyria: "short social hook, tight drums, bright ear-candy, 120 bpm",
     style: "Short social teaser, instant hook, tight drums, bright ear-candy, 120 bpm",
+    lyricsMode: "instructions",
     lyrics: "Start with the hook first.\nNo long intro.\nMake the first 8 seconds impossible to skip.",
     prompt: "Build a short teaser hook made for social — instant payoff, zero slow build.",
     tags: ["Short", "Hook", "Social"],
@@ -9376,6 +9388,11 @@ function applyDiscoveryIdeaToCreate(idea) {
   }
   if (Object.prototype.hasOwnProperty.call(idea, "dialect") && els.sunoDialect) els.sunoDialect.value = String(idea.dialect || "").trim();
   if (Object.prototype.hasOwnProperty.call(idea, "dialectHint") && els.sunoDialectHint) els.sunoDialectHint.value = String(idea.dialectHint || "").trim();
+  applyChallengeLanguageToCreate(idea.challenge, {
+    sparkId: idea.challenge?.type === "spark" ? idea.challenge.id : "",
+    genreId: idea.challenge?.genreId || "",
+    languageId: idea.challenge?.languageId,
+  });
   if (els.sunoAvoidTags && (useTemplateGuards || Object.prototype.hasOwnProperty.call(idea, "avoidTags"))) {
     els.sunoAvoidTags.value = templateSparkClipEnabled()
       ? ""
@@ -9401,6 +9418,7 @@ function applyDiscoveryIdeaToCreate(idea) {
     searchTemplateId: `idea:${String(idea.id || title).trim()}`,
     searchTemplateTitle: title,
     challengePromptPending: Boolean(idea.challenge),
+    ...(idea.lyricsMode ? { lyricsMode: idea.lyricsMode } : {}),
     ...(idea.challenge ? { challenge: idea.challenge } : {}),
   };
   if (idea.challenge) persistCreateChallengeContext(pendingSearchRemixMeta);
@@ -9462,8 +9480,18 @@ function applyDiscoveryIdeaToCreate(idea) {
   try { syncGenerateOrbVisibility?.(); } catch {}
   location.hash = "#/generate";
   scheduleApplyRoute();
-  if (isTemplateSparkClipFlow() && !voiceClipOnly && !photoSoloChallenge) {
-    primeTemplateSparkClipCreateUi(String(idea.lyrics || idea.prompt || "").trim());
+  if (!voiceClipOnly && !photoSoloChallenge) {
+    const seed = String(idea.lyrics || idea.prompt || "").trim();
+    if (isTemplateSparkClipFlow()) {
+      primeTemplateSparkClipCreateUi(seed, idea);
+    } else {
+      try {
+        setLyricsInputMode(
+          shouldCreateOpenGenerateTab(seed, idea) ? "generate" : "write",
+          { silent: true, preserveText: true },
+        );
+      } catch {}
+    }
   }
   if (photoSoloChallenge) {
     try { setActiveCreateTab("photo"); } catch {}
@@ -9475,7 +9503,23 @@ let _homeSeg = "start";
 let _homeMakeSeg = "occasion";
 let _challengeOccasionId = "";
 let _challengeGenreId = "";
-let _challengeLanguageId = "auto";
+let _challengeLanguageId = readStoredChallengeLanguageId();
+
+function applyChallengeLanguageToCreate(challenge, extras = {}) {
+  const languageId = String(
+    extras.languageId || challenge?.languageId || _challengeLanguageId || "auto",
+  ).trim();
+  const promptLang = resolveChallengePromptLang(languageId, {
+    sparkId: extras.sparkId || (challenge?.type === "spark" ? challenge?.id : ""),
+    genreId: extras.genreId || challenge?.genreId || "",
+  });
+  const mapped = mapChallengeLangToCreate(promptLang, languageId);
+  if (!mapped) return;
+  try { setLyricsLanguage(mapped.lyricsLanguage); } catch {}
+  if (mapped.lyricsLanguage === "arabic") {
+    try { setLyricsDialect(mapped.dialect || "lebanese"); } catch {}
+  }
+}
 
 function libraryTrackNeedsContinue(track) {
   if (!track) return false;
@@ -9707,12 +9751,16 @@ function applyChallengeStartById(id, challengesMap) {
   if (!challenge) return;
   haptic("light");
   const focus = challengeCreateFocusForId(challenge.id);
+  const languageId = _challengeLanguageId || readStoredChallengeLanguageId();
+  const localizedLyrics = isVoiceClipChallengeId(challenge.id)
+    ? ""
+    : pickSparkLyricPrompt({ sparkId: challenge.id, languageId });
   const idea = {
     ...challenge,
     id: `challenge:${challenge.id}`,
     title: String(challenge.title || "Spark").trim(),
     prompt: String(challenge.prompt || "").trim(),
-    lyrics: isVoiceClipChallengeId(challenge.id) ? "" : String(challenge.lyrics || challenge.prompt || "").trim(),
+    lyrics: localizedLyrics || (isVoiceClipChallengeId(challenge.id) ? "" : String(challenge.lyrics || challenge.prompt || "").trim()),
     style: templateStyleForProvider(
       `${String(challenge.style || "").trim()}, ${challengeDurationStyleClause(challenge.id)}`,
       challenge.id,
@@ -9721,14 +9769,17 @@ function applyChallengeStartById(id, challengesMap) {
     dialectHint: "",
     avoidTags: templateAvoidTagsForProvider(),
     createFocus: focus,
+    lyricsMode: challenge.lyricsMode || (localizedLyrics ? "instructions" : ""),
     challenge: {
       id: challenge.id,
       title: challenge.title,
       type: "spark",
       occasion: "",
       genre: "",
+      languageId,
       personName: "",
       variant: "spark",
+      lyricsMode: challenge.lyricsMode || (localizedLyrics ? "instructions" : ""),
     },
   };
   if (!authSession?.user?.id) {
@@ -13760,11 +13811,14 @@ function applyDiscoverOccasionStart(occasionId, liveChallenge) {
   if (!occ) return;
   haptic("light");
   const live = liveChallenge && typeof liveChallenge === "object" ? liveChallenge : null;
+  const languageId = _challengeLanguageId || readStoredChallengeLanguageId();
+  const lyrics = pickOccasionLyricPrompt({ occasionId: occ.id, languageId });
   applyDiscoveryIdeaToCreate({
     id: live?.id ? `live:${live.id}` : `occasion:${occ.id}`,
     title: live?.title || occ.title,
-    prompt: String(occ.lyricSeed || occ.angle || "").trim(),
-    lyrics: String(occ.lyricSeed || "").trim(),
+    prompt: lyrics,
+    lyrics,
+    lyricsMode: "instructions",
     style: "",
     tags: occ.tags || [],
     challenge: {
@@ -13774,8 +13828,10 @@ function applyDiscoverOccasionStart(occasionId, liveChallenge) {
       liveChallengeId: String(live?.id || "").trim(),
       occasion: occ.label,
       genre: "",
+      languageId,
       personName: "",
       variant: "occasion",
+      lyricsMode: "instructions",
     },
   });
 }
@@ -14099,26 +14155,18 @@ function bindChallengesPageOnce() {
     return false;
   };
   const buildChallengeLyricPrompt = (occasion, genre, language, person, variant) => {
-    const take = variant === "dance"
-      ? "Make it danceable with a repeatable hook."
-      : variant === "cinematic"
-        ? "Make it cinematic, emotional, and chorus-led."
-        : "Make it catchy, personal, and easy to sing.";
-    const languageHint = language?.id === "levantine"
-      ? "Use Levantine Arabic (Lebanese/Syrian/Palestinian). Avoid Egyptian dialect."
-      : language?.id && language.id !== "auto"
-        ? language.prompt
-        : "Use the natural language for this style.";
-    return [
-      `Write lyrics for ${person}: ${occasion.angle}.`,
-      take,
-      languageHint,
-      "Use verse and chorus sections.",
-    ].join("\n");
+    return pickOccasionLyricPrompt({
+      occasionId: occasion?.id,
+      languageId: language?.id || _challengeLanguageId,
+      genreId: genre?.id,
+      person,
+      variant,
+    });
   };
   const buildPresetIdea = (occasion, genre, variant = "anthem") => {
     const language = selected(CHALLENGE_LANGUAGES, _challengeLanguageId);
-    const person = nameForPrompt() || "someone special";
+    const promptLang = resolveChallengePromptLang(language?.id, { genreId: genre.id });
+    const person = nameForPrompt() || (promptLang === "arabic" ? "شخص غالي" : "someone special");
     const variantLabel = variant === "dance"
       ? "Dance version"
       : variant === "cinematic"
@@ -14138,6 +14186,7 @@ function bindChallengesPageOnce() {
       style: withTemplateStyleGuard(`${genre.style}, ${tempoHint}, personalized for ${person}. ${challengeBrief}`),
       prompt: lyricPrompt,
       lyrics: lyricPrompt,
+      lyricsMode: "instructions",
       dialect: language?.dialect || "",
       dialectHint: language?.dialectHint || "",
       avoidTags: TEMPLATE_GENERATION_AVOID_TAGS,
@@ -14151,10 +14200,12 @@ function bindChallengesPageOnce() {
         genre: genre.label,
         language: language?.label || "Auto",
         languageId: language?.id || "auto",
+        genreId: genre.id,
         dialect: language?.dialect || "",
         dialectHint: language?.dialectHint || "",
         personName: person,
         variant,
+        lyricsMode: "instructions",
       },
     };
   };
@@ -14258,7 +14309,9 @@ function bindChallengesPageOnce() {
     }
     const languageBtn = e.target?.closest?.("[data-challenge-language]");
     if (languageBtn && page.contains(languageBtn)) {
-      _challengeLanguageId = String(languageBtn.getAttribute("data-challenge-language") || _challengeLanguageId);
+      _challengeLanguageId = storeChallengeLanguageId(
+        languageBtn.getAttribute("data-challenge-language") || _challengeLanguageId,
+      );
       haptic("light");
       renderPresetLab();
       return;
@@ -26853,9 +26906,13 @@ const TEMPLATE_SPARK_CLIP_LYRICS_HINT =
 function isLyricsBriefOrInstructions(text) {
   const t = String(text || "").trim();
   if (!t) return true;
-  if (/^(Challenge:|Write a|Turn the|Make the|Start with|Build the|Only three|Paste|Describe)/im.test(t)) return true;
+  if (/^(Challenge:|Write a|Write |Turn the|Turn a|Turn an|Make the|Make it|Start with|Build the|Build a|Only three|Paste|Describe|Pick two|Flip |Name a)/im.test(t)) return true;
+  if (/^(اكتب|حوّل|خلّيها|غنّي|صفّق|مزاج|مقطع|كورس|أغنية)/m.test(t)) return true;
   if (/~\d+\s*sec|max \d+ line|Tap ✦|not a full song|optional;|when ready/i.test(t)) return true;
   if (/One short verse|One chorus \(2|Keep words short|No bridge\. No second|e\.g\./i.test(t)) return true;
+  if (/اكتب بالأحرف العربية فقط|Write the lyrics in English|ممنوع فرانكو|Never Latin, Franco/i.test(t)) return true;
+  if (/\[(?:Verse|Chorus|Pre-chorus|Intro)\]\s*[—\-–:].*\b(lines?|hook|whisper|quiet|before|after)\b/i.test(t)) return true;
+  if (/\b\d+\s*[-–]?\s*\d*\s*lines?\b/i.test(t) && /\[(?:Verse|Chorus)/i.test(t)) return true;
   if (linesLookLikeInstructions(t)) return true;
   return false;
 }
@@ -26864,7 +26921,9 @@ function linesLookLikeInstructions(text) {
   const lines = String(text || "").trim().split(/\n/).map((l) => l.trim()).filter(Boolean);
   if (lines.length < 2) return false;
   const instructy = lines.filter((l) =>
-    /^(Write|Turn|Make|Start|Build|Challenge|Verse:|Chorus:|Pre-chorus|Keep|Add|Use|Pick|Flip|Begin|Paste)/i.test(l) ||
+    /^(Write|Turn|Make|Start|Build|Challenge|Verse:|Chorus:|Pre-chorus|Keep|Add|Use|Pick|Flip|Begin|Paste|Name)/i.test(l) ||
+    /^(اكتب|حوّل|خلّيها|غنّي|صفّق|مزاج|مقطع|كورس|أغنية)/.test(l) ||
+    /^\[[^\]]+\]\s*[—\-–:]/.test(l) ||
     l.endsWith(":") ||
     /^[-•*]\s/.test(l),
   ).length;
@@ -26880,6 +26939,17 @@ function looksLikeSingableLyrics(text) {
   return false;
 }
 
+function shouldCreateOpenGenerateTab(seed, idea = null) {
+  const meta = pendingSearchRemixMeta && typeof pendingSearchRemixMeta === "object" ? pendingSearchRemixMeta : null;
+  const lyricsMode = String(
+    idea?.lyricsMode || idea?.challenge?.lyricsMode || meta?.lyricsMode || meta?.challenge?.lyricsMode || "",
+  ).trim();
+  if (lyricsMode === "instructions") return true;
+  const text = String(seed || "").trim();
+  if (isLyricsBriefOrInstructions(text)) return true;
+  return !looksLikeSingableLyrics(text);
+}
+
 function templateSparkClipLyricsReady() {
   if (activePhotoSoloChallengeId()) {
     return Boolean(imageMoodAppliedForNextGen);
@@ -26890,15 +26960,18 @@ function templateSparkClipLyricsReady() {
   return looksLikeSingableLyrics(text);
 }
 
-/** Template clip: seed stays in Generate mode until user runs ✦ lyrics. */
-function primeTemplateSparkClipCreateUi(seedText = "") {
+/** Template clip: prompt seeds open on AI lyrics; finished lyrics stay on Write. */
+function primeTemplateSparkClipCreateUi(seedText = "", idea = null) {
   const seed = String(seedText || "").trim();
   resetNabadLyricsDraftState();
   if (els.sunoPrompt) {
     els.sunoPrompt.value = seed;
     try { autoResizeLyricsBox(); } catch {}
   }
-  setLyricsInputMode(looksLikeSingableLyrics(seed) ? "write" : "generate", { silent: true });
+  setLyricsInputMode(
+    shouldCreateOpenGenerateTab(seed, idea) ? "generate" : "write",
+    { silent: true, preserveText: true },
+  );
   applyCreateChallengeFocus({ tab: "lyrics", tabs: ["photo", "lyrics"] });
   syncTemplateSparkClipGenerateReady();
 }
@@ -26917,9 +26990,9 @@ function syncTemplateSparkClipGenerateReady() {
     !busy
   ) {
     els.btnSunoGenerate.textContent = "Generate clip";
-    els.btnSunoGenerate.disabled = !ready;
     els.btnSunoGenerate.title = ready ? "" : TEMPLATE_SPARK_CLIP_LYRICS_HINT;
   }
+  try { syncCreateGenerateDock(); } catch {}
 }
 
 function nabadClipGenerateApiPath() {
@@ -66762,17 +66835,8 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
     syncGenerateOrbVisibility();
   };
   const setGenerateBtn = (label, disabled, mode) => {
-    let effectiveDisabled = disabled;
-    if (
-      !disabled &&
-      mode === "generate" &&
-      isTemplateSparkClipFlow() &&
-      !templateSparkClipLyricsReady()
-    ) {
-      effectiveDisabled = true;
-    }
     els.btnSunoGenerate.textContent = label;
-    els.btnSunoGenerate.disabled = effectiveDisabled;
+    els.btnSunoGenerate.disabled = disabled;
     els.btnSunoGenerate.dataset.mode = mode;
     if (isTemplateSparkClipFlow() && mode === "generate") {
       els.btnSunoGenerate.title = templateSparkClipLyricsReady() ? "" : TEMPLATE_SPARK_CLIP_LYRICS_HINT;

@@ -23260,6 +23260,21 @@ body.trackSheetOpen .coachFab{
     z-index: 120;
     transition: none;
   }
+  html.is-native-shell body[data-route="generate"] #btnSunoGenerate.aiGenerate:not(.isReady){
+    color: #f6f8ff;
+    background: #252836;
+    border-color: rgba(255, 255, 255, 0.16);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.12),
+      0 8px 20px rgba(0, 0, 0, 0.28);
+  }
+  html.is-native-shell body[data-route="generate"].createKeyboardOpen #createGenerateDock{
+    background: #131317;
+    padding-top: 10px;
+    padding-bottom: 12px;
+  }
   html:not(.is-native-shell) body[data-route="generate"] #createGenerateDock,
   html:not(.is-native-shell) body[data-route="generate"]:has(.hubNowPlaying.isVisible) #createGenerateDock,
   html:not(.is-native-shell) body[data-route="generate"].createKeyboardOpen #createGenerateDock{

@@ -649,7 +649,6 @@
     '<svg class="discoverCarouselPlayIco" viewBox="0 0 24 24" aria-hidden="true" focusable="false">' +
       '<path fill="currentColor" d="M6 5h4v14H6V5zm8 0h4v14h-4V5z"/>' +
     "</svg>";
-  var CAROUSEL_TAKEOVER_EVENT = "mk-carousel-takeover";
   var CAROUSEL_ARROW_SVG =
     '<svg class="marketingCarouselNavIco" viewBox="0 0 24 24" aria-hidden="true" focusable="false">' +
       '<path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" ' +
@@ -886,8 +885,6 @@
     }
 
     function step(towardsEnd) {
-      /* Arrows sit outside the scroller, so tell the drift to stand down explicitly. */
-      scroller.dispatchEvent(new Event(CAROUSEL_TAKEOVER_EVENT));
       var amount = Math.max(180, Math.round(scroller.clientWidth * 0.8));
       var direction = towardsEnd ? 1 : -1;
       if (rtl) direction *= -1;
@@ -902,51 +899,129 @@
     update();
   }
 
-  /* The rail eases sideways as its section settles into the viewport, so the row reads
-     as horizontal without pinning the page. Hands over permanently on first input. */
-  function setupCarouselDrift(section, scroller) {
-    if (!section || !scroller || prefersReducedMotion()) return;
-    if (scroller.getAttribute("data-mk-carousel-drift-ready") === "1") return;
-    scroller.setAttribute("data-mk-carousel-drift-ready", "1");
+  function ensureDiscoverPinShell(section) {
+    if (!section || section.querySelector("[data-mk-discover-pin-track]")) {
+      return section ? section.querySelector("[data-mk-discover-pin-track]") : null;
+    }
+    var track = document.createElement("div");
+    track.className = "marketingDiscoverPinTrack";
+    track.setAttribute("data-mk-discover-pin-track", "");
+    var sticky = document.createElement("div");
+    sticky.className = "marketingDiscoverPinSticky";
+    sticky.setAttribute("data-mk-discover-pin-sticky", "");
+    while (section.firstChild) sticky.appendChild(section.firstChild);
+    track.appendChild(sticky);
+    section.appendChild(track);
+    section.classList.add("marketingDiscoverTeaser--pin");
+    return track;
+  }
 
-    var engaged = false;
-    var takeoverEvents = ["pointerdown", "touchstart", "wheel", "keydown", CAROUSEL_TAKEOVER_EVENT];
+  function ensureCarouselInner(scroller) {
+    var inner = scroller.querySelector("[data-mk-carousel-inner]");
+    if (inner) return inner;
+    inner = document.createElement("div");
+    inner.className = "marketingDiscoverCarouselInner";
+    inner.setAttribute("data-mk-carousel-inner", "");
+    while (scroller.firstChild) inner.appendChild(scroller.firstChild);
+    scroller.appendChild(inner);
+    return inner;
+  }
 
-    /* Snapping would yank a partial offset to the nearest card mid-drift. */
+  function ensureDiscoverPinHint(sticky) {
+    if (!sticky || sticky.querySelector("[data-mk-discover-pin-hint]")) return;
+    var hint = document.createElement("p");
+    hint.className = "marketingDiscoverPinHint";
+    hint.setAttribute("data-mk-discover-pin-hint", "");
+    hint.textContent = "Scroll to browse";
+    var bar = document.createElement("div");
+    bar.className = "marketingDiscoverPinProgress";
+    bar.setAttribute("data-mk-discover-pin-progress", "");
+    bar.setAttribute("aria-hidden", "true");
+    bar.innerHTML = "<span></span>";
+    var wrap = sticky.querySelector("[data-mk-discover-carousel-wrap]");
+    if (wrap && wrap.nextSibling) {
+      sticky.insertBefore(hint, wrap.nextSibling);
+      sticky.insertBefore(bar, hint.nextSibling);
+    } else {
+      sticky.appendChild(hint);
+      sticky.appendChild(bar);
+    }
+  }
+
+  /* Pinned horizontal scroll: the Discover scene sticks while page scroll is mapped
+     1:1 onto the rail. When the last song is revealed, the page unsticks. */
+  function setupCarouselPin(section, wrap, scroller) {
+    if (!section || !wrap || !scroller) return;
+    if (prefersReducedMotion()) {
+      section.classList.remove("marketingDiscoverTeaser--pin");
+      return;
+    }
+    if (scroller.getAttribute("data-mk-carousel-pin-ready") === "1") {
+      if (typeof scroller._mkPinRefresh === "function") scroller._mkPinRefresh();
+      return;
+    }
+
+    var track = ensureDiscoverPinShell(section);
+    var sticky = section.querySelector("[data-mk-discover-pin-sticky]");
+    var inner = ensureCarouselInner(scroller);
+    if (!track || !sticky || !inner) return;
+    scroller.setAttribute("data-mk-carousel-pin-ready", "1");
     scroller.style.scrollSnapType = "none";
+    ensureDiscoverPinHint(sticky);
 
-    function release() {
-      if (engaged) return;
-      engaged = true;
-      scroller.style.removeProperty("scroll-snap-type");
-      takeoverEvents.forEach(function (name) {
-        scroller.removeEventListener(name, release);
-      });
-      window.removeEventListener("scroll", apply);
+    var rtl = document.documentElement.getAttribute("dir") === "rtl";
+    var hint = sticky.querySelector("[data-mk-discover-pin-hint]");
+    var fill = sticky.querySelector("[data-mk-discover-pin-progress] span");
+
+    function railMax() {
+      return Math.max(0, inner.scrollWidth - scroller.clientWidth);
     }
 
-    /* Runs straight off the scroll event rather than batching into rAF: a deferred
-       frame would latch the batching flag and kill the drift for the whole session. */
+    function sizeTrack() {
+      var max = railMax();
+      var stickyH = sticky.offsetHeight;
+      var extra = max <= 8 ? 0 : Math.max(max, Math.round((window.innerHeight || 600) * 0.7));
+      track.style.height = (stickyH + extra) + "px";
+      var top = Math.max(16, Math.round(((window.innerHeight || 600) - stickyH) / 2));
+      sticky.style.top = top + "px";
+      section.classList.toggle("hasDiscoverPin", extra > 8);
+    }
+
     function apply() {
-      if (engaged) return;
-      var max = scroller.scrollWidth - scroller.clientWidth;
-      var card = scroller.querySelector(".discoverCarouselCard");
-      if (max <= 8 || !card) return;
-      var rect = section.getBoundingClientRect();
-      var vh = window.innerHeight || 1;
-      /* 0 as the section crosses the bottom edge, 1 once it is centred. */
-      var span = vh / 2 + rect.height / 2;
-      var progress = span > 0 ? (vh - rect.top) / span : 0;
-      progress = Math.min(1, Math.max(0, progress));
-      var eased = progress * progress * (3 - 2 * progress);
-      var distance = Math.min(max, Math.round(card.offsetWidth * 0.8));
-      scroller.scrollLeft = eased * distance;
+      var max = railMax();
+      var extra = track.offsetHeight - sticky.offsetHeight;
+      if (max <= 8 || extra <= 0) {
+        inner.style.transform = "";
+        wrap.classList.remove("atCarouselEnd");
+        if (hint) hint.classList.remove("is-gone");
+        if (fill) fill.style.transform = "scaleX(0)";
+        return;
+      }
+      var pinTop = parseFloat(sticky.style.top) || 0;
+      var traveled = -track.getBoundingClientRect().top + pinTop;
+      var progress = Math.min(1, Math.max(0, traveled / extra));
+      var x = (rtl ? 1 : -1) * progress * max;
+      inner.style.transform = "translate3d(" + x + "px,0,0)";
+      wrap.classList.toggle("atCarouselEnd", progress >= 0.97);
+      if (hint) hint.classList.toggle("is-gone", progress > 0.08);
+      if (fill) fill.style.transform = "scaleX(" + progress + ")";
     }
 
-    takeoverEvents.forEach(function (name) {
-      scroller.addEventListener(name, release, { passive: true });
-    });
     window.addEventListener("scroll", apply, { passive: true });
+    window.addEventListener("resize", function () {
+      sizeTrack();
+      apply();
+    });
+    if (window.ResizeObserver) new ResizeObserver(function () {
+      sizeTrack();
+      apply();
+    }).observe(inner);
+
+    scroller._mkPinRefresh = function () {
+      sizeTrack();
+      apply();
+    };
+    sizeTrack();
     apply();
   }
 
@@ -971,7 +1046,8 @@
       return;
     }
     wrap.hidden = false;
-    root.innerHTML = songs.map(function (song) {
+    var mount = root.querySelector("[data-mk-carousel-inner]") || root;
+    mount.innerHTML = songs.map(function (song) {
       if (!song || !song.id) return "";
       var art = song.artUrl || "/assets/marketing/nabadai-social-card.png";
       var title = song.title || "Untitled";
@@ -998,7 +1074,7 @@
     }).join("");
     wireDiscoverCarouselPreviews(root);
     setupCarouselNav(wrap, root, { prev: "Show previous songs", next: "Show more songs" });
-    setupCarouselDrift(wrap.closest(".marketingDiscoverTeaser") || wrap, root);
+    setupCarouselPin(wrap.closest(".marketingDiscoverTeaser") || wrap, wrap, root);
     revealCarouselRow(wrap);
     setupScrollReveal(root);
   }

@@ -10,8 +10,6 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
 /** @type {{ file: string, page: string, locale: string, preload?: boolean }[]} */
 const targets = [
-  { file: "home.html", page: "home", locale: "en", preload: true },
-  { file: "ar/index.html", page: "home", locale: "ar" },
   { file: "ai-music-generator.html", page: "ai-music-generator", locale: "en" },
   { file: "hum-to-song.html", page: "hum-to-song", locale: "en" },
   { file: "lyrics-to-song.html", page: "lyrics-to-song", locale: "en" },

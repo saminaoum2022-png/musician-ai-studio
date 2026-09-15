@@ -23,7 +23,7 @@ const SEO_DEFAULTS = Object.freeze({
         ctaHref: "/app/#/intro",
         secondaryLabel: "See how it works",
         secondaryHref: "#features",
-        heroImageUrl: "/assets/marketing/seo-hero-device.png",
+        heroImageUrl: "/assets/marketing/seo-hero-device-1600.jpg",
         heroImageAlt: "NabadAi app on iPhone — create songs, hum melodies, and more",
       },
       features: {
@@ -72,7 +72,7 @@ const SEO_DEFAULTS = Object.freeze({
         ctaHref: "/app/#/intro",
         secondaryLabel: "تعرّف إلى الأدوات",
         secondaryHref: "#features",
-        heroImageUrl: "/assets/marketing/seo-hero-device.png",
+        heroImageUrl: "/assets/marketing/seo-hero-device-1600.jpg",
         heroImageAlt: "واجهة NabadAi لإنشاء الموسيقى",
       },
       features: {
@@ -124,7 +124,7 @@ const SEO_DEFAULTS = Object.freeze({
         ctaHref: "/app/#/intro",
         secondaryLabel: "See how it works",
         secondaryHref: "#features",
-        heroImageUrl: "/assets/marketing/seo-hero-device.png",
+        heroImageUrl: "/assets/marketing/seo-hero-device-1600.jpg",
         heroImageAlt: "NabadAi app on iPhone — create songs, hum melodies, and more",
       },
       features: {
@@ -193,7 +193,7 @@ const SEO_DEFAULTS = Object.freeze({
         ctaHref: "/app/#/intro",
         secondaryLabel: "See how it works",
         secondaryHref: "#features",
-        heroImageUrl: "/assets/marketing/seo-hero-device.png",
+        heroImageUrl: "/assets/marketing/seo-hero-device-1600.jpg",
         heroImageAlt: "NabadAi app on iPhone — create songs, hum melodies, and more",
       },
       features: {
@@ -245,7 +245,7 @@ const SEO_DEFAULTS = Object.freeze({
         ctaHref: "/app/#/intro",
         secondaryLabel: "See how it works",
         secondaryHref: "#features",
-        heroImageUrl: "/assets/marketing/seo-hero-device.png",
+        heroImageUrl: "/assets/marketing/seo-hero-device-1600.jpg",
         heroImageAlt: "NabadAi app on iPhone — create songs, hum melodies, and more",
       },
       features: {
@@ -297,7 +297,7 @@ const SEO_DEFAULTS = Object.freeze({
         ctaHref: "/app/#/intro",
         secondaryLabel: "See how it works",
         secondaryHref: "#features",
-        heroImageUrl: "/assets/marketing/seo-hero-device.png",
+        heroImageUrl: "/assets/marketing/seo-hero-device-1600.jpg",
         heroImageAlt: "NabadAi app on iPhone — create songs, hum melodies, and more",
       },
       features: {

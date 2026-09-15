@@ -50,6 +50,39 @@
     el.setAttribute("src", next);
   }
 
+  function isBundledHeroAsset(url) {
+    return /\/assets\/marketing\/seo-hero-device/i.test(String(url || ""));
+  }
+
+  function revealHeroPhoto(el) {
+    var img = el || document.querySelector(".marketingHeroArt img");
+    if (!img) return;
+    function show() { img.classList.add("is-loaded"); }
+    if (img.complete && img.naturalWidth) show();
+    else {
+      img.addEventListener("load", show, { once: true });
+      img.addEventListener("error", show, { once: true });
+    }
+  }
+
+  function setHeroImageSrc(url) {
+    var el = document.querySelector("[data-mk='hero.image']");
+    if (!el || url == null || url === "") return;
+    var next = String(url).trim();
+    if (!next || isBundledHeroAsset(next) || next.indexOf("/api/marketing/hero-image") === 0) return;
+    var cur = String(el.getAttribute("src") || "").trim();
+    if (cur === next) return;
+    var pic = el.closest("picture");
+    if (pic) {
+      var sources = pic.querySelectorAll("source");
+      for (var i = 0; i < sources.length; i++) sources[i].remove();
+    }
+    el.removeAttribute("srcset");
+    el.classList.remove("is-loaded");
+    el.setAttribute("src", next);
+    revealHeroPhoto(el);
+  }
+
   function usesHeroImageProxy(el) {
     if (!el) return false;
     return String(el.getAttribute("src") || "").indexOf("/api/marketing/hero-image") === 0;
@@ -521,7 +554,7 @@
       setAttr("[data-mk='hero.secondary']", "href", c.hero.secondaryHref);
       var heroEl = document.querySelector("[data-mk='hero.image']");
       if (heroEl && c.hero.heroImageUrl && !usesHeroImageProxy(heroEl)) {
-        setImageSrc("[data-mk='hero.image']", c.hero.heroImageUrl);
+        setHeroImageSrc(c.hero.heroImageUrl);
       }
       applyHeroAlt(c.hero.heroImageAlt);
     }
@@ -974,7 +1007,7 @@
     var heroImg = params.get("heroImg");
     var heroAlt = params.get("heroAlt");
     if (heroImg) {
-      setImageSrc("[data-mk='hero.image']", heroImg);
+      setHeroImageSrc(heroImg);
       if (heroAlt) applyHeroAlt(heroAlt);
     }
   }
@@ -1168,6 +1201,8 @@
   document.addEventListener("visibilitychange", function () {
     if (document.hidden) stopCarouselPreview();
   });
+
+  revealHeroPhoto();
 
   fetch("/api/marketing/content?page=" + encodeURIComponent(PAGE) + "&locale=" + encodeURIComponent(LOCALE), {
     credentials: "omit",

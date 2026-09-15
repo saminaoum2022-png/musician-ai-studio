@@ -1165,6 +1165,12 @@ img { display: block; max-width: 100%; height: auto; }
 
 .marketingCta:active { transform: translateY(1px) scale(0.985); }
 
+.heroActions > .heroCta {
+  min-height: 55px;
+  padding: 0 28px;
+  font-size: 17px;
+}
+
 .marketingCta--ghost {
   background: rgba(255, 255, 255, 0.05);
   border: 1px solid rgba(255, 255, 255, 0.14);
@@ -1284,6 +1290,11 @@ h1 {
   border-radius: 20px;
   object-fit: contain;
   filter: drop-shadow(0 28px 56px rgba(0, 0, 0, 0.55));
+  opacity: 0;
+  transition: opacity 140ms ease;
+}
+.marketingHeroArt img.is-loaded {
+  opacity: 1;
 }
 
 /* App screenshot — no fake bezel; PNG is already a device capture. */
@@ -1596,6 +1607,11 @@ body:has(.marketingDraftBanner) .marketingShell {
     min-height: 36px;
     padding: 0 14px;
     font-size: 13px;
+  }
+  .heroActions > .heroCta {
+    min-height: 41px;
+    padding: 0 16px;
+    font-size: 15px;
   }
   .marketingNavSignIn {
     font-size: 13px;

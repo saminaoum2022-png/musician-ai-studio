@@ -262,7 +262,7 @@ import { DISCOVER_SHOW_PLAY_COUNTS, MUSIC_VIDEO_FEATURE_ENABLED } from "./featur
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260915-230709";
+const APP_BUILD = "20260916-002230";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -369,6 +369,8 @@ let _bootSplashAnimEnded = Boolean(window.__nabadBootSplashEnded);
 let _bootSplashCanDismiss = false;
 let _bootSplashFinishTimer = 0;
 let _bootSplashPermanentlyDismissed = false;
+let _authSplashHandoff = false;
+let _authSplashLanded = false;
 
 /** Error / max-timeout path — never leave the overlay stuck. */
 function scheduleBootSplashFinish() {
@@ -406,30 +408,37 @@ function reassertViewportScale() {
 
 function finishBootSplash() {
   try {
+    if (_authSplashHandoff) return;
     if (_bootSplashPermanentlyDismissed) return;
+    if (shouldHandoffSplashToAuth()) {
+      startAuthSplashHandoff();
+      return;
+    }
+    dismissBootSplashOverlay({ destroyMotion: true });
+  } catch {}
+}
+
+function dismissBootSplashOverlay({ destroyMotion = true } = {}) {
+  try {
     _bootSplashPermanentlyDismissed = true;
     if (_bootSplashFinishTimer) clearTimeout(_bootSplashFinishTimer);
     _bootSplashFinishTimer = 0;
-    try { _bootSplashMotion?.destroy?.(); } catch {}
-    _bootSplashMotion = null;
+    if (destroyMotion) {
+      try { _bootSplashMotion?.destroy?.(); } catch {}
+      _bootSplashMotion = null;
+    }
     const splash = document.getElementById("bootSplash");
-    // Reveal instantly — NO opacity crossfade. The boot splash logo is screen-
-    // centered, but the route it reveals (intro/auth) has its own logo at a
-    // different height (~34vh). A 220ms fade left the half-transparent centered
-    // splash logo sitting over the route's logo for those frames — the "faded
-    // second logo" ghost users saw on web. Native always revealed instantly and
-    // was smooth, so we hide the splash in the SAME frame the app appears: the
-    // two logos never coexist at partial opacity.
     if (splash) {
       splash.style.transition = "none";
       splash.style.opacity = "0";
       splash.style.display = "none";
+      splash.classList.remove("bootSplash--handoff");
       splash.classList.add("bootSplash--gone");
       splash.setAttribute("aria-hidden", "true");
     }
     document.body.classList.remove("booting");
+    try { tryPlayAuthBrandIntro(); } catch {}
     try { ensurePageScrollHealthy(); } catch {}
-    // Force a correct device-width layout the instant the app is shown.
     reassertViewportScale();
     requestAnimationFrame(() => {
       try { syncTabGlassThumb(); } catch {}
@@ -4857,7 +4866,6 @@ function resolveEmptyHashRoute() {
     if (uid && shouldShowOnboardingForUser(uid)) return "onboarding";
     return DEFAULT_LOGGED_IN_ROUTE;
   }
-  if (!shouldSkipIntroOrOnboardingRoute()) return "onboarding";
   if (isGuestModeEnabled()) return DEFAULT_LOGGED_IN_ROUTE;
   return "auth";
 }
@@ -4910,9 +4918,7 @@ function parseSharedTrackIdFromLocation() {
 function shouldHoldBootSplashForRoute(wanted) {
   if (!document.body.classList.contains("booting")) return false;
   if (parseSharedTrackIdFromLocation()) return false;
-  if (!shouldSkipIntroOrOnboardingRoute(authSession?.user?.id) && wanted === "auth") return true;
-  if (wanted === "auth" && getSupabaseAuthToken()) return true;
-  if (wanted === "auth" && !_authBootDone) return true;
+  if (wanted === "auth" && (getSupabaseAuthToken() || isAppLoggedIn())) return true;
   return false;
 }
 
@@ -5444,6 +5450,12 @@ function applyRoute({ passGen } = {}) {
       history.replaceState(null, "", `#/${wanted}`);
     } catch {}
   }
+  if (wanted === "onboarding" && !isLoggedIn && !hasAuthToken) {
+    wanted = "auth";
+    try {
+      history.replaceState(null, "", "#/auth");
+    } catch {}
+  }
   if (shouldSkipIntroOrOnboardingRoute(authSession?.user?.id) && wanted === "onboarding") {
     wanted = isLoggedIn ? DEFAULT_LOGGED_IN_ROUTE : "auth";
     try {
@@ -5597,10 +5609,18 @@ function applyRoute({ passGen } = {}) {
   }
   animateRouteEnter(wanted, skipEnterAnim ? "none" : navDir);
   if (_skipGenerateRouteEnter) _skipGenerateRouteEnter = false;
-  if (wanted === "auth" && prevRoute !== "auth") {
-    try { resetAuthEmailPanel(); } catch {}
+  if (wanted === "auth") {
+    if (prevRoute !== "auth") {
+      try { resetAuthEmailPanel(); } catch {}
+    }
+    const mount = document.getElementById("authBrandAnim");
+    if (!mount?.querySelector("svg")) {
+      _authBrandIntroPending = true;
+      try { tryPlayAuthBrandIntro(); } catch {}
+    }
   } else if (prevRoute === "auth" && wanted !== "auth") {
     try { resetAuthEmailPanel(); } catch {}
+    try { stopAuthBrandIntro(); } catch {}
   }
   try {
     _appTourMod?.notifyAppRouteChanged?.(wanted);
@@ -31435,6 +31455,239 @@ function setAuthEmailPanelOpen(open) {
   if (show) {
     try { els.authEmailInput?.focus?.(); } catch {}
   }
+}
+
+const AUTH_TAGLINE_TEXT = "Create. Share. Connect.";
+let _authBrandSplash = null;
+let _authTaglineTimer = 0;
+let _authBrandIntroPending = false;
+
+function stopAuthTaglineType() {
+  if (_authTaglineTimer) {
+    clearTimeout(_authTaglineTimer);
+    _authTaglineTimer = 0;
+  }
+}
+
+function paintAuthTaglineChars(count) {
+  const host = document.getElementById("authTaglineTyped");
+  if (!host) return;
+  let html = "";
+  const n = Math.max(0, Math.min(AUTH_TAGLINE_TEXT.length, count | 0));
+  for (let i = 0; i < n; i++) {
+    const ch = AUTH_TAGLINE_TEXT[i];
+    if (ch === ".") {
+      const kind = i === 6 ? "create" : i === 13 ? "share" : "connect";
+      html += `<span class="authTaglineDot authTaglineDot--${kind}" aria-hidden="true">.</span>`;
+    } else {
+      html += ch === " " ? " " : ch;
+    }
+  }
+  host.innerHTML = html;
+}
+
+function typeAuthTagline() {
+  const tag = document.getElementById("authTagline");
+  const total = AUTH_TAGLINE_TEXT.length;
+  stopAuthTaglineType();
+  const reduced = (() => {
+    try { return window.matchMedia("(prefers-reduced-motion: reduce)").matches; } catch { return false; }
+  })();
+  if (reduced) {
+    paintAuthTaglineChars(total);
+    tag?.classList.remove("is-typing");
+    tag?.classList.add("is-done");
+    revealAuthHandoffRest();
+    return;
+  }
+  tag?.classList.add("is-typing");
+  tag?.classList.remove("is-done");
+  let n = 0;
+  paintAuthTaglineChars(0);
+  const tick = () => {
+    n += 1;
+    paintAuthTaglineChars(n);
+    if (n < total) _authTaglineTimer = window.setTimeout(tick, 38);
+    else {
+      _authTaglineTimer = 0;
+      tag?.classList.remove("is-typing");
+      tag?.classList.add("is-done");
+      revealAuthHandoffRest();
+    }
+  };
+  _authTaglineTimer = window.setTimeout(tick, 90);
+}
+
+function stopAuthBrandIntro() {
+  _authBrandIntroPending = false;
+  stopAuthTaglineType();
+  if (_authBrandSplash) {
+    try { _authBrandSplash.destroy(); } catch {}
+    _authBrandSplash = null;
+  }
+}
+
+function isAuthBrandRoute() {
+  return document.body.classList.contains("isAuth")
+    || (document.body.getAttribute("data-route") || "") === "auth";
+}
+
+function tryPlayAuthBrandIntro() {
+  if (_authSplashHandoff) return;
+  if (document.body.classList.contains("booting")) return;
+  if (!isAuthBrandRoute()) return;
+  const mount = document.getElementById("authBrandAnim");
+  if (!mount) return;
+  if (!_authBrandIntroPending && mount.querySelector("svg")) return;
+  _authBrandIntroPending = false;
+  playAuthBrandIntro();
+}
+
+function playAuthBrandIntro() {
+  const mount = document.getElementById("authBrandAnim");
+  const tag = document.getElementById("authTagline");
+  document.body.classList.add("authEntrySettled");
+  stopAuthTaglineType();
+  tag?.classList.remove("is-typing", "is-done");
+  paintAuthTaglineChars(0);
+  if (_authBrandSplash) {
+    try { _authBrandSplash.destroy(); } catch {}
+    _authBrandSplash = null;
+  }
+  if (!mount) {
+    typeAuthTagline();
+    return;
+  }
+  try {
+    _authBrandSplash = createNabadSplash(mount, {
+      wordmarkSrc: "./assets/splash/nabad-wordmark.png",
+    });
+    _authBrandSplash.showFinal();
+  } catch {
+    typeAuthTagline();
+    return;
+  }
+  typeAuthTagline();
+}
+
+function prefersAuthHandoffMotionReduce() {
+  try { return window.matchMedia("(prefers-reduced-motion: reduce)").matches; } catch { return false; }
+}
+
+function shouldHandoffSplashToAuth() {
+  if (isAppLoggedIn() || getSupabaseAuthToken()) return false;
+  const route = document.body.getAttribute("data-route") || "";
+  const hash = String(location.hash || "").replace(/^#\/?/, "").split(/[?#&]/)[0] || "";
+  return route === "auth" || route === "onboarding" || route === "intro"
+    || hash === "auth" || hash === "onboarding" || hash === "intro" || hash === "";
+}
+
+function hideBootSplashLayer() {
+  const splash = document.getElementById("bootSplash");
+  if (!splash) return;
+  splash.style.transition = "none";
+  splash.style.opacity = "0";
+  splash.style.display = "none";
+  splash.classList.remove("bootSplash--handoff");
+  splash.classList.add("bootSplash--gone");
+  splash.setAttribute("aria-hidden", "true");
+}
+
+function landSplashLockupOnAuth() {
+  if (_authSplashLanded) return;
+  _authSplashLanded = true;
+  const splashAnim = document.getElementById("bootSplashAnim");
+  const mount = document.getElementById("authBrandAnim");
+  const svg = splashAnim?.querySelector("svg");
+  if (svg && mount && !mount.contains(svg)) {
+    mount.replaceChildren(svg);
+  }
+  try { _bootSplashMotion?.detach?.(); } catch {}
+  _bootSplashMotion = null;
+  if (splashAnim) {
+    splashAnim.style.transition = "";
+    splashAnim.style.transform = "";
+  }
+  hideBootSplashLayer();
+}
+
+function revealAuthHandoffRest() {
+  const rest = document.getElementById("authHandoffRest");
+  rest?.classList.add("is-revealed");
+  if (!document.body.classList.contains("authHandoff")) {
+    _authSplashHandoff = false;
+    return;
+  }
+  window.setTimeout(() => {
+    document.body.classList.remove("authHandoff");
+    _authSplashHandoff = false;
+  }, 520);
+}
+
+function startAuthSplashHandoff() {
+  if (_authSplashHandoff) return;
+  _authSplashHandoff = true;
+  _bootSplashPermanentlyDismissed = true;
+  if (_bootSplashFinishTimer) clearTimeout(_bootSplashFinishTimer);
+  _bootSplashFinishTimer = 0;
+
+  const splash = document.getElementById("bootSplash");
+  const splashAnim = document.getElementById("bootSplashAnim");
+  const mount = document.getElementById("authBrandAnim");
+  splash?.classList.add("bootSplash--handoff");
+  splash?.classList.remove("bootSplash--gone");
+  if (splash) {
+    splash.style.display = "flex";
+    splash.style.opacity = "1";
+    splash.setAttribute("aria-hidden", "false");
+  }
+  document.body.classList.add("authHandoff", "isAuth", "authEntrySettled");
+  document.body.classList.remove("booting", "isOnboarding", "isIntro");
+  document.body.setAttribute("data-route", "auth");
+  try { history.replaceState(null, "", "#/auth"); } catch {}
+  try { ensurePageScrollHealthy(); } catch {}
+  reassertViewportScale();
+
+  const settle = () => {
+    try { landSplashLockupOnAuth(); } catch {}
+    typeAuthTagline();
+  };
+
+  if (prefersAuthHandoffMotionReduce() || !splashAnim || !mount) {
+    settle();
+    return;
+  }
+
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    const from = splashAnim.getBoundingClientRect();
+    const to = mount.getBoundingClientRect();
+    if (!from.width || !to.width) {
+      settle();
+      return;
+    }
+    const dx = (to.left + to.width / 2) - (from.left + from.width / 2);
+    const dy = (to.top + to.height / 2) - (from.top + from.height / 2);
+    const sx = to.width / from.width;
+    if (Math.abs(dx) < 3 && Math.abs(dy) < 3 && Math.abs(sx - 1) < 0.03) {
+      settle();
+      return;
+    }
+    splashAnim.style.transition = "transform 560ms cubic-bezier(0.22, 1, 0.36, 1)";
+    splashAnim.style.transformOrigin = "center center";
+    splashAnim.style.transform = `translate(${dx}px, ${dy}px) scale(${sx})`;
+    let finished = false;
+    const done = () => {
+      if (finished) return;
+      finished = true;
+      splashAnim.removeEventListener("transitionend", onEnd);
+      settle();
+    };
+    const onEnd = (event) => {
+      if (event.target === splashAnim) done();
+    };
+    splashAnim.addEventListener("transitionend", onEnd);
+    window.setTimeout(done, 720);
+  }));
 }
 
 function resetAuthEmailPanel() {

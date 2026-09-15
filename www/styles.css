@@ -1994,6 +1994,12 @@ body.booting .hubNowPlaying{
 .bootSplash--gone{
   display: none !important;
 }
+#bootSplash.bootSplash--handoff{
+  display: flex !important;
+  pointer-events: none;
+  background: #05070d;
+  opacity: 1;
+}
 body.booting .bootSplash{
   display: flex;
   pointer-events: auto;
@@ -2005,9 +2011,9 @@ body.booting .bootSplash{
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  /* 300px keeps the opening N ~84px (near the old 90px mark) and the
-     finished NabadAi lockup readable without filling the phone. */
-  width: min(84vw, 300px);
+  /* Shared with signup: 224px is ~25% smaller than 300, so the lockup
+     stays readable without filling the phone or crowding the CTAs. */
+  width: min(62vw, 224px);
 }
 .nabadSplash{
   display: block;
@@ -3397,7 +3403,7 @@ body.isOnboarding .generateOrb{ display:none !important; }
   align-items: center;
   justify-content: center;
   width: 100%;
-  margin: 0 0 42px;
+  margin: 0 0 12px;
 }
 .authLogoMark{
   display: block;
@@ -3415,11 +3421,36 @@ body.isOnboarding .generateOrb{ display:none !important; }
 .authTagline{
   margin: 0 0 10px;
   max-width: 340px;
+  min-height: 1.2em;
   font-size: clamp(23px, 6.8vw, 28px);
   line-height: 1.14;
   font-weight: 700;
   letter-spacing: -0.025em;
   color: #f0f4ff;
+  white-space: nowrap;
+}
+.authTaglineWord{
+  display: inline;
+  white-space: nowrap;
+}
+.authTaglineCaret{
+  display: none;
+  width: 2px;
+  height: 0.86em;
+  margin-left: 3px;
+  background: currentColor;
+  vertical-align: -0.06em;
+  animation: authTaglineBlink 0.9s step-end infinite;
+}
+.authTagline.is-typing .authTaglineCaret{
+  display: inline-block;
+}
+@keyframes authTaglineBlink{
+  0%, 45% { opacity: 1; }
+  50%, 100% { opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce){
+  .authTaglineCaret{ display: none !important; animation: none; }
 }
 .authTaglineWord{
   display: inline;
@@ -3637,7 +3668,38 @@ body.isOnboarding .generateOrb{ display:none !important; }
   margin-top: 12px;
 }
 .authBrand{
-  margin-bottom: 30px;
+  margin-bottom: 12px;
+}
+.authBrandAnim{
+  display: block;
+  width: min(62vw, 224px);
+  max-width: 100%;
+  aspect-ratio: 320 / 128;
+  overflow: visible;
+}
+.authHandoffRest{
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+body.authHandoff .authInner,
+body.authEntrySettled .authInner{
+  animation: none !important;
+  opacity: 1 !important;
+  transform: none !important;
+}
+body.authHandoff .authGateChoices{
+  animation: none !important;
+}
+body.authHandoff .authHandoffRest{
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 480ms ease;
+}
+body.authHandoff .authHandoffRest.is-revealed{
+  opacity: 1;
+  pointer-events: auto;
 }
 .authLogoMark{
   width: min(18vw, 76px);
@@ -3854,7 +3916,7 @@ body.loginSettling{
   text-align: center;
 }
 .loginSettlingAnim{
-  width: min(84vw, 300px);
+  width: min(62vw, 224px);
   overflow: visible;
 }
 .loginSettlingMsg{

@@ -105,9 +105,6 @@ export function getInitialBootHash(getAuthSession) {
   if (session?.user?.id && shouldShowOnboardingForUser(session.user.id)) {
     return "#/onboarding";
   }
-  if (!session?.user?.id && !isOnboardingComplete()) {
-    return "#/onboarding";
-  }
   return getPostOnboardingHash(getAuthSession);
 }
 

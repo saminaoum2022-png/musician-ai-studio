@@ -112,6 +112,12 @@ export function createNabadSplash(container, { wordmarkSrc = './nabad-wordmark.p
     element: svg,
     play,
     showFinal,
+    detach() {
+      disposed = true;
+      cancelAnimationFrame(frame);
+      settle = null;
+      media.removeEventListener('change', onPreference);
+    },
     destroy() {
       disposed = true;
       stop();

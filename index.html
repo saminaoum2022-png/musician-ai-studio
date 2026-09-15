@@ -196,7 +196,7 @@
       onload="this.media='all'"
     />
     <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Display:wght@900&family=Inter:wght@900&display=swap" /></noscript>
-    <link rel="stylesheet" href="./styles.css?v=20260915-230709" />
+    <link rel="stylesheet" href="./styles.css?v=20260916-002230" />
 
     <meta name="description" content="Create complete songs from lyrics, a hum, or a photo with NabadAi. Explore AI music tools, Arabic styles, voice personas, and creator sharing." />
     <meta property="og:type" content="website" />
@@ -549,12 +549,12 @@
         <section class="card wide authScreen" data-route="auth">
           <div class="authInner">
             <div class="authBrand" aria-label="NabadAi">
-              <span class="authLogoMark" aria-hidden="true"></span>
-              <span class="authBrandName authBrandName--plain">NabadAi</span>
+              <div class="authBrandAnim" id="authBrandAnim"></div>
             </div>
-            <h1 class="authTagline" aria-label="Create. Share. Connect.">
-              <span class="authTaglineWord">Create<span class="authTaglineDot authTaglineDot--create" aria-hidden="true">.</span></span><span class="authTaglineWord"> Share<span class="authTaglineDot authTaglineDot--share" aria-hidden="true">.</span></span><span class="authTaglineWord"> Connect<span class="authTaglineDot authTaglineDot--connect" aria-hidden="true">.</span></span>
+            <h1 class="authTagline" id="authTagline" aria-label="Create. Share. Connect.">
+              <span id="authTaglineTyped"></span><span class="authTaglineCaret" aria-hidden="true"></span>
             </h1>
+            <div class="authHandoffRest" id="authHandoffRest">
             <p class="authSub">The social platform for AI music creators.</p>
             <div class="authActions">
               <div class="authGateChoices" id="authGateChoices">
@@ -654,6 +654,7 @@
               <input id="authTermsCheck" type="checkbox" />
               <span>I agree to the <a href="./terms.html" data-legal-link="terms">Terms</a> and <a href="./privacy.html" data-legal-link="privacy">Privacy Policy</a>, including rules for uploads, voice samples, and AI-generated content.</span>
             </label>
+            </div>
           </div>
         </section>
 
@@ -5375,13 +5376,13 @@
         var bootUid = bootSessionUserId();
         var needsOnboarding = bootUid ? !bootOnboardingDone() : !done;
         if (!h) {
-          if (needsOnboarding) h = "onboarding";
+          if (bootUid && needsOnboarding) h = "onboarding";
           else h = hasSessionEarly ? "challenges" : (guestMode ? "challenges" : "auth");
         }
         if (/^onboarding\/\d+$/.test(h)) h = "onboarding";
         var ok = /^(intro|onboarding|music-preferences|first-song|auth|generate|challenges|activity|discover|friends|profile|profile-edit|settings|player|sounds|user|vocal|stems|studio|advanced|credits|mentor)$/.test(h);
         if (!ok) {
-          if (needsOnboarding) h = "onboarding";
+          if (bootUid && needsOnboarding) h = "onboarding";
           else {
             var hasSessionFallback = false;
             try {
@@ -5433,7 +5434,7 @@
         requestAnimationFrame(() => requestAnimationFrame(play));
       }
       // Dynamic import so the giant app module does not block the first dots.
-      import("./src/app.js?v=20260915-230709");
+      import("./src/app.js?v=20260916-002230");
     </script>
     <script defer src="/_vercel/insights/script.js"></script>
   </body>

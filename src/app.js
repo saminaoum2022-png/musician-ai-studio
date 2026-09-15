@@ -430,6 +430,9 @@ function finishBootSplash() {
     try { ensurePageScrollHealthy(); } catch {}
     // Force a correct device-width layout the instant the app is shown.
     reassertViewportScale();
+    requestAnimationFrame(() => {
+      try { syncTabGlassThumb(); } catch {}
+    });
   } catch {}
 }
 
@@ -4021,6 +4024,330 @@ function setTabbarCollapsed(collapsed) {
   const tabbar = document.querySelector(".mobileTabbar");
   try { tabbar?.setAttribute("aria-expanded", collapsed ? "false" : "true"); } catch {}
   syncTabbarDockTarget();
+  _tabGlassLockUntil = Date.now() + 380;
+  try { endTabGlassHold(tabbar, { snap: false }); } catch {}
+  try { syncTabGlassThumb(); } catch {}
+}
+
+let _tabGlassHold = null;
+let _tabGlassRaf = 0;
+let _tabGlassLiquidRaf = 0;
+let _tabGlassLockUntil = 0;
+
+function ensureTabGlassThumb(tabbar) {
+  if (!tabbar) return null;
+  let thumb = tabbar.querySelector(":scope > .tabGlassThumb");
+  if (!thumb) {
+    thumb = document.createElement("span");
+    thumb.className = "tabGlassThumb";
+    thumb.setAttribute("aria-hidden", "true");
+    tabbar.insertBefore(thumb, tabbar.firstChild);
+  }
+  return thumb;
+}
+
+function tabGlassPillSize(tabbar) {
+  const raw = getComputedStyle(tabbar).getPropertyValue("--tab-pill-size");
+  const n = parseFloat(raw);
+  return Number.isFinite(n) && n > 0 ? n : 46;
+}
+
+function tabGlassActiveIndex(tabbar) {
+  const tabs = [...tabbar.querySelectorAll(":scope > a[data-route-link]")];
+  const active = tabbar.querySelector(":scope > a.active[data-route-link]");
+  const i = tabs.indexOf(active);
+  return i >= 0 ? i : 0;
+}
+
+/** Resting slot geometry — ignores collapse transforms so the capsule cannot
+ *  get stuck mid-fan on the wrong icon. */
+function tabGlassSlots(tabbar) {
+  const tabs = [...tabbar.querySelectorAll(":scope > a[data-route-link]")];
+  const bar = tabbar.getBoundingClientRect();
+  const cs = getComputedStyle(tabbar);
+  const padX = parseFloat(cs.paddingLeft) || 6;
+  const padRight = parseFloat(cs.paddingRight) || padX;
+  const pill = tabGlassPillSize(tabbar);
+  const inner = Math.max(0, bar.width - padX - padRight);
+  const col = inner / Math.max(1, tabs.length);
+  return tabs.map((a, i) => {
+    const x = padX + i * col + (col - pill) / 2;
+    return {
+      a,
+      i,
+      x,
+      y: 0,
+      cx: bar.left + x + pill / 2,
+      size: pill,
+    };
+  });
+}
+
+function tabGlassNearest(slots, clientX) {
+  if (!slots.length) return null;
+  let best = slots[0];
+  let dist = Infinity;
+  for (const slot of slots) {
+    const d = Math.abs(slot.cx - clientX);
+    if (d < dist) {
+      dist = d;
+      best = slot;
+    }
+  }
+  return best;
+}
+
+function setTabGlassVars(tabbar, { x, y, scale, opacity, index, dragX, sx, sy, rot, glint } = {}) {
+  if (index != null) tabbar.style.setProperty("--tab-thumb-index", String(index));
+  if (x != null) tabbar.style.setProperty("--tab-thumb-x", `${Math.round(x * 100) / 100}px`);
+  if (dragX != null) tabbar.style.setProperty("--tab-thumb-drag-x", `${Math.round(dragX * 100) / 100}px`);
+  if (y != null) tabbar.style.setProperty("--tab-thumb-y", `${Math.round(y * 100) / 100}px`);
+  if (scale != null) tabbar.style.setProperty("--tab-thumb-scale", String(scale));
+  if (opacity != null) tabbar.style.setProperty("--tab-thumb-opacity", String(opacity));
+  if (sx != null) tabbar.style.setProperty("--tab-thumb-sx", String(sx));
+  if (sy != null) tabbar.style.setProperty("--tab-thumb-sy", String(sy));
+  if (rot != null) tabbar.style.setProperty("--tab-thumb-rot", rot);
+  if (glint != null) tabbar.style.setProperty("--tab-thumb-glint", `${Math.round(glint)}px`);
+}
+
+function resetTabGlassDeform(tabbar) {
+  if (!tabbar) return;
+  tabbar.style.setProperty("--tab-thumb-sx", "1");
+  tabbar.style.setProperty("--tab-thumb-sy", "1");
+  tabbar.style.setProperty("--tab-thumb-rot", "0deg");
+  tabbar.style.setProperty("--tab-thumb-glint", "0px");
+  tabbar.style.setProperty("--tab-thumb-y", "0px");
+  tabbar.style.setProperty("--tab-thumb-drag-x", "0px");
+}
+
+function syncTabGlassThumb(opts = {}) {
+  const tabbar = document.querySelector(".mobileTabbar");
+  if (!tabbar) return;
+  ensureTabGlassThumb(tabbar);
+  if (getComputedStyle(tabbar).display === "none" || !tabbar.getClientRects().length) return;
+  const index = opts.index != null ? opts.index : tabGlassActiveIndex(tabbar);
+  tabbar.style.setProperty("--tab-thumb-index", String(index));
+  resetTabGlassDeform(tabbar);
+  if (document.body.classList.contains("tabbarCollapsed")) {
+    tabbar.style.removeProperty("--tab-thumb-scale");
+    tabbar.style.removeProperty("--tab-thumb-opacity");
+    return;
+  }
+  const scale = opts.scale != null ? opts.scale : (_tabGlassHold?.live ? 1.36 : 1);
+  setTabGlassVars(tabbar, { scale, opacity: 1 });
+}
+
+function tabGlassMagnetX(slots, clientX, tabbar) {
+  if (!slots.length) return 0;
+  const bar = tabbar.getBoundingClientRect();
+  const pill = slots[0].size;
+  const min = slots[0].x;
+  const max = slots[slots.length - 1].x;
+  let x = clientX - bar.left - pill / 2;
+  x = Math.max(min - 10, Math.min(max + 10, x));
+  const nearest = tabGlassNearest(slots, clientX);
+  if (!nearest) return x;
+  const span = (max - min) / Math.max(1, slots.length - 1);
+  const influence = Math.max(0, 1 - Math.abs(nearest.x - x) / Math.max(28, span * 0.62));
+  return x + (nearest.x - x) * influence * 0.22;
+}
+
+function stopTabGlassLoop() {
+  if (_tabGlassLiquidRaf) {
+    cancelAnimationFrame(_tabGlassLiquidRaf);
+    _tabGlassLiquidRaf = 0;
+  }
+}
+
+function endTabGlassHold(tabbar, { snap = true } = {}) {
+  const hold = _tabGlassHold;
+  _tabGlassHold = null;
+  stopTabGlassLoop();
+  if (hold?.pressTimer) {
+    try { clearTimeout(hold.pressTimer); } catch {}
+  }
+  try { hold?.tab?.releasePointerCapture?.(hold.pointerId); } catch {}
+  try { hold?.tabbar?.releasePointerCapture?.(hold.pointerId); } catch {}
+  tabbar?.classList.remove("isThumbPressed", "isThumbDragging", "isThumbLiquid");
+  resetTabGlassDeform(tabbar);
+  if (!hold) {
+    if (snap) syncTabGlassThumb({ scale: 1 });
+    return null;
+  }
+  if (snap) syncTabGlassThumb({ scale: 1, index: hold.hoverIndex ?? tabGlassActiveIndex(tabbar) });
+  else setTabGlassVars(tabbar, { scale: 1 });
+  return hold;
+}
+
+function tabGlassShouldDeferTap(a) {
+  return Boolean(_tabGlassHold && _tabGlassHold.tab === a && (_tabGlassHold.deferred || _tabGlassHold.live));
+}
+
+function wireTabGlassThumb(tabbar) {
+  if (!tabbar || tabbar.dataset.tabGlassBound) return;
+  tabbar.dataset.tabGlassBound = "1";
+  ensureTabGlassThumb(tabbar);
+
+  function liquidFrame() {
+    const hold = _tabGlassHold;
+    if (!hold?.live) {
+      _tabGlassLiquidRaf = 0;
+      return;
+    }
+    const slots = tabGlassSlots(tabbar);
+    if (!slots.length) {
+      _tabGlassLiquidRaf = 0;
+      return;
+    }
+    const targetX = tabGlassMagnetX(slots, hold.fingerX, tabbar);
+    hold.x += (targetX - hold.x) * 0.32;
+    hold.y += (hold.targetY - hold.y) * 0.24;
+    const vx = hold.x - hold.prevX;
+    hold.prevX = hold.x;
+    const stretch = Math.max(-0.32, Math.min(0.32, vx * 0.14));
+    const sx = 1 + Math.abs(stretch);
+    const sy = Math.max(0.72, 1 / sx);
+    const rot = `${Math.max(-9, Math.min(9, vx * 3.2))}deg`;
+    const glint = Math.max(-8, Math.min(10, (hold.fingerX - tabbar.getBoundingClientRect().left - hold.x - slots[0].size / 2) * 0.18));
+    const nearest = tabGlassNearest(slots, hold.fingerX);
+    if (nearest && nearest.a !== hold.hover) {
+      hold.hover = nearest.a;
+      hold.hoverIndex = nearest.i;
+      try { haptic("light"); } catch {}
+    }
+    setTabGlassVars(tabbar, {
+      x: hold.x,
+      y: hold.y,
+      scale: hold.scale,
+      sx,
+      sy,
+      rot,
+      glint,
+    });
+    _tabGlassLiquidRaf = requestAnimationFrame(liquidFrame);
+  }
+
+  function pickUpDrop(hold) {
+    if (!hold || hold.live) return;
+    hold.live = true;
+    hold.dragging = true;
+    tabbar.classList.add("isThumbDragging", "isThumbLiquid");
+    const slots = tabGlassSlots(tabbar);
+    const slot = slots.find((s) => s.a === hold.tab) || slots[0];
+    hold.x = slot?.x || 0;
+    hold.prevX = hold.x;
+    hold.y = -7;
+    hold.targetY = -7;
+    hold.scale = 1.4;
+    setTabGlassVars(tabbar, { x: hold.x, y: hold.y, scale: hold.scale, index: slot?.i });
+    try { haptic("impact"); } catch { try { haptic("light"); } catch {} }
+    if (!_tabGlassLiquidRaf) _tabGlassLiquidRaf = requestAnimationFrame(liquidFrame);
+  }
+
+  const onMove = (ev) => {
+    const hold = _tabGlassHold;
+    if (!hold || ev.pointerId !== hold.pointerId) return;
+    hold.fingerX = ev.clientX;
+    hold.fingerY = ev.clientY;
+    const dx = ev.clientX - hold.startX;
+    const dy = ev.clientY - hold.startY;
+    hold.targetY = Math.max(-14, Math.min(10, -6 + dy * 0.22));
+    if (!hold.live && hold.deferred && (Math.abs(dx) > 5 || Math.abs(dy) > 8)) {
+      pickUpDrop(hold);
+    }
+    if (hold.deferred || hold.live) ev.preventDefault();
+    if (!hold.live) return;
+  };
+
+  const onUp = (ev) => {
+    const hold = _tabGlassHold;
+    if (!hold || (ev && ev.pointerId !== hold.pointerId)) return;
+    const dragged = hold.live;
+    const startTab = hold.tab;
+    const slots = tabGlassSlots(tabbar);
+    const nearest = tabGlassNearest(slots, hold.fingerX) || slots.find((s) => s.a === startTab);
+    const movingToOther = dragged && nearest?.a && nearest.a !== startTab;
+    if (hold.pressTimer) {
+      try { clearTimeout(hold.pressTimer); } catch {}
+    }
+    endTabGlassHold(tabbar, { snap: true });
+    if (movingToOther) {
+      if (!handleMobileTabTap(nearest.a, ev)) return;
+      try { haptic("light"); } catch {}
+      return;
+    }
+    if (hold.deferred && !dragged) {
+      if (!handleMobileTabTap(startTab, ev)) return;
+      try { haptic("light"); } catch {}
+    }
+  };
+
+  tabbar.addEventListener(
+    "pointerdown",
+    (ev) => {
+      if (ev.button != null && ev.button !== 0) return;
+      if (document.body.classList.contains("tabbarCollapsed")) return;
+      if (tabbarDockExpandConsumed || Date.now() < _tabGlassLockUntil) return;
+      const tab = ev.target?.closest?.("a[data-route-link]");
+      if (!tab || !tabbar.contains(tab)) return;
+      const slots = tabGlassSlots(tabbar);
+      const slot = slots.find((s) => s.a === tab);
+      const deferred = tab.classList.contains("active");
+      _tabGlassHold = {
+        tab,
+        tabbar,
+        pointerId: ev.pointerId,
+        startX: ev.clientX,
+        startY: ev.clientY,
+        fingerX: ev.clientX,
+        fingerY: ev.clientY,
+        dragging: false,
+        live: false,
+        deferred,
+        hover: tab,
+        hoverIndex: slot?.i,
+        x: slot?.x || 0,
+        prevX: slot?.x || 0,
+        y: 0,
+        targetY: -6,
+        scale: 1.12,
+        pressTimer: 0,
+      };
+      tabbar.classList.add("isThumbPressed");
+      if (slot) setTabGlassVars(tabbar, { index: slot.i, scale: deferred ? 1.14 : 1.08 });
+      if (deferred) {
+        ev.preventDefault();
+        try { tab.setPointerCapture(ev.pointerId); } catch {}
+        _tabGlassHold.pressTimer = window.setTimeout(() => {
+          if (_tabGlassHold && !_tabGlassHold.live) pickUpDrop(_tabGlassHold);
+        }, 120);
+      }
+    },
+    { capture: true, passive: false },
+  );
+  document.addEventListener("pointermove", onMove, { capture: true, passive: false });
+  document.addEventListener("pointerup", onUp, { capture: true });
+  document.addEventListener("pointercancel", () => endTabGlassHold(tabbar), { capture: true });
+  window.addEventListener("resize", () => {
+    if (_tabGlassRaf) cancelAnimationFrame(_tabGlassRaf);
+    _tabGlassRaf = requestAnimationFrame(() => {
+      _tabGlassRaf = 0;
+      syncTabGlassThumb();
+    });
+  });
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden) syncTabGlassThumb();
+  });
+  try {
+    const ro = new ResizeObserver(() => {
+      if (_tabGlassHold?.live) return;
+      syncTabGlassThumb();
+    });
+    ro.observe(tabbar);
+  } catch {}
+  requestAnimationFrame(() => syncTabGlassThumb());
+  window.setTimeout(() => syncTabGlassThumb(), 400);
+  window.setTimeout(() => syncTabGlassThumb(), 1200);
 }
 
 function consumeTabbarDockExpand(ev, fromClick) {
@@ -4100,6 +4427,7 @@ function wireFloatingTabDock() {
   }
   tabbar.addEventListener("pointerdown", expandFromDock, { capture: true, passive: false });
   tabbar.addEventListener("click", expandFromDock, { capture: true, passive: false });
+  try { wireTabGlassThumb(tabbar); } catch (e) { console.warn("[tabGlass] init", e); }
   document.addEventListener(
     "click",
     (ev) => {
@@ -4133,6 +4461,7 @@ function attachTabRefresh() {
       "pointerdown",
       (e) => {
         if (consumeTabbarDockExpand(e)) return;
+        if (tabGlassShouldDeferTap(a)) return;
         if (createTabMorphTapPending(a)) return;
         if (!handleMobileTabTap(a, e)) return;
         e.preventDefault();
@@ -4637,6 +4966,7 @@ function syncRoutePanelVisibility(wanted) {
       || (route === "messages" && link === "messages")
       || (route === "messages-thread" && link === "messages"));
   });
+  try { syncTabGlassThumb(); } catch {}
   try { syncTabbarDockTarget(); } catch {}
   try { syncDeskRailVisibility(); } catch {}
   try { syncDeskCoachPanel(); } catch {}

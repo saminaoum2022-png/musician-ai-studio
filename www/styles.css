@@ -479,13 +479,16 @@ html[data-theme="light"] .settingsThemeOpt.is-active{
     box-shadow: none;
   }
   html[data-theme="light"] .mobileTabbar a{
-    color: #1a1a24;
+    color: rgba(26, 26, 36, 0.46);
     opacity: 1;
+  }
+  html[data-theme="light"] .mobileTabbar a.active{
+    color: #1a1a24;
   }
   html[data-theme="light"] .mobileTabbar a.tabCreate,
   html[data-theme="light"] .mobileTabbar a.tabCreate .tabIco{
-    color: #1a1a24;
-    stroke: #1a1a24;
+    color: inherit;
+    stroke: currentColor;
     opacity: 1;
   }
   html[data-theme="light"] .mobileTabbar a.tabCreate::before{
@@ -519,13 +522,11 @@ html[data-theme="light"] .settingsThemeOpt.is-active{
     opacity: 1;
   }
   html[data-theme="light"] .mobileTabbar a.active:not(.tabCreate)::before{
-    background: rgba(15, 23, 40, 0.08);
+    background: transparent;
   }
   html[data-theme="light"] .mobileTabbar a.active .tabIco{
     stroke: var(--text-primary);
-    filter:
-      drop-shadow(0 0 8px rgba(124, 92, 255, 0.35))
-      drop-shadow(0 0 4px rgba(15, 23, 40, 0.18));
+    filter: none;
   }
   html[data-theme="light"] .mobileTabbar a.active .tabLabel{
     text-shadow: 0 0 10px rgba(124, 92, 255, 0.28);
@@ -21687,6 +21688,17 @@ input::placeholder, textarea::placeholder{
       inset 0 1px 0 rgba(255, 255, 255, 0.28),
       0 0 0 1px rgba(255, 255, 255, 0.16),
       0 3px 8px rgba(0, 0, 0, 0.22);
+    --tab-thumb-index: 0;
+    --tab-thumb-nudge: 0px;
+    --tab-thumb-x: 0px;
+    --tab-thumb-y: 0px;
+    --tab-thumb-drag-x: 0px;
+    --tab-thumb-sx: 1;
+    --tab-thumb-sy: 1;
+    --tab-thumb-rot: 0deg;
+    --tab-thumb-glint: 0px;
+    --tab-thumb-scale: 1;
+    --tab-thumb-opacity: 1;
     display:grid;
     grid-template-columns: repeat(5, 1fr);
     gap: 0;
@@ -21705,7 +21717,7 @@ input::placeholder, textarea::placeholder{
     pointer-events: none;
     overflow: visible;
   }
-  /* Glass tray — one nav instrument under the five pills. Collapses with them. */
+  /* Liquid Glass tray — page-tinted frost so the dock belongs to the screen. */
   .mobileTabbar::after{
     content: "";
     position: absolute;
@@ -21714,13 +21726,16 @@ input::placeholder, textarea::placeholder{
     top: calc(var(--tab-pad-y) + (var(--tab-pill-size) - var(--tab-tray-size)) / 2);
     height: var(--tab-tray-size);
     border-radius: 999px;
-    background: linear-gradient(180deg, rgba(36, 42, 58, 0.78), rgba(10, 12, 20, 0.82));
-    -webkit-backdrop-filter: blur(28px) saturate(1.55);
-    backdrop-filter: blur(28px) saturate(1.55);
+    background:
+      linear-gradient(180deg, rgba(255, 255, 255, 0.10), rgba(255, 255, 255, 0.02) 42%, transparent 70%),
+      color-mix(in srgb, var(--bg) 40%, transparent);
+    -webkit-backdrop-filter: blur(40px) saturate(1.75);
+    backdrop-filter: blur(40px) saturate(1.75);
     box-shadow:
-      inset 0 1px 0 rgba(255, 255, 255, 0.20),
-      0 0 0 1px rgba(255, 255, 255, 0.14),
-      0 18px 44px rgba(0, 0, 0, 0.48);
+      inset 0 0.5px 0 rgba(255, 255, 255, 0.22),
+      inset 0 -0.5px 0 rgba(255, 255, 255, 0.04),
+      0 0 0 0.5px rgba(255, 255, 255, 0.10),
+      0 10px 28px rgba(0, 0, 0, 0.22);
     pointer-events: none;
     z-index: 0;
     transition:
@@ -21731,20 +21746,134 @@ input::placeholder, textarea::placeholder{
       border-radius 320ms cubic-bezier(0.22, 1, 0.36, 1),
       opacity 240ms ease;
   }
+  /* Selected-tab Liquid Glass capsule — slot-indexed so collapse transforms
+     cannot leave it parked on the wrong icon. */
+  .tabGlassThumb{
+    position: absolute;
+    left: calc(
+      var(--tab-pad-x)
+      + (var(--tab-thumb-index) * var(--tab-col))
+      + (var(--tab-col) - var(--tab-pill-size)) / 2
+      + var(--tab-thumb-nudge)
+    );
+    top: var(--tab-pad-y);
+    width: var(--tab-pill-size);
+    height: var(--tab-pill-size);
+    border-radius: 50%;
+    z-index: 1;
+    pointer-events: none;
+    opacity: var(--tab-thumb-opacity);
+    background:
+      linear-gradient(180deg, rgba(255, 255, 255, 0.22) 0%, rgba(255, 255, 255, 0.07) 42%, rgba(255, 255, 255, 0.03) 100%);
+    -webkit-backdrop-filter: blur(22px) saturate(1.85);
+    backdrop-filter: blur(22px) saturate(1.85);
+    box-shadow:
+      inset 0 1px 1px rgba(255, 255, 255, 0.48),
+      inset 0 -10px 14px rgba(255, 255, 255, 0.04),
+      0 0 0 0.5px rgba(255, 255, 255, 0.24);
+    transform: translate3d(var(--tab-thumb-drag-x), var(--tab-thumb-y), 0)
+      rotate(var(--tab-thumb-rot))
+      scale(var(--tab-thumb-scale))
+      scale(var(--tab-thumb-sx), var(--tab-thumb-sy));
+    transform-origin: 50% 50%;
+    will-change: transform, left;
+    transition:
+      left 320ms cubic-bezier(0.22, 1, 0.36, 1),
+      transform 320ms cubic-bezier(0.22, 1, 0.36, 1),
+      opacity 200ms ease;
+  }
+  .tabGlassThumb::after{
+    content: "";
+    position: absolute;
+    left: 6px;
+    right: 6px;
+    top: 3px;
+    height: 38%;
+    border-radius: 999px;
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.42), rgba(255, 255, 255, 0));
+    pointer-events: none;
+  }
+  .mobileTabbar.isThumbPressed,
+  .mobileTabbar.isThumbLiquid{
+    pointer-events: auto;
+    touch-action: none;
+  }
+  .mobileTabbar.isThumbPressed a,
+  .mobileTabbar.isThumbLiquid a{
+    touch-action: none;
+  }
+  .mobileTabbar.isThumbPressed .tabGlassThumb,
+  .mobileTabbar.isThumbDragging .tabGlassThumb,
+  .mobileTabbar.isThumbLiquid .tabGlassThumb{
+    transition:
+      transform 90ms cubic-bezier(0.2, 0.9, 0.2, 1),
+      box-shadow 160ms ease,
+      filter 160ms ease,
+      opacity 120ms ease;
+  }
+  .mobileTabbar.isThumbDragging .tabGlassThumb,
+  .mobileTabbar.isThumbLiquid .tabGlassThumb{
+    left: var(--tab-thumb-x);
+    transition:
+      transform 0ms,
+      box-shadow 160ms ease,
+      filter 160ms ease;
+  }
+  .mobileTabbar.isThumbLiquid .tabGlassThumb{
+    background:
+      radial-gradient(ellipse 80% 60% at 32% 18%, rgba(255, 255, 255, 0.58), rgba(255, 255, 255, 0) 62%),
+      linear-gradient(180deg, rgba(255, 255, 255, 0.30) 0%, rgba(255, 255, 255, 0.08) 46%, rgba(255, 255, 255, 0.04) 100%);
+    -webkit-backdrop-filter: blur(28px) saturate(2.1);
+    backdrop-filter: blur(28px) saturate(2.1);
+    box-shadow:
+      inset 0 1px 2px rgba(255, 255, 255, 0.78),
+      inset 0 -14px 18px rgba(255, 255, 255, 0.06),
+      0 0 0 0.5px rgba(255, 255, 255, 0.38),
+      0 12px 28px rgba(0, 0, 0, 0.32);
+    filter: saturate(1.12);
+  }
+  .mobileTabbar.isThumbLiquid .tabGlassThumb::after{
+    left: calc(14% + var(--tab-thumb-glint));
+    right: auto;
+    width: 58%;
+    height: 44%;
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.62), rgba(255, 255, 255, 0));
+  }
+  /* Collapsed dock keeps the same Liquid Glass capsule; it rides with the
+     active tab into the right-hand orb instead of disappearing. */
+  body.tabbarCollapsed .mobileTabbar{
+    --tab-thumb-nudge: calc((4 - var(--tab-thumb-index)) * var(--tab-col-shift));
+    --tab-thumb-scale: calc(var(--tab-tray-collapsed) / var(--tab-pill-size));
+    --tab-thumb-opacity: 1;
+  }
+  .mobileTabbar:has(> .tabCreate.active.tabIsReady),
+  .mobileTabbar:has(> .tabCreate.active.tabIsListen),
+  .mobileTabbar:has(> .tabCreate.active.tabIsGenerating),
+  .mobileTabbar:has(> .tabCreate.active.tabIsAwaitingLyrics){
+    --tab-thumb-opacity: 0;
+  }
   body.tabbarCollapsed .mobileTabbar::after{
-    left: calc(var(--tab-pad-x) + (4 * var(--tab-col)) + (var(--tab-col) - var(--tab-tray-collapsed)) / 2);
-    right: calc(var(--tab-pad-x) + (var(--tab-col) - var(--tab-tray-collapsed)) / 2);
+    left: calc(var(--tab-pad-x) + (4 * var(--tab-col-shift)) + (var(--tab-col-shift) - var(--tab-tray-collapsed)) / 2);
+    right: calc(var(--tab-pad-x) + (var(--tab-col-shift) - var(--tab-tray-collapsed)) / 2);
     top: calc(var(--tab-pad-y) + (var(--tab-pill-size) - var(--tab-tray-collapsed)) / 2);
     height: var(--tab-tray-collapsed);
     border-radius: 50%;
+    background:
+      linear-gradient(180deg, rgba(255, 255, 255, 0.20), rgba(255, 255, 255, 0.05) 42%, transparent 70%),
+      color-mix(in srgb, var(--bg) 40%, transparent);
+    box-shadow:
+      inset 0 1px 1px rgba(255, 255, 255, 0.42),
+      inset 0 -8px 12px rgba(255, 255, 255, 0.04),
+      0 0 0 0.5px rgba(255, 255, 255, 0.20),
+      0 10px 28px rgba(0, 0, 0, 0.22);
   }
   .mobileTabbar a{
-    --tab-create-orbit-top: 0px;
+    color: rgba(255, 255, 255, 0.58);
     --tab-create-orbit-size: var(--tab-pill-size);
     --tab-create-gradient: var(--tab-pill-fill);
     --tab-create-glow: var(--tab-pill-glow);
     text-decoration:none;
-    color: #fff;
+    color: rgba(255, 255, 255, 0.58);
     opacity: 1;
     font-size: 10px;
     font-weight: 650;
@@ -21756,9 +21885,10 @@ input::placeholder, textarea::placeholder{
     min-height: calc(var(--tab-pill-size) + 16px);
     padding: 0 0 16px;
     justify-self: center;
-    touch-action: manipulation;
+    touch-action: none;
     -webkit-user-select: none;
     user-select: none;
+    -webkit-touch-callout: none;
     transition:
       color 180ms ease,
       opacity 180ms ease,
@@ -21771,14 +21901,14 @@ input::placeholder, textarea::placeholder{
     gap: 0;
     position: relative;
     isolation: isolate;
-    z-index: 1;
+    z-index: 2;
     pointer-events: auto;
     -webkit-tap-highlight-color: transparent;
     outline: none;
     transform-origin: 50% calc(var(--tab-pill-size) / 2);
   }
   .mobileTabbar a::before{
-    content: "";
+    content: none;
     position: absolute;
     left: 50%;
     top: 0;
@@ -21786,10 +21916,10 @@ input::placeholder, textarea::placeholder{
     height: var(--tab-pill-size);
     transform: translateX(-50%);
     border-radius: 50%;
-    background: var(--tab-pill-fill);
-    -webkit-backdrop-filter: blur(18px) saturate(1.35);
-    backdrop-filter: blur(18px) saturate(1.35);
-    box-shadow: var(--tab-pill-glow);
+    background: transparent;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    box-shadow: none;
     z-index: 0;
     pointer-events: none;
   }
@@ -21879,6 +22009,9 @@ input::placeholder, textarea::placeholder{
     body.tabbarCollapsed .mobileTabbar::after{
       transition: none;
     }
+    .tabGlassThumb{
+      transition: none;
+    }
     .mobileTabbar a{
       transition: opacity 140ms ease, color 140ms ease, filter 140ms ease;
     }
@@ -21898,7 +22031,7 @@ input::placeholder, textarea::placeholder{
     margin-top: 12px;
     transition: stroke 180ms ease, opacity 180ms ease, fill 180ms ease, filter 180ms ease;
     opacity: 1;
-    filter: drop-shadow(0 2px 8px rgba(255, 255, 255, 0.18));
+    filter: none;
   }
   .tabProfileAvatarSlot{
     position: relative;
@@ -21993,14 +22126,14 @@ input::placeholder, textarea::placeholder{
   }
   /* Create tab — original music-note mark, quiet glass pill (no brand gradient). */
   .mobileTabbar a.tabCreate{
-    color: #fff;
+    color: rgba(255, 255, 255, 0.58);
     opacity: 1;
     justify-content: center;
     padding-top: 0;
     padding-bottom: 0;
   }
   .mobileTabbar a.tabCreate::before{
-    content: "";
+    content: none;
     display: block;
     position: absolute;
     left: 50%;
@@ -22009,10 +22142,10 @@ input::placeholder, textarea::placeholder{
     height: var(--tab-create-orbit-size);
     transform: translateX(-50%);
     border-radius: 50%;
-    background: var(--tab-create-gradient);
-    -webkit-backdrop-filter: blur(18px) saturate(1.35);
-    backdrop-filter: blur(18px) saturate(1.35);
-    box-shadow: var(--tab-create-glow);
+    background: transparent;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    box-shadow: none;
     z-index: 0;
     pointer-events: none;
   }
@@ -22020,7 +22153,10 @@ input::placeholder, textarea::placeholder{
   .mobileTabbar a.tabCreate.tabIsListen::before,
   .mobileTabbar a.tabCreate.tabIsGenerating::before,
   .mobileTabbar a.tabCreate.tabIsAwaitingLyrics::before{
+    content: "";
     display: block;
+    -webkit-backdrop-filter: blur(18px) saturate(1.35);
+    backdrop-filter: blur(18px) saturate(1.35);
   }
   .mobileTabbar a.tabCreate .tabIco{
     position: absolute;
@@ -22040,8 +22176,8 @@ input::placeholder, textarea::placeholder{
     pointer-events: none;
     width: 26px;
     height: 26px;
-    background: #fff;
-    filter: drop-shadow(0 2px 8px rgba(255, 255, 255, 0.18));
+    background: currentColor;
+    filter: none;
     -webkit-mask-image: url(assets/icons/create-tab-music-note.png);
             mask-image: url(assets/icons/create-tab-music-note.png);
     -webkit-mask-size: contain;
@@ -22084,10 +22220,10 @@ input::placeholder, textarea::placeholder{
     color: #fff;
   }
   .mobileTabbar a.tabCreate.active::before{
-    background: rgba(255, 255, 255, 0.14);
+    background: transparent;
   }
   .mobileTabbar a.tabCreate.active .tabIcoCreate{
-    background: #fff;
+    background: currentColor;
   }
   html[data-theme="light"] .mobileTabbar{
     --tab-pill-fill: rgba(15, 23, 40, 0.07);
@@ -22097,15 +22233,30 @@ input::placeholder, textarea::placeholder{
       0 6px 14px rgba(15, 23, 40, 0.10);
   }
   html[data-theme="light"] .mobileTabbar::after{
-    background: linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(246, 248, 252, 0.78));
+    background:
+      linear-gradient(180deg, rgba(255, 255, 255, 0.62), rgba(255, 255, 255, 0.18) 46%, transparent 78%),
+      color-mix(in srgb, var(--bg) 58%, transparent);
     box-shadow:
-      inset 0 1px 0 rgba(255, 255, 255, 0.98),
-      0 0 0 1px rgba(15, 23, 40, 0.10),
-      0 14px 32px rgba(15, 23, 40, 0.16);
+      inset 0 0.5px 0 rgba(255, 255, 255, 0.92),
+      inset 0 -0.5px 0 rgba(15, 23, 40, 0.04),
+      0 0 0 0.5px rgba(15, 23, 40, 0.08),
+      0 10px 24px rgba(15, 23, 40, 0.10);
+  }
+  html[data-theme="light"] .tabGlassThumb{
+    background:
+      linear-gradient(180deg, rgba(255, 255, 255, 0.82) 0%, rgba(255, 255, 255, 0.38) 100%);
+    box-shadow:
+      inset 0 1px 1px rgba(255, 255, 255, 0.95),
+      inset 0 -8px 12px rgba(15, 23, 40, 0.04),
+      0 0 0 0.5px rgba(15, 23, 40, 0.08),
+      0 8px 18px rgba(15, 23, 40, 0.10);
   }
   html[data-theme="light"] .mobileTabbar a{
-    color: #1a1a24;
+    color: rgba(26, 26, 36, 0.46);
     opacity: 1;
+  }
+  html[data-theme="light"] .mobileTabbar a.active{
+    color: #1a1a24;
   }
   html[data-theme="light"] .mobileTabbar a .tabIco{
     filter: drop-shadow(0 1px 4px rgba(15, 23, 40, 0.12));
@@ -22117,11 +22268,14 @@ input::placeholder, textarea::placeholder{
   html[data-theme="light"] .mobileTabbar a.tabCreate{
     --tab-create-gradient: var(--tab-pill-fill);
     --tab-create-glow: var(--tab-pill-glow);
+    color: rgba(26, 26, 36, 0.46);
+  }
+  html[data-theme="light"] .mobileTabbar a.tabCreate.active{
     color: #1a1a24;
   }
   html[data-theme="light"] .mobileTabbar a.tabCreate .tabIcoCreate,
   html[data-theme="light"] .mobileTabbar a.tabCreate.active .tabIcoCreate{
-    background: #1a1a24;
+    background: currentColor;
   }
   /* Create tab — subtle morph when on Create with inputs ready */
   .mobileTabbar a.tabCreate .tabIcoPlay,
@@ -22303,16 +22457,15 @@ input::placeholder, textarea::placeholder{
     background: transparent;
   }
   .mobileTabbar a.active:not(.tabCreate)::before{
-    background: rgba(255, 255, 255, 0.16);
+    content: none;
+    background: transparent;
   }
   .mobileTabbar a.active:not(.tabCreate) .tabIco{
     stroke: #fff;
     stroke-width: 1.75;
     opacity: 1;
     transform: none;
-    filter:
-      drop-shadow(0 0 6px rgba(255, 255, 255, 0.95))
-      drop-shadow(0 0 16px rgba(255, 255, 255, 0.45));
+    filter: none;
   }
   .mobileTabbar a.tabCreate.active .tabIco,
   .mobileTabbar a.tabCreate.tabIsReady .tabIco,
@@ -22349,9 +22502,10 @@ input::placeholder, textarea::placeholder{
     background: transparent;
   }
   .mobileTabbar a.tabCreate.active .tabIcoCreate{
-    filter:
-      drop-shadow(0 0 8px rgba(255, 255, 255, 0.95))
-      drop-shadow(0 0 18px rgba(255, 255, 255, 0.42));
+    filter: none;
+  }
+  .tabProfileLink:not(.active) .tabProfileAvatarSlot{
+    opacity: 0.62;
   }
   .tabProfileLink.active .tabProfileAvatarSlot{
     filter:
@@ -22393,7 +22547,7 @@ input::placeholder, textarea::placeholder{
       0 0 12px rgba(255,77,109,0.74);
   }
 .mobileTabbar a:active{
-  transform: scale(0.96);
+  transform: none;
 }
 .hubNowPlaying{
   display:none;
@@ -52241,9 +52395,9 @@ body.isAuth:not(.booting) .authGateChoices:not([hidden]){
   transition: transform 160ms cubic-bezier(0.32, 0.72, 0, 1), background 200ms ease;
 }
 .onboardingDot:active{ transform: scale(0.85); }
-/* Bottom tab bar: a gentle press so taps feel acknowledged instantly. */
+/* Bottom tab bar: Liquid Glass capsule grows on press; icons stay put. */
 @media (max-width: 720px){
-  .mobileTabbar a:active{ transform: scale(0.92); }
+  body:not(.tabbarCollapsed) .mobileTabbar a:active{ transform: none; }
   .mobileTabbar a:active .tabIco{ opacity: 1; }
 }
 @media (prefers-reduced-motion: reduce){

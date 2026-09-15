@@ -3689,7 +3689,8 @@ body.authEntrySettled .authInner{
   opacity: 1 !important;
   transform: none !important;
 }
-body.authHandoff .authGateChoices{
+body.authHandoff .authGateChoices,
+body.authEntrySettled .authGateChoices{
   animation: none !important;
 }
 body.authHandoff .authHandoffRest{
@@ -52507,7 +52508,7 @@ body.isFirstSong:not(.booting) .firstSongInner{
 .authEmailForm:not([hidden]){
   animation: uxAuthPanelIn 260ms cubic-bezier(0.32, 0.72, 0, 1) both;
 }
-body.isAuth:not(.booting) .authGateChoices:not([hidden]){
+body.isAuth:not(.booting):not(.authHandoff):not(.authEntrySettled) .authGateChoices:not([hidden]){
   animation: uxAuthPanelIn 240ms cubic-bezier(0.32, 0.72, 0, 1) both;
 }
 

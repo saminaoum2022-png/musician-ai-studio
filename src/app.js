@@ -262,7 +262,7 @@ import { DISCOVER_SHOW_PLAY_COUNTS, MUSIC_VIDEO_FEATURE_ENABLED } from "./featur
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260916-002230";
+const APP_BUILD = "20260916-003120";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -31614,12 +31614,14 @@ function landSplashLockupOnAuth() {
 function revealAuthHandoffRest() {
   const rest = document.getElementById("authHandoffRest");
   rest?.classList.add("is-revealed");
+  document.body.classList.add("authEntrySettled");
   if (!document.body.classList.contains("authHandoff")) {
     _authSplashHandoff = false;
     return;
   }
   window.setTimeout(() => {
     document.body.classList.remove("authHandoff");
+    document.body.classList.add("authEntrySettled");
     _authSplashHandoff = false;
   }, 520);
 }

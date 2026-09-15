@@ -910,7 +910,6 @@
     scroller.setAttribute("data-mk-carousel-drift-ready", "1");
 
     var engaged = false;
-    var queued = false;
     var takeoverEvents = ["pointerdown", "touchstart", "wheel", "keydown", CAROUSEL_TAKEOVER_EVENT];
 
     /* Snapping would yank a partial offset to the nearest card mid-drift. */
@@ -923,11 +922,12 @@
       takeoverEvents.forEach(function (name) {
         scroller.removeEventListener(name, release);
       });
-      window.removeEventListener("scroll", onScroll);
+      window.removeEventListener("scroll", apply);
     }
 
+    /* Runs straight off the scroll event rather than batching into rAF: a deferred
+       frame would latch the batching flag and kill the drift for the whole session. */
     function apply() {
-      queued = false;
       if (engaged) return;
       var max = scroller.scrollWidth - scroller.clientWidth;
       var card = scroller.querySelector(".discoverCarouselCard");
@@ -943,16 +943,10 @@
       scroller.scrollLeft = eased * distance;
     }
 
-    function onScroll() {
-      if (engaged || queued) return;
-      queued = true;
-      requestAnimationFrame(apply);
-    }
-
     takeoverEvents.forEach(function (name) {
       scroller.addEventListener(name, release, { passive: true });
     });
-    window.addEventListener("scroll", onScroll, { passive: true });
+    window.addEventListener("scroll", apply, { passive: true });
     apply();
   }
 

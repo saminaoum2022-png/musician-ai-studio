@@ -21489,9 +21489,10 @@ body.trackSheetOpen .footer{
   body[data-route="generate"] .app{
     padding-bottom: calc(198px + env(safe-area-inset-bottom));
   }
+  /* Mobile web: Generate is in the page after Artwork, so only clear the tab bar. */
   html:not(.is-native-shell) body[data-route="generate"] .app,
   html:not(.is-native-shell) body[data-route="generate"].createKeyboardOpen .app{
-    padding-bottom: calc(12px + 58px + 16px + max(10px, env(safe-area-inset-bottom, 0px)));
+    padding-bottom: calc(76px + var(--safe-bottom, env(safe-area-inset-bottom, 0px)));
   }
   html:not(.is-native-shell) body[data-route="generate"] .createFlowStep--generate{
     padding-bottom: 0;
@@ -23337,10 +23338,6 @@ body.trackSheetOpen .coachFab{
   body[data-route="generate"] .createGenerateDockSpacer{
     display: none;
   }
-  html:not(.is-native-shell) body[data-route="generate"] .createGenerateDockSpacer{
-    display: block;
-    height: 72px;
-  }
   html.is-native-shell body[data-route="generate"] .createGenerateDockSpacer{
     display: block;
     height: 132px;
@@ -23368,21 +23365,6 @@ body.trackSheetOpen .coachFab{
     box-shadow: none;
     pointer-events: auto;
     transition: none;
-  }
-  html:not(.is-native-shell) body[data-route="generate"] #createGenerateDock{
-    position: fixed;
-    left: 0;
-    right: 0;
-    bottom: calc(58px + 8px + 16px + max(10px, env(safe-area-inset-bottom, 0px)));
-    z-index: 80;
-    margin: 0;
-    padding: 0 16px;
-    pointer-events: none;
-  }
-  html:not(.is-native-shell) body[data-route="generate"].createKeyboardOpen #createGenerateDock{
-    bottom: calc(var(--create-keyboard-inset, 0px) + 10px);
-    z-index: 80;
-    padding-bottom: 0;
   }
   html.is-native-shell body[data-route="generate"] #createGenerateDock{
     position: fixed;

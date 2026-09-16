@@ -19938,17 +19938,18 @@ body[data-route="user"] section.card.wide[data-route="user"]{
     letter-spacing: 0.01em;
   }
   body[data-route="generate"] #btnSunoGenerate.aiGenerate.isReady{
-    border-color: transparent;
+    border: 0;
+    outline: none;
     color: #fff;
     background: linear-gradient(148deg, #23d5ab 0%, #2ec4b8 34%, #6b78e8 72%, #7c5cff 100%);
+    background-origin: border-box;
+    background-clip: padding-box;
+    -webkit-background-clip: padding-box;
     -webkit-backdrop-filter: none;
     backdrop-filter: none;
-    box-shadow:
-      0 8px 20px rgba(0, 0, 0, 0.28),
-      0 0 0 1px rgba(255, 255, 255, 0.12),
-      0 0 16px rgba(35, 213, 171, 0.18),
-      0 0 14px rgba(124, 92, 255, 0.12),
-      inset 0 1px 0 rgba(255, 255, 255, 0.16);
+    overflow: hidden;
+    transform: translateZ(0);
+    box-shadow: 0 12px 28px rgba(0, 0, 0, 0.30);
   }
   body[data-route="generate"] #btnSunoGenerate.aiGenerate::before{
     display: none;
@@ -23458,19 +23459,22 @@ body.trackSheetOpen .coachFab{
     z-index: 1;
   }
   body[data-route="generate"] #btnSunoGenerate.aiGenerate.isReady{
-    border-color: transparent;
+    border: 0;
+    outline: none;
     color: #fff;
     background: linear-gradient(148deg, #23d5ab 0%, #2ec4b8 34%, #6b78e8 72%, #7c5cff 100%);
+    background-origin: border-box;
+    background-clip: padding-box;
+    -webkit-background-clip: padding-box;
     -webkit-backdrop-filter: none;
     backdrop-filter: none;
-    box-shadow:
-      0 0 0 1px rgba(255, 255, 255, 0.12),
-      0 0 16px rgba(35, 213, 171, 0.18),
-      0 0 14px rgba(124, 92, 255, 0.12),
-      inset 0 1px 0 rgba(255, 255, 255, 0.16);
+    overflow: hidden;
+    transform: translateZ(0);
+    box-shadow: 0 12px 28px rgba(0, 0, 0, 0.30);
   }
-  body[data-route="generate"] #btnSunoGenerate.aiGenerate::before{
-    display: none;
+  body[data-route="generate"] #btnSunoGenerate.aiGenerate::before,
+  body[data-route="generate"] #btnSunoGenerate.aiGenerate.isReady::before{
+    display: none !important;
   }
   body[data-route="generate"] #btnSunoGenerate.aiGenerate:disabled,
   body[data-route="generate"] #btnSunoGenerate.aiGenerate.isIdle,

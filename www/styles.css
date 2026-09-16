@@ -117,6 +117,12 @@
   --skeleton-fill: rgba(255, 255, 255, 0.03);
   --skeleton-stroke: rgba(255, 255, 255, 0.06);
   --row-divider: rgba(211, 202, 255, 0.08);
+  /* iOS 26 Safari overlay chrome can report env(safe-area-inset-*) as 0.
+     Prefer the live inset, then the max inset, then a JS/CSS fallback. */
+  --safe-top: max(env(safe-area-inset-top, 0px), env(safe-area-max-inset-top, 0px), var(--safe-top-fallback, 0px));
+  --safe-bottom: max(env(safe-area-inset-bottom, 0px), env(safe-area-max-inset-bottom, 0px), var(--safe-bottom-fallback, 0px));
+  --safe-left: max(env(safe-area-inset-left, 0px), env(safe-area-max-inset-left, 0px));
+  --safe-right: max(env(safe-area-inset-right, 0px), env(safe-area-max-inset-right, 0px));
 }
 
 /* ========== Nabad Glass Control System ==========
@@ -1869,16 +1875,30 @@ html[data-theme="light"] .challengePresetCard button{
 }
 
 *{ box-sizing:border-box; }
-html{ height:100%; }
+html{
+  height:100%;
+  min-height:100%;
+  min-height:100dvh;
+  background-color: var(--bg, #05070d);
+}
+/* iOS 26 Safari: overlay chrome often returns 0 for safe-area-inset-top.
+   Keep a Dynamic Island-sized floor so Home/marketing aren't under the clock. */
+@media (max-width: 720px) and (orientation: portrait){
+  html.is-web-shell:not(.is-standalone-pwa){
+    --safe-top-fallback: 54px;
+    --safe-bottom-fallback: 34px;
+  }
+}
 body{
   margin:0;
-  min-height:100%;
   height:auto;
   font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji","Segoe UI Emoji";
   color: var(--text);
   transition: opacity 260ms ease;
   position: relative;
+  min-height: 100%;
   min-height: 100vh;
+  min-height: 100dvh;
   /* Soft depth canvas — purple/teal washes sit on ::before, not on content. */
   background: var(--bg);
   /* Hard clamp: no descendant can ever drag the whole page sideways.
@@ -16623,7 +16643,7 @@ body[data-route="generate"] #btnSunoGenerate.aiGenerate:not(.isReady){
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  padding: calc(env(safe-area-inset-top, 0px) + 8px) 14px 8px;
+  padding: calc(var(--safe-top, env(safe-area-inset-top, 0px)) + 8px) 14px 8px;
   margin: 0;
   pointer-events: none;
   background: transparent;
@@ -18315,7 +18335,7 @@ button.profileMusicStylesLine:hover .profileMusicStylePill{
   }
   .profileAuraIdentity{ padding: 0; }
   .profileAuraHeaderChrome{
-    padding: calc(env(safe-area-inset-top, 0px) + 8px) 12px 8px;
+    padding: calc(var(--safe-top, env(safe-area-inset-top, 0px)) + 8px) 12px 8px;
   }
   .profileAuraNameInput{ font-size: 18px; max-width: min(100%, 260px); }
   .profileAuraStatStrip{ padding: 8px 12px; gap: 8px; }
@@ -20863,10 +20883,10 @@ body.trackSheetOpen .footer{
 .mobileTabbar{ display:none; }
 @media (max-width: 720px){
   :root{
-    --tabbar-h: calc(62px + env(safe-area-inset-bottom, 0px));
+    --tabbar-h: calc(62px + var(--safe-bottom, env(safe-area-inset-bottom, 0px)));
   }
   .app{
-    padding: calc(12px + env(safe-area-inset-top)) 12px calc(76px + env(safe-area-inset-bottom));
+    padding: calc(12px + var(--safe-top, env(safe-area-inset-top, 0px))) 12px calc(76px + var(--safe-bottom, env(safe-area-inset-bottom, 0px)));
     max-width: 100%;
   }
   body[data-route="profile"] > .app{
@@ -21025,7 +21045,7 @@ body.trackSheetOpen .footer{
     inset-inline: 0;
     z-index: 200;
     margin: 0;
-    padding-block-start: calc(env(safe-area-inset-top, 0px) + 10px);
+    padding-block-start: calc(var(--safe-top, env(safe-area-inset-top, 0px)) + 10px);
     padding-block-end: 28px;
     padding-inline-start: calc(16px + env(safe-area-inset-left, 0px));
     padding-inline-end: calc(16px + env(safe-area-inset-right, 0px));
@@ -21826,7 +21846,7 @@ input::placeholder, textarea::placeholder{
     z-index: 90;
     border: 0;
     border-radius: 0;
-    padding: var(--tab-pad-y) var(--tab-pad-x) max(10px, env(safe-area-inset-bottom)) var(--tab-pad-x);
+    padding: var(--tab-pad-y) var(--tab-pad-x) max(10px, var(--safe-bottom, env(safe-area-inset-bottom, 0px))) var(--tab-pad-x);
     background: transparent;
     box-shadow: none;
     -webkit-backdrop-filter: none;
@@ -29190,7 +29210,7 @@ body[data-route="discover"] > .app{
 }
 @media (max-width: 720px){
   body[data-route="discover"] > .app{
-    padding-bottom: calc(108px + env(safe-area-inset-bottom, 0px));
+    padding-bottom: calc(108px + var(--safe-bottom, env(safe-area-inset-bottom, 0px)));
   }
 }
 .discoverySegmentBar{
@@ -32727,7 +32747,7 @@ body.createChooserSheetOpen .footer{
 
 .searchBarWrap{
   position: sticky;
-  top: 0;
+  top: var(--safe-top, env(safe-area-inset-top, 0px));
   z-index: 5;
   padding: 6px 0 10px;
   background: linear-gradient(180deg, rgba(11,13,18,0.96) 70%, rgba(11,13,18,0));
@@ -46621,7 +46641,7 @@ body[data-route="generate"] .aiGenerate{
 
 .discoverFeedTabs{
   position: sticky;
-  top: 0;
+  top: var(--safe-top, env(safe-area-inset-top, 0px));
   z-index: 5;
   margin: 0 -2px 8px;
   padding: 0 0 4px;

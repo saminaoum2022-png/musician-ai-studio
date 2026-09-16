@@ -1886,7 +1886,6 @@ html{
 @media (max-width: 720px) and (orientation: portrait){
   html.is-web-shell:not(.is-standalone-pwa){
     --safe-top-fallback: 54px;
-    --safe-bottom-fallback: 34px;
   }
 }
 body{
@@ -21489,13 +21488,32 @@ body.trackSheetOpen .footer{
   body[data-route="generate"] .app{
     padding-bottom: calc(198px + env(safe-area-inset-bottom));
   }
-  /* Mobile web: Generate is in the page after Artwork, so only clear the tab bar. */
-  html:not(.is-native-shell) body[data-route="generate"] .app,
-  html:not(.is-native-shell) body[data-route="generate"].createKeyboardOpen .app{
-    padding-bottom: calc(76px + var(--safe-bottom, env(safe-area-inset-bottom, 0px)));
+  /* Mobile web: Generate is in the page after Artwork, so only clear the tab bar.
+     Top fullscreen is owned by the sticky Create header — not extra .app padding. */
+  html:not(.is-native-shell) body[data-route="generate"] > .app,
+  html:not(.is-native-shell) body[data-route="generate"].createKeyboardOpen > .app{
+    padding-top: 0;
+    padding-bottom: calc(76px + env(safe-area-inset-bottom, 0px));
   }
   html:not(.is-native-shell) body[data-route="generate"] .createFlowStep--generate{
     padding-bottom: 0;
+  }
+  html:not(.is-native-shell) body[data-route="generate"] .createPageHeader{
+    position: sticky;
+    top: 0;
+    z-index: 8;
+    margin: 0 -12px 10px;
+    padding: calc(var(--safe-top, env(safe-area-inset-top, 0px)) + 8px) 12px 10px;
+    background: color-mix(in srgb, #131317 88%, transparent);
+    -webkit-backdrop-filter: blur(18px) saturate(1.2);
+            backdrop-filter: blur(18px) saturate(1.2);
+  }
+  html[data-theme="light"]:not(.is-native-shell) body[data-route="generate"] .createPageHeader{
+    background: color-mix(in srgb, var(--bg) 88%, transparent);
+  }
+  html:not(.is-native-shell) body[data-route="generate"] .createPageHeader .appScreenTitle,
+  html:not(.is-native-shell) body[data-route="generate"] .card.wide[data-route="generate"] .createPageHeader .appScreenTitle{
+    margin-bottom: 0;
   }
   body[data-route="generate"].createKeyboardOpen,
   body[data-route="generate"].createKeyboardOpen .app{

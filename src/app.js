@@ -270,7 +270,7 @@ import { DISCOVER_SHOW_PLAY_COUNTS, MUSIC_VIDEO_FEATURE_ENABLED } from "./featur
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260916-025818";
+const APP_BUILD = "20260916-140929";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -4649,9 +4649,11 @@ function setCreateTemplateLoadedHint(title) {
   els.createChallengeHint.classList.add("createChallengeHint--template");
   if (els.createChallengeHintTitle) els.createChallengeHintTitle.textContent = `Template: ${t}`;
   if (els.createChallengeHintSub) {
-    els.createChallengeHintSub.textContent = templateSparkClipEnabled()
+    els.createChallengeHintSub.textContent = templateUsesLyriaClip()
       ? `~30s clip · ${formatCreditsAmount(TEMPLATE_SPARK_CLIP_CREDIT_COST)} credits. ${TEMPLATE_SPARK_CLIP_LYRICS_HINT}`
-      : "Personalize the lyrics and style, then tap Generate.";
+      : creditsState.isAdmin
+        ? `Admin engine: ${musicProviderSubline(getMusicProviderPref())}. Personalize, then Generate.`
+        : "Personalize the lyrics and style, then tap Generate.";
   }
   els.createChallengeHint.hidden = false;
   try { syncNabadClipCreateUi(); } catch {}
@@ -4684,7 +4686,7 @@ function setCreateChallengeHint(challenge) {
   if (els.createChallengeHintTitle) els.createChallengeHintTitle.textContent = creationSourceHintTitle(c);
   if (els.createChallengeHintSub) {
     const voiceClip = isVoiceClipChallengeId(c.id);
-    const clipStaging = templateSparkClipEnabled() && (kind === "template" || kind === "spark") && !voiceClip;
+    const clipStaging = templateUsesLyriaClip() && (kind === "template" || kind === "spark") && !voiceClip;
     if (clipStaging) {
       els.createChallengeHintSub.textContent = details
         ? `${details}. ~30s clip · ${formatCreditsAmount(TEMPLATE_SPARK_CLIP_CREDIT_COST)} credits. ${TEMPLATE_SPARK_CLIP_LYRICS_HINT}`
@@ -4707,6 +4709,18 @@ function setCreateChallengeHint(challenge) {
   }
   els.createChallengeHint.hidden = false;
   try { syncNabadClipCreateUi(); } catch {}
+}
+
+function syncCreateHintForSelectedEngine() {
+  const ch = challengePromptContext();
+  if (ch) {
+    setCreateChallengeHint(ch);
+    return;
+  }
+  const title = String(pendingSearchRemixMeta?.searchTemplateTitle || "").trim();
+  if (title && pendingSearchRemixMeta?.searchTemplateId) {
+    setCreateTemplateLoadedHint(title);
+  }
 }
 
 /** Suno "Sounds" task polling (separate from full-song generate). */
@@ -9394,7 +9408,7 @@ function applyDiscoveryIdeaToCreate(idea) {
     languageId: idea.challenge?.languageId,
   });
   if (els.sunoAvoidTags && (useTemplateGuards || Object.prototype.hasOwnProperty.call(idea, "avoidTags"))) {
-    els.sunoAvoidTags.value = templateSparkClipEnabled()
+    els.sunoAvoidTags.value = templateUsesLyriaClip()
       ? ""
       : trimAvoidTagsForSuno(
           String(idea.avoidTags || (useTemplateGuards ? templateAvoidTagsForProvider() : "")),
@@ -9447,7 +9461,7 @@ function applyDiscoveryIdeaToCreate(idea) {
       setStatus?.(
         voiceClipOnly
           ? `Spark: ${title}. Record on Hum, then Generate.`
-          : templateSparkClipEnabled() && (sourceKind === "template" || sourceKind === "spark")
+          : templateUsesLyriaClip() && (sourceKind === "template" || sourceKind === "spark")
             ? `${sourceKind === "template" ? "Template" : "Spark"} clip: ${title}. ~30s clip · ${formatCreditsAmount(TEMPLATE_SPARK_CLIP_CREDIT_COST)} credits. Edit lyrics or tap AI lyrics below.`
             : sourceKind === "template"
             ? `Template: ${title}. Edit below, then Generate.`
@@ -9462,7 +9476,7 @@ function applyDiscoveryIdeaToCreate(idea) {
       showToast(
         voiceClipOnly
           ? "Record on Hum — lyrics optional"
-          : templateSparkClipEnabled() && (sourceKind === "template" || sourceKind === "spark")
+          : templateUsesLyriaClip() && (sourceKind === "template" || sourceKind === "spark")
             ? `${sourceKind === "template" ? "Template" : "Spark"} clip — add lyrics or tap AI lyrics below`
             : sourceKind === "template"
             ? "Template ready — make it yours"
@@ -10034,14 +10048,14 @@ function withLyriaClipStyleGuard(style, challengeId = "") {
 }
 
 function templateStyleForProvider(style, challengeId = "") {
-  if (templateSparkClipEnabled()) {
+  if (templateUsesLyriaClip()) {
     return withLyriaClipStyleGuard(style, challengeId);
   }
   return withTemplateStyleGuard(style);
 }
 
 function templateAvoidTagsForProvider() {
-  if (templateSparkClipEnabled()) return "";
+  if (templateUsesLyriaClip()) return "";
   return TEMPLATE_GENERATION_AVOID_TAGS;
 }
 
@@ -14497,13 +14511,13 @@ function applyRemixTemplateToCreate(tpl, name) {
   const titleWithName = `${tpl.title} — for ${cleanName}`;
   if (els.sunoPrompt) els.sunoPrompt.value = lyrics;
   if (els.sunoStyle) {
-    els.sunoStyle.value = templateSparkClipEnabled()
+    els.sunoStyle.value = templateUsesLyriaClip()
       ? templateStyleForProvider(String(tpl.style || ""), "")
       : withTemplateStyleGuard(String(tpl.style || ""));
   }
   if (els.sunoTitle) els.sunoTitle.value = titleWithName;
   if (els.sunoAvoidTags) {
-    els.sunoAvoidTags.value = templateSparkClipEnabled()
+    els.sunoAvoidTags.value = templateUsesLyriaClip()
       ? ""
       : trimAvoidTagsForSuno(TEMPLATE_GENERATION_AVOID_TAGS);
   }
@@ -14515,14 +14529,21 @@ function applyRemixTemplateToCreate(tpl, name) {
   setCreateTemplateLoadedHint(tpl.title);
   try {
     setStatus?.(
-      templateSparkClipEnabled()
+      templateUsesLyriaClip()
         ? `Template clip: ${tpl.title} — ~30s clip · ${formatCreditsAmount(TEMPLATE_SPARK_CLIP_CREDIT_COST)} credits. ${TEMPLATE_SPARK_CLIP_LYRICS_HINT}`
         : `Template: ${tpl.title} — tap Generate when ready.`,
     );
   } catch {}
   try { syncNabadClipCreateUi(); } catch {}
-  if (templateSparkClipEnabled()) {
+  if (isTemplateSparkClipFlow()) {
     primeTemplateSparkClipCreateUi(lyrics);
+  } else {
+    try {
+      setLyricsInputMode(
+        shouldCreateOpenGenerateTab(lyrics) ? "generate" : "write",
+        { silent: true, preserveText: true },
+      );
+    } catch {}
   }
 }
 
@@ -17930,7 +17951,7 @@ function challengeCreateFocusForId(challengeId) {
 
 function challengeDurationStyleClause(challengeId) {
   const id = String(challengeId || "").trim();
-  if (templateSparkClipEnabled()) {
+  if (templateUsesLyriaClip()) {
     return lyriaClipDurationStyleClause(id);
   }
   if (["tiktok-teaser", "hook-rush", "three-word-hook", "arabic-trend-byte"].includes(id)) {
@@ -26804,6 +26825,8 @@ function setMusicProviderPref(pref) {
   } catch {}
   syncSettingsMusicProviderRow(p);
   try { syncNabadClipCreateUi(); } catch {}
+  try { syncCreateHintForSelectedEngine(); } catch {}
+  try { syncCreateGenerateDock(); } catch {}
 }
 
 function musicProviderSubline(pref) {
@@ -26851,9 +26874,18 @@ function isNabadClipFlow() {
   return getCreateFlow() === "nabadclip";
 }
 
-/** Templates, Sparks, and challenge shelves → Lyria Clip (~30s). */
+/** Templates, Sparks, and challenge shelves → Lyria Clip (~30s) for public users. */
 function templateSparkClipEnabled() {
   return true;
+}
+
+/** Admins keep Settings → engine. Lyria still uses the clip path; Suno / Eleven / MiniMax do not. */
+function adminHonorsTemplateEnginePicker() {
+  return Boolean(creditsState.isAdmin) && getMusicProviderPref() !== "lyria";
+}
+
+function templateUsesLyriaClip() {
+  return templateSparkClipEnabled() && !adminHonorsTemplateEnginePicker();
 }
 
 function templateSparkClipSourceKind() {
@@ -26888,7 +26920,7 @@ function activeTemplateSparkClipMeta() {
 }
 
 function isTemplateSparkClipFlow() {
-  if (!templateSparkClipEnabled() || isNabadClipFlow()) return false;
+  if (!templateUsesLyriaClip() || isNabadClipFlow()) return false;
   return Boolean(activeTemplateSparkClipMeta());
 }
 
@@ -27256,6 +27288,15 @@ function syncNabadClipCreateUi() {
         els.sunoSingerGender.value = "";
         try { syncSingerGenderPills(); } catch {}
       }
+    }
+    if (
+      els.btnSunoGenerate &&
+      (document.body.getAttribute("data-route") || "") === "generate" &&
+      String(els.btnSunoGenerate.dataset.mode || "generate") === "generate" &&
+      !els.btnSunoGenerate.disabled &&
+      !/generating|checking/i.test(String(els.btnSunoGenerate.textContent || ""))
+    ) {
+      els.btnSunoGenerate.textContent = "Generate song";
     }
   }
   try { syncClipVocalCharacterUi(); } catch {}
@@ -30497,6 +30538,9 @@ async function refreshMyCredits({ silent = false } = {}) {
     }
     if (creditsState.isAdmin) await refreshAdminCreditsView();
     try { syncSettingsMusicProviderRow(); } catch {}
+    try { syncNabadClipCreateUi(); } catch {}
+    try { syncCreateHintForSelectedEngine(); } catch {}
+    try { syncCreateGenerateDock(); } catch {}
     try { syncNabadClipHomeCard(); } catch {}
     try { syncNabadProducerHomeCard(); } catch {}
     try { syncNabadVibeCreateTab(); } catch {}
@@ -30513,6 +30557,9 @@ async function refreshMyCredits({ silent = false } = {}) {
   } finally {
     creditsState.inFlight = false;
     try { syncSettingsMusicProviderRow(); } catch {}
+    try { syncNabadClipCreateUi(); } catch {}
+    try { syncCreateHintForSelectedEngine(); } catch {}
+    try { syncCreateGenerateDock(); } catch {}
   }
   return creditsState;
 }
@@ -39558,7 +39605,7 @@ function coachProjectSummaryCtas() {
 function formatCoachProjectSummary(flow) {
   const rows = coachProjectPlanRows(flow).filter((r) => r.done && r.value !== "—" && r.id !== "format");
   const lines = rows.map((r) => `• **${r.label}:** ${r.value}`);
-  const formatLine = flow?.path === "occasion" && templateSparkClipEnabled()
+  const formatLine = flow?.path === "occasion" && templateUsesLyriaClip()
     ? "\n\n**Format:** Short clip (~30s) — same as Templates & Sparks."
     : "\n\n**Format:** Full song (~3 min)";
   return `Here's your song plan ✨\n\n${lines.join("\n")}${formatLine}\n\nReady when you are — open Create and I'll set everything up.`;
@@ -40115,7 +40162,7 @@ function coachScheduleLyricsGenerationIfReady(hasLyrics) {
   }, 520);
 }
 function coachOutputFormatLabel(flow) {
-  if (flow?.path === "occasion" && templateSparkClipEnabled()) return "Short clip (~30s)";
+  if (flow?.path === "occasion" && templateUsesLyriaClip()) return "Short clip (~30s)";
   return "Full song";
 }
 function coachSignupDedicatedQuestion(topicId) {
@@ -65636,7 +65683,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
     );
     const lyricDialectHint = [dialectHint, addressNote].filter(Boolean).join(" ");
     let mode = challenge
-      ? templateSparkClipEnabled() &&
+      ? templateUsesLyriaClip() &&
         ["spark", "template"].includes(creationSourceKind(challenge) || "") &&
         !isVoiceClipChallengeId(challenge.id)
         ? "challenge_clip"

@@ -7181,8 +7181,8 @@ function syncSingerGenderPills() {
   if (wrap) wrap.classList.toggle("isOverridden", overridden);
 }
 
-/** The Persona slot now lives inline as the third Singer pill (Male | Female |
- *  Persona). With no persona it's a "＋" create button; with personas it shows
+/** The Persona slot lives inline on the Singer row (Male | Female | Persona).
+ *  With no persona it's a "＋" create button; with personas it shows
  *  the active persona's name (or "Persona") and opens a chooser drawer. */
 function renderSingerPersonaPill() {
   const pill = document.getElementById("singerPersonaPill");
@@ -67399,7 +67399,7 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
     }
   }
 
-  // Singer pills (Auto / Male / Female) + saved-voice persona chips.
+  // Singer pills (Male / Female / Persona) + saved-voice persona chips.
   {
     const pills = document.getElementById("singerGenderPills");
     if (pills && els.sunoSingerGender) {
@@ -67408,7 +67408,8 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
         if (!btn || !pills.contains(btn)) return;
         haptic("light");
         const v = String(btn.getAttribute("data-singer-value") || "");
-        els.sunoSingerGender.value = v;
+        const cur = String(els.sunoSingerGender.value || "").trim();
+        els.sunoSingerGender.value = v && v === cur ? "" : v;
         // A conflicting Range pick in Options (e.g. Soprano while choosing
         // Male) would fight this — reset the range to Auto.
         const vp = String(els.sunoVoiceProfile?.value || "").trim();

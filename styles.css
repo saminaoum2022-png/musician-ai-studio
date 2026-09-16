@@ -12071,20 +12071,35 @@ html[data-theme="light"] body[data-route="generate"] .aiAssistBtn.isGenerating .
   color:#fff;
 }
 
-/* Singer chips — same pill language as Style / language optChips (not card grid). */
+/* Singer title sits with the pills — same label type as Style / Artwork, not a chip. */
+.singerVoiceHead{
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.singerVoiceHead > .inPanelLabel{
+  flex: 0 0 auto;
+  line-height: 1.2;
+}
 #singerGenderPills.addressPills{
   display: flex;
+  flex: 1 1 auto;
   flex-wrap: wrap;
+  justify-content: flex-end;
   gap: 6px;
-  margin-top: 8px;
+  margin-top: 0;
+  min-width: 0;
   grid-template-columns: none;
 }
 #singerGenderPills .addressPill{
   display: inline-flex;
+  flex: 0 0 auto;
   flex-direction: row;
   align-items: center;
   justify-content: center;
   gap: 0;
+  min-width: 0;
   min-height: 32px;
   padding: 4px 12px;
   border-radius: 999px;
@@ -12093,6 +12108,7 @@ html[data-theme="light"] body[data-route="generate"] .aiAssistBtn.isGenerating .
   color: var(--chip-text);
   font-size: 12.5px;
   font-weight: 700;
+  white-space: nowrap;
 }
 #singerGenderPills .addressPillMain{
   font-size: 12.5px;

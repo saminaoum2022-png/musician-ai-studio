@@ -3676,6 +3676,9 @@ function renderGenerations(data) {
     : `<tr><td colspan="9" class="loading">No generation logs yet</td></tr>`;
 
   els.panels.generations.innerHTML = adminPageStack(`
+    <div class="genCountWrap">
+      <span class="genCountPill">${fmtNum(total)} generations</span>
+    </div>
     <form id="generationFilterForm" class="toolbarBlock generationFilterBar">
       <div class="generationFilterGrid">
         <label class="field marketingField">

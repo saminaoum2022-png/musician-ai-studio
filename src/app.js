@@ -70477,7 +70477,19 @@ function createGenerateCtaArmed() {
   return hasLyrics;
 }
 
+function pinCreateGenerateDockForNativeGlass() {
+  try {
+    if (!isNativeShell()) return;
+    const dock = document.getElementById("createGenerateDock");
+    const tabbar = document.querySelector(".mobileTabbar");
+    if (!dock || !tabbar) return;
+    if (dock.parentElement === document.body) return;
+    document.body.insertBefore(dock, tabbar);
+  } catch {}
+}
+
 function syncCreateGenerateDock() {
+  pinCreateGenerateDockForNativeGlass();
   const dock = document.getElementById("createGenerateDock");
   const route = document.body.getAttribute("data-route") || "";
   const flow = getCreateFlow();

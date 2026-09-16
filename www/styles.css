@@ -21472,7 +21472,7 @@ body.trackSheetOpen .footer{
   /* Mobile web: Generate is in the page after Artwork, so only clear the tab bar. */
   html:not(.is-native-shell) body[data-route="generate"] .app,
   html:not(.is-native-shell) body[data-route="generate"].createKeyboardOpen .app{
-    padding-bottom: calc(76px + var(--safe-bottom, env(safe-area-inset-bottom, 0px)));
+    padding-bottom: calc(76px + env(safe-area-inset-bottom, 0px));
   }
   html:not(.is-native-shell) body[data-route="generate"] .createFlowStep--generate{
     padding-bottom: 0;

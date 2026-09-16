@@ -11,11 +11,8 @@ final class BridgeViewController: CAPBridgeViewController {
     private var didInjectAuthSession = false
     private var didStripInputAccessory = false
 
-    override var preferredStatusBarStyle: UIStatusBarStyle { .lightContent }
-
     override func capacitorDidLoad() {
         super.capacitorDidLoad()
-        pinWebViewToEdges()
         registerAuthUserScriptIfNeeded()
         removeInputAccessoryView()
         lockWebViewZoom()
@@ -23,7 +20,6 @@ final class BridgeViewController: CAPBridgeViewController {
 
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
-        pinWebViewToEdges()
         registerAuthUserScriptIfNeeded()
         removeInputAccessoryView()
         lockWebViewZoom()
@@ -31,7 +27,6 @@ final class BridgeViewController: CAPBridgeViewController {
 
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
-        pinWebViewToEdges()
         // On a cold launch the WKWebView can settle at a zoomScale below 1
         // (laying the page out at a wider-than-screen logical width, so the whole
         // UI looks "zoomed out" until a later reflow). Re-pin the scroll zoom to
@@ -39,21 +34,6 @@ final class BridgeViewController: CAPBridgeViewController {
         if let sv = webView?.scrollView, abs(sv.zoomScale - 1) > 0.001 {
             sv.setZoomScale(1, animated: false)
         }
-    }
-
-    /// Draw under the status bar and home indicator so CSS env(safe-area-inset-*)
-    /// matches iOS 26 full-screen apps. Automatic scroll insets letterbox WKWebView.
-    private func pinWebViewToEdges() {
-        additionalSafeAreaInsets = .zero
-        view.insetsLayoutMarginsFromSafeArea = false
-        guard let webView else { return }
-        webView.frame = view.bounds
-        webView.insetsLayoutMarginsFromSafeArea = false
-        let sv = webView.scrollView
-        sv.contentInsetAdjustmentBehavior = .never
-        sv.contentInset = .zero
-        sv.scrollIndicatorInsets = .zero
-        sv.automaticallyAdjustsScrollIndicatorInsets = false
     }
 
     /// Disable WKWebView pinch/auto zoom entirely and pin the scroll zoom to 1 so

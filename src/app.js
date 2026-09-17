@@ -270,7 +270,7 @@ import { DISCOVER_SHOW_PLAY_COUNTS, MUSIC_VIDEO_FEATURE_ENABLED } from "./featur
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260917-175145";
+const APP_BUILD = "20260917-202039";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -4991,12 +4991,8 @@ function syncRoutePanelVisibility(wanted) {
   }
   if (isDeskWebLayout()) {
     try { document.body.classList.remove("discoverReelInShell", "isDiscoverReelPlayer", "discoverReelOpening"); } catch {}
-    let shared = false;
-    try { shared = Boolean(parseSharedTrackIdFromLocation()); } catch {}
-    try { document.body.classList.toggle("deskSharePlayer", Boolean(shared)); } catch {}
-    if (route === "player" && !shared) {
-      const keep = String(document.body.getAttribute("data-route") || "").trim();
-      route = keep && keep !== "player" ? keep : "discover";
+    if (route === "player") {
+      try { stripDeskPlayerFullBleed(); } catch {}
     }
   } else {
     try { document.body.classList.remove("deskSharePlayer"); } catch {}
@@ -5637,18 +5633,6 @@ function applyRoute({ passGen } = {}) {
     navDir === "tab" ||
     isTabSwitch ||
     (prevRoute === "challenges" && wanted === "generate" && Boolean(getCreateFlow()));
-  if (wanted === "player" && isDeskWebLayout()) {
-    let shared = false;
-    try { shared = Boolean(parseSharedTrackIdFromLocation()); } catch {}
-    if (!shared) {
-      wanted = prevRoute && prevRoute !== "player" ? prevRoute : "discover";
-      try {
-        if (/^#\/player\b/i.test(String(location.hash || ""))) {
-          history.replaceState(null, "", `#/${wanted}`);
-        }
-      } catch {}
-    }
-  }
   syncRoutePanelVisibility(wanted);
   if (prevRoute !== wanted) resetRouteEnterScroll(wanted);
   if (wanted === "discover") {
@@ -11096,7 +11080,7 @@ function deskRailActive() {
     const route = document.body.getAttribute("data-route") || "";
     const skip = new Set([
       "auth", "intro", "onboarding", "music-preferences",
-      "pro", "player", "moment", "studio", "hub",
+      "pro", "moment", "studio", "hub",
     ]);
     if (skip.has(route) && !document.body.classList.contains("discoverReelInShell")) return false;
     return window.matchMedia("(min-width: 1200px)").matches;
@@ -11383,7 +11367,10 @@ function initDeskRail() {
       return;
     }
     if (e.target.closest("[data-desk-rail-open]")) {
-      if (isDeskWebLayout()) return;
+      if (isDeskWebLayout()) {
+        openDeskFittedPlayer();
+        return;
+      }
       if (discoverReelModeActive() && shouldUseDiscoverReelInPlace()) {
         openDiscoverReelOverlay();
         return;
@@ -11414,15 +11401,6 @@ if (document.readyState === "loading") {
   bootDeskRail();
 }
 window.addEventListener("load", bootDeskRail);
-window.addEventListener("hashchange", () => {
-  if (!isDeskWebLayout()) return;
-  if (!/^#\/player\b/i.test(String(location.hash || ""))) return;
-  try { if (parseSharedTrackIdFromLocation()) return; } catch {}
-  const keep = String(document.body.getAttribute("data-route") || "").trim();
-  const next = keep && keep !== "player" ? keep : "discover";
-  try { history.replaceState(null, "", `#/${next}`); } catch {}
-  try { syncRoutePanelVisibility(next); } catch {}
-}, true);
 
 async function refreshDiscoverCampaignRail() {
   const wrap = document.getElementById("discoverCampaignRail");
@@ -46987,9 +46965,7 @@ function shouldUseDiscoverReelInPlace() {
 function isDeskWebLayout() {
   if (!isWebOrDesktopShell()) return false;
   try {
-    const wide = window.matchMedia("(min-width: 721px)").matches;
-    const desktopPointer = window.matchMedia("(hover: hover) and (pointer: fine)").matches;
-    return wide && desktopPointer;
+    return window.matchMedia("(min-width: 721px)").matches;
   } catch {
     try {
       return (window.innerWidth || 0) >= 721;
@@ -46997,6 +46973,32 @@ function isDeskWebLayout() {
       return false;
     }
   }
+}
+
+function stripDeskPlayerFullBleed() {
+  try { document.body.classList.remove("discoverReelInShell", "isDiscoverReelPlayer", "discoverReelOpening"); } catch {}
+  try { unmarkDiscoverReelPlayerShell(); } catch {}
+  const card = document.querySelector(".playerCard");
+  if (card) {
+    card.dataset.discoverReel = "0";
+    card.classList.remove("isDiscoverReelLayout", "isReelAnimating", "isDiscoverReelShellPending");
+  }
+  const wrap = document.querySelector(".playerArtWrap");
+  const stage = document.querySelector(".playerArtStage");
+  const art = typeof els !== "undefined" ? els.playerArt : document.getElementById("playerArt");
+  for (const el of [wrap, stage, art]) {
+    if (!el) continue;
+    el.removeAttribute("style");
+  }
+}
+
+function openDeskFittedPlayer() {
+  stripDeskPlayerFullBleed();
+  try { syncRoutePanelVisibility("player"); } catch {}
+  try {
+    if (!/^#\/player\b/i.test(String(location.hash || ""))) location.hash = "#/player";
+  } catch {}
+  try { syncDeskRailVisibility(); } catch {}
 }
 
 function marketingSiteHomeUrl() {
@@ -63896,7 +63898,7 @@ async function playOnPlayerPage(url, label, meta = null, opts = {}) {
       if (!/^#\/player\b/i.test(String(location.hash || ""))) location.hash = "#/player";
     } catch {}
   }
-  if (reelOpen) {
+  if (reelOpen && !isDeskWebLayout()) {
     markDiscoverReelPlayerShell();
     void syncPlayerSocialRail();
     releaseDiscoverReelFullBleedLayout();

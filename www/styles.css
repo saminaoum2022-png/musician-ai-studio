@@ -22976,73 +22976,6 @@ input::placeholder, textarea::placeholder{
       0 0 22px rgba(46, 224, 192, 0.28),
       0 0 0 1px rgba(255, 255, 255, 0.14);
   }
-  .hubNowMelt{
-    display: none;
-    position: absolute;
-    pointer-events: none;
-    z-index: 0;
-    opacity: 0;
-    background-image: var(--hub-vinyl-art);
-    background-size: cover;
-    background-position: center;
-    transition: opacity 280ms ease;
-  }
-  .hubNowPlaying.isDocked .hubNowMelt{
-    display: block;
-    opacity: 0.92;
-  }
-  .hubNowPlaying.isDragging .hubNowMelt{
-    opacity: 0;
-  }
-  /* Cover smear into the bezel — the disc itself, not a neon halo. */
-  .hubNowPlaying.isDockedRight .hubNowMelt{
-    top: -8px;
-    bottom: -8px;
-    left: 10%;
-    right: -14px;
-    border-radius: 46% 10px 10px 46%;
-    filter: blur(15px) saturate(1.18);
-    -webkit-mask-image: linear-gradient(to right, transparent 0%, #000 22%, #000 62%, transparent 100%);
-    mask-image: linear-gradient(to right, transparent 0%, #000 22%, #000 62%, transparent 100%);
-  }
-  .hubNowPlaying.isDockedLeft .hubNowMelt{
-    top: -8px;
-    bottom: -8px;
-    right: 10%;
-    left: -14px;
-    border-radius: 10px 46% 46% 10px;
-    filter: blur(15px) saturate(1.18);
-    -webkit-mask-image: linear-gradient(to left, transparent 0%, #000 22%, #000 62%, transparent 100%);
-    mask-image: linear-gradient(to left, transparent 0%, #000 22%, #000 62%, transparent 100%);
-  }
-  .hubNowPlaying.isDocked .hubNowVinyl{
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.28);
-  }
-  .hubNowPlaying.isDocked[data-cover-prog="ready"] .hubNowVinyl{
-    box-shadow:
-      0 4px 12px rgba(0, 0, 0, 0.24),
-      0 0 14px rgba(var(--cover-glow-rgb), 0.2);
-  }
-  .hubNowPlaying.isDocked.isPlaying .hubNowVinyl{
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.28);
-  }
-  .hubNowPlaying.isDocked.isPlaying[data-cover-prog="ready"] .hubNowVinyl{
-    box-shadow:
-      0 4px 12px rgba(0, 0, 0, 0.24),
-      0 0 14px rgba(var(--cover-glow-rgb), 0.2);
-  }
-  .hubNowPlaying.isDockedRight .hubNowVinyl{
-    transform-origin: left center;
-    transform: scaleX(0.86);
-    -webkit-mask-image: linear-gradient(to right, #000 0%, #000 48%, rgba(0,0,0,0.4) 74%, transparent 100%);
-    mask-image: linear-gradient(to right, #000 0%, #000 48%, rgba(0,0,0,0.4) 74%, transparent 100%);
-  }
-  .hubNowPlaying.isDockedLeft .hubNowVinyl{
-    transform-origin: right center;
-    transform: scaleX(0.86);
-    -webkit-mask-image: linear-gradient(to left, #000 0%, #000 48%, rgba(0,0,0,0.4) 74%, transparent 100%);
-    mask-image: linear-gradient(to left, #000 0%, #000 48%, rgba(0,0,0,0.4) 74%, transparent 100%);
-  }
   .hubNowClose{
     display: none !important;
   }
@@ -23081,12 +23014,6 @@ input::placeholder, textarea::placeholder{
   }
   .hubNowVinyl:active{
     transform: scale(0.96);
-  }
-  .hubNowPlaying.isDockedRight .hubNowVinyl:active{
-    transform: scaleX(0.94);
-  }
-  .hubNowPlaying.isDockedLeft .hubNowVinyl:active{
-    transform: scaleX(0.94);
   }
   .hubNowPlaying.isDragging .hubNowVinyl:active{
     transform: scale(1.08);

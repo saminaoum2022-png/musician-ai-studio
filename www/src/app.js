@@ -2543,13 +2543,13 @@ function renderHubNowPlaying() {
     try {
       els.hubNowPlaying.style.removeProperty("--cover-glow-rgb");
       els.hubNowPlaying.style.removeProperty("--cover-prog-rgb");
-      els.hubNowPlaying.style.removeProperty("--hub-vinyl-art");
       els.hubNowPlaying.removeAttribute("data-cover-prog");
     } catch {}
     // Match `.hubNowPlaying` exit transition so display:none does not clip the animation.
     window.setTimeout(() => {
       if (els.hubNowPlaying && !els.hubNowPlaying.classList.contains("isVisible")) {
         els.hubNowPlaying.style.display = "none";
+        try { resetHubVinylToDefault(); } catch {}
       }
     }, 340);
     return;
@@ -2576,12 +2576,6 @@ function renderHubNowPlaying() {
   if (els.hubNowArt) {
     const artSrc = hubNowMeta.art || DEFAULT_SONG_COVER_URL;
     assignCoverImageSrc(els.hubNowArt, artSrc, { updateClasses: false, immediate: true });
-    try {
-      const safe = String(artSrc || "").replace(/\\/g, "/").replace(/"/g, "%22");
-      if (safe) els.hubNowPlaying.style.setProperty("--hub-vinyl-art", `url("${safe}")`);
-      else els.hubNowPlaying.style.removeProperty("--hub-vinyl-art");
-      applyCoverGlowRgb(els.hubNowPlaying, artSrc);
-    } catch {}
   }
   if (els.hubNowTitle) els.hubNowTitle.textContent = hubNowMeta.title || "Now playing";
   try {
@@ -2607,7 +2601,6 @@ function renderHubNowPlaying() {
   syncHubNowPlayPauseUi(Boolean(miniShowsPause));
   syncLockScreenNowPlaying();
   try { syncGlobalFeedHookMarkers(); } catch {}
-  try { restoreHubVinylDock(); } catch {}
 }
 
 function syncHubNowProgressRing(cur, dur) {
@@ -2636,26 +2629,20 @@ const HUB_VINYL_LONG_MS = 520;
 let hubVinylIgnoreClick = false;
 let hubVinylDock = null;
 
-function readHubVinylDock() {
-  try {
-    const raw = localStorage.getItem(HUB_VINYL_DOCK_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw);
-    const side = parsed?.side === "left" ? "left" : parsed?.side === "right" ? "right" : "";
-    const yRatio = Number(parsed?.yRatio);
-    if (!side || !Number.isFinite(yRatio)) return null;
-    return { side, yRatio: Math.max(0, Math.min(1, yRatio)) };
-  } catch {
-    return null;
-  }
+function resetHubVinylToDefault() {
+  const el = els.hubNowPlaying;
+  hubVinylDock = null;
+  if (!el) return;
+  el.classList.remove("isPlaced", "isDocked", "isDockedLeft", "isDockedRight", "isDragging");
+  el.style.removeProperty("left");
+  el.style.removeProperty("top");
+  el.style.removeProperty("right");
+  el.style.removeProperty("bottom");
+  try { localStorage.removeItem(HUB_VINYL_DOCK_KEY); } catch {}
 }
 
 function writeHubVinylDock(next) {
   hubVinylDock = next;
-  try {
-    if (!next) localStorage.removeItem(HUB_VINYL_DOCK_KEY);
-    else localStorage.setItem(HUB_VINYL_DOCK_KEY, JSON.stringify(next));
-  } catch {}
 }
 
 function hubVinylMetrics() {
@@ -2693,23 +2680,19 @@ function applyHubVinylBox(x, y, { docked = false, side = "" } = {}) {
 
 function restoreHubVinylDock({ force = false } = {}) {
   if (!els.hubNowPlaying) return;
-  if (!window.matchMedia || !window.matchMedia("(max-width: 720px)").matches) return;
+  if (!hubVinylDock || !els.hubNowPlaying.classList.contains("isPlaced")) return;
   if (!force && els.hubNowPlaying.classList.contains("isDragging")) return;
-  if (!force && els.hubNowPlaying.classList.contains("isPlaced")) return;
-  const saved = hubVinylDock || readHubVinylDock();
-  if (!saved) return;
-  hubVinylDock = saved;
   const { size, minY, maxY } = hubVinylMetrics();
-  const y = minY + saved.yRatio * Math.max(1, maxY - minY);
-  const x = saved.side === "left" ? -(size * 0.5) : window.innerWidth - size * 0.5;
-  applyHubVinylBox(x, y, { docked: true, side: saved.side });
+  const y = minY + hubVinylDock.yRatio * Math.max(1, maxY - minY);
+  const x = hubVinylDock.side === "left" ? -(size * 0.5) : window.innerWidth - size * 0.5;
+  applyHubVinylBox(x, y, { docked: true, side: hubVinylDock.side });
 }
 
 function wireHubNowVinylDrag() {
   const el = els.hubNowPlaying;
   if (!el || el.dataset.boundVinylDrag === "1") return;
   el.dataset.boundVinylDrag = "1";
-  hubVinylDock = readHubVinylDock();
+  try { localStorage.removeItem(HUB_VINYL_DOCK_KEY); } catch {}
   let dragging = false;
   let startX = 0;
   let startY = 0;

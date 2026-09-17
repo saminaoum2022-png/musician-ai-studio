@@ -683,8 +683,8 @@ function sanitizeElevenInpaintPlan(plan) {
       );
       if (re - rs >= 50) {
         gen.conditioning_ref = { song_id: refSong, range: { start_ms: rs, end_ms: re } };
-        const strength = String(c?.condition_strength || c?.conditionStrength || "high").trim();
-        gen.condition_strength = ["low", "medium", "high", "xhigh"].includes(strength) ? strength : "high";
+        const strength = String(c?.condition_strength || c?.conditionStrength || "medium").trim();
+        gen.condition_strength = ["low", "medium", "high", "xhigh"].includes(strength) ? strength : "medium";
       }
     }
     out.push(gen);
@@ -722,7 +722,7 @@ function summarizeElevenInpaintPlan(plan) {
     sections: chunks.map((c) => (
       (c?.song_id || c?.songId)
         ? `keep ${c.range?.start_ms}-${c.range?.end_ms}`
-        : `rewrite ${Number(c?.duration_ms) || 0}ms${c?.conditioning_ref || c?.conditioningRef ? ` cond ${c.condition_strength || c.conditionStrength || "high"}` : ""}`
+        : `rewrite ${Number(c?.duration_ms) || 0}ms${c?.conditioning_ref || c?.conditioningRef ? ` cond ${c.condition_strength || c.conditionStrength || "medium"}` : ""}`
     )),
   };
 }
@@ -837,7 +837,7 @@ function buildElevenEditCompositionPlan({ songId, chunks, edits, globalPositive,
         song_id: sid,
         range: { start_ms: startMs, end_ms: condEnd },
       };
-      rewriteChunk.condition_strength = "high";
+      rewriteChunk.condition_strength = "medium";
     }
     out.push(rewriteChunk);
   }

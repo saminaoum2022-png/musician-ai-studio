@@ -492,7 +492,7 @@ function referenceFilenameForMime(mime) {
  * Upload hum / vocal reference for conditioning_ref in a composition plan.
  * @see https://elevenlabs.io/docs/api-reference/music/upload
  */
-async function elevenlabsUploadMusic({ apiKey, buffer, mimeType, filename }) {
+async function elevenlabsUploadMusic({ apiKey, buffer, mimeType, filename, extractCompositionPlan }) {
   const fileBuffer = Buffer.isBuffer(buffer) ? buffer : Buffer.from(buffer || []);
   if (fileBuffer.length < 128) {
     return { ok: false, userMessage: "Reference audio is empty — record or upload again." };
@@ -500,6 +500,13 @@ async function elevenlabsUploadMusic({ apiKey, buffer, mimeType, filename }) {
   const form = new FormData();
   const blob = new Blob([fileBuffer], { type: mimeType || "audio/mpeg" });
   form.append("file", blob, filename || referenceFilenameForMime(mimeType));
+  if (extractCompositionPlan) {
+    const extract =
+      extractCompositionPlan === true
+        ? "music_v2"
+        : String(extractCompositionPlan).trim() || "music_v2";
+    form.append("extract_composition_plan", extract);
+  }
   try {
     const r = await fetch("https://api.elevenlabs.io/v1/music/upload", {
       method: "POST",
@@ -521,6 +528,179 @@ async function elevenlabsUploadMusic({ apiKey, buffer, mimeType, filename }) {
   } catch (e) {
     return { ok: false, userMessage: e?.message || "ElevenLabs reference upload failed." };
   }
+}
+
+function uniqueStyleTags(list) {
+  const out = [];
+  const seen = new Set();
+  for (const raw of Array.isArray(list) ? list : []) {
+    const t = String(raw || "").trim();
+    if (!t) continue;
+    const k = t.toLowerCase();
+    if (seen.has(k)) continue;
+    seen.add(k);
+    out.push(t);
+  }
+  return out.slice(0, 50);
+}
+
+function lyricsLinesFromPlanText(text) {
+  return String(text || "")
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter(Boolean)
+    .filter((l) => !/^\[([^\]]+)\]$/.test(l))
+    .filter((l) => !/^\{[\s\S]*\}$/.test(l));
+}
+
+function sectionLabelFromText(text, index) {
+  const raw = String(text || "").trim();
+  const tag = raw.match(/^\[([^\]]+)\]/);
+  if (tag) return String(tag[1] || "").trim() || `Section ${index + 1}`;
+  const first = raw.split(/\n/)[0].replace(/^\[|\]$/g, "").trim();
+  if (first) return first.slice(0, 42);
+  return `Section ${index + 1}`;
+}
+
+function extractUploadedEditPlan(data) {
+  const root = data?.composition_plan || data?.compositionPlan || data || {};
+  const globalPositive = uniqueStyleTags(root.positive_global_styles || root.positiveGlobalStyles || []);
+  const globalNegative = uniqueStyleTags(root.negative_global_styles || root.negativeGlobalStyles || []);
+  const sections = Array.isArray(root.sections) ? root.sections : [];
+  if (sections.length) {
+    let t = 0;
+    const chunks = sections.slice(0, 30).map((sec, i) => {
+      const duration = Math.max(
+        3000,
+        Math.min(120000, Math.round(Number(sec?.duration_ms ?? sec?.durationMs) || 15000)),
+      );
+      const startMs = t;
+      const endMs = startMs + duration;
+      t = endMs;
+      const label = String(sec?.section_name || sec?.sectionName || `Section ${i + 1}`).trim() || `Section ${i + 1}`;
+      const lines = Array.isArray(sec?.lines) ? sec.lines.map((l) => String(l || "").trim()).filter(Boolean) : [];
+      const lyrics = lines.join("\n");
+      const text = lyrics ? `[${label}]\n${lyrics}` : `[${label}]`;
+      return {
+        index: i,
+        label,
+        text,
+        lyrics,
+        durationMs: duration,
+        startMs,
+        endMs,
+        positiveStyles: uniqueStyleTags(sec?.positive_local_styles || sec?.positiveLocalStyles || []),
+        negativeStyles: uniqueStyleTags(sec?.negative_local_styles || sec?.negativeLocalStyles || []),
+      };
+    });
+    return { chunks, globalPositive, globalNegative };
+  }
+
+  const rawChunks = Array.isArray(root.chunks) ? root.chunks : [];
+  let t = 0;
+  const chunks = [];
+  for (let i = 0; i < rawChunks.length && i < 30; i++) {
+    const c = rawChunks[i];
+    const rangeStart = Number(c?.range?.start_ms ?? c?.range?.startMs);
+    const rangeEnd = Number(c?.range?.end_ms ?? c?.range?.endMs);
+    const duration = Math.max(
+      50,
+      Math.round(
+        Number(c?.duration_ms ?? c?.durationMs)
+        || (Number.isFinite(rangeEnd) && Number.isFinite(rangeStart) ? rangeEnd - rangeStart : 0)
+        || 15000,
+      ),
+    );
+    const startMs = Number.isFinite(rangeStart) ? Math.max(0, Math.round(rangeStart)) : t;
+    const endMs = Number.isFinite(rangeEnd)
+      ? Math.max(startMs + 50, Math.round(rangeEnd))
+      : startMs + duration;
+    t = endMs;
+    const text = String(c?.text || "").trim().slice(0, 4000);
+    const label = sectionLabelFromText(text, i);
+    const lyrics = lyricsLinesFromPlanText(text).join("\n");
+    chunks.push({
+      index: i,
+      label,
+      text,
+      lyrics,
+      durationMs: endMs - startMs,
+      startMs,
+      endMs,
+      positiveStyles: uniqueStyleTags([
+        ...(c?.positive_styles || c?.positiveStyles || []),
+        ...(c?.positive_local_styles || c?.positiveLocalStyles || []),
+      ]),
+      negativeStyles: uniqueStyleTags([
+        ...(c?.negative_styles || c?.negativeStyles || []),
+        ...(c?.negative_local_styles || c?.negativeLocalStyles || []),
+      ]),
+    });
+  }
+  return { chunks, globalPositive, globalNegative };
+}
+
+function extractUploadedPlanChunks(data) {
+  return extractUploadedEditPlan(data).chunks;
+}
+
+function buildElevenEditCompositionPlan({ songId, chunks, edits, globalPositive, globalNegative }) {
+  const sid = String(songId || "").trim();
+  if (!sid) return { ok: false, userMessage: "Missing uploaded song — prepare the track again." };
+  const list = Array.isArray(chunks) ? chunks : [];
+  if (!list.length) return { ok: false, userMessage: "No sections found in this song." };
+  const editList = Array.isArray(edits) ? edits : [];
+  const out = [];
+  let rewriteCount = 0;
+  for (let i = 0; i < list.length; i++) {
+    const c = list[i] || {};
+    const edit = editList[i] || {};
+    const action = String(edit.action || "keep").trim().toLowerCase() === "rewrite" ? "rewrite" : "keep";
+    const startMs = Math.max(0, Math.round(Number(c.startMs ?? c.start_ms) || 0));
+    const endMs = Math.max(
+      startMs + 50,
+      Math.round(Number(c.endMs ?? c.end_ms) || startMs + Number(c.durationMs || c.duration_ms || 15000)),
+    );
+    if (action === "keep") {
+      out.push({
+        song_id: sid,
+        range: { start_ms: startMs, end_ms: endMs },
+      });
+      continue;
+    }
+    rewriteCount += 1;
+    const label = String(c.label || `Section ${i + 1}`).trim() || `Section ${i + 1}`;
+    const lyrics = String(edit.text || c.lyrics || lyricsLinesFromPlanText(c.text).join("\n") || "").trim();
+    const direction = String(edit.direction || "").trim();
+    const parts = [`[${label}]`];
+    if (lyrics) parts.push(lyrics);
+    if (direction) parts.push(`{${direction}}`);
+    const text = parts.join("\n").slice(0, 4000);
+    out.push({
+      text,
+      duration_ms: Math.max(3000, Math.min(120000, endMs - startMs)),
+      positive_styles: ensureMinPositiveStyles(uniqueStyleTags([
+        ...uniqueStyleTags(globalPositive),
+        ...(edit.positiveStyles || edit.positive_styles || c.positiveStyles || c.positive_styles || []),
+      ])).slice(0, 50),
+      negative_styles: uniqueStyleTags([
+        ...uniqueStyleTags(globalNegative),
+        ...(edit.negativeStyles || edit.negative_styles || c.negativeStyles || c.negative_styles || []),
+      ]),
+      context_adherence: "high",
+      conditioning_ref: {
+        song_id: sid,
+        range: { start_ms: startMs, end_ms: endMs },
+        condition_strength: ["low", "medium", "high", "xhigh"].includes(String(edit.conditionStrength || "").trim())
+          ? String(edit.conditionStrength).trim()
+          : "medium",
+      },
+    });
+  }
+  if (!rewriteCount) {
+    return { ok: false, userMessage: "Mark at least one section to rewrite." };
+  }
+  return { ok: true, plan: { chunks: out }, rewriteCount };
 }
 
 function normalizePlanChunks(chunks) {
@@ -1437,7 +1617,10 @@ module.exports = {
   buildElevenPlanCreatePrompt,
   buildElevenReferenceCompositionPlan,
   buildElevenSongCompositionPlan,
+  buildElevenEditCompositionPlan,
   decodeReferenceAudioPayload,
+  extractUploadedEditPlan,
+  extractUploadedPlanChunks,
   fetchElevenReferenceBytesFromUrl,
   elevenlabsCreateCompositionPlan,
   estimateReferenceDurationMs,

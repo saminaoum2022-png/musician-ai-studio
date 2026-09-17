@@ -915,6 +915,13 @@
               </svg>
               <span class="createTabLabel">Vibe</span>
             </button>
+            <button id="createTabEdit" class="createTab" type="button" role="tab" aria-selected="false" data-mode="edit" hidden aria-hidden="true">
+              <svg class="createTabIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+                <path d="M12 20h9"/>
+                <path d="M16.5 3.5a2.121 2.121 0 1 1 3 3L7 19l-4 1 1-4 12.5-12.5Z"/>
+              </svg>
+              <span class="createTabLabel">Edit</span>
+            </button>
           </div>
           <div id="resultCard" class="resultCard" style="display:none">
             <div class="resultCardInner">
@@ -1180,6 +1187,53 @@
                 </button>
                 <p class="vibeLegalNote hint createInlineHint">Original inspiration only. We read mood, style, and structure — never lyrics or melody from your upload.</p>
                 <span id="vibeReadSummary" class="vibeReadSummary imageMoodSummary" hidden></span>
+              </div>
+
+              <div class="createPane createPane--edit" data-mode="edit" hidden aria-hidden="true">
+                <button id="createEditCta" class="createPaneCta createPaneCta--edit" type="button" aria-label="Upload a song to edit">
+                  <span id="createEditPreview" class="createEditPreview" aria-hidden="true"></span>
+                  <span class="createPhotoShade" aria-hidden="true"></span>
+                  <span class="createPaneCtaIcon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" width="28" height="28" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M12 20h9"/>
+                      <path d="M16.5 3.5a2.121 2.121 0 1 1 3 3L7 19l-4 1 1-4 12.5-12.5Z"/>
+                    </svg>
+                  </span>
+                  <span class="createPaneCtaTitle">Upload a song</span>
+                  <span class="createPaneCtaSub">Keep sections you like — rewrite the rest.</span>
+                </button>
+                <input id="songEditUpload" class="srOnly" type="file" accept="audio/*,.wav,.mp3,.m4a,.aac,.ogg,.webm" />
+                <p id="songEditLegal" class="vibeLegalNote hint createInlineHint">Admin Edit. Change one section — the rest stays the original recording.</p>
+                <div id="songEditStatus" class="songEditStatus" hidden></div>
+                <div id="songEditWorkspace" class="songEditWorkspace" hidden>
+                  <div id="songEditChipRow" class="songEditChipRow" role="tablist" aria-label="Song sections"></div>
+                  <div class="field grow inputPanel songEditCard">
+                    <div class="songEditCardHead">
+                      <div class="songEditCardTitles">
+                        <div class="label inPanelLabel" id="songEditCardTitle">Section</div>
+                        <span class="songEditSectionTime" id="songEditCardTime"></span>
+                      </div>
+                      <button id="songEditPlay" class="ghost songEditPlay" type="button">Play</button>
+                    </div>
+                    <div class="lyricsModeTabs songEditKeepTabs" role="tablist" aria-label="Keep or rewrite this section">
+                      <button id="songEditKeep" class="lyricsModeTab isActive" type="button" role="tab" aria-selected="true">Keep</button>
+                      <button id="songEditRewrite" class="lyricsModeTab" type="button" role="tab" aria-selected="false">Rewrite</button>
+                    </div>
+                    <p id="songEditKeepHint" class="hint createInlineHint">This slice stays as the original.</p>
+                    <div id="songEditRewriteFields" hidden>
+                      <textarea id="songEditLyrics" class="songEditLyrics" rows="5" dir="auto" placeholder="Lyrics for this section"></textarea>
+                      <div class="label inPanelLabel">This section</div>
+                      <div id="songEditLocalChips" class="optChipRow songEditTagRow" aria-label="Section sound tags"></div>
+                      <input id="songEditAddTag" class="songEditAddTag" type="text" maxlength="48" placeholder="Add a sound tag" autocomplete="off" />
+                      <input id="songEditDirection" class="songEditDirection" type="text" maxlength="160" placeholder="Optional — make the guitar louder" autocomplete="off" />
+                    </div>
+                  </div>
+                  <div id="songEditGlobalPanel" class="field grow inputPanel songEditGlobalPanel">
+                    <div class="label inPanelLabel">Song sound</div>
+                    <div id="songEditGlobalChips" class="optChipRow songEditTagRow" aria-label="Whole-song tags"></div>
+                    <input id="songEditAddGlobalTag" class="songEditAddTag" type="text" maxlength="48" placeholder="Add a song-wide tag" autocomplete="off" />
+                  </div>
+                </div>
               </div>
 
               <div class="createPane createPane--lyrics" data-mode="lyrics">

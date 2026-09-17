@@ -34,7 +34,13 @@ import {
   syncNabadVibeCreateTab,
   nabadVibeEnabled,
 } from "./nabad-vibe.js";
+import {
+  configureNabadSongEdit,
+  syncNabadSongEditCreateTab,
+  nabadSongEditEnabled,
+} from "./nabad-song-edit.js";
 import { prepareAudioForVibeRead } from "./vibe-audio-prep.js";
+import { prepareAudioForSongEdit } from "./song-edit-audio-prep.js";
 import {
   listVocals,
   getVocalBlob,
@@ -842,6 +848,25 @@ const els = {
   btnApplyImageMood: document.getElementById("btnApplyImageMood"),
   createPhotoCta: document.getElementById("createPhotoCta"),
   createVibeCta: document.getElementById("createVibeCta"),
+  createEditCta: document.getElementById("createEditCta"),
+  songEditUpload: document.getElementById("songEditUpload"),
+  songEditWorkspace: document.getElementById("songEditWorkspace"),
+  songEditChipRow: document.getElementById("songEditChipRow"),
+  songEditCardTitle: document.getElementById("songEditCardTitle"),
+  songEditCardTime: document.getElementById("songEditCardTime"),
+  songEditPlay: document.getElementById("songEditPlay"),
+  songEditKeep: document.getElementById("songEditKeep"),
+  songEditRewrite: document.getElementById("songEditRewrite"),
+  songEditKeepHint: document.getElementById("songEditKeepHint"),
+  songEditRewriteFields: document.getElementById("songEditRewriteFields"),
+  songEditLyrics: document.getElementById("songEditLyrics"),
+  songEditLocalChips: document.getElementById("songEditLocalChips"),
+  songEditAddTag: document.getElementById("songEditAddTag"),
+  songEditDirection: document.getElementById("songEditDirection"),
+  songEditGlobalChips: document.getElementById("songEditGlobalChips"),
+  songEditAddGlobalTag: document.getElementById("songEditAddGlobalTag"),
+  songEditLegal: document.getElementById("songEditLegal"),
+  songEditStatus: document.getElementById("songEditStatus"),
   vibeReadSummary: document.getElementById("vibeReadSummary"),
   vibeReadModal: document.getElementById("vibeReadModal"),
   vibeReadUpload: document.getElementById("vibeReadUpload"),
@@ -1340,6 +1365,7 @@ var imageMoodCoverOnlyForNextGen = false;
 var vibeReadData = null;
 var vibeReadAppliedForNextGen = false;
 var vibeReadSourceName = "";
+var songEditSession = null;
 let currentProofPost = null;
 let hubAudio = null;
 let hubAudioPostId = null;
@@ -18016,6 +18042,11 @@ function syncPhotoSoloChallengeCreateUi() {
     vibeTab.hidden = true;
     vibeTab.style.display = "none";
   }
+  const editTab = document.getElementById("createTabEdit");
+  if (editTab && is80s) {
+    editTab.hidden = true;
+    editTab.style.display = "none";
+  }
   if (is80s) {
     try { syncSoloInstrumentalToggleUi(); } catch {}
     try { setActiveCreateTab("photo"); } catch {}
@@ -18090,6 +18121,12 @@ function applyCreateChallengeFocus(focus) {
     vibeTab.hidden = !showVibe;
     vibeTab.style.display = showVibe ? "" : "none";
   }
+  const editTab = document.getElementById("createTabEdit");
+  if (editTab) {
+    const showEdit = tabs.includes("edit");
+    editTab.hidden = !showEdit;
+    editTab.style.display = showEdit ? "" : "none";
+  }
   try { setActiveCreateTab(String(focus.tab || tabs[0]), { requestPro: true }); } catch {}
   try { syncPhotoSoloChallengeCreateUi(); } catch {}
 }
@@ -18114,6 +18151,8 @@ function clearCreateChallengeFocus() {
     createTabs.setAttribute("aria-hidden", "false");
   }
   try { syncPhotoSoloChallengeCreateUi(); } catch {}
+  try { syncNabadVibeCreateTab(); } catch {}
+  try { syncNabadSongEditCreateTab(); } catch {}
 }
 
 function scrollFirstSongCreateLangControlsIntoView() {
@@ -22773,6 +22812,433 @@ function applyVibeReadAndClose() {
       ? "Vibe applied — style tags ready. Leave lyrics empty for instrumental."
       : "Vibe applied — style tags + structure in Create. Write your own lyrics — we never copy from the upload.",
   );
+}
+
+function formatSongEditClock(ms) {
+  const total = Math.max(0, Math.round(Number(ms) || 0) / 1000);
+  const m = Math.floor(total / 60);
+  const s = Math.floor(total % 60);
+  return `${m}:${String(s).padStart(2, "0")}`;
+}
+
+function songEditActiveChunk() {
+  const chunks = Array.isArray(songEditSession?.chunks) ? songEditSession.chunks : [];
+  const i = Math.max(0, Math.min(chunks.length - 1, Number(songEditSession?.activeIndex) || 0));
+  return chunks[i] || null;
+}
+
+function persistSongEditActiveCard() {
+  const chunk = songEditActiveChunk();
+  if (!chunk) return;
+  chunk.action = els.songEditRewrite?.classList.contains("isActive") ? "rewrite" : "keep";
+  if (els.songEditLyrics) chunk.rewriteText = String(els.songEditLyrics.value || "");
+  if (els.songEditDirection) chunk.direction = String(els.songEditDirection.value || "").trim();
+}
+
+function songEditCanGenerate() {
+  if (!nabadSongEditEnabled() || !songEditSession?.songId) return false;
+  persistSongEditActiveCard();
+  const chunks = Array.isArray(songEditSession.chunks) ? songEditSession.chunks : [];
+  return chunks.some((c) => String(c.action || "keep") === "rewrite");
+}
+
+function collectSongEditEdits() {
+  persistSongEditActiveCard();
+  const chunks = Array.isArray(songEditSession?.chunks) ? songEditSession.chunks : [];
+  return chunks.map((chunk) => ({
+    action: String(chunk.action || "keep") === "rewrite" ? "rewrite" : "keep",
+    text: String(chunk.rewriteText || chunk.lyrics || "").trim(),
+    direction: String(chunk.direction || "").trim(),
+    positiveStyles: Array.isArray(chunk.positiveStyles) ? chunk.positiveStyles.slice() : [],
+    negativeStyles: Array.isArray(chunk.negativeStyles) ? chunk.negativeStyles.slice() : [],
+  }));
+}
+
+function setCreateEditAttachmentPreview(summary = "", fileName = "") {
+  const name = String(fileName || "").trim();
+  const text = String(summary || "").trim();
+  const attached = Boolean(songEditSession?.songId || name);
+  if (els.createEditCta) {
+    els.createEditCta.classList.toggle("hasEditAttached", attached);
+    els.createEditCta.setAttribute("aria-label", attached ? "Change song to edit" : "Upload a song to edit");
+    const title = els.createEditCta.querySelector(".createPaneCtaTitle");
+    const sub = els.createEditCta.querySelector(".createPaneCtaSub");
+    if (title) title.textContent = attached ? (name || "Song ready to edit") : "Upload a song";
+    if (sub) {
+      sub.textContent = text
+        ? text
+        : (attached ? "Tap to change" : "Keep sections you like — rewrite the rest.");
+    }
+  }
+  if (els.songEditStatus) {
+    if (text && !songEditSession?.songId) {
+      els.songEditStatus.textContent = text;
+      els.songEditStatus.hidden = false;
+    } else {
+      els.songEditStatus.textContent = "";
+      els.songEditStatus.hidden = true;
+    }
+  }
+  if (els.songEditLegal) els.songEditLegal.hidden = Boolean(songEditSession?.songId);
+}
+
+function songEditTagChipHtml(tag, { avoid = false, scope = "local" } = {}) {
+  const label = escapeHtml(String(tag || ""));
+  const encoded = encodeURIComponent(String(tag || ""));
+  return `
+    <span class="optChip songEditTag${avoid ? " songEditTag--avoid" : ""} isActive">
+      <span>${label}</span>
+      <button type="button" class="songEditTagX" data-song-edit-remove-tag="${encoded}" data-song-edit-tag-scope="${scope}" aria-label="Remove ${label}">×</button>
+    </span>
+  `;
+}
+
+function renderSongEditTagRows() {
+  const chunk = songEditActiveChunk();
+  if (els.songEditLocalChips) {
+    const pos = Array.isArray(chunk?.positiveStyles) ? chunk.positiveStyles : [];
+    const neg = Array.isArray(chunk?.negativeStyles) ? chunk.negativeStyles : [];
+    els.songEditLocalChips.innerHTML = [
+      ...pos.map((t) => songEditTagChipHtml(t, { scope: "local" })),
+      ...neg.map((t) => songEditTagChipHtml(t, { avoid: true, scope: "local-neg" })),
+    ].join("");
+  }
+  if (els.songEditGlobalChips) {
+    const pos = Array.isArray(songEditSession?.globalPositive) ? songEditSession.globalPositive : [];
+    const neg = Array.isArray(songEditSession?.globalNegative) ? songEditSession.globalNegative : [];
+    els.songEditGlobalChips.innerHTML = [
+      ...pos.map((t) => songEditTagChipHtml(t, { scope: "global" })),
+      ...neg.map((t) => songEditTagChipHtml(t, { avoid: true, scope: "global-neg" })),
+    ].join("");
+  }
+}
+
+function renderSongEditChipRow() {
+  const row = els.songEditChipRow;
+  if (!row) return;
+  const chunks = Array.isArray(songEditSession?.chunks) ? songEditSession.chunks : [];
+  const active = Number(songEditSession?.activeIndex) || 0;
+  row.innerHTML = chunks.map((chunk, i) => {
+    const dirty = String(chunk.action || "keep") === "rewrite";
+    const label = escapeHtml(String(chunk.label || `Section ${i + 1}`));
+    return `<button type="button" class="songEditChip${i === active ? " isActive" : ""}${dirty ? " isDirty" : ""}" role="tab" aria-selected="${i === active ? "true" : "false"}" data-song-edit-chip="${i}">${label}</button>`;
+  }).join("");
+  const activeEl = row.querySelector(".songEditChip.isActive");
+  try { activeEl?.scrollIntoView?.({ inline: "center", block: "nearest", behavior: "smooth" }); } catch {}
+}
+
+function syncSongEditKeepRewriteUi() {
+  const chunk = songEditActiveChunk();
+  const rewrite = String(chunk?.action || "keep") === "rewrite";
+  if (els.songEditKeep) {
+    els.songEditKeep.classList.toggle("isActive", !rewrite);
+    els.songEditKeep.setAttribute("aria-selected", rewrite ? "false" : "true");
+  }
+  if (els.songEditRewrite) {
+    els.songEditRewrite.classList.toggle("isActive", rewrite);
+    els.songEditRewrite.setAttribute("aria-selected", rewrite ? "true" : "false");
+  }
+  if (els.songEditRewriteFields) els.songEditRewriteFields.hidden = !rewrite;
+  if (els.songEditKeepHint) els.songEditKeepHint.hidden = rewrite;
+}
+
+function renderSongEditActiveCard() {
+  const chunk = songEditActiveChunk();
+  const workspace = els.songEditWorkspace;
+  if (workspace) workspace.hidden = !chunk;
+  if (!chunk) return;
+  if (els.songEditCardTitle) els.songEditCardTitle.textContent = String(chunk.label || "Section");
+  if (els.songEditCardTime) {
+    els.songEditCardTime.textContent = `${formatSongEditClock(chunk.startMs)}–${formatSongEditClock(chunk.endMs)}`;
+  }
+  if (els.songEditLyrics) els.songEditLyrics.value = String(chunk.rewriteText || chunk.lyrics || "");
+  if (els.songEditDirection) els.songEditDirection.value = String(chunk.direction || "");
+  syncSongEditKeepRewriteUi();
+  renderSongEditTagRows();
+  renderSongEditChipRow();
+  if (els.songEditPlay) els.songEditPlay.textContent = "Play";
+  try { syncCreateGenerateDock(); } catch {}
+}
+
+function setSongEditActiveIndex(index) {
+  persistSongEditActiveCard();
+  stopSongEditPreview();
+  const chunks = Array.isArray(songEditSession?.chunks) ? songEditSession.chunks : [];
+  if (!chunks.length) return;
+  songEditSession.activeIndex = Math.max(0, Math.min(chunks.length - 1, Number(index) || 0));
+  renderSongEditActiveCard();
+}
+
+function setSongEditSectionAction(action) {
+  const chunk = songEditActiveChunk();
+  if (!chunk) return;
+  chunk.action = action === "rewrite" ? "rewrite" : "keep";
+  if (chunk.action === "rewrite" && !String(chunk.rewriteText || "").trim()) {
+    chunk.rewriteText = String(chunk.lyrics || "");
+  }
+  syncSongEditKeepRewriteUi();
+  renderSongEditChipRow();
+  try { syncCreateGenerateDock(); } catch {}
+}
+
+function addSongEditTag(raw, scope) {
+  const tag = String(raw || "").trim();
+  if (!tag) return;
+  if (scope === "global") {
+    const list = Array.isArray(songEditSession.globalPositive) ? songEditSession.globalPositive : [];
+    if (!list.some((t) => String(t).toLowerCase() === tag.toLowerCase())) list.push(tag);
+    songEditSession.globalPositive = list.slice(0, 50);
+  } else {
+    const chunk = songEditActiveChunk();
+    if (!chunk) return;
+    const list = Array.isArray(chunk.positiveStyles) ? chunk.positiveStyles : [];
+    if (!list.some((t) => String(t).toLowerCase() === tag.toLowerCase())) list.push(tag);
+    chunk.positiveStyles = list.slice(0, 50);
+  }
+  renderSongEditTagRows();
+}
+
+function removeSongEditTag(tag, scope) {
+  const needle = String(tag || "").trim().toLowerCase();
+  const drop = (list) => (Array.isArray(list) ? list : []).filter((t) => String(t).trim().toLowerCase() !== needle);
+  if (scope === "global") songEditSession.globalPositive = drop(songEditSession.globalPositive);
+  else if (scope === "global-neg") songEditSession.globalNegative = drop(songEditSession.globalNegative);
+  else {
+    const chunk = songEditActiveChunk();
+    if (!chunk) return;
+    if (scope === "local-neg") chunk.negativeStyles = drop(chunk.negativeStyles);
+    else chunk.positiveStyles = drop(chunk.positiveStyles);
+  }
+  renderSongEditTagRows();
+}
+
+let _songEditPreview = null;
+let _songEditPreviewTimer = 0;
+
+function stopSongEditPreview() {
+  if (_songEditPreviewTimer) {
+    window.clearInterval(_songEditPreviewTimer);
+    _songEditPreviewTimer = 0;
+  }
+  if (_songEditPreview) {
+    try { _songEditPreview.pause(); } catch {}
+  }
+  if (els.songEditPlay) els.songEditPlay.textContent = "Play";
+}
+
+function toggleSongEditPreview() {
+  const chunk = songEditActiveChunk();
+  const url = String(songEditSession?.objectUrl || "");
+  if (!chunk || !url) {
+    showToast("Upload a song first.", { icon: "!", durationMs: 2400 });
+    return;
+  }
+  if (_songEditPreview && !_songEditPreview.paused) {
+    stopSongEditPreview();
+    return;
+  }
+  stopSongEditPreview();
+  const audio = _songEditPreview && _songEditPreview.src === url ? _songEditPreview : new Audio(url);
+  _songEditPreview = audio;
+  const start = Math.max(0, Number(chunk.startMs) || 0) / 1000;
+  const end = Math.max(start + 0.2, (Number(chunk.endMs) || start * 1000 + 3000) / 1000);
+  const onTick = () => {
+    if (audio.currentTime >= end - 0.04) stopSongEditPreview();
+  };
+  audio.onended = () => stopSongEditPreview();
+  const play = () => {
+    audio.currentTime = start;
+    audio.play().then(() => {
+      if (els.songEditPlay) els.songEditPlay.textContent = "Stop";
+      _songEditPreviewTimer = window.setInterval(onTick, 80);
+    }).catch(() => {
+      showToast("Couldn't play this slice.", { icon: "!", durationMs: 2400 });
+    });
+  };
+  if (audio.readyState >= 1) play();
+  else audio.onloadedmetadata = play;
+}
+
+function resetSongEditSession() {
+  stopSongEditPreview();
+  if (songEditSession?.objectUrl) {
+    try { URL.revokeObjectURL(songEditSession.objectUrl); } catch {}
+  }
+  songEditSession = null;
+  _songEditPreview = null;
+  if (els.songEditUpload) {
+    try { els.songEditUpload.value = ""; } catch {}
+  }
+  if (els.songEditWorkspace) els.songEditWorkspace.hidden = true;
+  if (els.songEditChipRow) els.songEditChipRow.innerHTML = "";
+  setCreateEditAttachmentPreview("", "");
+}
+
+async function prepareSongEditFromFile(file) {
+  if (!nabadSongEditEnabled()) {
+    showToast("Edit is admin-only on this build.", { icon: "!", durationMs: 3200 });
+    return;
+  }
+  if (!file) {
+    setStatus("Choose an audio file first.");
+    return;
+  }
+  const authToken = getSupabaseAuthToken();
+  if (!authToken) {
+    showToast("Sign in to use Edit.", { icon: "!", durationMs: 3200 });
+    return;
+  }
+  try {
+    resetSongEditSession();
+    setCreateEditAttachmentPreview("Reading sections…", file.name);
+    if (els.songEditStatus) {
+      els.songEditStatus.hidden = false;
+      els.songEditStatus.textContent = "Uploading to ElevenLabs and splitting sections…";
+    }
+    const prep = await prepareAudioForSongEdit(file);
+    const r = await apiFetch("/api/music/edit-prepare", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${authToken}`,
+      },
+      nativeReadTimeoutMs: 120000,
+      nativeConnectTimeoutMs: 30000,
+      body: JSON.stringify({ audio: prep.dataUrl }),
+    });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(d?.error || "Could not prepare this song for Edit.");
+    const chunks = Array.isArray(d?.chunks) ? d.chunks : [];
+    if (!d?.songId || !chunks.length) throw new Error("ElevenLabs did not return sections for this track.");
+    let objectUrl = "";
+    try { objectUrl = URL.createObjectURL(file); } catch {}
+    songEditSession = {
+      songId: String(d.songId),
+      fileName: String(prep.fileName || file.name || "song"),
+      durationMs: Number(d.durationMs) || Number(chunks[chunks.length - 1]?.endMs) || 0,
+      objectUrl,
+      globalPositive: Array.isArray(d.globalPositive) ? d.globalPositive.slice() : [],
+      globalNegative: Array.isArray(d.globalNegative) ? d.globalNegative.slice() : [],
+      activeIndex: 0,
+      chunks: chunks.map((chunk, i) => ({
+        ...chunk,
+        index: i,
+        action: "keep",
+        rewriteText: String(chunk.lyrics || ""),
+        direction: "",
+        positiveStyles: Array.isArray(chunk.positiveStyles) ? chunk.positiveStyles.slice() : [],
+        negativeStyles: Array.isArray(chunk.negativeStyles) ? chunk.negativeStyles.slice() : [],
+      })),
+    };
+    renderSongEditActiveCard();
+    const n = chunks.length;
+    setCreateEditAttachmentPreview(
+      `${n} section${n === 1 ? "" : "s"} · pick one to rewrite`,
+      songEditSession.fileName,
+    );
+    setStatus("Edit ready — keep the rest, rewrite one section, then Generate.");
+  } catch (e) {
+    resetSongEditSession();
+    const msg = String(e?.message || "Edit prepare failed").trim();
+    setCreateEditAttachmentPreview("", file?.name || "");
+    if (els.songEditStatus) {
+      els.songEditStatus.hidden = false;
+      els.songEditStatus.textContent = msg;
+    }
+    setStatus(`Edit failed: ${msg}`);
+    showToast(msg, { icon: "!", durationMs: 4200 });
+  }
+}
+
+async function runCreateSongEditGenerate({ setGenerateBtn, startGeneratePolling }) {
+  if (!nabadSongEditEnabled()) {
+    showToast("Edit is admin-only on this build.", { icon: "!", durationMs: 3200 });
+    return;
+  }
+  if (!songEditSession?.songId) {
+    showToast("Upload a song on Edit first.", { icon: "!", durationMs: 3200 });
+    setStatus("Upload a song on Edit, then Generate.");
+    return;
+  }
+  const edits = collectSongEditEdits();
+  if (!edits.some((e) => e.action === "rewrite")) {
+    showToast("Rewrite at least one section before generating.", { icon: "!", durationMs: 3600 });
+    setStatus("Pick a section, tap Rewrite, then Generate.");
+    return;
+  }
+  if (!armCreateGenerateInFlight()) return;
+  try {
+    hideCreateResultCards();
+    setGenerateFieldsLocked(true);
+    setGenerateBtn("Editing…", true, "generate");
+    setStatus("ElevenLabs is rewriting the marked sections…");
+    setProgress(8);
+    const authToken = getSupabaseAuthToken();
+    if (!authToken) throw new Error("Sign in to use Edit.");
+    const title = String(els.sunoTitle?.value || "").trim()
+      || String(songEditSession.fileName || "").replace(/\.[a-z0-9]+$/i, "")
+      || "Edited song";
+    lastGenerationMeta = {
+      engine: "elevenlabs",
+      mode: "song_edit",
+      musicProvider: "elevenlabs",
+      songEdit: true,
+      title,
+    };
+    const r = await apiFetch("/api/music/generate?provider=elevenlabs", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${authToken}`,
+      },
+      nativeReadTimeoutMs: 120000,
+      nativeConnectTimeoutMs: 30000,
+      body: JSON.stringify({
+        title,
+        prompt: edits.filter((e) => e.action === "rewrite").map((e) => e.text).join("\n\n"),
+        elevenlabsUseFinetune: false,
+        elevenlabsModel: "music_v2",
+        elevenlabsEditPlan: {
+          songId: songEditSession.songId,
+          chunks: songEditSession.chunks,
+          edits,
+          globalPositive: songEditSession.globalPositive || [],
+          globalNegative: songEditSession.globalNegative || [],
+        },
+      }),
+    });
+    const data = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(data?.error || "Could not start Edit generation.");
+    const taskId = extractTaskIdLoose(data);
+    if (!taskId) throw new Error("Edit started but no task id came back.");
+    sunoTaskId = taskId;
+    savePendingBackendTask(taskId);
+    saveRecoverableGenerationTask(taskId, title);
+    setGenerationPending({
+      taskId,
+      title,
+      source: "song_edit",
+      variantCount: 1,
+    });
+    syncGenerationPendingLibraryUi();
+    try {
+      beginCoachGenerationStatus({
+        variantCount: 1,
+        pillText: "Editing your song…",
+      });
+    } catch {}
+    try { openProfileSongsWhileGenerating(); } catch {}
+    setLoading(false);
+    startGeneratePolling();
+  } catch (e) {
+    releaseCreateGenerateInFlight();
+    setGenerateFieldsLocked(false);
+    setGenerateBtn("Generate song", false, "generate");
+    setProgress(0);
+    const msg = String(e?.message || "Edit generation failed").trim();
+    setStatus(msg);
+    showToast(msg, { icon: "!", durationMs: 4200 });
+  }
 }
 let pendingBackendTaskId = "";
 const PENDING_TASK_KEY = "mas:pending_backend_task_v1";
@@ -30632,6 +31098,7 @@ async function refreshMyCredits({ silent = false } = {}) {
     try { syncNabadClipHomeCard(); } catch {}
     try { syncNabadProducerHomeCard(); } catch {}
     try { syncNabadVibeCreateTab(); } catch {}
+    try { syncNabadSongEditCreateTab(); } catch {}
     try { syncPhotoSoloChallengeCreateUi(); } catch {}
     if (document.body.getAttribute("data-route") === "first-song") {
       try { onFirstSongRouteActive(); } catch {}
@@ -66782,6 +67249,60 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
   if (els.btnApplyVibeRead) {
     els.btnApplyVibeRead.addEventListener("click", () => applyVibeReadAndClose());
   }
+  if (els.createEditCta) {
+    els.createEditCta.addEventListener("click", () => {
+      if (!nabadSongEditEnabled()) return;
+      try { setActiveCreateTab("edit"); } catch {}
+      els.songEditUpload?.click?.();
+    });
+  }
+  if (els.songEditUpload) {
+    els.songEditUpload.addEventListener("change", () => {
+      const file = els.songEditUpload.files?.[0];
+      if (!file) return;
+      void prepareSongEditFromFile(file);
+    });
+  }
+  if (els.songEditChipRow) {
+    els.songEditChipRow.addEventListener("click", (e) => {
+      const btn = e.target?.closest?.("[data-song-edit-chip]");
+      if (!btn) return;
+      setSongEditActiveIndex(btn.getAttribute("data-song-edit-chip"));
+    });
+  }
+  if (els.songEditKeep) {
+    els.songEditKeep.addEventListener("click", () => setSongEditSectionAction("keep"));
+  }
+  if (els.songEditRewrite) {
+    els.songEditRewrite.addEventListener("click", () => setSongEditSectionAction("rewrite"));
+  }
+  if (els.songEditPlay) {
+    els.songEditPlay.addEventListener("click", () => toggleSongEditPreview());
+  }
+  const onSongEditField = () => {
+    persistSongEditActiveCard();
+    try { syncCreateGenerateDock(); } catch {}
+  };
+  els.songEditLyrics?.addEventListener("input", onSongEditField);
+  els.songEditDirection?.addEventListener("input", onSongEditField);
+  const bindAddTag = (input, scope) => {
+    if (!input) return;
+    input.addEventListener("keydown", (e) => {
+      if (e.key !== "Enter") return;
+      e.preventDefault();
+      addSongEditTag(input.value, scope);
+      input.value = "";
+    });
+  };
+  bindAddTag(els.songEditAddTag, "local");
+  bindAddTag(els.songEditAddGlobalTag, "global");
+  const onRemoveTag = (e) => {
+    const btn = e.target?.closest?.("[data-song-edit-remove-tag]");
+    if (!btn) return;
+    removeSongEditTag(decodeURIComponent(btn.getAttribute("data-song-edit-remove-tag") || ""), btn.getAttribute("data-song-edit-tag-scope"));
+  };
+  els.songEditLocalChips?.addEventListener("click", onRemoveTag);
+  els.songEditGlobalChips?.addEventListener("click", onRemoveTag);
   if (els.btnCloseVocalRecorder) {
     els.btnCloseVocalRecorder.addEventListener("click", closeVocalRecorderModal);
   }
@@ -67737,6 +68258,10 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
       try { syncCoachPriorityStatusFromPending(getPriorityPending()); } catch {}
       try { openProfileSongsWhileGenerating(); } catch {}
       hideCreateResultCards();
+      return;
+    }
+    if (nabadSongEditEnabled() && getActiveCreateTabMode() === "edit") {
+      await runCreateSongEditGenerate({ setGenerateBtn, startGeneratePolling });
       return;
     }
     if (isLyriaClipGenerateFlow()) {
@@ -70615,6 +71140,11 @@ function createGenerateBlockedToastMessage() {
 
 function createTabCanGenerate() {
   if (isCreateTabGeneratingAnim()) return false;
+  if (nabadSongEditEnabled() && getActiveCreateTabMode() === "edit") {
+    const hasResult = (els.resultCard?.style.display || "none") !== "none";
+    if (hasResult) return false;
+    return songEditCanGenerate();
+  }
   if (isCreateGenerateBlockedAwaitingLyrics()) return false;
   if (!arabicLyricChoicesReady()) return false;
   const hasResult = (els.resultCard?.style.display || "none") !== "none";
@@ -70633,6 +71163,7 @@ function createTabCanGenerate() {
 
 function createTabIsBlocked() {
   if (isCreateTabGeneratingAnim()) return false;
+  if (nabadSongEditEnabled() && getActiveCreateTabMode() === "edit") return false;
   return isCreateGenerateBlockedAwaitingLyrics() || !arabicLyricChoicesReady();
 }
 
@@ -70716,6 +71247,9 @@ function syncCreateTabMorphNow() {
 }
 
 function createGenerateCtaArmed() {
+  if (nabadSongEditEnabled() && getActiveCreateTabMode() === "edit") {
+    return songEditCanGenerate();
+  }
   const hasLyrics = Boolean(String(els.sunoPrompt?.value || "").trim());
   const instrumental = String(els.vocalInstrumentalOnly?.value || "0") === "1";
   if (isCreateGenerateBlockedAwaitingLyrics()) return false;
@@ -75283,6 +75817,15 @@ try {
   syncNabadVibeCreateTab();
 } catch (e) { console.warn("[nabad-vibe] init", e); }
 
+try {
+  configureNabadSongEdit({
+    isAdmin: () => Boolean(creditsState.isAdmin),
+    setActiveCreateTab: (mode) => setActiveCreateTab(mode),
+    getActiveCreateTab: () => getActiveCreateTabMode(),
+  });
+  syncNabadSongEditCreateTab();
+} catch (e) { console.warn("[nabad-song-edit] init", e); }
+
 // Resolve the backing instrumental ("AI Guide") for a song. V1 prefers an
 // existing instrumental already in the library; otherwise it falls back to the
 // song's own audio as a temporary guide. NOTE: real on-demand vocal-removal
@@ -76456,6 +76999,7 @@ const createTabEls = {
   hum: document.getElementById("createTabHum"),
   lyrics: document.getElementById("createTabLyrics"),
   vibe: document.getElementById("createTabVibe"),
+  edit: document.getElementById("createTabEdit"),
 };
 const createPanesWrap = document.querySelector(".createPanes");
 function getActiveCreateTabMode() {
@@ -76479,7 +77023,7 @@ function setActiveCreateTab(mode, opts = {}) {
     else mode = "lyrics";
     if (opts.requestPro) return;
   }
-  ["photo", "hum", "lyrics", "vibe"].forEach((k) => {
+  ["photo", "hum", "lyrics", "vibe", "edit"].forEach((k) => {
     const el = createTabEls[k];
     if (!el || el.hidden) return;
     const active = k === mode;
@@ -76490,6 +77034,7 @@ function setActiveCreateTab(mode, opts = {}) {
   document.querySelectorAll(".createPane").forEach((p) => {
     p.hidden = p.dataset.mode !== mode;
   });
+  try { syncCreateGenerateDock(); } catch {}
 }
 if (createTabEls.lyrics) {
   createTabEls.lyrics.addEventListener("click", () => {
@@ -76509,6 +77054,12 @@ if (createTabEls.hum) {
 if (createTabEls.vibe) {
   createTabEls.vibe.addEventListener("click", () => {
     setActiveCreateTab("vibe");
+  });
+}
+if (createTabEls.edit) {
+  createTabEls.edit.addEventListener("click", () => {
+    setActiveCreateTab("edit");
+    try { syncCreateGenerateDock(); } catch {}
   });
 }
 const createPhotoCtaBtn = document.getElementById("createPhotoCta");

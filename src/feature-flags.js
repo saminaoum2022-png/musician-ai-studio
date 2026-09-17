@@ -13,6 +13,12 @@ export const NABAD_PRODUCER_PUBLIC_SHIPPED = false;
  */
 export const NABAD_VIBE_PUBLIC_SHIPPED = false;
 
+/**
+ * When true: Edit Create tab (ElevenLabs section rewrite) is live for users.
+ * Keep false until explicit Pro launch — staging bake uses nabadSongEditUi + admin.
+ */
+export const NABAD_SONG_EDIT_PUBLIC_SHIPPED = false;
+
 /** When false: hide play counts on Discover cards, charts, and challenge heroes (sorting unchanged). */
 export const DISCOVER_SHOW_PLAY_COUNTS = false;
 

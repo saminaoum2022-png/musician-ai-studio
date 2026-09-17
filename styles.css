@@ -9959,7 +9959,8 @@ body[data-photo-solo-challenge] .createPhotoSoloBannerCta[hidden]{
 body[data-photo-solo-challenge] .createTabs{
   display: none !important;
 }
-body[data-photo-solo-challenge] .createPane--vibe{
+body[data-photo-solo-challenge] .createPane--vibe,
+body[data-photo-solo-challenge] .createPane--edit{
   display: none !important;
 }
 body[data-photo-solo-challenge="80s-you"] .createPane--lyrics{
@@ -10409,6 +10410,195 @@ html[data-theme="light"] .btnCreateSettings{
 }
 .createPaneCta--vibe.hasVibeAttached .createVibePreview{
   opacity:1;
+}
+.createEditPreview{
+  position:absolute;
+  inset:0;
+  border-radius:inherit;
+  background: linear-gradient(135deg, rgba(45,212,191,0.2), rgba(251,191,36,0.16));
+  opacity:0;
+  transition: opacity 220ms ease;
+  pointer-events:none;
+}
+.createPaneCta--edit.hasEditAttached .createEditPreview{
+  opacity:1;
+}
+.createPaneCta--edit.hasEditAttached{
+  flex-direction:column;
+  align-items:flex-start;
+  justify-content:center;
+  gap:2px;
+  padding:12px 14px;
+  text-align:left;
+}
+.createPaneCta--edit.hasEditAttached .createPaneCtaIcon{
+  display:none;
+}
+.createPaneCta--edit.hasEditAttached .createPaneCtaTitle{
+  font-size:14px;
+}
+.createPaneCta--edit.hasEditAttached .createPaneCtaSub{
+  font-size:12px;
+  opacity:0.72;
+}
+.createFlow:has(.createPanes[data-mode="edit"]) .createFlowStep[aria-label="Sound and title"]{
+  display:none;
+}
+.createTabs:has(#createTabEdit:not([hidden])) .createTabIcon{
+  display:none;
+}
+.createTabs:has(#createTabEdit:not([hidden])) .createTab{
+  padding:8px 6px;
+  font-size:12.5px;
+  gap:0;
+}
+.songEditStatus{
+  margin:2px 2px 0;
+  font-size:13px;
+  line-height:1.4;
+  color:rgba(232,238,247,0.78);
+}
+.songEditWorkspace{
+  display:flex;
+  flex-direction:column;
+  gap:12px;
+  margin-top:4px;
+}
+.songEditWorkspace[hidden]{
+  display:none !important;
+}
+.songEditChipRow{
+  display:flex;
+  gap:6px;
+  overflow-x:auto;
+  -webkit-overflow-scrolling:touch;
+  scrollbar-width:none;
+  padding:2px 1px 4px;
+}
+.songEditChipRow::-webkit-scrollbar{ display:none; }
+.songEditChip{
+  flex:0 0 auto;
+  position:relative;
+  min-height:34px;
+  padding:6px 12px;
+  border-radius:999px;
+  border:1px solid var(--chip-border);
+  background: var(--chip-bg);
+  color: var(--chip-text);
+  font-size:12.5px;
+  font-weight:700;
+  white-space:nowrap;
+  cursor:pointer;
+  -webkit-tap-highlight-color:transparent;
+}
+.songEditChip.isActive{
+  border-color: var(--chip-selected-border);
+  background: var(--chip-selected-bg);
+  color: var(--chip-selected-text);
+}
+.songEditChip.isDirty::after{
+  content:"";
+  position:absolute;
+  top:5px;
+  right:6px;
+  width:6px;
+  height:6px;
+  border-radius:50%;
+  background: #5eead4;
+}
+.songEditCard{
+  gap:12px;
+}
+.songEditCardHead{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+}
+.songEditCardTitles{
+  min-width:0;
+}
+.songEditPlay{
+  flex:0 0 auto;
+  min-height:34px;
+  padding:6px 12px;
+  border-radius:999px;
+}
+.songEditKeepTabs{
+  align-self:stretch;
+  justify-content:stretch;
+}
+.songEditKeepTabs .lyricsModeTab{
+  flex:1;
+  justify-content:center;
+}
+.songEditTagRow{
+  flex-wrap:wrap;
+  gap:6px;
+}
+.songEditTag{
+  display:inline-flex;
+  align-items:center;
+  gap:4px;
+  max-width:100%;
+}
+.songEditTagX{
+  -webkit-appearance:none;
+  appearance:none;
+  width:16px;
+  height:16px;
+  border:0;
+  border-radius:999px;
+  background:rgba(255,255,255,0.14);
+  color:inherit;
+  font-size:12px;
+  line-height:1;
+  cursor:pointer;
+  padding:0;
+}
+.songEditTag--avoid{
+  opacity:0.72;
+}
+.songEditAddTag,
+.songEditDirection{
+  width:100%;
+  min-height:40px;
+  border-radius:12px;
+  border:1px solid rgba(255,255,255,0.12);
+  background: rgba(0,0,0,0.18);
+  color: inherit;
+  font: inherit;
+  font-size:14px;
+  padding:8px 12px;
+  box-sizing:border-box;
+}
+.songEditLyrics{
+  margin-top:0;
+  width:100%;
+  min-height:110px;
+  resize:vertical;
+  border-radius:12px;
+  border:1px solid rgba(255,255,255,0.12);
+  background: rgba(0,0,0,0.22);
+  color: inherit;
+  font: inherit;
+  padding:10px 12px;
+  box-sizing:border-box;
+}
+#songEditRewriteFields{
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+}
+.songEditLyrics[hidden],
+#songEditRewriteFields[hidden],
+#songEditKeepHint[hidden]{
+  display:none !important;
+}
+.songEditSectionTime{
+  font-size:12px;
+  color:rgba(232,238,247,0.55);
+  white-space:nowrap;
 }
 .vibeLegalNote,
 .vibeReadDisclaimer{

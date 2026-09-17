@@ -27,7 +27,7 @@ Before **every push to `main`**: `npm run verify:no-producer-ship`
 | Sami's phone — staging (Producer + Vibe) | `npm run run:ios:staging` |
 | Ship fixes to production | staging → main (verify flag still false) |
 
-**Staging phone:** `npm run run:ios:staging` bakes **Producer + Vibe** UI flags (admin-only at runtime). Agents install staging phone builds with this command — no separate producer/vibe install unless user asks.
+**Staging phone:** `npm run run:ios:staging` bakes **Producer + Vibe + Edit** UI flags (admin-only at runtime). Agents install staging phone builds with this command — no separate producer/vibe/edit install unless user asks.
 
 ## When Sami is ready to launch Producer publicly
 

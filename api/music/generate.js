@@ -48,6 +48,7 @@ const {
   buildElevenMusicPrompt,
   buildElevenReferenceCompositionPlan,
   buildElevenSongCompositionPlan,
+  buildElevenEditCompositionPlan,
   elevenlabsGenerateEnabled,
   elevenlabsGenerateMusicDetailedWithRetry,
   elevenlabsUploadMusic,
@@ -78,6 +79,7 @@ const {
   enrichLyriaSongWithGeminiProducer,
   enrichSongWithGeminiProducer,
 } = require("../_lib/clip-gemini-producer");
+const { nabadSongEditEnabled } = require("../_lib/nabad-song-edit-lib");
 
 const LYRIA_FULL_SONG_FLOW = "lyria_full_song";
 const FULL_SONG_COST = 12;
@@ -652,6 +654,7 @@ async function runElevenlabsGenerationJob({
   referenceSongId,
   referenceRangeMs,
   referenceConditionStrength,
+  editCompositionPlan = null,
 }) {
   const fail = async (msg) => {
     if (!isAdmin) {
@@ -673,8 +676,14 @@ async function runElevenlabsGenerationJob({
     let effectiveLyrics = lyrics;
     let effectiveStyle = stylePrompt;
     let producerResult = { ok: false, used: false, fallback: true };
+    let finalPrompt = elevenPrompt;
+    let finalCompositionPlan = null;
+    let elevenPlanSource = null;
 
-    if (geminiApiKey) {
+    if (editCompositionPlan?.chunks?.length) {
+      finalCompositionPlan = editCompositionPlan;
+      elevenPlanSource = "admin_song_edit";
+    } else if (geminiApiKey) {
       producerResult = await enrichSongWithGeminiProducer({
         apiKey: geminiApiKey,
         input: buildSongProducerInput({ ...body, musicLengthMs }, "elevenlabs"),
@@ -689,15 +698,13 @@ async function runElevenlabsGenerationJob({
       }
     }
 
-    let finalPrompt = elevenPrompt;
-    let finalCompositionPlan = null;
-    let elevenPlanSource = null;
     const producerChunks =
       producerResult.ok && Array.isArray(producerResult.composition_chunks)
         ? producerResult.composition_chunks
         : null;
     const vocalGender = String(body?.vocalGender || "").trim();
     const voiceTimbre = String(body?.voiceTimbre || "").trim();
+    if (!finalCompositionPlan?.chunks?.length) {
     const planBuilt = await buildElevenSongCompositionPlan({
       apiKey,
       stylePrompt: effectiveStyle,
@@ -771,6 +778,7 @@ async function runElevenlabsGenerationJob({
       });
       elevenPlanSource = "prompt_fallback";
     }
+    }
 
     await updateMusicGenerationByTaskId(taskId, {
       request_detail: appendProducerAdminDetail(
@@ -798,7 +806,7 @@ async function runElevenlabsGenerationJob({
       musicLengthMs,
       instrumental,
       finetuneId,
-      skipFinetune: Boolean(adminFinetuneDisabled),
+      skipFinetune: Boolean(adminFinetuneDisabled) || Boolean(editCompositionPlan?.chunks?.length),
       withTimestamps: !instrumental,
     });
     if (!upstream.ok) {
@@ -1338,7 +1346,33 @@ async function handleElevenlabsGenerate(req, res, { user, isAdmin, body }) {
     });
   }
 
-  const hasReference = Boolean(body?.hasReference || body?.referenceAudio || body?.referenceAudioUrl);
+  const editPlanInput = isAdmin ? body?.elevenlabsEditPlan : null;
+  const isSongEdit = Boolean(editPlanInput?.songId) && Array.isArray(editPlanInput?.chunks);
+  let editCompositionPlan = null;
+  if (isSongEdit) {
+    if (!nabadSongEditEnabled()) {
+      return sendJson(res, 403, {
+        error: "Song Edit is not enabled on this server.",
+        code: "nabad_song_edit_disabled",
+      });
+    }
+    const built = buildElevenEditCompositionPlan({
+      songId: editPlanInput.songId,
+      chunks: editPlanInput.chunks,
+      edits: editPlanInput.edits,
+      globalPositive: editPlanInput.globalPositive,
+      globalNegative: editPlanInput.globalNegative,
+    });
+    if (!built.ok) {
+      return sendJson(res, 400, {
+        error: built.userMessage || "Invalid Edit plan.",
+        code: "elevenlabs_edit_invalid",
+      });
+    }
+    editCompositionPlan = built.plan;
+  }
+
+  const hasReference = !isSongEdit && Boolean(body?.hasReference || body?.referenceAudio || body?.referenceAudioUrl);
   if (hasReference && Boolean(body?.instrumental) && Boolean(body?.referenceInstrumentalOnly)) {
     return sendJson(res, 400, {
       error: "ElevenLabs reference mode supports vocal hum/sing references — disable instrumental-from-melody for now.",
@@ -1369,15 +1403,27 @@ async function handleElevenlabsGenerate(req, res, { user, isAdmin, body }) {
     balanceAfterDebit = Number(debit.data?.balance || 0);
   }
 
-  const lyrics = String(body?.prompt || "").trim();
-  const stylePrompt = buildMusicPrompt(body);
-  const title = String(body?.title || "").trim();
+  const lyrics = isSongEdit
+    ? (Array.isArray(editPlanInput?.edits) ? editPlanInput.edits : [])
+        .filter((e) => String(e?.action || "").toLowerCase() === "rewrite")
+        .map((e) => String(e?.text || "").trim())
+        .filter(Boolean)
+        .join("\n\n")
+    : String(body?.prompt || "").trim();
+  const stylePrompt = isSongEdit ? "song edit" : buildMusicPrompt(body);
+  const title = String(body?.title || "").trim() || (isSongEdit ? "Edited song" : "");
   const instrumental = Boolean(body?.instrumental);
   const taskId = newTaskId("elevenlabs");
   const audioId = `${taskId}_a`;
-  const model = resolveElevenMusicModel(body?.elevenlabsModel);
-  const musicLengthMs = resolveElevenMusicLengthMsFromBody(body);
-  let finetuneId = resolveElevenFinetuneId(body?.elevenlabsFinetuneId);
+  const model = resolveElevenMusicModel(isSongEdit ? "music_v2" : body?.elevenlabsModel);
+  const musicLengthMs = isSongEdit
+    ? Math.max(
+        3000,
+        Number(editPlanInput.chunks[editPlanInput.chunks.length - 1]?.endMs)
+          || resolveElevenMusicLengthMsFromBody(body),
+      )
+    : resolveElevenMusicLengthMsFromBody(body);
+  let finetuneId = isSongEdit ? null : resolveElevenFinetuneId(body?.elevenlabsFinetuneId);
   const envFinetuneId = finetuneId;
   const adminFinetuneDisabled =
     isAdmin &&
@@ -1418,7 +1464,7 @@ async function handleElevenlabsGenerate(req, res, { user, isAdmin, body }) {
       finetuneId,
       finetuneCheck.finetune?.name || "NabadAi DNA",
     );
-  } else if (!adminFinetuneDisabled) {
+  } else if (!adminFinetuneDisabled && !isSongEdit) {
     console.warn("[music/generate] elevenlabs generate without finetune_id — set ELEVENLABS_FINETUNE_ID");
   }
 
@@ -1464,7 +1510,7 @@ async function handleElevenlabsGenerate(req, res, { user, isAdmin, body }) {
     );
   }
 
-  if (!instrumental && !lyrics && !stylePrompt && !hasReference) {
+  if (!isSongEdit && !instrumental && !lyrics && !stylePrompt && !hasReference) {
     return sendJson(res, 400, {
       error: "Add lyrics, style, or enable instrumental mode for ElevenLabs.",
       code: "elevenlabs_missing_prompt",
@@ -1475,6 +1521,7 @@ async function handleElevenlabsGenerate(req, res, { user, isAdmin, body }) {
     "flow: elevenlabs",
     adminFinetuneDisabled ? "finetune: admin_off" : finetuneId ? `finetune: ${finetuneId}` : "",
     referenceSongId ? `reference: ${referenceSongId.slice(0, 12)}` : "",
+    isSongEdit ? `edit: ${String(editPlanInput.songId).slice(0, 12)}` : "",
   ].filter(Boolean).join("\n");
 
   await logMusicGeneration({
@@ -1551,6 +1598,7 @@ async function handleElevenlabsGenerate(req, res, { user, isAdmin, body }) {
       referenceSongId,
       referenceRangeMs,
       referenceConditionStrength,
+      editCompositionPlan,
     }),
   );
 

@@ -685,7 +685,7 @@ async function runElevenlabsGenerationJob({
     let finalCompositionPlan = null;
     let elevenPlanSource = null;
 
-    if (isElevenInpaintPlan(editCompositionPlan)) {
+    if (editCompositionPlan) {
       finalCompositionPlan = editCompositionPlan;
       elevenPlanSource = "admin_song_edit";
     } else if (geminiApiKey) {
@@ -709,7 +709,7 @@ async function runElevenlabsGenerationJob({
         : null;
     const vocalGender = String(body?.vocalGender || "").trim();
     const voiceTimbre = String(body?.voiceTimbre || "").trim();
-    const isSongInpaint = isElevenInpaintPlan(editCompositionPlan);
+    const isSongInpaint = Boolean(editCompositionPlan);
     if (!isSongInpaint && !finalCompositionPlan?.chunks?.length) {
     const planBuilt = await buildElevenSongCompositionPlan({
       apiKey,
@@ -824,7 +824,7 @@ async function runElevenlabsGenerationJob({
       request_detail: adminDetailBefore,
     }).catch(() => null);
 
-    const isInpaint = isElevenInpaintPlan(editCompositionPlan);
+    const isInpaint = Boolean(editCompositionPlan);
     if (isInpaint && inpaintSummary) {
       console.log(
         "[music/generate] elevenlabs inpaint compose",
@@ -1580,6 +1580,9 @@ async function handleElevenlabsGenerate(req, res, { user, isAdmin, body }) {
     adminFinetuneDisabled ? "finetune: admin_off" : finetuneId ? `finetune: ${finetuneId}` : "",
     referenceSongId ? `reference: ${referenceSongId.slice(0, 12)}` : "",
     isSongEdit ? `edit: ${String(editPlanInput.songId).slice(0, 12)}` : "",
+    editCompositionPlan
+      ? `edit_keep: ${editCompositionPlan.chunks.filter((c) => c.song_id || c.songId).length} edit_rewrite: ${editCompositionPlan.chunks.filter((c) => !(c.song_id || c.songId)).length}`
+      : "",
   ].filter(Boolean).join("\n");
 
   await logMusicGeneration({

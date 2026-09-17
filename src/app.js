@@ -23166,6 +23166,11 @@ async function runCreateSongEditGenerate({ setGenerateBtn, startGeneratePolling 
     setStatus("Pick a section, tap Rewrite, then Generate.");
     return;
   }
+  if (!edits.some((e) => e.action === "keep")) {
+    showToast("Keep at least one section so the rest of the song stays the same.", { icon: "!", durationMs: 4200 });
+    setStatus("Leave other sections on Keep, rewrite only the part you want to change.");
+    return;
+  }
   if (!armCreateGenerateInFlight()) return;
   try {
     hideCreateResultCards();

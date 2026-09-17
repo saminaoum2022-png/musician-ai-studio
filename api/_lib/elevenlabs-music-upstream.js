@@ -821,8 +821,15 @@ function buildElevenEditCompositionPlan({ songId, chunks, edits, globalPositive,
   if (!rewriteCount) {
     return { ok: false, userMessage: "Mark at least one section to rewrite." };
   }
+  const keepCount = out.filter((c) => c.song_id).length;
+  if (!keepCount) {
+    return {
+      ok: false,
+      userMessage: "Keep at least one section so the rest of the song stays original.",
+    };
+  }
   if (!out.length) return { ok: false, userMessage: "No sections to edit." };
-  return { ok: true, plan: { chunks: out }, rewriteCount };
+  return { ok: true, plan: { chunks: out }, rewriteCount, keepCount };
 }
 
 function normalizePlanChunks(chunks) {

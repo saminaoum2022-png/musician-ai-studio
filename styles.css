@@ -21699,6 +21699,8 @@ body.trackSheetOpen .footer{
   body[data-route="generate"].createKeyboardOpen .hubNowPlaying{
     opacity: 0 !important;
     pointer-events: none !important;
+  }
+  body[data-route="generate"].createKeyboardOpen .hubNowPlaying:not(.isPlaced){
     transform: translate3d(0, 12px, 0) scale(0.92);
   }
   body[data-route="generate"] .footer{
@@ -22940,10 +22942,122 @@ input::placeholder, textarea::placeholder{
     pointer-events: auto;
     transform: translate3d(0, 0, 0) scale(1);
     opacity: 1;
+    touch-action: none;
+    -webkit-user-select: none;
+    user-select: none;
   }
   /* Create: vinyl shares the Generate CTA baseline (meet halfway). */
-  body[data-route="generate"] .hubNowPlaying{
+  body[data-route="generate"] .hubNowPlaying:not(.isPlaced){
     bottom: calc(var(--tabbar-h, calc(62px + env(safe-area-inset-bottom, 0px))) + 12px);
+  }
+  .hubNowPlaying.isPlaced{
+    right: auto;
+    bottom: auto;
+    transform: none;
+  }
+  .hubNowPlaying.isPlaced.isVisible{
+    transform: none;
+  }
+  .hubNowPlaying.isPlaced:not(.isDragging){
+    transition:
+      left 420ms cubic-bezier(0.22, 1, 0.36, 1),
+      top 420ms cubic-bezier(0.22, 1, 0.36, 1),
+      opacity 240ms ease;
+  }
+  .hubNowPlaying.isDragging{
+    z-index: 140;
+    transition: none !important;
+    opacity: 1;
+  }
+  .hubNowPlaying.isDragging .hubNowVinyl{
+    transform: scale(1.08);
+    box-shadow:
+      0 18px 36px rgba(0, 0, 0, 0.48),
+      0 0 22px rgba(46, 224, 192, 0.28),
+      0 0 0 1px rgba(255, 255, 255, 0.14);
+  }
+  .hubNowMelt{
+    display: none;
+    position: absolute;
+    top: -22px;
+    bottom: -22px;
+    width: 36px;
+    border-radius: 999px;
+    pointer-events: none;
+    z-index: 0;
+    opacity: 0;
+    filter: blur(11px);
+    transition: opacity 280ms ease;
+  }
+  .hubNowPlaying.isDocked .hubNowMelt{
+    display: block;
+    opacity: 1;
+  }
+  .hubNowPlaying.isDragging .hubNowMelt{
+    opacity: 0;
+  }
+  /* Melt sits on the visible bezel cut (disc center), not the off-screen half. */
+  .hubNowPlaying.isDockedRight .hubNowMelt{
+    left: 50%;
+    margin-left: -20px;
+    background: radial-gradient(ellipse at 70% 50%,
+      rgba(var(--cover-glow-rgb, 46, 224, 192), 0.95) 0%,
+      rgba(var(--cover-glow-rgb, 46, 224, 192), 0.4) 46%,
+      transparent 74%);
+  }
+  .hubNowPlaying.isDockedLeft .hubNowMelt{
+    right: 50%;
+    margin-right: -20px;
+    background: radial-gradient(ellipse at 30% 50%,
+      rgba(var(--cover-glow-rgb, 46, 224, 192), 0.95) 0%,
+      rgba(var(--cover-glow-rgb, 46, 224, 192), 0.4) 46%,
+      transparent 74%);
+  }
+  .hubNowPlaying.isDockedRight::after,
+  .hubNowPlaying.isDockedLeft::after{
+    content: "";
+    position: absolute;
+    top: 6%;
+    bottom: 6%;
+    width: 16px;
+    pointer-events: none;
+    z-index: 3;
+    filter: blur(6px);
+  }
+  .hubNowPlaying.isDockedRight::after{
+    left: 46%;
+    background: linear-gradient(to left, rgba(var(--cover-glow-rgb, 46, 224, 192), 0.55), transparent);
+  }
+  .hubNowPlaying.isDockedLeft::after{
+    right: 46%;
+    background: linear-gradient(to right, rgba(var(--cover-glow-rgb, 46, 224, 192), 0.55), transparent);
+  }
+  .hubNowPlaying.isDocked .hubNowVinyl{
+    box-shadow:
+      0 4px 14px rgba(0, 0, 0, 0.28),
+      0 0 18px rgba(var(--cover-glow-rgb, 46, 224, 192), 0.28);
+  }
+  .hubNowPlaying.isDockedRight .hubNowVinyl{
+    transform-origin: left center;
+    transform: scaleX(0.9);
+    -webkit-mask-image: linear-gradient(to right, #000 0%, #000 46%, rgba(0,0,0,0.45) 68%, transparent 100%);
+    mask-image: linear-gradient(to right, #000 0%, #000 46%, rgba(0,0,0,0.45) 68%, transparent 100%);
+  }
+  .hubNowPlaying.isDockedLeft .hubNowVinyl{
+    transform-origin: right center;
+    transform: scaleX(0.9);
+    -webkit-mask-image: linear-gradient(to left, #000 0%, #000 46%, rgba(0,0,0,0.45) 68%, transparent 100%);
+    mask-image: linear-gradient(to left, #000 0%, #000 46%, rgba(0,0,0,0.45) 68%, transparent 100%);
+  }
+  .hubNowClose{
+    display: none !important;
+  }
+  .hubNowPlaying.isDockedRight .hubNowVinyl::before,
+  .hubNowPlaying.isDockedLeft .hubNowVinyl::before{
+    content: "";
+    position: absolute;
+    inset: -14px;
+    z-index: 0;
   }
   .hubNowVinyl{
     -webkit-appearance: none;
@@ -22963,7 +23077,7 @@ input::placeholder, textarea::placeholder{
     cursor: pointer;
     overflow: visible;
     -webkit-tap-highlight-color: transparent;
-    touch-action: manipulation;
+    touch-action: none;
   }
   .hubNowPlaying.isPlaying .hubNowVinyl{
     box-shadow:
@@ -22973,6 +23087,15 @@ input::placeholder, textarea::placeholder{
   }
   .hubNowVinyl:active{
     transform: scale(0.96);
+  }
+  .hubNowPlaying.isDockedRight .hubNowVinyl:active{
+    transform: scaleX(0.94);
+  }
+  .hubNowPlaying.isDockedLeft .hubNowVinyl:active{
+    transform: scaleX(0.94);
+  }
+  .hubNowPlaying.isDragging .hubNowVinyl:active{
+    transform: scale(1.08);
   }
   .hubNowVinyl:focus-visible{
     outline: 2px solid rgba(46, 224, 192, 0.7);

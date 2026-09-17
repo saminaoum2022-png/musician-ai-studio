@@ -2523,6 +2523,7 @@ function renderHubNowPlaying() {
   const discoverMiniLoading = isDiscoverStyleMiniSource() && hasMeta;
   const showMini =
     hasMeta &&
+    (audible || discoverMiniLoading) &&
     (hubSrc || discoverMiniLoading) &&
     !hideHubSource &&
     !hideOnHubVisible &&
@@ -2599,6 +2600,7 @@ function renderHubNowPlaying() {
   syncHubNowPlayPauseUi(Boolean(miniShowsPause));
   syncLockScreenNowPlaying();
   try { syncGlobalFeedHookMarkers(); } catch {}
+  try { restoreHubVinylDock(); } catch {}
 }
 
 function syncHubNowProgressRing(cur, dur) {
@@ -2619,6 +2621,177 @@ function scheduleRenderHubNowPlaying() {
     renderHubNowPlaying();
   });
 }
+
+const HUB_VINYL_DOCK_KEY = "nabad.hubVinylDock.v1";
+const HUB_VINYL_SIZE = 52;
+const HUB_VINYL_DRAG_SLOP = 8;
+const HUB_VINYL_LONG_MS = 520;
+let hubVinylIgnoreClick = false;
+let hubVinylDock = null;
+
+function readHubVinylDock() {
+  try {
+    const raw = localStorage.getItem(HUB_VINYL_DOCK_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    const side = parsed?.side === "left" ? "left" : parsed?.side === "right" ? "right" : "";
+    const yRatio = Number(parsed?.yRatio);
+    if (!side || !Number.isFinite(yRatio)) return null;
+    return { side, yRatio: Math.max(0, Math.min(1, yRatio)) };
+  } catch {
+    return null;
+  }
+}
+
+function writeHubVinylDock(next) {
+  hubVinylDock = next;
+  try {
+    if (!next) localStorage.removeItem(HUB_VINYL_DOCK_KEY);
+    else localStorage.setItem(HUB_VINYL_DOCK_KEY, JSON.stringify(next));
+  } catch {}
+}
+
+function hubVinylMetrics() {
+  const size = Number(els.hubNowPlaying?.offsetWidth) || HUB_VINYL_SIZE;
+  const safeTop = 12 + (Number.parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--sat")) || 0);
+  const tabbar = document.querySelector(".mobileTabbar");
+  const tabH = tabbar ? Math.ceil(tabbar.getBoundingClientRect().height) : 62;
+  const minY = Math.max(safeTop + 8, 54);
+  const maxY = Math.max(minY, window.innerHeight - tabH - size - 8);
+  return { size, minY, maxY };
+}
+
+function hubVinylSnapPoint(x, y) {
+  const { size, minY, maxY } = hubVinylMetrics();
+  const cx = x + size / 2;
+  const side = cx < window.innerWidth / 2 ? "left" : "right";
+  const dockX = side === "left" ? -(size * 0.5) : window.innerWidth - size * 0.5;
+  const dockY = Math.max(minY, Math.min(maxY, y));
+  const span = Math.max(1, maxY - minY);
+  return { side, x: dockX, y: dockY, yRatio: (dockY - minY) / span };
+}
+
+function applyHubVinylBox(x, y, { docked = false, side = "" } = {}) {
+  const el = els.hubNowPlaying;
+  if (!el) return;
+  el.classList.add("isPlaced");
+  el.style.left = `${Math.round(x)}px`;
+  el.style.top = `${Math.round(y)}px`;
+  el.style.right = "auto";
+  el.style.bottom = "auto";
+  el.classList.toggle("isDocked", docked);
+  el.classList.toggle("isDockedLeft", docked && side === "left");
+  el.classList.toggle("isDockedRight", docked && side === "right");
+}
+
+function restoreHubVinylDock({ force = false } = {}) {
+  if (!els.hubNowPlaying) return;
+  if (!window.matchMedia || !window.matchMedia("(max-width: 720px)").matches) return;
+  if (!force && els.hubNowPlaying.classList.contains("isDragging")) return;
+  if (!force && els.hubNowPlaying.classList.contains("isPlaced")) return;
+  const saved = hubVinylDock || readHubVinylDock();
+  if (!saved) return;
+  hubVinylDock = saved;
+  const { size, minY, maxY } = hubVinylMetrics();
+  const y = minY + saved.yRatio * Math.max(1, maxY - minY);
+  const x = saved.side === "left" ? -(size * 0.5) : window.innerWidth - size * 0.5;
+  applyHubVinylBox(x, y, { docked: true, side: saved.side });
+}
+
+function wireHubNowVinylDrag() {
+  const el = els.hubNowPlaying;
+  if (!el || el.dataset.boundVinylDrag === "1") return;
+  el.dataset.boundVinylDrag = "1";
+  hubVinylDock = readHubVinylDock();
+  let dragging = false;
+  let startX = 0;
+  let startY = 0;
+  let originX = 0;
+  let originY = 0;
+  let pointerId = null;
+  let longTimer = 0;
+
+  const clearVinylLongPress = () => {
+    if (longTimer) {
+      window.clearTimeout(longTimer);
+      longTimer = 0;
+    }
+  };
+
+  const onMove = (e) => {
+    if (pointerId == null || e.pointerId !== pointerId) return;
+    const dx = e.clientX - startX;
+    const dy = e.clientY - startY;
+    if (!dragging) {
+      if (Math.hypot(dx, dy) < HUB_VINYL_DRAG_SLOP) return;
+      dragging = true;
+      clearVinylLongPress();
+      hubVinylIgnoreClick = true;
+      el.classList.add("isDragging");
+      el.classList.remove("isDocked", "isDockedLeft", "isDockedRight");
+      try { haptic("light"); } catch {}
+    }
+    try { e.preventDefault(); } catch {}
+    const { size, minY, maxY } = hubVinylMetrics();
+    const nextX = Math.max(-(size * 0.35), Math.min(window.innerWidth - size * 0.65, originX + dx));
+    const nextY = Math.max(minY, Math.min(maxY, originY + dy));
+    applyHubVinylBox(nextX, nextY, { docked: false });
+  };
+
+  const onUp = (e) => {
+    if (pointerId == null || e.pointerId !== pointerId) return;
+    pointerId = null;
+    clearVinylLongPress();
+    try { el.releasePointerCapture(e.pointerId); } catch {}
+    window.removeEventListener("pointermove", onMove, true);
+    window.removeEventListener("pointerup", onUp, true);
+    window.removeEventListener("pointercancel", onUp, true);
+    el.classList.remove("isDragging");
+    if (!dragging) return;
+    dragging = false;
+    const rect = el.getBoundingClientRect();
+    const snapped = hubVinylSnapPoint(rect.left, rect.top);
+    applyHubVinylBox(snapped.x, snapped.y, { docked: true, side: snapped.side });
+    writeHubVinylDock({ side: snapped.side, yRatio: snapped.yRatio });
+    try { haptic("medium"); } catch {}
+    window.setTimeout(() => { hubVinylIgnoreClick = false; }, 80);
+  };
+
+  el.addEventListener("pointerdown", (e) => {
+    if (e.pointerType === "mouse" && e.button !== 0) return;
+    if (!window.matchMedia || !window.matchMedia("(max-width: 720px)").matches) return;
+    if (e.target?.closest?.("#hubNowClose")) return;
+    const rect = el.getBoundingClientRect();
+    startX = e.clientX;
+    startY = e.clientY;
+    originX = rect.left;
+    originY = rect.top;
+    pointerId = e.pointerId;
+    dragging = false;
+    clearVinylLongPress();
+    longTimer = window.setTimeout(() => {
+      longTimer = 0;
+      if (dragging) return;
+      pointerId = null;
+      hubVinylIgnoreClick = true;
+      try { el.releasePointerCapture(e.pointerId); } catch {}
+      window.removeEventListener("pointermove", onMove, true);
+      window.removeEventListener("pointerup", onUp, true);
+      window.removeEventListener("pointercancel", onUp, true);
+      try { haptic("medium"); } catch {}
+      dismissMiniPlayer();
+    }, HUB_VINYL_LONG_MS);
+    try { el.setPointerCapture(e.pointerId); } catch {}
+    window.addEventListener("pointermove", onMove, true);
+    window.addEventListener("pointerup", onUp, true);
+    window.addEventListener("pointercancel", onUp, true);
+  });
+
+  window.addEventListener("resize", () => {
+    if (hubVinylDock) restoreHubVinylDock({ force: true });
+  });
+}
+
 const LATEST_SUNO_MODEL = "V6";
 /** Production API origins for native (try in order if one host fails). */
 const NATIVE_API_BASE_CANDIDATES = [
@@ -72318,10 +72491,12 @@ if (els.hubNowPlayPause && !els.hubNowPlayPause.dataset.boundHubPp) {
       e.preventDefault();
       e.stopPropagation();
     } catch {}
+    if (hubVinylIgnoreClick) return;
     haptic("light");
     openMiniPlayerFullSurface();
   });
 }
+try { wireHubNowVinylDrag(); } catch {}
 if (els.hubNowExpand && !els.hubNowExpand.dataset.boundHubExp) {
   els.hubNowExpand.dataset.boundHubExp = "1";
   els.hubNowExpand.addEventListener("click", (e) => {

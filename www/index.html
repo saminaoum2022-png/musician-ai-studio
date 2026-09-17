@@ -4956,7 +4956,8 @@
         </a>
       </nav>
       <div id="hubNowPlaying" class="hubNowPlaying" style="display:none">
-        <button type="button" id="hubNowPlayPause" class="hubNowVinyl" aria-label="Open player">
+        <span class="hubNowMelt" aria-hidden="true"></span>
+        <button type="button" id="hubNowPlayPause" class="hubNowVinyl" aria-label="Open player. Long press to close.">
           <svg class="hubNowRing" viewBox="0 0 36 36" aria-hidden="true">
             <circle class="hubNowRingTrack" cx="18" cy="18" r="15.2" fill="none" pathLength="100"/>
             <circle id="hubNowRingFill" class="hubNowRingFill" cx="18" cy="18" r="15.2" fill="none" pathLength="100" style="stroke-dasharray:100;stroke-dashoffset:100"/>
@@ -4966,7 +4967,7 @@
             <span class="hubNowVinylHole" aria-hidden="true"></span>
           </span>
         </button>
-        <button id="hubNowClose" class="hubNowClose" type="button" aria-label="Close player">
+        <button id="hubNowClose" class="hubNowClose" type="button" hidden aria-hidden="true" tabindex="-1" aria-label="Close player">
           <svg viewBox="0 0 24 24" width="11" height="11" aria-hidden="true">
             <path d="M6.4 6.4 17.6 17.6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" fill="none"/>
             <path d="M17.6 6.4 6.4 17.6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" fill="none"/>

@@ -651,7 +651,9 @@ function lyricsToPromptLines(text) {
 }
 
 function isElevenInpaintPlan(plan) {
-  return Boolean(plan?.sections?.length || plan?.chunks?.length);
+  if (Array.isArray(plan?.sections) && plan.sections.length) return true;
+  const chunks = Array.isArray(plan?.chunks) ? plan.chunks : [];
+  return chunks.some((c) => c?.song_id || c?.songId || c?.source_from);
 }
 
 function summarizeElevenInpaintPlan(plan) {

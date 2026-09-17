@@ -709,7 +709,8 @@ async function runElevenlabsGenerationJob({
         : null;
     const vocalGender = String(body?.vocalGender || "").trim();
     const voiceTimbre = String(body?.voiceTimbre || "").trim();
-    if (!finalCompositionPlan?.chunks?.length) {
+    const isSongInpaint = isElevenInpaintPlan(editCompositionPlan);
+    if (!isSongInpaint && !finalCompositionPlan?.chunks?.length) {
     const planBuilt = await buildElevenSongCompositionPlan({
       apiKey,
       stylePrompt: effectiveStyle,
@@ -836,7 +837,7 @@ async function runElevenlabsGenerationJob({
     const upstream = isInpaint
       ? await elevenlabsComposeInpaint({
           apiKey,
-          compositionPlan: finalCompositionPlan,
+          compositionPlan: editCompositionPlan,
           model,
         })
       : await elevenlabsGenerateMusicDetailedWithRetry({

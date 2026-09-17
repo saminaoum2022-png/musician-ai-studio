@@ -49,6 +49,7 @@ const {
   buildElevenReferenceCompositionPlan,
   buildElevenSongCompositionPlan,
   buildElevenEditCompositionPlan,
+  elevenlabsComposeInpaint,
   elevenlabsGenerateEnabled,
   elevenlabsGenerateMusicDetailedWithRetry,
   elevenlabsUploadMusic,
@@ -798,17 +799,40 @@ async function runElevenlabsGenerationJob({
       ),
     }).catch(() => null);
 
-    const upstream = await elevenlabsGenerateMusicDetailedWithRetry({
-      apiKey,
-      prompt: finalCompositionPlan ? undefined : finalPrompt,
-      compositionPlan: finalCompositionPlan || undefined,
-      model,
-      musicLengthMs,
-      instrumental,
-      finetuneId,
-      skipFinetune: Boolean(adminFinetuneDisabled) || Boolean(editCompositionPlan?.chunks?.length),
-      withTimestamps: !instrumental,
-    });
+    const isInpaint = Boolean(editCompositionPlan?.chunks?.length);
+    if (isInpaint) {
+      const keepCount = editCompositionPlan.chunks.filter((c) => c?.song_id || c?.songId).length;
+      const rewriteCount = editCompositionPlan.chunks.length - keepCount;
+      console.log(
+        "[music/generate] elevenlabs inpaint compose",
+        taskId,
+        `${keepCount} keep / ${rewriteCount} rewrite`,
+        JSON.stringify(
+          editCompositionPlan.chunks.map((c) => (
+            (c?.song_id || c?.songId)
+              ? { keep: [c.range?.start_ms, c.range?.end_ms] }
+              : { rewriteMs: c.duration_ms, text: String(c.text || "").slice(0, 40) }
+          )),
+        ),
+      );
+    }
+    const upstream = isInpaint
+      ? await elevenlabsComposeInpaint({
+          apiKey,
+          compositionPlan: finalCompositionPlan,
+          model,
+        })
+      : await elevenlabsGenerateMusicDetailedWithRetry({
+          apiKey,
+          prompt: finalCompositionPlan ? undefined : finalPrompt,
+          compositionPlan: finalCompositionPlan || undefined,
+          model,
+          musicLengthMs,
+          instrumental,
+          finetuneId,
+          skipFinetune: Boolean(adminFinetuneDisabled),
+          withTimestamps: !instrumental,
+        });
     if (!upstream.ok) {
       console.warn("[music/generate] elevenlabs compose failed", taskId, upstream.httpStatus, upstream.userMessage, upstream.text?.slice?.(0, 240));
       await fail(upstream.userMessage || "ElevenLabs generation failed — try again.");
@@ -1415,7 +1439,7 @@ async function handleElevenlabsGenerate(req, res, { user, isAdmin, body }) {
   const instrumental = Boolean(body?.instrumental);
   const taskId = newTaskId("elevenlabs");
   const audioId = `${taskId}_a`;
-  const model = resolveElevenMusicModel(isSongEdit ? "music_v2" : body?.elevenlabsModel);
+  const model = resolveElevenMusicModel(isSongEdit ? "music_v2_5" : body?.elevenlabsModel);
   const musicLengthMs = isSongEdit
     ? Math.max(
         3000,

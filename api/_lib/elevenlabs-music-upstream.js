@@ -570,12 +570,16 @@ function extractUploadedEditPlan(data) {
   if (sections.length) {
     let t = 0;
     const chunks = sections.slice(0, 30).map((sec, i) => {
-      const duration = Math.max(
-        3000,
-        Math.min(120000, Math.round(Number(sec?.duration_ms ?? sec?.durationMs) || 15000)),
-      );
-      const startMs = t;
-      const endMs = startMs + duration;
+      const fromRange = sec?.source_from?.range || sec?.sourceFrom?.range || null;
+      const rangeStart = Number(fromRange?.start_ms ?? fromRange?.startMs);
+      const rangeEnd = Number(fromRange?.end_ms ?? fromRange?.endMs);
+      const durationRaw = Math.round(Number(sec?.duration_ms ?? sec?.durationMs) || 0);
+      const startMs = Number.isFinite(rangeStart)
+        ? Math.max(0, Math.round(rangeStart))
+        : t;
+      const endMs = Number.isFinite(rangeEnd)
+        ? Math.max(startMs + 50, Math.round(rangeEnd))
+        : startMs + Math.max(50, durationRaw || 15000);
       t = endMs;
       const label = String(sec?.section_name || sec?.sectionName || `Section ${i + 1}`).trim() || `Section ${i + 1}`;
       const lines = Array.isArray(sec?.lines) ? sec.lines.map((l) => String(l || "").trim()).filter(Boolean) : [];
@@ -586,7 +590,7 @@ function extractUploadedEditPlan(data) {
         label,
         text,
         lyrics,
-        durationMs: duration,
+        durationMs: endMs - startMs,
         startMs,
         endMs,
         positiveStyles: uniqueStyleTags(sec?.positive_local_styles || sec?.positiveLocalStyles || []),
@@ -603,18 +607,11 @@ function extractUploadedEditPlan(data) {
     const c = rawChunks[i];
     const rangeStart = Number(c?.range?.start_ms ?? c?.range?.startMs);
     const rangeEnd = Number(c?.range?.end_ms ?? c?.range?.endMs);
-    const duration = Math.max(
-      50,
-      Math.round(
-        Number(c?.duration_ms ?? c?.durationMs)
-        || (Number.isFinite(rangeEnd) && Number.isFinite(rangeStart) ? rangeEnd - rangeStart : 0)
-        || 15000,
-      ),
-    );
+    const durationRaw = Math.round(Number(c?.duration_ms ?? c?.durationMs) || 0);
     const startMs = Number.isFinite(rangeStart) ? Math.max(0, Math.round(rangeStart)) : t;
     const endMs = Number.isFinite(rangeEnd)
       ? Math.max(startMs + 50, Math.round(rangeEnd))
-      : startMs + duration;
+      : startMs + Math.max(50, durationRaw || 15000);
     t = endMs;
     const text = String(c?.text || "").trim().slice(0, 4000);
     const label = sectionLabelFromText(text, i);
@@ -644,14 +641,45 @@ function extractUploadedPlanChunks(data) {
   return extractUploadedEditPlan(data).chunks;
 }
 
+function pushAudioRefChunks(out, songId, startMs, endMs) {
+  let a = Math.max(0, Math.round(startMs));
+  const end = Math.max(a + 50, Math.round(endMs));
+  while (end - a >= 50) {
+    const b = Math.min(end, a + 120000);
+    if (b - a >= 50) {
+      out.push({
+        song_id: songId,
+        range: { start_ms: a, end_ms: b },
+      });
+    }
+    a = b;
+  }
+}
+
 function buildElevenEditCompositionPlan({ songId, chunks, edits, globalPositive, globalNegative }) {
   const sid = String(songId || "").trim();
   if (!sid) return { ok: false, userMessage: "Missing uploaded song — prepare the track again." };
   const list = Array.isArray(chunks) ? chunks : [];
   if (!list.length) return { ok: false, userMessage: "No sections found in this song." };
   const editList = Array.isArray(edits) ? edits : [];
+  const songPos = uniqueStyleTags(globalPositive);
+  const songNeg = uniqueStyleTags(globalNegative);
   const out = [];
   let rewriteCount = 0;
+  let keepStart = null;
+  let keepEnd = null;
+
+  const flushKeep = () => {
+    if (keepStart == null || keepEnd == null || keepEnd - keepStart < 50) {
+      keepStart = null;
+      keepEnd = null;
+      return;
+    }
+    pushAudioRefChunks(out, sid, keepStart, keepEnd);
+    keepStart = null;
+    keepEnd = null;
+  };
+
   for (let i = 0; i < list.length; i++) {
     const c = list[i] || {};
     const edit = editList[i] || {};
@@ -662,12 +690,19 @@ function buildElevenEditCompositionPlan({ songId, chunks, edits, globalPositive,
       Math.round(Number(c.endMs ?? c.end_ms) || startMs + Number(c.durationMs || c.duration_ms || 15000)),
     );
     if (action === "keep") {
-      out.push({
-        song_id: sid,
-        range: { start_ms: startMs, end_ms: endMs },
-      });
+      if (keepStart == null) {
+        keepStart = startMs;
+        keepEnd = endMs;
+      } else if (startMs <= keepEnd + 80) {
+        keepEnd = Math.max(keepEnd, endMs);
+      } else {
+        flushKeep();
+        keepStart = startMs;
+        keepEnd = endMs;
+      }
       continue;
     }
+    flushKeep();
     rewriteCount += 1;
     const label = String(c.label || `Section ${i + 1}`).trim() || `Section ${i + 1}`;
     const lyrics = String(edit.text || c.lyrics || lyricsLinesFromPlanText(c.text).join("\n") || "").trim();
@@ -675,31 +710,25 @@ function buildElevenEditCompositionPlan({ songId, chunks, edits, globalPositive,
     const parts = [`[${label}]`];
     if (lyrics) parts.push(lyrics);
     if (direction) parts.push(`{${direction}}`);
-    const text = parts.join("\n").slice(0, 4000);
+    const localPos = uniqueStyleTags(edit.positiveStyles || edit.positive_styles || c.positiveStyles || c.positive_styles || []);
+    const localNeg = uniqueStyleTags(edit.negativeStyles || edit.negative_styles || c.negativeStyles || c.negative_styles || []);
+    const positiveStyles = uniqueStyleTags([...songPos, ...localPos]).slice(0, 50);
+    if (!positiveStyles.length) {
+      positiveStyles.push("same arrangement", "same vocal character", "studio mix");
+    }
     out.push({
-      text,
+      text: parts.join("\n").slice(0, 4000),
       duration_ms: Math.max(3000, Math.min(120000, endMs - startMs)),
-      positive_styles: ensureMinPositiveStyles(uniqueStyleTags([
-        ...uniqueStyleTags(globalPositive),
-        ...(edit.positiveStyles || edit.positive_styles || c.positiveStyles || c.positive_styles || []),
-      ])).slice(0, 50),
-      negative_styles: uniqueStyleTags([
-        ...uniqueStyleTags(globalNegative),
-        ...(edit.negativeStyles || edit.negative_styles || c.negativeStyles || c.negative_styles || []),
-      ]),
+      positive_styles: positiveStyles,
+      negative_styles: uniqueStyleTags([...songNeg, ...localNeg]),
       context_adherence: "high",
-      conditioning_ref: {
-        song_id: sid,
-        range: { start_ms: startMs, end_ms: endMs },
-        condition_strength: ["low", "medium", "high", "xhigh"].includes(String(edit.conditionStrength || "").trim())
-          ? String(edit.conditionStrength).trim()
-          : "medium",
-      },
     });
   }
+  flushKeep();
   if (!rewriteCount) {
     return { ok: false, userMessage: "Mark at least one section to rewrite." };
   }
+  if (!out.length) return { ok: false, userMessage: "No sections to edit." };
   return { ok: true, plan: { chunks: out }, rewriteCount };
 }
 
@@ -1479,6 +1508,57 @@ async function elevenlabsGenerateMusic({
 }
 
 /**
+ * Inpaint compose — mix AudioRefChunks (keep original audio) with GenerationChunks.
+ * Must use /v1/music (not /v1/music/detailed). Detailed compose regenerates keep slices.
+ * @see https://elevenlabs.io/docs/eleven-api/guides/how-to/music/inpainting
+ */
+async function elevenlabsComposeInpaint({ apiKey, compositionPlan, model }) {
+  const resolvedModel = resolveElevenMusicModel(model || "music_v2_5");
+  const plan = compositionPlan && typeof compositionPlan === "object" ? compositionPlan : null;
+  if (!plan?.chunks?.length) {
+    return { ok: false, userMessage: "Missing inpaint composition plan.", model: resolvedModel };
+  }
+  const url = `${ELEVEN_MUSIC_URL}?output_format=mp3_48000_192`;
+  const body = {
+    composition_plan: plan,
+    model_id: resolvedModel,
+  };
+  const r = await fetch(url, {
+    method: "POST",
+    headers: {
+      "xi-api-key": String(apiKey || "").trim(),
+      "Content-Type": "application/json",
+      Accept: "audio/mpeg",
+    },
+    body: JSON.stringify(body),
+  });
+  const ct = String(r.headers.get("content-type") || "").toLowerCase();
+  if (r.ok && ct.includes("audio")) {
+    const ab = await r.arrayBuffer();
+    const buffer = Buffer.from(ab);
+    return {
+      ok: buffer.length >= 128,
+      httpStatus: r.status,
+      audio: { buffer, mimeType: "audio/mpeg" },
+      alignedWords: [],
+      model: resolvedModel,
+      userMessage: buffer.length >= 128 ? "" : "ElevenLabs returned empty audio.",
+    };
+  }
+  const text = await r.text().catch(() => "");
+  const data = safeJson(text);
+  return {
+    ok: false,
+    httpStatus: r.status,
+    data,
+    text,
+    alignedWords: [],
+    model: resolvedModel,
+    userMessage: elevenUserMessage(r.status, data, text),
+  };
+}
+
+/**
  * Detailed compose — returns audio + optional word timestamps (karaoke).
  * @param {{ apiKey: string, prompt?: string, compositionPlan?: object, model?: string, musicLengthMs?: number, instrumental?: boolean, finetuneId?: string, withTimestamps?: boolean }} opts
  */
@@ -1625,6 +1705,7 @@ module.exports = {
   elevenlabsCreateCompositionPlan,
   estimateReferenceDurationMs,
   elevenlabsGenerateEnabled,
+  elevenlabsComposeInpaint,
   elevenlabsGenerateMusic,
   elevenlabsGenerateMusicDetailed,
   elevenlabsGenerateMusicDetailedWithRetry,

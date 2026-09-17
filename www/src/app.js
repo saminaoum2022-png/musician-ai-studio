@@ -11339,7 +11339,7 @@ function initDeskRail() {
       e.preventDefault();
       e.stopPropagation();
       try { haptic("light"); } catch {}
-      if (shouldUseDiscoverReelInPlace()) openDiscoverReelOverlay();
+      try { closeDiscoverReelOverlay(); } catch {}
       void playDiscoverFeedEntry({
         raw,
         title,
@@ -11359,6 +11359,7 @@ function initDeskRail() {
       return;
     }
     if (e.target.closest("[data-desk-rail-open]")) {
+      if (isDeskWebLayout()) return;
       if (discoverReelModeActive() && shouldUseDiscoverReelInPlace()) {
         openDiscoverReelOverlay();
         return;
@@ -11379,6 +11380,9 @@ function initDeskRail() {
 }
 function bootDeskRail() {
   try { initDeskRail(); } catch {}
+  try {
+    if (isDeskWebLayout()) closeDiscoverReelOverlay();
+  } catch {}
 }
 if (document.readyState === "loading") {
   document.addEventListener("DOMContentLoaded", bootDeskRail, { once: true });
@@ -46944,11 +46948,16 @@ function shouldUseDiscoverReelPlayer() {
 }
 
 function shouldUseDiscoverReelInPlace() {
+  return false;
+}
+
+function isDeskWebLayout() {
   if (!isWebOrDesktopShell()) return false;
   try {
-    if (!window.matchMedia("(min-width: 1024px)").matches) return false;
-  } catch { return false; }
-  return shouldUseDiscoverReelPlayer();
+    return window.matchMedia("(min-width: 1024px)").matches;
+  } catch {
+    return false;
+  }
 }
 
 function discoverReelInPlaceActive() {
@@ -46966,6 +46975,7 @@ function discoverReelUsesInShellLayout() {
 
 function resolveDiscoverReelOpenPlayer(opts = {}) {
   if (opts.openPlayer === false) return false;
+  if (isDeskWebLayout()) return false;
   if (discoverReelInPlaceActive() || shouldUseDiscoverReelInPlace()) return false;
   if (opts.openPlayer === true) return true;
   try {
@@ -47964,6 +47974,9 @@ async function playDiscoverFeedEntry({ raw, title, art, by, playSource, el, opts
       }
       const inPlace = shouldUseDiscoverReelInPlace();
       if (inPlace) openDiscoverReelOverlay();
+      else if (isDeskWebLayout()) {
+        try { closeDiscoverReelOverlay(); } catch {}
+      }
       let pick = _discoverReelQueue[idx];
       const playerArtUrl = discoverReelPlayerArtUrl(pick, art);
       if (playerArtUrl && !isSquareListCoverUrl(playerArtUrl) && !isDefaultSongCoverUrl(playerArtUrl)) {
@@ -47971,6 +47984,10 @@ async function playDiscoverFeedEntry({ raw, title, art, by, playSource, el, opts
         _discoverReelQueue[idx] = pick;
       }
       if (!inPlace) {
+        if (isDeskWebLayout()) {
+          await playDiscoverReelAt(idx, { openPlayer: false, skipCoverPaint: false, skipSlide: true });
+          return;
+        }
         discoverReelDebugLog("tap", `portrait=${discoverReelDebugShortUrl(playerArtUrl)}`);
         primeDiscoverReelOpenFirstFrame(pick, idx, { title, subtitle: by, el });
         if (playerArtUrl) {

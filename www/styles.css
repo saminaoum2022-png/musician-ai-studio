@@ -53229,6 +53229,21 @@ body[data-route="studio"] .deskRail { display: none !important; }
   }
   html.is-web-shell body[data-route="player"]:not(.discoverReelInShell) .playerArtWrap{
     position: relative;
+    max-width: 280px;
+    width: 100%;
+  }
+  html.is-web-shell body[data-route="player"]:not(.discoverReelInShell) .playerArtStage{
+    position: relative;
+    inset: auto;
+    width: 100%;
+    height: auto;
+  }
+  html.is-web-shell body[data-route="player"]:not(.discoverReelInShell) .playerArt{
+    width: 100%;
+    max-width: 280px;
+    height: auto;
+    aspect-ratio: 1 / 1;
+    object-fit: cover;
   }
   html.is-web-shell body[data-route="player"]:not(.discoverReelInShell) .playerMeta{
     position: static;

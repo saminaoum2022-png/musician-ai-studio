@@ -22,7 +22,8 @@ OUTPUT SCHEMA:
 }
 
 === structured_lyrics ===
-- The user ALWAYS provides lyrics when instrumental is false — preserve their words exactly (Arabic, English, or mixed). Do NOT translate. Do NOT rewrite lines. You may only trim if clearly too long for ~28s.
+- If idea_brief is set (prompt-to-song): WRITE original singable lyrics that fulfill the brief. Do NOT copy the brief, challenge instructions, line counts, or phrases like "Write a clip" into sung lines.
+- Else if lyrics_raw is set: the user provided lyrics — preserve their words exactly (Arabic, English, or mixed). Do NOT translate. Do NOT rewrite lines. You may only trim if clearly too long for ~28s.
 - Structure tags MUST be in English only, on their own lines, e.g.:
   [Quick Catchy Intro · 0:00–0:04]
   [Main Hook / Chorus Drop · 0:04–0:22]
@@ -88,7 +89,7 @@ OUTPUT SCHEMA:
 === composition_chunks (PRIMARY — required, 4–8 chunks) ===
 - Ordered song sections for ElevenLabs music_v2. Sum of duration_seconds ≈ target_length_seconds (±10%).
 - section: English tag in brackets, e.g. [Intro], [Verse 1], [Pre-Chorus], [Chorus], [Verse 2], [Bridge], [Final Chorus], [Outro].
-- lines: user's lyric lines for that section ONLY — preserve Arabic/English/mixed exactly. Do NOT translate or rewrite. Max ~8 lines per section, max 200 chars per line.
+- lines: if idea_brief is set, WRITE original lyric lines for that section (do not sing the brief or instructions). Else use the user's lyric lines for that section ONLY — preserve Arabic/English/mixed exactly. Do NOT translate or rewrite. Max ~8 lines per section, max 200 chars per line.
 - duration_seconds: integer 3–120 per chunk. Intro/outro shorter; chorus often longer.
 - positive_styles: 6–10 English tags per chunk — genre, BPM (REQUIRED same number every chunk, e.g. "108 BPM"), key, instrumentation, vocal character, energy for THIS section. First chunk sets overall genre/tone.
 - negative_styles: 2–6 English tags to avoid unwanted sounds in THIS section (e.g. chorus: ["drawn-out syllables", "a cappella"]; instrumental intro: ["vocals", "lyrics"]).
@@ -135,7 +136,8 @@ OUTPUT SCHEMA:
 }
 
 === structured_lyrics ===
-- The user ALWAYS provides lyrics when instrumental is false — preserve their words exactly (Arabic, English, or mixed). Do NOT translate. Do NOT rewrite lines. Do NOT add tanwin or formal MSA endings the user did not write.
+- If idea_brief is set (prompt-to-song): WRITE original singable lyrics that fulfill the brief. Do NOT copy the brief or challenge instructions into sung lines.
+- Else if lyrics_raw is set: the user provided lyrics — preserve their words exactly (Arabic, English, or mixed). Do NOT translate. Do NOT rewrite lines. Do NOT add tanwin or formal MSA endings the user did not write.
 - Structure tags MUST be in English only, on their own lines, e.g.:
   [Intro · 0:00–0:15]
   [Verse 1 · 0:15–0:45]
@@ -349,10 +351,17 @@ function buildClipProducerInput(body, flow = "nabad_clip") {
     dialectHint: String(body?.dialectHint || body?.dialect || "").trim(),
     clipVocalProfileId,
   });
+  const ideaPrompt = body?.ideaPrompt === true
+    || body?.ideaPrompt === 1
+    || body?.ideaPrompt === "1"
+    || String(body?.ideaPrompt || "").toLowerCase() === "true";
+  const rawPrompt = String(body?.prompt || "").trim();
+  const ideaBrief = String(body?.ideaBrief || (ideaPrompt ? rawPrompt : "")).trim();
 
   return {
     title: String(body?.title || "").trim(),
-    lyrics_raw: String(body?.prompt || "").trim(),
+    lyrics_raw: ideaPrompt ? "" : rawPrompt,
+    idea_brief: ideaBrief,
     style_tags: String(body?.style || "").trim(),
     instruments: String(body?.instruments || "").trim(),
     song_key: String(body?.songKey || "").trim(),

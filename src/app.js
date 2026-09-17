@@ -30265,18 +30265,11 @@ function syncProGatedWebUi() {
 }
 
 function syncDeskSidebarPromo() {
-  const storePromo = document.getElementById("deskSidebarStorePromo");
   const proLink = document.getElementById("deskSidebarProLink");
-  const webDesk = isWebOrDesktopShell();
-  if (storePromo) {
-    storePromo.hidden = !webDesk;
-    storePromo.setAttribute("aria-hidden", webDesk ? "false" : "true");
-  }
-  if (proLink) {
-    const showPro = webDesk && !Boolean(creditsState.proActive);
-    proLink.hidden = !showPro;
-    proLink.setAttribute("aria-hidden", showPro ? "false" : "true");
-  }
+  if (!proLink) return;
+  const showPro = isWebOrDesktopShell() && !Boolean(creditsState.proActive);
+  proLink.hidden = !showPro;
+  proLink.setAttribute("aria-hidden", showPro ? "false" : "true");
 }
 
 function syncProSubscriptionUi() {

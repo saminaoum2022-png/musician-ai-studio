@@ -161,6 +161,16 @@ module.exports = async function handler(req, res) {
           })()
         : {}),
     };
+    if (!payload.customMode) {
+      delete payload.style;
+      delete payload.title;
+      delete payload.personaId;
+      delete payload.personaModel;
+      delete payload.styleWeight;
+      delete payload.weirdnessConstraint;
+      delete payload.audioWeight;
+      if (payload.prompt) payload.prompt = String(payload.prompt).slice(0, 500);
+    }
 
     try {
       console.info("[suno/generate] →", {

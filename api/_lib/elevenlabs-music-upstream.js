@@ -1,5 +1,5 @@
 /**
- * ElevenLabs Music API (music_v2).
+ * ElevenLabs Music API (music_v2_5 default; music_v2 / music_v1 still allowed).
  * @see https://elevenlabs.io/docs/api-reference/music/compose
  * @see https://elevenlabs.io/docs/api-reference/music/compose-detailed
  */
@@ -77,10 +77,21 @@ function elevenlabsGenerateEnabled() {
   return v === "1" || v === "true" || v === "yes";
 }
 
+const ELEVEN_MUSIC_MODELS = new Set(["music_v1", "music_v2", "music_v2_5"]);
+const DEFAULT_ELEVEN_MUSIC_MODEL = "music_v2_5";
+
+function normalizeElevenMusicModelId(raw) {
+  const m = String(raw || "").trim().toLowerCase().replace(/-/g, "_");
+  if (m === "music_v2.5" || m === "v2.5" || m === "v25") return "music_v2_5";
+  if (m === "v2" || m === "music_v2") return "music_v2";
+  if (m === "v1" || m === "music_v1") return "music_v1";
+  return m;
+}
+
 function resolveElevenMusicModel(explicit) {
   const env = String(process.env.ELEVENLABS_MUSIC_MODEL || "").trim();
-  const m = String(explicit || env || "music_v2").trim();
-  return m === "music_v1" ? "music_v1" : "music_v2";
+  const normalized = normalizeElevenMusicModelId(explicit || env || DEFAULT_ELEVEN_MUSIC_MODEL);
+  return ELEVEN_MUSIC_MODELS.has(normalized) ? normalized : DEFAULT_ELEVEN_MUSIC_MODEL;
 }
 
 function resolveElevenMusicLengthMs(explicit) {

@@ -67,7 +67,7 @@ WHAT COSTS CREDITS:
 - Instrumental (karaoke) version = ${INSTRUMENTAL_CREDIT_COST} credits.
 - NabadAi Studio "Separate vocals" for a clean guide track ≈ ${STUDIO_SEPARATE_VOCALS_COST} credits.
 - Short **template clip** (~30s from Create → Templates) ≈ ${TEMPLATE_CLIP_CREDIT_COST} credits. There is no standalone Nabad Clip product.
-FREE (no credits): AI lyrics, Add vowel marks, ✦ Boost style, artwork suggestions, Voice Lab scan. Check singability is a Pro feature (no extra credits).
+FREE (no credits): Idea → Generate, AI lyrics preview, Add vowel marks, ✦ Boost style, artwork suggestions, Voice Lab scan. Check singability is a Pro feature (no extra credits).
 
 GIFTING CREDITS (on someone else's published song post):
 - Tap Gift on the post → Mic (${GIFT_TIERS[0].credits} cr), Pulse (${GIFT_TIERS[1].credits} cr), or Star (${GIFT_TIERS[2].credits} cr).

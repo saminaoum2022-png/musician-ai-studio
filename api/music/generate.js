@@ -1385,7 +1385,7 @@ async function handleElevenlabsGenerate(req, res, { user, isAdmin, body }) {
       body?.elevenlabsUseFinetune === "false" ||
       body?.elevenlabsUseFinetune === 0);
   if (adminFinetuneDisabled) {
-    console.log("[music/generate] elevenlabs admin finetune OFF — using base music_v2");
+    console.log(`[music/generate] elevenlabs admin finetune OFF — using base ${model}`);
     finetuneId = null;
   }
   const finetuneSkippedForReference = Boolean(hasReference && envFinetuneId && !adminFinetuneDisabled);

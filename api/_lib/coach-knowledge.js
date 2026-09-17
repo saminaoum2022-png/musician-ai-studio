@@ -23,7 +23,7 @@ MAIN AREAS (bottom navigation — five tabs):
 - Profile: your public page, your songs, stats (Songs, Plays, Fans), Persona, playlists, credits, and Settings.
 
 CREATING A SONG (Create tab) — start modes (tabs on Create):
-- "Lyrics": two sub-tabs — "Write" (type or paste your own lyrics) and "AI lyrics" (let NabadAi write lyrics for you, free).
+- "Lyrics": two sub-tabs — "Write" (type or paste your own lyrics) and "Idea" (describe the song in plain words, then tap Generate — NabadAi writes the lyrics and makes the song). Optional ✦ **AI lyrics** under the box lets you preview/edit lyrics first, for free.
 - "Hum": record or add a short melody and NabadAi builds a song around that tune — **NabadAi Pro** on iPhone and web.
 - "Photo": start a song from a picture; the Photo Mood assistant can analyze the image and shape the lyrics, style tags, and cover.
 The Create home has segments **Create / Sparks / Templates**, plus cards for Create Song, **Studio**, Persona, Photo Mood, and Mashup, and a "Continue" card to resume your last project.
@@ -37,7 +37,7 @@ SHORT CLIPS (~30 seconds) — TEMPLATES ONLY:
 - Sparks are idea cards for a full song vibe — not the clip product.
 
 LYRICS TOOLS (on Create → Lyrics, in the lyrics box — teach these by name):
-- **AI lyrics** (✦): writes or refreshes lyrics from your idea — **free**.
+- **AI lyrics** (✦): optional preview — writes or refreshes lyrics from your idea so you can edit them first. **Free.** In **Idea**, you can skip this and tap **Generate song** directly.
 - **Check singability** (♫): analyzes rhyme, وزن / wazen, line length, and whether lines will sing cleanly. Shows a score + notes. Does **not** rewrite lyrics. **NabadAi Pro** (iPhone and web).
 - **Add vowel marks** / **تشكيل**: adds Arabic harakat so the singer hits the right vowels. Use on **Write** with Arabic lyrics in the box. Not a Pro lock.
 - **Fix for singing**: rewrites the lyrics to balance rhyme and وزن so AI vocals stumble less. Keeps the meaning. **NabadAi Pro on web / desktop**; on iPhone it is available without that web lock.
@@ -47,7 +47,7 @@ LYRICS TOOLS (on Create → Lyrics, in the lyrics box — teach these by name):
 
 HOW TO GET THE BEST RESULTS (generation tips — share these proactively):
 - LANGUAGE: Under "Lyrics language" the chips are Auto, English, Arabic, French, plus more (Spanish, Turkish, Italian, German). "Auto" lets NabadAi guess the language; if you want a specific one, pick it for cleaner, on-language vocals. For Arabic, also pick a DIALECT (Auto, Lebanese, Egyptian, Iraqi, Gulf, Moroccan, Syrian, Palestinian, Tunisian, Sudanese, or MSA) so the phrasing sounds authentic instead of generic.
-- ARABIC ACCENT — best workflow: pick **Dialect** (e.g. Lebanese), tap **AI lyrics**, then **Check singability**. If lines are uneven, tap **Fix for singing** or **Polish lyrics** (Pro on web). **Add vowel marks** / تشكيل on Write for tricky words. Then **Generate song**. Style tags like **Levantine Pop** help. Colloquial Lebanese words beat formal فصحى.
+- ARABIC ACCENT — best workflow: pick **Dialect** (e.g. Lebanese), type an idea in **Idea** (or tap **AI lyrics** to preview), then **Generate song**. If you previewed lyrics, **Check singability**. If lines are uneven, tap **Fix for singing** or **Polish lyrics** (Pro on web). **Add vowel marks** / تشكيل on Write for tricky words. Style tags like **Levantine Pop** help. Colloquial Lebanese words beat formal فصحى.
 - ARABIC ADDRESS (who the song is sung to): set "Arabic address" so gendered words and endearments match the person — "To a man" (e.g. حبيبي / habibi), "To a woman" (e.g. حبيبتي / habibti), "To a group", or Auto. Choosing the right one keeps pronouns, verb endings, and words like habibi/habibti correct for the listener.
 - STYLE: In "Style / Tags", tap suggestion chips or type your own. The style picker is organized into **Genres** (e.g. Levantine Dabke, **Levantine Pop**, Tarab, Arabic Pop, R&B, Trap), **Moods** (Romantic, Sad, Energetic, Emotional…), **Instruments** (Oud, Tabla, Mijwiz, Piano, Strings, Synth, 808…), and **Tempo & Meter** (Slow, Mid Tempo, 120 BPM, 6/8…). Pick up to 2 genres, 1 mood, unlimited instruments, and 1 tempo. Adding at LEAST 3 style tags steers the sound much better than one — combine, for example, a genre + a mood + a key instrument (e.g. "Levantine Pop, Emotional, Oud"). **Levantine Pop** is for emotional Syrian/Lebanese-style pop ballads — modern 4/4 production with oud/synth accents; it is NOT dabke and NOT Egyptian shaabi. **Levantine Dabke** is for festive wedding/line-dance energy (mijwiz, 6/8 ktakufti rhythm). The "✦ Boost style with AI" button expands a short vibe into richer tags for you (free). There is also an "✨ Auto" style option that lets NabadAi pick a style for you. If you leave Style empty, NabadAi infers a style from your lyrics, but naming 3+ tags gives you the most control.
 - SINGER: Choose "Male" or "Female" for the vocal, or pick a "Persona ＋" for a signature voice that sounds like you. For Arabic, set "Arabic address" (Auto, To a man, To a woman, or To a group) so the lyrics address the right person.

@@ -683,8 +683,8 @@ function sanitizeElevenInpaintPlan(plan) {
       );
       if (re - rs >= 50) {
         gen.conditioning_ref = { song_id: refSong, range: { start_ms: rs, end_ms: re } };
-        const strength = String(c?.condition_strength || c?.conditionStrength || "medium").trim();
-        gen.condition_strength = ["low", "medium", "high", "xhigh"].includes(strength) ? strength : "medium";
+        const strength = String(c?.condition_strength || c?.conditionStrength || "high").trim();
+        gen.condition_strength = ["low", "medium", "high", "xhigh"].includes(strength) ? strength : "high";
       }
     }
     out.push(gen);
@@ -722,7 +722,7 @@ function summarizeElevenInpaintPlan(plan) {
     sections: chunks.map((c) => (
       (c?.song_id || c?.songId)
         ? `keep ${c.range?.start_ms}-${c.range?.end_ms}`
-        : `rewrite ${Number(c?.duration_ms) || 0}ms${c?.conditioning_ref || c?.conditioningRef ? ` cond ${c.condition_strength || c.conditionStrength || "medium"}` : ""}`
+        : `rewrite ${Number(c?.duration_ms) || 0}ms${c?.conditioning_ref || c?.conditioningRef ? ` cond ${c.condition_strength || c.conditionStrength || "high"} ${c.conditioning_ref?.range?.start_ms ?? c.conditioningRef?.range?.start_ms}-${c.conditioning_ref?.range?.end_ms ?? c.conditioningRef?.range?.end_ms}` : ""}`
     )),
   };
 }
@@ -745,6 +745,43 @@ function estimateMpegAudioDurationMs(buffer) {
   const bytes = Buffer.isBuffer(buffer) ? buffer.length : 0;
   if (bytes < 128) return 0;
   return Math.round((bytes * 8) / 192);
+}
+
+function mergeKeepTimeRanges(list, editList) {
+  const ranges = [];
+  for (let i = 0; i < list.length; i++) {
+    const c = list[i] || {};
+    const edit = editList[i] || {};
+    const action = String(edit.action || "keep").trim().toLowerCase() === "rewrite" ? "rewrite" : "keep";
+    if (action !== "keep") continue;
+    const startMs = Math.max(0, Math.round(Number(c.startMs ?? c.start_ms) || 0));
+    const endMs = Math.max(
+      startMs + 50,
+      Math.round(Number(c.endMs ?? c.end_ms) || startMs + Number(c.durationMs || c.duration_ms || 15000)),
+    );
+    ranges.push({ start: startMs, end: endMs });
+  }
+  ranges.sort((a, b) => a.start - b.start);
+  const merged = [];
+  for (const r of ranges) {
+    const last = merged[merged.length - 1];
+    if (last && r.start <= last.end + 80) last.end = Math.max(last.end, r.end);
+    else merged.push({ start: r.start, end: r.end });
+  }
+  return merged;
+}
+
+/** Voice match from a KEPT section (same singer, not the lyrics being replaced). Cap ~8s. */
+function pickVoiceConditionRange(keepRanges, rewriteStart, rewriteEnd) {
+  const usable = (Array.isArray(keepRanges) ? keepRanges : []).filter((r) => r.end - r.start >= 50);
+  if (!usable.length) return null;
+  const after = usable.find((r) => r.start >= rewriteEnd - 80);
+  const before = [...usable].reverse().find((r) => r.end <= rewriteStart + 80);
+  const pick = after || before || usable[0];
+  const start = Math.max(0, Math.round(pick.start));
+  const end = Math.min(pick.end, start + 8000, start + 30000);
+  if (end - start < 50) return null;
+  return { start_ms: start, end_ms: end };
 }
 
 function pushAudioRefChunks(out, songId, startMs, endMs) {
@@ -775,6 +812,7 @@ function buildElevenEditCompositionPlan({ songId, chunks, edits, globalPositive,
   let keepStart = null;
   let keepEnd = null;
   const fallbackStyles = songPos.length ? songPos : ["original mix", "same vocal character"];
+  const keepRanges = mergeKeepTimeRanges(list, editList);
 
   const flushKeep = () => {
     if (keepStart == null || keepEnd == null || keepEnd - keepStart < 50) {
@@ -824,7 +862,6 @@ function buildElevenEditCompositionPlan({ songId, chunks, edits, globalPositive,
       edit.negativeStyles || edit.negative_styles || c.negativeStyles || c.negative_styles || [],
     );
     const positiveStyles = uniqueStyleTags([...fallbackStyles, ...localPos]).slice(0, 50);
-    const condEnd = Math.min(endMs, startMs + 30000);
     const rewriteChunk = {
       text: parts.join("\n").slice(0, 4000),
       duration_ms: Math.max(3000, Math.min(120000, endMs - startMs)),
@@ -832,12 +869,13 @@ function buildElevenEditCompositionPlan({ songId, chunks, edits, globalPositive,
       negative_styles: uniqueStyleTags([...songNeg, ...localNeg]),
       context_adherence: "high",
     };
-    if (condEnd - startMs >= 50) {
+    const voiceRange = pickVoiceConditionRange(keepRanges, startMs, endMs);
+    if (voiceRange) {
       rewriteChunk.conditioning_ref = {
         song_id: sid,
-        range: { start_ms: startMs, end_ms: condEnd },
+        range: voiceRange,
       };
-      rewriteChunk.condition_strength = "medium";
+      rewriteChunk.condition_strength = "high";
     }
     out.push(rewriteChunk);
   }

@@ -1473,7 +1473,7 @@ async function handleElevenlabsGenerate(req, res, { user, isAdmin, body }) {
   const instrumental = Boolean(body?.instrumental);
   const taskId = newTaskId("elevenlabs");
   const audioId = `${taskId}_a`;
-  const model = resolveElevenMusicModel(isSongEdit ? "music_v2" : body?.elevenlabsModel);
+  const model = resolveElevenMusicModel(isSongEdit ? "music_v2_5" : body?.elevenlabsModel);
   const musicLengthMs = isSongEdit
     ? Math.max(
         3000,

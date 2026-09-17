@@ -23197,7 +23197,7 @@ async function runCreateSongEditGenerate({ setGenerateBtn, startGeneratePolling 
         title,
         prompt: edits.filter((e) => e.action === "rewrite").map((e) => e.text).join("\n\n"),
         elevenlabsUseFinetune: false,
-        elevenlabsModel: "music_v2",
+        elevenlabsModel: "music_v2_5",
         elevenlabsEditPlan: {
           songId: songEditSession.songId,
           chunks: songEditSession.chunks,

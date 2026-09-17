@@ -641,19 +641,45 @@ function extractUploadedPlanChunks(data) {
   return extractUploadedEditPlan(data).chunks;
 }
 
-function lyricsToPromptLines(text) {
-  return String(text || "")
-    .split(/\r?\n/)
-    .map((l) => String(l || "").trim())
-    .filter(Boolean)
-    .slice(0, 30)
-    .map((l) => l.slice(0, 200));
+function isElevenInpaintPlan(plan) {
+  const chunks = Array.isArray(plan?.chunks) ? plan.chunks : [];
+  return chunks.some((c) => c?.song_id || c?.songId);
 }
 
-function isElevenInpaintPlan(plan) {
-  if (Array.isArray(plan?.sections) && plan.sections.length) return true;
+/** REST body must match the inpainting guide: snake_case chunks only (not MusicPrompt sections). */
+function sanitizeElevenInpaintPlan(plan) {
   const chunks = Array.isArray(plan?.chunks) ? plan.chunks : [];
-  return chunks.some((c) => c?.song_id || c?.songId || c?.source_from);
+  const out = [];
+  for (const c of chunks) {
+    const songId = String(c?.song_id || c?.songId || "").trim();
+    if (songId) {
+      const start = Math.max(0, Math.round(Number(c?.range?.start_ms ?? c?.range?.startMs) || 0));
+      const end = Math.max(start + 50, Math.round(Number(c?.range?.end_ms ?? c?.range?.endMs) || 0));
+      if (end - start >= 50) {
+        out.push({
+          song_id: songId,
+          range: { start_ms: start, end_ms: end },
+        });
+      }
+      continue;
+    }
+    const text = String(c?.text || "").trim();
+    if (!text) continue;
+    const adherence = String(c?.context_adherence || c?.contextAdherence || "high").trim();
+    out.push({
+      text: text.slice(0, 4000),
+      duration_ms: Math.max(3000, Math.min(120000, Math.round(Number(c?.duration_ms ?? c?.durationMs) || 15000))),
+      positive_styles: uniqueStyleTags(c?.positive_styles || c?.positiveStyles || []).slice(0, 50),
+      negative_styles: uniqueStyleTags(c?.negative_styles || c?.negativeStyles || []).slice(0, 50),
+      context_adherence: ["low", "medium", "high"].includes(adherence) ? adherence : "high",
+    });
+  }
+  const keep = out.filter((c) => c.song_id).length;
+  const rewrite = out.length - keep;
+  if (!keep || !rewrite) {
+    return { ok: false, userMessage: "Edit plan must mix kept original audio with at least one rewritten section." };
+  }
+  return { ok: true, plan: { chunks: out }, keep, rewrite };
 }
 
 function summarizeElevenInpaintPlan(plan) {
@@ -706,6 +732,21 @@ function estimateMpegAudioDurationMs(buffer) {
   return Math.round((bytes * 8) / 192);
 }
 
+function pushAudioRefChunks(out, songId, startMs, endMs) {
+  let a = Math.max(0, Math.round(startMs));
+  const end = Math.max(a + 50, Math.round(endMs));
+  while (end - a >= 50) {
+    const b = Math.min(end, a + 120000);
+    if (b - a >= 50) {
+      out.push({
+        song_id: songId,
+        range: { start_ms: a, end_ms: b },
+      });
+    }
+    a = b;
+  }
+}
+
 function buildElevenEditCompositionPlan({ songId, chunks, edits, globalPositive, globalNegative }) {
   const sid = String(songId || "").trim();
   if (!sid) return { ok: false, userMessage: "Missing uploaded song — prepare the track again." };
@@ -714,10 +755,22 @@ function buildElevenEditCompositionPlan({ songId, chunks, edits, globalPositive,
   const editList = Array.isArray(edits) ? edits : [];
   const songPos = uniqueStyleTags(globalPositive);
   const songNeg = uniqueStyleTags(globalNegative);
-  const sections = [];
+  const out = [];
   let rewriteCount = 0;
-
+  let keepStart = null;
+  let keepEnd = null;
   const fallbackStyles = songPos.length ? songPos : ["original mix", "same vocal character"];
+
+  const flushKeep = () => {
+    if (keepStart == null || keepEnd == null || keepEnd - keepStart < 50) {
+      keepStart = null;
+      keepEnd = null;
+      return;
+    }
+    pushAudioRefChunks(out, sid, keepStart, keepEnd);
+    keepStart = null;
+    keepEnd = null;
+  };
 
   for (let i = 0; i < list.length; i++) {
     const c = list[i] || {};
@@ -728,65 +781,48 @@ function buildElevenEditCompositionPlan({ songId, chunks, edits, globalPositive,
       startMs + 50,
       Math.round(Number(c.endMs ?? c.end_ms) || startMs + Number(c.durationMs || c.duration_ms || 15000)),
     );
+    if (action === "keep") {
+      if (keepStart == null) {
+        keepStart = startMs;
+        keepEnd = endMs;
+      } else if (startMs <= keepEnd + 80) {
+        keepEnd = Math.max(keepEnd, endMs);
+      } else {
+        flushKeep();
+        keepStart = startMs;
+        keepEnd = endMs;
+      }
+      continue;
+    }
+    flushKeep();
+    rewriteCount += 1;
     const label = String(c.label || `Section ${i + 1}`).trim().slice(0, 100) || `Section ${i + 1}`;
+    const lyrics = String(edit.text || c.lyrics || lyricsLinesFromPlanText(c.text).join("\n") || "").trim();
+    const direction = String(edit.direction || "").trim();
+    const parts = [`[${label}]`];
+    if (lyrics) parts.push(lyrics);
+    if (direction) parts.push(`{${direction}}`);
     const localPos = uniqueStyleTags(
       edit.positiveStyles || edit.positive_styles || c.positiveStyles || c.positive_styles || [],
     );
     const localNeg = uniqueStyleTags(
       edit.negativeStyles || edit.negative_styles || c.negativeStyles || c.negative_styles || [],
     );
-    const positiveLocal = (localPos.length ? localPos : fallbackStyles).slice(0, 50);
-    const negativeLocal = uniqueStyleTags([...songNeg, ...localNeg]);
-
-    if (action === "keep") {
-      let a = startMs;
-      let part = 0;
-      while (endMs - a >= 50) {
-        const b = Math.min(endMs, a + 120000);
-        const keepLyrics = String(c.lyrics || lyricsLinesFromPlanText(c.text).join("\n") || "").trim();
-        sections.push({
-          section_name: (part === 0 ? label : `${label} ${part + 1}`).slice(0, 100),
-          duration_ms: Math.max(3000, Math.min(120000, b - a)),
-          lines: lyricsToPromptLines(keepLyrics),
-          positive_local_styles: positiveLocal,
-          negative_local_styles: negativeLocal,
-          source_from: {
-            song_id: sid,
-            range: { start_ms: a, end_ms: b },
-          },
-        });
-        a = b;
-        part += 1;
-      }
-      continue;
-    }
-
-    rewriteCount += 1;
-    const lyrics = String(edit.text || c.lyrics || lyricsLinesFromPlanText(c.text).join("\n") || "").trim();
-    const direction = String(edit.direction || "").trim();
-    const lines = lyricsToPromptLines(lyrics);
-    if (direction) lines.push(`{${direction.slice(0, 180)}}`);
-    sections.push({
-      section_name: label,
+    const positiveStyles = uniqueStyleTags([...fallbackStyles, ...localPos]).slice(0, 50);
+    out.push({
+      text: parts.join("\n").slice(0, 4000),
       duration_ms: Math.max(3000, Math.min(120000, endMs - startMs)),
-      lines,
-      positive_local_styles: uniqueStyleTags([...fallbackStyles, ...localPos]).slice(0, 50),
-      negative_local_styles: negativeLocal,
+      positive_styles: positiveStyles.length ? positiveStyles : fallbackStyles.slice(0, 50),
+      negative_styles: uniqueStyleTags([...songNeg, ...localNeg]),
+      context_adherence: "high",
     });
   }
+  flushKeep();
   if (!rewriteCount) {
     return { ok: false, userMessage: "Mark at least one section to rewrite." };
   }
-  if (!sections.length) return { ok: false, userMessage: "No sections to edit." };
-  return {
-    ok: true,
-    plan: {
-      positive_global_styles: fallbackStyles.slice(0, 50),
-      negative_global_styles: songNeg,
-      sections,
-    },
-    rewriteCount,
-  };
+  if (!out.length) return { ok: false, userMessage: "No sections to edit." };
+  return { ok: true, plan: { chunks: out }, rewriteCount };
 }
 
 function normalizePlanChunks(chunks) {
@@ -1570,14 +1606,15 @@ async function elevenlabsGenerateMusic({
  * @see https://elevenlabs.io/docs/eleven-api/guides/how-to/music/inpainting
  */
 async function elevenlabsComposeInpaint({ apiKey, compositionPlan, model }) {
-  const resolvedModel = resolveElevenMusicModel(model || "music_v2");
+  const resolvedModel = resolveElevenMusicModel(model || "music_v2_5");
   const plan = compositionPlan && typeof compositionPlan === "object" ? compositionPlan : null;
-  if (!isElevenInpaintPlan(plan)) {
-    return { ok: false, userMessage: "Missing inpaint composition plan.", model: resolvedModel };
+  const sanitized = sanitizeElevenInpaintPlan(plan);
+  if (!sanitized.ok) {
+    return { ok: false, userMessage: sanitized.userMessage, model: resolvedModel };
   }
   const url = `${ELEVEN_MUSIC_URL}?output_format=mp3_48000_192`;
   const body = {
-    composition_plan: plan,
+    composition_plan: sanitized.plan,
     model_id: resolvedModel,
   };
   const r = await fetch(url, {
@@ -1790,6 +1827,7 @@ module.exports = {
   extractElevenCopyrightRetry,
   injectLyricsIntoCompositionPlan,
   isElevenInpaintPlan,
+  sanitizeElevenInpaintPlan,
   normalizeElevenCompositionPlanResponse,
   normalizeElevenWordsTimestamps,
   parseStructuredLyricsIntoSections,

@@ -46954,6 +46954,11 @@ function discoverReelInPlaceActive() {
   }
 }
 
+/** Desktop Discover reel stays in the 3-column shell — never pin cover to the viewport. */
+function discoverReelUsesInShellLayout() {
+  return discoverReelInPlaceActive() || shouldUseDiscoverReelInPlace();
+}
+
 function resolveDiscoverReelOpenPlayer(opts = {}) {
   if (opts.openPlayer === false) return false;
   if (discoverReelInPlaceActive() || shouldUseDiscoverReelInPlace()) return false;
@@ -47351,6 +47356,10 @@ function unmarkDiscoverReelPlayerShell() {
 function lockDiscoverReelFullBleedLayout() {
   markDiscoverReelPlayerShell();
   try { document.body.classList.add("discoverReelOpening"); } catch {}
+  if (discoverReelUsesInShellLayout()) {
+    discoverReelDebugLog("lockLayout", "in-shell skip viewport");
+    return;
+  }
   discoverReelDebugLog("lockLayout", isNativeShell() ? "native CSS" : "inline");
   if (isNativeShell()) {
     try { void document.body.offsetHeight; } catch {}
@@ -47567,9 +47576,46 @@ function captureCurrentDiscoverReelPick() {
   };
 }
 
+function clearDiscoverReelAnimLayerViewportLock(layer) {
+  const root = layer || document.getElementById("playerReelAnimLayer");
+  if (!root) return;
+  [
+    "position",
+    "inset",
+    "top",
+    "left",
+    "right",
+    "bottom",
+    "width",
+    "height",
+    "z-index",
+    "overflow",
+    "background",
+  ].forEach((prop) => root.style.removeProperty(prop));
+  root.querySelectorAll(".playerReelAnimPanel, .playerReelAnimCover, .playerReelAnimArt").forEach((el) => {
+    [
+      "position",
+      "inset",
+      "width",
+      "height",
+      "overflow",
+      "background",
+      "max-width",
+      "aspect-ratio",
+      "object-fit",
+      "object-position",
+      "display",
+    ].forEach((prop) => el.style.removeProperty(prop));
+  });
+}
+
 function lockDiscoverReelAnimLayerLayout() {
   const layer = document.getElementById("playerReelAnimLayer");
   if (!layer) return;
+  if (discoverReelUsesInShellLayout()) {
+    clearDiscoverReelAnimLayerViewportLock(layer);
+    return;
+  }
   layer.style.setProperty("position", "fixed", "important");
   layer.style.setProperty("inset", "0", "important");
   layer.style.setProperty("top", "0", "important");
@@ -47747,6 +47793,7 @@ async function finishDiscoverReelSlideSwap(layer, outPanel, inPanel, targetIdx, 
   await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
   layer.hidden = true;
   layer.setAttribute("aria-hidden", "true");
+  if (discoverReelUsesInShellLayout()) clearDiscoverReelAnimLayerViewportLock(layer);
   resetDiscoverReelAnimPanels(outPanel, inPanel);
   requestAnimationFrame(() => resetDiscoverReelRailFade());
 }
@@ -62209,6 +62256,7 @@ function wirePlayerDiscoverReelSwipeOnce() {
       resetDiscoverReelAnimPanels(outPanel, inPanel);
       layer.hidden = true;
       layer.setAttribute("aria-hidden", "true");
+      if (discoverReelUsesInShellLayout()) clearDiscoverReelAnimLayerViewportLock(layer);
       setDiscoverReelAnimLayerActive(false);
       resetDiscoverReelRailFade();
     }

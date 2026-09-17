@@ -53283,6 +53283,7 @@ body[data-route="studio"] .deskRail { display: none !important; }
     padding: 0;
     border-radius: 22px;
     overflow: hidden;
+    contain: layout paint;
     border: 1px solid rgba(255,255,255,0.09);
     background: #0a0c12;
     box-shadow: 0 24px 64px rgba(0,0,0,0.45);
@@ -53428,7 +53429,9 @@ body[data-route="studio"] .deskRail { display: none !important; }
     top: 0;
     left: 0;
     right: 0;
-    bottom: 132px;
+    bottom: 0;
+    width: auto;
+    height: auto;
     z-index: 8;
     border-radius: inherit;
     overflow: hidden;
@@ -53442,10 +53445,7 @@ body[data-route="studio"] .deskRail { display: none !important; }
     z-index: 12;
   }
   html.is-web-shell body.discoverReelInShell[data-route="player"] .playerReelAnimMeta{
-    position: absolute;
-    left: 16px;
-    right: 56px;
-    bottom: 108px;
+    display: none !important;
   }
   html.is-web-shell body.discoverReelInShell[data-route="player"] .hubNowPlaying{
     display: none !important;

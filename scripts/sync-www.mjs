@@ -77,6 +77,7 @@ const seoMarketingFiles = [
   "app-store-screenshots/08-generate-song.png",
   "app-store-screenshots/10-song-player.png",
   "nabadai-pro-review-screenshot.png",
+  "nabadai-wordmark-ig.png",
   "badge-app-store.svg",
   "badge-google-play.svg",
 ];

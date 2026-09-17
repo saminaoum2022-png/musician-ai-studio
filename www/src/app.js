@@ -3971,6 +3971,12 @@ function handleMobileTabTap(a, e) {
   if (e?.button != null && e.button !== 0) return false;
   if (document.body.classList.contains("echoComposeOpen")) return false;
 
+  if (a?.getAttribute?.("data-route-link") === "coach") {
+    try { e?.preventDefault?.(); } catch {}
+    openNabadCoach();
+    return true;
+  }
+
   const resolved = resolveMobileTabTap(a);
   if (!resolved) return false;
   const { linkRoute, route, targetHash } = resolved;
@@ -5057,16 +5063,18 @@ function syncRoutePanelVisibility(wanted) {
     }
   });
   syncCreateFlowUi();
+  const coachThread = route === "messages-thread" && isCoachThreadId(_conversationId);
   document.querySelectorAll("[data-route-link]").forEach((a) => {
     const link = a.getAttribute("data-route-link");
     const active = link === route
       || (route === "discover-playlist" && link === "discover")
       || (route === "generate" && link === "challenges")
       || (route === "mashup" && link === "challenges")
-      || (route === "vocal" && link === "challenges");
+      || (route === "vocal" && link === "challenges")
+      || (coachThread && link === "coach");
     a.classList.toggle("active", active
       || (route === "messages" && link === "messages")
-      || (route === "messages-thread" && link === "messages"));
+      || (route === "messages-thread" && link === "messages" && !coachThread));
   });
   try { pulseTabTrayIfChanged(); } catch {}
   try { syncTabGlassThumb(); } catch {}
@@ -11357,6 +11365,12 @@ function syncCoachFabHeaderMount() {
     if (fab.parentElement !== parking) parking.appendChild(fab);
     fab.style.setProperty("display", "none", "important");
     fab.style.setProperty("pointer-events", "none", "important");
+    return;
+  }
+  // Mobile: Coach lives in the center tab. Don't also park the orb in headers.
+  if (window.matchMedia && window.matchMedia("(max-width: 720px)").matches) {
+    fab.classList.remove("coachFab--header");
+    if (fab.parentElement !== parking) parking.appendChild(fab);
     return;
   }
   if (!slotKey) {
@@ -71744,6 +71758,32 @@ syncCreateTabMorph();
 try { syncCreateGenerateDock(); } catch {}
 // First route apply runs after loadAuthSession() below — not here — so empty
 // hash does not briefly bounce through #/auth before Welcome / Get Started.
+
+(function wireHomeCreatePlus() {
+  const homePlus = document.getElementById("homeCreatePlus");
+  if (homePlus && homePlus.dataset.boundHomePlus !== "1") {
+    homePlus.dataset.boundHomePlus = "1";
+    homePlus.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      try { haptic("light"); } catch {}
+      const nav = resolveCreateTabNavigation();
+      flushTabRouteNavigation(nav.route, nav.hash);
+    });
+  }
+  const homeMark = document.getElementById("homeBrandWordmark");
+  if (homeMark && homeMark.dataset.boundHomeMark !== "1") {
+    homeMark.dataset.boundHomeMark = "1";
+    homeMark.addEventListener("click", (e) => {
+      e.preventDefault();
+      if ((document.body.getAttribute("data-route") || "") === "discover") {
+        try { window.scrollTo({ top: 0, behavior: "smooth" }); } catch {}
+        return;
+      }
+      flushTabRouteNavigation("discover", "#/discover");
+    });
+  }
+})();
 
 (function wireCreateTabClick() {
   const tab = document.getElementById("tabCreate");

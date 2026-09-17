@@ -1707,15 +1707,20 @@
         <section class="searchPage wide discoveryPage" data-route="discover">
           <div class="discoveryPane discoveryPaneStudio" id="discoveryPaneDiscover">
             <div class="discoveryStudioAmbient" aria-hidden="true"></div>
-            <header class="discoveryStudioHead">
+            <header class="discoveryStudioHead discoveryStudioHead--home">
               <button type="button" class="nabadBackBtn discoverySearchClose" id="discoverySearchClose" aria-label="Close search">
                 <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6 9 12l6 6"/></svg>
               </button>
-              <div class="discoveryStudioTitles">
-                <h2 class="discoveryStudioH2 appScreenTitle">Home</h2>
-              </div>
+              <a href="#/generate" id="homeCreatePlus" class="homeCreatePlus" aria-label="Create">
+                <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                  <rect x="3.2" y="3.2" width="17.6" height="17.6" rx="5.2" fill="none" stroke="currentColor" stroke-width="1.75"/>
+                  <path d="M12 8.2v7.6M8.2 12h7.6" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"/>
+                </svg>
+              </a>
+              <a href="#/discover" id="homeBrandWordmark" class="homeBrandWordmark" aria-label="NabadAi — Home">
+                <img src="./assets/marketing/nabadai-wordmark-ig.png" alt="NabadAi" width="110" height="34" decoding="async" />
+              </a>
               <div class="discoveryHeadActions">
-                <span class="coachFabSlot" data-coach-fab-slot="discover" aria-hidden="true"></span>
                 <button type="button" class="discoveryRefreshBtn discoveryHeadIconBtn" id="discoverySearchBtn" aria-label="Search Home" aria-expanded="false" aria-controls="discoverySearchPanel">
                   <svg class="discoveryRefreshIco" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
                     <circle cx="11" cy="11" r="7" fill="none" stroke="currentColor" stroke-width="1.85"/>
@@ -4903,15 +4908,30 @@
           <span class="tabLabel">Messages</span>
           <span id="messagesTabBadge" class="friendsTabDmBadge" hidden aria-hidden="true"></span>
         </a>
-        <a href="#/challenges" data-route-link="challenges" id="tabCreate" class="tabCreate challengesTab" data-tab-slot="c" aria-label="Create">
-          <span class="tabIcoSpinner" aria-hidden="true"></span>
-          <span class="tabIco tabIcoCreate" aria-hidden="true"></span>
-          <svg class="tabIco tabIcoPlay tabIcoWand" viewBox="0 0 24 24" aria-hidden="true">
-            <circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.75"/>
-            <path class="tabIcoWandStick" d="M5.5 18.5L14 10" fill="none" stroke="currentColor" stroke-linecap="round"/>
-            <path class="tabIcoWandStar" d="M16 4l.95 2.45L19.4 7.4l-2.45.95L16 10.8l-.95-2.45L12.6 7.4l2.45-.95z" fill="currentColor" stroke="none"/>
-          </svg>
-          <span class="tabLabel">Create</span>
+        <a href="#/messages" data-route-link="coach" id="tabCoach" class="tabCoach" data-tab-slot="c" aria-label="Coach">
+          <span class="tabIco tabIcoCoach" aria-hidden="true">
+            <svg viewBox="0 0 100 100" overflow="visible" aria-hidden="true">
+              <defs>
+                <linearGradient id="tabCoachOrbG" x1="28" y1="22" x2="72" y2="82" gradientUnits="userSpaceOnUse">
+                  <stop offset="0" stop-color="#5ef0d4"/>
+                  <stop offset=".45" stop-color="#3f73f0"/>
+                  <stop offset="1" stop-color="#6a23da"/>
+                </linearGradient>
+                <radialGradient id="tabCoachOrbHi" cx=".34" cy=".28" r=".62">
+                  <stop offset="0" stop-color="#ffffff" stop-opacity=".72"/>
+                  <stop offset=".42" stop-color="#ffffff" stop-opacity=".12"/>
+                  <stop offset="1" stop-color="#ffffff" stop-opacity="0"/>
+                </radialGradient>
+              </defs>
+              <g class="coachOrbArcRing">
+                <path class="coachOrbArc" d="M50 12 A38 38 0 0 1 88 50" fill="none" stroke="#36e7c0" stroke-width="3.2" stroke-linecap="round"/>
+                <path class="coachOrbArc coachOrbArc--b" d="M50 88 A38 38 0 0 1 12 50" fill="none" stroke="#36e7c0" stroke-width="3.2" stroke-linecap="round"/>
+              </g>
+              <circle cx="50" cy="50" r="27.5" fill="url(#tabCoachOrbG)"/>
+              <circle cx="50" cy="50" r="27.5" fill="url(#tabCoachOrbHi)"/>
+            </svg>
+          </span>
+          <span class="tabLabel">Coach</span>
         </a>
         <a href="#/activity" data-route-link="activity" class="activityTab" data-tab-slot="r1" aria-label="Activity">
           <svg class="tabIco tabIcoActivity" viewBox="0 0 24 24" aria-hidden="true">

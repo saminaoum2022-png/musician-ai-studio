@@ -22502,6 +22502,26 @@ input::placeholder, textarea::placeholder{
     stroke-width: 2;
     opacity: 1;
   }
+  .mobileTabbar a.tabCoach{
+    color: #fff;
+    opacity: 1;
+  }
+  .mobileTabbar a.tabCoach .tabIcoCoach{
+    width: 34px;
+    height: 34px;
+    margin-top: 6px;
+    stroke: none;
+    pointer-events: none;
+  }
+  .mobileTabbar a.tabCoach .tabIcoCoach svg{
+    width: 100%;
+    height: 100%;
+    display: block;
+    overflow: visible;
+  }
+  .mobileTabbar a.tabCoach.active .tabIcoCoach{
+    transform: scale(1.06);
+  }
   .mobileTabbar a.tabCreate .tabIcoCreate{
     display: block;
     pointer-events: none;
@@ -30032,6 +30052,66 @@ body.friendsFeedActive #discoverFriendsPanel .discoveryFeedStatus[hidden]{
   min-width: 0;
   overflow: visible;
 }
+.discoveryStudioHead--home{
+  position: relative;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 2px 2px 10px;
+  min-height: 38px;
+}
+.homeCreatePlus{
+  flex: 0 0 auto;
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  color: #fff;
+  text-decoration: none;
+  -webkit-tap-highlight-color: transparent;
+}
+.homeCreatePlus svg{
+  width: 26px;
+  height: 26px;
+  display: block;
+}
+.homeCreatePlus:active{
+  transform: scale(0.92);
+  opacity: 0.72;
+}
+.homeBrandWordmark{
+  position: absolute;
+  left: 50%;
+  top: 2px;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  height: 34px;
+  z-index: 1;
+}
+.discoveryStudioHead--home .discoveryHeadActions{
+  align-self: center;
+  margin-top: 0;
+  height: 34px;
+}
+.discoveryStudioHead--home .discoveryHeadIconBtn{
+  align-self: center;
+  margin-top: 0;
+  width: 34px;
+  height: 34px;
+}
+.homeBrandWordmark img{
+  display: block;
+  height: 34px;
+  width: auto;
+  filter: contrast(1.12);
+}
+html[data-theme="light"] .homeCreatePlus{
+  color: rgba(15, 23, 40, 0.92);
+}
+html[data-theme="light"] .homeBrandWordmark img{
+  filter: invert(1);
+}
 .discoveryStudioHead--tools{
   justify-content: flex-end;
   padding: 2px 2px 8px;
@@ -33305,6 +33385,10 @@ body.createChooserSheetOpen .footer{
 }
 .discoveryPaneStudio.isSearchOpen .discoveryStudioHead .discoverySearchClose{
   display: inline-flex;
+}
+.discoveryPaneStudio.isSearchOpen .homeCreatePlus,
+.discoveryPaneStudio.isSearchOpen .homeBrandWordmark{
+  display: none;
 }
 .discoveryPaneStudio.isSearchOpen #discoverySearchBtn{
   display: none;

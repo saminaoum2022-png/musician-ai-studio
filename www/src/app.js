@@ -5037,6 +5037,7 @@ function syncRoutePanelVisibility(wanted) {
   try { pulseTabTrayIfChanged(); } catch {}
   try { syncTabGlassThumb(); } catch {}
   try { syncTabbarDockTarget(); } catch {}
+  try { initDeskRail(); } catch {}
   try { syncDeskRailVisibility(); } catch {}
   try { syncDeskCoachPanel(); } catch {}
   try { syncCoachFabDesktopAnchor(); } catch {}
@@ -11329,14 +11330,16 @@ function initDeskRail() {
     const trendRow = e.target.closest(".deskRailTrendRow");
     if (trendRow) {
       // Rail lives outside #discoveryMainContent, so the Discover play handler
-      // never sees it — play directly via the same path it uses.
+      // never sees it — play the chart track itself (not the For You reel).
       const raw = decodeDiscoverDataAttr(trendRow, "data-challenge-entry-play");
       if (!raw) return;
       const title = decodeDiscoverDataAttr(trendRow, "data-challenge-entry-title") || "Song";
       const art = decodeDiscoverDataAttr(trendRow, "data-challenge-entry-art") || "";
       const by = decodeDiscoverDataAttr(trendRow, "data-challenge-entry-by") || "";
       e.preventDefault();
+      e.stopPropagation();
       try { haptic("light"); } catch {}
+      if (shouldUseDiscoverReelInPlace()) openDiscoverReelOverlay();
       void playDiscoverFeedEntry({
         raw,
         title,
@@ -11344,6 +11347,7 @@ function initDeskRail() {
         by,
         playSource: publicPlaySourceFromEl(trendRow),
         el: trendRow,
+        opts: { skipReel: true, openPlayer: false },
       });
       return;
     }
@@ -11373,7 +11377,15 @@ function initDeskRail() {
     }, 200);
   });
 }
-window.addEventListener("load", () => { try { initDeskRail(); } catch {} });
+function bootDeskRail() {
+  try { initDeskRail(); } catch {}
+}
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", bootDeskRail, { once: true });
+} else {
+  bootDeskRail();
+}
+window.addEventListener("load", bootDeskRail);
 
 async function refreshDiscoverCampaignRail() {
   const wrap = document.getElementById("discoverCampaignRail");

@@ -52181,6 +52181,7 @@ body[data-route="user"] #userPublicRepostsList{
     position: sticky;
     top: var(--nb-shell-pad-y, 20px);
     align-self: start;
+    z-index: 6;
     height: var(--nb-rail-height, calc(100dvh - 64px));
     max-height: var(--nb-rail-height, calc(100dvh - 64px));
     overflow: hidden;
@@ -52190,6 +52191,7 @@ body[data-route="user"] #userPublicRepostsList{
     flex-direction: column;
     gap: 12px;
     box-sizing: border-box;
+    pointer-events: auto;
   }
   aside.deskRail::-webkit-scrollbar{ display: none; }
 
@@ -53253,7 +53255,7 @@ body[data-route="studio"] .deskRail { display: none !important; }
   /* Discover For You reel — player route inside the 3-column shell. */
   html.is-web-shell body.discoverReelInShell[data-route="player"] > .app{
     display: grid !important;
-    grid-template-columns: var(--nb-sidebar, 248px) minmax(0, 1fr);
+    grid-template-columns: var(--nb-sidebar, 248px) minmax(0, 1fr) var(--nb-rail, 0px);
     column-gap: var(--nb-shell-gap, 34px);
     align-items: start;
     min-height: 100vh;
@@ -53435,6 +53437,7 @@ body[data-route="studio"] .deskRail { display: none !important; }
     z-index: 8;
     border-radius: inherit;
     overflow: hidden;
+    pointer-events: none;
   }
   html.is-web-shell body.discoverReelInShell[data-route="player"] .playerReelAnimCover{
     position: absolute;

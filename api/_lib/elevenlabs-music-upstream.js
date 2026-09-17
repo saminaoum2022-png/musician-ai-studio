@@ -666,13 +666,28 @@ function sanitizeElevenInpaintPlan(plan) {
     const text = String(c?.text || "").trim();
     if (!text) continue;
     const adherence = String(c?.context_adherence || c?.contextAdherence || "high").trim();
-    out.push({
+    const gen = {
       text: text.slice(0, 4000),
       duration_ms: Math.max(3000, Math.min(120000, Math.round(Number(c?.duration_ms ?? c?.durationMs) || 15000))),
       positive_styles: uniqueStyleTags(c?.positive_styles || c?.positiveStyles || []).slice(0, 50),
       negative_styles: uniqueStyleTags(c?.negative_styles || c?.negativeStyles || []).slice(0, 50),
       context_adherence: ["low", "medium", "high"].includes(adherence) ? adherence : "high",
-    });
+    };
+    const ref = c?.conditioning_ref || c?.conditioningRef;
+    const refSong = String(ref?.song_id || ref?.songId || "").trim();
+    if (refSong) {
+      const rs = Math.max(0, Math.round(Number(ref?.range?.start_ms ?? ref?.range?.startMs) || 0));
+      const re = Math.min(
+        rs + 30000,
+        Math.max(rs + 50, Math.round(Number(ref?.range?.end_ms ?? ref?.range?.endMs) || 0)),
+      );
+      if (re - rs >= 50) {
+        gen.conditioning_ref = { song_id: refSong, range: { start_ms: rs, end_ms: re } };
+        const strength = String(c?.condition_strength || c?.conditionStrength || "high").trim();
+        gen.condition_strength = ["low", "medium", "high", "xhigh"].includes(strength) ? strength : "high";
+      }
+    }
+    out.push(gen);
   }
   const keep = out.filter((c) => c.song_id).length;
   const rewrite = out.length - keep;
@@ -707,7 +722,7 @@ function summarizeElevenInpaintPlan(plan) {
     sections: chunks.map((c) => (
       (c?.song_id || c?.songId)
         ? `keep ${c.range?.start_ms}-${c.range?.end_ms}`
-        : `rewrite ${Number(c?.duration_ms) || 0}ms`
+        : `rewrite ${Number(c?.duration_ms) || 0}ms${c?.conditioning_ref || c?.conditioningRef ? ` cond ${c.condition_strength || c.conditionStrength || "high"}` : ""}`
     )),
   };
 }
@@ -809,13 +824,22 @@ function buildElevenEditCompositionPlan({ songId, chunks, edits, globalPositive,
       edit.negativeStyles || edit.negative_styles || c.negativeStyles || c.negative_styles || [],
     );
     const positiveStyles = uniqueStyleTags([...fallbackStyles, ...localPos]).slice(0, 50);
-    out.push({
+    const condEnd = Math.min(endMs, startMs + 30000);
+    const rewriteChunk = {
       text: parts.join("\n").slice(0, 4000),
       duration_ms: Math.max(3000, Math.min(120000, endMs - startMs)),
       positive_styles: positiveStyles.length ? positiveStyles : fallbackStyles.slice(0, 50),
       negative_styles: uniqueStyleTags([...songNeg, ...localNeg]),
       context_adherence: "high",
-    });
+    };
+    if (condEnd - startMs >= 50) {
+      rewriteChunk.conditioning_ref = {
+        song_id: sid,
+        range: { start_ms: startMs, end_ms: condEnd },
+      };
+      rewriteChunk.condition_strength = "high";
+    }
+    out.push(rewriteChunk);
   }
   flushKeep();
   if (!rewriteCount) {

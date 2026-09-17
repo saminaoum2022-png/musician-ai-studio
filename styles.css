@@ -53289,24 +53289,6 @@ body[data-route="studio"] .deskRail { display: none !important; }
     padding: 0 0 12px;
     overflow: visible;
   }
-  html.is-web-shell body.discoverReelInShell[data-route="player"] .playerCard{
-    display: flex !important;
-    flex-direction: column;
-    width: min(100%, 480px);
-    max-width: 480px;
-    min-height: calc(100vh - 64px);
-    max-height: calc(100vh - 52px);
-    margin-inline: auto;
-    padding: 0;
-    border-radius: 22px;
-    overflow: hidden;
-    contain: layout paint;
-    border: 1px solid rgba(255,255,255,0.09);
-    background: #0a0c12;
-    box-shadow: 0 24px 64px rgba(0,0,0,0.45);
-    position: relative;
-    flex: 1 1 auto;
-  }
   html.is-web-shell body.discoverReelInShell[data-route="player"] .playerHeader{
     position: absolute;
     top: 0;
@@ -53467,6 +53449,25 @@ body[data-route="studio"] .deskRail { display: none !important; }
   }
   html.is-web-shell body.discoverReelInShell[data-route="player"] .hubNowPlaying{
     display: none !important;
+  }
+}
+
+@media (min-width: 1024px) {
+  /* Desktop Discover/Create stay on the 3-column shell. Never show the
+     full-page player card — Now Playing lives in the right rail. Shared
+     track links opt in with body.deskSharePlayer. */
+  html.is-web-shell body:not(.deskSharePlayer) main.grid > .card.wide.playerCard[data-route="player"],
+  html.is-web-shell body:not(.deskSharePlayer)[data-route="player"] main.grid > [data-route="player"],
+  html.is-web-shell body:not(.deskSharePlayer) main.grid > .playerCard {
+    display: none !important;
+    visibility: hidden !important;
+    height: 0 !important;
+    max-height: 0 !important;
+    overflow: hidden !important;
+    pointer-events: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: 0 !important;
   }
 }
 

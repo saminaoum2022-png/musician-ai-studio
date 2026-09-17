@@ -270,7 +270,7 @@ import { DISCOVER_SHOW_PLAY_COUNTS, MUSIC_VIDEO_FEATURE_ENABLED } from "./featur
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260916-161510";
+const APP_BUILD = "20260917-173817";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -4989,13 +4989,25 @@ function syncRoutePanelVisibility(wanted) {
   } else if (route !== "generate" && getCreateFlow()) {
     clearCreateFlow();
   }
-  if (document.body.classList.contains("discoverReelInShell")) {
-    if (_discoverFeedTab !== "for-you") {
-      document.body.classList.remove("discoverReelInShell");
-    } else if (route === "discover" || route === "player") {
-      route = "player";
-    } else {
-      document.body.classList.remove("discoverReelInShell");
+  if (isDeskWebLayout()) {
+    try { document.body.classList.remove("discoverReelInShell", "isDiscoverReelPlayer", "discoverReelOpening"); } catch {}
+    let shared = false;
+    try { shared = Boolean(parseSharedTrackIdFromLocation()); } catch {}
+    try { document.body.classList.toggle("deskSharePlayer", Boolean(shared)); } catch {}
+    if (route === "player" && !shared) {
+      const keep = String(document.body.getAttribute("data-route") || "").trim();
+      route = keep && keep !== "player" ? keep : "discover";
+    }
+  } else {
+    try { document.body.classList.remove("deskSharePlayer"); } catch {}
+    if (document.body.classList.contains("discoverReelInShell")) {
+      if (_discoverFeedTab !== "for-you") {
+        document.body.classList.remove("discoverReelInShell");
+      } else if (route === "discover" || route === "player") {
+        route = "player";
+      } else {
+        document.body.classList.remove("discoverReelInShell");
+      }
     }
   }
   if (!route) return;
@@ -5625,6 +5637,18 @@ function applyRoute({ passGen } = {}) {
     navDir === "tab" ||
     isTabSwitch ||
     (prevRoute === "challenges" && wanted === "generate" && Boolean(getCreateFlow()));
+  if (wanted === "player" && isDeskWebLayout()) {
+    let shared = false;
+    try { shared = Boolean(parseSharedTrackIdFromLocation()); } catch {}
+    if (!shared) {
+      wanted = prevRoute && prevRoute !== "player" ? prevRoute : "discover";
+      try {
+        if (/^#\/player\b/i.test(String(location.hash || ""))) {
+          history.replaceState(null, "", `#/${wanted}`);
+        }
+      } catch {}
+    }
+  }
   syncRoutePanelVisibility(wanted);
   if (prevRoute !== wanted) resetRouteEnterScroll(wanted);
   if (wanted === "discover") {
@@ -47369,6 +47393,7 @@ function unmarkDiscoverReelPlayerShell() {
 
 /** Force edge-to-edge cover layout before body[data-route=player] CSS applies. */
 function lockDiscoverReelFullBleedLayout() {
+  if (isDeskWebLayout()) return;
   markDiscoverReelPlayerShell();
   try { document.body.classList.add("discoverReelOpening"); } catch {}
   if (discoverReelUsesInShellLayout()) {
@@ -47421,7 +47446,7 @@ function lockDiscoverReelFullBleedLayout() {
 }
 
 function clearDiscoverReelFullBleedLayout() {
-  if (discoverReelChromeActive()) return;
+  if (!isDeskWebLayout() && discoverReelChromeActive()) return;
   discoverReelDebugLog("clearLayout", "full bleed cleared");
   clearDiscoverReelOpeningLock();
   unmarkDiscoverReelPlayerShell();
@@ -47878,12 +47903,13 @@ async function playDiscoverReelAt(index, opts = {}) {
   discoverReelDebugLog("reelAt", `idx=${idx} skipCover=${Boolean(opts.skipCoverPaint)} pick=${discoverReelDebugShortUrl(pick.artUrl)}`);
   if (!opts.silent && !opts.skipSlide) haptic("light");
   hidePlayerKaraokeStrip();
+  const desk = isDeskWebLayout();
   await playLibraryUrlOnPlayer(pick.url, pick.title, pick.artUrl, {
     discoverFeed: true,
-    discoverReel: true,
-    reelSwap: true,
+    discoverReel: !desk,
+    reelSwap: !desk,
     reelIndex: idx,
-    openPlayer: resolveDiscoverReelOpenPlayer(opts),
+    openPlayer: desk ? false : resolveDiscoverReelOpenPlayer(opts),
     discoverBy: pick.byLine,
     skipCoverPaint: Boolean(opts.skipCoverPaint),
     playSource: pick.songId && pick.ownerUserId
@@ -47952,7 +47978,7 @@ async function playDiscoverFeedEntry({ raw, title, art, by, playSource, el, opts
   if (!opts.skipToggle && toggleDiscoverFeedPlaybackIfSameUrl(url)) return;
   primeGlobalPlayerInGesture();
   if (el) primeDiscoverPlaybackPendingFromEl(el);
-  const useReel = !opts.skipReel && shouldUseDiscoverReelPlayer() && opts.openPlayer !== false;
+  const useReel = !isDeskWebLayout() && !opts.skipReel && shouldUseDiscoverReelPlayer() && opts.openPlayer !== false;
   discoverReelDebugLog("tap", `useReel=${useReel} tab=${_discoverFeedTab} n=${_discoveryFeedTracks?.length || 0}`);
   if (!useReel) resetDiscoverReelShellRevealState();
   if (useReel) {
@@ -50595,6 +50621,10 @@ async function playLibraryUrlOnPlayer(rawUrl, title, artUrl, opts) {
   let openPlayer = true;
   if (opts?.openPlayer === false) openPlayer = false;
   else if (opts?.openPlayer === true) openPlayer = true;
+  if (isDeskWebLayout()) openPlayer = false;
+  if (isDeskWebLayout()) {
+    try { clearDiscoverReelFullBleedLayout(); } catch {}
+  }
   const byLine = fromDiscover || fromUserPlaylist || fromDm ? String(opts?.discoverBy || "").trim() : "";
   const playSource = opts?.playSource && opts.playSource.songId ? opts.playSource : null;
   const publicTrackMeta = playSource ? publicPlaybackTrackBySource(playSource, raw) : null;
@@ -63831,7 +63861,7 @@ async function playOnPlayerPage(url, label, meta = null, opts = {}) {
     }, metaOpts);
   }
   setPlayerSource(url, label);
-  if (!shareListen) {
+  if (!shareListen && !isDeskWebLayout()) {
     if (document.body.getAttribute("data-route") !== "player") {
       syncRoutePanelVisibility("player");
     }
@@ -71569,6 +71599,7 @@ if (els.hubNowExpand && !els.hubNowExpand.dataset.boundHubExp) {
   });
 }
 function openMiniPlayerFullSurface() {
+  if (isDeskWebLayout()) return;
   if (miniSource?.type === "hub" && hubAudioPostId) {
     if ((location.hash || "") !== "#/hub") location.hash = "#/hub";
     setTimeout(() => {

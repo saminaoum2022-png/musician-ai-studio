@@ -53452,13 +53452,13 @@ body[data-route="studio"] .deskRail { display: none !important; }
   }
 }
 
-@media (min-width: 1024px) {
-  /* Desktop Discover/Create stay on the 3-column shell. Never show the
-     full-page player card — Now Playing lives in the right rail. Shared
-     track links opt in with body.deskSharePlayer. */
+@media (min-width: 721px) and (hover: hover) and (pointer: fine) {
+  /* Desktop web — never show the full-page player. Zoomed windows often
+     report <1024px CSS width, which is why the giant cover kept appearing. */
   html.is-web-shell body:not(.deskSharePlayer) main.grid > .card.wide.playerCard[data-route="player"],
   html.is-web-shell body:not(.deskSharePlayer)[data-route="player"] main.grid > [data-route="player"],
-  html.is-web-shell body:not(.deskSharePlayer) main.grid > .playerCard {
+  html.is-web-shell body:not(.deskSharePlayer) main.grid > .playerCard,
+  html.is-web-shell body:not(.deskSharePlayer) .playerCard {
     display: none !important;
     visibility: hidden !important;
     height: 0 !important;
@@ -53468,6 +53468,18 @@ body[data-route="studio"] .deskRail { display: none !important; }
     margin: 0 !important;
     padding: 0 !important;
     border: 0 !important;
+  }
+  html.is-web-shell body:not(.deskSharePlayer) .playerArtStage,
+  html.is-web-shell body:not(.deskSharePlayer) .playerArtWrap,
+  html.is-web-shell body:not(.deskSharePlayer) .playerArt {
+    position: static !important;
+    inset: auto !important;
+    width: 0 !important;
+    height: 0 !important;
+    min-height: 0 !important;
+    max-width: 0 !important;
+    max-height: 0 !important;
+    overflow: hidden !important;
   }
 }
 

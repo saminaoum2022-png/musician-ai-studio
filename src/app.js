@@ -270,7 +270,7 @@ import { DISCOVER_SHOW_PLAY_COUNTS, MUSIC_VIDEO_FEATURE_ENABLED } from "./featur
 
 // Bumped on every deploy so we can verify, on-device, which JS version is live.
 // Surfaces in the page footer (always visible) and Settings → Environment.
-const APP_BUILD = "20260917-173817";
+const APP_BUILD = "20260917-175145";
 
 /** Cache-busted dynamic import — iOS WKWebView caches bare ./app-tour.js across builds. */
 let _appTourLoad = null;
@@ -11414,6 +11414,15 @@ if (document.readyState === "loading") {
   bootDeskRail();
 }
 window.addEventListener("load", bootDeskRail);
+window.addEventListener("hashchange", () => {
+  if (!isDeskWebLayout()) return;
+  if (!/^#\/player\b/i.test(String(location.hash || ""))) return;
+  try { if (parseSharedTrackIdFromLocation()) return; } catch {}
+  const keep = String(document.body.getAttribute("data-route") || "").trim();
+  const next = keep && keep !== "player" ? keep : "discover";
+  try { history.replaceState(null, "", `#/${next}`); } catch {}
+  try { syncRoutePanelVisibility(next); } catch {}
+}, true);
 
 async function refreshDiscoverCampaignRail() {
   const wrap = document.getElementById("discoverCampaignRail");
@@ -46978,10 +46987,26 @@ function shouldUseDiscoverReelInPlace() {
 function isDeskWebLayout() {
   if (!isWebOrDesktopShell()) return false;
   try {
-    return window.matchMedia("(min-width: 1024px)").matches;
+    const wide = window.matchMedia("(min-width: 721px)").matches;
+    const desktopPointer = window.matchMedia("(hover: hover) and (pointer: fine)").matches;
+    return wide && desktopPointer;
   } catch {
-    return false;
+    try {
+      return (window.innerWidth || 0) >= 721;
+    } catch {
+      return false;
+    }
   }
+}
+
+function marketingSiteHomeUrl() {
+  try {
+    const origin = String(location.origin || "").replace(/\/$/, "");
+    if (/^https?:\/\//i.test(origin) && !/localhost|127\.0\.0\.1|capacitor/i.test(origin)) {
+      return `${origin}/`;
+    }
+  } catch {}
+  return "https://www.nabadai.com/";
 }
 
 function discoverReelInPlaceActive() {
@@ -47186,9 +47211,11 @@ function revealDiscoverReelShell() {
   if (card) card.classList.remove("isDiscoverReelShellPending");
   if (_discoverReelDeferredRoute) {
     _discoverReelDeferredRoute = false;
-    syncRoutePanelVisibility("player");
-    try { location.hash = "#/player"; } catch {}
-    discoverReelDebugLog("revealShell", "route → player");
+    if (!isDeskWebLayout()) {
+      syncRoutePanelVisibility("player");
+      try { location.hash = "#/player"; } catch {}
+      discoverReelDebugLog("revealShell", "route → player");
+    }
   }
   _discoverReelShellRevealed = true;
   discoverReelDebugLog("revealShell", "shown");
@@ -47548,7 +47575,7 @@ function primeDiscoverReelOpenFirstFrame(pick, reelIdx, { title = "", subtitle =
   if (deferNativeRoute) {
     _discoverReelDeferredRoute = true;
     discoverReelDebugLog("openFrame", "defer route native");
-  } else {
+  } else if (!isDeskWebLayout()) {
     syncRoutePanelVisibility("player");
     try { location.hash = "#/player"; } catch {}
   }
@@ -71137,7 +71164,12 @@ if (_btnNewSong) {
   });
 }
 if (els.brandTitle) {
+  if (isWebOrDesktopShell()) els.brandTitle.title = "NabadAi home";
   els.brandTitle.addEventListener("click", () => {
+    if (isWebOrDesktopShell()) {
+      try { window.location.href = marketingSiteHomeUrl(); } catch {}
+      return;
+    }
     const route = document.body.getAttribute("data-route") || "";
     if (route !== "generate") {
       location.hash = "#/generate";

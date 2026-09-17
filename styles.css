@@ -22979,75 +22979,69 @@ input::placeholder, textarea::placeholder{
   .hubNowMelt{
     display: none;
     position: absolute;
-    top: -22px;
-    bottom: -22px;
-    width: 36px;
-    border-radius: 999px;
     pointer-events: none;
     z-index: 0;
     opacity: 0;
-    filter: blur(11px);
+    background-image: var(--hub-vinyl-art);
+    background-size: cover;
+    background-position: center;
     transition: opacity 280ms ease;
   }
   .hubNowPlaying.isDocked .hubNowMelt{
     display: block;
-    opacity: 1;
+    opacity: 0.92;
   }
   .hubNowPlaying.isDragging .hubNowMelt{
     opacity: 0;
   }
-  /* Melt sits on the visible bezel cut (disc center), not the off-screen half. */
+  /* Cover smear into the bezel — the disc itself, not a neon halo. */
   .hubNowPlaying.isDockedRight .hubNowMelt{
-    left: 50%;
-    margin-left: -20px;
-    background: radial-gradient(ellipse at 70% 50%,
-      rgba(var(--cover-glow-rgb, 46, 224, 192), 0.95) 0%,
-      rgba(var(--cover-glow-rgb, 46, 224, 192), 0.4) 46%,
-      transparent 74%);
+    top: -8px;
+    bottom: -8px;
+    left: 10%;
+    right: -14px;
+    border-radius: 46% 10px 10px 46%;
+    filter: blur(15px) saturate(1.18);
+    -webkit-mask-image: linear-gradient(to right, transparent 0%, #000 22%, #000 62%, transparent 100%);
+    mask-image: linear-gradient(to right, transparent 0%, #000 22%, #000 62%, transparent 100%);
   }
   .hubNowPlaying.isDockedLeft .hubNowMelt{
-    right: 50%;
-    margin-right: -20px;
-    background: radial-gradient(ellipse at 30% 50%,
-      rgba(var(--cover-glow-rgb, 46, 224, 192), 0.95) 0%,
-      rgba(var(--cover-glow-rgb, 46, 224, 192), 0.4) 46%,
-      transparent 74%);
-  }
-  .hubNowPlaying.isDockedRight::after,
-  .hubNowPlaying.isDockedLeft::after{
-    content: "";
-    position: absolute;
-    top: 6%;
-    bottom: 6%;
-    width: 16px;
-    pointer-events: none;
-    z-index: 3;
-    filter: blur(6px);
-  }
-  .hubNowPlaying.isDockedRight::after{
-    left: 46%;
-    background: linear-gradient(to left, rgba(var(--cover-glow-rgb, 46, 224, 192), 0.55), transparent);
-  }
-  .hubNowPlaying.isDockedLeft::after{
-    right: 46%;
-    background: linear-gradient(to right, rgba(var(--cover-glow-rgb, 46, 224, 192), 0.55), transparent);
+    top: -8px;
+    bottom: -8px;
+    right: 10%;
+    left: -14px;
+    border-radius: 10px 46% 46% 10px;
+    filter: blur(15px) saturate(1.18);
+    -webkit-mask-image: linear-gradient(to left, transparent 0%, #000 22%, #000 62%, transparent 100%);
+    mask-image: linear-gradient(to left, transparent 0%, #000 22%, #000 62%, transparent 100%);
   }
   .hubNowPlaying.isDocked .hubNowVinyl{
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.28);
+  }
+  .hubNowPlaying.isDocked[data-cover-prog="ready"] .hubNowVinyl{
     box-shadow:
-      0 4px 14px rgba(0, 0, 0, 0.28),
-      0 0 18px rgba(var(--cover-glow-rgb, 46, 224, 192), 0.28);
+      0 4px 12px rgba(0, 0, 0, 0.24),
+      0 0 14px rgba(var(--cover-glow-rgb), 0.2);
+  }
+  .hubNowPlaying.isDocked.isPlaying .hubNowVinyl{
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.28);
+  }
+  .hubNowPlaying.isDocked.isPlaying[data-cover-prog="ready"] .hubNowVinyl{
+    box-shadow:
+      0 4px 12px rgba(0, 0, 0, 0.24),
+      0 0 14px rgba(var(--cover-glow-rgb), 0.2);
   }
   .hubNowPlaying.isDockedRight .hubNowVinyl{
     transform-origin: left center;
-    transform: scaleX(0.9);
-    -webkit-mask-image: linear-gradient(to right, #000 0%, #000 46%, rgba(0,0,0,0.45) 68%, transparent 100%);
-    mask-image: linear-gradient(to right, #000 0%, #000 46%, rgba(0,0,0,0.45) 68%, transparent 100%);
+    transform: scaleX(0.86);
+    -webkit-mask-image: linear-gradient(to right, #000 0%, #000 48%, rgba(0,0,0,0.4) 74%, transparent 100%);
+    mask-image: linear-gradient(to right, #000 0%, #000 48%, rgba(0,0,0,0.4) 74%, transparent 100%);
   }
   .hubNowPlaying.isDockedLeft .hubNowVinyl{
     transform-origin: right center;
-    transform: scaleX(0.9);
-    -webkit-mask-image: linear-gradient(to left, #000 0%, #000 46%, rgba(0,0,0,0.45) 68%, transparent 100%);
-    mask-image: linear-gradient(to left, #000 0%, #000 46%, rgba(0,0,0,0.45) 68%, transparent 100%);
+    transform: scaleX(0.86);
+    -webkit-mask-image: linear-gradient(to left, #000 0%, #000 48%, rgba(0,0,0,0.4) 74%, transparent 100%);
+    mask-image: linear-gradient(to left, #000 0%, #000 48%, rgba(0,0,0,0.4) 74%, transparent 100%);
   }
   .hubNowClose{
     display: none !important;

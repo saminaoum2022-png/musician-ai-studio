@@ -2476,7 +2476,7 @@ function syncHubNowPlayPauseUi(audible) {
   if (!btn) return;
   btn.classList.toggle("isPlaying", playing);
   const title = String(hubNowMeta?.title || "Now playing").trim() || "Now playing";
-  btn.setAttribute("aria-label", `Open player, ${title}`);
+  btn.setAttribute("aria-label", `Open player, ${title}. Long press to close.`);
 }
 
 /** Audio element backing the bottom mini player (Discover uses `playerEl`). */
@@ -2543,6 +2543,7 @@ function renderHubNowPlaying() {
     try {
       els.hubNowPlaying.style.removeProperty("--cover-glow-rgb");
       els.hubNowPlaying.style.removeProperty("--cover-prog-rgb");
+      els.hubNowPlaying.style.removeProperty("--hub-vinyl-art");
       els.hubNowPlaying.removeAttribute("data-cover-prog");
     } catch {}
     // Match `.hubNowPlaying` exit transition so display:none does not clip the animation.
@@ -2575,6 +2576,12 @@ function renderHubNowPlaying() {
   if (els.hubNowArt) {
     const artSrc = hubNowMeta.art || DEFAULT_SONG_COVER_URL;
     assignCoverImageSrc(els.hubNowArt, artSrc, { updateClasses: false, immediate: true });
+    try {
+      const safe = String(artSrc || "").replace(/\\/g, "/").replace(/"/g, "%22");
+      if (safe) els.hubNowPlaying.style.setProperty("--hub-vinyl-art", `url("${safe}")`);
+      else els.hubNowPlaying.style.removeProperty("--hub-vinyl-art");
+      applyCoverGlowRgb(els.hubNowPlaying, artSrc);
+    } catch {}
   }
   if (els.hubNowTitle) els.hubNowTitle.textContent = hubNowMeta.title || "Now playing";
   try {

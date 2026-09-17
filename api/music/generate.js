@@ -53,6 +53,10 @@ const {
   elevenlabsGenerateEnabled,
   elevenlabsGenerateMusicDetailedWithRetry,
   elevenlabsUploadMusic,
+  estimateMpegAudioDurationMs,
+  expectedInpaintDurationMs,
+  isElevenInpaintPlan,
+  summarizeElevenInpaintPlan,
   estimateReferenceDurationMs,
   resolveElevenReferenceAudio,
   resolveElevenMusicLengthMs,
@@ -681,7 +685,7 @@ async function runElevenlabsGenerationJob({
     let finalCompositionPlan = null;
     let elevenPlanSource = null;
 
-    if (editCompositionPlan?.chunks?.length) {
+    if (isElevenInpaintPlan(editCompositionPlan)) {
       finalCompositionPlan = editCompositionPlan;
       elevenPlanSource = "admin_song_edit";
     } else if (geminiApiKey) {
@@ -781,39 +785,52 @@ async function runElevenlabsGenerationJob({
     }
     }
 
+    const inpaintSummary = isElevenInpaintPlan(editCompositionPlan)
+      ? summarizeElevenInpaintPlan(editCompositionPlan)
+      : null;
+    const inpaintExpectedMs = inpaintSummary ? expectedInpaintDurationMs(editCompositionPlan) : 0;
+    const inpaintDetail = inpaintSummary
+      ? [
+          `inpaint_format: ${inpaintSummary.format}`,
+          `inpaint_keep: ${inpaintSummary.keep}`,
+          `inpaint_rewrite: ${inpaintSummary.rewrite}`,
+          `inpaint_expected_ms: ${inpaintExpectedMs}`,
+          `inpaint_map: ${inpaintSummary.sections.join(" | ")}`.slice(0, 1600),
+        ].join("\n")
+      : "";
+
+    const adminDetailBefore = appendProducerAdminDetail(
+      [
+        adminDetailBase,
+        elevenPlanSource ? `eleven_plan: ${elevenPlanSource}` : "",
+        finalCompositionPlan?.sections?.length
+          ? `eleven_sections: ${finalCompositionPlan.sections.length}`
+          : "",
+        finalCompositionPlan?.chunks?.length
+          ? `eleven_chunks: ${finalCompositionPlan.chunks.length}`
+          : "",
+        inpaintDetail,
+        referenceSongId && finalCompositionPlan?.chunks?.length
+          ? `reference_chunks: ${finalCompositionPlan.chunks.filter((c) => c.conditioning_ref).length}`
+          : "",
+      ]
+        .filter(Boolean)
+        .join("\n"),
+      producerResult,
+    );
+
     await updateMusicGenerationByTaskId(taskId, {
-      request_detail: appendProducerAdminDetail(
-        [
-          adminDetailBase,
-          elevenPlanSource ? `eleven_plan: ${elevenPlanSource}` : "",
-          finalCompositionPlan?.chunks?.length
-            ? `eleven_chunks: ${finalCompositionPlan.chunks.length}`
-            : "",
-          referenceSongId && finalCompositionPlan?.chunks?.length
-            ? `reference_chunks: ${finalCompositionPlan.chunks.filter((c) => c.conditioning_ref).length}`
-            : "",
-        ]
-          .filter(Boolean)
-          .join("\n"),
-        producerResult,
-      ),
+      request_detail: adminDetailBefore,
     }).catch(() => null);
 
-    const isInpaint = Boolean(editCompositionPlan?.chunks?.length);
-    if (isInpaint) {
-      const keepCount = editCompositionPlan.chunks.filter((c) => c?.song_id || c?.songId).length;
-      const rewriteCount = editCompositionPlan.chunks.length - keepCount;
+    const isInpaint = isElevenInpaintPlan(editCompositionPlan);
+    if (isInpaint && inpaintSummary) {
       console.log(
         "[music/generate] elevenlabs inpaint compose",
         taskId,
-        `${keepCount} keep / ${rewriteCount} rewrite`,
-        JSON.stringify(
-          editCompositionPlan.chunks.map((c) => (
-            (c?.song_id || c?.songId)
-              ? { keep: [c.range?.start_ms, c.range?.end_ms] }
-              : { rewriteMs: c.duration_ms, text: String(c.text || "").slice(0, 40) }
-          )),
-        ),
+        `${inpaintSummary.keep} keep / ${inpaintSummary.rewrite} rewrite`,
+        inpaintSummary.format,
+        inpaintSummary.sections.join(" | "),
       );
     }
     const upstream = isInpaint
@@ -881,6 +898,22 @@ async function runElevenlabsGenerationJob({
     queueUpdateMusicGenerationByTaskId(taskId, {
       status: "completed",
       provider_cost_usd: ELEVENLABS_PROVIDER_COST_USD,
+      ...(isInpaint
+        ? {
+            request_detail: [
+              adminDetailBefore,
+              `el_http: ${upstream.httpStatus || 200}`,
+              `el_model: ${upstream.model || model}`,
+              upstream.requestId ? `el_request_id: ${upstream.requestId}` : "",
+              upstream.songId ? `el_out_song_id: ${upstream.songId}` : "",
+              `out_ms: ${upstream.outputDurationMs || estimateMpegAudioDurationMs(upstream.audio?.buffer)} expected_ms: ${inpaintExpectedMs}`,
+              `out_bytes: ${upstream.audio?.buffer?.length || 0}`,
+            ]
+              .filter(Boolean)
+              .join("\n")
+              .slice(0, 4000),
+          }
+        : {}),
     });
   } catch (e) {
     console.error("[music/generate] elevenlabs background job failed", taskId, e);
@@ -1439,7 +1472,7 @@ async function handleElevenlabsGenerate(req, res, { user, isAdmin, body }) {
   const instrumental = Boolean(body?.instrumental);
   const taskId = newTaskId("elevenlabs");
   const audioId = `${taskId}_a`;
-  const model = resolveElevenMusicModel(isSongEdit ? "music_v2_5" : body?.elevenlabsModel);
+  const model = resolveElevenMusicModel(isSongEdit ? "music_v2" : body?.elevenlabsModel);
   const musicLengthMs = isSongEdit
     ? Math.max(
         3000,

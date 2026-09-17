@@ -641,19 +641,67 @@ function extractUploadedPlanChunks(data) {
   return extractUploadedEditPlan(data).chunks;
 }
 
-function pushAudioRefChunks(out, songId, startMs, endMs) {
-  let a = Math.max(0, Math.round(startMs));
-  const end = Math.max(a + 50, Math.round(endMs));
-  while (end - a >= 50) {
-    const b = Math.min(end, a + 120000);
-    if (b - a >= 50) {
-      out.push({
-        song_id: songId,
-        range: { start_ms: a, end_ms: b },
-      });
-    }
-    a = b;
+function lyricsToPromptLines(text) {
+  return String(text || "")
+    .split(/\r?\n/)
+    .map((l) => String(l || "").trim())
+    .filter(Boolean)
+    .slice(0, 30)
+    .map((l) => l.slice(0, 200));
+}
+
+function isElevenInpaintPlan(plan) {
+  return Boolean(plan?.sections?.length || plan?.chunks?.length);
+}
+
+function summarizeElevenInpaintPlan(plan) {
+  const sections = Array.isArray(plan?.sections) ? plan.sections : [];
+  if (sections.length) {
+    const keep = sections.filter((s) => s?.source_from?.song_id || s?.sourceFrom?.songId).length;
+    return {
+      format: "music_prompt",
+      keep,
+      rewrite: sections.length - keep,
+      sections: sections.map((s) => {
+        const range = s?.source_from?.range || s?.sourceFrom?.range;
+        const name = String(s?.section_name || s?.sectionName || "section").trim() || "section";
+        if (range) return `keep ${name} ${range.start_ms ?? range.startMs}-${range.end_ms ?? range.endMs}`;
+        return `rewrite ${name} ${Number(s?.duration_ms ?? s?.durationMs) || 0}ms`;
+      }),
+    };
   }
+  const chunks = Array.isArray(plan?.chunks) ? plan.chunks : [];
+  const keep = chunks.filter((c) => c?.song_id || c?.songId).length;
+  return {
+    format: "composition_plan",
+    keep,
+    rewrite: chunks.length - keep,
+    sections: chunks.map((c) => (
+      (c?.song_id || c?.songId)
+        ? `keep ${c.range?.start_ms}-${c.range?.end_ms}`
+        : `rewrite ${Number(c?.duration_ms) || 0}ms`
+    )),
+  };
+}
+
+function expectedInpaintDurationMs(plan) {
+  if (Array.isArray(plan?.sections) && plan.sections.length) {
+    return plan.sections.reduce((n, s) => n + Math.max(0, Number(s?.duration_ms ?? s?.durationMs) || 0), 0);
+  }
+  const chunks = Array.isArray(plan?.chunks) ? plan.chunks : [];
+  return chunks.reduce((n, c) => {
+    const start = Number(c?.range?.start_ms);
+    const end = Number(c?.range?.end_ms);
+    if (Number.isFinite(start) && Number.isFinite(end) && end > start) return n + (end - start);
+    return n + Math.max(0, Number(c?.duration_ms) || 0);
+  }, 0);
+}
+
+/** CBR estimate for compose output_format mp3_48000_192. */
+function estimateMpegAudioDurationMs(buffer) {
+  const bytes = Buffer.isBuffer(buffer) ? buffer.length : 0;
+  if (bytes < 128) return 0;
+  return Math.round((bytes * 8) / 192);
 }
 
 function buildElevenEditCompositionPlan({ songId, chunks, edits, globalPositive, globalNegative }) {
@@ -664,21 +712,10 @@ function buildElevenEditCompositionPlan({ songId, chunks, edits, globalPositive,
   const editList = Array.isArray(edits) ? edits : [];
   const songPos = uniqueStyleTags(globalPositive);
   const songNeg = uniqueStyleTags(globalNegative);
-  const out = [];
+  const sections = [];
   let rewriteCount = 0;
-  let keepStart = null;
-  let keepEnd = null;
 
-  const flushKeep = () => {
-    if (keepStart == null || keepEnd == null || keepEnd - keepStart < 50) {
-      keepStart = null;
-      keepEnd = null;
-      return;
-    }
-    pushAudioRefChunks(out, sid, keepStart, keepEnd);
-    keepStart = null;
-    keepEnd = null;
-  };
+  const fallbackStyles = songPos.length ? songPos : ["original mix", "same vocal character"];
 
   for (let i = 0; i < list.length; i++) {
     const c = list[i] || {};
@@ -689,47 +726,65 @@ function buildElevenEditCompositionPlan({ songId, chunks, edits, globalPositive,
       startMs + 50,
       Math.round(Number(c.endMs ?? c.end_ms) || startMs + Number(c.durationMs || c.duration_ms || 15000)),
     );
+    const label = String(c.label || `Section ${i + 1}`).trim().slice(0, 100) || `Section ${i + 1}`;
+    const localPos = uniqueStyleTags(
+      edit.positiveStyles || edit.positive_styles || c.positiveStyles || c.positive_styles || [],
+    );
+    const localNeg = uniqueStyleTags(
+      edit.negativeStyles || edit.negative_styles || c.negativeStyles || c.negative_styles || [],
+    );
+    const positiveLocal = (localPos.length ? localPos : fallbackStyles).slice(0, 50);
+    const negativeLocal = uniqueStyleTags([...songNeg, ...localNeg]);
+
     if (action === "keep") {
-      if (keepStart == null) {
-        keepStart = startMs;
-        keepEnd = endMs;
-      } else if (startMs <= keepEnd + 80) {
-        keepEnd = Math.max(keepEnd, endMs);
-      } else {
-        flushKeep();
-        keepStart = startMs;
-        keepEnd = endMs;
+      let a = startMs;
+      let part = 0;
+      while (endMs - a >= 50) {
+        const b = Math.min(endMs, a + 120000);
+        const keepLyrics = String(c.lyrics || lyricsLinesFromPlanText(c.text).join("\n") || "").trim();
+        sections.push({
+          section_name: (part === 0 ? label : `${label} ${part + 1}`).slice(0, 100),
+          duration_ms: Math.max(3000, Math.min(120000, b - a)),
+          lines: lyricsToPromptLines(keepLyrics),
+          positive_local_styles: positiveLocal,
+          negative_local_styles: negativeLocal,
+          source_from: {
+            song_id: sid,
+            range: { start_ms: a, end_ms: b },
+          },
+        });
+        a = b;
+        part += 1;
       }
       continue;
     }
-    flushKeep();
+
     rewriteCount += 1;
-    const label = String(c.label || `Section ${i + 1}`).trim() || `Section ${i + 1}`;
     const lyrics = String(edit.text || c.lyrics || lyricsLinesFromPlanText(c.text).join("\n") || "").trim();
     const direction = String(edit.direction || "").trim();
-    const parts = [`[${label}]`];
-    if (lyrics) parts.push(lyrics);
-    if (direction) parts.push(`{${direction}}`);
-    const localPos = uniqueStyleTags(edit.positiveStyles || edit.positive_styles || c.positiveStyles || c.positive_styles || []);
-    const localNeg = uniqueStyleTags(edit.negativeStyles || edit.negative_styles || c.negativeStyles || c.negative_styles || []);
-    const positiveStyles = uniqueStyleTags([...songPos, ...localPos]).slice(0, 50);
-    if (!positiveStyles.length) {
-      positiveStyles.push("same arrangement", "same vocal character", "studio mix");
-    }
-    out.push({
-      text: parts.join("\n").slice(0, 4000),
+    const lines = lyricsToPromptLines(lyrics);
+    if (direction) lines.push(`{${direction.slice(0, 180)}}`);
+    sections.push({
+      section_name: label,
       duration_ms: Math.max(3000, Math.min(120000, endMs - startMs)),
-      positive_styles: positiveStyles,
-      negative_styles: uniqueStyleTags([...songNeg, ...localNeg]),
-      context_adherence: "high",
+      lines,
+      positive_local_styles: uniqueStyleTags([...fallbackStyles, ...localPos]).slice(0, 50),
+      negative_local_styles: negativeLocal,
     });
   }
-  flushKeep();
   if (!rewriteCount) {
     return { ok: false, userMessage: "Mark at least one section to rewrite." };
   }
-  if (!out.length) return { ok: false, userMessage: "No sections to edit." };
-  return { ok: true, plan: { chunks: out }, rewriteCount };
+  if (!sections.length) return { ok: false, userMessage: "No sections to edit." };
+  return {
+    ok: true,
+    plan: {
+      positive_global_styles: fallbackStyles.slice(0, 50),
+      negative_global_styles: songNeg,
+      sections,
+    },
+    rewriteCount,
+  };
 }
 
 function normalizePlanChunks(chunks) {
@@ -1513,9 +1568,9 @@ async function elevenlabsGenerateMusic({
  * @see https://elevenlabs.io/docs/eleven-api/guides/how-to/music/inpainting
  */
 async function elevenlabsComposeInpaint({ apiKey, compositionPlan, model }) {
-  const resolvedModel = resolveElevenMusicModel(model || "music_v2_5");
+  const resolvedModel = resolveElevenMusicModel(model || "music_v2");
   const plan = compositionPlan && typeof compositionPlan === "object" ? compositionPlan : null;
-  if (!plan?.chunks?.length) {
+  if (!isElevenInpaintPlan(plan)) {
     return { ok: false, userMessage: "Missing inpaint composition plan.", model: resolvedModel };
   }
   const url = `${ELEVEN_MUSIC_URL}?output_format=mp3_48000_192`;
@@ -1532,6 +1587,18 @@ async function elevenlabsComposeInpaint({ apiKey, compositionPlan, model }) {
     },
     body: JSON.stringify(body),
   });
+  const headerSongId = String(
+    r.headers.get("song-id")
+      || r.headers.get("x-song-id")
+      || r.headers.get("elevenlabs-song-id")
+      || "",
+  ).trim();
+  const requestId = String(
+    r.headers.get("request-id")
+      || r.headers.get("x-request-id")
+      || r.headers.get("x-correlation-id")
+      || "",
+  ).trim();
   const ct = String(r.headers.get("content-type") || "").toLowerCase();
   if (r.ok && ct.includes("audio")) {
     const ab = await r.arrayBuffer();
@@ -1542,6 +1609,9 @@ async function elevenlabsComposeInpaint({ apiKey, compositionPlan, model }) {
       audio: { buffer, mimeType: "audio/mpeg" },
       alignedWords: [],
       model: resolvedModel,
+      songId: headerSongId || undefined,
+      requestId: requestId || undefined,
+      outputDurationMs: estimateMpegAudioDurationMs(buffer),
       userMessage: buffer.length >= 128 ? "" : "ElevenLabs returned empty audio.",
     };
   }
@@ -1554,6 +1624,8 @@ async function elevenlabsComposeInpaint({ apiKey, compositionPlan, model }) {
     text,
     alignedWords: [],
     model: resolvedModel,
+    songId: headerSongId || undefined,
+    requestId: requestId || undefined,
     userMessage: elevenUserMessage(r.status, data, text),
   };
 }
@@ -1699,6 +1771,8 @@ module.exports = {
   buildElevenSongCompositionPlan,
   buildElevenEditCompositionPlan,
   decodeReferenceAudioPayload,
+  estimateMpegAudioDurationMs,
+  expectedInpaintDurationMs,
   extractUploadedEditPlan,
   extractUploadedPlanChunks,
   fetchElevenReferenceBytesFromUrl,
@@ -1713,6 +1787,7 @@ module.exports = {
   elevenUserMessage,
   extractElevenCopyrightRetry,
   injectLyricsIntoCompositionPlan,
+  isElevenInpaintPlan,
   normalizeElevenCompositionPlanResponse,
   normalizeElevenWordsTimestamps,
   parseStructuredLyricsIntoSections,
@@ -1724,5 +1799,6 @@ module.exports = {
   scaleCompositionPlanDuration,
   splitElevenNegativeStyleTags,
   splitElevenStyleTags,
+  summarizeElevenInpaintPlan,
   verifyElevenFinetuneAccess,
 };

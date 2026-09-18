@@ -2624,9 +2624,10 @@ function scheduleRenderHubNowPlaying() {
 
 const HUB_VINYL_DOCK_KEY = "nabad.hubVinylDock.v1";
 const HUB_VINYL_SIZE = 52;
-const HUB_VINYL_DRAG_SLOP = 8;
+const HUB_VINYL_DRAG_SLOP = 16;
 const HUB_VINYL_LONG_MS = 520;
 let hubVinylIgnoreClick = false;
+let hubVinylTapConsumed = false;
 let hubVinylDock = null;
 
 function resetHubVinylToDefault() {
@@ -2694,6 +2695,7 @@ function wireHubNowVinylDrag() {
   el.dataset.boundVinylDrag = "1";
   try { localStorage.removeItem(HUB_VINYL_DOCK_KEY); } catch {}
   let dragging = false;
+  let longPressed = false;
   let startX = 0;
   let startY = 0;
   let originX = 0;
@@ -2706,6 +2708,15 @@ function wireHubNowVinylDrag() {
       window.clearTimeout(longTimer);
       longTimer = 0;
     }
+  };
+
+  const endVinylPointer = () => {
+    try { if (pointerId != null) el.releasePointerCapture(pointerId); } catch {}
+    window.removeEventListener("pointermove", onMove, true);
+    window.removeEventListener("pointerup", onUp, true);
+    window.removeEventListener("pointercancel", onUp, true);
+    el.classList.remove("isDragging");
+    pointerId = null;
   };
 
   const onMove = (e) => {
@@ -2730,21 +2741,28 @@ function wireHubNowVinylDrag() {
 
   const onUp = (e) => {
     if (pointerId == null || e.pointerId !== pointerId) return;
-    pointerId = null;
-    clearVinylLongPress();
-    try { el.releasePointerCapture(e.pointerId); } catch {}
-    window.removeEventListener("pointermove", onMove, true);
-    window.removeEventListener("pointerup", onUp, true);
-    window.removeEventListener("pointercancel", onUp, true);
-    el.classList.remove("isDragging");
-    if (!dragging) return;
+    const cancelled = e.type === "pointercancel";
+    const wasDragging = dragging;
+    const wasLong = longPressed;
     dragging = false;
-    const rect = el.getBoundingClientRect();
-    const snapped = hubVinylSnapPoint(rect.left, rect.top);
-    applyHubVinylBox(snapped.x, snapped.y, { docked: true, side: snapped.side });
-    writeHubVinylDock({ side: snapped.side, yRatio: snapped.yRatio });
-    try { haptic("medium"); } catch {}
-    window.setTimeout(() => { hubVinylIgnoreClick = false; }, 80);
+    longPressed = false;
+    clearVinylLongPress();
+    endVinylPointer();
+    if (wasDragging) {
+      const rect = el.getBoundingClientRect();
+      const snapped = hubVinylSnapPoint(rect.left, rect.top);
+      applyHubVinylBox(snapped.x, snapped.y, { docked: true, side: snapped.side });
+      writeHubVinylDock({ side: snapped.side, yRatio: snapped.yRatio });
+      try { haptic("medium"); } catch {}
+      window.setTimeout(() => { hubVinylIgnoreClick = false; }, 80);
+      return;
+    }
+    hubVinylIgnoreClick = false;
+    if (cancelled || wasLong) return;
+    hubVinylTapConsumed = true;
+    try { haptic("light"); } catch {}
+    openMiniPlayerFullSurface();
+    window.setTimeout(() => { hubVinylTapConsumed = false; }, 400);
   };
 
   el.addEventListener("pointerdown", (e) => {
@@ -2758,18 +2776,16 @@ function wireHubNowVinylDrag() {
     originY = rect.top;
     pointerId = e.pointerId;
     dragging = false;
+    longPressed = false;
     clearVinylLongPress();
     longTimer = window.setTimeout(() => {
       longTimer = 0;
       if (dragging) return;
-      pointerId = null;
+      longPressed = true;
       hubVinylIgnoreClick = true;
-      try { el.releasePointerCapture(e.pointerId); } catch {}
-      window.removeEventListener("pointermove", onMove, true);
-      window.removeEventListener("pointerup", onUp, true);
-      window.removeEventListener("pointercancel", onUp, true);
       try { haptic("medium"); } catch {}
       dismissMiniPlayer();
+      window.setTimeout(() => { hubVinylIgnoreClick = false; }, 80);
     }, HUB_VINYL_LONG_MS);
     try { el.setPointerCapture(e.pointerId); } catch {}
     window.addEventListener("pointermove", onMove, true);
@@ -5397,21 +5413,28 @@ function animateRouteEnter(wanted, direction) {
   if (!direction || direction === "none") return;
   if (NAV_ANIM_SKIP.has(wanted)) return;
   if (navPrefersReducedMotion()) return;
-  // The full-screen player header (back + ⋯) is position:fixed and the card is
-  // vertically centered on mobile, so a transform-based slide can't land the
-  // fixed header at the viewport top without a visible snap, and the rising
-  // shell leaves a blank gap (reads as a flash). A plain opacity fade has no
-  // transform — the fixed header stays anchored and there is no gap.
+  if (wanted === "player") {
+    try {
+      const panel = document.querySelector('main.grid > [data-route="player"]');
+      if (panel?.classList.contains("routeEnter--present")) return;
+    } catch {}
+  }
+  const playerSlideUp =
+    wanted === "player" &&
+    window.matchMedia &&
+    window.matchMedia("(max-width: 720px)").matches;
   const cls =
-    wanted === "player" || (wanted === "generate" && isNativeShell())
-      ? "routeEnter--fade"
-      : direction === "forward"
-        ? "routeEnter--push"
-        : direction === "back"
-          ? "routeEnter--pop"
-          : direction === "present"
-            ? "routeEnter--present"
-            : "routeEnter--fade";
+    playerSlideUp
+      ? "routeEnter--present"
+      : wanted === "player" || (wanted === "generate" && isNativeShell())
+        ? "routeEnter--fade"
+        : direction === "forward"
+          ? "routeEnter--push"
+          : direction === "back"
+            ? "routeEnter--pop"
+            : direction === "present"
+              ? "routeEnter--present"
+              : "routeEnter--fade";
   let panels;
   try {
     panels = document.querySelectorAll(`main.grid > [data-route="${wanted}"]`);
@@ -5431,7 +5454,7 @@ function animateRouteEnter(wanted, direction) {
       el.removeEventListener("animationend", done);
     };
     el.addEventListener("animationend", done);
-    window.setTimeout(done, 180);
+    window.setTimeout(done, playerSlideUp ? 460 : 180);
   });
 }
 
@@ -47966,10 +47989,8 @@ function resetDiscoverReelPlayerArtForOpen() {
 }
 
 function stashDiscoverReelShellPending() {
-  if (_discoverReelShellRevealed || !isNativeShell()) return;
-  const card = document.querySelector(".playerCard");
-  if (card) card.classList.add("isDiscoverReelShellPending");
-  discoverReelDebugLog("stashShell", "hide player until portrait");
+  // No-op. Hiding the card, then revealing it while the player slides up, is
+  // what made Discover opens feel like a shake.
 }
 
 function resetDiscoverReelShellRevealState() {
@@ -47983,14 +48004,7 @@ function revealDiscoverReelShell() {
   if (_discoverReelShellRevealed) return;
   const card = document.querySelector(".playerCard");
   if (card) card.classList.remove("isDiscoverReelShellPending");
-  if (_discoverReelDeferredRoute) {
-    _discoverReelDeferredRoute = false;
-    if (!isDeskWebLayout()) {
-      syncRoutePanelVisibility("player");
-      try { location.hash = "#/player"; } catch {}
-      discoverReelDebugLog("revealShell", "route → player");
-    }
-  }
+  _discoverReelDeferredRoute = false;
   _discoverReelShellRevealed = true;
   discoverReelDebugLog("revealShell", "shown");
   discoverReelDebugLayout("shell-shown");
@@ -48004,13 +48018,10 @@ function primeDiscoverReelTapPreflight() {
   const card = document.querySelector(".playerCard");
   if (card) {
     card.dataset.discoverReel = "1";
-    card.classList.add("isDiscoverReelLayout", "isDiscoverReelShellPending");
+    card.classList.add("isDiscoverReelLayout");
   }
-  try { document.body.classList.add("isDiscoverReelPlayer", "discoverReelOpening"); } catch {}
   ensureNativeDiscoverReelCriticalCss();
-  if (isNativeShell()) try { reassertViewportScale(); } catch {}
   resetDiscoverReelPlayerArtForOpen();
-  lockDiscoverReelFullBleedLayout();
   stashDiscoverReelShellPending();
 }
 
@@ -48129,10 +48140,10 @@ function ensureNativeDiscoverReelCriticalCss() {
   const s = document.createElement("style");
   s.id = "nativeDiscoverReelCritical";
   s.textContent = [
-    "html.is-native-shell body.isDiscoverReelPlayer .mobileTabbar,",
-    "html.is-native-shell body.isDiscoverReelPlayer .header,",
-    "html.is-native-shell body.isDiscoverReelPlayer .hubNowPlaying{display:none!important}",
-    "html.is-native-shell body.isDiscoverReelPlayer .app{padding:0!important;min-height:100svh}",
+    "html.is-native-shell body.isDiscoverReelPlayer[data-route=player] .mobileTabbar,",
+    "html.is-native-shell body.isDiscoverReelPlayer[data-route=player] .header,",
+    "html.is-native-shell body.isDiscoverReelPlayer[data-route=player] .hubNowPlaying{display:none!important}",
+    "html.is-native-shell body.isDiscoverReelPlayer[data-route=player] .app{padding:0!important;min-height:100svh}",
     "html.is-native-shell .playerCard.isDiscoverReelLayout{padding:0!important;min-height:100svh!important;",
     "border:none!important;box-shadow:none!important;background:transparent!important}",
     "html.is-native-shell .playerCard.isDiscoverReelLayout .playerArtWrap{padding:0!important;border:none!important;",
@@ -48180,9 +48191,6 @@ function markDiscoverReelPlayerShell() {
   const card = document.querySelector(".playerCard");
   if (card) card.classList.add("isDiscoverReelLayout");
   ensureNativeDiscoverReelCriticalCss();
-  if (isNativeShell()) {
-    try { reassertViewportScale(); } catch {}
-  }
 }
 
 function unmarkDiscoverReelPlayerShell() {
@@ -48203,7 +48211,6 @@ function lockDiscoverReelFullBleedLayout() {
   }
   discoverReelDebugLog("lockLayout", isNativeShell() ? "native CSS" : "inline");
   if (isNativeShell()) {
-    try { void document.body.offsetHeight; } catch {}
     discoverReelDebugLayout("lock-native");
     return;
   }
@@ -48318,10 +48325,7 @@ function primeDiscoverReelOpenFirstFrame(pick, reelIdx, { title = "", subtitle =
     card.dataset.discoverReel = "1";
     card.classList.add("isDiscoverReelLayout");
   }
-  try { document.body.classList.add("isDiscoverReelPlayer", "discoverReelOpening"); } catch {}
   ensureNativeDiscoverReelCriticalCss();
-  if (isNativeShell()) try { reassertViewportScale(); } catch {}
-  lockDiscoverReelFullBleedLayout();
   stashDiscoverReelCoverPending();
   resetDiscoverReelRailFade();
   const url = String(pick?.url || "").trim();
@@ -48345,14 +48349,6 @@ function primeDiscoverReelOpenFirstFrame(pick, reelIdx, { title = "", subtitle =
     audioId: String(pick?.audioId || ""),
     meta: pick?.meta || {},
   };
-  const deferNativeRoute = isNativeShell() && !_discoverReelShellRevealed;
-  if (deferNativeRoute) {
-    _discoverReelDeferredRoute = true;
-    discoverReelDebugLog("openFrame", "defer route native");
-  } else if (!isDeskWebLayout()) {
-    syncRoutePanelVisibility("player");
-    try { location.hash = "#/player"; } catch {}
-  }
   primeDiscoverReelSocialRail(pick);
   void syncPlayerSocialRail();
   const playerArtUrl = discoverReelPlayerArtUrl(pick);
@@ -48364,12 +48360,8 @@ function primeDiscoverReelOpenFirstFrame(pick, reelIdx, { title = "", subtitle =
   });
   let painted = Boolean(instant);
   if (!painted) painted = primeDiscoverReelCoverFirstFrame(pick, { title, subtitle });
-  if (painted && !deferNativeRoute) void revealDiscoverReelCoverWhenReady(els.playerArt);
+  if (painted) void revealDiscoverReelCoverWhenReady(els.playerArt);
   discoverReelDebugLayout("openFrame-sync");
-  requestAnimationFrame(() => {
-    discoverReelDebugLayout("openFrame-rAF1");
-    requestAnimationFrame(() => discoverReelDebugLayout("openFrame-rAF2"));
-  });
   discoverReelDebugLog("openFrame", painted ? "painted sync" : "no sync paint");
   return painted;
 }
@@ -48377,7 +48369,6 @@ function primeDiscoverReelOpenFirstFrame(pick, reelIdx, { title = "", subtitle =
 /** Full portrait + full-bleed shell synchronously on tap (before any await). */
 function primeDiscoverReelCoverFirstFrame(pick, { title = "", subtitle = "" } = {}) {
   if (!pick || !els.playerArt) return false;
-  if (!document.body.classList.contains("discoverReelOpening")) lockDiscoverReelFullBleedLayout();
   const trackRef = {
     ...pick,
     meta: pick.meta || {},
@@ -64703,19 +64694,18 @@ async function playOnPlayerPage(url, label, meta = null, opts = {}) {
     }, metaOpts);
   }
   setPlayerSource(url, label);
-  if (!shareListen && !isDeskWebLayout()) {
-    if (document.body.getAttribute("data-route") !== "player") {
-      syncRoutePanelVisibility("player");
-    }
-    try {
-      if (!/^#\/player\b/i.test(String(location.hash || ""))) location.hash = "#/player";
-    } catch {}
-  }
   if (reelOpen && !isDeskWebLayout()) {
     markDiscoverReelPlayerShell();
     void syncPlayerSocialRail();
-    releaseDiscoverReelFullBleedLayout();
-    window.setTimeout(() => clearDiscoverReelOpeningLock(), 1200);
+    window.setTimeout(() => {
+      releaseDiscoverReelFullBleedLayout();
+      clearDiscoverReelOpeningLock();
+    }, 520);
+  }
+  if (!shareListen && !isDeskWebLayout()) {
+    try {
+      if (!/^#\/player\b/i.test(String(location.hash || ""))) location.hash = "#/player";
+    } catch {}
   }
   const a = ensurePlayer();
   const playUrl = normalizeAudioUrlForPlayback(url);
@@ -72549,7 +72539,7 @@ if (els.hubNowPlayPause && !els.hubNowPlayPause.dataset.boundHubPp) {
       e.preventDefault();
       e.stopPropagation();
     } catch {}
-    if (hubVinylIgnoreClick) return;
+    if (hubVinylIgnoreClick || hubVinylTapConsumed) return;
     haptic("light");
     openMiniPlayerFullSurface();
   });

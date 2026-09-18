@@ -9150,8 +9150,25 @@ main.grid > [data-route].routeEnter--present{
    its winning declarations never change as the routeEnter classes toggle, so the
    animation never re-triggers mid-open. */
 main.grid > .card.wide[data-route="player"]{
+  animation: none;
+  will-change: auto;
+}
+main.grid > .card.wide[data-route="player"].routeEnter--fade{
   animation: navFadeIn 190ms cubic-bezier(0.32, 0.72, 0, 1) both;
   will-change: opacity;
+}
+@media (max-width: 720px){
+  main.grid > .card.wide[data-route="player"].routeEnter--present{
+    animation: navPresentIn 440ms cubic-bezier(0.32, 0.72, 0, 1) both;
+    will-change: transform;
+  }
+  body[data-route="player"] main.grid > .card.wide[data-route="player"].routeEnter--present .playerHeader,
+  body[data-route="player"] main.grid > .card.wide[data-route="player"].routeEnter--present .playerArtStage,
+  body[data-route="player"] main.grid > .card.wide[data-route="player"].routeEnter--present .playerMeta,
+  body[data-route="player"] main.grid > .card.wide[data-route="player"].routeEnter--present .playerSocialRail,
+  body[data-route="player"] main.grid > .card.wide[data-route="player"].routeEnter--present .playerReelAnimLayer{
+    position: absolute;
+  }
 }
 /* Native Generate dock is position:fixed. Transform / will-change:transform on
    this card makes the dock's containing block the card, so Generate first sits
@@ -22001,11 +22018,11 @@ input::placeholder, textarea::placeholder{
   }
   .mobileTabbar{
     --tab-pill-size: 46px;
-    --tab-thumb-w: 56px;
+    --tab-thumb-w: 64px;
     --tab-thumb-h: 40px;
     --tab-tray-size: 58px;
     --tab-tray-collapsed: 52px;
-    --tab-tray-end: 18px;
+    --tab-tray-end: 26px;
     --tab-pad-x: 18px;
     --tab-pad-y: 8px;
     --tab-col: calc((100% - (var(--tab-pad-x) * 2)) / 5);
@@ -22346,8 +22363,8 @@ input::placeholder, textarea::placeholder{
     }
   }
   .mobileTabbar a .tabIco{
-    width: 22px;
-    height: 22px;
+    width: 24px;
+    height: 24px;
     fill: none;
     stroke: currentColor;
     stroke-width: 1.75;
@@ -22362,12 +22379,16 @@ input::placeholder, textarea::placeholder{
     opacity: 1;
     filter: none;
   }
+  .mobileTabbar a .tabIcoMessages,
+  .mobileTabbar a .tabIcoActivity{
+    stroke-width: 2.3;
+  }
   .tabProfileAvatarSlot{
     position: relative;
     z-index: 1;
     flex: 0 0 auto;
-    width: 24px;
-    height: 24px;
+    width: 26px;
+    height: 26px;
     margin-top: 11px;
     border-radius: var(--nabad-squircle-radius);
     display: none;
@@ -22823,7 +22844,7 @@ input::placeholder, textarea::placeholder{
   .mobileTabbar a.active .tabIcoMessages path{
     fill: currentColor;
     stroke: currentColor;
-    stroke-width: 1.15;
+    stroke-width: 2.15;
   }
   .mobileTabbar a.tabCreate.active .tabIco,
   .mobileTabbar a.tabCreate.tabIsReady .tabIco,
@@ -22851,7 +22872,7 @@ input::placeholder, textarea::placeholder{
   }
   .mobileTabbar a.active .tabIcoActivity polyline{
     stroke: #fff;
-    stroke-width: 2.45;
+    stroke-width: 2.75;
   }
   .mobileTabbar a.friendsTab.active,
   .mobileTabbar a.messagesTab.active{
@@ -23619,6 +23640,7 @@ body.trackSheetOpen .coachFab{
     padding: 0 16px;
     pointer-events: none;
     overflow: visible;
+    transition: padding-right 280ms cubic-bezier(0.22, 1, 0.36, 1);
   }
   /* Frost layer on the fixed dock (same trick as the tab bar) so WKWebView
      actually blurs — glyphs behind the pill must not stay readable. */
@@ -23644,7 +23666,7 @@ body.trackSheetOpen .coachFab{
   html.is-native-shell body[data-route="generate"] #createGenerateDock:has(#btnSunoGenerate.isReady)::after{
     display: none;
   }
-  html.is-native-shell body[data-route="generate"]:has(.hubNowPlaying.isVisible) #createGenerateDock{
+  html.is-native-shell body[data-route="generate"]:has(.hubNowPlaying.isVisible:not(.isPlaced)) #createGenerateDock{
     padding-right: 72px;
   }
   html.is-native-shell body[data-route="generate"].createKeyboardOpen #createGenerateDock{

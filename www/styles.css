@@ -22215,6 +22215,7 @@ input::placeholder, textarea::placeholder{
   .mobileTabbar a{
     color: #fff;
     --tab-create-orbit-size: var(--tab-pill-size);
+    --tab-create-orbit-top: 0px;
     --tab-create-gradient: var(--tab-pill-fill);
     --tab-create-glow: var(--tab-pill-glow);
     text-decoration:none;
@@ -22374,7 +22375,7 @@ input::placeholder, textarea::placeholder{
     display: block;
     position: relative;
     z-index: 1;
-    margin-top: 12px;
+    margin-top: 11px;
     transition: stroke 180ms ease, stroke-width 180ms ease, opacity 180ms ease, fill 180ms ease, filter 180ms ease, width 180ms ease, height 180ms ease;
     opacity: 1;
     filter: none;
@@ -22541,11 +22542,11 @@ input::placeholder, textarea::placeholder{
   .mobileTabbar a.tabCoach.active .tabIcoCoach{
     transform: scale(1.06);
   }
-  .mobileTabbar a.tabCreate .tabIcoCreate{
+  .mobileTabbar a.tabCreate .tabIco.tabIcoCreate{
     display: block;
     pointer-events: none;
-    width: 26px;
-    height: 26px;
+    width: 25px;
+    height: 25px;
     background: currentColor;
     filter: none;
     -webkit-mask-image: url(assets/icons/create-tab-music-note.png);
@@ -22592,9 +22593,9 @@ input::placeholder, textarea::placeholder{
   .mobileTabbar a.tabCreate.active::before{
     background: transparent;
   }
-  .mobileTabbar a.tabCreate.active .tabIcoCreate{
-    width: 29px;
-    height: 29px;
+  .mobileTabbar a.tabCreate.active .tabIco.tabIcoCreate{
+    width: 25px;
+    height: 25px;
     background: currentColor;
   }
   html[data-theme="light"] .mobileTabbar{
@@ -22839,7 +22840,7 @@ input::placeholder, textarea::placeholder{
   .mobileTabbar a.active .tabIcoHome path{
     fill: currentColor;
     stroke: currentColor;
-    stroke-width: 1.15;
+    stroke-width: 1.35;
   }
   .mobileTabbar a.active .tabIcoMessages path{
     fill: currentColor;
@@ -22851,6 +22852,9 @@ input::placeholder, textarea::placeholder{
   .mobileTabbar a.tabCreate.tabIsListen .tabIco,
   .mobileTabbar a.tabCreate.tabIsGenerating .tabIcoSpinner{
     transform: translate(-50%, -50%);
+  }
+  .mobileTabbar a.tabCreate .tabIco.tabIcoCreate{
+    transform: translate(-50%, calc(-50% + 1px));
   }
   .mobileTabbar a.active .tabLabel{
     opacity: 1;

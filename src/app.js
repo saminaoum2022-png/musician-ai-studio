@@ -4134,12 +4134,6 @@ function handleMobileTabTap(a, e) {
   if (e?.button != null && e.button !== 0) return false;
   if (document.body.classList.contains("echoComposeOpen")) return false;
 
-  if (a?.getAttribute?.("data-route-link") === "coach") {
-    try { e?.preventDefault?.(); } catch {}
-    openNabadCoach();
-    return true;
-  }
-
   const resolved = resolveMobileTabTap(a);
   if (!resolved) return false;
   const { linkRoute, route, targetHash } = resolved;
@@ -5226,18 +5220,16 @@ function syncRoutePanelVisibility(wanted) {
     }
   });
   syncCreateFlowUi();
-  const coachThread = route === "messages-thread" && isCoachThreadId(_conversationId);
   document.querySelectorAll("[data-route-link]").forEach((a) => {
     const link = a.getAttribute("data-route-link");
     const active = link === route
       || (route === "discover-playlist" && link === "discover")
       || (route === "generate" && link === "challenges")
       || (route === "mashup" && link === "challenges")
-      || (route === "vocal" && link === "challenges")
-      || (coachThread && link === "coach");
+      || (route === "vocal" && link === "challenges");
     a.classList.toggle("active", active
       || (route === "messages" && link === "messages")
-      || (route === "messages-thread" && link === "messages" && !coachThread));
+      || (route === "messages-thread" && link === "messages"));
   });
   try { pulseTabTrayIfChanged(); } catch {}
   try { syncTabGlassThumb(); } catch {}
@@ -9028,6 +9020,14 @@ const CHALLENGE_OCCASIONS = [
     lyricSeed: "Write like a voice note to someone far away.\nVerse: one specific memory. Chorus: I miss you + one line you'd actually say.\nConversational, complete ending.",
     tags: ["Distance", "Love"],
   },
+  {
+    id: "just-because",
+    label: "Just because",
+    title: "Just Because",
+    angle: "a warm unexpected song that says I was thinking of you",
+    lyricSeed: "No holiday, no excuse — just a gift.\nVerse: one reason they crossed your mind. Chorus: thinking of you, simply.\nKeep it short, warm, complete.",
+    tags: ["Gift", "Warm"],
+  },
 ];
 
 const CHALLENGE_GENRES = [
@@ -11530,12 +11530,6 @@ function syncCoachFabHeaderMount() {
     fab.style.setProperty("pointer-events", "none", "important");
     return;
   }
-  // Mobile: Coach lives in the center tab. Don't also park the orb in headers.
-  if (window.matchMedia && window.matchMedia("(max-width: 720px)").matches) {
-    fab.classList.remove("coachFab--header");
-    if (fab.parentElement !== parking) parking.appendChild(fab);
-    return;
-  }
   if (!slotKey) {
     fab.classList.remove("coachFab--header");
     if (fab.parentElement !== parking) parking.appendChild(fab);
@@ -11911,7 +11905,7 @@ const DISCOVER_CHALLENGE_AVATAR_SEEDS = {
   "roast-song": ["R", "O", "A", "S"],
 };
 
-const DISCOVER_CHALLENGE_ART_VERSION = "2026091080sHero";
+const DISCOVER_CHALLENGE_ART_VERSION = "20260918summer2";
 const DISCOVER_CHALLENGE_ART = {
   worldcup2026: "./assets/discover/challenges/worldcup-anthem.svg",
   "one-line-reply": "./assets/discover/challenges/remix-battle.svg",
@@ -13103,6 +13097,9 @@ function discoverFeedFeaturedChallengeBlockHtml(c, tracks, profMap, opts = {}) {
   const heroArt = discoverFeaturedChallengeHeroArt(c, top);
   const [toneA, toneB] = discoverChallengeToneTheme(c.tone);
   const kicker = discoverFeaturedChallengeKicker(c);
+  const scriptHtml = String(c.id || "") === "80s-you"
+    ? `<img class="discoverFeaturedChallengeHeroScript" src="${escapeHtml(`${bundleAssetUrl("assets/discover/challenges/music-lives-in-you.png")}?v=${DISCOVER_CHALLENGE_ART_VERSION}`)}" alt="" aria-hidden="true" />`
+    : "";
   const heroHtml = `
     <button
       type="button"
@@ -13116,6 +13113,7 @@ function discoverFeedFeaturedChallengeBlockHtml(c, tracks, profMap, opts = {}) {
       </span>
       <span class="discoverFeaturedChallengeHeroScrim" aria-hidden="true"></span>
       <span class="discoverFeaturedChallengeHeroGlow" aria-hidden="true"></span>
+      ${scriptHtml}
       <span class="discoverFeaturedChallengeHeroBody">
         <span class="discoverFeaturedChallengeHeroKicker">${escapeHtml(kicker)}</span>
         <span class="discoverFeaturedChallengeHeroTitle">${escapeHtml(challengeTitle)}</span>
@@ -13123,7 +13121,9 @@ function discoverFeedFeaturedChallengeBlockHtml(c, tracks, profMap, opts = {}) {
         <span class="discoverFeaturedChallengeHeroCta">Join Challenge</span>
       </span>
     </button>`;
-  const creationsRail = entries.length
+  const hideHead = opts.hideHead === true;
+  const hideCreations = opts.hideCreations === true;
+  const creationsRail = !hideCreations && entries.length
     ? `
       <div class="discoverFeaturedChallengeCreationsHead">
         <h4 class="discoverFeaturedChallengeCreationsTitle">Top creations from this challenge</h4>
@@ -13132,7 +13132,7 @@ function discoverFeedFeaturedChallengeBlockHtml(c, tracks, profMap, opts = {}) {
     : "";
   return `
     <section class="discoverFeedSection discoverFeedSection--featuredChallenge">
-      ${discoverFeedSectionHeadHtml(sectionTitle, viewAllBtn)}
+      ${hideHead ? "" : discoverFeedSectionHeadHtml(sectionTitle, viewAllBtn)}
       ${heroHtml}
       ${creationsRail}
     </section>`;
@@ -13363,18 +13363,28 @@ function discoverFeedCommunityPicksBlockHtml(tracks, profMap, prefs) {
     </section>`;
 }
 
+function discoverGiftShapeSvg(kind) {
+  if (kind === "birthday") {
+    return `<svg class="discoverMomentTileShapeIco" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12.7 2.5c.25.5.55 1.35.15 2.25-.45 1-1.15 1-1.35 1s-.9 0-1.35-1c-.4-.9-.1-1.75.15-2.25.28.55.58.85.95.85s.67-.3.95-.85Z"/><path fill="currentColor" d="M11.15 5.7h1.7v3.55h-1.7z"/><path fill="currentColor" d="M6.1 10.7h11.8c.7 0 1.25.5 1.25 1.15v1.7H4.85v-1.7c0-.65.55-1.15 1.25-1.15Z"/><path fill="currentColor" d="M4.7 14.85h14.6v5.2c0 1.05-.85 1.9-1.9 1.9H6.6c-1.05 0-1.9-.85-1.9-1.9z"/></svg>`;
+  }
+  if (kind === "wedding") {
+    return `<svg class="discoverMomentTileShapeIco" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 20.35S4.4 15.7 2.55 11.5C1.15 8.4 3.2 5.15 6.7 5.15c1.85 0 3.25 1.05 5.3 3.15 2.05-2.1 3.45-3.15 5.3-3.15 3.5 0 5.55 3.25 4.15 6.35-1.85 4.2-9.45 8.85-9.45 8.85Z"/></svg>`;
+  }
+  return `<svg class="discoverMomentTileShapeIco" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 2.8 14.5 8.4l6.1.7-4.6 4.1 1.4 6-5.4-2.9-5.4 2.9 1.4-6-4.6-4.1 6.1-.7Z"/></svg>`;
+}
+
 function discoverOccasionStripHtml() {
   const tiles = [
-    { id: "birthday", label: "Birthday", tone: "teal" },
-    { id: "wedding", label: "Wedding", tone: "violet" },
-    { id: "mom-day", label: "For mom", tone: "rose" },
-    { id: "anniversary", label: "Anniversary", tone: "mix" },
-    { id: "congrats", label: "Congrats", tone: "teal" },
+    { id: "birthday", label: "Birthday", sub: "Make it special", tone: "teal", shape: "birthday" },
+    { id: "wedding", label: "Wedding", sub: "Songs for love", tone: "violet", shape: "wedding" },
+    { id: "just-because", label: "Just because", sub: "Brighten their day", tone: "mix", shape: "just-because" },
   ];
   const cards = tiles.map((tile) => `
-    <button type="button" class="discoverMomentTile discoverMomentTile--${escapeHtml(tile.tone)}" data-discover-occasion-open="${escapeHtml(tile.id)}" aria-label="Gift a song: ${escapeHtml(tile.label)}">
+    <button type="button" class="discoverMomentTile discoverMomentTile--gift discoverMomentTile--${escapeHtml(tile.tone)}" data-discover-occasion-open="${escapeHtml(tile.id)}" aria-label="Gift a song: ${escapeHtml(tile.label)}">
       <span class="discoverMomentTileWash" aria-hidden="true"></span>
+      <span class="discoverMomentTileShape discoverMomentTileShape--${escapeHtml(tile.shape)}" aria-hidden="true">${discoverGiftShapeSvg(tile.shape)}</span>
       <span class="discoverMomentTileTitle">${escapeHtml(tile.label)}</span>
+      <span class="discoverMomentTileSub">${escapeHtml(tile.sub)}</span>
     </button>
   `).join("");
   const seeAll = `<button type="button" class="discoverFeedSectionLink" data-discover-feed-tab-jump="occasions">See all</button>`;
@@ -13384,6 +13394,32 @@ function discoverOccasionStripHtml() {
       <div class="discoverMomentRail" role="list">
         ${cards}
       </div>
+    </section>`;
+}
+
+function discoverVibeCoverUrl(pl) {
+  return `${bundleAssetUrl(pl.cover)}?v=${DISCOVER_CHALLENGE_ART_VERSION}`;
+}
+
+function discoverFeedVibeRailHtml() {
+  const go = `<svg viewBox="0 0 24 24" width="13" height="13" aria-hidden="true"><path fill="currentColor" d="M9.3 5.3a1 1 0 0 1 1.4 0l6 6a1 1 0 0 1 0 1.4l-6 6a1 1 0 1 1-1.4-1.4L14.58 12 9.3 6.7a1 1 0 0 1 0-1.4Z"/></svg>`;
+  const cards = DISCOVER_PLAYLISTS.map((pl) => {
+    const n = (_discoveryPlaylistBuckets.get(pl.slug) || []).length;
+    const label = n === 1 ? "1 song" : n > 0 ? `${n} songs` : "";
+    return `
+      <button type="button" class="discoverVibeCard" role="listitem" data-discover-playlist="${escapeHtml(pl.slug)}" aria-label="${escapeHtml(pl.title)} playlist${label ? `, ${label}` : ""}">
+        <span class="discoverVibeCardArt">
+          <img src="${escapeHtml(discoverVibeCoverUrl(pl))}" alt="" loading="lazy" decoding="async" />
+          <span class="discoverVibeCardGo" aria-hidden="true">${go}</span>
+        </span>
+        <span class="discoverVibeCardTitle">${escapeHtml(pl.title)}</span>
+        ${label ? `<span class="discoverVibeCardCount">${escapeHtml(label)}</span>` : ""}
+      </button>`;
+  }).join("");
+  return `
+    <section class="discoverFeedSection discoverVibeSection" aria-label="Your vibes">
+      ${discoverFeedSectionHeadHtml("Your vibes")}
+      <div class="discoverVibeRail" role="list">${cards}</div>
     </section>`;
 }
 
@@ -13403,8 +13439,8 @@ function renderDiscoverFeedForYou(tracks, profMap) {
   const topChallengePack = discoverFeaturedChallengeForForYou(tracks, prefs);
   const challengeBlock = topChallengePack.challenge
     ? discoverFeedFeaturedChallengeBlockHtml(topChallengePack.challenge, tracks, profMap, {
-      sectionTitle: "From challenges",
-      viewAllSlug: "live-challenges",
+      hideHead: true,
+      hideCreations: true,
       entries: topChallengePack.entries,
     })
     : "";
@@ -13424,6 +13460,7 @@ function renderDiscoverFeedForYou(tracks, profMap) {
   const suggestedFollowBlock = discoverFeedSuggestedFollowBlockHtml(tracks, profMap);
   return `
     ${challengeBlock}
+    ${discoverFeedVibeRailHtml()}
     ${discoverOccasionStripHtml()}
     <section id="discoverWeeklyChart" class="discoverWeeklyChart discoverWeeklyChart--final isLoading" aria-busy="true" aria-label="Top songs this week">${discoverWeeklyChartSkeletonHtml()}</section>
     ${communityBlock}
@@ -13540,6 +13577,7 @@ function renderDiscoverFeed(tracks, profMap, tab = _discoverFeedTab) {
     try { closeDiscoverReelOverlay(); } catch {}
   }
   rebuildDiscoveryChallengeBuckets(tracks);
+  rebuildDiscoveryPlaylistBuckets(tracks);
   paintDiscoverFeedTabsActive(_discoverFeedTab);
   bindChallengesPageOnce();
   syncDiscoverFriendsFeedChrome();
@@ -49350,76 +49388,72 @@ async function recordDiscoverSurvivalPlay(songId) {
   } catch {}
 }
 
-/** Editorial Discover playlists (disabled — kept for legacy route redirects). */
+/** Editorial Discover playlists shown as Your vibes on For You. */
 const DISCOVER_PLAYLISTS = [
   {
-    slug: "arabic",
-    title: "Arabic & Levant",
-    subtitle: "Dabke, oud, mijwiz, and Arabic vocals",
-    emoji: "🎵",
+    slug: "summer-vibes",
+    title: "Summer Vibes",
+    subtitle: "Sun-warmed hooks and golden-hour pop",
+    cover: "./assets/discover/vibes/summer-vibes.png",
+    theme: ["245,158,11", "244,114,182"],
+    keywords: ["summer", "sun", "beach", "tropical", "sunset", "vacation", "pool", "golden hour", "warm", "holiday"],
+  },
+  {
+    slug: "arabic-nights",
+    title: "Arabic Nights",
+    subtitle: "Dabke, oud, and late Levant nights",
+    cover: "./assets/discover/vibes/arabic-nights.png",
     theme: ["56,189,248", "167,139,250"],
     keywords: ["arabic", "levant", "dabke", "oud", "mijwiz", "darbuka", "maqam", "khaleeji", "iraqi", "levantine", "syrian", "lebanese", "palestinian", "jordanian", "egyptian", "msa", "colloquial arabic"],
   },
   {
-    slug: "love",
-    title: "Love & dedications",
+    slug: "indie-dreams",
+    title: "Indie Dreams",
+    subtitle: "Alt glow, dream pop, and night colors",
+    cover: "./assets/discover/vibes/indie-dreams.png",
+    theme: ["124,92,255", "56,189,248"],
+    keywords: ["indie", "dream pop", "alternative", "lo-fi", "lofi", "bedroom", "shoegaze", "synth", "dreamy", "alt", "indie pop"],
+  },
+  {
+    slug: "love-stories",
+    title: "Love Stories",
     subtitle: "Romantic, anniversary, and for-someone songs",
-    emoji: "💜",
+    cover: "./assets/discover/vibes/love-stories.png",
     theme: ["244,114,182", "251,191,36"],
     keywords: ["love", "romance", "romantic", "anniversary", "dedication", "dedicate", "valentine", "crush", "heart", "for you", "for someone", "soulmate", "together", "miss you"],
   },
   {
-    slug: "wedding",
-    title: "Wedding & celebration",
-    subtitle: "Entrances, dabke, and big-day energy",
-    emoji: "✨",
-    theme: ["245,158,11", "35,213,171"],
-    keywords: ["wedding", "bride", "groom", "entrance", "first dance", "zaffa", "dabke", "celebration", "party", "toast", "ceremony"],
-  },
-  {
-    slug: "trip",
-    title: "Trip & road",
-    subtitle: "Driving grooves and open-road momentum",
-    emoji: "🚗",
+    slug: "night-drive",
+    title: "Night Drive",
+    subtitle: "Windows down, city lights, momentum",
+    cover: "./assets/discover/vibes/night-drive.png",
     theme: ["34,211,238", "124,92,255"],
-    keywords: ["road", "drive", "driving", "trip", "highway", "journey", "travel", "windows down", "cruising", "groove", "syncopated", "afro", "funk"],
+    keywords: ["road", "drive", "driving", "trip", "highway", "journey", "travel", "windows down", "cruising", "night drive", "groove", "syncopated"],
   },
   {
-    slug: "uplifting",
-    title: "Uplifting & hype",
-    subtitle: "Workout, drill, trap, and arena energy",
-    emoji: "⚡",
-    theme: ["251,191,36", "244,114,182"],
-    keywords: ["hype", "workout", "gym", "drill", "trap", "anthem", "arena", "stadium", "viral", "energy", "power", "motivation", "win", "champion", "808"],
-  },
-  {
-    slug: "chill",
-    title: "Late night & chill",
+    slug: "quiet-hours",
+    title: "Quiet Hours",
     subtitle: "Ballads, piano, and slow intimate moods",
-    emoji: "🌙",
+    cover: "./assets/discover/vibes/quiet-hours.png",
     theme: ["99,102,241", "56,189,248"],
-    keywords: ["chill", "late night", "ballad", "piano", "acoustic", "intimate", "soft", "slow", "gentle", "sleep", "calm", "ambient", "60 bpm", "65 bpm", "68 bpm", "72 bpm"],
-  },
-  {
-    slug: "voice",
-    title: "Voice & remix",
-    subtitle: "Voice-note remixes and personal hooks",
-    emoji: "🎙",
-    theme: ["167,139,250", "56,189,248"],
-    keywords: ["voice", "voice-note", "voicenote", "remix", "vocal ref", "vocal reference", "hum", "melody", "personal hook"],
-  },
-  {
-    slug: "cinematic",
-    title: "Cinematic & epic",
-    subtitle: "Orchestral teasers and dramatic builds",
-    emoji: "🎬",
-    theme: ["124,92,255", "56,189,248"],
-    keywords: ["cinematic", "orchestral", "epic", "trailer", "teaser", "strings", "brass", "dramatic", "film", "score", "soundtrack"],
+    keywords: ["chill", "late night", "ballad", "piano", "acoustic", "intimate", "soft", "slow", "gentle", "sleep", "calm", "ambient", "quiet"],
   },
 ];
 
+const DISCOVER_PLAYLIST_ALIASES = {
+  arabic: "arabic-nights",
+  love: "love-stories",
+  trip: "night-drive",
+  chill: "quiet-hours",
+  wedding: "love-stories",
+  uplifting: "summer-vibes",
+  cinematic: "indie-dreams",
+  voice: "quiet-hours",
+};
+
 function getDiscoverPlaylistDef(slug) {
-  const s = String(slug || "").trim().toLowerCase();
+  const raw = String(slug || "").trim().toLowerCase();
+  const s = DISCOVER_PLAYLIST_ALIASES[raw] || raw;
   const editorial = DISCOVER_PLAYLISTS.find((pl) => pl.slug === s);
   if (editorial) return { ...editorial, kind: "editorial" };
   if (s === "live-challenges") {
@@ -71922,18 +71956,7 @@ try { syncCreateGenerateDock(); } catch {}
 // First route apply runs after loadAuthSession() below — not here — so empty
 // hash does not briefly bounce through #/auth before Welcome / Get Started.
 
-(function wireHomeCreatePlus() {
-  const homePlus = document.getElementById("homeCreatePlus");
-  if (homePlus && homePlus.dataset.boundHomePlus !== "1") {
-    homePlus.dataset.boundHomePlus = "1";
-    homePlus.addEventListener("click", (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      try { haptic("light"); } catch {}
-      const nav = resolveCreateTabNavigation();
-      flushTabRouteNavigation(nav.route, nav.hash);
-    });
-  }
+(function wireHomeBrandWordmark() {
   const homeMark = document.getElementById("homeBrandWordmark");
   if (homeMark && homeMark.dataset.boundHomeMark !== "1") {
     homeMark.dataset.boundHomeMark = "1";

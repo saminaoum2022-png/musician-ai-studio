@@ -189,6 +189,16 @@ const OCCASION_IDEAS = {
       "أغنية مسافة لـ {name}. عامّية، مش مسرحية.",
     ],
   },
+  "just-because": {
+    english: [
+      "A warm unexpected song for {name} — no holiday, no excuse, just I was thinking of you.",
+      "Write {name} a short gift with one specific reason they crossed your mind today.",
+    ],
+    arabic: [
+      "أغنية دافئة ومفاجئة لـ {name} — بلا مناسبة. بس خطرلي.",
+      "هدية قصيرة لـ {name} بسبب واحد خطر على بالك اليوم.",
+    ],
+  },
 };
 
 const SPARK_IDEAS = {

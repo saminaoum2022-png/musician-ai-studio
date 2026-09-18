@@ -56323,19 +56323,55 @@ function fmtVocalDate(ts) {
   try { return d.toLocaleDateString(undefined, { month: "short", day: "numeric" }); } catch { return ""; }
 }
 
+function profileStudioEntryHtml() {
+  return `
+    <button type="button" class="profileStudioEntry" data-profile-open-studio aria-label="Open Studio">
+      <span class="profileStudioEntryWash" aria-hidden="true"></span>
+      <span class="profileStudioEntryMark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" width="22" height="22" focusable="false">
+          <path d="M6 3.5v17" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" opacity=".42"/>
+          <rect x="4.2" y="9.1" width="3.6" height="3.1" rx="1" fill="currentColor"/>
+          <path d="M12 3.5v17" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" opacity=".42"/>
+          <rect x="10.2" y="6.4" width="3.6" height="3.1" rx="1" fill="currentColor"/>
+          <path d="M18 3.5v17" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" opacity=".42"/>
+          <rect x="16.2" y="12.4" width="3.6" height="3.1" rx="1" fill="currentColor"/>
+        </svg>
+      </span>
+      <span class="profileStudioEntryCopy">
+        <span class="profileStudioEntryTitle">Studio</span>
+        <span class="profileStudioEntrySub">Record your voice over a song</span>
+      </span>
+      <span class="profileStudioEntryGo" aria-hidden="true">
+        <svg viewBox="0 0 24 24" width="14" height="14" focusable="false"><path fill="currentColor" d="M9.3 5.3a1 1 0 0 1 1.4 0l6 6a1 1 0 0 1 0 1.4l-6 6a1 1 0 1 1-1.4-1.4L14.58 12 9.3 6.7a1 1 0 0 1 0-1.4Z"/></svg>
+      </span>
+    </button>`;
+}
+
+function openProfileStudio() {
+  if (!authSession?.user?.id) {
+    try { setPostAuthReturnHash("#/studio"); } catch {}
+    try { location.hash = "#/auth"; } catch {}
+    try { scheduleApplyRoute(); } catch {}
+    try { setStatus("Sign in to use the Studio."); } catch {}
+    return;
+  }
+  if (!requireProForWebFeature("NabadAi Studio")) return;
+  try { openStudioLobby(); } catch { try { location.hash = "#/studio"; } catch {} }
+  try { scheduleApplyRoute(); } catch {}
+}
+
 function renderMyVocals() {
   const host = document.getElementById("profileVocalsList");
   if (!host) return;
   let items = [];
   try { items = listVocals() || []; } catch { items = []; }
 
+  const entry = profileStudioEntryHtml();
   if (!items.length) {
     host.innerHTML = `
-      <div class="studioVocalsEmpty">
-        <div class="studioVocalsEmptyIco" aria-hidden="true">🎙️</div>
-        <h3>No studio songs yet</h3>
-        <p>Record your voice over a song in the Studio, then “Save to Songs”. Your takes stay on this device until you publish them.</p>
-      </div>`;
+      ${entry}
+      <p class="profileStudioEmptyNote">Takes you save appear here until you publish.</p>`;
+    bindMyVocalsOnce();
     return;
   }
 
@@ -56343,6 +56379,8 @@ function renderMyVocals() {
   // ⋯ menu affordance opening the track-options sheet.
   const placeholder = brokenCoverPlaceholderUrl();
   host.innerHTML = `
+    ${entry}
+    <h3 class="profileStudioTakesHead">Your takes</h3>
     <ul class="libraryRows" role="list">
       ${items.map((v) => {
         const { active, audible, loading } = getStudioVocalRowPlaybackUi(v.id);
@@ -56450,6 +56488,13 @@ function bindMyVocalsOnce() {
   if (!host || _vocalsBound) return;
   _vocalsBound = true;
   host.addEventListener("click", async (e) => {
+    const studioBtn = e.target.closest("[data-profile-open-studio]");
+    if (studioBtn) {
+      e.stopPropagation();
+      haptic("light");
+      openProfileStudio();
+      return;
+    }
     const menuBtn = e.target.closest("[data-vocal-menu]");
     if (menuBtn) {
       e.stopPropagation();

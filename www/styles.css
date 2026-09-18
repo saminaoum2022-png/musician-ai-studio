@@ -30950,10 +30950,12 @@ html[data-theme="light"] .profileLibraryFilter--public.is-active{
   flex: 0 0 auto;
   margin-left: 0;
 }
-body[data-profile-songs-seg="activities"] .profileSongsToolbar{
+body[data-profile-songs-seg="activities"] .profileSongsToolbar,
+body[data-profile-songs-seg="vocals"] .profileSongsToolbar{
   display: none;
 }
-body[data-profile-songs-seg="activities"] .profileSongsToolbarActions{
+body[data-profile-songs-seg="activities"] .profileSongsToolbarActions,
+body[data-profile-songs-seg="vocals"] .profileSongsToolbarActions{
   display: none;
 }
 .profileSongsToolbar .libraryCount:only-child{
@@ -46967,8 +46969,7 @@ body[data-route="generate"] .aiGenerate{
 }
 
 .discoverFeedTabs{
-  position: sticky;
-  top: 0;
+  position: relative;
   z-index: 5;
   margin: 0 -2px 8px;
   padding: 0 0 4px;
@@ -55558,22 +55559,131 @@ html[data-theme="light"] .studioSegBtn.isActive{
   color: var(--brand-violet-hover);
 }
 
-html[data-theme="light"] .studioVocalsEmpty,
-html[data-theme="light"] .studioVocalsEmpty h3{
-  color: var(--text);
-}
-html[data-theme="light"] .studioVocalsEmpty{
-  color: var(--muted);
-}
-
 /* -------------------------------------------------------------------------- */
-/* My Vocals — local Studio songs in Profile                                   */
+/* Studio — Profile tab (entry + local takes)                                  */
 /* -------------------------------------------------------------------------- */
-.studioVocalsList { padding: 4px 0 8px; }
-.studioVocalsEmpty { text-align: center; padding: 40px 18px; color: rgba(255,255,255,0.6); }
-.studioVocalsEmptyIco { font-size: 34px; margin-bottom: 10px; }
-.studioVocalsEmpty h3 { margin: 0 0 6px; font-size: 17px; color: rgba(255,255,255,0.9); }
-.studioVocalsEmpty p { margin: 0 auto; max-width: 320px; font-size: 13px; line-height: 1.5; }
+.studioVocalsList{
+  padding: 14px 0 12px;
+}
+.profileStudioEntry{
+  position: relative;
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  margin: 0;
+  padding: 14px 14px 14px 14px;
+  border: 0;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.045);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  color: #fff;
+  text-align: left;
+  overflow: hidden;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-appearance: none;
+  appearance: none;
+}
+.profileStudioEntry:active{
+  transform: scale(0.985);
+}
+.profileStudioEntryWash{
+  position: absolute;
+  inset: -40% -12% auto auto;
+  width: 140%;
+  height: 180%;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse at 18% 110%, rgba(35, 213, 171, 0.28), transparent 52%),
+    radial-gradient(ellipse at 88% 0%, rgba(124, 92, 255, 0.40), transparent 56%);
+}
+.profileStudioEntryMark{
+  position: relative;
+  z-index: 1;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+}
+.profileStudioEntryCopy{
+  position: relative;
+  z-index: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.profileStudioEntryTitle{
+  font-size: 17px;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  line-height: 1.15;
+  color: #fff;
+  -webkit-text-fill-color: #fff;
+}
+.profileStudioEntrySub{
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  line-height: 1.3;
+  color: rgba(232, 238, 247, 0.62);
+}
+.profileStudioEntryGo{
+  position: relative;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  color: rgba(244, 243, 255, 0.72);
+}
+.profileStudioEmptyNote{
+  margin: 12px 4px 0;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.45;
+  letter-spacing: -0.01em;
+  color: rgba(232, 238, 247, 0.48);
+}
+.profileStudioTakesHead{
+  margin: 20px 2px 8px;
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  line-height: 1.15;
+  color: #fff;
+  -webkit-text-fill-color: #fff;
+}
+html[data-theme="light"] .profileStudioEntry{
+  background: rgba(15, 23, 40, 0.04);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7);
+}
+html[data-theme="light"] .profileStudioEntryWash{
+  background:
+    radial-gradient(ellipse at 18% 110%, rgba(35, 213, 171, 0.18), transparent 52%),
+    radial-gradient(ellipse at 88% 0%, rgba(124, 92, 255, 0.22), transparent 56%);
+}
+html[data-theme="light"] .profileStudioEntryMark{
+  background: rgba(15, 23, 40, 0.06);
+  color: #14151c;
+}
+html[data-theme="light"] .profileStudioEntryTitle,
+html[data-theme="light"] .profileStudioTakesHead{
+  color: #14151c;
+  -webkit-text-fill-color: #14151c;
+}
+html[data-theme="light"] .profileStudioEntrySub{
+  color: rgba(20, 21, 28, 0.52);
+}
+html[data-theme="light"] .profileStudioEntryGo{
+  color: rgba(20, 21, 28, 0.42);
+}
+html[data-theme="light"] .profileStudioEmptyNote{
+  color: rgba(20, 21, 28, 0.48);
+}
 
 /* -------------------------------------------------------------------------- */
 /* Create page — dynamic greeting subtitle + Studio emphasis                    */

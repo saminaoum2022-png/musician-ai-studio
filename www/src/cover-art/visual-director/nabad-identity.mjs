@@ -52,7 +52,7 @@ const IDENTITY_AVOID = Object.freeze([
   "readable text",
 ]);
 
-const MAX_PHRASE_CHARS = 180;
+const MAX_PHRASE_CHARS = 280;
 const MIN_CLAUSES = 4;
 const MAX_CLAUSES = 6;
 
@@ -141,7 +141,11 @@ export function nabadIdentityPhrases(opts = {}) {
     else break;
   }
 
-  const clauses = picked.map((root) => NABAD_ROOT_PHRASES[root]).filter(Boolean);
+  const ordered = [
+    ...CORE_ROOTS.filter((root) => picked.includes(root)),
+    ...picked.filter((root) => !CORE_ROOTS.includes(root)),
+  ];
+  const clauses = ordered.map((root) => NABAD_ROOT_PHRASES[root]).filter(Boolean);
   let text = clauses.join(", ");
   if (text.length > MAX_PHRASE_CHARS) {
     text = text.slice(0, MAX_PHRASE_CHARS).replace(/,\s*[^,]*$/, "").trim();

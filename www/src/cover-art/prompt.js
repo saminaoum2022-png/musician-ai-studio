@@ -4,7 +4,7 @@
  */
 
 /** Bump when cover prompt policy changes. */
-export const COVER_PROMPT_POLICY_VERSION = 20;
+export const COVER_PROMPT_POLICY_VERSION = 22;
 /** Pollinations flux reliably returns ~768×768 square — request square, crop to 9:16 (avoids vertical stretch). */
 export const POLLINATIONS_COVER_WIDTH = 1024;
 export const POLLINATIONS_COVER_HEIGHT = 1024;
@@ -38,7 +38,7 @@ const MONOCHROME_PALETTE =
 /** Flux-native cinematic scenes — photographic environments and symbolic still lifes (not equalizer viz). */
 const FLUX_CINEMATIC_SCENES = [
   "cinematic empty stage with teal-violet spill light and soft haze, dramatic shadows, premium album mood, no people",
-  "symbolic still life on dark velvet, single candle and rose-gold rim light, editorial studio photograph, no people",
+  "symbolic still life on dark velvet, vinyl record and glass catching rose-gold studio rim light, editorial photograph, no people, no candles",
   "wet urban street at night, neon reflections in teal and violet grade, cinematic depth, no people",
   "coastal horizon at dusk, pearlescent sky glow and moody atmospheric depth, no people",
   "elegant interior with chandelier bokeh and champagne gold warmth, celebration mood, no people",
@@ -52,6 +52,19 @@ const FLUX_ABSTRACT_SCENES = [
   "abstract luminous sound aura in deep teal and violet, morphing energy bloom, premium music artwork",
   "rhythmic light pulses in void black with cyan-violet gradient, elegant music visualization",
 ];
+
+/** Default Nabad covers when no template/artwork theme is sent. */
+const NABAD_PULSE_SCENES = [
+  "abstract sonic pulse rings expanding through a dark studio void, teal-cyan shockwaves and violet bloom, music visualization, no people",
+  "luminous sound waves drifting across a moody recording studio, speaker cones and mixing-desk LEDs in haze, teal-violet grade, no people",
+  "heartbeat pulse of light in deep black, concentric frequency rings in cyan and violet, premium Nabad music artwork, no people",
+  "atmospheric music studio at night, empty vocal-booth glass catching teal spill and violet haze, quiet pulse of LED meters, no people",
+  "flowing audio waveform sculpture in mid-air over a dark soundstage, glassy teal-violet energy, no people",
+  "sub-bass pulse lighting a dark stage floor, concentric ripples of cyan light through violet fog, no people",
+];
+
+const NABAD_COLOR_LOCK =
+  "Nabad brand color grade required: deep void black, dominant teal and cyan lighting, rich violet and soft purple atmospheric haze, optional faint rose-gold accent only, no warm orange daylight, no generic stock colors, no brown amber candle warmth";
 
 const MUSIC_FALLBACK_SCENES = FLUX_CINEMATIC_SCENES;
 
@@ -94,6 +107,18 @@ const NEGATIVE_TEXT_PROMPT =
 const STYLE_CORE =
   "premium cinematic photograph, elegant composition, rich color grading, high-end editorial look, moody dark tones with luminous accents, deep teal and violet palette, physically plausible lighting, atmospheric depth, immersive environment, balanced vertical composition, symbolic objects and environments, no human subjects";
 
+/** Flux Schnell defaults to candlelit still lifes when the prompt is vague. */
+const NO_CANDLE_GUARD =
+  "no candles, no candlelight, no candlesticks, no dripping wax, lit by studio light or window light or neon only";
+
+function wantsCandleScene(text) {
+  const stripped = String(text || "")
+    .replace(/\bno\s+candles?\b/gi, "")
+    .replace(/\bno\s+candlelight\b/gi, "")
+    .replace(/\bno\s+candlesticks?\b/gi, "");
+  return /\b(candle|candles|candlelight|candlestick|birthday cake)\b/i.test(stripped);
+}
+
 const HUM_TRACK_STYLE_CORE =
   "premium cinematic visual art, elegant composition, rich color grading, moody dark tones with luminous accents, deep teal and violet palette, photoreal studio nook still life, props only, warm wood surfaces, window sunlight with long shadows, dried botanical accents, balanced composition, professional studio photography, minimal visual noise, high image coherence, clean perspective, no instruments visible, no human subjects";
 
@@ -128,7 +153,7 @@ const STORY_THEMES = [
     id: "prom_formal",
     re: /prom|prom night|homecoming|formal dance|school dance|senior year|senior night|university ball|college ball|graduation ball|graduation night|debs|matric|leaving cert|bal de promo|soirée de promo|حفل التخرج|حفل تخرج|سهرة تخرج|بروف|promenade/i,
     scene:
-      "elegant ballroom still life, crystal chandelier bokeh, formal table setting with candles and sequin fabric, festive celebration mood, no people",
+      "elegant ballroom still life, crystal chandelier bokeh, formal table setting with sequin fabric and champagne glasses, festive celebration mood, no people",
     visualMode: "still_life",
     bucket: "party",
   },
@@ -176,7 +201,7 @@ const STORY_THEMES = [
     id: "romance",
     re: /love you|my love|romantic|romance|darling|valentine|kiss|together forever|habibi|habibti|حبيب|حبيبي|حبيبتي|عشق|حب|قلبي/i,
     scene:
-      "romantic still life, rose petals and soft candlelight on dark surface, warm golden bokeh, tender warmth, no people",
+      "romantic still life, rose petals and gold jewelry on dark silk, warm rose-gold studio glow, tender warmth, no people, no candles",
     visualMode: "still_life",
     bucket: "love",
   },
@@ -255,8 +280,9 @@ const STORY_THEMES = [
 ];
 
 REGEN_VARIETY_POOL = [
+  ...NABAD_PULSE_SCENES,
+  ...FLUX_ABSTRACT_SCENES,
   ...FLUX_CINEMATIC_SCENES,
-  ...STORY_THEMES.filter((t) => t.visualMode !== "abstract").map((t) => t.scene),
 ];
 
 const ABSTRACT_FALLBACKS = MUSIC_FALLBACK_SCENES;
@@ -293,14 +319,14 @@ const REGEN_MOOD_HINTS = [
     id: "celebration",
     re: /\b(birthday|bday|happy birthday|party|celebration|celebrate|fiesta|cheers|toast|confetti|festive|anniversary|new year|graduation|prom|عيد ميلاد|احتفال)\b/i,
     scene:
-      "celebration still life, colorful balloons and soft candle glow on a festive surface, confetti scatter and champagne flute bokeh, warm joyful party mood, no people",
+      "celebration still life, colorful balloons and warm string lights on a festive surface, confetti scatter and champagne flute bokeh, warm joyful party mood, no people",
     bucket: "party",
   },
   {
     id: "romance",
     re: /\b(love|romantic|romance|valentine|darling|heartfelt|passion|habibi|habibti|حب|عشق|قلبي)\b/i,
     scene:
-      "romantic still life, rose petals and soft candlelight on dark surface, warm golden bokeh, tender warmth, no people",
+      "romantic still life, rose petals and gold jewelry on dark silk, warm rose-gold studio glow, tender warmth, no people, no candles",
     bucket: "love",
   },
   {
@@ -342,7 +368,7 @@ const REGEN_MOOD_HINTS = [
     id: "dark",
     re: /\b(dark|noir|gothic|sinister|brooding|moody|midnight)\b/i,
     scene:
-      "moody still life, single flickering candle on dark velvet, deep shadows and teal-violet rim light, cinematic tension, no people",
+      "moody still life, cracked glass and a single teal-violet rim light on dark velvet, cinematic tension, no people, no candles",
     bucket: "dark",
   },
 ];
@@ -517,6 +543,15 @@ export function classifyVisualBucket(input) {
   if (energy > 0.78) return "party";
   if (energy < 0.32) return "chill";
   return "default";
+}
+
+function hasExplicitCoverTheme(input, options = {}) {
+  if (String(options.userArtworkOverride || "").trim()) return true;
+  if (String(input?.artworkHint || input?.artworkStyle || "").trim()) return true;
+  if (String(input?.occasionLabel || input?.challenge?.occasion || "").trim()) return true;
+  const tpl = String(input?.searchTemplateTitle || input?.challenge?.title || "").trim();
+  if (tpl && !/^(template clip|nabad clip)$/i.test(tpl)) return true;
+  return false;
 }
 
 function pickFrom(list, seedKey, salt) {
@@ -701,7 +736,7 @@ function moodBucketFallback(bucketKey, energy) {
   }
   if (bucketKey === "love") {
     return {
-      scene: "romantic still life, rose petals and soft candlelight on dark surface, warm golden bokeh, tender warmth, no people",
+      scene: "romantic still life, rose petals and gold jewelry on dark silk, warm rose-gold studio glow, tender warmth, no people, no candles",
       visualMode: "still_life",
       palette,
     };
@@ -811,6 +846,7 @@ function brightnessPhrase(brightness) {
 }
 
 const STORY_MOOD_PHRASES = {
+  nabad_pulse: "Nabad pulse and music-studio atmosphere",
   winter_festive: "cozy winter festive atmosphere",
   prom_formal: "formal dance celebration atmosphere",
   graduation: "proud graduation celebration atmosphere",
@@ -880,7 +916,7 @@ const TEXT_TRIGGER_REPLACEMENTS = [
   ["album cover", "cinematic still life"],
   ["portrait", "symbolic object still life"],
   ["silhouette", "symbolic object still life"],
-  ["couple", "romantic rose petals and candlelight still life"],
+  ["couple", "romantic rose petals and gold jewelry still life"],
   ["person", "symbolic object"],
   ["people", "symbolic objects"],
 ];
@@ -1042,8 +1078,12 @@ export function buildFluxCoverPrompt(prompt, { avoidTags = "", visualMode = "" }
   const suffixBits = [MINIMAL_TEXT_GUARD];
   if (parsedAvoid.length) suffixBits.push(`avoid ${parsedAvoid.join(", ")}`);
   const suffix = `. ${suffixBits.join(", ")}`;
-  const baseBudget = Math.max(400, FLUX_PROMPT_MAX - suffix.length - 1);
+  const colorLock = NABAD_COLOR_LOCK;
+  const baseBudget = Math.max(400, FLUX_PROMPT_MAX - suffix.length - colorLock.length - 4);
   let base = compressPromptForFlux(String(prompt || "").trim(), baseBudget);
+  if (!/Nabad brand color grade/i.test(base)) {
+    base = `${colorLock}, ${base}`;
+  }
   if (!/\bsafe margin|centered in frame|inside the (vertical )?(reel )?frame|9:16|viewport\b/i.test(base)) {
     base = `${FLUX_REEL_PORTRAIT_FRAME}, ${base}`;
   }
@@ -1132,7 +1172,10 @@ export function buildAbstractCoverPrompt(input, options = {}) {
     : sceneOverrideRaw;
 
   const { scene, visualMode, storyTheme, bucketKey: storyBucketKey } = buildSceneFromStory(input);
-  const bucketKey = regenMood?.bucket || storyBucketKey;
+  const explicitCoverTheme = hasExplicitCoverTheme(input, options);
+  const bucketKey = explicitCoverTheme
+    ? (regenMood?.bucket || storyBucketKey)
+    : "default";
   const directorSceneHintRaw = creativeMode
     ? String(options.directorSceneHint || "").trim()
     : sanitizeArtworkPrompt(String(options.directorSceneHint || "").trim(), { title });
@@ -1141,21 +1184,24 @@ export function buildAbstractCoverPrompt(input, options = {}) {
     ? String(options.nabadIdentityPhrases || "").trim()
     : sanitizeArtworkPrompt(String(options.nabadIdentityPhrases || "").trim(), { title });
   const storyScene = creativeMode ? String(scene || "").trim() : toVisualOnlyPrompt(scene, { title });
-  const preferStoryScene = storyTheme !== "mood_fallback" && Boolean(storyScene);
+  const preferStoryScene = explicitCoverTheme && storyTheme !== "mood_fallback" && Boolean(storyScene);
   let visualScene = explicitUserHint
     ? ""
-    : forceMusicFallback
-    ? pickFrom(MUSIC_FALLBACK_SCENES, songId, regenSaltKey || "regen-auto")
+    : forceMusicFallback || !explicitCoverTheme
+    ? pickFrom(NABAD_PULSE_SCENES, songId, regenSaltKey || "nabad-pulse")
     : regenVariety
       ? pickFrom(REGEN_VARIETY_POOL, songId, regenSaltKey || "regen-variety")
       : preferStoryScene
         ? storyScene
         : directorSceneHint && !userArtwork
           ? directorSceneHint
-          : storyScene || pickFrom(MUSIC_FALLBACK_SCENES, songId, "flux-fallback");
+          : storyScene || pickFrom(NABAD_PULSE_SCENES, songId, "flux-fallback");
+  const pulseDefault = !explicitCoverTheme && !explicitUserHint && !userArtwork;
   const effectiveVisualMode = sceneOverride || userArtwork || userDirectedRegen
     ? "user_directed"
-    : visualMode;
+    : pulseDefault
+      ? "abstract"
+      : visualMode;
   if (!allowHumans && !creativeMode) {
     sceneOverride = sceneOverride ? enforceNoHumansScene(sceneOverride) : "";
     visualScene = enforceNoHumansScene(visualScene);
@@ -1171,7 +1217,11 @@ export function buildAbstractCoverPrompt(input, options = {}) {
         sceneOverride || userArtwork || userDirectedRegen ? "user_directed" : visualMode,
         { geminiReel: geminiImage && Boolean(userArtwork || userArtworkOverride) },
       );
-  const effectiveStoryTheme = userDirectedRegen ? "user_regen" : storyTheme;
+  const effectiveStoryTheme = userDirectedRegen
+    ? "user_regen"
+    : pulseDefault
+      ? "nabad_pulse"
+      : storyTheme;
   const seed = buildCoverSeed(input, effectiveStoryTheme, bucketKey, userArtwork, String(options.regenSalt || "").trim());
   const artworkSource = forceMusicFallback
     ? "regen_music_auto"
@@ -1179,6 +1229,8 @@ export function buildAbstractCoverPrompt(input, options = {}) {
       ? String(options.artworkSourceOverride || "scene_override")
     : userArtwork
         ? "user_artwork"
+        : pulseDefault
+          ? "nabad_pulse"
         : directorSceneHint
           ? "visual_director"
           : "auto_story";
@@ -1188,6 +1240,9 @@ export function buildAbstractCoverPrompt(input, options = {}) {
   const humGuard = isHumTrack ? HUM_TRACK_SCENE_GUARD : "";
   const autoFrame = composeFrameForCreativeMode(effectiveVisualMode);
   const photoLead = fluxPhotoLeadForMode(effectiveVisualMode);
+  const candleGuard = wantsCandleScene(`${userArtwork} ${userArtworkRaw} ${visualScene} ${sceneOverride}`)
+    ? ""
+    : NO_CANDLE_GUARD;
   const safetySuffix = isHumTrack ? HUM_TRACK_SAFETY_SUFFIX : SAFETY_SUFFIX;
   const humansGuard = allowHumans ? "" : NO_HUMANS_GUARD;
   const geminiReelFrame = geminiImage && Boolean(userArtwork || userArtworkOverride);
@@ -1236,16 +1291,18 @@ export function buildAbstractCoverPrompt(input, options = {}) {
       }
     } else {
       parts = [
+        NABAD_COLOR_LOCK,
+        nabadIdentityPhrases || "deep void black ground, teal-violet atmospheric haze, soft cyan fill",
         autoFrame,
         styleCore,
         `${photoLead}${visualScene}`.trim(),
-        nabadIdentityPhrases,
         humGuard,
         palette,
         composition,
-        storyMoodPhrase(storyTheme),
+        storyMoodPhrase(effectiveStoryTheme),
         bucketMoodPhrase(bucketKey),
         effectiveVisualMode === "abstract" ? sonicPhrase(sonicProfile) : "",
+        candleGuard,
         MINIMAL_TEXT_GUARD,
       ];
     }
@@ -1340,6 +1397,7 @@ export function buildAbstractCoverPrompt(input, options = {}) {
       ...(forceMusicFallback ? [] : [storyMoodPhrase(storyTheme), bucketMoodPhrase(bucketKey)]),
       tempoPhrase(tempo),
       brightnessPhrase(brightness),
+      candleGuard,
       NO_TEXT_REINFORCE,
       humansGuard,
       effectiveSafetySuffix,

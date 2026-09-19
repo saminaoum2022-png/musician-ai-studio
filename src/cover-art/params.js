@@ -96,7 +96,7 @@ const OCCASION_COVER_HINTS = [
   },
   {
     re: /anniversary|romantic|valentine|love song/i,
-    hint: "romantic still life, intertwined gold rings and rose petals with soft candlelight, no people, no writing",
+    hint: "romantic still life, intertwined gold rings and rose petals with warm rose-gold studio light, no people, no writing, no candles",
   },
   {
     re: /prom|graduation|congrats|congratulations|new year|mom day|for mom/i,

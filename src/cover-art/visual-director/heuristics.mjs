@@ -35,7 +35,7 @@ function mainSubjectFromContext(ctx) {
   if (ctx.sourcePath === "instrumental") {
     return "premium abstract living light gradients with cinematic bloom, no people";
   }
-  return "cinematic symbolic still life, premium props on dark surface with teal-violet rim light, editorial photograph mood, no people";
+  return "abstract sonic pulse rings and sound-wave haze in a dark music studio, teal-cyan and violet grade, no people";
 }
 
 function settingFromContext(ctx) {

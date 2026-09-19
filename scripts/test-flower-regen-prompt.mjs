@@ -70,7 +70,8 @@ const loveBuilt = promptMod.buildAbstractCoverPrompt(
   { songId: "regen-love", title: "Fog Song", lyrics: "mist and haze", artworkHint: "love" },
   { regenSalt: "test", userArtworkOverride: "love", nabadIdentityPhrases: idMod.nabadIdentityPhrases({ songId: "regen-love", bucketKey: "love", concreteSubject: true }).text },
 );
-assert(/ring|rose|candle|romantic|still life/i.test(loveBuilt.prompt), "love prompt uses romantic still life props");
+assert(/ring|rose|romantic|still life/i.test(loveBuilt.prompt), "love prompt uses romantic still life props");
+assert(!/\bcandlelight\b/i.test(loveBuilt.prompt) || /\bno candles\b/i.test(loveBuilt.prompt), "love prompt does not default to candles");
 assert(loveBuilt.bucket === "love", "love regen uses love palette bucket");
 assert(!/not literal props/i.test(loveBuilt.prompt), "love prompt avoids anti-literal haze DNA");
 

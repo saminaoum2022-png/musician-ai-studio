@@ -30,7 +30,7 @@ export function applyVisualDirection(coverInput, direction, opts = {}) {
           .map((root) => NABAD_ROOT_PHRASES[root])
           .filter(Boolean)
           .join(", ")
-          .slice(0, 180),
+          .slice(0, 280),
         dnaVersion: direction.nabadIdentity.dnaVersion,
       }
     : nabadIdentityPhrases({

@@ -5255,6 +5255,10 @@ function syncRoutePanelVisibility(wanted) {
   if (route !== "generate") clearCreatePageKeyboardInset();
   if (route !== "auth") clearAuthKeyboardInset();
   document.body.setAttribute("data-route", route);
+  if (route !== "discover") {
+    _discoverHeroVisitKey = "";
+    stopDiscoverHeroAutoSlide();
+  }
   try { document.body.dataset.route = route; } catch {}
   try { trackRouteView(route); } catch {}
   document.body.classList.toggle("isIntro", route === "intro");
@@ -8836,6 +8840,16 @@ const CHALLENGE_IDEAS = [
     tags: ["80s", "Photo", "Trend"],
   },
   {
+    id: "hum-track",
+    title: "Hum Track",
+    styleLyria: "solo instrumental from hummed melody, one instrument, intimate studio, 100 bpm",
+    style: "solo instrumental from a hummed melody, one chosen instrument, intimate studio, 100 bpm",
+    lyricsMode: "instructions",
+    lyrics: "Hum Track — melody only. No lyrics. Solo instrumental on the instrument you pick.",
+    prompt: "Hum a melody — get a solo instrumental on the instrument you pick.",
+    tags: ["Hum", "Instrumental"],
+  },
+  {
     id: "tiktok-teaser",
     title: "TikTok Teaser",
     styleLyria: "short social hook, tight drums, bright ear-candy, 120 bpm",
@@ -8991,6 +9005,7 @@ const CHALLENGE_SPARK_KICKERS = {
   "roast-song": "Roast",
   "last-photo-song": "Photo",
   "80s-you": "Trending",
+  "hum-track": "Hum",
   "roast-song": "Roast",
 };
 const CHALLENGE_SPARK_TONES = ["violet", "cyan", "rose", "gold", "mint", "amber"];
@@ -10081,6 +10096,10 @@ function renderHomeDeskContinue() {
 
 function applyChallengeStartById(id, challengesMap) {
   const key = String(id || "").trim();
+  if (key === "hum-track") {
+    openHumTrackFlow();
+    return;
+  }
   const challenge =
     challengesMap?.get?.(key)
     || CHALLENGE_IDEAS.find((row) => String(row.id) === key)
@@ -11966,10 +11985,11 @@ const DISCOVER_CHALLENGE_AVATAR_SEEDS = {
   "sad-to-dance": ["D", "M", "S", "K"],
   "last-photo-song": ["P", "H", "O", "T"],
   "80s-you": ["8", "0", "S", "U"],
+  "hum-track": ["H", "U", "M", "T"],
   "roast-song": ["R", "O", "A", "S"],
 };
 
-const DISCOVER_CHALLENGE_ART_VERSION = "20260918summer2";
+const DISCOVER_CHALLENGE_ART_VERSION = "20260919hum1";
 const DISCOVER_CHALLENGE_ART = {
   worldcup2026: "./assets/discover/challenges/worldcup-anthem.svg",
   "one-line-reply": "./assets/discover/challenges/remix-battle.svg",
@@ -11980,6 +12000,7 @@ const DISCOVER_CHALLENGE_ART = {
   "sad-to-dance": "./assets/discover/challenges/remix-battle.svg",
   "last-photo-song": "./assets/discover/challenges/birthday-song.svg",
   "80s-you": "./assets/discover/challenges/love-song.svg",
+  "hum-track": "./assets/discover/challenges/hum-track-hero.png",
   "roast-song": "./assets/discover/challenges/remix-battle.svg",
   birthday: "./assets/discover/challenges/birthday-song.svg",
   "love-song": "./assets/discover/challenges/love-song.svg",
@@ -11995,6 +12016,7 @@ function discoverChallengeArtUrl(challengeId) {
 const DISCOVER_FEATURED_HERO_ART = {
   worldcup2026: "./assets/discover/challenges/worldcup-hero.png",
   "80s-you": "./assets/discover/challenges/80s-you-hero.png",
+  "hum-track": "./assets/discover/challenges/hum-track-hero.png",
 };
 
 const PHOTO_SOLO_CHALLENGE_ART = {
@@ -12184,6 +12206,21 @@ const DISCOVER_LIVE_CHALLENGES = [
     featured: true,
   },
   {
+    id: "hum-track",
+    emoji: "🎙",
+    title: "Hum Track",
+    blurb: "Hum a melody. Get a solo instrumental.",
+    tone: "cyan",
+    participants: 612,
+    submissions: 88,
+    daysLeft: 18,
+    totalDays: 21,
+    progressGoal: 160,
+    action: "challenge",
+    challengeId: "hum-track",
+    featured: true,
+  },
+  {
     id: "dabke-drop",
     emoji: "💃",
     title: "Dabke Drop",
@@ -12265,6 +12302,7 @@ const DISCOVER_SUGGESTED_CREATORS = [
 
 const DISCOVER_NEW_THIS_WEEK = [
   { id: "80s-you", emoji: "📼", kicker: "Trending", title: "80s You", blurb: "Photo → your personal 80s anthem.", tone: "violet", action: "challenge", challengeId: "80s-you" },
+  { id: "hum-track", emoji: "🎙", kicker: "New", title: "Hum Track", blurb: "Hum a melody → solo instrumental.", tone: "cyan", action: "challenge", challengeId: "hum-track" },
   { id: "graduation", emoji: "🎓", kicker: "New template", title: "Graduation Song", blurb: "Celebrate the milestone.", tone: "gold", action: "occasion", occasionId: "congrats" },
   { id: "ramadan", emoji: "🌙", kicker: "Seasonal", title: "Ramadan Glow", blurb: "Warm spiritual vibes.", tone: "violet", action: "occasion", occasionId: "christmas" },
   { id: "roast-week", emoji: "😄", kicker: "Fun challenge", title: "Roast Song", blurb: "Playful roast for a friend — funny, never cruel.", tone: "gold", action: "challenge", challengeId: "roast-song" },
@@ -12401,6 +12439,11 @@ function discoverChallengeMatchesTrack(c, track) {
   if (c.id === "sad-to-dance" && (chId === "sad-to-dance-challenge" || chTitle.includes("sad") || chTitle.includes("dance"))) return true;
   if (c.id === "last-photo-song" && (chId === "last-photo-song" || chTitle.includes("photo"))) return true;
   if (c.id === "80s-you" && (chId === "80s-you" || chTitle.includes("80s") || chTitle.includes("80's"))) return true;
+  if (c.id === "hum-track" && (
+    chId === "hum-track"
+    || track?.meta?.humTrack
+    || (String(track?.kind || "") === "instrumental" && /hum track/i.test(String(track?.title || "")))
+  )) return true;
   if (c.challengeId === "roast-song" && (chId === "roast-song" || chTitle.includes("roast"))) return true;
   if (c.action === "campaign" && String(ch.campaign || "").trim()) {
     if (c.id === "worldcup2026") return true;
@@ -13135,42 +13178,133 @@ function discoverFeaturedChallengeSubtitle(c, topEntry, tracks) {
 }
 
 function discoverFeaturedChallengeKicker(c) {
+  if (String(c?.id || "") === "hum-track") return "Hum a melody";
   if (String(c?.action || "") === "campaign") return "Live event";
   if (c?.featured) return "Trending now";
   return "Featured challenge";
+}
+
+function discoverFeaturedChallengeCta(c) {
+  if (String(c?.id || "") === "hum-track") return "Start Hum Track";
+  return "Join Challenge";
+}
+
+function discoverFeaturedChallengePacksForForYou(tracks) {
+  const list = DISCOVER_LIVE_CHALLENGES.filter((c) => {
+    if (!c.featured) return false;
+    if (c.action === "campaign" && !liveCampaignNow()) return false;
+    return true;
+  });
+  return list.map((challenge) => ({
+    challenge,
+    entries: discoverTracksForChallenge(challenge, tracks, 8),
+  }));
+}
+
+const DISCOVER_HERO_SLIDE_KEY = "nabadai_discover_hero_slide_v1";
+let _discoverHeroAutoTimer = 0;
+let _discoverHeroVisitKey = "";
+
+function readDiscoverHeroSlideIndex() {
+  try {
+    const n = Number(sessionStorage.getItem(DISCOVER_HERO_SLIDE_KEY));
+    return Number.isFinite(n) ? n : -1;
+  } catch {
+    return -1;
+  }
+}
+
+function writeDiscoverHeroSlideIndex(i) {
+  try { sessionStorage.setItem(DISCOVER_HERO_SLIDE_KEY, String(i)); } catch {}
+}
+
+function nextDiscoverHeroStartIndex(count) {
+  const n = Math.max(1, Number(count) || 1);
+  const next = (readDiscoverHeroSlideIndex() + 1) % n;
+  writeDiscoverHeroSlideIndex(next);
+  return next;
+}
+
+function stopDiscoverHeroAutoSlide() {
+  if (_discoverHeroAutoTimer) {
+    clearInterval(_discoverHeroAutoTimer);
+    _discoverHeroAutoTimer = 0;
+  }
+}
+
+function bindDiscoverFeaturedHeroCarousel(root) {
+  const carousel = root?.querySelector?.(".discoverFeaturedHeroCarousel");
+  const track = carousel?.querySelector?.(".discoverFeaturedHeroTrack");
+  if (!track) return;
+  stopDiscoverHeroAutoSlide();
+  const cards = [...track.querySelectorAll(".discoverFeaturedChallengeHero")];
+  const dots = [...(carousel.querySelectorAll(".discoverFeaturedHeroDot") || [])];
+  const dotsRow = carousel.querySelector(".discoverFeaturedHeroDots");
+  if (cards.length < 2) {
+    if (dotsRow) dotsRow.hidden = true;
+    return;
+  }
+  if (dotsRow) dotsRow.hidden = false;
+  const stepOf = () => Math.max(1, track.clientWidth || cards[0]?.offsetWidth || 1);
+  const indexFromScroll = () => {
+    const i = Math.round(track.scrollLeft / stepOf());
+    return Math.max(0, Math.min(cards.length - 1, i));
+  };
+  const paintDots = (i) => {
+    dots.forEach((d, idx) => d.classList.toggle("isActive", idx === i));
+  };
+  const goTo = (i, smooth) => {
+    const n = cards.length;
+    const idx = ((Number(i) % n) + n) % n;
+    track.scrollTo({ left: idx * stepOf(), behavior: smooth ? "smooth" : "auto" });
+    paintDots(idx);
+    writeDiscoverHeroSlideIndex(idx);
+  };
+  const visitKey = `${document.body.getAttribute("data-route") || ""}|${_discoverFeedTab}`;
+  const start = visitKey !== _discoverHeroVisitKey
+    ? nextDiscoverHeroStartIndex(cards.length)
+    : Math.max(0, readDiscoverHeroSlideIndex() % cards.length);
+  _discoverHeroVisitKey = visitKey;
+  goTo(start, false);
+  if (track.dataset.boundCarousel === "1") return;
+  track.dataset.boundCarousel = "1";
+  track.addEventListener("scroll", () => paintDots(indexFromScroll()), { passive: true });
+  let paused = false;
+  track.addEventListener("pointerdown", () => { paused = true; }, { passive: true });
+  track.addEventListener("touchstart", () => { paused = true; }, { passive: true });
+  track.addEventListener("pointerup", () => {
+    window.setTimeout(() => { paused = false; }, 4500);
+  }, { passive: true });
+  _discoverHeroAutoTimer = window.setInterval(() => {
+    if (paused) return;
+    if (String(document.body.getAttribute("data-route") || "") !== "discover") return;
+    if (_discoverFeedTab !== "for-you") return;
+    goTo(indexFromScroll() + 1, true);
+  }, 6000);
 }
 
 function discoverFeedChallengeCreationsRailHtml(entries, profMap) {
   return (entries || []).map((t) => discoverFeedTemplateCardHtml(t, profMap)).join("");
 }
 
-/** For You — immersive featured challenge hero + top creations carousel. */
-function discoverFeedFeaturedChallengeBlockHtml(c, tracks, profMap, opts = {}) {
-  const entries = Array.isArray(opts.entries)
-    ? opts.entries.slice(0, 8)
-    : discoverTracksForChallenge(c, tracks, 8);
-  const top = entries[0] || null;
+function discoverFeaturedChallengeHeroButtonHtml(c, top, tracks) {
   const joinAttrs = discoverChallengeJoinAttrs(c);
-  const sectionTitle = String(opts.sectionTitle || "From challenges").trim();
-  const viewAllSlug = String(opts.viewAllSlug || discoverChallengePlaylistSlug(c.id)).trim();
-  const viewAllBtn = viewAllSlug
-    ? `<button type="button" class="discoverFeedSectionLink" data-discover-challenge-view-all="${escapeHtml(viewAllSlug)}">View all</button>`
-    : "";
   const challengeTitle = String(c.title || "Challenge").trim();
   const subtitle = discoverFeaturedChallengeSubtitle(c, top, tracks);
   const heroArt = discoverFeaturedChallengeHeroArt(c, top);
   const [toneA, toneB] = discoverChallengeToneTheme(c.tone);
   const kicker = discoverFeaturedChallengeKicker(c);
+  const cta = discoverFeaturedChallengeCta(c);
   const scriptHtml = String(c.id || "") === "80s-you"
     ? `<img class="discoverFeaturedChallengeHeroScript" src="${escapeHtml(`${bundleAssetUrl("assets/discover/challenges/music-lives-in-you.png")}?v=${DISCOVER_CHALLENGE_ART_VERSION}`)}" alt="" aria-hidden="true" />`
     : "";
-  const heroHtml = `
+  return `
     <button
       type="button"
       class="discoverFeaturedChallengeHero discoverFeaturedChallengeHero--${escapeHtml(String(c.tone || "violet").trim())}"
       ${joinAttrs}
       style="--feat-ch-a:${toneA};--feat-ch-b:${toneB}"
-      aria-label="Join ${escapeHtml(challengeTitle)}"
+      aria-label="${escapeHtml(cta)} — ${escapeHtml(challengeTitle)}"
     >
       <span class="discoverFeaturedChallengeHeroBg" aria-hidden="true">
         <img src="${escapeHtml(heroArt)}" alt="" loading="lazy" decoding="async" />
@@ -13182,9 +13316,41 @@ function discoverFeedFeaturedChallengeBlockHtml(c, tracks, profMap, opts = {}) {
         <span class="discoverFeaturedChallengeHeroKicker">${escapeHtml(kicker)}</span>
         <span class="discoverFeaturedChallengeHeroTitle">${escapeHtml(challengeTitle)}</span>
         <span class="discoverFeaturedChallengeHeroSub">${escapeHtml(subtitle)}</span>
-        <span class="discoverFeaturedChallengeHeroCta">Join Challenge</span>
+        <span class="discoverFeaturedChallengeHeroCta">${escapeHtml(cta)}</span>
       </span>
     </button>`;
+}
+
+function discoverFeedFeaturedHeroCarouselHtml(packs, tracks) {
+  const slides = (packs || []).filter((p) => p?.challenge);
+  if (!slides.length) return "";
+  const heroes = slides.map((pack) => (
+    discoverFeaturedChallengeHeroButtonHtml(pack.challenge, pack.entries?.[0] || null, tracks)
+  )).join("");
+  const dots = slides.map((_, i) => (
+    `<span class="discoverFeaturedHeroDot${i === 0 ? " isActive" : ""}"></span>`
+  )).join("");
+  return `
+    <section class="discoverFeedSection discoverFeedSection--featuredChallenge">
+      <div class="discoverFeaturedHeroCarousel" role="region" aria-roledescription="carousel" aria-label="Featured challenges">
+        <div class="discoverFeaturedHeroTrack">${heroes}</div>
+        <div class="discoverFeaturedHeroDots" aria-hidden="true">${dots}</div>
+      </div>
+    </section>`;
+}
+
+/** For You — immersive featured challenge hero + top creations carousel. */
+function discoverFeedFeaturedChallengeBlockHtml(c, tracks, profMap, opts = {}) {
+  const entries = Array.isArray(opts.entries)
+    ? opts.entries.slice(0, 8)
+    : discoverTracksForChallenge(c, tracks, 8);
+  const top = entries[0] || null;
+  const sectionTitle = String(opts.sectionTitle || "From challenges").trim();
+  const viewAllSlug = String(opts.viewAllSlug || discoverChallengePlaylistSlug(c.id)).trim();
+  const viewAllBtn = viewAllSlug
+    ? `<button type="button" class="discoverFeedSectionLink" data-discover-challenge-view-all="${escapeHtml(viewAllSlug)}">View all</button>`
+    : "";
+  const heroHtml = discoverFeaturedChallengeHeroButtonHtml(c, top, tracks);
   const hideHead = opts.hideHead === true;
   const hideCreations = opts.hideCreations === true;
   const creationsRail = !hideCreations && entries.length
@@ -13500,13 +13666,9 @@ function renderDiscoverFeedForYou(tracks, profMap) {
     prefs,
     12,
   );
-  const topChallengePack = discoverFeaturedChallengeForForYou(tracks, prefs);
-  const challengeBlock = topChallengePack.challenge
-    ? discoverFeedFeaturedChallengeBlockHtml(topChallengePack.challenge, tracks, profMap, {
-      hideHead: true,
-      hideCreations: true,
-      entries: topChallengePack.entries,
-    })
+  const featuredPacks = discoverFeaturedChallengePacksForForYou(tracks);
+  const challengeBlock = featuredPacks.length
+    ? discoverFeedFeaturedHeroCarouselHtml(featuredPacks, tracks)
     : "";
   const remixRowOpts = { rowClass: "discoverFeedSongRow--remix", compactMeta: true };
   const remixList = remixTracks.length
@@ -13637,6 +13799,8 @@ function renderDiscoverFeed(tracks, profMap, tab = _discoverFeedTab) {
   _discoverFeedTab = normalizeDiscoverFeedTab(tab);
   try { sessionStorage.setItem(DISCOVER_FEED_TAB_KEY, _discoverFeedTab); } catch {}
   if (_discoverFeedTab !== "for-you") {
+    _discoverHeroVisitKey = "";
+    stopDiscoverHeroAutoSlide();
     try { closeDiscoverReelOverlay(); } catch {}
   }
   rebuildDiscoveryChallengeBuckets(tracks);
@@ -13664,6 +13828,7 @@ function renderDiscoverFeed(tracks, profMap, tab = _discoverFeedTab) {
   mount.classList.remove("isLoading");
   mount.removeAttribute("aria-busy");
   if (_discoverFeedTab === "for-you") {
+    bindDiscoverFeaturedHeroCarousel(mount);
     void refreshDiscoverWeeklyChart();
     void paintDiscoverFeedFollowCards();
   }

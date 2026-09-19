@@ -4,7 +4,7 @@
  */
 
 /** Bump when cover prompt policy changes. */
-export const COVER_PROMPT_POLICY_VERSION = 22;
+export const COVER_PROMPT_POLICY_VERSION = 23;
 /** Pollinations flux reliably returns ~768×768 square — request square, crop to 9:16 (avoids vertical stretch). */
 export const POLLINATIONS_COVER_WIDTH = 1024;
 export const POLLINATIONS_COVER_HEIGHT = 1024;
@@ -81,7 +81,7 @@ const HUMAN_TRIGGER_RE =
 
 /** Keep in sync with hum-track-cover.mjs — no imports here (server loads this via dynamic import). */
 const HUM_TRACK_SCENE_GUARD =
-  "empty musician studio nook, warm wood table, window sunlight with long shadows, dried botanicals, no instruments visible, no people, no human figures, no faces, no hands, no fingers, no musician, no performer, no body parts";
+  "empty musician studio nook, warm wood table, window sunlight with long shadows, dried botanicals, teal-violet atmospheric haze, magenta to cyan grade, no instruments visible, no people, no human figures, no faces, no hands, no fingers, no musician, no performer, no body parts";
 
 const NO_TEXT_LEAD =
   "pure photograph with absolutely zero text letters or words visible anywhere, visual scene only, ";

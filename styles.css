@@ -48254,6 +48254,47 @@ html[data-theme="light"] .chartTitle{
 .discoverFeedSection--featuredChallenge{
   margin: 0 0 30px;
 }
+.discoverFeaturedHeroCarousel{
+  margin: 0;
+  overflow: hidden;
+}
+.discoverFeaturedHeroTrack{
+  display: flex;
+  gap: 0;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  scroll-padding-inline: 0;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+.discoverFeaturedHeroTrack::-webkit-scrollbar{
+  display: none;
+}
+.discoverFeaturedHeroCarousel .discoverFeaturedChallengeHero{
+  flex: 0 0 100%;
+  width: 100%;
+  max-width: 100%;
+  scroll-snap-align: start;
+  scroll-snap-stop: always;
+}
+.discoverFeaturedHeroDots{
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 6px;
+  margin: 10px 0 0;
+}
+.discoverFeaturedHeroDot{
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.22);
+  transition: width 180ms ease, background 180ms ease;
+}
+.discoverFeaturedHeroDot.isActive{
+  width: 16px;
+  background: rgba(255, 255, 255, 0.82);
+}
 .discoverFeaturedChallengeHero{
   position: relative;
   display: block;

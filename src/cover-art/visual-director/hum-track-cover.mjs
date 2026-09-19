@@ -3,7 +3,7 @@
  */
 
 export const HUM_TRACK_SCENE_GUARD =
-  "empty musician studio nook, warm wood table, window sunlight with long shadows, dried botanicals, no instruments visible, no people, no human figures, no faces, no hands, no fingers, no musician, no performer, no body parts";
+  "empty musician studio nook, warm wood table, window sunlight with long shadows, dried botanicals, teal-violet atmospheric haze, magenta to cyan grade, no instruments visible, no people, no human figures, no faces, no hands, no fingers, no musician, no performer, no body parts";
 
 /** Extra negative-prompt tags for Pollinations (anatomy + instrument render failures). */
 export const HUM_TRACK_AVOID = Object.freeze([

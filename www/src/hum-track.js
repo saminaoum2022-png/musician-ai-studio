@@ -287,6 +287,7 @@ function finishHumTrackSuccess(taskId, instrumentId, tracks) {
           styleInput: preset.style,
           styleSent: preset.style,
           artworkHint: preset.coverArtHint || "",
+          challenge: { id: "hum-track", title: "Hum Track", type: "spark", variant: "spark" },
         },
       }),
     );

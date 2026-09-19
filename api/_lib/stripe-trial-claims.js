@@ -14,10 +14,7 @@ function normalizeEmail(email) {
 
 async function serviceRest(path, { method = "GET", body, prefer } = {}) {
   if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
-    // Not configured at all — nothing we can check, but this is a config
-    // problem, not evidence the table is missing. Callers must NOT treat
-    // this as "fail open" for trial-eligibility checks.
-    return { ok: false, status: 500, missingTable: false, error: "not_configured" };
+    return { ok: false, status: 500, missingTable: false };
   }
   try {
     const headers = {
@@ -42,41 +39,21 @@ async function serviceRest(path, { method = "GET", body, prefer } = {}) {
     const missingTable =
       r.status === 404 ||
       (typeof data?.message === "string" && /stripe_trial_claims/i.test(data.message));
-    if (!r.ok && !missingTable) {
-      console.error(
-        `[stripe-trial-claims] Supabase REST error (status=${r.status}) for ${path.split("?")[0]}:`,
-        typeof data === "string" ? data.slice(0, 500) : JSON.stringify(data || {}).slice(0, 500),
-      );
-    }
     return { ok: r.ok, status: r.status, data, missingTable };
-  } catch (e) {
-    console.error(`[stripe-trial-claims] Supabase REST exception for ${path.split("?")[0]}:`, e?.message || e);
-    return { ok: false, status: 500, missingTable: false, error: e?.message || "network_error" };
+  } catch {
+    return { ok: false, status: 500, missingTable: false };
   }
 }
 
-/**
- * Looks up the trial claim for an email.
- * - missingTable=true  → table genuinely doesn't exist yet (404). Safe to fail open
- *   (pre-migration safety net); callers grant the trial.
- * - error=true          → real failure (network, auth, RLS, timeout, bad response).
- *   We do NOT know if a claim exists. Callers must fail CLOSED (do not grant a
- *   trial and do not overwrite/record a claim) rather than assuming "no claim".
- * - otherwise           → row is the authoritative claim (or null = truly no claim).
- */
 async function fetchStripeTrialClaimForEmail(email) {
   const emailLower = normalizeEmail(email);
-  if (!emailLower) return { row: null, missingTable: false, error: false };
+  if (!emailLower) return { row: null, missingTable: false };
   const res = await serviceRest(
     `${CLAIMS_TABLE}?select=email_lower,last_user_id,stripe_subscription_id,source&email_lower=eq.${encodeURIComponent(emailLower)}&limit=1`,
   );
-  if (res.missingTable) return { row: null, missingTable: true, error: false };
-  if (!res.ok) {
-    // Real error — unknown eligibility. Do not treat as "no claim".
-    return { row: null, missingTable: false, error: true };
-  }
+  if (res.missingTable) return { row: null, missingTable: true };
   const row = Array.isArray(res.data) && res.data[0] ? res.data[0] : null;
-  return { row, missingTable: false, error: false };
+  return { row, missingTable: false };
 }
 
 async function hasUsedStripeTrial(email) {
@@ -115,12 +92,6 @@ async function recordStripeTrialEligibilityUsed(
   { userId = null, subscriptionId = null, source = "account_deleted" } = {},
 ) {
   const existing = await fetchStripeTrialClaimForEmail(email);
-  if (existing.error) {
-    console.error(
-      `[stripe-trial-claims] recordStripeTrialEligibilityUsed: claim lookup failed; skipping write to avoid clobbering an existing claim.`,
-    );
-    return { ok: false, error: true };
-  }
   if (existing.row) return { ok: true, already: true };
   return recordStripeTrialUsed(email, { userId, subscriptionId, source });
 }
@@ -147,14 +118,6 @@ async function resolveStripeTrialCreditAmount(stripe, sub, plan, status, userId)
   const claim = await fetchStripeTrialClaimForEmail(email);
   if (claim.missingTable) {
     return { amount: Number(plan.trialCredits || 0), blocked: false };
-  }
-  if (claim.error) {
-    // Unknown eligibility due to a real lookup failure — fail CLOSED.
-    // Do not grant and do not record a claim (we might overwrite a real one).
-    console.error(
-      `[stripe-trial-claims] resolveStripeTrialCreditAmount: claim lookup failed for sub ${subId}; blocking trial grant instead of assuming eligible.`,
-    );
-    return { amount: 0, blocked: true, reason: "trial_claim_lookup_failed" };
   }
 
   if (claim.row) {
@@ -186,14 +149,6 @@ async function markStripeTrialStartedIfNeeded(stripe, sub, { userId, planId, sta
   if (!email) return { recorded: false };
 
   const claim = await fetchStripeTrialClaimForEmail(email);
-  if (claim.error) {
-    // Unknown state — do NOT write, could clobber an existing claim's
-    // subscription_id via the merge-duplicates upsert.
-    console.error(
-      `[stripe-trial-claims] markStripeTrialStartedIfNeeded: claim lookup failed for sub ${subId}; skipping write.`,
-    );
-    return { recorded: false, error: true };
-  }
   if (claim.row) return { recorded: false, already: true };
 
   await recordStripeTrialUsed(email, {

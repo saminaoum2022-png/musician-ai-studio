@@ -24137,7 +24137,14 @@ function getVocalReferenceFile() {
   // `vocalRefBlob` from a failed promote or race must NOT override the
   // current attachment — that was a source of "always the old vocal".
   if (currentVocalRefFile && currentVocalRefFile.size > 0) return currentVocalRefFile;
-  if (vocalRefBlob && vocalRefBlob.size > 0) {
+  // Only use the leftover blob when the user actually attached a clip
+  // (record / upload / remix). Persona wizard recordings used to land in
+  // vocalRefBlob with no origin and then silently attach on Generate.
+  if (
+    vocalRefBlob
+    && vocalRefBlob.size > 0
+    && (vocalRefOrigin === "record" || vocalRefOrigin === "upload" || vocalRefOrigin === "remix")
+  ) {
     const name = vocalReferenceFilenameForMime(vocalRefBlob.type);
     return new File([vocalRefBlob], name, {
       type: vocalRefBlob.type || "audio/webm",
@@ -26248,10 +26255,12 @@ async function startVocalReferenceRecording() {
     vocalRefChunks = chunks.slice();
     const blobType = effectiveMime();
     const blob = new Blob(chunks, { type: blobType });
-    vocalRefBlob = blob;
     const wizardActive =
       forWizard || vocalRecorderContext?.type === "voice_wizard";
     if (wizardActive) {
+      // Persona wizard recordings must never become a Create-page vocal
+      // clip. vocalRefBlob is the generate fallback — leaving it set here
+      // made the next lyrics+persona song silently go through upload-cover.
       voiceWizardRecBlob = blob;
       const ok = Boolean(blob && blob.size > 0);
       if (els.btnRecorderUse) els.btnRecorderUse.disabled = !ok;
@@ -53522,6 +53531,8 @@ function abandonPersonaFlow() {
   try {
     closeVocalRecorderModal();
   } catch {}
+  voiceWizardRecBlob = null;
+  if (!vocalRefOrigin) vocalRefBlob = null;
   voiceWizardState = {
     abort: true,
     sampleFile: null,
@@ -53737,21 +53748,24 @@ async function resolveRecordedVoiceReady(personaHit) {
 
   const hadPriorGen = Number(personaHit.genCount || 0) > 0;
   const stale = personaNeedsRefresh(personaHit);
-
-  const voiceReady = hadPriorGen
+  // `isAvailable: false` means "not usable right now" — still processing,
+  // or a temporary Suno blip — NOT "this voice is dead". We used to treat
+  // any false after the first song as expired, so a 50-minute-old voice
+  // told people to re-record. Only the 7-day age badge is a real expiry.
+  const voiceReady = stale && hadPriorGen
     ? await checkSunoVoiceAvailability(personaHit.voiceTaskId)
     : await waitForVoiceAvailable(personaHit.voiceTaskId, { attempts: 4, delayMs: 8000 });
 
   if (voiceReady === true) return { ready: true, reason: "check_ok" };
   if (voiceReady === false) {
-    return { ready: false, reason: hadPriorGen || stale ? "expired" : "processing" };
+    return { ready: false, reason: stale ? "expired" : "processing" };
   }
   if (voiceReady == null) {
     if (stale) return { ready: false, reason: "stale_unknown" };
     return { ready: true, reason: "check_failed" };
   }
 
-  return { ready: false, reason: hadPriorGen ? "expired" : "processing" };
+  return { ready: false, reason: stale ? "expired" : "processing" };
 }
 
 /** Suno singerSkillLevel enum — send only these words upstream, no extra voice tags. */
@@ -69125,10 +69139,10 @@ if (els.btnSunoGenerate && els.btnSunoStems) {
             setStatus("Generation paused: this recorded voice has expired — re-record it to refresh.");
           } else {
             showToast(
-              "Your voice is still processing — wait 1–2 minutes after recording, then try again.",
+              "Your recorded voice isn’t ready yet — wait a minute and try Generate again. You don’t need to re-record.",
               { icon: "!", durationMs: 6200 }
             );
-            setStatus("Generation paused: your recorded voice isn't ready yet.");
+            setStatus("Generation paused: your recorded voice isn’t ready yet — retry shortly.");
           }
           return;
         }

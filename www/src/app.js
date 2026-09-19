@@ -4014,6 +4014,7 @@ function wireProfileChromeNavOnce() {
   };
   bindSecondary("#btnProfileSettingsGear", "settings", "#/settings");
   bindSecondary("#profileCreditsLink", "credits", "#/credits");
+  bindSecondary("#profileProChip", "pro", "#/pro");
   bindSecondary('a.settingsRowLink[href="#/credits"]', "credits", "#/credits");
   document.querySelectorAll('a[href="#/pro"][data-route-link="pro"]').forEach((el) => {
     if (el.dataset.chromeNavBound === "1") return;
@@ -31134,6 +31135,7 @@ function syncDeskSidebarPromo() {
 function syncProSubscriptionUi() {
   syncProfileProAvatarPill();
   syncSettingsProRow();
+  try { syncProfileProChip(); } catch {}
   try { syncDeskSidebarPromo(); } catch {}
   try { syncProGatedWebUi(); } catch {}
   try { syncCreateProLocks(); } catch {}
@@ -31162,6 +31164,14 @@ function syncProfileProAvatarPill() {
   if (tabSlot) tabSlot.classList.toggle("hasPro", showTab);
 }
 
+function syncProfileProChip() {
+  const el = document.getElementById("profileProChip");
+  if (!el) return;
+  const show = !Boolean(getHealedProState().active);
+  el.hidden = !show;
+  el.setAttribute("aria-hidden", show ? "false" : "true");
+}
+
 function syncSettingsProRow() {
   const pill = document.getElementById("settingsProPill");
   const sub = document.getElementById("settingsProSub");
@@ -31177,18 +31187,22 @@ function syncSettingsProRow() {
     provider: pro.provider || creditsState.proProvider,
   });
   if (pill) {
-    pill.hidden = !active;
-    const trialing = displayStatus === "trialing";
-    pill.textContent = trialing ? "Trial" : "Pro";
-    pill.classList.toggle("settingsProPill--trial", trialing);
+    pill.hidden = active;
+    pill.textContent = "Upgrade";
+    pill.classList.remove("settingsProPill--trial");
   }
   if (sub) {
     if (active) {
+      const trialing = displayStatus === "trialing";
       const renew = formatProPeriodLabel(displayStatus, pro.currentPeriodEnd, { short: true });
-      const bits = [proPlanLabelShort(pro.planId), renew].filter(Boolean);
-      sub.textContent = bits.join(" · ") || "Your Pro benefits are unlocked";
+      const plan = proPlanLabelShort(pro.planId);
+      const bits = ["You're Pro"];
+      if (trialing) bits.push("Trial");
+      else if (plan) bits.push(plan);
+      if (renew) bits.push(renew);
+      sub.textContent = bits.join(" · ");
     } else {
-      sub.textContent = "Weekly and monthly plans, benefits";
+      sub.textContent = "Plans and benefits";
     }
   }
   syncSettingsManageSubscriptionRow(pro);

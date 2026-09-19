@@ -10248,7 +10248,8 @@ html:not([data-theme="light"]) body[data-route="generate"] .createTabs,
 html:not([data-theme="light"]) body[data-route="generate"] .inputPanel,
 html:not([data-theme="light"]) body[data-route="generate"] .createPaneCta,
 html:not([data-theme="light"]) body[data-route="generate"] .resultCard,
-html:not([data-theme="light"]) body[data-route="generate"] .lyricsModeTabs{
+html:not([data-theme="light"]) body[data-route="generate"] .lyricsModeTabs,
+html:not([data-theme="light"]) body[data-route="generate"] .createSongTypeTabs{
   background: rgba(255, 255, 255, 0.075);
   backdrop-filter: blur(24px) saturate(1.2);
   -webkit-backdrop-filter: blur(24px) saturate(1.2);
@@ -10260,7 +10261,8 @@ html:not([data-theme="light"]) body[data-route="generate"] .createTabs{
   border: 1px solid transparent;
   box-shadow: none;
 }
-html:not([data-theme="light"]) body[data-route="generate"] .lyricsModeTabs{
+html:not([data-theme="light"]) body[data-route="generate"] .lyricsModeTabs,
+html:not([data-theme="light"]) body[data-route="generate"] .createSongTypeTabs{
   border: 1px solid rgba(255, 255, 255, 0.08);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
 }
@@ -10341,15 +10343,28 @@ html:not([data-theme="light"]) body[data-route="generate"] #singerGenderPills .a
 .createPageHeader{
   max-width: 100%;
   overflow: visible;
+  padding-bottom: 0;
+  margin-bottom: 0;
 }
 .createHeadRow{
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  margin: 0;
+  margin: 0 0 18px;
   min-width: 0;
   overflow: visible;
+}
+.createSongTypeRow{
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0 0 10px;
+  min-width: 0;
+}
+.createSongTypeRow .btnNewSong{
+  margin-left: auto;
+  flex-shrink: 0;
 }
 .createHeadActions{
   display: inline-flex;
@@ -10407,7 +10422,7 @@ html[data-theme="light"] .btnCreateSettings{
   display:flex;
   gap:4px;
   padding:4px;
-  margin: 0 0 14px;
+  margin: 0;
   border:1px solid var(--surface-border);
   border-radius:999px;
   background: var(--surface-panel);
@@ -10460,6 +10475,13 @@ html[data-theme="light"] .btnCreateSettings{
 }
 .createTab[hidden]{
   display:none !important;
+}
+.createSongTypeTabs{
+  display: inline-flex;
+  margin: 0;
+}
+.createSongTypeTabs[hidden]{
+  display: none !important;
 }
 .createVibePreview{
   position:absolute;
@@ -21852,7 +21874,7 @@ body.trackSheetOpen .footer{
     padding-bottom: 8px;
   }
   .card.wide[data-route="generate"] .createPageHeader .appScreenTitle{
-    margin-bottom: 8px;
+    margin-bottom: 0;
   }
   .wizardTop{
     margin-bottom: 8px;
@@ -21925,7 +21947,7 @@ body.trackSheetOpen .footer{
     margin-bottom: 0;
   }
   body[data-route="generate"] .createTabs{
-    margin-bottom: 10px;
+    margin-bottom: 0;
   }
   body[data-route="generate"] #advancedSheet:not([open]){
     display: none;

@@ -7358,6 +7358,7 @@ function setCreateSongType(type) {
   if (els.btnLyricsFixSinging) els.btnLyricsFixSinging.disabled = instrumental;
   try { syncArabicGenerateGate(); } catch {}
   try { syncSoloInstrumentalToggleUi(); } catch {}
+  try { syncCreateSongTypeTabs(); } catch {}
   try { syncPhotoSoloVocalSections(); } catch {}
   try { syncTemplateSparkClipGenerateReady(); syncGenerateOrbVisibility(); } catch {}
 }
@@ -18284,6 +18285,25 @@ function photoSoloChallengeCanGenerate() {
   return Boolean(imageMoodAppliedForNextGen);
 }
 
+function syncCreateSongTypeTabs() {
+  const instrumental = String(els.vocalInstrumentalOnly?.value || "0") === "1";
+  const row = document.getElementById("createSongTypeTabs");
+  if (row) {
+    const hide = is80sYouCreateFlow();
+    row.hidden = hide;
+    row.setAttribute("aria-hidden", hide ? "true" : "false");
+    row.querySelectorAll("[data-create-song-type]").forEach((b) => {
+      const on = instrumental
+        ? b.getAttribute("data-create-song-type") === "instrumental"
+        : b.getAttribute("data-create-song-type") === "vocal";
+      b.classList.toggle("isActive", on);
+      b.setAttribute("aria-pressed", on ? "true" : "false");
+    });
+  }
+  const singerPanel = document.getElementById("singerVoicePanel");
+  if (singerPanel && !is80sYouCreateFlow()) singerPanel.hidden = instrumental;
+}
+
 function syncSoloInstrumentalToggleUi() {
   const instrumental = String(els.vocalInstrumentalOnly?.value || "0") === "1";
   document.querySelectorAll("#createSoloTypePills .addressPill[data-solo-song-type]").forEach((b) => {
@@ -18327,6 +18347,7 @@ function syncPhotoSoloChallengeCreateUi() {
   }
   if (is80s) {
     try { syncSoloInstrumentalToggleUi(); } catch {}
+    try { syncCreateSongTypeTabs(); } catch {}
     try { setActiveCreateTab("photo"); } catch {}
     const photoSub = document.querySelector("#createPhotoCta .createPaneCtaSub");
     if (photoSub) photoSub.textContent = "Tap to upload your retro portrait.";
@@ -18335,6 +18356,7 @@ function syncPhotoSoloChallengeCreateUi() {
     if (photoSub) photoSub.textContent = "We'll catch the mood and feed it into your song.";
   }
   try { syncPhotoSoloBannerUi(is80s ? challengePromptContext() : null); } catch {}
+  try { syncCreateSongTypeTabs(); } catch {}
 }
 
 function challengeCreateFocusForId(challengeId) {
@@ -77476,6 +77498,15 @@ const createVibeCtaBtn = document.getElementById("createVibeCta");
 if (createVibeCtaBtn) {
   createVibeCtaBtn.addEventListener("click", () => {
     openVibeReadSheet();
+  });
+}
+const createSongTypeTabs = document.getElementById("createSongTypeTabs");
+if (createSongTypeTabs) {
+  createSongTypeTabs.addEventListener("click", (e) => {
+    const btn = e.target?.closest?.("[data-create-song-type]");
+    if (!btn) return;
+    haptic("light");
+    setCreateSongType(btn.getAttribute("data-create-song-type") === "instrumental" ? "instrumental" : "vocal");
   });
 }
 const createSoloTypePills = document.getElementById("createSoloTypePills");

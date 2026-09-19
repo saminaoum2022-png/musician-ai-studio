@@ -35513,7 +35513,7 @@ const MESSAGES_THREAD_LOAD_OLDER_THRESHOLD_PX = 120;
 /** Safety poll when Realtime misses an insert (was 45s — too slow for chat). */
 const MESSAGES_THREAD_SAFETY_POLL_MS = 8000;
 /** Slower safety poll when Realtime is connected. */
-const MESSAGES_THREAD_SAFETY_POLL_LIVE_MS = 45000;
+const MESSAGES_THREAD_SAFETY_POLL_LIVE_MS = 12000;
 /** Faster poll while Realtime channel is still connecting. */
 const MESSAGES_THREAD_CONNECT_POLL_MS = 3000;
 /** Partner now-playing line in the thread header (independent of message poll). */
@@ -35525,9 +35525,9 @@ const MESSAGES_THREAD_RECEIPT_POLL_LIVE_MS = 15000;
 /** Global delivery heartbeat — ack undelivered inbound without thrashing receipts. */
 const DM_RECEIPT_HEARTBEAT_MS = 20000;
 const DM_RECEIPT_POLL_MIN_GAP_MS = 2500;
-const MESSAGES_INBOX_POLL_MS = 15000;
-/** Slower inbox poll when Realtime is connected. */
-const MESSAGES_INBOX_POLL_LIVE_MS = 60000;
+const MESSAGES_INBOX_POLL_MS = 8000;
+/** Backup inbox poll while Realtime is connected — keep it tight; live events can miss. */
+const MESSAGES_INBOX_POLL_LIVE_MS = 12000;
 /** Partner typing indicator — broadcast while composing. */
 const DM_TYPING_SEND_MS = 2500;
 const DM_TYPING_LINGER_MS = 4500;
@@ -36394,6 +36394,36 @@ function isActiveMessagesThreadRoute(threadId) {
   );
 }
 
+function applyInboxServerState(data) {
+  const incomingThreads = Array.isArray(data?.threads) ? data.threads : [];
+  const localById = new Map(
+    (_messagesInboxState.threads || []).map((t) => [String(t?.threadId || ""), t]),
+  );
+  const threads = incomingThreads.map((t) => {
+    const local = localById.get(String(t?.threadId || ""));
+    if (!local) return t;
+    const localAt = Date.parse(local.lastMessageAt || "") || 0;
+    const serverAt = Date.parse(t.lastMessageAt || "") || 0;
+    if (localAt > serverAt) {
+      return {
+        ...t,
+        lastMessage: local.lastMessage,
+        lastMessageAt: local.lastMessageAt,
+        lastMessageSenderId: local.lastMessageSenderId || t.lastMessageSenderId,
+        lastMessageDeliveredAt: local.lastMessageDeliveredAt ?? t.lastMessageDeliveredAt,
+        unread: local.unread,
+        unreadCount: local.unreadCount,
+      };
+    }
+    return t;
+  });
+  _messagesInboxState = {
+    threads,
+    requests: Array.isArray(data?.requests) ? data.requests : [],
+    sentRequests: Array.isArray(data?.sentRequests) ? data.sentRequests : [],
+  };
+}
+
 function patchInboxThreadRow({
   threadId,
   lastMessage,
@@ -36404,7 +36434,6 @@ function patchInboxThreadRow({
 } = {}) {
   const tid = String(threadId || "").trim();
   if (!tid) return false;
-  if (messageId && !rememberInboxMessageId(messageId)) return false;
 
   const myId = String(authSession?.user?.id || "");
   const isMine = senderId ? String(senderId) === myId : false;
@@ -36415,6 +36444,7 @@ function patchInboxThreadRow({
     void loadMessagesInbox({ silent: true });
     return false;
   }
+  if (messageId && !rememberInboxMessageId(messageId)) return false;
 
   const prev = threads[idx];
   const at = String(lastMessageAt || prev.lastMessageAt || new Date().toISOString());
@@ -36861,10 +36891,13 @@ function mergeThreadMessages(incoming, { scrollToBottom = true } = {}) {
 
     const optIdx = findOptimisticMessageIndex({ clientMessageId: m.client_message_id, serverMsg: m });
     if (optIdx >= 0) {
+      const prev = list[optIdx];
       list[optIdx] = {
-        ...list[optIdx],
+        ...prev,
         ...m,
-        client_message_id: list[optIdx].client_message_id || m.client_message_id || "",
+        client_message_id: prev.client_message_id || m.client_message_id || "",
+        sendStatus: "sent",
+        sendError: "",
         ...deliveryFieldsFromServer(m),
       };
       changed = true;
@@ -37142,6 +37175,8 @@ function confirmOptimisticThreadMessage(clientMessageId, serverMsg) {
   const next = {
     ...serverMsg,
     client_message_id: cid || String(serverMsg?.client_message_id || ""),
+    sendStatus: "sent",
+    sendError: "",
     ...deliveryFieldsFromServer(serverMsg),
   };
   if (idx >= 0) {
@@ -37177,6 +37212,7 @@ function markOptimisticThreadMessageFailed(clientMessageId, err) {
   const idx = findOptimisticMessageIndex({ clientMessageId: cid });
   if (idx < 0) return;
   const list = [..._messagesList];
+  if (isOutboundMessageConfirmed(list[idx])) return;
   list[idx] = {
     ...list[idx],
     sendStatus: "failed",
@@ -37202,9 +37238,13 @@ async function sendThreadMessageInBackground({ clientMessageId, threadId, body }
   const tid = String(threadId || _conversationId || "").trim();
   const text = String(body || "").trim();
   if (!cid || !tid || !text) return;
+  const watchdog = window.setTimeout(() => {
+    void pollNewThreadMessages(tid, { bootToken: _messagesThreadBootToken, reason: "send-watchdog" });
+  }, 2200);
   try {
     const data = await messagesApi("/api/messages", {
       method: "POST",
+      timeoutMs: 16000,
       body: JSON.stringify({
         action: "send_message",
         threadId: tid,
@@ -37221,6 +37261,9 @@ async function sendThreadMessageInBackground({ clientMessageId, threadId, body }
     void refreshMessagesUnreadBadge({ force: true });
   } catch (e) {
     markOptimisticThreadMessageFailed(cid, e);
+    void pollNewThreadMessages(tid, { bootToken: _messagesThreadBootToken, reason: "send-error" });
+  } finally {
+    window.clearTimeout(watchdog);
   }
 }
 
@@ -39411,8 +39454,7 @@ async function refreshDmInboxRealtimeSubscribe() {
       if (senderId && myId && senderId !== myId && tid) {
         void ackPartnerMessagesDelivered([row], { threadId: tid });
       }
-      const onMessagesRoute = String(document.body.getAttribute("data-route") || "") === "messages";
-      if (onMessagesRoute && patchInboxFromDmMessageRow(row)) {
+      if (patchInboxFromDmMessageRow(row)) {
         try { console.info("[dm-inbox-live]", { threadId: row.thread_id, messageId: row.id }); } catch {}
       }
     },
@@ -42323,11 +42365,7 @@ async function loadMessagesInbox({ silent = false } = {}) {
         data = await messagesApi("/api/messages?type=inbox");
       }
       if (!data?.ok) throw new Error(data?.error || "Could not load messages.");
-      _messagesInboxState = {
-        threads: Array.isArray(data?.threads) ? data.threads : [],
-        requests: Array.isArray(data?.requests) ? data.requests : [],
-        sentRequests: Array.isArray(data?.sentRequests) ? data.sentRequests : [],
-      };
+      applyInboxServerState(data);
       _messagesInboxHasLoadedOnce = true;
       saveMessagesInboxToStorage();
       markRouteHeavy("messages");

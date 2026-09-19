@@ -31,6 +31,23 @@ function svcHeaders(extra) {
   };
 }
 
+function runMessagesBackground(work) {
+  const task = Promise.resolve()
+    .then(() => work)
+    .catch((e) => {
+      console.warn("[messages] background work failed", e?.message || e);
+    });
+  let waitUntilFn = null;
+  try {
+    waitUntilFn = require("@vercel/functions").waitUntil;
+  } catch {}
+  if (typeof waitUntilFn === "function") {
+    waitUntilFn(task);
+    return;
+  }
+  return task;
+}
+
 async function svcFetch(path, opts) {
   if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
     return { ok: false, status: 500, data: null, text: "Missing Supabase service role" };
@@ -806,18 +823,22 @@ async function handleGet(req, res, user) {
     );
     const thread = Array.isArray(tr.data) && tr.data[0] ? tr.data[0] : null;
     if (!thread) return sendJson(res, 404, { ok: false, error: "Thread not found" });
-    await markUndeliveredPartnerMessages(thread, user.userId);
-    await reconcileOutboundDeliveryForSender(thread, user.userId);
     const limit = Math.min(80, Math.max(1, Number(url.searchParams.get("limit")) || 80));
     const before = String(url.searchParams.get("before") || "").trim();
     let msgPath =
       `dm_messages?select=id,sender_id,body,created_at,delivered_at&thread_id=eq.${encodeURIComponent(threadId)}&order=created_at.desc&limit=${limit}`;
     if (before) msgPath += `&created_at=lt.${encodeURIComponent(before)}`;
-    const msgs = await svcFetch(msgPath);
-    const rows = Array.isArray(msgs.data) ? [...msgs.data].reverse() : [];
     const partnerId = threadPartnerId(thread, user.userId);
-    const prof = partnerId ? await profileByUserId(partnerId) : null;
-    const partnerLastReadAt = await partnerLastReadAtForThread(thread, user.userId);
+    const [msgs, prof, partnerLastReadAt] = await Promise.all([
+      svcFetch(msgPath),
+      partnerId ? profileByUserId(partnerId) : Promise.resolve(null),
+      partnerLastReadAtForThread(thread, user.userId),
+    ]);
+    runMessagesBackground((async () => {
+      await markUndeliveredPartnerMessages(thread, user.userId);
+      await reconcileOutboundDeliveryForSender(thread, user.userId);
+    })());
+    const rows = Array.isArray(msgs.data) ? [...msgs.data].reverse() : [];
     return sendJson(res, 200, {
       ok: true,
       thread: {
@@ -844,9 +865,6 @@ async function handleGet(req, res, user) {
       ),
     ]);
     const threadRows = Array.isArray(threadsR.data) ? threadsR.data : [];
-    await Promise.all(
-      threadRows.slice(0, 50).map((thread) => markUndeliveredPartnerMessages(thread, user.userId)),
-    );
     const pendingRaw = Array.isArray(pendingR.data) ? pendingR.data : [];
     const sentRaw = Array.isArray(sentR.data) ? sentR.data : [];
     const requestUserIds = [
@@ -899,21 +917,23 @@ async function insertMessage({ threadId, senderId, body, clientMessageId = "" })
     body: JSON.stringify(row),
   });
   if (!ins.ok) return { ok: false, error: ins.text || "Send failed" };
-  await svcFetch(`dm_threads?id=eq.${encodeURIComponent(threadId)}`, {
-    method: "PATCH",
-    headers: { Prefer: "return=minimal" },
-    body: JSON.stringify({ last_message_at: now }),
-  });
-  await svcFetch("dm_thread_reads", {
-    method: "POST",
-    headers: { Prefer: "resolution=merge-duplicates,return=minimal" },
-    body: JSON.stringify({
-      thread_id: threadId,
-      user_id: senderId,
-      last_read_at: now,
-    }),
-  });
   const message = Array.isArray(ins.data) && ins.data[0] ? ins.data[0] : null;
+  await Promise.all([
+    svcFetch(`dm_threads?id=eq.${encodeURIComponent(threadId)}`, {
+      method: "PATCH",
+      headers: { Prefer: "return=minimal" },
+      body: JSON.stringify({ last_message_at: now }),
+    }),
+    svcFetch("dm_thread_reads", {
+      method: "POST",
+      headers: { Prefer: "resolution=merge-duplicates,return=minimal" },
+      body: JSON.stringify({
+        thread_id: threadId,
+        user_id: senderId,
+        last_read_at: now,
+      }),
+    }),
+  ]);
   const clientId = String(clientMessageId || "").trim();
   if (message && clientId) message.client_message_id = clientId;
   return { ok: true, message };
@@ -1205,9 +1225,6 @@ async function handlePost(req, res, user) {
       return sendJson(res, 400, { ok: false, error: "Missing threadId or targetUserId" });
     }
 
-    // Replying in-thread proves the partner's prior messages reached this device.
-    await markUndeliveredPartnerMessages(thread, user.userId);
-
     const sent = await insertMessage({
       threadId: thread.id,
       senderId: user.userId,
@@ -1216,32 +1233,22 @@ async function handlePost(req, res, user) {
     });
     if (!sent.ok) return sendJson(res, 500, { ok: false, error: sent.error || "Send failed" });
     const recipientId = threadPartnerId(thread, user.userId);
-    await reconcileOutboundDeliveryForSender(thread, user.userId);
-    if (recipientId) await reconcileOutboundDeliveryForSender(thread, recipientId);
-    if (recipientId && sent.message?.id) {
+    runMessagesBackground((async () => {
+      await markUndeliveredPartnerMessages(thread, user.userId);
+      await reconcileOutboundDeliveryForSender(thread, user.userId);
+      if (recipientId) await reconcileOutboundDeliveryForSender(thread, recipientId);
+      if (!recipientId || !sent.message?.id) return;
       const senderProfile = await profileByUserId(user.userId);
       const msgId = String(sent.message.id);
       const pushThreadId = thread.id;
-      const pushDeliverWork = sendPrivacySafePush({
+      const pushed = await sendPrivacySafePush({
         userId: recipientId,
         type: "dm_message",
         entityId: pushThreadId,
         actorDisplayName: senderProfile?.username || "Someone",
-      })
-        .then(async (r) => {
-          if (r?.ok) await markMessagesDelivered([msgId], { threadId: pushThreadId });
-        })
-        .catch(() => {});
-      let waitUntilFn = null;
-      try {
-        waitUntilFn = require("@vercel/functions").waitUntil;
-      } catch {}
-      if (typeof waitUntilFn === "function") {
-        waitUntilFn(pushDeliverWork);
-      } else {
-        await pushDeliverWork;
-      }
-    }
+      }).catch(() => null);
+      if (pushed?.ok) await markMessagesDelivered([msgId], { threadId: pushThreadId });
+    })());
     return sendJson(res, 200, { ok: true, threadId: thread.id, message: sent.message });
   }
 

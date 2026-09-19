@@ -8201,19 +8201,31 @@ html[data-theme="light"] .feedHookMarker::before{
   padding: 0;
   max-width: none;
 }
-.playerSocialAct{
+.playerSocialActions .playerSocialAct.followActAct{
   flex-direction: column;
   align-items: center;
   justify-content: center;
   gap: 5px;
   min-width: 44px;
   padding: 2px 4px;
-  color: rgba(255, 255, 255, 0.9);
+  color: #fff;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.42));
+}
+.playerSocialActions .playerSocialAct.followActAct:hover,
+.playerSocialActions .playerSocialAct.followActAct:active,
+.playerSocialActions .playerSocialAct.followActAct:focus-visible,
+.playerSocialActions .playerSocialAct.followActAct[data-friends-act="like"]:hover,
+.playerSocialActions .playerSocialAct.followActAct[data-friends-act="reply"]:hover,
+.playerSocialActions .playerSocialAct.followActAct[data-friends-act="share"]:hover{
+  color: #fff;
+  background: transparent;
 }
 .playerSocialAct .followActActIco,
 .playerSocialActIco .followActActIco{
   width: 28px;
   height: 28px;
+  fill: none;
+  stroke: currentColor;
 }
 .playerSocialAct--share .followActActIco{
   fill: none;
@@ -8226,7 +8238,7 @@ html[data-theme="light"] .feedHookMarker::before{
   font-size: 11px;
   font-weight: 650;
   line-height: 1;
-  color: rgba(223, 231, 251, 0.72);
+  color: #fff;
   min-width: 0;
   display: block;
   min-height: 11px;
@@ -8235,11 +8247,16 @@ html[data-theme="light"] .feedHookMarker::before{
   display: block;
   visibility: hidden;
 }
-.playerSocialAct[data-friends-act="like"].isLiked{
+.playerSocialActions .playerSocialAct.followActAct[data-friends-act="like"].isLiked,
+.playerSocialActions .playerSocialAct.followActAct[data-friends-act="like"].isLiked:hover{
   color: #FF4D5A;
 }
-.playerSocialAct[data-friends-act="gift"].isGifted,
-.playerSocialAct--gift.isGifted{
+.playerSocialActions .playerSocialAct.followActAct[data-friends-act="gift"],
+.playerSocialActions .playerSocialAct.followActAct.playerSocialAct--gift,
+.playerSocialActions .playerSocialAct.followActAct[data-friends-act="gift"]:hover,
+.playerSocialActions .playerSocialAct.followActAct.playerSocialAct--gift:hover,
+.playerSocialActions .playerSocialAct.followActAct[data-friends-act="gift"].isGifted,
+.playerSocialActions .playerSocialAct.followActAct.playerSocialAct--gift.isGifted{
   color: #4FD1B8;
 }
 .playerSocialAct--like{
@@ -22060,6 +22077,19 @@ input::placeholder, textarea::placeholder{
     backdrop-filter: none;
     pointer-events: none;
     overflow: visible;
+    touch-action: none;
+  }
+  /* Catch taps on the glass, gutters, and home-indicator strip so they
+     cannot fall through to the page scrolling behind the dock. */
+  .mobileTabbar::before{
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: -10px;
+    bottom: 0;
+    z-index: 1;
+    pointer-events: auto;
   }
   /* Instagram glass pill — page shows through, faint white rim on top and bottom. */
   .mobileTabbar::after{
@@ -22227,10 +22257,10 @@ input::placeholder, textarea::placeholder{
     text-align:center;
     border: 0;
     border-radius: 999px;
-    width: var(--tab-pill-size);
+    width: 100%;
     min-height: calc(var(--tab-pill-size) + 16px);
     padding: 0 0 16px;
-    justify-self: center;
+    justify-self: stretch;
     touch-action: none;
     -webkit-user-select: none;
     user-select: none;
@@ -29394,12 +29424,12 @@ body[data-route="discover-playlist"]::before{
   left: 0;
   right: 0;
   top: 0;
-  height: calc(env(safe-area-inset-top, 0px) + 260px);
+  height: calc(env(safe-area-inset-top, 0px) + 340px);
   z-index: 0;
   pointer-events: none;
   background:
-    radial-gradient(ellipse 90% 70% at 50% -10%, rgba(124,92,255,0.24), transparent 56%),
-    radial-gradient(ellipse 60% 45% at 100% 20%, rgba(56,189,248,0.10), transparent 50%);
+    radial-gradient(ellipse 140% 90% at 50% -18%, rgba(var(--pl-a, 245,158,11), 0.48), transparent 58%),
+    radial-gradient(ellipse 90% 70% at 100% 0%, rgba(var(--pl-b, 244,114,182), 0.28), transparent 52%);
 }
 body[data-route="discover-playlist"] > .app{
   position: relative;
@@ -29414,14 +29444,7 @@ body[data-route="discover-playlist"] > .app{
   padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 88px);
 }
 .discoverPlaylistAmbient{
-  position: absolute;
-  inset: -8px -12px 45%;
-  z-index: 0;
-  pointer-events: none;
-  background:
-    radial-gradient(ellipse 90% 70% at 50% -10%, rgba(var(--pl-a,124,92,255),0.32), transparent 55%),
-    radial-gradient(ellipse 60% 45% at 100% 20%, rgba(var(--pl-b,56,189,248),0.14), transparent 50%);
-  opacity: 0.95;
+  display: none;
 }
 .discoverPlaylistTop,
 .discoverPlaylistHero,
@@ -29432,17 +29455,41 @@ body[data-route="discover-playlist"] > .app{
 .discoverPlaylistTop{
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-start;
   gap: 12px;
   padding-top: 4px;
 }
 .discoverPlaylistBack{
   /* layout hook — visuals from .nabadBackBtn */
 }
+.discoverPlaylistTitleRow{
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 14px;
+}
 .discoverPlaylistPlayAll{
-  flex: 1 1 auto;
-  max-width: 200px;
-  margin-left: auto;
+  flex: 0 0 auto;
+  margin: 0;
+  padding: 0;
+  max-width: none;
+  border: 0;
+  background: none;
+  box-shadow: none;
+  color: rgba(232, 238, 247, 0.56);
+  font: inherit;
+  font-size: 15px;
+  font-weight: 650;
+  letter-spacing: -0.015em;
+  line-height: 1.1;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.discoverPlaylistPlayAll:active{
+  color: rgba(255, 255, 255, 0.92);
+}
+.discoverPlaylistPlayAll[hidden]{
+  display: none !important;
 }
 .discoverPlaylistHero{
   padding: 4px 2px 0;
@@ -29457,6 +29504,8 @@ body[data-route="discover-playlist"] > .app{
 }
 .discoverPlaylistTitle{
   margin: 0;
+  flex: 1 1 auto;
+  min-width: 0;
   font-size: clamp(28px, 7vw, 36px);
   line-height: 1.05;
   letter-spacing: -0.03em;
@@ -30138,20 +30187,15 @@ body.friendsFeedActive #discoverFriendsPanel .discoveryFeedStatus:empty{
 .discoveryPaneStudio > .discoveryStudioHead--home{
   padding-bottom: 6px;
 }
-.homeCoachSlot{
-  flex: 0 0 auto;
-  width: 34px;
-  height: 34px;
+.discoveryStudioHead--home .discoveryStudioTitles{
+  flex: 1 1 auto;
+  min-width: 0;
 }
-.homeBrandWordmark{
-  position: absolute;
-  left: 50%;
-  top: 2px;
-  transform: translateX(-50%);
-  display: flex;
-  align-items: center;
-  height: 34px;
-  z-index: 1;
+.discoveryStudioHead--home .appScreenTitle{
+  font-size: var(--tab-screen-title-size, clamp(28px, 6vw, 36px));
+  font-weight: 850;
+  letter-spacing: -0.04em;
+  line-height: var(--tab-screen-title-lh, 1.1);
 }
 .discoveryStudioHead--home .discoveryHeadActions{
   align-self: center;
@@ -33451,8 +33495,7 @@ body.createChooserSheetOpen .footer{
 .discoveryPaneStudio.isSearchOpen .discoveryStudioHead .discoverySearchClose{
   display: inline-flex;
 }
-.discoveryPaneStudio.isSearchOpen .homeCoachSlot,
-.discoveryPaneStudio.isSearchOpen .homeBrandWordmark{
+.discoveryPaneStudio.isSearchOpen .discoveryStudioHead--home .discoveryStudioTitles{
   display: none;
 }
 .discoveryPaneStudio.isSearchOpen #discoverySearchBtn{
@@ -44524,11 +44567,13 @@ html[data-theme="light"] body[data-route="friends"], body.friendsFeedActive .fol
   display: none;
 }
 .followActAct.isPulse{
-  animation: followActPulse 320ms ease;
+  animation: followActPulse 420ms ease;
 }
 @keyframes followActPulse {
   0%   { transform: scale(1); }
-  50%  { transform: scale(1.18); }
+  18%  { transform: scale(1.22); }
+  36%  { transform: scale(1.04); }
+  52%  { transform: scale(1.14); }
   100% { transform: scale(1); }
 }
 .followActAct[data-friends-act="like"].isLiked{
@@ -46925,7 +46970,7 @@ body[data-route="generate"] .aiGenerate{
   display: flex;
   flex-direction: column;
   gap: 0;
-  padding-bottom: 4px;
+  padding-bottom: 28px;
   min-width: 0;
 }
 
@@ -46997,7 +47042,7 @@ body[data-route="generate"] .aiGenerate{
 .discoverFeedTabs{
   position: relative;
   z-index: 5;
-  margin: 0 -2px 8px;
+  margin: 0 -2px 20px;
   padding: 0 0 4px;
   background: transparent;
   backdrop-filter: none;
@@ -47009,7 +47054,7 @@ body[data-route="generate"] .aiGenerate{
 
 /* Discover category tabs — typography-first underline strip */
 #discoverFeedTabs.discoverFeedTabs{
-  margin: 0 -2px 8px;
+  margin: 0 -2px 20px;
   padding: 0 0 4px;
 }
 .discoveryPaneDiscover > .discoveryStudioHead,
@@ -47032,9 +47077,9 @@ body[data-route="generate"] .aiGenerate{
 #discoverFeedTabs .nabadTabsTab{
   position: relative;
   flex: 0 0 auto;
-  font-size: 18.5px;
+  font-size: 16.5px;
   font-weight: 500;
-  letter-spacing: -0.025em;
+  letter-spacing: -0.02em;
   line-height: 1.25;
   color: var(--tab-inactive);
   padding: 6px 0 8px;
@@ -47050,7 +47095,7 @@ body[data-route="generate"] .aiGenerate{
 #discoverFeedTabs .nabadTabsTab.is-active{
   color: #fff;
   -webkit-text-fill-color: #fff;
-  font-weight: 800;
+  font-weight: 650;
   background: transparent;
   box-shadow: none;
   border-color: transparent;
@@ -48105,7 +48150,7 @@ html[data-theme="light"] .chartTitle{
 
 /* For You — featured challenge hero (campaign-style block) */
 .discoverFeedSection--featuredChallenge{
-  margin: 0 0 12px;
+  margin: 0 0 30px;
 }
 .discoverFeaturedChallengeHero{
   position: relative;
@@ -48267,7 +48312,7 @@ html[data-theme="light"] .chartTitle{
   text-align: center;
 }
 .discoverFeedV2 .discoverWeeklyChart{
-  margin: 0 0 12px;
+  margin: 0 0 28px;
 }
 .discoverFeedV2 .discoverWeeklyChart .chartTitleBadge{
   filter: none;
@@ -48275,7 +48320,16 @@ html[data-theme="light"] .chartTitle{
 
 /* ─── Discover moment rail — compact snap carousel ─ */
 .discoverMomentSection{
-  margin: 0 0 10px;
+  margin: 0 0 22px;
+}
+.discoverMomentSection .discoverFeedSectionHead{
+  margin-bottom: 8px;
+}
+.discoverMomentSection .discoverFeedSectionTitle{
+  font-size: 15px;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+  opacity: 0.72;
 }
 .discoverMomentRail{
   display: flex;
@@ -48432,7 +48486,10 @@ html[data-theme="light"] .chartTitle{
 
 /* Your vibes — square editorial playlists */
 .discoverVibeSection{
-  margin: 0 0 14px;
+  margin: 0 0 22px;
+}
+.discoverVibeSection .discoverFeedSectionHead{
+  margin-bottom: 12px;
 }
 .discoverVibeRail{
   display: flex;
@@ -51019,7 +51076,7 @@ html[data-theme="light"] #discoverFeedTabs .nabadTabsTab.is-active,
 html[data-theme="light"] .discoverFeedTabs .nabadTabsTab.is-active{
   color: var(--text-primary);
   -webkit-text-fill-color: var(--text-primary);
-  font-weight: 800;
+  font-weight: 650;
 }
 html[data-theme="light"] #friendsFeedTabs.friendsFeedTabs{
   background: transparent;

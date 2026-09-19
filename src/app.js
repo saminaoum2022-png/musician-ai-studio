@@ -3464,6 +3464,45 @@ function haptic(kind = "light") {
   } catch {}
 }
 
+/** Nabad like: lub–dub heartbeat. Second tap bypasses the single-shot gap. */
+function hapticHeartbeat() {
+  const now = Date.now();
+  if (now - _lastHapticAt < HAPTIC_MIN_GAP_MS) return;
+  if (!_hapticBurstWindowStart || now - _hapticBurstWindowStart > HAPTIC_BURST_WINDOW_MS) {
+    _hapticBurstWindowStart = now;
+    _hapticBurstCount = 0;
+  }
+  if (_hapticBurstCount >= HAPTIC_BURST_MAX) return;
+  _hapticBurstCount = Math.min(HAPTIC_BURST_MAX, _hapticBurstCount + 2);
+  _lastHapticAt = now;
+
+  const fireImpact = (style) => {
+    try {
+      const capHaptics = window?.Capacitor?.Plugins?.Haptics;
+      if (capHaptics?.impact) {
+        void capHaptics.impact({ style });
+        return true;
+      }
+    } catch {}
+    return false;
+  };
+
+  try {
+    const cap = window?.Capacitor;
+    const isNative = Boolean(
+      cap?.isNativePlatform?.() ||
+      cap?.getPlatform?.() === "ios" ||
+      cap?.getPlatform?.() === "android"
+    );
+    if (fireImpact("MEDIUM")) {
+      window.setTimeout(() => fireImpact("LIGHT"), 110);
+      return;
+    }
+    if (isNative) return;
+    if ("vibrate" in navigator) navigator.vibrate([16, 100, 9]);
+  } catch {}
+}
+
 let _fanSoundCtx = null;
 function playFanConfirmSound() {
   try {
@@ -13546,13 +13585,12 @@ function openDiscoverOccasionsTab(occasionId) {
     _challengeOccasionId = id;
     _homeMakeSeg = "occasion";
   }
-  renderDiscoverFeed(_discoveryFeedTracksRaw || [], _discoveryLastProfMap || new Map(), "occasions");
+  pinWindowScrollDuring(() => {
+    renderDiscoverFeed(_discoveryFeedTracksRaw || [], _discoveryLastProfMap || new Map(), "occasions");
+  });
   const panel = document.getElementById("discoverOccasionsPanel");
   try { panel?._renderPresetLab?.(); } catch {}
   try { syncHomeMakeSegUi(); } catch {}
-  try {
-    document.getElementById("discoverFeedTabs")?.scrollIntoView?.({ block: "nearest", behavior: "smooth" });
-  } catch {}
 }
 
 function renderDiscoverFeedTabPanel(tab, tracks, profMap) {
@@ -13630,7 +13668,17 @@ function renderDiscoverFeed(tracks, profMap, tab = _discoverFeedTab) {
   if (_discoverFeedTab === "challenges") {
     try { document.getElementById("discoverOccasionsPanel")?._refreshChallengeEntries?.(); } catch {}
   }
-  playDiscoverSectionEnter(mount);
+}
+
+function pinWindowScrollDuring(fn) {
+  const y = Math.max(0, Number(window.scrollY || document.documentElement.scrollTop || 0));
+  try { fn(); } finally {
+    const pin = () => {
+      try { window.scrollTo(0, y); } catch {}
+    };
+    pin();
+    requestAnimationFrame(pin);
+  }
 }
 
 function bindDiscoverFeedTabsOnce() {
@@ -13644,11 +13692,10 @@ function bindDiscoverFeedTabsOnce() {
       const tab = normalizeDiscoverFeedTab(tabBtn.getAttribute("data-discover-feed-tab") || "");
       if (!tab || tab === _discoverFeedTab) return;
     haptic("light");
-    renderDiscoverFeed(_discoveryFeedTracksRaw || [], _discoveryLastProfMap || new Map(), tab);
-    try {
-      const mount = document.getElementById("discoverFeedMount");
-      mount?.scrollIntoView?.({ block: "nearest", behavior: "smooth" });
-    } catch {}
+    try { tabBtn.focus({ preventScroll: true }); } catch {}
+    pinWindowScrollDuring(() => {
+      renderDiscoverFeed(_discoveryFeedTracksRaw || [], _discoveryLastProfMap || new Map(), tab);
+    });
   });
   const feedMount = document.getElementById("discoverFeedMount");
   if (feedMount && feedMount.dataset.boundDiscoverFeedJump !== "1") {
@@ -13660,10 +13707,9 @@ function bindDiscoverFeedTabsOnce() {
       const tab = normalizeDiscoverFeedTab(jumpBtn.getAttribute("data-discover-feed-tab-jump") || "");
       if (!tab || tab === _discoverFeedTab) return;
       haptic("light");
-      renderDiscoverFeed(_discoveryFeedTracksRaw || [], _discoveryLastProfMap || new Map(), tab);
-      try {
-        root.scrollIntoView?.({ block: "nearest", behavior: "smooth" });
-      } catch {}
+      pinWindowScrollDuring(() => {
+        renderDiscoverFeed(_discoveryFeedTracksRaw || [], _discoveryLastProfMap || new Map(), tab);
+      });
     });
   }
 }
@@ -20091,9 +20137,13 @@ async function handleFeedLikeTap(btn) {
   document.querySelectorAll(
     `.followActActions[data-friends-act-target-kind="${targetKind}"][data-friends-act-id="${targetId}"]`,
   ).forEach((r) => applyFeedSocialStatsToDom(r.parentElement || r));
-  try { haptic("light"); } catch {}
-  btn.classList.add("isPulse");
-  window.setTimeout(() => btn.classList.remove("isPulse"), 320);
+  if (nextLiked) {
+    try { hapticHeartbeat(); } catch {}
+    btn.classList.add("isPulse");
+    window.setTimeout(() => btn.classList.remove("isPulse"), 440);
+  } else {
+    try { haptic("light"); } catch {}
+  }
 
   try {
     const data = await socialApi("/api/social", {
